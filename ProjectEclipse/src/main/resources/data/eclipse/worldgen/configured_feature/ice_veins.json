@@ -1,0 +1,28 @@
+{
+  "_comment": "WG3 frost_crystal_cavern: packed-ice veins threading the frozen stone.",
+  "config": {
+    "discard_chance_on_air_exposure": 0.0,
+    "size": 14,
+    "targets": [
+      {
+        "state": {
+          "Name": "minecraft:packed_ice"
+        },
+        "target": {
+          "predicate_type": "minecraft:tag_match",
+          "tag": "minecraft:stone_ore_replaceables"
+        }
+      },
+      {
+        "state": {
+          "Name": "minecraft:packed_ice"
+        },
+        "target": {
+          "predicate_type": "minecraft:tag_match",
+          "tag": "minecraft:deepslate_ore_replaceables"
+        }
+      }
+    ]
+  },
+  "type": "minecraft:ore"
+}

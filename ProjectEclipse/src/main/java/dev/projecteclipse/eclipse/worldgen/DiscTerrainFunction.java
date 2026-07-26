@@ -1216,6 +1216,8 @@ public final class DiscTerrainFunction {
         MUSHROOM(Blocks.MYCELIUM, Blocks.DIRT, 3, 0.55D, 0.0D, 0.0D),
         /** WG2 ashen forest: dead coarse-dirt ground under the burnt canopy. */
         ASHEN(Blocks.COARSE_DIRT, Blocks.DIRT, 3, 0.9D, 0.0D, 0.0D),
+        /** WG3 obsidian wastes: blackstone crust over basalt at the desert wedge's far rim. */
+        OBSIDIAN(Blocks.BLACKSTONE, Blocks.BASALT, 3, 0.8D, 2.0D, 0.5D),
         NETHER_WASTES(Blocks.NETHERRACK, Blocks.NETHERRACK, 3, 1.0D, 0.0D, 0.0D),
         SOUL(Blocks.SOUL_SAND, Blocks.SOUL_SOIL, 3, 0.7D, -2.0D, 0.0D),
         BASALT(Blocks.BASALT, Blocks.BLACKSTONE, 3, 1.3D, 1.0D, 0.0D),
@@ -1248,16 +1250,17 @@ public final class DiscTerrainFunction {
     private static SectorStyle styleOf(DiscProfile profile, String biomeId) {
         String path = biomeId.substring(biomeId.indexOf(':') + 1);
         return switch (path) {
-            case "plains", "sunflower_plains", "river" -> SectorStyle.PLAINS;
+            case "plains", "sunflower_plains", "sunflower_ruins", "river" -> SectorStyle.PLAINS;
             case "desert" -> SectorStyle.DESERT;
             case "badlands", "wooded_badlands", "eroded_badlands",
                     "scorched_expanse" -> SectorStyle.BADLANDS;
+            case "obsidian_wastes" -> SectorStyle.OBSIDIAN;
             case "forest", "birch_forest", "old_growth_birch_forest", "taiga",
                     "old_growth_pine_taiga", "moonlit_grove" -> SectorStyle.FOREST;
             case "jungle", "sparse_jungle", "bamboo_jungle" -> SectorStyle.JUNGLE;
             case "savanna", "savanna_plateau", "windswept_savanna",
-                    "amber_savanna" -> SectorStyle.SAVANNA;
-            case "swamp", "mangrove_swamp", "gloom_mire" -> SectorStyle.SWAMP;
+                    "amber_savanna", "crystal_steppe" -> SectorStyle.SAVANNA;
+            case "swamp", "mangrove_swamp", "gloom_mire", "mist_moor" -> SectorStyle.SWAMP;
             case "snowy_slopes", "snowy_taiga", "ice_spikes", "jagged_peaks" -> SectorStyle.SNOWY;
             case "grove" -> SectorStyle.GROVE;
             case "dark_forest", "pale_garden" -> SectorStyle.DARK_FOREST;

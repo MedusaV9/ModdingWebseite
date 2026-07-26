@@ -1,0 +1,42 @@
+{
+  "_comment": "WG3 tangled_roots: amber-glowing root sprouts between the hanging roots.",
+  "config": {
+    "feature": {
+      "feature": {
+        "config": {
+          "to_place": {
+            "state": {
+              "Name": "eclipse:amber_tendril"
+            },
+            "type": "minecraft:simple_state_provider"
+          }
+        },
+        "type": "minecraft:simple_block"
+      },
+      "placement": [
+        {
+          "predicate": {
+            "predicates": [
+              {
+                "blocks": "minecraft:air",
+                "type": "minecraft:matching_blocks"
+              },
+              {
+                "state": {
+                  "Name": "eclipse:amber_tendril"
+                },
+                "type": "minecraft:would_survive"
+              }
+            ],
+            "type": "minecraft:all_of"
+          },
+          "type": "minecraft:block_predicate_filter"
+        }
+      ]
+    },
+    "tries": 32,
+    "xz_spread": 5,
+    "y_spread": 2
+  },
+  "type": "minecraft:random_patch"
+}

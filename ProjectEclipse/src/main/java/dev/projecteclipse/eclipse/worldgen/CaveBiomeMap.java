@@ -31,6 +31,28 @@ import net.minecraft.world.level.levelgen.synth.SimplexNoise;
  * {@code eclipse:umbral_depths}. Deep dark still outranks everything under the
  * mountain.</p>
  *
+ * <p>WG3 (F-059, 10 → 20 biomes) widens both existing fields — NO new noise salts, so
+ * every pre-WG3 assignment keeps its value and only previously-neutral/edge samples
+ * change (newly generated chunks only, exactly like the WG2 rollout):</p>
+ *
+ * <ul>
+ *   <li><b>Region hearts</b>: the strongest cores of the base field become their own
+ *       biomes — {@code v > }{@value #HEART_THRESHOLD} (heart of a dripstone region) →
+ *       {@code eclipse:molten_veins}, {@code v < -}{@value #HEART_THRESHOLD} (heart of
+ *       a lush region) → {@code eclipse:glowshroom_grotto}, both full-column.</li>
+ *   <li><b>Detail shoulders</b>: the bands just inside the B12 thresholds —
+ *       {@code ECHO_THRESHOLD < w <= SCULK_POCKET_THRESHOLD} →
+ *       {@code eclipse:echoing_hollow} (satellites of the sculk pockets) and
+ *       {@code CRYSTAL_THRESHOLD <= w < FROST_THRESHOLD} →
+ *       {@code eclipse:frost_crystal_cavern} (satellites of the crystal region).
+ *       {@link #detailRegionAt} (the {@code CaveDressings} decor key) is UNCHANGED.</li>
+ *   <li><b>New y-bands</b>: the lush middle band ({@value #TANGLED_MAX_Y} &gt; y ≥
+ *       {@value #FUNGAL_MAX_Y}) is {@code eclipse:tangled_roots}, and the deep half of
+ *       a sculk-pocket fold (y &lt; {@value #SCULK_DEPTHS_MAX_Y}) is
+ *       {@code eclipse:sculk_depths} (the mountain deep dark itself — the
+ *       {@code deepDarkColumn} path — stays untouched for the Ancient City).</li>
+ * </ul>
+ *
  * <p>All lookups are pure functions of position + frozen map data (no stage, no world
  * seed) — chunks generated before a ring grows must already carry the same biomes the
  * grown terrain will expose. Noise salts 29 (region field) and 33 (B12 detail field) of
@@ -56,11 +78,26 @@ public final class CaveBiomeMap {
     public static final int EMBER_MAX_Y = -80;
     /** Neutral-band samples below this Y read {@code eclipse:umbral_depths}. */
     public static final int UMBRAL_MAX_Y = -96;
+    /**
+     * WG3: lush-region samples below this Y (and at/above {@link #FUNGAL_MAX_Y}) read
+     * {@code eclipse:tangled_roots} — the root-riddled middle band between the shallow
+     * lush caves and the fungal basement.
+     */
+    public static final int TANGLED_MAX_Y = -40;
+    /** WG3: sculk-pocket samples below this Y read {@code eclipse:sculk_depths}. */
+    public static final int SCULK_DEPTHS_MAX_Y = -64;
 
     /** Feature scale (blocks) of the dripstone/lush region field — big, contiguous regions. */
     private static final double REGION_SCALE = 176.0D;
     /** |noise| above this splits a region off the neutral band (~⅓ of area total). */
     private static final double REGION_THRESHOLD = 0.34D;
+    /**
+     * WG3: |region noise| above this marks the HEART of a region — the hottest core of
+     * a dripstone region reads {@code eclipse:molten_veins}, the deepest-green core of
+     * a lush region reads {@code eclipse:glowshroom_grotto}. Strictly inside the
+     * {@link #REGION_THRESHOLD} area, so pre-WG3 neutral columns are never affected.
+     */
+    public static final double HEART_THRESHOLD = 0.62D;
 
     /** Feature scale of the B12 detail field — smaller pockets than the main regions. */
     private static final double DETAIL_SCALE = 132.0D;
@@ -68,6 +105,16 @@ public final class CaveBiomeMap {
     private static final double SCULK_POCKET_THRESHOLD = 0.72D;
     /** Detail noise below this → crystal region (rare). */
     private static final double CRYSTAL_THRESHOLD = -0.70D;
+    /**
+     * WG3: detail noise in {@code (ECHO_THRESHOLD, SCULK_POCKET_THRESHOLD]} → the
+     * {@code eclipse:echoing_hollow} shoulder ringing every sculk pocket.
+     */
+    public static final double ECHO_THRESHOLD = 0.58D;
+    /**
+     * WG3: detail noise in {@code [CRYSTAL_THRESHOLD, FROST_THRESHOLD)} → the
+     * {@code eclipse:frost_crystal_cavern} shoulder ringing the crystal region.
+     */
+    public static final double FROST_THRESHOLD = -0.58D;
 
     /** The rarer B12 detail regions layered over the dripstone/lush field. */
     public enum DetailRegion {
@@ -99,6 +146,18 @@ public final class CaveBiomeMap {
     public static final String EMBER_DEPTHS_ID = "eclipse:ember_depths";
     /** WG2 neutral-band basement biome id ({@code DiscBiomeSource} holder key). */
     public static final String UMBRAL_DEPTHS_ID = "eclipse:umbral_depths";
+    /** WG3 lush-heart biome id ({@code DiscBiomeSource} holder key). */
+    public static final String GLOWSHROOM_GROTTO_ID = "eclipse:glowshroom_grotto";
+    /** WG3 dripstone-heart biome id ({@code DiscBiomeSource} holder key). */
+    public static final String MOLTEN_VEINS_ID = "eclipse:molten_veins";
+    /** WG3 lush middle-band biome id ({@code DiscBiomeSource} holder key). */
+    public static final String TANGLED_ROOTS_ID = "eclipse:tangled_roots";
+    /** WG3 crystal-shoulder biome id ({@code DiscBiomeSource} holder key). */
+    public static final String FROST_CRYSTAL_CAVERN_ID = "eclipse:frost_crystal_cavern";
+    /** WG3 sculk-shoulder biome id ({@code DiscBiomeSource} holder key). */
+    public static final String ECHOING_HOLLOW_ID = "eclipse:echoing_hollow";
+    /** WG3 deep sculk-pocket band biome id ({@code DiscBiomeSource} holder key). */
+    public static final String SCULK_DEPTHS_ID = "eclipse:sculk_depths";
 
     private CaveBiomeMap() {}
 
@@ -107,7 +166,7 @@ public final class CaveBiomeMap {
      * underground or lies in the (above-{@value #UMBRAL_MAX_Y}) neutral band, where the
      * surface biome continues downward. Self-contained §3.10 seam: gates on the pure
      * terrain-function surface itself. Overworld only — the nether disc keeps its
-     * full-height wedges. Applies the WG2 y-bands, so this stays the single-call
+     * full-height wedges. Applies the WG2/WG3 y-bands, so this stays the single-call
      * equivalent of {@code DiscBiomeSource}'s per-column region + band resolution.
      */
     @Nullable
@@ -130,43 +189,69 @@ public final class CaveBiomeMap {
      * Region id of the column — {@code minecraft:dripstone_caves},
      * {@code minecraft:lush_caves}, {@code minecraft:deep_dark} (a B12 sculk-pocket
      * satellite), {@code eclipse:crystal_chasms} (the B12 crystal region, its own biome
-     * since WG2) or {@code null} (neutral band). 2-D on purpose so
-     * {@code DiscBiomeSource} can fold it into its per-column cache; the y gates
-     * ({@link #SURFACE_MARGIN}, {@link #DEEP_DARK_MAX_Y}, the WG2 bands via
-     * {@link #bandedBiome}) are applied per sample there. The B12 detail regions
-     * outrank the base field (their thresholds are far rarer); both fold into biome
-     * ids the biome source already resolves.
+     * since WG2), the WG3 additions ({@code eclipse:echoing_hollow} /
+     * {@code eclipse:frost_crystal_cavern} detail shoulders,
+     * {@code eclipse:molten_veins} / {@code eclipse:glowshroom_grotto} region hearts)
+     * or {@code null} (neutral band). 2-D on purpose so {@code DiscBiomeSource} can
+     * fold it into its per-column cache; the y gates ({@link #SURFACE_MARGIN},
+     * {@link #DEEP_DARK_MAX_Y}, the WG2/WG3 bands via {@link #bandedBiome}) are applied
+     * per sample there. The B12 detail field outranks the base field (its thresholds
+     * are far rarer); all outputs fold into biome ids the biome source resolves.
+     * Threshold order matches {@link #detailRegionAt} exactly on the shared thresholds,
+     * so the {@code CaveDressings} decor keys stay in sync.
      */
     @Nullable
     public static String regionAt(int x, int z) {
-        DetailRegion detail = detailRegionAt(x, z);
-        if (detail == DetailRegion.SCULK_POCKET) {
+        double w = detailNoise().getValue(x / DETAIL_SCALE, z / DETAIL_SCALE);
+        if (w > SCULK_POCKET_THRESHOLD) {
             return DEEP_DARK_ID;
         }
-        if (detail == DetailRegion.CRYSTAL) {
+        if (w > ECHO_THRESHOLD) {
+            return ECHOING_HOLLOW_ID;
+        }
+        if (w < CRYSTAL_THRESHOLD) {
             return CRYSTAL_CHASMS_ID;
         }
+        if (w < FROST_THRESHOLD) {
+            return FROST_CRYSTAL_CAVERN_ID;
+        }
         double v = regionNoise().getValue(x / REGION_SCALE, z / REGION_SCALE);
+        if (v > HEART_THRESHOLD) {
+            return MOLTEN_VEINS_ID;
+        }
         if (v > REGION_THRESHOLD) {
             return DRIPSTONE_CAVES_ID;
+        }
+        if (v < -HEART_THRESHOLD) {
+            return GLOWSHROOM_GROTTO_ID;
         }
         return v < -REGION_THRESHOLD ? LUSH_CAVES_ID : null;
     }
 
     /**
-     * WG2 y-banding of a {@link #regionAt} region id: the deep half of a lush region
-     * (y &lt; {@value #FUNGAL_MAX_Y}) reads {@code eclipse:fungal_hollows}, the deep
-     * half of a dripstone region (y &lt; {@value #EMBER_MAX_Y}) reads
-     * {@code eclipse:ember_depths}; every other (region, y) pair — crystal chasms, the
-     * sculk-pocket deep-dark fold and the shallow region halves — passes through
-     * unchanged. Pure, worker-thread safe, cheap enough for the per-sample hot path.
+     * WG2/WG3 y-banding of a {@link #regionAt} region id: a lush region splits into
+     * shallow lush caves / {@code eclipse:tangled_roots} (y &lt;
+     * {@value #TANGLED_MAX_Y}) / {@code eclipse:fungal_hollows} (y &lt;
+     * {@value #FUNGAL_MAX_Y}); the deep half of a dripstone region (y &lt;
+     * {@value #EMBER_MAX_Y}) reads {@code eclipse:ember_depths}; the deep half of a
+     * sculk-pocket fold (y &lt; {@value #SCULK_DEPTHS_MAX_Y}) reads
+     * {@code eclipse:sculk_depths}. Every other (region, y) pair — crystal chasms, the
+     * WG3 detail shoulders and region hearts, and the shallow region halves — passes
+     * through unchanged. Pure, worker-thread safe, cheap enough for the per-sample hot
+     * path.
      */
     public static String bandedBiome(String region, int y) {
-        if (y < FUNGAL_MAX_Y && LUSH_CAVES_ID.equals(region)) {
-            return FUNGAL_HOLLOWS_ID;
+        if (LUSH_CAVES_ID.equals(region)) {
+            if (y < FUNGAL_MAX_Y) {
+                return FUNGAL_HOLLOWS_ID;
+            }
+            return y < TANGLED_MAX_Y ? TANGLED_ROOTS_ID : region;
         }
         if (y < EMBER_MAX_Y && DRIPSTONE_CAVES_ID.equals(region)) {
             return EMBER_DEPTHS_ID;
+        }
+        if (y < SCULK_DEPTHS_MAX_Y && DEEP_DARK_ID.equals(region)) {
+            return SCULK_DEPTHS_ID;
         }
         return region;
     }

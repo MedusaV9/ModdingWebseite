@@ -1,0 +1,28 @@
+{
+  "_comment": "WG3 tangled_roots: amber inclusions caught between the roots (reuses eclipse:amber_block).",
+  "config": {
+    "discard_chance_on_air_exposure": 0.0,
+    "size": 6,
+    "targets": [
+      {
+        "state": {
+          "Name": "eclipse:amber_block"
+        },
+        "target": {
+          "predicate_type": "minecraft:tag_match",
+          "tag": "minecraft:stone_ore_replaceables"
+        }
+      },
+      {
+        "state": {
+          "Name": "eclipse:amber_block"
+        },
+        "target": {
+          "predicate_type": "minecraft:tag_match",
+          "tag": "minecraft:deepslate_ore_replaceables"
+        }
+      }
+    ]
+  },
+  "type": "minecraft:ore"
+}

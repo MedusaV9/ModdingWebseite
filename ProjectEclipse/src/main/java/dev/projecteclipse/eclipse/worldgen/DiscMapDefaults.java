@@ -77,16 +77,30 @@ public final class DiscMapDefaults {
      * frozen per save), so
      * existing saves pick the new outputs up for newly generated chunks only — already
      * baked chunks keep their old biomes, exactly like the pale-garden rollout.</p>
+     *
+     * <p>WG3 (F-059, 10 → 20 biomes) adds four more surface bands, same rollout rule:
+     * the plains wedge gains {@code eclipse:sunflower_ruins} between the sunflower
+     * plains and the pale garden (300–370), the desert wedge's far rim (&gt; 380)
+     * hardens from scorched expanse into {@code eclipse:obsidian_wastes}, the savanna
+     * wedge's far rim (&gt; 380) crystallises from amber savanna into
+     * {@code eclipse:crystal_steppe}, and the jungle wedge finally gets its twisted
+     * outer band — {@code eclipse:mist_moor} beyond the bamboo jungle (&gt; 360). All
+     * landmark sites stay inside their pre-WG3 bands (checked against the D8 table:
+     * village r≈255 &lt; 300, temple r≈192 &lt; 200, trial chambers r≈250 &lt; 310,
+     * outpost r≈195 &lt; 280, jungle temple r≈245 &lt; 280); the snowy wedge (ice
+     * spikes + stronghold at r 400) is deliberately untouched.</p>
      */
     private static final Map<String, List<Ring>> OVERWORLD_RINGS = Map.ofEntries(
             Map.entry("minecraft:plains", List.of(
                     new Ring(150.0D, "minecraft:plains"),
                     new Ring(300.0D, "minecraft:sunflower_plains"),
+                    new Ring(370.0D, "eclipse:sunflower_ruins"),
                     new Ring(Double.MAX_VALUE, "eclipse:pale_garden"))),
             Map.entry("minecraft:desert", List.of(
                     new Ring(200.0D, "minecraft:desert"),
                     new Ring(310.0D, "minecraft:badlands"),
-                    new Ring(Double.MAX_VALUE, "eclipse:scorched_expanse"))),
+                    new Ring(380.0D, "eclipse:scorched_expanse"),
+                    new Ring(Double.MAX_VALUE, "eclipse:obsidian_wastes"))),
             Map.entry("minecraft:forest", List.of(
                     new Ring(150.0D, "minecraft:forest"),
                     new Ring(280.0D, "minecraft:birch_forest"),
@@ -94,11 +108,13 @@ public final class DiscMapDefaults {
             Map.entry("minecraft:jungle", List.of(
                     new Ring(150.0D, "minecraft:jungle"),
                     new Ring(280.0D, "minecraft:sparse_jungle"),
-                    new Ring(Double.MAX_VALUE, "minecraft:bamboo_jungle"))),
+                    new Ring(360.0D, "minecraft:bamboo_jungle"),
+                    new Ring(Double.MAX_VALUE, "eclipse:mist_moor"))),
             Map.entry("minecraft:savanna", List.of(
                     new Ring(150.0D, "minecraft:savanna"),
                     new Ring(280.0D, "minecraft:savanna_plateau"),
-                    new Ring(Double.MAX_VALUE, "eclipse:amber_savanna"))),
+                    new Ring(380.0D, "eclipse:amber_savanna"),
+                    new Ring(Double.MAX_VALUE, "eclipse:crystal_steppe"))),
             Map.entry("minecraft:swamp", List.of(
                     new Ring(150.0D, "minecraft:swamp"),
                     new Ring(280.0D, "minecraft:mangrove_swamp"),
@@ -346,6 +362,13 @@ public final class DiscMapDefaults {
         ids.add(CaveBiomeMap.CRYSTAL_CHASMS_ID);
         ids.add(CaveBiomeMap.EMBER_DEPTHS_ID);
         ids.add(CaveBiomeMap.UMBRAL_DEPTHS_ID);
+        // WG3 cave additions: region hearts, detail shoulders and the new y-bands.
+        ids.add(CaveBiomeMap.GLOWSHROOM_GROTTO_ID);
+        ids.add(CaveBiomeMap.MOLTEN_VEINS_ID);
+        ids.add(CaveBiomeMap.TANGLED_ROOTS_ID);
+        ids.add(CaveBiomeMap.FROST_CRYSTAL_CAVERN_ID);
+        ids.add(CaveBiomeMap.ECHOING_HOLLOW_ID);
+        ids.add(CaveBiomeMap.SCULK_DEPTHS_ID);
         ids.add("minecraft:the_end");
         return ids;
     }

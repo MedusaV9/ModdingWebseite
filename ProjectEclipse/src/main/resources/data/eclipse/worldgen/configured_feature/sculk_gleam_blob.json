@@ -1,0 +1,28 @@
+{
+  "_comment": "WG3 sculk_depths: sculk-gleam seams glowing through the sculk skin.",
+  "config": {
+    "discard_chance_on_air_exposure": 0.0,
+    "size": 12,
+    "targets": [
+      {
+        "state": {
+          "Name": "eclipse:sculk_gleam"
+        },
+        "target": {
+          "predicate_type": "minecraft:tag_match",
+          "tag": "minecraft:stone_ore_replaceables"
+        }
+      },
+      {
+        "state": {
+          "Name": "eclipse:sculk_gleam"
+        },
+        "target": {
+          "predicate_type": "minecraft:tag_match",
+          "tag": "minecraft:deepslate_ore_replaceables"
+        }
+      }
+    ]
+  },
+  "type": "minecraft:ore"
+}

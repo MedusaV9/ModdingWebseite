@@ -1,0 +1,9 @@
+{
+  "_comment": "WG3 mist_moor: soft peat heaps rising out of the fog (forest_rock boulders).",
+  "config": {
+    "state": {
+      "Name": "eclipse:peat_block"
+    }
+  },
+  "type": "minecraft:forest_rock"
+}

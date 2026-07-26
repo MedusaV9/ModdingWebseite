@@ -1,0 +1,40 @@
+{
+  "_comment": "WG3 obsidian_wastes: jagged obsidian spires (block_column, 2-5 obsidian + an occasional crying-obsidian tip) rising from the blackstone crust.",
+  "config": {
+    "allowed_placement": {
+      "blocks": "minecraft:air",
+      "type": "minecraft:matching_blocks"
+    },
+    "direction": "up",
+    "layers": [
+      {
+        "height": {
+          "type": "minecraft:uniform",
+          "max_inclusive": 5,
+          "min_inclusive": 2
+        },
+        "provider": {
+          "state": {
+            "Name": "minecraft:obsidian"
+          },
+          "type": "minecraft:simple_state_provider"
+        }
+      },
+      {
+        "height": {
+          "type": "minecraft:uniform",
+          "max_inclusive": 1,
+          "min_inclusive": 0
+        },
+        "provider": {
+          "state": {
+            "Name": "minecraft:crying_obsidian"
+          },
+          "type": "minecraft:simple_state_provider"
+        }
+      }
+    ],
+    "prioritize_tip": false
+  },
+  "type": "minecraft:block_column"
+}

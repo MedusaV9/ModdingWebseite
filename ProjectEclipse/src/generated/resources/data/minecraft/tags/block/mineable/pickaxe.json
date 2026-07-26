@@ -63,6 +63,13 @@
     "eclipse:amber_block",
     "eclipse:cinderstone",
     "eclipse:duskstone",
-    "eclipse:emberstone"
+    "eclipse:emberstone",
+    "eclipse:runestone",
+    "eclipse:voidglass",
+    "eclipse:luster_crystal",
+    "eclipse:scoria",
+    "eclipse:frost_crystal",
+    "eclipse:echo_crystal",
+    "eclipse:sculk_gleam"
   ]
 }

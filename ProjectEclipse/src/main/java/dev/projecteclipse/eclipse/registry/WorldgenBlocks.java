@@ -43,6 +43,15 @@ import net.neoforged.neoforge.registries.DeferredRegister;
  * glowcap → {@code eclipse:fungal_hollows}, duskstone → {@code eclipse:crystal_chasms},
  * emberstone → {@code eclipse:ember_depths}, umbral bloom →
  * {@code eclipse:umbral_depths}.</p>
+ *
+ * <p>WG3 (F-059, 10 → 20 biomes) additions: withered sunflower + runestone →
+ * {@code eclipse:sunflower_ruins}, voidglass + voidbloom →
+ * {@code eclipse:obsidian_wastes}, luster crystal + prism sprouts →
+ * {@code eclipse:crystal_steppe}, wisp cap + peat block → {@code eclipse:mist_moor},
+ * lumishroom → {@code eclipse:glowshroom_grotto}, scoria + emberbloom →
+ * {@code eclipse:molten_veins}, amber tendril → {@code eclipse:tangled_roots}, frost
+ * crystal → {@code eclipse:frost_crystal_cavern}, echo crystal →
+ * {@code eclipse:echoing_hollow}, sculk gleam → {@code eclipse:sculk_depths}.</p>
  */
 public final class WorldgenBlocks {
     public static final DeferredRegister<Block> BLOCKS =
@@ -114,6 +123,109 @@ public final class WorldgenBlocks {
     public static final Supplier<Block> UMBRAL_BLOOM = BLOCKS.register("umbral_bloom",
             () -> new GlowPlantBlock(plantProperties(MapColor.COLOR_PURPLE, 3)));
 
+    // --- WG3 surface biome blocks (F-059) ---
+
+    /** Sunflower-ruins husk flower — dried out, no glow. */
+    public static final Supplier<Block> WITHERED_SUNFLOWER = BLOCKS.register("withered_sunflower",
+            () -> new GlowPlantBlock(plantProperties(MapColor.COLOR_YELLOW, 0)));
+
+    /** Sunflower-ruins rubble stone with faintly glowing glyphs (light 3); pickaxe-class. */
+    public static final Supplier<Block> RUNESTONE = BLOCKS.register("runestone",
+            () -> new Block(BlockBehaviour.Properties.of()
+                    .mapColor(MapColor.COLOR_GRAY)
+                    .instrument(NoteBlockInstrument.BASEDRUM)
+                    .strength(2.0F, 6.0F)
+                    .sound(SoundType.DEEPSLATE)
+                    .lightLevel(state -> 3)));
+
+    /** Obsidian-wastes glassy rock, dull violet sheen (light 2); pickaxe-class. */
+    public static final Supplier<Block> VOIDGLASS = BLOCKS.register("voidglass",
+            () -> new Block(BlockBehaviour.Properties.of()
+                    .mapColor(MapColor.COLOR_BLACK)
+                    .instrument(NoteBlockInstrument.BASEDRUM)
+                    .strength(3.0F, 9.0F)
+                    .sound(SoundType.DEEPSLATE)
+                    .lightLevel(state -> 2)));
+
+    /** Obsidian-wastes flower, violet void shimmer (light 6). */
+    public static final Supplier<Block> VOIDBLOOM = BLOCKS.register("voidbloom",
+            () -> new GlowPlantBlock(plantProperties(MapColor.COLOR_PURPLE, 6)));
+
+    /** Crystal-steppe crystal boulder, strong cyan shine (light 10); pickaxe-class. */
+    public static final Supplier<Block> LUSTER_CRYSTAL = BLOCKS.register("luster_crystal",
+            () -> new Block(BlockBehaviour.Properties.of()
+                    .mapColor(MapColor.COLOR_CYAN)
+                    .instrument(NoteBlockInstrument.HAT)
+                    .strength(1.5F)
+                    .sound(SoundType.AMETHYST)
+                    .lightLevel(state -> 10)));
+
+    /** Crystal-steppe grass shot through with crystal splinters (light 5). */
+    public static final Supplier<Block> PRISM_SPROUTS = BLOCKS.register("prism_sprouts",
+            () -> new GlowPlantBlock(plantProperties(MapColor.COLOR_CYAN, 5)));
+
+    /** Mist-moor will-o'-wisp mushroom, pale cold shine (light 8). */
+    public static final Supplier<Block> WISP_CAP = BLOCKS.register("wisp_cap",
+            () -> new GlowPlantBlock(plantProperties(MapColor.COLOR_LIGHT_BLUE, 8)));
+
+    /** Mist-moor peat ground heaps — soft, shovel-class (minecraft:mineable/shovel tag). */
+    public static final Supplier<Block> PEAT_BLOCK = BLOCKS.register("peat_block",
+            () -> new Block(BlockBehaviour.Properties.of()
+                    .mapColor(MapColor.TERRACOTTA_BROWN)
+                    .strength(0.5F)
+                    .sound(SoundType.MUD)
+                    .pushReaction(PushReaction.DESTROY)));
+
+    // --- WG3 cave biome blocks (F-059) ---
+
+    /** Glowshroom-grotto mushroom, the brightest plant shine of the set (light 12). */
+    public static final Supplier<Block> LUMISHROOM = BLOCKS.register("lumishroom",
+            () -> new GlowPlantBlock(plantProperties(MapColor.EMERALD, 12)));
+
+    /** Molten-veins porous slag stone, ember glow in the pores (light 4); pickaxe-class. */
+    public static final Supplier<Block> SCORIA = BLOCKS.register("scoria",
+            () -> new Block(BlockBehaviour.Properties.of()
+                    .mapColor(MapColor.COLOR_BROWN)
+                    .instrument(NoteBlockInstrument.BASEDRUM)
+                    .strength(1.5F, 6.0F)
+                    .sound(SoundType.BASALT)
+                    .lightLevel(state -> 4)));
+
+    /** Molten-veins flower, hot orange flicker (light 7). */
+    public static final Supplier<Block> EMBERBLOOM = BLOCKS.register("emberbloom",
+            () -> new GlowPlantBlock(plantProperties(MapColor.COLOR_ORANGE, 7)));
+
+    /** Tangled-roots sprout, warm amber glow like its namesake block (light 5). */
+    public static final Supplier<Block> AMBER_TENDRIL = BLOCKS.register("amber_tendril",
+            () -> new GlowPlantBlock(plantProperties(MapColor.COLOR_ORANGE, 5)));
+
+    /** Frost-crystal-cavern ice crystal, cold blue shine (light 8); pickaxe-class. */
+    public static final Supplier<Block> FROST_CRYSTAL = BLOCKS.register("frost_crystal",
+            () -> new Block(BlockBehaviour.Properties.of()
+                    .mapColor(MapColor.ICE)
+                    .instrument(NoteBlockInstrument.HAT)
+                    .strength(1.5F)
+                    .sound(SoundType.AMETHYST)
+                    .lightLevel(state -> 8)));
+
+    /** Echoing-hollow dark crystal, faint teal pulse (light 4); pickaxe-class. */
+    public static final Supplier<Block> ECHO_CRYSTAL = BLOCKS.register("echo_crystal",
+            () -> new Block(BlockBehaviour.Properties.of()
+                    .mapColor(MapColor.COLOR_CYAN)
+                    .instrument(NoteBlockInstrument.HAT)
+                    .strength(3.0F, 6.0F)
+                    .sound(SoundType.AMETHYST)
+                    .lightLevel(state -> 4)));
+
+    /** Sculk-depths accent stone, glowing soul speckles (light 6); pickaxe-class. */
+    public static final Supplier<Block> SCULK_GLEAM = BLOCKS.register("sculk_gleam",
+            () -> new Block(BlockBehaviour.Properties.of()
+                    .mapColor(MapColor.COLOR_CYAN)
+                    .instrument(NoteBlockInstrument.BASEDRUM)
+                    .strength(1.5F, 6.0F)
+                    .sound(SoundType.SCULK)
+                    .lightLevel(state -> 6)));
+
     // --- block items ---
 
     public static final Supplier<BlockItem> ASH_BLOCK_ITEM = blockItem("ash_block", ASH_BLOCK);
@@ -125,6 +237,27 @@ public final class WorldgenBlocks {
     public static final Supplier<BlockItem> DUSKSTONE_ITEM = blockItem("duskstone", DUSKSTONE);
     public static final Supplier<BlockItem> EMBERSTONE_ITEM = blockItem("emberstone", EMBERSTONE);
     public static final Supplier<BlockItem> UMBRAL_BLOOM_ITEM = blockItem("umbral_bloom", UMBRAL_BLOOM);
+    public static final Supplier<BlockItem> WITHERED_SUNFLOWER_ITEM =
+            blockItem("withered_sunflower", WITHERED_SUNFLOWER);
+    public static final Supplier<BlockItem> RUNESTONE_ITEM = blockItem("runestone", RUNESTONE);
+    public static final Supplier<BlockItem> VOIDGLASS_ITEM = blockItem("voidglass", VOIDGLASS);
+    public static final Supplier<BlockItem> VOIDBLOOM_ITEM = blockItem("voidbloom", VOIDBLOOM);
+    public static final Supplier<BlockItem> LUSTER_CRYSTAL_ITEM =
+            blockItem("luster_crystal", LUSTER_CRYSTAL);
+    public static final Supplier<BlockItem> PRISM_SPROUTS_ITEM =
+            blockItem("prism_sprouts", PRISM_SPROUTS);
+    public static final Supplier<BlockItem> WISP_CAP_ITEM = blockItem("wisp_cap", WISP_CAP);
+    public static final Supplier<BlockItem> PEAT_BLOCK_ITEM = blockItem("peat_block", PEAT_BLOCK);
+    public static final Supplier<BlockItem> LUMISHROOM_ITEM = blockItem("lumishroom", LUMISHROOM);
+    public static final Supplier<BlockItem> SCORIA_ITEM = blockItem("scoria", SCORIA);
+    public static final Supplier<BlockItem> EMBERBLOOM_ITEM = blockItem("emberbloom", EMBERBLOOM);
+    public static final Supplier<BlockItem> AMBER_TENDRIL_ITEM =
+            blockItem("amber_tendril", AMBER_TENDRIL);
+    public static final Supplier<BlockItem> FROST_CRYSTAL_ITEM =
+            blockItem("frost_crystal", FROST_CRYSTAL);
+    public static final Supplier<BlockItem> ECHO_CRYSTAL_ITEM =
+            blockItem("echo_crystal", ECHO_CRYSTAL);
+    public static final Supplier<BlockItem> SCULK_GLEAM_ITEM = blockItem("sculk_gleam", SCULK_GLEAM);
 
     private WorldgenBlocks() {}
 
@@ -166,6 +299,21 @@ public final class WorldgenBlocks {
                 event.accept(DUSKSTONE_ITEM.get());
                 event.accept(EMBERSTONE_ITEM.get());
                 event.accept(UMBRAL_BLOOM_ITEM.get());
+                event.accept(WITHERED_SUNFLOWER_ITEM.get());
+                event.accept(RUNESTONE_ITEM.get());
+                event.accept(VOIDGLASS_ITEM.get());
+                event.accept(VOIDBLOOM_ITEM.get());
+                event.accept(LUSTER_CRYSTAL_ITEM.get());
+                event.accept(PRISM_SPROUTS_ITEM.get());
+                event.accept(WISP_CAP_ITEM.get());
+                event.accept(PEAT_BLOCK_ITEM.get());
+                event.accept(LUMISHROOM_ITEM.get());
+                event.accept(SCORIA_ITEM.get());
+                event.accept(EMBERBLOOM_ITEM.get());
+                event.accept(AMBER_TENDRIL_ITEM.get());
+                event.accept(FROST_CRYSTAL_ITEM.get());
+                event.accept(ECHO_CRYSTAL_ITEM.get());
+                event.accept(SCULK_GLEAM_ITEM.get());
             }
         }
     }

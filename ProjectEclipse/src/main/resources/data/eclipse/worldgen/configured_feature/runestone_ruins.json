@@ -1,0 +1,9 @@
+{
+  "_comment": "WG3 sunflower_ruins: overgrown runestone rubble boulders between the withered sunflowers.",
+  "config": {
+    "state": {
+      "Name": "eclipse:runestone"
+    }
+  },
+  "type": "minecraft:forest_rock"
+}

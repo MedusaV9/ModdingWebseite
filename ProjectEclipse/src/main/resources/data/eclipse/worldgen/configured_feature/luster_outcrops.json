@@ -1,0 +1,9 @@
+{
+  "_comment": "WG3 crystal_steppe: luster-crystal boulders (light 10) breaking the crystallised grass.",
+  "config": {
+    "state": {
+      "Name": "eclipse:luster_crystal"
+    }
+  },
+  "type": "minecraft:forest_rock"
+}

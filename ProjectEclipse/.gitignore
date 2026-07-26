@@ -29,3 +29,7 @@ bin/
 
 # generated compiler arg files (machine-specific absolute paths)
 javac.*.args
+
+# python bytecode caches
+__pycache__/
+*.pyc
