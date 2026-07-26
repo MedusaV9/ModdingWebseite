@@ -13,7 +13,6 @@ import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.core.config.EclipseConfig;
 import dev.projecteclipse.eclipse.core.signal.EclipseSignals;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
-import dev.projecteclipse.eclipse.core.state.LivesApi;
 import dev.projecteclipse.eclipse.entity.GazerEntity;
 import dev.projecteclipse.eclipse.lang.ServerLang;
 import dev.projecteclipse.eclipse.network.S2CQuasarPayload;
@@ -36,7 +35,6 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
-import net.minecraft.world.Containers;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
@@ -45,7 +43,7 @@ import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
  * Server-side brain of the altar. Holds only transient per-player interaction
- * state (heart-sacrifice confirmations, revive-sigil selections); all durable
+ * state (offering confirmations, revive-sigil selections); all durable
  * progress lives in {@link EclipseWorldState}.
  *
  * <p>Milestone progress is tracked in {@link EclipseWorldState#getMilestoneProgress(String)}
@@ -55,9 +53,7 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * <p>All player feedback is action bar + sounds; nothing is ever sent to chat.</p>
  */
 public class AltarBlockEntity extends BlockEntity {
-    /** Heart sacrifice must be confirmed by a second sneak-right-click within this window (5 s). */
-    public static final long HEART_CONFIRM_WINDOW_TICKS = 100L;
-    /** Offerings use the same deliberate two-click confirmation window. */
+    /** Offerings are confirmed by a second sneak-right-click within this window (5 s). */
     public static final long OFFERING_CONFIRM_WINDOW_TICKS = 100L;
     /**
      * VEIL-REPASS-2 crowd-awareness: players within this range of the altar count as the
@@ -66,8 +62,6 @@ public class AltarBlockEntity extends BlockEntity {
      */
     public static final double CROWD_RANGE = 20.0D;
 
-    /** Game time of each player's pending (unconfirmed) heart sacrifice. */
-    private final Map<UUID, Long> pendingHeartSacrifices = new HashMap<>();
     /** Item id + game time of each player's pending (unconfirmed) daily offering. */
     private final Map<UUID, PendingOffering> pendingOfferings = new HashMap<>();
     /** Currently-selected revive target (banned player UUID) per interacting player. */
@@ -82,7 +76,43 @@ public class AltarBlockEntity extends BlockEntity {
     // --- milestone sacrifice ---
 
     /**
-     * Right-click with an item: consumes as much of the held stack as the next
+     * ALTARFIX2 #3 routing query: does the HUNGERING milestone still want this item?
+     * {@code true} also while the ladder is sealed ({@code /dev altar lock}), so
+     * {@link #handleMilestoneDeposit} can refuse with its own message instead of the item
+     * silently sliding into the daily-offering lane and being eaten.
+     */
+    public boolean wantsForMilestone(MinecraftServer server, ItemStack stack) {
+        if (stack.isEmpty()) {
+            return false;
+        }
+        EclipseWorldState state = EclipseWorldState.get(server);
+        EclipseConfig.Milestone milestone = EclipseConfig.milestone(state.getAltarLevel() + 1);
+        if (milestone == null) {
+            return false;
+        }
+        if (AltarAdminState.get(server).isProgressionLocked()) {
+            // Sealed: still claim the item so handleMilestoneDeposit prints "sealed".
+            String held = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
+            for (EclipseConfig.ItemCost cost : milestone.cost()) {
+                if (cost.item().equals(held)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        String itemId = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
+        for (EclipseConfig.ItemCost cost : milestone.cost()) {
+            if (cost.item().equals(itemId)
+                    && state.getMilestoneProgress(progressKey(milestone, cost.item())) < cost.count()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Sneak-right-click with an item the milestone wants (ALTARFIX2 #3 moved this off the
+     * plain right-click): consumes as much of the held stack as the next
      * milestone (current altar level + 1) still needs of that item. Completing
      * all cost entries raises the altar level, syncs it to all clients and plays
      * the subtle global cue (end-portal sound + portal particles, no text).
@@ -322,49 +352,18 @@ public class AltarBlockEntity extends BlockEntity {
         return exactValue <= 5 ? 0 : exactValue <= 40 ? 1 : 2;
     }
 
-    // --- heart sacrifice ---
+    // --- empty-hand sneak ---
 
     /**
-     * Sneak-right-click with an empty hand. The first click arms a pending
-     * sacrifice; a second one within {@link #HEART_CONFIRM_WINDOW_TICKS} takes a
-     * life ({@link LivesApi}) and drops one heart fragment on the altar. Players
-     * at 1 life or below are blocked with an action-bar hint.
+     * ALTARFIX2 #3: sneak-right-click with an EMPTY hand. This used to be the heart
+     * sacrifice (two clicks → −1 life, one heart fragment dropped on the stone) — the
+     * altar's only "hand an item out" path, and the one players triggered by accident.
+     * It is gone: the altar takes, it never gives. Heart fragments come from the
+     * craftable Heart Extractor ({@link HeartExtractorItem}: 2 hearts → 4 fragments).
      */
-    public void handleHeartSacrifice(ServerPlayer player) {
-        if (!(this.level instanceof ServerLevel serverLevel)) {
-            return;
-        }
-        if (LivesApi.get(player) <= 1) {
-            pendingHeartSacrifices.remove(player.getUUID());
-            actionBar(player, Component.translatable("ritual.eclipse.heart.blocked"));
-            player.playNotifySound(SoundEvents.FIRE_EXTINGUISH, SoundSource.BLOCKS, 0.5F, 0.8F);
-            return;
-        }
-        long now = serverLevel.getGameTime();
-        Long pending = pendingHeartSacrifices.get(player.getUUID());
-        if (pending == null || now - pending > HEART_CONFIRM_WINDOW_TICKS) {
-            pendingHeartSacrifices.put(player.getUUID(), now);
-            actionBar(player, Component.translatable("ritual.eclipse.heart.confirm"));
-            player.playNotifySound(SoundEvents.AMETHYST_BLOCK_RESONATE, SoundSource.BLOCKS, 0.8F, 0.6F);
-            return;
-        }
-        pendingHeartSacrifices.remove(player.getUUID());
-        LivesApi.add(player, -1);
-        dev.projecteclipse.eclipse.drama.WitnessedLossService.onHeartLost(player);
-        // W4-HEARTS R2: the sacrificed heart shatters over the hotbar + a world echo at the altar.
-        PacketDistributor.sendToPlayer(player,
-                new dev.projecteclipse.eclipse.network.S2CHeartBurstPayload(LivesApi.get(player)),
-                new S2CQuasarPayload(S2CQuasarPayload.HEART_BURST,
-                        Vec3.atCenterOf(this.worldPosition).add(0.0D, 1.2D, 0.0D)));
-        Containers.dropItemStack(serverLevel,
-                this.worldPosition.getX() + 0.5D, this.worldPosition.getY() + 1.0D, this.worldPosition.getZ() + 0.5D,
-                new ItemStack(EclipseItems.HEART_FRAGMENT.get()));
-        serverLevel.playSound(null, this.worldPosition, SoundEvents.WARDEN_HEARTBEAT, SoundSource.BLOCKS, 1.0F, 0.8F);
-        actionBar(player, Component.translatable("ritual.eclipse.heart.done"));
-        // W10: heart sacrifices draw a watcher too.
-        GazerEntity.watchSacrifice(serverLevel, this.worldPosition);
-        EclipseMod.LOGGER.info("{} sacrificed a life at the altar {} ({} lives left)",
-                player.getScoreboardName(), this.worldPosition, LivesApi.get(player));
+    public void handleEmptyHandDeposit(ServerPlayer player) {
+        actionBar(player, Component.translatable("ritual.eclipse.altar.empty_hand"));
+        player.playNotifySound(SoundEvents.AMETHYST_BLOCK_RESONATE, SoundSource.BLOCKS, 0.6F, 0.7F);
     }
 
     // --- revive sigil ---

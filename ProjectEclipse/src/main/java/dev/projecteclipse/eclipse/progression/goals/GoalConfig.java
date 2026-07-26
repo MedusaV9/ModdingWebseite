@@ -55,10 +55,13 @@ public final class GoalConfig {
      * Version 2 = the v5 phase-aware/harder ladder (FIX-ECON migration cut-in). Version 3
      * = EVAL-DOPA-F #8: day-1 {@code TEAM_ALL} mains demoted to {@code EACH_PLAYER} (a
      * single no-show must not zero the onboarding day) and the slow-grinder personals
-     * ({@code p_swimmer}/{@code p_leaper}) pushed to {@code minDay 2}. Bump when the
+     * ({@code p_swimmer}/{@code p_leaper}) pushed to {@code minDay 2}. Version 4 =
+     * ALTARFIX2 #1: {@code d01_touch_altar} moved off the spawn-radius
+     * {@code visit_location} trigger onto the new {@code touch_altar} signal (the old
+     * default auto-completed for everyone seconds after the start event). Bump when the
      * shipped default authoring must replace live files on servers.
      */
-    public static final int CONFIG_VERSION = 3;
+    public static final int CONFIG_VERSION = 4;
     /** Legacy sidebar bitmask limit — mirrored from {@code ConfigEditor.MAX_GOALS_PER_DAY}. */
     public static final int MAX_MAINS_PER_DAY = 8;
     private static final int MAX_DAYS = 64;
@@ -552,7 +555,11 @@ public final class GoalConfig {
                         main("d01_stone_age", Scope.EACH_PLAYER,
                                 count(TriggerType.CRAFT_ITEM, "minecraft:stone_pickaxe", 1),
                                 text("Everyone crafts a stone pickaxe", "Jeder fertigt eine Steinspitzhacke"), xp(250)),
-                        main("d01_touch_altar", Scope.EACH_PLAYER, location(0, 0, 10),
+                        // ALTARFIX2 #1: was visit_location(0, 0, r=10) — the sanctum altar
+                        // stands at (0, ~70, 0) and the start-event cutscene drops every
+                        // player right on it, so the 20t proximity poll completed the goal
+                        // within a second of the event. It now needs a REAL altar click.
+                        main("d01_touch_altar", Scope.EACH_PLAYER, touchAltar(),
                                 text("Everyone touches the altar", "Jeder berührt den Altar"),
                                 new Reward(300, 0, List.of(new GoalSpec.ItemReward("eclipse:umbral_shard", 2))))),
                 List.of(side("d01_unscathed", Scope.TEAM_ALL,
@@ -966,6 +973,10 @@ public final class GoalConfig {
 
     private static Trigger location(int x, int z, int radius) {
         return new Trigger(TriggerType.VISIT_LOCATION, "", 1, true, x, z, radius, 0, "", "", "");
+    }
+
+    private static Trigger touchAltar() {
+        return new Trigger(TriggerType.TOUCH_ALTAR, "", 1, true, 0, 0, 0, 0, "", "", "");
     }
 
     private static Trigger depth(int y) {

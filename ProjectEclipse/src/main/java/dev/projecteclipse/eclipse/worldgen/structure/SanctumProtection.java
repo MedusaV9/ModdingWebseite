@@ -47,9 +47,10 @@ import net.neoforged.neoforge.event.server.ServerStoppedEvent;
  * block-side interface P4's edge/auto-glide safety rule and P2's FX queries consume.</p>
  *
  * <p>plans_v5 PLAN-B B10: the break/place/explosion handlers additionally enforce the
- * BROAD {@code protection.json} spawn zone (default r=96) whenever {@code spawn.noBuild}
- * is set (default true; {@code spawn.buildRadius} > 0 overrides the ring size) — the
- * r=19..96 band around the altar is no longer freely minable. Fluid buckets and
+ * BROAD {@code protection.json} spawn zone (default r=71 since ALTARFIX2 #2, was 96)
+ * whenever {@code spawn.noBuild} is set (default true; {@code spawn.buildRadius} > 0
+ * overrides the ring size) — the r=19..71 band around the altar is no longer freely
+ * minable. Fluid buckets and
  * vehicles/TNT in the broad zone are already cancelled by
  * {@link dev.projecteclipse.eclipse.protection.SpawnProtectionRules} (RightClickBlock +
  * FluidPlaceBlockEvent + EntityJoinLevelEvent); flint-and-steel fire rides the vanilla
@@ -117,7 +118,7 @@ public final class SanctumProtection {
         return override > 0 ? override : RADIUS;
     }
 
-    /** Radius of the broad gameplay zone: saved override, otherwise protection.json (default r=96). */
+    /** Radius of the broad gameplay zone: saved override, otherwise protection.json (default r=71). */
     public static int spawnRadius(MinecraftServer server) {
         int override = SpawnTuningData.get(server).radiusOverride();
         return override > 0 ? override : Math.max(1, ProtectionConfig.current().spawn().radius());
@@ -139,7 +140,7 @@ public final class SanctumProtection {
     }
 
     /**
-     * Broad gameplay protection from {@code protection.json}: default r=96 with its own
+     * Broad gameplay protection from {@code protection.json}: default r=71 with its own
      * absolute vertical range. This is deliberately distinct from {@link #isProtected}.
      */
     public static boolean isSpawnProtected(Level level, BlockPos pos) {

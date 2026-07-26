@@ -80,6 +80,21 @@ import net.neoforged.neoforge.network.PacketDistributor;
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class QuestEngine {
     private static final int POLL_TICKS = 20;
+    /**
+     * ALTARFIX2 #1 arrival grace (2 real minutes at 20 tps). No {@code visit_location} and
+     * no {@code touch_altar} goal may complete while it runs, measured from BOTH anchors:
+     * world start ({@code gameTime < ARRIVAL_GRACE_TICKS}) and the moment the start-event
+     * cutscene finished ({@link EclipseWorldState#getStartEventGameTime()}). Both matter:
+     * the cutscene teleports every player onto the sanctum island, right on top of the
+     * day-1 goal's target coordinates.
+     */
+    public static final long ARRIVAL_GRACE_TICKS = 2400L;
+    /**
+     * {@code QuestState} baseline key prefix of the {@code visit_location} arm latch:
+     * {@code 1} = the player sat inside the radius during the arrival grace and must leave
+     * it once before an entry counts, {@code 0} = armed (seen outside).
+     */
+    private static final String VISIT_HOLD_PREFIX = "visitHold:";
     /** Movement stats summed for {@code travel_distance} (all in cm, matching analytics dist_cm). */
     private static final List<ResourceLocation> TRAVEL_STATS = List.of(
             Stats.WALK_ONE_CM, Stats.SPRINT_ONE_CM, Stats.CROUCH_ONE_CM, Stats.SWIM_ONE_CM,
@@ -744,9 +759,25 @@ public final class QuestEngine {
         flushDirty(server);
     }
 
+    /**
+     * ALTARFIX2 #1: whether the global arrival grace is still running. Nothing that a
+     * player can satisfy merely by BEING somewhere (proximity polls, altar touches) may
+     * complete inside it — the start-event cutscene drops everyone on the sanctum island
+     * and the day-1 goal's target is that very island.
+     */
+    public static boolean withinArrivalGrace(MinecraftServer server) {
+        long gameTime = server.overworld().getGameTime();
+        if (gameTime < ARRIVAL_GRACE_TICKS) {
+            return true;
+        }
+        long eventAt = EclipseWorldState.get(server).getStartEventGameTime();
+        return eventAt > 0L && gameTime - eventAt < ARRIVAL_GRACE_TICKS;
+    }
+
     /** Polled trigger types for one player. O(active polled specs); zero allocation hot path. */
     static void pollPlayer(MinecraftServer server, ResolvedDay day, QuestState state, ServerPlayer player) {
         UUID uuid = player.getUUID();
+        boolean grace = withinArrivalGrace(server);
         for (GoalSpec spec : day.ofType(TriggerType.VISIT_LOCATION)) {
             if (state.isPlayerDone(day.day, uuid, spec.id()) || state.isTeamDone(day.day, spec.id())) {
                 continue;
@@ -756,7 +787,16 @@ public final class QuestEngine {
                 double dz = player.getZ() - spec.trigger().z();
                 long radius = spec.trigger().radius();
                 if (dx * dx + dz * dz <= (double) (radius * radius)) {
-                    raiseTo(server, player, spec, spec.target());
+                    if (!grace && !isVisitHeld(state, day.day, uuid, spec)) {
+                        raiseTo(server, player, spec, spec.target());
+                    } else if (grace) {
+                        // Parked inside during the grace (cutscene drop-off / spawn):
+                        // latch a hold — this player must leave the radius once so the
+                        // completion is a real ENTRY rather than a spawn position.
+                        setVisitHold(state, day.day, uuid, spec, true);
+                    }
+                } else {
+                    setVisitHold(state, day.day, uuid, spec, false); // outside = armed
                 }
             }
         }
@@ -801,6 +841,31 @@ public final class QuestEngine {
                 continue;
             }
             raiseTo(server, player, spec, Math.max(0L, player.getStats().getValue(stat) - baseline));
+        }
+    }
+
+    /** Whether the player still owes a "leave the radius once" before an entry counts. */
+    private static boolean isVisitHeld(QuestState state, int day, UUID uuid, GoalSpec spec) {
+        Long hold = state.baseline(day, uuid, VISIT_HOLD_PREFIX + spec.id());
+        return hold != null && hold != 0L;
+    }
+
+    /**
+     * Writes the arm latch only on a real transition — the poll runs every 20 ticks.
+     * Clearing an ABSENT latch is a no-op on purpose: the overwhelming majority of
+     * players are simply never inside the radius, and they must not each accrue a
+     * dead {@code visitHold:*} baseline in the saved quest state ({@link #isVisitHeld}
+     * already reads a missing entry as "armed").
+     */
+    private static void setVisitHold(QuestState state, int day, UUID uuid, GoalSpec spec, boolean held) {
+        String key = VISIT_HOLD_PREFIX + spec.id();
+        Long current = state.baseline(day, uuid, key);
+        if (held) {
+            if (current == null || current != 1L) {
+                state.setBaseline(day, uuid, key, 1L);
+            }
+        } else if (current != null && current != 0L) {
+            state.setBaseline(day, uuid, key, 0L);
         }
     }
 

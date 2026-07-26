@@ -1,0 +1,53 @@
+{
+  "_comment": "ALTARFIX2 — #1 altar-touch quest grace, #3 altar interaction rework (right-click = UI, sneak-right-click = deposit, no more heart-fragment withdrawal), #4 shard-shop currency clarity + price/description audit. Keys below the first group OVERWRITE shipped strings that became factually wrong.",
+
+  "en_us": {
+    "quest.eclipse.altar_touch.too_early": "The altar is still waking — its stone will not remember this touch yet. Come back in a couple of minutes.",
+    "ritual.eclipse.altar.empty_hand": "The altar takes; it never gives. Hold what you want to offer, or craft a Heart Extractor for heart fragments.",
+
+    "gui.eclipse.altar.shop.count": "\u00d7%1$s",
+    "gui.eclipse.altar.shop.cost": "Price: %1$s \u00d7 %2$s",
+    "gui.eclipse.altar.shop.have.personal": "Your balance: %1$s %2$s",
+    "gui.eclipse.altar.shop.have.pooled": "Team pool: %1$s %2$s",
+    "gui.eclipse.altar.shop.short_by": "%1$s short.",
+    "gui.eclipse.altar.shop.buy_hint": "Click to buy.",
+
+    "gui.eclipse.altar.hint": "Right-click the altar to open this panel; SNEAK-right-click while holding an item to pay it in. Progress belongs to the whole team.",
+    "gui.eclipse.artifact.rules.line6": "6. Heart fragments come from the crafted Heart Extractor (2 hearts \u2192 4 fragments), never from the altar; they are an ingredient for reviving banished players.",
+    "collection.eclipse.item.heart_extractor": "Hold use to tear out two of your own hearts in exchange for four Heart Fragments. It refuses your last life. Survives four uses.",
+    "collection.eclipse.item.umbral_shard": "Loot of the night creatures and the altar's coin. Sneak-right-click the altar to bank shards into the TEAM POOL, which pays for the team offers in the shard shop; the shop's item offers are paid from your PERSONAL balance, which you earn from quests, contracts, boss payouts and awards.",
+    "item.eclipse.umbral_shard.tooltip": "Sneak-use on the altar to bank it into the TEAM POOL (team offers). Item offers are paid from your earned personal balance.",
+
+    "shop.eclipse.need": "The altar demands %1$s Umbral Shards from your PERSONAL balance; you hold %2$s. Shards banked at the altar go to the team pool instead.",
+    "shop.eclipse.pool_need": "The TEAM POOL holds %2$s of the %1$s Umbral Shards this demands.",
+    "shop.eclipse.offer": "Altar shop: %1$s \u2014 %2$s Umbral Shards from your personal balance (you have %3$s). Sneak-punch to buy.",
+    "shop.eclipse.offer_pooled": "Altar shop: %1$s \u2014 %2$s Umbral Shards from the TEAM POOL (pool holds %3$s). Sneak-punch to call it.",
+    "shop.eclipse.bought": "The altar yields: %1$s (%2$s Umbral Shards left on your balance)",
+    "shop.eclipse.deposit_hint": "Sneak-right-click banks shards into the team pool; right-click opens the altar panel to buy."
+  },
+
+  "de_de": {
+    "quest.eclipse.altar_touch.too_early": "Der Altar erwacht noch \u2014 sein Stein merkt sich diese Ber\u00fchrung noch nicht. Komm in ein paar Minuten wieder.",
+    "ritual.eclipse.altar.empty_hand": "Der Altar nimmt; er gibt niemals. Halte, was du opfern willst \u2014 oder fertige einen Herz-Extraktor f\u00fcr Herzfragmente.",
+
+    "gui.eclipse.altar.shop.count": "\u00d7%1$s",
+    "gui.eclipse.altar.shop.cost": "Preis: %1$s \u00d7 %2$s",
+    "gui.eclipse.altar.shop.have.personal": "Dein Guthaben: %1$s %2$s",
+    "gui.eclipse.altar.shop.have.pooled": "Team-Pool: %1$s %2$s",
+    "gui.eclipse.altar.shop.short_by": "Es fehlen %1$s.",
+    "gui.eclipse.altar.shop.buy_hint": "Klicken zum Kaufen.",
+
+    "gui.eclipse.altar.hint": "Rechtsklick auf den Altar \u00f6ffnet dieses Men\u00fc; SCHLEICHEN + Rechtsklick mit einem Gegenstand zahlt ihn ein. Der Fortschritt geh\u00f6rt dem ganzen Team.",
+    "gui.eclipse.artifact.rules.line6": "6. Herzfragmente kommen aus dem gefertigten Herz-Extraktor (2 Herzen \u2192 4 Fragmente), nie aus dem Altar; sie sind eine Zutat, um verbannte Spieler wiederzubeleben.",
+    "collection.eclipse.item.heart_extractor": "Nutzen halten, um dir zwei deiner Herzen herauszurei\u00dfen \u2014 im Tausch gegen vier Herzfragmente. Dein letztes Leben verweigert er. H\u00e4lt vier Anwendungen.",
+    "collection.eclipse.item.umbral_shard": "Beute der Nachtwesen und M\u00fcnze des Altars. Schleichend am Altar rechtsklicken zahlt Splitter in den TEAM-POOL ein, aus dem die Team-Angebote des Splitterladens bezahlt werden; die Gegenstands-Angebote gehen von deinem PERS\u00d6NLICHEN Guthaben ab, das du dir mit Quests, Kopfgeldern, Boss-Aussch\u00fcttungen und Auszeichnungen verdienst.",
+    "item.eclipse.umbral_shard.tooltip": "Schleichend am Altar benutzen, um ihn in den TEAM-POOL zu banken (Team-Angebote). Gegenstands-Angebote zahlst du aus deinem verdienten pers\u00f6nlichen Guthaben.",
+
+    "shop.eclipse.need": "Der Altar verlangt %1$s Umbrasplitter aus deinem PERS\u00d6NLICHEN Guthaben; du h\u00e4ltst %2$s. Am Altar eingezahlte Splitter landen stattdessen im Team-Pool.",
+    "shop.eclipse.pool_need": "Der TEAM-POOL h\u00e4lt %2$s der %1$s verlangten Umbrasplitter.",
+    "shop.eclipse.offer": "Altarladen: %1$s \u2014 %2$s Umbrasplitter aus deinem pers\u00f6nlichen Guthaben (du hast %3$s). Schleichen + Schlagen kauft.",
+    "shop.eclipse.offer_pooled": "Altarladen: %1$s \u2014 %2$s Umbrasplitter aus dem TEAM-POOL (Pool h\u00e4lt %3$s). Schleichen + Schlagen ruft sie.",
+    "shop.eclipse.bought": "Der Altar gew\u00e4hrt: %1$s (%2$s Umbrasplitter auf deinem Guthaben \u00fcbrig)",
+    "shop.eclipse.deposit_hint": "Schleichen + Rechtsklick bankt Splitter in den Team-Pool; Rechtsklick \u00f6ffnet das Altar-Men\u00fc zum Kaufen."
+  }
+}

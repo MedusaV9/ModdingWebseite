@@ -25,11 +25,34 @@ import net.neoforged.neoforge.event.server.ServerStartedEvent;
  * Loads {@code config/eclipse/protection.json} for spawn-protection toggles, villager
  * restrictions, and day-1 containment. Zone geometry for break/place remains
  * {@link dev.projecteclipse.eclipse.worldgen.structure.SanctumProtection#isProtected} (P6).
+ *
+ * <p><b>ALTARFIX2 #2 self-migration:</b> the file carries a {@code configVersion}. A file
+ * older than {@link #CONFIG_VERSION} whose {@code spawn.radius} is still the shipped
+ * legacy default is rewritten in place to the new default (backed up as
+ * {@code protection.json.bak-v<old>} first) and re-stamped, so the shrunken zone reaches
+ * live saves without deleting configs. An operator-tuned radius is preserved untouched —
+ * only the stamp is refreshed.</p>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class ProtectionConfig {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
     private static final String FILE = "protection.json";
+    /**
+     * Version 2 = ALTARFIX2 #2: the broad gameplay/no-build zone shrank from
+     * {@value #LEGACY_SPAWN_RADIUS} to {@value #DEFAULT_SPAWN_RADIUS} blocks (and with it
+     * the fall-safe zone, which is {@code radius + edgeBandExtra}).
+     */
+    public static final int CONFIG_VERSION = 2;
+    /** The pre-ALTARFIX2 default of {@code spawn.radius}; only THIS value is migrated. */
+    private static final int LEGACY_SPAWN_RADIUS = 96;
+    /**
+     * ALTARFIX2 #2: {@code max(96 - 25, 24)}. Fall-damage safety is
+     * {@code radius + edgeBandExtra} = {@value #DEFAULT_SPAWN_RADIUS} + 16 = 87 blocks
+     * (was 112) — the same 25-block shave. The sanctum build cylinder
+     * ({@code SanctumProtection.RADIUS} = 18) is deliberately NOT touched: it is the
+     * altar plus its immediate platform and already sits below the 24-block floor.
+     */
+    private static final int DEFAULT_SPAWN_RADIUS = Math.max(LEGACY_SPAWN_RADIUS - 25, 24);
 
     private static volatile Snapshot current = Snapshot.defaults();
     private static volatile boolean loaded = false;
@@ -72,7 +95,8 @@ public final class ProtectionConfig {
     public record Snapshot(SpawnRules spawn, VillagerRules villagers, ContainmentRules containment) {
         static Snapshot defaults() {
             return new Snapshot(
-                    new SpawnRules(96, -64, 320, true, 0, true, true, true, true, true, 16, 3, true),
+                    new SpawnRules(DEFAULT_SPAWN_RADIUS, -64, 320, true, 0, true, true, true, true, true,
+                            16, 3, true),
                     new VillagerRules(true, true, true),
                     new ContainmentRules(List.of(1), -180));
         }
@@ -103,6 +127,7 @@ public final class ProtectionConfig {
         } else {
             try {
                 root = JsonParser.parseString(Files.readString(file, StandardCharsets.UTF_8)).getAsJsonObject();
+                migrateIfOutdated(file, root);
             } catch (IOException | RuntimeException e) {
                 EclipseMod.LOGGER.error("Failed to read config {}; using built-in defaults", file, e);
                 root = defaultRoot();
@@ -130,6 +155,42 @@ public final class ProtectionConfig {
     private static void ensureLoaded() {
         if (!loaded) {
             reloadDefault();
+        }
+    }
+
+    /**
+     * ALTARFIX2 #2 targeted migration: mutates {@code root} in place (and rewrites the
+     * file) when its {@code configVersion} is older than {@link #CONFIG_VERSION}. Only a
+     * {@code spawn.radius} that still holds the shipped legacy default is replaced — a
+     * server that tuned the ring keeps its number and just gets the new stamp. The old
+     * file is copied to {@code protection.json.bak-v<old>} first.
+     */
+    private static void migrateIfOutdated(Path file, JsonObject root) {
+        int fileVersion = root.has("configVersion") ? root.get("configVersion").getAsInt() : 1;
+        if (fileVersion >= CONFIG_VERSION) {
+            return;
+        }
+        JsonObject spawn = root.has("spawn") && root.get("spawn").isJsonObject()
+                ? root.getAsJsonObject("spawn") : null;
+        boolean shrank = false;
+        if (spawn != null && spawn.has("radius") && spawn.get("radius").getAsInt() == LEGACY_SPAWN_RADIUS) {
+            spawn.addProperty("radius", DEFAULT_SPAWN_RADIUS);
+            shrank = true;
+        }
+        root.addProperty("configVersion", CONFIG_VERSION);
+        try {
+            Files.copy(file, file.resolveSibling(file.getFileName() + ".bak-v" + fileVersion),
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            Files.writeString(file, GSON.toJson(root), StandardCharsets.UTF_8);
+            EclipseMod.LOGGER.warn("{} migrated v{} -> v{}{} (old file kept as {}.bak-v{})",
+                    file.getFileName(), fileVersion, CONFIG_VERSION,
+                    shrank ? "; spawn.radius " + LEGACY_SPAWN_RADIUS + " -> " + DEFAULT_SPAWN_RADIUS
+                            + " (fall-safe zone shrinks with it)"
+                            : "; spawn.radius left at its operator value",
+                    file.getFileName(), fileVersion);
+        } catch (IOException e) {
+            EclipseMod.LOGGER.error("Failed to write migrated config {} — running with the in-memory "
+                    + "migration only", file, e);
         }
     }
 
@@ -190,6 +251,7 @@ public final class ProtectionConfig {
     private static JsonObject defaultRoot() {
         Snapshot defaults = Snapshot.defaults();
         JsonObject root = new JsonObject();
+        root.addProperty("configVersion", CONFIG_VERSION);
 
         JsonObject spawn = new JsonObject();
         spawn.addProperty("radius", defaults.spawn().radius());

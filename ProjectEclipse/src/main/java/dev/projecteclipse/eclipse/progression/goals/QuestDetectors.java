@@ -7,6 +7,7 @@ import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.analytics.AnalyticsState;
 import dev.projecteclipse.eclipse.core.signal.EclipseSignals;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
+import dev.projecteclipse.eclipse.lang.ServerLang;
 import dev.projecteclipse.eclipse.sequence.IntroSequence;
 import dev.projecteclipse.eclipse.skills.SkillsApi;
 import dev.projecteclipse.eclipse.skills.XpGates;
@@ -60,6 +61,7 @@ public final class QuestDetectors {
         EclipseSignals.onChunkExplored(QuestDetectors::handleChunkExplored);
         EclipseSignals.onBiomeVisited(QuestDetectors::handleBiomeVisited);
         EclipseSignals.onAltarDeposit(QuestDetectors::handleAltarDeposit);
+        EclipseSignals.onAltarTouched(QuestDetectors::handleAltarTouched);
         EclipseSignals.onSkillLevelUp(QuestDetectors::handleSkillLevelUp);
         EclipseSignals.onBreed(QuestDetectors::handleBreed);
         EclipseSignals.onDayRollover((srv, endedDay, newDay, phase) -> {
@@ -310,6 +312,38 @@ public final class QuestDetectors {
             if (QuestEngine.matchesItemId(itemId, trigger.target())) {
                 QuestEngine.increment(player.server, player, spec, count);
             }
+        }
+    }
+
+    /**
+     * ALTARFIX2 #1 — {@code touch_altar} detector. Only a deliberate interaction reaches
+     * here ({@code ritual.AltarBlock} fires the signal), and the shared arrival grace still
+     * has to have elapsed: for the first {@code QuestEngine.ARRIVAL_GRACE_TICKS} after
+     * world start / the start event, touching the altar credits nothing. Players are told
+     * why instead of silently failing.
+     */
+    private static void handleAltarTouched(ServerPlayer player, BlockPos altarPos) {
+        MinecraftServer server = player.server;
+        QuestEngine.ResolvedDay day = QuestEngine.resolved(server);
+        List<GoalSpec> specs = day.ofType(TriggerType.TOUCH_ALTAR);
+        if (specs.isEmpty()) {
+            return;
+        }
+        QuestState state = QuestState.get(server);
+        UUID uuid = player.getUUID();
+        boolean grace = QuestEngine.withinArrivalGrace(server);
+        for (GoalSpec spec : specs) {
+            if (!QuestEngine.isEligible(state, day, uuid, spec)
+                    || state.isPlayerDone(day.day, uuid, spec.id())
+                    || state.isTeamDone(day.day, spec.id())) {
+                continue;
+            }
+            if (grace) {
+                player.displayClientMessage(
+                        ServerLang.tr(player, "quest.eclipse.altar_touch.too_early"), true);
+                return;
+            }
+            QuestEngine.increment(server, player, spec, 1L);
         }
     }
 

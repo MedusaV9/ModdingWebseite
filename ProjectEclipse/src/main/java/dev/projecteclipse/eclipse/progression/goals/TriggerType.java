@@ -27,7 +27,19 @@ public enum TriggerType {
     PLACE_BLOCKS("place_blocks", false, "Place blocks (optional target filter)"),
     /** {@code altarDeposit} signal; optional purpose + item filters. */
     DEPOSIT_ALTAR("deposit_altar", false, "Deposit items at the altar (optional purpose/item filter)"),
-    /** 20t poll: squared 2D distance to (x, z) within radius, overworld only. */
+    /**
+     * {@code altarTouched} signal — a DELIBERATE altar interaction (opening the panel,
+     * depositing, banking, offering, cycling a sigil). ALTARFIX2 #1 introduced it because
+     * {@link #VISIT_LOCATION} around the sanctum cannot tell "walked up to the altar and
+     * used it" from "the start-event cutscene put me here"; the day-1 goal now needs a
+     * real click. Subject to {@code QuestEngine.ARRIVAL_GRACE_TICKS} like the poll.
+     */
+    TOUCH_ALTAR("touch_altar", false, "Interact with the altar (open the panel or deposit)"),
+    /**
+     * 20t poll: squared 2D distance to (x, z) within radius, overworld only. ALTARFIX2 #1:
+     * completion additionally requires that the player was NOT parked inside the radius
+     * during the arrival grace (see {@code QuestEngine.pollPlayer}).
+     */
     VISIT_LOCATION("visit_location", true, "Reach a location (x/z/radius, overworld)"),
     /** {@code biomeVisited} signal; target biome/#tag = visit it once, empty = count distinct. */
     VISIT_BIOMES("visit_biomes", false, "Visit biomes (target = biome/#tag, or count distinct)"),

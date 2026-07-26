@@ -12,9 +12,12 @@ import dev.projecteclipse.eclipse.network.altar.AltarPayloads;
 import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.util.Mth;
@@ -376,13 +379,59 @@ public final class AltarScreen extends Screen {
 
     // ------------------------------------------------------------------ shop rows
 
-    /** One clickable shop offer (only currently purchasable offers ever arrive). */
+    /**
+     * One clickable shop offer (only currently purchasable offers ever arrive).
+     *
+     * <p>ALTARFIX2 #4: the price is shown as the currency ITEM (icon + its real display
+     * name) times the count, plus which purse pays — "20 Splitter" alone was ambiguous
+     * between Umbrasplitter, Vitae-Splitter and Glitch-Splitter, and said nothing about
+     * the personal balance vs. the team pool. {@code cost} and {@code currencyItemId}
+     * both arrive from the same server-side {@code Offer} that gets charged.</p>
+     */
     private final class OfferRow extends EclipseWidget {
+        /** Square size the currency icon is drawn at (vanilla item sprite). */
+        private static final int ICON = 16;
+
         private final AltarPayloads.ShopEntry offer;
+        private final ItemStack currency;
 
         OfferRow(AltarPayloads.ShopEntry offer, int x, int y, int width, int height) {
             super(x, y, width, height, EclipseLang.tr(offer.nameKey()));
             this.offer = offer;
+            this.currency = new ItemStack(resolveItem(offer.currencyItemId()));
+            setTooltip(Tooltip.create(priceTooltip()));
+        }
+
+        /** Held amount of the purse this offer is charged against (same source as the row). */
+        private int purseBalance() {
+            return offer.pooled() ? header.poolShards() : header.personalShards();
+        }
+
+        /**
+         * The itemised price breakdown: what the offer is, how many of WHICH item it
+         * costs, which purse pays, what that purse currently holds and — when it is not
+         * enough — how far short it is. Rebuilt on every panel refresh (the screen calls
+         * {@code rebuildWidgets()} after each snapshot), so the balances never go stale.
+         */
+        private Component priceTooltip() {
+            String currencyName = currency.getHoverName().getString();
+            MutableComponent tooltip = Component.empty()
+                    .append(EclipseLang.tr(offer.nameKey()))
+                    .append("\n")
+                    .append(EclipseLang.tr("gui.eclipse.altar.shop.cost", offer.cost(), currencyName))
+                    .append("\n")
+                    .append(EclipseLang.tr(offer.pooled()
+                            ? "gui.eclipse.altar.shop.pooled" : "gui.eclipse.altar.shop.personal"))
+                    .append("\n")
+                    .append(EclipseLang.tr(offer.pooled()
+                                    ? "gui.eclipse.altar.shop.have.pooled"
+                                    : "gui.eclipse.altar.shop.have.personal",
+                            purseBalance(), currencyName));
+            int missing = offer.cost() - purseBalance();
+            tooltip.append("\n").append(missing > 0
+                    ? EclipseLang.tr("gui.eclipse.altar.shop.short_by", missing)
+                    : EclipseLang.tr("gui.eclipse.altar.shop.buy_hint"));
+            return tooltip;
         }
 
         @Override
@@ -399,23 +448,30 @@ public final class AltarScreen extends Screen {
             guiGraphics.fill(getX(), getY(), getX() + width, getY() + height,
                     EclipseUiTheme.PANEL_RAISED);
 
-            String cost = EclipseLang.trString("gui.eclipse.altar.shop.cost", offer.cost());
-            int costW = AltarScreen.this.font.width(cost);
-            String name = EclipseUiTheme.ellipsize(AltarScreen.this.font,
-                    getMessage().getString(), width - costW - 10);
-            guiGraphics.drawString(AltarScreen.this.font, name, getX() + 4, getY() + 3,
-                    EclipseUiTheme.TEXT);
-            guiGraphics.drawString(AltarScreen.this.font, cost, getX() + width - costW - 4, getY() + 3,
-                    EclipseUiTheme.ACCENT);
+            // Right edge: the currency ITEM's icon with its count in front of it, so the
+            // row answers "which splinter, how many" without opening the tooltip.
+            int iconX = getX() + width - ICON - 3;
+            guiGraphics.renderItem(currency, iconX, getY() + (height - ICON) / 2);
+            String count = EclipseLang.trString("gui.eclipse.altar.shop.count", offer.cost());
+            int countW = AltarScreen.this.font.width(count);
+            boolean affordable = purseBalance() >= offer.cost();
+            guiGraphics.drawString(AltarScreen.this.font, count, iconX - countW - 2, getY() + 3,
+                    affordable ? EclipseUiTheme.ACCENT : EclipseUiTheme.DANGER);
 
-            String detail = EclipseLang.trString(offer.pooled()
-                    ? "gui.eclipse.altar.shop.pooled" : "gui.eclipse.altar.shop.personal");
+            int textW = width - ICON - countW - 12;
+            guiGraphics.drawString(AltarScreen.this.font,
+                    EclipseUiTheme.ellipsize(AltarScreen.this.font, getMessage().getString(), textW),
+                    getX() + 4, getY() + 3, EclipseUiTheme.TEXT);
+
+            // Second line names the currency outright and says which purse pays for it.
+            String detail = currency.getHoverName().getString() + " · " + EclipseLang.trString(
+                    offer.pooled() ? "gui.eclipse.altar.shop.pooled" : "gui.eclipse.altar.shop.personal");
             if (offer.remainingSeconds() > 0) {
                 detail += " · " + EclipseLang.trString("gui.eclipse.altar.shop.remaining",
                         formatSeconds(offer.remainingSeconds()));
             }
             guiGraphics.drawString(AltarScreen.this.font,
-                    EclipseUiTheme.ellipsize(AltarScreen.this.font, detail, width - 8),
+                    EclipseUiTheme.ellipsize(AltarScreen.this.font, detail, width - ICON - 10),
                     getX() + 4, getY() + 13, EclipseUiTheme.DIM);
         }
     }

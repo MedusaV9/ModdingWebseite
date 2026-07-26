@@ -21,6 +21,7 @@ import dev.projecteclipse.eclipse.registry.EclipseItems;
 import dev.projecteclipse.eclipse.ritual.AltarAdminState;
 import dev.projecteclipse.eclipse.ritual.AltarBlock;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
@@ -88,6 +89,23 @@ public final class ShardEconomy {
         public boolean availableOnDay(int day) {
             return day >= minDay && (maxDay <= 0 || day <= maxDay);
         }
+    }
+
+    /**
+     * ALTARFIX2 #4: the registry id of the ONE item that is the shard currency, resolved
+     * from the very {@link EclipseItems#UMBRAL_SHARD} holder that {@link #deposit} banks
+     * and {@link #deliverShardItems} pays out. The altar panel ships this on every
+     * {@code ShopEntry} so the price row can render that item's icon + real display name:
+     * the German UI calls three different items "…splitter" (Umbrasplitter, Vitae-Splitter,
+     * Glitch-Splitter), so a bare "20 Splitter" was genuinely ambiguous.
+     *
+     * <p>Which PURSE the number is drawn from still depends on {@link Offer#pooled()}:
+     * pooled offers spend {@link EclipseWorldState#getShardPool()} (fed by banking shard
+     * ITEMS), personal offers spend the earned {@link #getShards} balance. Both purses
+     * are denominated in this same item — the panel labels which one per row.</p>
+     */
+    public static String currencyItemId() {
+        return BuiltInRegistries.ITEM.getKey(EclipseItems.UMBRAL_SHARD.get()).toString();
     }
 
     public static final int SUPPLY_BEACON_COST = 24;

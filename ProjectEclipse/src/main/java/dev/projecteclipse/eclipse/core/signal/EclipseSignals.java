@@ -64,6 +64,7 @@ public final class EclipseSignals {
     private static final List<ChunkExploredListener> CHUNK_EXPLORED = new CopyOnWriteArrayList<>();
     private static final List<BiomeVisitedListener> BIOME_VISITED = new CopyOnWriteArrayList<>();
     private static final List<AltarDepositListener> ALTAR_DEPOSIT = new CopyOnWriteArrayList<>();
+    private static final List<AltarTouchedListener> ALTAR_TOUCHED = new CopyOnWriteArrayList<>();
     private static final List<DayRolloverListener> DAY_ROLLOVER = new CopyOnWriteArrayList<>();
     private static final List<QuestCompletedListener> QUEST_COMPLETED = new CopyOnWriteArrayList<>();
     private static final List<SkillLevelUpListener> SKILL_LEVEL_UP = new CopyOnWriteArrayList<>();
@@ -126,6 +127,16 @@ public final class EclipseSignals {
 
     @FunctionalInterface public interface AltarDepositListener {
         void onAltarDeposit(ServerPlayer player, ResourceLocation itemId, int count, AltarDepositPurpose purpose);
+    }
+
+    /**
+     * ALTARFIX2 #1: a DELIBERATE altar interaction by a player — opening the altar panel,
+     * cycling a revive sigil, or any deposit lane (milestone / offering / shard bank).
+     * Standing next to the altar never fires it; this is the "really touched the altar"
+     * signal the day-1 goal keys on instead of a spawn-radius proximity poll.
+     */
+    @FunctionalInterface public interface AltarTouchedListener {
+        void onAltarTouched(ServerPlayer player, BlockPos altarPos);
     }
 
     @FunctionalInterface public interface DayRolloverListener {
@@ -200,6 +211,10 @@ public final class EclipseSignals {
 
     public static void onAltarDeposit(AltarDepositListener listener) {
         ALTAR_DEPOSIT.add(listener);
+    }
+
+    public static void onAltarTouched(AltarTouchedListener listener) {
+        ALTAR_TOUCHED.add(listener);
     }
 
     public static void onDayRollover(DayRolloverListener listener) {
@@ -295,6 +310,13 @@ public final class EclipseSignals {
         }
     }
 
+    /** Fired by {@code ritual.AltarBlock} for every deliberate altar interaction. */
+    public static void fireAltarTouched(ServerPlayer player, BlockPos altarPos) {
+        for (AltarTouchedListener listener : ALTAR_TOUCHED) {
+            listener.onAltarTouched(player, altarPos);
+        }
+    }
+
     public static void fireDayRollover(MinecraftServer server, int endedDay, int newDay, DayRolloverPhase phase) {
         for (DayRolloverListener listener : DAY_ROLLOVER) {
             listener.onDayRollover(server, endedDay, newDay, phase);
@@ -345,6 +367,7 @@ public final class EclipseSignals {
         CHUNK_EXPLORED.clear();
         BIOME_VISITED.clear();
         ALTAR_DEPOSIT.clear();
+        ALTAR_TOUCHED.clear();
         DAY_ROLLOVER.clear();
         QUEST_COMPLETED.clear();
         SKILL_LEVEL_UP.clear();

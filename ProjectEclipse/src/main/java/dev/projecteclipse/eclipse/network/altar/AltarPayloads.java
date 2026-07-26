@@ -50,8 +50,11 @@ import net.neoforged.neoforge.network.registration.PayloadRegistrar;
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class AltarPayloads {
-    /** Bumped to v2 when AUDITFIX-3 changed the ShopEntry/Header wire shape. */
-    private static final String VERSION = "v5altarui2";
+    /**
+     * Bumped to v2 when AUDITFIX-3 changed the ShopEntry/Header wire shape, and to v3 when
+     * ALTARFIX2 #4 added {@link ShopEntry#currencyItemId()}.
+     */
+    private static final String VERSION = "v5altarui3";
     /** Server-side reach check for panel requests and purchases (blocks, squared). */
     private static final double INTERACT_RANGE_SQ = 8.0D * 8.0D;
 
@@ -78,15 +81,25 @@ public final class AltarPayloads {
      * Double-XP countdown on its row. AUDITFIX-3: day-locked offers are never transmitted
      * (they ride only as the opaque {@link Header#sealedOffers()} count) and dev-disabled
      * offers are never sent at all.
+     *
+     * <p>ALTARFIX2 #4: {@code cost} and {@code currencyItemId} are copied verbatim from the
+     * SAME {@link ShardEconomy.Offer} that {@link ShardEconomy#buyById} later charges, so
+     * the printed price and the deducted amount cannot drift. {@code pooled} tells the
+     * panel WHICH purse that price is drawn from (team pool vs. personal balance) — both
+     * are counted in {@code currencyItemId}, which the row renders as an icon + real item
+     * name because "Splitter" alone collides with Vitae-/Glitch-Splitter in German.</p>
      */
     public record ShopEntry(String offerId, String nameKey, int cost, boolean pooled,
-            int remainingSeconds) {
+            int remainingSeconds, String currencyItemId) {
+        // 6 components — exactly the composite() ceiling; a 7th would need a hand-rolled
+        // codec like Header's.
         public static final StreamCodec<ByteBuf, ShopEntry> STREAM_CODEC = StreamCodec.composite(
                 ByteBufCodecs.STRING_UTF8, ShopEntry::offerId,
                 ByteBufCodecs.STRING_UTF8, ShopEntry::nameKey,
                 ByteBufCodecs.VAR_INT, ShopEntry::cost,
                 ByteBufCodecs.BOOL, ShopEntry::pooled,
                 ByteBufCodecs.VAR_INT, ShopEntry::remainingSeconds,
+                ByteBufCodecs.STRING_UTF8, ShopEntry::currencyItemId,
                 ShopEntry::new);
     }
 
@@ -235,6 +248,7 @@ public final class AltarPayloads {
         List<ShopEntry> offers = new ArrayList<>();
         int sealedOffers = 0;
         int doubleXpRemaining = ShardEconomy.doubleXpRemainingSeconds(server);
+        String currencyItemId = ShardEconomy.currencyItemId();
         for (ShardEconomy.Offer offer : ShardEconomy.allOffers()) {
             if (!ShardEconomy.isOfferEnabled(server, offer)) {
                 continue; // dev-disabled: gone, not even a sealed slot (AltarAdminState contract)
@@ -249,7 +263,7 @@ public final class AltarPayloads {
                 continue;
             }
             offers.add(new ShopEntry(offer.id(), offer.nameKey(), offer.cost(), offer.pooled(),
-                    "double_xp".equals(offer.id()) ? doubleXpRemaining : 0));
+                    "double_xp".equals(offer.id()) ? doubleXpRemaining : 0, currencyItemId));
         }
 
         Header header = new Header(day, state.getAltarLevel(), next == null,

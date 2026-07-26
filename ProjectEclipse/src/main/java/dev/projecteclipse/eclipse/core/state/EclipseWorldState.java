@@ -44,6 +44,7 @@ public final class EclipseWorldState extends SavedData {
     private static final String TAG_ALTAR_LEVEL = "altarLevel";
     private static final String TAG_BORDER_SIZE = "borderSize";
     private static final String TAG_START_EVENT_DONE = "startEventDone";
+    private static final String TAG_START_EVENT_GAME_TIME = "startEventGameTime";
     private static final String TAG_STORM_TOUCHED = "stormTouched";
     private static final String TAG_GHOST_SHIP_BUILT = "ghostShipBuilt";
     private static final String TAG_LIMBO_SEASCAPE_BUILT = "limboSeascapeBuilt";
@@ -83,6 +84,7 @@ public final class EclipseWorldState extends SavedData {
     private int altarLevel = 0;
     private double borderSize = 1000.0D;
     private boolean startEventDone = false;
+    private long startEventGameTime = 0L;
     private boolean stormTouched = false;
     private boolean ghostShipBuilt = false;
     private boolean limboSeascapeBuilt = false;
@@ -132,6 +134,10 @@ public final class EclipseWorldState extends SavedData {
         state.altarLevel = tag.getInt(TAG_ALTAR_LEVEL);
         state.borderSize = tag.contains(TAG_BORDER_SIZE) ? tag.getDouble(TAG_BORDER_SIZE) : 1000.0D;
         state.startEventDone = tag.getBoolean(TAG_START_EVENT_DONE);
+        // ALTARFIX2 #1: 0 on saves that predate the stamp — the arrival grace then only
+        // guards the first minutes of world time, which is the correct fallback for a
+        // world whose start event ran long ago.
+        state.startEventGameTime = tag.getLong(TAG_START_EVENT_GAME_TIME);
         // PROGFIX #3: defaults to false on saves that predate the flag; IntroSequence
         // backfills it on server start when the intro already completed (artifact-safe).
         state.stormTouched = tag.getBoolean(TAG_STORM_TOUCHED);
@@ -217,6 +223,7 @@ public final class EclipseWorldState extends SavedData {
         tag.putInt(TAG_ALTAR_LEVEL, this.altarLevel);
         tag.putDouble(TAG_BORDER_SIZE, this.borderSize);
         tag.putBoolean(TAG_START_EVENT_DONE, this.startEventDone);
+        tag.putLong(TAG_START_EVENT_GAME_TIME, this.startEventGameTime);
         tag.putBoolean(TAG_STORM_TOUCHED, this.stormTouched);
         tag.putBoolean(TAG_GHOST_SHIP_BUILT, this.ghostShipBuilt);
         tag.putBoolean(TAG_LIMBO_SEASCAPE_BUILT, this.limboSeascapeBuilt);
@@ -513,6 +520,24 @@ public final class EclipseWorldState extends SavedData {
 
     public void setStartEventDone(boolean startEventDone) {
         this.startEventDone = startEventDone;
+        setDirty();
+    }
+
+    /**
+     * ALTARFIX2 #1: overworld {@code gameTime} at which the start event finished, or
+     * {@code 0} when it never ran (or the save predates the stamp). It anchors the
+     * quest engine's arrival grace — the window in which a player standing on the
+     * sanctum island because the cutscene PUT them there must not complete
+     * proximity/altar goals.
+     */
+    public long getStartEventGameTime() {
+        return this.startEventGameTime;
+    }
+
+    /** Stamps {@link #getStartEventGameTime()} together with the done flag (idempotent). */
+    public void setStartEventDone(boolean startEventDone, long gameTime) {
+        this.startEventDone = startEventDone;
+        this.startEventGameTime = startEventDone ? Math.max(0L, gameTime) : 0L;
         setDirty();
     }
 
