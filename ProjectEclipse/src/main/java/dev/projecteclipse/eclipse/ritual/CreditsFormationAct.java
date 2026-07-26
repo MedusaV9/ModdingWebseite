@@ -24,19 +24,26 @@ import net.minecraft.world.phys.Vec3;
  * (the stateless-push law of {@code CreditsSequence}):
  *
  * <ol>
- *   <li><b>Spiral bands</b> ({@value #SPIRAL_COUNT}) — a huge slowly-turning debris tunnel
- *       whose axis is the players' east view line: golden-angle phyllotaxis around the view
- *       axis, radii {@value #TUNNEL_RADIUS_MIN}..{@value #TUNNEL_RADIUS_MAX} blocks, three
- *       interleaved bands drifting at incommensurate angular rates. Because every element
- *       sits at ≥ {@value #TUNNEL_RADIUS_MIN} blocks off the axis, the view center (the
- *       sunrise → the eclipse) stays OPEN and the periphery/horizon reads dense — the
- *       "dichter am Horizont, offener in Blickmitte" placement law.</li>
+ *   <li><b>Spiral arms</b> ({@value #SPIRAL_COUNT}, F-068 rework of the phyllotaxis
+ *       scatter) — {@value #SPIRAL_ARMS} COHERENT debris arms winding around the players'
+ *       east view line: two interleaved 3-arm spirals counter-rotating at incommensurate
+ *       rates (the whole composition slowly orbits, the arms keep their shape). Element
+ *       radius is bunched toward the {@value #TUNNEL_RADIUS_MAX} rim (outward ^0.7 bias)
+ *       and depth is bunched toward the horizon end of the tunnel (^0.65 bias) — the
+ *       placement DENSIFIES along the camera sightlines while every element still sits
+ *       ≥ {@value #TUNNEL_RADIUS_MIN} blocks off the axis: the view center (the sunrise
+ *       → the eclipse) stays OPEN, the periphery/horizon reads dense — the "dichter am
+ *       Horizont, offener in Blickmitte" placement law.</li>
  *   <li><b>Rotating rings</b> ({@value #RING_GROUPS}×{@value #RING_SIZE}) — face-on rings
  *       at staggered depths down the view axis, alternating spin directions, breathing
- *       ±6% radius on a slow sine.</li>
- *   <li><b>Ascending columns</b> ({@value #COLUMN_GROUPS}×{@value #COLUMN_SIZE}) — golden-
- *       angle scattered sea-surface columns whose elements climb, wrap and re-climb; the
- *       wrap seam is hidden by the same scale-floor envelope the flyers use.</li>
+ *       ±6% radius on a slow sine, with a gentle per-ring tilt precession (F-068) so the
+ *       stack never freezes into flat billboards.</li>
+ *   <li><b>Column arcs</b> ({@value #COLUMN_GROUPS}×{@value #COLUMN_SIZE}, F-068 rework
+ *       of the scattered field) — ascending sea-surface columns COMPOSED onto two
+ *       symmetric arcs flanking the view axis (bearing swinging 0.30..1.05 rad off-axis
+ *       as they recede — a receding colonnade framing the sunrise), each arc drifting a
+ *       slow orbital sway; elements climb, wrap and re-climb with the wrap seam hidden by
+ *       the same scale-floor envelope the flyers use.</li>
  * </ol>
  *
  * <p><b>Budget</b>: spawned {@value #SPAWN_PER_TICK}/t (≈{@code TOTAL/SPAWN_PER_TICK}
@@ -69,8 +76,12 @@ final class CreditsFormationAct {
     private static final float TUNNEL_RADIUS_MAX = 150.0F;
     /** Tunnel depth: elements spread this far east of the anchor along the view axis. */
     private static final float TUNNEL_DEPTH = 210.0F;
-    /** Base angular drift (rad/t) of the slowest spiral band; bands ride multiples. */
+    /** Base angular drift (rad/t) of the first arm set; the second counter-rotates slower. */
     private static final float BAND_RATE = 0.0022F;
+    /** F-068 spiral arms: two interleaved 3-arm spirals (6 coherent arms total). */
+    private static final int SPIRAL_ARMS = 6;
+    /** Winding (radians) of one arm across its radial run — a readable spiral sweep. */
+    private static final float ARM_WIND = 2.6F;
 
     // --- ring geometry ---
     private static final float RING_RADIUS_MIN = 30.0F;
@@ -218,19 +229,30 @@ final class CreditsFormationAct {
     }
 
     /**
-     * Spiral-band element: phyllotaxis around the east view axis. Radius and depth are
-     * per-element constants; the whole tunnel slowly turns (three bands at 1×/1.6×/2.3×
-     * the base rate, alternating sign) and drifts a slow ±5-block axial breath.
+     * Spiral-arm element (F-068): {@value #SPIRAL_ARMS} coherent arms around the east
+     * view axis — arms 0–2 form one 3-arm spiral orbiting at {@value #BAND_RATE} rad/t,
+     * arms 3–5 a second one counter-rotating at 0.62× (incommensurate, so the two sheets
+     * cross forever without syncing). Radius runs the arm's ^0.7-biased outward sweep
+     * (bunched toward the horizon rim) with ±4-block jitter; depth is ^0.65-biased
+     * toward the tunnel's far end (dense along the sightlines) and breathes a slow
+     * ±5-block axial sine. A small per-element angular oscillation keeps the arms alive
+     * without smearing their shape.
      */
     private static Vector3f spiralOffset(int index, int actTick) {
-        int band = index % 3;
-        float rate = BAND_RATE * (band == 0 ? 1.0F : band == 1 ? -1.6F : 2.3F);
-        // sqrt-uniform in area, biased outward (^0.8) — denser toward the horizon rim.
-        float radial = (float) Math.pow(CreditsSequence.hash01(index, 87), 0.8D);
+        int arm = index % SPIRAL_ARMS;
+        int slot = index / SPIRAL_ARMS;
+        float s = (slot + 0.5F) / (SPIRAL_COUNT / (float) SPIRAL_ARMS); // 0..1 along the arm
         float radius = TUNNEL_RADIUS_MIN + (TUNNEL_RADIUS_MAX - TUNNEL_RADIUS_MIN)
-                * (float) Math.sqrt(radial);
-        float theta = index * CreditsSequence.GOLDEN_ANGLE + actTick * rate;
-        float depth = (float) CreditsSequence.hash01(index, 88) * TUNNEL_DEPTH
+                * (float) Math.pow(s, 0.7D)
+                + ((float) CreditsSequence.hash01(index, 87) * 2.0F - 1.0F) * 4.0F;
+        boolean secondSheet = arm >= 3;
+        float rate = secondSheet ? -BAND_RATE * 0.62F : BAND_RATE;
+        float theta = (arm % 3) * (Mth.TWO_PI / 3.0F)
+                + (secondSheet ? 0.52F : 0.0F) // de-phase the sheets
+                + ARM_WIND * s
+                + actTick * rate
+                + 0.05F * Mth.sin(actTick * 0.004F + index * 0.9F);
+        float depth = (float) Math.pow(CreditsSequence.hash01(index, 88), 0.65D) * TUNNEL_DEPTH
                 + 5.0F * Mth.sin(actTick * 0.006F + index * 0.7F);
         // Squashed vertically, lifted over the sea; the bottom arc folds onto a
         // sea-skimming band (never under the water plane).
@@ -238,7 +260,11 @@ final class CreditsFormationAct {
         return new Vector3f(depth, y, radius * Mth.cos(theta));
     }
 
-    /** Ring element: face-on ring at a staggered depth, alternating spin, breathing radius. */
+    /**
+     * Ring element: face-on ring at a staggered depth, alternating spin, breathing
+     * radius, with a slow per-ring tilt PRECESSION (F-068) — the stack leans and
+     * recovers a few degrees over ~40 s instead of freezing into flat billboards.
+     */
     private static Vector3f ringOffset(int ringIndex, int actTick) {
         int group = ringIndex / RING_SIZE;
         int slot = ringIndex % RING_SIZE;
@@ -247,30 +273,37 @@ final class CreditsFormationAct {
         float rate = RING_RATE * (group % 2 == 0 ? 1.0F : -1.0F) * (1.0F + group * 0.12F);
         float theta = slot * (Mth.TWO_PI / RING_SIZE) + actTick * rate + group * 0.61F;
         float depth = RING_DEPTH_MIN + group * RING_DEPTH_STEP;
-        // Slight tilt per ring so the stack never reads as flat billboards.
-        float tilt = (group - RING_GROUPS / 2.0F) * 0.08F;
+        // Static lean per ring + the slow precession sine.
+        float tilt = (group - RING_GROUPS / 2.0F) * 0.08F
+                + 0.03F * Mth.sin(actTick * 0.0025F + group * 2.7F);
         float y = Math.max(radius * Mth.sin(theta) + 30.0F, 2.0F); // rings dip TO the sea, not under
         float z = radius * Mth.cos(theta);
         return new Vector3f(depth + z * tilt, y, z);
     }
 
     /**
-     * Column element: {@code COLUMN_GROUPS} golden-angle scattered sea-surface columns;
-     * each element climbs its column's {@value #COLUMN_CLIMB}-block run on a wrapping
-     * clock (staggered per slot) — {@link #columnEnvelope} floors the scale at both wrap
-     * ends so the seam never pops.
+     * Column-arc element (F-068): the {@code COLUMN_GROUPS} sea-surface columns are
+     * COMPOSED onto two symmetric arcs flanking the view axis — group parity picks the
+     * side, the group's rank along its arc sweeps the bearing 0.30..1.05 rad off-axis
+     * while the distance recedes {@value #COLUMN_FIELD_MIN}..{@value #COLUMN_FIELD_MAX}
+     * blocks (a colonnade framing the sunrise, open in the middle). Each arc sways a
+     * slow ±0.02 rad orbital drift. Elements climb their column's
+     * {@value #COLUMN_CLIMB}-block run on a wrapping clock (staggered per slot) —
+     * {@link #columnEnvelope} floors the scale at both wrap ends so the seam never pops.
      */
     private static Vector3f columnOffset(int columnIndex, int actTick) {
         int group = columnIndex / COLUMN_SIZE;
-        float fieldR = COLUMN_FIELD_MIN + (COLUMN_FIELD_MAX - COLUMN_FIELD_MIN)
-                * (float) Math.sqrt((group + 0.5F) / COLUMN_GROUPS);
-        float fieldTheta = group * CreditsSequence.GOLDEN_ANGLE;
+        int side = group % 2 == 0 ? 1 : -1;
+        float along = (group / 2 + 0.5F) / (COLUMN_GROUPS / 2.0F); // 0..1 down the arc
+        float bearing = side * (0.30F + 0.75F * along)
+                + side * 0.02F * Mth.sin(actTick * 0.0035F + group * 1.3F); // orbital sway
+        float dist = COLUMN_FIELD_MIN + (COLUMN_FIELD_MAX - COLUMN_FIELD_MIN) * along;
         float climb = columnProgress(columnIndex, actTick) * COLUMN_CLIMB;
         float sway = 2.5F * Mth.sin(actTick * 0.008F + group * 2.3F);
         return new Vector3f(
-                40.0F + fieldR * Math.abs(Mth.sin(fieldTheta)) + sway,
+                40.0F + dist * Mth.cos(bearing) + sway,
                 2.0F + climb,
-                fieldR * Mth.cos(fieldTheta) * 0.8F);
+                dist * Mth.sin(bearing));
     }
 
     /** Wrapping climb clock 0..1 of a column element (slot-staggered, per-column phase). */

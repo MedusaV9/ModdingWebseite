@@ -93,10 +93,15 @@ import net.neoforged.neoforge.network.PacketDistributor;
  *       everyone is parked (frozen, midair) at a vantage south of the sanctum island;
  *       the black releases onto the island. t={@value #T_SHATTER_BREAK} — the island and
  *       altar SHATTER: {@code CreditsShatterAct} spawns displays over the REAL sampled
- *       surface blocks (the world is never modified) that drift apart and rise; the sky
- *       contracts toward black with stars ({@code S2CCreditsSkyPayload} COLLAPSE), the
- *       eclipse sky element fades out ({@code ECLIPSE_ENDING}), the collapse Photon veil
- *       plays. t={@value #T_SHATTER_DARK} — black over the drifting debris;
+ *       surface blocks (the world is never modified) that drift apart and rise — F-068:
+ *       size-classed (boulders + a splinter shower), impulse tumbles, two
+ *       {@code AFTERSHOCK_AT} reach-kick beats (shake + thunder + baked Photon rings),
+ *       and the ALTAR CORE breaking LAST at break+{@value CreditsShatterAct#CORE_BREAK_TICK}t
+ *       with a light flash; the sky contracts toward black with stars
+ *       ({@code S2CCreditsSkyPayload} COLLAPSE), the eclipse sky element fades out
+ *       ({@code ECLIPSE_ENDING}), the collapse Photon veil plays (trailing dust +
+ *       aftershock rings + core flash baked on the same act ticks).
+ *       t={@value #T_SHATTER_DARK} — black over the drifting debris;
  *       t={@value #T_SHATTER_END} — fragments discarded behind it, sky handed back.</li>
  *   <li>t={@value #T_SHIP} — behind black: the ghost-ship helm shot (helm double at the
  *       block-display wheel, 140t {@code credits_helm} push-in).</li>
@@ -127,9 +132,13 @@ import net.neoforged.neoforge.network.PacketDistributor;
  *       starts, the sky flips to SPACE (dense stars, no sun/moon;
  *       {@code S2CCreditsSkyPayload}). t={@value #T_FINALE_REVEAL} — the black releases:
  *       a giant black hole ({@code black_hole_maw} Photon + the {@code eclipse:black_hole}
- *       Veil post distortion/desaturation + {@value CreditsBlackHoleAct#COUNT} spiraling
- *       displays, {@code CreditsBlackHoleAct}) slowly eats the map while the frame drains
- *       gray. t={@value #T_FINALE_DARK} — everything melts to black;
+ *       Veil post distortion/desaturation + {@value CreditsBlackHoleAct#COUNT} RECYCLED
+ *       displays of real sampled terrain in tear-off clusters, {@code CreditsBlackHoleAct})
+ *       slowly eats the map while the frame drains gray — F-068: the sky/post intensity
+ *       ladder now RAMPS the lensing in four steps, deterministic "Schluck" pulses
+ *       (shockwave ring + brightness blink, {@link CreditsBlackHoleAct#swallowPulse})
+ *       punctuate the devour, and two gentle FOV breath waypoints keep the camera alive.
+ *       t={@value #T_FINALE_DARK} — everything melts to black;
  *       t={@value #T_FINALE_TITLE} — "Minecraft Eclipse" holds until the victory theme
  *       ends.</li>
  *   <li>t={@value #T_FINALE_HOLD} — the HOLD: completion persisted, players quietly moved
@@ -283,9 +292,22 @@ public final class CreditsSequence implements SequenceReplayable {
     private static final int HOLD_REFRESH_PERIOD = 400;
     /** Client FOV multiplier of the tele shot (~70° × 0.25 ≈ 17° — the ortho read). */
     private static final float FINALE_FOV_SCALE = 0.25F;
-    /** SPACE-sky/post intensity ladder after the tele beat (offsets from T_FINALE_REVEAL). */
-    private static final int[] FINALE_SKY_STEP_AT = {300, 700, 1100};
-    private static final float[] FINALE_SKY_STEP_INTENSITY = {0.6F, 0.85F, 1.0F};
+    /**
+     * SPACE-sky/post intensity ladder after the tele beat (offsets from
+     * T_FINALE_REVEAL). F-068 added the early 0.45 step — the post pass maps intensity
+     * to lensing strength, so the gravitational pull now RAMPS across the whole scene
+     * instead of sitting at three coarse plateaus.
+     */
+    private static final int[] FINALE_SKY_STEP_AT = {120, 300, 700, 1100};
+    private static final float[] FINALE_SKY_STEP_INTENSITY = {0.45F, 0.6F, 0.85F, 1.0F};
+    /**
+     * F-068 camera breath: two slow FOV drift waypoints after the reveal (offsets from
+     * T_FINALE_REVEAL / target multipliers, 360t eased ramps each) — a barely-visible
+     * pull-back then push-in that keeps the long tele shot alive; the DARK beat's 0.4
+     * ease-out takes over from the last waypoint.
+     */
+    private static final int[] FINALE_FOV_BREATHE_AT = {240, 820};
+    private static final float[] FINALE_FOV_BREATHE_SCALE = {0.275F, 0.235F};
     /**
      * Credits roll span (FIN-6: over twice the old scroll speed's span — the roll ends
      * at t=1780, where the maker card takes the center and holds).
@@ -325,8 +347,10 @@ public final class CreditsSequence implements SequenceReplayable {
      * Hard cap on live credits displays of ALL kinds (flyers + eclipse + burst debris +
      * shatter fragments + formations + black-hole accretion): spawns beyond it are
      * dropped and logged — a lag spiral can never out-spawn the budget. F-057 raised it
-     * for the thousands-strong backdrop (worst concurrent set ≈ flyers 288 + shadows ~45
-     * + formations 1800 + eclipse 136 + burst 300 ≈ 2570).
+     * for the thousands-strong backdrop; F-068 re-audited the worst concurrent sets:
+     * beach act ≈ flyers 288 + shadows ~45 + formations 1800 + eclipse 136 + burst 300
+     * ≈ 2570; shatter act ≈ 1400 samples + 420 splinters ≈ 1820; black-hole act = 840
+     * recycled. Every set stays under the &lt;3000-simultaneous performance target.
      */
     private static final int DISPLAY_HARD_CAP = 3600;
     private static final String FLYER_TAG = "eclipse_credits_flyer";
@@ -725,6 +749,18 @@ public final class CreditsSequence implements SequenceReplayable {
             if ((t - T_SHATTER_BREAK) % RUMBLE_PERIOD == 0) {
                 shatterRumble(current, t);
             }
+            // F-068: the aftershock reach-kick beats (the act's pose steps outward on
+            // the same ticks) get their audible/physical half here.
+            for (int at : CreditsShatterAct.AFTERSHOCK_AT) {
+                if (t == T_SHATTER_BREAK + at) {
+                    shatterAftershock(current, t);
+                }
+            }
+            // F-068: the altar core breaks LAST — the light flash lands the exact tick
+            // the core fragments' launch band opens (and the baked Photon core flash).
+            if (t == T_SHATTER_BREAK + CreditsShatterAct.CORE_BREAK_TICK) {
+                shatterCoreBreak(current);
+            }
         }
         if (t > T_SHIP && t < T_EPILOGUE && (t - T_SHIP) % 4 == 0) {
             animateWheel(current, t); // BD-SHIP: the helm never stands still on camera
@@ -801,6 +837,22 @@ public final class CreditsSequence implements SequenceReplayable {
             for (int step = 0; step < FINALE_SKY_STEP_AT.length; step++) {
                 if (t == T_FINALE_REVEAL + FINALE_SKY_STEP_AT[step]) {
                     sendFinaleSky(current, FINALE_SKY_STEP_INTENSITY[step], 260);
+                }
+            }
+            // F-068 "Schluck-Momente": the act's deterministic gulp schedule — answered
+            // with a shockwave ring + brightness blink + devour thump.
+            if (t > T_FINALE_REVEAL + 60 && t < T_FINALE_DARK - 80) {
+                float pulse = current.blackHole.swallowPulse(t - T_FINALE_TELE);
+                if (pulse >= 0.0F) {
+                    devourPulse(current, pulse);
+                }
+            }
+            // F-068 camera breath: slow FOV drift waypoints across the long tele shot.
+            for (int step = 0; step < FINALE_FOV_BREATHE_AT.length; step++) {
+                if (t == T_FINALE_REVEAL + FINALE_FOV_BREATHE_AT[step]) {
+                    for (ServerPlayer player : current.server.getPlayerList().getPlayers()) {
+                        CreditsPayloads.sendFov(player, FINALE_FOV_BREATHE_SCALE[step], 360);
+                    }
                 }
             }
         }
@@ -928,6 +980,42 @@ public final class CreditsSequence implements SequenceReplayable {
         PacketDistributor.sendToAllPlayers(S2CShakePayload.shake(0.2F + 0.2F * progress, RUMBLE_PERIOD));
     }
 
+    /**
+     * F-068 aftershock beat (act ticks {@link CreditsShatterAct#AFTERSHOCK_AT}): the
+     * island coughs again — the act's pose function steps every airborne fragment a
+     * little further out on the same tick; this is the audible/physical half (heavier
+     * shake + a close thunder crack, both scaling with act progress).
+     */
+    private static void shatterAftershock(Run current, int t) {
+        float progress = Mth.clamp((t - T_SHATTER_BREAK)
+                / (float) (T_SHATTER_DARK - T_SHATTER_BREAK), 0.0F, 1.0F);
+        PacketDistributor.sendToAllPlayers(S2CShakePayload.shake(0.6F + 0.3F * progress, 40));
+        for (ServerPlayer player : current.server.overworld().players()) {
+            player.playNotifySound(SoundEvents.LIGHTNING_BOLT_THUNDER, SoundSource.WEATHER,
+                    0.75F, 0.5F);
+        }
+    }
+
+    /**
+     * F-068 — t={@value #T_SHATTER_BREAK}+{@value CreditsShatterAct#CORE_BREAK_TICK}:
+     * the ALTAR CORE breaks loose (the act holds the core columns' launch band for
+     * exactly this beat): a short white-violet light flash, a modest screen shockwave
+     * ring at the island center and one hard crack — the collapse veil's baked core
+     * flash ({@code credits_collapse}) lands on the same act tick by construction.
+     * The (0.55, 22) shockwave signature stays far from the (1.0, 50) giant seam.
+     */
+    private static void shatterCoreBreak(Run current) {
+        ServerLevel overworld = current.server.overworld();
+        Vec3 center = current.shatter.islandCenter();
+        FxPayloads.sendFxEvent(overworld, FxPayloads.FX_SHOCKWAVE, center, 0.55F, 22.0F, -1.0D);
+        PacketDistributor.sendToAllPlayers(new S2CScreenFadePayload(3, 6, 16, 0x66EADCFF));
+        PacketDistributor.sendToAllPlayers(S2CShakePayload.shake(0.9F, 30));
+        for (ServerPlayer player : overworld.players()) {
+            player.playNotifySound(SoundEvents.END_PORTAL_SPAWN, SoundSource.MASTER, 0.8F, 0.9F);
+            player.playNotifySound(SoundEvents.LIGHTNING_BOLT_THUNDER, SoundSource.WEATHER, 0.85F, 0.62F);
+        }
+    }
+
     /** t={@value #T_SHATTER_DARK} — black rises back over the drifting debris field. */
     private static void beatShatterDark(Run current) {
         for (ServerPlayer player : current.server.getPlayerList().getPlayers()) {
@@ -975,6 +1063,27 @@ public final class CreditsSequence implements SequenceReplayable {
         for (ServerPlayer player : overworld.players()) {
             player.playNotifySound(SoundEvents.END_PORTAL_SPAWN, SoundSource.MASTER,
                     0.35F + 0.3F * progress, 0.4F - 0.1F * progress);
+        }
+    }
+
+    /**
+     * F-068 "Schluck-Moment": a tear-off cluster group pours over the horizon
+     * ({@link CreditsBlackHoleAct#swallowPulse} — the deterministic gulp schedule):
+     * a screen shockwave ring anchored at the maw, a short white-violet brightness
+     * blink and a low devour thump, all scaled by the pulse strength. The shockwave
+     * signature (≤0.65, 18) stays far from the (1.0, 50) giant seam.
+     */
+    private static void devourPulse(Run current, float pulse) {
+        ServerLevel overworld = current.server.overworld();
+        FxPayloads.sendFxEvent(overworld, FxPayloads.FX_SHOCKWAVE,
+                current.blackHole.fxAnchor(), 0.3F + 0.35F * pulse, 18.0F, -1.0D);
+        int alpha = 0x22 + Math.round(0x2E * pulse);
+        PacketDistributor.sendToAllPlayers(
+                new S2CScreenFadePayload(3, 4, 9, (alpha << 24) | 0x00EADCFF));
+        PacketDistributor.sendToAllPlayers(S2CShakePayload.shake(0.18F + 0.3F * pulse, 16));
+        for (ServerPlayer player : overworld.players()) {
+            player.playNotifySound(SoundEvents.END_PORTAL_SPAWN, SoundSource.MASTER,
+                    0.25F + 0.35F * pulse, 0.5F - 0.15F * pulse);
         }
     }
 

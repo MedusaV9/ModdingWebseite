@@ -1,20 +1,34 @@
 #!/usr/bin/env python3
-"""CREDITS2 (F-056/F-058) — authors the credits finale-rework Photon assets with fxlib:
+"""CREDITS2 (F-056/F-058, polished by F-068) — authors the credits finale-rework Photon
+assets with fxlib:
 
   eclipse:credits_collapse   F-058 island-shatter collapse veil over the breaking
                              sanctum island: a sluggish dark dust updraft, sparse
-                             violet ember motes rising with the debris, and one soft
-                             expanding shock ring at the break beat (~460t one-shot,
-                             fired once by CreditsShatterAct at the island center)
+                             violet ember motes rising with the debris, one soft
+                             expanding shock ring at the break beat — plus the F-068
+                             polish layers: delayed trailing dust chasing the climbing
+                             debris, two aftershock rings baked on the SAME act ticks
+                             CreditsShatterAct kicks its fragments (AFTERSHOCK_AT =
+                             150/300), and the altar-core flash + spark burst baked on
+                             CORE_BREAK_TICK = 270 (~460t one-shot, fired once by
+                             CreditsSequence at the island center)
   eclipse:black_hole_maw     F-056 the black-hole maw: two counter-rotating accretion
                              swirls (fast inner / lazy outer), infalling particle
-                             streams pulled out of a wide shell, and a thin hot
-                             photon-ring rim glow (~340t one-shot, re-fired by
+                             streams pulled out of a wide shell, a thin hot
+                             photon-ring rim glow — plus the F-068 polish layers:
+                             stretched-billboard EMBER TRAILS dragging around the disc
+                             rim and fast stretched STAR STREAKS pulled in from a wide
+                             shell (the Photon-space cousins of the post shader's
+                             Doppler ring + streak layers) (~340t one-shot, re-fired by
                              CreditsBlackHoleAct on a 300t cadence — the kneel-corona
                              sustain law keeps the seam gapless)
 
 Authored scale: the maw is built around a ~26-block accretion radius (the act's
 BLACK-HOLE visual radius); the collapse veil around the island's ~16-block ellipse.
+
+Java-side tick contract (F-068): the baked burst times below MUST stay in lockstep with
+CreditsShatterAct.AFTERSHOCK_AT ({150, 300}) and CreditsShatterAct.CORE_BREAK_TICK (270)
+— the server fires the matching shake/flash beats on those exact act ticks.
 
 Usage:  python3 tools/photon/credits2_fx.py            # write + validate both
 Round-trip validation is fxlib's default; the CLI `validate` pass re-checks on disk.
@@ -102,6 +116,91 @@ def build_credits_collapse() -> FxBuilder:
                 [(0.0, 0.0), (0.15, 0.65), (1.0, 0.0)],
                 [(0.0, *VIOLET_HOT), (1.0, *VIOLET_MID)]))
         .with_cull_box((-30.0, -6.0, -30.0), (30.0, 12.0, 30.0)))
+
+    # F-068 trailing dust: a delayed, taller, longer-lived curtain chasing the debris
+    # up — the "nachziehender Staub" behind the rising fragment field.
+    (fx.particle_emitter(
+            "collapse_trail_dust",
+            duration=380, looping=False, start_delay=constant(40),
+            start_lifetime=random_between(110, 170), start_speed=constant(0.04),
+            start_size=nf3(random_between(2.6, 4.6), random_between(2.6, 4.6),
+                           random_between(2.6, 4.6)),
+            simulation_space="Local", max_particles=90)
+        .child_of(root)
+        .with_emission(rate=constant(0.55))
+        .with_shape(cylinder(radius=12.0, thickness=0.7))
+        .with_curves(
+            velocity_over_lifetime=dict(
+                orbital_mode="AngularVelocity",
+                orbital=nf3(constant(0), constant(0.05), constant(0)),
+                linear=nf3(constant(0), random_between(0.2, 0.34), constant(0))),  # chases the debris
+            color_over_lifetime=gradient(
+                [(0.0, 0.0), (0.3, 0.4), (0.8, 0.28), (1.0, 0.0)],
+                [(0.0, 0.11, 0.06, 0.16), (1.0, 0.05, 0.03, 0.09)]))
+        .with_material(texture_material(SMOKE_TEX, blend=BLEND_ALPHA))
+        .with_renderer(vertex_sorting="DISTANCE")
+        .with_cull_box((-20.0, -6.0, -20.0), (20.0, 52.0, 20.0)))
+
+    # F-068 aftershock rings: two softer echoes of the break ring, baked on the exact
+    # act ticks CreditsShatterAct steps its fragments outward (AFTERSHOCK_AT = 150/300;
+    # the server pairs them with shake + thunder on the same ticks).
+    (fx.particle_emitter(
+            "collapse_aftershock",
+            duration=340, looping=False, start_lifetime=constant(30),
+            start_speed=constant(0), start_size=nf3(6.0), max_particles=4)
+        .child_of(root)
+        .with_emission(rate=constant(0.0),
+                       bursts=[burst(time=150, count=constant(1)),
+                               burst(time=300, count=constant(1))])
+        .with_shape(dot())
+        .with_material(texture_material(CIRCLE_TEX, hdr=(0.8, 0.6, 1.25)))
+        .with_curves(
+            size_over_lifetime=curve(
+                0.0, 4.5, [(0.0, 0.15, 1.0, 1.0, 0.35, 0.65, 1.0, 1.0)]),
+            color_over_lifetime=gradient(
+                [(0.0, 0.0), (0.18, 0.45), (1.0, 0.0)],
+                [(0.0, *VIOLET_HOT), (1.0, *VIOLET_MID)]))
+        .with_cull_box((-26.0, -6.0, -26.0), (26.0, 12.0, 26.0)))
+
+    # F-068 altar-core flash: the heart of the island breaks LAST — one hot white-violet
+    # pop over the dais, baked on CORE_BREAK_TICK = 270 (the server's light-flash beat).
+    (fx.particle_emitter(
+            "collapse_core_flash",
+            duration=320, looping=False, start_lifetime=constant(24),
+            start_speed=constant(0), start_size=nf3(3.0), max_particles=2)
+        .child_of(root)
+        .at(0.0, 5.0, 0.0)
+        .with_emission(rate=constant(0.0),
+                       bursts=[burst(time=270, count=constant(1))])
+        .with_shape(dot())
+        .with_material(texture_material(CIRCLE_TEX, hdr=(1.6, 1.25, 2.2)))
+        .with_curves(
+            size_over_lifetime=curve(
+                0.0, 3.2, [(0.0, 0.2, 1.0, 1.0, 0.3, 1.0, 1.0, 0.55)]),
+            color_over_lifetime=gradient(
+                [(0.0, 0.0), (0.1, 0.95), (0.5, 0.4), (1.0, 0.0)],
+                [(0.0, *VIOLET_HOT), (1.0, *VIOLET_MID)]))
+        .with_cull_box((-12.0, -2.0, -12.0), (12.0, 16.0, 12.0)))
+
+    # F-068 core sparks: a single spray of hot motes ejecting with the core fragments.
+    (fx.particle_emitter(
+            "collapse_core_sparks",
+            duration=320, looping=False, start_lifetime=random_between(30, 55),
+            start_speed=random_between(0.35, 0.75),
+            start_size=nf3(random_between(0.12, 0.28)), max_particles=30)
+        .child_of(root)
+        .at(0.0, 5.0, 0.0)
+        .with_emission(rate=constant(0.0),
+                       bursts=[burst(time=270, count=constant(26))])
+        .with_shape(sphere(radius=1.6, thickness=0.5))
+        .with_curves(
+            velocity_over_lifetime=dict(
+                linear=nf3(constant(0), random_between(0.06, 0.16), constant(0))),
+            color_over_lifetime=gradient(
+                [(0.0, 0.0), (0.12, 0.9), (0.7, 0.45), (1.0, 0.0)],
+                [(0.0, *VIOLET_HOT), (1.0, *VIOLET_DEEP)]))
+        .with_material(texture_material(CIRCLE_TEX, hdr=(1.3, 1.0, 1.9)))
+        .with_cull_box((-16.0, -4.0, -16.0), (16.0, 20.0, 16.0)))
     return fx
 
 
@@ -195,6 +294,55 @@ def build_black_hole_maw() -> FxBuilder:
                 [(0.0, 0.0), (0.3, 0.7), (1.0, 0.0)],
                 [(0.0, *VIOLET_HOT), (1.0, *VIOLET_MID)]))
         .with_cull_box((-12.0, -12.0, -12.0), (12.0, 12.0, 12.0)))
+
+    # F-068 ember trails: stretched-billboard embers dragging around the disc RIM —
+    # fast orbital motion + a slow radial leak inward; the velocity stretch turns each
+    # mote into a short glowing trail hugging the accretion edge.
+    (fx.particle_emitter(
+            "maw_ember_trails",
+            duration=340, looping=False, start_lifetime=random_between(45, 75),
+            start_speed=constant(0.02),
+            start_size=nf3(random_between(0.22, 0.45)),
+            simulation_space="Local", max_particles=110)
+        .child_of(root)
+        .with_emission(rate=constant(1.7))
+        .with_shape(circle(radius=25.0, thickness=0.12))
+        .with_curves(
+            velocity_over_lifetime=dict(
+                orbital_mode="AngularVelocity",
+                orbital=nf3(constant(0), constant(0.62), constant(0)),  # the rim drag
+                radial=constant(-0.06)),                                 # slow leak in
+            color_over_lifetime=gradient(
+                [(0.0, 0.0), (0.15, 0.9), (0.75, 0.5), (1.0, 0.0)],
+                [(0.0, *VIOLET_HOT), (0.6, *VIOLET_MID), (1.0, *VIOLET_DEEP)]))
+        .with_material(texture_material(CIRCLE_TEX, hdr=(1.35, 1.05, 1.9)))
+        .with_renderer(render_mode="StretchedBillboard", velocity_scale=1.6,
+                       length_scale=2.6, vertex_sorting="DISTANCE")
+        .with_cull_box((-32.0, -12.0, -32.0), (32.0, 12.0, 32.0)))
+
+    # F-068 star streaks: fast stretched motes ripped out of a WIDE shell straight into
+    # the center — the Photon-space cousin of the post shader's streak layer (stars
+    # being pulled in from the space dome).
+    (fx.particle_emitter(
+            "maw_star_streaks",
+            duration=340, looping=False, start_lifetime=random_between(28, 46),
+            start_speed=constant(0.0),
+            start_size=nf3(random_between(0.1, 0.22)), max_particles=120)
+        .child_of(root)
+        .with_emission(rate=constant(1.5))
+        .with_shape(sphere(radius=36.0, thickness=0.1))
+        .with_curves(
+            velocity_over_lifetime=dict(
+                orbital_mode="AngularVelocity",
+                orbital=nf3(constant(0), constant(0.18), constant(0)),
+                radial=constant(-1.05)),                                 # the hard pull
+            color_over_lifetime=gradient(
+                [(0.0, 0.0), (0.2, 0.85), (0.85, 0.55), (1.0, 0.0)],
+                [(0.0, 0.82, 0.72, 1.0), (1.0, *VIOLET_MID)]))
+        .with_material(texture_material(CIRCLE_TEX, hdr=(1.25, 1.05, 1.8)))
+        .with_renderer(render_mode="StretchedBillboard", velocity_scale=2.2,
+                       length_scale=2.0)
+        .with_cull_box((-40.0, -40.0, -40.0), (40.0, 40.0, 40.0)))
     return fx
 
 
