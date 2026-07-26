@@ -10,60 +10,27 @@
 
 ## NEUES FEEDBACK (hier eintragen!)
 
-Baue mehr Sachen wie den Sturm. Also mehr so krasse Map effekt zb baue eine Glitch Zone bei der Mansion Struktur wo man diesen Grünen Outlines glitch effekt hat durchgehend dadrin im Gebäude aber platziere eine Art Gerät auf dem Dach was die spieler schlagen können und damit zerstören können. Es soll eine Art Schildblase machen und in dieser Schild blase sind halt nur Scan Lines an. Ich will das man von draußen nicht in diese Glitch Blase sehen kann sondern nur einen Strahl nach oben sieht von dem Glitch macher gerät. Baue dafür ein Model in Block Bench / Blender. Überlege dir weitere solcher Dinge damit die Map spannender will will ich das du solche neuen Features insgesammt 5 Stück auf der Map platzieren tust. Es soll jedes mal ein völliganderer neuer Woah Effekt sein der Photon und Veil nutzt. Ich will das du dir mal 20 Subagents Fable 5 Max Thinking nimmst die einfach nur ideen sammeln was man alles passendes erstellen kann es soll aufwendig und krass werden du hast unendlich zeit und unendlich viele Subagents Fable 5 Max Thinking gleichzeitig. 
-
-Ich will einen Dev Command um diese komische Phase zwischen Tag übergang und Map erweiterung wo alles so dunkle wird zu skippen.
-
-Ich will per /dev GhostScreen (spieler) mache das quasi eine Art Geist auf ihrem Screen erscheint und Text der rum glitcht und dann ganz viele Glitch Effekte und einmal ein ganz lauter Knall. Aber alles nur auf ihren Screen und nicht in der Welt und ich will noch das der selbe Effekt auch kommt wenn ich /dev BackroomsScare (spieler) eingebe dabei sollen sie dann aber am Ende einen Black Screen kriegen und mit Glitch effekten in die Backrooms clippen für 20-30s sie sollen dort nicht sterben können und wenn sie schaden kriegen sollen sie sofort glitch effekte kriegen und wieder zurück an ihrem Spot von davor sein. 
-
-Baue /dev JumpScare (Version) (spieler) ein ich will das du 30 verschiedene Jumpscares baust mit Veil,Photon und Shader Effekten jeden Jumpscare soll nur den spieler betreffen den ich eingebe die anderen sollen davon nichts merken.
-
-Ich will ein /invsee (spieler) und /enderchestsee (Spieler) Command als Dev haben.
-
-Ich will per Dev Multipler command einem spieler auch einen abbauspeed boost geben können.
-
-Verbessere das Schwarze Loch und die ganze End Scene noch viel viel mehr. Nutze mehr Subagents Fable 5 Max Thinking und mach es wirklich perfekt polished. Nutze mehr BlockDisplay Animations.
-
-Kümmere dich um deinen gesammten Backlog
-
-Verbessere die Effekte der Zauberstäbe noch viel mehr. Mach das Auswahl UI am Anfang beim ersten mal wählen besser und schöner.
-
-Verbessere die Zauberstäbe Effekte Visuell massiv.
-
-Denk dran weiterhin für alles Subagents Fable 5 Max Thinking Teams wie du willst und denke auch dran Eval und Verbesserungsvorschläge sammlen zu lassen von Fable 5 Max Thinking und bei Eval nutze GPT5.6SOLMAXTHINKINGFAST
+_(leer — hier neue Punkte reinschreiben; zuletzt gezogen: alle Punkte bis „GPT5.6SOLMAXTHINKINGFAST“-Nachricht → einsortiert als F-062…F-070)_
 
 ## Aktuell in Arbeit
 
 | # | Punkt | Status |
 |---|-------|--------|
-| F-030–034 | Sturm: Optimierung, Kampfverhalten, Burst-Anim, Photon-Nahfeld | 🟡 |
-| F-036–041 | Zauberstab-Rework (Skilltree, 30 Zauber, keine Cooldowns) | 🟡 |
-| F-044–046 | Tagesriss + Ferryman-Portal + Arena + Attacken | 🟡 |
-| F-035 | Nether-Öffnungsanimation Tag 2 | 🟡 |
-| F-042/043 | Backrooms Scary-Part + mehr Ebenen | 🟡 |
-| F-028 | Tutorialwelten (verschiedene Maps, Farbfilter) | 🟡 |
-| F-023/024/047 | End-Fixes (Tag-7-Timing, Windaltar, Insel-Crash) | 🟡 |
-| F-048/049 | Glitch lila + Altar-Aktivierung + Farb-Command | 🟡 |
-| F-050–052 | /dev skin, /dev adminskin, /msg-Beschränkung | 🟡 |
-| F-027/053/054 | Herald-Musik + Herold-Cutscene + /dev structure | 🟡 |
-| F-025/026 | Mesa-Pyramide + Schneeberg-Schmelzwasser | 🟡 |
+| F-062 | 5 „Woah“-Map-Features (Photon+Veil), #1: Mansion-Glitch-Dome (grüne Outlines drin, zerschlagbares Dach-Gerät mit Blockbench-Modell, Scanline-Schildblase, von außen nur Lichtstrahl) — 20 Fable-Idea-Subagents sammeln gerade Ideen | 🟡 |
+| F-063 | Dev-Command zum Skippen der dunklen Phase zwischen Tageswechsel und Map-Erweiterung | 🟡 |
+| F-064 | `/dev ghostscreen <Spieler>` (Geist + Glitch-Text + Knall, nur deren Screen) + `/dev backroomsscare <Spieler>` (gleicher Effekt → Blackscreen → 20–30 s Backrooms-Clip, unsterblich, Schaden ⇒ Glitch + zurück zum alten Spot) | 🟡 |
+| F-065 | `/dev jumpscare <Version> <Spieler>` — 30 verschiedene Jumpscares (Veil/Photon/Shader), nur für den Zielspieler | 🟡 |
+| F-066 | `/invsee <Spieler>` + `/enderchestsee <Spieler>` als Dev-Commands | 🟡 |
+| F-067 | Dev-Multiplier-Command: Abbaugeschwindigkeits-Boost pro Spieler | 🟡 |
+| F-068 | Schwarzes Loch + gesamte End-Szene noch viel mehr Polish (mehr BlockDisplay-Anims, mehr Subagents) | 🟡 |
+| F-069 | Restlichen Backlog abarbeiten (F-012 Classic-Audit) | 🟡 |
+| F-070 | Zauberstab-Effekte visuell massiv verbessern + erstes Auswahl-UI schöner | 🟡 |
 
 ## Backlog (offen, in Priorität)
 
-### Bugs / Fixes
 | # | Punkt | Status |
 |---|-------|--------|
-| F-012 | Classic-Blöcke recherchieren; KEINE AI-Blöcke mehr im Classic-Bereich | 🔴 |
-### Features / Verbesserungen
-| # | Punkt | Status |
-|---|-------|--------|
-| F-056 | Credits: längerer Blackscreen → orthografische Sicht am Kartenrand → schwarzes Loch frisst die Map (Photon, viele BlockEntities) → Weltall-Skybox → Rauszoomen, Farben ergrauen → „Minecraft Eclipse“ bis victory_theme endet → Blackscreen bis `/dev end_event` | 🔴 |
-| F-057 | Credits-Map: tausende BlockDisplays, besser platziert; Auto-Laufen ggf. raus; Spieler unsichtbar | 🔴 |
-| F-058 | Mittelinsel + Altar zerspringen sichtbar in tausende Teile; Himmel zieht sich zusammen; Eclipse verschwindet langsam | 🔴 |
-| F-059 | Biome: 9 → 20 (inkl. Cave-Biome), neue Blockbench/Blender-Modelle für Pflanzen etc. | 🔴 |
-| F-060 | Photon Editor mit 3 Entdecker- + 5 Planer- + 10 Umsetzungs-Subagents erkunden und nutzen | 🔴 |
-| F-061 | Race-Legacy-Map erstellen (Minigame-Fixes: Verlassen, Arena-Schild) | 🔴 |
-| F-055 | „Letzte Überfahrt“-Erklärung neu machen | 🔴 (kommt mit Ferryman-Team) |
+| F-012 | Classic-Blöcke recherchieren; KEINE AI-Blöcke mehr im Classic-Bereich | 🟡 (läuft in F-069) |
 
 ---
 
@@ -71,6 +38,25 @@ Denk dran weiterhin für alles Subagents Fable 5 Max Thinking Teams wie du wills
 
 | # | Punkt | Commit |
 |---|-------|--------|
+| F-023/047 | End-Timeline (Herold Tag 7, End-Disc Tag 12, Drache Tag 13) + Insel-Crash-Finale (Inseln krachen als Displays zu Boden, Mittelinsel weg nach Kampf, nur kleine Brocken bleiben) | `fix(end)` |
+| F-024 | Windaltar wirft jetzt dynamisch bis über die höchste Plattform (+Slow-Fall + Kurskorrektur) | `fix(end)` |
+| F-025 | Mesa-Pyramide: leere Chunks unter Landmark-Boxen werden repariert (DiscRepairService) | `fix(worldgen)` |
+| F-026 | Schneeberg: Fluss friert (frozen_river-Biom + Packeis über y96), kein Schmelzwasser mehr | `fix(worldgen)` |
+| F-027/053 | Herold: Kampfmusik beim Spawn, Siegesmusik erst beim Tod; 9,5-s-Spawn-Cutscene via `/dev event start herold` | `feat(herald)` |
+| F-028 | Tutorialwelten: 7 unterschiedliche Era-Maps (disjunkte Chunk-Fenster), Farbfilter statt AI-Texturen, eine Musik-Stimme | `feat(xbox)` |
+| F-030–034 | Sturm: Half-Res-Raymarch + adaptive Steps (Optimierung), Kampfverhalten (wächst, Kern löst sich, Debris-Orbits, echte Wurfblöcke als Displays), längere Burst-Anim, Photon-Nahfeld-LOD | `feat(storm)` |
+| F-035 | Nether-Öffnung Tag 2: 47-s-Photon-Sequenz (Asche, Beben, Block-Ruptur, Eruption) + permanente Rauch-Feuer-Wolke überm Loch | `feat(nether)` |
+| F-036–041 | Zauberstab-Rework: 48-Knoten-Skilltree mit Rebirths + Veil-Ladungs-Upgrades, 30 datengetriebene Zauber (10 je Richtung), keine Cooldowns (nur Veil-Ladung), Phasenwelle → Umbra-Lanze, Tab nur mit Stab in Hand, `/dev wand xp/level` | `feat(wand)` |
+| F-042/043 | Backrooms: Dread-System (Lichter-Aus-Wellen, Mob-Lautstärke-Rampe beim Anrennen, Laternen-Flackern) + 5 Ebenen (neu: Flooded Halls, The Hollow) | `feat(backrooms)` |
+| F-044–046 | Tagesriss am Himmel (Photon) mit Display-Fallout, der sich um die Mittelinsel sammelt; Tag-14-Portal-Formation + Riesenschlüssel-Aktivierung → Tür bricht auf, lila Geister, Schiff→Arena und zurück; Ferryman-Spezialattacken; `/dev start_ferryman` | `feat(ferryman)` |
+| F-048/049 | Glitch: Void-Effekt in Lila, Altar-Ambient-Aktivierung (Impuls vom Block), Farb-Parameter im `/dev glitch`-Command | `feat(glitch)` |
+| F-050–052 | `/dev skin <Spieler> <URL/NameMC>`, lila `/dev adminskin`, `/msg` nur an Sonic0810 | `feat(admin)` |
+| F-054 | `/dev structure <id>` platziert jede Struktur geerdet (StructureGrounding) | `feat(herald)` |
+| F-055 | „Letzte Überfahrt“-Erklärung neu geschrieben | `feat(ferryman)` |
+| F-056–058 | Credits-Finale: langer Blackscreen → Ortho-Kartenrand → Schwarzes Loch (Veil-Post-Distortion + Spiral-Displays) frisst die Map, Weltall-Skybox, Ergrauen, „Minecraft Eclipse“ bis victory_theme-Ende, Blackscreen bis `/dev end_event`; Insel/Altar-Shatter in tausende Teile; tausende Formation-Displays, Spieler unsichtbar, Auto-Laufen raus | `feat(credits)` |
+| F-059 | 20 Biome (10 neu: 4 Oberfläche + 6 Cave) + 15 neue Flora-/Kristallblöcke mit Loot/Models/Features | `feat(biomes)` |
+| F-060 | Photon-Editor-Erkundung: Bericht `docs/plans_v3/PHOTON_EDITOR_CAPABILITIES.md` (Editor-Workflow, Feature-Zensus über 145 .fx, Upgrade-Rezepte) | `docs(photon)` |
+| F-061 | Legacy-Race: prozeduraler Rundkurs (18 960 Blöcke, 7 Checkpoints, 3 Runden, Podium), ersetzt Elytra-Race; Arena-Schild + Verlassen-Flow gefixt | `feat(minigames)` |
 | F-001 | custom_payload-Kick beim Testwelt-Join (STRING_UTF8-32K-Limit; Chunked-Sync + LARGE_UTF8) | `fix(net)` |
 | F-002 | Limbo-Portal/Disc kamera-gekoppelt → feste Himmelsrichtung wie Vanilla-Sonne | `fix(limbo)` |
 | F-003 | Deckhands: 3s-Ruck (GeckoLib-Reset-Loop), Ruder-Culling, Spiegel-Flackern | `fix(limbo)` |
