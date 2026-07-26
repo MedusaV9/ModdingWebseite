@@ -309,7 +309,16 @@ public final class StormWallRenderer {
     private static double pulseBearing;
     private static float pulseLat;
 
-    // --- FX-STORM round: multi-stage explosion (implosion → flash → shard ring → bloom) ---
+    // --- FX-STORM round: multi-stage explosion (F-033: inflate → implosion → flash →
+    // shard ring → bloom → aftermath, stretched over StormRegistry.EXPLODE_TICKS = 100) ---
+    /**
+     * F-033 stage 1: fraction of the burst spent INFLATING (the shell swells and
+     * brightens — the breath before the pinch). Package-visible: {@code StormFxClient}'s
+     * white curve charges through the same window.
+     */
+    static final float EXPLODE_INFLATE_FRAC = 0.10F;
+    /** Swell amplitude at the inflate peak (radius × 1.06 just before the pinch). */
+    private static final float EXPLODE_INFLATE = 0.06F;
     /** Fraction of the burst spent on the implosion suck-in before the shell releases. */
     static final float EXPLODE_IMPLODE_FRAC = 0.18F;
     /** Radius pinch depth at the implosion's deepest point. */
@@ -474,7 +483,7 @@ public final class StormWallRenderer {
             return; // C8: the shockwave reveals the interior — the sky clears immediately
         }
         if (storm.type == S2CStormStatePayload.TYPE_SPHERE) {
-            buildSphereOccluder(buffer, storm, camera, vis);
+            buildSphereOccluder(buffer, storm, camera, vis, partialTick);
             return;
         }
         int segments = OCCLUDER_SEGMENTS;
@@ -525,9 +534,20 @@ public final class StormWallRenderer {
      * C8 opaque occluder dome of a sphere storm (never-see-inside, same guarantee as the
      * cylinder + cone lid): latitude bands at {@code r − }{@value #OCCLUDER_INSET} from the
      * below-ground skirt to the apex — no separate lid needed, the dome closes itself.
+     *
+     * <p>F-032: while a siege runs ({@code ClientStorm.siegeCoreFade} &gt; 0) the core
+     * DISSOLVES — radius and alpha ramp to 0 over ~3 s — so the boss fight inside plays
+     * with clear sight. The never-see-inside guarantee is intentionally suspended for
+     * the fight (the fight IS what was hidden). A WON fight rides into EXPLODE, where the
+     * occluder is skipped outright and the storm bursts — the core never returns; only an
+     * ABANDONED fight fades it back in as the siege deactivates.</p>
      */
     private static void buildSphereOccluder(BufferBuilder buffer, StormFxClient.ClientStorm storm,
-            Vec3 camera, float vis) {
+            Vec3 camera, float vis, float partialTick) {
+        float coreFade = storm.siegeCoreFade(partialTick);
+        if (coreFade >= 0.995F) {
+            return; // F-032: core fully dissolved — free sight into the arena
+        }
         // STORM-VOL: while the volumetric pass owns this storm the occluder shrinks to a
         // small core and its tint softens. The raymarcher clamps its march to the scene
         // depth buffer, so a full-size depth-writing dome at r − 5 would cut every ray
@@ -538,9 +558,12 @@ public final class StormWallRenderer {
         // active / the pipeline was evicted — the frozen near-black look is preserved there.
         boolean volumetric = StormVolumeFx.isVolumeStorm(storm.id);
         float inset = volumetric ? storm.radius * (1.0F - OCC_VOLUMETRIC_CORE) : OCCLUDER_INSET;
-        float radius = Math.max(1.5F, storm.radius - inset);
+        float radius = Math.max(1.5F, storm.radius - inset) * (1.0F - coreFade);
         float heightScale = heightScale(storm, vis);
-        float alpha = Math.min(1.0F, vis * 1.6F);
+        float alpha = Math.min(1.0F, vis * 1.6F) * (1.0F - coreFade);
+        if (radius <= 1.0F || alpha <= 0.01F) {
+            return;
+        }
         float occR = volumetric ? OCC_SOFT_R : OCC_R;
         float occG = volumetric ? OCC_SOFT_G : OCC_G;
         float occB = volumetric ? OCC_SOFT_B : OCC_B;
@@ -1464,20 +1487,26 @@ public final class StormWallRenderer {
     }
 
     /**
-     * FX-STORM stage curve of the C8 burst: a {@value #EXPLODE_PINCH}-deep implosion pinch
-     * over the first {@value #EXPLODE_IMPLODE_FRAC} of the burst (releasing right after),
-     * then an eased (t²) expansion out to {@code 1 + }{@value #EXPLODE_EXPAND} radii.
-     * Package-visible (STORM-VOL): {@link StormVolumeFx} expands the raymarched bounds on
-     * the SAME curve (raw boom = the outermost shell's stagger) during EXPLODE.
+     * FX-STORM stage curve of the C8 burst, F-033 retimed for the 100-tick length:
+     * an {@value #EXPLODE_INFLATE}-amplitude INFLATE swell over the first
+     * {@value #EXPLODE_INFLATE_FRAC} (stage 1 — the shell takes a breath and brightens,
+     * see {@code ClientStorm.explodeWhite}), collapsing into the
+     * {@value #EXPLODE_PINCH}-deep implosion pinch until {@value #EXPLODE_IMPLODE_FRAC}
+     * (releasing right after), then an eased (t²) expansion out to
+     * {@code 1 + }{@value #EXPLODE_EXPAND} radii. Package-visible (STORM-VOL):
+     * {@link StormVolumeFx} expands the raymarched bounds on the SAME curve (raw boom =
+     * the outermost shell's stagger) during EXPLODE.
      */
     static float explodeRadiusScale(float boom) {
         if (boom <= 0.0F) {
             return 1.0F;
         }
-        float pinch = EXPLODE_PINCH * smoothstep(0.0F, EXPLODE_IMPLODE_FRAC, boom)
+        float inflate = EXPLODE_INFLATE * smoothstep(0.0F, EXPLODE_INFLATE_FRAC, boom)
+                * (1.0F - smoothstep(EXPLODE_INFLATE_FRAC, EXPLODE_IMPLODE_FRAC, boom));
+        float pinch = EXPLODE_PINCH * smoothstep(EXPLODE_INFLATE_FRAC, EXPLODE_IMPLODE_FRAC, boom)
                 * (1.0F - smoothstep(EXPLODE_IMPLODE_FRAC, EXPLODE_IMPLODE_FRAC * 2.2F, boom));
         float expand = expandT(boom);
-        return 1.0F - pinch + EXPLODE_EXPAND * expand * expand;
+        return 1.0F + inflate - pinch + EXPLODE_EXPAND * expand * expand;
     }
 
     /** Expansion progress 0..1 of the post-implosion part of the burst. */

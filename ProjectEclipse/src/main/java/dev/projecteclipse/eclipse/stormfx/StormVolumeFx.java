@@ -60,10 +60,16 @@ public final class StormVolumeFx {
     public static final ResourceLocation STORM_VOLUME_POST =
             ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "storm_volume");
 
-    /** The volume pass engages while a sphere storm's shell is inside this distance. */
-    private static final float VOLUME_RANGE = 420.0F;
-    /** Strength ramps 1 → 0 over [fade-start, range] so the pass never pops at range. */
-    private static final float STRENGTH_FADE_START = 340.0F;
+    /**
+     * F-034 LOD handover: the volume pass engages while a sphere storm's shell is inside
+     * this distance — beyond it ONLY {@link StormWallRenderer}'s simple far/impostor wall
+     * tiers render (the cheap far read). {@link StormNearfieldFx}'s Photon layers share
+     * this window, so the volumetric mass and the near-field FX blend in together over
+     * the same approach band.
+     */
+    static final float VOLUME_RANGE = 250.0F;
+    /** Strength ramps 1 → 0 over [fade-start, range] — the F-034 handover blend zone. */
+    static final float STRENGTH_FADE_START = 150.0F;
     /** Raymarch step budget by quality tier (2/1/0) — the shader's quality ladder. */
     private static final float STEPS_TIER2 = 64.0F;
     private static final float STEPS_TIER1 = 40.0F;
@@ -83,6 +89,12 @@ public final class StormVolumeFx {
     private static final float FULLSCREEN_STEP_CAP = 48.0F;
     /** Absolute Java-side floor (the shader clamps to its own floor of 12). */
     private static final float STEPS_MIN = 16.0F;
+    /**
+     * F-031b: hard step ceiling while the target storm is under siege (the boss fight
+     * runs inside it — debris displays + block lifts + the grown radius all cost frame
+     * time, so the raymarch gives some back).
+     */
+    private static final float SIEGE_STEP_CAP = 32.0F;
     /** Flash light anchor sits at this fraction of r on the flash bearing (W-C formula). */
     private static final double FLASH_RADIUS_FRAC = 0.92D;
 
@@ -209,6 +221,10 @@ public final class StormVolumeFx {
         pipeline.getUniform("Visibility").setFloat(vis);
         pipeline.getUniform("Strength").setFloat(strength);
         pipeline.getUniform("StepCount").setFloat(stepCount(storm, camera, radius));
+        // F-030f: 3 self-shadow taps on the top tier, 2 below it AND while the storm is
+        // under siege (the shader rescales tap spacing so reach/optical depth hold).
+        pipeline.getUniform("ShadowTaps").setFloat(
+                effectiveTier(storm) >= 2 ? 3.0F : 2.0F);
         // Tick clock, not wall clock: pause-safe and continuous (the shader integrates
         // rotation angles from it — a wall-clock wrap would snap the churn).
         pipeline.getUniform("Time").setFloat((StormFxClient.ticks() + partialTick) / 20.0F);
@@ -262,7 +278,7 @@ public final class StormVolumeFx {
      * at 48 steps × 3 shadow taps instead of the old unconditional 64 × 4.
      */
     private static float stepCount(StormFxClient.ClientStorm storm, Vec3 camera, float radius) {
-        float steps = stepsForTier(EclipseClientConfig.stormVolumeQuality());
+        float steps = stepsForTier(effectiveTier(storm));
         double dx = camera.x - storm.center.x;
         double dy = camera.y - storm.center.y;
         double dz = camera.z - storm.center.z;
@@ -275,7 +291,19 @@ public final class StormVolumeFx {
         if (coverage >= COVERAGE_CAP_START) {
             steps = Math.min(steps, FULLSCREEN_STEP_CAP);
         }
+        if (StormFxClient.siegeActive(storm.id)) {
+            steps = Math.min(steps, SIEGE_STEP_CAP); // F-031b combat FPS guard
+        }
         return Math.max(steps, STEPS_MIN);
+    }
+
+    /**
+     * F-031b: the config quality tier, dropped ONE tier while this storm is under siege
+     * (the client's automatic combat downgrade — restored the tick the siege ends).
+     */
+    private static int effectiveTier(StormFxClient.ClientStorm storm) {
+        int tier = EclipseClientConfig.stormVolumeQuality();
+        return StormFxClient.siegeActive(storm.id) ? Math.max(0, tier - 1) : tier;
     }
 
     private static float stepsForTier(int tier) {

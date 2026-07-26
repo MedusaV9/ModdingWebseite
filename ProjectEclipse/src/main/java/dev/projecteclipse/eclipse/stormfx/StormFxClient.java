@@ -7,6 +7,7 @@ import javax.annotation.Nullable;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
+import dev.projecteclipse.eclipse.network.fx.S2CStormSiegePayload;
 import dev.projecteclipse.eclipse.network.fx.S2CStormStatePayload;
 import dev.projecteclipse.eclipse.registry.EclipseSounds;
 import dev.projecteclipse.eclipse.veilfx.FxBudget;
@@ -148,13 +149,14 @@ public final class StormFxClient {
         float height = payload.height() > 0.0F ? payload.height() : StormRegistry.heightFor(radius);
         int type = payload.stormType();
         if (storm != null && state == storm.state) {
-            if (storm.center.equals(center) && Float.compare(storm.radius, radius) == 0
-                    && Float.compare(storm.height, height) == 0 && storm.type == type) {
+            // F-031a: geometry compares against the WIRE base values — the rendered
+            // radius/height ride the siege growth ramp on top (applyGeometry).
+            if (storm.center.equals(center) && Float.compare(storm.baseRadius, radius) == 0
+                    && Float.compare(storm.baseHeight, height) == 0 && storm.type == type) {
                 return;
             }
             storm.center = center;
-            storm.radius = radius;
-            storm.height = height;
+            storm.applyGeometry(radius, height);
             storm.type = type;
             return;
         }
@@ -182,8 +184,7 @@ public final class StormFxClient {
             }
         }
         storm.center = center;
-        storm.radius = radius;
-        storm.height = height;
+        storm.applyGeometry(radius, height);
         storm.type = type;
         storm.state = state;
         storm.stateStartTick = clientTicks;
@@ -192,6 +193,40 @@ public final class StormFxClient {
                 && payload.ticks() > StormRegistry.RAMP_TICKS;
         storm.glitchStarted = false;
         storm.nextArcTick = clientTicks + ARC_MIN_INTERVAL;
+    }
+
+    /**
+     * {@code S2CStormSiegePayload} dispatch (F-031/F-032, client main thread — see
+     * {@code FxPayloads}): flips the siege overlay of one storm. Idempotent — keepalive
+     * re-sends of an unchanged state return early so the running grow/dissolve ramps are
+     * never restarted; a real flip snapshots the CURRENT ramp values and eases from
+     * there, so a mid-grow abandon shrinks back from wherever it was.
+     */
+    public static void handleSiege(S2CStormSiegePayload payload) {
+        ClientStorm storm = find(payload.stormId());
+        if (storm == null) {
+            return; // unknown storm — the next state resync re-establishes both layers
+        }
+        boolean active = payload.active();
+        float scale = Math.max(1.0F, payload.radiusScale());
+        if (storm.siegeActive == active
+                && (!active || Float.compare(storm.siegeRadiusScale, scale) == 0)) {
+            return; // keepalive — ramps keep their own clock
+        }
+        storm.siegeScaleAtFlip = storm.siegeScale(1.0F);
+        storm.siegeCoreFadeAtFlip = storm.siegeCoreFade(1.0F);
+        storm.siegeActive = active;
+        if (active) {
+            storm.siegeRadiusScale = scale;
+            storm.siegeGrowTicks = Math.max(1, payload.growTicks());
+        }
+        storm.siegeChangeTick = clientTicks;
+    }
+
+    /** F-031b: whether this storm is under siege (StormVolumeFx quality downgrade). */
+    public static boolean siegeActive(int stormId) {
+        ClientStorm storm = find(stormId);
+        return storm != null && storm.siegeActive;
     }
 
     /**
@@ -279,6 +314,11 @@ public final class StormFxClient {
 
     /** @return {@code false} once the storm fully dissipated/exploded and must be dropped. */
     private static boolean tickStorm(Minecraft minecraft, ClientLevel level, ClientStorm storm, Vec3 camera) {
+        // F-031a: re-derive the rendered geometry from the wire base × the siege growth
+        // ramp every tick (0.3%/tick at the 1.3× / 5 s default — no per-frame lerp needed).
+        float siegeScale = storm.siegeScale(1.0F);
+        storm.radius = storm.baseRadius * siegeScale;
+        storm.height = storm.baseHeight * siegeScale;
         int elapsed = clientTicks - storm.stateStartTick;
         // State promotion / expiry.
         if (storm.state == S2CStormStatePayload.STATE_SPAWN && elapsed >= storm.stateTicks) {
@@ -310,6 +350,7 @@ public final class StormFxClient {
             // riding the expanding shockwave ring. The crown dies with the shell.
             storm.releaseCrownHalo();
             tickLoopSound(minecraft, storm, shellDist, visibility);
+            tickBurstBeats(level, storm, camera);
             tickExplosionDebris(level, storm);
             return true;
         }
@@ -322,25 +363,62 @@ public final class StormFxClient {
         return true;
     }
 
+    /** F-033 stage 4 window: the last quarter of the burst is settling aftermath. */
+    private static final float EXPLODE_AFTERMATH_START = 0.75F;
+
+    /**
+     * F-033 sound layering for the extended burst (client-scheduled ambient beats, the
+     * heartbeat/arc precedent — the server's thunderclap + shatter stinger stay the
+     * sender-owned foreground): ONE {@code event.storm_burst} release boom the moment the
+     * pinch lets go (distance-attenuated at the camera), then sporadic quiet
+     * {@code event.lightning_far} crackles under the settling aftermath dust.
+     */
+    private static void tickBurstBeats(ClientLevel level, ClientStorm storm, Vec3 camera) {
+        float progress = storm.explodeProgress(1.0F);
+        if (!storm.burstReleaseFired && progress >= StormWallRenderer.EXPLODE_IMPLODE_FRAC) {
+            storm.burstReleaseFired = true;
+            double dx = camera.x - storm.center.x;
+            double dz = camera.z - storm.center.z;
+            double dist = Math.sqrt(dx * dx + dz * dz);
+            float volume = (float) Mth.clamp(1.5D * (1.0D - dist / 420.0D), 0.15D, 1.5D);
+            level.playLocalSound(camera.x, camera.y, camera.z,
+                    EclipseSounds.EVENT_STORM_BURST.get(), SoundSource.WEATHER,
+                    volume, 0.85F, false);
+        }
+        if (progress >= EXPLODE_AFTERMATH_START && clientTicks % 24 == 0
+                && level.random.nextInt(3) > 0) {
+            double angle = level.random.nextDouble() * Math.PI * 2.0D;
+            double ringR = storm.radius * (1.0D + level.random.nextDouble() * 1.5D);
+            level.playLocalSound(storm.center.x + Math.cos(angle) * ringR,
+                    storm.center.y + 2.0D, storm.center.z + Math.sin(angle) * ringR,
+                    EclipseSounds.EVENT_LIGHTNING_FAR.get(), SoundSource.WEATHER,
+                    0.25F, 0.7F + level.random.nextFloat() * 0.25F, false);
+        }
+    }
+
     /**
      * C8 explosion debris, staged (FX-STORM multi-stage burst, mirroring the renderer's
-     * {@code explodeRadiusScale} curve; EXPLOSION 2.0 upgrades from PLAN-STORM2 §W-D D4 —
-     * the renderer's staggered-shell collapse choreography itself is W-A's, this class
-     * owns the client debris/FX beats riding it):
+     * {@code explodeRadiusScale} curve; EXPLOSION 2.0 upgrades from PLAN-STORM2 §W-D D4;
+     * F-033 stretches the burst to {@link StormRegistry#EXPLODE_TICKS} = 100 ticks and
+     * adds the aftermath stage — the renderer's staggered-shell collapse choreography
+     * itself is W-A's, this class owns the client debris/FX beats riding it):
      * <ul>
-     *   <li><b>implosion</b> (progress &lt; {@link StormWallRenderer#EXPLODE_IMPLODE_FRAC}):
-     *       debris tears off the shell and is sucked INTO the center — no smoke column yet.
-     *       D4: plus 2 spark-white streaks/tick pulled hard toward the pinch point (the
-     *       inward breath has teeth; pairs with D5's fog "gulp" in the interior);</li>
-     *   <li><b>flash beat</b> (&lt; 0.30): white owns the frame, the air stays almost clean;</li>
-     *   <li><b>expansion</b>: debris ring on the renderer's eased {@code 1 + 1.8·t²} radius
-     *       law (D4: ring bursts DOUBLE at quality tier 2 — still raw {@code addParticle},
-     *       budget-free) + rising center column + a vertical debris FOUNTAIN during expand
-     *       0.3–0.8 climbing from the center toward 0.6·height (the burst has height, not
-     *       just radius) + a {@code border_glitch} strobe burst every 5 ticks riding the
-     *       ring — the glitch-voxel shard dissolve (tier ≥ 1 only, unchanged).</li>
+     *   <li><b>inflate + implosion</b> (progress &lt; {@link StormWallRenderer#EXPLODE_IMPLODE_FRAC}):
+     *       the shell swells and brightens (F-033 stage 1 — {@code explodeWhite} charges
+     *       through it) while debris tears off and is sucked INTO the center. D4: plus 2
+     *       spark-white streaks/tick pulled hard toward the pinch point;</li>
+     *   <li><b>flash beat</b> (&lt; 0.26): white owns the frame, the air stays almost clean;</li>
+     *   <li><b>expansion</b> (&lt; {@value #EXPLODE_AFTERMATH_START}): debris ring on the
+     *       renderer's eased radius law (ring bursts DOUBLE at quality tier 2 — still raw
+     *       {@code addParticle}, budget-free) + rising center column + the vertical debris
+     *       FOUNTAIN + a {@code border_glitch} strobe burst every 5 ticks riding the ring.
+     *       The Photon shockwave ring ({@code storm_burst_shockwave.fx}) is fired at the
+     *       release moment by {@link StormNearfieldFx} — F-033 stage 2;</li>
+     *   <li><b>aftermath</b> (≥ {@value #EXPLODE_AFTERMATH_START}): the ring dies down and
+     *       leftover cloud shreds drift over the wreck while spent sparks rain out of the
+     *       column — the sky is already clearing, the air is not (F-033 stage 4).</li>
      * </ul>
-     * Raw {@code addParticle} for the dust — a 2 s one-off; only the glitch bursts charge
+     * Raw {@code addParticle} for the dust — a 5 s one-off; only the glitch bursts charge
      * the STORM channel. The clear-sky bloom finish stays {@code StormInteriorFx}'s
      * white-out→bloom tail (untouched contract).
      */
@@ -348,6 +426,43 @@ public final class StormFxClient {
         RandomSource random = level.random;
         float progress = storm.explodeProgress(1.0F);
         boolean reduced = EclipseClientConfig.reducedFx();
+        if (progress >= EXPLODE_AFTERMATH_START) {
+            // Stage 4 — aftermath: slow cloud shreds hanging in the blast field + spent
+            // sparks raining down; density eases out over the stage so the last frame of
+            // the burst is already quiet sky.
+            float settle = 1.0F - (progress - EXPLODE_AFTERMATH_START)
+                    / (1.0F - EXPLODE_AFTERMATH_START);
+            int shreds = Math.max(1, Math.round((reduced ? 2 : 4) * settle));
+            for (int i = 0; i < shreds; i++) {
+                double angle = random.nextDouble() * Math.PI * 2.0D;
+                double reach = storm.radius * (0.4D + random.nextDouble() * 1.8D);
+                level.addParticle(random.nextBoolean()
+                                ? ParticleTypes.CAMPFIRE_COSY_SMOKE : ParticleTypes.CLOUD,
+                        storm.center.x + Math.cos(angle) * reach,
+                        storm.center.y + 0.6D + random.nextDouble() * 6.0D,
+                        storm.center.z + Math.sin(angle) * reach,
+                        (random.nextDouble() - 0.5D) * 0.04D,
+                        0.015D + random.nextDouble() * 0.02D,
+                        (random.nextDouble() - 0.5D) * 0.04D);
+            }
+            if (!reduced && clientTicks % 2 == 0) {
+                double angle = random.nextDouble() * Math.PI * 2.0D;
+                double reach = storm.radius * random.nextDouble() * 1.2D;
+                level.addParticle(ParticleTypes.ELECTRIC_SPARK,
+                        storm.center.x + Math.cos(angle) * reach,
+                        storm.center.y + 3.0D + random.nextDouble() * storm.height * 0.4D,
+                        storm.center.z + Math.sin(angle) * reach,
+                        0.0D, -0.12D - random.nextDouble() * 0.08D, 0.0D);
+            }
+            if (clientTicks % 6 == 0) {
+                level.addParticle(ParticleTypes.WHITE_ASH,
+                        storm.center.x + (random.nextDouble() - 0.5D) * storm.radius,
+                        storm.center.y + 2.0D + random.nextDouble() * 4.0D,
+                        storm.center.z + (random.nextDouble() - 0.5D) * storm.radius,
+                        0.0D, 0.06D, 0.0D);
+            }
+            return;
+        }
         if (progress < StormWallRenderer.EXPLODE_IMPLODE_FRAC) {
             // Stage 1 — implosion suck-in: shell debris streams toward the center.
             int bursts = reduced ? 3 : 6;
@@ -374,7 +489,7 @@ public final class StormFxClient {
             }
             return;
         }
-        if (progress < 0.30F) {
+        if (progress < 0.26F) {
             // Stage 2 — the flash beat: a lone ash flake over the center, nothing else.
             if (clientTicks % 4 == 0) {
                 level.addParticle(ParticleTypes.WHITE_ASH,
@@ -733,14 +848,30 @@ public final class StormFxClient {
 
     /** One client-tracked storm. Mutable on purpose — payloads update in place. */
     static final class ClientStorm {
+        /** F-032 core-dissolve ramp length (~3 s — the occluder melts for combat sight). */
+        static final int CORE_DISSOLVE_TICKS = 60;
+
         final int id;
         Vec3 center = Vec3.ZERO;
+        /** RENDERED geometry = wire base × the siege growth scale (updated per tick). */
         float radius = StormRegistry.DEFAULT_RADIUS;
         float height = StormRegistry.heightFor(StormRegistry.DEFAULT_RADIUS);
+        /** Wire-authoritative geometry from the last state payload (F-031a). */
+        float baseRadius = StormRegistry.DEFAULT_RADIUS;
+        float baseHeight = StormRegistry.heightFor(StormRegistry.DEFAULT_RADIUS);
         int type = S2CStormStatePayload.TYPE_WALL;
         int state = S2CStormStatePayload.STATE_SPAWN;
         int stateStartTick;
         int stateTicks = 1;
+        // --- F-031/F-032 siege overlay (S2CStormSiegePayload) ---
+        boolean siegeActive;
+        /** Tick of the last siege flip — the shared clock of the grow + dissolve ramps. */
+        int siegeChangeTick = Integer.MIN_VALUE / 2;
+        int siegeGrowTicks = 1;
+        float siegeRadiusScale = 1.0F;
+        /** Ramp values snapshotted at the last flip (a mid-ramp flip eases from here). */
+        float siegeScaleAtFlip = 1.0F;
+        float siegeCoreFadeAtFlip;
         /** SPAWN with ticks > RAMP_TICKS: hold hidden + glitch pulse + ramp over the last 80. */
         boolean revealStyle;
         boolean glitchStarted;
@@ -765,12 +896,49 @@ public final class StormFxClient {
         StormLoopSound loopSound;
         /** One play(...) attempt per approach (LimboAmbience pattern — no retry storms). */
         boolean loopStartedThisApproach;
+        /** F-033: the one-shot release boom fired (latched for the burst's lifetime). */
+        boolean burstReleaseFired;
 
         ClientStorm(int id) {
             this.id = id;
             this.wispHeights[0] = 4.0F;
             this.wispHeights[1] = 18.0F;
             this.wispHeights[2] = 32.0F;
+        }
+
+        /** Stores the wire geometry and derives the rendered one (base × siege scale). */
+        void applyGeometry(float wireRadius, float wireHeight) {
+            this.baseRadius = wireRadius;
+            this.baseHeight = wireHeight;
+            float scale = siegeScale(1.0F);
+            this.radius = wireRadius * scale;
+            this.height = wireHeight * scale;
+        }
+
+        /**
+         * F-031a: the current radius/height multiplier — eases from the value at the
+         * last siege flip toward {@code siegeRadiusScale} (active) or 1.0 (over) across
+         * {@code siegeGrowTicks}. 1.0 for storms that never saw a siege (the flip tick
+         * default puts the ramp far in the past, so lerp(1, …) lands on the target).
+         */
+        float siegeScale(float partialTick) {
+            float target = siegeActive ? siegeRadiusScale : 1.0F;
+            float ramp = smooth((clientTicks + partialTick - siegeChangeTick)
+                    / Math.max(1.0F, siegeGrowTicks));
+            return Mth.lerp(ramp, siegeScaleAtFlip, target);
+        }
+
+        /**
+         * F-032: occluder-core dissolve 0 (solid, the frozen never-see-inside look) → 1
+         * (gone — clear combat sight) over {@value #CORE_DISSOLVE_TICKS} ticks after a
+         * siege starts; eases back after an ABANDONED fight (a won fight rides EXPLODE,
+         * where the occluder is skipped outright and never returns — the storm bursts).
+         */
+        float siegeCoreFade(float partialTick) {
+            float target = siegeActive ? 1.0F : 0.0F;
+            float ramp = smooth((clientTicks + partialTick - siegeChangeTick)
+                    / (float) CORE_DISSOLVE_TICKS);
+            return Mth.lerp(ramp, siegeCoreFadeAtFlip, target);
         }
 
         /**
@@ -807,20 +975,29 @@ public final class StormFxClient {
         }
 
         /**
-         * C8 white-hot factor (0 otherwise). FX-STORM retiming: charges up through the
-         * implosion suck-in (to 0.55), PEAKS at the pinch release — the flash beat —
-         * then decays over ~15 ticks while the shockwave expands.
+         * C8 white-hot factor (0 otherwise). F-033 retiming over the 100-tick burst:
+         * stage 1 brightening to 0.35 through the INFLATE window, a hard charge to 1.0
+         * through the pinch, the PEAK at the release — the flash beat — then a decay
+         * over ~30 ticks while the shockwave expands (the longer burst keeps the flash
+         * proportionally short so white never owns more than the opening beat).
          */
         float explodeWhite(float partialTick) {
             if (state != S2CStormStatePayload.STATE_EXPLODE) {
                 return 0.0F;
             }
             float elapsed = clientTicks + partialTick - stateStartTick;
-            float implodeEnd = Math.max(1.0F, stateTicks * StormWallRenderer.EXPLODE_IMPLODE_FRAC);
-            if (elapsed < implodeEnd) {
-                return Mth.clamp(elapsed / implodeEnd, 0.0F, 1.0F) * 0.55F; // charging glow
+            float inflateEnd = Math.max(1.0F, stateTicks * StormWallRenderer.EXPLODE_INFLATE_FRAC);
+            float implodeEnd = Math.max(inflateEnd + 1.0F,
+                    stateTicks * StormWallRenderer.EXPLODE_IMPLODE_FRAC);
+            if (elapsed < inflateEnd) {
+                // F-033 stage 1: the swelling shell brightens with it.
+                return Mth.clamp(elapsed / inflateEnd, 0.0F, 1.0F) * 0.35F;
             }
-            return Mth.clamp(1.0F - (elapsed - implodeEnd) / 15.0F, 0.0F, 1.0F);
+            if (elapsed < implodeEnd) {
+                return 0.35F + 0.65F * Mth.clamp(
+                        (elapsed - inflateEnd) / (implodeEnd - inflateEnd), 0.0F, 1.0F);
+            }
+            return Mth.clamp(1.0F - (elapsed - implodeEnd) / 30.0F, 0.0F, 1.0F);
         }
 
         void releaseWisp(int index) {

@@ -2,20 +2,29 @@
 // round; FEATURE priority). A single-storm raymarcher: analytic ray/ellipsoid entry,
 // scene-depth-clamped Beer–Lambert march through a domain-warped fBm density field with
 // differential rotation, log-spiral rainbands, an anvil/skirt height profile and a
-// cauliflower tower term on the silhouette; lit by cheap single scattering (3-tap sun
+// cauliflower tower term on the silhouette; lit by cheap single scattering (2/3-tap sun
 // self-shadow + Henyey–Greenstein forward lobe + height-graded ambient) and the W-B
 // intra-wall flash injected as emissive light INSIDE the mass. The opaque occluder dome
 // keeps writing depth, so outside cameras march the entry→occluder band (the wall reads
 // meters thick) and silhouette rays march the full chord (the rim reads as a lumpy ball
-// of weather, not a shell). Composite is premultiplied-over: scene · transmittance +
-// in-scatter. Uniforms are fed per frame by stormfx.StormVolumeFx through the
-// VeilPostController row (never under an Iris shaderpack; StormWallRenderer's shell
-// stack is the fallback there): VolCenter (camera-relative), VolRadius, VolYScale,
-// Visibility, Strength, StepCount, Time, SunDir, Interior, FlashPos, FlashAmount.
+// of weather, not a shell).
+//
+// F-030 OPT: this pass now marches at HALF RESOLUTION into the pipeline's `volume_half`
+// RGBA16F target and outputs PREMULTIPLIED in-scatter (rgb) + transmittance (a); the
+// sibling eclipse:storm_volume_upsample stage bilateral-upsamples that against the
+// full-res depth buffer and composites scene · a + rgb. Per-ray budget cuts on top:
+// adaptive empty-space stepping with isosurface step-back refinement, the IGN start
+// dither (kills banding at the lower step counts), an earlier transmittance early-out
+// (< 0.02), an explicit distance LOD (steps halve as the entry point runs 160→320
+// blocks out) and ShadowTaps 3 → 2 on low quality tiers (spacing rescaled so shadow
+// reach AND optical depth are preserved). Uniforms are fed per frame by
+// stormfx.StormVolumeFx through the VeilPostController row (never under an Iris
+// shaderpack; StormWallRenderer's shell stack is the fallback there): VolCenter
+// (camera-relative), VolRadius, VolYScale, Visibility, Strength, StepCount, ShadowTaps,
+// Time, SunDir, Interior, FlashPos, FlashAmount.
 #include eclipse:eclipse_volume
 #include veil:space_helper
 
-uniform sampler2D DiffuseSampler0;
 uniform sampler2D DiffuseDepthSampler;
 uniform vec3 VolCenter;
 uniform float VolRadius;
@@ -23,6 +32,7 @@ uniform float VolYScale;
 uniform float Visibility;
 uniform float Strength;
 uniform float StepCount;
+uniform float ShadowTaps;
 uniform float Time;
 uniform vec3 SunDir;
 uniform float Interior;
@@ -59,6 +69,19 @@ const float BOUNDS_MARGIN = 1.55;
 // Spiral rainband arm count and log-spiral winding factor.
 const float ARMS = 3.0;
 const float SPIRAL_WIND = 2.4;
+// F-030d: quit the march once the mass is this opaque — the remaining chord contributes
+// < 2% of the pixel and the upsample pass hides the cut entirely.
+const float TRANS_EARLY_OUT = 0.02;
+// F-030e distance LOD: per-pixel step budget scales 1.0 → 0.5 as the ray's ENTRY point
+// runs from DIST_LOD_START to DIST_LOD_END blocks out (a far wall covers few pixels and
+// the IGN dither eats the residual banding).
+const float DIST_LOD_START = 160.0;
+const float DIST_LOD_END = 320.0;
+// F-030b adaptive stepping: while samples read empty the step multiplier grows by
+// SKIP_GROWTH per miss up to SKIP_MAX; the first HIT after a long skip steps BACK half
+// a stride and resamples, so the isosurface is refined instead of overshot.
+const float SKIP_GROWTH = 1.22;
+const float SKIP_MAX = 2.2;
 
 // W-A §A3 stratum ladder as a smooth curve of normalized height: heavy slow base 0.6×,
 // mid 1.0×, fast upper 1.5×, counter-rotating polar cap −0.8× — the wind strata read.
@@ -139,17 +162,23 @@ float stormDensity(vec3 u, float detail) {
     return max(prof * armMul * (body * 1.5 - 0.35), 0.0) * DENSITY_GAIN;
 }
 
-// Single scattering at one sample: 3 cheap self-shadow taps toward the sun (AUDITFIX-4;
-// same reach and optical depth as the old 4 — see SHADOW_STEP_N), forward-scatter phase
+// Single scattering at one sample: 2/3 cheap self-shadow taps toward the sun (F-030f:
+// ShadowTaps drops 3 → 2 on low quality tiers; the spacing widens by 3/taps so the
+// ~0.36·R reach AND the optical depth of the 3-tap ladder are both preserved — the
+// transmittance term multiplies the tap sum by the spacing), forward-scatter phase
 // (fed in), height-graded ambient (dark violet base → sick green top — the C8 sphere
 // palette), and the intra-wall flash as emissive light inside the mass.
 vec3 volumeLight(vec3 pos, vec3 u, float phase, float densMul) {
+    float taps = clamp(ShadowTaps, 2.0, 3.0);
+    float spacing = SHADOW_STEP_N * (3.0 / taps);
     vec3 sdir = normalize(SunDir + vec3(0.0, 1.0e-4, 0.0));
-    vec3 us = vec3(sdir.x, sdir.y / max(VolYScale, 0.05), sdir.z) * SHADOW_STEP_N;
+    vec3 us = vec3(sdir.x, sdir.y / max(VolYScale, 0.05), sdir.z) * spacing;
     float sh = stormDensity(u + us, 0.0);
     sh += stormDensity(u + us * 2.0, 0.0);
-    sh += stormDensity(u + us * 3.0, 0.0);
-    float lightT = exp(-sh * densMul * SHADOW_STEP_N * VolRadius * ABSORB);
+    if (taps > 2.5) {
+        sh += stormDensity(u + us * 3.0, 0.0);
+    }
+    float lightT = exp(-sh * densMul * spacing * VolRadius * ABSORB);
     // Bone-white day sun → moon-silver night (the renderer's rim-scatter palette).
     float dayness = clamp(SunDir.y * 2.6, 0.0, 1.0);
     vec3 sunCol = mix(vec3(0.72, 0.76, 0.90) * 0.25, vec3(0.85, 0.82, 0.74), dayness);
@@ -171,10 +200,12 @@ vec3 volumeLight(vec3 pos, vec3 u, float phase, float densMul) {
 }
 
 void main() {
-    vec3 scene = texture(DiffuseSampler0, texCoord).rgb;
+    // F-030a: this stage renders into the half-res `volume_half` target — output is
+    // premultiplied in-scatter (rgb) + transmittance (a); "no storm on this ray" is
+    // vec4(0, 0, 0, 1), which the upsample stage composites as an untouched scene.
     float strength = clamp(Strength, 0.0, 1.0) * clamp(Visibility, 0.0, 1.0);
     if (strength <= 0.004 || VolRadius <= 1.0) {
-        fragColor = vec4(scene, 1.0);
+        fragColor = vec4(0.0, 0.0, 0.0, 1.0);
         return;
     }
 
@@ -191,7 +222,7 @@ void main() {
     float bq = dot(oS, dS);
     float disc = bq * bq - aq * (dot(oS, oS) - R * R);
     if (disc <= 0.0) {
-        fragColor = vec4(scene, 1.0); // early out: the ray misses the storm bounds
+        fragColor = vec4(0.0, 0.0, 0.0, 1.0); // early out: the ray misses the bounds
         return;
     }
     float sq = sqrt(disc);
@@ -200,23 +231,28 @@ void main() {
 
     // Scene depth clamp: terrain (and the opaque occluder dome) correctly hides the
     // volume behind it. Depth ≥ ~1 is sky — no clamp (and no unstable reconstruction).
+    // The full-res depth buffer is sampled at this half-res pixel's center; the
+    // upsample stage weights its 4 taps against the SAME centers, so depth edges stay
+    // consistent between the two passes.
     float depth = texture(DiffuseDepthSampler, texCoord).r;
     float sceneDist = depth >= 0.9999 ? 1.0e7
             : length(screenToLocalSpace(texCoord, depth).xyz);
     t1 = min(t1, sceneDist);
     if (t1 <= t0) {
-        fragColor = vec4(scene, 1.0);
+        fragColor = vec4(0.0, 0.0, 0.0, 1.0);
         return;
     }
 
     // Step budget from Java (AUDITFIX-4: config tier 64/40/24 × screen-coverage ramp,
-    // hard-capped at 48 when the storm nearly fills the screen — StormVolumeFx.stepCount),
-    // further reduced per pixel for distant entry points along this ray.
+    // hard-capped when the storm nearly fills the screen — StormVolumeFx.stepCount),
+    // further halved per pixel as the entry point runs out (F-030e distance LOD).
     float steps = clamp(StepCount, 12.0, 64.0);
-    steps = clamp(steps * clamp(140.0 / max(t0, 1.0), 0.35, 1.0), 12.0, 64.0);
+    steps = clamp(steps * (1.0 - 0.5 * smoothstep(DIST_LOD_START, DIST_LOD_END, t0)),
+            12.0, 64.0);
     float dt0 = (t1 - t0) / steps;
-    // Interleaved-gradient-noise start dither + temporal drift — kills the shell banding
-    // a fixed march start would print into the fog.
+    // F-030c: interleaved-gradient-noise start dither + temporal drift — kills the
+    // shell banding a fixed march start would print into the fog at low step counts.
+    // gl_FragCoord is in half-res pixels here, which keeps the IGN lattice intact.
     float dith = fract(52.9829189
             * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))
             + fract(Time * 61.803));
@@ -232,26 +268,39 @@ void main() {
     float trans = 1.0;
     vec3 acc = vec3(0.0);
     float t = t0 + dith * dt0;
+    float skipMul = 1.0; // F-030b adaptive stride (grows through empty space)
     for (int i = 0; i < 64; i++) {
-        if (t >= t1 || trans < 0.01 || float(i) >= steps) {
-            break; // early exits: segment done / mass opaque / step budget spent
+        if (t >= t1 || trans < TRANS_EARLY_OUT || float(i) >= steps) {
+            break; // early exits: segment done / mass opaque (F-030d) / budget spent
         }
-        float dt = dt0 * (1.0 + t * 0.0025); // step-size growth along the ray
+        float dt = dt0 * (1.0 + t * 0.0025) * skipMul; // grows along the ray AND while empty
         vec3 pos = rd * t;
         vec3 lp = pos - VolCenter;
         lp.y *= invY;
         vec3 u = lp * invR;
         float dens = stormDensity(u, 1.0) * densMul;
         if (dens < 0.004) {
-            t += dt * 1.6; // empty-space acceleration through the eye / between towers
+            // Empty-space acceleration through the eye / between towers: each miss
+            // widens the stride up to SKIP_MAX × the base 1.6.
+            t += dt * 1.6;
+            skipMul = min(skipMul * SKIP_GROWTH, SKIP_MAX);
             continue;
         }
+        if (skipMul > 1.35) {
+            // A long skip just crossed the isosurface — step back half the (grown)
+            // stride and resample at the base rate, so lumps keep their crisp fronts
+            // instead of being aliased away by the wide stride that found them.
+            t -= dt * 0.5;
+            skipMul = 1.0;
+            continue;
+        }
+        skipMul = 1.0;
         float newTrans = trans * exp(-dens * dt * ABSORB);
         acc += volumeLight(pos, u, phase, densMul) * (trans - newTrans);
         trans = newTrans;
         t += dt;
     }
 
-    // Premultiplied over: in-scatter is already weighted by per-step opacity.
-    fragColor = vec4(scene * trans + acc, 1.0);
+    // Premultiplied half-res output; the upsample stage owns the scene composite.
+    fragColor = vec4(acc, trans);
 }

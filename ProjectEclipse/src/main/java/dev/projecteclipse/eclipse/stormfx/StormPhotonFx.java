@@ -112,6 +112,16 @@ final class StormPhotonFx {
         return ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, path);
     }
 
+    /**
+     * Channel-B pusher shared with {@link StormNearfieldFx} (F-034): ONE last-value
+     * cache for the global {@code eclStormR}/{@code eclStormH} expression variables, so
+     * the two managers never fight over redundant writes. Both windows resolve the same
+     * nearest sphere storm, so the values agree whenever both are open.
+     */
+    static void pushExprVars(float radius, float height) {
+        ExprVars.push(radius, height);
+    }
+
     // ------------------------------------------------------------------ tick
 
     @SubscribeEvent

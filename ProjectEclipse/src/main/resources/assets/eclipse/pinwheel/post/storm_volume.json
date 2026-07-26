@@ -4,7 +4,29 @@
       "type": "veil:blit",
       "shader": "eclipse:storm_volume",
       "in": "minecraft:main",
-      "out": "veil:post"
+      "out": "volume_half",
+      "clear": false
+    },
+    {
+      "type": "veil:blit",
+      "shader": "eclipse:storm_volume_upsample",
+      "in": "minecraft:main",
+      "out": "veil:post",
+      "clear": false
     }
-  ]
+  ],
+  "framebuffers": {
+    "volume_half": {
+      "width": "q.screen_width / 2.0",
+      "height": "q.screen_height / 2.0",
+      "depth": false,
+      "format": "RGBA16F"
+    }
+  },
+  "textures": {
+    "VolumeSampler": {
+      "type": "framebuffer",
+      "name": "volume_half"
+    }
+  }
 }

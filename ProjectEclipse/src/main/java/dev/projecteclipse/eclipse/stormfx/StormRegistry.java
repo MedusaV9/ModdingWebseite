@@ -62,8 +62,15 @@ public final class StormRegistry {
     public static final int RAMP_TICKS = 80;
     /** Default dissipate fade (R10 uses {@code DISSIPATE 60} for the intro vortex). */
     public static final int DISSIPATE_TICKS = 60;
-    /** C8 explosion burst: shockwave shell expands and fades over this many ticks (~2 s). */
-    public static final int EXPLODE_TICKS = 40;
+    /**
+     * C8 explosion burst: shockwave shell expands and fades over this many ticks. F-033:
+     * stretched 2.5× (40 → 100, ~5 s) for the multi-stage read — inflate + brighten,
+     * pinch release + Photon shockwave ring, expanding debris ring, then the settling
+     * aftermath (cloud shreds + spent sparks). Stage FRACTIONS live client-side
+     * ({@code StormWallRenderer.EXPLODE_*_FRAC}, {@code StormFxClient}), so tuning this
+     * one number re-times the whole choreography.
+     */
+    public static final int EXPLODE_TICKS = 100;
     /** Reveal beat 1: pause after the terrain has loaded under the (still invisible) storm. */
     public static final int REVEAL_PAUSE_TICKS = 40;
     /** Reveal beat 2: the 0.4-strength rift-glitch pulse (client-run, see {@link StormFxClient}). */

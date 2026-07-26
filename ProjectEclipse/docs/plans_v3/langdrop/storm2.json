@@ -1,0 +1,14 @@
+{
+  "_comment": "STORM2 — F-031 Kampfverhalten (StormSiege): arena action-bar beats for siege start, block-lift volleys and the post-fight calm. All three keys are NEW (sent by stormfx/StormSiege.messageArena). de+en parity.",
+
+  "en_us": {
+    "eclipse.storm.siege.begin": "The storm turns on you — the wall closes in and the ground begins to stir.",
+    "eclipse.storm.siege.lift": "The storm tears blocks from the ground!",
+    "eclipse.storm.siege.calm": "The storm loosens its grip. What it took falls back to earth."
+  },
+  "de_de": {
+    "eclipse.storm.siege.begin": "Der Sturm wendet sich gegen euch — die Wand rückt näher und der Boden beginnt sich zu regen.",
+    "eclipse.storm.siege.lift": "Der Sturm reißt Blöcke aus dem Boden!",
+    "eclipse.storm.siege.calm": "Der Sturm lockert seinen Griff. Was er nahm, fällt zurück zur Erde."
+  }
+}

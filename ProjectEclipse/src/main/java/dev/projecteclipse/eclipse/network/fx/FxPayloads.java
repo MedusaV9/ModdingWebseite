@@ -75,6 +75,7 @@ public final class FxPayloads {
         registrar.playToClient(S2CFxEventPayload.TYPE, S2CFxEventPayload.STREAM_CODEC, FxPayloads::handleFxEvent);
         registrar.playToClient(S2CFxEntityEventPayload.TYPE, S2CFxEntityEventPayload.STREAM_CODEC, FxPayloads::handleFxEntityEvent);
         registrar.playToClient(S2CStormStatePayload.TYPE, S2CStormStatePayload.STREAM_CODEC, FxPayloads::handleStormState);
+        registrar.playToClient(S2CStormSiegePayload.TYPE, S2CStormSiegePayload.STREAM_CODEC, FxPayloads::handleStormSiege);
         registrar.playToClient(S2CSupplyMarkerPayload.TYPE, S2CSupplyMarkerPayload.STREAM_CODEC, FxPayloads::handleSupplyMarker);
         registrar.playToClient(S2CViewDistancePayload.TYPE, S2CViewDistancePayload.STREAM_CODEC, FxPayloads::handleViewDistance);
         registrar.playToClient(S2CScreenFadePayload.TYPE, S2CScreenFadePayload.STREAM_CODEC, FxPayloads::handleScreenFade);
@@ -257,6 +258,11 @@ public final class FxPayloads {
     }
 
     /** Runs on the client main thread only; the client class is resolved lazily, never on the dedicated server. */
+    private static void handleStormSiege(S2CStormSiegePayload payload, IPayloadContext context) {
+        dev.projecteclipse.eclipse.stormfx.StormFxClient.handleSiege(payload);
+    }
+
+    /** Runs on the client main thread only; the client class is resolved lazily, never on the dedicated server. */
     private static void handleSupplyMarker(S2CSupplyMarkerPayload payload, IPayloadContext context) {
         dev.projecteclipse.eclipse.veilfx.SupplyBeamClient.handle(payload);
     }
@@ -289,7 +295,8 @@ public final class FxPayloads {
 
     /** Runs on the client main thread only; the client class is resolved lazily, never on the dedicated server. */
     private static void handleGlitchZone(S2CGlitchZonePayload payload, IPayloadContext context) {
-        dev.projecteclipse.eclipse.client.GlitchZoneFx.handle(payload.effect(), payload.strength());
+        dev.projecteclipse.eclipse.client.GlitchZoneFx.handle(payload.effect(), payload.strength(),
+                payload.colour(), payload.originValid(), payload.origin());
     }
 
     /** Nearest client-level player to an FX event position (glide events carry no entity id). */
