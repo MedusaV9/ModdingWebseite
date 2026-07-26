@@ -44,7 +44,10 @@ const float UPDRAFT = 0.018;
 // Self-shadow tap spacing in storm-normalized units (4 taps → ~0.4·R reach).
 const float SHADOW_STEP_N = 0.09;
 // Silhouette headroom beyond the nominal radius (anvil bulge + tower lumps live there).
-const float BOUNDS_MARGIN = 1.18;
+// Must exceed max(rEff) · 1.05, otherwise the bounds sphere clips the lumps flat and
+// prints back the perfectly round edge the lumps exist to break. Empty-space skipping
+// pays for the extra slack.
+const float BOUNDS_MARGIN = 1.55;
 // Spiral rainband arm count and log-spiral winding factor.
 const float ARMS = 3.0;
 const float SPIRAL_WIND = 2.4;
@@ -62,7 +65,7 @@ float stratumSpeed(float ny) {
 float stormDensity(vec3 u, float detail) {
     float ny = u.y;
     float lenH = length(u);
-    if (lenH > BOUNDS_MARGIN || ny > 1.06 || ny < -0.20) {
+    if (lenH > BOUNDS_MARGIN || ny > 1.22 || ny < -0.20) {
         return 0.0;
     }
     // Differential rotation: angular velocity varies with height (stratum ladder) AND
@@ -76,13 +79,19 @@ float stormDensity(vec3 u, float detail) {
     // Silhouette shaping: cauliflower towers (hi-freq lumps gated to the outer band),
     // an anvil/overhang bulge near the top and a flared skirt near the base all modulate
     // the EFFECTIVE radius, so the outline is lumpy and towered — never a perfect ball.
+    // Two scales of lump: big bulges that break the circle at a glance, plus cauliflower
+    // detail on top. A ±10% ripple reads as a perfect ball from any real viewing distance,
+    // so the coarse term carries most of the amplitude.
     float tower = evNoise3(q * 5.0 + vec3(0.0, -Time * 0.05, 0.0));
+    float bulge = evNoise3(q * 1.7 + vec3(0.0, -Time * 0.02, 11.3));
     float anvil = smoothstep(0.45, 0.72, ny) * (1.0 - smoothstep(0.80, 1.00, ny));
     float skirt = 1.0 - smoothstep(0.00, 0.30, ny);
+    float lumpGate = smoothstep(0.42, 0.92, lenH);
     float rEff = 1.0
-            + 0.10 * anvil
+            + 0.12 * anvil
             + 0.06 * skirt
-            + 0.16 * (tower - 0.35) * smoothstep(0.62, 0.95, lenH);
+            + 0.30 * (bulge - 0.42) * lumpGate
+            + 0.17 * (tower - 0.38) * smoothstep(0.62, 0.98, lenH);
     float rl = lenH / max(rEff, 0.5);
 
     // Radial shell profile: a THICK density band peaking mid-wall, a hollow-ish eye at
@@ -128,8 +137,12 @@ vec3 volumeLight(vec3 pos, vec3 u, float phase, float densMul) {
     float dayness = clamp(SunDir.y * 2.6, 0.0, 1.0);
     vec3 sunCol = mix(vec3(0.72, 0.76, 0.90) * 0.25, vec3(0.85, 0.82, 0.74), dayness);
     vec3 ambient = mix(vec3(0.052, 0.060, 0.082), vec3(0.088, 0.152, 0.120),
-            clamp(u.y, 0.0, 1.0)) * (0.45 + 0.55 * dayness);
-    vec3 col = sunCol * (lightT * phase * 2.4) + ambient;
+            clamp(u.y, 0.0, 1.0)) * (1.15 + 1.35 * dayness);
+    // Multiple-scattering approximation: deep cloud is not black, light diffuses into it.
+    // sqrt(lightT) with an isotropic lobe lifts the shadowed mass into readable grey so
+    // the layering is visible from outside instead of crushing to a silhouette.
+    float ms = sqrt(clamp(lightT, 0.0, 1.0));
+    vec3 col = sunCol * (lightT * phase * 3.8 + ms * 0.34) + ambient;
     if (FlashAmount > 0.004) {
         float fd = length(pos - FlashPos);
         col += vec3(0.70, 0.58, 1.00)

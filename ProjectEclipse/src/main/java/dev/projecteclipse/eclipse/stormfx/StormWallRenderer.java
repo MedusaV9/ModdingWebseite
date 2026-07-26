@@ -187,6 +187,13 @@ public final class StormWallRenderer {
     /** A6 inner-flash depth scaling: light born INSIDE the mass — inner shells flash hardest. */
     private static final float[] EXO_PULSE_DEPTH = {0.35F, 0.44F, 0.54F, 0.63F, 0.72F, 0.81F, 0.91F, 1.0F};
     /** EXO shell index sets: 8/5/3 shells by quality tier at near LOD, 3 at far LOD. */
+    /**
+     * Shell set used while the volumetric pass owns a sphere storm: none. The shells are
+     * the OLD way of faking mass; drawing them on top of the raymarched volume paints a
+     * bright, perfectly smooth additive rim around it — the storm then reads as an eggshell
+     * with a dark yolk instead of a cloud. The volume alone carries the silhouette now.
+     */
+    private static final int[] EXO_VOLUMETRIC = {};
     private static final int[] EXO_NEAR_TIER2 = {0, 1, 2, 3, 4, 5, 6, 7};
     private static final int[] EXO_NEAR_TIER1 = {0, 1, 3, 5, 7};
     private static final int[] EXO_NEAR_TIER0 = {1, 3, 5};
@@ -618,11 +625,11 @@ public final class StormWallRenderer {
                 // false under Iris / veilPostFx-off / eviction — the frozen 8/5/3 ladder
                 // is untouched there, and the far/impostor tiers never change.
                 boolean volumetric = StormVolumeFx.isVolumeStorm(storm.id);
-                int[] set = near
-                        ? (tier >= 2 ? (volumetric ? EXO_NEAR_TIER1 : EXO_NEAR_TIER2)
-                                : tier == 1 ? (volumetric ? EXO_NEAR_TIER0 : EXO_NEAR_TIER1)
-                                : EXO_NEAR_TIER0)
-                        : EXO_FAR;
+                int[] set = volumetric ? EXO_VOLUMETRIC
+                        : near
+                                ? (tier >= 2 ? EXO_NEAR_TIER2
+                                        : tier == 1 ? EXO_NEAR_TIER1 : EXO_NEAR_TIER0)
+                                : EXO_FAR;
                 for (int k = 0; k < set.length; k++) {
                     // Painter order for the alpha sheets: deepest-first when the camera is
                     // outside, outermost-first when inside (additive is order-independent).
