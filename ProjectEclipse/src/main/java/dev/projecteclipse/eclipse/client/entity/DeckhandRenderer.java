@@ -33,27 +33,37 @@ import software.bernie.geckolib.cache.object.GeoBone;
  * <ul>
  *   <li><b>Oar drop:</b> the {@code oar} bone chain is hidden while the deckhand is
  *       hostile (a risen fighter leaves its oar at the bench — v1 model behavior).</li>
- *   <li><b>Row-phase sync:</b> the {@code row} loop is authored at exactly
- *       {@code 3.0 s = 60 t}, so restarting the {@code base} controller whenever
- *       {@code gameTime % 60 == 0} pins every rower's animation clock to the shared
- *       level clock — all 8 stroke in unison regardless of when each entity spawned or
- *       started rendering (plan §2.3 sheet). At the natural loop seam the restart is a
- *       no-op; a drifted client snaps by at most the 4 t controller blend.</li>
+ *   <li><b>Row-phase sync (LIMBOFIX2):</b> the {@code row} loop is authored at exactly
+ *       {@code 3.0 s = 60 t}. The {@code base} controller is force-reset ONCE per rowing
+ *       session, on the first {@code gameTime % 60 == 0} boundary after the rower enters
+ *       the row state — every rower anchors to the same boundary grid, so all 8 stroke
+ *       in unison regardless of when each entity spawned or started rendering. The old
+ *       every-60t reset was NOT a no-op at the seam: GeckoLib re-anchors the controller
+ *       clock after its 4 t transition, so the loop sat permanently 4 t off the grid and
+ *       every reset cut the 2.8–3.0 s catch beat into a linear blend — the whole crew
+ *       hitched every 3 s.</li>
  *   <li><b>Port-side mirror:</b> one animation cannot serve both gunwales — the fore-aft
  *       sweep (oar bone yaw) and the blade feather (blade roll) would run bow-ward on one
  *       side and stern-ward on the other in world space. Port rowers (facing {@code -Z})
  *       render with those two channels negated so every blade drives toward the stern
  *       together.</li>
  *   <li><b>Blade splash:</b> 2–3 client-only {@code SPLASH} particles at the water
- *       surface under the blade tip on the catch beat (loop phase ≥ 2.8 s), once per
+ *       surface under the blade tip on the catch beat (authored at anim 2.8–3.0 s, which
+ *       plays at level-clock phase 0–4 t — see {@link #SPLASH_PHASE_TICKS}), once per
  *       60 t cycle — the visual bridge between the plan-sized oar (tip ~1.1 blocks below
  *       the deck) and the waterline ~3 blocks further down.</li>
  * </ul>
  */
 @OnlyIn(Dist.CLIENT)
 public class DeckhandRenderer extends EclipseGeoRenderer<DeckhandEntity> {
-    /** Loop phase (in ticks of the 60 t cycle) at which the blade re-enters the water. */
-    private static final float SPLASH_PHASE_TICKS = 56.0F;
+    /**
+     * Level-clock phase (ticks into the 60 t cycle) at which the blade re-enters the
+     * water. LIMBOFIX2: the row RUNNING clock anchors 4 t after the sync boundary (the
+     * controller's transition), so the authored 2.8–3.0 s catch beat plays at level-clock
+     * phase 0–4 — {@code 1.0} fires the splash just as the blade dips (was 56.0, which
+     * matched the ANIMATION phase but not the 4 t-lagged level-clock phase).
+     */
+    private static final float SPLASH_PHASE_TICKS = 1.0F;
     /** Blade-tip offset at the plunge, model-space blocks: outboard (-Z) and along (+X). */
     private static final double TIP_OUT_BLOCKS = 2.53D;
     private static final double TIP_ALONG_BLOCKS = 0.41D;
@@ -79,13 +89,27 @@ public class DeckhandRenderer extends EclipseGeoRenderer<DeckhandEntity> {
             oar.setHidden(!rowing);
             oar.setChildrenHidden(!rowing);
         });
-        if (!rowing || !entity.isAlive()) {
+        if (!rowing || !entity.isAlive() || entity.isTilt()) {
+            // The row loop is not the active base animation (hostile walk/sag, death or
+            // the cutscene tilt): drop the sync mark so the NEXT rowing session aligns
+            // itself once at the following 60t boundary.
+            entity.clientRowResetAt = Long.MIN_VALUE;
             return;
         }
         long gameTime = entity.level().getGameTime();
-        // Shared row clock: restart the base controller on every 60t boundary (once per
-        // tick — preRender runs per frame). setHidden above is unaffected by animations.
-        if (gameTime % DeckhandEntity.ROW_SYNC_PERIOD_TICKS == 0 && entity.clientRowResetAt != gameTime) {
+        // Shared row clock — LIMBOFIX2 (user bug "die Wesen sind verbuggt"): align the
+        // row loop to the level clock ONCE per rowing session instead of force-resetting
+        // on EVERY 60t boundary. forceAnimationReset() re-anchors the controller clock
+        // AFTER its 4t transition (AnimationController.process sets shouldResetTick again
+        // on the TRANSITIONING→RUNNING flip), so the old per-cycle reset left the loop
+        // permanently 4t out of phase with the boundary grid — and every reset then
+        // REPLACED the authored 2.8–3.0s catch beat (the blade dip) with a linear pose
+        // blend: all 8 rowers visibly hitched every 3 seconds, in unison, forever. The
+        // one-time reset costs a single 4t blend when a rower first (re)enters the row
+        // state; every rower anchors to the same boundary grid, so the crew still strokes
+        // in unison regardless of spawn/first-render time.
+        if (entity.clientRowResetAt == Long.MIN_VALUE
+                && gameTime % DeckhandEntity.ROW_SYNC_PERIOD_TICKS == 0) {
             entity.clientRowResetAt = gameTime;
             AnimationController<?> base = entity.getAnimatableInstanceCache()
                     .getManagerForId(getInstanceId(entity)).getAnimationControllers()
@@ -94,7 +118,8 @@ public class DeckhandRenderer extends EclipseGeoRenderer<DeckhandEntity> {
                 base.forceAnimationReset();
             }
         }
-        if (!entity.isTilt()) {
+        // Splash only once the loop is clock-aligned — phase is meaningless before that.
+        if (entity.clientRowResetAt != Long.MIN_VALUE) {
             spawnCatchSplash(entity, gameTime, partialTick);
         }
     }
@@ -136,13 +161,27 @@ public class DeckhandRenderer extends EclipseGeoRenderer<DeckhandEntity> {
             RenderType renderType, MultiBufferSource bufferSource, VertexConsumer buffer, boolean isReRender,
             float partialTick, int packedLight, int packedOverlay, int colour) {
         // Port-side mirror (bug 4d): negate the oar's fore-aft sweep + the blade feather
-        // so both gunwales drive stern-ward on the same beat. Only while the oar is shown
-        // (row/tilt keyframe both channels every frame, so no flip can accumulate).
+        // so both gunwales drive stern-ward on the same beat. LIMBOFIX2: the negation is
+        // RESTORED after the draw — GeckoLib's GeoModel.handleAnimations early-returns
+        // without re-ticking bones whenever the frame time hasn't advanced (paused game,
+        // reRender layer passes), so an unrestored in-place negation flip-flopped the
+        // oar between mirrored/unmirrored poses on those frames.
         if (!animatable.isHostile() && isPortSide(animatable)) {
             if ("oar".equals(bone.getName())) {
-                bone.setRotY(-bone.getRotY());
-            } else if ("oar_blade".equals(bone.getName())) {
-                bone.setRotZ(-bone.getRotZ());
+                float rotY = bone.getRotY();
+                bone.setRotY(-rotY);
+                super.renderRecursively(poseStack, animatable, bone, renderType, bufferSource, buffer,
+                        isReRender, partialTick, packedLight, packedOverlay, colour);
+                bone.setRotY(rotY);
+                return;
+            }
+            if ("oar_blade".equals(bone.getName())) {
+                float rotZ = bone.getRotZ();
+                bone.setRotZ(-rotZ);
+                super.renderRecursively(poseStack, animatable, bone, renderType, bufferSource, buffer,
+                        isReRender, partialTick, packedLight, packedOverlay, colour);
+                bone.setRotZ(rotZ);
+                return;
             }
         }
         super.renderRecursively(poseStack, animatable, bone, renderType, bufferSource, buffer, isReRender,

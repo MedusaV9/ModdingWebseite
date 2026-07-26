@@ -60,9 +60,11 @@ import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
  * <p><b>Post pipeline (v2)</b>: the static init registers the {@code eclipse:limbo} row with
  * {@link VeilPostController#register}, replacing W1's backward-compat {@code Intensity}-only
  * row. The feeder supplies the frozen §3.3 uniforms — {@code Intensity} (eased ~2 s fade
- * after entering limbo, as in v1), {@code GodrayDir} (NDC of the zenith eclipse point from
- * {@link LimboSpecialEffects#zenithWorldPoint} projected through {@link SunTracker#worldToNdc},
- * pushed far offscreen while behind the camera), {@code CausticsAmount} and {@code Time}.</p>
+ * after entering limbo, as in v1), {@code GodrayDir} (LIMBOFIX2: NDC of the FIXED eclipse
+ * direction {@link LimboSpecialEffects#celestialDirection} projected through
+ * {@link SunTracker#dirToNdc} — a {@code w=0} direction projection, the exact sky-pass
+ * transform; pushed far offscreen while behind the camera), {@code CausticsAmount} and
+ * {@code Time}.</p>
  *
  * <p><b>Post pipeline (v3, PLAN-C C1)</b>: the feeder additionally supplies the water-mask /
  * horizon set — {@code InvViewProj} + {@code CameraPos} (this frame's exact AFTER_SKY render
@@ -448,13 +450,18 @@ public final class LimboAmbience {
         pipeline.getUniform("Time").setFloat(seconds);
 
         ClientLevel level = Minecraft.getInstance().level;
+        // LIMBOFIX2: the god rays track the FIXED eclipse direction (the sky pass's
+        // LimboSpecialEffects.CELESTIAL_DIR) through a w=0 direction projection — the
+        // same transform the sky pass renders with, so the screen-space rays sit exactly
+        // on the disc no matter where the camera is or how it turns. The old feeder
+        // projected the finite zenith WORLD POINT, which re-aimed with every camera move.
         boolean valid = level != null
                 && level.dimension() == LimboDimension.LIMBO
-                && SunTracker.worldToNdc(LimboSpecialEffects.zenithWorldPoint(level), GODRAY_NDC);
+                && SunTracker.dirToNdc(LimboSpecialEffects.celestialDirection(), GODRAY_NDC);
         if (valid) {
             pipeline.getUniform("GodrayDir").setVector(GODRAY_NDC.x(), GODRAY_NDC.y());
         } else {
-            // Zenith behind the camera (looking down): push the ray origin far offscreen so
+            // Disc behind the camera (looking away): push the ray origin far offscreen so
             // the shader's look-up ramp fades the god rays out instead of popping.
             pipeline.getUniform("GodrayDir").setVector(10.0F, 10.0F);
         }

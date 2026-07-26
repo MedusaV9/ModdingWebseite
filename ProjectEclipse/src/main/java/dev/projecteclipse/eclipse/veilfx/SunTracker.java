@@ -119,6 +119,30 @@ public final class SunTracker {
         return true;
     }
 
+    /**
+     * Projects a world-space DIRECTION (a celestial at infinite distance) through this
+     * frame's exact render matrices — {@code w = 0}, so the camera translation drops out:
+     * exactly the sky-pass transform (the same math the overworld sun uses in
+     * {@link #onRenderLevelStage}). On success {@code dest.xy} holds the NDC point the
+     * direction projects to; returns {@code false} when no frame was captured yet or the
+     * direction points behind the camera. LIMBOFIX2 consumer: the limbo {@code GodrayDir}
+     * feeder tracks the FIXED eclipse direction instead of a finite world point.
+     * {@code dir} is only read; {@code dest} is a caller-owned scratch.
+     */
+    public static boolean dirToNdc(Vector3f dir, Vector4f dest) {
+        if (!haveFrame) {
+            return false;
+        }
+        dest.set(dir.x(), dir.y(), dir.z(), 0.0F);
+        FRAME_MVP.transform(dest);
+        if (dest.w <= 1.0E-4F) {
+            return false; // behind the camera
+        }
+        dest.x /= dest.w;
+        dest.y /= dest.w;
+        return true;
+    }
+
     @SubscribeEvent
     static void onRenderLevelStage(RenderLevelStageEvent event) {
         if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_SKY) {

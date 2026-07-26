@@ -75,11 +75,9 @@ import net.neoforged.api.distmarker.OnlyIn;
  *       hash, ~every 90&nbsp;s on average) a faint curved plume detaches from the disc rim
  *       and dissolves outward over ~10&nbsp;s ({@link #drawCoronalWisp}) — subtle
  *       (peak alpha 0.15), root hidden behind the disc, skipped under {@code reducedFx}.</li>
- *   <li><b>Parallax-layered aura rays</b>: the spin is slowed to
- *       {@value #RAY_SPIN_DEG_PER_SEC}&nbsp;°/s and layer B (the counter-rotating one) is
- *       offset opposite the camera's walk offset from the ship anchor
- *       ({@value #RAY_PARALLAX}, clamped) — the two fans read as depth-separated sheets
- *       when the player moves on deck. The disc quad itself is untouched (C2 stability).</li>
+ *   <li><b>Aura-ray spin</b>: slowed to {@value #RAY_SPIN_DEG_PER_SEC}&nbsp;°/s with
+ *       layer B counter-rotating. (The v4 camera-walk parallax offset on layer B was
+ *       REMOVED by LIMBOFIX2 below — it was a camera-position coupling.)</li>
  * </ul>
  *
  * <p>LIMBOFIX: the C2/v4 water-reflection streak is GONE. Standing almost directly under
@@ -89,13 +87,28 @@ import net.neoforged.api.distmarker.OnlyIn;
  * (limbo.fsh); the water simply shows no disc reflection now.</p>
  *
  * <p>v4.1 (VEIL-REPASS-2): <b>aurora veils</b> ({@link #drawAuroraVeils}) — three slow
- * soul-green polar-light curtains drifting around the zenith beyond the glow floor,
- * framing the eclipse at extreme altitude. Garnish tier (skipped under {@code reducedFx},
- * the wisp ladder); pure function of the hourly clock, so every client sees the same sky.</p>
+ * soul-green polar-light curtains drifting around the eclipse beyond the glow floor,
+ * framing it at altitude. Garnish tier (skipped under {@code reducedFx}, the wisp
+ * ladder); pure function of the hourly clock, so every client sees the same sky.</p>
  *
- * <p>The same zenith point feeds the {@code eclipse:limbo} post pipeline's {@code GodrayDir}
- * uniform (see {@code veilfx.LimboAmbience}), so the screen-space god rays and the sky-pass
- * aura radiate from one source of truth and cannot diverge.</p>
+ * <p><b>LIMBOFIX2 (the "giant purple thing still moves with every rotation" fix)</b>: the
+ * disc/aura direction is now a COMPILE-TIME CONSTANT — azimuth {@code +X} (dead ahead of
+ * the ship, the buoy-lane heading), elevation {@value #ECLIPSE_ELEVATION_DEG}° above the
+ * horizon ({@link #CELESTIAL_DIR}/{@link #CELESTIAL_ROT}). The C2 anchoring computed the
+ * direction from {@code zenith − cameraPos} every frame and low-pass filtered it: every
+ * camera move (walk, ship bob, third-person orbit) re-aimed the disc, and because it sat
+ * AT the zenith with a sky-filling aura (aurora feet reached ~65° from center), any yaw
+ * left the view "inside" the radially symmetric pattern — it read as glued to the camera.
+ * Now zero camera terms exist in the transform: the eclipse hangs at one fixed spot in the
+ * sky over the water ahead of the bow, pans across the screen when the player turns, and
+ * leaves the screen when they look away — like a real celestial object. The v4 ray-layer
+ * walk parallax (camera-offset coupled) went with it, and every aura extent is rescaled so
+ * nothing dips below the horizon at the new {@value #ECLIPSE_ELEVATION_DEG}° elevation.</p>
+ *
+ * <p>The same fixed direction ({@link #celestialDirection}) feeds the {@code eclipse:limbo}
+ * post pipeline's {@code GodrayDir} uniform (see {@code veilfx.LimboAmbience}), so the
+ * screen-space god rays and the sky-pass aura radiate from one source of truth and cannot
+ * diverge.</p>
  *
  * <p>Same Iris guard as the overworld: with a shaderpack active this defers entirely.</p>
  */
@@ -109,12 +122,20 @@ public class LimboSpecialEffects extends DimensionSpecialEffects {
 
     /** Celestial distance the disc/aura plane is drawn at (vanilla sun convention). */
     private static final float SKY_DISTANCE = 100.0F;
-    /** R5: 1.5× the v1 disc (35 → 52.5 half-extent). */
-    private static final float DISC_SIZE = 52.5F;
+    /** LIMBOFIX2: reduced from 52.5 — a discrete celestial disc, not a sky-filling decal. */
+    private static final float DISC_SIZE = 38.0F;
     /**
-     * Virtual altitude of the eclipse above the ship-deck anchor. High enough that the disc
-     * stays "overhead" across the whole play area around the ship, low enough that it visibly
-     * hangs over the ship rather than following the camera like a skybox decal.
+     * LIMBOFIX2: elevation (degrees above the horizon) of the FIXED eclipse direction.
+     * High enough that the whole aura clears the horizon (see the per-extent math on the
+     * radius constants), low enough that the disc visibly hangs over the water ahead of
+     * the bow instead of sitting at the degenerate zenith.
+     */
+    private static final float ECLIPSE_ELEVATION_DEG = 50.0F;
+    /**
+     * Virtual altitude of the {@link #zenithWorldPoint} anchor above the ship deck. The
+     * disc no longer draws toward this point (LIMBOFIX2 — fixed direction); the anchor
+     * remains the seam for {@link #clientWaterlineY} and the ship-relative FX consumers
+     * ({@code veilfx.LimboAmbience}'s soul shoal, the drift-cue lane).
      */
     private static final double ZENITH_HEIGHT = 480.0D;
 
@@ -123,29 +144,25 @@ public class LimboSpecialEffects extends DimensionSpecialEffects {
     private static final int RAYS_PER_LAYER = RAY_COUNT / 2;
     /** v4: VERY slow spin (was 1.2 °/s) — barely-perceptible drift; layer B counter-spins. */
     private static final float RAY_SPIN_DEG_PER_SEC = 0.35F;
-    /**
-     * v4 parallax depth layering: ray layer B is offset opposite the camera's horizontal
-     * walk offset from the ship anchor by this factor (celestial-plane units per block,
-     * clamped to ±{@value #RAY_PARALLAX_MAX}). Layer A stays locked to the disc — the two
-     * fans separate into near/far sheets as the player moves, and converge again at the
-     * anchor. Zero effect on the disc quad itself (the C2 stability freeze).
-     */
-    private static final float RAY_PARALLAX = 0.06F;
-    private static final float RAY_PARALLAX_MAX = 5.0F;
     /** Rays start slightly inside the disc silhouette so their roots hide behind it. */
-    private static final float RAY_INNER_RADIUS = 30.0F;
+    private static final float RAY_INNER_RADIUS = 24.0F;
     /** Peak root alpha of a ray (plan: additive, 0.4 alpha). */
     private static final float RAY_ALPHA = 0.4F;
-    /** Deterministic per-ray lengths (40–120 units) and root half-widths. */
+    /**
+     * Deterministic per-ray lengths and root half-widths. LIMBOFIX2: rescaled (×~0.55 of
+     * the zenith-era 40–120 range) so the longest ray tip ({@code 24 + 66 = 90} in-plane
+     * units) stays well above the horizon at the {@value #ECLIPSE_ELEVATION_DEG}°
+     * elevation — the horizon sits at {@code SKY_DISTANCE·tan(50°) ≈ 119} in-plane units.
+     */
     private static final float[] RAY_LENGTHS = {
-            118.0F, 62.0F, 94.0F, 47.0F, 108.0F, 71.0F,
-            55.0F, 101.0F, 43.0F, 86.0F, 66.0F, 120.0F};
+            65.0F, 34.0F, 52.0F, 26.0F, 59.0F, 39.0F,
+            30.0F, 56.0F, 24.0F, 47.0F, 36.0F, 66.0F};
     private static final float[] RAY_WIDTHS = {
-            7.5F, 5.0F, 6.5F, 4.2F, 7.0F, 5.6F,
-            4.6F, 6.8F, 4.0F, 6.0F, 5.2F, 7.8F};
+            5.4F, 3.6F, 4.7F, 3.0F, 5.0F, 4.0F,
+            3.3F, 4.9F, 2.9F, 4.3F, 3.7F, 5.6F};
 
-    /** Radial glow fan behind the disc (the aura "floor"). */
-    private static final float GLOW_RADIUS = 135.0F;
+    /** Radial glow fan behind the disc (the aura "floor"); LIMBOFIX2: 135 → 86. */
+    private static final float GLOW_RADIUS = 86.0F;
     private static final int GLOW_SEGMENTS = 24;
     /** v4 breathing corona: glow radius swells ±5% on a slow ~27 s cycle (0.23 rad/s). */
     private static final float CORONA_BREATH_RATE = 0.23F;
@@ -160,8 +177,8 @@ public class LimboSpecialEffects extends DimensionSpecialEffects {
     private static final float WISP_SLOT_SECONDS = 41.0F;
     private static final float WISP_DURATION_SECONDS = 10.0F;
     private static final float WISP_PEAK_ALPHA = 0.15F;
-    /** Wisp reach beyond the disc rim (units in the celestial plane) when fully extended. */
-    private static final float WISP_REACH = 62.0F;
+    /** Wisp reach beyond the disc rim (celestial-plane units); LIMBOFIX2: 62 → 48. */
+    private static final float WISP_REACH = 48.0F;
 
     /**
      * v4.1 aurora veils: soul-green polar-light bands at extreme altitude, framing the
@@ -174,11 +191,15 @@ public class LimboSpecialEffects extends DimensionSpecialEffects {
      */
     private static final int AURORA_VEILS = 3;
     private static final int AURORA_SEGMENTS = 18;
-    /** Innermost veil center radius; each further veil steps {@value #AURORA_RADIUS_STEP} out. */
-    private static final float AURORA_BASE_RADIUS = 152.0F;
-    private static final float AURORA_RADIUS_STEP = 26.0F;
+    /**
+     * Innermost veil foot radius; each further veil steps {@value #AURORA_RADIUS_STEP} out.
+     * LIMBOFIX2: 152/26/34 → 88/8/22 — the outermost undulated foot ({@code 88+2·8+5=109}
+     * in-plane units) stays above the horizon at the fixed 50° elevation.
+     */
+    private static final float AURORA_BASE_RADIUS = 88.0F;
+    private static final float AURORA_RADIUS_STEP = 8.0F;
     /** Radial depth of a curtain (bright outer edge → feathered inner fade). */
-    private static final float AURORA_BAND_DEPTH = 34.0F;
+    private static final float AURORA_BAND_DEPTH = 22.0F;
     /** Peak alpha of a curtain's bright edge (before pulse/envelope shaping). */
     private static final float AURORA_PEAK_ALPHA = 0.085F;
     /** Per-veil azimuth drift speeds (rad/s) — non-commensurate, so veils never lock step. */
@@ -188,24 +209,24 @@ public class LimboSpecialEffects extends DimensionSpecialEffects {
     /** Per-veil base azimuths (radians) — spread so the veils frame, never encircle. */
     private static final float[] AURORA_AZIMUTH = {0.6F, 2.9F, 4.6F};
 
-    /**
-     * C2: per-frame low-pass factor for the disc direction. Kills single-frame pops (anchor
-     * republish, degenerate snap, ship bob) while converging within ~10 frames — walking
-     * parallax stays imperceptible, jitter cannot.
-     */
-    private static final float DIR_SMOOTHING = 0.2F;
-
     /** C2 sailing cues: ticks between drift-cue spawns (doubled under reducedFx). */
     private static final int DRIFT_CUE_INTERVAL_TICKS = 3;
     /** Mist bands/foam glints stream astern at this speed (blocks/t, −X = astern). */
     private static final float DRIFT_CUE_SPEED = 0.22F;
 
-    // Pre-allocated render scratch (§3.5: no per-frame heap allocations in render loops).
-    private static final Quaternionf ZENITH_ROT = new Quaternionf();
-    private static final Vector3f ZENITH_DIR = new Vector3f();
-    /** Low-pass filtered disc direction (C2); world axes, unit length. */
-    private static final Vector3f SMOOTH_DIR = new Vector3f();
-    private static boolean hasSmoothDir;
+    /**
+     * LIMBOFIX2: the FIXED world-space unit direction the eclipse hangs at — azimuth
+     * {@code +X} (dead ahead of the ship / the buoy-lane heading), elevation
+     * {@value #ECLIPSE_ELEVATION_DEG}° above the horizon. Compile-time constant: no
+     * camera term can ever re-aim the disc. Never mutated after class init.
+     */
+    private static final Vector3f CELESTIAL_DIR = new Vector3f(
+            Mth.cos(ECLIPSE_ELEVATION_DEG * ((float) Math.PI / 180.0F)),
+            Mth.sin(ECLIPSE_ELEVATION_DEG * ((float) Math.PI / 180.0F)),
+            0.0F);
+    /** Rotation mapping the celestial plane's local {@code +Y} onto {@link #CELESTIAL_DIR}. */
+    private static final Quaternionf CELESTIAL_ROT = new Quaternionf().rotationTo(
+            0.0F, 1.0F, 0.0F, CELESTIAL_DIR.x, CELESTIAL_DIR.y, CELESTIAL_DIR.z);
     /** Game time of the last drift-cue spawn (C2 sailing illusion throttle). */
     private static long lastDriftCueGameTime = Long.MIN_VALUE;
 
@@ -239,10 +260,21 @@ public class LimboSpecialEffects extends DimensionSpecialEffects {
     }
 
     /**
-     * The world point the eclipse hangs at: {@value #ZENITH_HEIGHT} blocks above the ship
-     * deck anchor ({@code eclipse:ship_deck}), or above the shared spawn until P6 publishes
-     * the anchor. Also consumed by {@code veilfx.LimboAmbience}'s {@code GodrayDir} feeder so
-     * the post god-rays radiate from the exact same spot the sky pass draws the disc at.
+     * The FIXED world-space unit direction the eclipse disc + aura hang at (LIMBOFIX2).
+     * Consumed by {@code veilfx.LimboAmbience}'s {@code GodrayDir} feeder so the
+     * screen-space god rays radiate from the exact direction the sky pass draws the disc
+     * at. Shared read-only instance — never mutate, never store.
+     */
+    public static Vector3f celestialDirection() {
+        return CELESTIAL_DIR;
+    }
+
+    /**
+     * The ship-anchor reference point: {@value #ZENITH_HEIGHT} blocks above the ship deck
+     * anchor ({@code eclipse:ship_deck}), or above the shared spawn until P6 publishes the
+     * anchor. LIMBOFIX2: the disc no longer draws toward this point (it hangs at the fixed
+     * {@link #celestialDirection}); this remains the seam for {@link #clientWaterlineY}
+     * and {@code veilfx.LimboAmbience}'s ship-relative FX (soul shoal).
      * Returns a cached immutable {@link Vec3}, rebuilt only when the source position moves.
      */
     public static Vec3 zenithWorldPoint(ClientLevel level) {
@@ -322,29 +354,17 @@ public class LimboSpecialEffects extends DimensionSpecialEffects {
         LimboHorizonShips.draw(poseStack.last().pose(), level, camera);
         RenderSystem.enableCull();
 
-        // --- eclipse disc + aura: a stable camera-relative celestial (C2) -------------------
+        // --- eclipse disc + aura: a FIXED celestial direction (LIMBOFIX2) -------------------
         // Drawn INSIDE the stars' no-fog window with the depth test off, at effectively
-        // infinite distance (normalized direction, fixed angular size at SKY_DISTANCE): no
-        // parallax jitter, no fog/horizon-plane pops, no clipping.
-        Vec3 zenith = zenithWorldPoint(level);
+        // infinite distance (fixed angular size at SKY_DISTANCE). The transform contains
+        // ZERO camera terms: the only camera dependence is the view rotation already baked
+        // into the passed modelViewMatrix — exactly like the vanilla sun/moon. Rotating or
+        // walking cannot move, re-aim or spin the disc; it pans across the screen like any
+        // real celestial object.
         Vec3 cam = camera.getPosition();
-        ZENITH_DIR.set((float) (zenith.x - cam.x), (float) (zenith.y - cam.y), (float) (zenith.z - cam.z));
-        if (ZENITH_DIR.lengthSquared() < 1.0E-4F || ZENITH_DIR.y <= 0.0F) {
-            ZENITH_DIR.set(0.0F, 1.0F, 0.0F); // degenerate (camera above the zenith point)
-        }
-        ZENITH_DIR.normalize();
-        // Low-pass the direction: a snap only on the first frame or a genuinely new source
-        // (dimension change / anchor jump); otherwise any per-frame pop is eased away.
-        if (!hasSmoothDir || SMOOTH_DIR.dot(ZENITH_DIR) < 0.5F) {
-            SMOOTH_DIR.set(ZENITH_DIR);
-            hasSmoothDir = true;
-        } else {
-            SMOOTH_DIR.lerp(ZENITH_DIR, DIR_SMOOTHING).normalize();
-        }
-        ZENITH_ROT.rotationTo(0.0F, 1.0F, 0.0F, SMOOTH_DIR.x, SMOOTH_DIR.y, SMOOTH_DIR.z);
 
         poseStack.pushPose();
-        poseStack.mulPose(ZENITH_ROT);
+        poseStack.mulPose(CELESTIAL_ROT);
         Matrix4f zenithPose = poseStack.last().pose();
 
         float seconds = (System.currentTimeMillis() % 3_600_000L) / 1000.0F;
@@ -356,12 +376,6 @@ public class LimboSpecialEffects extends DimensionSpecialEffects {
         // dims slightly while expanded (a corona thins as it grows) — layered UNDER the
         // alpha pulse, so the two periods beat against each other organically.
         float breath = 1.0F + 0.05F * Mth.sin(seconds * CORONA_BREATH_RATE + 0.9F);
-        // v4 parallax depth layering: layer B shifts opposite the camera's walk offset
-        // from the ship anchor (the zenith point's x/z IS the anchor x/z), clamped small.
-        float parX = Mth.clamp((float) (cam.x - zenith.x) * -RAY_PARALLAX,
-                -RAY_PARALLAX_MAX, RAY_PARALLAX_MAX);
-        float parZ = Mth.clamp((float) (cam.z - zenith.z) * -RAY_PARALLAX,
-                -RAY_PARALLAX_MAX, RAY_PARALLAX_MAX);
 
         RenderSystem.disableDepthTest();
 
@@ -377,7 +391,7 @@ public class LimboSpecialEffects extends DimensionSpecialEffects {
             drawAuroraVeils(zenithPose, seconds, pulse);
         }
         drawAuraGlow(zenithPose, pulse, breath);
-        drawAuraRays(zenithPose, seconds, pulse, parX, parZ);
+        drawAuraRays(zenithPose, seconds, pulse);
         // v4: occasional coronal-mass wisp — drawn after the rays so the disc core still
         // occludes its root; garnish tier, so reducedFx skips it entirely.
         if (!EclipseClientConfig.reducedFx()) {
@@ -491,9 +505,10 @@ public class LimboSpecialEffects extends DimensionSpecialEffects {
                 float t1 = (float) (i + 1) / AURORA_SEGMENTS;
                 float a0 = azStart + t0 * span;
                 float a1 = azStart + t1 * span;
-                // 3-lobe undulation of the curtain foot + a slow travelling fold.
-                float r0 = footRadius + 9.0F * Mth.sin(a0 * 3.0F + seconds * 0.13F + v);
-                float r1 = footRadius + 9.0F * Mth.sin(a1 * 3.0F + seconds * 0.13F + v);
+                // 3-lobe undulation of the curtain foot + a slow travelling fold
+                // (LIMBOFIX2: amplitude 9 → 5, part of the horizon-clearance rescale).
+                float r0 = footRadius + 5.0F * Mth.sin(a0 * 3.0F + seconds * 0.13F + v);
+                float r1 = footRadius + 5.0F * Mth.sin(a1 * 3.0F + seconds * 0.13F + v);
                 // Mid-arc alpha envelope × curtain-ray shimmer (per-edge, so quads share
                 // edge values and the strip stays C0 — no banding between segments).
                 float e0 = Mth.sin(t0 * (float) Math.PI)
@@ -597,14 +612,12 @@ public class LimboSpecialEffects extends DimensionSpecialEffects {
      * The {@value #RAY_COUNT}-ray aura fan: two 6-ray layers counter-rotating at
      * ±{@value #RAY_SPIN_DEG_PER_SEC} °/s (v4: slowed from 1.2 — a drift you only notice
      * by staring). Each ray is a tapered additive wedge from just inside the disc
-     * silhouette out to its own 40–120-unit length, root alpha {@value #RAY_ALPHA}·pulse
-     * fading to zero at the tip. v4: layer B is shifted by the clamped parallax offset
-     * {@code (parX, parZ)} — nearer sheet, moves against the camera walk — while layer A
-     * stays locked to the disc; the offsets are continuous in camera position, so nothing
-     * can pop (the C2 law).
+     * silhouette out to its own length, root alpha {@value #RAY_ALPHA}·pulse fading to
+     * zero at the tip. LIMBOFIX2: the v4 layer-B walk-parallax offset is GONE — it was a
+     * camera-position term, and the whole point of the fix is that NO camera term may
+     * move any part of the celestial group.
      */
-    private static void drawAuraRays(Matrix4f pose, float seconds, float pulse,
-            float parX, float parZ) {
+    private static void drawAuraRays(Matrix4f pose, float seconds, float pulse) {
         BufferBuilder builder = Tesselator.getInstance().begin(
                 VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR);
         float spin = seconds * RAY_SPIN_DEG_PER_SEC;
@@ -618,9 +631,6 @@ public class LimboSpecialEffects extends DimensionSpecialEffects {
             // perpendicular in the celestial plane
             float perpX = -dirZ;
             float perpZ = dirX;
-            // v4 parallax: the whole layer-B fan translates in the celestial plane.
-            float offX = layerB ? parX : 0.0F;
-            float offZ = layerB ? parZ : 0.0F;
 
             float rootW = RAY_WIDTHS[i];
             float tipW = rootW * 0.12F;
@@ -628,17 +638,17 @@ public class LimboSpecialEffects extends DimensionSpecialEffects {
             float r1 = RAY_INNER_RADIUS + RAY_LENGTHS[i];
             float rootAlpha = RAY_ALPHA * pulse * (layerB ? 0.85F : 1.0F);
 
-            builder.addVertex(pose, offX + dirX * r0 - perpX * rootW, SKY_DISTANCE,
-                            offZ + dirZ * r0 - perpZ * rootW)
+            builder.addVertex(pose, dirX * r0 - perpX * rootW, SKY_DISTANCE,
+                            dirZ * r0 - perpZ * rootW)
                     .setColor(0.78F, 0.42F, 1.0F, rootAlpha);
-            builder.addVertex(pose, offX + dirX * r0 + perpX * rootW, SKY_DISTANCE,
-                            offZ + dirZ * r0 + perpZ * rootW)
+            builder.addVertex(pose, dirX * r0 + perpX * rootW, SKY_DISTANCE,
+                            dirZ * r0 + perpZ * rootW)
                     .setColor(0.78F, 0.42F, 1.0F, rootAlpha);
-            builder.addVertex(pose, offX + dirX * r1 + perpX * tipW, SKY_DISTANCE,
-                            offZ + dirZ * r1 + perpZ * tipW)
+            builder.addVertex(pose, dirX * r1 + perpX * tipW, SKY_DISTANCE,
+                            dirZ * r1 + perpZ * tipW)
                     .setColor(0.45F, 0.15F, 0.85F, 0.0F);
-            builder.addVertex(pose, offX + dirX * r1 - perpX * tipW, SKY_DISTANCE,
-                            offZ + dirZ * r1 - perpZ * tipW)
+            builder.addVertex(pose, dirX * r1 - perpX * tipW, SKY_DISTANCE,
+                            dirZ * r1 - perpZ * tipW)
                     .setColor(0.45F, 0.15F, 0.85F, 0.0F);
         }
         BufferUploader.drawWithShader(builder.buildOrThrow());

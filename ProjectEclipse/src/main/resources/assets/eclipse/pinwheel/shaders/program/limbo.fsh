@@ -261,7 +261,8 @@ void main() {
                 * (sky + horizonMix) * 0.30;
     }
 
-    // ---- screen-space radial god rays from the zenith disc ------------------------------
+    // ---- screen-space radial god rays from the eclipse disc (LIMBOFIX2: GodrayDir is the
+    // NDC projection of the FIXED celestial direction — it tracks the sky-pass disc 1:1) --
     float lookUp = 1.0 - smoothstep(0.9, 2.6, length(GodrayDir));
     float rayStrength = lookUp * Intensity;
     if (rayStrength > 0.001) {

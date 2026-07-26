@@ -40,6 +40,7 @@ import net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -143,7 +144,12 @@ public class DeckhandEntity extends EclipseGeoMob {
     /** Consecutive hostile ticks without a living Ferryman (bug 4b self-heal). */
     private int hostileOrphanTicks;
 
-    /** Renderer bookkeeping: last game time the {@code row} loop was clock-synced. */
+    /**
+     * Renderer bookkeeping: game time the current rowing session's {@code row} loop was
+     * clock-synced, or {@link Long#MIN_VALUE} while unsynced (LIMBOFIX2: one sync per
+     * rowing session — the renderer clears this whenever the row loop is not the active
+     * base animation).
+     */
     public long clientRowResetAt = Long.MIN_VALUE;
     /** Renderer bookkeeping: last row cycle that spawned the blade-dip splash. */
     public long clientSplashCycle = Long.MIN_VALUE;
@@ -393,6 +399,20 @@ public class DeckhandEntity extends EclipseGeoMob {
             return super.isInvulnerableTo(source); // The risen crew can be cut down.
         }
         return !source.is(DamageTypeTags.BYPASSES_INVULNERABILITY); // /kill still works.
+    }
+
+    /**
+     * LIMBOFIX2 (user bug "die Wesen sind verbuggt"): the render-culling box must cover
+     * the OAR, which is part of this entity's own GeckoLib skeleton and reaches ~2.5
+     * blocks outboard of the 0.7-wide collision box ({@code oar_blade} pivot sits at
+     * {@code z = -40} model units = 2.5 blocks; {@code DeckhandRenderer.TIP_OUT_BLOCKS}
+     * = 2.53). With the vanilla box, panning the camera near a rower culled the WHOLE
+     * entity while its oar should still be on screen — rower + oar popped in and out at
+     * the view edge. Y is padded too for the cutscene tilt (oars shipped skyward).
+     */
+    @Override
+    public AABB getBoundingBoxForCulling() {
+        return this.getBoundingBox().inflate(2.7D, 1.6D, 2.7D);
     }
 
     @Override
