@@ -1,12 +1,6 @@
 {
   "type": "eclipse:backrooms",
   "generator": {
-    "type": "minecraft:flat",
-    "settings": {
-      "biome": "minecraft:the_void",
-      "lakes": false,
-      "features": false,
-      "layers": []
-    }
+    "type": "eclipse:backrooms"
   }
 }

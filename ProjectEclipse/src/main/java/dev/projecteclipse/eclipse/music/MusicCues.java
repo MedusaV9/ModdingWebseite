@@ -40,9 +40,12 @@ public enum MusicCues {
     /**
      * Non-looping ceremonial sting (~45-60 s + tail). Triggered by the wand worker via
      * {@code MusicCues.play("wand_awakening", player)}; hands the channel back to the
-     * situation ladder after {@code durationTicks} like INTRO_STORM.
+     * situation ladder after {@code durationTicks} like INTRO_STORM. WANDFIX-6: the
+     * ceremony should color the moment, not own the next minute — ownership shortened
+     * to 700t (~35 s; the crossfade tips it out mid-tail) and the sting rides a 0.55
+     * gain so it swells in under the scene instead of stomping onto it.
      */
-    WAND_AWAKENING("wand_awakening", EclipseMusicSounds.WAND_AWAKENING, false, 1_200),
+    WAND_AWAKENING("wand_awakening", EclipseMusicSounds.WAND_AWAKENING, false, 700, 0, 0.55F),
     /** Situation rung: final-day dread bed (weakest in-world rung, MusicManager). */
     DAY_FINAL("day_final", EclipseMusicSounds.DAY_FINAL, true, 0, 200);
 
@@ -54,6 +57,7 @@ public enum MusicCues {
     private final boolean looping;
     private final int durationTicks;
     private final int lingerTicks;
+    private final float gain;
 
     MusicCues(String id, Supplier<SoundEvent> sound, boolean looping, int durationTicks) {
         this(id, sound, looping, durationTicks, 0);
@@ -61,11 +65,17 @@ public enum MusicCues {
 
     MusicCues(String id, Supplier<SoundEvent> sound, boolean looping, int durationTicks,
             int lingerTicks) {
+        this(id, sound, looping, durationTicks, lingerTicks, 1.0F);
+    }
+
+    MusicCues(String id, Supplier<SoundEvent> sound, boolean looping, int durationTicks,
+            int lingerTicks, float gain) {
         this.id = id;
         this.sound = sound;
         this.looping = looping;
         this.durationTicks = durationTicks;
         this.lingerTicks = lingerTicks;
+        this.gain = gain;
     }
 
     public String id() {
@@ -92,6 +102,15 @@ public enum MusicCues {
      */
     public int lingerTicks() {
         return lingerTicks;
+    }
+
+    /**
+     * Per-cue loudness trim applied under {@code MusicConfig.volumeMultiplier()} inside the
+     * MusicManager crossfade (WANDFIX-6). 1.0 for almost everything; quiet ceremonial
+     * stings (wand_awakening) sit lower so they support a scene instead of leading it.
+     */
+    public float gain() {
+        return gain;
     }
 
     public static List<String> ids() {

@@ -21,15 +21,18 @@ import net.neoforged.fml.loading.FMLPaths;
 
 /**
  * Loader for {@code config/eclipse/skilltree.json} (R3, plan §2.3 node table; expanded by
- * wave-5 A14): 60 nodes — the original 25 keystones (4-point spine + three 7-node
- * branches: hunt / delve / stride) plus 35 incremental filler tiers threaded between them
- * (fortune-echo, loot-luck, xp-gain %, mining pace, night stride, fall reduction, …).
- * Every filler reuses an EXISTING {@link SkillPerks}/{@link SkillService} effect-type
- * contract — no node ships an effect string the code does not implement. Node effects are
- * small, incremental and never OP by design — every magnitude is a config value consumed
- * by {@link SkillPerks} / {@link SkillService}, so balance can be retuned live via
- * {@code /eclipse reload}. The canonical serialized tree (not secret) ships to clients as
- * {@code S2CSkillTreePayload} for P3's GUI.
+ * wave-5 A14, then WANDFIX-4): 78 nodes — the original 25 keystones (4-point spine +
+ * three 7-node branches: hunt / delve / stride), 35 incremental filler tiers threaded
+ * between them (fortune-echo, loot-luck, xp-gain %, mining pace, night stride, fall
+ * reduction, …) and the 18-node <b>wand branch</b> (Veilladung reservoir / cast economy /
+ * damage / lore lines with two mutually exclusive specialisation pairs and a free-cast
+ * capstone — contracts in {@code wand/WandPerks}). Every other node reuses an EXISTING
+ * {@link SkillPerks}/{@link SkillService} effect-type contract — no node ships an effect
+ * string the code does not implement. Node effects are small, incremental and never OP by
+ * design — every magnitude is a config value consumed by {@link SkillPerks} /
+ * {@link SkillService}, so balance can be retuned live via {@code /eclipse reload}. The
+ * canonical serialized tree (not secret) ships to clients as {@code S2CSkillTreePayload}
+ * for P3's GUI.
  */
 public final class SkillTreeConfig {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
@@ -40,12 +43,17 @@ public final class SkillTreeConfig {
 
     private SkillTreeConfig() {}
 
-    /** One skill tree node. {@code duration}/{@code cooldown} are seconds (U3 only today). */
+    /**
+     * One skill tree node. {@code duration}/{@code cooldown} are seconds (U3 only today).
+     * {@code excludes} (WANDFIX-4) lists node ids this node can never coexist with —
+     * mutually exclusive specialisations, enforced both ways in {@link SkillTree#canBuy}.
+     */
     public record Node(
             String id,
             String branch,
             int cost,
             List<String> requires,
+            List<String> excludes,
             Localized title,
             Localized desc,
             String effectType,
@@ -132,6 +140,12 @@ public final class SkillTreeConfig {
                         requires.add(req.getAsString());
                     }
                 }
+                List<String> excludes = new java.util.ArrayList<>();
+                if (obj.has("excludes") && obj.get("excludes").isJsonArray()) {
+                    for (JsonElement exc : obj.getAsJsonArray("excludes")) {
+                        excludes.add(exc.getAsString());
+                    }
+                }
                 JsonObject effect = obj.has("effect") && obj.get("effect").isJsonObject()
                         ? obj.getAsJsonObject("effect") : new JsonObject();
                 nodes.put(id, new Node(
@@ -139,6 +153,7 @@ public final class SkillTreeConfig {
                         obj.has("branch") ? obj.get("branch").getAsString() : "spine",
                         obj.has("cost") ? Math.max(1, obj.get("cost").getAsInt()) : 1,
                         List.copyOf(requires),
+                        List.copyOf(excludes),
                         Localized.parse(obj.get("title")),
                         Localized.parse(obj.get("desc")),
                         effect.has("type") ? effect.get("type").getAsString() : "none",
@@ -152,6 +167,12 @@ public final class SkillTreeConfig {
                 if (!nodes.containsKey(req)) {
                     EclipseMod.LOGGER.warn("skilltree.json: node '{}' requires unknown node '{}' — "
                             + "it will be unpurchasable until fixed", node.id(), req);
+                }
+            }
+            for (String exc : node.excludes()) {
+                if (!nodes.containsKey(exc)) {
+                    EclipseMod.LOGGER.warn("skilltree.json: node '{}' excludes unknown node '{}' — "
+                            + "the exclusion is inert until fixed", node.id(), exc);
                 }
             }
         }
@@ -178,6 +199,8 @@ public final class SkillTreeConfig {
         for (Node node : nodes.values()) {
             JsonArray requires = new JsonArray();
             node.requires().forEach(requires::add);
+            JsonArray excludes = new JsonArray();
+            node.excludes().forEach(excludes::add);
             JsonObject effect = new JsonObject();
             effect.addProperty("type", node.effectType());
             effect.addProperty("value", node.value());
@@ -192,6 +215,9 @@ public final class SkillTreeConfig {
             obj.addProperty("branch", node.branch());
             obj.addProperty("cost", node.cost());
             obj.add("requires", requires);
+            if (!node.excludes().isEmpty()) {
+                obj.add("excludes", excludes);
+            }
             obj.add("title", node.title().toJsonElement());
             obj.add("desc", node.desc().toJsonElement());
             obj.add("effect", effect);
@@ -210,18 +236,21 @@ public final class SkillTreeConfig {
         JsonObject root = new JsonObject();
 
         JsonObject doc = new JsonObject();
-        doc.addProperty("schema", "nodes[]: {id, branch, cost, requires[], title{en,de}, desc{en,de}, "
-                + "effect{type, value, duration?, cooldown?}}. Effect magnitudes are fractions "
+        doc.addProperty("schema", "nodes[]: {id, branch, cost, requires[], excludes[]?, title{en,de}, "
+                + "desc{en,de}, effect{type, value, duration?, cooldown?}}. Effect magnitudes are fractions "
                 + "(0.05 = 5%) except post_kill_absorption (hearts), no_fall_damage_below_blocks "
-                + "(blocks) and first_biome_bonus_xp (flat XP). All values are live-tunable; "
-                + "effect TYPE strings are code contracts (SkillPerks) - do not rename.");
-        doc.addProperty("balance", "Total cost 147 points across 60 nodes = level 147 to complete "
-                + "everything. Filler tiers are deliberately tiny (1-5% each); the keystones keep "
+                + "(blocks), first_biome_bonus_xp (flat XP) and wand_charge_max_add (flat Veilladung). "
+                + "excludes[] names nodes that can never coexist with this one (mutually exclusive "
+                + "specialisations, enforced both ways). All values are live-tunable; "
+                + "effect TYPE strings are code contracts (SkillPerks/WandPerks) - do not rename.");
+        doc.addProperty("balance", "Total cost 200 points across 78 nodes; the two exclusive wand pairs "
+                + "(W5/W6, W16/W17) lock 8 of them out per character, so ~192 points completes everything "
+                + "ownable. Filler tiers are deliberately tiny (1-5% each); the keystones keep "
                 + "their old values, so owning everything is a long-arc goal far beyond softcap 50.");
         doc.addProperty("migration", "Existing skilltree.json files are NOT rewritten (loadOrCreate). "
-                + "To pick up the wave-5 60-node tree on a live save, delete config/eclipse/skilltree.json "
-                + "(or merge the new nodes manually) and run /eclipse reload. Old owned node ids are "
-                + "unchanged and stay owned.");
+                + "To pick up the WANDFIX-4 78-node tree (wand branch) on a live save, delete "
+                + "config/eclipse/skilltree.json (or merge the new nodes manually) and run /eclipse reload. "
+                + "Old owned node ids are unchanged and stay owned.");
         root.add("_doc", doc);
 
         JsonObject branches = new JsonObject();
@@ -229,6 +258,7 @@ public final class SkillTreeConfig {
         branches.add("hunt", loc("Hunt", "Jagd"));
         branches.add("delve", loc("Delve", "Tiefe"));
         branches.add("stride", loc("Stride", "Wanderschaft"));
+        branches.add("wand", loc("Wand", "Zauberstab"));
         root.add("branches", branches);
 
         JsonArray nodes = new JsonArray();
@@ -494,6 +524,96 @@ public final class SkillTreeConfig {
                 "-3% fall damage.", "−3 % Fallschaden.",
                 "fall_damage_reduce_pct", 0.03F, 0, 0));
 
+        // WANDFIX-4: the Zauberstab branch — 18 nodes, four sub-lines out of one root
+        // (reservoir / economy / damage / lore), TWO mutually exclusive specialisation
+        // pairs (W5 Sturmgefäß vs W6 Ebbe und Flut; W16 Überladung vs W17 Leitmagie)
+        // and a free-cast capstone that demands investment in two different lines.
+        // Effect contracts live in wand/WandPerks (all magnitudes summed per type,
+        // caps applied in code so a hand-edited config cannot zero costs/cooldowns).
+        nodes.add(node("W1", "wand", 1, List.of(),
+                "Veil Spark", "Veilfunke",
+                "+10 maximum Veilladung.", "+10 maximale Veilladung.",
+                "wand_charge_max_add", 10.0F, 0, 0));
+        // Reservoir line: bigger/faster Veilladung, forked capstone.
+        nodes.add(node("W2", "wand", 2, List.of("W1"),
+                "Veil Stream", "Veilstrom",
+                "+15% Veilladung regeneration.", "+15 % Veilladungs-Regeneration.",
+                "wand_regen_pct", 0.15F, 0, 0));
+        nodes.add(node("W3", "wand", 2, List.of("W2"),
+                "Deep Reserves", "Tiefe Reserven",
+                "+15 maximum Veilladung.", "+15 maximale Veilladung.",
+                "wand_charge_max_add", 15.0F, 0, 0));
+        nodes.add(node("W4", "wand", 3, List.of("W3"),
+                "Veil Stream II", "Veilstrom II",
+                "+20% Veilladung regeneration.", "+20 % Veilladungs-Regeneration.",
+                "wand_regen_pct", 0.20F, 0, 0));
+        nodes.add(node("W5", "wand", 4, List.of("W4"), List.of("W6"),
+                "Stormvessel", "Sturmgefäß",
+                "+40 maximum Veilladung. Locks out Ebb and Flow.",
+                "+40 maximale Veilladung. Schließt Ebbe und Flut aus.",
+                "wand_charge_max_add", 40.0F, 0, 0));
+        nodes.add(node("W6", "wand", 4, List.of("W4"), List.of("W5"),
+                "Ebb and Flow", "Ebbe und Flut",
+                "+50% Veilladung regeneration. Locks out Stormvessel.",
+                "+50 % Veilladungs-Regeneration. Schließt Sturmgefäß aus.",
+                "wand_regen_pct", 0.50F, 0, 0));
+        // Economy line: cheaper casts, shorter cooldowns, the Leitmagie specialisation.
+        nodes.add(node("W7", "wand", 2, List.of("W1"),
+                "Focused Weave", "Gezieltes Weben",
+                "Wand powers cost 5% less Veilladung.", "Stabkräfte kosten 5 % weniger Veilladung.",
+                "wand_cost_reduce_pct", 0.05F, 0, 0));
+        nodes.add(node("W8", "wand", 2, List.of("W7"),
+                "Practiced Caster", "Geübter Wirker",
+                "-8% wand power cooldowns.", "−8 % Abklingzeit aller Stabkräfte.",
+                "wand_cooldown_reduce_pct", 0.08F, 0, 0));
+        nodes.add(node("W9", "wand", 3, List.of("W8"),
+                "Focused Weave II", "Gezieltes Weben II",
+                "Wand powers cost another 5% less Veilladung.",
+                "Stabkräfte kosten weitere 5 % weniger Veilladung.",
+                "wand_cost_reduce_pct", 0.05F, 0, 0));
+        nodes.add(node("W10", "wand", 3, List.of("W9"),
+                "Cut Through Silence", "Schnitt durch die Stille",
+                "-7% wand power cooldowns.", "−7 % Abklingzeit aller Stabkräfte.",
+                "wand_cooldown_reduce_pct", 0.07F, 0, 0));
+        nodes.add(node("W17", "wand", 4, List.of("W10"), List.of("W16"),
+                "Conduit", "Leitmagie",
+                "-15% wand power cooldowns. Locks out Overload.",
+                "−15 % Abklingzeit aller Stabkräfte. Schließt Überladung aus.",
+                "wand_cooldown_reduce_pct", 0.15F, 0, 0));
+        // Damage line: raw power, the Überladung specialisation.
+        nodes.add(node("W11", "wand", 2, List.of("W1"),
+                "Unbound Edge", "Entfesselte Klinge",
+                "+10% wand power damage.", "+10 % Schaden aller Stabkräfte.",
+                "wand_damage_pct", 0.10F, 0, 0));
+        nodes.add(node("W12", "wand", 3, List.of("W11"),
+                "Veilburn", "Veilbrand",
+                "+10% wand power damage.", "+10 % Schaden aller Stabkräfte.",
+                "wand_damage_pct", 0.10F, 0, 0));
+        nodes.add(node("W15", "wand", 3, List.of("W12"),
+                "Veilburn II", "Veilbrand II",
+                "+8% wand power damage.", "+8 % Schaden aller Stabkräfte.",
+                "wand_damage_pct", 0.08F, 0, 0));
+        nodes.add(node("W16", "wand", 4, List.of("W15"), List.of("W17"),
+                "Overload", "Überladung",
+                "+20% wand power damage. Locks out Conduit.",
+                "+20 % Schaden aller Stabkräfte. Schließt Leitmagie aus.",
+                "wand_damage_pct", 0.20F, 0, 0));
+        // Lore line: faster wand leveling.
+        nodes.add(node("W13", "wand", 2, List.of("W1"),
+                "Channel Bond", "Kanalbindung",
+                "+10% wand XP from casts and kills.", "+10 % Zauberstab-EP aus Zaubern und Kills.",
+                "wand_xp_pct", 0.10F, 0, 0));
+        nodes.add(node("W14", "wand", 3, List.of("W13"),
+                "Resonance Study", "Resonanzlehre",
+                "+15% wand XP from casts and kills.", "+15 % Zauberstab-EP aus Zaubern und Kills.",
+                "wand_xp_pct", 0.15F, 0, 0));
+        // Capstone: demands the reservoir AND damage lines, rewards with free casts.
+        nodes.add(node("W18", "wand", 6, List.of("W4", "W15"),
+                "Heart of the Veil", "Herz des Schleiers",
+                "15% chance a cast costs no Veilladung.",
+                "15 % Chance, dass ein Zauber keine Veilladung kostet.",
+                "wand_free_cast_chance", 0.15F, 0, 0));
+
         root.add("nodes", nodes);
         return root;
     }
@@ -508,6 +628,14 @@ public final class SkillTreeConfig {
     private static JsonObject node(String id, String branch, int cost, List<String> requires,
             String titleEn, String titleDe, String descEn, String descDe,
             String effectType, float value, float duration, float cooldown) {
+        return node(id, branch, cost, requires, List.of(), titleEn, titleDe, descEn, descDe,
+                effectType, value, duration, cooldown);
+    }
+
+    /** Excludes-capable builder variant (WANDFIX-4 mutually exclusive specialisations). */
+    private static JsonObject node(String id, String branch, int cost, List<String> requires,
+            List<String> excludes, String titleEn, String titleDe, String descEn, String descDe,
+            String effectType, float value, float duration, float cooldown) {
         JsonObject obj = new JsonObject();
         obj.addProperty("id", id);
         obj.addProperty("branch", branch);
@@ -515,6 +643,11 @@ public final class SkillTreeConfig {
         JsonArray req = new JsonArray();
         requires.forEach(req::add);
         obj.add("requires", req);
+        if (!excludes.isEmpty()) {
+            JsonArray exc = new JsonArray();
+            excludes.forEach(exc::add);
+            obj.add("excludes", exc);
+        }
         obj.add("title", loc(titleEn, titleDe));
         obj.add("desc", loc(descEn, descDe));
         JsonObject effect = new JsonObject();

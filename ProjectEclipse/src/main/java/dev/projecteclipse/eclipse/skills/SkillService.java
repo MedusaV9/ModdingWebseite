@@ -337,10 +337,17 @@ public final class SkillService {
             player.displayClientMessage(ServerLang.tr(player, "message.eclipse.skill.buy.success",
                     node.title().pick(dev.projecteclipse.eclipse.lang.LangService.locale(player))), true);
             syncTo(player);
+            // WANDFIX-4: wand-branch nodes change the player's EFFECTIVE wand numbers
+            // (charge max, per-power cost/cooldown) — refresh that sync too, so the
+            // panel/HUD reflect the new perk without waiting for the next cast.
+            if (node.effectType().startsWith("wand_")) {
+                dev.projecteclipse.eclipse.wand.WandProgressSync.syncTo(player);
+            }
         } else {
             player.displayClientMessage(ServerLang.tr(player, switch (result) {
                 case ALREADY_OWNED -> "message.eclipse.skill.buy.owned";
                 case MISSING_PREREQ -> "message.eclipse.skill.buy.missing_prereq";
+                case EXCLUDED -> "message.eclipse.skill.buy.excluded";
                 case NOT_ENOUGH_POINTS -> "message.eclipse.skill.buy.no_points";
                 default -> "message.eclipse.skill.buy.unknown_node";
             }), true);

@@ -15,6 +15,7 @@ public final class SkillTree {
         UNKNOWN_NODE,
         ALREADY_OWNED,
         MISSING_PREREQ,
+        EXCLUDED,
         NOT_ENOUGH_POINTS
     }
 
@@ -24,6 +25,11 @@ public final class SkillTree {
      * Validates a purchase against the tree definition. The server calls this for BOTH the
      * {@code C2SSkillNodeBuyPayload} handler and the {@code /skills buy} fallback — clients
      * are never trusted with cost or prereq checks.
+     *
+     * <p>WANDFIX-4 exclusives: a node's {@code excludes} list names nodes it can never
+     * coexist with (mutually exclusive specialisations). The check runs BOTH directions —
+     * owning either side of an exclusive pair locks the other permanently — so a tree
+     * author forgetting to mirror the list cannot create a one-way loophole.</p>
      */
     public static BuyResult canBuy(Map<String, SkillTreeConfig.Node> nodes, Set<String> owned,
             int unspentPoints, String nodeId) {
@@ -37,6 +43,15 @@ public final class SkillTree {
         for (String requirement : node.requires()) {
             if (!owned.contains(requirement)) {
                 return BuyResult.MISSING_PREREQ;
+            }
+        }
+        for (String ownedId : owned) {
+            if (node.excludes().contains(ownedId)) {
+                return BuyResult.EXCLUDED;
+            }
+            SkillTreeConfig.Node ownedNode = nodes.get(ownedId);
+            if (ownedNode != null && ownedNode.excludes().contains(nodeId)) {
+                return BuyResult.EXCLUDED;
             }
         }
         if (unspentPoints < node.cost()) {

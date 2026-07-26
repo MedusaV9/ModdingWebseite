@@ -22,9 +22,6 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.HoverEvent;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.Style;
-import net.minecraft.network.protocol.game.ClientboundSetSubtitleTextPacket;
-import net.minecraft.network.protocol.game.ClientboundSetTitleTextPacket;
-import net.minecraft.network.protocol.game.ClientboundSetTitlesAnimationPacket;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -64,8 +61,6 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class XboxEventService {
 
-    private static final long WARN_5M_MILLIS = 5L * 60L * 1000L;
-    private static final long WARN_1M_MILLIS = 60L * 1000L;
     private static final long PERIODIC_SYNC_MILLIS = 20_000L;
     private static final long LEAVE_CONFIRM_WINDOW_MILLIS = 15_000L;
     private static final long BOUNCE_MESSAGE_THROTTLE_MILLIS = 3_000L;
@@ -75,7 +70,6 @@ public final class XboxEventService {
     private static final Map<UUID, Long> PENDING_LEAVE_CONFIRMS = new HashMap<>();
     private static final Map<UUID, Long> LAST_BOUNCE_MESSAGE = new HashMap<>();
     private static long lastPeriodicSyncMillis;
-    private static long lastSeenRemainingMillis = Long.MAX_VALUE;
 
     private XboxEventService() {}
 
@@ -131,7 +125,6 @@ public final class XboxEventService {
         PENDING_LEAVE_CONFIRMS.clear();
         LAST_BOUNCE_MESSAGE.clear();
         lastPeriodicSyncMillis = 0L;
-        lastSeenRemainingMillis = Long.MAX_VALUE;
         XboxWorldsManifest.clearRuntimeCaches();
     }
 
@@ -155,14 +148,12 @@ public final class XboxEventService {
         }
 
         if (state.phase() == XboxEventState.Phase.OPEN) {
-            checkWarnings(server, state, remaining);
             tickPortal(server, state);
             if (now - lastPeriodicSyncMillis >= PERIODIC_SYNC_MILLIS) {
                 lastPeriodicSyncMillis = now;
                 syncTimerToInside(server, state);
             }
         }
-        lastSeenRemainingMillis = remaining;
     }
 
     // ================================================================== start / stop / mutate
@@ -202,13 +193,7 @@ public final class XboxEventService {
         int effectiveMinutes = minutes > 0 ? minutes : config.defaultMinutes();
         long now = System.currentTimeMillis();
         state.beginInstance(worldId, now + effectiveMinutes * 60_000L);
-        lastSeenRemainingMillis = Long.MAX_VALUE;
         lastPeriodicSyncMillis = 0L;
-
-        // C16/C17: the announcement is ONLY "A portal has opened." — no world name, no
-        // minutes, no coordinates. The details live on the INSIDE-only welcome title.
-        broadcast(server, Component.translatable("eclipse.xbox.announce.start")
-                .withStyle(ChatFormatting.GREEN));
 
         ServerLevel overworld = server.overworld();
         BlockPos spot = XboxPortal.findSpotNearSpawn(overworld);
@@ -216,6 +201,8 @@ public final class XboxEventService {
             XboxPortal.place(overworld, spot, state);
             state.setPhase(XboxEventState.Phase.OPEN);
             XboxWorldInstaller.decorate(server, worldId);
+            // User decree: the portal-opening line is the ONLY chat these events send.
+            announcePortal(server);
         } else {
             EclipseMod.LOGGER.warn("Xbox event {}: no portal spot within {}..{} blocks of spawn",
                     worldId, config.portalSearchMinRadius(), config.portalSearchMaxRadius());
@@ -248,8 +235,8 @@ public final class XboxEventService {
         if (state.phase() == XboxEventState.Phase.ANNOUNCED) {
             state.setPhase(XboxEventState.Phase.OPEN);
             XboxWorldInstaller.decorate(server, state.worldId());
+            announcePortal(server); // first opening only — relocations stay silent
         }
-        // C16: no coordinate broadcast — the announcement stays "a portal has opened".
         return null;
     }
 
@@ -277,9 +264,7 @@ public final class XboxEventService {
         long now = System.currentTimeMillis();
         long graceEnd = now + GRACEFUL_STOP_MILLIS;
         if (state.endsAtEpochMillis() > graceEnd) {
-            state.setEndsAtEpochMillis(graceEnd);
-            broadcast(server, Component.translatable("eclipse.xbox.announce.stopping",
-                    worldName(state.worldId()), GRACEFUL_STOP_MILLIS / 1000L).withStyle(ChatFormatting.YELLOW));
+            state.setEndsAtEpochMillis(graceEnd); // quiet grace window (no chat, user decree)
             syncTimerToInside(server, state);
         }
         return null;
@@ -304,10 +289,7 @@ public final class XboxEventService {
         };
         state.setEndsAtEpochMillis(Math.max(now, newEndsAt));
         long newRemaining = Math.max(0L, state.endsAtEpochMillis() - now);
-        lastSeenRemainingMillis = Long.MAX_VALUE; // re-arm T-5/T-1 warnings against the new window
-        syncTimerToInside(server, state);
-        broadcastInside(server, state, Component.translatable("eclipse.xbox.announce.time_changed",
-                mmss(newRemaining)).withStyle(ChatFormatting.YELLOW));
+        syncTimerToInside(server, state); // the HUD timer is the only surface (no chat)
         return Component.translatable("dev.eclipse.xbox.time.changed", mmss(newRemaining), mmss(oldRemaining));
     }
 
@@ -325,8 +307,6 @@ public final class XboxEventService {
     private static void beginClosing(MinecraftServer server, XboxEventState state, ExitReason reason) {
         state.setPhase(XboxEventState.Phase.CLOSING);
         String worldId = state.worldId();
-        broadcast(server, Component.translatable("eclipse.xbox.announce.end", worldName(worldId))
-                .withStyle(ChatFormatting.GREEN));
 
         for (ServerPlayer player : insidePlayers(server, state)) {
             exitToAnchor(server, state, player, reason);
@@ -347,7 +327,6 @@ public final class XboxEventService {
 
         PENDING_LEAVE_CONFIRMS.clear();
         LAST_BOUNCE_MESSAGE.clear();
-        lastSeenRemainingMillis = Long.MAX_VALUE;
         state.setPhase(XboxEventState.Phase.IDLE);
         EclipseMod.LOGGER.info("Xbox event {} closed (instance {}, {} participants)",
                 worldId, state.instanceId(), participants.size());
@@ -360,10 +339,7 @@ public final class XboxEventService {
         int minutes = state.rewardMinutesOverride() > 0
                 ? state.rewardMinutesOverride() : config.rewardMinutes();
         boolean started = TimedBuffApi.Holder.get().start(server, buffId, minutes);
-        if (started) {
-            broadcast(server, Component.translatable("eclipse.xbox.announce.reward",
-                    buffId, minutes, participantCount).withStyle(ChatFormatting.GOLD));
-        } else {
+        if (!started) {
             EclipseMod.LOGGER.warn(
                     "Xbox participation reward '{}' ({} min) was refused or TimedBuffApi is not installed yet",
                     buffId, minutes);
@@ -415,8 +391,7 @@ public final class XboxEventService {
             long last = LAST_BOUNCE_MESSAGE.getOrDefault(uuid, 0L);
             if (now - last >= BOUNCE_MESSAGE_THROTTLE_MILLIS) {
                 LAST_BOUNCE_MESSAGE.put(uuid, now);
-                player.displayClientMessage(ServerLang.tr(player, "eclipse.xbox.enter.locked")
-                        .withStyle(ChatFormatting.RED), false);
+                // Quiet bounce (user decree: no chat) — the refusal sound carries the read.
                 player.playNotifySound(SoundEvents.VILLAGER_NO, SoundSource.PLAYERS, 0.8F, 1.0F);
             }
             return;
@@ -450,14 +425,9 @@ public final class XboxEventService {
 
         state.addParticipant(player.getUUID());
 
-        player.connection.send(new ClientboundSetTitlesAnimationPacket(10, 60, 20));
-        player.connection.send(new ClientboundSetTitleTextPacket(
-                ServerLang.resolve(player, worldName(worldId))));
-        player.connection.send(new ClientboundSetSubtitleTextPacket(
-                ServerLang.tr(player, "eclipse.xbox.enter.subtitle").withStyle(ChatFormatting.GRAY)));
+        // User decree: no title/subtitle, no leave-hint chat — only the levelup sting
+        // and the HUD timer mark the arrival.
         player.playNotifySound(SoundEvents.PLAYER_LEVELUP, SoundSource.PLAYERS, 0.7F, 0.6F);
-
-        player.displayClientMessage(leaveLine(player), false);
         sendTimer(state, player, true);
         EclipseMod.LOGGER.info("{} entered xbox world {} (instance {})",
                 player.getScoreboardName(), worldId, state.instanceId());
@@ -486,16 +456,7 @@ public final class XboxEventService {
         state.removeReturnAnchor(player.getUUID());
         PENDING_LEAVE_CONFIRMS.remove(player.getUUID());
         sendTimer(state, player, false);
-
-        String key = switch (reason) {
-            case DEATH -> "eclipse.xbox.exit.death";
-            case DEATH_LOCKED -> "eclipse.xbox.exit.death_locked";
-            case LEFT -> "eclipse.xbox.exit.left";
-            case LEFT_UNLOCKED -> "eclipse.xbox.exit.left_unlocked";
-            case TIME_UP -> "eclipse.xbox.exit.timeup";
-            case CLOSED -> "eclipse.xbox.exit.closed";
-        };
-        player.displayClientMessage(ServerLang.tr(player, key).withStyle(ChatFormatting.AQUA), false);
+        // Quiet exit (user decree: no chat) — {@code reason} stays for the call sites' logs.
     }
 
     // ================================================================== death protection
@@ -546,7 +507,6 @@ public final class XboxEventService {
                     && state.worldId().equals(dimWorldId);
             if (eventStillOn) {
                 sendTimer(state, player, true);
-                player.displayClientMessage(leaveLine(player), false);
             } else {
                 exitToAnchor(server, state, player, ExitReason.CLOSED);
             }
@@ -643,17 +603,6 @@ public final class XboxEventService {
                 state.endsAtEpochMillis(), System.currentTimeMillis(), state.worldId(), active));
     }
 
-    private static void checkWarnings(MinecraftServer server, XboxEventState state, long remaining) {
-        if (lastSeenRemainingMillis > WARN_5M_MILLIS && remaining <= WARN_5M_MILLIS) {
-            broadcast(server, Component.translatable("eclipse.xbox.announce.warn5",
-                    worldName(state.worldId())).withStyle(ChatFormatting.YELLOW));
-        }
-        if (lastSeenRemainingMillis > WARN_1M_MILLIS && remaining <= WARN_1M_MILLIS) {
-            broadcast(server, Component.translatable("eclipse.xbox.announce.warn1",
-                    worldName(state.worldId())).withStyle(ChatFormatting.RED));
-        }
-    }
-
     // ================================================================== chest loot hook
 
     /**
@@ -717,6 +666,15 @@ public final class XboxEventService {
     }
 
     /**
+     * The ONLY chat line the xbox event may send (user decree): the shared portal-opening
+     * announcement, baked per-recipient through {@link ServerLang#resolve}.
+     */
+    private static void announcePortal(MinecraftServer server) {
+        broadcast(server, Component.translatable("eclipse.portal.announce.opening")
+                .withStyle(ChatFormatting.GOLD));
+    }
+
+    /**
      * Per-recipient broadcast: the shared translatable is baked through
      * {@link ServerLang#resolve} so every player reads it in their {@code /lang} locale
      * (Wave-5 A1). The dedicated-server console still gets the raw line for the log.
@@ -725,12 +683,6 @@ public final class XboxEventService {
         server.sendSystemMessage(message);
         for (ServerPlayer player : List.copyOf(server.getPlayerList().getPlayers())) {
             player.sendSystemMessage(ServerLang.resolve(player, message));
-        }
-    }
-
-    private static void broadcastInside(MinecraftServer server, XboxEventState state, Component message) {
-        for (ServerPlayer player : insidePlayers(server, state)) {
-            player.displayClientMessage(ServerLang.resolve(player, message), false);
         }
     }
 
@@ -743,18 +695,6 @@ public final class XboxEventService {
         return XboxEventConfig.get().announceKeys()
                 ? Component.translatable(entry.nameKey())
                 : Component.literal(entry.displayNameEn());
-    }
-
-    private static Component leaveLine(ServerPlayer player) {
-        MutableComponent line = ServerLang.tr(player, "eclipse.xbox.enter.leaveline")
-                .withStyle(ChatFormatting.GRAY);
-        line.append(Component.literal(" "));
-        line.append(ServerLang.tr(player, "eclipse.xbox.enter.leavebutton")
-                .withStyle(Style.EMPTY.withColor(ChatFormatting.YELLOW).withUnderlined(true)
-                        .withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/xboxleave"))
-                        .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT,
-                                ServerLang.tr(player, "eclipse.xbox.enter.leavebutton.hover")))));
-        return line;
     }
 
     /** {@code 29:59} — used by dev-command feedback and log lines. */

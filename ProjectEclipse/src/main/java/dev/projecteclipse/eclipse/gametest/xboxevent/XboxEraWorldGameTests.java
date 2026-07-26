@@ -35,9 +35,10 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
  *       two-repeater ring clock oscillates (the baked {@code classic_water}/{@code
  *       classic_lava} are deliberately SOLID deco; only fresh vanilla fluid is dynamic).
  *       Runs on a pad far outside the baked map bounds (void chunks) and cleans up.</li>
- *   <li>{@link #framesDecorateIdempotently}: every world's loot manifest carries a
- *       {@code frames} section, {@code decorate} hangs the tagged display frames, and a
- *       second pass never double-hangs (the {@value XboxWorldInstaller#FRAME_TAG} rule).</li>
+ *   <li>{@link #framesSweptFromClassicMaps}: every world's loot manifest still carries a
+ *       {@code frames} section (data integrity), but {@code decorate} — inverted by the
+ *       user decree "remove all item frames from the classic maps" — SWEEPS every item
+ *       frame from the dimension and stays clean on a second pass.</li>
  * </ul>
  */
 @PrefixGameTestTemplate(false)
@@ -134,7 +135,7 @@ public final class XboxEraWorldGameTests {
     }
 
     @GameTest(template = GameTestSupport.EMPTY_TEMPLATE, timeoutTicks = 200)
-    public static void framesDecorateIdempotently(GameTestHelper helper) {
+    public static void framesSweptFromClassicMaps(GameTestHelper helper) {
         MinecraftServer server = helper.getLevel().getServer();
         for (String worldId : XboxWorldsManifest.all().keySet()) {
             helper.assertTrue(!XboxWorldsManifest.frames(server, worldId).isEmpty(),
@@ -147,20 +148,17 @@ public final class XboxEraWorldGameTests {
             return;
         }
         XboxWorldInstaller.decorate(server, "tu12");
-        int placed = taggedFrames(level).size();
-        helper.assertTrue(placed >= 4,
-                "decorate hangs the display frames (got " + placed + " of "
-                        + XboxWorldsManifest.frames(server, "tu12").size() + ")");
+        helper.assertTrue(anyFrames(level).isEmpty(),
+                "decorate sweeps every item frame from the classic map (user decree)");
         XboxWorldInstaller.decorate(server, "tu12");
-        helper.assertTrue(taggedFrames(level).size() == placed,
-                "second decorate pass never double-hangs (tag idempotency)");
+        helper.assertTrue(anyFrames(level).isEmpty(),
+                "second decorate pass stays frame-free");
         helper.succeed();
     }
 
-    private static List<Entity> taggedFrames(ServerLevel level) {
+    private static List<Entity> anyFrames(ServerLevel level) {
         BlockPos spawn = XboxWorldsManifest.byId("tu12").orElseThrow().spawn();
         return level.getEntities((Entity) null, new AABB(spawn).inflate(64.0D),
-                entity -> entity instanceof ItemFrame
-                        && entity.getTags().contains(XboxWorldInstaller.FRAME_TAG));
+                entity -> entity instanceof ItemFrame);
     }
 }

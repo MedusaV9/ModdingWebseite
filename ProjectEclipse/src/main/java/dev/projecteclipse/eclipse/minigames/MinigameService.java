@@ -94,6 +94,14 @@ public final class MinigameService {
      * after the teleport — the watchdog must not double-restore mid-flight). FFIX-B H1.
      */
     private static final Set<UUID> EXIT_IN_PROGRESS = new HashSet<>();
+    /**
+     * The leave-flow fix: the ticket anchor is captured the moment the player touches the
+     * portal volume, so {@link #exitToTicket} lands them back INSIDE the collision box and
+     * the next 10 t portal pass would swallow them again (minigames have no lockout to
+     * mask it). Players in this set must first STEP OUT of the portal volume once before
+     * the portal may take them again; cleared as soon as they stand clear.
+     */
+    private static final Set<UUID> AWAITING_PORTAL_CLEAR = new HashSet<>();
     private static long lastSeenRemainingMillis = Long.MAX_VALUE;
     private static long totalWindowMillisHint;
     /** Course generation finished for the current instance (entries bounce until true). */
@@ -158,10 +166,12 @@ public final class MinigameService {
         PENDING_LEAVE_CONFIRMS.clear();
         LAST_BOUNCE_MESSAGE.clear();
         EXIT_IN_PROGRESS.clear();
+        AWAITING_PORTAL_CLEAR.clear();
         lastSeenRemainingMillis = Long.MAX_VALUE;
         totalWindowMillisHint = 0L;
         courseReady = false;
         ArenaGame.resetTransient();
+        ElytraRace.resetTransient();
     }
 
     @SubscribeEvent
@@ -488,7 +498,17 @@ public final class MinigameService {
         MinigamePortal.ambientTick(level, portalPos, level.getGameTime());
         var box = MinigamePortal.collisionBox(portalPos);
         for (ServerPlayer player : List.copyOf(level.players())) {
-            if (!player.isSpectator() && player.isAlive() && box.intersects(player.getBoundingBox())) {
+            if (player.isSpectator() || !player.isAlive()) {
+                continue;
+            }
+            boolean inVolume = box.intersects(player.getBoundingBox());
+            if (AWAITING_PORTAL_CLEAR.contains(player.getUUID())) {
+                if (!inVolume) {
+                    AWAITING_PORTAL_CLEAR.remove(player.getUUID()); // stepped clear — re-armed
+                }
+                continue; // fresh exit still standing in the frame: never re-swallow
+            }
+            if (inVolume) {
                 tryEnter(server, state, player);
             }
         }
@@ -592,6 +612,9 @@ public final class MinigameService {
             EXIT_IN_PROGRESS.remove(player.getUUID());
         }
         player.fallDistance = 0.0F;
+        // The anchor usually sits inside the portal volume (captured at entry) — hold the
+        // portal off this player until they physically step out of the frame once.
+        AWAITING_PORTAL_CLEAR.add(player.getUUID());
 
         if (ticket != null) {
             MinigameState.restoreTicket(player, ticket);
@@ -780,6 +803,7 @@ public final class MinigameService {
         }
         PENDING_LEAVE_CONFIRMS.remove(player.getUUID());
         LAST_BOUNCE_MESSAGE.remove(player.getUUID());
+        AWAITING_PORTAL_CLEAR.remove(player.getUUID());
         ArenaGame.clearSpawnProtection(player);
         removeFromBossBar(player);
     }

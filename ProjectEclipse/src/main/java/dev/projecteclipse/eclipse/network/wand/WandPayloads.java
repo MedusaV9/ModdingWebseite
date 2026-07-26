@@ -1,6 +1,7 @@
 package dev.projecteclipse.eclipse.network.wand;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.backrooms.BackroomsRestrictions;
 import dev.projecteclipse.eclipse.wand.WandPowers;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -26,7 +27,7 @@ import net.neoforged.neoforge.network.registration.PayloadRegistrar;
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class WandPayloads {
-    private static final String VERSION = "w4wand2";
+    private static final String VERSION = "w4wand3"; // WANDFIX-3 added wand/cycle
 
     private WandPayloads() {}
 
@@ -37,6 +38,8 @@ public final class WandPayloads {
                 WandPayloads::handleCast);
         registrar.playToServer(C2SWandChoosePathPayload.TYPE, C2SWandChoosePathPayload.STREAM_CODEC,
                 WandPayloads::handleChoosePath);
+        registrar.playToServer(C2SWandCyclePayload.TYPE, C2SWandCyclePayload.STREAM_CODEC,
+                WandPayloads::handleCycle);
         registrar.playToClient(S2CWandProgressPayload.TYPE, S2CWandProgressPayload.STREAM_CODEC,
                 WandPayloads::handleProgress);
     }
@@ -47,6 +50,9 @@ public final class WandPayloads {
 
     private static void handleCast(C2SWandCastPayload payload, IPayloadContext context) {
         if (context.player() instanceof ServerPlayer player) {
+            if (BackroomsRestrictions.blocksCast(player)) {
+                return; // backrooms lockdown (user decree) — refusal chime fires inside
+            }
             WandPowers.handleCast(player, payload.mainHand());
         }
     }
@@ -54,6 +60,12 @@ public final class WandPayloads {
     private static void handleChoosePath(C2SWandChoosePathPayload payload, IPayloadContext context) {
         if (context.player() instanceof ServerPlayer player) {
             WandPowers.handleChoosePath(player, payload.pathId());
+        }
+    }
+
+    private static void handleCycle(C2SWandCyclePayload payload, IPayloadContext context) {
+        if (context.player() instanceof ServerPlayer player) {
+            WandPowers.handleCycle(player, payload.forward());
         }
     }
 }

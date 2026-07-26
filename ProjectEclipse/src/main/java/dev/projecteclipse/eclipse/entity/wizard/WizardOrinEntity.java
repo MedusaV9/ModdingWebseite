@@ -14,19 +14,19 @@ import dev.projecteclipse.eclipse.network.fx.FxPayloads;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.ParticleTypes;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerBossEvent;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.tags.DamageTypeTags;
+import net.minecraft.world.BossEvent;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.damagesource.DamageSource;
@@ -43,9 +43,7 @@ import net.minecraft.world.entity.ai.goal.RandomLookAroundGoal;
 import net.minecraft.world.entity.ai.goal.WaterAvoidingRandomStrollGoal;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
@@ -55,7 +53,8 @@ import software.bernie.geckolib.animation.AnimationController;
  * Orin the Sun-Reader / Orin der Sonnenleser — the hermit astronomer of the mountain
  * observatory (W4-WIZARD; {@code docs/plans_v3/ideas_wave4/IDEA-19_wand.md} §3): a
  * NEUTRAL named NPC ({@code eclipse:wizard_orin}, id FROZEN) who gates the veil-wand
- * catalyst behind an earn-or-take choice.
+ * catalyst behind combat — WANDFIX-5 retired the fetch-quest hand-over, the sun-core
+ * is now only ever TAKEN.
  *
  * <p><b>Neutral hermit</b>: wanders his observatory (leashed via
  * {@link #restrictTo(BlockPos, int)} + {@link MoveTowardsRestrictionGoal}), gazes at the
@@ -65,24 +64,35 @@ import software.bernie.geckolib.animation.AnimationController;
  *
  * <p><b>Dialogue</b>: right-click cycles four localized eclipse riddles
  * ({@code dialogue.eclipse.wizard_orin.1..4}, per-player rotation) as an "Orin:" chat
- * caption. While the player has not yet earned a catalyst, every fourth line is replaced
- * by the fetch-quest hint carrying the live remaining counts.</p>
+ * caption. Every fourth line is the combat challenge hint ({@code challenge_hint}) until
+ * the player has taken a core from him, then the victory acknowledgement
+ * ({@code challenge_taken}; ledger in {@link WizardData}, re-openable via
+ * {@code /dev wizard resetquest}).</p>
  *
- * <p><b>Fetch quest</b> (once per player, ledger in {@link WizardData}): bring
- * {@value #QUEST_AMETHYST} amethyst shards + {@value #QUEST_UMBRAL} umbral shard —
- * right-clicking with them in inventory consumes both and hands over one
- * {@code eclipse:wizard_catalyst}. The grant is recorded BEFORE the item spawns (no dupe
- * window), and {@code /dev wizard resetquest} re-opens the ledger.</p>
+ * <p><b>The fight</b> (WANDFIX-5; scripted in {@link #tick()}, Herald house pattern in
+ * miniature — no target goals, he only ever answers his attacker): damage from a player
+ * provokes him and raises a plain yellow bossbar. Three moves, each quoting one wand path
+ * (IDEA-19 §2 C: "the boss teaches the player what the wand can become"):</p>
+ * <ul>
+ *   <li><b>star_call</b> (Sternenfall): {@value #STAR_CALL_TELEGRAPH_TICKS}t rooted raise
+ *       telegraph (rising chimes + zone sparkles), then {@value #STAR_CALL_BOLTS} sky-bolts
+ *       (frozen {@code FX_LIGHTNING_STRIKE} ribbons) over the locked zone,
+ *       {@value #STAR_CALL_DAMAGE} dmg near each impact.</li>
+ *   <li><b>sun_flare</b> (Glutpfad): punishes melee crowding — {@value
+ *       #SUN_FLARE_TELEGRAPH_TICKS}t rooted gather (inrushing flame ring), then a radiant
+ *       nova: {@value #SUN_FLARE_DAMAGE} dmg + knockback + a short searing burn within
+ *       {@value #SUN_FLARE_RADIUS} blocks.</li>
+ *   <li><b>veil_step</b> (Risspfad): an attacker closing to melee is answered with a short
+ *       blink to safe ground inside his summit leash (collision-checked candidates,
+ *       {@value #VEIL_STEP_COOLDOWN_TICKS}t cooldown).</li>
+ * </ul>
  *
- * <p><b>Or take it</b>: damage from a player provokes him. He stands his ground and
- * answers with <b>star_call</b> — a telegraphed mini star shower (the raise anim +
- * rising chimes for {@value #STAR_CALL_TELEGRAPH_TICKS}t, then
- * {@value #STAR_CALL_BOLTS} visual sky-bolts via the frozen {@code FX_LIGHTNING_STRIKE}
- * payload raining over the attacker's marked zone, {@value #STAR_CALL_DAMAGE} dmg near
- * each impact). The attack deliberately quotes the Sternenfall wand path (IDEA-19 §2 C:
- * "the boss teaches the player what the wand can become"). On death he drops exactly ONE
- * catalyst ({@link #dropCustomDeathLoot}) and {@link WizardService} respawns him at his
- * hut the next overworld day.</p>
+ * <p><b>Unveiled</b> at ≤50% health: one bark ({@code unveil}), then faster cooldowns,
+ * shorter telegraphs and denser bolt showers. Leaving the summit (or dying) calms him;
+ * he heals to full like the Herald's arena reset. On death he drops exactly ONE catalyst
+ * ({@link #dropCustomDeathLoot}), the killer is recorded in the {@link WizardData} ledger
+ * (so the dialogue can acknowledge the victor), and {@link WizardService} respawns him at
+ * his hut the next overworld day.</p>
  */
 public class WizardOrinEntity extends EclipseGeoMob {
     /** Frozen §6 entity path — geo/anim/texture triple + animation ids key off this. */
@@ -94,23 +104,39 @@ public class WizardOrinEntity extends EclipseGeoMob {
     public static final String ANIM_GREET = "greet";
     public static final String ANIM_TRADE = "trade";
 
-    /** Fetch quest cost (IDEA-19 §1.3 economy sink, resolved against live registries). */
-    public static final int QUEST_AMETHYST = 8;
-    public static final int QUEST_UMBRAL = 1;
-
     /** Scripted sit-down-fade death length ({@code animation.wizard_orin.death} = 2.0 s). */
     public static final int DEATH_DURATION_TICKS = 40;
 
     /** How far from home Orin will wander (restriction radius, blocks). */
     public static final int HOME_RADIUS = 10;
 
-    private static final int STAR_CALL_COOLDOWN_TICKS = 140;
+    // --- star_call (Sternenfall quote): telegraph → sky-bolt shower over a locked zone ---
+    private static final int STAR_CALL_COOLDOWN_TICKS = 120;
+    private static final int STAR_CALL_COOLDOWN_UNVEILED = 90;
     private static final int STAR_CALL_TELEGRAPH_TICKS = 25;
-    private static final int STAR_CALL_BOLTS = 8;
+    private static final int STAR_CALL_TELEGRAPH_UNVEILED = 18;
+    private static final int STAR_CALL_BOLTS = 10;
+    private static final int STAR_CALL_BOLTS_UNVEILED = 14;
     private static final int STAR_CALL_BOLT_INTERVAL = 5;
-    private static final double STAR_CALL_ZONE_RADIUS = 3.5D;
+    private static final double STAR_CALL_ZONE_RADIUS = 4.0D;
     private static final double STAR_CALL_HIT_RADIUS = 2.2D;
-    private static final float STAR_CALL_DAMAGE = 5.0F;
+    private static final float STAR_CALL_DAMAGE = 6.0F;
+    // --- sun_flare (Glut quote): rooted gather → radiant melee-punish nova ---
+    private static final int SUN_FLARE_COOLDOWN_TICKS = 160;
+    private static final int SUN_FLARE_COOLDOWN_UNVEILED = 110;
+    private static final int SUN_FLARE_TELEGRAPH_TICKS = 15;
+    private static final double SUN_FLARE_RADIUS = 4.5D;
+    private static final float SUN_FLARE_DAMAGE = 7.0F;
+    private static final int SUN_FLARE_FIRE_TICKS = 60;
+    private static final float SUN_FLARE_KNOCKBACK = 1.1F;
+    // --- veil_step (Riss quote): melee-pressure escape blink inside the summit leash ---
+    private static final int VEIL_STEP_COOLDOWN_TICKS = 100;
+    private static final double VEIL_STEP_TRIGGER_RANGE = 3.5D;
+    private static final double VEIL_STEP_MIN_DIST = 5.0D;
+    private static final double VEIL_STEP_MAX_DIST = 9.0D;
+    private static final int VEIL_STEP_ATTEMPTS = 12;
+    /** Health fraction at which the one-time "unveil" phase shift fires. */
+    private static final float UNVEIL_FRACTION = 0.5F;
     /** Provocation memory: calm down after this long without being hurt again. */
     private static final int PROVOKED_TICKS = 600;
     private static final double GREET_RANGE = 6.0D;
@@ -131,20 +157,35 @@ public class WizardOrinEntity extends EclipseGeoMob {
     private int boltTimer;
     @Nullable
     private Vec3 starZone;
+    private int flareTelegraph = -1;
+    private int flareCooldown = 40;
+    private int veilCooldown;
+    private boolean unveiled;
     private final Map<UUID, Integer> dialogueCursor = new HashMap<>();
     private final Map<UUID, Long> greetedAt = new HashMap<>();
+
+    /** WANDFIX-5 mini-boss bar: plain yellow, only visible while he is provoked. */
+    private final ServerBossEvent bossEvent = new ServerBossEvent(
+            Component.translatable("name.eclipse.wizard_orin"),
+            BossEvent.BossBarColor.YELLOW, BossEvent.BossBarOverlay.PROGRESS);
 
     public WizardOrinEntity(EntityType<? extends WizardOrinEntity> entityType, Level level) {
         super(entityType, level);
         this.setPersistenceRequired();
+        this.bossEvent.setVisible(false);
     }
 
-    /** A sturdy but killable hermit: 60 HP, no melee, sure-footed on his summit. */
+    /**
+     * WANDFIX-5 combat statblock: a real gate fight now that the core is combat-only —
+     * 160 HP / armor 6 sits deliberately at roughly half a solo Herald (300 HP), tuned
+     * for an iron-to-diamond-kit player. Still no melee: all pressure is scripted casts.
+     */
     public static AttributeSupplier.Builder createAttributes() {
         return createMobAttributes()
-                .add(Attributes.MAX_HEALTH, 60.0D)
-                .add(Attributes.MOVEMENT_SPEED, 0.28D)
-                .add(Attributes.KNOCKBACK_RESISTANCE, 0.4D)
+                .add(Attributes.MAX_HEALTH, 160.0D)
+                .add(Attributes.ARMOR, 6.0D)
+                .add(Attributes.MOVEMENT_SPEED, 0.3D)
+                .add(Attributes.KNOCKBACK_RESISTANCE, 0.8D)
                 .add(Attributes.FOLLOW_RANGE, 48.0D);
     }
 
@@ -198,7 +239,7 @@ public class WizardOrinEntity extends EclipseGeoMob {
         this.entityData.set(DATA_CASTING, casting);
     }
 
-    // --- ticking (greeting + the scripted star_call defense) ---
+    // --- ticking (greeting + the scripted three-move fight) ---
 
     @Override
     public void tick() {
@@ -209,7 +250,11 @@ public class WizardOrinEntity extends EclipseGeoMob {
         }
         tickGreeting(serverLevel);
         tickProvocation(serverLevel);
-        tickStarCall(serverLevel);
+        tickCombat(serverLevel);
+        this.bossEvent.setVisible(isProvoked());
+        if (isProvoked()) {
+            this.bossEvent.setProgress(this.getHealth() / this.getMaxHealth());
+        }
     }
 
     /** A small "hmm?" hum for players stepping close — once per player per minute. */
@@ -251,6 +296,10 @@ public class WizardOrinEntity extends EclipseGeoMob {
             this.telegraphTimer = -1;
             this.boltsLeft = 0;
             this.starZone = null;
+            this.flareTelegraph = -1;
+            this.flareCooldown = 40;
+            this.veilCooldown = 0;
+            this.unveiled = false;
             setCasting(false);
             this.setHealth(this.getMaxHealth()); // The mountain mends its keeper.
         }
@@ -267,12 +316,19 @@ public class WizardOrinEntity extends EclipseGeoMob {
     }
 
     /**
-     * The scripted star_call cycle: cooldown → {@value #STAR_CALL_TELEGRAPH_TICKS}t
-     * rooted raise (anim + rising chime + zone marker particles = the fairness
-     * telegraph) → {@value #STAR_CALL_BOLTS} sky-bolts released over the locked zone,
-     * one per {@value #STAR_CALL_BOLT_INTERVAL}t.
+     * The scripted WANDFIX-5 fight loop, priority-ordered: finish a running bolt shower →
+     * run a rooted telegraph (sun_flare, then star_call) → veil-step away from melee
+     * pressure → choose the next move (sun_flare if crowded, else star_call on cooldown).
+     * Every damaging move keeps a visible rooted telegraph — the fairness contract every
+     * boss in the mod honors.
      */
-    private void tickStarCall(ServerLevel level) {
+    private void tickCombat(ServerLevel level) {
+        if (this.flareCooldown > 0) {
+            this.flareCooldown--;
+        }
+        if (this.veilCooldown > 0) {
+            this.veilCooldown--;
+        }
         // Release phase: rain the remaining bolts over the locked zone.
         if (this.boltsLeft > 0) {
             if (--this.boltTimer <= 0) {
@@ -286,13 +342,31 @@ public class WizardOrinEntity extends EclipseGeoMob {
         if (attacker == null) {
             return;
         }
-        // Telegraph phase: rooted raise, zone sparkles where the stars will land.
+        maybeUnveil(level, attacker);
+        // sun_flare telegraph: rooted gather, flames rushing inward onto the caster.
+        if (this.flareTelegraph >= 0) {
+            this.getNavigation().stop();
+            this.getLookControl().setLookAt(attacker, 30.0F, 30.0F);
+            if (this.flareTelegraph % 3 == 0) {
+                double ring = SUN_FLARE_RADIUS * this.flareTelegraph / SUN_FLARE_TELEGRAPH_TICKS;
+                level.sendParticles(ParticleTypes.FLAME, this.getX(), this.getY() + 1.0D,
+                        this.getZ(), 10, Math.max(0.3D, ring * 0.5D), 0.3D,
+                        Math.max(0.3D, ring * 0.5D), 0.02D);
+            }
+            if (--this.flareTelegraph < 0) {
+                setCasting(false);
+                releaseSunFlare(level);
+            }
+            return;
+        }
+        // star_call telegraph: rooted raise, zone sparkles where the stars will land.
         if (this.telegraphTimer >= 0) {
+            int telegraphTicks = unveiled ? STAR_CALL_TELEGRAPH_UNVEILED : STAR_CALL_TELEGRAPH_TICKS;
             this.getNavigation().stop();
             this.getLookControl().setLookAt(attacker, 30.0F, 30.0F);
             if (this.starZone != null && this.telegraphTimer % 5 == 0) {
-                int elapsed = STAR_CALL_TELEGRAPH_TICKS - this.telegraphTimer;
-                float pitch = 0.9F + elapsed / (float) STAR_CALL_TELEGRAPH_TICKS * 0.8F;
+                int elapsed = telegraphTicks - this.telegraphTimer;
+                float pitch = 0.9F + elapsed / (float) telegraphTicks * 0.8F;
                 level.playSound(null, BlockPos.containing(this.starZone),
                         SoundEvents.AMETHYST_BLOCK_CHIME, SoundSource.NEUTRAL, 1.2F, pitch);
                 level.sendParticles(ParticleTypes.END_ROD, this.starZone.x,
@@ -301,19 +375,27 @@ public class WizardOrinEntity extends EclipseGeoMob {
             }
             if (--this.telegraphTimer < 0) {
                 setCasting(false);
-                this.boltsLeft = STAR_CALL_BOLTS;
+                this.boltsLeft = unveiled ? STAR_CALL_BOLTS_UNVEILED : STAR_CALL_BOLTS;
                 this.boltTimer = 1;
                 EclipseMod.LOGGER.info("Orin star_call released: {} bolts over ({})",
-                        STAR_CALL_BOLTS, this.starZone == null ? "?" : this.starZone.toString());
+                        this.boltsLeft, this.starZone == null ? "?" : this.starZone.toString());
             }
+            return;
+        }
+        // veil_step: melee crowding between casts is answered with a short blink away.
+        tryVeilStep(level, attacker);
+        // sun_flare beats star_call whenever the attacker sits in nova range.
+        if (this.flareCooldown <= 0
+                && this.distanceToSqr(attacker) <= SUN_FLARE_RADIUS * SUN_FLARE_RADIUS) {
+            startSunFlare(level);
             return;
         }
         if (--this.castCooldown > 0) {
             return;
         }
         // Wind up a new shower on the attacker's current ground position.
-        this.castCooldown = STAR_CALL_COOLDOWN_TICKS;
-        this.telegraphTimer = STAR_CALL_TELEGRAPH_TICKS;
+        this.castCooldown = unveiled ? STAR_CALL_COOLDOWN_UNVEILED : STAR_CALL_COOLDOWN_TICKS;
+        this.telegraphTimer = unveiled ? STAR_CALL_TELEGRAPH_UNVEILED : STAR_CALL_TELEGRAPH_TICKS;
         this.starZone = attacker.position();
         setCasting(true);
         triggerAction(ANIM_STAR_CALL);
@@ -321,10 +403,109 @@ public class WizardOrinEntity extends EclipseGeoMob {
         level.playSound(null, this.blockPosition(), SoundEvents.EVOKER_PREPARE_SUMMON,
                 SoundSource.NEUTRAL, 0.9F, 1.5F);
         EclipseMod.LOGGER.info("Orin star_call telegraphed: {}t over ({}, {}, {})",
-                STAR_CALL_TELEGRAPH_TICKS,
+                this.telegraphTimer,
                 String.format(java.util.Locale.ROOT, "%.1f", this.starZone.x),
                 String.format(java.util.Locale.ROOT, "%.1f", this.starZone.y),
                 String.format(java.util.Locale.ROOT, "%.1f", this.starZone.z));
+    }
+
+    /**
+     * The one-time ≤{@value #UNVEIL_FRACTION} phase shift: one bark, a resonant flash,
+     * and every cooldown window tightens (the constants' {@code _UNVEILED} variants).
+     */
+    private void maybeUnveil(ServerLevel level, ServerPlayer attacker) {
+        if (this.unveiled || this.getHealth() > this.getMaxHealth() * UNVEIL_FRACTION) {
+            return;
+        }
+        this.unveiled = true;
+        say(attacker, Component.translatable("dialogue.eclipse.wizard_orin.unveil"));
+        this.castCooldown = Math.min(this.castCooldown, 20);
+        this.flareCooldown = Math.min(this.flareCooldown, 40);
+        level.playSound(null, this.blockPosition(), SoundEvents.AMETHYST_BLOCK_RESONATE,
+                SoundSource.NEUTRAL, 1.4F, 0.9F);
+        level.sendParticles(ParticleTypes.END_ROD, this.getX(), this.getY() + 1.2D, this.getZ(),
+                30, 0.6D, 0.9D, 0.6D, 0.1D);
+        EclipseMod.LOGGER.info("Orin unveiled at {}/{} HP — cooldowns tightened",
+                String.format(java.util.Locale.ROOT, "%.1f", this.getHealth()), this.getMaxHealth());
+    }
+
+    /** sun_flare wind-up: the same raise anim, but flames gather instead of chimes. */
+    private void startSunFlare(ServerLevel level) {
+        this.flareTelegraph = SUN_FLARE_TELEGRAPH_TICKS;
+        this.flareCooldown = unveiled ? SUN_FLARE_COOLDOWN_UNVEILED : SUN_FLARE_COOLDOWN_TICKS;
+        setCasting(true);
+        triggerAction(ANIM_STAR_CALL);
+        this.getNavigation().stop();
+        level.playSound(null, this.blockPosition(), SoundEvents.EVOKER_PREPARE_ATTACK,
+                SoundSource.NEUTRAL, 0.9F, 0.8F);
+        EclipseMod.LOGGER.info("Orin sun_flare telegraphed: {}t", SUN_FLARE_TELEGRAPH_TICKS);
+    }
+
+    /** sun_flare payoff: radiant nova — damage + knockback + a short searing burn. */
+    private void releaseSunFlare(ServerLevel level) {
+        level.playSound(null, this.blockPosition(), SoundEvents.FIRECHARGE_USE,
+                SoundSource.NEUTRAL, 1.0F, 0.8F);
+        level.sendParticles(ParticleTypes.FLAME, this.getX(), this.getY() + 1.0D, this.getZ(),
+                40, SUN_FLARE_RADIUS * 0.5D, 0.6D, SUN_FLARE_RADIUS * 0.5D, 0.12D);
+        level.sendParticles(ParticleTypes.LAVA, this.getX(), this.getY() + 0.5D, this.getZ(),
+                8, 0.5D, 0.3D, 0.5D, 0.0D);
+        int hit = 0;
+        for (LivingEntity target : level.getEntitiesOfClass(LivingEntity.class,
+                this.getBoundingBox().inflate(SUN_FLARE_RADIUS),
+                entity -> entity != this && entity.isAlive())) {
+            target.hurt(level.damageSources().indirectMagic(this, this), SUN_FLARE_DAMAGE);
+            target.knockback(SUN_FLARE_KNOCKBACK,
+                    this.getX() - target.getX(), this.getZ() - target.getZ());
+            target.setRemainingFireTicks(Math.max(target.getRemainingFireTicks(), SUN_FLARE_FIRE_TICKS));
+            hit++;
+        }
+        EclipseMod.LOGGER.info("Orin sun_flare released: {} target(s) seared", hit);
+    }
+
+    /**
+     * veil_step: when the attacker closes to {@value #VEIL_STEP_TRIGGER_RANGE} between
+     * casts, blink {@value #VEIL_STEP_MIN_DIST}–{@value #VEIL_STEP_MAX_DIST} blocks to
+     * collision-checked ground near his leash (the wand's own blink candidate pattern,
+     * {@code WandPowers.findBlinkTarget}). No damage — pure repositioning.
+     */
+    private void tryVeilStep(ServerLevel level, ServerPlayer attacker) {
+        if (this.veilCooldown > 0
+                || this.distanceToSqr(attacker) > VEIL_STEP_TRIGGER_RANGE * VEIL_STEP_TRIGGER_RANGE) {
+            return;
+        }
+        Vec3 from = this.position();
+        for (int attempt = 0; attempt < VEIL_STEP_ATTEMPTS; attempt++) {
+            double angle = this.random.nextDouble() * Math.PI * 2.0D;
+            double dist = VEIL_STEP_MIN_DIST
+                    + this.random.nextDouble() * (VEIL_STEP_MAX_DIST - VEIL_STEP_MIN_DIST);
+            double x = from.x + Math.cos(angle) * dist;
+            double z = from.z + Math.sin(angle) * dist;
+            if (this.hasRestriction() && !this.getRestrictCenter().closerToCenterThan(
+                    new Vec3(x, this.getRestrictCenter().getY(), z), HOME_RADIUS + 4.0D)) {
+                continue; // Never blink off his own summit leash.
+            }
+            for (int dy = 3; dy >= -4; dy--) {
+                Vec3 feet = new Vec3(x, from.y + dy, z);
+                AABB box = this.getBoundingBox().move(feet.subtract(from));
+                if (!level.noCollision(this, box)
+                        || level.getBlockState(BlockPos.containing(feet).below()).isAir()) {
+                    continue;
+                }
+                level.sendParticles(ParticleTypes.REVERSE_PORTAL, from.x, from.y + 1.0D, from.z,
+                        16, 0.3D, 0.7D, 0.3D, 0.05D);
+                this.teleportTo(feet.x, feet.y, feet.z);
+                this.resetFallDistance();
+                this.veilCooldown = VEIL_STEP_COOLDOWN_TICKS;
+                level.sendParticles(ParticleTypes.REVERSE_PORTAL, feet.x, feet.y + 1.0D, feet.z,
+                        16, 0.3D, 0.7D, 0.3D, 0.05D);
+                level.playSound(null, BlockPos.containing(feet), SoundEvents.ENDERMAN_TELEPORT,
+                        SoundSource.NEUTRAL, 0.8F, 1.3F);
+                this.getLookControl().setLookAt(attacker, 30.0F, 30.0F);
+                EclipseMod.LOGGER.info("Orin veil_step: {} -> {}",
+                        from.toString(), feet.toString());
+                return;
+            }
+        }
     }
 
     /** One falling star: a thin sky ribbon (frozen FX payload) + burst + zone damage. */
@@ -353,7 +534,7 @@ public class WizardOrinEntity extends EclipseGeoMob {
         }
     }
 
-    // --- interaction (dialogue + fetch quest) ---
+    // --- interaction (dialogue; WANDFIX-5 removed the fetch-quest turn-in for good) ---
 
     @Override
     protected InteractionResult mobInteract(Player player, InteractionHand hand) {
@@ -371,78 +552,24 @@ public class WizardOrinEntity extends EclipseGeoMob {
             say(serverPlayer, Component.translatable("dialogue.eclipse.wizard_orin.provoked"));
             return InteractionResult.CONSUME;
         }
-        if (tryQuestTurnIn(serverLevel, serverPlayer)) {
-            return InteractionResult.CONSUME;
-        }
         speakLine(serverLevel, serverPlayer);
         return InteractionResult.CONSUME;
     }
 
     /**
-     * Fetch-quest turn-in: needs {@value #QUEST_AMETHYST} amethyst shards +
-     * {@value #QUEST_UMBRAL} umbral shard in inventory, once per player. Returns true
-     * only when the trade completed (items consumed, catalyst handed over).
+     * Rotates the four riddles per player; every fourth line is the combat challenge
+     * hint (WANDFIX-5 — the core is won, never traded), or the victory acknowledgement
+     * once the {@link WizardData} ledger says this player already took one.
      */
-    private boolean tryQuestTurnIn(ServerLevel level, ServerPlayer player) {
-        if (!WizardEntities.WIZARD_CATALYST.isBound()) {
-            return false; // Registrar not wired: dialogue-only NPC until the line lands.
-        }
-        WizardData data = WizardData.get(level.getServer().overworld());
-        Item umbral = umbralShardItem();
-        if (data.hasCatalyst(player.getUUID())) {
-            if (countItem(player, Items.AMETHYST_SHARD) >= QUEST_AMETHYST
-                    && umbral != null && countItem(player, umbral) >= QUEST_UMBRAL) {
-                say(player, Component.translatable("dialogue.eclipse.wizard_orin.quest_already"));
-                return true;
-            }
-            return false;
-        }
-        if (umbral == null || countItem(player, Items.AMETHYST_SHARD) < QUEST_AMETHYST
-                || countItem(player, umbral) < QUEST_UMBRAL) {
-            return false;
-        }
-        // Ledger first, then consume, then hand over — a crash mid-way can lose the
-        // trade (re-openable via /dev wizard resetquest) but can never dupe a catalyst.
-        if (!data.grantCatalyst(player.getUUID())) {
-            return false;
-        }
-        consumeItem(player, Items.AMETHYST_SHARD, QUEST_AMETHYST);
-        consumeItem(player, umbral, QUEST_UMBRAL);
-        ItemStack catalyst = new ItemStack(WizardEntities.WIZARD_CATALYST.get());
-        if (!player.getInventory().add(catalyst)) {
-            player.drop(catalyst, false);
-        }
-        say(player, Component.translatable("dialogue.eclipse.wizard_orin.quest_done"));
-        this.getLookControl().setLookAt(player, 30.0F, 30.0F);
-        triggerAction(ANIM_STAR_CALL); // A small ceremonial flourish over the hand-over.
-        level.playSound(null, this.blockPosition(), SoundEvents.VILLAGER_CELEBRATE,
-                SoundSource.NEUTRAL, 1.0F, 0.8F);
-        level.playSound(null, this.blockPosition(), SoundEvents.AMETHYST_BLOCK_RESONATE,
-                SoundSource.NEUTRAL, 1.2F, 1.3F);
-        level.sendParticles(ParticleTypes.END_ROD, this.getX(), this.getY() + 1.8D, this.getZ(),
-                20, 0.5D, 0.8D, 0.5D, 0.06D);
-        // NEWFX-A5 Catalyst Handover: shard indraw -> fuse flash -> star-trail drop,
-        // entity lane anchored on Orin (the END_ROD puff above stays as the photon-less
-        // floor; reducedFx clients keep exactly that baseline). a = 0 reserved.
-        FxPayloads.sendFxEntityEvent(level, dev.projecteclipse.eclipse.network.fx.FxCues.CUE_WIZARD_CATALYST,
-                this, 0.0F, 0.0F, 48.0D);
-        EclipseMod.LOGGER.info("Orin fetch quest complete: {} traded {} amethyst + {} umbral for a catalyst",
-                player.getScoreboardName(), QUEST_AMETHYST, QUEST_UMBRAL);
-        return true;
-    }
-
-    /** Rotates the four riddles per player; unearned players get the quest hint 1-in-4. */
     private void speakLine(ServerLevel level, ServerPlayer player) {
         WizardData data = WizardData.get(level.getServer().overworld());
         int cursor = this.dialogueCursor.merge(player.getUUID(), 1, Integer::sum) - 1;
         boolean earned = data.hasCatalyst(player.getUUID());
         Component line;
-        if (!earned && cursor % DIALOGUE_LINES == DIALOGUE_LINES - 1) {
-            Item umbral = umbralShardItem();
-            int haveAmethyst = countItem(player, Items.AMETHYST_SHARD);
-            int haveUmbral = umbral == null ? 0 : countItem(player, umbral);
-            line = Component.translatable("dialogue.eclipse.wizard_orin.quest_hint",
-                    Math.max(0, QUEST_AMETHYST - haveAmethyst), Math.max(0, QUEST_UMBRAL - haveUmbral));
+        if (cursor % DIALOGUE_LINES == DIALOGUE_LINES - 1) {
+            line = Component.translatable(earned
+                    ? "dialogue.eclipse.wizard_orin.challenge_taken"
+                    : "dialogue.eclipse.wizard_orin.challenge_hint");
         } else {
             line = Component.translatable("dialogue.eclipse.wizard_orin." + (cursor % DIALOGUE_LINES + 1));
         }
@@ -466,39 +593,6 @@ public class WizardOrinEntity extends EclipseGeoMob {
                 .append(line.copy().withStyle(ChatFormatting.YELLOW))));
     }
 
-    // --- inventory helpers (main + off hand + backpack rows) ---
-
-    /** By-id lookup (zero compile-time coupling to the P4-owned registry entry). */
-    @Nullable
-    private static Item umbralShardItem() {
-        return BuiltInRegistries.ITEM.getOptional(
-                ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "umbral_shard")).orElse(null);
-    }
-
-    private static int countItem(Player player, Item item) {
-        int count = 0;
-        for (int slot = 0; slot < player.getInventory().getContainerSize(); slot++) {
-            ItemStack stack = player.getInventory().getItem(slot);
-            if (stack.is(item)) {
-                count += stack.getCount();
-            }
-        }
-        return count;
-    }
-
-    private static void consumeItem(Player player, Item item, int amount) {
-        int remaining = amount;
-        for (int slot = 0; slot < player.getInventory().getContainerSize() && remaining > 0; slot++) {
-            ItemStack stack = player.getInventory().getItem(slot);
-            if (stack.is(item)) {
-                int take = Math.min(remaining, stack.getCount());
-                stack.shrink(take);
-                remaining -= take;
-            }
-        }
-        player.containerMenu.broadcastChanges();
-    }
-
     // --- combat hooks (provocation + flinch) ---
 
     @Override
@@ -515,7 +609,7 @@ public class WizardOrinEntity extends EclipseGeoMob {
                     EclipseMod.LOGGER.info("Orin provoked by {}", attacker.getScoreboardName());
                 }
             }
-            if (this.telegraphTimer < 0) {
+            if (this.telegraphTimer < 0 && this.flareTelegraph < 0) {
                 triggerAction(ANIM_HURT); // Flinch, unless mid-raise (the cast reads through).
             }
         }
@@ -527,9 +621,18 @@ public class WizardOrinEntity extends EclipseGeoMob {
         super.die(damageSource);
         if (!this.level().isClientSide) {
             setCasting(false);
+            this.bossEvent.setVisible(false);
+            this.bossEvent.removeAllPlayers();
             triggerAction(EclipseGeoAnimations.ANIM_DEATH); // Sit-down-fade, held.
             if (this.level() instanceof ServerLevel serverLevel) {
                 WizardService.onWizardDied(serverLevel, this);
+                // WANDFIX-5 victory ledger: remember who took a core in combat so the
+                // dialogue acknowledges the victor (challenge_taken). Same once-per-player
+                // semantics as before; /dev wizard resetquest still re-opens it.
+                if (damageSource.getEntity() instanceof ServerPlayer killer) {
+                    WizardData.get(serverLevel.getServer().overworld())
+                            .grantCatalyst(killer.getUUID());
+                }
             }
             EclipseMod.LOGGER.info("Orin died ({}) — catalyst drop + next-day respawn scheduled",
                     damageSource.getMsgId());
@@ -571,6 +674,28 @@ public class WizardOrinEntity extends EclipseGeoMob {
         ItemEntity drop = this.spawnAtLocation(new ItemStack(WizardEntities.WIZARD_CATALYST.get()));
         if (drop != null) {
             drop.setUnlimitedLifetime(); // Never let the summit wind despawn the gate item.
+        }
+    }
+
+    // --- bossbar bookkeeping (Herald pattern; the bar itself only shows while provoked) ---
+
+    @Override
+    public void startSeenByPlayer(ServerPlayer player) {
+        super.startSeenByPlayer(player);
+        this.bossEvent.addPlayer(player);
+    }
+
+    @Override
+    public void stopSeenByPlayer(ServerPlayer player) {
+        super.stopSeenByPlayer(player);
+        this.bossEvent.removePlayer(player);
+    }
+
+    @Override
+    public void setCustomName(@Nullable Component name) {
+        super.setCustomName(name);
+        if (name != null) {
+            this.bossEvent.setName(name);
         }
     }
 

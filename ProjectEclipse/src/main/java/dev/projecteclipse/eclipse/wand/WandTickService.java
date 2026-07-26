@@ -109,18 +109,28 @@ public final class WandTickService {
         });
     }
 
-    /** Starts a Feuerwelle ring march around {@code center} (see {@code WandPowers#castFeuerwelle}). */
+    /**
+     * Starts a Feuerwelle ring march around {@code center} (see
+     * {@code WandPowers#castFeuerwelle}). WANDFIX-2: {@code burnBonus} &gt; 1 multiplies
+     * the ring damage against targets that are ALREADY burning when the front arrives.
+     */
     public static void startFireWave(ServerPlayer caster, Vec3 center, float maxRadius,
-            int expandTicks, float damage, int fireTicks, float knockup) {
+            int expandTicks, float damage, int fireTicks, float knockup, float burnBonus) {
         FIRE_WAVES.add(new FireWave(caster.getUUID(), caster.serverLevel(), center,
-                Math.max(2.0F, maxRadius), Math.max(5, expandTicks), damage, fireTicks, knockup));
+                Math.max(2.0F, maxRadius), Math.max(5, expandTicks), damage, fireTicks, knockup,
+                burnBonus));
     }
 
-    /** Tracks the Magmasprung caster until landing (see {@code WandPowers#castMagmasprung}). */
+    /**
+     * Tracks the Magmasprung caster until landing (see {@code WandPowers#castMagmasprung}).
+     * WANDFIX-2: {@code eruptRadius} &gt; 0 rolls a landing ember ring (a mini-Feuerwelle)
+     * out of the crater on touchdown — the L5 Eruptionskrater.
+     */
     public static void trackMagmaJump(ServerPlayer caster, float damage, float radius,
-            float knockback, int fireTicks) {
+            float knockback, int fireTicks, float eruptRadius, float eruptDamage,
+            int eruptFireTicks) {
         MAGMA_JUMPS.add(new MagmaJump(caster.getUUID(), caster.serverLevel(), damage, radius,
-                knockback, fireTicks));
+                knockback, fireTicks, eruptRadius, eruptDamage, eruptFireTicks));
     }
 
     // ------------------------------------------------------------------ lifecycle
@@ -231,12 +241,14 @@ public final class WandTickService {
         final float damage;
         final int fireTicks;
         final float knockup;
+        /** WANDFIX-2 burn combo: multiplier against targets already on fire (1 = off). */
+        final float burnBonus;
         final Set<Integer> hit = new HashSet<>();
         int age;
         float lastRadius;
 
         FireWave(UUID casterId, ServerLevel level, Vec3 center, float maxRadius, int expandTicks,
-                float damage, int fireTicks, float knockup) {
+                float damage, int fireTicks, float knockup, float burnBonus) {
             this.casterId = casterId;
             this.level = level;
             this.center = center;
@@ -245,6 +257,7 @@ public final class WandTickService {
             this.damage = damage;
             this.fireTicks = fireTicks;
             this.knockup = knockup;
+            this.burnBonus = burnBonus;
         }
 
         boolean tick() {
@@ -321,10 +334,13 @@ public final class WandTickService {
                     continue;
                 }
                 hit.add(victim.getId());
+                // WANDFIX-2 burn combo: read the fire state BEFORE this hit ignites them —
+                // Glutstoß pre-burn (or the L4 first ring) feeds the bonus.
+                float dealt = burnBonus > 1.0F && victim.isOnFire() ? damage * burnBonus : damage;
                 if (caster != null) {
-                    WandPowers.damageAround(caster, victim.position(), 0.5F, damage, 0.0F, fireTicks);
+                    WandPowers.damageAround(caster, victim.position(), 0.5F, dealt, 0.0F, fireTicks);
                 } else {
-                    victim.hurt(level.damageSources().onFire(), damage);
+                    victim.hurt(level.damageSources().onFire(), dealt);
                     victim.setRemainingFireTicks(Math.max(victim.getRemainingFireTicks(), fireTicks));
                 }
                 victim.push(0.0D, knockup, 0.0D);
@@ -362,17 +378,24 @@ public final class WandTickService {
         final float radius;
         final float knockback;
         final int fireTicks;
+        /** WANDFIX-2 Eruptionskrater (L5): landing ember-ring tuning (radius 0 = off). */
+        final float eruptRadius;
+        final float eruptDamage;
+        final int eruptFireTicks;
         boolean airborne;
         int age;
 
         MagmaJump(UUID casterId, ServerLevel level, float damage, float radius, float knockback,
-                int fireTicks) {
+                int fireTicks, float eruptRadius, float eruptDamage, int eruptFireTicks) {
             this.casterId = casterId;
             this.level = level;
             this.damage = damage;
             this.radius = radius;
             this.knockback = knockback;
             this.fireTicks = fireTicks;
+            this.eruptRadius = eruptRadius;
+            this.eruptDamage = eruptDamage;
+            this.eruptFireTicks = eruptFireTicks;
         }
 
         boolean tick() {
@@ -408,6 +431,12 @@ public final class WandTickService {
             caster.resetFallDistance();
             Vec3 impact = caster.position();
             WandPowers.damageAround(caster, impact, radius, damage, knockback, fireTicks);
+            if (eruptRadius > 0.0F) {
+                // WANDFIX-2 Eruptionskrater: a mini fire wave rolls out of the crater —
+                // the L5 landing is an opener, not just a slam.
+                startFireWave(caster, impact, eruptRadius, 16, eruptDamage, eruptFireTicks,
+                        0.3F, 1.0F);
+            }
             WandPowers.sendQuasar(level, WandPowers.GLUT_SPRUNG_CRATER, impact);
             // PH-PLAYER (IDEAS-player #5): landing re-send of the launch cue over the
             // POSITION lane (b = 1 marks touchdown) — same eruption asset, ground-anchored;

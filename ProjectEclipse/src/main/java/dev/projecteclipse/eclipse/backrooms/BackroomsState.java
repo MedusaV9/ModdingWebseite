@@ -29,10 +29,11 @@ import net.minecraft.world.level.saveddata.SavedData;
  * template:
  *
  * <ul>
- *   <li>{@link #stampCursor()} — budgeted-maze-stamp progress during ANNOUNCED (IDEAS
- *       §A1: OPEN flips only once the stamp finishes); persists so a crash mid-stamp
- *       resumes where it stopped — the maze itself is a pure function of
- *       {@link BackroomsMaze#mazeSeed}, so re-stamped cells are byte-identical.</li>
+ *   <li>{@link #markLootFilled(long)} — the once-per-instance loot-barrel ledger: the
+ *       terrain generator places LOOT_ALCOVE barrels EMPTY (the maze is generated
+ *       terrain now, not a per-instance stamp), and the service fills each barrel
+ *       lazily the first time a player comes near it, salted by the per-instance
+ *       {@link #mazeSeed()} — so loot refreshes each event without re-stamping.</li>
  *   <li>{@link #markScared(UUID)} — the once-per-instance jumpscare set (IDEAS §A4,
  *       the {@code markRewardGranted()} persistence law: relogs cannot re-arm it).</li>
  *   <li>{@link #markWhispered(UUID)} — the rare once-per-instance WHISPER caption
@@ -71,8 +72,8 @@ public final class BackroomsState extends SavedData {
     private Phase phase = Phase.IDLE;
     private long endsAtEpochMillis;
     private int instanceId;
-    /** Budgeted stamp progress: next {@link BackroomsMaze#stampUnit} index to run. */
-    private int stampCursor;
+    /** Cell keys of loot barrels already filled THIS instance (lazy per-instance loot). */
+    private final Set<Long> lootFilled = new HashSet<>();
     @Nullable
     private ResourceKey<Level> portalDimension;
     @Nullable
@@ -122,19 +123,23 @@ public final class BackroomsState extends SavedData {
         return instanceId;
     }
 
-    /** Per-instance maze seed (IDEAS §A1: {@code ECLIPSE_SEED ^ salt ^ instanceId}). */
+    /**
+     * Per-instance LOOT seed ({@code ECLIPSE_SEED ^ salt ^ instanceId}) — the maze
+     * LAYOUT is terrain-generated from the per-world {@link BackroomsMaze#worldSeed()};
+     * only the barrel loot rolls re-seed per instance.
+     */
     public long mazeSeed() {
         return BackroomsMaze.mazeSeed(instanceId);
     }
 
     /**
-     * Starts a fresh event instance: bumps {@link #instanceId()} (which reseeds the maze),
-     * resets the stamp cursor and all per-instance sets, prunes stale lockouts.
+     * Starts a fresh event instance: bumps {@link #instanceId()} (which reseeds the
+     * loot), resets all per-instance sets, prunes stale lockouts.
      */
     public void beginInstance(long endsAt) {
         this.instanceId++;
         this.endsAtEpochMillis = endsAt;
-        this.stampCursor = 0;
+        this.lootFilled.clear();
         this.exitPortalPos = null;
         this.participants.clear();
         this.returnAnchors.clear();
@@ -149,19 +154,15 @@ public final class BackroomsState extends SavedData {
         setDirty();
     }
 
-    // ------------------------------------------------------------------ stamp cursor
+    // ------------------------------------------------------------------ loot ledger
 
-    public int stampCursor() {
-        return stampCursor;
-    }
-
-    public void setStampCursor(int cursor) {
-        this.stampCursor = cursor;
-        setDirty();
-    }
-
-    public boolean stampComplete() {
-        return stampCursor >= BackroomsMaze.totalStampUnits();
+    /** @return true only for the FIRST fill of this loot-barrel cell this instance. */
+    public boolean markLootFilled(long cellKey) {
+        boolean added = lootFilled.add(cellKey);
+        if (added) {
+            setDirty();
+        }
+        return added;
     }
 
     // ------------------------------------------------------------------ portals
@@ -323,8 +324,10 @@ public final class BackroomsState extends SavedData {
         state.phase = Phase.byName(tag.getString("phase"));
         state.endsAtEpochMillis = tag.getLong("endsAtEpochMillis");
         state.instanceId = tag.getInt("instanceId");
-        state.stampCursor = tag.getInt("stampCursor");
         state.rewardGranted = tag.getBoolean("rewardGranted");
+        for (long cellKey : tag.getLongArray("lootFilled")) {
+            state.lootFilled.add(cellKey);
+        }
 
         if (tag.contains("portal", Tag.TAG_COMPOUND)) {
             CompoundTag portal = tag.getCompound("portal");
@@ -379,8 +382,8 @@ public final class BackroomsState extends SavedData {
         tag.putString("phase", phase.name().toLowerCase(Locale.ROOT));
         tag.putLong("endsAtEpochMillis", endsAtEpochMillis);
         tag.putInt("instanceId", instanceId);
-        tag.putInt("stampCursor", stampCursor);
         tag.putBoolean("rewardGranted", rewardGranted);
+        tag.putLongArray("lootFilled", lootFilled.stream().mapToLong(Long::longValue).toArray());
 
         if (portalDimension != null && portalPos != null) {
             CompoundTag portal = new CompoundTag();

@@ -48,7 +48,8 @@ import software.bernie.geckolib.animation.RawAnimation;
  *       combat-target case.</li>
  *   <li><b>Melee only when crowded</b>: the unprovoked target selector requires
  *       ≤ {@value #ATTACK_TRIGGER_RANGE} blocks ({@code TheOtherEntity.ATTACK_TRIGGER_RANGE}
- *       -style predicate); {@code FOLLOW_RANGE} 48 covers the long highway sightlines.</li>
+ *       -style predicate); {@code FOLLOW_RANGE} {@value #DETECTION_RANGE} — the user decree
+ *       caps detection at 20 blocks (no cross-map stalking).</li>
  *   <li><b>Glitch blink / corrupted voice</b>: inherited (200–280 t blink cadence,
  *       {@code ZOMBIE_AMBIENT} through the unstable 0.6–1.4 voice pitch).</li>
  * </ul>
@@ -75,6 +76,10 @@ public class GlitchedWandererEntity extends GlitchedHuskEntity {
     public static final double ATTACK_TRIGGER_RANGE = 3.0D;
     /** {@link PaceGoal} stops and stares at this distance (IDEAS §A3.1: 12). */
     public static final double STARE_RANGE = 12.0D;
+    /** User decree: backrooms mobs only notice players within 20 blocks. */
+    public static final double DETECTION_RANGE = 20.0D;
+    /** Pursuit keeps a small hysteresis over {@link #DETECTION_RANGE} (no goal thrash). */
+    private static final double PURSUIT_DROP_RANGE = 24.0D;
     /** Pace speed modifier — corridor-walking pace over the 0.27 base. */
     private static final double PACE_SPEED = 0.85D;
 
@@ -100,13 +105,13 @@ public class GlitchedWandererEntity extends GlitchedHuskEntity {
         super(entityType, level);
     }
 
-    /** Husk stats with the corridor-length follow range (IDEAS §A3.1: 48). */
+    /** Husk stats with the decree-capped detection range ({@value #DETECTION_RANGE}). */
     public static AttributeSupplier.Builder createAttributes() {
         return Monster.createMonsterAttributes()
                 .add(Attributes.MAX_HEALTH, 30.0D)
                 .add(Attributes.ATTACK_DAMAGE, 5.0D)
                 .add(Attributes.MOVEMENT_SPEED, 0.27D)
-                .add(Attributes.FOLLOW_RANGE, 48.0D);
+                .add(Attributes.FOLLOW_RANGE, DETECTION_RANGE);
     }
 
     @Override
@@ -240,7 +245,7 @@ public class GlitchedWandererEntity extends GlitchedHuskEntity {
             if (this.mob.getTarget() != null) {
                 return false;
             }
-            this.followed = this.mob.level().getNearestPlayer(this.mob, 48.0D);
+            this.followed = this.mob.level().getNearestPlayer(this.mob, DETECTION_RANGE);
             return this.followed != null && !this.followed.isSpectator();
         }
 
@@ -248,7 +253,7 @@ public class GlitchedWandererEntity extends GlitchedHuskEntity {
         public boolean canContinueToUse() {
             return this.mob.getTarget() == null && this.followed != null && this.followed.isAlive()
                     && !this.followed.isSpectator()
-                    && this.mob.distanceToSqr(this.followed) < 64.0D * 64.0D;
+                    && this.mob.distanceToSqr(this.followed) < PURSUIT_DROP_RANGE * PURSUIT_DROP_RANGE;
         }
 
         @Override

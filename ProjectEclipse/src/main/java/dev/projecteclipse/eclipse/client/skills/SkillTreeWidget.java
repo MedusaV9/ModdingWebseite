@@ -405,12 +405,19 @@ public class SkillTreeWidget extends AbstractWidget {
         }
 
         // Icon: locked nodes render a dark silhouette (icon dimmed under a veil overlay).
+        // WANDFIX-4 EXCLUDED (rival specialisation owned) shows a drawn bar instead of the
+        // padlock — the seal is permanent, not "come back with prereqs".
         guiGraphics.renderItem(node.icon(), x + (size - 16) / 2, y + (size - 16) / 2);
-        if (state == SkillTreeModel.State.LOCKED) {
+        if (state == SkillTreeModel.State.LOCKED || state == SkillTreeModel.State.EXCLUDED) {
             guiGraphics.fill(x + 1, y + 1, x + size - 1, y + size - 1,
                     EclipseUiTheme.withAlpha(0xFF0B0713, 0.72F));
-            drawLockGlyph(guiGraphics, x + size / 2, y + size / 2,
-                    EclipseUiTheme.withAlpha(EclipseUiTheme.DIM, 0.9F));
+            if (state == SkillTreeModel.State.EXCLUDED) {
+                guiGraphics.fill(x + size / 2 - 4, y + size / 2 - 1, x + size / 2 + 4, y + size / 2 + 1,
+                        EclipseUiTheme.withAlpha(EclipseUiTheme.DIM, 0.9F));
+            } else {
+                drawLockGlyph(guiGraphics, x + size / 2, y + size / 2,
+                        EclipseUiTheme.withAlpha(EclipseUiTheme.DIM, 0.9F));
+            }
         }
 
         // Pending purchase: server confirmation in flight — lock badge + slow blink.

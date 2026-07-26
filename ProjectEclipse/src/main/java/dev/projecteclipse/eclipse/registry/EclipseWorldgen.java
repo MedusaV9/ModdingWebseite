@@ -5,6 +5,7 @@ import java.util.function.Supplier;
 import com.mojang.serialization.MapCodec;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.backrooms.BackroomsChunkGenerator;
 import dev.projecteclipse.eclipse.worldgen.DiscBiomeSource;
 import dev.projecteclipse.eclipse.worldgen.DiscChunkGenerator;
 import net.minecraft.core.registries.Registries;
@@ -27,6 +28,10 @@ public final class EclipseWorldgen {
 
     public static final Supplier<MapCodec<DiscChunkGenerator>> DISC =
             CHUNK_GENERATORS.register("disc", () -> DiscChunkGenerator.CODEC);
+
+    /** The Backrooms layer-stack generator ({@code eclipse:backrooms}, PLAN-C C18). */
+    public static final Supplier<MapCodec<BackroomsChunkGenerator>> BACKROOMS =
+            CHUNK_GENERATORS.register("backrooms", () -> BackroomsChunkGenerator.CODEC);
 
     public static final Supplier<MapCodec<DiscBiomeSource>> DISC_SECTORS =
             BIOME_SOURCES.register("disc_sectors", () -> DiscBiomeSource.CODEC);

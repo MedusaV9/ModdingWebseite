@@ -25,10 +25,16 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.FallingBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.saveddata.SavedData;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 /**
@@ -49,9 +55,19 @@ import net.minecraft.world.phys.Vec3;
  *
  * <p><b>Hard blacklist</b> (never de-rezzed): block entities (chests, the altar, spawners
  * — inventories must never be voided), anything inside a spawn-protection zone
- * ({@link SpawnProtectionRules}), unbreakables (bedrock etc.), fluids and air. Restore
- * refuses to overwrite non-air (a player built there mid-phase → snapshot is discarded,
- * never grief-overwritten).</p>
+ * ({@link SpawnProtectionRules}), unbreakables (bedrock etc.), fluids and air, gravity
+ * blocks (sand/gravel/anvils — a de-rezzed one would re-rez straight into a fall) and
+ * blocks CARRYING a gravity block (never leave a sand column hanging over a phased hole).</p>
+ *
+ * <p><b>Physics safety (WANDFIX-1):</b> vanish and restore both write with
+ * {@link #SILENT_FLAGS} ({@code UPDATE_CLIENTS | UPDATE_KNOWN_SHAPE} — NO neighbor
+ * updates), so phasing never triggers falling-block physics, support-pops (torches,
+ * rails) or fluid flow in the surroundings; the world around the cone is left exactly as
+ * untouched as the fantasy promises. Restore never voids terrain: a gravity block that
+ * still fell into the hole (outside trigger) is popped as its item drop before the
+ * snapshot returns, a player-built block wins the spot but the snapshot drops as its
+ * resources, and a living entity standing in the hole defers the restore a few ticks
+ * (bounded) instead of entombing them.</p>
  *
  * <p>FX per event: vanish → {@code border_glitch} one-shot, restore →
  * {@code impact_light} micro-pop (both dispatched via {@code S2CQuasarPayload}; the client
@@ -67,6 +83,22 @@ public final class WandPhaseService {
     private static final double CONE_TAN = 0.5D;
     private static final double FX_RANGE = 48.0D;
 
+    /**
+     * WANDFIX-1 root-cause fix: both phase writes used flag 3 ({@code UPDATE_ALL} =
+     * neighbors + clients). The neighbor updates made every adjacent gravity block fall
+     * into the fresh hole and popped every supported block (torches, rails) as loose
+     * drops; the fallen block then OCCUPIED the restore position, so {@link #restore}
+     * discarded the snapshot — permanent terrain loss. {@code UPDATE_KNOWN_SHAPE}
+     * suppresses the neighbor/shape cascade entirely: clients still see the swap, but the
+     * world physics never learns the block was gone.
+     */
+    private static final int SILENT_FLAGS = Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE;
+
+    /** Max times one entry postpones its restore because a living entity fills the hole. */
+    private static final int MAX_RESTORE_DEFERRALS = 60;
+    /** Ticks per entity-occupied restore deferral (60 × 5 = at most 15 s of grace). */
+    private static final int RESTORE_DEFER_TICKS = 5;
+
     private WandPhaseService() {}
 
     // ------------------------------------------------------------------ casting
@@ -78,8 +110,8 @@ public final class WandPhaseService {
     public static boolean castWave(ServerPlayer player, WandConfig.Power power) {
         ServerLevel level = player.serverLevel();
         Data data = Data.get(player.server);
-        double length = power.param("length", 10.0F);
-        int maxBlocks = (int) power.param("maxBlocks", 24.0F);
+        double length = power.param("length", 12.0F);
+        int maxBlocks = (int) power.param("maxBlocks", 32.0F);
         int holdTicks = (int) power.param("holdTicks", 200.0F);
         int restoreEvery = Math.max(1, (int) power.param("restoreEveryTicks", 10.0F));
         int vanishPerTick = Math.max(1, (int) power.param("vanishPerTick", 6.0F));
@@ -158,6 +190,34 @@ public final class WandPhaseService {
                 SoundEvents.ENDERMAN_TELEPORT, SoundSource.PLAYERS, 0.9F, 0.55F);
         level.playSound(null, player.getX(), player.getY(), player.getZ(),
                 EclipseSounds.EVENT_BORDER_GLITCH.get(), SoundSource.PLAYERS, 0.6F, 1.35F);
+        // WANDFIX-2 Phasenschock: living things standing IN the de-rezzed cone lose their
+        // footing with the ground — phase-shear damage + Slowness II. The utility wave is
+        // now also a zoning tool, not damage-free terrain dressing.
+        float shearDamage = power.param("shearDamage", 0.0F)
+                * WandPerks.damageMultiplier(player); // WANDFIX-4 damage line
+        if (shearDamage > 0.0F) {
+            int slowTicks = (int) power.param("shearSlowTicks", 60.0F);
+            List<LivingEntity> sheared = level.getEntitiesOfClass(LivingEntity.class,
+                    new AABB(origin, origin).inflate(length + 1.0D),
+                    e -> e != player && e.isAlive());
+            for (LivingEntity victim : sheared) {
+                Vec3 toVictim = victim.position().add(0.0D, victim.getBbHeight() * 0.5D, 0.0D)
+                        .subtract(origin);
+                double along = toVictim.dot(dir);
+                if (along < 1.0D || along > length
+                        || toVictim.subtract(dir.scale(along)).length() > along * CONE_TAN + 0.5D
+                        || SpawnProtectionRules.isInProtectionZone(level, victim.blockPosition())) {
+                    continue;
+                }
+                victim.hurt(player.damageSources().indirectMagic(player, player), shearDamage);
+                if (slowTicks > 0) {
+                    victim.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SLOWDOWN,
+                            slowTicks, 1), player);
+                }
+                WandPowers.sendQuasar(level, BORDER_GLITCH,
+                        victim.position().add(0.0D, 1.0D, 0.0D));
+            }
+        }
         return true;
     }
 
@@ -169,6 +229,17 @@ public final class WandPhaseService {
         }
         if (state.getDestroySpeed(level, pos) < 0.0F) {
             return false; // bedrock-class
+        }
+        // WANDFIX-1: gravity blocks never phase — a de-rezzed anvil/sand would re-rez
+        // straight into a fall (displacement), and one already falling can't be journaled.
+        if (state.getBlock() instanceof FallingBlock) {
+            return false;
+        }
+        // WANDFIX-1: never pull the floor out from under a gravity block either. The
+        // silent flags stop the IMMEDIATE fall, but any later neighbor update (a mob
+        // trample, a player build) would still drop the column into the hole.
+        if (level.getBlockState(pos.above()).getBlock() instanceof FallingBlock) {
+            return false;
         }
         if (SpawnProtectionRules.isInProtectionZone(level, pos)) {
             return false; // altar / sanctum / protected builds
@@ -204,7 +275,7 @@ public final class WandPhaseService {
                     continue;
                 }
                 entry.state = current;
-                level.setBlock(entry.pos, Blocks.AIR.defaultBlockState(), 3);
+                level.setBlock(entry.pos, Blocks.AIR.defaultBlockState(), SILENT_FLAGS);
                 entry.vanished = true;
                 dirty = true;
                 Vec3 center = Vec3.atCenterOf(entry.pos);
@@ -219,6 +290,16 @@ public final class WandPhaseService {
                             SoundEvents.AMETHYST_CLUSTER_STEP, SoundSource.BLOCKS, 0.6F, 0.5F);
                 }
             } else if (entry.vanished && now >= entry.restoreAt) {
+                // WANDFIX-1: never re-rez a block inside a living body — postpone in
+                // short bounded steps until the hole is free (or the grace runs out).
+                if (entry.restoreDeferrals < MAX_RESTORE_DEFERRALS
+                        && !level.getEntitiesOfClass(LivingEntity.class, new AABB(entry.pos),
+                                LivingEntity::isAlive).isEmpty()) {
+                    entry.restoreAt = now + RESTORE_DEFER_TICKS;
+                    entry.restoreDeferrals++;
+                    dirty = true;
+                    continue;
+                }
                 restore(level, entry);
                 data.entries.remove(i);
                 dirty = true;
@@ -231,12 +312,26 @@ public final class WandPhaseService {
 
     private static void restore(ServerLevel level, Entry entry) {
         BlockState current = level.getBlockState(entry.pos);
-        if (!current.isAir() && !current.canBeReplaced()) {
-            EclipseMod.LOGGER.debug("Phasenwelle restore at {} skipped — position occupied by {}",
-                    entry.pos, current);
-            return;
+        if (current == entry.state) {
+            return; // vanish never reached the chunk (crash-recovery prepare record) — done
         }
-        level.setBlock(entry.pos, entry.state, 3);
+        if (!current.isAir() && !current.canBeReplaced()) {
+            if (current.getBlock() instanceof FallingBlock && !current.hasBlockEntity()) {
+                // WANDFIX-1: a gravity block still found its way into the hole (an outside
+                // neighbor update mid-hold). Pop it as its item so nothing is voided, then
+                // knit the original block back underneath the drop.
+                level.destroyBlock(entry.pos, true);
+            } else {
+                // A player built here mid-phase — their block wins the spot, but the
+                // snapshot drops as its resources instead of being voided (WANDFIX-1
+                // terrain conservation; the old silent discard permanently ate the block).
+                Block.dropResources(entry.state, level, entry.pos);
+                EclipseMod.LOGGER.debug("Phasenwelle restore at {} blocked by {} — snapshot dropped as items",
+                        entry.pos, current);
+                return;
+            }
+        }
+        level.setBlock(entry.pos, entry.state, SILENT_FLAGS);
         Vec3 center = Vec3.atCenterOf(entry.pos);
         WandPowers.sendQuasar(level, IMPACT_LIGHT, center);
         if (level.random.nextInt(8) == 0) {
@@ -288,8 +383,11 @@ public final class WandPhaseService {
         final BlockPos pos;
         BlockState state;
         final long vanishAt;
-        final long restoreAt;
+        /** Mutable: entity-occupied restores are postponed in {@value #RESTORE_DEFER_TICKS}-tick steps. */
+        long restoreAt;
         boolean vanished;
+        /** Transient deferral budget (not persisted — a reload simply re-grants the grace). */
+        int restoreDeferrals;
 
         Entry(ResourceKey<Level> dimension, BlockPos pos, BlockState state, long vanishAt,
                 long restoreAt, boolean vanished) {

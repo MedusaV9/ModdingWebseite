@@ -115,13 +115,33 @@ public final class SkillTreeModel {
             Map.entry("V14", "minecraft:soul_lantern"),
             Map.entry("V15", "minecraft:sand"),
             Map.entry("V16", "minecraft:cartography_table"),
-            Map.entry("V17", "minecraft:iron_boots"));
+            Map.entry("V17", "minecraft:iron_boots"),
+            // WANDFIX-4 wand branch (reservoir / economy / damage / lore + capstone).
+            Map.entry("W1", "minecraft:amethyst_shard"),
+            Map.entry("W2", "minecraft:glow_ink_sac"),
+            Map.entry("W3", "minecraft:amethyst_cluster"),
+            Map.entry("W4", "minecraft:glowstone_dust"),
+            Map.entry("W5", "minecraft:amethyst_block"),
+            Map.entry("W6", "minecraft:prismarine_crystals"),
+            Map.entry("W7", "minecraft:string"),
+            Map.entry("W8", "minecraft:clock"),
+            Map.entry("W9", "minecraft:cobweb"),
+            Map.entry("W10", "minecraft:shears"),
+            Map.entry("W11", "minecraft:blaze_rod"),
+            Map.entry("W12", "minecraft:blaze_powder"),
+            Map.entry("W13", "minecraft:writable_book"),
+            Map.entry("W14", "minecraft:enchanted_book"),
+            Map.entry("W15", "minecraft:magma_cream"),
+            Map.entry("W16", "minecraft:dragon_breath"),
+            Map.entry("W17", "minecraft:lightning_rod"),
+            Map.entry("W18", "minecraft:nether_star"));
 
     private static final Map<String, String> BRANCH_ICONS = Map.of(
             "spine", "minecraft:nether_star",
             "hunt", "minecraft:iron_sword",
             "delve", "minecraft:iron_pickaxe",
-            "stride", "minecraft:leather_boots");
+            "stride", "minecraft:leather_boots",
+            "wand", "eclipse:eclipse_wand");
 
     /** Cache: re-parse only when the payload text (or its identity) changes. */
     private static String cachedJson;
@@ -141,6 +161,8 @@ public final class SkillTreeModel {
         public final String branch;
         public final int cost;
         public final List<String> requires;
+        /** WANDFIX-4: node ids this node can never coexist with (exclusive specialisations). */
+        public final List<String> excludes;
         public final Localized title;
         public final Localized desc;
         public final String effectType;
@@ -154,12 +176,14 @@ public final class SkillTreeModel {
         @Nullable
         private ItemStack iconCache;
 
-        Node(String id, String branch, int cost, List<String> requires, Localized title,
-                Localized desc, String effectType, int tier, @Nullable String iconItemId) {
+        Node(String id, String branch, int cost, List<String> requires, List<String> excludes,
+                Localized title, Localized desc, String effectType, int tier,
+                @Nullable String iconItemId) {
             this.id = id;
             this.branch = branch;
             this.cost = cost;
             this.requires = requires;
+            this.excludes = excludes;
             this.title = title;
             this.desc = desc;
             this.effectType = effectType;
@@ -194,7 +218,9 @@ public final class SkillTreeModel {
 
     /** Node availability derived from the synced state — server truth, never predicted. */
     public enum State {
-        OWNED, AVAILABLE, LOCKED
+        OWNED, AVAILABLE, LOCKED,
+        /** WANDFIX-4: permanently sealed — the player owns a mutually exclusive rival node. */
+        EXCLUDED
     }
 
     private SkillTreeModel(Map<String, Node> nodes, List<Branch> branches,
@@ -244,11 +270,21 @@ public final class SkillTreeModel {
         return EclipseLang.locale().startsWith("de") ? "de" : "en";
     }
 
-    /** Current state of a node against the synced cache (owned list + prereqs). */
+    /** Current state of a node against the synced cache (owned list + prereqs + excludes). */
     public State stateOf(Node node) {
         List<String> owned = ClientStateCache.skillOwnedNodes;
         if (owned.contains(node.id)) {
             return State.OWNED;
+        }
+        // WANDFIX-4 exclusives mirror the server's SkillTree.canBuy both-ways check.
+        for (String ownedId : owned) {
+            if (node.excludes.contains(ownedId)) {
+                return State.EXCLUDED;
+            }
+            Node ownedNode = nodes.get(ownedId);
+            if (ownedNode != null && ownedNode.excludes.contains(node.id)) {
+                return State.EXCLUDED;
+            }
         }
         for (String req : node.requires) {
             if (!owned.contains(req)) {
@@ -337,6 +373,12 @@ public final class SkillTreeModel {
                         requires.add(req.getAsString());
                     }
                 }
+                List<String> excludes = new ArrayList<>();
+                if (obj.has("excludes") && obj.get("excludes").isJsonArray()) {
+                    for (JsonElement exc : obj.getAsJsonArray("excludes")) {
+                        excludes.add(exc.getAsString());
+                    }
+                }
                 JsonObject effect = obj.has("effect") && obj.get("effect").isJsonObject()
                         ? obj.getAsJsonObject("effect") : new JsonObject();
                 // Future-proof explicit placement: tier/column fields override the auto rows.
@@ -347,6 +389,7 @@ public final class SkillTreeModel {
                         branch,
                         obj.has("cost") ? Math.max(1, obj.get("cost").getAsInt()) : 1,
                         List.copyOf(requires),
+                        List.copyOf(excludes),
                         Localized.parse(obj.get("title")),
                         Localized.parse(obj.get("desc")),
                         effect.has("type") ? effect.get("type").getAsString() : "none",

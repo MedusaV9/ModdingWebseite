@@ -161,6 +161,7 @@ public final class ArenaGame {
         player.setItemSlot(EquipmentSlot.CHEST, new ItemStack(Items.LEATHER_CHESTPLATE));
         player.setItemSlot(EquipmentSlot.LEGS, new ItemStack(Items.LEATHER_LEGGINGS));
         player.setItemSlot(EquipmentSlot.FEET, new ItemStack(Items.LEATHER_BOOTS));
+        player.setItemSlot(EquipmentSlot.OFFHAND, new ItemStack(Items.SHIELD));
         player.getInventory().add(new ItemStack(Items.STONE_SWORD));
         player.getInventory().add(new ItemStack(Items.STONE_AXE));
         player.getInventory().add(new ItemStack(Items.BOW));

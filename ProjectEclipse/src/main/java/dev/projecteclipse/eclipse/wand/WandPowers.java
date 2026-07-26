@@ -7,6 +7,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.cutscene.FreezeService;
 import dev.projecteclipse.eclipse.lang.ServerLang;
 import dev.projecteclipse.eclipse.music.MusicCues;
 import dev.projecteclipse.eclipse.network.S2CQuasarPayload;
@@ -26,6 +27,8 @@ import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.ClipContext;
@@ -120,9 +123,15 @@ public final class WandPowers {
      * — none of which can reach the normal item-use path. Allowed game modes are exactly
      * the hand-interaction ones: survival, creative and adventure; spectator is rejected.
      * Rejections are SILENT (no message/sound) so forged packets cannot spam feedback.
+     *
+     * <p>WANDFIX-7: cutscene-frozen players ({@code FreezeService.isFrozen}) are rejected
+     * here too. The freeze cancels {@code PlayerInteractEvent}s, but the wand's C2S
+     * payloads never pass through those events — without this gate a frozen player (or a
+     * client that fires the payload directly) could cast from EITHER hand mid-scene.</p>
      */
     private static boolean isActorValid(ServerPlayer player) {
-        return player.isAlive() && !player.isRemoved() && !player.isSpectator();
+        return player.isAlive() && !player.isRemoved() && !player.isSpectator()
+                && !FreezeService.isFrozen(player);
     }
 
     // ------------------------------------------------------------------ payload entry points
@@ -166,10 +175,12 @@ public final class WandPowers {
                     String.format("%.1f", (readyAt - now) / 20.0D)), true);
             return;
         }
+        // WANDFIX-4: cost/cooldown honor the wand-branch skill nodes (WandPerks caps them).
+        int cost = WandPerks.effectiveCost(player, power);
         int charge = stack.getOrDefault(WandItems.WAND_CHARGE.get(), 0);
-        if (charge < power.cost()) {
+        if (charge < cost) {
             player.displayClientMessage(ServerLang.tr(player, "wand.eclipse.msg.no_charge",
-                    power.cost(), charge), true);
+                    cost, charge), true);
             EclipseWandItem.triggerWandAnim(player, stack, EclipseWandItem.ANIM_STALL);
             player.serverLevel().playSound(null, player.getX(), player.getY(), player.getZ(),
                     SoundEvents.AMETHYST_BLOCK_CHIME, SoundSource.PLAYERS, 0.6F, 0.5F);
@@ -185,13 +196,16 @@ public final class WandPowers {
             return; // refused (e.g. blink found no room) — no cost, no cooldown
         }
         castFlourish(player, path, mainHand, power);
-        stack.set(WandItems.WAND_CHARGE.get(), charge - power.cost());
+        // W18 Herz des Schleiers: a free cast skips only the charge — cooldown and XP flow.
+        if (!WandPerks.rollFreeCast(player)) {
+            stack.set(WandItems.WAND_CHARGE.get(), charge - cost);
+        }
         COOLDOWNS.computeIfAbsent(player.getUUID(), id -> new HashMap<>())
-                .put(key, now + power.cooldownTicks());
+                .put(key, now + WandPerks.effectiveCooldownTicks(player, power));
         EclipseWandItem.triggerWandAnim(player, stack, EclipseWandItem.ANIM_USE);
         WandConfig.Xp xp = WandConfig.get().xp();
-        awardXp(player, stack, power.cost() * xp.perCostPoint());
-        SkillsApi.addXp(player, "wand", power.cost() * xp.skillXpPerCostPoint());
+        awardXp(player, stack, cost * xp.perCostPoint());
+        SkillsApi.addXp(player, "wand", cost * xp.skillXpPerCostPoint());
         // V6-FIXWIRE #5: xp + the just-armed cooldown reach the client's panel this tick.
         WandProgressSync.syncTo(player);
     }
@@ -253,21 +267,46 @@ public final class WandPowers {
         WandProgressSync.syncTo(player);
     }
 
-    /** Sneak-right-click: cycles the selected power among the unlocked ones. */
-    public static void cycleSelected(ServerPlayer player, ItemStack stack) {
+    /**
+     * {@code C2SWandCyclePayload} handler (WANDFIX-3) — sneak-scroll power switching in
+     * BOTH directions. Same validation ladder as casting: actor gate (includes the
+     * WANDFIX-7 freeze check), held wand, ownership.
+     */
+    public static void handleCycle(ServerPlayer player, boolean forward) {
+        if (!isActorValid(player)) {
+            return; // forged/stale request, or frozen mid-cutscene (WANDFIX-7)
+        }
+        ItemStack stack = findHeldWand(player);
+        if (stack == null) {
+            return;
+        }
+        WandSoulbind.tick(player, stack);
+        if (!WandSoulbind.isOwner(player, stack)) {
+            return; // silent — a foreign wand gives no selection feedback either
+        }
+        cycleSelected(player, stack, forward ? 1 : -1);
+    }
+
+    /**
+     * Cycles the selected power among the unlocked ones. Direction −1 steps backwards
+     * (WANDFIX-3: sneak-scroll goes both ways; the legacy sneak-right-click stays a
+     * forward step). The pitch of the click tracks the slot so cycling is audible too.
+     */
+    public static void cycleSelected(ServerPlayer player, ItemStack stack, int direction) {
         WandPath path = WandSoulbind.pathOf(stack);
         if (path == WandPath.NONE) {
             player.displayClientMessage(ServerLang.tr(player, "wand.eclipse.msg.pathless"), true);
             return;
         }
         int level = WandSoulbind.levelOf(stack);
-        int selected = (stack.getOrDefault(WandItems.WAND_SELECTED.get(), 0) + 1) % level;
+        int selected = Math.floorMod(stack.getOrDefault(WandItems.WAND_SELECTED.get(), 0) + direction, level);
         stack.set(WandItems.WAND_SELECTED.get(), selected);
         WandConfig.Power power = WandConfig.get().power(path.powerKey(selected));
         player.displayClientMessage(ServerLang.tr(player, "wand.eclipse.msg.selected",
                 Component.translatable(path.powerLangKey(selected)), power.cost()), true);
         player.serverLevel().playSound(null, player.getX(), player.getY(), player.getZ(),
-                SoundEvents.UI_BUTTON_CLICK.value(), SoundSource.PLAYERS, 0.35F, 1.6F);
+                SoundEvents.UI_BUTTON_CLICK.value(), SoundSource.PLAYERS, 0.35F,
+                1.3F + 0.15F * selected);
     }
 
     // ------------------------------------------------------------------ XP / leveling
@@ -281,9 +320,11 @@ public final class WandPowers {
         if (amount <= 0.0F || WandSoulbind.pathOf(stack) == WandPath.NONE) {
             return;
         }
+        amount *= WandPerks.xpMultiplier(player); // WANDFIX-4 lore line (W13/W14)
         WandConfig.Xp config = WandConfig.get().xp();
         int xp = stack.getOrDefault(WandItems.WAND_XP.get(), 0) + Math.round(amount);
         int level = WandSoulbind.levelOf(stack);
+        boolean firstSecondPower = level < 2; // WANDFIX-3: about to own a second power?
         boolean leveled = false;
         while (level < WandPath.MAX_LEVEL && xp >= config.costForLevel(level)) {
             xp -= config.costForLevel(level);
@@ -306,6 +347,11 @@ public final class WandPowers {
         WandPath path = WandSoulbind.pathOf(stack);
         player.sendSystemMessage(ServerLang.tr(player, "wand.eclipse.msg.levelup", level,
                 Component.translatable(path.powerLangKey(level - 1))));
+        if (firstSecondPower && level >= 2) {
+            // WANDFIX-3: the moment a second power exists, teach the switch gesture once
+            // (sneak-scroll cycles both ways; sneak-right-click still steps forward).
+            player.sendSystemMessage(ServerLang.tr(player, "wand.eclipse.msg.cycle_hint"));
+        }
     }
 
     /** Three staggered {@code unlock_burst} pops around a position (level-up / awaken cue). */
@@ -415,10 +461,14 @@ public final class WandPowers {
      * riss_blink_tear}, cube render-style datamosh) at from/to over a NARROW rift pair,
      * a delayed second tear at the arrival point (the "re-rez" shimmer), digital chirps
      * (border-glitch static + pitched teleport crack) and a private camera tick.</p>
+     *
+     * <p>WANDFIX-2 Phasenschleier: for {@code veilTicks} after arrival the body hasn't
+     * fully re-knit — Resistance II — turning the blink into a real dodge, not just a
+     * hop.</p>
      */
     private static boolean castBlink(ServerPlayer player, WandConfig.Power power) {
         ServerLevel level = player.serverLevel();
-        double range = power.param("range", 12.0F);
+        double range = power.param("range", 16.0F);
         Vec3 from = player.position();
         Vec3 target = findBlinkTarget(player, range);
         if (target == null) {
@@ -459,6 +509,12 @@ public final class WandPowers {
         });
         player.teleportTo(target.x, target.y, target.z);
         player.resetFallDistance();
+        int veilTicks = (int) power.param("veilTicks", 30.0F);
+        if (veilTicks > 0) {
+            // Phasenschleier: half-re-rezzed for a beat — Resistance II, no icon spam.
+            player.addEffect(new MobEffectInstance(MobEffects.DAMAGE_RESISTANCE, veilTicks, 1,
+                    false, false, true));
+        }
         level.playSound(null, from.x, from.y, from.z, SoundEvents.ENDERMAN_TELEPORT,
                 SoundSource.PLAYERS, 0.7F, 1.55F);
         level.playSound(null, target.x, target.y, target.z, SoundEvents.ENDERMAN_TELEPORT,
@@ -493,11 +549,21 @@ public final class WandPowers {
      * debris streaks around the lips) fires with the tear, a second gulp follows two ticks
      * later, and the bite lands with a crushed static "CHOMP" (low border-glitch burst +
      * shattering chirp) plus a short shared camera hit for everyone standing close.</p>
+     *
+     * <p>WANDFIX-2 mechanics: the maw now PULLS — everything living within 2× the bite
+     * radius is dragged toward the lips before the teeth land ({@code pull}), so the AoE
+     * groups its own targets. The L5 upgrade adds an echo bite ({@code echo} fraction of
+     * the damage) 10 ticks later — the maw chews twice.</p>
      */
     private static boolean castRissschlag(ServerPlayer player, WandConfig.Power power) {
         ServerLevel level = player.serverLevel();
         Vec3 target = aimPoint(player, power.param("range", 24.0F)).add(0.0D, 1.2D, 0.0D);
         float width = power.param("width", 5.0F);
+        float radius = power.param("radius", 4.5F);
+        float damage = power.param("damage", 10.0F);
+        float knockback = power.param("knockback", 1.2F);
+        float pull = power.param("pull", 0.0F);
+        float echo = power.param("echo", 0.0F);
         FxPayloads.sendFxEvent(level, FxPayloads.FX_RIFT_OPEN, target, width, 1.0F, FX_RANGE);
         int openTicks = (int) power.param("openTicks", 25.0F);
         // PH-PLAYER (IDEAS-player #4): Photon implosion maw + Death sub-chain
@@ -529,8 +595,35 @@ public final class WandPowers {
             level.playSound(null, target.x, target.y, target.z,
                     EclipseSounds.EVENT_BORDER_GLITCH.get(), SoundSource.PLAYERS, 0.45F, 1.3F);
         });
-        damageAround(player, target, power.param("radius", 4.0F), power.param("damage", 8.0F),
-                power.param("knockback", 1.1F), 0);
+        if (pull > 0.0F) {
+            // The maw inhales first: everything in 2× the bite radius is dragged toward
+            // the lips (inverse knockback), THEN the teeth land on the packed group.
+            List<LivingEntity> dragged = level.getEntitiesOfClass(LivingEntity.class,
+                    new AABB(target, target).inflate(radius * 2.0D),
+                    e -> e != player && e.isAlive());
+            for (LivingEntity victim : dragged) {
+                if (SpawnProtectionRules.isInProtectionZone(level, victim.blockPosition())) {
+                    continue;
+                }
+                Vec3 toMaw = target.subtract(victim.position());
+                Vec3 flat = new Vec3(toMaw.x, 0.0D, toMaw.z);
+                if (flat.lengthSqr() > 1.0E-4D) {
+                    Vec3 dir = flat.normalize();
+                    victim.push(dir.x * pull, 0.12D * pull, dir.z * pull);
+                }
+            }
+        }
+        damageAround(player, target, radius, damage, knockback, 0);
+        if (echo > 0.0F) {
+            // Echo bite: the maw chews a second time — half-weight damage + a second
+            // gulp emitter so the double-hit reads on screen too.
+            WandTickService.schedule(level, 10, () -> {
+                sendQuasar(level, RISS_SCHLAG_MAW, target);
+                damageAround(player, target, radius, damage * echo, knockback * 0.4F, 0);
+                level.playSound(null, target.x, target.y, target.z,
+                        EclipseSounds.EVENT_BORDER_GLITCH.get(), SoundSource.PLAYERS, 0.55F, 0.9F);
+            });
+        }
         level.playSound(null, target.x, target.y, target.z, SoundEvents.PORTAL_TRIGGER,
                 SoundSource.PLAYERS, 0.6F, 1.7F);
         level.playSound(null, target.x, target.y, target.z,
@@ -550,10 +643,15 @@ public final class WandPowers {
      * lance ({@code glut_stoss_lance}) marched origin → midpoint → impact over three ticks
      * with a sparse heat-shimmer trail, a bass whoosh on release and a lava-splash payoff
      * where it lands.</p>
+     *
+     * <p>WANDFIX-2 pierce: the lance now burns THROUGH — up to {@code pierce} creatures
+     * on the ray are hit and ignited instead of only the first, so a line of mobs is a
+     * target, not a shield.</p>
      */
     private static boolean castGlutstoss(ServerPlayer player, WandConfig.Power power) {
         ServerLevel level = player.serverLevel();
         double range = power.param("range", 12.0F);
+        int maxTargets = Math.max(1, (int) power.param("pierce", 1.0F));
         Vec3 eye = player.getEyePosition();
         Vec3 look = player.getLookAngle();
         HitResult blockHit = level.clip(new ClipContext(eye, eye.add(look.scale(range)),
@@ -561,8 +659,8 @@ public final class WandPowers {
         double maxDist = blockHit.getType() == HitResult.Type.MISS ? range
                 : blockHit.getLocation().distanceTo(eye);
 
-        LivingEntity victim = null;
-        double victimDist = maxDist;
+        List<LivingEntity> victims = new ArrayList<>();
+        double lastHitDist = maxDist;
         for (double dist = 1.0D; dist <= maxDist; dist += 0.5D) {
             Vec3 point = eye.add(look.scale(dist));
             if (((int) (dist * 2.0D)) % 3 == 0) {
@@ -570,20 +668,21 @@ public final class WandPowers {
                 level.sendParticles(ParticleTypes.SMALL_FLAME, point.x, point.y, point.z,
                         1, 0.05D, 0.05D, 0.05D, 0.004D);
             }
-            if (victim == null) {
+            if (victims.size() < maxTargets) {
                 List<LivingEntity> hits = level.getEntitiesOfClass(LivingEntity.class,
-                        new AABB(point, point).inflate(0.6D), e -> e != player && e.isAlive());
+                        new AABB(point, point).inflate(0.6D),
+                        e -> e != player && e.isAlive() && !victims.contains(e));
                 if (!hits.isEmpty()) {
-                    victim = hits.get(0);
-                    victimDist = dist;
+                    victims.add(hits.get(0));
+                    lastHitDist = dist;
                 }
             }
         }
-        Vec3 impact = eye.add(look.scale(victimDist));
-        Vec3 mid = eye.add(look.scale(Math.max(1.0D, victimDist * 0.5D)));
+        Vec3 impact = eye.add(look.scale(victims.isEmpty() ? maxDist : lastHitDist));
+        Vec3 mid = eye.add(look.scale(Math.max(1.0D, lastHitDist * 0.5D)));
         sendQuasar(level, GLUT_STOSS_LANCE, eye.add(look.scale(1.2D)).add(0.0D, -0.15D, 0.0D));
         WandTickService.schedule(level, 1, () -> sendQuasar(level, GLUT_STOSS_LANCE, mid));
-        boolean hitSomething = victim != null;
+        boolean hitSomething = !victims.isEmpty();
         WandTickService.schedule(level, 2, () -> {
             sendQuasar(level, GLUT_STOSS_LANCE, impact);
             level.playSound(null, impact.x, impact.y, impact.z, SoundEvents.FIRE_EXTINGUISH,
@@ -598,10 +697,16 @@ public final class WandPowers {
             level.playSound(null, impact.x, impact.y, impact.z,
                     SoundEvents.CAMPFIRE_CRACKLE, SoundSource.PLAYERS, 0.5F, 0.75F);
         });
-        if (victim != null) {
-            victim.hurt(player.damageSources().indirectMagic(player, player), power.param("damage", 5.0F));
-            victim.igniteForSeconds((int) power.param("fireSeconds", 3.0F));
-            level.sendParticles(ParticleTypes.LAVA, impact.x, impact.y, impact.z, 4, 0.2D, 0.2D, 0.2D, 0.0D);
+        float damage = power.param("damage", 6.0F) * WandPerks.damageMultiplier(player);
+        int fireSeconds = (int) power.param("fireSeconds", 4.0F);
+        for (LivingEntity victim : victims) {
+            if (SpawnProtectionRules.isInProtectionZone(level, victim.blockPosition())) {
+                continue;
+            }
+            victim.hurt(player.damageSources().indirectMagic(player, player), damage);
+            victim.igniteForSeconds(fireSeconds);
+            level.sendParticles(ParticleTypes.LAVA, victim.getX(), victim.getY() + 0.8D,
+                    victim.getZ(), 4, 0.2D, 0.2D, 0.2D, 0.0D);
         }
         level.sendParticles(ParticleTypes.SMALL_FLAME, impact.x, impact.y, impact.z, 8, 0.25D, 0.25D, 0.25D, 0.02D);
         // Bass whoosh: low-pitched firecharge under a blaze bark.
@@ -616,19 +721,43 @@ public final class WandPowers {
      * L2 Feuerwelle: the giant fire wave — expanding ground flame ring, visual-first
      * ({@code FX_SHOCKWAVE} + marched flame particles), short fire ticks, and it NEVER
      * touches a block (no ignition, no griefing). Ring march runs on {@link WandTickService}.
+     *
+     * <p>WANDFIX-2 burn combo: targets that are ALREADY burning when the front reaches
+     * them take {@code burnBonus}× — Glutstoß pre-burn feeds the wave. The L4 upgrade
+     * marches a SECOND ring 12 ticks behind the first ({@code waves}), catching whatever
+     * the knock-up drops back into the fire.</p>
      */
     private static boolean castFeuerwelle(ServerPlayer player, WandConfig.Power power) {
         ServerLevel level = player.serverLevel();
         Vec3 center = player.position();
         int expandTicks = (int) power.param("expandTicks", 40.0F);
+        float radius = power.param("radius", 12.0F);
+        // Direct-hurt path (the ring hurts in WandTickService) — boost here, once.
+        float damage = power.param("damage", 9.0F) * WandPerks.damageMultiplier(player);
+        int fireTicks = (int) (power.param("fireSeconds", 4.0F) * 20.0F);
+        float knockup = power.param("knockup", 0.42F);
+        float burnBonus = power.param("burnBonus", 1.0F);
+        int waves = Math.max(1, (int) power.param("waves", 1.0F));
         FxPayloads.sendFxEvent(level, FxPayloads.FX_SHOCKWAVE, center,
                 1.2F, expandTicks, FX_RANGE + 32.0D);
         // D10 ignition beat: a magma crescent erupts at the caster before the ring rolls out
         // (the marching front FX + scorch decals live in WandTickService.FireWave).
         sendQuasar(level, GLUT_WELLE_RING, center.add(0.0D, 0.2D, 0.0D));
-        WandTickService.startFireWave(player, center,
-                power.param("radius", 12.0F), expandTicks, power.param("damage", 7.0F),
-                (int) (power.param("fireSeconds", 3.0F) * 20.0F), power.param("knockup", 0.42F));
+        WandTickService.startFireWave(player, center, radius, expandTicks, damage,
+                fireTicks, knockup, burnBonus);
+        if (waves > 1) {
+            // Twin ring (L4): the echo wave re-rolls from the SAME center 12 ticks later
+            // — the first ring ignites, the second collects the burn bonus.
+            WandTickService.schedule(level, 12, () -> {
+                sendQuasar(level, GLUT_WELLE_RING, center.add(0.0D, 0.2D, 0.0D));
+                FxPayloads.sendFxEvent(level, FxPayloads.FX_SHOCKWAVE, center,
+                        1.0F, expandTicks, FX_RANGE + 32.0D);
+                WandTickService.startFireWave(player, center, radius, expandTicks, damage,
+                        fireTicks, knockup, burnBonus);
+                level.playSound(null, center.x, center.y, center.z, SoundEvents.BLAZE_SHOOT,
+                        SoundSource.PLAYERS, 0.8F, 0.5F);
+            });
+        }
         // Bass whoosh stack: sub-pitched firecharge + blaze roar + a soft distant boom.
         level.playSound(null, center.x, center.y, center.z, SoundEvents.FIRECHARGE_USE,
                 SoundSource.PLAYERS, 1.0F, 0.5F);
@@ -647,18 +776,33 @@ public final class WandPowers {
      * scorched take-off decal + bass whoosh; the airborne ember contrail and the
      * lava-splash landing payoff (crater emitter, scorch decal, boom, shared shake) live
      * in {@code WandTickService.MagmaJump}.</p>
+     *
+     * <p>WANDFIX-2 mechanics: the launch wraps the caster in a fire veil
+     * ({@code resistSeconds} of Fire Resistance — dive into your own flames). The L5
+     * upgrade detonates an ember ring from the crater on touchdown
+     * ({@code eruptRadius}/{@code eruptDamage}/{@code eruptFireSeconds}) — a
+     * mini-Feuerwelle rolls out of the landing.</p>
      */
     private static boolean castMagmasprung(ServerPlayer player, WandConfig.Power power) {
         ServerLevel level = player.serverLevel();
-        float launch = power.param("launch", 1.15F);
+        float launch = power.param("launch", 1.3F);
         Vec3 look = player.getLookAngle();
         Vec3 flat = new Vec3(look.x, 0.0D, look.z);
         Vec3 dir = flat.lengthSqr() > 1.0E-4D ? flat.normalize() : Vec3.ZERO;
         player.setDeltaMovement(dir.scale(launch * 0.8D).add(0.0D, 0.9D * launch, 0.0D));
         player.hurtMarked = true; // force velocity sync to the client
-        WandTickService.trackMagmaJump(player, power.param("damage", 6.0F),
-                power.param("radius", 4.0F), power.param("knockback", 1.0F),
-                (int) (power.param("fireSeconds", 2.0F) * 20.0F));
+        int resistSeconds = (int) power.param("resistSeconds", 5.0F);
+        if (resistSeconds > 0) {
+            // Fire veil: your own fire fields can't cook you mid-combo (no icon spam).
+            player.addEffect(new MobEffectInstance(MobEffects.FIRE_RESISTANCE,
+                    resistSeconds * 20, 0, false, false, true));
+        }
+        float boost = WandPerks.damageMultiplier(player); // direct-hurt path (MagmaJump)
+        WandTickService.trackMagmaJump(player, power.param("damage", 8.0F) * boost,
+                power.param("radius", 4.5F), power.param("knockback", 1.0F),
+                (int) (power.param("fireSeconds", 2.0F) * 20.0F),
+                power.param("eruptRadius", 0.0F), power.param("eruptDamage", 0.0F) * boost,
+                (int) (power.param("eruptFireSeconds", 0.0F) * 20.0F));
         Vec3 feet = player.position();
         sendQuasar(level, GLUT_SPRUNG_CRATER, feet);
         // PH-PLAYER (IDEAS-player #5): Photon eruption with physics-bouncing chunks +
@@ -691,6 +835,10 @@ public final class WandPowers {
      * (strike intensity 0.35) delivers a needle starfall streak with a short light pillar
      * ({@code stern_funke_fall} spawned raised + at ground, the descending column reads as
      * the star burying itself), crystal chimes instead of thunder.</p>
+     *
+     * <p>WANDFIX-2 Sternenmal: victims are stamped with Glowing for {@code markTicks} —
+     * visible through walls, and every other STERN power deals its {@code markBonus}
+     * against marked targets. Funkenruf is the cheap opener that feeds the whole path.</p>
      */
     private static boolean castFunkenruf(ServerPlayer player, WandConfig.Power power) {
         ServerLevel level = player.serverLevel();
@@ -707,7 +855,8 @@ public final class WandPowers {
             level.playSound(null, target.x, target.y, target.z,
                     SoundEvents.AMETHYST_BLOCK_CHIME, SoundSource.PLAYERS, 0.35F, 1.95F);
         });
-        damageAround(player, target, power.param("radius", 2.0F), power.param("damage", 5.0F), 0.4F, 0);
+        damageAround(player, target, power.param("radius", 2.5F), power.param("damage", 6.0F),
+                0.4F, 0, 0.0F, 1.0F, 0, (int) power.param("markTicks", 100.0F));
         // Sender owns audio (strikeLightning contract) — crystal chimes, not thunder.
         level.playSound(null, target.x, target.y, target.z, SoundEvents.AMETHYST_BLOCK_CHIME,
                 SoundSource.PLAYERS, 0.9F, 1.6F);
@@ -728,6 +877,12 @@ public final class WandPowers {
      * motes) over the end-rod warning ring; each star is a 0.15-intensity silver ribbon +
      * a {@code stern_funke_fall} starfall streak, chimed at a rising random pitch; the
      * last star lands with a resonate payoff.</p>
+     *
+     * <p>WANDFIX-2 mechanics: every star hit dusts its victims with Slowness II for
+     * {@code slowTicks} (Sternenstaub — the zone is now real area denial) and collects
+     * the Sternenmal {@code markBonus} against Glowing targets. The L4 upgrade arms the
+     * D11 finale pulse with {@code finaleDamage}: the synced re-light at the end DETONATES
+     * across the whole zone instead of only shining.</p>
      */
     private static boolean castSternschauer(ServerPlayer player, WandConfig.Power power) {
         ServerLevel level = player.serverLevel();
@@ -735,9 +890,12 @@ public final class WandPowers {
         float zoneRadius = power.param("zoneRadius", 8.0F);
         int telegraph = (int) power.param("telegraphTicks", 30.0F);
         int duration = (int) power.param("durationTicks", 60.0F);
-        int count = Math.max(1, (int) power.param("count", 12.0F));
-        float damage = power.param("damage", 5.0F);
+        int count = Math.max(1, (int) power.param("count", 14.0F));
+        float damage = power.param("damage", 6.0F);
         float hitRadius = power.param("hitRadius", 2.5F);
+        int slowTicks = (int) power.param("slowTicks", 40.0F);
+        float markBonus = power.param("markBonus", 1.25F);
+        float finaleDamage = power.param("finaleDamage", 0.0F);
 
         // Telegraph: a quiet ring of end-rod motes so targets get their 1.5 s warning,
         // crowned by the rotating constellation ring.
@@ -771,7 +929,7 @@ public final class WandPowers {
                 // Thin silver ribbon (0.15) + the starfall needle reading as a light pillar.
                 FxPayloads.sendFxEvent(level, FxPayloads.FX_LIGHTNING_STRIKE, impact, 0.15F, 0.0F, FX_RANGE);
                 sendQuasar(level, STERN_FUNKE_FALL, impact.add(0.0D, 1.6D, 0.0D));
-                damageAround(player, impact, hitRadius, damage, 0.3F, 0);
+                damageAround(player, impact, hitRadius, damage, 0.3F, 0, 0.0F, markBonus, slowTicks, 0);
                 level.playSound(null, x, y, z, SoundEvents.AMETHYST_CLUSTER_BREAK,
                         SoundSource.PLAYERS, 0.8F, chimePitch + level.random.nextFloat() * 0.1F);
                 if (last) {
@@ -784,7 +942,8 @@ public final class WandPowers {
         // D11 field finale: one synced pulse — every landed star's pillar re-lights AT
         // ONCE a beat after the last impact (sampled down to 6 pillars for the budget
         // law; reducedFx clients drop extras silently), over a single held resonate.
-        // The shower now ENDS instead of trailing off.
+        // The shower now ENDS instead of trailing off. WANDFIX-2 (L4): with finaleDamage
+        // armed the pulse also DETONATES — one zone-wide burst closes the shower.
         WandTickService.schedule(level, telegraph + duration + 6, () -> {
             if (landed.isEmpty()) {
                 return;
@@ -795,6 +954,11 @@ public final class WandPowers {
                 sendQuasar(level, STERN_FUNKE_FALL, landed.get(i).add(0.0D, 1.6D, 0.0D));
             }
             Vec3 heart = landed.get(landed.size() / 2);
+            if (finaleDamage > 0.0F) {
+                damageAround(player, zone, zoneRadius, finaleDamage, 0.0F, 0,
+                        0.35F, markBonus, 0, 0);
+                shakeNear(level, zone, 20.0D, 0.16F, 8);
+            }
             level.playSound(null, heart.x, heart.y, heart.z, SoundEvents.AMETHYST_BLOCK_RESONATE,
                     SoundSource.PLAYERS, 0.85F, 1.1F);
             level.playSound(null, heart.x, heart.y, heart.z, SoundEvents.AMETHYST_BLOCK_CHIME,
@@ -811,14 +975,24 @@ public final class WandPowers {
      * descent beats before the impact tick, which lands as a giant strike + shockwave +
      * afterglow dome + light pillar with layered thunder/deep-chime audio and a real (but
      * still small) shared camera hit. Damage timing is UNCHANGED (impact at telegraph).</p>
+     *
+     * <p>WANDFIX-2 mechanics: the impact hurls victims SKYWARD ({@code knockup}) and
+     * collects the Sternenmal {@code markBonus} against Glowing targets. The L5 upgrade
+     * shatters — {@code splinters} shard-comets crash around the crater over the next
+     * half-second ({@code splinterDamage} in {@code splinterRadius} each).</p>
      */
     private static boolean castKometenschlag(ServerPlayer player, WandConfig.Power power) {
         ServerLevel level = player.serverLevel();
         Vec3 target = aimPoint(player, power.param("range", 32.0F));
         int telegraph = (int) power.param("telegraphTicks", 20.0F);
-        float damage = power.param("damage", 12.0F);
+        float damage = power.param("damage", 16.0F);
         float radius = power.param("radius", 5.0F);
-        float knockback = power.param("knockback", 1.4F);
+        float knockback = power.param("knockback", 1.5F);
+        float knockup = power.param("knockup", 0.8F);
+        float markBonus = power.param("markBonus", 1.25F);
+        int splinters = (int) power.param("splinters", 0.0F);
+        float splinterDamage = power.param("splinterDamage", 8.0F);
+        float splinterRadius = power.param("splinterRadius", 3.0F);
 
         level.sendParticles(ParticleTypes.END_ROD, target.x, target.y + 0.4D, target.z,
                 24, radius * 0.35D, 0.2D, radius * 0.35D, 0.02D);
@@ -865,7 +1039,7 @@ public final class WandPowers {
             FxPayloads.sendFxEvent(level, FxPayloads.FX_SHOCKWAVE, target, 0.9F, 16.0F, FX_RANGE);
             sendQuasar(level, STERN_KOMET_CORE, target); // afterglow dome
             sendQuasar(level, STERN_FUNKE_FALL, target.add(0.0D, 2.2D, 0.0D)); // light pillar
-            damageAround(player, target, radius, damage, knockback, 0);
+            damageAround(player, target, radius, damage, knockback, 0, knockup, markBonus, 0, 0);
             level.playSound(null, target.x, target.y, target.z, SoundEvents.LIGHTNING_BOLT_THUNDER,
                     SoundSource.PLAYERS, 1.0F, 1.05F);
             level.playSound(null, target.x, target.y, target.z, SoundEvents.AMETHYST_BLOCK_RESONATE,
@@ -874,6 +1048,26 @@ public final class WandPowers {
                     SoundSource.PLAYERS, 0.9F, 0.8F);
             shakeNear(level, target, 32.0D, 0.4F, 13);
         });
+        // WANDFIX-2 (L5) Splitterregen: shard-comets crash around the crater right after
+        // the main hit — thin ribbons + starfall streaks, each a small AoE of its own.
+        for (int i = 0; i < splinters; i++) {
+            int delay = telegraph + 4 + i * 3;
+            WandTickService.schedule(level, delay, () -> {
+                double angle = level.random.nextDouble() * Math.PI * 2.0D;
+                double dist = radius * (0.6D + level.random.nextDouble() * 0.7D);
+                double x = target.x + Math.cos(angle) * dist;
+                double z = target.z + Math.sin(angle) * dist;
+                double y = level.getHeight(Heightmap.Types.MOTION_BLOCKING,
+                        (int) Math.floor(x), (int) Math.floor(z));
+                Vec3 impact = new Vec3(x, y, z);
+                FxPayloads.sendFxEvent(level, FxPayloads.FX_LIGHTNING_STRIKE, impact, 0.3F, 0.0F, FX_RANGE);
+                sendQuasar(level, STERN_FUNKE_FALL, impact.add(0.0D, 1.6D, 0.0D));
+                damageAround(player, impact, splinterRadius, splinterDamage, 0.5F, 0,
+                        0.0F, markBonus, 0, 0);
+                level.playSound(null, x, y, z, SoundEvents.AMETHYST_CLUSTER_BREAK,
+                        SoundSource.PLAYERS, 0.8F, 1.0F + level.random.nextFloat() * 0.4F);
+            });
+        }
         return true;
     }
 
@@ -930,7 +1124,21 @@ public final class WandPowers {
      */
     static void damageAround(ServerPlayer caster, Vec3 center, float radius, float damage,
             float knockback, int fireTicks) {
+        damageAround(caster, center, radius, damage, knockback, fireTicks, 0.0F, 1.0F, 0, 0);
+    }
+
+    /**
+     * Full-fat AoE helper (WANDFIX-2 rebalance): the base contract plus the new mechanics
+     * — {@code knockup} hurls victims skyward on top of the radial push, {@code markBonus}
+     * &gt; 1 multiplies damage against Glowing targets (the STERN Sternenmal combo),
+     * {@code slowTicks} applies Slowness II (Sternenstaub), {@code glowTicks} stamps the
+     * Sternenmal mark itself. Zeros/1.0 = the classic behavior.
+     */
+    static void damageAround(ServerPlayer caster, Vec3 center, float radius, float damage,
+            float knockback, int fireTicks, float knockup, float markBonus, int slowTicks,
+            int glowTicks) {
         ServerLevel level = caster.serverLevel();
+        damage *= WandPerks.damageMultiplier(caster); // WANDFIX-4 damage line (W11/12/15/16)
         List<LivingEntity> victims = level.getEntitiesOfClass(LivingEntity.class,
                 new AABB(center, center).inflate(radius),
                 e -> e != caster && e.isAlive() && e.position().distanceTo(center) <= radius);
@@ -938,15 +1146,24 @@ public final class WandPowers {
             if (SpawnProtectionRules.isInProtectionZone(level, victim.blockPosition())) {
                 continue;
             }
-            victim.hurt(caster.damageSources().indirectMagic(caster, caster), damage);
+            float dealt = markBonus > 1.0F && victim.hasEffect(MobEffects.GLOWING)
+                    ? damage * markBonus : damage;
+            victim.hurt(caster.damageSources().indirectMagic(caster, caster), dealt);
             if (fireTicks > 0) {
                 victim.setRemainingFireTicks(Math.max(victim.getRemainingFireTicks(), fireTicks));
             }
-            if (knockback > 0.0F) {
+            if (slowTicks > 0) {
+                victim.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SLOWDOWN, slowTicks, 1), caster);
+            }
+            if (glowTicks > 0) {
+                victim.addEffect(new MobEffectInstance(MobEffects.GLOWING, glowTicks, 0), caster);
+            }
+            if (knockback > 0.0F || knockup > 0.0F) {
                 Vec3 away = victim.position().subtract(center);
                 Vec3 flat = new Vec3(away.x, 0.0D, away.z);
                 Vec3 dir = flat.lengthSqr() > 1.0E-4D ? flat.normalize() : Vec3.ZERO;
-                victim.push(dir.x * knockback * 0.5D, 0.25D * knockback, dir.z * knockback * 0.5D);
+                victim.push(dir.x * knockback * 0.5D, 0.25D * knockback + knockup,
+                        dir.z * knockback * 0.5D);
             }
         }
     }

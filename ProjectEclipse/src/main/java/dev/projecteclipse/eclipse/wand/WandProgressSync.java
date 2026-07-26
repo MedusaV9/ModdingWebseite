@@ -42,9 +42,13 @@ public final class WandProgressSync {
             level = progress.level;
             xp = Math.max(0, progress.xp);
         }
+        // WANDFIX-4: the synced max + power rows are the receiver's EFFECTIVE numbers
+        // (wand-branch skill perks folded in) so the panel/HUD never display raw config
+        // values that this player's casts would not actually pay.
+        int chargeMax = WandPerks.chargeMax(player);
         int charge = wand != null
-                ? wand.getOrDefault(WandItems.WAND_CHARGE.get(), config.charge().max())
-                : config.charge().max();
+                ? wand.getOrDefault(WandItems.WAND_CHARGE.get(), chargeMax)
+                : chargeMax;
 
         List<Integer> levelCosts = new ArrayList<>(config.xp().levelCosts().length);
         for (int cost : config.xp().levelCosts()) {
@@ -58,13 +62,13 @@ public final class WandProgressSync {
             long readyAt = cooldowns.getOrDefault(entry.getKey(), 0L);
             rows.add(new S2CWandProgressPayload.PowerRow(
                     entry.getKey(),
-                    entry.getValue().cost(),
-                    entry.getValue().cooldownTicks(),
+                    WandPerks.effectiveCost(player, entry.getValue()),
+                    WandPerks.effectiveCooldownTicks(player, entry.getValue()),
                     (int) Math.max(0L, readyAt - now)));
         }
 
         PacketDistributor.sendToPlayer(player, new S2CWandProgressPayload(
-                level, xp, charge, config.charge().max(),
+                level, xp, charge, chargeMax,
                 config.xp().perCostPoint(), config.xp().killBonus(), levelCosts, rows));
     }
 

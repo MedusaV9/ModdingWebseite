@@ -2,6 +2,7 @@ package dev.projecteclipse.eclipse.eventdim;
 
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.BiFunction;
@@ -10,8 +11,10 @@ import java.util.function.Function;
 import javax.annotation.Nullable;
 
 import dev.projecteclipse.eclipse.backrooms.BackroomsEventService;
+import dev.projecteclipse.eclipse.xboxevent.XboxDimensions;
 import dev.projecteclipse.eclipse.xboxevent.XboxEventConfig;
 import dev.projecteclipse.eclipse.xboxevent.XboxEventService;
+import dev.projecteclipse.eclipse.xboxevent.XboxWorldInstaller;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
@@ -70,13 +73,14 @@ public final class PortalEventScheduler {
     private static final Map<String, Variant> VARIANTS = new LinkedHashMap<>();
 
     static {
-        // xbox — COMMON: delegate to the existing tutorial-world event (default world,
-        // default minutes). Multi-world starts stay on /dev xboxevent start.
+        // xbox — COMMON: delegate to the existing tutorial-world event (default minutes).
+        // The world ROTATES per event instance (the "always the same map" fix): every
+        // scheduler open used to hardcode worlds().get(0), so tu12 was the only tutorial
+        // world players ever saw. Explicit multi-world starts stay on /dev xboxevent start.
         register(new Variant("xbox", Rarity.COMMON,
                 (server, operator) -> {
-                    String world = XboxEventConfig.get().worlds().isEmpty()
-                            ? "tu12" : XboxEventConfig.get().worlds().get(0);
-                    XboxEventService.StartResult result = XboxEventService.start(server, world, 0,
+                    XboxEventService.StartResult result = XboxEventService.start(server,
+                            nextXboxWorld(server), 0,
                             operator == null ? "portal-scheduler" : operator.getScoreboardName());
                     return result.started() ? null : result.message();
                 },
@@ -94,6 +98,27 @@ public final class PortalEventScheduler {
     }
 
     private PortalEventScheduler() {}
+
+    /**
+     * Deterministic tutorial-world rotation for scheduler-driven opens: walks the
+     * configured world list keyed on the persisted {@code XboxEventState.instanceId()}
+     * (bumped once per event), restricted to worlds whose dimension is registered AND
+     * whose region payload is installed — a missing archive skips to the next version
+     * instead of failing the open. Falls back to the raw config list (so
+     * {@code XboxEventService.start} reports its precise error) when nothing is installed.
+     */
+    private static String nextXboxWorld(MinecraftServer server) {
+        List<String> worlds = XboxEventConfig.get().worlds();
+        if (worlds.isEmpty()) {
+            return "tu12";
+        }
+        List<String> installed = worlds.stream()
+                .filter(id -> XboxDimensions.byWorldId(id) != null
+                        && XboxWorldInstaller.isInstalled(server, id))
+                .toList();
+        List<String> pool = installed.isEmpty() ? worlds : installed;
+        return pool.get(Math.floorMod(XboxEventService.stateOf(server).instanceId(), pool.size()));
+    }
 
     /** Registers a variant; last registration wins on id collision (dev-time override). */
     public static void register(Variant variant) {

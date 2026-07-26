@@ -3,6 +3,7 @@ package dev.projecteclipse.eclipse.wand;
 import java.util.List;
 import java.util.UUID;
 
+import dev.projecteclipse.eclipse.cutscene.FreezeService;
 import dev.projecteclipse.eclipse.entity.geo.EclipseGeoAnimations;
 import dev.projecteclipse.eclipse.network.wand.C2SWandCastPayload;
 import net.minecraft.ChatFormatting;
@@ -45,7 +46,10 @@ import software.bernie.geckolib.util.GeckoLibUtil;
  * <p>Interaction: right-click with a pathless wand opens the client path chooser; with a
  * chosen path it sends the {@code C2SWandCastPayload} cast request (ALL validation —
  * charge, cooldown, path, disabled state, protection zones — is server-side in
- * {@link WandPowers}). Sneak-right-click cycles the selected power server-side.</p>
+ * {@link WandPowers}). Sneak-right-click cycles the selected power server-side;
+ * sneak-scroll (client {@code WandSelectInput} → {@code C2SWandCyclePayload}) cycles in
+ * both directions. Every entry point refuses while the player is cutscene-frozen
+ * (WANDFIX-7).</p>
  */
 public final class EclipseWandItem extends Item implements GeoItem {
     /** Asset/anim id ({@code geo/item/eclipse_wand.geo.json}, {@code animation.eclipse_wand.*}). */
@@ -98,15 +102,25 @@ public final class EclipseWandItem extends Item implements GeoItem {
     public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
         ItemStack stack = player.getItemInHand(hand);
         if (player.isSecondaryUseActive()) {
-            if (!level.isClientSide && player instanceof ServerPlayer serverPlayer) {
-                WandPowers.cycleSelected(serverPlayer, stack);
+            if (!level.isClientSide && player instanceof ServerPlayer serverPlayer
+                    // WANDFIX-7 belt-and-braces: FreezeService already cancels
+                    // RightClickItem while frozen, but this entry point stays guarded on
+                    // its own so a future event-flow change can never reopen it.
+                    && !FreezeService.isFrozen(serverPlayer)) {
+                WandPowers.cycleSelected(serverPlayer, stack, 1);
             }
             return InteractionResultHolder.consume(stack);
         }
         if (level.isClientSide) {
+            // WANDFIX-7 client comfort: while a cutscene camera flight is active the
+            // click is swallowed locally — the server-side FreezeService gate in
+            // WandPowers is the authority; this only saves a doomed round-trip. Lazy
+            // fully-qualified client reference (FxPayloads pattern) — never loads on a
+            // dedicated server because this branch never executes there.
+            if (dev.projecteclipse.eclipse.cutscene.client.CameraDirector.isActive()) {
+                return InteractionResultHolder.consume(stack);
+            }
             if (WandSoulbind.pathOf(stack) == WandPath.NONE) {
-                // Lazy fully-qualified client reference (FxPayloads pattern) — never loads
-                // on a dedicated server because this branch never executes there.
                 dev.projecteclipse.eclipse.client.wand.WandPathScreen.open();
             } else {
                 net.neoforged.neoforge.network.PacketDistributor.sendToServer(
@@ -124,28 +138,34 @@ public final class EclipseWandItem extends Item implements GeoItem {
         }
         WandSoulbind.tick(player, stack);
         if (level.getGameTime() % 20L == 0L) {
-            regenCharge(level, stack, isSelected || player.getOffhandItem() == stack);
+            regenCharge(level, player, stack, isSelected || player.getOffhandItem() == stack);
         }
     }
 
-    /** Once-a-second Veilladung regen; faster in held hands and during the dark hours. */
-    private static void regenCharge(Level level, ItemStack stack, boolean held) {
+    /**
+     * Once-a-second Veilladung regen; faster in held hands and during the dark hours.
+     * WANDFIX-4: the cap and the rate honor the owner's wand-branch skill nodes
+     * ({@code WandPerks.chargeMax} / {@code regenMultiplier}) — per PLAYER, not per wand.
+     */
+    private static void regenCharge(Level level, ServerPlayer player, ItemStack stack, boolean held) {
         WandConfig.Charge config = WandConfig.get().charge();
-        int charge = stack.getOrDefault(WandItems.WAND_CHARGE.get(), config.max());
-        if (charge >= config.max()) {
+        int max = WandPerks.chargeMax(player);
+        int charge = stack.getOrDefault(WandItems.WAND_CHARGE.get(), max);
+        if (charge >= max) {
             return;
         }
         float regen = held ? config.regenHeldPerSecond() : config.regenStowedPerSecond();
         if (level.isNight()) {
             regen *= config.nightMult();
         }
+        regen *= WandPerks.regenMultiplier(player);
         int whole = (int) regen;
         float fraction = regen - whole;
         if (fraction > 0.0F && level.random.nextFloat() < fraction) {
             whole++;
         }
         if (whole > 0) {
-            stack.set(WandItems.WAND_CHARGE.get(), Math.min(config.max(), charge + whole));
+            stack.set(WandItems.WAND_CHARGE.get(), Math.min(max, charge + whole));
         }
     }
 
@@ -174,8 +194,13 @@ public final class EclipseWandItem extends Item implements GeoItem {
         }
         Integer charge = stack.get(WandItems.WAND_CHARGE.get());
         if (charge != null) {
+            // WANDFIX-4: show the synced per-player max (wand-branch perks) when present.
+            int max = FMLEnvironment.dist == Dist.CLIENT
+                    && dev.projecteclipse.eclipse.client.wand.ClientWandProgress.synced
+                    ? dev.projecteclipse.eclipse.client.wand.ClientWandProgress.chargeMax
+                    : WandConfig.get().charge().max();
             tooltip.add(Component.translatable("wand.eclipse.tooltip.charge",
-                    charge, WandConfig.get().charge().max()).withStyle(ChatFormatting.DARK_AQUA));
+                    charge, max).withStyle(ChatFormatting.DARK_AQUA));
         }
         UUID owner = stack.get(WandItems.WAND_OWNER.get());
         if (owner == null) {

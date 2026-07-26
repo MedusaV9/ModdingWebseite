@@ -87,56 +87,56 @@ public final class XboxWorldInstaller {
         return Files.exists(resetMarker(server, worldId));
     }
 
-    // ------------------------------------------------------------------ C17 frame pass
+    // ------------------------------------------------------------------ frame sweep
 
-    /** Command tag on installer-placed display frames (idempotency + tooling discovery). */
+    /** Command tag the old C17 pass put on installer-placed display frames (legacy saves). */
     public static final String FRAME_TAG = "eclipse_xbox_frame";
 
     /**
-     * C17 post-install decoration pass: hangs the period-correct display item frames from
-     * the loot manifest's {@code frames} section. Runs at EVENT START (not install time —
-     * entities need a live {@link ServerLevel}, and the installer runs before levels
-     * exist); idempotent via {@value #FRAME_TAG}, so re-starts and portal re-placements
-     * never double-hang. Frames are wiped with the dimension dir on a staged reset and
-     * re-hung by the next event start. Block items spawn classic-mapped like chest loot.
+     * The C17 frame pass, INVERTED by the user decree "remove all item frames from the
+     * classic maps": instead of hanging display frames, the event-start pass now SWEEPS
+     * every {@link ItemFrame} (incl. glow frames) out of the world — legacy tagged
+     * installer frames persisted in older saves as well as frames baked into the bundled
+     * {@code entities/*.mca} payloads. The manifest {@code frames} section is kept parsed
+     * (its positions chunk-force the legacy spots so persisted frames are discoverable),
+     * but nothing is placed anymore; {@link #onEntityJoinLevel} keeps freshly
+     * deserialized or player-placed frames out between passes.
      */
     public static void decorate(MinecraftServer server, String worldId) {
-        List<XboxWorldsManifest.FrameEntry> frames = XboxWorldsManifest.frames(server, worldId);
-        if (frames.isEmpty()) {
-            return;
-        }
         ResourceKey<Level> dimension = XboxDimensions.byWorldId(worldId);
         ServerLevel level = dimension == null ? null : server.getLevel(dimension);
         if (level == null) {
             return;
         }
-        int placed = 0;
-        for (XboxWorldsManifest.FrameEntry frame : frames) {
-            level.getChunk(frame.pos()); // force-load so existing frames are discoverable
-            if (hasTaggedFrame(level, frame.pos())) {
-                continue;
-            }
-            ItemFrame entity = new ItemFrame(level, frame.pos(), frame.facing());
-            if (!entity.survives()) {
-                EclipseMod.LOGGER.warn("Xbox frame at {} facing {} in {} has no supporting wall — skipped",
-                        frame.pos(), frame.facing(), worldId);
-                continue;
-            }
-            entity.setItem(XboxEventService.classicMapped(frame.item()), false);
-            entity.setInvulnerable(true); // display piece, not a takeable frame
-            entity.addTag(FRAME_TAG);
-            level.addFreshEntity(entity);
-            placed++;
+        for (XboxWorldsManifest.FrameEntry frame : XboxWorldsManifest.frames(server, worldId)) {
+            level.getChunk(frame.pos()); // force-load the legacy frame spots
         }
-        if (placed > 0) {
-            EclipseMod.LOGGER.info("Hung {} classic display frame(s) in xbox world {}", placed, worldId);
+        List<Entity> doomed = new java.util.ArrayList<>();
+        for (Entity entity : level.getAllEntities()) {
+            if (entity instanceof ItemFrame) {
+                doomed.add(entity);
+            }
+        }
+        doomed.forEach(Entity::discard);
+        if (!doomed.isEmpty()) {
+            EclipseMod.LOGGER.info("Swept {} item frame(s) from xbox world {} (user decree)",
+                    doomed.size(), worldId);
         }
     }
 
-    private static boolean hasTaggedFrame(ServerLevel level, BlockPos pos) {
-        List<Entity> existing = level.getEntities((Entity) null, new AABB(pos),
-                entity -> entity instanceof ItemFrame && entity.getTags().contains(FRAME_TAG));
-        return !existing.isEmpty();
+    /**
+     * Item frames must never (re)appear in the classic maps: frame entities baked into
+     * the bundled {@code entities/*.mca} payloads are refused as their chunks
+     * deserialize, and player-placed frames bounce the same way (the maps are display
+     * dimensions — nothing hangs on their walls anymore).
+     */
+    @SubscribeEvent
+    public static void onEntityJoinLevel(net.neoforged.neoforge.event.entity.EntityJoinLevelEvent event) {
+        if (event.getEntity() instanceof ItemFrame
+                && event.getLevel() instanceof ServerLevel level
+                && XboxDimensions.isXboxDimension(level.dimension())) {
+            event.setCanceled(true);
+        }
     }
 
     // ------------------------------------------------------------------ internals

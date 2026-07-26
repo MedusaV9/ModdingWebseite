@@ -209,41 +209,57 @@ public final class WandConfig {
         xp.addProperty("skillXpPerCostPoint", 0.4F);
         root.add("xp", xp);
 
+        // WANDFIX-2 rebalance: every power gained a mechanical identity on top of tuned
+        // numbers (the old table was pure stats and read flat against 200–400 HP bosses).
+        // RISS = control (arrival veil, phase shear, maw pull, echo bite), GLUT = burn
+        // combos (pierce, burning-target bonus, launch fire-veil, twin ring, landing
+        // eruption), STERN = the Sternenmal mark loop (Glowing mark → bonus damage,
+        // star-dust slow, skyward comet, detonating finale, splinter comets).
         JsonObject powers = new JsonObject();
-        powers.add("riss.blink", power(15, 60,
-                "range", 12));
-        powers.add("riss.phasenwelle", power(40, 300,
-                "length", 10, "maxBlocks", 24, "holdTicks", 200, "restoreEveryTicks", 10, "vanishPerTick", 6));
-        powers.add("riss.rissschlag", power(30, 160,
-                "range", 24, "width", 5, "damage", 8, "radius", 4, "knockback", 1.1F, "openTicks", 25));
-        powers.add("riss.phasenwelle_2", power(50, 260,
-                "length", 14, "maxBlocks", 40, "holdTicks", 240, "restoreEveryTicks", 8, "vanishPerTick", 8));
-        powers.add("riss.rissschlag_2", power(45, 200,
-                "range", 32, "width", 8, "damage", 14, "radius", 6, "knockback", 1.5F, "openTicks", 30));
+        powers.add("riss.blink", power(12, 50,
+                "range", 16, "veilTicks", 30));
+        powers.add("riss.phasenwelle", power(35, 240,
+                "length", 12, "maxBlocks", 32, "holdTicks", 200, "restoreEveryTicks", 10, "vanishPerTick", 6,
+                "shearDamage", 4, "shearSlowTicks", 60));
+        powers.add("riss.rissschlag", power(30, 140,
+                "range", 24, "width", 5, "damage", 10, "radius", 4.5F, "knockback", 1.2F, "openTicks", 25,
+                "pull", 0.65F));
+        powers.add("riss.phasenwelle_2", power(45, 220,
+                "length", 16, "maxBlocks", 48, "holdTicks", 240, "restoreEveryTicks", 8, "vanishPerTick", 8,
+                "shearDamage", 8, "shearSlowTicks", 100));
+        powers.add("riss.rissschlag_2", power(45, 180,
+                "range", 32, "width", 8, "damage", 18, "radius", 6, "knockback", 1.6F, "openTicks", 30,
+                "pull", 0.9F, "echo", 0.5F));
 
-        powers.add("glut.glutstoss", power(12, 40,
-                "range", 12, "damage", 5, "fireSeconds", 3));
-        powers.add("glut.feuerwelle", power(45, 400,
-                "radius", 12, "expandTicks", 40, "damage", 7, "fireSeconds", 3, "knockup", 0.42F));
-        powers.add("glut.magmasprung", power(25, 200,
-                "launch", 1.15F, "damage", 6, "radius", 4, "knockback", 1.0F, "fireSeconds", 2));
-        powers.add("glut.feuerwelle_2", power(55, 340,
-                "radius", 18, "expandTicks", 50, "damage", 10, "fireSeconds", 4, "knockup", 0.55F));
-        powers.add("glut.magmasprung_2", power(35, 160,
-                "launch", 1.45F, "damage", 10, "radius", 6, "knockback", 1.4F, "fireSeconds", 3));
+        powers.add("glut.glutstoss", power(10, 30,
+                "range", 12, "damage", 6, "fireSeconds", 4, "pierce", 2));
+        powers.add("glut.feuerwelle", power(40, 320,
+                "radius", 12, "expandTicks", 40, "damage", 9, "fireSeconds", 4, "knockup", 0.42F,
+                "burnBonus", 1.5F));
+        powers.add("glut.magmasprung", power(22, 140,
+                "launch", 1.3F, "damage", 8, "radius", 4.5F, "knockback", 1.0F, "fireSeconds", 2,
+                "resistSeconds", 5));
+        powers.add("glut.feuerwelle_2", power(50, 300,
+                "radius", 18, "expandTicks", 50, "damage", 13, "fireSeconds", 5, "knockup", 0.6F,
+                "burnBonus", 1.5F, "waves", 2));
+        powers.add("glut.magmasprung_2", power(32, 130,
+                "launch", 1.6F, "damage", 14, "radius", 6, "knockback", 1.5F, "fireSeconds", 3,
+                "resistSeconds", 6, "eruptRadius", 6, "eruptDamage", 6, "eruptFireSeconds", 3));
 
-        powers.add("stern.funkenruf", power(12, 50,
-                "range", 32, "damage", 5, "radius", 2));
-        powers.add("stern.sternschauer", power(45, 400,
-                "range", 32, "zoneRadius", 8, "count", 12, "telegraphTicks", 30, "durationTicks", 60,
-                "damage", 5, "hitRadius", 2.5F));
-        powers.add("stern.kometenschlag", power(30, 240,
-                "range", 32, "damage", 12, "radius", 5, "telegraphTicks", 20, "knockback", 1.4F));
-        powers.add("stern.sternschauer_2", power(55, 340,
-                "range", 40, "zoneRadius", 10, "count", 20, "telegraphTicks", 24, "durationTicks", 70,
-                "damage", 6, "hitRadius", 3.0F));
-        powers.add("stern.kometenschlag_2", power(45, 200,
-                "range", 40, "damage", 18, "radius", 7, "telegraphTicks", 16, "knockback", 1.8F));
+        powers.add("stern.funkenruf", power(10, 40,
+                "range", 32, "damage", 6, "radius", 2.5F, "markTicks", 100));
+        powers.add("stern.sternschauer", power(40, 320,
+                "range", 32, "zoneRadius", 8, "count", 14, "telegraphTicks", 30, "durationTicks", 60,
+                "damage", 6, "hitRadius", 2.5F, "slowTicks", 40, "markBonus", 1.25F));
+        powers.add("stern.kometenschlag", power(28, 200,
+                "range", 32, "damage", 16, "radius", 5, "telegraphTicks", 20, "knockback", 1.5F,
+                "knockup", 0.8F, "markBonus", 1.25F));
+        powers.add("stern.sternschauer_2", power(50, 300,
+                "range", 40, "zoneRadius", 10, "count", 24, "telegraphTicks", 24, "durationTicks", 70,
+                "damage", 8, "hitRadius", 3.0F, "slowTicks", 60, "markBonus", 1.25F, "finaleDamage", 8));
+        powers.add("stern.kometenschlag_2", power(42, 180,
+                "range", 40, "damage", 24, "radius", 7, "telegraphTicks", 16, "knockback", 1.9F,
+                "knockup", 1.0F, "markBonus", 1.25F, "splinters", 3, "splinterDamage", 8, "splinterRadius", 3));
         root.add("powers", powers);
 
         return root;

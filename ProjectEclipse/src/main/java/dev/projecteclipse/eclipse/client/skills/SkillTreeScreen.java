@@ -471,6 +471,9 @@ public class SkillTreeScreen extends Screen {
                     : EclipseLang.trString("gui.eclipse.skills.state.no_points");
             case LOCKED -> EclipseLang.trString("gui.eclipse.skills.requires",
                     String.join(", ", missingPrereqNames(model, node)));
+            // WANDFIX-4: sealed by an owned rival specialisation — name the rival(s).
+            case EXCLUDED -> EclipseLang.trString("gui.eclipse.skills.state.excluded",
+                    String.join(", ", excludingOwnedNames(model, node)));
         };
     }
 
@@ -481,6 +484,22 @@ public class SkillTreeScreen extends Screen {
             if (!ClientStateCache.skillOwnedNodes.contains(req)) {
                 SkillTreeModel.Node parent = model.nodes().get(req);
                 names.add(parent != null ? parent.title.pick(locale) : req);
+            }
+        }
+        return names;
+    }
+
+    /** Owned nodes sealing this one (WANDFIX-4 both-ways exclusive check, display names). */
+    private List<String> excludingOwnedNames(SkillTreeModel model, SkillTreeModel.Node node) {
+        String locale = SkillTreeModel.pickLocale();
+        List<String> names = new ArrayList<>();
+        for (String ownedId : ClientStateCache.skillOwnedNodes) {
+            SkillTreeModel.Node owned = model.nodes().get(ownedId);
+            if (owned == null) {
+                continue;
+            }
+            if (node.excludes.contains(ownedId) || owned.excludes.contains(node.id)) {
+                names.add(owned.title.pick(locale));
             }
         }
         return names;

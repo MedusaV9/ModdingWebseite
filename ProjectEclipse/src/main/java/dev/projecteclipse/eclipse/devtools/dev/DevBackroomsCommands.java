@@ -12,7 +12,6 @@ import com.mojang.brigadier.exceptions.CommandSyntaxException;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.backrooms.BackroomsEventService;
-import dev.projecteclipse.eclipse.backrooms.BackroomsMaze;
 import dev.projecteclipse.eclipse.backrooms.BackroomsState;
 import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
@@ -158,8 +157,7 @@ public final class DevBackroomsCommands {
             source.sendSuccess(() -> Component.translatable("dev.eclipse.backrooms.status.window",
                     BackroomsEventService.mmss(state.endsAtEpochMillis() - now),
                     state.instanceId()), false);
-            source.sendSuccess(() -> Component.translatable("dev.eclipse.backrooms.status.stamp",
-                    state.stampCursor(), BackroomsMaze.totalStampUnits()), false);
+            // The maze is terrain-generated now — there is no stamp progress to report.
         }
         source.sendSuccess(() -> Component.translatable("dev.eclipse.backrooms.status.participants",
                 state.participantsSnapshot().size()), false);

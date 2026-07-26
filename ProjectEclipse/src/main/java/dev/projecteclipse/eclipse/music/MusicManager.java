@@ -313,6 +313,14 @@ public final class MusicManager {
             lingerTicksLeft = 0;
             return natural;
         }
+        // C17 seam, linger edition: the nostalgia bed yields to a STREAMING era track
+        // immediately — holding it for its linger window would double-play both (the
+        // tutorial-world music overlap). The bed still lingers across dimension exits.
+        if (held == MusicCues.XBOX_NOSTALGIA && XboxEraSounds.eraTrackPlaying()) {
+            lingerCue = null;
+            lingerTicksLeft = 0;
+            return natural;
+        }
         if (lingerCue == null) {
             lingerCue = held;
             lingerTicksLeft = held.lingerTicks();
@@ -440,7 +448,8 @@ public final class MusicManager {
         public void tick() {
             age++;
             fade = Mth.clamp(fade + fadeDirection, 0, FADE_TICKS);
-            volume = MusicConfig.volumeMultiplier() * fade / (float) FADE_TICKS;
+            // WANDFIX-6: cue.gain() trims quiet ceremonial stings under the config volume.
+            volume = MusicConfig.volumeMultiplier() * cue.gain() * fade / (float) FADE_TICKS;
             if (fadeDirection < 0 && fade == 0) {
                 stop();
             }
