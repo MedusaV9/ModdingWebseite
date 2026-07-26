@@ -1,0 +1,34 @@
+{
+  "_comment": "GLITCH2 — F-048 (ambient altar glitch: purple void, impulse from the altar block) + F-049 (per-zone accent colour, <effect>_<colour> syntax). The three doc keys and the two list/added keys below OVERWRITE shipped strings whose syntax changed; everything else is new.",
+
+  "en_us": {
+    "dev.eclipse.doc.glitch.add": "Spawn a silent glitch zone: effect, radius (blocks), duration (s); defaults to your position/dimension, optional x y z, fade-out ticks and accent colour. The effect also accepts <effect>_<colour>, e.g. void_purple",
+    "dev.eclipse.doc.glitch.test": "Preview a glitch effect on yourself only (default 10 s), no zone is created; accepts <effect>_<colour>, e.g. outline_cyan",
+    "dev.eclipse.doc.glitch.color": "Repaint a LIVE glitch zone (purple, green, red, cyan, orange, white, pink, or 'default'); the accent slides on every client inside it",
+    "dev.eclipse.doc.glitch.altar": "Fire the ambient altar glitch now — a purple void zone on the sanctum altar whose impulse radiates from the altar block; 'status' prints the schedule instead",
+
+    "dev.eclipse.glitch.added": "Glitch zone created: %1$s, radius %2$s blocks, %3$s s, centre %4$s %5$s %6$s (id %7$s). No announcement goes out — the zone is simply there.",
+    "dev.eclipse.glitch.recoloured": "Glitch zone %1$s repainted to %2$s. Anyone inside sees the colour slide, not snap.",
+    "dev.eclipse.glitch.unknown_colour": "Unknown glitch colour '%1$s'. Available: %2$s (or 'default' for the effect's own accent)",
+
+    "dev.eclipse.glitch.altar.fired": "Altar glitch fired: %1$s %2$s, radiating from the altar block. Nothing was announced — only the people standing there know.",
+    "dev.eclipse.glitch.altar.status": "Altar glitch: altar at %1$s, trigger range %2$s blocks, next eligible fire in %3$s min %4$s s (a player must be near for it to actually run).",
+    "dev.eclipse.glitch.altar.unavailable": "The altar glitch cannot run: the sanctum is unbuilt, its chunk is unloaded, or a glitch zone already covers the altar.",
+    "dev.eclipse.glitch.altar.no_altar": "No sanctum altar exists in this save yet — the altar glitch has nothing to radiate from."
+  },
+  "de_de": {
+    "dev.eclipse.doc.glitch.add": "Erzeugt eine stille Glitch-Zone: Effekt, Radius (Blöcke), Dauer (s); Standard ist deine Position/Dimension, optional x y z, Ausblend-Ticks und Akzentfarbe. Der Effekt akzeptiert auch <Effekt>_<Farbe>, z. B. void_purple",
+    "dev.eclipse.doc.glitch.test": "Testet einen Glitch-Effekt nur an dir selbst (Standard 10 s), ohne eine Zone zu erzeugen; akzeptiert <Effekt>_<Farbe>, z. B. outline_cyan",
+    "dev.eclipse.doc.glitch.color": "Färbt eine AKTIVE Glitch-Zone um (purple, green, red, cyan, orange, white, pink oder 'default'); der Akzent gleitet auf jedem Client darin über",
+    "dev.eclipse.doc.glitch.altar": "Löst den Altar-Glitch sofort aus — eine lila Void-Zone auf dem Sanktum-Altar, deren Impuls vom Altarblock ausgeht; 'status' zeigt stattdessen den Zeitplan",
+
+    "dev.eclipse.glitch.added": "Glitch-Zone erzeugt: %1$s, Radius %2$s Blöcke, %3$s s, Zentrum %4$s %5$s %6$s (ID %7$s). Es geht keine Ankündigung raus — die Zone ist einfach da.",
+    "dev.eclipse.glitch.recoloured": "Glitch-Zone %1$s umgefärbt auf %2$s. Wer drinsteht, sieht die Farbe gleiten, nicht springen.",
+    "dev.eclipse.glitch.unknown_colour": "Unbekannte Glitch-Farbe '%1$s'. Verfügbar: %2$s (oder 'default' für den Eigenakzent des Effekts)",
+
+    "dev.eclipse.glitch.altar.fired": "Altar-Glitch ausgelöst: %1$s %2$s, ausgehend vom Altarblock. Es wurde nichts angekündigt — nur wer dort steht, weiß davon.",
+    "dev.eclipse.glitch.altar.status": "Altar-Glitch: Altar bei %1$s, Auslöse-Reichweite %2$s Blöcke, nächster möglicher Auslöser in %3$s min %4$s s (es muss dafür jemand in der Nähe sein).",
+    "dev.eclipse.glitch.altar.unavailable": "Der Altar-Glitch kann nicht laufen: Das Sanktum ist nicht gebaut, sein Chunk nicht geladen, oder eine Glitch-Zone deckt den Altar bereits ab.",
+    "dev.eclipse.glitch.altar.no_altar": "In diesem Spielstand existiert noch kein Sanktum-Altar — der Altar-Glitch hat nichts, wovon er ausgehen könnte."
+  }
+}

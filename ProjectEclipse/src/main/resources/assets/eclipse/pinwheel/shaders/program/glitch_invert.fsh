@@ -6,7 +6,9 @@
 // positive for a re-roll — film slipping in the gate. Fed by client.GlitchZoneFx:
 // Strength (0..1 ramp — no-op at 0), Time (wall-clock seconds), Detail (0 under reduced
 // FX: hue wander freezes at a fixed angle and the drops stop; the static negative +
-// posterize grade survives).
+// posterize grade survives), AccentColor/AccentAmount (F-049: the band-seam shimmer is the
+// accent — shipped violet, luma-matched to any commanded colour — plus a light wash over
+// the negative so the whole frame leans that way).
 #include eclipse:eclipse_common
 #include eclipse:eclipse_glitch
 
@@ -14,6 +16,8 @@ uniform sampler2D DiffuseSampler0;
 uniform float Strength;
 uniform float Time;
 uniform float Detail;
+uniform vec3 AccentColor;
+uniform float AccentAmount;
 
 in vec2 texCoord;
 
@@ -55,6 +59,11 @@ void main() {
     float levels = mix(48.0, 5.0, s);
     color = mix(color, gzPosterize(color, levels), s);
 
+    // --- accent wash ----------------------------------------------------------------------------
+    // A light lean of the whole negative toward the commanded hue (identity at amount 0),
+    // so a coloured invert zone is not just a violet seam on a neutral negative.
+    color *= gzTint(AccentColor, AccentAmount * 0.35 * s);
+
     // --- seam shimmer ---------------------------------------------------------------------------
     // Faint violet glow where posterize bands meet: both taps quantize the SCENE luma
     // (same domain), so the term fires exactly on band boundaries — the negative looks
@@ -62,7 +71,8 @@ void main() {
     vec2 texel = 1.0 / vec2(textureSize(DiffuseSampler0, 0));
     float qC = floor(gzLuma(scene) * levels + 0.5) / max(levels, 1.0);
     float qN = floor(gzLuma(texture(DiffuseSampler0, clamp(texCoord + vec2(0.0, texel.y * 1.5), vec2(0.001), vec2(0.999))).rgb) * levels + 0.5) / max(levels, 1.0);
-    color += vec3(0.35, 0.10, 0.45) * smoothstep(0.02, 0.15, abs(qC - qN)) * 0.25 * s;
+    color += gzAccent(vec3(0.35, 0.10, 0.45), AccentColor, AccentAmount)
+            * smoothstep(0.02, 0.15, abs(qC - qN)) * 0.25 * s;
 
     fragColor = vec4(clamp(color, 0.0, 1.0), 1.0);
 }

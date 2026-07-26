@@ -6,7 +6,11 @@
 // displacement, sparse full-frame tear lines that shove and duplicate a row band, and a
 // low static floor. Fed by client.GlitchZoneFx: Strength (0..1 ramp — no-op at 0), Time
 // (wall-clock seconds), Detail (0 under reduced FX: tears, block motion and static
-// collapse; a mild chroma/posterize grade remains so the zone still reads corrupted).
+// collapse; a mild chroma/posterize grade remains so the zone still reads corrupted),
+// AccentColor/AccentAmount (F-049: a broken codec has no accent object either, so the
+// colour lands where a real bad decode shows its bias — the corrupted BLOCKS and the tear
+// bands get a luma-preserving wash, and the static floor is tinted with it. Both terms are
+// scaled by AccentAmount, so an uncoloured datamosh zone is untouched).
 #include eclipse:eclipse_common
 #include eclipse:eclipse_glitch
 
@@ -14,6 +18,8 @@ uniform sampler2D DiffuseSampler0;
 uniform float Strength;
 uniform float Time;
 uniform float Detail;
+uniform vec3 AccentColor;
+uniform float AccentAmount;
 
 in vec2 texCoord;
 
@@ -68,10 +74,17 @@ void main() {
     vec3 crunched = gzPosterize(color, mix(24.0, 6.0, s));
     color = mix(color, crunched, max(crunch, 0.25 * s));
 
+    // --- accent bias ---------------------------------------------------------------------
+    // Where the decode failed (gated blocks + tear bands) the channels drift toward the
+    // commanded hue — the bias is strongest exactly on the corruption, which is what a
+    // colour-broken codec looks like. Identity at AccentAmount 0.
+    float broken = max(gate, inTear);
+    color *= gzTint(AccentColor, AccentAmount * s * (0.15 + 0.55 * broken));
+
     // --- static floor --------------------------------------------------------------------
     float static_ = (efxHash(texCoord * vec2(1021.0, 787.0) + fract(Time * 9.0)) - 0.5)
-            * 0.10 * s * detail * (0.3 + 0.7 * max(gate, inTear));
-    color += vec3(static_);
+            * 0.10 * s * detail * (0.3 + 0.7 * broken);
+    color += vec3(static_) * gzTint(AccentColor, AccentAmount);
 
     // Banding guard for the posterize/chroma gradients (temporal dither, house rule).
     color += vec3(efxDither(gl_FragCoord.xy, fract(Time * 3.0)) * s);

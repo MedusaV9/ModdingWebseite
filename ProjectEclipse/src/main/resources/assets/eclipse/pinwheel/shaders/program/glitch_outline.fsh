@@ -8,7 +8,9 @@
 // client.GlitchZoneFx through the VeilPostController row (never under an Iris
 // shaderpack): Strength (0..1 zone ramp — MUST be a no-op at 0), Time (wall-clock
 // seconds), Detail (0 under reduced FX: sweep bar, flicker and grain freeze/flatten;
-// the scanner grade itself survives).
+// the scanner grade itself survives), AccentColor/AccentAmount (F-049: the phosphor hue —
+// at amount 0 the shipped scanner green, luma-matched to any commanded colour at 1; the
+// dim fill wash and the grain ride the same accent so the readout stays one colour).
 #include eclipse:eclipse_common
 #include eclipse:eclipse_glitch
 #include veil:space_helper
@@ -18,6 +20,8 @@ uniform sampler2D DiffuseDepthSampler;
 uniform float Strength;
 uniform float Time;
 uniform float Detail;
+uniform vec3 AccentColor;
+uniform float AccentAmount;
 
 in vec2 texCoord;
 
@@ -91,10 +95,19 @@ void main() {
     float sweep = exp(-abs(texCoord.y - sweepPos) * 40.0) * detail;
     float grain = (efxHash(texCoord * vec2(853.0, 997.0) + fract(Time * 7.0)) - 0.5) * 0.05 * detail;
 
-    vec3 readout = FILL_GREEN * gzLuma(scene) * 0.30 * (1.0 - sky)
-            + EDGE_GREEN * edge * (0.85 * flicker + 0.45 * sweep)
-            + EDGE_GREEN * 0.02 * sweep
-            + vec3(0.0, grain, grain * 0.4);
+    // Accent swap: the edge phosphor is luma-matched, the fill wash and the grain are
+    // derived from the SAME hue (their shipped values are the edge green at ~22% and a
+    // green/blue grain split — both within a hair of accent · k, so amount 0 is a no-op).
+    vec3 edgeAccent = gzAccent(EDGE_GREEN, AccentColor, AccentAmount);
+    vec3 fillAccent = mix(FILL_GREEN, edgeAccent * (gzLuma(FILL_GREEN) / gzLuma(EDGE_GREEN)),
+            clamp(AccentAmount, 0.0, 1.0));
+    vec3 grainAccent = mix(vec3(0.0, 1.0, 0.4), edgeAccent / max(gzLuma(edgeAccent), 0.001) * 0.65,
+            clamp(AccentAmount, 0.0, 1.0));
+
+    vec3 readout = fillAccent * gzLuma(scene) * 0.30 * (1.0 - sky)
+            + edgeAccent * edge * (0.85 * flicker + 0.45 * sweep)
+            + edgeAccent * 0.02 * sweep
+            + grainAccent * grain;
 
     // Soft scanner vignette so the readout sits inside a tube, not a flat page.
     float vign = 1.0 - 0.35 * smoothstep(0.45, 0.95, length(texCoord - 0.5) * 1.5);

@@ -5,7 +5,11 @@
 // CHROMA BLEED (colour smears right while luma stays sharp — the tape look), tape static,
 // and a warm-phosphor grade with corner vignette. Fed by client.GlitchZoneFx: Strength
 // (0..1 ramp — no-op at 0), Time (wall-clock seconds), Detail (0 under reduced FX: hold
-// jitter, rolling bar and static freeze; scanlines/aberration/bleed grade survives).
+// jitter, rolling bar and static freeze; scanlines/aberration/bleed grade survives),
+// AccentColor/AccentAmount (F-049: the tube's phosphor. A CRT has no accent object to
+// recolour, so the colour leans the two things the tube itself emits — the phosphor grade
+// and the scan bar's glow — through the luma-preserving gzTint, which is exactly
+// vec3(1.0) at amount 0).
 #include eclipse:eclipse_common
 #include eclipse:eclipse_glitch
 
@@ -13,6 +17,8 @@ uniform sampler2D DiffuseSampler0;
 uniform float Strength;
 uniform float Time;
 uniform float Detail;
+uniform vec3 AccentColor;
+uniform float AccentAmount;
 
 in vec2 texCoord;
 
@@ -62,11 +68,13 @@ void main() {
     // --- static + bar highlight ---------------------------------------------------------------
     float static_ = (efxHash(uv * vec2(911.0, 631.0) + fract(Time * 11.0)) - 0.5) * 0.12 * s * detail;
     color += vec3(static_);
-    color += vec3(0.9, 0.95, 1.0) * bar * 0.10 * s * (0.5 + 0.5 * efxNoise(vec2(uv.x * 40.0, Time * 12.0)));
+    vec3 tint = gzTint(AccentColor, AccentAmount);
+    color += vec3(0.9, 0.95, 1.0) * tint * bar * 0.10 * s * (0.5 + 0.5 * efxNoise(vec2(uv.x * 40.0, Time * 12.0)));
 
     // --- phosphor grade + vignette ----------------------------------------------------------
-    // Slight warm-green cast, mild desaturation, dark corners: the tube itself.
-    color = mix(color, vec3(gzLuma(color)) * vec3(0.92, 1.04, 0.96), 0.30 * s);
+    // Slight warm-green cast, mild desaturation, dark corners: the tube itself. The cast is
+    // the commanded hue once a colour is set — a red tube, a cyan tube.
+    color = mix(color, vec3(gzLuma(color)) * vec3(0.92, 1.04, 0.96) * tint, 0.30 * s);
     color *= 1.0 - 0.30 * smoothstep(0.40, 0.95, length(fromCenter) * 1.6) * s;
 
     color += vec3(efxDither(gl_FragCoord.xy, fract(Time * 3.0)) * s);

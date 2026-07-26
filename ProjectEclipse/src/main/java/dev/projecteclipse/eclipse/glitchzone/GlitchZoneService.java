@@ -6,6 +6,7 @@ import java.util.UUID;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.network.fx.S2CGlitchZonePayload;
+import net.minecraft.core.BlockPos;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.phys.Vec3;
@@ -17,13 +18,19 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
- * Server tick driver of the GLITCHZONE event: expires zones, computes each player's active
- * zone + strength (spatial edge falloff × temporal fade, best zone wins when spheres
- * overlap) and syncs {@link S2CGlitchZonePayload} — but only when a player's value
- * MEANINGFULLY changes. The per-player change-detection cache means an idle server sends
- * ZERO glitch packets, a player standing deep inside a zone gets exactly one, and a player
- * walking the edge band gets a handful per second (strength epsilon {@value #EPSILON});
- * the client eases between samples so the coarse quantization never shows.
+ * Server tick driver of the GLITCHZONE event: expires zones, runs the ambient altar event
+ * ({@link AltarGlitchAmbience}), computes each player's active zone + strength (spatial edge
+ * falloff × temporal fade, best zone wins when spheres overlap) and syncs
+ * {@link S2CGlitchZonePayload} — but only when a player's value MEANINGFULLY changes. The
+ * per-player change-detection cache means an idle server sends ZERO glitch packets, a player
+ * standing deep inside a zone gets exactly one, and a player walking the edge band gets a
+ * handful per second (strength epsilon {@value #EPSILON}); the client eases between samples
+ * so the coarse quantization never shows.
+ *
+ * <p>The sample carries the winning zone's accent COLOUR and, for zones that ping from their
+ * own centre (F-048), that centre as a world-space impulse ORIGIN. Both participate in the
+ * change detection: a colour repaint or an origin switch is a change even at identical
+ * strength, and the client cross-fades the accent so it slides rather than pops.</p>
  *
  * <p>The event is SILENT by contract: this class never sends chat/titles/boss bars —
  * only the FX payload. {@code /dev glitch test} routes through {@link #startTest} so the
@@ -43,25 +50,31 @@ public final class GlitchZoneService {
     /** Fade-out window of a {@code /dev glitch test} self-test (1 s; fade-in is client-eased). */
     private static final int TEST_FADE_TICKS = 20;
 
-    /** Last (effect, strength) actually synced per player — the change-detection cache. */
+    /** The "no zone" sample; also the assumed cache entry for a player we never synced. */
+    private static final Sent NONE = new Sent("", 0.0F, GlitchColors.DEFAULT, false, BlockPos.ZERO);
+
+    /** Last sample actually synced per player — the change-detection cache. */
     private static final Map<UUID, Sent> LAST_SENT = new HashMap<>();
     /** Live {@code /dev glitch test} overrides per player (transient, never persisted). */
     private static final Map<UUID, TestOverride> TEST_OVERRIDES = new HashMap<>();
 
-    private record Sent(String effect, float strength) {}
+    private record Sent(String effect, float strength, String colour, boolean originValid,
+            BlockPos origin) {}
 
-    private record TestOverride(String effect, long endGameTime) {}
+    private record TestOverride(String effect, String colour, long endGameTime) {}
 
     private GlitchZoneService() {}
 
     /**
-     * Arms a personal self-test: the caller sees {@code effect} at full strength for
-     * {@code seconds}, ramping out over the last {@value #TEST_FADE_TICKS} ticks. Runs
-     * through the regular tick/sync path (never a direct send), so the cache stays honest.
+     * Arms a personal self-test: the caller sees {@code effect} in {@code colour} at full
+     * strength for {@code seconds}, ramping out over the last {@value #TEST_FADE_TICKS}
+     * ticks. Runs through the regular tick/sync path (never a direct send), so the cache
+     * stays honest. A self-test always pings from the camera — the world origin belongs to
+     * zones, and {@code /dev glitch altar} is the way to preview that.
      */
-    public static void startTest(ServerPlayer player, String effect, int seconds) {
+    public static void startTest(ServerPlayer player, String effect, String colour, int seconds) {
         long now = player.getServer().overworld().getGameTime();
-        TEST_OVERRIDES.put(player.getUUID(), new TestOverride(effect, now + seconds * 20L));
+        TEST_OVERRIDES.put(player.getUUID(), new TestOverride(effect, colour, now + seconds * 20L));
     }
 
     @SubscribeEvent
@@ -70,6 +83,7 @@ public final class GlitchZoneService {
         long now = server.overworld().getGameTime();
         GlitchZoneState state = GlitchZoneState.get(server);
         state.removeExpired(now);
+        AltarGlitchAmbience.tick(server, state, now);
         TEST_OVERRIDES.values().removeIf(override -> override.endGameTime() <= now);
 
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
@@ -77,9 +91,9 @@ public final class GlitchZoneService {
         }
     }
 
-    /** Strongest (effect, strength) affecting the player right now, or (\"\", 0) outside. */
+    /** Strongest sample affecting the player right now, or {@link #NONE} outside. */
     private static Sent computeFor(ServerPlayer player, GlitchZoneState state, long now) {
-        String bestEffect = "";
+        GlitchZone best = null;
         float bestStrength = 0.0F;
 
         Vec3 pos = player.position();
@@ -92,9 +106,14 @@ public final class GlitchZoneService {
             float strength = zone.spatialStrength(distSqr) * zone.temporalStrength(now);
             if (strength > bestStrength) {
                 bestStrength = strength;
-                bestEffect = zone.effect();
+                best = zone;
             }
         }
+
+        String bestEffect = best == null ? "" : best.effect();
+        String bestColour = best == null ? GlitchColors.DEFAULT : best.colour();
+        boolean originValid = best != null && best.originAtCentre();
+        BlockPos origin = originValid ? best.centre() : BlockPos.ZERO;
 
         TestOverride test = TEST_OVERRIDES.get(player.getUUID());
         if (test != null) {
@@ -103,22 +122,25 @@ public final class GlitchZoneService {
             if (strength > bestStrength) {
                 bestStrength = strength;
                 bestEffect = test.effect();
+                bestColour = test.colour();
+                originValid = false;
+                origin = BlockPos.ZERO;
             }
         }
 
         if (bestStrength < MIN_STRENGTH) {
-            return new Sent("", 0.0F);
+            return NONE;
         }
-        return new Sent(bestEffect, Math.min(bestStrength, 1.0F));
+        return new Sent(bestEffect, Math.min(bestStrength, 1.0F), bestColour, originValid, origin);
     }
 
-    /** Sends only on a meaningful change: effect switch, > epsilon move, or the 0/1 rails. */
+    /** Sends only on a meaningful change: effect/colour/origin switch, > epsilon move, or the 0/1 rails. */
     private static void sync(ServerPlayer player, Sent computed) {
-        Sent last = LAST_SENT.get(player.getUUID());
-        if (last == null) {
-            last = new Sent("", 0.0F);
-        }
+        Sent last = LAST_SENT.getOrDefault(player.getUUID(), NONE);
         boolean changed = !computed.effect().equals(last.effect())
+                || !computed.colour().equals(last.colour())
+                || computed.originValid() != last.originValid()
+                || !computed.origin().equals(last.origin())
                 || Math.abs(computed.strength() - last.strength()) > EPSILON
                 // Snap the endpoints exactly: fully-in must reach 1, fully-out must reach 0.
                 || (computed.strength() != last.strength()
@@ -127,8 +149,8 @@ public final class GlitchZoneService {
             return;
         }
         LAST_SENT.put(player.getUUID(), computed);
-        PacketDistributor.sendToPlayer(player,
-                new S2CGlitchZonePayload(computed.effect(), computed.strength()));
+        PacketDistributor.sendToPlayer(player, new S2CGlitchZonePayload(computed.effect(),
+                computed.strength(), computed.colour(), computed.originValid(), computed.origin()));
     }
 
     @SubscribeEvent
@@ -141,5 +163,6 @@ public final class GlitchZoneService {
     static void onServerStopped(ServerStoppedEvent event) {
         LAST_SENT.clear();
         TEST_OVERRIDES.clear();
+        AltarGlitchAmbience.reset();
     }
 }
