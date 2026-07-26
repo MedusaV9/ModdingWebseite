@@ -10,9 +10,27 @@
 
 ## NEUES FEEDBACK (hier eintragen!)
 
-_(leer — hier neue Punkte reinschreiben)_
+Baue mehr Sachen wie den Sturm. Also mehr so krasse Map effekt zb baue eine Glitch Zone bei der Mansion Struktur wo man diesen Grünen Outlines glitch effekt hat durchgehend dadrin im Gebäude aber platziere eine Art Gerät auf dem Dach was die spieler schlagen können und damit zerstören können. Es soll eine Art Schildblase machen und in dieser Schild blase sind halt nur Scan Lines an. Ich will das man von draußen nicht in diese Glitch Blase sehen kann sondern nur einen Strahl nach oben sieht von dem Glitch macher gerät. Baue dafür ein Model in Block Bench / Blender. Überlege dir weitere solcher Dinge damit die Map spannender will will ich das du solche neuen Features insgesammt 5 Stück auf der Map platzieren tust. Es soll jedes mal ein völliganderer neuer Woah Effekt sein der Photon und Veil nutzt. Ich will das du dir mal 20 Subagents Fable 5 Max Thinking nimmst die einfach nur ideen sammeln was man alles passendes erstellen kann es soll aufwendig und krass werden du hast unendlich zeit und unendlich viele Subagents Fable 5 Max Thinking gleichzeitig. 
 
----
+Ich will einen Dev Command um diese komische Phase zwischen Tag übergang und Map erweiterung wo alles so dunkle wird zu skippen.
+
+Ich will per /dev GhostScreen (spieler) mache das quasi eine Art Geist auf ihrem Screen erscheint und Text der rum glitcht und dann ganz viele Glitch Effekte und einmal ein ganz lauter Knall. Aber alles nur auf ihren Screen und nicht in der Welt und ich will noch das der selbe Effekt auch kommt wenn ich /dev BackroomsScare (spieler) eingebe dabei sollen sie dann aber am Ende einen Black Screen kriegen und mit Glitch effekten in die Backrooms clippen für 20-30s sie sollen dort nicht sterben können und wenn sie schaden kriegen sollen sie sofort glitch effekte kriegen und wieder zurück an ihrem Spot von davor sein. 
+
+Baue /dev JumpScare (Version) (spieler) ein ich will das du 30 verschiedene Jumpscares baust mit Veil,Photon und Shader Effekten jeden Jumpscare soll nur den spieler betreffen den ich eingebe die anderen sollen davon nichts merken.
+
+Ich will ein /invsee (spieler) und /enderchestsee (Spieler) Command als Dev haben.
+
+Ich will per Dev Multipler command einem spieler auch einen abbauspeed boost geben können.
+
+Verbessere das Schwarze Loch und die ganze End Scene noch viel viel mehr. Nutze mehr Subagents Fable 5 Max Thinking und mach es wirklich perfekt polished. Nutze mehr BlockDisplay Animations.
+
+Kümmere dich um deinen gesammten Backlog
+
+Verbessere die Effekte der Zauberstäbe noch viel mehr. Mach das Auswahl UI am Anfang beim ersten mal wählen besser und schöner.
+
+Verbessere die Zauberstäbe Effekte Visuell massiv.
+
+Denk dran weiterhin für alles Subagents Fable 5 Max Thinking Teams wie du willst und denke auch dran Eval und Verbesserungsvorschläge sammlen zu lassen von Fable 5 Max Thinking und bei Eval nutze GPT5.6SOLMAXTHINKINGFAST
 
 ## Aktuell in Arbeit
 
