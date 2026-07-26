@@ -231,6 +231,9 @@ public final class ExpansionSequence implements SequenceReplayable {
     /** Watchdog: a run whose sweep/structures stall is force-ended after this many ticks. */
     private static final int RUN_TIMEOUT_TICKS = 20 * 60 * 30;
 
+    /** F-063: grade release ramp of the operator dark-phase skip (short, but not a hard cut). */
+    private static final int SKIP_DARK_RAMP_TICKS = 20;
+
     private static final ExpansionSequence INSTANCE = new ExpansionSequence();
     private static final AtomicBoolean LISTENERS_REGISTERED = new AtomicBoolean();
 
@@ -301,6 +304,11 @@ public final class ExpansionSequence implements SequenceReplayable {
         boolean terrainComplete;
         /** A front cutscene (flyover OR the ring fallback) carried the growing caption. */
         boolean flyoverPlayed;
+        /**
+         * F-063: an operator fast-forwarded past the darken/hold window. Every later beat
+         * of this run must stop touching the eclipse grade — the sky is already back.
+         */
+        boolean darkSkipped;
         /** STRUCTURES establishing-gap gate: no beat may open before this (CUT-EXPANSION). */
         boolean firstBeatReleased;
         boolean ended;
@@ -431,7 +439,9 @@ public final class ExpansionSequence implements SequenceReplayable {
             return;
         }
         schedule(server, (int) (skyward.durationTicks() * SKYWARD_PUNCH_T), () -> {
-            if (run != null && (run.ended || RUNS.get(run.profile) != run)) {
+            // F-063: a dark-phase skip cancels the skyward flight — the punch burst would
+            // otherwise flash over free gameplay under an already restored sky.
+            if (run != null && (run.ended || run.darkSkipped || RUNS.get(run.profile) != run)) {
                 return;
             }
             for (ServerPlayer watcher : watchers) {
@@ -450,6 +460,13 @@ public final class ExpansionSequence implements SequenceReplayable {
             return;
         }
         MinecraftServer server = run.level.getServer();
+        if (run.darkSkipped) {
+            // F-063: reached through the aborted skyward group callback. The flyover is the
+            // second half of the darken/hold window — jump the run straight into GROWTH and
+            // never re-raise the grade the skip just released.
+            beginGrowth(run);
+            return;
+        }
         run.phase = Phase.FLYOVER;
         FxPayloads.sendEclipsePhase(server, ECLIPSE_TOTAL, 1.0F, 20, permanentRim(server));
 
@@ -515,6 +532,13 @@ public final class ExpansionSequence implements SequenceReplayable {
     /** GROWTH: control returns; the sweep animates on; dust wall rides the wave client-side. */
     private static void beginGrowth(Run run) {
         if (run.ended || RUNS.get(run.profile) != run) {
+            return;
+        }
+        if (run.phase != Phase.SKYWARD && run.phase != Phase.FLYOVER) {
+            // F-063 re-entrancy: the skip enters GROWTH directly AND the aborted cutscene
+            // group callback arrives right behind it (and the fallback timer may fire even
+            // later). Only the first entry counts — a second one would rewind an already
+            // running STRUCTURES phase back to GROWTH.
             return;
         }
         // CutsceneService returns ordinary flyover gathers before this callback; nether
@@ -766,6 +790,71 @@ public final class ExpansionSequence implements SequenceReplayable {
         }
         EclipseMod.LOGGER.info("ExpansionSequence: {} expansion {} -> {} complete",
                 run.profile.name(), run.fromStage, run.toStage);
+    }
+
+    // ------------------------------------------------------------------ F-063 operator skip
+
+    /**
+     * F-063 operator fast-forward ({@code /dev stage skipdark}): drops the darken/hold window
+     * that sits between the day rollover and the visible map growth, and puts the sky back.
+     *
+     * <p>Every live run is fast-forwarded: cutscene watchers are unfrozen and returned, the
+     * skyward/flyover beats are abandoned, the run enters {@code GROWTH} immediately and the
+     * eclipse grade ramps back to 0 over {@value #SKIP_DARK_RAMP_TICKS} ticks. The world half
+     * of the expansion is deliberately untouched — the ring sweep, the structure beats, the
+     * nether-visitor returns and the END bookkeeping all continue exactly as before, so a skip
+     * can never desync the stage commit from its cinematics.</p>
+     *
+     * @return how many runs were fast-forwarded; {@code 0} means nothing was running (no-op)
+     */
+    public static int skipDarkPhase(MinecraftServer server) {
+        List<Run> affected = new ArrayList<>();
+        for (Run run : List.copyOf(RUNS.values())) {
+            if (!run.ended && !run.darkSkipped) {
+                affected.add(run);
+            }
+        }
+        if (affected.isEmpty()) {
+            return 0;
+        }
+        // One release for the whole server: the phase payload is a global broadcast and the
+        // client eases from its CURRENT amount, so a per-run send would only restart the same
+        // ramp. END's own ENDING send later on is then a no-op (already at 0).
+        FxPayloads.sendEclipsePhase(server, ECLIPSE_ENDING, 0.0F, SKIP_DARK_RAMP_TICKS,
+                permanentRim(server));
+        for (Run run : affected) {
+            skipDarkPhase(run);
+        }
+        return affected.size();
+    }
+
+    /** Fast-forwards one run past its darken/hold beats. */
+    private static void skipDarkPhase(Run run) {
+        run.darkSkipped = true;
+        Phase phase = run.phase;
+        if (phase != Phase.SKYWARD && phase != Phase.FLYOVER) {
+            // GROWTH/STRUCTURES/END: the cinematic beats are already behind us, only the grade
+            // still darkened the sky — releasing it above was the whole job. Nether visitors
+            // keep their viewpoint and go home at END, unchanged.
+            EclipseMod.LOGGER.info("ExpansionSequence: {} eclipse grade released early during {}",
+                    run.profile.name(), phase);
+            return;
+        }
+        // Unfreeze every watcher, stop the flight client-side and undo the flyover gather.
+        // The abort drains the play group, whose callback (beginFlyover → beginGrowth) now
+        // takes the darkSkipped shortcut; the explicit beginGrowth below is the safety net for
+        // a group that cannot drain (e.g. a player who joined after the play started never had
+        // a session), and is idempotent thanks to beginGrowth's phase guard.
+        int aborted = CutsceneService.abort(List.copyOf(run.level.players()));
+        if (run.cinematic && !run.flyoverPlayed) {
+            // The flyover is what normally raises the rim monoliths — skipping it must not
+            // leave the frontier bare. armFrontier is idempotent; the null anchor plans the
+            // rocks around the players, since there is no gather point any more.
+            ExpansionBorderFx.armFrontier(run.level, run.profile, null);
+        }
+        beginGrowth(run);
+        EclipseMod.LOGGER.info("ExpansionSequence: {} dark phase skipped during {} "
+                + "({} cutscene session(s) aborted)", run.profile.name(), phase, aborted);
     }
 
     /** Fast teardown of a superseded run: rift closed, visitors carried or returned by callers. */

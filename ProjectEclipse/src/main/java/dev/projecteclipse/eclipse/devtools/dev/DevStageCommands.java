@@ -19,6 +19,8 @@ import com.mojang.brigadier.suggestion.SuggestionProvider;
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.devtools.StageBackups;
 import dev.projecteclipse.eclipse.devtools.StageIO;
+import dev.projecteclipse.eclipse.lang.ServerLang;
+import dev.projecteclipse.eclipse.sequence.ExpansionSequence;
 import dev.projecteclipse.eclipse.worldgen.DiscProfile;
 import dev.projecteclipse.eclipse.worldgen.stage.WorldStageService;
 import net.minecraft.ChatFormatting;
@@ -70,7 +72,10 @@ public final class DevStageCommands {
                         Danger.CAUTION, ClickAction.SUGGEST, 3),
                 new DevCommandDoc("stage.backup.now", DevCategory.STAGE,
                         "/dev stage backup now [<label>]", "dev.eclipse.doc.stage.backup",
-                        Danger.SAFE, ClickAction.SUGGEST, 3));
+                        Danger.SAFE, ClickAction.SUGGEST, 3),
+                new DevCommandDoc("stage.skipdark", DevCategory.STAGE,
+                        "/dev stage skipdark", "dev.eclipse.doc.stage.skipdark",
+                        Danger.CAUTION, ClickAction.RUN, 3));
     }
 
     private DevStageCommands() {}
@@ -90,6 +95,8 @@ public final class DevStageCommands {
                                         .executes(DevStageCommands::loadNamed)))
                         .then(Commands.literal("revert")
                                 .executes(DevStageCommands::revert))
+                        .then(Commands.literal("skipdark")
+                                .executes(DevStageCommands::skipDark))
                         .then(Commands.literal("list")
                                 .executes(DevStageCommands::list))
                         .then(Commands.literal("prune")
@@ -190,6 +197,25 @@ public final class DevStageCommands {
         }
         return reportOperation(source, StageBackups.restoreLatest(
                 source.getLevel(), profile, "dev-stage-revert", source.getTextName()));
+    }
+
+    /**
+     * F-063 {@code /dev stage skipdark}: fast-forwards the darken/hold window between the day
+     * rollover and the visible map growth. No-op safe — without a live expansion the operator
+     * only gets a "nothing to skip" line, nothing is broadcast and no FX are sent.
+     */
+    private static int skipDark(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        int skipped = ExpansionSequence.skipDarkPhase(source.getServer());
+        if (skipped == 0) {
+            source.sendFailure(ServerLang.tr(source.getPlayer(), "dev.eclipse.stage.skipdark.none"));
+            return 0;
+        }
+        source.sendSuccess(() -> ServerLang.tr(source.getPlayer(),
+                "dev.eclipse.stage.skipdark.ok", skipped), true);
+        EclipseMod.LOGGER.info("[DEV AUDIT] {} skipped the expansion dark phase ({} run(s))",
+                source.getTextName(), skipped);
+        return skipped;
     }
 
     private static int reportOperation(CommandSourceStack source, String result) {

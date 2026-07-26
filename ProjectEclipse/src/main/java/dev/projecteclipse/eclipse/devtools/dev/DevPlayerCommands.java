@@ -10,6 +10,7 @@ import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.devtools.MiningSpeedService;
 import dev.projecteclipse.eclipse.lang.ServerLang;
 import dev.projecteclipse.eclipse.skills.SkillsApi;
 import dev.projecteclipse.eclipse.voice.VoiceMuteApi;
@@ -25,6 +26,10 @@ import net.neoforged.neoforge.event.RegisterCommandsEvent;
 /**
  * Player XP/secret-perk controls, the ops-eyes-only online-name roster (B17), and the
  * Simple Voice Chat moderation bridge.
+ *
+ * <p>{@code /dev player multiplier} hosts two independent per-player factors: the hidden skill
+ * XP multiplier ({@code SkillsApi}, never broadcast, never logged above DEBUG) and the F-067
+ * mining-speed boost ({@link MiningSpeedService}). {@code multiplier show} prints both.</p>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class DevPlayerCommands {
@@ -42,6 +47,12 @@ public final class DevPlayerCommands {
                 new DevCommandDoc("player.multiplier.show", DevCategory.PLAYERS,
                         "/dev player multiplier show <player>",
                         "dev.eclipse.doc.player.multiplier.show", Danger.SAFE, ClickAction.SUGGEST, 2),
+                new DevCommandDoc("player.multiplier.mining.set", DevCategory.PLAYERS,
+                        "/dev player multiplier mining set <player> <factor>",
+                        "dev.eclipse.doc.player.multiplier.mining.set", Danger.CAUTION, ClickAction.SUGGEST, 2),
+                new DevCommandDoc("player.multiplier.mining.clear", DevCategory.PLAYERS,
+                        "/dev player multiplier mining clear <player>",
+                        "dev.eclipse.doc.player.multiplier.mining.clear", Danger.CAUTION, ClickAction.SUGGEST, 2),
                 new DevCommandDoc("player.names", DevCategory.PLAYERS,
                         "/dev player names",
                         "dev.eclipse.doc.player.names", Danger.SAFE, ClickAction.RUN, 2),
@@ -83,7 +94,20 @@ public final class DevPlayerCommands {
                                                 .executes(context -> setMultiplier(context, true))))
                                 .then(Commands.literal("show")
                                         .then(Commands.argument("player", EntityArgument.player())
-                                                .executes(DevPlayerCommands::showMultiplier)))))
+                                                .executes(DevPlayerCommands::showMultiplier)))
+                                // F-067: sibling of the secret XP multiplier — same command
+                                // family, but a visible BLOCK_BREAK_SPEED boost.
+                                .then(Commands.literal("mining")
+                                        .then(Commands.literal("set")
+                                                .then(Commands.argument("player", EntityArgument.player())
+                                                        .then(Commands.argument("factor",
+                                                                        FloatArgumentType.floatArg(
+                                                                                MiningSpeedService.MIN_FACTOR,
+                                                                                MiningSpeedService.MAX_FACTOR))
+                                                                .executes(context -> setMiningMultiplier(context, false)))))
+                                        .then(Commands.literal("clear")
+                                                .then(Commands.argument("player", EntityArgument.player())
+                                                        .executes(context -> setMiningMultiplier(context, true)))))))
                 .then(Commands.literal("voice")
                         .then(Commands.literal("mute")
                                 .then(Commands.literal("global")
@@ -153,12 +177,36 @@ public final class DevPlayerCommands {
         return 1;
     }
 
+    /**
+     * F-067 mining-speed boost. Unlike the secret XP multiplier this one is openly reported —
+     * a dig-speed change is immediately obvious in game, so hiding the value would only cost
+     * the operator information.
+     */
+    private static int setMiningMultiplier(CommandContext<CommandSourceStack> context, boolean clear)
+            throws CommandSyntaxException {
+        CommandSourceStack source = context.getSource();
+        ServerPlayer target = EntityArgument.getPlayer(context, "player");
+        float requested = clear ? MiningSpeedService.NEUTRAL : FloatArgumentType.getFloat(context, "factor");
+        float applied = MiningSpeedService.setFactor(source.getServer(), target.getUUID(), requested);
+        Component feedback = clear
+                ? Component.translatable("dev.eclipse.player.multiplier.mining.clear.ok",
+                        target.getScoreboardName())
+                : Component.translatable("dev.eclipse.player.multiplier.mining.set.ok",
+                        target.getScoreboardName(), applied);
+        audit(source, feedback, (clear ? "cleared" : "set " + applied + "x")
+                + " mining speed multiplier for " + target.getScoreboardName());
+        return 1;
+    }
+
     private static int showMultiplier(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
         CommandSourceStack source = context.getSource();
         ServerPlayer target = EntityArgument.getPlayer(context, "player");
         float factor = SkillsApi.getSecretMultiplier(source.getServer(), target.getUUID());
         source.sendSuccess(() -> Component.translatable("dev.eclipse.player.multiplier.show",
                 target.getScoreboardName(), factor), false);
+        float mining = MiningSpeedService.getFactor(source.getServer(), target.getUUID());
+        source.sendSuccess(() -> Component.translatable("dev.eclipse.player.multiplier.show.mining",
+                target.getScoreboardName(), mining), false);
         return 1;
     }
 

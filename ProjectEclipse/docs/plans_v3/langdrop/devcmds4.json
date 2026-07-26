@@ -1,0 +1,42 @@
+{
+  "en_us": {
+    "dev.eclipse.doc.stage.skipdark": "Fast-forwards the dark phase between the day rollover and the map expansion: cutscenes are aborted, the sky is restored and the ring growth continues normally.",
+    "dev.eclipse.stage.skipdark.ok": "Dark phase skipped — %s expansion run(s) fast-forwarded, sky restored.",
+    "dev.eclipse.stage.skipdark.none": "No expansion is running right now — there is no dark phase to skip.",
+
+    "dev.eclipse.doc.invsee": "Opens a LIVE view of another player's inventory (36 inventory + armor + offhand); changes apply instantly.",
+    "dev.eclipse.doc.enderchestsee": "Opens a LIVE view of another player's ender chest; changes apply instantly.",
+    "eclipse.invsee.title": "Inventory: %s",
+    "eclipse.invsee.decor": "Locked",
+    "eclipse.invsee.self": "You cannot inspect your own inventory — use your normal inventory screen.",
+    "eclipse.invsee.opened": "Opened the live inventory of %s.",
+    "eclipse.enderchestsee.title": "Ender chest: %s",
+    "eclipse.enderchestsee.opened": "Opened the live ender chest of %s.",
+
+    "dev.eclipse.doc.player.multiplier.mining.set": "Set a player's persisted mining-speed multiplier (BLOCK_BREAK_SPEED, survives death and relog).",
+    "dev.eclipse.doc.player.multiplier.mining.clear": "Reset a player's mining-speed multiplier back to 1.",
+    "dev.eclipse.player.multiplier.mining.set.ok": "Mining-speed multiplier for %1$s set to %2$sx.",
+    "dev.eclipse.player.multiplier.mining.clear.ok": "Mining-speed multiplier cleared for %s.",
+    "dev.eclipse.player.multiplier.show.mining": "Mining-speed multiplier for %1$s: %2$s"
+  },
+  "de_de": {
+    "dev.eclipse.doc.stage.skipdark": "Spult die Dunkelphase zwischen Tageswechsel und Map-Erweiterung vor: Cutscenes werden abgebrochen, der Himmel wird wiederhergestellt, das Ringwachstum läuft normal weiter.",
+    "dev.eclipse.stage.skipdark.ok": "Dunkelphase übersprungen — %s Erweiterungslauf/-läufe vorgespult, Himmel wiederhergestellt.",
+    "dev.eclipse.stage.skipdark.none": "Gerade läuft keine Erweiterung — es gibt keine Dunkelphase zum Überspringen.",
+
+    "dev.eclipse.doc.invsee": "Öffnet eine LIVE-Ansicht des Inventars eines anderen Spielers (36 Inventar + Rüstung + Zweithand); Änderungen wirken sofort.",
+    "dev.eclipse.doc.enderchestsee": "Öffnet eine LIVE-Ansicht der Endertruhe eines anderen Spielers; Änderungen wirken sofort.",
+    "eclipse.invsee.title": "Inventar: %s",
+    "eclipse.invsee.decor": "Gesperrt",
+    "eclipse.invsee.self": "Du kannst dein eigenes Inventar nicht so ansehen — nutze dafür dein normales Inventar.",
+    "eclipse.invsee.opened": "Live-Inventar von %s geöffnet.",
+    "eclipse.enderchestsee.title": "Endertruhe: %s",
+    "eclipse.enderchestsee.opened": "Live-Endertruhe von %s geöffnet.",
+
+    "dev.eclipse.doc.player.multiplier.mining.set": "Setzt den gespeicherten Abbaugeschwindigkeits-Multiplikator (BLOCK_BREAK_SPEED, übersteht Tod und Relog).",
+    "dev.eclipse.doc.player.multiplier.mining.clear": "Setzt den Abbaugeschwindigkeits-Multiplikator wieder auf 1.",
+    "dev.eclipse.player.multiplier.mining.set.ok": "Abbaugeschwindigkeits-Multiplikator für %1$s auf %2$sx gesetzt.",
+    "dev.eclipse.player.multiplier.mining.clear.ok": "Abbaugeschwindigkeits-Multiplikator für %s zurückgesetzt.",
+    "dev.eclipse.player.multiplier.show.mining": "Abbaugeschwindigkeits-Multiplikator für %1$s: %2$s"
+  }
+}
