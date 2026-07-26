@@ -1,93 +1,91 @@
 {
-  "pack": "Resource pack \"Minecraft: Classic Edition\" by JS03 — https://modrinth.com/resourcepack/minecraft-classic-edition",
-  "license": "MIT (verified via https://api.modrinth.com/v2/project/minecraft-classic-edition)",
-  "pack_version": "1.2.3",
-  "pack_sha512": "b504783667df83649d055c0f999e510a46f9e9caa16b67c0883771ca24fbd09118a316ba4a3d7573ce9c19dad090cca75a4d1a26512c364a75fa8dd6c460875e",
+  "generator": "tools/classicblocks/gen_textures.py",
+  "source": "vanilla 1.21.1 client resources (build/moddev/artifacts/*client-extra*.jar) — no third-party art, no generated art",
+  "note": "TUT2 deleted the imported classic texture set; the classic blocks resolve VANILLA textures and the console-era look comes from the per-era screen filter (client/xbox/XboxEraFx). Only the geometry sheets below stay bundled: vanilla renders chests, beds, signs and skulls as block ENTITIES and ships no block-atlas texture for them. F-012 rebuilt all of them from vanilla pixels.",
   "textures": [
     {
       "texture": "block/classic/chest_front.png",
-      "source": "derived from pack block/oak_planks.png",
-      "op": "drawn cube-chest front",
-      "note": "old cube-chest faces recreated over the pack's MIT planks art"
+      "source": "vanilla entity/chest/normal.png",
+      "op": "cube-chest front face, verbatim vanilla pixels",
+      "note": "vanilla renders chests as a block entity, so there is no block-atlas tile to reference"
     },
     {
       "texture": "block/classic/chest_side.png",
-      "source": "derived from pack block/oak_planks.png",
-      "op": "drawn cube-chest side",
-      "note": "old cube-chest faces recreated over the pack's MIT planks art"
+      "source": "vanilla entity/chest/normal.png",
+      "op": "cube-chest side face, verbatim vanilla pixels",
+      "note": "vanilla renders chests as a block entity, so there is no block-atlas tile to reference"
     },
     {
       "texture": "block/classic/chest_top.png",
-      "source": "derived from pack block/oak_planks.png",
-      "op": "drawn cube-chest top",
-      "note": "old cube-chest faces recreated over the pack's MIT planks art"
+      "source": "vanilla entity/chest/normal.png",
+      "op": "cube-chest top face, verbatim vanilla pixels",
+      "note": "vanilla renders chests as a block entity, so there is no block-atlas tile to reference"
     },
     {
       "texture": "block/classic/ender_chest_front.png",
-      "source": "derived from pack block/obsidian.png",
-      "op": "drawn cube-chest front",
-      "note": "old cube-chest faces over the pack's obsidian, teal latch"
+      "source": "vanilla entity/chest/ender.png",
+      "op": "cube-chest front face, verbatim vanilla pixels",
+      "note": "same as the normal chest — entity-rendered in vanilla"
     },
     {
       "texture": "block/classic/ender_chest_side.png",
-      "source": "derived from pack block/obsidian.png",
-      "op": "drawn cube-chest side",
-      "note": "old cube-chest faces over the pack's obsidian, teal latch"
+      "source": "vanilla entity/chest/ender.png",
+      "op": "cube-chest side face, verbatim vanilla pixels",
+      "note": "same as the normal chest — entity-rendered in vanilla"
     },
     {
       "texture": "block/classic/ender_chest_top.png",
-      "source": "derived from pack block/obsidian.png",
-      "op": "drawn cube-chest top",
-      "note": "old cube-chest faces over the pack's obsidian, teal latch"
+      "source": "vanilla entity/chest/ender.png",
+      "op": "cube-chest top face, verbatim vanilla pixels",
+      "note": "same as the normal chest — entity-rendered in vanilla"
     },
     {
       "texture": "block/classic/red_bed_sheet.png",
-      "source": "pack entity/bed/red.png",
+      "source": "vanilla entity/bed/red.png",
       "op": "copy (64x64)",
-      "note": "bed model UV-maps into the sheet"
+      "note": "the bed model UV-maps into the sheet"
     },
     {
       "texture": "block/classic/sign_oak.png",
-      "source": "pack entity/sign.png",
+      "source": "vanilla entity/signs/oak.png",
       "op": "64x16 board crop",
-      "note": "wall-sign model UV-maps into this"
+      "note": "the wall-sign model UV-maps into this"
     },
     {
       "texture": "block/classic/skull_creeper.png",
-      "source": "pack entity/creeper/creeper.png",
+      "source": "vanilla entity/creeper/creeper.png",
       "op": "32x16 head crop",
-      "note": "skull cube UV-maps into this"
+      "note": "the skull cube UV-maps into this"
     },
     {
       "texture": "block/classic/skull_skeleton.png",
-      "source": "pack entity/skeleton/skeleton.png",
+      "source": "vanilla entity/skeleton/skeleton.png",
       "op": "32x16 head crop",
-      "note": "skull cube UV-maps into this"
+      "note": "the skull cube UV-maps into this"
     },
     {
       "texture": "block/classic/skull_steve.png",
-      "source": "pack entity/steve.png",
+      "source": "vanilla entity/player/wide/steve.png",
       "op": "32x16 head crop",
-      "note": "skull cube UV-maps into this"
+      "note": "the skull cube UV-maps into this"
     },
     {
       "texture": "block/classic/skull_wither_skeleton.png",
-      "source": "pack entity/skeleton/wither_skeleton.png",
+      "source": "vanilla entity/skeleton/wither_skeleton.png",
       "op": "32x16 head crop",
-      "note": "skull cube UV-maps into this"
+      "note": "the skull cube UV-maps into this"
     },
     {
       "texture": "block/classic/skull_zombie.png",
-      "source": "pack entity/zombie/zombie.png",
+      "source": "vanilla entity/zombie/zombie.png",
       "op": "32x16 head crop",
-      "note": "skull cube UV-maps into this"
+      "note": "the skull cube UV-maps into this"
     },
     {
       "texture": "item/classic/red_bed.png",
-      "source": "pack item/red_bed.png",
-      "op": "copy",
-      "note": ""
+      "source": "vanilla entity/bed/red.png + block/oak_planks.png",
+      "op": "drawn 16x16 side-view icon",
+      "note": "vanilla ships no flat bed item texture (the item is entity-rendered); every colour is sampled from the two vanilla sources"
     }
-  ],
-  "note": "TUT2: the imported/recreated classic texture set was DELETED — the classic blocks now resolve VANILLA textures and the console-era look comes from the per-era screen filter (client/xbox/XboxEraFx). Only the geometry sheets below survive: vanilla renders chests, beds, signs and skulls as block ENTITIES and ships no block-atlas texture for them."
+  ]
 }
