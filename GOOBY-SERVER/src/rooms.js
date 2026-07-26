@@ -7,7 +7,11 @@ import { LIMITS } from './ratelimit.js';
 
 const ROOM_RE = /^(visit|board|drive|mg):[A-Za-z0-9._-]{1,64}$/;
 const KIND_RE = /^[A-Z][A-Z0-9_]{0,23}$/;
-const MAX_MEMBERS = 2; // M1: alle Room-Typen sind 2er-Räume
+// Kapazität PRO PRÄFIX (RANCH-DLC-IDEAS-4 §1.1 Punkt 1): ein globales
+// MAX_MEMBERS=4 würde Besuche/Brettspiele unbeabsichtigt zu Mehrpersonen-
+// räumen machen. mg: (Ranch-Minispiele/Ausritt) darf 4; Rest bleibt 2.
+// room.meta.maxMembers (z. B. Besuch über mg: = 2) deckelt zusätzlich.
+const MAX_MEMBERS_BY_PREFIX = { visit: 2, board: 2, drive: 2, mg: 4 };
 
 export class Rooms {
   constructor(ctx) {
@@ -57,7 +61,9 @@ export class Rooms {
       if (!verdict.ok) return verdict;
     }
     const room = this.ensure(roomId);
-    if (!room.members.has(conn.deviceId) && room.members.size >= MAX_MEMBERS) {
+    let cap = MAX_MEMBERS_BY_PREFIX[prefix] ?? 2;
+    if (Number.isInteger(room.meta.maxMembers)) cap = Math.min(cap, room.meta.maxMembers);
+    if (!room.members.has(conn.deviceId) && room.members.size >= cap) {
       return { ok: false, code: 'ROOM_FULL' };
     }
     const isNew = !room.members.has(conn.deviceId);

@@ -18,6 +18,13 @@ const TEMPLATES = {
   drive: 'fährt mit {gooby} eine Runde',
   vacation: 'ist mit {gooby} im Urlaub',
   sleep: 'schläft — pssst, {gooby} auch',
+  // Ranch-MP (RW-6): neue Presence-Kinds für Besuch/Ausritt/Minispiele.
+  ranch: 'ist mit {gooby} auf der Ranch',
+  ranchbesuch: 'besucht mit {gooby} eine Freundes-Ranch',
+  ausritt: 'ist mit Freunden auf einem Ausritt',
+  rennen: 'reitet ein Wettrennen auf der Grasbahn',
+  fangen: 'spielt Fangen auf der Weide',
+  parcours: 'reitet ein Parcours-Duell',
 };
 
 export function buildActivity(kind, goobyName) {

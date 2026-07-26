@@ -17,6 +17,11 @@ export function loadConfig(env = process.env) {
     maxPhotoKb: int(env.GOOBY_MAX_PHOTO_KB, 512),
     heartbeatSec: int(env.GOOBY_HEARTBEAT_SEC, 20),
     boardRejoinMs: int(env.GOOBY_BOARD_REJOIN_MS, 120_000),
+    // Ranch-MP (RW-6): Rejoin-Fenster analog Brettspiel; Fangen-Rundendauer;
+    // Countdown zwischen MG_READY-Komplett und Startschuss (Doc §2.3: ≥ 3 s).
+    rmpRejoinMs: int(env.GOOBY_RMP_REJOIN_MS, 120_000),
+    rmpFangenMs: int(env.GOOBY_RMP_FANGEN_MS, 90_000),
+    rmpCountdownMs: int(env.GOOBY_RMP_COUNTDOWN_MS, 4_000),
     // Limits (Doc C §7) — zentral, damit Tests sie referenzieren können.
     limits: {
       wsFrameBytes: 16 * 1024,
@@ -25,6 +30,10 @@ export function loadConfig(env = process.env) {
       analyticsBatchSessions: 200,
       nameLen: 24,
       presenceKindLen: 32,
+      // Ranch-MP: Ranch-Metadaten (Ausbau/Pferde/Trophäen) + Ghost-Blob.
+      ranchMetaBytes: 16 * 1024,
+      ghostBytes: 32 * 1024,
+      ghostsPerKurs: 64,
     },
   };
   if (!cfg.adminPassword) {

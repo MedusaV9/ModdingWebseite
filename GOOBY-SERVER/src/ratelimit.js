@@ -47,4 +47,11 @@ export const LIMITS = {
   panelLogin: { capacity: 5, refillPerSec: 5 / 900 }, // 5/15min pro IP
   presenceSet: { capacity: 12, refillPerSec: 12 / 60 }, // 12/min pro Gerät
   roomPos: { capacity: 10, refillPerSec: 5 }, // POS-Relay 5 Hz (Burst 10) pro Verbindung+Room
+  // Ranch-MP (RANCH-DLC-IDEAS-4 §1.1/§2.4): eigener, schnellerer Pose-Kanal —
+  // 12/s (10 Hz + Ereignis-Posen bei Sprung/Landung), Burst 20; Fangen darf
+  // kurz auf 15 Hz gehen und lebt vom Burst. Events deutlich niedriger.
+  mgPose: { capacity: 20, refillPerSec: 12 }, // MG_POSE pro Verbindung+Room
+  mgEvent: { capacity: 12, refillPerSec: 4 }, // MG_EVENT (Checkpoint/Tag/…) pro Verbindung+Room
+  rmpInvite: { capacity: 8, refillPerSec: 8 / 60 }, // Ranch-Einladungen 8/min pro Gerät
+  rmpScore: { capacity: 10, refillPerSec: 10 / 60 }, // Score-/Ghost-Upload 10/min pro Gerät
 };

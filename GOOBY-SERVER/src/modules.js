@@ -14,6 +14,7 @@ import * as codes from './codes.js';
 import * as events from './events.js';
 import * as visits from './visits.js';
 import * as boardgames from './boardgames.js';
+import * as ranchmp from './ranchmp.js';
 
 export const MODULES = [
   rooms,
@@ -25,4 +26,5 @@ export const MODULES = [
   events,
   visits,
   boardgames,
+  ranchmp,
 ];

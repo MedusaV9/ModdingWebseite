@@ -11,8 +11,15 @@ extends RefCounted
 ## Attack, KEINE harten Klicks (assets/audio/sfx/soft/, generiert per
 ## tools-Skript; CC0, selbst erzeugt). Die Kenney-Samples bleiben für
 ## Minigame-/Impact-Momente (LICENSE-kenney-cc0.txt).
+##
+## RW-8: Die Ranch-Familie (`ranch_*`) mappt ALLE 23 DLC-Sounds aus
+## assets/ranch/audio/sfx/ (Quellen/Lizenzen: License-audio.md dort).
+## file-Einträge dürfen dafür absolute res://-Pfade sein — path() reicht
+## sie unverändert durch. Trigger-Logik (Untergrund→Huf, Reaktionen,
+## Ambience-Mix) lebt in RanchAudio (scripts/audio/ranch_audio.gd).
 
 const BASE_DIR := "res://assets/audio/sfx"
+const RANCH_DIR := "res://assets/ranch/audio/sfx"
 
 ## Pflicht-UI-Ids (FIX-4-Kontrakt — Tests prüfen Existenz + Dateien):
 ## jedes UI-Element im Spiel soll eine dieser Ids feuern.
@@ -74,7 +81,72 @@ const SOUNDS := {
 	# ── Haus/Türen/Baumodus (Verdrahtung P3 via Handoff) ──
 	"door_knock": {"file": "impactPlank_medium_003.ogg", "volume_db": -6.0, "pitch_jitter": 0.1},
 	"build_hammer": {"file": "impactPlank_medium_001.ogg", "volume_db": -6.0, "pitch_jitter": 0.1},
+	# ── Ranch-DLC (RW-8): Hufschlag je Untergrund (Einzelschritt + Loops) ──
+	"ranch_huf_gras":
+	{"file": RANCH_DIR + "/huf_gras.ogg", "volume_db": -6.0, "pitch_jitter": 0.06},
+	"ranch_huf_sand":
+	{"file": RANCH_DIR + "/huf_sand.ogg", "volume_db": -5.0, "pitch_jitter": 0.06},
+	"ranch_huf_holz":
+	{"file": RANCH_DIR + "/huf_holz.ogg", "volume_db": -3.0, "pitch_jitter": 0.05},
+	"ranch_huf_stein":
+	{"file": RANCH_DIR + "/huf_stein.ogg", "volume_db": -4.0, "pitch_jitter": 0.05},
+	"ranch_huf_trab": {"file": RANCH_DIR + "/huf_trab_loop.ogg", "volume_db": -8.0},
+	"ranch_huf_galopp": {"file": RANCH_DIR + "/huf_galopp_loop.ogg", "volume_db": -7.0},
+	# ── Pferdelaute (Reaktionen: Begrüßung/Bindung/Erschöpfung) ──
+	"ranch_wiehern_a":
+	{"file": RANCH_DIR + "/pferd_wiehern_a.ogg", "volume_db": -5.0, "pitch_jitter": 0.04},
+	"ranch_wiehern_b":
+	{"file": RANCH_DIR + "/pferd_wiehern_b.ogg", "volume_db": -5.0, "pitch_jitter": 0.04},
+	"ranch_schnauben_a":
+	{"file": RANCH_DIR + "/pferd_schnauben_a.ogg", "volume_db": -6.0, "pitch_jitter": 0.05},
+	"ranch_schnauben_b":
+	{"file": RANCH_DIR + "/pferd_schnauben_b.ogg", "volume_db": -6.0, "pitch_jitter": 0.05},
+	# ── Pflege-Foley ──
+	"ranch_sattel": {"file": RANCH_DIR + "/sattel_aufsteigen.ogg", "volume_db": -6.0},
+	"ranch_buerste":
+	{"file": RANCH_DIR + "/buerste_striegeln.ogg", "volume_db": -6.0, "pitch_jitter": 0.05},
+	"ranch_heu": {"file": RANCH_DIR + "/heu_rascheln.ogg", "volume_db": -7.0, "pitch_jitter": 0.06},
+	# ── Ambience-Loops (Mix je Zone/Wetter/Tageszeit: RanchAudio) ──
+	"ranch_ambience_wind": {"file": RANCH_DIR + "/ambience_wind.ogg", "volume_db": -12.0},
+	"ranch_ambience_regen": {"file": RANCH_DIR + "/ambience_regen.ogg", "volume_db": -10.0},
+	"ranch_ambience_gewitter": {"file": RANCH_DIR + "/ambience_gewitter.ogg", "volume_db": -8.0},
+	"ranch_ambience_voegel": {"file": RANCH_DIR + "/ambience_voegel.ogg", "volume_db": -12.0},
+	"ranch_ambience_bach": {"file": RANCH_DIR + "/ambience_bach.ogg", "volume_db": -12.0},
+	"ranch_ambience_grillen": {"file": RANCH_DIR + "/ambience_grillen.ogg", "volume_db": -12.0},
+	# ── Turnier: Fanfaren + Publikum ──
+	"ranch_fanfare": {"file": RANCH_DIR + "/turnier_fanfare.ogg", "volume_db": -4.0},
+	"ranch_fanfare_sieg": {"file": RANCH_DIR + "/turnier_fanfare_sieg.ogg", "volume_db": -3.0},
+	"ranch_menge_jubel": {"file": RANCH_DIR + "/menge_jubel.ogg", "volume_db": -6.0},
+	"ranch_menge_gemurmel": {"file": RANCH_DIR + "/menge_gemurmel.ogg", "volume_db": -10.0},
 }
+
+## Pflicht-Ids des Ranch-DLC (RW-8-Kontrakt — Tests prüfen Existenz +
+## Dateien; deckt ALLE 23 Dateien unter assets/ranch/audio/sfx ab).
+const RANCH_REQUIRED_IDS: Array[String] = [
+	"ranch_huf_gras",
+	"ranch_huf_sand",
+	"ranch_huf_holz",
+	"ranch_huf_stein",
+	"ranch_huf_trab",
+	"ranch_huf_galopp",
+	"ranch_wiehern_a",
+	"ranch_wiehern_b",
+	"ranch_schnauben_a",
+	"ranch_schnauben_b",
+	"ranch_sattel",
+	"ranch_buerste",
+	"ranch_heu",
+	"ranch_ambience_wind",
+	"ranch_ambience_regen",
+	"ranch_ambience_gewitter",
+	"ranch_ambience_voegel",
+	"ranch_ambience_bach",
+	"ranch_ambience_grillen",
+	"ranch_fanfare",
+	"ranch_fanfare_sieg",
+	"ranch_menge_jubel",
+	"ranch_menge_gemurmel",
+]
 
 
 ## Eintrag zu einer Id ({} = unbekannt).
@@ -82,12 +154,16 @@ static func entry(id: String) -> Dictionary:
 	return SOUNDS.get(id, {})
 
 
-## Ressourcen-Pfad zu einer Id ("" = unbekannt).
+## Ressourcen-Pfad zu einer Id ("" = unbekannt). Absolute res://-Einträge
+## (Ranch-Familie) gehen unverändert durch, alles andere hängt an BASE_DIR.
 static func path(id: String) -> String:
 	var row: Dictionary = SOUNDS.get(id, {})
 	if row.is_empty():
 		return ""
-	return "%s/%s" % [BASE_DIR, row["file"]]
+	var file := str(row["file"])
+	if file.begins_with("res://"):
+		return file
+	return "%s/%s" % [BASE_DIR, file]
 
 
 ## Alle bekannten Ids (für Tests/Preload).

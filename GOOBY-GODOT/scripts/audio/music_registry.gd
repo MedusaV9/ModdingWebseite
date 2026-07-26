@@ -13,8 +13,17 @@ extends RefCounted
 ## "city", "shop" (REHWEI/IKEA), "vet", "vacation" (Urlaub → Vacation Day).
 ## Sender (§Web C-SYS1.2): bordmusik/gooby-fm/recap-fm/game-fm/alle;
 ## Stinger (< 10 s) laufen NIE in einem Sender — One-Shot-Cues.
+##
+## RW-8 (Ranch-DLC): 5 zusätzliche Tracks (Kategorie "Ranch", Dateien unter
+## assets/ranch/audio/musik/ — file-Einträge sind absolute res://-Pfade,
+## path() reicht sie durch). Kontexte: "ranch" (Hof), "ranch_reiten"
+## (Weite), "ranch_turnier", "ranch_nacht", "ranch_menue". Kontextwechsel
+## beim Reisen fährt RanchAudio (scripts/audio/ranch_audio.gd); die Trims
+## sind auf die Bestands-Loudness (~-16 dB mean) eingemessen. Ranch-Tracks
+## laufen in keinem Themen-Sender, nur in "alle".
 
 const BASE_DIR := "res://assets/music"
+const RANCH_MUSIK_DIR := "res://assets/ranch/audio/musik"
 ## Sub-10-Sekunden-Dateien sind One-Shot-Stinger (Web STINGER_MAX_SEC).
 const STINGER_MAX_SEC := 10.0
 
@@ -37,6 +46,11 @@ const CONTEXT_ALIASES := {
 	"shop": "location:shop",
 	"vet": "location:vet",
 	"arcade": "arcade",
+	"ranch": "ranch:hof",
+	"ranch_reiten": "ranch:reiten",
+	"ranch_turnier": "ranch:turnier",
+	"ranch_nacht": "ranch:nacht",
+	"ranch_menue": "ranch:menue",
 }
 
 ## Zusatz-Kontexte ohne Manifest-Token (Godot-additiv): Urlaub.
@@ -57,6 +71,11 @@ const REQUIRED_CONTEXTS := [
 	"room:kitchen",
 	"room:bathroom",
 	"room:bedroom",
+	"ranch",
+	"ranch_reiten",
+	"ranch_turnier",
+	"ranch_nacht",
+	"ranch_menue",
 ]
 
 ## Beat-Manifeste der Recap-Tracks (Web beats/*.beats.json, Override gewinnt).
@@ -607,6 +626,61 @@ const TRACKS := {
 		"context": "room:bedroom",
 		"variant": "sleeping",
 	},
+	"ranch-tag":
+	{
+		"file": RANCH_MUSIK_DIR + "/musik_ranch_tag.ogg",
+		"category": "Ranch",
+		"title": "Ranch-Tag",
+		"duration_sec": 199.8,
+		"gain_trim": 1.15,
+		"unlock_level": 1,
+		"context": "ranch:hof",
+		"variant": "",
+	},
+	"ranch-reiten":
+	{
+		"file": RANCH_MUSIK_DIR + "/musik_reiten.ogg",
+		"category": "Ranch",
+		"title": "Weites Land",
+		"duration_sec": 73.7,
+		"gain_trim": 1.86,
+		"unlock_level": 1,
+		"context": "ranch:reiten",
+		"variant": "",
+	},
+	"ranch-turnier":
+	{
+		"file": RANCH_MUSIK_DIR + "/musik_turnier.ogg",
+		"category": "Ranch",
+		"title": "Turnier-Galopp",
+		"duration_sec": 187.5,
+		"gain_trim": 1.84,
+		"unlock_level": 1,
+		"context": "ranch:turnier",
+		"variant": "",
+	},
+	"ranch-nacht":
+	{
+		"file": RANCH_MUSIK_DIR + "/musik_nacht.ogg",
+		"category": "Ranch",
+		"title": "Nacht am Teich",
+		"duration_sec": 235.0,
+		"gain_trim": 1.2,
+		"unlock_level": 1,
+		"context": "ranch:nacht",
+		"variant": "",
+	},
+	"ranch-menue":
+	{
+		"file": RANCH_MUSIK_DIR + "/musik_menue.ogg",
+		"category": "Ranch",
+		"title": "Ranch-Menü",
+		"duration_sec": 114.5,
+		"gain_trim": 1.82,
+		"unlock_level": 1,
+		"context": "ranch:menue",
+		"variant": "",
+	},
 	"stinger-levelup":
 	{
 		"file": "stinger/stinger-levelup.ogg",
@@ -637,12 +711,16 @@ static func entry(track_id: String) -> Dictionary:
 	return TRACKS.get(track_id, {})
 
 
-## Ressourcen-Pfad einer Track-Id ("" = unbekannt).
+## Ressourcen-Pfad einer Track-Id ("" = unbekannt). Absolute res://-Einträge
+## (Ranch-Familie) gehen unverändert durch, alles andere hängt an BASE_DIR.
 static func path(track_id: String) -> String:
 	var row: Dictionary = TRACKS.get(track_id, {})
 	if row.is_empty():
 		return ""
-	return "%s/%s" % [BASE_DIR, row["file"]]
+	var file := str(row["file"])
+	if file.begins_with("res://"):
+		return file
+	return "%s/%s" % [BASE_DIR, file]
 
 
 ## Alle bekannten Track-Ids.

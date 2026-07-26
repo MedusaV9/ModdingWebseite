@@ -136,6 +136,15 @@ export class Storage {
     return fs.readFileSync(file);
   }
 
+  // Blob löschen (Ghost-Prune, RW-6) — best effort, Pfad-Traversal-sicher.
+  deleteBlob(ref) {
+    try {
+      fs.rmSync(this._resolveRel(ref), { force: true });
+    } catch {
+      /* best effort */
+    }
+  }
+
   _resolveRel(relPath) {
     const file = path.resolve(this.dataDir, relPath);
     if (!file.startsWith(this.dataDir + path.sep)) throw new Error('path escape');

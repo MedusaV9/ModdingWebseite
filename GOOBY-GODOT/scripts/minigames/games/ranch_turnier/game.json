@@ -1,0 +1,10 @@
+{
+	"id": "ranchTurnier",
+	"title_key": "mg.ranchTurnier.title",
+	"scene": "res://scripts/minigames/games/ranch_turnier/turnier_game.tscn",
+	"coin_table": {"divisor": 4, "min": 4, "max": 30},
+	"target": 300,
+	"orientation": "landscape",
+	"supports_endless": false,
+	"energy_cost": 8
+}

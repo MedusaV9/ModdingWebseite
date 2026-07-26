@@ -31,6 +31,12 @@ const MAX_INSET_SHARE := 0.15
 
 ## Tests/Screenshot-Sim: erzwingt einen screen_scale (0 = DisplayServer).
 static var screen_scale_override := 0.0
+## RW-7 (Settings §4.3): Benutzerfaktoren aus AppSettings — der QualityService
+## setzt sie beim Boot und bei jeder Änderung (display.ui_scale /
+## display.text_scale / display.safe_area_extra). Defaults = neutrale 1.0/0.
+static var user_factor := 1.0
+static var text_factor := 1.0
+static var extra_inset := 0.0
 
 
 ## Kurze CANVAS-Kante gegen die 720er-Design-Basis (pure, headless testbar).
@@ -54,6 +60,8 @@ static func physical_factor(canvas_size: Vector2, window_px: Vector2, screen_sca
 
 
 ## Kombinierte Regel für einen echten Viewport (headless-sicher).
+## RW-7: multipliziert den Benutzerfaktor (display.ui_scale) hinein —
+## gedeckelt, damit 130 % auf großen Canvases nichts sprengt.
 static func for_viewport(viewport: Viewport) -> float:
 	if viewport == null:
 		return MIN_FACTOR
@@ -65,18 +73,28 @@ static func for_viewport(viewport: Viewport) -> float:
 	if scale > 0.0:
 		var window_px := Vector2(DisplayServer.window_get_size())
 		factor = maxf(factor, physical_factor(canvas, window_px, scale))
-	return factor
+	return clampf(factor * clampf(user_factor, 0.7, 1.6), 0.5, MAX_PHYSICAL_FACTOR)
+
+
+## RW-7: Faktor für SCHRIFTEN — UI-Faktor × Textgrößen-Faktor
+## (display.text_scale). Screens nutzen ihn für font_size-Overrides.
+static func font_scale(viewport: Viewport) -> float:
+	return for_viewport(viewport) * clampf(text_factor, 1.0, 1.5)
 
 
 ## Safe-Area-Insets in CANVAS-Koordinaten für einen echten Viewport:
 ## Override (Tests/Notch-Simulation) > DisplayServer > 0 (Desktop/Headless).
 ## Deckelt jede Seite auf MAX_INSET_SHARE der Achse (Robustheit, s. o.).
+## RW-7: `extra_inset` (display.safe_area_extra, 0–24 px Feinjustierung)
+## wird auf JEDE Seite addiert, bevor gedeckelt wird.
 static func safe_insets_canvas(viewport: Viewport, override := Rect2()) -> Dictionary:
 	var canvas := Vector2(viewport.get_visible_rect().size)
 	if override != Rect2():
-		return clamp_insets(HudLayoutLogic.safe_insets(canvas, override), canvas)
+		return clamp_insets(_plus_extra(HudLayoutLogic.safe_insets(canvas, override)), canvas)
 	if DisplayServer.get_name() == "headless":
-		return HudLayoutLogic.safe_insets(canvas, Rect2(Vector2.ZERO, canvas))
+		return clamp_insets(
+			_plus_extra(HudLayoutLogic.safe_insets(canvas, Rect2(Vector2.ZERO, canvas))), canvas
+		)
 	var win_size := Vector2(DisplayServer.window_get_size())
 	var win_pos := Vector2(DisplayServer.window_get_position())
 	var safe := Rect2(DisplayServer.get_display_safe_area())
@@ -85,7 +103,7 @@ static func safe_insets_canvas(viewport: Viewport, override := Rect2()) -> Dicti
 	)
 	var raw := HudLayoutLogic.safe_insets(win_size, local)
 	if win_size.x <= 0.0 or win_size.y <= 0.0:
-		return clamp_insets(raw, canvas)
+		return clamp_insets(_plus_extra(raw), canvas)
 	var fx := canvas.x / win_size.x
 	var fy := canvas.y / win_size.y
 	var scaled := {
@@ -94,7 +112,20 @@ static func safe_insets_canvas(viewport: Viewport, override := Rect2()) -> Dicti
 		"right": float(raw["right"]) * fx,
 		"bottom": float(raw["bottom"]) * fy,
 	}
-	return clamp_insets(scaled, canvas)
+	return clamp_insets(_plus_extra(scaled), canvas)
+
+
+## Benutzer-Feinjustierung auf alle Seiten addieren (pure).
+static func _plus_extra(insets: Dictionary) -> Dictionary:
+	var extra := clampf(extra_inset, 0.0, 24.0)
+	if extra <= 0.0:
+		return insets
+	return {
+		"left": float(insets.get("left", 0.0)) + extra,
+		"top": float(insets.get("top", 0.0)) + extra,
+		"right": float(insets.get("right", 0.0)) + extra,
+		"bottom": float(insets.get("bottom", 0.0)) + extra,
+	}
 
 
 ## Insets pro Seite auf MAX_INSET_SHARE der jeweiligen Achse deckeln (pure).

@@ -139,10 +139,12 @@ func _on_setting_changed(key: String, value: Variant) -> void:
 			apply_volume(bus_name, float(value))
 
 
-func _stream_for(id: String, row: Dictionary) -> AudioStream:
+## Pfad kommt aus SfxMap.path() — die Ranch-Familie (RW-8) nutzt absolute
+## res://-Einträge, alle anderen hängen wie bisher an BASE_DIR.
+func _stream_for(id: String, _row: Dictionary) -> AudioStream:
 	if _streams.has(id):
 		return _streams[id]
-	var path := "%s/%s" % [SfxMap.BASE_DIR, row["file"]]
+	var path := SfxMap.path(id)
 	if not ResourceLoader.exists(path):
 		if not _warned_ids.has(id):
 			_warned_ids[id] = true
