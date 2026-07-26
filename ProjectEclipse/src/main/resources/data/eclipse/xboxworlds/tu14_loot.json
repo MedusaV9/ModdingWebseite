@@ -5003,9 +5003,9 @@
   "frames": [
     {
       "pos": [
-        102,
-        73,
-        -107
+        74,
+        72,
+        236
       ],
       "facing": "west",
       "item": {
@@ -5015,11 +5015,11 @@
     },
     {
       "pos": [
-        104,
-        73,
-        -105
+        77,
+        72,
+        233
       ],
-      "facing": "south",
+      "facing": "north",
       "item": {
         "id": "minecraft:diamond",
         "count": 1
@@ -5027,11 +5027,11 @@
     },
     {
       "pos": [
-        105,
-        73,
-        -102
+        28,
+        72,
+        250
       ],
-      "facing": "west",
+      "facing": "south",
       "item": {
         "id": "minecraft:clock",
         "count": 1
@@ -5039,11 +5039,11 @@
     },
     {
       "pos": [
-        87,
-        73,
-        -102
+        82,
+        72,
+        235
       ],
-      "facing": "north",
+      "facing": "east",
       "item": {
         "id": "minecraft:music_disc_cat",
         "count": 1
@@ -5051,11 +5051,11 @@
     },
     {
       "pos": [
-        104,
-        73,
-        -98
+        26,
+        72,
+        248
       ],
-      "facing": "west",
+      "facing": "south",
       "item": {
         "id": "minecraft:bread",
         "count": 1
@@ -5063,11 +5063,11 @@
     },
     {
       "pos": [
-        88,
-        73,
-        -99
+        82,
+        72,
+        231
       ],
-      "facing": "north",
+      "facing": "east",
       "item": {
         "id": "minecraft:compass",
         "count": 1
@@ -5075,11 +5075,11 @@
     },
     {
       "pos": [
-        101,
-        73,
-        -118
+        27,
+        72,
+        245
       ],
-      "facing": "west",
+      "facing": "east",
       "item": {
         "id": "minecraft:iron_pickaxe",
         "count": 1
@@ -5087,11 +5087,11 @@
     },
     {
       "pos": [
-        97,
-        73,
-        -89
+        29,
+        72,
+        242
       ],
-      "facing": "north",
+      "facing": "east",
       "item": {
         "id": "minecraft:golden_apple",
         "count": 1

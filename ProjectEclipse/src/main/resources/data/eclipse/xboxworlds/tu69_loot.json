@@ -1,821 +1,8 @@
 {
   "worldId": "tu69",
   "dataVersion": 3955,
-  "note": "derived from tu12_loot.json by tools/xboxworlds/variants.py (C17): containers inside the 30x30-chunk trim box; items use the vanilla ItemStack JSON codec shape ({id,count,components}); ids are the ORIGINAL vanilla ids - P5-W9 decides at spill time what stays vanilla (music discs) vs maps to classic items (SS2.14 chest loot).",
+  "note": "derived from tu12_loot.json by tools/xboxworlds/variants.py (TUT2): containers inside the per-era window chunks x1..26 z-20..5; items use the vanilla ItemStack JSON codec shape ({id,count,components}); ids are the ORIGINAL vanilla ids - P5-W9 decides at spill time what stays vanilla (music discs) vs maps to classic items (SS2.14 chest loot).",
   "containers": [
-    {
-      "pos": [
-        -210,
-        47,
-        -192
-      ],
-      "block": "minecraft:chest",
-      "items": [
-        {
-          "id": "minecraft:cocoa_beans",
-          "count": 1
-        },
-        {
-          "id": "minecraft:wheat",
-          "count": 2
-        },
-        {
-          "id": "minecraft:gunpowder",
-          "count": 2
-        },
-        {
-          "id": "minecraft:bucket",
-          "count": 1
-        },
-        {
-          "id": "minecraft:redstone",
-          "count": 1
-        },
-        {
-          "id": "minecraft:string",
-          "count": 1
-        }
-      ]
-    },
-    {
-      "pos": [
-        -210,
-        47,
-        -191
-      ],
-      "block": "minecraft:chest",
-      "items": [
-        {
-          "id": "minecraft:cocoa_beans",
-          "count": 1
-        },
-        {
-          "id": "minecraft:saddle",
-          "count": 1
-        },
-        {
-          "id": "minecraft:iron_ingot",
-          "count": 4
-        },
-        {
-          "id": "minecraft:bucket",
-          "count": 1
-        },
-        {
-          "id": "minecraft:string",
-          "count": 4
-        }
-      ]
-    },
-    {
-      "pos": [
-        -205,
-        63,
-        -41
-      ],
-      "block": "minecraft:chest",
-      "items": [
-        {
-          "id": "minecraft:music_disc_mellohi",
-          "count": 1
-        },
-        {
-          "id": "minecraft:iron_sword",
-          "count": 1,
-          "components": {
-            "minecraft:enchantments": {
-              "levels": {
-                "minecraft:smite": 5
-              }
-            }
-          }
-        }
-      ]
-    },
-    {
-      "pos": [
-        -204,
-        25,
-        -72
-      ],
-      "block": "minecraft:chest",
-      "items": [
-        {
-          "id": "minecraft:bread",
-          "count": 1
-        },
-        {
-          "id": "minecraft:bucket",
-          "count": 1
-        },
-        {
-          "id": "minecraft:string",
-          "count": 2
-        },
-        {
-          "id": "minecraft:music_disc_cat",
-          "count": 1
-        },
-        {
-          "id": "minecraft:saddle",
-          "count": 1
-        }
-      ]
-    },
-    {
-      "pos": [
-        -189,
-        24,
-        170
-      ],
-      "block": "minecraft:chest",
-      "items": [
-        {
-          "id": "minecraft:bucket",
-          "count": 1
-        },
-        {
-          "id": "minecraft:saddle",
-          "count": 1
-        },
-        {
-          "id": "minecraft:bread",
-          "count": 1
-        },
-        {
-          "id": "minecraft:cocoa_beans",
-          "count": 1
-        },
-        {
-          "id": "minecraft:cocoa_beans",
-          "count": 1
-        },
-        {
-          "id": "minecraft:bread",
-          "count": 1
-        }
-      ]
-    },
-    {
-      "pos": [
-        -179,
-        65,
-        125
-      ],
-      "block": "minecraft:chest",
-      "items": [
-        {
-          "id": "minecraft:diamond",
-          "count": 1
-        },
-        {
-          "id": "minecraft:bread",
-          "count": 1
-        },
-        {
-          "id": "minecraft:bread",
-          "count": 1
-        },
-        {
-          "id": "minecraft:bread",
-          "count": 1
-        },
-        {
-          "id": "minecraft:apple",
-          "count": 2
-        }
-      ]
-    },
-    {
-      "pos": [
-        -143,
-        12,
-        -191
-      ],
-      "block": "minecraft:chest",
-      "items": [
-        {
-          "id": "minecraft:cocoa_beans",
-          "count": 1
-        },
-        {
-          "id": "minecraft:gunpowder",
-          "count": 4
-        },
-        {
-          "id": "minecraft:gunpowder",
-          "count": 3
-        },
-        {
-          "id": "minecraft:saddle",
-          "count": 1
-        },
-        {
-          "id": "minecraft:string",
-          "count": 3
-        }
-      ]
-    },
-    {
-      "pos": [
-        -142,
-        34,
-        159
-      ],
-      "block": "minecraft:chest",
-      "items": [
-        {
-          "id": "minecraft:bucket",
-          "count": 1
-        },
-        {
-          "id": "minecraft:wheat",
-          "count": 1
-        },
-        {
-          "id": "minecraft:wheat",
-          "count": 3
-        },
-        {
-          "id": "minecraft:gunpowder",
-          "count": 2
-        },
-        {
-          "id": "minecraft:iron_ingot",
-          "count": 2
-        },
-        {
-          "id": "minecraft:wheat",
-          "count": 1
-        }
-      ]
-    },
-    {
-      "pos": [
-        -141,
-        34,
-        162
-      ],
-      "block": "minecraft:chest",
-      "items": [
-        {
-          "id": "minecraft:wheat",
-          "count": 4
-        },
-        {
-          "id": "minecraft:saddle",
-          "count": 1
-        },
-        {
-          "id": "minecraft:cocoa_beans",
-          "count": 1
-        },
-        {
-          "id": "minecraft:cocoa_beans",
-          "count": 1
-        },
-        {
-          "id": "minecraft:bucket",
-          "count": 1
-        },
-        {
-          "id": "minecraft:iron_ingot",
-          "count": 2
-        },
-        {
-          "id": "minecraft:saddle",
-          "count": 1
-        }
-      ]
-    },
-    {
-      "pos": [
-        -137,
-        25,
-        102
-      ],
-      "block": "minecraft:chest",
-      "items": [
-        {
-          "id": "minecraft:redstone",
-          "count": 4
-        },
-        {
-          "id": "minecraft:saddle",
-          "count": 1
-        },
-        {
-          "id": "minecraft:bucket",
-          "count": 1
-        },
-        {
-          "id": "minecraft:iron_ingot",
-          "count": 2
-        },
-        {
-          "id": "minecraft:bucket",
-          "count": 1
-        }
-      ]
-    },
-    {
-      "pos": [
-        -136,
-        25,
-        103
-      ],
-      "block": "minecraft:chest",
-      "items": [
-        {
-          "id": "minecraft:gunpowder",
-          "count": 2
-        },
-        {
-          "id": "minecraft:wheat",
-          "count": 4
-        },
-        {
-          "id": "minecraft:redstone",
-          "count": 2
-        },
-        {
-          "id": "minecraft:bucket",
-          "count": 1
-        },
-        {
-          "id": "minecraft:bread",
-          "count": 1
-        },
-        {
-          "id": "minecraft:cocoa_beans",
-          "count": 1
-        }
-      ]
-    },
-    {
-      "pos": [
-        -97,
-        39,
-        237
-      ],
-      "block": "minecraft:chest",
-      "items": [
-        {
-          "id": "minecraft:bucket",
-          "count": 1
-        },
-        {
-          "id": "minecraft:wheat",
-          "count": 4
-        },
-        {
-          "id": "minecraft:wheat",
-          "count": 4
-        },
-        {
-          "id": "minecraft:iron_ingot",
-          "count": 4
-        },
-        {
-          "id": "minecraft:bucket",
-          "count": 1
-        }
-      ]
-    },
-    {
-      "pos": [
-        -95,
-        39,
-        239
-      ],
-      "block": "minecraft:chest",
-      "items": [
-        {
-          "id": "minecraft:bucket",
-          "count": 1
-        },
-        {
-          "id": "minecraft:bucket",
-          "count": 1
-        },
-        {
-          "id": "minecraft:saddle",
-          "count": 1
-        },
-        {
-          "id": "minecraft:bucket",
-          "count": 1
-        },
-        {
-          "id": "minecraft:bread",
-          "count": 1
-        }
-      ]
-    },
-    {
-      "pos": [
-        -62,
-        52,
-        171
-      ],
-      "block": "minecraft:chest",
-      "items": [
-        {
-          "id": "minecraft:bucket",
-          "count": 1
-        },
-        {
-          "id": "minecraft:iron_ingot",
-          "count": 4
-        },
-        {
-          "id": "minecraft:bucket",
-          "count": 1
-        },
-        {
-          "id": "minecraft:music_disc_13",
-          "count": 1
-        }
-      ]
-    },
-    {
-      "pos": [
-        -57,
-        52,
-        168
-      ],
-      "block": "minecraft:chest",
-      "items": [
-        {
-          "id": "minecraft:iron_ingot",
-          "count": 4
-        },
-        {
-          "id": "minecraft:cocoa_beans",
-          "count": 1
-        },
-        {
-          "id": "minecraft:wheat",
-          "count": 2
-        },
-        {
-          "id": "minecraft:iron_ingot",
-          "count": 3
-        },
-        {
-          "id": "minecraft:string",
-          "count": 2
-        },
-        {
-          "id": "minecraft:bucket",
-          "count": 1
-        },
-        {
-          "id": "minecraft:bread",
-          "count": 1
-        }
-      ]
-    },
-    {
-      "pos": [
-        -44,
-        59,
-        6
-      ],
-      "block": "minecraft:chest",
-      "items": [
-        {
-          "id": "minecraft:redstone",
-          "count": 4
-        },
-        {
-          "id": "minecraft:saddle",
-          "count": 1
-        },
-        {
-          "id": "minecraft:redstone",
-          "count": 3
-        },
-        {
-          "id": "minecraft:saddle",
-          "count": 1
-        },
-        {
-          "id": "minecraft:iron_ingot",
-          "count": 2
-        },
-        {
-          "id": "minecraft:string",
-          "count": 2
-        }
-      ]
-    },
-    {
-      "pos": [
-        -42,
-        20,
-        225
-      ],
-      "block": "minecraft:chest",
-      "items": [
-        {
-          "id": "minecraft:paper",
-          "count": 5
-        },
-        {
-          "id": "minecraft:book",
-          "count": 3
-        }
-      ]
-    },
-    {
-      "pos": [
-        -40,
-        35,
-        166
-      ],
-      "block": "minecraft:chest",
-      "items": [
-        {
-          "id": "minecraft:apple",
-          "count": 2
-        },
-        {
-          "id": "minecraft:apple",
-          "count": 2
-        },
-        {
-          "id": "minecraft:bread",
-          "count": 1
-        }
-      ]
-    },
-    {
-      "pos": [
-        -38,
-        59,
-        7
-      ],
-      "block": "minecraft:chest",
-      "items": [
-        {
-          "id": "minecraft:string",
-          "count": 1
-        },
-        {
-          "id": "minecraft:wheat",
-          "count": 2
-        },
-        {
-          "id": "minecraft:wheat",
-          "count": 3
-        },
-        {
-          "id": "minecraft:saddle",
-          "count": 1
-        }
-      ]
-    },
-    {
-      "pos": [
-        -34,
-        80,
-        -91
-      ],
-      "block": "minecraft:chest",
-      "items": [
-        {
-          "id": "minecraft:music_disc_cat",
-          "count": 1
-        },
-        {
-          "id": "minecraft:iron_boots",
-          "count": 1,
-          "components": {
-            "minecraft:enchantments": {
-              "levels": {
-                "minecraft:feather_falling": 4
-              }
-            }
-          }
-        }
-      ]
-    },
-    {
-      "pos": [
-        -33,
-        25,
-        221
-      ],
-      "block": "minecraft:chest",
-      "items": [
-        {
-          "id": "minecraft:book",
-          "count": 1
-        }
-      ]
-    },
-    {
-      "pos": [
-        -28,
-        11,
-        175
-      ],
-      "block": "minecraft:chest",
-      "items": [
-        {
-          "id": "minecraft:string",
-          "count": 4
-        },
-        {
-          "id": "minecraft:iron_ingot",
-          "count": 4
-        },
-        {
-          "id": "minecraft:bread",
-          "count": 1
-        },
-        {
-          "id": "minecraft:wheat",
-          "count": 3
-        },
-        {
-          "id": "minecraft:iron_ingot",
-          "count": 3
-        },
-        {
-          "id": "minecraft:redstone",
-          "count": 3
-        }
-      ]
-    },
-    {
-      "pos": [
-        -26,
-        11,
-        172
-      ],
-      "block": "minecraft:chest",
-      "items": [
-        {
-          "id": "minecraft:iron_ingot",
-          "count": 3
-        },
-        {
-          "id": "minecraft:iron_ingot",
-          "count": 1
-        },
-        {
-          "id": "minecraft:saddle",
-          "count": 1
-        },
-        {
-          "id": "minecraft:iron_ingot",
-          "count": 2
-        },
-        {
-          "id": "minecraft:saddle",
-          "count": 1
-        },
-        {
-          "id": "minecraft:string",
-          "count": 4
-        }
-      ]
-    },
-    {
-      "pos": [
-        -19,
-        34,
-        183
-      ],
-      "block": "minecraft:chest",
-      "items": [
-        {
-          "id": "minecraft:book",
-          "count": 2
-        }
-      ]
-    },
-    {
-      "pos": [
-        0,
-        54,
-        153
-      ],
-      "block": "minecraft:chest",
-      "items": [
-        {
-          "id": "minecraft:music_disc_blocks",
-          "count": 1
-        },
-        {
-          "id": "minecraft:iron_helmet",
-          "count": 1,
-          "components": {
-            "minecraft:enchantments": {
-              "levels": {
-                "minecraft:respiration": 3
-              }
-            }
-          }
-        }
-      ]
-    },
-    {
-      "pos": [
-        4,
-        21,
-        211
-      ],
-      "block": "minecraft:chest",
-      "items": [
-        {
-          "id": "minecraft:iron_boots",
-          "count": 1
-        },
-        {
-          "id": "minecraft:diamond",
-          "count": 2
-        },
-        {
-          "id": "minecraft:ender_pearl",
-          "count": 1
-        }
-      ]
-    },
-    {
-      "pos": [
-        10,
-        71,
-        -62
-      ],
-      "block": "minecraft:chest",
-      "items": [
-        {
-          "id": "minecraft:wheat",
-          "count": 20
-        },
-        {
-          "id": "minecraft:wheat_seeds",
-          "count": 20
-        },
-        {
-          "id": "minecraft:beef",
-          "count": 20
-        },
-        {
-          "id": "minecraft:bone",
-          "count": 10
-        },
-        {
-          "id": "minecraft:cod",
-          "count": 10
-        }
-      ]
-    },
-    {
-      "pos": [
-        15,
-        73,
-        -100
-      ],
-      "block": "minecraft:chest",
-      "items": [
-        {
-          "id": "minecraft:redstone",
-          "count": 64
-        },
-        {
-          "id": "minecraft:redstone",
-          "count": 64
-        },
-        {
-          "id": "minecraft:repeater",
-          "count": 10
-        },
-        {
-          "id": "minecraft:redstone_torch",
-          "count": 30
-        },
-        {
-          "id": "minecraft:lever",
-          "count": 10
-        },
-        {
-          "id": "minecraft:piston",
-          "count": 10
-        },
-        {
-          "id": "minecraft:sticky_piston",
-          "count": 10
-        },
-        {
-          "id": "minecraft:stone_button",
-          "count": 10
-        }
-      ]
-    },
     {
       "pos": [
         22,
@@ -1185,44 +372,6 @@
     },
     {
       "pos": [
-        81,
-        44,
-        207
-      ],
-      "block": "minecraft:chest",
-      "items": [
-        {
-          "id": "minecraft:saddle",
-          "count": 1
-        },
-        {
-          "id": "minecraft:cocoa_beans",
-          "count": 1
-        },
-        {
-          "id": "minecraft:iron_ingot",
-          "count": 4
-        },
-        {
-          "id": "minecraft:bucket",
-          "count": 1
-        },
-        {
-          "id": "minecraft:saddle",
-          "count": 1
-        },
-        {
-          "id": "minecraft:wheat",
-          "count": 4
-        },
-        {
-          "id": "minecraft:music_disc_cat",
-          "count": 1
-        }
-      ]
-    },
-    {
-      "pos": [
         95,
         16,
         78
@@ -1419,35 +568,6 @@
     },
     {
       "pos": [
-        115,
-        57,
-        107
-      ],
-      "block": "minecraft:chest",
-      "items": [
-        {
-          "id": "minecraft:music_disc_stal",
-          "count": 1
-        },
-        {
-          "id": "minecraft:flint_and_steel",
-          "count": 1
-        },
-        {
-          "id": "minecraft:iron_leggings",
-          "count": 1,
-          "components": {
-            "minecraft:enchantments": {
-              "levels": {
-                "minecraft:blast_protection": 4
-              }
-            }
-          }
-        }
-      ]
-    },
-    {
-      "pos": [
         118,
         62,
         30
@@ -1516,38 +636,468 @@
     },
     {
       "pos": [
-        218,
-        11,
-        125
+        240,
+        15,
+        -310
       ],
       "block": "minecraft:chest",
       "items": [
         {
+          "id": "minecraft:wheat",
+          "count": 2
+        },
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        },
+        {
+          "id": "minecraft:cocoa_beans",
+          "count": 1
+        },
+        {
+          "id": "minecraft:wheat",
+          "count": 1
+        },
+        {
           "id": "minecraft:string",
+          "count": 1
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 3
+        },
+        {
+          "id": "minecraft:wheat",
           "count": 4
-        },
+        }
+      ]
+    },
+    {
+      "pos": [
+        253,
+        91,
+        -185
+      ],
+      "block": "minecraft:chest",
+      "items": [
         {
-          "id": "minecraft:saddle",
+          "id": "minecraft:music_disc_wait",
           "count": 1
         },
         {
-          "id": "minecraft:saddle",
+          "id": "minecraft:diamond_pickaxe",
+          "count": 1,
+          "components": {
+            "minecraft:enchantments": {
+              "levels": {
+                "minecraft:silk_touch": 1
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "pos": [
+        258,
+        58,
+        40
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:bucket",
           "count": 1
         },
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        },
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 3
+        },
+        {
+          "id": "minecraft:gunpowder",
+          "count": 1
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 3
+        }
+      ]
+    },
+    {
+      "pos": [
+        303,
+        49,
+        -24
+      ],
+      "block": "minecraft:chest",
+      "items": [
         {
           "id": "minecraft:redstone",
           "count": 3
+        },
+        {
+          "id": "minecraft:redstone",
+          "count": 2
         },
         {
           "id": "minecraft:iron_ingot",
           "count": 4
         },
         {
+          "id": "minecraft:iron_ingot",
+          "count": 4
+        },
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        },
+        {
+          "id": "minecraft:gunpowder",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "pos": [
+        304,
+        49,
+        -20
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
           "id": "minecraft:bread",
           "count": 1
         },
         {
+          "id": "minecraft:gunpowder",
+          "count": 4
+        },
+        {
+          "id": "minecraft:gunpowder",
+          "count": 4
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 4
+        },
+        {
+          "id": "minecraft:gunpowder",
+          "count": 3
+        }
+      ]
+    },
+    {
+      "pos": [
+        336,
+        36,
+        -300
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:saddle",
+          "count": 1
+        },
+        {
           "id": "minecraft:bucket",
+          "count": 1
+        },
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        },
+        {
+          "id": "minecraft:wheat",
+          "count": 4
+        },
+        {
+          "id": "minecraft:wheat",
+          "count": 4
+        },
+        {
+          "id": "minecraft:string",
+          "count": 3
+        }
+      ]
+    },
+    {
+      "pos": [
+        349,
+        16,
+        34
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:bread",
+          "count": 1
+        },
+        {
+          "id": "minecraft:pumpkin_seeds",
+          "count": 4
+        },
+        {
+          "id": "minecraft:coal",
+          "count": 4
+        },
+        {
+          "id": "minecraft:melon_seeds",
+          "count": 2
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "pos": [
+        353,
+        53,
+        -292
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:cocoa_beans",
+          "count": 1
+        },
+        {
+          "id": "minecraft:cocoa_beans",
+          "count": 1
+        },
+        {
+          "id": "minecraft:gunpowder",
+          "count": 1
+        },
+        {
+          "id": "minecraft:string",
+          "count": 1
+        },
+        {
+          "id": "minecraft:gunpowder",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "pos": [
+        358,
+        53,
+        -295
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:cocoa_beans",
+          "count": 1
+        },
+        {
+          "id": "minecraft:saddle",
+          "count": 1
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 1
+        },
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        },
+        {
+          "id": "minecraft:string",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "pos": [
+        367,
+        32,
+        88
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:string",
+          "count": 1
+        },
+        {
+          "id": "minecraft:cocoa_beans",
+          "count": 1
+        },
+        {
+          "id": "minecraft:string",
+          "count": 1
+        },
+        {
+          "id": "minecraft:cocoa_beans",
+          "count": 1
+        },
+        {
+          "id": "minecraft:string",
+          "count": 1
+        },
+        {
+          "id": "minecraft:bread",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "pos": [
+        367,
+        75,
+        -57
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:music_disc_11",
+          "count": 1
+        },
+        {
+          "id": "minecraft:bow",
+          "count": 1,
+          "components": {
+            "minecraft:enchantments": {
+              "levels": {
+                "minecraft:power": 5
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "pos": [
+        368,
+        59,
+        84
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        },
+        {
+          "id": "minecraft:saddle",
+          "count": 1
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 1
+        },
+        {
+          "id": "minecraft:gunpowder",
+          "count": 3
+        },
+        {
+          "id": "minecraft:music_disc_cat",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "pos": [
+        371,
+        59,
+        83
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:bread",
+          "count": 1
+        },
+        {
+          "id": "minecraft:saddle",
+          "count": 1
+        },
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        },
+        {
+          "id": "minecraft:bucket",
+          "count": 1
+        },
+        {
+          "id": "minecraft:gunpowder",
+          "count": 4
+        }
+      ]
+    },
+    {
+      "pos": [
+        375,
+        59,
+        89
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:string",
+          "count": 2
+        },
+        {
+          "id": "minecraft:wheat",
+          "count": 4
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 1
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 4
+        },
+        {
+          "id": "minecraft:wheat",
+          "count": 2
+        },
+        {
+          "id": "minecraft:gunpowder",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "pos": [
+        377,
+        59,
+        92
+      ],
+      "block": "minecraft:chest",
+      "items": [
+        {
+          "id": "minecraft:cocoa_beans",
+          "count": 1
+        },
+        {
+          "id": "minecraft:iron_ingot",
+          "count": 4
+        },
+        {
+          "id": "minecraft:saddle",
+          "count": 1
+        },
+        {
+          "id": "minecraft:wheat",
+          "count": 2
+        },
+        {
+          "id": "minecraft:cocoa_beans",
           "count": 1
         }
       ]
@@ -1556,11 +1106,11 @@
   "frames": [
     {
       "pos": [
-        102,
-        73,
-        -107
+        232,
+        64,
+        -90
       ],
-      "facing": "west",
+      "facing": "south",
       "item": {
         "id": "minecraft:iron_sword",
         "count": 1
@@ -1568,11 +1118,11 @@
     },
     {
       "pos": [
-        104,
-        73,
-        -105
+        253,
+        64,
+        -108
       ],
-      "facing": "south",
+      "facing": "west",
       "item": {
         "id": "minecraft:diamond",
         "count": 1
@@ -1580,11 +1130,11 @@
     },
     {
       "pos": [
-        105,
-        73,
-        -102
+        228,
+        64,
+        -88
       ],
-      "facing": "west",
+      "facing": "north",
       "item": {
         "id": "minecraft:clock",
         "count": 1
@@ -1592,9 +1142,9 @@
     },
     {
       "pos": [
-        87,
-        73,
-        -102
+        242,
+        64,
+        -88
       ],
       "facing": "north",
       "item": {
@@ -1604,11 +1154,11 @@
     },
     {
       "pos": [
-        104,
-        73,
-        -98
+        234,
+        63,
+        -91
       ],
-      "facing": "west",
+      "facing": "east",
       "item": {
         "id": "minecraft:bread",
         "count": 1
@@ -1616,11 +1166,11 @@
     },
     {
       "pos": [
-        88,
-        73,
-        -99
+        231,
+        63,
+        -88
       ],
-      "facing": "north",
+      "facing": "east",
       "item": {
         "id": "minecraft:compass",
         "count": 1
@@ -1628,11 +1178,11 @@
     },
     {
       "pos": [
-        101,
-        73,
-        -118
+        237,
+        63,
+        -92
       ],
-      "facing": "west",
+      "facing": "south",
       "item": {
         "id": "minecraft:iron_pickaxe",
         "count": 1
@@ -1640,8 +1190,8 @@
     },
     {
       "pos": [
-        97,
-        73,
+        245,
+        63,
         -89
       ],
       "facing": "north",
