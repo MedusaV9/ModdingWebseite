@@ -17,6 +17,7 @@ Punkte. **Bitte einfach unten unter „Offen" anhängen — Format egal.**
 ---
 
 ## Offen (hier bitte eintragen)
+[ ] Stelle immer sicher das die Github Actions runs erfolgreich sind.
 [ ] Erstelle mal richtige Skyboxen selber
 [ ] Mach das der Boden auch etwas Textur hat also mal rau ist oder uneben statt das alles nur hunderprozent gerade flächen sind.
 [ ] Du kannst dir ja von vielen UIs oder Modelen erst bilder generieren und sie danach nach bauen damit du mehr infos hast wie so etwas ca. aussieht.
