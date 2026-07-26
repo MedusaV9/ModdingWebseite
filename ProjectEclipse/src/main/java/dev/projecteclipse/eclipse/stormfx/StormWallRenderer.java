@@ -161,6 +161,12 @@ public final class StormWallRenderer {
     private static final float OCC_SOFT_R = 0.038F;
     private static final float OCC_SOFT_G = 0.052F;
     private static final float OCC_SOFT_B = 0.048F;
+    /**
+     * Fraction of the nominal radius the occluder keeps while the volumetric pass owns a
+     * sphere storm. The raymarch clamps to scene depth, so everything the occluder covers
+     * is radius the volume can never integrate — this leaves it ~70%.
+     */
+    private static final float OCC_VOLUMETRIC_CORE = 0.30F;
 
     // --- C8 sphere storms → STORM 2.0 volumetric EXO stack (PLAN-STORM2 §W-A A2) ---
     /**
@@ -515,13 +521,19 @@ public final class StormWallRenderer {
      */
     private static void buildSphereOccluder(BufferBuilder buffer, StormFxClient.ClientStorm storm,
             Vec3 camera, float vis) {
-        float radius = Math.max(1.5F, storm.radius - OCCLUDER_INSET);
+        // STORM-VOL: while the volumetric pass owns this storm the occluder shrinks to a
+        // small core and its tint softens. The raymarcher clamps its march to the scene
+        // depth buffer, so a full-size depth-writing dome at r − 5 would cut every ray
+        // after ~5 blocks and the storm would read as a smooth black balloon with a thin
+        // veneer. Shrinking it hands ~70% of the radius back to the volume (which is what
+        // actually accumulates the mass) while keeping a hard never-see-inside core that
+        // sits behind ~20 blocks of dense media. False whenever Veil post is off / Iris is
+        // active / the pipeline was evicted — the frozen near-black look is preserved there.
+        boolean volumetric = StormVolumeFx.isVolumeStorm(storm.id);
+        float inset = volumetric ? storm.radius * (1.0F - OCC_VOLUMETRIC_CORE) : OCCLUDER_INSET;
+        float radius = Math.max(1.5F, storm.radius - inset);
         float heightScale = heightScale(storm, vis);
         float alpha = Math.min(1.0F, vis * 1.6F);
-        // STORM-VOL: color-only soften while the volumetric pass owns this storm's mass
-        // (opacity untouched); false whenever Veil post is off / Iris is active / the
-        // pipeline was evicted — the frozen near-black look is fully preserved there.
-        boolean volumetric = StormVolumeFx.isVolumeStorm(storm.id);
         float occR = volumetric ? OCC_SOFT_R : OCC_R;
         float occG = volumetric ? OCC_SOFT_G : OCC_G;
         float occB = volumetric ? OCC_SOFT_B : OCC_B;
