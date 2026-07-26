@@ -56,7 +56,10 @@ import net.minecraft.world.level.biome.Climate;
  *       {@code freeze_top_layer} snow/ice persists and high-altitude rain falls as snow
  *       instead of melting the caps into runoff.</li>
  *   <li><b>River ribbon</b>: {@code minecraft:river} along the authored polylines
- *       (channel + banks).</li>
+ *       (channel + banks), upgraded to {@code minecraft:frozen_river} inside the snow
+ *       mountain's frost region — polyline #1 starts on the flank BELOW the snowline, so
+ *       B1 never reached it and a warm river gash used to cut through the glacier
+ *       (F-026, see {@link SnowMountainFrost}).</li>
  *   <li><b>Detached shards</b>: crumble shards off the FINAL rim read
  *       {@code minecraft:mushroom_fields} (exact — evaluated through the terrain
  *       function's own final-stage shard predicate).</li>
@@ -94,6 +97,8 @@ public final class DiscBiomeSource extends BiomeSource {
      * {@code DiscTerrainFunction.computeSurfaceY}) so the stepped cliff bands read snowy.
      */
     public static final int SNOWLINE_Y = 152;
+    /** River-ribbon biome inside the snow mountain's frost region ({@link SnowMountainFrost}). */
+    private static final String FROST_RIVER_ID = "minecraft:frozen_river";
     /** River-ribbon half width: channel ({@code RIVER_HALF_WIDTH}) + bank margin. */
     public static final double RIVER_BIOME_HALF_WIDTH =
             DiscTerrainFunction.RIVER_HALF_WIDTH + DiscTerrainFunction.RIVER_BANK_MARGIN;
@@ -151,6 +156,7 @@ public final class DiscBiomeSource extends BiomeSource {
         if (map.mountain() != null) {
             ids.add(map.mountain().coreBiome());
             ids.add(map.mountain().flankBiome());
+            ids.add(FROST_RIVER_ID); // F-026: the river ribbon inside the frost region
         }
         Map<String, Holder<Biome>> resolved = new LinkedHashMap<>();
         for (String id : ids) {
@@ -297,7 +303,14 @@ public final class DiscBiomeSource extends BiomeSource {
             }
         }
         if (id == null && map.riverDistance(this.profile, bx, bz) < RIVER_BIOME_HALF_WIDTH) {
-            id = "minecraft:river";
+            // F-026: the head of river polyline #1 sits INSIDE the mountain footprint, so
+            // its ribbon climbs the flank at y≈100-140 — below the B1 snowline, which is
+            // why that fix never reached it. Plain minecraft:river (temperature 0.5) then
+            // painted a warm gash straight through the glacier: no snow layers, rain
+            // instead of snowfall, and freeze_top_layer skipping the channel entirely.
+            // Inside the frost region the channel is solid ice, so it reads as the cold
+            // biome it now looks like.
+            id = SnowMountainFrost.isFrostColumn(mountain, bx, bz) ? FROST_RIVER_ID : "minecraft:river";
         }
         if (id == null && mountain != null) {
             double flankR = mountain.radius() * 0.8D;

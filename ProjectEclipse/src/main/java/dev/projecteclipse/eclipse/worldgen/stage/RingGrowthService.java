@@ -21,6 +21,7 @@ import dev.projecteclipse.eclipse.worldgen.DiscChunkGenerator;
 import dev.projecteclipse.eclipse.worldgen.DiscGeometry;
 import dev.projecteclipse.eclipse.worldgen.DiscMapData;
 import dev.projecteclipse.eclipse.worldgen.DiscProfile;
+import dev.projecteclipse.eclipse.worldgen.DiscRepairService;
 import dev.projecteclipse.eclipse.worldgen.DiscTerrainFunction;
 import dev.projecteclipse.eclipse.worldgen.DiscTerrainFunction.DiscColumn;
 import dev.projecteclipse.eclipse.worldgen.StageRadii;
@@ -124,8 +125,10 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * the sweep starts contributes an XZ no-write box of its measured piece extent (villages
  * {@value #VILLAGE_PROTECTION_EXTENT}, temples {@value #TEMPLE_PROTECTION_EXTENT}, else
  * the authored radius) padded by {@value #STRUCTURE_PROTECTION_MARGIN} blocks; columns
- * inside a box are skipped, their block entities kept, and chunks overlapping a box skip
- * the decoration replay. Erase/downgrade sweeps rewrite everything — lowering the stage
+ * inside a box are skipped — unless they are completely EMPTY, which is not structure but
+ * a leftover void of the old rim band that the box happens to cover, and skipping those
+ * forever is what produced the F-025 holes at the pyramid site — their block entities are
+ * kept, and chunks overlapping a box skip the decoration replay. Erase/downgrade sweeps rewrite everything — lowering the stage
  * is a dev tool that deliberately removes structures ({@code StructureStamper} re-stamps
  * them when the stage grows back).</p>
  *
@@ -806,20 +809,31 @@ public final class RingGrowthService {
                 int x = unpackX(packed);
                 int z = unpackZ(packed);
                 if (this.rewriteChunks.contains(chunkKey) || lateGeneratedChunkCheck(chunkKey)) {
-                    if (isProtectedColumn(x, z)) {
-                        this.columnsProtected++;
-                    } else {
-                        LevelChunk chunk = chunkFor(chunkKey, loadsThisTick < maxLoads);
-                        if (chunk == null) {
+                    boolean protectedColumn = isProtectedColumn(x, z);
+                    LevelChunk chunk = chunkFor(chunkKey, loadsThisTick < maxLoads);
+                    if (chunk == null) {
+                        if (protectedColumn) {
+                            this.columnsProtected++; // cannot inspect it; keep the old skip
+                        } else {
                             break; // unloaded on-disk chunk and no load budget left this tick
                         }
+                    } else {
                         if (this.lastChunkCallLoaded) {
                             this.lastChunkCallLoaded = false;
                             loadsThisTick++;
                         }
-                        writeColumn(chunk, x, z, gameTime, rescueCandidates);
-                        this.touchedChunks.add(chunkKey);
-                        this.columnsWritten++;
+                        // F-025: a protected column that holds NO block is not structure —
+                        // it is a leftover void of the previous stage's rim taper/crumble
+                        // band that the box happens to cover. Skipping it again is what
+                        // turned the pyramid site into permanent holes, and there is
+                        // nothing in an empty column the rewrite could bulldoze.
+                        if (protectedColumn && !DiscRepairService.isVoidColumn(chunk, x, z)) {
+                            this.columnsProtected++;
+                        } else {
+                            writeColumn(chunk, x, z, gameTime, rescueCandidates);
+                            this.touchedChunks.add(chunkKey);
+                            this.columnsWritten++;
+                        }
                     }
                 } else {
                     this.columnsSkipped++;

@@ -526,6 +526,14 @@ public final class DiscTerrainFunction {
         // LAYERS now come from vanilla's freeze_top_layer via W1.1 decoration.
         boolean snowCap = profile == DiscProfile.OVERWORLD && surfaceY >= 210;
 
+        // F-026: the authored river polyline #1 starts INSIDE the mountain footprint, so
+        // its channel climbs the flank and every source spills down the mountainside.
+        // Inside the frost region the fill is solid glacier ice instead of water — see
+        // SnowMountainFrost. Evaluated once per column so stateInColumn stays a pure
+        // function of the column snapshot (no second DiscMapData read per block).
+        boolean frostFill = profile == DiscProfile.OVERWORLD
+                && SnowMountainFrost.isFrostColumn(mountain, x, z);
+
         int topY = surfaceY;
         if (lavaTopY > topY) {
             topY = lavaTopY;
@@ -548,7 +556,7 @@ public final class DiscTerrainFunction {
                 snowCap, riverBed, scar, moatLip, iceCascade, swampPool, false, hangState,
                 cavityMinY, cavityMaxY, cavityLavaY, cavityShell, caveMinY, caveMaxY,
                 caveFade, entrance, breach, endDisc, ceilingBottomY, ceilingBodyY,
-                ceilingTopY, seamCurtain);
+                ceilingTopY, seamCurtain, frostFill);
     }
 
     /** Whether (x, z) lies within 24 blocks of any nether landmark's clearance radius. */
@@ -635,6 +643,20 @@ public final class DiscTerrainFunction {
         return riverDist < 2.5D ? 4 : 3;
     }
 
+    /**
+     * The block of a river / swamp-pool / spillway fill: liquid water, except in the snow
+     * mountain's frost region, where it is glacier ice (F-026). The authored river head
+     * lies inside the mountain footprint, so its channel climbs the flank — liquid
+     * sources there spill down the mountainside forever, and the vanilla ice that
+     * {@code freeze_top_layer} put on top melts back at block light &gt; 11.
+     * {@code PACKED_ICE}/{@code BLUE_ICE} are not randomly ticked, so they never can.
+     */
+    private static BlockState riverFill(DiscColumn col, int y) {
+        return col.frostFill() && y >= SnowMountainFrost.FROST_MIN_Y
+                ? SnowMountainFrost.frostState(col.x(), y, col.z())
+                : WATER;
+    }
+
     /** Shallow swamp-pool bed: 2 blocks under the raw surface, never deeper than y 59. */
     private static int swampPoolBedY(int rawSurface) {
         return Math.max(rawSurface - 2, 59);
@@ -657,7 +679,7 @@ public final class DiscTerrainFunction {
                 style, Integer.MIN_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE, Integer.MAX_VALUE,
                 false, false, 0, false, false, false, true, null,
                 1, 0, Integer.MIN_VALUE, false, 1, 0, 0.0D, null, false, false,
-                Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MIN_VALUE, 0);
+                Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MIN_VALUE, 0, false);
     }
 
     /** Normalised 0..360 disc-map angle (degrees from +X towards +Z) of the column. */
@@ -694,7 +716,7 @@ public final class DiscTerrainFunction {
                 return LAVA;
             }
             if (y <= col.waterTopY()) {
-                return WATER; // river channel / swamp pool fill
+                return riverFill(col, y); // river channel / swamp pool fill
             }
             if (col.breach() && y == col.surfaceY() + 1) {
                 BlockState creep = BreachGeometry.creepAt(x, y, z, col.surfaceY());
@@ -729,7 +751,7 @@ public final class DiscTerrainFunction {
             return BEDROCK;
         }
         if (y >= col.waterBottomY()) {
-            return WATER; // spillway curtain painted into the rim face
+            return riverFill(col, y); // spillway curtain painted into the rim face
         }
         if (y >= col.cavityMinY() && y <= col.cavityMaxY()) {
             return y <= col.cavityLavaY() ? LAVA : CAVE_AIR;
@@ -1274,7 +1296,8 @@ public final class DiscTerrainFunction {
      * {@code ceilingBodyY} the roof lens base (fringe palette between the two),
      * {@code ceilingTopY} the sealed world-top layer. {@code seamCurtain} is the
      * lava-fall curtain level: 0 none, 1 magma splash lip, 2 core bowl, 3 core with a
-     * ceiling pour source.</p>
+     * ceiling pour source. {@code frostFill=true} marks a column in the snow mountain's
+     * frost region, where the water fills become glacier ice ({@link SnowMountainFrost}).</p>
      */
     public record DiscColumn(DiscProfile profile, int x, int z, int stage, boolean inside,
             double radial, int surfaceY, int undersideY, int bottomY, int groundBottomY,
@@ -1284,14 +1307,14 @@ public final class DiscTerrainFunction {
             int cavityMinY, int cavityMaxY, int cavityLavaY, boolean cavityShell,
             int caveMinY, int caveMaxY, double caveFade, CaveEntrances.Entrance entrance,
             boolean breach, boolean endDisc, int ceilingBottomY, int ceilingBodyY,
-            int ceilingTopY, int seamCurtain) {
+            int ceilingTopY, int seamCurtain, boolean frostFill) {
 
         static DiscColumn outside(DiscProfile profile, int x, int z, int stage) {
             return new DiscColumn(profile, x, z, stage, false, 0.0D, 0, 0, 0, 0, -1,
                     SectorStyle.PLAINS, 0, Integer.MIN_VALUE, Integer.MIN_VALUE,
                     Integer.MAX_VALUE, false, false, 0, false, false, false, false, null,
                     1, 0, Integer.MIN_VALUE, false, 1, 0, 0.0D, null, false, false,
-                    Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MIN_VALUE, 0);
+                    Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MIN_VALUE, 0, false);
         }
     }
 
