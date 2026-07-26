@@ -5,9 +5,9 @@ import java.util.List;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.core.config.EclipseConfig;
+import dev.projecteclipse.eclipse.lang.ServerLang;
 import dev.projecteclipse.eclipse.lives.InheritanceService;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Inventory;
@@ -209,6 +209,6 @@ public final class ModGate {
     /** Brief accent-colored action-bar message (never chat). */
     private static void hint(ServerPlayer player) {
         player.displayClientMessage(
-                Component.translatable("message.eclipse.sealed.mod").withColor(HINT_COLOR), true);
+                ServerLang.tr(player, "message.eclipse.sealed.mod").withColor(HINT_COLOR), true);
     }
 }

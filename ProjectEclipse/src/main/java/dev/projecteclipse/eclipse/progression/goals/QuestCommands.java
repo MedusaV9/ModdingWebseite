@@ -12,6 +12,7 @@ import com.mojang.brigadier.suggestion.SuggestionProvider;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.lang.LangService;
+import dev.projecteclipse.eclipse.lang.ServerLang;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
@@ -107,58 +108,62 @@ public final class QuestCommands {
 
     private static int tick(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
         ServerPlayer target = EntityArgument.getPlayer(ctx, "player");
+        ServerPlayer sender = ctx.getSource().getPlayer();
         String id = StringArgumentType.getString(ctx, "id");
         MinecraftServer server = ctx.getSource().getServer();
         Optional<GoalSpec> spec = QuestApi.byId(server, id);
         if (spec.isEmpty()) {
-            ctx.getSource().sendFailure(Component.translatable("command.eclipse.quests.unknown", id));
+            ctx.getSource().sendFailure(ServerLang.tr(sender, "command.eclipse.quests.unknown", id));
             return 0;
         }
         if (!QuestApi.complete(server, target, spec.get())) {
-            ctx.getSource().sendFailure(Component.translatable("command.eclipse.quests.already_done", id));
+            ctx.getSource().sendFailure(ServerLang.tr(sender, "command.eclipse.quests.already_done", id));
             return 0;
         }
-        ctx.getSource().sendSuccess(() -> Component.translatable("command.eclipse.quests.ticked",
+        ctx.getSource().sendSuccess(() -> ServerLang.tr(sender, "command.eclipse.quests.ticked",
                 id, target.getScoreboardName()), true);
         return 1;
     }
 
     private static int revoke(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
         ServerPlayer target = EntityArgument.getPlayer(ctx, "player");
+        ServerPlayer sender = ctx.getSource().getPlayer();
         String id = StringArgumentType.getString(ctx, "id");
         MinecraftServer server = ctx.getSource().getServer();
         Optional<GoalSpec> spec = QuestApi.byId(server, id);
         if (spec.isEmpty()) {
-            ctx.getSource().sendFailure(Component.translatable("command.eclipse.quests.unknown", id));
+            ctx.getSource().sendFailure(ServerLang.tr(sender, "command.eclipse.quests.unknown", id));
             return 0;
         }
         if (!QuestApi.revoke(server, target, spec.get())) {
-            ctx.getSource().sendFailure(Component.translatable("command.eclipse.quests.nothing_to_revoke", id));
+            ctx.getSource().sendFailure(ServerLang.tr(sender, "command.eclipse.quests.nothing_to_revoke", id));
             return 0;
         }
-        ctx.getSource().sendSuccess(() -> Component.translatable("command.eclipse.quests.revoked",
+        ctx.getSource().sendSuccess(() -> ServerLang.tr(sender, "command.eclipse.quests.revoked",
                 id, target.getScoreboardName()), true);
         return 1;
     }
 
     private static int reroll(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
         ServerPlayer target = EntityArgument.getPlayer(ctx, "player");
+        ServerPlayer sender = ctx.getSource().getPlayer();
         List<String> drawn = QuestApi.reroll(ctx.getSource().getServer(), target);
-        ctx.getSource().sendSuccess(() -> Component.translatable("command.eclipse.quests.rerolled",
+        ctx.getSource().sendSuccess(() -> ServerLang.tr(sender, "command.eclipse.quests.rerolled",
                 target.getScoreboardName(), String.join(", ", drawn)), true);
         return drawn.size();
     }
 
     private static int list(CommandContext<CommandSourceStack> ctx, ServerPlayer target) {
         MinecraftServer server = ctx.getSource().getServer();
+        ServerPlayer sender = ctx.getSource().getPlayer();
         List<GoalSpec> specs = QuestApi.allForPlayer(server, target);
         int day = QuestEngine.resolved(server).day;
-        ctx.getSource().sendSuccess(() -> Component.translatable("command.eclipse.quests.list.header",
+        ctx.getSource().sendSuccess(() -> ServerLang.tr(sender, "command.eclipse.quests.list.header",
                 day, target.getScoreboardName(), specs.size()), false);
         for (GoalSpec spec : specs) {
             long progress = Math.min(QuestApi.progress(server, target, spec), spec.target());
             boolean done = QuestApi.isDone(server, target, spec);
-            ctx.getSource().sendSuccess(() -> Component.translatable("command.eclipse.quests.list.entry",
+            ctx.getSource().sendSuccess(() -> ServerLang.tr(sender, "command.eclipse.quests.list.entry",
                     done ? "✔" : "•", spec.id(), spec.goalKind().id(), spec.scope().id(),
                     progress, spec.target(), spec.text().en()), false);
         }
@@ -166,9 +171,10 @@ public final class QuestCommands {
     }
 
     private static int reload(CommandContext<CommandSourceStack> ctx) {
+        ServerPlayer sender = ctx.getSource().getPlayer();
         GoalConfig.reloadNow();
         QuestApi.resyncAll(ctx.getSource().getServer());
-        ctx.getSource().sendSuccess(() -> Component.translatable("command.eclipse.quests.reloaded",
+        ctx.getSource().sendSuccess(() -> ServerLang.tr(sender, "command.eclipse.quests.reloaded",
                 GoalConfig.personalPool().size()), true);
         return 1;
     }

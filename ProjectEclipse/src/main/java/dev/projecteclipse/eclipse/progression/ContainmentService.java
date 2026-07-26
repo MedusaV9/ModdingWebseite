@@ -7,10 +7,10 @@ import java.util.Set;
 import java.util.UUID;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.lang.ServerLang;
 import dev.projecteclipse.eclipse.network.S2CQuasarPayload;
 import dev.projecteclipse.eclipse.protection.ProtectionConfig;
 import net.minecraft.core.particles.ParticleTypes;
-import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -176,7 +176,7 @@ public final class ContainmentService {
         SQUASH_RELEASE.put(player.getUUID(), SQUASH_TICKS);
         ANTICIPATION_WARNED.remove(player.getUUID()); // fall consumed — next dive re-chimes
 
-        player.displayClientMessage(Component.translatable("message.eclipse.containment.bounce").withColor(HINT_COLOR), true);
+        player.displayClientMessage(ServerLang.tr(player, "message.eclipse.containment.bounce").withColor(HINT_COLOR), true);
         player.playNotifySound(SoundEvents.AMETHYST_CLUSTER_BREAK, SoundSource.PLAYERS, 0.6F, 1.35F);
 
         ServerLevel level = player.serverLevel();

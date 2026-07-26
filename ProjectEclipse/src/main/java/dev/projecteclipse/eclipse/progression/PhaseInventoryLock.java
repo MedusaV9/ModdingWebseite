@@ -5,9 +5,9 @@ import java.util.Map;
 import java.util.UUID;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.lang.ServerLang;
 import dev.projecteclipse.eclipse.minigames.MinigameDimensions;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
@@ -228,7 +228,7 @@ public final class PhaseInventoryLock {
             return;
         }
         shownAt.put(key, now);
-        player.displayClientMessage(Component.translatable(key).withColor(HINT_COLOR), true);
+        player.displayClientMessage(ServerLang.tr(player, key).withColor(HINT_COLOR), true);
     }
 
     /** Drops the hint cooldowns of departing players so the map cannot grow unbounded. */

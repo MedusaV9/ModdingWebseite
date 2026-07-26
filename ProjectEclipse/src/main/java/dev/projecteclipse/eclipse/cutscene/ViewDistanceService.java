@@ -17,7 +17,7 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
 
 /**
  * Server side of the cinematic view-distance bump (P2 R12): while a cinematic session is
- * active the server raises {@code PlayerList.setViewDistance(min(}{@value #MAX_SERVER_CHUNKS}{@code , current + }{@value #SERVER_BUMP_CHUNKS}{@code ))}
+ * active the server raises {@code PlayerList.setViewDistance(min(}{@value #MAX_SERVER_CHUNKS}{@code , max(current + }{@value #SERVER_BUMP_CHUNKS}{@code , requested)))}
  * so the chunks the camera flies over are actually sent, and pushes
  * {@link S2CViewDistancePayload} to the watchers so their clients raise
  * {@code options.renderDistance} too (client side is opt-out via the
@@ -33,9 +33,15 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class ViewDistanceService {
-    /** Server view distance is never raised past this (risk §7.6: memory/CPU on big maps). */
-    public static final int MAX_SERVER_CHUNKS = 12;
-    /** Raise amount over the configured server view distance. */
+    /**
+     * Server view distance is never raised past this — the vanilla client render-distance
+     * ceiling (32), so a cinematic may stream everything a client can possibly show.
+     * Risk §7.6 (memory/CPU on big maps) is bounded differently now: the bump only ever
+     * rises AS FAR AS the session's requested client push (small requests stay small, see
+     * {@link #begin}), and it lives for one watchdog-guarded cinematic, not steady state.
+     */
+    public static final int MAX_SERVER_CHUNKS = 32;
+    /** Raise amount over the configured server view distance (floor for small requests). */
     public static final int SERVER_BUMP_CHUNKS = 4;
     /** Watchdog slack added on top of a session's requested TTL. */
     private static final int WATCHDOG_MARGIN_TICKS = 200;
@@ -64,16 +70,31 @@ public final class ViewDistanceService {
         }
         if (originalViewDistance < 0) {
             originalViewDistance = server.getPlayerList().getViewDistance();
-            int bumped = Math.min(MAX_SERVER_CHUNKS, originalViewDistance + SERVER_BUMP_CHUNKS);
+            // The server must SEND what the clients are asked to RENDER, or the pushed
+            // render distance shows void: rise to the requested client chunks (capped),
+            // with the old +SERVER_BUMP_CHUNKS as the floor for small requests.
+            int bumped = Math.min(MAX_SERVER_CHUNKS,
+                    Math.max(originalViewDistance + SERVER_BUMP_CHUNKS, clientChunks));
             if (bumped > originalViewDistance) {
                 server.getPlayerList().setViewDistance(bumped);
                 EclipseMod.LOGGER.info("ViewDistanceService: server view distance {} -> {} (cinematic)",
                         originalViewDistance, bumped);
             }
+        } else {
+            // Chained cinematics (limbo ship flyaround → intro approach): a stacked
+            // session with a BIGGER request raises the live bump further; the restore
+            // still returns to the true pre-cinematic value captured above.
+            int current = server.getPlayerList().getViewDistance();
+            int target = Math.min(MAX_SERVER_CHUNKS, Math.max(current, clientChunks));
+            if (target > current) {
+                server.getPlayerList().setViewDistance(target);
+                EclipseMod.LOGGER.info("ViewDistanceService: server view distance {} -> {} (stacked cinematic)",
+                        current, target);
+            }
         }
         activeSessions++;
         watchdogTicks = Math.max(watchdogTicks, Math.max(1, ttlTicks) + WATCHDOG_MARGIN_TICKS);
-        int capped = Math.min(MAX_SERVER_CHUNKS + SERVER_BUMP_CHUNKS, clientChunks);
+        int capped = Math.min(MAX_SERVER_CHUNKS, clientChunks);
         S2CViewDistancePayload payload = new S2CViewDistancePayload(capped);
         for (ServerPlayer player : players) {
             PUSHED.add(player.getUUID());

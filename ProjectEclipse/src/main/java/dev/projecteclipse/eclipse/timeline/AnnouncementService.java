@@ -10,6 +10,7 @@ import dev.projecteclipse.eclipse.core.config.Localized;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
 import dev.projecteclipse.eclipse.lang.LangService;
 import dev.projecteclipse.eclipse.network.S2CAnnouncePayload;
+import dev.projecteclipse.eclipse.network.fx.S2CCaptionPayload;
 import dev.projecteclipse.eclipse.progression.UnlockState;
 import dev.projecteclipse.eclipse.worldgen.stage.WorldStageService;
 import net.minecraft.server.MinecraftServer;
@@ -51,6 +52,9 @@ import net.neoforged.neoforge.network.PacketDistributor;
 public final class AnnouncementService {
     /** Altar level poll period; matches {@code WorldStageService}'s altar watcher cadence. */
     private static final int ALTAR_POLL_TICKS = 20;
+    /** SKYDAY: the quiet-dawn whisper caption (lang key; en+de via langdrop skyday.json). */
+    private static final String QUIET_DAY_CAPTION = "eclipse.caption.dawn.quietday";
+    private static final int QUIET_DAY_CAPTION_TICKS = 80;
 
     private static final AtomicBoolean STAGE_LISTENER_REGISTERED = new AtomicBoolean();
     /** Baselines for change detection; valid only while {@link #initialized} is true. */
@@ -71,16 +75,35 @@ public final class AnnouncementService {
      * Day-advance hook, called by {@code DayScheduler.setDay} AFTER the new day is persisted
      * (only when the day actually changed). Announces the day, then any unlock keys the day
      * added, then rebroadcasts the anonymized timeline.
+     *
+     * <p>SKYDAY: days whose plan is marked quiet ({@code DayPlan.announce() == false} —
+     * the mid-arc unlock-package days whose only news is keys that get their own unlock
+     * sweeps anyway) skip the full-screen day card and send a short whisper caption
+     * instead. The dawn toll (DawnCeremony) plays either way, the unlock sweeps and the
+     * timeline rebroadcast below are never skipped, and out-of-plan days keep the loud
+     * generic card (unchanged behavior).</p>
      */
     public static void onDayChanged(MinecraftServer server, int previousDay, int newDay) {
-        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-            PacketDistributor.sendToPlayer(player, new S2CAnnouncePayload(
-                    TimelineService.dayTitleKey(newDay, player),
-                    daySubtitleKey(newDay, player),
-                    S2CAnnouncePayload.STYLE_DAY));
+        EclipseConfig.DayPlan plan = EclipseConfig.day(newDay);
+        boolean loud = plan.day() != newDay || plan.announce();
+        if (loud) {
+            for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+                PacketDistributor.sendToPlayer(player, new S2CAnnouncePayload(
+                        TimelineService.dayTitleKey(newDay, player),
+                        daySubtitleKey(newDay, player),
+                        S2CAnnouncePayload.STYLE_DAY));
+            }
+            EclipseMod.LOGGER.info("Localized day {} announcement sent to {} players",
+                    newDay, server.getPlayerList().getPlayerCount());
+        } else {
+            for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+                PacketDistributor.sendToPlayer(player, new S2CCaptionPayload(
+                        QUIET_DAY_CAPTION, QUIET_DAY_CAPTION_TICKS,
+                        S2CCaptionPayload.STYLE_SUBTITLE));
+            }
+            EclipseMod.LOGGER.info("Quiet day {} rollover — whisper caption sent to {} players",
+                    newDay, server.getPlayerList().getPlayerCount());
         }
-        EclipseMod.LOGGER.info("Localized day {} announcement sent to {} players",
-                newDay, server.getPlayerList().getPlayerCount());
         announceNewUnlocks(server);
         TimelineService.syncAll(server);
     }

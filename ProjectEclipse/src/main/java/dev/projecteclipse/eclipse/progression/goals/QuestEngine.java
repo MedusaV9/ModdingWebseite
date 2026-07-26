@@ -19,6 +19,7 @@ import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
 import dev.projecteclipse.eclipse.core.state.LivesApi;
 import dev.projecteclipse.eclipse.economy.ShardEconomy;
 import dev.projecteclipse.eclipse.lang.LangService;
+import dev.projecteclipse.eclipse.lang.ServerLang;
 import dev.projecteclipse.eclipse.network.S2CGoalProgressPayload;
 import dev.projecteclipse.eclipse.network.S2CQuestStatePayload;
 import dev.projecteclipse.eclipse.network.fx.FxCues;
@@ -265,7 +266,7 @@ public final class QuestEngine {
             personals = drawPersonals(server, state, day.day, uuid, state.rerollNonce(day.day, uuid));
             state.setPersonals(day.day, uuid, personals);
             if (player.connection != null) {
-                player.displayClientMessage(Component.translatable("quest.eclipse.assigned"), true);
+                player.displayClientMessage(ServerLang.tr(player, "quest.eclipse.assigned"), true);
             }
         }
         day.rebuildIndexes(state);
@@ -432,7 +433,7 @@ public final class QuestEngine {
                 if (next >= target) {
                     state.setPlayerDone(day, uuid, spec.id());
                     if (player.connection != null) {
-                        player.displayClientMessage(Component.translatable("quest.eclipse.done.team_part",
+                        player.displayClientMessage(ServerLang.tr(player, "quest.eclipse.done.team_part",
                                 LangService.pick(spec.text(), player)), true);
                     }
                     checkTeamAll(server, spec, server.getPlayerList().getPlayers());
@@ -608,7 +609,7 @@ public final class QuestEngine {
             case SIDE -> "quest.eclipse.done.side";
             case PERSONAL -> "quest.eclipse.done.personal";
         };
-        player.displayClientMessage(Component.translatable(key,
+        player.displayClientMessage(ServerLang.tr(player, key,
                 LangService.pick(spec.text(), player)), true);
         if (spec.goalKind() == Kind.MAIN) {
             player.playNotifySound(SoundEvents.AMETHYST_BLOCK_CHIME, SoundSource.MASTER, 1.0F, 1.2F);

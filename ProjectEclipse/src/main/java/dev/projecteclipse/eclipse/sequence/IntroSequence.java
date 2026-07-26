@@ -157,8 +157,14 @@ public final class IntroSequence implements SequenceReplayable {
     private static final int BURST_HOLD_TICKS = 40;
     private static final int REVEAL_DURATION_TICKS = 300;
     private static final int SUNRISE_RAMP_TICKS = 200;
-    /** Cinematic view-distance bump for the global plays (R12 cap is 12). */
-    private static final int VIEW_DISTANCE_CHUNKS = 12;
+    /**
+     * Cinematic view-distance bump for the global plays: the vanilla render-distance
+     * option ceiling (32 chunks) — the intro is the one moment the whole disc should be
+     * visible, and {@code ViewDistanceService} raises the server view distance to match
+     * for the flight's duration (watchdog-restored). Going beyond 32 is not possible
+     * without replacing the vanilla option/renderer, so 32 is the honest maximum.
+     */
+    private static final int VIEW_DISTANCE_CHUNKS = 32;
     /** W4-CEREMONY / IDEA-01 #1: re-whisper cadence while APPROACH stalls (~1 min). */
     private static final int APPROACH_RENUDGE_TICKS = 1200;
     /** W4-CEREMONY / IDEA-01 #3: Logbook handoff hint delay after {@link #finish} (~15 s). */

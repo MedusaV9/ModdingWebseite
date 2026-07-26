@@ -75,10 +75,17 @@ public final class EclipseConfig {
      * (server truth via {@code timeline.DayTextConditions}) — so the timeline and
      * announcements stop advertising already-beaten content. Absent/blank = never swap
      * (fully backward compatible with existing {@code days.json} files).</p>
+     *
+     * <p>SKYDAY: {@code announce} (JSON {@code "announce"}, absent = {@code true}) marks
+     * whether the day's ROLLOVER shows the full-screen day card. Quiet days
+     * ({@code false}) keep their title/subtitle for the handbook timeline but pass with
+     * only the dawn toll + a short whisper caption ({@code AnnouncementService}); their
+     * unlock keys still get the dedicated unlock sweeps. Absent = announce, so existing
+     * {@code days.json} files keep today's behavior on every day.</p>
      */
     public record DayPlan(int day, List<Localized> localizedGoals, List<String> unlocks,
             double borderSize, Localized localizedTitle, Localized localizedSubtitle,
-            Localized localizedTitleDone, Localized localizedSubtitleDone) {
+            Localized localizedTitleDone, Localized localizedSubtitleDone, boolean announce) {
         public DayPlan {
             localizedGoals = List.copyOf(localizedGoals);
             unlocks = List.copyOf(unlocks);
@@ -86,6 +93,14 @@ public final class EclipseConfig {
             localizedSubtitle = localizedSubtitle == null ? Localized.of("") : localizedSubtitle;
             localizedTitleDone = localizedTitleDone == null ? Localized.of("") : localizedTitleDone;
             localizedSubtitleDone = localizedSubtitleDone == null ? Localized.of("") : localizedSubtitleDone;
+        }
+
+        /** Pre-SKYDAY canonical shape (always-announce) — kept so existing callers compile. */
+        public DayPlan(int day, List<Localized> localizedGoals, List<String> unlocks,
+                double borderSize, Localized localizedTitle, Localized localizedSubtitle,
+                Localized localizedTitleDone, Localized localizedSubtitleDone) {
+            this(day, localizedGoals, unlocks, borderSize, localizedTitle, localizedSubtitle,
+                    localizedTitleDone, localizedSubtitleDone, true);
         }
 
         /** Pre-Wave-5 canonical shape (no done-variants) — kept so existing callers compile. */
@@ -106,6 +121,12 @@ public final class EclipseConfig {
                 String title, String subtitle, String titleDone, String subtitleDone) {
             this(day, localize(goals), unlocks, borderSize, Localized.of(title), Localized.of(subtitle),
                     Localized.of(titleDone), Localized.of(subtitleDone));
+        }
+
+        /** Copy of this plan whose dawn rollover passes QUIETLY (no full-screen day card). */
+        public DayPlan quietDawn() {
+            return new DayPlan(day, localizedGoals, unlocks, borderSize, localizedTitle,
+                    localizedSubtitle, localizedTitleDone, localizedSubtitleDone, false);
         }
 
         /** Legacy English view used by old command/editor seams. */
@@ -493,6 +514,16 @@ public final class EclipseConfig {
      * day announcements and timeline entries (the reported "Day 1" / double-language
      * day-change bug). NOTE: an existing {@code days.json} on disk wins over these
      * defaults; regenerate or hand-merge the {@code de} lines for live servers.</p>
+     *
+     * <p>SKYDAY quiet dawns ({@link DayPlan#quietDawn()}): only days with genuinely NEW
+     * narrative or mechanical stakes keep the full-screen rollover card — 1 (the event's
+     * opening frame), 2 (nether + packs open, the first-ever rollover), 5 (flight opens
+     * the sky), 6 (the Herald briefing: miss the lure and day 7 is lost), 7 (Herald boss
+     * day), 12 (the End disc appears), 13 (dragon day), 14 (the finale). Days 3/4/8/9/10
+     * are incremental unlock-package days whose keys already announce via their dedicated
+     * unlock sweeps, and 11 is a soft preparation day — they pass with the dawn toll and
+     * a whisper caption instead. Titles stay authored on every day: the handbook
+     * timeline keeps its flavor either way.</p>
      */
     private static List<DayPlan> defaultDays() {
         List<DayPlan> plans = new ArrayList<>(14);
@@ -513,13 +544,13 @@ public final class EclipseConfig {
                 new Localized("Forge a full iron toolset", "Schmiedet einen vollständigen Satz Eisenwerkzeuge"),
                 new Localized("Scout the newly risen desert ring", "Erkundet den neu erhobenen Wüstenring")), List.of("workbenches", "create"), 0.0D,
                 new Localized("DAY 3 — MACHINES IN THE DARK", "TAG 3 — MASCHINEN IM DUNKELN"),
-                new Localized("Day 3. Workstations hum; contraptions may turn.", "Tag 3. Werkstationen summen; Konstruktionen dürfen sich drehen.")));
+                new Localized("Day 3. Workstations hum; contraptions may turn.", "Tag 3. Werkstationen summen; Konstruktionen dürfen sich drehen.")).quietDawn());
         plans.add(new DayPlan(4, List.of(
                 new Localized("Cook three Farmer's Delight meals", "Kocht drei Farmer's-Delight-Gerichte"),
                 new Localized("Establish a reliable food farm", "Errichtet eine verlässliche Nahrungsfarm"),
                 new Localized("Wear full iron armor", "Tragt vollständige Eisenrüstung")), List.of("armor", "farmersdelight", "simulated"), 0.0D,
                 new Localized("DAY 4 — THE FEAST", "TAG 4 — DAS FESTMAHL"),
-                new Localized("Day 4. Armor up and set the table — trust is cooked, not given.", "Tag 4. Legt Rüstung an und deckt den Tisch — Vertrauen wird gekocht, nicht geschenkt.")));
+                new Localized("Day 4. Armor up and set the table — trust is cooked, not given.", "Tag 4. Legt Rüstung an und deckt den Tisch — Vertrauen wird gekocht, nicht geschenkt.")).quietDawn());
         plans.add(new DayPlan(5, List.of(
                 new Localized("Take to the skies", "Erhebt euch in die Lüfte"),
                 new Localized("Gather 24 iron ingots as a team", "Sammelt als Team 24 Eisenbarren"),
@@ -543,25 +574,25 @@ public final class EclipseConfig {
                 new Localized("Bank 16 ender pearls", "Hinterlegt 16 Enderperlen"),
                 new Localized("Raise the altar to level 4", "Hebt den Altar auf Stufe 4")), List.of("ender_chests", "sophisticatedbackpacks", "sable"), 0.0D,
                 new Localized("DAY 8 — THE HOARD", "TAG 8 — DER HORT"),
-                new Localized("Day 8. Ender chests keep what you cannot.", "Tag 8. Endertruhen bewahren, was ihr nicht bewahren könnt.")));
+                new Localized("Day 8. Ender chests keep what you cannot.", "Tag 8. Endertruhen bewahren, was ihr nicht bewahren könnt.")).quietDawn());
         plans.add(new DayPlan(9, List.of(
                 new Localized("Brew strength and fire resistance", "Braut Stärke und Feuerresistenz"),
                 new Localized("Electrify a Create machine", "Elektrifiziert eine Create-Maschine"),
                 new Localized("Pool 24 umbral shards", "Legt als Team 24 Umbrasplitter zusammen")), List.of("brewing", "createaddition"), 0.0D,
                 new Localized("DAY 9 — ALCHEMY AND VOLTAGE", "TAG 9 — ALCHEMIE UND SPANNUNG"),
-                new Localized("Day 9. Cauldrons bubble; machines crackle awake.", "Tag 9. Kessel brodeln; Maschinen erwachen knisternd.")));
+                new Localized("Day 9. Cauldrons bubble; machines crackle awake.", "Tag 9. Kessel brodeln; Maschinen erwachen knisternd.")).quietDawn());
         plans.add(new DayPlan(10, List.of(
                 new Localized("Find a smithing template", "Findet eine Schmiedevorlage"),
                 new Localized("Upgrade a tool to netherite", "Wertet ein Werkzeug zu Netherit auf"),
                 new Localized("Fortify your base", "Befestigt eure Basis")), List.of("smithing"), 0.0D,
                 new Localized("DAY 10 — DEEP RUIN", "TAG 10 — TIEFE RUINEN"),
-                new Localized("Day 10. Netherite awaits the patient smith.", "Tag 10. Netherit erwartet den geduldigen Schmied.")));
+                new Localized("Day 10. Netherite awaits the patient smith.", "Tag 10. Netherit erwartet den geduldigen Schmied.")).quietDawn());
         plans.add(new DayPlan(11, List.of(
                 new Localized("Everyone reaches 4+ hearts", "Alle erreichen mindestens 4 Herzen"),
                 new Localized("Revive a banned player", "Belebt einen verbannten Spieler wieder"),
                 new Localized("Assemble an End raid kit", "Stellt eine Ausrüstung für den Sturm auf das Ende zusammen")), List.of(), 0.0D,
                 new Localized("DAY 11 — THE WEAKEST LINK", "TAG 11 — DAS SCHWÄCHSTE GLIED"),
-                new Localized("Day 11. A chain is judged by its weakest link.", "Tag 11. Eine Kette wird an ihrem schwächsten Glied gemessen.")));
+                new Localized("Day 11. A chain is judged by its weakest link.", "Tag 11. Eine Kette wird an ihrem schwächsten Glied gemessen.")).quietDawn());
         // Days 12/13 carry done-variants (C13/A5-extra): once the End has arrived / the
         // dragon has fallen, the timeline and announcements stop advertising the hunt.
         // B15: day 12 targets the End disc in the sky — the stronghold no longer spawns.
@@ -614,6 +645,10 @@ public final class EclipseConfig {
             if (!plan.localizedSubtitleDone().isBlank()) {
                 obj.add("subtitleDone", plan.localizedSubtitleDone().toJsonElement());
             }
+            // SKYDAY: only quiet days write the flag — absent means announce (back-compat).
+            if (!plan.announce()) {
+                obj.addProperty("announce", false);
+            }
             array.add(obj);
         }
         return array;
@@ -632,7 +667,9 @@ public final class EclipseConfig {
                     obj.has("title") ? Localized.fromJson(obj.get("title")) : Localized.of(""),
                     obj.has("subtitle") ? Localized.fromJson(obj.get("subtitle")) : Localized.of(""),
                     obj.has("titleDone") ? Localized.fromJson(obj.get("titleDone")) : Localized.of(""),
-                    obj.has("subtitleDone") ? Localized.fromJson(obj.get("subtitleDone")) : Localized.of("")));
+                    obj.has("subtitleDone") ? Localized.fromJson(obj.get("subtitleDone")) : Localized.of(""),
+                    // SKYDAY quiet-dawn flag; absent = announce (existing files unchanged).
+                    !obj.has("announce") || obj.get("announce").getAsBoolean()));
         }
         if (plans.isEmpty()) {
             throw new IllegalStateException("days.json contains no day entries");

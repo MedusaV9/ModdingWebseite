@@ -5,6 +5,7 @@ import org.joml.Vector3f;
 import org.joml.Vector4f;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.client.sky.EclipseSkyState;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.util.Mth;
@@ -69,11 +70,17 @@ public final class SunTracker {
     }
 
     /**
-     * The vanilla celestial angle θ in radians. Shared helper so the sky-pass sun quad
+     * The celestial angle θ in radians. Shared helper so the sky-pass sun quad
      * ({@code OverworldPurpleEffects}) and {@link #sunDirWorld} rotate from the SAME number.
+     *
+     * <p>Delegates to {@link EclipseSkyState#celestialAngleRadians} rather than reading
+     * {@code level.getSunAngle} directly, so the sun-halo post pass and the occlusion probe
+     * follow the eclipse when it is held at the zenith after an altar completion. Without
+     * this the halo stays on the true sun and visibly detaches from the disc.
+     * {@code EclipseSkyState} reads {@code getSunAngle} itself, so this cannot recurse.</p>
      */
     public static float sunAngleRadians(ClientLevel level, float partialTick) {
-        return level.getSunAngle(partialTick);
+        return EclipseSkyState.celestialAngleRadians(level, partialTick);
     }
 
     /**

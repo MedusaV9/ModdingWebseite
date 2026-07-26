@@ -52,6 +52,20 @@ import net.neoforged.api.distmarker.OnlyIn;
  *   <li><b>No clouds</b>: cloud height {@code NaN} + {@link #renderClouds} handled-empty.</li>
  * </ul>
  *
+ * <p>SKYDAY additions (see {@link EclipseSkyState}):</p>
+ * <ul>
+ *   <li><b>Day escalation</b>: the sky escalates with the synced event day 1..14 — deeper
+ *       purple grading, a baseline corona, a swelling idle sun, a stronger halo, stars
+ *       bleeding into the day and the {@link DaySkyEscalation} aurora curtains, all
+ *       culminating on day 14. Additive extras ride the tier-scaled
+ *       {@link EclipseSkyState#dayFxEscalation()} (reducedFx halves, tier 0 disables).</li>
+ *   <li><b>Zenith hold</b>: after the first altar completion the ECLIPSE frame (sun +
+ *       halo + coronas + rim + altar veil + day aurora) glides to and stays at the very
+ *       top of the sky ({@link EclipseSkyState#celestialAngleRadians} — angle 0, the
+ *       vanilla tick-6000 noon zenith); the moon, stars and sunrise band keep the vanilla
+ *       angle so nights stay intact.</li>
+ * </ul>
+ *
  * <p>Iris guard: while a shaderpack is active ({@link EclipseIrisState#shaderPackActive()}) this
  * returns {@code false} immediately so the shader pipeline owns the sky; the vanilla sun.png
  * override and the fog tint still apply in that case. The cloud kill applies either way
@@ -69,10 +83,16 @@ public class OverworldPurpleEffects extends DimensionSpecialEffects {
     private static final float PURPLE_G = 0.10F;
     private static final float PURPLE_B = 0.45F;
     private static final float SKY_BLEND = 0.35F;
+    /** SKYDAY: day-14 endpoint of the sky-disc purple blend (day 1 keeps {@value #SKY_BLEND}). */
+    private static final float SKY_BLEND_LAST_DAY = 0.55F;
 
     /** Sun quad size: idle (v1 look) → full eclipse (R1: "30 → 90 units", ours idles at 38). */
     private static final float SUN_SIZE_IDLE = 38.0F;
     private static final float SUN_SIZE_ECLIPSE = 90.0F;
+    /** SKYDAY: idle sun size by day 14 — the eclipse visibly swells across the event. */
+    private static final float SUN_SIZE_LAST_DAY = 56.0F;
+    /** SKYDAY: corona baseline the day escalation sustains without a live eclipse phase. */
+    private static final float DAY_CORONA_MAX = 0.85F;
     /** Soft halo quad size behind the sun (grows with the eclipse). */
     private static final float HALO_SIZE_IDLE = 60.0F;
     private static final float HALO_SIZE_ECLIPSE = 150.0F;
@@ -127,11 +147,16 @@ public class OverworldPurpleEffects extends DimensionSpecialEffects {
         poseStack.mulPose(modelViewMatrix);
 
         float eclipse = EclipseFxState.eclipseAmount(partialTick);
+        // SKYDAY escalation drivers: raw day factor for zero-cost grading, tier-scaled fx
+        // factor for everything that adds draw calls (coronas, stars, aurora curtains).
+        float dayEsc = EclipseSkyState.dayEscalation();
+        float fxEsc = EclipseSkyState.dayFxEscalation();
 
         // --- sky disc, blended toward purple during the day -------------------------------
+        // SKYDAY: the purple grading deepens with the event day (0.35 → 0.55 by day 14).
         Vec3 skyColor = level.getSkyColor(camera.getPosition(), partialTick);
         float day = dayFactor(level, partialTick);
-        float blend = SKY_BLEND * day;
+        float blend = Mth.lerp(dayEsc, SKY_BLEND, SKY_BLEND_LAST_DAY) * day;
         float skyR = Mth.lerp(blend, (float) skyColor.x, PURPLE_R);
         float skyG = Mth.lerp(blend, (float) skyColor.y, PURPLE_G);
         float skyB = Mth.lerp(blend, (float) skyColor.z, PURPLE_B);
@@ -182,17 +207,25 @@ public class OverworldPurpleEffects extends DimensionSpecialEffects {
         poseStack.pushPose();
         float rainAlpha = 1.0F - level.getRainLevel(partialTick);
         poseStack.mulPose(Axis.YP.rotationDegrees(-90.0F));
-        // R2: same celestial angle SunTracker projects into SunScreen — one source of truth.
+        // R2: same celestial angle SunTracker projects into SunScreen — one source of truth
+        // — now routed through the SKYDAY zenith hold ({@link EclipseSkyState}): after the
+        // first altar completion the ECLIPSE frame (sun, halo, coronas, rim, altar veil,
+        // day aurora) glides to and pins at the very top of the sky, while the moon, stars
+        // and sunrise band keep the vanilla angle below so nights stay intact.
+        poseStack.pushPose();
         poseStack.mulPose(Axis.XP.rotationDegrees(
-                (float) Math.toDegrees(SunTracker.sunAngleRadians(level, partialTick))));
+                (float) Math.toDegrees(EclipseSkyState.celestialAngleRadians(level, partialTick))));
         Matrix4f celestialPose = poseStack.last().pose();
 
         RenderSystem.setShader(GameRenderer::getPositionTexShader);
         RenderSystem.setShaderTexture(0, SUN_PURPLE);
 
-        // R1: three slowly rotating additive corona quads carry the eclipse's screen presence.
+        // R1: three slowly rotating additive corona quads carry the eclipse's screen
+        // presence. SKYDAY: the day escalation sustains a baseline corona (up to
+        // DAY_CORONA_MAX by day 14) even without a live eclipse phase.
         float seconds = (System.currentTimeMillis() % 3_600_000L) / 1000.0F;
-        if (eclipse > 0.001F) {
+        float coronaDrive = Math.max(eclipse, fxEsc * DAY_CORONA_MAX);
+        if (coronaDrive > 0.001F) {
             for (int i = 0; i < CORONA_SIZES.length; i++) {
                 poseStack.pushPose();
                 poseStack.mulPose(Axis.YP.rotationDegrees(seconds * CORONA_DEG_PER_SEC[i]));
@@ -201,18 +234,23 @@ public class OverworldPurpleEffects extends DimensionSpecialEffects {
                 float breathe = 0.90F + 0.10F * Mth.sin(seconds * 0.7F + i * 2.1F);
                 RenderSystem.setShaderColor(
                         0.75F - 0.12F * i, 0.40F - 0.09F * i, 1.00F - 0.05F * i,
-                        CORONA_ALPHAS[i] * breathe * eclipse * rainAlpha);
+                        CORONA_ALPHAS[i] * breathe * coronaDrive * rainAlpha);
                 SkyRenderUtil.drawCelestialQuad(poseStack.last().pose(), CORONA_SIZES[i], 100.0F);
                 poseStack.popPose();
             }
         }
 
         // soft halo: the same texture drawn much larger at low alpha behind the sun
-        RenderSystem.setShaderColor(0.72F, 0.35F, 0.95F, (0.40F + 0.25F * eclipse) * rainAlpha);
+        // (SKYDAY: it brightens and widens a little as the days pass)
+        RenderSystem.setShaderColor(0.72F, 0.35F, 0.95F,
+                (0.40F + 0.25F * eclipse + 0.18F * fxEsc) * rainAlpha);
         SkyRenderUtil.drawCelestialQuad(celestialPose,
-                Mth.lerp(eclipse, HALO_SIZE_IDLE, HALO_SIZE_ECLIPSE), 100.0F);
+                Mth.lerp(eclipse, HALO_SIZE_IDLE + 25.0F * fxEsc, HALO_SIZE_ECLIPSE), 100.0F);
 
-        float sunSize = Mth.lerp(eclipse, SUN_SIZE_IDLE, SUN_SIZE_ECLIPSE);
+        // SKYDAY: the idle sun swells 38 → 56 units across the event; a live eclipse
+        // still scales the result to its full 90.
+        float sunSize = Mth.lerp(eclipse,
+                Mth.lerp(dayEsc, SUN_SIZE_IDLE, SUN_SIZE_LAST_DAY), SUN_SIZE_ECLIPSE);
 
         // R10 SUNRISE: permanent purple rim pass behind the sun disc after the intro. A very
         // slow ±0.04 breath around the frozen 0.50 keeps the rim from reading as a static
@@ -227,7 +265,25 @@ public class OverworldPurpleEffects extends DimensionSpecialEffects {
         RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, rainAlpha);
         SkyRenderUtil.drawCelestialQuad(celestialPose, sunSize, 100.0F);
 
-        // vanilla moon (phases from the shared moon sheet)
+        // W-P-ALTAR: the altar level's permanent veil signature around the eclipse
+        // (ring → glyph constellation → aurora bands → halo beams → corona crown),
+        // keyed off the synced ClientStateCache.altarLevel. Additive blend and
+        // depthMask(false) are still active here; the moon pass below rebinds the
+        // tex pipeline, so the position-color swap inside needs no restore.
+        AltarVeilSky.render(celestialPose, partialTick, eclipse, rainAlpha);
+
+        // SKYDAY: the day escalation's aurora curtains + late-event ember ring — they
+        // ride the (possibly zenith-held) eclipse frame like the altar veil above.
+        DaySkyEscalation.render(celestialPose, seconds, rainAlpha);
+        poseStack.popPose();
+
+        // vanilla moon (phases from the shared moon sheet), in the VANILLA celestial
+        // frame — deliberately outside the zenith hold so nights keep their moon.
+        poseStack.mulPose(Axis.XP.rotationDegrees(
+                (float) Math.toDegrees(SunTracker.sunAngleRadians(level, partialTick))));
+        Matrix4f moonPose = poseStack.last().pose();
+        RenderSystem.setShader(GameRenderer::getPositionTexShader);
+        RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, rainAlpha);
         RenderSystem.setShaderTexture(0, MOON_LOCATION);
         int moonPhase = level.getMoonPhase();
         int px = moonPhase % 4;
@@ -238,21 +294,16 @@ public class OverworldPurpleEffects extends DimensionSpecialEffects {
         float v1 = (float) (py + 1) / 2.0F;
         float moonSize = 20.0F;
         BufferBuilder moon = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX);
-        moon.addVertex(celestialPose, -moonSize, -100.0F, moonSize).setUv(u1, v1);
-        moon.addVertex(celestialPose, moonSize, -100.0F, moonSize).setUv(u0, v1);
-        moon.addVertex(celestialPose, moonSize, -100.0F, -moonSize).setUv(u0, v0);
-        moon.addVertex(celestialPose, -moonSize, -100.0F, -moonSize).setUv(u1, v0);
+        moon.addVertex(moonPose, -moonSize, -100.0F, moonSize).setUv(u1, v1);
+        moon.addVertex(moonPose, moonSize, -100.0F, moonSize).setUv(u0, v1);
+        moon.addVertex(moonPose, moonSize, -100.0F, -moonSize).setUv(u0, v0);
+        moon.addVertex(moonPose, -moonSize, -100.0F, -moonSize).setUv(u1, v0);
         BufferUploader.drawWithShader(moon.buildOrThrow());
 
-        // W-P-ALTAR: the altar level's permanent veil signature around the eclipse
-        // (ring → glyph constellation → aurora bands → halo beams → corona crown),
-        // keyed off the synced ClientStateCache.altarLevel. Additive blend and
-        // depthMask(false) are still active here; the star pass below rebinds its
-        // own shader, so the position-color swap inside needs no restore.
-        AltarVeilSky.render(celestialPose, partialTick, eclipse, rainAlpha);
-
-        // stars, faintly purple-tinted; a strong eclipse pulls them out even at noon
-        float starBrightness = Math.max(level.getStarBrightness(partialTick), eclipse * 0.5F) * rainAlpha;
+        // stars, faintly purple-tinted; a strong eclipse pulls them out even at noon —
+        // SKYDAY: so do the last event days (fx-tier-scaled, cheap single draw).
+        float starBrightness = Math.max(level.getStarBrightness(partialTick),
+                Math.max(eclipse * 0.5F, fxEsc * 0.30F)) * rainAlpha;
         if (starBrightness > 0.0F) {
             RenderSystem.setShaderColor(starBrightness * 0.9F, starBrightness * 0.8F, starBrightness, starBrightness);
             FogRenderer.setupNoFog();

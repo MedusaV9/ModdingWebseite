@@ -15,6 +15,7 @@ import javax.annotation.Nullable;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.core.signal.EclipseSignals;
+import dev.projecteclipse.eclipse.lang.ServerLang;
 import dev.projecteclipse.eclipse.network.S2CRecipeLocksPayload;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
@@ -322,7 +323,9 @@ public final class RecipeGate {
         if (line == null) {
             line = Component.translatable("message.eclipse.recipe.locked");
         }
-        player.displayClientMessage(line.copy().withColor(HINT_COLOR), true);
+        // Provider hints may be arbitrary component trees — resolve() bakes any
+        // translatable nodes for the player's effective mod locale.
+        player.displayClientMessage(ServerLang.resolve(player, line).copy().withColor(HINT_COLOR), true);
         player.playNotifySound(SoundEvents.AMETHYST_BLOCK_CHIME, SoundSource.BLOCKS, 0.7F, 0.55F);
     }
 

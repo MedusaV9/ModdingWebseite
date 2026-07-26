@@ -321,9 +321,27 @@ public final class CutsceneService {
 
     // --- playback ---
 
+    /**
+     * The limbo ghost-ship deck flyaround. Its callers ({@code limbo.StartEventCutscene},
+     * {@code ferryman.ArenaFight}) use the simple local play form, so the cinematic
+     * view-distance bump for it rides HERE rather than at every call site: the flyaround
+     * pans across the whole limbo horizon and previously played with no bump at all.
+     */
+    private static final String LIMBO_SHIP_PATH_ID = "n";
+    /**
+     * Client push for the deck flyaround — deliberately below the intro's 32: limbo
+     * columns are near-empty (cheap), but {@code ViewDistanceService}'s server bump is
+     * global, and {@code ArenaFight} replays this path mid-event while other players may
+     * stand in the overworld; 24 keeps that worst-case chunk-tracking spike bounded.
+     */
+    private static final int LIMBO_SHIP_VIEW_DISTANCE = 24;
+
     /** Plays a path for the given players (freeze + play payload). Returns watchers started. */
     public static int play(String id, Collection<ServerPlayer> players) {
-        return play(id, players, null, null);
+        PlayOptions options = LIMBO_SHIP_PATH_ID.equals(id)
+                ? new PlayOptions(TeleportPolicy.LOCAL_ONLY, LIMBO_SHIP_VIEW_DISTANCE, false)
+                : PlayOptions.LOCAL;
+        return play(id, players, null, null, options);
     }
 
     /** v1 full form — local play, no view-distance bump (see the PlayOptions overload). */

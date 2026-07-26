@@ -5,10 +5,12 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.core.time.EclipseClock;
+import dev.projecteclipse.eclipse.lang.ServerLang;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
@@ -47,43 +49,48 @@ public final class RealtimeCommands {
 
     private static int arm(CommandSourceStack source) {
         MinecraftServer server = source.getServer();
+        ServerPlayer sender = source.getPlayer();
         long boundary = RealtimeDayApi.arm(server);
         long now = EclipseClock.epochMillis();
-        source.sendSuccess(() -> Component.translatable("command.eclipse.rt.armed",
+        source.sendSuccess(() -> ServerLang.tr(sender, "command.eclipse.rt.armed",
                 RealtimeDayService.formatInstant(boundary, RealtimeConfig.get().zone()),
                 RealtimeMath.remainingText(boundary - now)), true);
         return 1;
     }
 
     private static int disarm(CommandSourceStack source) {
+        ServerPlayer sender = source.getPlayer();
         RealtimeDayApi.disarm(source.getServer());
-        source.sendSuccess(() -> Component.translatable("command.eclipse.rt.disarmed"), true);
+        source.sendSuccess(() -> ServerLang.tr(sender, "command.eclipse.rt.disarmed"), true);
         return 1;
     }
 
     private static int pause(CommandSourceStack source) {
+        ServerPlayer sender = source.getPlayer();
         long remaining = RealtimeDayApi.pause(source.getServer());
         if (remaining < 0L) {
-            source.sendFailure(Component.translatable("command.eclipse.rt.pause.failed"));
+            source.sendFailure(ServerLang.tr(sender, "command.eclipse.rt.pause.failed"));
             return 0;
         }
-        source.sendSuccess(() -> Component.translatable("command.eclipse.rt.pause.ok",
+        source.sendSuccess(() -> ServerLang.tr(sender, "command.eclipse.rt.pause.ok",
                 RealtimeMath.remainingText(remaining)), true);
         return 1;
     }
 
     private static int resume(CommandSourceStack source) {
+        ServerPlayer sender = source.getPlayer();
         long boundary = RealtimeDayApi.resume(source.getServer());
         if (boundary < 0L) {
-            source.sendFailure(Component.translatable("command.eclipse.rt.resume.failed"));
+            source.sendFailure(ServerLang.tr(sender, "command.eclipse.rt.resume.failed"));
             return 0;
         }
-        source.sendSuccess(() -> Component.translatable("command.eclipse.rt.resume.ok",
+        source.sendSuccess(() -> ServerLang.tr(sender, "command.eclipse.rt.resume.ok",
                 RealtimeDayService.formatInstant(boundary, RealtimeConfig.get().zone())), true);
         return 1;
     }
 
     private static int add(CommandSourceStack source, String spec) {
+        ServerPlayer sender = source.getPlayer();
         long delta;
         try {
             delta = RealtimeMath.parseSignedOffsetMillis(spec);
@@ -93,15 +100,16 @@ public final class RealtimeCommands {
         }
         long remaining = RealtimeDayApi.addMillis(source.getServer(), delta);
         if (remaining < 0L) {
-            source.sendFailure(Component.translatable("command.eclipse.rt.add.failed"));
+            source.sendFailure(ServerLang.tr(sender, "command.eclipse.rt.add.failed"));
             return 0;
         }
-        source.sendSuccess(() -> Component.translatable("command.eclipse.rt.add.ok",
+        source.sendSuccess(() -> ServerLang.tr(sender, "command.eclipse.rt.add.ok",
                 spec, RealtimeMath.remainingText(remaining)), true);
         return 1;
     }
 
     private static int set(CommandSourceStack source, String spec) {
+        ServerPlayer sender = source.getPlayer();
         long target;
         try {
             target = RealtimeDayApi.setBoundary(source.getServer(), spec, RealtimeConfig.get().zone());
@@ -110,7 +118,7 @@ public final class RealtimeCommands {
             return 0;
         }
         long now = EclipseClock.epochMillis();
-        source.sendSuccess(() -> Component.translatable("command.eclipse.rt.set.ok",
+        source.sendSuccess(() -> ServerLang.tr(sender, "command.eclipse.rt.set.ok",
                 RealtimeDayService.formatInstant(target, RealtimeConfig.get().zone()),
                 RealtimeMath.remainingText(target - now)), true);
         return 1;
@@ -118,7 +126,8 @@ public final class RealtimeCommands {
 
     private static int status(CommandSourceStack source) {
         MinecraftServer server = source.getServer();
-        source.sendSuccess(() -> Component.translatable("command.eclipse.rt.status",
+        ServerPlayer sender = source.getPlayer();
+        source.sendSuccess(() -> ServerLang.tr(sender, "command.eclipse.rt.status",
                 RealtimeDayApi.status(server)), false);
         return RealtimeDayApi.isArmed(server) ? 1 : 0;
     }
