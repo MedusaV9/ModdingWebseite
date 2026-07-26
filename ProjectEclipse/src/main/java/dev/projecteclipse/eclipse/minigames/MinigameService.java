@@ -11,6 +11,7 @@ import javax.annotation.Nullable;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.core.state.EclipseSavedData;
+import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
 import dev.projecteclipse.eclipse.economy.ShardEconomy;
 import dev.projecteclipse.eclipse.lang.ServerLang;
 import dev.projecteclipse.eclipse.skills.SkillsApi;
@@ -36,6 +37,7 @@ import net.minecraft.world.BossEvent;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -68,10 +70,18 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
  * Every exit path — voluntary leave, timeout, dev stop, crash rescue at login, and any
  * foreign teleport out of a minigame dimension (FFIX-B H1) — restores the ticket and
  * only then deletes it. Podium/participation payouts ride the persisted
- * {@link MinigameState.PendingPayout} ledger (queue by stable instance-scoped id, claim
- * before give), so offline winners are paid at next login and crash replays cannot
- * double-pay (FFIX-B H2–H4).</p>
- */
+     * {@link MinigameState.PendingPayout} ledger (queue by stable instance-scoped id, claim
+     * before give), so offline winners are paid at next login and crash replays cannot
+     * double-pay (FFIX-B H2–H4).</p>
+     *
+     * <p><b>Leaving always works.</b> {@link #releasePlayer} is the ONE undo of everything
+     * an entry did — return teleport, inventory/game mode/health/food restore, effects,
+     * fire, mounts, open containers, per-game heat bookkeeping. It never depends on a
+     * ticket being present ({@link #resetToNeutral} covers the ticket-less case), never
+     * depends on the event still being active, and is reachable from every state through
+     * {@code /minigameleave} — including from OUTSIDE the minigame dimensions, where it
+     * doubles as the manual rescue for a stranded snapshot.</p>
+     */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class MinigameService {
 
@@ -171,7 +181,7 @@ public final class MinigameService {
         totalWindowMillisHint = 0L;
         courseReady = false;
         ArenaGame.resetTransient();
-        ElytraRace.resetTransient();
+        LegacyRace.resetTransient();
     }
 
     @SubscribeEvent
@@ -182,6 +192,7 @@ public final class MinigameService {
         }
         MinigameState state = MinigameState.get(server);
         if (!state.isActive()) {
+            evacuateStragglers(server, state);
             return;
         }
 
@@ -201,10 +212,36 @@ public final class MinigameService {
             if (MinigameDimensions.GAME_ARENA.equals(state.gameId())) {
                 ArenaGame.tickRounds(server, state, inside);
             } else if (MinigameDimensions.GAME_RACE.equals(state.gameId())) {
-                ElytraRace.tick(server, state, inside);
+                LegacyRace.tick(server, state, inside);
             }
         }
         lastSeenRemainingMillis = remaining;
+    }
+
+    /**
+     * Nobody may be stuck in a minigame dimension while no event runs there. The close
+     * sequence already exits everyone, but a player can still end up inside afterwards
+     * (a queued teleport landing a tick late, an operator {@code /execute in}, a respawn
+     * anchor pointing there), and without this sweep their only way out used to be dying
+     * or relogging. Runs on the same 10-tick cadence as the rest of the service.
+     */
+    private static void evacuateStragglers(MinecraftServer server, MinigameState state) {
+        for (String gameId : MinigameDimensions.gameIds()) {
+            ServerLevel level = server.getLevel(MinigameDimensions.byGameId(gameId));
+            if (level == null || level.players().isEmpty()) {
+                continue;
+            }
+            for (ServerPlayer straggler : List.copyOf(level.players())) {
+                // Operators inspecting the course in creative/spectator are not stragglers.
+                if ((straggler.isSpectator() || straggler.isCreative())
+                        && straggler.hasPermissions(2)) {
+                    continue;
+                }
+                EclipseMod.LOGGER.info("Evacuating {} from idle minigame dimension {}",
+                        straggler.getScoreboardName(), level.dimension().location());
+                exitToTicket(server, state, straggler, ExitReason.CLOSED);
+            }
+        }
     }
 
     // ================================================================== start / stop / mutate
@@ -370,6 +407,9 @@ public final class MinigameService {
         Runnable build = () -> {
             state.setBuiltSeed(gameId, newSeed);
             CourseBlocks.enqueueBuild(level, layoutFor(gameId, newSeed), () -> {
+                // The budgeted writer only moves block STATES; the notice boards need
+                // their block ENTITY text written afterwards, on loaded chunks.
+                MinigameSigns.apply(level, signsFor(gameId, newSeed));
                 courseReady = true;
                 EclipseMod.LOGGER.info("Minigame course ready: game={}, seed={}", gameId, newSeed);
             });
@@ -383,8 +423,14 @@ public final class MinigameService {
 
     private static List<CourseBlocks.Placement> layoutFor(String gameId, int seed) {
         return MinigameDimensions.GAME_RACE.equals(gameId)
-                ? ElytraRace.courseFor(seed).blocks()
+                ? LegacyRace.layout(seed)
                 : ArenaGame.layout(seed);
+    }
+
+    private static List<MinigameSigns.SignSpec> signsFor(String gameId, int seed) {
+        return MinigameDimensions.GAME_RACE.equals(gameId)
+                ? LegacyRace.signs(seed)
+                : ArenaGame.signs();
     }
 
     // ================================================================== closing
@@ -407,7 +453,7 @@ public final class MinigameService {
         if (MinigameDimensions.GAME_ARENA.equals(gameId)) {
             ArenaGame.endRound(server, state, inside, "eclipse.minigame.arena.round_final");
         } else if (MinigameDimensions.GAME_RACE.equals(gameId)) {
-            ElytraRace.announceClosingSummary(server, state);
+            LegacyRace.announceClosingSummary(server, state);
         }
 
         for (ServerPlayer player : inside) {
@@ -433,7 +479,9 @@ public final class MinigameService {
         LAST_BOUNCE_MESSAGE.clear();
         lastSeenRemainingMillis = Long.MAX_VALUE;
         courseReady = false;
+        AWAITING_PORTAL_CLEAR.clear();
         ArenaGame.resetTransient();
+        LegacyRace.resetTransient();
         state.setPhase(MinigameState.Phase.IDLE);
         EclipseMod.LOGGER.info("Minigame event {} closed (seed {}, {} participants)",
                 gameId, state.openCount(), state.participantsSnapshot().size());
@@ -447,7 +495,7 @@ public final class MinigameService {
             return;
         }
         var bounds = MinigameDimensions.GAME_RACE.equals(gameId)
-                ? ElytraRace.bounds() : ArenaGame.bounds();
+                ? LegacyRace.bounds() : ArenaGame.bounds();
         List<Entity> leftovers = level.getEntities((Entity) null, bounds,
                 entity -> !(entity instanceof ServerPlayer));
         leftovers.forEach(Entity::discard);
@@ -558,7 +606,7 @@ public final class MinigameService {
         EclipseSavedData.flushOverworld(server);
 
         if (MinigameDimensions.GAME_RACE.equals(gameId)) {
-            ElytraRace.placeIntoRace(target, state, player);
+            LegacyRace.placeIntoRace(target, state, player);
         } else {
             // Scattered join (never the exact center) — simultaneous entrants must not
             // pile into one block; the join shield covers the landing (W-P-ARENA).
@@ -567,7 +615,7 @@ public final class MinigameService {
         player.setGameMode(GameType.ADVENTURE);
         player.getInventory().clearContent();
         if (MinigameDimensions.GAME_RACE.equals(gameId)) {
-            ElytraRace.giveKit(player);
+            LegacyRace.giveKit(player);
         } else {
             ArenaGame.giveKit(player);
             ArenaGame.grantSpawnProtection(target, player);
@@ -587,31 +635,38 @@ public final class MinigameService {
 
     /**
      * THE exit path — every route out (leave command, timeout, dev stop, login rescue)
-     * funnels here: teleport to the ticket anchor, restore inventory/mode/health/food,
-     * delete the ticket, pay the once-per-instance participation reward.
+     * funnels here: teleport home, undo everything the entry did, delete the ticket, pay
+     * the once-per-instance participation reward.
+     *
+     * <p>Crucially this works in EVERY state, ticket or no ticket. A missing ticket used
+     * to leave the player teleported but still in adventure mode, still carrying the
+     * disposable kit and still wearing whatever effect the minigame had applied — the
+     * single biggest reason "leaving does not work properly". {@link #resetToNeutral} now
+     * covers that case, and the release itself runs before the anchor is even consulted.
      */
     private static void exitToTicket(MinecraftServer server, MinigameState state,
             ServerPlayer player, ExitReason reason) {
         MinigameState.Ticket ticket = state.ticket(player.getUUID());
-        ServerLevel target = null;
-        if (ticket != null) {
-            target = server.getLevel(ticket.anchor().dimension());
-        }
+        releasePlayer(state, player);
+
+        ServerLevel target = ticket == null ? null : server.getLevel(ticket.anchor().dimension());
         EXIT_IN_PROGRESS.add(player.getUUID());
         try {
             if (target != null) {
                 MinigameState.ReturnAnchor anchor = ticket.anchor();
-                player.teleportTo(target, anchor.x(), anchor.y(), anchor.z(), anchor.yaw(), anchor.pitch());
+                player.teleportTo(target, anchor.x(), anchor.y(), anchor.z(),
+                        anchor.yaw(), anchor.pitch());
             } else {
-                ServerLevel overworld = server.overworld();
-                BlockPos spawn = overworld.getSharedSpawnPos();
-                player.teleportTo(overworld, spawn.getX() + 0.5D, spawn.getY(), spawn.getZ() + 0.5D,
-                        overworld.getSharedSpawnAngle(), 0.0F);
+                MinigameState.ReturnAnchor fallback = fallbackAnchor(server);
+                ServerLevel level = server.getLevel(fallback.dimension());
+                player.teleportTo(level != null ? level : server.overworld(),
+                        fallback.x(), fallback.y(), fallback.z(), fallback.yaw(), fallback.pitch());
             }
         } finally {
             EXIT_IN_PROGRESS.remove(player.getUUID());
         }
-        player.fallDistance = 0.0F;
+        player.setDeltaMovement(Vec3.ZERO);
+        player.resetFallDistance();
         // The anchor usually sits inside the portal volume (captured at entry) — hold the
         // portal off this player until they physically step out of the frame once.
         AWAITING_PORTAL_CLEAR.add(player.getUUID());
@@ -619,12 +674,9 @@ public final class MinigameService {
         if (ticket != null) {
             MinigameState.restoreTicket(player, ticket);
             state.removeTicket(player.getUUID());
+        } else {
+            resetToNeutral(player);
         }
-        PENDING_LEAVE_CONFIRMS.remove(player.getUUID());
-        LAST_BOUNCE_MESSAGE.remove(player.getUUID());
-        ArenaGame.clearSpawnProtection(player);
-        removeFromBossBar(player);
-
         grantParticipationIfOwed(server, state, player);
 
         String key = switch (reason) {
@@ -633,6 +685,58 @@ public final class MinigameService {
             case CLOSED -> "eclipse.minigame.exit.closed";
         };
         player.displayClientMessage(ServerLang.tr(player, key).withStyle(ChatFormatting.AQUA), false);
+    }
+
+    /**
+     * Undoes every side effect a minigame can leave on a player, INDEPENDENT of the ticket
+     * and of whether an event is still running: mount, open container, fire, effects, the
+     * spawn shield, the bossbar, the pending leave prompt and the per-game heat
+     * bookkeeping. Called by every exit route before the return teleport, so a player is
+     * never dragged out of a minigame still riding something or still frozen by the race
+     * countdown's slowness.
+     */
+    private static void releasePlayer(MinigameState state, ServerPlayer player) {
+        player.stopRiding();
+        player.ejectPassengers();
+        player.closeContainer();
+        player.setRemainingFireTicks(0);
+        player.removeAllEffects();
+        player.resetFallDistance();
+        PENDING_LEAVE_CONFIRMS.remove(player.getUUID());
+        LAST_BOUNCE_MESSAGE.remove(player.getUUID());
+        ArenaGame.clearSpawnProtection(player);
+        removeFromBossBar(player);
+        LegacyRace.onRacerLeft(state, player.getUUID());
+    }
+
+    /**
+     * Last-resort cleanup for a player who has NO ticket (crash between capture and entry,
+     * an operator teleporting someone in by hand, a ticket already consumed by an earlier
+     * rescue): the disposable kit is dropped, survival is restored and vitals are made
+     * safe. Restoring a ticket does all of this from the snapshot instead.
+     */
+    private static void resetToNeutral(ServerPlayer player) {
+        player.getInventory().clearContent();
+        player.inventoryMenu.broadcastChanges();
+        player.setGameMode(GameType.SURVIVAL);
+        player.setHealth(player.getMaxHealth());
+        player.getFoodData().setFoodLevel(20);
+        player.getFoodData().setSaturation(5.0F);
+        EclipseMod.LOGGER.info("Minigame exit without a ticket for {} — reset to a neutral state",
+                player.getScoreboardName());
+    }
+
+    /**
+     * Where a ticket-less exit lands: the altar sanctum when it has been built (the
+     * server's actual social hub), otherwise the world spawn.
+     */
+    private static MinigameState.ReturnAnchor fallbackAnchor(MinecraftServer server) {
+        ServerLevel overworld = server.overworld();
+        BlockPos altar = EclipseWorldState.get(server).getSanctumAltarPos();
+        BlockPos spot = altar != null ? altar.above(2) : overworld.getSharedSpawnPos();
+        return new MinigameState.ReturnAnchor(Level.OVERWORLD,
+                spot.getX() + 0.5D, spot.getY(), spot.getZ() + 0.5D,
+                overworld.getSharedSpawnAngle(), 0.0F);
     }
 
     /**
@@ -691,7 +795,7 @@ public final class MinigameService {
      * Applies one queued payout with the AwardService claim-before-give pattern (FFIX-B,
      * FINAL-SAT-SOL H4): the durable delivered-marker is written FIRST, so crash replays
      * and login retries can never apply the same stable payout id twice. Package-private
-     * — {@link ArenaGame}/{@link ElytraRace} route their podium payouts through here.
+     * — {@link ArenaGame}/{@link LegacyRace} route their podium payouts through here.
      */
     static boolean grantPayout(MinigameState state, ServerPlayer player,
             MinigameState.PendingPayout payout) {
@@ -747,7 +851,7 @@ public final class MinigameService {
             // Stale player in a minigame dim without a running event: rescue them out.
             exitToTicket(server, state, player, ExitReason.CLOSED);
         } else if (MinigameDimensions.GAME_RACE.equals(dimGameId)) {
-            ElytraRace.respawnAtCheckpoint(server, state, player);
+            LegacyRace.respawnAtCheckpoint(server, state, player);
             player.displayClientMessage(ServerLang.tr(player, "eclipse.minigame.race.respawn")
                     .withStyle(ChatFormatting.AQUA), true);
         } else {
@@ -786,11 +890,7 @@ public final class MinigameService {
             }
         } else if (state.ticket(player.getUUID()) != null) {
             // Crash rescue: outside the dims but the snapshot was never restored.
-            MinigameState.restoreTicket(player, state.ticket(player.getUUID()));
-            state.removeTicket(player.getUUID());
-            grantParticipationIfOwed(server, state, player);
-            player.displayClientMessage(ServerLang.tr(player, "eclipse.minigame.exit.rescued")
-                    .withStyle(ChatFormatting.AQUA), false);
+            restoreInPlace(server, state, player);
             EclipseMod.LOGGER.info("Restored stranded minigame ticket for {} at login",
                     player.getScoreboardName());
         }
@@ -806,6 +906,9 @@ public final class MinigameService {
         AWAITING_PORTAL_CLEAR.remove(player.getUUID());
         ArenaGame.clearSpawnProtection(player);
         removeFromBossBar(player);
+        // A racer who logs out mid-heat must not keep a slot in the standings, or the
+        // heat waits forever for someone who is not coming back.
+        LegacyRace.onRacerLeft(MinigameState.get(player.server), player.getUUID());
     }
 
     /**
@@ -826,28 +929,51 @@ public final class MinigameService {
         }
         MinecraftServer server = player.server;
         MinigameState state = MinigameState.get(server);
-        MinigameState.Ticket ticket = state.ticket(player.getUUID());
-        if (ticket == null) {
+        if (state.ticket(player.getUUID()) == null) {
             return;
         }
-        MinigameState.restoreTicket(player, ticket);
-        state.removeTicket(player.getUUID());
-        PENDING_LEAVE_CONFIRMS.remove(player.getUUID());
-        LAST_BOUNCE_MESSAGE.remove(player.getUUID());
-        ArenaGame.clearSpawnProtection(player);
-        removeFromBossBar(player);
-        grantParticipationIfOwed(server, state, player);
-        player.displayClientMessage(ServerLang.tr(player, "eclipse.minigame.exit.rescued")
-                .withStyle(ChatFormatting.AQUA), false);
+        restoreInPlace(server, state, player);
         EclipseMod.LOGGER.info("Minigame ticket restored for {} after a foreign dimension exit to {}",
                 player.getScoreboardName(), event.getTo().location());
     }
 
+    /**
+     * Restores a ticket WITHOUT teleporting: the player is already somewhere legitimate
+     * (a foreign teleport's destination, or wherever they logged back in), so only the
+     * minigame's own footprint has to come off them.
+     */
+    private static void restoreInPlace(MinecraftServer server, MinigameState state,
+            ServerPlayer player) {
+        MinigameState.Ticket ticket = state.ticket(player.getUUID());
+        releasePlayer(state, player);
+        if (ticket != null) {
+            MinigameState.restoreTicket(player, ticket);
+            state.removeTicket(player.getUUID());
+        } else {
+            resetToNeutral(player);
+        }
+        grantParticipationIfOwed(server, state, player);
+        player.displayClientMessage(ServerLang.tr(player, "eclipse.minigame.exit.rescued")
+                .withStyle(ChatFormatting.AQUA), false);
+    }
+
     // ================================================================== /minigameleave
 
-    /** First {@code /minigameleave}: confirmation click-through; outside dims: polite no-op. */
+    /**
+     * First {@code /minigameleave}: the confirmation click-through. Outside the minigame
+     * dimensions it is still not a dead end — a player who holds a stranded ticket (the
+     * event closed while they were offline, an admin teleported them out, a crash landed
+     * between the two writes) gets rescued right here instead of being told "you are not
+     * inside a minigame" while wearing the kit.
+     */
     public static int leaveRequested(ServerPlayer player) {
         if (!MinigameDimensions.isInMinigameDimension(player)) {
+            MinecraftServer server = player.server;
+            MinigameState state = MinigameState.get(server);
+            if (state.ticket(player.getUUID()) != null) {
+                restoreInPlace(server, state, player);
+                return 1;
+            }
             player.displayClientMessage(ServerLang.tr(player, "eclipse.minigame.leave.outside")
                     .withStyle(ChatFormatting.GRAY), false);
             return 0;
@@ -867,9 +993,21 @@ public final class MinigameService {
         return 1;
     }
 
-    /** {@code /minigameleave confirm}: voluntary exit — re-entry stays open (no lockouts). */
+    /**
+     * {@code /minigameleave confirm}: the voluntary exit. It works from EVERY minigame
+     * state — waiting on the grid, mid-heat, mid-round, during the results cooldown, and
+     * even after the event already went IDLE around a player who is somehow still inside
+     * (that case has no ticket and no active event, and {@link #exitToTicket} still gets
+     * them home and neutral). Re-entry stays open: minigames have no lockouts.
+     */
     public static int leaveConfirmed(ServerPlayer player) {
+        MinecraftServer server = player.server;
+        MinigameState state = MinigameState.get(server);
         if (!MinigameDimensions.isInMinigameDimension(player)) {
+            if (state.ticket(player.getUUID()) != null) {
+                restoreInPlace(server, state, player);
+                return 1;
+            }
             player.displayClientMessage(ServerLang.tr(player, "eclipse.minigame.leave.outside")
                     .withStyle(ChatFormatting.GRAY), false);
             return 0;
@@ -878,8 +1016,6 @@ public final class MinigameService {
         if (window == null || window < System.currentTimeMillis()) {
             return leaveRequested(player); // expired → re-ask instead of surprising the player
         }
-        MinecraftServer server = player.server;
-        MinigameState state = MinigameState.get(server);
         exitToTicket(server, state, player, ExitReason.LEFT);
         EclipseMod.LOGGER.info("{} voluntarily left the minigame event", player.getScoreboardName());
         return 1;

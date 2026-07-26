@@ -21,9 +21,14 @@
  *   <li>{@link dev.projecteclipse.eclipse.minigames.ArenaGame} — circular FFA fight
  *       platform in {@code eclipse:minigame_arena}, kit combat, kill scoring, 5-minute
  *       rounds with an anonymized podium.</li>
- *   <li>{@link dev.projecteclipse.eclipse.minigames.ElytraRace} — floating ring course in
- *       {@code eclipse:minigame_sky}, elytra + fireworks, sequential checkpoints, lap
- *       timing, first-finish/best-time announcements.</li>
+ *   <li>{@link dev.projecteclipse.eclipse.minigames.RaceTrackBuilder} — the Legacy-style
+ *       speedway itself (F-061). There is no map file: the circuit IS this class, a
+ *       hand-authored closed spline swept into blocks.</li>
+ *   <li>{@link dev.projecteclipse.eclipse.minigames.LegacyRace} — the race rules on that
+ *       circuit in {@code eclipse:minigame_sky}: grid, lights-out countdown, ordered
+ *       checkpoints, lap counting, live standings, finish, podium and DNF.</li>
+ *   <li>{@link dev.projecteclipse.eclipse.minigames.MinigameSigns} — the notice boards
+ *       both courses carry; block-entity text written after a budgeted build lands.</li>
  * </ul>
  */
 package dev.projecteclipse.eclipse.minigames;

@@ -13,6 +13,8 @@ import dev.projecteclipse.eclipse.lang.ServerLang;
 import dev.projecteclipse.eclipse.registry.EclipseSounds;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.game.ClientboundSetSubtitleTextPacket;
@@ -28,9 +30,13 @@ import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.item.DyeColor;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.component.Unbreakable;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.HorizontalDirectionalBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -51,6 +57,13 @@ import net.neoforged.neoforge.event.entity.living.LivingIncomingDamageEvent;
  * a ROUND OVER title + stinger before the podium chat lines. Podium places use standard
  * competition ranking, so kill ties share the higher place (and its payout) instead of
  * being ordered arbitrarily.</p>
+ *
+ * <p><b>The notice boards</b> ("das Schild"): four lit rim pillars carry waxed, translated
+ * wall signs with the round rules, the kit and the leave command — the same board the race
+ * gantry carries, so both lobbies read identically. {@link #signs()} is the geometry;
+ * {@code MinigameService} writes the text through {@link MinigameSigns} once the budgeted
+ * build has landed. The kit's SHIELD (and every other gear piece) is unbreakable and is
+ * re-issued on respawn — a broken shield used to be gone for the rest of the round.</p>
  *
  * <p><b>Spawn protection</b> (W-P-ARENA): arena join and every respawn grant
  * {@value #SPAWN_PROTECTION_MILLIS}ms of invulnerability with a glow + end-rod particle
@@ -84,6 +97,10 @@ public final class ArenaGame {
     private static final int COUNTDOWN_SECONDS = 3;
     /** Players this far below the floor or past the wall are pulled back in. */
     private static final int FALL_RESCUE_DEPTH = 4;
+    /** Number of notice boards around the platform rim ({@link #signs}). */
+    private static final int SIGN_COUNT = 4;
+    /** How far outside the wall the notice pillars stand. */
+    private static final int SIGN_RING_RADIUS = WALL_RADIUS - 3;
 
     // ---- transient per-run state (reset by resetTransient(); never persisted) ----
     /** Epoch millis until which a player is spawn-protected. Server thread only. */
@@ -143,7 +160,53 @@ public final class ArenaGame {
                 out.add(new CourseBlocks.Placement(new BlockPos(px, FLOOR_Y + y, pz), pillar));
             }
         }
+
+        // The notice boards ("das Schild"): four lit pillars on the rim carrying the arena
+        // rules, mirroring the race gantry boards so both lobbies read the same way. The
+        // sign BLOCK belongs to the layout (a rebuild must be able to clear it again); the
+        // TEXT is written by MinigameSigns once the budgeted build has landed.
+        BlockState board = Blocks.POLISHED_BLACKSTONE_BRICKS.defaultBlockState();
+        for (MinigameSigns.SignSpec spec : signs()) {
+            BlockPos foot = signPost(spec).atY(FLOOR_Y + 1);
+            for (int y = 0; y < 3; y++) {
+                out.add(new CourseBlocks.Placement(foot.above(y), board));
+            }
+            out.add(new CourseBlocks.Placement(foot.above(3),
+                    Blocks.SEA_LANTERN.defaultBlockState()));
+            out.add(new CourseBlocks.Placement(spec.pos(), spec.state()));
+        }
         return out;
+    }
+
+    /** The pillar block a notice board hangs on — always behind the sign's facing. */
+    private static BlockPos signPost(MinigameSigns.SignSpec spec) {
+        return spec.pos().relative(
+                spec.state().getValue(HorizontalDirectionalBlock.FACING).getOpposite());
+    }
+
+    /**
+     * The arena notice boards. Geometry is seed-independent (the rim ring never moves), so
+     * this is a plain constant list: four wall signs on the rim pillars, each facing the
+     * platform center so a fighter reads it while walking in.
+     */
+    public static List<MinigameSigns.SignSpec> signs() {
+        List<MinigameSigns.SignSpec> out = new ArrayList<>(SIGN_COUNT);
+        for (int i = 0; i < SIGN_COUNT; i++) {
+            double angle = i * (Math.PI * 2.0D / SIGN_COUNT) + Math.PI / 4.0D;
+            int px = (int) Math.round(Math.cos(angle) * SIGN_RING_RADIUS);
+            int pz = (int) Math.round(Math.sin(angle) * SIGN_RING_RADIUS);
+            Direction towardCenter = Direction.getNearest(-px, 0.0D, -pz);
+            BlockPos post = new BlockPos(px, FLOOR_Y + 2, pz);
+            out.add(new MinigameSigns.SignSpec(post.relative(towardCenter),
+                    MinigameSigns.wallSign(towardCenter),
+                    List.of(Component.translatable("eclipse.minigame.arena.sign.title")
+                                    .withStyle(ChatFormatting.DARK_RED),
+                            Component.translatable("eclipse.minigame.arena.sign.rules"),
+                            Component.translatable("eclipse.minigame.arena.sign.kit"),
+                            Component.translatable("eclipse.minigame.sign.leave")),
+                    DyeColor.WHITE));
+        }
+        return List.copyOf(out);
     }
 
     /** Course bounds for the close-time entity sweep. */
@@ -155,19 +218,59 @@ public final class ArenaGame {
 
     // ------------------------------------------------------------------ kit & spawn
 
-    /** The standard disposable kit — everything vanishes on exit (ticket restore clears it). */
+    /**
+     * The standard disposable kit — everything vanishes on exit (the ticket restore clears
+     * it). Every gear piece is UNBREAKABLE: a kit that wears out mid-round is the whole
+     * reason the shield kept disappearing (a vanilla shield survives 336 points of blocked
+     * damage, then simply breaks and never came back until the next round start).
+     */
     public static void giveKit(ServerPlayer player) {
-        player.setItemSlot(EquipmentSlot.HEAD, new ItemStack(Items.LEATHER_HELMET));
-        player.setItemSlot(EquipmentSlot.CHEST, new ItemStack(Items.LEATHER_CHESTPLATE));
-        player.setItemSlot(EquipmentSlot.LEGS, new ItemStack(Items.LEATHER_LEGGINGS));
-        player.setItemSlot(EquipmentSlot.FEET, new ItemStack(Items.LEATHER_BOOTS));
-        player.setItemSlot(EquipmentSlot.OFFHAND, new ItemStack(Items.SHIELD));
-        player.getInventory().add(new ItemStack(Items.STONE_SWORD));
-        player.getInventory().add(new ItemStack(Items.STONE_AXE));
-        player.getInventory().add(new ItemStack(Items.BOW));
+        player.setItemSlot(EquipmentSlot.HEAD, kitItem(Items.LEATHER_HELMET));
+        player.setItemSlot(EquipmentSlot.CHEST, kitItem(Items.LEATHER_CHESTPLATE));
+        player.setItemSlot(EquipmentSlot.LEGS, kitItem(Items.LEATHER_LEGGINGS));
+        player.setItemSlot(EquipmentSlot.FEET, kitItem(Items.LEATHER_BOOTS));
+        player.setItemSlot(EquipmentSlot.OFFHAND, kitItem(Items.SHIELD));
+        player.getInventory().add(kitItem(Items.STONE_SWORD));
+        player.getInventory().add(kitItem(Items.STONE_AXE));
+        player.getInventory().add(kitItem(Items.BOW));
         player.getInventory().add(new ItemStack(Items.ARROW, 32));
         player.getInventory().add(new ItemStack(Items.COOKED_BEEF, 8));
         player.inventoryMenu.broadcastChanges();
+    }
+
+    /**
+     * Re-issues the gear a fighter is missing after a respawn — above all the SHIELD, the
+     * one kit piece that both breaks and (unlike a dropped sword) has no ground copy to
+     * pick back up, because protected deaths drop nothing. Consumables are deliberately
+     * NOT topped up: arrows and food are the round's economy.
+     */
+    public static void refreshKitGear(ServerPlayer player) {
+        for (EquipmentSlot slot : new EquipmentSlot[] {EquipmentSlot.HEAD, EquipmentSlot.CHEST,
+                EquipmentSlot.LEGS, EquipmentSlot.FEET, EquipmentSlot.OFFHAND}) {
+            if (player.getItemBySlot(slot).isEmpty()) {
+                player.setItemSlot(slot, kitItem(kitGearFor(slot)));
+            }
+        }
+        if (!player.getInventory().contains(stack -> stack.is(Items.STONE_SWORD))) {
+            player.getInventory().add(kitItem(Items.STONE_SWORD));
+        }
+        player.inventoryMenu.broadcastChanges();
+    }
+
+    private static Item kitGearFor(EquipmentSlot slot) {
+        return switch (slot) {
+            case HEAD -> Items.LEATHER_HELMET;
+            case CHEST -> Items.LEATHER_CHESTPLATE;
+            case LEGS -> Items.LEATHER_LEGGINGS;
+            case FEET -> Items.LEATHER_BOOTS;
+            default -> Items.SHIELD;
+        };
+    }
+
+    private static ItemStack kitItem(Item item) {
+        ItemStack stack = new ItemStack(item);
+        stack.set(DataComponents.UNBREAKABLE, new Unbreakable(false));
+        return stack;
     }
 
     /** Teleports the player onto the platform (scattered around the center). */
@@ -268,6 +371,9 @@ public final class ArenaGame {
             placeIntoArena(arena, victim, true);
             grantSpawnProtection(arena, victim);
         }
+        // Nothing drops on a protected death, so a broken shield would otherwise be gone
+        // for the rest of the round — hand back whatever gear the fighter is missing.
+        refreshKitGear(victim);
         victim.displayClientMessage(ServerLang.tr(victim, "eclipse.minigame.arena.respawn")
                 .withStyle(ChatFormatting.AQUA), true);
         if (killer != null && killer != victim) {
@@ -294,6 +400,15 @@ public final class ArenaGame {
         long roundEndsAt = state.roundEndsAtEpochMillis();
         if (roundEndsAt == 0L) {
             tickCountdown(server, state, inside, now);
+            return;
+        }
+        if (inside.isEmpty()) {
+            // Everybody left mid-round: drop it silently instead of letting the deadline
+            // fire a podium into an empty arena. The next entrant gets a fresh countdown.
+            state.setRoundEndsAtEpochMillis(0L);
+            state.clearKills();
+            countdownEndsAtMillis = 0L;
+            EclipseMod.LOGGER.info("Arena round aborted — no fighters left on the platform");
             return;
         }
         if (now < roundEndsAt) {

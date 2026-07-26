@@ -15,12 +15,12 @@ import net.minecraft.world.level.Level;
  * Dimension keys for the two minigame dimensions (the {@code XboxDimensions} pattern).
  * The datapack JSONs live at {@code data/eclipse/dimension/minigame_<id>.json} (both of
  * type {@code eclipse:minigame}, a void flat generator); the actual course blocks are
- * generated at open time by {@link ArenaGame} / {@link ElytraRace}.
+ * generated at open time by {@link ArenaGame} / {@link RaceTrackBuilder}.
  */
 public final class MinigameDimensions {
     /** Game id of the FFA fight arena ({@code /dev minigame start arena}). */
     public static final String GAME_ARENA = "arena";
-    /** Game id of the elytra ring race ({@code /dev minigame start race}). */
+    /** Game id of the Legacy-style circuit race ({@code /dev minigame start race}). */
     public static final String GAME_RACE = "race";
 
     public static final ResourceKey<Level> ARENA = key("minigame_arena");

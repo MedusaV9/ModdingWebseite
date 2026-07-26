@@ -101,6 +101,7 @@ public final class MinigameState extends SavedData {
     private static final String TAG_REWARDED = "rewardedParticipation";
     private static final String TAG_KILLS = "kills";
     private static final String TAG_RACE_PROGRESS = "raceProgress";
+    private static final String TAG_RACE_LAP = "raceLap";
     private static final String TAG_RACE_LAP_START = "raceLapStart";
     private static final String TAG_RACE_FINISHERS = "raceFinishers";
     private static final String TAG_BEST_LAP = "bestLapMillis";
@@ -126,6 +127,7 @@ public final class MinigameState extends SavedData {
     private final Map<UUID, Set<String>> deliveredPayoutIds = new HashMap<>();
     private final Map<UUID, Integer> kills = new HashMap<>();
     private final Map<UUID, Integer> raceProgress = new HashMap<>();
+    private final Map<UUID, Integer> raceLap = new HashMap<>();
     private final Map<UUID, Long> raceLapStart = new HashMap<>();
     private final List<UUID> raceFinishers = new ArrayList<>();
     private long bestLapMillis;
@@ -203,6 +205,7 @@ public final class MinigameState extends SavedData {
         this.rewardedParticipation.clear();
         this.kills.clear();
         this.raceProgress.clear();
+        this.raceLap.clear();
         this.raceLapStart.clear();
         this.raceFinishers.clear();
         this.bestLapMillis = 0L;
@@ -328,13 +331,27 @@ public final class MinigameState extends SavedData {
 
     // ------------------------------------------------------------------ race bookkeeping
 
-    /** Index of the NEXT checkpoint the player must pass ({@code 0} = start ring). */
+    /**
+     * Index of the NEXT checkpoint gate the racer must pass. {@code 0} means "not racing"
+     * (on the grid or in the paddock); a live racer sits at {@code 1..gates}, and reaching
+     * {@code gates} means the next gate is the start/finish line, which closes the lap.
+     */
     public int raceProgress(UUID uuid) {
         return raceProgress.getOrDefault(uuid, 0);
     }
 
     public void setRaceProgress(UUID uuid, int nextCheckpoint) {
         raceProgress.put(uuid, nextCheckpoint);
+        setDirty();
+    }
+
+    /** The racer's current lap, 1-based; {@code 0} = not on a flying lap. */
+    public int raceLap(UUID uuid) {
+        return raceLap.getOrDefault(uuid, 0);
+    }
+
+    public void setRaceLap(UUID uuid, int lap) {
+        raceLap.put(uuid, lap);
         setDirty();
     }
 
@@ -346,6 +363,20 @@ public final class MinigameState extends SavedData {
     public void setRaceLapStart(UUID uuid, long epochMillis) {
         raceLapStart.put(uuid, epochMillis);
         setDirty();
+    }
+
+    /**
+     * Drops one racer's live heat bookkeeping (progress, lap, lap timer) — used when a
+     * racer is put on the grid, parked in the paddock, or leaves the event. The instance's
+     * finisher list and best lap are records of the whole event and deliberately stay.
+     */
+    public void clearRacer(UUID uuid) {
+        boolean changed = raceProgress.remove(uuid) != null;
+        changed |= raceLap.remove(uuid) != null;
+        changed |= raceLapStart.remove(uuid) != null;
+        if (changed) {
+            setDirty();
+        }
     }
 
     /** Records a finisher (once); returns 1-based finish position, or 0 when already listed. */
@@ -526,6 +557,7 @@ public final class MinigameState extends SavedData {
 
         readUuidIntMap(tag.getList(TAG_KILLS, Tag.TAG_COMPOUND), state.kills);
         readUuidIntMap(tag.getList(TAG_RACE_PROGRESS, Tag.TAG_COMPOUND), state.raceProgress);
+        readUuidIntMap(tag.getList(TAG_RACE_LAP, Tag.TAG_COMPOUND), state.raceLap);
         for (Tag lapTag : tag.getList(TAG_RACE_LAP_START, Tag.TAG_COMPOUND)) {
             CompoundTag entry = (CompoundTag) lapTag;
             state.raceLapStart.put(entry.getUUID("uuid"), entry.getLong("value"));
@@ -630,6 +662,7 @@ public final class MinigameState extends SavedData {
 
         tag.put(TAG_KILLS, writeUuidIntMap(kills));
         tag.put(TAG_RACE_PROGRESS, writeUuidIntMap(raceProgress));
+        tag.put(TAG_RACE_LAP, writeUuidIntMap(raceLap));
         ListTag lapStarts = new ListTag();
         for (Map.Entry<UUID, Long> entry : raceLapStart.entrySet()) {
             CompoundTag lapTag = new CompoundTag();

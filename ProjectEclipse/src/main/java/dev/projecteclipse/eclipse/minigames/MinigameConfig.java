@@ -30,6 +30,10 @@ import net.neoforged.fml.loading.FMLPaths;
  * granted once per event instance to every participant on their exit; {@code podium*}
  * index 0/1/2 pays the anonymized top-3 of an arena round and the first three race
  * finishers.</p>
+ *
+ * <p>{@code race.laps} is the race distance of one heat and {@code race.dnfSeconds} the
+ * grace period stragglers get after the winner crosses the line before they are flagged
+ * DNF ({@link LegacyRace}).</p>
  */
 public final class MinigameConfig {
 
@@ -37,6 +41,8 @@ public final class MinigameConfig {
     public record Values(
             int defaultMinutes,
             int roundMinutes,
+            int raceLaps,
+            int raceDnfSeconds,
             int portalSearchMinRadius,
             int portalSearchMaxRadius,
             int participationShards,
@@ -74,8 +80,10 @@ public final class MinigameConfig {
             Values parsed = parse(JsonParser.parseString(raw).getAsJsonObject());
             values = parsed;
             EclipseMod.LOGGER.info(
-                    "Loaded {} (defaultMinutes={}, roundMinutes={}, participation={}s/{}xp, podium={}s/{}xp)",
+                    "Loaded {} (defaultMinutes={}, roundMinutes={}, race={}laps/{}s DNF, "
+                            + "participation={}s/{}xp, podium={}s/{}xp)",
                     file, parsed.defaultMinutes(), parsed.roundMinutes(),
+                    parsed.raceLaps(), parsed.raceDnfSeconds(),
                     parsed.participationShards(), parsed.participationSkillXp(),
                     parsed.podiumShards(), parsed.podiumSkillXp());
         } catch (IOException | RuntimeException e) {
@@ -88,7 +96,7 @@ public final class MinigameConfig {
     }
 
     private static Values defaults() {
-        return new Values(30, 5, 8, 24, 2, 40, List.of(8, 5, 3), List.of(120, 80, 50));
+        return new Values(30, 5, 3, 90, 8, 24, 2, 40, List.of(8, 5, 3), List.of(120, 80, 50));
     }
 
     private static Values parse(JsonObject root) {
@@ -97,6 +105,18 @@ public final class MinigameConfig {
                 ? root.get("defaultMinutes").getAsInt() : def.defaultMinutes();
         int roundMinutes = root.has("roundMinutes")
                 ? root.get("roundMinutes").getAsInt() : def.roundMinutes();
+
+        int raceLaps = def.raceLaps();
+        int raceDnfSeconds = def.raceDnfSeconds();
+        if (root.has("race") && root.get("race").isJsonObject()) {
+            JsonObject race = root.getAsJsonObject("race");
+            if (race.has("laps")) {
+                raceLaps = race.get("laps").getAsInt();
+            }
+            if (race.has("dnfSeconds")) {
+                raceDnfSeconds = race.get("dnfSeconds").getAsInt();
+            }
+        }
 
         int searchMin = def.portalSearchMinRadius();
         int searchMax = def.portalSearchMaxRadius();
@@ -132,6 +152,7 @@ public final class MinigameConfig {
         }
 
         return new Values(Math.max(1, defaultMinutes), Math.max(1, roundMinutes),
+                Math.max(1, raceLaps), Math.max(10, raceDnfSeconds),
                 Math.max(1, searchMin), Math.max(1, searchMax),
                 Math.max(0, participationShards), Math.max(0, participationSkillXp),
                 padToThree(podiumShards), padToThree(podiumSkillXp));
@@ -162,6 +183,10 @@ public final class MinigameConfig {
         JsonObject root = new JsonObject();
         root.addProperty("defaultMinutes", def.defaultMinutes());
         root.addProperty("roundMinutes", def.roundMinutes());
+        JsonObject race = new JsonObject();
+        race.addProperty("laps", def.raceLaps());
+        race.addProperty("dnfSeconds", def.raceDnfSeconds());
+        root.add("race", race);
         JsonObject portal = new JsonObject();
         portal.addProperty("searchMinRadius", def.portalSearchMinRadius());
         portal.addProperty("searchMaxRadius", def.portalSearchMaxRadius());

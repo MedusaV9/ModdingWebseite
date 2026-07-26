@@ -1,16 +1,22 @@
 package dev.projecteclipse.eclipse.gametest.minigames;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.gametest.GameTestSupport;
 import dev.projecteclipse.eclipse.minigames.ArenaGame;
-import dev.projecteclipse.eclipse.minigames.ElytraRace;
+import dev.projecteclipse.eclipse.minigames.CourseBlocks;
+import dev.projecteclipse.eclipse.minigames.LegacyRace;
 import dev.projecteclipse.eclipse.minigames.MinigameDimensions;
 import dev.projecteclipse.eclipse.minigames.MinigameService;
+import dev.projecteclipse.eclipse.minigames.MinigameSigns;
 import dev.projecteclipse.eclipse.minigames.MinigameState;
+import dev.projecteclipse.eclipse.minigames.RaceTrackBuilder;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
@@ -21,17 +27,19 @@ import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.GameType;
-import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.HorizontalDirectionalBlock;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 /**
  * W4-MINIGAMES gametests (the {@code XboxEventGameTests} pattern): state machine + NBT
  * round-trip incl. tickets, the bulletproof ticket capture/restore path with a real mock
- * player, deterministic-per-seed course generation, crash resume (past {@code endsAt}
- * boots straight into CLOSING→IDLE), participation-reward idempotence and lap-time
- * formatting. The full E2E (portal walk-in, protected death, kit combat, elytra laps)
- * needs a client and is covered by the manual walkthrough in the worker report.
+ * player, deterministic-per-seed course generation (incl. the F-061 Legacy circuit's
+ * seed-independent racing line), notice-board support geometry, crash resume (past
+ * {@code endsAt} boots straight into CLOSING→IDLE), participation-reward idempotence and
+ * lap-time formatting. The full E2E (portal walk-in, protected death, kit combat, a driven
+ * heat) needs a client and is covered by the manual walkthrough in the worker report.
  */
 @PrefixGameTestTemplate(false)
 @GameTestHolder(EclipseMod.MOD_ID)
@@ -55,6 +63,7 @@ public final class MinigameGameTests {
         state.addKill(fighter);
         state.addKill(fighter);
         state.setRaceProgress(racer, 4);
+        state.setRaceLap(racer, 2);
         state.setRaceLapStart(racer, 1_000_000L);
         helper.assertTrue(state.addRaceFinisher(racer) == 1, "first finisher position 1");
         helper.assertTrue(state.addRaceFinisher(racer) == 0, "double finish not counted");
@@ -84,7 +93,13 @@ public final class MinigameGameTests {
                 "participants survive NBT");
         helper.assertTrue(loaded.killsOf(fighter) == 2, "kills survive NBT");
         helper.assertTrue(loaded.raceProgress(racer) == 4, "race progress survives NBT");
+        helper.assertTrue(loaded.raceLap(racer) == 2, "race lap survives NBT");
         helper.assertTrue(loaded.raceLapStart(racer) == 1_000_000L, "lap start survives NBT");
+        loaded.clearRacer(racer);
+        helper.assertTrue(loaded.raceProgress(racer) == 0 && loaded.raceLap(racer) == 0
+                && loaded.raceLapStart(racer) == 0L, "clearRacer wipes the live heat state");
+        helper.assertTrue(loaded.raceFinishersSnapshot().equals(List.of(racer)),
+                "clearRacer keeps the instance finisher record");
         helper.assertTrue(loaded.raceFinishersSnapshot().equals(List.of(racer)),
                 "finish order survives NBT");
         helper.assertTrue(loaded.bestLapMillis() == 83_456L, "best lap survives NBT");
@@ -164,23 +179,83 @@ public final class MinigameGameTests {
         helper.assertTrue(ArenaGame.layout(6).size() == arenaA.size(),
                 "arena footprint constant across seeds");
 
-        // Race: cache-busting recompute must reproduce the same course; rings 12..16.
-        ElytraRace.Course course3 = ElytraRace.courseFor(3);
-        List<Vec3> centers = List.copyOf(course3.ringCenters());
-        int rings = centers.size();
-        helper.assertTrue(rings >= 12 && rings <= 16, "ring count in 12..16 (got " + rings + ")");
-        ElytraRace.courseFor(4); // evict the single-entry cache
-        ElytraRace.Course recomputed = ElytraRace.courseFor(3);
-        helper.assertTrue(recomputed.ringCenters().equals(centers), "race course deterministic");
-        helper.assertTrue(!ElytraRace.courseFor(4).ringCenters().equals(centers),
-                "different seeds vary the course");
-        double loop = 0.0D;
-        for (int i = 0; i < rings; i++) {
-            loop += centers.get(i).distanceTo(centers.get((i + 1) % rings));
+        // Race (F-061): the Legacy circuit is a hand-authored racing line, so its geometry
+        // must NOT vary with the seed (only cosmetic accents do), and a rebuild has to
+        // reproduce the previous layout block for block — the clear-then-build in
+        // MinigameService derives the clear job from the persisted OLD seed.
+        RaceTrackBuilder.Track track = LegacyRace.trackFor(3);
+        List<RaceTrackBuilder.Checkpoint> gates = List.copyOf(track.checkpoints());
+        List<CourseBlocks.Placement> blocks = List.copyOf(track.blocks());
+        double lap = track.lapLength();
+        helper.assertTrue(lap > 300.0D && lap < 500.0D,
+                "lap length 300..500 blocks (got " + (int) lap + ")");
+        helper.assertTrue(gates.size() == 7, "seven checkpoint gates (got " + gates.size() + ")");
+        helper.assertTrue(gates.get(0).index() == 0, "gate 0 closes the lap");
+        helper.assertTrue(track.lightSwitches().size() == 5, "five start lamps on the gantry");
+        helper.assertTrue(track.gridSpots().size() == 12, "twelve grid slots");
+        helper.assertTrue(track.signs().size() == 2, "both gantry pillars carry a board");
+        for (RaceTrackBuilder.Checkpoint gate : gates) {
+            helper.assertTrue(RaceTrackBuilder.bounds().contains(gate.center()),
+                    "gate " + gate.index() + " lies inside the swept course bounds");
+            helper.assertTrue(gate.center().y > RaceTrackBuilder.FALL_RESCUE_Y,
+                    "gate " + gate.index() + " sits above the fall-rescue line");
         }
-        helper.assertTrue(loop > 400.0D && loop < 900.0D,
-                "loop length ~600 blocks (got " + (int) loop + ")");
-        helper.assertTrue(!course3.blocks().isEmpty(), "race course has blocks");
+
+        // A boost straight has to stay walkable: blue ice cannot carry the half-step slab
+        // the rest of the surface ramps on, so no ice block may ever be covered — an ice
+        // cell with something on top means the zone drifted onto a slope.
+        Set<BlockPos> occupied = new HashSet<>();
+        for (CourseBlocks.Placement placement : blocks) {
+            occupied.add(placement.pos());
+        }
+        int ice = 0;
+        for (CourseBlocks.Placement placement : blocks) {
+            if (placement.state().is(Blocks.BLUE_ICE)) {
+                ice++;
+                helper.assertTrue(!occupied.contains(placement.pos().above()),
+                        "blue ice at " + placement.pos() + " is the top of the racing surface");
+            }
+        }
+        helper.assertTrue(ice > 100, "both boost straights are paved with ice (got " + ice + ")");
+
+        LegacyRace.trackFor(4); // evict the single-entry cache
+        helper.assertTrue(LegacyRace.trackFor(3).blocks().equals(blocks),
+                "race course deterministic per seed");
+        helper.assertTrue(LegacyRace.trackFor(4).checkpoints().equals(gates),
+                "the racing line is seed-independent");
+        helper.succeed();
+    }
+
+    @GameTest(template = GameTestSupport.EMPTY_TEMPLATE)
+    public static void noticeBoardsHangOnTheirOwnLayout(GameTestHelper helper) {
+        // A wall sign needs the block BEHIND its facing; if the pillar is missing from the
+        // layout the board silently pops off the first time the chunk updates.
+        Set<BlockPos> arenaBlocks = new HashSet<>();
+        for (CourseBlocks.Placement placement : ArenaGame.layout(2)) {
+            arenaBlocks.add(placement.pos());
+        }
+        List<MinigameSigns.SignSpec> arenaSigns = ArenaGame.signs();
+        helper.assertTrue(arenaSigns.size() == 4, "four arena notice boards");
+        for (MinigameSigns.SignSpec spec : arenaSigns) {
+            Direction facing = spec.state().getValue(HorizontalDirectionalBlock.FACING);
+            helper.assertTrue(arenaBlocks.contains(spec.pos()),
+                    "the arena board at " + spec.pos() + " is part of the layout");
+            helper.assertTrue(arenaBlocks.contains(spec.pos().relative(facing.getOpposite())),
+                    "the arena board at " + spec.pos() + " has a support pillar");
+            helper.assertTrue(spec.lines().size() == 4, "a board fills all four sign lines");
+        }
+
+        Set<BlockPos> raceBlocks = new HashSet<>();
+        for (CourseBlocks.Placement placement : LegacyRace.layout(2)) {
+            raceBlocks.add(placement.pos());
+        }
+        for (MinigameSigns.SignSpec spec : LegacyRace.signs(2)) {
+            Direction facing = spec.state().getValue(HorizontalDirectionalBlock.FACING);
+            helper.assertTrue(raceBlocks.contains(spec.pos()),
+                    "the race board at " + spec.pos() + " is part of the layout");
+            helper.assertTrue(raceBlocks.contains(spec.pos().relative(facing.getOpposite())),
+                    "the race board at " + spec.pos() + " has a gantry pillar behind it");
+        }
         helper.succeed();
     }
 
@@ -220,7 +295,7 @@ public final class MinigameGameTests {
         state.beginInstance("race", System.currentTimeMillis() + 60_000L);
         helper.assertTrue(state.markParticipationRewarded(uuid), "new instance re-arms the payout");
 
-        helper.assertTrue("01:23.456".equals(ElytraRace.lapTime(83_456L)), "lap time formatting");
+        helper.assertTrue("01:23.456".equals(LegacyRace.lapTime(83_456L)), "lap time formatting");
         helper.succeed();
     }
 }
