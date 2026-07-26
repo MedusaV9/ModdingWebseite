@@ -20,6 +20,8 @@ Punkte. **Bitte einfach unten unter „Offen" anhängen — Format egal.**
 [ ] Nutze absofort Fable 5 Max thinking statt Opus 5 Max thinking denn das was du bisher hier hergestellt hast sieht grauenhaft schlecht aus.
 [ ] Die Bilder in der Arcade haben kein Smoothing. Der Arcade Bereich ansich sieht komisch und buggy aus.
 [ ] Rückblicke fehlen
+[ ] Erstelle mal richtige Skyboxen selber
+[ ] Mach das der Boden auch etwas Textur hat also mal rau ist oder uneben statt das alles nur hunderprozent gerade flächen sind.
 [ ] Du kannst dir ja von vielen UIs oder Modelen erst bilder generieren und sie danach nach bauen damit du mehr infos hast wie so etwas ca. aussieht.
 [ ] Der Trailer ist noch nicht perfekt und vorallem ist das gameplay etwas zu low quality also irgendwie ist das pixelig
 [ ] Die Ranch ist nicht "belebt" genug und irgendwie fehlt so ein richtiges Feeling also Berge, Landschaften, Dinge zum erkunden.
