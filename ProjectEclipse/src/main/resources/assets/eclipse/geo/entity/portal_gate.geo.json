@@ -1,0 +1,125 @@
+{
+	"format_version": "1.12.0",
+	"minecraft:geometry": [
+		{
+			"description": {
+				"identifier": "geometry.portal_gate",
+				"texture_width": 512,
+				"texture_height": 512,
+				"visible_bounds_width": 14,
+				"visible_bounds_height": 14,
+				"visible_bounds_offset": [0, 6.5, 0]
+			},
+			"bones": [
+				{
+					"name": "root",
+					"pivot": [0, 0, 0]
+				},
+				{
+					"name": "frame",
+					"parent": "root",
+					"pivot": [0, 0, 0],
+					"cubes": [
+						{
+							"origin": [-72, 0, -8],
+							"size": [32, 160, 16],
+							"uv": [0, 0]
+						},
+						{
+							"origin": [40, 0, -8],
+							"size": [32, 160, 16],
+							"uv": [96, 0]
+						},
+						{
+							"origin": [-72, 160, -8],
+							"size": [72, 24, 16],
+							"uv": [192, 0]
+						},
+						{
+							"origin": [0, 160, -8],
+							"size": [72, 24, 16],
+							"uv": [192, 48]
+						},
+						{
+							"origin": [-24, 184, -8],
+							"size": [48, 16, 16],
+							"uv": [192, 96]
+						}
+					]
+				},
+				{
+					"name": "glow_runes_l",
+					"parent": "frame",
+					"pivot": [-56, 80, -8],
+					"cubes": [
+						{
+							"origin": [-68, 24, -9.05],
+							"size": [24, 112, 1],
+							"uv": [200, 176]
+						}
+					]
+				},
+				{
+					"name": "glow_runes_r",
+					"parent": "frame",
+					"pivot": [56, 80, -8],
+					"cubes": [
+						{
+							"origin": [44, 24, -9.05],
+							"size": [24, 112, 1],
+							"uv": [260, 176]
+						}
+					]
+				},
+				{
+					"name": "glow_keystone",
+					"parent": "frame",
+					"pivot": [0, 176, -8],
+					"cubes": [
+						{
+							"origin": [-12, 164, -9.05],
+							"size": [24, 24, 1],
+							"uv": [320, 176]
+						}
+					]
+				},
+				{
+					"name": "door_l",
+					"parent": "root",
+					"pivot": [-40, 0, 0],
+					"cubes": [
+						{
+							"origin": [-40, 0, -2],
+							"size": [40, 152, 4],
+							"uv": [0, 176]
+						}
+					]
+				},
+				{
+					"name": "door_r",
+					"parent": "root",
+					"pivot": [40, 0, 0],
+					"cubes": [
+						{
+							"origin": [0, 0, -2],
+							"size": [40, 152, 4],
+							"uv": [88, 176]
+						}
+					]
+				},
+				{
+					"name": "glow_keyhole",
+					"parent": "door_r",
+					"pivot": [4, 72, -2],
+					"cubes": [
+						{
+							"origin": [1, 64, -2.6],
+							"size": [8, 16, 1],
+							"uv": [320, 210]
+						}
+					]
+				}
+			]
+		}
+	]
+}

@@ -235,6 +235,9 @@ public class FerrymanEntity extends Monster {
     private int lastKneelCueTick = -KNEEL_CUE_INTERVAL_TICKS;
     /** Players already shown the kneel actionbar hint this crew phase (first hit only). */
     private final Set<UUID> kneelHintShown = new HashSet<>();
+    /** F-046b finale special-attack script (Seelenernte / Ruderschlag-Welle / Geisterbeschwörung). */
+    private final dev.projecteclipse.eclipse.ferryman.finale.FerrymanSpecialAttacks specials =
+            new dev.projecteclipse.eclipse.ferryman.finale.FerrymanSpecialAttacks(this);
 
     // Client-side smooth animation clock + pose blend weights (raise/kneel/plant).
     private float animAge;
@@ -492,11 +495,16 @@ public class FerrymanEntity extends Monster {
             tickSlamAirborne(level, fighters);
         } else {
             tickMovement(target);
-            tickSweep(level, fighters, target);
-            // FIN-5: the gunwale slam runs in P1 AND returns empowered in P3 (P2 stays
-            // slam-free — the kneel is that phase's counter, not dodging).
-            if (getPhase() == 1 || getPhase() >= 3) {
-                tickSlamWindup(target);
+            // F-046b: the finale specials run their own telegraphs; the base sweep/slam
+            // triggers pause while one is busy so warnings never overlap (fairness law).
+            this.specials.tick(level, fighters, target);
+            if (!this.specials.isBusy()) {
+                tickSweep(level, fighters, target);
+                // FIN-5: the gunwale slam runs in P1 AND returns empowered in P3 (P2 stays
+                // slam-free — the kneel is that phase's counter, not dodging).
+                if (getPhase() == 1 || getPhase() >= 3) {
+                    tickSlamWindup(target);
+                }
             }
         }
         if (getPhase() == 3) {

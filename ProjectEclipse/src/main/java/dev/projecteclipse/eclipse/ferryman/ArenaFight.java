@@ -224,6 +224,47 @@ public final class ArenaFight {
     }
 
     /**
+     * FERRYMAN2 handoff ({@code finale.FinaleSequence}): the key already opened the
+     * PORTAL GATE on the shore, the screens are purple — everyone is shipped to the
+     * limbo deck IMMEDIATELY (no altar door, the portal WAS the door) and the crossing
+     * resumes from the wait-for-all hold (countdown starts on the next aboard check).
+     * Returns whether the crossing was armed (false = machinery busy, caller logs it).
+     */
+    public static boolean armGateThroughPortal(MinecraftServer server) {
+        if (stage != Stage.IDLE || ArenaState.get(server).isFightRunning()) {
+            EclipseMod.LOGGER.warn("Ferry portal handoff refused: crossing busy (stage {}, fight {})",
+                    stage, ArenaState.get(server).isFightRunning());
+            return false;
+        }
+        ServerLevel limbo = server.getLevel(LimboDimension.LIMBO);
+        if (limbo == null) {
+            EclipseMod.LOGGER.warn("Ferry portal handoff aborted: limbo dimension is not loaded");
+            return false;
+        }
+        sweepMorphDisplays(limbo);
+        ServerLevel arena = ArenaDimension.get(server);
+        if (arena != null) {
+            ArenaBuilder.ensureBuilt(arena);
+            ArenaBuilder.sweepAccentDisplays(arena); // belt-and-braces: accents are fight-scoped
+        } else {
+            EclipseMod.LOGGER.warn("Ferry arena dimension {} is not loaded — the fight will stay on the limbo ship",
+                    ArenaDimension.ARENA.location());
+        }
+        stage = Stage.GATE;
+        gateTicks = 0;
+        countdownTicks = -1;
+        GoalTracker.onFinaleBegun(server); // idempotent team beat (portal path bypasses armGate)
+        shipStragglers(server, limbo);
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            PacketDistributor.sendToPlayer(player, new S2CCaptionPayload(
+                    "eclipse.caption.ferry.wait", 100, S2CCaptionPayload.STYLE_TITLE));
+        }
+        EclipseMod.LOGGER.info("Ferry gate armed THROUGH THE PORTAL: everyone shipped, {}t countdown pending",
+                GATE_COUNTDOWN_TICKS);
+        return true;
+    }
+
+    /**
      * FIN-5 mid-fight transformation, called by {@code FerrymanEntity.onPhaseChanged} at
      * the P3 toll break: the arena TRANSFORMS during the fight — a ribcage of bone teeth
      * erupts around the pit rim ({@link ArenaBuilder#spawnEscalationDisplays}, appended

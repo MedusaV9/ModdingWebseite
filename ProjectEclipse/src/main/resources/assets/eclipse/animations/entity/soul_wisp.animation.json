@@ -1,0 +1,112 @@
+{
+	"format_version": "1.8.0",
+	"animations": {
+		"animation.soul_wisp.idle": {
+			"loop": true,
+			"animation_length": 2.5,
+			"bones": {
+				"body": {
+					"position": {
+						"0.0": {"post": [0, 0, 0], "lerp_mode": "catmullrom"},
+						"0.625": {"post": [0, 1.5, 0], "lerp_mode": "catmullrom"},
+						"1.25": {"post": [0, 0, 0], "lerp_mode": "catmullrom"},
+						"1.875": {"post": [0, -1.5, 0], "lerp_mode": "catmullrom"},
+						"2.5": {"post": [0, 0, 0], "lerp_mode": "catmullrom"}
+					}
+				},
+				"tail": {
+					"rotation": ["math.sin(query.anim_time * 144) * 14", 0, "math.cos(query.anim_time * 144) * 8"]
+				},
+				"arm_l": {
+					"rotation": [0, 0, "10 + math.sin(query.anim_time * 144) * 10"]
+				},
+				"arm_r": {
+					"rotation": [0, 0, "-10 - math.sin(query.anim_time * 144 + 60) * 10"]
+				},
+				"glow_core": {
+					"scale": "1.0 + math.sin(query.anim_time * 200) * 0.3"
+				}
+			}
+		},
+		"animation.soul_wisp.walk": {
+			"loop": true,
+			"animation_length": 2.0,
+			"bones": {
+				"body": {
+					"rotation": [-12, 0, 0],
+					"position": {
+						"0.0": {"post": [0, 0, 0], "lerp_mode": "catmullrom"},
+						"0.5": {"post": [0, 1, 0], "lerp_mode": "catmullrom"},
+						"1.0": {"post": [0, 0, 0], "lerp_mode": "catmullrom"},
+						"1.5": {"post": [0, -1, 0], "lerp_mode": "catmullrom"},
+						"2.0": {"post": [0, 0, 0], "lerp_mode": "catmullrom"}
+					}
+				},
+				"tail": {
+					"rotation": ["18 + math.sin(query.anim_time * 240) * 16", 0, 0]
+				},
+				"arm_l": {
+					"rotation": [-20, 0, "14 + math.sin(query.anim_time * 240) * 8"]
+				},
+				"arm_r": {
+					"rotation": [-20, 0, "-14 - math.sin(query.anim_time * 240 + 60) * 8"]
+				}
+			}
+		},
+		"animation.soul_wisp.attack": {
+			"loop": false,
+			"animation_length": 0.5,
+			"bones": {
+				"body": {
+					"rotation": {
+						"0.0": [0, 0, 0],
+						"0.15": [-30, 0, 0],
+						"0.35": [12, 0, 0],
+						"0.5": [0, 0, 0]
+					}
+				},
+				"arm_l": {
+					"rotation": {
+						"0.0": [0, 0, 10],
+						"0.15": [-95, 0, 0],
+						"0.5": [0, 0, 10]
+					}
+				},
+				"arm_r": {
+					"rotation": {
+						"0.0": [0, 0, -10],
+						"0.15": [-95, 0, 0],
+						"0.5": [0, 0, -10]
+					}
+				},
+				"glow_core": {
+					"scale": {
+						"0.0": [1, 1, 1],
+						"0.15": [1.8, 1.8, 1.8],
+						"0.5": [1, 1, 1]
+					}
+				}
+			}
+		},
+		"animation.soul_wisp.death": {
+			"loop": "hold_on_last_frame",
+			"animation_length": 0.8,
+			"bones": {
+				"body": {
+					"rotation": {
+						"0.0": [0, 0, 0],
+						"0.8": [0, 360, 0]
+					},
+					"scale": {
+						"0.0": [1, 1, 1],
+						"0.8": [0.05, 0.05, 0.05]
+					},
+					"position": {
+						"0.0": [0, 0, 0],
+						"0.8": [0, 6, 0]
+					}
+				}
+			}
+		}
+	}
+}

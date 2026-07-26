@@ -1,0 +1,94 @@
+{
+	"format_version": "1.8.0",
+	"animations": {
+		"animation.portal_gate.idle": {
+			"loop": true,
+			"animation_length": 4.0,
+			"bones": {
+				"glow_runes_l": {
+					"scale": ["1.0", "1.0", "1.0 + math.sin(query.anim_time * 90) * 0.25"]
+				},
+				"glow_runes_r": {
+					"scale": ["1.0", "1.0", "1.0 + math.sin(query.anim_time * 90 + 180) * 0.25"]
+				},
+				"glow_keystone": {
+					"scale": "1.0 + math.sin(query.anim_time * 45) * 0.08"
+				},
+				"glow_keyhole": {
+					"scale": "1.0 + math.sin(query.anim_time * 120) * 0.12"
+				}
+			}
+		},
+		"animation.portal_gate.unlock": {
+			"loop": "hold_on_last_frame",
+			"animation_length": 6.0,
+			"bones": {
+				"root": {
+					"rotation": {
+						"0.0": [0, 0, 0],
+						"0.2": [0, 0, 0.6],
+						"0.5": [0, 0, -0.7],
+						"0.8": [0, 0, 0.5],
+						"1.1": [0, 0, -0.5],
+						"1.4": [0, 0, 0.35],
+						"1.7": [0, 0, -0.2],
+						"2.0": [0, 0, 0]
+					},
+					"position": {
+						"0.0": [0, 0, 0],
+						"0.3": [0.6, 0, 0],
+						"0.6": [-0.6, 0, 0],
+						"0.9": [0.45, 0.2, 0],
+						"1.2": [-0.35, 0, 0],
+						"1.6": [0.2, 0, 0],
+						"2.0": [0, 0, 0]
+					}
+				},
+				"door_l": {
+					"rotation": {
+						"0.0": {"post": [0, 0, 0], "lerp_mode": "catmullrom"},
+						"2.0": {"post": [0, 0, 0], "lerp_mode": "catmullrom"},
+						"2.4": {"post": [0, 6, 0], "lerp_mode": "catmullrom"},
+						"4.4": {"post": [0, -118, 0], "lerp_mode": "catmullrom"},
+						"5.0": {"post": [0, -104, 0], "lerp_mode": "catmullrom"},
+						"5.5": {"post": [0, -110, 0], "lerp_mode": "catmullrom"},
+						"6.0": {"post": [0, -108, 0], "lerp_mode": "catmullrom"}
+					}
+				},
+				"door_r": {
+					"rotation": {
+						"0.0": {"post": [0, 0, 0], "lerp_mode": "catmullrom"},
+						"2.0": {"post": [0, 0, 0], "lerp_mode": "catmullrom"},
+						"2.4": {"post": [0, -6, 0], "lerp_mode": "catmullrom"},
+						"4.4": {"post": [0, 118, 0], "lerp_mode": "catmullrom"},
+						"5.0": {"post": [0, 104, 0], "lerp_mode": "catmullrom"},
+						"5.5": {"post": [0, 110, 0], "lerp_mode": "catmullrom"},
+						"6.0": {"post": [0, 108, 0], "lerp_mode": "catmullrom"}
+					}
+				},
+				"glow_keystone": {
+					"scale": {
+						"0.0": [1, 1, 1],
+						"1.8": [1.6, 1.6, 1.6],
+						"2.2": [1.1, 1.1, 1.1],
+						"6.0": [1.25, 1.25, 1.25]
+					}
+				},
+				"glow_runes_l": {
+					"scale": {
+						"0.0": [1, 1, 1],
+						"1.8": [1, 1, 2.2],
+						"6.0": [1, 1, 1.6]
+					}
+				},
+				"glow_runes_r": {
+					"scale": {
+						"0.0": [1, 1, 1],
+						"1.8": [1, 1, 2.2],
+						"6.0": [1, 1, 1.6]
+					}
+				}
+			}
+		}
+	}
+}

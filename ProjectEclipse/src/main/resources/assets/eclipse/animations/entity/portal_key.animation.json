@@ -1,0 +1,49 @@
+{
+	"format_version": "1.8.0",
+	"animations": {
+		"animation.portal_key.idle": {
+			"loop": true,
+			"animation_length": 6.0,
+			"bones": {
+				"root": {
+					"rotation": {
+						"0.0": [0, 0, 0],
+						"3.0": [0, 180, 0],
+						"6.0": [0, 360, 0]
+					}
+				},
+				"body": {
+					"position": {
+						"0.0": {"post": [0, 0, 0], "lerp_mode": "catmullrom"},
+						"1.5": {"post": [0, 2.5, 0], "lerp_mode": "catmullrom"},
+						"3.0": {"post": [0, 0, 0], "lerp_mode": "catmullrom"},
+						"4.5": {"post": [0, -2.5, 0], "lerp_mode": "catmullrom"},
+						"6.0": {"post": [0, 0, 0], "lerp_mode": "catmullrom"}
+					}
+				},
+				"glow_gem": {
+					"scale": "1.0 + math.sin(query.anim_time * 150) * 0.2"
+				}
+			}
+		},
+		"animation.portal_key.fly": {
+			"loop": true,
+			"animation_length": 1.0,
+			"bones": {
+				"root": {
+					"rotation": {
+						"0.0": [0, 0, 0],
+						"0.5": [0, 180, 0],
+						"1.0": [0, 360, 0]
+					}
+				},
+				"body": {
+					"rotation": [25, 0, 0]
+				},
+				"glow_gem": {
+					"scale": "1.35 + math.sin(query.anim_time * 720) * 0.25"
+				}
+			}
+		}
+	}
+}
