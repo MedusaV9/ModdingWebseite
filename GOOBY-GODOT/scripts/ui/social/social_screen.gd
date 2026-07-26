@@ -32,6 +32,7 @@ var _f := 1.0
 var _rows_box: VBoxContainer
 var _back_btn: Button
 var _title_label: Label
+var _practice_btn: Button
 
 
 static func register_routes() -> void:
@@ -88,8 +89,13 @@ func _apply_metrics() -> void:
 	_rows_box.offset_right = -24.0 - float(insets["right"])
 	_rows_box.offset_top = 16.0 + float(insets["top"])
 	_rows_box.offset_bottom = -16.0 - float(insets["bottom"])
-	var floor_px := HudLayoutLogic.touch_floor_canvas(canvas)
+	var floor_px := maxf(
+		HudLayoutLogic.touch_floor_canvas(canvas),
+		float(AcTokens.TOUCH_FLOOR) * UiScale.touch_px_per_pt(get_viewport())
+	)
 	_back_btn.custom_minimum_size = Vector2(0.0, maxf(44.0 * _f, floor_px))
+	if _practice_btn != null:
+		_practice_btn.custom_minimum_size = Vector2(0.0, maxf(44.0 * _f, floor_px))
 	_scale_font(_back_btn, 17)
 	_scale_font(_title_label, AcTokens.FONT_SIZE_TITLE)
 	_scale_font(_status_chip, AcTokens.FONT_SIZE_CAPTION)
@@ -163,11 +169,11 @@ func _build_ui() -> void:
 	var practice_box := HBoxContainer.new()
 	practice_box.alignment = BoxContainer.ALIGNMENT_CENTER
 	rows.add_child(practice_box)
-	var practice_btn := Button.new()
-	practice_btn.theme_type_variation = &"GhostButton"
-	practice_btn.text = I18nService.t("chess.practice")
-	practice_btn.pressed.connect(_on_chess_practice_pressed)
-	practice_box.add_child(practice_btn)
+	_practice_btn = Button.new()
+	_practice_btn.theme_type_variation = &"GhostButton"
+	_practice_btn.text = I18nService.t("chess.practice")
+	_practice_btn.pressed.connect(_on_chess_practice_pressed)
+	practice_box.add_child(_practice_btn)
 
 	if FurnitureCatalog.def("brettspieltisch").is_empty():
 		var hint := Label.new()
@@ -300,8 +306,9 @@ func _build_friend_row(row: Dictionary) -> Control:
 ## Aktions-Knopf in Freundes-Zeilen: Font + Touch-Floor skalieren (FIX1).
 func _scale_action_button(btn: Button) -> void:
 	_scale_font(btn, 17)
-	var floor_px := HudLayoutLogic.touch_floor_canvas(
-		Vector2(get_viewport().get_visible_rect().size)
+	var floor_px := maxf(
+		HudLayoutLogic.touch_floor_canvas(Vector2(get_viewport().get_visible_rect().size)),
+		float(AcTokens.TOUCH_FLOOR) * UiScale.touch_px_per_pt(get_viewport())
 	)
 	btn.custom_minimum_size = Vector2(0.0, maxf(44.0 * _f, floor_px))
 

@@ -23,6 +23,8 @@ const LOCK_PORTRAIT := 2
 
 ## Sekunden pro Countdown-Schritt (Tests drehen auf ~0).
 var countdown_step_sec := 0.8
+## FB3: Sekunden pro Schritt des 3-2-1-WEITERSPIEL-Countdowns nach Pause.
+var resume_step_sec := 0.45
 ## Duck-Typing-Overrides für Tests (null → /root/GameState bzw. /root/…).
 var state_node: Node = null
 var auto_navigate := true
@@ -41,13 +43,16 @@ var _stage: Control
 var _viewport_container: SubViewportContainer
 var _viewport: SubViewport
 var _overlay: Control
+var _top_bar: HBoxContainer
 var _score_label: Label
 var _countdown_label: Label
-var _pause_overlay: Control
+var _pause_modal: MinigamePauseModal
 var _pause_button: Button
 var _results: MinigameResults
 var _round_over := false
 var _countdown_token := 0
+## FB3: Stage-Oberkante in Canvas-px (misst _apply_metrics aus der Top-Bar).
+var _stage_top := 56.0
 ## Coin-würdige Teil-Scores der Session (GvZ meldet pro gewonnenem Level —
 ## die Coin-Row wird dann PRO Chunk statt auf den Session-Score angewandt).
 var _coin_chunks: Array[int] = []
@@ -84,7 +89,8 @@ func _ready() -> void:
 	_build_ui()
 	_lock_orientation()
 	_mount_game()
-	resized.connect(_layout_stage)
+	resized.connect(_on_host_resized)
+	_apply_metrics()
 	_layout_stage()
 	_run_countdown()
 
@@ -135,27 +141,30 @@ func _build_ui() -> void:
 	add_child(_overlay)
 	juice.float_text_parent = _overlay
 
-	var top_bar := HBoxContainer.new()
-	top_bar.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
-	top_bar.offset_left = 16.0
-	top_bar.offset_right = -16.0
-	top_bar.offset_top = 10.0
-	top_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_overlay.add_child(top_bar)
+	_top_bar = HBoxContainer.new()
+	_top_bar.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	_top_bar.offset_left = 16.0
+	_top_bar.offset_right = -16.0
+	_top_bar.offset_top = 10.0
+	_top_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_overlay.add_child(_top_bar)
 	_score_label = Label.new()
 	_score_label.theme_type_variation = &"HeadlineLabel"
 	_score_label.text = I18nService.t("mg.host.score", {"score": 0})
-	top_bar.add_child(_score_label)
+	_score_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_top_bar.add_child(_score_label)
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	top_bar.add_child(spacer)
+	_top_bar.add_child(spacer)
 	_pause_button = Button.new()
+	_pause_button.name = "PauseButton"
 	_pause_button.theme_type_variation = &"GhostButton"
 	_pause_button.text = I18nService.t("mg.host.pause")
+	_pause_button.focus_mode = Control.FOCUS_NONE
 	_pause_button.pressed.connect(_on_pause_pressed)
 	_pause_button.disabled = true
-	top_bar.add_child(_pause_button)
+	_top_bar.add_child(_pause_button)
 
 	_countdown_label = Label.new()
 	_countdown_label.theme_type_variation = &"TitleLabel"
@@ -170,50 +179,20 @@ func _build_ui() -> void:
 	_countdown_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_overlay.add_child(_countdown_label)
 
-	_pause_overlay = _build_pause_overlay()
-	add_child(_pause_overlay)
+	# FB3: kompaktes, mittiges Pause-Modal (scripts/minigames/ui) statt des
+	# alten Vollflächen-Overlays — echte Pause + 3-2-1 macht der Host.
+	_pause_modal = MinigamePauseModal.new()
+	_pause_modal.hint_key = "mg.%s.hint" % game_id
+	_pause_modal.resume_requested.connect(_on_resume_requested)
+	_pause_modal.restart_requested.connect(_on_restart_requested)
+	_pause_modal.quit_requested.connect(_on_quit_pressed)
+	add_child(_pause_modal)
 
 	_results = RESULTS_SCENE.instantiate()
 	_results.hide()
 	_results.again_pressed.connect(_on_again_pressed)
 	_results.back_pressed.connect(func() -> void: _exit_to(&"arcade", {}))
 	add_child(_results)
-
-
-func _build_pause_overlay() -> Control:
-	var overlay := Control.new()
-	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	overlay.hide()
-	var dim := ColorRect.new()
-	dim.color = Color(0.24, 0.16, 0.12, 0.5)
-	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	overlay.add_child(dim)
-	var center := CenterContainer.new()
-	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	overlay.add_child(center)
-	var card := PanelContainer.new()
-	card.theme_type_variation = &"AcCardLg"
-	card.custom_minimum_size = Vector2(340, 0)
-	center.add_child(card)
-	var rows := VBoxContainer.new()
-	rows.add_theme_constant_override("separation", 12)
-	card.add_child(rows)
-	var title := Label.new()
-	title.theme_type_variation = &"TitleLabel"
-	title.text = I18nService.t("mg.host.paused")
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	rows.add_child(title)
-	var resume := Button.new()
-	resume.theme_type_variation = &"PrimaryButton"
-	resume.text = I18nService.t("mg.host.resume")
-	resume.pressed.connect(_on_resume_pressed)
-	rows.add_child(resume)
-	var quit := Button.new()
-	quit.theme_type_variation = &"GhostButton"
-	quit.text = I18nService.t("mg.host.quit")
-	quit.pressed.connect(_on_quit_pressed)
-	rows.add_child(quit)
-	return overlay
 
 
 func _mount_game() -> void:
@@ -238,11 +217,39 @@ func _mount_game() -> void:
 	_game.setup(_ctx)
 
 
-## Pillar-/Letterbox: Stage auf die Ziel-Orientierung einpassen.
+func _on_host_resized() -> void:
+	_apply_metrics()
+	_layout_stage()
+
+
+## FB3: Top-Bar in die Safe-Area einpassen und mit der ZENTRALEN UiScale-
+## Regel skalieren (vorher: feste 16/10-px-Offsets, Pause-Knopf unter dem
+## Touch-Floor und hinter der Notch).
+func _apply_metrics() -> void:
+	if _top_bar == null:
+		return
+	var m := ScreenShell.metrics(get_viewport())
+	var f: float = m["f"]
+	var insets: Dictionary = m["insets"]
+	_top_bar.offset_left = float(insets["left"]) + 12.0 * f
+	_top_bar.offset_right = -float(insets["right"]) - 12.0 * f
+	_top_bar.offset_top = float(insets["top"]) + 6.0 * f
+	ScreenShell.touch_target(_pause_button, m)
+	ScreenShell.scale_fonts(_top_bar, f)
+	ScreenShell.scale_fonts(_countdown_label, f)
+	_stage_top = _top_bar.offset_top + _top_bar.get_combined_minimum_size().y + 6.0 * f
+
+
+## Pillar-/Letterbox: Stage auf die Ziel-Orientierung einpassen — unter der
+## Top-Bar und INNERHALB der Safe-Area (Notch/Home-Indicator).
 func _layout_stage() -> void:
 	if _viewport_container == null:
 		return
-	var avail := size - Vector2(0, 56)
+	var insets := UiScale.safe_insets_canvas(get_viewport())
+	var left := float(insets["left"])
+	var right := float(insets["right"])
+	var bottom := float(insets["bottom"])
+	var avail := Vector2(size.x - left - right, size.y - _stage_top - bottom)
 	if avail.x <= 0 or avail.y <= 0:
 		return
 	var design := DESIGN_PORTRAIT
@@ -251,7 +258,7 @@ func _layout_stage() -> void:
 	var scale_factor := minf(avail.x / design.x, avail.y / design.y)
 	var fitted := design * scale_factor
 	_viewport_container.position = Vector2(
-		(size.x - fitted.x) * 0.5, 56.0 + (avail.y - fitted.y) * 0.5
+		left + (avail.x - fitted.x) * 0.5, _stage_top + (avail.y - fitted.y) * 0.5
 	)
 	_viewport_container.size = fitted
 
@@ -351,29 +358,88 @@ func _award(final_score: int) -> Dictionary:
 
 
 func _on_pause_pressed() -> void:
-	if _game == null or _round_over:
+	if _game == null or _round_over or _pause_modal.is_open():
 		return
 	AudioDirector.try_play(self, "ui_open")
 	_game.pause()
-	_pause_overlay.show()
+	# FB3 „pausiert WIRKLICH“: der SubViewport hört auf zu ticken (Zeit,
+	# Timer, Tweens, Physik) — nicht nur das game_paused-Flag; Eingaben
+	# frisst der Modal-Backdrop.
+	_set_game_frozen(true)
+	_pause_modal.open()
 
 
+## Fortsetzen (Modal-Knopf/Backdrop/Back-Geste): Modal ist schon zu —
+## erst der 3-2-1-Countdown, dann läuft das Spiel weiter.
+func _on_resume_requested() -> void:
+	if _game == null or _round_over:
+		_set_game_frozen(false)
+		return
+	_run_resume_countdown()
+
+
+## Alt-Pfad (bughunt_walkthrough ruft das direkt): wie Modal-Fortsetzen.
 func _on_resume_pressed() -> void:
-	AudioDirector.try_play(self, "ui_close")
-	_pause_overlay.hide()
+	if _pause_modal.is_open():
+		_pause_modal.hide_modal()
+	_on_resume_requested()
+
+
+## FB3: 3-2-1 vor dem Weiterspielen — Echtzeit-Timer (das Spiel bleibt
+## eingefroren, Zeitlupen-time_scale dehnt nichts), dann Freeze lösen.
+func _run_resume_countdown() -> void:
+	_countdown_token += 1
+	var token := _countdown_token
+	_pause_button.disabled = true
+	_countdown_label.show()
+	for step: int in [3, 2, 1]:
+		_countdown_label.text = str(step)
+		FeelSfx.play(self, "game_countdown", 0.9 + 0.12 * float(3 - step))
+		if juice != null:
+			juice.scale_pop(_countdown_label, 1.3, 240)
+		await get_tree().create_timer(maxf(resume_step_sec, 0.0), true, false, true).timeout
+		if token != _countdown_token or not is_inside_tree():
+			return
+	_countdown_label.hide()
+	_set_game_frozen(false)
 	if _game != null:
 		_game.resume()
+	_pause_button.disabled = _round_over
+
+
+func _on_restart_requested() -> void:
+	_set_game_frozen(false)
+	_restart_round()
 
 
 func _on_quit_pressed() -> void:
 	AudioDirector.try_play(self, "ui_back")
+	if _pause_modal.is_open():
+		_pause_modal.hide_modal()
+	_set_game_frozen(false)
 	if _game != null:
 		_game.end()
 	_exit_to(&"arcade", {})
 
 
+## Zeit + Eingaben des Spiels wirklich anhalten/freigeben: process aus für
+## den SubViewport-Ast (Timer/Tweens/Physik stehen), letztes Bild bleibt
+## unter der Abdunkelung sichtbar stehen.
+func _set_game_frozen(frozen: bool) -> void:
+	if _viewport_container == null:
+		return
+	_viewport_container.process_mode = (
+		Node.PROCESS_MODE_DISABLED if frozen else Node.PROCESS_MODE_INHERIT
+	)
+
+
 func _on_again_pressed() -> void:
-	# Interner Neustart (gleiche Difficulty/Orientierung, frischer Seed).
+	_restart_round()
+
+
+## Interner Neustart (gleiche Difficulty/Orientierung, frischer Seed) —
+## gemeinsamer Pfad für Results-„Nochmal“ UND Pause-„Neustart“ (FB3).
+func _restart_round() -> void:
 	if _is_exhausted():
 		# Jede Runde kostet Energie (§C6) — erschöpft geht es zurück zur
 		# Arcade statt in eine Gratis-Runde.
@@ -385,6 +451,7 @@ func _on_again_pressed() -> void:
 	_coin_chunks = []
 	run_seed = maxi(1, randi() & 0x7FFFFFFF)
 	_score_label.text = I18nService.t("mg.host.score", {"score": 0})
+	_pause_button.disabled = true
 	if _game != null:
 		_game.queue_free()
 		_game = null

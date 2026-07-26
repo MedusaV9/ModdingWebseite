@@ -98,7 +98,11 @@ func _build_roads() -> void:
 	# Bordstein und Hauswand lagen 6 m Gras und die Straße las sich als
 	# Landstraße statt als Häuserschlucht.
 	var block_prop := _prop([_slab(Logic.TILE_M, WALK.darkened(0.06), 0.015)], 32)
-	var road_prop := _prop([_slab(ROAD_W, ASPHALT, 0.03)], 128)
+	# Asphalt-OBERKANTE exakt auf y = 0 (Platte ist 0,05 dick, Mitte −0,025):
+	# Van, Verkehr, Routenpfeile und Abgabering posieren alle auf y = 0 —
+	# vorher lag der Deckel bei 0,055 und jedes Fahrzeug steckte 5,5 cm im
+	# Asphalt (FB-4-Bugfix „Autos schweben/versinken").
+	var road_prop := _prop([_slab(ROAD_W, ASPHALT, -0.025)], 128)
 	var dash_prop := _prop([_dash_part()], 200)
 	for prop in [walk_prop, block_prop, road_prop, dash_prop]:
 		prop.call("begin")
@@ -198,15 +202,17 @@ func _build_greens(rng: GoobyRng) -> void:
 						var swap := jx
 						jx = jz
 						jz = swap
+					# Büsche stehen auf dem Bauplatz-Pflaster (Deckel 0,04).
 					bush_prop.call(
-						"push", Transform3D(Basis.IDENTITY, Vector3(w.x + jx, 0.0, w.y + jz))
+						"push", Transform3D(Basis.IDENTITY, Vector3(w.x + jx, 0.04, w.y + jz))
 					)
 					continue
 				var rx := (rng.next() - 0.5) * Logic.TILE_M * 0.8
 				var rz := (rng.next() - 0.5) * Logic.TILE_M * 0.8
 				var yaw := rng.next() * TAU
+				# Bäume stehen auf der Wiese (−0,08) — vorher schwebten sie 8 cm.
 				tree_prop.call(
-					"push", Transform3D(Basis(Vector3.UP, yaw), Vector3(w.x + rx, 0.0, w.y + rz))
+					"push", Transform3D(Basis(Vector3.UP, yaw), Vector3(w.x + rx, -0.08, w.y + rz))
 				)
 	tree_prop.call("flush")
 	bush_prop.call("flush")
@@ -243,7 +249,8 @@ func _build_lamps() -> void:
 			var w := Logic.tile_to_world(r, c)
 			var vertical := Logic.is_road(r - 1, c) or Logic.is_road(r + 1, c)
 			var side := 1.0 if (r + c) % 2 == 0 else -1.0
-			var at := Vector3(w.x, 0.0, w.y)
+			# Laternen stehen auf dem Gehweg (Deckel 0,045).
+			var at := Vector3(w.x, 0.045, w.y)
 			var yaw := 0.0
 			if vertical:
 				at.x += side * edge
@@ -334,7 +341,9 @@ func _dash_part() -> Dictionary:
 	var box := BoxMesh.new()
 	box.size = Vector3(2.6, 0.04, 0.34)
 	box.material = Fx.flat(DASH)
-	return {"mesh": box, "xform": Transform3D(Basis.IDENTITY, Vector3(0.0, 0.06, 0.0))}
+	# Knapp über der Asphalt-Oberkante (y = 0) — vorher schwebten die Striche
+	# 4 cm über der Fahrbahn.
+	return {"mesh": box, "xform": Transform3D(Basis.IDENTITY, Vector3(0.0, 0.005, 0.0))}
 
 
 func _prop(parts: Array, cap: int, colored := false) -> Node3D:

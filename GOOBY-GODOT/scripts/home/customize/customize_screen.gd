@@ -74,10 +74,10 @@ var game_state_override: Object = null
 
 var _preview: CustomizePreview
 var _kategorie_liste: VBoxContainer
-var _raum_chips: HBoxContainer
+var _raum_chips: HFlowContainer
 var _optionen: HBoxContainer
 var _optionen_scroll: ScrollContainer
-var _farben: HBoxContainer
+var _farben: HFlowContainer
 var _farben_row: HBoxContainer
 var _zahl_row: HBoxContainer
 var _zahl_label: Label
@@ -90,6 +90,17 @@ var _raum := "living"
 var _pending_id := ""
 var _pending_farbe := ""
 var _rng := RandomNumberGenerator.new()
+## FB3: Metrik-Pass (Safe-Area/Touch-Floor/UiScale) bei jedem Resize.
+var _rows_box: VBoxContainer
+var _back_btn: Button
+var _kat_spalte: VBoxContainer
+var _options_panel: PanelContainer
+var _f := 1.0
+## Kachel-Faktor: wie _f, aber in flachen Quer-Canvases gedeckelt, damit
+## die Options-Zeile nicht die halbe Höhe frisst.
+var _tile_f := 1.0
+var _floor := float(AcTokens.TOUCH_FLOOR)
+var _stagger_key := ""
 
 
 ## Route am SceneRouter anmelden (idempotent) — wie IkeaScreen.
@@ -123,7 +134,55 @@ func _ready() -> void:
 	register_routes()
 	_rng.randomize()
 	_build_ui()
+	_apply_metrics()
+	get_viewport().size_changed.connect(_on_viewport_resized)
 	_refresh_alles()
+
+
+func _on_viewport_resized() -> void:
+	if not is_inside_tree():
+		return
+	_apply_metrics()
+	_refresh_alles()
+
+
+## FB3: Safe-Area + zentrale Skalierung + Touch-Floor — vorher feste
+## 20/14-px-Ränder (liefen unter die Notch) und 48-Design-px-Zeilen/36er-
+## Swatches, die auf Retina-Geräten unter 44 pt fielen.
+func _apply_metrics() -> void:
+	if _rows_box == null or not is_inside_tree():
+		return
+	var m := ScreenShell.metrics(get_viewport())
+	_f = m["f"]
+	_floor = m["floor_px"]
+	var canvas: Vector2 = m["canvas"]
+	# Kacheln in flachen Quer-Canvases deckeln (Höhe ist dort knapp).
+	_tile_f = minf(_f, maxf(1.0, canvas.y / 820.0))
+	ScreenShell.frame(_rows_box, m, 20.0, 14.0)
+	if _back_btn != null:
+		ScreenShell.touch_target(_back_btn, m)
+	_kat_spalte.custom_minimum_size = Vector2(minf(LIST_WIDTH * _f, canvas.x * 0.3), 0.0)
+	_optionen_scroll.custom_minimum_size = Vector2(0.0, TILE_SIZE.y * _tile_f + 18.0)
+	_kauf_button.custom_minimum_size = Vector2(150.0 * _f, _floor)
+	ScreenShell.scale_fonts(self, _f)
+	_fit_preview(m)
+
+
+## Vorschau-Höhe = Budget, das NACH Chips + Options-Panel übrig bleibt —
+## reicht es nicht, scrollt die rechte Spalte, statt dass Farben/Aktionen
+## aus dem Canvas laufen.
+func _fit_preview(m: Dictionary) -> void:
+	if _preview == null or _options_panel == null:
+		return
+	var canvas: Vector2 = m["canvas"]
+	var insets: Dictionary = m["insets"]
+	var body_h := (
+		canvas.y - float(insets["top"]) - float(insets["bottom"]) - 28.0 * _f - _floor - 10.0
+	)
+	var chips_h := _floor + 8.0 if _raum_chips != null and _raum_chips.visible else 0.0
+	var panel_h := _options_panel.get_combined_minimum_size().y
+	var prev_min := clampf(body_h - chips_h - panel_h - 52.0, 120.0, canvas.y * 0.32)
+	_preview.custom_minimum_size = Vector2(0.0, prev_min)
 
 
 # ── Öffentliche Steuerung (UI + Tests + Screenshots) ─────────────────────
@@ -333,19 +392,15 @@ func _build_ui() -> void:
 	var paper := AcWallpaper.new()
 	paper.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(paper)
-	var rows := VBoxContainer.new()
-	rows.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	rows.offset_left = 20.0
-	rows.offset_right = -20.0
-	rows.offset_top = 14.0
-	rows.offset_bottom = -14.0
-	rows.add_theme_constant_override("separation", 10)
-	add_child(rows)
-	rows.add_child(_build_header())
+	_rows_box = VBoxContainer.new()
+	_rows_box.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_rows_box.add_theme_constant_override("separation", 10)
+	add_child(_rows_box)
+	_rows_box.add_child(_build_header())
 	var body := HBoxContainer.new()
 	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	body.add_theme_constant_override("separation", 14)
-	rows.add_child(body)
+	_rows_box.add_child(body)
 	body.add_child(_build_kategorie_spalte())
 	body.add_child(_build_rechte_spalte())
 	_toasts = ToastLayer.new()
@@ -355,12 +410,12 @@ func _build_ui() -> void:
 func _build_header() -> Control:
 	var header := HBoxContainer.new()
 	header.add_theme_constant_override("separation", 10)
-	var back := Button.new()
-	back.name = "BackButton"
-	back.theme_type_variation = &"GhostButton"
-	back.text = I18nService.t("customize.back")
-	back.pressed.connect(_on_back_pressed)
-	header.add_child(back)
+	_back_btn = Button.new()
+	_back_btn.name = "BackButton"
+	_back_btn.theme_type_variation = &"GhostButton"
+	_back_btn.text = I18nService.t("customize.back")
+	_back_btn.pressed.connect(_on_back_pressed)
+	header.add_child(_back_btn)
 	var title := Label.new()
 	title.theme_type_variation = &"TitleLabel"
 	title.text = I18nService.t("customize.title")
@@ -375,7 +430,8 @@ func _build_header() -> Control:
 
 
 func _build_kategorie_spalte() -> Control:
-	var column := VBoxContainer.new()
+	_kat_spalte = VBoxContainer.new()
+	var column := _kat_spalte
 	column.custom_minimum_size = Vector2(LIST_WIDTH, 0)
 	column.add_theme_constant_override("separation", 8)
 	var scroll := ScrollContainer.new()
@@ -392,12 +448,24 @@ func _build_kategorie_spalte() -> Control:
 
 
 func _build_rechte_spalte() -> Control:
+	# FB3: die Spalte scrollt vertikal — vorher drückte ihre Minimalhöhe
+	# (Chips + Vorschau + Options-Panel) in Quer-Formaten den ganzen Body
+	# unter den Canvas-Rand (Farben/Zufall/Zurücksetzen unerreichbar).
+	var scroll := ScrollContainer.new()
+	scroll.name = "RechteSpalteScroll"
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	var column := VBoxContainer.new()
 	column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	column.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	column.add_theme_constant_override("separation", 8)
-	_raum_chips = HBoxContainer.new()
+	scroll.add_child(column)
+	# HFlow: Raum-Chips brechen im Hochformat um, statt rechts rauszulaufen.
+	_raum_chips = HFlowContainer.new()
 	_raum_chips.name = "RaumChips"
-	_raum_chips.add_theme_constant_override("separation", 6)
+	_raum_chips.add_theme_constant_override("h_separation", 6)
+	_raum_chips.add_theme_constant_override("v_separation", 6)
 	column.add_child(_raum_chips)
 	var card := PanelContainer.new()
 	card.theme_type_variation = &"AcCardLg"
@@ -409,18 +477,19 @@ func _build_rechte_spalte() -> Control:
 	_preview.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	card.add_child(_preview)
 	column.add_child(_build_options_panel())
-	return column
+	return scroll
 
 
 func _build_options_panel() -> Control:
 	var panel := PanelContainer.new()
+	_options_panel = panel
 	panel.theme_type_variation = &"AcCard"
 	var rows := VBoxContainer.new()
 	rows.add_theme_constant_override("separation", 6)
 	panel.add_child(rows)
 	_optionen_scroll = ScrollContainer.new()
 	_optionen_scroll.name = "OptionenScroll"
-	_optionen_scroll.custom_minimum_size = Vector2(0, TILE_SIZE.y + 18)
+	_optionen_scroll.custom_minimum_size = Vector2(0, TILE_SIZE.y * _f + 18)
 	_optionen_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	rows.add_child(_optionen_scroll)
 	_optionen = HBoxContainer.new()
@@ -439,9 +508,13 @@ func _build_farben_row() -> Control:
 	caption.theme_type_variation = &"CaptionLabel"
 	caption.text = I18nService.t("customize.farbe_titel")
 	_farben_row.add_child(caption)
-	_farben = HBoxContainer.new()
+	# HFlow: Swatches umbrechen — im Hochformat drückte die Zeile sonst die
+	# ganze Spalte über den rechten Canvas-Rand.
+	_farben = HFlowContainer.new()
 	_farben.name = "Farben"
-	_farben.add_theme_constant_override("separation", 6)
+	_farben.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_farben.add_theme_constant_override("h_separation", 6)
+	_farben.add_theme_constant_override("v_separation", 6)
 	_farben_row.add_child(_farben)
 	return _farben_row
 
@@ -456,7 +529,7 @@ func _build_zahl_row() -> Control:
 	minus.name = "ZahlMinus"
 	minus.theme_type_variation = &"AcChip"
 	minus.text = "-"
-	minus.custom_minimum_size = Vector2(AcTokens.TOUCH_FLOOR, AcTokens.TOUCH_FLOOR)
+	minus.custom_minimum_size = Vector2(_floor, _floor)
 	minus.pressed.connect(_on_zahl_pressed.bind(-1))
 	_zahl_row.add_child(minus)
 	_zahl_label = Label.new()
@@ -467,15 +540,17 @@ func _build_zahl_row() -> Control:
 	plus.name = "ZahlPlus"
 	plus.theme_type_variation = &"AcChip"
 	plus.text = "+"
-	plus.custom_minimum_size = Vector2(AcTokens.TOUCH_FLOOR, AcTokens.TOUCH_FLOOR)
+	plus.custom_minimum_size = Vector2(_floor, _floor)
 	plus.pressed.connect(_on_zahl_pressed.bind(1))
 	_zahl_row.add_child(plus)
 	return _zahl_row
 
 
 func _build_aktions_row() -> Control:
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 10)
+	# HFlow: Kaufen/Zufall/Zurücksetzen brechen im Hochformat um.
+	var row := HFlowContainer.new()
+	row.add_theme_constant_override("h_separation", 10)
+	row.add_theme_constant_override("v_separation", 6)
 	row.add_child(_build_zahl_row())
 	_status_label = Label.new()
 	_status_label.name = "StatusLabel"
@@ -486,21 +561,21 @@ func _build_aktions_row() -> Control:
 	_kauf_button.name = "KaufButton"
 	_kauf_button.theme_type_variation = &"PrimaryButton"
 	_kauf_button.text = I18nService.t("customize.kaufen")
-	_kauf_button.custom_minimum_size = Vector2(150, AcTokens.TOUCH_FLOOR)
+	_kauf_button.custom_minimum_size = Vector2(150, _floor)
 	_kauf_button.pressed.connect(_on_kauf_pressed)
 	row.add_child(_kauf_button)
 	var zufall_btn := Button.new()
 	zufall_btn.name = "ZufallButton"
 	zufall_btn.theme_type_variation = &"AcChip"
 	zufall_btn.text = I18nService.t("customize.zufall")
-	zufall_btn.custom_minimum_size = Vector2(0, AcTokens.TOUCH_FLOOR)
+	zufall_btn.custom_minimum_size = Vector2(0, _floor)
 	zufall_btn.pressed.connect(_on_zufall_pressed)
 	row.add_child(zufall_btn)
 	var reset_btn := Button.new()
 	reset_btn.name = "ResetButton"
 	reset_btn.theme_type_variation = &"GhostButton"
 	reset_btn.text = I18nService.t("customize.reset")
-	reset_btn.custom_minimum_size = Vector2(0, AcTokens.TOUCH_FLOOR)
+	reset_btn.custom_minimum_size = Vector2(0, _floor)
 	reset_btn.pressed.connect(_on_reset_pressed)
 	row.add_child(reset_btn)
 	return row
@@ -517,6 +592,18 @@ func _refresh_alles() -> void:
 	_refresh_aktionen()
 	_refresh_wallet()
 	_refresh_preview()
+	# FB3: neu gebaute Listen bekommen die zentrale Schrift-Skala; die
+	# Options-Kacheln blenden gestaffelt ein (Web-Stagger) — aber nur beim
+	# KATEGORIE-Wechsel, nicht bei jedem Antippen einer Option.
+	if is_inside_tree() and _rows_box != null:
+		ScreenShell.scale_fonts(_rows_box, _f)
+	var stagger_key := "%s/%s" % [str(_kategorie["id"]), _raum]
+	if _optionen != null and stagger_key != _stagger_key:
+		_stagger_key = stagger_key
+		UiMotion.stagger_in(_optionen.get_children(), 0.02)
+	# Panel-Inhalt hat sich geändert (Farben/Zahl-Zeile) → Vorschau-Budget neu.
+	if is_inside_tree():
+		_fit_preview(ScreenShell.metrics(get_viewport()))
 
 
 func _refresh_kategorien() -> void:
@@ -535,7 +622,7 @@ func _refresh_kategorien() -> void:
 		btn.theme_type_variation = &"ChipLeaf" if aktiv else &"AcCardButton"
 		btn.text = I18nService.t("customize.kategorie.%s" % str(kat["id"]))
 		btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
-		btn.custom_minimum_size = Vector2(0, AcTokens.TOUCH_FLOOR)
+		btn.custom_minimum_size = Vector2(0, _floor)
 		btn.pressed.connect(_on_kategorie_pressed.bind(str(kat["id"])))
 		_kategorie_liste.add_child(btn)
 
@@ -553,7 +640,8 @@ func _refresh_raum_chips() -> void:
 		chip.name = "Raum_%s" % room_id
 		chip.theme_type_variation = &"ChipLeaf" if room_id == _raum else &"AcChip"
 		chip.text = I18nService.t("home.raum.%s" % room_id)
-		chip.custom_minimum_size = Vector2(0, AcTokens.TOUCH_FLOOR)
+		# Floor auf BEIDEN Achsen — „Bad“ unterschreitet sonst die Breite.
+		chip.custom_minimum_size = Vector2(_floor, _floor)
 		chip.pressed.connect(_on_raum_pressed.bind(room_id))
 		_raum_chips.add_child(chip)
 
@@ -591,7 +679,7 @@ func _make_kachel(
 	var id := str(option["id"])
 	var kachel := Button.new()
 	kachel.name = "Option_%s" % id
-	kachel.custom_minimum_size = TILE_SIZE
+	kachel.custom_minimum_size = TILE_SIZE * _tile_f
 	kachel.icon = CustomizeIcons.option_preview(art, id, farb_id)
 	kachel.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	kachel.vertical_icon_alignment = VERTICAL_ALIGNMENT_TOP
@@ -646,7 +734,8 @@ func _erlaubte_farben() -> Array:
 func _make_swatch(farb_id: String, aktiv: bool) -> Button:
 	var swatch := Button.new()
 	swatch.name = "Farbe_%s" % farb_id
-	swatch.custom_minimum_size = Vector2(SWATCH_SIZE, SWATCH_SIZE)
+	# FB3: Swatches halten den PHYSISCHEN Touch-Floor (waren 36 Design-px).
+	swatch.custom_minimum_size = Vector2.ONE * maxf(SWATCH_SIZE * _f, _floor)
 	swatch.tooltip_text = I18nService.t("customize.farbe.%s" % farb_id)
 	var box := StyleBoxFlat.new()
 	box.bg_color = CustomizeMaterials.farbe(farb_id)

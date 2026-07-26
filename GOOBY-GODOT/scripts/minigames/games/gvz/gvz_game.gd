@@ -8,17 +8,14 @@ extends MinigameBase
 ## Feedback (W4-P1): JuiceKit an Gefechts-Momenten (Shake/Freeze/Bloom bei
 ## Welle/Boss/Mäher/Boom, Slowmo beim Boss-Auftritt) + AudioDirector-SFX.
 ##
-## BACKLOG (E4-P1, ~850 Draw Calls im Gefecht): jede Figur entsteht
-## immediate-mode aus Dutzenden draw_circle/draw_polygon (GvzArt) — jede
-## Primitive ist ein eigener Canvas-Befehl, Batching bricht. Fix-Skizze aus
-## E4: GvzArt-Figuren sind deterministisch → beim Level-Start pro Typ/Stimmung
-## einmal in einen ImageTexture-Atlas rendern (SubViewport) und in _draw()
-## nur noch draw_texture_rect_region aus EINEM Atlas ziehen (<50 Calls).
-## Haken, warum das kein Quick-Fix ist: die Wackel-Animation ist Tick-
-## getrieben (GvzArt-`tick`-Parameter verformt Ohren/Körper pro Frame) —
-## ein Atlas braucht dafür N Animationsphasen pro Figur ODER die Verformung
-## wandert in einen Vertex-Shader. Gameplay ist mit 20-Tick-Sim davon
-## unberührt; nur die Render-Schicht dieser Datei + gvz_art.gd sind betroffen.
+## FB-4: das Gefecht spielt auf einer ECHTEN 3D-Bühne (gvz_stage3d.gd) —
+## Rasen, Türme, Zombies, Boss, Projektile, Drops, Mäher und Nebelwand sind
+## Meshes, per ground_point-Raycast EXAKT unter dem 2D-Grid verankert. Die
+## 2D-Schicht rendert nur noch HUD (Karten, Zähler, Balken, Banner, Ghost).
+## Das löst auch das E4-P1-Backlog (~850 immediate-mode Draw-Calls): die
+## GvzArt-Figuren zeichnen jetzt nur noch die Karten-Icons.
+
+const Stage := preload("res://scripts/minigames/games/gvz/gvz_stage3d.gd")
 
 const TICK_SEC := 0.05
 const CARD_W := 56.0
@@ -47,11 +44,11 @@ var _banner_text := ""
 var _banner_until := 0.0
 var _last_run_score := 0
 var _prev_zombie_pos: Dictionary = {}
-var _poofs: Array = []
 var _select_screen: GvzLevelSelect
 var _overlay: Control
 var _font: Font
 var _font_bold: Font
+var _stage: Node3D
 
 
 func setup(context: MinigameCtx) -> void:
@@ -61,8 +58,24 @@ func setup(context: MinigameCtx) -> void:
 	levels = GvzData.load_levels()
 	_font = ThemeService.font(600)
 	_font_bold = ThemeService.font(800)
+	_stage = Stage.new()
+	_stage.name = "Vorgarten3D"
+	add_child(_stage)
+	_stage.setup_stage()
+	_stage.visible = false
+	if ctx != null and ctx.juice != null:
+		ctx.juice.world_environment = _stage.stage.world_env
 	_build_select_screen()
 	queue_redraw()
+
+
+## Pflicht-Layouthook: Kamera stellen und das Zellen-Gitter neu raycasten.
+func apply_view(size: Vector2) -> void:
+	if _stage == null:
+		return
+	_stage.frame(size)
+	if phase != "select" and not state.is_empty():
+		_relayout_stage()
 
 
 func start() -> void:
@@ -91,10 +104,13 @@ func open_level(id: int) -> void:
 	_accum = 0.0
 	_last_run_score = 0
 	_prev_zombie_pos = {}
-	_poofs = []
 	_show_banner(I18nService.t("gvz.hud.level", {"n": id}))
 	if _select_screen != null:
 		_select_screen.visible = false
+	if _stage != null:
+		_stage.visible = true
+		_stage.frame(_view_size())
+		_relayout_stage()
 	_clear_overlay()
 	queue_redraw()
 
@@ -102,6 +118,8 @@ func open_level(id: int) -> void:
 func back_to_select() -> void:
 	phase = "select"
 	state = {}
+	if _stage != null:
+		_stage.visible = false
 	_clear_overlay()
 	if _select_screen != null:
 		_select_screen.visible = true
@@ -139,10 +157,10 @@ func _process(delta: float) -> void:
 		_remember_zombie_positions()
 		var events := GvzLogic.tick(state)
 		_consume_events(events)
-	_decay_poofs(delta)
 	_report_live_score()
 	if GvzLogic.is_over(state):
 		_on_run_over()
+	_sync_stage(delta)
 	queue_redraw()
 
 
@@ -169,15 +187,18 @@ func _consume_events(events: Array) -> void:
 					ctx.juice.hit_freeze(110)
 					ctx.juice.shake(0.5)
 			"mower":
+				_stage.mower_fx()
 				AudioDirector.try_play(self, "gvz_mower")
 				if ctx != null and ctx.juice != null:
 					ctx.juice.shake(0.55)
 					ctx.juice.hit_freeze(70)
 			"die":
-				_spawn_poof(int(event["id"]), "die")
+				if _prev_zombie_pos.has(int(event["id"])):
+					_stage.die_fx(_prev_zombie_pos[int(event["id"])])
 				AudioDirector.try_play(self, "gvz_pop")
 			"pop":
-				_spawn_poof(int(event["id"]), "pop")
+				if _prev_zombie_pos.has(int(event["id"])):
+					_stage.pop_fx(_prev_zombie_pos[int(event["id"])])
 				AudioDirector.try_play(self, "gvz_balloon")
 			"collect":
 				AudioDirector.try_play(self, "gvz_collect")
@@ -187,16 +208,7 @@ func _consume_events(events: Array) -> void:
 						at, "+%d" % int(event["amount"]), GvzArt.NUTELLA.lightened(0.35)
 					)
 			"blast":
-				(
-					_poofs
-					. append(
-						{
-							"pos": _cell_center(int(event["lane"]), int(event["col"])),
-							"ttl": 0.35,
-							"kind": "blast",
-						}
-					)
-				)
+				_stage.blast_fx(_cell_center(int(event["lane"]), int(event["col"])))
 				AudioDirector.try_play(self, "gvz_boom")
 				if ctx != null and ctx.juice != null:
 					ctx.juice.shake(0.3)
@@ -227,6 +239,7 @@ func _on_run_over() -> void:
 			int(state["score"]), level_id, stars, bool(booking["first_clear"]), balance
 		)
 		session_score += total
+		_stage.win_fx()
 		AudioDirector.try_play(self, "mg_win")
 		if ctx != null:
 			ctx.report_score(session_score, total - _last_run_score)
@@ -239,6 +252,7 @@ func _on_run_over() -> void:
 		_build_end_overlay(true, stars, total, bool(booking["first_clear"]))
 	else:
 		phase = "lost"
+		_stage.lose_fx()
 		AudioDirector.try_play(self, "mg_lose")
 		if ctx != null and ctx.juice != null:
 			ctx.juice.shake(0.7)
@@ -294,14 +308,14 @@ func _apply_card(at: Vector2) -> void:
 		if GvzLogic.remove_tower(state, cell.y, cell.x):
 			selected_card = ""
 			AudioDirector.try_play(self, "gvz_shovel")
-			_poofs.append({"pos": _cell_center(cell.y, cell.x), "ttl": 0.35, "kind": "place"})
+			_stage.place_fx(_cell_center(cell.y, cell.x))
 		queue_redraw()
 		return
 	var placed := GvzLogic.place_tower(state, selected_card, cell.y, cell.x)
 	if bool(placed["ok"]):
 		selected_card = ""
 		AudioDirector.try_play(self, "gvz_place")
-		_poofs.append({"pos": _cell_center(cell.y, cell.x), "ttl": 0.35, "kind": "place"})
+		_stage.place_fx(_cell_center(cell.y, cell.x))
 	else:
 		AudioDirector.try_play(self, "ui_error")
 		if ctx != null and ctx.juice != null:
@@ -406,48 +420,159 @@ func _x_to_px(x: int) -> float:
 	return field.position.x + float(x) / float(GvzLogic.COLS * GvzLogic.CELL_MM) * field.size.x
 
 
-## ── Zeichnen ─────────────────────────────────────────────────────────────
+## ── 3D-Bühne (Layout + Sync) ─────────────────────────────────────────────
+
+
+## Zellen-Gitter, Nebelwand und Nachtlicht neu an das 2D-Layout koppeln.
+func _relayout_stage() -> void:
+	if _stage == null or state.is_empty():
+		return
+	var fog_px := _x_to_px(_fog_start_mm()) if _fog_cols() > 0 else -1.0
+	_stage.layout(_field_rect(), bool(state["mods"].get("night", false)), fog_px)
+
+
+## Jeden Frame: den kompletten Sim-Zustand als Canvas-Pixel-Anker zur Bühne.
+func _sync_stage(delta: float) -> void:
+	if _stage == null or not _stage.visible or state.is_empty():
+		return
+	var field := _field_rect()
+	var cell := _cell_size()
+	var tick := int(state["tick"])
+	var fog_mm := _fog_start_mm() if _fog_cols() > 0 else GvzLogic.COLS * GvzLogic.CELL_MM * 2
+	var towers: Array = []
+	for key: Variant in state["towers"]:
+		var tower: Dictionary = state["towers"][key]
+		(
+			towers
+			. append(
+				{
+					"key": key,
+					"type": tower["type"],
+					"lane": tower["lane"],
+					"col": tower["col"],
+				}
+			)
+		)
+	var zombies: Array = []
+	for zombie: Dictionary in state["zombies"]:
+		if bool(zombie["dead"]):
+			continue
+		(
+			zombies
+			. append(
+				{
+					"id": zombie["id"],
+					"type": zombie["type"],
+					"lane": zombie["lane"],
+					"px": _lane_px(int(zombie["lane"]), int(zombie["x"]), field, cell),
+					"hidden": int(zombie["x"]) >= fog_mm,
+					"dig": str(zombie.get("state", "walk")) == "dig",
+					"flying": bool(zombie.get("flying", false)),
+					"armor": int(zombie.get("armor_hp", 0)) > 0,
+					"raged": bool(zombie.get("raged", false)),
+					"slow": int(zombie.get("slow_until", 0)) > tick,
+				}
+			)
+		)
+	var boss_data := {}
+	var boss: Dictionary = state["boss"]
+	if not boss.is_empty() and int(boss["hp"]) > 0 and int(boss["x"]) < fog_mm:
+		boss_data = {
+			"px": _lane_px(int(boss["lane"]), int(boss["x"]), field, cell),
+			"lane": boss["lane"],
+			"phase": boss.get("phase", 1),
+		}
+	var projectiles: Array = []
+	for proj: Dictionary in state["projectiles"]:
+		if int(proj["x"]) >= fog_mm:
+			continue
+		(
+			projectiles
+			. append(
+				{
+					"kind": proj["kind"],
+					"lane": proj["lane"],
+					"px": _lane_px(int(proj["lane"]), int(proj["x"]), field, cell),
+				}
+			)
+		)
+	var drops: Array = []
+	for drop: Dictionary in state["drops"]:
+		(
+			drops
+			. append(
+				{
+					"id": drop["id"],
+					"lane": drop["lane"],
+					"px": _cell_center(int(drop["lane"]), int(drop["col"])),
+				}
+			)
+		)
+	var mowers: Array = []
+	for lane: Variant in state["mowers"]:
+		var mower: Dictionary = state["mowers"][lane]
+		var px := Vector2(MOWER_GUTTER * 0.5, field.position.y + (int(lane) + 0.5) * cell.y)
+		if bool(mower["active"]):
+			px.x = _x_to_px(int(mower["x"]))
+		(
+			mowers
+			. append(
+				{
+					"lane": int(lane),
+					"active": mower["active"],
+					"used": mower["used"],
+					"px": px,
+				}
+			)
+		)
+	var ghost := {}
+	if dragging and selected_card != "" and selected_card != "shovel":
+		var at := _cell_at(drag_pos)
+		if at.x >= 0:
+			ghost = {
+				"lane": at.y,
+				"col": at.x,
+				"ok": bool(GvzLogic.can_place(state, selected_card, at.y, at.x)["ok"]),
+			}
+	(
+		_stage
+		. sync(
+			{
+				"tick": tick,
+				"towers": towers,
+				"zombies": zombies,
+				"boss": boss_data,
+				"projectiles": projectiles,
+				"drops": drops,
+				"mowers": mowers,
+				"ghost": ghost,
+			},
+			delta
+		)
+	)
+
+
+## Boden-Anker (Canvas-Pixel) eines Sim-x auf der Bahnmitte.
+func _lane_px(lane: int, x_mm: int, field: Rect2, cell: Vector2) -> Vector2:
+	return Vector2(_x_to_px(x_mm), field.position.y + (float(lane) + 0.5) * cell.y)
+
+
+## ── Zeichnen (nur noch HUD — das Feld rendert die 3D-Bühne) ─────────────
 
 
 func _draw() -> void:
 	var vp := _view_size()
-	draw_rect(Rect2(Vector2.ZERO, vp), AcTokens.BG_CREAM)
 	if phase == "select":
+		draw_rect(Rect2(Vector2.ZERO, vp), AcTokens.BG_CREAM)
 		return
 	if state.is_empty():
 		return
-	_draw_field()
-	_draw_drops()
-	_draw_towers()
-	_draw_zombies()
-	_draw_boss()
-	_draw_projectiles()
-	_draw_poofs()
-	_draw_fog()
-	_draw_mowers()
+	_draw_bars()
 	_draw_hud()
 	_draw_ghost()
 	_draw_banner()
 	if phase != "battle":
 		draw_rect(Rect2(Vector2.ZERO, vp), Color(0.29, 0.23, 0.21, 0.35))
-
-
-func _draw_field() -> void:
-	var field := _field_rect()
-	var cell := _cell_size()
-	var night := bool(state["mods"].get("night", false))
-	var base_a := Color("#BCE39B") if not night else Color("#8FAF87")
-	var base_b := Color("#ABD689") if not night else Color("#7FA079")
-	for lane in 5:
-		for col in GvzLogic.COLS:
-			var tone := base_a if (lane + col) % 2 == 0 else base_b
-			draw_rect(
-				Rect2(field.position + Vector2(col * cell.x, lane * cell.y), cell + Vector2.ONE),
-				tone
-			)
-	# Haus-Seite (links): warmer Holz-Steg für die Panik-Goobys.
-	draw_rect(Rect2(0, field.position.y, MOWER_GUTTER, field.size.y), Color("#EAD9B0"))
-	draw_rect(Rect2(MOWER_GUTTER - 4, field.position.y, 4, field.size.y), GvzArt.WOOD)
 
 
 ## Nebel-Spalten des Levels (E11-P1-4: L11 liefert mods.fog_cols=3, der alte
@@ -466,55 +591,26 @@ func _fog_start_mm() -> int:
 	return (GvzLogic.COLS - _fog_cols()) * GvzLogic.CELL_MM
 
 
-## Nebelwand ÜBER den Zombies zeichnen — was im Nebel anrollt, bleibt
-## unsichtbar, bis es die Wand verlässt (das ist die Mechanik: Überraschung
-## auf den letzten Spalten, Doc G §4.4 L11).
-func _draw_fog() -> void:
-	var cols := _fog_cols()
-	if cols <= 0:
-		return
+## HP-Balken als 2D-Overlay über den 3D-Figuren (gleiche Anker wie vor dem
+## Umbau; Zombies hinter der Nebelwand bleiben — wie ihre Figuren — verdeckt).
+func _draw_bars() -> void:
+	var cell := _cell_size()
 	var field := _field_rect()
-	var fog_x := _x_to_px(_fog_start_mm())
-	draw_rect(Rect2(fog_x, field.position.y, field.end.x - fog_x, field.size.y), Color("#D9DEE6"))
-	# Weiche Wolkenkante + Schwaden, damit die Wand nicht wie ein UI-Panel wirkt.
-	var cell := _cell_size()
-	var tick := int(state["tick"])
-	for lane in 5:
-		var cy := field.position.y + (lane + 0.5) * cell.y
-		var wobble := sin(float(tick) * 0.05 + lane * 1.7) * cell.y * 0.12
-		draw_circle(Vector2(fog_x, cy + wobble), cell.y * 0.55, Color("#E4E8EF"))
-		draw_circle(
-			Vector2(fog_x + cell.x * 0.7, cy - wobble), cell.y * 0.4, Color(0.92, 0.94, 0.97, 0.8)
-		)
-
-
-func _draw_towers() -> void:
-	var cell := _cell_size()
-	var s := cell.y * 0.86
-	var tick := int(state["tick"])
 	for key: Variant in state["towers"]:
 		var tower: Dictionary = state["towers"][key]
 		var feet := _cell_center(int(tower["lane"]), int(tower["col"])) + Vector2(0, cell.y * 0.4)
-		GvzArt.draw_tower(self, str(tower["type"]), feet, s, tick)
 		var hp := float(tower["hp"]) / float(tower["max_hp"])
 		if hp < 0.99:
 			_draw_bar(
 				feet + Vector2(-cell.x * 0.3, -cell.y * 0.95), cell.x * 0.6, hp, GvzArt.MELON_GREEN
 			)
-
-
-func _draw_zombies() -> void:
-	var cell := _cell_size()
-	var s := cell.y * 0.9
-	var tick := int(state["tick"])
+	var fog_mm := _fog_start_mm() if _fog_cols() > 0 else GvzLogic.COLS * GvzLogic.CELL_MM * 2
 	for zombie: Dictionary in state["zombies"]:
-		if bool(zombie["dead"]):
+		if bool(zombie["dead"]) or int(zombie["x"]) >= fog_mm:
 			continue
 		var feet := Vector2(
-			_x_to_px(int(zombie["x"])),
-			_field_rect().position.y + (int(zombie["lane"]) + 1) * cell.y - 3.0
+			_x_to_px(int(zombie["x"])), field.position.y + (int(zombie["lane"]) + 1) * cell.y - 3.0
 		)
-		GvzArt.draw_zombie(self, str(zombie["type"]), feet, s, tick, zombie)
 		var total := int(zombie["hp"]) + int(zombie["armor_hp"])
 		var max_total := int(zombie["max_hp"]) + int(zombie.get("armor_hp", 0))
 		if total < int(zombie["max_hp"]):
@@ -524,65 +620,6 @@ func _draw_zombies() -> void:
 				float(total) / float(maxi(1, max_total)),
 				GvzArt.BERRY_RED
 			)
-
-
-func _draw_boss() -> void:
-	var boss: Dictionary = state["boss"]
-	if boss.is_empty() or int(boss["hp"]) <= 0:
-		return
-	var cell := _cell_size()
-	var feet := Vector2(
-		_x_to_px(int(boss["x"])), _field_rect().position.y + (int(boss["lane"]) + 1) * cell.y - 2.0
-	)
-	GvzArt.draw_boss(self, feet, cell.y * 1.5, int(state["tick"]), boss)
-
-
-func _draw_projectiles() -> void:
-	var cell := _cell_size()
-	for proj: Dictionary in state["projectiles"]:
-		var pos := Vector2(
-			_x_to_px(int(proj["x"])), _field_rect().position.y + (int(proj["lane"]) + 0.42) * cell.y
-		)
-		GvzArt.draw_projectile(self, str(proj["kind"]), pos, cell.y)
-
-
-func _draw_drops() -> void:
-	var cell := _cell_size()
-	var tick := int(state["tick"])
-	for drop: Dictionary in state["drops"]:
-		var pos := _cell_center(int(drop["lane"]), int(drop["col"])) + Vector2(0, cell.y * 0.3)
-		GvzArt.draw_nutella_drop(self, pos, cell.y * 0.8, tick + int(drop["id"]))
-
-
-func _draw_mowers() -> void:
-	var cell := _cell_size()
-	var field := _field_rect()
-	for lane: Variant in state["mowers"]:
-		var mower: Dictionary = state["mowers"][lane]
-		var feet := Vector2(MOWER_GUTTER * 0.5, field.position.y + (int(lane) + 1) * cell.y - 4.0)
-		if bool(mower["active"]):
-			feet.x = _x_to_px(int(mower["x"]))
-			GvzArt.draw_mower(self, feet, cell.y * 0.9, int(state["tick"]), false)
-		else:
-			GvzArt.draw_mower(self, feet, cell.y * 0.78, int(state["tick"]), bool(mower["used"]))
-
-
-func _draw_poofs() -> void:
-	for poof: Dictionary in _poofs:
-		var t := 1.0 - float(poof["ttl"]) / 0.35
-		var pos: Vector2 = poof["pos"]
-		match str(poof["kind"]):
-			"blast":
-				draw_arc(pos, 12.0 + t * 34.0, 0, TAU, 20, Color(1.0, 0.7, 0.3, 0.8 - t * 0.8), 6.0)
-			"pop":
-				draw_arc(
-					pos, 6.0 + t * 18.0, 0, TAU, 12, Color(0.95, 0.55, 0.5, 0.9 - t * 0.9), 3.0
-				)
-			_:
-				for i in 4:
-					var a := TAU * i / 4.0 + t * 2.0
-					var p := pos + Vector2(cos(a), sin(a)) * (6.0 + t * 16.0)
-					draw_circle(p, 3.5 - t * 3.0, Color(1, 1, 1, 0.8 - t * 0.8))
 
 
 func _draw_hud() -> void:
@@ -686,25 +723,12 @@ func _draw_boss_bar() -> void:
 	)
 
 
+## Drag-Feedback: das Karten-Icon folgt dem Finger (UI-Schicht); die grüne/
+## rote Zell-Markierung rendert die 3D-Bühne (_sync_stage → ghost).
 func _draw_ghost() -> void:
 	if not dragging or selected_card == "" or selected_card == "shovel":
 		return
-	var cell := _cell_at(drag_pos)
-	var size := _cell_size()
-	if cell.x >= 0:
-		var ok := bool(GvzLogic.can_place(state, selected_card, cell.y, cell.x)["ok"])
-		var tone := Color(0.5, 0.9, 0.5, 0.35) if ok else Color(0.9, 0.4, 0.4, 0.35)
-		var top_left := _cell_center(cell.y, cell.x) - size * 0.5
-		draw_rect(Rect2(top_left, size), tone)
-		GvzArt.draw_tower(
-			self,
-			selected_card,
-			_cell_center(cell.y, cell.x) + Vector2(0, size.y * 0.4),
-			size.y * 0.8,
-			0
-		)
-	else:
-		GvzArt.draw_tower(self, selected_card, drag_pos + Vector2(0, 20), 44.0, 0)
+	GvzArt.draw_tower(self, selected_card, drag_pos + Vector2(0, 20), 44.0, 0)
 
 
 func _draw_banner() -> void:
@@ -826,6 +850,8 @@ func _show_banner(text: String) -> void:
 	_banner_until = Time.get_ticks_msec() / 1000.0 + BANNER_SEC
 
 
+## Letzte Pixel-Anker der Zombies (die Sim entfernt Tote im selben Tick —
+## die 3D-FX für die "die"/"pop"-Events brauchen die Position davor).
 func _remember_zombie_positions() -> void:
 	_prev_zombie_pos = {}
 	for zombie: Dictionary in state["zombies"]:
@@ -833,16 +859,3 @@ func _remember_zombie_positions() -> void:
 			_x_to_px(int(zombie["x"])),
 			_field_rect().position.y + (int(zombie["lane"]) + 0.6) * _cell_size().y
 		)
-
-
-func _spawn_poof(id: int, kind: String) -> void:
-	if not _prev_zombie_pos.has(id):
-		return
-	_poofs.append({"pos": _prev_zombie_pos[id], "ttl": 0.35, "kind": kind})
-
-
-func _decay_poofs(delta: float) -> void:
-	for i in range(_poofs.size() - 1, -1, -1):
-		_poofs[i]["ttl"] = float(_poofs[i]["ttl"]) - delta
-		if float(_poofs[i]["ttl"]) <= 0.0:
-			_poofs.remove_at(i)

@@ -1,0 +1,146 @@
+{
+	"soul": {
+		"gruss": {
+			"morgen": {
+				"a": "Good morning{namek}! Did you sleep well?",
+				"b": "Moooorning! I've been waiting for you!",
+				"c": "Good morning! Today's going to be a good day, I can feel it!"
+			},
+			"mittag": {
+				"a": "Hey{namek}! I'm getting a little hungry…",
+				"b": "Hello you! So glad you're here!"
+			},
+			"nachmittag": {
+				"a": "Hey{namek}! How's your day been so far?",
+				"b": "Heeey! Perfect time for the two of us!"
+			},
+			"abend": {
+				"a": "Good evening{namek}! Shall we get cozy?",
+				"b": "Hello you! The evening is ours!"
+			},
+			"nacht": {
+				"a": "You're still awake{namek}…? Me too. Shhh.",
+				"b": "Midnight visit! That stays our secret."
+			},
+			"gefreut": {
+				"a": "There you are! I was thinking about you!",
+				"b": "Yay, you're back! What are we doing today?"
+			},
+			"eingeschnappt": {
+				"a": "Hmpf. You were gone a LONG time. … Fine, I missed you anyway.",
+				"b": "I'm sulking. A little. Okay, done sulking — glad you're here!"
+			},
+			"vermisst": {
+				"a": "YOU'RE BACK!! I missed you sooo much!",
+				"b": "Finally! I looked out the window every day to see if you were coming!"
+			}
+		},
+		"ritual": {
+			"geburtstag_spieler": {
+				"a": "HAPPY BIRTHDAY, {name}!! I remembered!",
+				"b": "Happy birthday, {name}! Today we celebrate YOU!"
+			},
+			"geburtstag_gooby": {
+				"a": "Today is MY birthday! Remember when I moved in?",
+				"b": "It's my birthday!! Is there… cake?"
+			},
+			"jubilaeum": {
+				"a": "You know what? We've known each other for {tage} days now! Nice, right?",
+				"b": "{tage} days, the two of us! Here's to many, many more!"
+			},
+			"neujahr": "Happy New Year!! This year is going to be OUR year!",
+			"ostern": "Happy Easter! I looked for eggs everywhere… none behind the sofa.",
+			"halloween": "Boo! … Did I scare you? A LITTLE? Happy Halloween!",
+			"nikolaus": "St. Nick's day! I polished my shoe. Just in case.",
+			"heiligabend": "Christmas Eve!! I'm SO excited. Can you hear the bells?",
+			"weihnachten": "Merry Christmas! The best present is you anyway.",
+			"silvester": "New Year's Eve! Let's stay up until midnight… or try to.",
+			"erster_schnee": "SNOW!! The first snow!! Look, LOOK!!"
+		},
+		"alltag": {
+			"zaehne": {
+				"a": "Teeth first! Squeaky clean!",
+				"b": "Toothbrush time! Scrub, scrub, scrub…"
+			},
+			"gutenacht": {
+				"a": "I'm getting sleeeepy… Will you tell me one more thing before I sleep?",
+				"b": "Yawn… Good night, you. Dream something nice about us."
+			}
+		},
+		"wetter": {
+			"regen": {
+				"a": "It's raining… I like the sound on the window.",
+				"b": "Pitter, patter… Good thing we're inside, right?"
+			},
+			"gewitter": "Was that THUNDER?! I-I'm not scared. Almost not.",
+			"schnee": "It's snowing again! Every flake is different, did you know that?"
+		},
+		"erinnerung": {
+			"rekord": "Remember your record in {spiel}? {punkte} points! That was pretty good!",
+			"urlaub": "Remember when we went on vacation? {ziel} was so beautiful!",
+			"kitzeln": "You've tickled me {anzahl} times already. I'm counting. Hehe.",
+			"garten": "{anzahl} harvests! Our garden is the best.",
+			"streak": "{tage} days in a row together! You and me, we're a team.",
+			"funkelpark": "Remember the theme park? {anzahl} visits! I still get dizzy.",
+			"spielzeit": "We've already spent {stunden} hours together. The best ones!"
+		},
+		"idle": {
+			"aufraeumen": {
+				"a": "Just tidying up a bit. A place for everything!",
+				"b": "Wasn't there… ah, there!"
+			},
+			"fernsehen": "Shhh, the exciting part is coming up!",
+			"fenster": "Just checking what's going on outside…",
+			"tanzen": "This song!! I HAVE to dance!",
+			"lieblingsplatz": "My favorite spot. {moebel} and I, we get each other."
+		},
+		"sup": {
+			"sofa_fund": "LOOK! Under the sofa! Coins! They're ours now!",
+			"traum": {
+				"a": "Zzz… no… YOU are the cookie…",
+				"b": "Zzz… five more minutes, Mr. Carrot…"
+			},
+			"turm": "I built a TOWER! I call it… Towery.",
+			"winken": "Hello! Yes, YOU there! I can see you! *wave*"
+		},
+		"kommentar": {
+			"moebel_neu": {
+				"a": "Oooh, {moebel}! Brand new! I already tested it — very good!",
+				"b": "{moebel}! It suits us, don't you think?"
+			},
+			"geschenk": {
+				"a": "Mmmh! Thank you!! You just know what I like!",
+				"b": "For ME? You're the best!"
+			},
+			"lieblingsessen": "{essen}!! My absolute FAVORITE! How did you know?",
+			"traurig": {
+				"a": "…it's okay. I'm just glad when you're here.",
+				"b": "*sigh* … Would you stay with me for a bit?"
+			}
+		},
+		"tipp": {
+			"kicher": {
+				"a": "Hihi!",
+				"b": "Hehe, that tickles!"
+			},
+			"kitzlig": "Hihihi!! Stop it — no, KEEP GOING — no, hihi!!",
+			"schwindelig": "Phew… I'm all dizzy… but that was fun."
+		},
+		"frage": {
+			"geburtstag": "Hey… when is your birthday, actually? I want to remember it!"
+		},
+		"essen": {
+			"carrot": "Carrot",
+			"apple": "Apple",
+			"cupcake": "Cupcake"
+		},
+		"geburtstag_panel": {
+			"titel": "When is your birthday?",
+			"monat": "Month",
+			"tag": "Day",
+			"speichern": "Remember it!",
+			"abbrechen": "Not telling",
+			"danke": "{tag}.{monat}. — saved! I will NEVER forget it!"
+		}
+	}
+}

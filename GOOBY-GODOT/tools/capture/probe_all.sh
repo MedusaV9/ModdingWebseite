@@ -12,7 +12,7 @@ for clip in "$@"; do
   res="640x360"
   if [[ " $PORTRAIT " == *" $clip "* ]]; then res="360x640"; fi
   echo "=== $clip ($res)"
-  OUT_DIR="$OUT_DIR" "$HERE/record.sh" "$clip" "$res" 30 2>&1 \
+  OUT_DIR="$OUT_DIR" FORMAT=avi "$HERE/record.sh" "$clip" "$res" 30 2>&1 \
     | grep -E "SCRIPT ERROR|ERROR|Clip|Done recording|frames at|WARNING.*capture" | head -20
   avi="$OUT_DIR/$clip.avi"
   if [[ -f "$avi" ]]; then

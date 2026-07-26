@@ -13,6 +13,9 @@ const DIFF_ORDER: Array[String] = ["easy", "normal", "hard", "endless"]
 const ORIENT_ORDER: Array[String] = ["auto", "portrait", "landscape"]
 const Stats := preload("res://scripts/logic/stats.gd")
 
+## Wunschbreite der Karte (Design-px — FB3: skaliert mit UiScale).
+const CARD_BASE_WIDTH := 520.0
+
 ## Tests: Navigation abschaltbar; State-Override wie beim Host.
 var auto_navigate := true
 var state_node: Node = null
@@ -22,6 +25,9 @@ var selected_difficulty := "normal"
 var selected_orientation := "auto"
 
 var _meta: Dictionary = {}
+var _center: CenterContainer
+var _card: PanelContainer
+var _cover: TextureRect
 var _best_label: Label
 var _hint_label: Label
 var _diff_buttons: Dictionary = {}
@@ -67,25 +73,25 @@ func _build_ui() -> void:
 	bg.color = Color(0.98, 0.94, 0.87)
 	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(bg)
-	var center := CenterContainer.new()
-	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	add_child(center)
-	var card := PanelContainer.new()
-	card.theme_type_variation = &"AcCardLg"
-	card.custom_minimum_size = Vector2(520, 0)
-	center.add_child(card)
+	_center = CenterContainer.new()
+	_center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child(_center)
+	_card = PanelContainer.new()
+	_card.theme_type_variation = &"AcCardLg"
+	_card.custom_minimum_size = Vector2(CARD_BASE_WIDTH, 0)
+	_center.add_child(_card)
 	var rows := VBoxContainer.new()
 	rows.add_theme_constant_override("separation", 12)
-	card.add_child(rows)
+	_card.add_child(rows)
 
-	var cover := TextureRect.new()
-	cover.custom_minimum_size = Vector2(0, 180)
-	cover.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	cover.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_cover = TextureRect.new()
+	_cover.custom_minimum_size = Vector2(0, 180)
+	_cover.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_cover.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	var cover_path := MinigameRegistry.cover_path(game_id)
 	if ResourceLoader.exists(cover_path):
-		cover.texture = load(cover_path)
-	rows.add_child(cover)
+		_cover.texture = load(cover_path)
+	rows.add_child(_cover)
 
 	var title := Label.new()
 	title.theme_type_variation = &"TitleLabel"
@@ -168,24 +174,37 @@ func _build_ui() -> void:
 	rows.add_child(_hint_label)
 
 
-## FIX-B-Handoff (E5-F4/E7-P1-3): 48-px-Touch-Floor gilt PHYSISCH. In
-## Hochkant hält der Stretch die kurze Canvas-Achse ≥1280 → Chips brauchen
-## ~85 Canvas-px Höhe. custom_minimum_size übersteuert die AcChip-Höhe (40)
-## konfliktfrei am Node (Theme-Styleboxen gehören FIX-A). Bei Resize/
-## Rotation neu anwenden — Muster wie Hud.apply_layout().
+## FIX-B-Handoff (E5-F4/E7-P1-3): 48-px-Touch-Floor gilt PHYSISCH.
+## FB3: Karte + Schriften laufen jetzt über die ZENTRALEN Bausteine
+## (`ScreenShell`/`UiScale`) statt der alten Hochkant-Heuristik — die Karte
+## skaliert in BEIDEN Orientierungen, bleibt in der Safe-Area zentriert
+## und wird nie breiter als der sichere Bereich. Bei Resize/Rotation neu.
 func _apply_touch_floor() -> void:
-	var canvas := get_viewport().get_visible_rect().size
-	var floor_px := HudLayoutLogic.touch_floor_canvas(canvas)
-	var scale_f := HudLayoutLogic.portrait_scale(canvas)
+	var m := ScreenShell.metrics(get_viewport())
+	var insets: Dictionary = m["insets"]
+	_center.offset_left = float(insets["left"])
+	_center.offset_right = -float(insets["right"])
+	_center.offset_top = float(insets["top"])
+	_center.offset_bottom = -float(insets["bottom"])
+	_card.custom_minimum_size = Vector2(ScreenShell.card_width(m, CARD_BASE_WIDTH), 0)
 	for btn in _touch_buttons:
 		# BEIDE Achsen: kurze Chip-Texte ("Auto") unterschreiten sonst den
 		# Floor in der Breite (48 px gilt für die kurze Kante des Tap-Ziels).
-		btn.custom_minimum_size = Vector2(floor_px, floor_px)
-	for btn in _chip_buttons:
-		if scale_f > 1.0:
-			btn.add_theme_font_size_override("font_size", int(17 * scale_f))
-		else:
-			btn.remove_theme_font_size_override("font_size")
+		btn.custom_minimum_size = btn.custom_minimum_size.max(Vector2(m["floor_px"], m["floor_px"]))
+	ScreenShell.scale_fonts(_card, m["f"])
+	# Cover ist Deko: skaliert mit, weicht aber ZUERST, wenn die Karte sonst
+	# höher würde als der sichere Bereich (Quer-Formate mit großem Floor) —
+	# Chips/Knöpfe behalten ihre Tippfläche, nichts läuft aus dem Canvas.
+	var canvas: Vector2 = m["canvas"]
+	var safe_h := canvas.y - float(insets["top"]) - float(insets["bottom"])
+	var cover_h := minf(180.0 * float(m["f"]), safe_h * 0.28)
+	_cover.custom_minimum_size = Vector2(0.0, cover_h)
+	_cover.visible = true
+	var over := _card.get_combined_minimum_size().y - safe_h * 0.94
+	if over > 0.0:
+		cover_h = maxf(cover_h - over, 0.0)
+		_cover.custom_minimum_size = Vector2(0.0, cover_h)
+		_cover.visible = cover_h >= 56.0
 
 
 func _section_label(text: String) -> Label:

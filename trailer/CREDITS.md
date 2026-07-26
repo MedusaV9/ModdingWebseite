@@ -13,7 +13,7 @@
   > http://creativecommons.org/licenses/by/4.0/
 
   Die Namensnennung ist zusätzlich im Trailer-Abspann (Outro) eingeblendet.
-- **Bearbeitung:** Auf 37,2 s gekürzt (Start beim Downbeat bei 2,25 s,
+- **Bearbeitung:** Auf 44,4 s gekürzt (Start beim Downbeat bei 2,25 s,
   2 s Fade-out), Loudness auf ca. −14 LUFS normalisiert (ffmpeg `loudnorm`).
   Tempo: 100 BPM → bei 60 fps liegt jeder Beat auf exakt 36 Frames; alle
   Schnitte des Trailers sitzen auf Beat-Vielfachen.
@@ -28,5 +28,8 @@
 - Alle Gameplay-Clips wurden mit den Skripten unter
   `GOOBY-GODOT/tools/capture/` direkt aus dem Godot-Projekt aufgenommen
   (Movie-Maker-Modus, feste 60-fps-Schrittweite, echte Spielszenen mit
-  skripteten Eingaben). App-Icon und Farbwelt stammen aus dem
-  GOOBY-Projekt selbst.
+  skripteten Eingaben). Aufnahme-Einstellungen: native 1920×1080 (hochkant
+  720×1280), Godot-Grafikpreset „hoch“ + MSAA 4× erzwungen, PNG-Einzelbilder
+  als verlustfreies Zwischenformat, H.264 CRF 14 als Remotion-Quellmaterial,
+  finaler Export H.264 CRF 16 (Details: README, „Qualitäts-Kette“).
+  App-Icon und Farbwelt stammen aus dem GOOBY-Projekt selbst.

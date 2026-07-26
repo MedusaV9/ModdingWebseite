@@ -14,6 +14,18 @@
    "frei": "Grünes Land"
   },
   "entdeckt": "Neu entdeckt: {zone}!",
+  "fund_entdeckt": "Entdeckt: {name}! +{muenzen} Münzen",
+  "fund": {
+   "wasserfall": "Der rauschende Wasserfall",
+   "hoehle": "Die Funkelhöhle",
+   "alter_baum": "Der uralte Baum",
+   "steinkreis": "Der Steinkreis",
+   "aussicht_kamm": "Aussicht am Hügelkamm",
+   "aussicht_see": "Aussicht am Glitzersee",
+   "truhe_wald": "Versteckte Waldtruhe",
+   "truhe_scheune": "Truhe hinter der Scheune",
+   "truhe_ufer": "Truhe am Seeufer"
+  },
   "wetter": {
    "sonne": "Sonnig",
    "wolken": "Wolkig",

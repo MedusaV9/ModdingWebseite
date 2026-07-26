@@ -29,6 +29,10 @@ func _setup() -> void:
 		)
 	)
 	add_child(host)
+	# Die Spiele rendern in einen EIGENEN SubViewport — HQ dort nachziehen
+	# (Root-Viewport-Einstellungen wirken nicht hinein).
+	if host._viewport != null:
+		wende_hq_an(host._viewport)
 
 
 func game() -> Node:

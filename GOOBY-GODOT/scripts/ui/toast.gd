@@ -131,7 +131,10 @@ func _reposition() -> void:
 			return
 		natural = Vector2(max_w, _panel.get_combined_minimum_size().y)
 	_panel.size = natural
-	var rest := Vector2((area.x - natural.x) / 2.0, area.y * TOP_SHARE)
+	# FB3: nie hinter die Notch — Ankerhöhe mindestens Safe-Top + Luft.
+	var insets := UiScale.safe_insets_canvas(get_viewport())
+	var top := maxf(area.y * TOP_SHARE, float(insets["top"]) + 8.0 * f)
+	var rest := Vector2((area.x - natural.x) / 2.0, top)
 	_panel.position = rest
 	_animate_in(rest, f)
 

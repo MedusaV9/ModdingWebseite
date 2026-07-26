@@ -157,11 +157,26 @@ func _build_band() -> void:
 	var walk := _prop(Models.parts(WALK, WALK_W), 32)
 	road.call("set_shadows", false)
 	walk.call("set_shadows", false)
+	# FAHRBAHN-OBERKANTE exakt auf y = 0: Gooby, Autos, Hütchen und Absperrungen
+	# posieren alle auf y = 0 — die eingepasste Kachel ist aber ~9 cm dick, mit
+	# Unterkante auf 0 steckten alle Fahrzeuge 9 cm im Asphalt (FB-4-Bugfix
+	# „Autos schweben/versinken"). Also die Platte um ihre Dicke absenken.
+	var road_drop := -Models.fitted_size(ROAD, ROAD_W).y
 	var road_items: Array = []
 	var walk_items: Array = []
 	var z := DESPAWN_Z
 	while z > DESPAWN_Z - CORRIDOR_LEN:
-		road_items.append({"x": 0.0, "z": z - 4.0, "scale": Vector3(1.0, 1.0, TILE_STEP / ROAD_W)})
+		(
+			road_items
+			. append(
+				{
+					"x": 0.0,
+					"y": road_drop,
+					"z": z - 4.0,
+					"scale": Vector3(1.0, 1.0, TILE_STEP / ROAD_W),
+				}
+			)
+		)
 		for sx: float in [-WALK_X, WALK_X]:
 			walk_items.append(
 				{"x": sx, "z": z - 4.0, "scale": Vector3(1.0, 1.0, TILE_STEP / WALK_W)}
@@ -186,6 +201,9 @@ func _build_band() -> void:
 					. append(
 						{
 							"x": side * BUILDING_X,
+							# Häuser stehen auf der Wiese (y = −0,06) — sonst
+							# schwebten die Sockel 6 cm über dem Gras.
+							"y": -0.06,
 							"z": -row * BUILDING_STEP - 2.0,
 							"yaw": -PI * 0.5 if side > 0 else PI * 0.5,
 						}
@@ -210,13 +228,15 @@ func _build_band() -> void:
 		dz -= DASH_STEP
 	band.call("add_group", dash_prop, dash_items)
 
+	# Bäume stehen AUF der Gehwegkachel — deren Deckelhöhe, nicht y = 0.
+	var walk_top := Models.fitted_size(WALK, WALK_W).y
 	for i in TREES.size():
 		var prop := _prop(Models.parts(TREES[i], 1.9), 8)
 		var items: Array = []
 		for k in 8:
 			if k % 2 != i:
 				continue
-			items.append({"x": -3.2 if k % 4 == 0 else 3.2, "z": -k * 13.0 - 8.5})
+			items.append({"x": -3.2 if k % 4 == 0 else 3.2, "y": walk_top, "z": -k * 13.0 - 8.5})
 		band.call("add_group", prop, items)
 
 

@@ -24,6 +24,10 @@ const MIN_FACTOR := 1.0
 ## Deckel gegen Absurd-Werte (kleine Fenster, kaputte DPI-Reports).
 const MAX_CANVAS_FACTOR := 2.6
 const MAX_PHYSICAL_FACTOR := 3.0
+## Tippflächen sind ein PHYSISCHES Minimum (44 pt) — ihr px/pt-Faktor darf
+## deshalb höher liegen als der Design-Deckel MAX_PHYSICAL_FACTOR (iPhone
+## hoch: 1280 Canvas-px / 393 pt ≈ 3,26).
+const MAX_TOUCH_FACTOR := 4.0
 ## Safe-Area-Insets werden pro Achse gedeckelt (echte Notches liegen bei
 ## ≤ ~8 % — schützt vor kaputten get_display_safe_area()-Werten, z. B.
 ## wenn das Fenster größer als der (virtuelle) Screen ist).
@@ -31,6 +35,11 @@ const MAX_INSET_SHARE := 0.15
 
 ## Tests/Screenshot-Sim: erzwingt einen screen_scale (0 = DisplayServer).
 static var screen_scale_override := 0.0
+## FB3-Audit/Tests: GLOBALE Notch-Simulation — Safe-Area-Rect in
+## CANVAS-Koordinaten (Rect2() = aus). Ein per-Aufruf-Override gewinnt;
+## damit prüfen Audit-Läufe ALLE Screens gegen dieselbe simulierte Notch,
+## ohne dass jeder Screen ein eigenes Override-Feld braucht.
+static var insets_override := Rect2()
 ## RW-7 (Settings §4.3): Benutzerfaktoren aus AppSettings — der QualityService
 ## setzt sie beim Boot und bei jeder Änderung (display.ui_scale /
 ## display.text_scale / display.safe_area_extra). Defaults = neutrale 1.0/0.
@@ -67,13 +76,52 @@ static func for_viewport(viewport: Viewport) -> float:
 		return MIN_FACTOR
 	var canvas := Vector2(viewport.get_visible_rect().size)
 	var factor := for_canvas(canvas)
-	var scale := screen_scale_override
-	if scale <= 0.0 and DisplayServer.get_name() != "headless":
-		scale = DisplayServer.screen_get_scale()
+	var scale := _screen_scale()
 	if scale > 0.0:
-		var window_px := Vector2(DisplayServer.window_get_size())
-		factor = maxf(factor, physical_factor(canvas, window_px, scale))
+		factor = maxf(factor, physical_factor(canvas, _window_px(viewport), scale))
 	return clampf(factor * clampf(user_factor, 0.7, 1.6), 0.5, MAX_PHYSICAL_FACTOR)
+
+
+## Canvas-px pro physischem PUNKT — Grundlage für Tippflächen-Minima
+## (44 pt × diesen Faktor). Bewusst NICHT mit MAX_PHYSICAL_FACTOR gedeckelt:
+## der Design-Deckel darf Schriften begrenzen, aber kein physisches
+## Tippflächen-Minimum unterschreiten. Headless-sicher (Fallback 1,0).
+static func touch_px_per_pt(viewport: Viewport) -> float:
+	if viewport == null:
+		return MIN_FACTOR
+	var scale := _screen_scale()
+	if scale <= 0.0:
+		return MIN_FACTOR
+	var window_px := _window_px(viewport)
+	if window_px.x <= 0.0 or window_px.y <= 0.0:
+		return MIN_FACTOR
+	var points_short := minf(window_px.x, window_px.y) / scale
+	if points_short <= 0.0:
+		return MIN_FACTOR
+	var canvas := Vector2(viewport.get_visible_rect().size)
+	var canvas_short := minf(canvas.x, canvas.y)
+	return clampf(canvas_short / points_short, MIN_FACTOR, MAX_TOUCH_FACTOR)
+
+
+## Screen-Scale: Override (Tests) > DisplayServer (nicht headless) > 0.
+static func _screen_scale() -> float:
+	if screen_scale_override > 0.0:
+		return screen_scale_override
+	if DisplayServer.get_name() != "headless":
+		return DisplayServer.screen_get_scale()
+	return 0.0
+
+
+## Fenstergröße in px — headless liefert der DisplayServer (0,0), dann
+## zählt die Window-Größe des Viewports (Tests setzen root.size).
+static func _window_px(viewport: Viewport) -> Vector2:
+	var window_px := Vector2(DisplayServer.window_get_size())
+	if window_px.x > 0.0 and window_px.y > 0.0:
+		return window_px
+	var win := viewport.get_window()
+	if win != null:
+		return Vector2(win.size)
+	return Vector2.ZERO
 
 
 ## RW-7: Faktor für SCHRIFTEN — UI-Faktor × Textgrößen-Faktor
@@ -91,6 +139,10 @@ static func safe_insets_canvas(viewport: Viewport, override := Rect2()) -> Dicti
 	var canvas := Vector2(viewport.get_visible_rect().size)
 	if override != Rect2():
 		return clamp_insets(_plus_extra(HudLayoutLogic.safe_insets(canvas, override)), canvas)
+	if insets_override != Rect2():
+		return clamp_insets(
+			_plus_extra(HudLayoutLogic.safe_insets(canvas, insets_override)), canvas
+		)
 	if DisplayServer.get_name() == "headless":
 		return clamp_insets(
 			_plus_extra(HudLayoutLogic.safe_insets(canvas, Rect2(Vector2.ZERO, canvas))), canvas

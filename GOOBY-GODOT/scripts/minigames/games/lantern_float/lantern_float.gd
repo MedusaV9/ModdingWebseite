@@ -4,11 +4,15 @@ extends MinigameBase
 ## seitlich, Sternenring +2 (jeder 5. golden +5), Glühwürmchen +1, Windböen
 ## schieben, Wolkenrempler −3 (Endlos: 3 Rempler beenden). 60 s.
 ##
-## 2D (Web war three.js mit fester Frontalkamera): das Spiel ist eine reine
-## seitliche Steuerung auf einer vertikal scrollenden Ebene — als gezeichneter
-## Nachthimmel bleibt jede Weltmeter-Zahl exakt und die Ringe sind lesbarer.
+## ECHTER 3D-NACHTHIMMEL (FB-4, LanternFloatStage3D): eine glühende
+## Papierlaterne trägt Gooby (echtes Rig) im Körbchen durch Torus-Ringe,
+## Glühwürmchen und 3D-Wolken; drei Sternschichten parallaxieren, der Mond
+## glüht hinten. Die Kamera rahmt die Flugebene EXAKT wie die 2D-Projektion
+## (set_half_height) — jede Weltmeter-Zahl bleibt erhalten. Nur der
+## Böen-Telegraf und das Banner bleiben als 2D-Overlay obenauf.
 
 const Logic := preload("res://scripts/minigames/games/lantern_float/lantern_float_logic.gd")
+const Stage := preload("res://scripts/minigames/games/lantern_float/lantern_float_stage3d.gd")
 
 ## Sichtbare Welt-Halbhöhe über/unter der Laternenebene.
 const HALF_H := 5.4
@@ -45,7 +49,7 @@ var ring_streak := 0
 var _rings: Array[Dictionary] = []
 var _next_index := 0
 var _next_y := 0.0
-var _stars: Array[Vector3] = []
+var _stage: Node3D
 var _ui := 1.0
 var _time_label: Label
 var _stat_label: Label
@@ -59,8 +63,16 @@ func setup(context: MinigameCtx) -> void:
 	tune = Logic.apply_difficulty(Logic.LANTERN, ctx.difficulty)
 	rng = ctx.rng()
 	_next_y = Logic.ring_spacing_at(0.0, tune)
-	for _i in 60:
-		_stars.append(Vector3(rng.next() * 2.0 - 1.0, rng.next(), 0.4 + rng.next() * 0.6))
+	# RNG-Parität mit der 2D-Fassung: die 60 Sternen-Würfe (je 3 Züge) bleiben
+	# im Seed-Strom, sonst verschieben sich alle späteren Ring-/Wolken-Würfe.
+	for _i in 60 * 3:
+		rng.next()
+	_stage = Stage.new()
+	_stage.name = "Nachthimmel3D"
+	add_child(_stage)
+	_stage.setup_stage(float(tune["RING_RADIUS"]), float(tune["CLOUD_HALF_W"]))
+	if ctx.juice != null:
+		ctx.juice.world_environment = _stage.stage.world_env
 	_build_hud()
 	_fill_rings()
 	_fit_viewport()
@@ -78,24 +90,29 @@ func apply_view(size: Vector2) -> void:
 	if size.x > 1.0 and size.y > 1.0:
 		view_size = size
 	landscape = view_size.x > view_size.y
-	_ui = clampf(minf(view_size.x, view_size.y) / DESIGN_SHORT, 0.75, 3.0)
 	position = Vector2.ZERO
+	if _stage != null:
+		_stage.frame(view_size, _world_scale(), landscape)
 	_layout_hud()
 	queue_redraw()
 
 
 ## Bedienleiste in Entwurfspixeln, mit _ui skaliert (sonst Krümelschrift).
+## HUD IMMER aus dem Viewport-Rect stellen: unter canvas_items-Stretch sind
+## Canvas-Einheiten ≠ Fensterpixel, apply_view-Größen können abweichen.
 func _layout_hud() -> void:
 	if _time_label == null:
 		return
+	var vp := get_viewport_rect().size
+	_ui = clampf(minf(vp.x, vp.y) / DESIGN_SHORT, 0.75, 3.0)
 	var pad := 14.0 * _ui
 	_time_label.position = Vector2(pad, 8.0 * _ui)
 	_time_label.add_theme_font_size_override("font_size", int(26.0 * _ui))
 	_stat_label.position = Vector2(pad, 44.0 * _ui)
 	_stat_label.add_theme_font_size_override("font_size", int(17.0 * _ui))
-	var hint_w := minf(view_size.x - pad * 2.0, 420.0 * _ui)
+	var hint_w := minf(vp.x - pad * 2.0, 420.0 * _ui)
 	_hint_label.add_theme_font_size_override("font_size", int(15.0 * _ui))
-	_hint_label.position = Vector2((view_size.x - hint_w) * 0.5, view_size.y - 46.0 * _ui)
+	_hint_label.position = Vector2((vp.x - hint_w) * 0.5, vp.y - 46.0 * _ui)
 	_hint_label.size = Vector2(hint_w, 40.0 * _ui)
 
 
@@ -112,6 +129,7 @@ func _process(delta: float) -> void:
 	_steer(delta)
 	_fill_rings()
 	_check_pass()
+	_stage.sync(_rings, travel, lantern_x, invuln, elapsed, delta)
 	_update_labels()
 	queue_redraw()
 
@@ -123,14 +141,6 @@ func _unhandled_input(event: InputEvent) -> void:
 		steer_target = Logic.steer_target_from(_normalized_x(event.position.x), tune)
 	elif event is InputEventScreenDrag:
 		steer_target = Logic.steer_target_from(_normalized_x(event.position.x), tune)
-
-
-## Weltkoordinaten (x, y relativ zur Laternenebene) → Bildschirmpixel.
-func project(wx: float, wy: float) -> Vector2:
-	var scale := _world_scale()
-	return Vector2(
-		view_size.x * 0.5 + wx * scale, view_size.y * (0.72 if not landscape else 0.68) - wy * scale
-	)
 
 
 func _world_scale() -> float:
@@ -235,8 +245,9 @@ func _award(points: int, wx: float, wy: float, gold: bool) -> void:
 	AudioDirector.try_play(
 		self, "mg_golden" if gold else "mg_good", FeelSfx.combo_pitch(ring_streak)
 	)
+	_stage.award_fx(wx, wy - travel, gold)
 	if ctx.juice != null:
-		var pos := project(wx, wy - travel)
+		var pos: Vector2 = _stage.to_screen(wx, wy - travel)
 		var color := Color(1.0, 0.82, 0.35) if gold else Color(0.72, 0.92, 1.0)
 		ctx.juice.float_text(pos, "+%d" % points, color)
 		ctx.juice.ring_burst(self, pos, color, 90.0 if gold else 64.0)
@@ -255,6 +266,7 @@ func _bump() -> void:
 	ring_streak = 0
 	invuln = float(tune["BUMP_INVULN_SEC"])
 	AudioDirector.try_play(self, "mg_spill")
+	_stage.bump_fx()
 	if ctx.juice != null:
 		ctx.juice.shake(0.35)
 		ctx.juice.hit_flash(Color(0.9, 0.32, 0.22, 0.16), 180)
@@ -311,38 +323,11 @@ func _update_labels() -> void:
 	_stat_label.text = I18nService.t("mg.lanternFloat.stats", {"hits": hits, "gold": golds})
 
 
+## Nur noch HUD-Overlay: der Böen-Telegraf ist eine WARNUNG, keine Kulisse,
+## und muss in jeder Kameralage sofort lesbar sein — das Banner ebenso.
 func _draw() -> void:
-	_draw_sky()
 	_draw_gust()
-	for ring in _rings:
-		_draw_ring(ring)
-	_draw_lantern()
 	_draw_banner()
-
-
-func _draw_sky() -> void:
-	var vp := view_size
-	draw_rect(Rect2(Vector2.ZERO, vp), Color(0.08, 0.09, 0.22))
-	for i in 20:
-		var f := float(i) / 19.0
-		draw_rect(
-			Rect2(0.0, vp.y * f, vp.x, vp.y / 19.0 + 1.0),
-			Color(0.08, 0.09, 0.22).lerp(Color(0.22, 0.16, 0.38), f)
-		)
-	# Sterne parallaxieren mit der Steighöhe.
-	for s in _stars:
-		var depth := s.z
-		var y := fposmod(s.y * vp.y - travel * 6.0 * depth, vp.y)
-		var pos := Vector2((s.x * 0.5 + 0.5) * vp.x, y)
-		draw_circle(pos, 1.0 + depth * 1.6, Color(1.0, 0.98, 0.86, 0.35 + depth * 0.5))
-	# Mond
-	draw_circle(Vector2(vp.x * 0.8, vp.y * 0.14), 34.0, Color(1.0, 0.96, 0.82, 0.92))
-	draw_circle(Vector2(vp.x * 0.83, vp.y * 0.12), 30.0, Color(0.12, 0.12, 0.26, 0.9))
-	# Gartensilhouette am unteren Rand
-	var ground := project(0.0, -HALF_H * 0.55).y
-	draw_rect(Rect2(0.0, ground, vp.x, vp.y - ground), Color(0.09, 0.16, 0.16))
-	for i in 8:
-		draw_circle(Vector2(vp.x * (0.06 + 0.13 * i), ground + 6.0), 26.0, Color(0.1, 0.2, 0.18))
 
 
 func _draw_gust() -> void:
@@ -350,19 +335,20 @@ func _draw_gust() -> void:
 	var phase := str(info["phase"])
 	if phase == "idle":
 		return
+	var vp := get_viewport_rect().size
 	var gust: Dictionary = info["gust"]
 	var dir := int(gust["dir"])
 	var alpha := 0.35 if phase == "telegraph" else 0.75
 	for i in 7:
-		var y := view_size.y * (0.12 + 0.11 * i)
-		var x0 := view_size.x * (0.1 if dir > 0 else 0.9)
-		var x1 := x0 + dir * view_size.x * 0.22 * (0.6 + 0.4 * sin(elapsed * 6.0 + i))
+		var y := vp.y * (0.12 + 0.11 * i)
+		var x0 := vp.x * (0.1 if dir > 0 else 0.9)
+		var x1 := x0 + dir * vp.x * 0.22 * (0.6 + 0.4 * sin(elapsed * 6.0 + i))
 		draw_line(Vector2(x0, y), Vector2(x1, y), Color(0.8, 0.92, 1.0, alpha * 0.5), 3.0)
 	if phase == "telegraph":
 		var font := ThemeService.font(800)
 		draw_string(
 			font,
-			Vector2(view_size.x * 0.5 - 160.0, view_size.y * 0.2),
+			Vector2(vp.x * 0.5 - 160.0, vp.y * 0.2),
 			I18nService.t("mg.lanternFloat.gust"),
 			HORIZONTAL_ALIGNMENT_CENTER,
 			320.0,
@@ -371,89 +357,15 @@ func _draw_gust() -> void:
 		)
 
 
-func _draw_ring(ring: Dictionary) -> void:
-	var scale := _world_scale()
-	var dy := float(ring["y"]) - travel
-	var pos := project(float(ring["x"]), dy)
-	if pos.y < -80.0 or pos.y > view_size.y + 80.0:
-		return
-	var r := float(tune["RING_RADIUS"]) * scale
-	var gold := bool(ring["gold"])
-	var col := Color(1.0, 0.83, 0.35) if gold else Color(0.66, 0.9, 1.0)
-	if bool(ring["done"]):
-		col.a = 0.25
-	draw_arc(pos, r, 0.0, TAU, 32, col, 5.0)
-	draw_arc(pos, r * 0.62, 0.0, TAU, 24, Color(col.r, col.g, col.b, col.a * 0.4), 2.0)
-	for i in 6:
-		var a := TAU * i / 6.0 + elapsed * (1.4 if gold else 0.6)
-		draw_circle(pos + Vector2(cos(a), sin(a)) * r, 3.5 if gold else 2.5, col)
-	# Glühwürmchen
-	if bool(ring["firefly"]) and not bool(ring["firefly_done"]):
-		var fpos := project(float(ring["firefly_x"]), dy - 1.6)
-		var glow := 0.55 + 0.45 * sin(elapsed * 7.0 + float(ring["index"]))
-		draw_circle(fpos, 9.0, Color(1.0, 0.95, 0.5, 0.22 * glow))
-		draw_circle(fpos, 4.0, Color(1.0, 0.97, 0.6, glow))
-	# Wolke
-	var cloud: Dictionary = ring["cloud"]
-	if bool(cloud["present"]) and not bool(ring["cloud_done"]):
-		var cpos := project(float(cloud["x"]), dy - 0.8)
-		var half := float(tune["CLOUD_HALF_W"]) * scale
-		for i in 4:
-			draw_circle(
-				cpos + Vector2((-0.55 + 0.37 * i) * half * 2.0, sin(i * 1.3) * half * 0.16),
-				half * 0.52,
-				Color(0.78, 0.8, 0.92, 0.85)
-			)
-
-
-func _draw_lantern() -> void:
-	var scale := _world_scale()
-	var pos := project(lantern_x, 0.0)
-	var bob := sin(elapsed * 2.4) * 3.0
-	pos.y += bob
-	var w := 0.36 * scale
-	var h := 0.46 * scale
-	var alpha := 1.0 if invuln <= 0.0 else (0.4 + 0.6 * absf(sin(invuln * 22.0)))
-	# Schein
-	draw_circle(pos, w * 2.6, Color(1.0, 0.78, 0.4, 0.14 * alpha))
-	draw_circle(pos, w * 1.7, Color(1.0, 0.82, 0.45, 0.2 * alpha))
-	var body := PackedVector2Array(
-		[
-			pos + Vector2(-w * 0.7, -h),
-			pos + Vector2(w * 0.7, -h),
-			pos + Vector2(w, h * 0.35),
-			pos + Vector2(-w, h * 0.35),
-		]
-	)
-	draw_colored_polygon(body, Color(1.0, 0.72, 0.45, alpha))
-	draw_polyline(body + PackedVector2Array([body[0]]), Color(0.75, 0.38, 0.3, alpha), 2.5)
-	draw_rect(
-		Rect2(pos + Vector2(-w * 0.75, -h - 5.0), Vector2(w * 1.5, 5.0)),
-		Color(0.72, 0.4, 0.3, alpha)
-	)
-	draw_circle(pos + Vector2(0.0, h * 0.05), w * 0.35, Color(1.0, 0.95, 0.65, alpha))
-	# Gooby-Gesicht auf dem Papier
-	draw_circle(pos + Vector2(-w * 0.3, -h * 0.25), 2.4, Color(0.35, 0.2, 0.2, alpha))
-	draw_circle(pos + Vector2(w * 0.3, -h * 0.25), 2.4, Color(0.35, 0.2, 0.2, alpha))
-	draw_arc(
-		pos + Vector2(0.0, -h * 0.05),
-		w * 0.3,
-		0.35,
-		PI - 0.35,
-		10,
-		Color(0.35, 0.2, 0.2, alpha),
-		2.0
-	)
-
-
 func _draw_banner() -> void:
 	if _banner_t <= 0.0 or _banner.is_empty():
 		return
+	var vp := get_viewport_rect().size
 	var font := ThemeService.font(800)
 	var alpha := clampf(_banner_t * 1.4, 0.0, 1.0)
 	draw_string(
 		font,
-		Vector2(view_size.x * 0.5 - 180.0, view_size.y * 0.38),
+		Vector2(vp.x * 0.5 - 180.0, vp.y * 0.38),
 		_banner,
 		HORIZONTAL_ALIGNMENT_CENTER,
 		360.0,

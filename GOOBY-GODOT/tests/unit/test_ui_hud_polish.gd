@@ -143,12 +143,12 @@ func test_safe_area_override_verschiebt_raender() -> void:
 		(hud.get_node("LeftColumn") as Control).offset_left, 67.0, "Cockpit-Stats rücken ein"
 	)
 	check_approx(
-		(hud.get_node("PortraitArc") as Control).offset_bottom,
+		(hud.get_node("PortraitDock") as Control).offset_bottom,
 		-29.0,
-		"Daumen-Bogen überm Home-Indicator (-8-21)"
+		"Daumen-Dock überm Home-Indicator (-8-21)"
 	)
 	hud.safe_area_override = Rect2()
 	hud.refresh_safe_area()
 	check_eq(top_bar.get_theme_constant("margin_left"), 8, "ohne Notch wieder Standard (EDGE_PAD)")
-	check_approx((hud.get_node("PortraitArc") as Control).offset_bottom, -8.0, "Bogen-Standard")
+	check_approx((hud.get_node("PortraitDock") as Control).offset_bottom, -8.0, "Dock-Standard")
 	unmount(hud)

@@ -151,8 +151,13 @@ func _build_ui() -> void:
 	_scroll.add_child(_grid)
 	# MG-3: all_games() statt GAMES — sonst fehlen alle per game.json-Manifest
 	# entdeckten Spiele (W6-Registry) im Grid.
+	var tiles: Array = []
 	for game in MinigameRegistry.all_games():
-		_grid.add_child(_build_tile(game))
+		var tile := _build_tile(game)
+		_grid.add_child(tile)
+		tiles.append(tile)
+	# FB3-Polish: Kacheln federn gestaffelt ein (Web-Stagger) statt zu ploppen.
+	UiMotion.stagger_in(tiles, 0.03)
 
 
 ## Responsive Metriken (FIX1): Safe-Area-Ränder, UiScale-Faktor,
@@ -175,9 +180,14 @@ func _apply_metrics() -> void:
 	_grid.add_theme_constant_override("v_separation", gap)
 	var avail := canvas.x - _rows.offset_left + _rows.offset_right
 	_grid.columns = grid_columns(avail, f)
-	var floor_px := HudLayoutLogic.touch_floor_canvas(canvas)
-	_back.custom_minimum_size = Vector2(0.0, maxf(48.0 * f, floor_px))
-	_title.add_theme_font_size_override("font_size", int(AcTokens.FONT_SIZE_TITLE * f))
+	# FB3: Touch-Floor auf BEIDEN Achsen + Schriften über die zentrale
+	# Regel (vorher skalierte nur der Titel, Kachel-Labels blieben klein).
+	var floor_px := maxf(
+		HudLayoutLogic.touch_floor_canvas(canvas),
+		float(AcTokens.TOUCH_FLOOR) * UiScale.touch_px_per_pt(get_viewport())
+	)
+	_back.custom_minimum_size = _back.custom_minimum_size.max(Vector2(floor_px, floor_px))
+	ScreenShell.scale_fonts(self, f)
 	for tile in _grid.get_children():
 		(tile as Control).custom_minimum_size = Vector2(0.0, TILE_HEIGHT * f)
 

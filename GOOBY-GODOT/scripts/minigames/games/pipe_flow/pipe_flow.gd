@@ -5,18 +5,16 @@ extends MinigameBase
 ## Hahn (oben) zum Sprenger (unten) löst das Rätsel. 90 s; Score = 25·gelöst +
 ## Tap-Effizienz-Bonus (0–10) − 5 je Leck. Ab Rätsel 3 tropft eine Stelle und
 ## kostet nach LEAK_SEC fünf Punkte. Endlos endet nach drei Patzern.
-## Optik: Kachelbrett auf Papier, Wasser füllt die Leitung in BFS-Reihenfolge.
+##
+## ECHTES 3D-ROHRPANEL (FB-4, PipeFlowStage3D): das Blaupausen-Brett steht als
+## 3D-Panel im Garten, Kacheln sind echte Rohrstücke, Wasser leuchtet als Kern
+## durch die Leitung, unten sprüht der Sprenger ins 3D-Beet und Gooby (echtes
+## Rig) schaut zu. Eingabe bleibt zahlengleich (Canvas-Rechtecke), 2D bleibt
+## nur der Leck-Countdown-Ring. MECHANIK komplett in PipeFlowLogic.
 
-## Blaupausen-Palette 1:1 aus dem Web (pipeFlow.js `COLORS`): dunkles
-## Planblatt, kreideweiße Rohre, Türkis-Wasser, Messing für Hahn & Sprenger.
 const WATER := Color("4FD8F7")
-const PIPE_BODY := Color("E8F1FB")
-const PIPE_EDGE := Color("2B5F9E")
-const SHEET := Color("1D4E89")
-const SHEET_DEEP := Color("173F70")
-const SHEET_LINE := Color(1.0, 1.0, 1.0, 0.10)
-const BRASS := Color("F2C14E")
-const BRASS_DARK := Color("C79A33")
+
+const Stage := preload("res://scripts/minigames/games/pipe_flow/pipe_flow_stage3d.gd")
 
 var tune: Dictionary = {}
 var board: Dictionary = {}
@@ -45,11 +43,18 @@ var _hint_label: Label
 var _grid_origin := Vector2.ZERO
 var _cell := 60.0
 var _pulse := 0.0
+var _stage: Node3D
 
 
 func setup(context: MinigameCtx) -> void:
 	super.setup(context)
 	tune = PipeFlowLogic.apply_difficulty(PipeFlowLogic.PIPE, ctx.difficulty)
+	_stage = Stage.new()
+	_stage.name = "Panel3D"
+	add_child(_stage)
+	_stage.setup_stage()
+	if ctx.juice != null:
+		ctx.juice.world_environment = _stage.stage.world_env
 	_build_hud()
 	_next_puzzle()
 	_fit_viewport()
@@ -77,12 +82,36 @@ func apply_view(size: Vector2) -> void:
 	# Etwas oberhalb der Mitte: der Rest unten trägt Fallrohr + Sprenger-Beet,
 	# damit im Hochformat keine tote Fläche stehen bleibt.
 	_grid_origin = Vector2((view_size.x - board_px) * 0.5, top + (avail.y - board_px) * 0.42)
-	if _time_label != null:
-		_time_label.position = Vector2(16.0, 10.0)
-		_puzzle_label.position = Vector2(16.0, 48.0)
-		_hint_label.position = Vector2(view_size.x * 0.5 - 180.0, view_size.y - 42.0)
-		_hint_label.size = Vector2(360.0, 34.0)
+	_layout_stage()
+	_layout_hud()
 	queue_redraw()
+
+
+## Bühne an die aktuellen Brett-Anker hängen (srcCol/goalCol je Rätsel neu!).
+func _layout_stage() -> void:
+	if _stage == null or board.is_empty():
+		return
+	_stage.frame(view_size)
+	_stage.layout(
+		_grid_origin,
+		_cell,
+		int(board["size"]),
+		int(board["srcCol"]),
+		int(board["goalCol"]),
+		_bed_y()
+	)
+
+
+## HUD IMMER aus dem Viewport-Rect stellen: unter canvas_items-Stretch sind
+## Canvas-Einheiten ≠ Fensterpixel, apply_view-Größen können abweichen.
+func _layout_hud() -> void:
+	if _time_label == null:
+		return
+	var vp := get_viewport_rect().size
+	_time_label.position = Vector2(16.0, 10.0)
+	_puzzle_label.position = Vector2(16.0, 48.0)
+	_hint_label.position = Vector2(vp.x * 0.5 - 180.0, vp.y - 42.0)
+	_hint_label.size = Vector2(360.0, 34.0)
 
 
 func _build_hud() -> void:
@@ -115,6 +144,7 @@ func _next_puzzle() -> void:
 	filling = false
 	fill_depth = 0
 	depths = {}
+	_layout_stage()
 	_update_labels()
 
 
@@ -134,6 +164,12 @@ func _process(delta: float) -> void:
 	if PipeFlowLogic.endless_should_end(failures, tune):
 		_finish()
 		return
+	var tiles: Array = board["tiles"]
+	var watered: Array[bool] = []
+	for i in tiles.size():
+		watered.append(_tile_watered(i))
+	var leak_pending := leak_index if (leak_index >= 0 and not leak_applied and not filling) else -1
+	_stage.sync(tiles, watered, filling, leak_pending, _pulse, delta)
 	_update_labels()
 	queue_redraw()
 
@@ -161,6 +197,7 @@ func _apply_leak() -> void:
 	leak_applied = true
 	failures += 1
 	solve_streak = 0
+	_stage.leak_fx(leak_index)
 	AudioDirector.try_play(self, "mg_spill")
 	if ctx.juice != null:
 		ctx.juice.shake(0.3)
@@ -199,6 +236,8 @@ func _solve(reach: Dictionary) -> void:
 	filling = true
 	fill_depth = 0
 	fill_left = 0.0
+	var grid := int(board["size"])
+	_stage.solve_fx((grid - 1) * grid + int(board["goalCol"]))
 	# Lösungs-Serie ohne Leck: Sieges-Ton klettert pro Puzzle.
 	AudioDirector.try_play(self, "mg_win", FeelSfx.combo_pitch(solve_streak))
 	if ctx.juice != null:
@@ -269,151 +308,16 @@ func _tile_watered(index: int) -> bool:
 	return filling and depths.has(index) and int(depths[index]) < fill_depth
 
 
+# Kein 2D-Brett mehr: Panel, Rohre, Hahn, Sprenger, Beet und Gooby rendert
+# die 3D-Bühne (PipeFlowStage3D); 2D bleibt nur der Leck-Countdown-Ring.
 func _draw() -> void:
-	draw_rect(Rect2(Vector2.ZERO, view_size), AcTokens.BG_CREAM)
-	var grid := int(board["size"])
-	var board_px := _cell * grid
-	var frame := Rect2(_grid_origin - Vector2(12.0, 12.0), Vector2.ONE * (board_px + 24.0))
-	# Steig- und Fallrohr füllen den Raum über/unter dem Brett.
-	_draw_feed_pipe(frame)
-	_draw_drain_pipe(frame)
-	draw_rect(frame, SHEET_DEEP)
-	draw_rect(Rect2(frame.position + Vector2(4.0, 4.0), frame.size - Vector2(8.0, 8.0)), SHEET)
-	for i in range(1, grid):
-		var at := _grid_origin + Vector2.ONE * (_cell * i)
-		draw_line(
-			Vector2(_grid_origin.x, at.y), Vector2(_grid_origin.x + board_px, at.y), SHEET_LINE, 2.0
-		)
-		draw_line(
-			Vector2(at.x, _grid_origin.y), Vector2(at.x, _grid_origin.y + board_px), SHEET_LINE, 2.0
-		)
-	draw_rect(frame, AcTokens.INK, false, 3.0)
-	var tiles: Array = board["tiles"]
-	for i in tiles.size():
-		_draw_tile(i, tiles[i])
-	_draw_tap(frame)
-	_draw_sprinkler(frame)
 	if leak_index >= 0 and not leak_applied and not filling:
 		_draw_leak()
-
-
-func _draw_tile(index: int, tile: Dictionary) -> void:
-	var grid := int(board["size"])
-	var col := index % grid
-	var row := index / grid
-	var pos := _grid_origin + Vector2(col * _cell, row * _cell)
-	var center := pos + Vector2.ONE * (_cell * 0.5)
-	var watered := _tile_watered(index)
-	var thickness := _cell * 0.3
-	var mask := PipeFlowLogic.mask_of(str(tile["shape"]), int(tile["rot"]))
-	var fill := WATER if watered else PIPE_BODY
-	# Zuerst die dunkle Kontur (Arme + runde Nabe), dann der helle Rohrkern —
-	# so wirkt jede Kachel als EIN durchgehendes Rohrstück, nicht als Loch.
-	for pass_index in 2:
-		var tint := PIPE_EDGE if pass_index == 0 else fill
-		var width := thickness + 7.0 if pass_index == 0 else thickness
-		for dir in 4:
-			if (mask & (1 << dir)) == 0:
-				continue
-			var step: Vector2i = PipeFlowLogic.DELTA[dir]
-			draw_line(center, center + Vector2(step.x, step.y) * (_cell * 0.5), tint, width)
-		draw_circle(center, width * 0.5, tint)
-	if watered:
-		var glow := thickness * 0.5 + 4.0 + sin(_pulse * 8.0) * 2.0
-		draw_circle(center, glow, Color(WATER.r, WATER.g, WATER.b, 0.28))
-	else:
-		# Kreide-Glanzlicht auf dem Rohrrücken.
-		draw_circle(
-			center - Vector2(thickness * 0.16, thickness * 0.16),
-			thickness * 0.16,
-			Color(1, 1, 1, 0.7)
-		)
-
-
-## Zulauf: Messinghahn am oberen Bildrand, Steigrohr bis zur Quellspalte.
-func _draw_feed_pipe(frame: Rect2) -> void:
-	var x := _grid_origin.x + (float(board["srcCol"]) + 0.5) * _cell
-	var head_y := maxf(96.0, frame.position.y - 96.0)
-	draw_line(Vector2(x, head_y), Vector2(x, frame.position.y + 6.0), PIPE_EDGE, 24.0)
-	draw_line(Vector2(x, head_y), Vector2(x, frame.position.y + 6.0), Color("B9C9DC"), 16.0)
-	if filling:
-		draw_line(Vector2(x, head_y), Vector2(x, frame.position.y + 6.0), WATER, 9.0)
 
 
 ## Oberkante des Blumenbeets am unteren Bildrand.
 func _bed_y() -> float:
 	return view_size.y - (132.0 if not landscape else 76.0)
-
-
-func _draw_drain_pipe(frame: Rect2) -> void:
-	var x := _grid_origin.x + (float(board["goalCol"]) + 0.5) * _cell
-	var bed_y := _bed_y()
-	draw_line(Vector2(x, frame.end.y - 6.0), Vector2(x, bed_y), PIPE_EDGE, 24.0)
-	draw_line(Vector2(x, frame.end.y - 6.0), Vector2(x, bed_y), Color("B9C9DC"), 16.0)
-	if filling:
-		draw_line(Vector2(x, frame.end.y - 6.0), Vector2(x, bed_y), WATER, 9.0)
-
-
-func _draw_tap(frame: Rect2) -> void:
-	var x := _grid_origin.x + (float(board["srcCol"]) + 0.5) * _cell
-	var y := maxf(100.0, frame.position.y - 104.0)
-	var s := clampf(_cell * 0.42, 30.0, 52.0)
-	# Wandkonsole + Messing-Handrad; es dreht sich, sobald Wasser läuft.
-	draw_rect(Rect2(x - s * 1.5, y - s * 1.1, s * 3.0, s * 0.4), Color("9FB1C6"))
-	draw_rect(Rect2(x - s * 1.5, y - s * 1.1, s * 3.0, s * 0.4), AcTokens.INK, false, 3.0)
-	var body := Rect2(x - s * 0.72, y - s * 0.7, s * 1.44, s * 0.95)
-	draw_rect(body, BRASS)
-	draw_rect(body, AcTokens.INK, false, 3.0)
-	var hub := Vector2(x, y - s * 1.5)
-	var spin: float = _pulse * 5.0 if filling else 0.0
-	for i in 3:
-		var a := spin + TAU * float(i) / 3.0
-		draw_line(hub, hub + Vector2(cos(a), sin(a)) * s * 0.9, BRASS_DARK, 9.0)
-		draw_line(hub, hub + Vector2(cos(a), sin(a)) * s * 0.9, BRASS, 5.0)
-	draw_circle(hub, s * 0.32, BRASS_DARK)
-	draw_arc(hub, s * 0.32, 0.0, TAU, 16, AcTokens.INK, 3.0)
-
-
-## Ablauf: Sprenger im Blumenbeet — das Ziel wird so als Ort lesbar.
-func _draw_sprinkler(_frame: Rect2) -> void:
-	var x := _grid_origin.x + (float(board["goalCol"]) + 0.5) * _cell
-	var bed_y := _bed_y()
-	draw_rect(Rect2(0.0, bed_y, view_size.x, view_size.y - bed_y), Color("8FD06C"))
-	draw_rect(Rect2(0.0, bed_y + 34.0, view_size.x, view_size.y - bed_y - 34.0), Color("6E4A32"))
-	draw_line(Vector2(0.0, bed_y), Vector2(view_size.x, bed_y), AcTokens.INK, 3.0)
-	draw_line(Vector2(0.0, bed_y + 34.0), Vector2(view_size.x, bed_y + 34.0), Color("533826"), 3.0)
-	var tints: Array[Color] = [AcTokens.PINK, AcTokens.YELLOW, AcTokens.TEAL, AcTokens.WHITE]
-	for i in 8:
-		var fx := (float(i) + 0.5) / 8.0 * view_size.x
-		if absf(fx - x) < 52.0:
-			continue
-		draw_line(Vector2(fx, bed_y + 30.0), Vector2(fx, bed_y - 8.0), Color("4E8F3C"), 4.0)
-		for k in 5:
-			var a := float(k) * TAU / 5.0
-			draw_circle(
-				Vector2(fx, bed_y - 10.0) + Vector2(cos(a), sin(a)) * 9.0,
-				7.0,
-				tints[i % tints.size()]
-			)
-		draw_circle(Vector2(fx, bed_y - 10.0), 6.0, AcTokens.YELLOW)
-	# Sprengerkopf auf einem Messingfuß.
-	var head := Rect2(x - 30.0, bed_y - 40.0, 60.0, 44.0)
-	draw_rect(head, AcTokens.TEAL)
-	draw_rect(head, AcTokens.INK, false, 3.0)
-	draw_rect(Rect2(x - 40.0, bed_y - 6.0, 80.0, 14.0), BRASS)
-	draw_rect(Rect2(x - 40.0, bed_y - 6.0, 80.0, 14.0), AcTokens.INK, false, 3.0)
-	if not filling:
-		return
-	for i in 7:
-		var a := -PI * 0.92 + float(i) * (PI * 0.84 / 6.0)
-		var reach := 56.0 + sin(_pulse * 9.0 + float(i)) * 16.0
-		var from := Vector2(x, bed_y - 40.0)
-		draw_line(
-			from,
-			from + Vector2(cos(a), sin(a)) * reach,
-			Color(WATER.r, WATER.g, WATER.b, 0.85),
-			5.0
-		)
 
 
 func _draw_leak() -> void:

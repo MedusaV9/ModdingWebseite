@@ -69,10 +69,10 @@ func test_hud_layouts_reparenten_buttons() -> void:
 	hud.apply_layout(HudLayoutLogic.Layout.PORTRAIT)
 	for btn_name in ["BtnIgohbie", "BtnBau", "BtnReise", "BtnArcade", "BtnAlbum", "BtnProfil"]:
 		check(
-			hud.get_node_or_null("PortraitArc/" + btn_name) != null,
-			"Hochkant: %s im Daumen-Bogen" % btn_name
+			hud.get_node_or_null("PortraitDock/" + btn_name) != null,
+			"Hochkant: %s im Daumen-Dock" % btn_name
 		)
-	check(hud.get_node("PortraitArc").visible, "Hochkant: Bogen sichtbar")
+	check(hud.get_node("PortraitDock").visible, "Hochkant: Dock sichtbar")
 	check(not hud.get_node("LandscapeColumn").visible, "Hochkant: Spalte versteckt")
 	check(
 		hud.get_node_or_null("TopBar/TopBarBox/StatusRow/CoinChip") != null,
@@ -84,7 +84,7 @@ func test_hud_layouts_reparenten_buttons() -> void:
 			hud.get_node_or_null("LandscapeColumn/" + btn_name) != null,
 			"Quer: %s in der Cockpit-Spalte" % btn_name
 		)
-	check(not hud.get_node("PortraitArc").visible, "Quer: Bogen versteckt")
+	check(not hud.get_node("PortraitDock").visible, "Quer: Dock versteckt")
 	check(
 		hud.get_node_or_null("LeftColumn/StatChipHunger") != null,
 		"Quer: Hunger-Chip in der linken Spalte"
@@ -112,7 +112,7 @@ func test_hud_setter_und_signale() -> void:
 	hud.set_level(12)
 	var actions: Array[StringName] = []
 	hud.action_pressed.connect(func(a: StringName) -> void: actions.append(a))
-	(hud.get_node("PortraitArc/BtnReise") as Button).pressed.emit()
+	(hud.get_node("PortraitDock/BtnReise") as Button).pressed.emit()
 	check_eq(actions, [&"reise"] as Array[StringName], "Reise-Button feuert action_pressed")
 	var eye_states: Array = []
 	hud.eye_toggled.connect(func(on: bool) -> void: eye_states.append(on))

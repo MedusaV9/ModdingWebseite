@@ -4,8 +4,14 @@ extends MinigameBase
 ## alle 12 s, Treffer +2, falsche Blase −2 + 0,5 s Stun, Stachelblasen platzen
 ## nie (Antippen −1), Steig- und Spawn-Kadenz rampen linear, drei gleiche
 ## Treffer in 2 s zünden eine Kettenreaktion über die Nachbarblasen.
-## Optik: Pastell-Unterwasser mit dicken Outlines, farbenblind-sichere Symbole
-## auf jeder Blase (Web-Tabelle), Gooby-Cameo taucht unten mit.
+## ECHTES 3D-UNTERWASSER (FB-4, BubblePopStage3D): Kenney-Food-Modelle schweben
+## in Glasblasen durch ein Pastell-Aquarium, die Zielsorte trägt einen
+## pulsierenden Leuchtring, Gooby taucht als echtes Rig mit. Die Kamera rahmt
+## die Aufstiegsebene EXAKT wie die 2D-Rechnung (set_half_height) — Spawn-,
+## Steig- und Trefferzahlen bleiben unangetastet. Nur HUD-Milchglas und der
+## Stun-Rotschleier bleiben als 2D-Overlay.
+
+const Stage := preload("res://scripts/minigames/games/bubble_pop/bubble_pop_stage3d.gd")
 
 ## Sichtbare Welt-Halbbreite in Logik-Einheiten (Web-Kamera ≈ 3.25 bei 390 px).
 ## Halbe sichtbare Welthöhe — im Web `tan(CAMERA_FOV/2) * 10` bei FOV 45°
@@ -36,6 +42,7 @@ var _time_label: Label
 var _streak_label: Label
 var _hint_label: Label
 var _banner_label: Label
+var _stage: Node3D
 var _bob := 0.0
 var _hud_plate := _make_hud_plate()
 
@@ -49,6 +56,12 @@ func setup(context: MinigameCtx) -> void:
 	var slots := int(ceil(float(tune["DURATION_SEC"]) / float(tune["TARGET_ROTATE_SEC"]))) + 24
 	target_order = BubblePopLogic.target_order(rng, slots)
 	next_spawn = BubblePopLogic.spawn_interval_at(0.0, float(tune["DURATION_SEC"]), tune)
+	_stage = Stage.new()
+	_stage.name = "Aquarium3D"
+	add_child(_stage)
+	_stage.setup_stage()
+	if ctx.juice != null:
+		ctx.juice.world_environment = _stage.stage.world_env
 	_build_hud()
 	_fit_viewport()
 	if is_inside_tree():
@@ -66,18 +79,25 @@ func apply_view(size: Vector2) -> void:
 		view_size = size
 	landscape = view_size.x > view_size.y
 	position = Vector2.ZERO
+	if _stage != null:
+		_stage.frame(view_size)
+	_layout_hud()
+	queue_redraw()
+
+
+## HUD IMMER aus dem Viewport-Rect stellen: unter canvas_items-Stretch sind
+## Canvas-Einheiten ≠ Fensterpixel, apply_view-Größen können abweichen.
+func _layout_hud() -> void:
 	if _time_label == null:
 		return
+	var vp := get_viewport_rect().size
 	_time_label.position = Vector2(16.0, 10.0)
 	_streak_label.position = Vector2(16.0, 48.0)
-	var banner_w := minf(view_size.x - 32.0, 420.0)
-	_banner_label.position = Vector2(
-		(view_size.x - banner_w) * 0.5, 84.0 if not landscape else 12.0
-	)
+	var banner_w := minf(vp.x - 32.0, 420.0)
+	_banner_label.position = Vector2((vp.x - banner_w) * 0.5, 84.0 if not landscape else 12.0)
 	_banner_label.size = Vector2(banner_w, 44.0)
-	_hint_label.position = Vector2(view_size.x * 0.5 - 170.0, view_size.y - 46.0)
+	_hint_label.position = Vector2(vp.x * 0.5 - 170.0, vp.y - 46.0)
 	_hint_label.size = Vector2(340.0, 36.0)
-	queue_redraw()
 
 
 ## Aktives Zielessen zum Rundenzeitpunkt.
@@ -125,6 +145,7 @@ func _process(delta: float) -> void:
 	if not bool(tune["ENDLESS"]) and elapsed >= float(tune["DURATION_SEC"]):
 		_finish()
 		return
+	_stage.sync(bubbles, target_food(), _bob, delta)
 	_update_labels()
 	queue_redraw()
 
@@ -200,11 +221,13 @@ func _pop(index: int) -> void:
 	match str(result["result"]):
 		"match":
 			streak += 1
+			_stage.pop_fx(float(bubble["x"]), float(bubble["y"]), true)
 			_celebrate_match(bubble, pos, delta)
 		"wrong":
 			streak = 0
 			stun_until = elapsed + float(result["stunSec"])
 			AudioDirector.try_play(self, "mg_junk")
+			_stage.pop_fx(float(bubble["x"]), float(bubble["y"]), false)
 			if ctx.juice != null:
 				ctx.juice.float_text(pos, I18nService.t("mg.bubblePop.wrong"), AcTokens.DANGER)
 				ctx.juice.shake(0.35)
@@ -213,6 +236,7 @@ func _pop(index: int) -> void:
 			streak = 0
 			spiky_pops += 1
 			AudioDirector.try_play(self, "mg_spill")
+			_stage.pop_fx(float(bubble["x"]), float(bubble["y"]), false)
 			if ctx.juice != null:
 				ctx.juice.float_text(pos, I18nService.t("mg.bubblePop.spiky"), AcTokens.DANGER)
 				ctx.juice.shake(0.3)
@@ -253,6 +277,7 @@ func _chain_burst(style: String, x: float, y: float, pos: Vector2) -> void:
 	if gained > 0:
 		score = BubblePopLogic.apply_score(score, gained)
 		ctx.report_score(score, gained)
+	_stage.chain_fx(x, y)
 	AudioDirector.try_play(self, "mg_golden")
 	if ctx.juice != null:
 		ctx.juice.bloom_pulse(0.9)
@@ -315,15 +340,11 @@ func _to_world(screen: Vector2) -> Vector2:
 	return Vector2((screen.x - view_size.x * 0.5) / ppu, (view_size.y * 0.5 - screen.y) / ppu)
 
 
+## Nur noch HUD-Overlay: Milchglas hinter den Labels + Stun-Rotschleier.
 func _draw() -> void:
-	_draw_water()
-	for bubble in bubbles:
-		_draw_bubble(bubble)
-	# Nach den Blasen: der Cameo sass sonst regelmässig hinter einer Blase.
-	_draw_gooby()
 	_draw_hud_backing()
 	if elapsed < stun_until:
-		draw_rect(Rect2(Vector2.ZERO, view_size), Color(0.9, 0.4, 0.4, 0.16))
+		draw_rect(Rect2(Vector2.ZERO, get_viewport_rect().size), Color(0.9, 0.4, 0.4, 0.16))
 
 
 ## Milchglas hinter Zeit und Serie. Die Labels sind Kinder und landen dadurch
@@ -346,94 +367,3 @@ func _draw_hud_backing() -> void:
 		+ Vector2(12.0, 6.0)
 	)
 	draw_style_box(_hud_plate, Rect2(top_left, bottom_right - top_left))
-
-
-func _draw_water() -> void:
-	draw_rect(Rect2(Vector2.ZERO, view_size), AcTokens.SKY_SOFT)
-	# Sanfte Lichtbahnen von oben + heller Wasserspiegel.
-	for i in 6:
-		var x := view_size.x * (0.08 + i * 0.17)
-		var top := Vector2(x, 0.0)
-		var bottom := Vector2(x + view_size.x * 0.06, view_size.y)
-		draw_line(top, bottom, Color(1.0, 1.0, 1.0, 0.10), 26.0)
-	draw_rect(Rect2(0.0, 0.0, view_size.x, 6.0), Color(1.0, 1.0, 1.0, 0.55))
-	draw_rect(Rect2(0.0, view_size.y - 52.0, view_size.x, 52.0), Color(0.58, 0.79, 0.62))
-	for i in 9:
-		var wx := view_size.x * (0.05 + i * 0.11)
-		var sway := sin(_bob * 1.4 + float(i)) * 7.0
-		draw_line(
-			Vector2(wx, view_size.y - 46.0),
-			Vector2(wx + sway, view_size.y - 96.0),
-			Color(0.42, 0.66, 0.44),
-			7.0
-		)
-
-
-func _draw_bubble(bubble: Dictionary) -> void:
-	var wobble := sin(_bob * 2.2 + float(bubble["wobble"])) * 0.06
-	var pos := _to_screen(Vector2(float(bubble["x"]) + wobble, float(bubble["y"])))
-	var ppu := _ppu()
-	if str(bubble["kind"]) == "spiky":
-		# Stachelblase bleibt bewusst matt und kühl: sie ist die Gefahr, darf
-		# aber die bunten Ess-Blasen optisch nicht erschlagen.
-		var r := SPIKY_R * ppu
-		for i in 10:
-			var a := TAU * i / 10.0 + _bob * 0.4
-			draw_line(
-				pos + Vector2(cos(a), sin(a)) * r * 0.74,
-				pos + Vector2(cos(a), sin(a)) * r * 1.16,
-				Color(0.46, 0.42, 0.52, 0.75),
-				3.0
-			)
-		draw_circle(pos, r * 0.78, Color(0.58, 0.56, 0.66, 0.5))
-		draw_arc(pos, r * 0.78, 0.0, TAU, 24, Color(0.32, 0.28, 0.36, 0.8), 3.0)
-		draw_circle(pos + Vector2(-r * 0.26, -r * 0.28), r * 0.14, Color(1, 1, 1, 0.45))
-		return
-	var food := str(bubble["food"])
-	var tint := Mg1FoodArt.tint_of(food)
-	var r := BUBBLE_R * ppu
-	var wanted := food == target_food()
-	# Gesuchte Sorte pulsiert leicht und trägt einen Zielring — das ist die
-	# einzige Information, die der Spieler in der Sekunde wirklich braucht.
-	if wanted:
-		var halo := r * (1.24 + sin(_bob * 4.0) * 0.05)
-		draw_circle(pos, halo, Color(tint.r, tint.g, tint.b, 0.2))
-		draw_arc(pos, halo, 0.0, TAU, 30, Color(1.0, 1.0, 1.0, 0.75), 4.0)
-	draw_circle(pos, r, Color(tint.r, tint.g, tint.b, 0.3))
-	draw_circle(pos, r, Color(1.0, 1.0, 1.0, 0.28))
-	Mg1FoodArt.draw(self, food, pos, r * 0.7)
-	draw_arc(pos, r, 0.0, TAU, 28, AcTokens.INK, 3.0)
-	# Glanzlicht und Seifenschimmer auf der Blasenhaut.
-	draw_arc(pos, r * 0.82, PI * 1.05, PI * 1.5, 12, Color(1, 1, 1, 0.8), 5.0)
-	draw_circle(pos + Vector2(r * 0.42, r * 0.34), r * 0.1, Color(1, 1, 1, 0.5))
-
-
-## Gooby taucht unten mit und schaut den Blasen hinterher.
-func _draw_gooby() -> void:
-	var r := clampf(view_size.y * 0.042, 26.0, 52.0)
-	# Immer vollständig über der Wasserpflanzen-Kante und nie angeschnitten.
-	var base := Vector2(
-		maxf(r * 1.8, view_size.x * 0.16), view_size.y - 108.0 - r + sin(_bob * 1.6) * 5.0
-	)
-	var fur := Color(0.99, 0.91, 0.7)
-	# Taucherblasen steigen aus dem Cameo auf.
-	for i in 3:
-		var phase := fmod(_bob * 0.5 + float(i) * 0.33, 1.0)
-		draw_circle(
-			base + Vector2(r * 0.9 + float(i) * 5.0, -r - phase * r * 2.4),
-			r * (0.1 + phase * 0.06),
-			Color(1, 1, 1, 0.5 * (1.0 - phase))
-		)
-	# Ohren wachsen AUS dem Kopf (frei schwebende Kreise sahen abgetrennt aus).
-	for side in [-1.0, 1.0]:
-		var ear_root := base + Vector2(side * r * 0.42, -r * 0.72)
-		var ear_tip := ear_root + Vector2(side * r * 0.34, -r * 0.85)
-		draw_line(ear_root, ear_tip, Color(0.98, 0.88, 0.66), r * 0.32)
-		draw_circle(ear_tip, r * 0.16, Color(0.98, 0.88, 0.66))
-	draw_circle(base, r, fur)
-	draw_arc(base, r, 0.0, TAU, 26, AcTokens.INK, 3.0)
-	draw_circle(base + Vector2(-r * 0.34, -r * 0.16), r * 0.12, AcTokens.INK)
-	draw_circle(base + Vector2(r * 0.34, -r * 0.16), r * 0.12, AcTokens.INK)
-	draw_circle(base + Vector2(-r * 0.62, r * 0.22), r * 0.16, Color(1.0, 0.72, 0.74, 0.5))
-	draw_circle(base + Vector2(r * 0.62, r * 0.22), r * 0.16, Color(1.0, 0.72, 0.74, 0.5))
-	draw_arc(base + Vector2(0.0, r * 0.16), r * 0.32, 0.3, PI - 0.3, 12, AcTokens.INK, 2.5)

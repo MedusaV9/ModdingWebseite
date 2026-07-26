@@ -1,0 +1,146 @@
+{
+	"soul": {
+		"gruss": {
+			"morgen": {
+				"a": "Guten Morgen{namek}! Hast du gut geschlafen?",
+				"b": "Mooorgen! Ich hab schon auf dich gewartet!",
+				"c": "Guten Morgen! Heute wird ein guter Tag, ich spür das!"
+			},
+			"mittag": {
+				"a": "Mahlzeit{namek}! Ich hab schon ein bisschen Hunger…",
+				"b": "Hallo du! Schön, dass du da bist!"
+			},
+			"nachmittag": {
+				"a": "Na{namek}? Wie war dein Tag bis jetzt?",
+				"b": "Heeey! Perfekte Zeit für uns zwei!"
+			},
+			"abend": {
+				"a": "Guten Abend{namek}! Machen wir es uns gemütlich?",
+				"b": "Hallo du! Der Abend gehört uns!"
+			},
+			"nacht": {
+				"a": "Du bist noch wach{namek}…? Ich auch. Psst.",
+				"b": "Mitternachts-Besuch! Das bleibt unser Geheimnis."
+			},
+			"gefreut": {
+				"a": "Da bist du ja wieder! Ich hab an dich gedacht!",
+				"b": "Juhu, du bist zurück! Was machen wir heute?"
+			},
+			"eingeschnappt": {
+				"a": "Hmpf. Du warst LANGE weg. … Na gut, ich hab dich trotzdem vermisst.",
+				"b": "Ich schmolle. Ein bisschen. Okay, fertig geschmollt — schön, dass du da bist!"
+			},
+			"vermisst": {
+				"a": "DU BIST WIEDER DA!! Ich hab dich sooo vermisst!",
+				"b": "Endlich! Ich hab jeden Tag aus dem Fenster geschaut, ob du kommst!"
+			}
+		},
+		"ritual": {
+			"geburtstag_spieler": {
+				"a": "ALLES GUTE ZUM GEBURTSTAG, {name}!! Ich hab dran gedacht!",
+				"b": "Happy Birthday, {name}! Heute feiern WIR DICH!"
+			},
+			"geburtstag_gooby": {
+				"a": "Heute ist MEIN Geburtstag! Weißt du noch, als ich eingezogen bin?",
+				"b": "Ich hab heute Geburtstag!! Gibt es… Kuchen?"
+			},
+			"jubilaeum": {
+				"a": "Weißt du was? Wir kennen uns jetzt {tage} Tage! Schön, oder?",
+				"b": "{tage} Tage wir zwei! Auf viele, viele mehr!"
+			},
+			"neujahr": "Frohes neues Jahr!! Dieses Jahr wird UNSER Jahr!",
+			"ostern": "Frohe Ostern! Ich hab überall nach Eiern gesucht… hinterm Sofa war keins.",
+			"halloween": "Buh! … Hab ich dich erschreckt? Ein BISSCHEN? Happy Halloween!",
+			"nikolaus": "Nikolaus! Ich hab meinen Schuh geputzt. Nur für den Fall.",
+			"heiligabend": "Heiligabend!! Ich bin SO aufgeregt. Hörst du die Glöckchen?",
+			"weihnachten": "Frohe Weihnachten! Das beste Geschenk bist sowieso du.",
+			"silvester": "Silvester! Lass uns bis Mitternacht wach bleiben… oder es versuchen.",
+			"erster_schnee": "SCHNEE!! Der erste Schnee!! Schau doch, SCHAU!!"
+		},
+		"alltag": {
+			"zaehne": {
+				"a": "Erst Zähne putzen! Blitzeblank!",
+				"b": "Zahnputz-Zeit! Schrubb, schrubb, schrubb…"
+			},
+			"gutenacht": {
+				"a": "Ich werd müüüde… Erzählst du mir noch was, bevor ich schlafen geh?",
+				"b": "Gähn… Gute Nacht, du. Träum was Schönes von uns."
+			}
+		},
+		"wetter": {
+			"regen": {
+				"a": "Es regnet… Ich mag das Geräusch am Fenster.",
+				"b": "Plitsch, platsch… Gut, dass wir drinnen sind, oder?"
+			},
+			"gewitter": "War das ein DONNER?! I-ich hab keine Angst. Fast keine.",
+			"schnee": "Es schneit schon wieder! Jede Flocke ist anders, wusstest du das?"
+		},
+		"erinnerung": {
+			"rekord": "Weißt du noch, dein Rekord in {spiel}? {punkte} Punkte! Das war schon gut!",
+			"urlaub": "Weißt du noch, als wir im Urlaub waren? {ziel} war so schön!",
+			"kitzeln": "Du hast mich schon {anzahl} Mal gekitzelt. Ich zähle mit. Hihi.",
+			"garten": "{anzahl} Mal geerntet! Unser Garten ist der beste.",
+			"streak": "{tage} Tage am Stück zusammen! Du und ich, wir sind ein Team.",
+			"funkelpark": "Weißt du noch, der Funkelpark? {anzahl} Besuche! Mir wird noch schwindelig.",
+			"spielzeit": "Wir haben schon {stunden} Stunden zusammen verbracht. Die schönsten!"
+		},
+		"idle": {
+			"aufraeumen": {
+				"a": "Ich räum nur kurz auf. Ordnung muss sein!",
+				"b": "Hier war doch noch… ah, da!"
+			},
+			"fernsehen": "Psst, gleich kommt die spannende Stelle!",
+			"fenster": "Nur mal kurz gucken, was draußen los ist…",
+			"tanzen": "Dieses Lied!! Ich MUSS tanzen!",
+			"lieblingsplatz": "Mein Lieblingsplatz. {moebel} und ich, wir verstehen uns."
+		},
+		"sup": {
+			"sofa_fund": "GUCK MAL! Unterm Sofa! Münzen! Die gehören jetzt uns!",
+			"traum": {
+				"a": "Zzz… nein… DU bist der Keks…",
+				"b": "Zzz… noch fünf Minuten, Herr Karotte…"
+			},
+			"turm": "Ich hab einen TURM gebaut! Ich nenne ihn… Turmi.",
+			"winken": "Hallo! Ja, DU da! Ich seh dich! *wink*"
+		},
+		"kommentar": {
+			"moebel_neu": {
+				"a": "Oooh, {moebel}! Ganz neu! Ich hab es schon getestet — sehr gut!",
+				"b": "{moebel}! Das steht uns, findest du nicht?"
+			},
+			"geschenk": {
+				"a": "Mmmh! Danke!! Du weißt einfach, was ich mag!",
+				"b": "Für MICH? Du bist der/die Beste!"
+			},
+			"lieblingsessen": "{essen}!! Mein absolutes LIEBLINGSESSEN! Woher wusstest du das?",
+			"traurig": {
+				"a": "…schon gut. Ich bin nur froh, wenn du da bist.",
+				"b": "*seufz* … Magst du ein bisschen bei mir bleiben?"
+			}
+		},
+		"tipp": {
+			"kicher": {
+				"a": "Hihi!",
+				"b": "Hehe, das kribbelt!"
+			},
+			"kitzlig": "Hihihi!! Aufhören — nein, WEITERMACHEN — nein, hihi!!",
+			"schwindelig": "Uff… mir ist ganz schwindelig… aber lustig war's."
+		},
+		"frage": {
+			"geburtstag": "Du… wann hast du eigentlich Geburtstag? Ich will es mir merken!"
+		},
+		"essen": {
+			"carrot": "Karotte",
+			"apple": "Apfel",
+			"cupcake": "Törtchen"
+		},
+		"geburtstag_panel": {
+			"titel": "Wann hast du Geburtstag?",
+			"monat": "Monat",
+			"tag": "Tag",
+			"speichern": "Merk es dir!",
+			"abbrechen": "Verrat ich nicht",
+			"danke": "{tag}.{monat}. — eingespeichert! Ich vergesse es NIE!"
+		}
+	}
+}

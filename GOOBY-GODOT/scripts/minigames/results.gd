@@ -13,9 +13,15 @@ extends Control
 signal again_pressed
 signal back_pressed
 
+## Wunschbreite der Karte (Design-px — FB3: skaliert mit UiScale).
+const PANEL_BASE_WIDTH := 420.0
+
 var _panel: PanelContainer
+var _center: CenterContainer
 var _rows: VBoxContainer
 var _juice: JuiceKit
+var _again: Button
+var _back: Button
 
 
 func _ready() -> void:
@@ -26,16 +32,48 @@ func _ready() -> void:
 	dim.color = Color(0.24, 0.16, 0.12, 0.55)
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(dim)
-	var center := CenterContainer.new()
-	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	add_child(center)
+	_center = CenterContainer.new()
+	_center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child(_center)
 	_panel = PanelContainer.new()
 	_panel.theme_type_variation = &"AcCardLg"
-	_panel.custom_minimum_size = Vector2(420, 0)
-	center.add_child(_panel)
+	_panel.custom_minimum_size = Vector2(PANEL_BASE_WIDTH, 0)
+	_center.add_child(_panel)
 	_rows = VBoxContainer.new()
 	_rows.add_theme_constant_override("separation", 10)
 	_panel.add_child(_rows)
+	get_viewport().size_changed.connect(_apply_metrics)
+
+
+## FB3: Karte skaliert mit der ZENTRALEN UiScale-Regel, bleibt in der
+## Safe-Area zentriert (Notch/Home-Indicator) und die Knöpfe halten den
+## Touch-Floor — vorher feste 420 px + Canvas-Zentrum.
+func _apply_metrics() -> void:
+	if _panel == null:
+		return
+	var m := ScreenShell.metrics(get_viewport())
+	var insets: Dictionary = m["insets"]
+	_center.offset_left = float(insets["left"])
+	_center.offset_right = -float(insets["right"])
+	_center.offset_top = float(insets["top"])
+	_center.offset_bottom = -float(insets["bottom"])
+	_panel.custom_minimum_size = Vector2(ScreenShell.card_width(m, PANEL_BASE_WIDTH), 0)
+	for btn in [_again, _back]:
+		if btn != null:
+			ScreenShell.touch_target(btn, m)
+	ScreenShell.scale_fonts(_panel, m["f"])
+	# Fit-Pass: die Karte darf NIE höher werden als die Safe-Area (Quer-
+	# Formate) — Schriften schrumpfen proportional zurück (nie unter die
+	# Design-Basis), die Knöpfe behalten ihren Touch-Floor.
+	var canvas: Vector2 = m["canvas"]
+	var safe_h := (canvas.y - float(insets["top"]) - float(insets["bottom"])) * 0.96
+	var f_fit: float = m["f"]
+	for _pass in 4:
+		var need := _panel.get_combined_minimum_size().y
+		if f_fit <= 1.0 or need <= safe_h:
+			break
+		f_fit = maxf(f_fit * safe_h / need, 1.0)
+		ScreenShell.scale_fonts(_panel, f_fit)
 
 
 ## breakdown = MinigameAward.award()-Ergebnis; meta = Registry-Zeile.
@@ -95,24 +133,27 @@ func show_results(breakdown: Dictionary, meta: Dictionary, juice: JuiceKit = nul
 	buttons.alignment = BoxContainer.ALIGNMENT_CENTER
 	buttons.add_theme_constant_override("separation", 14)
 	_rows.add_child(buttons)
-	var again := Button.new()
-	again.theme_type_variation = &"PrimaryButton"
-	again.text = I18nService.t("mg.results.again")
-	again.pressed.connect(
+	_again = Button.new()
+	_again.theme_type_variation = &"PrimaryButton"
+	_again.text = I18nService.t("mg.results.again")
+	_again.focus_mode = Control.FOCUS_NONE
+	_again.pressed.connect(
 		func() -> void:
 			AudioDirector.try_play(self, "ui_confirm")
 			again_pressed.emit()
 	)
-	buttons.add_child(again)
-	var back := Button.new()
-	back.theme_type_variation = &"GhostButton"
-	back.text = I18nService.t("mg.results.back")
-	back.pressed.connect(
+	buttons.add_child(_again)
+	_back = Button.new()
+	_back.theme_type_variation = &"GhostButton"
+	_back.text = I18nService.t("mg.results.back")
+	_back.focus_mode = Control.FOCUS_NONE
+	_back.pressed.connect(
 		func() -> void:
 			AudioDirector.try_play(self, "ui_back")
 			back_pressed.emit()
 	)
-	buttons.add_child(back)
+	buttons.add_child(_back)
+	_apply_metrics()
 	show()
 	if _juice != null:
 		# Punkte zählen hörbar hoch (Ticks steigen in der Tonhöhe), das Panel

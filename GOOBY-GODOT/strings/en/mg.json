@@ -49,7 +49,12 @@
 			"pause": "❚❚ Pause",
 			"paused": "Paused",
 			"resume": "Resume",
+			"restart": "Restart",
 			"quit": "Quit",
+			"sound_on": "Sound: On",
+			"sound_off": "Sound: Off",
+			"help": "Help",
+			"help_none": "Score points before the round ends — you got this!",
 			"go": "Go!"
 		},
 		"results": {

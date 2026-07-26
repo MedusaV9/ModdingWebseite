@@ -19,6 +19,8 @@ var net_override: NetClient = null
 var auto_navigate := true
 
 var _net: NetClient
+var _rows: VBoxContainer
+var _back: Button
 var _status_chip: Button
 var _code_value: Label
 var _copy_button: Button
@@ -59,6 +61,9 @@ func _ready() -> void:
 			_net.friends.requests_changed.connect(_on_requests_changed)
 			_net.friends.friend_code_changed.connect(func(_code: String) -> void: _refresh_code())
 	_refresh_all()
+	# FB3: Safe-Area + zentrale UiScale-Regel statt fester 24/16-px-Ränder.
+	_apply_metrics()
+	get_viewport().size_changed.connect(_apply_metrics)
 
 
 func _build_ui() -> void:
@@ -66,23 +71,25 @@ func _build_ui() -> void:
 	bg.color = Color(0.98, 0.94, 0.87)
 	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(bg)
-	var rows := VBoxContainer.new()
-	rows.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	rows.offset_left = 24.0
-	rows.offset_right = -24.0
-	rows.offset_top = 16.0
-	rows.offset_bottom = -16.0
-	rows.add_theme_constant_override("separation", 12)
-	add_child(rows)
+	_rows = VBoxContainer.new()
+	_rows.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_rows.offset_left = 24.0
+	_rows.offset_right = -24.0
+	_rows.offset_top = 16.0
+	_rows.offset_bottom = -16.0
+	_rows.add_theme_constant_override("separation", 12)
+	add_child(_rows)
 
-	# Header: Zurück | Titel | Status-Chip.
+	# Header: Zurück | Titel | Status-Chip (Zurück IMMER oben links —
+	# dieselbe Stelle wie in Arcade/Album/Profil).
 	var header := HBoxContainer.new()
-	rows.add_child(header)
-	var back := Button.new()
-	back.theme_type_variation = &"GhostButton"
-	back.text = I18nService.t("net.friends.back")
-	back.pressed.connect(_on_back_pressed)
-	header.add_child(back)
+	_rows.add_child(header)
+	_back = Button.new()
+	_back.theme_type_variation = &"GhostButton"
+	_back.text = I18nService.t("net.friends.back")
+	_back.focus_mode = Control.FOCUS_NONE
+	_back.pressed.connect(_on_back_pressed)
+	header.add_child(_back)
 	var title := Label.new()
 	title.theme_type_variation = &"TitleLabel"
 	title.text = I18nService.t("net.friends.title")
@@ -96,11 +103,13 @@ func _build_ui() -> void:
 	_offline_hint.text = I18nService.t("net.friends.offline_hint")
 	_offline_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_offline_hint.add_theme_color_override("font_color", FriendListUi.COLOR_HINT)
-	rows.add_child(_offline_hint)
+	_rows.add_child(_offline_hint)
 
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	rows.add_child(scroll)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.scroll_deadzone = 24
+	_rows.add_child(scroll)
 	var content := VBoxContainer.new()
 	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	content.add_theme_constant_override("separation", 12)
@@ -180,6 +189,18 @@ func _build_ui() -> void:
 	content.add_child(_friends_box)
 
 
+## FB3: Safe-Area-Ränder, Touch-Floor und Schrift-Skalierung über die
+## zentralen Bausteine (`ScreenShell`) — läuft bei Resize/Rotation erneut.
+func _apply_metrics() -> void:
+	if _rows == null:
+		return
+	var m := ScreenShell.metrics(get_viewport())
+	ScreenShell.frame(_rows, m)
+	for ctl: Control in [_back, _copy_button, _add_button, _status_chip, _add_input]:
+		ScreenShell.touch_target(ctl, m)
+	ScreenShell.scale_fonts(self, m["f"])
+
+
 func _refresh_all() -> void:
 	_on_status_changed(_net.status if _net != null else NetClient.Status.OFFLINE)
 	_refresh_code()
@@ -220,8 +241,14 @@ func _on_requests_changed(requests: Array) -> void:
 		child.queue_free()
 	_requests_title.visible = not requests.is_empty()
 	_requests_box.visible = _requests_title.visible
+	var cards: Array = []
 	for row: Dictionary in requests:
-		_requests_box.add_child(_build_request_row(row))
+		var card := _build_request_row(row)
+		_requests_box.add_child(card)
+		cards.append(card)
+	# FB3-Polish: Zeilen federn gestaffelt ein statt hart zu erscheinen.
+	UiMotion.stagger_in(cards)
+	_apply_metrics()
 
 
 func _on_friends_changed(friends: Array) -> void:
@@ -231,9 +258,15 @@ func _on_friends_changed(friends: Array) -> void:
 		_friends_box.add_child(
 			FriendListUi.build_empty_state("net.friends.empty_art", "net.friends.empty")
 		)
+		_apply_metrics()
 		return
+	var cards: Array = []
 	for row: Dictionary in friends:
-		_friends_box.add_child(_build_friend_row(row))
+		var card := _build_friend_row(row)
+		_friends_box.add_child(card)
+		cards.append(card)
+	UiMotion.stagger_in(cards)
+	_apply_metrics()
 
 
 func _build_request_row(row: Dictionary) -> Control:

@@ -34,6 +34,7 @@ var ampel_lookup: Dictionary = {}
 var _szene: Node3D
 var _karte: CityMap
 var _profil: Dictionary
+var _stunde := 12.0
 
 var _glb_mesh_cache: Dictionary = {}
 var _markisen: Array[Dictionary] = []
@@ -43,10 +44,11 @@ var _voegel: Array[Dictionary] = []
 var _voegel_zeit := 0.0
 
 
-func _init(szene: Node3D, karte: CityMap, licht_profil: Dictionary) -> void:
+func _init(szene: Node3D, karte: CityMap, licht_profil: Dictionary, stunde := 12.0) -> void:
 	_szene = szene
 	_karte = karte
 	_profil = licht_profil
+	_stunde = stunde
 
 
 ## Sanfte Dauer-Animationen der Kulisse (Markisen wehen, Voegel kreisen).
@@ -60,17 +62,12 @@ func tick(delta: float) -> void:
 func baue_licht() -> void:
 	var env := WorldEnvironment.new()
 	var e := Environment.new()
-	var sky := Sky.new()
-	var sky_mat := ProceduralSkyMaterial.new()
-	sky_mat.sky_top_color = _profil["himmel_oben"]
-	sky_mat.sky_horizon_color = _profil["himmel_horizont"]
-	# Boden-Hemisphäre grünlich statt dunkelbraun — sonst steht am Rand der
-	# endlichen Bodenplatte ein dunkler Horizont-Balken.
-	sky_mat.ground_horizon_color = _profil["boden_horizont"]
-	sky_mat.ground_bottom_color = _profil["boden_unten"]
-	sky.sky_material = sky_mat
+	# FB-2: prozeduraler GOOBY-Himmel (gleicher Shader wie die Ranch) —
+	# die Stadt hat kein Wetter, also einmal zur Bau-Stunde einstellen.
+	var himmel := GoobyHimmel.new()
+	himmel.wende_an(_stunde, {"typ": "sonne"})
 	e.background_mode = Environment.BG_SKY
-	e.sky = sky
+	e.sky = himmel.sky
 	e.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
 	e.ambient_light_energy = _profil["ambient_energie"]
 	env.environment = e
@@ -498,6 +495,10 @@ func baue_kulisse() -> void:
 	wurzel.name = "Kulisse"
 	_szene.add_child(wurzel)
 	var plaene := CityKulisse.plaene(_karte, _karte.deko_seed())
+	# FB-2 Stadt-Grün: Straßenbäume/Hecken/Blumenkästen/Efeu/Blumenampeln
+	# in DENSELBEN Plan mischen — gleiche glb|tint-Sorten teilen sich das
+	# MultiMesh, das Grün kostet also kaum zusätzliche Draw-Calls.
+	plaene.append_array(CityGruen.plaene(_karte, _karte.deko_seed() + 917))
 	var gruppen := CityKulisse.gruppen(plaene)
 	var schluessel: Array = gruppen.keys()
 	schluessel.sort()

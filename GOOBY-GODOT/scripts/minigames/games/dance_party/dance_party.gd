@@ -8,8 +8,16 @@ extends MinigameBase
 ## Der Song läuft ab −LEAD_IN_SEC; Noten fallen NOTE_TRAVEL_SEC lang auf die
 ## Trefferlinie. Im Endlos-Modus werden Chart-Segmente angehängt und je
 ## 12-Sekunden-Abschnitt ein Serienbruch gezählt (3 beenden den Lauf).
+##
+## ECHTER 3D-DISCO-CLUB (FB-4, DancePartyStage3D): Noten fallen als leuchtende
+## 3D-Kugeln durch Glasbahnen auf Trefferringe, Spiegelkugel + Scheinwerfer
+## schwenken im Takt, Gooby (echtes Rig) tanzt auf dem Kachelboden. Alle
+## Bildschirm-Anker (lane_x/note_y) bleiben die 2D-Rechnung — die Bühne
+## rechnet sie nur in Weltkoordinaten um. Nur die Zugabe-Einblendung bleibt
+## als 2D-Overlay.
 
 const Logic := preload("res://scripts/minigames/games/dance_party/dance_party_logic.gd")
+const Stage := preload("res://scripts/minigames/games/dance_party/dance_party_stage3d.gd")
 
 ## Bildschirmhöhe der Trefferlinie (Anteil von oben).
 const HIT_LINE_FRAC := 0.74
@@ -39,7 +47,6 @@ var _chart_segment := 0
 var _head := 0
 var _section_idx := 0
 var _section_missed := false
-var _bursts: Array[Dictionary] = []
 var _lane_flash: Array[float] = [0.0, 0.0, 0.0]
 var _ball_spin := 0.0
 var _ball_pop := 0.0
@@ -47,6 +54,7 @@ var _bob := 0.0
 var _score_label: Label
 var _combo_label: Label
 var _hint_label: Label
+var _stage: Node3D
 
 
 func setup(context: MinigameCtx) -> void:
@@ -57,6 +65,12 @@ func setup(context: MinigameCtx) -> void:
 	endless_state = Logic.create_endless_state()
 	song_time = -float(tune["LEAD_IN_SEC"])
 	_append_segment()
+	_stage = Stage.new()
+	_stage.name = "Club3D"
+	add_child(_stage)
+	_stage.setup_stage()
+	if ctx.juice != null:
+		ctx.juice.world_environment = _stage.stage.world_env
 	_build_hud()
 	_fit_viewport()
 	if is_inside_tree():
@@ -74,12 +88,29 @@ func apply_view(size: Vector2) -> void:
 		view_size = size
 	landscape = view_size.x > view_size.y
 	position = Vector2.ZERO
-	if _score_label != null:
-		_score_label.position = Vector2(16.0, 10.0)
-		_combo_label.position = Vector2(16.0, 48.0)
-		_hint_label.position = Vector2(view_size.x * 0.5 - 160.0, view_size.y - 44.0)
-		_hint_label.size = Vector2(320.0, 36.0)
+	if _stage != null:
+		_stage.frame(view_size)
+		var xs: Array[float] = [lane_x(0), lane_x(1), lane_x(2)]
+		_stage.layout(
+			xs,
+			view_size.y * (HIT_LINE_FRAC - TRAVEL_FRAC),
+			view_size.y * HIT_LINE_FRAC,
+			lane_span()
+		)
+	_layout_hud()
 	queue_redraw()
+
+
+## HUD IMMER aus dem Viewport-Rect stellen: unter canvas_items-Stretch sind
+## Canvas-Einheiten ≠ Fensterpixel, apply_view-Größen können abweichen.
+func _layout_hud() -> void:
+	if _score_label == null:
+		return
+	var vp := get_viewport_rect().size
+	_score_label.position = Vector2(16.0, 10.0)
+	_combo_label.position = Vector2(16.0, 48.0)
+	_hint_label.position = Vector2(vp.x * 0.5 - 160.0, vp.y - 44.0)
+	_hint_label.size = Vector2(320.0, 36.0)
 
 
 func _process(delta: float) -> void:
@@ -106,8 +137,41 @@ func _process(delta: float) -> void:
 		return
 	score = Logic.dance_score(tally)
 	ctx.report_score(score, 0)
+	_sync_stage(delta)
 	_update_labels()
 	queue_redraw()
+
+
+## Sichtbare Noten als Bildschirm-Anker an die Bühne geben.
+func _sync_stage(delta: float) -> void:
+	var visible_notes: Array[Dictionary] = []
+	for i in range(_head, notes.size()):
+		var n: Dictionary = notes[i]
+		if bool(n["hit"]) or bool(n["missed"]):
+			continue
+		var life := Logic.note_lifecycle(float(n["time"]), song_time, tune)
+		if life == "future":
+			break
+		if life != "visible":
+			continue
+		var lane := int(n["lane"])
+		visible_notes.append({"lane": lane, "x": lane_x(lane), "y": note_y(float(n["time"]))})
+	var beat := sin(_bob * (float(Logic.DANCE["BPM"]) / 60.0) * TAU)
+	var pop := 0.0
+	if _ball_pop > 0.0:
+		var f := _ball_pop / float(Logic.DANCE_JUICE["BALL_POP_SEC"])
+		pop = (float(Logic.DANCE_JUICE["BALL_POP_SCALE"]) - 1.0) * f
+	_stage.sync(
+		visible_notes,
+		_lane_flash,
+		tier(),
+		beat,
+		_ball_spin,
+		pop,
+		Logic.encore_active(fever, song_time),
+		_bob,
+		delta
+	)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -236,16 +300,18 @@ func _judge(kind: String, at_x: float) -> void:
 	if kind == "miss":
 		_section_missed = true
 		AudioDirector.try_play(self, "mg_junk")
+		_stage.miss_fx()
 		if ctx.juice != null:
 			ctx.juice.shake(0.35)
 			ctx.juice.sfx("game_miss")
 			ctx.juice.show_combo(0)
 		return
-	_bursts.append({"x": at_x, "t": float(Logic.DANCE_JUICE["BURST_LIFE_SEC"]), "kind": kind})
+	_stage.hit_fx(at_x, kind == "perfect")
 	_ball_pop = float(Logic.DANCE_JUICE["BALL_POP_SEC"])
 	var combo := int(tally["combo"])
 	if bool(chain["started"]):
 		AudioDirector.try_play(self, "mg_golden")
+		_stage.encore_fx()
 		if ctx.juice != null:
 			ctx.juice.bloom_pulse(1.0)
 			ctx.juice.edge_glow(0.8, Color(1.0, 0.75, 0.3))
@@ -275,12 +341,6 @@ func _judge(kind: String, at_x: float) -> void:
 
 
 func _age_bursts(delta: float) -> void:
-	var kept: Array[Dictionary] = []
-	for b in _bursts:
-		b["t"] = float(b["t"]) - delta
-		if float(b["t"]) > 0.0:
-			kept.append(b)
-	_bursts = kept
 	for i in _lane_flash.size():
 		_lane_flash[i] = maxf(0.0, _lane_flash[i] - delta)
 
@@ -318,173 +378,23 @@ func _update_labels() -> void:
 		_combo_label.text = ""
 
 
+## Nur noch HUD-Overlay: die Zugabe-Einblendung ist eine ANSAGE, keine
+## Kulisse, und muss in jeder Kameralage sofort lesbar sein.
 func _draw() -> void:
-	_draw_floor()
-	_draw_lanes()
-	_draw_hit_line()
-	_draw_notes()
-	_draw_bursts()
-	_draw_gooby()
-	_draw_mirror_ball()
 	if Logic.encore_active(fever, song_time):
 		_draw_encore()
 
 
-func _draw_floor() -> void:
-	for i in 12:
-		var f := float(i) / 11.0
-		draw_rect(
-			Rect2(0.0, view_size.y * f, view_size.x, view_size.y / 11.0 + 1.0),
-			FLOOR_DARK.lerp(FLOOR_LIGHT, f)
-		)
-	# Discolicht-Kegel von oben.
-	for i in 3:
-		var phase := _bob * 0.7 + i * TAU / 3.0
-		var top := Vector2(view_size.x * 0.5, view_size.y * 0.02)
-		var aim := view_size.x * (0.5 + 0.45 * sin(phase))
-		draw_colored_polygon(
-			PackedVector2Array(
-				[
-					top + Vector2(-14.0, 0.0),
-					top + Vector2(14.0, 0.0),
-					Vector2(aim + 90.0, view_size.y * HIT_LINE_FRAC),
-					Vector2(aim - 90.0, view_size.y * HIT_LINE_FRAC),
-				]
-			),
-			Color(LANE_COLORS[i], 0.09)
-		)
-
-
-func _draw_lanes() -> void:
-	var span := lane_span()
-	var top := view_size.y * (HIT_LINE_FRAC - TRAVEL_FRAC)
-	var height := view_size.y * HIT_LINE_FRAC - top
-	for i in int(Logic.DANCE["LANES"]):
-		var x := lane_x(i)
-		var alpha := 0.07 + _lane_flash[i] * 1.6
-		draw_rect(Rect2(x - span * 0.46, top, span * 0.92, height), Color(LANE_COLORS[i], alpha))
-		draw_rect(
-			Rect2(x - span * 0.46, top, span * 0.92, height),
-			Color(LANE_COLORS[i], 0.22),
-			false,
-			2.0
-		)
-
-
-func _draw_hit_line() -> void:
-	var y := view_size.y * HIT_LINE_FRAC
-	var span := lane_span()
-	draw_line(
-		Vector2(view_size.x * 0.5 - span * 1.5, y),
-		Vector2(view_size.x * 0.5 + span * 1.5, y),
-		Color(1.0, 1.0, 1.0, 0.55),
-		3.0
-	)
-	for i in int(Logic.DANCE["LANES"]):
-		var pulse := 1.0 + _lane_flash[i] * 2.2
-		draw_arc(
-			Vector2(lane_x(i), y),
-			span * 0.34 * pulse,
-			0.0,
-			TAU,
-			28,
-			Color(LANE_COLORS[i], 0.85),
-			3.0
-		)
-
-
-func _draw_notes() -> void:
-	var span := lane_span()
-	for i in range(_head, notes.size()):
-		var n: Dictionary = notes[i]
-		if bool(n["hit"]) or bool(n["missed"]):
-			continue
-		var life := Logic.note_lifecycle(float(n["time"]), song_time, tune)
-		if life == "future":
-			break
-		if life != "visible":
-			continue
-		var lane := int(n["lane"])
-		var pos := Vector2(lane_x(lane), note_y(float(n["time"])))
-		var r := span * 0.3
-		draw_circle(pos, r * 1.5, Color(LANE_COLORS[lane], 0.18))
-		draw_circle(pos, r, LANE_COLORS[lane])
-		draw_circle(pos, r * 0.55, Color(1.0, 1.0, 1.0, 0.75))
-
-
-func _draw_bursts() -> void:
-	var life := float(Logic.DANCE_JUICE["BURST_LIFE_SEC"])
-	var y := view_size.y * HIT_LINE_FRAC
-	for b in _bursts:
-		var f := 1.0 - float(b["t"]) / life
-		var end_scale := float(
-			Logic.DANCE_JUICE[
-				"BURST_SCALE_PERFECT" if str(b["kind"]) == "perfect" else "BURST_SCALE_GOOD"
-			]
-		)
-		draw_arc(
-			Vector2(float(b["x"]), y),
-			lane_span() * 0.3 * (1.0 + (end_scale - 1.0) * f),
-			0.0,
-			TAU,
-			30,
-			Color(1.0, 0.98, 0.85, 1.0 - f),
-			3.0
-		)
-
-
-func _draw_gooby() -> void:
-	var t := tier()
-	var pos := Vector2(view_size.x * 0.5, view_size.y * 0.85)
-	var beat := sin(_bob * (float(Logic.DANCE["BPM"]) / 60.0) * TAU)
-	var s := (view_size.y * 0.048) * (1.0 + 0.06 * t) * (1.0 + 0.05 * beat)
-	var sway := beat * (4.0 + 5.0 * t)
-	pos.x += sway
-	draw_circle(pos + Vector2(0.0, s * 0.85), s * 0.95, Color(0.99, 0.9, 0.66))
-	draw_circle(pos, s * 0.72, Color(0.99, 0.93, 0.74))
-	for side in [-1.0, 1.0]:
-		draw_circle(pos + Vector2(side * s * 0.34, -s * 0.85), s * 0.24, Color(0.99, 0.93, 0.74))
-		draw_circle(pos + Vector2(side * s * 0.26, -s * 0.05), s * 0.1, Color(0.22, 0.18, 0.16))
-	draw_circle(pos + Vector2(0.0, s * 0.2), s * 0.1, Color(0.96, 0.62, 0.68))
-	# Arme heben sich mit der Serienstufe.
-	for side in [-1.0, 1.0]:
-		draw_line(
-			pos + Vector2(side * s * 0.7, s * 0.7),
-			pos + Vector2(side * s * (1.2 + 0.2 * t), s * (0.7 - 0.45 * t - 0.2 * beat)),
-			Color(0.99, 0.9, 0.66),
-			s * 0.22
-		)
-
-
-func _draw_mirror_ball() -> void:
-	var pop := 1.0
-	if _ball_pop > 0.0:
-		var f := _ball_pop / float(Logic.DANCE_JUICE["BALL_POP_SEC"])
-		pop = 1.0 + (float(Logic.DANCE_JUICE["BALL_POP_SCALE"]) - 1.0) * f
-	var center := Vector2(view_size.x * 0.5, view_size.y * 0.055)
-	var r := view_size.y * 0.028 * pop
-	draw_line(Vector2(center.x, 0.0), center, Color(0.6, 0.6, 0.7), 2.0)
-	draw_circle(center, r * 1.6, Color(0.8, 0.85, 1.0, 0.14))
-	draw_circle(center, r, Color(0.72, 0.78, 0.95))
-	for i in 8:
-		var a := _ball_spin + i * TAU / 8.0
-		draw_line(
-			center + Vector2(cos(a), sin(a)) * r * 0.25,
-			center + Vector2(cos(a), sin(a)) * r,
-			Color(0.95, 0.97, 1.0, 0.75),
-			2.0
-		)
-
-
 func _draw_encore() -> void:
+	var vp := get_viewport_rect().size
 	var alpha := 0.25 + 0.15 * sin(_bob * 12.0)
-	draw_rect(Rect2(Vector2.ZERO, view_size), Color(1.0, 0.8, 0.45, alpha * 0.35))
+	draw_rect(Rect2(Vector2.ZERO, vp), Color(1.0, 0.8, 0.45, alpha * 0.35))
 	draw_string(
 		ThemeService.font(800),
-		Vector2(0.0, view_size.y * 0.2),
+		Vector2(0.0, vp.y * 0.2),
 		I18nService.t("mg.danceParty.encore"),
 		HORIZONTAL_ALIGNMENT_CENTER,
-		view_size.x,
+		vp.x,
 		30,
 		Color(1.0, 0.9, 0.6, 0.9)
 	)

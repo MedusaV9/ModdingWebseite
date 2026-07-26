@@ -56,7 +56,7 @@ func _ready() -> void:
 	karte = CityMap.laden()
 	graph = CityRoadGraph.aus_karte(karte)
 	_licht_profil = CityAmbiente.licht_profil(_stunde())
-	_bau = CityBau.new(self, karte, _licht_profil)
+	_bau = CityBau.new(self, karte, _licht_profil, _stunde())
 	_bau.baue_licht()
 	_bau.baue_boden()
 	_bau.baue_strassen()

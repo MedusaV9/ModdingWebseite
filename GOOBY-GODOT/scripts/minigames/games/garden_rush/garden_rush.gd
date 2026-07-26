@@ -4,7 +4,15 @@ extends MinigameBase
 ## 20 s, Nr. 8 ab 35 s), Welkfenster rampt 6 s → 3 s, Halten füllt den
 ## 0,8-s-Ring — Loslassen im letzten Viertel gibt +3, früher +1, verwelkt −2,
 ## gegossenes Unkraut −1. Bei 30 s erscheint der einmalige Sprinkler (+50 %
-## auf alle Ringe). Optik: Beet von oben, dicke Outlines, Gooby gießt mit.
+## auf alle Ringe).
+##
+## ECHTES 3D-BEET (FB-4, GardenRushStage3D): Terrakotta-Töpfe mit wachsenden
+## 3D-Sprossen und Unkraut auf einer Gartenbühne, Gooby (echtes Rig) gießt
+## mit. Die Töpfe liegen per ground_point-Raycast EXAKT unter den
+## 2D-Tap-Rechtecken — Eingabe bleibt zahlengleich. Nur der Füllring beim
+## Halten bleibt als 2D-Overlay (Eingabe-Feedback).
+
+const Stage := preload("res://scripts/minigames/games/garden_rush/garden_rush_stage3d.gd")
 
 ## Verhältnis Topfbreite zu Zellenbreite.
 const POT_FILL := 0.74
@@ -32,6 +40,7 @@ var _hint_label: Label
 var _banner_label: Label
 var _banner_until := -1.0
 var _active_pots := 0
+var _stage: Node3D
 var _bob := 0.0
 var _splash := 0.0
 
@@ -44,6 +53,12 @@ func setup(context: MinigameCtx) -> void:
 		pots.append({"state": "empty", "remaining": 0.0, "window": 0.0, "cooldown": 0.0})
 	_active_pots = GardenRushLogic.active_pots_at(0.0)
 	next_spawn = 0.35
+	_stage = Stage.new()
+	_stage.name = "Beet3D"
+	add_child(_stage)
+	_stage.setup_stage()
+	if ctx.juice != null:
+		ctx.juice.world_environment = _stage.stage.world_env
 	_build_hud()
 	_fit_viewport()
 	if is_inside_tree():
@@ -61,16 +76,30 @@ func apply_view(size: Vector2) -> void:
 		view_size = size
 	landscape = view_size.x > view_size.y
 	position = Vector2.ZERO
+	if _stage != null:
+		# Erst die Kamera stellen, dann die Töpfe unter die Rechtecke raycasten.
+		_stage.frame(view_size)
+		var rects: Array[Rect2] = []
+		for i in pots.size():
+			rects.append(_pot_rect(i))
+		_stage.layout(rects, _sprinkler_rect())
+	_layout_hud()
+	queue_redraw()
+
+
+## HUD IMMER aus dem Viewport-Rect stellen: unter canvas_items-Stretch sind
+## Canvas-Einheiten ≠ Fensterpixel, apply_view-Größen können abweichen.
+func _layout_hud() -> void:
 	if _time_label == null:
 		return
+	var vp := get_viewport_rect().size
 	_time_label.position = Vector2(16.0, 10.0)
 	_withered_label.position = Vector2(16.0, 48.0)
-	var banner_w := minf(view_size.x - 32.0, 420.0)
-	_banner_label.position = Vector2((view_size.x - banner_w) * 0.5, 84.0 if not landscape else 8.0)
+	var banner_w := minf(vp.x - 32.0, 420.0)
+	_banner_label.position = Vector2((vp.x - banner_w) * 0.5, 84.0 if not landscape else 8.0)
 	_banner_label.size = Vector2(banner_w, 44.0)
-	_hint_label.position = Vector2(view_size.x * 0.5 - 190.0, view_size.y - 38.0)
+	_hint_label.position = Vector2(vp.x * 0.5 - 190.0, vp.y - 38.0)
 	_hint_label.size = Vector2(380.0, 34.0)
-	queue_redraw()
 
 
 func _build_hud() -> void:
@@ -112,6 +141,8 @@ func _process(delta: float) -> void:
 	if _round_over():
 		_finish()
 		return
+	_stage.set_sprinkler_visible(sprinkler_spawned and not sprinkler_used)
+	_stage.sync(pots, _active_pots, hold_index, _bob, delta)
 	_update_labels()
 	queue_redraw()
 
@@ -245,6 +276,7 @@ func _water_sprout(index: int, frac: float) -> void:
 	pot["cooldown"] = WATERED_COOLDOWN
 	_splash = 1.0
 	var pos := _pot_rect(index).get_center()
+	_stage.water_fx(index, perfect)
 	AudioDirector.try_play(self, "mg_perfect" if perfect else "mg_good")
 	if ctx.juice != null:
 		var key := "mg.gardenRush.perfect" if perfect else "mg.gardenRush.early"
@@ -269,6 +301,7 @@ func _water_weed(index: int) -> void:
 	pot["remaining"] = minf(float(pot["remaining"]), 1.2)
 	pot["grown"] = true
 	var pos := _pot_rect(index).get_center()
+	_stage.weed_fx(index)
 	AudioDirector.try_play(self, "mg_junk")
 	if ctx.juice != null:
 		ctx.juice.shake(0.3)
@@ -283,6 +316,7 @@ func _wilt_out(index: int) -> void:
 	score = GardenRushLogic.apply_points(score, delta)
 	withered += 1
 	var pos := _pot_rect(index).get_center()
+	_stage.wilt_fx(index)
 	AudioDirector.try_play(self, "mg_spill")
 	if ctx.juice != null:
 		ctx.juice.shake(0.3)
@@ -318,6 +352,7 @@ func _fire_sprinkler() -> void:
 		refilled += 1
 	_banner_label.text = I18nService.t("mg.gardenRush.sprinkler_used", {"n": refilled})
 	_banner_until = elapsed + 2.5
+	_stage.sprinkler_fx()
 	AudioDirector.try_play(self, "gvz_collect")
 	if ctx.juice != null:
 		ctx.juice.bloom_pulse(1.0)
@@ -386,89 +421,11 @@ func _sprinkler_rect() -> Rect2:
 	)
 
 
+## Nur noch HUD-Overlay: der Füllring am gehaltenen Topf ist präzises
+## Eingabe-Feedback (Perfekt-Zone!) und bleibt deshalb gestochen scharf in 2D.
 func _draw() -> void:
-	_draw_field()
-	for i in pots.size():
-		_draw_pot(i)
-	_draw_gooby()
-	if sprinkler_spawned and not sprinkler_used:
-		_draw_sprinkler()
 	if hold_index >= 0:
 		_draw_fill_ring()
-
-
-func _draw_field() -> void:
-	draw_rect(Rect2(Vector2.ZERO, view_size), Color("EAF5DC"))
-	var field := _field_rect()
-	draw_rect(field.grow(14.0), Color("D8E9C0"))
-	draw_rect(field.grow(14.0), AcTokens.INK, false, 4.0)
-	# Beet-Furchen als ruhige Struktur unter den Töpfen.
-	var rows := 9
-	for i in rows:
-		var y := field.position.y + field.size.y * (float(i) + 0.5) / float(rows)
-		draw_line(
-			Vector2(field.position.x + 6.0, y),
-			Vector2(field.position.x + field.size.x - 6.0, y),
-			Color(0.55, 0.68, 0.45, 0.22),
-			3.0
-		)
-
-
-func _draw_pot(index: int) -> void:
-	var rect := _pot_rect(index)
-	var center := rect.get_center()
-	var half := rect.size.x * 0.5
-	var locked := index >= _active_pots
-	var soil := Color(0.44, 0.33, 0.25, 0.35 if locked else 1.0)
-	draw_circle(center, half, Color("C98A5B") if not locked else Color(0.8, 0.74, 0.68, 0.5))
-	draw_arc(center, half, 0.0, TAU, 30, AcTokens.INK, 3.0 if not locked else 2.0)
-	draw_circle(center, half * 0.76, soil)
-	if locked:
-		_draw_glyph(center, "+", int(half * 0.9), Color(0.35, 0.3, 0.28, 0.45))
-		return
-	var pot: Dictionary = pots[index]
-	match str(pot["state"]):
-		"sprout":
-			_draw_sprout(center, half, false)
-			_draw_wilt_ring(index, center, half)
-		"weed":
-			_draw_sprout(center, half, true)
-		"cooldown":
-			draw_arc(center, half * 0.5, 0.0, TAU, 20, Color(0.4, 0.55, 0.35, 0.35), 3.0)
-		_:
-			pass
-
-
-## Frische Sprossen sind hell und rund, Unkraut dunkel und stachelig.
-func _draw_sprout(center: Vector2, half: float, weed: bool) -> void:
-	var stem := center + Vector2(0.0, half * 0.25)
-	var tip := center - Vector2(0.0, half * (0.85 if not weed else 1.0))
-	var tint := Color("4E8B3A") if not weed else Color("2F5D2A")
-	draw_line(stem, tip, tint, 6.0)
-	var leaves := 3 if not weed else 5
-	for i in leaves:
-		var t := (float(i) + 1.0) / float(leaves + 1)
-		var base := stem.lerp(tip, t)
-		var dir := 1.0 if i % 2 == 0 else -1.0
-		var sway := sin(_bob * 2.0 + float(i)) * 3.0
-		var leaf := base + Vector2(dir * half * (0.55 if not weed else 0.42), -half * 0.18 + sway)
-		if weed:
-			draw_line(base, leaf, tint, 4.0)
-		else:
-			draw_circle(base.lerp(leaf, 0.6), half * 0.2, Color("7CC15A"))
-			draw_arc(base.lerp(leaf, 0.6), half * 0.2, 0.0, TAU, 14, AcTokens.INK, 2.0)
-	if weed:
-		_draw_glyph(center - Vector2(0.0, half * 1.25), "!", int(half * 0.6), AcTokens.DANGER)
-
-
-## Der Welkring zeigt die Restzeit — er wird knapp und rot, bevor es −2 gibt.
-func _draw_wilt_ring(index: int, center: Vector2, half: float) -> void:
-	var pot: Dictionary = pots[index]
-	var window := maxf(0.05, float(pot["window"]))
-	var ratio := clampf(float(pot["remaining"]) / window, 0.0, 1.0)
-	var tint := AcTokens.LEAF if ratio > 0.35 else AcTokens.DANGER
-	draw_arc(center, half * 1.16, 0.0, TAU, 32, Color(0.4, 0.35, 0.3, 0.18), 5.0)
-	draw_arc(center, half * 1.16, -PI * 0.5, -PI * 0.5 + TAU * ratio, 32, tint, 5.0)
 
 
 ## Füllring am gehaltenen Topf: das letzte Viertel ist die grüne Perfekt-Zone.
@@ -512,65 +469,3 @@ func _draw_can(pos: Vector2) -> void:
 	for i in 4:
 		var drop := pos + Vector2(30.0 + float(i) * 5.0, -10.0 + float(i) * 9.0)
 		draw_circle(drop, 3.5, Color(0.53, 0.78, 0.92, 0.9))
-
-
-func _draw_sprinkler() -> void:
-	var rect := _sprinkler_rect()
-	var center := rect.get_center()
-	var pulse := 1.0 + sin(_bob * 5.0) * 0.06
-	draw_circle(center, rect.size.x * 0.5 * pulse, Color("FFD166"))
-	draw_arc(center, rect.size.x * 0.5 * pulse, 0.0, TAU, 26, AcTokens.INK, 3.0)
-	for i in 6:
-		var a := TAU * float(i) / 6.0 + _bob
-		draw_line(
-			center + Vector2(cos(a), sin(a)) * rect.size.x * 0.32,
-			center + Vector2(cos(a), sin(a)) * rect.size.x * 0.52,
-			Color(0.45, 0.72, 0.92),
-			4.0
-		)
-	draw_circle(center, rect.size.x * 0.18, Color(0.45, 0.72, 0.92))
-
-
-func _draw_glyph(pos: Vector2, glyph: String, size: int, tint: Color) -> void:
-	var font := ThemeService.font(800)
-	var width := font.get_string_size(glyph, HORIZONTAL_ALIGNMENT_LEFT, -1.0, size).x
-	draw_string(
-		font,
-		pos + Vector2(-width * 0.5, size * 0.36),
-		glyph,
-		HORIZONTAL_ALIGNMENT_LEFT,
-		-1.0,
-		size,
-		tint
-	)
-
-
-## Gooby steht am Beetrand und gießt mit — bei Perfekt hüpft der Spritzer.
-func _draw_gooby() -> void:
-	var field := _field_rect()
-	# Rechte Seite: links kleben Zeit- und Welk-Label, dort sass der Cameo drauf.
-	var base := Vector2(field.end.x - 34.0, field.position.y - 40.0 + sin(_bob * 1.8) * 4.0)
-	if landscape:
-		base = Vector2(view_size.x - 44.0, view_size.y - 52.0 + sin(_bob * 1.8) * 4.0)
-	var r := 24.0
-	for side in [-1.0, 1.0]:
-		var ear_root := base + Vector2(side * r * 0.42, -r * 0.72)
-		var ear_tip := ear_root + Vector2(side * r * 0.34, -r * 0.85)
-		draw_line(ear_root, ear_tip, Color(0.98, 0.88, 0.66), r * 0.32)
-		draw_circle(ear_tip, r * 0.16, Color(0.98, 0.88, 0.66))
-	draw_circle(base, r, Color(0.99, 0.91, 0.7))
-	draw_arc(base, r, 0.0, TAU, 26, AcTokens.INK, 3.0)
-	draw_circle(base + Vector2(-r * 0.34, -r * 0.16), r * 0.12, AcTokens.INK)
-	draw_circle(base + Vector2(r * 0.34, -r * 0.16), r * 0.12, AcTokens.INK)
-	var smile := 0.36 if _splash > 0.1 else 0.28
-	draw_arc(base + Vector2(0.0, r * 0.16), r * smile, 0.3, PI - 0.3, 12, AcTokens.INK, 2.5)
-	if _splash > 0.05:
-		draw_arc(
-			base,
-			r * (1.5 + (1.0 - _splash)),
-			0.0,
-			TAU,
-			20,
-			Color(0.53, 0.78, 0.92, _splash * 0.5),
-			4.0
-		)

@@ -11,6 +11,15 @@ extends MinigameBase
 ## (hot-seat/Multi-Touch; Netz-Coop = Backlog-Hook, siehe README im Ordner).
 ## Punkte laufen NUR über ctx.report_score/report_end (Award macht der Host);
 ## jeder Levelsieg meldet einen Coin-Chunk (E10-P1-3-Muster wie GvZ).
+##
+## ECHTE 3D-CANDYLAND-BÜHNE (FB-4, GobnomStage3D): das Puzzle spielt auf einer
+## senkrechten Ebene vor einer Zuckerwatte-Wiese — Bonbon, Seile, Blasen,
+## Ventilatoren, Stachelbretter und Gläser sind echte Meshes, Gooby (echtes
+## Rig) wartet als Fänger. Alle Anker gehen als _to_screen-Pixel per
+## wall_point-Raycast auf die Ebene — Schnitte und Taps bleiben EXAKT unter
+## dem Finger, die MECHANIK (GobnomLogic) bleibt zahlengleich.
+
+const Stage := preload("res://scripts/minigames/games/gobnom/gobnom_stage3d.gd")
 
 const TICK_SEC := 1.0 / 60.0
 const BANNER_SEC := 2.2
@@ -39,11 +48,11 @@ var _banner_hint := ""
 var _banner_until := 0.0
 ## Aktive Zeiger: index → {mode: swipe|anchor|none, player, last, points, rope}.
 var _pointers: Dictionary = {}
-var _sparks: Array = []
 var _select_screen: GobnomLevelSelect
 var _overlay: Control
 var _font: Font
 var _font_bold: Font
+var _stage: Node3D
 
 
 func setup(context: MinigameCtx) -> void:
@@ -54,8 +63,25 @@ func setup(context: MinigameCtx) -> void:
 	coop_levels = GobnomData.load_coop()
 	_font = ThemeService.font(600)
 	_font_bold = ThemeService.font(800)
+	_stage = Stage.new()
+	_stage.name = "Candyland3D"
+	_stage.to_px = _to_screen
+	add_child(_stage)
+	_stage.setup_stage()
+	_stage.visible = false
+	if ctx != null and ctx.juice != null:
+		ctx.juice.world_environment = _stage.stage.world_env
 	_build_select_screen()
 	queue_redraw()
+
+
+## Pflicht-Layouthook: Kamera stellen und alle Ebenen-Anker neu raycasten.
+func apply_view(size: Vector2) -> void:
+	if _stage == null:
+		return
+	_stage.frame(size)
+	if not state.is_empty():
+		_stage.layout_level(state, balance)
 
 
 func start() -> void:
@@ -87,7 +113,9 @@ func open_level(level_track: String, id: int) -> void:
 	_accum = 0.0
 	_run_score = 0
 	_pointers = {}
-	_sparks = []
+	_stage.visible = true
+	_stage.frame(get_viewport_rect().size)
+	_stage.layout_level(state, balance)
 	var tag_key := "gobnom.hud.coop_level" if _is_coop() else "gobnom.hud.level"
 	var hint_key := "gobnom.intro.%s" % str(level.get("intro", ""))
 	_banner_hint = I18nService.t(hint_key) if I18nService.has_key(hint_key) else ""
@@ -101,6 +129,7 @@ func open_level(level_track: String, id: int) -> void:
 func back_to_select() -> void:
 	phase = "select"
 	state = {}
+	_stage.visible = false
 	_clear_overlay()
 	if _select_screen != null:
 		_select_screen.visible = true
@@ -138,19 +167,33 @@ func _process(delta: float) -> void:
 		_report_live_score()
 		if GobnomLogic.is_over(state):
 			_on_run_over()
-	_decay_sparks(delta)
+	_sync_stage(delta)
 	queue_redraw()
+
+
+## Jeden Frame: Bonbon, Seile, Blasen und Swipe-Spuren an die 3D-Bühne.
+func _sync_stage(delta: float) -> void:
+	if _stage == null or state.is_empty():
+		return
+	var swipe_pts: Array = []
+	for index: Variant in _pointers:
+		var pointer: Dictionary = _pointers[index]
+		if str(pointer["mode"]) != "swipe":
+			continue
+		for p: Variant in pointer["points"]:
+			swipe_pts.append(Vector2(p))
+	_stage.sync_state(state, GobnomLogic.candy_pos(state), swipe_pts, delta)
 
 
 func _consume_events(events: Array) -> void:
 	for event: Dictionary in events:
 		match str(event["kind"]):
 			"cut":
-				_spawn_spark(Vector2(event["at"]), "cut")
+				_stage.cut_fx(Vector2(event["at"]))
 				AudioDirector.try_play(self, "mg_combo", 1.05)
 			"jar":
 				var at := Vector2(event["at"])
-				_spawn_spark(at, "jar")
+				_stage.jar_fx(at)
 				AudioDirector.try_play(self, "gvz_collect")
 				if ctx != null and ctx.juice != null:
 					ctx.juice.float_text(
@@ -159,17 +202,18 @@ func _consume_events(events: Array) -> void:
 					if int(state["jars_taken"]) >= 3:
 						ctx.juice.bloom_pulse(0.5, 300)
 			"pop":
-				_spawn_spark(Vector2(event["at"]), "pop")
+				_stage.pop_fx(Vector2(event["at"]))
 				AudioDirector.try_play(self, "gvz_balloon")
 			"catch":
-				_spawn_spark(GobnomLogic.candy_pos(state), "pop")
+				_stage.pop_fx(GobnomLogic.candy_pos(state))
 				AudioDirector.try_play(self, "ui_chip")
 			"puff":
+				_stage.puff_fx(GobnomLogic.candy_pos(state))
 				AudioDirector.try_play(self, "mg_spill", 1.2)
 				if bool(event["hit"]) and ctx != null and ctx.juice != null:
 					ctx.juice.shake(0.25)
 			"shoot":
-				_spawn_spark(GobnomLogic.candy_pos(state), "cut")
+				_stage.cut_fx(GobnomLogic.candy_pos(state))
 				AudioDirector.try_play(self, "mg_combo", 0.85)
 			"fan":
 				AudioDirector.try_play(self, "ui_toggle")
@@ -187,7 +231,7 @@ func _consume_events(events: Array) -> void:
 						Color("#E0655F")
 					)
 			"nom":
-				_spawn_confetti(GobnomLogic.candy_pos(state))
+				_stage.confetti_fx(GobnomLogic.candy_pos(state))
 
 
 ## Live-Punkte während des Laufs: Gläser zählen sofort (Rest kommt beim Sieg).
@@ -366,201 +410,17 @@ func _to_screen(world_pos: Vector2) -> Vector2:
 ## ── Zeichnen ─────────────────────────────────────────────────────────────
 
 
+## Die Bühne rendert die Welt in 3D; 2D bleiben nur Select-Hintergrund,
+## HUD-Chip, Banner und die Abdunklung der Endscreens.
 func _draw() -> void:
 	var vp := get_viewport_rect().size
-	draw_rect(Rect2(Vector2.ZERO, vp), AcTokens.BG_CREAM)
 	if phase == "select" or state.is_empty():
+		draw_rect(Rect2(Vector2.ZERO, vp), AcTokens.BG_CREAM)
 		return
-	draw_set_transform(_world_offset(), 0.0, Vector2.ONE * _world_scale())
-	_draw_world_bg()
-	_draw_clouds()
-	_draw_rails_and_shooters()
-	_draw_spikes()
-	_draw_mouth()
-	_draw_jars()
-	_draw_cushions_and_fans()
-	_draw_ropes()
-	_draw_bubbles()
-	_draw_candy()
-	_draw_sparks()
-	_draw_swipes()
-	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	_draw_hud()
 	_draw_banner()
 	if phase != "play":
 		draw_rect(Rect2(Vector2.ZERO, vp), Color(0.29, 0.23, 0.21, 0.35))
-
-
-func _draw_world_bg() -> void:
-	var world := _world_size()
-	# Pastell-Himmel + Boden-Wiese (Sticker-Bühne).
-	draw_rect(Rect2(Vector2.ZERO, world), Color("#EAF4FB"))
-	draw_rect(Rect2(0, world.y - 26.0, world.x, 26.0), Color("#BCE39B"))
-	draw_rect(Rect2(0, world.y - 26.0, world.x, 4.0), Color("#A8D083"))
-	if _is_coop():
-		_draw_coop_split(world)
-
-
-## Coop: Hälften tönen (A rosa / B mint) + gestrichelte Grenze + Labels.
-func _draw_coop_split(world: Vector2) -> void:
-	var split: Dictionary = state["split"]
-	var at := float(split.get("at", 480.0))
-	var vertical := str(split.get("axis", "x")) == "x"
-	var rect_a := Rect2(0, 0, at, world.y) if vertical else Rect2(0, 0, world.x, at)
-	var rect_b := (
-		Rect2(at, 0, world.x - at, world.y) if vertical else Rect2(0, at, world.x, world.y - at)
-	)
-	draw_rect(rect_a, Color(0.96, 0.63, 0.6, 0.07))
-	draw_rect(rect_b, Color(0.55, 0.78, 0.52, 0.07))
-	var steps := 14
-	for i in steps:
-		var t0 := float(i) / float(steps)
-		var t1 := t0 + 0.5 / float(steps)
-		var p0 := Vector2(at, world.y * t0) if vertical else Vector2(world.x * t0, at)
-		var p1 := Vector2(at, world.y * t1) if vertical else Vector2(world.x * t1, at)
-		draw_line(p0, p1, Color(0.29, 0.23, 0.21, 0.4), 3.0)
-	var label_a := rect_a.get_center() - Vector2(10, -10)
-	var label_b := rect_b.get_center() - Vector2(10, -10)
-	var tint_a := Color(0.9, 0.5, 0.5, 0.35)
-	var tint_b := Color(0.4, 0.65, 0.4, 0.35)
-	draw_string(_font_bold, label_a, "A", HORIZONTAL_ALIGNMENT_LEFT, -1, 34, tint_a)
-	draw_string(_font_bold, label_b, "B", HORIZONTAL_ALIGNMENT_LEFT, -1, 34, tint_b)
-
-
-func _draw_clouds() -> void:
-	var tick := int(state["tick"])
-	for cloud: Dictionary in state["clouds"]:
-		var rect := Rect2(
-			float(cloud["x"]), float(cloud["y"]), float(cloud["w"]), float(cloud["h"])
-		)
-		GobnomArt.draw_cloud(self, rect, tick)
-
-
-func _draw_rails_and_shooters() -> void:
-	for rope: Dictionary in state["ropes"]:
-		if rope.get("rail") is Dictionary:
-			var rail: Dictionary = rope["rail"]
-			GobnomArt.draw_rail(self, Vector2(rail["from"]), Vector2(rail["to"]))
-	for shooter: Dictionary in state["shooters"]:
-		GobnomArt.draw_shooter(
-			self, Vector2(shooter["pos"]), float(shooter["r"]), bool(shooter["fired"])
-		)
-
-
-func _draw_spikes() -> void:
-	for spike: Dictionary in state["spikes"]:
-		var rect := Rect2(
-			float(spike["x"]), float(spike["y"]), float(spike["w"]), float(spike["h"])
-		)
-		GobnomArt.draw_spikes(self, rect)
-
-
-func _draw_mouth() -> void:
-	var mood := "open"
-	if phase == "won" or str(state["outcome"]) == "won":
-		mood = "nom"
-	elif GobnomLogic.is_over(state):
-		mood = "sad"
-	var mouth := Vector2((state["mouth"] as Dictionary)["pos"])
-	GobnomArt.draw_gooby_mouth(self, mouth, 130.0, int(state["tick"]), mood)
-
-
-func _draw_jars() -> void:
-	var tick := int(state["tick"])
-	for jar: Dictionary in state["jars"]:
-		GobnomArt.draw_jar(self, Vector2(jar["pos"]), 22.0, tick, bool(jar["taken"]))
-
-
-func _draw_cushions_and_fans() -> void:
-	var tick := int(state["tick"])
-	for cushion: Dictionary in state["cushions"]:
-		var ready := int(cushion["charges"]) != 0 and tick >= int(cushion["ready_tick"])
-		GobnomArt.draw_cushion(
-			self,
-			Vector2(cushion["pos"]),
-			Vector2(cushion["dir"]),
-			tick,
-			ready,
-			_owner_tint(str(cushion.get("owner", "any")))
-		)
-	for fan: Dictionary in state["fans"]:
-		GobnomArt.draw_fan(
-			self,
-			Vector2(fan["pos"]),
-			Vector2(fan["dir"]),
-			tick,
-			bool(fan["on"]),
-			(
-				_owner_tint(str(fan.get("owner", "any")))
-				if bool(fan["toggleable"])
-				else Color.TRANSPARENT
-			)
-		)
-
-
-func _draw_ropes() -> void:
-	var candy := GobnomLogic.candy_pos(state)
-	for rope: Dictionary in state["ropes"]:
-		if bool(rope["cut"]):
-			continue
-		GobnomArt.draw_rope(self, Vector2(rope["anchor"]), candy, float(rope["rest"]))
-		GobnomArt.draw_anchor(
-			self, Vector2(rope["anchor"]), _owner_tint(str(rope.get("owner", "any")))
-		)
-
-
-func _draw_bubbles() -> void:
-	var tick := int(state["tick"])
-	for bubble: Dictionary in state["bubbles"]:
-		if bool(bubble["popped"]):
-			continue
-		var holds := bool(bubble["holds"])
-		var at := GobnomLogic.candy_pos(state) if holds else Vector2(bubble["pos"])
-		GobnomArt.draw_bubble(self, at, float(bubble["r"]), tick, holds)
-
-
-func _draw_candy() -> void:
-	if str(state["outcome"]) == "won":
-		return
-	var physics: Dictionary = balance.get("physics", {})
-	GobnomArt.draw_candy(
-		self, GobnomLogic.candy_pos(state), float(physics.get("candy_r", 14.0)), int(state["tick"])
-	)
-
-
-func _draw_sparks() -> void:
-	for spark: Dictionary in _sparks:
-		var t := 1.0 - float(spark["ttl"]) / float(spark["ttl_max"])
-		var pos := Vector2(spark["pos"])
-		match str(spark["kind"]):
-			"cut":
-				for i in 5:
-					var a := TAU * float(i) / 5.0 + t * 3.0
-					var p := pos + Vector2(cos(a), sin(a)) * (4.0 + t * 22.0)
-					draw_circle(p, 3.0 - t * 2.6, Color(1.0, 0.85, 0.4, 0.9 - t * 0.9))
-			"jar":
-				draw_arc(pos, 8.0 + t * 26.0, 0, TAU, 16, Color(1.0, 0.83, 0.3, 0.9 - t * 0.9), 4.0)
-			"pop":
-				draw_arc(pos, 6.0 + t * 20.0, 0, TAU, 14, Color(0.6, 0.8, 0.95, 0.9 - t * 0.9), 3.0)
-			"confetti":
-				var vel := Vector2(spark["vel"])
-				var p := pos + vel * t + Vector2(0, 260.0) * t * t
-				draw_circle(p, 4.0 - t * 2.5, Color(spark["color"], 1.0 - t))
-
-
-func _draw_swipes() -> void:
-	for index: Variant in _pointers:
-		var pointer: Dictionary = _pointers[index]
-		if str(pointer["mode"]) != "swipe":
-			continue
-		var points: Array = pointer["points"]
-		if points.size() < 2:
-			continue
-		var line := PackedVector2Array()
-		for p: Variant in points:
-			line.append(Vector2(p))
-		draw_polyline(line, Color(1, 1, 1, 0.85), 5.0)
-		draw_polyline(line, Color(0.98, 0.62, 0.71, 0.9), 2.5)
 
 
 func _draw_hud() -> void:
@@ -622,18 +482,6 @@ func _draw_banner() -> void:
 			14,
 			Color(1, 1, 1, 0.85)
 		)
-
-
-func _owner_tint(owner_tag: String) -> Color:
-	if not _is_coop():
-		return Color.TRANSPARENT
-	match owner_tag:
-		"a":
-			return Color(0.96, 0.63, 0.6, 0.30)
-		"b":
-			return Color(0.55, 0.78, 0.52, 0.30)
-		_:
-			return Color.TRANSPARENT
 
 
 ## ── UI-Aufbau (Select + Overlays) ────────────────────────────────────────
@@ -724,34 +572,3 @@ func _is_coop() -> bool:
 func _show_banner(text: String) -> void:
 	_banner_text = text
 	_banner_until = Time.get_ticks_msec() / 1000.0 + BANNER_SEC
-
-
-func _spawn_spark(pos: Vector2, kind: String) -> void:
-	_sparks.append({"pos": pos, "kind": kind, "ttl": 0.4, "ttl_max": 0.4})
-
-
-## Sieg-Konfetti (rein visuell — deterministische Fächer-Winkel, kein RNG).
-func _spawn_confetti(pos: Vector2) -> void:
-	var colors := [GobnomArt.CANDY_PINK, GobnomArt.STAR_GOLD, Color("#8FD0EA"), Color("#A8D083")]
-	for i in 18:
-		var a := -PI * 0.9 + PI * 0.8 * float(i) / 17.0
-		(
-			_sparks
-			. append(
-				{
-					"pos": pos,
-					"kind": "confetti",
-					"vel": Vector2(cos(a), sin(a)) * (140.0 + 40.0 * float(i % 3)),
-					"color": colors[i % colors.size()],
-					"ttl": 1.1,
-					"ttl_max": 1.1,
-				}
-			)
-		)
-
-
-func _decay_sparks(delta: float) -> void:
-	for i in range(_sparks.size() - 1, -1, -1):
-		_sparks[i]["ttl"] = float(_sparks[i]["ttl"]) - delta
-		if float(_sparks[i]["ttl"]) <= 0.0:
-			_sparks.remove_at(i)

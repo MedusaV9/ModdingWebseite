@@ -3,23 +3,18 @@ extends MinigameBase
 ## CarrotCatchLogic (zahlengleich zum Web, Bot-zertifiziert): Spawn-Kadenz,
 ## Junk-Quote 10→30 %, Fallspeed +8 %/10 s (gestuft), Junk −2 + 0.5 s Dizzy,
 ## 1× goldene Möhre (+10, 1.5× Speed), Endlos endet nach 3 Boden-Möhren.
-## Steuerung: Touch-Drag zieht den Korb (Hochkant-optimiert). Optik:
-## AC-Pastell-Himmel, gezeichnete Items, JuiceKit-Feedback (Slowmo+Bloom bei
-## Gold, Shake bei Junk/Endlos-Miss, Bloom bei Combo) + AudioDirector-SFX.
+## Steuerung: Touch-Drag zieht den Korb (Hochkant-optimiert).
+##
+## ECHTER 3D-OBSTGARTEN (FB-4, CarrotCatchStage3D): Kenney-Food-Modelle fallen
+## als 3D-Objekte, Gooby rennt als echtes Rig mit dem Picknickkorb, hinten
+## Möhrenbeete, Zaun und Bäume. Die Kamera rahmt EXAKT die 2D-Rechnung
+## (Weltbreite 2·WORLD_HALF_W), alle Zahlen bleiben unangetastet. Die 3D-Welt
+## hängt unter der Node2D-Wurzel, der MinigameBase-Vertrag bleibt gleich.
+
+const Stage := preload("res://scripts/minigames/games/carrot_catch/carrot_catch_stage3d.gd")
 
 ## Sichtbare Welt-Halbbreite in Logik-Einheiten (Web-Kamera ≈ 3.25 bei 390px).
 const WORLD_HALF_W := 3.25
-const FOOD_COLORS := {
-	"apple": Color(0.88, 0.28, 0.25),
-	"banana": Color(0.97, 0.85, 0.35),
-	"cheese": Color(0.98, 0.78, 0.3),
-	"watermelon": Color(0.35, 0.65, 0.4),
-	"donut-sprinkles": Color(0.9, 0.6, 0.75),
-	"cupcake": Color(0.95, 0.7, 0.82),
-	"burger": Color(0.8, 0.55, 0.3),
-	"ice-cream": Color(0.95, 0.93, 0.85),
-	"cake": Color(0.98, 0.9, 0.92),
-}
 
 var tune: Dictionary = {}
 var rng: GoobyRng
@@ -39,6 +34,8 @@ var items: Array[Dictionary] = []
 var _time_label: Label
 var _combo_label: Label
 var _hint_label: Label
+var _stage: Node3D
+var _framed_vp := Vector2.ZERO
 
 
 func setup(context: MinigameCtx) -> void:
@@ -48,8 +45,28 @@ func setup(context: MinigameCtx) -> void:
 	if not bool(tune["ENDLESS"]):
 		golden_at = CarrotCatchLogic.golden_spawn_at(rng, float(tune["DURATION_SEC"]), tune)
 	next_spawn = CarrotCatchLogic.spawn_interval_at(0.0, float(tune["DURATION_SEC"]), tune)
+	_stage = Stage.new()
+	_stage.name = "Garten3D"
+	add_child(_stage)
+	_stage.setup_stage(float(tune["BASKET_HALF_WIDTH"]))
+	if ctx.juice != null:
+		ctx.juice.world_environment = _stage.stage.world_env
 	_build_labels()
-	queue_redraw()
+	_frame_stage()
+
+
+## Pflicht-Layouthook: die Kamera folgt dem Viewport-Rect (Canvas-Einheiten).
+func apply_view(_size: Vector2) -> void:
+	position = Vector2.ZERO
+	_frame_stage()
+
+
+func _frame_stage() -> void:
+	var vp := get_viewport_rect().size
+	if vp == _framed_vp or vp.x <= 1.0:
+		return
+	_framed_vp = vp
+	_stage.frame(vp, _px_per_unit(vp))
 
 
 func end() -> void:
@@ -92,8 +109,9 @@ func _process(delta: float) -> void:
 	):
 		_finish()
 		return
+	_frame_stage()
+	_stage.sync(items, basket_x, elapsed < dizzy_until, vp, ppu, elapsed, delta)
 	_update_labels()
-	queue_redraw()
 
 
 func _spawn_tick(vp: Vector2) -> void:
@@ -157,6 +175,10 @@ func _catch(item: Dictionary, vp: Vector2) -> void:
 		AudioDirector.try_play(self, "mg_good")
 	else:
 		AudioDirector.try_play(self, "mg_junk")
+	if kind == "junk" or kind == "rotten":
+		_stage.junk_fx()
+	else:
+		_stage.catch_fx(kind == "golden")
 	if ctx.juice != null:
 		if kind == "golden":
 			ctx.juice.float_text(pos, "+%d" % int(item["value"]), Color(1.0, 0.78, 0.1))
@@ -230,76 +252,3 @@ func _visible_half_w(vp: Vector2, ppu: float) -> float:
 
 func _visible_half_w_default(vp: Vector2) -> float:
 	return _visible_half_w(vp, _px_per_unit(vp))
-
-
-func _draw() -> void:
-	var vp := get_viewport_rect().size
-	var ppu := _px_per_unit(vp)
-	# Himmel + Wiese + Sonne.
-	draw_rect(Rect2(Vector2.ZERO, vp), Color(0.8, 0.92, 0.98))
-	draw_circle(Vector2(vp.x * 0.85, vp.y * 0.1), 42.0, Color(1.0, 0.87, 0.5))
-	draw_rect(Rect2(0, vp.y - 90, vp.x, 90), Color(0.62, 0.82, 0.5))
-	for item in items:
-		_draw_item(item, vp, ppu)
-	_draw_basket(vp, ppu)
-
-
-func _draw_basket(vp: Vector2, ppu: float) -> void:
-	var x := vp.x * 0.5 + basket_x * ppu
-	var y := vp.y - 118.0
-	var w := float(tune["BASKET_HALF_WIDTH"]) * ppu
-	var dizzy := elapsed < dizzy_until
-	var body := Color(0.72, 0.5, 0.3) if not dizzy else Color(0.6, 0.45, 0.4)
-	var points := PackedVector2Array(
-		[
-			Vector2(x - w, y),
-			Vector2(x + w, y),
-			Vector2(x + w * 0.72, y + 52),
-			Vector2(x - w * 0.72, y + 52),
-		]
-	)
-	draw_colored_polygon(points, body)
-	draw_rect(Rect2(x - w, y - 6, w * 2.0, 8), Color(0.55, 0.36, 0.2))
-	if dizzy:
-		draw_arc(Vector2(x, y - 26), 18.0, 0.0, TAU, 16, Color(0.95, 0.85, 0.3), 3.0)
-
-
-func _draw_item(item: Dictionary, vp: Vector2, ppu: float) -> void:
-	var pos := Vector2(vp.x * 0.5 + float(item["x"]) * ppu, float(item["y"]))
-	var kind := str(item["kind"])
-	var key := str(item["key"])
-	if kind == "golden":
-		draw_circle(pos, 26.0, Color(1.0, 0.85, 0.3, 0.35))
-		_draw_carrot(pos, Color(1.0, 0.78, 0.1))
-	elif kind == "rotten":
-		_draw_carrot(pos, Color(0.5, 0.4, 0.22))
-	elif kind == "junk":
-		if key == "soda-can-crushed":
-			draw_rect(Rect2(pos.x - 12, pos.y - 16, 24, 32), Color(0.62, 0.64, 0.68))
-			draw_rect(Rect2(pos.x - 12, pos.y - 6, 24, 5), Color(0.45, 0.47, 0.5))
-		else:
-			draw_line(pos + Vector2(-14, 0), pos + Vector2(14, 0), Color(0.9, 0.9, 0.88), 4.0)
-			draw_circle(pos + Vector2(16, 0), 5.0, Color(0.9, 0.9, 0.88))
-			for i in 3:
-				var bx := pos.x - 8 + i * 8.0
-				draw_line(
-					Vector2(bx, pos.y - 8), Vector2(bx, pos.y + 8), Color(0.9, 0.9, 0.88), 3.0
-				)
-	elif key == "carrot":
-		_draw_carrot(pos, Color(0.95, 0.52, 0.16))
-	else:
-		draw_circle(pos, 15.0, _food_color(key))
-		draw_circle(pos + Vector2(-4, -5), 4.0, Color(1, 1, 1, 0.45))
-
-
-func _draw_carrot(pos: Vector2, color: Color) -> void:
-	var points := PackedVector2Array(
-		[pos + Vector2(-11, -12), pos + Vector2(11, -12), pos + Vector2(0, 20)]
-	)
-	draw_colored_polygon(points, color)
-	draw_rect(Rect2(pos.x - 7, pos.y - 22, 5, 10), Color(0.45, 0.7, 0.35))
-	draw_rect(Rect2(pos.x + 2, pos.y - 22, 5, 10), Color(0.45, 0.7, 0.35))
-
-
-func _food_color(key: String) -> Color:
-	return FOOD_COLORS.get(key, Color(0.8, 0.8, 0.8))

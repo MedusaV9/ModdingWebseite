@@ -3,12 +3,15 @@ extends RefCounted
 ## Höhenmodell der Ranch-Region (RW-1) — PURE + headless-testbar. Die Höhe
 ## ist eine deterministische Funktion von (x, z) + den Karten-Daten
 ## (RanchKarte): sanfte Grundhügel (Sinus-Oktaven, kein RNG), darüber
-## Zonen-Features (Hügelkamm-Rücken, See-Senke, Weidetal-Mulde), dann
-## Plateau-Glättung (Hof/Turnierplatz/Hufingen bleiben bebaubar-flach)
-## und ZULETZT das eingeschnittene Bachbett (der Bach existiert immer).
+## Zonen-Features (Hügelkamm-Rücken, See-Senke, Weidetal-Mulde), dazu die
+## FEINSTRUKTUR (FB-2: Bodenwellen + kleine Unebenheiten, auf Wegen
+## geglättet), dann Plateau-Glättung (Hof/Turnierplatz/Hufingen bleiben
+## bebaubar-flach) und ZULETZT das eingeschnittene Bachbett.
 ##
 ## Vertrag für andere Agents (RW1-welt-api.md): `hoehe(x, z)` ist DIE
-## Bodenhöhe für Reiter/Tiere/Gebäude; Wasser liegt bei WASSER_HOEHE.
+## Bodenhöhe für Reiter/Tiere/Gebäude — inklusive Feinstruktur, damit
+## Gooby/Pferde die Unebenheiten wirklich „spüren"; Wasser liegt bei
+## WASSER_HOEHE.
 
 ## Wasserspiegel des SEES in Metern — muss zu ranch_karte.json passen.
 const WASSER_HOEHE := -1.1
@@ -25,15 +28,66 @@ const FURT_RADIUS_M := 14.0
 ## Ab dieser Kerbentiefe führt das Bachbett Wasser (Furt bleibt seichter).
 const BACH_WASSER_AB_M := 0.9
 
+## Feinstruktur-Grenzen (FB-2): Bodenwellen ±0,4 m + Rauigkeit ±0,2 m.
+const FEIN_MAX_M := 0.62
+
+## Wege bleiben glatt reitbar: so viele Meter neben der Wegkante blendet
+## die Feinstruktur weich wieder ein.
+const WEG_GLAETT_RAND_M := 5.0
+
+## Rest-Feinstruktur AUF dem Weg (kleine Unebenheit bleibt spürbar).
+const WEG_REST_ANTEIL := 0.15
+
+static var _weg_cache: Array[Dictionary] = []
+
 
 ## Bodenhöhe in Metern an Weltposition (x, z). Deterministisch.
 static func hoehe(x: float, z: float) -> float:
 	var karte := RanchKarte.karte()
 	var h := BASIS_HOEHE + _grundhuegel(x, z)
 	h += _zonen_features(x, z, karte)
+	h += feinstruktur(x, z)
 	h = _plateaus(x, z, h, karte)
 	h -= bach_kerbe(x, z)
 	return h
+
+
+## Test-Hook: Weg-Segment-Cache verwerfen (nach RanchKarte.reset_for_tests).
+static func reset_for_tests() -> void:
+	_weg_cache = []
+
+
+## Feinstruktur (FB-2 „der Boden ist zu glatt"): sanfte Bodenwellen
+## (~30 m) + kleine Unebenheiten (~10 m), deterministisch aus Sinus-
+## Oktaven. Auf Karten-Wegen stark gedämpft (weg_glaettung), damit
+## Feldwege glatt reitbar bleiben; die Plateau-Glättung downstream hält
+## Bau-Zonen flach.
+static func feinstruktur(x: float, z: float) -> float:
+	var wellen := sin(x * 0.19 + sin(z * 0.23) * 1.3) * sin(z * 0.17 - sin(x * 0.13) * 1.1) * 0.4
+	var rau := sin(x * 0.53 + 2.3) * cos(z * 0.47 - 0.8) * 0.14
+	rau += sin((x + z) * 0.71 + 1.1) * 0.08
+	return (wellen + rau) * weg_glaettung(x, z)
+
+
+## Dämpfungsfaktor der Feinstruktur: WEG_REST_ANTEIL auf dem Weg, 1.0 im
+## freien Land, weiche Rampe über WEG_GLAETT_RAND_M neben der Wegkante.
+static func weg_glaettung(x: float, z: float) -> float:
+	var faktor := 1.0
+	for segment: Dictionary in _weg_segmente():
+		if (
+			x < float(segment["min_x"])
+			or x > float(segment["max_x"])
+			or z < float(segment["min_z"])
+			or z > float(segment["max_z"])
+		):
+			continue
+		var d := _abstand_zu_strecke(Vector2(x, z), segment["a"], segment["b"])
+		var halb := float(segment["halb"])
+		if d >= halb + WEG_GLAETT_RAND_M:
+			continue
+		var t := clampf((d - halb) / WEG_GLAETT_RAND_M, 0.0, 1.0)
+		faktor = minf(faktor, lerpf(WEG_REST_ANTEIL, 1.0, t * t * (3.0 - 2.0 * t)))
+	return faktor
 
 
 ## Oberflächen-Normale (zentrale Differenzen) — für Ausrichtung/Shading.
@@ -148,6 +202,38 @@ static func bach_kerbe(x: float, z: float) -> float:
 
 
 ## ------------------------------------------------------------- Geometrie
+
+
+## Karten-Wege als flache Segment-Liste mit AABB (gecacht — hoehe() läuft
+## beim Chunk-Bau zehntausendfach; ohne Cache würde jeder Aufruf die
+## JSON-Arrays neu parsen).
+static func _weg_segmente() -> Array[Dictionary]:
+	if not _weg_cache.is_empty():
+		return _weg_cache
+	for weg: Dictionary in RanchKarte.wege():
+		var halb := float(weg.get("breite", 4.0)) / 2.0 + 1.0
+		var rand := halb + WEG_GLAETT_RAND_M
+		var punkte: Array = weg["punkte"]
+		for i in punkte.size() - 1:
+			var a: Array = punkte[i]
+			var b: Array = punkte[i + 1]
+			var av := Vector2(float(a[0]), float(a[1]))
+			var bv := Vector2(float(b[0]), float(b[1]))
+			(
+				_weg_cache
+				. append(
+					{
+						"a": av,
+						"b": bv,
+						"halb": halb,
+						"min_x": minf(av.x, bv.x) - rand,
+						"max_x": maxf(av.x, bv.x) + rand,
+						"min_z": minf(av.y, bv.y) - rand,
+						"max_z": maxf(av.y, bv.y) + rand,
+					}
+				)
+			)
+	return _weg_cache
 
 
 static func _abstand_zu_polyline(p: Vector2, punkte: Array) -> float:

@@ -49,7 +49,12 @@
 			"pause": "❚❚ Pause",
 			"paused": "Pause",
 			"resume": "Weiter",
+			"restart": "Neustart",
 			"quit": "Beenden",
+			"sound_on": "Ton: An",
+			"sound_off": "Ton: Aus",
+			"help": "Hilfe",
+			"help_none": "Sammle Punkte, bevor die Runde endet — du schaffst das!",
 			"go": "Los!"
 		},
 		"results": {

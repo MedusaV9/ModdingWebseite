@@ -1,7 +1,10 @@
 class_name Hud
 extends Control
-## Haupt-HUD mit BEIDEN Layouts aus Doc H §1.3:
-## - Hochkant P1 „Daumen-Bogen“: Status-Chips oben, Aktions-Bogen unten rechts.
+## Haupt-HUD mit BEIDEN Layouts:
+## - Hochkant P1 „Daumen-Dock“ (Web .g5-hud-btns): Status-Chips oben,
+##   Aktions-Kacheln unten MITTIG als 5+4-Raster mit Label unterm Icon —
+##   exakt die Web-Referenz (FB3: der alte 9-Knopf-Bogen überlappte sich
+##   ab 44-pt-Tippflächen zwangsläufig, s. styles.css-Kommentar V4/FIX-UI).
 ## - Querformat L1 „Cockpit“: Stats links vertikal, Button-Spalte rechts.
 ## Wechselt LIVE bei Rotation (hört auf `Viewport.size_changed` — lose
 ## Kopplung, bis der OrientationService von W1a verdrahtet ist).
@@ -25,8 +28,8 @@ extends Control
 ## - Status-Pills tragen ihre Stat-Icons in BEIDEN Layouts (Web .stat-pill),
 ##   farbig getönt; Hochkant-Pills flexen über die Zeilenbreite (Web flex:1).
 ## - Pill-Innenmaße/Schriften skalieren über die ZENTRALE `UiScale`-Regel
-##   (Web-CSS-px ≈ physische Punkte) — NUR die Bogen-GEOMETRIE bleibt auf
-##   `portrait_scale` (FIXB-Audit, s. u.).
+##   (Web-CSS-px ≈ physische Punkte) — seit FB3 auch die Dock-Geometrie
+##   (die alte `portrait_scale`-Bogen-Ausnahme ist Geschichte).
 ## - Münzen zählen hoch (UiMotion.count_to) + Wackel-Impuls aufs Icon.
 ## - Balken gleiten weich (UiMotion.bar_to, Web .stat-fill 300 ms ease).
 ## - Aktions-Icons in Identitätsfarben (Web .g5-hud-btn svg: pink/teal/gelb).
@@ -55,6 +58,14 @@ const LABEL_FONT := 12
 const LABEL_PAD := 20.0
 ## Abstand zwischen den Cockpit-Knöpfen (Canvas-px).
 const COLUMN_SEP := 10.0
+## FB3 — Hochkant-Dock (Web .g5-hud-btn/.g5-hud-btns): 3.375rem-Kachel mit
+## 22er-Icon + 9px-Label, 0.375rem Lücke, GENAU 5 Kacheln pro Zeile
+## (Web-Kommentar V4/FIX-UI: sonst verwaist der 9. Knopf allein in Zeile 2).
+const DOCK_BTN := 54.0
+const DOCK_ICON := 22.0
+const DOCK_LABEL_FONT := 9
+const DOCK_GAP := 6.0
+const DOCK_PER_ROW := 5
 ## AppSettings-Key: Coachmark „Deine Knöpfe“ schon gezeigt?
 const COACHMARK_SEEN_KEY := "hints.hud_actions_seen"
 ## Reihenfolge = Bogen von links (flach) nach oben; Spalte nutzt eigene Liste.
@@ -127,13 +138,18 @@ var _coachmark: Control
 var _column_width := 88.0
 ## Oberkante der Cockpit-Spalte in Canvas-px (unter dem Zahnrad).
 var _column_top := 84.0
+## FB3: Dock-Kenngrößen (setzt apply_layout; refresh_safe_area liest).
+var _dock_btn_px := DOCK_BTN
+var _dock_gap_px := DOCK_GAP
+## Bodenzeile (Gooby-Chip links, Auge rechts) — das Dock schwebt DARÜBER.
+var _dock_clearance := 0.0
 
 @onready var _top_bar: MarginContainer = $TopBar
 @onready var _top_spacer: Control = $TopBar/TopBarBox/TopSpacer
 @onready var _status_row: HBoxContainer = %StatusRow
 @onready var _left_column: VBoxContainer = %LeftColumn
 @onready var _bottom_left: VBoxContainer = $BottomLeft
-@onready var _portrait_arc: ArcContainer = %PortraitArc
+@onready var _portrait_dock: HFlowContainer = %PortraitDock
 ## FIX1: GridContainer statt VBox — bricht bei großem Retina-Faktor auf
 ## 2 Spalten um, damit alle 6 beschrifteten Knöpfe in die Höhe passen.
 @onready var _landscape_column: GridContainer = %LandscapeColumn
@@ -158,32 +174,30 @@ func _ready() -> void:
 
 ## Layout hart setzen (Rotation macht das automatisch; Tests rufen es direkt).
 ##
-## FIX1-Skalierungsregel:
-## - Querformat (Cockpit): zentrale Regel `UiScale.for_viewport()` (kurze
-##   Kante + physischer Retina-Faktor) — vorher blieb Querformat bei f=1
-##   und war physisch ~40 % kleiner als die Web-Referenz.
-## - Hochkant (Daumen-Bogen): bewährte Canvas-Regel `portrait_scale`
-##   (kurze Kante/720, Deckel 2) — der physische Faktor (bis 3×) sprengt
-##   die getunte Bogen-Geometrie (Radius/Stagger, FIXB-Audit).
+## FB3-Skalierungsregel: BEIDE Layouts nutzen die zentrale Regel
+## `UiScale.for_viewport()` (kurze Kante + physischer Retina-Faktor). Die
+## alte Hochkant-Ausnahme (`portrait_scale`, Deckel 2) existierte nur für
+## die getunte Bogen-Geometrie — mit dem Web-Paritäts-Dock entfällt sie,
+## und damit auch die 26-pt-Tippflächen auf 3×-Retina-Geräten.
 func apply_layout(layout: HudLayoutLogic.Layout) -> void:
 	current_layout = layout
 	var portrait := layout == HudLayoutLogic.Layout.PORTRAIT
 	var canvas := Vector2(get_viewport().get_visible_rect().size)
-	var f := (
-		HudLayoutLogic.portrait_scale(canvas) if portrait else UiScale.for_viewport(get_viewport())
+	var f := UiScale.for_viewport(get_viewport())
+	var floor_px := maxf(
+		HudLayoutLogic.touch_floor_canvas(canvas),
+		float(AcTokens.TOUCH_FLOOR) * UiScale.touch_px_per_pt(get_viewport())
 	)
-	var floor_px := maxf(HudLayoutLogic.touch_floor_canvas(canvas), float(AcTokens.TOUCH_FLOOR) * f)
 	var insets := _safe_insets()
-	_portrait_arc.visible = portrait
+	_portrait_dock.visible = portrait
 	_landscape_column.visible = not portrait
 	_left_column.visible = not portrait
 	_status_row.visible = portrait
-	_portrait_arc.radius = HudLayoutLogic.ARC_RADIUS * f
-	_portrait_arc.stagger = HudLayoutLogic.ARC_STAGGER * f
-	var btn_size := maxf(HudLayoutLogic.ACTION_BTN * f, floor_px)
+	var btn_size := maxf((DOCK_BTN if portrait else HudLayoutLogic.ACTION_BTN) * f, floor_px)
+	# Hochkant: Label sitzt IN der Kachel (Web .g5-btn-label) — kein Anbau.
 	var label_h := 0.0 if portrait else LABEL_PAD * f
 	_column_top = EDGE_PAD + float(insets["top"]) + maxf(56.0 * f, floor_px) + 12.0
-	var button_parent: Container = _portrait_arc if portrait else _landscape_column
+	var button_parent: Container = _portrait_dock if portrait else _landscape_column
 	var order: Array = []
 	if portrait:
 		for action in ACTIONS:
@@ -194,7 +208,7 @@ func apply_layout(layout: HudLayoutLogic.Layout) -> void:
 		var btn: Button = _buttons[id]
 		btn.custom_minimum_size = Vector2(btn_size, btn_size + label_h)
 		_apply_button_label(btn, id, portrait, f)
-		_scale_icon_button(btn, f)
+		_scale_icon_button(btn, f, DOCK_ICON if portrait else 44.0)
 		if btn.get_parent() != button_parent:
 			if btn.get_parent() != null:
 				btn.get_parent().remove_child(btn)
@@ -203,6 +217,11 @@ func apply_layout(layout: HudLayoutLogic.Layout) -> void:
 			button_parent.move_child(btn, order.find(id))
 	if portrait:
 		_column_width = btn_size
+		_dock_btn_px = btn_size
+		_dock_gap_px = DOCK_GAP * f
+		_dock_clearance = floor_px + EDGE_PAD
+		_portrait_dock.add_theme_constant_override("h_separation", int(_dock_gap_px))
+		_portrait_dock.add_theme_constant_override("v_separation", int(_dock_gap_px))
 	else:
 		btn_size = _fit_landscape_column(canvas, insets, btn_size, label_h, floor_px)
 	var chip_parent: Container = _status_row if portrait else _left_column
@@ -273,11 +292,14 @@ func _fit_landscape_column(
 		btn.custom_minimum_size = Vector2.ZERO
 		theme_min = theme_min.max(btn.get_combined_minimum_size())
 		btn.custom_minimum_size = saved
+	# FB3: so viele Spalten wie nötig — 9 Knöpfe à ~127 px Theme-Minimum
+	# passen auf kurzen Quer-Canvases (720 px hoch) auch zu zweit nicht mehr
+	# (5×127+40 = 675 px > freier Streifen) und liefen oben ins Zahnrad.
 	var columns := 1
 	var rows := count
-	if float(rows) * theme_min.y + COLUMN_SEP * float(rows - 1) > avail:
-		columns = 2
-		rows = int(ceilf(count / 2.0))
+	while columns < count and float(rows) * theme_min.y + COLUMN_SEP * float(rows - 1) > avail:
+		columns += 1
+		rows = int(ceilf(float(count) / float(columns)))
 	# Knopfgröße so eindampfen, dass `rows` Zeilen à max(btn+label, Minimum)
 	# in den freien Streifen passen — nie unter den Touch-Floor.
 	var cap := (avail - COLUMN_SEP * float(rows - 1)) / float(rows) - label_h
@@ -318,8 +340,18 @@ func refresh_safe_area() -> void:
 	_landscape_column.offset_right = -EDGE_PAD - right
 	_landscape_column.offset_top = _column_top
 	_landscape_column.offset_bottom = -EDGE_PAD - bottom
-	_portrait_arc.offset_right = -EDGE_PAD - right
-	_portrait_arc.offset_bottom = -EDGE_PAD - bottom
+	# FB3 — Daumen-Dock (Web .g5-hud-btns): unten MITTIG, gedeckelt auf
+	# genau 5 Kacheln Breite (5+4-Raster), und über der Bodenzeile
+	# (Gooby-Chip links, Auge rechts) + Home-Indicator.
+	var canvas := Vector2(get_viewport().get_visible_rect().size)
+	var cap := float(DOCK_PER_ROW) * _dock_btn_px + float(DOCK_PER_ROW - 1) * _dock_gap_px
+	_portrait_dock.offset_left = maxf((canvas.x - cap) / 2.0, left + EDGE_PAD)
+	_portrait_dock.offset_right = -maxf((canvas.x - cap) / 2.0, right + EDGE_PAD)
+	var dock_bottom := EDGE_PAD + bottom
+	if current_layout == HudLayoutLogic.Layout.PORTRAIT:
+		dock_bottom += _dock_clearance
+	_portrait_dock.offset_bottom = -dock_bottom
+	_portrait_dock.offset_top = -dock_bottom - 10.0
 	_place_eye_button(current_layout == HudLayoutLogic.Layout.PORTRAIT, right, bottom)
 	_position_coachmark()
 
@@ -415,7 +447,7 @@ func _build_action_buttons() -> void:
 		btn.focus_mode = Control.FOCUS_NONE
 		btn.pressed.connect(_on_action_pressed.bind(id))
 		_buttons[id] = btn
-		_portrait_arc.add_child(btn)
+		_portrait_dock.add_child(btn)
 
 
 func _build_status_chips() -> void:
@@ -522,14 +554,11 @@ func _place_eye_button(portrait: bool, inset_right := 0.0, inset_bottom := 0.0) 
 	_eye_button.reset_size()
 	var eye := _eye_button.get_combined_minimum_size()
 	if portrait:
-		# Im Drehpunkt des Daumen-Bogens (innerhalb des Innenradius ist
-		# Platz): kürzeste Daumenzone, kollidiert nie mit den Bogen-Buttons.
-		# Auge und Bogen-Buttons sind gleich groß (btn_size aus apply_layout),
-		# daher liefert eye.x auch den Ecken-Einzug des ArcContainers.
-		var pad := eye.x / 2.0 + ArcContainer.CORNER_PADDING
-		var corner := Vector2(vp.x - 8.0 - inset_right - pad, vp.y - 8.0 - inset_bottom - pad)
-		var center := corner - Vector2.ONE * eye.x * 0.55
-		_eye_button.position = center - eye / 2.0
+		# Bodenzeile rechts unten (FB3): Gooby-Chip links, Auge rechts —
+		# das Dock schwebt eine Zeile DARÜBER (_dock_clearance).
+		_eye_button.position = Vector2(
+			vp.x - inset_right - EDGE_PAD - eye.x, vp.y - inset_bottom - EDGE_PAD - eye.y
+		)
 	else:
 		# Links neben der Button-Spalte, unten (Cockpit) — folgt der echten
 		# Spaltenbreite statt fester 96 px (FIX1: Spalte ist jetzt skaliert).
@@ -540,13 +569,11 @@ func _place_eye_button(portrait: bool, inset_right := 0.0, inset_bottom := 0.0) 
 
 
 ## Icon-Skalierung für die Frost-Icon-Buttons: das Theme deckelt Icons auf
-## 44 px (`HudIconButton/icon_max_width`) — im skalierten Hochkant-Button
-## (~128 px) wächst der Deckel mit, sonst wirken die Icons verloren.
-func _scale_icon_button(btn: Button, f: float) -> void:
-	if f > 1.0:
-		btn.add_theme_constant_override("icon_max_width", int(44.0 * f))
-	else:
-		btn.remove_theme_constant_override("icon_max_width")
+## 44 px (`HudIconButton/icon_max_width`) — der Deckel wächst mit f, sonst
+## wirken die Icons verloren. `base` = Design-Icongröße: Dock-Kacheln nutzen
+## die Web-Referenz 22 (Icon + Label in der 54er-Kachel), Cockpit/Auge 44.
+func _scale_icon_button(btn: Button, f: float, base := 44.0) -> void:
+	btn.add_theme_constant_override("icon_max_width", int(maxf(base * f, 16.0)))
 
 
 ## Font-Größe = Web-CSS-px × zentrale Skala (UICOZY: vorher galt das nur
@@ -555,20 +582,17 @@ func _scale_font(ctl: Control, base_px: int, f: float) -> void:
 	ctl.add_theme_font_size_override("font_size", int(maxf(base_px * f, 10.0)))
 
 
-## FIX1 „Die Tasten rechts werden nichtmal erklärt“: im Cockpit (Querformat)
-## steht der deutsche Name UNTER dem Icon; der Hochkant-Bogen bleibt beim
-## reinen Icon (dort erklärt der Tooltip).
+## FIX1 „Die Tasten rechts werden nichtmal erklärt“ + FB3-Web-Parität: der
+## Name steht in BEIDEN Layouts unterm Icon (Web .g5-btn-label) — Hochkant
+## kompakt (9 px Basis), Cockpit etwas größer (12 px Basis).
 func _apply_button_label(btn: Button, id: StringName, portrait: bool, f: float) -> void:
-	if portrait:
-		btn.text = ""
-		btn.remove_theme_font_size_override("font_size")
-		return
 	btn.text = I18nService.t("hud." + String(id))
 	btn.alignment = HORIZONTAL_ALIGNMENT_CENTER
 	btn.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	btn.vertical_icon_alignment = VERTICAL_ALIGNMENT_TOP
 	btn.clip_text = true
-	btn.add_theme_font_size_override("font_size", int(maxf(LABEL_FONT * f, 10.0)))
+	var base := DOCK_LABEL_FONT if portrait else LABEL_FONT
+	btn.add_theme_font_size_override("font_size", int(maxf(float(base) * f, 10.0)))
 
 
 ## Erststart-Coachmark „Deine Knöpfe“ (FIX1): erklärt die Cockpit-Spalte

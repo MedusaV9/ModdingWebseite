@@ -18,9 +18,49 @@ var _cam_moves: Array[Dictionary] = []
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	# llvmpipe-Software-Rendering: MSAA kostet massiv — fürs Capture aus.
-	get_viewport().msaa_3d = Viewport.MSAA_DISABLED
+	_erzwinge_hohe_qualitaet()
 	_setup()
+
+
+## Movie-Maker rendert offline (feste Schrittweite) — Wandzeit ist egal,
+## deshalb volle Qualität statt Auto-Profil. Hintergrund (Trailer-Feedback
+## „pixelig“): das Auto-Profil stufte unter xvfb wegen der kleinen
+## Fensterkante auf „mittel“ herab (scale_3d 0.8, Schatten niedrig, Glow
+## aus), zusätzlich war MSAA hier hart deaktiviert.
+func _erzwinge_hohe_qualitaet() -> void:
+	var auto_bundle := QualityProfiles.resolve_auto(
+		DeviceProfile.classify(DeviceProfile.snapshot())
+	)
+	print("[capture] Auto-Profil hätte gewählt: %s" % str(auto_bundle))
+	var settings := get_node_or_null("/root/AppSettings")
+	if settings != null and settings.has_method("set_setting"):
+		settings.set_setting("graphics.preset", "hoch")
+	var quality := get_node_or_null("/root/Quality")
+	if quality != null:
+		quality.set("brake_enabled", false)
+	wende_hq_an(get_viewport())
+	print(
+		(
+			"[capture] Qualität erzwungen: preset=hoch scale_3d=%.2f msaa=%d schatten_atlas=%d fenster=%s"
+			% [
+				get_viewport().scaling_3d_scale,
+				get_viewport().msaa_3d,
+				get_viewport().positional_shadow_atlas_size,
+				str(get_viewport().size),
+			]
+		)
+	)
+
+
+## Maximale Render-Qualität auf ein Viewport anwenden — auch für Szenen
+## mit eigenem SubViewport (Minigame-Host) aufrufen, das Quality-Autoload
+## bedient nur das Root-Viewport.
+func wende_hq_an(vp: Viewport) -> void:
+	vp.scaling_3d_scale = 1.0
+	vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_BILINEAR
+	vp.msaa_3d = Viewport.MSAA_4X
+	vp.positional_shadow_atlas_size = 4096
+	RenderingServer.directional_shadow_atlas_set_size(4096, true)
 
 
 ## Überschreiben: Szene mounten + Zeitplan füllen.

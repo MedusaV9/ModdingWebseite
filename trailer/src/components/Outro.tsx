@@ -17,6 +17,8 @@ const FEATURES = [
   'Baumodus & GOUHBUS',
   'Multiplayer-Besuche',
   'NEU: Gooby Ranch',
+  'Reiten & Turniere',
+  'Wetter & Tageszeiten',
 ];
 
 const CHIP_COLORS = [
@@ -26,7 +28,12 @@ const CHIP_COLORS = [
   COLORS.tealDark,
   COLORS.pinkDark,
   COLORS.yellow,
+  COLORS.teal,
+  COLORS.pink,
 ];
+
+/** Gelb/Gold-Chips brauchen dunklen Text. */
+const DUNKLE_SCHRIFT = new Set([2, 5]);
 
 /** Outro: Feature-Chips wirbeln um das Logo, dann Claim + Musik-Credit. */
 export const Outro: React.FC = () => {
@@ -55,8 +62,10 @@ export const Outro: React.FC = () => {
           fps,
           config: {damping: 13, stiffness: 110},
         });
-        const radiusX = 640;
-        const radiusY = 360;
+        // Bei 8 Chips liegen die Diagonalen nah am Claim-Text — Ellipse
+        // groß genug, damit nichts überlappt (1080p-Layout geprüft).
+        const radiusX = 750;
+        const radiusY = 440;
         const x = Math.cos(winkel) * radiusX * chip;
         const y = Math.sin(winkel) * radiusY * chip;
         return (
@@ -70,7 +79,7 @@ export const Outro: React.FC = () => {
               fontFamily: FONT_FAMILY,
               fontWeight: 700,
               fontSize: 36,
-              color: i === 2 || i === 5 ? COLORS.brown : COLORS.white,
+              color: DUNKLE_SCHRIFT.has(i) ? COLORS.brown : COLORS.white,
               backgroundColor: CHIP_COLORS[i],
               borderRadius: 999,
               padding: '10px 30px 13px',

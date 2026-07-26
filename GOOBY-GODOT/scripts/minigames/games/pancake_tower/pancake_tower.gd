@@ -3,9 +3,12 @@ extends MinigameBase
 ## PancakeTowerLogic (zahlengleich zum Web): Pendel-Kadenz, Schnitt-Mathematik,
 ## Perfect-Fenster (+2 & +10 % Breite), jede 5. Lage Topping (+4), Ende bei
 ## Breite < 20 % oder 40 Lagen, Turmschwingung ab Lage 8.
-## Steuerung: Tippen lässt den Pfannkuchen fallen. Optik: Küchen-Pastell,
-## echte Turmrotation um die Basis, JuiceKit (Perfect: Bloom + Hitfreeze,
-## Schnitt: Shake) und AudioDirector-SFX.
+## Steuerung: Tippen lässt den Pfannkuchen fallen.
+##
+## ECHTE 3D-KÜCHE (FB-4, PancakeTowerStage3D): Pfannkuchen als 3D-Zylinder auf
+## Teller + Arbeitsplatte, Turm-Schwingung als echte Rotation, Gooby (echtes
+## Rig) reitet auf dem Pendel-Pfannkuchen, Kamera fährt mit der Spitze hoch.
+## Die Abbildung nutzt exakt die Web-Kameramathematik — MECHANIK unangetastet.
 
 ## Sichtbare Weltbreite (Web-Kamera rahmt ≈ 2.9 Einheiten bei 390 px).
 const VIEW_UNITS_X := 2.9
@@ -16,12 +19,8 @@ const DROP_HEIGHT := 1.5
 
 ## Bildschirmhöhe der Tellerkante (Weltnullpunkt) als Anteil von oben.
 const GROUND_FRAC := 0.88
-const PLATE_COLOR := Color(0.95, 0.96, 1.0)
-const PLATE_RIM := Color(0.6, 0.64, 0.76)
-const CAKE_COLOR := Color(0.95, 0.76, 0.45)
-const CAKE_EDGE := Color(0.78, 0.55, 0.28)
-const BUTTER := Color(1.0, 0.85, 0.36)
-const BERRY := Color(0.93, 0.36, 0.48)
+
+const Stage := preload("res://scripts/minigames/games/pancake_tower/pancake_tower_stage3d.gd")
 
 var tune: Dictionary = {}
 var rng: GoobyRng
@@ -48,6 +47,8 @@ var _cam_bottom := 0.0
 var _layers_label: Label
 var _width_label: Label
 var _hint_label: Label
+var _stage: Node3D
+var _pulse := 0.0
 
 
 func setup(context: MinigameCtx) -> void:
@@ -57,6 +58,12 @@ func setup(context: MinigameCtx) -> void:
 	stack = {"center": 0.0, "width": float(tune["BASE_WIDTH"])}
 	wobble = PancakeTowerLogic.initial_wobble_state()
 	slide_phase = rng.next()
+	_stage = Stage.new()
+	_stage.name = "Kueche3D"
+	add_child(_stage)
+	_stage.setup_stage(VIEW_UNITS_X, GROUND_FRAC, float(tune["LAYER_HEIGHT"]))
+	if ctx.juice != null:
+		ctx.juice.world_environment = _stage.stage.world_env
 	_build_hud()
 	_fit_viewport()
 	if is_inside_tree():
@@ -74,18 +81,29 @@ func apply_view(size: Vector2) -> void:
 		view_size = size
 	landscape = view_size.x > view_size.y
 	position = Vector2.ZERO
-	if _layers_label != null:
-		_layers_label.position = Vector2(16.0, 10.0)
-		_width_label.position = Vector2(16.0, 48.0)
-		_hint_label.position = Vector2(view_size.x * 0.5 - 150.0, view_size.y - 56.0)
-		_hint_label.size = Vector2(300.0, 40.0)
+	if _stage != null:
+		_stage.frame(view_size)
+	_layout_hud()
 	queue_redraw()
+
+
+## HUD IMMER aus dem Viewport-Rect stellen: unter canvas_items-Stretch sind
+## Canvas-Einheiten ≠ Fensterpixel, apply_view-Größen können abweichen.
+func _layout_hud() -> void:
+	if _layers_label == null:
+		return
+	var vp := get_viewport_rect().size
+	_layers_label.position = Vector2(16.0, 10.0)
+	_width_label.position = Vector2(16.0, 48.0)
+	_hint_label.position = Vector2(vp.x * 0.5 - 150.0, vp.y - 56.0)
+	_hint_label.size = Vector2(300.0, 40.0)
 
 
 func _process(delta: float) -> void:
 	if not is_active() or finished:
 		return
 	_flash = maxf(0.0, _flash - delta)
+	_pulse += delta
 	wobble = PancakeTowerLogic.step_wobble(wobble, delta, layers.size(), tune)
 	_step_crumbs(delta)
 	if falling:
@@ -94,8 +112,28 @@ func _process(delta: float) -> void:
 			_land()
 	else:
 		slide_t += delta
+	_sync_stage(delta)
 	_update_labels()
 	queue_redraw()
+
+
+## Kamera-Anker + Bühnenzustand an die 3D-Küche geben (Web-Kameramathematik).
+func _sync_stage(delta: float) -> void:
+	var ppu := _ppu()
+	var visible_units := view_size.y / ppu
+	_cam_bottom = maxf(0.0, _stack_height() - visible_units * TOP_ANCHOR)
+	var index := _current_index()
+	var x := fall_x if falling else PancakeTowerLogic.slide_x(slide_t, index, slide_phase, tune)
+	var y := fall_y if falling else _stack_height() + DROP_HEIGHT
+	var active := {
+		"x": x,
+		"y": y,
+		"width": float(stack["width"]),
+		"topping": PancakeTowerLogic.is_topping_layer(index, tune),
+		"visible": true,
+		"stack_top": _stack_height(),
+	}
+	_stage.sync(layers, active, float(wobble["angle"]), _cam_bottom, _crumbs, _pulse, delta)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -151,6 +189,7 @@ func _land() -> void:
 	var pos := _to_screen(fall_x, _stack_height())
 	if not bool(drop["landed"]):
 		_spawn_crumb(local_x, _stack_height(), float(stack["width"]))
+		_stage.topple_fx(fall_x, _stack_height())
 		_flash_text = I18nService.t("mg.pancakeTower.topple")
 		_flash = 1.0
 		AudioDirector.try_play(self, "mg_spill")
@@ -165,6 +204,7 @@ func _land() -> void:
 	if not (drop["cut"] as Dictionary).is_empty():
 		var cut: Dictionary = drop["cut"]
 		_spawn_crumb(float(cut["center"]), _stack_height(), float(cut["size"]))
+		_stage.cut_fx(float(cut["center"]), _stack_height())
 	bonus_points += int(drop["points"])
 	(
 		layers
@@ -192,6 +232,7 @@ func _celebrate(drop: Dictionary, topping: bool, pos: Vector2) -> void:
 	if bool(drop["perfect"]):
 		perfects += 1
 		perfect_streak += 1
+		_stage.perfect_fx(float(drop["center"]), _stack_height())
 		wobble = PancakeTowerLogic.damp_wobble(wobble, tune, layers.size())
 		# Nur der Fließtext am Stapel — das große Band bleibt dem Spielende
 		# vorbehalten, sonst steht die Meldung doppelt im Bild.
@@ -209,6 +250,7 @@ func _celebrate(drop: Dictionary, topping: bool, pos: Vector2) -> void:
 			)
 	elif topping:
 		perfect_streak = 0
+		_stage.topping_fx(float(drop["center"]), _stack_height())
 		AudioDirector.try_play(self, "mg_golden")
 		if ctx.juice != null:
 			ctx.juice.bloom_pulse(0.5)
@@ -278,165 +320,10 @@ func _tower_point(local_center: float, height: float) -> Vector2:
 	)
 
 
+# Kein 2D-Turm mehr: Küche, Teller, Lagen, Pendel und Gooby rendert die
+# 3D-Bühne (PancakeTowerStage3D); 2D bleibt nur der Topple-Flash-Text.
 func _draw() -> void:
-	var ppu := _ppu()
-	var visible_units := view_size.y / ppu
-	_cam_bottom = maxf(0.0, _stack_height() - visible_units * TOP_ANCHOR)
-	_draw_kitchen()
-	_draw_plate()
-	for layer in layers:
-		_draw_layer(layer)
-	for crumb in _crumbs:
-		_draw_crumb(crumb)
-	_draw_active()
 	_draw_flash()
-
-
-func _draw_kitchen() -> void:
-	var vp := view_size
-	draw_rect(Rect2(Vector2.ZERO, vp), Color(0.99, 0.95, 0.89))
-	# Warme Tapetenstreifen + Fensterlicht.
-	for i in 10:
-		var x := vp.x * i / 10.0
-		draw_rect(Rect2(x, 0.0, vp.x / 20.0, vp.y), Color(0.97, 0.91, 0.83, 0.55))
-	var win := Rect2(vp.x * 0.06, vp.y * 0.06, vp.x * 0.3, vp.y * 0.16)
-	draw_rect(win, Color(0.83, 0.92, 0.97, 0.9))
-	draw_rect(win, Color(0.86, 0.72, 0.56), false, 6.0)
-	draw_line(
-		Vector2(win.get_center().x, win.position.y),
-		Vector2(win.get_center().x, win.end.y),
-		Color(0.86, 0.72, 0.56),
-		5.0
-	)
-	draw_line(
-		Vector2(win.position.x, win.get_center().y),
-		Vector2(win.end.x, win.get_center().y),
-		Color(0.86, 0.72, 0.56),
-		5.0
-	)
-	draw_rect(
-		Rect2(win.position.x - 8.0, win.end.y, win.size.x + 16.0, 9.0), Color(0.9, 0.78, 0.62)
-	)
-	# Die Arbeitsplatte hängt am Weltnullpunkt und rutscht mit dem Turm weg.
-	var counter := _to_screen(0.0, 0.0).y
-	draw_rect(Rect2(0.0, counter, vp.x, vp.y - counter), Color(0.85, 0.72, 0.58))
-	draw_rect(Rect2(0.0, counter, vp.x, 6.0), Color(0.92, 0.81, 0.68))
-
-
-func _draw_plate() -> void:
-	var base := _to_screen(0.0, 0.0)
-	var ppu := _ppu()
-	var w := float(tune["BASE_WIDTH"]) * 1.35 * ppu
-	# Schatten, dann Teller-Fuß und -Spiegel; ohne Rand geht Weiß auf der
-	# hellen Arbeitsplatte komplett unter.
-	draw_rect(Rect2(base.x - w * 0.66, base.y + 10.0, w * 1.32, 14.0), Color(0.6, 0.48, 0.38, 0.5))
-	draw_rect(Rect2(base.x - w * 0.66, base.y + 4.0, w * 1.32, 16.0), PLATE_COLOR)
-	draw_rect(Rect2(base.x - w * 0.66, base.y + 4.0, w * 1.32, 16.0), PLATE_RIM, false, 2.5)
-	draw_rect(Rect2(base.x - w * 0.52, base.y - 8.0, w * 1.04, 16.0), PLATE_COLOR)
-	draw_rect(Rect2(base.x - w * 0.52, base.y - 8.0, w * 1.04, 16.0), PLATE_RIM, false, 2.5)
-
-
-## Pfannkuchen-Silhouette: Rechteck mit halbrunden Enden (Stadion-Form) im
-## Turm-Koordinatensystem, damit die Schwingung sie korrekt mitdreht.
-func _pancake_outline(center: float, half: float, y0: float, h: float) -> PackedVector2Array:
-	var r := minf(h * 0.5, half * 0.9)
-	var cy := y0 + h * 0.5
-	var pts := PackedVector2Array()
-	for i in 9:
-		var a := -PI * 0.5 + PI * float(i) / 8.0
-		pts.append(_tower_point(center + half - r + cos(a) * r, cy + sin(a) * r))
-	for i in 9:
-		var a := PI * 0.5 + PI * float(i) / 8.0
-		pts.append(_tower_point(center - half + r + cos(a) * r, cy + sin(a) * r))
-	return pts
-
-
-func _draw_layer(layer: Dictionary) -> void:
-	var ppu := _ppu()
-	var h := float(tune["LAYER_HEIGHT"])
-	var idx := int(layer["index"])
-	var y0 := (idx - 1) * h
-	var center := float(layer["center"])
-	var half := float(layer["width"]) * 0.5
-	var outline := _pancake_outline(center, half, y0, h)
-	draw_colored_polygon(
-		outline, CAKE_COLOR if not bool(layer["topping"]) else Color(0.97, 0.8, 0.5)
-	)
-	draw_polyline(outline + PackedVector2Array([outline[0]]), CAKE_EDGE, 2.0)
-	# Heller Streifen oben = frisch gebackene Oberseite.
-	draw_line(
-		_tower_point(center - half * 0.62, y0 + h * 0.72),
-		_tower_point(center + half * 0.62, y0 + h * 0.72),
-		Color(1.0, 0.9, 0.68, 0.7),
-		maxf(2.0, h * ppu * 0.18)
-	)
-	if bool(layer["topping"]):
-		var top := _tower_point(center, y0 + h)
-		if idx % 10 == 0:
-			draw_circle(top + Vector2(0.0, -7.0), maxf(4.0, half * ppu * 0.22), BERRY)
-		else:
-			var bw := maxf(8.0, half * ppu * 0.5)
-			draw_rect(Rect2(top.x - bw * 0.5, top.y - 10.0, bw, 10.0), BUTTER)
-
-
-func _draw_crumb(crumb: Dictionary) -> void:
-	var ppu := _ppu()
-	var pos := _to_screen(float(crumb["x"]), float(crumb["y"]))
-	var w := maxf(4.0, float(crumb["w"]) * ppu)
-	var fade := 1.0 - float(crumb["age"]) / float(tune["FALLEN_DESPAWN_SEC"])
-	draw_rect(
-		Rect2(pos.x - w * 0.5, pos.y, w, float(tune["LAYER_HEIGHT"]) * ppu),
-		Color(CAKE_COLOR.r, CAKE_COLOR.g, CAKE_COLOR.b, clampf(fade, 0.0, 1.0))
-	)
-
-
-func _draw_active() -> void:
-	var ppu := _ppu()
-	var index := _current_index()
-	var x := fall_x if falling else PancakeTowerLogic.slide_x(slide_t, index, slide_phase, tune)
-	var y := fall_y if falling else _stack_height() + DROP_HEIGHT
-	var half := float(stack["width"]) * 0.5
-	var pos := _to_screen(x, y)
-	var w := half * 2.0 * ppu
-	var h := float(tune["LAYER_HEIGHT"]) * ppu
-	# Zielhilfe: senkrechte Linie auf die Stapelspitze.
-	var target := _tower_point(0.0, _stack_height())
-	draw_line(
-		Vector2(pos.x, pos.y + h), Vector2(pos.x, target.y), Color(0.95, 0.45, 0.66, 0.35), 2.0
-	)
-	var r := minf(h * 0.5, w * 0.45)
-	var cake := PackedVector2Array()
-	for i in 9:
-		var a := -PI * 0.5 + PI * float(i) / 8.0
-		cake.append(Vector2(pos.x + w * 0.5 - r + cos(a) * r, pos.y - h * 0.5 + sin(a) * r))
-	for i in 9:
-		var a := PI * 0.5 + PI * float(i) / 8.0
-		cake.append(Vector2(pos.x - w * 0.5 + r + cos(a) * r, pos.y - h * 0.5 + sin(a) * r))
-	draw_colored_polygon(cake, CAKE_COLOR)
-	draw_polyline(cake + PackedVector2Array([cake[0]]), CAKE_EDGE, 2.0)
-	draw_line(
-		Vector2(pos.x - w * 0.31, pos.y - h * 0.72),
-		Vector2(pos.x + w * 0.31, pos.y - h * 0.72),
-		Color(1.0, 0.9, 0.68, 0.7),
-		maxf(2.0, h * 0.18)
-	)
-	if PancakeTowerLogic.is_topping_layer(index, tune):
-		draw_circle(Vector2(pos.x, pos.y - h - 6.0), 7.0, BERRY)
-	_draw_gooby(Vector2(pos.x, pos.y - h - _gooby_radius() * 1.6))
-
-
-func _gooby_radius() -> float:
-	return maxf(20.0, view_size.x * 0.055)
-
-
-func _draw_gooby(pos: Vector2) -> void:
-	var r := _gooby_radius()
-	draw_circle(pos + Vector2(-r * 0.5, -r * 1.05), r * 0.32, Color(0.98, 0.86, 0.6))
-	draw_circle(pos + Vector2(r * 0.5, -r * 1.05), r * 0.32, Color(0.98, 0.86, 0.6))
-	draw_circle(pos, r, Color(0.99, 0.9, 0.65))
-	draw_circle(pos + Vector2(-r * 0.32, -r * 0.1), r * 0.11, Color(0.2, 0.16, 0.14))
-	draw_circle(pos + Vector2(r * 0.32, -r * 0.1), r * 0.11, Color(0.2, 0.16, 0.14))
-	draw_arc(pos + Vector2(0.0, r * 0.2), r * 0.3, 0.3, PI - 0.3, 10, Color(0.2, 0.16, 0.14), 2.2)
 
 
 func _draw_flash() -> void:

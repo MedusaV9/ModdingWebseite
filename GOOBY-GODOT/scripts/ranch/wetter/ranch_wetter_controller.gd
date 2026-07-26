@@ -34,12 +34,23 @@ const REGENBOGEN_FARBEN: Array[Color] = [
 const WOLKEN_ANZAHL := 34
 const STERNE_ANZAHL := 130
 
+## Permanenter Fern-Dunst (FB-2 Fernsicht): kleine Grunddichte, die die
+## Bergketten nach Distanz hazed, ohne den Himmel milchig zu machen.
+## (Review-Iteration: 0.0011 wusch die Übersicht grau aus; auch 0.0006
+## ließ die Bergketten noch zu ~50 % in Nebelfarbe absaufen -> 0.0003.)
+const FERN_NEBEL_DICHTE := 0.0003
+
 ## Screenshots/Tests erzwingen eine Wetterlage ("" = Plan; zusätzlich
 ## "regenbogen" = Sonne + nasser Boden am Abend).
 var wetter_override := ""
 var seed_wert := 0
 var datum := ""
 var zustand: Dictionary = {}
+
+## FB-2: eigener Sky-Fahrer (prozeduraler Shader). Wenn gesetzt, färbt er
+## den Himmel statt des ProceduralSkyMaterial-Fallbacks — Wetter-Signale
+## und Himmel-Stimmung bleiben dadurch synchron.
+var himmel: GoobyHimmel
 
 var _env: Environment
 var _sonne: DirectionalLight3D
@@ -171,21 +182,31 @@ func _wende_licht_an(stunde: float) -> void:
 	var ambient := Color(0.88, 0.9, 0.86).lerp(Color(0.21, 0.25, 0.38), 1.0 - tag)
 	_env.ambient_light_color = ambient.lerp(Color(0.56, 0.6, 0.68), grau * 0.7)
 	_env.ambient_light_energy = (float(profil["ambient_energie"]) * lerpf(1.0, faktor, 0.75) * 0.7)
-	var sky := _env.sky.sky_material as ProceduralSkyMaterial
-	var wolke := Color(0.72, 0.75, 0.8)
-	sky.sky_top_color = (profil["himmel_oben"] as Color).lerp(wolke * 0.7, grau)
-	sky.sky_horizon_color = (profil["himmel_horizont"] as Color).lerp(wolke, grau)
-	sky.ground_horizon_color = (profil["boden_horizont"] as Color).lerp(wolke * 0.8, grau)
-	sky.ground_bottom_color = (profil["boden_unten"] as Color).lerp(wolke * 0.5, grau)
+	if himmel != null:
+		himmel.wende_an(stunde, zustand)
+	else:
+		var sky := _env.sky.sky_material as ProceduralSkyMaterial
+		var wolke := Color(0.72, 0.75, 0.8)
+		sky.sky_top_color = (profil["himmel_oben"] as Color).lerp(wolke * 0.7, grau)
+		sky.sky_horizon_color = (profil["himmel_horizont"] as Color).lerp(wolke, grau)
+		sky.ground_horizon_color = (profil["boden_horizont"] as Color).lerp(wolke * 0.8, grau)
+		sky.ground_bottom_color = (profil["boden_unten"] as Color).lerp(wolke * 0.5, grau)
 	_wende_nebel_an()
 	_wende_blitz_an()
 
 
+## Wetter-Nebel + permanenter Fern-Dunst (FB-2): der Fern-Dunst hazed die
+## Bergketten nach Distanz (Farbe = Himmel-Horizont), Wetter-Nebel legt
+## sich obendrauf und darf auch den Himmel eintrüben.
 func _wende_nebel_an() -> void:
 	var dichte := float(zustand["nebel_dichte"])
-	_env.fog_enabled = dichte > 0.01
-	_env.fog_light_color = Color(0.86, 0.89, 0.92)
-	_env.fog_density = dichte * 0.012
+	var fern := FERN_NEBEL_DICHTE if himmel != null else 0.0
+	_env.fog_enabled = dichte > 0.01 or fern > 0.0
+	var farbe := Color(0.86, 0.89, 0.92)
+	if himmel != null:
+		farbe = himmel.horizont_farbe().lerp(farbe, clampf(dichte, 0.0, 1.0) * 0.6)
+	_env.fog_light_color = farbe
+	_env.fog_density = maxf(fern, dichte * 0.012)
 	_env.fog_sky_affect = clampf(dichte * 0.85, 0.0, 1.0)
 
 

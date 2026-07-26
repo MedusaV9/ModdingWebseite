@@ -8,10 +8,12 @@
 		"auge": "Show me everything!",
 		"bau": "Build",
 		"coachmark_ok": "Got it!",
-		"coachmark_text": "Everything important lives on the right: Build, Travel, Arcade, Album, Profile and IGohbie. The eye below shows what Gooby wants right now.",
+		"coachmark_text": "Everything important lives here: Build, Decorate, Travel, Arcade, Album, Wardrobe, Furniture, Profile and IGohbie. The eye below shows what Gooby wants right now.",
 		"coachmark_titel": "Your buttons",
 		"einstellungen": "Settings",
+		"gestalten": "Decorate",
 		"igohbie": "IGohbie",
+		"ikea": "Furniture",
 		"level_pill": "Lv {level}",
 		"profil": "Profile",
 		"reise": "Travel",
@@ -21,6 +23,7 @@
 		"stat_hunger": "Hunger",
 		"stat_hygiene": "Hygiene",
 		"stat_spass": "Fun",
+		"wardrobe": "Wardrobe",
 		"wo_ist_gooby": "Where is my Gooby?"
 	},
 	"news": {

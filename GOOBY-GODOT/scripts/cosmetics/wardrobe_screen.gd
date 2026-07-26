@@ -53,6 +53,12 @@ var _buehne: Node3D
 var _viewport: SubViewport
 var _dreht := false
 var _karten: Dictionary = {}  # id -> TextureRect der Vorschau
+## FB3: Metrik-Pass (Safe-Area, Touch-Floor, UiScale) bei jedem Resize.
+var _rows: VBoxContainer
+var _back: Button
+var _saeule_links: VBoxContainer
+var _tab_scroll: ScrollContainer
+var _tile := KARTE
 
 
 ## Garderoben-Route am SceneRouter anmelden (idempotent).
@@ -87,9 +93,48 @@ func _ready() -> void:
 	# ERST wenn der ganze Baum hängt: GoobyRig lädt sein GLB in `_ready`, vorher
 	# gibt es kein Skelett, an das sich `CosmeticAttach` hängen könnte.
 	_attach = CosmeticAttach.fuer_rig(_rig)
+	_apply_metrics()
+	get_viewport().size_changed.connect(_apply_metrics)
 	tab_waehlen(_tab)
 	_rig_aktualisieren()
 	ready_for_reveal.emit()
+
+
+## FB3: Safe-Area + zentrale Skalierung + Touch-Floor (statt fester 24/16-px-
+## Ränder und 184er-Karten, die unter Notch/Home-Indicator liefen).
+func _apply_metrics() -> void:
+	if _rows == null or not is_inside_tree():
+		return
+	var m := ScreenShell.metrics(get_viewport())
+	var f: float = m["f"]
+	var canvas: Vector2 = m["canvas"]
+	ScreenShell.frame(_rows, m, 24.0, 16.0)
+	if _back != null:
+		ScreenShell.touch_target(_back, m)
+	# Tabs: Floor auf BEIDEN Achsen (kurze Texte wie „Fell“ unterschreiten
+	# sonst die Breite); die Leiste selbst reserviert ihre Zeilenhöhe.
+	for chip: Node in _tab_box.get_children():
+		if chip is Control:
+			(chip as Control).custom_minimum_size = Vector2(m["floor_px"], m["floor_px"])
+	if _tab_scroll != null:
+		_tab_scroll.custom_minimum_size = Vector2(0.0, m["floor_px"] + 4.0)
+	_saeule_links.custom_minimum_size = Vector2(minf(330.0 * f, canvas.x * 0.32), 0.0)
+	# Karten: Wunschgröße × f, Spaltenzahl aus der Restbreite.
+	_tile = KARTE * f
+	var insets: Dictionary = m["insets"]
+	var avail := (
+		canvas.x
+		- float(insets["left"])
+		- float(insets["right"])
+		- 48.0 * f
+		- _saeule_links.custom_minimum_size.x
+		- 16.0
+	)
+	_grid.columns = clampi(int(floorf((avail + 12.0) / (_tile.x + 12.0))), 1, 5)
+	for karte in _grid.get_children():
+		if karte is Control:
+			(karte as Control).custom_minimum_size = _tile
+	ScreenShell.scale_fonts(self, f)
 
 
 ## Kategorie-Tab anwählen (auch für Screenshots/Tests).
@@ -146,20 +191,16 @@ func _build_ui() -> void:
 	wallpaper.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(wallpaper)
 
-	var rows := VBoxContainer.new()
-	rows.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	rows.offset_left = 24.0
-	rows.offset_right = -24.0
-	rows.offset_top = 16.0
-	rows.offset_bottom = -16.0
-	rows.add_theme_constant_override("separation", 12)
-	add_child(rows)
-	rows.add_child(_build_header())
+	_rows = VBoxContainer.new()
+	_rows.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_rows.add_theme_constant_override("separation", 12)
+	add_child(_rows)
+	_rows.add_child(_build_header())
 
 	var split := HBoxContainer.new()
 	split.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	split.add_theme_constant_override("separation", 16)
-	rows.add_child(split)
+	_rows.add_child(split)
 	split.add_child(_build_buehne())
 	split.add_child(_build_regal())
 
@@ -167,12 +208,12 @@ func _build_ui() -> void:
 func _build_header() -> Control:
 	var header := HBoxContainer.new()
 	header.add_theme_constant_override("separation", 12)
-	var back := SquishButton.new()
-	back.theme_type_variation = &"BtnGhost"
-	back.text = I18nService.t("wardrobe.zurueck")
-	back.focus_mode = Control.FOCUS_NONE
-	back.pressed.connect(_on_back_pressed)
-	header.add_child(back)
+	_back = SquishButton.new()
+	_back.theme_type_variation = &"BtnGhost"
+	_back.text = I18nService.t("wardrobe.zurueck")
+	_back.focus_mode = Control.FOCUS_NONE
+	_back.pressed.connect(_on_back_pressed)
+	header.add_child(_back)
 	var title := Label.new()
 	title.theme_type_variation = &"TitleLabel"
 	title.text = I18nService.t("wardrobe.titel")
@@ -191,9 +232,10 @@ func _build_header() -> Control:
 
 ## Linke Spalte: der lebende Gooby im eigenen 3D-Viewport (mit Glow).
 func _build_buehne() -> Control:
-	var saeule := VBoxContainer.new()
-	saeule.custom_minimum_size = Vector2(330.0, 0.0)
-	saeule.add_theme_constant_override("separation", 8)
+	_saeule_links = VBoxContainer.new()
+	_saeule_links.custom_minimum_size = Vector2(330.0, 0.0)
+	_saeule_links.add_theme_constant_override("separation", 8)
+	var saeule := _saeule_links
 
 	var rahmen := PanelContainer.new()
 	rahmen.theme_type_variation = &"AcCard"
@@ -269,11 +311,19 @@ func _build_regal() -> Control:
 	saeule.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	saeule.add_theme_constant_override("separation", 8)
 
+	# FB3: Tab-Leiste scrollt horizontal — im Hochformat liefen die letzten
+	# Tabs sonst rechts aus dem Canvas.
+	var tab_scroll := ScrollContainer.new()
+	tab_scroll.name = "TabScroll"
+	tab_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	tab_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
+	saeule.add_child(tab_scroll)
 	_tab_box = HBoxContainer.new()
 	_tab_box.add_theme_constant_override("separation", 8)
 	for kategorie in CosmeticsCatalog.KATEGORIEN:
 		_tab_box.add_child(_build_tab(kategorie))
-	saeule.add_child(_tab_box)
+	tab_scroll.add_child(_tab_box)
+	_tab_scroll = tab_scroll
 
 	var kopf := HBoxContainer.new()
 	kopf.add_theme_constant_override("separation", 10)
@@ -320,8 +370,15 @@ func _grid_neu_bauen() -> void:
 		_grid.remove_child(child)
 	var slice := _slice()
 	var angelegt := CosmeticsState.equipped(slice, _tab)
+	var karten: Array = []
 	for def: Dictionary in CosmeticsCatalog.by_kategorie(_tab):
-		_grid.add_child(_build_karte(def, slice, angelegt))
+		var karte := _build_karte(def, slice, angelegt)
+		_grid.add_child(karte)
+		karten.append(karte)
+	if is_inside_tree():
+		ScreenShell.scale_fonts(_grid, UiScale.for_viewport(get_viewport()))
+	# FB3-Polish: Kacheln blenden gestaffelt ein (Web-Stagger).
+	UiMotion.stagger_in(karten, 0.02)
 
 
 func _build_karte(def: Dictionary, slice: Dictionary, angelegt: String) -> Control:
@@ -331,7 +388,7 @@ func _build_karte(def: Dictionary, slice: Dictionary, angelegt: String) -> Contr
 	var karte := SquishButton.new()
 	karte.name = "Item_%s" % id
 	karte.theme_type_variation = &"AcCard"
-	karte.custom_minimum_size = KARTE
+	karte.custom_minimum_size = _tile
 	karte.focus_mode = Control.FOCUS_NONE
 	karte.tooltip_text = CosmeticsCatalog.desc_of(def)
 	karte.disabled = gesperrt
@@ -369,7 +426,7 @@ func _build_bild(def: Dictionary, angelegt: bool) -> Control:
 	bild.name = "Vorschau"
 	bild.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	bild.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	bild.custom_minimum_size = Vector2(0.0, 108.0)
+	bild.custom_minimum_size = Vector2(0.0, 108.0 * _tile.x / KARTE.x)
 	bild.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	bild.texture = _preview.hole(str(def["id"]))
 	rahmen.add_child(bild)

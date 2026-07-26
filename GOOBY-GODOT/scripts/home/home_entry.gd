@@ -97,6 +97,8 @@ func _on_travel_finished(target: Variant = null) -> void:
 	# W3d-Hooks: Bad-Suite/Geschichten-Stunde + aktives Random-Event pro Raum.
 	InteractablesHost.attach_to(room)
 	EventRunner.attach_to(room)
+	# FB-6/SEELE-Hook: Begrüßungen, Rituale, Erinnerungen, Idle-Leben.
+	GoobyReactions.attach_to(room)
 
 
 ## HUD nur im Raum (RoomBase) zeigen — Album/Arcade/Social/Stadt sind

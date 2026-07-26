@@ -117,7 +117,12 @@ func _apply_metrics() -> void:
 	_rows_box.offset_right = -24.0 - float(insets["right"])
 	_rows_box.offset_top = 16.0 + float(insets["top"])
 	_rows_box.offset_bottom = -16.0 - float(insets["bottom"])
-	var floor_px := HudLayoutLogic.touch_floor_canvas(canvas)
+	# FB3: voller PHYSISCHER Touch-Floor (Retina-Faktor) — die alte
+	# Canvas-Heuristik ×0.85 ließ die Seiten-Chips auf 40 pt schrumpfen.
+	var floor_px := maxf(
+		HudLayoutLogic.touch_floor_canvas(canvas),
+		float(AcTokens.TOUCH_FLOOR) * UiScale.touch_px_per_pt(get_viewport())
+	)
 	_back_btn.custom_minimum_size = Vector2(0.0, maxf(44.0 * _f, floor_px))
 	_scale_font(_back_btn, 17)
 	_scale_font(_title_label, AcTokens.FONT_SIZE_TITLE)
@@ -127,7 +132,7 @@ func _apply_metrics() -> void:
 	_rail_scroll.custom_minimum_size = Vector2(minf(240.0 * _f, canvas.x * 0.32), 0.0)
 	for chip in _rail_box.get_children():
 		if chip is Control:
-			(chip as Control).custom_minimum_size = Vector2(0.0, maxf(40.0 * _f, floor_px * 0.85))
+			(chip as Control).custom_minimum_size = Vector2(0.0, maxf(40.0 * _f, floor_px))
 			_scale_font(chip as Control, AcTokens.FONT_SIZE_CAPTION)
 	# Kacheln: Restbreite auf 2..4 Spalten aufteilen (Seitenverhältnis wie
 	# die alte 190×200-Kachel).

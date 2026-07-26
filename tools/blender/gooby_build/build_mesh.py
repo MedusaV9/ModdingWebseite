@@ -372,9 +372,11 @@ def build(mb):
         yaw = math.atan2(n[0], n[2])
         pitch = -math.asin(max(-1, min(1, n[1])))
 
+        # FB1: 16×6 Segmente + flacherer Buckel (0.35→0.22) — die Web-Wange
+        # ist ein glattes flaches Decal, die alte 12×5-Kappe las sich eckig.
         mb.begin(f"cheek{side}")
-        mb.uvsphere(P.CHEEK["r"] * s, 12, 5, "cheek", pos=pos,
-                    scale=(1.0, 1.0, 0.35),
+        mb.uvsphere(P.CHEEK["r"] * s, 16, 6, "cheek", pos=pos,
+                    scale=(1.0, 1.0, 0.22),
                     pre_rot=lambda p, _y=yaw, _p=pitch: rot_y(rot_x(p, _p), _y))
         mb.end()
 
@@ -481,9 +483,14 @@ def make_palette_image(png_path=None):
             else:
                 rgb = default
             o = (yy * size + xx) * 4
-            px[o] = P.srgb_to_linear(rgb[0])
-            px[o + 1] = P.srgb_to_linear(rgb[1])
-            px[o + 2] = P.srgb_to_linear(rgb[2])
+            # sRGB-Bytes DIREKT schreiben (kein srgb_to_linear!): der glTF-
+            # Export übernimmt image.pixels 1:1 in die PNG, und glTF
+            # interpretiert baseColorTexture als sRGB. Mit Linear-Werten in
+            # der PNG dekodiert der Renderer doppelt → alle Pinktöne
+            # übersättigt (FB1-Befund: Nase (206,66,90) statt (232,139,160)).
+            px[o] = rgb[0]
+            px[o + 1] = rgb[1]
+            px[o + 2] = rgb[2]
             px[o + 3] = 1.0
     img.pixels[:] = px
     if png_path:

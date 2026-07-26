@@ -29,6 +29,9 @@ var leben_reduziert_override := -1
 var reiter: RanchWeltReiter
 var wetter: RanchWetterController
 var wildtiere: RanchWildtiere
+## FB-2: Sky-Fahrer (prozeduraler Shader) + Fernsicht-Bergketten.
+var himmel: GoobyHimmel
+var fernsicht: WeltFernsicht
 
 var _spawn_zone := "hof"
 var _deko_gruppen: Dictionary = {}
@@ -49,15 +52,23 @@ func _ready() -> void:
 	_terrain = RanchTerrain.new()
 	_terrain.baue_chunks(self)
 	_terrain.baue_wege(self)
+	_terrain.baue_trampelpfade(self)
 	_terrain.baue_wasser(self)
 	var deko := RanchZonenDeko.new(RanchKarte.seed_wert())
 	_deko_gruppen = deko.baue(self)
 	_windrad_rotor = deko.windrad_rotor
+	fernsicht = WeltFernsicht.new()
+	fernsicht.name = "Fernsicht"
+	add_child(fernsicht)
+	fernsicht.einrichten(RanchKarte.seed_wert())
+	RanchFundorteBau.new(_partikel_faktor()).baue(self)
+	RanchStreu.baue(self, _partikel_faktor(), _sicht_faktor())
 	wetter = RanchWetterController.new()
 	wetter.name = "Wetter"
 	wetter.seed_wert = RanchWeltState.wetter_seed(gs)
 	wetter.datum = RanchWetter.datum_heute()
 	wetter.wetter_override = wetter_override
+	wetter.himmel = himmel
 	add_child(wetter)
 	wetter.einrichten(_env, _sonne, _terrain.terrain_material, deko.gras_material)
 	wildtiere = RanchWildtiere.new()
@@ -77,11 +88,14 @@ func _process(delta: float) -> void:
 	wetter.tick(delta, stunde, reiter.position)
 	wetter.set_bach_naehe(clampf(1.0 - _bach_abstand() / 55.0, 0.0, 1.0))
 	wildtiere.tick(delta, stunde, str(wetter.zustand["typ"]), reiter.position)
+	if fernsicht != null and himmel != null:
+		fernsicht.faerbe(himmel.horizont_farbe(), HimmelStimmungen.tageslicht(stunde))
 	_stream_timer -= delta
 	if _stream_timer <= 0.0:
 		_stream_timer = 0.5
 		_streame_zonen()
 		_zeige_status(stunde)
+		_pruefe_fundorte()
 
 
 ## Router-Params (W1a-Contract).
@@ -114,14 +128,33 @@ func _leben_reduziert() -> bool:
 	return gs != null and bool(gs.get_value("city.lebenReduziert", false))
 
 
+## Qualitäts-Faktoren (FB-2 Budget): Streu-Dichte hängt am Partikel-Regler,
+## Kleinteil-Sichtweite am Sichtweiten-Regler — beides über das Quality-
+## Autoload (Tests/Headless ohne Autoload: 1.0).
+func _partikel_faktor() -> float:
+	var quality := get_node_or_null("/root/Quality")
+	if quality != null and quality.has_method("particle_factor"):
+		return clampf(float(quality.particle_factor()), 0.0, 1.0)
+	return 1.0
+
+
+func _sicht_faktor() -> float:
+	var quality := get_node_or_null("/root/Quality")
+	if quality != null and quality.has_method("draw_distance_factor"):
+		return clampf(float(quality.draw_distance_factor()), 0.25, 4.0)
+	return 1.0
+
+
 func _baue_licht() -> void:
 	var env_node := WorldEnvironment.new()
 	env_node.name = "Umgebung"
 	_env = Environment.new()
-	var sky := Sky.new()
-	sky.sky_material = ProceduralSkyMaterial.new()
+	# FB-2: prozeduraler GOOBY-Himmel (7 Stimmungen, weiches Blenden) statt
+	# ProceduralSkyMaterial — der Wetter-Controller fährt ihn im Tick.
+	himmel = GoobyHimmel.new()
+	himmel.wende_an(_stunde(), {"typ": "sonne"})
 	_env.background_mode = Environment.BG_SKY
-	_env.sky = sky
+	_env.sky = himmel.sky
 	# Lehre aus den Minigame-Bühnen (_3db_stage): reines Himmel-Ambient +
 	# Linear/Filmic brennt helle Pastellflächen zu Weiß aus. Warmes Farb-
 	# Ambient (Wetter-Controller färbt es je Tageszeit) + ACES mit gesenkter
@@ -240,6 +273,25 @@ func _on_zone_gewechselt(zone_id: String) -> void:
 	if RanchWeltState.entdecke_zone(game_state(), zone_id):
 		var zonen_name := I18nService.t("rwelt.zone.%s" % zone_id)
 		_zeige_toast(I18nService.t("rwelt.entdeckt", {"zone": zonen_name}))
+
+
+## FB-2 „Dinge zum Erkunden": Reiter nah genug an einem noch nicht
+## gefundenen Fundort? → markieren, Münzen gutschreiben, Toast zeigen.
+func _pruefe_fundorte() -> void:
+	if reiter == null:
+		return
+	var eintrag := RanchEntdeckungen.fund_bei(game_state(), reiter.position)
+	if eintrag.is_empty():
+		return
+	var ergebnis := RanchEntdeckungen.entdecke(game_state(), str(eintrag["id"]))
+	if not bool(ergebnis["neu"]):
+		return
+	var fund_name := I18nService.t(str(ergebnis["name_key"]))
+	_zeige_toast(
+		I18nService.t(
+			"rwelt.fund_entdeckt", {"name": fund_name, "muenzen": str(int(ergebnis["muenzen"]))}
+		)
+	)
 
 
 func _on_zum_hof() -> void:

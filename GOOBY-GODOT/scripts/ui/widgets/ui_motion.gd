@@ -145,6 +145,31 @@ static func bar_to(bar: Range, value: float) -> Tween:
 	return tween
 
 
+## FB3: Gestaffeltes Einblenden für Listen/Grids (Web-Stagger): jedes
+## Element federt nacheinander auf (pop_in), EIN Sequenz-Tween statt
+## n Timern. Reduced Motion: alles sofort sichtbar, keine Bewegung.
+static func stagger_in(ctls: Array, step := 0.05) -> void:
+	if ctls.is_empty():
+		return
+	var first := ctls[0] as Control
+	if first == null or not first.is_inside_tree() or reduced(first):
+		for ctl: Control in ctls:
+			ctl.modulate.a = 1.0
+		return
+	for ctl: Control in ctls:
+		ctl.modulate.a = 0.0
+	var tween := first.create_tween()
+	for ctl: Control in ctls:
+		tween.tween_callback(_stagger_pop.bind(ctl))
+		tween.tween_interval(step)
+
+
+static func _stagger_pop(ctl: Control) -> void:
+	if is_instance_valid(ctl) and ctl.is_inside_tree():
+		ctl.modulate.a = 1.0
+		pop_in(ctl)
+
+
 ## Schwebe-Hover für Karten/Kacheln: verbindet mouse_entered/exited EINMAL
 ## (Meta-Flag verhindert Doppel-Anschluss) und hebt das Control sanft an.
 static func attach_hover(ctl: Control) -> void:

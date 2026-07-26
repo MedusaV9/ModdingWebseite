@@ -19,6 +19,7 @@ extends MinigameBase
 ## `speed_bonus` bleiben leer, bis das Autohaus Karts liefert.
 
 const Logic := preload("res://scripts/minigames/games/toy_racer/toy_racer_logic.gd")
+const Contact := preload("res://scripts/minigames/games/toy_racer/toy_racer_contact.gd")
 const World := preload("res://scripts/minigames/games/toy_racer/toy_racer_world.gd")
 const Models := preload("res://scripts/minigames/games/_3db_stage/model_bank.gd")
 const Stage3D := preload("res://scripts/minigames/games/_3db_stage/stage3d.gd")
@@ -95,6 +96,8 @@ var view_size := Vector2(844.0, 390.0)
 var landscape := true
 
 var _paid_drift := 0
+## Laufende Kart-Berührungen (Paar-Schlüssel) — gehört der Rempel-Auflösung.
+var _contacts: Dictionary = {}
 var _steer: Variant = null
 var _drift_held := false
 var _want_item := false
@@ -186,6 +189,7 @@ func _process(delta: float) -> void:
 		return
 
 	Logic.step_race(race, dt, _take_input())
+	_play_bumps(Contact.resolve(race, dt, _contacts))
 	_play_events()
 	# Driftmeter zahlen live aus (§C10.1 Punkteformel).
 	var drift_pts := int(
@@ -618,6 +622,24 @@ func _snap_camera() -> void:
 
 
 # ── Ereignisse ────────────────────────────────────────────────────────────
+
+
+## Frische Kart-Rempler hörbar/fühlbar machen. Nur Kontakte MIT dem Spieler
+## bekommen Ton und Mimik — Bot-gegen-Bot rempelt stumm im Hintergrund.
+func _play_bumps(bumps: Array[Dictionary]) -> void:
+	for bump: Dictionary in bumps:
+		var other := int(bump["b"]) if int(bump["a"]) == 0 else int(bump["a"])
+		Fx.burst(
+			_sparks,
+			(_karts[int(bump["a"])].global_position + _karts[int(bump["b"])].global_position) * 0.5
+		)
+		if int(bump["a"]) != 0 and int(bump["b"]) != 0:
+			continue
+		AudioDirector.try_play(self, "mg_spill", 0.85)
+		_gooby.call("emote", "dizzy" if int(bump["rear"]) == 0 else "scared", 0.7)
+		overtake_streak = 0
+		if ctx.juice != null and other < _karts.size():
+			ctx.juice.overlay_ring(_player_px(), Color(1.0, 0.62, 0.4), 52.0)
 
 
 func _play_events() -> void:

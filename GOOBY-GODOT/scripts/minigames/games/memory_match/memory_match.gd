@@ -5,7 +5,13 @@ extends MinigameBase
 ## Zeitbonus (0–8) + 20 Board-Bonus. Nach drei sauberen Treffern in Folge gibt
 ## es EINEN Spick-Blick, der kurz alle Karten zeigt. Endlos kettet Boards, bis
 ## 12 Fehlgriffe zusammenkommen. Kein Fail-State im getakteten Modus.
-## Optik: Papier-Karten mit dicker Outline, Motive als gezeichnete Symbole.
+##
+## ECHTER 3D-PICKNICKTISCH (FB-4, MemoryMatchStage3D): 3D-Karten mit echten
+## Food-Modellen auf einer Picknickdecke, Gooby (echtes Rig) schaut zu. Die
+## Karten liegen per ground_point-Raycast EXAKT unter den 2D-Tap-Rechtecken —
+## Eingabe und Trefferflächen bleiben zahlengleich, die MECHANIK unangetastet.
+
+const Stage := preload("res://scripts/minigames/games/memory_match/memory_match_stage3d.gd")
 
 var tune: Dictionary = {}
 var rng: GoobyRng
@@ -33,6 +39,8 @@ var _peek_button: Button
 var _grid_origin := Vector2.ZERO
 var _card_size := Vector2(64.0, 78.0)
 var _card_gap := Vector2(8.0, 10.0)
+var _stage: Node3D
+var _pulse := 0.0
 
 
 func setup(context: MinigameCtx) -> void:
@@ -42,6 +50,12 @@ func setup(context: MinigameCtx) -> void:
 	layout = MemoryMatchLogic.layout_for_level(_gooby_level())
 	peek = {"cleanMatches": 0, "peekReady": false, "peekUsed": false}
 	_deal_board()
+	_stage = Stage.new()
+	_stage.name = "Picknick3D"
+	add_child(_stage)
+	_stage.setup_stage()
+	if ctx.juice != null:
+		ctx.juice.world_environment = _stage.stage.world_env
 	_build_hud()
 	_fit_viewport()
 	if is_inside_tree():
@@ -75,16 +89,35 @@ func apply_view(size: Vector2) -> void:
 		_card_size.x * cols + _card_gap.x * (cols - 1),
 		_card_size.y * rows + _card_gap.y * (rows - 1)
 	)
-	# Etwas tiefer als mittig: darüber steht der Gooby-Cameo statt Leerraum.
+	# Etwas tiefer als mittig: darüber steht die 3D-Kulisse statt Leerraum.
 	_grid_origin = Vector2((view_size.x - board.x) * 0.5, top + (avail.y - board.y) * 0.58)
-	if _time_label != null:
-		_time_label.position = Vector2(16.0, 10.0)
-		_miss_label.position = Vector2(16.0, 48.0)
-		_hint_label.position = Vector2(view_size.x * 0.5 - 170.0, view_size.y - 44.0)
-		_hint_label.size = Vector2(340.0, 36.0)
-		_peek_button.position = Vector2(view_size.x * 0.5 - 70.0, _grid_origin.y + board.y + 12.0)
-		_peek_button.size = Vector2(140.0, 48.0)
+	if _stage != null:
+		# Erst die Kamera stellen, dann die Karten unter die Rechtecke raycasten.
+		_stage.frame(view_size)
+		var rects: Array[Rect2] = []
+		var faces: Array[int] = []
+		for i in cards.size():
+			rects.append(Rect2(_card_pos(i), _card_size))
+			faces.append(int(cards[i]["face"]))
+		_stage.layout(rects, faces)
+	_layout_hud()
 	queue_redraw()
+
+
+## HUD IMMER aus dem Viewport-Rect stellen: unter canvas_items-Stretch sind
+## Canvas-Einheiten ≠ Fensterpixel, apply_view-Größen können abweichen.
+func _layout_hud() -> void:
+	if _time_label == null:
+		return
+	var vp := get_viewport_rect().size
+	var rows := int(layout.get("rows", 4))
+	var board_h := _card_size.y * rows + _card_gap.y * (rows - 1)
+	_time_label.position = Vector2(16.0, 10.0)
+	_miss_label.position = Vector2(16.0, 48.0)
+	_hint_label.position = Vector2(vp.x * 0.5 - 170.0, vp.y - 44.0)
+	_hint_label.size = Vector2(340.0, 36.0)
+	_peek_button.position = Vector2(vp.x * 0.5 - 70.0, _grid_origin.y + board_h + 12.0)
+	_peek_button.size = Vector2(140.0, 48.0)
 
 
 func _gooby_level() -> int:
@@ -132,6 +165,7 @@ func _process(delta: float) -> void:
 	if not is_active() or finished:
 		return
 	elapsed += delta
+	_pulse += delta
 	if reveal_left > 0.0:
 		reveal_left = maxf(0.0, reveal_left - delta)
 	if peek_left > 0.0:
@@ -140,6 +174,10 @@ func _process(delta: float) -> void:
 		resolve_left = maxf(0.0, resolve_left - delta)
 		if resolve_left <= 0.0:
 			_resolve_pick()
+	var shows: Array[bool] = []
+	for card in cards:
+		shows.append(_face_visible(card))
+	_stage.sync(cards, shows, _pulse, delta)
 	_update_labels()
 	queue_redraw()
 
@@ -181,6 +219,7 @@ func _resolve_pick() -> void:
 		b["state"] = "matched"
 		matched_pairs += 1
 		match_streak += 1
+		_stage.match_fx(picked[1])
 		# Paar-Serie klettert hörbar (Halbton pro Treffer in Folge).
 		AudioDirector.try_play(self, "mg_perfect", FeelSfx.combo_pitch(match_streak))
 		if ctx.juice != null:
@@ -196,6 +235,7 @@ func _resolve_pick() -> void:
 		b["state"] = "down"
 		misses += 1
 		match_streak = 0
+		_stage.miss_fx(picked[1])
 		AudioDirector.try_play(self, "mg_junk", 0.95)
 		if ctx.juice != null:
 			ctx.juice.shake(0.2)
@@ -222,6 +262,7 @@ func _resolve_pick() -> void:
 
 func _board_cleared() -> void:
 	boards_cleared += 1
+	_stage.cleared_fx()
 	AudioDirector.try_play(self, "mg_win")
 	if ctx.juice != null:
 		ctx.juice.bloom_pulse(1.0)
@@ -244,6 +285,7 @@ func _use_peek() -> void:
 	peek["peekUsed"] = true
 	peek_left = float(tune["PEEK_SEC"])
 	_peek_button.visible = false
+	_stage.peek_fx()
 	AudioDirector.try_play(self, "mg_golden")
 	if ctx.juice != null:
 		ctx.juice.bloom_pulse(0.7)
@@ -318,115 +360,5 @@ func _face_visible(card: Dictionary) -> bool:
 		or str(card["state"]) == "matched"
 	)
 
-
-func _draw() -> void:
-	draw_rect(Rect2(Vector2.ZERO, view_size), AcTokens.BG_CREAM)
-	# Tischdecke unter dem Brett — hebt die Karten vom Cream-Wash ab.
-	var cols := int(layout["cols"])
-	var rows := int(layout["rows"])
-	var board := Rect2(
-		_grid_origin - Vector2(12.0, 12.0),
-		Vector2(
-			_card_size.x * cols + _card_gap.x * (cols - 1) + 24.0,
-			_card_size.y * rows + _card_gap.y * (rows - 1) + 24.0
-		)
-	)
-	draw_rect(Rect2(board.position + Vector2(6.0, 8.0), board.size), AcTokens.SHADOW_COLOR)
-	draw_rect(board, AcTokens.PAPER_SHADE)
-	# Karo-Tischdecke, damit die Fläche unter den Karten nicht tot wirkt.
-	var weave := 26.0
-	var wx := board.position.x
-	while wx < board.end.x:
-		draw_line(
-			Vector2(wx, board.position.y), Vector2(wx, board.end.y), Color(1, 1, 1, 0.35), 2.0
-		)
-		wx += weave
-	var wy := board.position.y
-	while wy < board.end.y:
-		draw_line(
-			Vector2(board.position.x, wy), Vector2(board.end.x, wy), Color(1, 1, 1, 0.35), 2.0
-		)
-		wy += weave
-	draw_rect(board, AcTokens.INK, false, 3.0)
-	for i in cards.size():
-		_draw_card(i)
-	_draw_gooby()
-
-
-func _draw_card(index: int) -> void:
-	var card: Dictionary = cards[index]
-	var pos := _card_pos(index)
-	var rect := Rect2(pos, _card_size)
-	var state := str(card["state"])
-	if state == "matched":
-		draw_rect(rect, Color(0.83, 0.93, 0.8))
-		draw_rect(rect, AcTokens.LEAF_DARK, false, 3.0)
-	elif _face_visible(card):
-		draw_rect(rect, AcTokens.PAPER)
-		draw_rect(rect, AcTokens.INK, false, 3.0)
-	else:
-		_draw_card_back(rect)
-		return
-	if not _face_visible(card):
-		return
-	var key: String = MemoryMatchLogic.FACE_KEYS[
-		int(card["face"]) % MemoryMatchLogic.FACE_KEYS.size()
-	]
-	Mg1FoodArt.draw(self, key, rect.get_center(), minf(_card_size.x, _card_size.y) * 0.32)
-
-
-## Rückseite: Gooby-Kopf als Wappen auf gestreiftem Grund.
-func _draw_card_back(rect: Rect2) -> void:
-	draw_rect(rect, AcTokens.PINK)
-	var stripe := rect.size.x * 0.24
-	var sx := rect.position.x - rect.size.y
-	while sx < rect.end.x:
-		draw_line(
-			Vector2(maxf(sx, rect.position.x), rect.position.y + maxf(0.0, rect.position.x - sx)),
-			Vector2(
-				minf(sx + rect.size.y, rect.end.x),
-				rect.position.y + minf(rect.size.y, rect.end.x - sx)
-			),
-			Color(1.0, 1.0, 1.0, 0.10),
-			stripe * 0.5
-		)
-		sx += stripe
-	var inner := rect.grow(-rect.size.x * 0.09)
-	draw_rect(inner, Color(1.0, 1.0, 1.0, 0.16))
-	draw_rect(inner, Color(1.0, 1.0, 1.0, 0.45), false, 2.5)
-	var c := rect.get_center()
-	var r := rect.size.x * 0.2
-	for side in [-1.0, 1.0]:
-		draw_circle(c + Vector2(side * r * 0.52, -r * 1.15), r * 0.3, AcTokens.PINK_DARK)
-	draw_circle(c, r, AcTokens.PINK_DARK)
-	draw_circle(c + Vector2(-r * 0.34, -r * 0.12), r * 0.11, AcTokens.PINK)
-	draw_circle(c + Vector2(r * 0.34, -r * 0.12), r * 0.11, AcTokens.PINK)
-	draw_rect(rect, AcTokens.INK, false, 3.0)
-
-
-## Gooby-Cameo über dem Kartentisch — hält die Lupe auf die Auslage.
-func _draw_gooby() -> void:
-	var r := clampf(_grid_origin.y * 0.2, 22.0, 46.0)
-	var base := Vector2(view_size.x * 0.5, maxf(74.0, _grid_origin.y - r * 1.5))
-	if landscape:
-		base = Vector2(view_size.x - r * 2.0, r * 2.2)
-	var fur := Color(0.99, 0.91, 0.7)
-	for side in [-1.0, 1.0]:
-		var ear_root := base + Vector2(side * r * 0.42, -r * 0.72)
-		var ear_tip := ear_root + Vector2(side * r * 0.34, -r * 0.85)
-		draw_line(ear_root, ear_tip, Color(0.98, 0.88, 0.66), r * 0.32)
-		draw_circle(ear_tip, r * 0.16, Color(0.98, 0.88, 0.66))
-	draw_circle(base, r, fur)
-	draw_arc(base, r, 0.0, TAU, 26, AcTokens.INK, 3.0)
-	draw_circle(base + Vector2(-r * 0.32, -r * 0.14), r * 0.12, AcTokens.INK)
-	draw_circle(base + Vector2(r * 0.32, -r * 0.14), r * 0.12, AcTokens.INK)
-	draw_circle(base + Vector2(-r * 0.62, r * 0.24), r * 0.16, Color(1.0, 0.72, 0.74, 0.5))
-	draw_circle(base + Vector2(r * 0.62, r * 0.24), r * 0.16, Color(1.0, 0.72, 0.74, 0.5))
-	draw_arc(base + Vector2(0.0, r * 0.2), r * 0.3, 0.3, PI - 0.3, 12, AcTokens.INK, 2.6)
-	# Lupe in der Pfote.
-	var lens := base + Vector2(r * 1.25, r * 0.45)
-	draw_line(
-		lens + Vector2(r * 0.4, r * 0.4), lens + Vector2(r * 0.85, r * 0.85), Color("8A5A34"), 5.0
-	)
-	draw_circle(lens, r * 0.42, Color(0.75, 0.9, 1.0, 0.55))
-	draw_arc(lens, r * 0.42, 0.0, TAU, 20, AcTokens.INK, 3.0)
+# Kein _draw mehr: Karten, Decke, Kulisse und Gooby rendert die 3D-Bühne
+# (MemoryMatchStage3D); nur HUD-Labels und der Spick-Knopf bleiben 2D.

@@ -16,18 +16,22 @@ loadBaloo();
  * Beat-Vielfachen):
  *
  *   0.0– 3.0 s  Titelkarte „GOOBY 5.0 — Das Godot-Engine-Update“
- *   3.0– 7.2 s  Neuer 3D-Gooby (Showcase) — „Alles neu. Alles in 3D.“
- *   7.2– 9.6 s  Zuhause (Wohnzimmer, lebender Gooby)
- *   9.6–13.2 s  Baumodus (Bett aus dem Lager + Hammer-Gag)
- *  13.2–15.0 s  GOUHBUS-Möbelausstellung („IKEA“)
- *  15.0–16.8 s  Garderobe (Outfits am lebenden Gooby)
- *  16.8–18.6 s  Stadt-Panorama (goldene Stunde)
- *  18.6–20.4 s  Autofahrt am Tag (Ausparken/Verkehr)
- *  20.4–21.6 s  Stadt bei Nacht (Scheinwerfer)
- *  21.6–28.8 s  Minispiel-Montage im Beat (6 Slots à 1,2 s)
- *  28.8–31.2 s  Multiplayer-Besuch (zwei Goobys)
- *  31.2–33.6 s  Ranch-Teaser (Gooby-Pferde im Galopp)
- *  33.6–37.2 s  Outro (Feature-Chips + Logo + Credit)
+ *   3.0– 6.6 s  Neuer 3D-Gooby (Showcase) — „Alles neu. Alles in 3D.“
+ *   6.6– 9.0 s  Zuhause (Wohnzimmer, lebender Gooby)
+ *   9.0–12.6 s  Baumodus (Bett aus dem Lager + Hammer-Gag)
+ *  12.6–14.4 s  GOUHBUS-Möbelausstellung („IKEA“)
+ *  14.4–16.2 s  Garderobe (Outfits am lebenden Gooby)
+ *  16.2–18.0 s  Stadt-Panorama (goldene Stunde)
+ *  18.0–19.8 s  Autofahrt am Tag (Ausparken/Verkehr)
+ *  19.8–21.0 s  Stadt bei Nacht (Scheinwerfer)
+ *  21.0–28.2 s  Minispiel-Montage im Beat (6 Slots à 1,2 s)
+ *  28.2–30.6 s  Multiplayer-Besuch (zwei Goobys)
+ *  30.6–33.0 s  Ranch-Hof (Gooby-Pferde im Galopp)
+ *  33.0–35.4 s  Freies Reiten in der offenen Ranch-Region
+ *  35.4–37.2 s  Wetter & Tageszeiten (Regenbogen/Abendrot-Zeitraffer)
+ *  37.2–39.0 s  Reit-Dorf Hufingen (Ankunft per Ritt)
+ *  39.0–40.8 s  Turnier-Springen (Arena + Parcours)
+ *  40.8–44.4 s  Outro (Feature-Chips + Logo + Credit)
  */
 
 type Abschnitt = {
@@ -37,23 +41,23 @@ type Abschnitt = {
   flash?: boolean;
 };
 
-const MONTAGE_START = 36 * BEAT; // 21,6 s
+const MONTAGE_START = 35 * BEAT; // 21,0 s
 const SLOT = 2 * BEAT; // 1,2 s pro Montage-Slot
 
-export const TRAILER_DURATION = 62 * BEAT; // 37,2 s = 2232 Frames
+export const TRAILER_DURATION = 74 * BEAT; // 44,4 s = 2664 Frames
 
 export const Trailer: React.FC = () => {
   const abschnitte: Abschnitt[] = [
     {at: 0, dur: 5 * BEAT, el: <TitleCard />},
     {
       at: 5 * BEAT,
-      dur: 7 * BEAT,
+      dur: 6 * BEAT,
       flash: true,
       el: (
         <ClipScene
           src="clips/showcase.mp4"
           startFrom={30}
-          durationInFrames={7 * BEAT}
+          durationInFrames={6 * BEAT}
           label="Alles neu. Alles in 3D."
           accent={COLORS.pink}
           zoomFrom={1.0}
@@ -62,7 +66,7 @@ export const Trailer: React.FC = () => {
       ),
     },
     {
-      at: 12 * BEAT,
+      at: 11 * BEAT,
       dur: 4 * BEAT,
       flash: true,
       el: (
@@ -77,7 +81,7 @@ export const Trailer: React.FC = () => {
       ),
     },
     {
-      at: 16 * BEAT,
+      at: 15 * BEAT,
       dur: 6 * BEAT,
       el: (
         <ClipScene
@@ -91,7 +95,7 @@ export const Trailer: React.FC = () => {
       ),
     },
     {
-      at: 22 * BEAT,
+      at: 21 * BEAT,
       dur: 3 * BEAT,
       flash: true,
       el: (
@@ -106,7 +110,7 @@ export const Trailer: React.FC = () => {
       ),
     },
     {
-      at: 25 * BEAT,
+      at: 24 * BEAT,
       dur: 3 * BEAT,
       el: (
         <ClipScene
@@ -120,7 +124,7 @@ export const Trailer: React.FC = () => {
       ),
     },
     {
-      at: 28 * BEAT,
+      at: 27 * BEAT,
       dur: 3 * BEAT,
       flash: true,
       el: (
@@ -135,7 +139,7 @@ export const Trailer: React.FC = () => {
       ),
     },
     {
-      at: 31 * BEAT,
+      at: 30 * BEAT,
       dur: 3 * BEAT,
       el: (
         <ClipScene
@@ -149,7 +153,7 @@ export const Trailer: React.FC = () => {
       ),
     },
     {
-      at: 34 * BEAT,
+      at: 33 * BEAT,
       dur: 2 * BEAT,
       el: (
         <ClipScene
@@ -248,7 +252,7 @@ export const Trailer: React.FC = () => {
       ),
     },
     {
-      at: 48 * BEAT,
+      at: 47 * BEAT,
       dur: 4 * BEAT,
       flash: true,
       el: (
@@ -262,8 +266,9 @@ export const Trailer: React.FC = () => {
         />
       ),
     },
+    // ---- Ranch-Update-Block ----
     {
-      at: 52 * BEAT,
+      at: 51 * BEAT,
       dur: 4 * BEAT,
       flash: true,
       el: (
@@ -277,7 +282,64 @@ export const Trailer: React.FC = () => {
         />
       ),
     },
-    {at: 56 * BEAT, dur: 6 * BEAT, flash: true, el: <Outro />},
+    {
+      at: 55 * BEAT,
+      dur: 4 * BEAT,
+      el: (
+        <ClipScene
+          src="clips/ranch_ride.mp4"
+          startFrom={240}
+          durationInFrames={4 * BEAT}
+          label="Reite hinaus in die offene Welt"
+          accent={COLORS.teal}
+          zoomTo={1.05}
+        />
+      ),
+    },
+    {
+      at: 59 * BEAT,
+      dur: 3 * BEAT,
+      el: (
+        <ClipScene
+          src="clips/ranch_wetter.mp4"
+          startFrom={330}
+          durationInFrames={3 * BEAT}
+          label="Wetter & Tageszeiten"
+          accent={COLORS.gold}
+          zoomTo={1.04}
+        />
+      ),
+    },
+    {
+      at: 62 * BEAT,
+      dur: 3 * BEAT,
+      el: (
+        <ClipScene
+          src="clips/ranch_dorf.mp4"
+          startFrom={460}
+          durationInFrames={3 * BEAT}
+          label="Entdecke das Dorf Hufingen"
+          accent={COLORS.tealDark}
+          zoomTo={1.04}
+        />
+      ),
+    },
+    {
+      at: 65 * BEAT,
+      dur: 3 * BEAT,
+      flash: true,
+      el: (
+        <ClipScene
+          src="clips/ranch_comp.mp4"
+          startFrom={260}
+          durationInFrames={3 * BEAT}
+          label="Gewinne Turniere!"
+          accent={COLORS.pink}
+          zoomTo={1.05}
+        />
+      ),
+    },
+    {at: 68 * BEAT, dur: 6 * BEAT, flash: true, el: <Outro />},
   ];
 
   return (

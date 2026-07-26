@@ -5,7 +5,15 @@ extends MinigameBase
 ## alle 10 Tore enger. Ab Sekunde 6 kommt Wind: erst Telegraf, dann ein
 ## 0,4-Bahnen-Schubs — währenddessen zählen Tore doppelt. Eine Berührung
 ## beendet den Lauf (in JEDEM Modus, wie im Web).
-## Optik: Parallax-Hügel, dicke Säulen, Gooby mit wehenden Ohren.
+##
+## ECHTE 3D-HECKENLANDSCHAFT (FB-4, BunnyHopStage3D): Gooby flattert als
+## echtes Rig durch 3D-Heckensäulen mit Blätterkronen, dahinter Parallax-Hügel
+## und Wolken. Die Kamera rahmt die Spielebene EXAKT wie die 2D-Rechnung
+## (set_half_height), Spawn/Kollision bleiben zahlengleich. Nur der
+## Wind-Telegraf bleibt als 2D-Overlay. Die 3D-Welt hängt unter der
+## Node2D-Wurzel, der MinigameBase-Vertrag bleibt unberührt.
+
+const Stage := preload("res://scripts/minigames/games/bunny_hop/bunny_hop_stage3d.gd")
 
 ## Sichtbare Welt-Halbhöhe: FLOOR_Y −3.1 bis CEILING_Y 3.9 plus Rand.
 const WORLD_HALF_H := 3.9
@@ -40,9 +48,9 @@ var landscape := false
 var _time_label: Label
 var _gate_label: Label
 var _hint_label: Label
+var _stage: Node3D
 var _pulse := 0.0
 var _ear := 0.0
-var _clouds: Array[Vector3] = []
 
 
 func setup(context: MinigameCtx) -> void:
@@ -51,8 +59,16 @@ func setup(context: MinigameCtx) -> void:
 	rng = ctx.rng()
 	gooby_y = HOVER_Y
 	gooby_vy = 0.0
-	for i in 4:
-		_clouds.append(Vector3(rng.next(), 0.06 + rng.next() * 0.22, 0.6 + rng.next() * 0.5))
+	# RNG-Parität mit der 2D-Fassung: die vier Wolken-Würfe (je 3 Züge) bleiben
+	# im Seed-Strom, sonst verschieben sich alle späteren Lücken-Zentren.
+	for _i in 4 * 3:
+		rng.next()
+	_stage = Stage.new()
+	_stage.name = "Hecke3D"
+	add_child(_stage)
+	_stage.setup_stage(float(tune["FLOOR_Y"]))
+	if ctx.juice != null:
+		ctx.juice.world_environment = _stage.stage.world_env
 	_build_hud()
 	_fit_viewport()
 	if is_inside_tree():
@@ -70,11 +86,9 @@ func apply_view(size: Vector2) -> void:
 		view_size = size
 	landscape = view_size.x > view_size.y
 	position = Vector2.ZERO
-	if _time_label != null:
-		_time_label.position = Vector2(16.0, 10.0)
-		_gate_label.position = Vector2(16.0, 48.0)
-		_hint_label.position = Vector2(view_size.x * 0.5 - 170.0, view_size.y - 42.0)
-		_hint_label.size = Vector2(340.0, 34.0)
+	if _stage != null:
+		_stage.apply_size(view_size)
+	_update_labels()
 	queue_redraw()
 
 
@@ -106,6 +120,7 @@ func _process(delta: float) -> void:
 	if not started:
 		# Vorstart-Schweben: kein Scroll, keine Tore, keine Kollision.
 		gooby_y = HOVER_Y + sin(elapsed * 3.0) * HOVER_AMP
+		_sync_stage(delta)
 		_update_labels()
 		queue_redraw()
 		return
@@ -120,8 +135,24 @@ func _process(delta: float) -> void:
 	if _crashed():
 		_crash()
 		return
+	_sync_stage(delta)
 	_update_labels()
 	queue_redraw()
+
+
+func _sync_stage(delta: float) -> void:
+	_stage.sync(
+		pillars,
+		coins,
+		_gooby_world_x(),
+		gooby_y,
+		gooby_vy,
+		scroll,
+		float(tune["PILLAR_HALF_W"]),
+		0.04,
+		_pulse,
+		delta
+	)
 
 
 ## Der eine Windschubs pro Zyklus — exakt beim Übergang in die Böe.
@@ -154,7 +185,7 @@ func _pillar_tick() -> void:
 		AudioDirector.try_play(self, "mg_good", 1.0 + 0.01 * minf(gates, 20.0))
 		if ctx.juice != null:
 			ctx.juice.float_text(
-				Vector2(view_size.x * GOOBY_X_FRAC + 40.0, _to_screen_y(gooby_y) - 40.0),
+				_stage.gooby_screen() + Vector2(40.0, 0.0),
 				"+%d" % points,
 				AcTokens.GOLD if gusting else AcTokens.LEAF_DARK
 			)
@@ -211,11 +242,10 @@ func _coin_tick() -> void:
 				coin["taken"] = true
 				score += 1
 				AudioDirector.try_play(self, "gvz_collect")
+				_stage.coin_fx(cx, float(coin["y"]))
 				if ctx.juice != null:
 					ctx.juice.float_text(
-						Vector2(_to_screen_x(cx), _to_screen_y(float(coin["y"]))),
-						"+1",
-						AcTokens.GOLD
+						_stage.gooby_screen() + Vector2(30.0, -30.0), "+1", AcTokens.GOLD
 					)
 				ctx.report_score(BunnyHopLogic.final_hop_score(score, tune), 1)
 				continue
@@ -238,6 +268,8 @@ func _crashed() -> bool:
 
 func _crash() -> void:
 	AudioDirector.try_play(self, "mg_lose")
+	_stage.crash_fx()
+	_sync_stage(0.0)
 	if ctx.juice != null:
 		ctx.juice.shake(0.6)
 		ctx.juice.hit_freeze(120)
@@ -258,6 +290,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	started = true
 	gooby_vy = float(tune["HOP_VY"])
 	_ear = 1.0
+	_stage.hop_fx()
 	AudioDirector.try_play(self, "gvz_pop", 1.1)
 
 
@@ -270,6 +303,15 @@ func _finish() -> void:
 
 
 func _update_labels() -> void:
+	if _time_label == null:
+		return
+	# HUD IMMER aus dem Viewport-Rect stellen: unter canvas_items-Stretch sind
+	# Canvas-Einheiten ≠ Fensterpixel, apply_view-Größen können abweichen.
+	var vp := get_viewport_rect().size
+	_time_label.position = Vector2(16.0, 10.0)
+	_gate_label.position = Vector2(16.0, 48.0)
+	_hint_label.position = Vector2(vp.x * 0.5 - 170.0, vp.y - 42.0)
+	_hint_label.size = Vector2(340.0, 34.0)
 	_time_label.text = I18nService.t("mg.bunnyHop.gates", {"n": gates})
 	var phase := BunnyHopLogic.gust_phase_at(elapsed, tune)
 	if str(phase["phase"]) == "telegraph":
@@ -293,187 +335,23 @@ func _gooby_world_x() -> float:
 	return view_size.x * GOOBY_X_FRAC / _ppu()
 
 
-func _to_screen_x(world_x: float) -> float:
-	return world_x * _ppu()
-
-
-func _to_screen_y(world_y: float) -> float:
-	return view_size.y * 0.5 - world_y * _ppu()
-
-
+## Nur noch HUD-Overlay: der Wind-Telegraf bleibt 2D — er ist eine WARNUNG,
+## keine Kulisse, und muss in jeder Kameralage sofort lesbar sein.
 func _draw() -> void:
-	_draw_sky()
-	for pillar in pillars:
-		_draw_pillar(pillar)
-	for coin in coins:
-		_draw_coin(coin)
-	_draw_gooby()
 	var phase := BunnyHopLogic.gust_phase_at(elapsed, tune)
 	if str(phase["phase"]) != "none":
 		_draw_wind(str(phase["phase"]), int(phase["direction"]))
 
 
-func _draw_sky() -> void:
-	var floor_y := _to_screen_y(float(tune["FLOOR_Y"]))
-	# Himmel als Verlauf in schmalen Bändern — oben kühler, am Horizont heller.
-	var bands := 14
-	for i in bands:
-		var t := float(i) / float(bands - 1)
-		var band := Color("A9D9F0").lerp(Color("E7F5FB"), t)
-		draw_rect(
-			Rect2(
-				0.0, floor_y * float(i) / float(bands), view_size.x, floor_y / float(bands) + 1.0
-			),
-			band
-		)
-	_draw_sun()
-	for cloud in _clouds:
-		_draw_cloud(cloud, floor_y)
-	# Parallax-Hügel: zwei Ketten, die AUF dem Horizont sitzen statt ihn zu
-	# überdecken — sonst frisst der Hügelrücken die halbe Spielfläche.
-	for layer in 2:
-		var speed := 0.14 + layer * 0.2
-		var step := 260.0 - layer * 70.0
-		var radius := 108.0 - layer * 30.0
-		var crest := floor_y - (58.0 - layer * 22.0)
-		var tint := Color("8FC98A") if layer == 0 else Color("A8D89C")
-		var offset := fmod(scroll * speed * _ppu(), step)
-		var count := int(view_size.x / step) + 3
-		for i in count:
-			draw_circle(Vector2(-offset + i * step - step, crest + radius), radius, tint)
-	draw_rect(Rect2(0.0, floor_y, view_size.x, view_size.y - floor_y), Color("8FD06C"))
-	draw_rect(Rect2(0.0, floor_y, view_size.x, 10.0), Color("6DB54E"))
-	draw_line(Vector2(0.0, floor_y), Vector2(view_size.x, floor_y), AcTokens.INK, 3.0)
-	_draw_grass_tufts(floor_y)
-
-
-func _draw_sun() -> void:
-	var at := Vector2(view_size.x * 0.84, view_size.y * 0.12)
-	for i in 8:
-		var a := float(i) / 8.0 * TAU + _pulse * 0.25
-		draw_line(
-			at + Vector2.RIGHT.rotated(a) * 46.0,
-			at + Vector2.RIGHT.rotated(a) * 62.0,
-			Color(1.0, 0.85, 0.44, 0.65),
-			5.0
-		)
-	draw_circle(at, 38.0, Color("FFE49A"))
-	draw_circle(at, 30.0, Color("FFD166"))
-
-
-func _draw_cloud(cloud: Vector3, floor_y: float) -> void:
-	var drift := fmod(cloud.x - scroll * 0.05, 1.2)
-	if drift < -0.2:
-		drift += 1.2
-	var at := Vector2(drift * view_size.x, floor_y * cloud.y)
-	var r := 26.0 * cloud.z
-	var tint := Color(1.0, 1.0, 1.0, 0.85)
-	draw_circle(at, r, tint)
-	draw_circle(at + Vector2(r * 0.85, r * 0.18), r * 0.78, tint)
-	draw_circle(at + Vector2(-r * 0.85, r * 0.22), r * 0.66, tint)
-
-
-func _draw_grass_tufts(floor_y: float) -> void:
-	var step := 46.0
-	var offset := fmod(scroll * _ppu(), step)
-	var count := int(view_size.x / step) + 2
-	for i in count:
-		var x := -offset + i * step
-		draw_line(Vector2(x, floor_y + 4.0), Vector2(x - 5.0, floor_y - 11.0), Color("5FA344"), 3.0)
-		draw_line(
-			Vector2(x + 7.0, floor_y + 4.0), Vector2(x + 11.0, floor_y - 9.0), Color("5FA344"), 3.0
-		)
-
-
-## Säule = Heckenpfosten mit Blätterkrone an der Lücke (Web: Zaun + Baumkrone).
-func _draw_pillar(pillar: Dictionary) -> void:
-	var x := _to_screen_x(float(pillar["x"]) - scroll)
-	var half := float(tune["PILLAR_HALF_W"]) * _ppu()
-	var gap_top := _to_screen_y(float(pillar["gapCenterY"]) + float(pillar["gapHeight"]) * 0.5)
-	var gap_bottom := _to_screen_y(float(pillar["gapCenterY"]) - float(pillar["gapHeight"]) * 0.5)
-	var ground := _to_screen_y(float(tune["FLOOR_Y"]))
-	var passed := bool(pillar["passed"])
-	var body := Color("7FB964") if not passed else Color("A9C79B")
-	var slat := Color("6AA351") if not passed else Color("98B78B")
-	var columns: Array[Rect2] = [
-		Rect2(x - half, -12.0, half * 2.0, gap_top + 12.0),
-		Rect2(x - half, gap_bottom, half * 2.0, ground - gap_bottom),
-	]
-	for rect in columns:
-		if rect.size.y <= 0.0:
-			continue
-		draw_rect(rect, body)
-		# Lattenstruktur, damit die Säule nicht als Farbklotz liest.
-		var y := rect.position.y + 18.0
-		while y < rect.position.y + rect.size.y - 6.0:
-			draw_line(Vector2(rect.position.x + 4.0, y), Vector2(rect.end.x - 4.0, y), slat, 2.0)
-			y += 26.0
-		draw_rect(rect, AcTokens.INK, false, 3.0)
-	# Blätterkronen kappen die Lücke, ohne in die Öffnung zu ragen.
-	_draw_crown(Vector2(x, gap_top - 4.0), half, passed)
-	_draw_crown(Vector2(x, gap_bottom + 4.0), half, passed)
-
-
-func _draw_crown(at: Vector2, half: float, passed: bool) -> void:
-	var leaf := Color("6DB54E") if not passed else Color("9EC090")
-	var spots: Array[Vector2] = [
-		Vector2(-half * 0.7, 0.0), Vector2(half * 0.7, 0.0), Vector2(0.0, 0.0)
-	]
-	for spot in spots:
-		draw_circle(at + spot, half * 0.82, leaf)
-	for spot in spots:
-		draw_arc(at + spot, half * 0.82, 0.0, TAU, 18, AcTokens.INK, 2.5)
-
-
-func _draw_coin(coin: Dictionary) -> void:
-	var pos := Vector2(_to_screen_x(float(coin["x"]) - scroll), _to_screen_y(float(coin["y"])))
-	var wobble := sin(_pulse * float(BunnyHopLogic.HOP_JUICE["COIN_WOBBLE_HZ"]) * TAU) * 0.4 + 0.6
-	draw_circle(pos, 13.0, AcTokens.GOLD)
-	draw_arc(pos, 13.0, 0.0, TAU, 18, AcTokens.INK, 2.5)
-	draw_line(
-		pos + Vector2(0.0, -7.0 * wobble), pos + Vector2(0.0, 7.0 * wobble), Color("C9932E"), 3.0
-	)
-
-
-func _draw_gooby() -> void:
-	var pos := Vector2(view_size.x * GOOBY_X_FRAC, _to_screen_y(gooby_y))
-	var r := float(tune["BODY_HALF_H"]) * _ppu()
-	var tilt := clampf(gooby_vy * 0.1, -0.5, 0.5)
-	# Bodenschatten verankert den Hüpfer über dem Rasen.
-	var ground := _to_screen_y(float(tune["FLOOR_Y"]))
-	var shrink := clampf(1.0 - (ground - pos.y) / (view_size.y * 0.7), 0.3, 1.0)
-	draw_set_transform(Vector2(pos.x, ground - 4.0), 0.0, Vector2(1.0, 0.3))
-	draw_circle(Vector2.ZERO, r * 0.85 * shrink, Color(0.29, 0.23, 0.21, 0.16))
-	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-	var fur := Color("FFE9BE")
-	var fur_dark := Color("F3D49B")
-	# Ohren sitzen AM Kopf und legen sich beim Hüpfer nach hinten.
-	var lay := -tilt * 0.5 - _ear * 0.35
-	for side in [-1.0, 1.0]:
-		var root := pos + Vector2(side * r * 0.42, -r * 0.78)
-		var tip := root + Vector2(side * r * 0.5 + lay * r * 1.1, -r * 0.95)
-		draw_line(root, tip, fur, r * 0.34)
-		draw_circle(tip, r * 0.17, fur)
-	# Hinterläufe + Puschelschwanz, damit Gooby nicht nur ein Kopf ist.
-	draw_circle(pos + Vector2(-r * 0.72, r * 0.52), r * 0.34, fur_dark)
-	draw_circle(pos + Vector2(r * 0.3, r * 0.78), r * 0.3, fur_dark)
-	draw_circle(pos, r, fur)
-	draw_arc(pos, r, 0.0, TAU, 26, AcTokens.INK, 3.0)
-	draw_circle(pos + Vector2(r * 0.1, -r * 0.16), r * 0.12, AcTokens.INK)
-	draw_circle(pos + Vector2(r * 0.5, -r * 0.16), r * 0.12, AcTokens.INK)
-	draw_circle(pos + Vector2(r * 0.3, r * 0.04), r * 0.08, AcTokens.PINK)
-	draw_arc(pos + Vector2(r * 0.28, r * 0.2), r * 0.28, 0.3, PI - 0.3, 10, AcTokens.INK, 2.4)
-	draw_circle(pos + Vector2(-r * 0.55, r * 0.3), r * 0.2, Color(1.0, 0.72, 0.74, 0.55))
-
-
 func _draw_wind(phase: String, direction: int) -> void:
+	var vp := get_viewport_rect().size
 	var alpha := 0.3 if phase == "telegraph" else 0.55
 	var tint := AcTokens.YELLOW if phase == "telegraph" else AcTokens.TEAL
 	for i in 6:
-		var y := view_size.y * (0.14 + i * 0.13)
+		var y := vp.y * (0.14 + i * 0.13)
 		var wobble := sin(_pulse * 6.0 + i) * 16.0
 		var length := 60.0 + wobble
-		var from := Vector2(view_size.x * 0.62, y)
+		var from := Vector2(vp.x * 0.62, y)
 		draw_line(
 			from,
 			from + Vector2(length, -18.0 * direction),

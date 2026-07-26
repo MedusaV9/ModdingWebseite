@@ -5,12 +5,15 @@ extends MinigameBase
 ## 320 ms), ein Fehler beendet die Runde. Ab Runde 6 hängt ein Zwei-Pad-Akkord
 ## an, der binnen CHORD_WINDOW_MS beide Felder verlangt. Score = 10·Runden +
 ## Speed-Bonus (0–8) aus der mittleren Reaktionszeit.
-## Optik: vier dicke Pastell-Pads, Gooby dirigiert in der Mitte.
+##
+## ECHTE 3D-SPIELSHOW (FB-4, GoobySaysStage3D): vier leuchtende 3D-Podeste auf
+## einer Bühne mit Vorhang, Gooby dirigiert GROSS auf seinem Podium und trägt
+## beim Vorspielen einen Leuchtring in der Pad-Farbe. Eingaben laufen als
+## Raycast auf die Pads; die 3D-Welt hängt unter der Node2D-Wurzel (Godot
+## rendert 3D hinter den CanvasItems), der MinigameBase-Vertrag bleibt gleich.
 
-const PAD_COLORS: Array[Color] = [
-	Color("59C9B9"), Color("FF7BA9"), Color("FFD166"), Color("8FD06C")
-]
-const PAD_SYMBOLS: Array[String] = ["▲", "●", "◆", "★"]
+const Stage := preload("res://scripts/minigames/games/gooby_says/gooby_says_stage3d.gd")
+
 ## Pause zwischen zwei Wiedergabeschritten (Anteil der Schrittdauer).
 const PLAYBACK_GAP := 0.34
 
@@ -37,17 +40,20 @@ var landscape := false
 var _round_label: Label
 var _state_label: Label
 var _hint_label: Label
-var _pads: Array[Rect2] = []
-## Fläche über den Pads, auf der Gooby die Folge vorgibt.
-var _gooby_stage := Rect2()
+var _stage: Node3D
 var _pulse := 0.0
-var _shake := 0.0
 
 
 func setup(context: MinigameCtx) -> void:
 	super.setup(context)
 	tune = GoobySaysLogic.apply_difficulty(GoobySaysLogic.SAYS, ctx.difficulty)
 	rng = ctx.rng()
+	_stage = Stage.new()
+	_stage.name = "Show3D"
+	add_child(_stage)
+	_stage.setup_stage()
+	if ctx.juice != null:
+		ctx.juice.world_environment = _stage.stage.world_env
 	_build_hud()
 	_fit_viewport()
 	if is_inside_tree():
@@ -70,42 +76,9 @@ func apply_view(size: Vector2) -> void:
 		view_size = size
 	landscape = view_size.x > view_size.y
 	position = Vector2.ZERO
-	# Hochkant: 2×2-Block; Quer: eine Reihe aus vier Pads neben Gooby.
-	var top := 108.0 if not landscape else 66.0
-	var bottom := 64.0
-	var avail := Rect2(20.0, top, view_size.x - 40.0, maxf(120.0, view_size.y - top - bottom))
-	_pads = []
-	if landscape:
-		var pw := (avail.size.x - 3.0 * 14.0) / 4.0
-		var ph := minf(avail.size.y * 0.72, pw * 1.25)
-		for i in 4:
-			_pads.append(Rect2(avail.position.x + i * (pw + 14.0), avail.end.y - ph, pw, ph))
-		_gooby_stage = Rect2(
-			avail.position, Vector2(avail.size.x, maxf(90.0, avail.size.y - ph - 12.0))
-		)
-	else:
-		var pw := (avail.size.x - 16.0) * 0.5
-		# Hochkant ist die Breite der Engpass — die Pads dürfen darum etwas
-		# höher als breit werden, sonst bleibt unten ein toter Streifen.
-		var ph := clampf((avail.size.y - 16.0 - 96.0) * 0.5, pw * 0.8, pw * 1.22)
-		var block_w := pw * 2.0 + 16.0
-		var block_h := ph * 2.0 + 16.0
-		var ox := avail.position.x + (avail.size.x - block_w) * 0.5
-		# Über dem 2×2 steht die Gooby-Bühne; beide zusammen werden als EIN
-		# Block zentriert, sonst klafft im Hochformat oben eine leere Hälfte.
-		var stage_h := clampf(avail.size.y - block_h - 16.0, 96.0, 260.0)
-		var oy := avail.position.y + (avail.size.y - block_h - stage_h) * 0.5 + stage_h
-		for i in 4:
-			_pads.append(Rect2(ox + (i % 2) * (pw + 16.0), oy + (i / 2) * (ph + 16.0), pw, ph))
-		_gooby_stage = Rect2(
-			Vector2(avail.position.x, oy - stage_h), Vector2(avail.size.x, stage_h)
-		)
-	if _round_label != null:
-		_round_label.position = Vector2(16.0, 10.0)
-		_state_label.position = Vector2(16.0, 48.0)
-		_hint_label.position = Vector2(view_size.x * 0.5 - 170.0, view_size.y - 42.0)
-		_hint_label.size = Vector2(340.0, 34.0)
-	queue_redraw()
+	if _stage != null:
+		_stage.apply_size(view_size)
+	_update_labels()
 
 
 func _build_hud() -> void:
@@ -145,7 +118,6 @@ func _process(delta: float) -> void:
 		return
 	elapsed += delta
 	_pulse += delta
-	_shake = maxf(0.0, _shake - delta * 4.0)
 	if lit_left > 0.0:
 		lit_left = maxf(0.0, lit_left - delta)
 		if lit_left <= 0.0 and phase == "input":
@@ -154,8 +126,8 @@ func _process(delta: float) -> void:
 		_playback_tick(delta)
 	elif phase == "input":
 		_input_timeout_tick(delta)
+	_stage.sync(lit_pad, lit_left, phase, _pulse, delta)
 	_update_labels()
-	queue_redraw()
 
 
 func _playback_tick(delta: float) -> void:
@@ -176,6 +148,7 @@ func _playback_tick(delta: float) -> void:
 	AudioDirector.try_play(self, "mg_good", 0.85 + 0.12 * float(lit_pad))
 	if GoobySaysLogic.is_chord_step(step):
 		AudioDirector.try_play(self, "mg_perfect", 0.85 + 0.12 * float(step[1]))
+	_stage.flash_playback(lit_pad)
 	step_index += 1
 	play_timer = step_sec
 
@@ -238,26 +211,23 @@ func _advance_step() -> void:
 	rounds_completed = round_no
 	ctx.report_score(_live_score(), int(tune["ROUND_POINTS"]))
 	AudioDirector.try_play(self, "mg_win", 1.0 + 0.02 * minf(round_no, 10.0))
+	_stage.celebrate()
 	if ctx.juice != null:
 		ctx.juice.bloom_pulse(0.6)
 		ctx.juice.float_text(
-			Vector2(view_size.x * 0.5 - 60.0, view_size.y * 0.5),
-			"+%d" % int(tune["ROUND_POINTS"]),
-			AcTokens.LEAF_DARK
+			_stage.gooby_screen(), "+%d" % int(tune["ROUND_POINTS"]), AcTokens.LEAF_DARK
 		)
 	_next_round()
 
 
 func _fail() -> void:
 	AudioDirector.try_play(self, "mg_lose")
-	_shake = 1.0
+	_stage.fail_fx()
 	if ctx.juice != null:
 		ctx.juice.shake(0.5)
 		ctx.juice.hit_freeze(110)
 		ctx.juice.float_text(
-			Vector2(view_size.x * 0.5 - 50.0, view_size.y * 0.5),
-			I18nService.t("mg.goobySays.oops"),
-			AcTokens.DANGER
+			_stage.gooby_screen(), I18nService.t("mg.goobySays.oops"), AcTokens.DANGER
 		)
 	_finish()
 
@@ -281,6 +251,13 @@ func _finish() -> void:
 
 
 func _update_labels() -> void:
+	if _round_label == null:
+		return
+	var vp := get_viewport_rect().size
+	_round_label.position = Vector2(16.0, 10.0)
+	_state_label.position = Vector2(16.0, 48.0)
+	_hint_label.position = Vector2(vp.x * 0.5 - 170.0, vp.y - 42.0)
+	_hint_label.size = Vector2(340.0, 34.0)
 	_round_label.text = I18nService.t("mg.goobySays.round", {"n": maxi(1, round_no)})
 	if phase == "watch":
 		_state_label.text = I18nService.t("mg.goobySays.watch")
@@ -291,82 +268,4 @@ func _update_labels() -> void:
 
 
 func _pad_at(screen: Vector2) -> int:
-	for i in _pads.size():
-		if _pads[i].has_point(screen):
-			return i
-	return -1
-
-
-func _draw() -> void:
-	var jitter := Vector2.ZERO
-	if _shake > 0.0:
-		jitter = Vector2(sin(_pulse * 60.0) * _shake * 6.0, 0.0)
-	draw_set_transform(jitter, 0.0, Vector2.ONE)
-	draw_rect(Rect2(Vector2.ZERO, view_size), AcTokens.BG_CREAM)
-	for i in _pads.size():
-		_draw_pad(i)
-	_draw_gooby()
-	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-
-
-func _draw_pad(index: int) -> void:
-	var rect := _pads[index]
-	var lit := index == lit_pad and lit_left > 0.0
-	var base: Color = PAD_COLORS[index]
-	var fill := base if lit else base.darkened(0.28)
-	if lit:
-		# Aufleuchtender Pad bekommt einen weichen Hof (Postprocessing-Glow).
-		draw_rect(rect.grow(10.0), Color(base.r, base.g, base.b, 0.35))
-	draw_rect(rect, fill)
-	draw_rect(rect, AcTokens.INK, false, 4.0)
-	draw_rect(
-		Rect2(rect.position + Vector2(8.0, 8.0), Vector2(rect.size.x - 16.0, rect.size.y * 0.22)),
-		Color(1, 1, 1, 0.22)
-	)
-	var font := ThemeService.font(800)
-	var glyph: String = PAD_SYMBOLS[index]
-	var glyph_size := int(maxf(20.0, minf(rect.size.x, rect.size.y) * 0.4))
-	var width := font.get_string_size(glyph, HORIZONTAL_ALIGNMENT_LEFT, -1.0, glyph_size).x
-	draw_string(
-		font,
-		rect.get_center() + Vector2(-width * 0.5, glyph_size * 0.36),
-		glyph,
-		HORIZONTAL_ALIGNMENT_LEFT,
-		-1.0,
-		glyph_size,
-		Color(1, 1, 1, 0.9 if lit else 0.6)
-	)
-
-
-## Gooby dirigiert zwischen den Pads und wippt zur Wiedergabe.
-## Gooby als Dirigent auf der Bühne über den Pads: er leuchtet in der Farbe
-## des gerade gespielten Pads, damit „wer sagt was“ sofort klar ist.
-func _draw_gooby() -> void:
-	var stage := _gooby_stage
-	if stage.size.y <= 1.0:
-		stage = Rect2(0.0, 0.0, view_size.x, view_size.y * 0.3)
-	var r := clampf(minf(stage.size.y * 0.34, stage.size.x * 0.16), 26.0, 84.0)
-	var bounce := sin(_pulse * 5.0) * (r * 0.12 if phase == "watch" else r * 0.05)
-	var base := Vector2(stage.get_center().x, stage.end.y - r * 1.25 + bounce)
-	var lit := lit_pad >= 0 and lit_left > 0.0
-	if lit:
-		var halo: Color = PAD_COLORS[lit_pad]
-		draw_circle(base, r * 1.9, Color(halo.r, halo.g, halo.b, 0.22))
-		draw_arc(base, r * 1.55, 0.0, TAU, 34, Color(halo.r, halo.g, halo.b, 0.7), 5.0)
-	# Podest, damit Gooby nicht im Nichts schwebt.
-	draw_set_transform(Vector2(base.x, base.y + r * 1.15), 0.0, Vector2(1.0, 0.26))
-	draw_circle(Vector2.ZERO, r * 1.25, AcTokens.PAPER_SHADE)
-	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-	var fur := Color(0.99, 0.91, 0.7)
-	for side in [-1.0, 1.0]:
-		var root := base + Vector2(side * r * 0.42, -r * 0.8)
-		draw_line(root, root + Vector2(side * r * 0.34, -r * 0.95), fur, r * 0.32)
-		draw_circle(root + Vector2(side * r * 0.34, -r * 0.95), r * 0.16, fur)
-	draw_circle(base, r, fur)
-	draw_arc(base, r, 0.0, TAU, 30, AcTokens.INK, 3.5)
-	draw_circle(base + Vector2(-r * 0.34, -r * 0.16), r * 0.12, AcTokens.INK)
-	draw_circle(base + Vector2(r * 0.34, -r * 0.16), r * 0.12, AcTokens.INK)
-	draw_circle(base + Vector2(-r * 0.55, r * 0.2), r * 0.16, Color(1.0, 0.72, 0.74, 0.5))
-	draw_circle(base + Vector2(r * 0.55, r * 0.2), r * 0.16, Color(1.0, 0.72, 0.74, 0.5))
-	var mouth := 0.32 if phase == "watch" else 0.24
-	draw_arc(base + Vector2(0.0, r * 0.16), r * mouth, 0.3, PI - 0.3, 14, AcTokens.INK, 3.0)
+	return _stage.pad_at(screen)

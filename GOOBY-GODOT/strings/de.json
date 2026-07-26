@@ -8,10 +8,12 @@
 		"auge": "Zeig mir alles!",
 		"bau": "Bauen",
 		"coachmark_ok": "Alles klar!",
-		"coachmark_text": "Rechts findest du alles Wichtige: Bauen, Reise, Arcade, Album, Profil und IGohbie. Das Auge unten zeigt dir, was Gooby gerade will.",
+		"coachmark_text": "Hier findest du alles Wichtige: Bauen, Gestalten, Reise, Arcade, Album, Garderobe, Möbel, Profil und IGohbie. Das Auge unten zeigt dir, was Gooby gerade will.",
 		"coachmark_titel": "Deine Knöpfe",
 		"einstellungen": "Einstellungen",
+		"gestalten": "Gestalten",
 		"igohbie": "IGohbie",
+		"ikea": "Möbel",
 		"level_pill": "Lv {level}",
 		"profil": "Profil",
 		"reise": "Reise",
@@ -21,6 +23,7 @@
 		"stat_hunger": "Hunger",
 		"stat_hygiene": "Hygiene",
 		"stat_spass": "Spaß",
+		"wardrobe": "Garderobe",
 		"wo_ist_gooby": "Wo ist mein Gooby?"
 	},
 	"news": {

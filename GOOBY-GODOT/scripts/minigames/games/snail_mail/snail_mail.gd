@@ -4,10 +4,15 @@ extends MinigameBase
 ## Haus MALEN, danach kriecht die Postschnecke ihn ab. Pfütze = 2 s
 ## Schneckenhaus + kein Trocken-Bonus, Blumen +1. Zustellung +4 (+2 trocken).
 ##
-## 2D (Web war ohnehin ein flaches Garten-Diorama): der Garten ist eine reine
-## xy-Ebene, jede Weltkoordinate der Logik bleibt 1:1 erhalten.
+## ECHTES 3D-GARTEN-DIORAMA (FB-4, SnailMailStage3D): Häuschen, Bau, Briefkasten,
+## Pfützen und Blumen stehen als 3D-Modelle auf einer Sommerwiese, die
+## Postschnecke kriecht als 3D-Figur mit Umschlag den gemalten Weg ab, Gooby
+## (echtes Rig) wartet am Briefkasten. Alle Anker gehen als project()-Pixel per
+## ground_point-Raycast auf den Boden — Eingabe und MECHANIK bleiben
+## zahlengleich in SnailMailLogic (Weltkoordinaten unangetastet).
 
 const Logic := preload("res://scripts/minigames/games/snail_mail/snail_mail_logic.gd")
+const Stage := preload("res://scripts/minigames/games/snail_mail/snail_mail_stage3d.gd")
 
 ## Der gezeichnete Strich wird erst ab dieser Pixel-Distanz weiter abgetastet.
 const INPUT_PX_STEP := 5.0
@@ -44,12 +49,19 @@ var _stat_label: Label
 var _hint_label: Label
 var _banner := ""
 var _banner_t := 0.0
+var _stage: Node3D
 
 
 func setup(context: MinigameCtx) -> void:
 	super.setup(context)
 	tune = Logic.apply_difficulty(Logic.SNAIL, ctx.difficulty)
 	rng = ctx.rng()
+	_stage = Stage.new()
+	_stage.name = "Garten3D"
+	add_child(_stage)
+	_stage.setup_stage()
+	if ctx.juice != null:
+		ctx.juice.world_environment = _stage.stage.world_env
 	_next_level()
 	_build_hud()
 	_fit_viewport()
@@ -69,23 +81,80 @@ func apply_view(size: Vector2) -> void:
 	landscape = view_size.x > view_size.y
 	_ui = clampf(minf(view_size.x, view_size.y) / DESIGN_SHORT, 0.75, 3.0)
 	position = Vector2.ZERO
+	if _stage != null:
+		# Erst die Kamera stellen, dann alle Anker auf den Boden raycasten.
+		_stage.frame(view_size)
+		_layout_stage()
 	_layout_hud()
 	queue_redraw()
 
 
-## Bedienleiste in Entwurfspixeln, mit _ui skaliert (sonst Krümelschrift).
+## HUD IMMER aus dem Viewport-Rect stellen: unter canvas_items-Stretch sind
+## Canvas-Einheiten ≠ Fensterpixel, apply_view-Größen können abweichen.
 func _layout_hud() -> void:
 	if _time_label == null:
 		return
-	var pad := 14.0 * _ui
-	_time_label.position = Vector2(pad, 8.0 * _ui)
-	_time_label.add_theme_font_size_override("font_size", int(26.0 * _ui))
-	_stat_label.position = Vector2(pad, 44.0 * _ui)
-	_stat_label.add_theme_font_size_override("font_size", int(17.0 * _ui))
-	_hint_label.add_theme_font_size_override("font_size", int(15.0 * _ui))
+	var vp := get_viewport_rect().size
+	var ui := clampf(minf(vp.x, vp.y) / DESIGN_SHORT, 0.75, 3.0)
+	var pad := 14.0 * ui
+	_time_label.position = Vector2(pad, 8.0 * ui)
+	_time_label.add_theme_font_size_override("font_size", int(26.0 * ui))
+	_stat_label.position = Vector2(pad, 44.0 * ui)
+	_stat_label.add_theme_font_size_override("font_size", int(17.0 * ui))
+	_hint_label.add_theme_font_size_override("font_size", int(15.0 * ui))
 	# Der Hinweis ist zweizeilig — genug Luft nach unten lassen.
-	_hint_label.position = Vector2(pad, view_size.y - 64.0 * _ui)
-	_hint_label.size = Vector2(maxf(120.0, view_size.x - pad * 2.0), 56.0 * _ui)
+	_hint_label.position = Vector2(pad, vp.y - 64.0 * ui)
+	_hint_label.size = Vector2(maxf(120.0, vp.x - pad * 2.0), 56.0 * ui)
+
+
+## Alle Level-Anker (Häuser, Pfützen, Blumen, Briefkasten, Feld) als
+## project()-Pixel an die Bühne geben — dort raycastet layout_level sie auf
+## den Boden. Nach jedem apply_view UND jedem Levelwechsel aufrufen.
+func _layout_stage() -> void:
+	if _stage == null or _level.is_empty():
+		return
+	var houses_px: Array = []
+	var houses: Array = _level["houses"]
+	var target := int(_level["targetIdx"])
+	for i in houses.size():
+		var h: Dictionary = houses[i]
+		var door := Logic.door_of(h, tune)
+		(
+			houses_px
+			. append(
+				{
+					"px": project(float(h["x"]), float(h["y"])),
+					"door_px": project(float(door["x"]), float(door["y"])),
+					"kind": str(h.get("kind", "house")),
+					"target": i == target,
+				}
+			)
+		)
+	var puddles_px: Array = []
+	for p: Dictionary in _level["puddles"]:
+		(
+			puddles_px
+			. append(
+				{
+					"px": project(float(p["x"]), float(p["y"])),
+					"edge_px": project(float(p["x"]) + float(p["r"]), float(p["y"])),
+				}
+			)
+		)
+	var flowers_px: Array = []
+	for f: Dictionary in _level["flowers"]:
+		flowers_px.append(project(float(f["x"]), float(f["y"])))
+	var post: Dictionary = _level["post"]
+	var half_w := float(tune["FIELD_HALF_W"])
+	var tl := project(-half_w, float(tune["FIELD_Y_MAX"]))
+	var br := project(half_w, float(tune["FIELD_Y_MIN"]))
+	_stage.layout_level(
+		houses_px,
+		puddles_px,
+		flowers_px,
+		project(float(post["x"]), float(post["y"])),
+		Rect2(tl, br - tl)
+	)
 
 
 func _process(delta: float) -> void:
@@ -107,8 +176,38 @@ func _process(delta: float) -> void:
 			_beat = maxf(0.0, _beat - delta)
 			if _beat <= 0.0:
 				_next_level()
+	_sync_stage(delta)
 	_update_labels()
 	queue_redraw()
+
+
+## Jeden Frame: Schnecke, (Vorschau-)Weg und gepflückte Blumen an die Bühne.
+func _sync_stage(delta: float) -> void:
+	if _stage == null or _level.is_empty():
+		return
+	var pts: Array = []
+	if not _path.is_empty():
+		pts = _path["pts"]
+	elif _drawing and _raw.size() >= 2:
+		var preview := Logic.smooth_path(_raw, tune)
+		if not preview.is_empty():
+			pts = preview["pts"]
+	var path_px: Array[Vector2] = []
+	for pt: Dictionary in pts:
+		path_px.append(project(float(pt["x"]), float(pt["y"])))
+	var gone: Array[bool] = []
+	var flowers: Array = _level["flowers"]
+	for i in flowers.size():
+		gone.append(_picked.has(i))
+	_stage.sync(
+		project(float(_snail["x"]), float(_snail["y"])),
+		float(_snail["angle"]),
+		_phase,
+		path_px,
+		gone,
+		elapsed,
+		delta
+	)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -180,6 +279,7 @@ func _next_level() -> void:
 	_phase = "draw"
 	var post: Dictionary = _level["post"]
 	_snail = {"x": float(post["x"]), "y": float(post["y"]), "angle": PI * 0.5}
+	_layout_stage()
 
 
 func _begin_stroke(world: Dictionary) -> void:
@@ -248,10 +348,10 @@ func _pick_flowers(sx: float, sy: float) -> void:
 		_picked.append(i)
 		# Jede Blume der Tour klingt einen Halbton höher.
 		AudioDirector.try_play(self, "mg_good", 1.2 * FeelSfx.combo_pitch(_picked.size()))
+		var pos := project(float(f["x"]), float(f["y"]))
+		_stage.flower_fx(pos)
 		if ctx.juice != null:
-			var pos := project(float(f["x"]), float(f["y"]))
 			ctx.juice.float_text(pos, "+%d" % int(tune["FLOWER_PTS"]), Color(1.0, 0.72, 0.85))
-			ctx.juice.burst(self, pos, Color(1.0, 0.72, 0.85), 10)
 
 
 func _splash() -> void:
@@ -260,6 +360,7 @@ func _splash() -> void:
 	_phase = "retreat"
 	_retreat = float(tune["RETREAT_SEC"])
 	AudioDirector.try_play(self, "mg_spill")
+	_stage.splash_fx(project(float(_snail["x"]), float(_snail["y"])))
 	if ctx.juice != null:
 		ctx.juice.shake(0.3)
 		ctx.juice.hit_flash(Color(0.5, 0.65, 0.95, 0.18), 180)
@@ -286,16 +387,14 @@ func _deliver() -> void:
 	)
 	var houses: Array = _level["houses"]
 	var door := Logic.door_of(houses[int(_level["targetIdx"])], tune)
+	var door_px := project(float(door["x"]), float(door["y"]))
+	_stage.deliver_fx(door_px, not _wet)
 	if ctx.juice != null:
-		var pos := project(float(door["x"]), float(door["y"]))
 		var color := Color(0.55, 1.0, 0.7) if not _wet else Color(0.75, 0.86, 1.0)
-		ctx.juice.float_text(pos, "+%d" % points, color)
-		ctx.juice.ring_burst(self, pos, color, 80.0)
-		ctx.juice.burst(self, pos, color, 14)
+		ctx.juice.float_text(door_px, "+%d" % points, color)
 		ctx.juice.hit_freeze(45)
 		if dry_streak >= 2:
 			ctx.juice.show_combo(dry_streak)
-		ctx.juice.bloom_pulse(0.9 if not _wet else 0.3)
 	_set_banner(
 		I18nService.t("mg.snailMail.delivered" if not _wet else "mg.snailMail.delivered_wet")
 	)
@@ -342,269 +441,9 @@ func _update_labels() -> void:
 	)
 
 
+## Die Bühne rendert den Garten in 3D; als 2D-Overlay bleibt nur der Banner.
 func _draw() -> void:
-	_draw_garden()
-	for p: Dictionary in _level["puddles"]:
-		_draw_puddle(p)
-	_draw_flowers()
-	_draw_houses()
-	_draw_post()
-	_draw_path()
-	_draw_snail()
 	_draw_banner()
-
-
-func _draw_garden() -> void:
-	var s := _world_scale()
-	var half_w := float(tune["FIELD_HALF_W"])
-	var top_left := project(-half_w, float(tune["FIELD_Y_MAX"]))
-	var bottom_right := project(half_w, float(tune["FIELD_Y_MIN"]))
-	var field := Rect2(top_left, bottom_right - top_left)
-	# Umgebender Rasen mit Mäh-Streifen (füllt beide Orientierungen)
-	draw_rect(Rect2(Vector2.ZERO, view_size), Color(0.52, 0.74, 0.44))
-	var stripe := maxf(24.0, s * 0.42)
-	var stripes := int(ceil(view_size.y / stripe))
-	for i in stripes:
-		if i % 2 == 1:
-			continue
-		draw_rect(Rect2(0.0, i * stripe, view_size.x, stripe * 0.5), Color(0.56, 0.78, 0.47))
-	_draw_surround(field, s)
-	# Spielfeld als heller Garten-Teppich mit Beet-Einfassung
-	draw_rect(field.grow(s * 0.16), Color(0.46, 0.34, 0.24, 0.55))
-	draw_rect(field, Color(0.68, 0.86, 0.55))
-	draw_rect(field, Color(0.38, 0.58, 0.32, 0.85), false, 3.0)
-	for i in 54:
-		var gx := -half_w + fposmod(i * 0.4327, half_w * 2.0)
-		var gy := float(tune["FIELD_Y_MIN"]) + fposmod(i * 0.7919, 5.6)
-		var base := project(gx, gy)
-		var tuft := s * 0.09
-		draw_line(base, base + Vector2(-tuft * 0.4, -tuft), Color(0.53, 0.74, 0.43, 0.7), 2.0)
-		draw_line(base, base + Vector2(tuft * 0.4, -tuft), Color(0.53, 0.74, 0.43, 0.7), 2.0)
-
-
-## Deko außerhalb des Spielfelds: Baumkronen von oben + Kieselsteine.
-func _draw_surround(field: Rect2, s: float) -> void:
-	var spots: Array[Vector3] = [
-		Vector3(0.09, 0.09, 1.0),
-		Vector3(0.9, 0.14, 0.78),
-		Vector3(0.14, 0.9, 0.86),
-		Vector3(0.87, 0.88, 1.05),
-		Vector3(0.5, 0.03, 0.62),
-		Vector3(0.5, 0.97, 0.7),
-	]
-	for spot: Vector3 in spots:
-		var c := Vector2(view_size.x * spot.x, view_size.y * spot.y)
-		if field.grow(s * 0.3).has_point(c):
-			continue
-		var r := s * 0.42 * spot.z
-		draw_circle(c + Vector2(r * 0.12, r * 0.16), r, Color(0.24, 0.4, 0.2, 0.3))
-		draw_circle(c, r, Color(0.36, 0.6, 0.31))
-		draw_circle(c - Vector2(r * 0.22, r * 0.24), r * 0.52, Color(0.46, 0.71, 0.38))
-	for i in 14:
-		var p := Vector2(fposmod(i * 137.31, view_size.x), fposmod(i * 271.77 + 43.0, view_size.y))
-		if field.grow(s * 0.2).has_point(p):
-			continue
-		draw_circle(p, s * 0.05, Color(0.78, 0.79, 0.74, 0.6))
-
-
-func _draw_puddle(p: Dictionary) -> void:
-	var s := _world_scale()
-	var center := project(float(p["x"]), float(p["y"]))
-	var r := float(p["r"]) * s
-	# Leicht unrunde Lache: y gestaucht, Rand wellig (Sticker-Look)
-	var blob := PackedVector2Array()
-	var rim := PackedVector2Array()
-	var phase := float(p["x"]) * 3.1 + float(p["y"]) * 1.7
-	for i in 26:
-		var a := TAU * i / 26.0
-		var wob := 1.0 + 0.07 * sin(a * 3.0 + phase) + 0.04 * sin(a * 5.0 - phase)
-		var pt := center + Vector2(cos(a) * r * wob, sin(a) * r * 0.74 * wob)
-		blob.append(pt)
-		rim.append(center + (pt - center) * 1.1)
-	rim.append(rim[0])
-	draw_colored_polygon(rim, Color(0.44, 0.56, 0.7, 0.3))
-	draw_colored_polygon(blob, Color(0.4, 0.63, 0.84, 0.92))
-	draw_polyline(rim, Color(0.28, 0.46, 0.66, 0.6), 2.0)
-	draw_arc(
-		center + Vector2(-r * 0.24, -r * 0.2),
-		r * 0.34,
-		PI * 0.85,
-		PI * 1.75,
-		12,
-		Color(0.9, 0.96, 1.0, 0.8),
-		3.0
-	)
-
-
-func _draw_flowers() -> void:
-	var s := _world_scale()
-	var flowers: Array = _level["flowers"]
-	for i in flowers.size():
-		if _picked.has(i):
-			continue
-		var f: Dictionary = flowers[i]
-		var c := project(float(f["x"]), float(f["y"]))
-		draw_line(c, c + Vector2(0.0, s * 0.14), Color(0.36, 0.6, 0.3), 3.0)
-		for k in 5:
-			var a := TAU * k / 5.0 + elapsed * 0.6
-			draw_circle(c + Vector2(cos(a), sin(a)) * s * 0.07, s * 0.055, Color(1.0, 0.7, 0.84))
-		draw_circle(c, s * 0.05, Color(1.0, 0.88, 0.4))
-
-
-func _draw_houses() -> void:
-	var s := _world_scale()
-	var houses: Array = _level["houses"]
-	var target := int(_level["targetIdx"])
-	for i in houses.size():
-		var h: Dictionary = houses[i]
-		var c := project(float(h["x"]), float(h["y"]))
-		var door := Logic.door_of(h, tune)
-		var dpos := project(float(door["x"]), float(door["y"]))
-		var glow := 0.5 + 0.5 * sin(elapsed * 3.2)
-		if i == target:
-			draw_circle(dpos, s * 0.6 * (0.9 + 0.14 * glow), Color(1.0, 0.92, 0.45, 0.2))
-			draw_arc(
-				dpos,
-				float(tune["DELIVER_RADIUS"]) * s,
-				0.0,
-				TAU,
-				30,
-				Color(1.0, 0.86, 0.32, 0.8),
-				3.0
-			)
-		draw_circle(c + Vector2(s * 0.06, s * 0.1), s * 0.4, Color(0.3, 0.45, 0.26, 0.28))
-		if str(h.get("kind", "house")) == "burrow":
-			draw_circle(c + Vector2(0.0, -s * 0.02), s * 0.36, Color(0.52, 0.4, 0.3))
-			draw_circle(c + Vector2(0.0, s * 0.06), s * 0.24, Color(0.24, 0.17, 0.14))
-			draw_arc(c, s * 0.36, PI, TAU, 18, Color(0.4, 0.55, 0.32), 5.0)
-			for k in 6:
-				var a := PI + PI * (k + 0.5) / 6.0
-				draw_circle(
-					c + Vector2(cos(a), sin(a)) * s * 0.36, s * 0.06, Color(0.45, 0.63, 0.36)
-				)
-		else:
-			var w := s * 0.34
-			var hgt := s * 0.36
-			var body := Rect2(c + Vector2(-w, -hgt * 0.4), Vector2(w * 2.0, hgt))
-			draw_rect(body, Color(0.98, 0.93, 0.84))
-			draw_rect(body, Color(0.72, 0.6, 0.5, 0.8), false, 2.0)
-			draw_colored_polygon(
-				PackedVector2Array(
-					[
-						c + Vector2(-w * 1.2, -hgt * 0.4),
-						c + Vector2(w * 1.2, -hgt * 0.4),
-						c + Vector2(0.0, -hgt * 1.15),
-					]
-				),
-				Color(0.85, 0.45, 0.36) if i != target else Color(0.93, 0.55, 0.34)
-			)
-			for side: float in [-0.62, 0.62]:
-				var win := Rect2(
-					c + Vector2(w * side - w * 0.2, -hgt * 0.16), Vector2(w * 0.4, hgt * 0.3)
-				)
-				draw_rect(win, Color(0.63, 0.83, 0.94))
-				draw_rect(win, Color(0.72, 0.6, 0.5, 0.8), false, 1.5)
-			draw_rect(
-				Rect2(c + Vector2(-w * 0.28, hgt * 0.18), Vector2(w * 0.56, hgt * 0.42)),
-				Color(0.6, 0.4, 0.3)
-			)
-			draw_circle(c + Vector2(w * 0.18, hgt * 0.4), s * 0.02, Color(0.95, 0.85, 0.4))
-		if i == target:
-			# Hüpfender Zielpfeil wie im Web
-			var tip := c + Vector2(0.0, -s * (0.78 + 0.08 * glow))
-			draw_colored_polygon(
-				PackedVector2Array(
-					[
-						tip + Vector2(-s * 0.14, -s * 0.2),
-						tip + Vector2(s * 0.14, -s * 0.2),
-						tip,
-					]
-				),
-				Color(1.0, 0.82, 0.3)
-			)
-
-
-func _draw_post() -> void:
-	var s := _world_scale()
-	var post: Dictionary = _level["post"]
-	var c := project(float(post["x"]), float(post["y"]))
-	if _phase == "draw" and not _drawing:
-		draw_arc(
-			c,
-			float(tune["START_RADIUS"]) * s,
-			0.0,
-			TAU,
-			30,
-			Color(1.0, 0.98, 0.8, 0.35 + 0.2 * sin(elapsed * 3.0)),
-			2.0
-		)
-	draw_line(c, c + Vector2(0.0, -s * 0.34), Color(0.55, 0.4, 0.28), maxf(3.0, s * 0.06))
-	var box := Rect2(c + Vector2(-s * 0.16, -s * 0.62), Vector2(s * 0.32, s * 0.28))
-	draw_rect(box, Color(0.36, 0.6, 0.86))
-	draw_rect(box, Color(0.2, 0.36, 0.6), false, 2.0)
-	draw_rect(
-		Rect2(c + Vector2(-s * 0.1, -s * 0.53), Vector2(s * 0.2, s * 0.04)), Color(0.95, 0.97, 1.0)
-	)
-
-
-func _draw_path() -> void:
-	var pts: Array = []
-	if not _path.is_empty():
-		pts = _path["pts"]
-	elif _drawing and _raw.size() >= 2:
-		var preview := Logic.smooth_path(_raw, tune)
-		if not preview.is_empty():
-			pts = preview["pts"]
-	if pts.size() < 2:
-		return
-	var line := PackedVector2Array()
-	for pt: Dictionary in pts:
-		line.append(project(float(pt["x"]), float(pt["y"])))
-	draw_polyline(line, Color(1.0, 0.98, 0.86, 0.55), 9.0)
-	draw_polyline(line, Color(0.98, 0.78, 0.42, 0.85), 4.0)
-
-
-func _draw_snail() -> void:
-	var s := _world_scale()
-	var c := project(float(_snail["x"]), float(_snail["y"]))
-	var hidden := _phase == "retreat"
-	var shell_r := s * 0.24
-	var angle := float(_snail["angle"])
-	var fwd := Vector2(cos(angle), -sin(angle))
-	draw_circle(
-		c + Vector2(shell_r * 0.2, shell_r * 0.3), shell_r * 1.05, Color(0.3, 0.45, 0.26, 0.25)
-	)
-	if not hidden:
-		# Fuß
-		draw_circle(c - fwd * shell_r * 0.5, shell_r * 0.62, Color(0.98, 0.86, 0.72))
-		draw_circle(c + fwd * shell_r * 0.85, shell_r * 0.5, Color(0.98, 0.86, 0.72))
-		for side: float in [-0.4, 0.4]:
-			var eye: Vector2 = c + fwd * shell_r * 1.35 + fwd.orthogonal() * shell_r * side
-			draw_line(c + fwd * shell_r * 0.8, eye, Color(0.98, 0.86, 0.72), maxf(2.0, s * 0.02))
-			draw_circle(eye, shell_r * 0.16, Color(0.25, 0.18, 0.16))
-	# Schneckenhaus
-	draw_circle(c, shell_r, Color(0.86, 0.6, 0.35))
-	draw_arc(c, shell_r, 0.0, TAU, 26, Color(0.58, 0.36, 0.2), 2.0)
-	draw_arc(c, shell_r * 0.68, 0.0, TAU * 0.85, 22, Color(0.66, 0.42, 0.24), 3.0)
-	draw_arc(c, shell_r * 0.36, 1.2, TAU * 0.9, 16, Color(0.66, 0.42, 0.24), 2.5)
-	# Briefumschlag auf dem Haus
-	if _phase != "beat":
-		var env := Rect2(
-			c + Vector2(-shell_r * 0.4, -shell_r * 1.2), Vector2(shell_r * 0.8, shell_r * 0.5)
-		)
-		draw_rect(env, Color(1.0, 0.98, 0.9))
-		draw_rect(env, Color(0.7, 0.6, 0.5), false, 1.5)
-	if hidden:
-		var zzz := ThemeService.font(700)
-		draw_string(
-			zzz,
-			c + Vector2(shell_r, -shell_r * 1.4),
-			"zZ",
-			HORIZONTAL_ALIGNMENT_LEFT,
-			-1,
-			18,
-			Color(0.4, 0.45, 0.6, 0.85)
-		)
 
 
 func _draw_banner() -> void:

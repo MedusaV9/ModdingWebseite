@@ -42,12 +42,19 @@ var _price_label: Label
 var _buy_button: Button
 var _coins_label: Label
 var _storage_label: Label
-var _swatches: HBoxContainer
+var _swatches: HFlowContainer
 var _zoom_slider: HSlider
 var _toasts: ToastLayer
 var _kategorie := CATEGORY_ALL
 var _selected := ""
 var _variant := FurnitureVariants.DEFAULT_ID
+## FB3: Metrik-Pass (Safe-Area/Touch-Floor/UiScale) bei jedem Resize.
+var _rows_box: VBoxContainer
+var _back_btn: Button
+var _left_column: VBoxContainer
+var _detail_panel: PanelContainer
+var _f := 1.0
+var _floor := float(AcTokens.TOUCH_FLOOR)
 
 
 ## Route am SceneRouter anmelden (idempotent) — wie ArcadeScreen.
@@ -80,12 +87,53 @@ func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	register_routes()
 	_build_ui()
+	_apply_metrics()
+	get_viewport().size_changed.connect(_on_viewport_resized)
 	_refresh_chips()
 	_refresh_list()
 	_refresh_wallet()
 	var first := ShopCatalog.filter("", _kategorie)
 	if not first.is_empty():
 		select_item(str(first[0]["id"]))
+
+
+func _on_viewport_resized() -> void:
+	if not is_inside_tree():
+		return
+	_apply_metrics()
+	_refresh_chips()
+	_refresh_list()
+	_refresh_swatches()
+
+
+## FB3: Safe-Area + zentrale Skalierung + Touch-Floor — vorher feste
+## 20/14-px-Ränder (Notch), 58er-Zeilen und 40er-Swatches (< 44 pt).
+func _apply_metrics() -> void:
+	if _rows_box == null or not is_inside_tree():
+		return
+	var m := ScreenShell.metrics(get_viewport())
+	_f = m["f"]
+	_floor = m["floor_px"]
+	var canvas: Vector2 = m["canvas"]
+	ScreenShell.frame(_rows_box, m, 20.0, 14.0)
+	if _back_btn != null:
+		ScreenShell.touch_target(_back_btn, m)
+	_left_column.custom_minimum_size = Vector2(minf(LIST_WIDTH * _f, canvas.x * 0.36), 0.0)
+	_search.custom_minimum_size = Vector2(0.0, _floor)
+	_chip_scroll.custom_minimum_size = Vector2(0.0, _floor + 8.0)
+	_zoom_slider.custom_minimum_size = Vector2(120.0 * _f, _floor)
+	_buy_button.custom_minimum_size = Vector2(150.0 * _f, _floor)
+	ScreenShell.scale_fonts(self, _f)
+	# Vitrine: nimmt den Platz, der NACH dem Detail-Panel übrig bleibt
+	# (Höhen-Budget statt fester Mindesthöhe) — reicht er nicht, scrollt
+	# die rechte Spalte, statt den Kaufen-Knopf aus dem Canvas zu drücken.
+	var insets: Dictionary = m["insets"]
+	var body_h := (
+		canvas.y - float(insets["top"]) - float(insets["bottom"]) - 28.0 * _f - _floor - 10.0
+	)
+	var detail_h := _detail_panel.get_combined_minimum_size().y
+	var show_min := clampf(body_h - detail_h - 44.0, 140.0, canvas.y * 0.4)
+	_showcase.custom_minimum_size = Vector2(0.0, show_min)
 
 
 ## Ein Möbel in die Vitrine stellen (auch von Tests/Screenshots gerufen).
@@ -161,19 +209,15 @@ func _build_ui() -> void:
 	var paper := AcWallpaper.new()
 	paper.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(paper)
-	var rows := VBoxContainer.new()
-	rows.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	rows.offset_left = 20.0
-	rows.offset_right = -20.0
-	rows.offset_top = 14.0
-	rows.offset_bottom = -14.0
-	rows.add_theme_constant_override("separation", 10)
-	add_child(rows)
-	rows.add_child(_build_header())
+	_rows_box = VBoxContainer.new()
+	_rows_box.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_rows_box.add_theme_constant_override("separation", 10)
+	add_child(_rows_box)
+	_rows_box.add_child(_build_header())
 	var body := HBoxContainer.new()
 	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	body.add_theme_constant_override("separation", 14)
-	rows.add_child(body)
+	_rows_box.add_child(body)
 	body.add_child(_build_left_column())
 	body.add_child(_build_right_column())
 	_toasts = ToastLayer.new()
@@ -183,17 +227,20 @@ func _build_ui() -> void:
 func _build_header() -> Control:
 	var header := HBoxContainer.new()
 	header.add_theme_constant_override("separation", 10)
-	var back := Button.new()
-	back.name = "BackButton"
-	back.theme_type_variation = &"GhostButton"
-	back.text = I18nService.t("shop.ikea.back")
-	back.pressed.connect(_on_back_pressed)
-	header.add_child(back)
+	_back_btn = Button.new()
+	_back_btn.name = "BackButton"
+	_back_btn.theme_type_variation = &"GhostButton"
+	_back_btn.text = I18nService.t("shop.ikea.back")
+	_back_btn.pressed.connect(_on_back_pressed)
+	header.add_child(_back_btn)
 	var title := Label.new()
 	title.theme_type_variation = &"TitleLabel"
 	title.text = I18nService.t("shop.ikea.title")
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	# Langer Titel darf den Header nie breiter als den Canvas drücken (Hoch).
+	title.clip_text = true
+	title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	header.add_child(title)
 	_coins_label = Label.new()
 	_coins_label.name = "CoinsLabel"
@@ -207,7 +254,8 @@ func _build_header() -> Control:
 
 
 func _build_left_column() -> Control:
-	var column := VBoxContainer.new()
+	_left_column = VBoxContainer.new()
+	var column := _left_column
 	column.custom_minimum_size = Vector2(LIST_WIDTH, 0)
 	column.add_theme_constant_override("separation", 8)
 	_search = LineEdit.new()
@@ -238,9 +286,19 @@ func _build_left_column() -> Control:
 
 
 func _build_right_column() -> Control:
+	# FB3: die Spalte scrollt vertikal — vorher drückte ihre Minimalhöhe
+	# (Vitrine + Detail-Panel) in Quer-Formaten den ganzen Body unter den
+	# Canvas-Rand (Kaufen-Knopf/Swatches unerreichbar).
+	var scroll := ScrollContainer.new()
+	scroll.name = "DetailScroll"
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	var column := VBoxContainer.new()
 	column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	column.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	column.add_theme_constant_override("separation", 8)
+	scroll.add_child(column)
 	var card := PanelContainer.new()
 	card.theme_type_variation = &"AcCardLg"
 	card.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -251,11 +309,12 @@ func _build_right_column() -> Control:
 	_showcase.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	card.add_child(_showcase)
 	column.add_child(_build_detail_panel())
-	return column
+	return scroll
 
 
 func _build_detail_panel() -> Control:
 	var panel := PanelContainer.new()
+	_detail_panel = panel
 	panel.theme_type_variation = &"AcCard"
 	var rows := VBoxContainer.new()
 	rows.add_theme_constant_override("separation", 6)
@@ -263,6 +322,9 @@ func _build_detail_panel() -> Control:
 	_name_label = Label.new()
 	_name_label.name = "ItemName"
 	_name_label.theme_type_variation = &"HeadlineLabel"
+	# Umbruch statt Mindestbreite: lange Namen dürfen die Detail-Spalte
+	# nicht über den Canvas-Rand hinausschieben.
+	_name_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	rows.add_child(_name_label)
 	var meta := HBoxContainer.new()
 	meta.add_theme_constant_override("separation", 12)
@@ -288,9 +350,13 @@ func _build_variant_row() -> Control:
 	caption.theme_type_variation = &"CaptionLabel"
 	caption.text = I18nService.t("shop.ikea.variants")
 	row.add_child(caption)
-	_swatches = HBoxContainer.new()
+	# FB3: Swatches umbrechen (HFlow) — im Hochformat drückte die Zeile
+	# sonst die ganze Spalte über den rechten Canvas-Rand.
+	_swatches = HFlowContainer.new()
 	_swatches.name = "Swatches"
-	_swatches.add_theme_constant_override("separation", 6)
+	_swatches.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_swatches.add_theme_constant_override("h_separation", 6)
+	_swatches.add_theme_constant_override("v_separation", 6)
 	row.add_child(_swatches)
 	return row
 
@@ -317,8 +383,11 @@ func _build_zoom_row() -> Control:
 
 
 func _build_buy_row() -> Control:
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 10)
+	# HFlow: Preis + Kaufen brechen im Hochformat untereinander um, statt
+	# rechts aus dem Canvas zu laufen.
+	var row := HFlowContainer.new()
+	row.add_theme_constant_override("h_separation", 10)
+	row.add_theme_constant_override("v_separation", 6)
 	_price_label = Label.new()
 	_price_label.name = "PriceLabel"
 	_price_label.theme_type_variation = &"HeadlineLabel"
@@ -346,6 +415,8 @@ func _refresh_chips() -> void:
 		_chips.add_child(chip)
 		if kategorie == _kategorie:
 			aktiv = chip
+	if is_inside_tree():
+		ScreenShell.scale_fonts(_chips, _f)
 	# Die Chip-Leiste ist breiter als die Spalte — die aktive Kategorie muss
 	# sichtbar bleiben, sonst weiß niemand, wonach gerade gefiltert wird.
 	_scroll_to_chip.call_deferred(aktiv)
@@ -356,7 +427,9 @@ func _make_chip(kategorie: String, text: String) -> Button:
 	chip.name = "Chip_%s" % (kategorie if kategorie != "" else "alle")
 	chip.theme_type_variation = &"ChipLeaf" if kategorie == _kategorie else &"AcChip"
 	chip.text = text
-	chip.custom_minimum_size = Vector2(0, AcTokens.TOUCH_FLOOR)
+	# Floor auf BEIDEN Achsen — kurze Texte („Bad“) unterschreiten sonst
+	# die Tippflächen-Breite.
+	chip.custom_minimum_size = Vector2(_floor, _floor)
 	chip.pressed.connect(_on_chip_pressed.bind(kategorie))
 	return chip
 
@@ -388,8 +461,15 @@ func _refresh_list() -> void:
 		empty.text = I18nService.t("shop.ikea.leer")
 		_list.add_child(empty)
 		return
+	var row_nodes: Array = []
 	for item: Dictionary in items:
-		_list.add_child(_make_row(item))
+		var row := _make_row(item)
+		_list.add_child(row)
+		row_nodes.append(row)
+	if is_inside_tree():
+		ScreenShell.scale_fonts(_list, _f)
+	# FB3-Polish: Regalzeilen blenden gestaffelt ein (Web-Stagger).
+	UiMotion.stagger_in(row_nodes, 0.015)
 
 
 func _make_row(item: Dictionary) -> Button:
@@ -397,8 +477,13 @@ func _make_row(item: Dictionary) -> Button:
 	var row := Button.new()
 	row.name = "Row_%s" % id
 	row.theme_type_variation = &"AcCardButton"
-	row.custom_minimum_size = Vector2(0, 58)
+	row.custom_minimum_size = Vector2(0, maxf(58.0 * _f, _floor))
 	row.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	# Der TEXT darf die Zeile nicht verbreitern: sonst diktiert die längste
+	# Zeile die Spaltenbreite und drückt die Detail-Spalte aus dem Canvas
+	# (Hochformat) — lieber Ellipse als Layoutbruch.
+	row.clip_text = true
+	row.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	row.text = (
 		"%s   ·   %s"
 		% [
@@ -441,7 +526,8 @@ func _refresh_swatches() -> void:
 func _make_swatch(variant_id: String) -> Button:
 	var swatch := Button.new()
 	swatch.name = "Swatch_%s" % variant_id
-	swatch.custom_minimum_size = Vector2(SWATCH_SIZE, SWATCH_SIZE)
+	# FB3: Swatches halten den PHYSISCHEN Touch-Floor (waren 40 Design-px).
+	swatch.custom_minimum_size = Vector2.ONE * maxf(SWATCH_SIZE * _f, _floor)
 	swatch.tooltip_text = FurnitureVariants.label(variant_id)
 	var active := variant_id == _variant
 	var box := StyleBoxFlat.new()

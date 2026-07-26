@@ -53,4 +53,11 @@ static func clear() -> void:
 
 
 static func _prune() -> void:
-	_stack = _stack.filter(func(p: Control) -> bool: return is_instance_valid(p))
+	# KEIN filter(): das liefert ein untypisiertes Array (Laufzeitfehler bei
+	# der Zuweisung), und die Lambda-Typung schlägt bei bereits FREIGEGEBENEN
+	# Instanzen fehl. Von Hand einsammeln ist beides sicher.
+	var alive: Array[Control] = []
+	for panel: Variant in _stack:
+		if is_instance_valid(panel):
+			alive.append(panel)
+	_stack = alive

@@ -14,6 +14,18 @@
    "frei": "Green Country"
   },
   "entdeckt": "New discovery: {zone}!",
+  "fund_entdeckt": "Discovered: {name}! +{muenzen} coins",
+  "fund": {
+   "wasserfall": "The Rushing Waterfall",
+   "hoehle": "The Sparkle Cave",
+   "alter_baum": "The Ancient Tree",
+   "steinkreis": "The Stone Circle",
+   "aussicht_kamm": "Ridge Lookout",
+   "aussicht_see": "Glitter Lake Lookout",
+   "truhe_wald": "Hidden Forest Chest",
+   "truhe_scheune": "Chest Behind the Barn",
+   "truhe_ufer": "Lakeshore Chest"
+  },
   "wetter": {
    "sonne": "Sunny",
    "wolken": "Cloudy",
