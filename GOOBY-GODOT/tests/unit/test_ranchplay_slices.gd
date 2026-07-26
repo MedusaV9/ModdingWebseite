@@ -124,6 +124,89 @@ func test_normalize_spiele_repariert_struktur() -> void:
 	assert_eq(spiele["herde"]["best"], {})
 
 
+func test_altes_pferd_wird_zu_level_1_puschelhufer_geheilt() -> void:
+	# Save von VOR dem Pferde-DLC: nur Pflege-Felder — additive Heilung.
+	var tiere := Slices.normalize_tiere({"pferde": {"p1": {"name": "Oldie", "farbe": "braun"}}})
+	var p1: Dictionary = tiere["pferde"]["p1"]
+	assert_eq(str(p1["rasse"]), "puschelhufer")
+	assert_eq(int(p1["level"]), 1)
+	assert_almost(float(p1["xp"]), 0.0)
+	assert_eq(str(p1["alter"]), "ausgewachsen")
+	for k in RanchRassen.STAT_KEYS:
+		assert_eq(int(p1["stats"][k]), 10, "%s: neutraler Basiswert" % k)
+		assert_almost(float(p1["frische"][k]), 100.0, 1e-6, "%s: Frische voll" % k)
+		assert_eq(int(p1["trainiert"][k]), 0)
+
+
+func test_dlc_felder_werden_geklemmt_und_level_folgt_xp() -> void:
+	var roh := {
+		"name": "Hack",
+		"rasse": "wolkentraber",
+		"stats": {"tempo": 99, "ausdauer": -4},
+		"trainiert": {"tempo": 99},
+		"frische": {"tempo": 900.0},
+		"groesse": 9.0,
+		"stimmPitch": 0.1,
+		"xp": RanchHorseLevels.xp_summe_bis(5) + 1.0,
+		"level": 30,
+		"alter": "embryo",
+		"charakter": ["mutig", 42, "stur"],
+	}
+	var p: Dictionary = Slices.normalize_tiere({"pferde": {"p1": roh}})["pferde"]["p1"]
+	assert_eq(str(p["rasse"]), "wolkentraber", "Rasse bleibt")
+	assert_eq(int(p["stats"]["tempo"]), 20, "Stat auf 1..20 geklemmt")
+	assert_eq(int(p["stats"]["ausdauer"]), 1)
+	assert_eq(int(p["trainiert"]["tempo"]), 10, "Trainingspunkte auf 0..10 geklemmt")
+	assert_almost(float(p["frische"]["tempo"]), 100.0, 1e-6)
+	assert_almost(float(p["groesse"]), 1.6, 1e-6, "Groesse geklemmt")
+	assert_almost(float(p["stimmPitch"]), 0.6, 1e-6)
+	assert_eq(int(p["level"]), 5, "Level wird aus der XP ABGELEITET (Anti-Manipulation)")
+	assert_eq(str(p["alter"]), "ausgewachsen", "unbekannte Phase faellt zurueck")
+	assert_eq(p["charakter"], ["mutig", "stur"], "nur String-Zuege ueberleben")
+
+
+func test_neues_pferd_uebernimmt_individuum() -> void:
+	var individuum := RanchRassen.neues_individuum("sternschnuppler", 9, RanchRassen.load_balance())
+	var pferd := Slices.neues_pferd("Funkel", "braun", individuum)
+	assert_eq(str(pferd["rasse"]), "sternschnuppler")
+	assert_eq(str(pferd["farbe"]), str(individuum["farbe"]), "Farbe kommt aus den Genen")
+	assert_eq(pferd["stats"], individuum["stats"])
+	assert_almost(float(pferd["werte"]["hunger"]), 80.0, 1e-6, "Pflege-Startwerte bleiben")
+	assert_eq(int(pferd["level"]), 1)
+
+
+func test_normalize_zucht_heilt_struktur() -> void:
+	assert_eq(Slices.normalize_zucht("kaputt"), Slices.default_zucht())
+	var z := (
+		Slices
+		. normalize_zucht(
+			{
+				"traechtigkeiten":
+				{
+					"s1":
+					{
+						"startAt": -5,
+						"checkpoints": 9,
+						"letzterCheckpoint": 77,
+						"seed": 3,
+						"vater": {"name": "Papa"}
+					},
+					"kaputt": 42,
+				},
+				"ruhezeitBis": {"s2": -100, "s3": 5},
+			}
+		)
+	)
+	var t: Dictionary = z["traechtigkeiten"]
+	assert_eq(t.keys(), ["s1"], "Nicht-Dict-Eintraege fliegen raus")
+	assert_eq(int(t["s1"]["startAt"]), 0, "negativ geklemmt")
+	assert_eq(int(t["s1"]["checkpoints"]), 5, "auf 0..5 geklemmt")
+	assert_eq(int(t["s1"]["letzterCheckpoint"]), 4)
+	assert_eq(str(t["s1"]["vater"]["name"]), "Papa", "Vater-Snapshot bleibt")
+	assert_eq(int(z["ruhezeitBis"]["s2"]), 0)
+	assert_eq(int(z["ruhezeitBis"]["s3"]), 5)
+
+
 func test_progress_defaults_ohne_gamestate() -> void:
 	assert_eq(Progress.level_stars(null, "parcours", 1), 0)
 	assert_eq(Progress.level_best(null, "herde", 1), 0)

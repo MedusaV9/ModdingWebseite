@@ -1,0 +1,192 @@
+{
+	"version": 1,
+	"seed": 20260726,
+	"wasser_hoehe": -1.1,
+	"grenzen": {"min_x": -700.0, "max_x": 700.0, "min_z": -650.0, "max_z": 650.0},
+	"zonen": [
+		{
+			"id": "hof",
+			"name_key": "rwelt.zone.hof",
+			"stimmung": "heimat",
+			"rect": [-240.0, -190.0, 480.0, 380.0],
+			"spawn": [0.0, 160.0],
+			"hoehe_basis": 2.0
+		},
+		{
+			"id": "weidetal",
+			"name_key": "rwelt.zone.weidetal",
+			"stimmung": "weite",
+			"rect": [-660.0, -120.0, 380.0, 420.0],
+			"spawn": [-380.0, 90.0],
+			"hoehe_basis": -3.0,
+			"wildpferde_weide": [-590.0, 200.0]
+		},
+		{
+			"id": "waeldchen",
+			"name_key": "rwelt.zone.waeldchen",
+			"stimmung": "schatten",
+			"rect": [-600.0, -600.0, 360.0, 400.0],
+			"spawn": [-330.0, -300.0],
+			"hoehe_basis": 1.5,
+			"lichtung": [-420.0, -400.0]
+		},
+		{
+			"id": "see",
+			"name_key": "rwelt.zone.see",
+			"stimmung": "ruhe",
+			"rect": [330.0, 110.0, 340.0, 300.0],
+			"spawn": [380.0, 200.0],
+			"hoehe_basis": -1.5,
+			"see_mitte": [500.0, 270.0],
+			"see_radius": 85.0,
+			"steg": [432.0, 232.0]
+		},
+		{
+			"id": "huegelkamm",
+			"name_key": "rwelt.zone.huegelkamm",
+			"stimmung": "panorama",
+			"rect": [-60.0, -640.0, 440.0, 320.0],
+			"spawn": [120.0, -390.0],
+			"hoehe_basis": 6.0,
+			"aussichtspunkt": [160.0, -510.0]
+		},
+		{
+			"id": "bachlauf",
+			"name_key": "rwelt.zone.bachlauf",
+			"stimmung": "frisch",
+			"rect": [250.0, -300.0, 260.0, 380.0],
+			"spawn": [340.0, -140.0],
+			"hoehe_basis": -0.5
+		},
+		{
+			"id": "scheune_alt",
+			"name_key": "rwelt.zone.scheune_alt",
+			"stimmung": "geheimnis",
+			"rect": [-620.0, 340.0, 280.0, 260.0],
+			"spawn": [-460.0, 420.0],
+			"hoehe_basis": 2.0,
+			"scheune": [-500.0, 480.0]
+		},
+		{
+			"id": "turnierplatz",
+			"name_key": "rwelt.zone.turnierplatz",
+			"stimmung": "fest",
+			"rect": [-20.0, 320.0, 300.0, 280.0],
+			"spawn": [120.0, 380.0],
+			"hoehe_basis": 1.5,
+			"arena": [130.0, 470.0, 96.0, 60.0]
+		},
+		{
+			"id": "hufingen",
+			"name_key": "rwelt.zone.hufingen",
+			"stimmung": "dorf",
+			"rect": [360.0, 420.0, 300.0, 220.0],
+			"spawn": [440.0, 500.0],
+			"hoehe_basis": 2.5,
+			"strasse_ende": [560.0, 530.0]
+		}
+	],
+	"wege": [
+		{
+			"id": "hof_weidetal",
+			"von": "hof",
+			"nach": "weidetal",
+			"breite": 5.0,
+			"punkte": [[-120.0, 60.0], [-260.0, 70.0], [-380.0, 90.0]]
+		},
+		{
+			"id": "hof_waeldchen",
+			"von": "hof",
+			"nach": "waeldchen",
+			"breite": 4.5,
+			"punkte": [[-100.0, -120.0], [-200.0, -220.0], [-330.0, -300.0]]
+		},
+		{
+			"id": "hof_see",
+			"von": "hof",
+			"nach": "see",
+			"breite": 5.0,
+			"punkte": [[120.0, 40.0], [230.0, 60.0], [310.0, 120.0], [380.0, 200.0]]
+		},
+		{
+			"id": "hof_huegelkamm",
+			"von": "hof",
+			"nach": "huegelkamm",
+			"breite": 4.5,
+			"punkte": [[60.0, -140.0], [90.0, -260.0], [120.0, -390.0]]
+		},
+		{
+			"id": "hof_turnierplatz",
+			"von": "hof",
+			"nach": "turnierplatz",
+			"breite": 6.0,
+			"punkte": [[40.0, 170.0], [80.0, 280.0], [120.0, 380.0]]
+		},
+		{
+			"id": "turnierplatz_hufingen",
+			"von": "turnierplatz",
+			"nach": "hufingen",
+			"breite": 6.0,
+			"punkte": [[200.0, 420.0], [320.0, 460.0], [440.0, 500.0]]
+		},
+		{
+			"id": "weidetal_scheune_alt",
+			"von": "weidetal",
+			"nach": "scheune_alt",
+			"breite": 3.5,
+			"punkte": [[-400.0, 180.0], [-430.0, 300.0], [-460.0, 420.0]]
+		},
+		{
+			"id": "huegelkamm_bachlauf",
+			"von": "huegelkamm",
+			"nach": "bachlauf",
+			"breite": 4.0,
+			"punkte": [[200.0, -360.0], [260.0, -250.0], [305.0, -150.0], [340.0, -140.0]]
+		},
+		{
+			"id": "hof_bachlauf",
+			"von": "hof",
+			"nach": "bachlauf",
+			"breite": 4.5,
+			"punkte": [[140.0, -40.0], [230.0, -10.0], [318.0, 0.0], [340.0, -140.0]]
+		},
+		{
+			"id": "bachlauf_see",
+			"von": "bachlauf",
+			"nach": "see",
+			"breite": 4.0,
+			"punkte": [[360.0, -60.0], [370.0, 60.0], [380.0, 200.0]]
+		},
+		{
+			"id": "see_hufingen",
+			"von": "see",
+			"nach": "hufingen",
+			"breite": 5.0,
+			"punkte": [[410.0, 330.0], [430.0, 400.0], [440.0, 500.0]]
+		}
+	],
+	"bach": {
+		"breite": 7.0,
+		"tiefe": 1.6,
+		"punkte": [
+			[210.0, -600.0],
+			[250.0, -450.0],
+			[290.0, -300.0],
+			[305.0, -150.0],
+			[318.0, 0.0],
+			[350.0, 90.0],
+			[420.0, 180.0],
+			[480.0, 250.0]
+		],
+		"furt": [305.0, -150.0],
+		"bruecke": [318.0, 0.0]
+	},
+	"pfuetzen": [
+		[-60.0, 90.0],
+		[30.0, 210.0],
+		[-300.0, 80.0],
+		[150.0, 340.0],
+		[400.0, 460.0],
+		[90.0, -300.0]
+	]
+}

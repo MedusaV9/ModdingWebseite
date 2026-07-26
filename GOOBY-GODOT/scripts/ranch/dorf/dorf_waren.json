@@ -1,0 +1,110 @@
+{
+	"laeden": ["reitladen", "futterhof", "moebelscheune", "pferdehaendlerin", "schmiede"],
+	"futterhof": {
+		"waren": [
+			{"id": "heu", "preis": 8, "menge": 1},
+			{"id": "heu_bund", "preis": 35, "menge": 5},
+			{"id": "hafer", "preis": 12, "menge": 1},
+			{"id": "leckerli", "preis": 6, "menge": 1}
+		],
+		"ankauf": {"heu": 5, "apfel": 4}
+	},
+	"moebelscheune": {
+		"ranch_deko": [
+			"beet_blumen",
+			"bank_holz",
+			"laterne",
+			"fahne",
+			"blumenkuebel",
+			"vogelhaus",
+			"wegweiser",
+			"strohpuppe"
+		],
+		"moebel": [
+			{"id": "loungeChair", "preis": 120},
+			{"id": "table", "preis": 150},
+			{"id": "rugRound", "preis": 100},
+			{"id": "pottedPlant", "preis": 60},
+			{"id": "lampRoundFloor", "preis": 70},
+			{"id": "bookcaseOpen", "preis": 110}
+		]
+	},
+	"pferdehaendlerin": {
+		"angebot_anzahl": 3,
+		"verkauf_anteil": 0.5,
+		"basis_wert": 300,
+		"pool": [
+			{
+				"id": "hf_keks",
+				"name_key": "rdorf.pferde.keks",
+				"fell_id": "braun",
+				"farbe": "#B98A5E",
+				"maehne": "#6E4E30",
+				"preis": 300
+			},
+			{
+				"id": "hf_muschel",
+				"name_key": "rdorf.pferde.muschel",
+				"fell_id": "weiss",
+				"farbe": "#F2E9DC",
+				"maehne": "#D8C7AC",
+				"preis": 420
+			},
+			{
+				"id": "hf_pfeffer",
+				"name_key": "rdorf.pferde.pfeffer",
+				"fell_id": "schwarz",
+				"farbe": "#4A4149",
+				"maehne": "#2E282E",
+				"preis": 540
+			},
+			{
+				"id": "hf_toffee",
+				"name_key": "rdorf.pferde.toffee",
+				"fell_id": "palomino",
+				"farbe": "#E3B778",
+				"maehne": "#F4E8CE",
+				"preis": 660
+			},
+			{
+				"id": "hf_flocke",
+				"name_key": "rdorf.pferde.flocke",
+				"fell_id": "schecke",
+				"farbe": "#E8D9C8",
+				"maehne": "#8A6A4E",
+				"preis": 800
+			},
+			{
+				"id": "hf_kastanie",
+				"name_key": "rdorf.pferde.kastanie",
+				"fell_id": "fuchs",
+				"farbe": "#C26E45",
+				"maehne": "#7E3F24",
+				"preis": 950
+			},
+			{
+				"id": "hf_lavendel",
+				"name_key": "rdorf.pferde.lavendel",
+				"fell_id": "schecke",
+				"farbe": "#C9B0D8",
+				"maehne": "#8A6FA0",
+				"preis": 1200
+			},
+			{
+				"id": "hf_sternchen",
+				"name_key": "rdorf.pferde.sternchen",
+				"fell_id": "schwarz",
+				"farbe": "#3E3A52",
+				"maehne": "#B8B2E0",
+				"preis": 1500
+			}
+		]
+	},
+	"schmiede": {
+		"waren": [
+			{"id": "hufeisen_bronze", "preis": 60},
+			{"id": "hufeisen_silber", "preis": 300},
+			{"id": "hufeisen_gold", "preis": 900}
+		]
+	}
+}

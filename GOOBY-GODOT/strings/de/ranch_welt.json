@@ -1,0 +1,36 @@
+{
+ "rwelt": {
+  "titel": "Ranch-Region",
+  "zone": {
+   "hof": "Ranch-Hof",
+   "weidetal": "Weidetal",
+   "waeldchen": "Wäldchen",
+   "see": "Glitzersee",
+   "huegelkamm": "Hügelkamm",
+   "bachlauf": "Blubberbach",
+   "scheune_alt": "Alte Scheune",
+   "turnierplatz": "Turnierplatz",
+   "hufingen": "Dorfrand Hufingen",
+   "frei": "Grünes Land"
+  },
+  "entdeckt": "Neu entdeckt: {zone}!",
+  "wetter": {
+   "sonne": "Sonnig",
+   "wolken": "Wolkig",
+   "niesel": "Nieselregen",
+   "regen": "Regen",
+   "gewitter": "Gewitter",
+   "nebel": "Nebel",
+   "regenbogen": "Ein Regenbogen!"
+  },
+  "hud": {
+   "zur_ranch": "Zum Hof",
+   "aussicht": "Aussichtspunkt",
+   "steg_schild": "Glitzersee",
+   "scheune_schild": "Psst … alte Scheune",
+   "turnier_schild": "Turnierplatz",
+   "hufingen_schild": "Hufingen",
+   "ausreiten": "Ausreiten!"
+  }
+ }
+}

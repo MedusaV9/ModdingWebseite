@@ -1,21 +1,31 @@
 class_name RanchPlaySlices
 extends RefCounted
 ## Save-Unterschlüssel des Ranch-Gameplays (RANCH-2): `ranch.tiere`,
-## `ranch.wirtschaft`, `ranch.spiele` — ADDITIV im `ranch`-Slice, KEIN
-## SAVE-Version-Bump (Slice-Registry-Muster, s. save_schema.gd Header).
+## `ranch.wirtschaft`, `ranch.spiele`, `ranch.zucht` — ADDITIV im
+## `ranch`-Slice, KEIN SAVE-Version-Bump (Slice-Registry-Muster,
+## s. save_schema.gd Header).
 ##
 ## Absprache mit RANCH-1 (s. /tmp/gooby-godot/handoffs/RANCH2-needs.md):
 ## RANCH-1 besitzt den Top-Level-Slice `ranch`; seine default/normalize
-## sollen für diese drei Unterschlüssel HIERHER delegieren. Solange sein
+## sollen für diese Unterschlüssel HIERHER delegieren. Solange sein
 ## Code fehlt, registriert ensure_registered() den Slice defensiv selbst —
 ## und weicht aus, wenn `ranch` bereits registriert ist. Das normalize hier
 ## erhält FREMDE Schlüssel (RANCH-1s Welt/Kauf-Daten) VERBATIM.
+##
+## Pferde-DLC (RW-2): Pferde tragen zusätzlich additive Felder aus
+## RanchRassen.neues_individuum (rasse/gene/abzeichen/charakter/groesse/
+## stimmPitch/stats/alter/…) + Trainings-Felder aus RanchHorseLevels
+## (xp/level/statXp/trainiert/frische/…). Alte Saves ohne diese Felder
+## werden hier zu Level-1-Puschelhufern geheilt — additiv, verlustfrei.
 
 const SaveSchema := preload("res://scripts/state/save_schema.gd")
 
 const SLICE_ID := "ranch"
-const FELLFARBEN: Array[String] = ["braun", "schwarz", "weiss", "fuchs", "palomino", "schecke"]
+const FELLFARBEN: Array[String] = [
+	"braun", "schwarz", "weiss", "fuchs", "palomino", "schecke", "apricot", "rauchgrau"
+]
 const GEAR_SLOTS: Array[String] = ["sattel", "decke", "halfter"]
+const ALTER_PHASEN: Array[String] = ["fohlen", "jaehrling", "jungpferd", "ausgewachsen"]
 
 ## Frische Pflege-Startwerte eines neuen Pferds.
 const START_WERTE := {"hunger": 80.0, "durst": 85.0, "sauberkeit": 75.0}
@@ -49,6 +59,7 @@ static func default_slice() -> Dictionary:
 		"tiere": default_tiere(),
 		"wirtschaft": default_wirtschaft(),
 		"spiele": default_spiele(),
+		"zucht": default_zucht(),
 	}
 
 
@@ -60,6 +71,7 @@ static func normalize_slice(raw: Variant) -> Dictionary:
 	ranch["tiere"] = normalize_tiere(ranch.get("tiere"))
 	ranch["wirtschaft"] = normalize_wirtschaft(ranch.get("wirtschaft"))
 	ranch["spiele"] = normalize_spiele(ranch.get("spiele"))
+	ranch["zucht"] = normalize_zucht(ranch.get("zucht"))
 	return ranch
 
 
@@ -68,8 +80,11 @@ static func default_tiere() -> Dictionary:
 
 
 ## Fabrik für ein neues Pferd (RANCH-1s Pferdekauf ruft das auf).
-static func neues_pferd(name: String, farbe: String) -> Dictionary:
-	return {
+## `individuum` (optional): DLC-Felder aus RanchRassen.neues_individuum /
+## RanchHorseBreeding.wuerfle_fohlen — überschreiben die Defaults (inkl.
+## farbe, die dann aus den Genen kommt).
+static func neues_pferd(name: String, farbe: String, individuum: Dictionary = {}) -> Dictionary:
+	var pferd := {
 		"name": name,
 		"farbe": farbe if FELLFARBEN.has(farbe) else "braun",
 		"werte": START_WERTE.duplicate(),
@@ -79,6 +94,16 @@ static func neues_pferd(name: String, farbe: String) -> Dictionary:
 		"letztePflegeAt": 0,
 		"ausruestung": {"sattel": null, "decke": null, "halfter": null},
 	}
+	pferd.merge(_dlc_defaults())
+	for k: Variant in individuum.keys():
+		pferd[k] = (
+			individuum[k].duplicate(true)
+			if (individuum[k] is Dictionary or individuum[k] is Array)
+			else individuum[k]
+		)
+	if not FELLFARBEN.has(str(pferd.get("farbe"))):
+		pferd["farbe"] = "braun"
+	return pferd
 
 
 ## tiere-Unterschlüssel heilen: Typen reparieren, Werte klemmen,
@@ -145,6 +170,41 @@ static func normalize_wirtschaft(raw: Variant) -> Dictionary:
 	return w
 
 
+## Zucht-Unterschlüssel (RanchHorseBreeding): laufende Trächtigkeiten je
+## Stuten-Id + Ruhezeit-Stempel je Stute.
+static func default_zucht() -> Dictionary:
+	return {"v": 1, "traechtigkeiten": {}, "ruhezeitBis": {}}
+
+
+static func normalize_zucht(raw: Variant) -> Dictionary:
+	var zucht: Dictionary = raw if raw is Dictionary else default_zucht()
+	zucht["v"] = maxi(1, int(_num(zucht.get("v"), 1.0)))
+	var roh_t: Dictionary = (
+		zucht.get("traechtigkeiten") if zucht.get("traechtigkeiten") is Dictionary else {}
+	)
+	var t := {}
+	for id: Variant in roh_t.keys():
+		if not (roh_t[id] is Dictionary):
+			continue
+		var e: Dictionary = roh_t[id]
+		t[str(id)] = {
+			"startAt": maxi(0, int(_num(e.get("startAt"), 0.0))),
+			"checkpoints": clampi(int(_num(e.get("checkpoints"), 0.0)), 0, 5),
+			"letzterCheckpoint": clampi(int(_num(e.get("letzterCheckpoint"), -1.0)), -1, 4),
+			"seed": int(_num(e.get("seed"), 0.0)),
+			"vater": e.get("vater").duplicate(true) if e.get("vater") is Dictionary else {},
+		}
+	zucht["traechtigkeiten"] = t
+	var roh_ruhe: Dictionary = (
+		zucht.get("ruhezeitBis") if zucht.get("ruhezeitBis") is Dictionary else {}
+	)
+	var ruhe := {}
+	for id: Variant in roh_ruhe.keys():
+		ruhe[str(id)] = maxi(0, int(_num(roh_ruhe[id], 0.0)))
+	zucht["ruhezeitBis"] = ruhe
+	return zucht
+
+
 static func default_spiele() -> Dictionary:
 	return {
 		"v": 1,
@@ -182,6 +242,7 @@ static func _normalize_pferd(raw: Dictionary) -> Dictionary:
 	for slot: String in GEAR_SLOTS:
 		var farbe: Variant = ausr.get(slot)
 		pferd["ausruestung"][slot] = farbe if farbe is String else null
+	_normalize_pferd_dlc(pferd, raw)
 	# Fremde Zusatz-Schlüssel (z. B. RANCH-1-Kaufdaten am Pferd) VERBATIM erhalten.
 	for k: Variant in raw.keys():
 		if not pferd.has(k):
@@ -189,6 +250,81 @@ static func _normalize_pferd(raw: Dictionary) -> Dictionary:
 				raw[k].duplicate(true) if (raw[k] is Dictionary or raw[k] is Array) else raw[k]
 			)
 	return pferd
+
+
+## Neutrale DLC-Defaults: alte Saves werden zu Level-1-Puschelhufern mit
+## Basiswerten 10 — kein Individuum wird dabei überschrieben.
+static func _dlc_defaults() -> Dictionary:
+	var stats := {}
+	var frische := {}
+	var trainiert := {}
+	for k in RanchRassen.STAT_KEYS:
+		stats[k] = 10
+		frische[k] = 100.0
+		trainiert[k] = 0
+	return {
+		"rasse": "puschelhufer",
+		"gene": {},
+		"abzeichen": {},
+		"charakter": [],
+		"groesse": 1.0,
+		"stimmPitch": 1.0,
+		"phasenOffset": 0.0,
+		"stats": stats,
+		"trainiert": trainiert,
+		"statXp": {},
+		"frische": frische,
+		"frischeTag": "",
+		"mashTag": {},
+		"xp": 0.0,
+		"level": 1,
+		"rittXpHeute": 0.0,
+		"alter": "ausgewachsen",
+		"eltern": [],
+		"geborenAm": 0,
+	}
+
+
+## DLC-Felder heilen: Typen reparieren, Werte klemmen, Level aus XP
+## ableiten (Selbstheilung bei manipulierten Saves).
+static func _normalize_pferd_dlc(pferd: Dictionary, raw: Dictionary) -> void:
+	if raw.get("rasse") is String and str(raw["rasse"]) != "":
+		pferd["rasse"] = raw["rasse"]
+	for schluessel: String in ["gene", "abzeichen", "statXp", "mashTag"]:
+		if raw.get(schluessel) is Dictionary:
+			pferd[schluessel] = (raw[schluessel] as Dictionary).duplicate(true)
+	if raw.get("charakter") is Array:
+		var zuege: Array = []
+		for zug: Variant in raw["charakter"]:
+			if zug is String:
+				zuege.append(zug)
+		pferd["charakter"] = zuege
+	pferd["groesse"] = clampf(_num(raw.get("groesse"), 1.0), 0.4, 1.6)
+	pferd["stimmPitch"] = clampf(_num(raw.get("stimmPitch"), 1.0), 0.6, 1.4)
+	pferd["phasenOffset"] = clampf(_num(raw.get("phasenOffset"), 0.0), 0.0, 1.0)
+	var roh_stats: Dictionary = raw.get("stats") if raw.get("stats") is Dictionary else {}
+	var roh_trainiert: Dictionary = (
+		raw.get("trainiert") if raw.get("trainiert") is Dictionary else {}
+	)
+	var roh_frische: Dictionary = raw.get("frische") if raw.get("frische") is Dictionary else {}
+	for k in RanchRassen.STAT_KEYS:
+		pferd["stats"][k] = clampi(int(_num(roh_stats.get(k), 10.0)), 1, 20)
+		pferd["trainiert"][k] = clampi(int(_num(roh_trainiert.get(k), 0.0)), 0, 10)
+		pferd["frische"][k] = clampf(_num(roh_frische.get(k), 100.0), 0.0, 100.0)
+	if raw.get("frischeTag") is String:
+		pferd["frischeTag"] = raw["frischeTag"]
+	pferd["xp"] = clampf(
+		_num(raw.get("xp"), 0.0), 0.0, RanchHorseLevels.xp_summe_bis(RanchHorseLevels.LEVEL_MAX)
+	)
+	pferd["level"] = RanchHorseLevels.level_fuer_xp(pferd["xp"])
+	pferd["rittXpHeute"] = clampf(
+		_num(raw.get("rittXpHeute"), 0.0), 0.0, RanchHorseLevels.XP_RITT_TAGES_DECKEL
+	)
+	var alter := str(raw.get("alter", "ausgewachsen"))
+	pferd["alter"] = alter if ALTER_PHASEN.has(alter) else "ausgewachsen"
+	if raw.get("eltern") is Array:
+		pferd["eltern"] = (raw["eltern"] as Array).duplicate(true)
+	pferd["geborenAm"] = maxi(0, int(_num(raw.get("geborenAm"), 0.0)))
 
 
 static func _num(value: Variant, fallback: float) -> float:

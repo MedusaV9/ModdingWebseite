@@ -6,14 +6,28 @@ extends RefCounted
 ## Sprungphysik, Ausdauer und Kopfnicken. Der Node-Controller
 ## (ride_controller.gd) und der Parcours konsumieren NUR diese Funktionen —
 ## alles hier ist im Runner testbar.
+##
+## RW-2-DLC (IDEAS-3 Kap. 2.4 + 3): die ZAHLEN des Ausbaus (Antritts-Kick,
+## Tölt, Untergrund, Erschoepfung/Zweiter Wind, Sprung-Zonen, Kamera-Kicks)
+## leben als Konstanten HIER; die zugehoerigen Stat-Formeln stehen im
+## Schwester-Modul ride_stats.gd (RanchRideStats), weil dieser Kern sein
+## 20-Methoden-Lint-Budget bereits ausschoepft.
 
-## Gangarten in Schalt-Reihenfolge; Zieltempo in m/s.
+## Gangarten in Schalt-Reihenfolge; Zieltempo in m/s. Tölt (5,8 m/s) ist
+## die exklusive 5. Gangart des Tölterle — sie steht NICHT in GANGARTEN
+## (Bestands-Schaltfolge bleibt), RanchRideStats.gangart_hoch schaltet
+## sie fuer berechtigte Pferde zwischen Trab und Galopp ein.
 const GANGARTEN: Array[String] = ["stand", "schritt", "trab", "galopp"]
-const TEMPO := {"stand": 0.0, "schritt": 1.7, "trab": 4.2, "galopp": 8.5}
+const TEMPO := {"stand": 0.0, "schritt": 1.7, "trab": 4.2, "galopp": 8.5, "toelt": 5.8}
 
 ## Beschleunigung Richtung Zieltempo: sanft rauf, williger runter (m/s²).
 const ACCEL_AUF := 3.0
 const ACCEL_AB := 5.5
+## DLC-Antritt je Gangart (IDEAS-3 Kap. 3.1); Galopp-Wert gilt NACH dem Kick.
+const ACCEL_JE_GANGART := {"schritt": 2.0, "trab": 2.8, "galopp": 3.0, "toelt": 3.0}
+## Antritts-Kick beim Angaloppieren: 0,8 s lang ACCEL_AUF·1,5 (Flitzewind 1,2 s).
+const KICK_ACCEL := 4.5
+const KICK_DAUER_S := 0.8
 
 ## Lenk-Tiefpass τ = 140 ms — Pferde lenken weicher als Autos.
 const STEER_SMOOTH_TAU_S := 0.14
@@ -33,14 +47,55 @@ const SPRUNG_MIN_TEMPO := 3.0
 const AUSDAUER_MAX := 100.0
 const AUSDAUER_GALOPP_PRO_S := 7.0
 const AUSDAUER_REGEN_PRO_S := 9.0
+## Tölt traegt weiter als der Galopp (−3/s statt −7/s).
+const AUSDAUER_TOELT_PRO_S := 3.0
 ## Leergaloppierte Pferde fallen in den Trab zurück.
 const AUSDAUER_LEER_GANGART := "trab"
 ## Erst ab dieser Ausdauer darf wieder angaloppiert werden.
 const AUSDAUER_GALOPP_AB := 20.0
 
+## Erschoepfungsmoment (Tank = 0, IDEAS-3 Kap. 3.4): Schnauben + Kamera
+## sackt ab; bei Laune < 40 kostet jede Erschoepfung 1 Bindung (max 3/Tag).
+const ERSCHOEPFT_SCHNAUBEN_S := 2.0
+const ERSCHOEPFT_KAMERA_SACK_M := 0.1
+const ERSCHOEPFT_BINDUNG_MALUS := 1.0
+const ERSCHOEPFT_MALUS_MAX_TAG := 3.0
+const ERSCHOEPFT_LAUNE_UNTER := 40.0
+## Zweiter Wind: 1×/Ritt bei Tank < 10 anhalten + streicheln → +25 sofort.
+const ZWEITER_WIND_AB := 10.0
+const ZWEITER_WIND_BONUS := 25.0
+const ZWEITER_WIND_MAX_TEMPO := 0.2
+
+## Sprung-Timing (IDEAS-3 Kap. 3.5): Absprungzonen VOR dem Hindernis (m).
+const SPRUNG_PERFEKT_VON_M := 0.9
+const SPRUNG_PERFEKT_BIS_M := 1.3
+const SPRUNG_GUT_VON_M := 0.5
+const SPRUNG_GUT_BIS_M := 1.9
+const SPRUNG_PERFEKT_PUNKTE := 15
+const SPRUNG_STANGE_CHANCE := 0.6
+
+## Scheu-Moment (Kap. 1.3/2.4): kurzer Seitwaertshopser, Tempo −30 % fuer 2 s.
+const SCHEU_DAUER_S := 0.5
+const SCHEU_HOPS_M := 0.6
+const SCHEU_TEMPO_MULT := 0.7
+const SCHEU_TEMPO_S := 2.0
+
+## Untergrund (Kap. 3.3): Tempo-Malus + Hufschlag-Charakter je Boden.
+## sound-Ids zeigen auf assets/ranch/audio/sfx/<id>.ogg.
+const UNTERGRUND := {
+	"wiese": {"tempo_mult": 1.0, "sound": "huf_gras", "vol_db": -6.0, "pitch": 0.9},
+	"sand": {"tempo_mult": 1.0, "sound": "huf_sand", "vol_db": -4.0, "pitch": 1.0},
+	"holz": {"tempo_mult": 1.0, "sound": "huf_holz", "vol_db": 3.0, "pitch": 1.05},
+	"stein": {"tempo_mult": 1.0, "sound": "huf_stein", "vol_db": 0.0, "pitch": 1.1},
+	"wasser": {"tempo_mult": 0.85, "sound": "huf_sand", "vol_db": 0.0, "pitch": 1.0},
+	"matsch": {"tempo_mult": 0.9, "sound": "huf_sand", "vol_db": -2.0, "pitch": 0.8},
+	"schnee": {"tempo_mult": 1.0, "sound": "huf_gras", "vol_db": -9.0, "pitch": 0.85},
+}
+
 ## Kopfnicken: Frequenz (Hz) und Amplitude (m) je Gangart; stand = Atmen.
-const NICK_HZ := {"stand": 0.35, "schritt": 1.4, "trab": 2.4, "galopp": 1.9}
-const NICK_AMP := {"stand": 0.006, "schritt": 0.022, "trab": 0.045, "galopp": 0.07}
+## Tölt "schwebt": 2,8 Hz bei Amplitude 0,012 — fast glatt.
+const NICK_HZ := {"stand": 0.35, "schritt": 1.4, "trab": 2.4, "galopp": 1.9, "toelt": 2.8}
+const NICK_AMP := {"stand": 0.006, "schritt": 0.022, "trab": 0.045, "galopp": 0.07, "toelt": 0.012}
 
 ## Kamera: gedämpftes Follow + Blickwinkel-Kick über das Tempoband.
 const CAM_POS_LERP_K := 4.5
@@ -50,9 +105,16 @@ const FOV_MIN_DEG := 58.0
 const FOV_MAX_DEG := 66.0
 const FOV_TEMPO_VON := 4.2
 const FOV_TEMPO_BIS := 8.5
+## DLC-Kamera (Kap. 3.2): Landungs-Kick nach dem Sprung; das Galopp-
+## Wippen ist eine OPT-IN-Option (Standard AUS — kein Screenshake beim
+## Reiten, Bedienhilfen-Grundsatz).
+const LANDUNGS_KICK_M := 0.06
+const LANDUNGS_KICK_S := 0.15
+const GALOPP_WIPP_AMP_M := 0.03
+const GALOPP_WIPP_HZ := 7.0
 
 ## Staubpartikel-Anteil (0..1) je Gangart — Galopp wirbelt richtig.
-const STAUB := {"stand": 0.0, "schritt": 0.0, "trab": 0.35, "galopp": 1.0}
+const STAUB := {"stand": 0.0, "schritt": 0.0, "trab": 0.35, "galopp": 1.0, "toelt": 0.5}
 
 
 ## Winkel nach (-PI, PI] wickeln (carFeel-Muster).

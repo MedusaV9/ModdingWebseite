@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://rw4bauhof0001"]
+
+[ext_resource type="Script" path="res://scripts/ranch/bau/ranch_bau_mode.gd" id="1_bau"]
+
+[node name="RanchBauHof" type="Node3D"]
+script = ExtResource("1_bau")

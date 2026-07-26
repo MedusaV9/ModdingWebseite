@@ -39,6 +39,7 @@ DE ist führend; EN muss für jede Domain paritätisch sein (Test:
 | `audio.*` (Datei `strings/<locale>/audio.json` — Radiosender-Namen) | FIX-4 AUDIO | FIX |
 | `cutscene.*` (Datei `strings/<locale>/cutscene.json` — Cutscene-Titel + Captions) | FIX-4 AUDIO | FIX |
 | `recap.*` (Datei `strings/<locale>/recap.json` — Rückblick: Stationen, Statzeilen) | FIX-4 AUDIO | FIX |
+| `rpferd.*` (Datei `strings/<locale>/rpferd.json` — Ranch-DLC Pferde: Rassen, Reiten, Zähmen, Zucht, Bindung) | RW-2 PFERDE | RW |
 
 Regeln:
 1. Nur der Owner editiert Keys seines Prefixes (in de.json/en.json NUR im

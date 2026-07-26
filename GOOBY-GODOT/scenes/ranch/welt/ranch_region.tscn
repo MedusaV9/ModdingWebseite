@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://ranchregion0001"]
+
+[ext_resource type="Script" path="res://scripts/ranch/welt/ranch_region_scene.gd" id="1_region"]
+
+[node name="RanchRegion" type="Node3D"]
+script = ExtResource("1_region")

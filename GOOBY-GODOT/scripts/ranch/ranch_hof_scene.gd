@@ -309,6 +309,15 @@ func _baue_hud() -> void:
 	)
 	galopp.toggled.connect(_on_galopp_toggled)
 	hud.add_child(galopp)
+	# RW-1: Ausritt in die offene Ranch-Region (Zonen, Wetter, Wildtiere).
+	var ausritt := Button.new()
+	ausritt.theme_type_variation = "PrimaryButton"
+	ausritt.text = I18nService.t("rwelt.hud.ausreiten")
+	ausritt.set_anchors_and_offsets_preset(
+		Control.PRESET_BOTTOM_LEFT, Control.PRESET_MODE_MINSIZE, 24
+	)
+	ausritt.pressed.connect(_on_ausreiten)
+	hud.add_child(ausritt)
 	_toast = load("res://scripts/ui/toast.gd").new()
 	_toast.theme = ThemeService.theme()
 	layer.add_child(_toast)
@@ -360,6 +369,12 @@ func _on_zur_stadt() -> void:
 		_zeige_toast("(Route city — Router fehlt)")
 		return
 	router.goto(&"city", {})
+
+
+## Ausritt in die offene Ranch-Region (RW-1) — Spawn am Hof-Plateau.
+func _on_ausreiten() -> void:
+	if not RanchWeltRouten.reite_los(get_tree(), {"spawn_zone": "hof"}):
+		_zeige_toast("(Route ranch/welt — Router fehlt)")
 
 
 func _zeige_toast(text: String) -> void:
