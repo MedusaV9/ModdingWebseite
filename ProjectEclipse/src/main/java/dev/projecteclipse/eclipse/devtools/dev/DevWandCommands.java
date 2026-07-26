@@ -42,11 +42,11 @@ import net.neoforged.neoforge.event.RegisterCommandsEvent;
  *   <li>{@code set <player> path|level|xp|charge …} / {@code reset <player>} — test
  *       hooks; edits apply to the store row (PLAYER mode) AND all wands the target
  *       currently owns in their inventory, so changes are visible instantly.</li>
- *   <li>{@code xp <amount> [player]} / {@code level <level> [player]} — PROGFIX #4
- *       grants; player defaults to the issuing source. {@code xp} AWARDS through the real
- *       pipeline ({@code WandPowers.awardXp}: level-ups fire the celebration + store
- *       persistence), so it needs an owned wand with a chosen path; {@code level} is the
- *       {@code set … level} edit with the optional-player convenience.</li>
+ *   <li>{@code xp <player> <amount>} / {@code level <player> <n>} — F-041 grants,
+ *       player-FIRST (the spec'd shape). {@code xp} AWARDS Wand-XP-Punkte through the
+ *       real pipeline ({@code WandPowers.awardXp} — the wand-tree currency, F-036), so
+ *       it needs an owned wand with a chosen path; {@code level} force-sets the derived
+ *       display level (a dev override on top of the node-derived value).</li>
  * </ul>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
@@ -72,10 +72,10 @@ public final class DevWandCommands {
                         "/dev wand reset <player>",
                         "dev.eclipse.doc.wand.reset", Danger.DESTRUCTIVE, ClickAction.SUGGEST, 2),
                 new DevCommandDoc("wand.xp", DevCategory.PLAYERS,
-                        "/dev wand xp <amount> [player]",
+                        "/dev wand xp <player> <amount>",
                         "dev.eclipse.doc.wand.xp", Danger.CAUTION, ClickAction.SUGGEST, 2),
                 new DevCommandDoc("wand.level", DevCategory.PLAYERS,
-                        "/dev wand level <level> [player]",
+                        "/dev wand level <player> <level>",
                         "dev.eclipse.doc.wand.level", Danger.CAUTION, ClickAction.SUGGEST, 2));
     }
 
@@ -137,21 +137,15 @@ public final class DevWandCommands {
                                         .executes(context -> reset(context.getSource(),
                                                 EntityArgument.getPlayer(context, "player")))))
                         .then(Commands.literal("xp")
-                                .then(Commands.argument("amount", IntegerArgumentType.integer(1))
-                                        .executes(context -> grantXp(context.getSource(),
-                                                context.getSource().getPlayerOrException(),
-                                                IntegerArgumentType.getInteger(context, "amount")))
-                                        .then(Commands.argument("player", EntityArgument.player())
+                                .then(Commands.argument("player", EntityArgument.player())
+                                        .then(Commands.argument("amount", IntegerArgumentType.integer(1))
                                                 .executes(context -> grantXp(context.getSource(),
                                                         EntityArgument.getPlayer(context, "player"),
                                                         IntegerArgumentType.getInteger(context, "amount"))))))
                         .then(Commands.literal("level")
-                                .then(Commands.argument("level",
-                                                IntegerArgumentType.integer(1, WandPath.MAX_LEVEL))
-                                        .executes(context -> setLevel(context.getSource(),
-                                                context.getSource().getPlayerOrException(),
-                                                IntegerArgumentType.getInteger(context, "level")))
-                                        .then(Commands.argument("player", EntityArgument.player())
+                                .then(Commands.argument("player", EntityArgument.player())
+                                        .then(Commands.argument("level",
+                                                        IntegerArgumentType.integer(1, WandPath.MAX_LEVEL))
                                                 .executes(context -> setLevel(context.getSource(),
                                                         EntityArgument.getPlayer(context, "player"),
                                                         IntegerArgumentType.getInteger(context, "level"))))))));
@@ -200,10 +194,17 @@ public final class DevWandCommands {
             WandStore.Progress row = store.progress(target.getUUID());
             row.pathId = path.id();
             if (path == WandPath.NONE) {
+                // Full path wipe: derived level, currency and the tree go too (the
+                // permanent rebirth counter survives — it is meant to be permanent).
                 row.level = 1;
                 row.xp = 0;
+                row.nodes.clear();
             }
             store.setDirty();
+        }
+        if (path != WandPath.NONE) {
+            // F-036: a chosen path always owns its baseline spell node.
+            dev.projecteclipse.eclipse.wand.WandTreeService.ensureBaseline(target);
         }
         int touched = forEachOwnedWand(target, stack -> {
             stack.set(WandItems.WAND_PATH.get(), path.id());
@@ -211,7 +212,7 @@ public final class DevWandCommands {
                 stack.set(WandItems.WAND_LEVEL.get(), 1);
                 stack.set(WandItems.WAND_XP.get(), 0);
             }
-            WandSoulbind.clampSelected(stack);
+            WandSoulbind.sanitizeSelectedSpell(target, stack);
         });
         sendEditFeedback(source, target, touched,
                 Component.translatable("dev.eclipse.wand.set.path", target.getDisplayName(),
@@ -224,16 +225,14 @@ public final class DevWandCommands {
     private static int setLevel(CommandSourceStack source, ServerPlayer target, int level) {
         WandStore store = WandStore.get(source.getServer());
         if (!store.perItemMode()) {
+            // F-036: a display-level override only — the Wand-XP currency and the owned
+            // node set stay untouched (the next node purchase re-derives the level).
             WandStore.Progress row = store.progress(target.getUUID());
             row.level = level;
-            row.xp = 0;
             store.setDirty();
         }
-        int touched = forEachOwnedWand(target, stack -> {
-            stack.set(WandItems.WAND_LEVEL.get(), level);
-            stack.set(WandItems.WAND_XP.get(), 0);
-            WandSoulbind.clampSelected(stack);
-        });
+        int touched = forEachOwnedWand(target,
+                stack -> stack.set(WandItems.WAND_LEVEL.get(), level));
         sendEditFeedback(source, target, touched,
                 Component.translatable("dev.eclipse.wand.set.level", target.getDisplayName(), level));
         dev.projecteclipse.eclipse.wand.WandProgressSync.syncTo(target);
@@ -275,7 +274,7 @@ public final class DevWandCommands {
             stack.set(WandItems.WAND_PATH.get(), WandPath.NONE.id());
             stack.set(WandItems.WAND_LEVEL.get(), 1);
             stack.set(WandItems.WAND_XP.get(), 0);
-            stack.set(WandItems.WAND_SELECTED.get(), 0);
+            stack.remove(WandItems.WAND_SPELL.get());
         });
         final int count = touched;
         source.sendSuccess(() -> Component.translatable("dev.eclipse.wand.reset",
@@ -287,9 +286,10 @@ public final class DevWandCommands {
     // ------------------------------------------------------------------ PROGFIX #4 grants
 
     /**
-     * {@code /dev wand xp} — awards XP through the REAL pipeline ({@link WandPowers#awardXp}):
-     * level-ups fire the celebration flourish and the store write-back, exactly like a cast
-     * payout. Needs an owned wand with a chosen path (the award path no-ops on NONE).
+     * {@code /dev wand xp <player> <amount>} (F-041) — awards Wand-XP-Punkte through the
+     * REAL pipeline ({@link WandPowers#awardXp}): the store write-back happens exactly
+     * like a cast payout, and the points are immediately spendable in the wand tree.
+     * Needs an owned wand with a chosen path (the award path no-ops on NONE).
      */
     private static int grantXp(CommandSourceStack source, ServerPlayer target, int amount) {
         ItemStack wand = firstOwnedWand(target);

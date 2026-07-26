@@ -1,10 +1,7 @@
 package dev.projecteclipse.eclipse.wand;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.UUID;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.cutscene.FreezeService;
@@ -25,7 +22,6 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
-import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
@@ -42,9 +38,15 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * Server-side power execution for the Zauberstab. Single entry point per network request
  * ({@link #handleCast}, {@link #handleChoosePath} — dispatched by
  * {@code network/wand/WandPayloads}); EVERYTHING is validated here: held item, ownership,
- * global disable ({@code /dev wand disable}), path lock, unlocked power index, charge,
- * per-player-per-power cooldowns and spawn-protection zones. The client never decides
- * anything.
+ * global disable ({@code /dev wand disable}), path lock, spell unlock (the wand tree —
+ * {@code WandTreeService.unlockedSpells}), charge and spawn-protection zones. The client
+ * never decides anything. <b>F-040: cooldowns are GONE</b> — Veilladung cost is the only
+ * cast limiter.
+ *
+ * <p>F-039: spell resolution is data-driven — the stack's {@code wand_spell} component
+ * names a {@link WandSpells} entry, execution dispatches through
+ * {@link WandSpellEffects#cast}. The legacy cast implementations for the carried-over
+ * spells still live in this class (package-private).</p>
  *
  * <p>All world FX go through the frozen budgeted channels: {@code FxPayloads.sendFxEvent}
  * ({@code FX_LIGHTNING_STRIKE} / {@code FX_RIFT_OPEN} / {@code FX_RIFT_CLOSE} /
@@ -52,8 +54,7 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * {@code QuasarSpawner} enforces the P2 §3.5 budget law; over-budget cues drop silently).
  * Audio is server-owned per the {@code strikeLightning} contract. Multi-tick powers
  * (Feuerwelle ring, Sternschauer volley, Magmasprung landing, delayed rift closes) run on
- * {@link WandTickService}; the crash-safe Phasenwelle block engine is
- * {@link WandPhaseService}.</p>
+ * {@link WandTickService}.</p>
  *
  * <p><b>D10 FX identity law (visuals/audio only — numbers untouched):</b> every path
  * composes its own emitters and voice — RISS = voxel-dissolve cubes + datamosh shimmer +
@@ -64,11 +65,8 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * sting rides the first soulbind (path lock) in {@link #handleChoosePath}.</p>
  */
 public final class WandPowers {
-    /** In-memory per-player cooldowns: uuid → (power key → gameTime the power frees up). */
-    private static final Map<UUID, Map<String, Long>> COOLDOWNS = new HashMap<>();
-
     /** FX broadcast radius for one-shot cues. */
-    private static final double FX_RANGE = 64.0D;
+    static final double FX_RANGE = 64.0D;
 
     // One-shot quasar emitters (all loop:false — never dispatch looping ids via payload).
     private static final ResourceLocation UNLOCK_BURST = emitter("unlock_burst");
@@ -76,27 +74,27 @@ public final class WandPowers {
     // D10 FX rework — one distinct Quasar composition per path (assets/eclipse/quasar/emitters/).
     // RISS (glitch/void, 0xB98CFF): voxel-dissolve cubes, datamosh shimmer, digital chirps.
     static final ResourceLocation RISS_CAST_HAND = emitter("riss_cast_hand");
-    private static final ResourceLocation RISS_BLINK_TEAR = emitter("riss_blink_tear");
+    static final ResourceLocation RISS_BLINK_TEAR = emitter("riss_blink_tear");
     static final ResourceLocation RISS_WAVE_FRONT = emitter("riss_wave_front");
-    private static final ResourceLocation RISS_SCHLAG_MAW = emitter("riss_schlag_maw");
+    static final ResourceLocation RISS_SCHLAG_MAW = emitter("riss_schlag_maw");
     // GLUT (ember/magma, 0xFF7B3C): ember bursts, ground scorch decals, bass whooshes.
     static final ResourceLocation GLUT_CAST_HAND = emitter("glut_cast_hand");
-    private static final ResourceLocation GLUT_STOSS_LANCE = emitter("glut_stoss_lance");
+    static final ResourceLocation GLUT_STOSS_LANCE = emitter("glut_stoss_lance");
     static final ResourceLocation GLUT_WELLE_RING = emitter("glut_welle_ring");
     static final ResourceLocation GLUT_SPRUNG_CRATER = emitter("glut_sprung_crater");
     // STERN (starlight, 0xBFD9FF/gold): starfall streaks, light pillars, crystal chimes.
     static final ResourceLocation STERN_CAST_HAND = emitter("stern_cast_hand");
     static final ResourceLocation STERN_FUNKE_FALL = emitter("stern_funke_fall");
-    private static final ResourceLocation STERN_SCHAUER_FIELD = emitter("stern_schauer_field");
-    private static final ResourceLocation STERN_KOMET_CORE = emitter("stern_komet_core");
+    static final ResourceLocation STERN_SCHAUER_FIELD = emitter("stern_schauer_field");
+    static final ResourceLocation STERN_KOMET_CORE = emitter("stern_komet_core");
 
     // D11 FX residue layer — every path now LEAVES something behind (visuals/audio only):
     // RISS scars reality, GLUT sheds ash + heat, STERN writes tiny star maps.
     static final ResourceLocation RISS_SEAM_SCAR = emitter("riss_seam_scar");
-    private static final ResourceLocation RISS_MAW_SHIMMER = emitter("riss_maw_shimmer");
-    private static final ResourceLocation GLUT_ASH_FLAKES = emitter("glut_ash_flakes");
+    static final ResourceLocation RISS_MAW_SHIMMER = emitter("riss_maw_shimmer");
+    static final ResourceLocation GLUT_ASH_FLAKES = emitter("glut_ash_flakes");
     static final ResourceLocation GLUT_HEAT_COLUMN = emitter("glut_heat_column");
-    private static final ResourceLocation STERN_CONSTELLATION = emitter("stern_constellation");
+    static final ResourceLocation STERN_CONSTELLATION = emitter("stern_constellation");
     // D11 soulbind ceremony (path-agnostic): converging white orbit + one white flash.
     private static final ResourceLocation SOULBIND_ORBIT = emitter("wand_soulbind_orbit");
     private static final ResourceLocation SOULBIND_FLASH = emitter("wand_soulbind_flash");
@@ -105,16 +103,6 @@ public final class WandPowers {
 
     private static ResourceLocation emitter(String name) {
         return ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, name);
-    }
-
-    /** Server-stop reset (singleplayer relaunch safety). */
-    public static void clearRuntime() {
-        COOLDOWNS.clear();
-    }
-
-    /** Read view of one player's live cooldowns (power key → ready-at game time) for the sync. */
-    static Map<String, Long> cooldownsOf(UUID uuid) {
-        return COOLDOWNS.getOrDefault(uuid, Map.of());
     }
 
     /**
@@ -129,7 +117,7 @@ public final class WandPowers {
      * payloads never pass through those events — without this gate a frozen player (or a
      * client that fires the payload directly) could cast from EITHER hand mid-scene.</p>
      */
-    private static boolean isActorValid(ServerPlayer player) {
+    static boolean isActorValid(ServerPlayer player) {
         return player.isAlive() && !player.isRemoved() && !player.isSpectator()
                 && !FreezeService.isFrozen(player);
     }
@@ -162,20 +150,16 @@ public final class WandPowers {
         if (path == WandPath.NONE) {
             return; // client opens the chooser; nothing to cast yet
         }
-        int level = WandSoulbind.levelOf(stack);
-        int selected = Mth.clamp(stack.getOrDefault(WandItems.WAND_SELECTED.get(), 0), 0, level - 1);
-        String key = path.powerKey(selected);
-        WandConfig.Power power = WandConfig.get().power(key);
-
-        long now = player.serverLevel().getGameTime();
-        long readyAt = COOLDOWNS.getOrDefault(player.getUUID(), Map.of()).getOrDefault(key, 0L);
-        if (readyAt > now) {
-            player.displayClientMessage(ServerLang.tr(player, "wand.eclipse.msg.cooldown",
-                    Component.translatable(path.powerLangKey(selected)),
-                    String.format("%.1f", (readyAt - now) / 20.0D)), true);
-            return;
+        // F-039: resolve the selected spell (component key, clamped to the unlocked set).
+        WandTreeService.ensureBaseline(player);
+        WandSoulbind.sanitizeSelectedSpell(player, stack);
+        WandSpell spell = WandSpells.byKey(stack.get(WandItems.WAND_SPELL.get()));
+        if (spell == null) {
+            return; // no unlocked spell at all (dev-edited state) — nothing to cast
         }
-        // WANDFIX-4: cost/cooldown honor the wand-branch skill nodes (WandPerks caps them).
+        WandConfig.Power power = WandConfig.get().power(spell);
+
+        // F-040: no cooldown gate — the Veilladung cost is the only limiter.
         int cost = WandPerks.effectiveCost(player, power);
         int charge = stack.getOrDefault(WandItems.WAND_CHARGE.get(), 0);
         if (charge < cost) {
@@ -192,21 +176,16 @@ public final class WandPowers {
             return;
         }
 
-        if (!execute(player, stack, path, selected, power)) {
-            return; // refused (e.g. blink found no room) — no cost, no cooldown
+        if (!WandSpellEffects.cast(player, spell, power)) {
+            return; // refused (e.g. blink found no room) — no cost
         }
-        castFlourish(player, path, mainHand, power);
-        // W18 Herz des Schleiers: a free cast skips only the charge — cooldown and XP flow.
-        if (!WandPerks.rollFreeCast(player)) {
-            stack.set(WandItems.WAND_CHARGE.get(), charge - cost);
-        }
-        COOLDOWNS.computeIfAbsent(player.getUUID(), id -> new HashMap<>())
-                .put(key, now + WandPerks.effectiveCooldownTicks(player, power));
+        castFlourish(player, spell.path(), mainHand, power);
+        stack.set(WandItems.WAND_CHARGE.get(), charge - cost);
         EclipseWandItem.triggerWandAnim(player, stack, EclipseWandItem.ANIM_USE);
         WandConfig.Xp xp = WandConfig.get().xp();
         awardXp(player, stack, cost * xp.perCostPoint());
         SkillsApi.addXp(player, "wand", cost * xp.skillXpPerCostPoint());
-        // V6-FIXWIRE #5: xp + the just-armed cooldown reach the client's panel this tick.
+        // V6-FIXWIRE #5: the fresh Wand-XP balance reaches the client's tree tab this tick.
         WandProgressSync.syncTo(player);
     }
 
@@ -230,8 +209,14 @@ public final class WandPowers {
         stack.set(WandItems.WAND_PATH.get(), chosen.id());
         stack.set(WandItems.WAND_LEVEL.get(), 1);
         stack.set(WandItems.WAND_XP.get(), 0);
-        stack.set(WandItems.WAND_SELECTED.get(), 0);
         WandSoulbind.persistToStore(player, stack);
+        // F-036/F-039: choosing the path grants its baseline tree node (= spell 1) for
+        // free and selects that spell — the player can cast (and earn Wand-XP) instantly.
+        WandTreeService.ensureBaseline(player);
+        WandSpell baseline = WandSpells.baselineOf(chosen);
+        if (baseline != null) {
+            stack.set(WandItems.WAND_SPELL.get(), baseline.key());
+        }
 
         EclipseWandItem.triggerWandAnim(player, stack, EclipseWandItem.ANIM_AWAKEN);
         // D11 first-bind ceremony: white wisps spiral inward and converge into the wand
@@ -288,7 +273,9 @@ public final class WandPowers {
     }
 
     /**
-     * Cycles the selected power among the unlocked ones. Direction −1 steps backwards
+     * Cycles the selected spell among the UNLOCKED ones (F-039: the ordered
+     * {@code WandTreeService.unlockedSpells} list — chosen-path baseline + every spell
+     * whose tree node is owned, across all paths). Direction −1 steps backwards
      * (WANDFIX-3: sneak-scroll goes both ways; the legacy sneak-right-click stays a
      * forward step). The pitch of the click tracks the slot so cycling is audible too.
      */
@@ -298,64 +285,48 @@ public final class WandPowers {
             player.displayClientMessage(ServerLang.tr(player, "wand.eclipse.msg.pathless"), true);
             return;
         }
-        int level = WandSoulbind.levelOf(stack);
-        int selected = Math.floorMod(stack.getOrDefault(WandItems.WAND_SELECTED.get(), 0) + direction, level);
-        stack.set(WandItems.WAND_SELECTED.get(), selected);
-        WandConfig.Power power = WandConfig.get().power(path.powerKey(selected));
+        WandTreeService.ensureBaseline(player);
+        List<WandSpell> unlocked = WandTreeService.unlockedSpells(player);
+        if (unlocked.isEmpty()) {
+            return;
+        }
+        WandSpell current = WandSpells.byKey(stack.get(WandItems.WAND_SPELL.get()));
+        int index = current != null ? unlocked.indexOf(current) : -1;
+        int selected = Math.floorMod((index < 0 ? 0 : index) + direction, unlocked.size());
+        selectSpell(player, stack, unlocked.get(selected), selected);
+    }
+
+    /** Applies a (pre-validated) spell selection + the actionbar/click feedback. */
+    static void selectSpell(ServerPlayer player, ItemStack stack, WandSpell spell, int slot) {
+        stack.set(WandItems.WAND_SPELL.get(), spell.key());
+        int cost = WandPerks.effectiveCost(player, WandConfig.get().power(spell));
         player.displayClientMessage(ServerLang.tr(player, "wand.eclipse.msg.selected",
-                Component.translatable(path.powerLangKey(selected)), power.cost()), true);
+                Component.translatable(spell.langKey()), cost), true);
         player.serverLevel().playSound(null, player.getX(), player.getY(), player.getZ(),
                 SoundEvents.UI_BUTTON_CLICK.value(), SoundSource.PLAYERS, 0.35F,
-                1.3F + 0.15F * selected);
+                1.3F + 0.05F * (slot % 10));
     }
 
     // ------------------------------------------------------------------ XP / leveling
 
     /**
-     * Adds wand XP (cast payout, kill bonus) and handles level-ups: {@code levelup} trigger
-     * anim + a small wand-specific Quasar flourish (deliberately NOT the LevelUpOverlay) +
-     * model stage growth via the synced components.
+     * F-036: adds <b>Wand-XP-Punkte</b> (cast payout, kill bonus) — plain currency for
+     * the wand tree, no level curve. Levels derive from owned nodes and celebrate inside
+     * {@code WandTreeService.buyNode}; this stays silent by design (points tick up in
+     * the HUD/tree tab).
      */
     public static void awardXp(ServerPlayer player, ItemStack stack, float amount) {
         if (amount <= 0.0F || WandSoulbind.pathOf(stack) == WandPath.NONE) {
             return;
         }
-        amount *= WandPerks.xpMultiplier(player); // WANDFIX-4 lore line (W13/W14)
-        WandConfig.Xp config = WandConfig.get().xp();
-        int xp = stack.getOrDefault(WandItems.WAND_XP.get(), 0) + Math.round(amount);
-        int level = WandSoulbind.levelOf(stack);
-        boolean firstSecondPower = level < 2; // WANDFIX-3: about to own a second power?
-        boolean leveled = false;
-        while (level < WandPath.MAX_LEVEL && xp >= config.costForLevel(level)) {
-            xp -= config.costForLevel(level);
-            level++;
-            leveled = true;
-        }
+        amount *= WandPerks.xpMultiplier(player);
+        int xp = Math.max(0, stack.getOrDefault(WandItems.WAND_XP.get(), 0)) + Math.round(amount);
         stack.set(WandItems.WAND_XP.get(), xp);
-        stack.set(WandItems.WAND_LEVEL.get(), level);
         WandSoulbind.persistToStore(player, stack);
-        if (!leveled) {
-            return;
-        }
-        EclipseWandItem.triggerWandAnim(player, stack, EclipseWandItem.ANIM_LEVELUP);
-        ServerLevel serverLevel = player.serverLevel();
-        celebrationBurst(serverLevel, player.position().add(0.0D, 1.2D, 0.0D));
-        serverLevel.playSound(null, player.getX(), player.getY(), player.getZ(),
-                SoundEvents.PLAYER_LEVELUP, SoundSource.PLAYERS, 0.8F, 1.4F);
-        serverLevel.playSound(null, player.getX(), player.getY(), player.getZ(),
-                SoundEvents.AMETHYST_BLOCK_RESONATE, SoundSource.PLAYERS, 0.9F, 0.8F);
-        WandPath path = WandSoulbind.pathOf(stack);
-        player.sendSystemMessage(ServerLang.tr(player, "wand.eclipse.msg.levelup", level,
-                Component.translatable(path.powerLangKey(level - 1))));
-        if (firstSecondPower && level >= 2) {
-            // WANDFIX-3: the moment a second power exists, teach the switch gesture once
-            // (sneak-scroll cycles both ways; sneak-right-click still steps forward).
-            player.sendSystemMessage(ServerLang.tr(player, "wand.eclipse.msg.cycle_hint"));
-        }
     }
 
     /** Three staggered {@code unlock_burst} pops around a position (level-up / awaken cue). */
-    private static void celebrationBurst(ServerLevel level, Vec3 center) {
+    static void celebrationBurst(ServerLevel level, Vec3 center) {
         sendQuasar(level, UNLOCK_BURST, center);
         WandTickService.schedule(level, 4, () -> sendQuasar(level, UNLOCK_BURST, center.add(0.7D, 0.4D, -0.4D)));
         WandTickService.schedule(level, 8, () -> sendQuasar(level, UNLOCK_BURST, center.add(-0.6D, 0.7D, 0.5D)));
@@ -421,36 +392,13 @@ public final class WandPowers {
     }
 
     /** Impact-payoff camera feedback for everyone close to {@code pos} (small by design). */
-    private static void shakeNear(ServerLevel level, Vec3 pos, double range, float strength, int ticks) {
+    static void shakeNear(ServerLevel level, Vec3 pos, double range, float strength, int ticks) {
         PacketDistributor.sendToPlayersNear(level, null, pos.x, pos.y, pos.z, range,
                 S2CShakePayload.shake(strength, ticks));
     }
 
-    // ------------------------------------------------------------------ power dispatch
-
-    private static boolean execute(ServerPlayer player, ItemStack stack, WandPath path,
-            int selected, WandConfig.Power power) {
-        // Level-4/5 powers are the upgraded re-runs of the level-2/3 powers (per spec).
-        int effective = selected == 3 ? 1 : selected == 4 ? 2 : selected;
-        return switch (path) {
-            case RISS -> switch (effective) {
-                case 0 -> castBlink(player, power);
-                case 1 -> WandPhaseService.castWave(player, power);
-                default -> castRissschlag(player, power);
-            };
-            case GLUT -> switch (effective) {
-                case 0 -> castGlutstoss(player, power);
-                case 1 -> castFeuerwelle(player, power);
-                default -> castMagmasprung(player, power);
-            };
-            case STERN -> switch (effective) {
-                case 0 -> castFunkenruf(player, power);
-                case 1 -> castSternschauer(player, power);
-                default -> castKometenschlag(player, power);
-            };
-            default -> false;
-        };
-    }
+    // Spell dispatch (F-039) lives in WandSpellEffects.cast — the eight legacy
+    // implementations below are called from there by key.
 
     // ------------------------------------------------------------------ Phasenriss (RISS)
 
@@ -466,7 +414,7 @@ public final class WandPowers {
      * fully re-knit — Resistance II — turning the blink into a real dodge, not just a
      * hop.</p>
      */
-    private static boolean castBlink(ServerPlayer player, WandConfig.Power power) {
+    static boolean castBlink(ServerPlayer player, WandConfig.Power power) {
         ServerLevel level = player.serverLevel();
         double range = power.param("range", 16.0F);
         Vec3 from = player.position();
@@ -524,7 +472,7 @@ public final class WandPowers {
     }
 
     /** Furthest collision-free spot along the look ray the player's box fits into. */
-    private static Vec3 findBlinkTarget(ServerPlayer player, double range) {
+    static Vec3 findBlinkTarget(ServerPlayer player, double range) {
         ServerLevel level = player.serverLevel();
         Vec3 eye = player.getEyePosition();
         Vec3 look = player.getLookAngle();
@@ -555,7 +503,7 @@ public final class WandPowers {
      * groups its own targets. The L5 upgrade adds an echo bite ({@code echo} fraction of
      * the damage) 10 ticks later — the maw chews twice.</p>
      */
-    private static boolean castRissschlag(ServerPlayer player, WandConfig.Power power) {
+    static boolean castRissschlag(ServerPlayer player, WandConfig.Power power) {
         ServerLevel level = player.serverLevel();
         Vec3 target = aimPoint(player, power.param("range", 24.0F)).add(0.0D, 1.2D, 0.0D);
         float width = power.param("width", 5.0F);
@@ -648,7 +596,7 @@ public final class WandPowers {
      * on the ray are hit and ignited instead of only the first, so a line of mobs is a
      * target, not a shield.</p>
      */
-    private static boolean castGlutstoss(ServerPlayer player, WandConfig.Power power) {
+    static boolean castGlutstoss(ServerPlayer player, WandConfig.Power power) {
         ServerLevel level = player.serverLevel();
         double range = power.param("range", 12.0F);
         int maxTargets = Math.max(1, (int) power.param("pierce", 1.0F));
@@ -727,7 +675,7 @@ public final class WandPowers {
      * marches a SECOND ring 12 ticks behind the first ({@code waves}), catching whatever
      * the knock-up drops back into the fire.</p>
      */
-    private static boolean castFeuerwelle(ServerPlayer player, WandConfig.Power power) {
+    static boolean castFeuerwelle(ServerPlayer player, WandConfig.Power power) {
         ServerLevel level = player.serverLevel();
         Vec3 center = player.position();
         int expandTicks = (int) power.param("expandTicks", 40.0F);
@@ -783,7 +731,7 @@ public final class WandPowers {
      * ({@code eruptRadius}/{@code eruptDamage}/{@code eruptFireSeconds}) — a
      * mini-Feuerwelle rolls out of the landing.</p>
      */
-    private static boolean castMagmasprung(ServerPlayer player, WandConfig.Power power) {
+    static boolean castMagmasprung(ServerPlayer player, WandConfig.Power power) {
         ServerLevel level = player.serverLevel();
         float launch = power.param("launch", 1.3F);
         Vec3 look = player.getLookAngle();
@@ -840,7 +788,7 @@ public final class WandPowers {
      * visible through walls, and every other STERN power deals its {@code markBonus}
      * against marked targets. Funkenruf is the cheap opener that feeds the whole path.</p>
      */
-    private static boolean castFunkenruf(ServerPlayer player, WandConfig.Power power) {
+    static boolean castFunkenruf(ServerPlayer player, WandConfig.Power power) {
         ServerLevel level = player.serverLevel();
         Vec3 target = aimPoint(player, power.param("range", 32.0F));
         FxPayloads.sendFxEvent(level, FxPayloads.FX_LIGHTNING_STRIKE, target, 0.35F, 0.0F, FX_RANGE);
@@ -884,7 +832,7 @@ public final class WandPowers {
      * D11 finale pulse with {@code finaleDamage}: the synced re-light at the end DETONATES
      * across the whole zone instead of only shining.</p>
      */
-    private static boolean castSternschauer(ServerPlayer player, WandConfig.Power power) {
+    static boolean castSternschauer(ServerPlayer player, WandConfig.Power power) {
         ServerLevel level = player.serverLevel();
         Vec3 zone = aimPoint(player, power.param("range", 32.0F));
         float zoneRadius = power.param("zoneRadius", 8.0F);
@@ -981,7 +929,7 @@ public final class WandPowers {
      * shatters — {@code splinters} shard-comets crash around the crater over the next
      * half-second ({@code splinterDamage} in {@code splinterRadius} each).</p>
      */
-    private static boolean castKometenschlag(ServerPlayer player, WandConfig.Power power) {
+    static boolean castKometenschlag(ServerPlayer player, WandConfig.Power power) {
         ServerLevel level = player.serverLevel();
         Vec3 target = aimPoint(player, power.param("range", 32.0F));
         int telegraph = (int) power.param("telegraphTicks", 20.0F);
@@ -1076,7 +1024,7 @@ public final class WandPowers {
      * aim point — called with a growing radius per descent beat so the landing light
      * visibly expands. Vanilla particles by design (14/ring — no Quasar budget spend).
      */
-    private static void groundLightRing(ServerLevel level, Vec3 center, double ringRadius) {
+    static void groundLightRing(ServerLevel level, Vec3 center, double ringRadius) {
         int points = 14;
         for (int i = 0; i < points; i++) {
             double angle = i * Math.PI * 2.0D / points;

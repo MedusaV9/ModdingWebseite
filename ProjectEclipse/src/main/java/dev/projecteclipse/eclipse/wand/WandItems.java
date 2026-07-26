@@ -54,7 +54,7 @@ public final class WandItems {
             COMPONENTS.registerComponentType("wand_level", builder -> builder
                     .persistent(Codec.intRange(1, WandPath.MAX_LEVEL)).networkSynchronized(ByteBufCodecs.VAR_INT));
 
-    /** Wand XP toward the next level (whole points; curve in {@code WandConfig.levelCosts}). */
+    /** Spendable Wand-XP-Punkte (F-036: the wand tree's currency — no level curve anymore). */
     public static final Supplier<DataComponentType<Integer>> WAND_XP =
             COMPONENTS.registerComponentType("wand_xp", builder -> builder
                     .persistent(Codec.intRange(0, Integer.MAX_VALUE)).networkSynchronized(ByteBufCodecs.VAR_INT));
@@ -64,10 +64,23 @@ public final class WandItems {
             COMPONENTS.registerComponentType("wand_charge", builder -> builder
                     .persistent(Codec.intRange(0, Integer.MAX_VALUE)).networkSynchronized(ByteBufCodecs.VAR_INT));
 
-    /** Selected power index 0..4 (cycled with sneak-use; casting uses this server-side value). */
+    /**
+     * LEGACY selected power index 0..4. Superseded by {@link #WAND_SPELL} (F-039: 30
+     * spells need a key, not an index); kept registered so pre-rework wand stacks keep
+     * deserializing cleanly. Nothing reads or writes it anymore.
+     */
     public static final Supplier<DataComponentType<Integer>> WAND_SELECTED =
             COMPONENTS.registerComponentType("wand_selected", builder -> builder
                     .persistent(Codec.intRange(0, WandPath.MAX_LEVEL - 1)).networkSynchronized(ByteBufCodecs.VAR_INT));
+
+    /**
+     * F-039: the selected spell KEY (e.g. {@code riss.blink} — see {@link WandSpells}).
+     * Persists per wand stack, synced for HUD/tooltip; the server clamps to an unlocked
+     * spell on every cast/cycle.
+     */
+    public static final Supplier<DataComponentType<String>> WAND_SPELL =
+            COMPONENTS.registerComponentType("wand_spell", builder -> builder
+                    .persistent(Codec.STRING).networkSynchronized(ByteBufCodecs.STRING_UTF8));
 
     // ------------------------------------------------------------------ items
 

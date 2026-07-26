@@ -6,6 +6,8 @@ import dev.projecteclipse.eclipse.wand.WandConfig;
 import dev.projecteclipse.eclipse.wand.WandItems;
 import dev.projecteclipse.eclipse.wand.WandPath;
 import dev.projecteclipse.eclipse.wand.WandSoulbind;
+import dev.projecteclipse.eclipse.wand.WandSpell;
+import dev.projecteclipse.eclipse.wand.WandSpells;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -24,16 +26,16 @@ import net.minecraft.world.item.ItemStack;
  * checks — and the layer simply isn't whitelisted for cutscene HUD suppression, so
  * letterboxed scenes hide it automatically.
  *
- * <p>WANDFIX-3 spell readout: with a path locked, a persistent line above the pips names
- * the SELECTED power plus its state — path-tinted when castable, gray with a countdown
- * while cooling, dim red when charge can't pay the cost — and one selection dot per
- * unlocked power shows where in the cycle you are. This is the always-on feedback the
- * sneak-scroll/sneak-click switching writes into; before it, the only trace of the
- * selection was a vanishing actionbar toast and the tooltip.</p>
+ * <p>F-039 spell readout: with a path locked, a persistent line above the pips names the
+ * SELECTED spell plus its Veilladung cost — path-tinted when castable, dim red when the
+ * charge can't pay (F-040: no cooldown state exists anymore) — and a cycle indicator
+ * shows where in the unlocked list you are (dots up to {@value #MAX_DOTS} spells, a
+ * compact "n/m" counter beyond). This is the always-on feedback the sneak-scroll/
+ * sneak-click switching writes into.</p>
  *
- * <p>Component reads ({@code wand_charge}/{@code wand_selected}/{@code wand_level} are
- * synced data components) plus the {@code ClientWandProgress} cooldown cache — zero
- * custom network traffic for this HUD.</p>
+ * <p>Component reads ({@code wand_charge}/{@code wand_spell}/{@code wand_path} are
+ * synced data components) plus the {@code ClientWandProgress} sync cache (effective
+ * costs, owned nodes) — zero custom network traffic for this HUD.</p>
  */
 public final class WandChargeHud {
     public static final ResourceLocation LAYER_ID =
@@ -47,7 +49,8 @@ public final class WandChargeHud {
     private static final int RIM = 0x882E2347;
     private static final int DOT = 3;
     private static final int DOT_GAP = 3;
-    private static final int COOLING = 0xFFA8A8B8;
+    /** Above this many unlocked spells the dot row becomes an "n/m" counter. */
+    private static final int MAX_DOTS = 12;
     private static final int NO_CHARGE = 0xFFC96A6A;
 
     private WandChargeHud() {}
@@ -104,8 +107,9 @@ public final class WandChargeHud {
     }
 
     /**
-     * WANDFIX-3: the persistent selected-power line + one dot per unlocked power. Sits
-     * directly above the charge pips so the whole wand state reads as one block.
+     * F-039: the persistent selected-SPELL line + a cycle indicator over the unlocked
+     * list. Sits directly above the charge pips so the whole wand state reads as one
+     * block. F-040: no cooldown display — cost is the only gate left.
      */
     private static void renderSelection(GuiGraphics guiGraphics, Minecraft minecraft,
             ItemStack stack, int charge, int tint, int dim, int pipY) {
@@ -113,32 +117,36 @@ public final class WandChargeHud {
         if (path == WandPath.NONE) {
             return;
         }
-        int level = Mth.clamp(stack.getOrDefault(WandItems.WAND_LEVEL.get(), 1), 1, WandPath.MAX_LEVEL);
-        int selected = Mth.clamp(stack.getOrDefault(WandItems.WAND_SELECTED.get(), 0), 0, level - 1);
+        WandSpell selected = WandSpells.byKey(stack.get(WandItems.WAND_SPELL.get()));
+        if (selected == null) {
+            return; // no spell selected/unlocked yet — pips alone tell the story
+        }
+        java.util.List<WandSpell> unlocked = ClientWandProgress.synced
+                ? ClientWandProgress.unlockedSpells() : java.util.List.of(selected);
+        int count = Math.max(1, unlocked.size());
+        int index = Math.max(0, unlocked.indexOf(selected));
 
-        // Selection dots: filled = selected, dim = other unlocked powers.
-        int dotsWidth = level * DOT + (level - 1) * DOT_GAP;
-        int dotsX = (guiGraphics.guiWidth() - dotsWidth) / 2;
+        // Cycle indicator: dots while the list is short, a compact counter beyond.
         int dotsY = pipY - 7;
-        for (int i = 0; i < level; i++) {
-            int x = dotsX + i * (DOT + DOT_GAP);
-            guiGraphics.fill(x - 1, dotsY - 1, x + DOT + 1, dotsY + DOT + 1, RIM);
-            guiGraphics.fill(x, dotsY, x + DOT, dotsY + DOT, i == selected ? tint : dim);
+        if (count <= MAX_DOTS) {
+            int dotsWidth = count * DOT + (count - 1) * DOT_GAP;
+            int dotsX = (guiGraphics.guiWidth() - dotsWidth) / 2;
+            for (int i = 0; i < count; i++) {
+                int x = dotsX + i * (DOT + DOT_GAP);
+                guiGraphics.fill(x - 1, dotsY - 1, x + DOT + 1, dotsY + DOT + 1, RIM);
+                guiGraphics.fill(x, dotsY, x + DOT, dotsY + DOT, i == index ? tint : dim);
+            }
+        } else {
+            guiGraphics.drawCenteredString(minecraft.font, (index + 1) + "/" + count,
+                    guiGraphics.guiWidth() / 2, dotsY - 2, dim);
         }
 
-        // Name line: tinted when castable, gray + countdown while cooling, red when the
-        // charge can't pay. Cooldown state comes from the ClientWandProgress sync cache.
-        String key = path.powerKey(selected);
-        int cooldown = ClientWandProgress.cooldownRemainingSeconds(key);
-        int cost = ClientWandProgress.power(key).cost();
-        MutableComponent line = Component.translatable(path.powerLangKey(selected));
-        int color = tint;
-        if (cooldown > 0) {
-            line = line.append(Component.literal(" · " + cooldown + "s"));
-            color = COOLING;
-        } else if (ClientWandProgress.synced && charge < cost) {
-            color = NO_CHARGE;
-        }
+        // Name line: "<spell> · <cost>" — tinted when castable, red when the charge
+        // can't pay. Effective costs come from the ClientWandProgress sync cache.
+        int cost = ClientWandProgress.spellCost(selected.key());
+        MutableComponent line = Component.translatable(selected.langKey())
+                .append(Component.literal(" · " + cost));
+        int color = ClientWandProgress.synced && charge < cost ? NO_CHARGE : tint;
         guiGraphics.drawCenteredString(minecraft.font, line,
                 guiGraphics.guiWidth() / 2, dotsY - 11, color);
     }

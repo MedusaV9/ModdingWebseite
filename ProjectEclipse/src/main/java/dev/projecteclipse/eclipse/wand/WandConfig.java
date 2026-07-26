@@ -22,11 +22,13 @@ import net.neoforged.fml.loading.FMLPaths;
  * Follows the {@code SkillConfig} playbook: defaults written on first run, parse failures
  * keep the previous snapshot, unknown keys ignored.
  *
- * <p>Layout: {@code charge} (regen economy), {@code xp} (wand leveling + skill-XP feed),
- * and one {@code powers.<path>.<power>} entry per {@link WandPath#powerKey} with
- * {@code cost}, {@code cooldownTicks} and free-form float params read via
- * {@link Power#param}. Missing entries fall back to the authored defaults, so a stale
- * config file can never brick a cast.</p>
+ * <p>F-039/F-040 layout: {@code charge} (regen economy), {@code xp} (Wand-XP-Punkte
+ * earn rates — the currency of the {@link WandTree}; the old level-cost curve is gone,
+ * levels derive from owned nodes) and one {@code powers.<spellKey>} entry per
+ * {@link WandSpells} spell with {@code cost} and free-form float params read via
+ * {@link Power#param}. <b>No cooldowns anywhere</b> (F-040) — Veilladung is the only
+ * limiter. Missing entries fall back to the {@link WandSpells} authored defaults, so a
+ * stale config file can never brick a cast.</p>
  */
 public final class WandConfig {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
@@ -36,8 +38,8 @@ public final class WandConfig {
 
     private WandConfig() {}
 
-    /** One power's tuning: charge cost, cooldown, and named float params. */
-    public record Power(int cost, int cooldownTicks, Map<String, Float> params) {
+    /** One spell's tuning: charge cost and named float params (F-040: no cooldown). */
+    public record Power(int cost, Map<String, Float> params) {
         public float param(String key, float fallback) {
             Float value = params.get(key);
             return value != null ? value : fallback;
@@ -47,27 +49,27 @@ public final class WandConfig {
     public record Charge(int max, float regenHeldPerSecond, float regenStowedPerSecond, float nightMult) {}
 
     /**
-     * @param perCostPoint wand XP granted per charge point spent on a successful cast
-     * @param killBonus    flat wand XP for kills scored while holding your wand
-     * @param levelCosts   XP to go from level (i+1) → (i+2); length {@code MAX_LEVEL - 1}
+     * @param perCostPoint Wand-XP-Punkte granted per charge point spent on a successful cast
+     * @param killBonus    flat Wand-XP-Punkte for kills scored while holding your wand
      * @param skillXpPerCostPoint base fed to {@code SkillsApi.addXp(player, "wand", …)}
      */
-    public record Xp(float perCostPoint, float killBonus, int[] levelCosts, float skillXpPerCostPoint) {
-        public int costForLevel(int currentLevel) {
-            int index = Math.max(0, Math.min(levelCosts.length - 1, currentLevel - 1));
-            return currentLevel >= WandPath.MAX_LEVEL ? Integer.MAX_VALUE : levelCosts[index];
-        }
-    }
+    public record Xp(float perCostPoint, float killBonus, float skillXpPerCostPoint) {}
 
     public record Data(Charge charge, Xp xp, Map<String, Power> powers) {
-        /** Never null: unknown keys return the built-in default entry (or a safe stub). */
+        /** Never null: unknown keys fall back to the {@link WandSpells} authored defaults. */
         public Power power(String key) {
             Power power = powers.get(key);
             if (power != null) {
                 return power;
             }
-            Power builtin = DEFAULTS.powers.get(key);
-            return builtin != null ? builtin : new Power(20, 100, Map.of());
+            WandSpell spell = WandSpells.byKey(key);
+            return spell != null ? new Power(spell.defaultCost(), spell.defaultParams())
+                    : new Power(20, Map.of());
+        }
+
+        /** Live tuning of one spell (config override or authored defaults). */
+        public Power power(WandSpell spell) {
+            return power(spell.key());
         }
     }
 
@@ -102,8 +104,8 @@ public final class WandConfig {
         try {
             JsonObject root = JsonParser.parseString(Files.readString(file, StandardCharsets.UTF_8)).getAsJsonObject();
             data = parse(root);
-            EclipseMod.LOGGER.info("Wand config loaded: {} powers, charge max {}, level costs {}",
-                    data.powers().size(), data.charge().max(), data.xp().levelCosts().length);
+            EclipseMod.LOGGER.info("Wand config loaded: {} spell entries, charge max {}",
+                    data.powers().size(), data.charge().max());
         } catch (Exception e) {
             EclipseMod.LOGGER.error("Failed to parse {}; keeping previous values (or defaults)", file, e);
             if (data == null) {
@@ -117,28 +119,17 @@ public final class WandConfig {
         JsonObject charge = obj(root, "charge");
         Charge chargeData = new Charge(
                 (int) asFloat(charge, "max", 100),
-                asFloat(charge, "regenHeldPerSecond", 2.0F),
+                // F-040 rebalance: with cooldowns gone the charge pool is the ONLY
+                // limiter, so held regen rises 2.0 → 3.0/s (a 30-cost spell every ~10 s
+                // sustained at base; the tree's regen nodes and rebirths push it up).
+                asFloat(charge, "regenHeldPerSecond", 3.0F),
                 asFloat(charge, "regenStowedPerSecond", 0.5F),
                 asFloat(charge, "nightMult", 2.0F));
 
         JsonObject xp = obj(root, "xp");
-        int[] levelCosts = new int[WandPath.MAX_LEVEL - 1];
-        // FINAL-DOPA-SOL §4: the old 120/260/450/700 curve reached L3 in 25–55 casts
-        // (minutes, not a day of play). ~5x early costs put the efficient L3 route near
-        // 140 successful casts — a full active day at a normal cast pace.
-        int[] defaults = {600, 1800, 3600, 6000};
-        if (xp.has("levelCosts") && xp.get("levelCosts").isJsonArray()) {
-            var array = xp.getAsJsonArray("levelCosts");
-            for (int i = 0; i < levelCosts.length; i++) {
-                levelCosts[i] = i < array.size() ? array.get(i).getAsInt() : defaults[i];
-            }
-        } else {
-            levelCosts = defaults;
-        }
         Xp xpData = new Xp(
                 asFloat(xp, "perCostPoint", 0.6F),
                 asFloat(xp, "killBonus", 8.0F),
-                levelCosts,
                 asFloat(xp, "skillXpPerCostPoint", 0.4F));
 
         Map<String, Power> powers = new LinkedHashMap<>();
@@ -154,9 +145,12 @@ public final class WandConfig {
                     params.put(param.getKey(), param.getValue().getAsFloat());
                 }
             }
+            // Legacy configs may still carry cooldownTicks — parsed as a param, used by
+            // nothing (F-040). Cost falls back to the authored spell default when absent.
+            WandSpell spell = WandSpells.byKey(entry.getKey());
+            int defaultCost = spell != null ? spell.defaultCost() : 20;
             powers.put(entry.getKey(), new Power(
-                    (int) asFloat(power, "cost", 20),
-                    (int) asFloat(power, "cooldownTicks", 100),
+                    (int) asFloat(power, "cost", defaultCost),
                     Map.copyOf(params)));
         }
         return new Data(chargeData, xpData, Map.copyOf(powers));
@@ -180,17 +174,18 @@ public final class WandConfig {
         doc.addProperty("charge", "Veilladung pool on the wand item. regen*PerSecond applies every second "
                 + "(held = main/offhand, stowed = anywhere else in the inventory); nightMult multiplies regen "
                 + "during overworld night (the eclipse-dark hours).");
-        doc.addProperty("xp", "Wand XP = cost * perCostPoint per successful cast + killBonus per kill while "
-                + "holding your wand. levelCosts[i] = XP from level i+1 to i+2. skillXpPerCostPoint feeds "
-                + "SkillsApi.addXp(player, \"wand\", cost * value) so the shared skill pipeline profits too.");
-        doc.addProperty("powers", "cost = charge points, cooldownTicks = per-player per-power. Other keys are "
-                + "power-specific floats (blocks, ticks, hearts of damage = damage/2). *_2 entries are the "
-                + "level-4/5 upgraded re-runs of the level-2/3 powers.");
+        doc.addProperty("xp", "Wand-XP-Punkte = cost * perCostPoint per successful cast + killBonus per kill "
+                + "while holding your wand. Points are the wand skill tree's currency (nodes + rebirths); "
+                + "there is no level curve anymore — levels derive from owned nodes. skillXpPerCostPoint "
+                + "feeds SkillsApi.addXp(player, \"wand\", cost * value).");
+        doc.addProperty("powers", "One entry per spell key (see WandSpells): cost = charge points, other keys "
+                + "are spell-specific floats (blocks, ticks, hearts of damage = damage/2). NO cooldowns "
+                + "(F-040) — Veilladung is the only cast limiter.");
         root.add("_doc", doc);
 
         JsonObject charge = new JsonObject();
         charge.addProperty("max", 100);
-        charge.addProperty("regenHeldPerSecond", 2.0F);
+        charge.addProperty("regenHeldPerSecond", 3.0F);
         charge.addProperty("regenStowedPerSecond", 0.5F);
         charge.addProperty("nightMult", 2.0F);
         root.add("charge", charge);
@@ -198,81 +193,22 @@ public final class WandConfig {
         JsonObject xp = new JsonObject();
         xp.addProperty("perCostPoint", 0.6F);
         xp.addProperty("killBonus", 8);
-        // FINAL-DOPA-SOL §4 curve (~5x the old 120/260/450/700): L2 after ~67–86 casts,
-        // L3 after ~140 — day-long wand progression instead of a first-hour cap-out.
-        var levelCosts = new com.google.gson.JsonArray();
-        levelCosts.add(600);
-        levelCosts.add(1800);
-        levelCosts.add(3600);
-        levelCosts.add(6000);
-        xp.add("levelCosts", levelCosts);
         xp.addProperty("skillXpPerCostPoint", 0.4F);
         root.add("xp", xp);
 
-        // WANDFIX-2 rebalance: every power gained a mechanical identity on top of tuned
-        // numbers (the old table was pure stats and read flat against 200–400 HP bosses).
-        // RISS = control (arrival veil, phase shear, maw pull, echo bite), GLUT = burn
-        // combos (pierce, burning-target bonus, launch fire-veil, twin ring, landing
-        // eruption), STERN = the Sternenmal mark loop (Glowing mark → bonus damage,
-        // star-dust slow, skyward comet, detonating finale, splinter comets).
+        // The authored spell table (30 entries) — written out so server owners can see
+        // and tune every knob; values mirror the WandSpells Java defaults.
         JsonObject powers = new JsonObject();
-        powers.add("riss.blink", power(12, 50,
-                "range", 16, "veilTicks", 30));
-        powers.add("riss.phasenwelle", power(35, 240,
-                "length", 12, "maxBlocks", 32, "holdTicks", 200, "restoreEveryTicks", 10, "vanishPerTick", 6,
-                "shearDamage", 4, "shearSlowTicks", 60));
-        powers.add("riss.rissschlag", power(30, 140,
-                "range", 24, "width", 5, "damage", 10, "radius", 4.5F, "knockback", 1.2F, "openTicks", 25,
-                "pull", 0.65F));
-        powers.add("riss.phasenwelle_2", power(45, 220,
-                "length", 16, "maxBlocks", 48, "holdTicks", 240, "restoreEveryTicks", 8, "vanishPerTick", 8,
-                "shearDamage", 8, "shearSlowTicks", 100));
-        powers.add("riss.rissschlag_2", power(45, 180,
-                "range", 32, "width", 8, "damage", 18, "radius", 6, "knockback", 1.6F, "openTicks", 30,
-                "pull", 0.9F, "echo", 0.5F));
-
-        powers.add("glut.glutstoss", power(10, 30,
-                "range", 12, "damage", 6, "fireSeconds", 4, "pierce", 2));
-        powers.add("glut.feuerwelle", power(40, 320,
-                "radius", 12, "expandTicks", 40, "damage", 9, "fireSeconds", 4, "knockup", 0.42F,
-                "burnBonus", 1.5F));
-        powers.add("glut.magmasprung", power(22, 140,
-                "launch", 1.3F, "damage", 8, "radius", 4.5F, "knockback", 1.0F, "fireSeconds", 2,
-                "resistSeconds", 5));
-        powers.add("glut.feuerwelle_2", power(50, 300,
-                "radius", 18, "expandTicks", 50, "damage", 13, "fireSeconds", 5, "knockup", 0.6F,
-                "burnBonus", 1.5F, "waves", 2));
-        powers.add("glut.magmasprung_2", power(32, 130,
-                "launch", 1.6F, "damage", 14, "radius", 6, "knockback", 1.5F, "fireSeconds", 3,
-                "resistSeconds", 6, "eruptRadius", 6, "eruptDamage", 6, "eruptFireSeconds", 3));
-
-        powers.add("stern.funkenruf", power(10, 40,
-                "range", 32, "damage", 6, "radius", 2.5F, "markTicks", 100));
-        powers.add("stern.sternschauer", power(40, 320,
-                "range", 32, "zoneRadius", 8, "count", 14, "telegraphTicks", 30, "durationTicks", 60,
-                "damage", 6, "hitRadius", 2.5F, "slowTicks", 40, "markBonus", 1.25F));
-        powers.add("stern.kometenschlag", power(28, 200,
-                "range", 32, "damage", 16, "radius", 5, "telegraphTicks", 20, "knockback", 1.5F,
-                "knockup", 0.8F, "markBonus", 1.25F));
-        powers.add("stern.sternschauer_2", power(50, 300,
-                "range", 40, "zoneRadius", 10, "count", 24, "telegraphTicks", 24, "durationTicks", 70,
-                "damage", 8, "hitRadius", 3.0F, "slowTicks", 60, "markBonus", 1.25F, "finaleDamage", 8));
-        powers.add("stern.kometenschlag_2", power(42, 180,
-                "range", 40, "damage", 24, "radius", 7, "telegraphTicks", 16, "knockback", 1.9F,
-                "knockup", 1.0F, "markBonus", 1.25F, "splinters", 3, "splinterDamage", 8, "splinterRadius", 3));
+        for (WandSpell spell : WandSpells.all()) {
+            JsonObject entry = new JsonObject();
+            entry.addProperty("cost", spell.defaultCost());
+            for (Map.Entry<String, Float> param : spell.defaultParams().entrySet()) {
+                entry.addProperty(param.getKey(), param.getValue());
+            }
+            powers.add(spell.key(), entry);
+        }
         root.add("powers", powers);
 
         return root;
-    }
-
-    /** {@code power(cost, cd, "key", value, ...)} builder for the defaults table. */
-    private static JsonObject power(int cost, int cooldownTicks, Object... keyValues) {
-        JsonObject json = new JsonObject();
-        json.addProperty("cost", cost);
-        json.addProperty("cooldownTicks", cooldownTicks);
-        for (int i = 0; i + 1 < keyValues.length; i += 2) {
-            json.addProperty((String) keyValues[i], ((Number) keyValues[i + 1]).floatValue());
-        }
-        return json;
     }
 }

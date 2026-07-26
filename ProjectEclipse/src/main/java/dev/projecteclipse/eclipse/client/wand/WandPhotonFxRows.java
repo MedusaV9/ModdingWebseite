@@ -32,6 +32,13 @@ import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
  * <p>The per-path idle hand auras (IDEAS-player #6) are deliberately NOT rows: they are
  * pure client-side WINDOWED entity loops with zero wire — {@link WandAuraClient} drives
  * {@code PhotonBridge.ensureAttachedFx}/{@code stopAttachedFx} directly.</p>
+ *
+ * <p>F-038/F-039 second wave: six more LAYER rows for the spell-system highlight cues
+ * ({@code FxCues.CUE_WAND_*}; assets from {@code tools/photon/wand2_fx.py}). Same laws
+ * as the first three — no Quasar leg (the {@code WandSpellEffects} compositions stay the
+ * photon-less baseline), {@code allowMulti=true} everywhere (stacked casts are legit),
+ * and every timing knob rides the cue's {@code a} float so the Photon beat lands exactly
+ * on the server's damage tick.</p>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID, value = Dist.CLIENT, bus = EventBusSubscriber.Bus.MOD)
 public final class WandPhotonFxRows {
@@ -52,6 +59,14 @@ public final class WandPhotonFxRows {
      * the same 25t implosion window.
      */
     private static final int RISS_SNAP_DEFAULT_DELAY = 25;
+    /**
+     * Ereignishorizont collapse fallback when the cue carries no durationTicks — the
+     * authored {@code WandSpells} default ({@code "durationTicks", 120}); the vortex
+     * asset bakes the same window ({@code HORIZON_WINDOW} in wand2_fx.py).
+     */
+    private static final int HORIZON_DEFAULT_DURATION = 120;
+    /** Body-center offset for the entity-anchored Sternenschild dome (eye − 0.6). */
+    private static final double SCHILD_BODY_OFFSET = -0.6D;
 
     private WandPhotonFxRows() {}
 
@@ -134,6 +149,101 @@ public final class WandPhotonFxRows {
                     return PhotonBridge.spawn(photonFx, pos,
                             PhotonBridge.SpawnOptions.DEFAULT.withAllowMulti(true));
                 }));
+
+        // ------------------------------------------------------------------
+        // F-038/F-039 spell-system highlight rows (assets: tools/photon/wand2_fx.py).
+        // ------------------------------------------------------------------
+
+        // F-038 Umbra-Lanze — endpoint void bite. pos = beam end; the asset bakes the
+        // +3t inhale-then-bite window matching WandSpellEffects' damage schedule.
+        PhotonFxRegistry.registerRow(new PhotonFxRegistry.Row(
+                FxCues.CUE_WAND_UMBRA,
+                fx("wand_umbra_implosion"),
+                null,
+                FxBudget.Channel.BURST,
+                PhotonFxRegistry.Mode.LAYER,
+                false,
+                (photonFx, pos, entity, a, b) -> PhotonBridge.spawn(photonFx, pos,
+                        PhotonBridge.SpawnOptions.DEFAULT.withAllowMulti(true))));
+        // Ereignishorizont — standing vortex (baked ~120t) + a riss_maw_snap REUSED as
+        // the collapse beat, parked behind setDelay(a = durationTicks) so the snap lands
+        // exactly on the server's finale damage tick even when wand.json retunes it.
+        PhotonFxRegistry.registerRow(new PhotonFxRegistry.Row(
+                FxCues.CUE_WAND_HORIZON,
+                fx("wand_event_horizon"),
+                null,
+                FxBudget.Channel.BURST,
+                PhotonFxRegistry.Mode.LAYER,
+                false,
+                (photonFx, pos, entity, a, b) -> {
+                    boolean vortex = PhotonBridge.spawn(photonFx, pos,
+                            PhotonBridge.SpawnOptions.DEFAULT.withAllowMulti(true));
+                    int collapseDelay = a > 0.0F ? (int) a : HORIZON_DEFAULT_DURATION;
+                    boolean snap = PhotonBridge.spawn(fx("riss_maw_snap"), pos,
+                            PhotonBridge.SpawnOptions.DEFAULT
+                                    .withDelay(collapseDelay)
+                                    .withAllowMulti(true));
+                    return vortex || snap;
+                }));
+        // Sonnenkern — the whole solar detonation is delayed by a = telegraphTicks so
+        // asset-t0 IS the damage tick (stern_komet_impact pattern); the telegraph reads
+        // stay the server's Quasar heat-column/ground-ring baseline.
+        PhotonFxRegistry.registerRow(new PhotonFxRegistry.Row(
+                FxCues.CUE_WAND_SONNENKERN,
+                fx("wand_sonnenkern"),
+                null,
+                FxBudget.Channel.BURST,
+                PhotonFxRegistry.Mode.LAYER,
+                false,
+                (photonFx, pos, entity, a, b) -> PhotonBridge.spawn(photonFx, pos,
+                        PhotonBridge.SpawnOptions.DEFAULT
+                                .withDelay(Math.max(0, (int) a))
+                                .withAllowMulti(true))));
+        // Inferno — fire-storm pillar standing on the zone (baked ~140t = the authored
+        // durationTicks default); per-eruption ground beats stay the Quasar baseline.
+        PhotonFxRegistry.registerRow(new PhotonFxRegistry.Row(
+                FxCues.CUE_WAND_INFERNO,
+                fx("wand_inferno_pillar"),
+                null,
+                FxBudget.Channel.BURST,
+                PhotonFxRegistry.Mode.LAYER,
+                false,
+                (photonFx, pos, entity, a, b) -> PhotonBridge.spawn(photonFx, pos,
+                        PhotonBridge.SpawnOptions.DEFAULT.withAllowMulti(true))));
+        // Sternenschild / Novawächter — shield IGNITION beat on the caster (ENTITY
+        // lane, body-center offset); the sustained shield stays the Quasar
+        // constellation. Untracked-caster degrade uses the position anchor.
+        PhotonFxRegistry.registerRow(new PhotonFxRegistry.Row(
+                FxCues.CUE_WAND_SCHILD,
+                fx("wand_star_dome"),
+                null,
+                FxBudget.Channel.BURST,
+                PhotonFxRegistry.Mode.LAYER,
+                false,
+                (photonFx, pos, entity, a, b) -> {
+                    if (entity != null) {
+                        return PhotonBridge.spawnOnEntity(photonFx, entity,
+                                PhotonBridge.AUTO_ROTATE_NONE,
+                                PhotonBridge.SpawnOptions.DEFAULT
+                                        .withOffset(0.0D, SCHILD_BODY_OFFSET, 0.0D)
+                                        .withAllowMulti(true));
+                    }
+                    return PhotonBridge.spawn(photonFx, pos,
+                            PhotonBridge.SpawnOptions.DEFAULT.withAllowMulti(true));
+                }));
+        // Himmelsgericht — the verdict (sky lance + zone ring + star burst), delayed by
+        // a = finaleDelay so asset-t0 IS the synced zone-wide damage pulse.
+        PhotonFxRegistry.registerRow(new PhotonFxRegistry.Row(
+                FxCues.CUE_WAND_GERICHT,
+                fx("wand_judgment_finale"),
+                null,
+                FxBudget.Channel.BURST,
+                PhotonFxRegistry.Mode.LAYER,
+                false,
+                (photonFx, pos, entity, a, b) -> PhotonBridge.spawn(photonFx, pos,
+                        PhotonBridge.SpawnOptions.DEFAULT
+                                .withDelay(Math.max(0, (int) a))
+                                .withAllowMulti(true))));
     }
 
     private static ResourceLocation fx(String path) {

@@ -5,33 +5,32 @@ import java.util.Locale;
 import javax.annotation.Nullable;
 
 /**
- * The three locked skill paths of the Zauberstab (IDEA-19 adapted per the W4-WAND spec) plus
- * the pathless {@link #NONE} state a freshly crafted wand starts in. Wire ids are stable ints
- * (stored in the {@code eclipse:wand_path} data component and in {@code WandStore}); never
- * reorder.
+ * The three skill paths of the Zauberstab (IDEA-19, F-036 rework) plus the pathless
+ * {@link #NONE} state a freshly crafted wand starts in. Wire ids are stable ints
+ * (stored in the {@code eclipse:wand_path} data component and in {@code WandStore});
+ * never reorder.
  *
- * <p>Power keys per path are frozen here so {@code WandConfig} entries, {@code WandPowers}
- * dispatch and the lang keys ({@code wand.eclipse.power.<path>.<index+1>}) all agree. Index
- * 0&ndash;4 unlock at wand levels 1&ndash;5; indices 3/4 re-run the level-2/3 powers with
- * their own (bigger/faster) config entries.</p>
+ * <p>F-039: the per-path spell ladders (10 spells each) live in {@link WandSpells}; the
+ * per-path tree branches (16 nodes each) in {@link WandTree}. The old frozen power-key
+ * arrays are gone with them. Path identity: RISS = Raum/Bewegung (void/glitch), GLUT =
+ * Zerstörung (ember/magma), STERN = Schutz/Bindung (starlight/marks).</p>
  */
 public enum WandPath {
-    NONE(0, new String[0]),
-    /** Phasenriss — void/glitch: Blink, Phasenwelle, Rissschlag (+ upgraded 2/3). */
-    RISS(1, new String[] {"blink", "phasenwelle", "rissschlag", "phasenwelle_2", "rissschlag_2"}),
-    /** Glutherz — fire: Glutstoß, Feuerwelle, Magmasprung (+ upgraded 2/3). */
-    GLUT(2, new String[] {"glutstoss", "feuerwelle", "magmasprung", "feuerwelle_2", "magmasprung_2"}),
-    /** Sternenfall — storm/cosmos: Funkenruf, Sternschauer, Kometenschlag (+ upgraded 2/3). */
-    STERN(3, new String[] {"funkenruf", "sternschauer", "kometenschlag", "sternschauer_2", "kometenschlag_2"});
+    NONE(0),
+    /** Phasenriss — Raum/Bewegung: blinks, pulls, gravity wells, the Umbra-Lanze. */
+    RISS(1),
+    /** Glutherz — Zerstörung: fire lances, waves, eruptions, the Inferno. */
+    GLUT(2),
+    /** Sternenfall — Schutz/Bindung: marks, shields, roots, celestial judgment. */
+    STERN(3);
 
+    /** Display-level cap (drives the GeckoLib model stages; derived from tree nodes). */
     public static final int MAX_LEVEL = 5;
 
     private final int id;
-    private final String[] powerKeys;
 
-    WandPath(int id, String[] powerKeys) {
+    WandPath(int id) {
         this.id = id;
-        this.powerKeys = powerKeys;
     }
 
     public int id() {
@@ -61,27 +60,9 @@ public enum WandPath {
         }
     }
 
-    /** Number of powers this path defines (0 for NONE). */
-    public int powerCount() {
-        return powerKeys.length;
-    }
-
-    /**
-     * {@code WandConfig} entry key for the power at {@code index} (0-based, unlocks at wand
-     * level {@code index + 1}), e.g. {@code "riss.phasenwelle"}.
-     */
-    public String powerKey(int index) {
-        return name().toLowerCase(Locale.ROOT) + "." + powerKeys[index];
-    }
-
     /** Lang key of the path display name ({@code wand.eclipse.path.<name>}). */
     public String langKey() {
         return "wand.eclipse.path." + name().toLowerCase(Locale.ROOT);
-    }
-
-    /** Lang key of the power display name at {@code index} ({@code wand.eclipse.power.<path>.<n>}). */
-    public String powerLangKey(int index) {
-        return "wand.eclipse.power." + name().toLowerCase(Locale.ROOT) + "." + (index + 1);
     }
 
     /**

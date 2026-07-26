@@ -1,82 +1,92 @@
 package dev.projecteclipse.eclipse.wand;
 
-import dev.projecteclipse.eclipse.skills.SkillPerks;
+import java.util.Set;
+
 import net.minecraft.server.level.ServerPlayer;
 
 /**
- * WANDFIX-4: the wand-side reader for the skill tree's wand branch (nodes W1–W18 in
- * {@code skills/SkillTreeConfig}). One typed accessor per effect contract, all backed by
- * {@link SkillPerks#effect} (summed {@code effect.value} across owned nodes), with hard
- * caps applied HERE so a hand-edited {@code skilltree.json} can never zero a cast cost,
- * erase a cooldown or stack absurd damage. No wand behavior changes for players who own
- * nothing in the branch — every accessor degrades to the identity value.
+ * F-036: the aggregated effect reader of the wand's OWN skill tree ({@link WandTree},
+ * persisted per player in {@link WandStore.Progress}) plus the permanent rebirth
+ * multipliers. Replaces the old WANDFIX-4 bridge into the shared skill tree's wand
+ * branch (W1–W18) — the wand now carries its whole progression itself. Hard caps are
+ * applied HERE so no data edit can zero a cast cost or stack absurd damage; every
+ * accessor degrades to the identity value for players who own nothing.
  *
- * <p>Contracts (also listed in the skilltree {@code _doc}): {@code wand_charge_max_add}
- * (flat Veilladung), {@code wand_regen_pct}, {@code wand_cost_reduce_pct} (cap 40%),
- * {@code wand_cooldown_reduce_pct} (cap 50%), {@code wand_damage_pct} (cap +100%),
- * {@code wand_xp_pct}, {@code wand_free_cast_chance} (rolled through
- * {@link SkillPerks#procChance} so S3 Eclipsed folds in, proc feedback trio on hit).
- * Consumers: {@code EclipseWandItem.regenCharge}, {@code WandPowers} (cost / cooldown /
- * damage / XP), {@code WandPhaseService} (shear), {@code WandProgressSync} (per-player
- * effective numbers on the wire).</p>
+ * <p>Contracts (summed {@code effectValue} across owned stat nodes):
+ * {@link WandTree#FX_CHARGE_MAX_ADD} (flat Veilladung), {@link WandTree#FX_REGEN_PCT},
+ * {@link WandTree#FX_COST_REDUCE_PCT} (cap 40%), {@link WandTree#FX_DAMAGE_PCT}
+ * (cap +100%). Rebirths add {@code +15%} spell power and {@code +10%} max Veilladung
+ * each ({@link WandTree#REBIRTH_POWER_PCT}/{@link WandTree#REBIRTH_CHARGE_PCT}).
+ * F-040: there is NO cooldown contract anymore — cooldowns are gone entirely.</p>
+ *
+ * <p>Consumers: {@code EclipseWandItem.regenCharge}, {@code WandPowers} (cost/damage),
+ * {@code WandSpellEffects}, {@code WandProgressSync} (per-player effective numbers on
+ * the wire), {@code WandTreeService} (purchase/rebirth flow).</p>
  */
 public final class WandPerks {
     /** Cost reduction cap — a cast must always cost something real. */
     private static final float COST_REDUCE_CAP = 0.40F;
-    /** Cooldown reduction cap — spam ceilings stay meaningful. */
-    private static final float COOLDOWN_REDUCE_CAP = 0.50F;
-    /** Damage bonus cap. */
+    /** Node damage bonus cap (rebirth power multiplies ON TOP, uncapped by design). */
     private static final float DAMAGE_CAP = 1.00F;
 
     private WandPerks() {}
 
-    /** Per-player Veilladung maximum: config max + owned {@code wand_charge_max_add}. */
+    /** Summed effect value of one contract across the player's owned stat nodes. */
+    private static float effect(ServerPlayer player, String type) {
+        WandStore.Progress progress = WandStore.get(player.server).progress(player.getUUID());
+        Set<String> owned = progress.nodes;
+        if (owned.isEmpty()) {
+            return 0.0F;
+        }
+        float sum = 0.0F;
+        for (String id : owned) {
+            WandTree.Node node = WandTree.byId(id);
+            if (node != null && type.equals(node.effectType())) {
+                sum += node.effectValue();
+            }
+        }
+        return sum;
+    }
+
+    private static int rebirths(ServerPlayer player) {
+        return Math.max(0, WandStore.get(player.server).progress(player.getUUID()).rebirths);
+    }
+
+    /**
+     * Per-player Veilladung maximum: (config max + owned {@code charge_max_add}) ×
+     * (1 + 10% per rebirth).
+     */
     public static int chargeMax(ServerPlayer player) {
-        return WandConfig.get().charge().max()
-                + Math.max(0, Math.round(SkillPerks.effect(player, "wand_charge_max_add")));
+        float base = WandConfig.get().charge().max()
+                + Math.max(0.0F, effect(player, WandTree.FX_CHARGE_MAX_ADD));
+        float rebirthMult = 1.0F + WandTree.REBIRTH_CHARGE_PCT * rebirths(player);
+        return Math.max(1, Math.round(base * rebirthMult));
     }
 
-    /** Regen multiplier ({@code wand_regen_pct}); 1.0 without the perks. */
+    /** Regen multiplier ({@code regen_pct} nodes); 1.0 without the perks. */
     public static float regenMultiplier(ServerPlayer player) {
-        return 1.0F + Math.max(0.0F, SkillPerks.effect(player, "wand_regen_pct"));
+        return 1.0F + Math.max(0.0F, effect(player, WandTree.FX_REGEN_PCT));
     }
 
-    /** Effective charge cost of a power for this player (floors at 1, cap 40% off). */
+    /** Effective charge cost of a spell for this player (floors at 1, cap 40% off). */
     public static int effectiveCost(ServerPlayer player, WandConfig.Power power) {
-        float reduce = Math.clamp(SkillPerks.effect(player, "wand_cost_reduce_pct"),
+        float reduce = Math.clamp(effect(player, WandTree.FX_COST_REDUCE_PCT),
                 0.0F, COST_REDUCE_CAP);
         return Math.max(1, Math.round(power.cost() * (1.0F - reduce)));
     }
 
-    /** Effective cooldown ticks of a power for this player (floors at 10, cap 50% off). */
-    public static int effectiveCooldownTicks(ServerPlayer player, WandConfig.Power power) {
-        float reduce = Math.clamp(SkillPerks.effect(player, "wand_cooldown_reduce_pct"),
-                0.0F, COOLDOWN_REDUCE_CAP);
-        return Math.max(10, Math.round(power.cooldownTicks() * (1.0F - reduce)));
-    }
-
-    /** Damage multiplier for every wand power hit ({@code wand_damage_pct}, cap +100%). */
-    public static float damageMultiplier(ServerPlayer player) {
-        return 1.0F + Math.clamp(SkillPerks.effect(player, "wand_damage_pct"), 0.0F, DAMAGE_CAP);
-    }
-
-    /** Wand-XP multiplier ({@code wand_xp_pct}); 1.0 without the perks. */
-    public static float xpMultiplier(ServerPlayer player) {
-        return 1.0F + Math.max(0.0F, SkillPerks.effect(player, "wand_xp_pct"));
-    }
-
     /**
-     * W18 Herz des Schleiers: rolls the free-cast chance and fires the standard proc
-     * feedback trio on success. Called AFTER a cast executed, right before the charge is
-     * deducted — a free cast still pays cooldown and still earns full XP.
+     * Damage multiplier for every wand spell hit: (1 + capped node bonus) ×
+     * (1 + 15% spell power per rebirth) — the rebirth half is the permanent F-036 payoff.
      */
-    public static boolean rollFreeCast(ServerPlayer player) {
-        float base = SkillPerks.effect(player, "wand_free_cast_chance");
-        if (base <= 0.0F
-                || player.serverLevel().random.nextFloat() >= SkillPerks.procChance(player, base)) {
-            return false;
-        }
-        SkillPerks.sendProcFeedback(player, "wand_free_cast", 1.0F);
-        return true;
+    public static float damageMultiplier(ServerPlayer player) {
+        float nodes = 1.0F + Math.clamp(effect(player, WandTree.FX_DAMAGE_PCT), 0.0F, DAMAGE_CAP);
+        float rebirth = 1.0F + WandTree.REBIRTH_POWER_PCT * rebirths(player);
+        return nodes * rebirth;
+    }
+
+    /** Wand-XP multiplier — currently identity (reserved for future tree/rebirth hooks). */
+    public static float xpMultiplier(ServerPlayer player) {
+        return 1.0F;
     }
 }

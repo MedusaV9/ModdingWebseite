@@ -1,42 +1,50 @@
 package dev.projecteclipse.eclipse.client.wand;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import dev.projecteclipse.eclipse.network.wand.S2CWandProgressPayload;
-import dev.projecteclipse.eclipse.wand.WandPath;
-import net.minecraft.Util;
+import dev.projecteclipse.eclipse.wand.WandSpell;
+import dev.projecteclipse.eclipse.wand.WandSpells;
+import dev.projecteclipse.eclipse.wand.WandTree;
+import dev.projecteclipse.eclipse.wand.WandTreeService;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.api.distmarker.OnlyIn;
 
 /**
- * Client cache of the {@code S2CWandProgressPayload} sync (V6-FIXWIRE #5; the
- * {@code ClientRebirthState} pattern). {@link WandProgressPanel} reads the SERVER's wand
- * tuning from here — power costs/cooldowns, the level-cost curve, charge max, the
- * earn-hint numbers — instead of the client's own local {@code WandConfig} file, which
- * only matched on singleplayer. Live level/xp/charge stay read from the synced item
- * components (they mirror the server store every tick); this cache carries what the
- * components cannot: config numbers and per-power cooldown state.
+ * Client cache of the {@code S2CWandProgressPayload} sync (F-036 rework; the
+ * {@code ClientRebirthState} pattern). The wand tab and the charge HUD read the
+ * SERVER's per-player wand state from here — Wand-XP balance, rebirth counter, owned
+ * tree nodes, effective charge max/regen/damage and per-spell effective costs — instead
+ * of the client's own local {@code WandConfig} file, which only matched on singleplayer.
+ * The tree STRUCTURE never syncs: {@code WandTree}/{@code WandSpells} are static shared
+ * Java, so the client derives node costs, parents and the rebirth curve locally and
+ * only the STATE rides the payload.
  *
- * <p>Cooldowns arrive as remaining ticks and are pinned to wall-clock millis on receipt
- * ({@link #cooldownRemainingSeconds}), so the panel's countdown keeps running between
- * payloads without needing a shared game-time base.</p>
+ * <p>F-040: there is no cooldown state anymore — the old pinned-millis countdown cache
+ * is gone with the mechanic.</p>
  */
 @OnlyIn(Dist.CLIENT)
 public final class ClientWandProgress {
-    /** One power's synced tuning ({@code cooldownExpiresAtMillis} 0 = ready). */
-    public record Power(int cost, int cooldownTicks, long cooldownExpiresAtMillis) {}
-
     /** False until the first payload lands — the panel renders its syncing hint. */
     public static volatile boolean synced = false;
     public static volatile int level = 1;
+    /** Spendable Wand-XP-Punkte (the tree/rebirth currency). */
     public static volatile int xp = 0;
+    public static volatile int rebirths = 0;
+    public static volatile int charge = 0;
     public static volatile int chargeMax = 100;
+    /** Effective held regen per second (server config × the player's regen nodes). */
+    public static volatile float regenPerSecond = 0.0F;
+    /** Effective spell-power multiplier (nodes + rebirths), for the header stat. */
+    public static volatile float damageMult = 1.0F;
     public static volatile float xpPerCostPoint = 0.0F;
     public static volatile float xpKillBonus = 0.0F;
-    private static volatile List<Integer> levelCosts = List.of();
-    private static final Map<String, Power> POWERS = new ConcurrentHashMap<>();
+    private static volatile Set<String> nodes = Set.of();
+    private static final Map<String, Integer> SPELL_COSTS = new ConcurrentHashMap<>();
 
     private ClientWandProgress() {}
 
@@ -44,50 +52,79 @@ public final class ClientWandProgress {
     public static void update(S2CWandProgressPayload payload) {
         level = payload.level();
         xp = payload.xp();
+        rebirths = payload.rebirths();
+        charge = payload.charge();
         chargeMax = Math.max(1, payload.chargeMax());
+        regenPerSecond = payload.regenPerSecond();
+        damageMult = payload.damageMult();
         xpPerCostPoint = payload.xpPerCostPoint();
         xpKillBonus = payload.xpKillBonus();
-        levelCosts = payload.levelCosts();
-        long now = Util.getMillis();
-        POWERS.clear();
-        for (S2CWandProgressPayload.PowerRow row : payload.powers()) {
-            long expires = row.cooldownRemainingTicks() > 0
-                    ? now + row.cooldownRemainingTicks() * 50L : 0L;
-            POWERS.put(row.key(), new Power(row.cost(), row.cooldownTicks(), expires));
+        nodes = Set.copyOf(payload.nodes());
+        SPELL_COSTS.clear();
+        for (S2CWandProgressPayload.SpellRow row : payload.spells()) {
+            SPELL_COSTS.put(row.key(), row.cost());
         }
         synced = true;
     }
 
-    /** Server-synced XP needed to leave {@code currentLevel} (mirror of {@code WandConfig.Xp}). */
-    public static int costForLevel(int currentLevel) {
-        List<Integer> costs = levelCosts;
-        if (currentLevel >= WandPath.MAX_LEVEL || costs.isEmpty()) {
-            return Integer.MAX_VALUE;
+    /** The player's owned wand-tree node ids (server truth snapshot). */
+    public static Set<String> nodes() {
+        return nodes;
+    }
+
+    public static boolean ownsNode(String nodeId) {
+        return nodes.contains(nodeId);
+    }
+
+    /** Effective cast cost of a spell for THIS player (server-synced; authored fallback). */
+    public static int spellCost(String key) {
+        Integer cost = SPELL_COSTS.get(key);
+        if (cost != null) {
+            return cost;
         }
-        return costs.get(Math.max(0, Math.min(costs.size() - 1, currentLevel - 1)));
+        WandSpell spell = WandSpells.byKey(key);
+        return spell != null ? spell.defaultCost() : 0;
     }
 
-    /** Server-synced power tuning; a safe stub before/without a row (panel guards on {@link #synced}). */
-    public static Power power(String key) {
-        Power power = POWERS.get(key);
-        return power != null ? power : new Power(0, 0, 0L);
+    /**
+     * The unlocked spells in canonical order, derived exactly like the server does
+     * ({@code WandTreeService.unlockedSpells}): a spell is unlocked when its tree node
+     * is in the synced owned set.
+     */
+    public static List<WandSpell> unlockedSpells() {
+        Set<String> owned = nodes;
+        List<WandSpell> unlocked = new ArrayList<>();
+        for (WandSpell spell : WandSpells.all()) {
+            if (owned.contains(WandTreeService.nodeIdOfSpell(spell))) {
+                unlocked.add(spell);
+            }
+        }
+        return unlocked;
     }
 
-    /** Seconds left on this power's cooldown right now (0 = ready). */
-    public static int cooldownRemainingSeconds(String key) {
-        long expires = power(key).cooldownExpiresAtMillis();
-        return expires <= 0L ? 0 : (int) Math.max(0L, (expires - Util.getMillis() + 999L) / 1000L);
+    /** Wand-XP cost of the player's NEXT rebirth (static curve × synced counter). */
+    public static long nextRebirthCost() {
+        return WandTree.rebirthCost(rebirths);
+    }
+
+    /** True when every tree node is owned — the rebirth precondition. */
+    public static boolean treeMaxed() {
+        return WandTree.isMaxed(nodes);
     }
 
     public static void reset() {
         synced = false;
         level = 1;
         xp = 0;
+        rebirths = 0;
+        charge = 0;
         chargeMax = 100;
+        regenPerSecond = 0.0F;
+        damageMult = 1.0F;
         xpPerCostPoint = 0.0F;
         xpKillBonus = 0.0F;
-        levelCosts = List.of();
-        POWERS.clear();
+        nodes = Set.of();
+        SPELL_COSTS.clear();
     }
 
     /** Disconnect reset ({@code ClientRebirthState.DisconnectReset} pattern). */

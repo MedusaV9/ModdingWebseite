@@ -34,11 +34,21 @@ import net.minecraft.world.level.saveddata.SavedData;
 public final class WandStore extends SavedData {
     private static final String DATA_NAME = "eclipse_wand";
 
-    /** Mutable per-player progression row. Call {@link #setDirty()} after edits. */
+    /**
+     * Mutable per-player progression row. Call {@link #setDirty()} after edits.
+     *
+     * <p>F-036 rework: {@code xp} is now the spendable <b>Wand-XP-Punkte</b> currency
+     * (earned per cast/kill, spent on {@link WandTree} nodes and rebirths — no level
+     * curve anymore); {@code nodes} is the owned wand-tree node set; {@code rebirths}
+     * the permanent rebirth counter; {@code level} the derived 1–5 display level
+     * ({@link WandTree#levelForNodes}, dev-overridable via {@code /dev wand level}).</p>
+     */
     public static final class Progress {
         public int pathId = WandPath.NONE.id();
         public int level = 1;
         public int xp;
+        public final java.util.Set<String> nodes = new java.util.HashSet<>();
+        public int rebirths;
 
         public WandPath path() {
             return WandPath.byId(pathId);
@@ -72,6 +82,14 @@ public final class WandStore extends SavedData {
             progress.pathId = WandPath.byId(entry.getInt("path")).id();
             progress.level = Mth.clamp(entry.getInt("level"), 1, WandPath.MAX_LEVEL);
             progress.xp = Math.max(0, entry.getInt("xp"));
+            progress.rebirths = Math.max(0, entry.getInt("rebirths"));
+            ListTag nodes = entry.getList("nodes", Tag.TAG_STRING);
+            for (int n = 0; n < nodes.size(); n++) {
+                // Unknown ids (renamed nodes, older saves) are dropped silently.
+                if (WandTree.byId(nodes.getString(n)) != null) {
+                    progress.nodes.add(nodes.getString(n));
+                }
+            }
             store.players.put(entry.getUUID("id"), progress);
         }
         return store;
@@ -89,6 +107,12 @@ public final class WandStore extends SavedData {
             row.putInt("path", entry.getValue().pathId);
             row.putInt("level", entry.getValue().level);
             row.putInt("xp", entry.getValue().xp);
+            row.putInt("rebirths", entry.getValue().rebirths);
+            ListTag nodes = new ListTag();
+            for (String node : entry.getValue().nodes) {
+                nodes.add(net.minecraft.nbt.StringTag.valueOf(node));
+            }
+            row.put("nodes", nodes);
             list.add(row);
         }
         tag.put("players", list);

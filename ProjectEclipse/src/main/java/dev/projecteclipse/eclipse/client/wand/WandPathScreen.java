@@ -203,9 +203,13 @@ public final class WandPathScreen extends Screen {
         textY += 4;
         EclipseUiTheme.drawHairline(guiGraphics, textX, x + CARD_W - 9, textY);
         textY += 6;
-        for (int power = 0; power < 3; power++) {
-            guiGraphics.drawString(this.font, Component.literal("L" + (power + 1) + " ")
-                            .append(EclipseLang.tr(path.powerLangKey(power))),
+        // F-039: preview the path's first three ladder spells (of ten — the card teases,
+        // the wand tree in the skill screen shows the full ladder).
+        List<dev.projecteclipse.eclipse.wand.WandSpell> spells =
+                dev.projecteclipse.eclipse.wand.WandSpells.ofPath(path);
+        for (int spell = 0; spell < 3 && spell < spells.size(); spell++) {
+            guiGraphics.drawString(this.font, Component.literal("T" + spells.get(spell).tier() + " ")
+                            .append(EclipseLang.tr(spells.get(spell).langKey())),
                     textX, textY, EclipseUiTheme.withAlpha(EclipseUiTheme.DIM, alpha));
             textY += 10;
         }

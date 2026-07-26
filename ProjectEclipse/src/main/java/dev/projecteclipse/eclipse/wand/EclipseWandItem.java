@@ -45,8 +45,8 @@ import software.bernie.geckolib.util.GeckoLibUtil;
  *
  * <p>Interaction: right-click with a pathless wand opens the client path chooser; with a
  * chosen path it sends the {@code C2SWandCastPayload} cast request (ALL validation —
- * charge, cooldown, path, disabled state, protection zones — is server-side in
- * {@link WandPowers}). Sneak-right-click cycles the selected power server-side;
+ * charge, path, spell unlock, disabled state, protection zones — is server-side in
+ * {@link WandPowers}; F-040: no cooldowns). Sneak-right-click cycles the selected power server-side;
  * sneak-scroll (client {@code WandSelectInput} → {@code C2SWandCyclePayload}) cycles in
  * both directions. Every entry point refuses while the player is cutscene-frozen
  * (WANDFIX-7).</p>
@@ -183,14 +183,17 @@ public final class EclipseWandItem extends Item implements GeoItem {
             tooltip.add(Component.translatable("wand.eclipse.tooltip.path",
                             Component.translatable(path.langKey()), level)
                     .withStyle(ChatFormatting.LIGHT_PURPLE));
-            int selected = Math.min(stack.getOrDefault(WandItems.WAND_SELECTED.get(), 0), level - 1);
-            tooltip.add(Component.translatable("wand.eclipse.tooltip.selected",
-                            Component.translatable(path.powerLangKey(selected)))
-                    .withStyle(ChatFormatting.GRAY));
-            // UIPOLISH: one line on what the selected power actually does — the same
-            // wand.eclipse.power.<path>.<n>.desc strings the progression panel shows.
-            tooltip.add(Component.translatable(path.powerLangKey(selected) + ".desc")
-                    .withStyle(ChatFormatting.DARK_GRAY));
+            // F-039: the selected SPELL rides the synced wand_spell component.
+            WandSpell selected = WandSpells.byKey(stack.get(WandItems.WAND_SPELL.get()));
+            if (selected != null) {
+                tooltip.add(Component.translatable("wand.eclipse.tooltip.selected",
+                                Component.translatable(selected.langKey()))
+                        .withStyle(ChatFormatting.GRAY));
+                // UIPOLISH: one line on what the selected spell actually does — the same
+                // wand.eclipse.spell.<key>.desc strings the tree tab shows.
+                tooltip.add(Component.translatable(selected.descKey())
+                        .withStyle(ChatFormatting.DARK_GRAY));
+            }
         }
         Integer charge = stack.get(WandItems.WAND_CHARGE.get());
         if (charge != null) {

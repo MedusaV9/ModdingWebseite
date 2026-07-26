@@ -39,10 +39,19 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 /**
- * The Phasenriss signature — <b>Phasenwelle</b> (W4-WAND spec / IDEA-19 R1): a cone of
+ * <b>RETIRED (F-038):</b> the Phasenwelle spell was replaced by the Umbra-Lanze
+ * ({@code WandSpellEffects.castUmbraLanze} — a piercing beam that never writes a block).
+ * NO spell dispatches into this class anymore; it stays alive solely as the journal
+ * DRAIN for old saves: {@link #restoreAllOnLoad} and {@link #tick} (both driven by
+ * {@code WandTickService}) keep restoring any blocks a pre-rework Phasenwelle left
+ * vanished, then the journal simply stays empty forever.
+ *
+ * <p>Original design (kept for the recovery semantics below):</p>
+ *
+ * <p>The Phasenriss signature — <b>Phasenwelle</b> (W4-WAND spec / IDEA-19 R1): a cone of
  * blocks in front of the caster "de-rezzes" (collision + render vanish) for
  * {@code holdTicks}, then re-materializes <b>block by block</b> in random order with
- * glitch bursts. The world re-rendering itself IS the fantasy.
+ * glitch bursts. The world re-rendering itself IS the fantasy.</p>
  *
  * <p><b>Crash safety (FFIX-B / POLISH-SOL-02, hardened by AUDITFIX-1):</b> the journal is
  * a WRITE-AHEAD log. Casting stores {@code vanished=false} "prepare" records (snapshot at

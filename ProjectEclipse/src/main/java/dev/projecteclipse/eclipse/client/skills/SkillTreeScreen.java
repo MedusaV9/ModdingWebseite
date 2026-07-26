@@ -157,6 +157,9 @@ public class SkillTreeScreen extends Screen {
                 panelX + panelW - EclipseUiTheme.PAD - rebirthW,
                 panelY + panelH - REBIRTH_H + 3, rebirthW, 14));
 
+        if (tab == Tab.WAND && !holdingWand()) {
+            tab = Tab.SKILLS; // F-037: never re-init into a tab that no longer exists
+        }
         applyTab(tab);
     }
 
@@ -169,8 +172,20 @@ public class SkillTreeScreen extends Screen {
     }
 
     // ------------------------------------------------------------------
-    // Tabs (A14 §4: wand progression findable any time)
+    // Tabs (A14 §4; F-037: the wand tab exists only while a wand is HELD)
     // ------------------------------------------------------------------
+
+    /**
+     * F-037: the Zauberstab tab is only reachable while the player holds a wand in the
+     * main or off hand — the client half of the gate ({@code WandTreeService} enforces
+     * the same rule server-side on every tree action).
+     */
+    private boolean holdingWand() {
+        var player = this.minecraft != null ? this.minecraft.player : null;
+        return player != null
+                && (player.getMainHandItem().getItem() instanceof dev.projecteclipse.eclipse.wand.EclipseWandItem
+                        || player.getOffhandItem().getItem() instanceof dev.projecteclipse.eclipse.wand.EclipseWandItem);
+    }
 
     private void applyTab(Tab newTab) {
         tab = newTab;
@@ -182,10 +197,14 @@ public class SkillTreeScreen extends Screen {
         rebirthButton.visible = skills;
         tabSkills.selected = skills;
         tabWand.selected = !skills;
+        tabWand.visible = holdingWand() || !skills;
         updateBuyButton();
     }
 
     private void switchTab(Tab newTab) {
+        if (newTab == Tab.WAND && !holdingWand()) {
+            return; // F-037: no wand in hand, no wand tab
+        }
         if (tab != newTab) {
             UiSounds.tab();
             applyTab(newTab);
@@ -254,6 +273,14 @@ public class SkillTreeScreen extends Screen {
         if (closing && --closeTicks <= 0) {
             this.minecraft.setScreen(null);
             return;
+        }
+
+        // F-037 live gate: dropping/stowing the wand hides the tab (and bounces the
+        // view back to Skills if it was open).
+        boolean wandHeld = holdingWand();
+        tabWand.visible = wandHeld || tab == Tab.WAND;
+        if (tab == Tab.WAND && !wandHeld) {
+            applyTab(Tab.SKILLS);
         }
 
         // Server-truth diff: every node that flipped to OWNED celebrates exactly once —

@@ -139,6 +139,8 @@ public final class WandTickService {
     static void onServerStarted(ServerStartedEvent event) {
         // Crash recovery FIRST: any Phasenwelle snapshot left from a crash goes back in
         // before players (or a new wave) can touch the terrain.
+        // F-038: the Phasenwelle spell is gone (Umbra-Lanze replaced it), but this
+        // journal drain STAYS — old saves may still carry vanished blocks to restore.
         WandPhaseService.restoreAllOnLoad(event.getServer());
         // Scorch-decal sweep: discard requests ride the in-memory task queue, so a crash
         // can strand tagged displays — clear every loaded one on boot (unloaded ones are
@@ -163,12 +165,11 @@ public final class WandTickService {
         FIRE_WAVES.clear();
         MAGMA_JUMPS.clear();
         liveScorchDecals = 0;
-        WandPowers.clearRuntime();
     }
 
     @SubscribeEvent
     static void onServerTick(ServerTickEvent.Post event) {
-        WandPhaseService.tick(event.getServer());
+        WandPhaseService.tick(event.getServer()); // F-038: legacy journal drain only
         tickTasks();
         tickFireWaves();
         tickMagmaJumps();

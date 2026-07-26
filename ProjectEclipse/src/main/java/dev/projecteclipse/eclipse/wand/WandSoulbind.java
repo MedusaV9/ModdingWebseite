@@ -67,7 +67,7 @@ public final class WandSoulbind {
             WandStore.Progress progress = store.progress(holder.getUUID());
             writeProgress(stack, progress);
         }
-        clampSelected(stack);
+        sanitizeSelectedSpell(holder, stack);
         if (stack.get(WandItems.WAND_CHARGE.get()) == null) {
             stack.set(WandItems.WAND_CHARGE.get(), WandConfig.get().charge().max());
         }
@@ -87,7 +87,7 @@ public final class WandSoulbind {
                 || level == null || level != progress.level
                 || xp == null || xp != progress.xp) {
             writeProgress(stack, progress);
-            clampSelected(stack);
+            sanitizeSelectedSpell(holder, stack);
         }
     }
 
@@ -122,14 +122,26 @@ public final class WandSoulbind {
         }
     }
 
-    /** Keeps the selected-power index inside the unlocked range after level/path edits. */
-    public static void clampSelected(ItemStack stack) {
-        int level = levelOf(stack);
-        int selected = stack.getOrDefault(WandItems.WAND_SELECTED.get(), 0);
+    /**
+     * F-039: keeps the selected-SPELL key valid after path/tree edits — an unset, unknown
+     * or no-longer-unlocked key snaps to the first unlocked spell (the chosen path's
+     * baseline). Unlock truth comes from the holder's {@link WandStore} row via
+     * {@link WandTreeService#unlockedSpells}.
+     */
+    public static void sanitizeSelectedSpell(ServerPlayer holder, ItemStack stack) {
         if (pathOf(stack) == WandPath.NONE) {
-            stack.set(WandItems.WAND_SELECTED.get(), 0);
-        } else if (selected >= level) {
-            stack.set(WandItems.WAND_SELECTED.get(), level - 1);
+            stack.remove(WandItems.WAND_SPELL.get());
+            return;
+        }
+        var unlocked = WandTreeService.unlockedSpells(holder);
+        if (unlocked.isEmpty()) {
+            stack.remove(WandItems.WAND_SPELL.get());
+            return;
+        }
+        String selected = stack.get(WandItems.WAND_SPELL.get());
+        WandSpell spell = WandSpells.byKey(selected);
+        if (spell == null || !unlocked.contains(spell)) {
+            stack.set(WandItems.WAND_SPELL.get(), unlocked.get(0).key());
         }
     }
 
