@@ -1,0 +1,27 @@
+{
+  "_comment": "nether2 (day-2 nether-opening show: sequence/NetherOpeningSequence + devtools/dev/DevNetherCommands). Only the /dev nether ops surface is user-facing — the four phases themselves speak in sound, particles and block displays. Placeholders: started/replaying = (1) length in seconds, (2) crater centre; status = (1) phase, (2) elapsed ticks, (3) total ticks, (4) carve|fx, (5) live displays, (6) breach flag, (7) crater centre.",
+  "en": {
+    "dev.eclipse.doc.nether.open": "Run the full ~47 s day-2 nether-opening show (omen, quake, rupture, aftermath) INCLUDING the real excavation of the crater — identical to the day-2 rollover. Irreversible on a live world.",
+    "dev.eclipse.doc.nether.replay_fx": "Replay the opening show as FX only: identical timing, camera shake, block displays and Photon effects, but no block is written and no world state is committed. The safe verb for tuning.",
+    "dev.eclipse.doc.nether.stop": "Abort the running opening show and discard every block display. An excavation that already started keeps running — it is idempotent and must not be left half-dug.",
+    "dev.eclipse.doc.nether.status": "Report the running opening show: phase, elapsed/total ticks, carve or FX-replay mode, live block displays and whether the breach is already open.",
+    "dev.eclipse.nether.started": "Nether opening started: %1$s s of show, crater at %2$s. The pit is excavated in the rupture phase.",
+    "dev.eclipse.nether.replaying": "Nether opening REPLAY (FX only): %1$s s of show, crater at %2$s. No block is written.",
+    "dev.eclipse.nether.busy": "An opening show is already running — stop it with '/dev nether stop' first.",
+    "dev.eclipse.nether.idle": "No opening show is running.",
+    "dev.eclipse.nether.stopped": "Opening show aborted; all block displays discarded.",
+    "dev.eclipse.nether.status": "Nether opening: phase %1$s, tick %2$s/%3$s, mode %4$s, %5$s live display(s), breach open: %6$s, crater at %7$s."
+  },
+  "de": {
+    "dev.eclipse.doc.nether.open": "Spielt die vollständige ~47 s lange Tag-2-Nether-Öffnung (Vorzeichen, Beben, Aufbruch, Nachwehen) INKLUSIVE des echten Aushubs des Kraters — identisch zum Tag-2-Übergang. Auf einer laufenden Welt nicht umkehrbar.",
+    "dev.eclipse.doc.nether.replay_fx": "Wiederholt die Öffnungs-Show nur als FX: gleiches Timing, Kamerawackeln, Block-Displays und Photon-Effekte, aber es wird kein Block geschrieben und kein Welt-Status gesetzt. Der sichere Befehl zum Tunen.",
+    "dev.eclipse.doc.nether.stop": "Bricht die laufende Öffnungs-Show ab und verwirft alle Block-Displays. Ein bereits gestarteter Aushub läuft weiter — er ist idempotent und darf nicht halb fertig zurückbleiben.",
+    "dev.eclipse.doc.nether.status": "Zeigt die laufende Öffnungs-Show: Phase, vergangene/gesamte Ticks, Aushub- oder FX-Replay-Modus, aktive Block-Displays und ob der Durchbruch bereits offen ist.",
+    "dev.eclipse.nether.started": "Nether-Öffnung gestartet: %1$s s Show, Krater bei %2$s. Das Loch wird in der Aufbruch-Phase ausgehoben.",
+    "dev.eclipse.nether.replaying": "Nether-Öffnung als WIEDERHOLUNG (nur FX): %1$s s Show, Krater bei %2$s. Es wird kein Block geschrieben.",
+    "dev.eclipse.nether.busy": "Es läuft bereits eine Öffnungs-Show — zuerst mit '/dev nether stop' beenden.",
+    "dev.eclipse.nether.idle": "Es läuft keine Öffnungs-Show.",
+    "dev.eclipse.nether.stopped": "Öffnungs-Show abgebrochen; alle Block-Displays verworfen.",
+    "dev.eclipse.nether.status": "Nether-Öffnung: Phase %1$s, Tick %2$s/%3$s, Modus %4$s, %5$s aktive(s) Display(s), Durchbruch offen: %6$s, Krater bei %7$s."
+  }
+}

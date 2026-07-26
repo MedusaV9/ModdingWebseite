@@ -11,6 +11,7 @@ import dev.projecteclipse.eclipse.core.state.EclipseWorldgenState;
 import dev.projecteclipse.eclipse.network.S2CBreachPayload;
 import dev.projecteclipse.eclipse.network.S2CBreachPayload.Phase;
 import dev.projecteclipse.eclipse.network.breach.BreachPayloads;
+import dev.projecteclipse.eclipse.sequence.NetherOpeningSequence;
 import dev.projecteclipse.eclipse.worldgen.BreachGeometry;
 import dev.projecteclipse.eclipse.worldgen.DiscMapData;
 import dev.projecteclipse.eclipse.worldgen.DiscProfile;
@@ -247,7 +248,10 @@ public final class BreachBuilder {
     private static void onStageTerrainComplete(ServerLevel level, DiscProfile profile,
             int fromStage, int toStage) {
         if (profile == DiscProfile.NETHER && fromStage < 1 && toStage >= 1
-                && !EclipseWorldgenState.get(level.getServer()).breachOpen()) {
+                && !EclipseWorldgenState.get(level.getServer()).breachOpen()
+                // Day 2: the ~47 s opening show digs the crater in its RUPTURE phase
+                // (it calls openNow itself); only a refused show carves immediately.
+                && !NetherOpeningSequence.begin(level.getServer(), true)) {
             openNow(level.getServer().overworld());
         }
     }
