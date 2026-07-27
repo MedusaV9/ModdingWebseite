@@ -17,6 +17,9 @@ Punkte. **Bitte einfach unten unter „Offen" anhängen — Format egal.**
 ---
 
 ## Offen (hier bitte eintragen)
+weitere Bugs; UI ist viel zu groß oder viel zu klein du hast keine klanre Design Language und scrollen in den Settings und so klappt nicht. Gooby labert durchgehend irgendwas 
+und ich will meine Kamera frei umher bewegen können statt nur per gooby 
+
 [ ] Stelle immer sicher das die Github Actions runs erfolgreich sind.
 [x] Erstelle mal richtige Skyboxen selber
     -> prozeduraler Himmel-Shader mit 7 Stimmungen (klarer Morgen, Mittag, goldene Stunde, Abendrot, Nacht mit Sternen, bedeckt, Gewitter), blendet weich zwischen Tageszeit und Wetter.
