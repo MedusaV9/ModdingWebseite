@@ -1,0 +1,10 @@
+{
+  "stages": [
+    {
+      "type": "veil:blit",
+      "shader": "eclipse:glitch_dome",
+      "in": "minecraft:main",
+      "out": "veil:post"
+    }
+  ]
+}

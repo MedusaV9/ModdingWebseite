@@ -30,9 +30,15 @@ public final class GlitchZoneEffects {
      * from the zone centre when {@link GlitchZone#originAtCentre} is set (F-048).
      */
     public static final String VOID = "void";
+    /**
+     * WOAH-01 mansion-dome interior: the {@link #OUTLINE} green phosphor readout PLUS the
+     * {@link #SCANLINES} CRT layers in one pass ({@code woah.mansiondome} drives it as a
+     * persistent zone under the shield bubble).
+     */
+    public static final String DOME = "dome";
 
     /** All effect ids, in the order they should be suggested to operators. */
-    public static final List<String> IDS = List.of(OUTLINE, DATAMOSH, SCANLINES, INVERT, VOID);
+    public static final List<String> IDS = List.of(OUTLINE, DATAMOSH, SCANLINES, INVERT, VOID, DOME);
 
     private GlitchZoneEffects() {}
 

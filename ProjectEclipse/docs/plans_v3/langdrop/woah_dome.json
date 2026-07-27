@@ -1,0 +1,55 @@
+{
+  "_comment": "WOAH-01 MANSION GLITCH DOME — all new keys (entity name, protection actionbar, /dev dome docs + feedback). Merge into assets/eclipse/lang/en_us.json + de_de.json by the lang owner.",
+
+  "en_us": {
+    "entity.eclipse.glitch_emitter": "Glitch Emitter",
+    "message.eclipse.dome_protected": "The dome refuses. Its heart is the only way in.",
+
+    "dev.eclipse.doc.dome.status": "Dome state: status byte, geometry, remaining hits, zone/device ids, aftershock schedule",
+    "dev.eclipse.doc.dome.arm": "Arm the mansion glitch dome at the real landmark, or 'arm here [radius]' for a transient test dome at your feet",
+    "dev.eclipse.doc.dome.hits": "Set the emitter's remaining melee hits (0..8; 0 starts the destruction)",
+    "dev.eclipse.doc.dome.destroy": "Run the full destruction sequence from the first beat (loot, shatter, aftershocks)",
+    "dev.eclipse.doc.dome.shatter": "Play only the BlockDisplay shard show — at the dome if armed, else above you (FX iteration)",
+    "dev.eclipse.doc.dome.reset": "Rewind the dome to ACTIVE: fresh device and zone, shards swept, schedule cleared",
+
+    "dev.eclipse.dome.status": "Dome %1$s in %2$s — centre %3$s, shell r=%4$s, ground Y %5$s, roof Y %6$s, device %7$s, hits %8$s/%9$s",
+    "dev.eclipse.dome.status2": "zone %1$s, device %2$s, collapse t0 %3$s, aftershocks left %4$s (next @ %5$s), shard show: %6$s",
+    "dev.eclipse.dome.already_armed": "The dome is already %1$s — /dev dome reset first.",
+    "dev.eclipse.dome.not_placed": "The mansion site (%1$s) has not been placed in this world yet — use /dev dome arm here for a test dome.",
+    "dev.eclipse.dome.no_anchor": "The mansion landmark anchor could not be resolved.",
+    "dev.eclipse.dome.armed": "Dome armed over the mansion at %1$s. The shell is up; eight hits on the emitter bring it down.",
+    "dev.eclipse.dome.armed_here": "Test dome armed at %1$s (radius %2$s, transient — never the real mansion).",
+    "dev.eclipse.dome.not_active": "No active dome (status %1$s).",
+    "dev.eclipse.dome.hits_set": "Emitter hits set to %1$s/%2$s.",
+    "dev.eclipse.dome.destroying": "Destruction sequence started — watch the shell.",
+    "dev.eclipse.dome.shatter_started": "Shard show started (authored radius %1$s).",
+    "dev.eclipse.dome.never_armed": "There is no dome state to reset.",
+    "dev.eclipse.dome.reset_done": "Dome rewound to ACTIVE — fresh device, fresh zone, shards swept."
+  },
+
+  "de_de": {
+    "entity.eclipse.glitch_emitter": "Glitch-Emitter",
+    "message.eclipse.dome_protected": "Die Kuppel verweigert sich. Ihr Herz ist der einzige Weg hinein.",
+
+    "dev.eclipse.doc.dome.status": "Kuppel-Zustand: Status-Byte, Geometrie, verbleibende Treffer, Zonen-/Geräte-IDs, Nachbeben-Plan",
+    "dev.eclipse.doc.dome.arm": "Die Glitch-Kuppel am echten Herrenhaus scharfschalten, oder 'arm here [radius]' für eine transiente Test-Kuppel an deiner Position",
+    "dev.eclipse.doc.dome.hits": "Verbleibende Nahkampf-Treffer des Emitters setzen (0..8; 0 startet die Zerstörung)",
+    "dev.eclipse.doc.dome.destroy": "Die komplette Zerstörungssequenz ab dem ersten Beat abspielen (Loot, Zersplittern, Nachbeben)",
+    "dev.eclipse.doc.dome.shatter": "Nur die BlockDisplay-Scherbenschau abspielen — an der Kuppel falls scharf, sonst über dir (FX-Iteration)",
+    "dev.eclipse.doc.dome.reset": "Die Kuppel auf ACTIVE zurückspulen: neues Gerät und neue Zone, Scherben weggeräumt, Plan geleert",
+
+    "dev.eclipse.dome.status": "Kuppel %1$s in %2$s — Zentrum %3$s, Hülle r=%4$s, Boden Y %5$s, Dach Y %6$s, Gerät %7$s, Treffer %8$s/%9$s",
+    "dev.eclipse.dome.status2": "Zone %1$s, Gerät %2$s, Kollaps t0 %3$s, Nachbeben übrig %4$s (nächstes @ %5$s), Scherbenschau: %6$s",
+    "dev.eclipse.dome.already_armed": "Die Kuppel ist bereits %1$s — zuerst /dev dome reset.",
+    "dev.eclipse.dome.not_placed": "Das Herrenhaus (%1$s) wurde in dieser Welt noch nicht platziert — nutze /dev dome arm here für eine Test-Kuppel.",
+    "dev.eclipse.dome.no_anchor": "Der Landmark-Anker des Herrenhauses konnte nicht aufgelöst werden.",
+    "dev.eclipse.dome.armed": "Kuppel über dem Herrenhaus bei %1$s scharfgeschaltet. Die Hülle steht; acht Treffer auf den Emitter holen sie herunter.",
+    "dev.eclipse.dome.armed_here": "Test-Kuppel bei %1$s scharfgeschaltet (Radius %2$s, transient — niemals das echte Herrenhaus).",
+    "dev.eclipse.dome.not_active": "Keine aktive Kuppel (Status %1$s).",
+    "dev.eclipse.dome.hits_set": "Emitter-Treffer auf %1$s/%2$s gesetzt.",
+    "dev.eclipse.dome.destroying": "Zerstörungssequenz gestartet — behalte die Hülle im Blick.",
+    "dev.eclipse.dome.shatter_started": "Scherbenschau gestartet (Autoren-Radius %1$s).",
+    "dev.eclipse.dome.never_armed": "Es gibt keinen Kuppel-Zustand zum Zurücksetzen.",
+    "dev.eclipse.dome.reset_done": "Kuppel auf ACTIVE zurückgespult — neues Gerät, neue Zone, Scherben weggeräumt."
+  }
+}

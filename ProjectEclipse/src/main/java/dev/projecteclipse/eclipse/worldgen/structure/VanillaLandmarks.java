@@ -68,6 +68,20 @@ public final class VanillaLandmarks {
     }
 
     /**
+     * WOAH-01 facade (PLAN-01 §2.2): the deterministic surface anchor of a landmark id
+     * ({@code "eclipse:mansion"}), or {@code null} when the map has no such landmark.
+     * Wraps the package-private {@link StructureStamper#findLandmark}/{@code surfaceAnchor}
+     * pair so feature packages outside {@code worldgen.structure} (the mansion dome's
+     * restart reconcile) never need those visibilities opened.
+     */
+    @Nullable
+    public static BlockPos landmarkAnchor(DiscProfile profile, String landmarkId) {
+        dev.projecteclipse.eclipse.worldgen.DiscMapData.Landmark landmark =
+                StructureStamper.findLandmark(profile, landmarkId);
+        return landmark == null ? null : StructureStamper.surfaceAnchor(profile, landmark);
+    }
+
+    /**
      * Places a vanilla structure at a fixed anchor with terraforming (compile seam §3.10;
      * W1.7 bastion remnants, W1.8 end cities, and the stamper's mansion/outpost/trial
      * chambers/ancient city all come through here — the single {@code generateVanilla}

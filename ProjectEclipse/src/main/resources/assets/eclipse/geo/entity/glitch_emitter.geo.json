@@ -1,0 +1,226 @@
+{
+	"format_version": "1.12.0",
+	"minecraft:geometry": [
+		{
+			"description": {
+				"identifier": "geometry.glitch_emitter",
+				"texture_width": 128,
+				"texture_height": 128,
+				"visible_bounds_width": 6,
+				"visible_bounds_height": 5,
+				"visible_bounds_offset": [0, 2, 0]
+			},
+			"bones": [
+				{
+					"name": "root",
+					"pivot": [0, 0, 0]
+				},
+				{
+					"name": "base",
+					"parent": "root",
+					"pivot": [0, 0, 0],
+					"cubes": [
+						{
+							"origin": [-6, 0, -6],
+							"size": [12, 3, 12],
+							"uv": [0, 0]
+						}
+					]
+				},
+				{
+					"name": "leg_0",
+					"parent": "base",
+					"pivot": [0, 3, 0],
+					"rotation": [-22, 0, 0],
+					"cubes": [
+						{
+							"origin": [-1, 0, 5],
+							"size": [2, 5, 2],
+							"uv": [48, 0]
+						}
+					]
+				},
+				{
+					"name": "leg_1",
+					"parent": "base",
+					"pivot": [0, 3, 0],
+					"rotation": [-22, 120, 0],
+					"cubes": [
+						{
+							"origin": [-1, 0, 5],
+							"size": [2, 5, 2],
+							"uv": [48, 0]
+						}
+					]
+				},
+				{
+					"name": "leg_2",
+					"parent": "base",
+					"pivot": [0, 3, 0],
+					"rotation": [-22, 240, 0],
+					"cubes": [
+						{
+							"origin": [-1, 0, 5],
+							"size": [2, 5, 2],
+							"uv": [48, 0]
+						}
+					]
+				},
+				{
+					"name": "pylon",
+					"parent": "base",
+					"pivot": [0, 3, 0],
+					"cubes": [
+						{
+							"origin": [-2, 3, -2],
+							"size": [4, 15, 4],
+							"uv": [0, 16]
+						}
+					]
+				},
+				{
+					"name": "ring_outer",
+					"parent": "pylon",
+					"pivot": [0, 24, 0]
+				},
+				{
+					"name": "ring_outer_seg_0",
+					"parent": "ring_outer",
+					"pivot": [0, 24, 0],
+					"cubes": [
+						{
+							"origin": [-9, 23, -1.5],
+							"size": [5, 2, 3],
+							"uv": [32, 16]
+						}
+					]
+				},
+				{
+					"name": "ring_outer_seg_1",
+					"parent": "ring_outer",
+					"pivot": [0, 24, 0],
+					"rotation": [0, 90, 0],
+					"cubes": [
+						{
+							"origin": [-9, 23, -1.5],
+							"size": [5, 2, 3],
+							"uv": [32, 16]
+						}
+					]
+				},
+				{
+					"name": "ring_outer_seg_2",
+					"parent": "ring_outer",
+					"pivot": [0, 24, 0],
+					"rotation": [0, 180, 0],
+					"cubes": [
+						{
+							"origin": [-9, 23, -1.5],
+							"size": [5, 2, 3],
+							"uv": [32, 16]
+						}
+					]
+				},
+				{
+					"name": "ring_outer_seg_3",
+					"parent": "ring_outer",
+					"pivot": [0, 24, 0],
+					"rotation": [0, 270, 0],
+					"cubes": [
+						{
+							"origin": [-9, 23, -1.5],
+							"size": [5, 2, 3],
+							"uv": [32, 16]
+						}
+					]
+				},
+				{
+					"name": "ring_inner",
+					"parent": "pylon",
+					"pivot": [0, 24, 0],
+					"rotation": [0, 0, 20]
+				},
+				{
+					"name": "ring_inner_seg_0",
+					"parent": "ring_inner",
+					"pivot": [0, 24, 0],
+					"cubes": [
+						{
+							"origin": [-6.5, 23.2, -1],
+							"size": [3.5, 1.6, 2],
+							"uv": [32, 24]
+						}
+					]
+				},
+				{
+					"name": "ring_inner_seg_1",
+					"parent": "ring_inner",
+					"pivot": [0, 24, 0],
+					"rotation": [0, 90, 0],
+					"cubes": [
+						{
+							"origin": [-6.5, 23.2, -1],
+							"size": [3.5, 1.6, 2],
+							"uv": [32, 24]
+						}
+					]
+				},
+				{
+					"name": "ring_inner_seg_2",
+					"parent": "ring_inner",
+					"pivot": [0, 24, 0],
+					"rotation": [0, 180, 0],
+					"cubes": [
+						{
+							"origin": [-6.5, 23.2, -1],
+							"size": [3.5, 1.6, 2],
+							"uv": [32, 24]
+						}
+					]
+				},
+				{
+					"name": "ring_inner_seg_3",
+					"parent": "ring_inner",
+					"pivot": [0, 24, 0],
+					"rotation": [0, 270, 0],
+					"cubes": [
+						{
+							"origin": [-6.5, 23.2, -1],
+							"size": [3.5, 1.6, 2],
+							"uv": [32, 24]
+						}
+					]
+				},
+				{
+					"name": "core",
+					"parent": "pylon",
+					"pivot": [0, 24, 0],
+					"cubes": [
+						{
+							"origin": [-3, 21, -3],
+							"size": [6, 6, 6],
+							"uv": [0, 40]
+						}
+					]
+				},
+				{
+					"name": "antenna",
+					"parent": "core",
+					"pivot": [0, 30, 0],
+					"cubes": [
+						{
+							"origin": [-0.5, 27, -0.5],
+							"size": [1, 9, 1],
+							"uv": [56, 0]
+						},
+						{
+							"origin": [-1.5, 36, -1.5],
+							"size": [3, 3, 3],
+							"uv": [56, 16]
+						}
+					]
+				}
+			]
+		}
+	]
+}
