@@ -1,0 +1,29 @@
+{
+  "id": "miner",
+  "loop_ticks": 240,
+  "fade_ticks": 30,
+  "anchor": { "dx": 18, "dz": -10 },
+  "actors": [
+    {
+      "role": "miner",
+      "variant": "player",
+      "keyframes": [
+        { "t": 0, "x": -3.0, "z": 0.0, "yaw": 90, "action": "idle" },
+        { "t": 40, "x": -1.0, "z": 0.0, "yaw": 90, "action": "walk" },
+        { "t": 60, "x": 0.0, "z": 0.0, "yaw": 90, "action": "idle" },
+        { "t": 70, "x": 0.0, "z": 0.0, "yaw": 90, "action": "swing" },
+        { "t": 100, "x": 0.0, "z": 0.0, "yaw": 90, "action": "swing" },
+        { "t": 130, "x": 0.0, "z": 0.0, "yaw": 90, "action": "swing" },
+        { "t": 160, "x": 0.0, "z": 0.0, "yaw": 90, "action": "swing" },
+        { "t": 180, "x": 0.0, "z": 0.0, "yaw": 210, "action": "idle" },
+        { "t": 200, "x": 0.0, "z": 0.0, "yaw": 90, "action": "idle" },
+        { "t": 230, "x": -3.0, "z": 0.0, "yaw": 270, "action": "walk" },
+        { "t": 240, "x": -3.0, "z": 0.0, "yaw": 90, "action": "idle" }
+      ]
+    }
+  ],
+  "props": [
+    { "block": "minecraft:dark_oak_button", "dx": 2.2, "dy": 0.2, "dz": 1.4, "scale": 0.6 },
+    { "block": "minecraft:dark_oak_button", "dx": 2.2, "dy": 0.2, "dz": -1.4, "scale": 0.6 }
+  ]
+}

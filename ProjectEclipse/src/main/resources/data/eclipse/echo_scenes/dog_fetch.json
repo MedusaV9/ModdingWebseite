@@ -1,0 +1,35 @@
+{
+  "id": "dog_fetch",
+  "loop_ticks": 280,
+  "fade_ticks": 30,
+  "anchor": { "dx": -6, "dz": -18 },
+  "actors": [
+    {
+      "role": "owner",
+      "variant": "player",
+      "keyframes": [
+        { "t": 0, "x": 0.0, "z": 0.0, "yaw": 0, "action": "idle" },
+        { "t": 20, "x": 0.0, "z": 0.0, "yaw": 0, "action": "throw" },
+        { "t": 140, "x": 0.0, "z": 0.0, "yaw": 0, "action": "idle" },
+        { "t": 260, "x": 0.0, "z": 0.0, "yaw": 0, "action": "wave" },
+        { "t": 280, "x": 0.0, "z": 0.0, "yaw": 0, "action": "idle" }
+      ]
+    },
+    {
+      "role": "dog",
+      "variant": "wolf",
+      "keyframes": [
+        { "t": 0, "x": 1.0, "z": 0.5, "yaw": 0, "action": "idle" },
+        { "t": 30, "x": 1.0, "z": 0.5, "yaw": 0, "action": "idle" },
+        { "t": 100, "x": 1.0, "z": 8.0, "yaw": 0, "action": "run" },
+        { "t": 120, "x": 1.0, "y": 0.6, "z": 8.6, "yaw": 0, "action": "jump" },
+        { "t": 140, "x": 1.0, "z": 8.0, "yaw": 180, "action": "idle" },
+        { "t": 260, "x": 1.0, "z": 0.5, "yaw": 180, "action": "walk" },
+        { "t": 280, "x": 1.0, "z": 0.5, "yaw": 0, "action": "idle" }
+      ]
+    }
+  ],
+  "props": [
+    { "block": "minecraft:dark_oak_fence", "dx": 1.0, "dy": 0.05, "dz": 8.6, "scale": 0.3 }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "_comment": "WOAH-05 Echo grove — sound inventory. ZERO new sound events shipped: assets/eclipse/sounds.json + registry/EclipseSounds.java are locked by the parallel wave, so every beat is either a reused shipped event or vanilla note-block sequencing done LIVE server-side (plan §6.1 fallback built from day one — no TREBLO dependency). Senders: woah/echogrove/MemoryFloodService (music-box motif + deposit chimes), woah/echogrove/MemoryOrbEntity (whispers), woah/echogrove/EchoFinaleSequence (award sting + full motif). If the TREBLO tracks land later, the intended definitions are under 'deferred_sounds_json_rows'.",
+
+  "reused_eclipse_events": {
+    "eclipse:ambient.gazer_whisper": "Tree-orb lore whisper, positioned at the orb (vol 0.35, pitch 0.7 — low = warm, not creepy; 3 s per-orb cooldown). MemoryOrbEntity.whisper.",
+    "eclipse:award.sting": "Finale tick 560 reward materialization at the tree foot. EchoFinaleSequence.dropReward."
+  },
+
+  "reused_vanilla_events": {
+    "minecraft:block.note_block.chime": "Lead voice of the server-sequenced music-box motif (25-note table, 6t grid, RECORDS source, vol falls with distance) and the 3-tone ascending deposit chime (deposited n of 5 raises the base pitch). MemoryFloodService.queueMotif / playDepositChime.",
+    "minecraft:block.note_block.bell": "Sparse bell layer over the chime lead (every 4th motif note, vol 0.5) — the 'music box heard through fog' body. MemoryFloodService.drainNotes.",
+    "minecraft:entity.experience_orb.pickup": "Free with the finale's 10 ExperienceOrb.award drops (500 XP)."
+  },
+
+  "deferred_sounds_json_rows": {
+    "music.echo_music_box": "assets/eclipse/sounds/music/echo_music_box.ogg (TREBLO: 'lonely music box, minor waltz, tape-warm, ~8 s loopable') — when it ships: flip MemoryFloodService.NOTE_FALLBACK to false, register the SoundEvent in music/EclipseMusicSounds, and let the flood cue play the track client-side via the EchoGroveFx latch hook instead of the note queue.",
+    "music.echo_grove": "assets/eclipse/sounds/music/echo_grove.ogg (TREBLO: 'sparse ambient, distant slowed music box, soft strings') — optional MusicCues rung ECHO_GROVE for the zone; NOT implemented, the grove currently keeps the world music (near-silence staging works with the note motif).",
+    "ambient.echo_wind": "assets/eclipse/sounds/ambient/echo_wind.ogg — optional quiet client loop inside the hollow; NOT implemented, skipped to keep the melancholic near-silence until playtests ask for it."
+  },
+
+  "subtitles_note": "Because no new sound events ship, no new subtitles.eclipse.* keys are needed; note-block and reused events keep their existing subtitles. If the deferred rows land later, add 'subtitles.eclipse.music.echo_music_box' etc. with them."
+}

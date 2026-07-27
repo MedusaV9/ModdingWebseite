@@ -1,0 +1,24 @@
+{
+  "id": "lantern_walk",
+  "loop_ticks": 360,
+  "fade_ticks": 30,
+  "anchor": { "dx": 8, "dz": 22 },
+  "actors": [
+    {
+      "role": "keeper",
+      "variant": "player",
+      "keyframes": [
+        { "t": 0, "x": 0.0, "z": 0.0, "yaw": 135, "action": "idle" },
+        { "t": 20, "x": 0.0, "z": 0.0, "yaw": 135, "action": "walk" },
+        { "t": 90, "x": 8.0, "z": -8.0, "yaw": 135, "action": "idle" },
+        { "t": 110, "x": 8.0, "z": -8.0, "yaw": 100, "action": "wave" },
+        { "t": 130, "x": 8.0, "z": -8.0, "yaw": 145, "action": "walk" },
+        { "t": 210, "x": 14.0, "z": -18.0, "yaw": 145, "action": "idle" },
+        { "t": 240, "x": 14.0, "z": -18.0, "yaw": 325, "action": "walk" },
+        { "t": 350, "x": 0.0, "z": 0.0, "yaw": 315, "action": "idle" },
+        { "t": 360, "x": 0.0, "z": 0.0, "yaw": 135, "action": "idle" }
+      ]
+    }
+  ],
+  "props": []
+}

@@ -1,0 +1,30 @@
+{
+  "id": "bench_couple",
+  "loop_ticks": 400,
+  "fade_ticks": 30,
+  "anchor": { "dx": 10, "dz": 16 },
+  "actors": [
+    {
+      "role": "partner_a",
+      "variant": "player",
+      "keyframes": [
+        { "t": 0, "x": -0.5, "z": 0.0, "yaw": 180, "action": "sit" },
+        { "t": 200, "x": -0.5, "z": 0.0, "yaw": 205, "action": "sit" },
+        { "t": 280, "x": -0.5, "z": 0.0, "yaw": 180, "action": "sit" },
+        { "t": 400, "x": -0.5, "z": 0.0, "yaw": 180, "action": "sit" }
+      ]
+    },
+    {
+      "role": "partner_b",
+      "variant": "player",
+      "keyframes": [
+        { "t": 0, "x": 0.5, "z": 0.0, "yaw": 180, "action": "sit" },
+        { "t": 200, "x": 0.5, "z": 0.0, "yaw": 155, "action": "sit" },
+        { "t": 340, "x": 0.5, "z": 0.0, "yaw": 165, "action": "wave" },
+        { "t": 360, "x": 0.5, "z": 0.0, "yaw": 180, "action": "sit" },
+        { "t": 400, "x": 0.5, "z": 0.0, "yaw": 180, "action": "sit" }
+      ]
+    }
+  ],
+  "props": []
+}

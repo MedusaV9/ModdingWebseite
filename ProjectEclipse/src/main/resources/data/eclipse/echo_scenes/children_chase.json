@@ -1,0 +1,31 @@
+{
+  "id": "children_chase",
+  "loop_ticks": 320,
+  "fade_ticks": 30,
+  "anchor": { "dx": -14, "dz": 6 },
+  "actors": [
+    {
+      "role": "child_a",
+      "variant": "player_child",
+      "keyframes": [
+        { "t": 0, "x": 0.0, "z": 3.0, "yaw": 90, "action": "run" },
+        { "t": 80, "x": 3.0, "z": 0.0, "yaw": 180, "action": "run" },
+        { "t": 160, "x": 0.0, "z": -3.0, "yaw": 270, "action": "run" },
+        { "t": 240, "x": -3.0, "z": 0.0, "yaw": 0, "action": "run" },
+        { "t": 320, "x": 0.0, "z": 3.0, "yaw": 90, "action": "run" }
+      ]
+    },
+    {
+      "role": "child_b",
+      "variant": "player_child",
+      "keyframes": [
+        { "t": 0, "x": -2.4, "z": 2.4, "yaw": 135, "action": "run" },
+        { "t": 80, "x": 2.4, "z": 2.4, "yaw": 225, "action": "run" },
+        { "t": 160, "x": 2.4, "z": -2.4, "yaw": 315, "action": "run" },
+        { "t": 240, "x": -2.4, "z": -2.4, "yaw": 45, "action": "run" },
+        { "t": 320, "x": -2.4, "z": 2.4, "yaw": 135, "action": "run" }
+      ]
+    }
+  ],
+  "props": []
+}

@@ -1,0 +1,88 @@
+{
+  "_comment": "WOAH-05 'Echo-Hain' — lang keys for the misty memory hollow (woah/echogrove/* + client/echo/*). All keys are NEW; nothing shipped is overwritten. 'echo.eclipse.memory.0-4' are the five tree-orb lore fragments (plan §7.2, whisper captions via S2CCaptionPayload STYLE_WHISPER); 'echo.eclipse.memory.collected/deposited' ride the same channel on orb pickup / mote deposit; 'echo.eclipse.finale.title' is the STYLE_TITLE card at finale tick 560 (plan §7.3). 'item.eclipse.memory_mote[.lore]' + 'item.eclipse.echo_blossom[.lore]' name the quest ware and the finale artifact registered in woah/echogrove/EchoGroveItems (house '.lore' convention). 'entity.eclipse.echo_ghost[_wolf]/memory_orb' name the EchoGroveEntities types. 'dev.eclipse.woah.echo.*' are operator feedback + handbook docs for EchoGroveDevCommands. Merge into assets/eclipse/lang/en_us.json + de_de.json after the parallel wave (lang files are locked).",
+
+  "en_us": {
+    "echo.eclipse.memory.0": "The tree was already old when we were small. 'Catch me then,' she called — I can still hear it.",
+    "echo.eclipse.memory.1": "Every morning I waved to her from the adit. The rock gave silver. It never gave the hours back.",
+    "echo.eclipse.memory.2": "On this bench we said nothing until the sun went down. It was the finest conversation of my life.",
+    "echo.eclipse.memory.3": "Good boy. Fetch the stick. Bring it here. … I think he is waiting still.",
+    "echo.eclipse.memory.4": "When the lights came we sang. If you are hearing this: we were happy here.",
+    "echo.eclipse.memory.collected": "…you carry a memory now.",
+    "echo.eclipse.memory.deposited": "The tree takes it back, gently.",
+    "echo.eclipse.finale.title": "The grove remembers.",
+
+    "item.eclipse.memory_mote": "Memory Mote",
+    "item.eclipse.memory_mote.lore": "A borrowed moment, still warm.",
+    "item.eclipse.echo_blossom": "Echo Blossom",
+    "item.eclipse.echo_blossom.lore": "Memories keep you warm.",
+
+    "entity.eclipse.echo_ghost": "Echo",
+    "entity.eclipse.echo_ghost_wolf": "Echo of a Wolf",
+    "entity.eclipse.memory_orb": "Memory Orb",
+
+    "dev.eclipse.woah.echo.spawn.started": "Materializing the echo grove (budgeted carve — give it a few seconds)…",
+    "dev.eclipse.woah.echo.spawn.already": "The echo grove is already placed — use /dev woah echo reset to restart the quest.",
+    "dev.eclipse.woah.echo.spawn.done": "Echo grove materialized — scenes and orbs stream in once a player is within 64 blocks.",
+    "dev.eclipse.woah.echo.spawn.failed": "Echo grove materialization failed — see the server log.",
+    "dev.eclipse.woah.echo.not_placed": "The echo grove is not placed — /dev woah echo spawn first.",
+    "dev.eclipse.woah.echo.player_only": "This command needs a player — the scene plays next to whoever fires it.",
+    "dev.eclipse.woah.echo.flood.ok": "Memory flood forced (%s tick hold) — the past grows in four waves, then falls as ash.",
+    "dev.eclipse.woah.echo.finale.ok": "Deposited pinned to 5 — finale started: gather, golden bloom, reward at the tree.",
+    "dev.eclipse.woah.echo.finale.done_already": "The finale already ran in this world — /dev woah echo reset clears finaleDone.",
+    "dev.eclipse.woah.echo.reset.ok": "Quest reset: orbs respawned (%s), scenes despawned, overlay pool re-parked; terrain stays.",
+    "dev.eclipse.woah.echo.scene.ok": "Playing scene '%s' once, amplified, next to you.",
+    "dev.eclipse.woah.echo.scene.unknown": "Unknown scene '%s' — try children_chase, miner, bench_couple, dog_fetch or lantern_walk.",
+    "dev.eclipse.woah.echo.status.header": "Echo grove: placed=%s · collected=0b%s · deposited=%s/5 · finaleDone=%s",
+    "dev.eclipse.woah.echo.status.census": "Actors %s · loop instances %s · one-shots %s · live orbs %s",
+    "dev.eclipse.woah.echo.status.pool": "Overlay pool %s/%s · flood active=%s · next flood in %s t",
+
+    "dev.eclipse.doc.woah.echo.spawn": "WOAH-05: materializes the misty memory hollow immediately, bypassing the stage-4 gate (no-op with a hint when already placed).",
+    "dev.eclipse.doc.woah.echo.flood": "Forces a memory flood now — 620 display overlays grow in four waves, the grade turns golden, ash falls at the end ('ticks' overrides the 160t hold, 80–1200).",
+    "dev.eclipse.doc.woah.echo.finale": "Pins deposited=5 and starts the finale sequence: all echoes gather at the memory tree, extended golden bloom, echo_blossom reward, persistent afterglow.",
+    "dev.eclipse.doc.woah.echo.reset": "Resets the collection quest (orbs respawn, deposited=0, finaleDone=false) and despawns every scene actor; the terraformed grove itself stays.",
+    "dev.eclipse.doc.woah.echo.status": "Read-only: placed/collected/deposited/finaleDone plus the live actor, orb, overlay-pool and flood-timer census.",
+    "dev.eclipse.doc.woah.echo.scene": "Plays one echo scene once, amplified (glow 0.6), anchored next to the executing player — independent of the grove loops."
+  },
+  "de_de": {
+    "echo.eclipse.memory.0": "Der Baum war schon alt, als wir klein waren. ‚Fang mich doch', hat sie gerufen — ich höre es noch.",
+    "echo.eclipse.memory.1": "Jeden Morgen hab ich ihr vom Stollen aus gewinkt. Der Fels gab Silber. Die Stunden gab er nie zurück.",
+    "echo.eclipse.memory.2": "Auf dieser Bank haben wir geschwiegen, bis die Sonne unterging. Es war das schönste Gespräch meines Lebens.",
+    "echo.eclipse.memory.3": "Brav, Junge. Hol das Holz. Bring es her. … Ich glaube, er wartet noch immer.",
+    "echo.eclipse.memory.4": "Als die Lichter kamen, haben wir gesungen. Wenn du das hörst: Wir waren glücklich hier.",
+    "echo.eclipse.memory.collected": "…du trägst jetzt eine Erinnerung.",
+    "echo.eclipse.memory.deposited": "Der Baum nimmt sie sanft zurück.",
+    "echo.eclipse.finale.title": "Der Hain erinnert sich.",
+
+    "item.eclipse.memory_mote": "Erinnerungssplitter",
+    "item.eclipse.memory_mote.lore": "Ein geliehener Augenblick, noch warm.",
+    "item.eclipse.echo_blossom": "Echo-Blüte",
+    "item.eclipse.echo_blossom.lore": "Erinnerungen wärmen.",
+
+    "entity.eclipse.echo_ghost": "Echo",
+    "entity.eclipse.echo_ghost_wolf": "Echo eines Wolfs",
+    "entity.eclipse.memory_orb": "Erinnerungs-Orb",
+
+    "dev.eclipse.woah.echo.spawn.started": "Materialisiere den Echo-Hain (budgetiertes Carving — dauert ein paar Sekunden)…",
+    "dev.eclipse.woah.echo.spawn.already": "Der Echo-Hain ist bereits platziert — /dev woah echo reset startet die Quest neu.",
+    "dev.eclipse.woah.echo.spawn.done": "Echo-Hain materialisiert — Szenen und Orbs erscheinen, sobald ein Spieler näher als 64 Blöcke ist.",
+    "dev.eclipse.woah.echo.spawn.failed": "Echo-Hain-Materialisierung fehlgeschlagen — siehe Server-Log.",
+    "dev.eclipse.woah.echo.not_placed": "Der Echo-Hain ist nicht platziert — zuerst /dev woah echo spawn.",
+    "dev.eclipse.woah.echo.player_only": "Dieser Befehl braucht einen Spieler — die Szene spielt neben dem Ausführenden.",
+    "dev.eclipse.woah.echo.flood.ok": "Erinnerungs-Flut erzwungen (%s Ticks Haltezeit) — die Vergangenheit wächst in vier Wellen und fällt dann als Asche.",
+    "dev.eclipse.woah.echo.finale.ok": "Abgaben auf 5 gesetzt — Finale gestartet: Versammlung, goldene Blüte, Belohnung am Baum.",
+    "dev.eclipse.woah.echo.finale.done_already": "Das Finale lief in dieser Welt bereits — /dev woah echo reset löscht finaleDone.",
+    "dev.eclipse.woah.echo.reset.ok": "Quest zurückgesetzt: Orbs respawnt (%s), Szenen despawnt, Overlay-Pool neu geparkt; das Terrain bleibt.",
+    "dev.eclipse.woah.echo.scene.ok": "Spiele Szene '%s' einmal verstärkt neben dir ab.",
+    "dev.eclipse.woah.echo.scene.unknown": "Unbekannte Szene '%s' — versuche children_chase, miner, bench_couple, dog_fetch oder lantern_walk.",
+    "dev.eclipse.woah.echo.status.header": "Echo-Hain: placed=%s · collected=0b%s · deposited=%s/5 · finaleDone=%s",
+    "dev.eclipse.woah.echo.status.census": "Actors %s · Loop-Instanzen %s · One-Shots %s · lebende Orbs %s",
+    "dev.eclipse.woah.echo.status.pool": "Overlay-Pool %s/%s · Flut aktiv=%s · nächste Flut in %s t",
+
+    "dev.eclipse.doc.woah.echo.spawn": "WOAH-05: materialisiert die Nebelmulde sofort und umgeht das Stage-4-Gate (No-Op mit Hinweis, wenn bereits platziert).",
+    "dev.eclipse.doc.woah.echo.flood": "Erzwingt sofort eine Erinnerungs-Flut — 620 Display-Overlays wachsen in vier Wellen, die Grade wird golden, am Ende fällt Asche ('ticks' überschreibt die 160t-Haltezeit, 80–1200).",
+    "dev.eclipse.doc.woah.echo.finale": "Setzt deposited=5 und startet die Finale-Sequenz: alle Echos versammeln sich am Erinnerungs-Baum, verlängerte goldene Blüte, echo_blossom-Belohnung, dauerhafter Nachglanz.",
+    "dev.eclipse.doc.woah.echo.reset": "Setzt die Sammel-Quest zurück (Orbs respawnen, deposited=0, finaleDone=false) und despawnt alle Szenen-Actors; der terrageformte Hain selbst bleibt.",
+    "dev.eclipse.doc.woah.echo.status": "Nur lesend: placed/collected/deposited/finaleDone plus Zensus über Actors, Orbs, Overlay-Pool und Flut-Timer.",
+    "dev.eclipse.doc.woah.echo.scene": "Spielt eine Echo-Szene einmal verstärkt (Glow 0.6) neben dem ausführenden Spieler ab — unabhängig von den Hain-Loops."
+  }
+}
