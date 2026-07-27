@@ -49,7 +49,7 @@ export const CLIPS: ClipSpec[] = [
     cutIn: CUT[0], // 0
     cutOut: CUT[2], // 225 — 2 Takte
     playbackRate: 2,
-    trimBefore: 60,
+    trimBefore: 120,
     textId: 't1',
     kenBurns: {from: 1.02, to: 1.07, panY: -18},
     fadeIn: 24,
@@ -62,7 +62,7 @@ export const CLIPS: ClipSpec[] = [
     cutIn: CUT[2], // 225
     cutOut: CUT[5], // 563 — 3 Takte, laeuft ueber den Musik-Breakdown
     playbackRate: 1.5,
-    trimBefore: 60,
+    trimBefore: 30,
     textId: 't2',
     kenBurns: {from: 1.02, to: 1.06, panX: 24},
     label: 'Geisterschiff-Dolly mit Deckhands (Breakdown)',
@@ -100,7 +100,7 @@ export const CLIPS: ClipSpec[] = [
     cutIn: CUT[7], // 788
     cutOut: CUT[8], // 900
     playbackRate: 3,
-    trimBefore: 60,
+    trimBefore: 180,
     textId: 't5',
     kenBurns: {from: 1.02, to: 1.07},
     label: 'Zauberstab-Kampf POV',
@@ -112,7 +112,7 @@ export const CLIPS: ClipSpec[] = [
     cutIn: CUT[8], // 900 — 2. Drop-Runde
     cutOut: CUT[10], // 1125
     playbackRate: 2.5,
-    trimBefore: 60,
+    trimBefore: 180,
     textId: 't6',
     kenBurns: {from: 1.06, to: 1.02},
     shakeAmp: 30,
@@ -161,7 +161,7 @@ export const CLIPS: ClipSpec[] = [
     cutIn: CUT[14], // 1575
     cutOut: CUT[15], // 1688
     playbackRate: 4,
-    trimBefore: 60,
+    trimBefore: 960,
     textId: 't9',
     kenBurns: {from: 1.06, to: 1.02},
     label: 'End-Ankunfts-Helix (Zeitraffer)',
@@ -173,7 +173,7 @@ export const CLIPS: ClipSpec[] = [
     cutIn: CUT[15], // 1688
     cutOut: CUT[16], // 1800
     playbackRate: 2,
-    trimBefore: 60,
+    trimBefore: 150,
     kenBurns: {from: 1.02, to: 1.06},
     shakeAmp: 24,
     label: 'Schwarzes Loch -> Sog -> Endcard',

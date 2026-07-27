@@ -15,11 +15,9 @@ const lin = (db: number) => Math.pow(10, db / 20);
 
 /**
  * Master-Pegel der Musik. Vorgabe = 1.0 (die Dynamik steckt im Song).
- * ACHTUNG: worst_enemy_30s.wav ist ein kommerzieller Loud-Master
- * (gemessen I = -6.4 LUFS, True Peak +0.8 dBFS) — der Mix clippt dadurch
- * bereits ohne SFX. Wer Headroom braucht: hier 0.85 (~ -1.4 dB) setzen ODER
- * (besser) das WAV nach sound_design.md §5 auf -14 LUFS / -1.5 dBTP
- * normalisieren; dann kann dieser Wert auf 1.0 bleiben.
+ * worst_enemy_30s.wav ist per 2-Pass-loudnorm (linear) auf -14 LUFS /
+ * TP -6.9 dBFS normalisiert (Quell-Master war -6.4 LUFS mit Clipping) —
+ * damit haben die SFX-Spots Headroom und der Summenmix clippt nicht.
  */
 export const MUSIC_GAIN = 1.0;
 
