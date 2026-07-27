@@ -60,6 +60,10 @@ public final class LandmarkProtection {
     public static final int SUMMIT_RADIUS = 24;
     /** Depth below the summit surface still covered (the terraforming shelf cut). */
     public static final int SUMMIT_DEPTH = 24;
+    /** WOAH-04 resonance-field valley radius (PLAN-04 §2.3: monoliths + light paths). */
+    public static final int RESONANCE_RADIUS = 52;
+    /** Depth below the anchor surface still covered (plateau cut + bowl carve − 12 pad). */
+    public static final int RESONANCE_DEPTH = 24;
 
     /** One protected cylinder slice; full columns use MIN/MAX sentinels. */
     private record Zone(ResourceKey<Level> dimension, int x, int z, int radius,
@@ -139,6 +143,19 @@ public final class LandmarkProtection {
             built.add(new Zone(Level.OVERWORLD, mountain.x(), mountain.z(),
                     SUMMIT_RADIUS, summitY - SUMMIT_DEPTH, Integer.MAX_VALUE));
         }
+        // WOAH-04 resonance field (self-enqueued at stage 5, NOT a DiscMapDefaults row):
+        // r-52 cylinder around the authored valley anchor from below the carved bowl
+        // floor to the sky — the monoliths + light paths must never be undermined
+        // (docs/plans_v3/woah/PLAN-04 §2.3). Deliberately active even before the site
+        // is placed: the zone table exists from server start, players cannot pre-mine
+        // the valley footprint. Same deterministic surface probe as the summit band.
+        int resonanceY = DiscTerrainFunction.surfaceY(DiscProfile.OVERWORLD,
+                dev.projecteclipse.eclipse.woah.resonance.ResonanceFieldService.ANCHOR_X,
+                dev.projecteclipse.eclipse.woah.resonance.ResonanceFieldService.ANCHOR_Z);
+        built.add(new Zone(Level.OVERWORLD,
+                dev.projecteclipse.eclipse.woah.resonance.ResonanceFieldService.ANCHOR_X,
+                dev.projecteclipse.eclipse.woah.resonance.ResonanceFieldService.ANCHOR_Z,
+                RESONANCE_RADIUS, resonanceY - RESONANCE_DEPTH, Integer.MAX_VALUE));
         return List.copyOf(built);
     }
 

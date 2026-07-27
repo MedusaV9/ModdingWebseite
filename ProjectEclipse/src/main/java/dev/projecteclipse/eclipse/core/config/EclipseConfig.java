@@ -243,6 +243,21 @@ public final class EclipseConfig {
     }
 
     /**
+     * WOAH-04 §7.4: whether the resonance-field LISTEN phase shows the subtle hint glow
+     * on the next expected crystal ({@code general.json} nested
+     * {@code "resonance":{"hintGlow"}}, default {@code true}). Kept OUT of the
+     * {@link General} record on purpose — an additive side flag cannot break concurrent
+     * record-signature work.
+     */
+    public static boolean resonanceHintGlow() {
+        ensureLoaded();
+        return resonanceHintGlow;
+    }
+
+    /** WOAH-04 side flag (see {@link #resonanceHintGlow()}); parsed with general.json. */
+    private static volatile boolean resonanceHintGlow = true;
+
+    /**
      * The stage timeline of the given disc dimension ({@code "overworld"} / {@code "nether"}),
      * ordered by stage, from {@code stages.json}. Stage 0 is implicit (pre-intro geometry) and
      * never listed.
@@ -473,6 +488,9 @@ public final class EclipseConfig {
         JsonObject cutscenes = new JsonObject();
         cutscenes.addProperty("freezeDuringUnlocks", general.cutscenesFreezeDuringUnlocks());
         obj.add("cutscenes", cutscenes);
+        JsonObject resonance = new JsonObject();
+        resonance.addProperty("hintGlow", resonanceHintGlow);
+        obj.add("resonance", resonance);
         return obj;
     }
 
@@ -493,6 +511,10 @@ public final class EclipseConfig {
         // V5-FIXGUARD / EVAL-SAT-S #5: legacy saves must OPT IN to the stronghold self-heal.
         boolean legacyStrongholdSelfHeal = obj.has("legacyStrongholdSelfHeal")
                 && obj.get("legacyStrongholdSelfHeal").getAsBoolean();
+        // WOAH-04: pre-resonance general.json files have no "resonance" object — hint on.
+        resonanceHintGlow = !obj.has("resonance")
+                || !obj.getAsJsonObject("resonance").has("hintGlow")
+                || obj.getAsJsonObject("resonance").get("hintGlow").getAsBoolean();
         return new General(Math.max(0, graveGraceMinutes), dayAutoAdvance, dayAutoAdvanceTime,
                 Math.max(1, ringBlocksBudgetMs), freezeDuringUnlocks, Math.max(0, borderOffset),
                 Math.max(1, borderFxRange), randomizeMapSeed, legacyStrongholdSelfHeal);

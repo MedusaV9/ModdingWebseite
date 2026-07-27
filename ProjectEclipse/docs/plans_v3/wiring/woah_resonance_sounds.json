@@ -1,0 +1,24 @@
+{
+  "_comment": "WOAH-04 Resonanzfeld — sound inventory. ZERO new sound events shipped: assets/eclipse/sounds.json + registry/EclipseSounds.java are locked by the parallel wave, so every beat is layered LIVE in code from vanilla events + one shipped eclipse event (the plan-§6 recipes, mixed at play-time instead of in a sounds.json row). Senders: woah/resonance/ResonanceMelodyMachine + ResonanceFieldService (server), woah/resonance/client/ResonanceChoir (client-local voices). If the main agent later wants the plan's dedicated rows, the intended definitions are under 'deferred_sounds_json_rows'.",
+
+  "reused_vanilla_events": {
+    "minecraft:block.note_block.bell": "THE crystal note voice (plan §6.1): every strike/teach/cascade/arpeggio note plays this at the ResonanceTones pentatonic pitch table ({-12,-10,-8,-5,-3,0,+2,+4,+7} semitones -> 2^(n/12)). 1.21.1 Mojang-mappings gotcha handled: SoundEvents.NOTE_BLOCK_BELL is a Holder<SoundEvent>, so ResonanceMelodyMachine.playCrystalNote uses the Holder overload of Level.playSound on purpose.",
+    "minecraft:block.amethyst_block.chime": "Glassy shimmer layered UNDER every bell note (same pitch, x0.6 volume) — the two-layer 'crystal' timbre; also a Holder-typed constant.",
+    "minecraft:block.amethyst_cluster.hit": "The physical 'tap' transient on the struck crystal itself (ResonanceFieldService.strike, pitch ~ tone).",
+    "minecraft:block.amethyst_block.resonate": "TEACH intro swell at the altar + the finale's rising resonance bed.",
+    "minecraft:block.amethyst_block.break": "FAIL sting bottom layer (pitch 0.6) — the 'crystal cracks' read.",
+    "minecraft:block.note_block.didgeridoo": "FAIL dissonance dyad: two didgeridoo notes a tritone apart (pitch 0.53/0.75) — deliberately NOT from the pentatonic table.",
+    "minecraft:block.bell.resonate": "Finale crown layer (long golden after-ring over the arpeggio flood)."
+  },
+
+  "reused_eclipse_events": {
+    "eclipse:event.emerge": "Finale reward beat when the shard drops (pitch 1.2) — the house 'something arrives' whoosh.",
+    "eclipse:ambient.limbo_loop": "ResonanceChoir voice FALLBACK ONLY: until the dedicated ambient.crystal_voice .ogg is delivered, each idle crystal voice is this loop re-pitched by the SAME ResonanceTones table at low volume — exactly the documented self-healing fallback from SanctumHum.resolveHum(). The choir resolves eclipse:ambient.crystal_voice from the registry first and uses it automatically the moment the row lands."
+  },
+
+  "deferred_sounds_json_rows": {
+    "ambient.crystal_voice": "{ \"category\": \"ambient\", \"subtitle\": \"subtitles.eclipse.ambient.crystal_voice\", \"sounds\": [ { \"name\": \"eclipse:ambient/crystal_voice\", \"stream\": false } ] } — a soft glass-bow drone tone, loopable, ~6 s, recorded at tone index 5 (pitch 1.0 = A4) so the ResonanceTones pitch table transposes it correctly. Registry side: EclipseSounds.AMBIENT_CRYSTAL_VOICE = register(\"ambient.crystal_voice\"). Consumed by woah/resonance/client/ResonanceChoir.resolveVoice() which already looks the id up dynamically — NO code change needed when the row + .ogg land."
+  },
+
+  "subtitles_note": "subtitles.eclipse.ambient.crystal_voice ('Crystal sings' / 'Kristall singt') is already staged in docs/plans_v3/langdrop/woah_resonance.json so it ships together with the langdrop merge; all layered vanilla/eclipse events reuse their existing subtitles."
+}

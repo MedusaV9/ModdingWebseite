@@ -484,6 +484,19 @@ public final class PhotonBridge {
         return tracked == null || tracked == START_FAILED ? null : new LoopHandle(tracked);
     }
 
+    /**
+     * {@link #spawnLoop(ResourceLocation, Vec3)} with the full {@link SpawnOptions} knob
+     * set (rotation/scale for yaw-aligned loop legs, e.g. the WOAH-04 resonance light
+     * paths). {@code allowMulti} is forced on exactly like the plain loop path — loop
+     * ownership must never be stolen by Photon's same-anchor dedup.
+     */
+    @Nullable
+    public static LoopHandle spawnLoop(ResourceLocation fxId, Vec3 pos, SpawnOptions options) {
+        Tracked tracked = startExecutor(fxId, pos, null, 0,
+                options.withAllowMulti(true), true, true);
+        return tracked == null || tracked == START_FAILED ? null : new LoopHandle(tracked);
+    }
+
     /** Entity-attached variant of {@link #spawnLoop(ResourceLocation, Vec3)}. */
     @Nullable
     public static LoopHandle spawnLoop(ResourceLocation fxId, Entity entity, int autoRotateOrdinal) {

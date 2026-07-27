@@ -1,0 +1,93 @@
+{
+  "max_lifetime": 60,
+  "loop": false,
+  "rate": 1,
+  "count": 6,
+  "emitter_settings": {
+    "shape": {
+      "shape": "veil:cylinder",
+      "dimensions": [
+        2.2,
+        1.0,
+        2.2
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "from_surface": true
+    },
+    "particle_settings": {
+      "particle_speed": 0.9,
+      "random_speed": true,
+      "base_particle_size": 0.24,
+      "particle_size_variation": 0.08,
+      "particle_lifetime": 45,
+      "particle_lifetime_variation": 12,
+      "initial_direction": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "random_initial_direction": false,
+      "random_initial_rotation": true,
+      "random_size": true,
+      "random_lifetime": true
+    },
+    "force_spawn": false
+  },
+  "particle_data": {
+    "render_style": "veil:billboard",
+    "additive": true,
+    "should_collide": false,
+    "face_velocity": true,
+    "velocity_stretch_factor": 0.9,
+    "sprite_data": {
+      "sprite": "eclipse:textures/particle/wisp_white.png",
+      "frame_count": 1,
+      "frame_time": 1,
+      "stretch_to_lifetime": false
+    },
+    "modules": [
+      {
+        "module": "veil:drag",
+        "strength": 0.015
+      },
+      {
+        "module": "veil:color",
+        "gradient": {
+          "rgb_points": [
+            {
+              "percent": 0.0,
+              "color": "#EFE4FF"
+            },
+            {
+              "percent": 0.35,
+              "color": "#B98CFF"
+            },
+            {
+              "percent": 1.0,
+              "color": "#6FDCE8"
+            }
+          ],
+          "alpha_points": [
+            {
+              "percent": 0.0,
+              "alpha": 0.95
+            },
+            {
+              "percent": 0.7,
+              "alpha": 0.7
+            },
+            {
+              "percent": 1.0,
+              "alpha": 0.0
+            }
+          ]
+        },
+        "interpolant": "q.agePercent"
+      }
+    ]
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "en_us": {
+    "dev.eclipse.doc.woah.resonance.spawn": "Enqueue the WOAH-04 resonance field build at the authored anchor (stage gate bypassed); 'here' builds it at your feet instead (dev worlds)",
+    "dev.eclipse.doc.woah.resonance.melody": "Print the current melody as tone indices with the matching crystal coordinates, or reroll it and start TEACH immediately",
+    "dev.eclipse.doc.woah.resonance.solve": "Force the melody finale right now — arpeggio flood, light pillar, glitter rain, shard reward (FX/reward QA)",
+    "dev.eclipse.doc.woah.resonance.reset": "Reset the puzzle to IDLE, clear the cooldown, discard every field display/interaction and rebuild them from SavedData (self-heal test)",
+    "dev.eclipse.doc.woah.resonance.status": "Server-side census: puzzle state, melody progress, cooldown remaining, display/interaction counts, spawn queue",
+    "dev.eclipse.woah.resonance.spawn.already": "The resonance field is already built — use /dev woah resonance reset to rebuild its entities.",
+    "dev.eclipse.woah.resonance.spawn.started": "Resonance field enqueued at %1$s %2$s %3$s — the async placer will terraform and build it over the next seconds.",
+    "dev.eclipse.woah.resonance.melody.header": "Melody: %1$s (progress %2$s/%3$s)",
+    "dev.eclipse.woah.resonance.melody.new_ok": "Melody rerolled — TEACH starts now, watch the crystals.",
+    "dev.eclipse.woah.resonance.solve.ok": "Finale forced — arpeggio flood, light pillar, glitter rain, reward drop.",
+    "dev.eclipse.woah.resonance.reset.ok": "Resonance field reset: state IDLE, cooldown cleared, displays and interactions rebuilt from SavedData.",
+    "dev.eclipse.woah.resonance.not_built": "The resonance field is not built yet — /dev woah resonance spawn first.",
+    "eclipse.resonance.caption.teach": "The crystals sing a sequence...",
+    "eclipse.resonance.caption.progress": "The valley holds its breath... (%1$s/%2$s)",
+    "eclipse.resonance.caption.fail": "The song curdles. The valley falls silent.",
+    "eclipse.resonance.caption.cooldown": "The crystals are still gathering their voice (%1$s min).",
+    "eclipse.resonance.caption.first_solve": "The valley remembers your song.",
+    "subtitles.eclipse.ambient.crystal_voice": "Crystal sings"
+  },
+  "de_de": {
+    "dev.eclipse.doc.woah.resonance.spawn": "WOAH-04-Resonanzfeld am festgelegten Anker in die Bau-Queue legen (Stage-Gate umgangen); 'here' baut es stattdessen an deiner Position (Dev-Welten)",
+    "dev.eclipse.doc.woah.resonance.melody": "Aktuelle Melodie als Ton-Indizes samt Kristall-Koordinaten ausgeben, oder neu würfeln und sofort TEACH starten",
+    "dev.eclipse.doc.woah.resonance.solve": "Das Melodie-Finale sofort erzwingen — Arpeggio-Flut, Lichtsäule, Glitzerregen, Scherben-Belohnung (FX-/Belohnungs-Abnahme)",
+    "dev.eclipse.doc.woah.resonance.reset": "Rätsel auf IDLE setzen, Cooldown löschen, alle Feld-Displays/Interactions verwerfen und aus SavedData neu bauen (Selbstheilungs-Test)",
+    "dev.eclipse.doc.woah.resonance.status": "Server-Sicht: Rätselzustand, Melodie-Fortschritt, Rest-Cooldown, Display-/Interaction-Zählung, Spawn-Queue",
+    "dev.eclipse.woah.resonance.spawn.already": "Das Resonanzfeld steht bereits — /dev woah resonance reset baut seine Entities neu.",
+    "dev.eclipse.woah.resonance.spawn.started": "Resonanzfeld bei %1$s %2$s %3$s eingereiht — der Async-Placer terraformt und baut es in den nächsten Sekunden.",
+    "dev.eclipse.woah.resonance.melody.header": "Melodie: %1$s (Fortschritt %2$s/%3$s)",
+    "dev.eclipse.woah.resonance.melody.new_ok": "Melodie neu gewürfelt — TEACH startet jetzt, beobachte die Kristalle.",
+    "dev.eclipse.woah.resonance.solve.ok": "Finale erzwungen — Arpeggio-Flut, Lichtsäule, Glitzerregen, Belohnung fällt.",
+    "dev.eclipse.woah.resonance.reset.ok": "Resonanzfeld zurückgesetzt: Zustand IDLE, Cooldown gelöscht, Displays und Interactions aus SavedData neu gebaut.",
+    "dev.eclipse.woah.resonance.not_built": "Das Resonanzfeld steht noch nicht — erst /dev woah resonance spawn.",
+    "eclipse.resonance.caption.teach": "Die Kristalle singen eine Folge...",
+    "eclipse.resonance.caption.progress": "Das Tal hält den Atem an... (%1$s/%2$s)",
+    "eclipse.resonance.caption.fail": "Der Gesang kippt. Das Tal verstummt.",
+    "eclipse.resonance.caption.cooldown": "Die Kristalle sammeln noch ihre Stimme (%1$s min).",
+    "eclipse.resonance.caption.first_solve": "Das Tal erinnert sich an dein Lied.",
+    "subtitles.eclipse.ambient.crystal_voice": "Kristall singt"
+  }
+}
