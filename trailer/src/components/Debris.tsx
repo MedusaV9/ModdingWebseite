@@ -60,7 +60,10 @@ const PARTICLES = makeParticles(300);
  * Deterministic block-debris field (canvas 2D, stateless per frame).
  * From F1320 particles accelerate radially into the centre (black hole pull).
  */
-export const Debris: React.FC<{opacity?: number}> = ({opacity = 1}) => {
+export const Debris: React.FC<{opacity?: number; pullFrom?: number}> = ({
+  opacity = 1,
+  pullFrom = 1320,
+}) => {
   const frame = useCurrentFrame();
   const ref = useRef<HTMLCanvasElement>(null);
 
@@ -71,7 +74,7 @@ export const Debris: React.FC<{opacity?: number}> = ({opacity = 1}) => {
     if (!ctx) return;
     ctx.clearRect(0, 0, 3840, 2160);
     const tSec = frame / 60;
-    const pull = frame > 1320 ? Math.min(1, (frame - 1320) / 150) * 0.9 : 0;
+    const pull = frame > pullFrom ? Math.min(1, (frame - pullFrom) / 60) * 0.9 : 0;
     const cx = 1920;
     const cy = 1080;
     for (const p of PARTICLES) {
@@ -93,7 +96,7 @@ export const Debris: React.FC<{opacity?: number}> = ({opacity = 1}) => {
       ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
       ctx.restore();
     }
-  }, [frame, opacity]);
+  }, [frame, opacity, pullFrom]);
 
   return (
     <canvas

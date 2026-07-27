@@ -3,39 +3,50 @@ import {AbsoluteFill, interpolate, useCurrentFrame, Easing} from 'remotion';
 import {PAL} from '../lib/util';
 
 /**
- * S14 finale overlay (F1440-F1590): Einstein ring grows over the credits
- * still while the scene wrapper (handled by parent) spirals into the centre.
- * At F1590 the disc hands over to the EclipseRing endcard.
+ * Finale overlay: the Einstein ring grows over the (already collapsing) scene
+ * while the wrapper spirals into the centre; the disc then hands over to the
+ * EclipseRing endcard.
+ *
+ * Timings are expressed as fractions of the window so the same recipe works for
+ * the V1 layout (F1440, 160 F) and the V2 endcard bar (F1688, 64 F).
  */
-export const BlackHole: React.FC = () => {
+export const BlackHole: React.FC<{start?: number; dur?: number}> = ({
+  start = 1440,
+  dur = 160,
+}) => {
   const frame = useCurrentFrame();
-  if (frame < 1440 || frame >= 1600) return null;
+  if (frame < start || frame >= start + dur) return null;
 
-  const ringO = interpolate(frame, [1470, 1510], [0, 1], {
+  /** fraction of the window -> absolute frame */
+  const at = (q: number) => start + q * dur;
+
+  const ringO = interpolate(frame, [at(0.19), at(0.44)], [0, 1], {
     extrapolateLeft: 'clamp',
     extrapolateRight: 'clamp',
   });
-  const ringScale = interpolate(frame, [1470, 1590], [0.6, 1.05], {
+  const ringScale = interpolate(frame, [at(0.19), at(0.94)], [0.6, 1.05], {
     extrapolateLeft: 'clamp',
     extrapolateRight: 'clamp',
     easing: Easing.bezier(0.7, 0, 0.84, 0),
   });
   // conic streak overlay (radial suction streaks)
-  const streakRot = interpolate(frame, [1470, 1590], [0, -540], {
+  const streakRot = interpolate(frame, [at(0.19), at(0.94)], [0, -540], {
     extrapolateLeft: 'clamp',
     extrapolateRight: 'clamp',
   });
-  const streakO = interpolate(frame, [1470, 1520, 1575, 1590], [0, 0.8, 0.5, 0], {
-    extrapolateLeft: 'clamp',
-    extrapolateRight: 'clamp',
-  });
+  const streakO = interpolate(
+    frame,
+    [at(0.19), at(0.5), at(0.84), at(0.94)],
+    [0, 0.8, 0.5, 0],
+    {extrapolateLeft: 'clamp', extrapolateRight: 'clamp'},
+  );
   // darkness closing in
-  const darkO = interpolate(frame, [1500, 1585], [0, 1], {
+  const darkO = interpolate(frame, [at(0.375), at(0.91)], [0, 1], {
     extrapolateLeft: 'clamp',
     extrapolateRight: 'clamp',
     easing: Easing.in(Easing.cubic),
   });
-  const gradRot = ((frame - 1440) * 30) / 60;
+  const gradRot = ((frame - start) * 30) / 60;
 
   return (
     <AbsoluteFill style={{zIndex: 24, alignItems: 'center', justifyContent: 'center'}}>
@@ -68,9 +79,9 @@ export const BlackHole: React.FC = () => {
         <circle cx={1920} cy={1080} r={340} fill="none" stroke="url(#photonRing)" strokeWidth={22} filter="blur(4px)" />
         {/* lensing arcs */}
         <ellipse cx={1920} cy={860} rx={520} ry={190} fill="none" stroke={PAL.VIOLET_HOT} strokeWidth={10} opacity={0.7 * ringO}
-          strokeDasharray={2600} strokeDashoffset={interpolate(frame, [1490, 1520], [2600, 0], {extrapolateLeft: 'clamp', extrapolateRight: 'clamp'})} />
+          strokeDasharray={2600} strokeDashoffset={interpolate(frame, [at(0.31), at(0.5)], [2600, 0], {extrapolateLeft: 'clamp', extrapolateRight: 'clamp'})} />
         <ellipse cx={1920} cy={1300} rx={520} ry={190} fill="none" stroke={PAL.VIOLET_HOT} strokeWidth={10} opacity={0.7 * ringO}
-          strokeDasharray={2600} strokeDashoffset={interpolate(frame, [1500, 1530], [-2600, 0], {extrapolateLeft: 'clamp', extrapolateRight: 'clamp'})} />
+          strokeDasharray={2600} strokeDashoffset={interpolate(frame, [at(0.375), at(0.56)], [-2600, 0], {extrapolateLeft: 'clamp', extrapolateRight: 'clamp'})} />
         {/* event horizon */}
         <circle cx={1920} cy={1080} r={310} fill={PAL.VOID} />
       </svg>

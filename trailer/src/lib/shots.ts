@@ -39,6 +39,8 @@ export interface TextCardSpec {
   glitchy?: boolean;
   y?: number; // 0..1 vertical anchor, default 0.5
   size?: number;
+  /** Per-letter stagger in frames (default 2). Lower it for long lines. */
+  stagger?: number;
 }
 
 export const SHOTS: Shot[] = [

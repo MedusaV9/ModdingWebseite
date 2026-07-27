@@ -6,8 +6,11 @@
   "scripts": {
     "dev": "remotion studio src/index.ts",
     "still": "remotion still src/index.ts EclipseTrailer",
-    "render:test": "remotion render src/index.ts EclipseTrailer out/test.mp4 --frames=0-120 --gl=swangle --browser-executable=/usr/local/bin/google-chrome --concurrency=3 --timeout=180000 --image-format=jpeg --jpeg-quality=95 --codec=h264 --crf=17 --pixel-format=yuv420p",
-    "render": "remotion render src/index.ts EclipseTrailer ../ECLIPSE-Trailer-4K.mp4 --gl=swangle --browser-executable=/usr/local/bin/google-chrome --concurrency=3 --timeout=180000 --image-format=jpeg --jpeg-quality=95 --codec=h264 --video-bitrate=20M --pixel-format=yuv420p --audio-codec=aac --audio-bitrate=320k"
+    "render:test": "remotion render src/index.ts EclipseTrailer out/test.mp4 --frames=0-120 --gl=swangle --browser-executable=/usr/local/bin/google-chrome --concurrency=2 --timeout=180000 --image-format=jpeg --jpeg-quality=95 --codec=h264 --crf=17 --pixel-format=yuv420p",
+    "render:360": "remotion render src/index.ts EclipseTrailer out/v2_test_360p.mp4 --scale=0.1667 --gl=swangle --browser-executable=/usr/local/bin/google-chrome --concurrency=2 --timeout=180000 --image-format=jpeg --jpeg-quality=95 --codec=h264 --crf=20 --pixel-format=yuv420p --audio-codec=aac --audio-bitrate=192k",
+    "render": "remotion render src/index.ts EclipseTrailer ../ECLIPSE-Trailer-4K.mp4 --gl=swangle --browser-executable=/usr/local/bin/google-chrome --concurrency=2 --timeout=180000 --image-format=jpeg --jpeg-quality=95 --codec=h264 --video-bitrate=20M --x264-preset=slow --pixel-format=yuv420p --audio-codec=aac --audio-bitrate=320k",
+    "clips:manifest": "node tools/gen_clip_manifest.mjs",
+    "clips:placeholders": "bash tools/make_placeholder_clips.sh"
   },
   "dependencies": {
     "@fontsource/anton": "^5.2.5",

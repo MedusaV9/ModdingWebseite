@@ -52,7 +52,7 @@ export const TextCard: React.FC<{spec: TextCardSpec}> = ({spec}) => {
       <div>
         {chars.map((ch, i) => {
           const p = spring({
-            frame: frame - spec.inStart - i * 2,
+            frame: frame - spec.inStart - i * (spec.stagger ?? 2),
             fps: 60,
             config: SPRINGS.RISE,
           });
