@@ -80,6 +80,61 @@ const ORTE: Array[Dictionary] = [
 	},
 ]
 
+## NEUE Fundorte des Welt-Ausbaus (WELT-1) — separat von ORTE, weil der
+## Bestand-Vertrag exakt neun alte Orte garantiert; Abfragen laufen über
+## alle_orte()/fundort(), die BEIDE Listen kennen.
+const ORTE_NEU: Array[Dictionary] = [
+	{
+		"id": "gipfelkreuz",
+		"name_key": "rwelt.fund.gipfelkreuz",
+		"pos": [-80.0, -1085.0],
+		"blick": [30.0, -1030.0],
+		"muenzen": 80,
+	},
+	{
+		"id": "bergsee_perle",
+		"name_key": "rwelt.fund.bergsee_perle",
+		"pos": [100.0, -1064.0],
+		"blick": [120.0, -1044.0],
+		"muenzen": 50,
+	},
+	{
+		"id": "ruine_schatz",
+		"name_key": "rwelt.fund.ruine_schatz",
+		"pos": [700.0, -500.0],
+		"blick": [666.0, -474.0],
+		"muenzen": 70,
+	},
+	{
+		"id": "moor_irrlicht",
+		"name_key": "rwelt.fund.moor_irrlicht",
+		"pos": [842.0, -172.0],
+		"blick": [806.0, -142.0],
+		"muenzen": 50,
+	},
+	{
+		"id": "strand_muschel",
+		"name_key": "rwelt.fund.strand_muschel",
+		"pos": [812.0, 322.0],
+		"blick": [846.0, 292.0],
+		"muenzen": 45,
+	},
+	{
+		"id": "lavendel_bienen",
+		"name_key": "rwelt.fund.lavendel_bienen",
+		"pos": [-846.0, 46.0],
+		"blick": [-812.0, 74.0],
+		"muenzen": 40,
+	},
+	{
+		"id": "kornkreis",
+		"name_key": "rwelt.fund.kornkreis",
+		"pos": [-470.0, 748.0],
+		"blick": [-446.0, 776.0],
+		"muenzen": 55,
+	},
+]
+
 ## Trampelpfade, die zu Fundorten führen (schmale Erdspuren im Gelände):
 ## Punktlisten in Weltkoordinaten — Start liegt an einem Karten-Weg.
 const PFADE: Array[Dictionary] = [
@@ -110,17 +165,63 @@ const PFADE: Array[Dictionary] = [
 	},
 ]
 
+## Trampelpfade zu den NEUEN Fundorten (WELT-1) — jeder startet an einem
+## Karten-Weg und endet am Fundort.
+const PFADE_NEU: Array[Dictionary] = [
+	{
+		"id": "pfad_gipfelkreuz",
+		"breite": 2.0,
+		"punkte": [[60.0, -1004.0], [4.0, -1042.0], [-80.0, -1085.0]],
+	},
+	{
+		"id": "pfad_moor_irrlicht",
+		"breite": 1.8,
+		"punkte": [[800.0, -130.0], [824.0, -152.0], [842.0, -172.0]],
+	},
+	{
+		"id": "pfad_strand_muschel",
+		"breite": 1.8,
+		"punkte": [[810.0, 260.0], [808.0, 292.0], [812.0, 322.0]],
+	},
+	{
+		"id": "pfad_lavendel_bienen",
+		"breite": 1.8,
+		"punkte": [[-810.0, 90.0], [-830.0, 68.0], [-846.0, 46.0]],
+	},
+	{
+		"id": "pfad_kornkreis",
+		"breite": 1.8,
+		"punkte": [[-440.0, 780.0], [-456.0, 764.0], [-470.0, 748.0]],
+	},
+]
+
 
 ## Alle Fundorte (Kopie — Aufrufer dürfen nichts kaputtmachen).
 static func orte() -> Array[Dictionary]:
 	return ORTE.duplicate(true)
 
 
-## Fundort-Daten zu einer Id ({} wenn unbekannt).
+## ALLE Fundorte inkl. Welt-Ausbau (WELT-1) — Bau, Streu-Freihaltung und
+## fund_bei laufen hierüber.
+static func alle_orte() -> Array[Dictionary]:
+	var out := ORTE.duplicate(true)
+	out.append_array(ORTE_NEU.duplicate(true))
+	return out
+
+
+## Alle Trampelpfade (Bestand + Welt-Ausbau) — Terrain/Streu nutzen das.
+static func alle_pfade() -> Array[Dictionary]:
+	var out := PFADE.duplicate(true)
+	out.append_array(PFADE_NEU.duplicate(true))
+	return out
+
+
+## Fundort-Daten zu einer Id ({} wenn unbekannt) — kennt BEIDE Listen.
 static func fundort(id: String) -> Dictionary:
-	for eintrag: Dictionary in ORTE:
-		if str(eintrag["id"]) == id:
-			return eintrag.duplicate(true)
+	for liste: Array in [ORTE, ORTE_NEU]:
+		for eintrag: Dictionary in liste:
+			if str(eintrag["id"]) == id:
+				return eintrag.duplicate(true)
 	return {}
 
 
@@ -174,7 +275,7 @@ static func entdecke(gs: Object, id: String) -> Dictionary:
 static func fund_bei(gs: Object, pos: Vector3) -> Dictionary:
 	var p := Vector2(pos.x, pos.z)
 	var schon := gefunden(gs)
-	for eintrag: Dictionary in ORTE:
+	for eintrag: Dictionary in alle_orte():
 		if schon.has(str(eintrag["id"])):
 			continue
 		if p.distance_to(position_von(eintrag)) <= FUND_RADIUS_M:

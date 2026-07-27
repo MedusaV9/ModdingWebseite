@@ -46,6 +46,9 @@ var _last_reported := 0
 var _banner_text := ""
 var _banner_hint := ""
 var _banner_until := 0.0
+## Glas-Zähler im HUD-Chip: letzter Stand + Pop-Startzeit (Sammel-Feier).
+var _jars_seen := 0
+var _jar_pop := -10.0
 ## Aktive Zeiger: index → {mode: swipe|anchor|none, player, last, points, rope}.
 var _pointers: Dictionary = {}
 var _select_screen: GobnomLevelSelect
@@ -262,6 +265,7 @@ func _on_run_over() -> void:
 			if ctx.juice != null:
 				ctx.juice.bloom_pulse(0.9)
 				ctx.juice.slowmo(0.5, 350)
+				ctx.juice.confetti(70)
 		phase = "won"
 		_build_end_overlay(true, stars, total, first_clear)
 	else:
@@ -438,10 +442,19 @@ func _draw_hud() -> void:
 		AcTokens.INK
 	)
 	var taken := int(state["jars_taken"])
+	if taken != _jars_seen:
+		if taken > _jars_seen:
+			_jar_pop = Time.get_ticks_msec() / 1000.0
+		_jars_seen = taken
+	var pop := maxf(0.0, 1.0 - (Time.get_ticks_msec() / 1000.0 - _jar_pop) / 0.4)
 	for i in 3:
 		var at := chip.position + Vector2(104.0 + float(i) * 20.0, 24.0)
 		if i < taken:
-			GobnomArt.draw_jar(self, at, 8.0, 0, false)
+			# Das zuletzt gefangene Glas poppt golden auf.
+			var s := 8.0 * (1.0 + 0.5 * pop) if i == taken - 1 else 8.0
+			if i == taken - 1 and pop > 0.0:
+				draw_circle(at, s + 4.0, Color(1.0, 0.83, 0.3, 0.35 * pop))
+			GobnomArt.draw_jar(self, at, s, 0, false)
 		else:
 			draw_circle(at, 7.0, Color(0.29, 0.23, 0.21, 0.15))
 	var cuts := GobnomLogic.cuts_left(state)

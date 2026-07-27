@@ -37,6 +37,26 @@ const ITEM_BOX := KIT + "item-box.glb"
 const CONE := KIT + "item-cone.glb"
 const BANANA := KIT + "item-banana.glb"
 
+## Kinderzimmer-Requisiten (MP-F Tiefenpolitur): das Zimmer bekommt Wände,
+## Fensterlicht, Möbel-Silhouetten und Teddy-Zuschauer — vorher endete der
+## Boden in einer leeren Farbverlaufs-Wand.
+const FURN := "res://assets/furniture/"
+const BEAR := FURN + "bear.glb"
+const BOOKS := FURN + "books.glb"
+const PILLOW := FURN + "pillow.glb"
+const FLOOR_LAMP := FURN + "lampRoundFloor.glb"
+const PLANT := FURN + "pottedPlant.glb"
+const BOOKCASE := FURN + "bookcaseOpenLow.glb"
+const CHAIR := FURN + "chairCushion.glb"
+
+## Zimmermaße: der Dielenboden ist 190 m — die Wände stehen an seiner Kante.
+const ROOM_HALF := 95.0
+const WALL_H := 30.0
+const WALL_TINT := Color(0.92, 0.83, 0.7)
+const SKIRT_TINT := Color(0.62, 0.44, 0.29)
+## Fensterlicht: warmes Glühen auf der Nordwand + Lichtfleck auf dem Boden.
+const WINDOW_GLOW := Color(1.0, 0.97, 0.88)
+
 ## Gitterrichtung (0=+z · 1=−x · 2=−z · 3=+x) → Drehung des Streckenteils.
 const DIR_ROT_Y: Array[float] = [0.0, -PI * 0.5, PI, PI * 0.5]
 const DIRS_V: Array = [[0.0, 1.0], [-1.0, 0.0], [0.0, -1.0], [1.0, 0.0]]
@@ -91,11 +111,14 @@ func build(track: Dictionary, world_scale: float, seed_value: int) -> void:
 	_scale = world_scale
 	center = _track_center(track)
 	_build_floor(track)
+	_build_room()
+	_build_furniture()
 	_build_rug(track)
 	_build_skyline(track, seed_value)
 	_build_track(track)
 	_build_gates(track)
 	_build_clutter(track)
+	_build_spectators(track)
 	box_prop = _prop(Models.parts(ITEM_BOX, 0.62, false), 12)
 	block_prop = _prop(_block_parts(), 8, true)
 
@@ -148,6 +171,126 @@ func _build_floor(_track: Dictionary) -> void:
 	floor_mi.position = Vector3(center.x, -0.09, center.z)
 	floor_mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(floor_mi)
+
+
+## Zimmerwände mit Sockelleiste — der Boden endet an einer WAND, nicht in
+## einem Farbverlauf. Dazu ein „Fenster" (warmes Leuchtquad) auf der Nordwand
+## und sein Lichtfleck auf den Dielen: sofortiges Kinderzimmer-Gefühl,
+## vier + vier Instanzen in zwei MultiMeshes plus zwei Quads.
+func _build_room() -> void:
+	var wall := BoxMesh.new()
+	wall.size = Vector3(ROOM_HALF * 2.0, WALL_H, 1.0)
+	wall.material = Fx.flat(WALL_TINT, 0.96)
+	var wall_prop := _prop([{"mesh": wall, "xform": Transform3D.IDENTITY}], 4)
+	wall_prop.call("set_shadows", false)
+	var skirt := BoxMesh.new()
+	skirt.size = Vector3(ROOM_HALF * 2.0, 1.2, 1.16)
+	skirt.material = Fx.flat(SKIRT_TINT, 0.85)
+	var skirt_prop := _prop([{"mesh": skirt, "xform": Transform3D.IDENTITY}], 4)
+	skirt_prop.call("set_shadows", false)
+	wall_prop.call("begin")
+	skirt_prop.call("begin")
+	for k in 4:
+		var yaw := float(k) * PI * 0.5
+		var out := Basis(Vector3.UP, yaw) * Vector3(0.0, 0.0, -ROOM_HALF)
+		var basis := Basis(Vector3.UP, yaw)
+		var base := Vector3(center.x, 0.0, center.z) + out
+		wall_prop.call("push", Transform3D(basis, base + Vector3(0.0, WALL_H * 0.5 - 0.1, 0.0)))
+		skirt_prop.call("push", Transform3D(basis, base + Vector3(0.0, 0.5, 0.0)))
+	wall_prop.call("flush")
+	skirt_prop.call("flush")
+	_build_window()
+
+
+## Fenster auf der Nordwand (−z) + Lichtfleck auf dem Boden davor.
+func _build_window() -> void:
+	var pane := QuadMesh.new()
+	pane.size = Vector2(24.0, 17.0)
+	var glow := Fx.glow(WINDOW_GLOW, 0.9)
+	glow.disable_fog = true
+	pane.material = glow
+	var frame := BoxMesh.new()
+	frame.size = Vector3(26.0, 19.0, 0.8)
+	frame.material = Fx.flat(Color(0.99, 0.97, 0.93), 0.9)
+	var win := MeshInstance3D.new()
+	win.mesh = frame
+	win.position = Vector3(center.x - 18.0, 15.0, center.z - ROOM_HALF + 0.4)
+	win.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(win)
+	var pane_mi := MeshInstance3D.new()
+	pane_mi.mesh = pane
+	pane_mi.position = Vector3(0.0, 0.0, 0.55)
+	pane_mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	win.add_child(pane_mi)
+	# Kreuzsprosse, damit das Leuchtquad als Fenster liest.
+	for bar_size: Vector3 in [Vector3(1.1, 19.0, 0.9), Vector3(26.0, 1.1, 0.9)]:
+		var bar := MeshInstance3D.new()
+		var mesh := BoxMesh.new()
+		mesh.size = bar_size
+		mesh.material = frame.material
+		bar.mesh = mesh
+		bar.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		win.add_child(bar)
+	var patch := QuadMesh.new()
+	patch.size = Vector2(30.0, 20.0)
+	var patch_mat := Fx.glass(Color(1.0, 0.97, 0.86, 0.13), true)
+	patch_mat.disable_receive_shadows = true
+	patch.material = patch_mat
+	var patch_mi := MeshInstance3D.new()
+	patch_mi.mesh = patch
+	patch_mi.rotation_degrees.x = -90.0
+	patch_mi.position = Vector3(center.x - 18.0, -0.03, center.z - ROOM_HALF + 16.0)
+	patch_mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(patch_mi)
+
+
+## Riesige Möbel-Silhouetten an den Wänden — im Spielzeugmaßstab sind Regal,
+## Stuhl, Stehlampe und Topfpflanze Zimmer-hohe Landmarken, an denen man
+## beim Runden fahren die Himmelsrichtung abliest.
+func _build_furniture() -> void:
+	var cx := center.x
+	var cz := center.z
+	_furn(BOOKCASE, 34.0, Vector3(cx + ROOM_HALF - 10.0, -0.09, cz - 22.0), -PI * 0.5)
+	_furn(CHAIR, 22.0, Vector3(cx - ROOM_HALF + 16.0, -0.09, cz + 26.0), PI * 0.35)
+	_furn(FLOOR_LAMP, 12.0, Vector3(cx - 40.0, -0.09, cz - ROOM_HALF + 9.0), 0.0)
+	_furn(PLANT, 14.0, Vector3(cx + 38.0, -0.09, cz - ROOM_HALF + 10.0), 0.6)
+	_furn(BOOKS, 16.0, Vector3(cx + ROOM_HALF - 14.0, -0.09, cz + 34.0), 0.9)
+	_furn(PILLOW, 20.0, Vector3(cx - 30.0, -0.09, cz + ROOM_HALF - 12.0), 0.3)
+
+
+func _furn(path: String, width: float, pos: Vector3, yaw: float) -> void:
+	var node := Models.node(path, width)
+	node.position = pos
+	node.rotation.y = yaw
+	add_child(node)
+
+
+## Teddy-Zuschauer nah an der Strecke: drei Bären sitzen am Teppichrand und
+## „schauen zu" — plus ein Bücherstapel-Podest. Nähe schlägt Menge.
+func _build_spectators(track: Dictionary) -> void:
+	var radius := float(track["lapLen"]) * _scale * 0.235
+	var poses: Array = [
+		{"ang": 0.65, "w": 4.6},
+		{"ang": 2.7, "w": 3.8},
+		{"ang": 4.5, "w": 5.2},
+	]
+	for spec: Dictionary in poses:
+		var ang := float(spec["ang"])
+		var pos := Vector3(
+			center.x + cos(ang) * (radius + 4.0), -0.09, center.z + sin(ang) * (radius + 4.0)
+		)
+		var bear := Models.node(BEAR, float(spec["w"]))
+		bear.position = pos
+		# Blick zur Ringmitte — Zuschauer schauen aufs Rennen.
+		bear.rotation.y = atan2(center.x - pos.x, center.z - pos.z)
+		add_child(bear)
+	var books := Models.node(BOOKS, 6.0)
+	var bang := 1.7
+	books.position = Vector3(
+		center.x + cos(bang) * (radius + 5.0), -0.09, center.z + sin(bang) * (radius + 5.0)
+	)
+	books.rotation.y = bang
+	add_child(books)
 
 
 ## Ringelteppich: konzentrische Scheiben statt einer 512er-Textur — das sind

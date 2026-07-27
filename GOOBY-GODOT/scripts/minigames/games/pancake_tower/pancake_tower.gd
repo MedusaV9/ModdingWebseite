@@ -165,6 +165,11 @@ func _build_hud() -> void:
 	_hint_label.text = I18nService.t("mg.pancakeTower.hint")
 	_hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	add_child(_hint_label)
+	# Heller Text + dunkler Saum: lesbar auf Tapete UND Arbeitsplatte.
+	for label: Label in [_layers_label, _width_label, _hint_label]:
+		label.add_theme_color_override("font_color", Color(1.0, 0.97, 0.92))
+		label.add_theme_color_override("font_outline_color", Color(0.34, 0.2, 0.12, 0.9))
+		label.add_theme_constant_override("outline_size", 7)
 	_update_labels()
 
 
@@ -321,9 +326,23 @@ func _tower_point(local_center: float, height: float) -> Vector2:
 
 
 # Kein 2D-Turm mehr: Küche, Teller, Lagen, Pendel und Gooby rendert die
-# 3D-Bühne (PancakeTowerStage3D); 2D bleibt nur der Topple-Flash-Text.
+# 3D-Bühne (PancakeTowerStage3D); 2D bleiben Topple-Flash-Text + Breitenbalken.
 func _draw() -> void:
+	_draw_width_bar()
 	_draw_flash()
+
+
+## Breitenbalken unter dem HUD: färbt sich von Grün nach Rot, je näher der
+## Turm dem Aus (Breite < 20 %) kommt — Gefahr auf einen Blick.
+func _draw_width_bar() -> void:
+	var frac := clampf(float(stack["width"]) / float(tune["BASE_WIDTH"]), 0.0, 1.0)
+	var bar := Rect2(Vector2(16.0, 86.0), Vector2(132.0, 10.0))
+	draw_rect(bar, Color(0.2, 0.12, 0.1, 0.45))
+	var tint := Color(0.45, 0.78, 0.4).lerp(Color(0.92, 0.32, 0.24), 1.0 - frac)
+	draw_rect(Rect2(bar.position, Vector2(bar.size.x * frac, bar.size.y)), tint)
+	# Marke bei 20 %: darunter kippt der Turm (MIN_WIDTH_FRAC der Logik).
+	var mark_x := bar.position.x + bar.size.x * 0.2
+	draw_rect(Rect2(Vector2(mark_x, bar.position.y - 2.0), Vector2(2.0, 14.0)), Color(1, 1, 1, 0.8))
 
 
 func _draw_flash() -> void:

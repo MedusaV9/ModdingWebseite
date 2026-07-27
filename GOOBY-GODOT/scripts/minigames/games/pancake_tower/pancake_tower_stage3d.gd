@@ -13,11 +13,13 @@ const Models := preload("res://scripts/minigames/games/_3dc_stage/models3d.gd")
 const DIR := "res://assets/minigames/carrot_catch/"
 
 const CAM_DIST := 8.0
-const CAKE := Color(0.92, 0.67, 0.32)
-const CAKE_TOP := Color(0.96, 0.76, 0.44)
+const CAKE := Color(0.88, 0.6, 0.25)
+const CAKE_TOP := Color(0.94, 0.71, 0.38)
 const BUTTER := Color(1.0, 0.85, 0.36)
 const BERRY := Color(0.93, 0.36, 0.48)
-const WOOD := Color(0.72, 0.55, 0.4)
+const WOOD := Color(0.66, 0.49, 0.35)
+const TREATS := "res://assets/minigames/veggie_chop/tinytreats/"
+const SWEETS := "res://assets/minigames/purble_place/"
 
 var stage: Node3D
 var gooby: Node3D
@@ -34,6 +36,8 @@ var _active_berry: MeshInstance3D
 var _guide: MeshInstance3D
 var _star_burst: GPUParticles3D
 var _crumb_burst: GPUParticles3D
+var _land_ring: MeshInstance3D
+var _ring_age := 99.0
 
 var _mat_cake: StandardMaterial3D
 var _mat_topping: StandardMaterial3D
@@ -50,16 +54,18 @@ func setup_stage(view_units_x: float, ground_frac: float, layer_h: float) -> voi
 		stage
 		. build(
 			{
-				# Warmes Küchenlicht am Morgen, NICHT überbelichtet.
-				"sky_top": Color(0.62, 0.79, 0.92),
-				"sky_horizon": Color(0.88, 0.87, 0.8),
-				"ground_horizon": Color(0.84, 0.79, 0.7),
-				"ground_bottom": Color(0.66, 0.6, 0.52),
+				# Warmes Küchenlicht am Morgen, NICHT überbelichtet: Ambient
+				# kommt aus dem Himmel, sky_energy UND ambient drosseln.
+				"sky_top": Color(0.56, 0.72, 0.86),
+				"sky_horizon": Color(0.8, 0.78, 0.7),
+				"ground_horizon": Color(0.74, 0.68, 0.58),
+				"ground_bottom": Color(0.56, 0.5, 0.42),
+				"sky_energy": 0.75,
 				"sun_dir": Vector3(-0.35, -0.7, -0.55),
-				"sun_energy": 0.72,
-				"ambient": 0.5,
-				"fill_energy": 0.24,
-				"glow": 0.26,
+				"sun_energy": 0.5,
+				"ambient": 0.36,
+				"fill_energy": 0.16,
+				"glow": 0.24,
 				"glow_threshold": 0.88,
 				"shadow_distance": 24.0,
 				"far": 90.0,
@@ -81,7 +87,7 @@ func _build_kitchen() -> void:
 	var wall_mesh := PlaneMesh.new()
 	wall_mesh.size = Vector2(34.0, 30.0)
 	wall_mesh.orientation = PlaneMesh.FACE_Z
-	wall_mesh.material = Fx.flat(Color(0.95, 0.85, 0.7))
+	wall_mesh.material = Fx.flat(Color(0.88, 0.74, 0.58))
 	wall.mesh = wall_mesh
 	wall.position = Vector3(0.0, 12.0, -2.4)
 	wall.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -90,7 +96,7 @@ func _build_kitchen() -> void:
 	var stripes := MultiMeshInstance3D.new()
 	var stripe := BoxMesh.new()
 	stripe.size = Vector3(0.5, 30.0, 0.01)
-	stripe.material = Fx.flat(Color(0.9, 0.78, 0.6))
+	stripe.material = Fx.flat(Color(0.82, 0.66, 0.5))
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
 	mm.mesh = stripe
@@ -189,6 +195,132 @@ func _build_kitchen() -> void:
 	plate.mesh = plate_mesh
 	plate.position.y = -0.04
 	add_child(plate)
+	_build_backsplash()
+	_build_counter_props()
+	_build_upper_floors()
+
+
+func _build_backsplash() -> void:
+	# Fliesenspiegel hinter der Arbeitsplatte (1 Draw-Call) — Küche statt Wand.
+	var tiles := MultiMeshInstance3D.new()
+	var tile := BoxMesh.new()
+	tile.size = Vector3(0.62, 0.62, 0.02)
+	tile.material = Fx.flat(Color(0.93, 0.87, 0.78))
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.mesh = tile
+	mm.instance_count = 20
+	for i in 20:
+		var col := i % 10
+		var row := i / 10
+		mm.set_instance_transform(
+			i,
+			Transform3D(
+				Basis.IDENTITY,
+				Vector3(
+					-3.15 + float(col) * 0.7 + float(row) * 0.35, 0.34 + float(row) * 0.7, -2.32
+				)
+			)
+		)
+	tiles.multimesh = mm
+	tiles.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(tiles)
+
+
+func _build_counter_props() -> void:
+	# Backstube-Requisiten links und rechts vom Teller (Tiny Treats + Food-Kit).
+	# Sichtbare Breite ist NUR ±1,45 Einheiten (VIEW_UNITS_X 2,9) — alles
+	# außerhalb wäre unsichtbar; die Randfiguren dürfen anschneiden.
+	for entry: Array in [
+		[TREATS + "pan.gltf", 0.55, Vector3(-1.5, 0.0, -1.9), 0.5],
+		[SWEETS + "tinytreats/stand_mixer.gltf", 0.62, Vector3(-1.5, 0.0, -1.55), 0.2],
+		[TREATS + "kettle.gltf", 0.5, Vector3(1.5, 0.0, -1.55), -0.4],
+		[TREATS + "pot.gltf", 0.42, Vector3(1.62, 0.0, -1.95), 0.0],
+		[SWEETS + "waffle.glb", 0.5, Vector3(1.32, 0.0, -0.95), 0.3],
+		[SWEETS + "strawberry.glb", 0.35, Vector3(-1.32, 0.0, -0.9), 0.0],
+	]:
+		var prop := Models.node(str(entry[0]), float(entry[1]))
+		prop.position = entry[2]
+		prop.rotation.y = float(entry[3])
+		_no_shadow(prop)
+		add_child(prop)
+
+
+func _build_upper_floors() -> void:
+	# Kulisse für die Kletterhöhe: zweites Fenster, Bord mit Backwerk und eine
+	# Uhr — damit oben nicht nur Tapete wartet.
+	var win := Node3D.new()
+	win.position = Vector3(1.9, 8.6, -2.35)
+	add_child(win)
+	var glass := MeshInstance3D.new()
+	var glass_mesh := PlaneMesh.new()
+	glass_mesh.size = Vector2(1.4, 1.1)
+	glass_mesh.orientation = PlaneMesh.FACE_Z
+	glass_mesh.material = Fx.glow(Color(0.78, 0.9, 0.98), 0.35)
+	glass.mesh = glass_mesh
+	glass.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	win.add_child(glass)
+	var frame_mat := Fx.flat(Color(0.86, 0.72, 0.56))
+	for bar_pose: Array in [
+		[Vector3(0.0, 0.58, 0.01), Vector3(1.56, 0.1, 0.05)],
+		[Vector3(0.0, -0.58, 0.01), Vector3(1.56, 0.1, 0.05)],
+		[Vector3(-0.75, 0.0, 0.01), Vector3(0.1, 1.26, 0.05)],
+		[Vector3(0.75, 0.0, 0.01), Vector3(0.1, 1.26, 0.05)],
+	]:
+		var bar := MeshInstance3D.new()
+		var bar_mesh := BoxMesh.new()
+		bar_mesh.size = bar_pose[1]
+		bar_mesh.material = frame_mat
+		bar.mesh = bar_mesh
+		bar.position = bar_pose[0]
+		bar.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		win.add_child(bar)
+	var shelf := MeshInstance3D.new()
+	var shelf_mesh := BoxMesh.new()
+	shelf_mesh.size = Vector3(2.2, 0.08, 0.5)
+	shelf_mesh.material = Fx.flat(WOOD)
+	shelf.mesh = shelf_mesh
+	shelf.position = Vector3(-1.8, 9.6, -2.1)
+	shelf.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(shelf)
+	for entry: Array in [
+		[SWEETS + "muffin.glb", 0.6, Vector3(-2.4, 9.65, -2.1)],
+		[SWEETS + "tinytreats/macaron_pink.gltf", 0.4, Vector3(-1.6, 9.65, -2.1)],
+		[SWEETS + "pie.glb", 0.65, Vector3(-1.0, 9.65, -2.1)],
+	]:
+		var treat := Models.node(str(entry[0]), float(entry[1]))
+		treat.position = entry[2]
+		_no_shadow(treat)
+		add_child(treat)
+	# Küchenuhr: Zifferblatt + zwei Zeiger.
+	var clock := Node3D.new()
+	clock.position = Vector3(0.2, 12.4, -2.33)
+	add_child(clock)
+	var dial := MeshInstance3D.new()
+	var dial_mesh := CylinderMesh.new()
+	dial_mesh.top_radius = 0.5
+	dial_mesh.bottom_radius = 0.5
+	dial_mesh.height = 0.06
+	dial_mesh.radial_segments = 22
+	dial_mesh.material = Fx.flat(Color(0.97, 0.94, 0.88))
+	dial.mesh = dial_mesh
+	dial.rotation_degrees = Vector3(90.0, 0.0, 0.0)
+	dial.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	clock.add_child(dial)
+	var hand_mat := Fx.flat(Color(0.4, 0.28, 0.24))
+	for hand_pose: Array in [
+		[Vector3(0.0, 0.14, 0.04), Vector3(0.05, 0.3, 0.02), 0.0],
+		[Vector3(0.09, 0.05, 0.04), Vector3(0.05, 0.22, 0.02), -1.1],
+	]:
+		var hand := MeshInstance3D.new()
+		var hand_mesh := BoxMesh.new()
+		hand_mesh.size = hand_pose[1]
+		hand_mesh.material = hand_mat
+		hand.mesh = hand_mesh
+		hand.position = hand_pose[0]
+		hand.rotation.z = float(hand_pose[2])
+		hand.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		clock.add_child(hand)
 
 
 func _build_tower() -> void:
@@ -213,7 +345,7 @@ func _build_active() -> void:
 	_active.add_child(_active_berry)
 	gooby = Actor.new()
 	_active.add_child(gooby)
-	gooby.mount(0.5)
+	gooby.mount(0.62)
 	gooby.base_emotion = "happy"
 	_guide = MeshInstance3D.new()
 	var guide_mesh := BoxMesh.new()
@@ -258,6 +390,18 @@ func _build_fx() -> void:
 		)
 	)
 	add_child(_crumb_burst)
+	# Landering: pulsiert bei Perfect einmal um die Aufschlagstelle auf.
+	_land_ring = MeshInstance3D.new()
+	var ring_mesh := TorusMesh.new()
+	ring_mesh.inner_radius = 0.34
+	ring_mesh.outer_radius = 0.4
+	ring_mesh.rings = 26
+	ring_mesh.ring_segments = 8
+	ring_mesh.material = Fx.glow(Color(1.0, 0.78, 0.3), 1.6)
+	_land_ring.mesh = ring_mesh
+	_land_ring.visible = false
+	_land_ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(_land_ring)
 
 
 ## Kamera: frontal auf die Turmebene z=0, exakt die Web-Kameramathematik
@@ -339,6 +483,19 @@ func sync(
 		node.position = Vector3(float(crumb["x"]), float(crumb["y"]) + _layer_h * 0.5, 0.1)
 		node.scale = Vector3(cw, 1.0, cw)
 		node.rotation.z = float(crumb["age"]) * 3.0
+	_sync_land_ring(delta)
+
+
+## Landering: wächst 0,35 s lang auf und verschwindet (Perfect-Stempel).
+func _sync_land_ring(delta: float) -> void:
+	if _ring_age >= 0.35:
+		_land_ring.visible = false
+		return
+	_ring_age += delta
+	var t := clampf(_ring_age / 0.35, 0.0, 1.0)
+	var s := 1.0 + t * 1.1
+	_land_ring.visible = t < 1.0
+	_land_ring.scale = Vector3(s, 1.0, s)
 
 
 func perfect_fx(world_x: float, world_y: float) -> void:
@@ -346,6 +503,12 @@ func perfect_fx(world_x: float, world_y: float) -> void:
 	gooby.emote("ecstatic", 0.9)
 	gooby.hop(0.25, 0.15)
 	stage.pulse_glow(0.6)
+	# Ring zur Kamera drehen (Frontalkamera: flach läge er unsichtbar auf
+	# Kante) und VOR den Stapel legen (Pfannkuchen-Vorderkante ≈ z 0,75).
+	_land_ring.position = Vector3(world_x, world_y + _layer_h * 0.5, 0.85)
+	_land_ring.rotation_degrees = Vector3(90.0, 0.0, 0.0)
+	_land_ring.scale = Vector3.ONE
+	_ring_age = 0.0
 
 
 func topping_fx(world_x: float, world_y: float) -> void:

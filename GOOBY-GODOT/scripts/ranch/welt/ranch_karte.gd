@@ -122,6 +122,12 @@ static func nachbarn(zone_id: String) -> Array[String]:
 	return out
 
 
+## Brückendecks (WELT-1: Hängebrücke über die Schlucht) — Rohdaten;
+## RanchGelaende.reit_hoehe kennt die Deckhöhen.
+static func bruecken() -> Array:
+	return karte().get("bruecken", [])
+
+
 ## ------------------------------------------------------------- Abfragen
 
 
@@ -133,6 +139,12 @@ static func punkt(x: float, z: float) -> Vector3:
 ## Bodenhöhe an (x, z) — Kurzform für RanchGelaende.hoehe.
 static func hoehe(x: float, z: float) -> float:
 	return RanchGelaende.hoehe(x, z)
+
+
+## Reit-Höhe an (x, z): Bodenhöhe ODER Brückendeck (Hängebrücke), falls
+## eines die Position trägt — Reiter/NPCs stellen sich HIERauf.
+static func reit_hoehe(x: float, z: float) -> float:
+	return RanchGelaende.reit_hoehe(x, z)
 
 
 ## Ist die Position für Reiter/Tiere begehbar? Blockiert sind: außerhalb

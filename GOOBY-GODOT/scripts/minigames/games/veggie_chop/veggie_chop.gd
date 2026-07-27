@@ -142,6 +142,7 @@ func _process(delta: float) -> void:
 	_stage.tick(delta)
 	_stage.sync(items, elapsed)
 	_stage.feel(_mood())
+	_stage.set_frenzy(elapsed <= frenzy_until)
 	_update_labels()
 	queue_redraw()
 
@@ -233,14 +234,15 @@ func _fly_tick(step: float) -> void:
 		if float(entry["t"]) <= float(arc["vy"]) / g or pos.y >= floor_y:
 			kept.append(entry)
 		elif str((entry["item"] as Dictionary)["kind"]) == "veggie":
-			_register_miss()
+			_register_miss(pos)
 	items = kept
 
 
-func _register_miss() -> void:
+func _register_miss(world: Vector2) -> void:
 	misses += 1
 	swipe_combo = 0
 	AudioDirector.try_play(self, "mg_spill", 0.9)
+	_stage.miss(world)
 	if ctx.juice == null:
 		return
 	ctx.juice.shake(0.22)
@@ -305,7 +307,7 @@ func _resolve_hit(entry: Dictionary) -> void:
 	var kind := str(item["kind"])
 	swipe_combo = VeggieChopLogic.combo_after_hit(swipe_combo, kind)
 	if kind == "junk":
-		_hit_junk(pos)
+		_hit_junk(pos, Vector2(entry["pos"]))
 		return
 	var points := VeggieChopLogic.chop_points(swipe_combo)
 	score = VeggieChopLogic.apply_points(score, points)
@@ -324,11 +326,12 @@ func _resolve_hit(entry: Dictionary) -> void:
 	ctx.report_score(score, points)
 
 
-func _hit_junk(pos: Vector2) -> void:
+func _hit_junk(pos: Vector2, world: Vector2) -> void:
 	junk_hits += 1
 	stun_until = elapsed + float(tune["STUN_SEC"])
 	var delta := int(tune["JUNK_PTS"])
 	score = VeggieChopLogic.apply_points(score, delta)
+	_stage.junk_smash(world)
 	AudioDirector.try_play(self, "mg_junk")
 	if ctx.juice != null:
 		ctx.juice.shake(0.42)

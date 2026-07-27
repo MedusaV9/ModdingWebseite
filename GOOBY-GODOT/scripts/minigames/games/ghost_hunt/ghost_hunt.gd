@@ -68,6 +68,7 @@ var _lantern_light: OmniLight3D
 var _sheet: ArrayMesh
 var _face: Mesh
 var _sky: Node3D
+var _mist: Array[Dictionary] = []
 
 
 func setup(context: MinigameCtx) -> void:
@@ -113,6 +114,7 @@ func _process(delta: float) -> void:
 	_banner_t = maxf(0.0, _banner_t - delta)
 	_stage.tick(delta)
 	_gooby.tick(delta)
+	_drift_mist()
 	Logic.step_hunt(state, delta)
 	_drain_events()
 	_sync_ghosts()
@@ -162,15 +164,18 @@ func _build_world() -> void:
 		_stage
 		. build(
 			{
-				"sky_top": Color(0.16, 0.13, 0.3),
-				"sky_horizon": Color(0.55, 0.29, 0.4),
+				# NACHT-EICHUNG: Belichtung 1,05 hielt den Friedhof bei Luma
+				# 107 (Dämmerung statt Mitternacht). Dunklerer Himmel + 0,85
+				# drücken auf ~92; die kalte Mond-Sonne (1,7) hält Konturen.
+				"sky_top": Color(0.12, 0.1, 0.26),
+				"sky_horizon": Color(0.48, 0.26, 0.38),
 				# Boden-Hemisphäre des Prozedurhimmels = NEBELFARBE. Sie kippt
 				# sonst direkt unter der Horizontlinie fast auf Schwarz und
 				# malt einen dunklen Balken über die abgenebelte Wiese.
-				"ground_horizon": Color(0.31, 0.21, 0.38),
-				"ground_bottom": Color(0.29, 0.2, 0.36),
-				"sky_energy": 0.8,
-				"fog_color": Color(0.31, 0.21, 0.38),
+				"ground_horizon": Color(0.29, 0.2, 0.36),
+				"ground_bottom": Color(0.27, 0.19, 0.34),
+				"sky_energy": 0.62,
+				"fog_color": Color(0.29, 0.2, 0.36),
 				"fog_from": 13.0,
 				"fog_to": 40.0,
 				"fog_density": 0.7,
@@ -180,7 +185,7 @@ func _build_world() -> void:
 				"ambient": 0.34,
 				"ambient_color": Color(0.42, 0.38, 0.62),
 				"sky_ambient": 0.35,
-				"exposure": 1.05,
+				"exposure": 0.85,
 				"white": 2.2,
 				"fill_color": Color(1.0, 0.66, 0.42),
 				"fill_energy": 0.3,
@@ -197,6 +202,7 @@ func _build_world() -> void:
 	_stage.add_child(Props3D.ground(Vector2(70.0, 70.0), Props3D.flat(TURF), 0.0))
 	_build_moon()
 	_build_yard()
+	_build_mist()
 	_build_spots()
 	_build_decoys()
 	_build_ghosts()
@@ -299,6 +305,23 @@ func _build_gate() -> void:
 		var halo := Props3D.halo(0.68, Color(LANTERN_TINT, 0.28))
 		halo.position = at + Vector3.UP * 1.77
 		_stage.add_child(halo)
+
+
+## Bodennebel: fünf große, blasse Mondlicht-Schwaden, die träge zwischen den
+## Gräbern treiben (`_drift_mist`). Additive Halos, Deckkraft 0,1 — Runde 2:
+## 0,055 war unsichtbar, mehr überstrahlt die Grabsteine.
+func _build_mist() -> void:
+	for entry: Array in [
+		[Vector3(-2.6, 0.55, -2.2), 3.2],
+		[Vector3(2.4, 0.5, -4.0), 3.6],
+		[Vector3(-0.8, 0.6, -5.6), 2.8],
+		[Vector3(1.6, 0.5, -1.2), 2.6],
+		[Vector3(-3.4, 0.5, -4.8), 3.0],
+	]:
+		var wisp := Props3D.halo(float(entry[1]), Color(0.74, 0.72, 0.95, 0.1))
+		wisp.position = entry[0]
+		_stage.add_child(wisp)
+		_mist.append({"node": wisp, "home": entry[0] as Vector3})
 
 
 ## Sternenhimmel: ein MultiMesh winziger Leuchtplättchen weit hinten.
@@ -627,6 +650,7 @@ func _frame_yard() -> void:
 ## Geister-Pool an die Logik hängen: Position, Hebekurve, Deckkraft, Aura.
 func _sync_ghosts() -> void:
 	var live: Array = state["ghosts"]
+	var dt := get_process_delta_time()
 	for i in _ghosts.size():
 		var rig: Dictionary = _ghosts[i]
 		var root: Node3D = rig["root"]
@@ -639,6 +663,14 @@ func _sync_ghosts() -> void:
 			root.visible = false
 			continue
 		var spot: Dictionary = Logic.SPOTS[int(ghost["spot"])]
+		# ENTDECKUNGSMOMENT: taucht ein Geist NEU auf, blitzt seine Aura kurz
+		# auf und ein leiser Tick lockt das Ohr — das Auge findet ihn, bevor
+		# das Sichtfenster wieder zugeht.
+		if not root.visible:
+			rig["flash"] = 0.45
+			AudioDirector.try_play(self, "ui_tick", 0.8)
+		var flash := maxf(0.0, float(rig.get("flash", 0.0)) - dt)
+		rig["flash"] = flash
 		root.visible = true
 		root.position = _ghost_world(ghost, spot)
 		root.scale = Vector3.ONE * (GHOST_H * (0.72 + 0.28 * lift))
@@ -647,9 +679,11 @@ func _sync_ghosts() -> void:
 		var mat: StandardMaterial3D = rig["mat"]
 		mat.albedo_color = Color(tint, 0.62 + 0.34 * lift)
 		mat.emission = tint
-		mat.emission_energy_multiplier = 0.4 + (0.9 if bool(ghost["revealed"]) else 0.0)
+		mat.emission_energy_multiplier = (
+			0.4 + (0.9 if bool(ghost["revealed"]) else 0.0) + flash * 2.2
+		)
 		var halo: MeshInstance3D = rig["halo"]
-		var glow := 0.16 * lift + (0.2 if bool(ghost["revealed"]) else 0.0)
+		var glow := 0.16 * lift + (0.2 if bool(ghost["revealed"]) else 0.0) + flash * 0.5
 		_set_halo(halo, Color(LANTERN_TINT if bool(ghost["revealed"]) else tint, glow))
 
 
@@ -689,6 +723,16 @@ func _sync_tokens() -> void:
 			float(anchor["x"]), 1.05 + sin(_bob * 2.4) * 0.09, float(anchor["z"])
 		)
 		root.rotation.y = _bob * 1.1
+
+
+## Nebelschwaden träge treiben lassen (jede in eigener Phase um ihren Anker).
+func _drift_mist() -> void:
+	for i in _mist.size():
+		var wisp: Dictionary = _mist[i]
+		var node: Node3D = wisp["node"]
+		var home: Vector3 = wisp["home"]
+		var t := _bob * 0.16 + float(i) * 1.7
+		node.position = home + Vector3(sin(t) * 0.8, sin(t * 1.7) * 0.06, cos(t * 0.8) * 0.5)
 
 
 ## Der Laternen-Aufsammler taucht den ganzen Hof kurz in warmes Licht.

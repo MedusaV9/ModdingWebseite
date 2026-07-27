@@ -49,9 +49,13 @@ func setup_stage(lanes: Array) -> void:
 	build(
 		{
 			"space": true,
-			"bg": Color(0.018, 0.014, 0.062),
+			# BELICHTUNGS-EICHUNG (Gegenrichtung zu den Tagbühnen): 49 % der
+			# Pixel lagen unter Luma 25 — der Weltraum soff in Schwarz ab.
+			# Etwas helleres Blau als Grundton + Milchstraße/Nebel füllen das
+			# obere Drittel, ohne den Neon-Kontrast der Bahnen zu verlieren.
+			"bg": Color(0.03, 0.026, 0.094),
 			"ambient_color": Color(0.5, 0.52, 0.86),
-			"ambient": 1.15,
+			"ambient": 1.25,
 			"sun_color": Color(1.0, 0.94, 0.88),
 			"sun_energy": 2.6,
 			"sun_dir": Vector3(-0.3, -0.5, -0.8),
@@ -119,10 +123,12 @@ func _build_nebula() -> void:
 	# Zwei riesige, weiche Farbschleier weit hinten: der Nachthimmel des Webs
 	# (violett/magenta/teal) ohne Textur-Backerei.
 	_build_planet()
+	# Kräftiger als die erste Fassung (0,34/0,26/0,3): die Schleier waren im
+	# fertigen Bild kaum zu ahnen, die obere Bildhälfte blieb schwarz.
 	var tints := [
-		[Vector3(-8.5, 4.0, -40.0), 26.0, Color(0.4, 0.2, 0.72, 0.34)],
-		[Vector3(9.5, -1.0, -34.0), 20.0, Color(0.72, 0.24, 0.58, 0.26)],
-		[Vector3(2.0, 7.5, -30.0), 15.0, Color(0.14, 0.45, 0.66, 0.3)],
+		[Vector3(-8.5, 4.0, -40.0), 26.0, Color(0.4, 0.2, 0.72, 0.46)],
+		[Vector3(9.5, -1.0, -34.0), 20.0, Color(0.72, 0.24, 0.58, 0.36)],
+		[Vector3(2.0, 7.5, -30.0), 15.0, Color(0.14, 0.45, 0.66, 0.42)],
 	]
 	for entry: Array in tints:
 		var quad := MeshInstance3D.new()
@@ -150,11 +156,13 @@ func _build_planet() -> void:
 	ball.radial_segments = 24
 	ball.rings = 12
 	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.95, 0.62, 0.5)
+	# Satter Koralle-Ton mit mehr Eigenleuchten: die blasse erste Fassung las
+	# sich vor dem dunklen Feld als grauer Ball mit Unterlegscheibe.
+	mat.albedo_color = Color(1.0, 0.56, 0.42)
 	mat.roughness = 1.0
 	mat.emission_enabled = true
-	mat.emission = Color(0.5, 0.24, 0.42)
-	mat.emission_energy_multiplier = 0.55
+	mat.emission = Color(0.62, 0.24, 0.4)
+	mat.emission_energy_multiplier = 0.8
 	ball.material = mat
 	planet.mesh = ball
 	planet.position = Vector3(-19.0, 11.0, -62.0)
@@ -166,7 +174,7 @@ func _build_planet() -> void:
 	torus.rings = 24
 	torus.ring_segments = 8
 	var rmat := StandardMaterial3D.new()
-	rmat.albedo_color = Color(1.0, 0.86, 0.72, 0.55)
+	rmat.albedo_color = Color(1.0, 0.72, 0.38, 0.75)
 	rmat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	rmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	rmat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
@@ -215,6 +223,42 @@ func _build_starfield() -> void:
 	_stars = Node3D.new()
 	_stars.add_child(mmi)
 	add_child(_stars)
+	_build_milky_way(mat)
+
+
+## Milchstraßen-Band: ein zweites MultiMesh aus 150 winzigen, dichten Sternen
+## auf einer Diagonale quer über den oberen Himmel. Füllt das schwarze obere
+## Drittel für genau EINEN Draw-Call und gibt dem Korridor eine Richtung.
+func _build_milky_way(mat: StandardMaterial3D) -> void:
+	var quad := QuadMesh.new()
+	quad.size = Vector2(0.12, 0.12)
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.use_colors = true
+	mm.mesh = quad
+	mm.instance_count = 150
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 31337
+	for i in 150:
+		# Band von links unten nach rechts oben, quer hinter dem Korridor.
+		var t := rng.randf()
+		var across := rng.randfn(0.0, 2.6)
+		var pos := Vector3(
+			lerpf(-26.0, 26.0, t) + across * 0.4,
+			lerpf(2.0, 15.0, t) + across,
+			-46.0 + rng.randf_range(-4.0, 4.0)
+		)
+		var size := 0.6 + rng.randf() * 1.6
+		mm.set_instance_transform(i, Transform3D(Basis.IDENTITY.scaled(Vector3.ONE * size), pos))
+		var warm := rng.randf()
+		mm.set_instance_color(
+			i, Color(0.85 + warm * 0.15, 0.85, 1.0 - warm * 0.2, 0.35 + rng.randf() * 0.5)
+		)
+	var mmi := MultiMeshInstance3D.new()
+	mmi.multimesh = mm
+	mmi.material_override = mat
+	mmi.extra_cull_margin = 60.0
+	_stars.add_child(mmi)
 
 
 func _build_track() -> void:
@@ -366,7 +410,9 @@ func _make_meteor() -> Node3D:
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
 	mat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
-	mat.albedo_color = Color(1.0, 0.5, 0.24, 0.5)
+	# 0,5 Deckkraft ging im dunklen Feld unter — die Felsen lasen sich als
+	# braune Kartoffeln statt als glühende Brocken.
+	mat.albedo_color = Color(1.0, 0.5, 0.24, 0.68)
 	mat.albedo_texture = load(DIR + "vfx/circle_05.png")
 	halo.material_override = mat
 	holder.add_child(halo)

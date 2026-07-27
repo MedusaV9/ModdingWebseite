@@ -41,12 +41,20 @@ const POST := Color(0.48, 0.36, 0.26)
 ## machen — aber erst SO weit draußen liest sich der Kanal als Kanal und nicht
 ## als Häuserschlucht, und der Tiefennebel nimmt ihnen die harte Schattenseite.
 const TOWN_OFFSET := 21.0
-## Farbe des Hafenstädtchens im Morgendunst.
+## Farbe des Hafenstädtchens im Morgendunst (nur noch die HINTERE Reihe).
 const MIST := Color(0.8, 0.88, 0.88)
+## Vordere Häuserreihe: warmer Sandstein statt Dunstweiß — vorher stand der
+## ganze Hafen in EINEM blassen Zyan und die Kulisse wirkte ausgewaschen.
+const TOWN_NEAR := Color(0.89, 0.82, 0.7)
+## Leuchtturm-Farben (rot-weiß gebändert, Lampe glimmt warm).
+const LIGHTHOUSE_RED := Color(0.85, 0.3, 0.24)
+const LIGHTHOUSE_WHITE := Color(0.97, 0.95, 0.9)
 
 const BUOY := "res://assets/minigames/harbor_hopper/watercraft-kit/buoy.glb"
 const BUOY_FLAG := "res://assets/minigames/harbor_hopper/watercraft-kit/buoy-flag.glb"
 const CRATE := "res://assets/minigames/harbor_hopper/car-kit/box.glb"
+## Vertäute Kutter an der Kaimauer — dasselbe GLB wie das Spielerboot.
+const MOORED := "res://assets/minigames/harbor_hopper/watercraft-kit/boat-fishing-small.glb"
 const TOWN: Array[String] = [
 	"res://assets/city/gebaeude/building-b.glb",
 	"res://assets/city/gebaeude/building-d.glb",
@@ -60,6 +68,7 @@ var crate_prop: Node3D
 var ring_prop: Node3D
 var buoy_prop: Node3D
 var pier_prop: Node3D
+var pier_warn_prop: Node3D
 var wave_prop: Node3D
 var foam_prop: Node3D
 
@@ -103,12 +112,16 @@ func push_item(kind: String, x: float, z: float, bob: float, spin: float) -> voi
 			buoy_prop.call("push", _pose(x, bob, z, spin * 0.3))
 
 
-## Mole: ein Steg, der von der Mauer in den Kanal ragt.
+## Mole: ein Steg, der von der Mauer in den Kanal ragt — mit rot-weißem
+## Warnpoller an der Spitze (Lesbarkeit: die Gefahr ragt IN den Kanal,
+## der Poller markiert genau, wie weit).
 func push_pier(side: float, z: float, reach: float, depth: float, half_w: float) -> void:
 	var length := reach + QUAY_PAD + WALL_W * 0.5
 	var basis := Basis.IDENTITY.scaled(Vector3(length, 1.0, depth))
 	var cx := side * (half_w - reach + length * 0.5)
 	pier_prop.call("push", Transform3D(basis, Vector3(cx, 0.34, z)))
+	var tip_x := side * (half_w - reach + 0.18)
+	pier_warn_prop.call("push", _pose(tip_x, 0.68, z, 0.0))
 
 
 ## Wellenkamm quer über den Kanal plus Schaum-Sweetspot.
@@ -122,7 +135,7 @@ func push_wave(z: float, half_w: float, sweet_x: float, sweet_half: float, ridde
 
 
 func _all_props() -> Array[Node3D]:
-	return [crate_prop, ring_prop, buoy_prop, pier_prop, wave_prop, foam_prop]
+	return [crate_prop, ring_prop, buoy_prop, pier_prop, pier_warn_prop, wave_prop, foam_prop]
 
 
 func _pose(x: float, y: float, z: float, yaw: float) -> Transform3D:
@@ -238,6 +251,8 @@ func _build_band() -> void:
 	_build_foam_lines()
 	_build_posts()
 	_build_town()
+	_build_moored_boats()
+	_build_lighthouse()
 
 
 ## Schaumglitzer auf dem Wasser — sie machen das Tempo sichtbar.
@@ -300,25 +315,24 @@ func _build_posts() -> void:
 
 ## Hafenstädtchen hinter der Mauer — Kulisse, KEINE Häuserschlucht.
 ##
-## Zwei Reihen weit draußen: die nähere gibt dem Kanal einen Rahmen, die
-## fernere verliert sich im Morgennebel. Schattenwurf ist aus — sonst legten
-## die Dächer harte Balken über das Wasser, das im Web spiegelglatt bleibt.
+## Zwei Reihen weit draußen: die nähere in warmem Sandstein (sie gibt dem
+## Kanal seinen Rahmen und bricht das Zyan-Einerlei), die fernere im
+## Morgendunst. Schattenwurf ist aus — sonst legten die Dächer harte Balken
+## über das Wasser, das im Web spiegelglatt bleibt. Die Kenney-Texturen
+## bleiben trotzdem ÜBERDECKT: ihre fast schwarzen Ladenzeilen standen wie
+## Kohleklötze am Bildrand.
 func _build_town() -> void:
 	var rows := int(LOOP_LEN / 16.0)
-	# Einheitliches Dunstmaterial ÜBER den Haustexturen: die Kenney-Modelle
-	# bringen fast schwarze Ladenzeilen mit, und am Bildrand standen die als
-	# Kohleklötze neben dem Kanal. Das Web malt dort eine blasse Silhouette —
-	# ein heller Überzug bringt genau das, behält aber die echte 3D-Form.
-	var mist := Fx.flat(MIST, 1.0)
-	for i in TOWN.size():
-		var prop := _prop_tinted(Models.parts(TOWN[i], 9.0), 12, mist)
-		prop.call("set_shadows", false)
-		var items: Array = []
-		for row in rows:
-			for side: int in [-1, 1]:
-				if (row * 2 + (1 if side > 0 else 0)) % TOWN.size() != i:
-					continue
-				for rank in 2:
+	var tints: Array[StandardMaterial3D] = [Fx.flat(TOWN_NEAR, 1.0), Fx.flat(MIST, 1.0)]
+	for rank in 2:
+		for i in TOWN.size():
+			var prop := _prop_tinted(Models.parts(TOWN[i], 9.0), 8, tints[rank])
+			prop.call("set_shadows", false)
+			var items: Array = []
+			for row in rows:
+				for side: int in [-1, 1]:
+					if (row * 2 + (1 if side > 0 else 0)) % TOWN.size() != i:
+						continue
 					(
 						items
 						. append(
@@ -330,8 +344,73 @@ func _build_town() -> void:
 							}
 						)
 					)
-		band.call("add_group", prop, items)
+			band.call("add_group", prop, items)
 	_build_cranes()
+
+
+## Vertäute Kutter an der Kaimauer: das Spielerboot-GLB, geankert in der
+## Randrinne zwischen Fahrrinne und Mauer — der Hafen LEBT, statt leer zu sein.
+func _build_moored_boats() -> void:
+	var prop := _prop(Models.parts(MOORED, 0.0, false), 6)
+	prop.call("set_shadows", false)
+	var items: Array = []
+	for i in 4:
+		var side := -1.0 if i % 2 == 0 else 1.0
+		(
+			items
+			. append(
+				{
+					"x": side * (_wall_x - WALL_W * 0.5 - 0.55),
+					"y": 0.03,
+					"z": -float(i) * (LOOP_LEN / 4.0) - 11.0,
+					"yaw": (PI if side < 0.0 else 0.0) + 0.12 * side,
+					"scale": Vector3.ONE * 0.8,
+				}
+			)
+		)
+	band.call("add_group", prop, items)
+
+
+## Rot-weiß gebänderter Leuchtturm auf der Kaimauer — DIE Hafen-Landmarke.
+## Er läuft im Band mit: alle 96 m zieht er einmal vorbei.
+func _build_lighthouse() -> void:
+	var parts: Array = []
+	var bands: Array = [
+		[LIGHTHOUSE_RED, 0.0, 1.3, 0.62],
+		[LIGHTHOUSE_WHITE, 1.3, 1.2, 0.54],
+		[LIGHTHOUSE_RED, 2.5, 1.1, 0.47],
+		[LIGHTHOUSE_WHITE, 3.6, 1.0, 0.4],
+	]
+	for row: Array in bands:
+		var seg := CylinderMesh.new()
+		seg.bottom_radius = float(row[3])
+		seg.top_radius = float(row[3]) - 0.06
+		seg.height = float(row[2])
+		seg.radial_segments = 12
+		seg.rings = 1
+		seg.material = Fx.flat(row[0] as Color, 0.85)
+		var lift := Transform3D(
+			Basis.IDENTITY, Vector3(0.0, float(row[1]) + float(row[2]) * 0.5, 0.0)
+		)
+		parts.append({"mesh": seg, "xform": lift})
+	var lamp := SphereMesh.new()
+	lamp.radius = 0.3
+	lamp.height = 0.6
+	lamp.radial_segments = 10
+	lamp.rings = 5
+	lamp.material = Fx.glow(Color(1.0, 0.9, 0.55), 2.2)
+	parts.append({"mesh": lamp, "xform": Transform3D(Basis.IDENTITY, Vector3(0.0, 4.85, 0.0))})
+	var roof := CylinderMesh.new()
+	roof.bottom_radius = 0.42
+	roof.top_radius = 0.02
+	roof.height = 0.5
+	roof.radial_segments = 10
+	roof.rings = 1
+	roof.material = Fx.flat(Color(0.4, 0.3, 0.26))
+	parts.append({"mesh": roof, "xform": Transform3D(Basis.IDENTITY, Vector3(0.0, 5.35, 0.0))})
+	var prop := _prop(parts, 2)
+	prop.call("set_shadows", false)
+	band.call("add_group", prop, [{"x": _wall_x + WALL_W * 0.5 + 2.2, "y": 1.3, "z": -52.0}])
 
 
 ## Zwei Hafenkräne als Silhouette (Web malt sie in die Kulissentextur).
@@ -372,6 +451,7 @@ func _build_props(ring_radius: float) -> void:
 	ring_prop = _prop(_ring_parts(ring_radius), 12)
 	buoy_prop = _prop(Models.parts(BUOY, 0.9), 12)
 	pier_prop = _prop(_pier_parts(), 4)
+	pier_warn_prop = _prop(_pier_warn_parts(), 4)
 	wave_prop = _prop(_wave_parts(), 6)
 	foam_prop = _prop(_foam_parts(), 6)
 
@@ -394,6 +474,27 @@ func _pier_parts() -> Array:
 	mesh.size = Vector3(1.0, 0.7, 1.0)
 	mesh.material = Fx.flat(Color(0.55, 0.4, 0.28))
 	return [{"mesh": mesh, "xform": Transform3D.IDENTITY}]
+
+
+## Warnpoller für die Molenspitze: weißer Pfahl, rotes Band, rote Leuchte.
+func _pier_warn_parts() -> Array:
+	var pole := BoxMesh.new()
+	pole.size = Vector3(0.12, 0.7, 0.12)
+	pole.material = Fx.flat(LIGHTHOUSE_WHITE, 0.8)
+	var stripe := BoxMesh.new()
+	stripe.size = Vector3(0.14, 0.2, 0.14)
+	stripe.material = Fx.flat(LIGHTHOUSE_RED, 0.8)
+	var lamp := SphereMesh.new()
+	lamp.radius = 0.08
+	lamp.height = 0.16
+	lamp.radial_segments = 8
+	lamp.rings = 4
+	lamp.material = Fx.glow(Color(1.0, 0.36, 0.28), 2.4)
+	return [
+		{"mesh": pole, "xform": Transform3D.IDENTITY},
+		{"mesh": stripe, "xform": Transform3D(Basis.IDENTITY, Vector3(0.0, 0.12, 0.0))},
+		{"mesh": lamp, "xform": Transform3D(Basis.IDENTITY, Vector3(0.0, 0.44, 0.0))},
+	]
 
 
 func _wave_parts() -> Array:

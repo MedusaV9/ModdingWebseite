@@ -6,11 +6,14 @@ extends MinigameBase
 ## Tap-Effizienz-Bonus (0–10) − 5 je Leck. Ab Rätsel 3 tropft eine Stelle und
 ## kostet nach LEAK_SEC fünf Punkte. Endlos endet nach drei Patzern.
 ##
-## ECHTES 3D-ROHRPANEL (FB-4, PipeFlowStage3D): das Blaupausen-Brett steht als
-## 3D-Panel im Garten, Kacheln sind echte Rohrstücke, Wasser leuchtet als Kern
-## durch die Leitung, unten sprüht der Sprenger ins 3D-Beet und Gooby (echtes
-## Rig) schaut zu. Eingabe bleibt zahlengleich (Canvas-Rechtecke), 2D bleibt
-## nur der Leck-Countdown-Ring. MECHANIK komplett in PipeFlowLogic.
+## ECHTES 3D-ROHRPANEL (MP-D, PipeFlowStage3D): das Blaupausen-Brett steht als
+## 3D-Panel in einer Gärtnerei (Hügel, Hecke, Wolken), Kacheln sind echte
+## Rohrstücke über MultiMesh (Draw-Call-Diät), Wasser leuchtet als Kern durch
+## die Leitung, unten sprüht der Sprenger ins 3D-Beet und Gooby (echtes Rig)
+## schraubt auf seinem Hocker mit. Jeder Tap dreht die Kachel SICHTBAR, alles
+## am Hahn Angeschlossene ist blass blau getintet (sichtbarer Fortschritt).
+## Eingabe bleibt zahlengleich (Canvas-Rechtecke), 2D bleibt nur der
+## Leck-Countdown-Ring. MECHANIK komplett in PipeFlowLogic.
 
 const WATER := Color("4FD8F7")
 
@@ -33,6 +36,9 @@ var fill_left := 0.0
 var filling := false
 var fill_depth := 0
 var depths: Dictionary = {}
+## Kacheln, die aktuell am Hahn hängen (water_reach-Tiefen) — Cache für den
+## Fortschritts-Tint der Bühne, neu berechnet je Tap/Rätsel statt je Frame.
+var reach: Dictionary = {}
 var finished := false
 var view_size := Vector2(390.0, 844.0)
 var landscape := false
@@ -125,6 +131,10 @@ func _build_hud() -> void:
 	_hint_label.theme_type_variation = &"SoftLabel"
 	_hint_label.text = I18nService.t("mg.pipeFlow.hint")
 	_hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	# Vor der grünen Wiese lesbar: heller Text mit dunkler Kontur.
+	_hint_label.add_theme_color_override("font_color", Color(1.0, 1.0, 0.97))
+	_hint_label.add_theme_color_override("font_outline_color", Color(0.16, 0.3, 0.24, 0.85))
+	_hint_label.add_theme_constant_override("outline_size", 6)
 	add_child(_hint_label)
 	_update_labels()
 
@@ -144,6 +154,7 @@ func _next_puzzle() -> void:
 	filling = false
 	fill_depth = 0
 	depths = {}
+	reach = PipeFlowLogic.water_reach(board)["depths"]
 	_layout_stage()
 	_update_labels()
 
@@ -169,7 +180,7 @@ func _process(delta: float) -> void:
 	for i in tiles.size():
 		watered.append(_tile_watered(i))
 	var leak_pending := leak_index if (leak_index >= 0 and not leak_applied and not filling) else -1
-	_stage.sync(tiles, watered, filling, leak_pending, _pulse, delta)
+	_stage.sync(tiles, watered, reach, filling, leak_pending, _pulse, delta)
 	_update_labels()
 	queue_redraw()
 
@@ -222,17 +233,24 @@ func _unhandled_input(event: InputEvent) -> void:
 	var tiles: Array = board["tiles"]
 	tiles[index] = PipeFlowLogic.rotate_tile(tiles[index])
 	total_taps += 1
+	_stage.tap_fx(index)
 	AudioDirector.try_play(self, "ui_chip", 1.0 + 0.04 * float(index % 5))
-	var reach := PipeFlowLogic.water_reach(board)
-	if bool(reach["solved"]):
-		_solve(reach)
+	var result := PipeFlowLogic.water_reach(board)
+	var grown: bool = (result["depths"] as Dictionary).size() > reach.size()
+	reach = result["depths"]
+	# Hörbare Zug-Bestätigung: schließt der Dreh neue Rohre ans Wasser an,
+	# klingt ein hellerer Anschluss-Plop obendrauf.
+	if grown and not bool(result["solved"]):
+		FeelSfx.play(self, "game_pop", 1.0 + 0.03 * float(reach.size()))
+	if bool(result["solved"]):
+		_solve(result)
 	queue_redraw()
 
 
-func _solve(reach: Dictionary) -> void:
+func _solve(result: Dictionary) -> void:
 	solved += 1
 	solve_streak += 1
-	depths = reach["depths"]
+	depths = result["depths"]
 	filling = true
 	fill_depth = 0
 	fill_left = 0.0
@@ -251,6 +269,9 @@ func _solve(reach: Dictionary) -> void:
 		ctx.juice.burst(self, goal_center, Color(0.5, 0.85, 0.95), 16)
 		if solve_streak >= 2:
 			ctx.juice.show_combo(solve_streak)
+		# Ab drei Lösungen in Serie regnet Konfetti — der große Belohnungsmoment.
+		if solve_streak >= 3:
+			ctx.juice.confetti(70)
 	ctx.report_score(_live_score(), int(tune["SOLVE_POINTS"]))
 
 

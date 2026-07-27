@@ -60,19 +60,29 @@ func setup_stage(columns: Array) -> void:
 			"ground_horizon": Color(0.9, 0.78, 0.7),
 			"ground_bottom": Color(0.6, 0.4, 0.36),
 			"sky_energy": 0.4,
-			"ambient": 0.5,
-			"sun_color": Color(1.0, 0.9, 0.76),
-			"sun_energy": 2.2,
+			"ambient": 0.46,
+			"sun_color": Color(1.0, 0.87, 0.7),
+			"sun_energy": 1.9,
 			"sun_dir": Vector3(-0.32, -0.72, -0.6),
 			"fill_color": Color(0.78, 0.86, 1.0),
-			"fill_energy": 0.6,
+			"fill_energy": 0.55,
 			"shadows": false,
-			"glow": 0.3,
+			"glow": 0.34,
 			"glow_bloom": 0.02,
-			"glow_threshold": 1.05,
+			"glow_threshold": 1.0,
 			"far": 70.0,
 		}
 	)
+	# BELICHTUNGS-EICHUNG: mit der Basis-Belichtung lag das Bild im Mittel bei
+	# Luma 200 und 63 % der Pixel über 230 — die Creme-Wand brannte aus und die
+	# Bühne las sich flach. Dunkler belichtet kommen Verläufe und Neonlicht
+	# zurück; Kontrast/Sättigung geben dem Diner seine warmen, satten Flächen.
+	# (Runde 2: 0,74 drückte nur auf Luma 181 — die Filmic-Kurve staucht oben.
+	# 0,66 landet bei ~165 und die Creme-Wand behält endlich Zeichnung.)
+	environment.tonemap_exposure = 0.66
+	environment.adjustment_enabled = true
+	environment.adjustment_contrast = 1.06
+	environment.adjustment_saturation = 1.12
 	frame(7.36)
 	_build_room()
 	_build_counter()
@@ -143,7 +153,9 @@ func _build_room() -> void:
 	var box := BoxMesh.new()
 	box.size = Vector3(40.0, 26.0, 0.4)
 	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.98, 0.9, 0.8)
+	# Etwas tiefere Creme als vorher (0,98/0,9/0,8): die Wand füllt zwei
+	# Bilddrittel — zu hell gerät die ganze Bühne in den Anschlag.
+	mat.albedo_color = Color(0.93, 0.84, 0.72)
 	mat.roughness = 1.0
 	box.material = mat
 	wall.mesh = box
@@ -160,8 +172,53 @@ func _build_room() -> void:
 	stripe.position = Vector3(0.0, -1.4, WALL_Z + 0.25)
 	add_child(stripe)
 	_build_floor()
+	_build_windows()
 	_build_menu_board()
 	_build_wall_dressing()
+
+
+## Zwei Fenster mit warmem Abendlicht: sie brechen die große Creme-Fläche und
+## geben der Küche Tiefe (draußen ist Sonnenuntergang, drinnen brennt Neon).
+func _build_windows() -> void:
+	var frame_mat := StandardMaterial3D.new()
+	frame_mat.albedo_color = Color(0.99, 0.97, 0.94)
+	frame_mat.roughness = 0.7
+	var glass_mat := StandardMaterial3D.new()
+	glass_mat.albedo_color = Color(1.0, 0.78, 0.55)
+	glass_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	glass_mat.emission_enabled = true
+	glass_mat.emission = Color(1.0, 0.72, 0.45)
+	glass_mat.emission_energy_multiplier = 0.55
+	for wx in [-4.35, 4.35]:
+		var glass := MeshInstance3D.new()
+		var pane := BoxMesh.new()
+		pane.size = Vector3(1.9, 2.2, 0.06)
+		pane.material = glass_mat
+		glass.mesh = pane
+		glass.position = Vector3(wx, 2.5, WALL_Z + 0.28)
+		add_child(glass)
+		var frame := MeshInstance3D.new()
+		var fbox := BoxMesh.new()
+		fbox.size = Vector3(2.2, 2.5, 0.1)
+		fbox.material = frame_mat
+		frame.mesh = fbox
+		frame.position = Vector3(wx, 2.5, WALL_Z + 0.24)
+		add_child(frame)
+		var cross := MeshInstance3D.new()
+		var cbox := BoxMesh.new()
+		cbox.size = Vector3(0.1, 2.2, 0.05)
+		cbox.material = frame_mat
+		cross.mesh = cbox
+		cross.position = Vector3(wx, 2.5, WALL_Z + 0.33)
+		add_child(cross)
+		var sill := MeshInstance3D.new()
+		var sbox2 := BoxMesh.new()
+		sbox2.size = Vector3(0.1, 0.05, 2.0)
+		sbox2.material = frame_mat
+		sill.mesh = sbox2
+		sill.rotation_degrees = Vector3(0.0, 0.0, 90.0)
+		sill.position = Vector3(wx, 2.5, WALL_Z + 0.33)
+		add_child(sill)
 
 
 ## Die obere Wandhälfte wäre sonst leer: Wimpelkette, Wanduhr und zwei
@@ -212,6 +269,8 @@ func _build_wall_dressing() -> void:
 		mat.emission_energy_multiplier = 2.4
 		torus.material = mat
 		ring.mesh = torus
+		# Aufrichten: der Torus liegt sonst flach und wird von vorn zum Strich.
+		ring.rotation_degrees = Vector3(90.0, 0.0, 0.0)
 		ring.position = Vector3(float(entry[0]), float(entry[1]), WALL_Z + 0.4)
 		add_child(ring)
 
@@ -255,17 +314,119 @@ func _build_menu_board() -> void:
 	board.mesh = box
 	board.position = Vector3(0.0, 1.6, WALL_Z + 0.3)
 	add_child(board)
+	# Holzrahmen: ohne ihn liest sich die Tafel als schwebender dunkler Fleck.
+	var trim := StandardMaterial3D.new()
+	trim.albedo_color = Color(0.62, 0.44, 0.3)
+	trim.roughness = 0.85
+	for edge: Array in [[0.0, 2.86, 5.9, 0.14], [0.0, 0.34, 5.9, 0.14]]:
+		var bar := MeshInstance3D.new()
+		var bbox := BoxMesh.new()
+		bbox.size = Vector3(float(edge[2]), float(edge[3]), 0.2)
+		bbox.material = trim
+		bar.mesh = bbox
+		bar.position = Vector3(float(edge[0]), float(edge[1]), WALL_Z + 0.32)
+		add_child(bar)
+	for side: float in [-2.87, 2.87]:
+		var bar := MeshInstance3D.new()
+		var bbox := BoxMesh.new()
+		bbox.size = Vector3(0.14, 2.66, 0.2)
+		bbox.material = trim
+		bar.mesh = bbox
+		bar.position = Vector3(side, 1.6, WALL_Z + 0.32)
+		add_child(bar)
 	var chalk := StandardMaterial3D.new()
 	chalk.albedo_color = Color(1.0, 0.96, 0.88)
 	chalk.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	# Gerichte-Chips vor den Kreidezeilen: die Tafel liest sich als Speisekarte
+	# statt als vier graue Balken.
+	const CHIP_TINTS: Array[Color] = [
+		Color(0.91, 0.68, 0.36),
+		Color(0.9, 0.31, 0.28),
+		Color(1.0, 0.79, 0.28),
+		Color(0.5, 0.79, 0.38),
+	]
 	for i in 4:
 		var line := MeshInstance3D.new()
 		var lbox := BoxMesh.new()
-		lbox.size = Vector3(3.2 - i * 0.55, 0.13, 0.05)
+		lbox.size = Vector3(2.7 - i * 0.4, 0.13, 0.05)
 		lbox.material = chalk
 		line.mesh = lbox
-		line.position = Vector3(-0.7 + i * 0.15, 2.3 - i * 0.48, WALL_Z + 0.42)
+		line.position = Vector3(-0.35 + i * 0.15, 2.3 - i * 0.48, WALL_Z + 0.42)
 		add_child(line)
+		var chip := MeshInstance3D.new()
+		var cbox := BoxMesh.new()
+		cbox.size = Vector3(0.34, 0.26, 0.08)
+		var cmat := StandardMaterial3D.new()
+		cmat.albedo_color = CHIP_TINTS[i]
+		cmat.roughness = 0.8
+		cbox.material = cmat
+		chip.mesh = cbox
+		chip.position = Vector3(-2.25, 2.3 - i * 0.48, WALL_Z + 0.42)
+		add_child(chip)
+	_build_neon_sign()
+
+
+## Neon-Burger, der VOR dem linken Fenster hängt (wie ein „OPEN"-Schild im
+## Diner). Bewusst nicht mittig: dort hängen Lampe und Flash-Text, und die
+## Tafel braucht Luft. Links balanciert er den 2D-Bestellzettel rechts aus.
+func _build_neon_sign() -> void:
+	var holder := Node3D.new()
+	# Runde 2: bei x = −3,55 in Originalgröße schnitt das Hochformat den Ring
+	# an der Bildkante durch. Etwas kleiner und höher hängt er frei zwischen
+	# Wimpelkette und Tafelecke — in BEIDEN Formaten voll im Bild.
+	holder.position = Vector3(-3.3, 3.1, WALL_Z + 0.4)
+	holder.scale = Vector3.ONE * 0.8
+	add_child(holder)
+	var back := MeshInstance3D.new()
+	var disc := CylinderMesh.new()
+	disc.top_radius = 0.92
+	disc.bottom_radius = 0.92
+	disc.height = 0.08
+	disc.radial_segments = 20
+	var bmat := StandardMaterial3D.new()
+	bmat.albedo_color = Color(0.3, 0.24, 0.28)
+	bmat.roughness = 0.9
+	disc.material = bmat
+	back.mesh = disc
+	back.rotation_degrees = Vector3(90.0, 0.0, 0.0)
+	holder.add_child(back)
+	# Leuchtender Mini-Burger: Deckel, Patty, Salat, Unterseite als Neonlagen.
+	var layers: Array = [
+		[Vector3(0.0, 0.3, 0.1), Vector3(0.92, 0.28, 0.3), Color(1.0, 0.74, 0.28), 2.8],
+		[Vector3(0.0, 0.08, 0.1), Vector3(1.02, 0.13, 0.32), Color(1.0, 0.4, 0.26), 2.6],
+		[Vector3(0.0, -0.08, 0.1), Vector3(1.08, 0.09, 0.34), Color(0.6, 0.96, 0.36), 2.5],
+		[Vector3(0.0, -0.24, 0.1), Vector3(0.92, 0.18, 0.3), Color(1.0, 0.74, 0.28), 2.8],
+	]
+	for entry: Array in layers:
+		var slab := MeshInstance3D.new()
+		var sbox := BoxMesh.new()
+		sbox.size = entry[1]
+		var smat := StandardMaterial3D.new()
+		smat.albedo_color = entry[2]
+		smat.emission_enabled = true
+		smat.emission = entry[2]
+		smat.emission_energy_multiplier = float(entry[3])
+		sbox.material = smat
+		slab.mesh = sbox
+		slab.position = entry[0]
+		holder.add_child(slab)
+	var ring := MeshInstance3D.new()
+	var torus := TorusMesh.new()
+	torus.inner_radius = 0.86
+	torus.outer_radius = 0.98
+	torus.rings = 24
+	torus.ring_segments = 6
+	var rmat := StandardMaterial3D.new()
+	rmat.albedo_color = Color(1.0, 0.62, 0.5)
+	rmat.emission_enabled = true
+	rmat.emission = Color(1.0, 0.5, 0.42)
+	rmat.emission_energy_multiplier = 3.0
+	torus.material = rmat
+	ring.mesh = torus
+	# Aufrichten — flach läge der Ring als Strich im Bild.
+	ring.rotation_degrees = Vector3(90.0, 0.0, 0.0)
+	ring.position = Vector3(0.0, 0.0, 0.12)
+	holder.add_child(ring)
 
 
 func _build_counter() -> void:
@@ -327,31 +488,79 @@ func _build_counter() -> void:
 		var stool := Models.node_by_height(DIR + "stoolBar.glb", 2.6, true)
 		stool.position = Vector3(x, FLOOR_Y + 0.05, 2.6)
 		add_child(stool)
+	_build_condiments()
 
 
-## Zutatenschächte über den drei Spalten.
+## Ketchup- und Senfflasche auf der Theke: Diner-Charakter im Nahbereich,
+## bewusst außerhalb der Teller-Fahrspur (±3,0).
+func _build_condiments() -> void:
+	for entry: Array in [[-5.3, Color(0.82, 0.24, 0.2)], [5.3, Color(0.95, 0.75, 0.25)]]:
+		var bottle := Node3D.new()
+		bottle.position = Vector3(float(entry[0]), COUNTER_Y, -0.4)
+		add_child(bottle)
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = entry[1]
+		mat.roughness = 0.55
+		var body := MeshInstance3D.new()
+		var cyl := CylinderMesh.new()
+		cyl.top_radius = 0.17
+		cyl.bottom_radius = 0.21
+		cyl.height = 0.62
+		cyl.radial_segments = 10
+		cyl.material = mat
+		body.mesh = cyl
+		body.position = Vector3(0.0, 0.31, 0.0)
+		bottle.add_child(body)
+		var tip := MeshInstance3D.new()
+		var cone := CylinderMesh.new()
+		cone.top_radius = 0.03
+		cone.bottom_radius = 0.14
+		cone.height = 0.26
+		cone.radial_segments = 10
+		cone.material = mat
+		tip.mesh = cone
+		tip.position = Vector3(0.0, 0.75, 0.0)
+		bottle.add_child(tip)
+
+
+## Zutatenschächte über den drei Spalten: durchgehende Rohre bis über den
+## Bildrand, Mündung mit rotem Bund und warmem Lichtsaum — so sieht man,
+## WOHER die Zutaten fallen (vorher schnitt der Bildrand die Kästen ab und
+## übrig blieben schwebende rote Deckel).
 func _build_chutes(columns: Array) -> void:
 	for cx: float in columns:
 		var chute := MeshInstance3D.new()
 		var box := BoxMesh.new()
-		box.size = Vector3(1.6, 1.4, 1.4)
+		box.size = Vector3(1.5, 3.4, 1.4)
 		var mat := StandardMaterial3D.new()
-		mat.albedo_color = Color(0.86, 0.88, 0.92)
+		mat.albedo_color = Color(0.84, 0.86, 0.9)
 		mat.metallic = 0.35
 		mat.roughness = 0.4
 		box.material = mat
 		chute.mesh = box
-		chute.position = Vector3(cx, 6.2, -0.4)
+		chute.position = Vector3(cx, 6.8, -0.4)
 		add_child(chute)
 		var lip := MeshInstance3D.new()
 		var lbox := BoxMesh.new()
-		lbox.size = Vector3(1.9, 0.28, 1.7)
+		lbox.size = Vector3(1.8, 0.3, 1.7)
 		var lmat := StandardMaterial3D.new()
 		lmat.albedo_color = Color(0.84, 0.32, 0.3)
 		lbox.material = lmat
 		lip.mesh = lbox
-		lip.position = Vector3(cx, 5.4, -0.4)
+		lip.position = Vector3(cx, 5.0, -0.4)
 		add_child(lip)
+		var rim := MeshInstance3D.new()
+		var rbox := BoxMesh.new()
+		rbox.size = Vector3(1.66, 0.1, 1.56)
+		var rmat := StandardMaterial3D.new()
+		rmat.albedo_color = Color(1.0, 0.86, 0.55)
+		rmat.emission_enabled = true
+		rmat.emission = Color(1.0, 0.82, 0.5)
+		rmat.emission_energy_multiplier = 1.7
+		rbox.material = rmat
+		rim.mesh = rbox
+		rim.position = Vector3(cx, 4.83, -0.4)
+		add_child(rim)
 
 
 func _build_shelf() -> void:
@@ -426,6 +635,21 @@ func _build_lamps(columns: Array) -> void:
 		bulb.position = Vector3(cx, 2.9, 1.4)
 		add_child(bulb)
 		_lamps.append(bulb)
+		# Warmer Lichthof um die Birne — die Lampen LEUCHTEN statt nur zu glimmen.
+		var halo := MeshInstance3D.new()
+		var quad := QuadMesh.new()
+		quad.size = Vector2(1.7, 1.7)
+		halo.mesh = quad
+		var hmat := StandardMaterial3D.new()
+		hmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		hmat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		hmat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		hmat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+		hmat.albedo_color = Color(1.0, 0.82, 0.5, 0.34)
+		hmat.albedo_texture = load(DIR + "vfx/circle_05.png")
+		halo.material_override = hmat
+		halo.position = Vector3(cx, 2.9, 1.4)
+		add_child(halo)
 
 
 func _build_gooby() -> void:
@@ -532,6 +756,8 @@ func _build_effects() -> void:
 		)
 	)
 	add_child(_pop)
+	# ADDITIV: die Kenney-Sprites haben SCHWARZEN Grund (kein Alpha) — mit
+	# Alpha-Blending rendert jeder Partikel als dunkles Quadrat.
 	_steam = (
 		Puff
 		. stream(
@@ -544,14 +770,15 @@ func _build_effects() -> void:
 				"spread": 14.0,
 				"speed": Vector2(0.5, 1.0),
 				"gravity": Vector3(0.0, 0.4, 0.0),
-				"color": Color(1.0, 1.0, 1.0, 0.26),
+				"color": Color(1.0, 0.95, 0.88, 0.2),
 				"color_end": Color(1.0, 1.0, 1.0, 0.0),
-				"add": false,
 				"scale_range": Vector2(0.6, 1.9),
 			}
 		)
 	)
-	_steam.position = Vector3(6.6, COUNTER_Y + 1.4, -1.9)
+	# Über dem Show-Burger im Regal — dort ist der Dampf auch hochkant im Bild
+	# (die Kaffeemaschine bei x = −6,4 sieht nur das Querformat).
+	_steam.position = Vector3(1.6, 0.6, WALL_Z + 0.7)
 	add_child(_steam)
 
 

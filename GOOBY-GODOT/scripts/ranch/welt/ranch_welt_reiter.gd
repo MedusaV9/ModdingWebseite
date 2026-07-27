@@ -79,7 +79,7 @@ func _steuere(delta: float) -> void:
 	if absf(tempo) > 0.05:
 		var vor := -transform.basis.z
 		var kandidat := position + vor * tempo * delta
-		kandidat.y = RanchGelaende.hoehe(kandidat.x, kandidat.z)
+		kandidat.y = RanchGelaende.reit_hoehe(kandidat.x, kandidat.z)
 		if RanchKarte.ist_begehbar(kandidat):
 			position = kandidat
 		else:
@@ -99,12 +99,13 @@ func _setze_gangart() -> void:
 		pferd.set_gangart(RanchPferd.GANG_GALOPP)
 
 
-## Bodenhöhe + sanfte Hang-Neigung des Pferdes.
+## Bodenhöhe + sanfte Hang-Neigung des Pferdes. WELT-1: reit_hoehe statt
+## hoehe — über der Schlucht trägt das Hängebrücken-Deck den Reiter.
 func _am_boden() -> void:
-	position.y = RanchGelaende.hoehe(position.x, position.z)
+	position.y = RanchGelaende.reit_hoehe(position.x, position.z)
 	var vor := -transform.basis.z
 	var voraus := position + vor * 1.6
-	var steigung := RanchGelaende.hoehe(voraus.x, voraus.z) - position.y
+	var steigung := RanchGelaende.reit_hoehe(voraus.x, voraus.z) - position.y
 	pferd.rotation.x = lerpf(pferd.rotation.x, clampf(-steigung * 0.35, -0.3, 0.3), 0.2)
 
 
@@ -112,6 +113,6 @@ func _stelle_kamera(gewicht: float) -> void:
 	var zurueck := transform.basis.z
 	var abstand := 9.0 + absf(tempo) * 0.28
 	var ziel := position + zurueck * abstand + Vector3(0.0, 4.4, 0.0)
-	ziel.y = maxf(ziel.y, RanchGelaende.hoehe(ziel.x, ziel.z) + 1.6)
+	ziel.y = maxf(ziel.y, RanchGelaende.reit_hoehe(ziel.x, ziel.z) + 1.6)
 	cam.position = cam.position.lerp(ziel, gewicht)
 	cam.look_at(position + Vector3(0.0, 1.9, 0.0))

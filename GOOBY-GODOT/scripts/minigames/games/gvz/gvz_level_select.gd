@@ -19,6 +19,8 @@ var _stars_label: Label
 var _buttons: Dictionary = {}
 ## Level-Id → neues Element ("tower"/"zombie") für das NEU-Badge (E11 §Intro).
 var _new_element: Dictionary = {}
+## Gesamt-Sterne-Fortschritt als goldener Balken (der Fortschritt FEIERT).
+var _progress_fill: ColorRect
 
 
 func _ready() -> void:
@@ -48,6 +50,7 @@ func _ready() -> void:
 	_grid.add_theme_constant_override("v_separation", 8)
 	_grid.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	column.add_child(_grid)
+	column.add_child(_build_progress_bar())
 	var footer := HBoxContainer.new()
 	footer.add_theme_constant_override("separation", 12)
 	column.add_child(footer)
@@ -89,7 +92,9 @@ func _build_tiles() -> void:
 		_buttons[id] = tile
 
 
-## Sterne/Sperren neu aus dem Fortschritt lesen (nach jedem Sieg).
+## Sterne/Sperren neu aus dem Fortschritt lesen (nach jedem Sieg). Kacheln
+## feiern den Fortschritt: Mint = geschafft, Gold-Glanz = 3 Sterne, goldener
+## Rahmen = das NÄCHSTE Level, Berry-Rahmen = Boss-Finale.
 func refresh() -> void:
 	var unlocked := GvzProgress.max_unlocked(game_state)
 	for id in range(1, GvzProgress.LEVEL_COUNT + 1):
@@ -99,22 +104,35 @@ func refresh() -> void:
 		if id > unlocked:
 			tile.disabled = true
 			tile.text = "%d%s" % [id, badge]
-			_style_tile(tile, Color("#E7DFD3"), true)
-		else:
-			tile.disabled = false
-			var cleared := GvzProgress.is_cleared(game_state, id)
-			# E11 §Intro: das Level, das ein neues Element einführt, sagt das
-			# jetzt AN der Kachel (bis es abgeschlossen wurde).
-			if not cleared and _new_element.has(id):
-				badge += " · %s" % I18nService.t("gvz.select.new")
-			var star_row := "☆☆☆"
-			if stars > 0:
-				star_row = "★".repeat(stars) + "☆".repeat(3 - stars)
-			tile.text = "%d%s\n%s" % [id, badge, star_row]
-			_style_tile(tile, Color("#DFF2CF") if cleared else Color("#FFF6E3"), false)
-	_stars_label.text = I18nService.t(
-		"gvz.select.stars", {"n": GvzProgress.total_stars(game_state), "max": 45}
-	)
+			_style_tile(tile, Color("#E7DFD3"), Color("#CDBFAE"), 2)
+			continue
+		tile.disabled = false
+		var cleared := GvzProgress.is_cleared(game_state, id)
+		# E11 §Intro: das Level, das ein neues Element einführt, sagt das
+		# jetzt AN der Kachel (bis es abgeschlossen wurde).
+		if not cleared and _new_element.has(id):
+			badge += " · %s" % I18nService.t("gvz.select.new")
+		var star_row := "☆☆☆"
+		if stars > 0:
+			star_row = "★".repeat(stars) + "☆".repeat(3 - stars)
+		tile.text = "%d%s\n%s" % [id, badge, star_row]
+		var fill := Color("#DFF2CF") if cleared else Color("#FFF6E3")
+		var border := GvzArt.OUTLINE
+		var width := 3
+		if cleared and stars >= 3:
+			fill = Color("#FFF1C2")
+			border = Color("#D9A83C")
+		elif not cleared and id == unlocked:
+			border = Color("#D9A83C")
+			width = 4
+		if id == 15:
+			border = GvzArt.BERRY_RED
+		_style_tile(tile, fill, border, width)
+	var total := GvzProgress.total_stars(game_state)
+	_stars_label.text = I18nService.t("gvz.select.stars", {"n": total, "max": 45})
+	if _progress_fill != null:
+		_progress_fill.visible = total > 0
+		_progress_fill.anchor_right = clampf(float(total) / 45.0, 0.05, 1.0)
 
 
 ## new_towers/new_zombies aus den Level-Daten für die Badges einlesen.
@@ -128,14 +146,38 @@ func _load_new_elements() -> void:
 			_new_element[id] = "zombie"
 
 
-## Pastell-Kachel im Sticker-Look: Creme offen, Mint geschafft, blass gesperrt.
-static func _style_tile(tile: Button, fill: Color, locked: bool) -> void:
+## Goldener Gesamt-Sterne-Balken zwischen Gitter und Fußzeile.
+func _build_progress_bar() -> Control:
+	var bar := Panel.new()
+	bar.custom_minimum_size = Vector2(0, 14)
+	var bg := StyleBoxFlat.new()
+	bg.bg_color = Color("#EADFC9")
+	bg.set_corner_radius_all(7)
+	bg.set_border_width_all(2)
+	bg.border_color = GvzArt.OUTLINE
+	bar.add_theme_stylebox_override("panel", bg)
+	_progress_fill = ColorRect.new()
+	_progress_fill.color = GvzArt.STAR_GOLD
+	_progress_fill.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_progress_fill.anchor_right = 0.0
+	_progress_fill.offset_left = 3.0
+	_progress_fill.offset_top = 3.0
+	_progress_fill.offset_bottom = -3.0
+	_progress_fill.offset_right = -1.0
+	_progress_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	bar.add_child(_progress_fill)
+	return bar
+
+
+## Pastell-Kachel im Sticker-Look: Creme offen, Mint geschafft, Gold-Glanz
+## bei 3 Sternen, blass gesperrt; Rahmenfarbe markiert Frontier/Boss.
+static func _style_tile(tile: Button, fill: Color, border: Color, width: int) -> void:
 	for state_name in ["normal", "hover", "pressed", "disabled", "focus"]:
 		var style := StyleBoxFlat.new()
 		style.bg_color = fill.darkened(0.06) if state_name == "pressed" else fill
 		style.set_corner_radius_all(14)
-		style.set_border_width_all(2 if locked else 3)
-		style.border_color = Color("#CDBFAE") if locked else GvzArt.OUTLINE
+		style.set_border_width_all(width)
+		style.border_color = border
 		tile.add_theme_stylebox_override(state_name, style)
 
 

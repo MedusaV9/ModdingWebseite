@@ -17,7 +17,7 @@ signal ready_for_reveal
 signal zone_gewechselt(zone_id: String)
 
 ## Deko-Gruppen einer Zone verschwinden ab diesem Abstand zum Zonen-Rect.
-const STREAM_ABSTAND_M := 520.0
+const STREAM_ABSTAND_M := 640.0
 
 var game_state_override: Object
 ## Tests/Screenshots erzwingen Uhrzeit (< 0 = Systemzeit) + Wetterlage.
@@ -32,6 +32,8 @@ var wildtiere: RanchWildtiere
 ## FB-2: Sky-Fahrer (prozeduraler Shader) + Fernsicht-Bergketten.
 var himmel: GoobyHimmel
 var fernsicht: WeltFernsicht
+## WELT-1: Morgennebel/Wolkenschatten/Lichtstrahlen/Vogelschwarm/Ambience.
+var atmosphaere: RanchAtmosphaere
 
 var _spawn_zone := "hof"
 var _deko_gruppen: Dictionary = {}
@@ -49,7 +51,7 @@ var _stream_timer := 0.0
 func _ready() -> void:
 	var gs := game_state()
 	_baue_licht()
-	_terrain = RanchTerrain.new()
+	_terrain = RanchTerrain.new(RanchTerrain.saison_von_datum(RanchWetter.datum_heute()))
 	_terrain.baue_chunks(self)
 	_terrain.baue_wege(self)
 	_terrain.baue_trampelpfade(self)
@@ -57,10 +59,17 @@ func _ready() -> void:
 	var deko := RanchZonenDeko.new(RanchKarte.seed_wert())
 	_deko_gruppen = deko.baue(self)
 	_windrad_rotor = deko.windrad_rotor
+	var neue_zonen := RanchNeueZonen.new(RanchKarte.seed_wert())
+	_deko_gruppen.merge(neue_zonen.baue(self))
+	RanchWegenetz.baue(self)
 	fernsicht = WeltFernsicht.new()
 	fernsicht.name = "Fernsicht"
 	add_child(fernsicht)
-	fernsicht.einrichten(RanchKarte.seed_wert())
+	fernsicht.einrichten(RanchKarte.seed_wert(), RanchKarte.grenzen().grow(6.0))
+	atmosphaere = RanchAtmosphaere.new()
+	atmosphaere.name = "Atmosphaere"
+	add_child(atmosphaere)
+	atmosphaere.einrichten(RanchKarte.seed_wert())
 	RanchFundorteBau.new(_partikel_faktor()).baue(self)
 	RanchStreu.baue(self, _partikel_faktor(), _sicht_faktor())
 	wetter = RanchWetterController.new()
@@ -78,6 +87,10 @@ func _ready() -> void:
 	_merke_bach()
 	_baue_reiter()
 	_baue_hud()
+	# Budget-Nachlauf (WELT-1): Kleinteile (Pfosten, Eimer, Tiere, Fund-
+	# Details …) bekommen Sichtweiten — sonst kostet jedes Teil im
+	# Panorama einen Draw-Call, obwohl es sub-pixel-klein ist.
+	WeltBudget.kleinteil_culling(self)
 	ready_for_reveal.emit()
 
 
@@ -90,6 +103,8 @@ func _process(delta: float) -> void:
 	wildtiere.tick(delta, stunde, str(wetter.zustand["typ"]), reiter.position)
 	if fernsicht != null and himmel != null:
 		fernsicht.faerbe(himmel.horizont_farbe(), HimmelStimmungen.tageslicht(stunde))
+	if atmosphaere != null:
+		atmosphaere.tick(delta, stunde, reiter.aktuelle_zone())
 	_stream_timer -= delta
 	if _stream_timer <= 0.0:
 		_stream_timer = 0.5

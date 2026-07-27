@@ -26,7 +26,7 @@ const WIDE_PX := 412.0
 ## Die Kamera folgt der Arbeitsform, geklemmt auf ±1,4 m um die Bandmitte.
 const CAM_CLAMP := 1.4
 const CAM_K := 5.0
-## Vertikales Weltbudget der Bühne (Schiene 1,15 m + Luft + Boden).
+## Vertikales Weltbudget der Bühne (Schiene 1,42 m + Tanks + Luft + Boden).
 const STAGE_METERS := 2.6
 ## Meter unter der Bandoberkante (Rollen, Beine, Dielenboden).
 const BELOW_BELT := 0.55
@@ -371,6 +371,8 @@ func _on_serve(ev: Dictionary) -> void:
 		if ctx.juice != null:
 			ctx.juice.bloom_pulse(1.0)
 			ctx.juice.hit_freeze(60)
+			# Perfekte Torte = der große Moment: Konfetti über der Werkstatt.
+			ctx.juice.confetti(60)
 	else:
 		AudioDirector.try_play(self, "mg_combo")
 		_say(I18nService.t("mg.purblePlace.served", {"n": points}), true, 1.2)
@@ -676,10 +678,12 @@ func _draw_compact_tickets(tickets: Array, slots: int, font: Font) -> void:
 	var pad := 8.0 * _ui
 	# Brett nur so breit wie die WIRKLICH vorhandenen Aufträge: auf die volle
 	# Slotzahl aufgezogen war es quer ein leeres Brett über der halben Bühne.
+	# Ganz ohne Aufträge (direkt nach dem Versand) gibt es KEIN leeres Brett.
 	var shown := mini(slots, tickets.size())
+	if shown <= 0:
+		return
 	var board := Rect2(
-		Vector2(14.0 * _ui, 90.0 * _ui),
-		Vector2(maxi(1, shown) * (card_w + pad) + pad, card_h + pad * 2.0)
+		Vector2(14.0 * _ui, 90.0 * _ui), Vector2(shown * (card_w + pad) + pad, card_h + pad * 2.0)
 	)
 	draw_rect(board, Color(0.87, 0.71, 0.53, 0.92))
 	draw_rect(board, Color(0.66, 0.5, 0.36), false, 3.0 * _ui)

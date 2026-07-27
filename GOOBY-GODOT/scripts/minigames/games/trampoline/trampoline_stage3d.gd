@@ -1,8 +1,11 @@
 extends Node3D
-## ECHTE 3D-Turnhalle für Trampolin-Tricks (FB-4): Sprungtuch mit Federn und
-## Rahmen, Gooby (echtes Rig) springt METERGENAU (Spielhöhe = Weltmeter),
-## Höhenmarken ×2/×3 als leuchtende Bänder, Hallenwand mit Fensterband,
-## Sprossenwand und Wimpelkette. Die MECHANIK bleibt komplett in
+## ECHTE 3D-Turnhalle für Trampolin-Tricks (FB-4, MP-C-Politur): Sprungtuch
+## mit Federn und Rahmen auf einem runden Teppich, Gooby (echtes Rig) springt
+## METERGENAU (Spielhöhe = Weltmeter) mit Streck-/Stauchpose, jede Landung
+## dippt das Tuch, wirft Staub auf und schickt eine Schockwelle über die
+## Matte. Kulisse: Dielenboden mit Hallenlinien, Lambris + Fensterband mit
+## warmem Licht, Sprossenwand, Wimpelkette (echte Farben), Turnmatten, Bank
+## und Pflanze an den Querformat-Rändern. Die MECHANIK bleibt komplett in
 ## trampoline.gd/TrampolineLogic — diese Bühne ist reine Darstellung.
 
 const Stage3D := preload("res://scripts/minigames/games/_3dc_stage/stage3d.gd")
@@ -26,6 +29,7 @@ var _tier_chips: Array[Node3D] = []
 var _dust: GPUParticles3D
 var _trail: GPUParticles3D
 var _stars: Node3D
+var _squash := 0.0
 
 
 func setup_stage() -> void:
@@ -53,6 +57,7 @@ func setup_stage() -> void:
 		)
 	)
 	_build_hall()
+	_build_side_props()
 	_build_trampoline()
 	_build_tiers()
 	_build_gooby()
@@ -76,11 +81,22 @@ func _build_hall() -> void:
 		)
 	seams.multimesh = seam_mm
 	add_child(seams)
+	# Hallenlinien wie auf echten Turnhallenböden (teal + rosa).
+	for entry: Array in [
+		[Color(0.35, 0.72, 0.68), -0.9, 0.09], [Color(0.93, 0.6, 0.68), 2.3, 0.06]
+	]:
+		var line := MeshInstance3D.new()
+		var line_mesh := BoxMesh.new()
+		line_mesh.size = Vector3(30.0, 0.014, float(entry[2]))
+		line_mesh.material = Fx.flat(entry[0])
+		line.mesh = line_mesh
+		line.position = Vector3(0.0, 0.012, float(entry[1]))
+		add_child(line)
 	# Rückwand: Lambris unten, Creme in der Mitte, Fensterband oben.
 	for entry: Array in [
 		[Color(0.88, 0.76, 0.6), 0.0, 2.2],
 		[Color(0.95, 0.88, 0.76), 2.2, 2.8],
-		[Color(0.64, 0.77, 0.86), 5.0, 2.6],
+		[Color(0.55, 0.68, 0.8), 5.0, 2.6],
 	]:
 		var wall := MeshInstance3D.new()
 		var mesh := BoxMesh.new()
@@ -89,14 +105,30 @@ func _build_hall() -> void:
 		wall.mesh = mesh
 		wall.position = Vector3(0.0, float(entry[1]) + float(entry[2]) * 0.5, -5.6)
 		add_child(wall)
-	# Fenster: leuchtende Scheiben im Band (eine MultiMesh).
+	# Sockelleiste trennt Lambris und Cremeband sauber.
+	var skirt := MeshInstance3D.new()
+	var skirt_mesh := BoxMesh.new()
+	skirt_mesh.size = Vector3(30.0, 0.14, 0.34)
+	skirt_mesh.material = Fx.flat(Color(0.76, 0.6, 0.45))
+	skirt.mesh = skirt_mesh
+	skirt.position = Vector3(0.0, 2.2, -5.58)
+	add_child(skirt)
+	_build_windows()
+	_build_flags()
+	_build_banner()
+	_build_ladder()
+	_build_poster()
+
+
+## Fensterband: warme Scheiben MIT Kreuzsprossen — vorher weiße Löcher.
+func _build_windows() -> void:
 	var wins := MultiMeshInstance3D.new()
 	var win_mesh := BoxMesh.new()
 	win_mesh.size = Vector3(1.7, 1.3, 0.1)
-	var win_mat := Fx.flat(Color(0.78, 0.89, 0.97))
+	var win_mat := Fx.flat(Color(0.99, 0.93, 0.72))
 	win_mat.emission_enabled = true
-	win_mat.emission = Color(0.92, 0.96, 1.0)
-	win_mat.emission_energy_multiplier = 0.25
+	win_mat.emission = Color(1.0, 0.9, 0.65)
+	win_mat.emission_energy_multiplier = 0.4
 	win_mesh.material = win_mat
 	var win_mm := MultiMesh.new()
 	win_mm.transform_format = MultiMesh.TRANSFORM_3D
@@ -104,25 +136,52 @@ func _build_hall() -> void:
 	win_mm.instance_count = 6
 	for i in 6:
 		win_mm.set_instance_transform(
-			i, Transform3D(Basis.IDENTITY, Vector3(-7.5 + float(i) * 3.0, 6.0, -5.42))
+			i, Transform3D(Basis.IDENTITY, Vector3(-7.5 + float(i) * 3.0, 5.75, -5.42))
 		)
 	wins.multimesh = win_mm
 	add_child(wins)
-	# Wimpelkette mit Durchhang vor der Wand.
+	# Sprossen: je Fenster ein Kreuz (eine MultiMesh für alle Balken).
+	var bars := MultiMeshInstance3D.new()
+	var bar_mesh := BoxMesh.new()
+	bar_mesh.size = Vector3(1.8, 0.09, 0.06)
+	bar_mesh.material = Fx.flat(Color(0.99, 0.97, 0.94))
+	var bar_mm := MultiMesh.new()
+	bar_mm.transform_format = MultiMesh.TRANSFORM_3D
+	bar_mm.mesh = bar_mesh
+	bar_mm.instance_count = 12
+	for i in 6:
+		var x := -7.5 + float(i) * 3.0
+		bar_mm.set_instance_transform(i * 2, Transform3D(Basis.IDENTITY, Vector3(x, 5.75, -5.36)))
+		bar_mm.set_instance_transform(
+			i * 2 + 1,
+			Transform3D(
+				Basis(Vector3.BACK, PI * 0.5).scaled(Vector3(0.78, 1.0, 1.0)),
+				Vector3(x, 5.75, -5.36)
+			)
+		)
+	bars.multimesh = bar_mm
+	add_child(bars)
+
+
+## Wimpelkette mit Durchhang — Instanzfarben brauchen vertex_color_use_as_albedo,
+## sonst bleiben alle Wimpel blass-rosa (der Vorher-Fehler).
+func _build_flags() -> void:
 	var flags := MultiMeshInstance3D.new()
 	var flag_mesh := PrismMesh.new()
-	flag_mesh.size = Vector3(0.34, 0.42, 0.04)
-	flag_mesh.material = Fx.flat(Color(0.95, 0.62, 0.72))
+	flag_mesh.size = Vector3(0.4, 0.5, 0.04)
+	var flag_mat := Fx.flat(Color(1.0, 1.0, 1.0))
+	flag_mat.vertex_color_use_as_albedo = true
+	flag_mesh.material = flag_mat
 	var flag_mm := MultiMesh.new()
 	flag_mm.transform_format = MultiMesh.TRANSFORM_3D
 	flag_mm.use_colors = true
 	flag_mm.mesh = flag_mesh
 	flag_mm.instance_count = 11
 	var tints: Array[Color] = [
-		Color(0.95, 0.62, 0.72),
-		Color(1.0, 0.84, 0.44),
-		Color(0.42, 0.78, 0.72),
-		Color(0.62, 0.82, 0.46),
+		Color(0.95, 0.55, 0.66),
+		Color(1.0, 0.82, 0.4),
+		Color(0.38, 0.76, 0.7),
+		Color(0.58, 0.8, 0.42),
 	]
 	for i in 11:
 		var t := (float(i) + 0.5) / 11.0
@@ -132,24 +191,37 @@ func _build_hall() -> void:
 		flag_mm.set_instance_color(i, tints[i % tints.size()])
 	flags.multimesh = flag_mm
 	add_child(flags)
-	# Banner „GOOBY GYM" füllt die Wandmitte hinter der Flugbahn.
+
+
+## Banner „GOOBY GYM" — breit genug für den Schriftzug (vorher Überlauf).
+func _build_banner() -> void:
 	var banner := MeshInstance3D.new()
 	var banner_mesh := BoxMesh.new()
-	banner_mesh.size = Vector3(3.4, 0.9, 0.1)
-	banner_mesh.material = Fx.flat(Color(0.93, 0.5, 0.62))
+	banner_mesh.size = Vector3(4.5, 0.95, 0.1)
+	banner_mesh.material = Fx.flat(Color(0.91, 0.45, 0.58))
 	banner.mesh = banner_mesh
 	banner.position = Vector3(0.0, 3.2, -5.4)
 	add_child(banner)
+	var trim := MeshInstance3D.new()
+	var trim_mesh := BoxMesh.new()
+	trim_mesh.size = Vector3(4.66, 1.11, 0.06)
+	trim_mesh.material = Fx.flat(Color(0.99, 0.95, 0.9))
+	trim.mesh = trim_mesh
+	trim.position = Vector3(0.0, 3.2, -5.44)
+	add_child(trim)
 	var text := Label3D.new()
 	text.text = "GOOBY GYM"
-	text.font_size = 160
-	text.pixel_size = 0.004
+	text.font_size = 150
+	text.pixel_size = 0.0032
 	text.modulate = Color(1.0, 0.98, 0.94, 0.98)
 	text.outline_size = 26
 	text.outline_modulate = Color(INK.r, INK.g, INK.b, 0.85)
 	text.position = Vector3(0.0, 3.2, -5.33)
 	add_child(text)
-	# Sprossenwand links (zwei Holme + Sprossen als EINE MultiMesh).
+
+
+## Sprossenwand links (zwei Holme + Sprossen als EINE MultiMesh).
+func _build_ladder() -> void:
 	var rungs := MultiMeshInstance3D.new()
 	var rung_mesh := CylinderMesh.new()
 	rung_mesh.top_radius = 0.045
@@ -178,7 +250,105 @@ func _build_hall() -> void:
 		add_child(pole)
 
 
+## Motivationsposter rechts neben dem Trampolin (füllt die Hochkant-Wand).
+func _build_poster() -> void:
+	var backing := MeshInstance3D.new()
+	var mesh := BoxMesh.new()
+	mesh.size = Vector3(0.86, 1.1, 0.05)
+	mesh.material = Fx.flat(Color(0.99, 0.97, 0.92))
+	backing.mesh = mesh
+	backing.position = Vector3(1.72, 1.7, -5.42)
+	backing.rotation_degrees.z = -2.0
+	add_child(backing)
+	var inner := MeshInstance3D.new()
+	var inner_mesh := BoxMesh.new()
+	inner_mesh.size = Vector3(0.72, 0.82, 0.05)
+	inner_mesh.material = Fx.flat(Color(0.42, 0.76, 0.7))
+	inner.mesh = inner_mesh
+	inner.position = Vector3(1.72, 1.78, -5.4)
+	inner.rotation_degrees.z = -2.0
+	add_child(inner)
+	var text := Label3D.new()
+	text.text = "HOP!"
+	text.font_size = 110
+	text.pixel_size = 0.003
+	text.modulate = Color(1.0, 0.98, 0.94)
+	text.outline_size = 20
+	text.outline_modulate = Color(INK.r, INK.g, INK.b, 0.8)
+	text.position = Vector3(1.72, 1.78, -5.36)
+	text.rotation_degrees.z = -2.0
+	add_child(text)
+
+
+## Turnmatten, Bank, Ball und Pflanze: füllen die Querformat-Ränder, ohne
+## die Hochkant-Bühne (±2,2 m sichtbar) zuzustellen.
+func _build_side_props() -> void:
+	var mat_colors: Array[Color] = [Color(0.42, 0.62, 0.85), Color(1.0, 0.8, 0.42)]
+	for i in 2:
+		var pad := MeshInstance3D.new()
+		var pad_mesh := BoxMesh.new()
+		pad_mesh.size = Vector3(2.3, 0.34, 1.5)
+		pad_mesh.material = Fx.flat(mat_colors[i])
+		pad.mesh = pad_mesh
+		pad.position = Vector3(-4.1 + float(i) * 0.25, 0.17 + float(i) * 0.36, -3.3)
+		pad.rotation_degrees.y = 4.0 - float(i) * 7.0
+		add_child(pad)
+	var bench_seat := MeshInstance3D.new()
+	var seat_mesh := BoxMesh.new()
+	seat_mesh.size = Vector3(2.2, 0.12, 0.55)
+	seat_mesh.material = Fx.flat(Color(0.82, 0.64, 0.46))
+	bench_seat.mesh = seat_mesh
+	bench_seat.position = Vector3(4.1, 0.5, -3.6)
+	add_child(bench_seat)
+	for x: float in [3.25, 4.95]:
+		var leg := MeshInstance3D.new()
+		var leg_mesh := BoxMesh.new()
+		leg_mesh.size = Vector3(0.14, 0.5, 0.5)
+		leg_mesh.material = Fx.flat(Color(0.62, 0.47, 0.34))
+		leg.mesh = leg_mesh
+		leg.position = Vector3(x, 0.25, -3.6)
+		add_child(leg)
+	var ball := MeshInstance3D.new()
+	var ball_mesh := SphereMesh.new()
+	ball_mesh.radius = 0.27
+	ball_mesh.height = 0.54
+	ball_mesh.material = Fx.flat(Color(0.95, 0.55, 0.66))
+	ball.mesh = ball_mesh
+	ball.position = Vector3(3.4, 0.27, -2.2)
+	add_child(ball)
+	var pot := MeshInstance3D.new()
+	var pot_mesh := CylinderMesh.new()
+	pot_mesh.top_radius = 0.3
+	pot_mesh.bottom_radius = 0.22
+	pot_mesh.height = 0.5
+	pot_mesh.radial_segments = 10
+	pot_mesh.material = Fx.flat(Color(0.85, 0.55, 0.4))
+	pot.mesh = pot_mesh
+	pot.position = Vector3(-4.5, 0.25, -4.8)
+	add_child(pot)
+	var leaves := MeshInstance3D.new()
+	var leaves_mesh := SphereMesh.new()
+	leaves_mesh.radius = 0.5
+	leaves_mesh.height = 1.2
+	leaves_mesh.material = Fx.flat(Color(0.42, 0.66, 0.4))
+	leaves.mesh = leaves_mesh
+	leaves.position = Vector3(-4.5, 1.05, -4.8)
+	add_child(leaves)
+
+
 func _build_trampoline() -> void:
+	# Runder Teppich verankert das Trampolin auf dem großen Dielenboden.
+	var rug := MeshInstance3D.new()
+	var rug_mesh := CylinderMesh.new()
+	rug_mesh.top_radius = 2.3
+	rug_mesh.bottom_radius = 2.3
+	rug_mesh.height = 0.02
+	rug_mesh.radial_segments = 26
+	rug_mesh.material = Fx.flat(Color(0.93, 0.8, 0.72))
+	rug.mesh = rug_mesh
+	rug.position = Vector3(0.0, 0.012, 0.0)
+	rug.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(rug)
 	# Rahmenring, vier Beine, Federn und das dippende Sprungtuch.
 	var frame := MeshInstance3D.new()
 	var frame_mesh := TorusMesh.new()
@@ -209,11 +379,11 @@ func _build_trampoline() -> void:
 	add_child(legs)
 	var springs := MultiMeshInstance3D.new()
 	var spring_mesh := CylinderMesh.new()
-	spring_mesh.top_radius = 0.022
-	spring_mesh.bottom_radius = 0.022
-	spring_mesh.height = 0.16
+	spring_mesh.top_radius = 0.028
+	spring_mesh.bottom_radius = 0.028
+	spring_mesh.height = 0.17
 	spring_mesh.radial_segments = 6
-	spring_mesh.material = Fx.flat(Color(0.66, 0.7, 0.74), 0.5)
+	spring_mesh.material = Fx.flat(Color(0.55, 0.58, 0.63), 0.45)
 	var spring_mm := MultiMesh.new()
 	spring_mm.transform_format = MultiMesh.TRANSFORM_3D
 	spring_mm.mesh = spring_mesh
@@ -246,6 +416,13 @@ func _build_trampoline() -> void:
 	_shock_ring.position.y = MAT_Y + 0.06
 	_shock_ring.visible = false
 	add_child(_shock_ring)
+	# Warmes Hallenlicht über dem Trampolin: hebt Gooby aus der Pastellwand.
+	var lamp := OmniLight3D.new()
+	lamp.light_color = Color(1.0, 0.9, 0.72)
+	lamp.light_energy = 1.6
+	lamp.omni_range = 8.0
+	lamp.position = Vector3(0.0, 4.6, 1.6)
+	add_child(lamp)
 
 
 func _build_tiers() -> void:
@@ -258,7 +435,7 @@ func _build_tiers() -> void:
 		var tint := Color(1.0, 0.78, 0.3) if i == 1 else Color(0.35, 0.79, 0.72)
 		var band := MeshInstance3D.new()
 		var mesh := BoxMesh.new()
-		mesh.size = Vector3(3.2, 0.045, 0.045)
+		mesh.size = Vector3(4.4, 0.05, 0.05)
 		var mat := Fx.glow(tint, 0.0)
 		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		mat.albedo_color = Color(tint.r, tint.g, tint.b, 0.55)
@@ -386,22 +563,25 @@ func sync(
 			gooby.rotation = Vector3(0.0, trick_spin * 0.5, trick_spin)
 	else:
 		gooby.rotation = gooby.rotation.lerp(Vector3.ZERO, minf(1.0, delta * 14.0))
-	# Sprungtuch dippt beim Aufprall, der Schatten wächst zum Boden hin.
-	var dip := shock * 0.22
+	_pose_stretch(height, vy, stagger_left, shock, delta)
+	# Sprungtuch dippt beim Aufprall und wölbt sich leicht auf.
+	var dip := shock * 0.3
 	_cloth.position.y = MAT_Y - 0.03 - dip
+	_cloth.scale = Vector3(1.0 + dip * 0.3, 1.0, 1.0 + dip * 0.3)
 	_shadow.scale = Vector3.ONE * clampf(1.25 - height * 0.18, 0.35, 1.25)
 	var ring_t := 1.0 - shock
 	_shock_ring.visible = shock > 0.05
 	if _shock_ring.visible:
 		_shock_ring.scale = Vector3.ONE * (0.4 + ring_t * 2.6)
 		_shock_mat.albedo_color.a = shock * 0.7
-	# Höhenmarken leuchten, sobald der aktuelle Apex sie erreicht.
+	# Höhenmarken leuchten und pulsieren, sobald der aktuelle Apex sie erreicht.
 	var tiers: Array[float] = [
 		float(TrampolineLogic.TRAMP["TIER2_APEX"]), float(TrampolineLogic.TRAMP["TIER3_APEX"])
 	]
 	for i in _tier_mats.size():
 		var reached := apex >= tiers[i]
-		_tier_mats[i].emission_energy_multiplier = 1.1 if reached else 0.0
+		var glow := (1.0 + 0.35 * sin(pulse * 7.0)) if reached else 0.0
+		_tier_mats[i].emission_energy_multiplier = glow
 		_tier_mats[i].albedo_color.a = 0.85 if reached else 0.4
 	# Flugspur nur bei ordentlich Tempo.
 	_trail.global_position = gooby.global_position + Vector3(0.0, 0.5, 0.0)
@@ -413,9 +593,32 @@ func sync(
 		_stars.rotation.y = pulse * 4.0
 
 
+## Streck-/Stauchpose (nur Optik): steigen streckt, die Landung staucht kurz,
+## nach der Po-Landung sitzt Gooby platt gedrückt da.
+func _pose_stretch(
+	height: float, vy: float, stagger_left: float, shock: float, delta: float
+) -> void:
+	_squash = maxf(0.0, _squash - delta * 5.0)
+	if shock > 0.9:
+		_squash = 1.0
+	if stagger_left > 0.0:
+		gooby.scale = gooby.scale.lerp(Vector3(1.16, 0.78, 1.16), minf(1.0, delta * 10.0))
+		return
+	var near_mat := clampf(1.0 - height * 1.6, 0.0, 1.0)
+	var s := clampf(vy * 0.022, -0.1, 0.18) - _squash * 0.3 * near_mat
+	gooby.scale = Vector3(1.0 - s * 0.5, 1.0 + s, 1.0 - s * 0.5)
+
+
 ## Bildschirmanker über Gooby (Landefenster-Ring, float_text).
 func gooby_screen() -> Vector2:
 	return stage.to_screen(gooby.global_position + Vector3(0.0, 0.55, 0.0))
+
+
+## JEDE Landung: Staub + Tuch-Dip (der Dip läuft über den shock-Parameter).
+func land_fx(strength := 0.6) -> void:
+	Fx.burst(_dust, Vector3(0.0, MAT_Y + 0.08, 0.35))
+	if strength > 0.75:
+		stage.pulse_glow(0.35)
 
 
 func boost_fx() -> void:

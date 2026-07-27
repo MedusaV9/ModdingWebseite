@@ -99,6 +99,13 @@ func _build_pflanze(cell: Vector2i, crop_id: String, stufe: int) -> void:
 	if crop.is_empty():
 		return
 	var anteil := clampf(float(stufe) / float(crop["stufen"]), 0.15, 1.0)
+	# WELT2: echtes Pflanzen-Modell (Kenney bzw. eigener Blender-Crop) —
+	# der Stiel+Kugel-Lolli bleibt nur als Fallback ohne Assets.
+	var modell := HomeProps.pflanze(crop_id, anteil)
+	if modell != null:
+		modell.position = cell_to_world(cell) + Vector3(0.0, BEET_HOEHE, 0.0)
+		add_child(modell)
+		return
 	var hoehe := PFLANZE_MAX_H * anteil
 	var stiel := HomeProps.box(Vector3(0.06, hoehe, 0.06), "blatt")
 	stiel.position = cell_to_world(cell) + Vector3(0.0, BEET_HOEHE + hoehe * 0.5, 0.0)
@@ -156,6 +163,13 @@ func _struktur_node(kind: String, entry: Dictionary) -> Node3D:
 
 
 func _baum() -> Node3D:
+	# WELT2: echter Kenney-Baum statt Zylinder+Kugel (gleiche Hüllhöhe;
+	# tree_default ist schlank genug, dass die Krone in der 1-Zellen-
+	# Stellfläche bleibt und nicht in Nachbar-Bauten ragt).
+	var glb := HomeProps.modell_glb("res://assets/furniture/garten/tree_default.glb", 2.1)
+	if glb != null:
+		glb.name = "Baum"
+		return glb
 	var wurzel := Node3D.new()
 	wurzel.name = "Baum"
 	var stamm := HomeProps.zylinder(0.12, 1.1, "holz_dunkel")

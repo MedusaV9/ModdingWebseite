@@ -35,9 +35,16 @@ var _pools: Dictionary = {}
 var _busy: Array = []
 var _flying: Array = []
 var _splash: GPUParticles3D
+var _sparkle: GPUParticles3D
+var _miss_puff: GPUParticles3D
 var _steam: GPUParticles3D
+var _lamp: OmniLight3D
 var _emotion := "happy"
+var _frenzy := false
 var _knife: Node3D
+var _knife_swing: Node3D
+var _chop_tween: Tween
+var _lamp_tween: Tween
 
 
 func setup_stage() -> void:
@@ -106,9 +113,11 @@ func sync(items: Array, elapsed: float) -> void:
 	_tick_halves(elapsed)
 
 
-## Zwei Hälften auseinanderfliegen lassen (echte „-half"-Modelle).
+## Zwei Hälften auseinanderfliegen lassen (echte „-half"-Modelle) — plus
+## Saftspritzer UND Gold-Sternchen: der Schnitt muss sich verdient anfühlen.
 func split(world: Vector2, half_key: String, tint: Color) -> void:
 	Puff.fire(_splash, Vector3(world.x, world.y, 0.0), tint)
+	Puff.fire(_sparkle, Vector3(world.x, world.y, 0.2))
 	pulse_glow(0.35)
 	for side in [-1.0, 1.0]:
 		var node := _take("half:" + half_key)
@@ -138,10 +147,58 @@ func feel(emotion: String) -> void:
 	gooby.set_emotion(emotion)
 
 
-## Schnippelbewegung anstoßen.
+## Schnippelbewegung anstoßen: Clip neu takten + Messer-Hieb mit Überschwung.
+## Der Hieb macht JEDEN Treffer sichtbar, auch wenn der Clip gerade mittendrin
+## ist — Antizipation (kurz heben) steckt im Back-Easing des Rückwegs.
 func chop() -> void:
 	if gooby != null:
 		gooby.play_clip("build_hammer")
+	if _knife_swing == null:
+		return
+	if _chop_tween != null and _chop_tween.is_valid():
+		_chop_tween.kill()
+	_knife_swing.rotation_degrees.x = -55.0
+	_chop_tween = create_tween()
+	(
+		_chop_tween
+		. tween_property(_knife_swing, "rotation_degrees:x", 38.0, 0.07)
+		. set_trans(Tween.TRANS_QUAD)
+		. set_ease(Tween.EASE_IN)
+	)
+	(
+		_chop_tween
+		. tween_property(_knife_swing, "rotation_degrees:x", 0.0, 0.24)
+		. set_trans(Tween.TRANS_BACK)
+		. set_ease(Tween.EASE_OUT)
+	)
+
+
+## Grauer Staubwolken-Plumps, wo ein Gemüse auf den Boden fällt — der Fehler
+## bekommt einen ORT, nicht nur einen Zähler in der Ecke.
+func miss(world: Vector2) -> void:
+	Puff.fire(_miss_puff, Vector3(world.x, world.y, 0.0), Color(0.62, 0.58, 0.55, 0.85))
+
+
+## Dunkler Qualm beim Müll-Treffer — klar unterscheidbar vom Saftspritzer.
+func junk_smash(world: Vector2) -> void:
+	Puff.fire(_miss_puff, Vector3(world.x, world.y, 0.0), Color(0.3, 0.28, 0.3, 0.9))
+
+
+## Frenzy: die Küchenlampe dreht auf Gold-Alarm und pumpt, danach zurück auf
+## warmes Abendlicht. Nur bei Zustandswechsel, sonst zappelt der Tween.
+func set_frenzy(on: bool) -> void:
+	if _frenzy == on or _lamp == null:
+		return
+	_frenzy = on
+	if _lamp_tween != null and _lamp_tween.is_valid():
+		_lamp_tween.kill()
+	_lamp_tween = create_tween()
+	if on:
+		_lamp_tween.tween_property(_lamp, "light_color", Color(1.0, 0.72, 0.32), 0.3)
+		_lamp_tween.parallel().tween_property(_lamp, "light_energy", 8.5, 0.3)
+	else:
+		_lamp_tween.tween_property(_lamp, "light_color", Color(1.0, 0.86, 0.66), 0.6)
+		_lamp_tween.parallel().tween_property(_lamp, "light_energy", 5.5, 0.6)
 
 
 # ── Aufbau ────────────────────────────────────────────────────────────────
@@ -183,9 +240,14 @@ func _build_tiles() -> void:
 	var poses: Array = []
 	# 42 Spalten = 29 m: QUER ist der Ausschnitt gut 27 m breit, mit den
 	# ursprünglichen 24 Spalten endete der Kachelspiegel mitten im Bild.
+	# Die FENSTERFLÄCHE wird ausgespart: Kachelfronten (+0,25) und Glas
+	# (+0,24) lagen fast tiefengleich — das Fenster bekam ein Kachelraster
+	# über die Baumkronen gestanzt.
 	for row in 11:
 		for col in 42:
 			var pos := Vector3(-14.35 + col * 0.7, COUNTER_Y + 0.5 + row * 0.7, WALL_Z + 0.22)
+			if absf(pos.x - 1.35) < 2.15 and absf(pos.y - 0.8) < 1.75:
+				continue
 			poses.append(Transform3D(Basis.IDENTITY, pos))
 	add_child(Models.swarm([{"mesh": tile, "xform": Transform3D.IDENTITY}], poses, 30.0))
 
@@ -372,21 +434,26 @@ func _build_upper_wall() -> void:
 		pan.position = Vector3(float(entry[1]), 3.7, WALL_Z + 0.8)
 		pan.rotation_degrees = Vector3(88.0, 0.0, 0.0)
 		add_child(pan)
-	var hood := MeshInstance3D.new()
-	var cone := CylinderMesh.new()
-	cone.top_radius = 0.5
-	cone.bottom_radius = 1.9
-	cone.height = 1.5
-	cone.radial_segments = 4
+	# Dunstabzug: flacher Kasten + Kamin — die frühere 4-Eck-Pyramide las sich
+	# als schwebender Kristall statt als Küchengerät.
 	var hood_mat := StandardMaterial3D.new()
 	hood_mat.albedo_color = Color(0.9, 0.92, 0.94)
 	hood_mat.metallic = 0.45
 	hood_mat.roughness = 0.35
-	cone.material = hood_mat
-	hood.mesh = cone
-	hood.rotation_degrees = Vector3(0.0, 45.0, 0.0)
-	hood.position = Vector3(-4.4, 1.6, -3.1)
+	var hood := MeshInstance3D.new()
+	var hood_box := BoxMesh.new()
+	hood_box.size = Vector3(2.9, 0.55, 1.7)
+	hood_box.material = hood_mat
+	hood.mesh = hood_box
+	hood.position = Vector3(-4.4, 1.35, -3.1)
 	add_child(hood)
+	var chimney := MeshInstance3D.new()
+	var chim_box := BoxMesh.new()
+	chim_box.size = Vector3(1.0, 3.6, 0.9)
+	chim_box.material = hood_mat
+	chimney.mesh = chim_box
+	chimney.position = Vector3(-4.4, 3.3, -3.4)
+	add_child(chimney)
 	var clock := MeshInstance3D.new()
 	var disc := CylinderMesh.new()
 	disc.top_radius = 0.52
@@ -400,6 +467,20 @@ func _build_upper_wall() -> void:
 	clock.rotation_degrees = Vector3(90.0, 0.0, 0.0)
 	clock.position = Vector3(3.9, 2.75, WALL_Z + 0.3)
 	add_child(clock)
+	# Zeiger auf „kurz vor 12" — ohne sie war die Uhr ein leerer Teller.
+	var hand_mat := StandardMaterial3D.new()
+	hand_mat.albedo_color = Color(0.25, 0.28, 0.34)
+	for entry: Array in [[0.34, -24.0], [0.22, 150.0]]:
+		var hand := MeshInstance3D.new()
+		var hbox := BoxMesh.new()
+		hbox.size = Vector3(0.06, float(entry[0]), 0.05)
+		hbox.material = hand_mat
+		hand.mesh = hbox
+		hand.rotation_degrees = Vector3(0.0, 0.0, float(entry[1]))
+		var ang := deg_to_rad(float(entry[1]))
+		var off := Vector3(-sin(ang), cos(ang), 0.0) * float(entry[0]) * 0.5
+		hand.position = Vector3(3.9, 2.75, WALL_Z + 0.39) + off
+		add_child(hand)
 	_build_ceiling()
 
 
@@ -458,7 +539,7 @@ func _build_gooby() -> void:
 	# Rig-Höhe 1.13 wu → 3.4 wu Kochgröße auf einem Podest hinter der Platte:
 	# nur so ragt Gooby weit genug über die Arbeitsplatte ins Bild.
 	gooby.scale = Vector3.ONE * 3.4
-	gooby.position = Vector3(-1.15, FLOOR_Y + 0.55, -2.9)
+	gooby.position = Vector3(-1.15, FLOOR_Y + 0.85, -2.9)
 	gooby.rotation_degrees = Vector3(0.0, 14.0, 0.0)
 	add_child(gooby)
 	gooby.set_emotion(_emotion)
@@ -474,7 +555,7 @@ func _build_hat() -> void:
 	# beugt den Oberkörper, ein fester Aufsatz bliebe stehen. +0,38 ist die
 	# Schädeldecke — die 1,13 Rig-Höhe sind bis zu den OHRENSPITZEN gemessen,
 	# ein Hut auf dieser Höhe schwebte über dem Kopf.
-	hat.position = Vector3(0.0, 0.38, -0.03)
+	hat.position = Vector3(0.0, 0.42, -0.03)
 	hat.rotation_degrees = Vector3(-6.0, 0.0, 5.0)
 	Models.bone_mount(gooby).add_child(hat)
 	var mat := StandardMaterial3D.new()
@@ -501,30 +582,41 @@ func _build_hat() -> void:
 	hat.add_child(puff)
 
 
+## Messer an Goobys rechter Seite, VOR ihm überm Brett. Bewusst an der
+## RIG-WURZEL statt am arm.R-Knochen verankert: der BoneAttachment springt
+## beim ersten Skeleton-Update von der Rest- in die Clip-Pose und reißt jede
+## vorab gesetzte Weltposition mit. Die Hieb-Bewegung kommt stattdessen aus
+## dem inneren Gelenk `_knife_swing`, das chop() mit Überschwung dreht.
+## Maße in RIG-Einheiten (Rig 1,13 hoch, außen 3,4-fach skaliert).
 func _build_knife() -> void:
 	_knife = Node3D.new()
-	_knife.position = Vector3(-0.55, COUNTER_Y + 0.25, -1.5)
-	_knife.rotation_degrees = Vector3(0.0, 0.0, -18.0)
-	add_child(_knife)
+	gooby.add_child(_knife)
+	# Schwebt schräg über dem Schneidebrett (Griff zu Gooby hin) — dort, wo
+	# die Hälften entstehen, nicht am Gesicht.
+	_knife.global_position = gooby.global_position + Vector3(1.5, 1.9, 1.05)
+	_knife.look_at(gooby.global_position + Vector3(2.4, 1.45, 1.15), Vector3.UP)
+	_knife_swing = Node3D.new()
+	_knife.add_child(_knife_swing)
 	var blade := MeshInstance3D.new()
 	var box := BoxMesh.new()
-	box.size = Vector3(0.12, 0.16, 1.0)
+	box.size = Vector3(0.025, 0.07, 0.3)
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = Color(0.86, 0.9, 0.94)
 	mat.metallic = 0.6
 	mat.roughness = 0.25
 	box.material = mat
 	blade.mesh = box
-	_knife.add_child(blade)
+	blade.position = Vector3(0.0, 0.02, -0.16)
+	_knife_swing.add_child(blade)
 	var grip := MeshInstance3D.new()
 	var gbox := BoxMesh.new()
-	gbox.size = Vector3(0.14, 0.16, 0.44)
+	gbox.size = Vector3(0.035, 0.045, 0.13)
 	var gmat := StandardMaterial3D.new()
 	gmat.albedo_color = Color(0.44, 0.29, 0.2)
 	gbox.material = gmat
 	grip.mesh = gbox
-	grip.position = Vector3(0.0, 0.0, 0.68)
-	_knife.add_child(grip)
+	grip.position = Vector3(0.0, 0.0, 0.06)
+	_knife_swing.add_child(grip)
 
 
 func _build_effects() -> void:
@@ -548,6 +640,49 @@ func _build_effects() -> void:
 		)
 	)
 	add_child(_splash)
+	# Gold-Sternchen obendrauf: der Saft sagt WAS getroffen wurde, die Sterne
+	# sagen, dass es sich GELOHNT hat (additiv, deshalb eigener Emitter).
+	_sparkle = (
+		Puff
+		. burst(
+			DIR + "vfx/star_03.png",
+			{
+				"amount": 10,
+				"lifetime": 0.5,
+				"size": 0.34,
+				"dir": Vector3.UP,
+				"spread": 180.0,
+				"speed": Vector2(1.2, 3.2),
+				"gravity": Vector3(0.0, -2.5, 0.0),
+				"color": Color(1.0, 0.9, 0.45, 1.0),
+				"color_end": Color(1.0, 0.75, 0.3, 0.0),
+				"add": true,
+				"local": false,
+			}
+		)
+	)
+	add_child(_sparkle)
+	# Staub/Qualm-Wolke für Fehler und Müll — fire() färbt sie je Anlass um.
+	_miss_puff = (
+		Puff
+		. burst(
+			DIR + "vfx/circle_05.png",
+			{
+				"amount": 14,
+				"lifetime": 0.7,
+				"size": 0.42,
+				"dir": Vector3.UP,
+				"spread": 70.0,
+				"speed": Vector2(0.8, 2.0),
+				"gravity": Vector3(0.0, 1.2, 0.0),
+				"color": Color(0.62, 0.58, 0.55, 0.85),
+				"color_end": Color(0.62, 0.58, 0.55, 0.0),
+				"add": false,
+				"local": false,
+			}
+		)
+	)
+	add_child(_miss_puff)
 	_steam = (
 		Puff
 		. stream(
@@ -571,12 +706,13 @@ func _build_effects() -> void:
 	add_child(_steam)
 	# Warmes Deckenlicht direkt über dem Brett — der Lichtkegel gibt der
 	# Pastellküche die Tiefe, die ein reines Sonnen+Fülllicht nicht schafft.
-	var lamp := OmniLight3D.new()
-	lamp.light_color = Color(1.0, 0.86, 0.66)
-	lamp.light_energy = 5.5
-	lamp.omni_range = 9.0
-	lamp.position = Vector3(0.2, COUNTER_Y + 3.2, -1.0)
-	add_child(lamp)
+	# Als Feld gehalten: set_frenzy() dreht es auf Gold-Alarm.
+	_lamp = OmniLight3D.new()
+	_lamp.light_color = Color(1.0, 0.86, 0.66)
+	_lamp.light_energy = 5.5
+	_lamp.omni_range = 9.0
+	_lamp.position = Vector3(0.2, COUNTER_Y + 3.2, -1.0)
+	add_child(_lamp)
 
 
 # ── Pool + Takt ───────────────────────────────────────────────────────────

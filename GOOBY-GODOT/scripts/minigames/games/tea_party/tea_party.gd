@@ -168,6 +168,9 @@ func _release() -> void:
 	if TeaPartyLogic.endless_should_end(spills, tune):
 		_finish()
 		return
+	# Servierte Tasse rutscht SICHTBAR nach links raus (nur Optik).
+	if res["result"] != "spill":
+		_stage.serve_ghost(level)
 	# Nächste Tasse: Band neu würfeln, Kadenz aus der Logik.
 	level = 0.0
 	band = TeaPartyLogic.roll_band(rng, tune)

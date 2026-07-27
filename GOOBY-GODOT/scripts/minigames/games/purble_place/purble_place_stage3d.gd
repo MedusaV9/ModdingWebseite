@@ -1,9 +1,11 @@
 extends "res://scripts/minigames/games/_3dc_stage/stage3d.gd"
-## Tortenwerkstatt — 3D-Backstube (Agent 3D-C). Das Web zeigte eine flache
-## Seitenansicht auf ein gerades Band; hier steht dieselbe Strecke als ECHTE
-## Werkstatt: Laufband mit mitlaufenden Querstreben, Ofentunnel mit Glutfenster,
-## zehn Düsen an der Versorgungsschiene, Versandkiste, Gästetheke — und Gooby
-## als BÄCKER am Ofenausgang (echtes Rig, Mütze, Emotionen).
+## Tortenwerkstatt — 3D-Backstube (Agent 3D-C, MP-D-Tiefenpolitur). Das Web
+## zeigte eine flache Seitenansicht auf ein gerades Band; hier steht dieselbe
+## Strecke als ECHTE Werkstatt: Laufband mit mitlaufenden Querstreben,
+## Ofentunnel mit Glutfenster, zehn Düsen an der Versorgungsschiene,
+## Versandkiste, Gästetheke — und Gooby als WANDERNDER Bäcker (echtes Rig,
+## Mütze, Schürze, Emotionen), der dem Kamerafenster hinterherläuft.
+## Licht: goldener Feierabend statt Überbelichtung, weiche Sonnenschatten.
 ##
 ## Projektionsvertrag: die Kamera blickt mit `PITCH_DEG` Neigung auf die
 ## Bandebene z = 0; die Bandkoordinate s IST die Welt-x-Achse, y zählt Meter
@@ -34,7 +36,9 @@ const COUNTER_Z := -2.05
 ## Halbe Bandtiefe.
 const BELT_HALF_Z := 0.42
 ## Höhe der Versorgungsschiene und der Düsenköpfe (= Fallhöhe FALL_M).
-const RAIL_Y := 1.15
+## Schiene über Goobys Mützenrand (~1,23 m Welt), sonst schneidet sie beim
+## Wandern optisch durch den Kopf des Bäckers.
+const RAIL_Y := 1.42
 const NOZZLE_Y := 0.55
 ## Querstreben des Bandes: Abstand in Metern und Anzahl im Umlauf.
 const SLAT_PITCH := 0.25
@@ -44,9 +48,11 @@ const CAKE_W := 0.58
 ## Rig-Höhe bei scale 1 (gooby.glb) und Wunschgröße des Bäckers.
 const RIG_HEIGHT := 1.13
 const GOOBY_HEIGHT := 1.78
-## Bäckerplatz: liegt im Fenster, das in JEDER Kamerastellung sichtbar bleibt
-## (Kamera klemmt auf Bandmitte ±1,4 m, Hochkant zeigt ±1,8 m).
+## Startplatz des Bäckers (MP-D: er WANDERT — siehe _tick_gooby) und wie
+## weit er dem Kamerafenster hinterherläuft.
 const GOOBY_S := 3.38
+const GOOBY_LEAD := 1.2
+const GOOBY_WALK_SPEED := 1.5
 
 var gooby: GoobyRig
 
@@ -75,6 +81,11 @@ var _sparkle: GPUParticles3D
 var _emotion := "happy"
 var _cam_s := 3.0
 var _window := 3.6
+var _gooby_x := GOOBY_S
+var _gooby_walking := false
+var _gooby_bob := 0.0
+## Kurzer Freuden-Blitz der Versandzone nach einem geglückten Versand.
+var _ship_flash := 0.0
 
 
 ## `stations` = Logic.STATIONS, `tune` = die Runden-Zahlen (Ofen-/Versandmarken).
@@ -83,24 +94,31 @@ func setup_stage(stations: Array, tune: Dictionary) -> void:
 	_tune = tune
 	build(
 		{
-			"sky_top": Color(0.55, 0.72, 0.93),
-			"sky_horizon": Color(1.0, 0.91, 0.8),
-			"ground_horizon": Color(0.9, 0.8, 0.7),
-			"ground_bottom": Color(0.66, 0.56, 0.48),
-			"sky_energy": 0.5,
-			"ambient": 0.5,
-			"sun_color": Color(1.0, 0.9, 0.74),
-			"sun_energy": 2.1,
+			# Goldene Feierabend-Backstube — die Bühne war ~40 Luma-Stufen
+			# überbelichtet (Sonne 2,1 + Füller 0,55 wuschen alles cremeweiß).
+			"sky_top": Color(0.5, 0.66, 0.88),
+			"sky_horizon": Color(1.0, 0.87, 0.7),
+			"ground_horizon": Color(0.86, 0.74, 0.62),
+			"ground_bottom": Color(0.58, 0.48, 0.4),
+			"sky_energy": 0.4,
+			"ambient": 0.33,
+			"sun_color": Color(1.0, 0.88, 0.7),
+			"sun_energy": 1.0,
 			"sun_dir": Vector3(-0.35, -0.78, -0.52),
 			"fill_color": Color(0.74, 0.84, 1.0),
-			"fill_energy": 0.55,
-			"shadows": false,
+			"fill_energy": 0.26,
+			"shadows": true,
+			"shadow_distance": 14.0,
 			"glow": 0.3,
 			"glow_bloom": 0.05,
-			"glow_threshold": 0.95,
+			"glow_threshold": 0.92,
 			"far": 70.0,
 		}
 	)
+	# Weiche Schatten: die Requisiten stehen fühlbar AUF dem Boden.
+	sun.shadow_blur = 1.8
+	sun.shadow_opacity = 0.5
+	sun.light_angular_distance = 2.2
 	Shop3D.build(self)
 	_build_belt()
 	_build_oven()
@@ -156,7 +174,8 @@ func sync(line: Dictionary, scroll: float, oven_heat: float) -> void:
 	_sync_locks(line["lockouts"])
 	_oven_mat.emission_energy_multiplier = 0.8 + 3.4 * oven_heat
 	_smoke.emitting = oven_heat > 0.05
-	_ship_mat.emission_energy_multiplier = 2.6 if _ship_armed(line) else 0.35
+	var armed := 2.6 if _ship_armed(line) else 0.35
+	_ship_mat.emission_energy_multiplier = maxf(armed, 6.5 * _ship_flash)
 
 
 ## Bildschirmanker über dem Kopf von Gast `index` (dort hängt die Wunschblase).
@@ -180,9 +199,12 @@ func flour(s: float, tint: Color) -> void:
 	Puff.fire(_flour, Vector3(s, 0.12, 0.0), tint)
 
 
-## Versand geglückt: Funken an der Kiste + Glow-Puls + Gooby jubelt.
+## Versand geglückt: doppelter Funkenstoß an der Kiste, die Versandzone
+## blitzt grün auf, Glow-Puls + Gooby jubelt.
 func celebrate(s: float) -> void:
 	Puff.fire(_sparkle, Vector3(s, 0.45, 0.1), Color(1.0, 0.88, 0.5))
+	Puff.fire(_sparkle, Vector3(s + 0.3, 0.7, 0.05), Color(0.98, 0.66, 0.78))
+	_ship_flash = 1.0
 	pulse_glow(0.7)
 	if gooby != null:
 		gooby.play_clip("celebrate")
@@ -236,7 +258,11 @@ func _build_belt() -> void:
 		roll_poses.append(
 			Transform3D(Basis(Vector3.RIGHT, PI * 0.5), Vector3(-0.5 + i * 0.5, -0.24, 0.0))
 		)
-	add_child(Models.swarm([{"mesh": roller, "xform": Transform3D.IDENTITY}], roll_poses, 20.0))
+	add_child(
+		Shop3D.no_shadow(
+			Models.swarm([{"mesh": roller, "xform": Transform3D.IDENTITY}], roll_poses, 20.0)
+		)
+	)
 
 	var leg := BoxMesh.new()
 	leg.size = Vector3(0.1, 0.32, 0.1)
@@ -247,7 +273,11 @@ func _build_belt() -> void:
 			leg_poses.append(
 				Transform3D(Basis.IDENTITY, Vector3(0.3 + i * 1.4, FLOOR_Y + 0.16, float(z)))
 			)
-	add_child(Models.swarm([{"mesh": leg, "xform": Transform3D.IDENTITY}], leg_poses, 20.0))
+	add_child(
+		Shop3D.no_shadow(
+			Models.swarm([{"mesh": leg, "xform": Transform3D.IDENTITY}], leg_poses, 20.0)
+		)
+	)
 
 	# Querstreben laufen mit — 1 MultiMesh, Transforms je Frame.
 	var slat := BoxMesh.new()
@@ -264,6 +294,7 @@ func _build_belt() -> void:
 	_slats = MultiMeshInstance3D.new()
 	_slats.multimesh = mm
 	_slats.extra_cull_margin = 20.0
+	_slats.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(_slats)
 	_sync_slats(0.0)
 
@@ -306,6 +337,7 @@ func _build_oven() -> void:
 	_oven_glow.mesh = quad
 	_oven_glow.material_override = _oven_mat
 	_oven_glow.position = Vector3(mid, 0.5, 0.58)
+	_oven_glow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(_oven_glow)
 
 	var chimney := MeshInstance3D.new()
@@ -352,7 +384,9 @@ func _build_nozzles() -> void:
 		poses.append(
 			Transform3D(Basis.IDENTITY, Vector3(float(st["s"]), (RAIL_Y + NOZZLE_Y) * 0.5, -0.1))
 		)
-	add_child(Models.swarm([{"mesh": pipe, "xform": Transform3D.IDENTITY}], poses, 20.0))
+	add_child(
+		Shop3D.no_shadow(Models.swarm([{"mesh": pipe, "xform": Transform3D.IDENTITY}], poses, 20.0))
+	)
 
 	var rail := MeshInstance3D.new()
 	var rbox := BoxMesh.new()
@@ -381,6 +415,7 @@ func _build_nozzles() -> void:
 		mat.roughness = 0.5
 		head.material_override = mat
 		head.position = Vector3(float(st["s"]), NOZZLE_Y + 0.09, -0.1)
+		head.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		add_child(head)
 		_heads[str(st["id"])] = {"node": head, "mat": mat, "tint": tint}
 		var tank := MeshInstance3D.new()
@@ -395,6 +430,7 @@ func _build_nozzles() -> void:
 		tmat.roughness = 0.35
 		tank.material_override = tmat
 		tank.position = Vector3(float(st["s"]), RAIL_Y + 0.2, -0.1)
+		tank.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		add_child(tank)
 
 
@@ -462,6 +498,7 @@ func _build_ship() -> void:
 	_ship_zone.material_override = _ship_mat
 	_ship_zone.rotation_degrees = Vector3(-90.0, 0.0, 0.0)
 	_ship_zone.position = Vector3(s, 0.011, 0.0)
+	_ship_zone.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(_ship_zone)
 
 
@@ -493,6 +530,8 @@ func _build_guests() -> void:
 		Color(0.55, 0.75, 0.9), Color(0.95, 0.66, 0.55), Color(0.62, 0.82, 0.6)
 	]
 	_guests = Node3D.new()
+	Shop3D.no_shadow(counter)
+	Shop3D.no_shadow(ledge)
 	add_child(_guests)
 	for i in TINTS.size():
 		var guest := Node3D.new()
@@ -540,18 +579,61 @@ func _build_guests() -> void:
 			dot.mesh = eye
 			dot.position = Vector3(side * 0.09, 1.27, 0.235)
 			guest.add_child(dot)
+		Shop3D.no_shadow(guest)
 
 
 func _build_gooby() -> void:
 	gooby = GoobyRig.new()
 	gooby.name = "GoobyBaker"
 	gooby.scale = Vector3.ONE * (GOOBY_HEIGHT / RIG_HEIGHT)
-	gooby.position = Vector3(GOOBY_S, FLOOR_Y, -0.98)
+	gooby.position = Vector3(GOOBY_S, FLOOR_Y, -0.9)
 	gooby.rotation_degrees = Vector3(0.0, -18.0, 0.0)
 	add_child(gooby)
 	gooby.set_emotion(_emotion)
 	gooby.play_clip("build_hammer")
 	_build_hat()
+	_build_apron()
+
+
+## Der Bäcker WANDERT mit: Gooby folgt dem Kamerafenster hinterm Band, weicht
+## dem Ofenklotz aus und wechselt SICHTBAR zwischen Laufen (mit Hoppel-Bob)
+## und Werkeln — er arbeitet immer dort, wo der Spieler gerade hinschaut.
+func _tick_gooby(delta: float) -> void:
+	if gooby == null:
+		return
+	var want := clampf(_cam_s + GOOBY_LEAD, 0.6, 5.5)
+	var s0 := float(_tune["OVEN_START_S"]) - 0.5
+	var s1 := float(_tune["OVEN_END_S"]) + 0.35
+	if want > s0 and want < s1:
+		# Ofen-Ausweiche: auf die Seite, die NÄHER an der Bildmitte liegt —
+		# sonst steht der Bäcker ausgerechnet am Spielstart knapp im Off.
+		want = s0 if absf(s0 - _cam_s) < absf(s1 - _cam_s) else s1
+	var dx := want - _gooby_x
+	var walking := absf(dx) > 0.08
+	if walking != _gooby_walking:
+		_gooby_walking = walking
+		gooby.play_clip("walk" if walking else "build_hammer")
+	var face := -18.0
+	if walking:
+		_gooby_x += signf(dx) * minf(absf(dx), GOOBY_WALK_SPEED * delta)
+		_gooby_bob += delta * 9.0
+		face = 75.0 * signf(dx)
+	else:
+		_gooby_bob = 0.0
+	gooby.position.x = _gooby_x
+	gooby.position.y = FLOOR_Y + (0.05 * absf(sin(_gooby_bob)) if walking else 0.0)
+	gooby.rotation_degrees.y = _lerp_deg(gooby.rotation_degrees.y, face, 8.0 * delta)
+
+
+static func _lerp_deg(from_deg: float, to_deg: float, weight: float) -> float:
+	return rad_to_deg(lerp_angle(deg_to_rad(from_deg), deg_to_rad(to_deg), minf(1.0, weight)))
+
+
+## Bühne tickt mit dem Spiel (Glow-Puls) — plus Bäcker-Wanderung.
+func tick(delta: float) -> void:
+	super.tick(delta)
+	_ship_flash = maxf(0.0, _ship_flash - delta * 1.6)
+	_tick_gooby(delta)
 
 
 ## Bäckermütze (fester Aufsatz auf Kopfhöhe des Rigs).
@@ -563,13 +645,17 @@ func _build_hat() -> void:
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = Color(1.0, 0.99, 0.97)
 	mat.roughness = 0.95
+	# Rosa Hutband: auf weißem Fell wäre eine weiße Mütze unsichtbar.
+	var band_mat := StandardMaterial3D.new()
+	band_mat.albedo_color = Color(0.95, 0.68, 0.74)
+	band_mat.roughness = 0.95
 	var band := MeshInstance3D.new()
 	var cyl := CylinderMesh.new()
 	cyl.top_radius = 0.155
 	cyl.bottom_radius = 0.17
 	cyl.height = 0.1
 	cyl.radial_segments = 14
-	cyl.material = mat
+	cyl.material = band_mat
 	band.mesh = cyl
 	hat.add_child(band)
 	var puff := MeshInstance3D.new()
@@ -582,6 +668,29 @@ func _build_hat() -> void:
 	puff.mesh = ball
 	puff.position = Vector3(0.0, 0.14, 0.0)
 	hat.add_child(puff)
+
+
+## Rosa Bäckerschürze (fester Aufsatz vor dem Bauch) — liest sich sofort
+## als „der backt hier“, auch wenn Gooby gerade durchs Bild läuft.
+func _build_apron() -> void:
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(0.95, 0.68, 0.74)
+	mat.roughness = 0.95
+	var apron := MeshInstance3D.new()
+	var bib := BoxMesh.new()
+	bib.size = Vector3(0.34, 0.32, 0.05)
+	bib.material = mat
+	apron.mesh = bib
+	apron.position = Vector3(0.0, 0.3, 0.2)
+	apron.rotation_degrees.x = -8.0
+	gooby.add_child(apron)
+	var band := MeshInstance3D.new()
+	var strap := BoxMesh.new()
+	strap.size = Vector3(0.44, 0.06, 0.04)
+	strap.material = mat
+	band.mesh = strap
+	band.position = Vector3(0.0, 0.44, 0.17)
+	gooby.add_child(band)
 
 
 func _build_effects() -> void:
@@ -764,6 +873,7 @@ func _take_drop() -> MeshInstance3D:
 	mesh.rings = 6
 	node.mesh = mesh
 	node.material_override = StandardMaterial3D.new()
+	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_drops.add_child(node)
 	return node
 
@@ -781,6 +891,7 @@ func _take_splat() -> MeshInstance3D:
 	var mat := StandardMaterial3D.new()
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	node.material_override = mat
+	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_splats.add_child(node)
 	return node
 

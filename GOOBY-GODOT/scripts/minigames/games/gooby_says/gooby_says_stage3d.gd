@@ -26,6 +26,8 @@ var _halo: MeshInstance3D
 var _halo_mat: StandardMaterial3D
 var _confetti: GPUParticles3D
 var _landscape := false
+## Rest-Sekunden des roten Fehler-Blitzes auf allen Pads.
+var _fail_left := 0.0
 
 
 func setup_stage() -> void:
@@ -109,7 +111,8 @@ func _build_stage_floor() -> void:
 		)
 	folds.multimesh = mm
 	add_child(folds)
-	# Zwei warme Bühnenspots (nur Optik: Glühscheiben über der Bühne).
+	# Zwei warme Bühnenspots (nur Optik: Glühscheiben über der Bühne) mit
+	# sichtbaren Lichtkegeln auf Goobys Podium — DAS Spielshow-Signal.
 	for x: float in [-2.4, 2.4]:
 		var spot := MeshInstance3D.new()
 		var lamp := SphereMesh.new()
@@ -120,6 +123,81 @@ func _build_stage_floor() -> void:
 		spot.position = Vector3(x, 3.4, -1.4)
 		spot.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		add_child(spot)
+		var beam := MeshInstance3D.new()
+		var cone := CylinderMesh.new()
+		cone.top_radius = 0.06
+		cone.bottom_radius = 0.75
+		cone.height = 3.1
+		cone.radial_segments = 14
+		cone.material = Fx.glass(Color(1.0, 0.92, 0.66, 0.1), true)
+		beam.mesh = cone
+		beam.position = (spot.position + Vector3(x * -0.4, 0.3, -2.1)) * 0.5
+		beam.position.y = 1.85
+		beam.look_at_from_position(beam.position, Vector3(x * 0.28, 0.4, -2.1), Vector3.UP)
+		beam.rotate_object_local(Vector3.RIGHT, PI * 0.5)
+		beam.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		add_child(beam)
+	_build_footlights()
+	_build_curtain_deco()
+
+
+func _build_footlights() -> void:
+	# Rampenlicht: Glühbirnenkranz am vorderen Bühnenrand (1 Draw-Call).
+	var lights := MultiMeshInstance3D.new()
+	var bulb := SphereMesh.new()
+	bulb.radius = 0.07
+	bulb.height = 0.14
+	bulb.radial_segments = 10
+	bulb.rings = 6
+	bulb.material = Fx.glow(Color(1.0, 0.86, 0.5), 1.7)
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.mesh = bulb
+	mm.instance_count = 11
+	for i in 11:
+		var a := deg_to_rad(-62.0 + float(i) * 12.4)
+		mm.set_instance_transform(
+			i, Transform3D(Basis.IDENTITY, Vector3(sin(a) * 3.45, 0.2, cos(a) * 3.45))
+		)
+	lights.multimesh = mm
+	lights.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(lights)
+
+
+func _build_curtain_deco() -> void:
+	# Goldene Sterne am Vorhang + Glühbirnen-Bogen über Goobys Podium.
+	for entry: Array in [
+		[Vector3(-2.0, 3.6, -3.05), 0.5],
+		[Vector3(2.1, 3.9, -3.05), 0.42],
+		[Vector3(-3.1, 2.4, -3.0), 0.34],
+		[Vector3(3.2, 2.2, -3.0), 0.34],
+	]:
+		var star := Label3D.new()
+		star.text = "★"
+		star.font_size = 200
+		star.pixel_size = 0.0032 * float(entry[1])
+		star.modulate = Color(1.0, 0.84, 0.42, 0.95)
+		star.position = entry[0]
+		add_child(star)
+	var arch := MultiMeshInstance3D.new()
+	var bulb := SphereMesh.new()
+	bulb.radius = 0.09
+	bulb.height = 0.18
+	bulb.radial_segments = 10
+	bulb.rings = 6
+	bulb.material = Fx.glow(Color(1.0, 0.78, 0.85), 1.9)
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.mesh = bulb
+	mm.instance_count = 7
+	for i in 7:
+		var a := deg_to_rad(30.0 + float(i) * 20.0)
+		mm.set_instance_transform(
+			i, Transform3D(Basis.IDENTITY, Vector3(cos(a) * 1.7, 1.4 + sin(a) * 1.5, -2.6))
+		)
+	arch.multimesh = mm
+	arch.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(arch)
 
 
 func _build_pads() -> void:
@@ -210,17 +288,28 @@ func pad_at(screen: Vector2) -> int:
 	return -1
 
 
-## Jeden Frame: Pad-Leuchten + Gooby-Halo + Puls.
+## Jeden Frame: Pad-Leuchten (+Pop), Fehler-Blitz, Gooby-Halo + Puls.
 func sync(lit_pad: int, lit_left: float, phase: String, pulse: float, delta: float) -> void:
 	stage.tick(delta)
 	gooby.tick(delta)
+	_fail_left = maxf(0.0, _fail_left - delta)
+	var failing := _fail_left > 0.0
 	for i in _pads.size():
 		var lit := i == lit_pad and lit_left > 0.0
+		# Fehler: alle Pads blitzen rot — unübersehbare Fehlerrückmeldung.
+		_pad_mats[i].emission = Color(0.95, 0.2, 0.16) if failing else PAD_COLORS[i]
+		var target := 1.5 if failing else (0.95 if lit else 0.0)
 		_pad_mats[i].emission_energy_multiplier = (lerpf(
-			_pad_mats[i].emission_energy_multiplier, 1.35 if lit else 0.0, delta * 14.0
+			_pad_mats[i].emission_energy_multiplier, target, delta * 14.0
 		))
-		var body := _pads[i].get_child(0) as Node3D
+		var body := _pads[i].get_child(0) as MeshInstance3D
 		body.position.y = PAD_H * 0.5 + (0.06 if lit else 0.0)
+		# Skalier-Pop beim Aufleuchten: sofort spürbare Trefferrückmeldung.
+		var pop := 1.09 if lit else 1.0
+		body.scale = body.scale.lerp(Vector3(pop, 1.0 + (pop - 1.0) * 2.0, pop), delta * 16.0)
+		# Symbol reitet auf der Pad-Oberkante mit (sonst schluckt der Pop es).
+		var glyph := _pads[i].get_child(1) as Node3D
+		glyph.position.y = body.position.y + PAD_H * 0.5 * body.scale.y + 0.012
 	var show_halo := lit_pad >= 0 and lit_left > 0.0 and phase == "watch"
 	_halo.visible = show_halo
 	if show_halo:
@@ -252,3 +341,4 @@ func celebrate() -> void:
 func fail_fx() -> void:
 	gooby.emote("dizzy", 1.6)
 	gooby.play_for("idle", 0.2)
+	_fail_left = 0.6

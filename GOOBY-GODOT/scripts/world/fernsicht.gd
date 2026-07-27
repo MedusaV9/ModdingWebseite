@@ -8,12 +8,13 @@ extends Node3D
 ## `faerbe()` aus den Himmel-Farben (GoobyHimmel), zusätzlich hazed der
 ## permanente Fernnebel (Environment-Fog) die Ringe nach Distanz.
 
-## Ringe von nah nach fern: Radius (muss außerhalb der Kartenecken liegen),
-## Kammhöhe, Grundton und Dunst-Anteil Richtung Horizont-Farbe.
+## Ringe von nah nach fern: Radius (muss außerhalb der Kartenecken liegen —
+## WELT-1: die Karte reicht bis Ecke ~1640 m), Kammhöhe, Grundton und
+## Dunst-Anteil Richtung Horizont-Farbe.
 const RINGE: Array[Dictionary] = [
-	{"radius": 1080.0, "hoehe": 70.0, "ton": Color(0.42, 0.62, 0.38), "dunst": 0.18},
-	{"radius": 1340.0, "hoehe": 170.0, "ton": Color(0.38, 0.50, 0.68), "dunst": 0.34},
-	{"radius": 1650.0, "hoehe": 270.0, "ton": Color(0.46, 0.52, 0.74), "dunst": 0.52},
+	{"radius": 1780.0, "hoehe": 120.0, "ton": Color(0.42, 0.62, 0.38), "dunst": 0.18},
+	{"radius": 2120.0, "hoehe": 280.0, "ton": Color(0.38, 0.50, 0.68), "dunst": 0.34},
+	{"radius": 2520.0, "hoehe": 430.0, "ton": Color(0.46, 0.52, 0.74), "dunst": 0.52},
 ]
 
 ## Segmentzahl je Ring (Silhouette bleibt auch nah am Rand rund).
@@ -23,9 +24,12 @@ const SEGMENTE := 160
 const FUSS_Y := -60.0
 
 ## Fernwiesen-Ring: schließt den Boden zwischen Kartenrand und Bergfuß.
+## WELT-1: die Innenkante folgt dem RECHTECKIGEN Kartenrand (einrichten
+## nimmt das Karten-Rect entgegen); ohne Rect fällt sie auf den alten
+## Kreis-Radius zurück.
 const WIESE_INNEN := 640.0
-const WIESE_AUSSEN := 1750.0
-const WIESE_Y := -1.4
+const WIESE_AUSSEN := 2650.0
+const WIESE_Y := 0.9
 const WIESE_TON := Color(0.60, 0.78, 0.47)
 
 var _materialien: Array[StandardMaterial3D] = []
@@ -33,7 +37,9 @@ var _wiese_material: StandardMaterial3D
 
 
 ## Baut alle Ringe + Fernwiese (deterministisch über `seed_wert`).
-func einrichten(seed_wert: int) -> void:
+## `innen_rect`: Kartenrand, an dem die Fernwiese INNEN anliegt (Rect2()
+## = alter Kreis-Fallback).
+func einrichten(seed_wert: int, innen_rect := Rect2()) -> void:
 	for i in RINGE.size():
 		var konfig: Dictionary = RINGE[i]
 		var material := _unlit(Color.WHITE)
@@ -42,7 +48,7 @@ func einrichten(seed_wert: int) -> void:
 		ring.name = "Bergring_%d" % i
 		add_child(ring)
 	_wiese_material = _unlit(WIESE_TON)
-	var wiese := _baue_wiese()
+	var wiese := _baue_wiese(innen_rect)
 	wiese.name = "Fernwiese"
 	add_child(wiese)
 	faerbe(Color(0.8, 0.89, 0.97), 1.0)
@@ -128,14 +134,15 @@ func _dreieck(st: SurfaceTool, punkte: Array, farben: Array) -> void:
 		st.add_vertex(punkte[i])
 
 
-func _baue_wiese() -> MeshInstance3D:
+func _baue_wiese(innen_rect: Rect2) -> MeshInstance3D:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLE_STRIP)
 	for i in SEGMENTE + 1:
 		var winkel := TAU * float(i % SEGMENTE) / float(SEGMENTE)
 		var richtung := Vector3(cos(winkel), 0.0, sin(winkel))
+		var innen := richtung * _innen_abstand(winkel, innen_rect)
 		st.set_normal(Vector3.UP)
-		st.add_vertex(richtung * WIESE_INNEN + Vector3(0.0, WIESE_Y, 0.0))
+		st.add_vertex(innen + Vector3(0.0, WIESE_Y, 0.0))
 		st.set_normal(Vector3.UP)
 		st.add_vertex(richtung * WIESE_AUSSEN + Vector3(0.0, WIESE_Y, 0.0))
 	var mesh := st.commit()
@@ -145,6 +152,24 @@ func _baue_wiese() -> MeshInstance3D:
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	mi.ignore_occlusion_culling = true
 	return mi
+
+
+## Abstand der Wiesen-Innenkante am Winkel: Schnittpunkt des Strahls vom
+## Ursprung mit dem Karten-Rect (Slab-Test) — ohne Rect der alte Kreis.
+static func _innen_abstand(winkel: float, innen_rect: Rect2) -> float:
+	if innen_rect.size.x <= 0.0 or innen_rect.size.y <= 0.0:
+		return WIESE_INNEN
+	var richtung := Vector2(cos(winkel), sin(winkel))
+	var t := INF
+	if absf(richtung.x) > 0.0001:
+		var grenze_x := innen_rect.end.x if richtung.x > 0.0 else innen_rect.position.x
+		t = minf(t, grenze_x / richtung.x)
+	if absf(richtung.y) > 0.0001:
+		var grenze_z := innen_rect.end.y if richtung.y > 0.0 else innen_rect.position.y
+		t = minf(t, grenze_z / richtung.y)
+	if not is_finite(t) or t <= 0.0:
+		return WIESE_INNEN
+	return t
 
 
 func _unlit(farbe: Color) -> StandardMaterial3D:

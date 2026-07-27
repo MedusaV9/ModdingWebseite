@@ -428,6 +428,17 @@ func _build_walls() -> void:
 		if not _fenster_verdeckt(window):
 			_build_window(window)
 	_build_wandbord()
+	# WELT2: statische Wand-Deko (Lichtschalter/Steckdosen/Heizkörper/Bild)
+	# — hängt am Walls-Mount und macht Fenster-Rebuilds automatisch mit.
+	if not _is_outdoor():
+		var belegte := {}
+		for wall: String in GridData.WALLS:
+			var wand_spans: Array = []
+			wand_spans.assign(spans.get(wall, []))
+			for span: Array in _fenster_spans(wall):
+				wand_spans.append(span)
+			belegte[wall] = wand_spans
+		RoomDeko.anbringen(_wall_mount, _room_def, belegte, grid)
 
 
 ## Wand aus Segmenten: Türen und Außenfenster lassen jeweils eine Öffnung
@@ -583,13 +594,20 @@ func _build_window(window: Dictionary) -> void:
 		"E":
 			mesh.position = Vector3(size.x - 0.02, y, along)
 			mesh.rotation.y = PI / 2.0
-	var frame := MeshInstance3D.new()
-	var frame_box := BoxMesh.new()
-	frame_box.size = Vector3(width + 0.1, 1.0, 0.04)
-	frame.mesh = frame_box
-	frame.material_override = _flat_material(Color(0.95, 0.9, 0.82))
-	frame.position = Vector3(0.0, 0.0, -0.03)
-	mesh.add_child(frame)
+	# WELT2: echter Blender-Fensterrahmen (weiche Kapsel-Leisten + Sprossen)
+	# statt der nackten Rahmen-Box; Primitive-Fallback ohne Asset.
+	var rahmen_glb := HomeProps.prop_glb("fenster_rahmen_%d" % clampi(cells, 1, 3))
+	if rahmen_glb != null and cells >= 1 and cells <= 3:
+		rahmen_glb.position = Vector3(0.0, 0.0, 0.02)
+		mesh.add_child(rahmen_glb)
+	else:
+		var frame := MeshInstance3D.new()
+		var frame_box := BoxMesh.new()
+		frame_box.size = Vector3(width + 0.1, 1.0, 0.04)
+		frame.mesh = frame_box
+		frame.material_override = _flat_material(Color(0.95, 0.9, 0.82))
+		frame.position = Vector3(0.0, 0.0, -0.03)
+		mesh.add_child(frame)
 	_build_fensterbank(mesh, width)
 	_wall_mount.add_child(mesh)
 

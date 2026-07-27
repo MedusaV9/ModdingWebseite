@@ -20,6 +20,7 @@ extends MinigameBase
 ## darunter, HUD/Einholbalken/Fangtext sind CanvasItems obenauf.
 
 const Logic := preload("res://scripts/minigames/games/fishing_pond/fishing_pond_logic.gd")
+const Scenery := preload("res://scripts/minigames/games/fishing_pond/fishing_pond_scenery.gd")
 const Stage3D := preload("res://scripts/minigames/games/_3da_stage/stage3d.gd")
 const Props3D := preload("res://scripts/minigames/games/_3da_stage/props3d.gd")
 const GoobyActor := preload("res://scripts/minigames/games/_3da_stage/gooby_actor.gd")
@@ -91,6 +92,9 @@ var _line_rod: MeshInstance3D
 var _line_deep: MeshInstance3D
 var _hooked_node: Node3D
 var _surface: MeshInstance3D
+var _ducks: Node3D
+var _bucket: Node3D
+var _flights: Array[Dictionary] = []
 
 
 func setup(context: MinigameCtx) -> void:
@@ -149,6 +153,8 @@ func _process(delta: float) -> void:
 		return
 	_place_swimmers()
 	_place_tackle()
+	Scenery.tick_ducks(_ducks, elapsed)
+	Scenery.tick_flights(_flights, _bucket, delta)
 	_update_labels()
 	queue_redraw()
 
@@ -162,6 +168,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		if event.pressed:
 			reel_taps += 1
 			_gooby.swing(0.16, 20.0, Vector3.RIGHT)
+			# Drill-Gefühl: jeder Kurbel-Tap ruckt spürbar an der Szene.
+			_stage.shake(0.025, 0.1)
 			AudioDirector.try_play(self, "mg_combo", 1.0 + 0.05 * reel_taps)
 		return
 	if event.pressed and phase == "idle":
@@ -228,6 +236,10 @@ func _build_world() -> void:
 	_stage.add_child(_swimmers)
 	_build_gooby()
 	_build_sparks()
+	# Tiefenpolitur (MP-E): Hütte, Schilf, Enten, Laterne, Fang-Eimer.
+	var deco := Scenery.build(_stage)
+	_ducks = deco["ducks"]
+	_bucket = deco["bucket"]
 
 
 ## Ufermasse: drei große Erdblöcke mit Grasnarbe, vorn aufgeschnitten. Das
@@ -734,6 +746,10 @@ func _step_hook(delta: float) -> void:
 func _place_tackle() -> void:
 	var hook_at := _hook_world()
 	var bob_at := Vector3(float(tune["HOOK_X"]), sin(elapsed * 2.4) * 0.03, SWIM_Z)
+	if phase == "reel":
+		# Drill: der Fisch reißt den Schwimmer unter Wasser, er zittert.
+		bob_at.y = -0.1 + sin(elapsed * 26.0) * 0.03
+		bob_at.x += sin(elapsed * 31.0) * 0.02
 	_bobber.position = bob_at
 	_hook.position = hook_at
 	_catch_ring.position = hook_at
@@ -854,13 +870,20 @@ func _land_catch() -> void:
 		_finish()
 
 
-## Fangjubel: Funken, Glow-Puls, Gooby-Reaktion, Set-Bonus.
+## Fangjubel: Funken, Glow-Puls, Gooby-Reaktion, Set-Bonus — und der Fang
+## segelt sichtbar in den Eimer auf dem Steg (Belohnung als Ding in der Welt).
 func _celebrate_fish(kind: String, world: Vector3) -> void:
 	caught_species.append(str(hooked["species"]))
 	_sparks.burst(world)
 	_gooby.play_for("celebrate", 1.0, "sit")
 	_gooby.emote("ecstatic", 1.3)
 	_gooby.hop(0.4, 0.12)
+	var trophy_color := Logic.species_color(str(hooked["species"]))
+	var flyer := Props3D.model(ASSETS + "fish.glb", 0.085)
+	Props3D.tint(flyer, trophy_color)
+	flyer.position = world
+	_stage.add_child(flyer)
+	_flights.append({"node": flyer, "t": 0.0, "from": world, "color": trophy_color})
 	var bonus := Logic.rare_set_bonus(caught_species)
 	if bonus > 0 and not caught_species.has("__bonus"):
 		caught_species.append("__bonus")

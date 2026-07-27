@@ -12,6 +12,8 @@ const Stage3DScript := preload("res://scripts/minigames/games/_3da_stage/stage3d
 const GoobyActorScript := preload("res://scripts/minigames/games/_3da_stage/gooby_actor.gd")
 const Logic := preload("res://scripts/minigames/games/ranch_parcours/parcours_logic.gd")
 const Feel := preload("res://scripts/ranch/gameplay/ride_feel.gd")
+## Ranch-Kulisse + Farbkanon (Deko.CREME/HOLZ/FAHNEN, Werte wie RcompArena).
+const Deko := preload("res://scripts/minigames/games/ranch_parcours/parcours_deko.gd")
 
 ## Optik-Zahlen (nur Darstellung — die Mechanik lebt in Logic/Feel).
 const KAMERA_HINTEN := 7.2
@@ -49,6 +51,10 @@ var _pferd: RanchPferd
 var _reiter: Node3D
 var _gooby: Node3D
 var _staub: GPUParticles3D
+## Absprung-Marker: Glüh-Ring auf der Ideallinie am rechnerisch besten
+## Absprungpunkt (Bogenmitte über Hindernis) — pulst gold im Sprungfenster.
+var _sprung_marker: Node3D
+var _marker_mat: StandardMaterial3D
 var _select: RanchLevelSelect
 var _hud: Control
 var _zeit_label: Label
@@ -183,6 +189,8 @@ func _teardown_lauf() -> void:
 	_reiter = null
 	_gooby = null
 	_staub = null
+	_sprung_marker = null
+	_marker_mat = null
 	hindernisse = []
 
 
@@ -194,10 +202,18 @@ func _build_welt() -> void:
 		. call(
 			"build",
 			{
+				# Belichtung GEZÄHMT (bekannte Falle: Stage-Defaults 1.2/0.6
+				# überstrahlen die Wiese um ~40 Luma-Stufen ins Weiße).
 				"sky_top": Color(0.45, 0.68, 0.93),
-				"sky_horizon": Color(0.9, 0.95, 1.0),
-				"fog_from": 26.0,
-				"fog_to": 80.0,
+				"sky_horizon": Color(0.86, 0.93, 0.97),
+				"ground_horizon": Color(0.58, 0.75, 0.46),
+				"ground_bottom": Color(0.4, 0.56, 0.33),
+				"sun_energy": 0.85,
+				"ambient": 0.4,
+				"fill_energy": 0.26,
+				"fog_color": Color(0.82, 0.9, 0.92),
+				"fog_from": 30.0,
+				"fog_to": 90.0,
 				"far": 160.0,
 				"shadow_distance": 34.0,
 				"glow": 0.32,
@@ -210,62 +226,14 @@ func _build_welt() -> void:
 	_build_boden()
 	_build_hindernisse()
 	_build_reiter()
+	_build_sprung_marker()
 	_snap_kamera()
 
 
+## Boden + komplette Ranch-Kulisse (Bahn, Zaun, Tribüne, Ziel, Wiese) —
+## ausgelagert nach parcours_deko.gd (Datei-Budget), Farbkanon lebt dort.
 func _build_boden() -> void:
-	var laenge := float(kurs.get("laenge_m", 200.0))
-	# Weide: ein langes, breites Band + Sandbahn in der Mitte.
-	var gras := MeshInstance3D.new()
-	var gras_mesh := BoxMesh.new()
-	gras_mesh.size = Vector3(laenge + 80.0, 0.3, 44.0)
-	gras.mesh = gras_mesh
-	gras.material_override = RanchPferd.material(Color(0.56, 0.78, 0.45))
-	gras.position = Vector3(laenge * 0.5, -0.15, 0.0)
-	_welt.add_child(gras)
-	var bahn := MeshInstance3D.new()
-	var bahn_mesh := BoxMesh.new()
-	bahn_mesh.size = Vector3(laenge + 20.0, 0.06, 3.4)
-	bahn.mesh = bahn_mesh
-	bahn.material_override = RanchPferd.material(Color(0.84, 0.72, 0.52))
-	bahn.position = Vector3(laenge * 0.5, 0.02, 0.0)
-	bahn.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	_welt.add_child(bahn)
-	# Ziel-Torbogen am Kursende.
-	for seite: float in [-1.0, 1.0]:
-		var pfosten := MeshInstance3D.new()
-		var mesh := CylinderMesh.new()
-		mesh.top_radius = 0.14
-		mesh.bottom_radius = 0.14
-		mesh.height = 3.2
-		pfosten.mesh = mesh
-		pfosten.material_override = RanchPferd.material(Color(0.93, 0.55, 0.5))
-		pfosten.position = Vector3(laenge, 1.6, seite * 2.2)
-		_welt.add_child(pfosten)
-	# Deko-Bäume als EIN MultiMesh (Draw-Call-Budget).
-	var baeume := MultiMeshInstance3D.new()
-	var mm := MultiMesh.new()
-	mm.transform_format = MultiMesh.TRANSFORM_3D
-	var kugel := SphereMesh.new()
-	kugel.radius = 1.5
-	kugel.height = 3.0
-	kugel.radial_segments = 12
-	kugel.rings = 6
-	mm.mesh = kugel
-	mm.instance_count = 26
-	var rng := ctx.rng(917)
-	for i in 26:
-		var seite := -1.0 if i % 2 == 0 else 1.0
-		var at := Vector3(
-			rng.next() * (laenge + 40.0) - 16.0,
-			1.6 + rng.next() * 0.8,
-			seite * (7.0 + rng.next() * 9.0)
-		)
-		mm.set_instance_transform(i, Transform3D(Basis.IDENTITY, at))
-	baeume.multimesh = mm
-	baeume.material_override = RanchPferd.material(Color(0.4, 0.66, 0.4))
-	baeume.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	_welt.add_child(baeume)
+	Deko.build(_welt, float(kurs.get("laenge_m", 200.0)), ctx)
 
 
 func _build_hindernisse() -> void:
@@ -279,40 +247,94 @@ func _build_hindernisse() -> void:
 		hindernisse.append({"at": at, "typ": typ, "node": node, "state": "offen"})
 
 
-## Hindernis-Optik je Typ: zaun = weiße Stange, hecke = Buschkasten,
-## oxer = Doppelstange, wasser = blaues Becken.
+## Hindernis-Optik je Typ: zaun = rot-weiß gestreifte Stange, hecke =
+## Buschkasten mit Blattkuppen, oxer = Doppelstange (pink + teal), wasser =
+## blaues Becken. Jedes Hindernis bekommt einen dunklen Sand-Anker auf der
+## Bahn (Position sofort lesbar) und Wimpel auf den Ständern.
 func _hindernis_node(typ: String) -> Node3D:
 	var wurzel := Node3D.new()
 	var breite := float(Logic.HINDERNIS_BREITE.get(typ, 0.4))
+	_balken(
+		wurzel,
+		Vector3(0.0, 0.045, 0.0),
+		Vector3(maxf(1.0, breite + 0.5), 0.02, 3.6),
+		Color(0.72, 0.6, 0.42),
+		false
+	)
+	# "Kipp" trägt den Hindernis-Körper — beim Abwurf kippt NUR er, nicht
+	# der Boden-Anker und nicht die Ständer.
+	var kipp := Node3D.new()
+	kipp.name = "Kipp"
+	wurzel.add_child(kipp)
 	match typ:
 		"hecke":
-			_balken(wurzel, Vector3(0.0, 0.36, 0.0), Vector3(breite, 0.72, 3.0), Color("6DB54E"))
+			_balken(kipp, Vector3(0.0, 0.36, 0.0), Vector3(breite, 0.72, 3.0), Color("4F9A40"))
+			for k in 3:
+				var kuppe := MeshInstance3D.new()
+				var kuppe_mesh := SphereMesh.new()
+				kuppe_mesh.radius = 0.3
+				kuppe_mesh.height = 0.6
+				kuppe_mesh.radial_segments = 8
+				kuppe_mesh.rings = 4
+				kuppe.mesh = kuppe_mesh
+				kuppe.material_override = RanchPferd.material(Color("5FAE4C"))
+				kuppe.position = Vector3(0.0, 0.74, -1.0 + float(k))
+				kuppe.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+				kipp.add_child(kuppe)
 		"wasser":
-			_balken(wurzel, Vector3(0.0, 0.05, 0.0), Vector3(breite, 0.1, 3.2), Color("6FB7E8"))
+			_balken(kipp, Vector3(0.0, 0.05, 0.0), Vector3(breite, 0.1, 3.2), Color("3E93D4"))
 			_balken(
-				wurzel, Vector3(-breite * 0.5, 0.3, 0.0), Vector3(0.08, 0.6, 3.2), Color("F3EFE6")
+				kipp,
+				Vector3(breite * 0.18, 0.11, 0.0),
+				Vector3(breite * 0.5, 0.02, 2.9),
+				Color("7CC0EA"),
+				false
 			)
+			_balken(kipp, Vector3(-breite * 0.5, 0.3, 0.0), Vector3(0.08, 0.6, 3.2), Deko.CREME)
 		"oxer":
-			_stange(wurzel, -breite * 0.5, 0.62, Color("E98CA0"))
-			_stange(wurzel, breite * 0.5, 0.78, Color("F3EFE6"))
+			_streifen_stange(kipp, -breite * 0.5, 0.62, Deko.FAHNEN[0])
+			_streifen_stange(kipp, breite * 0.5, 0.78, Deko.FAHNEN[1])
 		_:
-			_stange(wurzel, 0.0, 0.7, Color("F3EFE6"))
+			_streifen_stange(kipp, 0.0, 0.7, Color("D9564E"))
 	for seite: float in [-1.0, 1.0]:
-		_balken(wurzel, Vector3(0.0, 0.55, seite * 1.7), Vector3(0.18, 1.1, 0.18), Color("C98B5A"))
+		_balken(wurzel, Vector3(0.0, 0.55, seite * 1.7), Vector3(0.18, 1.1, 0.18), Deko.HOLZ)
+		var wimpel := MeshInstance3D.new()
+		var wimpel_mesh := PrismMesh.new()
+		wimpel_mesh.size = Vector3(0.3, 0.34, 0.05)
+		wimpel.mesh = wimpel_mesh
+		wimpel.material_override = RanchPferd.material(Deko.FAHNEN[2])
+		wimpel.position = Vector3(0.0, 1.25, seite * 1.7)
+		wimpel.rotation.x = PI
+		wimpel.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		wurzel.add_child(wimpel)
 	return wurzel
 
 
-func _stange(parent: Node3D, at_x: float, hoehe: float, farbe: Color) -> void:
-	_balken(parent, Vector3(at_x, hoehe, 0.0), Vector3(0.12, 0.12, 3.4), farbe)
+## Turnier-Stange mit 5 Farbwechsel-Segmenten (weiß/farbig) — die klassische
+## Springreit-Optik macht Höhe und Lage der Stange auf einen Blick lesbar.
+func _streifen_stange(parent: Node3D, at_x: float, hoehe: float, farbe: Color) -> void:
+	var segment := 3.4 / 5.0
+	for s in 5:
+		_balken(
+			parent,
+			Vector3(at_x, hoehe, -1.7 + (float(s) + 0.5) * segment),
+			Vector3(0.13, 0.13, segment),
+			Deko.CREME if s % 2 == 0 else farbe,
+			false
+		)
 
 
-func _balken(parent: Node3D, pos: Vector3, groesse: Vector3, farbe: Color) -> void:
+func _balken(
+	parent: Node3D, pos: Vector3, groesse: Vector3, farbe: Color, schatten := true
+) -> void:
 	var mi := MeshInstance3D.new()
 	var mesh := BoxMesh.new()
 	mesh.size = groesse
 	mi.mesh = mesh
 	mi.material_override = RanchPferd.material(farbe)
 	mi.position = pos
+	if not schatten:
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	parent.add_child(mi)
 
 
@@ -329,6 +351,32 @@ func _build_reiter() -> void:
 	_gooby.call("mount", 0.62, 0.0, "idle")
 	_staub = _build_staub()
 	_reiter.add_child(_staub)
+
+
+## Absprung-Marker: flacher Glüh-Ring auf der Ideallinie. Er liegt am
+## rechnerisch besten Absprungpunkt (Bogenmitte über dem nächsten Hindernis)
+## und pulst gold, sobald ein Sprung JETZT das Hindernis sicher nimmt.
+func _build_sprung_marker() -> void:
+	_sprung_marker = Node3D.new()
+	_sprung_marker.visible = false
+	_welt.add_child(_sprung_marker)
+	var ring := MeshInstance3D.new()
+	var torus := TorusMesh.new()
+	torus.inner_radius = 0.42
+	torus.outer_radius = 0.62
+	torus.rings = 24
+	torus.ring_segments = 6
+	ring.mesh = torus
+	_marker_mat = StandardMaterial3D.new()
+	_marker_mat.albedo_color = Color(1.0, 0.84, 0.35)
+	_marker_mat.emission_enabled = true
+	_marker_mat.emission = Color(1.0, 0.78, 0.3)
+	_marker_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	ring.material_override = _marker_mat
+	ring.position = Vector3(0.0, 0.1, 0.0)
+	ring.scale = Vector3(1.0, 0.22, 1.0)
+	ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_sprung_marker.add_child(ring)
 
 
 func _build_staub() -> GPUParticles3D:
@@ -427,6 +475,8 @@ func _sprung_geschafft(h: Dictionary, qualitaet: String) -> void:
 	)
 	if _stage != null and qualitaet == "perfekt":
 		_stage.call("pulse_glow", 0.5)
+	if _gooby != null:
+		_gooby.call("emote", "ecstatic" if qualitaet == "perfekt" else "happy", 0.9)
 	if ctx.juice != null:
 		var at := _screen_pos(Vector3(float(h["at"]), 1.6, 0.0))
 		var text := (
@@ -445,19 +495,22 @@ func _abwurf(h: Dictionary) -> void:
 	AudioDirector.try_play(self, "mg_spill")
 	if _stage != null:
 		_stage.call("shake", 0.18, 0.3)
+	if _gooby != null:
+		_gooby.call("emote", "sad", 1.2)
 	if ctx.juice != null:
+		ctx.juice.hit_freeze(70)
 		ctx.juice.float_text(
 			_screen_pos(Vector3(float(h["at"]), 1.6, 0.0)),
 			I18nService.t("mg.ranchParcours.abwurf"),
 			AcTokens.DANGER
 		)
-	# Optik: die obere Stange kippt.
+	# Optik: der Hindernis-Körper ("Kipp"-Gruppe) kippt und sackt ab.
 	var node: Node3D = h["node"]
-	if node != null and node.get_child_count() > 0:
-		var stange := node.get_child(0) as Node3D
-		if stange != null:
-			stange.rotation.x = 0.5
-			stange.position.y = maxf(0.1, stange.position.y - 0.35)
+	if node != null:
+		var kipp := node.get_node_or_null("Kipp") as Node3D
+		if kipp != null:
+			kipp.rotation.x = 0.5
+			kipp.position.y = -0.3
 
 
 func _lauf_geschafft() -> void:
@@ -475,7 +528,11 @@ func _lauf_geschafft() -> void:
 	AudioDirector.try_play(self, "mg_win")
 	if _stage != null:
 		_stage.call("pulse_glow", 0.8)
+	if _gooby != null:
+		_gooby.call("emote", "ecstatic", 2.0)
+		_gooby.call("play_for", "celebrate", 1.6)
 	if ctx.juice != null:
+		ctx.juice.confetti(70)
 		ctx.juice.bloom_pulse(0.6)
 		ctx.juice.float_text(
 			Vector2(view_size.x * 0.5 - 130.0, view_size.y * 0.32),
@@ -512,8 +569,57 @@ func _step_optik(delta: float) -> void:
 		_pferd.rotation.x = 0.0
 	_staub.amount_ratio = maxf(0.05, Feel.staub_anteil(gangart))
 	_staub.emitting = not in_luft
+	_update_sprung_marker()
 	_spiele_hufschlaege(delta, gangart)
 	_folge_kamera(delta)
+
+
+## Marker nachführen: nächstes offenes Hindernis, Ideal-Absprung aus dem
+## AKTUELLEN Tempo (Bogenmitte = Hindernismitte). Gold + Puls, solange ein
+## Sprung jetzt sicher wäre; creme-neutral, solange man noch zu weit weg ist.
+func _update_sprung_marker() -> void:
+	if _sprung_marker == null:
+		return
+	var h := _naechstes_hindernis()
+	var weite := float(Feel.sprung_daten(tempo)["weite_m"])
+	if h.is_empty() or in_luft or weite <= 0.0:
+		_sprung_marker.visible = false
+		return
+	var mitte := float(h["at"])
+	var ideal := mitte - weite * 0.5
+	if ideal - x > 26.0:
+		_sprung_marker.visible = false
+		return
+	_sprung_marker.visible = true
+	_sprung_marker.position = Vector3(ideal, 0.0, 0.0)
+	var wertung := Logic.bewerte_sprung(x, tempo, mitte, str(h["typ"]), tune)
+	var springbar := (
+		str(wertung["qualitaet"]) != "abwurf" and Feel.kann_springen(tempo, float(sprung["y"]))
+	)
+	if _marker_mat == null:
+		return
+	if springbar:
+		var puls := 0.5 + 0.5 * sin(elapsed * 10.0)
+		_marker_mat.albedo_color = Color(1.0, 0.84, 0.3)
+		_marker_mat.emission = Color(1.0, 0.75, 0.25)
+		_sprung_marker.scale = Vector3.ONE * (1.0 + 0.14 * puls)
+	else:
+		_marker_mat.albedo_color = Color(0.95, 0.94, 0.87)
+		_marker_mat.emission = Color(0.65, 0.63, 0.55)
+		_sprung_marker.scale = Vector3.ONE
+
+
+## Nächstes noch offenes (nicht angesprungenes) Hindernis vor dem Pferd.
+func _naechstes_hindernis() -> Dictionary:
+	for h: Dictionary in hindernisse:
+		if bool(h.get("gewertet", false)):
+			continue
+		if not (h["state"] is String) or str(h["state"]) != "offen":
+			continue
+		if float(h["at"]) < x:
+			continue
+		return h
+	return {}
 
 
 func _spiele_hufschlaege(delta: float, gangart: String) -> void:

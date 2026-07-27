@@ -20,6 +20,7 @@ extends MinigameBase
 
 const Logic := preload("res://scripts/minigames/games/mini_golf/mini_golf_logic.gd")
 const Course := preload("res://scripts/minigames/games/mini_golf/mini_golf_course.gd")
+const Scenery := preload("res://scripts/minigames/games/mini_golf/mini_golf_scenery.gd")
 const Stage3D := preload("res://scripts/minigames/games/_3da_stage/stage3d.gd")
 const Props3D := preload("res://scripts/minigames/games/_3da_stage/props3d.gd")
 const GoobyActor := preload("res://scripts/minigames/games/_3da_stage/gooby_actor.gd")
@@ -29,6 +30,10 @@ const ASSETS := "res://assets/minigames/mini_golf/"
 
 ## Ruhepause nach einem eingelochten/abgebrochenen Loch (s).
 const HOLE_PAUSE_SEC := 1.1
+## Sichtbares Versacken des Balls im Loch (s) — statt hartem Ausblenden.
+const SINK_SEC := 0.38
+## Wie stark Gooby sich beim Zielen zurücklehnt (Radiant bei voller Kraft).
+const WINDUP_LEAN := 0.22
 ## Punkte der gepunkteten Zielvorschau.
 const PREVIEW_DOTS := 14
 ## Kachelhöhe der Bahn (Filz liegt auf y = 0).
@@ -80,6 +85,7 @@ var _stage: Stage3D
 var _gooby: GoobyActor
 var _sparks: Spark3D
 var _dust: Spark3D
+var _roll_dust: Spark3D
 var _hole_root: Node3D
 var _ball_node: Node3D
 var _blades: Node3D
@@ -87,6 +93,10 @@ var _nougat: Node3D
 var _cup_ring: MeshInstance3D
 var _ring_t := 0.0
 var _ring_scale := 1.0
+## Versenk-Animation: Restzeit, in der der Ball sichtbar ins Loch sackt.
+var _sink_t := 0.0
+## Roll-Staub: Abklingzeit bis zum nächsten Puff hinter dem rollenden Ball.
+var _roll_puff_t := 0.0
 
 
 func setup(context: MinigameCtx) -> void:
@@ -134,8 +144,12 @@ func _process(delta: float) -> void:
 	_stage.tick(delta)
 	_gooby.tick(delta)
 	_tick_cup_ring(delta)
+	_tick_windup()
+	_tick_roll_dust(delta)
 	if phase == "pause":
 		pause_left -= delta
+		_sink_t = maxf(0.0, _sink_t - delta)
+		_place_ball()
 		if pause_left <= 0.0:
 			_next_hole()
 		queue_redraw()
@@ -197,10 +211,12 @@ func _build_world() -> void:
 				"sun_dir": Vector3(-0.42, -0.86, -0.3),
 				"sun_color": Color(1.0, 0.95, 0.84),
 				"sun_energy": 1.05,
-				"ambient": 0.42,
+				"ambient": 0.38,
 				"ambient_color": Color(0.92, 0.9, 0.82),
 				"sky_ambient": 0.4,
-				"exposure": 0.82,
+				# Belichtung gedrosselt (MP-E): mit 0.82 clippte der Mint-Filz
+				# in ACES fast auf Weiß — die Bahn war ~40 Luma-Stufen zu hell.
+				"exposure": 0.58,
 				"fill_energy": 0.22,
 				"glow": 0.22,
 				"shadow_distance": 24.0,
@@ -248,6 +264,24 @@ func _build_world() -> void:
 			}
 		)
 	)
+	# Dauer-Emitter hinter dem rollenden Ball — macht Tempo SICHTBAR.
+	_roll_dust = Spark3D.new()
+	_stage.add_child(_roll_dust)
+	(
+		_roll_dust
+		. build(
+			{
+				"color": Color(0.86, 0.97, 0.8, 0.7),
+				"amount": 10,
+				"speed": Vector2(0.2, 0.7),
+				"size": Vector2(0.03, 0.07),
+				"lifetime": 0.45,
+				"texture": "puff",
+				"additive": false,
+				"explosiveness": 0.0,
+			}
+		)
+	)
 
 
 ## Putter als Requisite in Goobys rechter Pfote (Maße im Rig-Raum).
@@ -283,6 +317,9 @@ func _build_scenery() -> void:
 	bench.rotation.y = -0.95 + PI
 	Props3D.repaint(bench, Props3D.NATURE)
 	_stage.add_child(bench)
+	# Tiefenpolitur (MP-E): aus der einsamen Bahn wird eine ANLAGE —
+	# Nachbarbahnen, Zaun, Kiosk, Lichterkette, Trittsteine.
+	Scenery.build(_stage)
 
 
 ## Gemähte Rasenbahnen: der Greenkeeper-Look kostet EINEN Draw-Call und nimmt
@@ -537,18 +574,38 @@ func _place_ball() -> void:
 	if _ball_node == null:
 		return
 	var hole := current_hole()
+	if bool(ball.get("done", false)):
+		_place_sinking_ball(hole)
+		return
 	var bx := float(ball["x"])
 	var bz := float(ball["z"])
 	var y := Course.height_at(hole, bx, bz) + float(Logic.GOLF["BALL_R"])
-	if not bool(ball.get("done", false)):
-		var bump: Dictionary = hole.get("bump", {})
-		if not bump.is_empty():
-			var d := Vector2(bx - float(bump["x"]), bz - float(bump["z"])).length()
-			var radius := float(Logic.GOLF["BUMP_R"])
-			if d < radius:
-				y += cos(d / radius * PI * 0.5) * radius * 0.5
+	var bump: Dictionary = hole.get("bump", {})
+	if not bump.is_empty():
+		var d := Vector2(bx - float(bump["x"]), bz - float(bump["z"])).length()
+		var radius := float(Logic.GOLF["BUMP_R"])
+		if d < radius:
+			y += cos(d / radius * PI * 0.5) * radius * 0.5
 	_ball_node.position = Vector3(bx, y, bz)
-	_ball_node.visible = not bool(ball.get("done", false)) or phase != "pause"
+	_ball_node.scale = Vector3.ONE
+	_ball_node.visible = true
+
+
+## Der eingelochte Ball sackt SICHTBAR ins Loch (schrumpft und sinkt), statt
+## im selben Frame hart zu verschwinden — der Treffer bekommt ein Nachbild.
+func _place_sinking_ball(hole: Dictionary) -> void:
+	if _sink_t <= 0.0:
+		_ball_node.visible = false
+		_ball_node.scale = Vector3.ONE
+		return
+	var cup: Dictionary = hole["hole"]
+	var f := 1.0 - _sink_t / SINK_SEC
+	var y := Course.height_at(hole, float(cup["x"]), float(cup["z"]))
+	_ball_node.visible = true
+	_ball_node.position = Vector3(
+		float(cup["x"]), y + float(Logic.GOLF["BALL_R"]) - 0.17 * f, float(cup["z"])
+	)
+	_ball_node.scale = Vector3.ONE * (1.0 - 0.5 * f)
 
 
 func _place_gooby() -> void:
@@ -594,6 +651,30 @@ func _tick_cup_ring(delta: float) -> void:
 	_cup_ring.scale = Vector3.ONE * (1.0 + f * _ring_scale)
 
 
+## Zielspannung: Gooby lehnt sich beim Aufziehen zurück — die Schlagkraft ist
+## an seiner Körperhaltung ablesbar, BEVOR der Ball losrollt.
+func _tick_windup() -> void:
+	if _gooby == null:
+		return
+	var lean := 0.0
+	if _dragging and phase == "aim":
+		var pull := (_drag_from - _drag_to).length()
+		var power := Logic.power_from_drag(pull, view_size.x, view_size.y)
+		lean = -WINDUP_LEAN * power / float(Logic.GOLF["MAX_POWER"])
+	_gooby.rotation.z = lerpf(_gooby.rotation.z, lean, 0.25)
+
+
+## Staubfahne hinter dem schnell rollenden Ball (Dauer-Emitter folgt dem Ball).
+func _tick_roll_dust(delta: float) -> void:
+	if _roll_dust == null:
+		return
+	_roll_puff_t = maxf(0.0, _roll_puff_t - delta)
+	var speed := Vector2(float(ball["vx"]), float(ball["vz"])).length()
+	var rolling := speed > 1.6 and not bool(ball.get("done", false))
+	_roll_dust.position = Vector3(float(ball["x"]), 0.04, float(ball["z"]))
+	_roll_dust.stream(rolling)
+
+
 # ---------------------------------------------------------------- Spielzug
 
 
@@ -622,7 +703,9 @@ func _putt() -> void:
 	phase = "roll"
 	AudioDirector.try_play(self, "mg_good", 1.0 + 0.05 * (power / 6.5))
 	_gooby.play_for("build_hammer", 0.7)
-	_gooby.swing(0.45, 46.0, Vector3.RIGHT)
+	# Der Durchschwung wächst mit der Schlagkraft — ein Ass-Putt sieht anders
+	# aus als ein Zärtel-Putt.
+	_gooby.swing(0.42, 30.0 + 28.0 * power / float(Logic.GOLF["MAX_POWER"]), Vector3.RIGHT)
 	_gooby.emote("ecstatic", 0.6)
 	_dust.burst(Vector3(float(ball["x"]), 0.02, float(ball["z"])))
 	_stage.shake(0.02 + 0.03 * power / 6.5, 0.2)
@@ -675,6 +758,8 @@ func _end_hole(holed: bool) -> void:
 	var pos := _stage.to_screen(world)
 	_ring_t = float(Logic.GOLF_JUICE["RING_LIFE_SEC"])
 	_ring_scale = float(Logic.GOLF_JUICE["RING_SCALE_SINK"])
+	if holed:
+		_sink_t = SINK_SEC
 	if holed and taken == 1:
 		hole_streak += 1
 		_ring_scale = float(Logic.GOLF_JUICE["RING_SCALE_ACE"])

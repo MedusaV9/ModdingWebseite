@@ -13,6 +13,7 @@ extends MinigameBase
 ## zahlengleich, die MECHANIK unangetastet.
 
 const Stage := preload("res://scripts/minigames/games/carrot_guard/carrot_guard_stage3d.gd")
+const Kit := preload("res://scripts/minigames/games/carrot_catch/mpb_garden_kit.gd")
 
 var tune: Dictionary = {}
 var rng: GoobyRng
@@ -36,6 +37,8 @@ var _hint_label: Label
 var _holes: Array[Rect2] = []
 var _stage: Node3D
 var _pulse := 0.0
+var _hud_plate := Kit.hud_plate()
+var _hint_plate := Kit.hud_plate()
 
 
 func setup(context: MinigameCtx) -> void:
@@ -68,14 +71,19 @@ func apply_view(size: Vector2) -> void:
 	landscape = view_size.x > view_size.y
 	position = Vector2.ZERO
 	var grid := int(tune.get("GRID", 3))
-	var top := 108.0 if not landscape else 66.0
-	# Hochkant bleibt unten Platz fürs Karottenbeet, quer wandert es nach rechts.
-	var bed := 108.0 if not landscape else 0.0
-	var right := 0.0 if not landscape else view_size.x * 0.26
-	var avail := Vector2(view_size.x - 32.0 - right, maxf(120.0, view_size.y - top - bed - 52.0))
+	# Quer braucht das Feld MEHR Kopfraum: die oberste Reihe raycastet sonst
+	# bis in die Kulissen-Zone (Gewächshaus/Zaun bei z≈-15) hinein.
+	var top := 108.0 if not landscape else 118.0
+	# Das Karottenbeet liegt in 3D HINTER dem Feld (oben im Bild) — unten
+	# braucht es nur noch wenig Reserve, sonst bleibt ein leerer Grasstreifen.
+	var bed := 56.0 if not landscape else 0.0
+	var avail := Vector2(view_size.x - 32.0, maxf(120.0, view_size.y - top - bed - 52.0))
 	var cell := minf(avail.x, avail.y) / float(grid)
 	var board := cell * grid
-	var origin := Vector2((view_size.x - right - board) * 0.5, top + (avail.y - board) * 0.5)
+	# Hochkant das Brett nach unten schieben: füllt den Vordergrund,
+	# und die vorderen Hügel werden schön groß (Perspektive).
+	var down := 0.72 if not landscape else 0.5
+	var origin := Vector2((view_size.x - board) * 0.5, top + (avail.y - board) * down)
 	_holes = []
 	for row in grid:
 		for col in grid:
@@ -210,6 +218,8 @@ func _mole_tick(delta: float) -> void:
 		_stage.steal_fx(int(mole["hole"]))
 		if ctx.juice != null:
 			ctx.juice.shake(0.28)
+			ctx.juice.hit_flash(Color(0.9, 0.4, 0.3, 0.12))
+			ctx.juice.show_combo(0)
 			ctx.juice.float_text(
 				_holes[int(mole["hole"])].get_center(),
 				I18nService.t("mg.carrotGuard.steal"),
@@ -257,6 +267,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	# Danebengehauen: kein Punktverlust, aber die Kombo ist weg.
 	combo = int(CarrotGuardLogic.apply_whiff({"combo": combo})["combo"])
 	AudioDirector.try_play(self, "mg_junk", 0.9)
+	_stage.whiff_fx(hole)
+	if ctx.juice != null:
+		ctx.juice.show_combo(0)
 
 
 func _bonk(index: int) -> void:
@@ -273,9 +286,11 @@ func _bonk(index: int) -> void:
 	if ctx.juice != null:
 		ctx.juice.float_text(pos, "+%d" % delta, AcTokens.LEAF_DARK)
 		ctx.juice.hit_freeze(45)
+		# Mitwachsende Combo-Anzeige mit steigendem Ton; Reset blendet sie aus.
+		ctx.juice.show_combo(combo)
 		if int(result["bonus"]) > 0:
-			AudioDirector.try_play(self, "mg_combo")
 			ctx.juice.bloom_pulse(0.5)
+			ctx.juice.overlay_ring(pos, Color(1.0, 0.85, 0.45, 0.85), 64.0)
 			ctx.juice.float_text(
 				pos - Vector2(0.0, 40.0), I18nService.t("mg.carrotGuard.combo"), AcTokens.PINK
 			)
@@ -304,6 +319,8 @@ func _tap_king() -> void:
 	if ctx.juice != null:
 		ctx.juice.bloom_pulse(1.0)
 		ctx.juice.slowmo(0.4, 260)
+		ctx.juice.confetti(48)
+		ctx.juice.show_combo(combo)
 		ctx.juice.float_text(pos, I18nService.t("mg.carrotGuard.king_defeated"), AcTokens.GOLD)
 	ctx.report_score(score, delta)
 
@@ -334,6 +351,33 @@ func _update_labels() -> void:
 	_carrot_label.text = I18nService.t(
 		"mg.carrotGuard.carrots", {"n": carrots, "max": int(tune["CARROTS"])}
 	)
+	_hint_label.modulate.a = _hint_alpha()
+
+
+## Milchglas hinter Zeit/Karotten und dem Hinweis: die Wiese zog sonst direkt
+## durch die Ziffern (Lesbarkeit auf dem Handy).
+func _draw() -> void:
+	if _time_label == null:
+		return
+	var top_left := _time_label.position - Vector2(12.0, 6.0)
+	var bottom_right := (
+		_carrot_label.position
+		+ Vector2(maxf(_time_label.size.x, _carrot_label.size.x), _carrot_label.size.y)
+		+ Vector2(12.0, 6.0)
+	)
+	draw_style_box(_hud_plate, Rect2(top_left, bottom_right - top_left))
+	var hint_a := _hint_alpha()
+	if hint_a > 0.0:
+		_hint_plate.bg_color = Color(1.0, 0.99, 0.94, 0.72 * hint_a)
+		draw_style_box(
+			_hint_plate, Rect2(_hint_label.position - Vector2(0.0, 2.0), _hint_label.size)
+		)
+
+
+## Der Hinweis blendet nach ein paar Sekunden aus — das Beet gehört dann ganz
+## den Maulwürfen.
+func _hint_alpha() -> float:
+	return clampf(1.0 - (elapsed - 5.0) / 1.5, 0.0, 1.0)
 
 
 func _hole_at(screen: Vector2) -> int:

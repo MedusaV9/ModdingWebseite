@@ -13,6 +13,7 @@ extends MinigameBase
 ## Halten bleibt als 2D-Overlay (Eingabe-Feedback).
 
 const Stage := preload("res://scripts/minigames/games/garden_rush/garden_rush_stage3d.gd")
+const Kit := preload("res://scripts/minigames/games/carrot_catch/mpb_garden_kit.gd")
 
 ## Verhältnis Topfbreite zu Zellenbreite.
 const POT_FILL := 0.74
@@ -43,6 +44,11 @@ var _active_pots := 0
 var _stage: Node3D
 var _bob := 0.0
 var _splash := 0.0
+var _hud_plate := Kit.hud_plate()
+var _banner_plate := Kit.hud_plate()
+var _hint_plate := Kit.hud_plate()
+## Reine Anzeige-Serie (Perfekt-Güsse in Folge) — KEINE Punktelogik.
+var _perfect_streak := 0
 
 
 func setup(context: MinigameCtx) -> void:
@@ -278,6 +284,7 @@ func _water_sprout(index: int, frac: float) -> void:
 	var pos := _pot_rect(index).get_center()
 	_stage.water_fx(index, perfect)
 	AudioDirector.try_play(self, "mg_perfect" if perfect else "mg_good")
+	_perfect_streak = _perfect_streak + 1 if perfect else 0
 	if ctx.juice != null:
 		var key := "mg.gardenRush.perfect" if perfect else "mg.gardenRush.early"
 		ctx.juice.float_text(
@@ -285,8 +292,11 @@ func _water_sprout(index: int, frac: float) -> void:
 			I18nService.t(key),
 			AcTokens.LEAF_DARK if perfect else AcTokens.INK_SOFT
 		)
+		# Perfekt-Serie mit steigendem Ton; ein früher Guss setzt sie zurück.
+		ctx.juice.show_combo(_perfect_streak)
 		if perfect:
 			ctx.juice.bloom_pulse(0.55)
+			ctx.juice.overlay_ring(pos, Color(0.98, 0.75, 0.85, 0.85), 56.0)
 	ctx.report_score(score, points)
 	# Der Nachlauf läuft über den Cooldown-Zweig ab.
 	pot["state"] = "cooldown"
@@ -303,8 +313,11 @@ func _water_weed(index: int) -> void:
 	var pos := _pot_rect(index).get_center()
 	_stage.weed_fx(index)
 	AudioDirector.try_play(self, "mg_junk")
+	_perfect_streak = 0
 	if ctx.juice != null:
 		ctx.juice.shake(0.3)
+		ctx.juice.hit_flash(Color(0.55, 0.65, 0.3, 0.12))
+		ctx.juice.show_combo(0)
 		ctx.juice.float_text(
 			pos - Vector2(0.0, 30.0), I18nService.t("mg.gardenRush.weed"), AcTokens.DANGER
 		)
@@ -318,9 +331,12 @@ func _wilt_out(index: int) -> void:
 	var pos := _pot_rect(index).get_center()
 	_stage.wilt_fx(index)
 	AudioDirector.try_play(self, "mg_spill")
+	_perfect_streak = 0
 	if ctx.juice != null:
 		ctx.juice.shake(0.3)
 		ctx.juice.hit_freeze(70)
+		ctx.juice.hit_flash(Color(0.9, 0.4, 0.3, 0.12))
+		ctx.juice.show_combo(0)
 		ctx.juice.float_text(
 			pos - Vector2(0.0, 30.0), I18nService.t("mg.gardenRush.wilted"), AcTokens.DANGER
 		)
@@ -357,6 +373,7 @@ func _fire_sprinkler() -> void:
 	if ctx.juice != null:
 		ctx.juice.bloom_pulse(1.0)
 		ctx.juice.slowmo(0.4, 240)
+		ctx.juice.confetti(40)
 
 
 func _finish() -> void:
@@ -380,6 +397,13 @@ func _update_labels() -> void:
 		if not bool(tune["ENDLESS"]) and withered > 0
 		else ""
 	)
+	_hint_label.modulate.a = _hint_alpha()
+
+
+## Der Hinweis blendet nach ein paar Sekunden aus — das Beet gehört dann ganz
+## den Sprossen.
+func _hint_alpha() -> float:
+	return clampf(1.0 - (elapsed - 5.0) / 1.5, 0.0, 1.0)
 
 
 ## Beet-Raster: Hochkant 2×4, Quer 4×2 — beide Orientierungen bleiben groß.
@@ -423,7 +447,24 @@ func _sprinkler_rect() -> Rect2:
 
 ## Nur noch HUD-Overlay: der Füllring am gehaltenen Topf ist präzises
 ## Eingabe-Feedback (Perfekt-Zone!) und bleibt deshalb gestochen scharf in 2D.
+## Dazu Milchglas hinter Zeit/Welk-Zähler, Banner und Hinweis (Lesbarkeit).
 func _draw() -> void:
+	if _time_label != null:
+		var top_left := _time_label.position - Vector2(12.0, 6.0)
+		var bottom_right := (
+			_withered_label.position
+			+ Vector2(maxf(_time_label.size.x, _withered_label.size.x), _withered_label.size.y)
+			+ Vector2(12.0, 6.0)
+		)
+		draw_style_box(_hud_plate, Rect2(top_left, bottom_right - top_left))
+		if not _banner_label.text.is_empty():
+			draw_style_box(_banner_plate, Rect2(_banner_label.position, _banner_label.size))
+		var hint_a := _hint_alpha()
+		if hint_a > 0.0:
+			_hint_plate.bg_color = Color(1.0, 0.99, 0.94, 0.72 * hint_a)
+			draw_style_box(
+				_hint_plate, Rect2(_hint_label.position - Vector2(0.0, 2.0), _hint_label.size)
+			)
 	if hold_index >= 0:
 		_draw_fill_ring()
 

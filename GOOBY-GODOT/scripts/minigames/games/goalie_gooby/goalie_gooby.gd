@@ -19,6 +19,7 @@ extends MinigameBase
 ## auf −z blickt.
 
 const Logic := preload("res://scripts/minigames/games/goalie_gooby/goalie_gooby_logic.gd")
+const Scenery := preload("res://scripts/minigames/games/goalie_gooby/goalie_gooby_scenery.gd")
 const Stage3D := preload("res://scripts/minigames/games/_3da_stage/stage3d.gd")
 const Props3D := preload("res://scripts/minigames/games/_3da_stage/props3d.gd")
 const GoobyActor := preload("res://scripts/minigames/games/_3da_stage/gooby_actor.gd")
@@ -34,6 +35,10 @@ const GOAL_H_RATIO := 0.8
 const SPOT_Z := 7.4
 ## Ballradius in Metern.
 const BALL_R := 0.16
+## Nachspiel des Balls NACH der Entscheidung (Parade-Abwehr bzw. Einschlag).
+const BALL_FX_SEC := 0.7
+## Anlaufweg des Schützen-Blobs hinter dem Elfmeterpunkt (Meter).
+const STRIKER_RUN := 1.9
 
 const GRASS := Color(0.35, 0.61, 0.33)
 const POST := Color(0.99, 0.99, 0.97)
@@ -76,9 +81,19 @@ var _lane_glow: MeshInstance3D
 var _ball_node: Node3D
 var _ball_shadow: MeshInstance3D
 var _save_ring: MeshInstance3D
+var _crowd: Node3D
+var _striker: Node3D
+var _net_node: Node3D
 var _keeper_x := 0.0
 var _keeper_y := 0.0
 var _built_half := 0.0
+## Nachspiel des Balls: {"kind": "deflect"|"goal", "t": s, "from": Vector3,
+## "vel": Vector3} — reine Ansicht, die Logik ist längst entschieden.
+var _ball_fx: Dictionary = {}
+var _crowd_pulse := 0.0
+var _net_ripple := 0.0
+## Tritt-Animation des Schützen-Blobs (Restzeit).
+var _strike_t := 0.0
 
 
 func setup(context: MinigameCtx) -> void:
@@ -139,6 +154,10 @@ func _process(delta: float) -> void:
 		_resolve_kick()
 	_tick_keeper(delta)
 	_tick_ball()
+	_tick_ball_fx(delta)
+	_tick_striker(delta)
+	_tick_crowd(delta)
+	_tick_net_ripple(delta)
 	_tick_telegraph()
 	_tick_ring(delta)
 	_update_labels()
@@ -201,7 +220,9 @@ func _build_world() -> void:
 				"ambient": 0.32,
 				"ambient_color": Color(0.92, 0.9, 0.84),
 				"sky_ambient": 0.34,
-				"exposure": 0.54,
+				# MP-E: eine Idee dunkler — der Rasen lag noch ~15 Luma-Stufen
+				# über dem Ziel und fraß die weißen Torlinien.
+				"exposure": 0.42,
 				"fill_energy": 0.24,
 				"glow": 0.3,
 				"shadow_distance": 26.0,
@@ -262,6 +283,41 @@ func _build_glove(color: Color) -> Node3D:
 	return holder
 
 
+## Schützen-Blob am Elfmeterpunkt: er läuft während der Ankündigung an und
+## tritt beim Abschuss durch — der Schuss hat damit einen sichtbaren Absender
+## statt aus dem Nichts zu kommen.
+func _build_striker() -> void:
+	_striker = Node3D.new()
+	_striker.name = "Striker"
+	var body := Props3D.sphere(0.24, Props3D.flat(Color(0.55, 0.68, 0.92), 0.85))
+	body.position.y = 0.3
+	body.scale = Vector3(1.0, 1.2, 0.92)
+	_striker.add_child(body)
+	var head := Props3D.sphere(0.15, Props3D.flat(Color(0.98, 0.9, 0.78), 0.85))
+	head.position.y = 0.68
+	_striker.add_child(head)
+	var cap := Props3D.sphere(0.155, Props3D.flat(Color(0.92, 0.42, 0.38), 0.85))
+	cap.position.y = 0.73
+	cap.scale = Vector3(1.0, 0.55, 1.0)
+	_striker.add_child(cap)
+	var boot := Props3D.sphere(0.09, Props3D.flat(Color(0.32, 0.3, 0.34), 0.9))
+	boot.name = "Boot"
+	# Fuß zeigt Richtung Tor (-Z), nicht zur Kamera.
+	boot.position = Vector3(-0.08, 0.08, -0.2)
+	boot.scale = Vector3(1.0, 0.7, 1.4)
+	_striker.add_child(boot)
+	_striker.add_child(Props3D.blob_shadow(0.34, 0.3))
+	_striker.position = _striker_home()
+	_stage.add_child(_striker)
+
+
+## Wartepunkt des Schützen: deutlich SEITLICH des Elfmeterpunkts, nicht
+## dahinter — direkt hinter dem Punkt schneidet ihn die Kamera am unteren
+## Bildrand ab und der Anlauf wäre unsichtbar.
+func _striker_home() -> Vector3:
+	return Vector3(STRIKER_RUN, 0.0, SPOT_Z + 0.9)
+
+
 ## Gemähte Rasenbahnen quer zum Schuss — sie geben der leeren Wiese Tiefe.
 func _build_stripes() -> void:
 	# Flache PLATTEN, keine Quader: die 2 cm hohen Seitenflächen eines Quaders
@@ -319,11 +375,11 @@ func _build_park() -> void:
 	_stage.add_child(
 		Props3D.scatter(ASSETS + "flower_redA.glb", 0.32, 12, 13.9, Vector3.ZERO, 1.1, 3.8, behind)
 	)
-	var bench := Props3D.model(ASSETS + "bench.glb", 0.66)
-	bench.position = Vector3(-9.2, 0.0, 1.4)
-	bench.rotation.y = PI * 0.5
-	Props3D.repaint(bench, Props3D.NATURE)
-	_stage.add_child(bench)
+	# Tiefenpolitur (MP-E): Vereinsgelände statt leerer Wiese — Vereinsheim,
+	# Flutlicht, rot-weiße Bande, Zuschauer, Eckfahnen, Hütchen. Die alte
+	# einsame Bank weicht der Bande; Zuschauer wippen bei Paraden mit.
+	_crowd = Scenery.build(_stage)
+	_build_striker()
 
 
 ## Tor mit Pfosten, Latte, Netz und Strafraumlinien. Wird bei jedem
@@ -336,6 +392,7 @@ func _build_goal() -> void:
 	for child in _goal.get_children():
 		child.queue_free()
 	_lane_glow = null
+	_net_node = null
 	var height := half * GOAL_H_RATIO * 2.0 * 0.5 + 0.4
 	var post_mat := Props3D.flat(POST, 0.4)
 	for side: float in [-1.0, 1.0]:
@@ -383,7 +440,8 @@ func _build_net(half: float, height: float) -> void:
 	for i in 5:
 		var z := -depth * float(i) / 4.0
 		poses.append(_bar(Vector3(0.0, height, z), Vector3(half * 2.0, 0.0, 0.0)))
-	_goal.add_child(Props3D.swarm_mesh(mesh, poses, 6.0))
+	_net_node = Props3D.swarm_mesh(mesh, poses, 6.0)
+	_goal.add_child(_net_node)
 
 
 ## Ein Netzstab: Mitte + Richtungsvektor (Länge = Betrag).
@@ -536,18 +594,21 @@ func _tick_keeper(_delta: float) -> void:
 		lift = -0.12
 	# Sanft nachziehen: der harte Sprung der 2D-Fassung wirkt in 3D wie ein
 	# Teleport. Die LOGIK entscheidet weiterhin allein über die Parade.
-	_keeper_x = lerpf(_keeper_x, target.x, 0.35)
-	_keeper_y = lerpf(_keeper_y, lift, 0.3)
+	# MP-E: etwas straffer und mit mehr Körperlage — die Hechte soll nach
+	# Absprung aussehen, nicht nach Schlittenfahrt.
+	_keeper_x = lerpf(_keeper_x, target.x, 0.48)
+	_keeper_y = lerpf(_keeper_y, lift, 0.38)
 	_gooby.position = Vector3(_keeper_x, maxf(0.0, _keeper_y), 0.22)
-	_gooby.rotation.z = -clampf((target.x - _keeper_x) * 0.6 + _keeper_x * 0.12, -0.5, 0.5)
+	_gooby.rotation.z = -clampf((target.x - _keeper_x) * 0.75 + _keeper_x * 0.14, -0.62, 0.62)
 
 
 func _tick_ball() -> void:
 	if _ball_node == null:
 		return
 	if kick.is_empty():
-		_ball_node.visible = false
-		_ball_shadow.visible = false
+		if _ball_fx.is_empty():
+			_ball_node.visible = false
+			_ball_shadow.visible = false
 		return
 	_ball_node.visible = true
 	_ball_shadow.visible = true
@@ -566,6 +627,88 @@ func _tick_ball() -> void:
 	_ball_node.rotation.x -= 0.35 * p
 	_ball_shadow.position = Vector3(at.x, 0.02, at.z)
 	_ball_shadow.scale = Vector3.ONE * clampf(1.3 - at.y * 0.2, 0.6, 1.3)
+
+
+## Nachspiel des Balls: die Parade FAUSTET den Ball sichtbar weg, das
+## Gegentor schlägt sichtbar im Netz ein — vorher verschwand der Ball im
+## Entscheidungs-Frame einfach.
+func _tick_ball_fx(delta: float) -> void:
+	if _ball_fx.is_empty() or _ball_node == null:
+		return
+	var t := float(_ball_fx["t"]) + delta
+	if t >= BALL_FX_SEC:
+		_ball_fx = {}
+		return
+	_ball_fx["t"] = t
+	var from: Vector3 = _ball_fx["from"]
+	var vel: Vector3 = _ball_fx["vel"]
+	var at := from + vel * t + Vector3(0.0, -6.5, 0.0) * t * t * 0.5
+	if str(_ball_fx["kind"]) == "goal":
+		# Im Netz bleibt der Ball hängen: Bewegung klingt schnell ab.
+		var brake := clampf(1.0 - t * 3.2, 0.0, 1.0)
+		at = from + vel * t * brake + Vector3(0.0, -1.6, 0.0) * t * t
+		at.z = maxf(at.z, -1.25)
+	at.y = maxf(at.y, BALL_R)
+	_ball_node.visible = true
+	_ball_shadow.visible = true
+	_ball_node.position = at
+	_ball_node.rotation.x -= 9.0 * delta
+	_ball_shadow.position = Vector3(at.x, 0.02, at.z)
+	_ball_shadow.scale = Vector3.ONE * clampf(1.3 - at.y * 0.2, 0.6, 1.3)
+
+
+## Schützen-Blob: läuft in der Ankündigung an, tritt beim Abschuss durch und
+## trabt danach zurück zum Wartepunkt.
+func _tick_striker(delta: float) -> void:
+	if _striker == null:
+		return
+	_strike_t = maxf(0.0, _strike_t - delta)
+	var home := _striker_home()
+	var target := home
+	if not kick.is_empty():
+		var telegraph := float(kick["telegraph"])
+		var t := elapsed - kick_start
+		if t < telegraph:
+			# Anlauf: die letzten 60 % der Ankündigung tragen den Sprint.
+			var run := clampf(t / maxf(0.001, telegraph) - 0.4, 0.0, 0.6) / 0.6
+			var eased := run * run
+			target = home.lerp(Vector3(0.42, 0.0, SPOT_Z + 0.42), eased)
+			_striker.rotation.x = -0.14 * eased
+		else:
+			target = Vector3(0.42, 0.0, SPOT_Z + 0.42)
+			if _strike_t <= 0.0 and t < telegraph + 0.3:
+				_strike_t = 0.3
+	else:
+		_striker.rotation.x = lerpf(_striker.rotation.x, 0.0, 0.15)
+	var speed := 0.5 if kick.is_empty() else 1.0
+	_striker.position = _striker.position.lerp(target, speed * 14.0 * delta)
+	if _strike_t > 0.0:
+		# Durchziehen: kurzer Körper-Kick nach vorn.
+		var f := sin((1.0 - _strike_t / 0.3) * PI)
+		_striker.rotation.x = -0.55 * f
+	# Kleines Lauf-Wippen, solange er unterwegs ist.
+	var moving := _striker.position.distance_to(target) > 0.08
+	if moving:
+		_striker.position.y = absf(sin(elapsed * 14.0)) * 0.05
+
+
+## Zuschauer-Blobs: Grundwippen, bei Paraden ein Freuden-Hüpfer.
+func _tick_crowd(delta: float) -> void:
+	if _crowd == null:
+		return
+	_crowd_pulse = maxf(0.0, _crowd_pulse - delta * 1.3)
+	var hop := 0.18 * _crowd_pulse * absf(sin((1.0 - _crowd_pulse) * PI * 4.0))
+	_crowd.position.y = 0.03 * sin(elapsed * 1.9) + hop
+
+
+## Netz-Wellen nach dem Einschlag: das Netz beult kurz nach hinten aus.
+func _tick_net_ripple(delta: float) -> void:
+	if _net_node == null:
+		return
+	_net_ripple = maxf(0.0, _net_ripple - delta)
+	var f := _net_ripple / 0.5
+	var wave := sin((1.0 - f) * PI * 2.5) * f
+	_net_node.scale = Vector3(1.0, 1.0, 1.0 + 0.3 * maxf(0.0, wave) + 0.08 * f)
 
 
 func _tick_telegraph() -> void:
@@ -640,8 +783,11 @@ func _dive(delta_px: Vector2) -> void:
 	AudioDirector.try_play(self, "mg_good", 1.1)
 	if v == "up":
 		_gooby.hop(0.4, 0.3)
+	elif lane == 0 or lane == 4:
+		# Hechte in die Außenbahn: kleiner Absprung verkauft den Sprung.
+		_gooby.hop(0.32, 0.16)
 	_gooby.play_for("wave", 0.45)
-	_gooby.swing(0.35, 26.0, Vector3.FORWARD)
+	_gooby.swing(0.35, 30.0, Vector3.FORWARD)
 	if ctx.juice != null:
 		ctx.juice.shake(0.1)
 

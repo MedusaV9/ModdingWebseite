@@ -19,6 +19,7 @@ extends MinigameBase
 ## blickt bewusst achsparallel nach −z, damit „Wisch nach rechts" weiter
 ## „Ball nach +x" heißt.
 
+const Scenery := preload("res://scripts/minigames/games/basket_bounce/basket_bounce_scenery.gd")
 const Stage3D := preload("res://scripts/minigames/games/_3da_stage/stage3d.gd")
 const Props3D := preload("res://scripts/minigames/games/_3da_stage/props3d.gd")
 const GoobyActor := preload("res://scripts/minigames/games/_3da_stage/gooby_actor.gd")
@@ -31,10 +32,15 @@ const FLICK_SAMPLE_SEC := 0.13
 ## Punkte der 3D-Flugspur (Weltpunkte, im HUD als Linie gezeichnet).
 const TRAIL_MAX := 26
 
+## Wie stark Gooby sich beim Aufziehen des Flicks zurücklehnt (Radiant).
+const WINDUP_LEAN := 0.2
+## Ring-/Ball-Puls nach Ring- und Bretttreffern (s).
+const RIM_PULSE_SEC := 0.28
+
 const BALL_COLOR := Color(0.94, 0.52, 0.19)
 const SEAM_COLOR := Color(0.45, 0.22, 0.09)
 const RIM_COLOR := Color(0.94, 0.35, 0.22)
-const COURT := Color(0.8, 0.58, 0.4)
+const COURT := Color(0.74, 0.52, 0.35)
 const LINE := Color(0.99, 0.97, 0.93)
 const POLE := Color(0.58, 0.6, 0.64)
 ## Halbe Platzbreite/‑länge in Metern (der Asphalt, nicht die Wiese).
@@ -72,12 +78,16 @@ var _hint_label: Label
 var _stage: Stage3D
 var _gooby: GoobyActor
 var _sparks: Spark3D
+var _miss_puff: Spark3D
 var _hoop: Node3D
 var _rim: MeshInstance3D
 var _net: Node3D
 var _ball_node: Node3D
 var _ball_shadow: MeshInstance3D
+var _crowd: Node3D
 var _net_pulse := 0.0
+var _rim_pulse := 0.0
+var _crowd_pulse := 0.0
 var _framed_dist := -1.0
 
 
@@ -137,6 +147,9 @@ func _process(delta: float) -> void:
 	_place_hoop()
 	_place_ball()
 	_tick_net(delta)
+	_tick_rim(delta)
+	_tick_windup()
+	_tick_crowd(delta)
 	_frame_court()
 	_update_labels()
 	queue_redraw()
@@ -200,7 +213,9 @@ func _build_world() -> void:
 				# Belichtung bewusst niedrig: Sonne + Ambient summieren sich in
 				# ACES sonst über den Weißpunkt und der helle Asphalt clippt
 				# auf Cremeweiß (der Platz sah aus wie ein leeres Blatt).
-				"exposure": 0.56,
+				# MP-E: noch eine Stufe runter — 0.56 lag weiter ~25 Luma-Stufen
+				# über dem Ziel, der Platz blieb pastellblass.
+				"exposure": 0.47,
 				"fill_energy": 0.22,
 				"glow": 0.26,
 				"shadow_distance": 26.0,
@@ -238,6 +253,23 @@ func _build_world() -> void:
 	_sparks = Spark3D.new()
 	_stage.add_child(_sparks)
 	_sparks.build({"color": Color(1.0, 0.86, 0.42), "amount": 26, "speed": Vector2(1.6, 4.0)})
+	# Staubwölkchen für den Fehlwurf — der Ball schlägt sichtbar auf.
+	_miss_puff = Spark3D.new()
+	_stage.add_child(_miss_puff)
+	(
+		_miss_puff
+		. build(
+			{
+				"color": Color(0.85, 0.76, 0.62, 0.85),
+				"amount": 14,
+				"speed": Vector2(0.7, 1.8),
+				"size": Vector2(0.06, 0.14),
+				"texture": "puff",
+				"additive": false,
+				"lifetime": 0.6,
+			}
+		)
+	)
 
 
 ## Asphaltplatz mit gemalten Linien: Grundfläche, Seiten-/Grundlinie,
@@ -341,11 +373,10 @@ func _build_park() -> void:
 	_stage.add_child(
 		Props3D.scatter(ASSETS + "flower_redA.glb", 0.32, 12, 10.9, Vector3.ZERO, 1.1, 1.9, lane)
 	)
-	var bench := Props3D.model(ASSETS + "bench.glb", 0.66)
-	bench.position = Vector3(-6.4, 0.0, 2.6)
-	bench.rotation.y = PI * 0.5
-	Props3D.repaint(bench, Props3D.NATURE)
-	_stage.add_child(bench)
+	# Tiefenpolitur (MP-E): Käfig-Court statt leerem Asphalt — Zaun, Lampen,
+	# Bänke mit Zuschauer-Blobs, Ballständer, Wolken. Die Zuschauer wippen
+	# beim Korb mit (siehe _tick_crowd).
+	_crowd = Scenery.build(_stage)
 
 
 ## Korbanlage: Mast, Ausleger, Brett mit Zielrechteck, Ring und Netz.
@@ -524,7 +555,44 @@ func _tick_net(delta: float) -> void:
 		return
 	_net_pulse = maxf(0.0, _net_pulse - delta)
 	var f := _net_pulse / float(BasketBounceLogic.BASKET_JUICE["NET_PULSE_SEC"])
-	_net.scale = Vector3(1.0 + 0.12 * f, 1.0 + 0.45 * f, 1.0 + 0.12 * f)
+	# Gedämpfte Schwingung statt bloßem Aufblasen: das Netz peitscht nach
+	# unten durch und pendelt aus — DER Korb-Moment.
+	var wave := sin((1.0 - f) * PI * 3.0) * f
+	_net.scale = Vector3(1.0 + 0.1 * f, 1.0 + 0.42 * maxf(0.0, wave) + 0.1 * f, 1.0 + 0.1 * f)
+	_net.rotation.z = 0.08 * wave
+
+
+## Ring- und Brett-Treffer stauchen den Ring und den Ball kurz — der Abpraller
+## bekommt Gewicht.
+func _tick_rim(delta: float) -> void:
+	_rim_pulse = maxf(0.0, _rim_pulse - delta)
+	var f := _rim_pulse / RIM_PULSE_SEC
+	if _rim != null:
+		_rim.scale = Vector3.ONE * (1.0 + 0.14 * f)
+	if _ball_node != null:
+		var squash := 1.0 - 0.22 * f
+		_ball_node.scale = Vector3(2.0 - squash, squash, 2.0 - squash).lerp(Vector3.ONE, 1.0 - f)
+
+
+## Zielspannung: Gooby lehnt sich beim Aufziehen zurück, als würde er den
+## Wurf laden — die Flick-Stärke ist an der Haltung ablesbar.
+func _tick_windup() -> void:
+	if _gooby == null:
+		return
+	var lean := 0.0
+	if _dragging and phase == "aim":
+		var pull := (_drag_to - _drag_from).length()
+		lean = WINDUP_LEAN * clampf(pull / 220.0, 0.0, 1.0)
+	_gooby.rotation.x = lerpf(_gooby.rotation.x, lean, 0.25)
+
+
+## Die Zuschauer-Blobs leben: leichtes Grundwippen, beim Korb ein Hüpfer.
+func _tick_crowd(delta: float) -> void:
+	if _crowd == null:
+		return
+	_crowd_pulse = maxf(0.0, _crowd_pulse - delta * 1.4)
+	var hop := 0.16 * _crowd_pulse * absf(sin((1.0 - _crowd_pulse) * PI * 4.0))
+	_crowd.position.y = 0.025 * sin(elapsed * 2.1) + hop
 
 
 # ---------------------------------------------------------------- Spielzug
@@ -571,9 +639,11 @@ func _step_flight(delta: float) -> void:
 	if bool(ev["rim"]):
 		AudioDirector.try_play(self, "mg_junk", 1.1)
 		_stage.shake(0.05, 0.2)
+		_rim_pulse = RIM_PULSE_SEC
 	if bool(ev["board"]):
 		AudioDirector.try_play(self, "mg_spill", 1.15)
 		_stage.shake(0.04, 0.18)
+		_rim_pulse = maxf(_rim_pulse, RIM_PULSE_SEC * 0.7)
 	if bool(ev["basket"]):
 		_resolve_shot(true, not bool(ball["rim"]) and not bool(ball["board"]), bool(ball["board"]))
 	elif bool(ev["dead"]):
@@ -598,12 +668,13 @@ func _resolve_shot(made: bool, swish: bool, bank: bool) -> void:
 		_flash_text = "+%d" % points
 		_flash = 0.9
 		_net_pulse = float(BasketBounceLogic.BASKET_JUICE["NET_PULSE_SEC"])
+		_crowd_pulse = 1.0
 		_sparks.burst(world - Vector3(0.0, 0.35, 0.0))
 		_stage.pulse_glow(0.9 if swish else 0.55)
 		# Beim Korb dreht Gooby sich zur Kamera — sonst sähe man nur den Rücken.
 		_gooby.face(0.3)
 		_gooby.play("celebrate")
-		_gooby.hop(0.5, 0.34)
+		_gooby.hop(0.5, 0.5 if swish else 0.34)
 		_gooby.emote("ecstatic", 1.5)
 		_celebrate(swish, bank, pos, points)
 	else:
@@ -611,6 +682,7 @@ func _resolve_shot(made: bool, swish: bool, bank: bool) -> void:
 		_flash_text = I18nService.t("mg.basketBounce.miss")
 		_flash = 0.8
 		AudioDirector.try_play(self, "mg_spill")
+		_miss_puff.burst(_ball_world() + Vector3(0.0, 0.05, 0.0))
 		_gooby.face(PI * 0.58)
 		_gooby.play("idle")
 		_gooby.emote("sad", 1.1)
@@ -642,8 +714,11 @@ func _celebrate(swish: bool, bank: bool, pos: Vector2, points: int) -> void:
 	ctx.juice.bloom_pulse(0.7 if swish else 0.4)
 	if swish_streak >= 2:
 		ctx.juice.show_combo(swish_streak)
+		# Ab der Serie feiern auch die Bänke mit.
+		AudioDirector.try_play(self, "ranch_menge_jubel", 1.05)
 	if BasketBounceLogic.is_on_fire(swish_streak):
 		AudioDirector.try_play(self, "mg_golden")
+		AudioDirector.try_play(self, "ranch_menge_jubel", 1.0)
 		ctx.juice.bloom_pulse(1.0)
 		ctx.juice.edge_glow(0.75, Color(1.0, 0.55, 0.25))
 		_stage.pulse_glow(1.2)

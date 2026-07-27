@@ -93,6 +93,11 @@ func _build_hud() -> void:
 	_hint_label.text = I18nService.t("mg.goobySays.hint")
 	_hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	add_child(_hint_label)
+	# Heller Text + dunkler Saum: lesbar auf Vorhang UND Bühnenholz.
+	for label: Label in [_round_label, _state_label, _hint_label]:
+		label.add_theme_color_override("font_color", Color(1.0, 0.97, 0.92))
+		label.add_theme_color_override("font_outline_color", Color(0.24, 0.12, 0.2, 0.9))
+		label.add_theme_constant_override("outline_size", 7)
 	_update_labels()
 
 
@@ -259,12 +264,14 @@ func _update_labels() -> void:
 	_hint_label.position = Vector2(vp.x * 0.5 - 170.0, vp.y - 42.0)
 	_hint_label.size = Vector2(340.0, 34.0)
 	_round_label.text = I18nService.t("mg.goobySays.round", {"n": maxi(1, round_no)})
+	# Schrittzähler „3/5" macht den Fortschritt der Runde jederzeit ablesbar.
+	var steps := "  %d/%d" % [mini(step_index, sequence.size()), sequence.size()]
 	if phase == "watch":
 		_state_label.text = I18nService.t("mg.goobySays.watch")
 	elif step_index < sequence.size() and GoobySaysLogic.is_chord_step(sequence[step_index]):
-		_state_label.text = I18nService.t("mg.goobySays.chord")
+		_state_label.text = I18nService.t("mg.goobySays.chord") + steps
 	else:
-		_state_label.text = I18nService.t("mg.goobySays.go")
+		_state_label.text = I18nService.t("mg.goobySays.go") + steps
 
 
 func _pad_at(screen: Vector2) -> int:

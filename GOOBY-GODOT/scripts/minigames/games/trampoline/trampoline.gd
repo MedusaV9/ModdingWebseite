@@ -148,6 +148,8 @@ func _flight_tick(delta: float) -> void:
 	var next_vy := TrampolineLogic.next_bounce_vy(
 		TrampolineLogic.apex_for(vy, g) * 0.0 + absf(vy), action, tune
 	)
+	# JEDE Landung wirft Staub auf und dippt das Tuch (reine Optik).
+	_stage.land_fx(clampf(absf(vy) / float(tune["MAX_VY"]), 0.3, 1.0))
 	if action == "boost":
 		AudioDirector.try_play(self, "mg_perfect")
 		_stage.boost_fx()
@@ -306,6 +308,8 @@ func _draw() -> void:
 
 
 ## Landefenster als Ring um Gooby, sobald er fällt — das ist der Skill-Check.
+## Lesehilfe: das GRÜNE Segment am Ende der Skala IST das Fenster; der Zeiger
+## füllt die Skala, und sobald er im Grün steht, pulsiert der Ring — tippen!
 func _draw_window_gauge() -> void:
 	if not airborne or vy > 0.0 or finished:
 		return
@@ -318,6 +322,29 @@ func _draw_window_gauge() -> void:
 	var ring := _gooby_radius() * 1.7
 	var ratio := clampf(1.0 - tti / maxf(0.05, zone), 0.0, 1.0)
 	var inside := tti <= window
+	# Leise Laufbahn + grünes Fenster-Segment (Ziel sichtbar VOR dem Zeiger).
+	draw_arc(pos, ring, 0.0, TAU, 40, Color(0.4, 0.32, 0.28, 0.2), 4.0)
+	var window_from := clampf(1.0 - window / maxf(0.05, zone), 0.0, 1.0)
+	draw_arc(
+		pos,
+		ring,
+		-PI * 0.5 + TAU * window_from,
+		-PI * 0.5 + TAU,
+		24,
+		Color(AcTokens.LEAF.r, AcTokens.LEAF.g, AcTokens.LEAF.b, 0.4),
+		10.0
+	)
 	var tint := AcTokens.LEAF if inside else AcTokens.YELLOW
-	draw_arc(pos, ring, -PI * 0.5, -PI * 0.5 + TAU * ratio, 30, tint, 6.0)
-	draw_arc(pos, ring, 0.0, TAU, 30, Color(0.4, 0.32, 0.28, 0.18), 3.0)
+	draw_arc(pos, ring, -PI * 0.5, -PI * 0.5 + TAU * ratio, 30, tint, 7.0)
+	if inside:
+		# Jetzt-tippen-Puls: der ganze Ring atmet grün auf.
+		var flash := 0.45 + 0.35 * sin(_pulse * 16.0)
+		draw_arc(
+			pos,
+			ring + 8.0,
+			0.0,
+			TAU,
+			40,
+			Color(AcTokens.LEAF.r, AcTokens.LEAF.g, AcTokens.LEAF.b, flash),
+			3.5
+		)

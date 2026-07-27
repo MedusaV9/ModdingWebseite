@@ -39,6 +39,8 @@ const CELL_REF := 1.75
 const GOOBY_ANCHOR := Vector2(0.22, 0.90)
 const GOOBY_HEIGHT := 0.2
 const RIG_HEIGHT := 1.132
+## Dauer des Freuden-Hüpfers gefundener Tierchen (Sekunden).
+const HOP_SEC := 0.7
 
 var gooby: GoobyRig
 
@@ -46,8 +48,13 @@ var _spots: Array[Node3D] = []
 var _props: Array[Node3D] = []
 var _critters: Array[Node3D] = []
 var _leaves: GPUParticles3D
+var _sparkle: GPUParticles3D
 var _gooby_shade: MeshInstance3D
 var _emotion := "happy"
+var _butterflies: Array[Dictionary] = []
+## Versteck-Index → Restzeit des Freuden-Hüpfers (gefundene Tierchen springen).
+var _hops: Dictionary = {}
+var _sky_t := 0.0
 
 
 func setup_stage(spot_count: int) -> void:
@@ -57,13 +64,13 @@ func setup_stage(spot_count: int) -> void:
 			"sky_horizon": Color(0.88, 0.95, 0.92),
 			"ground_horizon": Color(0.66, 0.83, 0.56),
 			"ground_bottom": Color(0.44, 0.64, 0.38),
-			"sky_energy": 0.9,
-			"ambient": 0.5,
-			"sun_color": Color(1.0, 0.95, 0.82),
-			"sun_energy": 1.35,
+			"sky_energy": 0.8,
+			"ambient": 0.46,
+			"sun_color": Color(1.0, 0.92, 0.74),
+			"sun_energy": 1.3,
 			"sun_dir": Vector3(-0.44, -0.7, -0.56),
 			"fill_color": Color(0.66, 0.84, 1.0),
-			"fill_energy": 0.34,
+			"fill_energy": 0.32,
 			"shadows": false,
 			"glow": 0.2,
 			"glow_bloom": 0.02,
@@ -75,11 +82,21 @@ func setup_stage(spot_count: int) -> void:
 			"far": 120.0,
 		}
 	)
+	# BELICHTUNGS-EICHUNG: die Wiese stand im Mittel bei Luma 182 — zu hell,
+	# die Mähstreifen und Requisiten verloren ihre Zeichnung. Etwas dunkler
+	# plus wärmere Sonne = Nachmittagslicht statt Mittags-Überstrahlung.
+	# (Runde 2: 0,84 brachte nur Luma 177 — die Filmic-Kurve staucht oben,
+	# erst 0,70 landet im Zielband ~150.)
+	environment.tonemap_exposure = 0.7
+	environment.adjustment_enabled = true
+	environment.adjustment_contrast = 1.05
+	environment.adjustment_saturation = 1.12
 	set_half_height(CAM_HALF_H, CAM_REF)
 	camera.position = CAM_POS
 	camera.rotation_degrees = Vector3(CAM_PITCH, 0.0, 0.0)
 	_build_bank()
 	_build_skyline()
+	_build_butterflies()
 	_build_gooby()
 	for i in spot_count:
 		_build_spot(i)
@@ -112,8 +129,15 @@ func sync(rises: Array, elapsed: float) -> void:
 		critter.visible = rise > 0.001
 		if not critter.visible:
 			continue
-		critter.position.y = -1.0 + rise * 1.35
-		critter.rotation.y = sin(elapsed * 2.2 + i) * 0.4
+		var hop := 0.0
+		if _hops.has(i):
+			# Freuden-Hüpfer: abklingender Bogen (zwei Hüpfer in 0,7 s).
+			var t := 1.0 - float(_hops[i]) / HOP_SEC
+			hop = absf(sin(t * PI * 2.0)) * 0.5 * (1.0 - t * 0.6)
+		critter.position.y = -1.0 + rise * 1.35 + hop
+		# Je weiter draußen, desto lebhafter der Blick umher — ein lugendes
+		# Tierchen SOLL zappeln, das zieht den Blick aufs richtige Versteck.
+		critter.rotation.y = sin(elapsed * (2.2 + rise * 2.4) + i) * (0.25 + rise * 0.35)
 
 
 ## Requisiten-Wackler beim Tippen (Feedback am Versteck selbst).
@@ -142,6 +166,44 @@ func poof(spot: int, color: Color) -> void:
 	if spot < 0 or spot >= _spots.size():
 		return
 	Puff.fire(_leaves, _spots[spot].position + Vector3(0.0, 0.7, 0.7), color)
+
+
+## ENTDECKUNGSMOMENT, Teil 1 — das Lugen ankündigen: goldenes Aufblitzen über
+## dem Versteck, damit das Auge hinspringt, BEVOR das Tierchen wieder abtaucht.
+func alert(spot: int) -> void:
+	if spot < 0 or spot >= _spots.size():
+		return
+	Puff.fire(_sparkle, _spots[spot].position + Vector3(0.0, 1.5, 0.9), Color(1.0, 0.9, 0.45))
+
+
+## ENTDECKUNGSMOMENT, Teil 2 — gefunden! Das Tierchen macht Freudensprünge
+## (Hüpfbogen in `sync`), dazu feuert das Spiel den Blätterwirbel.
+func celebrate(spot: int) -> void:
+	if spot < 0 or spot >= _critters.size():
+		return
+	_hops[spot] = HOP_SEC
+
+
+## Hüpf-Timer abbauen, Schmetterlinge flattern lassen (pausiert mit dem Spiel).
+func tick(delta: float) -> void:
+	super.tick(delta)
+	_sky_t += delta
+	for spot: int in _hops.keys():
+		var left := float(_hops[spot]) - delta
+		if left <= 0.0:
+			_hops.erase(spot)
+		else:
+			_hops[spot] = left
+	for fly: Dictionary in _butterflies:
+		var node: Node3D = fly["node"]
+		var t: float = _sky_t * 0.55 + float(fly["phase"])
+		var home: Vector3 = fly["home"]
+		node.position = home + Vector3(sin(t) * 1.6, sin(t * 2.0) * 0.4, cos(t) * 0.9)
+		node.rotation.y = cos(t) * 0.9
+		# Flügelschlag: beide Quads gegengleich um die Körperachse kippen.
+		var flap := sin(_sky_t * 14.0 + float(fly["phase"])) * 55.0
+		(node.get_child(0) as Node3D).rotation_degrees = Vector3(-70.0, 0.0, flap)
+		(node.get_child(1) as Node3D).rotation_degrees = Vector3(-70.0, 0.0, -flap)
 
 
 ## Bildschirmpunkt → Punkt auf dem Gartenhang (y + SLOPE·z = BASE).
@@ -251,12 +313,16 @@ func _build_skyline() -> void:
 		hill.mesh = cone
 		hill.position = Vector3(float(entry[0]), -1.5, -34.0)
 		add_child(hill)
+	# BAUMHÖHE 6,5–8,5 statt 8–11: die alten Riesen füllten das komplette
+	# Himmelband und lasen sich als türkise Blobs. (Runde 2: 5,2–6,8 war zu
+	# zaghaft — hinter dem 4,6 m hohen Hangrücken blieben nur Stummel übrig.)
 	for i in 11:
 		var file := "tree_default.glb" if i % 2 == 0 else "tree_fat.glb"
-		var tree := Models.node_by_height(DIR + file, rng.randf_range(8.0, 11.0), true)
-		tree.position = Vector3(-21.0 + i * 4.2 + rng.randf_range(-1.1, 1.1), 0.0, -9.4)
+		var tree := Models.node_by_height(DIR + file, rng.randf_range(6.5, 8.5), true)
+		tree.position = Vector3(-21.0 + i * 4.2 + rng.randf_range(-1.1, 1.1), 0.0, -9.8)
 		tree.rotation.y = rng.randf() * TAU
 		add_child(tree)
+	_build_clouds()
 	var fence := Models.parts(DIR + "fence_simple.glb", 2.6, true)
 	if not fence.is_empty():
 		var poses: Array = []
@@ -277,6 +343,59 @@ func _build_skyline() -> void:
 	bird.position = Vector3(-9.4, 7.4, -6.0)
 	bird.rotation_degrees = Vector3(0.0, 138.0, 0.0)
 	add_child(bird)
+
+
+## Sommerwolken: flachgedrückte Kugel-Trios weit hinten. Ein MultiMesh je
+## Wolke wäre übertrieben — drei Kugeln teilen sich EIN Mesh über `swarm`.
+func _build_clouds() -> void:
+	var puffball := SphereMesh.new()
+	puffball.radius = 1.0
+	puffball.height = 1.4
+	puffball.radial_segments = 10
+	puffball.rings = 6
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(1.0, 1.0, 1.0)
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	puffball.material = mat
+	var poses: Array = []
+	for entry: Array in [[-19.0, 11.5, 1.0], [-3.0, 14.5, 1.35], [16.0, 12.0, 0.85]]:
+		var cx := float(entry[0])
+		var cy := float(entry[1])
+		var s := float(entry[2])
+		for blob: Array in [[0.0, 0.0, 2.6], [-2.2, -0.4, 1.7], [2.3, -0.5, 1.9]]:
+			var pos := Vector3(cx + float(blob[0]) * s, cy + float(blob[1]) * s, -46.0)
+			var basis := Basis.IDENTITY.scaled(
+				Vector3(float(blob[2]), float(blob[2]) * 0.62, 1.6) * s
+			)
+			poses.append(Transform3D(basis, pos))
+	add_child(Models.swarm([{"mesh": puffball, "xform": Transform3D.IDENTITY}], poses, 60.0))
+
+
+## Zwei Schmetterlinge über der Wiese: je zwei Flügel-Quads, die in `tick`
+## schlagen und in einer Acht über den Beeten kreisen — Sommerstimmung für
+## 4 Draw-Calls.
+func _build_butterflies() -> void:
+	for entry: Array in [
+		[Color(1.0, 0.72, 0.3), Vector3(-3.4, 2.2, -1.2), 0.0],
+		[Color(0.72, 0.6, 1.0), Vector3(3.8, 2.6, 1.4), 2.6],
+	]:
+		var fly := Node3D.new()
+		fly.position = entry[1]
+		add_child(fly)
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = entry[0]
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+		for side: float in [-1.0, 1.0]:
+			var wing := MeshInstance3D.new()
+			var quad := QuadMesh.new()
+			quad.size = Vector2(0.44, 0.34)
+			quad.center_offset = Vector3(side * 0.22, 0.0, 0.0)
+			quad.material = mat
+			wing.mesh = quad
+			wing.rotation_degrees = Vector3(-70.0, 0.0, 0.0)
+			fly.add_child(wing)
+		_butterflies.append({"node": fly, "home": entry[1] as Vector3, "phase": float(entry[2])})
 
 
 func _build_gooby() -> void:
@@ -440,6 +559,9 @@ func _make_critter(index: int) -> Node3D:
 
 
 func _build_effects() -> void:
+	# WICHTIG: star_03.png ist eine Additiv-Textur (weißer Stern auf Schwarz).
+	# Mit "add": false wurde das Schwarz alphageblendet — die Blätter waren
+	# dunkle Quadrate. Additiv gemischt bleiben nur die hellen Sterne übrig.
 	_leaves = (
 		Puff
 		. burst(
@@ -454,9 +576,52 @@ func _build_effects() -> void:
 				"gravity": Vector3(0.0, -3.4, 0.0),
 				"color": Color(0.6, 0.9, 0.5, 1.0),
 				"color_end": Color(0.9, 0.95, 0.6, 0.0),
-				"add": false,
 				"local": false,
 			}
 		)
 	)
 	add_child(_leaves)
+	# Aufblitz-Funkeln des Entdeckungsmoments (kurz, golden — Runde 2:
+	# größer, die 0,42er-Glitzer gingen im Gras unter).
+	_sparkle = (
+		Puff
+		. burst(
+			DIR + "vfx/star_03.png",
+			{
+				"amount": 12,
+				"lifetime": 0.55,
+				"size": 0.62,
+				"dir": Vector3.UP,
+				"spread": 70.0,
+				"speed": Vector2(1.4, 2.8),
+				"gravity": Vector3(0.0, -1.2, 0.0),
+				"color": Color(1.0, 0.92, 0.5, 1.0),
+				"color_end": Color(1.0, 0.75, 0.3, 0.0),
+				"local": false,
+			}
+		)
+	)
+	add_child(_sparkle)
+	# Pollen-Drift über der ganzen Wiese: winzige helle Punkte, die träge in
+	# der Nachmittagsluft schweben — EIN Draw-Call Sommerstimmung.
+	var pollen := (
+		Puff
+		. stream(
+			DIR + "vfx/circle_05.png",
+			{
+				"amount": 26,
+				"lifetime": 7.0,
+				"size": 0.1,
+				"dir": Vector3(0.25, 0.12, 0.0),
+				"spread": 40.0,
+				"speed": Vector2(0.2, 0.6),
+				"gravity": Vector3(0.0, -0.03, 0.0),
+				"color": Color(1.0, 0.98, 0.8, 0.5),
+				"color_end": Color(1.0, 0.95, 0.7, 0.0),
+				"box": Vector3(9.0, 3.0, 4.0),
+				"local": false,
+			}
+		)
+	)
+	pollen.position = Vector3(0.0, 2.2, 0.0)
+	add_child(pollen)

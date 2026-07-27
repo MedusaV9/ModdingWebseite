@@ -15,7 +15,7 @@ var _host: InteractablesHost
 var _furniture: Node3D
 var _is_shower := false
 var _routine_active := false
-var _curtain: MeshInstance3D
+var _curtain: Node3D
 var _silhouette: MeshInstance3D
 var _peek_head: MeshInstance3D
 var _peek_index := 0
@@ -162,18 +162,35 @@ func _show_curtain(active: bool) -> void:
 		_stop_silhouette_tween()
 
 
-## Vorhang-Plane + Silhouetten-Quad (Doc F: 2D-Silhouette statt Shader-Magie).
+## Vorhang + Silhouetten-Quad (Doc F: 2D-Silhouette statt Shader-Magie).
+## WELT2: welliger Blender-Vorhang mit Stange + Clips statt Box-Plane;
+## bei Duschen hängt zusätzlich ein Duschkopf über der Vorhangkante.
+## Primitive-Fallback, falls das Asset fehlt.
 func _build_curtain() -> void:
-	_curtain = MeshInstance3D.new()
-	var curtain_mesh := BoxMesh.new()
-	curtain_mesh.size = Vector3(1.1, 1.5, 0.03)
-	_curtain.mesh = curtain_mesh
-	var curtain_mat := StandardMaterial3D.new()
-	curtain_mat.albedo_color = Color(0.81, 0.91, 0.95, 0.9)
-	curtain_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	_curtain.material_override = curtain_mat
-	_curtain.position = Vector3(0.0, 0.85, 0.55)
-	add_child(_curtain)
+	var glb := HomeProps.prop_glb("duschvorhang")
+	if glb != null:
+		_curtain = Node3D.new()
+		_curtain.name = "Vorhang"
+		_curtain.position = Vector3(0.0, 0.0, 0.55)
+		_curtain.add_child(glb)
+		if _is_shower:
+			var kopf := HomeProps.prop_glb("duschkopf")
+			if kopf != null:
+				kopf.position = Vector3(0.0, 0.0, -0.35)
+				_curtain.add_child(kopf)
+		add_child(_curtain)
+	else:
+		var platte := MeshInstance3D.new()
+		var curtain_mesh := BoxMesh.new()
+		curtain_mesh.size = Vector3(1.1, 1.5, 0.03)
+		platte.mesh = curtain_mesh
+		var curtain_mat := StandardMaterial3D.new()
+		curtain_mat.albedo_color = Color(0.81, 0.91, 0.95, 0.9)
+		curtain_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		platte.material_override = curtain_mat
+		platte.position = Vector3(0.0, 0.85, 0.55)
+		_curtain = platte
+		add_child(_curtain)
 	_silhouette = MeshInstance3D.new()
 	var quad := QuadMesh.new()
 	quad.size = Vector2(0.62, 0.8)

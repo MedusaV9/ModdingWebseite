@@ -73,6 +73,10 @@ var view_size := Vector2(390.0, 844.0)
 var landscape := false
 
 var _ui := 1.0
+## Kamera-Rückfall mit dem Tempo (Meter, weich) — statt Mikro-Zittern.
+var _cam_back_extra := 0.0
+## Fahrtwind-Takt (s bis zum nächsten Whoosh) ab hohem Tempoband.
+var _wind_t := 0.0
 var _swipe_from := Vector2.ZERO
 var _swipe_live := false
 var _held: Dictionary = {}
@@ -539,7 +543,8 @@ func _sync_player(dt: float) -> void:
 	var target := Vector3(1.0 + (1.0 - squash) * 0.55, squash, 1.0 + (1.0 - squash) * 0.55)
 	_gooby.scale = _gooby.scale.lerp(target, minf(1.0, dt * 16.0))
 	_gooby.position = Vector3(px, py, 0.0)
-	_gooby.rotation.z = (float((tune["LANE_X"] as Array)[int(run["lane"])]) - px) * -0.22
+	# Körperneigung beim Spurwechsel — deutlich sichtbar, klingt von selbst ab.
+	_gooby.rotation.z = (float((tune["LANE_X"] as Array)[int(run["lane"])]) - px) * -0.42
 	var invuln := float(run["invulnT"])
 	_gooby.visible = invuln <= 0.0 or fmod(invuln * 12.0, 2.0) < 1.0
 	_gooby.call("run", 0.0 if sliding else 1.0)
@@ -586,23 +591,26 @@ func _sync_props() -> void:
 	(_world.get("band") as RefCounted).call("flush")
 
 
-## Verfolgerkamera + §G4.8-Tempojuice (FOV-Kick, Streifen, Mikro-Zittern).
+## Verfolgerkamera + §G4.8-Tempojuice (FOV-Kick, Streifen, Kamera-Rückfall,
+## Fahrtwind). KEIN Zittern/Shake — Motion-Comfort-Regel der Dauerlauf-Spiele.
 func _sync_camera(dt: float) -> void:
 	var reduced := _reduced_motion()
 	var speed := Run.current_speed(run)
-	var jitter := 0.0
-	if not reduced:
-		jitter = clampf((speed - 14.0) / 2.0, 0.0, 1.0) * 0.03
-	_place_camera(jitter)
 	var band01 := clampf(
 		(speed - SPEED_BAND.x) / maxf(0.001, SPEED_BAND.y - SPEED_BAND.x), 0.0, 1.0
 	)
+	_cam_back_extra = lerpf(_cam_back_extra, band01 * 0.85, minf(1.0, dt * 2.5))
+	_place_camera(0.0 if reduced else _cam_back_extra)
 	_stage.call("set_fov_bonus", HFOV_KICK * band01)
 	_streaks.set("enabled", not reduced)
 	_streaks.call("update", dt, speed, SpeedLines.rate_at(speed, STREAK_RATE))
+	_wind_t -= dt
+	if band01 >= 0.5 and _wind_t <= 0.0:
+		_wind_t = 1.1 + (1.0 - band01) * 1.6
+		FeelSfx.play(self, "game_whoosh", 0.85 + band01 * 0.5)
 
 
-func _place_camera(jitter: float) -> void:
+func _place_camera(back_extra: float) -> void:
 	var cam: Camera3D = _stage.get("camera")
 	if cam == null:
 		return
@@ -611,9 +619,7 @@ func _place_camera(jitter: float) -> void:
 	var pitch := CAM_PITCH + (0.0 if landscape else CAM_PORTRAIT_PITCH)
 	var follow := Run.player_x(run) * 0.32
 	cam.position = Vector3(
-		follow + randf_range(-jitter, jitter),
-		CAM_HEIGHT + lift + randf_range(-jitter, jitter),
-		CAM_BACK + back
+		follow, CAM_HEIGHT + lift + back_extra * 0.22, CAM_BACK + back + back_extra
 	)
 	cam.rotation = Vector3(deg_to_rad(-pitch), 0.0, 0.0)
 

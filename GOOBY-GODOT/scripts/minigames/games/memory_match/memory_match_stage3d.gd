@@ -41,6 +41,7 @@ var _flip: Array[float] = []
 var _faces: Array[int] = []
 var _blanket: Node3D
 var _basket: Node3D
+var _snacks: Node3D
 var _star_burst: GPUParticles3D
 var _poof_burst: GPUParticles3D
 
@@ -57,31 +58,33 @@ func setup_stage() -> void:
 		stage
 		. build(
 			{
-				# Sanfter Picknick-Nachmittag, NICHT überbelichtet.
-				"sky_top": Color(0.54, 0.77, 0.93),
-				"sky_horizon": Color(0.88, 0.93, 0.89),
-				"ground_horizon": Color(0.66, 0.8, 0.54),
-				"ground_bottom": Color(0.48, 0.64, 0.4),
+				# Sanfter Picknick-Nachmittag, NICHT überbelichtet: Ambient
+				# kommt aus dem Himmel, also sky_energy UND ambient drosseln.
+				"sky_top": Color(0.48, 0.7, 0.88),
+				"sky_horizon": Color(0.8, 0.86, 0.8),
+				"ground_horizon": Color(0.56, 0.7, 0.46),
+				"ground_bottom": Color(0.4, 0.54, 0.34),
+				"sky_energy": 0.78,
 				"sun_dir": Vector3(-0.3, -0.85, -0.35),
-				"sun_energy": 0.78,
-				"ambient": 0.5,
-				"fill_energy": 0.22,
-				"glow": 0.26,
+				"sun_energy": 0.52,
+				"ambient": 0.36,
+				"fill_energy": 0.16,
+				"glow": 0.24,
 				"glow_threshold": 0.86,
 				"shadow_distance": 30.0,
 				"fog": true,
-				"fog_color": Color(0.86, 0.92, 0.87),
+				"fog_color": Color(0.82, 0.88, 0.82),
 				"fog_from": 26.0,
 				"fog_to": 70.0,
 				"far": 110.0,
 			}
 		)
 	)
-	add_child(Fx.ground(Vector2(80.0, 60.0), Color(0.56, 0.75, 0.43)))
+	add_child(Fx.ground(Vector2(80.0, 60.0), Color(0.46, 0.64, 0.35)))
 	_mat_face = Fx.flat(Color(0.98, 0.94, 0.84))
-	_mat_matched = Fx.flat(Color(0.68, 0.88, 0.62))
-	_mat_back = Fx.flat(Color(0.95, 0.56, 0.68))
-	_mat_emblem = Fx.flat(Color(0.78, 0.36, 0.5))
+	_mat_matched = Fx.flat(Color(0.62, 0.84, 0.56))
+	_mat_back = Fx.flat(Color(0.92, 0.46, 0.6))
+	_mat_emblem = Fx.flat(Color(0.68, 0.26, 0.4))
 	_build_backdrop()
 	_build_gooby()
 	_build_fx()
@@ -129,6 +132,9 @@ func _build_backdrop() -> void:
 				Vector3(-12.0 + float(i) * 6.0, 0.0, -20.0 - 2.0 * float(i % 2))
 			)
 		)
+	# Zwei nähere Bäume rahmen das Feld — Mittelgrund statt leerer Wiese.
+	tree_poses.append(Transform3D(Basis(Vector3.UP, 0.7), Vector3(-9.6, 0.0, -13.0)))
+	tree_poses.append(Transform3D(Basis(Vector3.UP, 2.3), Vector3(9.8, 0.0, -14.2)))
 	add_child(Models.swarm(Models.parts(DIR + "tree_default.glb", 4.2), tree_poses))
 	var reds: Array = []
 	var yellows: Array = []
@@ -144,6 +150,17 @@ func _build_backdrop() -> void:
 	add_child(Models.swarm(Models.parts(DIR + "flower_yellowA.glb", 0.5), yellows))
 	_basket = Models.node(DIR + "picnic_basket_round.gltf", 1.5)
 	add_child(_basket)
+	# Snack-Ecke als Vordergrund-Requisite (Position setzt layout()).
+	_snacks = Node3D.new()
+	add_child(_snacks)
+	for entry: Array in [
+		["apple.glb", 0.55, Vector3(0.0, 0.0, 0.0)],
+		["strawberry.glb", 0.5, Vector3(0.75, 0.0, 0.45)],
+		["cupcake.glb", 0.55, Vector3(-0.5, 0.0, 0.7)],
+	]:
+		var snack := Models.node(DIR + str(entry[0]), float(entry[1]))
+		snack.position = entry[2]
+		_snacks.add_child(snack)
 
 
 func _build_gooby() -> void:
@@ -151,6 +168,7 @@ func _build_gooby() -> void:
 	add_child(gooby)
 	gooby.mount(1.15)
 	gooby.base_emotion = "happy"
+	gooby.add_child(Fx.blob_shadow(0.55))
 
 
 func _build_fx() -> void:
@@ -231,10 +249,17 @@ func layout(rects: Array[Rect2], faces: Array[int]) -> void:
 	var pad := 0.8
 	_blanket.position = Vector3((lo.x + hi.x) * 0.5, -0.01, (lo.z + hi.z) * 0.5)
 	_blanket.scale = Vector3(hi.x - lo.x + pad * 2.0, 1.0, hi.z - lo.z + pad * 2.0)
-	gooby.position = Vector3((lo.x + hi.x) * 0.5 + (hi.x - lo.x) * 0.28, 0.0, lo.z - 2.2)
-	gooby.scale = Vector3.ONE * 1.35
+	# Gooby sitzt NAH hinterm Feld (statt winzig am Horizont) und schaut drauf.
+	gooby.position = Vector3((lo.x + hi.x) * 0.5 + (hi.x - lo.x) * 0.24, 0.0, lo.z - 1.35)
+	gooby.scale = Vector3.ONE * 1.7
 	gooby.rotation.y = -0.3
-	_basket.position = Vector3(lo.x - 1.6, 0.0, lo.z - 1.2)
+	# Korb + Snack-Ecke ÜBER BILDSCHIRM-ANKER in den sichtbaren unteren
+	# Wiesenstreifen raycasten (Welt-Offsets rieten daneben — der Streifen
+	# unterhalb der Decke ist nur wenige Zehntel Einheiten tief).
+	var cam := stage.get("camera") as Camera3D
+	var vp: Vector2 = cam.get_viewport().get_visible_rect().size
+	_basket.position = stage.ground_point(Vector2(vp.x * 0.13, vp.y * 0.94))
+	_snacks.position = stage.ground_point(Vector2(vp.x * 0.82, vp.y * 0.93))
 
 
 ## Jeden Frame: Flip-Winkel weiterziehen, Zustand (Rücken/Motiv/gelöst) zeigen.
@@ -344,6 +369,17 @@ func _spawn_card() -> Node3D:
 	emblem.position.y = 0.058
 	emblem.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	back.add_child(emblem)
+	# „?" auf dem Rücken: in 3 Sekunden klar, dass hier verdeckte Karten liegen.
+	var quest := Label3D.new()
+	quest.text = "?"
+	quest.font_size = 180
+	quest.pixel_size = 0.0024
+	quest.modulate = Color(1.0, 0.97, 0.9, 0.95)
+	quest.outline_size = 20
+	quest.outline_modulate = Color(0.55, 0.18, 0.3, 0.9)
+	quest.rotation_degrees = Vector3(-90.0, 0.0, 0.0)
+	quest.position.y = 0.078
+	back.add_child(quest)
 	var holder := Node3D.new()
 	holder.name = "Motiv"
 	holder.visible = false

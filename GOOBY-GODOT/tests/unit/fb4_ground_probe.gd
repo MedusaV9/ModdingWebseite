@@ -37,15 +37,17 @@ func _model_report() -> void:
 	for path: String in paths:
 		var aabb := Models.aabb(path)
 		print(
-			"  %s: min_y=%.4f max_y=%.4f size=%.2fx%.2fx%.2f"
-			% [
-				path.get_file(),
-				aabb.position.y,
-				aabb.end.y,
-				aabb.size.x,
-				aabb.size.y,
-				aabb.size.z
-			]
+			(
+				"  %s: min_y=%.4f max_y=%.4f size=%.2fx%.2fx%.2f"
+				% [
+					path.get_file(),
+					aabb.position.y,
+					aabb.end.y,
+					aabb.size.x,
+					aabb.size.y,
+					aabb.size.z
+				]
+			)
 		)
 
 
@@ -93,9 +95,16 @@ func _toy_racer() -> void:
 	for i in karts.size():
 		var kart_state: Dictionary = (race["karts"] as Array)[i]
 		var smp: Dictionary = logic.point_at(race["track"], float(kart_state["s"]))
-		var spline_y: float = (world.call("world_at", smp, float(kart_state["lateral"])) as Vector3).y
+		var spline_y: float = (
+			(world.call("world_at", smp, float(kart_state["lateral"])) as Vector3).y
+		)
 		var bottom := _world_bottom(karts[i])
-		print("  Kart %d: Unterkante=%.4f Spline=%.4f Differenz=%.4f" % [i, bottom, spline_y, bottom - spline_y])
+		print(
+			(
+				"  Kart %d: Unterkante=%.4f Spline=%.4f Differenz=%.4f"
+				% [i, bottom, spline_y, bottom - spline_y]
+			)
+		)
 	game.queue_free()
 	await process_frame
 
@@ -114,7 +123,11 @@ func _runner() -> void:
 		var lows := _multi_bottoms(prop)
 		print("  Auto-Gruppe %d: %d Instanzen, Unterkanten %s" % [prop_i, lows.size(), lows])
 	# Fahrbahn: höchster Punkt des road-Modells nach Einpassung.
-	var road_parts := Models.parts_yawed("res://assets/city/strassen/road-straight.glb", PI * 0.5, float(world.get("ROAD_W")) if world.get("ROAD_W") != null else 8.0)
+	var road_parts := Models.parts_yawed(
+		"res://assets/city/strassen/road-straight.glb",
+		PI * 0.5,
+		float(world.get("ROAD_W")) if world.get("ROAD_W") != null else 8.0
+	)
 	var top := -INF
 	for part: Dictionary in road_parts:
 		var mesh: Mesh = part["mesh"]
@@ -154,7 +167,9 @@ func _delivery() -> void:
 	print("== deliveryRush: Van/Verkehr vs. Asphalt-Oberkante ==")
 	var game := await _mount("deliveryRush")
 	var van: Node3D = game.get("_van")
-	print("  Van-Unterkante: %.4f (Asphalt-Deckel laut _slab: 0.03+0.025=0.055)" % _world_bottom(van))
+	print(
+		"  Van-Unterkante: %.4f (Asphalt-Deckel laut _slab: 0.03+0.025=0.055)" % _world_bottom(van)
+	)
 	var world: Node3D = game.get("_world")
 	if world != null:
 		var traffic: Node3D = world.get("traffic_prop")

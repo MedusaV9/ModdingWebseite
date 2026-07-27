@@ -301,6 +301,10 @@ func _tick_peeks(delta: float) -> void:
 		elif elapsed >= float(critter["next_peek"]):
 			critter["peek_t"] = float(tune["PEEK_DURATION_SEC"])
 			AudioDirector.try_play(self, "ui_tick", 1.2)
+			# Entdeckungsmoment ankündigen: goldenes Aufblitzen am Versteck,
+			# damit das Auge hinspringt, bevor das Tierchen wieder abtaucht.
+			if _stage != null:
+				_stage.alert(spot)
 
 
 func _tap_spot(spot: int) -> void:
@@ -327,6 +331,8 @@ func _tap_spot(spot: int) -> void:
 	AudioDirector.try_play(self, "mg_good", 1.08)
 	if _stage != null:
 		_stage.poof(spot, CRITTER_COLORS[int(critter["color"])])
+		# Gefunden! Das Tierchen macht Freudensprünge statt nur dazustehen.
+		_stage.celebrate(spot)
 		_stage.pulse_glow(0.5)
 	if ctx.juice != null:
 		ctx.juice.float_text(
@@ -418,12 +424,15 @@ func _draw_banner() -> void:
 		return
 	var font := ThemeService.font(800)
 	var alpha := clampf(_banner_t * 1.4, 0.0, 1.0)
+	# Breite mit _ui skalieren — fest 380 px schnitt „Neue Welle: 4 verstecken
+	# sich" auf großen Bildschirmen mitten im Wort ab.
+	var w := minf(view_size.x * 0.92, 460.0 * _ui)
 	draw_string(
 		font,
-		Vector2(view_size.x * 0.5 - 190.0, view_size.y * 0.36),
+		Vector2((view_size.x - w) * 0.5, view_size.y * 0.36),
 		_banner,
 		HORIZONTAL_ALIGNMENT_CENTER,
-		380.0,
+		w,
 		32,
 		Color(0.32, 0.24, 0.28, alpha)
 	)

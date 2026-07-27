@@ -90,9 +90,18 @@ func is_busy() -> bool:
 	return _busy
 
 
-## Zarge mit Bekleidung (FIX-3-Politur): Pfosten + Architrav statt drei
-## nackter Kanthölzer — die Tür ist das erste, was der Spieler anfasst.
+## Zarge mit Bekleidung: Blender-GLB (weiche Kapsel-Bekleidung, Knauf im
+## Sturz) — die Tür ist das erste, was der Spieler anfasst (WELT2).
+## Primitive-Fallback, falls das Asset fehlt.
 func _build_frame() -> void:
+	var glb := HomeProps.prop_glb("tuer_zarge")
+	if glb != null:
+		# GLB ist für 1,0 m Öffnungsbreite gebaut — bei abweichender
+		# Türbreite nur die X-Achse mitziehen.
+		if not is_equal_approx(door_width, 1.0):
+			glb.scale = Vector3(door_width, 1.0, 1.0)
+		add_child(glb)
+		return
 	var post := BoxMesh.new()
 	post.size = Vector3(0.1, DOOR_HEIGHT, 0.16)
 	var trim := BoxMesh.new()
@@ -126,13 +135,21 @@ func _build_frame() -> void:
 	add_child(architrav)
 
 
-## Türblatt mit zwei Kassetten-Füllungen + Drückergarnitur statt nackter
-## Platte (FIX-3-Politur).
+## Türblatt: Blender-GLB mit Kassetten + echter Klinke (WELT2, User-Wunsch
+## „Türen mit Klinke"). Ursprung des GLB = Scharnierkante, das Blatt reicht
+## bis x=1,0 — hängt also direkt am Hinge-Node (Öffnen-Tween unverändert).
+## Primitive-Fallback, falls das Asset fehlt.
 func _build_panel() -> void:
 	_hinge = Node3D.new()
 	_hinge.name = "Hinge"
 	_hinge.position = Vector3(-door_width * 0.5, 0.0, 0.0)
 	add_child(_hinge)
+	var glb := HomeProps.prop_glb("tuer_blatt")
+	if glb != null:
+		if not is_equal_approx(door_width, 1.0):
+			glb.scale = Vector3(door_width, 1.0, 1.0)
+		_hinge.add_child(glb)
+		return
 	var panel := MeshInstance3D.new()
 	var panel_mesh := BoxMesh.new()
 	panel_mesh.size = Vector3(door_width, DOOR_HEIGHT, DOOR_THICKNESS)

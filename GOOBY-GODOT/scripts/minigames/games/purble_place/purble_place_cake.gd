@@ -216,12 +216,16 @@ static func draw_ticket_card(
 	c.draw_rect(rect, edge, false, lw)
 	var spec: Dictionary = ticket["spec"]
 	var cake_w := minf(rect.size.x * 0.62, rect.size.y * 0.62)
-	draw_cake(
-		c,
-		Vector2(rect.position.x + rect.size.x * 0.5, rect.position.y + rect.size.y * 0.46),
-		cake_w,
-		spec
+	var cake_at := Vector2(
+		rect.position.x + rect.size.x * 0.5, rect.position.y + rect.size.y * 0.46
 	)
+	# Teller unter der Zieltorte: auch weiße Torten heben sich von der
+	# cremefarbenen Karte ab.
+	c.draw_colored_polygon(
+		_ellipse(cake_at + Vector2(0.0, cake_w * 0.24), cake_w * 0.62, cake_w * 0.2),
+		Color(0.85, 0.8, 0.76)
+	)
+	draw_cake(c, cake_at, cake_w, spec)
 	# Geduldsbalken: grün → gelb → rot.
 	var bar_h := rect.size.y * 0.07
 	var bar := Rect2(

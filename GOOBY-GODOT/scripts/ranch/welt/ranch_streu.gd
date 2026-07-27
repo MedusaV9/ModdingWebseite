@@ -22,7 +22,7 @@ const DRAW_CALL_BUDGET := 400
 const SORTEN: Array[Dictionary] = [
 	{
 		"glb": "natur/tree_oak.glb",
-		"anzahl": 90,
+		"anzahl": 150,
 		"cluster": {"anzahl": 14, "radius": 55.0},
 		"min_abstand": 9.0,
 		"skala_min": 7.0,
@@ -32,7 +32,7 @@ const SORTEN: Array[Dictionary] = [
 	},
 	{
 		"glb": "natur/tree_default.glb",
-		"anzahl": 80,
+		"anzahl": 130,
 		"cluster": {"anzahl": 12, "radius": 48.0},
 		"min_abstand": 9.0,
 		"skala_min": 7.5,
@@ -42,7 +42,7 @@ const SORTEN: Array[Dictionary] = [
 	},
 	{
 		"glb": "natur/tree_detailed.glb",
-		"anzahl": 70,
+		"anzahl": 115,
 		"cluster": {"anzahl": 11, "radius": 44.0},
 		"min_abstand": 9.0,
 		"skala_min": 7.0,
@@ -52,7 +52,7 @@ const SORTEN: Array[Dictionary] = [
 	},
 	{
 		"glb": "natur/plant_bushLarge.glb",
-		"anzahl": 240,
+		"anzahl": 360,
 		"cluster": {"anzahl": 34, "radius": 26.0},
 		"min_abstand": 4.0,
 		"skala_min": 2.4,
@@ -61,8 +61,8 @@ const SORTEN: Array[Dictionary] = [
 	},
 	{
 		"glb": "natur/plant_bush.glb",
-		"anzahl": 160,
-		"cluster": {"anzahl": 26, "radius": 22.0},
+		"anzahl": 250,
+		"cluster": {"anzahl": 40, "radius": 22.0},
 		"min_abstand": 3.0,
 		"skala_min": 2.0,
 		"skala_max": 3.6,
@@ -70,7 +70,7 @@ const SORTEN: Array[Dictionary] = [
 	},
 	{
 		"glb": "natur/flower_yellowA.glb",
-		"anzahl": 160,
+		"anzahl": 240,
 		"cluster": {"anzahl": 20, "radius": 15.0},
 		"min_abstand": 2.2,
 		"skala_min": 2.2,
@@ -79,7 +79,7 @@ const SORTEN: Array[Dictionary] = [
 	},
 	{
 		"glb": "natur/flower_redA.glb",
-		"anzahl": 120,
+		"anzahl": 180,
 		"cluster": {"anzahl": 16, "radius": 14.0},
 		"min_abstand": 2.2,
 		"skala_min": 2.2,
@@ -88,7 +88,7 @@ const SORTEN: Array[Dictionary] = [
 	},
 	{
 		"glb": "natur/flower_purpleA.glb",
-		"anzahl": 120,
+		"anzahl": 180,
 		"cluster": {"anzahl": 16, "radius": 14.0},
 		"min_abstand": 2.2,
 		"skala_min": 2.2,
@@ -97,7 +97,7 @@ const SORTEN: Array[Dictionary] = [
 	},
 	{
 		"glb": "natur/grass_large.glb",
-		"anzahl": 300,
+		"anzahl": 460,
 		"cluster": {"anzahl": 44, "radius": 20.0},
 		"min_abstand": 2.0,
 		"skala_min": 2.2,
@@ -106,7 +106,7 @@ const SORTEN: Array[Dictionary] = [
 	},
 	{
 		"glb": "natur/rock_smallA.glb",
-		"anzahl": 70,
+		"anzahl": 140,
 		"cluster": {"anzahl": 20, "radius": 18.0},
 		"min_abstand": 5.0,
 		"skala_min": 1.4,
@@ -115,7 +115,7 @@ const SORTEN: Array[Dictionary] = [
 	},
 	{
 		"glb": "natur/rock_largeA.glb",
-		"anzahl": 46,
+		"anzahl": 90,
 		"cluster": {"anzahl": 12, "radius": 26.0},
 		"min_abstand": 10.0,
 		"skala_min": 2.0,
@@ -125,7 +125,7 @@ const SORTEN: Array[Dictionary] = [
 	},
 	{
 		"glb": "natur/stump_round.glb",
-		"anzahl": 36,
+		"anzahl": 54,
 		"cluster": {"anzahl": 12, "radius": 20.0},
 		"min_abstand": 8.0,
 		"skala_min": 2.2,
@@ -206,11 +206,23 @@ static func draw_call_schaetzung(streu_plaene: Array[Dictionary]) -> int:
 ## ------------------------------------------------------------------ intern
 
 
-## Gemeinsame Sperr-Regeln: Bau-Plateaus, See, Fundorte, Wege, Wasser.
+## Gemeinsame Sperr-Regeln: Bau-Plateaus, See, Fundorte (ALLE — auch die
+## neuen), Wege, Wasser, dazu die WELT-1-Sonderflächen (Lavendel-Feld,
+## Kornfeld, Obst-Raster, Bucht, Bergsee, Schlucht).
 static func _regeln_basis() -> Dictionary:
 	var meide_rects: Array[Rect2] = []
 	for zone_id: String in ["hof", "turnierplatz", "hufingen"]:
 		meide_rects.append(RanchKarte.zone_rect(RanchKarte.zone(zone_id)).grow(6.0))
+	for eintrag: Array in [
+		["blumenwiese", "lavendel_rect"], ["kornfeld", "feld_rect"], ["obstgarten", "baumraster"]
+	]:
+		var zone := RanchKarte.zone(str(eintrag[0]))
+		if zone.is_empty():
+			continue
+		var feld: Array = zone[str(eintrag[1])]
+		meide_rects.append(
+			Rect2(float(feld[0]), float(feld[1]), float(feld[2]), float(feld[3])).grow(4.0)
+		)
 	var meide_kreise: Array[Dictionary] = []
 	var see := RanchKarte.zone("see")
 	var see_mitte: Array = see["see_mitte"]
@@ -223,18 +235,65 @@ static func _regeln_basis() -> Dictionary:
 			}
 		)
 	)
-	for eintrag: Dictionary in RanchEntdeckungen.ORTE:
+	_neue_gewaesser_kreise(meide_kreise)
+	for eintrag: Dictionary in RanchEntdeckungen.alle_orte():
 		meide_kreise.append(
 			{"mitte": RanchEntdeckungen.position_von(eintrag), "radius": FUNDORT_FREI_M}
 		)
 	var segmente := WeltStreu.weg_segmente(RanchKarte.wege(), WEG_FREI_M)
-	for pfad: Dictionary in RanchEntdeckungen.PFADE:
+	for pfad: Dictionary in RanchEntdeckungen.alle_pfade():
 		segmente.append_array(WeltStreu.weg_segmente([pfad], 2.0))
+	var schlucht: Dictionary = RanchKarte.karte().get("schlucht", {})
+	if not schlucht.is_empty():
+		var halb := float(schlucht["breite"]) / 2.0 + 5.0
+		segmente.append_array(
+			WeltStreu.weg_segmente([{"punkte": schlucht["punkte"], "breite": 0.0}], halb)
+		)
 	return {
-		"rect": RanchKarte.grenzen(),
+		"rect": RanchKarte.grenzen().grow(-30.0),
 		"meide_rects": meide_rects,
 		"meide_kreise": meide_kreise,
 		"meide_segmente": segmente,
 		"hoehe_fn": func(x: float, z: float) -> float: return RanchGelaende.hoehe(x, z),
 		"frei_fn": func(p: Vector2) -> bool: return not RanchGelaende.ist_wasser(p.x, p.y),
 	}
+
+
+## Bucht + Bergsee + Moor-Tümpel als Sperr-Kreise.
+static func _neue_gewaesser_kreise(meide_kreise: Array[Dictionary]) -> void:
+	var strand := RanchKarte.zone("strand")
+	if not strand.is_empty():
+		var bucht: Array = strand["bucht_mitte"]
+		(
+			meide_kreise
+			. append(
+				{
+					"mitte": Vector2(float(bucht[0]), float(bucht[1])),
+					"radius": float(strand["bucht_radius"]) + 10.0,
+				}
+			)
+		)
+	var berg := RanchKarte.zone("bergmassiv")
+	if not berg.is_empty():
+		var bs: Array = berg["bergsee_mitte"]
+		(
+			meide_kreise
+			. append(
+				{
+					"mitte": Vector2(float(bs[0]), float(bs[1])),
+					"radius": float(berg["bergsee_radius"]) + 8.0,
+				}
+			)
+		)
+	var moor := RanchKarte.zone("moor")
+	if not moor.is_empty():
+		for paar: Array in moor["tuempel"]:
+			(
+				meide_kreise
+				. append(
+					{
+						"mitte": Vector2(float(paar[0]), float(paar[1])),
+						"radius": RanchGelaende.TUEMPEL_RADIUS_M + 3.0,
+					}
+				)
+			)

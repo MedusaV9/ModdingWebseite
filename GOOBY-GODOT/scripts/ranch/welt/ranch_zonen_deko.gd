@@ -417,8 +417,10 @@ func _baue_weidetal(wurzel: Node3D) -> Node3D:
 ## ------------------------------------------------- Bäume + Gras (global)
 
 
-## Baumgruppen der ganzen Region: dichter Wald im Wäldchen, lockere
-## Streuung überall sonst (drei Sorten = drei MultiMeshes).
+## Baumgruppen der ganzen Region: dichter Wald im Wäldchen, WELT-1 dazu
+## BAUMGRUPPEN-Cluster über die GROSSE Karte (statt Einzelbäume) — drei
+## Sorten = drei MultiMeshes. Oberhalb der Baumgrenze (~28 m) wächst
+## nichts mehr (Fels/Geröll übernehmen).
 func _baue_baeume(wurzel: Node3D) -> void:
 	var rng := _rng(8)
 	var wald_rect := RanchKarte.zone_rect(RanchKarte.zone("waeldchen"))
@@ -439,26 +441,33 @@ func _baue_baeume(wurzel: Node3D) -> void:
 			_boden_transform(p, rng.randf() * TAU, rng.randf_range(7.0, 11.0), -0.25)
 		)
 	var grenzen := RanchKarte.grenzen()
-	for _i in 190:
-		var p := _zufall_in(grenzen, rng)
-		if not _frei(p) or wald_rect.has_point(p):
-			continue
-		var sorte := str(namen[rng.randi_range(0, namen.size() - 1)])
-		(sorten[sorte] as Array).append(
-			_boden_transform(p, rng.randf() * TAU, rng.randf_range(8.0, 12.0), -0.25)
-		)
+	for _gruppe in 44:
+		var mitte := _zufall_in(grenzen.grow(-60.0), rng)
+		var im_haufen := rng.randi_range(5, 11)
+		for _i in im_haufen:
+			var p := mitte + Vector2.from_angle(rng.randf() * TAU) * rng.randf_range(4.0, 34.0)
+			if not _frei(p) or wald_rect.has_point(p):
+				continue
+			if RanchGelaende.hoehe(p.x, p.y) > 28.0:
+				continue
+			var sorte := str(namen[rng.randi_range(0, namen.size() - 1)])
+			(sorten[sorte] as Array).append(
+				_boden_transform(p, rng.randf() * TAU, rng.randf_range(7.0, 12.0), -0.25)
+			)
 	for sorte: String in sorten:
 		_multimesh(wurzel, sorte, sorten[sorte])
 
 
 ## Gras als EIN MultiMesh mit Wind-Shader (wogt per Uniform `wind`).
+## WELT-1: 9200 Büschel über die GROSSE Karte, oberhalb ~34 m (Fels)
+## wächst keins mehr.
 func _baue_gras(wurzel: Node3D) -> void:
 	var rng := _rng(9)
 	var grenzen := RanchKarte.grenzen()
 	var transforms: Array = []
-	for _i in 5200:
+	for _i in 9200:
 		var p := _zufall_in(grenzen, rng)
-		if not _frei(p):
+		if not _frei(p) or RanchGelaende.hoehe(p.x, p.y) > 34.0:
 			continue
 		transforms.append(_boden_transform(p, rng.randf() * TAU, rng.randf_range(2.6, 4.2), -0.04))
 	var teile := _glb_meshes("%s/natur/grass_large.glb" % ASSETS)
@@ -513,7 +522,9 @@ func _zufall_in(rect: Rect2, rng: RandomNumberGenerator) -> Vector2:
 	)
 
 
-## Frei für Deko? Kein Wasser, kein Weg (8 m Abstand), keine Bau-Plateaus.
+## Frei für Deko? Kein Wasser, kein Weg (8 m Abstand), keine Bau-Plateaus,
+## keine Sonderflächen der NEUEN Zonen (Lavendel, Kornfeld, Obst-Raster,
+## Bucht, Bergsee, Schlucht).
 func _frei(p: Vector2) -> bool:
 	if RanchGelaende.ist_wasser(p.x, p.y):
 		return false
@@ -523,6 +534,8 @@ func _frei(p: Vector2) -> bool:
 	var see := RanchKarte.zone("see")
 	var mitte: Array = see["see_mitte"]
 	if p.distance_to(Vector2(float(mitte[0]), float(mitte[1]))) < float(see["see_radius"]) + 14.0:
+		return false
+	if not _frei_neue_zonen(p):
 		return false
 	for weg: Dictionary in RanchKarte.wege():
 		var punkte: Array = weg["punkte"]
@@ -534,6 +547,35 @@ func _frei(p: Vector2) -> bool:
 			)
 			if d < 8.0:
 				return false
+	return true
+
+
+## Sperrflächen des WELT-1-Ausbaus (Sonderflächen gehören ihren Zonen).
+func _frei_neue_zonen(p: Vector2) -> bool:
+	if RanchGelaende.schlucht_kerbe(p.x, p.y) > 0.8:
+		return false
+	for eintrag: Array in [
+		["blumenwiese", "lavendel_rect"], ["kornfeld", "feld_rect"], ["obstgarten", "baumraster"]
+	]:
+		var zone := RanchKarte.zone(str(eintrag[0]))
+		if zone.is_empty():
+			continue
+		var feld: Array = zone[str(eintrag[1])]
+		var rect := Rect2(float(feld[0]), float(feld[1]), float(feld[2]), float(feld[3]))
+		if rect.grow(4.0).has_point(p):
+			return false
+	var strand := RanchKarte.zone("strand")
+	if not strand.is_empty():
+		var bucht: Array = strand["bucht_mitte"]
+		var b := Vector2(float(bucht[0]), float(bucht[1]))
+		if p.distance_to(b) < float(strand["bucht_radius"]) + 10.0:
+			return false
+	var berg := RanchKarte.zone("bergmassiv")
+	if not berg.is_empty():
+		var bs: Array = berg["bergsee_mitte"]
+		var s := Vector2(float(bs[0]), float(bs[1]))
+		if p.distance_to(s) < float(berg["bergsee_radius"]) + 8.0:
+			return false
 	return true
 
 

@@ -1,26 +1,31 @@
 extends Node3D
-## ECHTE 3D-CANDYLAND-BÜHNE für GOB NOM (FB-4): das Physik-Puzzle spielt auf
-## einer senkrechten Ebene (z = 0) vor einer Zuckerwatte-Wiese — Bonbon, Seile,
-## Blasen, Kissen, Ventilatoren, Stachelbretter, NUTELLA-Gläser und Schießer
-## sind echte Meshes, Gooby (echtes Rig) wartet mit offenem Mund als Fänger.
-## ALLE Anker kommen als CANVAS-PIXEL aus der View (_to_screen-Ausgabe) und
-## werden per wall_point-Raycast auf die Ebene gelegt — Schnitt-Linien und
-## Tap-Zonen bleiben EXAKT unter dem Finger, die MECHANIK (GobnomLogic)
-## bleibt zahlengleich.
+## ECHTE 3D-KÜCHEN-BÜHNE für GOB NOM (FB-4, Kulisse MP-G): das Physik-Puzzle
+## spielt auf einer senkrechten Ebene (z = 0) vor Goobys Küchenwand — Fliesen-
+## Spiegel, Regalbretter voller Gläser, Fenster mit Blick ins Grüne — Bonbon,
+## Seile (mit Faser-Drall), Blasen, Kissen, Ventilatoren, Stachelbretter,
+## NUTELLA-Gläser (verlockend baumelnd) und Schießer sind echte Meshes, Gooby
+## (echtes Rig) wartet mit offenem Mund als Fänger und fiebert mit, wenn das
+## Bonbon nah kommt. ALLE Anker kommen als CANVAS-PIXEL aus der View
+## (_to_screen-Ausgabe) und werden per wall_point-Raycast auf die Ebene
+## gelegt — Schnitt-Linien und Tap-Zonen bleiben EXAKT unter dem Finger, die
+## MECHANIK (GobnomLogic) bleibt zahlengleich.
 
 const Stage3D := preload("res://scripts/minigames/games/_3dc_stage/stage3d.gd")
 const Actor := preload("res://scripts/minigames/games/_3da_stage/gooby_actor.gd")
 const Fx := preload("res://scripts/minigames/games/_3db_stage/fx3d.gd")
 const Models := preload("res://scripts/minigames/games/_3dc_stage/models3d.gd")
+const Backdrop := preload("res://scripts/minigames/games/gobnom/gobnom_backdrop.gd")
 const DIR := "res://assets/minigames/carrot_catch/"
 
 const ROPE_SEG_N := 12
 const MAX_ROPE_SEGS := 96
 const MAX_SWIPE_DOTS := 64
+const MAX_ARC_DOTS := 22
 const OUTLINE := Color("#4A3B36")
 const CANDY_PINK := Color("#F2A0B5")
 const CANDY_WRAP := Color("#FFE9F0")
 const ROPE_BROWN := Color("#A9744B")
+const ROPE_DARK := Color("#8A5A38")
 const WOOD := Color("#A9744B")
 const WOOD_DARK := Color("#7C5433")
 const RAIL_GRAY := Color("#C9BCA9")
@@ -29,8 +34,9 @@ const FAN_METAL := Color("#9DA6AD")
 const SPIKE_GRAY := Color("#8C8C94")
 const NUTELLA := Color("#5C3A21")
 const NUTELLA_LID := Color("#E8E2D8")
-const CLOUD_PINK := Color(0.99, 0.87, 0.93)
 const STAR_GOLD := Color("#FFD34D")
+const KITCHEN_WALL := Color("#EBD8B4")
+const COUNTER_WOOD := Color("#D2AC7C")
 
 var stage: Node3D
 var gooby: Node3D
@@ -42,8 +48,14 @@ var _upx := 0.01
 var _ground_y := 0.0
 var _candy: Node3D
 var _mouth_ring: MeshInstance3D
+var _mouth_ring_scale := 1.0
+var _mouth_pos := Vector3.ZERO
+var _hungry := false
 var _rope_segs: MultiMeshInstance3D
 var _swipe_dots: MultiMeshInstance3D
+## Schwung-Bogen: die letzten Bonbon-Positionen als verblassende Spur.
+var _arc_dots: MultiMeshInstance3D
+var _arc_trail: Array[Vector3] = []
 var _level_root: Node3D
 var _anchors: Array[Node3D] = []
 var _bubbles: Array[Node3D] = []
@@ -72,22 +84,22 @@ func setup_stage() -> void:
 		stage
 		. build(
 			{
-				# Zuckerwatte-Nachmittag, NICHT überbelichtet.
+				# Warmes Küchen-Nachmittagslicht, NICHT überbelichtet (die
+				# Creme-Wand kippt sonst unter Filmic ins Weiße). WICHTIG:
+				# KEIN Tiefen-Nebel — die Wand steht ~19 m vor der Kamera,
+				# jeder Nebel ab <20 m wäscht die ganze Küche milchig aus.
 				"sky_top": Color(0.55, 0.74, 0.92),
-				"sky_horizon": Color(0.95, 0.86, 0.88),
+				"sky_horizon": Color(0.93, 0.85, 0.84),
 				"ground_horizon": Color(0.62, 0.78, 0.5),
 				"ground_bottom": Color(0.44, 0.6, 0.36),
 				"sun_dir": Vector3(-0.3, -0.75, -0.5),
-				"sun_energy": 0.9,
-				"ambient": 0.38,
-				"fill_energy": 0.24,
+				"sun_energy": 0.55,
+				"ambient": 0.26,
+				"fill_energy": 0.14,
 				"glow": 0.3,
 				"glow_threshold": 0.85,
 				"shadow_distance": 30.0,
-				"fog": true,
-				"fog_color": Color(0.9, 0.84, 0.88),
-				"fog_from": 14.0,
-				"fog_to": 44.0,
+				"fog": false,
 				"far": 100.0,
 			}
 		)
@@ -96,11 +108,12 @@ func setup_stage() -> void:
 	_mat_cushion_wait = Fx.flat(RAIL_GRAY)
 	_mat_shooter = Fx.flat(WOOD)
 	_mat_shooter_fired = Fx.flat(WOOD_DARK)
-	_ground = Fx.ground(Vector2(70.0, 50.0), Color(0.56, 0.76, 0.45))
+	# Küchen-Arbeitsplatte statt Wiese: das Puzzle spielt IN Goobys Küche.
+	_ground = Fx.ground(Vector2(70.0, 50.0), COUNTER_WOOD)
 	add_child(_ground)
 	_backdrop = Node3D.new()
 	add_child(_backdrop)
-	_build_backdrop()
+	Backdrop.build(_backdrop)
 	_level_root = Node3D.new()
 	add_child(_level_root)
 	_candy = _spawn_candy()
@@ -112,6 +125,8 @@ func setup_stage() -> void:
 	add_child(_rope_segs)
 	_swipe_dots = _make_swipe_multimesh()
 	add_child(_swipe_dots)
+	_arc_dots = _make_arc_multimesh()
+	add_child(_arc_dots)
 	gooby = Actor.new()
 	add_child(gooby)
 	gooby.mount(1.4)
@@ -139,6 +154,8 @@ func layout_level(state: Dictionary, balance: Dictionary) -> void:
 	_jars = []
 	_shooters = []
 	_cushions = []
+	_arc_trail = []
+	_hungry = false
 	var a := _wall(Vector2(0.0, 540.0))
 	var b := _wall(Vector2(960.0, 540.0))
 	_upx = maxf(0.001, a.distance_to(b) / 960.0)
@@ -194,8 +211,10 @@ func _layout_mouth(state: Dictionary) -> void:
 	gooby.scale = Vector3.ONE * (h / 1.4)
 	# Leicht HINTER der Ebene, damit Bonbon + Fangring vor dem Gesicht liegen.
 	gooby.position = Vector3(mouth.x, mouth.y - h * 0.78, -0.25)
+	_mouth_pos = mouth
 	_mouth_ring.position = mouth + Vector3(0.0, 0.0, 0.18)
-	_mouth_ring.scale = Vector3.ONE * maxf(0.3, 40.0 * _upx / 0.5)
+	_mouth_ring_scale = maxf(0.3, 40.0 * _upx / 0.5)
+	_mouth_ring.scale = Vector3.ONE * _mouth_ring_scale
 
 
 ## Jeden Frame: Bonbon, Seile, Blasen, Rotoren, Gläser und Swipe-Spur stellen.
@@ -208,6 +227,8 @@ func sync_state(state: Dictionary, candy: Vector2, swipe_pts: Array, delta: floa
 	_candy.visible = str(state["outcome"]) != "won"
 	_candy.position = candy_at
 	_candy.rotation.z = -float(tick) * 0.06
+	_sync_arc(candy_at, str(state["outcome"]) == "")
+	_sync_mouth(candy_at, state)
 	_sync_mood(state)
 	_sync_ropes(state, candy_at)
 	var i := 0
@@ -231,7 +252,10 @@ func sync_state(state: Dictionary, candy: Vector2, swipe_pts: Array, delta: floa
 		(node.get_node("Wind") as GPUParticles3D).emitting = on
 	i = 0
 	for jar: Dictionary in state["jars"]:
-		_jars[i].visible = not bool(jar["taken"])
+		var jar_node := _jars[i]
+		jar_node.visible = not bool(jar["taken"])
+		# Verlockendes Baumeln: jedes Glas pendelt sacht um seinen Deckel.
+		jar_node.rotation.z = sin(float(tick) * 0.055 + float(i) * 1.7) * 0.14
 		i += 1
 	i = 0
 	for shooter: Dictionary in state["shooters"]:
@@ -252,7 +276,9 @@ func sync_state(state: Dictionary, candy: Vector2, swipe_pts: Array, delta: floa
 
 
 ## Seile als EIN MultiMesh gestreckter Zylinder (gleiche Durchhang-Kurve
-## wie GobnomArt.draw_rope — rein visuell).
+## wie GobnomArt.draw_rope — rein visuell). Gespannte Seile werden dünner
+## und heller, lose hängen dicker durch; der Segment-Wechsel hell/dunkel
+## zeichnet den Faser-Drall.
 func _sync_ropes(state: Dictionary, candy_at: Vector3) -> void:
 	var mm := _rope_segs.multimesh
 	var used := 0
@@ -268,6 +294,8 @@ func _sync_ropes(state: Dictionary, candy_at: Vector3) -> void:
 		var rest := float(rope["rest"]) * _upx
 		var dist := anchor_at.distance_to(candy_at)
 		var slack := clampf(1.0 - dist / maxf(rest, 0.01), 0.0, 1.0)
+		var taut := 1.0 - slack
+		var thickness := lerpf(0.06, 0.042, taut)
 		var mid := (anchor_at + candy_at) * 0.5 + Vector3(0.0, -slack * rest * 0.35, 0.0)
 		var prev := anchor_at
 		for s in ROPE_SEG_N:
@@ -275,7 +303,9 @@ func _sync_ropes(state: Dictionary, candy_at: Vector3) -> void:
 				break
 			var t := float(s + 1) / float(ROPE_SEG_N)
 			var p := anchor_at.lerp(mid, t).lerp(mid.lerp(candy_at, t), t)
-			mm.set_instance_transform(used, _seg_transform(prev, p, 0.045))
+			mm.set_instance_transform(used, _seg_transform(prev, p, thickness))
+			var fiber := ROPE_BROWN if s % 2 == 0 else ROPE_DARK
+			mm.set_instance_color(used, fiber.lightened(taut * 0.22))
 			prev = p
 			used += 1
 	mm.visible_instance_count = used
@@ -289,6 +319,46 @@ func _sync_swipes(swipe_pts: Array) -> void:
 	for i in count:
 		var at := _wall(swipe_pts[i]) + Vector3(0.0, 0.0, 0.3)
 		mm.set_instance_transform(i, Transform3D(Basis.IDENTITY, at))
+
+
+## Bogen-Spur des Bonbons: neueste Position vorn, ältere verblassen golden.
+func _sync_arc(candy_at: Vector3, flying: bool) -> void:
+	if flying:
+		if _arc_trail.is_empty() or _arc_trail[_arc_trail.size() - 1].distance_to(candy_at) > 0.06:
+			_arc_trail.append(candy_at)
+			if _arc_trail.size() > MAX_ARC_DOTS:
+				_arc_trail.pop_front()
+	elif not _arc_trail.is_empty():
+		_arc_trail.pop_front()
+	var mm := _arc_dots.multimesh
+	mm.visible_instance_count = _arc_trail.size()
+	for i in _arc_trail.size():
+		var age := float(i + 1) / float(_arc_trail.size())
+		mm.set_instance_transform(
+			i,
+			Transform3D(
+				Basis.IDENTITY.scaled(Vector3.ONE * (0.5 + age)),
+				_arc_trail[i] + Vector3(0.0, 0.0, -0.15)
+			)
+		)
+		mm.set_instance_color(i, Color(1.0, 0.83, 0.42, 0.08 + 0.3 * age))
+
+
+## Goobys Maul fiebert mit: kommt das Bonbon nah, weitet sich der Fangring
+## und Gooby reißt erwartungsvoll die Augen auf.
+func _sync_mouth(candy_at: Vector3, state: Dictionary) -> void:
+	if str(state["outcome"]) != "":
+		return
+	var dist := candy_at.distance_to(_mouth_pos)
+	var near := clampf(1.0 - dist / 4.0, 0.0, 1.0)
+	var tick := int(state["tick"])
+	var pulse := 1.0 + near * (0.16 + 0.08 * sin(float(tick) * 0.3))
+	_mouth_ring.scale = Vector3.ONE * (_mouth_ring_scale * pulse)
+	if near > 0.55 and not _hungry:
+		_hungry = true
+		gooby.emote("ecstatic", 0.7)
+	elif near < 0.35 and _hungry:
+		_hungry = false
 
 
 func _sync_mood(state: Dictionary) -> void:
@@ -341,59 +411,6 @@ func _wall(world_pos: Variant) -> Vector3:
 ## ── Aufbau-Helfer ─────────────────────────────────────────────────────────
 
 
-func _build_backdrop() -> void:
-	# Zuckerwatte-Hügel + Süßigkeiten-Deko hinter der Spielebene.
-	var hill_mesh := SphereMesh.new()
-	hill_mesh.radius = 1.0
-	hill_mesh.height = 2.0
-	hill_mesh.material = Fx.flat(Color(0.58, 0.77, 0.46))
-	var hills := MultiMeshInstance3D.new()
-	var mm := MultiMesh.new()
-	mm.transform_format = MultiMesh.TRANSFORM_3D
-	mm.mesh = hill_mesh
-	mm.instance_count = 7
-	for i in 7:
-		var x := -18.0 + float(i) * 6.0
-		var r := 6.0 + 1.4 * float(i % 3)
-		mm.set_instance_transform(
-			i,
-			Transform3D(
-				Basis.IDENTITY.scaled(Vector3(r, r * 0.55, r)),
-				Vector3(x, 0.0, -11.0 - 1.6 * float(i % 2))
-			)
-		)
-	hills.multimesh = mm
-	hills.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	_backdrop.add_child(hills)
-	var sweets := ["cupcake.glb", "donut-sprinkles.glb", "ice-cream.glb", "cake.glb"]
-	for i in 4:
-		var prop := Models.node(DIR + sweets[i], 1.6)
-		prop.position = Vector3(-7.5 + float(i) * 5.0, 0.0, -4.0 - float(i % 2) * 1.5)
-		prop.rotation.y = 0.6 * float(i)
-		_backdrop.add_child(prop)
-	var puff_mesh := SphereMesh.new()
-	puff_mesh.radius = 1.0
-	puff_mesh.height = 2.0
-	puff_mesh.material = Fx.flat(Color(0.97, 0.82, 0.89))
-	var puffs := MultiMeshInstance3D.new()
-	var pmm := MultiMesh.new()
-	pmm.transform_format = MultiMesh.TRANSFORM_3D
-	pmm.mesh = puff_mesh
-	pmm.instance_count = 6
-	for i in 6:
-		var s := 0.55 + 0.25 * float(i % 3)
-		pmm.set_instance_transform(
-			i,
-			Transform3D(
-				Basis.IDENTITY.scaled(Vector3(s * 1.7, s, s)),
-				Vector3(-13.0 + float(i) * 5.4, 8.6 + 1.4 * float(i % 2), -12.0)
-			)
-		)
-	puffs.multimesh = pmm
-	puffs.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	_backdrop.add_child(puffs)
-
-
 func _build_fx() -> void:
 	_cut_burst = _burst(Color(1.0, 0.85, 0.4, 0.95), 12, 0.4, true)
 	_gold_burst = _burst(Color(1.0, 0.83, 0.3, 0.95), 16, 0.55, true)
@@ -430,11 +447,39 @@ func _make_rope_multimesh() -> MultiMeshInstance3D:
 	seg.bottom_radius = 1.0
 	seg.height = 1.0
 	seg.radial_segments = 6
-	seg.material = Fx.flat(ROPE_BROWN)
+	# Faser-Drall: Instanzfarben wechseln hell/dunkel pro Segment.
+	var mat := Fx.flat(Color.WHITE)
+	mat.vertex_color_use_as_albedo = true
+	seg.material = mat
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.use_colors = true
 	mm.mesh = seg
 	mm.instance_count = MAX_ROPE_SEGS
+	mm.visible_instance_count = 0
+	node.multimesh = mm
+	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return node
+
+
+## Schwung-Bogen: goldene Punktspur der letzten Bonbon-Positionen — macht
+## den Pendel-Bogen der Seil-Physik SICHTBAR.
+func _make_arc_multimesh() -> MultiMeshInstance3D:
+	var node := MultiMeshInstance3D.new()
+	var dot := SphereMesh.new()
+	dot.radius = 0.05
+	dot.height = 0.1
+	dot.radial_segments = 8
+	dot.rings = 4
+	var mat := Fx.glow(Color.WHITE, 0.7)
+	mat.vertex_color_use_as_albedo = true
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	dot.material = mat
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.use_colors = true
+	mm.mesh = dot
+	mm.instance_count = MAX_ARC_DOTS
 	mm.visible_instance_count = 0
 	node.multimesh = mm
 	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -769,13 +814,22 @@ func _spawn_jar() -> Node3D:
 	root.add_child(label)
 	var star := MeshInstance3D.new()
 	var star_mesh := SphereMesh.new()
-	star_mesh.radius = 0.05
-	star_mesh.height = 0.1
-	star_mesh.material = Fx.glow(STAR_GOLD, 1.2)
+	star_mesh.radius = 0.06
+	star_mesh.height = 0.12
+	star_mesh.material = Fx.glow(STAR_GOLD, 1.5)
 	star.mesh = star_mesh
-	star.position = Vector3(0.19, 0.26, 0.0)
+	star.position = Vector3(0.19, 0.26, 0.08)
 	star.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	root.add_child(star)
+	var shine := MeshInstance3D.new()
+	var shine_mesh := SphereMesh.new()
+	shine_mesh.radius = 0.035
+	shine_mesh.height = 0.07
+	shine_mesh.material = Fx.glow(Color(1.0, 0.98, 0.9), 1.1)
+	shine.mesh = shine_mesh
+	shine.position = Vector3(-0.09, 0.05, 0.14)
+	shine.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.add_child(shine)
 	root.scale = Vector3.ONE * maxf(0.5, 22.0 * _upx / 0.16)
 	return root
 

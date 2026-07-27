@@ -42,6 +42,12 @@ var ended := false
 var _accum := 0.0
 var _banner_text := ""
 var _banner_until := 0.0
+## Banner-Stil ("info" | "wave" | "huge" | "boss") + Startzeit für den Punch.
+var _banner_kind := "info"
+var _banner_start := 0.0
+## Nutella-Zähler: letzter Stand + Pop-Startzeit (Zähler feiert Änderungen).
+var _nutella_seen := -1
+var _nutella_pop := -10.0
 var _last_run_score := 0
 var _prev_zombie_pos: Dictionary = {}
 var _select_screen: GvzLevelSelect
@@ -168,20 +174,25 @@ func _consume_events(events: Array) -> void:
 	for event: Dictionary in events:
 		match str(event["kind"]):
 			"wave":
-				var key := "gvz.hud.huge_wave" if bool(event["huge"]) else "gvz.hud.wave"
-				_show_banner(I18nService.t(key, {"n": int(event["n"])}))
-				AudioDirector.try_play(self, "gvz_wave", 1.15 if not bool(event["huge"]) else 1.0)
-				if ctx != null and ctx.juice != null and bool(event["huge"]):
+				var huge := bool(event["huge"])
+				var key := "gvz.hud.huge_wave" if huge else "gvz.hud.wave"
+				_show_banner(I18nService.t(key, {"n": int(event["n"])}), "huge" if huge else "wave")
+				AudioDirector.try_play(self, "gvz_wave", 1.15 if not huge else 1.0)
+				if ctx != null and ctx.juice != null and huge:
 					ctx.juice.shake(0.35)
+					ctx.juice.edge_glow(0.55, GvzArt.BERRY_RED)
 			"boss_enter":
-				_show_banner(I18nService.t("gvz.hud.boss"))
+				_show_banner(I18nService.t("gvz.hud.boss"), "boss")
 				AudioDirector.try_play(self, "gvz_boss")
 				if ctx != null and ctx.juice != null:
 					ctx.juice.shake(0.6)
 					ctx.juice.slowmo(0.45, 400)
 					ctx.juice.bloom_pulse(0.5, 500)
+					ctx.juice.edge_glow(0.7, GvzArt.BERRY_RED)
 			"boss_phase":
-				_show_banner(I18nService.t("gvz.hud.boss_phase", {"n": int(event["phase"])}))
+				_show_banner(
+					I18nService.t("gvz.hud.boss_phase", {"n": int(event["phase"])}), "boss"
+				)
 				AudioDirector.try_play(self, "gvz_boss", 1.0 + 0.1 * int(event["phase"]))
 				if ctx != null and ctx.juice != null:
 					ctx.juice.hit_freeze(110)
@@ -248,6 +259,7 @@ func _on_run_over() -> void:
 			ctx.report_coin_chunk(total)
 			if ctx.juice != null:
 				ctx.juice.bloom_pulse(0.9)
+				ctx.juice.confetti(80)
 		phase = "won"
 		_build_end_overlay(true, stars, total, bool(booking["first_clear"]))
 	else:
@@ -389,6 +401,10 @@ func _card_at(at: Vector2) -> String:
 func _field_rect() -> Rect2:
 	var vp := _view_size()
 	var top := TOP_PAD + CARD_H * (0.82 * (_card_rows() - 1) + 1.0) + 8.0
+	# Horizont-Band (MP-G): über der Feld-Oberkante bleibt bewusst Luft für
+	# die Nachbarschafts-Kulisse (Haus, Zaun, Gehweg, Bäume). Ohne das Band
+	# ragt alles Hohe hinter dem Zaun abgeschnitten aus dem Bildrand.
+	top += vp.y * 0.16
 	return Rect2(MOWER_GUTTER, top, vp.x - MOWER_GUTTER - 6.0, vp.y - top - 8.0)
 
 
@@ -471,6 +487,8 @@ func _sync_stage(delta: float) -> void:
 					"armor": int(zombie.get("armor_hp", 0)) > 0,
 					"raged": bool(zombie.get("raged", false)),
 					"slow": int(zombie.get("slow_until", 0)) > tick,
+					# HP für den Trefferblitz der Bühne (Abfall = Treffer).
+					"hp": int(zombie["hp"]) + int(zombie.get("armor_hp", 0)),
 				}
 			)
 		)
@@ -623,17 +641,27 @@ func _draw_bars() -> void:
 
 
 func _draw_hud() -> void:
-	# Nutella-Zähler.
+	# Nutella-Zähler — poppt bei jeder Änderung (die Ressource FEIERT Zuwachs).
+	var nutella := int(state["nutella"])
+	if nutella != _nutella_seen:
+		if _nutella_seen >= 0:
+			_nutella_pop = Time.get_ticks_msec() / 1000.0
+		_nutella_seen = nutella
+	var pop := maxf(0.0, 1.0 - (Time.get_ticks_msec() / 1000.0 - _nutella_pop) / 0.3)
 	var counter := Rect2(6, TOP_PAD, 78, CARD_H)
-	_rounded(counter, AcTokens.PAPER)
-	GvzArt.draw_nutella_drop(self, counter.position + Vector2(22, 44), 34, int(state["tick"]))
+	_rounded(
+		counter, AcTokens.PAPER if pop <= 0.0 else AcTokens.PAPER.lerp(GvzArt.STAR_GOLD, pop * 0.35)
+	)
+	GvzArt.draw_nutella_drop(
+		self, counter.position + Vector2(22, 44), 34 * (1.0 + 0.25 * pop), int(state["tick"])
+	)
 	draw_string(
 		_font_bold,
 		counter.position + Vector2(38, 38),
-		str(state["nutella"]),
+		str(nutella),
 		HORIZONTAL_ALIGNMENT_LEFT,
 		-1,
-		17,
+		int(17 * (1.0 + 0.2 * pop)),
 		AcTokens.INK
 	)
 	var cards := _card_list()
@@ -731,20 +759,58 @@ func _draw_ghost() -> void:
 	GvzArt.draw_tower(self, selected_card, drag_pos + Vector2(0, 20), 44.0, 0)
 
 
+## Wellen-Banner mit WUCHT: schlägt groß ein (Punch-Skalierung), Farbe nach
+## Gefahr (Welle sand, Riesenwelle/Boss berry-rot), Mini-Zombies flankieren
+## den Text, am Ende blendet es weich aus.
 func _draw_banner() -> void:
-	if _banner_text == "" or Time.get_ticks_msec() / 1000.0 > _banner_until:
+	var now := Time.get_ticks_msec() / 1000.0
+	if _banner_text == "" or now > _banner_until:
 		return
 	var vp := _view_size()
-	var rect := Rect2(vp.x * 0.5 - 150.0, vp.y * 0.32, 300.0, 44.0)
-	_rounded(rect, Color(0.29, 0.23, 0.21, 0.8))
+	var t := now - _banner_start
+	var punch := maxf(0.0, 1.0 - t / 0.3)
+	var s := 1.0 + 0.5 * punch * punch
+	var fade := clampf((_banner_until - now) / 0.35, 0.0, 1.0)
+	var danger := _banner_kind == "huge" or _banner_kind == "boss"
+	var w := (340.0 if danger else 300.0) * s
+	var h := (54.0 if danger else 44.0) * s
+	var rect := Rect2(vp.x * 0.5 - w * 0.5, vp.y * 0.32 - (h - 44.0) * 0.5, w, h)
+	var fill := Color(0.29, 0.23, 0.21, 0.8)
+	if _banner_kind == "huge":
+		fill = Color(0.62, 0.2, 0.16, 0.88)
+	elif _banner_kind == "boss":
+		fill = Color(0.42, 0.14, 0.3, 0.9)
+	fill.a *= fade
+	_rounded(rect, fill)
+	if danger:
+		draw_rect(rect.grow(-1.5), Color(1.0, 0.83, 0.3, 0.85 * fade), false, 2.5)
+	if _banner_kind != "info":
+		var icon_s := h * 0.42
+		var horde := 3 if _banner_kind == "huge" else 1
+		for i in horde:
+			var offset := icon_s * (0.4 + 1.1 * float(i))
+			GvzArt.draw_zombie(
+				self,
+				"schlurfi",
+				rect.position + Vector2(-offset - 6.0, h * 0.72),
+				icon_s,
+				int(state["tick"]) + i * 3
+			)
+			GvzArt.draw_zombie(
+				self,
+				"schlurfi",
+				rect.position + Vector2(w + offset + 6.0, h * 0.72),
+				icon_s,
+				int(state["tick"]) + i * 5 + 2
+			)
 	draw_string(
 		_font_bold,
-		rect.position + Vector2(0, 30),
+		rect.position + Vector2(0, h * 0.5 + 8.0 * s),
 		_banner_text,
 		HORIZONTAL_ALIGNMENT_CENTER,
 		int(rect.size.x),
-		22,
-		Color.WHITE
+		int((26 if danger else 22) * s),
+		Color(1.0, 1.0, 1.0, fade)
 	)
 
 
@@ -845,9 +911,11 @@ func _conveyor_active() -> bool:
 	return not (state["conveyor"] as Dictionary).is_empty()
 
 
-func _show_banner(text: String) -> void:
+func _show_banner(text: String, kind := "info") -> void:
 	_banner_text = text
-	_banner_until = Time.get_ticks_msec() / 1000.0 + BANNER_SEC
+	_banner_kind = kind
+	_banner_start = Time.get_ticks_msec() / 1000.0
+	_banner_until = _banner_start + BANNER_SEC
 
 
 ## Letzte Pixel-Anker der Zombies (die Sim entfernt Tote im selben Tick —

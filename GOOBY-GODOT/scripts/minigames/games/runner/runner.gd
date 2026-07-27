@@ -18,6 +18,7 @@ extends MinigameBase
 
 const Logic := preload("res://scripts/minigames/games/runner/runner_logic.gd")
 const World := preload("res://scripts/minigames/games/runner/runner_world.gd")
+const Feel := preload("res://scripts/minigames/games/runner/runner_feel.gd")
 const Stage3D := preload("res://scripts/minigames/games/_3db_stage/stage3d.gd")
 const SpeedLines := preload("res://scripts/minigames/games/_3db_stage/speed_lines.gd")
 const GoobyMount := preload("res://scripts/minigames/games/_3db_stage/gooby_mount.gd")
@@ -94,6 +95,7 @@ var _dist_since_row := 0.0
 var _next_mystery_at := 0.0
 var _stage: Node3D
 var _world: Node3D
+var _feel: Node3D
 var _gooby: Node3D
 var _shadow: MeshInstance3D
 var _shield_vis: MeshInstance3D
@@ -263,6 +265,9 @@ func _build_stage() -> void:
 	_gooby.call("mount", float(tune["STAND_HEIGHT"]) * float(tune["RENDER_SCALE_MULT"]))
 	_shadow = Fx.blob_shadow(0.42, 0.34)
 	_stage.add_child(_shadow)
+	_feel = Feel.new()
+	_stage.add_child(_feel)
+	_feel.call("build")
 	_build_auras()
 
 	_streaks = SpeedLines.new()
@@ -625,6 +630,11 @@ func _collide(dz: float) -> void:
 			if finished:
 				break
 	_obstacles = keep
+	# Beinahe-Unfall: das Hindernis ist GERADE an Gooby vorbei, ohne Treffer —
+	# kurzer Schreck plus Windzug, danach geht die Grundlaune von selbst wieder an.
+	if _invuln <= 0.0 and not finished and _feel.call("near_miss", _obstacles, dz, lane):
+		_gooby.call("emote", "scared", 0.7)
+		FeelSfx.play(self, "game_whoosh", 1.45)
 	_collect_coins(dz, lane, y)
 	_collect_mystery(dz, lane, y)
 
@@ -716,9 +726,11 @@ func _on_hit() -> void:
 	_shield = bool(result["shield"])
 	_invuln = float(result["invulnT"])
 	coin_streak = 0
+	# KEIN Screenshake (Motion-Comfort der Dauerlauf-Spiele) — der Einschlag
+	# kommt aus Freeze + Blitz + rotem Bildrand, nicht aus Kamerarütteln.
 	if ctx.juice != null:
-		ctx.juice.shake(0.45 if outcome == "wipeout" else 0.3)
 		ctx.juice.hit_flash(Color(0.9, 0.32, 0.22, 0.16), 180)
+		ctx.juice.edge_glow(0.75 if outcome == "wipeout" else 0.5, Color(1.0, 0.36, 0.28))
 		ctx.juice.sfx("game_miss")
 		ctx.juice.show_combo(0)
 	if outcome == "shielded":
@@ -826,7 +838,8 @@ func _sync_player(dt: float) -> void:
 	var target := Vector3(1.0 + (1.0 - squash) * 0.55, squash, 1.0 + (1.0 - squash) * 0.55)
 	_gooby.scale = _gooby.scale.lerp(target, minf(1.0, dt * 16.0))
 	_gooby.position = Vector3(_lane_x, y, 0.0)
-	_gooby.rotation.z = (_lane_x - float((tune["LANE_X"] as Array)[_lane])) * 0.25
+	# Körperneigung beim Spurwechsel — deutlich sichtbar, klingt von selbst ab.
+	_gooby.rotation.z = (_lane_x - float((tune["LANE_X"] as Array)[_lane])) * 0.5
 	_gooby.visible = _invuln <= 0.0 or fmod(_invuln * 12.0, 2.0) < 1.0
 	_gooby.call("run", 1.0 if not sliding else 0.0)
 	_shadow.position = Vector3(_lane_x, 0.02, 0.0)
@@ -881,23 +894,21 @@ func _sync_props() -> void:
 	(_world.get("band") as RefCounted).call("flush")
 
 
-## Verfolgerkamera + §G4.8-Tempojuice (FOV-Kick, Streifen, Mikro-Zittern).
+## Verfolgerkamera + §G4.8-Tempojuice (FOV-Kick, Streifen, Kamera-Rückfall,
+## Staubfahne, Fahrtwind). KEIN Zittern/Shake — Motion-Comfort-Regel.
 func _sync_camera(dt: float) -> void:
 	var reduced := _reduced_motion()
-	var jitter := 0.0
-	if not reduced:
-		var top := clampf((_speed - 12.4) / 0.6, 0.0, 1.0)
-		jitter = top * 0.03
-	_place_camera(jitter)
 	var band01 := clampf(
 		(_speed - SPEED_BAND.x) / maxf(0.001, SPEED_BAND.y - SPEED_BAND.x), 0.0, 1.0
 	)
+	_feel.call("tick", dt, band01, _lane_x, reduced, self)
+	_place_camera(0.0 if reduced else float(_feel.get("cam_back_extra")))
 	_stage.call("set_fov_bonus", HFOV_KICK * band01)
 	_streaks.set("enabled", not reduced)
 	_streaks.call("update", dt, _speed, SpeedLines.rate_at(_speed, STREAK_RATE))
 
 
-func _place_camera(jitter: float) -> void:
+func _place_camera(back_extra: float) -> void:
 	var cam: Camera3D = _stage.get("camera")
 	if cam == null:
 		return
@@ -905,9 +916,9 @@ func _place_camera(jitter: float) -> void:
 	var back := 0.0 if landscape else CAM_PORTRAIT_BACK
 	var pitch := CAM_PITCH + (0.0 if landscape else CAM_PORTRAIT_PITCH)
 	var follow := _lane_x * 0.35
-	var jx := randf_range(-jitter, jitter)
-	var jy := randf_range(-jitter, jitter)
-	cam.position = Vector3(follow + jx, CAM_HEIGHT + lift + jy, CAM_BACK + back)
+	cam.position = Vector3(
+		follow, CAM_HEIGHT + lift + back_extra * 0.22, CAM_BACK + back + back_extra
+	)
 	cam.rotation = Vector3(deg_to_rad(-pitch), 0.0, 0.0)
 
 

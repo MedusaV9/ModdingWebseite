@@ -63,11 +63,18 @@ const PROPS: Array[String] = [
 	KAY + "bench.gltf",
 	KAY + "firehydrant.gltf",
 	KAY + "bush.gltf",
+	KAY + "trash_A.gltf",
 ]
 const LAMP := KAY + "streetlight.gltf"
 const CRATE := "res://assets/minigames/shopping_surf/car-kit/box.glb"
 const AWNING := "res://assets/minigames/shopping_surf/city-kit-commercial/detail-awning-wide.glb"
+## Kleines Vordach + Kistenpaar = Marktstand am Gehwegrand (MP-F).
+const AWNING_SMALL := "res://assets/minigames/shopping_surf/city-kit-commercial/detail-awning.glb"
+const STALL_BOX_A := KAY + "box_A.gltf"
+const STALL_BOX_B := KAY + "box_B.gltf"
 const COIN := "res://assets/minigames/shopping_surf/toy-car-kit/item-coin-gold.glb"
+## Ferne Dachlinie hinter der Ladenzeile — rosiger Dunst statt leerem Himmel.
+const SKYLINE_TINT := Color(0.93, 0.78, 0.83)
 ## Pastelltöne der Ladenmarkisen (Web: canopyMats).
 const CANOPY_TINTS: Array[Color] = [
 	Color(1.0, 0.56, 0.67),
@@ -216,8 +223,109 @@ func _pave(plane: MeshInstance3D, tex: Texture2D, width: float) -> void:
 func _build_band() -> void:
 	band = ScrollBand.new(LOOP_LEN, DESPAWN_Z)
 	_build_dots()
+	_build_crosswalks()
+	_build_manholes()
 	_build_shops()
+	_build_skyline()
 	_build_street_furniture()
+	_build_market_stalls()
+
+
+## Zebrastreifen quer über die Fahrbahn — alle ~40 m ein Taktschlag, der die
+## Straße in Blöcke gliedert (vorher: EIN Fugenmuster in Endlosschleife).
+func _build_crosswalks() -> void:
+	var stripe := BoxMesh.new()
+	stripe.size = Vector3(0.72, 0.022, 1.7)
+	var tool := SurfaceTool.new()
+	tool.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for k in 5:
+		var sx := (float(k) - 2.0) * 1.3
+		tool.append_from(stripe, 0, Transform3D(Basis.IDENTITY, Vector3(sx, 0.0, 0.0)))
+	tool.set_material(Fx.flat(Color(0.99, 0.97, 0.93)))
+	var mesh := tool.commit()
+	var prop := _prop([{"mesh": mesh, "xform": Transform3D.IDENTITY}], 4)
+	prop.call("set_shadows", false)
+	var items: Array = []
+	for i in 3:
+		items.append({"x": 0.0, "y": 0.012, "z": -float(i) * (LOOP_LEN / 3.0) - 17.0})
+	band.call("add_group", prop, items)
+
+
+## Gullydeckel auf der Fahrbahn — kleine dunkle Anker fürs Nahfeld, das
+## vorher als leere rosa Fläche ein Drittel des Hochformats füllte.
+func _build_manholes() -> void:
+	var mesh := CylinderMesh.new()
+	mesh.top_radius = 0.42
+	mesh.bottom_radius = 0.42
+	mesh.height = 0.016
+	mesh.radial_segments = 14
+	mesh.rings = 1
+	mesh.material = Fx.flat(Color(0.52, 0.42, 0.44), 0.7)
+	var prop := _prop([{"mesh": mesh, "xform": Transform3D.IDENTITY}], 8)
+	prop.call("set_shadows", false)
+	var items: Array = []
+	for i in 6:
+		var sx := fmod(float(i) * 2.17, 4.4) - 2.2
+		items.append({"x": sx, "y": 0.012, "z": -float(i) * (LOOP_LEN / 6.0) - 7.0})
+	band.call("add_group", prop, items)
+
+
+## Ferne Hochhaus-Dachlinie HINTER der Ladenzeile: dieselben KayKit-Häuser,
+## rosig getönt und hochskaliert — im Hochformat stand über den Läden sonst
+## nur leerer Himmel.
+func _build_skyline() -> void:
+	var tint := Fx.flat(SKYLINE_TINT, 1.0)
+	var rows := int(LOOP_LEN / SHOP_STEP)
+	for i in 3:
+		var prop := _prop(Models.parts(SHOPS[i * 2], SHOP_W), 6, false, tint)
+		prop.call("set_shadows", false)
+		var items: Array = []
+		for row in rows:
+			for side: int in [-1, 1]:
+				if (row + (1 if side > 0 else 0)) % 3 != i:
+					continue
+				var stretch := 1.5 + 0.5 * float((row + i) % 3)
+				(
+					items
+					. append(
+						{
+							"x": side * (FACADE_X + 8.5),
+							"z": -row * SHOP_STEP - 8.0,
+							"yaw": -PI * 0.5 if side > 0 else PI * 0.5,
+							"scale": Vector3(1.3, stretch, 1.3),
+						}
+					)
+				)
+		band.call("add_group", prop, items)
+
+
+## Marktstände am Gehwegrand: Kistenpaar unter kleinem Vordach — die
+## „Einkaufsstraße" bekommt Handel, nicht nur Fassade.
+func _build_market_stalls() -> void:
+	var parts: Array = []
+	for entry: Dictionary in Models.parts(STALL_BOX_A, 0.9):
+		parts.append(entry)
+	var shift := Transform3D(Basis(Vector3.UP, 0.5), Vector3(0.55, 0.0, 0.35))
+	for entry: Dictionary in Models.parts(STALL_BOX_B, 0.7):
+		parts.append({"mesh": entry["mesh"], "xform": shift * (entry["xform"] as Transform3D)})
+	var roof_lift := Transform3D(Basis(Vector3.UP, PI * 0.5), Vector3(0.25, 1.5, 0.1))
+	for entry: Dictionary in Models.parts(AWNING_SMALL, 1.9, false):
+		parts.append({"mesh": entry["mesh"], "xform": roof_lift * (entry["xform"] as Transform3D)})
+	var prop := _prop(parts, 4)
+	var items: Array = []
+	for i in 3:
+		var side := -1.0 if i % 2 == 0 else 1.0
+		(
+			items
+			. append(
+				{
+					"x": side * 4.2,
+					"z": -float(i) * (LOOP_LEN / 3.0) - 28.0,
+					"yaw": side * PI * 0.5,
+				}
+			)
+		)
+	band.call("add_group", prop, items)
 
 
 ## Laufende Spurpunkte auf der Mittellinie — sie verkaufen das Tempo.
@@ -357,7 +465,11 @@ func _flag_row_mesh() -> ArrayMesh:
 
 func _build_street_furniture() -> void:
 	for i in PROPS.size():
-		var target := 0.6 if PROPS[i].ends_with("bench.gltf") else 0.9
+		var target := 0.9
+		if PROPS[i].ends_with("bench.gltf"):
+			target = 0.6
+		elif PROPS[i].ends_with("trash_A.gltf"):
+			target = 0.72
 		var prop := _prop(Models.parts_by_height(PROPS[i], target), 6)
 		var items: Array = []
 		for k in 8:

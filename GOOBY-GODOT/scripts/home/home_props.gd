@@ -1,10 +1,13 @@
 class_name HomeProps
 extends RefCounted
-## Prozedurale Haus-/Garten-Props (Doc D §9): Fenster-Modul, Werkbank,
-## Shed L1–L3, Werkstatt-Hütte, Gewächshaus, Sprinkler, Sammel-Stock,
-## Klemmbrett und Hammer. Alles aus Godot-Primitiven zusammengesetzt — die
-## Kenney-Kits liefern diese Teile nicht, und ein Blender-Export wäre für
-## solche Kisten-mit-Dach-Formen unnötiger Ballast.
+## Haus-/Garten-Props (Doc D §9): Fenster-Modul, Werkbank, Shed L1–L3,
+## Werkstatt-Hütte, Gewächshaus, Sprinkler, Sammel-Spots, Klemmbrett.
+##
+## WELT2 (User: „Warum ist so vieles keine richtigen Assets sondern nur
+## Primitives?"): die sichtbaren Props kommen jetzt als selbstgebaute
+## Blender-GLBs aus assets/props/ (Pipeline: tools/blender/props/).
+## Die alten Primitive-Builder bleiben als Fallback, falls ein GLB fehlt
+## (Headless-Tests, kaputter Import) — Verhalten degradiert weich.
 ##
 ## FARBEN: eine EINZIGE Palette hier (aus den AC-Theme-Tokens abgeleitet) —
 ## kein Prop definiert eigene Farben. UI-Farben kommen weiterhin
@@ -27,19 +30,51 @@ const PALETTE := {
 ## Tiny-Treats-Kleinkram (Küche/Bad/Pflanzen) für Fensterbänke und Borde.
 const DEKO_ROOT := "res://assets/furniture/tiny-treats"
 
+## Selbstgebaute Blender-Props (WELT2, tools/blender/props/): Maße sind im
+## Rezept-Raum exakt auf die Godot-Skripte abgestimmt — KEINE Nachskalierung.
+const PROPS_ROOT := "res://assets/props"
+
+## Beet-Pflanzen (WELT2): Kenney-Crops wo vorhanden, eigene Blender-Crops
+## für den Rest. Schlüssel = crop_id aus garden_crops.json.
+const CROP_GLBS := {
+	"carrot": "res://assets/furniture/garten/crop_carrot.glb",
+	"melone": "res://assets/furniture/garten/crop_melon.glb",
+	"pilz": "res://assets/furniture/garten/mushroom_red.glb",
+}
+
+
+## Selbstgebautes Prop-GLB laden (1 Unit = 1 m, Ursprung am Boden bzw. wie
+## im jeweiligen Builder dokumentiert). null, wenn das Asset fehlt — die
+## Aufrufer degradieren dann weich auf ihre Primitive-Fallbacks.
+static func prop_glb(prop_name: String) -> Node3D:
+	var pfad := "%s/%s.glb" % [PROPS_ROOT, prop_name]
+	if not ResourceLoader.exists(pfad):
+		return null
+	var szene: PackedScene = load(pfad)
+	if szene == null:
+		return null
+	var node: Node3D = szene.instantiate()
+	node.name = "Prop_%s" % prop_name
+	return node
+
 
 ## GLB laden und uniform auf `ziel_hoehe` Meter skalieren, Unterkante auf
 ## y=0 (Fensterbank-/Bord-Deko). null bei fehlendem Asset (weich degradieren).
 static func deko_glb(unterpfad: String, ziel_hoehe: float) -> Node3D:
-	var pfad := "%s/%s.gltf" % [DEKO_ROOT, unterpfad]
+	return modell_glb("%s/%s.gltf" % [DEKO_ROOT, unterpfad], ziel_hoehe)
+
+
+## Beliebiges res://-Modell laden, uniform auf `ziel_hoehe` Meter skalieren
+## und den Ursprung auf die Boden-Mitte legen (Maßstab per Bounding-Box).
+static func modell_glb(pfad: String, ziel_hoehe: float) -> Node3D:
 	if not ResourceLoader.exists(pfad):
-		push_warning("Deko-GLB fehlt: %s" % pfad)
+		push_warning("Modell-GLB fehlt: %s" % pfad)
 		return null
 	var szene: PackedScene = load(pfad)
 	if szene == null:
 		return null
 	var wurzel := Node3D.new()
-	wurzel.name = "Deko_%s" % unterpfad.get_file()
+	wurzel.name = "Deko_%s" % pfad.get_file().get_basename()
 	var modell: Node3D = szene.instantiate()
 	wurzel.add_child(modell)
 	var aabb := merged_aabb(modell, Transform3D.IDENTITY)
@@ -102,38 +137,47 @@ static func zylinder(radius: float, hoehe: float, farbe_id: String) -> MeshInsta
 	return mesh
 
 
-## Fenster-Modul (Doc D §1.2): Rahmen aus vier Leisten + Glasscheibe.
+## Fenster-Modul (Doc D §1.2): Blender-Rahmen (weiche Kapsel-Leisten +
+## Sprossenkreuz + Griff) + prozedurale Glasscheibe + Fensterbank.
 ## `durchsichtig` (Außenfenster) lässt das Straßen-Diorama hinter der Wand
-## durchscheinen — der Rahmen ist deshalb bewusst KEINE geschlossene Platte.
+## durchscheinen — deshalb bleibt das Glas prozedural (Alpha variiert).
 static func fenster(breite_zellen: int, durchsichtig := false) -> Node3D:
 	var wurzel := Node3D.new()
 	wurzel.name = "Fenster"
 	var breite := breite_zellen * 0.5
 	var hoehe := 0.95
 	var leiste := 0.06
-	for x: float in [-(breite + leiste) * 0.5, (breite + leiste) * 0.5]:
-		var pfosten := box(Vector3(leiste, hoehe + leiste * 2.0, 0.07), "rahmen")
-		pfosten.position.x = x
-		wurzel.add_child(pfosten)
-	for y: float in [-(hoehe + leiste) * 0.5, (hoehe + leiste) * 0.5]:
-		var riegel := box(Vector3(breite + leiste * 2.0, leiste, 0.07), "rahmen")
-		riegel.position.y = y
-		wurzel.add_child(riegel)
+	var rahmen := prop_glb("fenster_rahmen_%d" % clampi(breite_zellen, 1, 3))
+	if rahmen != null and breite_zellen >= 1 and breite_zellen <= 3:
+		wurzel.add_child(rahmen)
+	else:
+		for x: float in [-(breite + leiste) * 0.5, (breite + leiste) * 0.5]:
+			var pfosten := box(Vector3(leiste, hoehe + leiste * 2.0, 0.07), "rahmen")
+			pfosten.position.x = x
+			wurzel.add_child(pfosten)
+		for y: float in [-(hoehe + leiste) * 0.5, (hoehe + leiste) * 0.5]:
+			var riegel := box(Vector3(breite + leiste * 2.0, leiste, 0.07), "rahmen")
+			riegel.position.y = y
+			wurzel.add_child(riegel)
+		var sprosse := box(Vector3(0.04, hoehe, 0.03), "rahmen")
+		sprosse.position.z = 0.05
+		wurzel.add_child(sprosse)
 	var glas := box(Vector3(breite, hoehe, 0.02), "glas", 0.16 if durchsichtig else 1.0)
 	glas.name = "Glas"
 	glas.position.z = 0.035
 	wurzel.add_child(glas)
-	var sprosse := box(Vector3(0.04, hoehe, 0.03), "rahmen")
-	sprosse.position.z = 0.05
-	wurzel.add_child(sprosse)
 	var bank := box(Vector3(breite + 0.2, 0.06, 0.14), "rahmen")
 	bank.position = Vector3(0.0, -(hoehe + 0.12) * 0.5, 0.05)
 	wurzel.add_child(bank)
 	return wurzel
 
 
-## Werkbank (fest verbaut in der Werkstatt).
+## Werkbank (fest verbaut in der Werkstatt) — Blender-GLB mit Ablage,
+## Schraubstock und Hammer; Primitive-Fallback ohne Assets.
 static func werkbank() -> Node3D:
+	var glb := prop_glb("werkbank")
+	if glb != null:
+		return glb
 	var wurzel := Node3D.new()
 	wurzel.name = "Werkbank"
 	var platte := box(Vector3(1.4, 0.1, 0.7), "holz_dunkel")
@@ -151,12 +195,17 @@ static func werkbank() -> Node3D:
 
 
 ## Shed in einer der drei Stufen (Doc D §2.3) — sichtbar größer und schöner.
+## Blender-GLB je Stufe (Giebelhütte statt Kiste); Primitive-Fallback.
 static func shed(stufe: int) -> Node3D:
 	var wurzel := Node3D.new()
 	wurzel.name = "Shed"
 	var modell := ShedLogic.modell(stufe)
 	var hoehe := float(modell["hoehe"])
 	if hoehe <= 0.0:
+		return wurzel
+	var glb := prop_glb("shed_l%d" % ShedLogic.clamp_stufe(stufe))
+	if glb != null:
+		wurzel.add_child(glb)
 		return wurzel
 	var breite := 1.8 + 0.2 * stufe
 	var farbe := "anstrich" if bool(modell["anstrich"]) else "holz"
@@ -188,8 +237,11 @@ static func shed(stufe: int) -> Node3D:
 
 
 ## Werkstatt-Hütte (3×2 Garten-Zellen) mit Schornstein — Tap öffnet drinnen
-## das Crafting-Panel.
+## das Crafting-Panel. Blender-GLB (Giebeldach, Schild); Primitive-Fallback.
 static func werkstatt() -> Node3D:
+	var glb := prop_glb("werkstatt")
+	if glb != null:
+		return glb
 	var wurzel := Node3D.new()
 	wurzel.name = "Werkstatt"
 	var korpus := box(Vector3(2.8, 2.0, 1.8), "holz")
@@ -213,8 +265,13 @@ static func werkstatt() -> Node3D:
 	return wurzel
 
 
-## Gewächshaus (2×3 Zellen, transparentes Dach, Tür-Modul).
+## Gewächshaus (2×3 Zellen, transparentes Dach, Tür-Modul). Blender-GLB
+## (Giebel-Glasdach, Tür fest an der Front — die Struktur-Rotation aus dem
+## Garten-Grid bleibt erhalten); Primitive-Fallback nutzt `tuer_offset`.
 static func gewaechshaus(tuer_offset: Vector3) -> Node3D:
+	var glb := prop_glb("gewaechshaus")
+	if glb != null:
+		return glb
 	var wurzel := Node3D.new()
 	wurzel.name = "Gewaechshaus"
 	var sockel := box(Vector3(2.0, 0.18, 3.0), "holz_dunkel")
@@ -238,7 +295,11 @@ static func gewaechshaus(tuer_offset: Vector3) -> Node3D:
 
 
 ## Bewässerungsanlage: Sprinkler-Kopf auf kurzem Rohr (3×3-Reichweite).
+## Blender-GLB (mit Wassertropfen); Primitive-Fallback.
 static func sprinkler() -> Node3D:
+	var glb := prop_glb("sprinkler")
+	if glb != null:
+		return glb
 	var wurzel := Node3D.new()
 	wurzel.name = "Sprinkler"
 	var rohr := zylinder(0.05, 0.5, "metall")
@@ -255,8 +316,33 @@ static func sprinkler() -> Node3D:
 	return wurzel
 
 
+## Pflanzen-Modell für ein Beet; `anteil` (0..1] = Wuchsgröße über die
+## Stufe. null ohne Assets — garden_view fällt auf Stiel+Kugel zurück.
+static func pflanze(crop_id: String, anteil: float) -> Node3D:
+	if crop_id == "salat":
+		var stufe_pfad := (
+			"res://assets/furniture/garten/crops_leafsStageB.glb"
+			if anteil > 0.6
+			else "res://assets/furniture/garten/crops_leafsStageA.glb"
+		)
+		return modell_glb(stufe_pfad, 0.1 + 0.22 * anteil)
+	if CROP_GLBS.has(crop_id):
+		return modell_glb(str(CROP_GLBS[crop_id]), 0.12 + 0.3 * anteil)
+	var eigen := prop_glb("pflanze_%s" % crop_id)
+	if eigen != null:
+		eigen.scale = Vector3.ONE * (0.35 + 0.65 * anteil)
+	return eigen
+
+
 ## Sammel-Spot: ein Stöckchen bzw. ein Blatt, das im Garten herumliegt.
+## Blender-GLBs (weiches Blatt mit Rippe, knubbelige Stöcke); Fallback.
 static func sammel_spot(material_id: String) -> Node3D:
+	var glb := prop_glb("sammel_blatt" if material_id == "blatt" else "sammel_stock")
+	if glb != null:
+		var huelle := Node3D.new()
+		huelle.name = "Spot_%s" % material_id
+		huelle.add_child(glb)
+		return huelle
 	var wurzel := Node3D.new()
 	wurzel.name = "Spot_%s" % material_id
 	if material_id == "blatt":

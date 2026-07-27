@@ -41,7 +41,9 @@ func _initialize() -> void:
 			continue
 		var box: AABB = Models.aabb(path)
 		print(
-			"%s  min_y=%.4f  size=%.3f/%.3f/%.3f"
-			% [path.get_file(), box.position.y, box.size.x, box.size.y, box.size.z]
+			(
+				"%s  min_y=%.4f  size=%.3f/%.3f/%.3f"
+				% [path.get_file(), box.position.y, box.size.x, box.size.y, box.size.z]
+			)
 		)
 	quit(0)

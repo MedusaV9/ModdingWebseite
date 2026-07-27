@@ -75,6 +75,10 @@ var _horn_flash := 0.0
 var _gull_t := 0.0
 var _gull_mode := ""
 var _wake := 0.0
+## Kamera-Rückfall bei Tempo/Boost (Meter, weich) — statt Zitter-Jitter.
+var _cam_back_extra := 0.0
+## Fahrtwind-Takt beim Wellenreiten (s bis zum nächsten Whoosh).
+var _wind_t := 0.0
 var _ui := 1.0
 var _time_label: Label
 var _stat_label: Label
@@ -242,8 +246,13 @@ func _build_stage() -> void:
 				"ground_horizon": Color(0.741, 0.91, 0.886),
 				"ground_bottom": Color(0.68, 0.86, 0.85),
 				"fog_color": Color(0.741, 0.91, 0.886),
-				"fog_from": 26.0,
-				"fog_to": 78.0,
+				# MP-F: Der alte Dunst (26→78) wusch schon die VORDERE
+				# Häuserreihe (≈ 26 m seitlich) zu Milchglas aus — der ganze
+				# Hafen stand in einem Zyan. Später einsetzend bleibt die
+				# Morgenstimmung, aber Sandstein-Reihe, Leuchtturm und Kräne
+				# behalten Farbe und Kante.
+				"fog_from": 30.0,
+				"fog_to": 95.0,
 				"glow": 0.34,
 				# Web: DirectionalLight(0xFFE3B8, 1.0) bei (−6, 4.5, 10);
 				# HemisphereLight(0xD8F5EF, 0x1F5F5C, 1.05) — Mittelwert unten.
@@ -253,8 +262,10 @@ func _build_stage() -> void:
 				# Kräftiges Teal im Umgebungslicht kippte die Schattenseiten der
 				# Kaimauern ins Olivgrüne — heller und entsättigter halten die
 				# Mauern ihren Sandstein, ohne die Morgenstimmung zu verlieren.
+				# MP-F: 1,45 überbelichtete die Kaimauern um gut 40 Luma-
+				# Stufen — mit 1,3 behalten Sandstein und Kutter Zeichnung.
 				"ambient_color": Color(0.66, 0.8, 0.79),
-				"ambient": 1.45,
+				"ambient": 1.3,
 				"fill_energy": 0.34,
 				"fill_color": Color(0.72, 0.88, 0.88),
 				# Das Wasser ist UNSHADED, seine Textur trägt exakt den
@@ -292,6 +303,7 @@ func _build_stage() -> void:
 	_gooby.call("mount", 0.86 * float(tune["RENDER_SCALE_MULT"]), true, true)
 	_gooby.position = Vector3(0.0, 0.5, 0.28)
 	_boat.add_child(_gooby)
+	_build_wake()
 	_build_deck_crates()
 	_build_gull()
 	_build_horn_cone()
@@ -343,6 +355,21 @@ func _build_stage() -> void:
 	)
 	_stage.add_child(_sparkle)
 	_place_camera(0.0)
+
+
+## V-förmiges Kielwasser am Heck: zwei flache Schaumstreifen, die hinter dem
+## Boot auseinanderlaufen — man SIEHT die Fahrt, nicht nur die Kulisse.
+func _build_wake() -> void:
+	for side: float in [-1.0, 1.0]:
+		var strip := BoxMesh.new()
+		strip.size = Vector3(0.14, 0.015, 2.1)
+		strip.material = Fx.glass(Color(0.93, 1.0, 0.99, 0.42), true)
+		var mi := MeshInstance3D.new()
+		mi.mesh = strip
+		mi.position = Vector3(side * 0.42, 0.02, 1.75)
+		mi.rotation.y = side * -0.19
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		_boat.add_child(mi)
 
 
 ## Ladung stapelt sich auf dem Vordeck (Web: 6 Kisten, erst sichtbar wenn
@@ -716,23 +743,29 @@ func _sync_gull() -> void:
 			wing.rotation.z = flap * (1.0 if i == 0 else -1.0)
 
 
-## Verfolgerkamera + §G4.8-Tempojuice.
+## Verfolgerkamera + §G4.8-Tempojuice. KEIN Zittern/Shake (Motion-Comfort) —
+## Tempo kommt aus FOV-Kick, Streifen, Kamera-Rückfall und Fahrtwind.
 func _sync_camera(dt: float) -> void:
 	var reduced := _reduced_motion()
 	var speed := Logic.speed_of(engine.state, tune)
-	var jitter := 0.0
-	if not reduced and float(engine.state["boostT"]) > 0.0:
-		jitter = 0.02
-	_place_camera(jitter)
 	var band01 := clampf(
 		(speed - SPEED_BAND.x) / maxf(0.001, SPEED_BAND.y - SPEED_BAND.x), 0.0, 1.0
 	)
+	var boost := float(engine.state["boostT"]) > 0.0
+	_cam_back_extra = lerpf(
+		_cam_back_extra, band01 * 0.45 + (0.5 if boost else 0.0), minf(1.0, dt * 2.5)
+	)
+	_place_camera(0.0 if reduced else _cam_back_extra)
 	_stage.call("set_fov_bonus", HFOV_KICK * band01)
 	_streaks.set("enabled", not reduced)
 	_streaks.call("update", dt, speed, SpeedLines.rate_at(speed, STREAK_RATE))
+	_wind_t -= dt
+	if boost and _wind_t <= 0.0:
+		_wind_t = 0.9
+		FeelSfx.play(self, "game_whoosh", 0.9 + band01 * 0.45)
 
 
-func _place_camera(jitter: float) -> void:
+func _place_camera(back_extra: float) -> void:
 	var cam: Camera3D = _stage.get("camera")
 	if cam == null:
 		return
@@ -741,9 +774,7 @@ func _place_camera(jitter: float) -> void:
 	var pitch := CAM_PITCH + (0.0 if landscape else CAM_PORTRAIT_PITCH)
 	var follow := float(engine.state["x"]) * 0.4
 	cam.position = Vector3(
-		follow + randf_range(-jitter, jitter),
-		CAM_HEIGHT + lift + randf_range(-jitter, jitter),
-		CAM_BACK + back
+		follow, CAM_HEIGHT + lift + back_extra * 0.2, CAM_BACK + back + back_extra
 	)
 	cam.rotation = Vector3(deg_to_rad(-pitch), 0.0, 0.0)
 

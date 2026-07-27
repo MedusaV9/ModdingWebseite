@@ -273,6 +273,9 @@ func _catch_item(item: Dictionary) -> void:
 		AudioDirector.try_play(self, "mg_good", 1.0 + 0.03 * placed)
 		_flash_text = "+%s" % _fmt(delta)
 		_flash_good = true
+		# Funkenwölkchen in der Farbe der gefangenen Lage — der Treffer
+		# passiert AM Teller, also antwortet auch der Teller.
+		_stage.poof(LAYER_COLORS.get(str(item["id"]), Color(1.0, 0.9, 0.6)))
 		if ctx.juice != null:
 			ctx.juice.float_text(pos, _flash_text, Color(0.2, 0.6, 0.34))
 			ctx.juice.hit_freeze(35)
@@ -280,6 +283,7 @@ func _catch_item(item: Dictionary) -> void:
 		AudioDirector.try_play(self, "mg_spill")
 		_flash_text = I18nService.t("mg.burgerBuild.wrong")
 		_flash_good = false
+		_stage.poof(Color(0.55, 0.5, 0.48))
 		if ctx.juice != null:
 			ctx.juice.float_text(pos, "%s" % _fmt(delta), Color(0.82, 0.32, 0.3))
 			ctx.juice.shake(0.2)
@@ -298,6 +302,11 @@ func _complete_order() -> void:
 	_flash_text = I18nService.t("mg.burgerBuild.done", {"n": _fmt(score - prev)})
 	_flash_good = true
 	_flash = 1.2
+	# Belohnungsmoment: der Koch jubelt, über dem fertigen Burger goldene
+	# Funken, die Bühne blitzt warm auf.
+	_stage.cheer("celebrate")
+	_stage.poof(Color(1.0, 0.85, 0.4))
+	_stage.pulse_glow(0.9)
 	if ctx.juice != null:
 		ctx.juice.bloom_pulse(1.0)
 		ctx.juice.shake(0.14)

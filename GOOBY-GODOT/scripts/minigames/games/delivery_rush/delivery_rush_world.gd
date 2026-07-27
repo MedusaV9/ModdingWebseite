@@ -39,8 +39,10 @@ const TRAFFIC_CARS: Array[String] = [
 
 ## Farben der Stadtfläche (Web: helle Wiese, dunkler Asphalt, sandiger Gehweg).
 ## Abendband: das grelle Mittagsgrün stach neben dem Pfirsichhimmel heraus.
+## Asphalt aufgehellt (0,33 → 0,42): unter der Abendsonne fielen die Straßen
+## zu FAST-SCHWARZEN Flächen zusammen und schluckten Striche und Route.
 const GRASS := Color(0.5, 0.66, 0.42)
-const ASPHALT := Color(0.33, 0.34, 0.38)
+const ASPHALT := Color(0.42, 0.43, 0.48)
 const WALK := Color(0.79, 0.71, 0.58)
 const DASH := Color(0.95, 0.92, 0.7)
 ## Laternen (Web: kaykit-city/streetlight entlang der Ringstraße).
@@ -234,10 +236,36 @@ func _build_lamps() -> void:
 	var head := BoxMesh.new()
 	head.size = Vector3(0.7, 0.2, 0.34)
 	head.material = Fx.glow(LAMP_HEAD, 1.3)
+	# Warmer Lichtschein um jeden Lampenkopf: in der Dämmerung „brennen" die
+	# Laternen erst mit Halo — vorher waren es nur gelbe Klötzchen. Ein Quad
+	# im selben MultiProp = ein einziger zusätzlicher Draw-Call für ALLE.
+	var halo := QuadMesh.new()
+	halo.size = Vector2(2.2, 2.2)
+	var gradient := Gradient.new()
+	gradient.set_color(0, Color(1.0, 1.0, 1.0, 1.0))
+	gradient.set_color(1, Color(1.0, 1.0, 1.0, 0.0))
+	gradient.add_point(0.4, Color(1.0, 1.0, 1.0, 0.5))
+	var tex := GradientTexture2D.new()
+	tex.gradient = gradient
+	tex.fill = GradientTexture2D.FILL_RADIAL
+	tex.fill_from = Vector2(0.5, 0.5)
+	tex.fill_to = Vector2(1.0, 0.5)
+	tex.width = 64
+	tex.height = 64
+	var halo_mat := StandardMaterial3D.new()
+	halo_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	halo_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	halo_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	halo_mat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+	halo_mat.albedo_color = Color(1.0, 0.8, 0.45, 0.26)
+	halo_mat.albedo_texture = tex
+	halo_mat.disable_receive_shadows = true
+	halo.material = halo_mat
 	var parts: Array = [
 		{"mesh": post, "xform": Transform3D(Basis.IDENTITY, Vector3(0.0, 3.0, 0.0))},
 		{"mesh": arm, "xform": Transform3D(Basis.IDENTITY, Vector3(0.7, 5.9, 0.0))},
 		{"mesh": head, "xform": Transform3D(Basis.IDENTITY, Vector3(1.3, 5.75, 0.0))},
+		{"mesh": halo, "xform": Transform3D(Basis.IDENTITY, Vector3(1.3, 5.75, 0.0))},
 	]
 	var prop := _prop(parts, 64)
 	prop.call("begin")

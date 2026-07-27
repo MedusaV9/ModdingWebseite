@@ -258,9 +258,11 @@ func _build_hud() -> void:
 	_hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	# Der Hinweis liegt auf der Wiese — heller Text mit weichem Rand.
-	_hint_label.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 0.95))
-	_hint_label.add_theme_color_override("font_outline_color", Color(0.16, 0.28, 0.14, 0.42))
-	_hint_label.add_theme_constant_override("outline_size", 7)
+	_hint_label.add_theme_color_override("font_color", Color(1.0, 1.0, 0.97))
+	# Kräftige dunkelgrüne Kontur — mit 0,42 Alpha war die Zeile auf der
+	# hellen Wiese kaum lesbar.
+	_hint_label.add_theme_color_override("font_outline_color", Color(0.14, 0.26, 0.13, 0.9))
+	_hint_label.add_theme_constant_override("outline_size", 8)
 	add_child(_hint_label)
 	_update_labels()
 
@@ -393,8 +395,13 @@ func _deliver() -> void:
 		var color := Color(0.55, 1.0, 0.7) if not _wet else Color(0.75, 0.86, 1.0)
 		ctx.juice.float_text(door_px, "+%d" % points, color)
 		ctx.juice.hit_freeze(45)
+		if not _wet:
+			ctx.juice.bloom_pulse(0.7)
 		if dry_streak >= 2:
 			ctx.juice.show_combo(dry_streak)
+		# Drei trockene Touren in Serie: Konfetti über dem Garten.
+		if dry_streak >= 3:
+			ctx.juice.confetti(60)
 	_set_banner(
 		I18nService.t("mg.snailMail.delivered" if not _wet else "mg.snailMail.delivered_wet")
 	)
@@ -452,12 +459,19 @@ func _draw_banner() -> void:
 	var font := ThemeService.font(800)
 	var alpha := clampf(_banner_t * 1.4, 0.0, 1.0)
 	var w := minf(view_size.x - 24.0, 380.0 * _ui)
-	draw_string(
+	var at := Vector2((view_size.x - w) * 0.5, view_size.y * 0.11)
+	var px := maxi(16, int(24.0 * _ui))
+	# Cremefarbene Kontur: der Banner bleibt auch vor Dächern/Wiese lesbar.
+	draw_string_outline(
 		font,
-		Vector2((view_size.x - w) * 0.5, view_size.y * 0.11),
+		at,
 		_banner,
 		HORIZONTAL_ALIGNMENT_CENTER,
 		w,
-		maxi(16, int(24.0 * _ui)),
-		Color(0.35, 0.28, 0.2, alpha)
+		px,
+		6,
+		Color(1.0, 0.97, 0.88, alpha * 0.9)
+	)
+	draw_string(
+		font, at, _banner, HORIZONTAL_ALIGNMENT_CENTER, w, px, Color(0.35, 0.28, 0.2, alpha)
 	)

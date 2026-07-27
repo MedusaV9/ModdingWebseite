@@ -12,6 +12,7 @@ extends MinigameBase
 ## hängt unter der Node2D-Wurzel, der MinigameBase-Vertrag bleibt gleich.
 
 const Stage := preload("res://scripts/minigames/games/carrot_catch/carrot_catch_stage3d.gd")
+const Kit := preload("res://scripts/minigames/games/carrot_catch/mpb_garden_kit.gd")
 
 ## Sichtbare Welt-Halbbreite in Logik-Einheiten (Web-Kamera ≈ 3.25 bei 390px).
 const WORLD_HALF_W := 3.25
@@ -36,6 +37,8 @@ var _combo_label: Label
 var _hint_label: Label
 var _stage: Node3D
 var _framed_vp := Vector2.ZERO
+var _hud_plate := Kit.hud_plate()
+var _hint_plate := Kit.hud_plate()
 
 
 func setup(context: MinigameCtx) -> void:
@@ -112,6 +115,7 @@ func _process(delta: float) -> void:
 	_frame_stage()
 	_stage.sync(items, basket_x, elapsed < dizzy_until, vp, ppu, elapsed, delta)
 	_update_labels()
+	queue_redraw()
 
 
 func _spawn_tick(vp: Vector2) -> void:
@@ -184,14 +188,18 @@ func _catch(item: Dictionary, vp: Vector2) -> void:
 			ctx.juice.float_text(pos, "+%d" % int(item["value"]), Color(1.0, 0.78, 0.1))
 			ctx.juice.slowmo(0.35, 350)
 			ctx.juice.bloom_pulse(0.8)
+			ctx.juice.confetti(36)
 		elif kind == "good":
 			ctx.juice.float_text(pos, "+%d" % int(item["value"]), Color(0.42, 0.6, 0.36))
+			ctx.juice.overlay_ring(pos, Color(1.0, 0.9, 0.55, 0.8), 52.0)
 		else:
 			ctx.juice.float_text(pos, I18nService.t("mg.carrotCatch.yuck"), Color(0.8, 0.3, 0.25))
 			ctx.juice.shake(0.4)
 			ctx.juice.hit_freeze(80)
+			ctx.juice.hit_flash(Color(0.9, 0.35, 0.3, 0.16))
+		# Mitwachsende Combo-Anzeige mit steigendem Ton; Reset blendet sie aus.
+		ctx.juice.show_combo(combo)
 		if CarrotCatchLogic.combo_milestone(combo):
-			AudioDirector.try_play(self, "mg_combo", 1.0 + 0.03 * minf(combo, 20.0))
 			ctx.juice.bloom_pulse(0.4)
 			ctx.juice.float_text(
 				pos - Vector2(0, 42),
@@ -239,6 +247,33 @@ func _update_labels() -> void:
 		_combo_label.text = ""
 	_hint_label.position = Vector2(vp.x * 0.5 - 140, vp.y - 52)
 	_hint_label.size = Vector2(280, 40)
+	_hint_label.modulate.a = _hint_alpha()
+
+
+## Milchglas hinter Zeit/Serie und dem Hinweis: fallende Ware und Wiese zogen
+## sonst direkt durch die Ziffern (Lesbarkeit auf dem Handy).
+func _draw() -> void:
+	if _time_label == null:
+		return
+	var top_left := _time_label.position - Vector2(12.0, 6.0)
+	var bottom_right := (
+		_combo_label.position
+		+ Vector2(maxf(_time_label.size.x, _combo_label.size.x), _combo_label.size.y)
+		+ Vector2(12.0, 6.0)
+	)
+	draw_style_box(_hud_plate, Rect2(top_left, bottom_right - top_left))
+	var hint_a := _hint_alpha()
+	if hint_a > 0.0:
+		_hint_plate.bg_color = Color(1.0, 0.99, 0.94, 0.72 * hint_a)
+		draw_style_box(
+			_hint_plate, Rect2(_hint_label.position - Vector2(0.0, 2.0), _hint_label.size)
+		)
+
+
+## Der Hinweis blendet nach ein paar Sekunden aus — das Spielfeld gehört dann
+## ganz dem Geschehen.
+func _hint_alpha() -> float:
+	return clampf(1.0 - (elapsed - 5.0) / 1.5, 0.0, 1.0)
 
 
 func _px_per_unit(vp: Vector2) -> float:

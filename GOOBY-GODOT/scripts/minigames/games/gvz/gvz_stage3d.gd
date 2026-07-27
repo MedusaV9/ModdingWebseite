@@ -13,13 +13,14 @@ const Actor := preload("res://scripts/minigames/games/_3da_stage/gooby_actor.gd"
 const Fx := preload("res://scripts/minigames/games/_3db_stage/fx3d.gd")
 const Models := preload("res://scripts/minigames/games/_3dc_stage/models3d.gd")
 const Props := preload("res://scripts/minigames/games/gvz/gvz_stage3d_props.gd")
+const Crowd := preload("res://scripts/minigames/games/gvz/gvz_stage3d_crowd.gd")
 const DIR := "res://assets/minigames/carrot_catch/"
 
 const LANES := 5
 const COLS := 9
 
-const LAWN_A := Color("#8FC168")
-const LAWN_B := Color("#7EB258")
+const LAWN_A := Color("#84B75B")
+const LAWN_B := Color("#73A84D")
 const LAWN_A_NIGHT := Color("#6E8F64")
 const LAWN_B_NIGHT := Color("#5F8056")
 
@@ -47,7 +48,10 @@ var _mat_ghost_ok: StandardMaterial3D
 var _mat_ghost_bad: StandardMaterial3D
 
 var _towers: Dictionary = {}
-var _zombies: Dictionary = {}
+var _crowd: Node3D
+## Zombie-Id → letzter HP-Stand / Trefferblitz-Restzeit (Sekunden).
+var _zombie_hp: Dictionary = {}
+var _zombie_flash: Dictionary = {}
 var _boss: Node3D
 var _boss_puffs: Array = []
 var _proj_pool: Array[Node3D] = []
@@ -58,6 +62,7 @@ var _place_burst: GPUParticles3D
 var _die_burst: GPUParticles3D
 var _pop_burst: GPUParticles3D
 var _blast_burst: GPUParticles3D
+var _hit_burst: GPUParticles3D
 
 
 func setup_stage() -> void:
@@ -67,22 +72,22 @@ func setup_stage() -> void:
 		stage
 		. build(
 			{
-				# Vorgarten-Nachmittag, NICHT überbelichtet.
+				# Vorgarten-Nachmittag, NICHT überbelichtet (Ziel-Luma ~210).
 				"sky_top": Color(0.5, 0.74, 0.93),
-				"sky_horizon": Color(0.89, 0.93, 0.88),
-				"ground_horizon": Color(0.62, 0.78, 0.5),
-				"ground_bottom": Color(0.44, 0.6, 0.36),
+				"sky_horizon": Color(0.87, 0.92, 0.86),
+				"ground_horizon": Color(0.58, 0.75, 0.46),
+				"ground_bottom": Color(0.4, 0.56, 0.33),
 				"sun_dir": Vector3(-0.35, -0.8, -0.4),
-				"sun_energy": 0.78,
-				"ambient": 0.42,
-				"fill_energy": 0.22,
+				"sun_energy": 0.7,
+				"ambient": 0.33,
+				"fill_energy": 0.18,
 				"glow": 0.26,
 				"glow_threshold": 0.87,
 				"shadow_distance": 34.0,
 				"fog": true,
-				"fog_color": Color(0.85, 0.92, 0.88),
-				"fog_from": 30.0,
-				"fog_to": 80.0,
+				"fog_color": Color(0.82, 0.9, 0.85),
+				"fog_from": 22.0,
+				"fog_to": 60.0,
 				"far": 120.0,
 			}
 		)
@@ -115,6 +120,8 @@ func setup_stage() -> void:
 	_ghost.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_ghost.visible = false
 	add_child(_ghost)
+	_crowd = Crowd.new()
+	add_child(_crowd)
 	gooby = Actor.new()
 	add_child(gooby)
 	gooby.mount(1.0)
@@ -174,7 +181,7 @@ func sync(data: Dictionary, delta: float) -> void:
 	var tick := int(data.get("tick", 0))
 	gooby.rotation.z = sin(float(tick) * 0.06) * 0.03
 	_sync_towers(data.get("towers", []), tick)
-	_sync_zombies(data.get("zombies", []), tick)
+	_sync_zombies(data.get("zombies", []), tick, delta)
 	_sync_boss(data.get("boss", {}), tick)
 	_sync_projectiles(data.get("projectiles", []))
 	_sync_drops(data.get("drops", []), tick)
@@ -269,10 +276,6 @@ func _layout_deck(field: Rect2) -> void:
 	var depth := absf(back_in.z - front_in.z) + _row_d[0] * 0.4
 	_deck.scale = Vector3(width, 0.14, depth)
 	_deck.position = Vector3(back_in.x - width * 0.5, 0.07, (back_in.z + front_in.z) * 0.5)
-	# Haus als Kulisse in der hinteren linken Ecke (der 44-px-Steg links ist
-	# zu schmal, um das Haus IM Bild neben dem Feld zu zeigen).
-	_house.position = Vector3(back_in.x + _row_w[0] * 0.55, 0.0, back_in.z - _row_d[0] * 1.1)
-	_house.scale = Vector3.ONE * clampf(_row_s[0] * 0.7, 0.6, 1.6)
 	# Gooby wacht SICHTBAR auf dem Steg im vorderen Drittel, Blick zum Feld.
 	gooby.position = Vector3(back_in.x - width * 0.5, 0.15, front_in.z - depth * 0.32)
 	gooby.scale = Vector3.ONE * clampf(_row_s[3] * 0.85, 0.5, 1.7)
@@ -302,9 +305,11 @@ func _layout_fog(field: Rect2, fog_px: float) -> void:
 		)
 
 
-## Kulisse hinter der letzten Reihe. Wichtig: über der Feld-Oberkante bleibt
-## nur der schmale Karten-Streifen — Zaun/Bäume müssen KLEIN bleiben, sonst
-## ragen sie abgeschnitten ins HUD (erster Wurf: riesige Baum-Silhouetten).
+## Kulisse hinter der letzten Reihe: Zaun, Gehweg, das VERTEIDIGTE Haus
+## (links, mit Nachbarhäusern), Bäume, Hecke und Blumen. Das Horizont-Band
+## der View (_field_rect senkt die Feld-Oberkante um ~10 % Bildhöhe) gibt
+## der Nachbarschaft echten Platz — vorher wurde alles Hohe hinter dem Zaun
+## vom Bildrand abgeschnitten.
 func _layout_backdrop() -> void:
 	for child in _backdrop.get_children():
 		child.queue_free()
@@ -312,6 +317,44 @@ func _layout_backdrop() -> void:
 	var lo_x: float = (cell_world(0, 0) as Vector3).x - _row_w[0] * 0.6
 	var hi_x: float = (cell_world(0, COLS - 1) as Vector3).x + _row_w[0] * 0.6
 	var unit := _row_s[0]
+	# Gehweg-Band zwischen Zaun und Häusern (die Straße der Nachbarschaft).
+	var walk := MeshInstance3D.new()
+	var walk_mesh := BoxMesh.new()
+	walk_mesh.size = Vector3(hi_x - lo_x + unit * 4.0, 0.05, unit * 1.1)
+	walk_mesh.material = Fx.flat(Color("#CFC7B6"))
+	walk.mesh = walk_mesh
+	walk.position = Vector3((lo_x + hi_x) * 0.5, 0.02, back_z - unit * 0.95)
+	_backdrop.add_child(walk)
+	# DAS Haus (die verteidigte Basis) links hinter dem Gehweg + zwei Nachbarn.
+	# Maß-Regel: das Horizont-Band ist ~10 % Bildhöhe — Häuser müssen KLEIN
+	# und DICHT hinter dem Gehweg stehen, sonst ragt nur die Wand ins Bild
+	# und das Dach verschwindet über dem Bildrand (erster Wurf).
+	# lerp 0.3: weit genug rechts, dass die Karten-Leiste (oben links) das
+	# verteidigte Haus in Landscape nicht verdeckt.
+	var house_scale := clampf(unit * 0.4, 0.35, 0.72)
+	_house.position = Vector3(lerpf(lo_x, hi_x, 0.3), 0.0, back_z - unit * 1.35)
+	_house.scale = Vector3.ONE * house_scale
+	_no_backdrop_shadow(_house)
+	var neighbors: Array = [
+		[0.52, Props.house(Color("#E3D7EA"), Color("#8B9BC9")), 0.82, 1.5],
+		[0.84, Props.house(Color("#D9E8DA"), Color("#C9A05A")), 0.9, 1.42],
+	]
+	for entry: Array in neighbors:
+		var nachbar := entry[1] as Node3D
+		nachbar.position = Vector3(
+			lerpf(lo_x, hi_x, float(entry[0])), 0.0, back_z - unit * float(entry[3])
+		)
+		nachbar.scale = Vector3.ONE * house_scale * float(entry[2])
+		_backdrop.add_child(nachbar)
+	# Hecke als Horizont-Abschluss: schließt die Rasenfläche hinter den
+	# Häusern ab, damit am oberen Bildrand keine leere Wiese ausfranst.
+	var hedge := MeshInstance3D.new()
+	var hedge_mesh := BoxMesh.new()
+	hedge_mesh.size = Vector3(hi_x - lo_x + unit * 10.0, unit * 0.9, unit * 0.8)
+	hedge_mesh.material = Fx.flat(Color("#5B8A49"))
+	hedge.mesh = hedge_mesh
+	hedge.position = Vector3((lo_x + hi_x) * 0.5, unit * 0.45, back_z - unit * 2.6)
+	_backdrop.add_child(hedge)
 	var fence_scale := clampf(unit * 0.5, 0.4, 1.3)
 	var fence_parts := Models.parts(DIR + "fence_simple.glb", fence_scale)
 	var fence_poses: Array = []
@@ -323,18 +366,18 @@ func _layout_backdrop() -> void:
 		)
 	_backdrop.add_child(Models.swarm(fence_parts, fence_poses))
 	var tree_poses: Array = []
-	for i in 3:
+	for i in 4:
 		tree_poses.append(
 			Transform3D(
 				Basis(Vector3.UP, float(i) * 1.4),
 				Vector3(
-					lerpf(lo_x, hi_x, 0.3 + 0.28 * float(i)),
+					lerpf(lo_x, hi_x, 0.02 + 0.31 * float(i)),
 					0.0,
-					back_z - unit * (2.6 + 1.2 * float(i % 2))
+					back_z - unit * (1.9 + 0.35 * float(i % 2))
 				)
 			)
 		)
-	var tree_scale := clampf(unit * 1.3, 1.0, 2.6)
+	var tree_scale := clampf(unit * 0.8, 0.7, 1.5)
 	_backdrop.add_child(
 		Models.swarm(Models.parts(DIR + "tree_default.glb", tree_scale), tree_poses)
 	)
@@ -353,18 +396,28 @@ func _layout_backdrop() -> void:
 			reds.append(pose)
 		else:
 			yellows.append(pose)
-	var flower_scale := clampf(unit * 0.35, 0.25, 0.8)
+	var flower_scale := clampf(unit * 0.24, 0.2, 0.45)
 	_backdrop.add_child(Models.swarm(Models.parts(DIR + "flower_redA.glb", flower_scale), reds))
 	_backdrop.add_child(
 		Models.swarm(Models.parts(DIR + "flower_yellowA.glb", flower_scale), yellows)
 	)
+	_no_backdrop_shadow(_backdrop)
+
+
+## Kulissen-Schatten sparen: die ganze Nachbarschaft sind reine Silhouetten —
+## Schattenwurf hätte pro Mesh einen zweiten Draw-Call gekostet.
+func _no_backdrop_shadow(node: Node) -> void:
+	if node is GeometryInstance3D:
+		(node as GeometryInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	for child in node.get_children():
+		_no_backdrop_shadow(child)
 
 
 func _apply_night(night: bool) -> void:
-	stage.sun.light_energy = 0.4 if night else 0.78
-	stage.fill.light_energy = 0.3 if night else 0.22
+	stage.sun.light_energy = 0.38 if night else 0.7
+	stage.fill.light_energy = 0.28 if night else 0.18
 	stage.fill.light_color = Color(0.62, 0.7, 0.95) if night else Color(0.76, 0.85, 1.0)
-	stage.environment.ambient_light_energy = 0.34 if night else 0.42
+	stage.environment.ambient_light_energy = 0.28 if night else 0.33
 	_mat_lawn_a.albedo_color = LAWN_A_NIGHT if night else LAWN_A
 	_mat_lawn_b.albedo_color = LAWN_B_NIGHT if night else LAWN_B
 
@@ -396,60 +449,70 @@ func _sync_towers(list: Array, tick: int) -> void:
 			_towers.erase(key)
 
 
-func _sync_zombies(list: Array, tick: int) -> void:
+## Die ganze Horde läuft über die MultiMesh-Menge (gvz_stage3d_crowd.gd):
+## pro Zombie NUR Transform + Instanzfarbe. HP-Abfälle lösen den weißen
+## Trefferblitz + Aufplatz-Funken aus — die Rückmeldung, dass Türme wirken.
+func _sync_zombies(list: Array, tick: int, delta: float) -> void:
 	var seen := {}
+	_crowd.call("begin")
 	for entry: Dictionary in list:
 		var id := int(entry["id"])
 		seen[id] = true
-		var record: Dictionary = _zombies.get(id, {})
-		if record.is_empty():
-			record = Props.zombie(str(entry["type"]))
-			add_child(record["node"] as Node3D)
-			_zombies[id] = record
-		_pose_zombie(record, entry, tick)
-	for id: Variant in _zombies.keys():
+		var hp := int(entry.get("hp", 0))
+		var flash := maxf(0.0, float(_zombie_flash.get(id, 0.0)) - delta)
+		if _zombie_hp.has(id) and hp < int(_zombie_hp[id]) and not bool(entry.get("dig", false)):
+			if flash <= 0.05:
+				Fx.burst(
+					_hit_burst,
+					(
+						stage.ground_point(Vector2(entry["px"]))
+						+ Vector3(0.0, row_scale(int(entry["lane"])) * 0.55, 0.0)
+					)
+				)
+			flash = 0.24
+		_zombie_hp[id] = hp
+		_zombie_flash[id] = flash
+		if bool(entry.get("hidden", false)):
+			continue
+		var lane := int(entry["lane"])
+		var s := row_scale(lane) * (1.5 if str(entry["type"]) == "brocken" else 1.0)
+		var phase := float(id % 7)
+		var base := Transform3D(
+			Basis(Vector3.UP, -PI * 0.5 + 0.4).scaled(Vector3.ONE * s),
+			stage.ground_point(Vector2(entry["px"]))
+		)
+		var fig_y := 0.0
+		if str(entry["type"]) == "huepfer":
+			fig_y = absf(sin(float(tick) * 0.25 + phase)) * 0.24
+		if bool(entry.get("flying", false)):
+			fig_y = 0.62 + sin(float(tick) * 0.1 + phase) * 0.06
+		var lean := -0.1 if str(entry["type"]) != "sprinter" else -0.3
+		if bool(entry.get("raged", false)):
+			lean = -0.34
+		(
+			_crowd
+			. call(
+				"add_zombie",
+				str(entry["type"]),
+				base,
+				{
+					"dig": entry.get("dig", false),
+					"flying": entry.get("flying", false),
+					"armor": entry.get("armor", false),
+					"slow": entry.get("slow", false),
+					"raged": entry.get("raged", false),
+					"fig_y": fig_y,
+					"wobble": sin(float(tick) * 0.22 + phase) * 0.06,
+					"lean": lean + flash * 0.6,
+					"flash": flash / 0.24,
+				}
+			)
+		)
+	_crowd.call("commit")
+	for id: Variant in _zombie_hp.keys():
 		if not seen.has(id):
-			((_zombies[id] as Dictionary)["node"] as Node3D).queue_free()
-			_zombies.erase(id)
-
-
-func _pose_zombie(record: Dictionary, entry: Dictionary, tick: int) -> void:
-	var root := record["node"] as Node3D
-	root.visible = not bool(entry.get("hidden", false))
-	if not root.visible:
-		return
-	var lane := int(entry["lane"])
-	var s := row_scale(lane)
-	var phase := float(int(entry["id"]) % 7)
-	root.position = stage.ground_point(Vector2(entry["px"]))
-	root.scale = Vector3.ONE * s * (1.5 if str(entry["type"]) == "brocken" else 1.0)
-	root.rotation.y = -PI * 0.5 + 0.4
-	var figure := record["figure"] as Node3D
-	var mound := record.get("mound") as Node3D
-	var dig := bool(entry.get("dig", false))
-	figure.visible = not dig
-	if mound != null:
-		mound.visible = dig
-	if dig:
-		return
-	# Schlurf-Wackeln; Hüpfer hüpfen, Sprinter lehnen sich in den Lauf.
-	figure.rotation.z = sin(float(tick) * 0.22 + phase) * 0.06
-	figure.position.y = 0.0
-	if str(entry["type"]) == "huepfer":
-		figure.position.y = absf(sin(float(tick) * 0.25 + phase)) * 0.24
-	var lean := -0.1 if str(entry["type"]) != "sprinter" else -0.3
-	figure.rotation.x = lean if not bool(entry.get("raged", false)) else -0.34
-	var armor := record.get("armor") as Node3D
-	if armor != null:
-		armor.visible = bool(entry.get("armor", false))
-	var balloon := record.get("balloon") as Node3D
-	if balloon != null:
-		var flying := bool(entry.get("flying", false))
-		balloon.visible = flying
-		figure.position.y = 0.62 + sin(float(tick) * 0.1 + phase) * 0.06 if flying else 0.0
-	var slow := record.get("slow") as Node3D
-	if slow != null:
-		slow.visible = bool(entry.get("slow", false))
+			_zombie_hp.erase(id)
+			_zombie_flash.erase(id)
 
 
 func _sync_boss(boss: Dictionary, tick: int) -> void:
@@ -642,3 +705,20 @@ func _build_fx() -> void:
 		)
 	)
 	add_child(_blast_burst)
+	_hit_burst = (
+		Fx
+		. particles(
+			{
+				"color": Color(1.0, 0.97, 0.85, 0.95),
+				"amount": 7,
+				"lifetime": 0.28,
+				"one_shot": true,
+				"explosiveness": 1.0,
+				"speed": Vector2(1.2, 2.4),
+				"spread": 80.0,
+				"size": Vector2(0.04, 0.09),
+				"additive": true,
+			}
+		)
+	)
+	add_child(_hit_burst)

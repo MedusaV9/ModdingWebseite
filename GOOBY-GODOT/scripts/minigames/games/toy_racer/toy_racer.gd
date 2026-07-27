@@ -111,6 +111,9 @@ var _cam_fwd := Vector3(0.0, 0.0, 1.0)
 var _cam_pos := Vector3.ZERO
 var _cam_look := Vector3.ZERO
 var _cam_ready := false
+## Beim Schub fällt die Kamera weich um bis zu diesen Betrag zurück (Meter) —
+## Tempo ohne Screenshake (Motion-Comfort-Regel der Fahr-Spiele).
+var _boost_back := 0.0
 var _spark_t := 0.0
 var _lap_label: Label
 var _pos_label: Label
@@ -125,6 +128,7 @@ var _shield: MeshInstance3D
 var _streaks: MultiMeshInstance3D
 var _sparks: GPUParticles3D
 var _confetti: GPUParticles3D
+var _boost_trail: GPUParticles3D
 
 
 func setup(context: MinigameCtx) -> void:
@@ -378,6 +382,27 @@ func _build_karts() -> void:
 	_shield.visible = false
 	_shield.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_karts[0].add_child(_shield)
+	# Abgasfahne am Heck: leuchtet nur, solange der Drift-Boost schiebt —
+	# man SIEHT das Tempo, statt es nur am Banner zu lesen.
+	_boost_trail = (
+		Fx
+		. particles(
+			{
+				"color": Color(1.0, 0.72, 0.32, 0.9),
+				"amount": 20,
+				"lifetime": 0.5,
+				"additive": true,
+				"speed": Vector2(1.6, 3.2),
+				"spread": 16.0,
+				"direction": Vector3(0.0, 0.25, -1.0),
+				"gravity": Vector3.ZERO,
+				"size": Vector2(0.07, 0.18),
+			}
+		)
+	)
+	_boost_trail.position = Vector3(0.0, 0.28, -0.62)
+	_boost_trail.emitting = false
+	_karts[0].add_child(_boost_trail)
 
 
 func _build_hud() -> void:
@@ -482,6 +507,8 @@ func _sync_camera(dt: float) -> void:
 	var flat := Vector3(float((smp["t"] as Array)[0]), 0.0, float((smp["t"] as Array)[2]))
 	if flat.length() > FLAT_TANGENT_MIN:
 		_cam_fwd = flat.normalized()
+	var boosting := float(race["karts"][0]["boostT"]) > 0.0
+	_boost_back = lerpf(_boost_back, 1.1 if boosting else 0.0, minf(1.0, dt * 3.0))
 	var wanted := player.position
 	var look := player.position
 	var zone := _loop_zone_at(track, ps)
@@ -501,7 +528,7 @@ func _sync_camera(dt: float) -> void:
 	else:
 		var lift := CAM_LIFT + (0.0 if landscape else CAM_PORTRAIT_LIFT)
 		var ahead := CAM_LOOK_AHEAD + (0.0 if landscape else CAM_PORTRAIT_AHEAD)
-		wanted = player.position - _cam_fwd * CAM_BACK
+		wanted = player.position - _cam_fwd * (CAM_BACK + _boost_back)
 		wanted.y = maxf(player.position.y + lift, lift)
 		look = player.position + _cam_fwd * ahead + Vector3(0.0, 0.4, 0.0)
 		var dodged := _dodge_loop_plane(track, ps, player.position, wanted)
@@ -520,11 +547,12 @@ func _sync_camera(dt: float) -> void:
 	cam.position = _cam_pos
 	if _cam_pos.distance_to(_cam_look) > 0.05:
 		cam.look_at(_cam_look, Vector3.UP)
-	var boosting := float(race["karts"][0]["boostT"]) > 0.0
 	_stage.call("set_fov_bonus", HFOV_KICK if boosting else 0.0)
 	var speed := float(race["karts"][0]["speed"]) * _scale
-	_streaks.set("enabled", boosting and not _reduced_motion())
+	var feel_on := boosting and not _reduced_motion()
+	_streaks.set("enabled", feel_on)
 	_streaks.call("update", dt, speed, 10.0 if boosting else 0.0)
+	_boost_trail.emitting = feel_on
 
 
 ## Zertifizierungs-Haken (Screenshots): Im Looping-Abschnitt steht die Kamera

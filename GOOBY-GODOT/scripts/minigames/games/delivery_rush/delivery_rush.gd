@@ -369,6 +369,10 @@ func _build_stage() -> void:
 				# also sieht man dauernd sonnenabgewandte Hauswände. Mit 0,14
 				# fielen die zu schwarzen Platten zusammen.
 				"fill_energy": 0.5,
+				# Etwas satter und knackiger als die Bühnen-Vorgabe (1,14/1,05):
+				# der Pfirsichdunst wusch Wiese und Fassaden zu Pastell aus.
+				"saturation": 1.22,
+				"contrast": 1.07,
 				"hfov": HFOV_BASE,
 				"shadow_distance": 60.0,
 				"far": 420.0,

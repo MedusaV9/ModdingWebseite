@@ -154,6 +154,11 @@ func _build_hud() -> void:
 	_peek_button.visible = false
 	_peek_button.pressed.connect(_use_peek)
 	add_child(_peek_button)
+	# Heller Text + dunkler Saum: lesbar auf Wiese, Bäumen UND Decke.
+	for label: Label in [_time_label, _miss_label, _hint_label]:
+		label.add_theme_color_override("font_color", Color(1.0, 0.98, 0.94))
+		label.add_theme_color_override("font_outline_color", Color(0.2, 0.3, 0.16, 0.9))
+		label.add_theme_constant_override("outline_size", 7)
 	_update_labels()
 
 

@@ -1,15 +1,17 @@
 extends RefCounted
 ## Figuren-Fabrik der GvZ-3D-Bühne (FB-4): baut die prozeduralen Chibi-Goobys
-## (13 Turmtypen, 10 Zombie-Typen), den Boss-Müllwagen, Projektile, Drops,
-## Panik-Mäher und das Haus. Reine statische Fabrik ohne Zustand — die Bühne
-## (gvz_stage3d.gd) hängt die Knoten ein und posiert sie pro Frame.
-## Farbwelt = GvzArt (die 2D-Vorlage bleibt der Look-Kanon).
+## (13 Turmtypen), den Boss-Müllwagen, Projektile, Drops, Panik-Mäher und die
+## Häuser. Reine statische Fabrik ohne Zustand — die Bühne (gvz_stage3d.gd)
+## hängt die Knoten ein und posiert sie pro Frame. Die Zombie-HORDE baut
+## dagegen gvz_stage3d_crowd.gd als MultiMesh-Instanzen (Draw-Call-Budget).
+## Farbwelt = GvzArt (die 2D-Vorlage bleibt der Look-Kanon). Jeder Turmtyp
+## bekommt eine EIGENE Körpertönung + markante Anbauten — die Silhouetten
+## sind auf einen Blick unterscheidbar (MP-G).
 
 const Fx := preload("res://scripts/minigames/games/_3db_stage/fx3d.gd")
 
 const CREAM := Color("#F9EDD6")
 const MINT := Color("#C7E2C0")
-const MINT_DARK := Color("#A8CCA2")
 const WOOD := Color("#A9744B")
 const WOOD_DARK := Color("#7C5433")
 const NUTELLA := Color("#5C3A21")
@@ -19,10 +21,23 @@ const ICE := Color("#A8D8F0")
 const STAR_GOLD := Color("#FFD34D")
 const BERRY_RED := Color("#E0655F")
 const MELON_GREEN := Color("#6DB54E")
-const BALLOON_RED := Color("#F28B82")
 const METAL := Color("#9DA6AD")
-const CONE_ORANGE := Color("#F2A03C")
 const INK := Color("#241C18")
+
+## Körpertönung je Turmtyp: die Farbe trägt die Silhouette schon von weitem.
+const TOWER_BODY := {
+	"moehrenschuetze": CREAM,
+	"doppelmoehre": Color("#F6DFC4"),
+	"nutella_sammler": Color("#F2DCAE"),
+	"goldi": Color("#F6D98A"),
+	"dicker_bert": Color("#EFE0C4"),
+	"eis_gooby": Color("#DDEEF8"),
+	"magnet_gooby": Color("#E8E2DC"),
+	"trampolin_gooby": Color("#D8E6F4"),
+	"pust_gooby": Color("#EAF4F2"),
+	"sternchen_gooby": Color("#EFE2F4"),
+	"melonen_meier": Color("#E4F0CE"),
+}
 
 
 ## Chibi-Gooby (Kugelkörper, Ohren, Augen), nominell ~1.0 hoch, Blick +z.
@@ -68,88 +83,44 @@ static func tower(type: String) -> Node3D:
 			return _knolle()
 		"boom_beere":
 			return _berry()
-	var body := CREAM if type != "goldi" else Color("#F6D98A")
-	var root := chibi(body)
+	var root := chibi(TOWER_BODY.get(type, CREAM) as Color)
 	match type:
 		"moehrenschuetze":
 			root.add_child(_band(CARROT_LEAF))
-			root.add_child(_cannon(Vector3(0.0, 0.52, 0.24)))
+			root.add_child(_cannon(Vector3(0.0, 0.52, 0.26), 1.15))
 		"doppelmoehre":
 			root.add_child(_band(BERRY_RED))
-			root.add_child(_cannon(Vector3(-0.1, 0.58, 0.22)))
-			root.add_child(_cannon(Vector3(0.12, 0.44, 0.26)))
+			root.add_child(_cannon(Vector3(-0.13, 0.6, 0.22)))
+			root.add_child(_cannon(Vector3(0.14, 0.44, 0.26)))
 		"nutella_sammler":
 			root.add_child(_jar(Vector3(0.0, 0.16, 0.34)))
+			root.add_child(_sparkle(Vector3(0.16, 0.42, 0.4)))
 		"goldi":
 			root.add_child(_jar(Vector3(0.0, 0.16, 0.34)))
 			root.add_child(_sparkle(Vector3(-0.3, 0.95, 0.1)))
 			root.add_child(_sparkle(Vector3(0.32, 0.75, 0.0)))
 		"dicker_bert":
-			root.scale = Vector3.ONE * 1.2
-			root.add_child(_shield(Vector3(0.0, 0.45, 0.4)))
+			root.scale = Vector3.ONE * 1.24
+			root.add_child(_band(WOOD_DARK))
+			root.add_child(_shield(Vector3(0.0, 0.45, 0.42)))
 		"eis_gooby":
 			root.add_child(_beanie())
+			var frost := _sparkle(Vector3(0.24, 0.62, 0.3))
+			(frost.mesh as SphereMesh).material = Fx.glow(ICE, 1.3)
+			root.add_child(frost)
 		"magnet_gooby":
-			root.add_child(_magnet(Vector3(0.26, 0.66, 0.18)))
+			root.add_child(_band(METAL))
+			root.add_child(_magnet(Vector3(0.28, 0.68, 0.2)))
 		"trampolin_gooby":
 			root.add_child(_tramp_disc())
 		"pust_gooby":
-			root.add_child(_puff(Vector3(0.1, 0.6, 0.42), 0.1))
-			root.add_child(_puff(Vector3(0.24, 0.68, 0.52), 0.07))
+			root.add_child(_puff(Vector3(0.1, 0.6, 0.44), 0.11))
+			root.add_child(_puff(Vector3(0.26, 0.68, 0.56), 0.08))
 		"sternchen_gooby":
 			root.add_child(_antenna_star())
 		"melonen_meier":
-			root.add_child(_melon(Vector3(-0.3, 0.2, 0.22)))
+			root.add_child(_melon(Vector3(0.0, 0.94, 0.0)))
 	return root
-
-
-## Zombie-Figur + benannte Schaltteile: {node, figure, armor?, mound?,
-## balloon?, slow} — die Bühne blendet Rüstung/Hügel/Ballon/Frost pro Frame.
-static func zombie(type: String) -> Dictionary:
-	var root := Node3D.new()
-	# Etwas tiefer als GvzArt.MINT: unter 3D-Sonne + Ambient bleicht das
-	# 2D-Pastell sonst zu Weiß aus und die Untoten sind nicht mehr lesbar.
-	var body := Color("#A9D0A0") if type != "maulwurf" else Color("#8A6B54")
-	var figure := chibi(body)
-	root.add_child(figure)
-	figure.add_child(_zombie_arm(Vector3(-0.1, 0.42, 0.3)))
-	figure.add_child(_zombie_arm(Vector3(0.12, 0.36, 0.32)))
-	var record := {"node": root, "figure": figure}
-	match type:
-		"huetchen":
-			var cone := _traffic_cone()
-			figure.add_child(cone)
-			record["armor"] = cone
-		"eimer":
-			var bucket := _bucket()
-			figure.add_child(bucket)
-			record["armor"] = bucket
-		"sprinter":
-			figure.add_child(_band(BERRY_RED))
-		"zeitungsopa":
-			var paper := _newspaper()
-			figure.add_child(paper)
-			record["armor"] = paper
-		"tuersteher":
-			figure.add_child(_vest())
-			var shield := _riot_shield()
-			figure.add_child(shield)
-			record["armor"] = shield
-		"maulwurf":
-			var mound := _mole_mound()
-			root.add_child(mound)
-			mound.visible = false
-			record["mound"] = mound
-		"ballon":
-			var balloon := _balloon()
-			figure.add_child(balloon)
-			record["balloon"] = balloon
-	var slow := _sparkle(Vector3(-0.3, 0.95, 0.1))
-	(slow.mesh as SphereMesh).material = Fx.glow(ICE, 1.2)
-	figure.add_child(slow)
-	slow.visible = false
-	record["slow"] = slow
-	return record
 
 
 ## Boss Knurps: Müllwagen + gekrönter Zombie-König; {node, puffs} — die
@@ -241,13 +212,34 @@ static func projectile() -> Node3D:
 	return root
 
 
+## Nutella-Drop als MINI-GLAS statt anonymem Klecks: die Ressource ist auf
+## dem Rasen sofort als "einsammeln!" lesbar (Deckel + Gold-Ring + Funkel).
 static func drop() -> Node3D:
 	var root := Node3D.new()
-	var blob := glow_ball(NUTELLA, 0.16, 0.55)
-	root.add_child(blob)
-	var ring := Fx.ring(0.2, 0.025, Color(1.0, 0.9, 0.5))
+	var glass := MeshInstance3D.new()
+	var glass_mesh := CylinderMesh.new()
+	glass_mesh.top_radius = 0.13
+	glass_mesh.bottom_radius = 0.11
+	glass_mesh.height = 0.2
+	glass_mesh.material = Fx.glow(NUTELLA, 0.35)
+	glass.mesh = glass_mesh
+	glass.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.add_child(glass)
+	var lid := MeshInstance3D.new()
+	var lid_mesh := CylinderMesh.new()
+	lid_mesh.top_radius = 0.14
+	lid_mesh.bottom_radius = 0.14
+	lid_mesh.height = 0.05
+	lid_mesh.material = Fx.flat(Color("#EFE6D8"))
+	lid.mesh = lid_mesh
+	lid.position.y = 0.12
+	lid.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.add_child(lid)
+	var spark := _sparkle(Vector3(0.12, 0.24, 0.06))
+	root.add_child(spark)
+	var ring := Fx.ring(0.22, 0.028, Color(1.0, 0.9, 0.5))
 	ring.rotation.x = PI * 0.5
-	ring.position.y = 0.02
+	ring.position.y = -0.12
 	root.add_child(ring)
 	root.visible = false
 	return root
@@ -280,20 +272,21 @@ static func mower() -> Node3D:
 	return root
 
 
-## Haus mit Veranda-Seite: die verteidigte Basis am linken Feldrand.
-static func house() -> Node3D:
+## Haus mit Veranda-Seite: die verteidigte Basis hinter dem Zaun. Tints für
+## die Nachbarhäuser der Kulisse (jede Fassade eine eigene Pastellfarbe).
+static func house(wall_color := Color("#F2E3C8"), roof_color := Color("#C96F5A")) -> Node3D:
 	var root := Node3D.new()
 	var walls := MeshInstance3D.new()
 	var walls_mesh := BoxMesh.new()
 	walls_mesh.size = Vector3(2.2, 1.7, 2.0)
-	walls_mesh.material = Fx.flat(Color("#F2E3C8"))
+	walls_mesh.material = Fx.flat(wall_color)
 	walls.mesh = walls_mesh
 	walls.position.y = 0.85
 	root.add_child(walls)
 	var roof := MeshInstance3D.new()
 	var roof_mesh := PrismMesh.new()
 	roof_mesh.size = Vector3(2.6, 1.1, 2.4)
-	roof_mesh.material = Fx.flat(Color("#C96F5A"))
+	roof_mesh.material = Fx.flat(roof_color)
 	roof.mesh = roof_mesh
 	roof.position.y = 2.25
 	root.add_child(roof)
@@ -347,6 +340,7 @@ static func _knolle() -> Node3D:
 	leaf_mesh.material = Fx.flat(CARROT_LEAF)
 	leaf.mesh = leaf_mesh
 	leaf.position.y = 0.72
+	leaf.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	root.add_child(leaf)
 	return root
 
@@ -365,6 +359,7 @@ static func _berry() -> Node3D:
 	stem.mesh = stem_mesh
 	stem.position = Vector3(0.06, 0.72, 0.0)
 	stem.rotation.z = -0.3
+	stem.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	root.add_child(stem)
 	return root
 
@@ -381,12 +376,14 @@ static func _band(color: Color) -> MeshInstance3D:
 	mesh.material = Fx.flat(color)
 	band.mesh = mesh
 	band.position.y = 0.62
+	band.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	return band
 
 
-static func _cannon(at: Vector3) -> Node3D:
+static func _cannon(at: Vector3, size := 1.0) -> Node3D:
 	var root := Node3D.new()
 	root.position = at
+	root.scale = Vector3.ONE * size
 	var barrel := MeshInstance3D.new()
 	var barrel_mesh := CylinderMesh.new()
 	barrel_mesh.top_radius = 0.07
@@ -395,6 +392,7 @@ static func _cannon(at: Vector3) -> Node3D:
 	barrel_mesh.material = Fx.flat(WOOD)
 	barrel.mesh = barrel_mesh
 	barrel.rotation.x = PI * 0.42
+	barrel.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	root.add_child(barrel)
 	var tip := MeshInstance3D.new()
 	var tip_mesh := CylinderMesh.new()
@@ -406,6 +404,7 @@ static func _cannon(at: Vector3) -> Node3D:
 	tip.mesh = tip_mesh
 	tip.rotation.x = PI * 0.42 + PI * 0.5
 	tip.position = Vector3(0.0, 0.05, 0.22)
+	tip.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	root.add_child(tip)
 	return root
 
@@ -420,6 +419,7 @@ static func _jar(at: Vector3) -> Node3D:
 	glass_mesh.height = 0.2
 	glass_mesh.material = Fx.flat(NUTELLA)
 	glass.mesh = glass_mesh
+	glass.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	root.add_child(glass)
 	var lid := MeshInstance3D.new()
 	var lid_mesh := CylinderMesh.new()
@@ -429,6 +429,7 @@ static func _jar(at: Vector3) -> Node3D:
 	lid_mesh.material = Fx.flat(Color("#EFE6D8"))
 	lid.mesh = lid_mesh
 	lid.position.y = 0.12
+	lid.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	root.add_child(lid)
 	return root
 
@@ -443,6 +444,7 @@ static func _shield(at: Vector3) -> MeshInstance3D:
 	shield.mesh = mesh
 	shield.position = at
 	shield.rotation.x = PI * 0.5
+	shield.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	return shield
 
 
@@ -455,6 +457,7 @@ static func _beanie() -> Node3D:
 	cap_mesh.material = Fx.flat(ICE)
 	cap.mesh = cap_mesh
 	cap.position.y = 0.76
+	cap.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	root.add_child(cap)
 	var pom := MeshInstance3D.new()
 	var pom_mesh := SphereMesh.new()
@@ -463,6 +466,7 @@ static func _beanie() -> Node3D:
 	pom_mesh.material = Fx.flat(Color.WHITE)
 	pom.mesh = pom_mesh
 	pom.position.y = 0.94
+	pom.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	root.add_child(pom)
 	return root
 
@@ -478,6 +482,7 @@ static func _magnet(at: Vector3) -> MeshInstance3D:
 	magnet.mesh = mesh
 	magnet.position = at
 	magnet.rotation.x = PI * 0.5
+	magnet.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	return magnet
 
 
@@ -490,6 +495,7 @@ static func _tramp_disc() -> MeshInstance3D:
 	mesh.material = Fx.flat(Color("#7FB6D9"))
 	disc.mesh = mesh
 	disc.position.y = 0.05
+	disc.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	return disc
 
 
@@ -515,6 +521,7 @@ static func _antenna_star() -> Node3D:
 	stem_mesh.material = Fx.flat(INK)
 	stem.mesh = stem_mesh
 	stem.position.y = 0.98
+	stem.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	root.add_child(stem)
 	var star := glow_ball(STAR_GOLD, 0.09, 1.4)
 	star.position.y = 1.12
@@ -530,6 +537,7 @@ static func _melon(at: Vector3) -> MeshInstance3D:
 	mesh.material = Fx.flat(MELON_GREEN)
 	melon.mesh = mesh
 	melon.position = at
+	melon.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	return melon
 
 
@@ -537,106 +545,3 @@ static func _sparkle(at: Vector3) -> MeshInstance3D:
 	var node := glow_ball(STAR_GOLD, 0.05, 1.6)
 	node.position = at
 	return node
-
-
-static func _zombie_arm(at: Vector3) -> MeshInstance3D:
-	var arm := MeshInstance3D.new()
-	var mesh := CapsuleMesh.new()
-	mesh.radius = 0.05
-	mesh.height = 0.3
-	mesh.material = Fx.flat(MINT_DARK)
-	arm.mesh = mesh
-	arm.position = at
-	arm.rotation.x = PI * 0.42
-	return arm
-
-
-static func _traffic_cone() -> MeshInstance3D:
-	var cone := MeshInstance3D.new()
-	var mesh := CylinderMesh.new()
-	mesh.top_radius = 0.0
-	mesh.bottom_radius = 0.17
-	mesh.height = 0.32
-	mesh.radial_segments = 10
-	mesh.material = Fx.flat(CONE_ORANGE)
-	cone.mesh = mesh
-	cone.position.y = 0.94
-	return cone
-
-
-static func _bucket() -> MeshInstance3D:
-	var bucket := MeshInstance3D.new()
-	var mesh := CylinderMesh.new()
-	mesh.top_radius = 0.19
-	mesh.bottom_radius = 0.14
-	mesh.height = 0.24
-	mesh.material = Fx.flat(METAL)
-	bucket.mesh = mesh
-	bucket.position.y = 0.92
-	return bucket
-
-
-static func _newspaper() -> MeshInstance3D:
-	var paper := MeshInstance3D.new()
-	var mesh := BoxMesh.new()
-	mesh.size = Vector3(0.3, 0.22, 0.02)
-	mesh.material = Fx.flat(Color("#EDE7DA"))
-	paper.mesh = mesh
-	paper.position = Vector3(0.0, 0.42, 0.38)
-	paper.rotation.x = -0.3
-	return paper
-
-
-static func _vest() -> MeshInstance3D:
-	var vest := MeshInstance3D.new()
-	var mesh := CylinderMesh.new()
-	mesh.top_radius = 0.3
-	mesh.bottom_radius = 0.34
-	mesh.height = 0.18
-	mesh.material = Fx.flat(Color("#3E3A45"))
-	vest.mesh = mesh
-	vest.position.y = 0.3
-	return vest
-
-
-static func _riot_shield() -> MeshInstance3D:
-	var shield := MeshInstance3D.new()
-	var mesh := BoxMesh.new()
-	mesh.size = Vector3(0.34, 0.5, 0.03)
-	mesh.material = Fx.glass(Color(0.75, 0.85, 0.92, 0.75))
-	shield.mesh = mesh
-	shield.position = Vector3(0.0, 0.4, 0.46)
-	return shield
-
-
-static func _mole_mound() -> MeshInstance3D:
-	var mound := MeshInstance3D.new()
-	var mesh := SphereMesh.new()
-	mesh.radius = 0.34
-	mesh.height = 0.68
-	mesh.material = Fx.flat(Color("#8A6B54"))
-	mound.mesh = mesh
-	mound.scale = Vector3(1.0, 0.4, 1.0)
-	return mound
-
-
-static func _balloon() -> Node3D:
-	var root := Node3D.new()
-	var string := MeshInstance3D.new()
-	var string_mesh := CylinderMesh.new()
-	string_mesh.top_radius = 0.012
-	string_mesh.bottom_radius = 0.012
-	string_mesh.height = 0.45
-	string_mesh.material = Fx.flat(INK)
-	string.mesh = string_mesh
-	string.position.y = 1.05
-	root.add_child(string)
-	var ball := MeshInstance3D.new()
-	var ball_mesh := SphereMesh.new()
-	ball_mesh.radius = 0.22
-	ball_mesh.height = 0.44
-	ball_mesh.material = Fx.flat(BALLOON_RED)
-	ball.mesh = ball_mesh
-	ball.position.y = 1.42
-	root.add_child(ball)
-	return root

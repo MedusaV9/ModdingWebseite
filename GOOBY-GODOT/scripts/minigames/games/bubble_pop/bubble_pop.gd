@@ -45,6 +45,8 @@ var _banner_label: Label
 var _stage: Node3D
 var _bob := 0.0
 var _hud_plate := _make_hud_plate()
+var _banner_plate := _make_hud_plate()
+var _hint_plate := _make_hud_plate()
 
 
 func setup(context: MinigameCtx) -> void:
@@ -98,6 +100,11 @@ func _layout_hud() -> void:
 	_banner_label.size = Vector2(banner_w, 44.0)
 	_hint_label.position = Vector2(vp.x * 0.5 - 170.0, vp.y - 46.0)
 	_hint_label.size = Vector2(340.0, 36.0)
+	# 3D-Zielabzeichen direkt unter das Banner hängen (zeigt das Ziel-Essen).
+	if _stage != null:
+		_stage.set_badge_anchor(
+			Vector2(vp.x * 0.5, _banner_label.position.y + _banner_label.size.y + 44.0)
+		)
 
 
 ## Aktives Zielessen zum Rundenzeitpunkt.
@@ -218,6 +225,11 @@ func _pop(index: int) -> void:
 	var delta := int(result["delta"])
 	score = BubblePopLogic.apply_score(score, delta)
 	var pos := _to_screen(Vector2(float(bubble["x"]), float(bubble["y"])))
+	# Erst entfernen, DANN feiern — wie die Web-Vorlage (despawn vor dem
+	# Ketten-Check). Sonst zählt die Kette die getroffene Blase doppelt und
+	# remove_at greift nach der Kettenräumung ins Leere.
+	if bool(result["pops"]):
+		bubbles.remove_at(index)
 	match str(result["result"]):
 		"match":
 			streak += 1
@@ -232,6 +244,7 @@ func _pop(index: int) -> void:
 				ctx.juice.float_text(pos, I18nService.t("mg.bubblePop.wrong"), AcTokens.DANGER)
 				ctx.juice.shake(0.35)
 				ctx.juice.hit_freeze(80)
+				ctx.juice.hit_flash(Color(0.9, 0.35, 0.3, 0.14))
 		_:
 			streak = 0
 			spiky_pops += 1
@@ -240,8 +253,6 @@ func _pop(index: int) -> void:
 			if ctx.juice != null:
 				ctx.juice.float_text(pos, I18nService.t("mg.bubblePop.spiky"), AcTokens.DANGER)
 				ctx.juice.shake(0.3)
-	if bool(result["pops"]):
-		bubbles.remove_at(index)
 	ctx.report_score(score, delta)
 
 
@@ -249,12 +260,15 @@ func _celebrate_match(bubble: Dictionary, pos: Vector2, delta: int) -> void:
 	AudioDirector.try_play(self, "mg_good", 1.0 + 0.02 * minf(streak, 12.0))
 	if ctx.juice != null:
 		ctx.juice.float_text(pos, "+%d" % delta, AcTokens.LEAF_DARK)
+		ctx.juice.overlay_ring(pos, Color(0.65, 0.95, 1.0, 0.85), 56.0)
+		# Serien-Ton steigt pro Treffer um einen Halbton — DER Dopamin-Hebel.
+		if streak >= 2:
+			ctx.juice.combo_tone(streak)
 	var style := str(bubble["food"])
 	var fired: Dictionary = BubblePopLogic.record_pop_chain(chain, style, elapsed)
 	if bool(fired["triggered"]):
 		_chain_burst(style, float(bubble["x"]), float(bubble["y"]), pos)
 	if BubblePopLogic.match_streak_milestone(streak):
-		AudioDirector.try_play(self, "mg_combo", 1.0 + 0.03 * minf(streak, 20.0))
 		if ctx.juice != null:
 			ctx.juice.bloom_pulse(0.5)
 			ctx.juice.float_text(
@@ -308,6 +322,13 @@ func _update_labels() -> void:
 	_banner_label.text = I18nService.t(
 		"mg.bubblePop.target", {"food": I18nService.t("mg.bubblePop.food_%s" % _food_key(food))}
 	)
+	_hint_label.modulate.a = _hint_alpha()
+
+
+## Der Hinweis blendet nach ein paar Sekunden aus — das Wasser gehört dann
+## ganz den Blasen.
+func _hint_alpha() -> float:
+	return clampf(1.0 - (elapsed - 5.0) / 1.5, 0.0, 1.0)
 
 
 func _food_key(food: String) -> String:
@@ -367,3 +388,18 @@ func _draw_hud_backing() -> void:
 		+ Vector2(12.0, 6.0)
 	)
 	draw_style_box(_hud_plate, Rect2(top_left, bottom_right - top_left))
+	# Auch das Ziel-Banner bekommt Milchglas — Blasen zogen sonst durch den
+	# Text und das Ziel war im Gewusel kaum zu lesen.
+	var banner_size := _banner_label.get_minimum_size() + Vector2(36.0, 10.0)
+	var banner_at := Vector2(
+		_banner_label.position.x + (_banner_label.size.x - banner_size.x) * 0.5,
+		_banner_label.position.y + (_banner_label.size.y - banner_size.y) * 0.5
+	)
+	draw_style_box(_banner_plate, Rect2(banner_at, banner_size))
+	# Der Hinweis blendet nach ein paar Sekunden aus.
+	var hint_a := _hint_alpha()
+	if hint_a > 0.0:
+		_hint_plate.bg_color = Color(1.0, 0.99, 0.94, 0.72 * hint_a)
+		draw_style_box(
+			_hint_plate, Rect2(_hint_label.position - Vector2(0.0, 2.0), _hint_label.size)
+		)
