@@ -11,6 +11,7 @@ import org.joml.Vector3f;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
+import dev.projecteclipse.eclipse.core.util.SpawnReturns;
 import dev.projecteclipse.eclipse.cutscene.CutsceneService;
 import dev.projecteclipse.eclipse.cutscene.FreezeService;
 import dev.projecteclipse.eclipse.entity.EclipseEntities;
@@ -41,7 +42,6 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -876,8 +876,7 @@ public final class ArenaFight {
                         0.0F, 0.0F);
             } else {
                 BlockPos column = spawn.offset(2 * (returned % 5 - 2), 0, 2 * (returned / 5 % 5 - 2));
-                int y = overworld.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
-                        column.getX(), column.getZ());
+                int y = SpawnReturns.homeY(overworld, column);
                 player.teleportTo(overworld, column.getX() + 0.5D, y, column.getZ() + 0.5D,
                         overworld.getSharedSpawnAngle(), 0.0F);
             }

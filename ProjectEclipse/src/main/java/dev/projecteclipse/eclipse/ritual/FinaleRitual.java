@@ -306,8 +306,7 @@ public final class FinaleRitual {
                     || ArenaDimension.isInArena(player)) {
                 // Deterministic spread so nobody lands inside anyone else (StartEventCutscene pattern).
                 BlockPos column = spawn.offset(2 * (returned % 5 - 2), 0, 2 * (returned / 5 % 5 - 2));
-                int y = overworld.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
-                        column.getX(), column.getZ());
+                int y = dev.projecteclipse.eclipse.core.util.SpawnReturns.homeY(overworld, column);
                 player.teleportTo(overworld, column.getX() + 0.5D, y, column.getZ() + 0.5D,
                         overworld.getSharedSpawnAngle(), 0.0F);
                 returned++;

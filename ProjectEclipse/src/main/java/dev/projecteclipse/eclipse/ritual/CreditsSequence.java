@@ -21,6 +21,7 @@ import org.joml.Vector3f;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
+import dev.projecteclipse.eclipse.core.util.SpawnReturns;
 import dev.projecteclipse.eclipse.cutscene.CutsceneService;
 import dev.projecteclipse.eclipse.cutscene.FreezeService;
 import dev.projecteclipse.eclipse.cutscene.SequenceReplayable;
@@ -58,7 +59,6 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.saveddata.SavedData;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.scores.PlayerTeam;
@@ -765,8 +765,7 @@ public final class CreditsSequence implements SequenceReplayable {
             clearHiding(player);
             if (!player.isSpectator()) {
                 BlockPos column = spawn.offset(2 * (returned % 5 - 2), 0, 2 * (returned / 5 % 5 - 2));
-                int y = overworld.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
-                        column.getX(), column.getZ());
+                int y = SpawnReturns.homeY(overworld, column);
                 player.teleportTo(overworld, column.getX() + 0.5D, y, column.getZ() + 0.5D,
                         overworld.getSharedSpawnAngle(), 0.0F);
                 returned++;
@@ -1497,8 +1496,7 @@ public final class CreditsSequence implements SequenceReplayable {
             FreezeService.unfreeze(player);
             if (!player.isSpectator()) {
                 BlockPos column = spawn.offset(2 * (returned % 5 - 2), 0, 2 * (returned / 5 % 5 - 2));
-                int y = overworld.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
-                        column.getX(), column.getZ());
+                int y = SpawnReturns.homeY(overworld, column);
                 player.teleportTo(overworld, column.getX() + 0.5D, y, column.getZ() + 0.5D,
                         overworld.getSharedSpawnAngle(), 0.0F);
                 returned++;
@@ -1811,8 +1809,7 @@ public final class CreditsSequence implements SequenceReplayable {
                 continue;
             }
             BlockPos column = spawn.offset(2 * (returned % 5 - 2), 0, 2 * (returned / 5 % 5 - 2));
-            int y = overworld.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
-                    column.getX(), column.getZ());
+            int y = SpawnReturns.homeY(overworld, column);
             player.teleportTo(overworld, column.getX() + 0.5D, y, column.getZ() + 0.5D,
                     overworld.getSharedSpawnAngle(), 0.0F);
             returned++;
@@ -2678,8 +2675,7 @@ public final class CreditsSequence implements SequenceReplayable {
                 MinecraftServer server = player.server;
                 ServerLevel overworld = server.overworld();
                 BlockPos spawn = overworld.getSharedSpawnPos();
-                int y = overworld.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
-                        spawn.getX(), spawn.getZ());
+                int y = SpawnReturns.homeY(overworld, spawn);
                 player.teleportTo(overworld, spawn.getX() + 0.5D, y, spawn.getZ() + 0.5D,
                         overworld.getSharedSpawnAngle(), 0.0F);
                 EclipseMod.LOGGER.info("CreditsSequence: {} rescued from the epilogue set at login",
