@@ -25,7 +25,7 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * Named world positions other systems publish for FX (P2 §3.1, FROZEN API). The server sets
  * an anchor (P6 ship door/deck, P4/P6 altar) and it auto-syncs to every client via
  * {@link S2CAnchorPayload}; clients read positions with {@link #get}. Frozen ids:
- * {@link #SHIP_DOOR}, {@link #ALTAR_CENTER}, {@link #SHIP_DECK}.
+ * {@link #SHIP_DOOR}, {@link #ALTAR_CENTER}, {@link #SHIP_DECK}, {@link #CHRONO_CENTER}.
  *
  * <p>Anchors are transient (in-memory): publishers re-set them on server start / structure
  * placement. Every anchor is re-sent to each player at login; both maps are cleared on
@@ -39,6 +39,9 @@ public final class FxAnchors {
             ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "altar_center");
     public static final ResourceLocation SHIP_DECK =
             ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "ship_deck");
+    /** WOAH-03 Chrono-Stasis sphere center (set by {@code ChronoStasisSite}). */
+    public static final ResourceLocation CHRONO_CENTER =
+            ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "chrono_center");
 
     private record Anchor(ResourceKey<Level> dimension, Vec3 pos) {}
 

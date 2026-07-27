@@ -1,0 +1,64 @@
+{
+  "_comment": "WOAH-03 'Chrono-Stase' — lang keys for the frozen-time clearing (woah/chronostasis/*). All keys are NEW; nothing shipped is overwritten. 'eclipse.chrono.*' are actionbar lines from ChronoStasisService (jolt_n args: current count, 5); 'eclipse.caption.chrono.discharge' rides S2CCaptionPayload as WHISPER; 'item.eclipse.chrono_core[.lore]' names the first-discharge trophy registered in woah/chronostasis/ChronoStasisItems (house '.lore' convention, NOT the plan's '.desc'); 'dev.eclipse.woah.chrono.*' are operator feedback + handbook docs for ChronoStasisDevCommands. Merge into assets/eclipse/lang/en_us.json + de_de.json after the parallel wave (lang files are locked).",
+
+  "en_us": {
+    "eclipse.chrono.jolt_n": "Time shudders… (%s/%s)",
+    "eclipse.chrono.exhausted": "The sphere is still gathering time…",
+    "eclipse.caption.chrono.discharge": "The held instant lets go.",
+
+    "item.eclipse.chrono_core": "Stillness Core",
+    "item.eclipse.chrono_core.lore": "One instant, kept forever.",
+
+    "dev.eclipse.woah.chrono.spawn.started": "Materializing the chrono-stasis site (budgeted carve — give it a few seconds)…",
+    "dev.eclipse.woah.chrono.spawn.already": "The chrono-stasis site is already placed — use /dev woah chrono reset to rebuild the scene.",
+    "dev.eclipse.woah.chrono.spawn.done": "Chrono-stasis site materialized — scene displays stream in with the chunk load.",
+    "dev.eclipse.woah.chrono.spawn.failed": "Chrono-stasis materialization failed — see the server log.",
+    "dev.eclipse.woah.chrono.player_only": "This command needs a player — the jolt/discharge is attributed to whoever fires it.",
+    "dev.eclipse.woah.chrono.not_ready": "Chrono-stasis is not ready (site missing or phase %s) — spawn it first, or wait for FROZEN.",
+    "dev.eclipse.woah.chrono.not_placed": "The chrono-stasis site is not placed — /dev woah chrono spawn first.",
+    "dev.eclipse.woah.chrono.tick.ok": "Time-jolt fired (%s/%s).",
+    "dev.eclipse.woah.chrono.discharge.ok": "DISCHARGE started — bolt, blast and tower resolve, then everything rewinds.",
+    "dev.eclipse.woah.chrono.reset.ok": "Scene reset: FROZEN, joltCount 0, %s prop(s) rebuilt deterministically.",
+    "dev.eclipse.woah.chrono.status.header": "Chrono-stasis: placed=%s · phase=%s",
+    "dev.eclipse.woah.chrono.status.progress": "Jolts %s/%s · discharges %s · reward claimed %s",
+    "dev.eclipse.woah.chrono.status.scene": "Displays: %s live / %s defined · %s spawn(s) pending · reconciled=%s",
+    "dev.eclipse.woah.chrono.status.center": "Center: %s %s %s",
+    "dev.eclipse.woah.chrono.status.no_scene": "No live scene session (site not placed, or the server just booted).",
+
+    "dev.eclipse.doc.woah.chrono.spawn": "WOAH-03: materializes the frozen-time clearing immediately, bypassing the stage-3 gate (no-op with a hint when already placed).",
+    "dev.eclipse.doc.woah.chrono.tick": "Fires one time-jolt exactly like a pad right-click (counter increments; 'count <n>' pins the persisted joltCount first — count 4 makes the next click discharge).",
+    "dev.eclipse.doc.woah.chrono.discharge": "Starts the DISCHARGE→REWIND resolution immediately, ignoring joltCount and the 5-minute repeat cooldown.",
+    "dev.eclipse.doc.woah.chrono.reset": "Snaps to FROZEN with joltCount 0, discards every tagged display and rebuilds the scene deterministically through the reconcile path.",
+    "dev.eclipse.doc.woah.chrono.status": "Read-only: placed/phase/jolt progress/reward flags plus the live display census."
+  },
+  "de_de": {
+    "eclipse.chrono.jolt_n": "Die Zeit ruckt… (%s/%s)",
+    "eclipse.chrono.exhausted": "Die Sphäre sammelt noch Zeit…",
+    "eclipse.caption.chrono.discharge": "Der festgehaltene Augenblick lässt los.",
+
+    "item.eclipse.chrono_core": "Stillstands-Kern",
+    "item.eclipse.chrono_core.lore": "Ein Augenblick, für immer bewahrt.",
+
+    "dev.eclipse.woah.chrono.spawn.started": "Chrono-Stase-Site wird materialisiert (budgetierter Aushub — ein paar Sekunden Geduld)…",
+    "dev.eclipse.woah.chrono.spawn.already": "Die Chrono-Stase-Site ist bereits platziert — /dev woah chrono reset baut die Szene neu.",
+    "dev.eclipse.woah.chrono.spawn.done": "Chrono-Stase-Site materialisiert — die Szenen-Displays streamen mit dem Chunk-Load ein.",
+    "dev.eclipse.woah.chrono.spawn.failed": "Chrono-Stase-Materialisierung fehlgeschlagen — siehe Server-Log.",
+    "dev.eclipse.woah.chrono.player_only": "Dieser Befehl braucht einen Spieler — der Ruck/die Entladung wird dem Auslöser zugeordnet.",
+    "dev.eclipse.woah.chrono.not_ready": "Chrono-Stase ist nicht bereit (Site fehlt oder Phase %s) — erst spawnen oder auf FROZEN warten.",
+    "dev.eclipse.woah.chrono.not_placed": "Die Chrono-Stase-Site ist nicht platziert — erst /dev woah chrono spawn.",
+    "dev.eclipse.woah.chrono.tick.ok": "Zeit-Ruck ausgelöst (%s/%s).",
+    "dev.eclipse.woah.chrono.discharge.ok": "DISCHARGE gestartet — Blitz, Explosion und Turm lösen sich auf, dann spult alles zurück.",
+    "dev.eclipse.woah.chrono.reset.ok": "Szene zurückgesetzt: FROZEN, joltCount 0, %s Prop(s) deterministisch neu gebaut.",
+    "dev.eclipse.woah.chrono.status.header": "Chrono-Stase: placed=%s · Phase=%s",
+    "dev.eclipse.woah.chrono.status.progress": "Rucks %s/%s · Entladungen %s · Belohnung abgeholt %s",
+    "dev.eclipse.woah.chrono.status.scene": "Displays: %s live / %s definiert · %s Spawn(s) ausstehend · reconciled=%s",
+    "dev.eclipse.woah.chrono.status.center": "Zentrum: %s %s %s",
+    "dev.eclipse.woah.chrono.status.no_scene": "Keine aktive Szenen-Session (Site nicht platziert oder Server frisch gestartet).",
+
+    "dev.eclipse.doc.woah.chrono.spawn": "WOAH-03: materialisiert die Eingefrorene-Zeit-Lichtung sofort und umgeht das Stufe-3-Gate (No-op mit Hinweis, wenn bereits platziert).",
+    "dev.eclipse.doc.woah.chrono.tick": "Löst einen Zeit-Ruck exakt wie ein Pad-Rechtsklick aus (Zähler zählt hoch; 'count <n>' pinnt vorher den persistierten joltCount — count 4 lässt den nächsten Klick entladen).",
+    "dev.eclipse.doc.woah.chrono.discharge": "Startet die DISCHARGE→REWIND-Auflösung sofort und ignoriert joltCount sowie den 5-Minuten-Cooldown.",
+    "dev.eclipse.doc.woah.chrono.reset": "Springt auf FROZEN mit joltCount 0, verwirft alle markierten Displays und baut die Szene deterministisch über den Reconcile-Pfad neu.",
+    "dev.eclipse.doc.woah.chrono.status": "Nur lesend: placed/Phase/Ruck-Fortschritt/Belohnungs-Flags plus die Live-Display-Zählung."
+  }
+}

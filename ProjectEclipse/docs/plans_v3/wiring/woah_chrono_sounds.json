@@ -1,0 +1,26 @@
+{
+  "_comment": "WOAH-03 Chrono-Stasis — sound inventory. ZERO new sound events shipped: assets/eclipse/sounds.json + registry/EclipseSounds.java are locked by the parallel wave, so every beat is layered LIVE in code from shipped eclipse events + vanilla events (the plan-§6 recipes, mixed at play-time instead of in a sounds.json row). Senders: woah/chronostasis/ChronoStasisService (server) and woah/chronostasis/client/ChronoTickSound (client-local). If the main agent later wants the plan's dedicated rows, the intended definitions are under 'deferred_sounds_json_rows'.",
+
+  "reused_eclipse_events": {
+    "eclipse:event.submerge": "Jolt 'chrono woom' body (pitch 0.45 vol 1.0), discharge-crack mid layer (pitch 0.4), and the quiet deep body under every clock tick (pitch 1.8 vol ~0.25, client-local).",
+    "eclipse:event.border_glitch": "Time-crackle layer on top of the jolt woom (pitch 0.35 vol 0.3).",
+    "eclipse:ui.heart_shatter": "Discharge-crack top layer (pitch 0.3) — the storm_shatter layering precedent.",
+    "eclipse:event.storm_burst": "The frozen explosion resolving to completion at DISCHARGE t=30 (pitch 0.8).",
+    "eclipse:event.emerge": "Discharge-crack tail (pitch 0.5) and the REWIND whoosh when the scene sucks back into the base pose (pitch 0.55 vol 0.9)."
+  },
+
+  "reused_vanilla_events": {
+    "minecraft:block.amethyst_block.chime": "Sphere pad click feedback (pitch 0.5 vol 0.9).",
+    "minecraft:block.note_block.bass": "The clock beat strike (client-local, pitch ~0.3-0.5 sinking toward the center, period stretches 1.7 s rim -> 3 s sphere).",
+    "minecraft:entity.lightning_bolt.thunder + .impact": "Free with the setVisualOnly lightning bolt at DISCHARGE t=20."
+  },
+
+  "deferred_sounds_json_rows": {
+    "event.chrono_tick": "minecraft:note/bass pitch 0.5 vol 0.9 + eclipse:event/submerge pitch 1.8 vol 0.25 (dull clock strike with deep body) — currently layered live in client/ChronoTickSound.",
+    "event.chrono_woom": "eclipse:event/submerge pitch 0.45 vol 1.0 + eclipse:event/border_glitch pitch 0.35 vol 0.3 (deep woom with time-crackle) — currently layered live in ChronoStasisService.beginJolt.",
+    "event.chrono_discharge": "eclipse:ui/heart_shatter pitch 0.3 + eclipse:event/submerge pitch 0.4 + eclipse:event/emerge pitch 0.5 (discharge crack; storm_shatter layering) — currently layered live in ChronoStasisService.playDischargeLayers.",
+    "ambient.chrono_drone": "eclipse:ambient/limbo_loop pitch 0.35 vol 0.35 stream (optional interior carpet every ~15 s) — NOT implemented; skipped to keep the zone's near-silence staging (LastMinuteHush precedent), revisit only if the clearing feels too dead in playtests."
+  },
+
+  "subtitles_note": "Because no new sound events ship, no new subtitles.eclipse.event.chrono_* keys are needed; the layered events reuse their existing subtitles. If the deferred rows land later, add subtitle keys with them."
+}
