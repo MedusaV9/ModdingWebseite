@@ -18,6 +18,8 @@ import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
 import dev.projecteclipse.eclipse.sequence.ExpansionSequence;
 import dev.projecteclipse.eclipse.worldgen.DiscProfile;
+import dev.projecteclipse.eclipse.worldgen.DiscTerrainFunction;
+import dev.projecteclipse.eclipse.worldgen.FrozenParams;
 import dev.projecteclipse.eclipse.worldgen.stage.GrowthPacing;
 import dev.projecteclipse.eclipse.worldgen.stage.RingGrowthService;
 import dev.projecteclipse.eclipse.worldgen.stage.WorldStageService;
@@ -51,13 +53,15 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
  * pattern): per target chunk, first a {@code getChunkNow} fast path (already resident),
  * then an async region-read probe ({@code chunkMap.read} — the
  * {@link RingGrowthService} skip probe) counts already-generated chunks done without
- * loading them; only genuinely missing chunks get a self-expiring
+ * loading them; only genuinely missing chunks get a short-lived
  * {@link #PREGEN_TICKET} ({@code addRegionTicket(pos, 0)}) and a {@code getChunkNow}
- * poll until promotion. <b>No ticket is ever held</b>: the TTL expires on its own
- * (long-pending targets are re-ticketed every {@value #TICKET_REFRESH_TICKS} ticks),
- * the distance manager unloads each chunk shortly after, and the unload path saves it
- * to disk. The in-flight window (config {@code pregen.maxInFlight}, default 12) bounds
- * simultaneous full chunks; issue rate is {@code pregen.issuesPerTick} (default 4).</p>
+ * poll until promotion. <b>No ticket is held past its target</b>: the poll drops the
+ * ticket the tick the chunk reads FULL, the distance manager unloads it shortly after
+ * and the unload path saves it to disk (the {@value #TICKET_TTL_TICKS}-tick TTL is only
+ * the safety net for targets that never confirm, and long-pending ones are re-ticketed
+ * every {@value #TICKET_REFRESH_TICKS} ticks). The in-flight window (config
+ * {@code pregen.maxInFlight}, default 12) therefore bounds how many full chunks are
+ * resident at once; issue rate is {@code pregen.issuesPerTick} (default 4).</p>
  *
  * <p><b>Guards</b>: nothing is issued while the server is above the
  * {@code pregen.msptGuard} (40 ms/tick — the sweep's MSPT doctrine), while
@@ -79,7 +83,13 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
 public final class MapPregenService {
     /** Ticket lifespan; generous so a congested worker pool never strands a target. */
     private static final int TICKET_TTL_TICKS = 600;
-    /** Self-expiring request ticket (never needs a matching removeRegionTicket). */
+    /**
+     * Blocks added beyond the last frozen ring in {@link #defaultRadius}: the rim noise
+     * amplitude the border mountains displace outward, plus two chunks of slack so a
+     * chunk that only clips the outermost crag still counts as part of "everything".
+     */
+    private static final int RIM_COVER_BUFFER = DiscTerrainFunction.RIM_NOISE_AMP + 32;
+    /** Request ticket: normally released on confirmation, self-expiring if it is not. */
     private static final TicketType<ChunkPos> PREGEN_TICKET = TicketType.create(
             "eclipse_pregen", Comparator.comparingLong(ChunkPos::toLong), TICKET_TTL_TICKS);
     /** Still-pending targets are re-ticketed on this cadence (refresh resets the TTL). */
@@ -112,9 +122,19 @@ public final class MapPregenService {
 
     // ------------------------------------------------------------------ public API
 
-    /** Pregen radius of "everything": the lens-shape constant safely covers every solid block. */
+    /**
+     * Pregen radius of "everything": the largest frozen stage radius (the final ring this
+     * save will ever grow to) widened by {@link #RIM_COVER_BUFFER} for the border-mountain
+     * band, floored at the lens-shape constant every chunk is normalised against. On the
+     * default tables both terms land on 480; reading the frozen table keeps the scope
+     * correct for saves whose ring schedule was re-authored past the lens constant.
+     */
     public static int defaultRadius(DiscProfile profile) {
-        return (int) profile.lensNormRadius(); // 480 (§2.1)
+        int finalRing = 0;
+        for (int radius : FrozenParams.stageRadii(profile)) {
+            finalRing = Math.max(finalRing, radius);
+        }
+        return Math.max((int) profile.lensNormRadius(), finalRing + RIM_COVER_BUFFER);
     }
 
     /**
@@ -184,6 +204,7 @@ public final class MapPregenService {
         int count = 0;
         for (Job job : List.copyOf(JOBS.values())) {
             job.cancelled = true;
+            job.releaseAllTickets();
             job.removeBossBar();
             PregenState.get(server).reset(job.profile);
             JOBS.remove(job.profile);
@@ -342,6 +363,7 @@ public final class MapPregenService {
     public static void onServerStopping(ServerStoppingEvent event) {
         for (Job job : JOBS.values()) {
             job.cancelled = true;
+            job.releaseAllTickets();
             if (!job.done) {
                 job.persistProgress();
                 EclipseMod.LOGGER.info(
@@ -495,6 +517,7 @@ public final class MapPregenService {
                 ChunkPos pos = new ChunkPos(chunkKey);
                 if (this.level.getChunkSource().getChunkNow(pos.x, pos.z) != null) {
                     this.inFlight.remove(chunkKey);
+                    releaseTicket(pos);
                     complete(entry.getValue().index);
                     continue;
                 }
@@ -544,6 +567,25 @@ public final class MapPregenService {
                     }
                 }, this.level.getServer());
             }
+        }
+
+        /**
+         * Drops the request ticket the moment the target reaches FULL. The distance manager
+         * then unloads the chunk on one of its next passes and the unload path writes it to
+         * its region file, so a whole-map run never keeps more than the in-flight window
+         * resident instead of holding every generated chunk for the ticket TTL. The TTL
+         * stays as the safety net for targets no confirmation ever arrives for.
+         */
+        private void releaseTicket(ChunkPos pos) {
+            this.level.getChunkSource().removeRegionTicket(PREGEN_TICKET, pos, 0, pos);
+        }
+
+        /** Teardown path (cancel/shutdown): leave no ticket waiting on its TTL to lapse. */
+        void releaseAllTickets() {
+            for (long chunkKey : List.copyOf(this.inFlight.keySet())) {
+                releaseTicket(new ChunkPos(chunkKey));
+            }
+            this.inFlight.clear();
         }
 
         private void complete(long index) {
