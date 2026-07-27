@@ -182,13 +182,21 @@ public final class TitleCardLayer {
     /**
      * Z-lift for every draw of this card ({@code RenderGuiEvent.Post} renders at pose
      * z=0, but GUI LAYERS stack upward — {@code GuiLayerManager} translates
-     * {@code +200} per layer and the caption layer's fullscreen fade fill WRITES DEPTH
-     * at z≈5–6k, so an unlifted card is depth-clipped BEHIND the credits black and
-     * invisible (reproduced: every end card + the finale title over the sustained
-     * hold). 9000 clears every registered layer and stays under the GUI ortho
-     * ceiling (+10000). Shared with {@link CreditsPanel}.
+     * {@code +200} per layer and the caption layer's fullscreen fade fill WRITES
+     * DEPTH at its layer z, so an unlifted card is depth-clipped BEHIND the credits
+     * black and invisible). The lift MUST NOT be a constant: the caption layer's z is
+     * {@code 200 * registrationIndex} and grows with every layer any mod registers —
+     * a stale constant (the old 9000) ended up BELOW the fade fill (measured z=12400
+     * with 66 layers) and depth-killed every end card. NeoForge sizes the GUI
+     * projection as {@code farPlane = 11000 + max(10000*(1+screens), 200*layerCount)}
+     * with the near clip at pose z {@code farPlane - 11000}, so {@code farPlane -
+     * 11100} is always above every registered layer (max draw z
+     * {@code 200*(layerCount-1)}) and 100 units inside the clip. Shared with
+     * {@link CreditsPanel}.
      */
-    static final float POST_OVERLAY_Z = 9000.0F;
+    static float postOverlayZ() {
+        return net.neoforged.neoforge.client.ClientHooks.getGuiFarPlane() - 11_100.0F;
+    }
 
     @SubscribeEvent
     static void onRenderGui(RenderGuiEvent.Post event) {
@@ -200,7 +208,7 @@ public final class TitleCardLayer {
         DeltaTracker deltaTracker = event.getPartialTick();
         float t = ticks + deltaTracker.getGameTimeDeltaPartialTick(true);
         guiGraphics.pose().pushPose();
-        guiGraphics.pose().translate(0.0F, 0.0F, POST_OVERLAY_Z);
+        guiGraphics.pose().translate(0.0F, 0.0F, postOverlayZ());
         try {
             renderCard(guiGraphics, minecraft, t);
         } finally {
