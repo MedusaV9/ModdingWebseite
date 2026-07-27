@@ -9,6 +9,16 @@
 ---
 
 ## NEUES FEEDBACK (hier eintragen!)
+Irgendwie muss man erst in dem Einem Sturm den Boss bekämpfen sonst spawnt der andere im anderen Nebel nicht
+
+Wenn man Stirbt beim Sturm kampf dann bleiben manche BlockDisplays für immer stuck an ihrem Punkt auch nachdem kampf.
+
+Im Sturmkampf solltest du auch aufpassen das Bosse keine Gräber bewegen oder zerstören können
+
+Stelle sicher das keine Zauber Gräber beschädigen können
+
+Gräber sollten von Boss NICHT zerstört werden können.
+
 Beim Limbo Schiff ganz am Anfang ist immernoch irgendein Objekt von Veil glaube ich und das blockiert die sicht ultra das ist irgendwas großes pinkes was nicht das Meer ist.
 
 Bei Strukturen Spawnen kriegt man immernoch einen Blackscreen.
