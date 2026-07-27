@@ -137,6 +137,8 @@ public final class ChronoSceneBuilder {
         final Display.BlockDisplay[] displays;
         final ArrayDeque<Integer> spawnQueue = new ArrayDeque<>();
         boolean reconciled;
+        /** One-shot latch so the per-tick "reconcile deferred" debug line can't flood the log. */
+        boolean deferLogged;
 
         SceneState(List<Prop> props) {
             this.props = props;
@@ -681,12 +683,14 @@ public final class ChronoSceneBuilder {
     public static void reconcile(ServerLevel level, SceneState state, BlockPos center,
             PoseParams bornPose, boolean force) {
         if (!anchorsEntityLoaded(level, center)) {
-            if (!state.reconciled) {
+            if (!state.reconciled && !state.deferLogged) {
+                state.deferLogged = true;
                 EclipseMod.LOGGER.debug(
                         "ChronoSceneBuilder: anchor entity sections not loaded — reconcile deferred");
             }
             return;
         }
+        state.deferLogged = false;
         int adopted = 0;
         int discarded = 0;
         boolean[] seen = new boolean[state.props.size()];
