@@ -330,9 +330,10 @@ public final class PhotonBridge {
      * client's catch-up ticks would see every just-spawned loop as dead, prune it, and
      * respawn it each tick (the "Duplicate fx runtime object id" storm: ~9 replaces per
      * frame at llvmpipe frame rates). Executors younger than this many bridge ticks are
-     * therefore treated as alive-pending instead of dead.
+     * therefore treated as alive-pending instead of dead. 100 t (5 s) also covers the
+     * long render stall of a dimension change (40 t left a 3-respawn tail there).
      */
-    private static final int SPAWN_GRACE_TICKS = 40;
+    private static final int SPAWN_GRACE_TICKS = 100;
 
     /** Monotonic client-tick counter driving {@link #SPAWN_GRACE_TICKS} (see {@link Sweep}). */
     private static long clientTicks;

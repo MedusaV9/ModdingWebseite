@@ -9,8 +9,8 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.Mth;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
+import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
@@ -122,8 +122,15 @@ public final class PlacementSafety {
             }
             int x = Mth.floor(player.getX());
             int z = Mth.floor(player.getZ());
-            int targetY = level.getHeight(Heightmap.Types.MOTION_BLOCKING, x, z);
-            if (targetY <= level.getMinBuildHeight() || targetY <= player.getY()) {
+            // Nearest open pocket ABOVE the player within the placed volume (a global
+            // MOTION_BLOCKING lift would land on the day-12 End disc at y≈360); a fully
+            // solid column falls back to one above the structure roof.
+            int targetY = firstOpenYAbove(level, x, z, Mth.floor(player.getY()) + 1,
+                    bounds.maxY() + 3);
+            if (targetY == Integer.MIN_VALUE) {
+                targetY = bounds.maxY() + 1;
+            }
+            if (targetY <= player.getY()) {
                 continue; // colliding with something above the surface — not this paste
             }
             player.teleportTo(level, player.getX(), targetY, player.getZ(),
@@ -136,18 +143,64 @@ public final class PlacementSafety {
     }
 
     /**
-     * The open standing Y of an evacuation column: the higher of the current
-     * {@code WORLD_SURFACE} first-free block (vegetation-topped — landing on a canopy is
-     * fine under Slow Falling) and one above the incoming seat (the plateau skirt may
-     * raise this column right after the evacuation). Void columns (outside the disc rim)
-     * fall back to the seat.
+     * The open standing Y of an evacuation column: the higher of the LOCAL surface near
+     * the seat (vegetation-topped — landing on a canopy is fine under Slow Falling) and
+     * one above the incoming seat (the plateau skirt may raise this column right after
+     * the evacuation). Void columns (outside the disc rim) fall back to the seat.
+     *
+     * <p>Deliberately NOT a global heightmap: once the day-12 End disc floats at y≈360,
+     * {@code WORLD_SURFACE} resolves to the sky layer and would yank the player ~300
+     * blocks up onto the End islands (observed with a footprint evacuation on day 14).</p>
      */
     private static double openY(ServerLevel level, int x, int z, int seatY) {
-        int surfaceY = level.getHeight(Heightmap.Types.WORLD_SURFACE, x, z);
-        if (surfaceY <= level.getMinBuildHeight()) {
+        int localSurface = localSurfaceY(level, x, z, seatY);
+        if (localSurface == Integer.MIN_VALUE) {
             return seatY + 1.0D;
         }
-        return Math.max(surfaceY, seatY + 1);
+        return Math.max(localSurface, seatY + 1);
+    }
+
+    /** Evacuation column scan reach below/above the seat ({@link #localSurfaceY}). */
+    private static final int LOCAL_SCAN_DOWN = 8;
+    private static final int LOCAL_SCAN_UP = 24;
+
+    /**
+     * One above the topmost colliding block within the band
+     * {@code [refY - LOCAL_SCAN_DOWN, refY + LOCAL_SCAN_UP]} at (x, z), or
+     * {@link Integer#MIN_VALUE} when the whole band is open (void column).
+     */
+    private static int localSurfaceY(ServerLevel level, int x, int z, int refY) {
+        BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
+        int top = Math.min(refY + LOCAL_SCAN_UP, level.getMaxBuildHeight() - 2);
+        int bottom = Math.max(refY - LOCAL_SCAN_DOWN, level.getMinBuildHeight());
+        for (int y = top; y >= bottom; y--) {
+            cursor.set(x, y, z);
+            if (!level.getBlockState(cursor).getCollisionShape(level, cursor).isEmpty()) {
+                return y + 1;
+            }
+        }
+        return Integer.MIN_VALUE;
+    }
+
+    /**
+     * First standable y in {@code [fromY, toY]} at (x, z): colliding floor at {@code y-1},
+     * free feet and head at {@code y}/{@code y+1}. {@link Integer#MIN_VALUE} when none.
+     */
+    private static int firstOpenYAbove(ServerLevel level, int x, int z, int fromY, int toY) {
+        BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
+        int top = Math.min(toY, level.getMaxBuildHeight() - 2);
+        for (int y = Math.max(fromY, level.getMinBuildHeight() + 1); y <= top; y++) {
+            boolean feetFree = level.getBlockState(cursor.set(x, y, z))
+                    .getCollisionShape(level, cursor).isEmpty();
+            boolean headFree = level.getBlockState(cursor.set(x, y + 1, z))
+                    .getCollisionShape(level, cursor).isEmpty();
+            boolean floorSolid = !level.getBlockState(cursor.set(x, y - 1, z))
+                    .getCollisionShape(level, cursor).isEmpty();
+            if (feetFree && headFree && floorSolid) {
+                return y;
+            }
+        }
+        return Integer.MIN_VALUE;
     }
 
     /** Shared landing tail: kill momentum, clear fall state, brief Slow Falling, re-anchor a freeze. */
