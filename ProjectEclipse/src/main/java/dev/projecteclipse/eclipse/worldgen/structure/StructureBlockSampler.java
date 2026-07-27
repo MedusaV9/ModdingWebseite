@@ -166,6 +166,10 @@ public final class StructureBlockSampler {
         DiscProfile profile = WorldStageService.profileOf(level.dimension());
         VanillaLandmarks.seatPieces(profile != null ? profile : DiscProfile.OVERWORLD,
                 start, anchor, mode);
+        // F-089b: the paste pins scattered features to that seat (StructureStamper.placeStart);
+        // without the same pin here the dry run would re-resolve them against the live global
+        // heightmap and preview a temple on the day-12 End disc at y≈360.
+        StructureGrounding.pinScatteredSeats(start);
     }
 
     /**

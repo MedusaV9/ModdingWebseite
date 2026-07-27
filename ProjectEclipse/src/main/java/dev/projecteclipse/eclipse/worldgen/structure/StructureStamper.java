@@ -372,9 +372,19 @@ public final class StructureStamper {
      * lazy cache would be stale after {@link StructurePiece#move} repositioning). Chunks are
      * force-materialised first — the ring sweep only rewrites already-generated chunks, so
      * a landmark area may still be ungenerated when its stage completes.
+     *
+     * <p>F-089b: scattered features are pinned to their seat first
+     * ({@link StructureGrounding#pinScatteredSeats}) — this is the single choke point
+     * every seated lane passes through before {@code postProcess} may re-resolve a piece
+     * against the live global heightmap.</p>
      */
     static BoundingBox placeStart(ServerLevel level, StructureStart start, RandomSource random) {
         BoundingBox bounds = pieceUnion(start);
+        int pinned = StructureGrounding.pinScatteredSeats(start);
+        if (pinned > 0) {
+            EclipseMod.LOGGER.info("StructureStamper: pinned {} scattered piece(s) to their seat y={}",
+                    pinned, bounds.minY());
+        }
         ChunkPos minChunk = new ChunkPos(SectionPos.blockToSectionCoord(bounds.minX()),
                 SectionPos.blockToSectionCoord(bounds.minZ()));
         ChunkPos maxChunk = new ChunkPos(SectionPos.blockToSectionCoord(bounds.maxX()),

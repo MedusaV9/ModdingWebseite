@@ -14,6 +14,9 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
+import net.minecraft.world.level.levelgen.structure.ScatteredFeaturePiece;
+import net.minecraft.world.level.levelgen.structure.StructurePiece;
+import net.minecraft.world.level.levelgen.structure.StructureStart;
 
 /**
  * FIX-FLOAT — the two halves of "a stamped structure must never hang in the air", shared
@@ -102,6 +105,43 @@ public final class StructureGrounding {
     public static int assembledGroundLineY(DiscProfile profile, int x, int z, int fallbackY) {
         DiscColumn column = DiscTerrainFunction.column(profile, x, z, WorldStageAccess.stage(profile));
         return column.inside() ? column.topY() + 1 : fallbackY;
+    }
+
+    // ------------------------------------------------------------------ scattered seats
+
+    /**
+     * F-089b — nails every {@link ScatteredFeaturePiece} of a start to the Y it is
+     * standing at, so the paste can no longer re-seat it against the LIVE global
+     * heightmap.
+     *
+     * <p>Scattered features (desert/jungle temple, swamp hut) are the one piece family
+     * that resolves its own ground line DURING {@code postProcess} instead of at
+     * generation: {@code updateHeightPositionToLowestGroundHeight} takes the minimum
+     * {@code MOTION_BLOCKING_NO_LEAVES} height over its footprint and moves the whole box
+     * there. Once the day-12 End disc floats over the map that minimum is the sky layer,
+     * so a temple materialised at y≈360 and then dropped its own {@code fillColumnDown}
+     * foundation ~300 blocks back to the real ground (observed with
+     * {@code /dev structure place minecraft:desert_pyramid} on a day-14 world).</p>
+     *
+     * <p>The seat is already known by then — {@link VanillaLandmarks#seatPieces} put the
+     * box on the deterministic {@link DiscTerrainFunction} ground that {@link SitePrep}
+     * builds the plateau to — so this pins rather than re-scans: any non-negative
+     * {@code heightPosition} makes vanilla's resolver return early and leave the box
+     * alone. Below the End disc the two agree (the plateau IS the local surface), so
+     * nothing about pre-day-12 placement changes; the {@code max(0, …)} only keeps the
+     * sentinel meaning of a negative value out of a seat that sits under y=0.</p>
+     *
+     * @return how many pieces were pinned (0 for every non-scattered structure)
+     */
+    public static int pinScatteredSeats(StructureStart start) {
+        int pinned = 0;
+        for (StructurePiece piece : start.getPieces()) {
+            if (piece instanceof ScatteredFeaturePiece scattered && scattered.heightPosition < 0) {
+                scattered.heightPosition = Math.max(0, scattered.getBoundingBox().minY());
+                pinned++;
+            }
+        }
+        return pinned;
     }
 
     // ------------------------------------------------------------------ foundation fill

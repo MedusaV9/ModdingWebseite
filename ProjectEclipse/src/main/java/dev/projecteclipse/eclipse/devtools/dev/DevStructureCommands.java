@@ -313,6 +313,11 @@ public final class DevStructureCommands {
         if (start == null || !start.isValid()) {
             return fail(source, id, "generated no valid pieces at " + target.toShortString());
         }
+        // F-089b: same pin the grounded lane gets in StructureStamper.placeStart — the raw
+        // path has no seat of its own, but the generator already put the pieces on the
+        // deterministic disc surface and the live heightmap (End disc, y≈360) must not
+        // pull them off it while they paste.
+        StructureGrounding.pinScatteredSeats(start);
         BoundingBox bounds = start.getBoundingBox();
         ChunkPos min = new ChunkPos(SectionPos.blockToSectionCoord(bounds.minX()),
                 SectionPos.blockToSectionCoord(bounds.minZ()));
