@@ -15,6 +15,34 @@
 
 ---
 
+## 0. Implementation status (2026-07-27)
+
+- [x] `tools/photon/altar_aura2_fx.py` — generator written; all 6 assets generated +
+      round-trip validated (`altar_aura_{rim_lo,rim_mid,rim_hi,spiral_lo,spiral_hi,powerup}.fx`
+      + `.fxproj` siblings).
+- [x] `veilfx/AltarAura2FxRows.java` — 5 AMBIENT loop rows + 1 SEQUENCE one-shot row.
+- [x] `client/drama/AltarAuraIdle.java` — min/max-level tier swap (rim lo 1–2 / mid
+      3–4 / hi 5; spiral lo 2–3 / hi 4+), island-top yOffset −4, 45 t stage-up bloom
+      delay via an internal stage tracker, `CameraDirector.isActive()` graceful gate.
+- [x] `client/drama/AltarAuraGrade.java` — `Edge` (Gaussian band at d 24, active from
+      L2 at 0.35×) + `Gold` (0.15/0.5/1.0 at L3/L4/L5) eased feeds, `pulse()` envelope
+      (attack 3 t / decay 30 t, +0.5 Aura headroom), cutscene gate.
+- [x] `pinwheel/shaders/program/altar_aura_grade.fsh` — [g4] boundary ripple + chroma
+      split (Detail-gated, amount-scaled — no bare `return;`), Gold colour mix on
+      [g2]/[g3].
+- [x] `client/drama/AltarCeremonyFx.java` — powerup cue dispatch (near-gated +
+      cutscene-gated) + `AltarAuraGrade.pulse()` at the impact beat.
+- [x] `worldgen/structure/SanctumOrbitals.java` — ring-3 rune halo (8 displays, L4+,
+      r 7 at altar +12; eligibility flip re-arms reconcile; 24 displays total).
+- [x] `docs/plans_v3/wiring/altar_model_status.md` — executor-budget risk note updated.
+
+Deviations from §2–§5 (rationale inline): the 45 t bloom delay lives in
+`AltarAuraIdle`'s own stage tracker keyed off the synced `ClientStateCache.altarLevel`
+(instead of a `notifyStageUp` ceremony callback) — this kills the
+S2CDayStatePayload/FX-payload ordering race and also covers `/eclipse altar set`.
+Total display count is 24, not 20 (the audit's "12 existing" missed the 4 ring-2 islet
+companions) — still far under the 150 budget.
+
 ## 1. Audit — current state (verified in-repo 2026-07-27)
 
 ### 1.1 What exists AND is wired (V1, commit `eae14f4` — all live in-game)

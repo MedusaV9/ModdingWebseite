@@ -78,8 +78,10 @@ boolean AltarModelTriggers.heartbeat(ServerLevel); // "the altar noticed" pulse
 - **Render box**: the geo overhangs the block cell (~±1 block, ~2.4 high; erupt lifts the
   core ~1 more). `getRenderBoundingBox` covers ±2/+5 — if a future anim moves bones
   further, widen it.
-- **Executor budget**: worst case the island holds 5 live loop executors (4 aura + L5
-  corona). If `PhotonBridge.MAX_LIVE_EXECUTORS` is ever lowered below ~8, revisit.
+- **Executor budget**: worst case the island holds 7 live loop executors since F-075 V2
+  (4 V1 aura + L5 corona + one rim tier + one spiral tier — the V2 families tier-swap,
+  never stack; see `docs/plans_v3/feedback3/PLAN-F075-altar-insel-aura.md`). If
+  `PhotonBridge.MAX_LIVE_EXECUTORS` is ever lowered below ~10, revisit.
 - **No compile run**: per order no `./gradlew` — all signatures verified via `javap`
   (GeckoLib 4.9.2 jar) + repo precedents (`RespawnDoorRenderer`, `GhostGradeFx`,
   `AltarAberration`, `SanctumLightfall`). Assets machine-validated (geo/anim validator,

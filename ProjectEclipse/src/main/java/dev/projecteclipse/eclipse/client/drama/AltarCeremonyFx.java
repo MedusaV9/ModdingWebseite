@@ -5,12 +5,15 @@ import java.util.Iterator;
 import java.util.List;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.cutscene.client.CameraDirector;
 import dev.projecteclipse.eclipse.cutscene.client.CaptionRenderer;
 import dev.projecteclipse.eclipse.network.S2CQuasarPayload;
 import dev.projecteclipse.eclipse.network.fx.S2CCaptionPayload;
 import dev.projecteclipse.eclipse.registry.EclipseSounds;
+import dev.projecteclipse.eclipse.veilfx.AltarAura2FxRows;
 import dev.projecteclipse.eclipse.veilfx.EclipseFxState;
 import dev.projecteclipse.eclipse.veilfx.FxBudget;
+import dev.projecteclipse.eclipse.veilfx.PhotonFxRegistry;
 import dev.projecteclipse.eclipse.veilfx.QuasarSpawner;
 import dev.projecteclipse.eclipse.veilfx.SignatureCompositions;
 import dev.projecteclipse.eclipse.veilfx.WorldStageArbiter;
@@ -272,6 +275,22 @@ public final class AltarCeremonyFx {
                     GOLD_RUSH_REWARD_BASE_SCALE + GOLD_RUSH_REWARD_LEVEL_STEP * lvl,
                     SignatureCompositions.Sting.AWARD));
         }
+
+        // --- F-075 V2: the ISLAND AURA acknowledges the new stage — the powerup ring
+        // wave sweeps altar → rim (~1.2 s) under the impact beat while the aura grade
+        // pulses once; the newly unlocked aura layers then bloom ~45 t later through
+        // AltarAuraIdle's own stage tracker (no coupling needed here). Both legs are
+        // cutscene-safe: the dispatch is skipped and pulse() no-ops while a camera
+        // path owns the frame. Photon-less clients lose only this garnish — the
+        // ceremony composition above IS the baseline beat. ---
+        if (near) {
+            at(lead, () -> {
+                if (!CameraDirector.isActive()) {
+                    PhotonFxRegistry.dispatch(AltarAura2FxRows.CUE_ALTAR_AURA_POWERUP, pos);
+                }
+            });
+        }
+        at(lead, AltarAuraGrade::pulse);
     }
 
     /** Ceremony surge 0..1 for {@code AltarVeilSky} (L5 corona ignition flare). */

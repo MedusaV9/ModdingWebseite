@@ -1,5 +1,6 @@
 package dev.projecteclipse.eclipse.worldgen.structure;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import javax.annotation.Nullable;
@@ -18,6 +19,8 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Display;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -86,6 +89,19 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
  * The first reconcile of a boot waits for the altar chunk's entity section
  * ({@link ServerLevel#areEntitiesLoaded}) so late-loading persisted displays are adopted
  * instead of duplicated (the Deckhand 4a load-race lesson).</p>
+ *
+ * <p><b>F-075 V2 rune halo (ring 3):</b> from altar level {@value #HALO_MIN_LEVEL} the
+ * monument gains a third, high ring — {@value #HALO_COUNT} slow counter-orbiting
+ * rune/prism displays (amethyst clusters, purpur pillars, crying obsidian) on
+ * r = {@value #HALO_RADIUS} at {@value #HALO_ABOVE_ALTAR} blocks above the altar
+ * (above the corona ribbons). The halo anchors are built HERE (the frozen
+ * {@link FloatingSanctumBuilder#orbitalAnchors} interface stays untouched) and ride
+ * the exact same transport/persistence/self-heal: identity tags
+ * {@code eclipse_sanctum_orbital_r3_<index>}, one reconcile pass spawns them when the
+ * level reaches the gate and discards them as strays when it drops (an eligibility
+ * flip re-arms the reconcile immediately, so the halo appears/retires within one
+ * cadence instead of waiting out the 600 t sweep). Total display budget with the halo:
+ * 24 (16 debris/islet + 8 halo).</p>
  *
  * <p><b>Dev hook:</b> {@link #rebuild(ServerLevel)} discards every tagged display and
  * respawns the full ring fresh (for {@code /dev} wiring — see
@@ -163,6 +179,22 @@ public final class SanctumOrbitals {
     /** Altar levels beyond this stop growing the ring (keeps r ≤ ~14.8 ≤ scan margin). */
     private static final int LEVEL_SCALE_CAP = 5;
 
+    // --- F-075 V2 rune halo (ring 3; anchors authored here, not in the frozen W4 API) ---
+
+    /** Ring id of the high-stage rune halo (0/1 = debris rings, 2 = islet companions). */
+    private static final int HALO_RING = 3;
+    /** Rune/prism displays on the halo ring. */
+    private static final int HALO_COUNT = 8;
+    /** Halo orbit radius (blocks) — inside the r 9 high debris ring, above it. */
+    private static final double HALO_RADIUS = 7.0D;
+    /** Halo height above the ALTAR block (above the L5 corona ribbons at +3.2). */
+    private static final int HALO_ABOVE_ALTAR = 12;
+    /** The halo is a high-stage tell — present only from this altar level. */
+    private static final int HALO_MIN_LEVEL = 4;
+    /** Per-slot halo display scales (prisms small, rune pillars a touch larger). */
+    private static final float[] HALO_SCALES = {
+            0.45F, 0.55F, 0.45F, 0.50F, 0.45F, 0.55F, 0.45F, 0.50F};
+
     /**
      * Per-anchor size spread multiplied onto the frozen anchor scales (W4 bases run
      * 0.40–0.70) so the debris reads as genuinely different sizes: final scales span
@@ -186,6 +218,8 @@ public final class SanctumOrbitals {
     private static Display.BlockDisplay[] displays;
     /** Set once the boot/flip reconcile succeeded; missing entities re-arm it. */
     private static boolean reconciled;
+    /** Whether the last reconcile pass considered the rune halo eligible (F-075 V2). */
+    private static boolean haloActive;
 
     private SanctumOrbitals() {}
 
@@ -205,6 +239,13 @@ public final class SanctumOrbitals {
         if (!playerNear(overworld, altarPos)) {
             return; // presence gate: zero packets, zero scans, displays hold their pose
         }
+        // F-075 V2: a halo eligibility flip (level-up past the gate / admin reset)
+        // re-arms the reconcile so the ring appears/retires this pass, not in ≤ 600 t.
+        boolean eligible = haloEligible(overworld);
+        if (eligible != haloActive) {
+            haloActive = eligible;
+            reconciled = false;
+        }
         long gameTime = overworld.getGameTime();
         if (!reconciled || gameTime % RECONCILE_CADENCE_TICKS < UPDATE_CADENCE_TICKS) {
             reconcile(overworld, altarPos, false);
@@ -217,6 +258,7 @@ public final class SanctumOrbitals {
     public static void onServerStopped(ServerStoppedEvent event) {
         displays = null;
         reconciled = false;
+        haloActive = false;
     }
 
     /** The altar position IF the v2 floating sanctum is stamped, else {@code null}. */
@@ -257,8 +299,7 @@ public final class SanctumOrbitals {
             }
             return;
         }
-        List<FloatingSanctumBuilder.OrbitalAnchor> anchors =
-                FloatingSanctumBuilder.orbitalAnchors(altarPos);
+        List<FloatingSanctumBuilder.OrbitalAnchor> anchors = activeAnchors(overworld, altarPos);
         Display.BlockDisplay[] resolved = new Display.BlockDisplay[anchors.size()];
 
         int adopted = 0;
@@ -366,6 +407,43 @@ public final class SanctumOrbitals {
                 EclipseWorldState.get(overworld.getServer()).getAltarLevel(), 0), LEVEL_SCALE_CAP);
     }
 
+    // --- F-075 V2 rune halo anchors ---
+
+    /** Whether the rune halo should exist right now (altar level gate). */
+    private static boolean haloEligible(ServerLevel overworld) {
+        return EclipseWorldState.get(overworld.getServer()).getAltarLevel() >= HALO_MIN_LEVEL;
+    }
+
+    /**
+     * The frozen W4 debris/islet anchors plus — while the altar level clears
+     * {@value #HALO_MIN_LEVEL} — the {@value #HALO_COUNT} ring-{@value #HALO_RING}
+     * rune-halo anchors authored here (r {@value #HALO_RADIUS}, altar
+     * +{@value #HALO_ABOVE_ALTAR}, counter-clockwise like every non-zero ring).
+     * Reconcile handles both directions of the level gate for free: below it the
+     * tagged halo displays resolve to no anchor and are discarded as strays.
+     */
+    private static List<FloatingSanctumBuilder.OrbitalAnchor> activeAnchors(
+            ServerLevel overworld, BlockPos altarPos) {
+        List<FloatingSanctumBuilder.OrbitalAnchor> anchors =
+                new ArrayList<>(FloatingSanctumBuilder.orbitalAnchors(altarPos));
+        if (!haloEligible(overworld)) {
+            return anchors;
+        }
+        Vec3 center = new Vec3(altarPos.getX() + 0.5D,
+                altarPos.getY() + HALO_ABOVE_ALTAR, altarPos.getZ() + 0.5D);
+        BlockState amethyst = Blocks.AMETHYST_CLUSTER.defaultBlockState();
+        BlockState runePillar = Blocks.PURPUR_PILLAR.defaultBlockState();
+        BlockState crying = Blocks.CRYING_OBSIDIAN.defaultBlockState();
+        BlockState[] haloBlocks = {
+                amethyst, runePillar, crying, amethyst, runePillar, amethyst, crying, runePillar};
+        for (int i = 0; i < HALO_COUNT; i++) {
+            anchors.add(new FloatingSanctumBuilder.OrbitalAnchor(HALO_RING, i, center,
+                    HALO_RADIUS, i * (Math.PI * 2.0D / HALO_COUNT), HALO_SCALES[i],
+                    haloBlocks[i]));
+        }
+        return anchors;
+    }
+
     // --- motion ---
 
     /** One interpolated transform push per display, targeting the NEXT cadence boundary. */
@@ -374,8 +452,7 @@ public final class SanctumOrbitals {
         if (current == null) {
             return;
         }
-        List<FloatingSanctumBuilder.OrbitalAnchor> anchors =
-                FloatingSanctumBuilder.orbitalAnchors(altarPos);
+        List<FloatingSanctumBuilder.OrbitalAnchor> anchors = activeAnchors(overworld, altarPos);
         Vec3 mount = anchorMountPos(altarPos);
         double radiusBonus = levelRadiusBonus(overworld);
         double bobScale = levelBobScale(overworld);
@@ -409,7 +486,10 @@ public final class SanctumOrbitals {
     private static Transformation poseAt(FloatingSanctumBuilder.OrbitalAnchor anchor,
             int orderIndex, Vec3 mount, long gameTime, double radiusBonus, double bobScale) {
         int variationIndex = Math.min(orderIndex, SCALE_VARIATION.length - 1);
-        float scale = anchor.scale() * SCALE_VARIATION[variationIndex];
+        // The F-075 V2 halo carries its exact scales in HALO_SCALES — no debris spread.
+        float scale = anchor.ring() == HALO_RING
+                ? anchor.scale()
+                : anchor.scale() * SCALE_VARIATION[variationIndex];
         double direction = anchor.ring() == 0 ? 1.0D : -1.0D; // counter-rotating rings
         double orbitAngle = anchor.phaseRadians()
                 + direction * Math.toRadians(ORBIT_DEG_PER_TICK) * gameTime;
