@@ -795,6 +795,23 @@ public final class ExpansionSequence implements SequenceReplayable {
     // ------------------------------------------------------------------ F-063 operator skip
 
     /**
+     * F-091 guard probe: whether ANY expansion cinematic run is live in this server tick.
+     * {@code MapPregenService} pauses its chunk issuing while this is true — the cutscene
+     * (and the sweep it wraps) owns the chunk-load budget. Server thread only.
+     */
+    public static boolean isAnyRunActive() {
+        if (RUNS.isEmpty()) {
+            return false;
+        }
+        for (Run run : RUNS.values()) {
+            if (!run.ended) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * F-063 operator fast-forward ({@code /dev stage skipdark}): drops the darken/hold window
      * that sits between the day rollover and the visible map growth, and puts the sky back.
      *

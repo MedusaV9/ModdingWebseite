@@ -34,6 +34,7 @@ import dev.projecteclipse.eclipse.network.fx.FxPayloads;
 import dev.projecteclipse.eclipse.network.fx.S2CScreenFadePayload;
 import dev.projecteclipse.eclipse.network.gate.GatePayloads;
 import dev.projecteclipse.eclipse.network.gate.S2CPortalFxPayload;
+import dev.projecteclipse.eclipse.registry.EclipseSounds;
 import dev.projecteclipse.eclipse.worldgen.stage.BudgetedBlockWriter;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
@@ -147,7 +148,17 @@ import net.neoforged.neoforge.network.PacketDistributor;
  *       filaments, a nebula + shooting-star garnish rides the maw cadence
  *       ({@code credits3_nebula}), the gray ladder runs SIX overlapping steps (one
  *       continuous curve), an ambient tremor keeps reality unsteady, and the FOV
- *       beat-map ends on a slow dolly-push into the peaking devour.
+ *       beat-map ends on a slow dolly-push into the peaking devour. F-090/F-093
+ *       "Map-Zerreißen V3": a pixel-aligned MAP EFFIGY ({@code CreditsMapRipAct} —
+ *       the real disc sampled behind the black as a ~1250-cell LOD grid, rebuilt 1:3.9
+ *       along the true view rays) physically RIPS APART under the hole — crack fronts
+ *       racing along plate borders ({@code credits4_crackfront}), 40 tectonic plates
+ *       lifting in 5 waves and sub-fracturing mid-air ({@code credits4_platebreak}),
+ *       underside slabs + stalactites, traveling gravity waves stripping shards, jet
+ *       shreds strobing the shader ({@code credits4_jetburst} +
+ *       {@code S2CCreditsJetPayload}), a deep bedrock layer that itself rips at the
+ *       end, gulps now SYNCED to plate horizon-crossings and a pitch-cycled fake
+ *       shepard riser under it all ({@link #mapRipBeats}).
  *       t={@value #T_FINALE_DARK} — everything melts to black;
  *       t={@value #T_FINALE_TITLE} — "Minecraft Eclipse" MATERIALIZES letter by letter
  *       out of particle dust (V3 finale card) and holds until the victory theme
@@ -198,6 +209,15 @@ public final class CreditsSequence implements SequenceReplayable {
      */
     private static final ResourceLocation CUE_CREDITS3_PRECRACK = FxCues.cue("credits3_precrack");
     private static final ResourceLocation CUE_CREDITS3_NEBULA = FxCues.cue("credits3_nebula");
+
+    /**
+     * F-090/F-093 "Map-Zerreißen V3" cue ids, same {@link FxCues#cue} derivation (client
+     * rows in {@code veilfx.CreditsFinale4FxRows}; assets by
+     * {@code tools/photon/credits4_fx.py}).
+     */
+    private static final ResourceLocation CUE_CREDITS4_CRACKFRONT = FxCues.cue("credits4_crackfront");
+    private static final ResourceLocation CUE_CREDITS4_PLATEBREAK = FxCues.cue("credits4_platebreak");
+    private static final ResourceLocation CUE_CREDITS4_JETBURST = FxCues.cue("credits4_jetburst");
 
     /** The one-shot epilogue dimension (pre-dawn beach; datapack JSONs). */
     public static final ResourceKey<Level> EPILOGUE = ResourceKey.create(Registries.DIMENSION,
@@ -349,6 +369,23 @@ public final class CreditsSequence implements SequenceReplayable {
      */
     private static final int FINALE_TREMOR_PERIOD = 80;
     /**
+     * F-090/F-093 map rip: the effigy grid's budgeted WORLD sampling starts here —
+     * ≤ {@value CreditsMapRipAct#SAMPLE_PER_TICK} forced column reads/t spread across
+     * the post-card black (~1300 chunk touches never land in one tick), done long
+     * before the tele beat; the budgeted crust/pool spawn rides the same window, so
+     * the reveal at {@value #T_FINALE_REVEAL} opens on the finished intact map replica.
+     */
+    private static final int T_MAPRIP_SAMPLE = 3400;
+    /**
+     * F-090/F-093 "shepard riser" fake: a second END_SHATTER_RUMBLE layer on this
+     * cadence whose pitch walks {@link #SHEPARD_PITCH} with crossfaded volumes
+     * ({@link #SHEPARD_VOL} — quiet at the cycle seams, full in the middle), so the
+     * devour bed reads as ever-rising from existing assets alone (no new OGG).
+     */
+    private static final int SHEPARD_PERIOD = 120;
+    private static final float[] SHEPARD_PITCH = {0.5F, 0.7F, 1.0F, 1.4F};
+    private static final float[] SHEPARD_VOL = {0.4F, 0.62F, 0.62F, 0.4F};
+    /**
      * Credits roll span (FIN-6: over twice the old scroll speed's span — the roll ends
      * at t=1780, where the maker card takes the center and holds).
      */
@@ -389,8 +426,11 @@ public final class CreditsSequence implements SequenceReplayable {
      * dropped and logged — a lag spiral can never out-spawn the budget. F-057 raised it
      * for the thousands-strong backdrop; F-068 re-audited the worst concurrent sets:
      * beach act ≈ flyers 288 + shadows ~45 + formations 1800 + eclipse 136 + burst 300
-     * ≈ 2570; shatter act ≈ 1400 samples + 420 splinters ≈ 1820; black-hole act = 840
-     * recycled. Every set stays under the &lt;3000-simultaneous performance target.
+     * ≈ 2570; shatter act ≈ 1400 samples + 420 splinters ≈ 1820. F-090/F-093 re-audit:
+     * the black-hole finale is now the sequence peak — map-rip crust ≤ 1300 (expected
+     * ≈ 1250) + underside pool 500 + seam pool 160 + shard pool 280 + the (reduced)
+     * 700-display accretion field ≈ 2890, all recycled. Every set stays under the
+     * &lt;3000-simultaneous performance target.
      */
     private static final int DISPLAY_HARD_CAP = 3600;
     private static final String FLYER_TAG = "eclipse_credits_flyer";
@@ -540,7 +580,8 @@ public final class CreditsSequence implements SequenceReplayable {
                 && (entity.getTags().contains(WHEEL_TAG) || entity.getTags().contains(FLYER_TAG)
                         || entity.getTags().contains(CreditsShatterAct.TAG)
                         || entity.getTags().contains(CreditsFormationAct.TAG)
-                        || entity.getTags().contains(CreditsBlackHoleAct.TAG))
+                        || entity.getTags().contains(CreditsBlackHoleAct.TAG)
+                        || entity.getTags().contains(CreditsMapRipAct.TAG))
                 && !LIVE_DISPLAYS.contains(entity.getUUID())) {
             entity.discard();
         }
@@ -583,6 +624,8 @@ public final class CreditsSequence implements SequenceReplayable {
         final CreditsFormationAct formations = new CreditsFormationAct();
         /** F-056 black-hole finale stage manager. */
         final CreditsBlackHoleAct blackHole = new CreditsBlackHoleAct();
+        /** F-090/F-093 "Map-Zerreißen V3" map-effigy stage manager. */
+        final CreditsMapRipAct mapRip = new CreditsMapRipAct();
 
         Run(MinecraftServer server, int nonce) {
             this.server = server;
@@ -637,6 +680,9 @@ public final class CreditsSequence implements SequenceReplayable {
         }
         // F-056: the black-hole finale always has a stage (altar column or spawn fallback).
         run.blackHole.prepare(server.overworld(), altar);
+        // F-090/F-093: the map effigy stages its GEOMETRY off the same vantage ray (no
+        // world reads yet — the budgeted disc sampling runs behind the post-card black).
+        run.mapRip.prepare(server.overworld(), run.blackHole, nonce);
 
         // t=0: fade to black (held through the shatter vantage hop at T_SHATTER_VANTAGE),
         // music out, everyone hidden (F-057: invisibility without particles + the
@@ -709,6 +755,7 @@ public final class CreditsSequence implements SequenceReplayable {
         current.shatter.discard();
         current.formations.discard();
         current.blackHole.discard();
+        current.mapRip.discard();
         run = null;
         ServerLevel overworld = server.overworld();
         BlockPos spawn = overworld.getSharedSpawnPos();
@@ -759,6 +806,7 @@ public final class CreditsSequence implements SequenceReplayable {
         current.shatter.discard();
         current.formations.discard();
         current.blackHole.discard();
+        current.mapRip.discard();
         run = null;
         TASKS.clear();
         return before - LIVE_DISPLAYS.size();
@@ -892,6 +940,30 @@ public final class CreditsSequence implements SequenceReplayable {
         if (t > T_BURST && t < T_WHITE_FADE && (t - T_BURST) % BURST_PULSE_PERIOD == 0) {
             burstEscalation(current, t);
         }
+        // F-090/F-093 map rip: budgeted disc sampling + crust/pool spawns behind the
+        // post-card black (the reveal opens on the finished intact replica), then the
+        // whole rip choreography on the act clock ripTick = t − T_FINALE_REVEAL.
+        if (t >= T_MAPRIP_SAMPLE && t < T_FINALE_HOLD && current.mapRip.prepared()) {
+            ServerLevel overworld = current.server.overworld();
+            int ripTick = t - T_FINALE_REVEAL;
+            if (current.mapRip.sampleRemaining()) {
+                current.mapRip.sampleBatch(overworld);
+            }
+            if (current.mapRip.spawnRemaining()) {
+                current.mapRip.spawnBatch(overworld, ripTick);
+            }
+            if (current.mapRip.undersideSpawnRemaining(ripTick)) {
+                current.mapRip.spawnUndersideBatch(overworld, ripTick);
+            }
+            if (current.mapRip.staged() && ripTick % CreditsMapRipAct.PUSH_STRIDE == 0) {
+                current.mapRip.animate(ripTick);
+            }
+            // Crack fronts / lift waves / sub-fractures / gravity waves / jet bursts /
+            // the shepard riser — the act publishes the schedules, the sends live here.
+            if (t >= T_FINALE_REVEAL && t < T_FINALE_DARK) {
+                mapRipBeats(current, ripTick);
+            }
+        }
         // F-056 black-hole finale: accretion spawn/pushes, maw cue cadence, sky ladder.
         if (t > T_FINALE_TELE && t < T_FINALE_HOLD) {
             ServerLevel overworld = current.server.overworld();
@@ -911,9 +983,13 @@ public final class CreditsSequence implements SequenceReplayable {
                 }
             }
             // F-068 "Schluck-Momente": the act's deterministic gulp schedule — answered
-            // with a shockwave ring + brightness blink + devour thump.
+            // with a shockwave ring + brightness blink + devour thump. F-090/F-093
+            // gulp-sync upgrade: the hashed schedule stays the FLOOR, but a sub-plate
+            // pouring over the horizon takes the max (strength 0.75–1.0) — the
+            // shockwave/blink/thump land exactly when a continent visibly goes over.
             if (t > T_FINALE_REVEAL + 60 && t < T_FINALE_DARK - 80) {
-                float pulse = current.blackHole.swallowPulse(t - T_FINALE_TELE);
+                float pulse = Math.max(current.blackHole.swallowPulse(t - T_FINALE_TELE),
+                        current.mapRip.plateCrossing(t - T_FINALE_REVEAL));
                 if (pulse >= 0.0F) {
                     devourPulse(current, pulse);
                 }
@@ -1232,6 +1308,105 @@ public final class CreditsSequence implements SequenceReplayable {
     }
 
     /**
+     * F-090/F-093 — the map rip's per-tick beat dressing (offsets on the act clock
+     * {@code ripTick} = run tick − {@value #T_FINALE_REVEAL}; every schedule is
+     * deterministic act state, every SEND stays sequence-owned — the house law):
+     *
+     * <ul>
+     *   <li><b>Crack-front steps</b> ({@link CreditsMapRipAct#crackStep}): the
+     *       {@code credits4_crackfront} veil at the step midpoint (glow motes hugging
+     *       the seam + dust curtain + debris jet) + a shake pulse per propagation step
+     *       + the END_SHATTER_CRACK pitch ladder with a DEEPSLATE_BREAK double.</li>
+     *   <li><b>Lift waves</b>: the "continent groan" — END_SHATTER_RUMBLE at 0.45
+     *       pitch + a delayed muffled GENERIC_EXPLODE as a wave of plates tears out.</li>
+     *   <li><b>Sub-fractures</b> ({@link CreditsMapRipAct#plateBreaks}): the
+     *       {@code credits4_platebreak} burst + crack snap at each mid-air split.</li>
+     *   <li><b>Gravity waves</b>: a screen shockwave ring at the anchor + rumble +
+     *       long soft shake as each ring crest starts across the effigy.</li>
+     *   <li><b>Jet bursts</b> ({@link CreditsMapRipAct#jetBurst}): the
+     *       {@code credits4_jetburst} streams at the anchor + the
+     *       {@code S2CCreditsJetPayload} strobe (the shader's JetPulse flare) whenever
+     *       a shredded sub-plate sprays along the jet axis.</li>
+     *   <li><b>Shepard riser</b>: the {@value #SHEPARD_PERIOD}t pitch-cycled rumble
+     *       bed ({@link #SHEPARD_PITCH}/{@link #SHEPARD_VOL}) under the whole devour.</li>
+     * </ul>
+     */
+    private static void mapRipBeats(Run current, int ripTick) {
+        if (!current.mapRip.staged()) {
+            return;
+        }
+        ServerLevel overworld = current.server.overworld();
+        CreditsMapRipAct.CrackStep step = current.mapRip.crackStep(ripTick);
+        if (step != null) {
+            FxPayloads.sendFxEvent(overworld, CUE_CREDITS4_CRACKFRONT, step.mid(),
+                    step.progress(), 0.0F, -1.0D);
+            PacketDistributor.sendToAllPlayers(
+                    S2CShakePayload.shake(0.3F + 0.25F * step.progress(), 14));
+            for (ServerPlayer player : overworld.players()) {
+                player.playNotifySound(EclipseSounds.EVENT_END_SHATTER_CRACK.get(),
+                        SoundSource.MASTER, 0.9F, 0.55F + 0.25F * step.progress());
+                player.playNotifySound(SoundEvents.DEEPSLATE_BREAK, SoundSource.BLOCKS,
+                        0.7F, 0.5F + 0.2F * step.progress());
+            }
+        }
+        for (int wave = 0; wave < CreditsMapRipAct.LIFT_WAVE_AT.length; wave++) {
+            if (ripTick == CreditsMapRipAct.LIFT_WAVE_AT[wave]) {
+                PacketDistributor.sendToAllPlayers(S2CShakePayload.shake(0.42F, 44));
+                for (ServerPlayer player : overworld.players()) {
+                    player.playNotifySound(EclipseSounds.EVENT_END_SHATTER_RUMBLE.get(),
+                            SoundSource.MASTER, 0.9F, 0.45F);
+                }
+                schedule(current.server, 14, () -> {
+                    for (ServerPlayer player : current.server.getPlayerList().getPlayers()) {
+                        if (!player.hasDisconnected()) {
+                            player.playNotifySound(SoundEvents.GENERIC_EXPLODE.value(),
+                                    SoundSource.MASTER, 0.35F, 0.4F);
+                        }
+                    }
+                });
+            }
+        }
+        for (Vec3 breakPos : current.mapRip.plateBreaks(ripTick)) {
+            FxPayloads.sendFxEvent(overworld, CUE_CREDITS4_PLATEBREAK, breakPos,
+                    0.0F, 0.0F, -1.0D);
+            PacketDistributor.sendToAllPlayers(S2CShakePayload.shake(0.35F, 12));
+            for (ServerPlayer player : overworld.players()) {
+                player.playNotifySound(EclipseSounds.EVENT_END_SHATTER_CRACK.get(),
+                        SoundSource.MASTER, 0.85F, 0.8F);
+            }
+        }
+        for (int wave = 0; wave < CreditsMapRipAct.GRAVITY_WAVE_AT.length; wave++) {
+            if (ripTick == CreditsMapRipAct.GRAVITY_WAVE_AT[wave]) {
+                // The (≤0.65, 26) signature stays clear of the intro's (1.0, 50) seam
+                // and the gulps' (≤0.65, 18) rings.
+                FxPayloads.sendFxEvent(overworld, FxPayloads.FX_SHOCKWAVE,
+                        current.blackHole.fxAnchor(), 0.3F + 0.05F * wave, 26.0F, -1.0D);
+                PacketDistributor.sendToAllPlayers(S2CShakePayload.shake(0.3F, 30));
+                for (ServerPlayer player : overworld.players()) {
+                    player.playNotifySound(EclipseSounds.EVENT_END_SHATTER_RUMBLE.get(),
+                            SoundSource.MASTER, 0.8F, 0.45F);
+                }
+            }
+        }
+        float jet = current.mapRip.jetBurst(ripTick);
+        if (jet >= 0.0F) {
+            FxPayloads.sendFxEvent(overworld, CUE_CREDITS4_JETBURST,
+                    current.blackHole.fxAnchor(), jet, 0.0F, -1.0D);
+            for (ServerPlayer player : current.server.getPlayerList().getPlayers()) {
+                CreditsPayloads.sendJet(player, jet);
+            }
+        }
+        if (ripTick > 0 && ripTick % SHEPARD_PERIOD == 0
+                && ripTick < CreditsBlackHoleAct.SPIRAL_TICKS - 140) {
+            int cycle = (ripTick / SHEPARD_PERIOD) % SHEPARD_PITCH.length;
+            for (ServerPlayer player : overworld.players()) {
+                player.playNotifySound(EclipseSounds.EVENT_END_SHATTER_RUMBLE.get(),
+                        SoundSource.MASTER, SHEPARD_VOL[cycle], SHEPARD_PITCH[cycle]);
+            }
+        }
+    }
+
+    /**
      * t={@value #T_FINALE_TELE} — behind the long post-card black: everyone to the HIGH
      * tele-vantage (frozen, still invisible), the FOV crushed to
      * {@value #FINALE_FOV_SCALE} (tele/ortho read), the SPACE sky armed at its first
@@ -1314,6 +1489,7 @@ public final class CreditsSequence implements SequenceReplayable {
         CreditsData data = CreditsData.get(current.server);
         data.setCompleted(true);
         current.blackHole.discard();
+        current.mapRip.discard();
         ServerLevel overworld = current.server.overworld();
         BlockPos spawn = overworld.getSharedSpawnPos();
         int returned = 0;
@@ -2632,9 +2808,11 @@ public final class CreditsSequence implements SequenceReplayable {
                 return true;
             }
             case "BLACKHOLE" -> {
-                // FX-only F-056 (+F-072 V3 nebula + one sample gulp): SPACE sky + post
+                // FX-only F-056 (+F-072 V3 nebula + one sample gulp; +F-090/F-093 one
+                // sample crack front, jet burst and JetPulse strobe): SPACE sky + post
                 // distortion + the maw & nebula cues 60 blocks down the watcher's view
-                // line + the tele FOV — all handed back after.
+                // line + the tele FOV — all handed back after. NOTE: FX-only replays
+                // never spawn displays — the map-rip effigy itself needs the real run.
                 for (ServerPlayer player : watchers) {
                     Vec3 ahead = player.position().add(player.getLookAngle().scale(60.0D));
                     CreditsPayloads.sendSky(player, new CreditsPayloads.S2CCreditsSkyPayload(
@@ -2646,10 +2824,36 @@ public final class CreditsSequence implements SequenceReplayable {
                             .S2CFxEventPayload(CUE_CREDITS3_NEBULA, ahead, 0.0F, 0.0F));
                     CreditsPayloads.sendFov(player, FINALE_FOV_SCALE, 80);
                 }
+                schedule(server, 80, () -> {
+                    for (ServerPlayer player : watchers) {
+                        if (!player.hasDisconnected()) {
+                            // One sample crack-front step at the watcher (mid-front read).
+                            PacketDistributor.sendToPlayer(player, new dev.projecteclipse.eclipse
+                                    .network.fx.S2CFxEventPayload(CUE_CREDITS4_CRACKFRONT,
+                                            player.position(), 0.5F, 0.0F));
+                            PacketDistributor.sendToPlayer(player, S2CShakePayload.shake(0.42F, 14));
+                            player.playNotifySound(EclipseSounds.EVENT_END_SHATTER_CRACK.get(),
+                                    SoundSource.MASTER, 0.9F, 0.68F);
+                        }
+                    }
+                });
                 schedule(server, 160, () -> {
                     for (ServerPlayer player : watchers) {
                         if (!player.hasDisconnected()) {
                             CreditsPayloads.sendPulse(player, 0.7F); // one sample gulp flare
+                        }
+                    }
+                });
+                schedule(server, 300, () -> {
+                    for (ServerPlayer player : watchers) {
+                        if (!player.hasDisconnected()) {
+                            // One sample jet burst: the Photon streams down the view line
+                            // + the JetPulse strobe (the shader jets flare with it).
+                            Vec3 ahead = player.position().add(player.getLookAngle().scale(60.0D));
+                            PacketDistributor.sendToPlayer(player, new dev.projecteclipse.eclipse
+                                    .network.fx.S2CFxEventPayload(CUE_CREDITS4_JETBURST,
+                                            ahead, 0.85F, 0.0F));
+                            CreditsPayloads.sendJet(player, 0.85F);
                         }
                     }
                 });

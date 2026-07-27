@@ -57,7 +57,9 @@ import dev.projecteclipse.eclipse.worldgen.ore.OreField;
  * moat lip, cave voids, entrances, breach and End geometry) is keyed exclusively to
  * fixed map data, frozen per-save params and FINAL radii, while every stage-dependent
  * effect (rim spill curtains, crumble-shard promotion, hanging rim lichen/vines, the
- * stalactite fringe) lives inside the rim band the ring sweep rewrites anyway. The
+ * stalactite fringe, and the F-092 rim mountain wall — a stage-keyed uplift band whose
+ * innermost reach {@link #RIM_WALL_BAND} sized the margin) lives inside the rim band
+ * the ring sweep rewrites anyway. The
  * breach funnel and End disc flip on once per save ({@code FrozenParams.breachOpen()} /
  * {@code endDiscMaterialized()}); their live materialization sweeps (W1.7/W1.8) write
  * exactly what this function returns afterwards.</p>
@@ -67,12 +69,40 @@ public final class DiscTerrainFunction {
     public static final int RIM_WIDTH = 12;
     /** Amplitude in blocks of the simplex wobble applied to every disc rim. */
     public static final int RIM_NOISE_AMP = 8;
+
+    // --- F-092 rim mountain wall (Layer B) ---
+
+    /**
+     * Innermost reach in blocks of the rim-wall uplift band, measured inward from the
+     * CURRENT stage radius: the wall occupies {@code [R − 56, R − 6]}. This constant
+     * sizes {@link #RIM_REWRITE_MARGIN}, so the whole (stage-keyed!) wall always lies
+     * inside the annulus the ring sweep rewrites on the next expansion.
+     */
+    public static final int RIM_WALL_BAND = 56;
+    /** Gap between the stage radius and the wall's outer foot (the rim taper owns the rest). */
+    private static final int RIM_WALL_RIM_GAP = 6;
+    /** Distance from the rim at which the uplift envelope reaches its crest plateau. */
+    private static final int RIM_WALL_CREST_DIST = 12;
+    /** Baseline surface lift of the wall at full envelope (before crest noise). */
+    private static final double RIM_WALL_BASE_LIFT = 130.0D;
+    /** Extra lift of the sharp ridge crests on top of the baseline (peaks ≈ y 200-245). */
+    private static final double RIM_WALL_CREST_AMP = 45.0D;
+    /** Absolute cap of a wall summit — below THE mountain's 280 crown (peak primacy). */
+    private static final int RIM_WALL_MAX_Y = 245;
+    /** Stage-0 discs are tiny — crags only (band reach and lift scaled down). */
+    private static final double RIM_WALL_STAGE0_SCALE = 0.35D;
+    /** Radial fade width of the wall out of river channels (gorges for the rim waterfalls). */
+    private static final double RIM_WALL_RIVER_FADE = 18.0D;
+    /** Fade width of the wall around landmark clearances and the breach halo. */
+    private static final double RIM_WALL_SUPPRESS_FADE = 20.0D;
+
     /**
      * How far INSIDE the previous stage radius the ring sweep must start rewriting so
-     * the old rim taper, crumble holes and spill curtains are replaced by interior
-     * terrain (rim width + rim noise + a safety margin).
+     * the old rim taper, crumble holes, spill curtains and the F-092 rim mountain wall
+     * are replaced by interior terrain (wall band + rim noise + a safety margin —
+     * 24 → 68 with the wall, plan PLAN-F091-092 §3.3).
      */
-    public static final int RIM_REWRITE_MARGIN = RIM_WIDTH + RIM_NOISE_AMP + 4;
+    public static final int RIM_REWRITE_MARGIN = RIM_WALL_BAND + RIM_NOISE_AMP + 4;
 
     /** Half-width in blocks of an authored river channel (depressed bed + water fill). */
     public static final double RIVER_HALF_WIDTH = 4.0D;
@@ -92,12 +122,14 @@ public final class DiscTerrainFunction {
     // map-seed noise family: 1-5 + 9 live here, 6/7/10 in CaveDensity, 8 in
     // DiscMapData's sector-seam wobble, 24/27 here (dunes / red-sand patches),
     // 25 in EndDiscGeometry, 26 in BreachGeometry, 29 in CaveBiomeMap,
-    // 30-32 in DiscMapDefaults. Next free noise salt: 33+.
+    // 30-32 in DiscMapDefaults, 33 here (F-092 rim-wall crests). Next free
+    // noise salt: 34+.
     private static volatile TerrainNoises terrainNoises;
 
     private record TerrainNoises(long seed, SimplexNoise rim, SimplexNoise surfaceLarge,
             SimplexNoise surfaceMedium, SimplexNoise surfaceDetail, SimplexNoise fringe,
-            SimplexNoise ridge, SimplexNoise dune, SimplexNoise sandPatch) {}
+            SimplexNoise ridge, SimplexNoise dune, SimplexNoise sandPatch,
+            SimplexNoise rimWall) {}
 
     // Hash salts. 13 (CaveEntrances), 14 (BreachGeometry) and 15 (EndDiscGeometry) are
     // owned by the sibling geometry modules; 17 + ore.salt() belongs to W1.3's OreField
@@ -274,6 +306,23 @@ public final class DiscTerrainFunction {
                 && BreachGeometry.contains(x, z);
         boolean endDisc = profile == DiscProfile.OVERWORLD && FrozenParams.endDiscMaterialized()
                 && EndDiscGeometry.footprintContains(x, z);
+
+        // Authored walk-in cave entrance of this column's 96×96 cell, if any (D4.4).
+        // Resolved before the rim wall so entrance craters suppress the uplift.
+        CaveEntrances.Entrance entrance = profile == DiscProfile.OVERWORLD
+                ? CaveEntrances.entranceAt(map, x, z)
+                : null;
+
+        // F-092 Layer B — the rim mountain wall: a stage-keyed uplift band hugging the
+        // CURRENT rim, applied BEFORE every consumer of surfaceY so the underside,
+        // caves, snow caps and high-rock strata all follow the lifted surface. Torn
+        // down ring by ring on expansion because the whole band lies inside
+        // RIM_REWRITE_MARGIN. Overworld only: the nether roof shell (y ≈ 200+) would
+        // collide, and its rim reads as cave wall by design.
+        if (profile == DiscProfile.OVERWORLD && !breach && !endDisc && entrance == null
+                && map.surfaceOverrideAt(x, z) == Integer.MIN_VALUE) {
+            surfaceY = rimWallSurfaceY(map, x, z, stage, r, riverDist, surfaceY);
+        }
 
         // River carve: depress the bed 3-4 blocks and fill static water sources up to
         // the original surface − 1. Where the channel crosses the rim taper the water
@@ -517,11 +566,6 @@ public final class DiscTerrainFunction {
         double caveFade = caveMaxY == Integer.MIN_VALUE ? 0.0D
                 : smoothstep(Math.max(0.0D, Math.min(1.0D, (edge - 0.55D) / 0.30D)));
 
-        // Authored walk-in cave entrance of this column's 96×96 cell, if any (D4.4).
-        CaveEntrances.Entrance entrance = profile == DiscProfile.OVERWORLD
-                ? CaveEntrances.entranceAt(map, x, z)
-                : null;
-
         // Snow caps on high ground are strata (SNOW_BLOCK top), not vegetation; snow
         // LAYERS now come from vanilla's freeze_top_layer via W1.1 decoration.
         boolean snowCap = profile == DiscProfile.OVERWORLD && surfaceY >= 210;
@@ -557,6 +601,90 @@ public final class DiscTerrainFunction {
                 cavityMinY, cavityMaxY, cavityLavaY, cavityShell, caveMinY, caveMaxY,
                 caveFade, entrance, breach, endDisc, ceilingBottomY, ceilingBodyY,
                 ceilingTopY, seamCurtain, frostFill);
+    }
+
+    /**
+     * F-092 Layer B: surface Y with the rim mountain wall applied — a smoothstep uplift
+     * envelope over the {@code [R − 56, R − 6]} band (0 at the inner edge, crest plateau
+     * within ~{@value #RIM_WALL_CREST_DIST} blocks of the rim) carrying sharp
+     * {@code 1 − |simplex|} ridge crests (salt 33) plus a high-frequency crag octave.
+     * Peaks reach y ≈ 200-245 — a 130-170-block wall over typical y ≈ 71 terrain,
+     * capped below THE mountain's 280 crown. Smoothly faded out of river channels
+     * (gorges for the rim waterfalls), around the breach halo and around landmark
+     * clearances (the stronghold r400 site); stage-0 discs get
+     * {@value #RIM_WALL_STAGE0_SCALE}-scaled crags only. Returns {@code surfaceY}
+     * unchanged outside the band or in fully suppressed columns.
+     */
+    private static int rimWallSurfaceY(DiscMapData map, int x, int z, int stage, double r,
+            double riverDist, int surfaceY) {
+        int stageRadius = stage >= 1
+                ? StageRadii.radius(DiscProfile.OVERWORLD, stage)
+                : DiscGeometry.MAIN_DISC_RADIUS;
+        if (stageRadius <= 0) {
+            return surfaceY;
+        }
+        double scale = stage >= 1 ? 1.0D : RIM_WALL_STAGE0_SCALE;
+        double innerReach = RIM_WALL_RIM_GAP + (RIM_WALL_BAND - RIM_WALL_RIM_GAP) * scale;
+        double crestDist = RIM_WALL_RIM_GAP + (RIM_WALL_CREST_DIST - RIM_WALL_RIM_GAP) * scale;
+        double fromRim = stageRadius - r;
+        if (fromRim < RIM_WALL_RIM_GAP || fromRim > innerReach) {
+            return surfaceY;
+        }
+        double fade = fromRim <= crestDist ? 1.0D
+                : smoothstep((innerReach - fromRim) / (innerReach - crestDist));
+        // River gorge: the wall parts around authored channels so the rim waterfalls
+        // keep pouring at their carved height.
+        double riverEdge = RIVER_HALF_WIDTH + RIVER_BANK_MARGIN;
+        if (riverDist < riverEdge + RIM_WALL_RIVER_FADE) {
+            fade *= smoothstep(Math.max(0.0D, (riverDist - riverEdge) / RIM_WALL_RIVER_FADE));
+        }
+        // Breach halo: graded, so the funnel lip meets a slope instead of a cliff face.
+        if (fade > 0.0D && FrozenParams.breachOpen()) {
+            double bdx = x - BreachGeometry.centerX();
+            double bdz = z - BreachGeometry.centerZ();
+            double breachDist = Math.sqrt(bdx * bdx + bdz * bdz);
+            fade *= smoothstep(Math.max(0.0D, Math.min(1.0D,
+                    (breachDist - BreachGeometry.HALO_RADIUS) / RIM_WALL_SUPPRESS_FADE)));
+        }
+        if (fade > 0.0D) {
+            fade *= overworldLandmarkFactor(map, x, z);
+        }
+        if (fade <= 0.0D) {
+            return surfaceY;
+        }
+        TerrainNoises noises = terrainNoises();
+        double crest = 1.0D - Math.abs(noises.rimWall().getValue(x / 26.0D, z / 26.0D));
+        double crag = noises.rimWall().getValue(x / 9.0D + 900.0D, z / 9.0D - 900.0D);
+        crest = Math.max(0.0D, Math.min(1.15D, crest + crag * 0.20D));
+        double lift = (RIM_WALL_BASE_LIFT + crest * RIM_WALL_CREST_AMP) * fade * scale;
+        int lifted = (int) Math.round(Math.min((double) RIM_WALL_MAX_Y, surfaceY + lift));
+        return Math.max(surfaceY, lifted);
+    }
+
+    /**
+     * 0..1 damping factor of the rim wall around overworld landmark clearances: 0
+     * inside {@code radius + 24} (the cliffiness clearance guard), smoothstepping to 1
+     * over the next {@value #RIM_WALL_SUPPRESS_FADE} blocks, so landmark plateaus meet
+     * the wall as a slope instead of a 150-block cliff.
+     */
+    private static double overworldLandmarkFactor(DiscMapData map, int x, int z) {
+        double factor = 1.0D;
+        for (DiscMapData.Landmark landmark : map.profile(DiscProfile.OVERWORLD).landmarks()) {
+            double clear = landmark.radius() + 24.0D;
+            double reach = clear + RIM_WALL_SUPPRESS_FADE;
+            double dx = x - landmark.x();
+            double dz = z - landmark.z();
+            double distSq = dx * dx + dz * dz;
+            if (distSq >= reach * reach) {
+                continue;
+            }
+            double t = Math.max(0.0D, (Math.sqrt(distSq) - clear) / RIM_WALL_SUPPRESS_FADE);
+            factor = Math.min(factor, smoothstep(t));
+            if (factor <= 0.0D) {
+                return 0.0D;
+            }
+        }
+        return factor;
     }
 
     /** Whether (x, z) lies within 24 blocks of any nether landmark's clearance radius. */
@@ -1348,7 +1476,7 @@ public final class DiscTerrainFunction {
                 if (cached == null || cached.seed() != seed) {
                     cached = new TerrainNoises(seed, noise(seed, 1), noise(seed, 2), noise(seed, 3),
                             noise(seed, 4), noise(seed, 5), noise(seed, 9), noise(seed, 24),
-                            noise(seed, 27));
+                            noise(seed, 27), noise(seed, 33));
                     terrainNoises = cached;
                 }
             }

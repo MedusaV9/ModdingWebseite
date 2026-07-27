@@ -44,6 +44,12 @@
 //              hotspots, jets and the lensed starfield — the cheap core read stays)
 //   Pulse    — 0..1 gulp envelope (V3; CreditsSkyFx.holePulse ← S2CCreditsPulsePayload,
 //              sent by CreditsSequence.devourPulse / the horizon flashes). 0 = no-op.
+//   JetPulse — 0..1 jet-burst envelope (F-090/F-093; CreditsSkyFx.jetPulse ←
+//              S2CCreditsJetPayload, sent when a shredded sub-plate sprays along the
+//              jet axis): the jet columns FLARE (×(1 + 1.4·jetP)), the knot phase
+//              speed doubles and the axial window lengthens to (0.5, 0.95) — the jets
+//              visibly STROBE with the display spray. Detail-gated like the jets;
+//              strict no-op at 0.
 #include eclipse:eclipse_common
 
 uniform sampler2D DiffuseSampler0;
@@ -53,6 +59,7 @@ uniform float Aspect;
 uniform float Time;
 uniform float Detail;
 uniform float Pulse;
+uniform float JetPulse;
 
 in vec2 texCoord;
 
@@ -185,7 +192,11 @@ void main() {
     // the lensing ramp (the hole only ignites its jets once it feeds hard — from the
     // 0.7 intensity step up), pulse knots traveling OUTWARD, a slow sway, the upper
     // (approaching) jet Doppler-bright. Sheared, not rotated — one mad() per pixel.
+    // F-090/F-093 JetPulse strobe: on a jet burst the columns flare ×(1 + 1.4·jetP),
+    // the knot phase speed doubles and the axial window lengthens to (0.5, 0.95) —
+    // the screen jets surge exactly while the display spray rides the same axis.
     float jetGate = smoothstep(0.45, 0.8, strength) * Detail;
+    float jetP = clamp(JetPulse, 0.0, 1.0) * Detail;
     if (jetGate > 0.003) {
         float sway = 0.05 * sin(Time * 0.21);
         vec2 jp = vec2(toHole.x + toHole.y * sway, toHole.y);
@@ -194,12 +205,12 @@ void main() {
         float width = coreR * 0.26 + axial * 0.05; // a gently opening cone
         float lateral = 1.0 - smoothstep(0.0, width, abs(jp.x));
         float along = smoothstep(coreR * 1.15, coreR * 2.1, axial)
-                * (1.0 - smoothstep(0.42, 0.8, axial));
+                * (1.0 - smoothstep(mix(0.42, 0.5, jetP), mix(0.8, 0.95, jetP), axial));
         float knots = 0.62 + 0.38 * sin(axial / max(coreR, 1.0e-3) * 7.0
-                - Time * 2.4 + side * 1.9);
+                - Time * 2.4 * (1.0 + jetP) + side * 1.9);
         float jetDoppler = side > 0.0 ? 1.18 : 0.74;
         color += JET_COLOR * lateral * lateral * along * knots * jetDoppler
-                * (0.5 + 0.45 * pulse) * jetGate;
+                * (0.5 + 0.45 * pulse) * (1.0 + 1.4 * jetP) * jetGate;
     }
 
     // [b3c] star streaks: hashed angular buckets carry thin dashes flowing INWARD

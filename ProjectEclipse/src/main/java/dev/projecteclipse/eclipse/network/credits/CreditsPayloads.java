@@ -45,6 +45,7 @@ public final class CreditsPayloads {
     private static volatile Consumer<S2CCreditsFovPayload> fovHandler;
     private static volatile Consumer<S2CCreditsSkyPayload> skyHandler;
     private static volatile Consumer<S2CCreditsPulsePayload> pulseHandler;
+    private static volatile Consumer<S2CCreditsJetPayload> jetHandler;
 
     private CreditsPayloads() {}
 
@@ -208,6 +209,27 @@ public final class CreditsPayloads {
     }
 
     /**
+     * F-090/F-093 — one black-hole JET burst impulse ({@code client.credits.CreditsSkyFx}):
+     * {@code strength} 0..1 drives a second attack/decay envelope the
+     * {@code eclipse:black_hole} post pass reads as its {@code JetPulse} uniform — the
+     * polar jets FLARE and strobe exactly when {@code CreditsSequence} shreds a
+     * sub-plate along the jet axis ({@code CreditsMapRipAct.jetBurst}, paired with the
+     * {@code credits4_jetburst} Photon streams). Fire-and-forget like the gulp pulse;
+     * a lost packet just skips one strobe.
+     */
+    public record S2CCreditsJetPayload(float strength) implements CustomPacketPayload {
+        public static final Type<S2CCreditsJetPayload> TYPE = new Type<>(
+                ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "credits/jet"));
+        public static final StreamCodec<ByteBuf, S2CCreditsJetPayload> STREAM_CODEC =
+                ByteBufCodecs.FLOAT.map(S2CCreditsJetPayload::new, S2CCreditsJetPayload::strength);
+
+        @Override
+        public Type<S2CCreditsJetPayload> type() {
+            return TYPE;
+        }
+    }
+
+    /**
      * The client-close broadcast (IDEAS §B3): after {@code delayTicks} the client calls
      * {@code Minecraft.stop()} — guarded client-side (nonce match, never in
      * singleplayer/LAN, {@code allowFinaleClose} kill-switch).
@@ -248,6 +270,8 @@ public final class CreditsPayloads {
                 (payload, context) -> dispatch(skyHandler, payload, "sky"));
         registrar.playToClient(S2CCreditsPulsePayload.TYPE, S2CCreditsPulsePayload.STREAM_CODEC,
                 (payload, context) -> dispatch(pulseHandler, payload, "pulse"));
+        registrar.playToClient(S2CCreditsJetPayload.TYPE, S2CCreditsJetPayload.STREAM_CODEC,
+                (payload, context) -> dispatch(jetHandler, payload, "jet"));
     }
 
     private static <T extends CustomPacketPayload> void dispatch(Consumer<T> handler, T payload, String name) {
@@ -292,6 +316,11 @@ public final class CreditsPayloads {
     /** F-072 V3: one black-hole gulp impulse (the post pass's {@code Pulse} envelope). */
     public static void sendPulse(ServerPlayer player, float strength) {
         PacketDistributor.sendToPlayer(player, new S2CCreditsPulsePayload(strength));
+    }
+
+    /** F-090/F-093: one jet-burst impulse (the post pass's {@code JetPulse} envelope). */
+    public static void sendJet(ServerPlayer player, float strength) {
+        PacketDistributor.sendToPlayer(player, new S2CCreditsJetPayload(strength));
     }
 
     public static void sendClose(ServerPlayer player, int delayTicks, int nonce) {
@@ -348,5 +377,10 @@ public final class CreditsPayloads {
     /** Installed by {@code client.credits.CreditsSkyFx} (client class-load). */
     public static void setClientPulseHandler(Consumer<S2CCreditsPulsePayload> handler) {
         pulseHandler = handler;
+    }
+
+    /** Installed by {@code client.credits.CreditsSkyFx} (client class-load). */
+    public static void setClientJetHandler(Consumer<S2CCreditsJetPayload> handler) {
+        jetHandler = handler;
     }
 }

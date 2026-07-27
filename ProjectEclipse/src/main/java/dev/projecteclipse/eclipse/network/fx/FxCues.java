@@ -435,6 +435,18 @@ public final class FxCues {
      * stand-in; released unconditionally under reducedFx (loop law).
      */
     public static final ResourceLocation CUE_DUNGEON_MAW_IDLE = cue("dungeon_maw_idle");
+    /**
+     * F-092: rim-mountain recede dust curtain + low rumble ({@code eclipse:rim_recede}),
+     * fired ONCE per player (overworld only) at the expansion RELEASE moment by
+     * {@code ExpansionBorderFx}'s gate release — {@code pos} = the nearest point of the
+     * OLD rim to that player ({@code FxPayloads.sendFxEventTo}, leaking nothing beyond
+     * the already-synced ring radius), {@code a} = the old ring radius (informational),
+     * {@code b} = 0. Accompanies the {@code SoftBorder.releaseGrowthHold} lerp that
+     * glides the {@code RimMountainSilhouette} ring (and the border) outward. Photon-less
+     * clients get the {@code growth_dust_wall} Quasar leg (row in
+     * {@code WorldEventPhotonFxRows}).
+     */
+    public static final ResourceLocation CUE_RIM_RECEDE = cue("rim_recede");
 
     // NEWFX-D — client atmosphere & transit (PLAN-NEWFX §2 D1–D5). The package is wire-free
     // by design: D1/D4 are client-latched one-shots spawned directly through

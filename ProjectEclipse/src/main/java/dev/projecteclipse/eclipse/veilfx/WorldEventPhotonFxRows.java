@@ -35,6 +35,11 @@ import net.neoforged.neoforge.client.event.ClientTickEvent;
  * {@code tools/photon/worldevents_fx.py}; Quasar fallbacks live under
  * {@code assets/eclipse/quasar/emitters/} — NEW emitters are legal fallbacks here
  * because every cue is new (pre-row baseline was nothing, the Row javadoc law).
+ * F-092's rim-mountain recede cue rides the same registrar (plan
+ * PLAN-F091-092 §3.4 names this pattern): its Quasar leg reuses the EXISTING
+ * {@code growth_dust_wall} curtain emitter, and until the Photon
+ * {@code rim_recede} asset is authored the row plays that leg alone (the bridge
+ * degrades a missing Photon asset silently — LAYER law).
  *
  * <p>Custom {@code PhotonLeg}s (INTEGRATION §3.5 — grows only when a cue needs it):</p>
  * <ul>
@@ -143,6 +148,20 @@ public final class WorldEventPhotonFxRows {
                 FxBudget.Channel.AMBIENT,
                 PhotonFxRegistry.Mode.REPLACE,
                 true));
+        // F-092 — rim-mountain recede dust curtain: fired once per player at the
+        // expansion RELEASE (ExpansionBorderFx gate release, pos = that player's
+        // nearest old-rim point, a = old ring radius). Default position leg; the
+        // Quasar half reuses the growth_dust_wall curtain (an EXISTING emitter —
+        // legal, the cue is new) so photon-less clients still see the wall exhale
+        // as the silhouette ring glides outward. SEQUENCE-grade: once per player
+        // per expansion (§5 budget).
+        PhotonFxRegistry.registerRow(new PhotonFxRegistry.Row(
+                FxCues.CUE_RIM_RECEDE,
+                fx("rim_recede"),
+                quasar("growth_dust_wall"),
+                FxBudget.Channel.SEQUENCE,
+                PhotonFxRegistry.Mode.LAYER,
+                false));
     }
 
     // ------------------------------------------------------------------ custom legs

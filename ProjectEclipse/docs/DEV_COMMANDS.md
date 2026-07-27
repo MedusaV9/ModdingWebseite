@@ -134,6 +134,13 @@ Operator reference for `/dev` and legacy admin roots. Regenerate with `/dev docs
 ## Stage
 
 - `/dev chunk regen [<pos>|current] [<radius>] [force]` — Rewrite loaded disc chunks from the frozen terrain function at the committed stage and replay carving/decoration (radius 0-2 around a position; 'force' overrides structure protection). · perm **3** · *destructive*
+- `/dev preload cancel` — Cancels all running pregeneration jobs and forgets their saved progress; a later start begins from zero. · perm **3** · *caution*
+- `/dev preload everything` — Pregenerates BOTH disc dimensions to the final frozen radius once, so every later chunk access is a pure region-file load — no raw chunk generation is ever visible again. · perm **3** · *caution*
+- `/dev preload pause` — Pauses all running pregeneration jobs (in-flight chunks still drain). · perm **3**
+- `/dev preload resume` — Resumes manually paused pregeneration jobs. · perm **3**
+- `/dev preload start <overworld|nether|all> [<radiusBlocks>]` — Starts or resumes a scoped pregeneration run for one dimension (or all) with an optional custom radius in blocks. · perm **3** · *caution*
+- `/dev preload status` — Shows per-dimension pregeneration progress: cursor, percent, rate, ETA, in-flight window, and disk headroom. · perm **3**
+- `/dev preload unload` — Manual flush-save of every level plus a report of outstanding pregen chunk requests (the normal completion path already flushes on its own). · perm **3** · *caution*
 - `/dev stage backup now [<label>]` — Captures a timestamped live-terrain backup immediately, with an optional label. · perm **3**
 - `/dev stage list` — Lists curated snapshots and live backups with clickable restore links and UTC timestamps. · perm **3**
 - `/dev stage load <name>` — Restores a curated snapshot or timestamped live backup; first backs up the current terrain. · perm **3** · *destructive*

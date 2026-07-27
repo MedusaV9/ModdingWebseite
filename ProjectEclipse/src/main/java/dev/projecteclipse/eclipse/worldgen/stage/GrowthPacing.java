@@ -30,14 +30,18 @@ import net.neoforged.neoforge.event.server.ServerAboutToStartEvent;
  * {@code stages.json} these are never frozen per save):
  *
  * <pre>{@code
- * { "configVersion": 2,                   // growth.* self-migration marker (see below)
+ * { "configVersion": 3,                   // growth.* self-migration marker (see below)
  *   "growth": { "targetTicks": 500,       // animated sweeps pace toward this duration
  *               "revealDelayTicks": 4,    // chunk resend lag behind its covering wavefront payload
  *               "ringsPerPulse": 20,      // max 1-block rings the wavefront advances per 5-tick FX pulse
  *               "shakeEveryRings": 12,    // S2CShakePayload pulse cadence in rings (<=0 disables)
  *               "columnRiseTicks": 18 },  // client column-rise animation hint (S2CGrowthWavePayload)
  *   "features": { "deny": [] },           // placed-feature ids removed from every biome (W1.1 filter)
- *   "glitch": { "freshTicks": 72000 } }   // NewRingRegistry freshness decay (3 in-game days)
+ *   "glitch": { "freshTicks": 72000 },    // NewRingRegistry freshness decay (3 in-game days)
+ *   "pregen": { "autoStart": true,        // F-091: auto-pregen on boot while startEventDone == false
+ *               "maxInFlight": 12,        // concurrent full-chunk targets of MapPregenService
+ *               "issuesPerTick": 4,       // new chunk requests issued per tick
+ *               "msptGuard": 40 } }       // issue nothing while the server is above this ms/tick
  * }</pre>
  *
  * <p><b>Defaults live in {@link ExpansionTiming}</b>, not here — the whole expansion
@@ -74,13 +78,16 @@ public final class GrowthPacing {
     /**
      * Bumped whenever the {@code growth} pacing defaults change; older files are backed up
      * and regenerated so an existing save actually receives the new timings (v2 = the
-     * "map expansion is too slow" speed pass, {@link ExpansionTiming}).
+     * "map expansion is too slow" speed pass, {@link ExpansionTiming}; v3 = the F-091
+     * {@code pregen} block for {@code MapPregenService}).
      */
-    static final int CONFIG_VERSION = 2;
+    static final int CONFIG_VERSION = 3;
 
     /** Immutable knob snapshot; {@link #DEFAULTS} until the first successful load. */
     record Snapshot(int targetTicks, int revealDelayTicks, int ringsPerPulse, int shakeEveryRings,
-            int columnRiseTicks, int glitchFreshTicks, List<ResourceLocation> denyIds) {}
+            int columnRiseTicks, int glitchFreshTicks, List<ResourceLocation> denyIds,
+            boolean pregenAutoStart, int pregenMaxInFlight, int pregenIssuesPerTick,
+            int pregenMsptGuard) {}
 
     private static final Snapshot DEFAULTS = new Snapshot(
             ExpansionTiming.SWEEP_TARGET_TICKS,
@@ -88,7 +95,11 @@ public final class GrowthPacing {
             ExpansionTiming.SWEEP_RINGS_PER_PULSE,
             ExpansionTiming.SWEEP_SHAKE_EVERY_RINGS,
             ExpansionTiming.SWEEP_COLUMN_RISE_TICKS,
-            DEFAULT_FRESH_TICKS, List.of());
+            DEFAULT_FRESH_TICKS, List.of(),
+            ExpansionTiming.PREGEN_AUTO_START,
+            ExpansionTiming.PREGEN_MAX_IN_FLIGHT,
+            ExpansionTiming.PREGEN_ISSUES_PER_TICK,
+            ExpansionTiming.PREGEN_MSPT_GUARD_MS);
 
     private static volatile Snapshot current = DEFAULTS;
 
@@ -137,6 +148,28 @@ public final class GrowthPacing {
     /** The last-loaded {@code features.deny[]} ids (already pushed into the biome filter). */
     public static List<ResourceLocation> denyIds() {
         return current.denyIds();
+    }
+
+    // --- pregen knobs (F-091 MapPregenService, plan PLAN-F091-092 §2.4) ---
+
+    /** Whether the full-map pregen auto-starts on boot while the start event is pending. */
+    public static boolean pregenAutoStart() {
+        return current.pregenAutoStart();
+    }
+
+    /** Max concurrent full-chunk targets a pregen job keeps in flight. */
+    public static int pregenMaxInFlight() {
+        return current.pregenMaxInFlight();
+    }
+
+    /** Max new chunk requests a pregen job issues per tick. */
+    public static int pregenIssuesPerTick() {
+        return current.pregenIssuesPerTick();
+    }
+
+    /** MSPT ceiling (ms/tick) above which a pregen job stops issuing new requests. */
+    public static int pregenMsptGuardMs() {
+        return current.pregenMsptGuard();
     }
 
     /**
@@ -220,6 +253,8 @@ public final class GrowthPacing {
                 ? root.getAsJsonObject("growth") : new JsonObject();
         JsonObject glitch = root.has("glitch") ? root.getAsJsonObject("glitch") : new JsonObject();
         JsonObject features = root.has("features") ? root.getAsJsonObject("features") : new JsonObject();
+        // Like glitch/features, operator pregen overrides survive growth-block migrations.
+        JsonObject pregen = root.has("pregen") ? root.getAsJsonObject("pregen") : new JsonObject();
 
         List<ResourceLocation> deny = new ArrayList<>();
         if (features.has("deny") && features.get("deny").isJsonArray()) {
@@ -240,7 +275,23 @@ public final class GrowthPacing {
                 clamp(growth, "shakeEveryRings", DEFAULTS.shakeEveryRings(), -1, 4096),
                 clamp(growth, "columnRiseTicks", DEFAULTS.columnRiseTicks(), 1, 20 * 30),
                 clamp(glitch, "freshTicks", DEFAULTS.glitchFreshTicks(), 20, 24000 * 100),
-                List.copyOf(deny));
+                List.copyOf(deny),
+                readBoolean(pregen, "autoStart", DEFAULTS.pregenAutoStart()),
+                clamp(pregen, "maxInFlight", DEFAULTS.pregenMaxInFlight(), 1, 128),
+                clamp(pregen, "issuesPerTick", DEFAULTS.pregenIssuesPerTick(), 1, 64),
+                clamp(pregen, "msptGuard", DEFAULTS.pregenMsptGuard(), 5, 1000));
+    }
+
+    private static boolean readBoolean(JsonObject obj, String key, boolean fallback) {
+        if (!obj.has(key)) {
+            return fallback;
+        }
+        try {
+            return obj.get(key).getAsBoolean();
+        } catch (RuntimeException e) {
+            EclipseMod.LOGGER.warn("Ignoring malformed {} value '{}' in {}", key, obj.get(key), FILE_NAME);
+            return fallback;
+        }
     }
 
     private static int clamp(JsonObject obj, String key, int fallback, int min, int max) {
@@ -262,7 +313,8 @@ public final class GrowthPacing {
                 + "configVersion below the code's resets this block and backs the old file up); "
                 + "features.deny lists placed-feature ids removed "
                 + "from every biome (applies on next boot once chunks have decorated); glitch.freshTicks "
-                + "is the fresh-ring decay window for glitched-mob spawning.");
+                + "is the fresh-ring decay window for glitched-mob spawning; pregen.* paces the F-091 "
+                + "full-map pregeneration (/dev preload).");
         root.addProperty("configVersion", CONFIG_VERSION);
         JsonObject growth = new JsonObject();
         growth.addProperty("targetTicks", snapshot.targetTicks());
@@ -281,6 +333,12 @@ public final class GrowthPacing {
         JsonObject glitch = new JsonObject();
         glitch.addProperty("freshTicks", snapshot.glitchFreshTicks());
         root.add("glitch", glitch);
+        JsonObject pregen = new JsonObject();
+        pregen.addProperty("autoStart", snapshot.pregenAutoStart());
+        pregen.addProperty("maxInFlight", snapshot.pregenMaxInFlight());
+        pregen.addProperty("issuesPerTick", snapshot.pregenIssuesPerTick());
+        pregen.addProperty("msptGuard", snapshot.pregenMsptGuard());
+        root.add("pregen", pregen);
         try {
             Files.createDirectories(configDir);
             Files.writeString(file, GSON.toJson(root), StandardCharsets.UTF_8);

@@ -94,8 +94,13 @@ public final class ExpansionTiming {
     /** Sweep-coupled ring lerp length; matches {@link #SWEEP_TARGET_TICKS} (was 1500). */
     public static final int BORDER_GROWTH_LERP_TICKS = SWEEP_TARGET_TICKS;
 
-    /** Release surge: the gate-held ring expands to the new radius over this (was 8 s). */
-    public static final long BORDER_RELEASE_LERP_MS = 2_500L;
+    /**
+     * Release surge: the gate-held ring expands to the new radius over this (was 2.5 s).
+     * F-092 stretched it to 10 s: the client border radius drives the rim-mountain
+     * silhouette ring, so this IS the visible "mountains slowly recede" glide every
+     * player on the map watches at release ("langsam zurückweichen").
+     */
+    public static final long BORDER_RELEASE_LERP_MS = 10_000L;
 
     // ------------------------------------------------------------------ boulder gate
 
@@ -139,4 +144,18 @@ public final class ExpansionTiming {
      * "Downloading terrain" screen (pure black in 1.21.1) from outlasting the transition.
      */
     public static final int FLYOVER_WARM_TIMEOUT_TICKS = 40;
+
+    // ------------------------------------------------------------------ map pregen (F-091)
+
+    /** Auto-start the full-map pregen on boot while the start event is pending (§2.4). */
+    public static final boolean PREGEN_AUTO_START = true;
+
+    /** Concurrent FULL-status chunk targets a {@code MapPregenService} job keeps in flight. */
+    public static final int PREGEN_MAX_IN_FLIGHT = 12;
+
+    /** New chunk requests a pregen job issues per tick. */
+    public static final int PREGEN_ISSUES_PER_TICK = 4;
+
+    /** Pregen issues nothing while the server is above this many ms/tick (sweep doctrine). */
+    public static final int PREGEN_MSPT_GUARD_MS = 40;
 }

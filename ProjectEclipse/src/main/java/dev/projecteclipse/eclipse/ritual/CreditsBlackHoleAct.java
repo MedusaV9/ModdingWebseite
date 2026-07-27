@@ -73,11 +73,14 @@ final class CreditsBlackHoleAct {
 
     /**
      * Spiraling map-debris displays. F-068 raised the F-056 300–600 band to a recycled
-     * {@value}: every entity re-falls on its cluster's fall cycle, so the visual
+     * 840: every entity re-falls on its cluster's fall cycle, so the visual
      * throughput is several thousand infalls across the act while the LIVE count (the
-     * budget that matters) never exceeds this.
+     * budget that matters) never exceeds this. F-090/F-093 trimmed it to {@value} —
+     * the {@code CreditsMapRipAct} effigy (≈ 2190 displays) now carries the map read,
+     * and the combined finale peak (≈ 2890) must stay under the audited &lt;3000
+     * simultaneous target.
      */
-    static final int COUNT = 840;
+    static final int COUNT = 700;
     static final int SPAWN_PER_TICK = 48;
     static final int PUSH_STRIDE = 10;
     /** Full consume duration: reveal → all swallowed (the act's master clock). */

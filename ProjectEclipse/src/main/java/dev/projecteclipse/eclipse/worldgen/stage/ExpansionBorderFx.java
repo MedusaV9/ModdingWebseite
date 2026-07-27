@@ -23,6 +23,8 @@ import com.mojang.math.Transformation;
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.border.SoftBorder;
 import dev.projecteclipse.eclipse.network.S2CShakePayload;
+import dev.projecteclipse.eclipse.network.fx.FxCues;
+import dev.projecteclipse.eclipse.network.fx.FxPayloads;
 import dev.projecteclipse.eclipse.network.fx.S2CCaptionPayload;
 import dev.projecteclipse.eclipse.registry.EclipseSounds;
 import dev.projecteclipse.eclipse.worldgen.DiscProfile;
@@ -153,9 +155,13 @@ public final class ExpansionBorderFx {
     /** Slab displays per monolith: a broad embedded base up to a narrow tilted crown. */
     private static final int SHARDS_MIN = 3;
     private static final int SHARDS_MAX = 7;
-    /** Monolith height range in blocks. */
-    private static final float HEIGHT_MIN = 4.0F;
-    private static final float HEIGHT_MAX = 8.0F;
+    /**
+     * Monolith height range in blocks. F-092 retune (plan §3.4): the rocks now garnish a
+     * REAL rim-mountain wall ({@code DiscTerrainFunction} uplift band), so 4–8-block
+     * pebbles read wrong — the quake props scale up toward the plan's 12–16 band.
+     */
+    private static final float HEIGHT_MIN = 6.0F;
+    private static final float HEIGHT_MAX = 14.0F;
     /** Girth as a fraction of the height (massy, not spindly). */
     private static final float GIRTH_MIN_FACTOR = 0.55F;
     private static final float GIRTH_MAX_FACTOR = 0.90F;
@@ -775,6 +781,30 @@ public final class ExpansionBorderFx {
                     ExpansionTiming.BORDER_RELEASE_LERP_MS);
             PacketDistributor.sendToPlayersInDimension(level, new S2CCaptionPayload(
                     CAPTION_RELEASE, 60, S2CCaptionPayload.STYLE_WHISPER));
+            // F-092 recede beat (plan §3.4-4): ONE rim_recede cue per player, anchored at
+            // THEIR nearest point of the old rim (leaks nothing — the ring radius is
+            // already synced), so the dust curtain lands wherever on the disc they watch
+            // the silhouette ring march outward over the release lerp; a low rumble at
+            // each watcher carries the beat past FX_RANGE. Overworld only — the nether
+            // rim reads as cave wall (no mountains, plan §3.2).
+            if (profile == DiscProfile.OVERWORLD) {
+                Vec3 center = SoftBorder.center(level.getServer());
+                float oldRing = (float) this.heldRadius;
+                for (ServerPlayer player : level.players()) {
+                    double dx = player.getX() - center.x;
+                    double dz = player.getZ() - center.z;
+                    double len = Math.sqrt(dx * dx + dz * dz);
+                    double nx = len > 1.0E-3D ? dx / len : 1.0D;
+                    double nz = len > 1.0E-3D ? dz / len : 0.0D;
+                    Vec3 rimPoint = new Vec3(center.x + nx * this.rimRadius,
+                            profile.surfaceBaseY(), center.z + nz * this.rimRadius);
+                    FxPayloads.sendFxEventTo(player, FxCues.CUE_RIM_RECEDE, rimPoint,
+                            oldRing, 0.0F);
+                    level.playSound(null, player.getX(), player.getY(), player.getZ(),
+                            SoundEvents.AMBIENT_BASALT_DELTAS_LOOP, SoundSource.AMBIENT,
+                            1.6F, 0.45F);
+                }
+            }
             int collapses = 0;
             for (Boulder boulder : boulders) {
                 Vec3 pos = boulder.base;

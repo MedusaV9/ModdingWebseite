@@ -38,11 +38,19 @@ public final class CreditsSkyFx {
     static {
         CreditsPayloads.setClientSkyHandler(CreditsSkyFx::handle);
         CreditsPayloads.setClientPulseHandler(CreditsSkyFx::handlePulse);
+        CreditsPayloads.setClientJetHandler(CreditsSkyFx::handleJet);
     }
 
     /** F-072 V3 gulp envelope: {@value}t attack, {@value #PULSE_DECAY_TICKS}t decay. */
     private static final float PULSE_ATTACK_TICKS = 3.0F;
     private static final float PULSE_DECAY_TICKS = 15.0F;
+    /**
+     * F-090/F-093 jet-burst envelope: {@value}t attack, {@value #JET_DECAY_TICKS}t
+     * decay — slower than the gulp so the strobing jets read as a sustained SURGE
+     * roughly matching the display spray's 50t flight.
+     */
+    private static final float JET_ATTACK_TICKS = 4.0F;
+    private static final float JET_DECAY_TICKS = 22.0F;
 
     /** Client thread only. */
     private static int clientTicks;
@@ -59,6 +67,9 @@ public final class CreditsSkyFx {
     /** V3 gulp pulse state ({@code S2CCreditsPulsePayload}). */
     private static float pulseStrength;
     private static int pulseStartTick = Integer.MIN_VALUE / 2;
+    /** F-090/F-093 jet-burst state ({@code S2CCreditsJetPayload}). */
+    private static float jetStrength;
+    private static int jetStartTick = Integer.MIN_VALUE / 2;
 
     private CreditsSkyFx() {}
 
@@ -136,6 +147,32 @@ public final class CreditsSkyFx {
         return pulseStrength * env * env * (3.0F - 2.0F * env);
     }
 
+    /** F-090/F-093: latches one jet-burst impulse (overlaps restart the envelope). */
+    private static void handleJet(CreditsPayloads.S2CCreditsJetPayload payload) {
+        float live = jetPulse(0.0F);
+        jetStrength = Math.max(Mth.clamp(payload.strength(), 0.0F, 1.0F), live);
+        jetStartTick = clientTicks;
+    }
+
+    /**
+     * F-090/F-093: the eased jet-burst envelope 0..1 — a {@value #JET_ATTACK_TICKS}t
+     * attack and a {@value #JET_DECAY_TICKS}t decay around each
+     * {@code S2CCreditsJetPayload}. Feeds the post pass's {@code JetPulse} uniform (the
+     * polar jets flare, their knots race and the columns lengthen exactly while a
+     * shredded sub-plate sprays along the same axis); 0 between bursts, so the shader
+     * law is a strict no-op then.
+     */
+    public static float jetPulse(float partialTick) {
+        float age = clientTicks - jetStartTick + partialTick;
+        if (age < 0.0F || age >= JET_ATTACK_TICKS + JET_DECAY_TICKS) {
+            return 0.0F;
+        }
+        float env = age < JET_ATTACK_TICKS
+                ? age / JET_ATTACK_TICKS
+                : 1.0F - (age - JET_ATTACK_TICKS) / JET_DECAY_TICKS;
+        return jetStrength * env * env * (3.0F - 2.0F * env);
+    }
+
     private static float progress(float partialTick) {
         float linear = Mth.clamp(
                 (clientTicks - rampStartTick + partialTick) / rampTicks, 0.0F, 1.0F);
@@ -160,5 +197,7 @@ public final class CreditsSkyFx {
         holeCenter = Vec3.ZERO;
         pulseStrength = 0.0F;
         pulseStartTick = Integer.MIN_VALUE / 2;
+        jetStrength = 0.0F;
+        jetStartTick = Integer.MIN_VALUE / 2;
     }
 }

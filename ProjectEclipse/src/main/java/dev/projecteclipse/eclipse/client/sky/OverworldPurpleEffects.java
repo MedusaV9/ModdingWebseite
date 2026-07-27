@@ -332,6 +332,13 @@ public class OverworldPurpleEffects extends DimensionSpecialEffects {
         RenderSystem.defaultBlendFunc();
         poseStack.popPose();
 
+        // --- F-092 rim-mountain silhouette ring (far field) ---------------------------------
+        // Drawn AFTER the celestial pass and the stars (painter's algorithm: the peaks
+        // genuinely occlude the rising eclipse sun and cut a black ridgeline out of the
+        // star field) and before the below-horizon disc. The ring radius is the synced,
+        // client-lerped border radius, so it recedes with every expansion release.
+        RimMountainSilhouette.render(poseStack.last().pose(), level, camera, partialTick, setupFog);
+
         // --- dark disc below the horizon (vanilla behavior) ---------------------------------
         RenderSystem.setShaderColor(0.0F, 0.0F, 0.0F, 1.0F);
         double distanceAboveHorizon = camera.getPosition().y - level.getLevelData().getHorizonHeight(level);
