@@ -52,6 +52,7 @@ const EYE_AUTO_OFF_SEC := 8.0
 const STAT_ALERT_THRESHOLD := 25.0
 ## FIX1: Randabstand zur Bildschirmkante (nur Schattenluft — Stats sollen
 ## bündig sitzen, der Rest kommt aus der Safe-Area).
+const TOUCH_MIN_PT := 44.0
 const EDGE_PAD := 8.0
 ## Label unter den Cockpit-Buttons (Design-px, skaliert mit f).
 const LABEL_FONT := 12
@@ -653,9 +654,10 @@ func _build_coachmark() -> Control:
 	ok.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	ok.focus_mode = Control.FOCUS_NONE
 	# FB3-Regel: physische Tippflaeche >= 44 pt (nicht Design-Pixel!).
-	var touch_floor := HudLayoutLogic.touch_floor_canvas(
-		Vector2(get_viewport().get_visible_rect().size)
-	)
+	# FB3-Regel: physische Tippflaeche >= 44 pt. `touch_floor_canvas` rechnet in
+	# DESIGN-Pixeln und unterschreitet das auf dichten Displays — deshalb hier
+	# derselbe physische Massstab, den die UI-Pruefung anlegt.
+	var touch_floor := UiScale.touch_px_per_pt(get_viewport()) * TOUCH_MIN_PT
 	ok.custom_minimum_size = Vector2(maxf(120.0 * f, touch_floor), touch_floor)
 	ok.pressed.connect(_on_coachmark_dismissed)
 	vbox.add_child(ok)
@@ -668,6 +670,10 @@ func _position_coachmark() -> void:
 		return
 	var canvas := Vector2(get_viewport().get_visible_rect().size)
 	var insets := _safe_insets()
+	var ok_btn := _coachmark.find_child("CoachmarkOk", true, false) as Control
+	if ok_btn != null:
+		var floor_px := UiScale.touch_px_per_pt(get_viewport()) * TOUCH_MIN_PT
+		ok_btn.custom_minimum_size = Vector2(maxf(ok_btn.custom_minimum_size.x, floor_px), floor_px)
 	_coachmark.reset_size()
 	var size := _coachmark.get_combined_minimum_size()
 	# Autowrap-Labels melden im ERSTEN Layout-Pass eine viel zu grosse Hoehe
