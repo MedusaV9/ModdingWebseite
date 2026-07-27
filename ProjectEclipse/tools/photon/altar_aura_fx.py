@@ -106,7 +106,7 @@ def build_altar_aura_motes() -> FxBuilder:
        # Hovers a hand above the floor, one block outside the dais skirt.
        .with_shape(circle(radius=6.4, thickness=0.25), position=nf3(0, -3.6, 0))
        .with_material(texture_material(CIRCLE_TEX, discard=0.02, blend=BLEND_ADDITIVE))
-       .with_renderer(render_mode="HorizontalBillboard", vertex_sorting="NONE", shade=False)
+       .with_renderer(render_mode="Horizontal", vertex_sorting="NONE", shade=False)
        .with_cull_box((-9.0, -5.0, -9.0), (9.0, 3.0, 9.0))
        .with_curves(
             velocity_over_lifetime=dict(

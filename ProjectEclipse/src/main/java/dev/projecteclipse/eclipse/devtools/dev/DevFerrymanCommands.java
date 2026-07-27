@@ -77,6 +77,7 @@ public final class DevFerrymanCommands {
             source.sendFailure(ServerLang.tr(source.getPlayer(), "dev.eclipse.ferryman.noaltar"));
             return 0;
         }
+        clearStaleVictoryLatch(server);
         boolean started = PortalFormation.begin(server, true, true);
         if (!started) {
             source.sendFailure(ServerLang.tr(source.getPlayer(), "dev.eclipse.ferryman.start.fail",
@@ -91,6 +92,7 @@ public final class DevFerrymanCommands {
     /** Straight to the crossing: everyone ships to the limbo deck, fight machinery runs. */
     private static int skipToArena(CommandContext<CommandSourceStack> context) {
         CommandSourceStack source = context.getSource();
+        clearStaleVictoryLatch(source.getServer());
         boolean armed = ArenaFight.armGateThroughPortal(source.getServer());
         if (!armed) {
             source.sendFailure(ServerLang.tr(source.getPlayer(), "dev.eclipse.ferryman.skip.fail"));
@@ -112,6 +114,22 @@ public final class DevFerrymanCommands {
                 portal == null ? "-" : portal.toShortString(),
                 ArenaFight.isFightRunning(server) ? "ON" : "OFF"), false);
         return state.stage();
+    }
+
+    /**
+     * A dev re-run after a won finale: the persisted {@code ferrymanDefeated} latch would
+     * make {@code ArenaFight}'s fight watch declare victory on its very first stride
+     * (accents swept seconds after the summon, pit chunks unforced, wipe/reset watch dead)
+     * even though the freshly summoned boss keeps fighting. A NEW crossing means a NEW
+     * fight — drop the latch so the full machinery runs again; the natural path is
+     * untouched (players can't reach these perm-2 commands).
+     */
+    private static void clearStaleVictoryLatch(MinecraftServer server) {
+        EclipseWorldState worldState = EclipseWorldState.get(server);
+        if (worldState.isFerrymanDefeated()) {
+            worldState.setFerrymanDefeated(false);
+            EclipseMod.LOGGER.info("Dev ferryman: stale victory latch cleared for a fresh finale run");
+        }
     }
 
     private static String stageName(int stage) {

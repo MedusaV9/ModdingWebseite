@@ -138,7 +138,7 @@ def _rim_fog(fx, alpha, hdr):
                    position=nf3(0, 0.15, 0))
        .with_material(texture_material(CIRCLE_TEX, discard=0.02, hdr=hdr,
                                        blend=BLEND_ADDITIVE))
-       .with_renderer(render_mode="HorizontalBillboard", vertex_sorting="NONE",
+       .with_renderer(render_mode="Horizontal", vertex_sorting="NONE",
                       shade=False)
        .with_cull_box((-20.0, -3.0, -20.0), (20.0, 4.0, 20.0))
        .with_curves(

@@ -704,6 +704,26 @@ class _RendererMixin:
         self._materials.append(material_entry)
         return self
 
+    # Photon deserializes enum strings with valueOf-or-null: an unknown name leaves the
+    # field NULL and the client NPE-crashes the first time such a particle renders
+    # (TileParticle.renderInternal, "renderMode is null"). Validate at authoring time.
+    _RENDER_MODES = {"None", "Billboard", "Horizontal", "Vertical", "VerticalBillboard",
+                     "StretchedBillboard", "Model"}
+    _FACING_MODES = {"DEFAULT", "ROTATE_Y", "LOOKAT_XYZ", "LOOKAT_Y", "LOOKAT_DIRECTION",
+                     "DIRECTION_X", "DIRECTION_Y", "DIRECTION_Z", "EMITTER_TRANSFORM_XY",
+                     "EMITTER_TRANSFORM_XZ", "EMITTER_TRANSFORM_YZ"}
+    _LAYERS = {"Opaque", "Translucent"}
+    _SORT_MODES = {"NONE", "DISTANCE"}
+
+    @staticmethod
+    def _enum(allowed, label):
+        def conv(v):
+            v = str(v)
+            if v not in allowed:
+                raise ValueError(f"invalid {label} {v!r} (Photon enum: {sorted(allowed)})")
+            return v
+        return conv
+
     def with_renderer(self, **kwargs):
         """Overrides renderer fields. Accepted keys (particle emitters unless noted):
 
@@ -712,8 +732,10 @@ class _RendererMixin:
         order_in_layer, vertex_sorting (NONE|DISTANCE), shade, use_block_uv,
         use_gpu_instance, model_pivot (x,y,z), velocity_scale, length_scale.
         """
-        m = {"render_mode": ("renderMode", str), "facing_mode": ("facingMode", str),
-             "layer": ("layer", str), "vertex_sorting": ("vertexSortingMode", str),
+        m = {"render_mode": ("renderMode", self._enum(self._RENDER_MODES, "render_mode")),
+             "facing_mode": ("facingMode", self._enum(self._FACING_MODES, "facing_mode")),
+             "layer": ("layer", self._enum(self._LAYERS, "layer")),
+             "vertex_sorting": ("vertexSortingMode", self._enum(self._SORT_MODES, "vertex_sorting")),
              "order_in_layer": ("orderInLayer", lambda v: I(int(v))),
              "shade": ("shade", _bool), "use_block_uv": ("useBlockUV", _bool),
              "use_gpu_instance": ("useGPUInstance", _bool),

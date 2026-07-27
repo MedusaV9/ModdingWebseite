@@ -296,9 +296,8 @@ def build_ferry_harvest_ring() -> FxBuilder:
         .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(1), cycles=1)])
         .with_shape(dot())
         .at(0.0, 0.1, 0.0)
-        .rotated(90.0, 0.0, 0.0)
         .with_material(texture_material(CIRCLE_TEX, hdr=(1.0, 0.7, 1.6)))
-        .with_renderer(render_mode="HorizontalBillboard")
+        .with_renderer(render_mode="Horizontal")
         .with_curves(
             size_over_lifetime=curve(
                 0.0, 1.0, [(0.0, 0.4, 0.3, 1.0, 0.8, 0.9, 1.0, 0.5)]),
