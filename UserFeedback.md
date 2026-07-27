@@ -27,10 +27,8 @@ _(leer — hier neue Punkte reinschreiben; zuletzt gezogen: 27.07. 10:57-Commit 
 | F-091 | `/dev preload everything`: ganze Map einmal vorgenerieren + entladen, kein sichtbares Chunk-Reingenerieren mehr (auch Start-Event) | 🟡 |
 | F-092 | Rand-Berge: riesig auftürmen, Map komplett einkreisen, von überall sichtbar, weichen beim Erweitern langsam zurück | 🟡 |
 | F-090/093 | Credits-Szene + Schwarzes Loch V3: Map wird richtig zerrissen (heftige Animationen/Effekte) | 🟡 |
-| F-074 | Altar-UI: bessere Lesbarkeit; Shop-Tab mit Kaufbestätigung + Kauf-Animation + kurzer Nach-Kauf-Cutscene je nach Item — Planungswelle läuft | 🟡 |
-| F-075 | Altar-Insel-Aura (Photon+Veil), magisch, skaliert mit Altar-Stufe — Planungswelle läuft | 🟡 |
-| F-076 | Altar-Block als richtiges Blockbench/GeckoLib-Modell mit Animationen — Planungswelle läuft | 🟡 |
-| F-077 | End-Erscheinen-Cutscene mit Riesen-Effekten (Altar „spuckt" End-Blöcke o.ä.) — Planungswelle läuft | 🟡 |
+| F-075 | Altar-Insel-Aura V2: Insel-Rand-Ring (r≈15.5), Spiral-Ströme Rand→Krone, Powerup-Beat bei Stufenaufstieg, Veil-Grenzübertritts-Ripple, Violett→Gold-Farbleiter — Implementierung läuft (V1 war schon in `eae14f4`) | 🟡 |
+| F-077 | End-Ankunft V2 „Gigantismus": 600-Teile-Helix statt 220, silhouettengetreue Wellen-Assembly, Riesen-Schockringe, Veil-Dim/EndTint, End-Rift-Ambient, synthetisierte Sounds — Implementierung läuft (V1 „The Altar Calls the End" war schon in `1f78a59`) | 🟡 |
 | F-071/078/079 | Dauerbetrieb: alle ~30 min Feedback-Check; wenn leer → Photon/Veil-Effekte mit Planner-/Ideen-Teams immer weiter iterieren; nur Fable 5 Max Thinking als Subagent-Modell | 🟡 (läuft) |
 
 ## Backlog (offen, in Priorität)
@@ -46,6 +44,8 @@ _(leer — hier neue Punkte reinschreiben; zuletzt gezogen: 27.07. 10:57-Commit 
 | # | Punkt | Commit |
 |---|-------|--------|
 | F-073 | „ECLIPSE-Trailer-4K": 30 s Remotion-Trailer, 4K 60 fps, deutsch, eigener Score+SFX — liegt als `ECLIPSE-Trailer-4K.mp4` im Repo-Root, Quellprojekt unter `trailer/` | `feat(trailer)` |
+| F-074 | Altar-UI-Lesbarkeit (Preis-Chips, Währungs-Icons, Leistbarkeits-Kanten, Tooltips) + modale Kaufbestätigung + Flying-Shard-Kaufanimation + kategoriebasierte Nach-Kauf-Zeremonie (Spirale/Item-Flug/Fontäne) — war bereits in `681f98e` gelandet, Backlog war veraltet; Plan-/Verifikationsdoc nachgereicht | `feat(altar)` |
+| F-076 | Altar als GeckoLib-Monument (schwebender Eclipse-Kern, gegenläufige Runenringe, Debris-Satelliten; idle/heartbeat/gift/erupt/stage_up + Glowmask) — war bereits in `eae14f4` gelandet; Plan-/Verifikationsdoc nachgereicht | `feat(altar)` |
 | F-063 | `/dev stage skipdark` — dunkle Phase zwischen Tageswechsel und Map-Erweiterung skippen (Cutscene-Abbruch, Himmel zurück, Ring wächst normal weiter) | `feat(devtools)` |
 | F-064 | `/dev ghostscreen <Spieler>` + `/dev backroomsscare <Spieler>` (Blackscreen → 20–30 s Backrooms-Clip, unsterblich, Schaden ⇒ Glitch + Rückteleport) | `feat(scare)` |
 | F-065 | `/dev jumpscare <version> <Spieler>` — 30 benannte Varianten (`/dev jumpscare list`), rein clientseitig nur beim Ziel | `feat(scare)` |
