@@ -1,0 +1,29 @@
+{
+  "name": "eclipse-trailer-4k",
+  "version": "1.0.0",
+  "private": true,
+  "description": "MINECRAFT ECLIPSE - 30s 4K60 Trailer (Remotion)",
+  "scripts": {
+    "dev": "remotion studio src/index.ts",
+    "still": "remotion still src/index.ts EclipseTrailer",
+    "render:test": "remotion render src/index.ts EclipseTrailer out/test.mp4 --frames=0-120 --gl=swangle --browser-executable=/usr/local/bin/google-chrome --concurrency=3 --timeout=180000 --image-format=jpeg --jpeg-quality=95 --codec=h264 --crf=17 --pixel-format=yuv420p",
+    "render": "remotion render src/index.ts EclipseTrailer ../ECLIPSE-Trailer-4K.mp4 --gl=swangle --browser-executable=/usr/local/bin/google-chrome --concurrency=3 --timeout=180000 --image-format=jpeg --jpeg-quality=95 --codec=h264 --video-bitrate=20M --pixel-format=yuv420p --audio-codec=aac --audio-bitrate=320k"
+  },
+  "dependencies": {
+    "@fontsource/anton": "^5.2.5",
+    "@fontsource/bebas-neue": "^5.2.5",
+    "@fontsource/jetbrains-mono": "^5.2.5",
+    "@fontsource/space-grotesk": "^5.2.5",
+    "@remotion/cli": "4.0.497",
+    "@remotion/fonts": "4.0.497",
+    "@remotion/transitions": "4.0.497",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "remotion": "4.0.497"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.0",
+    "@types/react-dom": "19.2.0",
+    "typescript": "^5.9.2"
+  }
+}
