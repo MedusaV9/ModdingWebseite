@@ -162,6 +162,20 @@ public final class CreditsPanel {
         }
         GuiGraphics guiGraphics = event.getGuiGraphics();
         DeltaTracker deltaTracker = event.getPartialTick();
+        // Depth-lift over the caption layer's fade fill (see TitleCardLayer.POST_OVERLAY_Z:
+        // layers write depth at z≈5-6k, Post handlers draw at z=0 and get clipped) — the
+        // roll and the maker card both ride credits fades by design.
+        guiGraphics.pose().pushPose();
+        guiGraphics.pose().translate(0.0F, 0.0F, TitleCardLayer.POST_OVERLAY_Z);
+        try {
+            renderPanel(guiGraphics, minecraft, deltaTracker);
+        } finally {
+            guiGraphics.pose().popPose();
+        }
+    }
+
+    private static void renderPanel(GuiGraphics guiGraphics, Minecraft minecraft,
+            DeltaTracker deltaTracker) {
         float partial = minecraft.isPaused() ? 0.0F : deltaTracker.getGameTimeDeltaPartialTick(false);
         float age = ticks + partial;
         if (age > durationTicks) {

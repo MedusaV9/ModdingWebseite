@@ -179,6 +179,17 @@ public final class TitleCardLayer {
         ticks = -1;
     }
 
+    /**
+     * Z-lift for every draw of this card ({@code RenderGuiEvent.Post} renders at pose
+     * z=0, but GUI LAYERS stack upward — {@code GuiLayerManager} translates
+     * {@code +200} per layer and the caption layer's fullscreen fade fill WRITES DEPTH
+     * at z≈5–6k, so an unlifted card is depth-clipped BEHIND the credits black and
+     * invisible (reproduced: every end card + the finale title over the sustained
+     * hold). 9000 clears every registered layer and stays under the GUI ortho
+     * ceiling (+10000). Shared with {@link CreditsPanel}.
+     */
+    static final float POST_OVERLAY_Z = 9000.0F;
+
     @SubscribeEvent
     static void onRenderGui(RenderGuiEvent.Post event) {
         Minecraft minecraft = Minecraft.getInstance();
@@ -188,6 +199,16 @@ public final class TitleCardLayer {
         GuiGraphics guiGraphics = event.getGuiGraphics();
         DeltaTracker deltaTracker = event.getPartialTick();
         float t = ticks + deltaTracker.getGameTimeDeltaPartialTick(true);
+        guiGraphics.pose().pushPose();
+        guiGraphics.pose().translate(0.0F, 0.0F, POST_OVERLAY_Z);
+        try {
+            renderCard(guiGraphics, minecraft, t);
+        } finally {
+            guiGraphics.pose().popPose();
+        }
+    }
+
+    private static void renderCard(GuiGraphics guiGraphics, Minecraft minecraft, float t) {
         if (style == S2CCreditsTitlePayload.STYLE_GENTLE) {
             renderGentle(guiGraphics, t);
             return;
