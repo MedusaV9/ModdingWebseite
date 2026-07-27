@@ -145,6 +145,20 @@ public final class ArenaFight {
     private static int morphDeckPieces;
     /** Fight-scoped arena accent displays (BD-SHIP; spawned/animated/swept via ArenaBuilder). */
     private static final List<UUID> accentDisplays = new ArrayList<>();
+    /**
+     * THE current fight's boss (set at summon; adopted on restart-resume when the
+     * persisted boss streams in). Any OTHER Ferryman joining the arena is an orphan of
+     * an ended/crashed run and gets discarded by the join-time stray guard — never
+     * killed ({@code die()} would fire the whole victory theater).
+     */
+    private static UUID fightBossUuid;
+    /**
+     * True only inside the {@code finishTransform} summon call: the fresh boss's OWN
+     * join event fires synchronously inside {@code addFreshEntity} — before the
+     * {@code fightBossUuid} assignment lands and while the stage still reads TRANSFORM —
+     * so the guard adopts that one join instead of judging it.
+     */
+    private static boolean summoningFightBoss;
 
     private ArenaFight() {}
 
@@ -775,7 +789,12 @@ public final class ArenaFight {
                     new S2CQuasarPayload(S2CQuasarPayload.CUTSCENE_VEIL, player.position()));
         }
         discardBoss(arena); // a stray that streamed in after the arrival sweep (async entities)
-        FerrymanEntity.summon(arena, ArenaBuilder.summonAnchor(arena), -90.0F);
+        summoningFightBoss = true;
+        try {
+            fightBossUuid = FerrymanEntity.summon(arena, ArenaBuilder.summonAnchor(arena), -90.0F).getUUID();
+        } finally {
+            summoningFightBoss = false;
+        }
         forcePitChunks(arena, true);
         ArenaBuilder.spawnAccentDisplays(arena, accentDisplays); // fight dressing (BD-SHIP)
         ArenaState.get(server).setFightRunning(true);
@@ -837,6 +856,7 @@ public final class ArenaFight {
             }
         }
         accentDisplays.clear();
+        fightBossUuid = null;
         ArenaState.get(server).setFightRunning(false);
         stage = Stage.IDLE;
         arenaEmptyTicks = 0;
@@ -1033,6 +1053,7 @@ public final class ArenaFight {
         countdownTicks = -1;
         morphDisplays.clear();
         accentDisplays.clear();
+        fightBossUuid = null;
     }
 
     /**
@@ -1061,6 +1082,19 @@ public final class ArenaFight {
             // REPASS-BD: crash-persisted morph pieces streaming in from a chunk the
             // boot sweep could not reach — same async-load seam as the other families.
             entity.discard();
+        } else if (entity instanceof FerrymanEntity ferryman && ArenaDimension.isInArena(ferryman)) {
+            // Boss identity guard (same async-load seam): a persisted Ferryman can
+            // stream in AFTER the arrival/summon sweeps ran over its still-loading
+            // entity section — two bosses, two bossbars. THE fight's boss is the one
+            // this session summoned; on restart-resume (fight watch re-entered, no
+            // summon) the first one in is adopted instead.
+            if (summoningFightBoss || (stage == Stage.FIGHT && fightBossUuid == null)) {
+                fightBossUuid = ferryman.getUUID();
+            } else if (!ferryman.getUUID().equals(fightBossUuid)) {
+                ferryman.discard();
+                EclipseMod.LOGGER.info("Arena stray guard: orphaned Ferryman {} discarded on load",
+                        ferryman.getUUID());
+            }
         }
     }
 
