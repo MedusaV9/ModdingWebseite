@@ -10,6 +10,9 @@
 
 ## NEUES FEEDBACK (hier eintragen!)
 
+der Trailer muss verbessert werden und nutze auch npcs und gameplay scenen einbauen trailer bessere Songs verwenden nutze bitte explizit den Song wir haben permission egal woher du ihn nimmst Worst Enemy feat. goldN
+by Shawn Williams
+
 _(leer — hier neue Punkte reinschreiben; zuletzt gezogen: 27.07. 10:57-Commit → einsortiert als F-080…F-093)_
 
 ## Aktuell in Arbeit
