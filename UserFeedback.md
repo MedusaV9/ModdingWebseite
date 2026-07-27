@@ -9,6 +9,8 @@
 ---
 
 ## NEUES FEEDBACK (hier eintragen!)
+Wenn man die Welt verlässt oder den Server stoppen will bleibt es für immer im SAVING State statt richtig zu beenden.
+
 Der Kampf im Sturm sollte beginnen in dem die Spieler eine Statur schlagen und nicht einfach nur weil sie dort sind.
 
 Wenn jemand im Sturm Boss kampf stirbt sollte der Kampf zurück gesetzt werden (pass auf das Grab auf.)
