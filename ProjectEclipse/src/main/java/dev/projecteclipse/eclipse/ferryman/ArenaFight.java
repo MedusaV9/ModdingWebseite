@@ -516,18 +516,30 @@ public final class ArenaFight {
             return;
         }
         ServerLevel arena = ArenaDimension.get(server);
-        if (ferrymanAlive(limbo) || (arena != null && ferrymanAlive(arena))) {
-            EclipseMod.LOGGER.info("Ferry arrival: a Ferryman is already afloat; skipping the crossing");
-            stage = Stage.IDLE;
-            return;
-        }
         if (arena == null) {
+            if (ferrymanAlive(limbo)) {
+                // Legacy limbo fights have no fight flag — a boss afloat may be mid-fight.
+                EclipseMod.LOGGER.info("Ferry arrival: a Ferryman is already afloat; skipping the crossing");
+                stage = Stage.IDLE;
+                return;
+            }
             // No arena dimension: legacy limbo fight (the pre-C10 flow), no transform.
             FerrymanEntity.summon(limbo);
             stage = Stage.IDLE;
             EclipseMod.LOGGER.info("Ferry arrival: arena missing — Ferryman summoned on the limbo ship (legacy)");
             return;
         }
+        if (ArenaState.get(server).isFightRunning() && (ferrymanAlive(limbo) || ferrymanAlive(arena))) {
+            EclipseMod.LOGGER.info("Ferry arrival: a Ferryman is already afloat; skipping the crossing");
+            stage = Stage.IDLE;
+            return;
+        }
+        // Modern flow with the fight flag OFF: a boss still afloat is an orphan of an
+        // ended/aborted run (armGate* refuses to arm while a fight runs; an instant
+        // victory-latch end leaves the entity behind without cleanPit) — the crossing
+        // is authoritative, sweep the strays instead of aborting the whole show.
+        discardBoss(limbo);
+        discardBoss(arena);
         beginTransform(server, limbo);
     }
 
@@ -762,6 +774,7 @@ public final class ArenaFight {
             PacketDistributor.sendToPlayer(player,
                     new S2CQuasarPayload(S2CQuasarPayload.CUTSCENE_VEIL, player.position()));
         }
+        discardBoss(arena); // a stray that streamed in after the arrival sweep (async entities)
         FerrymanEntity.summon(arena, ArenaBuilder.summonAnchor(arena), -90.0F);
         forcePitChunks(arena, true);
         ArenaBuilder.spawnAccentDisplays(arena, accentDisplays); // fight dressing (BD-SHIP)
