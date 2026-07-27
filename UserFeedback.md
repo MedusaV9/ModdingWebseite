@@ -9,6 +9,10 @@
 ---
 
 ## NEUES FEEDBACK (hier eintragen!)
+Der Kampf im Sturm sollte beginnen in dem die Spieler eine Statur schlagen und nicht einfach nur weil sie dort sind.
+
+Wenn jemand im Sturm Boss kampf stirbt sollte der Kampf zurück gesetzt werden (pass auf das Grab auf.)
+
 Irgendwie muss man erst in dem Einem Sturm den Boss bekämpfen sonst spawnt der andere im anderen Nebel nicht
 
 Wenn man Stirbt beim Sturm kampf dann bleiben manche BlockDisplays für immer stuck an ihrem Punkt auch nachdem kampf.
