@@ -16,7 +16,7 @@ _(leer — hier neue Punkte reinschreiben; zuletzt gezogen: 27.07. 10:57-Commit 
 
 | # | Punkt | Status |
 |---|-------|--------|
-| F-080 | Server/Welt-Verlassen hängt für immer im SAVING-State statt sauber zu stoppen — Fix implementiert (Stop-Sweep räumt FX-Schwärme VOR dem Save, kein Sync-Chunkload im Stop mehr, Arena-Pit-Chunks werden freigegeben); dedizierter Server-Stop in ~10 s verifiziert ✅, Singleplayer-Quit-Test folgt | 🟡→🟢 |
+| F-080 | Server/Welt-Verlassen hängt für immer im SAVING-State statt sauber zu stoppen — Fix implementiert (Stop-Sweep räumt FX-Schwärme VOR dem Save, kein Sync-Chunkload im Stop mehr, Arena-Pit-Chunks werden freigegeben); dedizierter Server-Stop in ~10 s verifiziert ✅ | 🟢 |
 | F-081 | Sturm-Bosskampf startet erst, wenn Spieler eine Statue schlagen — implementiert (4-teilige Display-Statue + Interaction-Hitbox, Photon-Idle-Aura, 3-s-Awaken); Spieler-Test folgt | 🟡 |
 | F-082 | Tod im Sturm-Bosskampf ⇒ Wipe-Reset (Boss heilt/despawnt, Statue re-armt nach 30 s, KEINE Blockschreibungen ⇒ Gräber sicher) — implementiert, Spieler-Test folgt | 🟡 |
 | F-083 | Stürme entkoppelt: reconcile markiert jetzt JEDE aktive Site — im Server-Log verifiziert (2 Lairs gleichzeitig armed) ✅ | 🟢 |
@@ -27,17 +27,16 @@ _(leer — hier neue Punkte reinschreiben; zuletzt gezogen: 27.07. 10:57-Commit 
 | F-091 | `/dev preload everything`: ganze Map einmal vorgenerieren + entladen, kein sichtbares Chunk-Reingenerieren mehr (auch Start-Event) | 🟡 |
 | F-092 | Rand-Berge: riesig auftürmen, Map komplett einkreisen, von überall sichtbar, weichen beim Erweitern langsam zurück | 🟡 |
 | F-090/093 | Credits-Szene + Schwarzes Loch V3: Map wird richtig zerrissen (heftige Animationen/Effekte) | 🟡 |
-| F-073 | „ECLIPSE-Trailer-4K": ~30 s Remotion-Trailer, 4K 60 fps, deutsch — Stills fertig, 4K-Render läuft gerade, danach ins Repo | 🟡 |
+| F-074 | Altar-UI: bessere Lesbarkeit; Shop-Tab mit Kaufbestätigung + Kauf-Animation + kurzer Nach-Kauf-Cutscene je nach Item — Planungswelle läuft | 🟡 |
+| F-075 | Altar-Insel-Aura (Photon+Veil), magisch, skaliert mit Altar-Stufe — Planungswelle läuft | 🟡 |
+| F-076 | Altar-Block als richtiges Blockbench/GeckoLib-Modell mit Animationen — Planungswelle läuft | 🟡 |
+| F-077 | End-Erscheinen-Cutscene mit Riesen-Effekten (Altar „spuckt" End-Blöcke o.ä.) — Planungswelle läuft | 🟡 |
 | F-071/078/079 | Dauerbetrieb: alle ~30 min Feedback-Check; wenn leer → Photon/Veil-Effekte mit Planner-/Ideen-Teams immer weiter iterieren; nur Fable 5 Max Thinking als Subagent-Modell | 🟡 (läuft) |
 
 ## Backlog (offen, in Priorität)
 
 | # | Punkt | Status |
 |---|-------|--------|
-| F-074 | Altar-UI: bessere Lesbarkeit; Shop-Tab mit Kaufbestätigung + Kauf-Animation + kurzer Nach-Kauf-Cutscene je nach Item | 🔴 |
-| F-075 | Altar-Insel-Aura (Photon+Veil), magisch, skaliert mit Altar-Stufe | 🔴 |
-| F-076 | Altar-Block als richtiges Blockbench/GeckoLib-Modell mit Animationen — mächtig wirkend | 🔴 |
-| F-077 | Cutscene mit Riesen-Effekten wenn das End erscheint (Altar „spuckt" die End-Blöcke o.ä.) | 🔴 |
 | F-062 | 5 „Woah“-Map-Features: Feinschliff/Iteration (Basis implementiert: Mansion-Glitch-Dome, Gravitationsbruch, Chrono-Stase, Resonanzfeld, Echo-Hain) | 🔴 |
 
 ---
@@ -46,6 +45,7 @@ _(leer — hier neue Punkte reinschreiben; zuletzt gezogen: 27.07. 10:57-Commit 
 
 | # | Punkt | Commit |
 |---|-------|--------|
+| F-073 | „ECLIPSE-Trailer-4K": 30 s Remotion-Trailer, 4K 60 fps, deutsch, eigener Score+SFX — liegt als `ECLIPSE-Trailer-4K.mp4` im Repo-Root, Quellprojekt unter `trailer/` | `feat(trailer)` |
 | F-063 | `/dev stage skipdark` — dunkle Phase zwischen Tageswechsel und Map-Erweiterung skippen (Cutscene-Abbruch, Himmel zurück, Ring wächst normal weiter) | `feat(devtools)` |
 | F-064 | `/dev ghostscreen <Spieler>` + `/dev backroomsscare <Spieler>` (Blackscreen → 20–30 s Backrooms-Clip, unsterblich, Schaden ⇒ Glitch + Rückteleport) | `feat(scare)` |
 | F-065 | `/dev jumpscare <version> <Spieler>` — 30 benannte Varianten (`/dev jumpscare list`), rein clientseitig nur beim Ziel | `feat(scare)` |
