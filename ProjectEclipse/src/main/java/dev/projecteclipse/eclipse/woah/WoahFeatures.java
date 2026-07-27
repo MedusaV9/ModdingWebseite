@@ -22,13 +22,24 @@ public final class WoahFeatures {
 
     public static void register(IEventBus modEventBus) {
         // --- WOAH-01 mansion glitch dome: mod-bus registrations go here ---
+        dev.projecteclipse.eclipse.woah.mansiondome.MansionDomeEntities.register(modEventBus);
 
         // --- WOAH-02 gravity rift: mod-bus registrations go here ---
+        // (none needed: no deferred registers — the payload self-registers via its own
+        // @EventBusSubscriber RegisterPayloadHandlersEvent registrar, game events
+        // self-subscribe via @EventBusSubscriber and the client FX rows/lens post
+        // self-register on FMLClientSetupEvent.)
 
         // --- WOAH-03 chrono stasis: mod-bus registrations go here ---
+        dev.projecteclipse.eclipse.woah.chronostasis.ChronoStasisItems.register(modEventBus);
 
         // --- WOAH-04 resonance field: mod-bus registrations go here ---
+        // (none needed: no deferred registers — the payload registers via the sanctioned
+        // EclipsePayloads line, game events self-subscribe via @EventBusSubscriber and
+        // the client FX rows self-register on FMLClientSetupEvent.)
 
         // --- WOAH-05 echo grove: mod-bus registrations go here ---
+        dev.projecteclipse.eclipse.woah.echogrove.EchoGroveEntities.register(modEventBus);
+        dev.projecteclipse.eclipse.woah.echogrove.EchoGroveItems.register(modEventBus);
     }
 }
