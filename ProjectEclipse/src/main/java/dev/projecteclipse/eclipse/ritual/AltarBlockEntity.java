@@ -14,6 +14,7 @@ import dev.projecteclipse.eclipse.core.config.EclipseConfig;
 import dev.projecteclipse.eclipse.core.signal.EclipseSignals;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
 import dev.projecteclipse.eclipse.entity.GazerEntity;
+import dev.projecteclipse.eclipse.entity.geo.EclipseGeoAnimations;
 import dev.projecteclipse.eclipse.lang.ServerLang;
 import dev.projecteclipse.eclipse.network.S2CQuasarPayload;
 import dev.projecteclipse.eclipse.network.fx.FxCues;
@@ -40,6 +41,12 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.network.PacketDistributor;
+import software.bernie.geckolib.animatable.GeoBlockEntity;
+import software.bernie.geckolib.animatable.instance.AnimatableInstanceCache;
+import software.bernie.geckolib.animation.AnimatableManager;
+import software.bernie.geckolib.animation.AnimationController;
+import software.bernie.geckolib.animation.RawAnimation;
+import software.bernie.geckolib.util.GeckoLibUtil;
 
 /**
  * Server-side brain of the altar. Holds only transient per-player interaction
@@ -51,8 +58,41 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * {@code altar_level_<n>:<item_id>} (one counter per cost entry of multi-cost milestones).</p>
  *
  * <p>All player feedback is action bar + sounds; nothing is ever sent to chat.</p>
+ *
+ * <p><b>F-076 GeckoLib chassis:</b> the altar renders through a GeckoLib model
+ * ({@code geo/block/altar.geo.json} + {@code animations/block/altar.animation.json} +
+ * {@code textures/block/altar.png}/{@code _glowmask}, drawn by
+ * {@code client.altarmodel.AltarModelRenderer} — {@code AltarBlock} is
+ * {@code RenderShape.INVISIBLE} now). One controller ({@value #CONTROLLER_STATE}) loops
+ * {@code idle} (floating core, counter-rotating rune rings, drifting debris) and holds
+ * four server-triggerable one-shots: {@value #ANIM_HEARTBEAT} (a strong pulse — fired
+ * here on every accepted payment), {@value #ANIM_STAGE_UP} (the level-up fanfare, fired
+ * from {@link #completeMilestone}), {@value #ANIM_GIFT} (the altar "hands out" — for
+ * shop purchases) and {@value #ANIM_ERUPT} (the big-event quake — for the End reveal).
+ * Other systems fire gift/erupt through the {@link AltarModelTriggers} facade; the
+ * trigger rides GeckoLib's own BE network path, no new payloads.</p>
  */
-public class AltarBlockEntity extends BlockEntity {
+public class AltarBlockEntity extends BlockEntity implements GeoBlockEntity {
+    /** Geo/anim/texture triple id: {@code geo/block/altar.geo.json} etc. */
+    public static final String GEO_ID = "altar";
+    /** The single animation controller (idle loop + server-triggered one-shots). */
+    public static final String CONTROLLER_STATE = "state";
+    /** Triggerable one-shot: strong core pulse (accepted payments, special moments). */
+    public static final String ANIM_HEARTBEAT = "heartbeat";
+    /** Triggerable one-shot: rings open, core lifts, light breaks out (purchases). */
+    public static final String ANIM_GIFT = "gift";
+    /** Triggerable one-shot: the big-event quake (End reveal etc.). */
+    public static final String ANIM_ERUPT = "erupt";
+    /** Triggerable one-shot: short ascension fanfare when the altar level rises. */
+    public static final String ANIM_STAGE_UP = "stage_up";
+
+    private static final RawAnimation IDLE =
+            EclipseGeoAnimations.loop(GEO_ID, EclipseGeoAnimations.ANIM_IDLE);
+    private static final RawAnimation HEARTBEAT = EclipseGeoAnimations.once(GEO_ID, ANIM_HEARTBEAT);
+    private static final RawAnimation GIFT = EclipseGeoAnimations.once(GEO_ID, ANIM_GIFT);
+    private static final RawAnimation ERUPT = EclipseGeoAnimations.once(GEO_ID, ANIM_ERUPT);
+    private static final RawAnimation STAGE_UP = EclipseGeoAnimations.once(GEO_ID, ANIM_STAGE_UP);
+
     /** Offerings are confirmed by a second sneak-right-click within this window (5 s). */
     public static final long OFFERING_CONFIRM_WINDOW_TICKS = 100L;
     /**
@@ -67,10 +107,29 @@ public class AltarBlockEntity extends BlockEntity {
     /** Currently-selected revive target (banned player UUID) per interacting player. */
     private final Map<UUID, UUID> sigilSelections = new HashMap<>();
 
+    private final AnimatableInstanceCache geoCache = GeckoLibUtil.createInstanceCache(this);
+
     private record PendingOffering(long armedAt, String itemId) {}
 
     public AltarBlockEntity(BlockPos pos, BlockState state) {
         super(EclipseBlockEntities.ALTAR.get(), pos, state);
+    }
+
+    // --- F-076 GeckoLib animation chassis ---
+
+    @Override
+    public void registerControllers(AnimatableManager.ControllerRegistrar controllers) {
+        controllers.add(new AnimationController<>(this, CONTROLLER_STATE, 4,
+                state -> state.setAndContinue(IDLE))
+                .triggerableAnim(ANIM_HEARTBEAT, HEARTBEAT)
+                .triggerableAnim(ANIM_GIFT, GIFT)
+                .triggerableAnim(ANIM_ERUPT, ERUPT)
+                .triggerableAnim(ANIM_STAGE_UP, STAGE_UP));
+    }
+
+    @Override
+    public AnimatableInstanceCache getAnimatableInstanceCache() {
+        return this.geoCache;
     }
 
     // --- milestone sacrifice ---
@@ -181,6 +240,10 @@ public class AltarBlockEntity extends BlockEntity {
 
         if (isMilestoneComplete(state, milestone)) {
             completeMilestone(serverLevel, state, milestone);
+        } else {
+            // F-076: the altar visibly swallows the payment — one strong model pulse.
+            // Only when the ladder did NOT complete (stage_up owns that beat).
+            triggerAnim(CONTROLLER_STATE, ANIM_HEARTBEAT);
         }
     }
 
@@ -242,6 +305,9 @@ public class AltarBlockEntity extends BlockEntity {
         }
         PacketDistributor.sendToAllPlayers(new S2CFxEventPayload(FxPayloads.FX_ALTAR_LEVELUP,
                 fxPos, milestone.level(), crowd));
+        // F-076: the model's short ascension fanfare (rings pop, core double-pulses)
+        // plays under the ceremony FX above — GeckoLib syncs the trigger to watchers.
+        triggerAnim(CONTROLLER_STATE, ANIM_STAGE_UP);
         EclipseMod.LOGGER.info("Altar milestone {} completed at {}; rewards {}",
                 milestone.level(), this.worldPosition, milestone.rewards());
     }
@@ -328,6 +394,8 @@ public class AltarBlockEntity extends BlockEntity {
                 new S2CQuasarPayload(S2CQuasarPayload.ALTAR_BEAM,
                         Vec3.atCenterOf(this.worldPosition).add(0.0D, 0.7D, 0.0D)));
         GazerEntity.watchSacrifice(serverLevel, this.worldPosition);
+        // F-076: the swallow lands ON the model — one strong pulse as the item vanishes.
+        triggerAnim(CONTROLLER_STATE, ANIM_HEARTBEAT);
     }
 
     /**

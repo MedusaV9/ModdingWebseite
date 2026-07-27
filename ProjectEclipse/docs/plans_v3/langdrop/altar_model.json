@@ -1,0 +1,5 @@
+{
+  "_comment": "ALTAR-MODEL (F-076 GeckoLib altar + F-075 island aura) — deliberately empty: the altar block name ships already, the model/aura are pure visuals (no UI text, no subtitles: the one-shots ride existing ceremony audio, the aura loops are silent). Kept as the empty shape so the langmerge manifest stays complete.",
+  "en_us": {},
+  "de_de": {}
+}

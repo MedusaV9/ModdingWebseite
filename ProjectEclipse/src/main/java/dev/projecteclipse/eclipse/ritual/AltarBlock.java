@@ -66,9 +66,17 @@ public class AltarBlock extends BaseEntityBlock {
         return CODEC;
     }
 
+    /**
+     * F-076: the altar draws through the GeckoLib model on {@link AltarBlockEntity}
+     * ({@code client.altarmodel.AltarModelRenderer}) — the static blockstate model is no
+     * longer rendered (respawn-door pattern). {@code blockstates/altar.json} +
+     * {@code models/block/altar.json} stay untouched: the JSON model still feeds the
+     * breaking-particle texture and the admin {@code BlockItem}'s inventory look.
+     * Hitbox/collision (full cube) and every interaction lane are unchanged.
+     */
     @Override
     protected RenderShape getRenderShape(BlockState state) {
-        return RenderShape.MODEL;
+        return RenderShape.INVISIBLE;
     }
 
     @Override
@@ -114,6 +122,8 @@ public class AltarBlock extends BaseEntityBlock {
                 EclipseSignals.fireAltarDeposit(player,
                         net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(EclipseItems.UMBRAL_SHARD.get()),
                         amount, EclipseSignals.AltarDepositPurpose.SHARD_BANK);
+                // F-076: banking is a payment too — the model acknowledges with a pulse.
+                altar.triggerAnim(AltarBlockEntity.CONTROLLER_STATE, AltarBlockEntity.ANIM_HEARTBEAT);
             }
             return;
         }
