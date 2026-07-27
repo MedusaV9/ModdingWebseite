@@ -159,27 +159,25 @@ void main() {
     // on incommensurate orbits, each flaring on a slow cubed-sine clock and smearing
     // into a wide trailing lobe BEHIND its orbital motion (leading edge sharp, wake
     // long) — the flare-and-smear read of a feeding accretion disc.
+    // NOTE: no anonymous {} scopes here — Veil's GLSL processor flattens them, so
+    // sibling-block locals collide ("`dA' redeclared") and the whole pass dies black.
     if (Detail > 0.5 && (band1 + band2) > 0.003) {
         float angD = atan(discP.y, discP.x);
         float hot = 0.0;
         // hotspot 0 (prograde, faster)
-        {
-            float dA = angD - (Time * 0.42 + 2.1);
-            dA = atan(sin(dA), cos(dA));
-            float widen = dA < 0.0 ? 2.6 : 1.0; // wake trails behind (negative side)
-            float lobe = 1.0 - smoothstep(0.0, 0.55 * widen, abs(dA));
-            float flare = 0.35 + 0.65 * pow(0.5 + 0.5 * sin(Time * 0.83 + 1.3), 3.0);
-            hot += lobe * flare;
-        }
+        float dA0 = angD - (Time * 0.42 + 2.1);
+        dA0 = atan(sin(dA0), cos(dA0));
+        float widen0 = dA0 < 0.0 ? 2.6 : 1.0; // wake trails behind (negative side)
+        float lobe0 = 1.0 - smoothstep(0.0, 0.55 * widen0, abs(dA0));
+        float flare0 = 0.35 + 0.65 * pow(0.5 + 0.5 * sin(Time * 0.83 + 1.3), 3.0);
+        hot += lobe0 * flare0;
         // hotspot 1 (slower, de-phased)
-        {
-            float dA = angD - (Time * 0.27 + 5.0);
-            dA = atan(sin(dA), cos(dA));
-            float widen = dA < 0.0 ? 2.2 : 1.0;
-            float lobe = 1.0 - smoothstep(0.0, 0.5 * widen, abs(dA));
-            float flare = 0.3 + 0.7 * pow(0.5 + 0.5 * sin(Time * 0.61 + 4.2), 3.0);
-            hot += lobe * flare;
-        }
+        float dA1 = angD - (Time * 0.27 + 5.0);
+        dA1 = atan(sin(dA1), cos(dA1));
+        float widen1 = dA1 < 0.0 ? 2.2 : 1.0;
+        float lobe1 = 1.0 - smoothstep(0.0, 0.5 * widen1, abs(dA1));
+        float flare1 = 0.3 + 0.7 * pow(0.5 + 0.5 * sin(Time * 0.61 + 4.2), 3.0);
+        hot += lobe1 * flare1;
         color += DISC_COLOR * hot * (band1 * 0.55 + band2 * 0.24) * doppler * strength;
     }
 
