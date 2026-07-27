@@ -205,15 +205,15 @@ func _baue_blumenwiese(wurzel: Node3D) -> Node3D:
 	var rect := Rect2(float(feld[0]), float(feld[1]), float(feld[2]), float(feld[3]))
 	var rng := _rng(41)
 	var lavendel: Array = []
-	var reihen := int(rect.size.y / 7.0)
+	var reihen := int(rect.size.y / 5.0)
 	for reihe in reihen:
-		var z := rect.position.y + 4.0 + float(reihe) * 7.0
+		var z := rect.position.y + 3.0 + float(reihe) * 5.0
 		var x := rect.position.x + 3.0
 		while x < rect.end.x - 3.0:
-			var p := Vector2(x + rng.randf_range(-0.5, 0.5), z + rng.randf_range(-0.6, 0.6))
+			var p := Vector2(x + rng.randf_range(-0.4, 0.4), z + rng.randf_range(-0.5, 0.5))
 			if not RanchGelaende.ist_wasser(p.x, p.y):
-				lavendel.append(_boden_transform(p, rng.randf() * TAU, rng.randf_range(2.2, 3.2)))
-			x += 2.6
+				lavendel.append(_boden_transform(p, rng.randf() * TAU, rng.randf_range(1.0, 1.35)))
+			x += 1.9
 	_multimesh_flora(gruppe, "lavendel", lavendel)
 	_baue_bienenstoecke(gruppe)
 	var blumen: Array = []
@@ -574,21 +574,21 @@ func _baue_kornfeld(wurzel: Node3D) -> Node3D:
 	var kreis := RanchEntdeckungen.position_von(RanchEntdeckungen.fundort("kornkreis"))
 	var rng := _rng(91)
 	var halme: Array = []
-	var spalten := int(rect.size.x / 3.2)
-	var reihen := int(rect.size.y / 3.2)
+	var spalten := int(rect.size.x / 2.0)
+	var reihen := int(rect.size.y / 2.0)
 	for sx in spalten:
-		if sx % 9 >= 7:
+		if sx % 12 >= 10:
 			continue
 		for sz in reihen:
-			if sz % 11 >= 10:
+			if sz % 17 >= 16:
 				continue
 			var p := Vector2(
-				rect.position.x + 1.6 + float(sx) * 3.2 + rng.randf_range(-0.7, 0.7),
-				rect.position.y + 1.6 + float(sz) * 3.2 + rng.randf_range(-0.7, 0.7)
+				rect.position.x + 1.0 + float(sx) * 2.0 + rng.randf_range(-0.45, 0.45),
+				rect.position.y + 1.0 + float(sz) * 2.0 + rng.randf_range(-0.45, 0.45)
 			)
 			if p.distance_to(kreis) < 16.0:
 				continue
-			halme.append(_boden_transform(p, rng.randf() * TAU, rng.randf_range(2.0, 2.8)))
+			halme.append(_boden_transform(p, rng.randf() * TAU, rng.randf_range(0.95, 1.3)))
 	_multimesh_flora(gruppe, "korn", halme)
 	_baue_kornkreis(gruppe, kreis)
 	_baue_vogelscheuche(gruppe, Vector2(rect.get_center().x, rect.position.y - 8.0))

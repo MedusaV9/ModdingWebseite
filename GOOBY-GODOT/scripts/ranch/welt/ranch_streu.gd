@@ -17,13 +17,25 @@ const DRAW_CALLS_JE_GRUPPE := 2
 const DRAW_CALL_SOCKEL := 290
 const DRAW_CALL_BUDGET := 400
 
+## Kantenlänge der Kleinteil-Zellen (VIS-1 „Außenwelt wirkt karg"): jede
+## Zelle ist ein eigenes MultiMesh mit LOKALEM Distanz-Culling. Vorher
+## cullte EIN map-weites MultiMesh über seinen Zentroid — am Kartenrand
+## verschwand damit auch das Gras direkt vor der Kamera.
+const ZELLE_M := 240.0
+## Obergrenze gleichzeitig sichtbarer Zellen je Kleinteil-Sorte (Kreis
+## mit Radius Sichtweite + Zell-Marge über der Zellfläche).
+const ZELLEN_SICHTBAR_MAX := 11
+## Kleinteil-Sichtweite = KLEINTEIL_SICHT_M × dieser Faktor — dank
+## Zellen-Culling darf sie weiter tragen als das alte map-weite Limit.
+const KLEIN_SICHT_FAKTOR := 1.8
+
 ## Streu-Sorten: glb, anzahl (Basis-Dichte), cluster, min_abstand,
 ## skala, klein (Kleinteil-Culling), optional rect ("wald"), hoehe_min.
 const SORTEN: Array[Dictionary] = [
 	{
 		"glb": "natur/tree_oak.glb",
-		"anzahl": 150,
-		"cluster": {"anzahl": 14, "radius": 55.0},
+		"anzahl": 220,
+		"cluster": {"anzahl": 17, "radius": 55.0},
 		"min_abstand": 9.0,
 		"skala_min": 7.0,
 		"skala_max": 11.0,
@@ -32,8 +44,8 @@ const SORTEN: Array[Dictionary] = [
 	},
 	{
 		"glb": "natur/tree_default.glb",
-		"anzahl": 130,
-		"cluster": {"anzahl": 12, "radius": 48.0},
+		"anzahl": 190,
+		"cluster": {"anzahl": 15, "radius": 48.0},
 		"min_abstand": 9.0,
 		"skala_min": 7.5,
 		"skala_max": 12.0,
@@ -42,8 +54,8 @@ const SORTEN: Array[Dictionary] = [
 	},
 	{
 		"glb": "natur/tree_detailed.glb",
-		"anzahl": 115,
-		"cluster": {"anzahl": 11, "radius": 44.0},
+		"anzahl": 170,
+		"cluster": {"anzahl": 14, "radius": 44.0},
 		"min_abstand": 9.0,
 		"skala_min": 7.0,
 		"skala_max": 11.5,
@@ -52,17 +64,17 @@ const SORTEN: Array[Dictionary] = [
 	},
 	{
 		"glb": "natur/plant_bushLarge.glb",
-		"anzahl": 360,
-		"cluster": {"anzahl": 34, "radius": 26.0},
+		"anzahl": 560,
+		"cluster": {"anzahl": 50, "radius": 26.0},
 		"min_abstand": 4.0,
 		"skala_min": 2.4,
 		"skala_max": 4.4,
-		"klein": true,
+		"klein": false,
 	},
 	{
 		"glb": "natur/plant_bush.glb",
-		"anzahl": 250,
-		"cluster": {"anzahl": 40, "radius": 22.0},
+		"anzahl": 450,
+		"cluster": {"anzahl": 62, "radius": 22.0},
 		"min_abstand": 3.0,
 		"skala_min": 2.0,
 		"skala_max": 3.6,
@@ -70,8 +82,8 @@ const SORTEN: Array[Dictionary] = [
 	},
 	{
 		"glb": "natur/flower_yellowA.glb",
-		"anzahl": 240,
-		"cluster": {"anzahl": 20, "radius": 15.0},
+		"anzahl": 430,
+		"cluster": {"anzahl": 34, "radius": 15.0},
 		"min_abstand": 2.2,
 		"skala_min": 2.2,
 		"skala_max": 3.2,
@@ -79,8 +91,8 @@ const SORTEN: Array[Dictionary] = [
 	},
 	{
 		"glb": "natur/flower_redA.glb",
-		"anzahl": 180,
-		"cluster": {"anzahl": 16, "radius": 14.0},
+		"anzahl": 340,
+		"cluster": {"anzahl": 28, "radius": 14.0},
 		"min_abstand": 2.2,
 		"skala_min": 2.2,
 		"skala_max": 3.2,
@@ -88,8 +100,8 @@ const SORTEN: Array[Dictionary] = [
 	},
 	{
 		"glb": "natur/flower_purpleA.glb",
-		"anzahl": 180,
-		"cluster": {"anzahl": 16, "radius": 14.0},
+		"anzahl": 340,
+		"cluster": {"anzahl": 28, "radius": 14.0},
 		"min_abstand": 2.2,
 		"skala_min": 2.2,
 		"skala_max": 3.2,
@@ -97,8 +109,8 @@ const SORTEN: Array[Dictionary] = [
 	},
 	{
 		"glb": "natur/grass_large.glb",
-		"anzahl": 460,
-		"cluster": {"anzahl": 44, "radius": 20.0},
+		"anzahl": 2000,
+		"cluster": {"anzahl": 110, "radius": 26.0},
 		"min_abstand": 2.0,
 		"skala_min": 2.2,
 		"skala_max": 3.6,
@@ -106,17 +118,27 @@ const SORTEN: Array[Dictionary] = [
 	},
 	{
 		"glb": "natur/rock_smallA.glb",
-		"anzahl": 140,
-		"cluster": {"anzahl": 20, "radius": 18.0},
+		"anzahl": 240,
+		"cluster": {"anzahl": 32, "radius": 18.0},
 		"min_abstand": 5.0,
 		"skala_min": 1.4,
 		"skala_max": 3.2,
 		"klein": true,
 	},
 	{
-		"glb": "natur/rock_largeA.glb",
+		"glb": "natur/tree_fat.glb",
 		"anzahl": 90,
-		"cluster": {"anzahl": 12, "radius": 26.0},
+		"cluster": {"anzahl": 10, "radius": 40.0},
+		"min_abstand": 9.0,
+		"skala_min": 6.5,
+		"skala_max": 10.0,
+		"einsenken": -0.25,
+		"klein": false,
+	},
+	{
+		"glb": "natur/rock_largeA.glb",
+		"anzahl": 112,
+		"cluster": {"anzahl": 14, "radius": 26.0},
 		"min_abstand": 10.0,
 		"skala_min": 2.0,
 		"skala_max": 4.6,
@@ -125,21 +147,21 @@ const SORTEN: Array[Dictionary] = [
 	},
 	{
 		"glb": "natur/stump_round.glb",
-		"anzahl": 54,
-		"cluster": {"anzahl": 12, "radius": 20.0},
+		"anzahl": 70,
+		"cluster": {"anzahl": 15, "radius": 20.0},
 		"min_abstand": 8.0,
 		"skala_min": 2.2,
 		"skala_max": 3.2,
-		"klein": true,
+		"klein": false,
 	},
 	{
 		"glb": "natur/log.glb",
-		"anzahl": 26,
-		"cluster": {"anzahl": 9, "radius": 22.0},
+		"anzahl": 38,
+		"cluster": {"anzahl": 12, "radius": 22.0},
 		"min_abstand": 10.0,
 		"skala_min": 2.4,
 		"skala_max": 3.6,
-		"klein": true,
+		"klein": false,
 	},
 ]
 
@@ -189,18 +211,53 @@ static func baue(wurzel: Node3D, dichte_faktor := 1.0, sicht_faktor := 1.0) -> i
 	gruppe.name = "Streu"
 	wurzel.add_child(gruppe)
 	for plan: Dictionary in plaene(dichte_faktor):
-		var sicht := 0.0
+		var pfad := "%s/%s" % [ASSETS, plan["glb"]]
 		if bool(plan["klein"]):
-			sicht = RanchBau.KLEINTEIL_SICHT_M * clampf(sicht_faktor, 0.25, 4.0)
-		bau.baue_multimesh(gruppe, "%s/%s" % [ASSETS, plan["glb"]], plan["transforms"], "", sicht)
-		gruppen += 1
+			# VIS-1 („Außenwelt wirkt karg"): Kleinteile tragen weiter in
+			# den Mittelgrund UND liegen in Boden-Zellen — nahe Zellen
+			# bleiben sichtbar, ferne kosten keine Draw-Calls (Culling je
+			# Zell-Zentroid statt map-weit).
+			var sicht := (
+				RanchBau.KLEINTEIL_SICHT_M * KLEIN_SICHT_FAKTOR * clampf(sicht_faktor, 0.25, 4.0)
+			)
+			for zelle: Array in zellen(plan["transforms"]):
+				bau.baue_multimesh(gruppe, pfad, zelle, "", sicht + ZELLE_M * 0.5)
+				gruppen += 1
+		else:
+			bau.baue_multimesh(gruppe, pfad, plan["transforms"])
+			gruppen += 1
 	return gruppen
 
 
+## Kleinteil-Transforms in Boden-Gitterzellen (Kantenlänge ZELLE_M)
+## aufteilen — deterministische Reihenfolge über sortierte Zell-Schlüssel.
+static func zellen(transforms: Array) -> Array:
+	var karte: Dictionary = {}
+	for t: Transform3D in transforms:
+		var key := Vector2i(floori(t.origin.x / ZELLE_M), floori(t.origin.z / ZELLE_M))
+		if not karte.has(key):
+			karte[key] = []
+		(karte[key] as Array).append(t)
+	var schluessel: Array = karte.keys()
+	schluessel.sort()
+	var out: Array = []
+	for key: Vector2i in schluessel:
+		out.append(karte[key])
+	return out
+
+
 ## Draw-Call-Schätzung der Ranch-Ansicht: gemessener Sockel + Kosten je
-## Streu-Gruppe. Der echte Nachweis kommt aus dem Screenshot-Lauf.
+## Streu-Sorte. Kleinteile rendern ohne Schatten, aber je sichtbarer
+## Zelle ein Call; Großteile map-weit mit Schatten-Pass. Der echte
+## Nachweis kommt aus dem Screenshot-Lauf.
 static func draw_call_schaetzung(streu_plaene: Array[Dictionary]) -> int:
-	return DRAW_CALL_SOCKEL + streu_plaene.size() * DRAW_CALLS_JE_GRUPPE
+	var calls := DRAW_CALL_SOCKEL
+	for plan: Dictionary in streu_plaene:
+		if bool(plan["klein"]):
+			calls += ZELLEN_SICHTBAR_MAX
+		else:
+			calls += DRAW_CALLS_JE_GRUPPE
+	return calls
 
 
 ## ------------------------------------------------------------------ intern

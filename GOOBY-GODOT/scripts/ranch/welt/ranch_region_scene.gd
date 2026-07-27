@@ -79,7 +79,13 @@ func _ready() -> void:
 	wetter.wetter_override = wetter_override
 	wetter.himmel = himmel
 	add_child(wetter)
-	wetter.einrichten(_env, _sonne, _terrain.terrain_material, deko.gras_material)
+	wetter.einrichten(
+		_env,
+		_sonne,
+		_terrain.terrain_material,
+		deko.gras_material,
+		[_terrain.weg_material, _terrain.trampel_material]
+	)
 	wildtiere = RanchWildtiere.new()
 	wildtiere.name = "Wildtiere"
 	add_child(wildtiere)

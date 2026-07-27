@@ -1,25 +1,32 @@
 class_name WeltFlora
 extends RefCounted
-## Prozedurale Pflanzen-Meshes (WELT-1) — kleine Low-Poly-Meshes mit
-## Vertex-Farben, gebaut aus SurfaceTool-Dreiecken (KEINE Texturen, keine
-## Assets). Gedacht als MultiMesh-Füllung für die Vegetations-SCHICHTEN
-## der offenen Welt: Lavendel-Büschel, Farnwedel, Pilze, Binsen (Moor),
-## Kornhalme und Blüten-Tupfer. Alle Fabriken sind deterministisch
-## (Form kommt nur aus Konstanten) und PURE genug für Headless-Tests:
-## `beschreibungen()` nennt jede Sorte mit erwarteter Höhe.
+## Prozedurale Pflanzen-Meshes (WELT-1, VIS-1-Überarbeitung nach Trailer-
+## Review „Korn sieht aus wie gelbe Pfeile"): Korn und Lavendel sind jetzt
+## texturierte BILLBOARD-BÜSCHEL (drei gekreuzte Quads, Ähren-/Blüten-
+## Textur aus tools/blender/props/gen_flora_billboards.py, Wind-Shader
+## flora_wind.gdshader) — echte Halme mit Ähre, unten grün, oben golden,
+## statt Rauten-Spitzen auf Stangen. Farn, Pilz, Binse und Seerose bleiben
+## kleine Low-Poly-Meshes mit Vertex-Farben (SurfaceTool, keine Texturen).
+## Alle Fabriken sind deterministisch und PURE genug für Headless-Tests:
+## `beschreibungen()` nennt jede Sorte mit erwarteter Höhe. Der
+## RanchWetterController treibt `wind_materialien()` (Böen-Uniform).
 
-const LAVENDEL_LILA := Color(0.62, 0.48, 0.86)
-const LAVENDEL_STIEL := Color(0.45, 0.62, 0.42)
 const FARN_GRUEN := Color(0.36, 0.58, 0.34)
 const PILZ_HUT := Color(0.82, 0.36, 0.3)
 const PILZ_FUSS := Color(0.92, 0.88, 0.78)
+const BINSE_GRUEN := Color(0.44, 0.54, 0.34)
 const BINSE_BRAUN := Color(0.52, 0.44, 0.3)
 const BINSE_KOLBEN := Color(0.38, 0.28, 0.18)
 const KORN_GOLD := Color(0.89, 0.76, 0.42)
 const SEEROSE_GRUEN := Color(0.4, 0.66, 0.42)
 const SEEROSE_BLUETE := Color(0.97, 0.82, 0.9)
 
+const WIND_SHADER := "res://scripts/ranch/welt/flora_wind.gdshader"
+const KORN_TEXTUR := "res://assets/ranch/welt/korn_bueschel.png"
+const LAVENDEL_TEXTUR := "res://assets/ranch/welt/lavendel_busch.png"
+
 static var _cache: Dictionary = {}
+static var _wind_mats: Array[ShaderMaterial] = []
 
 
 ## Sorten-Katalog: id → erwartete Mesh-Höhe in Metern (fürs Testen und
@@ -42,7 +49,7 @@ static func mesh(id: String) -> Mesh:
 	var out: Mesh = null
 	match id:
 		"lavendel":
-			out = _lavendel()
+			out = _bueschel(LAVENDEL_TEXTUR, 0.85, 0.75)
 		"farn":
 			out = _farn()
 		"pilz":
@@ -50,15 +57,15 @@ static func mesh(id: String) -> Mesh:
 		"binse":
 			out = _binse()
 		"korn":
-			out = _korn()
+			out = _bueschel(KORN_TEXTUR, 1.3, 1.05)
 		"seerose":
 			out = _seerose()
 	_cache[id] = out
 	return out
 
 
-## Material für Flora-MultiMeshes: Vertex-Farben, matt, beidseitig
-## (die Blatt-Quads haben keine Rückseite).
+## Material für Vertex-Farben-Flora: matt, beidseitig (Blatt-Quads haben
+## keine Rückseite).
 static func material() -> StandardMaterial3D:
 	var mat := StandardMaterial3D.new()
 	mat.vertex_color_use_as_albedo = true
@@ -67,24 +74,45 @@ static func material() -> StandardMaterial3D:
 	return mat
 
 
+## Alle Wind-Shader-Materialien der Billboard-Sorten — der Wetter-
+## Controller setzt hier pro Tick die Böen-Stärke (`wind`).
+static func wind_materialien() -> Array[ShaderMaterial]:
+	return _wind_mats
+
+
 static func reset_for_tests() -> void:
 	_cache = {}
+	_wind_mats = []
 
 
 ## ------------------------------------------------------------- Fabriken
 
 
-## Lavendel: 5 Stiele mit lila Blüten-Rauten obenauf.
-static func _lavendel() -> Mesh:
+## Billboard-Büschel: drei um 60° gekreuzte Quads mit Alphatextur und
+## Wind-Shader — aus jeder Blickrichtung ein dichtes Pflanzenbüschel.
+static func _bueschel(textur_pfad: String, breite: float, hoch: float) -> Mesh:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	for i in 5:
-		var w := float(i) / 5.0 * TAU
-		var fuss := Vector3(cos(w) * 0.13, 0.0, sin(w) * 0.13)
-		var kopf := fuss * 1.6 + Vector3(0.0, 0.55, 0.0)
-		_halm(st, fuss, kopf, 0.02, LAVENDEL_STIEL)
-		_raute(st, kopf, 0.075, 0.2, LAVENDEL_LILA)
-	return _fertig(st)
+	for i in 3:
+		var w := float(i) * PI / 3.0
+		var achse := Vector3(cos(w), 0.0, sin(w)) * (breite / 2.0)
+		# UV: v=0 = Texturoberkante, die Pflanzen-Basis liegt bei v=1.
+		var ecken: Array[Vector3] = [
+			-achse + Vector3(0.0, hoch, 0.0),
+			achse + Vector3(0.0, hoch, 0.0),
+			achse,
+			-achse,
+		]
+		var uvs: Array[Vector2] = [
+			Vector2(0.0, 0.0), Vector2(1.0, 0.0), Vector2(1.0, 1.0), Vector2(0.0, 1.0)
+		]
+		for idx: int in [0, 1, 2, 0, 2, 3]:
+			st.set_normal(Vector3.UP)
+			st.set_uv(uvs[idx])
+			st.add_vertex(ecken[idx])
+	var mesh := st.commit()
+	mesh.surface_set_material(0, _wind_material(textur_pfad, hoch))
+	return mesh
 
 
 ## Farn: 6 Wedel rundum, jeder als Bogen aus zwei Dreiecken — steigt
@@ -122,31 +150,24 @@ static func _pilz() -> Mesh:
 	return _fertig(st)
 
 
-## Binse (Moor): 4 hohe Halme, zwei davon mit braunem Kolben.
+## Binse (Moor, VIS-1 voller): 7 Halme mit Farbverlauf grün→braun, drei
+## davon tragen einen DICKEN Rohrkolben (kurzer brauner Doppel-Halm) mit
+## heller Spitze — Schilfbüschel statt dünner Stangen.
 static func _binse() -> Mesh:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	for i in 4:
-		var w := float(i) / 4.0 * TAU + 0.6
-		var fuss := Vector3(cos(w) * 0.08, 0.0, sin(w) * 0.08)
-		var hoch := 1.15 - 0.14 * float(i % 2)
-		var kopf := fuss + Vector3(cos(w) * 0.06, hoch, sin(w) * 0.06)
-		_halm(st, fuss, kopf, 0.018, BINSE_BRAUN)
+	for i in 7:
+		var w := float(i) / 7.0 * TAU + 0.6
+		var radius := 0.09 + 0.03 * float(i % 2)
+		var fuss := Vector3(cos(w) * radius, 0.0, sin(w) * radius)
+		var hoch := 1.15 - 0.16 * float(i % 3)
+		var kopf := fuss + Vector3(cos(w) * 0.1, hoch, sin(w) * 0.1)
+		_halm_verlauf(st, fuss, kopf, 0.02, BINSE_GRUEN, BINSE_BRAUN)
 		if i % 2 == 0:
-			_raute(st, kopf, 0.045, 0.2, BINSE_KOLBEN)
-	return _fertig(st)
-
-
-## Kornhalm: 3 goldene Halme mit Ähren-Rauten.
-static func _korn() -> Mesh:
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	for i in 3:
-		var w := float(i) / 3.0 * TAU + 1.1
-		var fuss := Vector3(cos(w) * 0.07, 0.0, sin(w) * 0.07)
-		var kopf := fuss + Vector3(cos(w) * 0.1, 0.92, sin(w) * 0.1)
-		_halm(st, fuss, kopf, 0.016, KORN_GOLD.darkened(0.15))
-		_raute(st, kopf, 0.05, 0.13, KORN_GOLD)
+			var kolben_fuss := kopf - Vector3(0.0, 0.02, 0.0)
+			var kolben_kopf := kopf + Vector3(0.0, 0.16, 0.0)
+			_halm(st, kolben_fuss, kolben_kopf, 0.045, BINSE_KOLBEN)
+			_halm(st, kolben_kopf, kolben_kopf + Vector3(0.0, 0.07, 0.0), 0.012, BINSE_BRAUN)
 	return _fertig(st)
 
 
@@ -168,6 +189,17 @@ static func _seerose() -> Mesh:
 ## ------------------------------------------------------------- Werkzeug
 
 
+## Wind-ShaderMaterial je Textur (gecacht + in der Wind-Registry).
+static func _wind_material(textur_pfad: String, hoch: float) -> Material:
+	var mat := ShaderMaterial.new()
+	mat.shader = load(WIND_SHADER)
+	if ResourceLoader.exists(textur_pfad):
+		mat.set_shader_parameter("albedo_tex", load(textur_pfad))
+	mat.set_shader_parameter("hoehe", hoch)
+	_wind_mats.append(mat)
+	return mat
+
+
 ## Halm: zwei gekreuzte Quads von `fuss` nach `kopf`.
 static func _halm(st: SurfaceTool, fuss: Vector3, kopf: Vector3, halb: float, farbe: Color) -> void:
 	for achse: Vector3 in [Vector3(halb, 0.0, 0.0), Vector3(0.0, 0.0, halb)]:
@@ -175,7 +207,20 @@ static func _halm(st: SurfaceTool, fuss: Vector3, kopf: Vector3, halb: float, fa
 		_dreieck(st, [fuss - achse, kopf + achse, kopf - achse], farbe)
 
 
-## Stehende Doppel-Raute (Blüte/Kolben/Ähre) am Punkt `pos`.
+## Halm mit Farbverlauf: unten `farbe_fuss`, oben `farbe_kopf`.
+static func _halm_verlauf(
+	st: SurfaceTool, fuss: Vector3, kopf: Vector3, halb: float, farbe_fuss: Color, farbe_kopf: Color
+) -> void:
+	for achse: Vector3 in [Vector3(halb, 0.0, 0.0), Vector3(0.0, 0.0, halb)]:
+		_dreieck_farben(
+			st, [fuss - achse, fuss + achse, kopf + achse], [farbe_fuss, farbe_fuss, farbe_kopf]
+		)
+		_dreieck_farben(
+			st, [fuss - achse, kopf + achse, kopf - achse], [farbe_fuss, farbe_kopf, farbe_kopf]
+		)
+
+
+## Stehende Doppel-Raute (Blüte/Kolben) am Punkt `pos`.
 static func _raute(st: SurfaceTool, pos: Vector3, halb: float, hoch: float, farbe: Color) -> void:
 	var oben := pos + Vector3(0.0, hoch, 0.0)
 	var unten := pos - Vector3(0.0, hoch * 0.4, 0.0)
@@ -185,16 +230,20 @@ static func _raute(st: SurfaceTool, pos: Vector3, halb: float, hoch: float, farb
 
 
 static func _dreieck(st: SurfaceTool, punkte: Array, farbe: Color) -> void:
+	_dreieck_farben(st, punkte, [farbe, farbe, farbe])
+
+
+static func _dreieck_farben(st: SurfaceTool, punkte: Array, farben: Array) -> void:
 	var normal := Vector3.UP
 	var kante_a: Vector3 = punkte[1] - punkte[0]
 	var kante_b: Vector3 = punkte[2] - punkte[0]
 	var kreuz := kante_a.cross(kante_b)
 	if kreuz.length_squared() > 0.000001:
 		normal = kreuz.normalized()
-	for p: Vector3 in punkte:
-		st.set_color(farbe)
+	for i in 3:
+		st.set_color(farben[i])
 		st.set_normal(normal)
-		st.add_vertex(p)
+		st.add_vertex(punkte[i])
 
 
 static func _fertig(st: SurfaceTool) -> ArrayMesh:

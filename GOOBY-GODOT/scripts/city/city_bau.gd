@@ -248,18 +248,25 @@ func baue_orte() -> void:
 			_collider_fuer_tile(CityMap._tile_von(tile_raw), 7.5)
 
 
-## Namensschild über einem Eingang: Billboard-Label, nachts mit Glow-Tafel.
+## Namensschild über einem Eingang (VIS-2 lesbar): OrtSchild-Billboard mit
+## Mindest-Bildschirmgröße (wächst ab 40 m mit der Entfernung), weichem
+## Fern-Ausblenden und IMMER einer Kontrast-Tafel — tagsüber Creme hinter
+## der Tinten-Schrift, nachts der warme Glow (_lass_schild_leuchten).
 func _haenge_schild(
 	wurzel: Node3D, text: String, mitte: Vector3, zur_strasse: Vector3, hoehe: float, tint: String
 ) -> void:
 	var an: bool = _profil["lichter_an"]
-	var schild := Label3D.new()
+	var schild := OrtSchild.new()
 	schild.text = text
 	schild.font_size = 150
-	schild.pixel_size = 0.011
+	schild.pixel_size = 0.013
 	schild.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	schild.modulate = CityAmbiente.schild_farbe(an)
-	schild.outline_size = 24
+	schild.outline_size = 30
+	# Beide sind kamerazugewandte Billboards und damit koplanar — ohne feste
+	# Sortierung z-fightet die Tafel mit der Schrift (halbe Buchstaben weg).
+	schild.render_priority = 1
+	schild.outline_render_priority = 0
 	# Über dem EINGANG, nicht über der Tile-Mitte: mittig verschluckt die
 	# Fassade (und der Nachbarblock) die halbe Schrift.
 	var richtung := zur_strasse
@@ -269,7 +276,10 @@ func _haenge_schild(
 	schild.position = mitte + richtung.normalized() * 8.0 + Vector3(0, hoehe, 0)
 	wurzel.add_child(schild)
 	if an:
-		_lass_schild_leuchten(wurzel, schild, tint)
+		_lass_schild_leuchten(schild, tint)
+	else:
+		schild.outline_modulate = Color(1.0, 0.98, 0.92)
+		schild.setze_tafel(Color(1.0, 0.97, 0.9, 0.85), 0.25, true)
 
 
 ## Fassaden-Props je Ort (FIX-5 „lesbar"): kleine, charakteristische
@@ -422,21 +432,12 @@ func _baue_ort_props(wurzel: Node3D, ort_id: String, mitte: Vector3, zur_strasse
 ## HINTER der Schrift in der Fassadenfarbe. Bewusst KEIN Environment-Glow-
 ## Pass und kein zusätzliches Licht — das wäre auf dem Handy ein Fullscreen-
 ## Blur bzw. ein Licht pro Laden; so ist es ein Quad (Doc A §7 Licht-Budget).
-func _lass_schild_leuchten(wurzel: Node3D, schild: Label3D, hex: String) -> void:
+## VIS-2: die Tafel hängt jetzt IM Schild (setze_tafel) und macht dessen
+## Entfernungs-Skalierung und Fern-Ausblenden automatisch mit.
+func _lass_schild_leuchten(schild: OrtSchild, hex: String) -> void:
 	schild.outline_modulate = AcTokens.INK
-	# Beide sind kamerazugewandte Billboards und damit koplanar — ohne feste
-	# Sortierung z-fightet die Tafel mit der Schrift (halbe Buchstaben weg).
-	schild.render_priority = 1
-	schild.outline_render_priority = 0
-	var breite := float(schild.text.length()) * float(schild.font_size) * schild.pixel_size
-	var tafel := MeshInstance3D.new()
-	var quad := QuadMesh.new()
-	quad.size = Vector2(maxf(4.0, breite * 0.62) + 3.0, 3.4)
-	tafel.mesh = quad
 	var farbe := Color(hex) if not hex.is_empty() else AcTokens.YELLOW
-	tafel.material_override = CityAmbiente.schild_glow_material(farbe.lerp(AcTokens.WHITE, 0.55))
-	tafel.position = schild.position
-	wurzel.add_child(tafel)
+	schild.setze_tafel(farbe.lerp(AcTokens.WHITE, 0.55), 1.1)
 
 
 func baue_deko() -> void:

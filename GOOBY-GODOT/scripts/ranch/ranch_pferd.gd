@@ -18,6 +18,15 @@ extends Node3D
 ## prozedurale Beinphase weiter (Tests + Hufschlag-Sync lesen sie), die
 ## sichtbare Beinanimation kommt aus dem AnimationPlayer des GLB.
 ##
+## VIS-2 Bodenkontakt pro Huf: die Lauf-Clips tauchen die Hufe ein paar
+## Zentimeter unter y=0 und am Hang/Brueckendeck liegt der Boden unter
+## den Hufen hoeher als unter der Koerpermitte (die Reiter setzen den
+## Knoten auf die MITTEN-Hoehe). `_halte_hufe_ueber_boden` misst deshalb
+## jeden Frame die vier Huf-Punkte gegen den Boden (set_bodenkontakt-
+## Callback oder die eigene Standflaeche) und hebt das sichtbare Rig
+## (plus Sattel/Decke) gerade so weit an, dass kein Huf mehr eintaucht —
+## Anheben sofort (kein sichtbares Clipping), Absenken weich gedaempft.
+##
 ##   var pferd := RanchPferd.neu(Color("#D9A066"), Color("#8A5A33"))
 ##   add_child(pferd)
 ##   pferd.set_gangart(RanchPferd.GANG_TRAB)
@@ -81,6 +90,17 @@ const ABZEICHEN_WEISS := Color("#F7F1E4")
 ## Rücken-Oberkante (Sattel-Auflage) in Metern — für body_height/Gear.
 const RUECKEN_Y := 1.42
 
+## VIS-2 Bodenkontakt: Huf-tragende Knochen des GLB-Skeletts.
+const HUF_KNOCHEN: Array[String] = ["leg.FL", "leg.FR", "leg.BL", "leg.BR"]
+## Sicherheitsabstand (m) der Hufsohle ueber dem Boden — deckt die flach
+## liegenden Brueckenplanken ab (Deckkurve vs. Plankenoberkante ≤ ~3 cm).
+const HUF_EPSILON := 0.02
+## Obergrenze (m) fuer die Anhebung — Kliff-Kanten heben das Rig nicht
+## ins Absurde, dort klemmt ohnehin die Begehbarkeits-Pruefung der Welt.
+const HUF_LIFT_MAX := 0.4
+## Absenk-Daempfung (1/s): Anheben ist sofort, Absenken federt weich nach.
+const HUF_SENK_RATE := 5.0
+
 ## Skalen je Alters-Phase (RanchHorseBreeding.PHASEN) + GLB-Wahl.
 const ALTER_SKALA := {"fohlen": 0.55, "jaehrling": 0.75, "jungpferd": 0.90, "ausgewachsen": 1.0}
 const FOHLEN_ALTER: Array[String] = ["fohlen", "jaehrling"]
@@ -118,6 +138,13 @@ var _kopf: Node3D
 var _beine: Array[Node3D] = []
 var _gear: Dictionary = {}
 var _gear_farben: Dictionary = {}
+var _gear_basis_y: Dictionary = {}
+## VIS-2 Bodenkontakt: Callable(x, z) -> float (Welt-Bodenhoehe) oder leer
+## (= eigene Standflaeche als Ebene), Huf-Anker in Knochen-Koordinaten
+## und die aktuell angewandte Rig-Anhebung (lokale Einheiten).
+var _boden_cb := Callable()
+var _huf_anker: Array[Dictionary] = []
+var _huf_lift := 0.0
 
 
 ## Fabrik: Pferd mit Fell- und Mähnenfarbe (Pack-Daten) bauen.
@@ -142,10 +169,15 @@ static func material(color: Color) -> StandardMaterial3D:
 
 func _ready() -> void:
 	_baue_pferd()
+	_auto_bodenkontakt()
 
 
 ## Selbstläufer-Animation — pausiert, solange ein externer Treiber
-## (RANCH-2-Reit-Controller) über tick() die Phase übernimmt.
+## (RANCH-2-Reit-Controller) über tick() die Phase übernimmt. Der
+## Huf-Bodenkontakt läuft NICHT hier, sondern nach jedem Skelett-Update
+## (skeleton_updated in _baue_huf_anker): _process liefe einen Frame VOR
+## dem AnimationPlayer und die Korrektur hinkte der Pose hinterher
+## (Rest-Clipping im schnellen Galopp-Takt).
 func _process(delta: float) -> void:
 	if Time.get_ticks_msec() - _extern_tick_ms > 500:
 		if _anim != null and _anim.speed_scale != 1.0:
@@ -206,6 +238,28 @@ func set_aussehen(pferd: Dictionary) -> void:
 	_wende_aussehen_an()
 
 
+## VIS-2: Bodenkontakt pro Huf einschalten. `hoehe_cb` = Callable(x, z)
+## -> float mit der WELT-Bodenhoehe unter einem Huf (z. B.
+## RanchKarte.reit_hoehe — kennt auch das Haengebruecken-Deck); leere
+## Callable = Ebene durch die eigene Standflaeche (fängt die Lauf-Clip-
+## Eintauchtiefe auf flachem Boden ab, laeuft immer). Korrigiert NUR die
+## sichtbare Rig-Hoehe — Node-Position/Vertrags-API bleiben unberuehrt.
+func set_bodenkontakt(hoehe_cb: Callable) -> void:
+	_boden_cb = hoehe_cb
+
+
+## VIS-2 Mess-/Test-Hook: kleinster aktueller Huf-Abstand zum Boden in
+## Welt-Metern (negativ = ein Huf taucht ein). INF ohne Rig/Anker.
+func huf_bodenabstand_min() -> float:
+	if _huf_anker.is_empty() or _skelett == null:
+		return INF
+	var abstand := INF
+	for anker: Dictionary in _huf_anker:
+		var punkt := _huf_welt(anker)
+		abstand = minf(abstand, punkt.y - _boden_unter(punkt))
+	return abstand
+
+
 ## Externer Animations-Treiber (Reit-Controller): `tempo` (m/s) staucht/
 ## streckt die Schrittfrequenz relativ zum Gangart-Zieltempo — dieselbe
 ## Semantik wie horse_stub.tick.
@@ -245,6 +299,7 @@ func equip(slot: String, gear_farbe: Variant) -> void:
 		(_gear[slot] as Node3D).queue_free()
 		_gear.erase(slot)
 	_gear_farben.erase(slot)
+	_gear_basis_y.erase(slot)
 	if not (gear_farbe is String):
 		return
 	var aufsatz := RanchGearMeshes.build(slot, gear_farbe)
@@ -252,10 +307,12 @@ func equip(slot: String, gear_farbe: Variant) -> void:
 		return
 	match slot:
 		"sattel":
-			aufsatz.position = Vector3(0.0, RUECKEN_Y + 0.06, 0.05)
+			aufsatz.position = Vector3(0.0, RUECKEN_Y + 0.06 + _huf_lift, 0.05)
+			_gear_basis_y[slot] = RUECKEN_Y + 0.06
 			add_child(aufsatz)
 		"decke":
-			aufsatz.position = Vector3(0.0, RUECKEN_Y + 0.02, 0.05)
+			aufsatz.position = Vector3(0.0, RUECKEN_Y + 0.02 + _huf_lift, 0.05)
+			_gear_basis_y[slot] = RUECKEN_Y + 0.02
 			add_child(aufsatz)
 		"halfter":
 			if _kopf == null:
@@ -328,6 +385,8 @@ func _neu_bauen() -> void:
 	_anim = null
 	_kopf = null
 	_beine = []
+	_huf_anker = []
+	_huf_lift = 0.0
 	_baue_pferd()
 	for slot: String in gear_kopie:
 		equip(slot, gear_kopie[slot])
@@ -355,6 +414,7 @@ func _baue_pferd() -> void:
 	_entferne_blinzel_tracks()
 	_baue_kopf_proxy()
 	_baue_bein_proxys()
+	_baue_huf_anker()
 	_wende_aussehen_an()
 	_spiele_gangart()
 
@@ -394,6 +454,85 @@ func _baue_bein_proxys() -> void:
 		bein.position = pos
 		add_child(bein)
 		_beine.append(bein)
+
+
+## VIS-2: Huf-Anker in Knochen-Koordinaten — die Hufsohle liegt in
+## Ruhepose direkt unter dem Bein-Knochen auf der Mesh-Unterkante
+## (GLB-Vertrag: Boden y=0, AABB-Minimum ≈ Hufsohle). Die Wache haengt
+## am skeleton_updated-Signal: sie laeuft damit im selben Frame NACH der
+## Animation (in _process hinkte sie einen Frame hinterher).
+func _baue_huf_anker() -> void:
+	_huf_anker = []
+	if _skelett == null or _mesh == null or _mesh.mesh == null:
+		return
+	var sohle_y := _mesh.mesh.get_aabb().position.y
+	for knochen in HUF_KNOCHEN:
+		var idx := _skelett.find_bone(knochen)
+		if idx < 0:
+			continue
+		var ruhe := _skelett.get_bone_global_rest(idx)
+		var sohle := Vector3(ruhe.origin.x, sohle_y, ruhe.origin.z)
+		_huf_anker.append({"bone": idx, "lokal": ruhe.affine_inverse() * sohle})
+	if not _huf_anker.is_empty():
+		_skelett.skeleton_updated.connect(_nach_skelett_update)
+
+
+func _nach_skelett_update() -> void:
+	_halte_hufe_ueber_boden(get_process_delta_time())
+
+
+## VIS-2 Bodenkontakt-Wache: misst pro Frame die vier Hufsohlen gegen den
+## Boden und hebt das sichtbare Rig (plus Sattel/Decke) um die groesste
+## Eindringtiefe an. Anheben sofort (kein sichtbares Clipping), Absenken
+## mit HUF_SENK_RATE gedaempft (kein Zappeln im Galopp-Takt).
+func _halte_hufe_ueber_boden(delta: float) -> void:
+	if _huf_anker.is_empty() or _rig == null or not is_inside_tree():
+		return
+	var skala := maxf(global_basis.y.length(), 0.001)
+	var lift_welt := _huf_lift * skala
+	var noetig := 0.0
+	for anker: Dictionary in _huf_anker:
+		var punkt := _huf_welt(anker)
+		var ohne_lift := punkt.y - lift_welt
+		noetig = maxf(noetig, _boden_unter(punkt) + HUF_EPSILON - ohne_lift)
+	var ziel: float = clampf(noetig, 0.0, HUF_LIFT_MAX) / skala
+	if ziel >= _huf_lift:
+		_huf_lift = ziel
+	else:
+		_huf_lift = lerpf(_huf_lift, ziel, minf(1.0, delta * HUF_SENK_RATE))
+	_rig.position.y = _huf_lift
+	for slot: String in _gear_basis_y:
+		var aufsatz: Node3D = _gear.get(slot)
+		if aufsatz != null:
+			aufsatz.position.y = float(_gear_basis_y[slot]) + _huf_lift
+
+
+## Welt-Position der Hufsohle eines Ankers (aktuelle Skelett-Pose).
+func _huf_welt(anker: Dictionary) -> Vector3:
+	var pose := _skelett.get_bone_global_pose(int(anker["bone"]))
+	return _skelett.global_transform * (pose * (anker["lokal"] as Vector3))
+
+
+## Bodenhoehe (Welt) unter einem Huf-Punkt: Gelaende-Callback oder die
+## eigene Standflaeche (Ebene durch den Fusspunkt des Knotens).
+func _boden_unter(punkt: Vector3) -> float:
+	if _boden_cb.is_valid():
+		return _num(_boden_cb.call(punkt.x, punkt.z), global_position.y)
+	return global_position.y
+
+
+## VIS-2 Auto-Verdrahtung: haengt das Pferd unter dem freien Welt-Reiter
+## (RanchWeltReiter, Duck-Typing — VIS-1-Datei bleibt unberuehrt), liefert
+## RanchKarte.reit_hoehe die Bodenhoehe inklusive Haengebruecken-Deck.
+func _auto_bodenkontakt() -> void:
+	if _boden_cb.is_valid():
+		return
+	var knoten := get_parent()
+	while knoten != null:
+		if knoten.has_method("springe_zu") and knoten.has_method("aktuelle_zone"):
+			_boden_cb = Callable(RanchKarte, "reit_hoehe")
+			return
+		knoten = knoten.get_parent()
 
 
 ## Farbe + Abzeichen + Skala in einem Rutsch (nach Bau/set_aussehen).

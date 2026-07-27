@@ -35,6 +35,9 @@ const TINT_UFER := Color(1.08, 1.0, 0.78)
 ## FB-2: sattes Grasbüschel-Grün, warme Erdstellen, Kies, Trampel-Erde.
 const TINT_GRASFLECK := Color(0.84, 0.97, 0.74)
 const TINT_ERDE := Color(1.05, 0.93, 0.72)
+## VIS-1 („karg und flach"): tieferes Wiesengrün für großflächige
+## Ton-Wellen — gibt Übersichten Farbtiefe, wo Einzel-Flecken verschwimmen.
+const TINT_WIESE_TIEF := Color(0.64, 0.84, 0.54)
 const TINT_KIES := Color(0.99, 0.97, 0.9)
 const TINT_TRAMPEL := Color(1.02, 0.9, 0.7)
 ## WELT-1: Bergfels (hell/dunkel für Schichtbänder), Schnee, Sand, Moor,
@@ -61,8 +64,8 @@ const SAISON_TINT := {
 var terrain_material: StandardMaterial3D
 var weg_material: StandardMaterial3D
 var trampel_material: StandardMaterial3D
-var wasser_material: StandardMaterial3D
-var moor_material: StandardMaterial3D
+var wasser_material: ShaderMaterial
+var moor_material: ShaderMaterial
 
 var saison := "sommer"
 
@@ -82,16 +85,10 @@ func _init(saison_id := "sommer") -> void:
 	trampel_material.albedo_texture = _textur(TEX_FELDWEG)
 	trampel_material.albedo_color = Color(0.86, 0.74, 0.58)
 	trampel_material.roughness = 1.0
-	wasser_material = StandardMaterial3D.new()
-	wasser_material.albedo_texture = _textur(TEX_WASSER)
-	wasser_material.albedo_color = Color(0.75, 0.9, 1.0, 0.86)
-	wasser_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	wasser_material.roughness = 0.12
-	moor_material = StandardMaterial3D.new()
-	moor_material.albedo_texture = _textur(TEX_WASSER)
-	moor_material.albedo_color = Color(0.45, 0.55, 0.5, 0.9)
-	moor_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	moor_material.roughness = 0.2
+	# VIS-1: echte Wasseroberflächen (Wellen, Tiefenverlauf, Schaumsaum)
+	# statt flacher blauer Scheiben — Shader + radiale UV, siehe WeltWasser.
+	wasser_material = WeltWasser.material("klar")
+	moor_material = WeltWasser.material("moor")
 	for pfad: Dictionary in RanchEntdeckungen.alle_pfade():
 		var punkte: Array = pfad["punkte"]
 		for i in punkte.size() - 1:
@@ -206,6 +203,7 @@ func baue_wasser(wurzel: Node3D) -> void:
 			wasser_material
 		)
 	_baue_tuempel(wurzel)
+	_baue_ufer_schilf(wurzel)
 	var bach: Dictionary = RanchKarte.karte()["bach"]
 	var punkte: Array[Vector3] = []
 	for paar: Array in bach["punkte"]:
@@ -215,7 +213,7 @@ func baue_wasser(wurzel: Node3D) -> void:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	_band_in(st, punkte, float(bach["breite"]) + 2.5, 0.0, true)
-	var band := _commit(st, wasser_material)
+	var band := _commit(st, WeltWasser.material("bach"))
 	band.name = "BachWasser"
 	band.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	wurzel.add_child(band)
@@ -229,13 +227,16 @@ func _wasser_scheibe(
 ) -> void:
 	var scheibe := MeshInstance3D.new()
 	scheibe.name = scheiben_name
-	var mesh := CylinderMesh.new()
-	mesh.top_radius = radius
-	mesh.bottom_radius = radius
-	mesh.height = 0.05
-	mesh.radial_segments = 40
-	mesh.material = mat
-	scheibe.mesh = mesh
+	# Ufer-Anteil je Vertex aus der echten Wassertiefe backen — der
+	# Tiefenverlauf/Schaumsaum liegt an der SICHTBAREN Uferlinie.
+	scheibe.mesh = WeltWasser.gelaende_scheibe_mesh(
+		Vector2(pos.x, pos.z),
+		radius,
+		pos.y,
+		func(x: float, z: float) -> float: return RanchGelaende.hoehe(x, z)
+	)
+	scheibe.material_override = mat
+	scheibe.scale = Vector3(radius, 1.0, radius)
 	scheibe.position = pos
 	scheibe.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	wurzel.add_child(scheibe)
@@ -249,13 +250,7 @@ func _baue_tuempel(wurzel: Node3D) -> void:
 	var punkte: Array = moor["tuempel"]
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
-	var scheibe := CylinderMesh.new()
-	scheibe.top_radius = 1.0
-	scheibe.bottom_radius = 1.0
-	scheibe.height = 0.04
-	scheibe.radial_segments = 20
-	scheibe.material = moor_material
-	mm.mesh = scheibe
+	mm.mesh = WeltWasser.scheibe_mesh()
 	mm.instance_count = punkte.size()
 	for i in punkte.size():
 		var p: Array = punkte[i]
@@ -267,6 +262,84 @@ func _baue_tuempel(wurzel: Node3D) -> void:
 	var mmi := MultiMeshInstance3D.new()
 	mmi.name = "MoorTuempel"
 	mmi.multimesh = mm
+	mmi.material_override = moor_material
+	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	wurzel.add_child(mmi)
+
+
+## Ufer-Schilf (VIS-1 Uferzone): Binsen-Büschel am See- und Buchtsaum —
+## der Übergang Wasser→Wiese bekommt eine lesbare Kante (bergsee hat
+## bereits Schilf über RanchNeueZonen). EIN MultiMesh je Gewässer.
+func _baue_ufer_schilf(wurzel: Node3D) -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = RanchKarte.seed_wert() + 271
+	var see := RanchKarte.zone("see")
+	var see_mitte: Array = see["see_mitte"]
+	_schilf_ring(
+		wurzel,
+		"SeeUferSchilf",
+		Vector2(float(see_mitte[0]), float(see_mitte[1])),
+		float(see["see_radius"]) * 1.9,
+		44,
+		rng
+	)
+	var strand := RanchKarte.zone("strand")
+	if not strand.is_empty():
+		var bucht: Array = strand["bucht_mitte"]
+		_schilf_ring(
+			wurzel,
+			"BuchtUferSchilf",
+			Vector2(float(bucht[0]), float(bucht[1])),
+			float(strand["bucht_radius"]) * 0.85,
+			18,
+			rng
+		)
+
+
+func _schilf_ring(
+	wurzel: Node3D,
+	ring_name: String,
+	mitte: Vector2,
+	radius: float,
+	anzahl: int,
+	rng: RandomNumberGenerator
+) -> void:
+	var transforms: Array[Transform3D] = []
+	for i in anzahl:
+		# Uferlinie je Winkel SUCHEN (von innen nach außen der erste Punkt
+		# über dem Wasserspiegel) statt blind auf einem Ring zu würfeln.
+		var w := float(i) / float(anzahl) * TAU + rng.randf_range(-0.06, 0.06)
+		var richtung := Vector2.from_angle(w)
+		var ufer_r := -1.0
+		var r := radius * 0.7
+		while r < radius * 1.45:
+			var h_probe := RanchGelaende.hoehe(mitte.x + richtung.x * r, mitte.y + richtung.y * r)
+			if h_probe > RanchGelaende.WASSER_HOEHE - 0.05:
+				ufer_r = r
+				break
+			r += 1.0
+		if ufer_r < 0.0:
+			continue
+		var p := mitte + richtung * (ufer_r + rng.randf_range(-0.6, 0.8))
+		var h := RanchGelaende.hoehe(p.x, p.y)
+		if h > RanchGelaende.WASSER_HOEHE + 2.0:
+			continue
+		var basis := Basis(Vector3.UP, w).scaled(Vector3.ONE * rng.randf_range(0.9, 1.4))
+		transforms.append(
+			Transform3D(basis, Vector3(p.x, maxf(h, RanchGelaende.WASSER_HOEHE) - 0.05, p.y))
+		)
+	if transforms.is_empty():
+		return
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.mesh = WeltFlora.mesh("binse")
+	mm.instance_count = transforms.size()
+	for i in transforms.size():
+		mm.set_instance_transform(i, transforms[i])
+	var mmi := MultiMeshInstance3D.new()
+	mmi.name = ring_name
+	mmi.multimesh = mm
+	mmi.visibility_range_end = 290.0
 	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	wurzel.add_child(mmi)
 
@@ -378,6 +451,9 @@ func _skirt_in(
 func _vertex_tint(x: float, z: float, h: float, wald_rect: Rect2) -> Color:
 	var tint := TINT_WIESE
 	var bewuchs := 1.0
+	# VIS-1: großflächige Wiesentön-Wellen (~300–500 m Wellenlänge) zuerst,
+	# damit auch Mittelgrund und Luftbild Farbabstufung zeigen.
+	tint = tint.lerp(TINT_WIESE_TIEF, _weide_ton(x, z) * 0.75)
 	# FB-2 Bodentextur-Variation: erst die Wiesen-Flecken, dann gewinnt
 	# der Zonen-Charakter (Wald/Fels/Ufer/Sand/Moor/Korn) wie gehabt.
 	tint = tint.lerp(TINT_GRASFLECK, _fleck(x, z, 0.043, 0.037, 1.9) * 0.65)
@@ -453,6 +529,14 @@ func _zonen_tint(x: float, z: float, tint: Color) -> Color:
 
 ## Deterministische Fleck-Maske 0..1 (Sinus-Interferenz, ~30–60-m-Flecken)
 ## — statisch + PURE, damit Tests die Variation nachrechnen können.
+## Großflächige Wiesentön-Welle 0..1 (deterministisch, weiche Übergänge,
+## Wellenlänge einige hundert Meter — fürs Luftbild/Mittelgrund).
+static func _weide_ton(x: float, z: float) -> float:
+	var n := 0.5 + 0.5 * sin(x * 0.017 + sin(z * 0.011) * 1.9)
+	n += 0.5 + 0.5 * sin(z * 0.015 + sin(x * 0.009) * 1.7 + 2.3)
+	return smoothstep(0.5, 1.6, n)
+
+
 static func _fleck(x: float, z: float, fx: float, fz: float, phase: float) -> float:
 	var n := sin(x * fx + phase) * sin(z * fz + phase * 1.7)
 	n += 0.5 * sin(x * fx * 2.3 - phase) * sin(z * fz * 2.1 + 0.6)

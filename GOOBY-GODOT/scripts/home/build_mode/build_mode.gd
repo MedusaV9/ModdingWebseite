@@ -18,6 +18,12 @@ signal closed
 signal furniture_changed
 
 const DRAWER_HEIGHT := 168.0
+## VIS-2: Innenabstand der Lager-Schublade zum Bildschirmrand. Die Chips
+## klebten links bündig an der Kante — abgeschnittene Möbelnamen („Fe…“
+## statt „Fernsehsessel“) bei Notch/abgerundeten Ecken oder wenn ein
+## Video-Schnitt (Trailer-Ken-Burns) minimal ins Bild zoomt.
+const DRAWER_RAND_X := 28.0
+const DRAWER_RAND_Y := 10.0
 ## Max. Bodenabstand (m) zur Wand, ab dem ein Tap als Wand-Item-Auswahl
 ## zählt (negativ = Projektion hinter der Wand, der Normalfall beim Tap
 ## direkt aufs hängende Item).
@@ -576,7 +582,9 @@ func _build_kamera_leiste() -> void:
 	_kamera_leiste.set_anchors_preset(Control.PRESET_CENTER_RIGHT)
 	_kamera_leiste.grow_vertical = Control.GROW_DIRECTION_BOTH
 	_kamera_leiste.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-	_kamera_leiste.position.x -= 12.0
+	# Gleicher Sicherheitsabstand wie die Lager-Schublade (VIS-2): bündig
+	# an der rechten Kante wurden „Draufsicht“/„Schrägsicht“ angeschnitten.
+	_kamera_leiste.position.x -= DRAWER_RAND_X
 	_kamera_leiste.add_theme_constant_override("separation", 8)
 	_ui.add_child(_kamera_leiste)
 	_add_kamera_button("build.kamera.oben", func() -> void: _build_camera.set_draufsicht(true))
@@ -609,12 +617,22 @@ func _build_drawer() -> void:
 	drawer.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	drawer.custom_minimum_size = Vector2(0, DRAWER_HEIGHT)
 	_ui.add_child(drawer)
+	# Innenabstand (VIS-2): kein Label darf bündig an der Bildschirmkante
+	# starten — sonst schneiden Notch/Ecken/Video-Crop den ersten Chip an.
+	var rand := MarginContainer.new()
+	rand.add_theme_constant_override("margin_left", int(DRAWER_RAND_X))
+	rand.add_theme_constant_override("margin_right", int(DRAWER_RAND_X))
+	rand.add_theme_constant_override("margin_top", int(DRAWER_RAND_Y))
+	rand.add_theme_constant_override("margin_bottom", int(DRAWER_RAND_Y))
+	drawer.add_child(rand)
 	var box := VBoxContainer.new()
-	drawer.add_child(box)
+	rand.add_child(box)
 	var header := HBoxContainer.new()
 	box.add_child(header)
 	_capacity_label = Label.new()
 	_capacity_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	# Wenn der Platz doch mal knapp wird: Ellipse statt hartem Schnitt.
+	_capacity_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	header.add_child(_capacity_label)
 	# Goobay (Doc D §5.4): verkauft wird aus dem LAGER — deshalb sitzt der
 	# Einstieg direkt an der Lager-Schublade.
@@ -673,6 +691,9 @@ func _refresh_drawer() -> void:
 			]
 		)
 		btn.theme_type_variation = "AcChip"
+		# BEWUSST kein text_overrun_behavior: mit Ellipse verloere der Chip
+		# seine text-basierte Mindestbreite und kollabiert in der HBox zum
+		# leeren Knopf — volle Namen sind hier ok, die Reihe scrollt (VIS-2).
 		btn.pressed.connect(_begin_new.bind(def))
 		_drawer_items.add_child(btn)
 

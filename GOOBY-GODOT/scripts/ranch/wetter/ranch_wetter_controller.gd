@@ -56,8 +56,14 @@ var _env: Environment
 var _sonne: DirectionalLight3D
 var _terrain_mat: StandardMaterial3D
 var _terrain_albedo := Color.WHITE
+var _terrain_rauheit := 0.95
+## Weitere Boden-Materialien (Wege/Trampelpfade), die bei Nässe dunkeln
+## und glänzen — Liste aus [material, basis_albedo, basis_rauheit].
+var _nass_mats: Array[Array] = []
 var _gras_shader: ShaderMaterial
 var _regen: GPUParticles3D
+var _regen_fern: GPUParticles3D
+var _spritzer: GPUParticles3D
 var _blaetter: GPUParticles3D
 var _staub: GPUParticles3D
 var _wolken: MultiMeshInstance3D
@@ -81,13 +87,17 @@ func einrichten(
 	env: Environment,
 	sonne: DirectionalLight3D,
 	terrain_mat: StandardMaterial3D = null,
-	gras_shader: ShaderMaterial = null
+	gras_shader: ShaderMaterial = null,
+	nass_mats: Array[StandardMaterial3D] = []
 ) -> void:
 	_env = env
 	_sonne = sonne
 	_terrain_mat = terrain_mat
 	if terrain_mat != null:
 		_terrain_albedo = terrain_mat.albedo_color
+		_terrain_rauheit = terrain_mat.roughness
+	for mat in nass_mats:
+		_nass_mats.append([mat, mat.albedo_color, mat.roughness])
 	_gras_shader = gras_shader
 	_blitz_rng.seed = seed_wert + 77
 	_baue_regen()
@@ -113,8 +123,16 @@ func tick(delta: float, stunde: float, fokus: Vector3) -> void:
 	_wende_himmel_an(stunde, fokus)
 	_wende_boden_an()
 	_wende_ton_an(stunde, delta)
+	var boee := RanchWetter.boe(_zeit, float(zustand["wind"]))
 	if _gras_shader != null:
-		_gras_shader.set_shader_parameter("wind", RanchWetter.boe(_zeit, float(zustand["wind"])))
+		_gras_shader.set_shader_parameter("wind", boee)
+	# VIS-1: Billboard-Flora (Korn/Lavendel) wogt mit derselben Böe, die
+	# Wasserflächen kräuseln bei Nässe (Regen-Uniform im wasser.gdshader).
+	for mat in WeltFlora.wind_materialien():
+		mat.set_shader_parameter("wind", boee)
+	var naesse := float(zustand["naesse"])
+	for mat in WeltWasser.materialien():
+		mat.set_shader_parameter("regen", naesse)
 
 
 ## Bach-Nähe 0..1 (Szene misst den Abstand) — steuert den Bach-Loop.
@@ -231,10 +249,17 @@ func _wende_partikel_an(fokus: Vector3) -> void:
 	var typ := str(zustand["typ"])
 	var intensitaet := float(zustand["intensitaet"]) * float(zustand["blend"])
 	var regnet := RanchWetter.REGEN_TYPEN.has(typ)
+	var staerke := clampf((0.25 if typ == "niesel" else 1.0) * intensitaet, 0.05, 1.0)
 	_regen.emitting = regnet
+	_regen_fern.emitting = regnet
+	_spritzer.emitting = regnet
 	if regnet:
 		_regen.global_position = fokus + Vector3(0.0, 26.0, 0.0)
-		_regen.amount_ratio = clampf((0.25 if typ == "niesel" else 1.0) * intensitaet, 0.05, 1.0)
+		_regen.amount_ratio = staerke
+		_regen_fern.global_position = fokus + Vector3(0.0, 28.0, 0.0)
+		_regen_fern.amount_ratio = staerke
+		_spritzer.global_position = fokus + Vector3(0.0, 0.12, 0.0)
+		_spritzer.amount_ratio = staerke
 	var windig := RanchWetter.boe(_zeit, float(zustand["wind"])) > 0.55
 	_blaetter.emitting = windig and not regnet
 	if _blaetter.emitting:
@@ -263,7 +288,8 @@ func _wende_himmel_an(stunde: float, fokus: Vector3) -> void:
 		_regenbogen.position = Vector3(fokus.x, 0.0, fokus.z - 380.0)
 
 
-## Pfützen wachsen mit der Nässe; nasser Boden dunkelt leicht ab.
+## Pfützen wachsen mit der Nässe; nasser Boden dunkelt ab UND bekommt
+## nassen Glanz (VIS-1: Roughness sinkt mit der Nässe).
 func _wende_boden_an() -> void:
 	var naesse := float(zustand["naesse"])
 	_pfuetzen.visible = naesse > 0.12
@@ -271,7 +297,12 @@ func _wende_boden_an() -> void:
 		var skala := clampf(naesse, 0.2, 1.0)
 		_pfuetzen.scale = Vector3(skala, 1.0, skala)
 	if _terrain_mat != null:
-		_terrain_mat.albedo_color = _terrain_albedo.darkened(naesse * 0.18)
+		_terrain_mat.albedo_color = _terrain_albedo.darkened(naesse * 0.22)
+		_terrain_mat.roughness = lerpf(_terrain_rauheit, 0.45, naesse)
+	for eintrag: Array in _nass_mats:
+		var mat: StandardMaterial3D = eintrag[0]
+		mat.albedo_color = (eintrag[1] as Color).darkened(naesse * 0.28)
+		mat.roughness = lerpf(float(eintrag[2]), 0.35, naesse)
 
 
 ## ----------------------------------------------------------------- Ton
@@ -307,30 +338,130 @@ func _wende_ton_an(stunde: float, delta: float) -> void:
 ## ------------------------------------------------------------------ Bau
 
 
+## VIS-1 Regen-Umbau (Review „weiße, statische Striche"): ZWEI Fall-
+## Ebenen (nah = lange schnelle Tropfen-Streaks, fern = kürzere langsame
+## — Tiefenstaffelung), Streaks mit weicher Verlaufs-Textur statt harter
+## Quads, leicht schräg im Wind, plus Aufschlag-RINGE am Boden.
 func _baue_regen() -> void:
-	_regen = GPUParticles3D.new()
-	_regen.name = "Regen"
+	_regen = _regen_ebene("Regen", Vector3(30.0, 2.0, 30.0), Vector2(0.06, 0.7), 900, 0.72, 19.0)
+	_regen_fern = _regen_ebene(
+		"RegenFern", Vector3(58.0, 3.0, 58.0), Vector2(0.04, 0.44), 650, 0.42, 12.5
+	)
+	_baue_spritzer()
+
+
+func _regen_ebene(
+	ebene_name: String, box: Vector3, tropfen: Vector2, menge: int, deckung: float, tempo: float
+) -> GPUParticles3D:
+	var ebene := GPUParticles3D.new()
+	ebene.name = ebene_name
 	var mat := ParticleProcessMaterial.new()
 	mat.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
-	mat.emission_box_extents = Vector3(34.0, 2.0, 34.0)
-	mat.direction = Vector3(0.0, -1.0, 0.0)
-	mat.spread = 3.0
-	mat.initial_velocity_min = 16.0
-	mat.initial_velocity_max = 22.0
+	mat.emission_box_extents = box
+	# Leicht schräg (Wind) — Tropfen kleben nicht senkrecht an der Kamera.
+	mat.direction = Vector3(0.14, -1.0, 0.06)
+	mat.spread = 4.0
+	mat.initial_velocity_min = tempo
+	mat.initial_velocity_max = tempo * 1.35
 	mat.gravity = Vector3(0.0, -22.0, 0.0)
-	_regen.process_material = mat
-	_regen.amount = 1200
-	_regen.lifetime = 1.6
-	_regen.emitting = false
+	ebene.process_material = mat
+	ebene.amount = menge
+	ebene.lifetime = 1.7
+	ebene.emitting = false
 	# Default-visibility_aabb ist 8x8x8 m — der Knoten haengt aber 26 m
 	# UEBER der Kamera: Box raus aus dem Frustum -> ALLE Tropfen gecullt.
-	_regen.visibility_aabb = AABB(Vector3(-44.0, -34.0, -44.0), Vector3(88.0, 42.0, 88.0))
+	var weite := box.x + 12.0
+	ebene.visibility_aabb = AABB(
+		Vector3(-weite, -36.0, -weite), Vector3(weite * 2.0, 44.0, weite * 2.0)
+	)
+	# Streaks kippen mit der Fallrichtung (Y an Velocity ausgerichtet).
+	ebene.transform_align = GPUParticles3D.TRANSFORM_ALIGN_Z_BILLBOARD_Y_TO_VELOCITY
 	var quad := QuadMesh.new()
-	# Breit + kräftig genug, dass Tropfen auch auf 720p-Screens lesbar sind.
-	quad.size = Vector2(0.07, 0.62)
-	quad.material = _unlit(Color(0.62, 0.72, 0.88, 0.6), true)
-	_regen.draw_pass_1 = quad
-	add_child(_regen)
+	quad.size = tropfen
+	var quad_mat := _unlit(Color(0.68, 0.76, 0.9, deckung), false)
+	quad_mat.albedo_texture = _streak_textur()
+	quad.material = quad_mat
+	ebene.draw_pass_1 = quad
+	add_child(ebene)
+	return ebene
+
+
+## Aufschlag-Ringe: flache Ring-Meshes, die am Boden aufploppen, wachsen
+## und ausblenden (scale_curve + color_ramp) — Regen „trifft" sichtbar.
+func _baue_spritzer() -> void:
+	_spritzer = GPUParticles3D.new()
+	_spritzer.name = "RegenSpritzer"
+	var mat := ParticleProcessMaterial.new()
+	mat.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
+	mat.emission_box_extents = Vector3(13.0, 0.5, 13.0)
+	mat.gravity = Vector3.ZERO
+	mat.initial_velocity_min = 0.0
+	mat.initial_velocity_max = 0.0
+	mat.scale_min = 0.6
+	mat.scale_max = 1.8
+	var kurve := Curve.new()
+	kurve.add_point(Vector2(0.0, 0.15))
+	kurve.add_point(Vector2(1.0, 1.0))
+	var kurve_tex := CurveTexture.new()
+	kurve_tex.curve = kurve
+	mat.scale_curve = kurve_tex
+	var verlauf := Gradient.new()
+	verlauf.set_color(0, Color(0.88, 0.94, 1.0, 0.95))
+	verlauf.set_color(1, Color(0.88, 0.94, 1.0, 0.0))
+	var verlauf_tex := GradientTexture1D.new()
+	verlauf_tex.gradient = verlauf
+	mat.color_ramp = verlauf_tex
+	_spritzer.process_material = mat
+	_spritzer.amount = 320
+	_spritzer.lifetime = 0.55
+	_spritzer.emitting = false
+	_spritzer.visibility_aabb = AABB(Vector3(-16.0, -3.0, -16.0), Vector3(32.0, 6.0, 32.0))
+	_spritzer.draw_pass_1 = _ring_mesh()
+	add_child(_spritzer)
+
+
+## Flacher Aufschlag-Ring (Annulus, 14 Segmente) als Partikel-Mesh.
+func _ring_mesh() -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var innen := 0.17
+	var aussen := 0.24
+	var segmente := 14
+	for s in segmente:
+		var w0 := float(s) / float(segmente) * TAU
+		var w1 := float(s + 1) / float(segmente) * TAU
+		var ecken: Array[Vector3] = [
+			Vector3(cos(w0) * innen, 0.0, sin(w0) * innen),
+			Vector3(cos(w1) * innen, 0.0, sin(w1) * innen),
+			Vector3(cos(w1) * aussen, 0.0, sin(w1) * aussen),
+			Vector3(cos(w0) * aussen, 0.0, sin(w0) * aussen),
+		]
+		# Godot-Winding: Vorderseite = im Uhrzeigersinn (von +Y gesehen).
+		for idx: int in [0, 2, 1, 0, 3, 2]:
+			st.set_normal(Vector3.UP)
+			st.add_vertex(ecken[idx])
+	var mesh := st.commit()
+	var mat := _unlit(Color(1.0, 1.0, 1.0, 0.8), false)
+	mat.vertex_color_use_as_albedo = true
+	mesh.surface_set_material(0, mat)
+	return mesh
+
+
+## Weiche Tropfen-Streak-Textur: vertikaler Alpha-Verlauf (unten/oben
+## transparent, Mitte deckend) — kein hartes „Strich"-Rechteck mehr.
+func _streak_textur() -> GradientTexture2D:
+	var verlauf := Gradient.new()
+	verlauf.offsets = PackedFloat32Array([0.0, 0.42, 1.0])
+	verlauf.colors = PackedColorArray(
+		[Color(1, 1, 1, 0.0), Color(1, 1, 1, 1.0), Color(1, 1, 1, 0.0)]
+	)
+	var tex := GradientTexture2D.new()
+	tex.gradient = verlauf
+	tex.width = 4
+	tex.height = 32
+	tex.fill_from = Vector2(0.0, 0.0)
+	tex.fill_to = Vector2(0.0, 1.0)
+	return tex
 
 
 func _baue_blaetter() -> void:

@@ -131,6 +131,7 @@ func set_horse(node: Node3D) -> void:
 		var kopf: Node3D = _horse.head_pivot()
 		if kopf != null:
 			_kopf_basis_y = kopf.position.y
+	_verdrahte_bodenkontakt()
 
 
 ## Reit-Areal (Koppel) setzen: Mitte + Halbausdehnung in Metern (RANCH-1).
@@ -173,6 +174,16 @@ func set_pferd(pferd: Dictionary) -> void:
 func set_gelaende(hoehe: Callable, untergrund_cb: Callable) -> void:
 	_hoehe_cb = hoehe
 	_untergrund_cb = untergrund_cb
+	_verdrahte_bodenkontakt()
+
+
+## VIS-2: das Pferd bekommt dieselbe Gelaende-Hoehe fuer seinen
+## Huf-Bodenkontakt (RanchPferd hebt das Rig, wenn ein Huf am Hang oder
+## auf dem Brueckendeck sonst eintauchen wuerde). Der Stub kennt die API
+## nicht — defensiv per has_method.
+func _verdrahte_bodenkontakt() -> void:
+	if _horse != null and _horse.has_method("set_bodenkontakt"):
+		_horse.set_bodenkontakt(_hoehe_cb)
 
 
 ## DLC: Hindernis-Positionen (Welt) fuer die Sprung-Timing-Wertung.

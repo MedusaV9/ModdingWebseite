@@ -13,6 +13,13 @@ const TEMPO_TRAB := 8.0
 const TEMPO_GALOPP := 14.5
 const DREH_TEMPO := 1.9
 
+## VIS-1 Huf-Clipping: Bodenabtastung an den vier Huf-Punkten (vor/zurück
+## × links/rechts, Meter im Pferde-Raum) + kleiner Freigang — der Körper
+## steht auf dem HÖCHSTEN Bodenkontakt, kein Huf sinkt in Boden/Planken.
+const HUF_VOR_M := 1.05
+const HUF_SEITE_M := 0.38
+const HUF_FREI_M := 0.05
+
 ## HUD-Schalter: Galopp statt Trab als Reisetempo.
 var galopp := false
 ## Steuerung aus (Screenshot-Fahrten setzen die Position direkt).
@@ -101,12 +108,27 @@ func _setze_gangart() -> void:
 
 ## Bodenhöhe + sanfte Hang-Neigung des Pferdes. WELT-1: reit_hoehe statt
 ## hoehe — über der Schlucht trägt das Hängebrücken-Deck den Reiter.
+## VIS-1: statt EINEM Mittelpunkt tasten wir die vier Huf-Punkte ab und
+## heben den Körper auf den höchsten Kontakt (+Freigang) — auf Kuppen,
+## in Senken und auf den Brücken-Planken sinkt kein Huf mehr ein.
 func _am_boden() -> void:
-	position.y = RanchGelaende.reit_hoehe(position.x, position.z)
 	var vor := -transform.basis.z
-	var voraus := position + vor * 1.6
-	var steigung := RanchGelaende.reit_hoehe(voraus.x, voraus.z) - position.y
-	pferd.rotation.x = lerpf(pferd.rotation.x, clampf(-steigung * 0.35, -0.3, 0.3), 0.2)
+	var quer := transform.basis.x
+	var vorn := -1000.0
+	var hinten := -1000.0
+	for seite: float in [-1.0, 1.0]:
+		var pv := position + vor * HUF_VOR_M + quer * seite * HUF_SEITE_M
+		vorn = maxf(vorn, RanchGelaende.reit_hoehe(pv.x, pv.z))
+		var ph := position - vor * HUF_VOR_M + quer * seite * HUF_SEITE_M
+		hinten = maxf(hinten, RanchGelaende.reit_hoehe(ph.x, ph.z))
+	var mitte := RanchGelaende.reit_hoehe(position.x, position.z)
+	var steigung := (vorn - hinten) / (HUF_VOR_M * 2.0)
+	var neigung := clampf(-steigung * 0.55, -0.3, 0.3)
+	pferd.rotation.x = lerpf(pferd.rotation.x, neigung, 0.2)
+	# Die TATSÄCHLICH angewandte Neigung hebt die Berg-Hufe bereits an —
+	# nur der Rest muss über die Körperhöhe kommen.
+	var hub := -pferd.rotation.x * HUF_VOR_M
+	position.y = maxf(mitte, maxf(vorn - hub, hinten + hub)) + HUF_FREI_M
 
 
 func _stelle_kamera(gewicht: float) -> void:
