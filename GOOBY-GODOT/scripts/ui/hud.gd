@@ -616,6 +616,8 @@ func _maybe_show_coachmark() -> void:
 	_coachmark = _build_coachmark()
 	add_child(_coachmark)
 	_position_coachmark()
+	_coachmark.minimum_size_changed.connect(_position_coachmark)
+	_position_coachmark.call_deferred()
 	# UICOZY: Coachmark federt auf (Web --ease-spring) statt hart zu stehen.
 	UiMotion.pop_in(_coachmark)
 
@@ -650,6 +652,11 @@ func _build_coachmark() -> Control:
 	ok.text = I18nService.t("hud.coachmark_ok")
 	ok.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	ok.focus_mode = Control.FOCUS_NONE
+	# FB3-Regel: physische Tippflaeche >= 44 pt (nicht Design-Pixel!).
+	var touch_floor := HudLayoutLogic.touch_floor_canvas(
+		Vector2(get_viewport().get_visible_rect().size)
+	)
+	ok.custom_minimum_size = Vector2(maxf(120.0 * f, touch_floor), touch_floor)
 	ok.pressed.connect(_on_coachmark_dismissed)
 	vbox.add_child(ok)
 	return card
@@ -657,15 +664,28 @@ func _build_coachmark() -> Control:
 
 ## Coachmark links neben die Cockpit-Spalte setzen (vertikal mittig).
 func _position_coachmark() -> void:
-	if _coachmark == null:
+	if _coachmark == null or not is_instance_valid(_coachmark):
 		return
 	var canvas := Vector2(get_viewport().get_visible_rect().size)
 	var insets := _safe_insets()
 	_coachmark.reset_size()
 	var size := _coachmark.get_combined_minimum_size()
+	# Autowrap-Labels melden im ERSTEN Layout-Pass eine viel zu grosse Hoehe
+	# (Godot kennt die Zeilenumbrueche noch nicht). Ungeklemmt schiebt das die
+	# Karte weit ueber den Bildrand hinaus — deshalb hart in den sicheren
+	# Bereich klemmen und nach dem Settle erneut setzen.
+	var top := float(insets["top"]) + EDGE_PAD
+	var bottom := canvas.y - float(insets["bottom"]) - EDGE_PAD
+	var left := float(insets["left"]) + EDGE_PAD
+	var right := canvas.x - float(insets["right"]) - EDGE_PAD
+	size.x = minf(size.x, maxf(right - left, 1.0))
+	size.y = minf(size.y, maxf(bottom - top, 1.0))
+	_coachmark.size = size
 	var x := canvas.x - float(insets["right"]) - EDGE_PAD - _column_width - 16.0 - size.x
 	var y := (canvas.y - size.y) / 2.0
-	_coachmark.position = Vector2(maxf(x, float(insets["left"]) + EDGE_PAD), y)
+	_coachmark.position = Vector2(
+		clampf(x, left, maxf(right - size.x, left)), clampf(y, top, maxf(bottom - size.y, top))
+	)
 
 
 func _on_coachmark_dismissed() -> void:

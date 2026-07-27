@@ -542,11 +542,15 @@ func _build_end_overlay(won: bool, stars: int, total: int, first_clear: bool) ->
 	_overlay.add_child(row)
 	if won and level_id < GobnomProgress.level_count(track):
 		row.add_child(
-			_overlay_button("gobnom.end.next", func() -> void: open_level(track, level_id + 1))
+			_overlay_button(
+				"gobnom.end.next", func() -> void: open_level(str(track), int(level_id) + 1)
+			)
 		)
 	if not won:
 		row.add_child(
-			_overlay_button("gobnom.end.retry", func() -> void: open_level(track, level_id))
+			_overlay_button(
+				"gobnom.end.retry", func() -> void: open_level(str(track), int(level_id))
+			)
 		)
 	row.add_child(_overlay_button("gobnom.end.select", back_to_select))
 	var vp := get_viewport_rect().size
