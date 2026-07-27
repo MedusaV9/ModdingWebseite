@@ -1,0 +1,17 @@
+{
+  "_comment": "WOAH-02 Gravitationsbruch — sound inventory. ZERO new sound events shipped: assets/eclipse/sounds.json + registry/EclipseSounds.java are locked by the parallel wave, so the plan's audio beats reuse shipped eclipse events (the plan §6 already targets existing rows; only the ambient hum bed has a deferred dedicated row). Senders: woah/gravityrift/GravityRiftService (server beats), woah/gravityrift/client/GravityRiftAmbience (client positional drone loop).",
+
+  "reused_eclipse_events": {
+    "eclipse:event.rift_drone": "TWO uses: (1) server-side pulse TELEGRAPH swell at the heart (vol 1.2 / pitch 0.8, 30 t before the launch beat); (2) client-side positional hum-loop FALLBACK re-pitched to 0.75 until the dedicated ambient.gravity_hum row lands (the SanctumHum.resolveHum self-healing pattern — GravityRiftAmbience.resolveHum() looks eclipse:ambient.gravity_hum up in the registry first, so NO code change is needed when the row ships).",
+    "eclipse:event.rift_thud": "The pulse LAUNCH beat (vol 1.4 / pitch 0.9) — the deep gravity 'kick' the zone-wide upward launch rides on; also the heart-hit impact transient.",
+    "eclipse:event.storm_shatter": "Inversion START sting (vol 1.2 / pitch 0.7): the 'amethyst heart shatters its grip' beat under the CUE_GRAVITY_INVERT burst.",
+    "eclipse:event.border_glitch": "Inversion COOLDOWN dud (vol 0.6 / pitch 1.4): the small fizzle when the heart is hit while the inversion is still cooling down.",
+    "eclipse:event.rift_resolve": "Inversion END resolve (vol 1.0 / pitch 1.0): gravity settling home under the CUE_GRAVITY_RESOLVE wave."
+  },
+
+  "deferred_sounds_json_rows": {
+    "ambient.gravity_hum": "{ \"category\": \"ambient\", \"subtitle\": \"subtitles.eclipse.ambient.gravity_hum\", \"sounds\": [ { \"name\": \"eclipse:ambient/gravity_hum\", \"stream\": false } ] } — a low weightless drone bed, loopable, ~8 s, tuned so a +0.35 pitch bend (the inversion ramp in GravityRiftAmbience) still sounds clean. Registry side: EclipseSounds.AMBIENT_GRAVITY_HUM = register(\"ambient.gravity_hum\"). Consumed by woah/gravityrift/client/GravityRiftAmbience.resolveHum() which already looks the id up dynamically — NO code change needed when the row + .ogg land."
+  },
+
+  "subtitles_note": "No new subtitle keys shipped: every reused event keeps its existing subtitle row. If ambient.gravity_hum lands, add subtitles.eclipse.ambient.gravity_hum ('Gravity hums' / 'Die Schwerkraft summt') alongside the sounds.json row."
+}
