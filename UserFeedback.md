@@ -9,56 +9,36 @@
 ---
 
 ## NEUES FEEDBACK (hier eintragen!)
-Wenn man die Welt verlässt oder den Server stoppen will bleibt es für immer im SAVING State statt richtig zu beenden.
 
-Der Kampf im Sturm sollte beginnen in dem die Spieler eine Statur schlagen und nicht einfach nur weil sie dort sind.
-
-Wenn jemand im Sturm Boss kampf stirbt sollte der Kampf zurück gesetzt werden (pass auf das Grab auf.)
-
-Irgendwie muss man erst in dem Einem Sturm den Boss bekämpfen sonst spawnt der andere im anderen Nebel nicht
-
-Wenn man Stirbt beim Sturm kampf dann bleiben manche BlockDisplays für immer stuck an ihrem Punkt auch nachdem kampf.
-
-Im Sturmkampf solltest du auch aufpassen das Bosse keine Gräber bewegen oder zerstören können
-
-Stelle sicher das keine Zauber Gräber beschädigen können
-
-Gräber sollten von Boss NICHT zerstört werden können.
-
-Beim Limbo Schiff ganz am Anfang ist immernoch irgendein Objekt von Veil glaube ich und das blockiert die sicht ultra das ist irgendwas großes pinkes was nicht das Meer ist.
-
-Bei Strukturen Spawnen kriegt man immernoch einen Blackscreen.
-
-Die Credits Scene muss noch mehr verbessert werden.
-
-Warum generierst du nicht einmal die Map vor? und lädst die dann einfach immer? ist das nicht schneller als immer wieder neu die Chunks generierern zulassen? und dann kannst du es ja krasser Animieren oder?
-Am Rand die Felsen sind nicht groß genug sie sollen einmal wie riesige Berge sich auftürmen am rand und dann die map quasi ein kreisen und dann sich langsam immer weiter zurück bewegen und sie sollen von der ganzen Map aus sehbar sein.
-
-Allgemein finde die wie auch zb am Start Event die Chunks erst noch reingenierer sieht komisch aus. Baue eventuell ein /dev preload everything Command und der generiert einmal alles vor und dann entlädt er die bereiche so das sie danach einfach wieder rein geladen werden
-
-Das Schwarze loch ist nicht krass genug die Map soll richitig kaputt gerissen werden mit heftigen Animations und Effekten.
-
-
-_(leer — hier neue Punkte reinschreiben; zuletzt gezogen: 26.07. 23:34-Commit → einsortiert als F-071…F-079)_
+_(leer — hier neue Punkte reinschreiben; zuletzt gezogen: 27.07. 10:57-Commit → einsortiert als F-080…F-093)_
 
 ## Aktuell in Arbeit
 
 | # | Punkt | Status |
 |---|-------|--------|
-| F-062 | 5 „Woah“-Map-Features: Pläne fertig (`docs/plans_v3/woah/PLAN-01…05`) — Mansion-Glitch-Dome, Gravitationsbruch (kreisende Schollen + Low-G + Lensing), Chrono-Stase (eingefrorener Blitz/Explosion/Regen + Zeit-Ruck), Resonanzfeld (singende Riesenkristalle + Melodie-Rätsel), Echo-Hain (Geister-Erinnerungen + Vergangenheits-Flut). 5 Implementierungs-Agents laufen parallel | 🟡 |
-| F-072 | Credits-Szene + Schwarzes Loch + gesamte Cutscene NOCH viel weiter verbessern (V3) | 🟡 |
-| F-073 | „ECLIPSE-Trailer-4K": ~30 s Remotion-Trailer, 4K 60 fps, deutsch, mit Song/Sounds/Animationen, am Ende in die Repo | 🟡 |
-| F-074 | Altar-UI: bessere Lesbarkeit; Shop-Tab mit Kaufbestätigung + Kauf-Animation + kurzer Nach-Kauf-Cutscene je nach Item | 🟡 |
-| F-075 | Altar-Insel-Aura (Photon+Veil), magisch, skaliert mit Altar-Stufe | 🟡 |
-| F-076 | Altar-Block als richtiges Blockbench/GeckoLib-Modell mit Animationen — mächtig wirkend | 🟡 |
-| F-077 | Cutscene mit Riesen-Effekten wenn das End erscheint (Altar „spuckt" die End-Blöcke o.ä.) | 🟡 |
+| F-080 | Server/Welt-Verlassen hängt für immer im SAVING-State statt sauber zu stoppen | 🟡 |
+| F-081 | Sturm-Bosskampf startet erst, wenn Spieler eine Statue schlagen (nicht mehr durch bloße Anwesenheit) | 🟡 |
+| F-082 | Tod im Sturm-Bosskampf ⇒ Kampf wird zurückgesetzt (Gräber bleiben dabei unangetastet) | 🟡 |
+| F-083 | Stürme entkoppeln: jeder Sturmboss spawnt unabhängig (kein „erst Boss A, dann Boss B“) | 🟡 |
+| F-084 | Stuck-BlockDisplays nach Tod im Sturmkampf werden zuverlässig aufgeräumt | 🟡 |
+| F-085/086/087 | Grab-Schutz: Bosse können Gräber weder bewegen noch zerstören; Zauber beschädigen keine Gräber | 🟡 |
+| F-088 | Limbo-Schiff: großes pinkes Veil-Objekt am Anfang blockiert die Sicht — entfernen/fixen | 🟡 |
+| F-089 | Struktur-Spawn verursacht immer noch Blackscreens — endgültig fixen | 🟡 |
+| F-091 | `/dev preload everything`: ganze Map einmal vorgenerieren + entladen, kein sichtbares Chunk-Reingenerieren mehr (auch Start-Event) | 🟡 |
+| F-092 | Rand-Berge: riesig auftürmen, Map komplett einkreisen, von überall sichtbar, weichen beim Erweitern langsam zurück | 🟡 |
+| F-090/093 | Credits-Szene + Schwarzes Loch V3: Map wird richtig zerrissen (heftige Animationen/Effekte) | 🟡 |
+| F-073 | „ECLIPSE-Trailer-4K": ~30 s Remotion-Trailer, 4K 60 fps, deutsch — Stills fertig, 4K-Render läuft gerade, danach ins Repo | 🟡 |
 | F-071/078/079 | Dauerbetrieb: alle ~30 min Feedback-Check; wenn leer → Photon/Veil-Effekte mit Planner-/Ideen-Teams immer weiter iterieren; nur Fable 5 Max Thinking als Subagent-Modell | 🟡 (läuft) |
 
 ## Backlog (offen, in Priorität)
 
 | # | Punkt | Status |
 |---|-------|--------|
-| — | _(leer)_ | |
+| F-074 | Altar-UI: bessere Lesbarkeit; Shop-Tab mit Kaufbestätigung + Kauf-Animation + kurzer Nach-Kauf-Cutscene je nach Item | 🔴 |
+| F-075 | Altar-Insel-Aura (Photon+Veil), magisch, skaliert mit Altar-Stufe | 🔴 |
+| F-076 | Altar-Block als richtiges Blockbench/GeckoLib-Modell mit Animationen — mächtig wirkend | 🔴 |
+| F-077 | Cutscene mit Riesen-Effekten wenn das End erscheint (Altar „spuckt" die End-Blöcke o.ä.) | 🔴 |
+| F-062 | 5 „Woah“-Map-Features: Feinschliff/Iteration (Basis implementiert: Mansion-Glitch-Dome, Gravitationsbruch, Chrono-Stase, Resonanzfeld, Echo-Hain) | 🔴 |
 
 ---
 
