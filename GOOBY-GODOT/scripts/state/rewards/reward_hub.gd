@@ -99,6 +99,11 @@ func _ready() -> void:
 		unlocks.attach(_gs)
 		achievements.attach(_gs)
 		_wire_daily_bonus()
+		# FERTIG-1 (EVAL Rang 12): Modifier-Start-Toast — der Ticker meldet
+		# "modifierStarted:<gameId>:<typ>", der Hub macht die sichtbare
+		# Einladung daraus ("Bonus-Event: Doppel-Gold in Teeparty!").
+		if _gs is Node and (_gs as Node).has_signal("gooby_events"):
+			(_gs as Node).gooby_events.connect(_on_gooby_events)
 
 
 ## REST-1: Tagesbonus beim ersten Start des Tages anbieten. Mit Router
@@ -223,6 +228,40 @@ func _maybe_offer_daily_bonus() -> void:
 func _on_gs_slice_changed(slice_id: String, _data: Variant) -> void:
 	if slice_id == "onboarding":
 		_maybe_offer_daily_bonus()
+
+
+## FERTIG-1 (EVAL Rang 12): Ticker-Event "modifierStarted:<gameId>:<typ>"
+## → Toast mit Modifier-Name + Spielname (Web-§B4 „Bubble im Arcade-Hub“
+## plus globale Einladung, weil der Spieler meist im Raum steht).
+func _on_gooby_events(events: Array) -> void:
+	for ev: Variant in events:
+		var text := str(ev)
+		if not text.begins_with("modifierStarted:"):
+			continue
+		var parts := text.split(":")
+		if parts.size() < 3:
+			continue
+		var game := MinigameRegistry.get_game(parts[1])
+		var def: Variant = ModifierEngine.TYPES.get(parts[2])
+		if game.is_empty() or not (def is Dictionary):
+			continue
+		(
+			_toasts
+			. show_toast(
+				(
+					I18nService
+					. t(
+						"modifier.start",
+						{
+							"name":
+							I18nService.t(str((def as Dictionary).get("name_key", parts[2]))),
+							"game": I18nService.t(str(game.get("title_key", parts[1]))),
+						}
+					)
+				)
+			)
+		)
+		AudioDirector.try_play(self, "ui_sticker")
 
 
 func _on_daily_bonus_claimed(reward: Dictionary) -> void:

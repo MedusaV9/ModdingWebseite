@@ -27,16 +27,25 @@ const MINIGAME_DAY_CAP := 150
 ## liefert das Results-Breakdown. `today` = Clock.local_day().
 ## `chunks`: optionale coin-würdige Teil-Scores (GvZ pro Level) — nicht-leer
 ## wird die Coin-Row pro Chunk angewandt (Summe der Basen statt Session-Base).
+## `modifier` (FERTIG-1, EVAL Rang 12): ModifierEngine.launch_params der
+## konsumierten Runde — score_mult wirkt VOR allem (Coins/Best/Ziel sehen den
+## geboosteten Score), coin_mult-Überschuss und die Glücksrolle laufen gegen
+## das 150-c-Tages-Ledger (Economy.award 'modifier'/'glueckspilz'), xp_mult
+## skaliert die Runden-XP. energy_free wirkt im Host (kein Energie-Abzug).
 static func award(
 	state: Dictionary,
 	meta: Dictionary,
 	score: int,
 	difficulty: String,
 	today: String,
-	chunks: Array[int] = []
+	chunks: Array[int] = [],
+	modifier: Dictionary = {}
 ) -> Dictionary:
 	var id: String = meta["id"]
 	var s := maxi(0, score)
+	var score_mult := _num(modifier.get("score_mult"), 1.0)
+	if score_mult > 1.0:
+		s = maxi(0, int(round(float(s) * score_mult)))
 	var mode := MinigameFrameworkLogic.normalize_difficulty(difficulty)
 	var mg: Dictionary = state["minigames"]
 	var legacy: Dictionary = mg["legacy"]
@@ -69,10 +78,36 @@ static func award(
 		paid = timed_granted
 		Economy.award(econ, paid, "minigame", today)
 
+	# FERTIG-1: doppelGold/muenzregen — nur der ÜBERSCHUSS über die normale
+	# Auszahlung läuft gegen das 150-c-Modifier-Tages-Ledger (Anti-Farm).
+	var mod_bonus := 0
+	var mod_capped := false
+	var coin_mult := _num(modifier.get("coin_mult"), 1.0)
+	if coin_mult > 1.0 and paid > 0:
+		var want := int(round(float(paid) * (coin_mult - 1.0)))
+		mod_bonus = Economy.award(econ, want, "modifier", today)
+		mod_capped = mod_bonus < want
+	# FERTIG-1: Glückspilz — seeded 10–60-c-Rolle, gleiches Tages-Ledger.
+	var glueck := 0
+	if modifier.get("gluecksrolle", false):
+		var roll := ModifierEngine.roll_glueckspilz(state)
+		glueck = Economy.award(econ, roll, "glueckspilz", today)
+		if glueck < roll:
+			mod_capped = true
+
 	var stats: Dictionary = state["gooby"]["stats"]
 	stats["fun"] = clampf(float(stats.get("fun", 0.0)) + FUN_REWARD, 0.0, 100.0)
 	mg["plays"][id] = int(_num(_dict(mg.get("plays")).get(id))) + 1
 	legacy["lastPlayDay"][id] = today
+	# FERTIG-1: Sticker "modifierMischief" zählt Runden MIT aktivem
+	# Modifikator über achievements.counters.modifierPlays (Web-Counter).
+	if not modifier.is_empty() and state.get("achievements") is Dictionary:
+		var ach: Dictionary = state["achievements"]
+		if not (ach.get("counters") is Dictionary):
+			ach["counters"] = {}
+		ach["counters"]["modifierPlays"] = (
+			int(_num(_dict(ach["counters"]).get("modifierPlays"))) + 1
+		)
 
 	# §G5.7-4: per-Modus-Boards — best (Mittel) / bestByDiff / endlessBest.
 	var prev := _prev_best(legacy, id, mode)
@@ -98,6 +133,10 @@ static func award(
 
 	var prog: Dictionary = state["progression"]
 	var xp_gain := Leveling.minigame_xp(paid)
+	# FERTIG-1: Lernrausch — Runden-XP ×2 (nur die XP, nie die Coins).
+	var xp_mult := _num(modifier.get("xp_mult"), 1.0)
+	if xp_mult > 1.0:
+		xp_gain = int(round(float(xp_gain) * xp_mult))
 	var res := Leveling.apply_xp(
 		{"xp": _num(prog.get("xp")), "level": int(_num(prog.get("level"), 1.0))}, float(xp_gain)
 	)
@@ -121,6 +160,11 @@ static func award(
 		"difficulty": mode,
 		"dayCapReached": day_cap_reached,
 		"beatTarget": beat_target,
+		# FERTIG-1 (EVAL Rang 12): Modifier-Wirkung für den Results-Screen.
+		"modifier": modifier.duplicate(true),
+		"modifierBonusCoins": mod_bonus,
+		"gluecksrolleCoins": glueck,
+		"modifierCapped": mod_capped,
 	}
 
 

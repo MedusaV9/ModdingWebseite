@@ -4,8 +4,9 @@ extends RefCounted
 ##
 ## Vereint ALLE Nahrungs-Ids, die im Godot-Spiel in `inventory.food` landen
 ## können: Starter-Kühlschrank (save_schema STARTER_FOOD), REHWEI-Sortiment
-## (scripts/city/data/rehwei_sortiment.json — IDs/Werte 1:1 gespiegelt) und
-## die Garten-Ernten (scripts/home/data/garden_crops.json, deutsche Ids).
+## (scripts/city/data/rehwei_sortiment.json — IDs/Werte 1:1 gespiegelt),
+## die Garten-Ernten (scripts/home/data/garden_crops.json, deutsche Ids)
+## und die Funkelpark-Naschgasse (park_state.gd STALLS, Web V6_PARK_FOODS).
 ## Vorlage der Werte: Web GOOBY/src/data/foods.js (38 Speisen) — hier nur
 ## die Teilmenge, die im Godot-Spiel wirklich erreichbar ist.
 ##
@@ -45,6 +46,17 @@ const FOODS := {
 	"sandwich": {"hunger": 24, "fun": 3},
 	"burger": {"hunger": 40, "fun": 6},
 	"pizza": {"hunger": 45, "fun": 8, "hygiene": -2, "junk": true},
+	# ── FERTIG-1 (EVAL D1, Web-Parität): drei weitere FOOD_TABLE-Speisen,
+	# deren Kenney-GLBs schon im Repo liegen (donut/hot-dog/pancakes) ──
+	"donut-sprinkles": {"hunger": 10, "fun": 10, "junk": true},
+	"hot-dog": {"hunger": 25, "fun": 4},
+	"pancakes": {"hunger": 28, "fun": 6},
+	# ── FERTIG-1: Funkelpark-Naschgasse (Web V6_PARK_FOODS) — die Stände
+	# verkaufen diese Ids in inventory.food; ohne Katalog-Eintrag fielen
+	# sie beim Füttern auf den generischen Snack zurück ──
+	"cottonCandy": {"hunger": 5, "fun": 16, "energy": 2, "hygiene": -2, "junk": true},
+	"softServe": {"hunger": 7, "fun": 15, "energy": 4, "hygiene": -1, "junk": true},
+	"waffle": {"hunger": 22, "fun": 8, "energy": 3, "hygiene": -1},
 	# ── Garten-Ernten (deutsche Ids aus garden_crops.json) ──
 	"tomate": {"hunger": 12, "fun": 1},
 	"melone": {"hunger": 14, "fun": 4},

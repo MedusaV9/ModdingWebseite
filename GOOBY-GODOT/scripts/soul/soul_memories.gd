@@ -12,6 +12,15 @@ const MIN_TICKLES := 20
 const MIN_HARVESTS := 10
 const MIN_STREAK := 3
 const MIN_PLAYTIME_MIN := 600
+## Vorlieben (SEELE-2): erst ab echter Datenlage — 2 gespielte Spiele bzw.
+## 3 Fütterungen desselben Essens.
+const MIN_VORLIEBE_SPIELE := 2
+const MIN_VORLIEBE_ESSEN := 3
+
+## Goobys kleine eigene Ziele (SEELE-2): „Ich wollte schon immer mal…“ —
+## jede Bedingung prüft ECHTE Save-Daten; erfüllt sich das Ziel, bezieht
+## sich Gooby beiläufig darauf zurück. Reihenfolge = stabile Auswahlbasis.
+const WUNSCH_IDS: Array[String] = ["funkelpark", "urlaub", "streak7", "kissenturm"]
 
 
 ## Alle aktuell möglichen Erinnerungen: Array aus
@@ -24,6 +33,7 @@ static func candidates(state: Dictionary) -> Array[Dictionary]:
 	_add_streak(out, state)
 	_add_park(out, state)
 	_add_playtime(out, state)
+	_add_vorlieben(out, state)
 	return out
 
 
@@ -167,6 +177,90 @@ static func _add_playtime(out: Array[Dictionary], state: Dictionary) -> void:
 		)
 
 
+# ── Vorlieben & kleine Wünsche (SEELE-2) ─────────────────────────────────────
+
+
+## Vorlieben aus dem echten Verhalten: Lieblingsspiel (bestes von ≥2
+## gespielten) und Lieblingsessen (meistgefüttert, ≥3×). Beiläufig als
+## Erinnerung erwähnt — nie als Liste.
+static func _add_vorlieben(out: Array[Dictionary], state: Dictionary) -> void:
+	var best: Variant = _dig(state, ["minigames", "legacy", "best"])
+	if best is Dictionary and (best as Dictionary).size() >= MIN_VORLIEBE_SPIELE:
+		var top_id := ""
+		var top_score := 0
+		var ids: Array = (best as Dictionary).keys()
+		ids.sort()
+		for game_id: Variant in ids:
+			var score := int(_num(best[game_id]))
+			if score > top_score:
+				top_score = score
+				top_id = str(game_id)
+		if not top_id.is_empty():
+			(
+				out
+				. append(
+					{
+						"id": "vorliebe_spiel",
+						"text_key": "soul.erinnerung.vorliebe_spiel",
+						"args": {"spiel": _game_title(top_id)},
+					}
+				)
+			)
+	var food: Variant = _dig(state, ["soul", "foodGiven"])
+	if food is Dictionary:
+		var top_food := ""
+		var top_count := 0
+		var food_ids: Array = (food as Dictionary).keys()
+		food_ids.sort()
+		for food_id: Variant in food_ids:
+			var count := int(_num(food[food_id]))
+			if count > top_count:
+				top_count = count
+				top_food = str(food_id)
+		if top_count >= MIN_VORLIEBE_ESSEN:
+			(
+				out
+				. append(
+					{
+						"id": "vorliebe_essen",
+						"text_key": "soul.erinnerung.vorliebe_essen",
+						"args": {"essen": _food_title(top_food)},
+					}
+				)
+			)
+
+
+## Ist dieser Wunsch aktuell noch OFFEN (Bedingung aus echten Daten)?
+static func wunsch_offen(state: Dictionary, wunsch_id: String) -> bool:
+	match wunsch_id:
+		"funkelpark":
+			return int(_num(_dig(state, ["park", "visits"]))) <= 0
+		"urlaub":
+			var visited: Variant = _dig(state, ["vacation", "visited"])
+			return not (visited is Dictionary) or (visited as Dictionary).is_empty()
+		"streak7":
+			return int(_num(_dig(state, ["daily", "streak"]))) < 7
+		"kissenturm":
+			var seen: Variant = _dig(state, ["soul", "surpriseAt"])
+			return not (seen is Dictionary) or not (seen as Dictionary).has("sup_turm")
+	return false
+
+
+static func wunsch_erfuellt(state: Dictionary, wunsch_id: String) -> bool:
+	return WUNSCH_IDS.has(wunsch_id) and not wunsch_offen(state, wunsch_id)
+
+
+## Alle Wünsche, die Gooby JETZT fassen könnte: offen und noch nie erfüllt
+## gefeiert (wunschErfuellt-Map). Stabile Reihenfolge.
+static func offene_wuensche(state: Dictionary, slice: Dictionary) -> Array[String]:
+	var gefeiert: Dictionary = slice.get("wunschErfuellt", {})
+	var out: Array[String] = []
+	for wunsch_id in WUNSCH_IDS:
+		if wunsch_offen(state, wunsch_id) and not gefeiert.has(wunsch_id):
+			out.append(wunsch_id)
+	return out
+
+
 ## Spieltitel über den I18n-Katalog der Minigames ("mg.<id>.title"),
 ## Fallback: die rohe Id (nie crashen, nie leere Erinnerung).
 static func _game_title(game_id: String) -> String:
@@ -181,6 +275,13 @@ static func _dest_title(dest_id: String) -> String:
 	if I18nService.has_key(key):
 		return I18nService.t(key)
 	return dest_id
+
+
+static func _food_title(food_id: String) -> String:
+	var key := "soul.essen.%s" % food_id
+	if I18nService.has_key(key):
+		return I18nService.t(key)
+	return FoodCatalog.display_name(food_id)
 
 
 static func _dig(state: Dictionary, path: Array) -> Variant:

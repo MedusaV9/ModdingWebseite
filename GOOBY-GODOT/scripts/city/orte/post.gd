@@ -1,8 +1,8 @@
 class_name OrtPost
 extends OrtScene
 ## Post (Doc E §2.3, Doc C §3.7): Schalter-Halle mit Frau Zettel hinter der
-## Scheibe, Paketberg im Hintergrund. Paket-/Brief-Versand ist ein HOOK für
-## den Multiplayer (PostSheet.mp_hook) — hier steht bewusst kein Netzcode.
+## Scheibe, Paketberg im Hintergrund. FERTIG-1: statt des gestrichenen
+## Multiplayer-Versand-Hooks gibt es hier das echte TAGESPAKET (PostLogic).
 
 const INNEN := "res://assets/city/innen"
 const MOEBEL := "res://assets/furniture"
@@ -28,7 +28,7 @@ func _npc_konfig() -> Dictionary:
 	return {"tint": Color("#FFD166"), "emotion": "happy", "pos": Vector3(-0.4, 0.0, -2.4)}
 
 
-## Post hat ein eigenes Schalter-UI (Paket/Brief + Postkarten-Archiv).
+## Post hat ein eigenes Schalter-UI (Tagespaket + Postkarten-Archiv).
 func oeffne_laden() -> void:
 	var inhalt := PostSheet.new()
 	inhalt.gs = game_state()

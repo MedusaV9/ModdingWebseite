@@ -20,6 +20,8 @@ extends Control
 
 signal ready_for_reveal
 
+const Leveling := preload("res://scripts/logic/leveling.gd")
+
 const ROUTE := &"profil"
 const ROUTES := {ROUTE: "res://scripts/ui/profil/profil_screen.tscn"}
 const PORTRAIT_BASE := 168.0
@@ -93,6 +95,9 @@ func _build_ui() -> void:
 	scroll.add_child(_list_box)
 
 	_list_box.add_child(_build_pass_card())
+	# FERTIG-1 (EVAL „Rundes Ende“): Spiel-Abschluss als sichtbares
+	# Langzeit-Ziel direkt unter dem Pass — Prozent + vier Sammlungen.
+	_list_box.add_child(_build_abschluss_card())
 	_list_box.add_child(_build_stats_card())
 	_list_box.add_child(_build_favorites_card())
 	_list_box.add_child(_build_achievements_card())
@@ -199,8 +204,17 @@ func _build_level_row() -> Control:
 	row.add_theme_constant_override("separation", 8)
 	var label := Label.new()
 	label.theme_type_variation = &"HeadlineLabel"
-	label.text = I18nService.t("profil.level", {"level": _level()})
+	# FERTIG-1 („Rundes Ende“): die Level-Obergrenze steht SICHTBAR im Pass.
+	label.text = I18nService.t("profil.level_von", {"level": _level(), "max": Leveling.MAX_LEVEL})
 	row.add_child(label)
+	if _level() >= Leveling.MAX_LEVEL:
+		var voll := Label.new()
+		voll.name = "LevelMax"
+		voll.theme_type_variation = &"SoftLabel"
+		voll.text = I18nService.t("profil.level_max")
+		voll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(voll)
+		return row
 	var bar := ProgressBar.new()
 	bar.name = "XpBar"
 	bar.min_value = 0.0
@@ -212,6 +226,43 @@ func _build_level_row() -> Control:
 	bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	row.add_child(bar)
 	return row
+
+
+## Abschluss-Karte (FERTIG-1, „Rundes Ende“): Gesamt-Prozent + die vier
+## Sammlungen aus AbschlussLogic; bei 100 % ersetzt eine Feier-Zeile den
+## Hinweis — DAS ist das sichtbare Endziel des Spiels.
+func _build_abschluss_card() -> Control:
+	var card := _card("AbschlussCard", I18nService.t("profil.abschluss"))
+	var box := card.get_child(0) as VBoxContainer
+	var state: Dictionary = _gs.state() if _gs != null and _gs.has_method("state") else {}
+	var p := AbschlussLogic.prozent(state)
+	var prozent := Label.new()
+	prozent.name = "AbschlussProzent"
+	prozent.theme_type_variation = &"TitleLabel"
+	prozent.text = I18nService.t("profil.abschluss_prozent", {"p": p})
+	box.add_child(prozent)
+	var bar := _progress_row("AbschlussBar", p, 100)
+	box.add_child(bar)
+	for teil in AbschlussLogic.komponenten(state):
+		var id := str(teil["id"])
+		box.add_child(
+			_field_row(
+				"Abschluss%s" % id.capitalize(),
+				I18nService.t("profil.abschluss_teil.%s" % id),
+				I18nService.t(
+					"profil.abschluss_stand", {"n": int(teil["n"]), "total": int(teil["total"])}
+				)
+			)
+		)
+	var zeile := Label.new()
+	zeile.name = "AbschlussZeile"
+	zeile.theme_type_variation = &"SoftLabel"
+	zeile.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	zeile.text = I18nService.t(
+		"profil.abschluss_fertig" if AbschlussLogic.komplett(state) else "profil.abschluss_hinweis"
+	)
+	box.add_child(zeile)
+	return card
 
 
 func _build_stats_card() -> Control:

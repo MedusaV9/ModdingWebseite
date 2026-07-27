@@ -105,19 +105,23 @@ jobs:
       - name: Test-Runner
         run: |
           set -o pipefail
-          godot --headless --path GOOBY-GODOT --script res://tests/run_tests.gd 2>&1 \
+          bash tools/ci/run_godot_isolated.sh \
+            godot --headless --path GOOBY-GODOT --script res://tests/run_tests.gd 2>&1 \
             | tee test-reports/run_tests.log
 
       - name: Unit-Tests (W1c-UI-Runner)
         run: |
           set -o pipefail
-          godot --headless --path GOOBY-GODOT --script res://tests/unit/run_w1c_tests.gd 2>&1 \
+          bash tools/ci/run_godot_isolated.sh \
+            godot --headless --path GOOBY-GODOT --script res://tests/unit/run_w1c_tests.gd 2>&1 \
             | tee test-reports/run_w1c_tests.log
 
       - name: Boot-Smoke (Projekt bootet headless)
         run: |
           set -o pipefail
-          godot --headless --path GOOBY-GODOT --quit 2>&1 | tee test-reports/boot_smoke.log
+          bash tools/ci/run_godot_isolated.sh \
+            godot --headless --path GOOBY-GODOT --quit 2>&1 \
+            | tee test-reports/boot_smoke.log
 
       - name: Test-Reports hochladen (auch bei roten Läufen)
         if: always()
@@ -137,9 +141,20 @@ jobs:
   ios-ipa:
     runs-on: macos-15
     needs: linux-checks
+    # Der Build bleibt nach den Linux-Tests eingeordnet, läuft aber auch bei
+    # roten Tests. So gibt es weiterhin eine testbare IPA; ihr Artefaktname
+    # kennzeichnet den roten Vorlauf unmissverständlich als UNVERIFIED.
+    if: ${{ always() && needs.linux-checks.result != 'cancelled' }}
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7
+
+      - name: Roten Linux-Vorlauf kennzeichnen
+        if: ${{ needs.linux-checks.result != 'success' }}
+        run: |
+          echo "::warning::Linux-Tests sind ${{ needs.linux-checks.result }}; die IPA wird nur zum Testen gebaut."
+          echo "## IPA aus rotem Linux-Vorlauf" >> "$GITHUB_STEP_SUMMARY"
+          echo "Artefakt wird als **UNVERIFIED** gekennzeichnet." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Godot (macOS) + Export-Templates cachen
         uses: actions/cache@v4
@@ -233,7 +248,16 @@ jobs:
           set -euo pipefail
           python3 tools/ci/verify_ipa.py build/ios/GOOBY-godot-unsigned.ipa GOOBY-GODOT
 
-      - uses: actions/upload-artifact@v7
+      - name: Verifizierte .ipa hochladen
+        if: ${{ needs.linux-checks.result == 'success' }}
+        uses: actions/upload-artifact@v7
         with:
           name: GOOBY-godot-unsigned-ipa
+          path: build/ios/GOOBY-godot-unsigned.ipa
+
+      - name: .ipa aus rotem Linux-Vorlauf hochladen
+        if: ${{ needs.linux-checks.result != 'success' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: GOOBY-godot-unsigned-ipa-UNVERIFIED-linux-${{ needs.linux-checks.result }}
           path: build/ios/GOOBY-godot-unsigned.ipa

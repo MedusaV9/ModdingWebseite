@@ -22,6 +22,11 @@ const DOMAIN := "soul"
 
 ## Wie oft eine Erinnerung statt nichts kommt, wenn Platz ist (roll-Gate).
 const MEMORY_CHANCE := 0.35
+## Anteil des Erinnerungs-Slots, der einen NEUEN kleinen Wunsch ansagt
+## (SEELE-2) — Wünsche bleiben selten, die Erfüllung kommt dafür sicher.
+const WUNSCH_ANTEIL := 0.3
+## Wünsche erst, wenn man sich ein paar Tage kennt.
+const WUNSCH_MIN_DAYS := 3
 ## Geburtstags-Nachfrage: erst nach ein paar Kennen-Tagen, dann selten.
 const ASK_BIRTHDAY_MIN_DAYS := 3
 const ASK_BIRTHDAY_RETRY_MS := 7 * 86_400_000
@@ -56,6 +61,11 @@ static func decide_enter(
 	var weather := _decide_weather(slice, defs, ctx, roll)
 	if not weather.is_empty():
 		return weather
+	# SEELE-2: ein erfüllter Wunsch wird SICHER gefeiert (kein roll-Gate) —
+	# das Versprechen „ich wollte schon immer mal…“ braucht seinen Payoff.
+	var erfuellt := _decide_wunsch_erfuellt(state, slice, defs, ctx, roll)
+	if not erfuellt.is_empty():
+		return erfuellt
 	return _decide_memory(state, slice, defs, ctx, roll)
 
 
@@ -81,6 +91,11 @@ static func book_enter(slice: Dictionary, moment: Dictionary, ctx: Dictionary) -
 			slice["lastGreetKind"] = str(moment["id"])
 		"erinnerung":
 			slice["memoryShownAt"][str(moment["memory_id"])] = now_ms
+		"wunsch":
+			slice["wunsch"] = {"id": str(moment["wunsch_id"]), "seitMs": now_ms}
+		"wunsch_erfuellt":
+			slice["wunschErfuellt"][str(moment["wunsch_id"])] = now_ms
+			slice["wunsch"] = {}
 
 
 ## Idle-Handlung fürs Hintergrund-Leben ({} = weiter dösen). `cooldowns` ist
@@ -92,10 +107,15 @@ static func pick_idle(
 	var now_ms := int(ctx["now_ms"])
 	var available: Array[Dictionary] = []
 	var total := 0.0
+	var band := str(ctx.get("laune_band", "happy"))
 	for def: Variant in _defs_of_kind(defs, "idle"):
 		if now_ms < int(cooldowns.get(str(def["id"]), 0)):
 			continue
 		if not _idle_requirement_met(def, ctx):
+			continue
+		# SEELE-2: Laune-Gate — ein elender Gooby tanzt nicht und reißt
+		# keine TV-Witze; ein seliger setzt sich nicht in die Trauerecke.
+		if not SoulMood.def_erlaubt(def, band):
 			continue
 		available.append(def)
 		total += maxf(0.0, float(def.get("weight", 1)))
@@ -221,7 +241,10 @@ static func _decide_greeting(
 	var def := def_by_id(defs, def_id)
 	if def.is_empty():
 		return {}
-	return _moment_from_def(def, "gruss", args, roll)
+	# SEELE-2: Beziehungs-Stufe erweitert den Text-Pool — nach 50 Tagen
+	# grüßt Gooby anders als am dritten Tag.
+	var days := SoulTriggers.days_known(int(slice["firstMetAt"]), int(ctx["now_ms"]))
+	return _moment_from_def(def, "gruss", args, roll, SoulTriggers.beziehung_stufe(days))
 
 
 static func _decide_weather(
@@ -251,9 +274,15 @@ static func _decide_memory(
 ) -> Dictionary:
 	if roll >= MEMORY_CHANCE:
 		return {}
-	var candidates := SoulMemories.candidates(state)
 	# roll unterhalb MEMORY_CHANCE auf 0..1 strecken → eine Zufallsquelle.
 	var pick_roll := roll / MEMORY_CHANCE
+	# SEELE-2: ein Teil des Erinnerungs-Slots gehört Goobys eigenen kleinen
+	# Zielen — aber nur, wenn er gerade keinen offenen Wunsch hat.
+	if pick_roll < WUNSCH_ANTEIL:
+		var wunsch := _decide_wunsch_neu(state, slice, defs, ctx, pick_roll / WUNSCH_ANTEIL)
+		if not wunsch.is_empty():
+			return wunsch
+	var candidates := SoulMemories.candidates(state)
 	var memory := SoulMemories.pick(
 		candidates, slice["memoryShownAt"], int(ctx["now_ms"]), pick_roll
 	)
@@ -267,6 +296,47 @@ static func _decide_memory(
 	var moment := _moment_from_def(def, "erinnerung", args, pick_roll)
 	moment["text_key"] = str(memory["text_key"])
 	moment["memory_id"] = str(memory["id"])
+	return moment
+
+
+## Neuer kleiner Wunsch („Ich wollte schon immer mal…“): nur ohne aktiven
+## Wunsch, erst nach ein paar Kennen-Tagen, deterministisch über roll.
+static func _decide_wunsch_neu(
+	state: Dictionary, slice: Dictionary, defs: Array, ctx: Dictionary, roll: float
+) -> Dictionary:
+	var aktiv: Dictionary = slice.get("wunsch", {})
+	if not str(aktiv.get("id", "")).is_empty():
+		return {}
+	var days := SoulTriggers.days_known(int(slice["firstMetAt"]), int(ctx["now_ms"]))
+	if days < WUNSCH_MIN_DAYS:
+		return {}
+	var offen := SoulMemories.offene_wuensche(state, slice)
+	if offen.is_empty():
+		return {}
+	var def := def_by_id(defs, "wunsch")
+	if def.is_empty():
+		return {}
+	var wunsch_id: String = offen[int(clampf(roll, 0.0, 0.999999) * offen.size())]
+	var moment := _moment_from_def(def, "wunsch", _base_args(slice, ctx), roll)
+	moment["text_key"] = "soul.wunsch." + wunsch_id
+	moment["wunsch_id"] = wunsch_id
+	return moment
+
+
+## Erfüllter Wunsch: Goobys Ziel ist WIRKLICH eingetreten (echte Daten) —
+## er bezieht sich zurück und feiert. Räumt verwaiste Wunsch-Ids still ab.
+static func _decide_wunsch_erfuellt(
+	state: Dictionary, slice: Dictionary, defs: Array, ctx: Dictionary, roll: float
+) -> Dictionary:
+	var wunsch_id := str(slice.get("wunsch", {}).get("id", ""))
+	if wunsch_id.is_empty() or not SoulMemories.wunsch_erfuellt(state, wunsch_id):
+		return {}
+	var def := def_by_id(defs, "wunsch_erfuellt")
+	if def.is_empty():
+		return {}
+	var moment := _moment_from_def(def, "wunsch_erfuellt", _base_args(slice, ctx), roll)
+	moment["text_key"] = "soul.wunsch.%s_erfuellt" % wunsch_id
+	moment["wunsch_id"] = wunsch_id
 	return moment
 
 
@@ -285,12 +355,23 @@ static func _ritual(
 	return moment
 
 
+## Text-Pool eines Defs: Basis-Varianten + optionale Stufen-Varianten
+## ("text_keys_stufe": {stufe: [keys]}) — die Beziehung färbt die Sprache.
+static func text_pool(def: Dictionary, stufe := "") -> Array:
+	var pool: Array = (def.get("text_keys", []) as Array).duplicate()
+	if not stufe.is_empty():
+		var stufen: Variant = def.get("text_keys_stufe", {})
+		if stufen is Dictionary:
+			pool.append_array((stufen as Dictionary).get(stufe, []))
+	return pool
+
+
 ## Moment aus einem Def: Textvariante deterministisch über roll wählen,
 ## Anzeige-Metadaten (Emotion/Clip/SFX) durchreichen.
 static func _moment_from_def(
-	def: Dictionary, kind: String, args: Dictionary, roll: float
+	def: Dictionary, kind: String, args: Dictionary, roll: float, stufe := ""
 ) -> Dictionary:
-	var keys: Array = def.get("text_keys", [])
+	var keys := text_pool(def, stufe)
 	var text_key := ""
 	if not keys.is_empty():
 		text_key = str(keys[int(clampf(roll, 0.0, 0.999999) * keys.size())])

@@ -15,9 +15,12 @@
     {"id": "watermelon", "name_de": "Wassermelone", "preis": 12, "glb": "watermelon.glb", "hunger": 14, "spass": 4},
     {"id": "croissant", "name_de": "Croissant", "preis": 12, "glb": "croissant.glb", "hunger": 14, "spass": 4},
     {"id": "muffin", "name_de": "Muffin", "preis": 12, "glb": "muffin.glb", "hunger": 10, "spass": 8, "junk": true},
+    {"id": "donut-sprinkles", "name_de": "Streusel-Donut", "preis": 12, "glb": "donut.glb", "hunger": 10, "spass": 10, "junk": true},
     {"id": "salad", "name_de": "Salat", "preis": 14, "glb": "salad.glb", "hunger": 20, "spass": 0, "hygiene": 2},
     {"id": "fries", "name_de": "Pommes", "preis": 14, "glb": "fries.glb", "hunger": 12, "spass": 9, "hygiene": -1, "junk": true},
     {"id": "sandwich", "name_de": "Sandwich", "preis": 16, "glb": "sandwich.glb", "hunger": 24, "spass": 3, "gooberando": true},
+    {"id": "hot-dog", "name_de": "Hotdog", "preis": 18, "glb": "hot-dog.glb", "hunger": 25, "spass": 4},
+    {"id": "pancakes", "name_de": "Pfannkuchen", "preis": 20, "glb": "pancakes.glb", "hunger": 28, "spass": 6},
     {"id": "burger", "name_de": "Burger", "preis": 25, "glb": "burger.glb", "hunger": 40, "spass": 6, "gooberando": true},
     {"id": "pizza", "name_de": "Pizza", "preis": 30, "glb": "pizza.glb", "hunger": 45, "spass": 8, "hygiene": -2, "junk": true, "gooberando": true}
   ]

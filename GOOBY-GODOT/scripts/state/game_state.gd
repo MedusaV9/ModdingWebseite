@@ -49,6 +49,8 @@ const DEFAULT_SLICE_SCRIPTS := {
 	"bad": "res://scripts/home/interactables/bad_state.gd",
 	"city": "res://scripts/city/city_state.gd",
 	"gvz": "res://scripts/minigames/games/gvz/gvz_progress.gd",
+	# FERTIG-1 (EVAL Rang 12): Arcade-Modifier-Events — additiver Slice.
+	"modifiers": "res://scripts/minigames/modifier_engine.gd",
 }
 
 ## Pinnbare Uhr — EINZIGE Zeitquelle fuer State-Code (Tests pinnen sie).

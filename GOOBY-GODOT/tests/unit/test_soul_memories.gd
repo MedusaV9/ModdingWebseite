@@ -27,10 +27,13 @@ func test_kaputter_state_crasht_nicht() -> void:
 func test_minigame_rekord_aus_echten_daten() -> void:
 	var state := {"minigames": {"legacy": {"best": {"minigolf": 42, "sprint": 99}}}}
 	var out := SoulMemories.candidates(state)
-	assert_eq(out.size(), 1, "genau eine Rekord-Erinnerung")
+	# SEELE-2: ab 2 gespielten Spielen kommt zur Rekord-Erinnerung die
+	# Lieblingsspiel-Vorliebe dazu (beides aus denselben echten Daten).
+	assert_eq(out.size(), 2, "Rekord- plus Lieblingsspiel-Erinnerung")
 	assert_eq(str(out[0]["id"]), "rekord_sprint", "höchster Score gewinnt")
 	assert_eq(int(out[0]["args"]["punkte"]), 99, "echter Punktestand im Text")
-	# Score 0 zählt nicht als Rekord.
+	assert_eq(str(out[1]["id"]), "vorliebe_spiel", "Lieblingsspiel ab 2 Spielen")
+	# Score 0 zählt nicht als Rekord (und 1 Spiel reicht nicht als Vorliebe).
 	var nix := SoulMemories.candidates({"minigames": {"legacy": {"best": {"golf": 0}}}})
 	assert_eq(nix.size(), 0, "Score 0 = keine Erinnerung")
 

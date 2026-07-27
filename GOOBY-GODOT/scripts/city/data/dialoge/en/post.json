@@ -6,11 +6,10 @@
       "sprecher": "pia",
       "text": [
         "Welcome to the post office! I’m Pia. Counter two is unstaffed right now — I AM counter two.",
-        "Parcel, letter, or just here to admire the stamp?"
+        "Daily parcel, postcards, or just here to admire the stamp?"
       ],
       "optionen": [
-        {"text": "Send a parcel.", "next": "paket"},
-        {"text": "A letter to a friend.", "next": "brief"},
+        {"text": "Is there a parcel waiting for me?", "next": "paket"},
         {"text": "How’s my postcard archive?", "next": "postkarten"},
         {"text": "Just the stamp.", "next": "stempel"}
       ]
@@ -18,17 +17,8 @@
     "paket": {
       "sprecher": "pia",
       "text": [
-        "Parcels to other Goobys? The conveyor belt is on order. It’s arriving … by parcel.",
-        "Once it’s here you can send real things to real friends. Promise."
-      ],
-      "effekt": ["laden"],
-      "ende": true
-    },
-    "brief": {
-      "sprecher": "pia",
-      "text": [
-        "Letters between Goobys go out soon — the postal network is still being laid.",
-        "Until then I collect your drafts. Sorted. Alphabetically. By mood."
+        "Every day I set one parcel aside for Gooby. I weighed it three times — better safe than sorry.",
+        "Just pick it up at the counter. Once a day, or my shelf tips over."
       ],
       "effekt": ["laden"],
       "ende": true

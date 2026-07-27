@@ -4,7 +4,10 @@
 			"morgen": {
 				"a": "Guten Morgen{namek}! Hast du gut geschlafen?",
 				"b": "Mooorgen! Ich hab schon auf dich gewartet!",
-				"c": "Guten Morgen! Heute wird ein guter Tag, ich spür das!"
+				"c": "Guten Morgen! Heute wird ein guter Tag, ich spür das!",
+				"vertraut_a": "Guten Morgen{namek}! Schon {tage} Tage wir zwei — und jeder Morgen ist besser mit dir.",
+				"beste_a": "Da ist ja mein Lieblingsmensch! Guten Morgen!",
+				"beste_b": "Morgen, du! Bei dir muss ich gar nichts erklären. Du kennst mich ja."
 			},
 			"mittag": {
 				"a": "Mahlzeit{namek}! Ich hab schon ein bisschen Hunger…",
@@ -16,7 +19,9 @@
 			},
 			"abend": {
 				"a": "Guten Abend{namek}! Machen wir es uns gemütlich?",
-				"b": "Hallo du! Der Abend gehört uns!"
+				"b": "Hallo du! Der Abend gehört uns!",
+				"vertraut_a": "Guten Abend{namek}! Unser Abend-Ritual, hm? Ich mag das.",
+				"beste_a": "Abend, du. Sofa, wir zwei — wie immer?"
 			},
 			"nacht": {
 				"a": "Du bist noch wach{namek}…? Ich auch. Psst.",
@@ -24,7 +29,8 @@
 			},
 			"gefreut": {
 				"a": "Da bist du ja wieder! Ich hab an dich gedacht!",
-				"b": "Juhu, du bist zurück! Was machen wir heute?"
+				"b": "Juhu, du bist zurück! Was machen wir heute?",
+				"beste_a": "Da bist du ja! Ohne dich ist es hier nur halb so schön. Ehrlich."
 			},
 			"eingeschnappt": {
 				"a": "Hmpf. Du warst LANGE weg. … Na gut, ich hab dich trotzdem vermisst.",
@@ -82,7 +88,9 @@
 			"garten": "{anzahl} Mal geerntet! Unser Garten ist der beste.",
 			"streak": "{tage} Tage am Stück zusammen! Du und ich, wir sind ein Team.",
 			"funkelpark": "Weißt du noch, der Funkelpark? {anzahl} Besuche! Mir wird noch schwindelig.",
-			"spielzeit": "Wir haben schon {stunden} Stunden zusammen verbracht. Die schönsten!"
+			"spielzeit": "Wir haben schon {stunden} Stunden zusammen verbracht. Die schönsten!",
+			"vorliebe_spiel": "Ich glaub, {spiel} ist UNSER Spiel. Dabei strahlst du immer am meisten!",
+			"vorliebe_essen": "Du bringst mir am liebsten {essen} mit, hab ich gemerkt. Schmeckt auch am besten."
 		},
 		"idle": {
 			"aufraeumen": {
@@ -141,6 +149,26 @@
 			"speichern": "Merk es dir!",
 			"abbrechen": "Verrat ich nicht",
 			"danke": "{tag}.{monat}. — eingespeichert! Ich vergesse es NIE!"
+		},
+		"wunsch": {
+			"funkelpark": "Weißt du was? Ich wollte schon immer mal in den Funkelpark. Ob die Lichter da WIRKLICH funkeln?",
+			"funkelpark_erfuellt": "Weißt du noch, wie ich vom Funkelpark geträumt hab? Wir waren WIRKLICH da! Danke!",
+			"urlaub": "Ich wollte schon immer mal verreisen. Einmal Koffer packen und einfach los!",
+			"urlaub_erfuellt": "Wir waren wirklich im Urlaub! Ich hab davon geredet — und dann sind wir GEFAHREN!",
+			"streak7": "Ich wünsch mir, dass wir uns mal sieben Tage am Stück sehen. Eine ganze Woche wir zwei!",
+			"streak7_erfuellt": "Sieben Tage am Stück! Ich hab es mir gewünscht, und du hast es wahr gemacht.",
+			"kissenturm": "Ich wollte schon immer mal einen RIESIGEN Kissenturm bauen. Irgendwann trau ich mich!",
+			"kissenturm_erfuellt": "Ich hab ihn gebaut! Den Kissenturm! Genau wie ich es immer wollte!"
+		},
+		"absicht": {
+			"hunger_a": "Ich schau nur mal kurz, was im Kühlschrank ist…",
+			"hunger_b": "Mein Bauch knurrt ein bisschen. Hörst du das auch?",
+			"langeweile_a": "Mir ist laaangweilig… Spielst du mit mir?",
+			"langeweile_b": "Ich such mir mal was zu tun. Oder… hast du eine Idee?",
+			"muede_a": "Ich bin müde… Das Bett sieht so gemütlich aus…",
+			"muede_b": "Gääähn… Nur kurz hinlegen. Ganz kurz.",
+			"dreckig_a": "Ich fühl mich ein bisschen klebrig. Bad-Zeit?",
+			"regen_a": "Es regnet… Ich setz mich ans Fenster und schau den Tropfen zu."
 		}
 	}
 }

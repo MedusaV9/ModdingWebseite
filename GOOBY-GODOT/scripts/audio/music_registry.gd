@@ -301,7 +301,9 @@ const TRACKS := {
 		"duration_sec": 65.4,
 		"gain_trim": 1.0,
 		"unlock_level": 1,
-		"context": "game:goobyWelt",
+		# FERTIG-1 (EVAL Rang 13): goobyWelt ist offiziell gestrichen (§A/§G)
+		# — der Track bleibt als reiner Radio-Song, ohne toten Spiel-Kontext.
+		"context": "",
 		"variant": "",
 	},
 	"game-sternenhopser":

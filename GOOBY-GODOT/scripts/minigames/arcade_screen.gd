@@ -219,6 +219,10 @@ func _build_tile(game: Dictionary) -> Control:
 	tile.add_child(content)
 	var cover := _build_cover(id, coming_soon)
 	content.add_child(cover)
+	# FERTIG-1 (EVAL Rang 12): läuft ein Modifier-Event für dieses Spiel,
+	# trägt die Kachel ein sichtbares Bonus-Badge (Name · Restzeit).
+	if not coming_soon:
+		_add_modifier_badge(cover, id)
 	var label := Label.new()
 	label.text = I18nService.t(str(game.get("title_key", id)))
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -226,6 +230,45 @@ func _build_tile(game: Dictionary) -> Control:
 	label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	content.add_child(label)
 	return tile
+
+
+## FERTIG-1 (EVAL Rang 12): Bonus-Badge auf der Ziel-Kachel des aktiven
+## Modifier-Events ("Doppel-Gold · 42:10") — die Web-Arcade-Bubble.
+func _add_modifier_badge(cover: Control, id: String) -> void:
+	var gs := get_node_or_null("/root/GameState")
+	if gs == null or not gs.has_method("state") or gs.get("clock") == null:
+		return
+	var now := int(gs.clock.now_ms())
+	var active := ModifierEngine.get_active_for(gs.state(), id, now)
+	if active.is_empty():
+		return
+	var badge := Label.new()
+	badge.name = "ModifierBadge"
+	badge.text = (
+		I18nService
+		. t(
+			"modifier.badge",
+			{
+				"name": I18nService.t(str(active["name_key"])),
+				"rest": ModifierEngine.countdown_text(int(active["endsAt"]), now),
+			}
+		)
+	)
+	badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	badge.add_theme_color_override("font_color", Color(1.0, 0.98, 0.92))
+	var style := StyleBoxFlat.new()
+	var badge_color: Color = active.get("color", Color(1.0, 0.83, 0.3))
+	style.bg_color = Color(badge_color.r, badge_color.g, badge_color.b, 0.92)
+	style.set_corner_radius_all(10)
+	style.content_margin_left = 10.0
+	style.content_margin_right = 10.0
+	style.content_margin_top = 3.0
+	style.content_margin_bottom = 3.0
+	badge.add_theme_stylebox_override("normal", style)
+	badge.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
+	badge.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	cover.add_child(badge)
 
 
 ## Dieselbe Textur-Instanz für Kachel UND LoadingVeil-Cover-Karte

@@ -91,6 +91,9 @@ static func catch_up(state: Dictionary, now_ms: int) -> Array:
 			events.append_array(
 				_advance_care(state, awake_min, Offline.AWAKE_RATE_MULT, now_ms, false)
 			)
+	# FERTIG-1 (EVAL Rang 12): Modifier-Scheduler holt Offline-Zeit nach
+	# (ein verpasstes nextAt startet das Event JETZT — Web-§C-SYS4.1).
+	events.append_array(_tick_modifiers(state, now_ms))
 	return events
 
 
@@ -101,7 +104,16 @@ static func catch_up(state: Dictionary, now_ms: int) -> Array:
 ## REST-3: Krankheit (Junk/Vernachlaessigung/Erschoepfung/Kaelte) und
 ## Gewichts-Drift ticken im selben Takt mit (becameQueasy/becameSick/
 ## recovered/tummyWarning-Events fuer die UI).
+## FERTIG-1 (EVAL Rang 12): der Modifier-Scheduler tickt im selben Takt —
+## auch waehrend Schlaf/Urlaub (der Kern hat Early-Returns, deshalb der
+## Wrapper), damit ein faelliges Event nie am Zustand des Goobys haengt.
 static func live_tick(state: Dictionary, now_ms: int) -> Array:
+	var events := _live_tick_core(state, now_ms)
+	events.append_array(_tick_modifiers(state, now_ms))
+	return events
+
+
+static func _live_tick_core(state: Dictionary, now_ms: int) -> Array:
 	var flat := flat_view(state)
 	if Vacation.is_away(flat):
 		flat["lastTickAt"] = now_ms
@@ -136,6 +148,19 @@ static func live_tick(state: Dictionary, now_ms: int) -> Array:
 			events.append("statLow:%s" % k)
 	events.append_array(_advance_care(state, dt_min, 1.0, now_ms, false))
 	return events
+
+
+## FERTIG-1 (EVAL Rang 12): ein Modifier-Scheduler-Tick (Web §B4) — weist
+## die Engine-Aenderungen dem Slice zu und meldet den Start als Eventstring
+## "modifierStarted:<gameId>:<typ>" (RewardHub macht daraus den Toast).
+static func _tick_modifiers(state: Dictionary, now_ms: int) -> Array:
+	var res := ModifierEngine.tick(state, now_ms)
+	if res["changes"] != null:
+		state["modifiers"] = res["changes"]
+	if str(res["event"]) == "started":
+		var cur := _dict(_dict(state.get("modifiers")).get("current"))
+		return ["modifierStarted:%s:%s" % [cur.get("gameId", ""), cur.get("type", "")]]
+	return []
 
 
 ## REST-3: Krankheit + Gewicht um dt_min vorruecken (mult = Offline-Faktor).

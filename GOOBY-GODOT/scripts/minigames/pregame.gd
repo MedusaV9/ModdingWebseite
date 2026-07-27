@@ -115,6 +115,10 @@ func _build_ui() -> void:
 	)
 	rows.add_child(energy_note)
 
+	# FERTIG-1 (EVAL Rang 12): läuft für DIESES Spiel ein Modifier-Event,
+	# steht es SICHTBAR vor dem Start (Name, Wirkung, Rest-Runden/-Zeit).
+	_add_modifier_banner(rows)
+
 	rows.add_child(_section_label(I18nService.t("mg.pregame.difficulty")))
 	var diff_row := HBoxContainer.new()
 	diff_row.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -205,6 +209,51 @@ func _apply_touch_floor() -> void:
 		cover_h = maxf(cover_h - over, 0.0)
 		_cover.custom_minimum_size = Vector2(0.0, cover_h)
 		_cover.visible = cover_h >= 56.0
+
+
+## FERTIG-1 (EVAL Rang 12): Bonus-Event-Banner — die sichtbare Anzeige VOR
+## dem Start (Web-§B4-Pendant zur Arcade-Bubble). Nur wenn das aktive Event
+## zu diesem Spiel gehört und das Fenster noch offen ist.
+func _add_modifier_banner(rows: VBoxContainer) -> void:
+	var gs := _resolve_state()
+	if gs == null or gs.get("clock") == null:
+		return
+	var now := int(gs.clock.now_ms())
+	var active := ModifierEngine.get_active_for(gs.state(), game_id, now)
+	if active.is_empty():
+		return
+	var box := PanelContainer.new()
+	box.name = "ModifierBanner"
+	box.theme_type_variation = &"AcCard"
+	rows.add_child(box)
+	var lines := VBoxContainer.new()
+	lines.add_theme_constant_override("separation", 2)
+	box.add_child(lines)
+	var color: Color = active.get("color", Color(1.0, 0.83, 0.3))
+	var titel := Label.new()
+	titel.theme_type_variation = &"HeadlineLabel"
+	titel.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	titel.add_theme_color_override("font_color", color)
+	titel.text = I18nService.t("modifier.pregame.titel")
+	lines.add_child(titel)
+	var desc := Label.new()
+	desc.theme_type_variation = &"CaptionLabel"
+	desc.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	desc.text = (
+		"%s — %s" % [I18nService.t(str(active["name_key"])), I18nService.t(str(active["desc_key"]))]
+	)
+	lines.add_child(desc)
+	var rest := ModifierEngine.countdown_text(int(active["endsAt"]), now)
+	var plays := int(active.get("remaining_plays", 0))
+	var rest_label := Label.new()
+	rest_label.theme_type_variation = &"CaptionLabel"
+	rest_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	if plays <= 1:
+		rest_label.text = I18nService.t("modifier.pregame.runde_eine", {"rest": rest})
+	else:
+		rest_label.text = I18nService.t("modifier.pregame.runden", {"n": plays, "rest": rest})
+	lines.add_child(rest_label)
 
 
 func _section_label(text: String) -> Label:

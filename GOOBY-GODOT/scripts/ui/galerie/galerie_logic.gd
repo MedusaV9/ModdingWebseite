@@ -82,6 +82,33 @@ static func entferne(state: Dictionary, pfad: String) -> bool:
 	return false
 
 
+## FERTIG-1 (Platzhalter „Teilen (bald)“ → gebaut): echter Foto-EXPORT.
+## Kopiert das PNG in den Bilder-Ordner des Systems (Unterordner GOOBY);
+## ohne System-Bilderordner (Headless/Sandbox) nach user://export/.
+## Liefert den Zielpfad für den Toast ("" = Quelle fehlt/Kopie schlug fehl).
+static func exportiere(pfad: String) -> String:
+	if pfad.is_empty() or not FileAccess.file_exists(pfad):
+		return ""
+	var bytes := FileAccess.get_file_as_bytes(pfad)
+	if bytes.is_empty():
+		return ""
+	var bilder := OS.get_system_dir(OS.SYSTEM_DIR_PICTURES)
+	var ziel_dir := (
+		bilder.path_join("GOOBY")
+		if not bilder.is_empty()
+		else ProjectSettings.globalize_path("user://export")
+	)
+	if DirAccess.make_dir_recursive_absolute(ziel_dir) != OK:
+		return ""
+	var ziel := ziel_dir.path_join(pfad.get_file())
+	var out := FileAccess.open(ziel, FileAccess.WRITE)
+	if out == null:
+		return ""
+	out.store_buffer(bytes)
+	out.close()
+	return ziel
+
+
 ## Anzeigename eines Aufnahmeorts: `galerie.ort_<id>`-Key, sonst die
 ## CityMap (Ortsname), sonst "Unterwegs".
 static func ort_name(ort: String) -> String:

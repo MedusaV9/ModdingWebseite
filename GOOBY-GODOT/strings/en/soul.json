@@ -4,7 +4,10 @@
 			"morgen": {
 				"a": "Good morning{namek}! Did you sleep well?",
 				"b": "Moooorning! I've been waiting for you!",
-				"c": "Good morning! Today's going to be a good day, I can feel it!"
+				"c": "Good morning! Today's going to be a good day, I can feel it!",
+				"vertraut_a": "Good morning{namek}! {tage} days of us already — and every morning is better with you.",
+				"beste_a": "There's my favorite person! Good morning!",
+				"beste_b": "Morning, you! With you I don't have to explain anything. You just know me."
 			},
 			"mittag": {
 				"a": "Hey{namek}! I'm getting a little hungry…",
@@ -16,7 +19,9 @@
 			},
 			"abend": {
 				"a": "Good evening{namek}! Shall we get cozy?",
-				"b": "Hello you! The evening is ours!"
+				"b": "Hello you! The evening is ours!",
+				"vertraut_a": "Good evening{namek}! Our evening ritual, hm? I like that.",
+				"beste_a": "Evening, you. Sofa, the two of us — like always?"
 			},
 			"nacht": {
 				"a": "You're still awake{namek}…? Me too. Shhh.",
@@ -24,7 +29,8 @@
 			},
 			"gefreut": {
 				"a": "There you are! I was thinking about you!",
-				"b": "Yay, you're back! What are we doing today?"
+				"b": "Yay, you're back! What are we doing today?",
+				"beste_a": "There you are! Without you this place is only half as nice. Honestly."
 			},
 			"eingeschnappt": {
 				"a": "Hmpf. You were gone a LONG time. … Fine, I missed you anyway.",
@@ -82,7 +88,9 @@
 			"garten": "{anzahl} harvests! Our garden is the best.",
 			"streak": "{tage} days in a row together! You and me, we're a team.",
 			"funkelpark": "Remember the theme park? {anzahl} visits! I still get dizzy.",
-			"spielzeit": "We've already spent {stunden} hours together. The best ones!"
+			"spielzeit": "We've already spent {stunden} hours together. The best ones!",
+			"vorliebe_spiel": "I think {spiel} is OUR game. You always light up the most playing it!",
+			"vorliebe_essen": "You bring me {essen} most of all, I've noticed. Tastes the best, too."
 		},
 		"idle": {
 			"aufraeumen": {
@@ -141,6 +149,26 @@
 			"speichern": "Remember it!",
 			"abbrechen": "Not telling",
 			"danke": "{tag}.{monat}. — saved! I will NEVER forget it!"
+		},
+		"wunsch": {
+			"funkelpark": "You know what? I've always wanted to visit the sparkle park. Do the lights REALLY sparkle there?",
+			"funkelpark_erfuellt": "Remember how I dreamed about the sparkle park? We REALLY went! Thank you!",
+			"urlaub": "I've always wanted to travel. Pack a suitcase once and just go!",
+			"urlaub_erfuellt": "We really went on vacation! I talked about it — and then we actually WENT!",
+			"streak7": "I wish we could see each other seven days in a row. A whole week of us!",
+			"streak7_erfuellt": "Seven days in a row! I wished for it, and you made it come true.",
+			"kissenturm": "I've always wanted to build a HUGE pillow tower. One day I'll dare!",
+			"kissenturm_erfuellt": "I built it! The pillow tower! Just like I always wanted!"
+		},
+		"absicht": {
+			"hunger_a": "Just taking a tiny peek at what's in the fridge…",
+			"hunger_b": "My tummy is rumbling a little. Can you hear it too?",
+			"langeweile_a": "I'm sooo bored… Will you play with me?",
+			"langeweile_b": "I'll find something to do. Or… do you have an idea?",
+			"muede_a": "I'm tired… The bed looks so cozy…",
+			"muede_b": "Yaaawn… Just lying down for a bit. Just a bit.",
+			"dreckig_a": "I feel a little sticky. Bath time?",
+			"regen_a": "It's raining… I'll sit by the window and watch the drops."
 		}
 	}
 }

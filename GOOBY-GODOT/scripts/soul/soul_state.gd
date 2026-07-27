@@ -41,6 +41,11 @@ static func default_slice() -> Dictionary:
 		"foodGiven": {},
 		"ambient": {"day": "", "count": 0, "lastAt": 0},
 		"totalMoments": 0,
+		# SEELE-2 (additiv, KEIN Version-Bump): durchgehende Stimmung +
+		# Goobys aktueller kleiner Wunsch ({id, seitMs}) + erfüllte Wünsche.
+		"stimmung": SoulMood.default_stimmung(),
+		"wunsch": {},
+		"wunschErfuellt": {},
 	}
 
 
@@ -54,9 +59,12 @@ static func normalize_slice(raw: Variant) -> Dictionary:
 		if slice.get(key) is String:
 			out[key] = slice[key]
 	out["playerBirthday"] = _normalize_birthday(slice.get("playerBirthday"))
-	for key in ["celebrated", "memoryShownAt", "surpriseAt", "knownItems", "foodGiven"]:
+	var map_keys := ["celebrated", "memoryShownAt", "surpriseAt", "knownItems", "foodGiven"]
+	map_keys.append_array(["wunsch", "wunschErfuellt"])
+	for key: String in map_keys:
 		if slice.get(key) is Dictionary:
 			out[key] = (slice[key] as Dictionary).duplicate(true)
+	out["stimmung"] = SoulMood.normalize(slice.get("stimmung"))
 	var ambient: Variant = slice.get("ambient")
 	if ambient is Dictionary:
 		out["ambient"] = {

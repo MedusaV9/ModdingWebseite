@@ -24,6 +24,11 @@ var on_end: Callable = Callable()
 ## (z. B. GvZ pro gewonnenem Level). Optional; ohne Meldung wird die Coin-Row
 ## wie bisher einmal auf den Session-Score angewandt.
 var on_coin_chunk: Callable = Callable()
+## FERTIG-1 (EVAL Rang 12): aktiver Runden-Modifier (ModifierEngine.
+## launch_params — {type, coin_mult?, score_mult?, xp_mult?, energy_free?,
+## gluecksrolle?}) oder {} ohne Event. Alle Effekte wirken ZENTRAL im
+## Host/Award; Spiele LESEN hier nur, wenn sie zusätzlich reagieren wollen.
+var modifier: Dictionary = {}
 
 
 ## Deterministischer mulberry32-RNG; ohne Argument mit dem Lauf-Seed.

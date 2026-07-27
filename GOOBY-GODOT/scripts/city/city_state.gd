@@ -46,6 +46,8 @@ static func default_slice() -> Dictionary:
 		"markt": {"tag": "", "verkauft": {}},
 		"fotos": [],
 		"fahrdienst": "",
+		# FERTIG-1 (Post-Tagespaket, additiv): letzter Abhol-Tag.
+		"postPaket": {"tag": ""},
 	}
 
 
@@ -69,6 +71,10 @@ static func normalize_slice(raw: Variant) -> Dictionary:
 	if not (city.get("fotos") is Array):
 		city["fotos"] = []
 	city["fahrdienst"] = str(city.get("fahrdienst", ""))
+	var paket: Variant = city.get("postPaket")
+	city["postPaket"] = {
+		"tag": str((paket as Dictionary).get("tag", "")) if paket is Dictionary else ""
+	}
 	return city
 
 

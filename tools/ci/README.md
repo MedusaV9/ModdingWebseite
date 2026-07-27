@@ -13,8 +13,11 @@ pip install "gdtoolkit==4.*"
 #    ohne Import-Cache schlagen load() von Szenen/Ressourcen fehl)
 godot --headless --path GOOBY-GODOT --import
 
-# 3) Test-Runner (Exit-Code 0 = grün; entdeckt tests/**/test_*.gd)
-godot --headless --path GOOBY-GODOT --script res://tests/run_tests.gd
+# 3) Beide Test-Runner mit frischem user:// (wie CI/Preflight)
+bash tools/ci/run_godot_isolated.sh \
+  godot --headless --path GOOBY-GODOT --script res://tests/run_tests.gd
+bash tools/ci/run_godot_isolated.sh \
+  godot --headless --path GOOBY-GODOT --script res://tests/unit/run_w1c_tests.gd
 
 # 4) Lint + Format-Check — AUS GOOBY-GODOT/ heraus aufrufen, damit die
 #    .gdlintrc dort gefunden wird (gdlint sucht ab CWD aufwärts)
@@ -22,8 +25,8 @@ cd GOOBY-GODOT
 git ls-files -z -- "*.gd" | xargs -0 gdlint
 git ls-files -z -- "*.gd" | xargs -0 gdformat --check
 
-# 5) Boot-Smoke (bootet die Main-Szene und beendet sich)
-godot --headless --path GOOBY-GODOT --quit
+# 5) Boot-Smoke (bootet die Main-Szene mit frischem user:// und beendet sich)
+bash tools/ci/run_godot_isolated.sh godot --headless --path GOOBY-GODOT --quit
 ```
 
 Formatieren (statt nur checken): `gdformat <dateien>` — Godot-Stil = Tabs,
@@ -34,6 +37,9 @@ Zeilenlänge 100 (siehe `.editorconfig` + `.gdlintrc` in `GOOBY-GODOT/`).
 - `install_godot.sh` — lädt Godot 4.4.1 (Linux x86_64) nach
   `~/.cache/godot-bin` (im CI via actions/cache persistiert) und verlinkt es
   als `godot`. Env-Overrides: `GODOT_VERSION`, `GODOT_CACHE_DIR`.
+- `run_godot_isolated.sh` — führt einen Godot-Befehl mit temporärem `HOME`
+  und frischen XDG-Verzeichnissen aus. Dadurch können lokale Einstellungen
+  keine Erststart-UI unterdrücken, die ein frischer CI-Runner prüft.
 
 ## Workflow `.github/workflows/gooby-godot.yml`
 
@@ -41,12 +47,11 @@ Zeilenlänge 100 (siehe `.editorconfig` + `.gdlintrc` in `GOOBY-GODOT/`).
   Der alte Web-Workflow `gooby-ios.yml` (triggert auf `GOOBY/**`) bleibt
   unberührt.
 - Job **linux-checks**: Godot cachen/installieren → gdtoolkit → `--import` →
-  Test-Runner → gdlint → `gdformat --check` → Boot-Smoke.
-- Job **ios-ipa-skeleton**: dokumentiertes Gerüst, per `if: false`
-  deaktiviert. Es fehlt `GOOBY-GODOT/export_presets.cfg` mit einem
-  "iOS"-Preset (Owner: W2b) — erst dann können Export + `xcodebuild`
-  (unsigned, Sideload) laufen. Scharfschalten: `if: false` entfernen und die
-  TODO-Steps (Projekt-/Scheme-Name) an den echten Export anpassen.
+  beide isolierten Test-Runner → Boot-Smoke.
+- Job **ios-ipa**: exportiert auf macOS ein Xcode-Projekt, baut unsigned und
+  lädt `GOOBY-godot-unsigned-ipa` hoch. Er läuft auch nach roten Linux-Tests,
+  damit ein testbares Build verfügbar bleibt; dieses Artefakt heißt dann klar
+  `GOOBY-godot-unsigned-ipa-UNVERIFIED-linux-<status>`.
 
 ## Konventionen für neue Tests (alle Wellen)
 

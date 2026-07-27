@@ -4,9 +4,9 @@ extends Control
 ## Vorschaubildern (city.fotos aus dem FotoModus), Vollansicht mit Zoom
 ## (Knöpfe + Mausrad, Pan über den Scroll-Container), Favoriten
 ## (additives fav-Flag), Löschen mit Nachfrage (Index + PNG-Datei),
-## Datum/Ort-Anzeige, ehrlich benannter Teilen-Platzhalter und
-## Speicheranzeige (n von 40 Plätzen). Route `galerie` — erreichbar aus
-## der Kamera-App des IGohbie.
+## Datum/Ort-Anzeige, echter Foto-Export (FERTIG-1: in den Bilder-Ordner
+## des Systems) und Speicheranzeige (n von 40 Plätzen). Route `galerie` —
+## erreichbar aus der Kamera-App des IGohbie.
 
 signal ready_for_reveal
 
@@ -364,8 +364,14 @@ func _refresh_fav_knopf() -> void:
 	_voll_fav_btn.theme_type_variation = &"BtnYellow" if fav else &"BtnTeal"
 
 
+## FERTIG-1: aus „Teilen (bald)“ wurde ein echter Export — das PNG landet
+## im Bilder-Ordner des Systems (bzw. user://export ohne System-Ordner).
 func _on_teilen() -> void:
-	_toasts.show_toast(I18nService.t("galerie.teilen_hinweis"))
+	var ziel := GalerieLogic.exportiere(_voll_pfad)
+	if ziel.is_empty():
+		_toasts.show_toast(I18nService.t("galerie.export_fehler"))
+		return
+	_toasts.show_toast(I18nService.t("galerie.export_ok", {"ziel": ziel}))
 
 
 ## ---------------------------------------------------------------- Löschen

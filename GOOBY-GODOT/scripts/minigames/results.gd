@@ -119,6 +119,8 @@ func show_results(breakdown: Dictionary, meta: Dictionary, juice: JuiceKit = nul
 	var coins_line := _add_line(coins_text, Color(0.93, 0.61, 0.15))
 	if breakdown.get("dayCapReached", false):
 		_add_line(I18nService.t("mg.results.day_cap"), Color(0.72, 0.5, 0.42))
+	# FERTIG-1 (EVAL Rang 12): Modifier-Wirkung sichtbar im Ergebnis.
+	_add_modifier_lines(breakdown)
 	_add_line(
 		I18nService.t("mg.results.xp", {"xp": int(breakdown.get("xp", 0))}), Color(0.42, 0.6, 0.36)
 	)
@@ -171,6 +173,38 @@ func show_results(breakdown: Dictionary, meta: Dictionary, juice: JuiceKit = nul
 		_juice.scale_pop(_panel, 1.06, 260)
 		if coins > 0:
 			_pulse_later(0.5, coins_line)
+
+
+## FERTIG-1 (EVAL Rang 12): war ein Modifier-Event aktiv, zeigt der Screen
+## Name + jede konkrete Wirkung (Bonus-Coins, Punkte-/XP-Faktor, gratis
+## Energie, Glücksrolle) und den Tages-Ledger-Hinweis, wenn gedeckelt.
+func _add_modifier_lines(breakdown: Dictionary) -> void:
+	var mod: Variant = breakdown.get("modifier")
+	if not (mod is Dictionary) or (mod as Dictionary).is_empty():
+		return
+	var type_id := str((mod as Dictionary).get("type", ""))
+	var def: Variant = ModifierEngine.TYPES.get(type_id)
+	if not (def is Dictionary):
+		return
+	var color: Color = (def as Dictionary).get("color", Color(0.93, 0.61, 0.15))
+	var mod_name := I18nService.t(str((def as Dictionary).get("name_key", type_id)))
+	var line := _add_line(I18nService.t("modifier.results.aktiv", {"name": mod_name}), color)
+	if _juice != null:
+		_juice.scale_pop(line, 1.12, 220)
+	var bonus := int(breakdown.get("modifierBonusCoins", 0))
+	if bonus > 0:
+		_add_line(I18nService.t("modifier.results.bonus_coins", {"n": bonus}), color)
+	if float((mod as Dictionary).get("score_mult", 1.0)) > 1.0:
+		_add_line(I18nService.t("modifier.results.score_mult"), color)
+	if float((mod as Dictionary).get("xp_mult", 1.0)) > 1.0:
+		_add_line(I18nService.t("modifier.results.xp_mult"), color)
+	if (mod as Dictionary).get("energy_free", false):
+		_add_line(I18nService.t("modifier.results.energie"), color)
+	var glueck := int(breakdown.get("gluecksrolleCoins", 0))
+	if glueck > 0:
+		_add_line(I18nService.t("modifier.results.gluecksrolle", {"n": glueck}), color)
+	if breakdown.get("modifierCapped", false):
+		_add_line(I18nService.t("modifier.results.capped"), Color(0.72, 0.5, 0.42))
 
 
 func _add_stars(breakdown: Dictionary, final_score: int) -> void:

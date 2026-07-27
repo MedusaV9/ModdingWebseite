@@ -18,6 +18,7 @@ set -uo pipefail
 
 cd "$(dirname "$0")/../.."
 PROJECT="GOOBY-GODOT"
+ISOLATED_GODOT="tools/ci/run_godot_isolated.sh"
 LINT_ONLY=0
 NO_TESTS=0
 for arg in "$@"; do
@@ -84,18 +85,20 @@ if [ "$NO_TESTS" = "1" ]; then
   echo ""; echo "PREFLIGHT (ohne Tests) GRUEN."; exit 0
 fi
 
-# [4/6 + 5/6] Beide Test-Runner — exakt die CI-Kommandos.
+# [4/6 + 5/6] Beide Test-Runner — exakt die CI-Kommandos. Das frische
+# user:// verhindert, dass lokale AppSettings Erststart-UI verstecken, die
+# ein frischer CI-Runner rendert (z. B. hints.hud_actions_seen).
 step "4/6" "Test-Runner (CI: linux-checks)"
-godot --headless --path "$PROJECT" --script res://tests/run_tests.gd \
+bash "$ISOLATED_GODOT" godot --headless --path "$PROJECT" --script res://tests/run_tests.gd \
   || fail "Tests rot (res://tests/run_tests.gd)" "FAIL-Zeilen oben beheben, dann erneut."
 
 step "5/6" "W1c-UI-Test-Runner (CI: linux-checks)"
-godot --headless --path "$PROJECT" --script res://tests/unit/run_w1c_tests.gd \
+bash "$ISOLATED_GODOT" godot --headless --path "$PROJECT" --script res://tests/unit/run_w1c_tests.gd \
   || fail "UI-Tests rot (res://tests/unit/run_w1c_tests.gd)" "FAIL-Zeilen oben beheben, dann erneut."
 
 # [6/6] Boot-Smoke — Projekt bootet headless ohne Skriptfehler.
 step "6/6" "Boot-Smoke (CI: linux-checks)"
-godot --headless --path "$PROJECT" --quit \
+bash "$ISOLATED_GODOT" godot --headless --path "$PROJECT" --quit \
   || fail "Projekt bootet nicht (headless --quit)" "Parse-/Autoload-Fehler oben beheben."
 
 echo ""

@@ -6,11 +6,10 @@
       "sprecher": "pia",
       "text": [
         "Willkommen bei der Post! Ich bin Pia. Schalter zwei ist gerade unbesetzt — ich BIN Schalter zwei.",
-        "Paket, Brief oder nur den Stempel bewundern?"
+        "Tagespaket, Postkarten oder nur den Stempel bewundern?"
       ],
       "optionen": [
-        {"text": "Ein Paket verschicken.", "next": "paket"},
-        {"text": "Einen Brief an einen Freund.", "next": "brief"},
+        {"text": "Liegt ein Paket für mich bereit?", "next": "paket"},
         {"text": "Was macht mein Postkarten-Archiv?", "next": "postkarten"},
         {"text": "Nur den Stempel.", "next": "stempel"}
       ]
@@ -18,17 +17,8 @@
     "paket": {
       "sprecher": "pia",
       "text": [
-        "Pakete an andere Goobys? Das Förderband dafür ist bestellt. Es kommt … per Paket.",
-        "Sobald es da ist, kannst du echten Freunden echte Sachen schicken. Versprochen."
-      ],
-      "effekt": ["laden"],
-      "ende": true
-    },
-    "brief": {
-      "sprecher": "pia",
-      "text": [
-        "Briefe zwischen Goobys gehen bald raus in die weite Welt — das Postnetz wird gerade verlegt.",
-        "Bis dahin sammle ich deine Entwürfe. Sortiert. Alphabetisch. Nach Stimmung."
+        "Jeden Tag lege ich ein Paket für Gooby zurück. Gewogen habe ich es dreimal — sicher ist sicher.",
+        "Einfach am Schalter abholen. Einmal pro Tag, sonst kippt mein Regal."
       ],
       "effekt": ["laden"],
       "ende": true

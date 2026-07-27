@@ -13,6 +13,11 @@ extends Node3D
 ## Design nach F-gooby §1.6: 4-Spieler-Pool, ±12 % Pitch pro Silbe, Hash
 ## Buchstabe→Silbe (deterministisch pro Wort), Rate ~11 Silben/s, Satzende =
 ## Pitch-Bogen runter, '?' = rauf; Emotion moduliert Basis-Pitch.
+##
+## SEELE-2: Zusätzlich moduliert die DURCHGEHENDE Stimmung (SoulMood, 0..100
+## via set_stimmung) Tonhöhe, Tempo UND Länge des Gebrabbels — man hört,
+## wie es Gooby geht: elend = tiefer, langsamer, wortkarg; selig = hell und
+## flott. Die Ableitung ist pur (modulation/kuerze_plan) und damit testbar.
 
 signal silbe(index: int, anzahl: int)
 signal fertig
@@ -38,12 +43,16 @@ const EMOTION_PITCH: Dictionary = {
 	"scared": 1.1,
 	"dizzy": 0.95,
 }
+## Kurzatmig, aber nie stumm: gekürzte Sätze behalten mindestens so viele
+## Silben (SEELE-2, kuerze_plan).
+const MIN_SILBEN := 4
 
 var _streams: Array[AudioStream] = []
 var _pool: Array[AudioStreamPlayer3D] = []
 var _pool_index := 0
 var _token := 0  # neue sagt()-Aufrufe entwerten laufende Schleifen
 var _talking := false
+var _stimmung := SoulMood.DEFAULT_WERT
 
 
 func _ready() -> void:
@@ -104,6 +113,50 @@ func ist_am_reden() -> bool:
 	return _talking
 
 
+## Durchgehende Stimmung (0..100, SoulMood-Skala) — färbt jedes Gebrabbel.
+func set_stimmung(wert: float) -> void:
+	_stimmung = clampf(wert, 0.0, 100.0)
+
+
+func stimmung() -> float:
+	return _stimmung
+
+
+## PURE (SEELE-2): Stimm-Parameter aus Stimmung + Moment-Emotion.
+## pitch = Emotions-Grundton × Laune-Ton; tempo skaliert die Silbenrate
+## (traurig bleibt zusätzlich gedehnt); laenge 0..1 kürzt den Satz.
+static func modulation(stimmung_wert: float, emotion: String) -> Dictionary:
+	var laune := SoulMood.stimme(stimmung_wert)
+	return {
+		"pitch": float(EMOTION_PITCH.get(emotion, 1.0)) * float(laune["pitch"]),
+		"tempo": float(laune["tempo"]) * (0.85 if emotion == "sad" else 1.0),
+		"laenge": float(laune["laenge"]),
+	}
+
+
+## PURE (SEELE-2): Silben-Plan auf laenge (0..1) kürzen — ein matter Gooby
+## brabbelt kurz. Nie unter MIN_SILBEN klingende Silben, Pausen zählen nicht.
+static func kuerze_plan(plan: Array[Dictionary], laenge: float) -> Array[Dictionary]:
+	if laenge >= 1.0:
+		return plan
+	var klingend := 0
+	for step in plan:
+		if not step["pause"]:
+			klingend += 1
+	var behalten := maxi(MIN_SILBEN, int(ceilf(klingend * clampf(laenge, 0.0, 1.0))))
+	if behalten >= klingend:
+		return plan
+	var out: Array[Dictionary] = []
+	var gezaehlt := 0
+	for step in plan:
+		if not step["pause"]:
+			if gezaehlt >= behalten:
+				break
+			gezaehlt += 1
+		out.append(step)
+	return out
+
+
 ## Text → Gebrabbel. Läuft asynchron; ein neuer Aufruf bricht den alten ab.
 func sagt(text: String, emotion: String = "neutral") -> void:
 	_token += 1
@@ -114,14 +167,15 @@ func _babble(text: String, emotion: String, token: int) -> void:
 	if _streams.is_empty():
 		fertig.emit()
 		return
-	var plan := _plan_syllables(text)
+	var stimme := modulation(_stimmung, emotion)
+	var plan := kuerze_plan(_plan_syllables(text), float(stimme["laenge"]))
 	if plan.is_empty():
 		fertig.emit()
 		return
 	_talking = true
-	var base_pitch: float = EMOTION_PITCH.get(emotion, 1.0)
+	var base_pitch: float = stimme["pitch"]
 	var question := text.strip_edges().ends_with("?")
-	var interval := 1.0 / (RATE * (0.85 if emotion == "sad" else 1.0))
+	var interval := 1.0 / (RATE * float(stimme["tempo"]))
 	var count := plan.size()
 	for i in count:
 		if token != _token or not is_inside_tree():

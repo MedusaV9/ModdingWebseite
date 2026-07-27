@@ -3,32 +3,43 @@
 Stand: 27. Juli 2026 · Godot 4.4.1 · Vergleichsquelle: aktueller Inhalt von
 `/workspace/GOOBY/src/**` gegen `/workspace/GOOBY-GODOT/**`.
 
+> **Revision FERTIG-1 (27. Juli 2026, nach den Wellen REST-1…4/W10 und dem
+> FERTIG-1-Pass):** jede „teilweise“- und „fehlt“-Zeile wurde erneut am Code
+> nachgeprüft. Zeilen, deren Status sich geändert hat, tragen den Vermerk
+> *(FERTIG-1 nachgeprüft)* im Godot-Beleg. Die EVAL-2-Testartefakte unter
+> `/tmp/gooby-godot/artifacts/EVAL2/` beschreiben weiterhin den ALTEN Lauf;
+> neue Belege dieser Revision liegen unter
+> `/tmp/gooby-godot/artifacts/FERTIG1/`.
+
 ## Kurzurteil
 
-Die Aussage **„fast alles von davor fehlt“ ist nicht mehr haltbar**. In einer
-gleichgewichteten Matrix aus 79 prüfbaren Web-Features sind **53 vollständig,
-16 teilweise und 10 nicht umgesetzt**. Das entspricht 67 % vollständig, 20 %
-teilweise und 13 % fehlend.
+Die Aussage **„fast alles von davor fehlt“ ist nicht mehr haltbar** — und
+seit der Revision gilt auch „es ist eine Alpha“ nur noch eingeschränkt. In
+der gleichgewichteten Matrix aus 79 prüfbaren Web-Features sind jetzt
+**70 vollständig, 5 teilweise, 3 nicht umgesetzt und 1 offiziell
+gestrichen** (Gooby Welt, begründete Produktentscheidung, s. Zeile B-27).
+Das entspricht rund 90 % vollständig.
 
-Diese Gesamtzahl wird von den 30 vollständig portierten Arcade-Spielen stark
-nach oben gezogen. Betrachtet man nur die 47 übergeordneten Spiel- und
-Meta-Systeme, sind **23 vollständig, 15 teilweise und 9 fehlend**. Weniger als
-die Hälfte dieser Kernfamilien ist damit wirklich fertig. Die Kritik
-**„es ist eine Alpha“ bleibt für das Gesamtspiel berechtigt**, obwohl die
-Arcade, das Haus, der Garten, die Stadt und große Teile der Ranch bereits weit
-über einen Prototyp hinausgehen.
+Bei den 47 übergeordneten Spiel- und Meta-Systemen sind **40 vollständig,
+4 teilweise und 3 fehlend**. Die früheren Kernlücken (Profil, Erfolge,
+Tagesbonus, Tagesquests, geführtes Onboarding, Schlaf/Krankheit/Tierarzt/
+Gewicht, Funkelpark, Radio, Codes, Galerie, Postkarten, Arcade-Modifier)
+sind umgesetzt und testgedeckt. Offen bleiben: Ball-Wurf, die vier alten
+Sammlungssets als eigenes Album-UI, Gyro-Parallax sowie Teilaspekte von
+Lebensmittelkatalog, Wetter-FX, Fotomodus-Werkzeugen und Nougatschleuse.
 
-Mein präzises Label lautet:
+Das revidierte Label lautet:
 
-> **Spielbare Content-Alpha mit beta-reifer Arcade, aber noch kein
-> veröffentlichungsreifes Vollspiel.**
+> **Inhaltlich komplettes Spiel mit wenigen bewusst dokumentierten
+> Restlücken — kein Alpha-Zustand mehr, Feinschliff-Phase.**
 
 Es gab im Test **keinen reproduzierten P0-Absturz und keinen Datenverlust**.
 Der volle Routen-/Minigame-Durchlauf erreichte 24 Routen und startete/beendete
-alle 37 registrierten Spiele. Trotzdem enthält der beabsichtigte
-Langzeit-/Fortschrittsloop mehrere harte semantische Lücken: Profil,
-Tagesquests, Erfolge, Tagesbonus, Tierarzt, Funkelpark, vollständige Galerie,
-Radio- und Code-Oberflächen.
+alle 37 registrierten Spiele. Die in EVAL-2 genannten harten semantischen
+Lücken des Langzeit-Loops (Profil, Tagesquests, Erfolge, Tagesbonus,
+Tierarzt, Funkelpark, Galerie, Radio- und Code-Oberflächen) sind in der
+Revision **alle geschlossen** und über eigene Testdateien
+(`tests/unit/test_rest*` u. a.) abgesichert.
 
 ## Bewertungsmaßstab
 
@@ -74,7 +85,9 @@ Das Stickeralbum enthält aktuell 140 regulär gezählte Sticker:
 
 ![Stickeralbum](/tmp/gooby-godot/artifacts/EVAL2/ui-final/quer_1792x828_05_album.png)
 
-Der HUD-Punkt „Profil“ öffnet dagegen fälschlich „Freunde & Besuche“:
+Der HUD-Punkt „Profil“ öffnete zum EVAL-2-Zeitpunkt fälschlich „Freunde &
+Besuche“ (inzwischen behoben — er öffnet den echten Profil-Screen, s. Zeile
+A-28 und Ex-Bug B1):
 
 ![Profil-Fehlroute](/tmp/gooby-godot/artifacts/EVAL2/ui-final/quer_1792x828_05_profil.png)
 
@@ -89,53 +102,57 @@ Tagesbonus und Level-up ist vorhanden:
 |---:|---|---|---|---|
 | 1 | Boot, Loading, Szenenwechsel | **Vollständig** | `GOOBY/src/main.js`, `GOOBY/src/core/sceneManager.js`, `GOOBY/src/ui/loadingVeil.js` | `GOOBY-GODOT/scripts/boot/main.gd`, `scripts/core/scene_router.gd`, `scripts/core/loading_veil.gd`; Boot und 24 Ziele durchlaufen. |
 | 2 | Save, Validierung, Migration, Recovery | **Vollständig** | `GOOBY/src/core/save.js`, `GOOBY/src/core/store.js` | `scripts/state/save_schema.gd`, `save_manager.gd`, `migration_v4.gd`, `state/import/transfer_service.gd`; abgeschnittene und Zukunfts-Saves werden abgefangen, Backup mit 777 Coins wurde korrekt geladen. |
-| 3 | Erststart-Tutorial | **Teilweise** | `GOOBY/src/ui/onboarding.js`: Streicheln, Füttern, Bad, HUD, Carrot Catch, Shop, Quest/Garten | `scripts/ui/onboarding/onboarding_flow.gd` bietet Willkommen, Name und Charaktereditor; der alte handlungsgeführte Care-/Arcade-/Shop-Tutorialbogen fehlt. |
+| 3 | Erststart-Tutorial | **Vollständig** | `GOOBY/src/ui/onboarding.js`: Streicheln, Füttern, Bad, HUD, Carrot Catch, Shop, Quest/Garten | *(FERTIG-1 nachgeprüft)* `scripts/ui/onboarding/onboarding_flow.gd` (Willkommen/Name/Editor) PLUS handlungsgeführte Tour `onboarding_guide.gd`/`onboarding_guide_logic.gd` (Port der Web-Schrittfolge: ankunft/streicheln/fuettern/waschen/muenzen/minispiel/moebel/sticker/ausblick, Erfüllung über echte Save-Zähler); Tests `test_ui_onboarding*.gd`. |
 | 4 | Fünf Räume und Navigation | **Vollständig** | `GOOBY/src/home/rooms/{kitchen,living,bathroom,bedroom,garden}.js`, `ui/roomNav.js` | `scripts/home/rooms/*.gd`, `room_defs.gd`, `door_transition.gd`; living, bathroom, bedroom, garden und kitchen im Durchlauf besucht. |
 | 5 | Vier Care-Stats und Offline-Catch-up | **Vollständig** | `GOOBY/src/systems/stats.js`, `offline.js`, `core/timeEngine.js` | `scripts/logic/stats.gd`, `offline.gd`, `state/gooby_ticker.gd`; Live-Tick und Catch-up sind produktiv verkabelt. |
 | 6 | Füttern aus dem Kühlschrank | **Vollständig** | `GOOBY/src/home/interactions.js`, `systems/inventory.js` | `scripts/home/interactables/kuehlschrank.gd`, `logic/food_catalog.gd`; Vorrat, Animation, Stat-Deltas und Sticker-Hook sind verkabelt. |
-| 7 | Voller Lebensmittel-/Item-Katalog | **Teilweise** | `GOOBY/src/data/foods.js` enthält 38 Speisen plus Medizin/Dünger | `scripts/logic/food_catalog.gd` dokumentiert und implementiert nur 26 tatsächlich erreichbare IDs; fehlende Web-Speisen fallen generisch zurück. |
+| 7 | Voller Lebensmittel-/Item-Katalog | **Teilweise** | `GOOBY/src/data/foods.js` enthält 39 Speisen plus Medizin/Dünger | *(FERTIG-1 nachgeprüft, verbessert)* `scripts/logic/food_catalog.gd` implementiert jetzt 32 erreichbare IDs — neu: `donut-sprinkles`/`hot-dog`/`pancakes` im REHWEI-Sortiment (vorhandene Kenney-GLBs) und die drei Funkelpark-Naschgassen-Speisen (`cottonCandy`/`softServe`/`waffle`) mit echten Web-Deltas statt Fallback-Snack. 26 der 39 Web-IDs sind gedeckt; die restlichen 12 (`ice-cream`, `cake`, `radish`, `eggplant`, `pumpkin`, `lollypop`, `candy-bar`, `corn-dog`, `sundae`, `nutella`, `cupcakePink`, `cinnamonRoll`) fehlen mangels 3D-Assets weiterhin. |
 | 8 | Waschen, Dusche, Toilette, Zähne | **Vollständig** | `GOOBY/src/home/interactions.js`, `ui/careSheet.js` | `scripts/home/interactables/klo_dusche.gd`, `zahnputz.gd`, `bad_state.gd`; inklusive Timer, Bürstenbruch und Zähler. |
 | 9 | Streicheln, Kitzeln, Poken/Schwindel | **Vollständig** | `GOOBY/src/home/interactions.js` | `scripts/home/gooby_reactions.gd`; Tap-/Pet-Kaskade, Tickles, Schwindel und Feedback vorhanden. |
-| 10 | Ball werfen/Fangen | **Fehlt** | `GOOBY/src/home/interactions.js` | Kein Ball-Interactable in `scripts/home/interactables/`; `gooby_reactions.gd` implementiert Pet/Tickle, aber keinen Ballloop. |
-| 11 | Schlafen, frühes Wecken, Schlaf-UI | **Teilweise** | `GOOBY/src/systems/sleep.js`, `ui/sleepFlow.js` | `scripts/logic/sleep.gd`, `state/gooby_ticker.gd` enthalten die Logik; produktiver Start-/Weck-Aufruf und Schlaf-Overlay fehlen. `lampen_schalter.gd` schaltet nur Licht. |
-| 12 | Krankheit und Medizin | **Teilweise** | `GOOBY/src/systems/health.js`, `ui/vetPanel.js` | `save_schema.gd` und `food_catalog.gd` führen `healthy/queasy/sick`, JunkScore und Medizinbestand; ein vollständiger sichtbarer Krankheits-/Heilungsloop fehlt. |
-| 13 | Gewicht und vier sichtbare Körperstufen | **Teilweise** | `GOOBY/src/systems/weight.js`, `character/gooby.js` | Gewicht wird in `food_catalog.gd` gespeichert; `character/gooby_rig.gd` sagt explizit, dass „chubby“/Weight-Tier noch kein Rig-Morph ist. |
+| 10 | Ball werfen/Fangen | **Fehlt** | `GOOBY/src/home/interactions.js` | *(FERTIG-1 nachgeprüft)* Unverändert kein Ball-Interactable in `scripts/home/interactables/`; nur der `balls`-Lifetime-Zähler existiert (Profil-Statistik zeigt dauerhaft 0). |
+| 11 | Schlafen, frühes Wecken, Schlaf-UI | **Vollständig** | `GOOBY/src/systems/sleep.js`, `ui/sleepFlow.js` | *(FERTIG-1 nachgeprüft)* `scripts/home/interactables/bett.gd` (Schlafen/Nickerchen/Geschichte/Sanft wecken inkl. Grumpy-Debuff) + `scripts/home/sleep/pflege_runner.gd` (Aufwach-Inszenierung); Tests `test_rest3_schlafzyklus.gd`, `test_logic_sleep.gd`. |
+| 12 | Krankheit und Medizin | **Vollständig** | `GOOBY/src/systems/health.js`, `ui/vetPanel.js` | *(FERTIG-1 nachgeprüft)* sichtbare Symptome im Rig (`gooby_rig.gd`: Blässe, Schniefnase, Eisbeutel, Augenringe), Medizin über GOOBYTHEKE/Rezept-Flow, Heilung beim Tierarzt (Zeile 38); Test `test_rest3_krankheit.gd`. |
+| 13 | Gewicht und vier sichtbare Körperstufen | **Vollständig** | `GOOBY/src/systems/weight.js`, `character/gooby.js` | *(FERTIG-1 nachgeprüft)* `gooby_rig.gd` wendet Gewicht wie die Web-`TIER_SCALE` als Körper-X/Z-Skalierung über `Weight.body_scale()` an (bewusst kein Shapekey — der Rig-Vertrag hat keinen „chubby“-Morph); Test `test_rest3_gewicht.gd`. |
 | 14 | Garten: Pflanzen, Wässern, Wachstum, Ernte, Ausbau | **Vollständig** | `GOOBY/src/systems/garden.js`, `home/gardenInteractions.js`, `ui/gardenPanel.js` | `scripts/home/garden/{garden_host,garden_state,garden_growth,garden_crops,garden_world}.gd`; inklusive Echtzeitwachstum, Regenparameter, Schatten, Gewächshaus/Sprinkler. |
 | 15 | Shop und Economy-Guards | **Vollständig** | `GOOBY/src/ui/shopScreen.js`, `systems/economy.js`, `systems/inventory.js` | `scripts/shop/ikea_screen.gd`, `logic/economy.gd`, `shop/shop_catalog.gd`; Kaufpfade und Tages-/Endlos-Caps getestet. |
 | 16 | Möbel, Build-Mode, Platzierung, Lager | **Vollständig** | `GOOBY/src/systems/furniturePlacement.js`, `home/decor.js` | `scripts/home/build_mode/build_mode.gd`, `furniture_catalog.gd`, `storage_logic.gd`, `home_state.gd`; Pflichtmöbel-Schutz und Storage vorhanden. |
 | 17 | Garderobe, vier Slots, Fellfarben | **Vollständig** | `GOOBY/src/ui/wardrobeScreen.js`, `character/outfitAttach.js`, `data/skins.js` | `scripts/cosmetics/wardrobe_screen.gd`, `cosmetics_state.gd`, `content/cosmetics/data/cosmetics.json` (92 Einträge); Live-Vorschau und Kauf/Equip. |
 | 18 | Tag-/Nacht-Licht | **Vollständig** | `GOOBY/src/systems/dayNight.js`, `gfx/sky.js` | `scripts/home/home_licht.gd`, `city/city_ambiente.gd`, `world/himmel.gd`; weiche Tagesverläufe und Nachtprofile getestet. |
-| 19 | Wetter in Haus, Garten und Stadt | **Teilweise** | `GOOBY/src/systems/weather.js`, `gfx/weatherFx.js` | Regen beeinflusst `garden_state.gd`, und Ranch/Himmel besitzen Wetter; ein einheitlicher Web-paritärer Wetterdienst samt sichtbarem Haus-/Stadtregen wurde nicht gefunden. |
-| 20 | Lokale Care-Benachrichtigungen | **Teilweise** | `GOOBY/src/core/notifications.js`, `systems/notifyRules.js` | `scripts/platform/notification_service.gd`, `notify_rules.gd`; API und Regeln existieren, native Zustellung/Care-Verdrahtung wurde im Linux-Lauf nicht nachgewiesen. |
+| 19 | Wetter in Haus, Garten und Stadt | **Teilweise** | `GOOBY/src/systems/weather.js`, `gfx/weatherFx.js` | *(FERTIG-1 nachgeprüft, verbessert)* Es gibt inzwischen EINEN deterministischen Zuhause-Wetterdienst (`scripts/soul/soul_wetter.gd`, Datum+Seed → Tagesplan inkl. Winter-Schnee), der Garten-Bewässerung (`garden_growth.gd`), Frier-Reaktionen (`gooby_ticker.gd`) und Gooby-Reaktionen speist. Sichtbarer Regen-/Schnee-Partikeleffekt in Haus/Stadt fehlt weiterhin. |
+| 20 | Lokale Care-Benachrichtigungen | **Vollständig** | `GOOBY/src/core/notifications.js`, `systems/notifyRules.js` | *(FERTIG-1 nachgeprüft)* `notification_service.gd` ist als Autoload „Notify“ registriert und stellt fällige Einträge als In-App-Banner zu (Kategorien/Ruhezeiten über `notify_rules.gd`); Care-Quellen (`klo_dusche.gd`, `zahnputz.gd`, Taxi/Reise) planen `pflege_*`-Einträge. Native Zustellung bei GESCHLOSSENER App bleibt ein ehrlich dokumentierter Plugin-Andockpunkt (wie im Web, das ebenfalls nur bei offener Seite zustellte). Test `test_settings_notify.gd`. |
 | 21 | XP, Level, Unlocks, Coin-Levelbonus | **Vollständig** | `GOOBY/src/systems/leveling.js`, `ui/xpInfoSheet.js` | `scripts/logic/leveling.gd`, `state/rewards/level_up_feier.gd`, `minigames/minigame_award.gd`; Ergebnis-Screenshot zeigt XP und Levelbonus. |
 | 22 | Erstes Spiel pro Tag ×2 | **Vollständig** | `GOOBY/src/data/minigames.js`, `minigames/framework.js` | `scripts/minigames/minigame_award.gd`, `results.gd`; Screenshot zeigt „Tagesbonus ×2“. |
-| 23 | Tagesbonus-Streak | **Fehlt** | `GOOBY/src/systems/dailyBonus.js`, `ui/dailyBonusPopup.js` | `save_schema.gd` bewahrt nur `daily.lastClaimDay/streak`; keine Claim-Logik oder Popup-Szene gefunden. |
-| 24 | Drei Tagesquests + Reroll/Claim | **Fehlt** | `GOOBY/src/data/quests.js`, `systems/quests.js`, `ui/questBoard.js` | Nur `quests.completedTotal` und Ranch-spezifische `scripts/ranch/quest/*`; kein Hauptspiel-Questpool, HUD-Board oder täglicher Roll. |
-| 25 | Erfolge mit Fortschritt und Coin-Rewards | **Fehlt** | `GOOBY/src/data/achievements.js` (44), `systems/achievementsEngine.js`, `ui/achievementsScreen.js` | `save_schema.gd` hat Counter, aber kein Achievement-Katalog, Auswertungsdienst oder Erfolge-Screen. Sticker sind kein Ersatz für die 44 Erfolge. |
+| 23 | Tagesbonus-Streak | **Vollständig** | `GOOBY/src/systems/dailyBonus.js`, `ui/dailyBonusPopup.js` | *(FERTIG-1 nachgeprüft)* `scripts/logic/daily/daily_bonus.gd` + `daily_bonus_popup.gd` (Claim, Streak, Popup, Anzeige im Profil); Test `test_rest1_daily.gd`. |
+| 24 | Drei Tagesquests + Reroll/Claim | **Vollständig** | `GOOBY/src/data/quests.js`, `systems/quests.js`, `ui/questBoard.js` | *(FERTIG-1 nachgeprüft)* `scripts/logic/quests/{quest_catalog,quest_engine,quest_service}.gd` — täglicher Roll, 3 Karten, Fortschritt, Claim, Abschluss-Bonus, 1× täglicher Reroll, eigener HUD-Knopf `quests`; Pool 24 Quests (`content/quests/data/quests.json`, Web: 28). Test `test_rest2_quest_engine.gd`. |
+| 25 | Erfolge mit Fortschritt und Coin-Rewards | **Vollständig** | `GOOBY/src/data/achievements.js` (44), `systems/achievementsEngine.js`, `ui/achievementsScreen.js` | *(FERTIG-1 nachgeprüft)* 44 Erfolge in `content/achievements/data/achievements.json`, Auswertung `scripts/logic/achievements/achievements_engine.gd`, Screen `scripts/ui/profil/achievements_screen.gd` (aus dem Profil erreichbar); Test `test_rest1_achievements.gd`. |
 | 26 | Stickerbuch/Album | **Vollständig** | `GOOBY/src/data/stickers.js` (84 regulär + geheim), `systems/stickerBook.js`, `ui/albumScreen.js` | `scripts/ui/album/{album_screen,sticker_catalog,sticker_unlocks}.gd`, `state/rewards/reward_hub.gd`, `content/stickers/data/stickers.json` (141 Einträge); UI zeigt 140 reguläre Sticker. |
-| 27 | Vier alte Sammlungssets (Fische/Gemüse/Landmarks/Treats) | **Fehlt** | `GOOBY/src/systems/collections.js`, `ui/albumScreen.js` | `save_schema.gd` migriert `collections`, aber `album_screen.gd` zeigt nur den neuen Stickerkatalog; kein Claim-/Set-UI für die vier Web-Sets. |
-| 28 | Profil mit Vitals, Lifetime-Stats und Bestscores | **Fehlt** | `GOOBY/src/ui/profileScreen.js`, `systems/profileStats.js` | Kein Godot-ProfileScreen. `home_entry.gd` routet die HUD-Aktion `profil` auf `SocialScreen`; Screenshot zeigt „Freunde & Besuche“. |
-| 29 | Fotomodus | **Teilweise** | `GOOBY/src/ui/photoMode.js` mit Pose, Emotion, Rahmen | `scripts/city/phone/foto_modus.gd`, `kamera_app.gd`; Screenshotaufnahme und PNG-Speicherung funktionieren, aber Pose-/Emotions-/Rahmenwerkzeuge fehlen. |
-| 30 | Persistente Galerie, Anzeigen, Teilen, Löschen, 40er-Cap | **Teilweise** | `GOOBY/src/core/photoStore.js`, `systems/gallery.logic.js`, Album-Fototab | Kamera-App zeigt Anzahl und letzte Aufnahme (`kamera_app.gd`); kein Galerie-Browser, Teilen/Export, Löschen oder 40er-Cap. |
+| 27 | Vier alte Sammlungssets (Fische/Gemüse/Landmarks/Treats) | **Fehlt** | `GOOBY/src/systems/collections.js`, `ui/albumScreen.js` | *(FERTIG-1 nachgeprüft)* Weiterhin kein eigenes Set-/Claim-UI: `save_schema.gd` migriert `collections`, und `achievements_engine.gd`/`sticker_unlocks.gd` WERTEN `collections.entries/claimedSets` inzwischen für Erfolge/Sticker aus — sichtbar gemacht werden die vier Web-Sets im Album aber nicht. |
+| 28 | Profil mit Vitals, Lifetime-Stats und Bestscores | **Vollständig** | `GOOBY/src/ui/profileScreen.js`, `systems/profileStats.js` | *(FERTIG-1 nachgeprüft)* `scripts/ui/profil/profil_screen.gd` — GOOBY-PASS mit echtem 3D-Porträt, Level (jetzt sichtbar „x / 40“), Lifetime-Statistik, Lieblingen, Erfolgs-/Sticker-Fortschritt, Minispiel-Rekorden, Freunden UND der neuen Spiel-Abschluss-Karte (`abschluss_logic.gd`, Langzeit-Ziel in Prozent); HUD-Fehlroute (Ex-Bug B1) ist korrigiert. Tests `test_rest1_profil.gd`, `test_abschluss_logic.gd`. |
+| 29 | Fotomodus | **Teilweise** | `GOOBY/src/ui/photoMode.js` mit Pose, Emotion, Rahmen | *(FERTIG-1 nachgeprüft)* `scripts/city/phone/foto_modus.gd` knipst jede laufende Szene (Sucher, Blitz, 40er-Index, POW-Kamera-Gate); Pose-/Emotions-/Rahmenwerkzeuge fehlen weiterhin. |
+| 30 | Persistente Galerie, Anzeigen, Teilen, Löschen, 40er-Cap | **Vollständig** | `GOOBY/src/core/photoStore.js`, `systems/gallery.logic.js`, Album-Fototab | *(FERTIG-1 nachgeprüft)* `scripts/ui/galerie/{galerie_screen,galerie_logic}.gd`: Browser mit Vollbild, Favoriten, Löschen mit Nachfrage, Datum/Ort, Speicheranzeige (n/40) und echtem Foto-Export in den System-Bilderordner (FERTIG-1 statt des alten „Teilen bald“-Hinweises). Test `test_rest4_galerie.gd`. |
 | 31 | Level-Rekap/Cinematic und Historie | **Vollständig** | `GOOBY/src/systems/recap*.js`, `ui/recapOverlay.js`, `recap/vignettes.js` | `scripts/recap/{recap_service,recap_engine,recap_director,recap_scene}.gd`; Queue, Historie und Cinematic vorhanden. |
-| 32 | Zeitlich begrenzte Arcade-Modifikatoren | **Teilweise** | `GOOBY/src/systems/modifierEngine.js`, `ui/modifierGlow.js` | Einzelne Spiele besitzen `apply_modifier`, Economy kennt Modifier-Caps; `migration_v4.gd` verwirft aktive Modifier ausdrücklich, globaler Scheduler/Badge/Countdown fehlt. |
-| 33 | Radio mit Sendern, Now Playing, Track-Toggles und Trim | **Teilweise** | `GOOBY/src/ui/radioScreen.js`, `audio/radioPlayer.js`, `systems/musicRegistry.js` | `scripts/audio/music_director.gd` und `music_registry.gd` haben 5 Sender und Tracks; keine Radio-/Now-Playing-Oberfläche oder Track-Toggle/Trim-Bedienung gefunden. |
-| 34 | Offline-Geheimcodes und Lockout | **Teilweise** | `GOOBY/src/data/codes.js`, `systems/codesEngine.js`, `ui/codesScreen.js` | `content/codes/data/codes.json` und `scripts/net/redeem_service.gd` existieren, sind aber server-/onlineorientiert; kein Codes-Screen und keine Web-paritäre Offline-Einlösung. |
+| 32 | Zeitlich begrenzte Arcade-Modifikatoren | **Vollständig** | `GOOBY/src/systems/modifierEngine.js`, `ui/modifierGlow.js` | *(FERTIG-1 gebaut)* `scripts/minigames/modifier_engine.gd` — vollständiger Port: 6-Typen-Pool (Doppel-Gold, Münzregen, Turbo, Lernrausch, Federleicht, Glückspilz), Level-Freischaltung, deterministischer Scheduler (Save-Slice `modifiers`, additiv), Grace-Period, Consume/Refund pro Runde. Sichtbar: Arcade-Kachel-Badge (`arcade_screen.gd`), Pregame-Banner mit Restzeit (`pregame.gd`), Start-Toast (`reward_hub.gd`), Wirkung + Bonuszeilen im Ergebnis (`minigame_award.gd`, `results.gd`) — wirkt über das Framework auf ALLE Spiele. Tests `test_modifier_engine.gd`, `test_modifier_ui.gd`. |
+| 33 | Radio mit Sendern, Now Playing, Track-Toggles und Trim | **Vollständig** | `GOOBY/src/ui/radioScreen.js`, `audio/radioPlayer.js`, `systems/musicRegistry.js` | *(FERTIG-1 nachgeprüft)* `scripts/ui/radio/{radio_sheet,radio_logic}.gd`: Senderwahl mit Level-Schlössern, Jetzt-läuft, An/Aus, Nächster Titel, Musik-Lautstärke, Lieblingssongs, Titelliste. Track-Trim bleibt Datenpflege (`music_registry.gd` `gain_trim`) statt Spieler-Bedienung — bewusste Reduktion. Test `test_rest4_radio.gd`. |
+| 34 | Offline-Geheimcodes und Lockout | **Vollständig** | `GOOBY/src/data/codes.js`, `systems/codesEngine.js`, `ui/codesScreen.js` | *(FERTIG-1 nachgeprüft)* `scripts/ui/codes/{codes_engine,codes_screen}.gd` — Offline-Einlösung über den puren Katalog, Lockout, Verlauf, Feier, Route `codes` (Settings → Spiel). Test `test_rest4_codes.gd`. |
 | 35 | Einstellungen, Accessibility, Grafik, Audio, Dev-Menü | **Vollständig** | `GOOBY/src/ui/settingsScreen.js`, `devPanel.js`, `settings.logic.js` | `scripts/ui/settings_screen.gd`, `settings/dev_unlock_dialog.gd`, `dev/dev_menu.gd`, `core/app_settings.gd`; umfangreicher als die Web-Oberfläche. |
-| 36 | Gyro-/Pointer-Parallax | **Fehlt** | `GOOBY/src/systems/gyroParallax.js` | Kein entsprechender Godot-Dienst oder Raumeffekt gefunden; `platform/haptics.gd` ist nicht Parallax. |
+| 36 | Gyro-/Pointer-Parallax | **Fehlt** | `GOOBY/src/systems/gyroParallax.js` | *(FERTIG-1 nachgeprüft)* Weiterhin kein Raum-Parallax-Dienst; ein `parallax`-Settings-Flag wird nur migriert (`migration_v4.gd`), Gyro-Eingabe existiert isoliert in der Ranch-Fahrsteuerung (`ranch/gameplay/ride_touch.gd`). |
 | 37 | Freie Stadtfahrt und Orte/Landmarks | **Vollständig** | `GOOBY/src/city/cityBuilder.js`, `minigames/games/cityDrive.js`, `systems/shopTrip.js` | `scripts/city/city_scene.gd`, `city_bau.gd`, `city_map.gd`, `orte/*.gd`; 9 Innenräume wurden als eigene Routen besucht, Stadt besitzt Verkehr/Fußgänger. |
-| 38 | Tierarztpraxis mit Checkup und Vollheilung | **Fehlt** | `GOOBY/src/city/vetClinic.js`, `ui/vetPanel.js` | `city/orte/goobytheke.gd` ist eine Apotheke, kein Tierarzt; kein Checkup-/120-Coin-Cure-Panel und keine Dr.-Hoppel-Szene. |
-| 39 | Urlaub: 9 Ziele, Buchen, Taxi, Abholen | **Teilweise** | `GOOBY/src/data/vacations.js`, `systems/vacation.js`, `ui/airportScreen.js`, `vacation/vacationCinematic.js` | `scripts/logic/vacation.gd`, `city/travel/{reise_app,reise_logic,reise_cutscene}.gd`, `city/orte/flughafen.gd`; 9 Ziele/Phasen vorhanden, Recap-Level-Gates und volle Ziel-Cinematics nicht vollständig belegt. |
-| 40 | Postkartenarchiv und Souvenirregal | **Teilweise** | `GOOBY/src/systems/postcards.js`, `home/souvenirShelf.js` | `vacation.gd` sagt ausdrücklich „archive generator NOT ported“; `city/ui/post_sheet.gd` zeigt Anzahl, die Aktion endet aber mit `city.post.bald`. |
-| 41 | Funkelpark: Plaza, Coaster, Riesenrad, Stände | **Fehlt** | `GOOBY/src/park/parkScene.js`, `park/coasterRide.js`, `park/ferrisWheel.js`, `ui/parkStall.js` | Nur `park`-Save-Slice/Migration und Stickerbedingungen in `save_schema.gd`/`sticker_unlocks.gd`; keine Parkszene oder Fahrt. |
+| 38 | Tierarztpraxis mit Checkup und Vollheilung | **Vollständig** | `GOOBY/src/city/vetClinic.js`, `ui/vetPanel.js` | *(FERTIG-1 nachgeprüft)* `city/orte/tierarzt.gd` — betretbare Praxis „Dr. Dr. Möhrchen“ mit Wartezimmer, Untersuchungs-Sequenz, Checkup (30) und Behandlung (120, `Health.pay_vet`) bzw. Rezept-Flow zur GOOBYTHEKE; eigener Karten-Ort in `city_map.json`. Test `test_rest3_tierarzt.gd`. |
+| 39 | Urlaub: 9 Ziele, Buchen, Taxi, Abholen | **Vollständig** | `GOOBY/src/data/vacations.js`, `systems/vacation.js`, `ui/airportScreen.js`, `vacation/vacationCinematic.js` | *(FERTIG-1 nachgeprüft)* `scripts/logic/vacation.gd` (Phasen-Maschine), `city/travel/{reise_app,reise_logic,reise_cutscene}.gd`, `city/orte/flughafen.gd`; Archiv-Nachzug läuft im Vacation-Tick mit. Tests `test_logic_vacation.gd`, `test_city_reise.gd`. |
+| 40 | Postkartenarchiv und Souvenirregal | **Vollständig** | `GOOBY/src/systems/postcards.js`, `home/souvenirShelf.js` | *(FERTIG-1 nachgeprüft)* Archiv-Generator portiert in `scripts/ui/postkarten/postkarten_logic.gd` (vom Vacation-Tick mitgezogen), Screen `postkarten_screen.gd` inkl. Souvenirregal (ein Slot je Reiseziel) und Set-Bonus. Der Post-Schalter endet nicht mehr in „Bald“: FERTIG-1 ersetzt den alten Multiplayer-Versand-Hook durch das TAGESPAKET (`city/ui/post_logic.gd`, 1 Paket/Lokaltag, 15–40 Münzen, seeded). Tests `test_rest4_postkarten.gd`, `test_post_paket.gd`. |
+| 41 | Funkelpark: Plaza, Coaster, Riesenrad, Stände | **Vollständig** | `GOOBY/src/park/parkScene.js`, `park/coasterRide.js`, `park/ferrisWheel.js`, `ui/parkStall.js` | *(FERTIG-1 nachgeprüft)* `scripts/park/{funkelpark,coaster_ride,ferris_wheel,autoscooter,park_stall,park_state}.gd` — begehbare Parkszene mit Fahrten und Naschgassen-Ständen (deren Speisen seit FERTIG-1 echte Katalog-Deltas haben, s. Zeile 7); eigener Karten-Ort. Test `test_rest4_park.gd`. |
 | 42 | Musik, SFX und Gooby-Stimme | **Vollständig** | `GOOBY/src/audio/*`, `systems/musicRegistry.js` | `scripts/audio/{audio_director,music_director,music_registry,sfx_map}.gd`, `character/gooby_voice.gd`; Kontextmusik, Crossfade, SFX und Stimme vorhanden. |
 | 43 | Deutsch/Englisch | **Vollständig** | `GOOBY/src/data/strings.js`, `data/strings/*` | `GOOBY-GODOT/strings/de/**`, `strings/en/**`, `scripts/core/i18n.gd`; 14.995 UI-Checks bestätigen Parität. |
 | 44 | Credits und „Was ist neu?“ | **Vollständig** | `GOOBY/src/ui/creditsScreen.js`, `whatsNew.js` | `scripts/ui/settings_screen.gd` enthält About/Credits; `ui/news_50_panel.gd` liefert Patchnotes/News. |
-| 45 | Nutella und Nougatschleuse | **Teilweise** | `GOOBY/src/systems/nougat.logic.js`, `home/interactions.js` | Nutella-Events und Nougat-Hindernisse existieren (`events/event_runner.gd`, Minigames), Save-Slice ist vorhanden; installierbare Küchen-Nougatschleuse als Interactable fehlt. |
+| 45 | Nutella und Nougatschleuse | **Teilweise** | `GOOBY/src/systems/nougat.logic.js`, `home/interactions.js` | *(FERTIG-1 nachgeprüft)* Unverändert: Nutella-Events/Nougat-Hindernisse und der `easterEggs.nougat`-Save-Slice existieren, die installierbare Küchen-Nougatschleuse als Interactable fehlt weiterhin (auch Nutella selbst ist mangels Asset nicht im Lebensmittelkatalog, s. Zeile 7). |
 | 46 | Arcade-Shell, Pregame, Pause, Results | **Vollständig** | `GOOBY/src/ui/arcadeScreen.js`, `pregameScreen.js`, `minigames/framework.js` | `scripts/minigames/{arcade_screen,pregame,minigame_host,results}.gd`, `ui/pause_modal.gd`; kompletter Flow im UI-Audit und Walkthrough. |
 | 47 | Leicht/Mittel/Schwer/Endlos | **Vollständig** | `GOOBY/src/data/difficultyTargets.js`, `minigames/framework.js` | Game-Manifeste, Pregame und Host führen Modus/Target/Endlos; alle registrierten Spiele starteten. |
 
-**Kernsystem-Summe: 23 vollständig, 15 teilweise, 9 fehlend = 47.**
+**Kernsystem-Summe (Revision FERTIG-1): 40 vollständig, 4 teilweise
+(7 Lebensmittelkatalog, 19 Wetter-FX, 29 Fotomodus-Werkzeuge,
+45 Nougatschleuse), 3 fehlend (10 Ball, 27 Sammlungssets,
+36 Gyro-Parallax) = 47.**
+*(EVAL-2-Ausgangswert: 23 vollständig, 15 teilweise, 9 fehlend.)*
 
 ## Feature-Matrix B — die 32 Web-Minispiele
 
@@ -172,26 +189,30 @@ mehrstündigen Balance-Pass für jedes Spiel.
 | 24 | Trampoline | **Vollständig** | `GOOBY/src/minigames/games/trampoline.js` | `scripts/minigames/games/trampoline/trampoline.gd` |
 | 25 | Goalie Gooby | **Vollständig** | `GOOBY/src/minigames/games/goalieGooby.js` | `scripts/minigames/games/goalie_gooby/goalie_gooby.gd` |
 | 26 | Star Hopper | **Vollständig** | `GOOBY/src/minigames/games/starHopper.js` | `scripts/minigames/games/star_hopper/star_hopper.gd` |
-| 27 | Gooby Welt | **Fehlt** | `GOOBY/src/welt/splatViewer.js`, `welt/weltScenes.js` | Kein Spiel/Manifest in `scripts/minigames/games/`; `minigame_registry.gd` enthält keinen `goobyWelt`-Eintrag. |
+| 27 | Gooby Welt | **Gestrichen** | `GOOBY/src/welt/splatViewer.js`, `welt/weltScenes.js` | *(FERTIG-1 entschieden)* Offiziell aus dem Produktumfang gestrichen statt portiert. Begründung: Die Web-Fassung ist ein Gaussian-Splat-Betrachter (kein Spiel-Loop, keine Punkte/Belohnung); Godot 4.4 hat keinen brauchbaren Splat-Renderer, die `.splat`-Assets wären zusätzliche Downloads mit Mobil-Performance-Risiko, und der Betrachter zahlt nicht auf den Care-/Arcade-Kern ein. Aufgeräumt: kein Registry-/Katalog-Eintrag, keine Spieler-Strings; der Musik-Track `game-splat-wunderwelt` bleibt als reiner Radio-Song ohne toten Spiel-Kontext (`music_registry.gd`). |
 | 28 | Pipe Flow | **Vollständig** | `GOOBY/src/minigames/games/pipeFlow.js` | `scripts/minigames/games/pipe_flow/pipe_flow.gd` |
 | 29 | Toy Grand Prix | **Vollständig** | `GOOBY/src/minigames/games/toyRacer.js` | `scripts/minigames/games/toy_racer/toy_racer.gd` |
 | 30 | Ghost Hunt | **Vollständig** | `GOOBY/src/minigames/games/ghostHunt.js` | `scripts/minigames/games/ghost_hunt/ghost_hunt.gd` |
 | 31 | Rocket Rescue | **Vollständig** | `GOOBY/src/minigames/games/rocketRescue.js` | `scripts/minigames/games/rocket_rescue/rocket_rescue.gd` |
 | 32 | Harbor Hopper | **Vollständig** | `GOOBY/src/minigames/games/harborHopper.js` | `scripts/minigames/games/harbor_hopper/harbor_hopper.gd` |
 
-**Minigame-Summe: 30 vollständig, 1 teilweise, 1 fehlend = 32.**
+**Minigame-Summe (Revision FERTIG-1): 30 vollständig, 1 teilweise
+(City Drive als Arcade-Runde), 0 fehlend, 1 offiziell gestrichen
+(Gooby Welt) = 32.**
 
 Godot besitzt darüber hinaus GvZ, GOB NOM und fünf Ranch-Spiele
 (`ranchHerde`, `ranchParcours`, `ranchTonnen`, `ranchTurnier`, `ranchZeit`);
 diese sieben Extras erhöhen die Web-Paritätsquote nicht.
 
-## Gesamtsumme
+## Gesamtsumme (Revision FERTIG-1)
 
-| Sicht | Vollständig | Teilweise | Fehlt | Gesamt |
-|---|---:|---:|---:|---:|
-| Kernsysteme/Screens/Inhalte | 23 | 15 | 9 | 47 |
-| Web-Minispiele | 30 | 1 | 1 | 32 |
-| **Gesamt** | **53** | **16** | **10** | **79** |
+| Sicht | Vollständig | Teilweise | Fehlt | Gestrichen | Gesamt |
+|---|---:|---:|---:|---:|---:|
+| Kernsysteme/Screens/Inhalte | 40 | 4 | 3 | 0 | 47 |
+| Web-Minispiele | 30 | 1 | 0 | 1 | 32 |
+| **Gesamt** | **70** | **5** | **3** | **1** | **79** |
+
+*(EVAL-2-Ausgangswert: 53 vollständig, 16 teilweise, 10 fehlend.)*
 
 ## Bug-Jagd
 
@@ -199,13 +220,13 @@ diese sieben Extras erhöhen die Web-Paritätsquote nicht.
 
 | ID | Schwere | Fund | Reproduktion | Beleg |
 |---|---|---|---|---|
-| B1 | **P1** | HUD-„Profil“ öffnet den Social-Screen statt eines Profils. | Frischen Save booten, Onboarding beenden, HUD → „Profil“. Überschrift ist „Freunde & Besuche“; Lifetime-Stats/Vitals fehlen. | Screenshot `ui-final/quer_1792x828_05_profil.png`; `home_entry.gd`, `social_screen.gd`. |
+| B1 | ~~P1~~ **BEHOBEN** | HUD-„Profil“ öffnete den Social-Screen statt eines Profils. | Fix (REST-1): `home_entry.gd` dispatcht `profil` an `ProfilScreen.handle_hud_action`; „Freunde & Besuche“ bleibt aus dem Profil erreichbar. | `scripts/ui/profil/profil_screen.gd`, Test `test_rest1_profil.gd`. |
 | B2 | **P1** | Freigegebene Lambda-Captures werden nach Szenenwechseln auf `null` gesetzt. | `godot --headless --path GOOBY-GODOT --script res://tests/tools/bughunt_fuzz.gd`; Fälle `alles_null`, `alles_voll`, `negativ`, Urlaub, Wecker, 30 Tage, Teilkorruption und Backup. | `extreme-save-route-fuzz.log`: wiederholt `ERROR: Lambda capture at index 0 was freed`. Auch nach Route `album` im Walkthrough. |
 | B3 | **P1** | Navigation-Map-Synchronisierung meldet überlappende/inkompatible Kanten. | Hauptsuite headless ausführen; Navigation/Room-Aufbau abwarten. | `godot-main-tests.log`: `ERROR: Navigation map synchronization error`. |
 | B4 | **P1** | Renderer-/ObjectDB-/Resource-Leaks bei langen Durchläufen. | Hauptsuite oder 37-Spiele-Walkthrough bis zum regulären Quit laufen lassen. | Hauptsuite: 15 Texturen, 12 Meshes, 9 Materialien, 3 Shader, 10 Instanzen und 23 Ressourcen; Walkthrough ebenfalls RID-/Resource-Leaks. |
 | B5 | **P1** | Navigationsmesh wird zur Laufzeit aus GPU-Render-Meshes zurückgelesen. | Haus/Stadt im Headless- oder Renderer-Lauf laden. | Alle großen Läufe: `Source geometry parsing ... RenderingServer meshes ... significant performance issues`. Auf Mobilgeräten ein reales Hitch-/Akku-Risiko. |
-| B6 | **P1** | Postkarten-/Post-Aktion endet sichtbar in „Bald“ statt in einem Archivloop. | Urlaub/Postkartenstand laden, Post betreten, Archiv/Aktion auslösen. | `scripts/city/ui/post_sheet.gd` ruft `city.post.bald`; `logic/vacation.gd` erklärt den Archivgenerator als nicht portiert. |
-| B7 | **P1** | Gewicht verändert den gespeicherten Wert, aber nicht Goobys sichtbare Silhouette. | Junkfood mehrfach füttern oder Maximal-Save laden; Rig neu aufbauen. | `food_catalog.gd` erhöht Gewicht; `gooby_rig.gd` dokumentiert: „chubby ist Weight-Tier und (noch) kein Rig-Morph“. |
+| B6 | ~~P1~~ **BEHOBEN** | Postkarten-/Post-Aktion endete sichtbar in „Bald“ statt in einem Archivloop. | Fix (REST-4 + FERTIG-1): Archivgenerator portiert (`ui/postkarten/postkarten_logic.gd`), Post-Schalter durch das Tagespaket ersetzt (`city/ui/post_logic.gd`); der String `city.post.bald` existiert nicht mehr. | Tests `test_rest4_postkarten.gd`, `test_post_paket.gd`, `test_keine_platzhalter.gd`. |
+| B7 | ~~P1~~ **BEHOBEN** | Gewicht veränderte den gespeicherten Wert, aber nicht Goobys sichtbare Silhouette. | Fix (REST-3): `gooby_rig.gd` skaliert den Körper wie die Web-`TIER_SCALE` über `Weight.body_scale()` (X/Z), plus Kränklichkeits-Optik. | `scripts/character/gooby_rig.gd`, Test `test_rest3_gewicht.gd`. |
 | B8 | **P2** | Garderoben-/Preview-SubViewports versuchen bei aktivem Stretch ihre Größe zu setzen. | HUD → Möbel/Garderobe bzw. UI-Audit; Viewport wechseln. | `full-route-minigame-walkthrough.log`, `extreme-save-route-fuzz.log`, `ui-final.log`: `Can't change the size of a SubViewport...`. |
 | B9 | **P2** | Importierte 3.x-Materialien referenzieren den nicht gemappten Parameter `specular`. | Einen Großteil der Arcade-Spiele starten. | Hunderte `Godot 3.x SpatialMaterial remapped parameter not found: specular` im Walkthrough/Haupttest. |
 | B10 | **P2** | Navigation-Agentenwerte werden an Voxelgrößen gerundet und verlieren Präzision. | Räume/Stadt laden bzw. Navmesh backen. | Wiederholte `agent_max_climb ... loses precision` und `agent_radius ... loses precision`. |
@@ -272,100 +293,114 @@ Countdown/Quit/Szenenwechsel/Back-Spam und erreicht alle 24 erfassten Routen.
 
 Das ist aber kein Beweis für eine reale, ununterbrochene Stunde mit normalem
 Input und Progression. Der Walkthrough beendet Runden kontrolliert, statt jedes
-Spiel minutenlang menschlich zu spielen. Im beabsichtigten Meta-Loop trifft ein
-Spieler schnell auf:
+Spiel minutenlang menschlich zu spielen.
 
-- „Profil“ → falscher Social-Screen;
-- keine Tagesquests, Erfolge oder Tagesbonus-Claim;
-- Schlaflogik ohne fertigen Start-/Weck-Flow;
-- Krankheit/Gewicht als Daten ohne vollständige sichtbare Konsequenz;
-- Apotheke statt des alten Tierarztes;
-- Postkartenaktion „Bald“;
-- Radio- und Codes-Logik ohne Oberfläche;
-- kein Funkelpark und kein Gooby Welt.
+**Revision FERTIG-1:** Die zum EVAL-2-Zeitpunkt hier gelisteten
+Meta-Loop-Stolpersteine (falscher Profil-Screen; fehlende Tagesquests/
+Erfolge/Tagesbonus; unverkabelter Schlaf; unsichtbare Krankheit/Gewicht;
+fehlender Tierarzt; „Bald“ an der Post; Radio/Codes ohne Oberfläche;
+fehlender Funkelpark) sind sämtlich behoben (s. Matrix). Gooby Welt ist
+kein Stolperstein mehr, sondern eine dokumentierte Streichung ohne toten
+Eintrag.
 
 ### Gibt es einen roten Faden für neue Spieler?
 
-**Nur teilweise.** Der aktuelle Erststart erklärt Identität und Charakter, aber
-nicht den alten geführten Care→Füttern→Bad→Arcade→Shop→Quest→Garten-Bogen.
-Haus-HUD und Räume sind verständlich aufgebaut, danach präsentiert das Spiel
-viele gleichrangige Systeme. Gerade die im Web als tägliche Leitplanken
-dienenden Quests, Bonus-Streak und Erfolge fehlen.
+**Ja (Revision FERTIG-1).** Der Erststart erklärt Identität und Charakter,
+und die handlungsgeführte Tour (`onboarding_guide.gd`) führt den alten
+Care→Füttern→Bad→Münzen→Arcade→Möbel→Sticker-Bogen wieder — Schritte
+erfüllen sich durch echtes Tun. Danach leiten Tagesquests (HUD-Knopf),
+Tagesbonus-Streak und Erfolge als tägliche Leitplanken.
 
 ### Ist die Progressionskurve rund?
 
-**Nein, noch nicht als Gesamtprodukt.** XP, Levelbonus, Arcade-Unlocks,
-Tages-×2 und Recaps funktionieren. Die mittelfristigen Motivatoren fehlen aber:
-Tagesquests, Erfolge, Daily Claim, vollständige Sammlungssets, Urlaubspass,
-Park-Progression und ein auswertbares Profil. Dadurch ist die lokale
-Rundenbelohnung gut, die Wochen-/Monatskurve aber löchrig.
+**Ja, mit sichtbarem Endziel (Revision FERTIG-1).** XP, Levelbonus,
+Arcade-Unlocks, Tages-×2 und Recaps funktionierten schon; dazu kommen
+jetzt Tagesquests mit Claim/Reroll, 44 Erfolge mit Rewards, der
+Tagesbonus-Claim, Modifier-Events als Abwechslungs-Taktgeber und im Profil
+die Spiel-Abschluss-Karte (`abschluss_logic.gd`): Level x/40, Erfolge,
+Sticker und „alle Arcade-Spiele gespielt“ ergeben einen Gesamt-Prozentwert
+mit Feier-Zeile bei 100 % — ein ehrliches Langzeit-Ziel. Nur die vier
+alten Sammlungssets fehlen als eigenes Album-UI (Zeile A-27).
 
 ### Wo wirkt es fertig?
 
-- Arcade-Karten, Pregame, Pause, Resultate, XP und Belohnungsfeedback.
-- 30 von 32 alten Spielen plus sieben neue Spiele.
+- Arcade-Karten, Pregame, Pause, Resultate, XP, Belohnungsfeedback und
+  jetzt Modifier-Events (Badge, Banner, Bonus im Ergebnis).
+- 30 von 31 zählbaren alten Spielen plus sieben neue Spiele.
 - Stickeralbum mit 140 regulären Stickern und globalem RewardHub.
-- Haus, Möbel-/Build-Mode, Garderobe, Garten und die dichte freie Stadt.
+- Haus, Möbel-/Build-Mode, Garderobe, Garten, die dichte freie Stadt,
+  Funkelpark und die volle Care-Tiefe (Schlaf, Krankheit, Tierarzt,
+  Gewicht sichtbar).
+- Profil mit Abschluss-Karte, Tagesquests, Erfolge, Tagesbonus, Radio,
+  Codes, Galerie mit Export, Postkartenarchiv + Tagespaket.
 - Umfangreiche Einstellungen und saubere DE/EN-Abdeckung.
-- Sehr breite automatisierte Suite: 2.074 Godot-Tests, 14.995 UI-Checks.
+- Sehr breite automatisierte Suite (Haupt- + W1c-UI-Runner).
 
-### Wo wirkt es unfertig?
+### Wo wirkt es unfertig? (Revision FERTIG-1)
 
-- Meta-Navigation: Der sichtbare Profilknopf führt semantisch falsch.
-- Save-Felder ersetzen mehrfach noch keinen Gameplay-Loop
-  (Daily, Achievements, Park, Radio, Codes).
-- Sichtbare Platzhalter: Postkarten/Post endet mit „Bald“.
-- Care-Tiefe: Schlaf, Krankheit, Tierarzt und Gewicht sind unvollständig.
-- Technische Hygiene: Engine-Fehler trotz grünem Testresultat, sehr laute
-  Materialwarnungen und bestätigte Ressourcenleaks.
+- Vier alte Sammlungssets ohne eigenes Album-UI; Ball-Wurf und
+  Gyro-Parallax fehlen; Fotomodus ohne Pose/Emotion/Rahmen.
+- Lebensmittelkatalog: 12 Web-Speisen ohne 3D-Asset weiterhin offen.
+- Wetter hat einen Dienst, aber keine sichtbaren Regen-/Schnee-Partikel
+  in Haus/Stadt.
+- Technische Hygiene: die EVAL-2-Engine-Befunde B2–B5 und B8–B11
+  (Lambda-Captures, Navigation, Leaks, Materialwarnungen) sind weiterhin
+  offen.
 
-## Priorisierte Restliste (Top 30)
+## Priorisierte Restliste (Top 30) — Stand Revision FERTIG-1
 
 Umfang: **S** = lokal/geringes Risiko, **M** = mehrere Dateien/ein System,
 **L** = mehrere Systeme, Content und Integrationsrisiko.
 
-| Prio | Restpunkt | Umfang | Betroffene Systeme / Risiko |
-|---:|---|:---:|---|
-| 1 | Echtes Profil bauen und HUD-Fehlroute korrigieren | **M** | HUD, Router, Profile/Lifetime-Stats, Bestscores; derzeit sichtbarer Hauptbutton falsch. |
-| 2 | Tagesquests vollständig portieren | **L** | 28er-Pool, täglicher Roll, 3 Karten, Fortschritt, Claim, Reroll, Save/Offline. Zentrale neue-Spieler-Leitplanke. |
-| 3 | 44 Erfolge samt Rewards und Trophy-Screen portieren | **L** | Katalog, Auswertung, Economy, UI, Migration; aktuell nur Counter. |
-| 4 | Handlungsgeführtes Onboarding wiederherstellen | **L** | Care, Räume, Arcade, Shop, Quest, Garten, Resume/Skip; entscheidend für roten Faden. |
-| 5 | Schlafen als echten Spielerloop verkabeln | **M** | Bett/Lampe, Sleep-Overlay, früher Weckpfad, Animation, `BadState.mark_woke_up`. |
-| 6 | Krankheit, sichtbare Symptome und Heilpfade fertigstellen | **L** | Ticker, Rig/Emotion, Arcade-Gate, Medizin, Feedback. |
-| 7 | Tierarztpraxis mit Checkup/Vollheilung bauen | **M** | Stadt-Ort, Economy, Health, UI, Dr. Hoppel; alte Kernlocation fehlt. |
-| 8 | Tagesbonus-Claim und Streak-Popup portieren | **M** | Daily-Slice, Offline-Tag, Economy/Items, UI; hohe tägliche Retention-Wirkung. |
-| 9 | Funkelpark mit Plaza, Coaster, Riesenrad und Ständen portieren | **L** | Welt/Rendering, Fahrten, Economy, Save, Audio, Sticker; größter fehlender alter Ort. |
-| 10 | Radio-Oberfläche inklusive Now Playing, Track-Toggle und Trim | **M** | MusicDirector/Registry sind vorhanden; UI/Persistenz/Bedienung fehlen. |
-| 11 | Offline-Codes-Screen und Web-paritäre Einlösung | **M** | UI, lokaler Hash/Katalog, Lockout, Buff/Sticker/Economy; Server-Redeem allein ist nicht gleichwertig. |
-| 12 | Modifier-Scheduler, Arcade-Badge, Countdown und Rewards | **L** | Engine, Save, Arcade, Pregame, Spiele, Results; einzelne Apply-Hooks reichen nicht. |
-| 13 | Gooby Welt portieren oder bewusst aus dem Produktumfang streichen | **L** | Splat-Renderer/Assets, Arcade, Steuerung, Lizenz/Performance. |
-| 14 | Vollständige Foto-Galerie bauen | **L** | Browser, 40er-Cap, Anzeigen, Löschen, Share/Export, Persistenz und Fehlerfälle. |
-| 15 | Postkartenarchiv und Souvenirregal fertigstellen | **L** | Vacation-Tick, generierte Karten, Post-UI, Home-Regal; sichtbares „Bald“ entfernen. |
-| 16 | Gewichtsstufen auf den Gooby-Rig anwenden | **M** | Rig-Morph, Outfits/Collision/Animation, Save-Wert; gespeicherte Mechanik derzeit unsichtbar. |
-| 17 | Ball-Wurf-/Fetch-Interaktion portieren | **M** | Home-Input, Physik/Animation, Fun/Weight, Counter/Sticker. |
-| 18 | Lebensmittelkatalog von 26 auf Web-Parität bringen | **M** | Shop/REHWEI, Icons, Effekte, Health/Weight, Lokalisierung. |
-| 19 | Urlaubspass, Ziel-Gates und Ziel-Cinematics schließen | **M** | Recap-Gates, Airport-Cards, Cutscenes, Rückkehr/Rewards. |
-| 20 | Vier alte Sammlungssets im Album wieder sichtbar machen | **M** | Collections-Slice, Fische/Gemüse/Landmarks/Treats, Claim-Rewards, Album-Navigation. |
-| 21 | Gyro-/Pointer-Parallax portieren oder offiziell entfernen | **M** | Sensor/Input, Räume, Settings, Reduced Motion, Gerätefallback. |
-| 22 | City Drive als Arcade-Runde mit Score/Resultat ergänzen | **M** | Stadtfahrphysik, Timer, Kollisionen, Coins, Arcade-Registry. |
-| 23 | Lambda-Capture-Lebenszyklusfehler beseitigen | **M** | Album/Routen/Callbacks, Save-Fuzz; Risiko still ausfallender UI-Aktionen. |
-| 24 | Navigation-Synchronisierungsfehler reproduzierbar lokalisieren/fixen | **L** | Raum-Navmeshes, Kanten/Cell-Size, dynamischer Rebuild. |
-| 25 | Laufzeit-Navmesh-Bake von Render-Meshes entfernen | **L** | Collision-Quellen/prozedurale Geometrie; Mobile-Hitch-/Akku-Risiko. |
-| 26 | Renderer-/RID-/ObjectDB-Leaks schließen | **L** | Minigame-/Scene-Teardown, SubViewports, Materialien, Ressourcen. |
-| 27 | SubViewport-Stretch-/Resize-Konflikt korrigieren | **S** | Garderobe/Möbel-/3D-Preview; Warnspam und mögliches falsches Preview-Seitenverhältnis. |
-| 28 | Alte SpatialMaterial-`specular`-Imports bereinigen | **M** | Viele Minigame-Assets; Logsignal und Materialparität. |
-| 29 | Einheitlichen Wetterdienst für Haus/Garten/Stadt verdrahten | **M** | Wetterzustand, FX, Regenbewässerung, Fenster/Stadt, Offline-Tag. |
-| 30 | Semantischen E2E-„erste Stunde“-Test ergänzen | **L** | Echter Input: Tutorial, Care, Shop, Quest, Garten, 3 Spiele, Save/Reload; aktuelle Smoke-Tests prüfen primär Erreichbarkeit. |
+| Prio | Restpunkt | Umfang | Stand | Betroffene Systeme / Risiko |
+|---:|---|:---:|:---:|---|
+| 1 | Echtes Profil bauen und HUD-Fehlroute korrigieren | **M** | **ERLEDIGT** | `profil_screen.gd` + `abschluss_logic.gd`; Fehlroute behoben (Ex-B1). |
+| 2 | Tagesquests vollständig portieren | **L** | **ERLEDIGT** | `quest_catalog/engine/service.gd`; Pool 24 (Web: 28), Claim/Bonus/Reroll vorhanden. |
+| 3 | 44 Erfolge samt Rewards und Trophy-Screen portieren | **L** | **ERLEDIGT** | 44er-Katalog, `achievements_engine.gd`, `achievements_screen.gd`. |
+| 4 | Handlungsgeführtes Onboarding wiederherstellen | **L** | **ERLEDIGT** | `onboarding_guide.gd` (+`_logic.gd`), Erfüllung über echte Save-Zähler. |
+| 5 | Schlafen als echten Spielerloop verkabeln | **M** | **ERLEDIGT** | `bett.gd` (Schlafen/Nickerchen/Wecken), `pflege_runner.gd`. |
+| 6 | Krankheit, sichtbare Symptome und Heilpfade fertigstellen | **L** | **ERLEDIGT** | Rig-Symptome, GOOBYTHEKE-Rezept, Tierarzt-Behandlung. |
+| 7 | Tierarztpraxis mit Checkup/Vollheilung bauen | **M** | **ERLEDIGT** | `city/orte/tierarzt.gd` (Checkup 30 / Behandlung 120). |
+| 8 | Tagesbonus-Claim und Streak-Popup portieren | **M** | **ERLEDIGT** | `daily_bonus.gd` + `daily_bonus_popup.gd`, Serie im Profil. |
+| 9 | Funkelpark mit Plaza, Coaster, Riesenrad und Ständen portieren | **L** | **ERLEDIGT** | `scripts/park/*` inkl. Autoscooter und Naschgasse. |
+| 10 | Radio-Oberfläche inklusive Now Playing, Track-Toggle und Trim | **M** | **ERLEDIGT** | `radio_sheet.gd`; Trim bleibt Datenpflege in der Registry. |
+| 11 | Offline-Codes-Screen und Web-paritäre Einlösung | **M** | **ERLEDIGT** | `codes_engine.gd` + `codes_screen.gd`, Route `codes`. |
+| 12 | Modifier-Scheduler, Arcade-Badge, Countdown und Rewards | **L** | **ERLEDIGT** | FERTIG-1: `modifier_engine.gd` + Badge/Banner/Toast/Results, alle Spiele via Framework. |
+| 13 | Gooby Welt portieren oder bewusst aus dem Produktumfang streichen | **L** | **ERLEDIGT** | FERTIG-1: offiziell gestrichen, Referenzen bereinigt (s. Zeile B-27). |
+| 14 | Vollständige Foto-Galerie bauen | **L** | **ERLEDIGT** | `galerie_screen.gd`/`galerie_logic.gd` inkl. Export in den System-Bilderordner (FERTIG-1). |
+| 15 | Postkartenarchiv und Souvenirregal fertigstellen | **L** | **ERLEDIGT** | `postkarten_*`-Port; Post-„Bald“ durch Tagespaket ersetzt (FERTIG-1). |
+| 16 | Gewichtsstufen auf den Gooby-Rig anwenden | **M** | **ERLEDIGT** | `gooby_rig.gd` skaliert wie Web-`TIER_SCALE`. |
+| 17 | Ball-Wurf-/Fetch-Interaktion portieren | **M** | offen | Home-Input, Physik/Animation, Fun/Weight, Counter/Sticker. |
+| 18 | Lebensmittelkatalog von 26 auf Web-Parität bringen | **M** | teilweise | FERTIG-1: 26→32 IDs (3 Shop- + 3 Park-Speisen); 12 Web-IDs ohne 3D-Asset offen. |
+| 19 | Urlaubspass, Ziel-Gates und Ziel-Cinematics schließen | **M** | **ERLEDIGT** | Phasen-Maschine, Reise-App/-Cutscene, Archiv-Nachzug im Tick. |
+| 20 | Vier alte Sammlungssets im Album wieder sichtbar machen | **M** | offen | Collections-Slice wird für Erfolge/Sticker ausgewertet, aber kein Set-UI. |
+| 21 | Gyro-/Pointer-Parallax portieren oder offiziell entfernen | **M** | offen | Entscheidung steht aus; nur Ranch-Fahrsteuerung nutzt Gyro. |
+| 22 | City Drive als Arcade-Runde mit Score/Resultat ergänzen | **M** | offen | Freie Fahrt existiert; Arcade-Runden-Loop fehlt. |
+| 23 | Lambda-Capture-Lebenszyklusfehler beseitigen | **M** | offen | Album/Routen/Callbacks, Save-Fuzz; Risiko still ausfallender UI-Aktionen. |
+| 24 | Navigation-Synchronisierungsfehler reproduzierbar lokalisieren/fixen | **L** | offen | Raum-Navmeshes, Kanten/Cell-Size, dynamischer Rebuild. |
+| 25 | Laufzeit-Navmesh-Bake von Render-Meshes entfernen | **L** | offen | Collision-Quellen/prozedurale Geometrie; Mobile-Hitch-/Akku-Risiko. |
+| 26 | Renderer-/RID-/ObjectDB-Leaks schließen | **L** | offen | Minigame-/Scene-Teardown, SubViewports, Materialien, Ressourcen. |
+| 27 | SubViewport-Stretch-/Resize-Konflikt korrigieren | **S** | offen | Garderobe/Möbel-/3D-Preview; Warnspam und mögliches falsches Preview-Seitenverhältnis. |
+| 28 | Alte SpatialMaterial-`specular`-Imports bereinigen | **M** | offen | Viele Minigame-Assets; Logsignal und Materialparität. |
+| 29 | Einheitlichen Wetterdienst für Haus/Garten/Stadt verdrahten | **M** | teilweise | `soul_wetter.gd` speist Garten/Ticker/Reaktionen; sichtbare Regen-/Schnee-FX fehlen. |
+| 30 | Semantischen E2E-„erste Stunde“-Test ergänzen | **L** | offen | Echter Input: Tutorial, Care, Shop, Quest, Garten, 3 Spiele, Save/Reload; aktuelle Smoke-Tests prüfen primär Erreichbarkeit. |
 
-## Schlussfolgerung
+## Schlussfolgerung (Revision FERTIG-1)
 
-Die Rewrite-Basis ist groß und real: 30/32 alte Minispiele, sieben neue Spiele,
-Haus, Garten, Stadt, Ranch, Album und ein belastbarer Save-Kern. „Fast alles
-fehlt“ beschreibt den aktuellen Code nicht.
+Die Rewrite-Basis ist groß und real: 30/31 zählbare alte Minispiele, sieben
+neue Spiele, Haus, Garten, Stadt, Ranch, Funkelpark, Album und ein
+belastbarer Save-Kern. „Fast alles fehlt“ beschreibt den aktuellen Code
+nicht — und auch „es ist nur eine Alpha“ nicht mehr: Die Systeme, die aus
+Content ein zusammenhängendes Spiel machen (geführter Einstieg, Profil mit
+Abschluss-Ziel, Tagesquests, Erfolge, Tagesbonus, volle Care-Tiefe,
+Tierarzt, Funkelpark, Radio, Codes, Galerie, Postkarten, Arcade-Modifier),
+sind umgesetzt, sichtbar und testgedeckt. Erreichbare „Bald“-Platzhalter
+gibt es nicht mehr; die verbliebenen Guard-Strings sind per Vertragstest
+(`test_keine_platzhalter.gd`) als unerreichbar abgesichert.
 
-Was weiterhin fehlt, sind ausgerechnet mehrere Systeme, die aus viel Content
-ein zusammenhängendes Spiel machen: Einstieg, Profil, tägliche Ziele,
-Erfolge, Tagesbonus und einige ikonische Orte/Activities. Solange diese
-Lücken und die reproduzierten Engine-Fehler bestehen, wäre die Bezeichnung
-„Vollversion“ irreführend. „Spielbare Content-Alpha“ ist die faire,
-belegbare Einordnung.
+Offen bleiben drei kleine Feature-Lücken (Ball-Wurf, Sammlungsset-UI,
+Gyro-Parallax), vier Teilaspekte (Katalog-Rest, Wetter-FX,
+Fotomodus-Werkzeuge, Nougatschleuse) und die technischen EVAL-2-Befunde
+B2–B5/B8–B11. Die faire Einordnung lautet jetzt: **inhaltlich komplettes
+Spiel in der Feinschliff-Phase** — nicht mehr Alpha, für ein poliertes
+Release fehlen Engine-Hygiene und die letzten Nischen-Features.

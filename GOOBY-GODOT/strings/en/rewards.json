@@ -50,7 +50,13 @@
 			"salat": "Lettuce",
 			"pilz": "Mushroom",
 			"ananas": "Pineapple",
-			"chili": "Chili"
+			"chili": "Chili",
+			"donut-sprinkles": "Sprinkle donut",
+			"hot-dog": "Hot dog",
+			"pancakes": "Pancakes",
+			"cottonCandy": "Cotton candy",
+			"softServe": "Soft serve",
+			"waffle": "Waffle"
 		}
 	}
 }

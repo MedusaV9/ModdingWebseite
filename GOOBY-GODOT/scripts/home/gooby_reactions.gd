@@ -19,6 +19,15 @@ extends Node
 ##    nach dem Aufwachen, Gute-Nacht-Gähnen.
 ##  - Geburtstags-Frage: kleines wegklickbares Panel, Datum wird gemerkt
 ##    und jedes Jahr gefeiert.
+##
+## SEELE-2 — durchgehende Stimmung statt Einzelsprüche (Details in der
+## Komponente scripts/soul/seele_runner.gd, hängt als Kind an diesem Node):
+##  - SoulMood: EINE träge Laune (0..100, Save-Slice) färbt ALLES — das
+##    Ruhe-Gesicht zwischen den Momenten (statt hart „happy“), Ohren/Lider/
+##    Blick (GoobyExpressions), Idle-Auswahl + -Takt, Gruß-Annäherung und
+##    die Stimme (GoobyVoice-Modulation). Stumm — kein neuer Text-Spam.
+##  - SoulIntent: Bedürfnis → SICHTBARE Handlung mit Blick zum Spieler,
+##    hat Vorrang vor dem Zufalls-Idle.
 
 const Economy := preload("res://scripts/logic/economy.gd")
 
@@ -68,6 +77,8 @@ var _food_snapshot: Dictionary = {}
 var _sad := false
 var _tap_area: Area3D = null
 var _emotion_revert: SceneTreeTimer = null
+## SEELE-2: Stimmung/Ausdruck/Stimme/Absichten (scripts/soul/seele_runner.gd).
+var _seele: SeeleRunner = null
 
 
 ## Runner erzeugen und an einen RoomBase hängen (idempotent pro Raum).
@@ -124,6 +135,7 @@ func setup(target_room: Node) -> void:
 	if room.has_signal("build_mode_toggled"):
 		room.build_mode_toggled.connect(_on_build_mode_toggled)
 	_setup_tap_area()
+	_seele = SeeleRunner.attach_to(self)
 	_pick_favorite_if_needed()
 	_run_enter()
 
@@ -137,12 +149,16 @@ func _process(delta: float) -> void:
 	if _presence_timer >= PRESENCE_STAMP_S:
 		_presence_timer = 0.0
 		SoulState.mutate(gs, func(s: Dictionary) -> void: s["lastVisitAt"] = _now_ms())
+	_seele.tick(delta)
 	if _busy():
 		return
 	_idle_timer -= delta
 	if _idle_timer <= 0.0:
-		_idle_timer = rng.randf_range(IDLE_MIN_S, IDLE_MAX_S)
-		_run_idle()
+		# Schlechte Laune = träger Takt, gute = lebhafter (SEELE-2).
+		_idle_timer = rng.randf_range(IDLE_MIN_S, IDLE_MAX_S) * _seele.idle_takt_faktor()
+		# Sichtbare Absicht schlägt Zufallsanimation.
+		if not _seele.try_intent():
+			_run_idle()
 	_surprise_timer -= delta
 	if _surprise_timer <= 0.0:
 		_surprise_timer = SURPRISE_CHECK_S
@@ -166,6 +182,8 @@ func _run_enter() -> void:
 		_maybe_ask_birthday(ctx)
 		return
 	SoulState.mutate(gs, func(s: Dictionary) -> void: SoulService.book_enter(s, moment, ctx))
+	# SEELE-2: Wiedersehen bewegt die Laune — freudig hebt, Schmollen senkt.
+	_seele.stoss_gruss(str(moment.get("id", "")))
 	_show_moment(moment)
 
 
@@ -225,7 +243,12 @@ func handle_tap() -> void:
 		_tap_count = 0
 	_tap_last_s = now_s
 	_tap_count += 1
-	_pet_feedback(_count_pet())
+	# SEELE-2: Aufmerken (Ohren-Perk + Blick) mit Latenz nach Laune —
+	# elend reagiert träge, selig sofort.
+	_seele.aufmerken()
+	var pets_today := _count_pet()
+	_pet_feedback(pets_today)
+	_seele.stoss_streicheln(pets_today)
 	var stage := tap_stage(_tap_count)
 	if stage.is_empty():
 		return
@@ -233,6 +256,7 @@ func handle_tap() -> void:
 		_tap_count = 0
 	if stage == "tipp_kitzlig":
 		_count_tickle()
+		_seele.stoss(SeeleRunner.STOSS_KITZELN)
 	var def := SoulService.def_by_id(_defs, stage)
 	if def.is_empty():
 		return
@@ -289,6 +313,8 @@ func _run_idle() -> void:
 	ctx["radio_an"] = (
 		bool(gs.get_value("radio.owned", false)) and bool(gs.get_value("radio.playing", false))
 	)
+	# SEELE-2: die Laune gatet die Auswahl (elend tanzt nicht).
+	ctx["laune_band"] = _seele.band()
 	var slice := SoulState.slice_of(gs)
 	var fav := str(slice["favFurniture"])
 	ctx["hat_fav"] = not fav.is_empty() and not _find_items_by_id(fav).is_empty()
@@ -441,6 +467,8 @@ func _check_food_given() -> void:
 		func(s: Dictionary) -> void: s["foodGiven"][given] = int(s["foodGiven"].get(given, 0)) + 1
 	)
 	counted = int(SoulState.slice_of(gs)["foodGiven"].get(given, 0))
+	# SEELE-2: Füttern hebt die Laune spürbar (gedeckelter Stoß).
+	_seele.stoss(SeeleRunner.STOSS_FUETTERN)
 	_comment_food(given, counted)
 
 
@@ -482,7 +510,7 @@ func _check_neglect(stats: Dictionary) -> void:
 	if lowest >= NEGLECT_STAT_THRESHOLD:
 		if _sad:
 			_sad = false
-			_set_emotion("happy")
+			_set_emotion(_seele.ruhe_emotion_jetzt())
 		return
 	if _sad:
 		return
@@ -588,6 +616,7 @@ func _on_birthday_saved(month: SpinBox, day: SpinBox, panel: Control) -> void:
 func _show_moment(moment: Dictionary, quiet_ok := false) -> void:
 	if moment.is_empty():
 		return
+	var emotion := str(moment.get("emotion", ""))
 	var text_key := str(moment.get("text_key", ""))
 	if not text_key.is_empty():
 		var now_s := float(Time.get_ticks_msec()) / 1000.0
@@ -595,8 +624,7 @@ func _show_moment(moment: Dictionary, quiet_ok := false) -> void:
 			text_key = ""
 		else:
 			_last_bubble_s = now_s
-			_say(I18nService.t(text_key, moment.get("args", {})))
-	var emotion := str(moment.get("emotion", ""))
+			_say(I18nService.t(text_key, moment.get("args", {})), emotion)
 	if not emotion.is_empty():
 		_set_emotion(emotion, true)
 	var clip := str(moment.get("clip", ""))
@@ -605,6 +633,10 @@ func _show_moment(moment: Dictionary, quiet_ok := false) -> void:
 	var sfx := str(moment.get("sfx", ""))
 	if not sfx.is_empty():
 		AudioDirector.try_play(self, sfx)
+	# SEELE-2: Grüße zeigen die Beziehung im KÖRPER — gute Laune kommt dir
+	# entgegen, miese bleibt auf Abstand (Rückzug ohne Drama).
+	if str(moment.get("kind", "")) == "gruss":
+		_seele.gruss_annaeherung()
 	match str(moment.get("aktion", "")):
 		"konfetti":
 			_confetti()
@@ -616,26 +648,35 @@ func _show_moment(moment: Dictionary, quiet_ok := false) -> void:
 			pass
 
 
-func _say(text: String) -> void:
-	if room != null and room.has_method("say") and not text.is_empty():
-		room.say(text)
+## Bubble + Gebrabbel: die Stimme moduliert nach Stimmung UND Moment-Emotion
+## (GoobyVoice.modulation, in SeeleRunner) — man HÖRT, wie es Gooby geht.
+func _say(text: String, emotion := "") -> void:
+	if room == null or not room.has_method("say") or text.is_empty():
+		return
+	room.say(text)
+	_seele.sagt(text, emotion)
 
 
 func _set_emotion(emotion: String, revert := false) -> void:
 	if gooby == null or gooby.get("rig") == null:
 		return
 	gooby.rig.set_emotion(emotion)
-	if not revert or emotion == "happy" or emotion == "neutral":
+	if not revert:
 		return
+	# Solange das Moment-Gesicht steht, lässt der Stimmungs-Takt es in Ruhe.
+	_seele.emotion_temp_setzen(EMOTION_REVERT_S)
 	_emotion_revert = get_tree().create_timer(EMOTION_REVERT_S)
 	# Methoden-Callable statt Lambda (REST5, B2): stirbt dieser Node vor dem
 	# Timeout, trennt Godot die Verbindung automatisch.
 	_emotion_revert.timeout.connect(_revert_emotion)
 
 
+## Zurück ins RUHE-Gesicht der aktuellen Laune (SEELE-2) — vorher fiel hier
+## alles hart auf "happy", egal wie es Gooby ging.
 func _revert_emotion() -> void:
+	_seele.emotion_temp_frei()
 	if not _sad and gooby != null and is_instance_valid(gooby):
-		gooby.rig.set_emotion("happy")
+		gooby.rig.set_emotion(_seele.ruhe_emotion_jetzt())
 
 
 ## Konfetti-Regen (Geburtstage/Jubiläen) — reine CPU-Partikel, kein Asset.

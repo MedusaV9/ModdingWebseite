@@ -68,6 +68,11 @@ var _stage_top := 56.0
 ## Coin-würdige Teil-Scores der Session (GvZ meldet pro gewonnenem Level —
 ## die Coin-Row wird dann PRO Chunk statt auf den Session-Score angewandt).
 var _coin_chunks: Array[int] = []
+## FERTIG-1 (EVAL Rang 12): beim echten Rundenstart konsumiertes Modifier-
+## Event (Snapshot für Refund bei Früh-Abbruch) + dessen Launch-Params
+## (coin_mult/score_mult/xp_mult/energy_free/gluecksrolle) für den Award.
+var _modifier_snapshot: Dictionary = {}
+var _modifier_params: Dictionary = {}
 
 
 func receive_params(params: Dictionary) -> void:
@@ -322,9 +327,16 @@ func _run_countdown(quick := false) -> void:
 	get_tree().create_timer(0.6).timeout.connect(_countdown_label.hide)
 	_pause_button.disabled = false
 	if _game != null:
+		# FERTIG-1 (§C-SYS4.4): läuft für dieses Spiel ein Modifier-Event,
+		# wird JETZT (echter Rundenstart) eine Runde konsumiert.
+		_consume_modifier()
+		if _ctx != null:
+			_ctx.modifier = _modifier_params.duplicate(true)
 		# Web-Parität §C6 (framework.js:1369-1377): die Energie wird erst
 		# beim ECHTEN Rundenstart abgebucht (Abbruch im Countdown ist gratis).
-		_charge_energy()
+		# FERTIG-1: Federleicht macht genau diese Abbuchung frei.
+		if not _modifier_params.get("energy_free", false):
+			_charge_energy()
 		_game.start()
 
 
@@ -417,9 +429,12 @@ func _award(final_score: int) -> Dictionary:
 	var meta := _meta
 	var mode := difficulty
 	var chunks := _coin_chunks.duplicate()
+	var mod := _modifier_params.duplicate(true)
+	# FERTIG-1: Runde regulär beendet — der Refund-Snapshot verfällt.
+	_modifier_snapshot = {}
 	gs.update(
 		func(state: Dictionary) -> void:
-			holder.append(MinigameAward.award(state, meta, final_score, mode, today, chunks))
+			holder.append(MinigameAward.award(state, meta, final_score, mode, today, chunks, mod))
 	)
 	return holder[0] if holder.size() > 0 else {}
 
@@ -484,6 +499,10 @@ func _on_quit_pressed() -> void:
 	if _pause_modal.is_open():
 		_pause_modal.hide_modal()
 	_set_game_frozen(false)
+	# FERTIG-1: Früh-Abbruch erstattet die konsumierte Modifier-Runde
+	# (max. einmal pro Event — Engine-Regel, Anti-Farming §C-SYS4.4).
+	if not _round_over:
+		_refund_modifier()
 	if _game != null:
 		_game.end()
 	_exit_to(&"arcade", {})
@@ -515,6 +534,10 @@ func _restart_round() -> void:
 		# Arcade statt in eine Gratis-Runde.
 		_exit_to(&"arcade", {})
 		return
+	# FERTIG-1: Neustart MITTEN in der Runde (Pause-Modal) bricht die
+	# laufende Runde ab → Refund; der Neustart konsumiert dann regulär neu.
+	if not _round_over:
+		_refund_modifier()
 	_results.hide()
 	_round_over = false
 	score = 0
@@ -627,3 +650,38 @@ func _charge_energy() -> void:
 				float((stats as Dictionary).get("energy", 0.0)) - float(cost)
 			)
 	)
+
+
+## FERTIG-1 (EVAL Rang 12): beim ECHTEN Rundenstart eine Modifier-Runde
+## konsumieren (Engine prüft Spiel/Fenster/Budget selbst). Merkt sich den
+## Snapshot (Refund bei Abbruch) und die Launch-Params (Award/ctx).
+func _consume_modifier() -> void:
+	_modifier_snapshot = {}
+	_modifier_params = {}
+	var gs := _resolve_state()
+	if gs == null:
+		return
+	var id := game_id
+	var now := int(gs.clock.now_ms())
+	var holder: Array[Dictionary] = []
+	gs.update(
+		func(state: Dictionary) -> void: holder.append(ModifierEngine.consume(state, id, now))
+	)
+	var res: Dictionary = holder[0] if holder.size() > 0 else {}
+	if res.get("ok", false):
+		_modifier_snapshot = res.get("modifier", {})
+		_modifier_params = ModifierEngine.launch_params(_modifier_snapshot)
+
+
+## FERTIG-1: Früh-Abbruch-Erstattung (Engine erstattet max. 1×/Event).
+func _refund_modifier() -> void:
+	if _modifier_snapshot.is_empty():
+		return
+	var snap := _modifier_snapshot.duplicate(true)
+	_modifier_snapshot = {}
+	_modifier_params = {}
+	var gs := _resolve_state()
+	if gs == null:
+		return
+	var now := int(gs.clock.now_ms())
+	gs.update(func(state: Dictionary) -> void: ModifierEngine.refund(state, snap, now))

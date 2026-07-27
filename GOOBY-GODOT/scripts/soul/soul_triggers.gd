@@ -69,6 +69,16 @@ static func days_known(first_met_ms: int, now_ms: int) -> int:
 	return int(float(now_ms - first_met_ms) / float(MS_PER_DAY))
 
 
+## Beziehungs-Stufe (SEELE-2): färbt Grüße/Texte — Gooby redet mit einem
+## Menschen, den er 100 Tage kennt, anders als am dritten Tag.
+static func beziehung_stufe(days: int) -> String:
+	if days >= 50:
+		return "beste_freunde"
+	if days >= 7:
+		return "vertraut"
+	return "neu"
+
+
 ## Meilenstein, der GENAU heute erreicht ist (0 = keiner). „Heute erreicht“
 ## heißt: days_known trifft den Meilenstein — über Datumssprünge hinweg wird
 ## ein verpasster Meilenstein NICHT nachgefeiert (kein Spam nach Pausen),

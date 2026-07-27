@@ -52,7 +52,9 @@ const EYE_AUTO_OFF_SEC := 8.0
 const STAT_ALERT_THRESHOLD := 25.0
 ## FIX1: Randabstand zur Bildschirmkante (nur Schattenluft — Stats sollen
 ## bündig sitzen, der Rest kommt aus der Safe-Area).
-const TOUCH_MIN_PT := 44.0
+## 44 pt ist das Minimum der UI-Pruefung; mit etwas Reserve, weil das Layout
+## die Endgroesse um Bruchteile eines Punktes beschneiden kann.
+const TOUCH_MIN_PT := 46.0
 const EDGE_PAD := 8.0
 ## Label unter den Cockpit-Buttons (Design-px, skaliert mit f).
 const LABEL_FONT := 12
