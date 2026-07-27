@@ -37,7 +37,12 @@ import net.neoforged.neoforge.client.event.ClientTickEvent;
 public final class CreditsSkyFx {
     static {
         CreditsPayloads.setClientSkyHandler(CreditsSkyFx::handle);
+        CreditsPayloads.setClientPulseHandler(CreditsSkyFx::handlePulse);
     }
+
+    /** F-072 V3 gulp envelope: {@value}t attack, {@value #PULSE_DECAY_TICKS}t decay. */
+    private static final float PULSE_ATTACK_TICKS = 3.0F;
+    private static final float PULSE_DECAY_TICKS = 15.0F;
 
     /** Client thread only. */
     private static int clientTicks;
@@ -51,6 +56,9 @@ public final class CreditsSkyFx {
     private static int rampStartTick;
     private static int rampTicks = 1;
     private static Vec3 holeCenter = Vec3.ZERO;
+    /** V3 gulp pulse state ({@code S2CCreditsPulsePayload}). */
+    private static float pulseStrength;
+    private static int pulseStartTick = Integer.MIN_VALUE / 2;
 
     private CreditsSkyFx() {}
 
@@ -103,6 +111,31 @@ public final class CreditsSkyFx {
         return holeCenter;
     }
 
+    /** F-072 V3: latches one gulp impulse (overlapping gulps restart the envelope). */
+    private static void handlePulse(CreditsPayloads.S2CCreditsPulsePayload payload) {
+        // Never let a stray weak pulse cut a strong flare short mid-attack.
+        float live = holePulse(0.0F);
+        pulseStrength = Math.max(Mth.clamp(payload.strength(), 0.0F, 1.0F), live);
+        pulseStartTick = clientTicks;
+    }
+
+    /**
+     * F-072 V3: the eased gulp envelope 0..1 — a {@value #PULSE_ATTACK_TICKS}t attack
+     * and a {@value #PULSE_DECAY_TICKS}t decay around each {@code
+     * S2CCreditsPulsePayload}. Feeds the post pass's {@code Pulse} uniform (horizon
+     * breath + ring flare); 0 between gulps, so the layer is a strict no-op then.
+     */
+    public static float holePulse(float partialTick) {
+        float age = clientTicks - pulseStartTick + partialTick;
+        if (age < 0.0F || age >= PULSE_ATTACK_TICKS + PULSE_DECAY_TICKS) {
+            return 0.0F;
+        }
+        float env = age < PULSE_ATTACK_TICKS
+                ? age / PULSE_ATTACK_TICKS
+                : 1.0F - (age - PULSE_ATTACK_TICKS) / PULSE_DECAY_TICKS;
+        return pulseStrength * env * env * (3.0F - 2.0F * env);
+    }
+
     private static float progress(float partialTick) {
         float linear = Mth.clamp(
                 (clientTicks - rampStartTick + partialTick) / rampTicks, 0.0F, 1.0F);
@@ -125,5 +158,7 @@ public final class CreditsSkyFx {
         rampTicks = 1;
         rampStartTick = clientTicks;
         holeCenter = Vec3.ZERO;
+        pulseStrength = 0.0F;
+        pulseStartTick = Integer.MIN_VALUE / 2;
     }
 }

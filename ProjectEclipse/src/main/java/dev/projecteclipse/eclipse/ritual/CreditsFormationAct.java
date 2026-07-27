@@ -54,6 +54,13 @@ import net.minecraft.world.phys.Vec3;
  * translation + a widened view range — the eclipse-anchor trick at formation scale.
  * Despawn guarantee: shrink-out + discard with the flyers, belt-and-braces discard at the
  * white peak and in {@code endEvent}, and the {@link #TAG} stray sweep.</p>
+ *
+ * <p><b>F-072 V3 "Versammlungs-Sog"</b>: every element is born {@value #GATHER_REACH}×
+ * beyond its formation slot with a ±{@value #GATHER_SWIRL} rad swirl about the view
+ * axis, and {@link #gather} pulls it onto the slot over its first {@value #GATHER_TICKS}
+ * ticks on a smootherstep — the formations visibly ASSEMBLE (sucked into place, soft
+ * catch) instead of fading in already-formed. Steady state is bit-identical to the pure
+ * formation pose, so late re-pushes still agree with the stateless-push law.</p>
  */
 final class CreditsFormationAct {
     static final String TAG = "eclipse_credits_formation";
@@ -100,6 +107,10 @@ final class CreditsFormationAct {
     private static final float SCALE_FLOOR = 0.02F;
     /** Spawn grow-in window (ticks) — a batch never pops in at full scale. */
     private static final float GROW_IN_TICKS = 40.0F;
+    /** V3 gathering pull: convergence window (t), radial over-reach, swirl (rad). */
+    private static final float GATHER_TICKS = 90.0F;
+    private static final float GATHER_REACH = 0.45F;
+    private static final float GATHER_SWIRL = 0.35F;
 
     /** The formation's greatest-hits palette (the flyer palette + glass accents). */
     private static final BlockState[] PALETTE = {
@@ -213,6 +224,7 @@ final class CreditsFormationAct {
             offset = columnOffset(index - SPIRAL_COUNT - RING_GROUPS * RING_SIZE, actTick);
             baseScale = 0.8F + (float) CreditsSequence.hash01(index, 82) * 1.0F;
         }
+        offset = gather(offset, index, actTick); // V3: born wide, sucked onto the slot
         // Gentle golden-phased tumble — neighbors never spin in sync (BD-SHIP law).
         float spin = index * CreditsSequence.GOLDEN_ANGLE
                 + actTick * (0.004F + (float) CreditsSequence.hash01(index, 83) * 0.006F);
@@ -329,5 +341,41 @@ final class CreditsFormationAct {
         float spawnTick = index / (float) SPAWN_PER_TICK;
         float linear = Mth.clamp((actTick - spawnTick) / GROW_IN_TICKS, 0.0F, 1.0F);
         return linear * linear * (3.0F - 2.0F * linear);
+    }
+
+    /**
+     * F-072 V3 "Versammlungs-Sog": maps the pure formation offset to the element's
+     * CONVERGING position during its first {@value #GATHER_TICKS} ticks — born
+     * {@value #GATHER_REACH}× beyond the slot (radially off the anchor, mildly ahead on
+     * the view axis) and swirled ±{@value #GATHER_SWIRL} rad about the view axis, both
+     * decaying with the pull. Identity once {@code pull >= 1} (steady state stays the
+     * exact formation pose). The y floor keeps the swirl from dipping under the sea.
+     */
+    private static Vector3f gather(Vector3f offset, int index, int actTick) {
+        float pull = gatherPull(index, actTick);
+        if (pull >= 1.0F) {
+            return offset;
+        }
+        float loose = 1.0F - pull;
+        float swirl = GATHER_SWIRL * loose
+                * (CreditsSequence.hash01(index, 90) < 0.5D ? -1.0F : 1.0F);
+        float cos = Mth.cos(swirl);
+        float sin = Mth.sin(swirl);
+        float y = offset.y * cos - offset.z * sin;
+        float z = offset.y * sin + offset.z * cos;
+        float reach = 1.0F + GATHER_REACH * loose;
+        return new Vector3f(offset.x * (1.0F + 0.25F * loose),
+                Math.max(y * reach, 2.0F), z * reach);
+    }
+
+    /**
+     * Convergence clock 0..1: a smootherstep over the element's first
+     * {@value #GATHER_TICKS}t — gentle start, decisive mid rush, soft catch (reads as
+     * suction, not interpolation). 1 forever afterwards.
+     */
+    private static float gatherPull(int index, int actTick) {
+        float spawnTick = index / (float) SPAWN_PER_TICK;
+        float linear = Mth.clamp((actTick - spawnTick) / GATHER_TICKS, 0.0F, 1.0F);
+        return linear * linear * linear * (linear * (linear * 6.0F - 15.0F) + 10.0F);
     }
 }

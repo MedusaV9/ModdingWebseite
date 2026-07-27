@@ -35,7 +35,7 @@ import net.neoforged.neoforge.network.registration.PayloadRegistrar;
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID, bus = EventBusSubscriber.Bus.MOD)
 public final class CreditsPayloads {
-    private static final String VERSION = "credits1";
+    private static final String VERSION = "credits2";
 
     private static volatile Consumer<S2CCreditsBeginPayload> beginHandler;
     private static volatile Consumer<S2CCreditsAutoRunPayload> autoRunHandler;
@@ -44,6 +44,7 @@ public final class CreditsPayloads {
     private static volatile Consumer<S2CCreditsClosePayload> closeHandler;
     private static volatile Consumer<S2CCreditsFovPayload> fovHandler;
     private static volatile Consumer<S2CCreditsSkyPayload> skyHandler;
+    private static volatile Consumer<S2CCreditsPulsePayload> pulseHandler;
 
     private CreditsPayloads() {}
 
@@ -104,20 +105,26 @@ public final class CreditsPayloads {
 
     /**
      * Full-screen title card ({@code client.credits.TitleCardLayer}): {@code titleKey}
-     * decodes from glitch noise (BossIntroOverlay recipe, gold credits theme),
-     * {@code holdTicks} is the post-decode hold. {@code gentle} (FIN-6 end cards) swaps
-     * the glitch decode for a slow, silent fade-in/out — the post-eclipse black-screen
-     * cards, not a boss reveal.
+     * arrives in one of three styles — {@link #STYLE_DECODE} decodes from glitch noise
+     * (BossIntroOverlay recipe, gold credits theme), {@link #STYLE_GENTLE} (FIN-6 end
+     * cards) is a slow, silent fade-in/out over black, and {@link #STYLE_FINALE}
+     * (F-072 V3, the "Minecraft Eclipse" closer) MATERIALIZES the title letter by
+     * letter out of converging particle dust with a slow kerning breath and a settling
+     * chromatic fringe. {@code holdTicks} is the post-arrival hold.
      */
-    public record S2CCreditsTitlePayload(String titleKey, int holdTicks, boolean gentle)
+    public record S2CCreditsTitlePayload(String titleKey, int holdTicks, int style)
             implements CustomPacketPayload {
+        public static final int STYLE_DECODE = 0;
+        public static final int STYLE_GENTLE = 1;
+        public static final int STYLE_FINALE = 2;
+
         public static final Type<S2CCreditsTitlePayload> TYPE = new Type<>(
                 ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "credits/title"));
         public static final StreamCodec<ByteBuf, S2CCreditsTitlePayload> STREAM_CODEC =
                 StreamCodec.composite(
                         ByteBufCodecs.STRING_UTF8, S2CCreditsTitlePayload::titleKey,
                         ByteBufCodecs.VAR_INT, S2CCreditsTitlePayload::holdTicks,
-                        ByteBufCodecs.BOOL, S2CCreditsTitlePayload::gentle,
+                        ByteBufCodecs.VAR_INT, S2CCreditsTitlePayload::style,
                         S2CCreditsTitlePayload::new);
 
         @Override
@@ -181,6 +188,26 @@ public final class CreditsPayloads {
     }
 
     /**
+     * F-072 V3 — one black-hole "gulp" impulse ({@code client.credits.CreditsSkyFx}):
+     * {@code strength} 0..1 drives a short attack/decay envelope the
+     * {@code eclipse:black_hole} post pass reads as its {@code Pulse} uniform — the
+     * event horizon swells and the photon rings flare exactly on the server's
+     * deterministic swallow beats ({@code CreditsSequence.devourPulse}) and the smaller
+     * horizon flashes. Fire-and-forget; a lost packet just skips one flare.
+     */
+    public record S2CCreditsPulsePayload(float strength) implements CustomPacketPayload {
+        public static final Type<S2CCreditsPulsePayload> TYPE = new Type<>(
+                ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "credits/pulse"));
+        public static final StreamCodec<ByteBuf, S2CCreditsPulsePayload> STREAM_CODEC =
+                ByteBufCodecs.FLOAT.map(S2CCreditsPulsePayload::new, S2CCreditsPulsePayload::strength);
+
+        @Override
+        public Type<S2CCreditsPulsePayload> type() {
+            return TYPE;
+        }
+    }
+
+    /**
      * The client-close broadcast (IDEAS §B3): after {@code delayTicks} the client calls
      * {@code Minecraft.stop()} — guarded client-side (nonce match, never in
      * singleplayer/LAN, {@code allowFinaleClose} kill-switch).
@@ -219,6 +246,8 @@ public final class CreditsPayloads {
                 (payload, context) -> dispatch(fovHandler, payload, "fov"));
         registrar.playToClient(S2CCreditsSkyPayload.TYPE, S2CCreditsSkyPayload.STREAM_CODEC,
                 (payload, context) -> dispatch(skyHandler, payload, "sky"));
+        registrar.playToClient(S2CCreditsPulsePayload.TYPE, S2CCreditsPulsePayload.STREAM_CODEC,
+                (payload, context) -> dispatch(pulseHandler, payload, "pulse"));
     }
 
     private static <T extends CustomPacketPayload> void dispatch(Consumer<T> handler, T payload, String name) {
@@ -244,12 +273,25 @@ public final class CreditsPayloads {
     }
 
     public static void sendTitle(ServerPlayer player, String titleKey, int holdTicks) {
-        PacketDistributor.sendToPlayer(player, new S2CCreditsTitlePayload(titleKey, holdTicks, false));
+        PacketDistributor.sendToPlayer(player, new S2CCreditsTitlePayload(
+                titleKey, holdTicks, S2CCreditsTitlePayload.STYLE_DECODE));
     }
 
     /** FIN-6 end card: slow silent fade-in/out instead of the glitch decode. */
     public static void sendGentleTitle(ServerPlayer player, String titleKey, int holdTicks) {
-        PacketDistributor.sendToPlayer(player, new S2CCreditsTitlePayload(titleKey, holdTicks, true));
+        PacketDistributor.sendToPlayer(player, new S2CCreditsTitlePayload(
+                titleKey, holdTicks, S2CCreditsTitlePayload.STYLE_GENTLE));
+    }
+
+    /** F-072 V3 closer card: letters materialize from dust, kerning breathes in. */
+    public static void sendFinaleTitle(ServerPlayer player, String titleKey, int holdTicks) {
+        PacketDistributor.sendToPlayer(player, new S2CCreditsTitlePayload(
+                titleKey, holdTicks, S2CCreditsTitlePayload.STYLE_FINALE));
+    }
+
+    /** F-072 V3: one black-hole gulp impulse (the post pass's {@code Pulse} envelope). */
+    public static void sendPulse(ServerPlayer player, float strength) {
+        PacketDistributor.sendToPlayer(player, new S2CCreditsPulsePayload(strength));
     }
 
     public static void sendClose(ServerPlayer player, int delayTicks, int nonce) {
@@ -301,5 +343,10 @@ public final class CreditsPayloads {
     /** Installed by {@code client.credits.CreditsSkyFx} (client class-load). */
     public static void setClientSkyHandler(Consumer<S2CCreditsSkyPayload> handler) {
         skyHandler = handler;
+    }
+
+    /** Installed by {@code client.credits.CreditsSkyFx} (client class-load). */
+    public static void setClientPulseHandler(Consumer<S2CCreditsPulsePayload> handler) {
+        pulseHandler = handler;
     }
 }

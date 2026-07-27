@@ -57,6 +57,16 @@ import net.minecraft.world.phys.Vec3;
  * covered, discarded behind the final black. {@link #swallowPulse} publishes the
  * deterministic "gulp" schedule (a cluster group crossing the horizon) that
  * {@code CreditsSequence} answers with a shockwave ring + brightness blink.</p>
+ *
+ * <p><b>F-072 V3 infall dramaturgy</b>: crossing {@value #HEAT_START} of the fall every
+ * fragment IGNITES — the terrain state swaps to a magma-core heat state (hashed
+ * shroomlight accents) at full-bright, tidal friction made visible right before the
+ * swallow — and cools back to its real terrain block when the recycle wraps it out to
+ * the rim. The cluster arc-trailing WIDENS across the spaghettification window
+ * (+{@value #FILAMENT_TRAIL} rad/member), so a tear-off chunk visibly strings out into a
+ * glowing spiral filament instead of falling as a lump. {@link #horizonFlash} publishes
+ * a second, denser schedule of weak "letzte Blitze" between the big gulps that
+ * {@code CreditsSequence} forwards as low-strength client Pulse flickers.</p>
  */
 final class CreditsBlackHoleAct {
     static final String TAG = "eclipse_credits_blackhole";
@@ -86,6 +96,14 @@ final class CreditsBlackHoleAct {
     /** Swallow-pulse ("gulp") schedule: spacing + hashed jitter (see {@link #swallowPulse}). */
     private static final int PULSE_PERIOD = 115;
     private static final int PULSE_JITTER = 34;
+
+    /** V3 horizon "letzte Blitze": the denser, weaker flash schedule between big gulps. */
+    private static final int FLASH_PERIOD = 47;
+    private static final int FLASH_JITTER = 21;
+    /** V3 heat glow: fall progress where a fragment ignites (magma-core state swap). */
+    private static final float HEAT_START = 0.78F;
+    /** V3 tidal filament: extra per-member arc trailing gained across the stretch window. */
+    private static final float FILAMENT_TRAIL = 0.34F;
 
     /** Vantage geometry: high above and far south of the map center. */
     private static final double VANTAGE_SOUTH = 430.0D;
@@ -135,11 +153,17 @@ final class CreditsBlackHoleAct {
             Blocks.SMOOTH_BASALT.defaultBlockState(),
             Blocks.OBSIDIAN.defaultBlockState()};
 
+    /** V3 heat-glow states (the burn right before the swallow): magma core + rare accent. */
+    private static final BlockState HEAT_PRIMARY = Blocks.MAGMA_BLOCK.defaultBlockState();
+    private static final BlockState HEAT_ACCENT = Blocks.SHROOMLIGHT.defaultBlockState();
+
     private final List<Display.BlockDisplay> displays = new ArrayList<>(COUNT);
     /** REAL sampled surface states, ordered center→rim (cluster pockets stay coherent). */
     private final List<BlockState> terrainPalette = new ArrayList<>(TERRAIN_SAMPLES * 2);
     /** Last pushed Doppler sky value per display (skip no-op NBT round trips). */
     private final int[] dopplerCache = new int[COUNT];
+    /** V3: whether each fragment currently shows its heat state (swap on crossings only). */
+    private final boolean[] hotCache = new boolean[COUNT];
     private Vec3 holeCenter = Vec3.ZERO;
     private Vec3 vantage = Vec3.ZERO;
     private Vec3 fxAnchor = Vec3.ZERO;
@@ -195,6 +219,7 @@ final class CreditsBlackHoleAct {
         }
         sampleTerrainPalette(overworld, center);
         java.util.Arrays.fill(this.dopplerCache, Integer.MIN_VALUE);
+        java.util.Arrays.fill(this.hotCache, false);
         this.prepared = true;
         EclipseMod.LOGGER.info("CreditsBlackHoleAct: staged — hole {}, vantage {}, anchor {} (yaw {} pitch {}), "
                 + "{} terrain sample(s)", this.holeCenter, this.vantage, this.fxAnchor, this.yaw,
@@ -326,6 +351,11 @@ final class CreditsBlackHoleAct {
      * One lookahead interpolation window per {@value #PUSH_STRIDE}t, plus the strided
      * Doppler brightness wave (1/{@value #DOPPLER_STRIDE} of the field per push; values
      * are quantized and cached so unchanged fragments never pay the NBT round trip).
+     *
+     * <p>V3 heat glow rides the same loop: crossing {@value #HEAT_START} of the fall the
+     * fragment's state swaps to {@link #heatState} at full-bright (tidal friction turned
+     * visible), and the recycle wrap swaps the real terrain block back in with a fresh
+     * Doppler value — both are crossing-edge-only NBT writes, never per-push.</p>
      */
     void animate(int actTick) {
         this.pushWave++;
@@ -337,7 +367,23 @@ final class CreditsBlackHoleAct {
             piece.setTransformationInterpolationDelay(0);
             piece.setTransformationInterpolationDuration(PUSH_STRIDE);
             piece.setTransformation(pose(i, actTick + PUSH_STRIDE));
-            if (i % DOPPLER_STRIDE == this.pushWave % DOPPLER_STRIDE) {
+            boolean hot = fallProgress(i, actTick) >= HEAT_START;
+            if (hot != this.hotCache[i]) {
+                this.hotCache[i] = hot;
+                if (hot) {
+                    piece.setBlockState(heatState(i));
+                    CreditsSequence.applyBrightnessOverride(piece, 15, 15);
+                    this.dopplerCache[i] = Integer.MIN_VALUE;
+                } else {
+                    // Recycle wrap: back to real terrain, immediately re-lit (a full-
+                    // bright chunk at the cold shell rim would read wrong for 40t).
+                    piece.setBlockState(fragmentState(i));
+                    int sky = dopplerSky(i, actTick);
+                    this.dopplerCache[i] = sky;
+                    CreditsSequence.applyBrightnessOverride(piece, sky, Math.max(0, sky - 3));
+                }
+            }
+            if (!hot && i % DOPPLER_STRIDE == this.pushWave % DOPPLER_STRIDE) {
                 int sky = dopplerSky(i, actTick);
                 if (sky != this.dopplerCache[i]) {
                     this.dopplerCache[i] = sky;
@@ -345,6 +391,11 @@ final class CreditsBlackHoleAct {
                 }
             }
         }
+    }
+
+    /** V3 heat pick: magma core with a hashed shroomlight accent (deterministic). */
+    private static BlockState heatState(int index) {
+        return CreditsSequence.hash01(index, 104) < 0.25D ? HEAT_ACCENT : HEAT_PRIMARY;
     }
 
     /**
@@ -362,6 +413,22 @@ final class CreditsBlackHoleAct {
         }
         float progress = Mth.clamp(actTick / (float) SPIRAL_TICKS, 0.0F, 1.0F);
         return 0.35F + 0.5F * progress;
+    }
+
+    /**
+     * F-072 V3 "letzte Blitze": the denser, weaker flash schedule between the big
+     * {@link #swallowPulse} gulps — a fragment's final flare crossing the horizon.
+     * Returns the flash strength 0..1 when one lands exactly at {@code actTick}, else
+     * -1. {@code CreditsSequence} forwards it as a low-strength client Pulse (photon-
+     * ring flicker only — the shockwave, blink and thump stay reserved for true gulps).
+     */
+    float horizonFlash(int actTick) {
+        int slot = actTick / FLASH_PERIOD;
+        int due = slot * FLASH_PERIOD + (int) (CreditsSequence.hash01(slot, 105) * FLASH_JITTER);
+        if (actTick != due || actTick >= SPIRAL_TICKS - WIND_DOWN_TICKS) {
+            return -1.0F;
+        }
+        return 0.10F + 0.16F * (float) CreditsSequence.hash01(slot, 106);
     }
 
     void discard() {
@@ -388,12 +455,18 @@ final class CreditsBlackHoleAct {
         return Math.floorMod(actTick + phase, cycle) / (float) cycle;
     }
 
-    /** Disc angle (radians in the ring plane) of fragment {@code index} at fall progress {@code q}. */
+    /**
+     * Disc angle (radians in the ring plane) of fragment {@code index} at fall progress
+     * {@code q}. V3: the per-member arc trailing WIDENS across the spaghettification
+     * window ({@code 0.09 → 0.09 + }{@value #FILAMENT_TRAIL} rad) — the tidal field
+     * pulls a tear-off cluster apart into a glowing spiral filament before the swallow.
+     */
     private static float discTheta(int index, int actTick, float q) {
         int cluster = index / CLUSTER_SIZE;
         float turns = 2.0F + (float) CreditsSequence.hash01(cluster, 95) * 2.5F;
+        float filament = Mth.clamp((q - STRETCH_START) / (1.0F - STRETCH_START), 0.0F, 1.0F);
         return cluster * CreditsSequence.GOLDEN_ANGLE
-                + (index % CLUSTER_SIZE) * 0.09F // members trail along the same arc
+                + (index % CLUSTER_SIZE) * (0.09F + FILAMENT_TRAIL * filament)
                 + turns * Mth.TWO_PI * q * q
                 + actTick * 0.0016F; // the whole disc slowly turns even between falls
     }

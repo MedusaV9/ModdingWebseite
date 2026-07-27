@@ -86,6 +86,8 @@ public final class CreditsBlackHolePostFx {
         pipeline.getUniform("Aspect").setFloat(aspect);
         pipeline.getUniform("Time").setFloat((fxTicks % TIME_WRAP_TICKS + partialTick) / 20.0F);
         pipeline.getUniform("Detail").setFloat(EclipseClientConfig.reducedFx() ? 0.0F : 1.0F);
+        // F-072 V3: the server's gulp beats — horizon breath + ring flare envelope.
+        pipeline.getUniform("Pulse").setFloat(CreditsSkyFx.holePulse(partialTick));
     }
 
     private static float partialTick() {
