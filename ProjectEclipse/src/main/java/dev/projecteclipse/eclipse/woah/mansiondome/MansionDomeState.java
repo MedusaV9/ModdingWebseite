@@ -227,6 +227,12 @@ public final class MansionDomeState extends SavedData {
         setDirty();
     }
 
+    /** Geometry heal (reset-time re-probe of a void-parked device stand). */
+    public void setDevicePos(BlockPos devicePos) {
+        this.devicePos = devicePos;
+        setDirty();
+    }
+
     public void setHitsRemaining(int hitsRemaining) {
         this.hitsRemaining = Math.max(0, Math.min(MAX_HITS, hitsRemaining));
         setDirty();

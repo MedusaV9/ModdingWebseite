@@ -206,32 +206,23 @@ public final class MansionDomeService {
         long now = level.getServer().overworld().getGameTime();
 
         // Roof probe: 9×9 heightmap grid over the footprint (one-off sync chunk loads are
-        // sanctioned here — same as StructureStamper.registerStart).
+        // sanctioned here — same as StructureStamper.registerStart). Level.getHeight does
+        // NOT load chunks (unloaded columns answer minBuildHeight — that once parked the
+        // device at y=-176), so probe through probeHeight which forces the chunk in and
+        // rejects void columns.
         int probeStep = Math.max(2, Math.round(footprint / 10.0F));
         int roofTopY = Integer.MIN_VALUE;
         for (int gx = -4; gx <= 4; gx++) {
             for (int gz = -4; gz <= 4; gz++) {
-                int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
-                        anchor.getX() + gx * probeStep, anchor.getZ() + gz * probeStep);
-                roofTopY = Math.max(roofTopY, y);
+                roofTopY = Math.max(roofTopY, probeHeight(level,
+                        anchor.getX() + gx * probeStep, anchor.getZ() + gz * probeStep));
             }
         }
         // Device column: max-Y column of the inner 24×24 (the main roof), stand = first
-        // free block (getHeight already answers "highest blocking + 1").
-        BlockPos devicePos = anchor;
-        int deviceY = Integer.MIN_VALUE;
+        // free block (the heightmap already answers "highest blocking + 1").
         int deviceHalf = Math.min(12, Math.max(4, footprint / 6));
-        for (int dx = -deviceHalf; dx <= deviceHalf; dx += 4) {
-            for (int dz = -deviceHalf; dz <= deviceHalf; dz += 4) {
-                int x = anchor.getX() + dx;
-                int z = anchor.getZ() + dz;
-                int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
-                if (y > deviceY) {
-                    deviceY = y;
-                    devicePos = new BlockPos(x, y, z);
-                }
-            }
-        }
+        BlockPos devicePos = probeDevice(level, anchor.getX(), anchor.getZ(), deviceHalf,
+                anchor.getY(), roofTopY);
 
         int groundY = anchor.getY();
         int roofY = Math.max(roofTopY - 1, groundY); // top BLOCK of the roof
@@ -243,6 +234,7 @@ public final class MansionDomeService {
         shellRadius = Math.max(shellRadius,
                 (roofY + SHELL_ROOF_CLEARANCE) - centre.getY() + SHELL_ROOF_PAD);
 
+        // (void-guarded devicePos from the probe above)
         state.arm(level.dimension(), centre, shellRadius, groundY, roofY, devicePos, testDome);
         discardDevice(level, state);
         spawnDevice(level, state);
@@ -252,6 +244,43 @@ public final class MansionDomeService {
                 "MansionDome ARMED{}: centre {} r={} groundY={} roofY={} device {} ({} hits)",
                 testDome ? " (test)" : "", centre.toShortString(), shellRadius, groundY, roofY,
                 devicePos.toShortString(), state.hitsRemaining());
+    }
+
+    /**
+     * Heightmap probe that FORCES the chunk in first ({@code Level.getHeight} silently
+     * answers {@code minBuildHeight} for unloaded chunks) and normalises "no blocking
+     * block in this column" to {@code minBuildHeight} so callers can max() safely.
+     */
+    private static int probeHeight(ServerLevel level, int x, int z) {
+        var chunk = level.getChunk(x >> 4, z >> 4); // sync-load (arm-time one-off)
+        int y = chunk.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x & 15, z & 15) + 1;
+        return Math.max(y, level.getMinBuildHeight());
+    }
+
+    /**
+     * Finds the highest column of the inner roof grid for the device stand; falls back
+     * to standing over the anchor when every probed column is void/unresolved (the
+     * "device parked at y=minBuildHeight" failure mode).
+     */
+    private static BlockPos probeDevice(ServerLevel level, int anchorX, int anchorZ,
+            int deviceHalf, int groundY, int roofTopY) {
+        BlockPos best = new BlockPos(anchorX, groundY + 1, anchorZ);
+        int bestY = Integer.MIN_VALUE;
+        for (int dx = -deviceHalf; dx <= deviceHalf; dx += 4) {
+            for (int dz = -deviceHalf; dz <= deviceHalf; dz += 4) {
+                int x = anchorX + dx;
+                int z = anchorZ + dz;
+                int y = probeHeight(level, x, z);
+                if (y > bestY) {
+                    bestY = y;
+                    best = new BlockPos(x, y, z);
+                }
+            }
+        }
+        if (bestY <= level.getMinBuildHeight() + 2 || bestY < groundY) {
+            return new BlockPos(anchorX, Math.max(roofTopY, groundY + 1), anchorZ);
+        }
+        return best;
     }
 
     // ------------------------------------------------------------------ ACTIVE self-heal
@@ -516,6 +545,16 @@ public final class MansionDomeService {
         DomeShatterFx.clearAll();
         removeZone(level.getServer(), state);
         discardDevice(level, state);
+        // Geometry self-heal: arms that probed over unloaded chunks parked the device
+        // at minBuildHeight — reset is the operator's escape hatch, so re-probe here.
+        BlockPos device = state.devicePos();
+        if (device.getY() <= level.getMinBuildHeight() + 2 || device.getY() < state.groundY()) {
+            BlockPos healed = probeDevice(level, state.centre().getX(), state.centre().getZ(),
+                    12, state.groundY(), state.roofY() + 1);
+            state.setDevicePos(healed);
+            EclipseMod.LOGGER.info("MansionDome reset: re-probed void-parked device -> {}",
+                    healed.toShortString());
+        }
         state.setStatus(MansionDomeState.STATUS_ACTIVE);
         state.setHitsRemaining(MansionDomeState.MAX_HITS);
         state.setCollapseStartGameTime(0L);
