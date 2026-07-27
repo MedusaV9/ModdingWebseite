@@ -17,6 +17,15 @@ Punkte. **Bitte einfach unten unter „Offen" anhängen — Format egal.**
 ---
 
 ## Offen (hier bitte eintragen)
+verbessere den Aufbau der Feedback Md 
+
+verbessere das UI von Gooby
+
+im Baum Modus die Stadt drum herum sieht komisch aus plus wenn ich im Garten bin will zb das Hais Dach sehen und so bei Räumen den Rest des Hauses oder sowas
+
+mach so Post Processing effecte plus das zb Gooby auch gechockt sein und so es richtig feelings zusehen gibt wie bei Animal Crossing
+
+
 weitere Bugs; UI ist viel zu groß oder viel zu klein du hast keine klanre Design Language und scrollen in den Settings und so klappt nicht. Gooby labert durchgehend irgendwas 
 und ich will meine Kamera frei umher bewegen können statt nur per gooby 
 
