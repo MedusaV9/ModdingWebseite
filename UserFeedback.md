@@ -9,6 +9,10 @@
 ---
 
 ## NEUES FEEDBACK (hier eintragen!)
+Beim Limbo Schiff ganz am Anfang ist immernoch irgendein Objekt von Veil glaube ich und das blockiert die sicht ultra das ist irgendwas großes pinkes was nicht das Meer ist.
+
+Bei Strukturen Spawnen kriegt man immernoch einen Blackscreen.
+
 Die Credits Scene muss noch mehr verbessert werden.
 
 Warum generierst du nicht einmal die Map vor? und lädst die dann einfach immer? ist das nicht schneller als immer wieder neu die Chunks generierern zulassen? und dann kannst du es ja krasser Animieren oder?
