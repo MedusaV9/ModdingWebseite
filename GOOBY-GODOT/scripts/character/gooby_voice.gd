@@ -21,6 +21,13 @@ const VOICE_DIR := "res://assets/audio/voice"
 const RATE := 11.0  # Silben pro Sekunde
 const PITCH_JITTER := 0.12  # ±12 %
 const POOL_SIZE := 4
+## EVAL-1 S3: Gebrabbel läuft über den Voice-Bus (vorher Master — der
+## Settings-Regler "Stimme" war wirkungslos). Die Silben-WAVs sind auf
+## −16 dBFS RMS gemastert (tools/audio/ef2_gen_sfx.py); der Trim setzt
+## die Stimme auf die Effekt-Ebene (eff. ≈ −22 dBFS) statt lautester
+## Sound im Spiel zu sein.
+const VOICE_BUS := &"Voice"
+const VOICE_TRIM_DB := -6.0
 const EMOTION_PITCH: Dictionary = {
 	"neutral": 1.0,
 	"happy": 1.15,
@@ -41,12 +48,26 @@ var _talking := false
 
 func _ready() -> void:
 	_load_streams()
+	_ensure_voice_bus()
 	for i in POOL_SIZE:
 		var player := AudioStreamPlayer3D.new()
 		player.name = "Voice%d" % i
 		player.max_distance = 30.0
+		player.bus = VOICE_BUS
+		player.volume_db = VOICE_TRIM_DB
 		add_child(player)
 		_pool.append(player)
+
+
+## Ohne AudioDirector (Showcase/Tests) existiert der Voice-Bus evtl. noch
+## nicht — dann anlegen, sonst fiele der Player still auf Master zurück.
+func _ensure_voice_bus() -> void:
+	if AudioServer.get_bus_index(VOICE_BUS) >= 0:
+		return
+	var idx := AudioServer.bus_count
+	AudioServer.add_bus(idx)
+	AudioServer.set_bus_name(idx, VOICE_BUS)
+	AudioServer.set_bus_send(idx, &"Master")
 
 
 func _load_streams() -> void:

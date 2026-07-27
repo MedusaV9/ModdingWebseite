@@ -11,6 +11,7 @@ extends Node3D
 ##   bathroomMirror          → Spiegel
 ##   bathroomSink            → Zahnputz
 ##   bed*                    → StoryTime (Geschichten-Stunde am Bett)
+##   kitchenFridge*          → Kuehlschrank (Füttern, EF-1/EVAL-1 D1)
 ##
 ## Einhängen (W2a-Hook-Request: W3d-home-requests.md):
 ##   InteractablesHost.attach_to(room)  # nach RoomBase._ready()
@@ -58,6 +59,8 @@ func rescan() -> void:
 			_dock(Zahnputz.new(), node)
 		elif item_id.begins_with("bed"):
 			_dock(StoryTime.new(), node)
+		elif item_id.begins_with("kitchenFridge"):
+			_dock(Kuehlschrank.new(), node)
 
 
 ## Tap-Zone über einem Möbel (Area3D + Box um die Möbel-AABB) — geteilter

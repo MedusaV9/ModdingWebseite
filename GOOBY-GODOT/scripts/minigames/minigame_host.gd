@@ -12,6 +12,8 @@ extends Control
 
 signal exit_requested(target: StringName, params: Dictionary)
 signal round_finished(breakdown: Dictionary)
+## EF-3 F3: der Host hat den zentralen End-Moment gezündet ("win"/"lose").
+signal end_moment_fired(kind: String)
 
 const RESULTS_SCENE := preload("res://scripts/minigames/results.tscn")
 const Stats := preload("res://scripts/logic/stats.gd")
@@ -20,11 +22,21 @@ const DESIGN_PORTRAIT := Vector2(390, 844)
 ## OrientationService.LockMode (W1a-Contract FROZEN: AUTO/LANDSCAPE/PORTRAIT).
 const LOCK_LANDSCAPE := 1
 const LOCK_PORTRAIT := 2
+## EF-3 F3: so kurz nach report_end prüft der Host, ob das Spiel selbst
+## gefeiert hat; danach zündet er den zentralen End-Moment.
+const END_MOMENT_DELAY_SEC := 0.12
+## Ein spieleigener win_moment() innerhalb dieses Fensters (ms) unterdrückt
+## den Auto-Moment (die 5 Selbst-Feierer zünden ihn direkt am Rundenende).
+const END_MOMENT_GRACE_MS := 1100
 
 ## Sekunden pro Countdown-Schritt (Tests drehen auf ~0).
-var countdown_step_sec := 0.8
+## EF-3 F4: 0,6 statt 0,8 — der Auftakt bleibt lesbar, wartet aber nicht.
+var countdown_step_sec := 0.6
 ## FB3: Sekunden pro Schritt des 3-2-1-WEITERSPIEL-Countdowns nach Pause.
 var resume_step_sec := 0.45
+## EF-3 F2: „Nochmal“/Neustart überspringt den 3-2-1 — nur „GO!“ für diese
+## Zeit, dann läuft die frische Runde (Erststart behält den vollen Countdown).
+var quick_go_sec := 0.5
 ## Duck-Typing-Overrides für Tests (null → /root/GameState bzw. /root/…).
 var state_node: Node = null
 var auto_navigate := true
@@ -119,6 +131,17 @@ func _build_ui() -> void:
 	bg.color = Color(0.98, 0.94, 0.87)
 	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(bg)
+	# EF-3 F6: die Pillar-/Letterbox-Flächen sind Theme-Creme, aber nackt —
+	# eine leise 8%-Vignette gibt ihnen Tiefe und rahmt das Spielfeld,
+	# ohne vom Spiel abzulenken (statisch, kein Perf-Kostenpunkt).
+	var vignette := ColorRect.new()
+	vignette.name = "BarsVignette"
+	vignette.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	vignette.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var vignette_mat := ShaderMaterial.new()
+	vignette_mat.shader = _vignette_shader()
+	vignette.material = vignette_mat
+	add_child(vignette)
 
 	_stage = Control.new()
 	_stage.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -265,25 +288,35 @@ func _layout_stage() -> void:
 
 ## Countdown mit Federung und steigender Tonhöhe (POLISH-A): jede Ziffer
 ## ploppt ein und klingt einen Schritt höher, das GO bekommt Goldblitz +
-## großen Pop — derselbe Belohnungsmoment für ALLE Spiele.
-func _run_countdown() -> void:
+## großen Pop — derselbe Belohnungsmoment für ALLE Spiele. EF-3 F4: pro
+## Tick ein weißer 40-ms-Flash übers Spielfeld, das GO schüttelt kurz.
+## quick=true (EF-3 F2, Retry): kein 3-2-1 — „GO!“ steht quick_go_sec, dann
+## startet die frische Runde (fairer Bereitmach-Moment statt Warteschleife).
+func _run_countdown(quick := false) -> void:
 	_countdown_token += 1
 	var token := _countdown_token
 	_countdown_label.show()
-	for step: int in [3, 2, 1]:
-		_countdown_label.text = str(step)
-		FeelSfx.play(self, "game_countdown", 0.9 + 0.12 * float(3 - step))
-		if juice != null:
-			juice.scale_pop(_countdown_label, 1.4, 300)
-		await get_tree().create_timer(countdown_step_sec).timeout
-		if token != _countdown_token or not is_inside_tree():
-			return
+	if not quick:
+		for step: int in [3, 2, 1]:
+			_countdown_label.text = str(step)
+			FeelSfx.play(self, "game_countdown", 0.9 + 0.12 * float(3 - step))
+			if juice != null:
+				juice.scale_pop(_countdown_label, 1.4, 300)
+				juice.hit_flash(Color(1.0, 1.0, 1.0, 0.1), 40)
+			await get_tree().create_timer(countdown_step_sec).timeout
+			if token != _countdown_token or not is_inside_tree():
+				return
 	_countdown_label.text = I18nService.t("mg.host.go")
 	FeelSfx.play(self, "game_go")
 	if juice != null:
 		juice.scale_pop(_countdown_label, 1.7, 380)
 		juice.hit_flash(Color(1.0, 0.95, 0.7, 0.16), 240)
+		juice.shake(0.15)
 	_countdown_label.show()
+	if quick:
+		await get_tree().create_timer(maxf(quick_go_sec, 0.0)).timeout
+		if token != _countdown_token or not is_inside_tree():
+			return
 	get_tree().create_timer(0.6).timeout.connect(
 		func() -> void:
 			if is_instance_valid(_countdown_label):
@@ -319,10 +352,37 @@ func _on_game_end(result: Dictionary) -> void:
 	if delay <= 0.0 or get_tree() == null:
 		_results.show_results(breakdown, _meta, juice)
 		return
+	# EF-3 F3: die Atempause ist nur verdient, wenn sie GEFÜLLT ist — der
+	# Host inszeniert das Rundenende zentral für alle Spiele (s. unten).
+	_schedule_end_moment(breakdown)
 	get_tree().create_timer(delay, true, false, true).timeout.connect(
 		func() -> void:
 			if is_instance_valid(_results) and _round_over:
 				_results.show_results(breakdown, _meta, juice)
+	)
+
+
+## EF-3 F3 (EVAL-1: „0,9 s toter Standbild-Moment“): nur 5/37 Spiele riefen
+## win_moment() selbst — jetzt zündet der HOST kurz nach report_end den
+## passenden End-Moment für ALLE Spiele: Sieg = Zeitlupe + Goldblitz +
+## Konfetti (JuiceKit.win_moment), Niederlage (0 Punkte) = weicher Trost-
+## Moment ohne Konfetti. Spiele, die selbst feiern (JuiceKit merkt sich den
+## letzten win_moment), bekommen KEINEN doppelten Effekt.
+func _schedule_end_moment(breakdown: Dictionary) -> void:
+	if juice == null or get_tree() == null:
+		return
+	get_tree().create_timer(END_MOMENT_DELAY_SEC, true, false, true).timeout.connect(
+		func() -> void:
+			if not is_instance_valid(self) or not _round_over or juice == null:
+				return
+			if Time.get_ticks_msec() - juice.win_moment_msec <= END_MOMENT_GRACE_MS:
+				return
+			var kind := "win" if int(breakdown.get("score", 0)) > 0 else "lose"
+			if kind == "win":
+				juice.win_moment()
+			else:
+				juice.lose_moment()
+			end_moment_fired.emit(kind)
 	)
 
 
@@ -439,6 +499,9 @@ func _on_again_pressed() -> void:
 
 ## Interner Neustart (gleiche Difficulty/Orientierung, frischer Seed) —
 ## gemeinsamer Pfad für Results-„Nochmal“ UND Pause-„Neustart“ (FB3).
+## EF-3 F2: Der Neustart nutzt den Quick-GO (kein 3-2-1) — der Spielzustand
+## ist trotzdem KOMPLETT frisch (neue Spielinstanz, Score/Chunks/Seed reset,
+## Energie wird wie immer erst beim echten Start abgebucht).
 func _restart_round() -> void:
 	if _is_exhausted():
 		# Jede Runde kostet Energie (§C6) — erschöpft geht es zurück zur
@@ -457,7 +520,7 @@ func _restart_round() -> void:
 		_game = null
 	_lock_orientation()
 	_mount_game()
-	_run_countdown()
+	_run_countdown(true)
 
 
 func _exit_to(target: StringName, params: Dictionary) -> void:
@@ -505,6 +568,20 @@ func _reduced_motion() -> bool:
 	if settings != null and settings.has_method("is_reduced_motion"):
 		return settings.is_reduced_motion()
 	return false
+
+
+## Warme, sehr leise Rand-Vignette für die Letterbox-Balken (EF-3 F6).
+static func _vignette_shader() -> Shader:
+	var shader := Shader.new()
+	shader.code = """
+shader_type canvas_item;
+void fragment() {
+	vec2 d = UV - vec2(0.5);
+	float edge = smoothstep(0.35, 0.85, length(d) * 1.35);
+	COLOR = vec4(0.35, 0.22, 0.12, edge * 0.08);
+}
+"""
+	return shader
 
 
 ## §C1 Web-Parität: Energie <= 15 → Minigames verweigern den Start.

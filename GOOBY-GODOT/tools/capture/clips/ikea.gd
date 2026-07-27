@@ -11,10 +11,12 @@ func _setup() -> void:
 	screen = packed.instantiate()
 	screen.auto_navigate = false
 	add_child(screen)
-	schedule(1.2, func() -> void: _tap_listeneintrag(1))
+	# Gezielt fotogene Möbel in die Vitrine holen (die Alles-Liste beginnt
+	# mit Umzugskartons — fürs Schaufenster wäre das zu langweilig).
+	schedule(1.2, func() -> void: screen.select_item("loungeSofa"))
 	schedule(3.6, func() -> void: _tap_swatch(1))
 	schedule(5.0, func() -> void: _tap_swatch(2))
-	schedule(6.4, func() -> void: _tap_listeneintrag(3))
+	schedule(6.4, func() -> void: screen.select_item("bedDouble"))
 	schedule(8.8, func() -> void: _tap_swatch(1))
 
 

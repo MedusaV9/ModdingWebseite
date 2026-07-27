@@ -22,6 +22,11 @@ func _setup() -> void:
 	region.receive_params({"spawn_zone": "hof"})
 	add_child(region)
 	schedule(0.2, func() -> void: _hud_aus())
+	schedule(0.25, func() -> void: gooby_in_den_sattel(region.reiter.pferd))
+	# Offenes Weidetal statt Hof: beim Hof-Spawn trabte der Reiter bei ~5 s
+	# unter dem Torbogen durch — das Schild füllte das halbe Bild (Erkenntnis
+	# aus der Einzelbild-Kontrolle). Im Tal gehört der Himmel der Kamera.
+	schedule(0.3, func() -> void: region.reiter.springe_zu(Vector3(-380.0, 0.0, 60.0), 2.05))
 	schedule(0.6, func() -> void: Input.action_press("ui_up"))
 	schedule(
 		5.0,

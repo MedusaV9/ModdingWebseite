@@ -12,8 +12,8 @@ dest_files=["res://.godot/imported/bordmusik-vacation-day.ogg-8827c0543c5444dc75
 
 [params]
 
-loop=false
-loop_offset=0
+loop=true
+loop_offset=1.8
 bpm=0
 beat_count=0
 bar_beats=4

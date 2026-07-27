@@ -223,6 +223,22 @@ func _tick_camera() -> void:
 ## ------------------------------------------------------------ Sonstiges
 
 
+## Trailer-Regie: sichtbarer Gooby im Sattel (so sehen einen Mitspieler
+## über RmpRemoteRider) — der lokale RanchWeltReiter zeigt selbst keinen.
+## Maße/Sitz wie in rmp_remote_rider.gd (Skalierung 0.72, body_height).
+func gooby_in_den_sattel(pferd: Node3D) -> void:
+	if pferd == null or not pferd.has_method("body_height"):
+		return
+	if pferd.has_method("equip"):
+		pferd.equip("sattel", "rot")
+	var rig := GoobyRig.new()
+	rig.name = "TrailerGooby"
+	rig.scale = Vector3.ONE * 0.72
+	rig.position = Vector3(0.0, pferd.body_height(), 0.05)
+	pferd.add_child(rig)
+	schedule(t + 0.1, func() -> void: rig.play_clip("sit"))
+
+
 func window_size() -> Vector2:
 	return Vector2(get_viewport().size)
 

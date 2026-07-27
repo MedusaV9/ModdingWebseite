@@ -12,8 +12,8 @@ dest_files=["res://.godot/imported/room-blubberbad.ogg-701276285227c6d735f018b46
 
 [params]
 
-loop=false
-loop_offset=0
+loop=true
+loop_offset=1.9
 bpm=0
 beat_count=0
 bar_beats=4

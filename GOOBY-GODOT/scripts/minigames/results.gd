@@ -81,7 +81,9 @@ func _apply_metrics() -> void:
 ## ohne Kit (Alt-Aufrufer/Tests) steht der Screen sofort statisch da.
 func show_results(breakdown: Dictionary, meta: Dictionary, juice: JuiceKit = null) -> void:
 	_juice = juice
-	FeelSfx.play(self, "game_win")
+	# EF-3 F3 („jeweils passend“): 0 Punkte bekommen keinen Sieg-Klang —
+	# der weiche game_lose passt zum Trost-Moment des Hosts.
+	FeelSfx.play(self, "game_win" if int(breakdown.get("score", 0)) > 0 else "game_lose")
 	for child in _rows.get_children():
 		child.queue_free()
 	var title := Label.new()
@@ -127,6 +129,9 @@ func show_results(breakdown: Dictionary, meta: Dictionary, juice: JuiceKit = nul
 			),
 			Color(0.95, 0.45, 0.66)
 		)
+		# EF-1/EVAL-1 D8: Level-Up wird GEFEIERT (Vollbild-Moment nach dem
+		# Count-Up) — vorher war es nur eine unscheinbare Textzeile.
+		_feier_level_up(breakdown)
 	if breakdown.get("beatTarget", false):
 		_add_line(I18nService.t("mg.results.beat_target"), Color(0.42, 0.6, 0.36))
 	var buttons := HBoxContainer.new()
@@ -180,6 +185,22 @@ func _add_stars(breakdown: Dictionary, final_score: int) -> void:
 	stars.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	_rows.add_child(stars)
 	stars.reveal(earned, _reduced_motion())
+
+
+## Level-Up-Feier (EF-1, EVAL-1 D8): der Vollbild-Moment kommt nach dem
+## Score-Count-Up (Ranch-Muster levelup_feier.gd, eigenständige Klasse).
+func _feier_level_up(breakdown: Dictionary) -> void:
+	var tree := get_tree()
+	if tree == null:
+		return
+	tree.create_timer(1.1).timeout.connect(
+		func() -> void:
+			if not is_instance_valid(self) or not visible:
+				return
+			LevelUpFeier.zeige_in(
+				self, int(breakdown.get("level", 2)), int(breakdown.get("coinsFromLevels", 0))
+			)
+	)
 
 
 ## „Neuer Rekord!“ — Konfetti + Fanfare + Goldblitz, Zeile poppt.

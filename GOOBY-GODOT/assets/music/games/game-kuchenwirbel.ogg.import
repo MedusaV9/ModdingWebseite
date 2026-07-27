@@ -12,8 +12,8 @@ dest_files=["res://.godot/imported/game-kuchenwirbel.ogg-a308bec77ccf55e9f8e8853
 
 [params]
 
-loop=false
-loop_offset=0
+loop=true
+loop_offset=4.7
 bpm=0
 beat_count=0
 bar_beats=4

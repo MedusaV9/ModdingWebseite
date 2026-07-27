@@ -116,6 +116,8 @@ static func award(
 		"xp": xp_gain,
 		"levelsGained": res["levelsGained"],
 		"coinsFromLevels": res["coinsAwarded"],
+		# EF-1/EVAL-1 D8: neues Level für die Level-Up-Feier im Results.
+		"level": int(res["level"]),
 		"difficulty": mode,
 		"dayCapReached": day_cap_reached,
 		"beatTarget": beat_target,

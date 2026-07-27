@@ -104,6 +104,11 @@ func finish_shower() -> void:
 				if stats is Dictionary:
 					stats["hygiene"] = minf(100.0, float(stats.get("hygiene", 0.0)) + 20.0)
 		)
+		# EF-1/EVAL-1 D6: Pflege zählt (washes → Sticker) und meldet SICHTBAR
+		# und HÖRBAR zurück — vorher endete die Dusche wortlos.
+		BadState.mark_washed(gs)
+	AudioDirector.try_play(self, "ui_sticker")
+	_show_care_reward(gooby, 20)
 	_say("bad.dusche.fertig")
 
 
@@ -133,6 +138,17 @@ func _run_klo_routine() -> void:
 
 func is_routine_active() -> bool:
 	return _routine_active
+
+
+## Pflege-Belohnung (EF-1, EVAL-1 D6): „+{n}“-Float + Glitzer über Gooby.
+func _show_care_reward(gooby: Node, betrag: int) -> void:
+	var room := _host.room()
+	if room == null:
+		return
+	var pos: Vector3 = global_position + Vector3(0.0, 1.0, 0.4)
+	if gooby is Node3D:
+		pos = (gooby as Node3D).global_position + Vector3(0.0, 0.9, 0.0)
+	RewardFx.pflege_reward(room, pos, betrag)
 
 
 func _peek_gag() -> void:

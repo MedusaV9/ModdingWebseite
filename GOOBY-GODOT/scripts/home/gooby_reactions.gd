@@ -33,6 +33,18 @@ const BUBBLE_MIN_GAP_S := 12.0
 const NEGLECT_STAT_THRESHOLD := 20.0
 const FAV_FOOD_MIN := 3
 const SOFA_FUND_COINS := 3
+## EF-1/EVAL-1 D4: Idle-Handlungen sind meist kommentiert (vorher 45 %) …
+const IDLE_TEXT_QUOTE := 0.7
+## … und etwa alle 90 s gibt es einen Mini-Fund (+1 Münze, Funken). Die
+## Frequenz läuft über die VORHANDENE Seelen-Bremse (ambient_allowed).
+const FUND_INTERVAL_S := 90.0
+const MINI_FUND_COINS := 1
+const FUND_KEYS: Array[String] = ["rewards.fund.a", "rewards.fund.b", "rewards.fund.c"]
+## EF-1/EVAL-1 D5 Streichel-Treppe: Tonhöhe steigt je Streichler, jeder
+## zehnte Streichler des Tages gibt einen kleinen Münz-Bonus.
+const PET_BONUS_JEDER := 10
+const PET_PITCH_SCHRITT := 0.04
+const PET_BONUS_COINS := 1
 
 var room: Node = null
 var gs: Object = null
@@ -46,6 +58,7 @@ var visuals_enabled := true
 var _defs: Array = []
 var _idle_timer := 0.0
 var _surprise_timer := 0.0
+var _fund_timer := FUND_INTERVAL_S
 var _presence_timer := 0.0
 var _idle_cooldowns: Dictionary = {}
 var _tap_count := 0
@@ -79,6 +92,17 @@ static func tap_stage(count: int) -> String:
 	if count >= 6:
 		return "tipp_schwindelig"
 	return ""
+
+
+## Streichel-Tonhöhe (PURE, EVAL-1 D5): steigt Stufe um Stufe zur
+## Bonus-Marke hin, nach jedem zehnten Streichler startet die Treppe neu.
+static func pet_pitch(pets_today: int) -> float:
+	return 1.0 + PET_PITCH_SCHRITT * float(maxi(pets_today - 1, 0) % PET_BONUS_JEDER)
+
+
+## Ist dieser Streichler die Bonus-Stufe (jeder zehnte des Tages)?
+static func pet_bonus_due(pets_today: int) -> bool:
+	return pets_today > 0 and pets_today % PET_BONUS_JEDER == 0
 
 
 func setup(target_room: Node) -> void:
@@ -123,6 +147,10 @@ func _process(delta: float) -> void:
 	if _surprise_timer <= 0.0:
 		_surprise_timer = SURPRISE_CHECK_S
 		_run_surprise()
+	_fund_timer -= delta
+	if _fund_timer <= 0.0:
+		_fund_timer = FUND_INTERVAL_S
+		_run_mini_fund()
 
 
 # ── Betreten-Moment ───────────────────────────────────────────────────────────
@@ -197,7 +225,7 @@ func handle_tap() -> void:
 		_tap_count = 0
 	_tap_last_s = now_s
 	_tap_count += 1
-	_count_pet()
+	_pet_feedback(_count_pet())
 	var stage := tap_stage(_tap_count)
 	if stage.is_empty():
 		return
@@ -211,7 +239,8 @@ func handle_tap() -> void:
 	_show_moment(_moment_of(def, _ctx(0)), true)
 
 
-func _count_pet() -> void:
+## Zählt den Streichler und liefert den neuen Tagesstand (EVAL-1 D5).
+func _count_pet() -> int:
 	var today := SoulTriggers.day_string(_date_now())
 	gs.update(
 		func(s: Dictionary) -> void:
@@ -221,6 +250,25 @@ func _count_pet() -> void:
 				counters["petsToday"] = 0
 			counters["petsToday"] = int(counters.get("petsToday", 0)) + 1
 	)
+	RewardHub.note_action(gs)
+	return int(gs.get_value("achievements.counters.petsToday", 0))
+
+
+## Streichel-Treppe (EVAL-1 D5): jeder Streichler klingt (steigende
+## Tonhöhe) mit Herzchen, jeder zehnte gibt +1 Münze mit Gold-Float —
+## vorher war Streicheln komplett belohnungsfrei.
+func _pet_feedback(pets_today: int) -> void:
+	AudioDirector.try_play(self, "ui_tick", pet_pitch(pets_today))
+	var pos := _gooby_pos()
+	if visuals_enabled and room != null and gooby != null:
+		RewardFx.herz_burst(room, pos, 4)
+	if not pet_bonus_due(pets_today):
+		return
+	_grant_coins(PET_BONUS_COINS)
+	AudioDirector.try_play(self, "ui_coins")
+	if visuals_enabled and room != null and gooby != null:
+		RewardFx.float_text(room, pos, "+%d" % PET_BONUS_COINS, RewardFx.GOLD)
+		RewardFx.herz_burst(room, pos, 14)
 
 
 func _count_tickle() -> void:
@@ -229,6 +277,7 @@ func _count_tickle() -> void:
 			var counters: Dictionary = s.get("achievements", {}).get("counters", {})
 			counters["tickles"] = int(counters.get("tickles", 0)) + 1
 	)
+	RewardHub.note_action(gs)
 
 
 # ── Idle-Leben (Hintergrund) ──────────────────────────────────────────────────
@@ -253,8 +302,13 @@ func _run_idle() -> void:
 func _perform_idle(act: Dictionary, ctx: Dictionary) -> void:
 	var moment := _moment_of(act, ctx)
 	# Idle-Texte nur manchmal (nie zutexten) — die Handlung spricht selbst.
-	if rng.randf() > 0.45:
+	# EVAL-1 D4: Quote auf 70 % angehoben und jede Handlung leise vertont,
+	# vorher blieben 75 s Leerlauf komplett stumm (0 Bubbles/0 SFX).
+	if rng.randf() > IDLE_TEXT_QUOTE:
 		moment["text_key"] = ""
+	if str(moment.get("sfx", "")).is_empty():
+		moment["sfx"] = "ui_tick"
+	_idle_sparkle()
 	match str(act.get("aktion", "")):
 		"moebel":
 			_walk_to_random_furniture()
@@ -299,6 +353,40 @@ func _grant_coins(amount: int) -> void:
 			var econ: Dictionary = s.get("economy", {})
 			Economy.award(econ, amount, "soul_sofa_fund")
 	)
+
+
+## Mini-Fund (EF-1, EVAL-1 D4): etwa alle FUND_INTERVAL_S ein kleiner
+## Moment — Gooby findet eine Münze (Funken + „+1“-Float + Münz-Ton +
+## Zeile). Die Frequenz läuft über die VORHANDENE Seelen-Bremse
+## (ambient_allowed: 90-s-Mindestabstand + Tagesdeckel) — kein zweites
+## Bremssystem, nichts darf nerven.
+func _run_mini_fund() -> void:
+	var ctx := _ctx(0)
+	if not _ambient_ok():
+		return
+	_book_ambient(ctx)
+	_grant_coins(MINI_FUND_COINS)
+	AudioDirector.try_play(self, "ui_coins")
+	if visuals_enabled and gooby != null and room != null:
+		var pos := _gooby_pos()
+		RewardFx.float_text(room, pos, "+%d" % MINI_FUND_COINS, RewardFx.GOLD)
+		RewardFx.funken_burst(room, pos + Vector3(0.0, -0.25, 0.0))
+	var key: String = FUND_KEYS[rng.randi_range(0, FUND_KEYS.size() - 1)]
+	_say(I18nService.t(key, {"gooby": str(gs.get_value("meta.goobyNickname", "Gooby"))}))
+
+
+## Kleiner Idle-Funkel (EVAL-1 D4): macht die Handlung sichtbar, ohne zu
+## schreien — ein paar Glitzerteilchen am Gooby.
+func _idle_sparkle() -> void:
+	if not visuals_enabled or gooby == null or room == null:
+		return
+	RewardFx.glitzer_burst(room, gooby.global_position + Vector3(0.0, 0.7, 0.0), 6)
+
+
+func _gooby_pos() -> Vector3:
+	if gooby != null:
+		return gooby.global_position + Vector3(0.0, 0.8, 0.0)
+	return Vector3.ZERO
 
 
 # ── Kommentare: Möbel, Essen, Vernachlässigung, Rituale ───────────────────────
@@ -775,7 +863,8 @@ func _food_name(food_id: String) -> String:
 	var key := "soul.essen." + food_id
 	if I18nService.has_key(key):
 		return I18nService.t(key)
-	return food_id
+	# EF-1: neue Speisen heißen im rewards-Katalog (Kühlschrank/REHWEI/Garten).
+	return FoodCatalog.display_name(food_id)
 
 
 func _moment_of(def: Dictionary, ctx: Dictionary) -> Dictionary:

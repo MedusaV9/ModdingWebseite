@@ -25,6 +25,12 @@ const CROSSFADE_S := 1.5
 ## Radio an/aus blendet schneller (Web 0.4 s).
 const RADIO_FADE_S := 0.4
 const FADE_OUT_DB := -40.0
+## Stinger sind Belohnungs-One-Shots und sollen ÜBER dem Musikbett sitzen:
+## Der Music-Bus liegt fix −10 dB unter den Effekten (AudioDirector
+## BUS_BASE_DB), die Stinger-Dateien sind auf −17 dBFS gemastert — der
+## Boost hebt sie in die Nähe der SFX-Ebene (eff. ≈ −21 dBFS), Peaks
+## bleiben dank Datei-Headroom + Master-Limiter unter −1 dBFS.
+const STINGER_BOOST_DB := 6.0
 const NODE_NAME := "MusicDirector"
 
 ## SceneRouter-Ziel → Musik-Kontext. mg_host wird dynamisch aufgelöst
@@ -222,7 +228,7 @@ func play_stinger(track_id: String) -> void:
 	if stream == null or _stinger_player == null:
 		return
 	_stinger_player.stream = stream
-	_stinger_player.volume_db = MusicRegistry.trim_db(track_id)
+	_stinger_player.volume_db = MusicRegistry.trim_db(track_id) + STINGER_BOOST_DB
 	_stinger_player.play()
 
 
@@ -349,3 +355,6 @@ func _ensure_music_bus() -> void:
 	AudioServer.add_bus(idx)
 	AudioServer.set_bus_name(idx, "Music")
 	AudioServer.set_bus_send(idx, &"Master")
+	# Fallback ohne AudioDirector: Mix-Offset trotzdem anwenden, damit die
+	# Musik nie wieder 9 dB über den Effekten liegt (EVAL-1 S1).
+	AudioServer.set_bus_volume_db(idx, float(AudioDirector.BUS_BASE_DB.get("Music", 0.0)))

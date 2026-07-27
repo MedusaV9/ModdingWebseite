@@ -14,6 +14,18 @@ func _setup() -> void:
 		dorf.receive_params({"via": "ritt"})
 	add_child(dorf)
 	schedule(0.2, func() -> void: _hud_aus())
+	schedule(0.25, func() -> void: gooby_in_den_sattel(dorf.reiter.pferd))
+	# Der Ritt-Spawn liegt ~174 m von der Plaza — in 10 s unerreichbar
+	# (Erkenntnis aus der Einzelbild-Kontrolle: NPCs blieben unsichtbar).
+	# Deshalb ~55 m vor die Plaza (600/540) teleportieren: Ankunft bei ~6 s,
+	# dann im Schritt zwischen Brunnen, Läden und Gooby-NPCs.
+	schedule(
+		0.3,
+		func() -> void:
+			var start := Vector3(547.0, 0.0, 525.0)
+			var d := Vector2(600.0 - start.x, 540.0 - start.z)
+			dorf.reiter.springe_zu(start, atan2(-d.x, -d.y))
+	)
 	schedule(
 		0.6,
 		func() -> void:

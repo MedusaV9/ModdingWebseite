@@ -12,13 +12,15 @@ import {COLORS, FONT_FAMILY} from '../theme';
 
 const FEATURES = [
   'Komplett neu in 3D',
-  '30+ Minispiele',
-  'Lebendige Stadt',
-  'Baumodus & GOUHBUS',
-  'Multiplayer-Besuche',
+  '36 Minispiele',
   'NEU: Gooby Ranch',
-  'Reiten & Turniere',
-  'Wetter & Tageszeiten',
+  'Offene Welt & Wetter',
+  'Turnier-Liga',
+  'Multiplayer & Ausritte',
+  'Quests & NPCs',
+  'Gestalten-Modus',
+  '92 Kosmetik-Teile',
+  'Bauen & GOUHBUS',
 ];
 
 const CHIP_COLORS = [
@@ -30,10 +32,12 @@ const CHIP_COLORS = [
   COLORS.yellow,
   COLORS.teal,
   COLORS.pink,
+  COLORS.tealDark,
+  COLORS.gold,
 ];
 
 /** Gelb/Gold-Chips brauchen dunklen Text. */
-const DUNKLE_SCHRIFT = new Set([2, 5]);
+const DUNKLE_SCHRIFT = new Set([2, 5, 9]);
 
 /** Outro: Feature-Chips wirbeln um das Logo, dann Claim + Musik-Credit. */
 export const Outro: React.FC = () => {
@@ -62,10 +66,10 @@ export const Outro: React.FC = () => {
           fps,
           config: {damping: 13, stiffness: 110},
         });
-        // Bei 8 Chips liegen die Diagonalen nah am Claim-Text — Ellipse
+        // Bei 10 Chips liegen die Diagonalen nah am Claim-Text — Ellipse
         // groß genug, damit nichts überlappt (1080p-Layout geprüft).
-        const radiusX = 750;
-        const radiusY = 440;
+        const radiusX = 740;
+        const radiusY = 450;
         const x = Math.cos(winkel) * radiusX * chip;
         const y = Math.sin(winkel) * radiusY * chip;
         return (
@@ -78,7 +82,7 @@ export const Outro: React.FC = () => {
               transform: `translate(calc(-50% + ${x}px), calc(-50% + ${y}px)) scale(${chip}) rotate(${(i % 2 === 0 ? 1 : -1) * 3}deg)`,
               fontFamily: FONT_FAMILY,
               fontWeight: 700,
-              fontSize: 36,
+              fontSize: 33,
               color: DUNKLE_SCHRIFT.has(i) ? COLORS.brown : COLORS.white,
               backgroundColor: CHIP_COLORS[i],
               borderRadius: 999,

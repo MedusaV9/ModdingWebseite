@@ -46,6 +46,10 @@ func _ready() -> void:
 	BattleshipScene.register_routes()
 	ChessScene.register_routes()
 	_build_hud()
+	# EF-1/EVAL-1 D2: globale Sticker-Auswertung + Feier (Toast+Ton+Konfetti)
+	# — feuert nach JEDER Handlung, egal welcher Screen offen ist.
+	if _gs != null:
+		RewardHub.attach_to(self, _gs)
 	if _router != null and _router.has_signal("travel_finished"):
 		_router.travel_finished.connect(_on_travel_finished)
 	if _router != null and _router.has_signal("travel_started"):

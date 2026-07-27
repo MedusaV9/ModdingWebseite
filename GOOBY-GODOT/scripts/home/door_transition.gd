@@ -56,6 +56,13 @@ func travel(gooby: Node3D, ui_layer: Node) -> void:
 	_busy = true
 	_travel_gooby = gooby
 	travel_started.emit(door_id)
+	# EF-3 F1: Zielraum SOFORT threaded vorladen — die Öffnen-Animation und
+	# der Gooby-Lauf überbrücken die Ladezeit, der Tür-Wisch bleibt kurz.
+	# (RoomBase preloadet ebenfalls beim Tap; hier idempotent für alle
+	# Direkt-Aufrufer von travel().)
+	var router := get_node_or_null("/root/SceneRouter")
+	if router != null and router.has_method("preload_target"):
+		router.preload_target(RoomDefs.route_target(target_room))
 	logic = DoorLogic.new(_doors_animated(), last_was_stuck, randf(), randf())
 	last_was_stuck = false
 	if logic.begin() == DoorLogic.State.OPENING:

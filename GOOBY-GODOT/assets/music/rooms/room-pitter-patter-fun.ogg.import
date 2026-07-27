@@ -12,8 +12,8 @@ dest_files=["res://.godot/imported/room-pitter-patter-fun.ogg-4e14c45ebf3752c966
 
 [params]
 
-loop=false
-loop_offset=0
+loop=true
+loop_offset=7.0
 bpm=0
 beat_count=0
 bar_beats=4

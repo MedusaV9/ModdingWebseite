@@ -1,0 +1,11 @@
+=== ranch_fahrt (640x360)
+[capture] Clip 'ranch_fahrt' gestartet
+[capture] Clip fertig (12.0 s)
+Done recording movie at path: /workspace/trailer/probe/ranch_fahrt.avi
+720 frames at 60 FPS (movie length: 00.0:00.0:12.0), recorded in 00.0:10.0:40.0 (1% of real-time speed).
+ffmpeg: /exec-daemon/tmux-root/lib/libncursesw.so.6: no version information available (required by /lib/x86_64-linux-gnu/libcaca.so.0)
+ffmpeg: /exec-daemon/tmux-root/lib/libncursesw.so.6: no version information available (required by /lib/x86_64-linux-gnu/libcaca.so.0)
+ffmpeg: /exec-daemon/tmux-root/lib/libncursesw.so.6: no version information available (required by /lib/x86_64-linux-gnu/libcaca.so.0)
+ffmpeg: /exec-daemon/tmux-root/lib/libncursesw.so.6: no version information available (required by /lib/x86_64-linux-gnu/libcaca.so.0)
+    720 Frames → ranch_fahrt_mid.png / _end.png
+=== ranch_berge (640x360)

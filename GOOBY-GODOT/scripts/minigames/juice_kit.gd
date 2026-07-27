@@ -30,6 +30,11 @@ var world_environment: WorldEnvironment
 ## Parent für float_text-Labels und Overlay-Effekte (Overlay des Hosts).
 var float_text_parent: Node
 
+## EF-3 F3: Ticks-Zeitstempel des letzten win_moment()/lose_moment() — der
+## MinigameHost erkennt daran, ob ein Spiel sein Rundenende selbst inszeniert
+## hat (nie doppelt feiern).
+var win_moment_msec := -1_000_000
+
 var _trauma := 0.0
 var _shake_base := Vector2.ZERO
 var _shake_base_valid := false
@@ -384,9 +389,18 @@ func count_to(label: Label, from: int, to: int, dur := 0.8, prefix := "", suffix
 ## Der Siegmoment: kurze Zeitlupe + Goldblitz + Konfetti (Sound macht der
 ## Aufrufer über sfx("game_win"), damit Sieg/Rekord unterscheidbar bleiben).
 func win_moment() -> void:
+	win_moment_msec = Time.get_ticks_msec()
 	slowmo(0.35, 420)
 	hit_flash(Color(1.0, 0.9, 0.5, 0.28), 300)
 	confetti(70)
+
+
+## Der Trost-Moment am Rundenende OHNE Punkte (EF-3 F3): weiche kurze
+## Zeitlupe + kühler Blitz — bewusst kein Konfetti, Niederlagen feiern nicht.
+func lose_moment() -> void:
+	win_moment_msec = Time.get_ticks_msec()
+	slowmo(0.55, 300)
+	hit_flash(Color(0.55, 0.6, 0.75, 0.16), 260)
 
 
 func _time_scale_pulse(scale: float, ms: int) -> void:

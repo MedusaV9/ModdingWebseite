@@ -13,10 +13,16 @@
   > http://creativecommons.org/licenses/by/4.0/
 
   Die Namensnennung ist zusätzlich im Trailer-Abspann (Outro) eingeblendet.
-- **Bearbeitung:** Auf 44,4 s gekürzt (Start beim Downbeat bei 2,25 s,
-  2 s Fade-out), Loudness auf ca. −14 LUFS normalisiert (ffmpeg `loudnorm`).
-  Tempo: 100 BPM → bei 60 fps liegt jeder Beat auf exakt 36 Frames; alle
-  Schnitte des Trailers sitzen auf Beat-Vielfachen.
+- **Bearbeitung:** Auf 54,6 s gekürzt (Start beim Downbeat bei 2,25 s,
+  2,2 s Fade-out ab 52,4 s), Loudness auf ca. −14 LUFS normalisiert
+  (ffmpeg `loudnorm`). Tempo: 100 BPM (per Spektralfluss-Analyse bestätigt:
+  100,01 BPM) → bei 60 fps liegt jeder Beat auf exakt 36 Frames; alle
+  Schnitte des Trailers sitzen auf Beat-Vielfachen, Kapitelwechsel auf
+  Taktgrenzen. Der Track wurde für die neue Fassung bewusst BEIBEHALTEN:
+  exakt 100 BPM (verlustfreies Beat-Grid), durchgehend hohe Energie für
+  die Montagen, Lizenz bereits sauber attribuiert — die Ranch-Wendung wird
+  visuell (Kapitel-Karte + Flash auf Taktgrenze) markiert, da der Track
+  keinen musikalischen Break besitzt.
 
 ## Schrift
 
@@ -33,3 +39,6 @@
   als verlustfreies Zwischenformat, H.264 CRF 14 als Remotion-Quellmaterial,
   finaler Export H.264 CRF 16 (Details: README, „Qualitäts-Kette“).
   App-Icon und Farbwelt stammen aus dem GOOBY-Projekt selbst.
+- Kapitel-Karte „GOOBY RANCH“: Key-Artwork und Holzschild-Logo aus
+  `GOOBY-GODOT/assets/ranch/artwork/` (`key_artwork_gooby_ranch.webp`,
+  `logo_gooby_ranch_frei.webp`) — projekteigenes Artwork.

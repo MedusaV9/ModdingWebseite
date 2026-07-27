@@ -18,10 +18,13 @@ extends Node
 ##
 ## Reise-Typen (API FROZEN nach W1, Handoff W1a-core.md):
 ## - VEIL_TRAVEL: voller Ladescreen (Haus↔Stadt, Minigames, Orte).
-## - DOOR_TRAVEL: M1-Skelett = kurzer Veil-Cut. W2-HOUSE ruft goto(...,
-##   TravelType.DOOR_TRAVEL) NACH seiner Tür-Gag-/Lauf-Sequenz auf; das
-##   additive Laden ohne Veil (Doc A §1.4) ist Backlog M2 und ändert die
-##   Signatur NICHT.
+## - DOOR_TRAVEL: kurzer Tür-Wisch OHNE Vollveil (EF-3/EVAL-1 F1): das Veil
+##   zeigt einen ~330-ms-Wisch statt Karte+Blende, und die Mindestanzeige
+##   fällt auf door_min_shown_ms (0) — ein Raumwechsel fühlt sich wie ein
+##   Schritt durch die Tür an, nicht wie ein Ladebildschirm. W2-HOUSE ruft
+##   goto(..., TravelType.DOOR_TRAVEL) NACH seiner Tür-Gag-/Lauf-Sequenz
+##   auf; der Zielraum lädt derweil threaded im Hintergrund (preload_target
+##   beim Tür-Tap). Signatur unverändert.
 ##
 ## FIX1 — EIN gemeinsamer Zurück-Pfad (P0 „Zurück-Button geht meist nicht“):
 ## - Der Router führt eine Reise-HISTORY; `back()` reist zum vorherigen Ziel.
@@ -55,6 +58,9 @@ const HISTORY_LIMIT := 16
 
 ## Mindest-Anzeigedauer des Veils (verhindert Blitz-Flackern bei Mini-Szenen).
 var min_shown_ms := 600
+## Mindest-Anzeigedauer für DOOR_TRAVEL (EF-3 F1): 0 — der Tür-Wisch ist so
+## kurz wie das Laden erlaubt; die Wisch-Animation selbst glättet den Cut.
+var door_min_shown_ms := 0
 ## Force-Reveal-Deckel: nach so vielen ms wird IMMER aufgedeckt (nie Deadlock).
 var hard_timeout_ms := 10_000
 ## Idle-Frames nach ready_for_reveal (Shader-/Pipeline-Warmup).
@@ -255,7 +261,8 @@ func _travel(target: StringName, params: Dictionary, travel_type: int, record :=
 		ready_state["ready"] = true
 
 	_set_state(State.WAIT_READY)
-	var clean := await _wait_until_ready(ready_state, cover_started_ms)
+	var min_shown := door_min_shown_ms if travel_type == TravelType.DOOR_TRAVEL else min_shown_ms
+	var clean := await _wait_until_ready(ready_state, cover_started_ms, min_shown)
 	if not clean:
 		push_warning(
 			"SceneRouter: Hard-Timeout (%d ms) für '%s' — Force-Reveal." % [hard_timeout_ms, target]
@@ -284,12 +291,14 @@ func _mount_scene(packed: PackedScene, params: Dictionary, ready_state: Dictiona
 	mount.add_child(_current_scene)
 
 
-func _wait_until_ready(ready_state: Dictionary, started_ms: int) -> bool:
+func _wait_until_ready(ready_state: Dictionary, started_ms: int, min_shown := -1) -> bool:
+	if min_shown < 0:
+		min_shown = min_shown_ms
 	var idle_frames := 0
 	while true:
 		var elapsed := Time.get_ticks_msec() - started_ms
 		var is_ready: bool = ready_state["ready"]
-		if is_ready and idle_frames >= idle_frames_required and elapsed >= min_shown_ms:
+		if is_ready and idle_frames >= idle_frames_required and elapsed >= min_shown:
 			return true
 		if elapsed >= hard_timeout_ms:
 			return false

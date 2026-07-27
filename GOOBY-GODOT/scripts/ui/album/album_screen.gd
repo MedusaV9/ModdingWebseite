@@ -493,12 +493,30 @@ func _on_sticker_tapped(def: Dictionary) -> void:
 		_refresh_rail()
 
 
+## EF-1/EVAL-1 D2: läuft der globale RewardHub, feiert ER (Toast+Ton+
+## Konfetti auf der obersten Layer) — das Album hängt sich nur für den
+## Grid-Refresh an dessen Auswertung (keine Doppel-Feier, kein zweiter
+## Service). Ohne Hub (Tests/Alt-Aufrufer) bleibt der eigene Pfad erhalten.
 func _attach_unlock_service() -> void:
+	var hub := RewardHub.find(self)
+	if hub != null and hub.unlocks != null and gs_override == null:
+		hub.unlocks.sticker_unlocked.connect(_on_hub_sticker_unlocked)
+		return
 	_unlocks = StickerUnlocks.new()
 	add_child(_unlocks)
 	_unlocks.sticker_unlocked.connect(_on_sticker_unlocked)
 	if _gs != null:
 		_unlocks.attach(_gs, _catalog)
+
+
+## Refresh-only-Pfad bei aktivem RewardHub: Anzeige aktualisieren, Feier
+## und Set-Belohnung kommen vom Hub.
+func _on_hub_sticker_unlocked(def: Dictionary) -> void:
+	_refresh_count()
+	_refresh_rail()
+	if str(def.get("page", "")) == _current_page:
+		_show_page(_current_page)
+	_refresh_page_progress(_current_page)
 
 
 func _on_sticker_unlocked(def: Dictionary) -> void:

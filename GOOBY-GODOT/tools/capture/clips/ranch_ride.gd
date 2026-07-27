@@ -16,6 +16,7 @@ func _setup() -> void:
 	region.receive_params({"spawn_zone": "hof"})
 	add_child(region)
 	schedule(0.2, func() -> void: _hud_aus())
+	schedule(0.25, func() -> void: gooby_in_den_sattel(region.reiter.pferd))
 	schedule(
 		0.6,
 		func() -> void:

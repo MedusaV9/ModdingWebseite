@@ -13,6 +13,16 @@ import {COLORS} from '../theme';
  * Hochkant-Triptychon: drei Portrait-Minigames als „Handy-Karten“
  * nebeneinander, leicht rotiert, federn nacheinander ein.
  */
+const CARD_W = 442;
+const CARD_H = 932;
+/** Quellvideo (720×1280) und Spiel-Canvas darin (Host-Chrome außenrum). */
+const SRC_W = 720;
+const SRC_H = 1280;
+const RECT = {x: 124, y: 60, w: 470, h: 1027};
+const S = Math.max(CARD_W / RECT.w, CARD_H / RECT.h);
+const TX = -(RECT.x * S - (CARD_W - RECT.w * S) / 2);
+const TY = -(RECT.y * S - (CARD_H - RECT.h * S) / 2);
+
 export const TrioScene: React.FC<{
   clips: {src: string; startFrom?: number}[];
 }> = ({clips}) => {
@@ -39,21 +49,29 @@ export const TrioScene: React.FC<{
           <div
             key={clip.src}
             style={{
-              width: 442,
-              height: 932,
+              width: CARD_W,
+              height: CARD_H,
               borderRadius: 38,
               overflow: 'hidden',
               boxShadow: '0 18px 60px rgba(74, 59, 54, 0.3)',
               border: `10px solid ${COLORS.white}`,
               transform: `scale(${pop}) rotate(${rots[i % 3]}deg)`,
               backgroundColor: COLORS.white,
+              position: 'relative',
             }}
           >
             <OffthreadVideo
               muted
               src={staticFile(clip.src)}
               startFrom={clip.startFrom ?? 0}
-              style={{width: '100%', height: '100%', objectFit: 'cover'}}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: SRC_W * S,
+                height: SRC_H * S,
+                transform: `translate(${TX}px, ${TY}px)`,
+              }}
             />
           </div>
         );

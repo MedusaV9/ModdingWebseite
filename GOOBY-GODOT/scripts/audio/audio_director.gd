@@ -15,6 +15,15 @@ extends Node
 
 ## Busname → AppSettings-Key unter "audio." (Master heißt im Setting master).
 const BUS_SETTINGS := {"Master": "master", "Music": "music", "Sfx": "sfx", "Voice": "voice"}
+## Fester Mix-Offset je Bus, ZUSÄTZLICH zum Nutzer-Regler (EVAL-1 S1):
+## Musik sitzt nach AC-Referenz 6–10 dB UNTER den Interaktions-Sounds.
+## Die Musikdateien sind auf −20 dBFS gemastert (music_registry.gd, in der
+## EVAL1-Messmetrik −17); der SFX-Median liegt bei ~−22,6 — der Bus legt
+## die Musik mit −13 dB auf ~7,4 dB unter die Effekte (Regler 1.0 Default).
+## tests/unit/test_ef2_audio_levels.gd wacht über das Verhältnis.
+const BUS_BASE_DB := {"Music": -13.0}
+## Master-Limiter (EVAL-1 S1): nichts über −1 dBFS, egal was sich stapelt.
+const LIMITER_CEILING_DB := -1.0
 const NODE_NAME := "AudioDirector"
 const POOL_SIZE := 10
 ## Gleiche Id innerhalb dieses Fensters nur einmal spielen (GvZ-Pop-Cluster).
@@ -29,6 +38,7 @@ var _pool_next := 0
 var _streams: Dictionary = {}
 var _last_played_msec: Dictionary = {}
 var _warned_ids: Dictionary = {}
+var _loop_players: Dictionary = {}
 var _rng := RandomNumberGenerator.new()
 
 
@@ -40,6 +50,24 @@ static func try_play(from: Node, id: String, pitch := 1.0) -> void:
 	var director := get_or_create(from)
 	if director.is_inside_tree():
 		director.play(id, pitch)
+
+
+## Dauer-Loop starten/stoppen (Wasser-/Bürsten-Foley, EVAL-1 F7) — Muster
+## wie try_play: ohne Baum still no-op.
+static func try_start_loop(from: Node, id: String) -> void:
+	if from == null or not from.is_inside_tree():
+		return
+	var director := get_or_create(from)
+	if director.is_inside_tree():
+		director.start_loop(id)
+
+
+static func try_stop_loop(from: Node, id: String) -> void:
+	if from == null or not from.is_inside_tree():
+		return
+	var director := get_or_create(from)
+	if director.is_inside_tree():
+		director.stop_loop(id)
 
 
 ## Autoload /root/Audio bevorzugt, sonst lazy-Instanz unter /root.
@@ -98,14 +126,65 @@ func play(id: String, pitch := 1.0) -> void:
 	player.play()
 
 
-## Lautstärke eines Busses live nachziehen (0..1, 0 = mute).
+## Geloopten Foley-Sound starten (care_wasser/care_buersten). Ein zweiter
+## Aufruf derselben Id ist no-op; stop_loop(id) blendet weich aus. Der
+## Stream wird dupliziert, damit der One-Shot-Cache loop-frei bleibt.
+func start_loop(id: String) -> void:
+	if _loop_players.has(id):
+		return
+	var row := SfxMap.entry(id)
+	if row.is_empty():
+		if not _warned_ids.has(id):
+			_warned_ids[id] = true
+			push_warning("[audio] unbekannte SFX-Id '%s' (s. sfx_map.gd)" % id)
+		return
+	var stream := _stream_for(id, row)
+	if stream == null:
+		return
+	var looped: AudioStream = stream.duplicate()
+	if looped is AudioStreamOggVorbis:
+		(looped as AudioStreamOggVorbis).loop = true
+	elif looped is AudioStreamWAV:
+		(looped as AudioStreamWAV).loop_mode = AudioStreamWAV.LOOP_FORWARD
+	var player := AudioStreamPlayer.new()
+	player.bus = &"Sfx"
+	player.stream = looped
+	player.volume_db = float(row.get("volume_db", 0.0))
+	add_child(player)
+	player.play()
+	_loop_players[id] = player
+
+
+## Loop weich beenden (150-ms-Fade gegen Abschalt-Klick).
+func stop_loop(id: String) -> void:
+	var player: AudioStreamPlayer = _loop_players.get(id)
+	if player == null:
+		return
+	_loop_players.erase(id)
+	if not is_inside_tree():
+		player.queue_free()
+		return
+	var tween := create_tween()
+	tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+	tween.tween_property(player, "volume_db", -40.0, 0.15)
+	tween.tween_callback(player.queue_free)
+
+
+func is_loop_playing(id: String) -> bool:
+	return _loop_players.has(id)
+
+
+## Lautstärke eines Busses live nachziehen (0..1, 0 = mute). Der feste
+## Mix-Offset aus BUS_BASE_DB kommt IMMER obendrauf — der Regler steuert
+## also relativ zur eingemessenen Mix-Balance.
 func apply_volume(bus_name: String, level: float) -> void:
 	var idx := AudioServer.get_bus_index(bus_name)
 	if idx < 0:
 		return
 	var clamped := clampf(level, 0.0, 1.0)
+	var base_db := float(BUS_BASE_DB.get(bus_name, 0.0))
 	AudioServer.set_bus_mute(idx, clamped <= 0.0)
-	AudioServer.set_bus_volume_db(idx, linear_to_db(maxf(clamped, 0.0001)))
+	AudioServer.set_bus_volume_db(idx, base_db + linear_to_db(maxf(clamped, 0.0001)))
 
 
 func _ensure_buses() -> void:
@@ -116,6 +195,22 @@ func _ensure_buses() -> void:
 		AudioServer.add_bus(idx)
 		AudioServer.set_bus_name(idx, bus_name)
 		AudioServer.set_bus_send(idx, &"Master")
+	_ensure_master_limiter()
+
+
+## Brickwall auf dem Master (EVAL-1 S1): 37 Tracks clippten früher nach
+## gain_trim; die Dateien sind jetzt zwar gemastert, aber Stapel-Momente
+## (Fanfare + Konfetti + Musik) sollen physikalisch nie über −1 dBFS.
+func _ensure_master_limiter() -> void:
+	var idx := AudioServer.get_bus_index("Master")
+	if idx < 0:
+		return
+	for i in AudioServer.get_bus_effect_count(idx):
+		if AudioServer.get_bus_effect(idx, i) is AudioEffectHardLimiter:
+			return
+	var limiter := AudioEffectHardLimiter.new()
+	limiter.ceiling_db = LIMITER_CEILING_DB
+	AudioServer.add_bus_effect(idx, limiter)
 
 
 func _apply_all_volumes() -> void:

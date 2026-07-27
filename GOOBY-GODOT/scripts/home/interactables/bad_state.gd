@@ -100,6 +100,19 @@ static func mark_woke_up(gs: Object) -> void:
 	_write(gs, "needsBrushing", true)
 
 
+## Geduscht/gebadet (EF-1, EVAL-1 D3): `washes`-Counter hoch — vorher wurde
+## er NIRGENDS inkrementiert, Sticker squeakyClean/cleanMachine und die
+## Recap-Zeile waren unerreichbar. Feuert die achievements-Auswertung an.
+static func mark_washed(gs: Object) -> void:
+	gs.update(
+		func(state: Dictionary) -> void:
+			var counters: Variant = state.get("achievements", {}).get("counters")
+			if counters is Dictionary:
+				counters["washes"] = int(counters.get("washes", 0)) + 1
+	)
+	gs.notify_slice_changed("achievements")
+
+
 ## Zähne geputzt: Pflicht weg, Counter hoch (Sticker-Signal), Buff kommt vom
 ## Aufrufer (zahnputz.gd). broke=true zählt den Bürsten-Bruch.
 static func mark_brushed(gs: Object, broke: bool) -> void:

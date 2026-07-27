@@ -1,6 +1,6 @@
 # GOOBY 5.0 — Godot-Update-Trailer
 
-Offizieller Trailer zum Godot-Engine-Update: **1920×1080, 60 fps, ~44 s**,
+Offizieller Trailer zum Godot-Engine-Update: **1920×1080, 60 fps, ~54,6 s**,
 gebaut mit [Remotion](https://remotion.dev). Finales Video:
 `GOOBY-5.0-Godot-Update-Trailer.mp4` (in diesem Ordner).
 
@@ -19,18 +19,26 @@ kein verlustiges JPEG-Zwischenformat). Vorschau/Studio: `npm run dev`
 Alle Zutaten liegen in `public/`:
 
 - `public/clips/*.mp4` — die Gameplay-Aufnahmen (siehe unten)
-- `public/audio/glitter_blast_cut.m4a` — Musik, fertig geschnitten (44,4 s)
-- `public/img/icon.png`, `public/fonts/baloo2-latin-var.woff2` — Branding
+- `public/audio/glitter_blast_cut54.m4a` — Musik, fertig geschnitten (54,6 s)
+- `public/img/icon.png`, `public/img/key_artwork_gooby_ranch.webp`,
+  `public/img/logo_gooby_ranch_frei.webp`,
+  `public/fonts/baloo2-latin-var.woff2` — Branding/Key-Art (Ranch-Artwork
+  aus `GOOBY-GODOT/assets/ranch/artwork/`)
 
 ## Aufbau (Sekunden-Fahrplan)
 
 Der Schnitt liegt auf dem Beat („Glitter Blast“, 100 BPM → 1 Beat = 36
-Frames). Fahrplan siehe Kommentar in `src/Trailer.tsx`:
-Titelkarte → 3D-Gooby → Zuhause/Baumodus → GOUHBUS/Garderobe →
-Stadt (Panorama/Tag/Nacht) → Minispiel-Montage (Beat-Schnitte, inkl.
-Hochkant-Triptychon) → Multiplayer-Besuch → **Ranch-Update-Block**
-(Hof mit Pferden → freies Reiten in der offenen Region → Wetter- und
-Tageszeiten-Zeitraffer → Reit-Dorf Hufingen → Turnier-Springen) →
+Frames; Kapitelwechsel auf Taktgrenzen). Fahrplan siehe Kommentar in
+`src/Trailer.tsx`:
+Titelkarte → wiederhergestellter Original-Gooby (Showcase) →
+Zuhause mit echten Möbeln/Baumodus/**Gestalten-Modus** → GOUHBUS/Garderobe
+(92 Teile) → Stadt (Panorama/Tag/Nacht) → Minispiel-Montage („36
+Minispiele“, Beat-Schnitte inkl. Hochkant-Triptychon) → Multiplayer-Besuch
+→ **Kapitel-Karte GOOBY RANCH** (Key-Artwork + Logo) → Überlandfahrt →
+Hof mit Pferden → freies Reiten → **Bergmassiv mit Hängebrücke + Bergsee**
+→ Neue-Zonen-Montage (Lavendelwiese, Nebelmoor, Turmruine, Muschelbucht,
+Apfelgarten, Kornfeld) → 7 Wetterlagen & Tageszeiten → Dorf Hufingen
+(Quests & NPCs) → Turnier-Springen (Liga) → Multiplayer-Ausritt →
 Outro mit Feature-Chips und Musik-Credit.
 
 ## Gameplay-Clips neu aufnehmen
@@ -78,14 +86,26 @@ wieder absenken:
 
 Movie-Maker rendert offline (feste Schrittweite) — die Aufnahme darf
 beliebig langsam sein, unter llvmpipe sind ~1–3 fps normal (alle Clips
-zusammen ≈ 2–3 h).
+zusammen ≈ 2–3 h, unter Last entsprechend länger).
 
 Verfügbare Clip-Treiber: `GOOBY-GODOT/tools/capture/clips/*.gd`
-(Minigames als `mg_*`, Stadt `city_*`, Haus `home_*`, Ranch `ranch`,
-`ranch_ride`, `ranch_comp`, `ranch_dorf`, `ranch_wetter`, dazu
-`showcase`, `wardrobe`, `ikea`, `visit`, `cutscene`). Die Minigame-Treiber
-pushen Touch-Events direkt in den SubViewport des MinigameHost
-(Fenster-Events erreichen dessen `_unhandled_input` nicht).
+(Minigames als `mg_*`, Stadt `city_*`, Haus `home_*` inkl. `home_style`
+für den Gestalten-Modus, Ranch `ranch`, `ranch_fahrt`, `ranch_ride`,
+`ranch_berge`, `ranch_zonen`, `ranch_comp`, `ranch_dorf`, `ranch_wetter`,
+`ranch_mp`, dazu `showcase`, `wardrobe`, `ikea`, `visit`, `cutscene`).
+Die Minigame-Treiber pushen Touch-Events direkt in den SubViewport des
+MinigameHost (Fenster-Events erreichen dessen `_unhandled_input` nicht).
+Trailer-Regie-Detail: Der lokale `RanchWeltReiter` zeigt selbst keinen
+Gooby im Sattel (nur Mitspieler sehen einen via `RmpRemoteRider`) — die
+Reit-Treiber setzen deshalb über `clip_driver.gooby_in_den_sattel()` einen
+sichtbaren Gooby samt Sattel aufs Pferd (reine Aufnahme-Regie).
+
+Zweites Regie-Detail: Der MinigameHost rendert das Spiel in ein
+Teilrechteck des Fensters (außenrum Host-Chrome mit Sterne-Zähler und
+Pause-Knopf). Im Trailer soll das SPIEL das Bild füllen — `Trailer.tsx`
+schneidet deshalb per `sourceRect` (`MG_RECT`, quer) bzw. dem Karten-Crop
+in `TrioScene.tsx` (hochkant) auf die per Einzelbild vermessene
+Spiel-Canvas zu. Ändert sich das Host-Layout, Rechtecke neu vermessen.
 
 ## Musik-Lizenz
 

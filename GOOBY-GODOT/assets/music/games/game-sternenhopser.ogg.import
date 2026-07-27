@@ -12,8 +12,8 @@ dest_files=["res://.godot/imported/game-sternenhopser.ogg-32e9d756599cc3d93e80d7
 
 [params]
 
-loop=false
-loop_offset=0
+loop=true
+loop_offset=15.3
 bpm=0
 beat_count=0
 bar_beats=4

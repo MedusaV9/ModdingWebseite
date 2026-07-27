@@ -17,6 +17,21 @@ extends RefCounted
 ## file-Einträge dürfen dafür absolute res://-Pfade sein — path() reicht
 ## sie unverändert durch. Trigger-Logik (Untergrund→Huf, Reaktionen,
 ## Ambience-Mix) lebt in RanchAudio (scripts/audio/ranch_audio.gd).
+##
+## EF-2 (EVAL-1 S1/S4 + Abdeckungslücken 2.5): Quelldateien sind auf
+## Peak ≤ −1 dBFS normalisiert, die volume_db-Trims auf eine gemeinsame
+## Effekt-Ebene (~−22 dBFS eff.) eingemessen — tools/audio/ef2_gen_sfx.py
+## + ef2_apply_sfx_trims.py, Wache: tests/unit/test_ef2_audio_levels.gd.
+## NEU für die stummen Interaktionen (Wiring: Besitzer der jeweiligen
+## Szene, Sound-Ids sind hier fertig gemappt):
+##   care_wasser (Dusch-Loop, via Audio.start_loop/stop_loop),
+##   care_buersten (Zahnputz-Loop), care_spuelung (Klo/Abfluss),
+##   care_erfolg (Pflege-Abschluss-Pluck, D6),
+##   pet_squish (Streichel-Squish pro Tap, D5),
+##   step_tap (Gooby-Schritte, D4/F8), nom_nom (Füttern/Kauen, D1),
+##   travel_whoosh_auf/_zu (Reise-Veil statt ui_open/close, F9).
+## gvz_collect klingt jetzt nach weichem 1,2-kHz-Pluck (S4), mg_win nach
+## Dur-Dreiklang (S6) — beide aus der soft/-Synthese.
 
 const BASE_DIR := "res://assets/audio/sfx"
 const RANCH_DIR := "res://assets/ranch/audio/sfx"
@@ -58,40 +73,52 @@ const SOUNDS := {
 	"ui_sticker": {"file": "soft/soft_sticker.ogg", "volume_db": -4.0},
 	"ui_toast": {"file": "soft/soft_toast.ogg", "volume_db": -6.0},
 	# ── Minigame-Framework (Countdown/Ergebnis) ──
-	"mg_go": {"file": "confirmation_001.ogg", "volume_db": -4.0},
-	"mg_win": {"file": "confirmation_003.ogg", "volume_db": -3.0},
-	"mg_lose": {"file": "error_008.ogg", "volume_db": -5.0},
+	"mg_go": {"file": "confirmation_001.ogg", "volume_db": -6.5},
+	"mg_win": {"file": "soft/soft_win.ogg", "volume_db": -3.5},
+	"mg_lose": {"file": "error_008.ogg", "volume_db": -1.5},
 	# ── teaParty / carrotCatch ──
-	"mg_perfect": {"file": "glass_005.ogg", "volume_db": -4.0, "pitch_jitter": 0.04},
-	"mg_good": {"file": "drop_002.ogg", "volume_db": -6.0, "pitch_jitter": 0.08},
-	"mg_golden": {"file": "glass_006.ogg", "volume_db": -3.0},
-	"mg_combo": {"file": "pluck_002.ogg", "volume_db": -5.0},
-	"mg_spill": {"file": "impactPlate_medium_000.ogg", "volume_db": -8.0, "pitch_jitter": 0.06},
-	"mg_junk": {"file": "impactMetal_light_002.ogg", "volume_db": -8.0, "pitch_jitter": 0.06},
+	"mg_perfect": {"file": "glass_005.ogg", "volume_db": -2.0, "pitch_jitter": 0.04},
+	"mg_good": {"file": "drop_002.ogg", "volume_db": -2.5, "pitch_jitter": 0.08},
+	"mg_golden": {"file": "glass_006.ogg", "volume_db": -1.5},
+	"mg_combo": {"file": "pluck_002.ogg", "volume_db": -1.5},
+	"mg_spill": {"file": "impactPlate_medium_000.ogg", "volume_db": -0.5, "pitch_jitter": 0.06},
+	"mg_junk": {"file": "impactMetal_light_002.ogg", "volume_db": -3.0, "pitch_jitter": 0.06},
 	# ── GvZ (Gefechts-Momente) ──
-	"gvz_place": {"file": "impactPlank_medium_000.ogg", "volume_db": -7.0, "pitch_jitter": 0.08},
-	"gvz_shovel": {"file": "impactMining_002.ogg", "volume_db": -7.0},
-	"gvz_boom": {"file": "impactPlate_heavy_002.ogg", "volume_db": -4.0, "pitch_jitter": 0.05},
-	"gvz_mower": {"file": "impactMetal_heavy_001.ogg", "volume_db": -5.0},
-	"gvz_pop": {"file": "impactGeneric_light_001.ogg", "volume_db": -9.0, "pitch_jitter": 0.1},
-	"gvz_balloon": {"file": "impactGlass_light_001.ogg", "volume_db": -8.0, "pitch_jitter": 0.08},
-	"gvz_collect": {"file": "glass_004.ogg", "volume_db": -7.0, "pitch_jitter": 0.06},
-	"gvz_wave": {"file": "impactBell_heavy_002.ogg", "volume_db": -7.0},
-	"gvz_boss": {"file": "impactBell_heavy_004.ogg", "volume_db": -4.0},
+	"gvz_place": {"file": "impactPlank_medium_000.ogg", "volume_db": -2.0, "pitch_jitter": 0.08},
+	"gvz_shovel": {"file": "impactMining_002.ogg", "volume_db": -1.0},
+	"gvz_boom": {"file": "impactPlate_heavy_002.ogg", "volume_db": -1.5, "pitch_jitter": 0.05},
+	"gvz_mower": {"file": "impactMetal_heavy_001.ogg", "volume_db": -0.5},
+	"gvz_pop": {"file": "impactGeneric_light_001.ogg", "volume_db": -4.0, "pitch_jitter": 0.1},
+	"gvz_balloon": {"file": "impactGlass_light_001.ogg", "volume_db": -1.5, "pitch_jitter": 0.08},
+	"gvz_collect": {"file": "soft/soft_collect.ogg", "volume_db": -4.0, "pitch_jitter": 0.06},
+	"gvz_wave": {"file": "impactBell_heavy_002.ogg", "volume_db": -1.5},
+	"gvz_boss": {"file": "impactBell_heavy_004.ogg", "volume_db": 0.0},
 	# ── Haus/Türen/Baumodus (Verdrahtung P3 via Handoff) ──
-	"door_knock": {"file": "impactPlank_medium_003.ogg", "volume_db": -6.0, "pitch_jitter": 0.1},
-	"build_hammer": {"file": "impactPlank_medium_001.ogg", "volume_db": -6.0, "pitch_jitter": 0.1},
+	"door_knock": {"file": "impactPlank_medium_003.ogg", "volume_db": -4.0, "pitch_jitter": 0.1},
+	"build_hammer": {"file": "impactPlank_medium_001.ogg", "volume_db": -5.0, "pitch_jitter": 0.1},
+	# ── Pflege (EVAL-1 D6/F7 — Dusche/Zähne/Klo klingen jetzt) ──
+	"care_wasser": {"file": "foley/care_wasser.ogg", "volume_db": -6.0},
+	"care_buersten": {"file": "foley/care_buersten.ogg", "volume_db": -1.0},
+	"care_spuelung": {"file": "foley/care_spuelung.ogg", "volume_db": -4.0},
+	"care_erfolg": {"file": "soft/soft_care_erfolg.ogg", "volume_db": -4.5},
+	# ── Gooby-Interaktion (D1/D4/D5/F8) ──
+	"pet_squish": {"file": "foley/pet_squish.ogg", "volume_db": -7.0, "pitch_jitter": 0.05},
+	"step_tap": {"file": "foley/step_tap.ogg", "volume_db": -12.0, "pitch_jitter": 0.1},
+	"nom_nom": {"file": "foley/nom_nom.ogg", "volume_db": -5.5, "pitch_jitter": 0.1},
+	# ── Reise-Whoosh (F9 — Veil-Reisen statt ui_open/ui_close) ──
+	"travel_whoosh_auf": {"file": "foley/travel_whoosh_auf.ogg", "volume_db": -3.0},
+	"travel_whoosh_zu": {"file": "foley/travel_whoosh_zu.ogg", "volume_db": -4.0},
 	# ── Ranch-DLC (RW-8): Hufschlag je Untergrund (Einzelschritt + Loops) ──
 	"ranch_huf_gras":
 	{"file": RANCH_DIR + "/huf_gras.ogg", "volume_db": -6.0, "pitch_jitter": 0.06},
 	"ranch_huf_sand":
 	{"file": RANCH_DIR + "/huf_sand.ogg", "volume_db": -5.0, "pitch_jitter": 0.06},
 	"ranch_huf_holz":
-	{"file": RANCH_DIR + "/huf_holz.ogg", "volume_db": -3.0, "pitch_jitter": 0.05},
+	{"file": RANCH_DIR + "/huf_holz.ogg", "volume_db": -5.5, "pitch_jitter": 0.05},
 	"ranch_huf_stein":
 	{"file": RANCH_DIR + "/huf_stein.ogg", "volume_db": -4.0, "pitch_jitter": 0.05},
 	"ranch_huf_trab": {"file": RANCH_DIR + "/huf_trab_loop.ogg", "volume_db": -8.0},
-	"ranch_huf_galopp": {"file": RANCH_DIR + "/huf_galopp_loop.ogg", "volume_db": -7.0},
+	"ranch_huf_galopp": {"file": RANCH_DIR + "/huf_galopp_loop.ogg", "volume_db": -5.0},
 	# ── Pferdelaute (Reaktionen: Begrüßung/Bindung/Erschöpfung) ──
 	"ranch_wiehern_a":
 	{"file": RANCH_DIR + "/pferd_wiehern_a.ogg", "volume_db": -5.0, "pitch_jitter": 0.04},

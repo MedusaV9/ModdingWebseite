@@ -76,6 +76,10 @@ func _on_rub_finished() -> void:
 	if gooby != null:
 		gooby.play_clip("hop")
 		gooby.set_wander_enabled(true)
+	# EF-1/EVAL-1 D6: Pflege meldet sichtbar+hörbar zurück („+10“-Float für
+	# den frische_zaehne-Buff, Glitzer, Pluck) — vorher nur eine Textzeile.
+	AudioDirector.try_play(self, "ui_sticker")
+	_show_care_reward(gooby, 10)
 	_say("bad.zahnputz.bruch" if broke else "bad.zahnputz.fertig")
 	_waiting_pose_done = false
 	_busy = false
@@ -83,6 +87,17 @@ func _on_rub_finished() -> void:
 
 func is_busy() -> bool:
 	return _busy
+
+
+## Pflege-Belohnung (EF-1, EVAL-1 D6): „+{n}“-Float + Glitzer über Gooby.
+func _show_care_reward(gooby: Node, betrag: int) -> void:
+	var room := _host.room()
+	if room == null:
+		return
+	var pos: Vector3 = global_position + Vector3(0.0, 1.0, 0.4)
+	if gooby is Node3D:
+		pos = (gooby as Node3D).global_position + Vector3(0.0, 0.9, 0.0)
+	RewardFx.pflege_reward(room, pos, betrag)
 
 
 func _gooby() -> Node:
