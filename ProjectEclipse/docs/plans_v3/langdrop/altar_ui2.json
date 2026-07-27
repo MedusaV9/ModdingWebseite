@@ -1,0 +1,18 @@
+{
+  "en_us": {
+    "gui.eclipse.altar.confirm.title": "Confirm purchase",
+    "gui.eclipse.altar.confirm.price": "%1$s × %2$s",
+    "gui.eclipse.altar.confirm.after": "Balance after purchase: %1$s",
+    "gui.eclipse.altar.confirm.hint": "Enter confirms · ESC cancels",
+    "gui.eclipse.altar.confirm.buy": "Buy",
+    "gui.eclipse.altar.confirm.cancel": "Cancel"
+  },
+  "de_de": {
+    "gui.eclipse.altar.confirm.title": "Kauf bestätigen",
+    "gui.eclipse.altar.confirm.price": "%1$s × %2$s",
+    "gui.eclipse.altar.confirm.after": "Guthaben nach dem Kauf: %1$s",
+    "gui.eclipse.altar.confirm.hint": "Enter bestätigt · ESC bricht ab",
+    "gui.eclipse.altar.confirm.buy": "Kaufen",
+    "gui.eclipse.altar.confirm.cancel": "Abbrechen"
+  }
+}

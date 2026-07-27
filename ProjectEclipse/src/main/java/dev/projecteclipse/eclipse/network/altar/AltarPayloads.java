@@ -51,10 +51,11 @@ import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class AltarPayloads {
     /**
-     * Bumped to v2 when AUDITFIX-3 changed the ShopEntry/Header wire shape, and to v3 when
-     * ALTARFIX2 #4 added {@link ShopEntry#currencyItemId()}.
+     * Bumped to v2 when AUDITFIX-3 changed the ShopEntry/Header wire shape, to v3 when
+     * ALTARFIX2 #4 added {@link ShopEntry#currencyItemId()}, and to v4 when F-074 added
+     * {@link ShopEntry#rewardItemId()} + the {@link S2CAltarBuyResultPayload} buy receipt.
      */
-    private static final String VERSION = "v5altarui3";
+    private static final String VERSION = "v6altarui4";
     /** Server-side reach check for panel requests and purchases (blocks, squared). */
     private static final double INTERACT_RANGE_SQ = 8.0D * 8.0D;
 
@@ -88,19 +89,36 @@ public final class AltarPayloads {
      * panel WHICH purse that price is drawn from (team pool vs. personal balance) — both
      * are counted in {@code currencyItemId}, which the row renders as an icon + real item
      * name because "Splitter" alone collides with Vitae-/Glitch-Splitter in German.</p>
+     *
+     * <p>F-074: {@code rewardItemId} is the registry id of the item the offer hands out,
+     * or {@code ""} for the non-item team offers (Eclipse's Favor, Double XP, Supply
+     * Beacon). The confirmation overlay renders it as the "what you are buying" icon.
+     * No spoiler surface: only CURRENTLY PURCHASABLE offers ever carry a ShopEntry
+     * (AUDITFIX-3), so the id is public information the row already names.</p>
      */
     public record ShopEntry(String offerId, String nameKey, int cost, boolean pooled,
-            int remainingSeconds, String currencyItemId) {
-        // 6 components — exactly the composite() ceiling; a 7th would need a hand-rolled
-        // codec like Header's.
-        public static final StreamCodec<ByteBuf, ShopEntry> STREAM_CODEC = StreamCodec.composite(
-                ByteBufCodecs.STRING_UTF8, ShopEntry::offerId,
-                ByteBufCodecs.STRING_UTF8, ShopEntry::nameKey,
-                ByteBufCodecs.VAR_INT, ShopEntry::cost,
-                ByteBufCodecs.BOOL, ShopEntry::pooled,
-                ByteBufCodecs.VAR_INT, ShopEntry::remainingSeconds,
-                ByteBufCodecs.STRING_UTF8, ShopEntry::currencyItemId,
-                ShopEntry::new);
+            int remainingSeconds, String currencyItemId, String rewardItemId) {
+        // 7 fields — past the 6-component composite() ceiling, so encode/decode by hand
+        // (argument evaluation order is left-to-right, matching the write order — the
+        // Header codec precedent).
+        public static final StreamCodec<ByteBuf, ShopEntry> STREAM_CODEC = StreamCodec.of(
+                (buf, entry) -> {
+                    ByteBufCodecs.STRING_UTF8.encode(buf, entry.offerId());
+                    ByteBufCodecs.STRING_UTF8.encode(buf, entry.nameKey());
+                    ByteBufCodecs.VAR_INT.encode(buf, entry.cost());
+                    ByteBufCodecs.BOOL.encode(buf, entry.pooled());
+                    ByteBufCodecs.VAR_INT.encode(buf, entry.remainingSeconds());
+                    ByteBufCodecs.STRING_UTF8.encode(buf, entry.currencyItemId());
+                    ByteBufCodecs.STRING_UTF8.encode(buf, entry.rewardItemId());
+                },
+                buf -> new ShopEntry(
+                        ByteBufCodecs.STRING_UTF8.decode(buf),
+                        ByteBufCodecs.STRING_UTF8.decode(buf),
+                        ByteBufCodecs.VAR_INT.decode(buf),
+                        ByteBufCodecs.BOOL.decode(buf),
+                        ByteBufCodecs.VAR_INT.decode(buf),
+                        ByteBufCodecs.STRING_UTF8.decode(buf),
+                        ByteBufCodecs.STRING_UTF8.decode(buf)));
     }
 
     /**
@@ -185,6 +203,34 @@ public final class AltarPayloads {
         }
     }
 
+    /**
+     * F-074 buy receipt, server → the buyer only: whether the purchase of {@code offerId}
+     * at the altar {@code pos} actually went through. Drives the panel's purchase
+     * animation (success) or its refusal flash (failure) — the refreshed snapshot that
+     * follows carries no success bit, and inferring it from balance deltas client-side
+     * would misread concurrent team-pool spends. The in-world ceremony that follows a
+     * success is fired separately by {@code economy.AltarBuyCeremony} (server-side
+     * displays + existing Quasar/FX sends), so this payload stays buyer-private.
+     */
+    public record S2CAltarBuyResultPayload(BlockPos pos, String offerId, boolean success)
+            implements CustomPacketPayload {
+        public static final CustomPacketPayload.Type<S2CAltarBuyResultPayload> TYPE =
+                new CustomPacketPayload.Type<>(
+                        ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "altar/buy_result"));
+
+        public static final StreamCodec<ByteBuf, S2CAltarBuyResultPayload> STREAM_CODEC =
+                StreamCodec.composite(
+                        BlockPos.STREAM_CODEC, S2CAltarBuyResultPayload::pos,
+                        ByteBufCodecs.STRING_UTF8, S2CAltarBuyResultPayload::offerId,
+                        ByteBufCodecs.BOOL, S2CAltarBuyResultPayload::success,
+                        S2CAltarBuyResultPayload::new);
+
+        @Override
+        public CustomPacketPayload.Type<S2CAltarBuyResultPayload> type() {
+            return TYPE;
+        }
+    }
+
     /** Client → server: buy {@code offerId} from the panel at {@code pos}. */
     public record C2SAltarBuyPayload(BlockPos pos, String offerId) implements CustomPacketPayload {
         public static final CustomPacketPayload.Type<C2SAltarBuyPayload> TYPE =
@@ -212,6 +258,8 @@ public final class AltarPayloads {
                 AltarPayloads::handlePanelRequest);
         registrar.playToServer(C2SAltarBuyPayload.TYPE, C2SAltarBuyPayload.STREAM_CODEC,
                 AltarPayloads::handleBuy);
+        registrar.playToClient(S2CAltarBuyResultPayload.TYPE, S2CAltarBuyResultPayload.STREAM_CODEC,
+                AltarPayloads::handleBuyResult);
     }
 
     // ------------------------------------------------------------------ server → client
@@ -263,7 +311,8 @@ public final class AltarPayloads {
                 continue;
             }
             offers.add(new ShopEntry(offer.id(), offer.nameKey(), offer.cost(), offer.pooled(),
-                    "double_xp".equals(offer.id()) ? doubleXpRemaining : 0, currencyItemId));
+                    "double_xp".equals(offer.id()) ? doubleXpRemaining : 0, currencyItemId,
+                    rewardItemId(offer)));
         }
 
         Header header = new Header(day, state.getAltarLevel(), next == null,
@@ -271,6 +320,19 @@ public final class AltarPayloads {
                 ShardEconomy.getShards(player), state.getShardPool(),
                 bossHintId(state, next), sealedOffers);
         return new S2CAltarPanelPayload(altarPos, openScreen, header, requirements, unlockKeys, offers);
+    }
+
+    /**
+     * F-074: registry id of the item an offer hands out, {@code ""} for the non-item team
+     * offers — resolved from the SAME {@link ShardEconomy.Offer#item()} supplier that
+     * {@code ShardEconomy.buy} later puts into the buyer's inventory.
+     */
+    private static String rewardItemId(ShardEconomy.Offer offer) {
+        if (offer.item() == null) {
+            return "";
+        }
+        return net.minecraft.core.registries.BuiltInRegistries.ITEM
+                .getKey(offer.item().get()).toString();
     }
 
     /**
@@ -320,13 +382,39 @@ public final class AltarPayloads {
         if (!(context.player() instanceof ServerPlayer player) || !validAltar(player, payload.pos())) {
             return;
         }
+        // F-074 success detection WITHOUT touching the guard chain: buyById/buy stay the
+        // single validation authority. Every successful purchase deducts exactly cost()
+        // from its purse inside this synchronous server-thread call; every refusal branch
+        // leaves both purses untouched — so the before/after delta IS the success bit.
+        ShardEconomy.Offer offer = ShardEconomy.offerById(payload.offerId());
+        int purseBefore = offer == null ? 0 : purseOf(player, offer);
         ShardEconomy.buyById(player, payload.offerId(), payload.pos());
+        boolean success = offer != null && purseOf(player, offer) == purseBefore - offer.cost();
+        if (success) {
+            // The in-world thank-you ceremony (starts after the panel's own purchase
+            // animation has had its beat — the delay lives in the ceremony class).
+            dev.projecteclipse.eclipse.economy.AltarBuyCeremony.begin(player, payload.pos(), offer);
+        }
+        PacketDistributor.sendToPlayer(player,
+                new S2CAltarBuyResultPayload(payload.pos(), payload.offerId(), success));
         // Win or refuse, answer with a fresh snapshot so the panel reflects reality.
         sendPanel(player, payload.pos(), false);
+    }
+
+    /** The balance of the purse {@code offer} is charged against (team pool vs. personal). */
+    private static int purseOf(ServerPlayer player, ShardEconomy.Offer offer) {
+        return offer.pooled()
+                ? EclipseWorldState.get(player.server).getShardPool()
+                : ShardEconomy.getShards(player);
     }
 
     /** Runs on the client main thread only; the client class is resolved lazily, never on the dedicated server. */
     private static void handlePanel(S2CAltarPanelPayload payload, IPayloadContext context) {
         dev.projecteclipse.eclipse.client.altar.AltarScreen.handlePanel(payload);
+    }
+
+    /** Runs on the client main thread only; the client class is resolved lazily, never on the dedicated server. */
+    private static void handleBuyResult(S2CAltarBuyResultPayload payload, IPayloadContext context) {
+        dev.projecteclipse.eclipse.client.altar.AltarScreen.handleBuyResult(payload);
     }
 }
