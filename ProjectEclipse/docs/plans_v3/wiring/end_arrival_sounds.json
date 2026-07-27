@@ -1,0 +1,25 @@
+{
+  "_comment": "F-077 End-arrival cinematic — sound inventory. ZERO new sound events: assets/eclipse/sounds.json needs NO merge (it is locked by the parallel wave anyway). Every beat reuses shipped eclipse events or vanilla events, listed here so the main agent can audit the mix. All senders live in sequence/endarrival/EndArrivalSequence (plus EndDiscService.announceCrash, which fires unchanged at the phase-3 boundary).",
+
+  "reused_eclipse_events": {
+    "eclipse:event.end_shatter_rumble": "Phase 1 + 2 deep drone (pitch 0.4/0.6 — the NetherOpeningSequence pre-tremor convention).",
+    "eclipse:event.rift_whoosh": "Pillar launch (t=200) and per-lightning-strike whoosh during the spill.",
+    "eclipse:event.rift_drone": "The maw's arrival drone (t=240, pitch 0.5).",
+    "eclipse:event.rift_thud": "The finale implosion thump (t=800, pitch 0.9)."
+  },
+
+  "reused_vanilla_events": {
+    "minecraft:ambient.cave": "Phase-1 unease layer (pitch 0.4).",
+    "minecraft:block.portal.ambient": "Phase-1 altar hum on a 64 t cadence.",
+    "minecraft:block.portal.trigger": "Phase-2 entry sting (pitch 0.55).",
+    "minecraft:block.beacon.activate": "The pillar ignition (t=200, pitch 0.55).",
+    "minecraft:block.end_portal.spawn": "The maw tearing open (t=240, pitch 0.6).",
+    "minecraft:entity.ender_dragon.growl": "Phase-3 opener (via announceCrash, unchanged) + the distant finale roar (t=850, pitch 0.5, plus a quiet per-player notify).",
+    "minecraft:entity.lightning_bolt.thunder": "Per violet strike during the spill (pitch 0.5-0.7); also fired once by announceCrash.",
+    "minecraft:entity.generic.explode": "The implosion body under the rift_thud (t=800, pitch 0.6)."
+  },
+
+  "optional_upgrades_for_later": {
+    "eclipse:event.end_arrival_choir": "A dedicated rising choir/drone pad for phases 2-3 would beat the layered rumbles; if audio assets ever get commissioned, register it in EclipseSounds + sounds.json and swap it in at CHARGE enter."
+  }
+}

@@ -13,6 +13,7 @@ import dev.projecteclipse.eclipse.network.end.EndPayloads;
 import dev.projecteclipse.eclipse.network.end.S2CEndCrashPayload;
 import dev.projecteclipse.eclipse.progression.DayScheduler;
 import dev.projecteclipse.eclipse.ritual.HeraldsLureItem;
+import dev.projecteclipse.eclipse.sequence.endarrival.EndArrivalSequence;
 import dev.projecteclipse.eclipse.worldgen.DiscProfile;
 import dev.projecteclipse.eclipse.worldgen.EndDiscGeometry;
 import dev.projecteclipse.eclipse.worldgen.stage.BudgetedBlockWriter;
@@ -71,6 +72,14 @@ public final class EndDiscService {
             return false;
         }
         boolean firstStart = !fight.materializationStarted();
+        // F-077: the very FIRST materialization belongs to the End-arrival cinematic —
+        // the sequence claims this call, runs its omen/charge phases and re-enters this
+        // same method at its phase-3 boundary (latched, so the claim is not repeated);
+        // the disc then builds in sync with the debris show. Restart-resume paths
+        // (firstStart == false) and an already-claimed start bypass the show untouched.
+        if (firstStart && EndArrivalSequence.interceptFirstMaterialize(server)) {
+            return true;
+        }
         EclipseWorldgenState.get(server).setEndDiscMaterialized(true);
         fight.beginMaterialization();
         activeJob = new Job(server.overworld(), fight);

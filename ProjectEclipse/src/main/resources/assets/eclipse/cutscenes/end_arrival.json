@@ -1,0 +1,28 @@
+{
+  "id": "end_arrival",
+  "enabled": true,
+  "allowSkip": true,
+  "interpolation": "catmullrom",
+  "anchor": "world",
+  "dimension": "minecraft:overworld",
+  "letterbox": true,
+  "hideHud": true,
+  "durationTicks": 1000,
+  "keyframes": [
+    { "t": 0.0, "pos": [11.0, 4.0, 15.0], "yaw": 0, "pitch": 8, "roll": 0, "fov": 62, "easing": "easeInOutSine", "lookAt": [0.0, 1.5, 0.0] },
+    { "t": 0.1, "pos": [-4.0, 5.0, 18.0], "yaw": 0, "pitch": 10, "roll": 0, "fov": 60, "easing": "easeInOutSine", "lookAt": [0.0, 1.5, 0.0] },
+    { "t": 0.16, "pos": [-14.0, 7.0, 17.0], "yaw": 0, "pitch": 10, "roll": -1, "fov": 61, "easing": "easeInOutSine", "lookAt": [0.0, 3.0, 0.0] },
+    { "t": 0.24, "pos": [-22.0, 14.0, 26.0], "yaw": 0, "pitch": -6, "roll": -1, "fov": 64, "easing": "easeInOutSine", "lookAt": [0.0, 40.0, 0.0] },
+    { "t": 0.34, "pos": [-36.0, 60.0, 48.0], "yaw": 0, "pitch": -18, "roll": 2, "fov": 70, "easing": "easeInOutSine", "lookAt": [0.0, 190.0, 0.0] },
+    { "t": 0.46, "pos": [-62.0, 160.0, 84.0], "yaw": 0, "pitch": -8, "roll": 2, "fov": 74, "easing": "easeInOutSine", "lookAt": [0.0, 300.0, 0.0] },
+    { "t": 0.62, "pos": [-108.0, 250.0, 104.0], "yaw": 0, "pitch": 4, "roll": -2, "fov": 78, "easing": "easeInOutSine", "lookAt": [30.0, 285.0, -20.0] },
+    { "t": 0.78, "pos": [126.0, 300.0, -128.0], "yaw": 0, "pitch": 6, "roll": 3, "fov": 82, "easing": "easeInOutQuart", "lookAt": [0.0, 280.0, 0.0] },
+    { "t": 0.9, "pos": [96.0, 230.0, -150.0], "yaw": 0, "pitch": -2, "roll": 0, "fov": 74, "easing": "easeInOutSine", "lookAt": [0.0, 310.0, 0.0] },
+    { "t": 1.0, "pos": [64.0, 150.0, -120.0], "yaw": 0, "pitch": 2, "roll": 0, "fov": 70, "easing": "easeInOutSine", "lookAt": [0.0, 270.0, 0.0] }
+  ],
+  "events": [],
+  "params": {
+    "_comment": "F-077 'Der Altar ruft das End' guided camera, played LOCAL (no teleport, skippable) for players within 128 blocks of the sanctum altar while EndArrivalSequence runs the ~50s show; the play anchor is the altar top center, so all positions/lookAts are offsets from it. Staging: t 0-0.16 slow close orbit on the altar (omen suction), t 0.16-0.24 the tremor pull-back as the erupt hits, t 0.24-0.46 the tilt-up ride along the violet pillar toward the rift maw (lookAt climbs 40->300 with the pillar), t 0.46-0.78 the wide crane past the rift while the debris streams pour onto the disc band (the easeInOutQuart leg crosses to the far side for the Totale), t 0.78-1.0 the implosion framing and a slow settle onto the finished sky-disc. Events are deliberately EMPTY: EndArrivalSequence broadcasts all sound/shake/caption beats itself to the WHOLE dimension so free-watching distant players get the identical read (the end_shatter JSON-event pattern would double them for cutscene viewers). LookAt Y-offsets assume the rift ~300-360 blocks above the altar (rift = disc surface 360 + 80 clearance, altar between Y 60 and Y 140 depending on sanctum stage); the framing is intentionally sky-wide so the variance stays invisible.",
+    "_doc": "Per-keyframe 'fov' (degrees, default 70) is smoothly lerped along the flight by CameraDirector.onComputeFov and eases back into the player's own FOV at the end."
+  }
+}

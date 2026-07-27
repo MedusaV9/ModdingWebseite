@@ -1,0 +1,34 @@
+{
+  "_comment": "F-077 'Der Altar ruft das End' — lang keys for the End-arrival cinematic (sequence/endarrival/EndArrivalSequence + devtools/dev/DevEndArrivalCommands). All keys are NEW; nothing shipped is overwritten. 'eclipse.caption.*' ride S2CCaptionPayload (omen = whisper, rift/spill = subtitle, arrived = title); 'dev.eclipse.*' are operator feedback + handbook docs. The existing chat broadcast 'announce.eclipse.end.arrival' fires unchanged from EndDiscService.announceCrash at the phase-3 boundary — no new announce key is needed. Merge into assets/eclipse/lang/en_us.json + de_de.json after the parallel wave (lang files are locked).",
+
+  "en_us": {
+    "eclipse.caption.end_arrival.omen": "The altar is drawing breath…",
+    "eclipse.caption.end_arrival.rift": "The sky tears open",
+    "eclipse.caption.end_arrival.spill": "The altar spits out the End",
+    "eclipse.caption.end_arrival.arrived": "THE END HAS COME",
+
+    "dev.eclipse.event.start.endarrival": "End arrival cinematic started — the disc materializes at the phase-3 boundary.",
+    "dev.eclipse.event.start.endarrival.fxonly": "End arrival cinematic started (FX only — no block is written, no flag is committed).",
+    "dev.eclipse.event.start.endarrival.busy": "The End arrival cinematic is already running, or the disc is already built/building (use fxonly to replay the show).",
+    "dev.eclipse.event.stop.endarrival": "End arrival cinematic stopped — debris cleared, cameras released.",
+    "dev.eclipse.event.stop.endarrival.idle": "No End arrival cinematic is running.",
+
+    "dev.eclipse.doc.event.start.endarrival": "F-077: runs the ~50 s 'the altar summons the End' cinematic. Without arguments this is the REAL day-12 path (the End disc materializes at the phase-3 boundary); 'fxonly' replays the identical show without writing a single block.",
+    "dev.eclipse.doc.event.stop.endarrival": "Aborts the running End arrival cinematic: block-display debris is discarded and guided cameras are released. World state already committed (a started disc build) keeps running."
+  },
+  "de_de": {
+    "eclipse.caption.end_arrival.omen": "Der Altar holt Atem…",
+    "eclipse.caption.end_arrival.rift": "Der Himmel reißt auf",
+    "eclipse.caption.end_arrival.spill": "Der Altar spuckt das End aus",
+    "eclipse.caption.end_arrival.arrived": "DAS END IST GEKOMMEN",
+
+    "dev.eclipse.event.start.endarrival": "End-Ankunfts-Cutscene gestartet — die Disc materialisiert an der Phase-3-Grenze.",
+    "dev.eclipse.event.start.endarrival.fxonly": "End-Ankunfts-Cutscene gestartet (nur FX — kein Block wird geschrieben, kein Flag gesetzt).",
+    "dev.eclipse.event.start.endarrival.busy": "Die End-Ankunfts-Cutscene läuft bereits, oder die Disc ist schon gebaut/im Bau (fxonly nutzen, um die Show erneut abzuspielen).",
+    "dev.eclipse.event.stop.endarrival": "End-Ankunfts-Cutscene gestoppt — Trümmer entfernt, Kameras freigegeben.",
+    "dev.eclipse.event.stop.endarrival.idle": "Es läuft keine End-Ankunfts-Cutscene.",
+
+    "dev.eclipse.doc.event.start.endarrival": "F-077: startet die ~50-s-Cutscene 'Der Altar ruft das End'. Ohne Argument ist das der ECHTE Tag-12-Pfad (die End-Disc materialisiert an der Phase-3-Grenze); 'fxonly' spielt dieselbe Show ab, ohne einen einzigen Block zu schreiben.",
+    "dev.eclipse.doc.event.stop.endarrival": "Bricht die laufende End-Ankunfts-Cutscene ab: BlockDisplay-Trümmer werden entfernt und geführte Kameras freigegeben. Bereits committeter Weltzustand (ein gestarteter Disc-Bau) läuft weiter."
+  }
+}

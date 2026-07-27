@@ -63,7 +63,7 @@ public final class CutscenePaths {
     private static final List<String> DEFAULT_IDS =
             List.of("intro_v3_ship", "intro_v3_flight", "intro_v3_reveal", "unlock_ring",
                     "expansion_skyward", "expansion_flyover", "finale_return", "credits_helm",
-                    "end_shatter");
+                    "end_shatter", "end_arrival");
     private static final String BUNDLED_RESOURCE_ROOT = "/assets/eclipse/cutscenes/";
     /** Sits in {@code config/eclipse/} (NOT in {@code cutscenes/} — the loader scans that). */
     private static final String MANIFEST_NAME = "cutscene_defaults_manifest.json";
