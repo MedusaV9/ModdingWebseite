@@ -31,10 +31,9 @@ out vec4 fragColor;
 void main() {
     vec3 color = texture(DiffuseSampler0, texCoord).rgb;
     float amount = clamp(Amount, 0.0, 1.0);
-    if (amount <= 0.001) {
-        fragColor = vec4(color, 1.0);
-        return;
-    }
+    // No bare `return;` here: glsl-processor 0.2.3 NPEs hashing value-less
+    // GlslReturnNodes (GlslReturnNode.hashCode), which kills the whole parse.
+    // The idle-skip stays cheap because every term below scales with `amount`.
     float warmth = clamp(max(Warmth, AfterglowFloor), 0.0, 1.0);
 
     // Cold base: desaturate 15% at full Amount…
