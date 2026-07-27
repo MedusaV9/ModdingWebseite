@@ -40,5 +40,44 @@ public final class EndArrivalFxCues {
      */
     public static final ResourceLocation CUE_GLITTER = FxCues.cue("end_arrival_glitter");
 
+    // --- V2 "GIGANTISMUS" cues (PLAN-F077 §3; assets from tools/photon/end_arrival2_fx.py) ---
+
+    /**
+     * Beat-1 omen: the rune ring gathering in the sky over the altar (anchored at
+     * altar top + 40; the ~80 t one-shot dies naturally ON the t = 160 erupt).
+     * {@code a,b} unused.
+     */
+    public static final ResourceLocation CUE_GLYPHS = FxCues.cue("end_arrival_glyphs");
+    /**
+     * Beat-3: the comet-trail sheath around the three debris helix strands, anchored
+     * at the ALTAR TOP. {@code a} = real pillar height in blocks; the row Y-scales by
+     * {@code a / 260} (the {@code CUE_PILLAR} law).
+     */
+    public static final ResourceLocation CUE_STRAND_TRAIL = FxCues.cue("end_arrival_strand_trail");
+    /**
+     * Beat-3 wave stamp: the giant horizontal shock ring when an assembly wave
+     * completes, anchored at the DISC CENTER (surface height). {@code a} = ring radius
+     * in blocks; the row XZ-scales by {@code a / 60} (authored radius).
+     */
+    public static final ResourceLocation CUE_ISLAND_RING = FxCues.cue("end_arrival_island_ring");
+    /**
+     * Permanent: the subtle end-rift residue over the finished disc, anchored at disc
+     * center + 40. Re-fired every 600 t by {@code worldgen/end/EndRiftAmbient} (the
+     * ~660 t one-shot + dedup = a seamless ambient). {@code a,b} unused.
+     */
+    public static final ResourceLocation CUE_RIFT_AMBIENT = FxCues.cue("end_arrival_rift_ambient");
+    /**
+     * Beat-1/4 Veil grade lane (NOT a Photon row — an explicit {@code FxPayloads}
+     * branch feeds {@code EclipseFxState.setArrivalDim}): {@code a} = dim target 0..1,
+     * {@code b} = ramp ticks.
+     */
+    public static final ResourceLocation CUE_GRADE = FxCues.cue("end_arrival_grade");
+    /**
+     * Beat-4 Veil sky-pulse lane (explicit {@code FxPayloads} branch →
+     * {@code EclipseFxState.setEndTintPulse}): {@code a} = pulse target 0..1,
+     * {@code b} = ramp ticks.
+     */
+    public static final ResourceLocation CUE_TINT = FxCues.cue("end_arrival_tint");
+
     private EndArrivalFxCues() {}
 }

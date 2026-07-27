@@ -1,0 +1,18 @@
+{
+  "_comment": "F-077 V2 'GIGANTISMUS' — lang keys for the End-arrival upgrade pass (PLAN-F077 §WP-I). All keys are NEW; nothing shipped is overwritten. They are the subtitles of the five synthesized sound events registered by this wave in assets/eclipse/sounds.json (event.end_arrival_* — oggs from tools/music/gen_endarrival_sfx.py). No new caption/dev keys: V2 reuses the shipped eclipse.caption.end_arrival.* and dev.eclipse.*.endarrival keys from langdrop/end_arrival.json unchanged. Merge into assets/eclipse/lang/en_us.json + de_de.json after the parallel wave (lang files are locked).",
+
+  "en_us": {
+    "subtitles.eclipse.event.end_arrival_subboom": "The altar's heart pounds",
+    "subtitles.eclipse.event.end_arrival_riser": "Power surges skyward",
+    "subtitles.eclipse.event.end_arrival_choir": "Void voices swell",
+    "subtitles.eclipse.event.end_arrival_snap": "End stone snaps into place",
+    "subtitles.eclipse.event.end_arrival_drone": "The End hums above"
+  },
+  "de_de": {
+    "subtitles.eclipse.event.end_arrival_subboom": "Das Herz des Altars pocht",
+    "subtitles.eclipse.event.end_arrival_riser": "Energie schießt himmelwärts",
+    "subtitles.eclipse.event.end_arrival_choir": "Stimmen der Leere schwellen an",
+    "subtitles.eclipse.event.end_arrival_snap": "Endstein rastet ein",
+    "subtitles.eclipse.event.end_arrival_drone": "Das End summt über der Welt"
+  }
+}

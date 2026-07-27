@@ -82,6 +82,16 @@ public final class EclipseFxState {
     private static int transHold;
     private static int transOut;
 
+    // --- F-077 V2 End-arrival grade feeds (additive — the frozen API is untouched) ---
+    private static float arrivalDimFrom;
+    private static float arrivalDimTarget;
+    private static int arrivalDimStartTick;
+    private static int arrivalDimRampTicks = 1;
+    private static float endTintFrom;
+    private static float endTintTarget;
+    private static int endTintStartTick;
+    private static int endTintRampTicks = 1;
+
     // --- post-expansion new-land glow band (IDEA-14 §3; additive — the frozen API is untouched) ---
     /** New-land glow envelope: full at set time, gone after {@value} ticks (~10 min). */
     private static final int NEW_LAND_GLOW_TICKS = 12000;
@@ -276,6 +286,45 @@ public final class EclipseFxState {
                 && radius >= newLandInnerR && radius <= newLandOuterR;
     }
 
+    // ------------------------------------------------------------------ end-arrival grade (F-077 V2)
+
+    /**
+     * Beat-1 "Herzschlag" world dim: vignette-weighted exposure pull + gentle desat in
+     * the {@code eclipse:world_grade} pass while the altar drains its surroundings.
+     * Driven by the {@code end_arrival_grade} cue ({@code EndArrivalSequence});
+     * {@code target} eases in over {@code rampTicks} from wherever the amount sits now.
+     */
+    public static void setArrivalDim(float target, int rampTicks) {
+        arrivalDimFrom = arrivalDim(0.0F);
+        arrivalDimTarget = Mth.clamp(target, 0.0F, 1.0F);
+        arrivalDimStartTick = clientTicks;
+        arrivalDimRampTicks = Math.max(1, rampTicks);
+    }
+
+    /** Eased End-arrival dim amount in [0,1] (0 outside the cinematic — bit-identical frame). */
+    public static float arrivalDim(float partialTick) {
+        return Mth.lerp(easedProgress(arrivalDimStartTick, arrivalDimRampTicks, partialTick),
+                arrivalDimFrom, arrivalDimTarget);
+    }
+
+    /**
+     * Beat-4 "Reveal" end-purple sky pulse: sky-weighted violet wash in the
+     * {@code eclipse:world_grade} pass as the rift implodes and the End disc is
+     * unveiled. Driven by the {@code end_arrival_tint} cue.
+     */
+    public static void setEndTintPulse(float target, int rampTicks) {
+        endTintFrom = endTintPulse(0.0F);
+        endTintTarget = Mth.clamp(target, 0.0F, 1.0F);
+        endTintStartTick = clientTicks;
+        endTintRampTicks = Math.max(1, rampTicks);
+    }
+
+    /** Eased end-purple pulse amount in [0,1] (0 outside the cinematic). */
+    public static float endTintPulse(float partialTick) {
+        return Mth.lerp(easedProgress(endTintStartTick, endTintRampTicks, partialTick),
+                endTintFrom, endTintTarget);
+    }
+
     // ------------------------------------------------------------------ transition glitch
 
     /**
@@ -340,6 +389,12 @@ public final class EclipseFxState {
         ghostStartTick = clientTicks - GHOST_RAMP_TICKS;
         shockOrigin = null;
         transStartTick = Integer.MIN_VALUE;
+        arrivalDimFrom = 0.0F;
+        arrivalDimTarget = 0.0F;
+        arrivalDimRampTicks = 1;
+        endTintFrom = 0.0F;
+        endTintTarget = 0.0F;
+        endTintRampTicks = 1;
         clearNewLandBand();
     }
 

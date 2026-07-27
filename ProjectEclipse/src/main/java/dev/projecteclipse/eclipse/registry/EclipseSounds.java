@@ -315,6 +315,39 @@ public final class EclipseSounds {
             () -> SoundEvent.createVariableRangeEvent(
                     ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "event.end_shatter_crack")));
 
+    // F-077 V2 End-arrival layered-audio suite (sequence/endarrival/EndArrivalSequence +
+    // EndArrivalDebrisFx) — synthesized oggs from tools/music/gen_endarrival_sfx.py.
+
+    /** 40 Hz heartbeat sub-boom: omen pulse train + the erupt hit. */
+    public static final Supplier<SoundEvent> EVENT_END_ARRIVAL_SUBBOOM = SOUNDS.register(
+            "event.end_arrival_subboom",
+            () -> SoundEvent.createVariableRangeEvent(
+                    ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "event.end_arrival_subboom")));
+
+    /** 6 s riser that lands exactly ON the altar erupt beat (fired at t = 40). */
+    public static final Supplier<SoundEvent> EVENT_END_ARRIVAL_RISER = SOUNDS.register(
+            "event.end_arrival_riser",
+            () -> SoundEvent.createVariableRangeEvent(
+                    ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "event.end_arrival_riser")));
+
+    /** Detuned minor choir pad under the beat-3 assembly (re-fired on a 120 t cadence). */
+    public static final Supplier<SoundEvent> EVENT_END_ARRIVAL_CHOIR = SOUNDS.register(
+            "event.end_arrival_choir",
+            () -> SoundEvent.createVariableRangeEvent(
+                    ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "event.end_arrival_choir")));
+
+    /** Chorus-flower snap tick where a debris chunk lands (3 variants, ≤ 2/t). */
+    public static final Supplier<SoundEvent> EVENT_END_ARRIVAL_SNAP = SOUNDS.register(
+            "event.end_arrival_snap",
+            () -> SoundEvent.createVariableRangeEvent(
+                    ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "event.end_arrival_snap")));
+
+    /** Deep end-ambience drone tail under the beat-4 reveal. */
+    public static final Supplier<SoundEvent> EVENT_END_ARRIVAL_DRONE = SOUNDS.register(
+            "event.end_arrival_drone",
+            () -> SoundEvent.createVariableRangeEvent(
+                    ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "event.end_arrival_drone")));
+
     // C7 expansion-delivery suite (worldgen.stage.StructureFlightFx) — all sounds.json
     // aliases of shipped oggs (the P2-W1 placeholder doctrine; real oggs may replace the
     // aliases via the C19 pipeline without touching code).

@@ -32,6 +32,12 @@
 //   PhaseTint — signed color-script lean in [−1, 1]: −1 = full dusk/BUILDUP lean,
 //               +1 = full dawn/ENDING lean, 0 = neutral deep night. Sun-elevation
 //               edge (overworld) + eased eclipse-phase lean, combined CPU-side.
+// v4 additive uniforms (F-077 V2 End-arrival — same feeder, same commit):
+//   ArrivalDim   — 0..1 beat-1 omen dim: vignette-weighted exposure pull + gentle
+//                  desat while the altar drains the world (EclipseFxState.arrivalDim,
+//                  driven by the end_arrival_grade cue). 0 = bit-identical frame.
+//   EndTintPulse — 0..1 beat-4 reveal pulse: sky-weighted end-violet wash as the rift
+//                  implodes and the End disc is unveiled (end_arrival_tint cue).
 #include eclipse:eclipse_common
 
 uniform sampler2D DiffuseSampler0;
@@ -44,6 +50,8 @@ uniform float Time;
 uniform float HorizonY;
 uniform float Detail;
 uniform float PhaseTint;
+uniform float ArrivalDim;
+uniform float EndTintPulse;
 
 in vec2 texCoord;
 
@@ -149,6 +157,24 @@ void main() {
     // ±2% luminance at full eclipse — the dome itself seems to move. Gated by Detail.
     float seethe = efxNoise(texCoord * vec2(6.0, 3.5) + vec2(Time * 0.025, -Time * 0.017));
     color *= 1.0 + (seethe - 0.5) * 0.04 * sky * EclipseAmount * Detail;
+
+    // [v4] F-077 beat-1 omen dim: a vignette-weighted exposure pull (the world "loses
+    // light" toward the edges first) plus a gentle desat — the altar is drinking the
+    // color out of the day. Static per frame; zero uniform = bit-identical frame.
+    if (ArrivalDim > 0.001) {
+        float dimEdge = smoothstep(0.25, 0.85, d);
+        color *= 1.0 - ArrivalDim * (0.16 + 0.30 * dimEdge);
+        float dimLuma = dot(color, vec3(0.299, 0.587, 0.114));
+        color = mix(color, vec3(dimLuma), ArrivalDim * 0.35);
+    }
+
+    // [v4] F-077 beat-4 reveal pulse: a hue-only end-violet lean plus a sky-weighted
+    // violet wash — the dome flashes end-purple as the rift snaps shut, then decays.
+    if (EndTintPulse > 0.001) {
+        float pulseLuma = dot(color, vec3(0.299, 0.587, 0.114));
+        color = mix(color, pulseLuma * vec3(0.86, 0.70, 1.12), EndTintPulse * 0.25);
+        color += vec3(0.24, 0.10, 0.36) * sky * EndTintPulse * 0.14;
+    }
 
     // Exposure dip (0.62 during eclipse TOTAL, eased CPU-side over 60 ticks — the old
     // 0.35 target rendered totality near-black on top of the crush; see EclipseFxState).

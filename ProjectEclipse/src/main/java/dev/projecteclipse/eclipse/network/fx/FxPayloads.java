@@ -223,6 +223,14 @@ public final class FxPayloads {
             // warden pattern: an explicit branch over the registered row.
             dev.projecteclipse.eclipse.veilfx.PlayerFxPhotonRows.heartTheftArc(
                     payload.pos(), payload.a(), payload.b());
+        } else if (dev.projecteclipse.eclipse.sequence.endarrival.EndArrivalFxCues.CUE_GRADE.equals(id)) {
+            // F-077 V2 beat-1/4 Veil grade lane: not a Photon row — the cue feeds the
+            // world_grade ArrivalDim uniform (a = target 0..1, b = ramp ticks; the
+            // CUE_GROWTH_RIDER dedicated-branch shape, §3.5 law 5).
+            EclipseFxState.setArrivalDim(payload.a(), Math.max(1, (int) payload.b()));
+        } else if (dev.projecteclipse.eclipse.sequence.endarrival.EndArrivalFxCues.CUE_TINT.equals(id)) {
+            // F-077 V2 beat-4 end-purple sky pulse (world_grade EndTintPulse uniform).
+            EclipseFxState.setEndTintPulse(payload.a(), Math.max(1, (int) payload.b()));
         } else if (dev.projecteclipse.eclipse.veilfx.PhotonFxRegistry.dispatch(
                 id, payload.pos(), payload.a(), payload.b())) {
             // PH-CORE tail branch: table-driven FxCues cue rows (Photon layer + Quasar

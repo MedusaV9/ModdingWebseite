@@ -200,6 +200,54 @@
     ],
     "subtitle": "subtitles.eclipse.event.emerge"
   },
+  "event.end_arrival_choir": {
+    "sounds": [
+      {
+        "name": "eclipse:event/end_arrival_choir",
+        "volume": 0.9
+      }
+    ],
+    "subtitle": "subtitles.eclipse.event.end_arrival_choir"
+  },
+  "event.end_arrival_drone": {
+    "sounds": [
+      {
+        "name": "eclipse:event/end_arrival_drone",
+        "volume": 0.9
+      }
+    ],
+    "subtitle": "subtitles.eclipse.event.end_arrival_drone"
+  },
+  "event.end_arrival_riser": {
+    "sounds": [
+      {
+        "name": "eclipse:event/end_arrival_riser"
+      }
+    ],
+    "subtitle": "subtitles.eclipse.event.end_arrival_riser"
+  },
+  "event.end_arrival_snap": {
+    "sounds": [
+      {
+        "name": "eclipse:event/end_arrival_snap_a"
+      },
+      {
+        "name": "eclipse:event/end_arrival_snap_b"
+      },
+      {
+        "name": "eclipse:event/end_arrival_snap_c"
+      }
+    ],
+    "subtitle": "subtitles.eclipse.event.end_arrival_snap"
+  },
+  "event.end_arrival_subboom": {
+    "sounds": [
+      {
+        "name": "eclipse:event/end_arrival_subboom"
+      }
+    ],
+    "subtitle": "subtitles.eclipse.event.end_arrival_subboom"
+  },
   "event.end_shatter_crack": {
     "sounds": [
       {

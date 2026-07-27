@@ -16,12 +16,15 @@ import org.joml.Vector3f;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.network.fx.FxPayloads;
+import dev.projecteclipse.eclipse.registry.EclipseSounds;
+import dev.projecteclipse.eclipse.worldgen.EndDiscGeometry;
 import dev.projecteclipse.eclipse.worldgen.stage.DisplayBrightnessFx;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.Display;
@@ -43,6 +46,17 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
  * the island silhouette with a violet implosion puff ({@code CUE_PUFF}) while the real
  * chunks materialize underneath ({@code EndDiscService}'s budgeted writer runs in parallel
  * — the displays are the "Baustoff-Show", the writer is the truth).
+ *
+ * <p><b>V2 "GIGANTISMUS"</b> (PLAN-F077 §3, WP-C/D/H): the stream grew to
+ * {@value #STREAM_TARGET} pieces (cap {@value #HARD_CAP}) braided into
+ * {@value #STRAND_COUNT} co-rotating helix strands; landings are no longer random ring
+ * slots but REAL disc-silhouette columns sampled from
+ * {@link dev.projecteclipse.eclipse.worldgen.EndDiscGeometry} (grid stride
+ * {@value #TARGET_SAMPLE_STRIDE}, pillars last), opened wave by wave
+ * ({@value #WAVE_COUNT} annulus waves, one every {@value #WAVE_OPEN_INTERVAL_TICKS} t,
+ * inward → outward); landings stamp the {@code end_arrival_snap} tick; and a
+ * 45 ms-MSPT guard (hysteresis {@value #MSPT_RECOVER_NANOS} ns) pauses spawning and
+ * halves the push rate (6 t windows) instead of ever dropping the show.</p>
  *
  * <p><b>Doctrine</b> is {@link dev.projecteclipse.eclipse.sequence.StormDebrisFx} 1:1:</p>
  * <ul>
@@ -73,12 +87,12 @@ public final class EndArrivalDebrisFx {
 
     // ------------------------------------------------------------------ tuning constants
 
-    /** Stream size the staggered spawn fills up to ("HUNDERTE Endstein-Brocken"). */
-    private static final int STREAM_TARGET = 220;
-    /** Absolute ceiling — never exceeded, whatever happens. */
-    private static final int HARD_CAP = 260;
+    /** Stream size the staggered spawn fills up to (V2 "GIGANTISMUS": 600, was 220). */
+    private static final int STREAM_TARGET = 600;
+    /** Absolute ceiling — never exceeded, whatever happens (V2: 700, was 260). */
+    private static final int HARD_CAP = 700;
     /** Pieces per spawn batch and the stagger between batches (spawn-cost smoothing). */
-    private static final int SPAWN_BATCH = 10;
+    private static final int SPAWN_BATCH = 14;
     private static final int SPAWN_STAGGER_TICKS = 2;
     /** Transform push cadence == interpolation duration (DisplayAnimator law). */
     private static final int UPDATE_INTERVAL_TICKS = 3;
@@ -96,18 +110,25 @@ public final class EndArrivalDebrisFx {
     /** Helix radius band around the pillar axis during the climb. */
     private static final double CLIMB_HELIX_MIN = 1.6D;
     private static final double CLIMB_HELIX_MAX = 4.2D;
-    /** Helix angular rate during the climb (radians per tick). */
-    private static final double CLIMB_SPIN_MIN = 0.18D;
-    private static final double CLIMB_SPIN_MAX = 0.34D;
-    /** Outward-spiral angular sweep over one whole transit (radians). */
+    /**
+     * V2 (WP-C) braid: number of intertwined climb strands. Every piece is quantized
+     * onto one of these 120°-offset lanes, all co-rotating at {@link #STRAND_SPIN} —
+     * three readable comet streams instead of one homogeneous swarm (the
+     * {@code end_arrival2_strand_trail} asset sheathes them at orbital 0.22–0.30).
+     */
+    private static final int STRAND_COUNT = 3;
+    /** Shared braid angular rate (rad/t), jittered ±10 % per piece. */
+    private static final double STRAND_SPIN = 0.26D;
+    /** Per-piece angular jitter inside a strand lane (radians). */
+    private static final double STRAND_ANGLE_JITTER = 0.35D;
+    /** Minimum transit sweep (radians): closer targets gain a full extra turn instead. */
     private static final double TRANSIT_SWEEP_MIN = 0.9D;
-    private static final double TRANSIT_SWEEP_MAX = 2.4D;
-    /** Island-target ring around the DISC center, as fractions of the disc radius. */
-    private static final double TARGET_RADIUS_MIN_FACTOR = 0.30D;
-    private static final double TARGET_RADIUS_MAX_FACTOR = 0.96D;
-    /** Island-target height band above the disc surface. */
-    private static final double TARGET_Y_MIN = 1.0D;
-    private static final double TARGET_Y_MAX = 14.0D;
+    /** V2 (WP-D) silhouette sampling: grid stride over the disc footprint (blocks). */
+    private static final int TARGET_SAMPLE_STRIDE = 9;
+    /** Assembly waves (annuli, inward → outward; the last one owns the pillars). */
+    private static final int WAVE_COUNT = 5;
+    /** One assembly wave opens every this many stream ticks (5 × 80 t = the SPILL span). */
+    private static final int WAVE_OPEN_INTERVAL_TICKS = 80;
     /** Piece size spread. */
     private static final float MIN_SCALE = 0.35F;
     private static final float MAX_SCALE = 1.5F;
@@ -130,6 +151,17 @@ public final class EndArrivalDebrisFx {
     private static final int MAX_PUFFS_PER_TICK = 2;
     /** Puff cue broadcast radius (blocks). */
     private static final double PUFF_RANGE = 320.0D;
+
+    /**
+     * V2 (WP-H) MSPT guard: above this average tick time new spawns pause and the push
+     * cadence halves (6 t windows); below {@link #MSPT_RECOVER_NANOS} the stream
+     * recovers (hysteresis so the guard never flaps). The 45 ms line mirrors the
+     * pregen {@code msptGuard} doctrine ({@code ExpansionTiming}/{@code GrowthPacing}).
+     */
+    private static final long MSPT_DEGRADE_NANOS = 45_000_000L;
+    private static final long MSPT_RECOVER_NANOS = 38_000_000L;
+    /** Guard evaluation cadence (ticks). */
+    private static final int MSPT_CHECK_INTERVAL_TICKS = 20;
 
     /** The End palette (user ask: end_stone, obsidian, purpur accents, chorus). */
     private static final BlockState[] PALETTE = {
@@ -254,11 +286,15 @@ public final class EndArrivalDebrisFx {
         Display.BlockDisplay display;
         BlockState state = Blocks.END_STONE.defaultBlockState();
         float scale;
-        /** Climb-leg helix parameters. */
+        /** Climb-leg helix parameters (V2: quantized onto one of the braid strands). */
         double climbAngle0;
         double climbSpin;
         double climbRadius;
-        /** Transit-leg spiral: angular sweep + target ring slot around the disc center. */
+        /**
+         * Transit-leg spiral (V2 WP-D): total angular sweep landing EXACTLY on the
+         * sampled silhouette column ({@code targetAngle}/{@code targetRadius}/{@code
+         * targetY} around the disc center).
+         */
         double transitSweep;
         double targetRadius;
         double targetY;
@@ -285,10 +321,21 @@ public final class EndArrivalDebrisFx {
         final Vec3 mount;
         final RandomSource random;
         final List<Piece> pieces = new ArrayList<>(STREAM_TARGET);
+        /**
+         * V2 (WP-D): real silhouette landing columns per assembly wave — annulus
+         * buckets inward → outward, pillars folded into the last wave. Sampled once
+         * at arm time from {@code EndDiscGeometry} (pure functions, no chunk access).
+         */
+        final List<List<Vec3>> waveTargets;
+        /** Transit spiral origin (rift point in disc-polar coordinates). */
+        final double startAngle;
+        final double startRadius;
 
         int age;
         int arrivals;
         int puffsThisTick;
+        /** V2 (WP-H): true while the MSPT guard has the stream degraded. */
+        boolean degraded;
         /** Stream age the collapse started at, or −1 while the spill still runs. */
         int collapseStart = -1;
         boolean done;
@@ -301,6 +348,64 @@ public final class EndArrivalDebrisFx {
             this.discRadius = discRadius;
             this.mount = new Vec3(altarTop.x, (altarTop.y + rift.y) * 0.5D, altarTop.z);
             this.random = RandomSource.create(level.getGameTime() * 31L + Double.hashCode(altarTop.x));
+            this.startAngle = Math.atan2(rift.z - discCenter.z, rift.x - discCenter.x);
+            this.startRadius = Math.hypot(rift.x - discCenter.x, rift.z - discCenter.z);
+            this.waveTargets = sampleWaveTargets(discCenter, discRadius);
+        }
+
+        /**
+         * Samples the disc's REAL silhouette into {@value #WAVE_COUNT} annulus buckets
+         * ({@code EndDiscGeometry.footprintContains}/{@code topYAt} on a
+         * {@value #TARGET_SAMPLE_STRIDE}-block grid ≈ 400 columns for r = 96); the
+         * eight obsidian pillars are folded into the LAST wave so the spires visibly
+         * finish the build. Any empty bucket (degenerate geometry) falls back to a
+         * ring slot at the bucket's mid radius so the show never starves.
+         */
+        private static List<List<Vec3>> sampleWaveTargets(Vec3 discCenter, double discRadius) {
+            List<List<Vec3>> buckets = new ArrayList<>(WAVE_COUNT);
+            for (int i = 0; i < WAVE_COUNT; i++) {
+                buckets.add(new ArrayList<>());
+            }
+            int centerX = (int) Math.floor(discCenter.x);
+            int centerZ = (int) Math.floor(discCenter.z);
+            int reach = (int) Math.ceil(discRadius);
+            for (int x = centerX - reach; x <= centerX + reach; x += TARGET_SAMPLE_STRIDE) {
+                for (int z = centerZ - reach; z <= centerZ + reach; z += TARGET_SAMPLE_STRIDE) {
+                    if (!EndDiscGeometry.footprintContains(x, z)) {
+                        continue;
+                    }
+                    int topY = EndDiscGeometry.topYAt(x, z);
+                    if (topY == Integer.MIN_VALUE) {
+                        continue;
+                    }
+                    double dist = Math.hypot(x + 0.5D - discCenter.x, z + 0.5D - discCenter.z);
+                    int wave = Mth.clamp((int) (dist / discRadius * WAVE_COUNT), 0, WAVE_COUNT - 1);
+                    buckets.get(wave).add(new Vec3(x + 0.5D, topY + 1.0D, z + 0.5D));
+                }
+            }
+            // The spires land last — the skyline completes as the finale approaches.
+            List<Vec3> lastWave = buckets.get(WAVE_COUNT - 1);
+            for (int i = 0; i < EndDiscGeometry.PILLAR_COUNT; i++) {
+                int px = EndDiscGeometry.pillarX(i);
+                int pz = EndDiscGeometry.pillarZ(i);
+                int topY = EndDiscGeometry.topYAt(px, pz);
+                if (topY != Integer.MIN_VALUE) {
+                    lastWave.add(new Vec3(px + 0.5D, topY + 1.0D, pz + 0.5D));
+                }
+            }
+            for (int i = 0; i < WAVE_COUNT; i++) {
+                if (buckets.get(i).isEmpty()) {
+                    double radius = (i + 0.5D) / WAVE_COUNT * discRadius;
+                    buckets.get(i).add(new Vec3(discCenter.x + radius, discCenter.y + 2.0D,
+                            discCenter.z));
+                }
+            }
+            return buckets;
+        }
+
+        /** The assembly wave currently open (inward → outward, one every 80 t). */
+        private int currentWave() {
+            return Mth.clamp(this.age / WAVE_OPEN_INTERVAL_TICKS, 0, WAVE_COUNT - 1);
         }
 
         boolean collapsing() {
@@ -323,8 +428,10 @@ public final class EndArrivalDebrisFx {
                 this.done = true;
                 return;
             }
+            tickMsptGuard();
             boolean visible = playerNear();
-            if (!collapsing() && visible && this.pieces.size() < STREAM_TARGET
+            if (!collapsing() && visible && !this.degraded
+                    && this.pieces.size() < STREAM_TARGET
                     && this.age % SPAWN_STAGGER_TICKS == 0) {
                 spawnBatch();
             }
@@ -332,6 +439,31 @@ public final class EndArrivalDebrisFx {
                 return; // presence gate: pieces hold their last pose, zero packets
             }
             animate();
+        }
+
+        /**
+         * V2 (WP-H) degrade lever: over {@value #MSPT_DEGRADE_NANOS} ns average tick
+         * time the stream stops spawning and halves its push cadence; it recovers
+         * below {@value #MSPT_RECOVER_NANOS} ns (hysteresis). The show always
+         * continues — degraded means slower interpolation windows, never a cut.
+         */
+        private void tickMsptGuard() {
+            if (this.age % MSPT_CHECK_INTERVAL_TICKS != 0) {
+                return;
+            }
+            long avgNanos = this.level.getServer().getAverageTickTimeNanos();
+            if (this.degraded) {
+                if (avgNanos < MSPT_RECOVER_NANOS) {
+                    this.degraded = false;
+                    EclipseMod.LOGGER.info("EndArrivalDebrisFx: MSPT recovered ({} ms) — full cadence",
+                            avgNanos / 1_000_000L);
+                }
+            } else if (avgNanos > MSPT_DEGRADE_NANOS) {
+                this.degraded = true;
+                EclipseMod.LOGGER.info(
+                        "EndArrivalDebrisFx: MSPT guard tripped ({} ms > 45 ms) — spawns paused, pushes halved",
+                        avgNanos / 1_000_000L);
+            }
         }
 
         private boolean playerNear() {
@@ -354,24 +486,34 @@ public final class EndArrivalDebrisFx {
             }
         }
 
-        /** (Re)rolls one piece's whole flight: palette, size, helix, spiral, island slot. */
+        /** (Re)rolls one piece's whole flight: palette, size, strand lane, silhouette slot. */
         private void rearm(Piece piece, int bornAge) {
             piece.state = PALETTE[this.random.nextInt(PALETTE.length)];
             piece.scale = MIN_SCALE + (MAX_SCALE - MIN_SCALE)
                     * (float) Math.pow(this.random.nextDouble(), 1.5D);
-            piece.climbAngle0 = this.random.nextDouble() * Math.PI * 2.0D;
-            piece.climbSpin = (CLIMB_SPIN_MIN
-                    + this.random.nextDouble() * (CLIMB_SPIN_MAX - CLIMB_SPIN_MIN))
-                    * (this.random.nextBoolean() ? 1.0D : -1.0D);
+            // V2 (WP-C): quantize onto one of the co-rotating braid strands.
+            int strand = this.random.nextInt(STRAND_COUNT);
+            piece.climbAngle0 = strand * (Math.PI * 2.0D / STRAND_COUNT)
+                    + (this.random.nextDouble() - 0.5D) * 2.0D * STRAND_ANGLE_JITTER;
+            piece.climbSpin = STRAND_SPIN * (0.9D + this.random.nextDouble() * 0.2D);
             piece.climbRadius = CLIMB_HELIX_MIN
                     + this.random.nextDouble() * (CLIMB_HELIX_MAX - CLIMB_HELIX_MIN);
-            piece.transitSweep = (TRANSIT_SWEEP_MIN
-                    + this.random.nextDouble() * (TRANSIT_SWEEP_MAX - TRANSIT_SWEEP_MIN))
-                    * (this.random.nextBoolean() ? 1.0D : -1.0D);
-            piece.targetRadius = this.discRadius * (TARGET_RADIUS_MIN_FACTOR
-                    + this.random.nextDouble() * (TARGET_RADIUS_MAX_FACTOR - TARGET_RADIUS_MIN_FACTOR));
-            piece.targetY = this.discCenter.y + TARGET_Y_MIN
-                    + this.random.nextDouble() * (TARGET_Y_MAX - TARGET_Y_MIN);
+            // V2 (WP-D): land on a REAL silhouette column of the currently open wave.
+            List<Vec3> bucket = this.waveTargets.get(currentWave());
+            Vec3 target = bucket.get(this.random.nextInt(bucket.size()));
+            piece.targetRadius = Math.hypot(target.x - this.discCenter.x,
+                    target.z - this.discCenter.z);
+            piece.targetY = target.y;
+            double targetAngle = Math.atan2(target.z - this.discCenter.z,
+                    target.x - this.discCenter.x);
+            // Total sweep landing EXACTLY on the target angle; near-radial paths gain
+            // a full extra turn so every flight still reads as a spiral.
+            double sweep = Math.atan2(Math.sin(targetAngle - this.startAngle),
+                    Math.cos(targetAngle - this.startAngle));
+            if (Math.abs(sweep) < TRANSIT_SWEEP_MIN) {
+                sweep += (this.random.nextBoolean() ? 1.0D : -1.0D) * Math.PI * 2.0D;
+            }
+            piece.transitSweep = sweep;
             piece.spinAxis.set(
                     this.random.nextFloat() - 0.5F,
                     this.random.nextFloat() - 0.5F,
@@ -405,7 +547,9 @@ public final class EndArrivalDebrisFx {
             rearm(piece, this.age);
             // Stagger flight phases so the very first batches don't arrive as one wall.
             piece.bornAge = this.age - this.random.nextInt(CLIMB_TICKS + TRANSIT_TICKS);
-            piece.pushPhase = this.pieces.size() % UPDATE_INTERVAL_TICKS;
+            // Slices are assigned over the DOUBLED window so the WP-H degraded cadence
+            // (6 t) still spreads pushes evenly; normal cadence folds it mod 3.
+            piece.pushPhase = this.pieces.size() % (UPDATE_INTERVAL_TICKS * 2);
             display.setBlockState(piece.state);
             display.moveTo(this.mount.x, this.mount.y, this.mount.z, 0.0F, 0.0F);
             display.addTag(ENTITY_TAG);
@@ -426,13 +570,19 @@ public final class EndArrivalDebrisFx {
         /**
          * One interpolated push per piece in this tick's slice, targeting the pose the
          * window ENDS on (keyframe lead). A piece whose flight ended this window is
-         * re-armed in place (recycle) — unless the collapse has started.
+         * re-armed in place (recycle) — unless the collapse has started. Under the
+         * WP-H guard the window doubles to 6 t (half the pushes, same show — the
+         * slices were assigned mod 6, so the degraded cadence stays evenly spread).
          */
         private void animate() {
-            int slice = this.age % UPDATE_INTERVAL_TICKS;
+            int interval = this.degraded ? UPDATE_INTERVAL_TICKS * 2 : UPDATE_INTERVAL_TICKS;
+            int slice = this.age % interval;
             boolean missing = false;
             for (Piece piece : this.pieces) {
-                if (piece.pushPhase != slice) {
+                boolean pushNow = this.degraded
+                        ? piece.pushPhase == slice
+                        : piece.pushPhase % UPDATE_INTERVAL_TICKS == slice;
+                if (!pushNow) {
                     continue;
                 }
                 Display.BlockDisplay display = piece.display;
@@ -452,8 +602,8 @@ public final class EndArrivalDebrisFx {
                     continue;
                 }
                 display.setTransformationInterpolationDelay(0);
-                display.setTransformationInterpolationDuration(UPDATE_INTERVAL_TICKS);
-                display.setTransformation(poseAt(piece, this.age + UPDATE_INTERVAL_TICKS));
+                display.setTransformationInterpolationDuration(interval);
+                display.setTransformation(poseAt(piece, this.age + interval));
             }
             if (missing) {
                 this.pieces.removeIf(piece -> piece.display == null || piece.display.isRemoved());
@@ -470,6 +620,10 @@ public final class EndArrivalDebrisFx {
             this.puffsThisTick++;
             Vec3 at = flightPos(piece, 1.0D, 1.0D);
             FxPayloads.sendFxEvent(this.level, EndArrivalFxCues.CUE_PUFF, at, 0.0F, 0.0F, PUFF_RANGE);
+            // V2 (WP-G): the chorus-flower snap tick — rides the same ≤ 2/t rate limit.
+            this.level.playSound(null, at.x, at.y, at.z,
+                    EclipseSounds.EVENT_END_ARRIVAL_SNAP.get(), SoundSource.AMBIENT,
+                    1.6F, 0.9F + this.random.nextFloat() * 0.25F);
             // Photon-less baseline: a small END_ROD/PORTAL sparkle at the snap-in point.
             this.level.sendParticles(ParticleTypes.END_ROD, at.x, at.y, at.z,
                     6, 0.6D, 0.6D, 0.6D, 0.03D);
@@ -479,9 +633,10 @@ public final class EndArrivalDebrisFx {
 
         /**
          * Flight position for eased climb progress {@code c} (0..1) and eased transit
-         * progress {@code s} (0..1). Climb: altar top → rift in a tight helix around the
-         * pillar axis. Transit: rift → island slot in a wide outward spiral around the
-         * DISC center (radius opens, height sinks onto the band).
+         * progress {@code s} (0..1). Climb: altar top → rift riding one of the three
+         * braid strands around the pillar axis. Transit: rift → the piece's REAL
+         * silhouette column in a wide spiral around the DISC center that lands EXACTLY
+         * on the target angle/radius/height (V2 WP-D).
          */
         private Vec3 flightPos(Piece piece, double c, double s) {
             if (s <= 0.0D) {
@@ -493,12 +648,9 @@ public final class EndArrivalDebrisFx {
                         + Math.sin(angle) * piece.climbRadius;
                 return new Vec3(x, y, z);
             }
-            double startAngle = Math.atan2(this.rift.z - this.discCenter.z,
-                    this.rift.x - this.discCenter.x);
-            double startRadius = Math.hypot(this.rift.x - this.discCenter.x,
-                    this.rift.z - this.discCenter.z) + piece.climbRadius;
-            double angle = startAngle + piece.transitSweep * s;
-            double radius = Mth.lerp(s, startRadius, piece.targetRadius);
+            double angle = this.startAngle + piece.transitSweep * s;
+            // The helix offset melts away over the transit so s = 1 IS the target.
+            double radius = Mth.lerp(s, this.startRadius + piece.climbRadius, piece.targetRadius);
             double y = Mth.lerp(s * s * (3.0D - 2.0D * s), this.rift.y, piece.targetY);
             return new Vec3(
                     this.discCenter.x + Math.cos(angle) * radius,

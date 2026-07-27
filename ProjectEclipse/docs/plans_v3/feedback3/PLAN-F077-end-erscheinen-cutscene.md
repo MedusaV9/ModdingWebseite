@@ -222,3 +222,51 @@ Rows: extend `veilfx/EndArrivalFxRows` — 3 SEQUENCE-channel REPLACE rows (glyp
   committed fallback (swap isolated to `EndArrivalSequence`).
 - Camera keyframes are geometry-tolerant (rift assumed ~300–360 over the altar); a
   reshoot pass after the V2 playtest is budgeted, same as v1.
+
+---
+
+## 8. Status (implemented 2026-07-27 — awaiting orchestrator compile + RCON playtest)
+
+- [x] **WP-A Grade-Ramp (Veil)** — `ArrivalDim`/`EndTintPulse` uniforms in
+  `world_grade.fsh`, fed by `VeilPostController.feedWorldGrade`; eased scalars live in
+  `EclipseFxState` (additive, the new-land-glow precedent) instead of a new
+  `client/end/EndArrivalGradeState` class — same recipe, one fewer class, logout reset
+  for free via `clearAll()`. Cues `CUE_GRADE`/`CUE_TINT` dispatch as explicit
+  `FxPayloads` branches (the `CUE_GROWTH_RIDER` shape). `wantWorldGrade` keeps the pass
+  alive in plain daylight while either feed is > 0.005.
+- [x] **WP-B Glyphs** — `end_arrival2_glyphs.fx` (fxlib-validated), `CUE_GLYPHS` fired
+  at t 80 @ altar+40; the ~80 t one-shot dies naturally ON the t 160 erupt.
+- [x] **WP-C Eruption upscale** — `STREAM_TARGET 600` / `HARD_CAP 700` /
+  `SPAWN_BATCH 14`; strand lane quantized in `rearm` (no `Piece.strand` field needed —
+  the lane only shapes `climbAngle0`), all strands co-rotate at `STRAND_SPIN 0.26 ±10 %`;
+  `CUE_STRAND_TRAIL` (one asset sheathing all three strands, Y-scaled a/260, 100-t
+  refire cadence).
+- [x] **WP-D Silhouette waves** — `sampleWaveTargets` grid (stride 9, ≈400 columns +
+  8 pillar tops in the last bucket), 5 annulus waves opened every 80 t inward→outward;
+  transit spiral lands EXACTLY on the sampled column (sweep wraps + full extra turn for
+  near-radial paths). Wave rings fire on the SEQUENCE's deterministic clock
+  (t 480/560/640/720 + hero ring at 790, not on bucket exhaustion — recycling reuses
+  targets, so "exhaustion" never happens); `FX_SHOCKWAVE` 0.6/30 on waves 3 and 5.
+- [x] **WP-E Sky pulse** — via WP-A `EndTintPulse` (flash 1.0 @ t 800 → afterglow 0.3
+  @ t 840 → decay 0 @ t 980).
+- [x] **WP-F Permanent rift ambient** — `end_arrival2_rift_ambient.fx` (~660 t
+  one-shot, AMBIENT row) + `worldgen/end/EndRiftAmbient` (600-t refire, presence-gated
+  512, only while `materializationComplete`); the sequence stamps the first ambient at
+  t 980 so fxonly replays also show it once.
+- [x] **WP-G Audio** — `tools/music/gen_endarrival_sfx.py` (numpy → ffmpeg loudnorm
+  **−14 LUFS, mono 44.1 kHz** — matching the shipped `event/*.ogg` conventions, NOT the
+  music-track −16/48k/stereo spec; `validate_oggs.py` is music-scoped so the generator
+  self-verifies via ffprobe). 7 oggs generated (subboom/riser/choir/snap_a-c/drone, all
+  ≤ 6 s — riser shortened from the planned 8 s, choir loops via 120-t refire instead of
+  one 20 s file). Registered as `event.end_arrival_*` in `EclipseSounds` + `sounds.json`
+  (ogg filenames use the sounds/event/ dir, hence no `2` in the asset names).
+- [x] **WP-H MSPT guard** — 45 ms trip / 38 ms recover hysteresis, checked every 20 t:
+  spawns pause + push windows double to 6 t (slices pre-assigned mod 6 so the degraded
+  cadence stays even).
+- [x] **WP-I Consolidation** — `docs/plans_v3/langdrop/end_arrival2.json` (5 subtitle
+  keys en+de; lang files stay locked, merge later with `end_arrival.json`). Cue ids kept
+  in `EndArrivalFxCues` (folding into `FxCues` deferred — no functional need, less churn).
+- [x] **Photon assets** — `tools/photon/end_arrival2_fx.py` authored + run; all 4
+  `.fx`/`.fxproj` pairs written and fxlib round-trip validated.
+- [ ] Orchestrator: `./gradlew build` + RCON playtest (`/dev event start endarrival
+  fxonly` → observe; `/dev event stop endarrival` → dim/tint release check).

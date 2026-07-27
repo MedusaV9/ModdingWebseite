@@ -180,7 +180,11 @@ public final class VeilPostController {
             return false; // limbo owns its own grade
         }
         float partialTick = partialTick();
-        return nightAmount(level, partialTick) > 0.01F || EclipseFxState.eclipseAmount(partialTick) > 0.01F;
+        // F-077 V2: the End-arrival grade feeds keep the pass alive in plain daylight
+        // (the day-12 show usually plays at EclipseAmount == NightAmount == 0).
+        return nightAmount(level, partialTick) > 0.01F || EclipseFxState.eclipseAmount(partialTick) > 0.01F
+                || EclipseFxState.arrivalDim(partialTick) > 0.005F
+                || EclipseFxState.endTintPulse(partialTick) > 0.005F;
     }
 
     /** Scratch for the horizon projection (feeder-only; never escapes). */
@@ -204,6 +208,10 @@ public final class VeilPostController {
         // v3 (VEIL-REPASS-1): signed color-script lean — dusk/BUILDUP negative,
         // dawn/ENDING positive; the shader tints the violet story from it.
         pipeline.getUniform("PhaseTint").setFloat(phaseTint(level, partialTick));
+        // v4 (F-077 V2): End-arrival event uniforms — same feeder, same commit (the
+        // additive rule). Both read 0 outside the cinematic (bit-identical frame).
+        pipeline.getUniform("ArrivalDim").setFloat(EclipseFxState.arrivalDim(partialTick));
+        pipeline.getUniform("EndTintPulse").setFloat(EclipseFxState.endTintPulse(partialTick));
     }
 
     // --- v3 (VEIL-REPASS-1): world_grade color script -----------------------------------

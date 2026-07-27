@@ -42,6 +42,10 @@ public final class EndArrivalFxRows {
     private static final double PILLAR_MODEL_HEIGHT = 260.0D;
     /** Authored column height of {@code end_arrival_glitter.fx}. */
     private static final double GLITTER_MODEL_HEIGHT = 240.0D;
+    /** Authored column height of {@code end_arrival2_strand_trail.fx} (V2 generator). */
+    private static final double TRAIL_MODEL_HEIGHT = 260.0D;
+    /** Authored radius of {@code end_arrival2_island_ring.fx} (V2 generator). */
+    private static final double RING_MODEL_RADIUS = 60.0D;
 
     private EndArrivalFxRows() {}
 
@@ -117,6 +121,64 @@ public final class EndArrivalFxRows {
                 false,
                 (photonFx, pos, entity, a, b) ->
                         yScaledColumnLeg(photonFx, pos, a, GLITTER_MODEL_HEIGHT)));
+
+        // --- V2 "GIGANTISMUS" rows (PLAN-F077 §4; assets from end_arrival2_fx.py) ---
+
+        // Beat 1 — rune ring gathering over the altar (~80 t, dies ON the erupt beat).
+        PhotonFxRegistry.registerRow(new PhotonFxRegistry.Row(
+                EndArrivalFxCues.CUE_GLYPHS,
+                fx("end_arrival2_glyphs"),
+                fx("altar_levelup_ring"),
+                FxBudget.Channel.SEQUENCE,
+                PhotonFxRegistry.Mode.REPLACE,
+                false));
+        // Beat 3 — comet-trail sheath around the debris helix strands; a = real
+        // altar→rift height (Y-stretch, the pillar law).
+        PhotonFxRegistry.registerRow(new PhotonFxRegistry.Row(
+                EndArrivalFxCues.CUE_STRAND_TRAIL,
+                fx("end_arrival2_strand_trail"),
+                fx("altar_beam"),
+                FxBudget.Channel.SEQUENCE,
+                PhotonFxRegistry.Mode.REPLACE,
+                false,
+                (photonFx, pos, entity, a, b) ->
+                        yScaledColumnLeg(photonFx, pos, a, TRAIL_MODEL_HEIGHT)));
+        // Beat 3 — giant wave-complete shock ring; a = ring radius in blocks
+        // (XZ-stretch onto the completing annulus; allowMulti: five stamped waves).
+        PhotonFxRegistry.registerRow(new PhotonFxRegistry.Row(
+                EndArrivalFxCues.CUE_ISLAND_RING,
+                fx("end_arrival2_island_ring"),
+                fx("unlock_burst"),
+                FxBudget.Channel.SEQUENCE,
+                PhotonFxRegistry.Mode.REPLACE,
+                false,
+                EndArrivalFxRows::islandRingLeg));
+        // Permanent — the subtle end-rift residue over the finished disc (AMBIENT
+        // lane: it plays forever; EndRiftAmbient re-fires it every 600 t and the
+        // allowMulti=false dedup turns the ~660 t one-shot into a seamless loop).
+        PhotonFxRegistry.registerRow(new PhotonFxRegistry.Row(
+                EndArrivalFxCues.CUE_RIFT_AMBIENT,
+                fx("end_arrival2_rift_ambient"),
+                fx("vortex_wisp"),
+                FxBudget.Channel.AMBIENT,
+                PhotonFxRegistry.Mode.REPLACE,
+                false));
+    }
+
+    /**
+     * Wave-ring leg: the payload's {@code a} float carries the completing wave's ring
+     * radius in blocks; stretch the executor's XZ by {@code a / RING_MODEL_RADIUS} so
+     * the authored r=60 annulus lands on the actual assembly band. {@code a <= 0}
+     * (dev refire) plays unscaled. {@code allowMulti}: all five wave stamps must play
+     * even where their lifetimes overlap an FX replay.
+     */
+    private static boolean islandRingLeg(ResourceLocation photonFx, Vec3 pos,
+            @Nullable Entity entity, float a, float b) {
+        double xzScale = a > 0.5F ? a / RING_MODEL_RADIUS : 1.0D;
+        return PhotonBridge.spawn(photonFx, pos,
+                PhotonBridge.SpawnOptions.DEFAULT
+                        .withScale(xzScale, 1.0D, xzScale)
+                        .withAllowMulti(true));
     }
 
     /**

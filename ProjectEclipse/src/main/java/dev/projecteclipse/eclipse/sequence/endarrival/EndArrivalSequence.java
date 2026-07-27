@@ -83,6 +83,15 @@ import net.neoforged.neoforge.network.PacketDistributor;
  *
  * <p><b>FX replay</b> ({@code /dev event start endarrival fxonly}) runs the identical show
  * with {@code buildDisc = false}: no block is written and no state flag is committed.</p>
+ *
+ * <p><b>V2 "GIGANTISMUS"</b> (PLAN-F077 §3): the same phase machine gained the Veil
+ * world-grade dim/tint lanes ({@code CUE_GRADE}/{@code CUE_TINT} → {@code ArrivalDim} /
+ * {@code EndTintPulse} uniforms), the omen glyph ring ({@code CUE_GLYPHS}), the helix
+ * comet-trail sheath ({@code CUE_STRAND_TRAIL}), five wave-complete island shock rings
+ * ({@code CUE_ISLAND_RING} + two hero {@code FX_SHOCKWAVE} pulses), the synthesized
+ * sub-boom/riser/choir/drone audio layer ({@code tools/music/gen_endarrival_sfx.py})
+ * and the permanent {@code CUE_RIFT_AMBIENT} handoff (re-fired forever by
+ * {@code worldgen/end/EndRiftAmbient} once the real disc completes).</p>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class EndArrivalSequence {
@@ -106,6 +115,33 @@ public final class EndArrivalSequence {
     /** Finale sub-beats. */
     private static final int ROAR_AT = SPILL_END + 50;
     private static final int CAPTION_AT = SPILL_END + 70;
+
+    // --- V2 "GIGANTISMUS" sub-beats (PLAN-F077 §3) ---
+
+    /** The 6 s riser starts here so it ends exactly ON the t = 160 erupt beat. */
+    private static final int RISER_AT = OMEN_END - 120;
+    /** Omen heartbeat cadence (sub-boom pulse train). */
+    private static final int SUBBOOM_INTERVAL_TICKS = 40;
+    /** The glyph rune ring gathers over the altar here (its ~80 t dies ON the erupt). */
+    private static final int GLYPHS_AT = 80;
+    /** The glyph anchor floats this many blocks above the altar top. */
+    private static final double GLYPH_HEIGHT = 40.0D;
+    /** Grade dim script: omen creep → erupt spike → spill simmer (released at PILLAR_AT). */
+    private static final float DIM_OMEN = 0.35F;
+    private static final float DIM_SPIKE = 0.55F;
+    private static final float DIM_SIMMER = 0.15F;
+    /** Choir pad re-fire cadence during the spill (the ogg is ~6 s = 120 t). */
+    private static final int CHOIR_REFIRE_TICKS = 120;
+    /** One island shock ring per completed assembly wave (EndArrivalDebrisFx wave law). */
+    private static final int WAVE_RING_INTERVAL_TICKS = 80;
+    private static final int WAVE_COUNT = 5;
+    /** The last (pillar) wave's hero ring fires just before the implosion. */
+    private static final int LAST_WAVE_RING_AT = SPILL_END - 10;
+    /** End-purple tint script: reveal flash → afterglow → decay to zero. */
+    private static final int TINT_AFTERGLOW_AT = SPILL_END + 40;
+    private static final int TINT_DECAY_AT = TOTAL_TICKS - 20;
+    /** The deep end-ambience drone lands under the FINALE caption. */
+    private static final int DRONE_AT = SPILL_END + 80;
 
     /** The rift point sits this far above the disc surface, directly over the altar. */
     private static final int RIFT_CLEARANCE = 80;
@@ -192,6 +228,11 @@ public final class EndArrivalSequence {
         Run run = active;
         if (run != null) {
             EndArrivalDebrisFx.clearAll();
+            // V2 (WP-A): never leave the world dimmed/tinted behind an abort.
+            FxPayloads.sendFxEvent(run.overworld, EndArrivalFxCues.CUE_GRADE,
+                    run.altarTop, 0.0F, 40.0F, CUE_RANGE_ALL);
+            FxPayloads.sendFxEvent(run.overworld, EndArrivalFxCues.CUE_TINT,
+                    run.altarTop, 0.0F, 40.0F, CUE_RANGE_ALL);
             List<ServerPlayer> inCutscene = new ArrayList<>();
             for (ServerPlayer player : run.overworld.players()) {
                 if (CUTSCENE_ID.equals(CutsceneService.activePathId(player))) {
@@ -366,6 +407,8 @@ public final class EndArrivalSequence {
             switch (phase) {
                 case OMEN -> {
                     cue(EndArrivalFxCues.CUE_SUCTION, this.altarTop, 0.0F);
+                    // V2 (WP-A): the world starts losing light — ArrivalDim creeps in.
+                    cue(EndArrivalFxCues.CUE_GRADE, this.altarTop, DIM_OMEN, 120.0F);
                     sound(this.altarTop, EclipseSounds.EVENT_END_SHATTER_RUMBLE.get(),
                             SoundSource.AMBIENT, 2.4F, 0.4F);
                     sound(this.altarTop, SoundEvents.AMBIENT_CAVE.value(),
@@ -377,10 +420,15 @@ public final class EndArrivalSequence {
                     // The altar itself physically erupts here (GeckoLib model animation).
                     dev.projecteclipse.eclipse.ritual.AltarModelTriggers.erupt(this.overworld);
                     cue(EndArrivalFxCues.CUE_RINGS, this.altarTop, 0.0F);
+                    // V2 (WP-A): the erupt beat spikes the dim before the pillar releases it.
+                    cue(EndArrivalFxCues.CUE_GRADE, this.altarTop, DIM_SPIKE, 10.0F);
                     sound(this.altarTop, SoundEvents.PORTAL_TRIGGER,
                             SoundSource.AMBIENT, 2.4F, 0.55F);
                     sound(this.altarTop, EclipseSounds.EVENT_END_SHATTER_RUMBLE.get(),
                             SoundSource.AMBIENT, 2.2F, 0.6F);
+                    // V2 (WP-G): the fortissimo heartbeat right on the eruption.
+                    sound(this.altarTop, EclipseSounds.EVENT_END_ARRIVAL_SUBBOOM.get(),
+                            SoundSource.AMBIENT, 3.2F, 0.85F);
                 }
                 case SPILL -> {
                     if (this.buildDisc) {
@@ -402,6 +450,11 @@ public final class EndArrivalSequence {
                     }
                     EndArrivalDebrisFx.begin(this.overworld, this.altarTop, this.rift,
                             this.discCenter, this.discRadius);
+                    // V2 (WP-C): the comet-trail sheath around the three helix strands.
+                    cue(EndArrivalFxCues.CUE_STRAND_TRAIL, this.altarTop, this.pillarHeight);
+                    // V2 (WP-G): the choir pad enters with the spill (re-fired on cadence).
+                    sound(this.altarTop, EclipseSounds.EVENT_END_ARRIVAL_CHOIR.get(),
+                            SoundSource.AMBIENT, 2.4F, 1.0F);
                     caption("eclipse.caption.end_arrival.spill", 100,
                             S2CCaptionPayload.STYLE_SUBTITLE);
                 }
@@ -409,6 +462,9 @@ public final class EndArrivalSequence {
                     EndArrivalDebrisFx.collapse(this.overworld);
                     cue(EndArrivalFxCues.CUE_IMPLOSION, this.rift, 0.0F);
                     cue(EndArrivalFxCues.CUE_GLITTER, this.altarTop, this.pillarHeight);
+                    // V2 (WP-A): the reveal — end-purple sky flash + the dim releases.
+                    cue(EndArrivalFxCues.CUE_TINT, this.rift, 1.0F, 20.0F);
+                    cue(EndArrivalFxCues.CUE_GRADE, this.altarTop, 0.0F, 140.0F);
                     // Veil-Post radial distortion pulse: the world-anchored screen
                     // shockwave (EclipseFxState.startShockwave). 0.9/45 stays clear of
                     // the (>=1.0, >=50) intro-burst giant signature.
@@ -431,6 +487,23 @@ public final class EndArrivalSequence {
             // Re-fire the suction one-shot on its ~90 t cadence (Photon dedup absorbs).
             if (this.tick > 0 && this.tick % 80 == 0) {
                 cue(EndArrivalFxCues.CUE_SUCTION, this.altarTop, 0.0F);
+            }
+            // V2 (WP-B): the rune ring gathers in the sky over the altar; the ~80 t
+            // one-shot dies exactly ON the erupt beat.
+            if (this.tick == GLYPHS_AT) {
+                cue(EndArrivalFxCues.CUE_GLYPHS,
+                        this.altarTop.add(0.0D, GLYPH_HEIGHT, 0.0D), 0.0F);
+            }
+            // V2 (WP-G): the heartbeat — sub-boom pulses swelling toward the eruption.
+            if (this.tick > 0 && this.tick % SUBBOOM_INTERVAL_TICKS == 0) {
+                float swell = this.tick / (float) OMEN_END;
+                sound(this.altarTop, EclipseSounds.EVENT_END_ARRIVAL_SUBBOOM.get(),
+                        SoundSource.AMBIENT, 1.6F + swell, 1.0F);
+            }
+            // V2 (WP-G): the 6 s riser lands its peak exactly on the t = 160 erupt.
+            if (this.tick == RISER_AT) {
+                sound(this.altarTop, EclipseSounds.EVENT_END_ARRIVAL_RISER.get(),
+                        SoundSource.AMBIENT, 2.6F, 1.0F);
             }
             if (this.tick % BASELINE_PARTICLE_INTERVAL != 0) {
                 return;
@@ -461,6 +534,9 @@ public final class EndArrivalSequence {
         private void tickCharge() {
             if (this.tick == PILLAR_AT) {
                 cue(EndArrivalFxCues.CUE_PILLAR, this.altarTop, this.pillarHeight);
+                // V2 (WP-A): the erupt dim spike releases to the spill simmer with the
+                // pillar — the light "escapes" upward.
+                cue(EndArrivalFxCues.CUE_GRADE, this.altarTop, DIM_SIMMER, 60.0F);
                 sound(this.altarTop, SoundEvents.BEACON_ACTIVATE,
                         SoundSource.AMBIENT, 3.0F, 0.55F);
                 sound(this.altarTop, EclipseSounds.EVENT_RIFT_WHOOSH.get(),
@@ -498,6 +574,37 @@ public final class EndArrivalSequence {
 
         private void tickSpill() {
             refireLongCues();
+            int local = this.tick - CHARGE_END;
+            // V2 (WP-G): re-fire the ~6 s choir pad so it carries the whole assembly.
+            if (local > 0 && local % CHOIR_REFIRE_TICKS == 0 && local < 360) {
+                sound(this.altarTop, EclipseSounds.EVENT_END_ARRIVAL_CHOIR.get(),
+                        SoundSource.AMBIENT, 2.2F, 1.0F);
+            }
+            // V2 (WP-D): one giant island shock ring per completed assembly wave
+            // (EndArrivalDebrisFx opens wave k at local k·80; k completes at (k+1)·80).
+            // Waves 0–3 stamp at t = 480/560/640/720; the pillar wave's hero ring fires
+            // at LAST_WAVE_RING_AT (790), just before the implosion takes the stage.
+            int wave = -1;
+            if (local > 0 && local % WAVE_RING_INTERVAL_TICKS == 0) {
+                wave = local / WAVE_RING_INTERVAL_TICKS - 1;
+            } else if (this.tick == LAST_WAVE_RING_AT) {
+                wave = WAVE_COUNT - 1;
+            }
+            if (wave >= 0 && wave < WAVE_COUNT) {
+                double ringRadius = (wave + 0.5D) / WAVE_COUNT * this.discRadius;
+                Vec3 at = new Vec3(this.discCenter.x, this.discCenter.y + 2.0D,
+                        this.discCenter.z);
+                cue(EndArrivalFxCues.CUE_ISLAND_RING, at, (float) ringRadius);
+                sound(at, EclipseSounds.EVENT_RIFT_RESOLVE.get(),
+                        SoundSource.AMBIENT, 2.4F, 0.9F + wave * 0.05F);
+                // Hero beats: the mid and the pillar wave also pulse the Veil
+                // screen shockwave (0.6/30 stays clear of the intro-burst signature).
+                if (wave == 2 || wave == WAVE_COUNT - 1) {
+                    FxPayloads.sendFxEvent(this.overworld, FxPayloads.FX_SHOCKWAVE,
+                            at, 0.6F, 30.0F, CUE_RANGE_ALL);
+                    shake(0.5F, 25);
+                }
+            }
             // Endergeist wisps dancing between the debris streams (random point on the
             // altar→rift column, biased toward the rift where the streams fan out).
             if (this.tick % WISP_INTERVAL_TICKS == 0) {
@@ -549,6 +656,21 @@ public final class EndArrivalSequence {
             } else if (this.tick == CAPTION_AT) {
                 caption("eclipse.caption.end_arrival.arrived", 110,
                         S2CCaptionPayload.STYLE_TITLE);
+            } else if (this.tick == TINT_AFTERGLOW_AT) {
+                // V2 (WP-A): the reveal flash settles into a violet afterglow…
+                cue(EndArrivalFxCues.CUE_TINT, this.rift, 0.3F, 120.0F);
+            } else if (this.tick == DRONE_AT) {
+                // V2 (WP-G): the deep end-ambience drone under the arrival caption.
+                sound(this.rift, EclipseSounds.EVENT_END_ARRIVAL_DRONE.get(),
+                        SoundSource.AMBIENT, 2.8F, 1.0F);
+            } else if (this.tick == TINT_DECAY_AT) {
+                // …and decays to zero past the sequence end (the client keeps easing).
+                cue(EndArrivalFxCues.CUE_TINT, this.rift, 0.0F, 120.0F);
+                // V2 (WP-F): first ambient stamp over the disc — the permanent
+                // EndRiftAmbient ticker takes over once the real build completes.
+                cue(EndArrivalFxCues.CUE_RIFT_AMBIENT,
+                        new Vec3(this.discCenter.x, this.discCenter.y + 40.0D,
+                                this.discCenter.z), 0.0F);
             }
             if (this.tick % 5 == 0) {
                 // The pillar dissolving: falling END_ROD glitter along the column.
@@ -563,11 +685,12 @@ public final class EndArrivalSequence {
             }
         }
 
-        /** Pillar and maw are long one-shots; re-fire on a cadence for late joiners. */
+        /** Pillar, maw and strand trail are long one-shots; re-fire for late joiners. */
         private void refireLongCues() {
             if (this.tick % LONG_CUE_REFIRE_TICKS == 0) {
                 cue(EndArrivalFxCues.CUE_PILLAR, this.altarTop, this.pillarHeight);
                 cue(EndArrivalFxCues.CUE_MAW, this.rift, 0.0F);
+                cue(EndArrivalFxCues.CUE_STRAND_TRAIL, this.altarTop, this.pillarHeight);
             }
         }
 
@@ -592,6 +715,12 @@ public final class EndArrivalSequence {
 
         private void cue(net.minecraft.resources.ResourceLocation id, Vec3 pos, float a) {
             FxPayloads.sendFxEvent(this.overworld, id, pos, a, 0.0F, CUE_RANGE_ALL);
+        }
+
+        /** Two-parameter cue (V2 grade/tint lanes: {@code a} = target, {@code b} = ramp). */
+        private void cue(net.minecraft.resources.ResourceLocation id, Vec3 pos, float a,
+                float b) {
+            FxPayloads.sendFxEvent(this.overworld, id, pos, a, b, CUE_RANGE_ALL);
         }
 
         private void shake(float strength, int ticks) {
