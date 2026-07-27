@@ -96,7 +96,9 @@ def _rim_motes(fx, rate, max_particles, climb, size_hi, hdr, alpha_hold, rgb_out
             duration=100, looping=True, prewarm=80,
             start_lifetime=random_between(80, 120),
             start_speed=constant(0.0),
-            start_size=nf3(random_between(0.05, size_hi)),
+            # V2.1 readability pass: floor 0.12 (was 0.05) — sub-0.1 motes vanished
+            # beyond ~15 blocks, defeating the island-scale read (llvmpipe QA).
+            start_size=nf3(random_between(0.12, size_hi)),
             simulation_space="Local", max_particles=max_particles)
        .with_emission(rate=constant(rate))
        # The island edge: r 15.5 +- the thickness band covers the 14..16 ellipse.
@@ -129,7 +131,7 @@ def _rim_fog(fx, alpha, hdr):
             duration=100, looping=True, prewarm=90,
             start_lifetime=random_between(100, 140),
             start_speed=constant(0.0),
-            start_size=nf3(random_between(0.7, 1.1)),
+            start_size=nf3(random_between(1.1, 1.8)),
             simulation_space="Local", max_particles=14)
        .with_emission(rate=constant(0.09))
        .with_shape(circle(radius=RIM_RADIUS + 0.7, thickness=0.3),
@@ -165,7 +167,7 @@ def _rim_streamers(fx, burst_count, probability, hdr):
             duration=50, looping=True, prewarm=0,
             start_lifetime=random_between(38, 55),
             start_speed=constant(0.0),
-            start_size=nf3(random_between(0.09, 0.14)),
+            start_size=nf3(random_between(0.16, 0.26)),
             simulation_space="Local", max_particles=12)
        .with_emission(rate=constant(0.0),
                       bursts=[burst(time=20, count=constant(burst_count), cycles=1,
@@ -193,9 +195,9 @@ def build_altar_aura_rim_lo() -> FxBuilder:
     """Stage 1-2: the perimeter whisper — sparse, low, deep violet."""
     fx = FxBuilder("altar_aura_rim_lo")
     _rim_motes(fx, rate=0.5, max_particles=40,
-               climb=random_between(0.03, 0.06), size_hi=0.10,
-               hdr=(1.0, 0.85, 1.3), alpha_hold=0.5, rgb_out=VIOLET)
-    _rim_fog(fx, alpha=0.10, hdr=(1.0, 1.0, 1.0))
+               climb=random_between(0.03, 0.06), size_hi=0.26,
+               hdr=(1.3, 1.1, 1.6), alpha_hold=0.65, rgb_out=VIOLET)
+    _rim_fog(fx, alpha=0.16, hdr=(1.0, 1.0, 1.0))
     return fx
 
 
@@ -203,10 +205,10 @@ def build_altar_aura_rim_mid() -> FxBuilder:
     """Stage 3-4: denser + taller, gold flecks, pillar-ring streamers arrive."""
     fx = FxBuilder("altar_aura_rim_mid")
     _rim_motes(fx, rate=1.2, max_particles=64,
-               climb=random_between(0.06, 0.11), size_hi=0.12,
-               hdr=(1.2, 1.0, 1.5), alpha_hold=0.6, rgb_out=GOLD)
-    _rim_fog(fx, alpha=0.12, hdr=(1.1, 1.0, 1.2))
-    _rim_streamers(fx, burst_count=3, probability=0.7, hdr=(1.5, 1.25, 1.7))
+               climb=random_between(0.06, 0.11), size_hi=0.32,
+               hdr=(1.5, 1.3, 1.8), alpha_hold=0.75, rgb_out=GOLD)
+    _rim_fog(fx, alpha=0.19, hdr=(1.1, 1.0, 1.2))
+    _rim_streamers(fx, burst_count=4, probability=0.8, hdr=(1.8, 1.5, 2.0))
     return fx
 
 
@@ -214,10 +216,10 @@ def build_altar_aura_rim_hi() -> FxBuilder:
     """Stage 5: full density, tallest climb, gold crests over a core-white body."""
     fx = FxBuilder("altar_aura_rim_hi")
     _rim_motes(fx, rate=2.0, max_particles=80,
-               climb=random_between(0.08, 0.16), size_hi=0.14,
-               hdr=(1.5, 1.3, 1.8), alpha_hold=0.7, rgb_out=CORE)
-    _rim_fog(fx, alpha=0.14, hdr=(1.3, 1.15, 1.4))
-    _rim_streamers(fx, burst_count=5, probability=0.85, hdr=(1.9, 1.6, 1.4))
+               climb=random_between(0.08, 0.16), size_hi=0.38,
+               hdr=(1.8, 1.6, 2.1), alpha_hold=0.85, rgb_out=CORE)
+    _rim_fog(fx, alpha=0.22, hdr=(1.3, 1.15, 1.4))
+    _rim_streamers(fx, burst_count=7, probability=0.95, hdr=(2.2, 1.9, 1.7))
     return fx
 
 
@@ -236,7 +238,7 @@ def _spiral_arm(fx, name, yaw_deg, rate, max_particles, inward, orbital_speed,
             duration=100, looping=True, prewarm=100,
             start_lifetime=constant(130),
             start_speed=constant(0.0),
-            start_size=nf3(random_between(0.08, 0.12)),
+            start_size=nf3(random_between(0.16, 0.26)),
             simulation_space="Local", max_particles=max_particles)
        .with_emission(rate=constant(rate))
        # Loop arc: birth point marches around the rim, so successive carriers form
@@ -282,8 +284,8 @@ def build_altar_aura_spiral_lo() -> FxBuilder:
     fx = FxBuilder("altar_aura_spiral_lo")
     for i, yaw in enumerate((0.0, 180.0)):
         _spiral_arm(fx, f"arm_{i}", yaw, rate=0.8, max_particles=8,
-                    inward=-2.3, orbital_speed=0.32, hdr=(1.2, 1.0, 1.4),
-                    trail_lifetime=0.3, trail_width=0.1, head_alpha=0.6)
+                    inward=-2.3, orbital_speed=0.32, hdr=(1.5, 1.3, 1.7),
+                    trail_lifetime=0.3, trail_width=0.16, head_alpha=0.75)
     return fx
 
 
@@ -292,8 +294,8 @@ def build_altar_aura_spiral_hi() -> FxBuilder:
     fx = FxBuilder("altar_aura_spiral_hi")
     for i, yaw in enumerate((0.0, 90.0, 180.0, 270.0)):
         _spiral_arm(fx, f"arm_{i}", yaw, rate=1.0, max_particles=10,
-                    inward=-2.5, orbital_speed=0.4, hdr=(1.8, 1.5, 2.1),
-                    trail_lifetime=0.45, trail_width=0.14, head_alpha=0.85)
+                    inward=-2.5, orbital_speed=0.4, hdr=(2.1, 1.8, 2.4),
+                    trail_lifetime=0.45, trail_width=0.22, head_alpha=0.95)
     return fx
 
 
