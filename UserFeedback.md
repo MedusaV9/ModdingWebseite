@@ -16,14 +16,14 @@ _(leer — hier neue Punkte reinschreiben; zuletzt gezogen: 27.07. 10:57-Commit 
 
 | # | Punkt | Status |
 |---|-------|--------|
-| F-080 | Server/Welt-Verlassen hängt für immer im SAVING-State statt sauber zu stoppen | 🟡 |
-| F-081 | Sturm-Bosskampf startet erst, wenn Spieler eine Statue schlagen (nicht mehr durch bloße Anwesenheit) | 🟡 |
-| F-082 | Tod im Sturm-Bosskampf ⇒ Kampf wird zurückgesetzt (Gräber bleiben dabei unangetastet) | 🟡 |
-| F-083 | Stürme entkoppeln: jeder Sturmboss spawnt unabhängig (kein „erst Boss A, dann Boss B“) | 🟡 |
-| F-084 | Stuck-BlockDisplays nach Tod im Sturmkampf werden zuverlässig aufgeräumt | 🟡 |
-| F-085/086/087 | Grab-Schutz: Bosse können Gräber weder bewegen noch zerstören; Zauber beschädigen keine Gräber | 🟡 |
-| F-088 | Limbo-Schiff: großes pinkes Veil-Objekt am Anfang blockiert die Sicht — entfernen/fixen | 🟡 |
-| F-089 | Struktur-Spawn verursacht immer noch Blackscreens — endgültig fixen | 🟡 |
+| F-080 | Server/Welt-Verlassen hängt für immer im SAVING-State statt sauber zu stoppen — Fix implementiert (Stop-Sweep räumt FX-Schwärme VOR dem Save, kein Sync-Chunkload im Stop mehr, Arena-Pit-Chunks werden freigegeben); dedizierter Server-Stop in ~10 s verifiziert ✅, Singleplayer-Quit-Test folgt | 🟡→🟢 |
+| F-081 | Sturm-Bosskampf startet erst, wenn Spieler eine Statue schlagen — implementiert (4-teilige Display-Statue + Interaction-Hitbox, Photon-Idle-Aura, 3-s-Awaken); Spieler-Test folgt | 🟡 |
+| F-082 | Tod im Sturm-Bosskampf ⇒ Wipe-Reset (Boss heilt/despawnt, Statue re-armt nach 30 s, KEINE Blockschreibungen ⇒ Gräber sicher) — implementiert, Spieler-Test folgt | 🟡 |
+| F-083 | Stürme entkoppelt: reconcile markiert jetzt JEDE aktive Site — im Server-Log verifiziert (2 Lairs gleichzeitig armed) ✅ | 🟢 |
+| F-084 | Display-Leak gefixt (LIVE_DISPLAYS-Chunk-Unload-Leak) + Scope-Tags + Orphan-Sweeps bei Kampfende/Reset/Serverstart/Chunkload — implementiert | 🟡 |
+| F-085/086/087 | Grab-Schutz implementiert: Explosions-Pruning + LivingDestroyBlock-Cancel, Grab-Ausschluss in Sturm-Liftlogik, Zauber-Blacklist, Blast-Resistance 6→1200 | 🟡 |
+| F-088 | Limbo-Pink-Objekt identifiziert (Eclipse-Aura exakt vor dem Schiffsbug, 81°-Glow-Fächer): 45° zur Seite gedreht, verkleinert (R86→60) + gedimmt; Sichttest folgt | 🟡 |
+| F-089 | Blackscreen-Ursache: Spieler wird beim Struktur-Platzieren EINGEMAUERT (Inside-Block-Overlay = „Blackscreen“). Evakuierungs-Seam + Post-Paste-Sweep implementiert | 🟡 |
 | F-091 | `/dev preload everything`: ganze Map einmal vorgenerieren + entladen, kein sichtbares Chunk-Reingenerieren mehr (auch Start-Event) | 🟡 |
 | F-092 | Rand-Berge: riesig auftürmen, Map komplett einkreisen, von überall sichtbar, weichen beim Erweitern langsam zurück | 🟡 |
 | F-090/093 | Credits-Szene + Schwarzes Loch V3: Map wird richtig zerrissen (heftige Animationen/Effekte) | 🟡 |
