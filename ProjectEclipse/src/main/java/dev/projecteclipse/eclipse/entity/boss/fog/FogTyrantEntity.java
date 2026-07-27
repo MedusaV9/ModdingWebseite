@@ -124,10 +124,18 @@ import software.bernie.geckolib.animation.RawAnimation;
  * sweep.</p>
  *
  * <p><b>Scaling</b> (snapshotted at summon): HP = {@value #BASE_MAX_HEALTH}·(1+0.4·(n−1))
- * for n living players within {@value #SCALING_RANGE} blocks. <b>Wipe/reset</b> (Herald
- * rules): no player within {@value #RESET_RANGE} blocks for {@value #RESET_TICKS}t →
- * heal to full, despawn every {@value #ADD_TAG}-tagged hound/colossus add and despawn
- * ship-shape ({@link FogBankMarker} re-arms the lair). <b>Death</b>:
+ * for n living players within {@value #SCALING_RANGE} blocks. <b>Wipe/reset (F-082)</b>:
+ * two paths share {@link #resetFight} — the ABANDON path (Herald rules: no player within
+ * {@value #RESET_RANGE} blocks for {@value #RESET_TICKS}t) and the WIPE path (once at
+ * least one enrolled participant has died this fight — {@code participantDied}, flagged
+ * by {@link FogTyrantFightHooks}, persisted — and no living participant remains within
+ * {@value #RESET_RANGE} blocks, checked every {@value #WIPE_CHECK_TICKS}t like the
+ * Ferryman's {@code checkWipe}). Both heal to full, despawn every
+ * {@value #ADD_TAG}-tagged hound/colossus add and despawn ship-shape; the reset writes
+ * NO blocks (graves placed by the deaths survive untouched — the siege's sink ending
+ * restores lifts only into {@code canBeReplaced()} cells), and
+ * {@link TyrantStatue#onFightReset} re-arms the statue + lair after its cooldown (the
+ * G-1 in-session re-arm fix). <b>Death</b>:
  * {@value #DEATH_DURATION_TICKS}t scripted storm-burst — the crown falls first (anim),
  * the chest core gutters (synced {@code CORE_LIT} flag, Ferryman lantern pattern),
  * the body collapses, final thunderclap + camera shake. C8 death beat: at the
@@ -145,8 +153,9 @@ import software.bernie.geckolib.animation.RawAnimation;
  * 3 + 1 per extra scaled player, cap {@value #SHARD_PAYOUT_CAP}) staggered over the
  * storm-burst award ceremony.</p>
  *
- * <p><b>Placement seam:</b> NOT a spawner mob — P1's mature-storm flow marks the lair via
- * {@link FogBankMarker#markLair} (proximity-triggered summon) or calls
+ * <p><b>Placement seam:</b> NOT a spawner mob — P1's active-storm flow marks the lair via
+ * {@link FogBankMarker#markLair} (F-081: the {@link TyrantStatue} stands there and a
+ * player must STRIKE it to summon) or calls
  * {@link #summonAt(ServerLevel, BlockPos)} directly (documented in
  * {@code docs/plans_v3/wiring/WB-TYRANT_wiring.md}); the fight self-pins its
  * r={@value FogTyrantArena#ARENA_RADIUS} arena at the summon point, so plain
@@ -209,8 +218,10 @@ public class FogTyrantEntity extends EclipseGeoMonster {
     private static final double MELEE_RANGE = 3.6D;
     private static final int MELEE_COOLDOWN_TICKS = 30;
     private static final int SPECIAL_GAP_TICKS = 20;
-    private static final int RESET_TICKS = 1200; // 60 s (Herald wipe rules)
+    private static final int RESET_TICKS = 1200; // 60 s (Herald abandon rules)
     private static final double RESET_RANGE = 24.0D;
+    /** F-082 wipe-check cadence (Ferryman {@code WIPE_CHECK_TICKS} pattern). */
+    private static final int WIPE_CHECK_TICKS = 20;
     private static final int DEFLECT_CUE_INTERVAL_TICKS = 20;
     private static final double SUMMON_DEDUP_RANGE = 64.0D;
     /** W4 loot ceremony: first participant payout keyframe of the death storm-burst. */
@@ -280,6 +291,13 @@ public class FogTyrantEntity extends EclipseGeoMonster {
     private int meleeCooldown;
     private int fightTicks;
     private int noPlayerTicks;
+    /**
+     * F-082: at least one enrolled participant died THIS fight (flagged by
+     * {@link FogTyrantFightHooks}, persisted in NBT so a restart mid-fight keeps the
+     * wipe semantics). Gates {@link #checkWipeReset} so "everyone briefly steps out"
+     * stays governed by the 60 s abandon timer, never an instant reset.
+     */
+    private boolean participantDied;
     private int lastPhase = 1;
     // PH-IMPROVE-2 (IDEAS-boss #10): P3 fog-arm sustain clock — counts down to the next
     // CUE_TYRANT_FOG_ARMS re-send (transient; a restart mid-P3 re-arms on the next tick).
@@ -468,6 +486,9 @@ public class FogTyrantEntity extends EclipseGeoMonster {
         this.fightTicks++;
         updatePhase(level);
         updateParticipants(level);
+        if (checkWipeReset(level)) {
+            return;
+        }
         if (tickReset(level)) {
             return;
         }
@@ -576,9 +597,49 @@ public class FogTyrantEntity extends EclipseGeoMonster {
     }
 
     /**
-     * Abandon-reset (Herald wipe rules): no players within {@value #RESET_RANGE} blocks
-     * for {@value #RESET_TICKS}t → heal to full, despawn tagged adds, despawn ship-shape
-     * (the {@link FogBankMarker} lair re-arms for the next approach).
+     * F-082 death-hook seam ({@link FogTyrantFightHooks}): a death only arms the wipe
+     * check when the victim was ENROLLED in this fight. Idempotent; ignored once the
+     * monarch is already down.
+     */
+    public void noteParticipantDeath(UUID playerId) {
+        if (!this.isAlive() || !this.participants.contains(playerId)) {
+            return;
+        }
+        if (!this.participantDied) {
+            EclipseMod.LOGGER.info("Fog Tyrant fight: an enrolled participant died — wipe reset armed "
+                    + "(fires once no living participant remains within {} blocks)", RESET_RANGE);
+        }
+        this.participantDied = true;
+    }
+
+    /**
+     * F-082 wipe reset (Ferryman {@code checkWipe} pattern, every
+     * {@value #WIPE_CHECK_TICKS}t): once at least one enrolled participant has died
+     * this fight, the fight resets the moment NO living participant remains in the
+     * fight zone — every enrolled player is dead, a spectator, offline, in another
+     * dimension or beyond {@value #RESET_RANGE} blocks. Players who merely step out
+     * without a death stay on the 60 s abandon timer instead.
+     */
+    private boolean checkWipeReset(ServerLevel level) {
+        if (!this.participantDied || this.participants.isEmpty()
+                || this.tickCount % WIPE_CHECK_TICKS != 0) {
+            return false;
+        }
+        for (UUID id : this.participants) {
+            ServerPlayer player = level.getServer().getPlayerList().getPlayer(id);
+            if (player != null && player.isAlive() && !player.isSpectator()
+                    && player.level() == level
+                    && player.position().distanceTo(this.position()) <= RESET_RANGE) {
+                return false; // A living participant still stands the storm.
+            }
+        }
+        resetFight(level, "wipe — every enrolled participant is dead or gone");
+        return true;
+    }
+
+    /**
+     * Abandon-reset (Herald rules): no players within {@value #RESET_RANGE} blocks
+     * for {@value #RESET_TICKS}t → the shared {@link #resetFight}.
      */
     private boolean tickReset(ServerLevel level) {
         boolean anyoneNear = level.players().stream().anyMatch(player ->
@@ -591,12 +652,28 @@ public class FogTyrantEntity extends EclipseGeoMonster {
         if (++this.noPlayerTicks < RESET_TICKS) {
             return false;
         }
-        EclipseMod.LOGGER.info("Fog Tyrant reset: no players within {} blocks for {} ticks — healing, "
-                + "cleaning up adds and despawning", RESET_RANGE, RESET_TICKS);
+        resetFight(level, "abandon — no players within " + (int) RESET_RANGE
+                + " blocks for " + RESET_TICKS + " ticks");
+        return true;
+    }
+
+    /**
+     * F-082 shared reset — the wipe path ({@link #checkWipeReset}) and the abandon path
+     * ({@link #tickReset}) both land here: telegraphs clear, tagged adds despawn, the
+     * monarch heals to full and despawns ship-shape. {@code StormSiege} notices the
+     * tyrant is gone within one poll and runs its sink ending (debris sinks, airborne
+     * lifts restore into their sockets — {@code canBeReplaced()}-guarded plus the
+     * {@code GraveProtection} belts, so graves survive untouched), and
+     * {@link TyrantStatue#onFightReset} re-arms the statue + lair after its 30 s
+     * cooldown (the G-1 in-session re-arm fix). This method writes NO blocks.
+     */
+    private void resetFight(ServerLevel level, String reason) {
+        EclipseMod.LOGGER.info("Fog Tyrant reset ({}): healing, cleaning up adds and despawning", reason);
+        clearTelegraphs();
         discardTaggedAdds(level);
         this.setHealth(this.getMaxHealth());
+        TyrantStatue.onFightReset(level, this.arena != null ? this.arena.center() : this.position());
         this.discard();
-        return true;
     }
 
     /**
@@ -1637,6 +1714,7 @@ public class FogTyrantEntity extends EclipseGeoMonster {
         super.addAdditionalSaveData(compound);
         compound.putInt("ScaledPlayers", this.scaledPlayers);
         compound.putBoolean("ColossusCalled", this.colossusCalled);
+        compound.putBoolean("ParticipantDied", this.participantDied); // F-082 wipe gate.
         compound.putInt("EnrageStacks", getEnrageStacks());
         compound.putInt("FightTicks", this.fightTicks);
         if (this.arena != null) {
@@ -1656,6 +1734,7 @@ public class FogTyrantEntity extends EclipseGeoMonster {
             this.scaledPlayers = Math.max(1, compound.getInt("ScaledPlayers"));
         }
         this.colossusCalled = compound.getBoolean("ColossusCalled");
+        this.participantDied = compound.getBoolean("ParticipantDied"); // F-082 wipe gate.
         this.fightTicks = compound.getInt("FightTicks");
         int stacks = Mth.clamp(compound.getInt("EnrageStacks"), 0, ENRAGE_MAX_STACKS);
         this.entityData.set(DATA_ENRAGE_STACKS, stacks);

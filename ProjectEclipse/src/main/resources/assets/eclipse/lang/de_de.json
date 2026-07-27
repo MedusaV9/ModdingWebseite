@@ -1817,6 +1817,8 @@
   "eclipse.storm.siege.begin": "Der Sturm wendet sich gegen euch — die Wand rückt näher und der Boden beginnt sich zu regen.",
   "eclipse.storm.siege.calm": "Der Sturm lockert seinen Griff. Was er nahm, fällt zurück zur Erde.",
   "eclipse.storm.siege.lift": "Der Sturm reißt Blöcke aus dem Boden!",
+  "eclipse.storm.statue.hint": "Die Statue summt vor Sturmkraft. Schlag sie — wenn du dich traust.",
+  "eclipse.storm.statue.awaken": "Die Statue birst — der Sturm ballt sich zu einer Krone!",
   "eclipse.structure.collapsed_vault": "Eingestürztes Gewölbe",
   "eclipse.structure.flooded_crypt": "Geflutete Gruft",
   "eclipse.structure.glitch_reliquary": "Glitch-Reliquiar",

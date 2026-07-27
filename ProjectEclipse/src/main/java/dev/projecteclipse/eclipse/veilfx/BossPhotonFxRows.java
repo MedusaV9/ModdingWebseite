@@ -85,6 +85,19 @@ public final class BossPhotonFxRows {
                 FxBudget.Channel.BURST,
                 PhotonFxRegistry.Mode.LAYER,
                 false));
+        // F-081 — tyrant statue idle aura (ember orbit + crown sparks, statue_fx.py
+        // asset, 200t runtime). NOT a loop row: the server re-sends the cue every 40t
+        // while the lair is armed (TyrantStatue.ensureArmed) and 40 divides 200, so
+        // each mid-run re-send is a silent dedup no-op — the CUE_TYRANT_FOG_ARMS
+        // sustain law, position lane. Null Quasar leg: the server-stamped ELECTRIC_SPARK
+        // spiral IS the photon-less baseline (LAYER law), no Quasar analogue needed.
+        PhotonFxRegistry.registerRow(new PhotonFxRegistry.Row(
+                FxCues.CUE_TYRANT_STATUE_IDLE,
+                fx("boss/tyrant_statue_idle"),
+                null,
+                FxBudget.Channel.AMBIENT,
+                PhotonFxRegistry.Mode.LAYER,
+                false));
     }
 
     /**

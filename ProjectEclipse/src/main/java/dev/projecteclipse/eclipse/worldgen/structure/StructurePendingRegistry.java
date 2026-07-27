@@ -33,6 +33,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
+import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
@@ -116,6 +117,14 @@ public final class StructurePendingRegistry {
 
     /** Ticks between auto-delay scans (placement spacing itself is config-driven). */
     private static final int SCAN_INTERVAL_TICKS = 10;
+    /**
+     * F-089 vertical reach of {@link #safetyBounds} below the anchor: the plateau fill
+     * packs foundations up to 24 blocks ({@code SitePrep.FILL_DEPTH}) under a seat that
+     * may sit up to 8 blocks ({@code StructureGrounding.MAX_SEAT_DROP}) under the anchor.
+     */
+    private static final int SAFETY_DEPTH_BELOW = 32;
+    /** F-089 vertical reach of {@link #safetyBounds} above the anchor (tall pastes). */
+    private static final int SAFETY_HEIGHT_ABOVE = 64;
     /** Maximum failed attempts before the row is abandoned without a placed record. */
     private static final int MAX_PLACEMENT_FAILURES = 3;
     private static final String FILE_NAME = "pending_structures.json";
@@ -401,6 +410,8 @@ public final class StructurePendingRegistry {
                 return true;
             }
             try {
+                // F-089: clear the footprint of players BEFORE any terraform/paste runs.
+                PlacementSafety.evacuate(level, safetyBounds(site), site.anchor().getY());
                 asyncPlacer.place(level, site,
                         () -> completeAsync(server, level, site, null),
                         error -> completeAsync(server, level, site, error));
@@ -427,6 +438,8 @@ public final class StructurePendingRegistry {
             return true;
         }
         try {
+            // F-089: clear the footprint of players BEFORE any terraform/paste runs.
+            PlacementSafety.evacuate(level, safetyBounds(site), site.anchor().getY());
             placer.place(level, site);
         } catch (Exception e) {
             placementFailed(server, level, site, e);
@@ -434,6 +447,8 @@ public final class StructurePendingRegistry {
         }
         removeAndRecord(site, true);
         lastPlaceGameTime = level.getGameTime();
+        // F-089 belt-and-braces: pop anyone the paste still caught (walked in mid-prep).
+        PlacementSafety.sweepEntombed(level, safetyBounds(site));
         fire(level, site, Phase.PLACED);
         EclipseMod.LOGGER.info("Structure site PLACED: {} ({}) at {}", site.siteId(),
                 site.structureId(), site.anchor().toShortString());
@@ -451,9 +466,27 @@ public final class StructurePendingRegistry {
         }
         removeAndRecord(site, true);
         lastPlaceGameTime = level.getGameTime();
+        // F-089 belt-and-braces: pop anyone the paste still caught (walked in mid-prep).
+        PlacementSafety.sweepEntombed(level, safetyBounds(site));
         fire(level, site, Phase.PLACED);
         EclipseMod.LOGGER.info("Structure site PLACED: {} ({}) at {}",
                 site.siteId(), site.structureId(), site.anchor().toShortString());
+    }
+
+    /**
+     * F-089 — the volume a player must not occupy while a site materializes: the pending
+     * row's XZ footprint around the anchor plus the {@link SitePrep#MARGIN} terraform
+     * skirt seam, from {@value #SAFETY_DEPTH_BELOW} blocks below the anchor to
+     * {@value #SAFETY_HEIGHT_ABOVE} above. Only anchor + footprint exist before the
+     * placer runs, so this brackets the real piece bounds generously; the exact plateau
+     * volume is covered again inside {@link SitePrep#preparePlateau} itself.
+     */
+    private static BoundingBox safetyBounds(PendingSite site) {
+        int half = site.footprint() / 2 + SitePrep.MARGIN;
+        BlockPos anchor = site.anchor();
+        return new BoundingBox(
+                anchor.getX() - half, anchor.getY() - SAFETY_DEPTH_BELOW, anchor.getZ() - half,
+                anchor.getX() + half, anchor.getY() + SAFETY_HEIGHT_ABOVE, anchor.getZ() + half);
     }
 
     private static void placementFailed(MinecraftServer server, @Nullable ServerLevel level,

@@ -52,6 +52,11 @@ public final class PristineSnapshots {
         if (!isValidName(name)) {
             return "ERROR: snapshot names must match [a-z0-9_-]+ (max 32 chars)";
         }
+        if (!server.isRunning()) {
+            // F-080 (S7): the flush below blocks on the chunk/IO workers — on a stopping
+            // server that wait can never end. The command is dev-only; just refuse.
+            return "ERROR: the server is stopping — snapshot save skipped";
+        }
         long startNanos = System.nanoTime();
         for (ServerLevel level : server.getAllLevels()) {
             level.getChunkSource().save(true);

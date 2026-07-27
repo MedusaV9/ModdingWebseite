@@ -294,6 +294,13 @@ public final class RingGrowthService {
     private static final int MAX_SHUTDOWN_FINISHES = 64;
 
     /**
+     * Wall-clock budget for the server-stop drain (F-080 RC-2): the count bound alone
+     * still allowed multi-minute "SAVING" hangs when replays are slow; past this the
+     * drain abandons the queue and the cursor rollback re-finishes everything on resume.
+     */
+    private static final long SHUTDOWN_DRAIN_BUDGET_NANOS = 2_000L * 1_000_000L;
+
+    /**
      * Restart hygiene, part 1 — persist each in-flight sweep's cursor one last time (the
      * live persistence only lands every {@value #CURSOR_PERSIST_INTERVAL} columns). This
      * must happen on {@code ServerStoppingEvent}: it fires BEFORE the final world save,
@@ -305,10 +312,12 @@ public final class RingGrowthService {
      * pipeline replay (no trees, ever) across the restart: up to
      * {@value #MAX_SHUTDOWN_FINISHES} pending chunks are finished right here (replay runs
      * synchronously; the async relight tail self-heals on next load via
-     * {@code lightCorrect=false}). A deeper backlog instead rolls the persisted cursor
-     * back to the first column of the oldest still-pending chunk, so the resumed sweep
-     * re-writes and re-finishes everything the drain missed — see
-     * {@link Job#drainFinishQueue}.</p>
+     * {@code lightCorrect=false}). F-080 RC-2: the drain only touches chunks that are
+     * ALREADY resident — it never sync-loads or generates during shutdown — and it also
+     * stops at the {@link #SHUTDOWN_DRAIN_BUDGET_NANOS} wall-clock budget. Whatever it
+     * skips (plus any deeper backlog) rolls the persisted cursor back to the first
+     * column of the oldest still-pending chunk, so the resumed sweep re-writes and
+     * re-finishes everything the drain missed — see {@link Job#drainFinishQueue}.</p>
      */
     @SubscribeEvent
     public static void onServerStopping(ServerStoppingEvent event) {
@@ -1216,7 +1225,20 @@ public final class RingGrowthService {
          * task queue + resend to watching clients).
          */
         private void finishChunk(long chunkKey) {
-            LevelChunk chunk = chunkFor(chunkKey, true);
+            finishChunk(chunkKey, false);
+        }
+
+        /**
+         * {@code shutdownDrain} = server-stop mode (F-080 RC-2): the chunk is only
+         * finished when it is ALREADY resident — never sync-loaded — and the replay
+         * skips the 3×3 neighbour sync-preload. Returns {@code false} only in shutdown
+         * mode, for a non-resident chunk the cursor rollback must re-finish on resume.
+         */
+        private boolean finishChunk(long chunkKey, boolean shutdownDrain) {
+            LevelChunk chunk = chunkFor(chunkKey, !shutdownDrain);
+            if (chunk == null) {
+                return false; // shutdown drain only: not resident, never load at stop
+            }
 
             // Every non-protected column of the chunk out to outerRadius was rewritten —
             // their old block entities are orphans now (replayed features re-create their
@@ -1229,13 +1251,14 @@ public final class RingGrowthService {
                 }
             }
 
-            replayPipeline(chunk, chunkKey);
+            replayPipeline(chunk, chunkKey, shutdownDrain);
             Heightmap.primeHeightmaps(chunk, HEIGHTMAPS_TO_PRIME);
             if (!this.erase) {
                 rescueFromReplay(chunk);
             }
             BudgetedBlockWriter.relightAndResend(this.level, chunk);
             this.chunksRewritten++;
+            return true;
         }
 
         /**
@@ -1248,13 +1271,15 @@ public final class RingGrowthService {
          * neighbourhood is ticket-loaded first because features may write across chunk
          * borders and biome lookups read neighbours.
          */
-        private void replayPipeline(LevelChunk chunk, long chunkKey) {
+        private void replayPipeline(LevelChunk chunk, long chunkKey, boolean skipNeighborLoads) {
             if (this.protectedChunks.contains(chunkKey)) {
                 this.chunkReplaysSkippedProtected++;
                 return;
             }
             long replayStart = System.nanoTime();
-            BudgetedBlockWriter.ensureNeighborsLoaded(this.level, chunk.getPos());
+            if (!skipNeighborLoads) {
+                BudgetedBlockWriter.ensureNeighborsLoaded(this.level, chunk.getPos());
+            }
             if (this.seedAnimals) {
                 DiscGenPipeline.runOnLiveChunk(this.level, chunk);
             } else {
@@ -1328,19 +1353,38 @@ public final class RingGrowthService {
          * Server-stop drain (see {@link RingGrowthService#onServerStopping}): finishes up
          * to {@code max} pending chunks immediately — reveal times are ignored, the world
          * is going down and nobody sees the pop — and returns the cursor to persist.
-         * When the queue drains fully that is the live cursor. A deeper backlog
-         * (pathological instant-sweep stop) returns the first column index of the oldest
-         * still-pending chunk instead: the resumed sweep re-writes from there, so every
-         * chunk that missed its replay gets re-finished (base rewrite and replay are
-         * deterministic; already-finished chunks interleaving that band are re-finished
-         * too, which may re-seed their animals — the lesser evil next to permanently
-         * undecorated terrain).
+         * F-080 RC-2 bounds: only chunks that are ALREADY resident are finished (never a
+         * sync load or worldgen at shutdown) and the whole drain stops at the
+         * {@value RingGrowthService#SHUTDOWN_DRAIN_BUDGET_NANOS}-ns wall-clock budget.
+         * When the queue drains fully that is the live cursor. Anything skipped — or a
+         * deeper backlog (pathological instant-sweep stop) — returns the first column
+         * index of the oldest still-pending chunk instead: the resumed sweep re-writes
+         * from there, so every chunk that missed its replay gets re-finished (base
+         * rewrite and replay are deterministic; already-finished chunks interleaving
+         * that band are re-finished too, which may re-seed their animals — the lesser
+         * evil next to permanently undecorated terrain).
          */
         long drainFinishQueue(int max) {
+            long deadline = System.nanoTime() + SHUTDOWN_DRAIN_BUDGET_NANOS;
+            ArrayDeque<PendingFinish> skipped = new ArrayDeque<>();
             int drained = 0;
             while (!this.finishQueue.isEmpty() && drained < max) {
-                finishChunk(this.finishQueue.poll().chunkKey());
-                drained++;
+                if (System.nanoTime() >= deadline) {
+                    EclipseMod.LOGGER.warn(
+                            "Ring growth {}: shutdown drain budget spent after {} finish(es) — abandoning the rest",
+                            this.profile.name(), drained);
+                    break;
+                }
+                PendingFinish head = this.finishQueue.poll();
+                if (finishChunk(head.chunkKey(), true)) {
+                    drained++;
+                } else {
+                    skipped.add(head); // not resident: the cursor rollback re-finishes it
+                }
+            }
+            // Skipped entries stay pending (front, original order) for the rollback math.
+            while (!skipped.isEmpty()) {
+                this.finishQueue.addFirst(skipped.pollLast());
             }
             if (this.finishQueue.isEmpty()) {
                 return this.cursor;

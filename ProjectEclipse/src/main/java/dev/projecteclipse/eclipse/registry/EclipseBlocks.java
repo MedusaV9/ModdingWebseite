@@ -17,11 +17,17 @@ public final class EclipseBlocks {
     public static final DeferredRegister<Block> BLOCKS =
             DeferredRegister.create(Registries.BLOCK, EclipseMod.MOD_ID);
 
-    /** Player grave holding death drops. Stone-like strength, breakable by hand, never drops itself. */
+    /**
+     * Player grave holding death drops. Stone-like strength, breakable by hand, never
+     * drops itself. F-085: obsidian-class blast resistance (was 6.0F) so even explosion
+     * paths that bypass {@code GraveProtection}'s Detonate prune (other mods,
+     * {@code /summon tnt} variants) cannot pop a grave — note this also covers graves
+     * against player TNT mining, intended per the feedback.
+     */
     public static final Supplier<GraveBlock> GRAVE = BLOCKS.register("grave",
             () -> new GraveBlock(BlockBehaviour.Properties.of()
                     .mapColor(MapColor.STONE)
-                    .strength(1.5F, 6.0F)
+                    .strength(1.5F, 1200.0F)
                     .noLootTable()));
 
     /** Ritual altar (milestones, heart sacrifice, revive ritual). Obsidian-like, never drops itself. */

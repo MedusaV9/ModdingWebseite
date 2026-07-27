@@ -110,6 +110,18 @@ import net.neoforged.api.distmarker.OnlyIn;
  * screen-space god rays and the sky-pass aura radiate from one source of truth and cannot
  * diverge.</p>
  *
+ * <p><b>F-088 (the "big pink object blocks the view" fix)</b>: LIMBOFIX2 froze the
+ * direction but left the group parked at azimuth {@code +X} — dead ahead of the ship's
+ * bow, exactly where the player looks at the ship-phase start — with a glow fan spanning
+ * ~81° of sky. It still read as a huge pink wall over the whole forward view. The fixed
+ * direction now swings {@value #ECLIPSE_AZIMUTH_DEG}° to port of the buoy lane (a
+ * {@code −Z} component; still a compile-time constant, still zero camera terms) and the
+ * aura is rescaled/dimmed to a distant celestial accent: glow floor 86 →
+ * {@value #GLOW_RADIUS}, glow center alpha 0.30 → 0.20, ray root alpha 0.4 →
+ * {@value #RAY_ALPHA}, aurora feet 88 → {@value #AURORA_BASE_RADIUS}, glow center hue
+ * pulled off pink toward deep violet. The god rays follow automatically
+ * ({@link #celestialDirection} stays the shared source of truth).</p>
+ *
  * <p>Same Iris guard as the overworld: with a shaderpack active this defers entirely.</p>
  */
 @OnlyIn(Dist.CLIENT)
@@ -132,6 +144,14 @@ public class LimboSpecialEffects extends DimensionSpecialEffects {
      */
     private static final float ECLIPSE_ELEVATION_DEG = 50.0F;
     /**
+     * F-088: azimuth swing (degrees toward {@code −Z} / port) of the fixed eclipse
+     * direction off the {@code +X} buoy-lane heading. {@code 0} (the LIMBOFIX2 value)
+     * parked the group dead ahead of the bow — the default view direction of the ship
+     * phase — so its aura dominated the entire forward sky. 45° keeps the disc framed
+     * over the water but clears the lane view.
+     */
+    private static final float ECLIPSE_AZIMUTH_DEG = 45.0F;
+    /**
      * Virtual altitude of the {@link #zenithWorldPoint} anchor above the ship deck. The
      * disc no longer draws toward this point (LIMBOFIX2 — fixed direction); the anchor
      * remains the seam for {@link #clientWaterlineY} and the ship-relative FX consumers
@@ -146,8 +166,8 @@ public class LimboSpecialEffects extends DimensionSpecialEffects {
     private static final float RAY_SPIN_DEG_PER_SEC = 0.35F;
     /** Rays start slightly inside the disc silhouette so their roots hide behind it. */
     private static final float RAY_INNER_RADIUS = 24.0F;
-    /** Peak root alpha of a ray (plan: additive, 0.4 alpha). */
-    private static final float RAY_ALPHA = 0.4F;
+    /** Peak root alpha of a ray (F-088: 0.4 → 0.28 — the aura dims to an accent). */
+    private static final float RAY_ALPHA = 0.28F;
     /**
      * Deterministic per-ray lengths and root half-widths. LIMBOFIX2: rescaled (×~0.55 of
      * the zenith-era 40–120 range) so the longest ray tip ({@code 24 + 66 = 90} in-plane
@@ -161,8 +181,12 @@ public class LimboSpecialEffects extends DimensionSpecialEffects {
             5.4F, 3.6F, 4.7F, 3.0F, 5.0F, 4.0F,
             3.3F, 4.9F, 2.9F, 4.3F, 3.7F, 5.6F};
 
-    /** Radial glow fan behind the disc (the aura "floor"); LIMBOFIX2: 135 → 86. */
-    private static final float GLOW_RADIUS = 86.0F;
+    /**
+     * Radial glow fan behind the disc (the aura "floor"); LIMBOFIX2: 135 → 86; F-088:
+     * 86 → 60 — the fan's half-angle drops from ~41° to ~31° so it reads as a corona
+     * around the disc, not a wall across the sky.
+     */
+    private static final float GLOW_RADIUS = 60.0F;
     private static final int GLOW_SEGMENTS = 24;
     /** v4 breathing corona: glow radius swells ±5% on a slow ~27 s cycle (0.23 rad/s). */
     private static final float CORONA_BREATH_RATE = 0.23F;
@@ -193,10 +217,11 @@ public class LimboSpecialEffects extends DimensionSpecialEffects {
     private static final int AURORA_SEGMENTS = 18;
     /**
      * Innermost veil foot radius; each further veil steps {@value #AURORA_RADIUS_STEP} out.
-     * LIMBOFIX2: 152/26/34 → 88/8/22 — the outermost undulated foot ({@code 88+2·8+5=109}
-     * in-plane units) stays above the horizon at the fixed 50° elevation.
+     * LIMBOFIX2: 152/26/34 → 88/8/22; F-088 aura shrink: 88 → 68 — the outermost
+     * undulated foot ({@code 68+2·8+5=89} in-plane units) stays above the horizon at
+     * the fixed 50° elevation (horizon ≈ 119).
      */
-    private static final float AURORA_BASE_RADIUS = 88.0F;
+    private static final float AURORA_BASE_RADIUS = 68.0F;
     private static final float AURORA_RADIUS_STEP = 8.0F;
     /** Radial depth of a curtain (bright outer edge → feathered inner fade). */
     private static final float AURORA_BAND_DEPTH = 22.0F;
@@ -215,15 +240,19 @@ public class LimboSpecialEffects extends DimensionSpecialEffects {
     private static final float DRIFT_CUE_SPEED = 0.22F;
 
     /**
-     * LIMBOFIX2: the FIXED world-space unit direction the eclipse hangs at — azimuth
-     * {@code +X} (dead ahead of the ship / the buoy-lane heading), elevation
+     * LIMBOFIX2/F-088: the FIXED world-space unit direction the eclipse hangs at —
+     * azimuth {@value #ECLIPSE_AZIMUTH_DEG}° to port ({@code −Z}) of the {@code +X}
+     * buoy-lane heading (F-088; LIMBOFIX2 had it dead ahead of the bow), elevation
      * {@value #ECLIPSE_ELEVATION_DEG}° above the horizon. Compile-time constant: no
-     * camera term can ever re-aim the disc. Never mutated after class init.
+     * camera term can ever re-aim the disc. Never mutated after class init. Unit length
+     * by construction ({@code cos²el·(cos²az + sin²az) + sin²el = 1}).
      */
     private static final Vector3f CELESTIAL_DIR = new Vector3f(
-            Mth.cos(ECLIPSE_ELEVATION_DEG * ((float) Math.PI / 180.0F)),
+            Mth.cos(ECLIPSE_ELEVATION_DEG * ((float) Math.PI / 180.0F))
+                    * Mth.cos(ECLIPSE_AZIMUTH_DEG * ((float) Math.PI / 180.0F)),
             Mth.sin(ECLIPSE_ELEVATION_DEG * ((float) Math.PI / 180.0F)),
-            0.0F);
+            -Mth.cos(ECLIPSE_ELEVATION_DEG * ((float) Math.PI / 180.0F))
+                    * Mth.sin(ECLIPSE_AZIMUTH_DEG * ((float) Math.PI / 180.0F)));
     /** Rotation mapping the celestial plane's local {@code +Y} onto {@link #CELESTIAL_DIR}. */
     private static final Quaternionf CELESTIAL_ROT = new Quaternionf().rotationTo(
             0.0F, 1.0F, 0.0F, CELESTIAL_DIR.x, CELESTIAL_DIR.y, CELESTIAL_DIR.z);
@@ -459,15 +488,16 @@ public class LimboSpecialEffects extends DimensionSpecialEffects {
      * Soft radial glow fan behind the disc: violet center fading to nothing at the rim.
      * v4: the fan radius breathes with {@code breath} (±5%, ~27 s) and the center alpha
      * dims as it expands — energy conservation makes the breathing read physical instead
-     * of like a scale wobble.
+     * of like a scale wobble. F-088: center alpha 0.30 → 0.20 and the center hue pulled
+     * off pink toward deep violet (less red), part of the aura-to-accent rescale.
      */
     private static void drawAuraGlow(Matrix4f pose, float pulse, float breath) {
         float radius = GLOW_RADIUS * breath;
-        float centerAlpha = 0.30F * pulse * (1.96F - breath);
+        float centerAlpha = 0.20F * pulse * (1.96F - breath);
         BufferBuilder builder = Tesselator.getInstance().begin(
                 VertexFormat.Mode.TRIANGLE_FAN, DefaultVertexFormat.POSITION_COLOR);
         builder.addVertex(pose, 0.0F, SKY_DISTANCE, 0.0F)
-                .setColor(0.55F, 0.22F, 0.95F, centerAlpha);
+                .setColor(0.42F, 0.20F, 0.92F, centerAlpha);
         for (int i = 0; i <= GLOW_SEGMENTS; i++) {
             float angle = (float) i / GLOW_SEGMENTS * ((float) Math.PI * 2.0F);
             builder.addVertex(pose, Mth.cos(angle) * radius, SKY_DISTANCE, Mth.sin(angle) * radius)

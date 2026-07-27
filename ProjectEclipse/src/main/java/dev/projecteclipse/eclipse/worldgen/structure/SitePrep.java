@@ -209,6 +209,12 @@ public final class SitePrep {
         int maxZ = boundsMaxZ + MARGIN;
         PreparedGround prepared = new PreparedGround(level, profile, Mode.PLATEAU,
                 minX, minZ, maxX, maxZ, plateauY);
+        // F-089: the terraform alone can bury a player — the fill raises terrain INTO
+        // anyone standing in a dip — before any paste happens. The seam sits here (and
+        // not only in StructurePendingRegistry.placeNow) because this entry point also
+        // serves lanes that never pass through the registry (dev commands, W1.x placers).
+        PlacementSafety.evacuate(level, new BoundingBox(minX, plateauY - FILL_DEPTH, minZ,
+                maxX, plateauY + CANOPY_CLEAR, maxZ), plateauY);
         BudgetedBlockWriter.enqueue(level,
                 new PlateauWork(level, profile, stage, prepared),
                 () -> {

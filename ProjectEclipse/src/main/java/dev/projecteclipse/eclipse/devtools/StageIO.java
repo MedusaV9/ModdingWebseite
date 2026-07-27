@@ -423,6 +423,11 @@ public final class StageIO {
         if (live != null) {
             return serializeLiveChunk(level, live);
         }
+        if (!level.getServer().isRunning()) {
+            // F-080 (S7): the region IO worker may already be draining on a stopping
+            // server — the join() below could never return. Skip; chunkgen covers.
+            return null;
+        }
         Optional<CompoundTag> diskTag;
         try {
             diskTag = level.getChunkSource().chunkMap.read(pos).join();

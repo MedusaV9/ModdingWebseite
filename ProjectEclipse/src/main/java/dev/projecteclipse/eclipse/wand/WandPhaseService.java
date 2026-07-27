@@ -7,6 +7,7 @@ import java.util.List;
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.lang.ServerLang;
 import dev.projecteclipse.eclipse.core.state.EclipseSavedData;
+import dev.projecteclipse.eclipse.lives.GraveProtection;
 import dev.projecteclipse.eclipse.network.S2CQuasarPayload;
 import dev.projecteclipse.eclipse.protection.SpawnProtectionRules;
 import dev.projecteclipse.eclipse.registry.EclipseSounds;
@@ -69,7 +70,8 @@ import net.minecraft.world.phys.Vec3;
  * only its journal removal missed the disk).</p>
  *
  * <p><b>Hard blacklist</b> (never de-rezzed): block entities (chests, the altar, spawners
- * — inventories must never be voided), anything inside a spawn-protection zone
+ * — inventories must never be voided; F-087: graves get an explicit belt check on top
+ * via {@code GraveProtection.isGraveAt}), anything inside a spawn-protection zone
  * ({@link SpawnProtectionRules}), unbreakables (bedrock etc.), fluids and air, gravity
  * blocks (sand/gravel/anvils — a de-rezzed one would re-rez straight into a fall) and
  * blocks CARRYING a gravity block (never leave a sand column hanging over a phased hole).</p>
@@ -241,6 +243,12 @@ public final class WandPhaseService {
     private static boolean isPhaseable(ServerLevel level, BlockPos pos, Data data) {
         BlockState state = level.getBlockState(pos);
         if (state.isAir() || state.hasBlockEntity() || !state.getFluidState().isEmpty()) {
+            return false;
+        }
+        // F-087 belt: graves are ALREADY excluded by hasBlockEntity() above, but the
+        // explicit check survives any future grave-block refactor — a spell must never
+        // de-rez a player's grave (GraveProtection is the standing rule).
+        if (GraveProtection.isGraveAt(level, pos)) {
             return false;
         }
         if (state.getDestroySpeed(level, pos) < 0.0F) {

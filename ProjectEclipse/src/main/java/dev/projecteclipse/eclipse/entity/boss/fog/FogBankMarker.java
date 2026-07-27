@@ -21,16 +21,16 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
 
 /**
  * Fog-bank lair marker for the Fog Tyrant ({@code docs/plans_v3/P6_mobs_models_builds.md}
- * §2.4 summoning row + P6-W11): marks a mature storm site as the tyrant's LAIR, dresses
- * it with ambient fog-bank columns (campfire-smoke pillars on a r={@value #BANK_RING_RADIUS}
+ * §2.4 summoning row + P6-W11): marks a storm site as the tyrant's LAIR, dresses it with
+ * ambient fog-bank columns (campfire-smoke pillars on a r={@value #BANK_RING_RADIUS}
  * ring — vanilla stand-ins until P2's {@code eclipse:fog_bank} emitter, plan §4.2), and
- * arms a proximity trigger that summons the tyrant through
- * {@link FogTyrantEntity#summonAt} the moment a player wanders within
- * {@value #TRIGGER_RANGE} blocks of the marked center.
+ * keeps the {@link TyrantStatue} standing at the marked center. <b>F-081: the fight no
+ * longer starts by proximity</b> — a player must STRIKE the statue; this class only
+ * watches the lair and delegates arm/stand-down to the statue's state machine.
  *
  * <p><b>The P1 seam (one line, documented in
  * {@code docs/plans_v3/wiring/WB-TYRANT_wiring.md} — this class never touches
- * {@code FogStormSites}):</b> when P1 flags its strongest/mature storm center, it calls</p>
+ * {@code FogStormSites}):</b> when P1 flags an active storm center, it calls</p>
  *
  * <pre>{@code
  * FogBankMarker.markLair(serverLevel, stormCenterBlockPos);
@@ -39,23 +39,19 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
  * <p>from wherever it materializes/restores that site (natural spots:
  * {@code FogStormSites.materializeSite}'s completion block and the restart-restore path
  * — lairs are deliberately NOT persisted here, so P1 re-marks on restore exactly like it
- * re-announces storm walls). Marking is idempotent; {@link #clearLair} /
- * {@link #clearAll} unmark (the trigger also disarms itself after a successful summon —
- * the tyrant's own abandon-reset despawn re-arms it via {@code markLair} being called
- * again, or players simply re-approaching a still-armed lair).</p>
- *
- * <p>The trigger radius ({@value #TRIGGER_RANGE}) sits deliberately INSIDE the tyrant's
- * abandon-reset radius (24): a player hovering just outside the reset ring cannot
- * flap the boss between despawn and re-summon.</p>
+ * re-announces storm walls). Marking is idempotent; {@link #clearLair} / {@link #clearAll}
+ * unmark. {@link #disarmLair} pulls a lair while the statue survives — the statue-hit
+ * moment (the fight is committed; {@code TyrantStatue.onFightReset} re-marks after a
+ * reset cooldown, closing re-arm gap G-1 in-session). {@link #clearLair} additionally
+ * retires the statue entry outright (victory / site retirement), even when the lair was
+ * already disarmed mid-fight.</p>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class FogBankMarker {
-    /** Player proximity that springs the lair (kept below the boss's 24-block reset ring). */
-    public static final double TRIGGER_RANGE = 20.0D;
     /** Radius of the ambient fog-bank pillar ring dressed around the lair center. */
     public static final double BANK_RING_RADIUS = 10.0D;
-    /** No second tyrant while one already fights near the lair (summonAt dedups too). */
-    private static final double LIVE_TYRANT_RANGE = 48.0D;
+    /** No second tyrant near a lair (summonAt dedups too) — shared with the statue. */
+    static final double LIVE_TYRANT_RANGE = 48.0D;
     /** Ambient FX only render for players reasonably close to the lair. */
     private static final double AMBIENT_RANGE = 64.0D;
     private static final int CHECK_CADENCE_TICKS = 40;
@@ -68,7 +64,7 @@ public final class FogBankMarker {
     /**
      * Marks {@code center} as a tyrant lair in {@code level} — THE P1/FogStormSites
      * seam. Idempotent; safe to call every restart/materialization. The lair stays
-     * armed until a tyrant is summoned from it (or {@link #clearLair} is called).
+     * armed until its statue is struck (or {@link #clearLair} is called).
      */
     public static void markLair(ServerLevel level, BlockPos center) {
         List<BlockPos> lairs = LAIRS.computeIfAbsent(level.dimension(), key -> new CopyOnWriteArrayList<>());
@@ -81,15 +77,44 @@ public final class FogBankMarker {
                 immutable.toShortString(), level.dimension().location(), lairs.size());
     }
 
-    /** Unmarks one lair (e.g. P1 downgrading a storm). No-op when it was never marked. */
+    /** Whether {@code center} currently rides the armed-lair list ({@code TyrantStatue} seam). */
+    public static boolean isLairArmed(ServerLevel level, BlockPos center) {
+        List<BlockPos> lairs = LAIRS.get(level.dimension());
+        return lairs != null && lairs.contains(center.immutable());
+    }
+
+    /**
+     * Pulls one lair WITHOUT retiring its statue entry — the statue-hit moment (F-081):
+     * the fight is committed, and {@code TyrantStatue} owns the entry through
+     * AWAKENING/FIGHT/COOLDOWN until it re-marks or retires. No-op when unmarked.
+     */
+    public static void disarmLair(ServerLevel level, BlockPos center) {
+        List<BlockPos> lairs = LAIRS.get(level.dimension());
+        if (lairs != null && lairs.remove(center.immutable())) {
+            EclipseMod.LOGGER.info("FogBankMarker: lair at {} disarmed (statue struck)",
+                    center.toShortString());
+        }
+    }
+
+    /**
+     * Unmarks one lair AND retires its statue (victory {@code stormEnded}, storm
+     * downgrade). The retire runs even when the lair wasn't tracked — a mid-fight lair
+     * is disarmed already, but its statue entry still rides FIGHT/COOLDOWN.
+     */
     public static void clearLair(ServerLevel level, BlockPos center) {
         List<BlockPos> lairs = LAIRS.get(level.dimension());
         if (lairs != null && lairs.remove(center.immutable())) {
             EclipseMod.LOGGER.info("FogBankMarker: tyrant lair cleared at {}", center.toShortString());
         }
+        TyrantStatue.retireLair(level, center);
     }
 
-    /** Unmarks every lair in {@code level}. */
+    /**
+     * Unmarks every lair in {@code level} — the reconcile pattern (clear-all then
+     * re-mark actives in the same pass). Deliberately does NOT retire statues: entries
+     * whose lairs come straight back never flicker, and truly orphaned ones fall to
+     * {@code TyrantStatue}'s armed-state sweep (which checks {@link #isLairArmed}).
+     */
     public static void clearAll(ServerLevel level) {
         List<BlockPos> lairs = LAIRS.remove(level.dimension());
         if (lairs != null && !lairs.isEmpty()) {
@@ -115,44 +140,38 @@ public final class FogBankMarker {
                 continue;
             }
             for (BlockPos lair : entry.getValue()) {
-                tickLair(level, lair, entry.getValue());
+                tickLair(level, lair);
             }
         }
     }
 
-    private static void tickLair(ServerLevel level, BlockPos lair, List<BlockPos> lairs) {
+    /**
+     * The watched-lair pass (F-081): ambient dressing, then the statue delegation —
+     * a live tyrant nearby stands the statue down ({@code noteFightRunning}, e.g. a
+     * mid-fight restart where the reconcile re-marked the lair), otherwise the statue
+     * stands/self-heals/hints ({@code ensureArmed}). No player proximity summons.
+     */
+    private static void tickLair(ServerLevel level, BlockPos lair) {
         Vec3 center = Vec3.atCenterOf(lair);
-        ServerPlayer trigger = null;
         boolean anyoneWatching = false;
         for (ServerPlayer player : level.players()) {
-            if (player.isSpectator() || !player.isAlive()) {
-                continue;
-            }
-            double dist = player.position().distanceTo(center);
-            if (dist <= AMBIENT_RANGE) {
+            if (!player.isSpectator() && player.isAlive()
+                    && player.position().distanceTo(center) <= AMBIENT_RANGE) {
                 anyoneWatching = true;
-            }
-            if (dist <= TRIGGER_RANGE && (trigger == null
-                    || player.position().distanceToSqr(center) < trigger.position().distanceToSqr(center))) {
-                trigger = player;
+                break;
             }
         }
         if (!anyoneWatching) {
             return;
         }
         stampBankPillars(level, center);
-        if (trigger == null) {
-            return;
-        }
         boolean tyrantAlready = !level.getEntitiesOfClass(FogTyrantEntity.class,
                 new AABB(lair).inflate(LIVE_TYRANT_RANGE), FogTyrantEntity::isAlive).isEmpty();
         if (tyrantAlready) {
-            return; // Fight in progress — the lair re-arms once the boss resets/despawns.
+            TyrantStatue.noteFightRunning(level, lair);
+        } else {
+            TyrantStatue.ensureArmed(level, lair);
         }
-        EclipseMod.LOGGER.info("FogBankMarker: {} entered the lair at {} — summoning the Fog Tyrant",
-                trigger.getScoreboardName(), lair.toShortString());
-        FogTyrantEntity.summonAt(level, lair);
-        lairs.remove(lair); // Disarm; P1 (or an admin) re-marks if the storm outlives the fight.
     }
 
     /** Ambient dressing: slow smoke pillars + spark motes on the bank ring (cheap). */

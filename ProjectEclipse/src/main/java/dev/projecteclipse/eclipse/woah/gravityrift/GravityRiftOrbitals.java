@@ -135,6 +135,40 @@ public final class GravityRiftOrbitals {
         SPAWN_QUEUE.clear();
     }
 
+    /**
+     * F-080 shutdown sweep hook: discards every cached orbital display plus any tagged
+     * stray in the rift volume NOW — on {@code ServerStoppingEvent}, before the final
+     * save and level close. The persisted zone state is untouched; the next boot's
+     * reconcile pass rebuilds the full set through the budgeted spawn queue (the same
+     * self-heal that covers {@code /kill @e[tag=eclipse_gravity_orbital]}). Returns the
+     * display count dropped.
+     */
+    public static int forceClearNow(MinecraftServer server) {
+        int discarded = 0;
+        Display.BlockDisplay[] current = displays;
+        if (current != null) {
+            for (Display.BlockDisplay display : current) {
+                if (display != null && !display.isRemoved()) {
+                    display.discard();
+                    discarded++;
+                }
+            }
+        }
+        BlockPos anchor = GravityRiftState.get(server).anchor();
+        if (anchor != null) {
+            for (Display.BlockDisplay stray : scanTagged(server.overworld(), anchor)) {
+                if (!stray.isRemoved()) {
+                    stray.discard();
+                    discarded++;
+                }
+            }
+        }
+        displays = null;
+        reconciled = false;
+        SPAWN_QUEUE.clear();
+        return discarded;
+    }
+
     private static boolean playerNear(ServerLevel overworld, BlockPos anchor) {
         double rangeSq = PLAYER_GATE_RANGE * PLAYER_GATE_RANGE;
         for (ServerPlayer player : overworld.players()) {

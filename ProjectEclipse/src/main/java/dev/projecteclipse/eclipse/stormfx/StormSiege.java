@@ -18,6 +18,8 @@ import org.joml.Vector3f;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.entity.boss.fog.FogTyrantEntity;
+import dev.projecteclipse.eclipse.entity.boss.fog.TyrantStatue;
+import dev.projecteclipse.eclipse.lives.GraveProtection;
 import dev.projecteclipse.eclipse.network.fx.S2CStormSiegePayload;
 import dev.projecteclipse.eclipse.network.fx.S2CStormStatePayload;
 import dev.projecteclipse.eclipse.registry.EclipseSounds;
@@ -85,15 +87,38 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * and resolves every airborne lift as a drop; abandon sinks the debris out over
  * {@value #SINK_TICKS} ticks, restores lifted blocks (re-place if still free, drop
  * otherwise) and eases the client overlay back. Despawn guarantee (the
- * {@code StormDebrisFx} doctrine): every display carries {@value #ENTITY_TAG}, tagged
- * joiners not in the live-UUID set are crash strays and are discarded on load, a
- * {@value #WATCHDOG_TICKS}-tick watchdog force-clears a wedged siege, and
- * {@code /kill @e[tag=eclipse_storm_siege_debris]} always works.</p>
+ * {@code StormDebrisFx} doctrine, hardened by F-084): every display carries
+ * {@value #ENTITY_TAG} + the {@value #STORM_FX_TAG} umbrella + this siege's per-fight
+ * scope tag ({@value #FIGHT_SCOPE_TAG_PREFIX}{@code storm_<id>}); tagged joiners not in
+ * a live-UUID set (ours or {@code TyrantStatue}'s) are strays and are discarded on load
+ * — that ONE check covers crash strays after a restart AND frozen displays whose chunk
+ * unloaded mid-session (their UUIDs are pruned from {@code LIVE_DISPLAYS} the moment
+ * the animation loses them, so the reload sweeps them). Ending completion additionally
+ * sweeps every loaded entity still carrying the siege's scope tag, a
+ * {@value #WATCHDOG_TICKS}-tick watchdog force-clears a wedged siege,
+ * {@link #forceClearNow} clears everything on demand (shutdown sweeps), and both
+ * {@code /kill @e[tag=eclipse_storm_siege_debris]} and
+ * {@code /kill @e[tag=eclipse_storm_fx]} always work.</p>
+ *
+ * <p><b>Graves are sacrosanct (F-086):</b> the lift sampler never tears out a grave or
+ * any block within one block of a grave (no floating graves), and every re-place path
+ * guards against writing over a grave cell ({@link GraveProtection}).</p>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class StormSiege {
     /** Frozen command tag on every siege display — strays from a crash are swept on load. */
     public static final String ENTITY_TAG = "eclipse_storm_siege_debris";
+    /**
+     * F-084 umbrella tag on EVERY fight-spawned entity (siege debris, statue pieces,
+     * statue hitboxes) — the one-tag admin escape hatch and the shared join-sweep key.
+     */
+    public static final String STORM_FX_TAG = "eclipse_storm_fx";
+    /**
+     * F-084 per-fight scope tag prefix; a siege stamps
+     * {@code eclipse_fight_storm_<stormId>} (storm ids are stable per site), the statue
+     * stamps {@code eclipse_fight_lair_<x>_<y>_<z>} — targeted sweeps key off these.
+     */
+    public static final String FIGHT_SCOPE_TAG_PREFIX = "eclipse_fight_";
 
     // ------------------------------------------------------------------ tuning constants
     /** Fight detection poll cadence (entity scan — cheap, but no need for per-tick). */
@@ -204,13 +229,23 @@ public final class StormSiege {
         }
     }
 
-    /** StormDebrisFx sweep doctrine: a tagged display we did not spawn is a crash stray. */
+    /**
+     * StormDebrisFx sweep doctrine, extended for F-084: ANY entity carrying a storm-fx
+     * tag (siege debris, statue displays, statue {@code Interaction} hitboxes) that
+     * joins without being tracked by a live owner is a stray — a crash leftover after a
+     * restart (the live sets are empty then) or a mid-session chunk-reload orphan (the
+     * animation pruned its UUID from {@code LIVE_DISPLAYS} when the chunk unloaded).
+     */
     @SubscribeEvent
     static void onEntityJoin(EntityJoinLevelEvent event) {
         Entity entity = event.getEntity();
-        if (!event.getLevel().isClientSide() && entity instanceof Display.BlockDisplay
-                && entity.getTags().contains(ENTITY_TAG)
-                && !LIVE_DISPLAYS.contains(entity.getUUID())) {
+        if (event.getLevel().isClientSide()
+                || (!entity.getTags().contains(ENTITY_TAG)
+                        && !entity.getTags().contains(STORM_FX_TAG))) {
+            return;
+        }
+        if (!LIVE_DISPLAYS.contains(entity.getUUID())
+                && !TyrantStatue.isLivePiece(entity.getUUID())) {
             entity.discard();
         }
     }
@@ -224,6 +259,36 @@ public final class StormSiege {
         SIEGES.clear();
         LIVE_DISPLAYS.clear();
         pollCountdown = POLL_TICKS;
+    }
+
+    /**
+     * F-080 shutdown sweep hook + the F-084 on-demand clear (one public "clear all
+     * siege displays NOW" entry point — {@code EclipseShutdownSweep} calls it on
+     * {@code ServerStoppingEvent}, before the final save and level close): every live
+     * siege eases its client overlay off, restores its airborne lifts into their
+     * still-free sockets (drop as items otherwise; grave cells are never overwritten)
+     * and discards every display through the existing fight-end cleanup path,
+     * including the scope-tag sweep for loaded pieces that fell out of the tracking
+     * lists. Idempotent; safe with no siege running. Returns the display count
+     * dropped; the {@code ServerStoppedEvent} handler stays as the idempotent
+     * bookkeeping reset.
+     */
+    public static int forceClearNow() {
+        int discarded = 0;
+        for (Siege siege : SIEGES.values()) {
+            for (int i = 0; i < siege.whirl.size(); i++) {
+                if (siege.whirl.get(i).display != null) {
+                    discarded++;
+                }
+            }
+            discarded += siege.lifts.size();
+            siege.broadcastSiege(false);
+            siege.resolveLifts(true);
+            siege.discardAll();
+            siege.done = true;
+        }
+        SIEGES.clear();
+        return discarded;
     }
 
     // ------------------------------------------------------------------ detection
@@ -274,6 +339,8 @@ public final class StormSiege {
         final Vec3 combatCenter;
         /** The one fixed entity position every display mounts at (StormDebrisFx law). */
         final Vec3 mount;
+        /** F-084 per-fight scope tag on every display this siege spawns. */
+        final String scopeTag;
         final RandomSource random;
         final int debrisTarget;
         final List<WhirlPiece> whirl = new ArrayList<>(DEBRIS_MAX);
@@ -297,6 +364,7 @@ public final class StormSiege {
             this.stormRadius = stormRadius;
             this.combatCenter = tyrantPos;
             this.mount = new Vec3(tyrantPos.x, tyrantPos.y + 8.0D, tyrantPos.z);
+            this.scopeTag = FIGHT_SCOPE_TAG_PREFIX + "storm_" + stormId;
             this.random = RandomSource.create(level.getGameTime() * 17L + stormId);
             this.debrisTarget = DEBRIS_MIN + this.random.nextInt(DEBRIS_MAX - DEBRIS_MIN + 1);
             this.nextLiftAge = rollLiftInterval() / 2; // first volley lands early-ish
@@ -492,7 +560,20 @@ public final class StormSiege {
                 pushPose(piece, this.age + UPDATE_INTERVAL_TICKS);
             }
             if (missing) {
-                this.whirl.removeIf(piece -> piece.display == null || piece.display.isRemoved());
+                this.whirl.removeIf(piece -> {
+                    if (piece.display == null) {
+                        return true;
+                    }
+                    if (piece.display.isRemoved()) {
+                        // F-084 (gap G-2): an isRemoved() display here was UNLOADED to
+                        // its chunk (or externally killed), not discarded by us — forget
+                        // its UUID so the join sweep reclaims the persisted entity the
+                        // moment its chunk reloads, instead of adopting a frozen ghost.
+                        LIVE_DISPLAYS.remove(piece.display.getUUID());
+                        return true;
+                    }
+                    return false;
+                });
             }
         }
 
@@ -609,20 +690,32 @@ public final class StormSiege {
             return new BlockPos(x, y, z);
         }
 
-        /** Simple full-cube world blocks only — no BEs, no unbreakables, no fluids. */
+        /**
+         * Simple full-cube world blocks only — no BEs, no unbreakables, no fluids, and
+         * (F-086) never a grave nor any block within one block of a grave: the BE check
+         * already excludes the grave itself, the {@code nearGrave} ring keeps the storm
+         * from sucking the ground out from under one (no floating graves).
+         */
         private boolean liftable(BlockPos pos) {
             BlockState state = this.level.getBlockState(pos);
             return !state.isAir()
                     && state.getDestroySpeed(this.level, pos) >= 0.0F
                     && this.level.getBlockEntity(pos) == null
                     && state.getFluidState().isEmpty()
-                    && state.isCollisionShapeFullBlock(this.level, pos);
+                    && state.isCollisionShapeFullBlock(this.level, pos)
+                    && !GraveProtection.isGraveAt(this.level, pos)
+                    && !GraveProtection.nearGrave(this.level, pos, 1);
         }
 
         private void tickLifts() {
             for (int i = this.lifts.size() - 1; i >= 0; i--) {
                 LiftedBlock lift = this.lifts.get(i);
                 if (lift.display.isRemoved()) {
+                    // F-084 (gap G-2): unloaded/killed mid-flight — forget the UUID (the
+                    // join sweep reclaims the persisted display on chunk reload) and
+                    // drop the torn-out REAL block at its socket so it is never lost.
+                    LIVE_DISPLAYS.remove(lift.display.getUUID());
+                    dropAsItem(lift.state, Vec3.atCenterOf(lift.origin).add(0.0D, 1.0D, 0.0D));
                     this.lifts.remove(i);
                     continue;
                 }
@@ -700,10 +793,13 @@ public final class StormSiege {
                     at.x, at.y, at.z, 24, 0.5D, 0.5D, 0.5D, 0.15D);
             this.level.playSound(null, BlockPos.containing(at),
                     lift.state.getSoundType().getBreakSound(), SoundSource.HOSTILE, 1.0F, 0.9F);
-            // The block either plants itself where it landed (free spot) or drops.
+            // The block either plants itself where it landed (free spot) or drops. The
+            // grave guard is unreachable today (a grave never canBeReplaced()) but keeps
+            // F-086 true through future refactors.
             BlockPos landing = BlockPos.containing(at);
             if (this.level.isLoaded(landing)
-                    && this.level.getBlockState(landing).canBeReplaced()) {
+                    && this.level.getBlockState(landing).canBeReplaced()
+                    && !GraveProtection.isGraveAt(this.level, landing)) {
                 this.level.setBlockAndUpdate(landing, lift.state);
             } else {
                 dropAsItem(lift.state, at);
@@ -729,7 +825,8 @@ public final class StormSiege {
                 return;
             }
             if (restore && this.level.isLoaded(lift.origin)
-                    && this.level.getBlockState(lift.origin).canBeReplaced()) {
+                    && this.level.getBlockState(lift.origin).canBeReplaced()
+                    && !GraveProtection.isGraveAt(this.level, lift.origin)) {
                 this.level.setBlockAndUpdate(lift.origin, lift.state);
             } else {
                 dropAsItem(lift.state, lift.display.position()
@@ -778,6 +875,8 @@ public final class StormSiege {
             display.setBlockState(state);
             display.moveTo(this.mount.x, this.mount.y, this.mount.z, 0.0F, 0.0F);
             display.addTag(ENTITY_TAG);
+            display.addTag(STORM_FX_TAG);
+            display.addTag(this.scopeTag);
             DisplayBrightnessFx.set(display, DEBRIS_BLOCK_LIGHT, MAX_SKY_LIGHT, VIEW_RANGE);
             display.setTransformationInterpolationDelay(0);
             display.setTransformationInterpolationDuration(0);
@@ -803,6 +902,30 @@ public final class StormSiege {
             }
             this.whirl.clear();
             resolveLifts(false);
+            sweepScopedStrays();
+        }
+
+        /**
+         * F-084 ending-completion sweep: discard every LOADED entity still carrying this
+         * siege's scope tag (pieces that fell out of the tracking lists while loaded).
+         * Bounded scan — every display mounts at the combat center, so the box around
+         * the storm covers the whole fight; unloaded stragglers are reclaimed by the
+         * join sweep instead (their UUIDs left {@code LIVE_DISPLAYS} at prune time).
+         */
+        private void sweepScopedStrays() {
+            AABB box = AABB.ofSize(this.stormCenter,
+                    this.stormRadius * 4.0D + 64.0D, this.stormRadius * 4.0D + 64.0D,
+                    this.stormRadius * 4.0D + 64.0D);
+            List<Entity> strays = this.level.getEntities((Entity) null, box,
+                    entity -> entity.getTags().contains(this.scopeTag));
+            for (int i = 0; i < strays.size(); i++) {
+                LIVE_DISPLAYS.remove(strays.get(i).getUUID());
+                strays.get(i).discard();
+            }
+            if (!strays.isEmpty()) {
+                EclipseMod.LOGGER.info("StormSiege: ending sweep discarded {} stray scoped "
+                        + "display(s) for storm {}", strays.size(), this.stormId);
+            }
         }
     }
 

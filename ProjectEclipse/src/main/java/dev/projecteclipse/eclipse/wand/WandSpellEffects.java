@@ -34,6 +34,14 @@ import net.minecraft.world.phys.Vec3;
  * single block (F-038's core demand — the Umbra-Lanze replaced the block-phasing
  * Phasenwelle exactly for this), and multi-tick choreography rides
  * {@link WandTickService#schedule} so a stopped server just drops pending FX.</p>
+ *
+ * <p><b>F-087 standing rule — graves are sacred:</b> the live spell set writes no
+ * blocks and ignites no terrain ({@code igniteForSeconds} burns entities only), so
+ * spells cannot damage a player's grave today. ANY future spell that writes, breaks,
+ * ignites or explodes real blocks MUST consult
+ * {@code dev.projecteclipse.eclipse.lives.GraveProtection.isGraveAt} first (real
+ * {@code Level.explode} calls are additionally pruned by GraveProtection's
+ * explosion-detonate hook, but per-spell writes are on the spell author).</p>
  */
 public final class WandSpellEffects {
     private static final double FX_RANGE = WandPowers.FX_RANGE;

@@ -70,9 +70,14 @@ public final class RiftVolumeFx {
      * at {@value #CAMERA_FADE_IN}, so walking into a tear dissolves the raymarched mass
      * smoothly instead of blacking out — {@code RiftRenderer}'s star geometry keeps
      * drawing the tear throughout, so the spectacle stays visible.</p>
+     *
+     * <p>F-089 hardening: band widened 1.15/1.55 → 1.35/1.90. Standing ~14–19 blocks
+     * from a fully open 24-wide ground tear left the near-black violet mass at partial
+     * strength across most of a view looking over it — the volume now dissolves earlier
+     * as the camera approaches, at no cost to the 30+ block look.</p>
      */
-    private static final float CAMERA_FADE_OUT = 1.15F;
-    private static final float CAMERA_FADE_IN = 1.55F;
+    private static final float CAMERA_FADE_OUT = 1.35F;
+    private static final float CAMERA_FADE_IN = 1.90F;
     /** Mirror of the shader's {@code DEPTH_SCALE} — the guard must use the same space. */
     private static final double DEPTH_SCALE = 0.55D;
 

@@ -305,6 +305,32 @@ public final class ExpansionBorderFx {
     }
 
     /**
+     * F-080 shutdown sweep hook: releases every live gate's growth hold and instantly
+     * discards its boulder displays NOW — on {@code ServerStoppingEvent}, before the
+     * final save and level close. No goodbye FX (the world is going down); the
+     * {@code ServerStoppedEvent} handler stays as the idempotent bookkeeping reset.
+     * Returns the shard display count dropped.
+     */
+    public static int forceClearNow(MinecraftServer server) {
+        int discarded = 0;
+        for (Gate gate : GATES.values()) {
+            // A hold must never outlive its sweep — the onStageTerrainComplete safety,
+            // pulled forward to the stop path.
+            SoftBorder.releaseGrowthHold(server, gate.profile, 0L);
+            for (Boulder boulder : gate.boulders) {
+                for (Shard shard : boulder.shards) {
+                    if (shard.display != null) {
+                        discarded++;
+                    }
+                }
+            }
+            gate.discardBoulders();
+        }
+        GATES.clear();
+        return discarded;
+    }
+
+    /**
      * Boot-time half of the despawn guarantee: any tagged monolith that survived a crash
      * inside an already-resident chunk (spawn chunks, forced chunks) is discarded before
      * the first player can see it. Chunks that load later are covered by

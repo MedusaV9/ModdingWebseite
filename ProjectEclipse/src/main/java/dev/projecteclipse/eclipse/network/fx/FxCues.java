@@ -75,6 +75,16 @@ public final class FxCues {
      */
     public static final ResourceLocation CUE_TYRANT_SQUALL = cue("tyrant_squall");
     /**
+     * F-081: Tyrant statue idle aura ({@code eclipse:boss/tyrant_statue_idle}) — a slow
+     * ember orbit up the statue column + faint crown sparks so the statue reads as
+     * INTERACTIVE ("strike me"). Sent by {@code TyrantStatue.ensureArmed} on its 40t
+     * armed-lair cadence; the asset runs 200t and 40 divides 200, so re-sends are
+     * silent dedup no-ops mid-run and the loop sustains seamlessly (the
+     * {@link #CUE_TYRANT_FOG_ARMS} cadence law). LAYER law: the server keeps stamping
+     * the vanilla spark-spiral baseline for photon-less clients.
+     */
+    public static final ResourceLocation CUE_TYRANT_STATUE_IDLE = cue("tyrant_statue_idle");
+    /**
      * PH-BOSS-B (IDEAS-boss #3): Rift Warden volley-telegraph eye laser
      * ({@code eclipse:boss/warden_eye_laser}). Carries {@code a} = the warden's yaw in
      * degrees so the client can aim the raycast beam (rotation cannot ride the generic

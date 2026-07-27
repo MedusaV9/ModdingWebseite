@@ -308,9 +308,14 @@ public final class LimboAmbience {
      */
     private static final Window GODRAYS = new Window(
             LIMBO_GODRAY, 3, 90, 130, 10.0D, 24.0D, 8.0D, 7.0D, 0.9D, false);
-    /** Dim violet fog sheets hugging the water surface (alpha-blended, so keep them few). */
+    /**
+     * Dim violet fog sheets hugging the water surface (alpha-blended, so keep them few).
+     * F-088 polish: spawn window pushed out 8 → 14 blocks — the emitter's billboards
+     * reach ~8 ± 7 blocks around their center, so an 8-block spawn could park a sheet
+     * directly in front of the camera.
+     */
     private static final Window FOG = new Window(
-            LIMBO_FOG, 2, 110, 160, 8.0D, 22.0D, 0.4D, 1.2D, 0.0D, false);
+            LIMBO_FOG, 2, 110, 160, 14.0D, 22.0D, 0.4D, 1.2D, 0.0D, false);
     /**
      * IDEA-18 §3: big slow middle-distance fog banks rolling +X past the ship (the
      * buoy-lane heading) — the emitter's raised wind sells that the sea moves.

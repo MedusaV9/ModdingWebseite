@@ -927,8 +927,9 @@ public final class ArenaFight {
         ServerLevel arena = ArenaDimension.get(server);
         if (state.isFightRunning()) {
             if (arena != null) {
-                // The pit chunks were force-loaded when the flag was set, so the persisted
-                // boss loads with them; the grace window covers async entity loading.
+                // Re-force the pit chunks (the stop hook released them — F-080 S6) so the
+                // persisted boss loads with them; the grace window covers async loading.
+                forcePitChunks(arena, true);
                 stage = Stage.FIGHT;
                 fightGraceTicks = FIGHT_WATCH_GRACE_TICKS;
                 arenaEmptyTicks = 0;
@@ -1007,6 +1008,14 @@ public final class ArenaFight {
             EclipseMod.LOGGER.info("Ferry crossing stage {} dropped on server stop (re-derived next start)", stage);
         }
         AltarDoor.cancelAssembly(event.getServer()); // discard pieces pre-save (BD-SHIP)
+        // F-080 (S6): never persist the pit force-load into the ForcedChunks saved data —
+        // a mid-fight stop would otherwise leave eclipse:ferryman_arena ticking forced
+        // chunks on every future boot. The mid-fight restart recovery re-forces them
+        // (onServerStarted), so the resumed fight watch loses nothing.
+        ServerLevel arena = ArenaDimension.get(event.getServer());
+        if (arena != null) {
+            forcePitChunks(arena, false);
+        }
         stage = Stage.IDLE;
         countdownTicks = -1;
         morphDisplays.clear();

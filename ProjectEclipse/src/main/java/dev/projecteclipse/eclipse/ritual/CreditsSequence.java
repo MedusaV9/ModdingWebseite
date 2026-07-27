@@ -738,6 +738,32 @@ public final class CreditsSequence implements SequenceReplayable {
         return true;
     }
 
+    /**
+     * F-080 shutdown sweep hook: aborts a live run and discards every act's displays
+     * NOW — on {@code ServerStoppingEvent}, before the final save and level close. No
+     * player-facing teardown (the stop disconnects everyone anyway) and no completion
+     * is persisted: the next boot's restart recovery ({@code onServerStarted}) skips a
+     * mid-credits world to the end state as designed. Returns the display count
+     * dropped; the {@code ServerStoppedEvent} handler stays as the idempotent
+     * bookkeeping reset.
+     */
+    public static int forceClearNow() {
+        Run current = run;
+        if (current == null) {
+            return 0;
+        }
+        int before = LIVE_DISPLAYS.size();
+        discardWheel(current);
+        discardFlyers(current);
+        discardEclipse(current);
+        current.shatter.discard();
+        current.formations.discard();
+        current.blackHole.discard();
+        run = null;
+        TASKS.clear();
+        return before - LIVE_DISPLAYS.size();
+    }
+
     // ------------------------------------------------------------------ tick machine
 
     @SubscribeEvent

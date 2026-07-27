@@ -11,7 +11,8 @@ dev.projecteclipse.eclipse.entity.boss.fog.FogBossEntities.register(modEventBus)
 That is the entire integration. Everything else is annotation-discovered: attributes
 (`@EventBusSubscriber` inside the registrar), renderers
 (`client/entity/fogboss/FogBossRenderers`, client-event self-subscribed — `FogRenderers`
-pattern), and the lair proximity trigger (`FogBankMarker`, game-bus self-subscribed).
+pattern), and the lair watcher + statue trigger (`FogBankMarker` + `TyrantStatue` +
+`FogTyrantFightHooks`, game-bus self-subscribed).
 Until the line lands the whole family no-ops via `DeferredHolder.isBound()` guards (one
 warn log at attribute time), so the build and both run configs stay green either way.
 
@@ -24,22 +25,25 @@ Bestiary keys for `fog_tyrant` already exist from P6-W56 — nothing to add ther
 spawner sets references it. P1's mature-storm flow has two entry points (pick one per
 site; both self-pin the r=16 arena):
 
-**Preferred — mark the lair (proximity-triggered, dramatic):**
+**Preferred — mark the lair (statue-triggered, F-081):**
 
 ```java
 dev.projecteclipse.eclipse.entity.boss.fog.FogBankMarker.markLair(serverLevel, stormCenterBlockPos);
 ```
 
-One line inside `FogStormSites.materializeSite`'s completion block for the strongest
-(highest-stage) storm site — and again on the restart-restore path, because lairs are
-deliberately NOT persisted (same lifecycle as the storm-wall re-announce; `markLair` is
-idempotent, safe to call every boot). The marker dresses the center with ambient
-fog-bank smoke pillars (r=10 ring — vanilla stand-ins until P2's `eclipse:fog_bank`
-emitter, plan §4.2) and summons the tyrant through `FogTyrantEntity.summonAt` when a
-player comes within 20 blocks (kept inside the boss's 24-block reset ring so the fight
-can't flap). After a summon the trigger disarms; call `markLair` again (or let players
-re-approach a re-marked lair) to re-arm. `clearLair`/`clearAll` unmark on storm
-downgrade.
+One line inside `FogStormSites.materializeSite`'s completion block for EVERY active
+storm site (F-083: each storm hosts its own independent lair/statue/boss — the old
+"strongest site only" gate is retired) — and again on the restart-restore path, because
+lairs are deliberately NOT persisted (same lifecycle as the storm-wall re-announce;
+`markLair` is idempotent, safe to call every boot). The marker dresses the center with
+ambient fog-bank smoke pillars (r=10 ring — vanilla stand-ins until P2's
+`eclipse:fog_bank` emitter, plan §4.2) and keeps a `TyrantStatue` standing at the
+center (4 BlockDisplay pieces + an interaction hitbox, idle Photon cue + spark spiral).
+**Presence never starts the fight** — a player must STRIKE (or use) the statue: ~3 s
+awaken telegraph, then `FogTyrantEntity.summonAt`. The lair disarms at statue-hit time;
+after a fight reset (wipe or abandon, F-082) the statue re-arms itself IN-SESSION after
+a 30 s cooldown (`TyrantStatue.onFightReset` → `markLair`). `clearLair` (also retires
+the statue) / `clearAll` unmark on storm downgrade/retirement.
 
 **Direct — summon now:**
 
@@ -59,9 +63,11 @@ with a mostly flat floor (r=16 ring + wall FX).
 | File | What it is |
 |---|---|
 | `entity/boss/fog/FogBossEntities.java` | Registrar: frozen id `eclipse:fog_tyrant` (MONSTER 2.4×4.2, eye 3.0, fire-immune, tracking 10), attributes. |
-| `entity/boss/fog/FogTyrantEntity.java` | The apex boss, 350 HP ×(1+0.4·(n−1)) / dmg 9 / speed 0.2 / kb-res 1.0 / armor 6. PURPLE NOTCHED_20 `ServerBossEvent` (notch lines sit exactly on the 60%/25% phase splits). P1 "Court": cleaver melee + fog-lance volleys every 140 t (25 t rooted raise, 3 locked lance lines glitter with electric warning trails, then 7 dmg down the exact trails — sidestep; raycasts budgeted 1 clip/lance at lock) + hound howl every 500 t (pack topped to 2 `eclipse:storm_hound` by id, skip-if-absent) + storm-step every 220 t (10 t vanish with a gathering fog column AT the destination, reappears on the target's flank). P2 ≤60%: crown lightning every 160 t (2 marked rings, 30 t = 1.5 s spark telegraph, visual-only `LightningBolt` + manual 8 dmg r=2.5 — no fire grief) + blind squall every 300 t (30 t rising sonic-charge cue while the crown collapses → Blindness 3 s + 4 dmg to everyone WITH line of sight — hide behind cover) + slow enrage stacking (1 stack/400 t, max 5: −6% special cooldowns, +4% speed each, transient attribute modifier). P3 ≤25%: one-time colossus call (1 `eclipse:fog_colossus` by id if none lives) + desperation barrage (volleys 70 t/5 lances, steps 120 t). One rooted telegraph at a time + 20 t gap between specials — no stunlocks. Herald wipe/reset (60 s empty ring → full heal + add cleanup + despawn), outside-ring damage deflect with cue, 70 t scripted storm-burst death (crown falls → core gutters at t32, synced CORE_LIT → thunderclap + `S2CShakePayload` at t60) + participant-feet drops. |
+| `entity/boss/fog/FogTyrantEntity.java` | The apex boss, 350 HP ×(1+0.4·(n−1)) / dmg 9 / speed 0.2 / kb-res 1.0 / armor 6. PURPLE NOTCHED_20 `ServerBossEvent` (notch lines sit exactly on the 60%/25% phase splits). P1 "Court": cleaver melee + fog-lance volleys every 140 t (25 t rooted raise, 3 locked lance lines glitter with electric warning trails, then 7 dmg down the exact trails — sidestep; raycasts budgeted 1 clip/lance at lock) + hound howl every 500 t (pack topped to 2 `eclipse:storm_hound` by id, skip-if-absent) + storm-step every 220 t (10 t vanish with a gathering fog column AT the destination, reappears on the target's flank). P2 ≤60%: crown lightning every 160 t (2 marked rings, 30 t = 1.5 s spark telegraph, visual-only `LightningBolt` + manual 8 dmg r=2.5 — no fire grief) + blind squall every 300 t (30 t rising sonic-charge cue while the crown collapses → Blindness 3 s + 4 dmg to everyone WITH line of sight — hide behind cover) + slow enrage stacking (1 stack/400 t, max 5: −6% special cooldowns, +4% speed each, transient attribute modifier). P3 ≤25%: one-time colossus call (1 `eclipse:fog_colossus` by id if none lives) + desperation barrage (volleys 70 t/5 lances, steps 120 t). One rooted telegraph at a time + 20 t gap between specials — no stunlocks. F-082 resets share `resetFight`: abandon (60 s empty ring) AND wipe (≥1 enrolled death, then no living participant within 24 blocks, 20 t cadence) → full heal + add cleanup + despawn + statue cooldown re-arm; the reset writes no blocks (graves survive). Outside-ring damage deflect with cue, 70 t scripted storm-burst death (crown falls → core gutters at t32, synced CORE_LIT → thunderclap + `S2CShakePayload` at t60) + participant-feet drops. |
 | `entity/boss/fog/FogTyrantArena.java` | Immutable arena anchor: r=16 ring at summon pos, contains/clamp/impulse/particle-wall helpers (RiftAnchor/SoftBorder pattern), NBT save/load. |
-| `entity/boss/fog/FogBankMarker.java` | The lair marker + P1 seam (section above): idempotent `markLair`, ambient smoke-pillar dressing, 20-block proximity summon trigger, live-tyrant dedup, `clearLair`/`clearAll`, server-stop hygiene. |
+| `entity/boss/fog/FogBankMarker.java` | The lair marker + P1 seam (section above): idempotent `markLair`, ambient smoke-pillar dressing, statue delegation (F-081 — no proximity summon), live-tyrant dedup, `isLairArmed`/`disarmLair` statue seams, `clearLair` (retires the statue)/`clearAll`, server-stop hygiene. |
+| `entity/boss/fog/TyrantStatue.java` | F-081 trigger: per-lair statue (polished-blackstone plinth, tilted deepslate torso, crying-obsidian head, lightning-rod crown — 4 BlockDisplays + tagged `minecraft:interaction` hitbox), ARMED/AWAKENING/FIGHT/COOLDOWN state machine, hit detection (attack + use, cancelled), ~3 s awaken telegraph → `summonAt`, 30 s cooldown re-arm on fight reset (G-1 fix), self-heal respawn, F-084 tag doctrine (`eclipse_storm_fx` + `eclipse_tyrant_statue` + per-lair scope tag, live-UUID set for StormSiege's join sweep). |
+| `entity/boss/fog/FogTyrantFightHooks.java` | F-082 death hook: `LivingDeathEvent` → `FogTyrantEntity.noteParticipantDeath` on live tyrants near the victim (flag-only; grave placement and ship theater untouched). |
 | `client/entity/fogboss/{FogBossRenderers,FogTyrantRenderer}.java` | Self-subscribed renderer registrar (isBound-guarded) + `EclipseGeoRenderer` subclass: head-tracked, `withGlowmask()` (crown/eyes/core/lance edges/seams) + `withUprightDeath()` (scripted collapse), shadow 1.1. |
 | `assets/eclipse/geo/entity/fog_tyrant.geo.json` | 23 bones / 29 cubes, 4.2-block crowned storm wraith — layered robe + 4 tatters, chest cavity with caged `glow_core`, two cloak layers, twin lance arms, hooded head, floating crown ring + 4 `glow_crown_*` shard-spikes. Validated (`validate_geo.py`), zero UV overlaps. |
 | `assets/eclipse/animations/entity/fog_tyrant.animation.json` | 10 clips: `idle` (hover-sway, crown orbit), `stride`, `attack`, `lance_volley` (raise → thrust), `storm_step_out`/`storm_step_in`, `crown_call` (summon raise), `squall` (crown collapse → burst), `enrage`, `death` (crown falls first, core sag, collapse — eased). Lengths match server timings (raise 25 t, squall windup 30 t, death 70 t). |
@@ -74,9 +80,9 @@ with a mostly flat floor (r=16 ring + wall FX).
 
 1. **Integrator:** apply the one-liner above; merge `docs/plans_v3/langdrop/WB-TYRANT.json`.
 2. **P1 (`FogStormSites`):** add the `FogBankMarker.markLair(...)` line (section above)
-   for the strongest storm site when it materializes AND on restart-restore; call
-   `clearLair` if a storm downgrades. Alternatively call `summonAt` directly or leave
-   the tyrant admin-summon this event — everything works standalone.
+   for EVERY active storm site when it materializes AND on restart-restore (F-083);
+   call `clearLair` if a storm downgrades. Alternatively call `summonAt` directly or
+   leave the tyrant admin-summon this event — everything works standalone.
 3. **P2 (FX, optional):** ambient banks + step bursts use vanilla particles behind
    single helper methods (`fogBurstFx`, `FogBankMarker` pillar loop) — one-line swaps
    when the `eclipse:fog_bank` emitter lands (plan §4.2).
@@ -113,7 +119,8 @@ with a mostly flat floor (r=16 ring + wall FX).
   logs and drops nothing for a bad id; the code path falls back to shards.
 - `FogBankMarker` lairs live in memory only — P1 must re-mark on restore (documented
   above; matches the storm-wall re-announce lifecycle). Until P1 wires the seam the
-  tyrant is admin-summon only (deliberate).
+  tyrant is admin-summon only (deliberate). A fight reset no longer needs a re-mark:
+  `TyrantStatue.onFightReset` re-arms in-session after its 30 s cooldown (G-1 fix).
 - The blind squall's LOS check raycasts once per participant per squall (≤ every 15 s)
   — negligible; lance volleys clip once per lance at lock time (≤ 5 clips per volley).
 
@@ -132,10 +139,12 @@ with a mostly flat floor (r=16 ring + wall FX).
    lances, twice as often).
 4. Damage it from outside the ring → deflected with a fizzle cue at your crosshair.
 5. Walk everyone > 24 blocks away for 60 s → full heal, adds despawn, tyrant despawns
-   clean (logs).
+   clean (logs); the statue re-arms ~30 s later (F-082/G-1). Die mid-fight instead
+   (all participants) → same reset within one 20 t wipe check, grave untouched.
 6. Kill it → 70 t storm-burst: crown falls, chest core gutters out mid-collapse, final
    thunderclap + camera shake; loot-table purse (shards + Replant book + trophy) plus
    storm-heart-or-shards and 3 shards at each participant's feet.
 7. Seam dry-run: from a dev hook call
-   `FogBankMarker.markLair(level, pos)` → smoke pillars ring the point; walk within 20
-   blocks → the tyrant rises exactly as in step 1.
+   `FogBankMarker.markLair(level, pos)` → smoke pillars ring the point and the statue
+   stands (idle sparks + action-bar hint within 14 blocks); walking close does NOTHING —
+   strike the statue → ~3 s awaken shudder → the tyrant rises exactly as in step 1.

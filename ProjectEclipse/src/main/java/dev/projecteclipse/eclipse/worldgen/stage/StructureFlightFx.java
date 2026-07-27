@@ -368,6 +368,28 @@ public final class StructureFlightFx {
         configLoaded = false;
     }
 
+    /**
+     * F-080 shutdown sweep hook: abandons every airborne delivery NOW — on
+     * {@code ServerStoppingEvent}, before the final save and level close — through the
+     * watchdog's discard path. Safe by the registry contract: the pending SavedData row
+     * persists through the whole flight, so the real placement re-runs on the next
+     * boot. Returns the display count dropped; the {@code ServerStoppedEvent} handler
+     * stays as the idempotent bookkeeping reset.
+     */
+    public static int forceClearNow() {
+        int discarded = 0;
+        for (Flight flight : FLIGHTS.values()) {
+            for (Piece piece : flight.pieces) {
+                if (piece.display != null) {
+                    discarded++;
+                }
+            }
+            flight.discardDisplays();
+        }
+        FLIGHTS.clear();
+        return discarded;
+    }
+
     /** OarAnimator sweep doctrine: a tagged display we did not spawn is a crash stray. */
     @SubscribeEvent
     static void onEntityJoin(EntityJoinLevelEvent event) {

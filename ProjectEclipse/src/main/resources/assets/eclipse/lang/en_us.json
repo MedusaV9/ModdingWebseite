@@ -1817,6 +1817,8 @@
   "eclipse.storm.siege.begin": "The storm turns on you — the wall closes in and the ground begins to stir.",
   "eclipse.storm.siege.calm": "The storm loosens its grip. What it took falls back to earth.",
   "eclipse.storm.siege.lift": "The storm tears blocks from the ground!",
+  "eclipse.storm.statue.hint": "The statue hums with the storm's power. Strike it — if you dare.",
+  "eclipse.storm.statue.awaken": "The statue cracks — the storm gathers into a crown!",
   "eclipse.structure.collapsed_vault": "Collapsed Vault",
   "eclipse.structure.flooded_crypt": "Flooded Crypt",
   "eclipse.structure.glitch_reliquary": "Glitch Reliquary",

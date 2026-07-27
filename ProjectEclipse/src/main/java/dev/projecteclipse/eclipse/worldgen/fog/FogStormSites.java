@@ -225,14 +225,16 @@ public final class FogStormSites {
     }
 
     /**
-     * P6-W11 seam: exactly one active highest-stage storm hosts the Fog Tyrant lair.
-     * Markers are session-only and are fully reconciled whenever site lifecycle changes.
+     * P6-W11 seam, widened by F-083: EVERY active storm hosts its own Fog Tyrant lair
+     * (statue + boss), fightable independently and in any order — no more single
+     * highest-stage pick. Markers are session-only and are fully reconciled whenever
+     * site lifecycle changes (clear-all + re-mark actives in one pass; statues survive
+     * the churn, see {@code FogBankMarker.clearAll}).
      */
     private static void reconcileTyrantLair(ServerLevel level) {
         FogBankMarker.clearAll(level);
         sites.stream().filter(Site::active)
-                .max(java.util.Comparator.comparingInt(Site::stage).thenComparing(Site::id))
-                .ifPresent(site -> FogBankMarker.markLair(level,
+                .forEach(site -> FogBankMarker.markLair(level,
                         surfaceCenter(level, site.x(), site.z())));
     }
 
