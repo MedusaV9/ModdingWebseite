@@ -127,9 +127,9 @@ public final class EndArrivalSequence {
     /** The glyph anchor floats this many blocks above the altar top. */
     private static final double GLYPH_HEIGHT = 40.0D;
     /** Grade dim script: omen creep → erupt spike → spill simmer (released at PILLAR_AT). */
-    private static final float DIM_OMEN = 0.35F;
-    private static final float DIM_SPIKE = 0.55F;
-    private static final float DIM_SIMMER = 0.15F;
+    private static final float DIM_OMEN = 0.55F;
+    private static final float DIM_SPIKE = 0.8F;
+    private static final float DIM_SIMMER = 0.2F;
     /** Choir pad re-fire cadence during the spill (the ogg is ~6 s = 120 t). */
     private static final int CHOIR_REFIRE_TICKS = 120;
     /** One island shock ring per completed assembly wave (EndArrivalDebrisFx wave law). */

@@ -163,9 +163,10 @@ void main() {
     // color out of the day. Static per frame; zero uniform = bit-identical frame.
     if (ArrivalDim > 0.001) {
         float dimEdge = smoothstep(0.25, 0.85, d);
-        color *= 1.0 - ArrivalDim * (0.16 + 0.30 * dimEdge);
+        // V2.1 QA: 0.16/0.30/0.35 read as invisible on camera — the omen must be FELT.
+        color *= 1.0 - ArrivalDim * (0.24 + 0.42 * dimEdge);
         float dimLuma = dot(color, vec3(0.299, 0.587, 0.114));
-        color = mix(color, vec3(dimLuma), ArrivalDim * 0.35);
+        color = mix(color, vec3(dimLuma), ArrivalDim * 0.5);
     }
 
     // [v4] F-077 beat-4 reveal pulse: a hue-only end-violet lean plus a sky-weighted

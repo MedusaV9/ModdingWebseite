@@ -293,7 +293,8 @@ public final class PhotonBridge {
 
         /** Whether the loop's runtime is still alive (false after stop/sweep/kill). */
         public boolean alive() {
-            return LIVE.contains(tracked) && runtimeAlive(tracked.executor);
+            return LIVE.contains(tracked)
+                    && (runtimeAlive(tracked.executor) || withinSpawnGrace(tracked));
         }
     }
 
@@ -308,6 +309,8 @@ public final class PhotonBridge {
         /** Spawn anchor for position executors ({@code null} for entity attaches). */
         @Nullable
         final Vec3 anchorPos;
+        /** Bridge tick the executor was started on ({@link #SPAWN_GRACE_TICKS}). */
+        final long spawnTick;
 
         Tracked(Object executor, ResourceLocation fxId, Level level, @Nullable Entity entity,
                 boolean loop, @Nullable Vec3 anchorPos) {
@@ -317,7 +320,26 @@ public final class PhotonBridge {
             this.entity = entity;
             this.loop = loop;
             this.anchorPos = anchorPos;
+            this.spawnTick = clientTicks;
         }
+    }
+
+    /**
+     * A freshly started runtime reports {@code isAlive() == false} until its emitters have
+     * ticked once — and FXRuntime ticks ride the RENDER cadence, so after a render stall the
+     * client's catch-up ticks would see every just-spawned loop as dead, prune it, and
+     * respawn it each tick (the "Duplicate fx runtime object id" storm: ~9 replaces per
+     * frame at llvmpipe frame rates). Executors younger than this many bridge ticks are
+     * therefore treated as alive-pending instead of dead.
+     */
+    private static final int SPAWN_GRACE_TICKS = 40;
+
+    /** Monotonic client-tick counter driving {@link #SPAWN_GRACE_TICKS} (see {@link Sweep}). */
+    private static long clientTicks;
+
+    /** True while {@code tracked} is young enough that a not-yet-alive runtime is expected. */
+    private static boolean withinSpawnGrace(Tracked tracked) {
+        return clientTicks - tracked.spawnTick <= SPAWN_GRACE_TICKS;
     }
 
     // ------------------------------------------------------------------ availability
@@ -394,7 +416,7 @@ public final class PhotonBridge {
             }
             Vec3 anchor = tracked.entity != null ? tracked.entity.position() : tracked.anchorPos;
             if (anchor != null && anchor.distanceToSqr(pos) <= rangeSq
-                    && runtimeAlive(tracked.executor)) {
+                    && (runtimeAlive(tracked.executor) || withinSpawnGrace(tracked))) {
                 return true;
             }
         }
@@ -523,7 +545,7 @@ public final class PhotonBridge {
             int autoRotateOrdinal, @Nullable Vec3 offset) {
         for (Tracked tracked : LIVE) {
             if (tracked.entity == entity && tracked.fxId.equals(fxId)
-                    && runtimeAlive(tracked.executor)) {
+                    && (runtimeAlive(tracked.executor) || withinSpawnGrace(tracked))) {
                 return true; // keepalive no-op — exactly one live runtime per (fx, entity)
             }
         }
@@ -680,7 +702,7 @@ public final class PhotonBridge {
         ClientLevel current = Minecraft.getInstance().level;
         for (int i = LIVE.size() - 1; i >= 0; i--) {
             Tracked tracked = LIVE.get(i);
-            if (!runtimeAlive(tracked.executor)) {
+            if (!runtimeAlive(tracked.executor) && !withinSpawnGrace(tracked)) {
                 LIVE.remove(i);
                 continue;
             }
@@ -732,6 +754,7 @@ public final class PhotonBridge {
 
         @SubscribeEvent
         static void onClientTick(ClientTickEvent.Post event) {
+            clientTicks++;
             sweep();
         }
 

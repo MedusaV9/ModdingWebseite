@@ -27,8 +27,8 @@ _(leer — hier neue Punkte reinschreiben; zuletzt gezogen: 27.07. 10:57-Commit 
 | F-091 | `/dev preload everything`: ganze Map einmal vorgenerieren + entladen, kein sichtbares Chunk-Reingenerieren mehr (auch Start-Event) | 🟡 |
 | F-092 | Rand-Berge: riesig auftürmen, Map komplett einkreisen, von überall sichtbar, weichen beim Erweitern langsam zurück | 🟡 |
 | F-090/093 | Credits-Szene + Schwarzes Loch V3: Map wird richtig zerrissen (heftige Animationen/Effekte) | 🟡 |
-| F-075 | Altar-Insel-Aura V2: Insel-Rand-Ring (r≈15.5), Spiral-Ströme Rand→Krone, Powerup-Beat bei Stufenaufstieg, Veil-Grenzübertritts-Ripple, Violett→Gold-Farbleiter — Implementierung läuft (V1 war schon in `eae14f4`) | 🟡 |
-| F-077 | End-Ankunft V2 „Gigantismus": 600-Teile-Helix statt 220, silhouettengetreue Wellen-Assembly, Riesen-Schockringe, Veil-Dim/EndTint, End-Rift-Ambient, synthetisierte Sounds — Implementierung läuft (V1 „The Altar Calls the End" war schon in `1f78a59`) | 🟡 |
+| F-075 | Altar-Insel-Aura V2: Insel-Rand-Ring (r≈15.5), Spiral-Ströme Rand→Krone, Powerup-Beat bei Stufenaufstieg, Veil-Grenzübertritts-Ripple, Violett→Gold-Farbleiter + V2.1-Lesbarkeits-Pass. QA: „Pink-Flood“ in Testvideos = L4/L5-Himmelsriss-Blitz (Absicht) + llvmpipe-Capture-Tearing, KEIN Bug (Kontrolltest L2 sauber, L4 reproduziert). Photon-Respawn-Sturm (Duplicate-Warn-Spam bei Render-Stalls) via Spawn-Grace in PhotonBridge gefixt. Finale Ladder-Verifikation läuft | 🟡 |
+| F-077 | End-Ankunft V2 „Gigantismus": 600-Teile-Helix statt 220, silhouettengetreue Wellen-Assembly, Riesen-Schockringe, Veil-Dim/EndTint, End-Rift-Ambient, synthetisierte Sounds — Cutscene fxonly verifiziert; OMEN-Dimming war zu subtil → DIM 0.35/0.55/0.15 → 0.55/0.8/0.2 + stärkere Shader-Kurve, Re-Test läuft | 🟡 |
 | F-071/078/079 | Dauerbetrieb: alle ~30 min Feedback-Check; wenn leer → Photon/Veil-Effekte mit Planner-/Ideen-Teams immer weiter iterieren; nur Fable 5 Max Thinking als Subagent-Modell | 🟡 (läuft) |
 
 ## Backlog (offen, in Priorität)
