@@ -9,6 +9,15 @@
 ---
 
 ## NEUES FEEDBACK (hier eintragen!)
+Die Credits Scene muss noch mehr verbessert werden.
+
+Warum generierst du nicht einmal die Map vor? und lädst die dann einfach immer? ist das nicht schneller als immer wieder neu die Chunks generierern zulassen? und dann kannst du es ja krasser Animieren oder?
+Am Rand die Felsen sind nicht groß genug sie sollen einmal wie riesige Berge sich auftürmen am rand und dann die map quasi ein kreisen und dann sich langsam immer weiter zurück bewegen und sie sollen von der ganzen Map aus sehbar sein.
+
+Allgemein finde die wie auch zb am Start Event die Chunks erst noch reingenierer sieht komisch aus. Baue eventuell ein /dev preload everything Command und der generiert einmal alles vor und dann entlädt er die bereiche so das sie danach einfach wieder rein geladen werden
+
+Das Schwarze loch ist nicht krass genug die Map soll richitig kaputt gerissen werden mit heftigen Animations und Effekten.
+
 
 _(leer — hier neue Punkte reinschreiben; zuletzt gezogen: 26.07. 23:34-Commit → einsortiert als F-071…F-079)_
 
