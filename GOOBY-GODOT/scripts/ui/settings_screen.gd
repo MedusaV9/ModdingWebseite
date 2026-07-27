@@ -586,6 +586,9 @@ func _build_game_section() -> void:
 	_add_help(rows, "AutosaveHelp", I18nService.t("settings.autosave_hilfe"))
 	var reset_btn := _section_button(rows, "TutorialResetButton", "settings.tutorial_reset")
 	reset_btn.pressed.connect(_on_tutorial_reset)
+	# REST-4 (EVAL Rang 11): Aktionscodes-Screen (Route `codes`).
+	var codes_btn := _section_button(rows, "CodesButton", "codes.settings_eintrag")
+	codes_btn.pressed.connect(_on_codes_pressed)
 
 
 func _build_updates_section() -> void:
@@ -607,6 +610,13 @@ func _on_transfer_pressed() -> void:
 	var router := get_node_or_null("/root/SceneRouter")
 	if router != null and router.has_method("goto"):
 		router.goto(TransferScreen.ROUTE)
+
+
+func _on_codes_pressed() -> void:
+	CodesScreen.register_routes()
+	var router := get_node_or_null("/root/SceneRouter")
+	if router != null and router.has_method("goto"):
+		router.goto(CodesScreen.ROUTE)
 
 
 func _build_about_section() -> void:

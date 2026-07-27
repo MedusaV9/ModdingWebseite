@@ -50,6 +50,8 @@ func _ready() -> void:
 	# — feuert nach JEDER Handlung, egal welcher Screen offen ist.
 	if _gs != null:
 		RewardHub.attach_to(self, _gs)
+		# REST-2: Tagesquests (Roll/Claim/Bonus + „Was nun?“-Hinweis).
+		DailyQuestService.attach_to(self, _gs)
 	if _router != null and _router.has_signal("travel_finished"):
 		_router.travel_finished.connect(_on_travel_finished)
 	if _router != null and _router.has_signal("travel_started"):
@@ -103,6 +105,8 @@ func _on_travel_finished(target: Variant = null) -> void:
 	EventRunner.attach_to(room)
 	# FB-6/SEELE-Hook: Begrüßungen, Rituale, Erinnerungen, Idle-Leben.
 	GoobyReactions.attach_to(room)
+	# REST-3: Schlaf-/Krankheits-/Gewichts-Optik (Pflege-Kreislauf sichtbar).
+	PflegeRunner.attach_to(room)
 
 
 ## HUD nur im Raum (RoomBase) zeigen — Album/Arcade/Social/Stadt sind
@@ -160,11 +164,6 @@ func _on_hud_action(action: StringName) -> void:
 	if action == &"reise" and _router != null:
 		_router.goto(CityScene.ROUTE_CITY)
 		return
-	if action == &"profil" and _router != null:
-		# M1: der Profil-Knopf öffnet den Social-Screen (Freunde/Besuche/Pal);
-		# der volle Profil-Rework ist W4/M2 (GODOT-PLAN Backlog).
-		_router.goto(SocialScreen.ROUTE)
-		return
 	_toasts.show_toast(I18nService.t("home.aktion_bald"))
 
 
@@ -180,7 +179,16 @@ func _dispatch_to_screens(action: StringName) -> bool:
 		return true
 	if IkeaScreen.handle_hud_action(action):
 		return true
-	if CustomizeScreen.handle_hud_action(action):
+	# REST-2: Quests-Knopf öffnet das Tagesquest-Panel (mit Customize geteilt,
+	# damit die Return-Grenze des Linters haelt — `or` kurzschliesst wie zuvor).
+	# REST-1 (P1-Fix): der Profil-Knopf öffnet jetzt den ECHTEN Profil-Screen
+	# (vorher fälschlich der Social-Screen „Freunde & Besuche“ — der bleibt
+	# vom Profil aus erreichbar).
+	if (
+		CustomizeScreen.handle_hud_action(action)
+		or DailyQuestService.handle_hud_action(action)
+		or ProfilScreen.handle_hud_action(action)
+	):
 		return true
 	# W6: die Handy-Shell ersetzt den direkten GOOBERANDO-Aufruf — sie haengt
 	# dieselbe App als Kachel ein und bringt Taxi/Guber/Kamera/Pal dazu.
@@ -225,6 +233,10 @@ func _show_onboarding() -> void:
 func _start_home() -> void:
 	_hud_enabled = true
 	_hud.visible = true
+	# REST-2: handlungsgeführte erste Viertelstunde (nur frische Saves;
+	# Bestands-Saves werden im attach_to still als erledigt markiert).
+	if _gs != null:
+		OnboardingGuide.attach_to(self, _gs)
 	if _router != null:
 		_router.goto(RoomDefs.route_target(START_ROOM))
 

@@ -207,7 +207,7 @@ func _liefer_gooby() -> void:
 	_box.add_child(container)
 	var viewport := SubViewport.new()
 	viewport.transparent_bg = true
-	viewport.size = Vector2i(380, 220)
+	# KEINE manuelle size: der Stretch-Container übernimmt die Größe (REST5).
 	container.add_child(viewport)
 	var licht := DirectionalLight3D.new()
 	licht.rotation_degrees = Vector3(-40.0, -25.0, 0.0)

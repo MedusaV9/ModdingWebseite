@@ -48,6 +48,7 @@ var _doors: Dictionary = {}
 var _furniture: Dictionary = {}
 var _dioramas: Dictionary = {}
 var _nav_region: NavigationRegion3D
+var _nav_map := RID()
 var _blockers: Node3D
 var _grid_mount: Node3D
 var _wall_mount: Node3D
@@ -219,7 +220,15 @@ func request_rebake() -> void:
 func _on_rebake_timeout() -> void:
 	_rebake_pending = false
 	if is_inside_tree():
-		_nav_region.bake_navigation_mesh(false)
+		# REST5 (B5): CPU-Bake aus Boden-Rechteck + Blocker-AABBs — das alte
+		# bake_navigation_mesh() las Render-Meshes zur Laufzeit von der GPU.
+		RoomNavmesh.bake(_nav_region, _world_size(), _blockers.get_children())
+
+
+func _exit_tree() -> void:
+	# Die private Navigation-Map gehört dem Raum — ohne free_rid leakt die
+	# RID beim Beenden (EVAL-2 B4).
+	_nav_map = RoomNavmesh.free_private_map(_nav_map)
 
 
 ## Hammer-Aufbau-Gag (Doc D §3.1): Gooby hämmert, Qualm, Jubel.
@@ -339,16 +348,11 @@ func _stunde() -> float:
 func _build_nav_and_floor() -> void:
 	_nav_region = NavigationRegion3D.new()
 	_nav_region.name = "NavRegion"
-	var nav_mesh := NavigationMesh.new()
-	nav_mesh.agent_radius = 0.28
-	nav_mesh.agent_height = 1.0
-	nav_mesh.agent_max_climb = 0.3
-	# MUSS zur Default-Map passen (0.25) — sonst lehnt der NavServer den Bake ab.
-	nav_mesh.cell_size = 0.25
-	nav_mesh.cell_height = 0.25
-	nav_mesh.geometry_parsed_geometry_type = NavigationMesh.PARSED_GEOMETRY_MESH_INSTANCES
-	_nav_region.navigation_mesh = nav_mesh
+	# REST5 (EVAL-2 B3/B5/B10): voxel-exaktes Mesh, eigene Map je Raum und
+	# CPU-Quellgeometrie statt Visual-Mesh-Parsing — Details in RoomNavmesh.
+	_nav_region.navigation_mesh = RoomNavmesh.make_mesh()
 	add_child(_nav_region)
+	_nav_map = RoomNavmesh.attach_private_map(_nav_region)
 	var size := _world_size()
 	var floor_mesh := MeshInstance3D.new()
 	floor_mesh.name = "Floor"

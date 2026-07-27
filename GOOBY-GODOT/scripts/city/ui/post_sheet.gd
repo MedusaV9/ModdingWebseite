@@ -54,6 +54,21 @@ func _baue_archiv() -> void:
 	CitySheetBausteine.label(
 		karte, I18nService.t("city.post.archiv_zahl").format({"n": anzahl}), "CaptionLabel"
 	)
+	# REST-4 (P1 „Bald“-Fix, EVAL Rang 15): der Archiv-Klick landet jetzt im
+	# echten Postkarten-Archiv statt in einem Platzhalter.
+	var btn := Button.new()
+	btn.name = "ArchivAnsehen"
+	btn.theme_type_variation = "AccentButton"
+	btn.text = I18nService.t("postkarten.ansehen")
+	btn.pressed.connect(_on_archiv_ansehen)
+	karte.add_child(btn)
+
+
+func _on_archiv_ansehen() -> void:
+	PostkartenScreen.register_routes()
+	var router := get_node_or_null("/root/SceneRouter")
+	if router != null and router.has_method("goto"):
+		router.goto(PostkartenScreen.ROUTE, {})
 
 
 func _on_schalter(id: String) -> void:

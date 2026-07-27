@@ -1,0 +1,7 @@
+[gd_scene load_steps=2 format=3 uid="uid://c4restfunkelpark"]
+
+[ext_resource type="Script" path="res://scripts/park/funkelpark.gd" id="1_funkelpark"]
+
+[node name="Funkelpark" type="Node3D"]
+script = ExtResource("1_funkelpark")
+ort_id = "funkelpark"

@@ -51,11 +51,10 @@ static func float_text(parent: Node, world_pos: Vector3, text: String, color := 
 	if tree == null:
 		return
 	if reduced_motion(parent):
-		tree.create_timer(FLOAT_DAUER_S).timeout.connect(
-			func() -> void:
-				if is_instance_valid(label):
-					label.queue_free()
-		)
+		# Methoden-Callable statt Lambda: die Verbindung löst sich beim
+		# Freigeben des Labels selbst — ein Lambda-Capture würde nach einem
+		# Szenenwechsel als "Lambda capture ... was freed" feuern (B2).
+		tree.create_timer(FLOAT_DAUER_S).timeout.connect(label.queue_free)
 		return
 	var tween := label.create_tween()
 	tween.tween_property(label, "position:y", label.position.y + FLOAT_HUB_M, FLOAT_DAUER_S)
@@ -163,8 +162,7 @@ static func _free_later(parent: Node, node: Node, seconds: float) -> void:
 	if tree == null:
 		node.queue_free()
 		return
-	tree.create_timer(seconds).timeout.connect(
-		func() -> void:
-			if is_instance_valid(node):
-				node.queue_free()
-	)
+	# Methoden-Callable statt Lambda-Capture (B2): stirbt `node` vor dem
+	# Timeout (Szenenwechsel), räumt Godot die Verbindung selbst ab — ein
+	# Lambda würde "Lambda capture ... was freed" in den Log spammen.
+	tree.create_timer(seconds).timeout.connect(node.queue_free)

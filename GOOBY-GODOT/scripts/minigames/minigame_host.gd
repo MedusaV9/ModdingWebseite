@@ -317,11 +317,9 @@ func _run_countdown(quick := false) -> void:
 		await get_tree().create_timer(maxf(quick_go_sec, 0.0)).timeout
 		if token != _countdown_token or not is_inside_tree():
 			return
-	get_tree().create_timer(0.6).timeout.connect(
-		func() -> void:
-			if is_instance_valid(_countdown_label):
-				_countdown_label.hide()
-	)
+	# Methoden-Callable statt Lambda (REST5, B2): stirbt das Label vor dem
+	# Timeout (Szenenwechsel), trennt Godot die Verbindung automatisch.
+	get_tree().create_timer(0.6).timeout.connect(_countdown_label.hide)
 	_pause_button.disabled = false
 	if _game != null:
 		# Web-Parität §C6 (framework.js:1369-1377): die Energie wird erst
@@ -355,11 +353,16 @@ func _on_game_end(result: Dictionary) -> void:
 	# EF-3 F3: die Atempause ist nur verdient, wenn sie GEFÜLLT ist — der
 	# Host inszeniert das Rundenende zentral für alle Spiele (s. unten).
 	_schedule_end_moment(breakdown)
+	# Gebundene Methode statt Lambda (REST5, B2): wird der Host vor dem
+	# Timeout freigegeben, trennt Godot die Verbindung automatisch.
 	get_tree().create_timer(delay, true, false, true).timeout.connect(
-		func() -> void:
-			if is_instance_valid(_results) and _round_over:
-				_results.show_results(breakdown, _meta, juice)
+		_zeige_results_verzoegert.bind(breakdown)
 	)
+
+
+func _zeige_results_verzoegert(breakdown: Dictionary) -> void:
+	if _round_over:
+		_results.show_results(breakdown, _meta, juice)
 
 
 ## EF-3 F3 (EVAL-1: „0,9 s toter Standbild-Moment“): nur 5/37 Spiele riefen
@@ -371,19 +374,23 @@ func _on_game_end(result: Dictionary) -> void:
 func _schedule_end_moment(breakdown: Dictionary) -> void:
 	if juice == null or get_tree() == null:
 		return
+	# Gebundene Methode statt Lambda (REST5, B2) — s. _on_game_end.
 	get_tree().create_timer(END_MOMENT_DELAY_SEC, true, false, true).timeout.connect(
-		func() -> void:
-			if not is_instance_valid(self) or not _round_over or juice == null:
-				return
-			if Time.get_ticks_msec() - juice.win_moment_msec <= END_MOMENT_GRACE_MS:
-				return
-			var kind := "win" if int(breakdown.get("score", 0)) > 0 else "lose"
-			if kind == "win":
-				juice.win_moment()
-			else:
-				juice.lose_moment()
-			end_moment_fired.emit(kind)
+		_zuende_end_moment.bind(breakdown)
 	)
+
+
+func _zuende_end_moment(breakdown: Dictionary) -> void:
+	if not _round_over or juice == null:
+		return
+	if Time.get_ticks_msec() - juice.win_moment_msec <= END_MOMENT_GRACE_MS:
+		return
+	var kind := "win" if int(breakdown.get("score", 0)) > 0 else "lose"
+	if kind == "win":
+		juice.win_moment()
+	else:
+		juice.lose_moment()
+	end_moment_fired.emit(kind)
 
 
 ## Award über GameState.update (Signale + Autosave); ohne GameState (Tests

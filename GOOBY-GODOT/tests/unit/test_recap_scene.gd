@@ -92,14 +92,19 @@ func test_recap_ist_ab_10s_ueberspringbar() -> void:
 	tree.root.add_child(scene)
 	scene.skip()
 	assert_eq(result.size(), 0, "Vor skip_after_sec passiert beim Tippen nichts.")
-	var armed := await wait_until(
-		func() -> bool:
-			if result.size() == 1:
-				return true
+	# Schleife statt wait_until-Lambda (REST5, EVAL-2 B2): die Poll-Lambda
+	# capturte `scene` — nach deren queue_free loggt JEDER weitere Aufruf
+	# "Lambda capture at index 1 was freed" (auch wenn der Codepfad die
+	# Szene gar nicht anfasst).
+	var deadline := Time.get_ticks_msec() + 30000
+	var armed := false
+	while Time.get_ticks_msec() < deadline:
+		if result.size() == 1:
+			armed = true
+			break
+		if is_instance_valid(scene):
 			scene.skip()
-			return false,
-		30000
-	)
+		await tree.process_frame
 	assert_true(armed, "Skip nach 10 s muss zur Endkarte schneiden und enden.")
 	if armed:
 		assert_true(bool(result[0]), "Skip endet als skipped=true.")

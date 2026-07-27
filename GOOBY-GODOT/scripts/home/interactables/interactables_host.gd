@@ -10,13 +10,17 @@ extends Node3D
 ##   toilet/shower/bathtub   → KloDusche
 ##   bathroomMirror          → Spiegel
 ##   bathroomSink            → Zahnputz
-##   bed*                    → StoryTime (Geschichten-Stunde am Bett)
+##   bed*                    → Bett (Schlafen/Nickerchen/Geschichte, REST-3)
 ##   kitchenFridge*          → Kuehlschrank (Füttern, EF-1/EVAL-1 D1)
 ##
 ## Einhängen (W2a-Hook-Request: W3d-home-requests.md):
 ##   InteractablesHost.attach_to(room)  # nach RoomBase._ready()
 
 const KLO_IDS: Array[String] = ["toilet", "shower", "bathtub"]
+## REST-4: Möbel-Ids, die die Radio-Oberfläche öffnen (Katalog W2a).
+const RADIO_IDS: Array[String] = ["radio", "radioRetro", "speaker"]
+## REST-4: Möbel-Ids, die das Postkarten-Archiv öffnen.
+const POSTKARTEN_IDS: Array[String] = ["postkartenWand", "souvenirRegal"]
 
 var _room: Node = null
 
@@ -58,9 +62,15 @@ func rescan() -> void:
 		elif item_id == "bathroomSink":
 			_dock(Zahnputz.new(), node)
 		elif item_id.begins_with("bed"):
-			_dock(StoryTime.new(), node)
+			_dock(Bett.new(), node)
 		elif item_id.begins_with("kitchenFridge"):
 			_dock(Kuehlschrank.new(), node)
+		elif RADIO_IDS.has(item_id):
+			# REST-4 (EVAL Rang 10): Radio-Möbel öffnen die Radio-Oberfläche.
+			_dock(RadioGeraet.new(), node)
+		elif POSTKARTEN_IDS.has(item_id):
+			# REST-4 (EVAL Rang 15): Wand/Regal öffnen das Postkarten-Archiv.
+			_dock(PostkartenWand.new(), node)
 
 
 ## Tap-Zone über einem Möbel (Area3D + Box um die Möbel-AABB) — geteilter

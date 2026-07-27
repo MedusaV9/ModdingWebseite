@@ -16,10 +16,9 @@ extends RefCounted
 ## zurück — Füttern darf NIE crashen.
 
 const Stats := preload("res://scripts/logic/stats.gd")
+const HealthLogic := preload("res://scripts/logic/health.gd")
+const WeightLogic := preload("res://scripts/logic/weight.gd")
 
-## Gewichtszunahme pro Junk-Fütterung (Web weight.onEat: +2, Deckel 95).
-const JUNK_WEIGHT_GAIN := 2.0
-const WEIGHT_MAX := 95.0
 ## Ist Gooby praktisch satt, lehnt er höflich ab (kein Essen verschwenden).
 const SATT_AB := 99.5
 
@@ -148,11 +147,13 @@ static func apply_feed(state: Dictionary, food_id: String) -> Dictionary:
 	var after := Stats.apply_deltas(before, d)
 	if gooby is Dictionary:
 		gooby["stats"] = after
-		if is_junk(food_id):
-			gooby["weight"] = minf(WEIGHT_MAX, float(_num(gooby.get("weight", 50.0))) + 2.0)
-			var health: Variant = gooby.get("health")
-			if health is Dictionary:
-				health["junkScore"] = int(_num(health.get("junkScore"))) + 1
+		# REST-3: Füttern speist die ECHTEN Pflege-Module (Web §B5) — vorher
+		# stand hier eine Inline-Näherung nur für Junk. Jetzt: Gewicht Junk
+		# +2.0 / gesund +0.5, Krankheits-Slice junkScore +1 bzw. −0.5 samt
+		# tummyWarning-Rampe (der Ticker feuert das Event beim nächsten Takt).
+		var junk := is_junk(food_id)
+		gooby["weight"] = WeightLogic.on_eat(gooby.get("weight", WeightLogic.DEFAULT), junk)
+		gooby["health"] = HealthLogic.on_eat(gooby.get("health"), junk)
 	var counters := _counters(state)
 	counters["feeds"] = int(_num(counters.get("feeds"))) + 1
 	return {

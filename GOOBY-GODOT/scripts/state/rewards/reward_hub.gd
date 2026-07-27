@@ -12,8 +12,15 @@ extends Node
 ## alle FEIER_ABSTAND_S), Toasts stapeln nie (ToastQueue). Set-komplett-
 ## Belohnungen werden zusätzlich hier geclaimt (additiv in
 ## stickers.setRewards — identisch idempotent zum Album-Pfad).
+##
+## REST-1: derselbe Hub feiert jetzt auch die 44 ERFOLGE (AchievementsService
+## hängt hier, kein zweites System) und bietet beim ersten Start des Tages
+## den TAGESBONUS an (DailyBonusPopup auf der Hub-Layer) — beide teilen die
+## Feier-Queue/Toasts/Konfetti mit den Stickern.
 
 signal sticker_celebrated(def: Dictionary)
+signal achievement_celebrated(def: Dictionary)
+signal daily_bonus_claimed(reward: Dictionary)
 
 ## Serialisierung der Feiern — nie zwei Konfetti-Bursts übereinander.
 const FEIER_ABSTAND_S := 2.6
@@ -24,12 +31,18 @@ const GROUP := &"reward_hub"
 const Economy := preload("res://scripts/logic/economy.gd")
 
 var unlocks: StickerUnlocks
+## REST-1: Erfolgs-Auswertung — gleiches Muster wie `unlocks`.
+var achievements: AchievementsService
 
 var _gs: Object = null
 var _layer: CanvasLayer
 var _toasts: ToastLayer
+## Feier-Queue: [{kind: "sticker"|"erfolg", def: {...}}].
 var _queue: Array[Dictionary] = []
 var _draining := false
+var _daily_popup: Control = null
+## Einmal pro Session beim ersten travel_finished anbieten (s. _wire_daily_bonus).
+var _daily_offer_done := false
 
 
 ## Hub erzeugen und an den Home-Entry hängen (idempotent, Gruppe reward_hub).
@@ -78,14 +91,63 @@ func _ready() -> void:
 	unlocks.name = "GlobalStickerUnlocks"
 	add_child(unlocks)
 	unlocks.sticker_unlocked.connect(_on_sticker_unlocked)
+	achievements = AchievementsService.new()
+	achievements.name = "GlobalAchievements"
+	add_child(achievements)
+	achievements.achievement_unlocked.connect(_on_achievement_unlocked)
 	if _gs != null:
 		unlocks.attach(_gs)
+		achievements.attach(_gs)
+		_wire_daily_bonus()
+
+
+## REST-1: Tagesbonus beim ersten Start des Tages anbieten. Mit Router
+## wartet das Angebot auf die ERSTE Ankunft im Raum (travel_finished) und
+## jede weitere Reise schließt ein offenes Popup („Später“-Semantik — der
+## Bonus bleibt bis Mitternacht abholbar). Ohne Router (nackte Tests) kommt
+## das Angebot deferred direkt. App-Resume prüft erneut (Datumswechsel).
+func _wire_daily_bonus() -> void:
+	if _gs is Node and (_gs as Node).has_signal("slice_changed"):
+		(_gs as Node).slice_changed.connect(_on_gs_slice_changed)
+	var router := get_node_or_null("/root/SceneRouter")
+	if router != null and router.has_signal("travel_finished"):
+		router.travel_finished.connect(_on_travel_finished)
+		router.travel_started.connect(_on_travel_started)
+	else:
+		_maybe_offer_daily_bonus.call_deferred()
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_APPLICATION_RESUMED:
+		_maybe_offer_daily_bonus()
+
+
+## Erste Raum-Ankunft der Session → Tagesbonus anbieten (einmalig; Resume
+## und Onboarding-Abschluss prüfen separat erneut).
+func _on_travel_finished(_target: Variant = null) -> void:
+	if _daily_offer_done:
+		return
+	_daily_offer_done = true
+	_maybe_offer_daily_bonus()
+
+
+## Reiseantritt mit offenem Popup = „Später“: schließen, nicht claimen.
+func _on_travel_started(_target: StringName = &"", _travel_type: int = 0) -> void:
+	if _daily_popup != null and is_instance_valid(_daily_popup):
+		_daily_popup.queue_free()
+	_daily_popup = null
 
 
 ## Feiert das Album gerade selbst mit? Nein — das Album zeigt nur noch den
 ## Grid-Refresh, die Feier (Toast+Ton+Konfetti) kommt IMMER von hier.
 func _on_sticker_unlocked(def: Dictionary) -> void:
-	_queue.append(def)
+	_queue.append({"kind": "sticker", "def": def})
+	if not _draining:
+		_drain_queue()
+
+
+func _on_achievement_unlocked(def: Dictionary) -> void:
+	_queue.append({"kind": "erfolg", "def": def})
 	if not _draining:
 		_drain_queue()
 
@@ -93,8 +155,12 @@ func _on_sticker_unlocked(def: Dictionary) -> void:
 func _drain_queue() -> void:
 	_draining = true
 	while not _queue.is_empty():
-		var def: Dictionary = _queue.pop_front()
-		_celebrate(def)
+		var entry: Dictionary = _queue.pop_front()
+		var def: Dictionary = entry.get("def", {})
+		if str(entry.get("kind", "sticker")) == "erfolg":
+			_celebrate_achievement(def)
+		else:
+			_celebrate(def)
 		var tree := get_tree()
 		if tree == null:
 			break
@@ -113,6 +179,75 @@ func _celebrate(def: Dictionary) -> void:
 	RewardFx.konfetti_2d(_toasts, KONFETTI_TEILE, breite)
 	_maybe_claim_set_reward(str(def.get("page", "")))
 	sticker_celebrated.emit(def)
+
+
+## REST-1: Erfolgs-Feier — Toast (Name + Münzen aus dem Katalog), Ton und
+## Konfetti auf derselben obersten Layer wie die Sticker.
+func _celebrate_achievement(def: Dictionary) -> void:
+	var id := str(def.get("id", ""))
+	var ach_name := I18nService.t("achievements.defs.%s.name" % id)
+	_toasts.show_toast(
+		I18nService.t(
+			"achievements.unlock_toast", {"name": ach_name, "coins": int(def.get("coins", 0))}
+		)
+	)
+	AudioDirector.try_play(self, "ui_sticker")
+	var breite := 640.0
+	var viewport := get_viewport()
+	if viewport != null:
+		breite = viewport.get_visible_rect().size.x
+	RewardFx.konfetti_2d(_toasts, KONFETTI_TEILE, breite)
+	achievement_celebrated.emit(def)
+
+
+## REST-1: Tagesbonus-Popup anbieten, wenn heute noch nichts abgeholt wurde
+## (should_offer prüft Onboarding + lastClaimDay). Idempotent — nie zwei
+## Popups; „Später“ lässt den Bonus bis Mitternacht abholbar.
+func _maybe_offer_daily_bonus() -> void:
+	if _gs == null or _layer == null:
+		return
+	if _daily_popup != null and is_instance_valid(_daily_popup):
+		return
+	if not DailyBonusPopup.should_offer(_gs, _local_day()):
+		return
+	var popup := DailyBonusPopup.new()
+	popup.name = "DailyBonusPopup"
+	popup.theme = ThemeService.theme()
+	popup.setup(_gs)
+	popup.claimed.connect(_on_daily_bonus_claimed)
+	_layer.add_child(popup)
+	_daily_popup = popup
+
+
+## Onboarding fertig → der erste Tagesbonus darf sofort kommen (Web-Fluss).
+func _on_gs_slice_changed(slice_id: String, _data: Variant) -> void:
+	if slice_id == "onboarding":
+		_maybe_offer_daily_bonus()
+
+
+func _on_daily_bonus_claimed(reward: Dictionary) -> void:
+	var coins := int(reward.get("coins", 0))
+	var food_id := str(reward.get("food_id", ""))
+	if food_id.is_empty():
+		_toasts.show_toast(I18nService.t("daily.claimed_toast", {"coins": coins}))
+	else:
+		var snack := I18nService.t("rewards.food.%s" % food_id)
+		_toasts.show_toast(
+			I18nService.t("daily.claimed_snack_toast", {"coins": coins, "snack": snack})
+		)
+	var breite := 640.0
+	var viewport := get_viewport()
+	if viewport != null:
+		breite = viewport.get_visible_rect().size.x
+	RewardFx.konfetti_2d(_toasts, KONFETTI_TEILE, breite)
+	daily_bonus_claimed.emit(reward)
+
+
+func _local_day() -> String:
+	if _gs != null and "clock" in _gs:
+		return str(_gs.clock.local_day())
+	var d := Time.get_datetime_dict_from_system()
+	return "%04d-%02d-%02d" % [d.year, d.month, d.day]
 
 
 ## Set-komplett-Belohnung auch außerhalb des Albums claimen (additiv,

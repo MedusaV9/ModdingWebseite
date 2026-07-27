@@ -628,11 +628,14 @@ func _set_emotion(emotion: String, revert := false) -> void:
 	if not revert or emotion == "happy" or emotion == "neutral":
 		return
 	_emotion_revert = get_tree().create_timer(EMOTION_REVERT_S)
-	_emotion_revert.timeout.connect(
-		func() -> void:
-			if not _sad and gooby != null and is_instance_valid(gooby):
-				gooby.rig.set_emotion("happy")
-	)
+	# Methoden-Callable statt Lambda (REST5, B2): stirbt dieser Node vor dem
+	# Timeout, trennt Godot die Verbindung automatisch.
+	_emotion_revert.timeout.connect(_revert_emotion)
+
+
+func _revert_emotion() -> void:
+	if not _sad and gooby != null and is_instance_valid(gooby):
+		gooby.rig.set_emotion("happy")
 
 
 ## Konfetti-Regen (Geburtstage/Jubiläen) — reine CPU-Partikel, kein Asset.
@@ -661,11 +664,9 @@ func _confetti() -> void:
 	particles.position = gooby.global_position + Vector3(0.0, 0.9, 0.0)
 	room.add_child(particles)
 	particles.emitting = true
-	get_tree().create_timer(2.5).timeout.connect(
-		func() -> void:
-			if is_instance_valid(particles):
-				particles.queue_free()
-	)
+	# Methoden-Callable statt Lambda (B2): stirbt der Raum vor dem Timeout,
+	# räumt Godot die Verbindung ab — kein "Lambda capture ... was freed".
+	get_tree().create_timer(2.5).timeout.connect(particles.queue_free)
 
 
 static func _confetti_gradient() -> Gradient:
@@ -695,11 +696,8 @@ func _build_tower() -> void:
 		tower.add_child(block)
 	tower.position = gooby.global_position + Vector3(0.6, 0.0, 0.2)
 	room.add_child(tower)
-	get_tree().create_timer(10.0).timeout.connect(
-		func() -> void:
-			if is_instance_valid(tower):
-				tower.queue_free()
-	)
+	# Methoden-Callable statt Lambda (B2) — s. Konfetti oben.
+	get_tree().create_timer(10.0).timeout.connect(tower.queue_free)
 
 
 # ── Laufwege ─────────────────────────────────────────────────────────────────

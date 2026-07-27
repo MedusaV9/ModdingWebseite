@@ -3,10 +3,11 @@ extends RefCounted
 ## (V5/VACATION, core paths). Pure slice math; used by offline.gd catch-up
 ## and by migration_v4.gd (interrupted-trip handling).
 ##
-## W1d scope note: the postcard ARCHIVE generator (web systems/postcards.js)
-## is NOT ported yet — tick() advances the postcard COUNT + phase only, the
-## archive list is carried verbatim. W2 ports postcards.js when the keepsake
-## shelf UI lands (archive normalization then joins slice_of()).
+## REST-4 (EVAL Rang 15): the postcard ARCHIVE generator (web
+## systems/postcards.js) is ported in scripts/ui/postkarten/
+## postkarten_logic.gd (pure, cycle-free — it does NOT load this file);
+## tick() now also brings the archive current (one shared processor for
+## the live ticker and the offline catch-up, idempotent).
 
 const PHASE_NONE := "none"
 const PHASE_AWAY := "away"
@@ -135,6 +136,15 @@ static func tick(state: Dictionary, now_ms: int) -> Dictionary:
 		for n in range(int(v["postcards"]) + 1, due + 1):
 			events.append({"type": "postcard", "destId": v["destId"], "n": n})
 		v["postcards"] = due
+		changed = true
+	# REST-4: Archiv-Karten nachziehen (postkarten_logic.gd, Web postcards.js).
+	var karten := PostkartenLogic.process_postcards_up_to(v, now_ms)
+	if (
+		int(karten["added"]) > 0
+		or int(karten["lastPostcardDayProcessed"]) != int(v["lastPostcardDayProcessed"])
+	):
+		v["archive"] = karten["archive"]
+		v["lastPostcardDayProcessed"] = karten["lastPostcardDayProcessed"]
 		changed = true
 	var phase := phase_at(v, now_ms)
 	if phase != v["phase"]:

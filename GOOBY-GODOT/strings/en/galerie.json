@@ -1,0 +1,29 @@
+{
+	"galerie": {
+		"titel": "Photo Gallery",
+		"leer": "No photos yet. Start snapping — the camera is waiting!",
+		"speicher": "{n} of {max} slots used",
+		"oeffnen": "Open gallery",
+		"nur_favoriten": "Favorites only",
+		"alle": "All photos",
+		"favorit": "Favorite",
+		"favorit_gesetzt": "Marked as favorite.",
+		"favorit_entfernt": "Favorite removed.",
+		"loeschen": "Delete",
+		"loeschen_frage": "Really delete this photo?",
+		"loeschen_ja": "Yes, delete",
+		"geloescht": "Photo deleted.",
+		"abbrechen": "Cancel",
+		"teilen": "Share (soon)",
+		"teilen_hinweis": "Sharing comes later — honestly, it is not built yet.",
+		"datum": "Taken: {datum}",
+		"ort": "Place: {ort}",
+		"ort_unbekannt": "Out and about",
+		"ort_funkelpark": "Sparkle Park",
+		"zoom_hinweis": "Mouse wheel or buttons: zoom in",
+		"zoom_rein": "Bigger",
+		"zoom_raus": "Smaller",
+		"zurueck": "Back",
+		"fehler_laden": "This photo cannot be loaded anymore."
+	}
+}

@@ -20,6 +20,14 @@ const EARLY_WAKE_AFTER_MIN := 5
 ## Early wake grumpy debuff: mood -15 for 10 minutes.
 const EARLY_WAKE_MOOD_DEBUFF := 15.0
 const EARLY_WAKE_DEBUFF_MIN := 10
+## REST-3 (additiv): Mittagsschlaf — kurzes festes Nickerchen, schon erlaubt,
+## wenn Gooby nur ein bisschen muede ist (energy < 90). Die Web-Parity-
+## Funktionen oben bleiben unveraendert.
+const NAP_BELOW_ENERGY := 90.0
+const NAP_MIN := 20
+## REST-3: unterhalb dieser Energie wird Gooby SICHTBAR muede (Gaehnen,
+## Augenringe, langsamerer Gang) — rein kosmetisch, nie eine Strafe.
+const TIRED_VISIBLE_BELOW := 45.0
 
 
 ## Sleep duration in minutes for a given energy level (§C1.4).
@@ -54,6 +62,27 @@ static func can_sleep(state: Dictionary) -> bool:
 ## Callers must check can_sleep() first (this does not).
 static func start_sleep(state: Dictionary, now_ms: int) -> Dictionary:
 	var dur_min := sleep_duration_min(float(state["stats"].get("energy", 0.0)))
+	var s := state.duplicate(true)
+	s["sleep"] = {"sleeping": true, "startedAt": now_ms, "wakeAt": now_ms + dur_min * 60000}
+	return s
+
+
+## REST-3: Ist ein Nickerchen erlaubt? Wach und nicht schon putzmunter.
+static func can_nap(state: Dictionary) -> bool:
+	if is_sleeping(state):
+		return false
+	var stats: Variant = state.get("stats")
+	if not (stats is Dictionary):
+		return false
+	return float(stats.get("energy", 0.0)) < NAP_BELOW_ENERGY
+
+
+## REST-3: Nickerchen starten — fester Kurzschlaf (hoechstens NAP_MIN, nie
+## laenger als der volle Schlaf dauern wuerde). Pure — neuer State.
+## Aufrufer pruefen can_nap() vorher (wie bei start_sleep/can_sleep).
+static func start_nap(state: Dictionary, now_ms: int) -> Dictionary:
+	var full := sleep_duration_min(float(state["stats"].get("energy", 0.0)))
+	var dur_min := mini(NAP_MIN, full)
 	var s := state.duplicate(true)
 	s["sleep"] = {"sleeping": true, "startedAt": now_ms, "wakeAt": now_ms + dur_min * 60000}
 	return s
@@ -133,6 +162,67 @@ static func grumpy_debuff(state: Dictionary, now_ms: int) -> float:
 ## Canonical mood reader (§C1 + §C1.4): mood with the early-wake debuff.
 static func current_mood(state: Dictionary, now_ms: int) -> float:
 	return Stats.mood(state["stats"], {"debuff": grumpy_debuff(state, now_ms)})
+
+
+# ── REST-3: v5-State-Helfer (fuers Bett-Interactable + Tests) ─────────────────
+
+
+## Stufenlose Muedigkeit fuers Modell: 0.0 ab energy >= 45, 1.0 bei energy 0.
+static func tiredness01(stats: Variant) -> float:
+	if not (stats is Dictionary):
+		return 0.0
+	var energy := _num((stats as Dictionary).get("energy"))
+	return clampf((TIRED_VISIBLE_BELOW - energy) / TIRED_VISIBLE_BELOW, 0.0, 1.0)
+
+
+## Flache Web-Sicht auf den v5-gooby-Slice (Referenzen, nur zum LESEN der
+## can_*-Prüfungen — Schreiber duplizieren über start_sleep/start_nap selbst).
+static func flat_of(state: Dictionary) -> Dictionary:
+	var gooby: Variant = state.get("gooby")
+	if not (gooby is Dictionary):
+		return {"stats": {}, "sleep": {}, "grumpyUntil": 0}
+	return {
+		"stats": gooby.get("stats", {}),
+		"sleep": gooby.get("sleep", {}),
+		"grumpyUntil": gooby.get("grumpyUntil", 0),
+	}
+
+
+## Schlaf (nap=false) oder Nickerchen (nap=true) direkt im v5-Save starten.
+## Mutiert `state` in place (im gs.update laufen lassen); false, wenn die
+## can_sleep-/can_nap-Regel es nicht erlaubt.
+static func start_sleep_state(state: Dictionary, now_ms: int, nap := false) -> bool:
+	var gooby: Variant = state.get("gooby")
+	if not (gooby is Dictionary):
+		return false
+	var flat := flat_of(state)
+	if not (flat["stats"] is Dictionary) or (flat["stats"] as Dictionary).is_empty():
+		return false
+	if nap:
+		if not can_nap(flat):
+			return false
+		gooby["sleep"] = start_nap(flat, now_ms)["sleep"]
+	else:
+		if not can_sleep(flat):
+			return false
+		gooby["sleep"] = start_sleep(flat, now_ms)["sleep"]
+	return true
+
+
+## Fruehes (manuelles) Wecken im v5-Save: nur nach 5 Schlafminuten erlaubt;
+## setzt den Web-Grumpy-Debuff (KEINE Grants — die gibt es nur fuer vollen
+## Schlaf ueber den Ticker). Rueckgabe die Events ([] = nichts passiert).
+static func wake_early_state(state: Dictionary, now_ms: int) -> Array:
+	var gooby: Variant = state.get("gooby")
+	if not (gooby is Dictionary):
+		return []
+	var flat := flat_of(state)
+	if not is_sleeping(flat) or not can_wake_early(flat, now_ms):
+		return []
+	var res := wake_up(flat, now_ms, {"early": true})
+	gooby["sleep"] = res["state"]["sleep"]
+	gooby["grumpyUntil"] = res["state"]["grumpyUntil"]
+	return res["events"]
 
 
 static func _num(value: Variant) -> float:

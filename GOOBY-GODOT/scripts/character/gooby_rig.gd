@@ -94,6 +94,22 @@ const SAVE_MORPH_MAP := {
 const SQUEEZE_DOOR_AMOUNT := 0.3
 const SQUEEZE_LERP_SPEED := 5.0
 
+## REST-3 Pflege-Darstellung (P1-Bug Gewicht + Krankheits-/Müdigkeits-Optik).
+## Gewicht läuft NICHT über einen Shapekey (der Rig-Vertrag hat keinen
+## „chubby“-Morph, s. SAVE_MORPH_MAP) sondern — wie die Web-TIER_SCALE —
+## als sanfte Körper-X/Z-Skalierung über Weight.body_scale().
+const WeightLogic := preload("res://scripts/logic/weight.gd")
+## Blasse Kränklichkeits-Tönung (multipliziert aufs Albedo, 1.0 = volle Stufe).
+const CARE_PALE_TINT := Color(0.80, 0.88, 0.82)
+const CARE_PALE_QUEASY := 0.5
+const CARE_PALE_SICK := 1.0
+## Rote Schniefnase (ab kränklich) + Eisbeutel (nur richtig krank).
+const CARE_NOSE_COLOR := Color("#E86A5E")
+const CARE_ICE_COLOR := Color(0.72, 0.88, 0.97, 0.92)
+## Augenringe: ab dieser Müdigkeit sichtbar (blendet bis 1.0 kräftiger).
+const CARE_EYEBAG_FROM := 0.3
+const CARE_EYEBAG_COLOR := Color(0.42, 0.36, 0.52)
+
 var look_at_target: Node3D = null
 
 var _model: Node3D
@@ -119,6 +135,18 @@ var _mouth_pulse := 0.0
 var _look_yaw := 0.0
 var _look_pitch := 0.0
 var _rng := RandomNumberGenerator.new()
+
+## REST-3 Pflege-Zustand (Gewicht/Krankheit/Müdigkeit) + Symptom-Nodes.
+var _weight_scale := 1.0
+var _care_grade := 0
+var _care_tired := 0.0
+var _care_mount: BoneAttachment3D
+var _care_nose: MeshInstance3D
+var _care_ice: Node3D
+var _care_eyebags: Array[MeshInstance3D] = []
+var _care_base_material: Material
+var _care_pale_material: StandardMaterial3D
+var _sneeze_tween: Tween
 
 
 ## Innerer SkeletonModifier: schreibt Look-At- UND Emotions-Pose-Offsets auf
@@ -403,6 +431,189 @@ func squeeze(amount: float) -> void:
 ## Kurzer Mundöffner-Puls für Silben-Lipsync (GoobyVoice ruft das pro Silbe).
 func babble_pulse() -> void:
 	_mouth_pulse = 1.0
+
+
+# ------------------------------------------------- REST-3: Pflege-Optik
+
+
+## P1-Fix Gewicht: Silhouette dem Gewichtswert (5–95) nachführen — stetige
+## Kurve durch die Web-TIER_SCALE-Anker (sleek 0.93 … floof 1.14) als
+## Körper-X/Z-Scale. Kein Stufensprung, kein Kommentar — Gooby wird bei viel
+## Süßem weich runder und bei Bewegung wieder schlanker.
+func set_weight(value: float) -> void:
+	_weight_scale = WeightLogic.body_scale(value)
+	_apply_weight_scale()
+
+
+## Aktuell angewandter Körper-Scale (Tests messen hierüber die Wirkung).
+func weight_scale() -> float:
+	return _weight_scale
+
+
+func _apply_weight_scale() -> void:
+	if _model != null:
+		_model.scale = Vector3(_weight_scale, 1.0, _weight_scale)
+
+
+## Krankheits-/Müdigkeits-Optik: grade 0 = gesund, 1 = kränklich (blasse
+## Haut + Schniefnase), 2 = krank (dazu Eisbeutel). tired01 (0..1) steuert
+## die Augenringe (ab CARE_EYEBAG_FROM sichtbar). Idempotent und jederzeit
+## rückstandsfrei zurück auf gesund/wach — Symptome sind nie eine Strafe.
+func set_care(grade: int, tired01 := 0.0) -> void:
+	_care_grade = clampi(grade, 0, 2)
+	_care_tired = clampf(tired01, 0.0, 1.0)
+	_apply_care_look()
+
+
+func care_grade() -> int:
+	return _care_grade
+
+
+func care_tiredness() -> float:
+	return _care_tired
+
+
+## Niesen (Symptom, nur richtig krank): kurzes Aufplustern + Squash mit
+## Mund-Puls. Reduced Motion: nur der Mund-Puls, kein Körper-Ruck. Ton und
+## Sprech-Zeile macht der Aufrufer (PflegeRunner).
+func sneeze() -> void:
+	babble_pulse()
+	if _care_reduced_motion() or not is_inside_tree():
+		return
+	if _sneeze_tween != null and _sneeze_tween.is_valid():
+		_sneeze_tween.kill()
+	_sneeze_tween = create_tween()
+	_sneeze_tween.tween_property(self, "scale:y", 1.06, 0.16)
+	_sneeze_tween.tween_property(self, "scale:y", 0.86, 0.09)
+	_sneeze_tween.tween_property(self, "scale:y", 1.0, 0.22)
+
+
+func _care_reduced_motion() -> bool:
+	var settings := get_node_or_null("/root/AppSettings")
+	return settings != null and settings.is_reduced_motion()
+
+
+func _apply_care_look() -> void:
+	_apply_care_pale()
+	_ensure_care_props()
+	if _care_nose != null:
+		_care_nose.visible = _care_grade >= 1
+	if _care_ice != null:
+		_care_ice.visible = _care_grade >= 2
+	var bag_strength := _care_tired
+	if _care_grade > 0:
+		bag_strength = maxf(bag_strength, 0.45)
+	var sichtbar := bag_strength >= CARE_EYEBAG_FROM
+	for bag: MeshInstance3D in _care_eyebags:
+		bag.visible = sichtbar
+		var mat := bag.material_override as StandardMaterial3D
+		if mat != null:
+			mat.albedo_color = Color(
+				CARE_EYEBAG_COLOR.r,
+				CARE_EYEBAG_COLOR.g,
+				CARE_EYEBAG_COLOR.b,
+				0.2 + 0.4 * bag_strength
+			)
+
+
+## Blasse Haut über EIN Surface-Override (Basis-Material bleibt unberührt —
+## Zurücksetzen = Override entfernen, andere Goobys teilen ihre Materialien).
+func _apply_care_pale() -> void:
+	if _mesh == null:
+		return
+	if _care_grade <= 0:
+		_mesh.set_surface_override_material(0, null)
+		return
+	if _care_pale_material == null:
+		_care_base_material = _mesh.mesh.surface_get_material(0)
+		if _care_base_material is StandardMaterial3D:
+			_care_pale_material = (_care_base_material as StandardMaterial3D).duplicate()
+		else:
+			_care_pale_material = StandardMaterial3D.new()
+	var k := CARE_PALE_SICK if _care_grade >= 2 else CARE_PALE_QUEASY
+	var basis_farbe := Color.WHITE
+	if _care_base_material is StandardMaterial3D:
+		basis_farbe = (_care_base_material as StandardMaterial3D).albedo_color
+	_care_pale_material.albedo_color = basis_farbe * Color.WHITE.lerp(CARE_PALE_TINT, k)
+	_mesh.set_surface_override_material(0, _care_pale_material)
+
+
+## Symptom-Requisiten am Kopf-Bone (lazy, einmalig): Schniefnase, Eisbeutel,
+## zwei Augenring-Monde — alles Primitives, kein Asset nötig. Hängen am
+## BoneAttachment3D und machen damit jede Kopf-Pose/Animation mit.
+func _ensure_care_props() -> void:
+	if _care_mount != null or _skeleton == null:
+		return
+	_care_mount = BoneAttachment3D.new()
+	_care_mount.name = "CareMount"
+	_skeleton.add_child(_care_mount)
+	_care_mount.bone_name = "head"
+	_care_nose = _care_ball(0.048, CARE_NOSE_COLOR, 1.0)
+	_care_nose.name = "SchniefNase"
+	_care_nose.position = Vector3(0.0, 0.06, 0.20)
+	_care_nose.visible = false
+	_care_mount.add_child(_care_nose)
+	_care_ice = _care_ice_pack()
+	_care_ice.name = "Eisbeutel"
+	_care_ice.position = Vector3(0.0, 0.30, 0.0)
+	_care_ice.rotation_degrees = Vector3(0.0, 0.0, 8.0)
+	_care_ice.visible = false
+	_care_mount.add_child(_care_ice)
+	for seite: float in [-1.0, 1.0]:
+		var bag := _care_ball(0.045, CARE_EYEBAG_COLOR, 0.4)
+		bag.name = "Augenring_L" if seite < 0.0 else "Augenring_R"
+		bag.scale = Vector3(1.0, 0.38, 0.5)
+		bag.position = Vector3(seite * 0.082, 0.095, 0.155)
+		bag.visible = false
+		_care_mount.add_child(bag)
+		_care_eyebags.append(bag)
+
+
+func _care_ball(radius: float, farbe: Color, alpha: float) -> MeshInstance3D:
+	var ball := MeshInstance3D.new()
+	var mesh := SphereMesh.new()
+	mesh.radius = radius
+	mesh.height = radius * 2.0
+	ball.mesh = mesh
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(farbe.r, farbe.g, farbe.b, alpha)
+	mat.roughness = 0.55
+	if alpha < 1.0:
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	ball.material_override = mat
+	ball.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return ball
+
+
+## Eisbeutel: hellblauer weicher Beutel + kleiner Knoten obendrauf.
+func _care_ice_pack() -> Node3D:
+	var beutel := Node3D.new()
+	var body := MeshInstance3D.new()
+	var mesh := SphereMesh.new()
+	mesh.radius = 0.11
+	mesh.height = 0.13
+	body.mesh = mesh
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = CARE_ICE_COLOR
+	mat.roughness = 0.35
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	body.material_override = mat
+	body.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	beutel.add_child(body)
+	var knoten := MeshInstance3D.new()
+	var knoten_mesh := CylinderMesh.new()
+	knoten_mesh.top_radius = 0.028
+	knoten_mesh.bottom_radius = 0.045
+	knoten_mesh.height = 0.05
+	knoten.mesh = knoten_mesh
+	var knoten_mat := StandardMaterial3D.new()
+	knoten_mat.albedo_color = Color(0.92, 0.97, 1.0)
+	knoten_mat.roughness = 0.4
+	knoten.material_override = knoten_mat
+	knoten.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	knoten.position = Vector3(0.0, 0.075, 0.0)
+	beutel.add_child(knoten)
+	return beutel
 
 
 func _morph_to_delta(id: String, value: float) -> float:

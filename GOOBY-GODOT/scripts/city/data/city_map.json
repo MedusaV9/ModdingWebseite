@@ -17,7 +17,8 @@
     "zentrum": {"zonen": [[5, 2, 6, 12]], "energie": 4},
     "wohnen": {"zonen": [[8, 2, 9, 5], [8, 11, 9, 12]], "energie": 4},
     "park": {"zonen": [[8, 7, 9, 9]], "energie": 6},
-    "flughafen": {"zonen": [[0, 2, 0, 5]], "energie": 6}
+    "flughafen": {"zonen": [[0, 2, 0, 5]], "energie": 6},
+    "funkelpark": {"zonen": [[11, 6, 11, 9]], "energie": 6}
   },
   "zuhause": {"tile": [9, 2], "strasse": [9, 1], "einfahrt_m": 11.5},
   "gooberando_kueche": {"tile": [5, 5], "strasse": [5, 6]},
@@ -51,6 +52,16 @@
       "distrikt": "zentrum",
       "szene": "res://scenes/city/orte/gouhbus.tscn",
       "fassade": {"glb": "building-f", "awning": false, "tint": "#F0EFE9"}
+    },
+    {
+      "id": "tierarzt",
+      "name_key": "vet.ort_name",
+      "typ": "praxis",
+      "tiles": [[6, 4]],
+      "strasse": [7, 4],
+      "distrikt": "zentrum",
+      "szene": "res://scenes/city/orte/tierarzt.tscn",
+      "fassade": {"glb": "building-f", "awning": true, "tint": "#8ED0A0"}
     },
     {
       "id": "flughafen",
@@ -112,6 +123,16 @@
       "szene": "res://scenes/city/orte/wochenmarkt.tscn",
       "oeffnung": {"wochentage": [6], "von_stunde": 8, "bis_stunde": 14},
       "fassade": {"glb": "", "awning": false, "tint": ""}
+    },
+    {
+      "id": "funkelpark",
+      "name_key": "park.ort.funkelpark",
+      "typ": "freizeitpark",
+      "tiles": [[11, 7], [11, 8]],
+      "strasse": [10, 7],
+      "distrikt": "funkelpark",
+      "szene": "res://scenes/park/funkelpark.tscn",
+      "fassade": {"glb": "building-e", "awning": true, "tint": "#F781B0"}
     }
   ],
   "deko": [

@@ -2514,6 +2514,40 @@
       "wall_size": 1
     },
     {
+      "id": "postkartenWand",
+      "name_de": "Postkartenwand",
+      "name_en": "Postcard Wall",
+      "glb": "",
+      "proc": "postkartenwand",
+      "footprint": [
+        2,
+        1
+      ],
+      "layer": "WALL",
+      "wall_size": 2,
+      "preis": 60,
+      "lagerwert": 1,
+      "pflicht": "",
+      "kategorie": "bilder"
+    },
+    {
+      "id": "souvenirRegal",
+      "name_de": "Souvenirregal",
+      "name_en": "Souvenir Shelf",
+      "glb": "",
+      "proc": "souvenirregal",
+      "footprint": [
+        3,
+        1
+      ],
+      "layer": "WALL",
+      "wall_size": 3,
+      "preis": 90,
+      "lagerwert": 2,
+      "pflicht": "",
+      "kategorie": "bilder"
+    },
+    {
       "id": "pictureFrameStanding",
       "name_de": "Bilderrahmen",
       "name_en": "Standing Frame",

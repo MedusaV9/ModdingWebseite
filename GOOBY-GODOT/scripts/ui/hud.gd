@@ -82,12 +82,15 @@ const ACTIONS: Array[Dictionary] = [
 	{"id": &"wardrobe", "icon": "shirt", "tint": AcTokens.PINK},
 	{"id": &"ikea", "icon": "sofa", "tint": AcTokens.TEAL},
 	{"id": &"gestalten", "icon": "brush", "tint": AcTokens.YELLOW_DARK},
+	# REST-2: Tagesquests (DailyQuestService) — 10. Kachel macht das Dock 5+5.
+	{"id": &"quests", "icon": "check", "tint": AcTokens.LEAF_DARK},
 ]
 const COLUMN_ORDER: Array[StringName] = [
 	&"bau",
 	&"gestalten",
 	&"reise",
 	&"arcade",
+	&"quests",
 	&"album",
 	&"wardrobe",
 	&"ikea",
@@ -219,7 +222,10 @@ func apply_layout(layout: HudLayoutLogic.Layout) -> void:
 		_column_width = btn_size
 		_dock_btn_px = btn_size
 		_dock_gap_px = DOCK_GAP * f
-		_dock_clearance = floor_px + EDGE_PAD
+		# REST-2: Freihöhe = ECHTE Höhe der Bodenzeile — das Auge ist
+		# ACTION_BTN*f hoch (> floor_px); seit die 10. Kachel (Quests) die
+		# zweite Dock-Zeile rechts füllt, würde floor_px allein kollidieren.
+		_dock_clearance = maxf(HudLayoutLogic.ACTION_BTN * f, floor_px) + EDGE_PAD
 		_portrait_dock.add_theme_constant_override("h_separation", int(_dock_gap_px))
 		_portrait_dock.add_theme_constant_override("v_separation", int(_dock_gap_px))
 	else:

@@ -193,13 +193,17 @@ func _feier_level_up(breakdown: Dictionary) -> void:
 	var tree := get_tree()
 	if tree == null:
 		return
-	tree.create_timer(1.1).timeout.connect(
-		func() -> void:
-			if not is_instance_valid(self) or not visible:
-				return
-			LevelUpFeier.zeige_in(
-				self, int(breakdown.get("level", 2)), int(breakdown.get("coinsFromLevels", 0))
-			)
+	# Gebundene Methode statt Lambda (REST5, B2): wird der Results-Screen vor
+	# dem Timeout freigegeben, löst Godot die Verbindung automatisch — ein
+	# Lambda-Capture würde "Lambda capture ... was freed" loggen.
+	tree.create_timer(1.1).timeout.connect(_zeige_level_up.bind(breakdown))
+
+
+func _zeige_level_up(breakdown: Dictionary) -> void:
+	if not visible:
+		return
+	LevelUpFeier.zeige_in(
+		self, int(breakdown.get("level", 2)), int(breakdown.get("coinsFromLevels", 0))
 	)
 
 
@@ -211,28 +215,32 @@ func _celebrate_record(line: Label) -> void:
 	var tree := get_tree()
 	if tree == null:
 		return
-	tree.create_timer(0.55).timeout.connect(
-		func() -> void:
-			if not is_instance_valid(self) or not visible:
-				return
-			FeelSfx.play(self, "game_record")
-			_juice.confetti(110)
-			_juice.hit_flash(Color(1.0, 0.85, 0.35, 0.2), 320)
-			_juice.scale_pop(line, 1.35, 300)
-	)
+	# Gebundene Methode statt Lambda (REST5, B2) — s. _feier_level_up.
+	tree.create_timer(0.55).timeout.connect(_zeige_rekord_feier.bind(line))
+
+
+func _zeige_rekord_feier(line: Label) -> void:
+	if not visible or _juice == null:
+		return
+	FeelSfx.play(self, "game_record")
+	_juice.confetti(110)
+	_juice.hit_flash(Color(1.0, 0.85, 0.35, 0.2), 320)
+	_juice.scale_pop(line, 1.35, 300)
 
 
 func _pulse_later(delay: float, line: Label) -> void:
 	var tree := get_tree()
 	if tree == null:
 		return
-	tree.create_timer(delay).timeout.connect(
-		func() -> void:
-			if not is_instance_valid(self) or not visible or _juice == null:
-				return
-			_juice.coin_rain(24)
-			_juice.scale_pop(line, 1.18, 220)
-	)
+	# Gebundene Methode statt Lambda (REST5, B2) — s. _feier_level_up.
+	tree.create_timer(delay).timeout.connect(_pulse_now.bind(line))
+
+
+func _pulse_now(line: Label) -> void:
+	if not visible or _juice == null:
+		return
+	_juice.coin_rain(24)
+	_juice.scale_pop(line, 1.18, 220)
 
 
 func _add_line(text: String, color: Color) -> Label:

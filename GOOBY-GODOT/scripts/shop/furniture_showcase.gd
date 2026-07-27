@@ -54,8 +54,6 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	_build_halo()
 	_build_viewport()
-	resized.connect(_on_resized)
-	_on_resized()
 
 
 ## Zeigt ein Möbel (ShopCatalog-Def) in der gewünschten Farbvariante.
@@ -204,11 +202,6 @@ func _add_lights() -> void:
 	environment.ambient_light_energy = 0.85
 	env.environment = environment
 	_viewport.add_child(env)
-
-
-func _on_resized() -> void:
-	if _viewport != null:
-		_viewport.size = Vector2i(maxi(1, int(size.x)), maxi(1, int(size.y)))
 
 
 func _rebuild() -> void:

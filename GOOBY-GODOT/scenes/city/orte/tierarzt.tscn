@@ -1,0 +1,7 @@
+[gd_scene load_steps=2 format=3 uid="uid://c3aorttierar01"]
+
+[ext_resource type="Script" path="res://scripts/city/orte/tierarzt.gd" id="1_tierarzt"]
+
+[node name="Tierarzt" type="Node3D"]
+script = ExtResource("1_tierarzt")
+ort_id = "tierarzt"

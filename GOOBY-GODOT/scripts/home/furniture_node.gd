@@ -101,6 +101,12 @@ static func _make_model(def: Dictionary) -> Node3D:
 	var proc := str(def.get("proc", ""))
 	if proc == "fenster":
 		return HomeProps.fenster(int(def.get("wall_size", 2)), bool(def.get("exterior", false)))
+	if proc == "postkartenwand":
+		# REST-4 (EVAL Rang 15): Archiv-Karten am Korkbrett.
+		return PostkartenProps.postkartenwand()
+	if proc == "souvenirregal":
+		# REST-4 (EVAL Rang 15): ein Mini je besuchtem Reiseziel.
+		return PostkartenProps.souvenirregal()
 	if proc != "":
 		push_warning("Unbekanntes Prop: %s (%s)" % [proc, def.get("id", "?")])
 		return null

@@ -42,6 +42,11 @@ DE ist führend; EN muss für jede Domain paritätisch sein (Test:
 | `rpferd.*` (Datei `strings/<locale>/rpferd.json` — Ranch-DLC Pferde: Rassen, Reiten, Zähmen, Zucht, Bindung) | RW-2 PFERDE | RW |
 | `dev.*` + NEUE `settings.*`-Keys (Datei `strings/<locale>/settings.json` — Grafik/Anzeige/Steuerung/Barrierefreiheit/Benachrichtigungen/Spiel/Credits + Dev-Menü; die W1-`settings.*`-Keys bleiben in de.json/en.json) | RW-7 SETTINGS | RW |
 | `rewards.*` (Datei `strings/<locale>/rewards.json` — Kühlschrank/Füttern, Mini-Fund, Level-Up-Feier, Speise-Namen) | EF-1 DOPAMIN | EF |
+| `park.*` (Datei `strings/<locale>/park.json` — Funkelpark: Tor, Fahrgeschäfte, Naschgasse, Park-Speisen) | REST-4 | REST |
+| `radio.*` (Datei `strings/<locale>/radio.json` — Radio-Oberfläche: Sender, Titel, Likes) | REST-4 | REST |
+| `codes.*` (Datei `strings/<locale>/codes.json` — Aktionscodes-Screen: Eingabe, Fehler, Verlauf) | REST-4 | REST |
+| `galerie.*` (Datei `strings/<locale>/galerie.json` — Fotogalerie: Raster, Vollansicht, Favoriten) | REST-4 | REST |
+| `postkarten.*` (Datei `strings/<locale>/postkarten.json` — Postkarten-Archiv, Souvenirregal, Set-Bonus, Kartentexte) | REST-4 | REST |
 
 Regeln:
 1. Nur der Owner editiert Keys seines Prefixes (in de.json/en.json NUR im

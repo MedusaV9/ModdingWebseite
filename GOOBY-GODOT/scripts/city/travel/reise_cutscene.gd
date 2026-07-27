@@ -86,8 +86,10 @@ func _baue_buehne() -> void:
 	skip_btn.visible = false
 	skip_btn.pressed.connect(skip)
 	_layer.add_child(skip_btn)
-	# Skip ab Sekunde 2 (Doc E §3.2)
-	get_tree().create_timer(2.0).timeout.connect(func() -> void: skip_btn.visible = true)
+	# Skip ab Sekunde 2 (Doc E §3.2). Gebundenes Methoden-Callable statt
+	# Lambda (B2): endet die Cutscene vorher, löst Godot die Verbindung —
+	# ein Lambda-Capture würde "Lambda capture ... was freed" loggen.
+	get_tree().create_timer(2.0).timeout.connect(skip_btn.set_visible.bind(true))
 
 
 func _neues_set() -> void:

@@ -220,12 +220,14 @@ func _on_copy_pressed() -> void:
 		return
 	DisplayServer.clipboard_set(code)
 	_copy_button.text = I18nService.t("net.friends.copied")
-	var timer := get_tree().create_timer(1.4)
-	timer.timeout.connect(
-		func() -> void:
-			if is_instance_valid(_copy_button):
-				_copy_button.text = I18nService.t("net.friends.copy")
-	)
+	# Methoden-Callable statt Lambda (REST5, B2): wird der Screen vor dem
+	# Timeout geschlossen, trennt Godot die Verbindung automatisch — ein
+	# Lambda-Capture würde "Lambda capture ... was freed" loggen.
+	get_tree().create_timer(1.4).timeout.connect(_reset_copy_button_text)
+
+
+func _reset_copy_button_text() -> void:
+	_copy_button.text = I18nService.t("net.friends.copy")
 
 
 func _on_status_changed(status: int) -> void:

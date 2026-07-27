@@ -146,6 +146,9 @@ static func pflanzen(gs: Object, at: Vector2i, crop_id: String) -> bool:
 		)
 	)
 	save_grid(gs, garden_grid)
+	# REST-2: Lebenszeit-Zähler für Quests/Sticker/Erinnerungen (der Key
+	# existiert seit v1 im Schema, wurde aber nie gebucht).
+	_bump_counter(gs, "plantings")
 	return true
 
 
@@ -158,6 +161,7 @@ static func giessen(gs: Object, at: Vector2i, jetzt_s: float) -> bool:
 	data["watered_until"] = jetzt_s + GardenGrowth.GIESS_STUNDEN * 3600.0
 	garden_grid.set_cell(at, data)
 	save_grid(gs, garden_grid)
+	_bump_counter(gs, "waterings")
 	return true
 
 
@@ -196,6 +200,7 @@ static func ernten(gs: Object, at: Vector2i) -> int:
 				food[food_id] = int(food.get(food_id, 0)) + menge
 	)
 	gs.notify_slice_changed("home")
+	_bump_counter(gs, "harvests")
 	return menge
 
 
@@ -257,3 +262,14 @@ static func take_ernte(gs: Object, crop_id: String, menge := 1) -> bool:
 static func _blockiert(garden_grid: GardenGrid, at: Vector2i) -> bool:
 	var kind := str(garden_grid.occupied_cells().get(at, ""))
 	return kind != "" and kind != "gewaechshaus"
+
+
+## REST-2: Achievements-Zähler buchen + RewardHub anstoßen (Sticker/Quests
+## werten Zähler-Bumps nur über note_action aus — Muster gooby_reactions.gd).
+static func _bump_counter(gs: Object, key: String) -> void:
+	gs.update(
+		func(state: Dictionary) -> void:
+			var counters: Dictionary = state.get("achievements", {}).get("counters", {})
+			counters[key] = int(counters.get(key, 0)) + 1
+	)
+	RewardHub.note_action(gs)

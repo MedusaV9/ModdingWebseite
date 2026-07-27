@@ -303,7 +303,7 @@ func _build_stage() -> void:
 	# Eigene 3D-Welt — sonst teilt der SubViewport die World3D des Root-
 	# Viewports und rendert den Home-Raum statt der Recap-Bühne.
 	_viewport.own_world_3d = true
-	_viewport.size = Vector2i(1280, 720)
+	# KEINE manuelle size: der Stretch-Container übernimmt die Größe (REST5).
 	container.add_child(_viewport)
 	var world := Node3D.new()
 	_viewport.add_child(world)

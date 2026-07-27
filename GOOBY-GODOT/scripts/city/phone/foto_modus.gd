@@ -47,7 +47,8 @@ static func foto_pfad(unix_s: int) -> String:
 
 
 ## Aufnahme im city-Slice vermerken (additiv, jüngste zuerst, gedeckelt).
-static func merke_foto(game_state: Object, pfad: String, at_ms: int) -> Array:
+## `ort` ist optional (REST-4-Galerie: Aufnahmeort, z. B. "funkelpark").
+static func merke_foto(game_state: Object, pfad: String, at_ms: int, ort := "") -> Array:
 	if game_state == null or pfad.is_empty():
 		return []
 	var neu: Array = []
@@ -55,7 +56,10 @@ static func merke_foto(game_state: Object, pfad: String, at_ms: int) -> Array:
 		func(state: Dictionary) -> void:
 			var city: Dictionary = state.get(CityState.SLICE_ID, {})
 			var liste: Array = city.get("fotos", [])
-			liste.push_front({"pfad": pfad, "at": at_ms})
+			var eintrag := {"pfad": pfad, "at": at_ms}
+			if not ort.is_empty():
+				eintrag["ort"] = ort
+			liste.push_front(eintrag)
 			while liste.size() > MAX_FOTOS:
 				liste.pop_back()
 			city["fotos"] = liste
@@ -98,7 +102,7 @@ func knipsen() -> String:
 	if bild.save_png(pfad) != OK:
 		_hinweis.text = I18nService.t("phone.foto.fehler")
 		return ""
-	FotoModus.merke_foto(gs, pfad, int(Time.get_unix_time_from_system() * 1000.0))
+	FotoModus.merke_foto(gs, pfad, int(Time.get_unix_time_from_system() * 1000.0), _aktueller_ort())
 	_hinweis.text = I18nService.t("phone.foto.gespeichert").format(
 		{"n": FotoModus.fotos(gs).size()}
 	)
@@ -110,6 +114,19 @@ func knipsen() -> String:
 func schliessen() -> void:
 	geschlossen.emit()
 	queue_free()
+
+
+## Aufnahmeort für die Galerie (REST-4): ort_id der aktuellen Router-Szene
+## (OrtScene/Funkelpark tragen eine), sonst "" (Galerie zeigt "Unterwegs").
+func _aktueller_ort() -> String:
+	var router := get_node_or_null("/root/SceneRouter")
+	if router == null or not router.has_method("get_current_scene"):
+		return ""
+	var scene: Node = router.get_current_scene()
+	if scene == null:
+		return ""
+	var ort: Variant = scene.get("ort_id")
+	return str(ort) if ort is String else ""
 
 
 ## ---------------------------------------------------------------- Aufbau

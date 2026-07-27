@@ -40,6 +40,9 @@ const LOS_SCHRITT := 0.1
 
 var rig: GoobyRig
 var grid: GridData
+## REST-3 (Pflege): Tempo-Faktor 0..1 — müde/kranke Goobys watscheln
+## sichtbar langsamer (PflegeRunner setzt das; 1.0 = normal).
+var speed_mult := 1.0
 
 var _wander_enabled := true
 var _wander_timer := 0.0
@@ -364,7 +367,7 @@ func _step_walk(delta: float) -> void:
 		# abgeschnitten): hier stehen bleiben statt Möbel zu pflügen.
 		_stop_walking()
 		return
-	var step := to_next.normalized() * SPEED * delta
+	var step := to_next.normalized() * SPEED * clampf(speed_mult, 0.25, 1.0) * delta
 	if step.length() > to_next.length():
 		step = to_next
 	global_position += step

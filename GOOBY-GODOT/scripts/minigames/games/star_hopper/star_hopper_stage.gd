@@ -82,6 +82,15 @@ func setup_stage(lanes: Array) -> void:
 	_build_effects()
 
 
+func _exit_tree() -> void:
+	# Die Karotten-Vorlage hängt nie im Baum (nur duplicate()-Quelle) und
+	# muss deshalb von Hand freigegeben werden — sonst leaken Node, Meshes
+	# und Materialien beim Beenden (REST5, EVAL-2 B4).
+	if _gold != null and is_instance_valid(_gold):
+		_gold.free()
+	_gold = null
+
+
 ## Ganze Bühne je Frame aus dem Spielzustand nachziehen.
 func sync(s: Dictionary) -> void:
 	var traveled := float(s["traveled"])
@@ -381,6 +390,9 @@ func _build_pools() -> void:
 	add_child(_meteors)
 	_meteors.build(_make_meteor, METEOR_POOL)
 	_star_mesh = _make_star_mesh()
+	# ACHTUNG: _gold ist NUR duplicate()-Vorlage und hängt nie im Baum —
+	# ohne das free() in _exit_tree leakt der ganze Karotten-Teilbaum samt
+	# Meshes/Materialien beim Beenden (REST5, EVAL-2 B4).
 	_gold = Models.node(DIR + "carrot.glb", 0.55, false)
 	Models.tint(_gold, Color(1.0, 0.72, 0.2), 0.9)
 	_pickups = Pool.new()

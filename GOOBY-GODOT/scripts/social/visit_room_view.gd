@@ -21,6 +21,9 @@ var _room_def: Dictionary = {}
 var _furniture: Dictionary = {}
 var _grid_mount: Node3D
 var _nav_region: NavigationRegion3D
+var _nav_map := RID()
+## Möbel-Nodes mit blocks_movement — Quellgeometrie fürs CPU-Navmesh-Bake.
+var _nav_blockers: Array[Node3D] = []
 var _delta_seq := 0
 
 
@@ -78,6 +81,7 @@ func rebuild_furniture() -> void:
 	for uid: String in _furniture:
 		(_furniture[uid] as Node).queue_free()
 	_furniture = {}
+	_nav_blockers = []
 	var surface_entries: Array = []
 	for entry: Dictionary in grid.to_items_array():
 		var def := FurnitureCatalog.def(str(entry["item"]))
@@ -156,15 +160,11 @@ func _build_environment() -> void:
 func _build_nav_and_floor() -> void:
 	_nav_region = NavigationRegion3D.new()
 	_nav_region.name = "NavRegion"
-	var nav_mesh := NavigationMesh.new()
-	nav_mesh.agent_radius = 0.28
-	nav_mesh.agent_height = 1.0
-	nav_mesh.agent_max_climb = 0.3
-	nav_mesh.cell_size = 0.25
-	nav_mesh.cell_height = 0.25
-	nav_mesh.geometry_parsed_geometry_type = NavigationMesh.PARSED_GEOMETRY_MESH_INSTANCES
-	_nav_region.navigation_mesh = nav_mesh
+	# REST5 (EVAL-2 B3/B5/B10): voxel-exaktes Mesh, eigene Map je Raum und
+	# CPU-Quellgeometrie statt Visual-Mesh-Parsing — Details in RoomNavmesh.
+	_nav_region.navigation_mesh = RoomNavmesh.make_mesh()
 	add_child(_nav_region)
+	_nav_map = RoomNavmesh.attach_private_map(_nav_region)
 	var size := world_size()
 	var floor_mesh := MeshInstance3D.new()
 	floor_mesh.name = "Floor"
@@ -260,11 +260,20 @@ func _spawn_furniture(entry: Dictionary, def: Dictionary) -> void:
 		return
 	_grid_mount.add_child(node)
 	_furniture[uid] = node
+	if bool(def.get("blocks_movement", false)) and not entry.has("wall"):
+		_nav_blockers.append(node)
 
 
 func _bake_nav() -> void:
 	if _nav_region != null and is_inside_tree():
-		_nav_region.bake_navigation_mesh(false)
+		# REST5 (B5): CPU-Bake aus Boden-Rechteck + Blocker-AABBs — das alte
+		# bake_navigation_mesh() las Render-Meshes zur Laufzeit von der GPU.
+		RoomNavmesh.bake(_nav_region, world_size(), _nav_blockers)
+
+
+func _exit_tree() -> void:
+	# Private Navigation-Map freigeben — sonst leakt die RID (EVAL-2 B4).
+	_nav_map = RoomNavmesh.free_private_map(_nav_map)
 
 
 func _is_outdoor() -> bool:

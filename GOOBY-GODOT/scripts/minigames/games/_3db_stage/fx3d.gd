@@ -18,8 +18,9 @@ static func flat(color: Color, rough := 0.92) -> StandardMaterial3D:
 	mat.metallic = 0.0
 	# 0, nicht 0,15: die Vorlage ist durchweg Lambert (kein Glanzanteil). Schon
 	# ein Rest-Specular zieht bei streifendem Blick einen hellen Saum über
-	# Böden und Fahrbahnen.
-	mat.specular = 0.0
+	# Böden und Fahrbahnen. Godot-4-Name ist metallic_specular — das alte
+	# `specular` läuft in den SpatialMaterial-3.x-Remap und spammt Warnungen.
+	mat.metallic_specular = 0.0
 	return mat
 
 
