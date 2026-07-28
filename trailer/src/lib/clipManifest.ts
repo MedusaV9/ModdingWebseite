@@ -7,8 +7,13 @@
 export const AVAILABLE_CLIPS: readonly string[] = [
   'clips/v01_eclipse_island.mp4',
   'clips/v02_ghost_ship.mp4',
+  'clips/v03_sky_rift.mp4',
+  'clips/v04_altar_deposit.mp4',
   'clips/v05_wand_fight.mp4',
   'clips/v06_herald_arrival.mp4',
+  'clips/v07_village_storm.mp4',
+  'clips/v08_gravity_orbitals.mp4',
+  'clips/v09_ferryman_boss.mp4',
   'clips/v10_end_helix.mp4',
   'clips/v11_blackhole.mp4',
 ];

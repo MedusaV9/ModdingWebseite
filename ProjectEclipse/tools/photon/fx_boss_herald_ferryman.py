@@ -324,6 +324,12 @@ def build_ferry_oar_tear() -> FxBuilder:
 # ---------------------------------------------------------------------------
 # Concept 9 — eclipse:boss/ferry_kneel_corona (100t one-shot, re-fired on the
 # 20t crew cadence; allowMulti=false dedups re-sends while the runtime lives)
+#
+# FXWAVE-9 #3 V2: the P2 kneel read as a STALLED fight (boss frozen, one thin
+# halo). Three additions keep the beat alive without a single Java change —
+# breathing ground-fog skirt (r5.5), a SECOND counter-orbiting halo band higher
+# up (opposed spin sells "contained power"), and a heartbeat bloom that thumps
+# twice per re-fire window at chest height. Live-particle budget ≈60.
 # ---------------------------------------------------------------------------
 def build_ferry_kneel_corona() -> FxBuilder:
     fx = FxBuilder("boss/ferry_kneel_corona")
@@ -350,6 +356,86 @@ def build_ferry_kneel_corona() -> FxBuilder:
             color_over_lifetime=gradient(
                 [(0.0, 0.0), (0.2, 0.6), (0.8, 0.5), (1.0, 0.0)],
                 [(0.0, 0.4, 0.95, 0.85), (1.0, 0.15, 0.5, 0.55)]))
+       .with_lights(sky=15, block=15))
+
+    # V2: counter-orbiting upper band (y≈2.6, spin OPPOSED to corona_halo) — the
+    # two rings shearing against each other read as bound, waiting power.
+    (fx.particle_emitter(
+            "corona_halo_hi",
+            duration=100, looping=False, prewarm=10, max_particles=64,
+            start_lifetime=random_between(28, 44), start_speed=constant(0.02),
+            start_size=nf3(random_between(0.10, 0.2), random_between(0.10, 0.2),
+                           random_between(0.10, 0.2)),
+            simulation_space="Local")
+       .with_emission(rate=constant(0.55))
+       .with_shape(cylinder(radius=1.7, thickness=0.1, arc_mode="Loop", arc_speed=0.5),
+                   position=nf3(0, 2.6, 0))
+       .with_material(texture_material(CIRCLE, hdr=(0.45, 1.05, 1.0), blend=BLEND_ADDITIVE))
+       .with_renderer(vertex_sorting="NONE")
+       .with_cull_box((-4.0, -1.0, -4.0), (4.0, 6.0, 4.0))
+       .with_curves(
+            velocity_over_lifetime=dict(
+                linear=nf3(constant(0), random_between(-0.02, -0.008), constant(0)),
+                orbital_mode="AngularVelocity",
+                orbital=nf3(constant(0), constant(-0.55), constant(0)),
+                offset=nf3(0)),
+            color_over_lifetime=gradient(
+                [(0.0, 0.0), (0.2, 0.55), (0.8, 0.45), (1.0, 0.0)],
+                [(0.0, 0.55, 1.0, 0.95), (1.0, 0.2, 0.6, 0.6)]))
+       .with_lights(sky=15, block=15))
+
+    # V2: breathing ground-fog skirt — a wide, slow teal haze hugging the deck
+    # around the kneel so the whole ARENA area reads "ritual in progress".
+    (fx.particle_emitter(
+            "kneel_fog",
+            duration=100, looping=False, prewarm=40, max_particles=18,
+            start_lifetime=random_between(70, 95), start_speed=constant(0.0),
+            start_size=nf3(random_between(1.4, 2.2)),
+            simulation_space="Local")
+       .with_emission(rate=constant(0.15))
+       .with_shape(circle(radius=5.5, thickness=0.35), position=nf3(0, 0.2, 0))
+       .with_material(texture_material(CIRCLE, discard=0.02, hdr=(0.25, 0.6, 0.55),
+                                       blend=BLEND_ADDITIVE))
+       .with_renderer(render_mode="Horizontal", vertex_sorting="NONE", shade=False)
+       .with_cull_box((-8.0, -1.0, -8.0), (8.0, 3.0, 8.0))
+       .with_curves(
+            velocity_over_lifetime=dict(
+                linear=nf3(constant(0), constant(0.0015), constant(0)),
+                orbital_mode="AngularVelocity",
+                orbital=nf3(constant(0), constant(0.04), constant(0)),
+                offset=nf3(0), radial=constant(0.0), speed_modifier=constant(1)),
+            color_over_lifetime=gradient(
+                [(0.0, 0.0), (0.3, 0.16), (0.7, 0.13), (1.0, 0.0)],
+                [(0.0, 0.3, 0.8, 0.7), (1.0, 0.2, 0.55, 0.5)]),
+            size_over_lifetime=nf3(
+                curve(0.7, 1.0, [(0.0, 0.5, 0.35, 1.0, 0.7, 1.0, 1.0, 0.6)],
+                      "lifetime", "size"),
+                curve(0.7, 1.0, [(0.0, 0.5, 0.35, 1.0, 0.7, 1.0, 1.0, 0.6)],
+                      "lifetime", "size"),
+                curve(0.7, 1.0, [(0.0, 0.5, 0.35, 1.0, 0.7, 1.0, 1.0, 0.6)],
+                      "lifetime", "size")))
+       .with_lights(sky=15, block=15))
+
+    # V2: heartbeat bloom — two soft chest-height thumps per 100t window (the
+    # kneel has a pulse; pairs with the server-side subboom swell).
+    (fx.particle_emitter(
+            "kneel_heartbeat",
+            duration=100, looping=False, max_particles=6,
+            start_lifetime=constant(22), start_speed=constant(0.0),
+            start_size=nf3(1.1), simulation_space="Local")
+       .with_emission(rate=constant(0.0),
+                      bursts=[burst(time=10, count=constant(2), cycles=2, interval=50)])
+       .with_shape(dot(), position=nf3(0, 1.6, 0))
+       .with_material(texture_material(CIRCLE, hdr=(1.6, 1.2, 1.5), blend=BLEND_ADDITIVE))
+       .with_renderer(vertex_sorting="NONE")
+       .with_cull_box((-3.0, 0.0, -3.0), (3.0, 4.0, 3.0))
+       .with_curves(
+            size_over_lifetime=curve(
+                0.0, 1.0, [(0.0, 0.25, 0.25, 1.0, 0.6, 0.85, 1.0, 0.6)],
+                "lifetime", "size"),
+            color_over_lifetime=gradient(
+                [(0.0, 0.0), (0.18, 0.5), (0.5, 0.2), (1.0, 0.0)],
+                [(0.0, 0.5, 1.0, 0.9), (1.0, 0.3, 0.7, 0.7)]))
        .with_lights(sky=15, block=15))
 
     # ONE faint ghost-bell dome; deliberately dim (no HDR — the read is "inert").

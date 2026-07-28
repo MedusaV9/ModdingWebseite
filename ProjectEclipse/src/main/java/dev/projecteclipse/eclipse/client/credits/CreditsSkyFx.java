@@ -73,6 +73,17 @@ public final class CreditsSkyFx {
 
     private CreditsSkyFx() {}
 
+    /**
+     * Whether the credits sky owns the frame right now (collapse darken or the space/
+     * black-hole dome, current OR ramping-in). {@code CreditsHandHider} keys the
+     * first-person hand removal off this for the finale beats that run AFTER the
+     * roll-stop payload already handed the HUD back (black-hole vantage, eclipse act).
+     */
+    public static boolean cinematicSkyActive() {
+        return darkenTarget > 0.02F || starsTarget > 0.02F || holeTarget > 0.02F
+                || skyDarken(0.0F) > 0.02F || holeAmount(0.0F) > 0.02F;
+    }
+
     private static void handle(S2CCreditsSkyPayload payload) {
         float intensity = Mth.clamp(payload.intensity(), 0.0F, 1.0F);
         darkenFrom = skyDarken(0.0F);
