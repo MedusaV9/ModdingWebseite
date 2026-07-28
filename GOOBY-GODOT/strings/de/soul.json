@@ -169,6 +169,56 @@
 			"muede_b": "Gääähn… Nur kurz hinlegen. Ganz kurz.",
 			"dreckig_a": "Ich fühl mich ein bisschen klebrig. Bad-Zeit?",
 			"regen_a": "Es regnet… Ich setz mich ans Fenster und schau den Tropfen zu."
+		},
+		"feel": {
+			"schreck": {
+				"a": "WAAH! W-was war DAS?!",
+				"b": "Huch!! Mein Herz klopft bis in die Ohren!"
+			},
+			"freude": {
+				"a": "Hihi! Heute ist einfach ein guter Tag!",
+				"b": "Das macht mich froh, weißt du?"
+			},
+			"begeisterung": {
+				"a": "JAAA! Das ist das BESTE!",
+				"b": "Nochmal! Nochmal! Bitte nochmal!"
+			},
+			"ueberraschung": {
+				"a": "Oh!! Damit hab ich NICHT gerechnet!",
+				"b": "Was?! Echt jetzt? Für mich?"
+			},
+			"verlegenheit": {
+				"a": "Ähm… du hast nichts gesehen, okay?",
+				"b": "D-das war nicht das, wonach es aussah…"
+			},
+			"trotz": {
+				"a": "Hmpf. Ich schmolle. Offiziell.",
+				"b": "Nö. Einfach nö."
+			},
+			"traurigkeit": {
+				"a": "Ich bin grad ein bisschen klein…",
+				"b": "Kannst du kurz bei mir bleiben…?"
+			},
+			"muedigkeit": {
+				"a": "Mhhh… nur noch fünf Minuten…",
+				"b": "So… müüüde…"
+			},
+			"neugier": {
+				"a": "Oh? Was ist DAS denn?",
+				"b": "Das muss ich mir genauer ansehen!"
+			},
+			"stolz": {
+				"a": "Hast du das gesehen? DAS WAR ICH!",
+				"b": "Neuer Rekord! Ich bin quasi berühmt!"
+			},
+			"angst": {
+				"a": "I-ist da wer…? Es ist so dunkel…",
+				"b": "Ich bin nicht ängstlich! Nur… vorsichtig!"
+			},
+			"verliebtheit": {
+				"a": "Mein LIEBLINGSESSEN! Du kennst mich so gut!",
+				"b": "Ich… ich glaub, das ist Liebe."
+			}
 		}
 	}
 }

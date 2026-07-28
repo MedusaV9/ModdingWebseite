@@ -1638,6 +1638,7 @@ GhostButton/colors/icon_hover_color = Color(0.290196, 0.231373, 0.211765, 1)
 GhostButton/colors/icon_normal_color = Color(0.290196, 0.231373, 0.211765, 1)
 GhostButton/colors/icon_pressed_color = Color(0.290196, 0.231373, 0.211765, 1)
 GhostButton/constants/h_separation = 8
+GhostButton/constants/icon_max_width = 22
 GhostButton/font_sizes/font_size = 22
 GhostButton/styles/disabled = SubResource("StyleBoxFlat_yeq2u")
 GhostButton/styles/focus = SubResource("StyleBoxEmpty_0yo4f")

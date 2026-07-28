@@ -82,6 +82,7 @@ func _ready() -> void:
 	rebuild_furniture()
 	_build_camera()
 	_build_skyline()
+	HausKontext.attach_to(self)
 	_build_ui()
 	_spawn_gooby()
 	# Garten 2.0 (Doc D §6): Beete/Bauten/Sammel-Spots liegen NICHT im
@@ -183,10 +184,10 @@ func rebuild_furniture() -> void:
 	request_rebake()
 
 
-## Fenster-Dioramen (Doc D §1.2): pro Außenwand höchstens eins, und nur
+## Fenster-Dioramen (Doc D §1.2): pro Außenwand höchstens eins (Garten-
+## oder Straßen-Variante je Vista, s. GartenDiorama.fuer_vista), und nur
 ## solange dort wirklich ein Fenster hängt — nach jedem Bau-Commit neu.
-## Im Baumodus bleiben sie versteckt (FIX-3): dort übernimmt die
-## CitySkyline-Kulisse, sonst stünden zwei Straßen übereinander.
+## Im Baumodus versteckt (FIX-3): dort übernimmt die CitySkyline-Kulisse.
 func _rebuild_dioramas() -> void:
 	for diorama: Variant in _dioramas.values():
 		if is_instance_valid(diorama) and diorama is Node:
@@ -194,7 +195,7 @@ func _rebuild_dioramas() -> void:
 	_dioramas = {}
 	var exterior := RoomDefs.exterior_walls(_room_def)
 	for wall: String in exterior:
-		var diorama := StreetDiorama.attach_if_needed(
+		var diorama := GartenDiorama.fuer_vista(
 			self, grid, _world_size(), wall, str(exterior[wall])
 		)
 		if diorama != null:
@@ -454,6 +455,9 @@ func _build_wall_segments(wall: String, door_spans: Array) -> void:
 	for span: Array in door_spans:
 		var oben := height if _is_outdoor() else DoorTransition.DOOR_HEIGHT
 		oeffnungen.append({"von": int(span[0]), "bis": int(span[1]), "y0": 0.0, "y1": oben})
+	# HAUS-SICHT: kein Garten-Zaun, wo die Hausfassade die Grenze ist.
+	if _is_outdoor() and wall == "N":
+		oeffnungen.append_array(HouseLayout.zaun_oeffnungen(_room_def, height))
 	for span: Array in _fenster_spans(wall):
 		oeffnungen.append(
 			{"von": int(span[0]), "bis": int(span[1]), "y0": FENSTER_Y0, "y1": FENSTER_Y1}
@@ -710,9 +714,9 @@ func _build_camera() -> void:
 	_camera_rig.setup(_world_size())
 
 
-## Stadt-Kulisse (FIX-3): schläft außerhalb des Baumodus komplett.
+## Vorstadt-Kulisse (FIX-3/HAUS-SICHT): schläft außerhalb des Baumodus.
 func _build_skyline() -> void:
-	_skyline = CitySkyline.attach_to(self, _world_size(), room_id.hash())
+	_skyline = CitySkyline.attach_to(self, _world_size(), room_id.hash(), room_id)
 
 
 func skyline() -> CitySkyline:

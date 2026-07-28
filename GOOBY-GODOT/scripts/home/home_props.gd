@@ -103,6 +103,52 @@ static func merged_aabb(node: Node, xform: Transform3D) -> AABB:
 	return merged
 
 
+## Alle MeshInstance3D eines GLB als EIN MultiMesh-Satz an `parent` hängen
+## (HAUS-SICHT: geteilt von Skyline + Dioramen — Wiederhol-Geometrie kostet
+## so einen Draw-Call pro Quell-Mesh statt einen pro Instanz). Die lokale
+## Transform jedes Quell-Meshes wird in jede Instanz-Transform eingerechnet.
+static func multi_glb(
+	parent: Node, pfad: String, transforms: Array[Transform3D], basis_name: String, lod_ende := 0.0
+) -> void:
+	if transforms.is_empty() or not ResourceLoader.exists(pfad):
+		return
+	var szene: PackedScene = load(pfad)
+	if szene == null:
+		return
+	var vorlage: Node3D = szene.instantiate()
+	var quellen: Array[Node] = vorlage.find_children("*", "MeshInstance3D", true, false)
+	var index := 0
+	for quelle: Node in quellen:
+		var mesh_quelle := quelle as MeshInstance3D
+		if mesh_quelle.mesh == null:
+			continue
+		var lokal := _relative_transform(mesh_quelle, vorlage)
+		var multi := MultiMesh.new()
+		multi.transform_format = MultiMesh.TRANSFORM_3D
+		multi.mesh = mesh_quelle.mesh
+		multi.instance_count = transforms.size()
+		for i in transforms.size():
+			multi.set_instance_transform(i, transforms[i] * lokal)
+		var instanz := MultiMeshInstance3D.new()
+		instanz.name = "%s%d" % [basis_name, index]
+		instanz.multimesh = multi
+		instanz.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		if lod_ende > 0.0:
+			instanz.visibility_range_end = lod_ende
+		parent.add_child(instanz)
+		index += 1
+	vorlage.free()
+
+
+static func _relative_transform(node: Node3D, wurzel: Node3D) -> Transform3D:
+	var out := node.transform
+	var eltern := node.get_parent()
+	while eltern is Node3D and eltern != wurzel:
+		out = (eltern as Node3D).transform * out
+		eltern = eltern.get_parent()
+	return out
+
+
 ## Flaches, weiches Material in einer Paletten-Farbe.
 static func material(farbe_id: String, alpha := 1.0) -> StandardMaterial3D:
 	var mat := StandardMaterial3D.new()

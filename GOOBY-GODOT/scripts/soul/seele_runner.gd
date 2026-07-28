@@ -14,6 +14,13 @@ extends Node
 ## Der Runner (gooby_reactions.gd) bleibt der Orchestrator und delegiert
 ## hierher; Zeit/Zufall laufen über SEINE Overrides (now_ms/rng) — diese
 ## Komponente hält nur Stimmung-, Ausdrucks- und Absichts-Zustand.
+##
+## FEEL-AC — inszenierte Gefühle (Animal-Crossing-Momente): echte Ereignisse
+## (Donner im Gewitter, Münz-Fund, Ertapptwerden bei einer Absicht, neuer
+## Minispiel-Rekord, Lieblingsessen, Dunkelheit, Grüße, Kitzeln, neue Möbel,
+## Müdigkeit, Vernachlässigung) laufen durch SoulFeelings (Emotion + eigene
+## Frequenzbremse im Soul-Slice) und werden über die GoobyFeelings-Schicht
+## voll ausgespielt (Gesicht/Pose/Bewegung/Symbol/Ton, starke mit Regie).
 
 const Sleep := preload("res://scripts/logic/sleep.gd")
 const Health := preload("res://scripts/logic/health.gd")
@@ -31,6 +38,9 @@ const GRUSS_STOSS := {
 }
 ## Streichel-Stöße zählen nur bis hierhin pro Tag (kein Laune-Pumpen).
 const STOSS_PET_MAX_PRO_TAG := 20
+## FEEL-AC: solange nach dem Start einer Absicht gilt ein Antippen als
+## „ertappt“ (Gooby wird verlegen — er wollte das doch heimlich machen!).
+const ERTAPPT_FENSTER_MS := 8_000
 
 ## Der GoobyReactions-Runner (bewusst untypisiert — kein Klassen-Zyklus).
 var runner: Node = null
@@ -43,6 +53,17 @@ var _intent_cooldowns: Dictionary = {}
 ## Solange ein Moment sein Gesicht trägt, überschreibt der Stimmungs-Takt
 ## es nicht (Zeitstempel statt Flag — überlappende Momente verlängern).
 var _emotion_temp_bis_ms := 0
+
+## FEEL-AC: Gefühls-Schicht am Rig + Ereignis-Detektoren (Schnappschüsse
+## verhindern Fehlalarme beim ersten Beobachtungs-Takt).
+var _feelings_layer: GoobyFeelings = null
+var _feel_prio := 0
+var _feel_gewitter := false
+var _donner_in_s := -1.0
+var _feel_food_seen: Dictionary = {}
+var _feel_coins_seen := 0
+var _feel_items_seen := 0
+var _intent_bis_ms := 0
 
 
 ## Komponente erzeugen und an den Runner hängen (idempotent).
@@ -60,6 +81,7 @@ static func attach_to(target_runner: Node) -> SeeleRunner:
 func setup(target_runner: Node) -> void:
 	runner = target_runner
 	_setup_ausdruck_und_stimme()
+	_feel_snapshots_init()
 	refresh_stimmung()
 
 
@@ -70,6 +92,9 @@ func _setup_ausdruck_und_stimme() -> void:
 	if gooby == null or not (gooby.get("rig") is GoobyRig):
 		return
 	_expressions = GoobyExpressions.attach_to(gooby.rig)
+	_feelings_layer = GoobyFeelings.attach_to(gooby.rig)
+	if not _feelings_layer.gefuehl_beendet.is_connected(_on_gefuehl_beendet):
+		_feelings_layer.gefuehl_beendet.connect(_on_gefuehl_beendet)
 	var existing := gooby.get_node_or_null("GoobyVoice")
 	if existing is GoobyVoice:
 		_voice = existing
@@ -90,12 +115,15 @@ func _on_silbe(_index: int, _anzahl: int) -> void:
 # ── Stimmungs-Takt ───────────────────────────────────────────────────────────
 
 
-## Vom Runner-_process gerufen: alle MOOD_REFRESH_S einmal takten.
+## Vom Runner-_process gerufen: alle MOOD_REFRESH_S einmal takten; dazwischen
+## läuft nur der (billige) Donner-Countdown, wenn gerade ein Gewitter tobt.
 func tick(delta: float) -> void:
 	_mood_timer -= delta
 	if _mood_timer <= 0.0:
 		_mood_timer = MOOD_REFRESH_S
 		refresh_stimmung()
+		_feel_beobachte()
+	_feel_donner_tick(delta)
 
 
 func wert() -> float:
@@ -125,8 +153,18 @@ func refresh_stimmung() -> void:
 
 
 ## Ereignis-Stoß auf die Laune (füttern +, eingeschnappt −, ...). Klein und
-## gedeckelt (SoulMood.bump) — die Trägheit bleibt spürbar.
+## gedeckelt (SoulMood.bump) — die Trägheit bleibt spürbar. Füttern und
+## Kitzeln sind an ihren Stoßwerten erkennbar (die Aufrufer im Runner
+## bleiben unverändert) und lösen zusätzlich ihr inszeniertes Gefühl aus.
 func stoss(delta: float) -> void:
+	_stoss_wert(delta)
+	if is_equal_approx(delta, STOSS_FUETTERN):
+		_feel_essen()
+	elif is_equal_approx(delta, STOSS_KITZELN):
+		melde_gefuehl("kitzeln")
+
+
+func _stoss_wert(delta: float) -> void:
 	var now: int = runner._now_ms()
 	SoulState.mutate(
 		runner.gs,
@@ -135,16 +173,21 @@ func stoss(delta: float) -> void:
 	_verteile_stimmung()
 
 
-## Wiedersehen bewegt die Laune — freudig hebt, Schmollen senkt.
+## Wiedersehen bewegt die Laune — freudig hebt, Schmollen senkt. Die
+## Gruß-Ids sind zugleich Gefühls-Ereignisse (Freude/Begeisterung/Trotz).
 func stoss_gruss(moment_id: String) -> void:
 	if GRUSS_STOSS.has(moment_id):
-		stoss(float(GRUSS_STOSS[moment_id]))
+		_stoss_wert(float(GRUSS_STOSS[moment_id]))
+		melde_gefuehl(moment_id)
 
 
 ## Streicheln hebt sanft — aber nur bis zum Tagesdeckel (kein Pumpen).
+## Die Bonus-Stufe (jeder zehnte Streichler) macht sichtbar Freude.
 func stoss_streicheln(pets_today: int) -> void:
 	if pets_today <= STOSS_PET_MAX_PRO_TAG:
-		stoss(STOSS_STREICHELN)
+		_stoss_wert(STOSS_STREICHELN)
+	if pets_today > 0 and runner.pet_bonus_due(pets_today):
+		melde_gefuehl("streichel_bonus")
 
 
 func _verteile_stimmung() -> void:
@@ -185,10 +228,13 @@ func emotion_temp_frei() -> void:
 	_emotion_temp_bis_ms = 0
 
 
-## Aufmerken (Ohren-Perk + Blick zur Kamera) mit Latenz nach Laune.
+## Aufmerken (Ohren-Perk + Blick zur Kamera) mit Latenz nach Laune. Wird
+## Gooby MITTEN in einer Absicht angetippt, ist ihm das sichtbar peinlich.
 func aufmerken() -> void:
 	if _expressions != null:
 		_expressions.aufmerken()
+	if runner._now_ms() < _intent_bis_ms:
+		melde_gefuehl("ertappt")
 
 
 ## Gebrabbel zur Bubble: die Stimme moduliert nach Stimmung UND Moment-
@@ -269,6 +315,7 @@ func _door_to_room(ziel_raum: String) -> Dictionary:
 ## anschauen — DANN erst (vielleicht) ein Satz. Die Absicht spricht zuerst
 ## durch den Körper; Text läuft über die vorhandene Bubble-Bremse.
 func _perform_intent(absicht: Dictionary) -> void:
+	_intent_bis_ms = runner._now_ms() + ERTAPPT_FENSTER_MS
 	var moment := {}
 	var def := SoulService.def_by_id(runner._defs, str(absicht["id"]))
 	if not def.is_empty():
@@ -307,6 +354,160 @@ func _intent_ziel_welt(absicht: Dictionary) -> Vector3:
 		_:
 			pass
 	return Vector3.INF
+
+
+# ── FEEL-AC: inszenierte Gefühle ─────────────────────────────────────────────
+
+
+## Ereignis melden — entscheidet über SoulFeelings (Bremse/Gates/Priorität)
+## und spielt die Emotion voll aus (GoobyFeelings: Gesicht/Pose/Bewegung/
+## Symbol/Ton, starke mit Moment-Regie). Gibt die gespielte Emotion zurück
+## ("" = unterdrückt). Auch ohne Rig (headless) wird die Buchung gemacht.
+func melde_gefuehl(ereignis: String) -> String:
+	var emotion := _entscheide_gefuehl(ereignis)
+	if emotion.is_empty():
+		return ""
+	_feel_prio = SoulFeelings.prio(ereignis)
+	if _feelings_layer != null:
+		_feelings_layer.zeige(emotion)
+		# Der Stimmungs-Takt lässt das Gefühls-Gesicht bis zum Ende in Ruhe.
+		emotion_temp_setzen(FeelEmotions.dauer_s(emotion) + 1.0)
+	_feel_zeile(emotion)
+	return emotion
+
+
+## Nur Entscheidung + Buchung (deterministisch, läuft auch ohne Rig):
+## Ereignis → Emotion oder "". Ein laufendes Gefühl unterbricht nur ein
+## Ereignis mit ECHT höherer Priorität (Schreck schlägt Freude, nie andersrum).
+func _entscheide_gefuehl(ereignis: String) -> String:
+	var emotion := SoulFeelings.emotion_fuer(ereignis)
+	if emotion.is_empty():
+		return ""
+	if _feelings_layer != null and _feelings_layer.aktiv():
+		if SoulFeelings.prio(ereignis) <= _feel_prio:
+			return ""
+	var now: int = runner._now_ms()
+	var today := SoulTriggers.day_string(runner._date_now())
+	if not SoulFeelings.erlaubt(SoulState.slice_of(runner.gs)["feelings"], ereignis, now, today):
+		return ""
+	SoulState.mutate(
+		runner.gs,
+		func(s: Dictionary) -> void:
+			s["feelings"] = SoulFeelings.buche(s.get("feelings", {}), ereignis, now, today)
+	)
+	return emotion
+
+
+## Beobachtungs-Takt (alle MOOD_REFRESH_S): Post-FX nachführen, Gewitter →
+## Donner scharfstellen, Dunkelheit, Müdigkeit, Traurigkeit, neuer Rekord,
+## Münz-Fund, neue Möbel. Im Schlaf fühlt Gooby nichts Inszeniertes.
+func _feel_beobachte() -> void:
+	var state: Dictionary = runner.gs.state()
+	var ctx: Dictionary = runner._ctx(0)
+	_feel_postfx(ctx)
+	_feel_gewitter = str(ctx["wetter"].get("typ", "")) == "gewitter"
+	if not _feel_gewitter:
+		_donner_in_s = -1.0
+	if Sleep.is_sleeping(_gooby_slice(state)):
+		return
+	if SoulFeelings.ist_dunkel(int(ctx["hour"])):
+		melde_gefuehl("dunkelheit")
+	if SoulFeelings.ist_muede(_stats_now(state)):
+		melde_gefuehl("muede")
+	if bool(runner._sad):
+		melde_gefuehl("vernachlaessigt")
+	var best := SoulFeelings.rekord_max(state)
+	if best > int(SoulState.slice_of(runner.gs)["feelings"]["bestMax"]):
+		_feel_merke_bestwert(best)
+		melde_gefuehl("rekord")
+	var coins := int(state.get("economy", {}).get("coins", 0))
+	if coins > _feel_coins_seen:
+		melde_gefuehl("fund")
+	_feel_coins_seen = coins
+	var items: int = SoulState.slice_of(runner.gs)["knownItems"].size()
+	if items > _feel_items_seen:
+		melde_gefuehl("neues_moebel")
+	_feel_items_seen = items
+
+
+## Donner: im Gewitter läuft ein Countdown (Zufallsintervall aus dem
+## Runner-RNG); bei 0 zuckt Gooby zusammen (Schreck) und es wird neu gewürfelt.
+func _feel_donner_tick(delta: float) -> void:
+	if not _feel_gewitter:
+		return
+	if _donner_in_s < 0.0:
+		_donner_in_s = SoulFeelings.donner_intervall_s(runner.rng.randf())
+		return
+	_donner_in_s -= delta
+	if _donner_in_s <= 0.0:
+		_donner_in_s = SoulFeelings.donner_intervall_s(runner.rng.randf())
+		melde_gefuehl("donner")
+
+
+## Füttern: Lieblingsessen macht verliebt, alles andere macht Freude. Das
+## gegebene Essen ist der foodGiven-Zuwachs seit dem letzten Blick (der
+## Runner bucht foodGiven VOR dem Stimmungs-Stoß).
+func _feel_essen() -> void:
+	var given: Dictionary = SoulState.slice_of(runner.gs)["foodGiven"]
+	var food_id := ""
+	for id: String in given:
+		if int(given[id]) > int(_feel_food_seen.get(id, 0)):
+			food_id = id
+			break
+	_feel_food_seen = given.duplicate()
+	if food_id.is_empty():
+		melde_gefuehl("essen")
+		return
+	var fav: bool = SoulFeelings.ist_lieblingsessen(given, food_id, runner.FAV_FOOD_MIN)
+	melde_gefuehl("lieblingsessen" if fav else "essen")
+
+
+## Post-FX folgen Tageszeit + Stimmung (warme Farbkorrektur, Sättigung).
+func _feel_postfx(ctx: Dictionary) -> void:
+	if not is_inside_tree():
+		return
+	var fx := PostFx.get_or_create(self)
+	fx.set_tageszeit(float(ctx["hour"]))
+	fx.set_stimmung(_wert)
+
+
+## Kurze Gefühls-Zeile (nur bemerkenswerte Gefühle, prio ≥ 2 — nie
+## zutexten); die Stimme moduliert nach der dominanten Gesichts-Emotion.
+func _feel_zeile(emotion: String) -> void:
+	if _feel_prio < 2:
+		return
+	var variante := "a" if runner.rng.randf() < 0.5 else "b"
+	var key := "soul.feel.%s.%s" % [emotion, variante]
+	runner._say(I18nService.t(key), FeelEmotions.stimm_emotion(emotion))
+
+
+func _on_gefuehl_beendet(_id: String) -> void:
+	_feel_prio = 0
+	emotion_temp_frei()
+	apply_ruhe_emotion()
+
+
+## Schnappschüsse für die Beobachter — kein Fehlalarm im ersten Takt, alte
+## Rekorde werden nicht nachgefeiert (bestMax wird still nachgezogen).
+func _feel_snapshots_init() -> void:
+	var state: Dictionary = runner.gs.state()
+	var slice := SoulState.slice_of(runner.gs)
+	_feel_food_seen = (slice["foodGiven"] as Dictionary).duplicate()
+	_feel_coins_seen = int(state.get("economy", {}).get("coins", 0))
+	_feel_items_seen = (slice["knownItems"] as Dictionary).size()
+	var best := SoulFeelings.rekord_max(state)
+	if best > int(slice["feelings"]["bestMax"]):
+		_feel_merke_bestwert(best)
+
+
+func _feel_merke_bestwert(best: int) -> void:
+	SoulState.mutate(
+		runner.gs,
+		func(s: Dictionary) -> void:
+			var feelings := SoulFeelings.normalize(s.get("feelings", {}))
+			feelings["bestMax"] = best
+			s["feelings"] = feelings
+	)
 
 
 # ── Save-Helfer ──────────────────────────────────────────────────────────────

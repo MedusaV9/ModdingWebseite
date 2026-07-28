@@ -67,8 +67,9 @@ func _ready() -> void:
 
 
 func _build_ui() -> void:
-	var bg := ColorRect.new()
-	bg.color = Color(0.98, 0.94, 0.87)
+	# UIFINAL: Kontext-Wallpaper (Reise-Petrol) statt beziehungsloser
+	# Farbfläche — derselbe Look wie alle anderen Screens (UICOZY-API).
+	var bg := AcWallpaper.for_context("profil")
 	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(bg)
 	_rows = VBoxContainer.new()
@@ -134,6 +135,11 @@ func _build_ui() -> void:
 	_code_value = Label.new()
 	_code_value.theme_type_variation = &"TitleLabel"
 	_code_value.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	# UIFINAL: der Code ist der HELD dieser Karte — 800er-Gewicht in Teal,
+	# damit „zeigen & abtippen“ auf einen Blick funktioniert.
+	_code_value.add_theme_font_override("font", ThemeService.font(800))
+	_code_value.add_theme_color_override("font_color", AcTokens.TEAL_DARK)
+	_code_value.add_theme_font_size_override("font_size", 32)
 	code_row.add_child(_code_value)
 	_copy_button = Button.new()
 	_copy_button.name = "CopyButton"
@@ -257,8 +263,11 @@ func _on_friends_changed(friends: Array) -> void:
 	for child in _friends_box.get_children():
 		child.queue_free()
 	if friends.is_empty():
+		# UIFINAL Runde 2: volle UiScale mitgeben — ohne Faktor blieb der
+		# Sticker-Hase auf Retina eine Briefmarke neben normal großem Text.
+		var f: float = ScreenShell.metrics(get_viewport())["f"]
 		_friends_box.add_child(
-			FriendListUi.build_empty_state("net.friends.empty_art", "net.friends.empty")
+			FriendListUi.build_empty_state("net.friends.empty_art", "net.friends.empty", f)
 		)
 		_apply_metrics()
 		return

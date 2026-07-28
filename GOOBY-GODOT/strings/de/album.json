@@ -1,7 +1,7 @@
 {
 	"album": {
 		"titel": "Sticker-Album",
-		"zurueck": "Zurück",
+		"zurueck": "‹ Zurück",
 		"zaehler": "{n} / {total} Sticker",
 		"unbekannt": "???",
 		"hint_label": "So bekommst du ihn:",

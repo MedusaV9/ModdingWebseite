@@ -37,6 +37,7 @@ Recap="*res://scripts/recap/recap_service.gd"
 Quality="*res://scripts/platform/quality_service.gd"
 Notify="*res://scripts/platform/notification_service.gd"
 Dev="*res://scripts/dev/dev_service.gd"
+Fx="*res://scripts/fx/post_fx.gd"
 
 [display]
 

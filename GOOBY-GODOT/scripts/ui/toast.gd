@@ -135,8 +135,24 @@ func _reposition() -> void:
 	var insets := UiScale.safe_insets_canvas(get_viewport())
 	var top := maxf(area.y * TOP_SHARE, float(insets["top"]) + 8.0 * f)
 	var rest := Vector2((area.x - natural.x) / 2.0, top)
+	rest.y = _dodge_hint_card(Rect2(rest, natural), f)
 	_panel.position = rest
 	_animate_in(rest, f)
+
+
+## UIFINAL Runde 2: Toast und „Was nun?“-Karte teilen sich die Kopf-Zone —
+## bei Quest-Erfolg lag die Paper-Bubble mitten AUF der Karte. Steht die
+## Karte im Weg, rutscht der Toast unter ihre Unterkante.
+func _dodge_hint_card(toast_rect: Rect2, f: float) -> float:
+	var tree := get_tree()
+	if tree == null:
+		return toast_rect.position.y
+	for node: Node in tree.get_nodes_in_group(&"wasnun_karte"):
+		if node is Control and (node as Control).is_visible_in_tree():
+			var card := (node as Control).get_global_rect()
+			if toast_rect.intersects(card):
+				return card.end.y + 8.0 * f
+	return toast_rect.position.y
 
 
 ## Web @keyframes toast-in: von +12 px / Scale 0.9 federnd auf Position.

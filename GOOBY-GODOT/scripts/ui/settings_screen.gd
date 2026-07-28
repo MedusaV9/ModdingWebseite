@@ -251,7 +251,10 @@ func _build_language_row(rows: VBoxContainer) -> void:
 		var id := str(opt[0])
 		var btn := SquishButton.new()
 		btn.name = "Lang" + id.to_upper()
-		btn.theme_type_variation = "BtnYellow" if id == active else "BtnTeal"
+		# UIFINAL: klare Rangfolge — die GEWÄHLTE Sprache ist die gefüllte
+		# Teal-Pill, die andere eine leise Ghost-Outline (vorher Gelb gegen
+		# Teal: beide riefen „aktiv!“).
+		btn.theme_type_variation = "BtnTeal" if id == active else "GhostButton"
 		btn.text = str(opt[1])
 		btn.focus_mode = Control.FOCUS_NONE
 		btn.custom_minimum_size = Vector2(120.0 * _f, AcTokens.TOUCH_FLOOR * _f)

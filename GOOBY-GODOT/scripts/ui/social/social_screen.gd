@@ -127,8 +127,9 @@ func pal_service() -> GoobyPalService:
 
 
 func _build_ui() -> void:
-	var bg := ColorRect.new()
-	bg.color = Color(0.98, 0.94, 0.87)
+	# UIFINAL: Kontext-Wallpaper (Reise-Petrol) statt beziehungsloser
+	# Farbfläche — derselbe Look wie alle anderen Screens (UICOZY-API).
+	var bg := AcWallpaper.for_context("profil")
 	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(bg)
 	var rows := VBoxContainer.new()
@@ -172,6 +173,9 @@ func _build_ui() -> void:
 	_practice_btn = Button.new()
 	_practice_btn.theme_type_variation = &"GhostButton"
 	_practice_btn.text = I18nService.t("chess.practice")
+	# UIFINAL: kleines Spiel-Icon — der lose Knopf bekommt einen Anker.
+	_practice_btn.icon = load("res://assets/ui/icons/gamepad.svg")
+	_practice_btn.add_theme_color_override("icon_normal_color", AcTokens.TEAL_DARK)
 	_practice_btn.pressed.connect(_on_chess_practice_pressed)
 	practice_box.add_child(_practice_btn)
 

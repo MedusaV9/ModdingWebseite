@@ -203,8 +203,10 @@ func _build_ui() -> void:
 func _build_header() -> Control:
 	var header := HBoxContainer.new()
 	header.add_theme_constant_override("separation", 12)
+	# UIFINAL: Kopfzeilen-Konsistenz — Zurück ist überall die Ghost-Outline-
+	# Pill mit ‹-Pfeil (wie Arcade/Freunde/Profil), nicht die weiße Paper-Pill.
 	var back := SquishButton.new()
-	back.theme_type_variation = &"BtnGhost"
+	back.theme_type_variation = &"GhostButton"
 	back.text = I18nService.t("album.zurueck")
 	back.focus_mode = Control.FOCUS_NONE
 	back.pressed.connect(_on_back_pressed)

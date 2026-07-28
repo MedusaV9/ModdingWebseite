@@ -1,6 +1,6 @@
 # GOOBY 5.0 — Godot-Update-Trailer
 
-Offizieller Trailer zum Godot-Engine-Update: **1920×1080, 60 fps, ~54,6 s**,
+Offizieller Trailer zum Godot-Engine-Update: **1920×1080, 60 fps, ~57,6 s**,
 gebaut mit [Remotion](https://remotion.dev). Finales Video:
 `GOOBY-5.0-Godot-Update-Trailer.mp4` (in diesem Ordner).
 
@@ -19,7 +19,7 @@ kein verlustiges JPEG-Zwischenformat). Vorschau/Studio: `npm run dev`
 Alle Zutaten liegen in `public/`:
 
 - `public/clips/*.mp4` — die Gameplay-Aufnahmen (siehe unten)
-- `public/audio/glitter_blast_cut54.m4a` — Musik, fertig geschnitten (54,6 s)
+- `public/audio/glitter_blast_cut576.m4a` — Musik, fertig geschnitten (57,6 s)
 - `public/img/icon.png`, `public/img/key_artwork_gooby_ranch.webp`,
   `public/img/logo_gooby_ranch_frei.webp`,
   `public/fonts/baloo2-latin-var.woff2` — Branding/Key-Art (Ranch-Artwork
@@ -28,11 +28,13 @@ Alle Zutaten liegen in `public/`:
 ## Aufbau (Sekunden-Fahrplan)
 
 Der Schnitt liegt auf dem Beat („Glitter Blast“, 100 BPM → 1 Beat = 36
-Frames; Kapitelwechsel auf Taktgrenzen). Fahrplan siehe Kommentar in
+Frames; 96 Beats = 57,6 s). Fahrplan siehe Kommentar in
 `src/Trailer.tsx`:
-Titelkarte → wiederhergestellter Original-Gooby (Showcase) →
-Zuhause mit echten Möbeln/Baumodus/**Gestalten-Modus** → GOUHBUS/Garderobe
-(92 Teile) → Stadt (Panorama/Tag/Nacht) → Minispiel-Montage („36
+Titelkarte → wiederhergestellter Original-Gooby (Showcase, Fell-Look) →
+**Emotions-Nahaufnahme** (Schreck + Verliebtheit mit Symbol, Regie-Zoom) →
+Zuhause mit echten Möbeln/Baumodus/**Gestalten-Modus** → **Haus im Garten**
+(HAUS-SICHT) → GOUHBUS/Garderobe (92 Teile) → Stadt (Panorama/Tag/Nacht) →
+**Funkelpark** (Tor-Totale + Achterbahn-POV) → Minispiel-Montage („36
 Minispiele“, Beat-Schnitte inkl. Hochkant-Triptychon) → Multiplayer-Besuch
 → **Kapitel-Karte GOOBY RANCH** (Key-Artwork + Logo) → Überlandfahrt →
 Hof mit Pferden → freies Reiten → **Bergmassiv mit Hängebrücke + Bergsee**
@@ -88,11 +90,46 @@ Movie-Maker rendert offline (feste Schrittweite) — die Aufnahme darf
 beliebig langsam sein, unter llvmpipe sind ~1–3 fps normal (alle Clips
 zusammen ≈ 2–3 h, unter Last entsprechend länger).
 
+### Einzelbild-Kontrolle (v3, dokumentiert)
+
+Vor dem Endrender wurden aus den fertigen `public/clips/*.mp4` über 20
+Einzelbilder in 100 % (native 1080p, teils zusätzliche 100 %-Crops)
+geprüft — pro Reviewer-Befund mindestens ein Beleg-Frame im gewählten
+`startFrom`-Fenster:
+
+- **Kornfeld** (`ranch_zonen` ~F1000): echte Ährenbüschel, im Wind geneigt
+  — keine „schwebenden Pfeile“.
+- **Wasser** (`ranch_berge` ~F700): Wellenringe, Tiefenverlauf,
+  Schaumsaum am Ufer.
+- **Hufe** (`ranch` ~F594, `ranch_comp` ~F600): Bodenkontakt bzw. sauberer
+  Sprungbogen ohne Clipping durch Planken/Stangen.
+- **Regen** (`ranch_wetter` ~F300): mehrschichtige Tropfen +
+  Aufschlagringe.
+- **Ortsschilder** (`city_day` ~F400): mitwachsende Billboards, lesbar.
+- **Fell-Look** (`showcase` ~F120, 100 %-Crop): Korn, Flaum-Silhouette,
+  warmer Lichtsaum.
+- **Emotionen** (`emotion` F56–128/F330–402): Schreck-„!“ und Herz-Symbol
+  über dem Kopf inkl. Regie-Zoom.
+- **Haus im Garten** (`haus_garten` ~F400): Haus mit Dach im gewählten
+  Stil, Gooby winkt vor der Tür.
+- **Funkelpark** (`funkelpark` F36/F500+): lesbares Torschild bzw.
+  Looping-POV.
+- Alle 30 Fenster gegen die tatsächliche Framezahl der Clips geprüft
+  (kein Fenster läuft über das Clip-Ende hinaus → keine Schwarzframes).
+
 Verfügbare Clip-Treiber: `GOOBY-GODOT/tools/capture/clips/*.gd`
 (Minigames als `mg_*`, Stadt `city_*`, Haus `home_*` inkl. `home_style`
 für den Gestalten-Modus, Ranch `ranch`, `ranch_fahrt`, `ranch_ride`,
 `ranch_berge`, `ranch_zonen`, `ranch_comp`, `ranch_dorf`, `ranch_wetter`,
-`ranch_mp`, dazu `showcase`, `wardrobe`, `ikea`, `visit`, `cutscene`).
+`ranch_mp`, dazu `showcase`, `wardrobe`, `ikea`, `visit`, `cutscene` —
+und neu: `emotion` (FEEL-AC-Nahaufnahme mit Schreck/Verliebtheit inkl.
+MomentRegie-Zoom), `haus_garten` (HAUS-SICHT: das eigene Haus im Garten)
+und `funkelpark` (Tor-Totale + Achterbahn-POV; Boarding/Lift werden per
+deterministischem `simuliere()`-Vorlauf übersprungen)).
+WICHTIG für Treiber-Autoren: `GoobyHome.walk_to()` hat ein WANDUHR-Timeout
+(`Time.get_ticks_msec`) — im Movie-Maker (1–6 fps Wandzeit) bricht das
+Läufe nach wenigen Frames ab. In Treibern stattdessen
+`gooby.call("_start_walking", ziel)` benutzen (ohne Timeout).
 Die Minigame-Treiber pushen Touch-Events direkt in den SubViewport des
 MinigameHost (Fenster-Events erreichen dessen `_unhandled_input` nicht).
 Trailer-Regie-Detail: Der lokale `RanchWeltReiter` zeigt selbst keinen

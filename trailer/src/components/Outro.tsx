@@ -14,13 +14,13 @@ const FEATURES = [
   'Komplett neu in 3D',
   '36 Minispiele',
   'NEU: Gooby Ranch',
+  '12 große Gefühle',
+  'Funkelpark',
   'Offene Welt & Wetter',
   'Turnier-Liga',
   'Multiplayer & Ausritte',
-  'Quests & NPCs',
-  'Gestalten-Modus',
-  '92 Kosmetik-Teile',
-  'Bauen & GOUHBUS',
+  'Erfolge & Tagesquests',
+  'Tierarzt & Radio',
 ];
 
 const CHIP_COLORS = [

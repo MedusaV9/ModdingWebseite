@@ -198,6 +198,11 @@ static func _build_ghost_button(theme: Theme) -> void:
 	var disabled := theme.get_stylebox("disabled", "GhostButton") as StyleBoxFlat
 	disabled.bg_color = Color(AcTokens.PAPER, 0.0)
 	disabled.border_color = Color(AcTokens.INK_FAINT, 0.25)
+	# UIFINAL-Guardrail: Ghost-Buttons tragen kleine Glyphen (×, ‹) — die
+	# authored SVGs sind aber 96 px groß. Ungedeckelt sprengte das den Knopf
+	# (FB3-Regression „Riesen-X“ im Was-nun-Hinweis); Screens dürfen den
+	# Deckel per Override weiter mit UiScale skalieren.
+	theme.set_constant("icon_max_width", "GhostButton", 22)
 
 
 ## „AcCardButton“ (E7-P0-3): Karten-Optik als ECHTE Button-Variation für

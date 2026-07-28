@@ -23,6 +23,7 @@ func _setup() -> void:
 	scene.relay_enabled = false
 	scene.receive_params({"snapshot": _snapshot_haus(), "role": VisitService.ROLE_GUEST})
 	add_child(scene)
+	schedule(0.1, _kamera_flacher)
 	schedule(1.0, _peer_erscheint)
 	schedule(2.0, func() -> void: _peer_geht(Vector3(1.6, 0.0, 1.2), 2.6))
 	schedule(5.2, func() -> void: _peer_geht(Vector3(-1.2, 0.0, 2.0), 2.4))
@@ -31,7 +32,9 @@ func _setup() -> void:
 		func() -> void:
 			if scene.my_gooby != null:
 				scene.my_gooby.set_wander_enabled(false)
-				scene.my_gooby.walk_to(Vector3(0.4, 0.0, 2.2))
+				# _start_walking statt walk_to: dessen Timeout ist Wanduhr-
+				# basiert und bricht im Movie-Maker (1–6 fps Wandzeit) ab.
+				scene.my_gooby.call("_start_walking", Vector3(0.4, 0.0, 2.2))
 	)
 	schedule(
 		6.4,
@@ -40,6 +43,17 @@ func _setup() -> void:
 				scene.my_gooby.rig.play_clip("wave")
 				scene.my_gooby.rig.set_emotion("happy")
 	)
+
+
+## Wie in home_room: seit dem HAUS-Update haben Innenräume Deckenbalken —
+## die Standard-Schrägsicht legt sie quer durch die Bildmitte. Flacherer
+## Blick fürs Trailer-Framing (Balken bleiben oben als Feature sichtbar).
+func _kamera_flacher() -> void:
+	var rig: Node3D = scene._camera_rig
+	if rig == null:
+		return
+	var dist: float = rig._offset.length()
+	rig._offset = Vector3(0.0, 2.9, 5.6).normalized() * dist
 
 
 func _snapshot_haus() -> Dictionary:

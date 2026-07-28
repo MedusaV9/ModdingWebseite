@@ -13,34 +13,39 @@ import {BEAT, COLORS} from './theme';
 loadBaloo();
 
 /**
- * Fahrplan v2 (60 fps, Beat = 36 Frames bei 100 BPM — alle Schnitte liegen
- * auf Beat-Vielfachen; Kapitelwechsel auf Taktgrenzen):
+ * Fahrplan v3 (60 fps, Beat = 36 Frames bei 100 BPM — alle Schnitte liegen
+ * auf Beat-Vielfachen; 96 Beats = 57,6 s):
  *
  *   0.0– 2.4 s  Titelkarte „GOOBY 5.0“
- *   2.4– 6.0 s  Der wiederhergestellte Gooby (Showcase, Original-Modell)
- *   6.0– 8.4 s  Zuhause mit echten Möbeln (Wohnzimmer)
- *   8.4–10.8 s  Baumodus (Bett aus dem Lager + Hammer-Gag)
- *  10.8–12.6 s  NEU: Gestalten-Modus (Fassaden-/Dach-/Türfarben live)
- *  12.6–14.4 s  GOUHBUS-Möbelausstellung in 3D
- *  14.4–16.2 s  Garderobe (92 Kosmetik-Teile am lebenden Gooby)
- *  16.2–18.0 s  Stadt-Panorama
- *  18.0–19.8 s  Autofahrt am Tag
- *  19.8–21.6 s  Stadt bei Nacht
- *  21.6–28.8 s  Minispiel-Montage „36 Minispiele“ (6 Slots à 1,2 s,
+ *   2.4– 4.8 s  Der wiederhergestellte Gooby (Showcase, Fell-Look mit Flaum)
+ *   4.8– 7.2 s  NEU: Emotions-Nahaufnahme — Schreck (!) + Verliebtheit (♥)
+ *               mit Symbol überm Kopf, echtem Regie-Zoom und Zeitlupe
+ *   7.2– 9.0 s  Zuhause mit echten Möbeln (Wohnzimmer)
+ *   9.0–11.4 s  Baumodus (Bett aus dem Lager, Vorstadt-Kulisse, Hammer-Gag)
+ *  11.4–13.2 s  Gestalten-Modus (Fassaden-/Dach-/Türfarben live)
+ *  13.2–15.0 s  NEU: Das eigene Haus steht im Garten (HAUS-SICHT)
+ *  15.0–16.2 s  GOUHBUS-Möbelausstellung in 3D
+ *  16.2–18.0 s  Garderobe (92 Kosmetik-Teile am lebenden Gooby)
+ *  18.0–19.2 s  Stadt-Panorama
+ *  19.2–21.0 s  Autofahrt am Tag (lesbare Billboard-Ortsschilder)
+ *  21.0–22.2 s  Stadt bei Nacht
+ *  22.2–25.2 s  NEU: Funkelpark — Tor-Totale, dann Achterbahn-POV
+ *  25.2–32.4 s  Minispiel-Montage „36 Minispiele“ (6 Slots à 1,2 s,
  *               inkl. Hochkant-Triptychon)
- *  28.8–30.6 s  Multiplayer-Besuch (zwei Goobys im Wohnzimmer)
- *  30.6–32.4 s  ★ Kapitel-Karte GOOBY RANCH (Key-Artwork + Logo)
- *  32.4–34.2 s  Überlandfahrt zur Ranch (Landstraße, Felder, Kühe)
- *  34.2–36.0 s  Ranch-Hof (Gooby-Pferde im Galopp)
- *  36.0–37.8 s  Freies Reiten in der offenen Region
- *  37.8–40.2 s  Bergmassiv: Hängebrücke über die Schlucht + Bergsee
- *  40.2–43.8 s  Neue-Zonen-Montage (Lavendelwiese, Nebelmoor, Turmruine,
- *               Muschelbucht, Apfelgarten, Kornfeld — 6 × 0,6 s)
- *  43.8–45.6 s  7 Wetterlagen & Tageszeiten (Regen → Regenbogen → Nacht)
- *  45.6–47.4 s  Dorf Hufingen (Quests & NPCs)
- *  47.4–49.2 s  Turnier-Springen (Wettbewerbe + Liga)
- *  49.2–51.0 s  Multiplayer-Ausritt (zwei Reiter im Weidetal)
- *  51.0–54.6 s  Outro (Feature-Chips + Logo + Musik-Credit)
+ *  32.4–33.6 s  Multiplayer-Besuch (zwei Goobys im Wohnzimmer)
+ *  33.6–35.4 s  ★ Kapitel-Karte GOOBY RANCH (Key-Artwork + Logo)
+ *  35.4–37.2 s  Überlandfahrt zur Ranch (Landstraße, Felder, Kühe)
+ *  37.2–39.0 s  Ranch-Hof (Gooby-Pferde im Galopp, Huf-Bodenkontakt)
+ *  39.0–40.8 s  Freies Reiten in der offenen Region
+ *  40.8–42.0 s  Bergmassiv: Hängebrücke über die Schlucht
+ *  42.0–43.2 s  Bergsee (Wasser mit Wellen, Tiefe und Schaumsaum)
+ *  43.2–46.8 s  Neue-Zonen-Montage (Lavendel, Moor, Ruine, Bucht,
+ *               Apfelgarten, Kornfeld mit Wind — 6 × 0,6 s)
+ *  46.8–48.6 s  7 Wetterlagen (mehrschichtiger Regen mit Aufschlagringen)
+ *  48.6–50.4 s  Dorf Hufingen (Quests & NPCs)
+ *  50.4–52.2 s  Turnier-Springen (Wettbewerbe + Liga)
+ *  52.2–54.0 s  Multiplayer-Ausritt (zwei Reiter im Weidetal)
+ *  54.0–57.6 s  Outro (Feature-Chips + Logo + Musik-Credit)
  */
 
 type Abschnitt = {
@@ -50,9 +55,9 @@ type Abschnitt = {
   flash?: boolean;
 };
 
-const MONTAGE_START = 36 * BEAT; // 21,6 s
+const MONTAGE_START = 42 * BEAT; // 25,2 s
 const SLOT = 2 * BEAT; // 1,2 s pro Montage-Slot
-const ZONEN_START = 67 * BEAT; // 40,2 s
+const ZONEN_START = 72 * BEAT; // 43,2 s
 const ZONEN_SLOT = BEAT; // 0,6 s pro Zonen-Shot
 
 /**
@@ -63,7 +68,7 @@ const ZONEN_SLOT = BEAT; // 0,6 s pro Zonen-Shot
  */
 const MG_RECT = {x: 2, y: 190, w: 1626, h: 750};
 
-export const TRAILER_DURATION = 91 * BEAT; // 54,6 s = 3276 Frames
+export const TRAILER_DURATION = 96 * BEAT; // 57,6 s = 3456 Frames
 
 /** Neue-Zonen-Montage: [startFrom im Quellclip, Badge, Akzent]. */
 const ZONEN: [number, string, string][] = [
@@ -80,29 +85,59 @@ export const Trailer: React.FC = () => {
     {at: 0, dur: 4 * BEAT, el: <TitleCard />},
     {
       at: 4 * BEAT,
-      dur: 6 * BEAT,
+      dur: 4 * BEAT,
       flash: true,
       el: (
         <ClipScene
           src="clips/showcase.mp4"
-          startFrom={30}
-          durationInFrames={6 * BEAT}
+          startFrom={60}
+          durationInFrames={4 * BEAT}
           label="Alles neu — und ganz der Alte!"
           accent={COLORS.pink}
-          zoomFrom={1.1}
-          zoomTo={1.22}
+          zoomFrom={1.08}
+          zoomTo={1.18}
+        />
+      ),
+    },
+    // ---- NEU: Emotions-Nahaufnahme (Schreck, dann Verliebtheit) ----
+    {
+      at: 8 * BEAT,
+      dur: 2 * BEAT,
+      flash: true,
+      el: (
+        <ClipScene
+          src="clips/emotion.mp4"
+          startFrom={56}
+          durationInFrames={2 * BEAT}
+          label="Neu: 12 große Gefühle"
+          accent={COLORS.teal}
+          zoomTo={1.04}
         />
       ),
     },
     {
       at: 10 * BEAT,
-      dur: 4 * BEAT,
+      dur: 2 * BEAT,
+      el: (
+        <ClipScene
+          src="clips/emotion.mp4"
+          startFrom={330}
+          durationInFrames={2 * BEAT}
+          zoomTo={1.06}
+        >
+          <MontageBadge text="… mit Herz!" accent={COLORS.pink} />
+        </ClipScene>
+      ),
+    },
+    {
+      at: 12 * BEAT,
+      dur: 3 * BEAT,
       flash: true,
       el: (
         <ClipScene
           src="clips/home_room.mp4"
           startFrom={60}
-          durationInFrames={4 * BEAT}
+          durationInFrames={3 * BEAT}
           label="Dein Zuhause — mit echten Möbeln"
           accent={COLORS.teal}
           zoomTo={1.06}
@@ -110,13 +145,13 @@ export const Trailer: React.FC = () => {
       ),
     },
     {
-      at: 14 * BEAT,
-      dur: 4 * BEAT,
+      at: 15 * BEAT,
+      dur: 2 * BEAT,
       el: (
         <ClipScene
           src="clips/home_build.mp4"
           startFrom={150}
-          durationInFrames={4 * BEAT}
+          durationInFrames={2 * BEAT}
           label="Bau um, was du willst …"
           accent={COLORS.teal}
           zoomTo={1.05}
@@ -124,9 +159,22 @@ export const Trailer: React.FC = () => {
       ),
     },
     {
-      at: 18 * BEAT,
+      at: 17 * BEAT,
+      dur: 2 * BEAT,
+      el: (
+        <ClipScene
+          src="clips/home_build.mp4"
+          startFrom={500}
+          durationInFrames={2 * BEAT}
+          label="… mitten in deiner Nachbarschaft"
+          accent={COLORS.gold}
+          zoomTo={1.04}
+        />
+      ),
+    },
+    {
+      at: 19 * BEAT,
       dur: 3 * BEAT,
-      flash: true,
       el: (
         <ClipScene
           src="clips/home_style.mp4"
@@ -138,14 +186,30 @@ export const Trailer: React.FC = () => {
         />
       ),
     },
+    // ---- NEU: Das eigene Haus steht im Garten ----
     {
-      at: 21 * BEAT,
+      at: 22 * BEAT,
       dur: 3 * BEAT,
+      flash: true,
+      el: (
+        <ClipScene
+          src="clips/haus_garten.mp4"
+          startFrom={324}
+          durationInFrames={3 * BEAT}
+          label="Neu: Dein Haus steht im Garten"
+          accent={COLORS.gold}
+          zoomTo={1.05}
+        />
+      ),
+    },
+    {
+      at: 25 * BEAT,
+      dur: 2 * BEAT,
       el: (
         <ClipScene
           src="clips/ikea.mp4"
           startFrom={100}
-          durationInFrames={3 * BEAT}
+          durationInFrames={2 * BEAT}
           label="Möbel shoppen im GOUHBUS"
           accent={COLORS.yellow}
           zoomTo={1.04}
@@ -153,7 +217,7 @@ export const Trailer: React.FC = () => {
       ),
     },
     {
-      at: 24 * BEAT,
+      at: 27 * BEAT,
       dur: 3 * BEAT,
       el: (
         <ClipScene
@@ -167,14 +231,14 @@ export const Trailer: React.FC = () => {
       ),
     },
     {
-      at: 27 * BEAT,
-      dur: 3 * BEAT,
+      at: 30 * BEAT,
+      dur: 2 * BEAT,
       flash: true,
       el: (
         <ClipScene
           src="clips/city_overview.mp4"
           startFrom={60}
-          durationInFrames={3 * BEAT}
+          durationInFrames={2 * BEAT}
           label="Eine lebendige Stadt"
           accent={COLORS.teal}
           zoomTo={1.0}
@@ -182,12 +246,12 @@ export const Trailer: React.FC = () => {
       ),
     },
     {
-      at: 30 * BEAT,
+      at: 32 * BEAT,
       dur: 3 * BEAT,
       el: (
         <ClipScene
           src="clips/city_day.mp4"
-          startFrom={300}
+          startFrom={340}
           durationInFrames={3 * BEAT}
           label="Steig ein und fahr los"
           accent={COLORS.gold}
@@ -196,17 +260,47 @@ export const Trailer: React.FC = () => {
       ),
     },
     {
-      at: 33 * BEAT,
-      dur: 3 * BEAT,
+      at: 35 * BEAT,
+      dur: 2 * BEAT,
       el: (
         <ClipScene
           src="clips/city_night.mp4"
           startFrom={240}
-          durationInFrames={3 * BEAT}
+          durationInFrames={2 * BEAT}
           label="… auch nachts"
           accent={COLORS.pinkDark}
           zoomTo={1.04}
         />
+      ),
+    },
+    // ---- NEU: Funkelpark (Totale, dann Achterbahn-POV) ----
+    {
+      at: 37 * BEAT,
+      dur: 2 * BEAT,
+      flash: true,
+      el: (
+        <ClipScene
+          src="clips/funkelpark.mp4"
+          startFrom={36}
+          durationInFrames={2 * BEAT}
+          label="Neu: der Funkelpark!"
+          accent={COLORS.pink}
+          zoomTo={1.04}
+        />
+      ),
+    },
+    {
+      at: 39 * BEAT,
+      dur: 3 * BEAT,
+      el: (
+        <ClipScene
+          src="clips/funkelpark.mp4"
+          startFrom={500}
+          durationInFrames={3 * BEAT}
+          zoomTo={1.05}
+        >
+          <MontageBadge text="Achterbahn-POV" accent={COLORS.teal} />
+        </ClipScene>
       ),
     },
     // ---- Minispiel-Montage (Beat-Schnitte) ----
@@ -300,14 +394,14 @@ export const Trailer: React.FC = () => {
       ),
     },
     {
-      at: 48 * BEAT,
-      dur: 3 * BEAT,
+      at: 54 * BEAT,
+      dur: 2 * BEAT,
       flash: true,
       el: (
         <ClipScene
           src="clips/visit.mp4"
           startFrom={200}
-          durationInFrames={3 * BEAT}
+          durationInFrames={2 * BEAT}
           label="Multiplayer: Besucht euch!"
           accent={COLORS.pink}
           zoomTo={1.05}
@@ -315,9 +409,9 @@ export const Trailer: React.FC = () => {
       ),
     },
     // ---- Kapitel GOOBY RANCH ----
-    {at: 51 * BEAT, dur: 3 * BEAT, flash: true, el: <RanchCard />},
+    {at: 56 * BEAT, dur: 3 * BEAT, flash: true, el: <RanchCard />},
     {
-      at: 54 * BEAT,
+      at: 59 * BEAT,
       dur: 3 * BEAT,
       flash: true,
       el: (
@@ -332,7 +426,7 @@ export const Trailer: React.FC = () => {
       ),
     },
     {
-      at: 57 * BEAT,
+      at: 62 * BEAT,
       dur: 3 * BEAT,
       el: (
         <ClipScene
@@ -346,7 +440,7 @@ export const Trailer: React.FC = () => {
       ),
     },
     {
-      at: 60 * BEAT,
+      at: 65 * BEAT,
       dur: 3 * BEAT,
       el: (
         <ClipScene
@@ -360,7 +454,7 @@ export const Trailer: React.FC = () => {
       ),
     },
     {
-      at: 63 * BEAT,
+      at: 68 * BEAT,
       dur: 2 * BEAT,
       flash: true,
       el: (
@@ -375,14 +469,14 @@ export const Trailer: React.FC = () => {
       ),
     },
     {
-      at: 65 * BEAT,
+      at: 70 * BEAT,
       dur: 2 * BEAT,
       el: (
         <ClipScene
           src="clips/ranch_berge.mp4"
-          startFrom={500}
+          startFrom={660}
           durationInFrames={2 * BEAT}
-          label="… mit Bergsee überm Nebel"
+          label="… und oben wartet der Bergsee"
           accent={COLORS.teal}
           zoomTo={1.04}
         />
@@ -405,7 +499,7 @@ export const Trailer: React.FC = () => {
       ),
     })),
     {
-      at: 73 * BEAT,
+      at: 78 * BEAT,
       dur: 3 * BEAT,
       el: (
         <ClipScene
@@ -419,12 +513,12 @@ export const Trailer: React.FC = () => {
       ),
     },
     {
-      at: 76 * BEAT,
+      at: 81 * BEAT,
       dur: 3 * BEAT,
       el: (
         <ClipScene
           src="clips/ranch_dorf.mp4"
-          startFrom={400}
+          startFrom={15}
           durationInFrames={3 * BEAT}
           label="Dorf Hufingen: Quests & NPCs"
           accent={COLORS.tealDark}
@@ -433,13 +527,13 @@ export const Trailer: React.FC = () => {
       ),
     },
     {
-      at: 79 * BEAT,
+      at: 84 * BEAT,
       dur: 3 * BEAT,
       flash: true,
       el: (
         <ClipScene
           src="clips/ranch_comp.mp4"
-          startFrom={260}
+          startFrom={525}
           durationInFrames={3 * BEAT}
           label="Gewinne Turniere — steig in der Liga auf!"
           accent={COLORS.pink}
@@ -448,12 +542,12 @@ export const Trailer: React.FC = () => {
       ),
     },
     {
-      at: 82 * BEAT,
+      at: 87 * BEAT,
       dur: 3 * BEAT,
       el: (
         <ClipScene
           src="clips/ranch_mp.mp4"
-          startFrom={240}
+          startFrom={400}
           durationInFrames={3 * BEAT}
           label="Gemeinsame Ausritte & Rennen"
           accent={COLORS.teal}
@@ -461,12 +555,12 @@ export const Trailer: React.FC = () => {
         />
       ),
     },
-    {at: 85 * BEAT, dur: 6 * BEAT, flash: true, el: <Outro />},
+    {at: 90 * BEAT, dur: 6 * BEAT, flash: true, el: <Outro />},
   ];
 
   return (
     <AbsoluteFill style={{backgroundColor: COLORS.cream}}>
-      <Audio src={staticFile('audio/glitter_blast_cut54.m4a')} />
+      <Audio src={staticFile('audio/glitter_blast_cut576.m4a')} />
       {abschnitte.map((ab, i) => (
         <Sequence key={i} from={ab.at} durationInFrames={ab.dur}>
           {ab.el}

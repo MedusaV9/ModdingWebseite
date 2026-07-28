@@ -408,6 +408,52 @@ func is_eye_active() -> bool:
 	return _eye_button.button_pressed
 
 
+## UIFINAL — freier Streifen für Sprechblasen/Overlays am unteren Rand:
+## `top` = Canvas-y der Oberkante der HUD-Bodenmöblierung (Hochkant: das
+## Dock; Querformat: Auge/Gooby-Chip-Zeile), `width` = maximale Breite
+## eines MITTIG zentrierten Elements, ohne die Cockpit-Spalte zu schneiden.
+## Die DialogBubble fragt das ab, statt hinter Auge/Chip zu liegen.
+func bubble_lane() -> Dictionary:
+	var canvas := Vector2(get_viewport().get_visible_rect().size)
+	var insets := _safe_insets()
+	var portrait := current_layout == HudLayoutLogic.Layout.PORTRAIT
+	var lane_top := canvas.y - float(insets["bottom"]) - EDGE_PAD
+	var width := canvas.x - float(insets["left"]) - float(insets["right"]) - 2.0 * EDGE_PAD
+	if portrait and _portrait_dock.visible:
+		lane_top = _portrait_dock.get_global_rect().position.y
+	else:
+		lane_top -= maxf(_eye_button.size.y, _eye_button.get_combined_minimum_size().y)
+		var column_left := canvas.x - float(insets["right"]) - EDGE_PAD - _column_width
+		width = minf(width, 2.0 * (column_left - 12.0 - canvas.x / 2.0))
+	return {"top": lane_top, "width": maxf(width, 220.0)}
+
+
+## UIFINAL — freie Kopf-Zone für den „Was nun?“-Hinweis: Hochkant die volle
+## Breite UNTER der Statuszeile; Querformat der Streifen ZWISCHEN der
+## Status-Spalte links und dem Zahnrad rechts, oben bündig mit der
+## Safe-Area (die Cockpit-Spalte beginnt tiefer). Nie über HUD-Knöpfen.
+func hint_lane() -> Dictionary:
+	var canvas := Vector2(get_viewport().get_visible_rect().size)
+	var insets := _safe_insets()
+	var left := float(insets["left"]) + EDGE_PAD
+	var right := canvas.x - float(insets["right"]) - EDGE_PAD
+	var top := float(insets["top"]) + EDGE_PAD
+	if current_layout == HudLayoutLogic.Layout.PORTRAIT:
+		if _top_bar != null and _top_bar.visible:
+			top = maxf(top, _top_bar.get_global_rect().end.y + 8.0)
+	else:
+		if _left_column != null and _left_column.visible:
+			left = maxf(left, _left_column.get_global_rect().end.x + 12.0)
+		if _settings_button != null:
+			right = minf(right, _settings_button.get_global_rect().position.x - 12.0)
+		# Auch an der Cockpit-Spalte enden: auf kurzen Canvases ragt eine
+		# hohe Karte sonst in deren oberste Knopfzeile.
+		if _landscape_column != null and _landscape_column.visible:
+			right = minf(right, _landscape_column.get_global_rect().position.x - 12.0)
+		top += 4.0
+	return {"left": left, "right": maxf(right, left + 220.0), "top": top}
+
+
 ## Stat-Detail-Sheet (Tap auf eine Status-Kapsel): 4 Stats groß mit
 ## Icons + Balken + Buff-Anzeige (`hud_status_sheet.gd`).
 func open_status_sheet() -> void:

@@ -123,6 +123,11 @@ var _pending_oneshot := ""
 
 var _emotion := "neutral"
 var _emotion_weights: Dictionary = {}  # emotion -> aktuelles Gewicht
+## FEEL-AC: optionales Ausdrucks-Override (GoobyFeelings) — Gesichts-MIX auf
+## den vorhandenen emotion_*-Shapekeys + eigene Körperpose. Leer = normales
+## Ein-Hot-Verhalten über _emotion. KEINE neuen Shapekey-Namen (Vertrag!).
+var _expr_faces: Dictionary = {}
+var _expr_pose: Dictionary = {}
 var _pose_ear_l := 0.06  # aktuelle (geglättete) Körperpose, Start = neutral
 var _pose_ear_r := 0.06
 var _pose_head := 0.0
@@ -398,6 +403,25 @@ func get_emotion() -> String:
 	return _emotion
 
 
+## FEEL-AC: Ausdrucks-Override — blendet die emotion_*-Shapekeys auf einen
+## freien MIX (Schlüssel = Emotions-Ids aus EMOTIONS, Werte 0..1) und die
+## Körperpose auf `pose` (Kanäle wie EMOTION_POSES; fehlende = neutral 0).
+## set_emotion() bleibt unangetastet und übernimmt wieder, sobald
+## clear_expression_override() aufgeräumt hat — dieselbe weiche Lerp-Rampe.
+func set_expression_override(faces: Dictionary, pose: Dictionary) -> void:
+	_expr_faces = faces.duplicate()
+	_expr_pose = pose.duplicate()
+
+
+func clear_expression_override() -> void:
+	_expr_faces = {}
+	_expr_pose = {}
+
+
+func has_expression_override() -> bool:
+	return not _expr_faces.is_empty() or not _expr_pose.is_empty()
+
+
 ## Editor-Morphs — `value` kommt im SAVE-/EDITOR-Wertebereich an (identisch
 ## zur 2D-Onboarding-Vorschau, meta.charMorphs-Kontrakt):
 ##   eye_width:  −1 … +1, Neutral 0  (eyes_apart; Shapekey-Delta 1:1)
@@ -648,19 +672,27 @@ func _process(delta: float) -> void:
 
 func _process_emotions(delta: float) -> void:
 	var lerp_step := minf(EMOTION_LERP_SPEED * delta, 1.0)
+	var override := has_expression_override()
 	for emotion in EMOTIONS:
-		var target := 1.0 if emotion == _emotion else 0.0
+		var target := 0.0
+		if override:
+			target = clampf(float(_expr_faces.get(emotion, 0.0)), 0.0, 1.0)
+		elif emotion == _emotion:
+			target = 1.0
 		var weight: float = lerpf(_emotion_weights[emotion], target, lerp_step)
 		if absf(weight - _emotion_weights[emotion]) > 0.0005:
 			_emotion_weights[emotion] = weight
 			_set_shape("emotion_" + emotion, weight)
 	# Körperpose (P1-1): Ohren/Kopf/Arme lerpen zur EMOTION_POSES-Zielpose;
 	# der PoseModifier schreibt die Offsets nach dem AnimationTree auf die Bones.
+	# Ein FEEL-AC-Override ersetzt die Zielpose (fehlende Kanäle = 0).
 	var pose: Dictionary = EMOTION_POSES[_emotion]
-	_pose_ear_l = lerpf(_pose_ear_l, float(pose["ear_l"]), lerp_step)
-	_pose_ear_r = lerpf(_pose_ear_r, float(pose["ear_r"]), lerp_step)
-	_pose_head = lerpf(_pose_head, float(pose["head"]), lerp_step)
-	_pose_arms = lerpf(_pose_arms, float(pose["arms"]), lerp_step)
+	if override:
+		pose = _expr_pose
+	_pose_ear_l = lerpf(_pose_ear_l, float(pose.get("ear_l", 0.0)), lerp_step)
+	_pose_ear_r = lerpf(_pose_ear_r, float(pose.get("ear_r", 0.0)), lerp_step)
+	_pose_head = lerpf(_pose_head, float(pose.get("head", 0.0)), lerp_step)
+	_pose_arms = lerpf(_pose_arms, float(pose.get("arms", 0.0)), lerp_step)
 
 
 func _process_blink(delta: float) -> void:

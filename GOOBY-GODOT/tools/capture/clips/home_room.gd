@@ -11,8 +11,21 @@ func _setup() -> void:
 	room = packed.instantiate()
 	room.stunde_override = 15.0
 	add_child(room)
+	_kamera_flacher()
 	schedule(0.8, _spaziergang)
 	schedule(4.2, _winken)
+
+
+## Seit dem HAUS-Update haben Innenräume Deckenbalken (DachInnen) — die
+## Standard-Schrägsicht legt sie quer durch die Bildmitte. Flacherer Blick
+## fürs Trailer-Framing: Balken bleiben als Feature am oberen Bildrand
+## sichtbar, Gooby und Möbel bleiben frei.
+func _kamera_flacher() -> void:
+	var rig: Node3D = room.camera_rig()
+	if rig == null:
+		return
+	var dist: float = rig._offset.length()
+	rig._offset = Vector3(0.0, 2.9, 5.6).normalized() * dist
 
 
 func _spaziergang() -> void:
@@ -20,7 +33,9 @@ func _spaziergang() -> void:
 	if gooby == null:
 		return
 	gooby.set_wander_enabled(false)
-	gooby.walk_to(Vector3(1.2, 0.0, 1.6))
+	# _start_walking statt walk_to: dessen Timeout ist Wanduhr-basiert und
+	# bricht den Lauf im Movie-Maker (1–6 fps Wandzeit) nach Frames ab.
+	gooby.call("_start_walking", Vector3(1.2, 0.0, 1.6))
 
 
 func _winken() -> void:

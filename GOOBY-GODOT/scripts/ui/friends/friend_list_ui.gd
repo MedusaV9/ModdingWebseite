@@ -89,26 +89,53 @@ static func style_status_chip(chip: Button, status: int) -> void:
 	chip.add_theme_color_override("icon_normal_color", chip.get_theme_color("font_color"))
 
 
-## Text-Leerzustand: Mini-Hasen-ASCII (aus den Strings) + Hinweiszeile.
-## `ui_scale` > 1 skaliert die Fonts (FIX1, zentrale UiScale-Regel).
-static func build_empty_state(art_key: String, text_key: String, ui_scale := 1.0) -> Control:
+## Leerzustand mit Charme (UIFINAL): Hase im weichen Kreis-Well statt
+## ASCII-Zeichen — der `_art_key` bleibt für die Aufrufer-Signatur erhalten.
+## `ui_scale` skaliert Maße/Fonts (FIX1, zentrale UiScale-Regel).
+static func build_empty_state(_art_key: String, text_key: String, ui_scale := 1.0) -> Control:
+	var s := maxf(ui_scale, 1.0)
 	var box := VBoxContainer.new()
+	box.name = "EmptyState"
 	box.alignment = BoxContainer.ALIGNMENT_CENTER
-	box.add_theme_constant_override("separation", int(4 * ui_scale))
-	var art := Label.new()
-	art.text = I18nService.t(art_key)
-	art.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	art.add_theme_color_override("font_color", COLOR_OFFLINE)
-	if ui_scale > 1.0:
-		art.add_theme_font_size_override("font_size", int(16 * ui_scale))
-	box.add_child(art)
+	box.add_theme_constant_override("separation", int(12 * s))
+	# Luft nach oben/unten — der Leerzustand darf ruhig atmen.
+	var top_pad := Control.new()
+	top_pad.custom_minimum_size = Vector2(0.0, 24.0 * s)
+	box.add_child(top_pad)
+	var well_row := HBoxContainer.new()
+	well_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	box.add_child(well_row)
+	# Winkender Gooby als „Sticker-Karte“ — die Illustration bringt den
+	# Charme, die Paper-Karte rahmt sie wie im Sticker-Album.
+	var well := PanelContainer.new()
+	var well_style := StyleBoxFlat.new()
+	well_style.bg_color = AcTokens.PAPER
+	well_style.set_corner_radius_all(AcTokens.RADIUS_CARD)
+	well_style.set_content_margin_all(10.0 * s)
+	well_style.shadow_color = AcTokens.SHADOW_SOFT_COLOR
+	well_style.shadow_size = AcTokens.SHADOW_SOFT_SIZE
+	well_style.shadow_offset = Vector2(0.0, AcTokens.SHADOW_SOFT_OFFSET_Y)
+	well.add_theme_stylebox_override("panel", well_style)
+	well_row.add_child(well)
+	var art := TextureRect.new()
+	art.texture = load("res://assets/ui/motif_gooby_wave.png")
+	art.custom_minimum_size = Vector2.ONE * roundf(120.0 * s)
+	art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	well.add_child(art)
 	var text := Label.new()
-	text.theme_type_variation = &"CaptionLabel"
+	text.theme_type_variation = &"SoftLabel"
 	text.text = I18nService.t(text_key)
 	text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	if ui_scale > 1.0:
-		text.add_theme_font_size_override("font_size", int(15 * ui_scale))
+	text.add_theme_font_size_override("font_size", int(17 * s))
+	# `s` steckt schon in der Schrift — Screens, die zusätzlich pauschal
+	# `ScreenShell.scale_fonts` fahren (FriendsScreen), dürfen hier nicht
+	# noch einmal multiplizieren (Runde-2-Befund: Mini-Sticker/Doppel-Skala).
+	text.set_meta(ScreenShell.META_FONT_SKIP, true)
 	box.add_child(text)
+	var bottom_pad := Control.new()
+	bottom_pad.custom_minimum_size = Vector2(0.0, 16.0 * s)
+	box.add_child(bottom_pad)
 	return box

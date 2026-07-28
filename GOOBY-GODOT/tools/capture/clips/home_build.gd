@@ -29,16 +29,31 @@ func _setup() -> void:
 		func() -> void:
 			if room._gooby != null:
 				room._gooby.set_wander_enabled(false)
-				room._gooby.walk_to(_ecke_welt())
+				# _start_walking statt walk_to (Wanduhr-Timeout, s. haus_garten).
+				room._gooby.call("_start_walking", _ecke_welt())
 	)
 	schedule(1.2, func() -> void: room.open_build_mode())
 	schedule(2.4, func() -> void: _neues_teil("bedSingle"))
 	schedule(2.6, func() -> void: _glide_zu_freier_zelle("bedSingle", 1.8))
 	schedule(4.8, func() -> void: _bestaetigen_bis(6.4))
+	# Phase 2 — Vorstadt-Vista: Kamera flach + weit raus tweeenen, damit die
+	# überarbeitete Kulisse (Straße im Norden, Nachbarhäuser, Baumreihen,
+	# Hügel) hinter der Raumkante ins Bild kommt. Die Standard-Schrägsicht
+	# (64,8°) sieht davon nichts; die Pflanzen-Platzierung läuft währenddessen
+	# weiter (Pixelziel wird jeden Frame live unprojiziert).
+	schedule(6.6, _vista_auf)
 	schedule(7.0, func() -> void: _neues_teil("plantSmall2"))
 	schedule(7.2, func() -> void: _glide_zu_freier_zelle("plantSmall2", 1.4))
 	schedule(9.0, func() -> void: _bestaetigen_bis(10.2))
-	schedule(10.8, func() -> void: _bm().close())
+	schedule(11.4, func() -> void: _bm().close())
+
+
+func _vista_auf() -> void:
+	var cam: Node = _bm()._build_camera
+	var tw := create_tween()
+	tw.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+	tw.tween_property(cam, "_pitch", 0.8, 1.4)
+	tw.parallel().tween_property(cam, "_dist", cam._dist * 2.2, 1.4)
 
 
 func _bm() -> Node:

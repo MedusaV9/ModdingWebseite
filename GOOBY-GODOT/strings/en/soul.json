@@ -169,6 +169,56 @@
 			"muede_b": "Yaaawn… Just lying down for a bit. Just a bit.",
 			"dreckig_a": "I feel a little sticky. Bath time?",
 			"regen_a": "It's raining… I'll sit by the window and watch the drops."
+		},
+		"feel": {
+			"schreck": {
+				"a": "WAAH! W-what was THAT?!",
+				"b": "Yikes!! My heart is pounding up to my ears!"
+			},
+			"freude": {
+				"a": "Hehe! Today is simply a good day!",
+				"b": "That makes me happy, you know?"
+			},
+			"begeisterung": {
+				"a": "YESSS! This is the BEST!",
+				"b": "Again! Again! Please, again!"
+			},
+			"ueberraschung": {
+				"a": "Oh!! I did NOT expect that!",
+				"b": "What?! Really? For me?"
+			},
+			"verlegenheit": {
+				"a": "Um… you saw nothing, okay?",
+				"b": "T-that wasn't what it looked like…"
+			},
+			"trotz": {
+				"a": "Hmpf. I'm sulking. Officially.",
+				"b": "Nope. Just nope."
+			},
+			"traurigkeit": {
+				"a": "I'm feeling a bit small right now…",
+				"b": "Could you stay with me for a moment…?"
+			},
+			"muedigkeit": {
+				"a": "Mhhh… just five more minutes…",
+				"b": "So… sleeeepy…"
+			},
+			"neugier": {
+				"a": "Oh? What is THAT?",
+				"b": "I need a closer look at this!"
+			},
+			"stolz": {
+				"a": "Did you see that? THAT WAS ME!",
+				"b": "New record! I'm basically famous!"
+			},
+			"angst": {
+				"a": "I-is somebody there…? It's so dark…",
+				"b": "I'm not scared! Just… careful!"
+			},
+			"verliebtheit": {
+				"a": "My FAVORITE food! You know me so well!",
+				"b": "I… I think this is love."
+			}
 		}
 	}
 }

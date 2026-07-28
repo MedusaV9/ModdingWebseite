@@ -46,6 +46,8 @@ static func default_slice() -> Dictionary:
 		"stimmung": SoulMood.default_stimmung(),
 		"wunsch": {},
 		"wunschErfuellt": {},
+		# FEEL-AC (additiv): Frequenzbremse + Gates der inszenierten Gefühle.
+		"feelings": SoulFeelings.default_feelings(),
 	}
 
 
@@ -65,6 +67,7 @@ static func normalize_slice(raw: Variant) -> Dictionary:
 		if slice.get(key) is Dictionary:
 			out[key] = (slice[key] as Dictionary).duplicate(true)
 	out["stimmung"] = SoulMood.normalize(slice.get("stimmung"))
+	out["feelings"] = SoulFeelings.normalize(slice.get("feelings"))
 	var ambient: Variant = slice.get("ambient")
 	if ambient is Dictionary:
 		out["ambient"] = {

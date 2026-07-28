@@ -16,10 +16,11 @@ CRF="${CRF:-14}"
 mkdir -p "$CAP_DIR" "$CLIP_DIR"
 
 PORTRAIT="mg_mini_golf mg_fishing mg_ghost_hunt"
-ALLE="showcase home_room home_build home_style ikea wardrobe city_overview \
-city_day city_night mg_toy_racer mg_runner mg_goalie mg_gvz mg_gobnom \
-mg_mini_golf mg_fishing mg_ghost_hunt visit ranch ranch_fahrt ranch_ride \
-ranch_berge ranch_zonen ranch_comp ranch_dorf ranch_wetter ranch_mp"
+ALLE="showcase emotion home_room home_build home_style haus_garten ikea \
+wardrobe city_overview city_day city_night funkelpark mg_toy_racer mg_runner \
+mg_goalie mg_gvz mg_gobnom mg_mini_golf mg_fishing mg_ghost_hunt visit ranch \
+ranch_fahrt ranch_ride ranch_berge ranch_zonen ranch_comp ranch_dorf \
+ranch_wetter ranch_mp"
 
 CLIPS=("$@")
 if [[ ${#CLIPS[@]} -eq 0 ]]; then read -r -a CLIPS <<<"$ALLE"; fi
