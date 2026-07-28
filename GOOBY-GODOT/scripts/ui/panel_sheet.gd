@@ -139,14 +139,32 @@ func _relayout() -> void:
 	var content_min := _body.get_combined_minimum_size()
 	var desired_h := chrome_h + content_min.y
 	var rect := PanelSheetLayout.sheet_rect(canvas, insets, f, desired_h)
-	# Pass 2: Scroll-Fenster auf den verfügbaren Innenraum setzen.
+	# Pass 2: Scroll-Fenster IMMER = verfuegbarer Innenraum.
+	# Frueher: min(content, inner) — wenn content≈inner nach Layout-Pass,
+	# kollabiert die Scrollrange (Symptom: Scroll geht 1×, danach tot).
 	var inner_h := maxf(rect.size.y - chrome_h, 0.0)
-	_scroll.custom_minimum_size = Vector2(0.0, minf(content_min.y, inner_h))
+	_scroll.custom_minimum_size = Vector2(0.0, inner_h)
+	_body.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	_sheet.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	_sheet.offset_left = rect.position.x
 	_sheet.offset_top = rect.position.y
 	_sheet.offset_right = rect.position.x + rect.size.x
 	_sheet.offset_bottom = rect.position.y + rect.size.y
+	# #region agent log
+	(
+		AgentDebug
+		. log(
+			"S2",
+			"panel_sheet.gd:_relayout",
+			"sheet_scroll_geom",
+			{
+				"inner_h": inner_h,
+				"content_min_h": content_min.y,
+				"can_scroll": content_min.y > inner_h + 1.0,
+			}
+		)
+	)
+	# #endregion
 
 
 func _apply_scale(f: float) -> void:

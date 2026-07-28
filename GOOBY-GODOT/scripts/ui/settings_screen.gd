@@ -1,26 +1,8 @@
 class_name SettingsScreen
 extends Control
-## Settings-Screen (H §5.2 + RW-7 Vollausbau nach Doc RANCH-DLC-IDEAS-4 §4).
-## Abschnitte: Allgemein / Grafik / Anzeige / Steuerung / Barrierefreiheit /
-## Audio / Benachrichtigungen / Spiel / Spielstand / Updates / Ueber.
-##
-## Wirkprinzip: JEDE Einstellung schreibt sofort in /root/AppSettings
-## (persistiert atomar); die ANWENDUNG passiert zentral im QualityService
-## (graphics./display./controls./accessibility./game.autosave), im
-## AudioDirector (audio.*) und im NotificationService (notifications.*) —
-## alle lauschen auf AppSettings.setting_changed. Der Screen selbst haelt
-## nur den lokalen Spiegel `_values` fuer die Legacy-Keys (language,
-## orientation, reduced_motion, door_*, volume_*) und emittiert wie bisher
-## `setting_changed(key, value)`.
-##
-## Versteckter Entwicklermodus (Doc §5.1): die Sprachwahl ist eine
-## Segmented-Row; 3 Tipps innerhalb 1,5 s auf das BEREITS aktive "Deutsch"
-## (DevTrigger, mit Cooldown) oeffnen den Warn-Dialog mit
-## Halte-Bestaetigung (DevUnlockDialog) — erst der aktiviert /root/Dev.
-##
-## FIX1: der ganze Screen skaliert mit `UiScale.for_viewport()`; Schriften
-## nutzen zusaetzlich `UiScale.font_scale()` (Textgroesse-Regler wirkt also
-## messbar auf diesen Screen selbst). Bei Resize/Rotation wird neu gebaut.
+## Settings-Screen (H §5.2 + RW-7). Schreibt sofort nach /root/AppSettings;
+## Quality/Audio/Notify lauschen. Versteckter Dev-Modus: 3× Tip auf aktives
+## „Deutsch“. Skaliert mit UiScale; bei Resize/_rebuild neu.
 
 signal setting_changed(key: StringName, value: Variant)
 signal update_check_requested
@@ -70,6 +52,8 @@ var _tf := 1.0
 var _dev_trigger := DevTrigger.new()
 var _dev_dialog: Control
 var _preset_pick: OptionButton
+var _scroll_dragging := false
+var _scroll_log_armed := true
 
 @onready var _sections: VBoxContainer = %SectionsVBox
 @onready var _title: Label = %HeaderTitle
@@ -85,6 +69,7 @@ func _ready() -> void:
 	get_viewport().size_changed.connect(_on_viewport_resized)
 	var scroll := _scroll()
 	if scroll != null:
+		scroll.scroll_deadzone = 0
 		scroll.gui_input.connect(_on_scroll_gui_input)
 	_rebuild()
 	# #region agent log
@@ -95,7 +80,12 @@ func _ready() -> void:
 ## FIX1: bei Resize/Rotation neu skalieren (nur wenn sich der Faktor
 ## wirklich aendert — _rebuild wirft die Rows weg und baut sie frisch).
 func _on_viewport_resized() -> void:
+	if _scroll_dragging:
+		return
 	if absf(UiScale.for_viewport(get_viewport()) - _f) > 0.01:
+		# #region agent log
+		AgentDebug.log("S3", "settings_screen.gd:resize", "rebuild", {})
+		# #endregion
 		_rebuild()
 
 
@@ -104,9 +94,18 @@ func _scroll() -> ScrollContainer:
 
 
 func _on_scroll_gui_input(event: InputEvent) -> void:
+	if event is InputEventScreenTouch:
+		_scroll_dragging = (event as InputEventScreenTouch).pressed
+		if not _scroll_dragging:
+			_scroll_log_armed = true
+	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+		_scroll_dragging = event.pressed
+		if not _scroll_dragging:
+			_scroll_log_armed = true
 	# #region agent log
-	if event is InputEventScreenDrag or (event is InputEventMouseButton and event.pressed):
-		_log_scroll("gui_input")
+	if _scroll_log_armed and (event is InputEventScreenDrag or event is InputEventMouseMotion):
+		_scroll_log_armed = false
+		_log_scroll("first_drag")
 	# #endregion
 
 
@@ -126,8 +125,8 @@ func _log_scroll(phase: String) -> void:
 				"content_min_h": content_h,
 				"scroll_y": scroll.scroll_vertical,
 				"can_scroll": content_h > scroll.size.y + 1.0,
-				"deadzone": scroll.scroll_deadzone,
-				"sections_flags_v": _sections.size_flags_vertical,
+				"flags_v": _sections.size_flags_vertical,
+				"dragging": _scroll_dragging,
 			}
 		)
 	)
@@ -240,7 +239,6 @@ func _rebuild() -> void:
 	_build_transfer_section()
 	_build_updates_section()
 	_build_about_section()
-	# Content darf NIE EXPAND_FILL im Scroll sein (sonst can_scroll=false nach 1. Layout).
 	_sections.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	if scroll != null:
 		scroll.set_deferred("scroll_vertical", keep_y)
@@ -260,8 +258,6 @@ func _apply_scale() -> void:
 	var floor_px := HudLayoutLogic.touch_floor_canvas(canvas)
 	_back.custom_minimum_size = Vector2.ONE * maxf(56.0 * _f, floor_px)
 	_title.add_theme_font_size_override("font_size", int(AcTokens.FONT_SIZE_HEADLINE * _tf))
-	# Scroll-Inhalt: Breite = min(Design 660×Faktor, verfügbare Viewport-Breite).
-	# Kein CenterContainer im Scroll — der würde den Content-Fit zerstören.
 	var avail := canvas.x - float(insets["left"]) - float(insets["right"]) - 48.0
 	_sections.custom_minimum_size = Vector2(minf(660.0 * _f, maxf(avail, 1.0)), 0.0)
 	_sections.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -806,13 +802,16 @@ func _add_section(node_name: String, title: String) -> VBoxContainer:
 	var card := PanelContainer.new()
 	card.name = "Section" + node_name
 	card.theme_type_variation = "AcCard"
+	card.mouse_filter = Control.MOUSE_FILTER_PASS
 	var rows := VBoxContainer.new()
 	rows.name = "Rows"
+	rows.mouse_filter = Control.MOUSE_FILTER_PASS
 	rows.add_theme_constant_override("separation", int(10.0 * _f))
 	var title_label := Label.new()
 	title_label.name = "SectionTitle"
 	title_label.theme_type_variation = "TitleLabel"
 	title_label.text = title
+	title_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	title_label.add_theme_font_size_override("font_size", int(AcTokens.FONT_SIZE_TITLE * _tf))
 	rows.add_child(title_label)
 	card.add_child(rows)
@@ -913,8 +912,8 @@ func _add_range_row(
 	if rebuild_on_release:
 		slider.drag_ended.connect(
 			func(changed: bool) -> void:
-				if changed:
-					_rebuild()
+				if changed and not _scroll_dragging:
+					call_deferred("_rebuild")
 		)
 	row.add_child(slider)
 	return slider

@@ -19,6 +19,7 @@ const DIST_MIN := 3.5
 const DIST_MAX := 18.0
 ## Nach freiem Schwenk so lange Gooby-Follow pausieren.
 const MANUAL_HOLD_S := 2.5
+## Deadzone ab Finger-Down (NICHT pro Frame — sonst startet Pan auf Touch nie).
 const PAN_DEADZONE_PX := 8.0
 
 var camera: Camera3D
@@ -36,6 +37,13 @@ var _pan_active := false
 var _pan_last := Vector2.ZERO
 var _touches: Dictionary = {}
 var _maus_gedrueckt := false
+
+
+## True wenn Drag ab Origin die Deadzone ueberschritten hat (testbar/pure).
+static func pan_gesture_ready(
+	origin: Vector2, current: Vector2, deadzone := PAN_DEADZONE_PX
+) -> bool:
+	return origin.distance_to(current) >= deadzone
 
 
 func _ready() -> void:
@@ -188,9 +196,9 @@ func _apply(delta: float) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if _build_active:
 		return
-	if event is InputEventMouseButton:
-		_maus_taste(event as InputEventMouseButton)
-	elif event is InputEventScreenTouch:
+	# Touchscreen: nur Screen*-Events (sonst Doppel-Events durch emulate_mouse).
+	var touch_ui := DisplayServer.is_touchscreen_available()
+	if event is InputEventScreenTouch:
 		var touch := event as InputEventScreenTouch
 		if touch.pressed:
 			_finger_runter(touch.index, touch.position)
@@ -199,7 +207,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event is InputEventScreenDrag:
 		var drag := event as InputEventScreenDrag
 		_finger_zieht(drag.index, drag.position)
-	elif event is InputEventMouseMotion and _maus_gedrueckt:
+	elif not touch_ui and event is InputEventMouseButton:
+		_maus_taste(event as InputEventMouseButton)
+	elif not touch_ui and event is InputEventMouseMotion and _maus_gedrueckt:
 		_finger_zieht(0, (event as InputEventMouseMotion).position)
 
 
@@ -222,11 +232,22 @@ func _finger_runter(index: int, pos: Vector2) -> void:
 	_pan_index = index
 	_pan_last = pos
 	_pan_active = false
+	# #region agent log
+	AgentDebug.log("C1", "camera_rig.gd:_finger_runter", "pan_down", {"pos": pos})
+	# #endregion
 
 
 func _finger_hoch(index: int) -> void:
 	_touches.erase(index)
 	if index == _pan_index:
+		# #region agent log
+		AgentDebug.log(
+			"C1",
+			"camera_rig.gd:_finger_hoch",
+			"pan_up",
+			{"was_active": _pan_active, "manual": _manual_pan, "pivot": _pivot}
+		)
+		# #endregion
 		_pan_index = -1
 		_pan_active = false
 
@@ -234,23 +255,34 @@ func _finger_hoch(index: int) -> void:
 func _finger_zieht(index: int, pos: Vector2) -> void:
 	if index != _pan_index or _touches.size() != 1:
 		return
-	var vorher: Vector2 = _touches.get(index, pos)
-	_touches[index] = pos
 	if not _pan_active:
-		if vorher.distance_to(pos) < PAN_DEADZONE_PX:
+		# WICHTIG: Distanz ab Finger-Down (_pan_last), nicht Frame-Delta.
+		if not pan_gesture_ready(_pan_last, pos):
 			return
 		_pan_active = true
 		_manual_pan = true
 		_manual_hold_left = MANUAL_HOLD_S
 		# #region agent log
-		AgentDebug.log(
-			"C1",
-			"camera_rig.gd:_finger_zieht",
-			"pan_start",
-			{"pos": pos, "pivot": _pivot, "build": _build_active}
+		(
+			AgentDebug
+			. log(
+				"C1",
+				"camera_rig.gd:_finger_zieht",
+				"pan_start",
+				{
+					"pos": pos,
+					"origin": _pan_last,
+					"dist": _pan_last.distance_to(pos),
+					"pivot": _pivot,
+				}
+			)
 		)
 		# #endregion
-	_pan_screen(vorher, pos)
+		_pan_screen(_pan_last, pos)
+	else:
+		var vorher: Vector2 = _touches.get(index, pos)
+		_pan_screen(vorher, pos)
+	_touches[index] = pos
 	_manual_hold_left = MANUAL_HOLD_S
 	get_viewport().set_input_as_handled()
 
