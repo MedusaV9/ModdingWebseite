@@ -272,7 +272,35 @@ public final class IntroSequence implements SequenceReplayable {
             EclipseMod.LOGGER.warn("IntroSequence: world restarted mid-intro (phase {}) — skipping to end state",
                     data.phase());
             completeAbandonedRun(server, data);
+        } else {
+            // Not mid-intro (never started / dev-skipped / completed): re-seat the anchor.
+            republishAltarAnchor(server);
         }
+    }
+
+    /**
+     * FX-Wave-10 root-cause: {@link FxAnchors} are in-memory ("publishers re-set them on
+     * server start"), but only the mid-intro abort path ({@link #completeAbandonedRun})
+     * ever set {@code ALTAR_CENTER} again — every restart of any other world (intro
+     * completed OR dev-skipped) silently dropped the anchor, and with it the whole
+     * altar-island ambience stack (aura ladder, corona, lightfall, idle motes, aberration
+     * — all gate on {@code FxAnchors.get(ALTAR_CENTER) != null}). Mirrors the abort leg's
+     * float gate: publish only once the island is actually floating (a pre-fusion grounded
+     * altar keeps its intro-owned staging).
+     */
+    private static void republishAltarAnchor(MinecraftServer server) {
+        ServerLevel overworld = server.overworld();
+        Vec3 altar = altarCenter(server);
+        if (altar == null) {
+            return; // sanctum never built — nothing to anchor
+        }
+        if (SanctumVersionData.get(overworld).version() != SanctumVersionData.VERSION_FLOATING) {
+            EclipseMod.LOGGER.info(
+                    "IntroSequence: ALTAR_CENTER republish skipped — sanctum not floating yet (pre-fusion)");
+            return;
+        }
+        FxAnchors.set(FxAnchors.ALTAR_CENTER, overworld, altar);
+        EclipseMod.LOGGER.info("IntroSequence: ALTAR_CENTER anchor republished at {} (server restart)", altar);
     }
 
     @SubscribeEvent
