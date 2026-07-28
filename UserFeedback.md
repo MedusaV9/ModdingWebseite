@@ -16,7 +16,6 @@ _(leer — hier neue Punkte reinschreiben; zuletzt gezogen: 27.07.-Trailer-Wunsc
 
 | # | Punkt | Status |
 |---|-------|--------|
-| F-094 | Trailer V2: alle 11 Gameplay-Video-Szenen gecaptured (inkl. V09 Fährmann-Bosskampf + V11 Schwarzloch-Sog NEU), Song „Worst Enemy feat. goldN“ auf −14 LUFS gemastert, 360p-Review-Blocker gefixt (t4-Fadenkreuz-Overlap, t5/t7-Satzenden, V05 als echter Zauberstab-Kampf neu gedreht, V11 mit Terrain-Zerreißen) — finaler 4K-Render läuft | 🟡 |
 | F-080 | Server/Welt-Verlassen hängt für immer im SAVING-State statt sauber zu stoppen — Fix implementiert (Stop-Sweep räumt FX-Schwärme VOR dem Save, kein Sync-Chunkload im Stop mehr, Arena-Pit-Chunks werden freigegeben); dedizierter Server-Stop in ~10 s verifiziert ✅ | 🟢 |
 | F-081 | Sturm-Bosskampf startet erst, wenn Spieler eine Statue schlagen — implementiert (4-teilige Display-Statue + Interaction-Hitbox, Photon-Idle-Aura, 3-s-Awaken); Spieler-Test folgt | 🟡 |
 | F-082 | Tod im Sturm-Bosskampf ⇒ Wipe-Reset (Boss heilt/despawnt, Statue re-armt nach 30 s, KEINE Blockschreibungen ⇒ Gräber sicher) — implementiert, Spieler-Test folgt | 🟡 |
@@ -44,6 +43,7 @@ _(leer — hier neue Punkte reinschreiben; zuletzt gezogen: 27.07.-Trailer-Wunsc
 
 | # | Punkt | Commit |
 |---|-------|--------|
+| F-094 | Trailer V2 FINAL: `ECLIPSE-Trailer-4K.mp4` neu gerendert (3840x2160@60, 1800 Frames, 30s, 20.9 Mbps, Song 'Worst Enemy feat. goldN' auf -14 LUFS) — 11 echte Gameplay-Video-Szenen inkl. NPC-Szenen (Deckhands/Herold/Villager/Fährmann-Boss), alle 360p-Review-Blocker gefixt; Hinweis: nativer 4K-Remotion-Render wedgt auf dieser VM (SwiftShader), Pipeline = 1080p-Body + wedge-resistente Chunk-Frames + Lanczos-4K-Assembly | `feat(trailer)` |
 | F-094a | Photon-Client-Crash gefixt: 'HorizontalBillboard' ist kein Photon-Enum → renderMode null → NPE beim ersten Render (Seelenernte-Ring + 4 Altar-Aura-Fogs betroffen); fxlib validiert Enum-Strings jetzt beim Authoring | `fix(photon)` |
 | F-094b | Fährmann-Re-Run-Fixes: /dev-Kommandos räumen den persistierten Sieg-Latch (Fight-Watch beendete den Kampf sonst sofort 'victory'), Arrival-Beat sweept verwaiste Bosse statt abzubrechen, Boss-Identity-Guard gegen Doppel-Bossbars (async Entity-Streaming) | `fix(ferryman)` |
 | F-073 | „ECLIPSE-Trailer-4K": 30 s Remotion-Trailer, 4K 60 fps, deutsch, eigener Score+SFX — liegt als `ECLIPSE-Trailer-4K.mp4` im Repo-Root, Quellprojekt unter `trailer/` | `feat(trailer)` |
