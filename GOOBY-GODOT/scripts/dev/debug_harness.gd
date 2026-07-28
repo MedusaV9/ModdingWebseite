@@ -28,16 +28,44 @@ func _h1_settings_scroll() -> void:
 	(
 		AgentDebugScript
 		. log(
-			"H1",
+			"S1",
 			"debug_harness.gd:h1",
 			"settings_scroll_structure",
 			{
 				"has_center_container": tscn.contains('type="CenterContainer"'),
-				"has_margin_scroll_host": tscn.contains('type="MarginContainer"'),
+				"has_scroll_center_node": tscn.contains("ScrollCenter"),
+				"sections_under_scroll": tscn.contains('parent="Margin/Layout/Scroll"'),
+				"sections_shrink_begin": tscn.contains("size_flags_vertical = 0"),
 				"has_scroll_container": tscn.contains('type="ScrollContainer"'),
 				"mentions_scroll_deadzone": tscn.contains("scroll_deadzone"),
-				"sections_fixed_660": tscn.contains("Vector2(660, 0)"),
 				"run": "post-fix",
+			}
+		)
+	)
+	var sheet := FileAccess.get_file_as_string("res://scripts/ui/panel_sheet.tscn")
+	(
+		AgentDebugScript
+		. log(
+			"S1",
+			"debug_harness.gd:h1",
+			"panel_sheet_scroll_body",
+			{
+				"sheet_body_expand_fill": sheet.contains("size_flags_vertical = 3"),
+				"sheet_body_shrink": sheet.contains("size_flags_vertical = 0"),
+			}
+		)
+	)
+	var cam := FileAccess.get_file_as_string("res://scripts/home/camera_rig.gd")
+	(
+		AgentDebugScript
+		. log(
+			"C1",
+			"debug_harness.gd:h1",
+			"camera_free_pan",
+			{
+				"has_unhandled_input": cam.contains("func _unhandled_input"),
+				"has_pan_screen": cam.contains("func _pan_screen"),
+				"has_manual_hold": cam.contains("MANUAL_HOLD_S"),
 			}
 		)
 	)

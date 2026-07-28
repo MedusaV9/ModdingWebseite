@@ -83,23 +83,12 @@ func _ready() -> void:
 	_back.pressed.connect(func() -> void: back_pressed.emit())
 	_load_from_settings_autoload()
 	get_viewport().size_changed.connect(_on_viewport_resized)
+	var scroll := _scroll()
+	if scroll != null:
+		scroll.gui_input.connect(_on_scroll_gui_input)
 	_rebuild()
 	# #region agent log
-	var scroll_n := get_node_or_null("Margin/Layout/Scroll") as ScrollContainer
-	var center_n := get_node_or_null("Margin/Layout/Scroll/ScrollCenter")
-	(
-		AgentDebug
-		. log(
-			"H1",
-			"settings_screen.gd:_ready",
-			"settings_scroll_nodes",
-			{
-				"center_is_centercontainer": center_n is CenterContainer,
-				"deadzone": scroll_n.scroll_deadzone if scroll_n else -1,
-				"scroll_size": scroll_n.size if scroll_n else Vector2.ZERO,
-			}
-		)
-	)
+	_log_scroll("ready")
 	# #endregion
 
 
@@ -108,6 +97,40 @@ func _ready() -> void:
 func _on_viewport_resized() -> void:
 	if absf(UiScale.for_viewport(get_viewport()) - _f) > 0.01:
 		_rebuild()
+
+
+func _scroll() -> ScrollContainer:
+	return get_node_or_null("%Scroll") as ScrollContainer
+
+
+func _on_scroll_gui_input(event: InputEvent) -> void:
+	# #region agent log
+	if event is InputEventScreenDrag or (event is InputEventMouseButton and event.pressed):
+		_log_scroll("gui_input")
+	# #endregion
+
+
+func _log_scroll(phase: String) -> void:
+	var scroll := _scroll()
+	if scroll == null or _sections == null:
+		return
+	var content_h := _sections.get_combined_minimum_size().y
+	(
+		AgentDebug
+		. log(
+			"S1",
+			"settings_screen.gd:_log_scroll",
+			phase,
+			{
+				"scroll_h": scroll.size.y,
+				"content_min_h": content_h,
+				"scroll_y": scroll.scroll_vertical,
+				"can_scroll": content_h > scroll.size.y + 1.0,
+				"deadzone": scroll.scroll_deadzone,
+				"sections_flags_v": _sections.size_flags_vertical,
+			}
+		)
+	)
 
 
 ## Aktueller Wert (fuers HUD/Tests; Quelle: Autoload-Spiegel oder lokal).
@@ -198,6 +221,8 @@ func _effective_graphics() -> Dictionary:
 
 
 func _rebuild() -> void:
+	var scroll := _scroll()
+	var keep_y := scroll.scroll_vertical if scroll != null else 0
 	_f = UiScale.for_viewport(get_viewport())
 	_tf = UiScale.font_scale(get_viewport())
 	_apply_scale()
@@ -215,6 +240,13 @@ func _rebuild() -> void:
 	_build_transfer_section()
 	_build_updates_section()
 	_build_about_section()
+	# Content darf NIE EXPAND_FILL im Scroll sein (sonst can_scroll=false nach 1. Layout).
+	_sections.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	if scroll != null:
+		scroll.set_deferred("scroll_vertical", keep_y)
+	# #region agent log
+	call_deferred("_log_scroll", "after_rebuild")
+	# #endregion
 
 
 ## FIX1: Chrome (Raender/Header/Sektions-Breite) an Faktor + Safe-Area ziehen.
@@ -233,6 +265,7 @@ func _apply_scale() -> void:
 	var avail := canvas.x - float(insets["left"]) - float(insets["right"]) - 48.0
 	_sections.custom_minimum_size = Vector2(minf(660.0 * _f, maxf(avail, 1.0)), 0.0)
 	_sections.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_sections.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 
 
 ## ------------------------------------------------------------- Abschnitte

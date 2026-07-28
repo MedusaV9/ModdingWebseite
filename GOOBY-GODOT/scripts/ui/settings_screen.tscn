@@ -21,6 +21,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+mouse_filter = 2
 script = ExtResource("2_wall")
 pattern = "leaves"
 
@@ -62,21 +63,19 @@ layout_mode = 2
 size_flags_horizontal = 3
 
 [node name="Scroll" type="ScrollContainer" parent="Margin/Layout"]
+unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 3
 horizontal_scroll_mode = 0
 scroll_deadzone = 24
+follow_focus = false
 
-[node name="ScrollCenter" type="MarginContainer" parent="Margin/Layout/Scroll"]
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_vertical = 0
-
-[node name="SectionsVBox" type="VBoxContainer" parent="Margin/Layout/Scroll/ScrollCenter"]
+[node name="SectionsVBox" type="VBoxContainer" parent="Margin/Layout/Scroll"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(660, 0)
 layout_mode = 2
 size_flags_horizontal = 3
+size_flags_vertical = 0
 theme_override_constants/separation = 16
 
 [node name="Toast" type="Control" parent="."]

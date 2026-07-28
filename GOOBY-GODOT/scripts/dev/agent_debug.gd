@@ -4,8 +4,8 @@ extends RefCounted
 ## Schreibt nach res://../debug-61ebfd.log (Repo-Root) und faellt auf
 ## user://debug-61ebfd.log zurueck.
 
-const SESSION := "61ebfd"
-const LOG_NAME := "debug-61ebfd.log"
+const SESSION := "2c37c0"
+const LOG_NAME := "debug-2c37c0.log"
 
 
 static func log(
