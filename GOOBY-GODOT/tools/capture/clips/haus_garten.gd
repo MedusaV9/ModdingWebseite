@@ -50,9 +50,7 @@ func _regie() -> void:
 	# kommen ins Bild.
 	var mitte_x := breite * 0.5
 	cine_camera(
-		Vector3(mitte_x - breite * 0.42, 0.9, tiefe + 1.6),
-		Vector3(_tuer_x, 1.1, 0.0),
-		52.0
+		Vector3(mitte_x - breite * 0.42, 0.9, tiefe + 1.6), Vector3(_tuer_x, 1.1, 0.0), 52.0
 	)
 	move_camera(
 		Vector3(mitte_x + breite * 0.34, 3.4, tiefe + 2.6),
@@ -104,8 +102,6 @@ func _winken() -> void:
 	if _cine_cam != null:
 		var richtung := _cine_cam.global_position - gooby.global_position
 		var tween := create_tween()
-		tween.tween_property(
-			gooby.rig, "rotation:y", atan2(richtung.x, richtung.z), 0.35
-		)
+		tween.tween_property(gooby.rig, "rotation:y", atan2(richtung.x, richtung.z), 0.35)
 	gooby.rig.play_clip("wave")
 	gooby.rig.set_emotion("happy")
