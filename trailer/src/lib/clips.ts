@@ -100,7 +100,7 @@ export const CLIPS: ClipSpec[] = [
     cutIn: CUT[7], // 788
     cutOut: CUT[8], // 900
     playbackRate: 3,
-    trimBefore: 180,
+    trimBefore: 60, // Neucapture (Altar-Plaza-Jets): Bursts bei ~1.6s + 6.4s im Fenster
     textId: 't5',
     kenBurns: {from: 1.02, to: 1.07},
     label: 'Zauberstab-Kampf POV',

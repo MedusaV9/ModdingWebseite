@@ -34,7 +34,8 @@ export const TEXTS: TextEntry[] = [
     pop: true,
     glitchy: true,
   },
-  // V04 (675–788)
+  // V04 (675–788) — y 0.72: Ego-Szene, das Fadenkreuz sitzt in der Bildmitte und
+  // ueberlappte den zentrierten Text ("ZAHL MIT+HERZEN" im 360p-Review).
   {
     id: 't4',
     text: 'Zahl mit Herzen.',
@@ -43,26 +44,32 @@ export const TEXTS: TextEntry[] = [
     outStart: 758,
     outEnd: 775,
     gold: true,
+    y: 0.72,
   },
-  // V05 (788–900)
+  // V05 (788–900) — stagger 1: mit Default 2 war der Satz erst ~Frame 860 komplett
+  // und stand nur 10 Frames voll, bevor der Out-Fade begann.
   {
     id: 't5',
     text: '30 Zauber. Dein Pfad.',
-    inStart: 800,
-    inEnd: 816,
+    inStart: 796,
+    inEnd: 812,
     outStart: 870,
     outEnd: 888,
+    stagger: 1,
   },
   // V06 (900–1125)
   {id: 't6', text: 'Tag 7.', inStart: 905, inEnd: 912, outStart: 960, outEnd: 975, pop: true},
-  // V07 (1125–1238)
+  // V07 (1125–1238) — stagger 1 + frueherer Start: mit Default-Stagger 2 wurde
+  // "sicher." erst ~Frame 1190 sichtbar und der Out-Fade ab 1208 fras es auf
+  // ("KEIN ORT IST" im 360p-Review).
   {
     id: 't7',
     text: 'Kein Ort ist sicher.',
-    inStart: 1135,
-    inEnd: 1150,
+    inStart: 1128,
+    inEnd: 1142,
     outStart: 1208,
     outEnd: 1225,
+    stagger: 1,
   },
   // V08 (1238–1350) bleibt bewusst textfrei
   // V09 (1350–1575) — Musik-Peak
