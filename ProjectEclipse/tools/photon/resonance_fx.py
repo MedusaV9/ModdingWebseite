@@ -257,12 +257,15 @@ def build_far_pulse() -> FxBuilder:
 # One-shots (payload-fired through the ResonancePhotonFxRows rows)
 # ===========================================================================
 def build_strike_burst() -> FxBuilder:
-    """Strike on a crystal top (30 t): 22-glitter volley with light gravity, one
+    """Strike on a crystal top (30 t): 10-glitter volley with light gravity, one
     horizontal foot ring, one short vertical flash beam (8 blocks, 6 t)."""
     fx = FxBuilder("resonance_strike_burst")
     root = fx.empty("strike")
 
     # (a) the glitter volley — StretchedBillboard streaks, gentle fall.
+    # FX-Wave-11 stacking-law pass: 22 additive streaks born inside a 0.6 r shell at
+    # hdr 2.6 fused into one white blob on the crystal tip. Count 22->10 on a 1.0 r
+    # shell, hdr nerfed to ~1.45, alpha crest 1.0->0.7.
     (fx.particle_emitter("glitter",
             duration=30, looping=False,
             start_lifetime=random_between(16, 26),
@@ -271,9 +274,9 @@ def build_strike_burst() -> FxBuilder:
             start_color=random_color(VIOLET, CYAN),
             simulation_space="World", max_particles=24)
        .child_of(root)
-       .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(22))])
-       .with_shape(sphere(radius=0.6, thickness=0.0))
-       .with_material(texture_material(CIRCLE, hdr=(2.4, 2.1, 2.6), blend=BLEND_ADDITIVE))
+       .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(10))])
+       .with_shape(sphere(radius=1.0, thickness=0.0))
+       .with_material(texture_material(CIRCLE, hdr=(1.45, 1.3, 1.45), blend=BLEND_ADDITIVE))
        .with_renderer(render_mode="StretchedBillboard", velocity_scale=1.2,
                       vertex_sorting="NONE", shade=False)
        .with_cull_box((-5.0, -6.0, -5.0), (5.0, 9.0, 5.0))
@@ -281,7 +284,7 @@ def build_strike_burst() -> FxBuilder:
        .with_curves(
             size_over_lifetime=curve(0.0, 1.0, [SEG_POP_SHRINK]),
             color_over_lifetime=gradient(
-                [(0.0, 1.0), (0.7, 0.8), (1.0, 0.0)], [(0.0, 1.0, 1.0, 1.0)]))
+                [(0.0, 0.7), (0.7, 0.56), (1.0, 0.0)], [(0.0, 1.0, 1.0, 1.0)]))
        .with_lights(sky=15, block=14))
 
     # (b) foot ring at the cue anchor.

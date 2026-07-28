@@ -59,28 +59,32 @@ def build_altar_levelup() -> FxBuilder:
     root = fx.empty("altar_levelup_root")  # identity transform: shared origin
 
     # --- ring_shock: the HDR bloom shock ring -------------------------------
+    # FX-Wave-11 stacking-law pass: 96 additive sparks born on one 0.6 r shell at
+    # hdr 3.2 with a pure-white birth stop bloomed into a supernova at the altar.
+    # Count 96->44 (cap 160->64) spread over a 1.5 r shell, hdr nerfed to ~1.45, the
+    # birth stop starts at #E7C9FF instead of white and the alpha crest at 0.7.
     (fx.particle_emitter(
             "ring_shock",
             duration=30, looping=False,
             start_lifetime=random_between(14, 20),
             start_speed=constant(2.4),                   # radial from the circle shell
             start_size=nf3(random_between(0.22, 0.4)),
-            simulation_space="World", max_particles=160)
+            simulation_space="World", max_particles=64)
        .child_of(root)
        .with_emission(rate=constant(0.0),
-                      bursts=[burst(time=0, count=constant(96), cycles=1, interval=1,
+                      bursts=[burst(time=0, count=constant(44), cycles=1, interval=1,
                                     probability=1.0)])
-       .with_shape(circle(radius=0.6, thickness=0.0, arc=360.0,
+       .with_shape(circle(radius=1.5, thickness=0.0, arc=360.0,
                           arc_mode="BurstSpread"))       # even spacing, no clumping
        .with_material(texture_material(CIRCLE_TEX, discard=0.05,
-                                       hdr=(2.6, 1.7, 3.2), blend=BLEND_ADDITIVE))
+                                       hdr=(1.45, 1.1, 1.45), blend=BLEND_ADDITIVE))
        .with_renderer(render_mode="Billboard", vertex_sorting="NONE", shade=False)
        .with_cull_box((-10.0, -1.0, -10.0), (10.0, 6.0, 10.0))
        .with_curves(
-            # white -> #E7C9FF -> violet #7B3FD9, alpha 1 -> 0.85 -> 0
+            # #E7C9FF -> #E7C9FF -> violet #7B3FD9, alpha 0.7 -> 0.6 -> 0
             color_over_lifetime=gradient(
-                [(0.0, 1.0), (0.5, 0.85), (1.0, 0.0)],
-                [(0.0, 1.0, 1.0, 1.0), (0.5, 0.906, 0.788, 1.0),
+                [(0.0, 0.7), (0.5, 0.6), (1.0, 0.0)],
+                [(0.0, 0.906, 0.788, 1.0), (0.5, 0.906, 0.788, 1.0),
                  (1.0, 0.482, 0.247, 0.851)]),
             # pop then dissolve: single-segment bezier [0,0.4 0.15,1 0.7,0.95 1,0]
             size_over_lifetime=nf3(

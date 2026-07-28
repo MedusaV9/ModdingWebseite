@@ -76,6 +76,10 @@ def build_boss_intro_shockwave() -> FxBuilder:
     cull = ((-6.0, -2.0, -6.0), (6.0, 4.0, 6.0))
 
     # The particles ARE the ring: circle-shell burst launched radially at 2.2 b/t.
+    # FX-Wave-11 stacking-law pass: 90 additive sparks born on a 0.4 r shell with
+    # hdr 2.4 converged into one white supernova ball. Count 90->40 on a 1.2 r shell,
+    # hdr nerfed to ~1.45 and the alpha crest to 0.7 — the ring reads as an arc of
+    # separate sparks again.
     (fx.particle_emitter(
             "ring",
             duration=30, looping=False, max_particles=96,
@@ -83,9 +87,9 @@ def build_boss_intro_shockwave() -> FxBuilder:
             start_size=nf3(random_between(0.14, 0.24), random_between(0.14, 0.24),
                            random_between(0.14, 0.24)),
             simulation_space="World")
-       .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(90))])
-       .with_shape(circle(radius=0.4, thickness=0.0, arc_mode="BurstSpread"))
-       .with_material(texture_material(CIRCLE, hdr=(1.6, 1.2, 2.4), blend=BLEND_ADDITIVE))
+       .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(40))])
+       .with_shape(circle(radius=1.2, thickness=0.0, arc_mode="BurstSpread"))
+       .with_material(texture_material(CIRCLE, hdr=(1.2, 1.0, 1.45), blend=BLEND_ADDITIVE))
        .with_lights()
        .with_cull_box(*cull)
        .with_curves(
@@ -93,7 +97,7 @@ def build_boss_intro_shockwave() -> FxBuilder:
             # the crest breathes instead of ticking down (QUALITY §2 row 6).
             size_over_lifetime=curve(0.0, 1.0, [SEG_DECAY_TAIL], "lifetime", "size"),
             color_over_lifetime=gradient(
-                [(0.0, 1.0), (0.6, 0.85), (1.0, 0.0)],
+                [(0.0, 0.7), (0.6, 0.6), (1.0, 0.0)],
                 [(0.0, 0.95, 0.9, 1.0), (1.0, 0.6, 0.4, 0.95)])))
 
     # World-lit dust kick that grounds the bloom flash (shade samples the lightmap).
@@ -113,9 +117,12 @@ def build_boss_intro_shockwave() -> FxBuilder:
        .with_curves(
             # Smoothstep billow — dust swells open, no mechanical ramp.
             size_over_lifetime=curve(1.0, 1.8, [SEG_SMOOTH_UP], "lifetime", "size"),
+            # FX-Wave-11 stacking-law pass: the birth tint was light grey (0.65,0.6,0.7),
+            # so 24 overlapping alpha puffs composited toward white right on top of the
+            # ring flash. Birth now starts dark (0.30,0.30,0.40) and only warms later.
             color_over_lifetime=gradient(
                 [(0.0, 0.55), (0.5, 0.4), (1.0, 0.0)],
-                [(0.0, 0.65, 0.6, 0.7), (1.0, 0.45, 0.4, 0.55)])))
+                [(0.0, 0.3, 0.3, 0.4), (1.0, 0.45, 0.4, 0.55)])))
 
     # Light bleeding along the ground cracks: 4 short radial beams, clipped by terrain.
     pivot = fx.empty("crack_pivot")

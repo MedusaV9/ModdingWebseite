@@ -119,6 +119,12 @@ public final class DayRiftOrbits {
     private static final double SPIN_DEG_PER_TICK_MAX = 0.16D;
     private static final float SCALE_MIN = 0.7F;
     private static final float SCALE_MAX = 1.7F;
+    /** Rare heavy slab (FX-Wave-11): ~1 index in {@value #KEYSTONE_EVERY} is a keystone. */
+    public static final float KEYSTONE_SCALE = 2.6F;
+    private static final int KEYSTONE_EVERY = 12;
+    /** Scatter around the size-derived band so the sorting reads as sediment, not stairs. */
+    private static final double HEIGHT_JITTER = 3.0D;
+    private static final double SPEED_JITTER = 0.01D;
 
     /** Rift maw height over the island top; drops blend into orbit over ~30 s. */
     public static final int RIFT_ABOVE_TOP = 72;
@@ -523,19 +529,48 @@ public final class DayRiftOrbits {
         return paramsFor(seed, index).scale;
     }
 
-    /** Deterministic per-piece orbit parameters — a pure function of (seed, index). */
+    /**
+     * Deterministic per-piece orbit parameters — a pure function of (seed, index).
+     *
+     * <p><b>FX-Wave-11 sediment sorting</b>: height and angular speed are no longer
+     * rolled independently of the size. They are DERIVED from the scale, so the swarm
+     * settles like sediment in water — the heavy pieces sink to the bottom of the band
+     * and crawl ({@value #HEIGHT_MIN} blocks at {@value #ORBIT_DEG_PER_TICK_MIN} deg/t),
+     * the small shards ride high and whip around ({@value #HEIGHT_MAX} at
+     * {@value #ORBIT_DEG_PER_TICK_MAX}). Reading the swarm bottom-up therefore reads it
+     * heaviest-first, which is what makes the sky look SORTED instead of sprinkled.
+     * A small deterministic jitter around each derived value keeps the correlation from
+     * looking like stairs. Roughly one index in {@value #KEYSTONE_EVERY} (a bit of the
+     * same {@link #mix} hash the palette uses) is a KEYSTONE slab at
+     * {@value #KEYSTONE_SCALE}× scale, pinned to the lowest and slowest band with no
+     * jitter — the few anchors the eye measures the rest of the swarm against.</p>
+     *
+     * <p>Still zero extra packets and unchanged cadence/caps: everything below is
+     * arithmetic on {@code (seed, index)}, so the same pair always yields the same
+     * pose and boot/reconcile keeps adopting the persisted displays.</p>
+     */
     private static OrbitParams paramsFor(long seed, int index) {
-        RandomSource random = RandomSource.create(mix(seed, index));
+        long hash = mix(seed, index);
+        RandomSource random = RandomSource.create(hash);
         double radius = RADIUS_MIN + random.nextDouble() * (RADIUS_MAX - RADIUS_MIN);
-        double height = HEIGHT_MIN + random.nextDouble() * (HEIGHT_MAX - HEIGHT_MIN);
+        double heightJitter = (random.nextDouble() * 2.0D - 1.0D) * HEIGHT_JITTER;
         double phase = random.nextDouble() * Math.PI * 2.0D;
-        double degPerTick = ORBIT_DEG_PER_TICK_MIN
-                + random.nextDouble() * (ORBIT_DEG_PER_TICK_MAX - ORBIT_DEG_PER_TICK_MIN);
+        double speedJitter = (random.nextDouble() * 2.0D - 1.0D) * SPEED_JITTER;
         double direction = random.nextBoolean() ? 1.0D : -1.0D;
         double bobPeriod = BOB_BASE_PERIOD_TICKS * (1.0D + random.nextDouble() * 0.8D);
         double spin = SPIN_DEG_PER_TICK_MIN
                 + random.nextDouble() * (SPIN_DEG_PER_TICK_MAX - SPIN_DEG_PER_TICK_MIN);
-        float scale = SCALE_MIN + random.nextFloat() * (SCALE_MAX - SCALE_MIN);
+        boolean keystone = Math.floorMod(hash, KEYSTONE_EVERY) == 0;
+        float scale = keystone ? KEYSTONE_SCALE
+                : SCALE_MIN + random.nextFloat() * (SCALE_MAX - SCALE_MIN);
+        // 0 = the lightest shard, 1 = the heaviest slab (a keystone clamps in at 1).
+        double mass = clamp((scale - SCALE_MIN) / (SCALE_MAX - SCALE_MIN), 0.0D, 1.0D);
+        double height = clamp(HEIGHT_MAX - mass * (HEIGHT_MAX - HEIGHT_MIN)
+                + (keystone ? 0.0D : heightJitter), HEIGHT_MIN, HEIGHT_MAX);
+        double degPerTick = clamp(ORBIT_DEG_PER_TICK_MAX
+                        - mass * (ORBIT_DEG_PER_TICK_MAX - ORBIT_DEG_PER_TICK_MIN)
+                        + (keystone ? 0.0D : speedJitter),
+                ORBIT_DEG_PER_TICK_MIN, ORBIT_DEG_PER_TICK_MAX);
         return new OrbitParams(radius, height, phase, degPerTick, direction, bobPeriod, spin, scale);
     }
 
@@ -548,6 +583,10 @@ public final class DayRiftOrbits {
         h *= 0xFF51AFD7ED558CCDL;
         h ^= h >>> 33;
         return h;
+    }
+
+    private static double clamp(double x, double min, double max) {
+        return Math.max(min, Math.min(max, x));
     }
 
     private static double smoothstep(double x) {

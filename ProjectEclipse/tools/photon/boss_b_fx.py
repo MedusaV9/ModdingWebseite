@@ -31,7 +31,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from fxlib import (  # noqa: E402
     BLEND_ADDITIVE, BLEND_ALPHA, FX_ASSETS_DIR, REPO_ROOT, SEG_EASE_OUT_CREST,
     SEG_LINEAR_DOWN, SEG_LINEAR_UP,
-    FxBuilder, blend, box, circle, burst, constant, curve, dot, gradient, nf3,
+    FxBuilder, blend, box, circle, burst, color, constant, curve, dot, gradient, nf3,
     random_between, random_curve, sphere, sub_emitter, texture_material, validate_file,
 )
 
@@ -183,18 +183,22 @@ def build_tyrant_blind_burst() -> FxBuilder:
                                          [(0.0, 1.0, 1.0, 1.0)])))
 
     # Three staggered expanding fog shells (~ the shipped 3/7/12 CLOUD radii).
+    # FX-Wave-11 stacking-law pass: 3x60 alpha smoke puffs born on one 0.8 r surface
+    # with a near-white (0.85,0.88,0.90) birth tint composited into a second white ball
+    # right behind the flash. Now 3x24 over a thick 1.5 r shell, birth tint slate, and
+    # the alpha crest trimmed 0.65 -> 0.5 so the shells stay readable as fog.
     (fx.particle_emitter(
             "fog_shells",
-            duration=26, looping=False, max_particles=180,
+            duration=26, looping=False, max_particles=80,
             start_lifetime=random_between(14, 22), start_speed=random_between(0.9, 1.3),
             start_size=nf3(random_between(0.4, 0.8), random_between(0.4, 0.8),
                            random_between(0.4, 0.8)),
             simulation_space="World")
        .with_emission(rate=constant(0.0), bursts=[
-            burst(time=0, count=constant(60)),
-            burst(time=5, count=constant(60)),
-            burst(time=10, count=constant(60))])
-       .with_shape(sphere(radius=0.8, thickness=0.0))
+            burst(time=0, count=constant(24)),
+            burst(time=5, count=constant(24)),
+            burst(time=10, count=constant(24))])
+       .with_shape(sphere(radius=1.5, thickness=0.25))
        .with_material(texture_material("photon:textures/particle/smoke.png",
                                        blend=BLEND_ALPHA))
        .with_renderer(vertex_sorting="DISTANCE", shade=True)
@@ -202,8 +206,8 @@ def build_tyrant_blind_burst() -> FxBuilder:
        .with_curves(
             size_over_lifetime=curve(1.0, 2.2, [SEG_LINEAR_UP], "lifetime", "size"),
             color_over_lifetime=gradient(
-                [(0.0, 0.0), (0.15, 0.65), (0.7, 0.5), (1.0, 0.0)],
-                [(0.0, 0.85, 0.88, 0.9), (1.0, 0.6, 0.66, 0.7)])))
+                [(0.0, 0.0), (0.15, 0.5), (0.7, 0.5), (1.0, 0.0)],
+                [(0.0, 0.227, 0.227, 0.333), (1.0, 0.6, 0.66, 0.7)])))
 
     # Electric arcs off the crown at release.
     (fx.particle_emitter(
@@ -278,16 +282,22 @@ def build_warden_glitch_orbit() -> FxBuilder:
     fx = FxBuilder("boss/warden_glitch_orbit")
     cull = ((-3.0, -1.0, -3.0), (3.0, 4.0, 3.0))
 
+    # FX-Wave-11 stacking-law pass: 22 shards on a 1.1 r shell at full opacity stacked
+    # their additive violet rims (hdr 2.0 blue) into a solid glowing shell instead of
+    # discrete holes. Count 22->12, shards kept small (max 0.22), rim hdr nerfed to
+    # ~1.45 and the alpha peak dropped to 0.7 via startColor (this emitter has no
+    # colorOverLifetime gradient — the peak WAS the implicit opaque-white default).
     (fx.particle_emitter(
             "glitch_shards",
             duration=40, looping=False, max_particles=26,
             start_lifetime=random_between(30, 40), start_speed=constant(0),
-            start_size=nf3(random_between(0.1, 0.3), random_between(0.1, 0.3),
-                           random_between(0.1, 0.3)),
+            start_size=nf3(random_between(0.1, 0.22), random_between(0.1, 0.22),
+                           random_between(0.1, 0.22)),
             start_rotation=nf3(constant(0), constant(0), random_between(0.0, 360.0)),
+            start_color=color(0xB3FFFFFF),
             simulation_space="Local")
        .at(0.0, 1.6, 0.0)
-       .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(22))])
+       .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(12))])
        .with_shape(sphere(radius=1.1, thickness=0.2))
        # Pass 1: REVERSE_SUB subtracts scene color under shard alpha (the void bite).
        .with_material(texture_material("eclipse:textures/particle/glitch_shard.png",
@@ -295,7 +305,7 @@ def build_warden_glitch_orbit() -> FxBuilder:
                                                    "REVERSE_SUB")))
        # Pass 2: additive violet rims (discard eats the fill, leaving edges).
        .with_material(texture_material("eclipse:textures/particle/glitch_shard.png",
-                                       discard=0.45, hdr=(1.4, 0.5, 2.0),
+                                       discard=0.45, hdr=(1.2, 0.5, 1.45),
                                        blend=BLEND_ADDITIVE))
        .with_renderer(order_in_layer=1)
        .with_cull_box(*cull)

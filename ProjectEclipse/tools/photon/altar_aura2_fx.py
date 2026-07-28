@@ -308,27 +308,30 @@ def build_altar_aura_powerup() -> FxBuilder:
     fx = FxBuilder("altar_aura_powerup")
 
     # --- wave_ring: the expanding ground wave (floor sits 3.4 below the anchor) ---
+    # FX-Wave-11 stacking-law pass: 48 additive sparks leaving one 0.8 r shell at
+    # hdr 2.6 all overlapped for the first few ticks and flashed white before the
+    # wave separated. Count 48->24 on a 1.5 r shell, hdr ~1.45, alpha crest 0.9->0.6.
     (fx.particle_emitter(
             "wave_ring",
             duration=40, looping=False,
             start_lifetime=constant(26),
-            start_speed=constant(13.0),                  # radial: r 0.8 -> ~17 b
+            start_speed=constant(13.0),                  # radial: r 1.5 -> ~18 b
             start_size=nf3(random_between(0.15, 0.25)),
             simulation_space="World", max_particles=48)
        .with_emission(rate=constant(0.0),
-                      bursts=[burst(time=0, count=constant(48), cycles=1, interval=1,
+                      bursts=[burst(time=0, count=constant(24), cycles=1, interval=1,
                                     probability=1.0)])
-       .with_shape(circle(radius=0.8, thickness=0.0, arc=360.0,
+       .with_shape(circle(radius=1.5, thickness=0.0, arc=360.0,
                           arc_mode="BurstSpread"),
                    position=nf3(0, -3.4, 0))
-       .with_material(texture_material(CIRCLE_TEX, discard=0.05, hdr=(2.2, 1.7, 2.6),
+       .with_material(texture_material(CIRCLE_TEX, discard=0.05, hdr=(1.45, 1.2, 1.45),
                                        blend=BLEND_ADDITIVE))
        .with_renderer(render_mode="Billboard", vertex_sorting="NONE", shade=False)
        .with_cull_box((-20.0, -6.0, -20.0), (20.0, 4.0, 20.0))
        .with_curves(
             # white core -> violet, dying exactly as the wave passes the rim
             color_over_lifetime=gradient(
-                [(0.0, 0.9), (0.6, 0.6), (1.0, 0.0)],
+                [(0.0, 0.6), (0.6, 0.6), (1.0, 0.0)],
                 [(0.0, 1.0, 1.0, 1.0), (0.5,) + CORE, (1.0,) + VIOLET]),
             size_over_lifetime=nf3(
                 curve(0.0, 1.0, [(0.0, 0.4, 0.15, 1.0, 0.7, 0.95, 1.0, 0.0)],

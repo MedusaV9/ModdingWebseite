@@ -368,6 +368,10 @@ def build_invert_burst() -> FxBuilder:
 
     # (c) t=20 — the RE-EXPAND: amethyst shatter volley (glitch_shard billboards
     # tumbling out) + star glints, light gravity so the shards arc down.
+    # FX-Wave-11 stacking-law pass: 34 additive shards born on one 1.2 r SURFACE at
+    # hdr 2.4 re-lit the heart as a white ball at the exact re-expand beat. Count
+    # 34->18, the shell given 0.3 thickness so births spread through the volume,
+    # hdr nerfed to ~1.45 and the alpha crest 1.0->0.7.
     (fx.particle_emitter("shatter_shards",
             duration=40, looping=False, start_delay=constant(20),
             start_lifetime=random_between(20, 32),
@@ -377,9 +381,9 @@ def build_invert_burst() -> FxBuilder:
             start_color=random_color(AMETHYST, PALE_VIOLET),
             simulation_space="World", max_particles=40)
        .child_of(root)
-       .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(34))])
-       .with_shape(sphere(radius=1.2, thickness=0.0))
-       .with_material(texture_material(SHARD, hdr=(2.2, 2.0, 2.4), blend=BLEND_ADDITIVE))
+       .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(18))])
+       .with_shape(sphere(radius=1.2, thickness=0.3))
+       .with_material(texture_material(SHARD, hdr=(1.45, 1.3, 1.5), blend=BLEND_ADDITIVE))
        .with_renderer(vertex_sorting="DISTANCE")
        .with_cull_box((-8.0, -6.0, -8.0), (8.0, 10.0, 8.0))
        .with_physics(collision=False, gravity=0.25)
@@ -387,7 +391,7 @@ def build_invert_burst() -> FxBuilder:
             rotation_over_lifetime=dict(roll=random_between(-160, 160)),
             size_over_lifetime=curve(0.0, 1.0, [SEG_POP_SHRINK]),
             color_over_lifetime=gradient(
-                [(0.0, 1.0), (0.7, 0.8), (1.0, 0.0)], [(0.0, 1.0, 1.0, 1.0)]))
+                [(0.0, 0.7), (0.7, 0.56), (1.0, 0.0)], [(0.0, 1.0, 1.0, 1.0)]))
        .with_lights(sky=15, block=15))
 
     # (d) t=20 — rising debris sheet: a wide mote curtain lifting off the bowl

@@ -60,6 +60,9 @@ def build_scare_swarm() -> FxBuilder:
     # Core cloud: a dense burst of small motes that BUZZ around the anchor point —
     # high orbital drag + strong noise keeps them milling chaotically right in front
     # of the face instead of dispersing.
+    # FX-Wave-11 stacking-law pass: 52 motes born inside a 0.5 r ball right in the
+    # camera's face stacked their green hdr into one glowing blob. Opening burst
+    # 52->24 over a 1.2 r volume, hdr green 1.9->1.45, alpha crest 0.95->0.6.
     (fx.particle_emitter(
             "swarm_motes",
             duration=70, looping=False, start_lifetime=random_between(26, 44),
@@ -68,9 +71,9 @@ def build_scare_swarm() -> FxBuilder:
             simulation_space="Local", max_particles=90)
         .child_of(root)
         .with_emission(rate=constant(0.0),
-                       bursts=[burst(time=0, count=constant(52)),
+                       bursts=[burst(time=0, count=constant(24)),
                                burst(time=10, count=constant(24))])
-        .with_shape(sphere(radius=0.5, thickness=1.0))
+        .with_shape(sphere(radius=1.2, thickness=1.0))
         .with_curves(
             velocity_over_lifetime=dict(
                 orbital_mode="AngularVelocity",
@@ -78,14 +81,16 @@ def build_scare_swarm() -> FxBuilder:
                 radial=random_between(-0.12, 0.1)),          # breathing, not fleeing
             noise=dict(frequency=1.6, position=nf3(0.22)),   # the chitter jitter
             color_over_lifetime=gradient(
-                [(0.0, 0.0), (0.1, 0.95), (0.75, 0.55), (1.0, 0.0)],
+                [(0.0, 0.0), (0.1, 0.6), (0.75, 0.55), (1.0, 0.0)],
                 [(0.0, *SOUL_HOT), (0.55, *SOUL_MID), (1.0, *SOUL_DEEP)]))
-        .with_material(texture_material(CIRCLE_TEX, hdr=(1.2, 1.9, 1.6)))
+        .with_material(texture_material(CIRCLE_TEX, hdr=(1.2, 1.45, 1.45)))
         .with_cull_box((-4.0, -3.0, -4.0), (4.0, 3.0, 4.0)))
 
     # Rush streaks: fast stretched motes exploding OUT of the core — at 2.5-4 blocks
     # ahead, a radial burst means a fistful of them blow straight past the camera.
     # Two waves so the second script burst (`swarm` re-fires at t+17) overlaps live ones.
+    # FX-Wave-11 stacking-law pass: births widened 0.25 -> 0.8 r and the green hdr
+    # nerfed to ~1.45 so the two waves read as separate streaks, not a green flash.
     (fx.particle_emitter(
             "swarm_rush",
             duration=70, looping=False, start_lifetime=random_between(10, 18),
@@ -95,13 +100,13 @@ def build_scare_swarm() -> FxBuilder:
         .with_emission(rate=constant(0.0),
                        bursts=[burst(time=1, count=constant(22)),
                                burst(time=14, count=constant(16))])
-        .with_shape(sphere(radius=0.25, thickness=0.4))
+        .with_shape(sphere(radius=0.8, thickness=0.4))
         .with_curves(
             size_over_lifetime=curve(0.0, 1.0, [SEG_DECAY_TAIL]),
             color_over_lifetime=gradient(
                 [(0.0, 0.0), (0.08, 1.0), (0.6, 0.5), (1.0, 0.0)],
                 [(0.0, *SOUL_HOT), (1.0, *SOUL_MID)]))
-        .with_material(texture_material(CIRCLE_TEX, hdr=(1.3, 2.1, 1.7)))
+        .with_material(texture_material(CIRCLE_TEX, hdr=(1.3, 1.45, 1.45)))
         .with_renderer(render_mode="StretchedBillboard", velocity_scale=1.8,
                        length_scale=2.4)
         .with_cull_box((-6.0, -5.0, -6.0), (6.0, 5.0, 6.0)))

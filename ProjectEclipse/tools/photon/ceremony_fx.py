@@ -512,6 +512,9 @@ def build_revive_thunderbloom() -> FxBuilder:
                 [(0.0, 1.0, 1.0, 1.0), (0.4,) + SAC_HOT, (1.0,) + SAC_VIOLET]))
        .with_lights(sky=15, block=15))
     # L3 the lightning ring: fast-out filaments hugging the ground, noise-crackled.
+    # FX-Wave-11 stacking-law pass: 26 additive filaments born on a 0.4 r shell all
+    # overlapped at the sigil for the first ticks, adding a second white ball right
+    # after the bloom flash. Count 26->14 on a 1.2 r shell, hdr ~1.45, crest 1.0->0.65.
     (fx.particle_emitter(
             "lightning_ring",
             duration=20, looping=False, start_delay=constant(12),
@@ -520,15 +523,15 @@ def build_revive_thunderbloom() -> FxBuilder:
             start_size=nf3(random_between(0.16, 0.26)),
             simulation_space="World", max_particles=30)
        .at(0.0, 0.15, 0.0)
-       .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(26))])
-       .with_shape(circle(radius=0.4, thickness=0.0, arc_mode="BurstSpread"))
-       .with_material(texture_material(TEX_LASER, hdr=(1.5, 1.2, 1.9),
+       .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(14))])
+       .with_shape(circle(radius=1.2, thickness=0.0, arc_mode="BurstSpread"))
+       .with_material(texture_material(TEX_LASER, hdr=(1.2, 1.0, 1.45),
                                        blend=BLEND_ADDITIVE))
        .with_renderer(render_mode="StretchedBillboard", length_scale=3.2,
                       velocity_scale=0.4, vertex_sorting="NONE")
        .with_curves(
             color_over_lifetime=gradient(
-                [(0.0, 1.0), (0.5, 0.8), (1.0, 0.0)],
+                [(0.0, 0.65), (0.5, 0.52), (1.0, 0.0)],
                 [(0.0,) + SAC_HOT, (0.35,) + SAC_VIOLET, (0.75,) + SAC_DEEP,
                  (1.0,) + SAC_VOID]),
             # Impact-fast for 2-4t, then the filaments stall and crackle out (§2).

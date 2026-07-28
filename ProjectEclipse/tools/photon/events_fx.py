@@ -298,6 +298,10 @@ def build_structure_slam_mushroom() -> FxBuilder:
     clods use real collision physics + a Collision sub-emitter (slam_dust_puff)."""
     fx = FxBuilder("structure_slam_mushroom")
     # Decelerating dust column that blooms into the cap as it slows.
+    # FX-Wave-11 stacking-law pass: 40 big alpha smoke puffs born inside a 0.15 r disc
+    # composited toward the sprite's own light grey — a white pillar, not dust. Births
+    # now spread over a 0.45 r disc, count 40->20, alpha crest 0.85->0.55, the growth
+    # cap x3->x2 (less overlap late) and the mid-life tint clamped below ~0.45/channel.
     (fx.particle_emitter(
             "column",
             duration=16, looping=False, start_delay=constant(0),
@@ -305,8 +309,8 @@ def build_structure_slam_mushroom() -> FxBuilder:
             start_size=nf3(random_between(0.5, 0.9), random_between(0.5, 0.9),
                            random_between(0.5, 0.9)),
             simulation_space="World", max_particles=64)
-       .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(40))])
-       .with_shape(circle(radius=0.15, thickness=1.0))
+       .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(20))])
+       .with_shape(circle(radius=0.45, thickness=1.0))
        .with_material(texture_material(TEX_SMOKE, blend=BLEND_ALPHA))
        .with_renderer(vertex_sorting="DISTANCE", shade=True)
        .with_curves(
@@ -316,11 +320,11 @@ def build_structure_slam_mushroom() -> FxBuilder:
                 linear=nf3(constant(0),
                            curve(0.0, 1.6, [SEG_DECEL_PUNCH], "lifetime"),
                            constant(0))),
-            size_over_lifetime=nf3(*[curve(1.0, 3.0, [SEG_SMOOTH_UP], "lifetime", "size")
+            size_over_lifetime=nf3(*[curve(1.0, 2.0, [SEG_SMOOTH_UP], "lifetime", "size")
                                      for _ in range(3)]),
             color_over_lifetime=gradient(
-                [(0.0, 0.85), (0.5, 0.6), (1.0, 0.0)],
-                [(0.0, 0.45, 0.33, 0.22), (0.5, 0.62, 0.55, 0.45),
+                [(0.0, 0.55), (0.5, 0.39), (1.0, 0.0)],
+                [(0.0, 0.45, 0.33, 0.22), (0.5, 0.45, 0.4, 0.33),
                  (1.0, 0.75, 0.7, 0.62)])))
     # The roiling mushroom head, 8t behind the column.
     (fx.particle_emitter(

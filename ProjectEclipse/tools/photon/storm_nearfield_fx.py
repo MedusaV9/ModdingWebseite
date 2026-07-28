@@ -62,6 +62,11 @@ H_EXPR = "max(eclStormH,12)"
 
 # The one-shot's authored reference radius — StormRegistry.DEFAULT_RADIUS.
 REF_RADIUS = 24.0
+# Central-axis updraft footprint of the burst (authored blocks, executor-scaled with
+# everything else in the one-shot — never an eclStormR expression).
+UPDRAFT_RADIUS = 0.9
+# Cull top of the whole one-shot: the updraft slugs throw ~20 blocks, the dust wall ~12.
+SHOCK_CULL_TOP = 40.0
 
 # Frozen Channel-A contract with StormNearfieldFx.TUNED_BASE_RATES (see docstring).
 # Rates are per-TICK (polish pass: rate x mean lifetime stays under maxParticles —
@@ -372,7 +377,7 @@ def build_storm_burst_shockwave() -> FxBuilder:
         .with_material(texture_material(RING_SOFT, hdr=(1.9, 1.7, 2.6), blend=BLEND_ADDITIVE,
                                         depth_mask=False))
         .with_renderer(render_mode="Horizontal", shade=False, vertex_sorting="NONE")
-        .with_cull_box((-150.0, -6.0, -150.0), (150.0, 40.0, 150.0)))
+        .with_cull_box((-150.0, -6.0, -150.0), (150.0, SHOCK_CULL_TOP, 150.0)))
 
     # Echo ring: fainter, 6 t late, slightly slower — sells the double pulse.
     (fx.particle_emitter(
@@ -392,7 +397,7 @@ def build_storm_burst_shockwave() -> FxBuilder:
         .with_material(texture_material(RING_SOFT, hdr=(1.4, 1.3, 2.0), blend=BLEND_ADDITIVE,
                                         depth_mask=False))
         .with_renderer(render_mode="Horizontal", shade=False, vertex_sorting="NONE")
-        .with_cull_box((-150.0, -6.0, -150.0), (150.0, 40.0, 150.0)))
+        .with_cull_box((-150.0, -6.0, -150.0), (150.0, SHOCK_CULL_TOP, 150.0)))
 
     # Dust rim: smoke kicked outward from the authored wall foot (radial velocity).
     (fx.particle_emitter(
@@ -416,7 +421,7 @@ def build_storm_burst_shockwave() -> FxBuilder:
         .with_material(texture_material(SMOKE, blend=BLEND_ALPHA))
         .with_lights(sky=8, block=2)
         .with_renderer(vertex_sorting="NONE", shade=True)
-        .with_cull_box((-150.0, -6.0, -150.0), (150.0, 40.0, 150.0)))
+        .with_cull_box((-150.0, -6.0, -150.0), (150.0, SHOCK_CULL_TOP, 150.0)))
 
     # Spark fling: HDR arc sparks riding the wavefront out + slightly up.
     (fx.particle_emitter(
@@ -441,7 +446,68 @@ def build_storm_burst_shockwave() -> FxBuilder:
             size_over_lifetime=eased([(0.0, 1.0), (0.5, 0.8), (1.0, 0.0)], "in"))
         .with_material(texture_material(CIRCLE, hdr=(2.2, 2.0, 3.0)))
         .with_renderer(vertex_sorting="NONE")
-        .with_cull_box((-150.0, -6.0, -150.0), (150.0, 40.0, 150.0)))
+        .with_cull_box((-150.0, -6.0, -150.0), (150.0, SHOCK_CULL_TOP, 150.0)))
+
+    # Dust wall: 30 sprites off the SAME authored reference ring as the rim (no
+    # eclStormR — the row leg's radius/24 executor scale carries this asset), but thrown
+    # UP on an eased 0.5 -> 0 updraft (~12 blocks) while they swell 1.2 -> 2.6. The rim
+    # says how far the wave went; the wall says how hard it hit. Alpha ceiling 0.32.
+    (fx.particle_emitter(
+            "shock_dust_wall",
+            duration=50, looping=False,
+            start_lifetime=random_between(34, 46), start_speed=constant(0),
+            start_size=nf3(random_between(1.7, 2.9), random_between(1.7, 2.9),
+                           random_between(1.7, 2.9)),
+            start_color=color(0xFF3A3A55),  # STM_SLATE birth tint
+            simulation_space="World", max_particles=32)
+        .child_of(root)
+        .with_emission(rate=constant(0.0), bursts=[burst(time=3, count=constant(30), cycles=1)])
+        .with_shape(fixed_ring_shape(REF_RADIUS, 3.0, "0.4+randomC*1.6"))
+        .with_curves(
+            velocity_over_lifetime=dict(  # kicked up, then stalled by its own mass
+                linear=nf3(constant(0),
+                           eased([(0.0, 0.5), (0.55, 0.42), (1.0, 0.0)], "out"),
+                           constant(0))),
+            noise=dict(frequency=0.3, quality="Noise2D",
+                       position=nf3(constant(0.05), constant(0.02), constant(0.05))),
+            color_over_lifetime=gradient(
+                [(0.0, 0.0), (0.12, 0.32), (0.7, 0.22), (1.0, 0.0)],
+                [(0.0, STM_SLATE[0], STM_SLATE[1], STM_SLATE[2]), (1.0, 0.16, 0.16, 0.24)]),
+            size_over_lifetime=eased([(0.0, 1.2), (0.5, 2.0), (1.0, 2.6)], "out"))
+        .with_material(texture_material(SMOKE, blend=BLEND_ALPHA))
+        .with_lights(sky=8, block=2)
+        .with_renderer(vertex_sorting="DISTANCE", shade=True)
+        .with_cull_box((-150.0, -6.0, -150.0), (150.0, SHOCK_CULL_TOP, 150.0)))
+
+    # Central updraft: a dozen dark slugs racing up the axis to ~20 blocks — the burst
+    # venting straight up out of the eye. Twelve particles and an alpha ceiling of 0.42
+    # keep the stacking law: this layer is MASS, so it stays dark and LDR (the two HDR
+    # rings above own all the light in this asset).
+    (fx.particle_emitter(
+            "shock_updraft",
+            duration=50, looping=False,
+            start_lifetime=random_between(11, 16),
+            start_speed=random_between(4.0, 6.0),
+            start_size=nf3(random_between(0.9, 1.7), random_between(0.9, 1.7),
+                           random_between(0.9, 1.7)),
+            start_color=color(0xFF2E2E44), simulation_space="World", max_particles=14)
+        .child_of(root)
+        .with_emission(rate=constant(0.0), bursts=[burst(time=1, count=constant(12), cycles=1)])
+        # A near-zero-angle cone IS the tight central cylinder here: it launches along
+        # +Y, where a `cylinder` shape would fire the slugs radially outward instead.
+        .with_shape(cone(angle=4.0, radius=UPDRAFT_RADIUS))
+        .with_curves(
+            velocity_over_lifetime=dict(  # spent fast, then hangs at the top
+                speed_modifier=eased([(0.0, 1.0), (0.55, 0.3), (1.0, 0.04)], "out")),
+            color_over_lifetime=gradient(
+                [(0.0, 0.0), (0.1, 0.42), (0.65, 0.3), (1.0, 0.0)],
+                [(0.0, 0.18, 0.18, 0.27), (1.0, 0.1, 0.1, 0.16)]),
+            size_over_lifetime=eased([(0.0, 0.6), (0.35, 1.0), (1.0, 0.55)], "out"))
+        .with_material(texture_material(SMOKE, blend=BLEND_ALPHA))
+        .with_lights(sky=8, block=2)
+        .with_renderer(render_mode="StretchedBillboard", velocity_scale=1.6,
+                       length_scale=2.4, vertex_sorting="DISTANCE", shade=True)
+        .with_cull_box((-150.0, -6.0, -150.0), (150.0, SHOCK_CULL_TOP, 150.0)))
     return fx
 
 

@@ -31,7 +31,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from fxlib import (  # noqa: E402
     BLEND_ALPHA, FX_ASSETS_DIR, FxBuilder, box, burst, circle, cone,
-    constant, curve, dot, gradient, nf3, random_between, sphere,
+    constant, curve, dot, function_shape, gradient, nf3, random_between, sphere,
     texture_material, validate_file)
 
 CIRCLE_TEX = "photon:textures/particle/circle.png"
@@ -47,6 +47,18 @@ GOLD = (0.98, 0.82, 0.45)
 # ---------------------------------------------------------------------------
 # 1. eclipse:day_rift_maw — F-044 (slow, dark, pulsing — NOT the structure rift)
 # ---------------------------------------------------------------------------
+# Underhang bell geometry: the curtain sags UNDERHANG_DEPTH blocks below the rift
+# plane and widens from UNDERHANG_R0 to UNDERHANG_R0 + UNDERHANG_R_GROWTH on the way
+# down (one randomC drives both, so depth and radius stay coupled = a bell, not a tube).
+UNDERHANG_DEPTH = 10.0
+UNDERHANG_R0 = 4.5
+UNDERHANG_R_GROWTH = 4.0
+# One shared cull envelope for the whole asset — it must clear the bell's sag, else the
+# underside pops away the moment the camera swings below the rift.
+MAW_CULL_MIN = (-14.0, -28.0, -14.0)
+MAW_CULL_MAX = (14.0, 8.0, 14.0)
+
+
 def build_day_rift_maw() -> FxBuilder:
     fx = FxBuilder("day_rift_maw")
     root = fx.empty("maw_root")
@@ -73,7 +85,38 @@ def build_day_rift_maw() -> FxBuilder:
                 [(0.0, 0.16, 0.09, 0.22), (1.0, 0.08, 0.04, 0.13)]))
         .with_material(texture_material(SMOKE_TEX, blend=BLEND_ALPHA))
         .with_renderer(vertex_sorting="DISTANCE")
-        .with_cull_box((-12.0, -10.0, -12.0), (12.0, 8.0, 12.0)))
+        .with_cull_box(MAW_CULL_MIN, MAW_CULL_MAX))
+
+    # Underhang bell: a widening curtain sagging BELOW the rift, turning at ~half the
+    # body's orbital rate (0.1 vs 0.22). That LAG is the whole point — the underside
+    # drags behind the mouth, so the maw reads as a heavy hanging mass instead of a
+    # painted hole. Alpha ceiling 0.30: it darkens the sky under the rift, nothing more.
+    (fx.particle_emitter(
+            "maw_underhang",
+            duration=560, looping=False, start_lifetime=random_between(80, 120),
+            start_speed=constant(0),
+            start_size=nf3(random_between(2.0, 3.6), random_between(2.0, 3.6),
+                           random_between(2.0, 3.6)),
+            simulation_space="Local", max_particles=60)
+        .child_of(root)
+        .with_emission(rate=constant(0.6))
+        .with_shape(function_shape(
+            x=f"cos(randomA*2*PI)*({UNDERHANG_R0}+randomC*{UNDERHANG_R_GROWTH})",
+            y=f"-(randomC*{UNDERHANG_DEPTH})",
+            z=f"sin(randomA*2*PI)*({UNDERHANG_R0}+randomC*{UNDERHANG_R_GROWTH})"))
+        .with_curves(
+            velocity_over_lifetime=dict(
+                linear=nf3(constant(0), random_between(-0.08, -0.04), constant(0)),
+                orbital_mode="AngularVelocity",
+                orbital=nf3(constant(0), constant(0.1), constant(0))),  # HALF the body
+            color_over_lifetime=gradient(
+                [(0.0, 0.0), (0.25, 0.3), (0.8, 0.22), (1.0, 0.0)],
+                [(0.0, 0.1, 0.08, 0.16), (1.0, 0.05, 0.04, 0.09)]),
+            size_over_lifetime=curve(
+                0.8, 1.4, [(0.0, 0.0, 0.25, 0.45, 0.6, 0.92, 1.0, 1.0)]))
+        .with_material(texture_material(SMOKE_TEX, blend=BLEND_ALPHA))
+        .with_renderer(vertex_sorting="DISTANCE")
+        .with_cull_box(MAW_CULL_MIN, MAW_CULL_MAX))
 
     # Heartbeat pulses: one soft violet bloom every ~2.5 s — the "pulsierend lila".
     (fx.particle_emitter(
@@ -92,7 +135,7 @@ def build_day_rift_maw() -> FxBuilder:
             color_over_lifetime=gradient(
                 [(0.0, 0.0), (0.3, 0.8), (1.0, 0.0)],
                 [(0.0, 0.612, 0.482, 0.878), (1.0, 0.35, 0.2, 0.55)]))
-        .with_cull_box((-12.0, -10.0, -12.0), (12.0, 8.0, 12.0)))
+        .with_cull_box(MAW_CULL_MIN, MAW_CULL_MAX))
 
     # Dripping motes: sparse violet droplets sinking out of the maw (the debris seam —
     # the real block displays fall through this curtain).
@@ -115,7 +158,7 @@ def build_day_rift_maw() -> FxBuilder:
         .with_material(texture_material(CIRCLE_TEX, hdr=(1.1, 0.8, 1.7)))
         .with_renderer(render_mode="StretchedBillboard", velocity_scale=1.2,
                        length_scale=1.8, vertex_sorting="NONE")
-        .with_cull_box((-12.0, -24.0, -12.0), (12.0, 8.0, 12.0)))
+        .with_cull_box(MAW_CULL_MIN, MAW_CULL_MAX))
     return fx
 
 

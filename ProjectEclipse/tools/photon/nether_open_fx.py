@@ -224,6 +224,17 @@ def build_nether_quake_fissure() -> FxBuilder:
 ERUPT_HUMPS = [(0.0, 1.0, 0.04, 1.0, 0.1, 0.55, 0.22, 0.42),
                (0.22, 0.42, 0.4, 0.3, 0.6, 0.16, 1.0, 0.05)]
 
+#: Ballistic drag for the soot core: the launch speed is spent over the first ~quarter
+#: of the life, then the slug only creeps. Mean ~0.154 of the start speed, i.e. a
+#: ~50-block apex at 2.5-3.5 blk/t over 90-130t (the tallest slugs top out near 70).
+SEG_APEX_DRAG = [(0.0, 1.0, 0.04, 0.68, 0.12, 0.28, 0.24, 0.14),
+                 (0.24, 0.14, 0.48, 0.075, 0.74, 0.03, 1.0, 0.0)]
+#: Birth height band of the fall-back debris over the crater (blocks over the lip plane).
+DEBRIS_Y_MIN = 30.0
+DEBRIS_Y_SPAN = 25.0
+#: Apex of the eruption silhouette — every emitter that can reach it culls to this top.
+ERUPT_CULL_TOP = 80.0
+
 
 def build_nether_eruption() -> FxBuilder:
     """eclipse:nether_eruption — block-anchored at the crater centre on the lip plane, fired
@@ -256,7 +267,75 @@ def build_nether_eruption() -> FxBuilder:
                 0.2, 1.0,
                 [(0.0, 0.4, 0.1, 1.0, 0.25, 1.0, 0.45, 1.0),
                  (0.45, 1.0, 0.65, 0.8, 0.85, 0.1, 1.0, 0.0)]))
-       .with_cull_box((-HALO_R, -20.0, -HALO_R), (HALO_R, 70.0, HALO_R)))
+       .with_cull_box((-HALO_R, -20.0, -HALO_R), (HALO_R, ERUPT_CULL_TOP, HALO_R)))
+
+    # Overshooting soot core: near-black stretched slugs punched up the middle of the
+    # throat FASTER and far longer-lived than the fire tongues, so the column's dark mass
+    # keeps climbing (~55 blocks) after the flames have burnt out (~40). Alpha-blended
+    # with a 0.5 ceiling — it must OCCLUDE the fire it overtakes, never add to it.
+    (fx.particle_emitter(
+            "column_core",
+            duration=ERUPTION_TICKS, looping=False,
+            start_lifetime=random_between(90, 130),
+            start_speed=random_between(2.5, 3.5),
+            start_size=nf3(random_between(1.3, 2.8), random_between(1.3, 2.8),
+                           random_between(1.3, 2.8)),
+            simulation_space="World", max_particles=60)
+       # Same throat-punch envelope as the fire and smoke (one event, one breath).
+       .with_emission(rate=curve(0.2, 4.0, ERUPT_HUMPS))
+       .with_shape(cone(angle=7.0, radius=CRATER_R * 0.22))
+       .with_curves(
+            velocity_over_lifetime=dict(  # drag to the apex, then hang
+                speed_modifier=curve(0.0, 1.0, SEG_APEX_DRAG)),
+            noise=dict(frequency=0.25, quality="Noise2D",
+                       position=nf3(constant(0.04), constant(0.02), constant(0.04))),
+            color_over_lifetime=gradient(  # near-black soot, alpha ceiling 0.5
+                [(0.0, 0.0), (0.14, 0.5), (0.7, 0.36), (1.0, 0.0)],
+                [(0.0, 0.12, 0.1, 0.1), (1.0, 0.06, 0.05, 0.055)]),
+            size_over_lifetime=curve(
+                0.6, 1.7,
+                [(0.0, 0.0, 0.22, 0.5, 0.6, 0.92, 1.0, 1.0)]))
+       .with_material(texture_material(SMOKE, blend=BLEND_ALPHA))
+       .with_renderer(render_mode="StretchedBillboard", velocity_scale=1.8,
+                      length_scale=2.8, vertex_sorting="DISTANCE", shade=True)
+       .with_cull_box((-HALO_R, -20.0, -HALO_R), (HALO_R, ERUPT_CULL_TOP, HALO_R)))
+
+    # Debris rain-back: chunks born HIGH over the crater halo (y 30-55) falling back as
+    # −y streaks in three waves — the column's own mass returning, which is what sells
+    # the throw height. Cooling-ember ramp, HDR kept to a fleck (1.4) so 70 streaks stay
+    # sparks in the sky instead of a second fire sheet.
+    (fx.particle_emitter(
+            "debris_rain",
+            duration=ERUPTION_TICKS, looping=False,
+            start_lifetime=random_between(70, 120),
+            start_speed=constant(0.0),
+            start_size=nf3(random_between(0.14, 0.34), random_between(0.14, 0.34),
+                           random_between(0.14, 0.34)),
+            simulation_space="World", max_particles=70)
+       .with_emission(rate=constant(0.0),
+                      bursts=[burst(time=40, count=constant(20), cycles=3, interval=40)])
+       # Flat disc over the halo footprint, lifted into the debris band (randomB keeps
+       # x/z on ONE radius per particle; randomC picks its birth height).
+       .with_shape(function_shape(
+            x=f"cos(randomA*2*PI)*{HALO_R}*randomB",
+            y=f"{DEBRIS_Y_MIN}+randomC*{DEBRIS_Y_SPAN}",
+            z=f"sin(randomA*2*PI)*{HALO_R}*randomB"))
+       .with_curves(
+            velocity_over_lifetime=dict(  # tips over, then accelerates down
+                linear=nf3(constant(0), curve(-0.9, -0.12, [SEG_DECAY_TAIL]), constant(0))),
+            color_over_lifetime=gradient(  # dull orange -> dead dark
+                [(0.0, 0.0), (0.12, 0.85), (0.8, 0.45), (1.0, 0.0)],
+                [(0.0, 1.0, 0.55, 0.22), (0.55, 0.62, 0.26, 0.12),
+                 (1.0, 0.24, 0.1, 0.07)]),
+            size_over_lifetime=curve(
+                0.35, 1.0,
+                [(0.0, 1.0, 0.3, 0.95, 0.72, 0.5, 1.0, 0.0)]))
+       .with_material(texture_material(CIRCLE, hdr=(1.4, 0.6, 0.22)))
+       .with_lights(sky=15, block=15)
+       .with_renderer(render_mode="StretchedBillboard", velocity_scale=1.5,
+                      length_scale=2.2, vertex_sorting="NONE")
+       .with_cull_box((-HALO_R - 10.0, -24.0, -HALO_R - 10.0),
+                      (HALO_R + 10.0, ERUPT_CULL_TOP, HALO_R + 10.0)))
 
     # Ember shrapnel: REAL collision, so glowing chunks skitter over the crimson creep
     # halo and the crater lip instead of sinking through it (parallelUpdate stays off).
