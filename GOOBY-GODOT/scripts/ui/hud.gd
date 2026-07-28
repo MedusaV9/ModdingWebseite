@@ -112,7 +112,8 @@ const STATS := [
 const STAT_ICON_PX := 20.0
 const STAT_BAR_H_PX := 10.0
 const STAT_BAR_MIN_W_PX := 24.0
-const STAT_BAR_LANDSCAPE_W_PX := 132.0
+## Querformat-Stat-Track: kompakt in der linken Spalte (war 132 — H2 zu breit).
+const STAT_BAR_LANDSCAPE_W_PX := 80.0
 const RING_PX := 40.0
 const COIN_ICON_PX := 22.0
 const COIN_FONT_PX := 17
@@ -199,7 +200,7 @@ func apply_layout(layout: HudLayoutLogic.Layout) -> void:
 	_landscape_column.visible = not portrait
 	_left_column.visible = not portrait
 	_status_row.visible = portrait
-	var btn_size := maxf((DOCK_BTN if portrait else HudLayoutLogic.ACTION_BTN) * f, floor_px)
+	var btn_size := maxf((DOCK_BTN if portrait else HudLayoutLogic.LANDSCAPE_BTN) * f, floor_px)
 	# Hochkant: Label sitzt IN der Kachel (Web .g5-btn-label) — kein Anbau.
 	var label_h := 0.0 if portrait else LABEL_PAD * f
 	_column_top = EDGE_PAD + float(insets["top"]) + maxf(56.0 * f, floor_px) + 12.0
@@ -210,11 +211,12 @@ func apply_layout(layout: HudLayoutLogic.Layout) -> void:
 			order.append(action["id"])
 	else:
 		order = COLUMN_ORDER.duplicate()
+	var icon_base := DOCK_ICON if portrait else HudLayoutLogic.LANDSCAPE_ICON
 	for id: StringName in order:
 		var btn: Button = _buttons[id]
 		btn.custom_minimum_size = Vector2(btn_size, btn_size + label_h)
 		_apply_button_label(btn, id, portrait, f)
-		_scale_icon_button(btn, f, DOCK_ICON if portrait else 44.0)
+		_scale_icon_button(btn, f, icon_base)
 		if btn.get_parent() != button_parent:
 			if btn.get_parent() != null:
 				btn.get_parent().remove_child(btn)
@@ -239,9 +241,9 @@ func apply_layout(layout: HudLayoutLogic.Layout) -> void:
 			if chip.get_parent() != null:
 				chip.get_parent().remove_child(chip)
 			chip_parent.add_child(chip)
-		# Hochkant = Mini-Kapseln (H §1.3: Glance-Info, Details per Tap-Sheet).
-		chip.theme_type_variation = &"StatusCapsuleMini" if portrait else &"StatusCapsule"
-		# Kapseln sind Tap-Ziele (öffnen das Status-Sheet) → Touch-Floor.
+		# Mini-Kapseln in BEIDEN Layouts (H §1.3 Glance; Quer war zu fett).
+		# Tap öffnet weiter das Status-Sheet → Touch-Floor bleibt Minimum.
+		chip.theme_type_variation = &"StatusCapsuleMini"
 		chip.custom_minimum_size = Vector2.ONE * floor_px
 	# UICOZY (Web .g5-topbar): Hochkant flext die Stat-Pillen über die
 	# Zeilenbreite (flex:1) — der Spacer weicht, die StatusRow übernimmt.
@@ -254,7 +256,7 @@ func apply_layout(layout: HudLayoutLogic.Layout) -> void:
 		(_stat_chips[info["id"]] as Control).size_flags_horizontal = pill_flags
 		var bar: ProgressBar = _stat_bars[info["id"]]
 		# Web .stat-fill-Track: 10 px hoch, Hochkant min 24 px + flext mit,
-		# Querformat feste 132 px (Cockpit-Spaltenbreite).
+		# Querformat kompakte feste Breite (Cockpit-Spalte).
 		bar.custom_minimum_size = (
 			Vector2(roundf(STAT_BAR_MIN_W_PX * f), roundf(STAT_BAR_H_PX * f))
 			if portrait
@@ -275,6 +277,29 @@ func apply_layout(layout: HudLayoutLogic.Layout) -> void:
 	_scale_icon_button(_eye_button, f)
 	_gooby_chip.custom_minimum_size = Vector2(0.0, floor_px)
 	refresh_safe_area()
+	# #region agent log
+	var sample_btn: Button = _buttons.get(&"bau")
+	(
+		AgentDebug
+		. log(
+			"H2",
+			"hud.gd:apply_layout",
+			"hud_sizes_applied",
+			{
+				"layout": int(layout),
+				"f": f,
+				"floor_px": floor_px,
+				"column_width": _column_width,
+				"btn_design": DOCK_BTN if portrait else HudLayoutLogic.LANDSCAPE_BTN,
+				"icon_design": icon_base,
+				"stat_bar_w": STAT_BAR_MIN_W_PX if portrait else STAT_BAR_LANDSCAPE_W_PX,
+				"bau_min": sample_btn.custom_minimum_size if sample_btn else Vector2.ZERO,
+				"chip_min":
+				_chip_nodes[0].custom_minimum_size if not _chip_nodes.is_empty() else Vector2.ZERO,
+			}
+		)
+	)
+	# #endregion
 
 
 ## FIX1-Messpass fürs Cockpit (Ursache „Spalte läuft über beide Ränder“):
@@ -625,8 +650,8 @@ func _place_eye_button(portrait: bool, inset_right := 0.0, inset_bottom := 0.0) 
 
 ## Icon-Skalierung für die Frost-Icon-Buttons: das Theme deckelt Icons auf
 ## 44 px (`HudIconButton/icon_max_width`) — der Deckel wächst mit f, sonst
-## wirken die Icons verloren. `base` = Design-Icongröße: Dock-Kacheln nutzen
-## die Web-Referenz 22 (Icon + Label in der 54er-Kachel), Cockpit/Auge 44.
+## wirken die Icons verloren. `base` = Design-Icongröße: Dock + Cockpit
+## nutzen die Web-Referenz 22 (kompakte Kachel); Auge bleibt 44.
 func _scale_icon_button(btn: Button, f: float, base := 44.0) -> void:
 	btn.add_theme_constant_override("icon_max_width", int(maxf(base * f, 16.0)))
 

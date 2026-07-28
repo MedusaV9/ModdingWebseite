@@ -111,14 +111,9 @@ func test_fruehes_wecken_macht_grumpy_nie_mehr() -> void:
 	gs.set_value("gooby.stats.energy", 40.0)
 	gs.set_value("gooby.lastTickAt", NOW_MS)
 	gs.update(func(s: Dictionary) -> void: Sleep.start_sleep_state(s, NOW_MS))
-	# Zu frueh (unter 5 min): das Bett laesst gar nicht wecken.
-	var zu_frueh := NOW_MS + 2 * MIN_MS
+	# Sofort wecken erlaubt (EARLY_WAKE_AFTER_MIN=0); Folge ist NUR der Grumpy-Debuff.
+	var now := NOW_MS
 	var events := {"list": []}
-	gs.update(func(s: Dictionary) -> void: events["list"] = Sleep.wake_early_state(s, zu_frueh))
-	assert_eq(events["list"], [], "unter 5 min: kein Wecken")
-	assert_true(bool(gs.get_value("gooby.sleep.sleeping")), "schlaeft weiter")
-	# Nach 6 min: Wecken erlaubt, Folge ist NUR der Grumpy-Debuff.
-	var now := NOW_MS + 6 * MIN_MS
 	gs.update(func(s: Dictionary) -> void: events["list"] = Sleep.wake_early_state(s, now))
 	assert_eq(events["list"], ["wokeEarly"], "wokeEarly-Event")
 	assert_false(bool(gs.get_value("gooby.sleep.sleeping")), "wach")

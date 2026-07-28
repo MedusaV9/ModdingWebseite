@@ -44,6 +44,7 @@ func _open_panel(gs: Object) -> void:
 	# Screens nicht über den Rand wachsen (Kuehlschrank-Muster).
 	var scroll := ScrollContainer.new()
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.scroll_deadzone = 24
 	var hoehe := 640.0
 	if is_inside_tree() and get_viewport() != null:
 		hoehe = minf(hoehe, get_viewport().get_visible_rect().size.y - 80.0)

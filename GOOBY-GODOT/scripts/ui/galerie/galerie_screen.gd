@@ -132,6 +132,7 @@ func _build_ui() -> void:
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.scroll_deadzone = 24
 	_rows.add_child(scroll)
 	_grid = GridContainer.new()
 	_grid.name = "FotoRaster"
@@ -247,6 +248,8 @@ func _zeige_vollansicht(pfad: String) -> void:
 	_voll_scroll = ScrollContainer.new()
 	_voll_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_voll_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_voll_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_voll_scroll.scroll_deadzone = 24
 	spalte.add_child(_voll_scroll)
 	_voll_rect = TextureRect.new()
 	_voll_rect.name = "VollBild"

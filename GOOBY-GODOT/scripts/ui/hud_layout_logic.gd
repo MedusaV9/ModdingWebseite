@@ -17,8 +17,12 @@ const ARC_RADIUS := 166.0
 const ARC_START_DEG := 176.0  # fast waagerecht links vom Eck
 const ARC_END_DEG := 94.0  # fast senkrecht überm Eck
 const ARC_STAGGER := 82.0
-## Aktions-Button-Kantenlänge (H §1.3, Basis wie ARC_RADIUS).
+## Aktions-Button-Kantenlänge (H §1.3, Basis wie ARC_RADIUS) — Auge/Bogen.
 const ACTION_BTN := 72.0
+## Kompakte Cockpit-Kachel Querformat (Design-px vor UiScale): 48er-Taste
+## mit 22er-Icon — ACTION_BTN×f war physisch zu groß (H2-Debug).
+const LANDSCAPE_BTN := 48.0
+const LANDSCAPE_ICON := 22.0
 
 
 ## Layout aus der Viewport-Größe: höher als breit → Hochkant.

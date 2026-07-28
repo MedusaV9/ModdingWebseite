@@ -15,8 +15,8 @@ const START_BELOW_ENERGY := 70.0
 ## sleepDurationMin = ceil(30 * (100 - energy) / 100), minimum 10.
 const DURATION_BASE_MIN := 30.0
 const DURATION_MIN_MIN := 10
-## Early manual wake allowed after this many minutes.
-const EARLY_WAKE_AFTER_MIN := 5
+## Early manual wake allowed after this many minutes (0 = sofort kündbar).
+const EARLY_WAKE_AFTER_MIN := 0
 ## Early wake grumpy debuff: mood -15 for 10 minutes.
 const EARLY_WAKE_MOOD_DEBUFF := 15.0
 const EARLY_WAKE_DEBUFF_MIN := 10
@@ -88,7 +88,8 @@ static func start_nap(state: Dictionary, now_ms: int) -> Dictionary:
 	return s
 
 
-## Is an early manual wake allowed (§C1.4)? Only after 5 minutes of sleep.
+## Is an early manual wake allowed? Nach EARLY_WAKE_AFTER_MIN Minuten Schlaf
+## (0 = sofort, Grumpy-Debuff bleibt beim early-Pfad).
 static func can_wake_early(state: Dictionary, now_ms: int) -> bool:
 	if not is_sleeping(state):
 		return false
@@ -209,9 +210,9 @@ static func start_sleep_state(state: Dictionary, now_ms: int, nap := false) -> b
 	return true
 
 
-## Fruehes (manuelles) Wecken im v5-Save: nur nach 5 Schlafminuten erlaubt;
-## setzt den Web-Grumpy-Debuff (KEINE Grants — die gibt es nur fuer vollen
-## Schlaf ueber den Ticker). Rueckgabe die Events ([] = nichts passiert).
+## Fruehes (manuelles) Wecken im v5-Save: erlaubt nach EARLY_WAKE_AFTER_MIN
+## (0 = sofort); setzt den Grumpy-Debuff (KEINE Grants — die gibt es nur
+## fuer vollen Schlaf ueber den Ticker). Rueckgabe die Events ([] = nichts).
 static func wake_early_state(state: Dictionary, now_ms: int) -> Array:
 	var gooby: Variant = state.get("gooby")
 	if not (gooby is Dictionary):

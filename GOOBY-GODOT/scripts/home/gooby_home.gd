@@ -132,6 +132,21 @@ func cancel_walk() -> void:
 	_stop_walking()
 
 
+## Gooby aufs Bett snappen (Schlaf-Pose): Wander/Walk stoppen, Position auf
+## Möbel-Origin + leichter Y-Lift, Rig-Yaw entlang der Bettlänge.
+## Sleep-Clip ist eine Liegepose — Ausrichtung `furniture.rotation.y + PI/2`
+## (Kopf/Fuß entlang der langen Bettkante; unsicher bei Sonder-Meshes).
+func lie_on_bed(furniture: Node3D) -> void:
+	cancel_walk()
+	set_wander_enabled(false)
+	if furniture == null or not is_instance_valid(furniture):
+		return
+	const BED_Y_LIFT := 0.15
+	global_position = furniture.global_position + Vector3(0.0, BED_Y_LIFT, 0.0)
+	if rig != null:
+		rig.rotation.y = furniture.global_rotation.y + PI / 2.0
+
+
 ## Aktuelle Grid-Zelle (für Blockade-Checks der Türen).
 func current_cell() -> Vector2i:
 	return GridData.cell_of(global_position)

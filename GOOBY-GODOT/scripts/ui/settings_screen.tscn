@@ -65,8 +65,9 @@ size_flags_horizontal = 3
 layout_mode = 2
 size_flags_vertical = 3
 horizontal_scroll_mode = 0
+scroll_deadzone = 24
 
-[node name="ScrollCenter" type="CenterContainer" parent="Margin/Layout/Scroll"]
+[node name="ScrollCenter" type="MarginContainer" parent="Margin/Layout/Scroll"]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 0
@@ -75,6 +76,7 @@ size_flags_vertical = 0
 unique_name_in_owner = true
 custom_minimum_size = Vector2(660, 0)
 layout_mode = 2
+size_flags_horizontal = 3
 theme_override_constants/separation = 16
 
 [node name="Toast" type="Control" parent="."]

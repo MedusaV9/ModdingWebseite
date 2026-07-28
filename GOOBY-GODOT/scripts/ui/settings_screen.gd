@@ -84,6 +84,23 @@ func _ready() -> void:
 	_load_from_settings_autoload()
 	get_viewport().size_changed.connect(_on_viewport_resized)
 	_rebuild()
+	# #region agent log
+	var scroll_n := get_node_or_null("Margin/Layout/Scroll") as ScrollContainer
+	var center_n := get_node_or_null("Margin/Layout/Scroll/ScrollCenter")
+	(
+		AgentDebug
+		. log(
+			"H1",
+			"settings_screen.gd:_ready",
+			"settings_scroll_nodes",
+			{
+				"center_is_centercontainer": center_n is CenterContainer,
+				"deadzone": scroll_n.scroll_deadzone if scroll_n else -1,
+				"scroll_size": scroll_n.size if scroll_n else Vector2.ZERO,
+			}
+		)
+	)
+	# #endregion
 
 
 ## FIX1: bei Resize/Rotation neu skalieren (nur wenn sich der Faktor
@@ -211,8 +228,11 @@ func _apply_scale() -> void:
 	var floor_px := HudLayoutLogic.touch_floor_canvas(canvas)
 	_back.custom_minimum_size = Vector2.ONE * maxf(56.0 * _f, floor_px)
 	_title.add_theme_font_size_override("font_size", int(AcTokens.FONT_SIZE_HEADLINE * _tf))
+	# Scroll-Inhalt: Breite = min(Design 660×Faktor, verfügbare Viewport-Breite).
+	# Kein CenterContainer im Scroll — der würde den Content-Fit zerstören.
 	var avail := canvas.x - float(insets["left"]) - float(insets["right"]) - 48.0
-	_sections.custom_minimum_size = Vector2(minf(660.0 * _f, avail), 0.0)
+	_sections.custom_minimum_size = Vector2(minf(660.0 * _f, maxf(avail, 1.0)), 0.0)
+	_sections.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
 
 ## ------------------------------------------------------------- Abschnitte

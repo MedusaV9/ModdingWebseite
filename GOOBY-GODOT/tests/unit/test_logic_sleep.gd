@@ -32,12 +32,12 @@ func test_is_sleeping_liest_slice_defensiv() -> void:
 	assert_true(Sleep.is_sleeping(asleep), "nach start_sleep → true")
 
 
-func test_can_wake_early_erst_nach_5_minuten() -> void:
+func test_can_wake_early_sofort_erlaubt() -> void:
 	assert_false(Sleep.can_wake_early(_awake_state(), NOW_MS), "wach → nie")
 	var asleep := Sleep.start_sleep(_awake_state(30.0), NOW_MS)
-	assert_false(Sleep.can_wake_early(asleep, NOW_MS), "Minute 0 → nein")
-	assert_false(Sleep.can_wake_early(asleep, NOW_MS + 5 * MIN_MS - 1), "4:59 → nein")
-	assert_true(Sleep.can_wake_early(asleep, NOW_MS + 5 * MIN_MS), "ab 5:00 → ja")
+	assert_true(Sleep.can_wake_early(asleep, NOW_MS), "Minute 0 → ja (EARLY_WAKE_AFTER_MIN=0)")
+	assert_true(Sleep.can_wake_early(asleep, NOW_MS + 1), "sofort danach → ja")
+	assert_eq(Sleep.EARLY_WAKE_AFTER_MIN, 0, "Gate offen ab 0 min")
 
 
 func test_sleep_remaining_ms_countdown_und_clamp() -> void:

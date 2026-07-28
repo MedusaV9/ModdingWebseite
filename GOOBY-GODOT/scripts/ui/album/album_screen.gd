@@ -234,6 +234,7 @@ func _build_rail() -> Control:
 	scroll.custom_minimum_size = Vector2(240, 0)
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.scroll_deadzone = 24
 	_rail_scroll = scroll
 	_rail_box = VBoxContainer.new()
 	_rail_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -313,6 +314,8 @@ func _build_page_panel() -> Control:
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.scroll_deadzone = 24
 	panel.add_child(scroll)
 	_grid = GridContainer.new()
 	_grid.columns = 3

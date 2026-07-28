@@ -921,8 +921,8 @@ func _on_build_opened() -> void:
 	if _skyline != null:
 		_skyline.set_aktiv(true)
 	_set_dioramas_visible(false)
-	_gooby.set_wander_enabled(false)
-	_gooby.rig.play_clip("sit")
+	_gooby.set_wander_enabled(true)
+	_gooby.rig.play_clip("idle")
 	say(I18nService.t("home.gooby.watch"))
 
 

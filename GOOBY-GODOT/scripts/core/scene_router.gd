@@ -106,8 +106,10 @@ func _notification(what: int) -> void:
 func handle_back_request() -> bool:
 	if PanelStack.close_top():
 		return true
+	# Bei laufender Reise NICHT „true“ vortäuschen — sonst schlucken
+	# Screens (Arcade) den Zurück-Tap ohne Navigation (H4).
 	if _busy:
-		return true
+		return false
 	if can_go_back():
 		back()
 		return true

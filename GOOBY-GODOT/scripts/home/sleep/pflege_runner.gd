@@ -189,21 +189,69 @@ func _sneeze() -> void:
 		_say(I18nService.t("health.hatschi"))
 
 
-## Schlafender Gooby liegt ruhig im sleep-Clip; nach dem Aufwachen (frueh
-## geweckt via Bett ODER wokeUp) laeuft er wieder los.
+## Schlafender Gooby liegt ruhig im sleep-Clip (Bett-Snap + Yaw); nach dem
+## Aufwachen (frueh geweckt via Bett ODER wokeUp) laeuft er wieder los.
+## Snap wird bei jedem refresh erneut gesetzt, falls Gooby verrutscht.
 func _apply_sleep_pose() -> void:
 	var sleeping := _sleeping()
-	if sleeping and not _sleep_posed:
-		_sleep_posed = true
+	if sleeping:
 		if gooby != null:
+			if gooby.has_method("cancel_walk"):
+				gooby.cancel_walk()
 			gooby.set_wander_enabled(false)
-			gooby.play_clip("sleep")
+			var bed := _find_bed_furniture()
+			if bed != null and gooby.has_method("lie_on_bed"):
+				gooby.lie_on_bed(bed)
+			if not _sleep_posed:
+				gooby.play_clip("sleep")
+				# #region agent log
+				(
+					AgentDebug
+					. log(
+						"H6",
+						"pflege_runner.gd:_apply_sleep_pose",
+						"pose_applied_with_bed_snap",
+						{
+							"gooby_pos":
+							{"x": gooby.global_position.x, "z": gooby.global_position.z},
+							"gooby_yaw": gooby.rig.rotation.y if gooby.get("rig") != null else -1.0,
+							"bed_found": bed != null,
+							"bed_yaw": bed.global_rotation.y if bed != null else -1.0,
+							"walking":
+							bool(gooby.get("_walking")) if gooby.get("_walking") != null else false,
+							"wander":
+							(
+								bool(gooby.get("_wander_enabled"))
+								if gooby.get("_wander_enabled") != null
+								else false
+							),
+						}
+					)
+				)
+				# #endregion
+		_sleep_posed = true
 		_set_emotion("sleepy")
 	elif not sleeping and _sleep_posed and not _wake_running:
 		_sleep_posed = false
 		if gooby != null:
 			gooby.play_clip("idle")
 			gooby.set_wander_enabled(true)
+
+
+## Bett-Möbel im Raum finden (InteractablesHost → Bett._furniture).
+func _find_bed_furniture() -> Node3D:
+	if room == null:
+		return null
+	var host := room.get_node_or_null("InteractablesHost")
+	if host == null:
+		return null
+	for child in host.get_children():
+		if child is Bett:
+			var furniture: Variant = child.get("_furniture")
+			if furniture is Node3D and is_instance_valid(furniture):
+				return furniture
+			return child
+	return null
 
 
 func _arm_sneeze() -> void:
