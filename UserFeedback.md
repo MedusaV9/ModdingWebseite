@@ -26,11 +26,29 @@ schreibt dazu, WAS er gemacht hat.
       Neu gegliedert: 1. Neu von dir (hier reinschreiben), 2. In Arbeit,
       3. Wo das Spiel steht (Testen/Spielstand/Offenes/Trailer auf einen Blick),
       4. Erledigt mit Erklärung. Keine Doppelungen mehr, klare Reihenfolge.
-- [ ] verbessere das UI von Gooby
-- [ ] im Baumodus die Stadt drumherum sieht komisch aus; plus wenn ich im Garten bin
-      will ich z. B. das Hausdach sehen, und bei Räumen den Rest des Hauses
-- [ ] mach Post-Processing-Effekte, plus dass Gooby auch geschockt sein kann —
-      es soll richtige Gefühle zu sehen geben wie bei Animal Crossing
+- [x] **verbessere das UI von Gooby**
+      Jeder Screen einzeln bewertet und nachgezogen: klare Hierarchie (eine Hauptsache
+      pro Bild), einheitliche Kopfzeilen, illustrierte Leerzustaende statt leerer
+      Flaechen, animierte Hintergruende mit eigener Farbstimmung, Freundescode als
+      Blickfang. Die automatische UI-Pruefung (15 Screens x 4 Geraeteformate) bleibt
+      bei 0 Befunden.
+- [x] **Baumodus-Kulisse + Haus von aussen sehen**
+      Diagnose der alten Kulisse: eine Ringstrasse lag 4 m an der Wand, mit Autos die
+      groesser waren als der Raum - das las sich als Kreisverkehr um eine Insel. Neu:
+      eigenes Grundstueck mit Zaun und Weg, EINE Strasse hinter Vorgarten und Gehweg,
+      Nachbarhaeuser in richtiger Groesse, Baumreihen, Horizont. Im Garten steht jetzt
+      dein Haus mit Dach im gewaehlten Stil daneben (die Haustuer sitzt exakt ueber der
+      Gartentuer), Raeume haben Deckenbalken bzw. Dachschraegen, hinter Tueren sieht man
+      den Nachbarraum, und aus Kuechen-/Badfenster blickt man in den Garten.
+- [x] **Post-Processing + echte Gefuehle wie bei Animal Crossing**
+      12 klar lesbare Emotionen mit Gesicht, Koerperhaltung, Bewegung, Ton und
+      Symbol ueber dem Kopf: Schreck (Ausrufezeichen), Freude, Begeisterung,
+      Ueberraschung, Verlegenheit, Trotz, Traurigkeit, Muedigkeit, Neugier, Stolz,
+      Angst, Verliebtheit (Herz). Sie kommen von selbst - Schreck beim Donner,
+      Verliebtheit beim Lieblingsessen, Stolz nach einem Rekord - und die starken
+      bekommen einen Kamera-Zoom mit Zeitlupe. Dazu ein Effekt-Stapel: Vignette,
+      Tageszeit-Toenung, Bloom, Tiefenschaerfe, Farbstoss bei starken Gefuehlen -
+      in den Einstellungen abschaltbar, Kosten nur +1 Draw-Call.
 
 ---
 
