@@ -40,7 +40,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from fxlib import (  # noqa: E402
     BLEND_ADDITIVE, BLEND_ALPHA, FX_ASSETS_DIR, REPO_ROOT, SEG_DECAY_TAIL,
-    SEG_LINEAR_DOWN, SEG_LINEAR_UP, SEG_POP_SHRINK, SEG_SMOOTH_UP,
+    SEG_EASE_OUT_CREST, SEG_LINEAR_DOWN, SEG_LINEAR_UP, SEG_POP_SHRINK, SEG_SMOOTH_UP,
     FxBuilder, blend, block_atlas_material, box, burst, circle, cone, constant, curve,
     cylinder, dot, function_shape, gradient, mesh, nf3, random_between, random_color,
     sphere, sub_emitter, texture_material, validate_file,
@@ -75,21 +75,25 @@ def build_boss_intro_shockwave() -> FxBuilder:
     fx = FxBuilder("boss_intro_shockwave")
     cull = ((-6.0, -2.0, -6.0), (6.0, 4.0, 6.0))
 
-    # The particles ARE the ring: circle-shell burst launched radially at 2.2 b/t.
+    # The particles ARE the ring: circle-shell burst launched radially.
     # FX-Wave-11 stacking-law pass: 90 additive sparks born on a 0.4 r shell with
     # hdr 2.4 converged into one white supernova ball. Count 90->40 on a 1.2 r shell,
     # hdr nerfed to ~1.45 and the alpha crest to 0.7 — the ring reads as an arc of
     # separate sparks again.
+    # FX-Wave-11.1 readability pass: at 2.2 b/t the 0.14-0.24 sparks left a 12-block
+    # FOV in <6 ticks and the whole beat read as "nothing happened". Slower (1.25),
+    # bigger (0.22-0.36), longer (20-28t), 48 sparks, crest 0.85 — punchy but still
+    # born spread on the 1.2 r shell so nothing re-converges to white.
     (fx.particle_emitter(
             "ring",
             duration=30, looping=False, max_particles=96,
-            start_lifetime=random_between(16, 22), start_speed=constant(2.2),
-            start_size=nf3(random_between(0.14, 0.24), random_between(0.14, 0.24),
-                           random_between(0.14, 0.24)),
+            start_lifetime=random_between(20, 28), start_speed=constant(1.25),
+            start_size=nf3(random_between(0.22, 0.36), random_between(0.22, 0.36),
+                           random_between(0.22, 0.36)),
             simulation_space="World")
-       .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(40))])
+       .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(48))])
        .with_shape(circle(radius=1.2, thickness=0.0, arc_mode="BurstSpread"))
-       .with_material(texture_material(CIRCLE, hdr=(1.2, 1.0, 1.45), blend=BLEND_ADDITIVE))
+       .with_material(texture_material(CIRCLE, hdr=(1.5, 1.2, 1.8), blend=BLEND_ADDITIVE))
        .with_lights()
        .with_cull_box(*cull)
        .with_curves(
@@ -97,18 +101,39 @@ def build_boss_intro_shockwave() -> FxBuilder:
             # the crest breathes instead of ticking down (QUALITY §2 row 6).
             size_over_lifetime=curve(0.0, 1.0, [SEG_DECAY_TAIL], "lifetime", "size"),
             color_over_lifetime=gradient(
-                [(0.0, 0.7), (0.6, 0.6), (1.0, 0.0)],
+                [(0.0, 0.85), (0.6, 0.7), (1.0, 0.0)],
                 [(0.0, 0.95, 0.9, 1.0), (1.0, 0.6, 0.4, 0.95)])))
 
+    # FX-Wave-11.1: single expanding ground-flash quad. ONE particle cannot stack,
+    # so this is the legal way to buy back the "impact frame" the trimmed ring lost:
+    # a horizontal HDR disc popping 3 -> 9 blocks in 8 ticks, gone before the dust.
+    (fx.particle_emitter(
+            "ground_flash",
+            duration=10, looping=False, max_particles=2,
+            start_lifetime=constant(8), start_speed=constant(0),
+            start_size=nf3(3.0, 3.0, 3.0), simulation_space="World")
+       .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(1))])
+       .with_shape(dot(), position=nf3(0, 0.15, 0))
+       .with_material(texture_material(CIRCLE, hdr=(1.8, 1.4, 2.4), blend=BLEND_ADDITIVE))
+       .with_renderer(render_mode="Horizontal", vertex_sorting="NONE", shade=False)
+       .with_cull_box(*cull)
+       .with_curves(
+            size_over_lifetime=curve(0.0, 3.0, [SEG_EASE_OUT_CREST], "lifetime", "size"),
+            color_over_lifetime=gradient(
+                [(0.0, 0.85), (0.45, 0.5), (1.0, 0.0)],
+                [(0.0, 0.9, 0.8, 1.0), (1.0, 0.55, 0.35, 0.95)])))
+
     # World-lit dust kick that grounds the bloom flash (shade samples the lightmap).
+    # FX-Wave-11.1: kicked harder (speed 0.3-0.65, size 0.35-0.6, 30 puffs) so the
+    # dust visibly rolls outward — the dark birth tint below keeps the pile legal.
     (fx.particle_emitter(
             "dust_kick",
             duration=30, looping=False, max_particles=32,
-            start_lifetime=random_between(18, 26), start_speed=random_between(0.15, 0.4),
-            start_size=nf3(random_between(0.25, 0.45), random_between(0.25, 0.45),
-                           random_between(0.25, 0.45)),
+            start_lifetime=random_between(18, 26), start_speed=random_between(0.3, 0.65),
+            start_size=nf3(random_between(0.35, 0.6), random_between(0.35, 0.6),
+                           random_between(0.35, 0.6)),
             simulation_space="World")
-       .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(24))])
+       .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(30))])
        .with_shape(cone(angle=30.0, radius=0.6))
        .with_material(texture_material(SMOKE, blend=BLEND_ALPHA))
        .with_renderer(vertex_sorting="DISTANCE", shade=True)

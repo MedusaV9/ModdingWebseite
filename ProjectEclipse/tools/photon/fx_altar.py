@@ -63,6 +63,9 @@ def build_altar_levelup() -> FxBuilder:
     # hdr 3.2 with a pure-white birth stop bloomed into a supernova at the altar.
     # Count 96->44 (cap 160->64) spread over a 1.5 r shell, hdr nerfed to ~1.45, the
     # birth stop starts at #E7C9FF instead of white and the alpha crest at 0.7.
+    # FX-Wave-11.1: 44 sparks x ~0.3 b covered ~13 b of a 9.4 b circumference —
+    # still >1 layer of overlap at birth, so the base of the sky spear kept flashing
+    # into a pink ball. 36 sparks on a 2.4 r shell (15 b circumference), crest 0.55.
     (fx.particle_emitter(
             "ring_shock",
             duration=30, looping=False,
@@ -72,18 +75,18 @@ def build_altar_levelup() -> FxBuilder:
             simulation_space="World", max_particles=64)
        .child_of(root)
        .with_emission(rate=constant(0.0),
-                      bursts=[burst(time=0, count=constant(44), cycles=1, interval=1,
+                      bursts=[burst(time=0, count=constant(36), cycles=1, interval=1,
                                     probability=1.0)])
-       .with_shape(circle(radius=1.5, thickness=0.0, arc=360.0,
+       .with_shape(circle(radius=2.4, thickness=0.0, arc=360.0,
                           arc_mode="BurstSpread"))       # even spacing, no clumping
        .with_material(texture_material(CIRCLE_TEX, discard=0.05,
                                        hdr=(1.45, 1.1, 1.45), blend=BLEND_ADDITIVE))
        .with_renderer(render_mode="Billboard", vertex_sorting="NONE", shade=False)
        .with_cull_box((-10.0, -1.0, -10.0), (10.0, 6.0, 10.0))
        .with_curves(
-            # #E7C9FF -> #E7C9FF -> violet #7B3FD9, alpha 0.7 -> 0.6 -> 0
+            # #E7C9FF -> #E7C9FF -> violet #7B3FD9, alpha 0.55 -> 0.5 -> 0
             color_over_lifetime=gradient(
-                [(0.0, 0.7), (0.5, 0.6), (1.0, 0.0)],
+                [(0.0, 0.55), (0.5, 0.5), (1.0, 0.0)],
                 [(0.0, 0.906, 0.788, 1.0), (0.5, 0.906, 0.788, 1.0),
                  (1.0, 0.482, 0.247, 0.851)]),
             # pop then dissolve: single-segment bezier [0,0.4 0.15,1 0.7,0.95 1,0]
@@ -136,7 +139,9 @@ def build_altar_levelup() -> FxBuilder:
        .child_of(root)
        .with_emission(rate=constant(0.0),
                       bursts=[burst(time=1, count=constant(12), cycles=1)])
-       .with_shape(cone(angle=18.0, radius=0.4))         # pointed +Y (fountain cone)
+       # FX-Wave-11.1: cone mouth 0.4 -> 1.2 r — 12 hdr-2.2 ribbon heads born inside
+       # a 0.4 r disc were the last bright clump left at the spear base.
+       .with_shape(cone(angle=18.0, radius=1.2))         # pointed +Y (fountain cone)
        .with_material(texture_material(CIRCLE_TEX, discard=0.05, hdr=(1.6, 1.1, 2.2),
                                        blend=BLEND_ADDITIVE))
        .with_renderer(render_mode="Billboard", vertex_sorting="NONE", shade=False)

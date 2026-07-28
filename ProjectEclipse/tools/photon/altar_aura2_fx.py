@@ -329,10 +329,11 @@ def build_altar_aura_powerup() -> FxBuilder:
        .with_renderer(render_mode="Billboard", vertex_sorting="NONE", shade=False)
        .with_cull_box((-20.0, -6.0, -20.0), (20.0, 4.0, 20.0))
        .with_curves(
-            # white core -> violet, dying exactly as the wave passes the rim
+            # FX-Wave-11.1: pale-violet birth stop instead of pure white — the first
+            # 2 ticks of the wave still overlap on the 1.5 r shell.
             color_over_lifetime=gradient(
                 [(0.0, 0.6), (0.6, 0.6), (1.0, 0.0)],
-                [(0.0, 1.0, 1.0, 1.0), (0.5,) + CORE, (1.0,) + VIOLET]),
+                [(0.0, 0.906, 0.82, 1.0), (0.5,) + CORE, (1.0,) + VIOLET]),
             size_over_lifetime=nf3(
                 curve(0.0, 1.0, [(0.0, 0.4, 0.15, 1.0, 0.7, 0.95, 1.0, 0.0)],
                       "lifetime", "size"),
@@ -343,6 +344,10 @@ def build_altar_aura_powerup() -> FxBuilder:
        .with_lights(sky=15, block=15))
 
     # --- crown_flash: a short upward flare right at the altar crown ---------------
+    # FX-Wave-11.1 stacking-law pass: 10 hdr-(2.4,2.0,2.8) white sparks born inside a
+    # 0.4 r sphere WERE the "solid white ball at the centre" in the client test —
+    # every spark overlapped every other one for its whole life. 5 sparks on a 1.0 r
+    # shell at hdr ~1.6 and a 0.7 birth alpha keep the flare without the fusion.
     (fx.particle_emitter(
             "crown_flash",
             duration=40, looping=False,
@@ -351,10 +356,10 @@ def build_altar_aura_powerup() -> FxBuilder:
             start_size=nf3(random_between(0.2, 0.35)),
             simulation_space="World", max_particles=10)
        .with_emission(rate=constant(0.0),
-                      bursts=[burst(time=0, count=constant(10), cycles=1, interval=1,
+                      bursts=[burst(time=0, count=constant(5), cycles=1, interval=1,
                                     probability=1.0)])
-       .with_shape(sphere(radius=0.4, thickness=0.0), position=nf3(0, 1.5, 0))
-       .with_material(texture_material(CIRCLE_TEX, discard=0.05, hdr=(2.4, 2.0, 2.8),
+       .with_shape(sphere(radius=1.0, thickness=0.0), position=nf3(0, 1.5, 0))
+       .with_material(texture_material(CIRCLE_TEX, discard=0.05, hdr=(1.6, 1.3, 1.9),
                                        blend=BLEND_ADDITIVE))
        .with_renderer(render_mode="Billboard", vertex_sorting="NONE", shade=False)
        .with_cull_box((-4.0, -1.0, -4.0), (4.0, 8.0, 4.0))
@@ -365,8 +370,8 @@ def build_altar_aura_powerup() -> FxBuilder:
                 orbital=nf3(constant(0), constant(0.3), constant(0)),
                 offset=nf3(0), radial=constant(0.0), speed_modifier=constant(1)),
             color_over_lifetime=gradient(
-                [(0.0, 1.0), (0.5, 0.7), (1.0, 0.0)],
-                [(0.0, 1.0, 1.0, 1.0), (1.0,) + GOLD]))
+                [(0.0, 0.7), (0.5, 0.55), (1.0, 0.0)],
+                [(0.0, 0.95, 0.88, 1.0), (1.0,) + GOLD]))
        .with_lights(sky=15, block=15))
 
     # --- spark_rain: a 2 s glitter fall over the whole island (t = 6) -------------

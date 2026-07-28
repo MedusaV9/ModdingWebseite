@@ -187,18 +187,22 @@ def build_tyrant_blind_burst() -> FxBuilder:
     # with a near-white (0.85,0.88,0.90) birth tint composited into a second white ball
     # right behind the flash. Now 3x24 over a thick 1.5 r shell, birth tint slate, and
     # the alpha crest trimmed 0.65 -> 0.5 so the shells stay readable as fog.
+    # FX-Wave-11.1: client test still showed a lingering grey cotton ball — the late
+    # tint climbed to (0.6,0.66,0.7) at 0.5 alpha, i.e. bright again once ~3 shells
+    # overlapped. Late tint now stays slate (0.4,0.44,0.5), crest 0.38, born on a
+    # wider 2.2 r shell and pushed faster (1.2-1.7 b/t) so shells separate at birth.
     (fx.particle_emitter(
             "fog_shells",
             duration=26, looping=False, max_particles=80,
-            start_lifetime=random_between(14, 22), start_speed=random_between(0.9, 1.3),
+            start_lifetime=random_between(14, 22), start_speed=random_between(1.2, 1.7),
             start_size=nf3(random_between(0.4, 0.8), random_between(0.4, 0.8),
                            random_between(0.4, 0.8)),
             simulation_space="World")
        .with_emission(rate=constant(0.0), bursts=[
-            burst(time=0, count=constant(24)),
-            burst(time=5, count=constant(24)),
-            burst(time=10, count=constant(24))])
-       .with_shape(sphere(radius=1.5, thickness=0.25))
+            burst(time=0, count=constant(18)),
+            burst(time=5, count=constant(18)),
+            burst(time=10, count=constant(18))])
+       .with_shape(sphere(radius=2.2, thickness=0.35))
        .with_material(texture_material("photon:textures/particle/smoke.png",
                                        blend=BLEND_ALPHA))
        .with_renderer(vertex_sorting="DISTANCE", shade=True)
@@ -206,8 +210,8 @@ def build_tyrant_blind_burst() -> FxBuilder:
        .with_curves(
             size_over_lifetime=curve(1.0, 2.2, [SEG_LINEAR_UP], "lifetime", "size"),
             color_over_lifetime=gradient(
-                [(0.0, 0.0), (0.15, 0.5), (0.7, 0.5), (1.0, 0.0)],
-                [(0.0, 0.227, 0.227, 0.333), (1.0, 0.6, 0.66, 0.7)])))
+                [(0.0, 0.0), (0.15, 0.38), (0.7, 0.38), (1.0, 0.0)],
+                [(0.0, 0.227, 0.227, 0.333), (1.0, 0.4, 0.44, 0.5)])))
 
     # Electric arcs off the crown at release.
     (fx.particle_emitter(
