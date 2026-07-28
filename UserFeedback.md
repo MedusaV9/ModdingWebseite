@@ -17,10 +17,10 @@ schreibt dazu, WAS er gemacht hat.
 
 ## 1. Neu von dir
 
-<!-- Hier reinschreiben. Beispiel:
-- [ ] Das HUD ist mir im Querformat zu weit links
-- [ ] Der Taxi-Sound ist zu laut
--->
+> **Hier reinschreiben.** Stichworte reichen, z. B. „HUD im Querformat zu weit links"
+> oder „Taxi-Sound zu laut". Der Agent hakt sie ab und schreibt dazu, was er gemacht hat.
+
+_(gerade nichts offen — alle bisherigen Punkte stehen unten unter „Erledigt")_
 
 - [x] **verbessere den Aufbau der Feedback Md**
       Neu gegliedert: 1. Neu von dir (hier reinschreiben), 2. In Arbeit,
