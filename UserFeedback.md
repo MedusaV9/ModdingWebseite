@@ -17,7 +17,6 @@ _(leer — hier neue Punkte reinschreiben; zuletzt gezogen: 27.07.-Trailer-Wunsc
 | # | Punkt | Status |
 |---|-------|--------|
 | F-080 | Server/Welt-Verlassen hängt für immer im SAVING-State statt sauber zu stoppen — Fix implementiert (Stop-Sweep räumt FX-Schwärme VOR dem Save, kein Sync-Chunkload im Stop mehr, Arena-Pit-Chunks werden freigegeben); dedizierter Server-Stop in ~10 s verifiziert ✅ | 🟢 |
-| F-081 | Sturm-Bosskampf startet erst, wenn Spieler eine Statue schlagen — implementiert (4-teilige Display-Statue + Interaction-Hitbox, Photon-Idle-Aura, 3-s-Awaken); Spieler-Test folgt | 🟡 |
 | F-082 | Tod im Sturm-Bosskampf ⇒ Wipe-Reset (Boss heilt/despawnt, Statue re-armt nach 30 s, KEINE Blockschreibungen ⇒ Gräber sicher) — implementiert, Spieler-Test folgt | 🟡 |
 | F-083 | Stürme entkoppelt: reconcile markiert jetzt JEDE aktive Site — im Server-Log verifiziert (2 Lairs gleichzeitig armed) ✅ | 🟢 |
 | F-084 | Display-Leak gefixt (LIVE_DISPLAYS-Chunk-Unload-Leak) + Scope-Tags + Orphan-Sweeps bei Kampfende/Reset/Serverstart/Chunkload — implementiert | 🟡 |
@@ -43,6 +42,7 @@ _(leer — hier neue Punkte reinschreiben; zuletzt gezogen: 27.07.-Trailer-Wunsc
 
 | # | Punkt | Commit |
 |---|-------|--------|
+| F-081..087 | Sturm-Boss VERIFIZIERT (Client-Test): Statue-Trigger (Melee-Schlag in Reichweite <=3 Bloecke!) -> 60t-Awaken -> Fog Tyrant spawnt (Bossbar, Storm-Steps), Spielertod -> Wipe-Reset (Boss heilt/despawnt, 2 Adds discarded, Statue-Cooldown 600t -> Re-Arm), Graeber/Kisten unversehrt; Custom-Death-Screen 'YOU HAVE FALLEN' + Limbo-Respawn ok. Beobachtung (minor): Scythe-Display kann waehrend Storm-Step-Vanish kurz detached wirken | Logs + Screenshots |
 | F-094 | Trailer V2 FINAL: `ECLIPSE-Trailer-4K.mp4` neu gerendert (3840x2160@60, 1800 Frames, 30s, 20.9 Mbps, Song 'Worst Enemy feat. goldN' auf -14 LUFS) — 11 echte Gameplay-Video-Szenen inkl. NPC-Szenen (Deckhands/Herold/Villager/Fährmann-Boss), alle 360p-Review-Blocker gefixt; Hinweis: nativer 4K-Remotion-Render wedgt auf dieser VM (SwiftShader), Pipeline = 1080p-Body + wedge-resistente Chunk-Frames + Lanczos-4K-Assembly | `feat(trailer)` |
 | F-094a | Photon-Client-Crash gefixt: 'HorizontalBillboard' ist kein Photon-Enum → renderMode null → NPE beim ersten Render (Seelenernte-Ring + 4 Altar-Aura-Fogs betroffen); fxlib validiert Enum-Strings jetzt beim Authoring | `fix(photon)` |
 | F-094b | Fährmann-Re-Run-Fixes: /dev-Kommandos räumen den persistierten Sieg-Latch (Fight-Watch beendete den Kampf sonst sofort 'victory'), Arrival-Beat sweept verwaiste Bosse statt abzubrechen, Boss-Identity-Guard gegen Doppel-Bossbars (async Entity-Streaming) | `fix(ferryman)` |
