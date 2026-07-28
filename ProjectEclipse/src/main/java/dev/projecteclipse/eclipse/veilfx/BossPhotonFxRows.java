@@ -98,6 +98,23 @@ public final class BossPhotonFxRows {
                 FxBudget.Channel.AMBIENT,
                 PhotonFxRegistry.Mode.LAYER,
                 false));
+        // FX-Wave-10 — storm-step beats (tyrant_step_fx.py assets). LAYER law: the
+        // shipped fogBurstFx CLOUD puffs remain the photon-less baseline on both ends;
+        // null Quasar leg — the vanilla puffs ARE that fallback.
+        PhotonFxRegistry.registerRow(new PhotonFxRegistry.Row(
+                FxCues.CUE_TYRANT_STEP_OUT,
+                fx("boss/tyrant_step_out"),
+                null,
+                FxBudget.Channel.BURST,
+                PhotonFxRegistry.Mode.LAYER,
+                false));
+        PhotonFxRegistry.registerRow(new PhotonFxRegistry.Row(
+                FxCues.CUE_TYRANT_STEP_IN,
+                fx("boss/tyrant_step_in"),
+                null,
+                FxBudget.Channel.BURST,
+                PhotonFxRegistry.Mode.LAYER,
+                false));
     }
 
     /**

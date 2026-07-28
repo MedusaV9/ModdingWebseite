@@ -85,6 +85,21 @@ public final class FxCues {
      */
     public static final ResourceLocation CUE_TYRANT_STATUE_IDLE = cue("tyrant_statue_idle");
     /**
+     * FX-Wave-10: Fog Tyrant storm-step VANISH beat ({@code eclipse:boss/tyrant_step_out})
+     * — the fog fold gulping the body: inward shell motes, a swelling indigo core that
+     * snaps shut with an electric fleck burst, and a floor dust skirt. Fired by
+     * {@code FogTyrantEntity.maybeStartStormStep} at body center (+1.5). LAYER law:
+     * the shipped {@code fogBurstFx} CLOUD puffs stay the photon-less baseline.
+     */
+    public static final ResourceLocation CUE_TYRANT_STEP_OUT = cue("tyrant_step_out");
+    /**
+     * FX-Wave-10: Fog Tyrant storm-step REAPPEAR beat ({@code eclipse:boss/tyrant_step_in})
+     * — the fold bursting open on the flank: expanding fog shell, ground shock ring,
+     * short wisp pillar and falling electric embers. Fired by
+     * {@code FogTyrantEntity.executeStormStep} at the destination (+1.5); same LAYER law.
+     */
+    public static final ResourceLocation CUE_TYRANT_STEP_IN = cue("tyrant_step_in");
+    /**
      * PH-BOSS-B (IDEAS-boss #3): Rift Warden volley-telegraph eye laser
      * ({@code eclipse:boss/warden_eye_laser}). Carries {@code a} = the warden's yaw in
      * degrees so the client can aim the raycast beam (rotation cannot ride the generic

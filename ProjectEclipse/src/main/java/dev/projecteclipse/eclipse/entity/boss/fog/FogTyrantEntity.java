@@ -27,6 +27,7 @@ import dev.projecteclipse.eclipse.worldgen.fog.FogStormSites;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.particles.BlockParticleOption;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
@@ -218,6 +219,8 @@ public class FogTyrantEntity extends EclipseGeoMonster {
     private static final double MELEE_RANGE = 3.6D;
     private static final int MELEE_COOLDOWN_TICKS = 30;
     private static final int SPECIAL_GAP_TICKS = 20;
+    /** FX-Wave-10: horizontal blocks walked between stride-wake footfall beats. */
+    private static final double STRIDE_WAKE_BLOCKS = 8.0D;
     private static final int RESET_TICKS = 1200; // 60 s (Herald abandon rules)
     private static final double RESET_RANGE = 24.0D;
     /** F-082 wipe-check cadence (Ferryman {@code WIPE_CHECK_TICKS} pattern). */
@@ -291,6 +294,10 @@ public class FogTyrantEntity extends EclipseGeoMonster {
     private int meleeCooldown;
     private int fightTicks;
     private int noPlayerTicks;
+    // FX-Wave-10 stride wake: horizontal travel accumulated since the last footfall FX.
+    private double strideAccum;
+    private double strideLastX;
+    private double strideLastZ;
     /**
      * F-082: at least one enrolled participant died THIS fight (flagged by
      * {@link FogTyrantFightHooks}, persisted in NBT so a restart mid-fight keeps the
@@ -531,7 +538,49 @@ public class FogTyrantEntity extends EclipseGeoMonster {
         tickHoundHowl(level);
         tickColossusCall(level);
         tickEnrage(level);
+        tickStrideWake(level);
         tickStalkAndCleave(level);
+    }
+
+    /**
+     * FX-Wave-10 stride wake: every {@value #STRIDE_WAKE_BLOCKS} blocks of grounded
+     * walking, the footfall kicks a dust ring + floor-block chips, a heavy step thud
+     * and a tiny nearby shake — the body reads as TONNAGE crossing the arena, not a
+     * sliding model. Teleport jumps (storm-step) reset the tracker without firing.
+     */
+    private void tickStrideWake(ServerLevel level) {
+        double dx = this.getX() - this.strideLastX;
+        double dz = this.getZ() - this.strideLastZ;
+        this.strideLastX = this.getX();
+        this.strideLastZ = this.getZ();
+        double moved = Math.sqrt(dx * dx + dz * dz);
+        if (!this.onGround() || moved < 0.02D || moved > 4.0D) {
+            if (moved > 4.0D) {
+                this.strideAccum = 0.0D; // a teleport is not a stride
+            }
+            return;
+        }
+        this.strideAccum += moved;
+        if (this.strideAccum < STRIDE_WAKE_BLOCKS) {
+            return;
+        }
+        this.strideAccum = 0.0D;
+        Vec3 pos = this.position();
+        for (int i = 0; i < 10; i++) {
+            double angle = (Math.PI * 2.0D / 10.0D) * i;
+            level.sendParticles(ParticleTypes.CLOUD,
+                    pos.x + Math.cos(angle) * 1.6D, pos.y + 0.15D,
+                    pos.z + Math.sin(angle) * 1.6D, 1, 0.1D, 0.02D, 0.1D, 0.02D);
+        }
+        BlockState floor = level.getBlockState(this.blockPosition().below());
+        if (!floor.isAir()) {
+            level.sendParticles(new BlockParticleOption(ParticleTypes.BLOCK, floor),
+                    pos.x, pos.y + 0.1D, pos.z, 14, 1.2D, 0.1D, 1.2D, 0.08D);
+        }
+        level.playSound(null, this.blockPosition(), SoundEvents.RAVAGER_STEP,
+                SoundSource.HOSTILE, 1.1F, 0.55F);
+        PacketDistributor.sendToPlayersNear(level, null, pos.x, pos.y, pos.z, 14.0D,
+                S2CShakePayload.shake(0.10F, 4));
     }
 
     /**
@@ -870,7 +919,12 @@ public class FogTyrantEntity extends EclipseGeoMonster {
         this.specialGapTimer = SPECIAL_GAP_TICKS;
         triggerAction(ANIM_STEP_OUT);
         this.getNavigation().stop();
-        fogBurstFx(level, this.position().add(0.0D, 1.5D, 0.0D), 30);
+        // LAYER law: 16 CLOUD puffs keep the photon-less read; the dark Photon
+        // fold supplies the body so the baseline must not drown it in white.
+        fogBurstFx(level, this.position().add(0.0D, 1.5D, 0.0D), 16);
+        // FX-Wave-10: Photon fog-fold gulp layered over the CLOUD baseline (LAYER law).
+        FxPayloads.sendFxEvent(level, FxCues.CUE_TYRANT_STEP_OUT,
+                this.position().add(0.0D, 1.5D, 0.0D), 0.0F, 0.0F, 64.0D);
         level.playSound(null, this.blockPosition(), SoundEvents.ELDER_GUARDIAN_CURSE,
                 SoundSource.HOSTILE, 0.9F, 1.4F);
         EclipseMod.LOGGER.info("Fog Tyrant storm-step: vanishing for {}t towards ({}, {}, {})",
@@ -927,7 +981,12 @@ public class FogTyrantEntity extends EclipseGeoMonster {
         }
         this.teleportTo(dest.x, dest.y, dest.z);
         triggerAction(ANIM_STEP_IN);
-        fogBurstFx(level, dest.add(0.0D, 1.5D, 0.0D), 40);
+        // LAYER law: 20 CLOUD puffs keep the photon-less read (was 40 — the
+        // white baseline swallowed the dark Photon shockwave layer).
+        fogBurstFx(level, dest.add(0.0D, 1.5D, 0.0D), 20);
+        // FX-Wave-10: Photon reappear shockwave layered over the CLOUD baseline.
+        FxPayloads.sendFxEvent(level, FxCues.CUE_TYRANT_STEP_IN,
+                dest.add(0.0D, 1.5D, 0.0D), 0.0F, 0.0F, 64.0D);
         level.playSound(null, BlockPos.containing(dest), SoundEvents.ELDER_GUARDIAN_CURSE,
                 SoundSource.HOSTILE, 1.0F, 0.8F);
         ServerPlayer marked = this.stepTargetId != null
