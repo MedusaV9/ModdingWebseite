@@ -17,10 +17,10 @@ _(leer — hier neue Punkte reinschreiben; zuletzt gezogen: 27.07.-Trailer-Wunsc
 | # | Punkt | Status |
 |---|-------|--------|
 | F-080 | Server/Welt-Verlassen hängt für immer im SAVING-State statt sauber zu stoppen — Fix implementiert (Stop-Sweep räumt FX-Schwärme VOR dem Save, kein Sync-Chunkload im Stop mehr, Arena-Pit-Chunks werden freigegeben); dedizierter Server-Stop in ~10 s verifiziert ✅ | 🟢 |
-| F-082 | Tod im Sturm-Bosskampf ⇒ Wipe-Reset (Boss heilt/despawnt, Statue re-armt nach 30 s, KEINE Blockschreibungen ⇒ Gräber sicher) — implementiert, Spieler-Test folgt | 🟡 |
+| F-082 | Tod im Sturm-Bosskampf ⇒ Wipe-Reset (Boss heilt/despawnt, Statue re-armt nach 30 s, KEINE Blockschreibungen ⇒ Gräber sicher) — im Client-Test verifiziert (s. F-081..087 unten) ✅ | 🟢 |
 | F-083 | Stürme entkoppelt: reconcile markiert jetzt JEDE aktive Site — im Server-Log verifiziert (2 Lairs gleichzeitig armed) ✅ | 🟢 |
-| F-084 | Display-Leak gefixt (LIVE_DISPLAYS-Chunk-Unload-Leak) + Scope-Tags + Orphan-Sweeps bei Kampfende/Reset/Serverstart/Chunkload — implementiert | 🟡 |
-| F-085/086/087 | Grab-Schutz implementiert: Explosions-Pruning + LivingDestroyBlock-Cancel, Grab-Ausschluss in Sturm-Liftlogik, Zauber-Blacklist, Blast-Resistance 6→1200 | 🟡 |
+| F-084 | Display-Leak gefixt (LIVE_DISPLAYS-Chunk-Unload-Leak) + Scope-Tags + Orphan-Sweeps bei Kampfende/Reset/Serverstart/Chunkload — im Client-Test keine verwaisten Displays nach Wipe-Reset ✅ | 🟢 |
+| F-085/086/087 | Grab-Schutz implementiert: Explosions-Pruning + LivingDestroyBlock-Cancel, Grab-Ausschluss in Sturm-Liftlogik, Zauber-Blacklist, Blast-Resistance 6→1200 — Gräber/Kisten im Client-Test unversehrt ✅ | 🟢 |
 | F-088 | Limbo-Pink-Objekt (Eclipse-Aura vorm Schiffsbug): 45° gedreht, verkleinert + gedimmt — Client-Sichttest vom Bug aus ok ✅ | 🟢 |
 | F-089 | Blackscreen/Evakuierung + End-Disc-Heightmap-Familie: Evakuierungs-Band-Scan, ScatteredFeature-Pinning UND neu SpawnReturns (Heimkehr-Teleports der Credits/Finale/Arena landeten auf der End-Disc y≈361, Spieler starb dort hinterm Schwarz an Drachen-Magie — live reproduziert + gefixt) | 🟢 |
 | F-091 | `/dev preload everything`: ganze Map einmal vorgenerieren + entladen, kein sichtbares Chunk-Reingenerieren mehr (auch Start-Event) | 🟡 |
@@ -42,6 +42,7 @@ _(leer — hier neue Punkte reinschreiben; zuletzt gezogen: 27.07.-Trailer-Wunsc
 
 | # | Punkt | Commit |
 |---|-------|--------|
+| FX-W10 | Fog-Tyrant Storm-Step Photon-Beats: `tyrant_step_out` (Fog-Fold-Gulp — dunkle Slate-Tendrils stürzen einwärts, Indigo-Kern, Snap-Fleck-Burst + kleiner Blitz-Quad, Boden-Skirt) + `tyrant_step_in` (aufplatzende Fog-Schale, Boden-Schockring, Wisp-Säule, fallende Embers) — isoliert im Client verifiziert (dunkler Body liest klar, KEIN Weiß-Ball mehr); Stride-Wake alle 8 Blöcke (Staubring + Floor-Chips + Ravager-Thud + Mini-Shake). Learning „V2.1-Stacking-Law" dokumentiert: dutzende ALPHA-Sprites im selben Halbblock konvergieren zur Sprite-Eigenfarbe → Birth-Tints müssen DUNKEL starten, Shells breit, Counts getrimmt | `feat(fxwave10)` |
 | F-081..087 | Sturm-Boss VERIFIZIERT (Client-Test): Statue-Trigger (Melee-Schlag in Reichweite <=3 Bloecke!) -> 60t-Awaken -> Fog Tyrant spawnt (Bossbar, Storm-Steps), Spielertod -> Wipe-Reset (Boss heilt/despawnt, 2 Adds discarded, Statue-Cooldown 600t -> Re-Arm), Graeber/Kisten unversehrt; Custom-Death-Screen 'YOU HAVE FALLEN' + Limbo-Respawn ok. Beobachtung (minor): Scythe-Display kann waehrend Storm-Step-Vanish kurz detached wirken | Logs + Screenshots |
 | F-094 | Trailer V2 FINAL: `ECLIPSE-Trailer-4K.mp4` neu gerendert (3840x2160@60, 1800 Frames, 30s, 20.9 Mbps, Song 'Worst Enemy feat. goldN' auf -14 LUFS) — 11 echte Gameplay-Video-Szenen inkl. NPC-Szenen (Deckhands/Herold/Villager/Fährmann-Boss), alle 360p-Review-Blocker gefixt; Hinweis: nativer 4K-Remotion-Render wedgt auf dieser VM (SwiftShader), Pipeline = 1080p-Body + wedge-resistente Chunk-Frames + Lanczos-4K-Assembly | `feat(trailer)` |
 | F-094a | Photon-Client-Crash gefixt: 'HorizontalBillboard' ist kein Photon-Enum → renderMode null → NPE beim ersten Render (Seelenernte-Ring + 4 Altar-Aura-Fogs betroffen); fxlib validiert Enum-Strings jetzt beim Authoring | `fix(photon)` |
