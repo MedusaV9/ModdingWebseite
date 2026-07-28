@@ -88,14 +88,18 @@ void main() {
 
     // F-068 lensing ramp: the eased square keeps the early scene subtle and lets the
     // late intensity steps visibly bend the whole frame.
+    // FXWAVE-9 #4: the Pulse gulps now also PUNCH the lensing itself (+35% warp reach
+    // on a full-strength swallow) — a heavy plate going over visibly bends the whole
+    // starfield for a beat, not just the horizon radius.
     float lens = strength * strength * (3.0 - 2.0 * strength);
+    float lensPulse = 1.0 + 0.35 * pulse;
 
     // [b1] radial pull: smooth far-field falloff + a 1/r near-field term (the drag
     // steepens toward the hole instead of plateauing).
-    float pull = smoothstep(0.7, 0.04, dist) * (0.10 + 0.13 * lens)
-            + 0.05 * lens / (dist * 6.0 + 0.6);
+    float pull = (smoothstep(0.7, 0.04, dist) * (0.10 + 0.13 * lens)
+            + 0.05 * lens / (dist * 6.0 + 0.6)) * lensPulse;
     // [b2] swirl: rotation angle decays with distance (accretion drag).
-    float swirl = smoothstep(0.58, 0.0, dist) * (0.85 + 0.95 * lens);
+    float swirl = smoothstep(0.58, 0.0, dist) * (0.85 + 0.95 * lens) * lensPulse;
     float cs = cos(swirl);
     float sn = sin(swirl);
     vec2 swirled = vec2(toHole.x * cs - toHole.y * sn, toHole.x * sn + toHole.y * cs);
@@ -114,7 +118,9 @@ void main() {
     vec2 dirUv = dir / vec2(Aspect, 1.0);
     float ringBand = smoothstep(coreR * 4.5, coreR * 1.6, dist)
             * smoothstep(coreR * 0.8, coreR * 1.4, dist);
-    float caAmt = (0.0012 + 0.0035 * (0.35 + 0.65 * ringBand)) * lens * Detail;
+    // FXWAVE-9 #4: aberration spikes +50% on the gulp — the RGB fringe flinches with it.
+    float caAmt = (0.0012 + 0.0035 * (0.35 + 0.65 * ringBand)) * lens * Detail
+            * (1.0 + 0.5 * pulse);
     vec3 color = efxChroma(DiffuseSampler0, warpedUv, dirUv, caAmt);
 
     // [b4] desaturate + darken: the world grays out, then dims (never fully black here —

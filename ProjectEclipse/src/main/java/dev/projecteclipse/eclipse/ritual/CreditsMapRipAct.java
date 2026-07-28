@@ -157,6 +157,15 @@ final class CreditsMapRipAct {
     private static final int JET_FROM = 520;
     private static final int JET_SPRAY_TICKS = 50;
     private static final double JET_SHRED_CHANCE = 0.30D;
+    /**
+     * FXWAVE-9 #4 — SECOND jet cycle: inside this window the shred chance ramps
+     * {@value #JET_SHRED_CHANCE} → {@value #JET2_SHRED_CHANCE} and the two LARGEST
+     * crossing sub-plates are force-shredded at full strength with OPPOSED jet sides
+     * (a bipolar pair) — the show's peak beat repeats bigger instead of tailing off.
+     */
+    private static final int JET2_FROM = 900;
+    private static final int JET2_UNTIL = 1150;
+    private static final double JET2_SHRED_CHANCE = 0.55D;
 
     // --- deep layer ---
     /** Anchor-blocks the recycled slab layer sits under the crust replica. */
@@ -806,11 +815,52 @@ final class CreditsMapRipAct {
             sub.turns = 1.5F + (float) CreditsSequence.hash01(this.nonce + i * 131, 213) * 1.7F;
             sub.crossTick = plate.liftStart == Integer.MAX_VALUE ? Integer.MAX_VALUE
                     : plate.liftStart + LIFT_TICKS + Math.round(DRAIN_Q * sub.infallDur);
-            sub.crossStrength = Mth.clamp(0.75F + 0.25F * sub.members / 24.0F, 0.75F, 1.0F);
+            // FXWAVE-9 #4 mass scaling: small splinters now gulp at 0.45, only true
+            // continents reach 1.0 — the shockwave/blink/lens pulse reads plate MASS
+            // (the old 0.75 floor made a 3-cell shard thump like a landmass).
+            sub.crossStrength = Mth.clamp(0.45F + 0.55F * sub.members / 24.0F, 0.45F, 1.0F);
+            boolean inJet2 = sub.crossTick >= JET2_FROM && sub.crossTick < JET2_UNTIL;
+            double shredChance = inJet2
+                    ? JET_SHRED_CHANCE + (JET2_SHRED_CHANCE - JET_SHRED_CHANCE)
+                            * Mth.clamp((sub.crossTick - JET2_FROM)
+                                    / (float) (JET2_UNTIL - JET2_FROM), 0.0F, 1.0F)
+                    : JET_SHRED_CHANCE;
             sub.shredded = sub.members > 0 && sub.crossTick >= JET_FROM
                     && sub.crossTick < WIND_DOWN_START
-                    && CreditsSequence.hash01(this.nonce + i * 131, 216) < JET_SHRED_CHANCE;
+                    && CreditsSequence.hash01(this.nonce + i * 131, 216) < shredChance;
             sub.jetSide = CreditsSequence.hash01(this.nonce + i * 131, 217) < 0.5D ? 1.0F : -1.0F;
+        }
+        forceBipolarPeak();
+    }
+
+    /**
+     * FXWAVE-9 #4: the two LARGEST sub-plates crossing inside the second jet window
+     * always shred, at full strength, on OPPOSED jet sides — a guaranteed bipolar
+     * finale pair regardless of the hash rolls.
+     */
+    private void forceBipolarPeak() {
+        SubPlate biggest = null;
+        SubPlate second = null;
+        for (SubPlate sub : this.subs) {
+            if (sub.members == 0 || sub.crossTick < JET2_FROM || sub.crossTick >= JET2_UNTIL) {
+                continue;
+            }
+            if (biggest == null || sub.members > biggest.members) {
+                second = biggest;
+                biggest = sub;
+            } else if (second == null || sub.members > second.members) {
+                second = sub;
+            }
+        }
+        if (biggest != null) {
+            biggest.shredded = true;
+            biggest.crossStrength = 1.0F;
+            biggest.jetSide = 1.0F;
+        }
+        if (second != null) {
+            second.shredded = true;
+            second.crossStrength = 1.0F;
+            second.jetSide = -1.0F;
         }
     }
 
