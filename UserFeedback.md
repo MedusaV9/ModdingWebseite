@@ -10,26 +10,24 @@
 
 ## NEUES FEEDBACK (hier eintragen!)
 
-der Trailer muss verbessert werden und nutze auch npcs und gameplay scenen einbauen trailer bessere Songs verwenden nutze bitte explizit den Song wir haben permission egal woher du ihn nimmst Worst Enemy feat. goldN
-by Shawn Williams
-
-_(leer — hier neue Punkte reinschreiben; zuletzt gezogen: 27.07. 10:57-Commit → einsortiert als F-080…F-093)_
+_(leer — hier neue Punkte reinschreiben; zuletzt gezogen: 27.07.-Trailer-Wunsch → einsortiert als F-094)_
 
 ## Aktuell in Arbeit
 
 | # | Punkt | Status |
 |---|-------|--------|
+| F-094 | Trailer V2: alle 11 Gameplay-Video-Szenen gecaptured (inkl. V09 Fährmann-Bosskampf + V11 Schwarzloch-Sog NEU), Song „Worst Enemy feat. goldN“ auf −14 LUFS gemastert, 360p-Review-Blocker gefixt (t4-Fadenkreuz-Overlap, t5/t7-Satzenden, V05 als echter Zauberstab-Kampf neu gedreht, V11 mit Terrain-Zerreißen) — finaler 4K-Render läuft | 🟡 |
 | F-080 | Server/Welt-Verlassen hängt für immer im SAVING-State statt sauber zu stoppen — Fix implementiert (Stop-Sweep räumt FX-Schwärme VOR dem Save, kein Sync-Chunkload im Stop mehr, Arena-Pit-Chunks werden freigegeben); dedizierter Server-Stop in ~10 s verifiziert ✅ | 🟢 |
 | F-081 | Sturm-Bosskampf startet erst, wenn Spieler eine Statue schlagen — implementiert (4-teilige Display-Statue + Interaction-Hitbox, Photon-Idle-Aura, 3-s-Awaken); Spieler-Test folgt | 🟡 |
 | F-082 | Tod im Sturm-Bosskampf ⇒ Wipe-Reset (Boss heilt/despawnt, Statue re-armt nach 30 s, KEINE Blockschreibungen ⇒ Gräber sicher) — implementiert, Spieler-Test folgt | 🟡 |
 | F-083 | Stürme entkoppelt: reconcile markiert jetzt JEDE aktive Site — im Server-Log verifiziert (2 Lairs gleichzeitig armed) ✅ | 🟢 |
 | F-084 | Display-Leak gefixt (LIVE_DISPLAYS-Chunk-Unload-Leak) + Scope-Tags + Orphan-Sweeps bei Kampfende/Reset/Serverstart/Chunkload — implementiert | 🟡 |
 | F-085/086/087 | Grab-Schutz implementiert: Explosions-Pruning + LivingDestroyBlock-Cancel, Grab-Ausschluss in Sturm-Liftlogik, Zauber-Blacklist, Blast-Resistance 6→1200 | 🟡 |
-| F-088 | Limbo-Pink-Objekt identifiziert (Eclipse-Aura exakt vor dem Schiffsbug, 81°-Glow-Fächer): 45° zur Seite gedreht, verkleinert (R86→60) + gedimmt; Sichttest folgt | 🟡 |
-| F-089 | Blackscreen-Ursache: Spieler wird beim Struktur-Platzieren EINGEMAUERT (Inside-Block-Overlay = „Blackscreen“). Evakuierungs-Seam + Post-Paste-Sweep implementiert | 🟡 |
+| F-088 | Limbo-Pink-Objekt (Eclipse-Aura vorm Schiffsbug): 45° gedreht, verkleinert + gedimmt — Client-Sichttest vom Bug aus ok ✅ | 🟢 |
+| F-089 | Blackscreen/Evakuierung + End-Disc-Heightmap-Familie: Evakuierungs-Band-Scan, ScatteredFeature-Pinning UND neu SpawnReturns (Heimkehr-Teleports der Credits/Finale/Arena landeten auf der End-Disc y≈361, Spieler starb dort hinterm Schwarz an Drachen-Magie — live reproduziert + gefixt) | 🟢 |
 | F-091 | `/dev preload everything`: ganze Map einmal vorgenerieren + entladen, kein sichtbares Chunk-Reingenerieren mehr (auch Start-Event) | 🟡 |
-| F-092 | Rand-Berge: riesig auftürmen, Map komplett einkreisen, von überall sichtbar, weichen beim Erweitern langsam zurück | 🟡 |
-| F-090/093 | Credits-Szene + Schwarzes Loch V3: Map wird richtig zerrissen (heftige Animationen/Effekte) | 🟡 |
+| F-092 | Rand-Berge: mehrschichtige Silhouetten-Kette umringt die Map, aus Bodennähe UND aus der Luft von überall sichtbar (Client-Sichttest ✅); Terrain-Wall-Band [R−56, R−6] regeneriert planmäßig mit jeder Ring-Erweiterung | 🟢 |
+| F-090/093 | Credits + Schwarzes Loch V3 im Client verifiziert: Insel-Shatter-Prolog, Map-Zerreißen (Terrain-Brocken-Spiralen, Swallow-Pulse, polare Jet-Bursts), Ergrauen — dazu 2 Client-Bugs gefunden+gefixt: Titel-Karten wurden vom Fade-Schwarz depth-geclippt (GUI-Layer-Z 12400 > Post-Render-Z; dynamischer Z-Lift via getGuiFarPlane), Heimkehr auf die End-Disc (s. F-089) | 🟢 |
 | F-075 | Altar-Insel-Aura V2: Insel-Rand-Ring (r≈15.5), Spiral-Ströme Rand→Krone, Powerup-Beat bei Stufenaufstieg, Veil-Grenzübertritts-Ripple, Violett→Gold-Farbleiter + V2.1-Lesbarkeits-Pass. QA: „Pink-Flood“ in Testvideos = L4/L5-Himmelsriss-Blitz (Absicht) + llvmpipe-Capture-Tearing, KEIN Bug (Kontrolltest L2 sauber, L4 reproduziert). Photon-Respawn-Sturm (Duplicate-Warn-Spam bei Render-Stalls) via Spawn-Grace in PhotonBridge gefixt. Finale Ladder-Verifikation läuft | 🟡 |
 | F-077 | End-Ankunft V2 „Gigantismus": 600-Teile-Helix statt 220, silhouettengetreue Wellen-Assembly, Riesen-Schockringe, Veil-Dim/EndTint, End-Rift-Ambient, synthetisierte Sounds — Cutscene fxonly verifiziert; OMEN-Dimming war zu subtil → DIM 0.35/0.55/0.15 → 0.55/0.8/0.2 + stärkere Shader-Kurve, Re-Test läuft | 🟡 |
 | F-071/078/079 | Dauerbetrieb: alle ~30 min Feedback-Check; wenn leer → Photon/Veil-Effekte mit Planner-/Ideen-Teams immer weiter iterieren; nur Fable 5 Max Thinking als Subagent-Modell | 🟡 (läuft) |
@@ -46,6 +44,8 @@ _(leer — hier neue Punkte reinschreiben; zuletzt gezogen: 27.07. 10:57-Commit 
 
 | # | Punkt | Commit |
 |---|-------|--------|
+| F-094a | Photon-Client-Crash gefixt: 'HorizontalBillboard' ist kein Photon-Enum → renderMode null → NPE beim ersten Render (Seelenernte-Ring + 4 Altar-Aura-Fogs betroffen); fxlib validiert Enum-Strings jetzt beim Authoring | `fix(photon)` |
+| F-094b | Fährmann-Re-Run-Fixes: /dev-Kommandos räumen den persistierten Sieg-Latch (Fight-Watch beendete den Kampf sonst sofort 'victory'), Arrival-Beat sweept verwaiste Bosse statt abzubrechen, Boss-Identity-Guard gegen Doppel-Bossbars (async Entity-Streaming) | `fix(ferryman)` |
 | F-073 | „ECLIPSE-Trailer-4K": 30 s Remotion-Trailer, 4K 60 fps, deutsch, eigener Score+SFX — liegt als `ECLIPSE-Trailer-4K.mp4` im Repo-Root, Quellprojekt unter `trailer/` | `feat(trailer)` |
 | F-074 | Altar-UI-Lesbarkeit (Preis-Chips, Währungs-Icons, Leistbarkeits-Kanten, Tooltips) + modale Kaufbestätigung + Flying-Shard-Kaufanimation + kategoriebasierte Nach-Kauf-Zeremonie (Spirale/Item-Flug/Fontäne) — war bereits in `681f98e` gelandet, Backlog war veraltet; Plan-/Verifikationsdoc nachgereicht | `feat(altar)` |
 | F-076 | Altar als GeckoLib-Monument (schwebender Eclipse-Kern, gegenläufige Runenringe, Debris-Satelliten; idle/heartbeat/gift/erupt/stage_up + Glowmask) — war bereits in `eae14f4` gelandet; Plan-/Verifikationsdoc nachgereicht | `feat(altar)` |
