@@ -110,8 +110,29 @@ public final class ArenaBuilder {
             {-16, 7}, {-12, 7}, {-8, 7}, {-4, 7}, {4, 7}, {8, 7}, {12, 7}, {16, 7},
             {-16, -7}, {-12, -7}, {-8, -7}, {-4, -7}, {4, -7}, {8, -7}, {12, -7}, {16, -7},
             {23, 0}, {-23, 0}};
-    /** Ribs rise sunk-below-deck → full height over this many ticks (smoothstep-eased). */
-    private static final int RIB_RISE_TICKS = 100;
+    /**
+     * FXWAVE-9 #1 — per-rib ERUPTION rework. The old single 100t smoothstep rode the
+     * 20t fight-watch stride: the first interpolation window after the spawn swallowed
+     * 21–40t of the max-slope midsection (up to ~45% of full rib height in one glide)
+     * and all 18 ribs shared one clock, so the cage read as ONE popping block. Now each
+     * rib gets its OWN launch tick (staggered around the rim, fangs last), a short
+     * {@value #RIB_RISE_TICKS}t burst-rise with a ×{@value #RIB_OVERSHOOT} overshoot
+     * that settles back to seat, and the whole envelope is driven by 4t interpolation
+     * windows ({@link #tickEruption}) instead of the 20t stride.
+     */
+    private static final int RIB_RISE_TICKS = 26;
+    /** Rise tick at which the overshoot peaks (ease-out burst), then settle to seat. */
+    private static final int RIB_OVERSHOOT_TICK = 18;
+    private static final float RIB_OVERSHOOT = 1.12F;
+    /** Rim-rib launch stagger band (ticks after the escalation begins). */
+    private static final int RIB_LAUNCH_MIN = 6;
+    private static final int RIB_LAUNCH_SPREAD = 48;
+    /** The two fangs erupt LAST — the jaws close as the finisher beat. */
+    private static final int FANG_LAUNCH_BASE = 60;
+    private static final int FANG_LAUNCH_STEP = 6;
+    /** Whole-eruption envelope (last fang launch + rise + settle margin). */
+    private static final int ERUPTION_ENVELOPE_TICKS = FANG_LAUNCH_BASE + FANG_LAUNCH_STEP
+            + RIB_RISE_TICKS + 8;
     /** Rib footprint (XZ scale) and height band (base + per-rib hash spread). */
     private static final float RIB_WIDTH = 0.8F;
     private static final float RIB_HEIGHT_BASE = 4.0F;
@@ -123,11 +144,22 @@ public final class ArenaBuilder {
     /** Post-rise breathing bob (golden-angle phases — the ribcage never heaves in sync). */
     private static final double RIB_BREATH = 0.10D;
     private static final double RIB_BREATH_PERIOD = 110.0D;
+    /** Ground-burst debris chips per launching rib (ballistic, fight-scoped, ≤40t). */
+    private static final int CHIPS_PER_RIB = 8;
+    private static final int CHIP_LIFE_TICKS = 40;
 
     /** Accent indices ≥ this are escalation ribs (−1 = the pit has not erupted). */
     private static int escalationBase = -1;
     /** Game time the ribs began rising (stateless absolute-clock rise fraction). */
     private static long escalationStart;
+    /** Launch-beat latches (debris/sound fire exactly once per rib). */
+    private static final boolean[] ribLaunched = new boolean[ESCALATION_RIBS.length];
+    /** Live ground-burst chips (ballistic pose pushes ride {@link #tickEruption}). */
+    private static final List<Chip> chips = new ArrayList<>();
+
+    /** One ballistic deck chip: spawn state + straight-line physics replayed per push. */
+    private record Chip(UUID id, double x, double y, double z, double vx, double vy,
+            double vz, long born, int seedA, int seedB) {}
 
     private ArenaBuilder() {}
 
@@ -480,17 +512,146 @@ public final class ArenaBuilder {
         }
         escalationBase = liveIds.size();
         escalationStart = arena.getGameTime();
+        java.util.Arrays.fill(ribLaunched, false);
+        chips.clear();
         int y = ringY(arena) + 1;
         for (int rib = 0; rib < ESCALATION_RIBS.length; rib++) {
             int[] cell = ESCALATION_RIBS[rib];
+            // Spawned fully sunk; the launch beat (debris/sound/particles) fires from
+            // tickEruption exactly when THIS rib's stagger slot comes up.
             spawnAccent(arena, liveIds, new Vec3(cell[0] + 0.5D, y, cell[1] + 0.5D),
                     Blocks.BONE_BLOCK.defaultBlockState(), ribPose(rib, escalationStart));
-            arena.sendParticles(ParticleTypes.SOUL_FIRE_FLAME,
-                    cell[0] + 0.5D, y + 0.3D, cell[1] + 0.5D, 8, 0.3D, 0.2D, 0.3D, 0.02D);
         }
-        EclipseMod.LOGGER.info("Arena escalation: {} bone rib display(s) erupting around the pit "
-                + "({}t rise)", ESCALATION_RIBS.length, RIB_RISE_TICKS);
+        EclipseMod.LOGGER.info("Arena escalation: {} bone rib display(s) staged — staggered "
+                + "eruption over {}t ({}t rise each, x{} overshoot)", ESCALATION_RIBS.length,
+                ERUPTION_ENVELOPE_TICKS, RIB_RISE_TICKS, RIB_OVERSHOOT);
         return ESCALATION_RIBS.length;
+    }
+
+    /**
+     * FXWAVE-9 #1 — the 4t eruption driver ({@code ArenaFight}'s FIGHT branch calls this
+     * every 4 ticks): fine interpolation windows for the ribs while the staggered
+     * eruption envelope is live (the 20t stride would swallow half a rise in one glide),
+     * per-rib launch beats (ground-burst debris chips, deck particles, a muffled boom
+     * with per-rib pitch), and the ballistic chip choreography. No-op outside the
+     * envelope — the stride takes the ribs back for the breathing idle.
+     */
+    public static void tickEruption(ServerLevel arena, List<UUID> liveIds) {
+        if (escalationBase < 0) {
+            return;
+        }
+        long now = arena.getGameTime();
+        if (now > escalationStart + ERUPTION_ENVELOPE_TICKS) {
+            if (!chips.isEmpty()) {
+                chips.forEach(chip -> {
+                    if (arena.getEntity(chip.id()) instanceof Display.BlockDisplay display) {
+                        display.discard();
+                    }
+                });
+                chips.clear();
+            }
+            return;
+        }
+        long target = now + 4L;
+        for (int index = escalationBase; index < liveIds.size(); index++) {
+            if (arena.getEntity(liveIds.get(index)) instanceof Display.BlockDisplay display) {
+                display.setTransformationInterpolationDelay(0);
+                display.setTransformationInterpolationDuration(4);
+                display.setTransformation(ribPose(index - escalationBase, target));
+            }
+        }
+        int y = ringY(arena) + 1;
+        for (int rib = 0; rib < ESCALATION_RIBS.length; rib++) {
+            if (!ribLaunched[rib] && now >= ribLaunchTick(rib)) {
+                ribLaunched[rib] = true;
+                launchBurst(arena, rib, y);
+            }
+        }
+        tickChips(arena, target);
+    }
+
+    /** Absolute game time this rib's eruption begins (rim staggered, fangs last). */
+    private static long ribLaunchTick(int rib) {
+        boolean fang = ESCALATION_RIBS[rib][1] == 0;
+        int fangIndex = rib - (ESCALATION_RIBS.length - 2);
+        return escalationStart + (fang
+                ? FANG_LAUNCH_BASE + FANG_LAUNCH_STEP * Math.max(0, fangIndex)
+                : RIB_LAUNCH_MIN + Math.round((float) (hash01(rib) * RIB_LAUNCH_SPREAD)));
+    }
+
+    /** Launch beat: deck-burst debris arcs + cloud/soul-flame pop + muffled per-rib boom. */
+    private static void launchBurst(ServerLevel arena, int rib, int y) {
+        int[] cell = ESCALATION_RIBS[rib];
+        double cx = cell[0] + 0.5D;
+        double cz = cell[1] + 0.5D;
+        for (int chip = 0; chip < CHIPS_PER_RIB; chip++) {
+            double angle = hash01(rib * 31 + chip) * Math.PI * 2.0D;
+            double speed = 0.06D + hash01(rib * 47 + chip) * 0.10D;
+            Chip record = new Chip(spawnChip(arena, cx, y, cz, rib, chip),
+                    cx, y + 0.2D, cz,
+                    Math.cos(angle) * speed,
+                    0.35D + hash01(rib * 13 + chip) * 0.25D,
+                    Math.sin(angle) * speed,
+                    arena.getGameTime(), rib, chip);
+            chips.add(record);
+        }
+        arena.sendParticles(ParticleTypes.CLOUD, cx, y + 0.2D, cz, 16, 0.4D, 0.1D, 0.4D, 0.05D);
+        arena.sendParticles(ParticleTypes.SOUL_FIRE_FLAME, cx, y + 0.4D, cz, 10, 0.3D, 0.3D, 0.3D, 0.02D);
+        arena.playSound(null, BlockPos.containing(cx, y, cz), SoundEvents.GENERIC_EXPLODE.value(),
+                SoundSource.HOSTILE, 0.7F, 0.55F + (float) hash01(rib) * 0.3F);
+    }
+
+    /** One tumbling bone/plank chip display; tagged like the accents so every sweep covers it. */
+    private static UUID spawnChip(ServerLevel arena, double x, int y, double z, int rib, int chip) {
+        Display.BlockDisplay display = new Display.BlockDisplay(EntityType.BLOCK_DISPLAY, arena);
+        display.setBlockState(hash01(rib * 7 + chip) < 0.5D
+                ? Blocks.BONE_BLOCK.defaultBlockState()
+                : Blocks.DARK_OAK_PLANKS.defaultBlockState());
+        display.moveTo(x, y + 0.2D, z, 0.0F, 0.0F);
+        display.addTag(ACCENT_TAG);
+        display.setTransformationInterpolationDelay(0);
+        display.setTransformationInterpolationDuration(0);
+        display.setTransformation(chipPose(rib, chip, 0L));
+        arena.addFreshEntity(display);
+        return display.getUUID();
+    }
+
+    /** Ballistic pose pushes for the live chips; landed/expired chips are discarded. */
+    private static void tickChips(ServerLevel arena, long target) {
+        if (chips.isEmpty()) {
+            return;
+        }
+        chips.removeIf(chip -> {
+            long age = target - chip.born();
+            if (age > CHIP_LIFE_TICKS) {
+                if (arena.getEntity(chip.id()) instanceof Display.BlockDisplay display) {
+                    display.discard();
+                }
+                return true;
+            }
+            if (arena.getEntity(chip.id()) instanceof Display.BlockDisplay display) {
+                double t = age;
+                double dx = chip.vx() * t;
+                double dy = Math.max(-0.4D, chip.vy() * t - 0.5D * 0.04D * t * t);
+                double dz = chip.vz() * t;
+                display.setTransformationInterpolationDelay(0);
+                display.setTransformationInterpolationDuration(4);
+                Transformation base = chipPose(chip.seedA(), chip.seedB(), age);
+                display.setTransformation(new Transformation(
+                        new Vector3f((float) dx, (float) dy, (float) dz).add(base.getTranslation()),
+                        base.getLeftRotation(), base.getScale(), base.getRightRotation()));
+            }
+            return false;
+        });
+    }
+
+    /** Small tumbling chip pose (scale 0.15–0.35, slow spin keyed on age). */
+    private static Transformation chipPose(int rib, int chip, long age) {
+        float scale = 0.15F + (float) hash01(rib * 53 + chip) * 0.20F;
+        float spin = (float) (age * (0.12D + hash01(rib + chip) * 0.15D));
+        Quaternionf rotation = new Quaternionf().rotationXYZ(spin, spin * 0.7F, spin * 0.4F);
+        return new Transformation(new Vector3f(-scale * 0.5F, 0.0F, -scale * 0.5F), rotation,
+                new Vector3f(scale, scale, scale), new Quaternionf());
     }
 
     /**
@@ -503,11 +664,19 @@ public final class ArenaBuilder {
      */
     public static void animateAccentDisplays(ServerLevel arena, List<UUID> liveIds) {
         long target = arena.getGameTime() + 20L;
+        // FXWAVE-9 #1: while the staggered eruption envelope is live, the ribs belong to
+        // tickEruption's 4t windows — a 20t stride push here would swallow a whole rise.
+        boolean erupting = escalationBase >= 0
+                && arena.getGameTime() <= escalationStart + ERUPTION_ENVELOPE_TICKS;
         for (int index = 0; index < liveIds.size(); index++) {
+            boolean rib = escalationBase >= 0 && index >= escalationBase;
+            if (rib && erupting) {
+                continue;
+            }
             if (arena.getEntity(liveIds.get(index)) instanceof Display.BlockDisplay display) {
                 display.setTransformationInterpolationDelay(0);
                 display.setTransformationInterpolationDuration(20);
-                display.setTransformation(escalationBase >= 0 && index >= escalationBase
+                display.setTransformation(rib
                         ? ribPose(index - escalationBase, target)
                         : accentPose(index, target));
             }
@@ -517,6 +686,7 @@ public final class ArenaBuilder {
     /** Discards every tagged accent display over the arena footprint (never the spectator ship). */
     public static void sweepAccentDisplays(ServerLevel arena) {
         escalationBase = -1; // Accents are fight-scoped; the ribs die with them.
+        chips.clear(); // Chip bodies carry ACCENT_TAG — the tag sweep below removes them.
         AABB sweep = new AABB(-ARENA_HALF_LENGTH - 2.0D, 0.0D, -ARENA_HALF_WIDTH - 2.0D,
                 ARENA_HALF_LENGTH + 2.0D, 128.0D, ARENA_HALF_WIDTH + 2.0D);
         List<Entity> strays = arena.getEntities((Entity) null, sweep,
@@ -594,11 +764,11 @@ public final class ArenaBuilder {
         boolean fang = cell[1] == 0;
         double h = hash01(rib);
         float height = fang ? FANG_HEIGHT : RIB_HEIGHT_BASE + (float) h * RIB_HEIGHT_VAR;
-        float raw = Math.max(0.0F, Math.min(1.0F, (gameTime - escalationStart) / (float) RIB_RISE_TICKS));
-        float s = raw * raw * (3.0F - 2.0F * raw); // smoothstep (ArenaFight.easeInOut law)
+        float s = ribRise(rib, gameTime);
         float sunk = (height + 0.5F) * (1.0F - s);
         float breath = (float) (RIB_BREATH
-                * Math.sin(gameTime * (Math.PI * 2.0D / RIB_BREATH_PERIOD) + rib * GOLDEN_ANGLE)) * s;
+                * Math.sin(gameTime * (Math.PI * 2.0D / RIB_BREATH_PERIOD) + rib * GOLDEN_ANGLE))
+                * Math.min(1.0F, s);
         float tilt = fang ? RIB_TILT_BASE * 1.5F : RIB_TILT_BASE + (float) h * RIB_TILT_VAR;
         Quaternionf rotation = fang
                 ? new Quaternionf().rotationZ(cell[0] > 0 ? tilt : -tilt)
@@ -608,6 +778,31 @@ public final class ArenaBuilder {
                 .sub(rotation.transform(pivot, new Vector3f()));
         return new Transformation(translation, rotation,
                 new Vector3f(RIB_WIDTH, height, RIB_WIDTH), new Quaternionf());
+    }
+
+    /**
+     * FXWAVE-9 #1 rise profile for one rib: 0 before its stagger slot, an ease-out
+     * BURST to ×{@value #RIB_OVERSHOOT} by tick {@value #RIB_OVERSHOOT_TICK}, then a
+     * smoothstep settle back to exactly 1.0 by {@value #RIB_RISE_TICKS} — values &gt; 1
+     * push the tooth briefly ABOVE its seat (the eruption's kick), the settle sinks it
+     * home. Absolute-clock and per-rib, so a lagged window glides back on trajectory.
+     */
+    private static float ribRise(int rib, long gameTime) {
+        long since = gameTime - ribLaunchTick(rib);
+        if (since <= 0) {
+            return 0.0F;
+        }
+        if (since >= RIB_RISE_TICKS) {
+            return 1.0F;
+        }
+        if (since <= RIB_OVERSHOOT_TICK) {
+            float v = since / (float) RIB_OVERSHOOT_TICK;
+            float easeOut = 1.0F - (1.0F - v) * (1.0F - v) * (1.0F - v);
+            return RIB_OVERSHOOT * easeOut;
+        }
+        float w = (since - RIB_OVERSHOOT_TICK) / (float) (RIB_RISE_TICKS - RIB_OVERSHOOT_TICK);
+        float settle = w * w * (3.0F - 2.0F * w);
+        return RIB_OVERSHOOT + (1.0F - RIB_OVERSHOOT) * settle;
     }
 
     /** Fixed positional hash in [0,1) — deterministic rib choreography (ArenaFight twin). */

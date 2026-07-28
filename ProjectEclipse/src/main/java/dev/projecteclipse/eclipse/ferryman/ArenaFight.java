@@ -338,8 +338,26 @@ public final class ArenaFight {
             case GATE -> tickGate(server);
             case ARRIVAL -> tickArrival(server);
             case TRANSFORM -> tickTransform(server);
-            case FIGHT -> tickFightWatch(server);
+            case FIGHT -> {
+                tickEruptionDriver(server);
+                tickFightWatch(server);
+            }
             default -> { }
+        }
+    }
+
+    /**
+     * FXWAVE-9 #1: 4t fine-window driver for the P3 rib eruption (the 20t fight-watch
+     * stride swallowed half a rise in one interpolation glide — the "pop"). No-op
+     * outside the eruption envelope; ArenaBuilder owns all the choreography state.
+     */
+    private static void tickEruptionDriver(MinecraftServer server) {
+        if (server.getTickCount() % 4 != 0) {
+            return;
+        }
+        ServerLevel arena = ArenaDimension.get(server);
+        if (arena != null) {
+            ArenaBuilder.tickEruption(arena, accentDisplays);
         }
     }
 
