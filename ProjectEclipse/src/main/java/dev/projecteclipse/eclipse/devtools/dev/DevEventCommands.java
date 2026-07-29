@@ -6,6 +6,7 @@ import com.mojang.brigadier.context.CommandContext;
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.artifact.ArtifactSlotLock;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
+import dev.projecteclipse.eclipse.core.util.SpawnReturns;
 import dev.projecteclipse.eclipse.lang.ServerLang;
 import dev.projecteclipse.eclipse.sequence.HeraldSummonSequence;
 import dev.projecteclipse.eclipse.worldgen.structure.AltarSanctumBuilder;
@@ -15,7 +16,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.level.levelgen.Heightmap;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
@@ -92,10 +92,12 @@ public final class DevEventCommands {
             // The dais floor sits ALTAR_ABOVE_GROUND under the altar block (lure path).
             groundY = altarPos.getY() - AltarSanctumBuilder.ALTAR_ABOVE_GROUND;
         } else {
-            // Free-standing preview: seat the cutscene on the terrain under the source, so
-            // the heaved slabs and the boss's hover measure off real ground even in the air.
+            // Free-standing preview: seat the cutscene on the terrain under the source. The
+            // band scan (not the global heightmap) matters — from day 12 the End disc hangs
+            // at y≈360 over the map center and MOTION_BLOCKING resolves to the DISC, arming
+            // the whole show 270 blocks over the operator's head (F-089 trap family).
             BlockPos at = BlockPos.containing(source.getPosition());
-            groundY = level.getHeightmapPos(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, at).getY();
+            groundY = SpawnReturns.groundY(level, at.getX(), at.getZ(), at.getY());
             altarPos = new BlockPos(at.getX(), groundY + AltarSanctumBuilder.ALTAR_ABOVE_GROUND, at.getZ());
         }
         if (!HeraldSummonSequence.begin(level, altarPos, groundY)) {
