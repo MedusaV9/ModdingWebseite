@@ -49,7 +49,9 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
  *   <li>{@link #erupt} — phase 3: the whole footprint is blown out at once as up to
  *       {@value #FOUNTAIN_PIECES} pieces on ballistic fountain arcs (up + outward, faster
  *       and steeper towards the middle), tumbling hard and scaling to zero as they fall,
- *       so nothing ever lands as visible litter.</li>
+ *       so nothing ever lands as visible litter. {@value #JET_SHARE} of them are JET
+ *       slugs fired out of the throat on a lighter gravity — the central column that
+ *       gives the eruption an axis.</li>
  * </ol>
  *
  * <p><b>Transport</b> (the {@code StormDebrisFx} law): every piece is mounted at ONE fixed
@@ -81,7 +83,7 @@ public final class NetherUpheavalFx {
     // ------------------------------------------------------------------ tuning constants
 
     /** Absolute ceiling of live pieces across both beats — never exceeded. */
-    private static final int HARD_CAP = 210;
+    private static final int HARD_CAP = 480;
     /** Pieces kicked loose per quake wave. */
     private static final int HOP_WAVE = 9;
     /** Ticks between two quake waves at full pressure (scaled up while pressure is low). */
@@ -91,10 +93,10 @@ public final class NetherUpheavalFx {
     /** Hop apex band (blocks). */
     private static final double HOP_HEIGHT_MIN = 0.5D;
     private static final double HOP_HEIGHT_MAX = 1.9D;
-    /** Fountain size (user ask: "100–200 Block-Displays"). */
-    private static final int FOUNTAIN_PIECES = 170;
+    /** Fountain size (FX-Wave-12 eruption gigantism). */
+    private static final int FOUNTAIN_PIECES = 380;
     /** Fountain pieces spawned per tick — spreads the spawn cost over ~1.5 s. */
-    private static final int FOUNTAIN_SPAWN_BATCH = 6;
+    private static final int FOUNTAIN_SPAWN_BATCH = 12;
     /** Fountain launch speed band at the rim … (blocks/tick). */
     private static final double FOUNTAIN_SPEED_MIN = 0.55D;
     /** … and in the middle of the mouth, where the eruption is strongest. */
@@ -107,6 +109,38 @@ public final class NetherUpheavalFx {
     private static final int FOUNTAIN_FLIGHT_TICKS = 110;
     /** Last fraction of the flight the piece scales to zero over. */
     private static final double FOUNTAIN_FADE_FRACTION = 0.3D;
+
+    /**
+     * FX-Wave-12 JET class: this share of the eruption launches from the very throat of
+     * the crater — inside {@value #JET_RADIUS_FRACTION}× the mouth radius — nearly
+     * straight up at {@value #JET_SPEED_MIN}–{@value #JET_SPEED_MAX} blocks/tick. That is
+     * the central COLUMN that turns a wide fountain into an eruption with an axis.
+     */
+    private static final double JET_SHARE = 0.15D;
+    private static final double JET_RADIUS_FRACTION = 0.25D;
+    private static final double JET_SPEED_MIN = 2.6D;
+    private static final double JET_SPEED_MAX = 3.4D;
+    /** Tight outward lean — the jet must read as a column, not a second fountain. */
+    private static final double JET_SPREAD = 0.03D;
+    /**
+     * Jet gravity as a multiple of {@value #FOUNTAIN_GRAVITY}.
+     *
+     * <p>The FX-Wave-12 recipe asked for 0.6 to make the jet hang, but the piece life is
+     * the harder constraint and it wins. A jet apexes at {@code t = v / g} and fades from
+     * {@code (1 - }{@value #FOUNTAIN_FADE_FRACTION}{@code ) × }{@value
+     * #FOUNTAIN_FLIGHT_TICKS}{@code  = 77t}. At 0.6 the top of the launch band apexes at
+     * 126t — the slug is DISCARDED still climbing, so the column never tops out at all.
+     * Even 0.8 apexes at 94t, i.e. at 47 % scale, so the crown of the column is drawn by
+     * a piece that has half melted away. Full gravity is the largest reduction the 110t
+     * life can actually pay for: the whole {@value #JET_SPEED_MIN}–{@value
+     * #JET_SPEED_MAX} band then apexes by 76t, a beat BEFORE the fade opens, and the
+     * column reads at full scale all the way to its crown.
+     *
+     * <p>Apex is {@code v² / (2·g)}, so that band tops out at ~75–128 blocks and, since
+     * the speed roll is biased low, sits around ~95 for the bulk of the jets — the
+     * ~90–120 block column the recipe was actually describing.
+     */
+    private static final double JET_GRAVITY_FACTOR = 1.0D;
 
     /** Transform push cadence == interpolation duration (DisplayAnimator law). */
     private static final int UPDATE_INTERVAL_TICKS = 3;
@@ -122,13 +156,17 @@ public final class NetherUpheavalFx {
     /** Ember-lit rubble: a little block light so pieces read against the night desert. */
     private static final int PIECE_BLOCK_LIGHT = 6;
     private static final int MAX_SKY_LIGHT = 15;
-    /** Piece size spread. */
+    /** Piece size spread (FX-Wave-12: widened so slabs read as slabs). */
     private static final float MIN_SCALE = 0.35F;
-    private static final float MAX_SCALE = 1.15F;
+    private static final float MAX_SCALE = 1.9F;
+    /** Scatter around the launch-speed-derived size so the coupling is not a staircase. */
+    private static final double SCALE_JITTER = 0.22D;
     /** Tumble rate band (degrees per tick) — hops barely tilt, the fountain spins hard. */
     private static final double HOP_SPIN_MAX_DEG_PER_TICK = 1.1D;
     private static final double FOUNTAIN_SPIN_MIN_DEG_PER_TICK = 2.0D;
     private static final double FOUNTAIN_SPIN_MAX_DEG_PER_TICK = 9.0D;
+    /** Jet shrapnel spins hardest of all — it is the smallest, fastest debris there is. */
+    private static final double JET_SPIN_MAX_DEG_PER_TICK = 14.0D;
 
     /**
      * Fallback palette for columns whose real block state cannot be read (chunk not loaded
@@ -280,6 +318,8 @@ public final class NetherUpheavalFx {
         /** Ballistic launch velocity (blocks/tick); {@code null} for a hop. */
         @Nullable
         final Vec3 velocity;
+        /** Gravity on this arc (blocks/tick²) — the JET class flies on a lighter one. */
+        final double gravity;
         /** Hop apex height (blocks); ignored for fountain pieces. */
         final double hopHeight;
         /** Total lifetime in ticks — the piece is discarded when it runs out. */
@@ -292,13 +332,14 @@ public final class NetherUpheavalFx {
         /** Swarm age the piece was spawned at. */
         final int bornAge;
 
-        Piece(BlockState state, float scale, Vec3 from, @Nullable Vec3 velocity, double hopHeight,
-                int lifeTicks, Vector3f spinAxis, float spinRate, float spinPhase, int pushPhase,
-                int bornAge) {
+        Piece(BlockState state, float scale, Vec3 from, @Nullable Vec3 velocity, double gravity,
+                double hopHeight, int lifeTicks, Vector3f spinAxis, float spinRate,
+                float spinPhase, int pushPhase, int bornAge) {
             this.state = state;
             this.scale = scale;
             this.from = from;
             this.velocity = velocity;
+            this.gravity = gravity;
             this.hopHeight = hopHeight;
             this.lifeTicks = lifeTicks;
             this.spinAxis = spinAxis;
@@ -394,14 +435,20 @@ public final class NetherUpheavalFx {
                 double height = HOP_HEIGHT_MIN
                         + this.random.nextDouble() * (HOP_HEIGHT_MAX - HOP_HEIGHT_MIN)
                                 * (0.4D + 0.6D * hopWavePressure);
-                spawn(build(column, null, height, HOP_TICKS, HOP_SPIN_MAX_DEG_PER_TICK * 0.15D,
-                        HOP_SPIN_MAX_DEG_PER_TICK));
+                // Hops are not thrown, so they keep a free size roll (speedFraction random).
+                spawn(build(column, null, FOUNTAIN_GRAVITY, height, HOP_TICKS,
+                        HOP_SPIN_MAX_DEG_PER_TICK * 0.15D, HOP_SPIN_MAX_DEG_PER_TICK,
+                        this.random.nextDouble()));
             }
         }
 
         private void spawnFountainBatch() {
             int budget = Math.min(FOUNTAIN_SPAWN_BATCH, FOUNTAIN_PIECES - this.fountainSpawned);
             for (int i = 0; i < budget; i++) {
+                if (this.random.nextDouble() < JET_SHARE) {
+                    spawnJet();
+                    continue;
+                }
                 // Bias towards the middle: the throat throws hardest, the rim only crumbles.
                 double t = this.random.nextDouble();
                 double dist = t * t * this.radius;
@@ -420,9 +467,35 @@ public final class NetherUpheavalFx {
                 Vec3 velocity = new Vec3(Math.cos(angle) * outward, speed,
                         Math.sin(angle) * outward);
                 this.fountainSpawned++;
-                spawn(build(column, velocity, 0.0D, FOUNTAIN_FLIGHT_TICKS,
-                        FOUNTAIN_SPIN_MIN_DEG_PER_TICK, FOUNTAIN_SPIN_MAX_DEG_PER_TICK));
+                spawn(build(column, velocity, FOUNTAIN_GRAVITY, 0.0D, FOUNTAIN_FLIGHT_TICKS,
+                        FOUNTAIN_SPIN_MIN_DEG_PER_TICK, FOUNTAIN_SPIN_MAX_DEG_PER_TICK,
+                        (speed - FOUNTAIN_SPEED_MIN)
+                                / (FOUNTAIN_SPEED_MAX - FOUNTAIN_SPEED_MIN)));
             }
+        }
+
+        /**
+         * One JET slug: torn out of the throat (inside {@value #JET_RADIUS_FRACTION}× the
+         * mouth radius) and fired nearly straight up. The speed roll is biased low, so the
+         * band's 75–128 block apex range lands around ~95 for the bulk of the column and
+         * only the occasional hero slug goes the full distance.
+         */
+        private void spawnJet() {
+            Column column = surfacePoint(Math.sqrt(this.random.nextDouble())
+                    * this.radius * JET_RADIUS_FRACTION);
+            if (column == null) {
+                return;
+            }
+            double jetRoll = Math.pow(this.random.nextDouble(), 1.6D);
+            double speed = JET_SPEED_MIN + (JET_SPEED_MAX - JET_SPEED_MIN) * jetRoll;
+            double angle = this.random.nextDouble() * Math.PI * 2.0D;
+            double outward = speed * JET_SPREAD * this.random.nextDouble();
+            Vec3 velocity = new Vec3(Math.cos(angle) * outward, speed,
+                    Math.sin(angle) * outward);
+            this.fountainSpawned++;
+            spawn(build(column, velocity, FOUNTAIN_GRAVITY * JET_GRAVITY_FACTOR, 0.0D,
+                    FOUNTAIN_FLIGHT_TICKS, FOUNTAIN_SPIN_MAX_DEG_PER_TICK,
+                    JET_SPIN_MAX_DEG_PER_TICK, 0.8D + 0.2D * jetRoll));
         }
 
         /**
@@ -446,8 +519,22 @@ public final class NetherUpheavalFx {
             return new Column(new Vec3(x + 0.5D, surfaceY, z + 0.5D), state);
         }
 
-        private Piece build(Column column, @Nullable Vec3 velocity, double hopHeight,
-                int lifeTicks, double spinMinDeg, double spinMaxDeg) {
+        /**
+         * FX-Wave-12 mass law: size and tumble are DERIVED from how hard the piece was
+         * thrown ({@code speedFraction} 0 = barely nudged, 1 = shotgunned). Fast pieces
+         * come out small and spinning hard, slow ones come out as big lazy slabs, so the
+         * eruption reads as a real spray of graded debris instead of uniform confetti.
+         */
+        private Piece build(Column column, @Nullable Vec3 velocity, double gravity,
+                double hopHeight, int lifeTicks, double spinMinDeg, double spinMaxDeg,
+                double speedFraction) {
+            double thrown = Mth.clamp(speedFraction, 0.0D, 1.0D);
+            float scale = (float) Mth.clamp(
+                    MAX_SCALE - thrown * (MAX_SCALE - MIN_SCALE)
+                            + (this.random.nextDouble() * 2.0D - 1.0D) * SCALE_JITTER,
+                    MIN_SCALE, MAX_SCALE);
+            double spinDeg = spinMinDeg + (spinMaxDeg - spinMinDeg) * Mth.clamp(
+                    thrown + (this.random.nextDouble() - 0.5D) * 0.3D, 0.0D, 1.0D);
             Vector3f spinAxis = new Vector3f(
                     this.random.nextFloat() - 0.5F,
                     this.random.nextFloat() - 0.5F,
@@ -458,11 +545,9 @@ public final class NetherUpheavalFx {
             spinAxis.normalize();
             return new Piece(
                     column.state(),
-                    MIN_SCALE + (MAX_SCALE - MIN_SCALE)
-                            * (float) Math.pow(this.random.nextDouble(), 1.5D),
-                    column.pos(), velocity, hopHeight, lifeTicks, spinAxis,
-                    (float) Math.toRadians(spinMinDeg
-                            + this.random.nextDouble() * (spinMaxDeg - spinMinDeg))
+                    scale,
+                    column.pos(), velocity, gravity, hopHeight, lifeTicks, spinAxis,
+                    (float) Math.toRadians(spinDeg)
                             * (this.random.nextBoolean() ? 1.0F : -1.0F),
                     (float) (this.random.nextDouble() * Math.PI * 2.0D),
                     this.pieces.size() % UPDATE_INTERVAL_TICKS,
@@ -560,7 +645,7 @@ public final class NetherUpheavalFx {
                 py += Math.sin(Math.PI * u) * piece.hopHeight;
             } else {
                 px += velocity.x * life;
-                py += velocity.y * life - 0.5D * FOUNTAIN_GRAVITY * life * life;
+                py += velocity.y * life - 0.5D * piece.gravity * life * life;
                 pz += velocity.z * life;
                 double fadeStart = piece.lifeTicks * (1.0D - FOUNTAIN_FADE_FRACTION);
                 if (life > fadeStart) {

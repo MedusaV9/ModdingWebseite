@@ -16,12 +16,15 @@ import org.joml.Vector3f;
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.core.signal.EclipseSignals;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
+import dev.projecteclipse.eclipse.network.S2CShakePayload;
 import dev.projecteclipse.eclipse.network.fx.FxCues;
 import dev.projecteclipse.eclipse.network.fx.FxPayloads;
 import dev.projecteclipse.eclipse.network.fx.S2CCaptionPayload;
 import dev.projecteclipse.eclipse.progression.DayScheduler;
 import dev.projecteclipse.eclipse.registry.EclipseSounds;
 import dev.projecteclipse.eclipse.ritual.FinaleRitual;
+import dev.projecteclipse.eclipse.sequence.endarrival.EndArrivalFxCues;
+import dev.projecteclipse.eclipse.wand.WandTickService;
 import dev.projecteclipse.eclipse.worldgen.stage.DisplayBrightnessFx;
 import dev.projecteclipse.eclipse.worldgen.structure.FloatingSanctumBuilder;
 import net.minecraft.core.BlockPos;
@@ -131,6 +134,15 @@ public final class DayRiftOrbits {
     private static final int DROP_BLEND_TICKS = 560;
     /** Per-piece drop stagger inside one beat (the maw "rains" for ~25 s). */
     private static final int DROP_STAGGER_TOTAL_TICKS = 500;
+
+    /**
+     * FX-12 rollover pressure: the {@code world_grade} violet lean the maw opens under
+     * (the {@code EndArrivalFxCues} tint lane — beat-agnostic) and its scheduled release.
+     */
+    private static final float RIFT_TINT = 0.3F;
+    private static final float RIFT_TINT_RAMP = 25.0F;
+    private static final int RIFT_TINT_HOLD_TICKS = 30;
+    private static final float RIFT_TINT_RELEASE = 80.0F;
 
     /** Mount height over the island top (open sky; mid-orbit-band anchor). */
     private static final int MOUNT_ABOVE_TOP = 45;
@@ -257,6 +269,16 @@ public final class DayRiftOrbits {
                 SoundSource.AMBIENT, 1.4F, 0.55F);
         PacketDistributor.sendToPlayersNear(overworld, null, rift.x, rift.y, rift.z, 192.0D,
                 new S2CCaptionPayload("eclipse.caption.finale.rift", 80, S2CCaptionPayload.STYLE_WHISPER));
+        // FX-12: the rollover gets PRESSURE — a violet sky lean over the maw and one soft
+        // ground shove at the caption's own 192-block radius. The tint lane is a HOLD, so
+        // the release is scheduled (sending it in the same tick would cancel the ramp).
+        FxPayloads.sendFxEvent(overworld, EndArrivalFxCues.CUE_TINT, rift,
+                RIFT_TINT, RIFT_TINT_RAMP, 256.0D);
+        WandTickService.schedule(overworld, RIFT_TINT_HOLD_TICKS,
+                () -> FxPayloads.sendFxEvent(overworld, EndArrivalFxCues.CUE_TINT, rift,
+                        0.0F, RIFT_TINT_RELEASE, 256.0D));
+        PacketDistributor.sendToPlayersNear(overworld, null, rift.x, rift.y, rift.z, 192.0D,
+                S2CShakePayload.shake(0.3F, 18));
         reconciled = false; // next gated pass adopts + spawns the new indices
         EclipseMod.LOGGER.info("Day rift beat (day {}): +{} orbit display(s), swarm {} / cap {}",
                 day, added, after, CAP);

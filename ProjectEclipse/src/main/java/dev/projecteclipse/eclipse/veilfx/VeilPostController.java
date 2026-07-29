@@ -184,8 +184,14 @@ public final class VeilPostController {
         // (the day-12 show usually plays at EclipseAmount == NightAmount == 0).
         return nightAmount(level, partialTick) > 0.01F || EclipseFxState.eclipseAmount(partialTick) > 0.01F
                 || EclipseFxState.arrivalDim(partialTick) > 0.005F
-                || EclipseFxState.endTintPulse(partialTick) > 0.005F;
+                || EclipseFxState.endTintPulse(partialTick) > 0.005F
+                // FX-12: the day-2 breach show plays at high noon too — the heat feed
+                // has to keep the pass alive on its own, exactly like the grade lane.
+                || EclipseFxState.netherHeat(partialTick) > 0.005F;
     }
+
+    /** FX-12: the heat haze runs at this share of the ember lean (one state value, two uniforms). */
+    private static final float HEAT_SHIMMER_SHARE = 0.6F;
 
     /** Scratch for the horizon projection (feeder-only; never escapes). */
     private static final Vector4f HORIZON_NDC = new Vector4f();
@@ -212,6 +218,11 @@ public final class VeilPostController {
         // additive rule). Both read 0 outside the cinematic (bit-identical frame).
         pipeline.getUniform("ArrivalDim").setFloat(EclipseFxState.arrivalDim(partialTick));
         pipeline.getUniform("EndTintPulse").setFloat(EclipseFxState.endTintPulse(partialTick));
+        // v5 (FX-12 nether opening): one state value feeds both heat uniforms — the
+        // shimmer is the softer half of the same ramp, so they can never disagree.
+        float heat = EclipseFxState.netherHeat(partialTick);
+        pipeline.getUniform("HeatTint").setFloat(heat);
+        pipeline.getUniform("HeatShimmer").setFloat(heat * HEAT_SHIMMER_SHARE);
     }
 
     // --- v3 (VEIL-REPASS-1): world_grade color script -----------------------------------

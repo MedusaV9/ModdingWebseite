@@ -400,6 +400,14 @@ public class HeraldEntity extends Monster {
         this.gazeTargetId = null;
         level.playSound(null, this.blockPosition(), SoundEvents.WITHER_SPAWN, SoundSource.HOSTILE,
                 1.0F, phase == 2 ? 1.2F : 0.7F);
+        if (phase == 2) {
+            // FX-12 parity: the P2 break was audio-only. The same roar ring the P3 break
+            // and the summon arrival fire (the row ignores a/b — 0/0 is the convention),
+            // under a shake one rung below P3's collapse so the breaks stay ranked.
+            PacketDistributor.sendToPlayersNear(level, null, this.getX(), this.getY(), this.getZ(),
+                    96.0D, S2CShakePayload.shake(0.4F, 14));
+            FxPayloads.sendFxEvent(level, FxCues.CUE_BOSS_ROAR, this.position(), 0.0F, 0.0F, 96.0D);
+        }
         if (phase == 3) {
             // Collapse opener: slam FX at the boss as it starts its descent.
             PacketDistributor.sendToPlayersNear(level, null, this.getX(), this.getY(), this.getZ(), 96.0D,

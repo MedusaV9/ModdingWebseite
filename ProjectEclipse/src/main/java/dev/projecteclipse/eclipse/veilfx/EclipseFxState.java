@@ -92,6 +92,12 @@ public final class EclipseFxState {
     private static int endTintStartTick;
     private static int endTintRampTicks = 1;
 
+    // --- FX-12 nether-opening "Glutgrad" heat feed (additive — same ramp shape) ---
+    private static float netherHeatFrom;
+    private static float netherHeatTarget;
+    private static int netherHeatStartTick;
+    private static int netherHeatRampTicks = 1;
+
     // --- post-expansion new-land glow band (IDEA-14 §3; additive — the frozen API is untouched) ---
     /** New-land glow envelope: full at set time, gone after {@value} ticks (~10 min). */
     private static final int NEW_LAND_GLOW_TICKS = 12000;
@@ -325,6 +331,29 @@ public final class EclipseFxState {
                 endTintFrom, endTintTarget);
     }
 
+    // ------------------------------------------------------------------ nether-opening heat (FX-12)
+
+    /**
+     * Day-2 breach "Glutgrad": the ember lean + heat haze of the {@code eclipse:world_grade}
+     * pass while the nether opening tears the desert apart (the {@code HeatTint} /
+     * {@code HeatShimmer} uniforms). Driven client-side by {@code NetherOpenClientFx} off
+     * the sequence's phase broadcasts, scaled by that client's own distance falloff;
+     * {@code target} eases in over {@code rampTicks} from wherever the amount sits now
+     * (the {@link #setArrivalDim} law).
+     */
+    public static void setNetherHeat(float target, int rampTicks) {
+        netherHeatFrom = netherHeat(0.0F);
+        netherHeatTarget = Mth.clamp(target, 0.0F, 1.0F);
+        netherHeatStartTick = clientTicks;
+        netherHeatRampTicks = Math.max(1, rampTicks);
+    }
+
+    /** Eased breach-heat amount in [0,1] (0 outside the opening — bit-identical frame). */
+    public static float netherHeat(float partialTick) {
+        return Mth.lerp(easedProgress(netherHeatStartTick, netherHeatRampTicks, partialTick),
+                netherHeatFrom, netherHeatTarget);
+    }
+
     // ------------------------------------------------------------------ transition glitch
 
     /**
@@ -395,6 +424,9 @@ public final class EclipseFxState {
         endTintFrom = 0.0F;
         endTintTarget = 0.0F;
         endTintRampTicks = 1;
+        netherHeatFrom = 0.0F;
+        netherHeatTarget = 0.0F;
+        netherHeatRampTicks = 1;
         clearNewLandBand();
     }
 

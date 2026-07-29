@@ -22,6 +22,8 @@ import dev.projecteclipse.eclipse.limbo.LimboDimension;
 import dev.projecteclipse.eclipse.lives.BanService;
 import dev.projecteclipse.eclipse.network.S2CQuasarPayload;
 import dev.projecteclipse.eclipse.network.S2CShakePayload;
+import dev.projecteclipse.eclipse.network.fx.FxCues;
+import dev.projecteclipse.eclipse.network.fx.FxPayloads;
 import dev.projecteclipse.eclipse.network.fx.S2CCaptionPayload;
 import dev.projecteclipse.eclipse.network.gate.GatePayloads;
 import dev.projecteclipse.eclipse.network.gate.S2CPortalFxPayload;
@@ -300,6 +302,14 @@ public final class ArenaFight {
         PacketDistributor.sendToPlayersNear(arena, null, 0.5D, pitY + 2.0D, 0.5D, 128.0D,
                 new S2CCaptionPayload("eclipse.caption.ferry.bones", 90, S2CCaptionPayload.STYLE_SUBTITLE));
         BlockPos center = new BlockPos(0, pitY, 0);
+        // FX-12 parity: the rib eruption gets the shared boss roar ring the Herald/Ferryman
+        // breaks fire (the row ignores a/b — 0/0 is the convention). The planned world_grade
+        // dim thump is deliberately NOT sent here: eclipse:ferryman_arena is neither the
+        // overworld nor the nether, so VeilPostController.wantWorldGrade never activates the
+        // pass in this dimension — the cue would be dead weight that could only misfire on a
+        // player who leaves the arena inside the release window.
+        FxPayloads.sendFxEvent(arena, FxCues.CUE_BOSS_ROAR,
+                new Vec3(0.5D, pitY + 1.0D, 0.5D), 0.0F, 0.0F, 128.0D);
         arena.playSound(null, center, SoundEvents.END_PORTAL_SPAWN, SoundSource.HOSTILE, 1.2F, 0.35F);
         arena.playSound(null, center, EclipseSounds.BOSS_FERRYMAN_BELL.get(), SoundSource.HOSTILE, 1.4F, 0.5F);
         EclipseMod.LOGGER.info("Arena fight: P3 escalation — {} bone rib display(s) rising, quake + bell sent",

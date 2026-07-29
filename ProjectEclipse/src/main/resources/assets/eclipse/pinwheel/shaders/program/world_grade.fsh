@@ -38,6 +38,12 @@
 //                  driven by the end_arrival_grade cue). 0 = bit-identical frame.
 //   EndTintPulse — 0..1 beat-4 reveal pulse: sky-weighted end-violet wash as the rift
 //                  implodes and the End disc is unveiled (end_arrival_tint cue).
+// v5 additive uniforms (FX-12 nether-opening "Glutgrad" — same feeder, same commit):
+//   HeatTint     — 0..1 ember-red lean: multiplicative red-shift + a slight highlight
+//                  lift while the breach tears open (EclipseFxState.netherHeat, driven
+//                  client-side by NetherOpenClientFx). 0 = bit-identical frame.
+//   HeatShimmer  — 0..1 heat haze: a small UV wobble on sky/far pixels only (the [i6]
+//                  seethe idiom on a faster clock), Detail-gated like every motion layer.
 #include eclipse:eclipse_common
 
 uniform sampler2D DiffuseSampler0;
@@ -52,6 +58,8 @@ uniform float Detail;
 uniform float PhaseTint;
 uniform float ArrivalDim;
 uniform float EndTintPulse;
+uniform float HeatTint;
+uniform float HeatShimmer;
 
 in vec2 texCoord;
 
@@ -175,6 +183,30 @@ void main() {
         float pulseLuma = dot(color, vec3(0.299, 0.587, 0.114));
         color = mix(color, pulseLuma * vec3(0.86, 0.70, 1.12), EndTintPulse * 0.25);
         color += vec3(0.24, 0.10, 0.36) * sky * EndTintPulse * 0.14;
+    }
+
+    // [v5] FX-12 "Glutgrad": the day-2 breach heats the whole frame. A multiplicative
+    // ember lean (hue-only at first order — the crush still owns brightness) plus a
+    // small warm lift that only the highlights receive, so the ground reads as lit by
+    // something below the horizon. Static per frame; zero uniform = bit-identical frame.
+    if (HeatTint > 0.001) {
+        float heatLuma = dot(color, vec3(0.299, 0.587, 0.114));
+        color = mix(color, color * vec3(1.20, 0.84, 0.68), HeatTint * 0.65);
+        color += vec3(0.075, 0.026, 0.008) * HeatTint * smoothstep(0.30, 0.85, heatLuma);
+    }
+
+    // [v5] FX-12 heat shimmer: one low-frequency noise octave on a fast clock displaces
+    // the SKY/far pixels (bandMask, the [i3] horizon-band weighting) by a few
+    // thousandths of a screen. Applied as the DELTA between the wobbled and the
+    // un-wobbled RAW sample so displaced pixels still ride the graded curve instead of
+    // punching un-crushed source color through it. Gated by Detail like [i1]/[i2]/[i6].
+    if (HeatShimmer > 0.001) {
+        float haze = HeatShimmer * Detail * bandMask;
+        float wob = efxNoise(texCoord * vec2(7.0, 15.0)
+                + vec2(Time * 0.13, -Time * 0.47)) - 0.5;
+        vec2 warp = vec2(wob * 0.0040, abs(wob) * 0.0026) * haze;
+        vec3 wobbled = texture(DiffuseSampler0, texCoord + warp).rgb;
+        color += clamp(wobbled - texture(DiffuseSampler0, texCoord).rgb, -0.25, 0.25) * haze * 0.8;
     }
 
     // Exposure dip (0.62 during eclipse TOTAL, eased CPU-side over 60 ticks — the old

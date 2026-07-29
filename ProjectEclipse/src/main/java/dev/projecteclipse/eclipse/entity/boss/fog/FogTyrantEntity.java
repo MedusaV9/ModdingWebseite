@@ -20,9 +20,12 @@ import dev.projecteclipse.eclipse.network.S2CQuasarPayload;
 import dev.projecteclipse.eclipse.network.S2CShakePayload;
 import dev.projecteclipse.eclipse.network.fx.FxCues;
 import dev.projecteclipse.eclipse.network.fx.FxPayloads;
+import dev.projecteclipse.eclipse.network.fx.S2CScreenFadePayload;
 import dev.projecteclipse.eclipse.registry.EclipseItems;
 import dev.projecteclipse.eclipse.registry.EclipseSounds;
+import dev.projecteclipse.eclipse.sequence.endarrival.EndArrivalFxCues;
 import dev.projecteclipse.eclipse.stormfx.StormRegistry;
+import dev.projecteclipse.eclipse.wand.WandTickService;
 import dev.projecteclipse.eclipse.worldgen.fog.FogStormSites;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -208,6 +211,10 @@ public class FogTyrantEntity extends EclipseGeoMonster {
     private static final int SQUALL_WINDUP_TICKS = 30;
     private static final int SQUALL_BLIND_TICKS = 60; // 3 s
     private static final float SQUALL_DAMAGE = 4.0F;
+    /** Squall FX broadcast range (the arena-scale 64 every tyrant cue rides). */
+    private static final double SQUALL_FX_RANGE = 64.0D;
+    /** FX-12 squall exhale: fog-white at ~72 % alpha (ARGB), the cold gold-exhale twin. */
+    private static final int SQUALL_EXHALE_ARGB = 0xB8E8F0F2;
     // Enrage stacking (P2+).
     private static final int ENRAGE_INTERVAL_TICKS = 400;
     private static final int ENRAGE_MAX_STACKS = 5;
@@ -247,6 +254,11 @@ public class FogTyrantEntity extends EclipseGeoMonster {
     private static final int FOG_ARMS_REFIRE_TICKS = 100;
     /** CUE_TYRANT_FOG_ARMS broadcast range (matches the squall's arena-scale 64). */
     private static final double FOG_ARMS_FX_RANGE = 64.0D;
+    /** FX-12 phase-break world-grade thump: dim in, short hold, slow release. */
+    private static final float GRADE_THUMP_DIM = 0.3F;
+    private static final float GRADE_THUMP_RAMP = 6.0F;
+    private static final int GRADE_THUMP_HOLD_TICKS = 10;
+    private static final float GRADE_THUMP_RELEASE = 40.0F;
 
     /** Current phase 1..3 (synced; lets the renderer/model react if it ever wants to). */
     private static final EntityDataAccessor<Integer> DATA_PHASE =
@@ -610,6 +622,7 @@ public class FogTyrantEntity extends EclipseGeoMonster {
         level.sendParticles(ParticleTypes.ELECTRIC_SPARK,
                 this.getX(), this.getY() + 3.4D, this.getZ(), 40, 1.2D, 0.8D, 1.2D, 0.15D);
         fogBurstFx(level, this.position().add(0.0D, 0.5D, 0.0D), 30);
+        gradeThump(level);
         if (phase == 2) {
             triggerAction(ANIM_CROWN_CALL); // The crown awakens.
             this.lightningTimer = Math.min(this.lightningTimer, 60);
@@ -628,6 +641,22 @@ public class FogTyrantEntity extends EclipseGeoMonster {
             this.fogArmsRefireTimer = FOG_ARMS_REFIRE_TICKS;
         }
         return true;
+    }
+
+    /**
+     * FX-12 phase-break thump: the world darkens for a heartbeat and lets go again (the
+     * {@code world_grade} ArrivalDim lane — beat-agnostic, any server code may drive it).
+     * The lane is a HOLD, so the release is scheduled rather than sent alongside: the
+     * timer is LEVEL-scoped ({@link WandTickService#schedule}) and not an entity field on
+     * purpose — a tyrant that dies inside the window must not park the dim on the screen.
+     */
+    private void gradeThump(ServerLevel level) {
+        Vec3 at = this.position();
+        FxPayloads.sendFxEvent(level, EndArrivalFxCues.CUE_GRADE, at,
+                GRADE_THUMP_DIM, GRADE_THUMP_RAMP, SQUALL_FX_RANGE);
+        WandTickService.schedule(level, GRADE_THUMP_HOLD_TICKS,
+                () -> FxPayloads.sendFxEvent(level, EndArrivalFxCues.CUE_GRADE, at,
+                        0.0F, GRADE_THUMP_RELEASE, SQUALL_FX_RANGE));
     }
 
     /** Everyone entering the combat ring joins the fight (and stays enrolled for drops). */
@@ -1156,7 +1185,15 @@ public class FogTyrantEntity extends EclipseGeoMonster {
         // + three staggered fog shells over the CLOUD rings (LAYER row: photon-less
         // clients keep the shipped rings; release beat only, no windup send).
         FxPayloads.sendFxEvent(level, FxCues.CUE_TYRANT_SQUALL,
-                this.position().add(0.0D, 1.2D, 0.0D), 0.0F, 0.0F, 64.0D);
+                this.position().add(0.0D, 1.2D, 0.0D), 0.0F, 0.0F, SQUALL_FX_RANGE);
+        // FX-12: the squall EXHALES over the whole screen — a 2t fog-white flash relaxing
+        // over 30t (the SignatureCompositions gold-exhale envelope, inverted to cold) plus
+        // one short hit of shake. Sent to everyone in squall range, blinded or not: the
+        // players behind cover should still feel the pulse howl past them.
+        PacketDistributor.sendToPlayersNear(level, null, this.getX(), this.getY(), this.getZ(),
+                SQUALL_FX_RANGE, new S2CScreenFadePayload(2, 6, 30, SQUALL_EXHALE_ARGB));
+        PacketDistributor.sendToPlayersNear(level, null, this.getX(), this.getY(), this.getZ(),
+                SQUALL_FX_RANGE, S2CShakePayload.shake(0.5F, 12));
         EclipseMod.LOGGER.info("Fog Tyrant blind squall released: {} blinded, {} safe behind cover",
                 blinded, covered);
     }

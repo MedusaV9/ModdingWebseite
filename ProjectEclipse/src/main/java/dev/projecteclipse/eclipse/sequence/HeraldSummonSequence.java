@@ -22,6 +22,7 @@ import dev.projecteclipse.eclipse.network.fx.FxCues;
 import dev.projecteclipse.eclipse.network.fx.FxPayloads;
 import dev.projecteclipse.eclipse.network.fx.S2CScreenFadePayload;
 import dev.projecteclipse.eclipse.registry.EclipseSounds;
+import dev.projecteclipse.eclipse.sequence.endarrival.EndArrivalFxCues;
 import dev.projecteclipse.eclipse.worldgen.stage.DisplayBrightnessFx;
 import net.minecraft.commands.arguments.EntityAnchorArgument;
 import net.minecraft.core.BlockPos;
@@ -133,6 +134,18 @@ public final class HeraldSummonSequence {
     /** Broadcast radius of the cutscene's FX cues / veil / shake. */
     private static final double FX_RANGE = 128.0D;
 
+    /**
+     * FX-12 world-grade lanes ({@code EndArrivalFxCues} — beat-agnostic, any sequence may
+     * drive them): the announcement sinks the whole world by {@value #OMEN_DIM} and HOLDS
+     * it — the {@code DARKEN_*} screen veil is a one-shot, the grade is the sustain — the
+     * materialize beat throws one violet pulse over it, and the arrival releases both.
+     */
+    private static final float OMEN_DIM = 0.35F;
+    private static final float OMEN_DIM_RAMP = 30.0F;
+    private static final float MATERIALIZE_TINT = 0.5F;
+    private static final float MATERIALIZE_TINT_RAMP = 15.0F;
+    private static final float GRADE_RELEASE_RAMP = 60.0F;
+
     // ------------------------------------------------------------------ ground break
 
     /** Slabs heaved out of the dais floor (user ask: 12–20). */
@@ -209,6 +222,7 @@ public final class HeraldSummonSequence {
     public static void clearAll() {
         Run current = run;
         if (current != null) {
+            current.releaseGrade();
             current.discardSlabs();
             run = null;
         }
@@ -361,6 +375,7 @@ public final class HeraldSummonSequence {
                             + "— summoning now", this.age);
                     summonNow();
                 }
+                releaseGrade(); // safety net: the watchdog tail must not park the dim
                 discardSlabs();
                 this.done = true;
                 EclipseMod.LOGGER.info("Herald summon cutscene finished after {}t", this.age);
@@ -390,6 +405,10 @@ public final class HeraldSummonSequence {
             }
             this.level.playSound(null, this.altarPos, SoundEvents.BEACON_DEACTIVATE,
                     SoundSource.HOSTILE, 1.6F, 0.5F);
+            // FX-12: the sky veil is a 3-second flash — the world_grade dim is what makes
+            // the omen LAST. Held all the way to the arrival beat, which releases it.
+            FxPayloads.sendFxEvent(this.level, EndArrivalFxCues.CUE_GRADE,
+                    this.center, OMEN_DIM, OMEN_DIM_RAMP, FX_RANGE);
         }
 
         /** t=15: the light/ash column and the rune bands claim the dais. */
@@ -492,6 +511,9 @@ public final class HeraldSummonSequence {
                     new S2CQuasarPayload(S2CQuasarPayload.ALTAR_BEAM, this.center));
             this.level.playSound(null, this.altarPos, EclipseSounds.EVENT_RIFT_WHOOSH.get(),
                     SoundSource.HOSTILE, 1.5F, 0.5F);
+            // FX-12: the rune cage closing throws one violet pulse over the held dim.
+            FxPayloads.sendFxEvent(this.level, EndArrivalFxCues.CUE_TINT,
+                    this.center, MATERIALIZE_TINT, MATERIALIZE_TINT_RAMP, FX_RANGE);
         }
 
         /** t=150: lightning, shockwave, shake — and the real boss. */
@@ -510,12 +532,25 @@ public final class HeraldSummonSequence {
                     this.center, 0.8F, 30.0F, FX_RANGE);
             PacketDistributor.sendToPlayersNear(this.level, null, this.center.x, this.center.y,
                     this.center.z, FX_RANGE, S2CShakePayload.shake(0.85F, 22));
+            releaseGrade(); // the light comes back with the boss
             summonNow();
         }
 
         private void summonNow() {
             this.spawned = true;
             HeraldEntity.summon(this.level, this.altarPos, this.groundY);
+        }
+
+        /**
+         * FX-12: returns both world-grade lanes to 0. Both are HOLDS, so every exit of the
+         * run has to pass through here — the arrival beat, the end/watchdog tail and the
+         * dev abort. Re-sending a release is a no-op ramp (0 → 0), never a visual seam.
+         */
+        void releaseGrade() {
+            FxPayloads.sendFxEvent(this.level, EndArrivalFxCues.CUE_GRADE,
+                    this.center, 0.0F, GRADE_RELEASE_RAMP, FX_RANGE);
+            FxPayloads.sendFxEvent(this.level, EndArrivalFxCues.CUE_TINT,
+                    this.center, 0.0F, GRADE_RELEASE_RAMP, FX_RANGE);
         }
 
         // --- slabs ---

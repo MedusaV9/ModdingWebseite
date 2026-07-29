@@ -130,26 +130,86 @@ public final class StormSiege {
     /** F-031a: growth ramp length (~5 s; the client eases both ways on this clock). */
     private static final int GROW_TICKS = 100;
 
-    /** F-031c whirl debris count band (rolled once per siege). */
-    private static final int DEBRIS_MIN = 80;
-    private static final int DEBRIS_MAX = 150;
+    /** F-031c whirl debris count band (rolled once per siege) — FX-Wave-12 gigantism. */
+    private static final int DEBRIS_MIN = 350;
+    private static final int DEBRIS_MAX = 500;
     /** Staggered debris spawn: batch size / cadence (spawn-cost smoothing). */
-    private static final int SPAWN_BATCH = 6;
+    private static final int SPAWN_BATCH = 10;
     private static final int SPAWN_STAGGER_TICKS = 2;
     /** Transform push cadence == interpolation duration (DisplayAnimator law). */
     private static final int UPDATE_INTERVAL_TICKS = 3;
-    /** Whirl orbit band around the combat center (blocks) and height band. */
-    private static final double ORBIT_MIN_R = 6.0D;
-    private static final double ORBIT_MAX_R = 22.0D;
+    /**
+     * FX-Wave-12: THREE discrete orbit radius bands (near / mid / far) instead of one
+     * continuous 6–22 spread. Discrete bands are what buys parallax — a continuous
+     * spread averages out into one soft cloud, three shells read as a near wall, a mid
+     * body and a far silhouette sliding past each other at visibly different rates.
+     */
+    private static final double[] ORBIT_BAND_MIN = {6.0D, 12.0D, 24.0D};
+    private static final double[] ORBIT_BAND_MAX = {12.0D, 24.0D, 38.0D};
+    /** Cumulative share of the swarm per band (near-heavy: the fight is in the middle). */
+    private static final double[] ORBIT_BAND_SHARE = {0.34D, 0.72D, 1.0D};
     private static final double ORBIT_MIN_Y = 0.8D;
-    private static final double ORBIT_MAX_Y = 14.0D;
+    /**
+     * FX-Wave-12: the funnel ceiling is no longer a flat 14 — it is derived from the
+     * storm's own wire height (a sphere dome carries height == radius), so the debris
+     * towers all the way up the INTERIOR WALL of whatever dome the fight stands in.
+     */
+    private static final double ORBIT_MAX_Y_FACTOR = 0.85D;
+    /** Floor under the derived ceiling — a tiny storm still gets the old funnel height. */
+    private static final double ORBIT_MAX_Y_FLOOR = 14.0D;
     /** Shared tangential speed the per-piece angular rate derives from (blocks/tick). */
     private static final double TANGENTIAL_BLOCKS_PER_TICK = 0.42D;
+    /**
+     * Sediment law (the {@code DayRiftOrbits.paramsFor} pattern): band height and angular
+     * speed are DERIVED from the piece scale instead of rolled next to it — heavy slabs
+     * grind low and slow along the floor of the funnel, light shards ride high and whip.
+     * Reading the funnel bottom-up therefore reads it heaviest-first, which is what makes
+     * the whirl look SORTED instead of sprinkled; the jitters keep it off the stairs.
+     */
+    private static final double SPEED_LIGHT_FACTOR = 1.4D;
+    private static final double SPEED_HEAVY_FACTOR = 0.6D;
+    private static final double SPEED_JITTER = 0.08D;
+    private static final double BAND_Y_JITTER = 2.0D;
     /** Piece size spread + tumble band (degrees/tick). */
     private static final float MIN_SCALE = 0.35F;
     private static final float MAX_SCALE = 1.15F;
+    /** Roughly one piece in this many is a KEYSTONE slab, pinned lowest and slowest. */
+    private static final int KEYSTONE_EVERY = 12;
+    /** Keystone size as a multiple of {@value #MAX_SCALE} (≈2.76 blocks of raw slab). */
+    private static final float KEYSTONE_SCALE_FACTOR = 2.4F;
     private static final double SPIN_MIN_DEG = 1.0D;
     private static final double SPIN_MAX_DEG = 4.5D;
+    /** Slow radial in/out breathing of an orbit (the StormDebrisFx wobble idiom). */
+    private static final double RADIUS_WOBBLE = 2.6D;
+    private static final double RADIUS_WOBBLE_MIN_PERIOD = 90.0D;
+    private static final double RADIUS_WOBBLE_MAX_PERIOD = 240.0D;
+    /**
+     * Slow inward-spiral GUST: a raised cosine (never negative) that sucks a piece toward
+     * the eye and lets it back out, so the funnel breathes in as well as around.
+     */
+    private static final double GUST_INWARD_BLOCKS = 4.5D;
+    private static final double GUST_MIN_PERIOD = 200.0D;
+    private static final double GUST_MAX_PERIOD = 420.0D;
+    /**
+     * Wobble + gust may never push a piece inside this radius: the near band starts at
+     * 6 and the gust pulls up to {@value #GUST_INWARD_BLOCKS} blocks in, so without this
+     * floor the funnel would breathe straight through the tyrant's melee space.
+     */
+    private static final double ORBIT_HARD_MIN_R = 5.0D;
+    /** Spawn ease-in: a piece fades up and drifts in over this window instead of popping. */
+    private static final int SPAWN_EASE_TICKS = 24;
+    /** Extra radius a piece eases IN from while it fades up. */
+    private static final double SPAWN_EASE_RADIUS_OUT = 6.0D;
+    /**
+     * PERF (the {@code EndArrivalDebrisFx.tickMsptGuard} port): this whirl runs DURING a
+     * boss fight, so it must be the first thing to yield. Over {@value
+     * #MSPT_DEGRADE_NANOS} ns average tick time the siege stops spawning debris and
+     * halves its push cadence; it recovers below {@value #MSPT_RECOVER_NANOS} ns
+     * (hysteresis). Degraded means slower interpolation windows, never a cut show.
+     */
+    private static final long MSPT_DEGRADE_NANOS = 45_000_000L;
+    private static final long MSPT_RECOVER_NANOS = 38_000_000L;
+    private static final int MSPT_CHECK_INTERVAL_TICKS = 20;
     /** Display range/light overrides (readable against the dark interior). */
     private static final float VIEW_RANGE = 4.0F;
     private static final int DEBRIS_BLOCK_LIGHT = 6;
@@ -159,9 +219,16 @@ public final class StormSiege {
     /** Volley cadence band ("alle 8–15 s"). */
     private static final int LIFT_MIN_INTERVAL = 160;
     private static final int LIFT_MAX_INTERVAL = 300;
-    /** Blocks torn out per volley ("3–6 ECHTE Blöcke"). */
-    private static final int LIFT_MIN = 3;
-    private static final int LIFT_MAX = 6;
+    /** Blocks torn out per volley (FX-Wave-12: the storm takes real bites out of the arena). */
+    private static final int LIFT_MIN = 8;
+    private static final int LIFT_MAX = 14;
+    /**
+     * One volley lands as this many staggered SUB-volleys: a wave of eight-plus blocks
+     * ripping out on a single tick reads as a glitch, two waves read as the storm
+     * inhaling twice. Also keeps the setBlock/particle cost off one tick.
+     */
+    private static final int LIFT_SUBVOLLEYS = 2;
+    private static final int LIFT_SUBVOLLEY_STAGGER_TICKS = 18;
     /** Ground ring the volley samples (blocks from the combat center). */
     private static final double LIFT_RING_MIN = 5.0D;
     private static final double LIFT_RING_MAX = 15.0D;
@@ -311,7 +378,7 @@ public final class StormSiege {
                 FogTyrantEntity tyrant = findTyrant(level, storm.center(), storm.radius());
                 if (tyrant != null) {
                     Siege siege = new Siege(level, storm.stormId(), storm.center(),
-                            storm.radius(), tyrant.position());
+                            storm.radius(), storm.height(), tyrant.position());
                     SIEGES.put(storm.stormId(), siege);
                     siege.begin();
                 }
@@ -335,6 +402,11 @@ public final class StormSiege {
         final int stormId;
         final Vec3 stormCenter;
         final float stormRadius;
+        /**
+         * Funnel ceiling for this fight: {@value #ORBIT_MAX_Y_FACTOR} × the storm's wire
+         * height (floored at {@value #ORBIT_MAX_Y_FLOOR}) — the debris tower height.
+         */
+        final double orbitMaxY;
         /** Combat ring center — the tyrant's position at detection (he self-pins there). */
         final Vec3 combatCenter;
         /** The one fixed entity position every display mounts at (StormDebrisFx law). */
@@ -356,12 +428,19 @@ public final class StormSiege {
         int ending;
         int endingStart;
         boolean done;
+        /** True while the MSPT guard has the siege degraded (no spawns, half cadence). */
+        boolean degraded;
+        /** Age the pending lift sub-volley fires at, or −1 when none is queued. */
+        int subVolleyAge = -1;
+        int subVolleyCount;
 
-        Siege(ServerLevel level, int stormId, Vec3 stormCenter, float stormRadius, Vec3 tyrantPos) {
+        Siege(ServerLevel level, int stormId, Vec3 stormCenter, float stormRadius,
+                float stormHeight, Vec3 tyrantPos) {
             this.level = level;
             this.stormId = stormId;
             this.stormCenter = stormCenter;
             this.stormRadius = stormRadius;
+            this.orbitMaxY = Math.max(ORBIT_MAX_Y_FLOOR, stormHeight * ORBIT_MAX_Y_FACTOR);
             this.combatCenter = tyrantPos;
             this.mount = new Vec3(tyrantPos.x, tyrantPos.y + 8.0D, tyrantPos.z);
             this.scopeTag = FIGHT_SCOPE_TAG_PREFIX + "storm_" + stormId;
@@ -376,9 +455,11 @@ public final class StormSiege {
             this.level.playSound(null, BlockPos.containing(this.combatCenter),
                     EclipseSounds.EVENT_STORM_SPHERE_ROAR.get(), SoundSource.HOSTILE, 1.2F, 0.8F);
             EclipseMod.LOGGER.info("StormSiege: fight detected inside storm {} — siege up "
-                    + "(radius ×{} over {}t, {} whirl displays, lift volleys every {}–{}t)",
+                    + "(radius ×{} over {}t, {} whirl displays up to y+{}, lift volleys "
+                    + "every {}–{}t in {} sub-volleys)",
                     this.stormId, RADIUS_SCALE, GROW_TICKS, this.debrisTarget,
-                    LIFT_MIN_INTERVAL, LIFT_MAX_INTERVAL);
+                    String.format(java.util.Locale.ROOT, "%.1f", this.orbitMaxY),
+                    LIFT_MIN_INTERVAL, LIFT_MAX_INTERVAL, LIFT_SUBVOLLEYS);
         }
 
         void tick() {
@@ -401,15 +482,53 @@ public final class StormSiege {
             if (this.ending != 0) {
                 return;
             }
-            if (this.spawned < this.debrisTarget && this.age % SPAWN_STAGGER_TICKS == 0) {
+            tickMsptGuard();
+            if (this.spawned < this.debrisTarget && !this.degraded
+                    && this.age % SPAWN_STAGGER_TICKS == 0) {
                 spawnBatch();
             }
             animateWhirl();
-            if (this.age >= this.nextLiftAge && this.lifts.isEmpty()) {
+            if (this.subVolleyAge >= 0 && this.age >= this.subVolleyAge) {
+                int pending = this.subVolleyCount;
+                this.subVolleyAge = -1;
+                this.subVolleyCount = 0;
+                tearBlocks(pending);
+            }
+            if (this.age >= this.nextLiftAge && this.lifts.isEmpty() && this.subVolleyAge < 0) {
                 this.nextLiftAge = this.age + rollLiftInterval();
                 liftVolley();
             }
             tickLifts();
+        }
+
+        /**
+         * The {@code EndArrivalDebrisFx.tickMsptGuard} lever, ported verbatim: over
+         * {@value #MSPT_DEGRADE_NANOS} ns average tick time the siege pauses debris
+         * spawns and halves its push cadence; it recovers below {@value
+         * #MSPT_RECOVER_NANOS} ns (hysteresis). Lifts and endings are untouched — the
+         * fight never loses its readable hazards, only the whirl's packet rate.
+         */
+        private void tickMsptGuard() {
+            if (this.age % MSPT_CHECK_INTERVAL_TICKS != 0) {
+                return;
+            }
+            long avgNanos = this.level.getServer().getAverageTickTimeNanos();
+            if (this.degraded) {
+                if (avgNanos < MSPT_RECOVER_NANOS) {
+                    this.degraded = false;
+                    EclipseMod.LOGGER.info("StormSiege: MSPT recovered ({} ms) — full cadence",
+                            avgNanos / 1_000_000L);
+                }
+            } else if (avgNanos > MSPT_DEGRADE_NANOS) {
+                this.degraded = true;
+                EclipseMod.LOGGER.info("StormSiege: MSPT guard tripped ({} ms > 45 ms) — "
+                        + "whirl spawns paused, pushes halved", avgNanos / 1_000_000L);
+            }
+        }
+
+        /** Live push cadence: doubled (halved rate) while the MSPT guard is degraded. */
+        private int pushInterval() {
+            return this.degraded ? UPDATE_INTERVAL_TICKS * 2 : UPDATE_INTERVAL_TICKS;
         }
 
         /** Victory / abandon detection (every {@value #POLL_TICKS} ticks, off the age clock). */
@@ -457,7 +576,7 @@ public final class StormSiege {
             }
             // First keyframe of the ending pose for EVERY piece at once (turn = one gesture).
             for (int i = 0; i < this.whirl.size(); i++) {
-                pushPose(this.whirl.get(i), this.age + UPDATE_INTERVAL_TICKS);
+                pushPose(this.whirl.get(i), this.age + pushInterval());
             }
             EclipseMod.LOGGER.info("StormSiege: siege on storm {} ending ({}) — {} whirl "
                     + "display(s) {}, {} lift(s) resolved", this.stormId,
@@ -516,8 +635,34 @@ public final class StormSiege {
             }
         }
 
+        /**
+         * FX-Wave-12 whirl piece: one of three discrete radius bands, then the
+         * {@code DayRiftOrbits.paramsFor} sediment law — the SIZE is rolled first and the
+         * band height plus the angular rate are derived from it (heavy = low + slow,
+         * light = high + fast), with ~1 piece in {@value #KEYSTONE_EVERY} promoted to a
+         * {@value #KEYSTONE_SCALE_FACTOR}× keystone slab pinned lowest and slowest.
+         */
         private WhirlPiece buildWhirl() {
-            double orbitR = ORBIT_MIN_R + this.random.nextDouble() * (ORBIT_MAX_R - ORBIT_MIN_R);
+            int band = bandFor(this.random.nextDouble());
+            double orbitR = ORBIT_BAND_MIN[band]
+                    + this.random.nextDouble() * (ORBIT_BAND_MAX[band] - ORBIT_BAND_MIN[band]);
+            boolean keystone = this.random.nextInt(KEYSTONE_EVERY) == 0;
+            float scale = keystone ? MAX_SCALE * KEYSTONE_SCALE_FACTOR
+                    : MIN_SCALE + (MAX_SCALE - MIN_SCALE)
+                            * (float) Math.pow(this.random.nextDouble(), 1.5D);
+            // 0 = the lightest shard, 1 = the heaviest slab (a keystone clamps in at 1).
+            double mass = Mth.clamp((scale - MIN_SCALE) / (double) (MAX_SCALE - MIN_SCALE),
+                    0.0D, 1.0D);
+            double bandJitter = keystone ? 0.0D
+                    : (this.random.nextDouble() * 2.0D - 1.0D) * BAND_Y_JITTER;
+            double bandY = Mth.clamp(
+                    ORBIT_MIN_Y + (1.0D - mass) * (this.orbitMaxY - ORBIT_MIN_Y) + bandJitter,
+                    ORBIT_MIN_Y, this.orbitMaxY);
+            double speedFactor = Mth.clamp(
+                    SPEED_LIGHT_FACTOR - mass * (SPEED_LIGHT_FACTOR - SPEED_HEAVY_FACTOR)
+                            + (keystone ? 0.0D
+                                    : (this.random.nextDouble() * 2.0D - 1.0D) * SPEED_JITTER),
+                    SPEED_HEAVY_FACTOR, SPEED_LIGHT_FACTOR);
             Vector3f spinAxis = new Vector3f(this.random.nextFloat() - 0.5F,
                     this.random.nextFloat() - 0.5F, this.random.nextFloat() - 0.5F);
             if (spinAxis.lengthSquared() < 1.0E-4F) {
@@ -526,38 +671,62 @@ public final class StormSiege {
             spinAxis.normalize();
             return new WhirlPiece(
                     PALETTE[this.random.nextInt(PALETTE.length)],
-                    MIN_SCALE + (MAX_SCALE - MIN_SCALE)
-                            * (float) Math.pow(this.random.nextDouble(), 1.5D),
+                    scale,
                     this.random.nextDouble() * Math.PI * 2.0D,
-                    (TANGENTIAL_BLOCKS_PER_TICK
-                            * (0.7D + this.random.nextDouble() * 0.6D)) / Math.max(1.0D, orbitR),
+                    (TANGENTIAL_BLOCKS_PER_TICK * speedFactor) / Math.max(1.0D, orbitR),
                     orbitR,
-                    ORBIT_MIN_Y + this.random.nextDouble() * (ORBIT_MAX_Y - ORBIT_MIN_Y),
+                    bandY,
                     2.0D + this.random.nextDouble() * 3.0D,
                     60.0D + this.random.nextDouble() * 160.0D,
+                    this.random.nextDouble() * Math.PI * 2.0D,
+                    RADIUS_WOBBLE_MIN_PERIOD + this.random.nextDouble()
+                            * (RADIUS_WOBBLE_MAX_PERIOD - RADIUS_WOBBLE_MIN_PERIOD),
+                    this.random.nextDouble() * Math.PI * 2.0D,
+                    GUST_MIN_PERIOD
+                            + this.random.nextDouble() * (GUST_MAX_PERIOD - GUST_MIN_PERIOD),
                     this.random.nextDouble() * Math.PI * 2.0D,
                     spinAxis,
                     (float) Math.toRadians(SPIN_MIN_DEG
                             + this.random.nextDouble() * (SPIN_MAX_DEG - SPIN_MIN_DEG))
                             * (this.random.nextBoolean() ? 1.0F : -1.0F),
-                    this.whirl.size() % UPDATE_INTERVAL_TICKS,
+                    // Slices are assigned over the DOUBLED window so the degraded 6 t
+                    // cadence still spreads evenly; full cadence folds it back mod 3.
+                    this.whirl.size() % (UPDATE_INTERVAL_TICKS * 2),
                     this.age);
         }
 
-        /** One interpolated push per piece in this tick's slice (keyframe LEAD, phase-sliced). */
+        /** Picks a discrete radius band from a 0..1 roll against the cumulative shares. */
+        private static int bandFor(double roll) {
+            for (int band = 0; band < ORBIT_BAND_SHARE.length - 1; band++) {
+                if (roll < ORBIT_BAND_SHARE[band]) {
+                    return band;
+                }
+            }
+            return ORBIT_BAND_SHARE.length - 1;
+        }
+
+        /**
+         * One interpolated push per piece in this tick's slice (keyframe LEAD,
+         * phase-sliced). Under the MSPT guard the window doubles to 6 t — half the
+         * packets, same choreography, because the poses are pure functions of {@code t}.
+         */
         private void animateWhirl() {
-            int slice = this.age % UPDATE_INTERVAL_TICKS;
+            int interval = pushInterval();
+            int slice = this.age % interval;
             boolean missing = false;
             for (int i = 0; i < this.whirl.size(); i++) {
                 WhirlPiece piece = this.whirl.get(i);
-                if (piece.pushPhase != slice) {
+                boolean pushNow = this.degraded
+                        ? piece.pushPhase == slice
+                        : piece.pushPhase % UPDATE_INTERVAL_TICKS == slice;
+                if (!pushNow) {
                     continue;
                 }
                 if (piece.display == null || piece.display.isRemoved()) {
                     missing = true;
                     continue;
                 }
-                pushPose(piece, this.age + UPDATE_INTERVAL_TICKS);
+                pushPose(piece, this.age + interval);
             }
             if (missing) {
                 this.whirl.removeIf(piece -> {
@@ -583,38 +752,55 @@ public final class StormSiege {
                 return;
             }
             display.setTransformationInterpolationDelay(0);
-            display.setTransformationInterpolationDuration(UPDATE_INTERVAL_TICKS);
+            // Push-cadence law: the interpolation duration IS the push interval.
+            display.setTransformationInterpolationDuration(pushInterval());
             display.setTransformation(poseFor(piece, t));
         }
 
-        /** Absolute pose of one whirl piece at siege age {@code t} (pure function of t). */
+        /**
+         * Absolute pose of one whirl piece at siege age {@code t} (pure function of t).
+         *
+         * <p>FX-Wave-12 adds three terms on top of the base orbit: a slow radial WOBBLE
+         * (the StormDebrisFx idiom), a slow inward-spiral GUST (a raised cosine, so it
+         * only ever pulls toward the eye and releases) and a spawn EASE — the piece fades
+         * up from zero scale while it drifts in from {@value #SPAWN_EASE_RADIUS_OUT}
+         * blocks further out, so nothing ever pops into the funnel.</p>
+         */
         private Transformation poseFor(WhirlPiece piece, int t) {
             double life = t - piece.bornAge;
+            double ease = Mth.clamp(life / (double) SPAWN_EASE_TICKS, 0.0D, 1.0D);
+            ease = ease * ease * (3.0D - 2.0D * ease); // smoothstep
             double angle = piece.angle0 + piece.angularSpeed * life;
-            double orbitR = piece.radius;
+            double gust = GUST_INWARD_BLOCKS * 0.5D * (1.0D
+                    - Math.cos((Math.PI * 2.0D / piece.gustPeriod) * life + piece.gustPhase));
+            double orbitR = Math.max(ORBIT_HARD_MIN_R, piece.radius
+                    + Math.sin((Math.PI * 2.0D / piece.radiusWobblePeriod) * life
+                            + piece.radiusWobblePhase) * RADIUS_WOBBLE
+                    - gust
+                    + (1.0D - ease) * SPAWN_EASE_RADIUS_OUT);
             double py = this.combatCenter.y + piece.bandY
                     + Math.sin((Math.PI * 2.0D / piece.bobPeriod) * life + piece.bobPhase)
                             * piece.bobAmplitude;
             double px = this.combatCenter.x + Math.cos(angle) * orbitR;
             double pz = this.combatCenter.z + Math.sin(angle) * orbitR;
-            float scale = piece.scale;
+            float scale = (float) (piece.scale * ease);
 
             if (this.ending == 1) {
                 // F-033 stage 3 — victory: radially OUTWARD from the storm center, rising
                 // slightly, scaling to zero as the shockwave carries the arena apart.
                 float raw = Mth.clamp((t - this.endingStart) / (float) FLING_OUT_TICKS, 0.0F, 1.0F);
                 float eased = 1.0F - (1.0F - raw) * (1.0F - raw); // ease-out throw
-                double out = piece.radius + eased * (this.stormRadius * 1.6D + 20.0D);
+                double out = orbitR + eased * (this.stormRadius * 1.6D + 20.0D);
                 px = this.combatCenter.x + Math.cos(angle) * out;
                 pz = this.combatCenter.z + Math.sin(angle) * out;
                 py += eased * 6.0D * (1.0D - raw);
-                scale = piece.scale * (1.0F - eased);
+                scale *= 1.0F - eased;
             } else if (this.ending == 2) {
                 // Abandon: the wind lets go — pieces sink to the ground and shrink out.
                 float raw = Mth.clamp((t - this.endingStart) / (float) SINK_TICKS, 0.0F, 1.0F);
                 float eased = raw * raw;
                 py = Mth.lerp(eased, py, this.combatCenter.y + 0.3D);
-                scale = piece.scale * (1.0F - raw);
+                scale *= 1.0F - raw;
             }
 
             float spinAngle = piece.spinRate * (float) life;
@@ -636,9 +822,26 @@ public final class StormSiege {
                     + this.random.nextInt(LIFT_MAX_INTERVAL - LIFT_MIN_INTERVAL + 1);
         }
 
-        /** Tears {@value #LIFT_MIN}–{@value #LIFT_MAX} real surface blocks out of the ring. */
+        /**
+         * Rolls one volley of {@value #LIFT_MIN}–{@value #LIFT_MAX} real surface blocks
+         * and splits it into {@value #LIFT_SUBVOLLEYS} waves: the first tears out now,
+         * the rest is queued {@value #LIFT_SUBVOLLEY_STAGGER_TICKS} ticks later (the
+         * "never dump everything in one tick" law, applied to world edits too).
+         */
         private void liftVolley() {
             int want = LIFT_MIN + this.random.nextInt(LIFT_MAX - LIFT_MIN + 1);
+            int first = Math.max(1, want / LIFT_SUBVOLLEYS);
+            this.subVolleyCount = want - first;
+            this.subVolleyAge = this.subVolleyCount > 0
+                    ? this.age + LIFT_SUBVOLLEY_STAGGER_TICKS : -1;
+            tearBlocks(first);
+        }
+
+        /** Tears {@code want} real surface blocks out of the ring (one sub-volley). */
+        private void tearBlocks(int want) {
+            if (want <= 0) {
+                return;
+            }
             int lifted = 0;
             for (int attempt = 0; attempt < want * 6 && lifted < want; attempt++) {
                 BlockPos pos = sampleRingGround();
@@ -942,6 +1145,12 @@ public final class StormSiege {
         final double bobAmplitude;
         final double bobPeriod;
         final double bobPhase;
+        /** Slow radial breathing of the orbit (FX-Wave-12). */
+        final double radiusWobblePeriod;
+        final double radiusWobblePhase;
+        /** Slow inward-spiral gust that sucks the piece toward the eye and releases it. */
+        final double gustPeriod;
+        final double gustPhase;
         final Vector3f spinAxis;
         final float spinRate;
         final int pushPhase;
@@ -949,7 +1158,9 @@ public final class StormSiege {
 
         WhirlPiece(BlockState state, float scale, double angle0, double angularSpeed,
                 double radius, double bandY, double bobAmplitude, double bobPeriod,
-                double bobPhase, Vector3f spinAxis, float spinRate, int pushPhase, int bornAge) {
+                double bobPhase, double radiusWobblePeriod, double radiusWobblePhase,
+                double gustPeriod, double gustPhase, Vector3f spinAxis, float spinRate,
+                int pushPhase, int bornAge) {
             this.state = state;
             this.scale = scale;
             this.angle0 = angle0;
@@ -959,6 +1170,10 @@ public final class StormSiege {
             this.bobAmplitude = bobAmplitude;
             this.bobPeriod = bobPeriod;
             this.bobPhase = bobPhase;
+            this.radiusWobblePeriod = radiusWobblePeriod;
+            this.radiusWobblePhase = radiusWobblePhase;
+            this.gustPeriod = gustPeriod;
+            this.gustPhase = gustPhase;
             this.spinAxis = spinAxis;
             this.spinRate = spinRate;
             this.pushPhase = pushPhase;

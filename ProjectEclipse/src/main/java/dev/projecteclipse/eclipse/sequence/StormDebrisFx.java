@@ -75,7 +75,10 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
  * (~{@value #AMBIENT_TARGET}/{@value #UPDATE_INTERVAL_TICKS}) rather than the whole swarm in
  * one tick, and the entire pass early-outs while no player is within
  * {@value #PLAYER_GATE_RANGE} blocks of the vortex (pieces simply hold their pose). The
- * swarm is hard-capped at {@value #HARD_CAP} pieces including lightning kicks.</p>
+ * swarm is hard-capped at {@value #HARD_CAP} pieces including lightning kicks, which
+ * puts the worst case right on the proven ~200-packets-per-tick ceiling — hence the
+ * FX-Wave-12 MSPT guard, which pauses spawns and doubles the window when the server
+ * starts to sweat.</p>
  *
  * <p><b>Despawn guarantee</b> (the {@code StructureFlightFx} doctrine): every piece carries
  * the command tag {@value #ENTITY_TAG} and is tracked in a live-UUID set. A tagged display
@@ -91,19 +94,31 @@ public final class StormDebrisFx {
 
     // ------------------------------------------------------------------ tuning constants
 
-    /** Ambient swarm size the staggered spawn fills up to (user ask: "150–400"). */
-    private static final int AMBIENT_TARGET = 200;
+    /** Ambient swarm size the staggered spawn fills up to (FX-Wave-12 raise). */
+    private static final int AMBIENT_TARGET = 450;
     /** Absolute ceiling including lightning kicks — never exceeded, whatever happens. */
-    private static final int HARD_CAP = 400;
+    private static final int HARD_CAP = 600;
     /** Pieces per spawn batch and the stagger between batches (spawn-cost smoothing). */
     private static final int SPAWN_BATCH = 8;
     private static final int SPAWN_STAGGER_TICKS = 3;
     /** Transform push cadence == interpolation duration (DisplayAnimator law). */
     private static final int UPDATE_INTERVAL_TICKS = 3;
-    /** Fresh pieces thrown up out of the ground by one lightning strike. */
-    private static final int LIGHTNING_KICK_PIECES = 12;
+    /** Fresh pieces thrown up out of the ground by one lightning strike (FX-Wave-12 ×2). */
+    private static final int LIGHTNING_KICK_PIECES = 24;
     /** Minimum ticks between two lightning kicks (a strike hail must not flood the swarm). */
-    private static final int LIGHTNING_KICK_COOLDOWN_TICKS = 25;
+    private static final int LIGHTNING_KICK_COOLDOWN_TICKS = 15;
+    /**
+     * PERF (the {@code EndArrivalDebrisFx.tickMsptGuard} port). At {@value #HARD_CAP}
+     * pieces on a {@value #UPDATE_INTERVAL_TICKS}-tick window the swarm sits right ON
+     * the proven ~200-transform-packets-per-tick ceiling, so it now carries the same
+     * degrade lever every other mass system does: over {@value #MSPT_DEGRADE_NANOS} ns
+     * average tick time it stops spawning and halves its push cadence, recovering below
+     * {@value #MSPT_RECOVER_NANOS} ns (hysteresis). Degraded = slower interpolation
+     * windows, never a cut show.
+     */
+    private static final long MSPT_DEGRADE_NANOS = 45_000_000L;
+    private static final long MSPT_RECOVER_NANOS = 38_000_000L;
+    private static final int MSPT_CHECK_INTERVAL_TICKS = 20;
     /** Loft envelope of a kicked piece: ground → orbit over this many ticks. */
     private static final int LOFT_TICKS = 44;
     /** Whole pass sleeps (zero packets) with no player this close to the vortex axis. */
@@ -118,11 +133,38 @@ public final class StormDebrisFx {
     private static final double HEIGHT_LOW_FRACTION = 0.06D;
     private static final double HEIGHT_HIGH_FRACTION = 1.08D;
     /**
+     * FX-Wave-12 FAR band: this share of the ambient swarm is thrown out to
+     * {@value #FAR_INNER_FACTOR}–{@value #FAR_OUTER_FACTOR}× the shell radius at half
+     * speed with a hard size floor, so the storm gets a slow, chunky SILHOUETTE ring
+     * crawling behind the main body — the depth cue the single-band swarm never had.
+     */
+    private static final double FAR_BAND_SHARE = 0.25D;
+    private static final double FAR_INNER_FACTOR = 2.2D;
+    private static final double FAR_OUTER_FACTOR = 3.4D;
+    private static final float FAR_SCALE_FLOOR = 0.9F;
+    private static final double FAR_SPEED_FACTOR = 0.5D;
+    /** Vertical window the far ring rides in (mid-column: it reads against the horizon). */
+    private static final double FAR_HEIGHT_LOW_FRACTION = 0.10D;
+    private static final double FAR_HEIGHT_HIGH_FRACTION = 0.85D;
+    /**
      * Tangential speed (blocks/tick) the angular rate is derived from, so outer pieces do
      * not whip around faster than inner ones. Varied ±{@value #SPEED_VARIANCE} per piece.
      */
     private static final double TANGENTIAL_BLOCKS_PER_TICK = 0.34D;
     private static final double SPEED_VARIANCE = 0.4D;
+    /**
+     * FX-Wave-12 sediment law (the {@code DayRiftOrbits.paramsFor} pattern): the ±
+     * {@value #SPEED_VARIANCE} speed spread and the vertical band are no longer rolled
+     * independently of the size — both are DERIVED from the piece scale. Heavy slabs
+     * grind along the bottom of their band, light shards ride the top and whip around,
+     * so the swarm reads bottom-up as heaviest-first (sorted) instead of sprinkled. The
+     * small jitters keep the correlation off the stairs.
+     */
+    private static final double SPEED_LIGHT_FACTOR = 1.0D + SPEED_VARIANCE;
+    private static final double SPEED_HEAVY_FACTOR = 1.0D - SPEED_VARIANCE;
+    private static final double SPEED_JITTER = 0.08D;
+    /** Band scatter as a fraction of the storm height (keystones get none). */
+    private static final double BAND_JITTER_FRACTION = 0.05D;
     /**
      * Hard floor on the orbit radius as a multiple of the shell radius. The inner band plus
      * a full inward {@link #RADIUS_WOBBLE} swing would otherwise dip pieces INSIDE the smoke
@@ -141,6 +183,9 @@ public final class StormDebrisFx {
     /** Piece size spread. */
     private static final float MIN_SCALE = 0.30F;
     private static final float MAX_SCALE = 1.35F;
+    /** Roughly one piece in this many is a KEYSTONE slab, pinned lowest and slowest. */
+    private static final int KEYSTONE_EVERY = 12;
+    private static final float KEYSTONE_SCALE = 2.7F;
     /** Tumble rate band (degrees per tick). */
     private static final double SPIN_MIN_DEG_PER_TICK = 0.5D;
     private static final double SPIN_MAX_DEG_PER_TICK = 3.2D;
@@ -354,6 +399,8 @@ public final class StormDebrisFx {
         int collapseStart = -1;
         Vec3 collapseTarget = Vec3.ZERO;
         boolean done;
+        /** True while the MSPT guard has the swarm degraded (no spawns, half cadence). */
+        boolean degraded;
 
         Swarm(ServerLevel level, Vec3 center, float radius, float height) {
             this.level = level;
@@ -382,8 +429,9 @@ public final class StormDebrisFx {
                 this.done = true;
                 return;
             }
+            tickMsptGuard();
             boolean visible = playerNear();
-            if (!collapsing() && visible && this.spawned < AMBIENT_TARGET
+            if (!collapsing() && visible && !this.degraded && this.spawned < AMBIENT_TARGET
                     && this.age % SPAWN_STAGGER_TICKS == 0) {
                 spawnBatch();
             }
@@ -391,6 +439,31 @@ public final class StormDebrisFx {
                 return; // presence gate: pieces hold their last pose, zero packets
             }
             animate();
+        }
+
+        /**
+         * The {@code EndArrivalDebrisFx.tickMsptGuard} lever, ported verbatim: over
+         * {@value #MSPT_DEGRADE_NANOS} ns average tick time the swarm stops spawning and
+         * halves its push cadence; it recovers below {@value #MSPT_RECOVER_NANOS} ns
+         * (hysteresis). The presence gate and the watchdog are untouched — this only
+         * trades interpolation resolution for headroom, it never cuts the show.
+         */
+        private void tickMsptGuard() {
+            if (this.age % MSPT_CHECK_INTERVAL_TICKS != 0) {
+                return;
+            }
+            long avgNanos = this.level.getServer().getAverageTickTimeNanos();
+            if (this.degraded) {
+                if (avgNanos < MSPT_RECOVER_NANOS) {
+                    this.degraded = false;
+                    EclipseMod.LOGGER.info("StormDebrisFx: MSPT recovered ({} ms) — full cadence",
+                            avgNanos / 1_000_000L);
+                }
+            } else if (avgNanos > MSPT_DEGRADE_NANOS) {
+                this.degraded = true;
+                EclipseMod.LOGGER.info("StormDebrisFx: MSPT guard tripped ({} ms > 45 ms) — "
+                        + "spawns paused, pushes halved", avgNanos / 1_000_000L);
+            }
         }
 
         private boolean playerNear() {
@@ -439,28 +512,60 @@ public final class StormDebrisFx {
                     0.7F, 0.6F + this.random.nextFloat() * 0.3F);
         }
 
+        /**
+         * An ambient piece: {@value #FAR_BAND_SHARE} of the swarm goes into the slow FAR
+         * silhouette ring out at {@value #FAR_INNER_FACTOR}–{@value #FAR_OUTER_FACTOR}×
+         * the shell, the rest into the near body hugging the wall.
+         */
         private Piece buildAmbient() {
+            if (this.random.nextDouble() < FAR_BAND_SHARE) {
+                double farRadius = this.radius * (FAR_INNER_FACTOR
+                        + this.random.nextDouble() * (FAR_OUTER_FACTOR - FAR_INNER_FACTOR));
+                return build(farRadius, FAR_HEIGHT_LOW_FRACTION, FAR_HEIGHT_HIGH_FRACTION,
+                        FAR_SCALE_FLOOR, FAR_SPEED_FACTOR, null);
+            }
             double orbitRadius = this.radius * RADIUS_INNER_FACTOR
                     + this.random.nextDouble() * this.radius * (RADIUS_OUTER_FACTOR - RADIUS_INNER_FACTOR);
-            double bandY = this.center.y + this.height * (HEIGHT_LOW_FRACTION
-                    + this.random.nextDouble() * (HEIGHT_HIGH_FRACTION - HEIGHT_LOW_FRACTION));
-            return build(orbitRadius, bandY, null);
+            return build(orbitRadius, HEIGHT_LOW_FRACTION, HEIGHT_HIGH_FRACTION,
+                    MIN_SCALE, 1.0D, null);
         }
 
         private Piece buildKicked(Vec3 from) {
             double orbitRadius = this.radius * RADIUS_INNER_FACTOR
                     + this.random.nextDouble() * this.radius * 0.55D;
             // Kicks end up HIGH — the strike is what throws them over the shell top.
-            double bandY = this.center.y + this.height * (0.55D + this.random.nextDouble() * 0.5D);
-            return build(orbitRadius, bandY, from);
+            return build(orbitRadius, 0.55D, 1.05D, MIN_SCALE, 1.0D, from);
         }
 
-        private Piece build(double orbitRadius, double bandY, @Nullable Vec3 loftFrom) {
+        /**
+         * FX-Wave-12 sediment build: the SIZE is rolled first (with ~1 piece in
+         * {@value #KEYSTONE_EVERY} promoted to a {@value #KEYSTONE_SCALE} keystone slab)
+         * and the band height plus the angular rate are DERIVED from it inside the
+         * caller's vertical window — heavy low and slow, light high and fast.
+         */
+        private Piece build(double orbitRadius, double bandLowFraction, double bandHighFraction,
+                float scaleFloor, double speedFactor, @Nullable Vec3 loftFrom) {
+            boolean keystone = this.random.nextInt(KEYSTONE_EVERY) == 0;
+            float scale = keystone ? KEYSTONE_SCALE
+                    : Math.max(scaleFloor, MIN_SCALE + (MAX_SCALE - MIN_SCALE)
+                            * (float) Math.pow(this.random.nextDouble(), 1.6D));
+            // 0 = the lightest shard, 1 = the heaviest slab (a keystone clamps in at 1).
+            double mass = Mth.clamp((scale - MIN_SCALE) / (double) (MAX_SCALE - MIN_SCALE),
+                    0.0D, 1.0D);
+            double bandJitter = keystone ? 0.0D
+                    : (this.random.nextDouble() * 2.0D - 1.0D) * BAND_JITTER_FRACTION;
+            double bandFraction = Mth.clamp(
+                    bandHighFraction - mass * (bandHighFraction - bandLowFraction) + bandJitter,
+                    bandLowFraction, bandHighFraction);
+            double bandY = this.center.y + this.height * bandFraction;
             // Angular rate from a shared tangential speed: outer pieces do not outrun inner
             // ones, and one 3-tick interpolation window covers ~2-3° of arc (the linear
             // tween across such a chord is visually exact — VFXPOLISH-3's window law).
-            double speed = TANGENTIAL_BLOCKS_PER_TICK
-                    * (1.0D - SPEED_VARIANCE + this.random.nextDouble() * SPEED_VARIANCE * 2.0D);
+            double speed = TANGENTIAL_BLOCKS_PER_TICK * speedFactor * Mth.clamp(
+                    SPEED_LIGHT_FACTOR - mass * (SPEED_LIGHT_FACTOR - SPEED_HEAVY_FACTOR)
+                            + (keystone ? 0.0D
+                                    : (this.random.nextDouble() * 2.0D - 1.0D) * SPEED_JITTER),
+                    SPEED_HEAVY_FACTOR, SPEED_LIGHT_FACTOR);
             Vector3f spinAxis = new Vector3f(
                     this.random.nextFloat() - 0.5F,
                     this.random.nextFloat() - 0.5F,
@@ -471,8 +576,7 @@ public final class StormDebrisFx {
             spinAxis.normalize();
             return new Piece(
                     PALETTE[this.random.nextInt(PALETTE.length)],
-                    MIN_SCALE + (MAX_SCALE - MIN_SCALE)
-                            * (float) Math.pow(this.random.nextDouble(), 1.6D),
+                    scale,
                     this.random.nextDouble() * Math.PI * 2.0D,
                     speed / Math.max(1.0D, orbitRadius),
                     orbitRadius,
@@ -488,7 +592,9 @@ public final class StormDebrisFx {
                             + this.random.nextDouble() * (SPIN_MAX_DEG_PER_TICK - SPIN_MIN_DEG_PER_TICK))
                             * (this.random.nextBoolean() ? 1.0F : -1.0F),
                     (float) (this.random.nextDouble() * Math.PI * 2.0D),
-                    this.pieces.size() % UPDATE_INTERVAL_TICKS,
+                    // Slices are assigned over the DOUBLED window so the degraded 6 t
+                    // cadence still spreads evenly; full cadence folds it back mod 3.
+                    this.pieces.size() % (UPDATE_INTERVAL_TICKS * 2),
                     loftFrom,
                     this.age);
         }
@@ -530,13 +636,19 @@ public final class StormDebrisFx {
         /**
          * One interpolated push per piece in this tick's slice, targeting the pose the
          * window ENDS on (keyframe lead) so the client tween covers the gap instead of
-         * trailing a full interval behind the server.
+         * trailing a full interval behind the server. Under the MSPT guard the window
+         * doubles to 6 t (half the packets, same choreography — poses are pure functions
+         * of {@code t}, and the slices were assigned mod 6 so they stay evenly spread).
          */
         private void animate() {
-            int slice = this.age % UPDATE_INTERVAL_TICKS;
+            int interval = this.degraded ? UPDATE_INTERVAL_TICKS * 2 : UPDATE_INTERVAL_TICKS;
+            int slice = this.age % interval;
             boolean missing = false;
             for (Piece piece : this.pieces) {
-                if (piece.pushPhase != slice) {
+                boolean pushNow = this.degraded
+                        ? piece.pushPhase == slice
+                        : piece.pushPhase % UPDATE_INTERVAL_TICKS == slice;
+                if (!pushNow) {
                     continue;
                 }
                 Display.BlockDisplay display = piece.display;
@@ -545,8 +657,9 @@ public final class StormDebrisFx {
                     continue;
                 }
                 display.setTransformationInterpolationDelay(0);
-                display.setTransformationInterpolationDuration(UPDATE_INTERVAL_TICKS);
-                display.setTransformation(poseAt(piece, this.age + UPDATE_INTERVAL_TICKS));
+                // Push-cadence law: the interpolation duration IS the push interval.
+                display.setTransformationInterpolationDuration(interval);
+                display.setTransformation(poseAt(piece, this.age + interval));
             }
             if (missing) {
                 this.pieces.removeIf(piece -> piece.display == null || piece.display.isRemoved());
@@ -619,12 +732,13 @@ public final class StormDebrisFx {
             // Push the first collapse keyframe for EVERY piece at once (not just this
             // tick's slice), or up to two thirds of the swarm would keep orbiting for
             // another two ticks before turning inward — the turn must read as one gesture.
+            int interval = this.degraded ? UPDATE_INTERVAL_TICKS * 2 : UPDATE_INTERVAL_TICKS;
             for (Piece piece : this.pieces) {
                 Display.BlockDisplay display = piece.display;
                 if (display != null && !display.isRemoved()) {
                     display.setTransformationInterpolationDelay(0);
-                    display.setTransformationInterpolationDuration(UPDATE_INTERVAL_TICKS);
-                    display.setTransformation(poseAt(piece, this.age + UPDATE_INTERVAL_TICKS));
+                    display.setTransformationInterpolationDuration(interval);
+                    display.setTransformation(poseAt(piece, this.age + interval));
                 }
             }
         }

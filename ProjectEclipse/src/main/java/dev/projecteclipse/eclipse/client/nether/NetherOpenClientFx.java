@@ -4,6 +4,7 @@ import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.cutscene.client.CameraDirector;
 import dev.projecteclipse.eclipse.network.nether.NetherOpenPayloads;
 import dev.projecteclipse.eclipse.network.nether.S2CNetherOpenPayload;
+import dev.projecteclipse.eclipse.veilfx.EclipseFxState;
 import dev.projecteclipse.eclipse.veilfx.NetherOpenPhotonFxRows;
 import dev.projecteclipse.eclipse.veilfx.PhotonBridge;
 import dev.projecteclipse.eclipse.worldgen.BreachGeometry;
@@ -34,6 +35,11 @@ import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
  *       impulse. One broadcast, a proximity-correct shake for every player.</li>
  * </ul>
  *
+ * <p>FX-12: every phase also drives the {@code eclipse:world_grade} heat feed
+ * ({@link EclipseFxState#setNetherHeat}) — an ember lean plus sky shimmer that climbs
+ * through OMEN/TREMOR, spikes on RUPTURE and releases over AFTERMATH, each target scaled
+ * by the same {@link #proximity} falloff the rumble uses.</p>
+ *
  * <p>Every Photon spawn rides {@link PhotonBridge}'s full guard chain (photon absent,
  * {@code reducedFx}, missing asset, executor budget ⇒ silent no-op): the photon-less read of
  * the whole sequence is the server's own particle/sound stack, which every client gets.</p>
@@ -61,6 +67,20 @@ public final class NetherOpenClientFx {
     private static final float RUPTURE_HIT_FREQUENCY = 1.4F;
     /** The omen/eruption anchors sit this far above the lip plane. */
     private static final double SURFACE_LIFT = 0.5D;
+    /**
+     * FX-12 "Glutgrad": the {@code eclipse:world_grade} heat feed per phase — the desert
+     * warms through the omen and the quake, spikes when the pit tears open and bleeds off
+     * over the aftermath. Each target is scaled by THIS client's {@link #proximity} share,
+     * so the grade is a local pressure (the rumble law), not a server-wide screen filter.
+     */
+    private static final float HEAT_OMEN = 0.25F;
+    private static final int HEAT_OMEN_RAMP = 120;
+    private static final float HEAT_TREMOR = 0.45F;
+    private static final int HEAT_TREMOR_RAMP = 120;
+    private static final float HEAT_RUPTURE = 0.8F;
+    private static final int HEAT_RUPTURE_RAMP = 10;
+    /** The release always runs to a hard 0 — a stale heat lean must never survive the show. */
+    private static final int HEAT_RELEASE_RAMP = 200;
 
     private NetherOpenClientFx() {}
 
@@ -77,15 +97,25 @@ public final class NetherOpenClientFx {
         Vec3 center = new Vec3(payload.center().getX() + 0.5D,
                 payload.center().getY() + SURFACE_LIFT, payload.center().getZ() + 0.5D);
         switch (payload.phase()) {
-            case OMEN -> PhotonBridge.spawn(NetherOpenPhotonFxRows.FX_NETHER_OMEN_ASH, center);
-            case TREMOR -> stampFissures(center);
+            case OMEN -> {
+                PhotonBridge.spawn(NetherOpenPhotonFxRows.FX_NETHER_OMEN_ASH, center);
+                heat(minecraft, center, HEAT_OMEN, HEAT_OMEN_RAMP);
+            }
+            case TREMOR -> {
+                stampFissures(center);
+                heat(minecraft, center, HEAT_TREMOR, HEAT_TREMOR_RAMP);
+            }
             case RUPTURE -> {
                 PhotonBridge.spawn(NetherOpenPhotonFxRows.FX_NETHER_ERUPTION, center);
                 CameraDirector.addShakeImpulse(
                         RUPTURE_HIT_STRENGTH * proximity(minecraft, center),
                         RUPTURE_HIT_TICKS, RUPTURE_HIT_FREQUENCY);
+                heat(minecraft, center, HEAT_RUPTURE, HEAT_RUPTURE_RAMP);
             }
-            case AFTERMATH -> NetherPitPlume.onOpened();
+            case AFTERMATH -> {
+                NetherPitPlume.onOpened();
+                EclipseFxState.setNetherHeat(0.0F, HEAT_RELEASE_RAMP);
+            }
             case RUMBLE -> {
                 float strength = payload.intensity() * proximity(minecraft, center);
                 if (strength > 0.001F) {
@@ -114,6 +144,11 @@ public final class NetherOpenClientFx {
                     PhotonBridge.SpawnOptions.DEFAULT.withRotationDeg(
                             0.0D, -angle * Mth.RAD_TO_DEG, 0.0D));
         }
+    }
+
+    /** Ramps the world-grade heat to this client's proximity-scaled share of {@code target}. */
+    private static void heat(Minecraft minecraft, Vec3 center, float target, int rampTicks) {
+        EclipseFxState.setNetherHeat(target * proximity(minecraft, center), rampTicks);
     }
 
     /** This client's share of a beat: 1 at the rim of the pit, 0 past {@link #SHAKE_RANGE}. */

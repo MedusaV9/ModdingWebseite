@@ -3,6 +3,7 @@ package dev.projecteclipse.eclipse.sequence;
 import javax.annotation.Nullable;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.network.fx.FxPayloads;
 import dev.projecteclipse.eclipse.network.nether.NetherOpenPayloads;
 import dev.projecteclipse.eclipse.network.nether.S2CNetherOpenPayload;
 import dev.projecteclipse.eclipse.network.nether.S2CNetherOpenPayload.Phase;
@@ -18,6 +19,7 @@ import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
+import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.server.ServerStoppedEvent;
@@ -266,6 +268,12 @@ public final class NetherOpeningSequence {
                             SoundSource.BLOCKS, 3.0F, 0.5F);
                     sound(this.center, SoundEvents.GHAST_SCREAM,
                             SoundSource.HOSTILE, 3.0F, 0.55F);
+                    // FX-12: the Veil radial-distortion ring the rupture never had (the
+                    // End-arrival finale idiom). 0.9/45 stays clear of the reserved
+                    // (>=1.0, >=50) intro-burst giant signature; dimension-wide (-1) so
+                    // the shock reads for everyone the phase broadcast reaches.
+                    FxPayloads.sendFxEvent(this.overworld, FxPayloads.FX_SHOCKWAVE,
+                            Vec3.atCenterOf(this.center), 0.9F, 45.0F, -1.0D);
                     this.overworld.sendParticles(ParticleTypes.EXPLOSION_EMITTER,
                             this.center.getX() + 0.5D, this.center.getY() + 2.0D,
                             this.center.getZ() + 0.5D, 3, this.radius * 0.4D, 1.0D,

@@ -42,13 +42,16 @@ import net.neoforged.neoforge.network.PacketDistributor;
  *
  * <ol>
  *   <li><b>Sync</b> (0–{@value #SYNC_END_FRACTION}): the free orbits glide into ONE
- *       synchronized ring (shared radius/height/rate, even spacing).</li>
+ *       synchronized ring, STRATIFIED into three sediment tiers by frozen piece scale
+ *       (heavy low + wide, light high + tight; shared rate, even spacing).</li>
  *   <li><b>Spiral</b> (–{@value #GATHER_END_FRACTION}): the ring corkscrews across the
  *       sky — radius tightening, rate rising — to a gather point over the water off the
  *       island shore ({@link FinaleState#portalPos()}, chosen deterministically once and
- *       persisted).</li>
- *   <li><b>Build</b> (–1.0): piece by piece (golden-hash stagger) the debris flies from
- *       the gather swirl onto its slot on the gate silhouette — two-layer arch outline,
+ *       persisted), quantized mid-flight onto {@value #STRAND_COUNT} braided comet
+ *       streams.</li>
+ *   <li><b>Build</b> (–1.0): piece by piece (golden-hash stagger, inner depth layers
+ *       first, crown keystones last) the debris flies from the gather swirl onto its
+ *       slot on the gate silhouette — four-layer arch outline,
  *       ~{@value #ARCH_HEIGHT_BLOCKS} blocks tall — and locks in, yaw-aligned with the
  *       door plane.</li>
  * </ol>
@@ -75,10 +78,60 @@ public final class PortalFormation {
     public static final double SYNC_END_FRACTION = 0.32D;
     public static final double GATHER_END_FRACTION = 0.62D;
 
-    /** Synced-ring geometry (stage 1 target). */
+    /** Synced-ring geometry (stage 1 target) — the MID tier of the stratified ring. */
     private static final double SYNC_RADIUS = 38.0D;
     private static final double SYNC_HEIGHT_ABOVE_TOP = 42.0D;
     private static final double SYNC_DEG_PER_TICK = 0.3D;
+    /**
+     * FX-Wave-12 stratified sync ring. Stage 1 no longer flattens the whole swarm onto
+     * ONE plane at {@value #SYNC_HEIGHT_ABOVE_TOP}: the piece's frozen
+     * {@link DayRiftOrbits#scaleOf} decides which of three sediment TIERS it syncs into —
+     * heavy slabs settle low and wide, light shards ride high and tight, so the "ring"
+     * reads as a stratified cone of sorted debris instead of a flat hoop. Pure retarget
+     * math: the same displays, the same cadence, zero extra entities or packets.
+     */
+    private static final double[] SYNC_TIER_HEIGHT = {34.0D, SYNC_HEIGHT_ABOVE_TOP, 52.0D};
+    private static final double[] SYNC_TIER_RADIUS = {
+            SYNC_RADIUS + 6.0D, SYNC_RADIUS, SYNC_RADIUS - 6.0D};
+    /** Tier cuts on the DayRiftOrbits scale band (0.7–1.7, keystones 2.6). */
+    private static final float SYNC_TIER_HEAVY_SCALE = 1.35F;
+    private static final float SYNC_TIER_MID_SCALE = 1.0F;
+
+    /**
+     * FX-Wave-12 braided spiral. Stage 2 quantizes every piece onto one of
+     * {@value #STRAND_COUNT} co-rotating strand lanes ({@code i % 3}) with a trailing
+     * comet tail behind each lane head, plus a radial/vertical weave that laces the three
+     * streams around each other. Both the quantization and the weave ride a
+     * {@code sin(pi q)} bump, so the stage still STARTS exactly on the stage-1 ring pose
+     * and still ENDS exactly on the old evenly-spread gather swirl — the braid lives
+     * entirely in the middle of the corkscrew, where the eye is actually watching.
+     */
+    private static final int STRAND_COUNT = 3;
+    /**
+     * How hard the lanes pull (1 = a piece is dragged all the way onto its lane bearing).
+     * Held under 1 on purpose: a full pull can be half a revolution of extra travel on a
+     * 38-block ring, which would push a 10-tick push window past the arc its linear tween
+     * can still draw as a curve. See the class doc's cadence law.
+     */
+    private static final double STRAND_QUANTIZE = 0.6D;
+    /**
+     * How far back along the spiral the tail of a strand trails (fraction of stage 2).
+     *
+     * <p>The single most expensive knob in this stage, so it is deliberately modest. A
+     * trailing piece rides a LAGGED spiral phase, so while the tail retracts it must
+     * advance faster than the stage does, and the corkscrew term is quadratic — the
+     * catch-up buys extra arc exactly where the whip is already fastest. Measured on
+     * the 1500t path, the worst-case gap between a push pair's linear tween and the
+     * true curve grows about 0.6 blocks per 0.1 of span.
+     */
+    private static final double STRAND_TAIL_SPAN = 0.15D;
+    /** Extra angular lag of a strand's tail at full extension (radians). */
+    private static final double STRAND_TAIL_ARC = 1.0D;
+    /** Radial + vertical weave of the three strands around each other (blocks). */
+    private static final double BRAID_AMPLITUDE = 3.5D;
+    private static final double BRAID_TURNS = 2.0D;
+    /** Radius the gather swirl closes to at the end of stage 2. */
+    private static final double GATHER_RADIUS = 2.5D;
 
     /** Portal-site scan band off the altar (stays inside the display culling envelope). */
     private static final int PORTAL_MIN_DIST = 40;
@@ -88,6 +141,32 @@ public final class PortalFormation {
     private static final double ARCH_HALF_WIDTH = 4.5D;
     /** Gather swirl over the gate site (stage 2 target). */
     private static final double GATHER_ABOVE_GATE = 20.0D;
+
+    /**
+     * FX-Wave-12 four-layer arch. The silhouette is built from FOUR depth layers instead
+     * of two, so the finished jamb reads as a ~3-block-deep masonry wall rather than a
+     * cardboard outline. The two inner layers lock first (the core wall stands, then the
+     * facing plates onto it), and keystone-sized pieces are pinned to the crown and lock
+     * dead last — the arch closes on its keystone, the way an arch actually closes.
+     */
+    private static final double[] ARCH_LAYER_Z = {-1.4D, -0.5D, 0.5D, 1.4D};
+    /**
+     * Pieces at or above this frozen scale are keystones: crown arc only, locking last.
+     *
+     * <p>Keyed off {@link DayRiftOrbits#KEYSTONE_SCALE} (2.6, ~1 index in 12) rather than
+     * the flat 1.1 the FX-Wave-12 recipe named. The swarm's ordinary size band is
+     * 0.7–1.7, so a 1.1 cut is not a rarity test at all — it selects about 64 % of the
+     * swarm, which would pile two thirds of the gate onto the crown arc and leave the
+     * jambs bare. The recipe wanted the RARE heavy slabs, and this system already has a
+     * name for those.
+     */
+    private static final float KEYSTONE_SCALE = DayRiftOrbits.KEYSTONE_SCALE - 0.1F;
+    /** Build-stage lock stagger budget — jitter + depth + keystone must stay ≤ 0.7. */
+    private static final double LOCK_JITTER_SPAN = 0.42D;
+    private static final double LOCK_DEPTH_DELAY = 0.14D;
+    private static final double LOCK_KEYSTONE_DELAY = 0.14D;
+    /** Length of one piece's own dive, as a fraction of the build stage. */
+    private static final double LOCK_WINDOW = 0.3D;
 
     /** Keyframe push spacing during the formation (finer than the idle 40t orbits). */
     private static final int PUSH_SPACING_TICKS = 10;
@@ -322,27 +401,51 @@ public final class PortalFormation {
         Vec3 islandCenter = new Vec3(altarPos.getX() + 0.5D, 0.0D, altarPos.getZ() + 0.5D);
         Vec3 gate = gateCenter(portalPos);
         Vec3 gather = gate.add(0.0D, GATHER_ABOVE_GATE, 0.0D);
+        int tier = tierOf(DayRiftOrbits.scaleOf(seed, i));
+        double tierHeight = SYNC_TIER_HEIGHT[tier];
+        double tierRadius = SYNC_TIER_RADIUS[tier];
 
-        // Stage 1 — sync: free orbit → shared ring (componentwise, wrap-free).
+        // Stage 1 — sync: free orbit → this piece's TIER of the stratified ring
+        // (componentwise, wrap-free). Heavy = low + wide, light = high + tight.
         double sync = smoothstep(p / SYNC_END_FRACTION);
         Vec3 ring = new Vec3(
-                islandCenter.x + Math.cos(ringAngle) * SYNC_RADIUS,
-                islandTop + SYNC_HEIGHT_ABOVE_TOP,
-                islandCenter.z + Math.sin(ringAngle) * SYNC_RADIUS);
+                islandCenter.x + Math.cos(ringAngle) * tierRadius,
+                islandTop + tierHeight,
+                islandCenter.z + Math.sin(ringAngle) * tierRadius);
         Vec3 pos = lerp(free, ring, sync);
         if (p <= SYNC_END_FRACTION) {
             return pos;
         }
 
-        // Stage 2 — spiral: the ring corkscrews to the gather point over the water.
+        // Stage 2 — braided spiral: the tiered ring quantizes onto three co-rotating
+        // strand lanes, each dragging a comet tail, and the three streams weave around
+        // each other on the way to the gather point over the water. `weave` is a
+        // sin(pi q) bump, so q = 0 reproduces the stage-1 ring pose exactly and q = 1
+        // reproduces the old evenly-spread gather swirl exactly.
         double q = smoothstep((p - SYNC_END_FRACTION) / (GATHER_END_FRACTION - SYNC_END_FRACTION));
-        double spiralRadius = SYNC_RADIUS * (1.0D - q) + 2.5D * q;
-        double spiralAngle = ringAngle + q * q * Math.PI * 4.0D;
-        Vec3 spiralCenter = lerp(new Vec3(islandCenter.x, islandTop + SYNC_HEIGHT_ABOVE_TOP,
-                islandCenter.z), gather, q);
+        double weave = Math.sin(Math.PI * q);
+        double lanePhase = Math.floorMod(i, STRAND_COUNT) * (Math.PI * 2.0D / STRAND_COUNT);
+        // 0 = the head of this lane's comet, 1 = the last piece of its tail.
+        double tail = strandRank(i, count) * STRAND_TAIL_SPAN * weave;
+        double qEff = Math.max(0.0D, q - tail);
+        double laneAngle = lanePhase + Math.toRadians(SYNC_DEG_PER_TICK) * gameTime;
+        double spiralAngle = ringAngle
+                + wrapRadians(laneAngle - ringAngle) * weave * STRAND_QUANTIZE
+                // The corkscrew rides qEff, not q: a piece lagging in its comet tail is
+                // genuinely EARLIER in the spiral, so it must also whip slower. Driving
+                // it off q instead would spin the tail at full rate while it still sits
+                // out at ring radius — twice the arc per push window, for nothing.
+                + qEff * qEff * Math.PI * 4.0D
+                - tail * STRAND_TAIL_ARC;
+        double braid = BRAID_AMPLITUDE * weave;
+        double braidPhase = qEff * Math.PI * BRAID_TURNS + lanePhase;
+        double spiralRadius = tierRadius * (1.0D - qEff) + GATHER_RADIUS * qEff
+                + Math.sin(braidPhase) * braid;
+        Vec3 spiralCenter = lerp(new Vec3(islandCenter.x, islandTop + tierHeight,
+                islandCenter.z), gather, qEff);
         pos = new Vec3(
                 spiralCenter.x + Math.cos(spiralAngle) * spiralRadius,
-                spiralCenter.y,
+                spiralCenter.y + Math.cos(braidPhase) * braid,
                 spiralCenter.z + Math.sin(spiralAngle) * spiralRadius);
         if (p <= GATHER_END_FRACTION) {
             return pos;
@@ -350,29 +453,78 @@ public final class PortalFormation {
 
         // Stage 3 — build: staggered dives from the gather swirl onto the arch slots.
         double lock = buildBlend(seed, i, p);
-        Vec3 slot = archSlot(i, count, portalPos, altarPos);
+        Vec3 slot = archSlot(seed, i, count, portalPos, altarPos);
         return lerp(pos, slot, lock);
     }
 
-    /** 0..1 lock-in of piece {@code i} during the build stage (golden-hash stagger). */
+    /** Which sediment tier of the stage-1 ring a frozen piece scale belongs to. */
+    private static int tierOf(float scale) {
+        if (scale >= SYNC_TIER_HEAVY_SCALE) {
+            return 0; // heavy slab — the low, wide tier
+        }
+        return scale >= SYNC_TIER_MID_SCALE ? 1 : 2;
+    }
+
+    /** 0 (lane head) .. 1 (lane tail): how far back piece {@code i} rides its strand. */
+    private static double strandRank(int i, int count) {
+        int laneSize = Math.max(1, (count + STRAND_COUNT - 1) / STRAND_COUNT);
+        return Math.min(1.0D, (i / STRAND_COUNT) / (double) laneSize);
+    }
+
+    /** Shortest signed angular delta, so the lane quantization never takes the long way. */
+    private static double wrapRadians(double radians) {
+        double wrapped = radians % (Math.PI * 2.0D);
+        if (wrapped >= Math.PI) {
+            wrapped -= Math.PI * 2.0D;
+        } else if (wrapped < -Math.PI) {
+            wrapped += Math.PI * 2.0D;
+        }
+        return wrapped;
+    }
+
+    /**
+     * 0..1 lock-in of piece {@code i} during the build stage. FX-Wave-12 layers a
+     * DEPTH stagger and a KEYSTONE delay on top of the golden-hash jitter: the two inner
+     * depth layers lock before the two outer facing layers, and keystone pieces (which
+     * live on the crown) lock dead last, so the arch visibly closes on its crown.
+     */
     private static double buildBlend(long seed, int i, double p) {
         if (p <= GATHER_END_FRACTION) {
             return 0.0D;
         }
         double r = (p - GATHER_END_FRACTION) / (1.0D - GATHER_END_FRACTION);
-        double start = 0.7D * hash01(seed, i);
-        return smoothstep((r - start) / 0.3D);
+        double start = LOCK_JITTER_SPAN * hash01(seed, i)
+                + (isOuterLayer(i) ? LOCK_DEPTH_DELAY : 0.0D)
+                + (isKeystone(seed, i) ? LOCK_KEYSTONE_DELAY : 0.0D);
+        return smoothstep((r - start) / LOCK_WINDOW);
+    }
+
+    /** True for the two facing layers (|z| > 1) — they plate onto the locked core. */
+    private static boolean isOuterLayer(int i) {
+        return Math.abs(ARCH_LAYER_Z[Math.floorMod(i, ARCH_LAYER_Z.length)]) > 1.0D;
+    }
+
+    private static boolean isKeystone(long seed, int i) {
+        return DayRiftOrbits.scaleOf(seed, i) >= KEYSTONE_SCALE;
     }
 
     /**
-     * Slot of piece {@code i} on the gate silhouette: two jittered layers tracing the
-     * arch outline (up the left jamb, over the crown, down the right jamb), in world
-     * space through the gate yaw.
+     * Slot of piece {@code i} on the gate silhouette: FOUR jittered depth layers tracing
+     * the arch outline (up the left jamb, over the crown, down the right jamb), in world
+     * space through the gate yaw. Keystone-sized pieces skip the perimeter walk and are
+     * distributed across the crown arc on a golden-ratio sequence, so the lintel is
+     * always the heaviest masonry on the gate.
      */
-    private static Vec3 archSlot(int i, int count, BlockPos portalPos, BlockPos altarPos) {
+    private static Vec3 archSlot(long seed, int i, int count, BlockPos portalPos,
+            BlockPos altarPos) {
         float yaw = gateYaw(portalPos, altarPos);
-        double u = count <= 1 ? 0.0D : i / (double) count;
-        int layer = i % 2; // two depth layers so 350 pieces read as a massive jamb
+        double u;
+        if (isKeystone(seed, i)) {
+            u = 0.35D + 0.30D * goldenFraction(i);
+        } else {
+            u = count <= 1 ? 0.0D : i / (double) count;
+        }
+        int layer = Math.floorMod(i, ARCH_LAYER_Z.length);
         // Perimeter parameterization: 0..0.35 left jamb up, 0.35..0.65 crown arc,
         // 0.65..1.0 right jamb down.
         double lx;
@@ -391,7 +543,7 @@ public final class PortalFormation {
             lx = ARCH_HALF_WIDTH;
             ly = (1.0D - t) * (ARCH_HEIGHT_BLOCKS - 3.0D);
         }
-        double lz = (layer == 0 ? -0.8D : 0.8D);
+        double lz = ARCH_LAYER_Z[layer];
         // Deterministic jitter so the debris reads as rough masonry, not beads.
         RandomSource jitter = RandomSource.create(hashLong(0x517A_F045L + i * 7919L));
         lx += (jitter.nextDouble() - 0.5D) * 1.2D;
@@ -558,6 +710,12 @@ public final class PortalFormation {
     private static double smoothstep(double x) {
         x = Math.max(0.0D, Math.min(1.0D, x));
         return x * x * (3.0D - 2.0D * x);
+    }
+
+    /** Low-discrepancy 0..1 sequence — an even spread over any index subsequence. */
+    private static double goldenFraction(int i) {
+        double x = i * 0.6180339887498949D;
+        return x - Math.floor(x);
     }
 
     private static double hash01(long seed, int i) {
