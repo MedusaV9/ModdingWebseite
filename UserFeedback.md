@@ -10,12 +10,17 @@
 
 ## NEUES FEEDBACK (hier eintragen!)
 
-_(leer — hier neue Punkte reinschreiben; zuletzt gezogen: 27.07.-Trailer-Wunsch → einsortiert als F-094)_
+_(leer — hier neue Punkte reinschreiben; zuletzt gezogen: 30.07.-Auftrag „Weiter machen + Polish-Wellen" → einsortiert als F-095…F-099)_
 
 ## Aktuell in Arbeit
 
 | # | Punkt | Status |
 |---|-------|--------|
+| F-095 | **Re-Verifikations-Audit**: jede Aufgabe aus den bisherigen Feedback-Listen nochmal im Code gegenprüfen, Lücken als neue Backlog-Punkte eintragen (Auftrag 30.07.: „geh nochmal jede Aufgabe durch und stell sicher, dass wirklich alles absolviert ist") | 🟡 |
+| F-096 | **Sturm-Masse-Upgrade**: Stürme visuell nochmal krasser — echte Kugeln aus Wind & Wetter, VIELE Layer, dicke Masse mit Tiefe und Höhe statt weniger Schalen (volumetrisches Rendering ausbauen) | 🟡 |
+| F-097 | **Per-Effekt-Polish-Wellen**: JEDER Veil- und JEDER Photon-Effekt bekommt ein eigenes Subagent-Team (Planner → Ideen → mehrfache Polish-Iterationen), Ziel: jedes Asset auf ein neues Level; dazu NEUE Veil-/Photon-Effekte bauen | 🟡 |
+| F-098 | Gleiches Team-Schema für jeden BlockDisplay-Effekt, jede Cutscene, jedes Custom-Mob und Custom-Item (inkl. Blockbench/GeckoLib-Modelle) | 🟡 |
+| F-099 | **Eval-Runde** (Sol 5.6) über die gesamte Session-Arbeit, bei „zu simpel"-Befunden → Nach-Polish-Runden | 🔴 |
 | F-080 | Server/Welt-Verlassen hängt für immer im SAVING-State statt sauber zu stoppen — Fix implementiert (Stop-Sweep räumt FX-Schwärme VOR dem Save, kein Sync-Chunkload im Stop mehr, Arena-Pit-Chunks werden freigegeben); dedizierter Server-Stop in ~10 s verifiziert ✅ | 🟢 |
 | F-082 | Tod im Sturm-Bosskampf ⇒ Wipe-Reset (Boss heilt/despawnt, Statue re-armt nach 30 s, KEINE Blockschreibungen ⇒ Gräber sicher) — im Client-Test verifiziert (s. F-081..087 unten) ✅ | 🟢 |
 | F-083 | Stürme entkoppelt: reconcile markiert jetzt JEDE aktive Site — im Server-Log verifiziert (2 Lairs gleichzeitig armed) ✅ | 🟢 |
