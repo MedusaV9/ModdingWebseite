@@ -1,9 +1,12 @@
 package dev.projecteclipse.eclipse.entity;
 
 import java.util.EnumSet;
+import java.util.UUID;
 
 import javax.annotation.Nullable;
 
+import dev.projecteclipse.eclipse.entity.geo.EclipseGeoAnimations;
+import dev.projecteclipse.eclipse.entity.geo.EclipseGeoMob;
 import dev.projecteclipse.eclipse.network.S2CQuasarPayload;
 import dev.projecteclipse.eclipse.registry.EclipseSounds;
 import net.minecraft.core.BlockPos;
@@ -16,8 +19,9 @@ import net.minecraft.sounds.SoundSource;
 import net.minecraft.tags.DamageTypeTags;
 import net.minecraft.util.Mth;
 import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityEvent;
 import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.entity.ai.goal.LookAtPlayerGoal;
 import net.minecraft.world.entity.player.Player;
@@ -25,6 +29,9 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.network.PacketDistributor;
+import software.bernie.geckolib.animation.AnimationController;
+import software.bernie.geckolib.animation.AnimationState;
+import software.bernie.geckolib.animation.PlayState;
 
 /**
  * The Gazer — ambient watcher ({@code docs/ideas/04_content.md} §1.2). It never attacks and
@@ -37,13 +44,96 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * 20–40 blocks away inside the nearest player's peripheral vision (view dot 0.3–0.8), so
  * it is always <em>almost</em> in frame.</p>
  *
- * <p>Unkillable: any non-bypass damage makes it vanish instead ({@link #hurt}). At dawn it
+ * <p>Unkillable: any non-bypass damage makes it vanish instead ({@link #hurt}) — since the
+ * MC1 GeckoLib conversion with a short {@value #HURT_VANISH_DELAY_TICKS}t flinch
+ * ({@code hurt} one-shot) before the wisp puff, so the strike reads on the body. At dawn it
  * quietly fades (spawns are night-only, day 3+ — see {@link EclipseSpawner}). Ambient
  * whisper loop {@code eclipse:ambient.gazer_whisper} is a fixed-range 12-block sound.</p>
+ *
+ * <p><b>Presentation</b> (MC1 GeckoLib conversion): geo/anims/textures live under
+ * {@code geo/entity/gazer.geo.json}, {@code animations/entity/gazer.animation.json} and
+ * {@code textures/entity/gazer(.png|_glowmask.png)}, rendered by
+ * {@code client/entity/gazer/GazerGeoRenderer}. The {@code base} controller idles (the
+ * gazer never walks — teleport relocation must not flick {@code walk}, census trap F-9);
+ * the {@code action} controller carries {@code gaze_lock} (held pupil dilation),
+ * {@code tether_snap} (the recoil when the stare tether tears), {@code hurt} and the held
+ * {@code death}. The stare beat is driven by {@link #tickStareMirror}: a server-side
+ * mirror of the client {@code MobPhotonFxRows.GazeTetherWatcher} constants (lock cone
+ * {@value #LOCK_DEG}°, release cone {@value #RELEASE_DEG}°, {@value #LOCK_TICKS}t arm
+ * time, {@value #TETHER_RANGE}/{@value #RELEASE_RANGE}-block band) so the pupil dilates
+ * the same moment the client's {@code gazer_gaze_beam} thread arms, and the
+ * {@code tether_snap} twitch lands with the {@code gazer_tether_snap} tear-off FX.</p>
  */
-public class GazerEntity extends PathfinderMob {
+public class GazerEntity extends EclipseGeoMob {
+    /** Frozen §6 entity path — geo/anim/texture triple + animation ids key off this. */
+    public static final String GEO_ID = "gazer";
+    /** Held one-shot: the pupil dilates and the lids pin open while the stare is locked. */
+    public static final String ANIM_GAZE_LOCK = "gaze_lock";
+    /** One-shot: the gaze tether tears — iris slams dark, hood whips, body shudders. */
+    public static final String ANIM_TETHER_SNAP = "tether_snap";
+    /** One-shot: flinch played in the {@value #HURT_VANISH_DELAY_TICKS}t before a hurt-vanish. */
+    public static final String ANIM_HURT = "hurt";
+    /** Scripted death window (sheet: 30t — the lids close forever; bypass-kills only). */
+    public static final int DEATH_ANIM_TICKS = 30;
+    /** Flinch window between a (blocked) hit and the vanish puff. */
+    public static final int HURT_VANISH_DELAY_TICKS = 7;
+
+    // Server-side mirror of the client gaze-tether watcher (MobPhotonFxRows.
+    // GazeTetherWatcher) — SAME constants, so the gaze_lock/tether_snap anims land on
+    // the beats the FX derives client-locally. Do not tune these independently.
+    private static final double LOCK_DEG = 25.0D;
+    private static final double RELEASE_DEG = 45.0D;
+    private static final double LOCK_DOT = Math.cos(Math.toRadians(LOCK_DEG));
+    private static final double RELEASE_DOT = Math.cos(Math.toRadians(RELEASE_DEG));
+    private static final int LOCK_TICKS = 8;
+    private static final double TETHER_RANGE = 20.0D;
+    private static final double RELEASE_RANGE = 22.0D;
+
+    /** Player the hood's stare is currently arming/holding on (server only). */
+    @Nullable
+    private UUID stareTargetId;
+    private int stareTicks;
+    private boolean stareLocked;
+    /** Hurt-flinch countdown: > 0 means a vanish is pending ({@link #tick}). */
+    private int pendingVanishTicks;
+    @Nullable
+    private ServerPlayer pendingVanishMood;
+
     public GazerEntity(EntityType<? extends GazerEntity> entityType, Level level) {
         super(entityType, level);
+    }
+
+    // --- GeckoLib (frozen two-controller layout from EclipseGeoMob) ---
+
+    @Override
+    public String geoId() {
+        return GEO_ID;
+    }
+
+    @Override
+    protected void registerActionTriggers(AnimationController<?> action) {
+        super.registerActionTriggers(action); // death (played-and-held)
+        // gaze_lock HOLDS its dilated last frame — the stare is a state, not a beat; it
+        // is always resolved by tether_snap (every lock break fires one) or the discard.
+        action.triggerableAnim(ANIM_GAZE_LOCK, EclipseGeoAnimations.hold(GEO_ID, ANIM_GAZE_LOCK));
+        action.triggerableAnim(ANIM_TETHER_SNAP, EclipseGeoAnimations.once(GEO_ID, ANIM_TETHER_SNAP));
+        action.triggerableAnim(ANIM_HURT, EclipseGeoAnimations.once(GEO_ID, ANIM_HURT));
+    }
+
+    /**
+     * The gazer never walks (speed 0, relocation is teleport-only) — but a teleport IS a
+     * position delta, so both {@code state.isMoving()} and the plain DriftLantern delta
+     * check would flick {@code walk} for a frame on every relocation (census trap F-9).
+     * Gate the delta from above too: only a sub-block glide (external push, water) plays
+     * {@code walk}; a ≥half-block jump is a teleport and stays {@code idle}.
+     */
+    @Override
+    protected PlayState handleBaseState(AnimationState<?> state) {
+        double dx = this.getX() - this.xOld;
+        double dz = this.getZ() - this.zOld;
+        double driftSq = dx * dx + dz * dz;
+        boolean gliding = driftSq > 1.0E-5D && driftSq < 0.25D;
+        return state.setAndContinue(gliding ? walkAnim() : idleAnim());
     }
 
     @Override
@@ -57,27 +147,124 @@ public class GazerEntity extends PathfinderMob {
     @Override
     public void tick() {
         super.tick();
+        if (this.level().isClientSide || !this.isAlive()) {
+            return;
+        }
+        // Hurt-flinch window: the stare mirror pauses (the flinch anim owns the face)
+        // and the wisp puff fires when the countdown runs out (vanish() discards).
+        if (this.pendingVanishTicks > 0) {
+            if (--this.pendingVanishTicks == 0) {
+                this.vanish(this.pendingVanishMood);
+            }
+            return;
+        }
         // Night watcher: fade out quietly at dawn so gazers never accumulate into the day.
-        if (!this.level().isClientSide && this.isAlive() && this.level().isDay()) {
+        if (this.level().isDay()) {
             this.vanish(null);
+            return;
+        }
+        if (this.level() instanceof ServerLevel serverLevel) {
+            tickStareMirror(serverLevel);
         }
     }
 
-    /** Unkillable: damage (except /kill-style bypasses) makes it vanish instead. */
+    /**
+     * Server-side mirror of the client-local gaze-tether watcher: while the hood's look
+     * vector holds a player inside the {@value #LOCK_DEG}° cone (with line of sight,
+     * within the {@value #TETHER_RANGE}-block gate) for {@value #LOCK_TICKS}t, the stare
+     * LOCKS — {@code gaze_lock} dilates the pupil and holds it. The lock survives inside
+     * the wider {@value #RELEASE_DEG}°/{@value #RELEASE_RANGE}-block hysteresis band and
+     * BREAKS the first tick it leaves it — {@code tether_snap} twitches the hood the same
+     * tick the client watcher tears the thread FX. One canonical stare per gazer (the
+     * client watcher is per-observer; the hood only points one way, so the server picks
+     * the player it is actually looking at — the best-dot candidate).
+     */
+    private void tickStareMirror(ServerLevel level) {
+        ServerPlayer target = this.stareTargetId != null
+                ? level.getServer().getPlayerList().getPlayer(this.stareTargetId) : null;
+        if (target != null && !target.isRemoved() && !target.isSpectator()
+                && target.level() == level && holdsStare(target, this.stareLocked)) {
+            if (this.stareTicks < LOCK_TICKS && ++this.stareTicks >= LOCK_TICKS) {
+                this.stareLocked = true;
+                triggerAction(ANIM_GAZE_LOCK);
+            }
+            return;
+        }
+        if (this.stareLocked) {
+            // The cord recoils into the hood — same tick the client watcher fires the
+            // gazer_tether_snap FX for its own broken thread.
+            triggerAction(ANIM_TETHER_SNAP);
+        }
+        this.stareTargetId = null;
+        this.stareTicks = 0;
+        this.stareLocked = false;
+        // Acquire: the player the hood is actually staring down (best look-dot inside
+        // the arm cone, tether range and line of sight).
+        ServerPlayer best = null;
+        double bestDot = LOCK_DOT;
+        for (ServerPlayer player : level.players()) {
+            if (player.isSpectator()
+                    || this.distanceToSqr(player.position()) > TETHER_RANGE * TETHER_RANGE) {
+                continue;
+            }
+            Vec3 toPlayer = player.getEyePosition().subtract(this.getEyePosition());
+            if (toPlayer.lengthSqr() < 1.0E-4D) {
+                continue;
+            }
+            double dot = this.getLookAngle().dot(toPlayer.normalize());
+            if (dot >= bestDot && this.hasLineOfSight(player)) {
+                best = player;
+                bestDot = dot;
+            }
+        }
+        if (best != null) {
+            this.stareTargetId = best.getUUID();
+            this.stareTicks = 1;
+        }
+    }
+
+    /** Range gate + hysteretic stare cone + line of sight — the watcher's own math. */
+    private boolean holdsStare(ServerPlayer player, boolean locked) {
+        double gate = locked ? RELEASE_RANGE : TETHER_RANGE;
+        if (this.distanceToSqr(player.position()) > gate * gate) {
+            return false;
+        }
+        Vec3 toPlayer = player.getEyePosition().subtract(this.getEyePosition());
+        if (toPlayer.lengthSqr() < 1.0E-4D) {
+            return true; // inside its own head: no meaningful direction to break
+        }
+        double dot = this.getLookAngle().dot(toPlayer.normalize());
+        return dot >= (locked ? RELEASE_DOT : LOCK_DOT) && this.hasLineOfSight(player);
+    }
+
+    /**
+     * Unkillable: damage (except /kill-style bypasses) makes it vanish instead — with a
+     * {@value #HURT_VANISH_DELAY_TICKS}t {@code hurt} flinch first, so the strike reads
+     * on the body before the wisp puff swallows it.
+     */
     @Override
     public boolean hurt(DamageSource source, float amount) {
         if (source.is(DamageTypeTags.BYPASSES_INVULNERABILITY)) {
             return super.hurt(source, amount);
         }
-        if (!this.level().isClientSide && this.isAlive()) {
-            this.vanish(source.getEntity() instanceof ServerPlayer player ? player : null);
+        if (!this.level().isClientSide && this.isAlive() && this.pendingVanishTicks <= 0) {
+            triggerAction(ANIM_HURT);
+            // Drop any held stare SILENTLY (no tether_snap): the flinch replaces the
+            // gaze_lock hold on the action controller, so a snap fired after the flinch
+            // would pop from rest straight to the snap's dilated first frame.
+            this.stareTargetId = null;
+            this.stareTicks = 0;
+            this.stareLocked = false;
+            this.pendingVanishTicks = HURT_VANISH_DELAY_TICKS;
+            this.pendingVanishMood = source.getEntity() instanceof ServerPlayer player ? player : null;
         }
         return false;
     }
 
     /**
      * Despawn with a wisp puff; when {@code moodTarget} is given, only that player hears
-     * the cave-mood sting (the one who stared it down / struck it).
+     * the cave-mood sting (the one who stared it down / struck it). Instant discard — a
+     * broken stare tether is torn client-locally by the gaze watcher at the last seen eye.
      */
     public void vanish(@Nullable ServerPlayer moodTarget) {
         if (this.level() instanceof ServerLevel serverLevel) {
@@ -91,6 +278,32 @@ public class GazerEntity extends PathfinderMob {
             }
         }
         this.discard();
+    }
+
+    // --- death (bypass-kills only; scripted upright gutter-out, renderer zeroes the flip) ---
+
+    @Override
+    public void die(DamageSource damageSource) {
+        super.die(damageSource);
+        if (!this.level().isClientSide) {
+            triggerAction(EclipseGeoAnimations.ANIM_DEATH);
+        }
+    }
+
+    @Override
+    protected void tickDeath() {
+        this.deathTime++;
+        if (!(this.level() instanceof ServerLevel serverLevel)) {
+            return; // Client: the held death anim plays; deathTime is cosmetic here.
+        }
+        if (this.deathTime % 5 == 0) {
+            serverLevel.sendParticles(ParticleTypes.PORTAL,
+                    this.getX(), this.getY() + 1.2D, this.getZ(), 2, 0.2D, 0.4D, 0.2D, 0.02D);
+        }
+        if (this.deathTime >= DEATH_ANIM_TICKS && !this.isRemoved()) {
+            serverLevel.broadcastEntityEvent(this, EntityEvent.POOF);
+            this.remove(Entity.RemovalReason.KILLED);
+        }
     }
 
     /**
