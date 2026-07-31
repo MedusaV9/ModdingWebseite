@@ -156,9 +156,6 @@ func _process(delta: float) -> void:
 		_manual_hold_left = maxf(0.0, _manual_hold_left - delta)
 		if _manual_hold_left <= 0.0 and not _pan_active:
 			_manual_pan = false
-			# #region agent log
-			AgentDebug.log("C1", "camera_rig.gd:_process", "manual_end", {"pivot": _pivot})
-			# #endregion
 	var goal := _pivot
 	if _manual_pan:
 		goal = _pivot
@@ -232,22 +229,11 @@ func _finger_runter(index: int, pos: Vector2) -> void:
 	_pan_index = index
 	_pan_last = pos
 	_pan_active = false
-	# #region agent log
-	AgentDebug.log("C1", "camera_rig.gd:_finger_runter", "pan_down", {"pos": pos})
-	# #endregion
 
 
 func _finger_hoch(index: int) -> void:
 	_touches.erase(index)
 	if index == _pan_index:
-		# #region agent log
-		AgentDebug.log(
-			"C1",
-			"camera_rig.gd:_finger_hoch",
-			"pan_up",
-			{"was_active": _pan_active, "manual": _manual_pan, "pivot": _pivot}
-		)
-		# #endregion
 		_pan_index = -1
 		_pan_active = false
 
@@ -262,22 +248,6 @@ func _finger_zieht(index: int, pos: Vector2) -> void:
 		_pan_active = true
 		_manual_pan = true
 		_manual_hold_left = MANUAL_HOLD_S
-		# #region agent log
-		(
-			AgentDebug
-			. log(
-				"C1",
-				"camera_rig.gd:_finger_zieht",
-				"pan_start",
-				{
-					"pos": pos,
-					"origin": _pan_last,
-					"dist": _pan_last.distance_to(pos),
-					"pivot": _pivot,
-				}
-			)
-		)
-		# #endregion
 		_pan_screen(_pan_last, pos)
 	else:
 		var vorher: Vector2 = _touches.get(index, pos)

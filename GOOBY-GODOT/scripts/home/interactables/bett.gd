@@ -133,28 +133,6 @@ func _build_wake_entry(box: VBoxContainer, gs: Object) -> void:
 	var flat := Sleep.flat_of(gs.state())
 	var now := _now_ms()
 	var can := Sleep.can_wake_early(flat, now)
-	# #region agent log
-	(
-		AgentDebug
-		. log(
-			"H5",
-			"bett.gd:_build_wake_entry",
-			"wake_button_state",
-			{
-				"can_wake_early": can,
-				"sleeping": Sleep.is_sleeping(flat),
-				"started_at":
-				(
-					int(flat.get("sleep", {}).get("startedAt", 0))
-					if flat.get("sleep") is Dictionary
-					else 0
-				),
-				"now_ms": now,
-				"early_after_min": Sleep.EARLY_WAKE_AFTER_MIN,
-			}
-		)
-	)
-	# #endregion
 	if can:
 		wecken.pressed.connect(_on_wake_chosen)
 	else:
@@ -205,32 +183,6 @@ func start_sleep_flow(nap: bool) -> void:
 	else:
 		_say(I18nService.t("sleep.nap.los"))
 	var bed_node: Node3D = _furniture if _furniture != null else self
-	# #region agent log
-	(
-		AgentDebug
-		. log(
-			"H6",
-			"bett.gd:start_sleep_flow",
-			"sleep_flow_before_walk",
-			{
-				"nap": nap,
-				"bed_pos":
-				{
-					"x": bed_node.global_position.x,
-					"y": bed_node.global_position.y,
-					"z": bed_node.global_position.z
-				},
-				"bed_yaw": bed_node.global_rotation.y,
-				"gooby_before":
-				(
-					{"x": gooby.global_position.x, "z": gooby.global_position.z}
-					if gooby != null
-					else {}
-				),
-			}
-		)
-	)
-	# #endregion
 	if gooby != null:
 		gooby.set_wander_enabled(false)
 		await gooby.walk_to(bed_node.global_position + Vector3(0.0, 0.0, 0.6), 5.0)
@@ -239,39 +191,9 @@ func start_sleep_flow(nap: bool) -> void:
 		if gooby.get("rig") != null:
 			gooby.rig.set_emotion("sleepy")
 		gooby.play_clip("sleep")
-		# #region agent log
-		(
-			AgentDebug
-			. log(
-				"H6",
-				"bett.gd:start_sleep_flow",
-				"sleep_posed_before_state",
-				{
-					"gooby_after": {"x": gooby.global_position.x, "z": gooby.global_position.z},
-					"gooby_yaw": gooby.rig.rotation.y if gooby.get("rig") != null else -1.0,
-					"bed_yaw": bed_node.global_rotation.y,
-					"yaw_delta":
-					(
-						(gooby.rig.rotation.y - bed_node.global_rotation.y)
-						if gooby.get("rig") != null
-						else -1.0
-					),
-					"expected_yaw_offset": PI / 2.0,
-				}
-			)
-		)
-		# #endregion
 	var ok := {"ok": false}
 	var now := _now_ms()
 	gs.update(func(state: Dictionary) -> void: ok["ok"] = Sleep.start_sleep_state(state, now, nap))
-	# #region agent log
-	AgentDebug.log(
-		"H6",
-		"bett.gd:start_sleep_flow",
-		"sleep_state_after_pose",
-		{"nap": nap, "ok": bool(ok["ok"]), "now_ms": now}
-	)
-	# #endregion
 	if not bool(ok["ok"]):
 		_say(I18nService.t("sleep.bett.wach"))
 		if gooby != null:

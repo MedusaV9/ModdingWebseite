@@ -53,7 +53,6 @@ var _dev_trigger := DevTrigger.new()
 var _dev_dialog: Control
 var _preset_pick: OptionButton
 var _scroll_dragging := false
-var _scroll_log_armed := true
 
 @onready var _sections: VBoxContainer = %SectionsVBox
 @onready var _title: Label = %HeaderTitle
@@ -72,9 +71,6 @@ func _ready() -> void:
 		scroll.scroll_deadzone = 0
 		scroll.gui_input.connect(_on_scroll_gui_input)
 	_rebuild()
-	# #region agent log
-	_log_scroll("ready")
-	# #endregion
 
 
 ## FIX1: bei Resize/Rotation neu skalieren (nur wenn sich der Faktor
@@ -83,9 +79,6 @@ func _on_viewport_resized() -> void:
 	if _scroll_dragging:
 		return
 	if absf(UiScale.for_viewport(get_viewport()) - _f) > 0.01:
-		# #region agent log
-		AgentDebug.log("S3", "settings_screen.gd:resize", "rebuild", {})
-		# #endregion
 		_rebuild()
 
 
@@ -96,40 +89,8 @@ func _scroll() -> ScrollContainer:
 func _on_scroll_gui_input(event: InputEvent) -> void:
 	if event is InputEventScreenTouch:
 		_scroll_dragging = (event as InputEventScreenTouch).pressed
-		if not _scroll_dragging:
-			_scroll_log_armed = true
 	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		_scroll_dragging = event.pressed
-		if not _scroll_dragging:
-			_scroll_log_armed = true
-	# #region agent log
-	if _scroll_log_armed and (event is InputEventScreenDrag or event is InputEventMouseMotion):
-		_scroll_log_armed = false
-		_log_scroll("first_drag")
-	# #endregion
-
-
-func _log_scroll(phase: String) -> void:
-	var scroll := _scroll()
-	if scroll == null or _sections == null:
-		return
-	var content_h := _sections.get_combined_minimum_size().y
-	(
-		AgentDebug
-		. log(
-			"S1",
-			"settings_screen.gd:_log_scroll",
-			phase,
-			{
-				"scroll_h": scroll.size.y,
-				"content_min_h": content_h,
-				"scroll_y": scroll.scroll_vertical,
-				"can_scroll": content_h > scroll.size.y + 1.0,
-				"flags_v": _sections.size_flags_vertical,
-				"dragging": _scroll_dragging,
-			}
-		)
-	)
 
 
 ## Aktueller Wert (fuers HUD/Tests; Quelle: Autoload-Spiegel oder lokal).
@@ -242,9 +203,6 @@ func _rebuild() -> void:
 	_sections.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	if scroll != null:
 		scroll.set_deferred("scroll_vertical", keep_y)
-	# #region agent log
-	call_deferred("_log_scroll", "after_rebuild")
-	# #endregion
 
 
 ## FIX1: Chrome (Raender/Header/Sektions-Breite) an Faktor + Safe-Area ziehen.

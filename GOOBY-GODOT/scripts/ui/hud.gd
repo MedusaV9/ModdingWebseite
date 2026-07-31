@@ -277,29 +277,6 @@ func apply_layout(layout: HudLayoutLogic.Layout) -> void:
 	_scale_icon_button(_eye_button, f)
 	_gooby_chip.custom_minimum_size = Vector2(0.0, floor_px)
 	refresh_safe_area()
-	# #region agent log
-	var sample_btn: Button = _buttons.get(&"bau")
-	(
-		AgentDebug
-		. log(
-			"H2",
-			"hud.gd:apply_layout",
-			"hud_sizes_applied",
-			{
-				"layout": int(layout),
-				"f": f,
-				"floor_px": floor_px,
-				"column_width": _column_width,
-				"btn_design": DOCK_BTN if portrait else HudLayoutLogic.LANDSCAPE_BTN,
-				"icon_design": icon_base,
-				"stat_bar_w": STAT_BAR_MIN_W_PX if portrait else STAT_BAR_LANDSCAPE_W_PX,
-				"bau_min": sample_btn.custom_minimum_size if sample_btn else Vector2.ZERO,
-				"chip_min":
-				_chip_nodes[0].custom_minimum_size if not _chip_nodes.is_empty() else Vector2.ZERO,
-			}
-		)
-	)
-	# #endregion
 
 
 ## FIX1-Messpass fürs Cockpit (Ursache „Spalte läuft über beide Ränder“):

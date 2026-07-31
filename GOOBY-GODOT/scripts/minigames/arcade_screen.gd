@@ -358,56 +358,18 @@ func _on_back_pressed() -> void:
 		return
 	var router := get_node_or_null("/root/SceneRouter")
 	if router == null or not router.has_method("goto"):
-		# #region agent log
-		AgentDebug.log("H4", "arcade_screen.gd:_on_back", "no_router", {})
-		# #endregion
 		return
 	# Sheet zuerst (eine Geste = ein Panel). Danach IMMER die Arcade
 	# verlassen — handle_back_request() darf das NICHT schlucken, weil es
 	# bei Router._busy true zurückgibt ohne zu navigieren (H4-Befund).
 	if PanelStack.count() > 0:
 		PanelStack.close_top()
-		# #region agent log
-		AgentDebug.log(
-			"H4",
-			"arcade_screen.gd:_on_back",
-			"closed_panel_only",
-			{"panel_count_after": PanelStack.count()}
-		)
-		# #endregion
 		return
 	var used_history := false
 	if router.has_method("can_go_back") and router.can_go_back() and router.has_method("back"):
 		used_history = bool(router.back())
-	# #region agent log
-	(
-		AgentDebug
-		. log(
-			"H4",
-			"arcade_screen.gd:_on_back",
-			"back_pressed",
-			{
-				"used_history": used_history,
-				"can_go_back": router.can_go_back() if router.has_method("can_go_back") else false,
-				"busy": router.is_busy() if router.has_method("is_busy") else false,
-				"panel_count": PanelStack.count(),
-				"current":
-				str(router.get_current_target()) if router.has_method("get_current_target") else "",
-			}
-		)
-	)
-	# #endregion
 	if used_history:
 		return
 	var routes: Variant = router.get("_routes")
 	if routes is Dictionary and (routes as Dictionary).has(&"home"):
 		router.goto(&"home", {})
-	else:
-		# #region agent log
-		AgentDebug.log(
-			"H4",
-			"arcade_screen.gd:_on_back",
-			"home_alias_missing",
-			{"routes": routes.keys() if routes is Dictionary else []}
-		)
-		# #endregion

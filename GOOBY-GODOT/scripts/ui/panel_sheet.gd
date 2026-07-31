@@ -150,21 +150,6 @@ func _relayout() -> void:
 	_sheet.offset_top = rect.position.y
 	_sheet.offset_right = rect.position.x + rect.size.x
 	_sheet.offset_bottom = rect.position.y + rect.size.y
-	# #region agent log
-	(
-		AgentDebug
-		. log(
-			"S2",
-			"panel_sheet.gd:_relayout",
-			"sheet_scroll_geom",
-			{
-				"inner_h": inner_h,
-				"content_min_h": content_min.y,
-				"can_scroll": content_min.y > inner_h + 1.0,
-			}
-		)
-	)
-	# #endregion
 
 
 func _apply_scale(f: float) -> void:

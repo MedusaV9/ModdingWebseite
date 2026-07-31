@@ -204,31 +204,6 @@ func _apply_sleep_pose() -> void:
 				gooby.lie_on_bed(bed)
 			if not _sleep_posed:
 				gooby.play_clip("sleep")
-				# #region agent log
-				(
-					AgentDebug
-					. log(
-						"H6",
-						"pflege_runner.gd:_apply_sleep_pose",
-						"pose_applied_with_bed_snap",
-						{
-							"gooby_pos":
-							{"x": gooby.global_position.x, "z": gooby.global_position.z},
-							"gooby_yaw": gooby.rig.rotation.y if gooby.get("rig") != null else -1.0,
-							"bed_found": bed != null,
-							"bed_yaw": bed.global_rotation.y if bed != null else -1.0,
-							"walking":
-							bool(gooby.get("_walking")) if gooby.get("_walking") != null else false,
-							"wander":
-							(
-								bool(gooby.get("_wander_enabled"))
-								if gooby.get("_wander_enabled") != null
-								else false
-							),
-						}
-					)
-				)
-				# #endregion
 		_sleep_posed = true
 		_set_emotion("sleepy")
 	elif not sleeping and _sleep_posed and not _wake_running:
