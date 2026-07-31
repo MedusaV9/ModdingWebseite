@@ -159,6 +159,9 @@ func _make_row(rows: VBoxContainer, key: String, label_text: String) -> HBoxCont
 	label.text = label_text
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	# W14 (FB3-Audit): Autowrap — ohne treibt das LÄNGSTE Label die
+	# Karten-Mindestbreite über den Canvas (Hochformat lief 11 px über).
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	label.add_theme_font_size_override("font_size", int(AcTokens.FONT_SIZE_BODY * _tf))
 	row.add_child(label)
 	rows.add_child(row)
