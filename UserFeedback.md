@@ -17,40 +17,22 @@ schreibt dazu, WAS er gemacht hat.
 
 ## 1. Neu von dir
 
-Das Gesammte UI ist hässlich null gleich und es sieht halt dazu auch noch null gut aus ich will das du das gesammte UI einmal ein Rework machst. Ein full Rework schau dir an wie Buttons in der nicht Godot Version davor aussahen etc und versuche den Stil wieder besser zu treffen überarbeite auch das sich zb notifactions und so nicht mit Goobys Text bubble unten überschenidet. Verbessere das gesammte UI im Spiel ich will wie gesagt einen full rework und dann sollst du den UI Stil von Animal Crossing new Horizons besser nachmachen also ich will zb so animierte Runde süße Sprechblasen ich will das die Knöpfe haptisches Feedback haben etc 
-Ich will das du einmal jedes UI Reworken tust jedes also auch Settings, Arcade etc
-
-Ich will das für Sachen wie Lieferungen etc zb auch Dynamic Island genutzt wird damit man sieht wie lange noch bzw. das live activities genutzt werden 
-
-ich will das du ein Gooby Widget hinzufügen tust das man bei IOS auf seinem Homscreen haben kann in verschiedenen Größen wo man seinen Gooby sieht plus einen Text was der so redet halt bzw das man dort zb auch sieht wenn gooby hingefallen ist etc und das man dort auch seine Stats sieht wie es ihm geht etc baue das vollständig mit in die App ein und mach das wirklich perfekt ist und niedlich als auch cool und das man es recht viel in den Settings auch noch mehr anpassen kann was dort landet welches Farb Schema etc 
-
-Gehe nochmal mit jeweils pro Spiel 5 Fable 5 Max Thinking Subagents durch und bewerte jedes Soiel einzeln komplett und dann verbessere jedes und stelle sicher das es unsere Qualität Standards vollständig erreichen tust und übertriffst
-
-die Stadt ist noch nicht perfekt 
-
-Beim freien rumschauen im Haus sollte es keine Decke im weg geben…
-
-Viele Minispiele sind irgendwie komisch aufgebaut
-
-Ich will das man Gooby im Urlaub mit begleitet und dort immer Sachen mit erlebt und ganz viele neue Bereiche etc 
-
-ich will das du einmal mehr Features und mehr spiele und mehr zu tun und einfach mehr niedliche Dinge einbaust
-
-der Kühlschrank muss auch verbessert werden ich will das die Objekte dort besser angezeigt werden und das man so eine richtige Gooby muss gefüttert werden Interaktion hat
-
-in meinen DEV Tools fehlt gefühlt alles plus ich brauche noch mehr DEV Tools Sachen und ich will das man in Settings (auch ohne dev) den Server eintragen kann unter „Mehrspieler“ und dann muss man dort den Server mit Port und Secret eingeben. Dann soll der Client darüber alles tun etc 
-
-der Ladebildschirm muss wieder so wie vorher in der nicht Godot Version sein. Der jetzige Ladebildschirm sieht traurig aus generiere volle passende Bilder und mach auch so Effekte und mach ganz am Anfang beim Rein laden wo es ja am längsten dauert so ein Querformat Coverartwork mit ladebalken unten und dann eine Animation wenn’s ins Spiel geht 
-
-Es ist vieles noch unpolished, fühlt sich einfach nicht clean und ordentlich an das meiste Spielt sich mehr wie eine Test Alpha statt wie ein richtiges Spiel.
-
-Ich will das du ein weiteres Riesen DLC Desingnen tust (in Settings soll es „DLC“ Bereich geben wo alle DLCs aufgelistet sind mit ihren Coverarts samt dem Namen und so einer Art DLC Info ohne zu viel zu Spoilern ich will das du zwei neue Riesen DLCs baust, ich will das Gooby einen eigenen Supermarkt mit Mitarbeitern und Ware transportieren und auch selber bauen etc haben kann der „Goo und Bye” und das man auch einen „McGooby“ haben kann also es sollen halt zwei Riesen DLCs sein in dem einem hat man einen eigenen Supermarkt/Einkaufsladen und muss den Managern und bauen etc alles und das zweite neue DLC soll sein das man einen eigenen Fast Food Laden der wie McDonald’s und Bürger King ist,er soll McGooby heißen bitte nutze nun 20 Ideen Sammler Subagents Fable 5 Max Thinkin gPro DLC und dann baue und verbessere und polishe immer weiter du kennst ja unseren Loop. 
-
-Baue mehr verschiedene „Voice“ und „Text“ Linies und interactions zwischen dem Spieler und Gooby ein und mach das Spiel dadurch noch lebendiger und toller und schöner sowie witziger 
-
-
 > **Hier reinschreiben.** Stichworte reichen, z. B. „HUD im Querformat zu weit links"
 > oder „Taxi-Sound zu laut". Der Agent hakt sie ab und schreibt dazu, was er gemacht hat.
+
+_(Deine Meldungen vom 31. Juli sind angekommen — alle unten in „In Arbeit" übernommen, Runde W14 läuft.)_
+
+- [~] **UI-Full-Rework (ACNH-Stil, animierte runde Sprechblasen, Haptik, alle Screens inkl. Settings/Arcade, Notification/Bubble-Überschneidung)** — Runde W14, drei UI-Agents (Kern-Komponenten + alle Screens in zwei Gruppen)
+- [~] **Ladebildschirm wie früher** (Querformat-Coverartwork mit Ladebalken beim Erststart + Übergangs-Animation) — Coverart wird generiert, Agent baut den Flow
+- [~] **Kühlschrank-Rework** (Objekte richtig angezeigt, echte Fütter-Interaktion) + **mehr Voice-/Text-Lines**
+- [~] **Decke beim freien Umschauen ausblenden** + **Stadt-Feinschliff**
+- [~] **Mehrspieler-Settings** (Server + Port + Secret ohne Dev-Modus) + **DEV-Tools-Ausbau**
+- [~] **DLC-Bereich in den Settings** (alle DLCs mit Coverart + Info) + **Design der zwei neuen Riesen-DLCs „Goo und Bye" (Supermarkt) & „McGooby" (Fast-Food)** — Ideen-Sammler laufen; die DLCs selbst sind Mehr-Runden-Projekte, diese Runde liefert Konzept + DLC-Hub + Coverarts
+- [~] **Minispiel-Qualitätspass** — Bewertung + Verbesserung in Gruppen (ehrlich: 5 Agents pro Spiel × 37 Spiele sprengt eine Runde; die schwächsten Spiele werden zuerst einzeln poliert, weitere folgen jede Runde)
+- [~] **Urlaub begleiten** (Gooby im Urlaub besuchen, neue Bereiche) — Konzept + erster Ausbau
+- [-] **Dynamic Island / Live Activities + iOS-Homescreen-Widget** — braucht native Extensions, die nur in einer SIGNIERTEN App auf echtem Gerät laufen (unsignierte Sideload-.ipa kann keine Widget-/ActivityKit-Extension registrieren). Diese Runde: sauberes Scaffold + Doku, damit es beim Signing sofort scharf geht. Nicht vergessen — nur ehrlich zurückgestellt.
+
+---
 
 _(gerade nichts offen — alle bisherigen Punkte stehen unten unter „Erledigt")_
 
