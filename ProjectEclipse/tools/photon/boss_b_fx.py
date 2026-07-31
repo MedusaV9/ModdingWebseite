@@ -9,6 +9,8 @@ IDEAS-boss.md #2, #6, #3, #7):
     eclipse:boss/fog_debris_puff          (#2 FirstCollision sub-emitter child)
     eclipse:boss/tyrant_blind_burst       (#6 releaseSquall HDR flash)
     eclipse:boss/warden_eye_laser         (#3 beam_emitter volley telegraph, raycast BLOCKS)
+    eclipse:boss/warden_laser_impact      (#3 FirstCollision child — glow burst at the
+                                           raycast endpoint)
     eclipse:boss/warden_glitch_orbit      (#7 REVERSE_SUB/MAX stagger orbit, 40t)
 
 Plus the three textures those concepts need (deterministic, seeded — safe to re-run):
@@ -31,8 +33,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from fxlib import (  # noqa: E402
     BLEND_ADDITIVE, BLEND_ALPHA, FX_ASSETS_DIR, REPO_ROOT, SEG_EASE_OUT_CREST,
     SEG_LINEAR_DOWN, SEG_LINEAR_UP,
-    FxBuilder, blend, box, circle, burst, color, constant, curve, dot, gradient, nf3,
-    random_between, random_curve, sphere, sub_emitter, texture_material, validate_file,
+    FxBuilder, blend, box, circle, burst, color, constant, curve, dot, function_shape,
+    gradient, nf3, random_between, random_curve, sphere, sub_emitter, texture_material,
+    validate_file,
 )
 
 TEXTURE_DIR = REPO_ROOT / "src/main/resources/assets/eclipse/textures/particle"
@@ -250,8 +253,10 @@ def build_warden_eye_laser() -> FxBuilder:
                           [(0.0, 0.75, 0.3, 1.0), (1.0, 0.3, 0.1, 0.5)]))
     # Thin flicker -> committed beam right before release (constructor only takes scalars).
     beam._config["width"] = curve(0.04, 0.28, [(0.0, 0.15, 0.55, 0.35, 0.9, 1.0, 1.0, 1.0)])
+    # FX-Wave-13 HDR law (<= ~1.45 per channel): the old (2.0, 0.9, 3.0) is rescaled by
+    # 1.45/3.0 so the violet hue is untouched and only the bloom drive comes down.
     (beam.with_material(texture_material("eclipse:textures/particle/beam_core.png",
-                                         hdr=(2.0, 0.9, 3.0), blend=BLEND_ADDITIVE))
+                                         hdr=(0.97, 0.43, 1.45), blend=BLEND_ADDITIVE))
          .with_uv_animation(tiles=(1, 4), animation="SingleRow",
                             frame_over_time=curve(0.0, 1.0, [SEG_LINEAR_UP]))
          .with_lights(sky=15, block=15)
@@ -268,12 +273,128 @@ def build_warden_eye_laser() -> FxBuilder:
        .with_emission(rate=constant(2.5))
        .with_shape(sphere(radius=0.9, thickness=0.0))
        .with_material(texture_material("photon:textures/particle/circle.png",
-                                       hdr=(1.5, 0.8, 2.2), blend=BLEND_ADDITIVE))
+                                       hdr=(0.99, 0.53, 1.45), blend=BLEND_ADDITIVE))
        .with_cull_box((-1.0, -1.0, -26.0), (1.0, 3.0, 1.0))
        .with_curves(
             velocity_over_lifetime=dict(radial=constant(-0.5)),
             color_over_lifetime=gradient([(0.0, 0.9), (1.0, 0.0)],
                                          [(0.0, 0.75, 0.5, 1.0), (1.0, 0.5, 0.2, 0.8)])))
+
+    # FX-Wave-13 A4 — the beam already terminates on blocks, but a raycast-clipped
+    # BeamEmitter has no hook at its own endpoint (BeamConfig carries no sub-emitters),
+    # so the impact is stamped by a PROBE: three bolt heads ride the same local −Z the
+    # beam is drawn along and die on the first block they touch — which is by
+    # construction the pixel the beam ends on. `FirstCollision` then spawns the glow
+    # burst there. No hit inside 24 b (open sky) = probe expires mid-air = no stamp,
+    # which is exactly the wanted behaviour.
+    #
+    # SPEED UNITS (jar-verified, and the reason the first cut of this never fired):
+    # `Function.nextPosVel` normalises the speed vector to 0.05 and `TileParticle`
+    # then multiplies by `startSpeed` — so every Photon speed/velocity number is in
+    # BLOCKS PER SECOND, not per tick. 48 b/s = 2.4 b/t clears the 24-block reach in
+    # 10 ticks; the collision test is vanilla `Entity.collideBoundingBox`, which
+    # sweeps the movement vector, so 2.4 b/t cannot tunnel a 1-block wall.
+    # parallelUpdate off is the collision law (FX_FORMAT §3.1 / LINT-GPU-PHYSICS).
+    (fx.particle_emitter(
+            "laser_probe",
+            duration=20, looping=False, max_particles=6,
+            start_lifetime=constant(12),  # 12t x 2.4 b/t = 28.8 b > the 24 b reach
+            start_speed=constant(48.0),   # 48 b/s = 2.4 b/t
+            start_size=nf3(0.16, 0.16, 0.16),
+            simulation_space="World", parallel_update=False)
+       .with_emission(rate=constant(0.0),
+                      bursts=[burst(time=1, count=constant(1)),
+                              burst(time=8, count=constant(1)),
+                              burst(time=14, count=constant(1))])
+       # Pure local −Z launch: the row's `withRotationDeg(0, 180 − yaw, 0)` turns that
+       # into the warden's facing, the same alignment the beam quad is drawn on.
+       .with_shape(function_shape(speed_z="-1"))
+       .with_material(texture_material("photon:textures/particle/circle.png",
+                                       hdr=(1.3, 0.6, 1.45), blend=BLEND_ADDITIVE))
+       .with_renderer(render_mode="StretchedBillboard", velocity_scale=0.5, length_scale=2.2,
+                      vertex_sorting="NONE")
+       .with_cull_box((-2.0, -2.0, -28.0), (2.0, 4.0, 2.0))
+       .with_physics(collision=True, removed_when_collided=True, gravity=0.0,
+                     friction=1.0, bounce_chance=0.0)
+       .with_sub_emitters(sub_emitter("eclipse:boss/warden_laser_impact",
+                                      event="FirstCollision", probability=1.0))
+       .with_curves(
+            color_over_lifetime=gradient([(0.0, 0.85), (0.75, 0.6), (1.0, 0.0)],
+                                         [(0.0, 0.85, 0.6, 1.0), (1.0, 0.55, 0.2, 0.9)])))
+    return fx
+
+
+def build_warden_laser_impact() -> FxBuilder:
+    """FirstCollision child of `laser_probe`: the burn mark where the eye laser lands.
+
+    Stamped up to 3x per telegraph, so the whole file is budgeted at the LINT-SUBEM-FAT
+    ceiling (8 burst particles total) — a flash, a rim ring and six skittering sparks.
+    """
+    fx = FxBuilder("boss/warden_laser_impact")
+    cull = ((-4.0, -4.0, -4.0), (4.0, 4.0, 4.0))
+
+    # The hit itself: one hot bloom that punches open and decays.
+    (fx.particle_emitter(
+            "impact_flash",
+            duration=10, looping=False, max_particles=2,
+            start_lifetime=constant(9), start_speed=constant(0),
+            start_size=nf3(1.5, 1.5, 1.5), simulation_space="World")
+       .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(1))])
+       .with_shape(dot())
+       .with_material(texture_material("photon:textures/particle/circle.png",
+                                       hdr=(1.4, 0.7, 1.45), blend=BLEND_ADDITIVE))
+       .with_renderer(vertex_sorting="NONE")
+       .with_cull_box(*cull)
+       .with_curves(
+            size_over_lifetime=curve(0.25, 1.0, [SEG_EASE_OUT_CREST], "lifetime", "size"),
+            color_over_lifetime=gradient(
+                [(0.0, 1.0), (0.3, 0.75), (1.0, 0.0)],
+                [(0.0, 1.0, 0.92, 1.0), (0.45, 0.7, 0.32, 1.0), (1.0, 0.4, 0.14, 0.7)]))
+       .with_lights(sky=15, block=15))
+
+    # Contact rim: the soft ring texture flares out flat across whatever was hit.
+    (fx.particle_emitter(
+            "impact_rim",
+            duration=14, looping=False, max_particles=2,
+            start_lifetime=constant(12), start_speed=constant(0),
+            start_size=nf3(1.0, 1.0, 1.0), simulation_space="World")
+       .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(1))])
+       .with_shape(dot())
+       .with_material(texture_material("eclipse:textures/particle/ring_soft.png",
+                                       hdr=(1.1, 0.5, 1.45), blend=BLEND_ADDITIVE))
+       .with_renderer(vertex_sorting="NONE")
+       .with_cull_box(*cull)
+       .with_curves(
+            size_over_lifetime=curve(0.0, 3.4, [(0.0, 0.08, 0.2, 0.85, 0.55, 1.0, 1.0, 1.0)],
+                                     "lifetime", "size"),
+            color_over_lifetime=gradient(
+                [(0.0, 0.85), (0.5, 0.45), (1.0, 0.0)],
+                [(0.0, 0.9, 0.7, 1.0), (1.0, 0.45, 0.16, 0.8)])))
+
+    # Splash-back sparks that skitter along the surface (collision on, no bounce loss).
+    # Speed in b/s (see the laser_probe note): 5-11 b/s = 0.25-0.55 b/t, so a spark
+    # covers 2-8 blocks over its 8-15t life before friction and gravity fold it down.
+    (fx.particle_emitter(
+            "impact_sparks",
+            duration=12, looping=False, max_particles=10,
+            start_lifetime=random_between(8, 15), start_speed=random_between(5.0, 11.0),
+            start_size=nf3(random_between(0.04, 0.09), random_between(0.04, 0.09),
+                           random_between(0.04, 0.09)),
+            simulation_space="World", parallel_update=False)
+       .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(6))])
+       .with_shape(sphere(radius=0.25, thickness=1.0))
+       .with_material(texture_material("photon:textures/particle/circle.png",
+                                       hdr=(1.2, 0.6, 1.45), blend=BLEND_ADDITIVE))
+       .with_renderer(render_mode="StretchedBillboard", velocity_scale=0.8, length_scale=1.6,
+                      vertex_sorting="NONE")
+       .with_cull_box(*cull)
+       .with_physics(collision=True, removed_when_collided=False, friction=0.96,
+                     collided_friction=0.6, gravity=0.35, bounce_chance=0.6,
+                     bounce_rate=0.3, bounce_spread=0.2)
+       .with_curves(
+            color_over_lifetime=gradient(
+                [(0.0, 1.0), (0.65, 0.7), (1.0, 0.0)],
+                [(0.0, 1.0, 0.9, 1.0), (0.5, 0.72, 0.34, 1.0), (1.0, 0.35, 0.1, 0.6)])))
     return fx
 
 
@@ -410,6 +531,7 @@ BUILDERS = {
     "boss/fog_debris_puff.fx": build_fog_debris_puff,
     "boss/tyrant_blind_burst.fx": build_tyrant_blind_burst,
     "boss/warden_eye_laser.fx": build_warden_eye_laser,
+    "boss/warden_laser_impact.fx": build_warden_laser_impact,
     "boss/warden_glitch_orbit.fx": build_warden_glitch_orbit,
 }
 

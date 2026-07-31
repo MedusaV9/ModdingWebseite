@@ -25,8 +25,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from fxlib import (  # noqa: E402
-    BLEND_ADDITIVE, FX_ASSETS_DIR, REPO_ROOT, FxBuilder, burst, circle, constant, curve,
-    cylinder, dot, gradient, nf3, random_between, texture_material, validate_file,
+    BLEND_ADDITIVE, BLEND_ALPHA, FX_ASSETS_DIR, REPO_ROOT, SEG_DECAY_TAIL,
+    SEG_EASE_OUT_CREST, FxBuilder, burst, circle, constant, curve, cylinder, dot,
+    function_shape, gradient, nf3, random_between, random_gradient, sphere,
+    texture_material, validate_file,
 )
 
 BOSS_FX_DIR = FX_ASSETS_DIR / "boss"
@@ -39,6 +41,29 @@ GLYPH = "eclipse:textures/particle/herald_glyph.png"
 
 # Herald violet-white, the palette the roar ring and shard trail already use.
 VIOLET_WHITE = ((0.0, 0.9, 0.8, 1.0), (1.0, 0.45, 0.2, 0.7))
+
+# ---------------------------------------------------------------------------
+# FX-Wave-13 A4 — Herald silhouette reveal (census §5: "the boss is suddenly just
+# THERE"). The beats live INSIDE herald_summon_pillar rather than behind a new cue:
+# the pillar is already fired once, at a known tick, at a known point, so every beat
+# below is just a `startDelay` off that one spawn — no FxCues.java edit, no second
+# broadcast, and a photon-less client is unaffected.
+#
+# Geometry (HeraldSummonSequence + HeraldsLureItem/DevEventCommands + HeraldEntity):
+#   fx origin  = Run.center      = (altar.x, groundY, altar.z)
+#   hover slot = Run.hover.y     = altarPos.getY() + HeraldEntity.SUMMON_HEIGHT
+#   altarPos.getY()              = groundY + AltarSanctumBuilder.ALTAR_ABOVE_GROUND
+#   => hover is a FIXED  4 + 12 = 16 blocks above the fx origin on BOTH spawn paths.
+#
+# Timing (all HeraldSummonSequence constants, minus PILLAR_TICK = 15):
+#   SILHOUETTE_TICK  55 -> fx  40   the fog closes and the backlight comes up
+#   MATERIALIZE_TICK 130 -> fx 115   the curtain PARTS, backlight flares
+#   SPAWN_TICK       150 -> fx 135   the real entity takes over
+# ---------------------------------------------------------------------------
+HOVER_Y = 16.0
+REVEAL_TICK = 40
+PART_TICK = 115
+HANDOFF_TICK = 135
 
 
 # ---------------------------------------------------------------------------
@@ -113,7 +138,7 @@ def build_herald_summon_pillar() -> FxBuilder:
        .with_emission(rate=constant(0.0),
                       bursts=[burst(time=0, count=1, cycles=1, probability=1.0)])
        .with_shape(dot())
-       .with_material(texture_material(CIRCLE, hdr=(1.7, 1.1, 2.4), blend=BLEND_ADDITIVE))
+       .with_material(texture_material(CIRCLE, hdr=(1.03, 0.66, 1.45), blend=BLEND_ADDITIVE))
        .with_renderer(render_mode="VerticalBillboard", vertex_sorting="NONE")
        .with_cull_box((-6.0, -1.0, -6.0), (6.0, 30.0, 6.0))
        .with_curves(
@@ -163,7 +188,7 @@ def build_herald_summon_pillar() -> FxBuilder:
        .with_emission(rate=constant(0.0),
                       bursts=[burst(time=0, count=1, cycles=1, probability=1.0)])
        .with_shape(dot())
-       .with_material(texture_material(RING_SOFT, hdr=(1.5, 1.0, 2.1), blend=BLEND_ADDITIVE))
+       .with_material(texture_material(RING_SOFT, hdr=(1.04, 0.69, 1.45), blend=BLEND_ADDITIVE))
        .with_renderer(render_mode="Horizontal", facing_mode="DEFAULT", shade=False,
                       vertex_sorting="NONE")
        .with_cull_box((-24.0, -2.0, -24.0), (24.0, 8.0, 24.0))
@@ -172,7 +197,202 @@ def build_herald_summon_pillar() -> FxBuilder:
                                      "lifetime", "size"),
             color_over_lifetime=gradient([(0.0, 0.9), (0.6, 0.5), (1.0, 0.0)],
                                          list(VIOLET_WHITE))))
+
+    add_silhouette_reveal(fx)
     return fx
+
+
+# ---------------------------------------------------------------------------
+# The reveal itself (see the beat/geometry block at the top of the file).
+# ---------------------------------------------------------------------------
+def _spindle_shape():
+    """Crowned-godhead spindle around the hover slot, in Photon's expression language.
+
+    `HeraldSummonSequence.profileRadius` is a 3-branch piecewise; the same silhouette
+    without conditionals is a half-sine (torso bulge) tapered linearly toward the crown:
+    r(t) = (0.35 + 0.95·sin(πt))·(1 − 0.5t) — 0.35 at the feet, ~1.0 across the
+    shoulders, 0.18 at the crown. `randomA` scatters the azimuth over the full circle.
+    """
+    radius = "(0.35+0.95*sin(t*PI))*(1.0-0.5*t)"
+    return function_shape(
+        x=f"{radius}*cos(randomA*2*PI)",
+        y=f"{HOVER_Y - 2.3}+t*4.6",
+        z=f"{radius}*sin(randomA*2*PI)",
+        speed_y="0.01+0.02*randomB")
+
+
+def add_silhouette_reveal(fx: FxBuilder) -> None:
+    """Fog curtain -> backlight -> dark body -> the curtain parts."""
+    cull = ((-12.0, -2.0, -12.0), (12.0, 26.0, 12.0))
+
+    # 1. Backlight. One tall violet-white quad centred on the hover slot: the boss
+    #    materialises INSIDE it, so the halo that survives around the model's outline
+    #    is what turns an unlit body into a readable silhouette. Two bursts — the slow
+    #    swell while the fog is closed, and the flare on the part beat.
+    (fx.particle_emitter(
+            "reveal_backlight",
+            duration=HANDOFF_TICK - REVEAL_TICK + 10, looping=False,
+            start_delay=constant(REVEAL_TICK), max_particles=4,
+            start_lifetime=constant(78), start_speed=constant(0.0),
+            start_size=nf3(7.0, 10.0, 7.0), simulation_space="World")
+       .with_emission(rate=constant(0.0),
+                      bursts=[burst(time=0, count=constant(1)),
+                              burst(time=PART_TICK - REVEAL_TICK, count=constant(1))])
+       .with_shape(dot(), position=nf3(0, HOVER_Y, 0))
+       .with_material(texture_material(CIRCLE, hdr=(1.15, 0.7, 1.45), blend=BLEND_ADDITIVE))
+       .with_renderer(render_mode="VerticalBillboard", vertex_sorting="NONE", shade=False)
+       .with_cull_box(*cull)
+       .with_curves(
+            # Comes up slowly (the light behind the fog), holds, blows out at the end.
+            size_over_lifetime=curve(
+                0.35, 1.0, [(0.0, 0.1, 0.35, 0.28, 0.6, 0.85, 0.75, 1.0),
+                            (0.75, 1.0, 0.85, 1.0, 0.94, 0.45, 1.0, 0.0)],
+                "lifetime", "size"),
+            color_over_lifetime=gradient(
+                [(0.0, 0.0), (0.35, 0.35), (0.7, 0.7), (0.88, 0.5), (1.0, 0.0)],
+                [(0.0, 0.55, 0.3, 0.85), (0.55, 0.85, 0.62, 1.0), (1.0, 1.0, 0.9, 1.0)]))
+       .with_lights(sky=15, block=15))
+
+    # 2. Fog curtain. A dark, slowly rotating smoke wall standing in FRONT of the
+    #    backlight — alpha-blended and near-black at birth (wave-13 dark-birth law), so
+    #    it subtracts detail instead of adding glow. DISTANCE sorting: it is the one
+    #    translucent stack in the file and it overlaps itself constantly.
+    (fx.particle_emitter(
+            "reveal_fog_curtain",
+            duration=PART_TICK - REVEAL_TICK, looping=False,
+            start_delay=constant(REVEAL_TICK), max_particles=34,
+            start_lifetime=random_between(34, 52), start_speed=constant(0.0),
+            start_size=nf3(random_between(2.2, 3.4)), simulation_space="World")
+       .with_emission(rate=constant(0.9),
+                      bursts=[burst(time=0, count=constant(10))])
+       .with_shape(cylinder(radius=3.1, thickness=0.3, arc_mode="Random"),
+                   position=nf3(0, HOVER_Y - 0.4, 0), scale=nf3(1.0, 5.6, 1.0))
+       .with_material(texture_material(SMOKE, discard=0.02, blend=BLEND_ALPHA))
+       .with_renderer(vertex_sorting="DISTANCE", shade=False)
+       .with_cull_box(*cull)
+       .with_curves(
+            velocity_over_lifetime=dict(
+                linear=nf3(constant(0), random_between(0.3, 0.9), constant(0)),
+                orbital_mode="AngularVelocity",
+                # b/s again: 0.9 rad/s turns the curtain ~a third of a revolution over
+                # the 75t it is closed — a drift, not a carousel.
+                orbital=nf3(constant(0), constant(0.9), constant(0)),
+                offset=nf3(0), radial=constant(-0.25)),
+            rotation_over_lifetime=dict(roll=random_between(-1.4, 1.4)),
+            noise=dict(frequency=0.35, quality="Noise2D",
+                       position=nf3(constant(0.05), constant(0.03), constant(0.05))),
+            # Umbral near-black in, a hint of bruised violet out — never brightens.
+            color_over_lifetime=gradient(
+                [(0.0, 0.0), (0.2, 0.82), (0.72, 0.7), (1.0, 0.0)],
+                [(0.0, 0.04, 0.02, 0.07), (0.45, 0.1, 0.05, 0.16),
+                 (1.0, 0.17, 0.09, 0.26)])))
+
+    # 3. The body. Dark alpha motes filling the same crowned spindle the vanilla
+    #    SOUL_FIRE_FLAME rings trace (HeraldSummonSequence.profileRadius) — the vanilla
+    #    pass draws the OUTLINE in light, this one fills it in with shadow so the shape
+    #    is a hole in the backlight rather than a sparkle cloud.
+    (fx.particle_emitter(
+            "reveal_silhouette",
+            duration=HANDOFF_TICK - REVEAL_TICK - 12, looping=False,
+            start_delay=constant(REVEAL_TICK), max_particles=110,
+            start_lifetime=random_between(16, 28), start_speed=constant(0.0),
+            start_size=nf3(random_between(0.5, 0.95)), simulation_space="World")
+       .with_emission(rate=constant(3.0), bursts=[burst(time=0, count=constant(14))])
+       .with_shape(_spindle_shape())
+       .with_material(texture_material(SMOKE, discard=0.02, blend=BLEND_ALPHA))
+       .with_renderer(vertex_sorting="DISTANCE", shade=False)
+       .with_cull_box(*cull)
+       .with_curves(
+            # Scatter tightens toward the materialise beat, mirroring the server-side
+            # SILHOUETTE_SPREAD_START ramp: the noise the shape is built from calms down.
+            noise=dict(frequency=0.6, quality="Noise3D",
+                       position=nf3(curve(0.02, 0.16, [SEG_DECAY_TAIL], "duration", "value"),
+                                    curve(0.02, 0.16, [SEG_DECAY_TAIL], "duration", "value"),
+                                    curve(0.02, 0.16, [SEG_DECAY_TAIL], "duration", "value"))),
+            size_over_lifetime=curve(0.5, 1.0, [SEG_EASE_OUT_CREST], "lifetime", "size"),
+            color_over_lifetime=gradient(
+                [(0.0, 0.0), (0.25, 0.9), (0.75, 0.85), (1.0, 0.0)],
+                [(0.0, 0.02, 0.01, 0.04), (1.0, 0.06, 0.03, 0.1)])))
+
+    # 4. Ember updraft. Motes torn off the dais that climb the full 16 blocks into the
+    #    hover slot over their life — the vertical link between the broken floor and the
+    #    thing assembling above it. random_gradient per ember (census A4 note: kill the
+    #    repetition read on a beat players will watch several times an event).
+    #    Photon speeds are BLOCKS PER SECOND (Photon multiplies every velocity by 0.05
+    #    before adding it per tick — jar-verified in VelocityOverLifetimeSetting), so
+    #    5.4-7.2 b/s over a 46-66t (2.3-3.3 s) life is the 16-block climb.
+    (fx.particle_emitter(
+            "reveal_embers",
+            duration=HANDOFF_TICK - REVEAL_TICK + 4, looping=False,
+            start_delay=constant(REVEAL_TICK - 4), max_particles=80,
+            start_lifetime=random_between(46, 66), start_speed=random_between(0.02, 0.08),
+            start_size=nf3(random_between(0.07, 0.18)), simulation_space="World")
+       .with_emission(rate=constant(1.5), bursts=[burst(time=0, count=constant(12))])
+       .with_shape(circle(radius=4.2, thickness=0.7), position=nf3(0, 0.3, 0))
+       .with_material(texture_material(CIRCLE, hdr=(0.9, 0.45, 1.35), blend=BLEND_ADDITIVE))
+       .with_renderer(render_mode="StretchedBillboard", velocity_scale=0.7, length_scale=1.4,
+                      vertex_sorting="NONE")
+       .with_cull_box(*cull)
+       .with_curves(
+            velocity_over_lifetime=dict(
+                linear=nf3(constant(0), random_between(5.4, 7.2), constant(0)),
+                orbital_mode="AngularVelocity",
+                orbital=nf3(constant(0), constant(-0.9), constant(0)),
+                offset=nf3(0), radial=constant(-0.6)),
+            noise=dict(frequency=0.5, quality="Noise2D",
+                       position=nf3(constant(0.07), constant(0.02), constant(0.07))),
+            # Dark birth on both rolls; one ember burns violet, the other bone-white.
+            color_over_lifetime=random_gradient(
+                [(0.0, 0.0), (0.12, 0.9), (0.7, 0.55), (1.0, 0.0)],
+                [(0.0, 0.16, 0.05, 0.24), (0.35, 0.8, 0.4, 1.0), (1.0, 0.35, 0.14, 0.55)],
+                [(0.0, 0.0), (0.18, 0.75), (0.65, 0.45), (1.0, 0.0)],
+                [(0.0, 0.12, 0.09, 0.14), (0.4, 0.95, 0.88, 1.0), (1.0, 0.5, 0.3, 0.6)])))
+
+    # 5. The part. The curtain does not fade — it is BLOWN outward on the materialise
+    #    beat, which is the frame the shape stops being a rumour.
+    (fx.particle_emitter(
+            "reveal_curtain_part",
+            duration=26, looping=False,
+            start_delay=constant(PART_TICK), max_particles=28,
+            start_lifetime=random_between(18, 26), start_speed=random_between(2.4, 4.0),
+            start_size=nf3(random_between(2.0, 3.0)), simulation_space="World")
+       .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(18))])
+       .with_shape(cylinder(radius=3.0, thickness=0.2, arc_mode="Random"),
+                   position=nf3(0, HOVER_Y - 0.4, 0), scale=nf3(1.0, 5.2, 1.0))
+       .with_material(texture_material(SMOKE, discard=0.02, blend=BLEND_ALPHA))
+       .with_renderer(vertex_sorting="DISTANCE", shade=False)
+       .with_cull_box(*cull)
+       .with_curves(
+            velocity_over_lifetime=dict(
+                linear=nf3(constant(0), random_between(0.4, 1.4), constant(0)),
+                offset=nf3(0),
+                # b/s: 5.0 -> 0.25 b/t, so the curtain halves clear ~3 blocks of the
+                # hover slot in the first half-second and then coast to a stop.
+                radial=curve(0.0, 5.0, [(0.0, 1.0, 0.2, 0.7, 0.6, 0.2, 1.0, 0.0)],
+                             "lifetime", "value")),
+            size_over_lifetime=curve(1.0, 1.7, [SEG_EASE_OUT_CREST], "lifetime", "size"),
+            color_over_lifetime=gradient(
+                [(0.0, 0.68), (0.3, 0.5), (1.0, 0.0)],
+                [(0.0, 0.14, 0.07, 0.2), (1.0, 0.3, 0.18, 0.42)])))
+
+    # 6. Rim glints riding the parting edge — the light finally getting past the fog.
+    (fx.particle_emitter(
+            "reveal_rim_glint",
+            duration=20, looping=False,
+            start_delay=constant(PART_TICK), max_particles=24,
+            start_lifetime=random_between(10, 18), start_speed=random_between(1.6, 3.6),
+            start_size=nf3(random_between(0.1, 0.22)), simulation_space="World")
+       .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(16))])
+       .with_shape(sphere(radius=1.9, thickness=0.25),
+                   position=nf3(0, HOVER_Y - 0.2, 0))
+       .with_material(texture_material(CIRCLE, hdr=(1.3, 1.0, 1.45), blend=BLEND_ADDITIVE))
+       .with_renderer(vertex_sorting="NONE")
+       .with_cull_box(*cull)
+       .with_curves(
+            color_over_lifetime=gradient(
+                [(0.0, 0.0), (0.15, 1.0), (0.6, 0.6), (1.0, 0.0)],
+                [(0.0, 1.0, 0.95, 1.0), (1.0, 0.6, 0.28, 0.9)]))
+       .with_lights(sky=15, block=15))
 
 
 # ---------------------------------------------------------------------------
@@ -196,7 +416,7 @@ def build_herald_glyph_swirl() -> FxBuilder:
        .with_emission(rate=constant(0.9))
        .with_shape(cylinder(radius=4.6, thickness=0.12, arc_mode="Loop", arc_speed=0.6),
                    position=nf3(constant(0), constant(1.2), constant(0)))
-       .with_material(texture_material(GLYPH, hdr=(1.3, 0.8, 2.0), blend=BLEND_ADDITIVE))
+       .with_material(texture_material(GLYPH, hdr=(0.94, 0.58, 1.45), blend=BLEND_ADDITIVE))
        .with_renderer(render_mode="Horizontal", facing_mode="DEFAULT", shade=False,
                       vertex_sorting="NONE")
        .with_cull_box((-10.0, -2.0, -10.0), (10.0, 16.0, 10.0))
@@ -223,7 +443,7 @@ def build_herald_glyph_swirl() -> FxBuilder:
                       bursts=[burst(time=20, count=8, cycles=1, probability=1.0)])
        .with_shape(cylinder(radius=1.9, thickness=0.1, arc_mode="Loop", arc_speed=-1.1),
                    position=nf3(constant(0), constant(2.4), constant(0)))
-       .with_material(texture_material(GLYPH, hdr=(1.6, 1.0, 2.3), blend=BLEND_ADDITIVE))
+       .with_material(texture_material(GLYPH, hdr=(1.01, 0.63, 1.45), blend=BLEND_ADDITIVE))
        .with_renderer(render_mode="VerticalBillboard", vertex_sorting="NONE")
        .with_cull_box((-6.0, -2.0, -6.0), (6.0, 18.0, 6.0))
        .with_curves(
@@ -246,7 +466,7 @@ def build_herald_glyph_swirl() -> FxBuilder:
             simulation_space="World")
        .with_emission(rate=constant(1.2))
        .with_shape(circle(radius=4.2, thickness=0.8))
-       .with_material(texture_material(CIRCLE, hdr=(1.0, 0.6, 1.6), blend=BLEND_ADDITIVE))
+       .with_material(texture_material(CIRCLE, hdr=(0.91, 0.54, 1.45), blend=BLEND_ADDITIVE))
        .with_renderer(vertex_sorting="NONE")
        .with_cull_box((-10.0, -2.0, -10.0), (10.0, 16.0, 10.0))
        .with_curves(

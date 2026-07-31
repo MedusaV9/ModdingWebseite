@@ -31,7 +31,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from fxlib import (  # noqa: E402
     B, F, I, L, BLEND_ADDITIVE, BLEND_ALPHA, FX_ASSETS_DIR, REPO_ROOT, FxBuilder,
     block_atlas_material, burst, circle, constant, curve, cylinder, dot, function_shape,
-    gradient, mesh, nf3, random_between, rom, sphere, texture_material, validate_file,
+    gradient, mesh, nf3, random_between, random_curve, rom, sphere, texture_material,
+    validate_file,
 )
 
 BOSS_FX_DIR = FX_ASSETS_DIR / "boss"
@@ -41,6 +42,37 @@ DOME_TEXTURE = REPO_ROOT / "src/main/resources/assets/eclipse/textures/particle/
 CIRCLE = "photon:textures/particle/circle.png"
 SMOKE = "photon:textures/particle/smoke.png"
 DOME_FAINT = "eclipse:textures/particle/dome_faint.png"
+
+
+# ---------------------------------------------------------------------------
+# Ara-trail toggle groups — the ONE reason `section`/`physicsSetting` never did
+# anything in this repo (FX-Wave-13 A4 finding).
+#
+# `TrailSection` and `AraPhysicsSetting` both extend Photon's `ToggleGroup`, i.e.
+# LDLib2 `IToggleConfigurable`. Its `deserializeNBT` reads `_enable` FIRST and then
+# short-circuits: `if (!isEnable() && skipDisableSerialize()) return;` — with
+# `skipDisableSerialize()` hard-coded to `true`. A compound written WITHOUT the flag
+# therefore deserialises as DISABLED and its payload is never read at all. fxlib's
+# `AraTrailEmitter` writes the payload but not the flag, so every ara trail in the
+# tree has been rendering as `appendFlatTrail` (flat band, zero segment physics)
+# no matter what section/physics the generator asked for.
+#
+# fxlib.py is A0-owned shared ground this wave, so the A4 assets stamp the flag on
+# their own emitters instead of changing the library.
+# ---------------------------------------------------------------------------
+def ara_toggles_on(emitter):
+    """Marks an ara trail's `section` / `physicsSetting` toggle groups as enabled.
+
+    Both fields extend LDLib2's `ToggleGroup`, which deserialises to DISABLED unless the
+    compound carries an explicit `_enable: 1b`. `fxlib.AraTrailEmitter` writes the group's
+    payload but not that flag, so a `physics=dict(...)` block is inert until this runs.
+    (fxlib is a shared file this team must not touch — hence the post-hoc patch.)
+    """
+    for key in ("section", "physicsSetting"):
+        block = emitter._config.get(key)
+        if isinstance(block, dict):
+            block["_enable"] = B(1)
+    return emitter
 
 
 # ---------------------------------------------------------------------------
@@ -109,7 +141,7 @@ def build_roar_shockwave() -> FxBuilder:
                       bursts=[burst(time=0, count=1, cycles=1, probability=1.0)])
        .with_shape(dot())
        .with_material(texture_material("eclipse:textures/particle/ring_soft.png",
-                                       hdr=(1.6, 1.1, 2.2), blend=BLEND_ADDITIVE))
+                                       hdr=(1.05, 0.72, 1.45), blend=BLEND_ADDITIVE))
        .with_renderer(render_mode="Horizontal", facing_mode="DEFAULT", shade=False,
                       vertex_sorting="NONE")
        .with_cull_box((-32.0, -2.0, -32.0), (32.0, 12.0, 32.0))
@@ -127,7 +159,7 @@ def build_roar_shockwave() -> FxBuilder:
        .with_emission(rate=constant(0.0),
                       bursts=[burst(time=0, count=1, cycles=1, probability=1.0)])
        .with_shape(dot())
-       .with_material(texture_material(CIRCLE, hdr=(1.6, 1.1, 2.2), blend=BLEND_ADDITIVE))
+       .with_material(texture_material(CIRCLE, hdr=(1.05, 0.72, 1.45), blend=BLEND_ADDITIVE))
        .with_renderer(render_mode="VerticalBillboard", vertex_sorting="NONE")
        .with_cull_box((-4.0, -1.0, -4.0), (4.0, 11.0, 4.0))
        .with_curves(
@@ -163,65 +195,289 @@ def build_roar_shockwave() -> FxBuilder:
 # ---------------------------------------------------------------------------
 # Concept 5 — eclipse:boss/herald_shard_trail (entity-bound ara ribbon; loop is
 # safe: the runtime dies with the projectile ≤ ~5 s later)
+#
+# FX-Wave-13 A4 "Ara-Vollausbau" (census §2 row 9 — the flattest premium ribbon in
+# the tree). The shard homes at 0.45 b/t with 0.18 steering, so it ARCS: the whole
+# point of the upgrade is that the arcs now carry volume, lag and a taper.
+#
+# THREE stacked ribbons instead of one flat band. They differ in width, length and
+# — the part that actually sells volume — in `inertia`, so they separate through
+# every homing turn and the shard flies inside its own wake instead of dragging a
+# single decal behind it:
+#
+#   veil    0.62 thick / 1.30 s / inertia 0.50 — wide dim violet smear, swings widest
+#   ribbon  0.32 thick / 1.00 s / inertia 0.22 — the main read, corona violet
+#   core    0.09 thick / 0.40 s / no physics   — white-hot spine welded to the shard
+#
+# Each carries the recipe's width curve (broad head -> point tail), a gradient along
+# the ribbon AND a second gradient over each segment's own age.
+#
+# WHY NO `section` (the obvious way to get a crystal tube, deliberately not used):
+# Photon 2.1.5's `AraTrailParticle.appendSection` extrudes the cross-section along
+# `bitangent` and `this.tangent` — but for every alignment except `Local`,
+# `this.tangent` IS the along-curve direction (it is set to `(nextV+prevV)*0.5` a few
+# lines above). So the section ring has exactly zero extent on the third axis: it is
+# a flat sheet lying in the plane that CONTAINS the direction of travel, smeared
+# forward/back over itself, and it vanishes to a sliver whenever the camera is off to
+# the side. Measured against the decompiled math on a shard-like arc, a 6-point star
+# at thickness 0.3 spans 0.600 b across, 0.520 b ALONG travel and 0.000 b on the
+# perpendicular — i.e. no tube at all. `Local` is the only geometrically sound
+# alignment for sections, and it would need the emitter frame rotated onto the flight
+# path by `AutoRotate.FORWARD`, whose quaternion in `EntityEffectExecutor` is built as
+# `rotateXYZ(0, atan2(-z, x), y)` — the raw Y component fed in as a Z angle, so it
+# does not survive a climbing/diving shard. Stacked flat ribbons are what the other
+# 14 ara trails in the tree use, and they are the only path that renders correctly.
+#
+# Choppiness is fixed by `smoothness`, NOT by `timeInterval`/`minDistance`: emission
+# runs in `render()` and drops AT MOST ONE point per FRAME, so on a low-FPS client the
+# point cloud is sparse no matter how small the interval is. `smoothness` is the
+# Catmull-style subdivision between existing points and is the only lever that adds
+# geometry the emitter never sampled.
+#
+# WHY NO `high_quality_corners` (also deliberate — it SHREDS the ribbon):
+# `appendFlatTrail` compensates miter joins with
+#     correctedThickness = sectionThickness / max(bitangent . nextSectionBitangent, 0.15)
+# so any segment whose bitangent is poorly conditioned — which is every near-degenerate
+# segment produced by dense sampling plus `smoothness` subdivision — is drawn up to
+# 6.67x too thick. On a shard-speed ribbon that renders as a comb of vertical spikes
+# instead of a band. None of the other 14 ara trails in the tree switch it on, and
+# `cornerRoundness` is gated behind the same flag, so leaving both at their defaults is
+# both the house pattern and the only stable one. `minDistance` is held at 0.07 (above
+# the 0.05 `smoothingDistance` default) for the same reason: it keeps consecutive points
+# far enough apart that the per-point frame stays well conditioned.
 # ---------------------------------------------------------------------------
+def _shard_taper(knee: float) -> dict:
+    """Width curve: full at the head, `knee` at mid-length, out to a true point."""
+    return curve(0.0, 1.0,
+                 [(0.0, 1.0, 0.18, 0.97, 0.42, knee + 0.18, 0.55, knee),
+                  (0.55, knee, 0.74, knee * 0.55, 0.9, 0.04, 1.0, 0.0)],
+                 "length", "thickness")
+
+
 def build_herald_shard_trail() -> FxBuilder:
     fx = FxBuilder("boss/herald_shard_trail")
+    # Generous entity-local box: ~9 b of veil at 0.45 b/t plus the gravity sag.
+    cull = ((-12.0, -12.0, -12.0), (12.0, 12.0, 12.0))
+
+    # 1. Veil — widest, longest, laggiest. Dim on its own; it exists to give the
+    #    ribbon something to be bright against and to smear the turns.
+    veil = fx.ara_trail_emitter(
+        "shard_veil",
+        duration=100, looping=True,
+        space="World", alignment="View", sorting="NewerOnTop",
+        thickness=0.62, smoothness=3,
+        time=1.3, time_interval=0.04, min_distance=0.07,  # SECONDS (ara exception)
+        texture_mode="Stretch",
+        thickness_over_length=_shard_taper(0.62),
+        # Dim violet at the head, umbral indigo out to nothing — birth tint stays dark.
+        color_over_length=gradient(
+            [(0.0, 0.42), (0.45, 0.34), (0.8, 0.14), (1.0, 0.0)],
+            [(0.0, 0.62, 0.34, 0.95), (0.45, 0.4, 0.16, 0.8), (1.0, 0.18, 0.06, 0.4)]),
+        physics=dict(warmup=0.0, gravity=(0.0, -1.9, 0.0), inertia=0.5,
+                     velocity_smoothing=0.62, damping=0.88))
+    ara_toggles_on(veil)
+    (veil
+       .with_material(texture_material(CIRCLE, hdr=(0.62, 0.3, 0.95), blend=BLEND_ADDITIVE))
+       .with_cull_box(*cull))
+
+    # 2. Main ribbon — the read. Highest smoothness of the three, because this is the
+    #    silhouette players actually track.
+    ribbon = fx.ara_trail_emitter(
+        "shard_ribbon",
+        duration=100, looping=True,
+        space="World", alignment="View", sorting="NewerOnTop",
+        thickness=0.32, smoothness=6,
+        time=1.0, time_interval=0.04, min_distance=0.07,
+        texture_mode="Stretch",
+        thickness_over_length=_shard_taper(0.46),
+        # Head white-hot -> corona violet -> umbral indigo, alpha out with the taper.
+        color_over_length=gradient(
+            [(0.0, 0.95), (0.35, 0.82), (0.78, 0.42), (1.0, 0.0)],
+            [(0.0, 1.0, 0.95, 1.0), (0.3, 0.72, 0.38, 1.0),
+             (0.7, 0.45, 0.16, 0.85), (1.0, 0.28, 0.1, 0.5)]),
+        # Colour over each SEGMENT's own age (the "over its lifetime" ramp). RGB only —
+        # `colorOverLength` owns the alpha so the two multiplies cannot cancel the ribbon.
+        color_over_segment_time=gradient(
+            [(0.0, 1.0), (1.0, 1.0)],
+            [(0.0, 1.0, 0.92, 1.0), (0.45, 0.8, 0.45, 1.0), (1.0, 0.55, 0.24, 0.95)]),
+        physics=dict(warmup=0.0, gravity=(0.0, -1.5, 0.0), inertia=0.22,
+                     velocity_smoothing=0.7, damping=0.82))
+    ara_toggles_on(ribbon)
+    (ribbon
+       .with_material(texture_material(CIRCLE, hdr=(1.05, 0.5, 1.45), blend=BLEND_ADDITIVE))
+       .with_cull_box(*cull))
+
+    # 3. Hot spine: NO physics, so it stays welded to the shard while the other two
+    #    swing off it — that separation is what sells the lag.
     (fx.ara_trail_emitter(
-            "shard_ribbon",
+            "shard_core",
             duration=100, looping=True,
             space="World", alignment="View", sorting="NewerOnTop",
-            thickness=0.18, smoothness=4, high_quality_corners=False,
-            time=0.45, time_interval=0.05, min_distance=0.05,  # SECONDS (ara exception)
+            thickness=0.09, smoothness=4,
+            time=0.4, time_interval=0.04, min_distance=0.07,
             texture_mode="Stretch",
-            thickness_over_length=curve(
-                0.0, 1.0, [(0.0, 1.0, 0.4, 0.85, 0.9, 0.2, 1.0, 0.0)], "length", "thickness"),
+            thickness_over_length=_shard_taper(0.34),
             color_over_length=gradient(
-                [(0.0, 0.9), (1.0, 0.0)],
-                [(0.0, 1.0, 0.95, 1.0), (0.35, 0.75, 0.4, 1.0), (1.0, 0.3, 0.1, 0.5)]),
-            physics=dict(gravity=(0.0, -0.4, 0.0), inertia=0.25,
-                         velocity_smoothing=0.75, damping=0.8))
-       .with_material(texture_material(CIRCLE, hdr=(1.3, 0.7, 2.0), blend=BLEND_ADDITIVE))
-       .with_cull_box((-3.0, -3.0, -3.0), (3.0, 3.0, 3.0)))
+                [(0.0, 1.0), (0.4, 0.65), (1.0, 0.0)],
+                [(0.0, 1.0, 0.98, 1.0), (1.0, 0.85, 0.6, 1.0)]))
+       .with_material(texture_material(CIRCLE, hdr=(1.45, 1.2, 1.45), blend=BLEND_ADDITIVE))
+       .with_cull_box(*cull))
     return fx
 
 
 # ---------------------------------------------------------------------------
 # Concept 4 — eclipse:boss/ferry_lantern_swarm (soul-lantern Model particles)
+#
+# FX-Wave-13 A4 "Laternenschwarm" (census §2 row 12). The shipped version was a
+# CAROUSEL: one shared 0.35 rad/t orbital on every lantern, so all 24 turned as a
+# rigid disc. The swarm read comes from breaking that lockstep:
+#
+#   * per-lantern orbital speed AND radial drift (each light keeps its own orbit)
+#   * a gentle per-lantern breathe (`random_curve` — two different pulse shapes, the
+#     roll is memoized per particle, so no two lanterns are in phase)
+#   * `lights` on the models so the lanterns are LIT objects in the umbral dark
+#     instead of shaded blocks, plus a warm amber halo emitter riding the same mesh
+#     distribution and the same drift
+#   * a warm ara thread off every second lantern (the census's "Ara-Fäden")
+#
+# Palette law: the lanterns are the ONLY warm thing in the scene — the soul leak
+# stays cold teal underneath so the amber has something to be warm against.
 # ---------------------------------------------------------------------------
+# Per-lantern breathe: two envelopes with different periods; random_curve lerps
+# between them once per particle, so the swarm never pulses in unison.
+_LANTERN_BREATHE_A = [(0.0, 0.72, 0.12, 1.0, 0.35, 1.0, 0.5, 0.78),
+                      (0.5, 0.78, 0.62, 0.62, 0.82, 1.0, 1.0, 0.85)]
+_LANTERN_BREATHE_B = [(0.0, 0.95, 0.18, 0.66, 0.44, 0.7, 0.62, 1.0),
+                      (0.62, 1.0, 0.78, 0.94, 0.9, 0.7, 1.0, 0.8)]
+
+
 def build_ferry_lantern_swarm() -> FxBuilder:
     fx = FxBuilder("boss/ferry_lantern_swarm")
+    cull = ((-9.0, -1.0, -9.0), (9.0, 8.0, 9.0))
+    # Warm lantern amber -> ember red. Deliberately off the cold house palette.
+    lantern_warm = gradient(
+        [(0.0, 0.0), (0.14, 0.85), (0.75, 0.7), (1.0, 0.0)],
+        [(0.0, 0.28, 0.14, 0.06), (0.3, 1.0, 0.72, 0.34), (1.0, 0.95, 0.45, 0.18)])
 
-    # 24 actual soul-lantern models rise in a slow counter-clockwise carousel.
+    # 24 actual soul-lantern models drift on their own orbits.
     # Mesh shape doubles as the baked-model source for renderMode Model (FX_FORMAT §3.2);
     # shape scale spreads the emission points to roughly the spec's r=2.2 circle.
-    (fx.particle_emitter(
+    lanterns = (fx.particle_emitter(
             "lantern_swarm",
             duration=80, looping=False, max_particles=24,
             start_lifetime=random_between(50, 70), start_speed=constant(0.05),
-            start_size=nf3(random_between(0.5, 0.7), random_between(0.5, 0.7),
-                           random_between(0.5, 0.7)),
+            # Photon's Model bake flattens soul_lantern's multipart model to a UV'd cube,
+            # so the body has to stay SMALL and let the halo carry the lamp read — at the
+            # shipped 0.5-0.7 the cubes are legible as crates once the swarm spreads out.
+            start_size=nf3(random_between(0.22, 0.34), random_between(0.22, 0.34),
+                           random_between(0.22, 0.34)),
             start_rotation=nf3(constant(0), random_between(0.0, 360.0), constant(0)),
             simulation_space="Local")
        .with_emission(rate=constant(0.0),
                       bursts=[burst(time=0, count=6, cycles=1, probability=1.0),
                               burst(time=10, count=6, cycles=3, interval=10, probability=1.0)])
-       .with_shape(mesh("block/soul_lantern", emit_from="Triangle"), scale=nf3(4.4))
+       # Scale is the SPREAD of the emission volume, not the lantern size: a soul_lantern
+       # model is only ~0.4x0.5 in model space, so the shipped 4.4 packed all 24 lanterns
+       # into a ~1.6 b clump that read as one amber blob. 11 wide / 5 tall puts them on
+       # roughly the spec's r=2.2 circle with enough radius for the orbital drift to bite.
+       .with_shape(mesh("block/soul_lantern", emit_from="Triangle"),
+                   scale=nf3(11.0, 5.0, 11.0))
        .with_material(block_atlas_material(blend=BLEND_ALPHA, cull=True, depth_test=True,
                                            depth_mask=True))
        .with_renderer(render_mode="Model", use_block_uv=True, model_pivot=(0.5, 0.5, 0.5),
                       facing_mode="ROTATE_Y", shade=True)
-       .with_cull_box((-8.0, -1.0, -8.0), (8.0, 7.0, 8.0))
+       .with_cull_box(*cull)
        .with_curves(
             velocity_over_lifetime=dict(
-                linear=nf3(constant(0), random_between(0.02, 0.05), constant(0)),
+                # Photon velocities are BLOCKS PER SECOND (the runtime multiplies every
+                # velocity by 0.05 before adding it per tick — jar-verified in
+                # VelocityOverLifetimeSetting), so the shipped 0.02-0.05 "rise" was
+                # 0.05 blocks over the whole 60t life, i.e. a dead-still ring.
+                linear=nf3(constant(0), random_between(0.5, 1.7), constant(0)),
                 orbital_mode="AngularVelocity",
-                orbital=nf3(constant(0), constant(0.35), constant(0)),
-                offset=nf3(0)),
+                # Own orbit per lantern (some even hang back) + a slow in/out breath
+                # on the radius — the two together are what turns a disc into a swarm.
+                orbital=nf3(constant(0), random_between(0.25, 1.1), constant(0)),
+                offset=nf3(0), radial=random_between(-0.45, 0.7)),
             rotation_over_lifetime=dict(yaw=random_between(-3.0, 3.0)),
-            noise=dict(frequency=0.5, quality="Noise2D",
-                       position=nf3(constant(0.04), constant(0.02), constant(0.04)))))
+            size_over_lifetime=random_curve(0.82, 1.12, _LANTERN_BREATHE_A,
+                                            _LANTERN_BREATHE_B, "lifetime", "size"),
+            noise=dict(frequency=0.5, quality="Noise3D",
+                       position=nf3(constant(0.07), constant(0.045), constant(0.07))))
+       # Lanterns are light SOURCES: without this the block model renders at the
+       # ambient lightmap of a night-time deck, i.e. as a dark lump.
+       .with_lights(sky=15, block=15))
+    # Warm ara thread off every second lantern — the swarm leaves a wake instead of
+    # sliding through clean air. Thin + short, so 12 live ribbons stay cheap.
+    lanterns.with_module("trails", {
+        "ratio": F(0.5),
+        "lifetime": constant(0.6),
+        "dieWithParticles": B(1),
+        "sizeAffectsWidth": B(1),
+        "sizeAffectsLifetime": B(0),
+        "inheritParticleColor": B(0),
+        "trailType": "ARA_TRAIL",
+        "araConfig": {
+            "space": "World",
+            "thickness": F(0.07),
+            "time": F(0.9),                # seconds (ara exception)
+            "smoothness": I(3),
+            # highQualityCorners stays OFF: its miter compensation divides thickness by
+            # max(dot, 0.15), which shreds short segments into spikes (see the
+            # herald_shard_trail header for the full derivation).
+            "highQualityCorners": B(0),
+            "textureMode": "Stretch",
+            "thicknessOverLength": curve(
+                0.0, 1.0, [(0.0, 1.0, 0.3, 0.78, 0.75, 0.2, 1.0, 0.0)], "length", "thickness"),
+            "colorOverLength": gradient(
+                [(0.0, 0.55), (0.45, 0.3), (1.0, 0.0)],
+                [(0.0, 1.0, 0.78, 0.42), (1.0, 0.75, 0.3, 0.12)]),
+            "physicsSetting": {
+                "_enable": B(1),           # see ara_toggles_on — the flag IS the switch
+                "warmup": F(0.0),
+                "gravity": L([F(0.0), F(-0.12), F(0.0)]),
+                "inertia": F(0.3),
+                "velocitySmoothing": F(0.8),
+                "damping": F(0.85)},
+            "renderer": {
+                "materials": rom([texture_material(CIRCLE, hdr=(1.35, 0.8, 0.35),
+                                                   blend=BLEND_ADDITIVE)]),
+                "layer": "Translucent", "cull": {"_enable": B(0)},
+                "orderInLayer": I(0), "vertexSortingMode": "NONE"}}})
 
-    # Teal soul-flame motes leaking off the ring under the lanterns.
+    # The light each lantern throws: a warm halo on the SAME mesh distribution and the
+    # same drift parameters, so the glows travel with the swarm. `random_curve` size
+    # flicker on top of the breathe gives the candle read the census asks for.
+    (fx.particle_emitter(
+            "lantern_glow",
+            duration=80, looping=False, max_particles=28,
+            start_lifetime=random_between(50, 70), start_speed=constant(0.05),
+            start_size=nf3(random_between(0.7, 1.05)),
+            simulation_space="Local")
+       .with_emission(rate=constant(0.0),
+                      bursts=[burst(time=0, count=6, cycles=1, probability=1.0),
+                              burst(time=10, count=6, cycles=3, interval=10, probability=1.0)])
+       # Same distribution AND spread as the lantern models, so every halo sits on a lamp.
+       .with_shape(mesh("block/soul_lantern", emit_from="Triangle"),
+                   scale=nf3(11.0, 5.0, 11.0))
+       .with_material(texture_material(CIRCLE, hdr=(1.45, 0.85, 0.35), blend=BLEND_ADDITIVE))
+       .with_renderer(vertex_sorting="NONE")
+       .with_cull_box(*cull)
+       .with_curves(
+            velocity_over_lifetime=dict(
+                linear=nf3(constant(0), random_between(0.5, 1.7), constant(0)),
+                orbital_mode="AngularVelocity",
+                orbital=nf3(constant(0), random_between(0.25, 1.1), constant(0)),
+                offset=nf3(0), radial=random_between(-0.45, 0.7)),
+            size_over_lifetime=random_curve(0.6, 1.25, _LANTERN_BREATHE_B,
+                                            _LANTERN_BREATHE_A, "lifetime", "size"),
+            noise=dict(frequency=0.5, quality="Noise3D",
+                       position=nf3(constant(0.07), constant(0.045), constant(0.07))),
+            color_over_lifetime=lantern_warm)
+       .with_lights(sky=15, block=15))
+
+    # Cold counterpoint: teal soul-flame motes leaking off the ring under the lanterns.
+    # Given the same swarm drift so they read as part of the shoal, not a static ring.
     (fx.particle_emitter(
             "soul_leak",
             duration=80, looping=False, max_particles=64,
@@ -233,10 +489,15 @@ def build_ferry_lantern_swarm() -> FxBuilder:
        .with_shape(circle(radius=2.4))
        .with_material(texture_material(CIRCLE, hdr=(0.4, 1.3, 1.2), blend=BLEND_ADDITIVE))
        .with_renderer(vertex_sorting="NONE")
-       .with_cull_box((-8.0, -1.0, -8.0), (8.0, 7.0, 8.0))
+       .with_cull_box(*cull)
        .with_curves(
             velocity_over_lifetime=dict(
-                linear=nf3(constant(0), random_between(0.02, 0.05), constant(0))),
+                linear=nf3(constant(0), random_between(0.6, 1.5), constant(0)),
+                orbital_mode="AngularVelocity",
+                orbital=nf3(constant(0), random_between(0.2, 0.8), constant(0)),
+                offset=nf3(0)),
+            size_over_lifetime=random_curve(0.55, 1.15, _LANTERN_BREATHE_A,
+                                            _LANTERN_BREATHE_B, "lifetime", "size"),
             color_over_lifetime=gradient(
                 [(0.0, 0.0), (0.2, 0.8), (1.0, 0.0)],
                 [(0.0, 0.4, 1.0, 0.9), (1.0, 0.15, 0.5, 0.55)]))
@@ -315,7 +576,7 @@ def build_ferry_oar_tear() -> FxBuilder:
        .with_emission(rate=constant(0.0),
                       bursts=[burst(time=2, count=8, cycles=1, probability=1.0)])
        .with_shape(_tear_arc_shape())
-       .with_material(texture_material(CIRCLE, hdr=(1.2, 1.8, 2.0), blend=BLEND_ADDITIVE))
+       .with_material(texture_material(CIRCLE, hdr=(0.87, 1.3, 1.45), blend=BLEND_ADDITIVE))
        .with_renderer(vertex_sorting="NONE")
        .with_cull_box((-7.0, -2.0, -7.0), (7.0, 4.0, 7.0)))
     return fx
@@ -426,7 +687,7 @@ def build_ferry_kneel_corona() -> FxBuilder:
        .with_emission(rate=constant(0.0),
                       bursts=[burst(time=10, count=constant(2), cycles=2, interval=50)])
        .with_shape(dot(), position=nf3(0, 1.6, 0))
-       .with_material(texture_material(CIRCLE, hdr=(1.6, 1.2, 1.5), blend=BLEND_ADDITIVE))
+       .with_material(texture_material(CIRCLE, hdr=(1.45, 1.09, 1.36), blend=BLEND_ADDITIVE))
        .with_renderer(vertex_sorting="NONE")
        .with_cull_box((-3.0, 0.0, -3.0), (3.0, 4.0, 3.0))
        .with_curves(
