@@ -156,9 +156,7 @@ func zeige_linie(text: String, emotion: String, stil: String) -> void:
 	var runner: Node = seele.runner
 	var ac := _ac_bubble_script()
 	if ac != null and ac.can_instantiate() and _ui_layer() != null:
-		ac.call(
-			"show_bubble", _ui_layer(), text, {"speaker_3d": runner.gooby, "stil": stil}
-		)
+		ac.call("show_bubble", _ui_layer(), text, {"speaker_3d": runner.gooby, "stil": stil})
 		seele.sagt(text, emotion)
 		return
 	runner._say(text, emotion)
