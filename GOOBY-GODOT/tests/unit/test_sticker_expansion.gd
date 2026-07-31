@@ -16,7 +16,7 @@ const NEW_SETS := {
 	"stadtnacht": 6,
 	"kueche": 7,
 	"jahreszeiten": 6,
-	"ereignisse": 3,
+	"ereignisse": 4,
 }
 ## Hooks, die Code/Events feuern — jeder braucht einen Katalog-Sticker.
 const FIRED_HOOKS := [
@@ -42,7 +42,7 @@ func _load_items(path: String) -> Array:
 func test_neue_sets_vollstaendig_und_valide() -> void:
 	var items := _load_items(STICKERS_JSON)
 	var pages := _load_items(PAGES_JSON)
-	assert_eq(items.size(), 143, "141 Bestand + 2 W13B-GvZ-Meilensteine")
+	assert_eq(items.size(), 144, "141 Bestand + 2 GvZ-Meilensteine + 1 Schüttel-Geheimsticker")
 	var by_set := {}
 	for def: Dictionary in items:
 		var set_id := str(def.get("set", ""))

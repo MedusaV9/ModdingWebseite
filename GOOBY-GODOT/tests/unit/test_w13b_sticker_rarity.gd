@@ -53,10 +53,10 @@ func test_meilenstein_sticker_im_katalog_und_valide() -> void:
 
 func test_katalog_integritaet_jeder_sticker_hat_asset() -> void:
 	# Verschärfte Fassung des Bestands-Checks (test_album_catalog):
-	# JEDER der 143 Sticker — inkl. der 2 neuen — hat ein existierendes
+	# JEDER der 144 Sticker — inkl. der 2 neuen + Geheim-Sticker — hat ein existierendes
 	# Asset und eine valide Rarity.
 	var items := _items()
-	assert_eq(items.size(), 143, "141 Bestand + 2 Meilensteine")
+	assert_eq(items.size(), 144, "141 Bestand + 2 Meilensteine + 1 Schüttel-Geheimsticker")
 	for def: Dictionary in items:
 		var image := str(def.get("image", ""))
 		assert_true(FileAccess.file_exists(image), "%s: Asset fehlt (%s)" % [def.get("id"), image])

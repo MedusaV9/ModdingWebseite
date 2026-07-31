@@ -1,8 +1,8 @@
 extends TestCase
-## W3d — Sticker-Katalog: 143 Ids (85 Legacy + 18 W3d + 2 Basis + 36
-## BACKLOG-REST + 2 W13B-GvZ-Meilensteine), Assets existieren, DE-Texte
-## komplett, Seiten-Katalog konsistent — plus die puren
-## StickerCatalog-Helfer und die album.*-String-Parität.
+## W3d — Sticker-Katalog: 144 Ids (85 Legacy + 18 W3d + 2 Basis + 36
+## BACKLOG-REST + 2 W13B-GvZ-Meilensteine + 1 W13B-Schüttel-Geheimsticker),
+## Assets existieren, DE-Texte komplett, Seiten-Katalog konsistent — plus
+## die puren StickerCatalog-Helfer und die album.*-String-Parität.
 
 const STICKERS_JSON := "res://content/stickers/data/stickers.json"
 const PAGES_JSON := "res://content/stickers/data/sticker_pages.json"
@@ -28,7 +28,7 @@ func _load_items(path: String) -> Array:
 func test_katalog_vollstaendig_und_valide() -> void:
 	var items := _load_items(STICKERS_JSON)
 	var pages := _load_items(PAGES_JSON)
-	assert_eq(items.size(), 143, "141 Bestand + 2 W13B-GvZ-Meilensteine")
+	assert_eq(items.size(), 144, "141 Bestand + 2 GvZ-Meilensteine + 1 Schüttel-Geheimsticker")
 	var by_set := {}
 	for def: Dictionary in items:
 		var set_id := str(def.get("set", ""))

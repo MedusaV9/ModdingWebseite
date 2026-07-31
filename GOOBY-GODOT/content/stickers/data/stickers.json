@@ -2213,6 +2213,22 @@
 				"type": "event",
 				"key": "karton_gooby"
 			}
+		},
+		{
+			"id": "bluemerant",
+			"name_de": "Ganz blümerant",
+			"flavor_de": "Die Welt hat gewackelt. Gooby auch. Hauptsache, die Möhren liegen noch.",
+			"hint_de": "Ein wildes Geheimnis… irgendetwas muss man wohl schütteln.",
+			"set": "ereignisse",
+			"page": "bonus",
+			"rarity": "geheim",
+			"image": "res://content/stickers/assets/ev_bluemerant.png",
+			"cond": {
+				"type": "counter",
+				"key": "shakeStage3",
+				"count": 1
+			},
+			"secret": true
 		}
 	]
 }
