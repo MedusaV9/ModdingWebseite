@@ -18,7 +18,8 @@ const GESPRAECHE_PFAD := "res://content/soul/data/gespraeche.json"
 const SOUL_PACK_PFAD := "res://content/soul/data/soul.json"
 
 const ERWARTETE_GESPRAECHE := 12
-const ERWARTETE_LINES := 120
+## 120 aus W14/VOICE + 4 markt.stand-Lines (W15-MARKT-Request an VOICE).
+const ERWARTETE_LINES := 124
 const NOW_MS := 1768478400000
 
 var _seq := 0
@@ -185,7 +186,7 @@ func test_merke_antwort_ist_pur_und_zaehlt() -> void:
 
 
 func test_alle_120_lines_de_en_paritaetisch() -> void:
-	assert_eq(SoulLinien.gesamt_anzahl(), ERWARTETE_LINES, "genau 120 neue Lines")
+	assert_eq(SoulLinien.gesamt_anzahl(), ERWARTETE_LINES, "genau 124 Kategorie-Lines")
 	I18nService.reset_cache()
 	var de := I18nService.table("de")
 	var en := I18nService.table("en")

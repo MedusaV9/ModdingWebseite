@@ -252,10 +252,12 @@ func _on_replay_gestartet() -> void:
 	for kunde in _kunden:
 		if is_instance_valid(kunde):
 			kunde.set_emotion("ecstatic")
-	# 2-3 Markt-Kommentare laufen über die SeeleRunner.kommentar-API —
-	# in Ort-Szenen ohne GoobyReactions-Runner bleibt der Ruf still und die
-	# Tages-Line im Sheet übernimmt (s. >> MARKT→VOICE im Handoff).
-	SeeleRunner.kommentar_im_raum(self, "markt.stand")
+	# W15/INTEGRATE (MARKT→VOICE-Request): Kategorie markt.stand existiert
+	# jetzt in SoulLinien — wie bei der Raumstation spricht der statische
+	# Einstieg über den zuletzt aktiven SeeleRunner (None-sicher), weil die
+	# Ort-Szene keinen eigenen GoobyReactions-Runner hat. Fällt der Ruf
+	# still, übernimmt die Tages-Line im Sheet.
+	SeeleRunner.kommentar_global("markt.stand")
 
 
 ## Verkaufs-Pling im Replay: der nächste Kunde hüpft, der Stand-Gooby
@@ -281,7 +283,7 @@ func _on_abgeholt(erloes: int) -> void:
 	if stand_gooby != null:
 		stand_gooby.set_emotion("ecstatic")
 		stand_gooby.play_clip("celebrate" if erloes > 0 else "wave")
-	SeeleRunner.kommentar_im_raum(self, "markt.stand")
+	SeeleRunner.kommentar_global("markt.stand")
 
 
 ## Stand-Deko und Kundschaft folgen dem Save (Bestücken/Entnehmen/Abholen).

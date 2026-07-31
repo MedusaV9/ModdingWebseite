@@ -167,6 +167,14 @@
 				"4": "A WEEK! I saved a cookie for you every day. Theoretically.",
 				"5": "So long… I thought you'd flown to the moon! Tell me EVERYTHING."
 			},
+			"markt": {
+				"stand": {
+					"1": "My very own stand! I'm basically business Gooby. With an apron!",
+					"2": "Buy, folks, buy! Everything fresh, everything fluffily wrapped!",
+					"3": "Clink, coins! I like that sound almost as much as cookies.",
+					"4": "Sold out would be nice… worst case I'll just nibble the rest myself."
+				}
+			},
 			"uebermut": {
 				"pause": "Break ti-i-ime! My fur is all ruffled up!"
 			}

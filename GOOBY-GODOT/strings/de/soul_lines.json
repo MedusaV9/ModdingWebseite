@@ -167,6 +167,14 @@
 				"4": "Eine WOCHE! Ich hab jeden Tag einen Keks für dich aufgehoben. Theoretisch.",
 				"5": "So lange… ich dachte schon, du bist zum Mond geflogen! Erzähl mir ALLES."
 			},
+			"markt": {
+				"stand": {
+					"1": "Mein eigener Stand! Ich bin quasi Geschäfts-Gooby. Mit Schürze!",
+					"2": "Kauft, Leute, kauft! Alles frisch, alles flauschig verpackt!",
+					"3": "Kling, Münzen! Das Geräusch mag ich fast so gern wie Kekse.",
+					"4": "Ausverkauft wäre schön… zur Not nasch ich den Rest eben selbst."
+				}
+			},
 			"uebermut": {
 				"pause": "Paus-e-e! Mein Fell ist ganz zerzaust!"
 			}

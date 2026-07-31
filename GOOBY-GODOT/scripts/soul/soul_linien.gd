@@ -14,7 +14,8 @@ extends RefCounted
 ## Anti-Wiederholung: so viele zuletzt gezeigte Keys je Kategorie sperren.
 const GEDAECHTNIS_MAX := 5
 
-## Kategorie → {prefix, anzahl}. Gesamtsumme = 120 Lines (Test-Gate).
+## Kategorie → {prefix, anzahl}. Gesamtsumme = 124 Lines (Test-Gate;
+## 120 aus W14/VOICE + 4 Markt-Stand-Lines aus dem W15-MARKT-Request).
 const KATEGORIEN := {
 	# Tageszeit-Grüße (12) — NEUE Varianten zusätzlich zu soul.gruss.*.
 	"gruss.morgen": {"prefix": "soul.linie.gruss.morgen.", "anzahl": 3},
@@ -57,6 +58,9 @@ const KATEGORIEN := {
 	"feier.erfolg": {"prefix": "soul.linie.feier.erfolg.", "anzahl": 5},
 	# „Lange nicht gesehen“-Staffelung (5) — Auswahl über wiedersehen_key.
 	"wiedersehen": {"prefix": "soul.linie.wiedersehen.", "anzahl": 5},
+	# Eigenstand auf dem Wochenmarkt (4) — Aufrufer: wochenmarkt.gd bei
+	# Replay-Start/Abrechnung (W15-MARKT-Request an VOICE).
+	"markt.stand": {"prefix": "soul.linie.markt.stand.", "anzahl": 4},
 }
 
 ## Wiedersehen-Staffel: ab dieser Lücke (Stunden) gilt Stufe n (1..5).
