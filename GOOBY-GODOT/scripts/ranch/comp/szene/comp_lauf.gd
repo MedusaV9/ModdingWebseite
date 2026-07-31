@@ -207,10 +207,33 @@ func _baue_stage(_cfg: Dictionary) -> void:
 				"fog_to": 190.0,
 				"far": 320.0,
 				"shadow_distance": 42.0,
-				"glow": 0.3,
+				# W14/GAMESQA-Request: Arena wirkte weiss ueberstrahlt (Audit
+				# c=1) — die Stage-Defaults (ambient 0.6 + heller Himmel mit
+				# sky_ambient 0.45 + Sonne 1.2 + kuehles Fill 0.4) summierten
+				# sich auf den hellen Sand-/Gras-Albedos zur Ueberbelichtung,
+				# und der Glow (Softlight ab Schwelle 0.9) bloomte den ganzen
+				# sonnigen Boden. Belichtungs-Eichung nach dem hide_seek-
+				# Muster (exposure runter statt Albedo-Radikalkur), dazu
+				# gedrosseltes waermeres Umgebungslicht + Glow nur noch fuer
+				# echte Highlights.
+				"exposure": 0.66,
+				"glow": 0.22,
+				"glow_threshold": 1.08,
+				"ambient": 0.42,
+				"ambient_color": Color(0.85, 0.84, 0.78),
+				"sky_ambient": 0.3,
+				"sun_energy": 1.15,
+				"sun_color": Color(1.0, 0.92, 0.78),
+				"fill_energy": 0.28,
 			}
 		)
 	)
+	# Zeichnung zurueckholen: die Filmic-Kurve staucht oben (hide_seek-Eichung).
+	var env: Environment = stage.get("environment")
+	if env != null:
+		env.adjustment_enabled = true
+		env.adjustment_contrast = 1.05
+		env.adjustment_saturation = 1.1
 	welt = Node3D.new()
 	stage.add_child(welt)
 

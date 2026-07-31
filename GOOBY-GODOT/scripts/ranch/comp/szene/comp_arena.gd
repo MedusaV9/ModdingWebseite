@@ -6,8 +6,11 @@ extends RefCounted
 ## Einritt-Lücke, Tribüne mit Publikum, Fahnen, Podium. Wiederholtes
 ## läuft als MultiMesh (Draw-Call-Budget ≤ 350, RW-4-Muster).
 
-const SAND := Color(0.87, 0.76, 0.56)
-const GRAS := Color(0.56, 0.78, 0.45)
+## W14: Sand/Gras einen Tick tiefer/waermer — die 0.87er/0.78er-Albedos
+## brannten unter dem Arena-Licht weiss aus (GAMESQA-Audit c=1,
+## s. comp_lauf._baue_stage; Gras-Referenz: hide_seek 0.5/0.74/0.42).
+const SAND := Color(0.8, 0.68, 0.48)
+const GRAS := Color(0.49, 0.71, 0.39)
 const HOLZ := Color(0.79, 0.55, 0.35)
 const HOLZ_DUNKEL := Color(0.55, 0.38, 0.24)
 const CREME := Color(0.95, 0.94, 0.87)
