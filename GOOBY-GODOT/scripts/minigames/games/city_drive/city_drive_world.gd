@@ -22,6 +22,8 @@ const HOUSES: Array[String] = [
 ]
 const TREE := "res://assets/city/natur/tree_default.glb"
 const TRAFFIC_CAR := "res://assets/city/autos/taxi.glb"
+const AWNING := CITY + "detail-awning.glb"
+const STREETLIGHT := "res://assets/city/deko/streetlight.gltf"
 
 ## Flächenfarben — dasselbe Abendband wie die deliveryRush-Stadt.
 const GRASS := Color(0.5, 0.66, 0.42)
@@ -191,6 +193,114 @@ func _dash_part() -> Dictionary:
 	box.size = Vector3(2.6, 0.04, 0.34)
 	box.material = Fx.flat(DASH)
 	return {"mesh": box, "xform": Transform3D(Basis.IDENTITY, Vector3(0.0, 0.005, 0.0))}
+
+
+## Mini-Laden fürs Checkpoint-Ziel (W16/G2): die „Einkaufsfahrt" bekommt am
+## Ring einen ORT — Kiosk-Theke + Kenney-Markise + leuchtendes rosa Schild +
+## zwei Laternen. Lokales +z zeigt zur Straße; city_drive.gd stellt/dreht den
+## Knoten bei jedem Checkpoint-Wechsel (reine Deko, keine Kollision).
+func build_checkpoint_venue() -> Node3D:
+	var venue := Node3D.new()
+	venue.name = "CheckpointVenue"
+	var counter := MeshInstance3D.new()
+	var counter_mesh := BoxMesh.new()
+	counter_mesh.size = Vector3(3.2, 1.1, 1.5)
+	counter_mesh.material = Fx.flat(Color(0.95, 0.88, 0.72))
+	counter.mesh = counter_mesh
+	counter.position = Vector3(0.0, 0.55, 0.0)
+	venue.add_child(counter)
+	var awning := Models.node(AWNING, 3.8)
+	awning.position = Vector3(0.0, 1.7, 0.35)
+	venue.add_child(awning)
+	var sign := MeshInstance3D.new()
+	var sign_mesh := BoxMesh.new()
+	sign_mesh.size = Vector3(2.6, 0.6, 0.16)
+	# Dasselbe Rosa wie der Checkpoint-Ring — der Laden LIEST sich als Ziel.
+	sign_mesh.material = Fx.glow(Color(0.95, 0.36, 0.62), 1.1)
+	sign.mesh = sign_mesh
+	sign.position = Vector3(0.0, 2.75, 0.1)
+	sign.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	venue.add_child(sign)
+	for side in [-1.0, 1.0]:
+		var lantern := _one_off(Models.parts_by_height(STREETLIGHT, 4.6))
+		lantern.position = Vector3(4.4 * side, 0.0, 1.1)
+		lantern.rotation.y = PI
+		venue.add_child(lantern)
+	return venue
+
+
+## Funkengarbe für Rempler/Crashes an der Stoßstange (Farben wie das
+## Near-Miss-Funken-Modul der Stadt) — city_drive.gd feuert sie per Fx.burst.
+func build_sparks() -> GPUParticles3D:
+	return (
+		Fx
+		. particles(
+			{
+				"color": Color(1.0, 0.82, 0.4, 1.0),
+				"amount": 26,
+				"lifetime": 0.5,
+				"one_shot": true,
+				"explosiveness": 1.0,
+				"additive": true,
+				"speed": Vector2(2.5, 6.0),
+				"spread": 85.0,
+				"gravity": Vector3(0.0, -9.8, 0.0),
+				"size": Vector2(0.05, 0.14),
+				"radius": 0.3,
+			}
+		)
+	)
+
+
+## Asphalt-Staubfahne hinter dem Auto (deliveryRush-Muster, Dauer-Emitter —
+## city_drive.gd schaltet sie ab ~60 % Vmax an).
+func build_drive_dust() -> GPUParticles3D:
+	return (
+		Fx
+		. particles(
+			{
+				"color": Color(0.78, 0.72, 0.62, 0.5),
+				"amount": 26,
+				"lifetime": 0.9,
+				"speed": Vector2(0.5, 1.4),
+				"spread": 30.0,
+				"gravity": Vector3(0.0, 0.9, 0.0),
+				"size": Vector2(0.25, 0.6),
+				"radius": 0.4,
+			}
+		)
+	)
+
+
+## Gras-Staub fürs Offroad-Rumpeln (grünlich, steigt leicht auf).
+func build_grass_puff() -> GPUParticles3D:
+	return (
+		Fx
+		. particles(
+			{
+				"color": Color(0.6, 0.68, 0.4, 0.7),
+				"amount": 22,
+				"lifetime": 0.7,
+				"speed": Vector2(0.8, 2.0),
+				"spread": 45.0,
+				"gravity": Vector3(0.0, 1.4, 0.0),
+				"size": Vector2(0.18, 0.45),
+				"radius": 0.5,
+			}
+		)
+	)
+
+
+## Einzelstück aus {mesh, xform}-Teilen (parts_by_height liefert die Liste —
+## Models.node passt nur nach BREITE ein, Laternen brauchen die Höhe).
+func _one_off(parts: Array) -> Node3D:
+	var holder := Node3D.new()
+	for entry: Dictionary in parts:
+		var mi := MeshInstance3D.new()
+		mi.mesh = entry["mesh"]
+		mi.transform = entry["xform"]
+		holder.add_child(mi)
+	return holder
 
 
 ## Goldmünze: liegender, leuchtender Zylinder — von der Verfolgerkamera aus

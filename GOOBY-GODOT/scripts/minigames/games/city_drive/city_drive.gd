@@ -18,6 +18,13 @@ extends MinigameBase
 ##
 ## KEIN Screenshake beim Fahren (Motion-Comfort-Regel) — Crashes bekommen
 ## Frame-Freeze, Randblitz und eine Gooby-Grimasse.
+##
+## W16/G2-FEEDBACK-POLITUR (Scout minigames-g3 §5, nur Präsentation):
+## Intro-Beat 1,5 s (M1, Sim wartet — Muster star_hopper), Funken+Ruck bei
+## Remplern/Crashes, Gras-Staub + Toast abseits der Straße, Staubfahne ab
+## ~60 % Vmax (deliveryRush-Muster), Wind-Loop mit Tempo-Pitch (vorhandenes
+## SFX, kein neues Audio-File), persistente Strike-Pips im HUD und ein
+## Mini-Laden mit Laternen am Checkpoint (city_drive_world).
 
 const Logic := preload("res://scripts/minigames/games/city_drive/city_drive_logic.gd")
 const World := preload("res://scripts/minigames/games/city_drive/city_drive_world.gd")
@@ -55,6 +62,16 @@ const HINT_FADE_SEC := 7.0
 const GOOBY_H := 1.7
 ## Autopilot (nur Screenshots/Zertifizierung): so scharf zielt er.
 const BOT_STEER_GAIN := 1.6
+## W14-Intro-Beat (s): Kamera-Orbit ums Auto + Ziel-Banner, Sim wartet.
+const INTRO_S := 1.5
+## Rempler-Feedback höchstens alle 0,8 s — Dauerschleifen am selben Haus
+## sollen rumpeln, aber nicht dauer-freezen/-funken.
+const BUMP_COOL_S := 0.8
+## Staubfahne ab diesem Anteil vom Vmax (deliveryRush: 55 %) — knapp UNTER
+## den 60 % der Grundfahrt (9/15), damit sie schon beim Cruisen lebt.
+const DUST_FROM_BAND := 0.58
+## Wind-/Fahrt-Loop: vorhandenes Ambience-SFX, Pitch/Volume folgen dem Tempo.
+const WIND_SFX_ID := "ranch_ambience_wind"
 
 var tune: Dictionary = {}
 var rng: GoobyRng
@@ -94,6 +111,19 @@ var _pop: GPUParticles3D
 var _cam_pos := Vector3.ZERO
 var _cam_look := Vector3.ZERO
 var _cam_ready := false
+var _intro_left := 0.0
+var _body: Node3D
+var _van_len := 4.0
+var _bump_kick := 0.0
+var _bump_cool := 0.0
+var _pip_pulse := 0.0
+var _offroad := false
+var _offroad_warned := false
+var _sparks: GPUParticles3D
+var _dust: GPUParticles3D
+var _grass_puff: GPUParticles3D
+var _venue: Node3D
+var _wind: AudioStreamPlayer
 
 
 func setup(context: MinigameCtx) -> void:
@@ -112,6 +142,11 @@ func setup(context: MinigameCtx) -> void:
 	_build_hud()
 	_sync_world(0.0)
 	_fit_viewport()
+	# Intro-Beat (M1): Kamera-Orbit ums Auto, Ziel-Banner, die Sim wartet —
+	# der Lauf bleibt danach zahlengleich (elapsed startet erst nach INTRO_S).
+	_intro_left = INTRO_S
+	_set_banner(I18nService.t("mg.cityDrive.intro"), INTRO_S + 1.0)
+	_gooby.call("emote", "happy", INTRO_S)
 	if is_inside_tree():
 		get_viewport().size_changed.connect(_fit_viewport)
 
@@ -119,6 +154,8 @@ func setup(context: MinigameCtx) -> void:
 func end() -> void:
 	super.end()
 	finished = true
+	if _wind != null:
+		_wind.stop()
 
 
 ## Pflicht-Layouthook: beide Orientierungen laufen über DIESE Funktion.
@@ -135,11 +172,24 @@ func apply_view(size: Vector2) -> void:
 
 
 func _process(delta: float) -> void:
+	if _wind != null:
+		_wind.stream_paused = not is_active() or finished
 	if not is_active() or finished:
+		return
+	if _wind != null and not _wind.playing:
+		_wind.play()
+	if _intro_left > 0.0:
+		_intro_left = maxf(_intro_left - delta, 0.0)
+		_banner_t = maxf(0.0, _banner_t - delta)
+		_sync_world(delta)
+		queue_redraw()
 		return
 	elapsed += delta
 	_banner_t = maxf(0.0, _banner_t - delta)
 	_crash_cool = maxf(0.0, _crash_cool - delta)
+	_bump_cool = maxf(0.0, _bump_cool - delta)
+	_bump_kick = maxf(0.0, _bump_kick - delta * 3.2)
+	_pip_pulse = maxf(0.0, _pip_pulse - delta * 2.4)
 	if autoplay:
 		_autopilot()
 	_step_van(delta)
@@ -259,6 +309,38 @@ func _build_stage() -> void:
 		)
 	)
 	_stage.add_child(_pop)
+	# W16/G2-Feedback-Bausteine kommen aus der Welt-Datei (Fabriken dort,
+	# Verhalten hier): Funken für Rempler, Staubfahne, Gras-Staub, Laden.
+	_sparks = _world.call("build_sparks") as GPUParticles3D
+	_stage.add_child(_sparks)
+	_dust = _world.call("build_drive_dust") as GPUParticles3D
+	_stage.add_child(_dust)
+	_grass_puff = _world.call("build_grass_puff") as GPUParticles3D
+	_stage.add_child(_grass_puff)
+	_venue = _world.call("build_checkpoint_venue") as Node3D
+	_stage.add_child(_venue)
+	_place_venue()
+	_build_wind()
+
+
+## Wind-/Fahrt-Loop aus einem VORHANDENEN Ambience-SFX (kein neues File):
+## eigener Player, weil AudioDirector-Loops keinen Live-Pitch können —
+## Pitch/Volume folgen in _sync_wind dem Tempo. Bus "Sfx" ⇒ Nutzer-Regler
+## und Master-Limiter gelten weiter; headless spielt der Dummy-Treiber still.
+func _build_wind() -> void:
+	var path := SfxMap.path(WIND_SFX_ID)
+	if not ResourceLoader.exists(path):
+		return
+	var stream: AudioStream = (load(path) as AudioStream).duplicate()
+	if stream is AudioStreamOggVorbis:
+		(stream as AudioStreamOggVorbis).loop = true
+	elif stream is AudioStreamWAV:
+		(stream as AudioStreamWAV).loop_mode = AudioStreamWAV.LOOP_FORWARD
+	_wind = AudioStreamPlayer.new()
+	_wind.bus = &"Sfx"
+	_wind.stream = stream
+	_wind.volume_db = -30.0
+	add_child(_wind)
 
 
 ## Spielerauto = das GEWÄHLTE Autohaus-Auto (ctx.car: glb + farbe), Fallback
@@ -272,7 +354,9 @@ func _build_car() -> void:
 	var body := Models.node(glb, CAR_WIDTH_M, true)
 	_tint_car(body, str(ctx.car.get("farbe", "")))
 	_van.add_child(body)
+	_body = body
 	var size := Models.fitted_size(glb, CAR_WIDTH_M)
+	_van_len = size.z
 	_gooby = GoobyMount.new()
 	_gooby.call("mount", GOOBY_H, true, false)
 	_gooby.position = Vector3(0.0, size.y * 0.99, -size.z * 0.18)
@@ -381,19 +465,44 @@ func _step_van(delta: float) -> void:
 	van_heading += steer * Logic.steer_rate(tune) * damp * delta
 	var target := Logic.target_speed(elapsed, tune)
 	var tile := Logic.world_to_tile(van_pos.x, van_pos.y)
-	if not Logic.is_road(tile.x, tile.y):
+	_offroad = not Logic.is_road(tile.x, tile.y)
+	if _offroad:
 		target *= 0.45
+		# Einmaliger Toast erklärt die stille Bremse (§5-Befund: „das Auto
+		# ist plötzlich langsam" wirkte wie ein Bug).
+		if not _offroad_warned:
+			_offroad_warned = true
+			_set_banner(I18nService.t("mg.cityDrive.offroad"), 2.2)
+			AudioDirector.try_play(self, "ui_tick", 0.9)
 	van_speed = Logic.step_speed(van_speed, target, delta, tune)
 	var dir := Vector2(sin(van_heading), -cos(van_heading))
 	var next_pos := van_pos + dir * van_speed * delta
 	if _blocked(next_pos):
 		van_speed *= 0.3
-		AudioDirector.try_play(self, "mg_junk", 0.9)
+		_bump_feedback(dir)
 	else:
 		van_pos = next_pos
 	var limit := Logic.TILE_M * (Logic.GRID * 0.5)
 	van_pos.x = clampf(van_pos.x, -limit, limit)
 	van_pos.y = clampf(van_pos.y, -limit, limit)
+
+
+## Rempler-Moment (§5 Prio 1): Funken an der Stoßstange, 40-ms-Freeze,
+## Gooby-Schreck und Karosserie-Ruck — gedrosselt über BUMP_COOL_S, die
+## MECHANIK (Tempo × 0.3, kein Strike) bleibt unverändert.
+func _bump_feedback(dir: Vector2) -> void:
+	if _bump_cool > 0.0:
+		return
+	_bump_cool = BUMP_COOL_S
+	var band01 := clampf(van_speed / float(tune["MAX_SPEED"]), 0.0, 1.0)
+	AudioDirector.try_play(self, "mg_junk", 0.85 + 0.25 * band01)
+	_gooby.call("emote", "scared", 0.9)
+	_bump_kick = 1.0
+	if not _reduced_motion():
+		var nose := van_pos + dir * _van_len * 0.55
+		Fx.burst(_sparks, Vector3(nose.x, 0.35, nose.y))
+	if ctx.juice != null:
+		ctx.juice.hit_freeze(40)
 
 
 func _blocked(pos: Vector2) -> bool:
@@ -454,6 +563,14 @@ func _crash() -> void:
 	van_speed *= float(tune["CRASH_SPEED_MULT"])
 	AudioDirector.try_play(self, "mg_spill", 0.85)
 	_gooby.call("emote", "dizzy", 1.5)
+	# W16/G2: das Auto reagiert sichtbar mit — Funken an der Stoßstange +
+	# Karosserie-Ruck (abklingend über _bump_kick) + Strike-Pip-Puls im HUD.
+	_bump_kick = 1.0
+	_pip_pulse = 1.0
+	if not _reduced_motion():
+		var fwd := Vector2(sin(van_heading), -cos(van_heading))
+		var nose := van_pos + fwd * _van_len * 0.55
+		Fx.burst(_sparks, Vector3(nose.x, 0.35, nose.y))
 	# KEIN Screenshake: Dauerfahrt, Motion-Comfort-Regel.
 	if ctx.juice != null:
 		ctx.juice.hit_freeze(70)
@@ -501,6 +618,7 @@ func _check_checkpoint() -> void:
 	checkpoints += 1
 	var reached := _checkpoint
 	_checkpoint = Logic.next_checkpoint(rng, van_pos)
+	_place_venue()
 	AudioDirector.try_play(self, "mg_win", 1.0 + 0.04 * float(mini(checkpoints, 5)))
 	_stage.call("pulse_glow", 1.0)
 	_gooby.call("emote", "ecstatic", 1.4)
@@ -524,6 +642,8 @@ func _finish_time_up() -> void:
 		ctx.report_score(score, score - prev)
 		_set_banner(I18nService.t("mg.cityDrive.zero_crash", {"n": bonus}))
 	AudioDirector.try_play(self, "mg_win")
+	if _wind != null:
+		_wind.stop()
 	if ctx.juice != null:
 		ctx.juice.win_moment()
 	finished = true
@@ -542,9 +662,9 @@ func _finish_time_up() -> void:
 	)
 
 
-func _set_banner(text: String) -> void:
+func _set_banner(text: String, seconds := 1.6) -> void:
 	_banner = text
-	_banner_t = 1.6
+	_banner_t = seconds
 
 
 func _fade_hint() -> void:
@@ -573,6 +693,7 @@ func _sync_world(delta: float) -> void:
 	_sync_coins()
 	_sync_ring()
 	_sync_camera(delta)
+	_sync_wind()
 
 
 func _sync_van() -> void:
@@ -582,6 +703,84 @@ func _sync_van() -> void:
 	var lean := clampf(steer * van_speed / float(tune["MAX_SPEED"]), -1.0, 1.0)
 	var basis := Basis(right, Vector3.UP, fwd) * Basis(Vector3.BACK, -lean * 0.06)
 	_van.transform = Transform3D(basis, Vector3(van_pos.x, 0.0, van_pos.y))
+	_sync_body_feel()
+	_sync_drive_dust()
+
+
+## Karosserie-Gefühl (nur Optik, Reduced-Motion-gegated): Nase taucht nach
+## Remplern/Crashes kurz ein (_bump_kick klingt in _process ab), abseits der
+## Straße rumpelt die Karosserie leicht.
+func _sync_body_feel() -> void:
+	if _body == null:
+		return
+	if _reduced_motion():
+		_body.position.y = 0.0
+		_body.rotation.x = 0.0
+		return
+	var kick := _bump_kick * _bump_kick
+	var bob := 0.0
+	if _offroad and van_speed > 2.0:
+		bob = 0.03 * sin(elapsed * 32.0)
+	_body.position.y = bob
+	_body.rotation.x = -0.12 * kick
+
+
+## Fahr-Partikel am Heck (deliveryRush-Muster): Asphalt-Staubfahne ab ~60 %
+## Vmax, Gras-Staub sobald es abseits der Straße rollt.
+func _sync_drive_dust() -> void:
+	if _dust == null or _grass_puff == null:
+		return
+	var tail := _van.global_transform * Vector3(0.0, 0.15, -_van_len * 0.45)
+	var moving := not _reduced_motion() and _intro_left <= 0.0
+	_dust.global_position = tail
+	_dust.emitting = (
+		moving and not _offroad and van_speed > float(tune["MAX_SPEED"]) * DUST_FROM_BAND
+	)
+	_grass_puff.global_position = tail
+	_grass_puff.emitting = moving and _offroad and van_speed > 2.0
+
+
+## Wind-/Fahrt-Loop folgt dem Tempo: schneller = höher + lauter (Werte um
+## die -12 dB der SfxMap-Zeile herum, der Sfx-Bus regelt weiter).
+func _sync_wind() -> void:
+	if _wind == null or not _wind.playing:
+		return
+	var band01 := clampf(van_speed / float(tune["MAX_SPEED"]), 0.0, 1.0)
+	_wind.pitch_scale = 0.85 + 0.55 * band01
+	_wind.volume_db = lerpf(-26.0, -11.0, band01)
+
+
+## Mini-Laden an die Seite des frischen Checkpoints stellen: bevorzugt der
+## Nachbar OHNE Straße Richtung Stadtmitte (Laden vor den Häusern), sonst die
+## Wiesenseite; an der Kreuzungs-Mitte (alle Nachbarn Straße) bleibt er weg.
+func _place_venue() -> void:
+	if _venue == null:
+		return
+	var tile := Logic.world_to_tile(_checkpoint.x, _checkpoint.y)
+	var candidates: Array[Vector2i] = [
+		Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)
+	]
+	if Logic.is_road(tile.x, tile.y + 1) or Logic.is_road(tile.x, tile.y - 1):
+		candidates = [Vector2i(1, 0), Vector2i(-1, 0)]
+	elif Logic.is_road(tile.x + 1, tile.y) or Logic.is_road(tile.x - 1, tile.y):
+		candidates = [Vector2i(0, 1), Vector2i(0, -1)]
+	candidates.sort_custom(
+		func(a: Vector2i, b: Vector2i) -> bool:
+			var center := Vector2i(Logic.CENTER, Logic.CENTER)
+			var ta := tile + a - center
+			var tb := tile + b - center
+			return ta.length_squared() < tb.length_squared()
+	)
+	for cand in candidates:
+		if Logic.is_road(tile.x + cand.x, tile.y + cand.y):
+			continue
+		# Tile-Offset (dr, dc) → Weltrichtung (x, z) = (dc, dr).
+		var side := Vector2(float(cand.y), float(cand.x))
+		_venue.visible = true
+		_venue.position = Vector3(_checkpoint.x + side.x * 7.6, 0.0, _checkpoint.y + side.y * 7.6)
+		_venue.rotation.y = atan2(-side.x, -side.y)
+		return
+	_venue.visible = false
 
 
 func _sync_traffic() -> void:
@@ -619,6 +818,9 @@ func _sync_camera(delta: float) -> void:
 	var cam: Camera3D = _stage.get("camera")
 	if cam == null:
 		return
+	if _intro_left > 0.0 and not _reduced_motion():
+		_sync_intro_camera(cam, delta)
+		return
 	var dir := Vector2(sin(van_heading), -cos(van_heading))
 	var fwd := Vector3(dir.x, 0.0, dir.y)
 	var lift := CAM_LIFT + (0.0 if landscape else CAM_PORTRAIT_LIFT)
@@ -643,6 +845,26 @@ func _sync_camera(delta: float) -> void:
 	_streaks.call("update", delta, van_speed, SpeedLines.rate_at(van_speed, STREAK_RATE))
 
 
+## Intro-Orbit (M1): die Kamera schwenkt in 1,5 s von seitlich-vorn (Auto +
+## Gooby im Bild) in die Verfolger-Pose — bei Reduced Motion steht stattdessen
+## sofort die normale Verfolgerkamera (der Fairness-Beat bleibt).
+func _sync_intro_camera(cam: Camera3D, delta: float) -> void:
+	var s: float = smoothstep(0.0, 1.0, 1.0 - _intro_left / INTRO_S)
+	var yaw := van_heading + PI * 0.9 * (1.0 - s)
+	var offset := Vector3(sin(yaw), 0.0, -cos(yaw))
+	var lift := lerpf(2.4, CAM_LIFT + (0.0 if landscape else CAM_PORTRAIT_LIFT), s)
+	var back := lerpf(6.5, CAM_BACK + (0.0 if landscape else CAM_PORTRAIT_BACK), s)
+	var here := Vector3(van_pos.x, 0.0, van_pos.y)
+	_cam_pos = here - offset * back + Vector3(0.0, lift, 0.0)
+	_cam_look = here + Vector3(0.0, 1.2, 0.0)
+	_cam_ready = true
+	cam.position = _cam_pos
+	cam.look_at(_cam_look, Vector3.UP)
+	_stage.call("set_fov_bonus", 0.0)
+	_streaks.set("enabled", false)
+	_streaks.call("update", delta, 0.0, 0.0)
+
+
 func _reduced_motion() -> bool:
 	var settings := get_node_or_null(^"/root/AppSettings")
 	if settings != null and settings.has_method("is_reduced_motion"):
@@ -663,7 +885,35 @@ func _project(world: Vector2) -> Vector2:
 
 func _draw() -> void:
 	_draw_compass()
+	_draw_strike_pips()
 	_draw_banner()
+
+
+## Persistente Strike-Pips (§5 Prio 2): DIE Zustandsinfo des Spiels — drei
+## Plätze unter der Zeit, gefüllt = Crash, der frischste pulst kurz auf.
+func _draw_strike_pips() -> void:
+	if tune.is_empty():
+		return
+	var radius := 7.0 * _ui
+	var gap := 24.0 * _ui
+	var base := Vector2(22.0 * _ui, 58.0 * _ui)
+	var ink := Color(0.18, 0.24, 0.16, 0.5)
+	var cream := Color(1.0, 0.99, 0.94, 0.9)
+	var dark := Color(0.36, 0.12, 0.08, 0.9)
+	for i in int(tune["STRIKE_LIMIT"]):
+		var center := base + Vector2(gap * float(i), 0.0)
+		var r := radius
+		if i == crashes - 1 and _pip_pulse > 0.0 and not _reduced_motion():
+			r = radius * (1.0 + 0.45 * _pip_pulse)
+		draw_circle(center, r + 2.0 * _ui, ink)
+		if i < crashes:
+			draw_circle(center, r, Color(0.95, 0.42, 0.3))
+			var a := r * 0.42
+			draw_line(center + Vector2(-a, -a), center + Vector2(a, a), dark, 2.0 * _ui)
+			draw_line(center + Vector2(-a, a), center + Vector2(a, -a), dark, 2.0 * _ui)
+		else:
+			draw_circle(center, r, Color(1.0, 0.99, 0.94, 0.22))
+			draw_arc(center, r - 1.0 * _ui, 0.0, TAU, 24, cream, 1.6 * _ui)
 
 
 ## Kompass-Pfeil zum Checkpoint-Ring (Verfolgerkamera: der Ring steht oft
@@ -703,18 +953,34 @@ func _draw_compass() -> void:
 	)
 
 
+## Banner mit Kontur (M7): Creme-Text stand vorher OHNE Outline direkt auf
+## dem hellen Abendhimmel; multiline, damit längere Texte (Intro) umbrechen.
 func _draw_banner() -> void:
 	if _banner_t <= 0.0 or _banner.is_empty():
 		return
 	var font := ThemeService.font(800)
 	var alpha := clampf(_banner_t * 1.2, 0.0, 1.0)
 	var w := minf(view_size.x - 24.0, 420.0 * _ui)
-	draw_string(
+	var pos := Vector2((view_size.x - w) * 0.5, view_size.y * 0.22)
+	var font_size := maxi(18, int(28.0 * _ui))
+	draw_multiline_string_outline(
 		font,
-		Vector2((view_size.x - w) * 0.5, view_size.y * 0.22),
+		pos,
 		_banner,
 		HORIZONTAL_ALIGNMENT_CENTER,
 		w,
-		maxi(18, int(28.0 * _ui)),
+		font_size,
+		-1,
+		maxi(4, int(8.0 * _ui)),
+		Color(0.24, 0.17, 0.12, alpha * 0.85)
+	)
+	draw_multiline_string(
+		font,
+		pos,
+		_banner,
+		HORIZONTAL_ALIGNMENT_CENTER,
+		w,
+		font_size,
+		-1,
 		Color(1.0, 0.99, 0.94, alpha)
 	)
