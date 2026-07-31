@@ -4098,7 +4098,7 @@
       "id": "windrad_deko",
       "name_de": "Windrad-Deko",
       "name_en": "Pinwheel Decoration",
-      "glb": "../ranch/gebaeude/windmuehle.glb",
+      "glb": "../minigames/mini_golf/windmill.glb",
       "footprint": [
         1,
         1
