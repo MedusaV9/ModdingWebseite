@@ -5,8 +5,14 @@ extends Node3D
 ## wartet dann am Waschbecken (Warte-Pose). Tap aufs Becken startet die
 ## Rubbel-Mini-Interaktion (5 s Coverage-Geste), Abschluss: brush_teeth-Clip,
 ## Schaum-Sparkle, Buff „frische_zaehne“ + teeth_brushed-Counter (Sticker!).
-## Zahnbürsten-Bruch-Chance kommt aus der W2b-Balance
-## (`zahnbuersten_bruch_chance`).
+##
+## W13C GOOBYMAN (Doc H §6.4): der alte Einmal-Bruch-Gag ist jetzt eine
+## Haltbarkeits-Zustandsmaschine (ZahnbuersteState: neu → benutzt →
+## ausgefranst → GEBROCHEN). Die Abnutzungs-CHANCE pro Session kommt
+## unverändert aus der W2b-Balance (`zahnbuersten_bruch_chance`, remote-
+## änderbar). Gebrochene Bürste = Zähneputzen blockiert, bis eine neue aus
+## inventory.items aktiviert wird (Kauf beim GOOBYMAN in der Stadt); beim
+## allerersten Bruch erklärt eine Erste-Male-Karte den Weg dorthin.
 
 var _host: InteractablesHost
 var _rng := RandomNumberGenerator.new()
@@ -18,6 +24,7 @@ var _waiting_pose_done := false
 func setup(host: InteractablesHost, furniture: Node3D) -> void:
 	_host = host
 	_rng.randomize()
+	ZahnbuersteState.register_slice()
 	add_child(InteractablesHost.make_tap_area(furniture, _on_tapped))
 
 
@@ -45,6 +52,14 @@ func _take_waiting_pose() -> void:
 func _on_tapped() -> void:
 	if _busy or _room_busy():
 		return
+	# W13C: gebrochene Bürste blockiert — außer im Inventar wartet Ersatz
+	# vom GOOBYMAN, dann wird der automatisch eingespannt.
+	var gs := _host.game_state()
+	if gs != null and ZahnbuersteState.ist_gebrochen(gs):
+		if ZahnbuersteState.aktiviere_ersatz(gs).is_empty():
+			_say("goobyman.zahnputz.blockiert")
+			return
+		_say("goobyman.zahnputz.neue_buerste")
 	_busy = true
 	_start_rub_game()
 
@@ -67,9 +82,15 @@ func _start_rub_game() -> void:
 func _on_rub_finished() -> void:
 	_overlay.queue_free()
 	_overlay = null
-	var broke := BadState.brush_breaks(_rng.randf(), BadState.brush_break_chance())
+	# W13C: Abnutzung würfeln (RNG injiziert, Chance = Balance-Pack wie
+	# bisher) — statt des alten Einmal-Bruch-Gags.
+	var broke := false
+	var erster_bruch := false
 	var gs := _host.game_state()
 	if gs != null:
+		var session := ZahnbuersteState.putz_session(gs, _rng.randf())
+		broke = bool(session["gebrochen"])
+		erster_bruch = bool(session["erster_bruch"])
 		BadState.mark_brushed(gs, broke)
 		GoobyBuffs.grant(gs, "frische_zaehne", "hygiene", 10.0, 3.0, _now_ms())
 	var gooby := _gooby()
@@ -81,12 +102,22 @@ func _on_rub_finished() -> void:
 	AudioDirector.try_play(self, "ui_sticker")
 	_show_care_reward(gooby, 10)
 	_say("bad.zahnputz.bruch" if broke else "bad.zahnputz.fertig")
+	if erster_bruch:
+		_zeige_bruch_info()
 	_waiting_pose_done = false
 	_busy = false
 
 
 func is_busy() -> bool:
 	return _busy
+
+
+## Erste-Male-Karte beim ALLERERSTEN Bürsten-Bruch (W13C): erklärt einmalig,
+## dass es Ersatz beim GOOBYMAN in der Stadt gibt (Latch im Slice).
+func _zeige_bruch_info() -> void:
+	var karte := BruchInfoKarte.new()
+	karte.theme = ThemeService.theme()
+	_ui_layer().add_child(karte)
 
 
 ## Pflege-Belohnung (EF-1, EVAL-1 D6): „+{n}“-Float + Glitzer über Gooby.
@@ -134,6 +165,41 @@ func _ui_layer() -> CanvasLayer:
 	layer.layer = 6
 	_host.add_child(layer)
 	return layer
+
+
+class BruchInfoKarte:
+	extends Control
+	## Erste-Male-Info (W13C): zentrierte AC-Karte mit Titel, Erklärtext und
+	## OK-Knopf — reine Theme-Bausteine, kein Asset.
+
+	func _ready() -> void:
+		set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		mouse_filter = Control.MOUSE_FILTER_STOP
+		var panel := PanelContainer.new()
+		panel.theme_type_variation = &"AcCard"
+		panel.set_anchors_preset(Control.PRESET_CENTER)
+		panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+		panel.grow_vertical = Control.GROW_DIRECTION_BOTH
+		panel.custom_minimum_size = Vector2(380.0, 0.0)
+		add_child(panel)
+		var box := VBoxContainer.new()
+		box.add_theme_constant_override("separation", 10)
+		panel.add_child(box)
+		var titel := Label.new()
+		titel.theme_type_variation = &"HeadlineLabel"
+		titel.text = I18nService.t("goobyman.bruch_info.titel")
+		box.add_child(titel)
+		var text := Label.new()
+		text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		text.custom_minimum_size = Vector2(340.0, 0.0)
+		text.size = Vector2(340.0, 0.0)
+		text.text = I18nService.t("goobyman.bruch_info.text")
+		box.add_child(text)
+		var ok := Button.new()
+		ok.theme_type_variation = &"PrimaryButton"
+		ok.text = I18nService.t("goobyman.bruch_info.ok")
+		ok.pressed.connect(queue_free)
+		box.add_child(ok)
 
 
 class RubOverlay:

@@ -125,6 +125,16 @@
       "fassade": {"glb": "", "awning": false, "tint": ""}
     },
     {
+      "id": "goobyman",
+      "name_key": "city.ort.goobyman",
+      "typ": "laden",
+      "tiles": [[6, 5]],
+      "strasse": [7, 5],
+      "distrikt": "zentrum",
+      "szene": "res://scenes/city/orte/goobyman.tscn",
+      "fassade": {"glb": "building-b", "awning": true, "tint": "#D94F8C"}
+    },
+    {
       "id": "funkelpark",
       "name_key": "park.ort.funkelpark",
       "typ": "freizeitpark",
