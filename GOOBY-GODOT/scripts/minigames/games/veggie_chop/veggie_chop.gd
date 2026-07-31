@@ -315,6 +315,9 @@ func _resolve_hit(entry: Dictionary) -> void:
 	_stage.chop()
 	AudioDirector.try_play(self, "mg_good", 1.0 + 0.04 * minf(swipe_combo, 6.0))
 	if ctx.juice != null:
+		# W14 Quick-Win: 30-ms-Mikro-Freeze — der Schnitt bekommt einen
+		# spürbaren Impakt-Punkt (Audit d=3; Junk hat 90 ms, Treffer hatten 0).
+		ctx.juice.hit_freeze(30)
 		ctx.juice.float_text(pos, "+%d" % points, AcTokens.LEAF_DARK)
 	if swipe_combo > 1:
 		AudioDirector.try_play(self, "mg_combo", 1.0 + 0.05 * minf(swipe_combo, 6.0))
