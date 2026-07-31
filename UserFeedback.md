@@ -54,23 +54,22 @@ _(gerade nichts offen — alle bisherigen Punkte stehen unten unter „Erledigt"
 
 ## 2. In Arbeit
 
-Runde W13 (30. Juli) — der Agent arbeitet gerade an:
+Runde W13 (30./31. Juli) — Welle A + B sind FERTIG (Details unten in „Erledigt"),
+der Agent arbeitet gerade an Welle C:
 
-- [~] **Frische unsignierte .ipa per GitHub Actions** — Lauf startet mit diesem Push;
-      danach baut jeder weitere Push automatisch eine neue (Artefakt `GOOBY-godot-unsigned-ipa`)
-- [~] **Tote Drähte reparieren:** GvZ-Sticker + Goldi-Code einlösbar machen,
-      „Wo ist mein Gooby?"-Knopf, Interaktions-Anzeige (Auge-Button)
-- [~] **Ball werfen** mit Gooby (alter Web-Klassiker) zurückbringen
-- [~] **Sammlungssets** (Fische/Gemüse/Landmarks/Leckereien) wieder sichtbar im Album
-- [~] **Sichtbarer Regen & Schnee** in Haus, Garten und Stadt (bisher nur auf der Ranch)
-- [~] **Radio-Regeln:** Bordmusik nur pausierbar, Skip erst nach IKEA-Kauf
-- [~] **Ranch ab Level 15** (statt 20) kaufbar + Ranch-Random-Events
-- [~] **6 fehlende Speisen** in den Katalog (Eis, Kuchen, Kürbis, Sundae, Zimtschnecke,
-      Cupcake) + Nutella & Nougatschleuse
-- [~] Danach: Post/Mail-Multiplayer + InstantGooby, GOOBERANDO-Vollausbau, Reisepass 2.0
-      mit Passfoto, Raumstation GOOB-1, Sticker-Glitzer, Geschichten-Stunde-Ausbau,
-      Schüttel-Secret, City Drive als Arcade-Runde u. v. m.
-- [~] Zum Schluss: STATUS.md/Doku auf den ehrlichen Ist-Stand bringen, Eval-Welle + Polish
+- [~] **InstantGooby + Snap A Gooby** (Foto-Feed + First-Person-Selfies, aufbauend
+      auf dem neuen Post/Mail-System)
+- [~] **GOB.TY** — der Wohnzimmer-Fernseher zeigt witzige Gooby-Clips
+- [~] **Goobyman-Laden** (Zahnbürsten-Haltbarkeit + Nachschub)
+- [~] **Garage mit Rolltor** + Layout-Presets („Raum speichern")
+- [~] **Fotomodus-Werkzeuge** (Pose/Emotion/Rahmen) + Gyro-Parallax
+- [~] **Neue Gooby-Animationen** (Tanzen, Tomatenwurf, Decken-Kletterer, Ragdoll
+      u. a. über die Blender-Pipeline)
+- [~] **E2E-„erste Stunde"-Test** + Difficulty-Zertifizierung weiterer Minispiele
+- [~] **ipa-Release-Automatik** (GitHub-Release + latest_native-Bump) + Soft-Restart
+- [~] **Webpanel-Ausbau** (GoobyPal-Ledger, Brettspiele, Ranch-Bestenlisten, Ban)
+      + Account-Umzugs-Code
+- [~] Zum Schluss: Mega-Eval-Welle (15 Prüf-Agents) + Fix-Wellen + Polish
 
 ---
 
@@ -88,6 +87,38 @@ Runde W13 (30. Juli) — der Agent arbeitet gerade an:
 ## 4. Erledigt
 
 Chronologisch nach Meldung; die Erklärung steht jeweils darunter.
+
+- [x] **Runde W13, Welle A+B (30./31. Juli): Backlog-Großputz — 20 Arbeitspakete**
+      Jeder Push baut jetzt automatisch eine frische unsignierte .ipa (Artefakt
+      `GOOBY-godot-unsigned-ipa`; Läufe 30592927997 + 30597075885 grün). NEU/GEFIXT:
+      Ball werfen & apportieren ist zurück (Web-Physik 1:1, Wohnzimmer); die 4
+      Sammlungssets (Fische/Gemüse/Sehenswürdigkeiten/Leckereien) sind wieder im Album
+      sichtbar UND werden von Angeln/Ernte/Lieferungen/Füttern echt befüllt; sichtbarer
+      Regen/Schnee/Gewitter jetzt auch in Haus (durchs Fenster), Garten und Stadt; die
+      Stadt liest echtes Wetter statt Dauer-Sonne; GvZ-Sticker sind endlich erspielbar
+      (L5/L10/L15-Meilensteine, 2 neue Sticker „Zaunheld" + „Nutella-Kommandant") und
+      der Geheimcode GOLDIGOLD schaltet Goldi frei; „Wo ist mein Gooby?" springt zu ihm
+      und er erzählt, was er gerade tut; der Auge-Knopf markiert alle anklickbaren
+      Objekte (Rim-Glow + Pfeile); Radio: Bordmusik ohne Kauf nur pausierbar, Sender/Skip
+      erst nach IKEA-Kauf, dazu „Was läuft?"-Ticker; Ranch ab Level 15 kaufbar + 4
+      Ranch-Random-Events (ausgebüxtes Pferd, Heudieb, Hufschmied, Karottenregen); 9 neue
+      Speisen inkl. Nutella + die Küchen-Nougatschleuse aus dem Web ist zurück;
+      Post/Mail-Multiplayer komplett (Briefe + Fotos + Geschenke an Freunde, Quota,
+      offline-Outbox); GOOBERANDO mit 3 Restaurants und echtem Fahrer auf der Karte;
+      Guber kostet 30 (Surge-Gag 18–20 Uhr: 45); City Drive ist jetzt eine echte
+      Arcade-Runde mit Score/Strikes, Autos haben Stats, die im Pregame stehen;
+      Reisepass 2.0 (Flip-Karte, eigenes Passfoto aus der Galerie, Stempelseite,
+      MRZ-Gag) + Abflugtafel im Split-Flap-Look + Boarding-Pass; Raumstation GOOB-1
+      als betretbarer Ort (2 Arcade-Terminals, Low-Gravity-Hopser); Weltengooby-Titel
+      bei 9/9 Zielen + 48-h-Erholungs-Boost + GOOBY-FREE-Shop am Flughafen; Besucher
+      schlafen abends auf der Couch; Coop-Fahrt mit synchronem Radio; Geschichten-Stunde
+      mit 6 Büchern/14 neuen Geschichten + Abnutzung; Schüttel-Secret (3 Stufen bis zum
+      Ragdoll-Flug + Geheim-Sticker „Ganz blümerant"); Decken-Bau-Layer + spannbare
+      Girlanden (Wimpel/Lichterkette/Pompons); Sticker-Rarity-Effekte (Gold glitzert,
+      Konfetti+Jingle); Galaxie-Fellfarbe mit Sternen-Shader; Klopapier-Mumie-Event;
+      Buchstaben-Typewriter in Dialogen; 5 Kauf-Bugs gefixt (Geld weg ohne Leistung —
+      Lambda-Capture-Falle); alte Debug-Instrumentierung entfernt; STATUS.md/Doku auf
+      den ehrlichen Ist-Stand gebracht.
 
 - [x] **Stelle immer sicher das die Github Actions runs erfolgreich sind.**
       ALLE DREI JOBS GRUEN (Lauf 30285924723: lint, linux-checks, ios-ipa). Die .ipa liegt als
