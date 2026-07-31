@@ -44,7 +44,22 @@
 //                  client-side by NetherOpenClientFx). 0 = bit-identical frame.
 //   HeatShimmer  — 0..1 heat haze: a small UV wobble on sky/far pixels only (the [i6]
 //                  seethe idiom on a faster clock), Detail-gated like every motion layer.
+// v6 additive uniforms (FX-13 A9 eclipse sky moments — same feeder, same commit):
+//   BloodDusk    — 0..1 day-10+ blood lean, fed only inside the sun-elevation twilight
+//                  window (VeilPostController.bloodDusk: synced event day × vanilla-sun
+//                  horizon edge — never midday). Multiplicative blood shift + highlight
+//                  ember + the [i3] horizon band deepens toward arterial red (the [v5]
+//                  HeatTint pattern). 0 = bit-identical frame.
+//   ShadowBands  — 0..1 totality shadow bands (TotalityPeakFx crescent-window driver,
+//                  >0 only ±20 s around the peak): thin, wavering, LOW-CONTRAST shadow
+//                  snakes racing over the WORLD ground — per-pixel world position is
+//                  reconstructed from scene depth (veil:space_helper, the wiki fog-
+//                  example law) and the bands live on worldPos.xz + Time, so they stick
+//                  to terrain, not to the screen. Total darkening ≤ ~0.10 (uncanny, not
+//                  loud), sky-masked, distance-faded, Detail-gated (pure motion layer).
+//                  0 = bit-identical frame.
 #include eclipse:eclipse_common
+#include veil:space_helper
 
 uniform sampler2D DiffuseSampler0;
 uniform sampler2D DiffuseDepthSampler;
@@ -60,6 +75,8 @@ uniform float ArrivalDim;
 uniform float EndTintPulse;
 uniform float HeatTint;
 uniform float HeatShimmer;
+uniform float BloodDusk;
+uniform float ShadowBands;
 
 in vec2 texCoord;
 
@@ -207,6 +224,45 @@ void main() {
         vec2 warp = vec2(wob * 0.0040, abs(wob) * 0.0026) * haze;
         vec3 wobbled = texture(DiffuseSampler0, texCoord + warp).rgb;
         color += clamp(wobbled - texture(DiffuseSampler0, texCoord).rgb, -0.25, 0.25) * haze * 0.8;
+    }
+
+    // [v6] FX-13 A9 blood dusk (from event day 10): the dawns and dusks bleed. Same law
+    // as the [v5] ember lean — a multiplicative blood shift (hue-first, the crush still
+    // owns brightness), a small ember lift that only the highlights receive (the low sun
+    // seems to burn), and the [i3] horizon band deepens toward arterial red where it is
+    // most readable. The feeder gates it to the twilight window (never midday) and
+    // scales it by the synced event day (0.15 day 10 → 0.40 day 13+). Static per frame;
+    // zero uniform = bit-identical frame.
+    if (BloodDusk > 0.001) {
+        float duskLuma = dot(color, vec3(0.299, 0.587, 0.114));
+        color = mix(color, color * vec3(1.30, 0.72, 0.66), BloodDusk * 0.55);
+        color += vec3(0.070, 0.008, 0.012) * BloodDusk * smoothstep(0.30, 0.85, duskLuma);
+        color += vec3(0.30, 0.03, 0.06) * band * bandMask * BloodDusk * 0.45;
+    }
+
+    // [v6] FX-13 A9 totality shadow bands: the real pre/post-totality phenomenon — thin,
+    // wavy, low-contrast shadow snakes hurrying across the ground. Per-pixel WORLD
+    // position from scene depth (veil:space_helper, the wiki fog-example reconstruction),
+    // so the bands are painted ONTO terrain in world space: two incommensurate sinusoid
+    // carriers stacked along world X (the sun's travel axis), each serpentined by a
+    // low-frequency drifting noise bend and scrolling at ~4–6 blocks/s. Only the darkest
+    // crests survive the smoothstep remaps, total darkening caps at ~0.10 (alpha law:
+    // uncanny, never loud). Sky-masked, faded out past ~50 blocks (grazing-angle smear
+    // guard), Detail-gated — a pure motion layer with no static story to keep.
+    // Zero uniform = bit-identical frame.
+    if (ShadowBands > 0.001) {
+        float bandsAmt = ShadowBands * Detail * (1.0 - sky);
+        if (bandsAmt > 0.001) {
+            vec3 wp = screenToWorldSpace(texCoord, depth).xyz;
+            float bandFade = 1.0 - smoothstep(20.0, 52.0, length(wp - VeilCamera.CameraPosition));
+            float bend1 = efxNoise(wp.xz * 0.060 + vec2(0.0, Time * 0.16)) - 0.5;
+            float bend2 = efxNoise(wp.xz * 0.034 + vec2(Time * 0.11, 3.7)) - 0.5;
+            float snake1 = sin(wp.x * 0.85 + bend1 * 7.0 + Time * 4.2);
+            float snake2 = sin(wp.x * 0.52 - bend2 * 9.0 - Time * 2.9 + 1.7);
+            float shade = smoothstep(0.45, 0.95, snake1) * 0.062
+                    + smoothstep(0.55, 0.95, snake2) * 0.038;
+            color *= 1.0 - shade * bandsAmt * bandFade;
+        }
     }
 
     // Exposure dip (0.62 during eclipse TOTAL, eased CPU-side over 60 ticks — the old

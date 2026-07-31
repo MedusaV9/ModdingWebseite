@@ -187,7 +187,11 @@ public final class VeilPostController {
                 || EclipseFxState.endTintPulse(partialTick) > 0.005F
                 // FX-12: the day-2 breach show plays at high noon too — the heat feed
                 // has to keep the pass alive on its own, exactly like the grade lane.
-                || EclipseFxState.netherHeat(partialTick) > 0.005F;
+                || EclipseFxState.netherHeat(partialTick) > 0.005F
+                // FX-13 A9: the blood-dusk window OPENS while the sun is still ~17° above
+                // the horizon, where dayFactor is 1 and NightAmount is exactly 0 — the
+                // lean must keep the pass alive on its own (the FX-12 heat precedent).
+                || bloodDusk(level, partialTick) > 0.005F;
     }
 
     /** FX-12: the heat haze runs at this share of the ember lean (one state value, two uniforms). */
@@ -223,6 +227,11 @@ public final class VeilPostController {
         float heat = EclipseFxState.netherHeat(partialTick);
         pipeline.getUniform("HeatTint").setFloat(heat);
         pipeline.getUniform("HeatShimmer").setFloat(heat * HEAT_SHIMMER_SHARE);
+        // v6 (FX-13 A9): totality shadow bands (TotalityPeakFx crescent-window driver —
+        // already 0 under reducedFx/rain/occlusion, so it passes through unfiltered) and
+        // the day-10+ blood-dusk lean. Both read 0 in idle (bit-identical frame).
+        pipeline.getUniform("ShadowBands").setFloat(TotalityPeakFx.shadowBands());
+        pipeline.getUniform("BloodDusk").setFloat(bloodDusk(level, partialTick));
     }
 
     // --- v3 (VEIL-REPASS-1): world_grade color script -----------------------------------
@@ -285,6 +294,51 @@ public final class VeilPostController {
         return 10.0F;
     }
 
+    // --- v6 (FX-13 A9): blood dusk ------------------------------------------------------
+
+    /** Blood-dusk starts on this event day (census N7: "the world knows the end is near"). */
+    private static final int BLOOD_DUSK_FIRST_DAY = 10;
+    /** Day the lean saturates (10 → 13 ramps {@value #BLOOD_DUSK_MIN} → {@value #BLOOD_DUSK_MAX}). */
+    private static final int BLOOD_DUSK_LAST_DAY = 13;
+    /** Uniform value on day 10 — dezent, a suspicion at the horizon. */
+    private static final float BLOOD_DUSK_MIN = 0.15F;
+    /** Uniform value from day 13 on — deutlich, the dusk openly bleeds. */
+    private static final float BLOOD_DUSK_MAX = 0.40F;
+
+    /**
+     * {@code world_grade BloodDusk} uniform: from event day {@value #BLOOD_DUSK_FIRST_DAY}
+     * the dawn/dusk windows lean blood-red, deepening daily until day
+     * {@value #BLOOD_DUSK_LAST_DAY}.
+     *
+     * <p><b>Day source</b>: {@code ClientStateCache.day} — the same server-synced field
+     * (S2CDayStatePayload, login re-send included) the sky escalation reads through
+     * {@code EclipseSkyState.dayEscalation}; no new packets.</p>
+     *
+     * <p><b>Window source</b>: the VANILLA {@code level.getSunAngle}, deliberately NOT
+     * {@link SunTracker#sunAngleRadians} — that follows the post-altar zenith hold, which
+     * pins {@code cos ≈ 1} forever and would close the twilight window for the whole late
+     * event. Dusk is a time-of-day story, and per the {@code EclipseSkyState} law the
+     * vanilla cycle still owns time of day (moon/stars/sunrise band keep it too). The
+     * same ±17°-of-horizon edge as {@link #phaseTint} gates it: dawn AND dusk fire,
+     * midday and midnight are exactly 0 (bit-identical frames).</p>
+     */
+    private static float bloodDusk(ClientLevel level, float partialTick) {
+        if (level == null || level.dimension() != Level.OVERWORLD) {
+            return 0.0F;
+        }
+        int day = dev.projecteclipse.eclipse.client.ClientStateCache.day;
+        if (day < BLOOD_DUSK_FIRST_DAY) {
+            return 0.0F;
+        }
+        float lean = Mth.lerp(Mth.clamp(
+                (day - BLOOD_DUSK_FIRST_DAY) / (float) (BLOOD_DUSK_LAST_DAY - BLOOD_DUSK_FIRST_DAY),
+                0.0F, 1.0F), BLOOD_DUSK_MIN, BLOOD_DUSK_MAX);
+        float angle = level.getSunAngle(partialTick);
+        float edge = Mth.clamp(1.0F - Math.abs(Mth.cos(angle)) / 0.30F, 0.0F, 1.0F);
+        edge = edge * edge * (3.0F - 2.0F * edge);
+        return lean * edge;
+    }
+
     /** R3: {@code clamp(1 − dayFactor) · 0.55} — overworld only (the nether has no day cycle). */
     private static float nightAmount(ClientLevel level, float partialTick) {
         if (level.dimension() != Level.OVERWORLD) {
@@ -326,6 +380,9 @@ public final class VeilPostController {
         // AltarIdleMotes, SanctumHum all read the same ladder).
         pipeline.getUniform("AltarWarmth").setFloat(
                 Mth.clamp(dev.projecteclipse.eclipse.client.ClientStateCache.altarLevel, 0, 5) / 5.0F);
+        // v4 (FX-13 A9): the black-sun snap rides the TotalityPeakFx crest timeline —
+        // the same crest that spawns the Photon diamond ring. 0 outside the peak beat.
+        pipeline.getUniform("SunSnap").setFloat(TotalityPeakFx.snapAmount(partialTick()));
     }
 
     /** Per-tick slew of the binary {@link SunTracker#sunOccluded} probe toward 0/1. */

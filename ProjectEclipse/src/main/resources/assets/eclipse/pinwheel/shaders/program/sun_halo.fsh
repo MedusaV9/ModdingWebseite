@@ -48,6 +48,16 @@
 // v3 additive uniform (same feeder, same commit — the additive rule):
 //   AltarWarmth — clamp(ClientStateCache.altarLevel, 0, 5) / 5 (the established
 //                 client altar-ladder normalization); halo temperature shift driver
+//
+// v4 (FX-13 A9): the black-sun snap.
+//   [s10] at the exact totality crest the sun snaps into a black hole for ~1.5 s: the
+//        disc interior collapses toward black, a thin bright corona ring hugs the
+//        silhouette with ONE hot diamond bead, and a few faint radial streamers escape —
+//        then everything blends softly back to the ordinary totality halo.
+// v4 additive uniform (same feeder, same commit — the additive rule):
+//   SunSnap — 0..1 envelope from TotalityPeakFx.snapAmount (hard 3-tick snap-in,
+//             25-tick black hold, 30-tick soft release), armed by the SAME rising crest
+//             that spawns the Photon diamond ring. 0 = bit-identical frame.
 #include eclipse:eclipse_common
 
 uniform sampler2D DiffuseSampler0;
@@ -58,6 +68,7 @@ uniform float RimOnly;
 uniform float Time;
 uniform float Detail;
 uniform float AltarWarmth;
+uniform float SunSnap;
 
 in vec2 texCoord;
 
@@ -112,7 +123,9 @@ void main() {
             exp(-dist / glowRadius * 3.0));
 
     // Sky pixels take the full effect; solid geometry only catches a soft 20% spill.
-    float spill = mix(0.2, 1.0, step(0.9999, texture(DiffuseDepthSampler, texCoord).r));
+    // (Hoisted sky flag: [s10] reuses the same depth sample — the spill math is unchanged.)
+    float skyHere = step(0.9999, texture(DiffuseDepthSampler, texCoord).r);
+    float spill = mix(0.2, 1.0, skyHere);
 
     float rimVis = mix(1.0, 0.35, occluded);          // occluded: faint rim silhouette
     float glowVis = 1.0 - smoothstep(0.10, 0.85, occluded); // occluded: glow fades out
@@ -163,5 +176,29 @@ void main() {
             * (2.0 / 255.0) * smoothstep(0.002, 0.05, haloLuma);
 
     color += halo + vec3(dither);
+
+    // [s10] FX-13 A9 black-sun snap (TotalityPeakFx crest timeline): the hole is applied
+    // AFTER the halo add so the glow core inside the disc collapses with it. The interior
+    // crushes to 5% (a hole, not a decal — some scene response survives), sky-gated so a
+    // treeline in front of the disc is never darkened; the thin corona ring, its one hot
+    // diamond bead (upper-right rim, the Photon ring's screen-side memory) and the faint
+    // 7-fold radial streamers ride snapVis = SunSnap × glowVis, so mid-snap occlusion
+    // fades the whole beat instead of popping it. Zero uniform = bit-identical frame.
+    if (SunSnap > 0.001) {
+        float snapVis = clamp(SunSnap, 0.0, 1.0) * glowVis;
+        float hole = (1.0 - smoothstep(sunRadius * 0.78, sunRadius * 1.02, dist))
+                * snapVis * skyHere;
+        color = mix(color, color * 0.05, hole);
+        float ringH = (dist - sunRadius * 1.05) / (sunRadius * 0.085);
+        float corona = exp(-ringH * ringH);
+        float accH = azimuth - 0.85;
+        float accent = exp(-accH * accH / 0.14);
+        float spokes = pow(abs(sin(azimuth * 7.0 + 0.4)), 18.0)
+                * exp(-max(dist - sunRadius, 0.0) / (sunRadius * 1.6));
+        vec3 snapColor = vec3(0.94, 0.86, 1.08)
+                * (corona * (0.55 + 0.75 * accent) + spokes * 0.18);
+        color += snapColor * snapVis * spill;
+    }
+
     fragColor = vec4(color, 1.0);
 }
