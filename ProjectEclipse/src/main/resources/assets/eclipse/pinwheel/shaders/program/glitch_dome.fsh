@@ -22,6 +22,17 @@
 //      is gated by gzDepthValid. On a dead depth attachment all five taps collapse onto one
 //      point, cross() is the zero vector, and a raw normalize() would paint NaN over the
 //      whole dome interior.
+//
+// F-102 GLITCH-FAMILY POLISH "HEX-SCHALE": the dome INTERFACE becomes visible from inside.
+// The dome zone carries no world origin (MansionDomeService arms it originAtCentre = false),
+// so the layer is built on the VIEW RAY alone: a hex lattice on the ray's sphere coordinates
+// (longitude scaled by an INTEGER so the atan seam lands on a whole lattice period) painted
+// where the world is FAR — a distance gate at 30..70 blocks catches the opaque hull (shell
+// radius is clamped to 48..72) and the sky, and leaves the mansion interior clean. A Fresnel
+// band brightens the hexes toward the horizon (grazing view = dome equator), which is the
+// "Fresnel-Kante" of the mandate; each cell breathes on its own hash phase, on the shared
+// 5 s twinkle divisor of the 100 s wrap. On a dead depth buffer the linearized distance
+// collapses to the near plane and the gate closes the layer — no NaN path, no garbage.
 #include eclipse:eclipse_common
 #include eclipse:eclipse_glitch
 #include veil:space_helper
@@ -45,6 +56,13 @@ const vec3 EDGE_GREEN = vec3(0.10, 1.00, 0.32);
 const vec3 FILL_GREEN = vec3(0.04, 0.22, 0.09);
 // CRT layer gain relative to the outline readout (plan: static/bar at 0.4×).
 const float CRT_WEIGHT = 0.4;
+// [F-102] Hex shell: integer longitude repeat (seam law), latitude scale, edge line width
+// in lattice units, and the far-distance gate that finds the hull (shell radius 48..72).
+const float HEX_LON = 26.0;
+const float HEX_LAT = 15.0;
+const float HEX_LINE = 0.07;
+const float HEX_NEAR = 30.0;
+const float HEX_FAR = 70.0;
 
 void main() {
     float s = clamp(Strength, 0.0, 1.0);
@@ -116,6 +134,24 @@ void main() {
                 + edgeAccent * edge * (0.85 * flicker + 0.45 * sweep)
                 + edgeAccent * 0.02 * sweep
                 + grainAccent * grain;
+
+        // ================ 1b) HEX SHELL — the dome interface (F-102) ======================
+        // View-ray sphere coordinates; the longitude repeat is an integer so the atan seam
+        // is invisible. Painted only where the world is far (the hull / the sky) — the
+        // mansion around the player stays a clean scanner readout.
+        vec3 ray = viewDirFromUv(texCoord);
+        float lon = atan(ray.z, ray.x) * 0.15915494 + 0.5;
+        vec2 hex = gzHex(vec2(lon * HEX_LON, ray.y * HEX_LAT));
+        float hexEdge = smoothstep(HEX_LINE, 0.0, hex.x);
+        // Per-cell breathing on the shared 5 s twinkle divisor; parked mid-glow at Detail 0.
+        float cellPulse = mix(0.75, 0.60 + 0.40 * sin(Time * GZ_TWINKLE_RATE + hex.y * 39.0), detail);
+        // Fresnel toward the horizon: grazing rays hit the dome equator — the bright edge.
+        float fresnel = pow(1.0 - clamp(abs(ray.y), 0.0, 1.0), 3.0);
+        // Far gate: sky counts as infinitely far; a dead depth buffer collapses lC to the
+        // near plane and closes the gate.
+        float shellVis = max(smoothstep(HEX_NEAR, HEX_FAR, lC) * depthOk, sky);
+        readout += edgeAccent * hexEdge * cellPulse * (0.10 + 0.35 * fresnel) * shellVis
+                + fillAccent * (0.35 + 0.65 * fresnel) * 0.30 * shellVis;
 
         // ================= 2) CRT LAYERS — pattern UVs only, readout input =================
         // Vertical-hold jitter: irregular gated frame slips (~3 rolls/s window). Shifts the

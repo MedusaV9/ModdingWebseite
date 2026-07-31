@@ -144,6 +144,30 @@ float gzVoidStars(vec3 p, float density, float time, float detail) {
             * (0.45 + 0.55 * fract(h * 13.7)) * twinkle;
 }
 
+// --- analytic hex lattice (F-102: glitch_dome / dome_shell) ---------------------------------
+// Pointy-top hexagon tiling via the classic two-offset-grid trick: ONE mod-pair, zero
+// texture taps, self-contained (uses only the private gzHash above — the include law).
+//
+// Returns vec2(edgeDist, cellHash):
+//   edgeDist — distance to the nearest hex EDGE in lattice units; 0.0 exactly on an edge,
+//              0.5 at a cell centre. Border glow = smoothstep(width, 0.0, edgeDist).
+//   cellHash — stable per-cell hash in [0,1) for per-cell flicker/pulse phases.
+//
+// Lattice periods are H = (1, sqrt(3)): callers that wrap a coordinate (longitude!) must
+// scale it by an INTEGER count so the seam lands on a whole lattice period. Keep |p| in the
+// low hundreds — the cell id feeds the sin-based gzHash (the fp32 conditioning law).
+vec2 gzHex(vec2 p) {
+    const vec2 H = vec2(1.0, 1.7320508);
+    vec2 a = mod(p, H) - H * 0.5;
+    vec2 b = mod(p - H * 0.5, H) - H * 0.5;
+    vec2 ga = dot(a, a) < dot(b, b) ? a : b;
+    // Cell centre in lattice space, snapped to kill fp jitter on the id hash.
+    vec2 id = floor((p - ga) * 4.0 + 0.5);
+    vec2 g = abs(ga);
+    float edge = 0.5 - max(dot(g, vec2(0.5, 0.8660254)), g.x);
+    return vec2(edge, gzHash(id * 0.25));
+}
+
 // --- accent colour (F-049) -------------------------------------------------------------
 // Every GLITCHZONE shader takes the uniform pair (AccentColor, AccentAmount) fed by
 // client.GlitchZoneFx. AccentAmount is the "a colour was commanded" ramp: at 0 the helpers
