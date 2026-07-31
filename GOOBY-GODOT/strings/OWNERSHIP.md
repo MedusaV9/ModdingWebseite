@@ -104,3 +104,5 @@ Regeln:
 - `phone.gooberando.*` + `phone.guber.surge` (additiv in `strings/<locale>/phone.json` — Restaurant-Wahl/Warenkorb/Live-Karte der GOOBERANDO-App, Guber-Surge-Spruch; Guber-`pitch` 25→30 mitgezogen) → Owner **W13B GOBERANDO** (Welle W13-B). *(per >> angehängt — beim nächsten Doku-Pass in die Tabelle oben heben)*
 
 - `city_leben.*` (NEUE Datei `strings/<locale>/city_leben.json` — Ziel-Chevron-GPS-Toasts im Fahr-HUD) → Owner **W13B GOBERANDO** (Welle W13-B). *(per >> angehängt — beim nächsten Doku-Pass in die Tabelle oben heben)*
+
+- `raumstation.*` + `gfree.*` + `rewards.food.weltraumMoehre` (NEUE Datei `strings/<locale>/raumstation.json` — Raumstation GOOB-1: Astro-Snack-Automat, Sternenfoto-Spot, Weltengooby-Toast; GOOBY-FREE-Shop am Flughafen inkl. Shuttle-Knopf; Anzeigename der Weltraum-Möhre) → Owner **W13B RAUMSTATION** (Welle W13-B). *(per >> angehängt — beim nächsten Doku-Pass in die Tabelle oben heben)*
