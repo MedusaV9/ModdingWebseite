@@ -117,6 +117,8 @@ func _einschalten() -> void:
 	set_process(true)
 	AudioDirector.try_play(self, "ui_toggle")
 	_say_key("gobty.an")
+	# W14/VOICE-Anbindung: frische Reaktions-Line (Bremse/Anti-Wdh. inklusive).
+	SeeleRunner.kommentar_im_raum(_host.room(), "w13.gobty")
 	_setz_gooby_hin()
 
 

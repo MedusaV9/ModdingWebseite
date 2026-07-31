@@ -450,6 +450,38 @@ func test_kommentar_api_spricht_und_merkt_sich_lines() -> void:
 	await wait_frames(1)
 
 
+func test_kommentar_im_raum_statischer_einstieg() -> void:
+	# W14/INTEGRATE: 1-Zeilen-Einstieg für Feature-Besitzer (Ball/Nougat/
+	# GOB.TY rufen SeeleRunner.kommentar_im_raum(room, kategorie)).
+	var kahl := RoomStub.new()
+	tree.root.add_child(kahl)
+	assert_eq(
+		SeeleRunner.kommentar_im_raum(kahl, "w13.ball"),
+		"",
+		"ohne GoobyReactions-Runner: still, kein Crash"
+	)
+	assert_eq(SeeleRunner.kommentar_im_raum(null, "w13.ball"), "", "room=null: still")
+	kahl.queue_free()
+	var gs := _fresh_gs()
+	var room := RoomStub.new()
+	room.gs_ref = gs
+	tree.root.add_child(room)
+	var runner := GoobyReactions.new()
+	runner.name = "GoobyReactions"
+	runner.now_ms_override = NOW_MS
+	runner.visuals_enabled = false
+	room.add_child(runner)
+	runner.setup(room)
+	runner.now_ms_override = NOW_MS + 91_000
+	var key := SeeleRunner.kommentar_im_raum(room, "w13.gobty")
+	assert_true(key.begins_with("soul.linie.w13.gobty."), "Einstieg findet die Seele (%s)" % key)
+	var bubble := _neuste_bubble(room)
+	assert_true(bubble != null, "Line wird gesprochen (AcBubble am Layer)")
+	room.queue_free()
+	gs.queue_free()
+	await wait_frames(1)
+
+
 # ── Slice: neue Felder überleben normalize ────────────────────────────────────
 
 

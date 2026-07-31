@@ -259,6 +259,9 @@ func _feiere(result: Dictionary) -> void:
 	RewardFx.herz_burst(_room, ball_welt + Vector3(0.0, 0.3, 0.0), HERZ_TEILE)
 	if _room.has_method("say"):
 		_room.say(I18nService.t(BallLogic.spruch_key(rng)))
+	# W14/VOICE-Anbindung: frische Reaktions-Line (Bremse/Anti-Wdh. inklusive,
+	# AcBubble-Queue reiht hinter dem Fang-Spruch ein).
+	SeeleRunner.kommentar_im_raum(_room, "w13.ball")
 
 
 # ── Helfer ────────────────────────────────────────────────────────────────────

@@ -96,6 +96,22 @@ static func attach_to(target_runner: Node) -> SeeleRunner:
 	return seele
 
 
+## Bequemer 1-Zeilen-Einstieg für Feature-Besitzer (Ball/Nougatschleuse/
+## GOB.TY/…, s. W14-Requests): sucht die Seele am GoobyReactions-Runner des
+## Raums und spricht eine frische Line der Kategorie (kommentar()). Fehlt
+## der Runner (nackte Test-Szene) oder hält die Bremse: still, gibt "".
+static func kommentar_im_raum(room: Node, kategorie: String) -> String:
+	if room == null:
+		return ""
+	var target_runner := room.get_node_or_null("GoobyReactions")
+	if target_runner == null:
+		return ""
+	var seele := target_runner.get_node_or_null("SeeleRunner")
+	if seele is SeeleRunner:
+		return (seele as SeeleRunner).kommentar(kategorie)
+	return ""
+
+
 func setup(target_runner: Node) -> void:
 	runner = target_runner
 	# W14/VOICE: Lücke JETZT lesen — der Betreten-Moment stempelt gleich

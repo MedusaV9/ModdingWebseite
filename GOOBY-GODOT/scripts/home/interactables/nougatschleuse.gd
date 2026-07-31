@@ -96,6 +96,8 @@ func _glob(gs: Object) -> void:
 	RewardHub.note_action(gs)
 	AudioDirector.try_play(self, "mg_perfect", 1.05)
 	_say_text(I18nService.t(KLECKS_KEYS[_rng.randi_range(0, KLECKS_KEYS.size() - 1)]))
+	# W14/VOICE-Anbindung: frische Reaktions-Line (Bremse/Anti-Wdh. inklusive).
+	SeeleRunner.kommentar_im_raum(_host.room(), "w13.nougat")
 	_show_reward(gooby, result)
 	_restore(gooby)
 
