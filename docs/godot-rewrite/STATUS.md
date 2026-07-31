@@ -1,8 +1,9 @@
 # STATUS — GOOBY-Godot-Rewrite (ehrlicher Ist-Stand)
 
-Stand: **W13-Beginn (31. Juli 2026)** — nach den Wellen W1–W5 (M1-Kern), Mega-Eval +
+Stand: **nach W14 (31. Juli 2026)** — nach den Wellen W1–W5 (M1-Kern), Mega-Eval +
 Fix-Wellen, W6–W12 (Games/IPA, Ranch-DLC, Feedback, Polish, Complete, Final/IPA, Visuals,
-Emotionen/Trailer) sowie den REST-1…5-/FERTIG-1-Pässen. Quellen: `GODOT-PLAN.md` (bindend),
+Emotionen/Trailer), den REST-1…5-/FERTIG-1-Pässen sowie **W13 A/B/C (Backlog-Großputz,
+30 Pakete) und W14 (User-Feedback-Runde: UI-Full-Rework u. v. m., 12 Pakete — s. u.)**. Quellen: `GODOT-PLAN.md` (bindend),
 `EVAL-VOLLSTAENDIGKEIT.md` (Revision FERTIG-1 + W13), die statischen Code-Verifikationen
 der W13-Planungswelle, Test-Runner- und CI-Ausgaben. Dieses Dokument sagt ehrlich,
 **was fertig ist** und **was Backlog ist** — die vollständige, nichts-verlierende
@@ -14,8 +15,9 @@ Backlog-Liste steht in `GODOT-PLAN.md` §6 (dort seit W13 mit ✅-Annotationen f
   3 fehlend, 1 offiziell gestrichen (Gooby Welt) — rund 90 %
   (`EVAL-VOLLSTAENDIGKEIT.md`, Rev. FERTIG-1). Einordnung dort: „inhaltlich
   komplettes Spiel in der Feinschliff-Phase — kein Alpha-Zustand mehr“.
-- **Tests:** 2.074+ Haupt-Tests, ~15.000 UI-Checks (W1c-Runner), 99 Server-Tests —
-  0 Failures. `gdlint`/`gdformat` sauber, alles headless reproduzierbar.
+- **Tests (nach W14):** 2.872 Haupt-Tests, 24.027 UI-Checks (W1c-Runner),
+  129 Server-Tests — 0 Failures. `gdlint`/`gdformat` sauber, alles headless
+  reproduzierbar.
 - **CI:** `gooby-godot.yml` grün **inklusive `ios-ipa`-Job** — jeder Push baut eine
   forensisch verifizierte, unsignierte .ipa (Artefakt `GOOBY-godot-unsigned-ipa`,
   ~189 MB). Sideload-Runbook: `docs/godot-rewrite/IOS-BUILD.md`.
@@ -114,26 +116,37 @@ Godot-Hauptsuite 2.074+ Tests grün):
   (`GOOBY-SERVER/README.md`).
 - Matchmaking/zufällige Gegner gibt es nicht (bewusst: nur Freunde).
 
-## W13 — läuft gerade (in Arbeit)
+## W13 + W14 — GELIEFERT (31. Juli, drei Wellen + Feedback-Runde)
 
-9 parallele Code-Pakete (Stand 31. Juli, Ergebnisse werden nach der Runde hier
-und in GODOT-PLAN §6 nachgeführt):
+**W13 A/B/C (30 Arbeitspakete, alle grün):** GvZ-Verdrahtung (Sticker/Goldi/B11),
+Gooby-Suche + Interaktions-Auge, Ball-Wurf, Wetter-FX überall, Sammlungssets im
+Album inkl. Award-Verdrahtung, 9 neue Speisen + Nougatschleuse, Radio-Gates,
+Ranch-Level-15 + 4 Ranch-Events, Netz-Kleinpaket (GoobyPal-Verlauf, ws://-Gate,
+Presence-i18n), Post/Mail-Multiplayer (Briefe/Fotos/Geschenke) + InstantGooby-Feed,
+GOOBERANDO-Vollausbau mit Fahrer-Sim, City Drive als Arcade-Runde + Auto-Stats +
+ctx.strike(), Reisepass 2.0 + Abflugtafel, Raumstation GOOB-1 + Urlaubs-Nutzen-Paket,
+Besucher-Couch + Coop-Fahrt mit Radio-Sync, Geschichten-Stunde-Vollausbau +
+Schüttel-Secret (+Geheim-Sticker), Decken-Layer + Girlanden, Sticker-Rarity-FX +
+2 GvZ-Meilenstein-Sticker, Galaxie-Fell, Klopapier-Mumie, Typewriter, GOB.TY,
+Goobyman-Laden, Garage + Layout-Presets, Foto-Werkzeuge + Gyro-Parallax +
+Snap A Gooby, E2E-„erste Stunde"-Test + Leak-Gate (38 Spiele, 0 Orphans),
+Difficulty-Zertifizierung 2→12 Spiele, ipa-Release-Job + Soft-Restart,
+Panel-Ausbau (Pal-Ledger/Spiele/Ranch/Bans) + Account-Umzugs-Code, 8 neue
+Rig-Clips (dance/tomato_throw/ceiling_cling/…), 5 Kauf-Bugs (Lambda-Capture)
++ DailyQuest-Claim-Bug gefixt.
 
-1. **GvZ-Verdrahtung** — Sticker-Counter + Kampagnen-Hook + Goldi-Code-Effekt
-   einlösbar machen; dazu der B11-Layout-Fix.
-2. **Gooby-Suche + Auge** — „Wo ist mein Gooby?“-Kamera-Fokus + Tat-Bubble;
-   Auge-Button → sichtbare Interaktions-Anzeige.
-3. **Ball** — Ball-Wurf/Fetch im Haus (letzte fehlende Kern-Care-Interaktion).
-4. **Wetter-FX** — sichtbarer Regen/Schnee in Haus, Garten und Stadt
-   (Generalisierung des Ranch-Controllers).
-5. **Sammlungssets** — die 4 alten Sets (Fische/Gemüse/Landmarks/Leckereien)
-   als Set-/Claim-UI im Album.
-6. **Speisen + Nougat** — 6 fehlende Katalog-Speisen mit vorhandenen Assets +
-   Nutella/Nougatschleuse.
-7. **Radio-Gates** — Bordmusik nur pausierbar, Skip/Sender erst nach IKEA-Kauf.
-8. **Ranch-Level-15 + Events** — Freischaltung ab Level 15 (statt 20) +
-   ranch-spezifische Random-Events.
-9. **Netz-Kleinpaket** — kleine Multiplayer-Nachzügler aus Backlog C.
+**W14 (User-Feedback-Runde, 12 Pakete):** UI-Full-Rework (Web-geeichte Tokens,
+AcBubble-Sprechblasen, Haptik, UiAnchors gegen Overlaps; alle Screens),
+Boot-Cover-Ladebildschirm mit echtem Fortschritt, Kühlschrank 2.0 mit
+Fütter-Sequenz, 120+ neue Lines + Antwort-Chips + 3 Gebrabbel-Melodien,
+Decken-Fade + Stadt-Top-5-Fixes, Mehrspieler-Settings (Server/Port/Secret) +
+Dev-Werkzeugkasten (6 Tabs), DLC-Hub + 2 komplette DLC-Design-Docs
+(Goo und Bye, McGooby), Minigame-Qualitätspass (38er-Audit, 6 Tiefen-Polituren
+— u. a. unsichtbares Ranch-Wettkampf-HUD gefunden —, 7 Quick-Wins).
+
+Zahlen nach W14: **2.872 Haupt-Tests / 24.027 UI-Checks / 129 Server-Tests — 0 rot.**
+Offen aus dem Feedback: Urlaub-Begleiten (W15), Minigame-Gruppe 2,
+DLC-Umsetzung, natives Widget/ActivityKit (braucht Signing).
 
 ## M2/M3 — Backlog (Kurzfassung; vollständig + bindend in GODOT-PLAN §6)
 

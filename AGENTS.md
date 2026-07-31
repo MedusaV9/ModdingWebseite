@@ -23,3 +23,30 @@ Arbeitsregeln für Agents in diesem Repo (GOOBY Godot-Rewrite).
 - Zeitabhängige Logik/Tests: Zeit und Zufall IMMER injizieren
   (`Clock`-Muster von `game_state.gd`, RNG als Parameter) — keine
   OS-Uhr/`randomize()` in testbarer Kernlogik.
+
+## Cursor Cloud specific instructions
+
+- **Toolchain (frische VM):** Godot 4.4.1 via `bash tools/ci/install_godot.sh`
+  (nach `/usr/local/bin/godot`); gdtoolkit via `pip3 install --user "gdtoolkit==4.*"`
+  (`~/.local/bin` in den PATH — non-interaktive Shells brauchen
+  `export PATH="$HOME/.local/bin:$PATH"`); Server-Deps via `npm install` in
+  `GOOBY-SERVER/` (sonst schlagen die 2 Netz-Integrationstests der Hauptsuite
+  fehl: „Cannot find package 'express'"). Blender 4.0.2 via apt (nur für
+  `tools/blender/`-Pipelines nötig).
+- **Die VM hat wenige Kerne** — parallele Godot-Instanzen vermeiden; die volle
+  Preflight (`bash tools/ci/preflight.sh`) dauert ~10–15 min. Einzelne
+  Testdateien laufen ohne den Runner über ein Wrapper-Skript nach dem Muster
+  von `tests/run_tests.gd` (SceneTree-Skript per absolutem Pfad an
+  `--script` übergeben; Aufruf immer über `tools/ci/run_godot_isolated.sh`).
+- **Import-Cache-Gotcha:** Neue `class_name`-Skripte/Assets brauchen EINMAL
+  `godot --headless --path GOOBY-GODOT --import`, sonst wirft der Test-Runner
+  Parse-Errors (staler global_script_class_cache); erzeugte `.uid`/`.import`
+  gehören MIT committet. Parallele `--import`-Läufe vermeiden (Cache-Race).
+- **Branch-Layout:** `main` enthält ein ANDERES Projekt (BAPBAP-Server, .NET).
+  Das Gooby-Spiel lebt auf `cursor/gooby-godot-rewrite-d1d8`. Der User schreibt
+  live in `UserFeedback.md` (auch per Web-Commit → vor dem Push fetchen/rebasen)
+  — Datei vor und nach jeder Runde lesen, Erledigtes abhaken.
+- **CI:** Jeder Push auf `GOOBY-GODOT/**` baut die unsignierte .ipa (Artefakt
+  `GOOBY-godot-unsigned-ipa`, Job `ios-ipa` auf macos-15, ~10-12 min).
+  Versionierte GitHub-Releases: Tag `ipa-v<semver>` pushen (Job `release`).
+  `gh` nur lesend nutzen (`gh run list/view`).

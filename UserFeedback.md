@@ -20,17 +20,21 @@ schreibt dazu, WAS er gemacht hat.
 > **Hier reinschreiben.** Stichworte reichen, z. B. „HUD im Querformat zu weit links"
 > oder „Taxi-Sound zu laut". Der Agent hakt sie ab und schreibt dazu, was er gemacht hat.
 
-_(Deine Meldungen vom 31. Juli sind angekommen — alle unten in „In Arbeit" übernommen, Runde W14 läuft.)_
+_(Runde W14 mit deinen Meldungen vom 31. Juli ist FERTIG — Details unten in „Erledigt". Offen/zurückgestellt aus der Runde:)_
 
-- [~] **UI-Full-Rework (ACNH-Stil, animierte runde Sprechblasen, Haptik, alle Screens inkl. Settings/Arcade, Notification/Bubble-Überschneidung)** — Runde W14, drei UI-Agents (Kern-Komponenten + alle Screens in zwei Gruppen)
-- [~] **Ladebildschirm wie früher** (Querformat-Coverartwork mit Ladebalken beim Erststart + Übergangs-Animation) — Coverart wird generiert, Agent baut den Flow
-- [~] **Kühlschrank-Rework** (Objekte richtig angezeigt, echte Fütter-Interaktion) + **mehr Voice-/Text-Lines**
-- [~] **Decke beim freien Umschauen ausblenden** + **Stadt-Feinschliff**
-- [~] **Mehrspieler-Settings** (Server + Port + Secret ohne Dev-Modus) + **DEV-Tools-Ausbau**
-- [~] **DLC-Bereich in den Settings** (alle DLCs mit Coverart + Info) + **Design der zwei neuen Riesen-DLCs „Goo und Bye" (Supermarkt) & „McGooby" (Fast-Food)** — Ideen-Sammler laufen; die DLCs selbst sind Mehr-Runden-Projekte, diese Runde liefert Konzept + DLC-Hub + Coverarts
-- [~] **Minispiel-Qualitätspass** — Bewertung + Verbesserung in Gruppen (ehrlich: 5 Agents pro Spiel × 37 Spiele sprengt eine Runde; die schwächsten Spiele werden zuerst einzeln poliert, weitere folgen jede Runde)
-- [~] **Urlaub begleiten** (Gooby im Urlaub besuchen, neue Bereiche) — Konzept + erster Ausbau
-- [-] **Dynamic Island / Live Activities + iOS-Homescreen-Widget** — braucht native Extensions, die nur in einer SIGNIERTEN App auf echtem Gerät laufen (unsignierte Sideload-.ipa kann keine Widget-/ActivityKit-Extension registrieren). Diese Runde: sauberes Scaffold + Doku, damit es beim Signing sofort scharf geht. Nicht vergessen — nur ehrlich zurückgestellt.
+- [~] **Urlaub begleiten** (Gooby im Urlaub besuchen, neue Bereiche) — noch nicht gebaut,
+      steht als nächster großer Punkt auf dem Plan (Runde W15)
+- [~] **Minispiel-Qualität, Gruppe 2** — die nächsten Kandidaten sind schon notiert
+      (purblePlace-UI, Steuergefühl ranchHerde/rocketRescue, gardenRush-Kulisse,
+      danceParty-Bühne, Level-Menü-Charme)
+- [~] **DLC-Umsetzung „Goo und Bye" + „McGooby"** — die kompletten Design-Dokumente
+      stehen (docs/godot-rewrite/DLC-GOO-UND-BYE.md + DLC-MCGOOBY.md), der DLC-Hub
+      zeigt beide als „BALD" — die Spiele selbst sind Mehr-Runden-Projekte
+- [-] **Dynamic Island / Live Activities + iOS-Homescreen-Widget** — braucht native
+      Extensions, die nur in einer SIGNIERTEN App auf echtem Gerät laufen (die
+      unsignierte Sideload-.ipa kann keine Widget-/ActivityKit-Extension registrieren).
+      Ehrlich zurückgestellt, nicht vergessen; die Godot-Seite hat die Andockpunkte
+      (LiveActivityBridge/NotifyStub) schon.
 
 ---
 
@@ -101,6 +105,46 @@ der Agent arbeitet gerade an Welle C:
 ## 4. Erledigt
 
 Chronologisch nach Meldung; die Erklärung steht jeweils darunter.
+
+- [x] **Runde W14 (31. Juli): dein komplettes Feedback vom Morgen — 12 Arbeitspakete**
+      **UI-Full-Rework:** Buttons/Karten exakt an der alten Web-Version geeicht (Press-Squish
+      0.94 mit Feder-Overshoot, wärmere dicke Outlines), NEUE animierte runde ACNH-Sprechblasen
+      (Pop-In-Wackler, Atmen, Buchstaben-Typewriter, Sprech-Schwanz) überall, haptisches
+      Feedback auf JEDEM Knopf (abschaltbar unter Einstellungen → Haptik), und Notifications
+      können Goobys Bubble strukturell nie mehr überlappen (Anker-Zonen + Ausweich-Logik, per
+      Test bewiesen). Alle Screens reworked: Settings (6 Icon-Gruppen), Arcade, Profil (inkl.
+      Reisepass-Hochkant-Fix — lief 40 % übers Canvas!), Album (Off-Screen-Sticker gefixt),
+      HUD (Daumen-Zeile unten/Cockpit-Spalte quer nach Design-Doc), IKEA (Preis-Pillen statt
+      abgeschnittener Preise), Radio/Codes/News/Pause/Galerie im Einheits-Look.
+      **Ladebildschirm:** Beim App-Start jetzt ein generiertes Vollbild-Coverartwork
+      (Gooby + Garten/Stadt/Ranch-Panorama) mit ECHTEM Möhren-Ladebalken (an die realen
+      Boot-Phasen gekoppelt) + 10 knuffige Sprüche, dann Kreis-Wipe-Öffnung auf Gooby ins
+      Spiel; der Szenenwechsel-Veil wurde mitpoliert (hüpfender Gooby, Fortschritts-Punkte).
+      **Kühlschrank 2.0:** Regal-Grid mit echten 3D-Vorschauen, Kategorien-Chips,
+      Vorrats-Badges, Stat-Pillen — und eine richtige Fütter-Sequenz: die Speise schwebt zu
+      Gooby, er mampft in 3 Bissen mit Krümeln und Sound, Lieblingsessen macht verliebt.
+      **Gooby lebendiger:** 120+ neue deutsche Text-Lines (Tageszeiten, Wetter, Reaktionen
+      auf alle neuen Features, Selbstgespräche), NEU: Antwort-Chips — du kannst Gooby
+      antworten und er reagiert (12 Mini-Dialoge), 3 Gebrabbel-Melodien (fragend/aufgeregt/
+      schläfrig).
+      **Decke weg beim Umschauen:** Kamera von oben = Decke/Balken/Dachschräge faden sanft
+      aus (Decken-Lampen im Baumodus als 30-%-Geister). **Stadt-Feinschliff:** Top-5-Diagnose
+      gefixt (Pastell-Fassaden-Varianz, Laternen-Lichtkegel nachts, begrünte Vorplätze,
+      weiche Distrikt-Übergänge, möblierter Wochenmarkt).
+      **Mehrspieler-Settings:** Server + Port + Secret jetzt ganz normal in den Einstellungen
+      (mit „Verbindung testen"-Knopf); Secret wird serverseitig geprüft (GOOBY_JOIN_SECRET).
+      **DEV-Tools-Werkzeugkasten:** 6 Tabs — Spielstand (Coins/XP/Sticker/Fixtures), Zeit
+      (Uhr-Offset + „Nächster Tag"), Events (jedes sofort auslösen + Wetter-Override),
+      Gegenstände (durchsuchbare Item-Vergabe), Netz (Config-Dump, Log, Outbox), Perf-Overlay.
+      **DLC-Hub:** Einstellungen → DLC mit großen Cover-Karten (Ranch = verfügbar/installiert,
+      „Goo und Bye" + „McGooby" = BALD mit generierten Coverarts + spoilerarmen Teasern);
+      beide neuen Riesen-DLCs sind fertig durchdesignt (je ~600-700 Zeilen Design-Doc mit
+      20-Perspektiven-Ideensammlung, Kern-Loops, Mitarbeiter-Gags, Multiplayer, Technik-Plan).
+      **Minispiel-Qualitätspass:** Alle 38 Spiele bewertet (5 Achsen); die 6 schwächsten tief
+      poliert — dabei ECHTEN Bug gefunden: die 3 Ranch-Wettkampf-Spiele hatten unsichtbares
+      HUD! Dazu GvZ-Intro + Mäher-Fix, starHopper-Forgiveness, runner-Licht, 7 Quick-Wins
+      (danceParty-Bahnen sichtbar, deliveryRush-Leuchtkugel, u. a.).
+      Qualität: Haupt-Runner 2872 Tests grün, UI-Runner 24027 Checks grün, Preflight grün.
 
 - [x] **Runde W13, Welle A+B (30./31. Juli): Backlog-Großputz — 20 Arbeitspakete**
       Jeder Push baut jetzt automatisch eine frische unsignierte .ipa (Artefakt
