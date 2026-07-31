@@ -425,8 +425,17 @@ ZERO3 = None  # placeholder; use nf3(0) at call sites (kept for readability of p
 # ---------------------------------------------------------------------------
 # Shapes (registry photon:shape) — emission volume + initial velocity direction
 # ---------------------------------------------------------------------------
+# Photon deserializes ShapeArcSetting.arcMode with valueOf-or-null (same trap as the
+# renderer enums, F-094a): an unknown name leaves the field null and the FIRST spawned
+# particle NPEs the render thread in ShapeArcSetting.sampleArcFraction — a hard client
+# crash, not a visual glitch. Validate at authoring time.
+_ARC_MODES = {"Random", "Loop", "PingPong", "BurstSpread"}
+
+
 def _shape_arc(mode="Random", spread=0.0, speed=1.0):
     """arcMode: Random | Loop | PingPong | BurstSpread (Unity arc emission modes)."""
+    if mode not in _ARC_MODES:
+        raise ValueError(f"invalid arc_mode {mode!r} (Photon enum: {sorted(_ARC_MODES)})")
     return {"arcMode": mode, "arcSpread": F(float(spread)), "arcSpeed": _nf(speed)}
 
 
@@ -1408,12 +1417,32 @@ def _validate_particle_config(config: dict, where: str) -> list:
     for key in ("emission", "shape"):
         if not isinstance(config.get(key), dict):
             errors.append(f"{where}: config.{key} missing/not a compound")
+    errors.extend(_validate_shape_arc(config.get("shape"), where))
     for key, value in config.items():
         if isinstance(value, dict) and "_enable" in value and not isinstance(value["_enable"], B):
             errors.append(f"{where}: config.{key}._enable is not a Byte")
     errors.extend(_validate_renderer(config, where))
     errors.extend(_validate_nf_wrappers(config, f"{where}.config"))
     return errors
+
+
+def _validate_shape_arc(shape, where: str) -> list:
+    """shapeArc.arcMode must be a real ShapeArcMode name — valueOf-or-null means an
+    unknown string NPEs the render thread on the first spawned particle (client crash)."""
+    if not isinstance(shape, dict):
+        return []
+    data = shape.get("data")
+    if not isinstance(data, dict):
+        return []
+    arc = data.get("shapeArc")
+    if not isinstance(arc, dict):
+        return []
+    mode = arc.get("arcMode")
+    if mode is not None and str(mode) not in _ARC_MODES:
+        return [f"{where}: shape.shapeArc.arcMode {str(mode)!r} is not a Photon "
+                f"ShapeArcMode ({sorted(_ARC_MODES)}) — deserializes to null and "
+                f"crashes the client on first spawn"]
+    return []
 
 
 def _validate_renderer(config: dict, where: str) -> list:

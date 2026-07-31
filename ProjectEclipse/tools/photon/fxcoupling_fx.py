@@ -256,7 +256,11 @@ def build_wizard_star_call(fast: bool = False) -> FxBuilder:
        .at(0.0, 0.0, TIP_Z)
        .with_emission(rate=constant(0.0),
                       bursts=[burst(time=0, count=constant(24), cycles=1)])
-       .with_shape(circle(radius=0.5, thickness=0.0, arc_mode="Uniform"))
+       # BurstSpread = Unity's even-around-the-arc distribution for burst counts —
+       # exactly the 24-point radial ring. ("Uniform" is NOT a ShapeArcMode; Photon
+       # valueOf-or-null'd it to null and the first ring particle NPE-crashed the
+       # client render thread. Caught in the F-101 live acceptance pass.)
+       .with_shape(circle(radius=0.5, thickness=0.0, arc_mode="BurstSpread"))
        .with_material(texture_material(CIRCLE, hdr=hdr(1.45, 1.4, 1.3),
                                        blend=BLEND_ADDITIVE))
        .with_cull_box(*cull)
