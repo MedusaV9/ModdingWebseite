@@ -13,6 +13,9 @@ signal status_changed(status: int)
 signal welcome_received(data: Dictionary)
 signal pushed(type: String, data: Dictionary)
 signal message_received(envelope: Dictionary)
+## ws://-Heimnetz-Gate (Doc C §7): unverschlüsselte Verbindung zu einem
+## öffentlichen Host wurde verweigert — Client bleibt im Offline-Modus.
+signal insecure_blocked(host: String)
 
 enum Status { OFFLINE, CONNECTING, ONLINE }
 
@@ -23,6 +26,8 @@ const RECONNECT_MAX_SEC := 30.0
 ## Fallback, wenn weder ContentRegistry noch config.json liefern (W2b-Doku).
 const DEFAULT_NET := {"host": "127.0.0.1", "port": 8765, "tls": false}
 const EMBEDDED_CONFIG_PATH := "res://content/config/data/config.json"
+## Toast-Text fürs Heimnetz-Gate (strings/<locale>/net.json).
+const GATE_TOAST_KEY := "net.gate.ws_heimnetz"
 
 ## Beim _ready automatisch verbinden (Autoload-Betrieb). Tests: false.
 var auto_connect := true
@@ -58,6 +63,8 @@ var _identity: Dictionary = {}
 var _reconnect_attempts := 0
 var _reconnect_at_ms := -1
 var _heartbeat_accum := 0.0
+## Gate-Toast nur EINMAL pro geblocktem Host (Reconnects spammen sonst).
+var _gate_toasted_host := ""
 
 
 func _ready() -> void:
@@ -115,8 +122,17 @@ func connect_now() -> void:
 	if _link != null:
 		return
 	var net_config := _resolve_net_config()
-	var scheme := "wss" if net_config.get("tls", false) else "ws"
-	var url := "%s://%s:%d/ws" % [scheme, net_config["host"], int(net_config["port"])]
+	var use_tls := bool(net_config.get("tls", false))
+	var host := str(net_config.get("host", ""))
+	# ws://-Heimnetz-Gate (Doc C §7 / AP-12): unverschlüsselt NUR zu privaten/
+	# lokalen Zielen — sonst kein Verbindungsversuch, Offline-Modus + Toast.
+	# wss:// (tls) bleibt immer erlaubt. Der Reconnect-Backoff bleibt aktiv,
+	# damit eine korrigierte Remote-Config (tls=true) sofort wieder greift.
+	if not use_tls and not NetHostGate.is_private_host(host):
+		_refuse_insecure(host)
+		return
+	var scheme := "wss" if use_tls else "ws"
+	var url := "%s://%s:%d/ws" % [scheme, host, int(net_config["port"])]
 	_link = link_factory.call() if link_factory.is_valid() else WebSocketPeer.new()
 	_hello_sent = false
 	_set_status(Status.CONNECTING)
@@ -291,6 +307,30 @@ func _maybe_reconnect() -> void:
 	if Time.get_ticks_msec() >= _reconnect_at_ms:
 		_reconnect_at_ms = -1
 		connect_now()
+
+
+## Heimnetz-Gate hat zugeschlagen: offline bleiben, Signal + (einmal pro
+## Host) deutscher Fehler-Toast über einen ToastLayer im Baum, falls einer
+## existiert (headless/Tests: nur das Signal).
+func _refuse_insecure(host: String) -> void:
+	_schedule_reconnect()
+	_set_status(Status.OFFLINE)
+	insecure_blocked.emit(host)
+	if _gate_toasted_host == host:
+		return
+	_gate_toasted_host = host
+	push_warning("[net] ws:// zu öffentlichem Host »%s« blockiert — wss:// (TLS) nötig" % host)
+	_show_gate_toast()
+
+
+func _show_gate_toast() -> void:
+	var tree_ref := get_tree()
+	if tree_ref == null:
+		return
+	for layer in tree_ref.root.find_children("*", "ToastLayer", true, false):
+		if layer.has_method("show_toast"):
+			layer.show_toast(I18nService.t(GATE_TOAST_KEY), true)
+			return
 
 
 func _set_status(next: int) -> void:

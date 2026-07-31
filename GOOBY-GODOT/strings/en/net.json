@@ -27,6 +27,29 @@
 			"offline": "offline right now",
 			"coins": "ᴳ {coins}",
 			"request_from": "{name} ({gooby})"
+		},
+		"presence": {
+			"online": "is online",
+			"home": "is at home with {gooby}",
+			"park": "is at the park with {gooby}",
+			"city": "is out in the city with {gooby}",
+			"ikea": "is browsing the furniture store with {gooby}",
+			"garden": "is in the garden with {gooby}",
+			"visit": "is visiting a friend with {gooby}",
+			"board": "is playing a round of battleship",
+			"drive": "is out for a drive with {gooby}",
+			"vacation": "is on vacation with {gooby}",
+			"sleep": "is asleep — shhh, so is {gooby}",
+			"ranch": "is at the ranch with {gooby}",
+			"ranchbesuch": "is visiting a friend’s ranch with {gooby}",
+			"ausritt": "is out on a trail ride with friends",
+			"rennen": "is riding a race on the grass track",
+			"fangen": "is playing tag in the meadow",
+			"parcours": "is riding a jumping duel",
+			"minigame": "is playing “{name}”"
+		},
+		"gate": {
+			"ws_heimnetz": "Unencrypted connections are home-network only — use wss:// (TLS)"
 		}
 	}
 }

@@ -27,6 +27,29 @@
 			"offline": "gerade offline",
 			"coins": "ᴳ {coins}",
 			"request_from": "{name} ({gooby})"
+		},
+		"presence": {
+			"online": "ist online",
+			"home": "ist mit {gooby} zuhause",
+			"park": "ist gerade mit {gooby} im Park",
+			"city": "ist mit {gooby} in der Stadt unterwegs",
+			"ikea": "stöbert mit {gooby} im Möbelhaus",
+			"garden": "ist mit {gooby} im Garten",
+			"visit": "ist mit {gooby} zu Besuch bei einem Freund",
+			"board": "spielt eine Runde Schiffe versenken",
+			"drive": "fährt mit {gooby} eine Runde",
+			"vacation": "ist mit {gooby} im Urlaub",
+			"sleep": "schläft — pssst, {gooby} auch",
+			"ranch": "ist mit {gooby} auf der Ranch",
+			"ranchbesuch": "besucht mit {gooby} eine Freundes-Ranch",
+			"ausritt": "ist mit Freunden auf einem Ausritt",
+			"rennen": "reitet ein Wettrennen auf der Grasbahn",
+			"fangen": "spielt Fangen auf der Weide",
+			"parcours": "reitet ein Parcours-Duell",
+			"minigame": "spielt gerade „{name}“"
+		},
+		"gate": {
+			"ws_heimnetz": "Unverschlüsselte Verbindung nur im Heimnetz — nutze wss:// (TLS)"
 		}
 	}
 }
