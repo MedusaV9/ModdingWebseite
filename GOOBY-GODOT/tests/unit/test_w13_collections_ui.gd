@@ -7,9 +7,12 @@ extends TestCase
 ## Claim-Knopf-Zustände, Claim über den Knopf).
 
 const GameStateScript := preload("res://scripts/state/game_state.gd")
+const SaveSchema := preload("res://scripts/state/save_schema.gd")
 
 ## Injizierte Test-Zeit (Zeit kommt IMMER als Parameter — kein Uhr-Zugriff).
 const NOW_MS := 1_234_567
+## Injizierte Garten-Zeit (Muster test_home_garden — Ernte-Verdrahtung).
+const GARTEN_JETZT_S := 1768478400.0
 
 var _dir_seq := 0
 
@@ -147,6 +150,80 @@ func test_apply_claim_verweigert_unvollstaendig() -> void:
 	await wait_frames(1)
 
 
+# ── Award-Verdrahtung der Quellsysteme ────────────────────────────────────────
+
+
+func test_mapping_crop_und_food_ids() -> void:
+	assert_eq(CollectionsLogic.veggie_entry_for_crop("carrot"), "carrot", "identische Id")
+	assert_eq(CollectionsLogic.veggie_entry_for_crop("tomate"), "tomato", "DE-Alias")
+	assert_eq(CollectionsLogic.veggie_entry_for_crop("melone"), "watermelon", "DE-Alias")
+	assert_eq(CollectionsLogic.veggie_entry_for_crop("salat"), "salad", "DE-Alias")
+	assert_eq(CollectionsLogic.veggie_entry_for_crop("pilz"), "", "Crop ohne Set-Pendant")
+	assert_eq(CollectionsLogic.treat_entry_for_food("cupcakePink"), "cupcake", "Skin-Alias")
+	assert_eq(CollectionsLogic.treat_entry_for_food("ice-cream"), "ice-cream", "identische Id")
+	assert_eq(CollectionsLogic.treat_entry_for_food("carrot"), "", "kein Treat = kein Award")
+
+
+func test_angel_fangliste_wird_zu_set_eintraegen() -> void:
+	var ids := FishingPondLogic.collection_ids(
+		["sunnyCarp", "pearlMinnow", "__bonus", "gildedWhopper", "sunnyCarp"]
+	)
+	assert_eq(
+		ids,
+		["sunnyCarp", "tinyMinnow", "goldenFish", "sunnyCarp"],
+		"Seltenheiten mappen auf Basis-Ids, __bonus-Marker fliegt raus"
+	)
+	# So bucht der Minigame-Host das report_end-Feld (fish zählt Wiederholungen).
+	var state := {"collections": {"entries": {}, "claimedSets": {}}}
+	CollectionsLogic.award_report(state, {"score": 1, "collections": {"fish": ids}})
+	var entries: Dictionary = state["collections"]["entries"]
+	assert_eq(int(entries["fish.sunnyCarp"]), 2, "Doppelfang zählt ×2")
+	assert_eq(int(entries["fish.tinyMinnow"]), 1)
+	assert_eq(int(entries["fish.goldenFish"]), 1)
+
+
+func test_landmark_report_bucht_first_only() -> void:
+	var state := {}
+	var report := {"collections": {"landmarks": ["shop", "shop", "vetClinic"]}}
+	CollectionsLogic.award_report(state, report)
+	var entries: Dictionary = state["collections"]["entries"]
+	assert_eq(int(entries["landmarks.shop"]), 1, "firstOnly: nie über 1 (Web)")
+	assert_eq(int(entries["landmarks.vetClinic"]), 1)
+	CollectionsLogic.award_report(state, report)
+	entries = state["collections"]["entries"]
+	assert_eq(int(entries["landmarks.shop"]), 1, "auch über Runden hinweg nur 1")
+	CollectionsLogic.award_report(state, {"collections": "kaputt"})
+	CollectionsLogic.award_report(state, {})
+	assert_eq((state["collections"]["entries"] as Dictionary).size(), 2, "Müll-Payload = No-Op")
+
+
+func test_ernte_bucht_veggies_eintrag() -> void:
+	var gs := _garden_gs()
+	var beet := Vector2i(2, 2)
+	assert_true(GardenState.pflanzen(gs, beet, "tomate"))
+	GardenState.tick(gs, GARTEN_JETZT_S)
+	GardenState.giessen(gs, beet, GARTEN_JETZT_S)
+	GardenState.tick(gs, GARTEN_JETZT_S + GardenCrops.total_minutes("tomate") * 60.0)
+	assert_true(GardenState.ernten(gs, beet) > 0, "Ernte klappt")
+	var entries: Dictionary = gs.get_value("collections.entries", {})
+	assert_eq(int(entries.get("veggies.tomato", 0)), 1, "Godot-Crop tomate → Web-Eintrag tomato")
+	assert_eq(entries.size(), 1, "genau EIN Set-Eintrag pro Erntesorte")
+	_garden_teardown(gs)
+
+
+func test_fuettern_bucht_treats_eintrag() -> void:
+	var state := _feed_state({"cupcakePink": 2, "carrot": 1})
+	assert_false(FoodCatalog.apply_feed(state, "cupcakePink").is_empty(), "Füttern klappt")
+	var entries: Dictionary = state["collections"]["entries"]
+	assert_eq(int(entries.get("treats.cupcake", 0)), 1, "cupcakePink → Web-Eintrag cupcake")
+	assert_false(FoodCatalog.apply_feed(state, "carrot").is_empty())
+	entries = state["collections"]["entries"]
+	assert_eq(entries.size(), 1, "Möhre ist kein Treat = kein Eintrag")
+	assert_false(FoodCatalog.apply_feed(state, "cupcakePink").is_empty())
+	entries = state["collections"]["entries"]
+	assert_eq(int(entries.get("treats.cupcake", 0)), 2, "Wiederholung zählt hoch (kein firstOnly)")
+
+
 # ── UI-Smoke ──────────────────────────────────────────────────────────────────
 
 
@@ -243,6 +320,39 @@ func _fresh_gs() -> Node:
 	gs.initialize(dir + "/save_v5.json")
 	tree.root.add_child(gs)
 	return gs
+
+
+## GameState mit registriertem home-Slice + gepinnter Uhr (Muster
+## test_home_garden) — für den Ernte-Einbaupunkt in GardenState.ernten.
+func _garden_gs() -> Node:
+	_dir_seq += 1
+	var dir := "user://w13_tests/garten_%d_%d" % [Time.get_ticks_usec(), _dir_seq]
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(dir))
+	HomeState.register_slice()
+	var gs: Node = GameStateScript.new()
+	gs.clock.pin(int(GARTEN_JETZT_S * 1000.0))
+	gs.initialize(dir + "/save_v5.json")
+	return gs
+
+
+func _garden_teardown(gs: Node) -> void:
+	gs.free()
+	SaveSchema.unregister_slice(HomeState.SLICE_ID)
+	HomeState.reset_for_tests()
+
+
+## Minimaler Fütter-State (Muster test_ef1_fuettern._state).
+func _feed_state(food: Dictionary) -> Dictionary:
+	return {
+		"inventory": {"food": food},
+		"gooby":
+		{
+			"stats": {"hunger": 40.0, "fun": 50.0, "energy": 50.0, "hygiene": 50.0},
+			"weight": 50.0,
+			"health": {"junkScore": 0},
+		},
+		"achievements": {"counters": {}},
+	}
 
 
 func _open_album() -> Dictionary:

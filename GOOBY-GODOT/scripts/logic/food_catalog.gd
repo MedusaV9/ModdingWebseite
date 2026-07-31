@@ -180,6 +180,9 @@ static func apply_feed(state: Dictionary, food_id: String) -> Dictionary:
 		gooby["health"] = HealthLogic.on_eat(gooby.get("health"), junk)
 	var counters := _counters(state)
 	counters["feeds"] = int(_num(counters.get("feeds"))) + 1
+	# W13/SAMMLUNG: Süßes füllt das treats-Album-Set (Web interactions.js
+	# isTreat-Pfad); Foods ohne Set-Pendant sind ein No-Op.
+	CollectionsLogic.award_in_state(state, "treats", CollectionsLogic.treat_entry_for_food(food_id))
 	return {
 		"id": food_id,
 		"deltas": d,

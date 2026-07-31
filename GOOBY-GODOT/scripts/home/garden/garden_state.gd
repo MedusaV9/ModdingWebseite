@@ -198,6 +198,11 @@ static func ernten(gs: Object, at: Vector2i) -> int:
 			if food_id != "":
 				var food: Dictionary = state["inventory"]["food"]
 				food[food_id] = int(food.get(food_id, 0)) + menge
+			# W13/SAMMLUNG: jede Ernte füllt das veggies-Album-Set (Web
+			# gardenInteractions.js); unmappte Crops sind ein No-Op.
+			CollectionsLogic.award_in_state(
+				state, "veggies", CollectionsLogic.veggie_entry_for_crop(crop_id)
+			)
 	)
 	gs.notify_slice_changed("home")
 	_bump_counter(gs, "harvests")

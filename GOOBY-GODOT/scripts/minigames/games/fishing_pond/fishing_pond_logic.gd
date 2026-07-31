@@ -215,6 +215,18 @@ static func species_collection_id(species: String) -> String:
 	return species
 
 
+## W13/SAMMLUNG: Fangliste → fish-Set-Einträge fürs report_end (Web
+## framework.js: award('fish', speciesId) pro Fang). Der "__bonus"-Marker
+## (rare_set_bonus) ist kein Fang und fliegt raus; Seltenheiten mappen auf
+## ihre Basis-Album-Id.
+static func collection_ids(caught: Array) -> Array[String]:
+	var ids: Array[String] = []
+	for species: Variant in caught:
+		if str(species) != "__bonus":
+			ids.append(species_collection_id(str(species)))
+	return ids
+
+
 ## Farbe einer Art (Fallback: neutrales Teichgrau).
 static func species_color(species: String) -> Color:
 	return Color(str(SPECIES_COLORS.get(species, "#9FB2C8")))

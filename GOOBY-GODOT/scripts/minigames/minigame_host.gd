@@ -351,7 +351,7 @@ func _on_game_end(result: Dictionary) -> void:
 	_round_over = true
 	score = int(result.get("score", score))
 	_pause_button.disabled = true
-	var breakdown := _award(score)
+	var breakdown := _award(score, result)
 	_unlock_orientation()
 	round_finished.emit(breakdown)
 	# POLISH-A: dem Siegmoment im Spiel (Zeitlupe, Konfetti, Jubel-Text) eine
@@ -406,8 +406,9 @@ func _zuende_end_moment(breakdown: Dictionary) -> void:
 
 
 ## Award über GameState.update (Signale + Autosave); ohne GameState (Tests
-## ohne State) gibt es ein reines Anzeige-Breakdown ohne Buchung.
-func _award(final_score: int) -> Dictionary:
+## ohne State) gibt es ein reines Anzeige-Breakdown ohne Buchung. `result` =
+## report_end-Dictionary des Spiels (optionale Sammlungs-Funde, W13/SAMMLUNG).
+func _award(final_score: int, result: Dictionary = {}) -> Dictionary:
 	var gs := _resolve_state()
 	if gs == null:
 		return {
@@ -435,6 +436,8 @@ func _award(final_score: int) -> Dictionary:
 	gs.update(
 		func(state: Dictionary) -> void:
 			holder.append(MinigameAward.award(state, meta, final_score, mode, today, chunks, mod))
+			# W13/SAMMLUNG: organische Sticker-Funde der Runde (fish/landmarks).
+			CollectionsLogic.award_report(state, result)
 	)
 	return holder[0] if holder.size() > 0 else {}
 

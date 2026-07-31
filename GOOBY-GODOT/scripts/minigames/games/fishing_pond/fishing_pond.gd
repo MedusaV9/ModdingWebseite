@@ -910,7 +910,18 @@ func _finish() -> void:
 		return
 	finished = true
 	running = false
-	ctx.report_end({"score": score, "species": caught_species.size()})
+	# W13/SAMMLUNG: Fänge füllen das fish-Album-Set (Host bucht via
+	# CollectionsLogic.award_report — Web framework.js Rundenende).
+	(
+		ctx
+		. report_end(
+			{
+				"score": score,
+				"species": caught_species.size(),
+				"collections": {"fish": Logic.collection_ids(caught_species)},
+			}
+		)
+	)
 
 
 func _update_labels() -> void:

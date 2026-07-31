@@ -18,6 +18,15 @@ const Leveling := preload("res://scripts/logic/leveling.gd")
 ## §C5.2: Set-Vervollständigung gibt +50 XP (LEVELING.XP_SET_COMPLETE).
 const XP_SET_COMPLETE := 50
 
+## Godot-Garten-Crop-Id → veggies-Set-Eintrag (Web-Id). Nur Aliasse, die vom
+## Web-Namen abweichen; Crops ohne Set-Pendant (pilz/ananas/chili) mappen
+## auf "" (kein Award).
+const VEGGIE_BY_CROP := {"tomate": "tomato", "melone": "watermelon", "salat": "salad"}
+
+## Godot-Food-Katalog-Id → treats-Set-Eintrag (Web-Id). Nur Aliasse; Foods
+## ohne Set-Pendant (z. B. carrot/pizza) mappen auf "" (kein Award).
+const TREAT_BY_FOOD := {"cupcakePink": "cupcake"}
+
 ## Die 4 Web-Sets (§C6 verbatim, Reihenfolge wie constants.js COLLECTIONS):
 ## id, entries (8/8/6/10 Sticker-IDs), Münz-Belohnung, Deko-Belohnung.
 const SETS: Array[Dictionary] = [
@@ -111,6 +120,51 @@ static func award(c: Dictionary, set_id: String, entry_id: String, n := 1) -> Di
 	var next := normalize_slice(c)
 	next["entries"][entry_key(set_id, entry_id)] = prev + amount
 	return {"c": next, "first": prev == 0}
+
+
+## Einbaupunkt-Helfer für die Quellsysteme (INNERHALB von GameState.update
+## aufrufen): bucht EINEN Award direkt in den State. entry_id == "" ist ein
+## No-Op (unmappte Crop-/Food-Ids); first_only überspringt schon Besessenes
+## (Web-firstOnly für landmarks). Liefert das award-first-Flag.
+static func award_in_state(
+	state: Dictionary, set_id: String, entry_id: String, first_only := false
+) -> bool:
+	if entry_id.is_empty():
+		return false
+	var c := normalize_slice(state.get("collections"))
+	if first_only and count_of(c, set_id, entry_id) > 0:
+		return false
+	var res := award(c, set_id, entry_id)
+	state["collections"] = res["c"]
+	return bool(res["first"])
+
+
+## Minigame-Host-Helfer (INNERHALB von GameState.update aufrufen): bucht das
+## optionale report_end-Feld result["collections"] = {set_id: [entry_ids]}.
+## landmarks laufen firstOnly (Web framework.js: firstOnly nur für landmarks).
+static func award_report(state: Dictionary, result: Dictionary) -> void:
+	var payload: Variant = result.get("collections")
+	if not (payload is Dictionary):
+		return
+	for set_id: Variant in payload:
+		var entries: Variant = payload[set_id]
+		if not (entries is Array):
+			continue
+		for entry_id: Variant in entries:
+			award_in_state(state, str(set_id), str(entry_id), str(set_id) == "landmarks")
+
+
+static func veggie_entry_for_crop(crop_id: String) -> String:
+	return _entry_in_set("veggies", str(VEGGIE_BY_CROP.get(crop_id, crop_id)))
+
+
+static func treat_entry_for_food(food_id: String) -> String:
+	return _entry_in_set("treats", str(TREAT_BY_FOOD.get(food_id, food_id)))
+
+
+static func _entry_in_set(set_id: String, entry_id: String) -> String:
+	var ids: Array = set_def(set_id).get("entries", [])
+	return entry_id if ids.has(entry_id) else ""
 
 
 ## Kaputte/fremde Slices heilen (self-heal wie Web-mergeDefaults): liefert

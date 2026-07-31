@@ -104,6 +104,8 @@ var delivery_streak := 0
 var _grid: Array = []
 var _colliders: Array[Dictionary] = []
 var _targets: Array[String] = []
+## W13/SAMMLUNG: beliefert = besucht — Landmark-Ids für das landmarks-Set.
+var _visited_landmarks: Array[String] = []
 var _drop_points: Array[Vector2] = []
 var _traffic: Array[Dictionary] = []
 var _endless_state: Dictionary = {}
@@ -661,6 +663,7 @@ func _check_drop(before: Vector2) -> void:
 	var bonus := Logic.fragile_delivery_bonus(fragile_index, parcel, fragile_damaged)
 	if bonus > 0:
 		score += bonus
+	_visited_landmarks.append(_targets[parcel])
 	drops += 1
 	parcel += 1
 	delivery_streak += 1
@@ -735,7 +738,20 @@ func _finish() -> void:
 		return
 	finished = true
 	running = false
-	ctx.report_end({"score": score, "drops": drops, "crashes": crashes, "elapsed": elapsed})
+	# W13/SAMMLUNG: belieferte Landmarken füllen das landmarks-Set (Host
+	# bucht firstOnly via CollectionsLogic.award_report — Web framework.js).
+	(
+		ctx
+		. report_end(
+			{
+				"score": score,
+				"drops": drops,
+				"crashes": crashes,
+				"elapsed": elapsed,
+				"collections": {"landmarks": _visited_landmarks},
+			}
+		)
+	)
 
 
 func _set_banner(text: String) -> void:
