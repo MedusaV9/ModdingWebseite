@@ -42,10 +42,14 @@ Arbeitsregeln für Agents in diesem Repo (GOOBY Godot-Rewrite).
   `godot --headless --path GOOBY-GODOT --import`, sonst wirft der Test-Runner
   Parse-Errors (staler global_script_class_cache); erzeugte `.uid`/`.import`
   gehören MIT committet. Parallele `--import`-Läufe vermeiden (Cache-Race).
-- **Branch-Layout:** `main` enthält ein ANDERES Projekt (BAPBAP-Server, .NET).
-  Das Gooby-Spiel lebt auf `cursor/gooby-godot-rewrite-d1d8`. Der User schreibt
-  live in `UserFeedback.md` (auch per Web-Commit → vor dem Push fetchen/rebasen)
-  — Datei vor und nach jeder Runde lesen, Erledigtes abhaken.
+- **Repo-Umzug (W16):** Das Projekt lebt jetzt im Repo
+  `MedusaV9/MinecraftBubbleShieldMod` auf dem Branch
+  `cursor/gooby-godot-loop-2c10` (voller Verlauf des alten Branches
+  `cursor/gooby-godot-rewrite-d1d8` aus `MedusaV9/CustomServerPrivate` wurde
+  übernommen). `main` dieses Repos enthält ein ANDERES Projekt (Minecraft-Mod
+  „Bubble Shield", Java/Gradle) — auf diesem Branch nicht anfassen. Der User
+  schreibt live in `UserFeedback.md` (auch per Web-Commit → vor dem Push
+  fetchen/rebasen) — Datei vor und nach jeder Runde lesen, Erledigtes abhaken.
 - **CI:** Jeder Push auf `GOOBY-GODOT/**` baut die unsignierte .ipa (Artefakt
   `GOOBY-godot-unsigned-ipa`, Job `ios-ipa` auf macos-15, ~10-12 min).
   Versionierte GitHub-Releases: Tag `ipa-v<semver>` pushen (Job `release`).

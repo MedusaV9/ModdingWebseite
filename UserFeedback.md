@@ -20,7 +20,19 @@ schreibt dazu, WAS er gemacht hat.
 > **Hier reinschreiben.** Stichworte reichen, z. B. „HUD im Querformat zu weit links"
 > oder „Taxi-Sound zu laut". Der Agent hakt sie ab und schreibt dazu, was er gemacht hat.
 
+_(NEU seit W16: Das Projekt ist umgezogen — es lebt jetzt im Repo
+`MedusaV9/MinecraftBubbleShieldMod` auf dem Branch `cursor/gooby-godot-loop-2c10`,
+mit komplettem Verlauf. Alle Updates/Builds laufen ab jetzt über dieses Repo.
+Diese Datei bleibt dein direkter Draht: einfach unten reinschreiben.)_
+
 _(Runden W14 UND W15 sind FERTIG — Details unten in „Erledigt". Aktueller Stand:)_
+
+- [~] **W16 läuft (1. August):** Umzug hierher abgeschlossen; große Analyse-Welle
+      (Ladebildschirme der alten Web-Version als Vorlage, UI-Rework-Bestandsaufnahme
+      über alle Screens, Update-Kanal aufs neue Repo umstellen) + danach die
+      Umsetzungs-Wellen: **UI-Rework** (Hintergrund darf ins Vollbild, Knöpfe/Inhalte
+      mehr zur Mitte, angenehm erreichbar), **Ladebildschirme im Stil der alten
+      Version**, Update-Repoint, und weiter Polish/Bugfixes in Dauerschleife.
 
 - [~] **DLC-Umsetzung „Goo und Bye" + „McGooby"** — Design-Docs komplett, DLC-Hub zeigt
       beide als „BALD"; nächster Schritt ist Welle A des Goo-und-Bye-Fundaments
