@@ -7,11 +7,13 @@ Design sheet (docs/plans_v3/P6_mobs_models_builds.md §2.3) + the MOB-FOG palett
 mouth (#E9FFD8), branching charge veins (#A9F07E) crackling along the flanks,
 lightning-rod spine shards + horn antenna burning green-to-violet (#9C63E8), a
 three-bone STORM MANE at the neck (slate fur streaked with violet charge — flares on
-the windup/howl), and a three-segment whip tail with a static-charged tip.
+the windup/howl), two SHOULDER BLADE plates (`scapula_*`, tight dark fur with a
+charge-lit crest — they ride up over the spine on the howl/windup/gallop) and a
+three-segment whip tail with a static-charged tip.
 
 Emissive (glowmask): the `glow_spine_*` shards and `glow_horn` (auto-included), the
-flank veins, the mane charge streaks, the two eye dots and a faint charge on the tail
-tips (`tail_b`/`tail_c`).
+flank veins, the mane charge streaks, the scapula crests, the two eye dots and a faint
+charge on the tail tips (`tail_b`/`tail_c`).
 
 Run from the ProjectEclipse root (deterministic — reruns are byte-identical):
     python3 scripts/geckolib_gen/mobs/storm_hound.py
@@ -119,6 +121,32 @@ def mane_glow(px):
     return None
 
 
+def _scapula_ridge_at(px):
+    """The bony top edge of the shoulder blade: the whole up face plus row 0 of the side
+    faces — the line that breaks the fur silhouette when the blades ride up."""
+    if px.face == "up":
+        return True
+    if px.face not in ("east", "west", "north", "south"):
+        return False
+    return px.fy == 0
+
+
+def scapula(px):
+    """Shoulder blade plates: fur pulled tight over bone (darker than the flank, no
+    veins) with a charge-lit ridge along the crest."""
+    if _scapula_ridge_at(px):
+        return mix(MANE_VIOLET, VEIN_CORE, px.noise(97) * 0.45)
+    return _fur_px(px, 0.78)
+
+
+def scapula_glow(px):
+    """Only the crest glows, faintly — the blades pick up the spine shards' charge
+    instead of being lamps of their own."""
+    if _scapula_ridge_at(px):
+        return with_alpha(MANE_VIOLET, 120)
+    return None
+
+
 def skull(px):
     """Head fur, slightly darker than the body, with one bright eye dot per side of the
     north face (the snout cube covers the center, leaving the eyes at the corners)."""
@@ -219,6 +247,7 @@ def main():
     painter.set_material("head", skull)
     painter.set_cube_material("head", 1, snout)
     painter.set_material("jaw", jaw)
+    painter.set_material("scapula_*", scapula)
     painter.set_material("leg_*", leg_upper)
     painter.set_material("leg_*_lower", leg_lower)
     painter.set_material("tail_a", tail)
@@ -231,6 +260,7 @@ def main():
     painter.set_glow_painter("body", body_glow)
     painter.set_glow_painter("mane_*", mane_glow)
     painter.set_glow_painter("head", head_glow)
+    painter.set_glow_painter("scapula_*", scapula_glow)
     painter.set_glow_painter("tail_b", tail_tip_glow)
     painter.set_glow_painter("tail_c", tail_end_glow)
     painter.paint(OUT)

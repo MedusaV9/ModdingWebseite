@@ -27,6 +27,9 @@ import net.minecraft.world.entity.monster.Monster;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import software.bernie.geckolib.animation.AnimationController;
+import software.bernie.geckolib.animation.AnimationState;
+import software.bernie.geckolib.animation.PlayState;
+import software.bernie.geckolib.animation.RawAnimation;
 
 /**
  * Storm Hound / Sturmhund — the charged lunge pack hunter of the fog storms
@@ -36,6 +39,12 @@ import software.bernie.geckolib.animation.AnimationController;
  * <p><b>Pack kit</b> (Umbral Stalker precedent): leap, persistent melee (1.3, true), and
  * {@code HurtByTargetGoal().setAlertOthers()} — hit one hound and the whole pack turns.
  * W6's spawn rules place them in packs of 2–3.</p>
+ *
+ * <p><b>Locomotion:</b> the {@code base} controller runs three loops — idle, a diagonal
+ * trot ({@code walk}) and a true gallop ({@code sprint}, two suspension phases) gated on
+ * {@link #isAggressive()}. A stroll reads as a trot, a hunt reads as a gallop; the gate
+ * is latched client-side so it cannot flicker mid-stride
+ * (see {@link #handleBaseState}).</p>
  *
  * <p><b>Charged lunge</b> ({@link ChargedLungeGoal}): with a target 6–14 blocks out,
  * line of sight and the 160 t cooldown up, it roots for a 20 t windup (the
@@ -63,10 +72,17 @@ public class StormHoundEntity extends EclipseGeoMonster {
     public static final String ANIM_CHARGE_WINDUP = "charge_windup";
     public static final String ANIM_LUNGE = "lunge";
     public static final String ANIM_HOWL = "howl";
+    /** Second locomotion loop on the {@code base} controller — the hunting gallop. */
+    public static final String ANIM_SPRINT = "sprint";
     /** Scripted death window (sheet: side collapse + spine flicker-out). */
     public static final int DEATH_ANIM_TICKS = 30;
+    /** Client-side gallop hold — see {@link #updateSprintGate()}. */
+    private static final int SPRINT_HOLD_TICKS = 8;
 
     private boolean howled;
+    private RawAnimation cachedSprintAnim;
+    /** Client-only gallop latch (ticks remaining); never read or written server-side. */
+    private int sprintHold;
 
     public StormHoundEntity(EntityType<? extends StormHoundEntity> entityType, Level level) {
         super(entityType, level);
@@ -86,6 +102,43 @@ public class StormHoundEntity extends EclipseGeoMonster {
     @Override
     public String geoId() {
         return GEO_ID;
+    }
+
+    /**
+     * Three-state locomotion on the frozen {@code base} controller: idle, the diagonal
+     * trot ({@code walk}) and the hunting gallop ({@code sprint}) — no third controller.
+     * The gallop gate is {@link #isAggressive()} (set by {@code MeleeAttackGoal}, synced
+     * on the vanilla living-entity flag byte, so the client can read it) held open by the
+     * {@link #updateSprintGate()} latch.
+     */
+    @Override
+    protected PlayState handleBaseState(AnimationState<?> state) {
+        if (!state.isMoving()) {
+            return state.setAndContinue(idleAnim());
+        }
+        return state.setAndContinue(this.sprintHold > 0 ? sprintAnim() : walkAnim());
+    }
+
+    /** Cached {@code animation.storm_hound.sprint} loop (gallop with two flight phases). */
+    private RawAnimation sprintAnim() {
+        if (cachedSprintAnim == null) {
+            cachedSprintAnim = EclipseGeoAnimations.loop(GEO_ID, ANIM_SPRINT);
+        }
+        return cachedSprintAnim;
+    }
+
+    /**
+     * Client-side hysteresis on the gallop gate. {@code MeleeAttackGoal} clears
+     * {@code isAggressive()} for a tick whenever {@code LeapAtTargetGoal} preempts it or
+     * the path is recomputed; without the {@value #SPRINT_HOLD_TICKS} t latch the base
+     * controller would flip trot/gallop mid-stride and re-blend every time.
+     */
+    private void updateSprintGate() {
+        if (this.isAggressive() && this.isAlive()) {
+            this.sprintHold = SPRINT_HOLD_TICKS;
+        } else if (this.sprintHold > 0) {
+            this.sprintHold--;
+        }
     }
 
     @Override
@@ -127,6 +180,9 @@ public class StormHoundEntity extends EclipseGeoMonster {
     @Override
     public void tick() {
         super.tick();
+        if (this.level().isClientSide) {
+            updateSprintGate();
+        }
         if (this.level().isClientSide && this.isAlive() && this.random.nextInt(14) == 0) {
             // Ambient static crackle off the spine shards.
             this.level().addParticle(ParticleTypes.ELECTRIC_SPARK,

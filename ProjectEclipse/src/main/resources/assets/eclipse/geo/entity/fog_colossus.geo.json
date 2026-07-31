@@ -16,16 +16,30 @@
 					"pivot": [0, 0, 0]
 				},
 				{
-					"name": "body",
+					"name": "hips",
 					"parent": "root",
+					"pivot": [0, 12, 0]
+				},
+				{
+					"name": "body",
+					"parent": "hips",
 					"pivot": [0, 10, 0],
 					"cubes": [
 						{"origin": [-11, 10, -6], "size": [22, 22, 12], "uv": [0, 0]}
 					]
 				},
 				{
-					"name": "maw",
+					"name": "chest",
 					"parent": "body",
+					"pivot": [0, 20, -6],
+					"cubes": [
+						{"origin": [-11, 14, -7.2], "size": [5, 12, 1], "uv": [0, 34]},
+						{"origin": [6, 14, -7.2], "size": [5, 12, 1], "uv": [68, 34]}
+					]
+				},
+				{
+					"name": "maw",
+					"parent": "chest",
 					"pivot": [0, 20, -6],
 					"cubes": [
 						{
@@ -35,6 +49,14 @@
 								"north": {"uv": [108, 14], "uv_size": [12, 10]}
 							}
 						}
+					]
+				},
+				{
+					"name": "jaw",
+					"parent": "chest",
+					"pivot": [0, 18, -6.6],
+					"cubes": [
+						{"origin": [-6, 14, -7.4], "size": [12, 4, 1], "uv": [72, 82]}
 					]
 				},
 				{

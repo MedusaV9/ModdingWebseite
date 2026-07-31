@@ -166,6 +166,61 @@ def maw_glow(px):
     return maw(px) if maw_gap_at(px) else None
 
 
+def rib_at(px):
+    """Rib banding on the chest slabs: horizontal grooves every 3 texels — the bone cage
+    the `chest` bone inflates before a roar."""
+    return px.face in ("north", "south", "east", "west") and px.gy % 3 == 0
+
+
+def chest_rib(px):
+    """Chest cage slabs flanking the maw: cracked slate with rib grooves and the family
+    fissure light bleeding out of the deepest ones."""
+    if rib_at(px) and px.noise(131, x=px.gx, y=px.gy) > 0.78:
+        return fissure_color(px)
+    col = cracked_slate(SLATE_DARK, salt=37, fissures=False, rim=True)(px)
+    if rib_at(px):
+        col = mul(col, 0.7)  # groove shadow
+    return col
+
+
+def chest_rib_glow(px):
+    if rib_at(px) and px.noise(131, x=px.gx, y=px.gy) > 0.78:
+        return fissure_color(px)
+    if rim_at(px):
+        return with_alpha(RIM_VIOLET, 90)
+    return None
+
+
+def jaw_seam_at(px):
+    """The glowing seam along the TOP edge of the mandible plate (row 0 of the vertical
+    faces + the whole up face) — the lip of the chest maw. Widens into tooth notches."""
+    if px.face == "up":
+        return True
+    if px.face not in ("north", "south", "east", "west"):
+        return False
+    tooth = px.noise(137, x=px.gx, y=0) > 0.66
+    return px.fy == 0 or (tooth and px.fy == 1)
+
+
+def jaw_plate(px):
+    """Mandible: near-black stone with the glowing lip seam burned in bright (Iris parity
+    — conventions §4: emissive regions stay hot in the albedo too)."""
+    if jaw_seam_at(px):
+        return fissure_color(px)
+    col = mul(MAW_PIT, 0.95 + px.noise(139) * 0.5)
+    if px.noise(141) > 0.93:
+        return mix(col, CORAL_LO, 0.35)  # mineral crust on the chin
+    return col
+
+
+# Mostly-emissive lip plate: shadeless keeps the seam as bright as its glowmask copy.
+jaw_plate.shadeless = True
+
+
+def jaw_glow(px):
+    return fissure_color(px) if jaw_seam_at(px) else None
+
+
 def spine(px):
     """Back spines: dark slate shard with a glowing tip — the top 2 rows of every side
     face plus the whole up face burn green->violet."""
@@ -194,6 +249,8 @@ def spine_glow(px):
 def main():
     painter = GeoPainter(GEO, seed=SEED)
     painter.set_material("body", cracked_slate(SLATE))
+    painter.set_material("chest", chest_rib)
+    painter.set_material("jaw", jaw_plate)
     painter.set_material("maw", maw)
     painter.set_material("shoulders", cracked_slate(SLATE, rim=True))
     painter.set_material("back_slab_*", cracked_slate(SLATE_DARK, salt=17, rim=True))
@@ -205,6 +262,8 @@ def main():
     painter.set_material("head", head_stone)
     # Emissive: fissures + rim on the silhouette bones, maw gash, spine tips, eyes.
     painter.set_glow_painter("body", slate_glow())
+    painter.set_glow_painter("chest", chest_rib_glow)
+    painter.set_glow_painter("jaw", jaw_glow)
     painter.set_glow_painter("maw", maw_glow)
     painter.set_glow_painter("shoulders", slate_glow(rim=True))
     painter.set_glow_painter("back_slab_*", slate_glow(rim=True))

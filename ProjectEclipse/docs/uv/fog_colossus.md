@@ -2,7 +2,7 @@
 
 **Texture size:** 128×128 (both files — GeckoLib's `AutoGlowingTexture` enforces
 matching canvases; 128² is the frozen §6 canvas for the colossus tier). Model:
-`assets/eclipse/geo/entity/fog_colossus.geo.json` (GeckoLib, 14 bones / 17 cubes,
+`assets/eclipse/geo/entity/fog_colossus.geo.json` (GeckoLib, 21 bones / 25 cubes,
 3.4-block hulk — massive forearms, tiny head sunk between the shoulders, cracked-slab
 back, stumpy legs; walks half-gorilla). As with all GeckoLib mobs, the geo file **is**
 the UV source of truth — the painter (`scripts/geckolib_gen/paint_lib.py`) parses it
@@ -10,7 +10,11 @@ and computes every face rect itself, so only the layout is frozen here:
 
 | Bone | Cube | Box W×H×D | UV | Notes |
 |---|---|---|---|---|
+| hips | — | — | — | transform-only pelvis (pivot 0,12,0); carries the walk weight shift, no cube |
 | body | barrel | 22×22×12 | box-UV (0,0) | cracked slate, wandering fissures |
+| chest | rib pair | 5×12×1 ×2 | box-UV (0,34) / (68,34) | MA6: flanking rib plates on the chest front; inflate on the roar inhale. (0,34) is the dead corner **left of** the shoulder yoke's east face — box-UV rects verified non-overlapping |
+| maw | chest maw | 12×10×1 | per-face north (108,14) | upper maw plate; north face only (interior lit) |
+| jaw | mandible | 12×4×1 | box-UV (72,82) | MA6: hinged lower jaw under the maw (pivot 0,18,−6.6) |
 | shoulders | yoke | 26×16×16 | box-UV (0,34) | widest slab; fissures + coral fringe |
 | head | sunken head | 7×7×7 | box-UV (68,0) | head-tracked; 2 ember eyes north face |
 | back_slab_low | cracked slab | 16×14×3 | box-UV (84,34) | fissured back plate |
@@ -34,6 +38,9 @@ face.
 **Emissive (glowmask):** the fissure cracks on every slate bone + the two eyes — the
 telegraph read for the slam (fissures flare with the `slam` raise) and the light that
 bleeds out during the 50 t collapse. Coral shelves stay dark on the mask.
+MA6 adds two furnace regions: the **rib gaps** on `chest` (`#8FD5E8` → `#CFF3FF` between
+the rib bars — the light the chest inflation reveals) and the **jaw seam** on `jaw` (hot
+top edge, so the roar's jaw drop opens a bright line instead of a black slot).
 
 **Generator (deterministic, byte-identical reruns):**
 
