@@ -31,9 +31,10 @@
 # Job release (W13C, B §5.2): läuft NUR bei Tag-Push `ipa-v*` oder bei
 # workflow_dispatch MIT gesetztem Input `release_version` — normale
 # Branch-Pushes erreichen den Job nie (if-Gate + needs auf grüne
-# linux-checks UND ios-ipa). Er benennt die .ipa versioniert um und legt
-# sie als GitHub-Release-Asset ab. Der latest_native-Manifest-Bump ist als
-# auskommentierter Step vorbereitet (Manifest-Quelle fehlt noch, s. unten).
+# linux-checks UND ios-ipa). Er benennt die .ipa versioniert um, legt sie
+# als GitHub-Release-Asset ab und bumpt danach `latest_native` im
+# manifest.json des rollenden `updates`-Release DIESES Repos (W15/UPDREPO;
+# der Step überspringt sich sauber, solange es den Release noch nicht gibt).
 name: GOOBY Godot
 
 on:
@@ -379,30 +380,37 @@ jobs:
             ### Hinweise
             - Daten-Updates (Cosmetics, Sticker, Balance, …) kommen weiterhin OHNE neue
               IPA über „Nach Updates suchen“ in den Einstellungen (`docs/UPDATES.md`).
-            - Diese App-Version gehört als `latest_native` ins Update-Manifest, damit
-              ältere Apps den „Neue App-Version nötig“-Hinweis zeigen (s. Workflow-Step
-              bzw. `docs/UPDATES.md` §6, solange der Step noch auskommentiert ist).
+            - `latest_native` im Update-Manifest (rollender Release `updates` in diesem
+              Repo) bumpt dieser Lauf automatisch auf diese Version — ältere Apps zeigen
+              dann den „Neue App-Version nötig“-Hinweis. Existiert der `updates`-Release
+              noch nicht, wird der Bump sauber übersprungen (s. Step-Notice).
 
-      # --- latest_native-Bump (zweite Hälfte von B §5.2) — VORBEREITET, noch AUS ---
+      # --- latest_native-Bump (zweite Hälfte von B §5.2; W15/UPDREPO: SCHARF) ---
       # Der Client liest latest_native aus manifest.json am rollenden
-      # Release-Tag `updates` (docs/UPDATES.md §3; Parser scripts/updates/
-      # manifest.gd). Diesen `updates`-Release gibt es erst nach dem ersten
-      # gooby-packs.yml-Lauf mit publish=true; Zielbild ist sogar ein eigenes
-      # public Content-Repo `gooby-updates` (existiert noch nicht — User-Action,
-      # docs/UPDATES.md §6). Solange die Manifest-Quelle fehlt, wäre dieser Step
-      # zwangsläufig rot — deshalb auskommentiert statt fail-open.
-      # Einkommentieren, sobald der `updates`-Release existiert. Fürs Haupt-Repo
-      # reicht das GITHUB_TOKEN unten; fürs public Content-Repo stattdessen
-      # GH_TOKEN auf secrets.GH_CONTENT_TOKEN setzen und beide gh-Aufrufe um
-      # `--repo MedusaV9/gooby-updates` ergänzen.
-      #
-      # - name: latest_native im Update-Manifest bumpen
-      #   env:
-      #     GH_TOKEN: ${{ github.token }}
-      #     VERSION: ${{ steps.version.outputs.version }}
-      #   run: |
-      #     set -euo pipefail
-      #     gh release download updates --pattern manifest.json --dir manifest-bump
-      #     node tools/ci/bump_latest_native.mjs \
-      #       --manifest manifest-bump/manifest.json --version "$VERSION"
-      #     gh release upload updates manifest-bump/manifest.json --clobber
+      # Release-Tag `updates` DIESES Repos (docs/UPDATES.md §3; Parser
+      # scripts/updates/manifest.gd — das separate Content-Repo gooby-updates
+      # entfällt endgültig, User-Entscheidung W15). Robust statt rot: gibt es
+      # den `updates`-Release noch nicht (erster Pack-Release per packs-v*-Tag
+      # bzw. gooby-packs-Dispatch mit publish=true steht aus) oder fehlt das
+      # manifest.json-Asset, wird der Step mit einer Notice übersprungen.
+      # GITHUB_TOKEN reicht (Release im selben Repo); das Bump-Script selbst
+      # ist fail-closed (striktes Semver, Schema-Check, Downgrade-Verweigerung,
+      # idempotente Re-Runs — tools/ci/bump_latest_native.mjs).
+      - name: latest_native im Update-Manifest bumpen
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          if ! gh release view updates --json tagName >/dev/null 2>&1; then
+            echo "::notice::Kein 'updates'-Release vorhanden — latest_native-Bump übersprungen. Ersten Pack-Release fahren: git tag packs-v1.0.0 && git push origin packs-v1.0.0"
+            exit 0
+          fi
+          mkdir -p manifest-bump
+          if ! gh release download updates --pattern manifest.json --dir manifest-bump; then
+            echo "::notice::'updates'-Release hat kein manifest.json-Asset — latest_native-Bump übersprungen (Pack-Release prüfen)."
+            exit 0
+          fi
+          node tools/ci/bump_latest_native.mjs \
+            --manifest manifest-bump/manifest.json --version "$VERSION"
+          gh release upload updates manifest-bump/manifest.json --clobber
