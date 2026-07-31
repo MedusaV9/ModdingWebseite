@@ -16,6 +16,11 @@
 		"neu_laden_besuch": "You have a visitor right now — end the visit first, then reload.",
 		"neu_laden_brettspiel": "Your match is still running — finish it first, then reload.",
 		"neu_laden_minigame": "Mid-minigame! Finish the round first, then reload.",
-		"neu_laden_reise": "On the move right now — wait a moment and try again."
+		"neu_laden_reise": "On the move right now — wait a moment and try again.",
+		"token_label": "GitHub token (for app updates)",
+		"token_platzhalter": "github_pat_…",
+		"token_hinweis": "You get this from your server operator — needed because updates live in a private area.",
+		"token_gespeichert": "Saved — applies from the next update check.",
+		"token_fehlt": "Updates need an access key — Settings → Updates."
 	}
 }

@@ -728,6 +728,9 @@ func _build_updates_section() -> void:
 	var rows := _add_section("Updates", I18nService.t("settings.updates"))
 	var btn := _section_button(rows, "UpdateCheckButton", "settings.update_suchen")
 	btn.pressed.connect(_on_update_check)
+	# >> W15/UPDREPO Andock-Zeile (minimal): GitHub-Token-Zeile fuer App-Updates
+	# lebt in scripts/ui/settings/updates_sektion.gd.
+	rows.add_child(UpdatesSektion.new())
 
 
 ## W6/FIX-6: Weg zum Uebernahme-Screen fuer den Spielstand der alten App —

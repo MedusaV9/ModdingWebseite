@@ -16,6 +16,11 @@
 		"neu_laden_besuch": "Gerade ist Besuch da — erst den Besuch beenden, dann neu laden.",
 		"neu_laden_brettspiel": "Die Partie läuft noch — erst fertig spielen, dann neu laden.",
 		"neu_laden_minigame": "Mitten im Minispiel! Erst die Runde beenden, dann neu laden.",
-		"neu_laden_reise": "Gerade unterwegs — einen Moment warten und nochmal versuchen."
+		"neu_laden_reise": "Gerade unterwegs — einen Moment warten und nochmal versuchen.",
+		"token_label": "GitHub-Token (für App-Updates)",
+		"token_platzhalter": "github_pat_…",
+		"token_hinweis": "Bekommst du vom Server-Betreiber — nötig, weil die Updates in einem privaten Bereich liegen.",
+		"token_gespeichert": "Gespeichert — gilt ab der nächsten Update-Suche.",
+		"token_fehlt": "Updates brauchen einen Zugangsschlüssel — Einstellungen → Updates."
 	}
 }

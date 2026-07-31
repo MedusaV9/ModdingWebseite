@@ -55,6 +55,9 @@ func attach(screen: Node, service: Node = null) -> void:
 
 ## Ergebnis → updates.*-String-Keys (statisch, damit pur testbar).
 ## UPDATED mit native_update/gated liefert ZWEI Toasts (geladen + IPA-Hinweis).
+## W15/UPDREPO: ERROR mit details.token_required (privates Update-Repo ohne
+## Zugangsschlüssel angefragt) bekommt den klaren Token-Hinweis statt des
+## generischen „gerade nicht erreichbar“.
 static func result_text_keys(result: int, details: Dictionary) -> Array[String]:
 	var needs_native: bool = (
 		bool(details.get("native_update", false)) or not details.get("gated", []).is_empty()
@@ -70,6 +73,8 @@ static func result_text_keys(result: int, details: Dictionary) -> Array[String]:
 		UpdateService.Result.UP_TO_DATE:
 			return ["updates.alles_aktuell"]
 		_:
+			if bool(details.get("token_required", false)):
+				return ["updates.token_fehlt"]
 			return ["updates.fehler"]
 
 
