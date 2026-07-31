@@ -27,6 +27,7 @@ const ROUTE := &"profil"
 const ROUTES := {ROUTE: "res://scripts/ui/profil/profil_screen.tscn"}
 const PORTRAIT_BASE := 168.0
 const MAX_FRIEND_ROWS := 4
+const ICON_DIR := "res://assets/ui/icons/"
 
 ## Tests: Navigation abschaltbar; GameState/NetClient injizierbar.
 var auto_navigate := true
@@ -75,13 +76,14 @@ func _ready() -> void:
 
 
 func _build_ui() -> void:
-	var wallpaper := AcWallpaper.new()
-	wallpaper.set_anchors_preset(Control.PRESET_FULL_RECT)
-	add_child(wallpaper)
+	# W14: Pass-Stimmung (Web-V6 „passport“) statt Standard-Blätter — das
+	# HIER ist der GOOBY-PASS, der Hintergrund darf es zeigen.
+	add_child(AcWallpaper.for_context("passport"))
 
 	_rows_box = VBoxContainer.new()
 	_rows_box.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_rows_box.add_theme_constant_override("separation", 12)
+	# W14: 8er-Raster (12 war rasterfremd).
+	_rows_box.add_theme_constant_override("separation", 16)
 	add_child(_rows_box)
 	_rows_box.add_child(_build_header())
 
@@ -93,7 +95,7 @@ func _build_ui() -> void:
 	_rows_box.add_child(scroll)
 	_list_box = VBoxContainer.new()
 	_list_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_list_box.add_theme_constant_override("separation", 12)
+	_list_box.add_theme_constant_override("separation", 16)
 	scroll.add_child(_list_box)
 
 	_list_box.add_child(_build_pass_card())
@@ -106,14 +108,18 @@ func _build_ui() -> void:
 	_list_box.add_child(_build_sticker_card())
 	_list_box.add_child(_build_minigames_card())
 	_list_box.add_child(_build_friends_card())
+	# W14: Karten federn gestaffelt ein (Reduced Motion beachtet UiMotion).
+	UiMotion.stagger_in(_list_box.get_children(), 0.04)
 
 
 func _build_header() -> Control:
 	var header := HBoxContainer.new()
-	header.add_theme_constant_override("separation", 12)
+	header.add_theme_constant_override("separation", 16)
 	_back_btn = SquishButton.new()
 	_back_btn.name = "BackBtn"
-	_back_btn.theme_type_variation = &"BtnGhost"
+	# W14: Kopfzeilen-Konsistenz — Zurück ist überall die Ghost-OUTLINE-Pill
+	# (wie Settings/Arcade/Album), nicht die weiße Paper-Pill.
+	_back_btn.theme_type_variation = &"GhostButton"
 	_back_btn.text = I18nService.t("profil.zurueck")
 	_back_btn.focus_mode = Control.FOCUS_NONE
 	_back_btn.pressed.connect(_on_back_pressed)
@@ -151,7 +157,7 @@ func _build_pass_card() -> Control:
 ## Sammlungen aus AbschlussLogic; bei 100 % ersetzt eine Feier-Zeile den
 ## Hinweis — DAS ist das sichtbare Endziel des Spiels.
 func _build_abschluss_card() -> Control:
-	var card := _card("AbschlussCard", I18nService.t("profil.abschluss"))
+	var card := _card("AbschlussCard", I18nService.t("profil.abschluss"), "check")
 	var box := card.get_child(0) as VBoxContainer
 	var state: Dictionary = _gs.state() if _gs != null and _gs.has_method("state") else {}
 	var p := AbschlussLogic.prozent(state)
@@ -185,7 +191,7 @@ func _build_abschluss_card() -> Control:
 
 
 func _build_stats_card() -> Control:
-	var card := _card("StatsCard", I18nService.t("profil.statistik"))
+	var card := _card("StatsCard", I18nService.t("profil.statistik"), "book")
 	var grid := GridContainer.new()
 	grid.name = "StatsGrid"
 	grid.columns = 2
@@ -243,7 +249,7 @@ func _stat_cell(key_text: String, value_text: String) -> Control:
 ## Lieblinge aus der Seele: Essen = foodGiven-Spitzenreiter, Möbel =
 ## favFurniture (beide „Noch unbekannt“, solange die Seele nichts weiß).
 func _build_favorites_card() -> Control:
-	var card := _card("FavoritesCard", I18nService.t("profil.lieblinge"))
+	var card := _card("FavoritesCard", I18nService.t("profil.lieblinge"), "hunger")
 	var box := card.get_child(0) as VBoxContainer
 	box.add_child(
 		_field_row("Essen", I18nService.t("profil.lieblingsessen"), _favorite_food_text())
@@ -292,7 +298,7 @@ func _soul_slice() -> Dictionary:
 
 ## Erfolge-Vorschau: n/44-Balken + Sprung zum vollen Erfolgs-Screen (Rang 3).
 func _build_achievements_card() -> Control:
-	var card := _card("AchievementsCard", I18nService.t("profil.erfolge"))
+	var card := _card("AchievementsCard", I18nService.t("profil.erfolge"), "sparkle")
 	var box := card.get_child(0) as VBoxContainer
 	var catalog := AchievementsCatalog.all()
 	var unlocked := 0
@@ -317,7 +323,7 @@ func _build_achievements_card() -> Control:
 
 
 func _build_sticker_card() -> Control:
-	var card := _card("StickerCard", I18nService.t("profil.sticker"))
+	var card := _card("StickerCard", I18nService.t("profil.sticker"), "gift")
 	var box := card.get_child(0) as VBoxContainer
 	var catalog := StickerCatalog.all()
 	var total := StickerCatalog.regular_count(catalog)
@@ -334,7 +340,7 @@ func _build_sticker_card() -> Control:
 
 
 func _build_minigames_card() -> Control:
-	var card := _card("MinigamesCard", I18nService.t("profil.minigames"))
+	var card := _card("MinigamesCard", I18nService.t("profil.minigames"), "gamepad")
 	var box := card.get_child(0) as VBoxContainer
 	var plays: Variant = _value("minigames.plays", {})
 	var best: Variant = _value("minigames.legacy.best", {})
@@ -355,15 +361,30 @@ func _build_minigames_card() -> Control:
 
 
 func _build_friends_card() -> Control:
-	var card := _card("FriendsCard", I18nService.t("profil.freunde"))
+	var card := _card("FriendsCard", I18nService.t("profil.freunde"), "phone")
 	var box := card.get_child(0) as VBoxContainer
 	var friends := _friend_rows()
 	if friends.is_empty():
-		var empty := Label.new()
+		# W14: illustrierter Leerzustand (ACNH-Muster) — Hasen-Silhouette
+		# wie die Album-Mystery-Slots statt nackter Textzeile. Node-Name
+		# „FreundeLeer“ bleibt Testkontrakt (test_rest1_profil).
+		var empty := VBoxContainer.new()
 		empty.name = "FreundeLeer"
-		empty.theme_type_variation = &"SoftLabel"
-		empty.text = I18nService.t("profil.freunde_leer")
-		empty.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		empty.add_theme_constant_override("separation", 8)
+		var silhouette := TextureRect.new()
+		silhouette.texture = load(ICON_DIR + "rabbit.svg")
+		silhouette.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		silhouette.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		silhouette.custom_minimum_size = Vector2(0.0, 64.0)
+		silhouette.self_modulate = Color(AcTokens.INK, 0.18)
+		silhouette.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		empty.add_child(silhouette)
+		var text := Label.new()
+		text.theme_type_variation = &"SoftLabel"
+		text.text = I18nService.t("profil.freunde_leer")
+		text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		empty.add_child(text)
 		box.add_child(empty)
 	for i in mini(friends.size(), MAX_FRIEND_ROWS):
 		var row: Dictionary = friends[i]
@@ -398,7 +419,9 @@ func _friend_rows() -> Array:
 ## ---- Bausteine -----------------------------------------------------------
 
 
-func _card(node_name: String, title_text: String) -> PanelContainer:
+## W14: AC-Karte mit Abschnitts-Header — Icon-Glyph (assets/ui/icons) neben
+## dem Titel, wie die Settings-Gruppen-Header (ACNH-Muster).
+func _card(node_name: String, title_text: String, icon := "") -> PanelContainer:
 	var card := PanelContainer.new()
 	card.name = node_name
 	card.theme_type_variation = &"AcCard"
@@ -406,10 +429,26 @@ func _card(node_name: String, title_text: String) -> PanelContainer:
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 8)
 	card.add_child(box)
+	var head := HBoxContainer.new()
+	head.name = "CardHead"
+	head.add_theme_constant_override("separation", 8)
+	box.add_child(head)
+	var icon_path := "%s%s.svg" % [ICON_DIR, icon]
+	if not icon.is_empty() and ResourceLoader.exists(icon_path):
+		var glyph := TextureRect.new()
+		glyph.name = "CardIcon"
+		glyph.texture = load(icon_path)
+		glyph.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		glyph.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		glyph.custom_minimum_size = Vector2.ONE * 22.0
+		glyph.self_modulate = AcTokens.INK
+		glyph.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		glyph.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		head.add_child(glyph)
 	var title := Label.new()
 	title.theme_type_variation = &"HeadlineLabel"
 	title.text = title_text
-	box.add_child(title)
+	head.add_child(title)
 	return card
 
 

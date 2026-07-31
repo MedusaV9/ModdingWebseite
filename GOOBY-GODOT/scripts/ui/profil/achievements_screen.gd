@@ -72,7 +72,8 @@ func _build_ui() -> void:
 
 	_rows_box = VBoxContainer.new()
 	_rows_box.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_rows_box.add_theme_constant_override("separation", 12)
+	# W14: 8er-Raster (12 war rasterfremd).
+	_rows_box.add_theme_constant_override("separation", 16)
 	add_child(_rows_box)
 	_rows_box.add_child(_build_header())
 	_rows_box.add_child(_build_chip_row())
@@ -94,7 +95,8 @@ func _build_header() -> Control:
 	header.add_theme_constant_override("separation", 12)
 	_back_btn = SquishButton.new()
 	_back_btn.name = "BackBtn"
-	_back_btn.theme_type_variation = &"BtnGhost"
+	# W14: Kopfzeilen-Konsistenz — Ghost-Outline-Pill wie Profil/Album.
+	_back_btn.theme_type_variation = &"GhostButton"
 	_back_btn.text = I18nService.t("achievements.zurueck")
 	_back_btn.focus_mode = Control.FOCUS_NONE
 	_back_btn.pressed.connect(_on_back_pressed)
@@ -144,6 +146,9 @@ func _show_category(cat: String) -> void:
 	for def: Variant in defs:
 		if def is Dictionary:
 			_list_box.add_child(_build_row(def))
+	# W14: Zeilen federn beim Kategorie-Wechsel gestaffelt ein (ACNH-Muster;
+	# UiMotion beachtet Reduced Motion selbst).
+	UiMotion.stagger_in(_list_box.get_children(), 0.02)
 
 
 ## Aktiver Chip bekommt den Leaf-Ton (aktiver-Tab-Konvention).
