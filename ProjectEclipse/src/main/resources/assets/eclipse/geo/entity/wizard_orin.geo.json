@@ -84,12 +84,20 @@
 					"parent": "head",
 					"pivot": [0, 21.5, -2.6],
 					"cubes": [
-						{"origin": [-2, 14, -3.6], "size": [4, 8, 1], "uv": [28, 36]}
+						{"origin": [-2, 18, -3.6], "size": [4, 4, 1], "uv": [28, 36]}
+					]
+				},
+				{
+					"name": "beard_mid",
+					"parent": "beard",
+					"pivot": [0, 18, -3.1],
+					"cubes": [
+						{"origin": [-2, 14, -3.6], "size": [4, 4, 1], "uv": [28, 41]}
 					]
 				},
 				{
 					"name": "beard_tip",
-					"parent": "beard",
+					"parent": "beard_mid",
 					"pivot": [0, 14.5, -3.1],
 					"cubes": [
 						{"origin": [-1, 11.5, -3.5], "size": [2, 3, 1], "uv": [38, 36]}

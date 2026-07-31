@@ -10,6 +10,7 @@ import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.entity.geo.EclipseGeoAnimations;
 import dev.projecteclipse.eclipse.entity.geo.EclipseGeoMob;
 import dev.projecteclipse.eclipse.lang.ServerLang;
+import dev.projecteclipse.eclipse.network.fx.FxCues;
 import dev.projecteclipse.eclipse.network.fx.FxPayloads;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
@@ -99,6 +100,18 @@ public class WizardOrinEntity extends EclipseGeoMob {
     public static final String GEO_ID = "wizard_orin";
 
     public static final String ANIM_STAR_CALL = "star_call";
+    /**
+     * MB2: dedicated sun_flare gather→nova sheet (1.4 s; nova beat at 0.8 s = the
+     * {@value #SUN_FLARE_TELEGRAPH_TICKS}t telegraph release) — the raise pose used to be
+     * shared with star_call, which mis-sold the inrushing-flame gather as a sky-raise.
+     */
+    public static final String ANIM_SUN_FLARE = "sun_flare";
+    /**
+     * MB2: veil_step arrival re-materialize (0.55 s riss-stretch snap) — triggered right
+     * after {@link #teleportTo}; GeckoLib syncs to tracking clients, so the one-shot plays
+     * at the destination (the blink itself is instantaneous, only the landing is animated).
+     */
+    public static final String ANIM_VEIL_STEP = "veil_step";
     public static final String ANIM_HURT = "hurt";
     /** MOB-AMBIENT v2 hospitality one-shots: hat-tip greeting + ledger-lean dialogue. */
     public static final String ANIM_GREET = "greet";
@@ -208,6 +221,8 @@ public class WizardOrinEntity extends EclipseGeoMob {
     protected void registerActionTriggers(AnimationController<?> action) {
         super.registerActionTriggers(action); // death (played-and-held)
         action.triggerableAnim(ANIM_STAR_CALL, EclipseGeoAnimations.once(GEO_ID, ANIM_STAR_CALL));
+        action.triggerableAnim(ANIM_SUN_FLARE, EclipseGeoAnimations.once(GEO_ID, ANIM_SUN_FLARE));
+        action.triggerableAnim(ANIM_VEIL_STEP, EclipseGeoAnimations.once(GEO_ID, ANIM_VEIL_STEP));
         action.triggerableAnim(ANIM_HURT, EclipseGeoAnimations.once(GEO_ID, ANIM_HURT));
         action.triggerableAnim(ANIM_GREET, EclipseGeoAnimations.once(GEO_ID, ANIM_GREET));
         action.triggerableAnim(ANIM_TRADE, EclipseGeoAnimations.once(GEO_ID, ANIM_TRADE));
@@ -429,12 +444,12 @@ public class WizardOrinEntity extends EclipseGeoMob {
                 String.format(java.util.Locale.ROOT, "%.1f", this.getHealth()), this.getMaxHealth());
     }
 
-    /** sun_flare wind-up: the same raise anim, but flames gather instead of chimes. */
+    /** sun_flare wind-up: dedicated gather anim (nova beat 0.8 s = the 16t release). */
     private void startSunFlare(ServerLevel level) {
         this.flareTelegraph = SUN_FLARE_TELEGRAPH_TICKS;
         this.flareCooldown = unveiled ? SUN_FLARE_COOLDOWN_UNVEILED : SUN_FLARE_COOLDOWN_TICKS;
         setCasting(true);
-        triggerAction(ANIM_STAR_CALL);
+        triggerAction(ANIM_SUN_FLARE);
         this.getNavigation().stop();
         level.playSound(null, this.blockPosition(), SoundEvents.EVOKER_PREPARE_ATTACK,
                 SoundSource.NEUTRAL, 0.9F, 0.8F);
@@ -496,6 +511,9 @@ public class WizardOrinEntity extends EclipseGeoMob {
                 this.teleportTo(feet.x, feet.y, feet.z);
                 this.resetFallDistance();
                 this.veilCooldown = VEIL_STEP_COOLDOWN_TICKS;
+                // MB2: arrival re-materialize (riss-stretch snap) — after the teleport so
+                // tracking clients play the one-shot at the destination, not the origin.
+                triggerAction(ANIM_VEIL_STEP);
                 level.sendParticles(ParticleTypes.REVERSE_PORTAL, feet.x, feet.y + 1.0D, feet.z,
                         16, 0.3D, 0.7D, 0.3D, 0.05D);
                 level.playSound(null, BlockPos.containing(feet), SoundEvents.ENDERMAN_TELEPORT,
@@ -575,6 +593,10 @@ public class WizardOrinEntity extends EclipseGeoMob {
         }
         say(player, line);
         this.getLookControl().setLookAt(player, 30.0F, 30.0F);
+        // MB2 verified: Orin has NO container menu (WANDFIX-5 — "trades nothing"); THIS
+        // dialogue exchange is his "Handel", and this tick is the open moment: caption,
+        // trade sound and the GeckoLib trigger all flush in the same packet batch, so the
+        // ledger-lean lands exactly with the caption on every tracking client.
         triggerAction(ANIM_TRADE); // MOB-AMBIENT v2: ledger-lean toward the listener.
         level.playSound(null, this.blockPosition(), SoundEvents.VILLAGER_TRADE,
                 SoundSource.NEUTRAL, 0.7F, 0.75F);
@@ -609,8 +631,10 @@ public class WizardOrinEntity extends EclipseGeoMob {
                     EclipseMod.LOGGER.info("Orin provoked by {}", attacker.getScoreboardName());
                 }
             }
-            if (this.telegraphTimer < 0 && this.flareTelegraph < 0) {
-                triggerAction(ANIM_HURT); // Flinch, unless mid-raise (the cast reads through).
+            if (this.telegraphTimer < 0 && this.flareTelegraph < 0 && this.boltsLeft == 0) {
+                // Flinch, unless mid-raise OR mid-shower (the cast/conducting reads through
+                // — the retimed 3.6 s star_call keeps the staff up while the bolts rain).
+                triggerAction(ANIM_HURT);
             }
         }
         return hurt;
@@ -674,6 +698,13 @@ public class WizardOrinEntity extends EclipseGeoMob {
         ItemEntity drop = this.spawnAtLocation(new ItemStack(WizardEntities.WIZARD_CATALYST.get()));
         if (drop != null) {
             drop.setUnlimitedLifetime(); // Never let the summit wind despawn the gate item.
+            // MB2 re-coupling: the NEWFX-A5 handover FX (shard indraw + fuse flash +
+            // star-trail drop, row in ProgressionPhotonFxRows) was orphaned when WANDFIX-5
+            // retired tryQuestTurnIn. The take-path IS the handover now — fire the cue on
+            // the corpse drop, entity lane on Orin (the 40t sit-down-fade keeps him
+            // tracked; untracked clients degrade to the payload's position anchor).
+            FxPayloads.sendFxEntityEvent(level, FxCues.CUE_WIZARD_CATALYST, this,
+                    0.0F, 0.0F, 64.0D);
         }
     }
 

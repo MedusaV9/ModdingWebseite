@@ -1,28 +1,37 @@
 # UV map — Orin the Sun-Reader (`assets/eclipse/textures/entity/wizard_orin.png` + `_glowmask.png`)
 
 **Texture size:** 64×64 (both files — GeckoLib's `AutoGlowingTexture` enforces matching
-canvases). Model: `assets/eclipse/geo/entity/wizard_orin.geo.json` (GeckoLib, 14 bones /
-15 cubes, box-UV, zero strip overlaps). The geo file **is** the UV source of truth — the
-painter (`scripts/geckolib_gen/paint_lib.py`) parses it and computes every face rect
-itself, so only the box-UV origins are frozen here:
+canvases). Model: `assets/eclipse/geo/entity/wizard_orin.geo.json` (GeckoLib, 19 bones /
+19 cubes, box-UV + a few per-face cubes, zero strip overlaps). The geo file **is** the UV
+source of truth — the painter (`scripts/geckolib_gen/paint_lib.py`) parses it and computes
+every face rect itself, so only the UV origins are frozen here:
 
 | Bone | Cube | Box W×H×D | UV origin | Strip (x0,y0)-(x1,y1) |
 |---|---|---|---|---|
 | robe_lower | skirt | 9×11×6 | (0,0) | (0,0)-(30,17) |
+| robe_hem | flared hem ring | 10×2×7 | per-face (44,30) | (44,30)-(61,43) |
 | torso | chest | 7×10×5 | (30,0) | (30,0)-(54,15) |
 | head | head | 5×5×5 | (0,17) | (0,17)-(20,27) |
 | hat | brim | 8×1×8 | (20,17) | (20,17)-(52,26) |
-| hat | cone | 5×3.5×5 | (0,27) | (0,27)-(20,36) |
-| hat | tip | 3×2.5×3 | (20,27) | (20,27)-(32,33) |
+| hat | cone | 5×3.5×5 | per-face (0,27) | (0,27)-(20,36) |
+| hat | tip | 3×2.5×3 | per-face (20,27) | (20,27)-(32,33) |
 | glow_hat_star | star charm | 1×1×1 | (32,27) | (32,27)-(36,29) |
-| glow_staff_tip | starlit tip | 1.5×1.5×1.5 | (38,27) | (38,27)-(44,30) |
+| glow_staff_tip | starlit tip | 1.5×1.5×1.5 | per-face (38,27) | (38,27)-(44,30) |
+| glow_staff_crystal | orbit crystal | 1.2×1.2×1.2 | per-face (54,0) | (54,0)-(59,3) |
 | arm_right | sleeve | 3×9×3 | (0,36) | (0,36)-(12,48) |
 | arm_left | sleeve | 3×9×3 | (12,36) | (12,36)-(24,48) |
+| book | tome (left hand) | 2.8×1.2×2.2 | per-face (54,4) | (54,4)-(61,11) |
 | staff | shaft | 1×14×1 | (24,36) | (24,36)-(28,51) |
-| beard | main fall | 4×8×1 | (28,36) | (28,36)-(38,45) |
-| beard | tip tuft | 2×3×1 | (38,36) | (38,36)-(44,40) |
+| beard | root fall | 4×4×1 | (28,36) | (28,36)-(38,41) |
+| beard_mid | mid fall | 4×4×1 | (28,41) | (28,41)-(38,46) |
+| beard_tip | tip tuft | 2×3×1 | (38,36) | (38,36)-(44,40) |
 | spyglass | back-slung tube | 2×6×2 | (30,48) | (30,48)-(38,56) |
 | scarf | collar wrap | 8×3×6 (inflate 0.25) | (0,52) | (0,52)-(28,61) |
+
+**Rig note (MB2):** the beard is a three-segment chain (`beard` → `beard_mid` →
+`beard_tip`) so the Molang sway in `wizard_orin.animation.json` can run phase-shifted
+sine waves down the strand. The painter's `beard*` material rule covers all three
+segments, so no painter change is needed when re-splitting the strand.
 
 **Art brief (IDEA-19 §3, W4-WIZARD):** a hermit astronomer — midnight-blue robe
 (`#1E2748`, sleeves/hood/hat `#161C36`) embroidered with sparse constellation stitches
