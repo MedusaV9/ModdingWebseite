@@ -171,6 +171,20 @@ public final class AltarCeremonyFx {
             // one-sting-per-40t window (the bloom chime lands exactly one window later).
             WorldStageArbiter.noteSting();
         });
+
+        // --- FX-Wave-13 A7: the monument-origin shockwave rides the GeckoLib
+        // stage_up one-shot, which the SERVER triggers in the same tick as this
+        // payload — so it fires at t=0 (NOT +lead) and its per-emitter startDelays
+        // (8/10/12/14/26 t) land on the animation's glow-flash and ring-pop
+        // keyframes: the crest leaves the core, then each rune ring is "dragged"
+        // at its own pop peak. Cutscene-safe + Photon-less-safe like the powerup. ---
+        if (near) {
+            at(0, () -> {
+                if (!CameraDirector.isActive()) {
+                    PhotonFxRegistry.dispatch(AltarAura2FxRows.CUE_ALTAR_STAGEUP_SHOCKWAVE, pos);
+                }
+            });
+        }
         if (lead > 0) {
             at(2, () -> soundAt(pos, EclipseSounds.EVENT_BEAM_HUM.get(), 0.55F, 0.78F));
             at(16, () -> soundAt(pos, EclipseSounds.EVENT_BEAM_HUM.get(), 0.65F, 1.0F));

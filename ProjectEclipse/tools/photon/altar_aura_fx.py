@@ -23,6 +23,12 @@ House palette: violet #B98CFF / deep #6E4DA8 / core #E7D6FF, gold #FFE9B0.
 Budgets: every asset stays ≤ ~70 live particles; one Photon executor each against
 `PhotonBridge.MAX_LIVE_EXECUTORS` while its window is open.
 
+FX-Wave-13 A7 GPU-instancing pass: every trail-less billboard loop here carries
+`useGPUInstance: 1b` (jar-verified: the instanced upload honors renderMode via
+`Mode.quaternion`, incl. Horizontal fog — only physics is illegal, LINT-GPU-PHYSICS),
+and counts were bumped ~40 % inside the same ≤ ~70 budget line. The band carriers and
+arc_bolts keep the CPU path: their `trails` modules render through the CPU pipeline.
+
 Every write round-trip-validates (fxlib law). Re-run after editing:
     python3 tools/photon/altar_aura_fx.py
 """
@@ -34,7 +40,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from fxlib import (  # noqa: E402
     B, F, FX_ASSETS_DIR, REPO_ROOT, TrailEmitter, FxBuilder,
-    BLEND_ADDITIVE, burst, circle, constant, curve, gradient, nf3,
+    BLEND_ADDITIVE, SEG_DECAY_TAIL, burst, circle, constant, curve, gradient, nf3,
     random_between, sphere, texture_material, validate_file,
 )
 
@@ -71,13 +77,14 @@ def build_altar_aura_motes() -> FxBuilder:
             start_lifetime=random_between(70, 110),
             start_speed=constant(0.0),
             start_size=nf3(random_between(0.04, 0.09)),
-            simulation_space="Local", max_particles=36)
-       .with_emission(rate=constant(0.35))
+            simulation_space="Local", max_particles=52)
+       .with_emission(rate=constant(0.5))                # A7: 0.35/36 -> 0.5/52 (GPU)
        # Wide ring hugging the island floor around the dais (anchor = altar center).
        .with_shape(circle(radius=5.2, thickness=0.55))
        .with_material(texture_material(CIRCLE_TEX, discard=0.05, hdr=(1.0, 0.85, 1.3),
                                        blend=BLEND_ADDITIVE))
-       .with_renderer(render_mode="Billboard", vertex_sorting="NONE", shade=False)
+       .with_renderer(render_mode="Billboard", vertex_sorting="NONE", shade=False,
+                      use_gpu_instance=True)
        .with_cull_box((-9.0, -3.0, -9.0), (9.0, 7.0, 9.0))
        .with_curves(
             velocity_over_lifetime=dict(
@@ -101,12 +108,13 @@ def build_altar_aura_motes() -> FxBuilder:
             start_lifetime=random_between(90, 130),
             start_speed=constant(0.0),
             start_size=nf3(random_between(0.55, 0.95)),
-            simulation_space="Local", max_particles=14)
-       .with_emission(rate=constant(0.09))
+            simulation_space="Local", max_particles=18)
+       .with_emission(rate=constant(0.12))               # A7: 0.09/14 -> 0.12/18 (GPU)
        # Hovers a hand above the floor, one block outside the dais skirt.
        .with_shape(circle(radius=6.4, thickness=0.25), position=nf3(0, -3.6, 0))
        .with_material(texture_material(CIRCLE_TEX, discard=0.02, blend=BLEND_ADDITIVE))
-       .with_renderer(render_mode="Horizontal", vertex_sorting="NONE", shade=False)
+       .with_renderer(render_mode="Horizontal", vertex_sorting="NONE", shade=False,
+                      use_gpu_instance=True)
        .with_cull_box((-9.0, -5.0, -9.0), (9.0, 3.0, 9.0))
        .with_curves(
             velocity_over_lifetime=dict(
@@ -142,14 +150,15 @@ def build_altar_aura_glyphs() -> FxBuilder:
             start_lifetime=random_between(55, 80),
             start_speed=constant(0.0),
             start_size=nf3(random_between(0.1, 0.17)),
-            simulation_space="Local", max_particles=12)
-       .with_emission(rate=constant(0.16))
+            simulation_space="Local", max_particles=16)
+       .with_emission(rate=constant(0.22))               # A7: 0.16/12 -> 0.22/16 (GPU)
        # Loop arc: sparks march around the band instead of popping randomly.
        .with_shape(circle(radius=3.1, thickness=0.15, arc_mode="Loop", arc_speed=0.45),
                    position=nf3(0, 1.4, 0))
        .with_material(texture_material(CIRCLE_TEX, discard=0.05, hdr=(1.5, 1.2, 1.8),
                                        blend=BLEND_ADDITIVE))
-       .with_renderer(render_mode="Billboard", vertex_sorting="NONE", shade=False)
+       .with_renderer(render_mode="Billboard", vertex_sorting="NONE", shade=False,
+                      use_gpu_instance=True)
        .with_cull_box((-7.0, -2.0, -7.0), (7.0, 6.0, 7.0))
        .with_curves(
             velocity_over_lifetime=dict(
@@ -179,15 +188,16 @@ def build_altar_aura_glyphs() -> FxBuilder:
             start_lifetime=constant(26),
             start_speed=constant(0.85),                  # radial from the circle shell
             start_size=nf3(random_between(0.07, 0.11)),
-            simulation_space="Local", max_particles=40)
-       .with_emission(rate=constant(0.0),
-                      bursts=[burst(time=0, count=constant(32), cycles=1, interval=1,
+            simulation_space="Local", max_particles=48)
+       .with_emission(rate=constant(0.0),                # A7: 32/40 -> 40/48 (GPU)
+                      bursts=[burst(time=0, count=constant(40), cycles=1, interval=1,
                                     probability=1.0)])
        .with_shape(circle(radius=2.2, thickness=0.0, arc=360.0, arc_mode="BurstSpread"),
                    position=nf3(0, -3.4, 0))
        .with_material(texture_material(CIRCLE_TEX, discard=0.05, hdr=(1.3, 1.05, 1.6),
                                        blend=BLEND_ADDITIVE))
-       .with_renderer(render_mode="Billboard", vertex_sorting="NONE", shade=False)
+       .with_renderer(render_mode="Billboard", vertex_sorting="NONE", shade=False,
+                      use_gpu_instance=True)
        .with_cull_box((-8.0, -5.0, -8.0), (8.0, 2.0, 8.0))
        .with_curves(color_over_lifetime=gradient(
             [(0.0, 0.5), (0.6, 0.3), (1.0, 0.0)],
@@ -228,12 +238,13 @@ def build_altar_aura_pillar() -> FxBuilder:
             start_lifetime=random_between(60, 90),
             start_speed=constant(0.0),
             start_size=nf3(random_between(0.08, 0.14)),
-            simulation_space="Local", max_particles=10)
-       .with_emission(rate=constant(0.11))
+            simulation_space="Local", max_particles=14)
+       .with_emission(rate=constant(0.16))               # A7: 0.11/10 -> 0.16/14 (GPU)
        .with_shape(circle(radius=0.55, thickness=1.0))
        .with_material(texture_material(CIRCLE_TEX, discard=0.05, hdr=(1.4, 1.15, 1.7),
                                        blend=BLEND_ADDITIVE))
-       .with_renderer(render_mode="Billboard", vertex_sorting="NONE", shade=False)
+       .with_renderer(render_mode="Billboard", vertex_sorting="NONE", shade=False,
+                      use_gpu_instance=True)
        .with_cull_box((-2.0, -1.0, -2.0), (2.0, 44.0, 2.0))
        .with_curves(
             velocity_over_lifetime=dict(
@@ -336,7 +347,10 @@ def build_altar_aura_bands() -> FxBuilder:
             "trailType": "TRAIL",
             "config": embedded_trail_config(
                 arc_mat, time=6, min_vertex_distance=0.04,
-                width=curve(0.0, 0.1, [(0.0, 1.0, 0.33, 0.66, 0.66, 0.33, 1.0, 0.0)]),
+                # v7 quality bar: the old chord-collinear taper tripped
+                # LINT-LINEAR-CURVE — house decay-tail (hold near full, then
+                # accelerate to zero) reads as a real energy die-off.
+                width=curve(0.0, 0.1, [SEG_DECAY_TAIL]),
                 color_nf=gradient(
                     [(0.0, 0.9), (1.0, 0.0)],
                     [(0.0, 0.906, 0.839, 1.0), (1.0, 0.482, 0.247, 0.851)]))})

@@ -4,7 +4,6 @@
 # its line (or regenerate via `fxlib.py validate --lint --update-baseline` AFTER
 # review — never to sneak new violations in). Info-severity findings are advisory
 # and never listed.
-altar_levelup.fx|LINT-LINEAR-CURVE|spark_ribbons.trails.config.widthOverTrail
 border_first_contact.fx|LINT-LINEAR-CURVE|hairline.width
 boss/roar_shockwave.fx|LINT-LINEAR-CURVE|roar_column.sizeOverLifetime.size[0]
 boss/tyrant_blind_burst.fx|LINT-LINEAR-CURVE|fog_shells.sizeOverLifetime.size[0]

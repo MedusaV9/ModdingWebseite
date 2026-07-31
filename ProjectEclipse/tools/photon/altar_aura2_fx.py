@@ -28,8 +28,12 @@ one-shot is dispatched at the raw `ALTAR_CENTER` anchor and carries its own -3.4
 offset in the shape position.
 
 House palette: violet #B98CFF / deep #6E4DA8 / core #E7D6FF, gold #FFE9B0.
-Budgets: every loop asset stays <= ~80 live particles (one executor each while its
-window is open); the one-shot peaks at ~118 short-lived particles.
+Budgets: rim loops peak at ~146 live particles at stage 5 — legal because the whole
+rim family is GPU-INSTANCED (FX-Wave-13 A7: `useGPUInstance: 1b` on every trail-less
+billboard/horizontal loop emitter; jar-verified that the instanced upload honors
+renderMode via `Mode.quaternion`). The spiral arms keep the CPU path (their `trails`
+modules render through the CPU pipeline) and stay <= ~40. One executor per asset while
+its window is open; the one-shot peaks at ~118 short-lived particles.
 
 Every write round-trip-validates (fxlib law). Re-run after editing:
     python3 tools/photon/altar_aura2_fx.py
@@ -106,7 +110,8 @@ def _rim_motes(fx, rate, max_particles, climb, size_hi, hdr, alpha_hold, rgb_out
                    position=nf3(0, 0.3, 0))
        .with_material(texture_material(CIRCLE_TEX, discard=0.05, hdr=hdr,
                                        blend=BLEND_ADDITIVE))
-       .with_renderer(render_mode="Billboard", vertex_sorting="NONE", shade=False)
+       .with_renderer(render_mode="Billboard", vertex_sorting="NONE", shade=False,
+                      use_gpu_instance=True)
        .with_cull_box((-20.0, -3.0, -20.0), (20.0, 10.0, 20.0))
        .with_curves(
             velocity_over_lifetime=dict(
@@ -132,14 +137,14 @@ def _rim_fog(fx, alpha, hdr):
             start_lifetime=random_between(100, 140),
             start_speed=constant(0.0),
             start_size=nf3(random_between(1.1, 1.8)),
-            simulation_space="Local", max_particles=14)
-       .with_emission(rate=constant(0.09))
+            simulation_space="Local", max_particles=18)
+       .with_emission(rate=constant(0.12))               # A7: 0.09/14 -> 0.12/18 (GPU)
        .with_shape(circle(radius=RIM_RADIUS + 0.7, thickness=0.3),
                    position=nf3(0, 0.15, 0))
        .with_material(texture_material(CIRCLE_TEX, discard=0.02, hdr=hdr,
                                        blend=BLEND_ADDITIVE))
        .with_renderer(render_mode="Horizontal", vertex_sorting="NONE",
-                      shade=False)
+                      shade=False, use_gpu_instance=True)
        .with_cull_box((-20.0, -3.0, -20.0), (20.0, 4.0, 20.0))
        .with_curves(
             velocity_over_lifetime=dict(
@@ -168,7 +173,7 @@ def _rim_streamers(fx, burst_count, probability, hdr):
             start_lifetime=random_between(38, 55),
             start_speed=constant(0.0),
             start_size=nf3(random_between(0.16, 0.26)),
-            simulation_space="Local", max_particles=12)
+            simulation_space="Local", max_particles=16)
        .with_emission(rate=constant(0.0),
                       bursts=[burst(time=20, count=constant(burst_count), cycles=1,
                                     interval=1, probability=probability)])
@@ -176,7 +181,8 @@ def _rim_streamers(fx, burst_count, probability, hdr):
                    position=nf3(0, 0.6, 0))
        .with_material(texture_material(CIRCLE_TEX, discard=0.05, hdr=hdr,
                                        blend=BLEND_ADDITIVE))
-       .with_renderer(render_mode="Billboard", vertex_sorting="NONE", shade=False)
+       .with_renderer(render_mode="Billboard", vertex_sorting="NONE", shade=False,
+                      use_gpu_instance=True)
        .with_cull_box((-12.0, -1.0, -12.0), (12.0, 12.0, 12.0))
        .with_curves(
             velocity_over_lifetime=dict(
@@ -194,7 +200,9 @@ def _rim_streamers(fx, burst_count, probability, hdr):
 def build_altar_aura_rim_lo() -> FxBuilder:
     """Stage 1-2: the perimeter whisper — sparse, low, deep violet."""
     fx = FxBuilder("altar_aura_rim_lo")
-    _rim_motes(fx, rate=0.5, max_particles=40,
+    # A7 GPU bump: 0.5/40 -> 0.7/56 (and equivalents below) — instanced, so the
+    # ~40 % density gain costs upload bytes, not per-particle CPU draw calls.
+    _rim_motes(fx, rate=0.7, max_particles=56,
                climb=random_between(0.03, 0.06), size_hi=0.26,
                hdr=(1.3, 1.1, 1.6), alpha_hold=0.65, rgb_out=VIOLET)
     _rim_fog(fx, alpha=0.16, hdr=(1.0, 1.0, 1.0))
@@ -204,22 +212,22 @@ def build_altar_aura_rim_lo() -> FxBuilder:
 def build_altar_aura_rim_mid() -> FxBuilder:
     """Stage 3-4: denser + taller, gold flecks, pillar-ring streamers arrive."""
     fx = FxBuilder("altar_aura_rim_mid")
-    _rim_motes(fx, rate=1.2, max_particles=64,
+    _rim_motes(fx, rate=1.7, max_particles=88,          # A7 GPU bump: 1.2/64
                climb=random_between(0.06, 0.11), size_hi=0.32,
                hdr=(1.5, 1.3, 1.8), alpha_hold=0.75, rgb_out=GOLD)
     _rim_fog(fx, alpha=0.19, hdr=(1.1, 1.0, 1.2))
-    _rim_streamers(fx, burst_count=4, probability=0.8, hdr=(1.8, 1.5, 2.0))
+    _rim_streamers(fx, burst_count=6, probability=0.8, hdr=(1.8, 1.5, 2.0))
     return fx
 
 
 def build_altar_aura_rim_hi() -> FxBuilder:
     """Stage 5: full density, tallest climb, gold crests over a core-white body."""
     fx = FxBuilder("altar_aura_rim_hi")
-    _rim_motes(fx, rate=2.0, max_particles=80,
+    _rim_motes(fx, rate=2.8, max_particles=112,         # A7 GPU bump: 2.0/80
                climb=random_between(0.08, 0.16), size_hi=0.38,
                hdr=(1.8, 1.6, 2.1), alpha_hold=0.85, rgb_out=CORE)
     _rim_fog(fx, alpha=0.22, hdr=(1.3, 1.15, 1.4))
-    _rim_streamers(fx, burst_count=7, probability=0.95, hdr=(2.2, 1.9, 1.7))
+    _rim_streamers(fx, burst_count=10, probability=0.95, hdr=(2.2, 1.9, 1.7))
     return fx
 
 
