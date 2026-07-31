@@ -1,7 +1,11 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://scripts/home/room_base.gd" id="1_room"]
+[ext_resource type="Script" path="res://scripts/home/interactables/ball.gd" id="2_ball"]
 
 [node name="Wohnzimmer" type="Node3D"]
 script = ExtResource("1_room")
 room_id = "living"
+
+[node name="WurfBall" type="Node3D" parent="."]
+script = ExtResource("2_ball")

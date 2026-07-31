@@ -883,6 +883,45 @@ func _book_ambient(ctx: Dictionary) -> void:
 	)
 
 
+# ── Apportieren (W13/BALL) ────────────────────────────────────────────────────
+
+
+## W13/BALL: Gooby flitzt freudig zum liegenden Ball (stoppt kurz davor,
+## Web maybeFetch: lerp auf 0,28 m Abstand), fängt ihn mit Wackel-Ohren
+## (ecstatic, W12-Emotion-API) + Hopser und meldet die Ankunft über
+## `bei_ankunft` (der Ball macht daraus Kopfstoß + Belohnung).
+## false = Gooby ist gerade beschäftigt (Baumodus/kein GameState).
+func apportiere(ziel: Vector3, bei_ankunft: Callable) -> bool:
+	if gooby == null or _busy():
+		return false
+	_apport_lauf(ziel, bei_ankunft)
+	return true
+
+
+## Der eigentliche Lauf (async): hin, fangen, melden, kurz freuen, weiter.
+func _apport_lauf(ziel: Vector3, bei_ankunft: Callable) -> void:
+	gooby.set_wander_enabled(false)
+	var von := gooby.global_position
+	var dist := Vector2(ziel.x - von.x, ziel.z - von.z).length()
+	var stopp := von.lerp(ziel, maxf(0.0, 1.0 - 0.28 / maxf(dist, 0.28)))
+	stopp.y = von.y
+	if visuals_enabled:
+		await gooby.walk_to(stopp, 5.0)
+	if gooby == null or not is_instance_valid(gooby):
+		return
+	# Fang-Moment: Freuden-Gesicht mit Auto-Rückblende + kleiner Hopser;
+	# Spielen hebt die Laune wie Kitzeln (gedeckelter Seelen-Stoß).
+	_set_emotion("ecstatic", true)
+	if gooby.get("rig") != null:
+		gooby.rig.play_clip("hop")
+	_seele.stoss(SeeleRunner.STOSS_KITZELN)
+	bei_ankunft.call()
+	if is_inside_tree():
+		await get_tree().create_timer(0.65).timeout
+	if gooby != null and is_instance_valid(gooby):
+		gooby.set_wander_enabled(true)
+
+
 ## Snapshot der Futter-Bestände (inventory.food) — Abnahme = Fütterung.
 func _food_now() -> Dictionary:
 	var food: Variant = gs.get_value("inventory.food", {})
