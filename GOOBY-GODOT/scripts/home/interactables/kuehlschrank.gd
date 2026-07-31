@@ -1,31 +1,28 @@
 class_name Kuehlschrank
 extends Node3D
-## Kühlschrank-Interactable (EF-1, EVAL-1 D1+D3): schließt die größte Lücke
-## im Kernloop — `hunger` fiel, aber Füttern existierte nicht (der Veil-Tipp
-## „Kühlschrank checken!“ lief ins Leere). Tap auf einen Kühlschrank öffnet
-## die Vorrats-Auswahl (inventory.food, Starter: Möhre/Apfel/Törtchen);
-## ein Tap auf ein Essen lässt Gooby SICHTBAR essen: hinlaufen, Kau-Squash,
-## drei Nom-Töne (Pitch 0,9/1,0/1,1), „+{hunger}“-Float, Herz-Burst.
-## Wirkung über FoodCatalog.apply_feed (PURE): Stats + Junk-Gewicht +
-## `feeds`-Counter (Sticker firstNom/snackStack, Recap-Zeile) — danach stößt
-## RewardHub.note_action die globale Sticker-Auswertung an.
+## Kühlschrank-Interactable (EF-1 → W14/FRIDGE „Kühlschrank 2.0"). Tap öffnet
+## statt der flachen Text-Liste ein appetitliches Regal-Grid (FuetterGrid:
+## AC-Karten mit echter 3D-Vorschau, Vorrats-Badge, Stat-Pillen, Kategorien-
+## Chips; leerer Vorrat = Gähn-Leerzustand + „Zu REHWEI fahren"-Route).
+## Nach der Auswahl wird NICHT mehr sofort gebucht: die FuetterRegie spielt
+## die Mampf-Sequenz (Speise schwebt zu Gooby, mouth_open-Bisse, Krümel,
+## Schluck, Emotion — ~2,5 s, Doppel-Tap abgewehrt, Reduced Motion =
+## Kurzfassung), ERST DANACH bucht FoodCatalog.apply_feed wie bisher (Stats +
+## Junk-Gewicht + feeds-Counter + treats-Sammlung — Semantik unverändert),
+## gefolgt von RewardHub.note_action, Reward-Floats, Bubble-Spruch
+## (AcBubble-Vertrag, 8 rotierende Sprüche je Kategorie) und Erfolgs-Haptik.
+## Refusals bleiben EXAKT wie bisher: satt wird VOR Panel/Sequenz geprüft
+## (FoodCatalog.too_full), apply_feed bleibt fail-closed.
 
-const NOM_PITCHES: Array[float] = [0.9, 1.0, 1.1]
-const NOM_ABSTAND_S := 0.32
 const HERZ_TEILE := 12
-const MJAM_KEYS: Array[String] = [
-	"rewards.fuettern.mjam1", "rewards.fuettern.mjam2", "rewards.fuettern.mjam3"
-]
 
 var _host: InteractablesHost
-var _rng := RandomNumberGenerator.new()
-var _panel: PanelContainer
+var _panel: FuetterGrid
 var _busy := false
 
 
 func setup(host: InteractablesHost, furniture: Node3D) -> void:
 	_host = host
-	_rng.randomize()
 	add_child(InteractablesHost.make_tap_area(furniture, _on_tapped))
 
 
@@ -45,90 +42,27 @@ func _on_tapped() -> void:
 	_open_panel()
 
 
-# ── Vorrats-Panel ─────────────────────────────────────────────────────────────
+# ── Regal-Panel ───────────────────────────────────────────────────────────────
 
 
 func _open_panel() -> void:
 	_close_panel()
 	AudioDirector.try_play(self, "ui_open")
-	_panel = PanelContainer.new()
-	_panel.name = "KuehlschrankPanel"
-	_panel.theme = ThemeService.theme()
-	_panel.theme_type_variation = "AcCard"
-	_panel.set_anchors_preset(Control.PRESET_CENTER)
-	_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	_panel.grow_vertical = Control.GROW_DIRECTION_BOTH
-	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 10)
-	_panel.add_child(box)
-	var titel := Label.new()
-	titel.theme_type_variation = &"TitleLabel"
-	titel.text = I18nService.t("rewards.kuehlschrank.titel")
-	titel.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	box.add_child(titel)
 	var gs := _host.game_state()
-	var entries := FoodCatalog.inventory_entries(gs.state()) if gs != null else []
-	if entries.is_empty():
-		_build_empty_state(box)
-	else:
-		_build_food_list(box, entries)
-	var schliessen := Button.new()
-	schliessen.theme_type_variation = "GhostButton"
-	schliessen.text = I18nService.t("rewards.kuehlschrank.schliessen")
-	schliessen.custom_minimum_size = Vector2(0, 44)
-	schliessen.focus_mode = Control.FOCUS_NONE
-	schliessen.pressed.connect(
+	var entries: Array[Dictionary] = []
+	if gs != null:
+		entries = FoodCatalog.inventory_entries(gs.state())
+	_panel = FuetterGrid.new()
+	_panel.name = "KuehlschrankPanel"
+	_panel.setup(entries)
+	_panel.speise_gewaehlt.connect(_on_food_chosen)
+	_panel.rehwei_gewuenscht.connect(_on_rehwei_gewuenscht)
+	_panel.schliessen_gewuenscht.connect(
 		func() -> void:
 			AudioDirector.try_play(self, "ui_close")
 			_close_panel()
 	)
-	box.add_child(schliessen)
 	_ui_layer().add_child(_panel)
-
-
-func _build_empty_state(box: VBoxContainer) -> void:
-	var leer := Label.new()
-	leer.text = I18nService.t("rewards.kuehlschrank.leer")
-	leer.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	box.add_child(leer)
-	var tipp := Label.new()
-	tipp.theme_type_variation = &"CaptionLabel"
-	tipp.text = I18nService.t("rewards.kuehlschrank.tipp")
-	tipp.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	tipp.custom_minimum_size = Vector2(280, 0)
-	tipp.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	box.add_child(tipp)
-
-
-func _build_food_list(box: VBoxContainer, entries: Array[Dictionary]) -> void:
-	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(300, minf(64.0 * entries.size(), 300.0))
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	box.add_child(scroll)
-	var liste := VBoxContainer.new()
-	liste.add_theme_constant_override("separation", 8)
-	liste.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(liste)
-	for entry: Dictionary in entries:
-		var food_id := str(entry["id"])
-		var deltas := FoodCatalog.deltas(food_id)
-		var btn := Button.new()
-		btn.theme_type_variation = "PrimaryButton"
-		btn.custom_minimum_size = Vector2(0, 52)
-		btn.focus_mode = Control.FOCUS_NONE
-		btn.text = (
-			I18nService
-			. t(
-				"rewards.kuehlschrank.eintrag",
-				{
-					"essen": FoodCatalog.display_name(food_id),
-					"anzahl": int(entry["count"]),
-					"hunger": int(deltas["hunger"]),
-				}
-			)
-		)
-		btn.pressed.connect(_on_food_chosen.bind(food_id))
-		liste.add_child(btn)
 
 
 func _close_panel() -> void:
@@ -137,63 +71,69 @@ func _close_panel() -> void:
 	_panel = null
 
 
+## Leerzustands-Knopf: NUR der Route-Aufruf zum REHWEI-Laden.
+func _on_rehwei_gewuenscht() -> void:
+	AudioDirector.try_play(self, "ui_click")
+	_close_panel()
+	var router := get_node_or_null("/root/SceneRouter")
+	if router != null and router.has_method("goto"):
+		router.goto(&"city/ort/rehwei", {})
+
+
 # ── Fütter-Ablauf ─────────────────────────────────────────────────────────────
 
 
 func _on_food_chosen(food_id: String) -> void:
 	AudioDirector.try_play(self, "ui_click")
 	_close_panel()
-	_feed(food_id)
+	_fuettere(food_id)
 
 
-func _feed(food_id: String) -> void:
+func _fuettere(food_id: String) -> void:
 	if _busy:
+		return  # Doppel-Tap-Guard (zweite Sicherung neben FuetterSequenz.start)
+	var gs := _host.game_state()
+	if gs == null:
+		return
+	# Refusal-Kurzschluss VOR der Sequenz — bestehende Gates, nicht dupliziert.
+	var grund := FuetterSequenz.refusal(gs.state(), food_id)
+	if grund == "satt":
+		_say_text(I18nService.t("rewards.fuettern.satt"))
+		return
+	if not grund.is_empty():
 		return
 	_busy = true
-	var gs := _host.game_state()
+	var gooby := _gooby()
+	if gooby != null:
+		gooby.set_wander_enabled(false)
+		await gooby.walk_to(global_position + Vector3(0.3, 0.0, 0.7), 5.0)
+	var regie := FuetterRegie.new()
+	add_child(regie)
+	var durchgelaufen := await regie.ablauf(
+		gooby, food_id, global_position + Vector3(0.0, 0.95, 0.35), RewardFx.reduced_motion(self)
+	)
+	regie.queue_free()
+	# Buchung ERST NACH dem Sequenz-Ende — Semantik unverändert (apply_feed
+	# prüft satt/Vorrat selbst fail-closed nach).
 	var result := {}
-	if gs != null:
+	if durchgelaufen:
 		gs.update(
 			func(state: Dictionary) -> void:
 				var applied := FoodCatalog.apply_feed(state, food_id)
 				result.merge(applied, true)
 		)
-	if result.is_empty():
-		_busy = false
-		return
-	RewardHub.note_action(gs)
-	var gooby := _gooby()
+	if not result.is_empty():
+		RewardHub.note_action(gs)
+		_show_reward(gooby, result)
+		# W14/UIKERN-Vertrag direkt: AcBubble-Spruch (Tail auf Gooby) + Haptik.
+		var opts := {}
+		if gooby is Node3D:
+			opts["speaker_3d"] = gooby
+		AcBubble.show_bubble(_ui_layer(), FuetterSprueche.naechster(food_id), opts)
+		Haptics.success(self)
 	if gooby != null:
-		gooby.set_wander_enabled(false)
-		await gooby.walk_to(global_position + Vector3(0.3, 0.0, 0.7), 5.0)
-	_say_mjam(food_id, bool(result.get("favorit", false)))
-	await _chew(gooby, bool(result.get("favorit", false)))
-	_show_reward(gooby, result)
-	if gooby != null:
-		gooby.play_clip("hop")
 		gooby.set_wander_enabled(true)
 	_busy = false
-
-
-## Kau-Moment: drei Nom-Töne mit Pitch-Treppe + Squash-Wippen am Rig.
-## Reduced Motion: Töne bleiben, das Wippen fällt weg.
-func _chew(gooby: Node, favorit: bool) -> void:
-	var rig: Node3D = gooby.get("rig") if gooby != null else null
-	if rig != null:
-		rig.set_emotion("ecstatic")
-	var reduced := RewardFx.reduced_motion(self)
-	for pitch: float in NOM_PITCHES:
-		AudioDirector.try_play(self, "mg_good", pitch)
-		if rig != null and not reduced:
-			var tween := rig.create_tween()
-			tween.tween_property(rig, "scale:y", 0.88, NOM_ABSTAND_S * 0.4)
-			tween.tween_property(rig, "scale:y", 1.0, NOM_ABSTAND_S * 0.5)
-		if is_inside_tree():
-			await get_tree().create_timer(NOM_ABSTAND_S).timeout
-	if favorit:
-		AudioDirector.try_play(self, "mg_perfect", 1.1)
-	if rig != null:
-		rig.set_emotion("happy")
 
 
 ## Sichtbare Wirkung: „+{hunger}“-Float in Mint + Herz-Burst über Gooby.
@@ -208,15 +148,6 @@ func _show_reward(gooby: Node, result: Dictionary) -> void:
 	if gain > 0:
 		RewardFx.float_text(room, pos, "+%d" % gain, RewardFx.MINT)
 	RewardFx.herz_burst(room, pos + Vector3(0.0, -0.3, 0.0), HERZ_TEILE)
-
-
-func _say_mjam(food_id: String, favorit: bool) -> void:
-	var essen := FoodCatalog.display_name(food_id)
-	if favorit:
-		_say_text(I18nService.t("rewards.fuettern.favorit", {"essen": essen}))
-		return
-	var key: String = MJAM_KEYS[_rng.randi_range(0, MJAM_KEYS.size() - 1)]
-	_say_text(I18nService.t(key, {"essen": essen}))
 
 
 # ── Helfer ────────────────────────────────────────────────────────────────────
