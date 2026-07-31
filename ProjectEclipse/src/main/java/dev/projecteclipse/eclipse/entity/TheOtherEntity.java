@@ -49,9 +49,32 @@ public class TheOtherEntity extends Monster {
     public static final double ATTACK_TRIGGER_RANGE = 3.0D;
     /** MimicWalkGoal stops and stares at this distance (spec: "stops at 5 blocks"). */
     public static final double STARE_RANGE = 5.0D;
+    /**
+     * Reveal beat windows (ticks), single source of truth for the client clocks below
+     * AND for {@code TheOtherModel}'s fragment kinematics (the model aliases these):
+     * detach = fragments tear out on aggro, retract = they reassemble on aggro loss.
+     */
+    public static final float REVEAL_DETACH_TICKS = 8.0F;
+    public static final float REVEAL_RETRACT_TICKS = 6.0F;
 
     /** Remaining ticks of the 180°-in-2t aggro head snap (server-side). */
     private int headSnapTicks;
+
+    /**
+     * Client-side only: {@code tickCount} at the moment the synced {@code isAggressive()}
+     * flag flipped on; {@link Integer#MIN_VALUE} while passive. {@code TheOtherModel} keys
+     * the fragment detach-ease and the head-cant ease on this clock (MC4 polish) — the
+     * flag alone is binary and would pop.
+     */
+    private int clientRevealStartTick = Integer.MIN_VALUE;
+    /**
+     * Client-side only: {@code tickCount} at the moment aggro DROPPED (reveal → passive);
+     * {@link Integer#MIN_VALUE} otherwise. Drives the fragment retract beat (the mask
+     * reassembling) so the reveal exit doesn't pop either.
+     */
+    private int clientRetractStartTick = Integer.MIN_VALUE;
+    /** Client-side only: reveal duration (ticks) at the moment aggro dropped. */
+    private int clientLastRevealTicks;
 
     public TheOtherEntity(EntityType<? extends TheOtherEntity> entityType, Level level) {
         super(entityType, level);
@@ -98,10 +121,59 @@ public class TheOtherEntity extends Monster {
     @Override
     public void tick() {
         super.tick();
+        if (this.level().isClientSide) {
+            // Reveal/retract clocks for the renderer (fragment detach + reassembly
+            // easing in TheOtherModel — the synced flag alone is binary and would pop).
+            if (this.isAggressive()) {
+                if (this.clientRevealStartTick == Integer.MIN_VALUE) {
+                    int backdate = 0;
+                    if (this.clientRetractStartTick != Integer.MIN_VALUE) {
+                        // Re-aggro mid-retract: resume the detach from roughly the
+                        // fragments' current retract radius instead of restarting it
+                        // from the emergence points (which would jump).
+                        float r = Math.min(1.0F,
+                                (this.tickCount - this.clientRetractStartTick) / REVEAL_RETRACT_TICKS);
+                        float eased = r * r * (3.0F - 2.0F * r); // TheOtherModel.smoothstep01
+                        backdate = Math.round(REVEAL_DETACH_TICKS * (1.0F - eased));
+                    }
+                    this.clientRevealStartTick = this.tickCount - backdate;
+                    this.clientRetractStartTick = Integer.MIN_VALUE;
+                }
+            } else if (this.clientRevealStartTick != Integer.MIN_VALUE) {
+                this.clientLastRevealTicks = this.tickCount - this.clientRevealStartTick;
+                this.clientRevealStartTick = Integer.MIN_VALUE;
+                this.clientRetractStartTick = this.tickCount;
+            }
+            return;
+        }
         // Event mob: dawn dissolves it (Pale Nights end at sunrise).
-        if (!this.level().isClientSide && this.isAlive() && this.level().isDay()) {
+        if (this.isAlive() && this.level().isDay()) {
             despawnAtDawn();
         }
+    }
+
+    /**
+     * Ticks (fractional — pass {@code ageInTicks} from the model, which already carries
+     * the partial tick) since the aggro reveal began on this client; {@code 0} right at
+     * the flip. Only meaningful while {@code isAggressive()} is true.
+     */
+    public float clientRevealAge(float ageInTicks) {
+        return this.clientRevealStartTick == Integer.MIN_VALUE ? 0.0F
+                : Math.max(0.0F, ageInTicks - this.clientRevealStartTick);
+    }
+
+    /**
+     * Ticks (fractional) since aggro dropped on this client, or {@code -1} while no
+     * retract is pending. The model hides the fragments once its retract window passed.
+     */
+    public float clientRetractAge(float ageInTicks) {
+        return this.clientRetractStartTick == Integer.MIN_VALUE ? -1.0F
+                : Math.max(0.0F, ageInTicks - this.clientRetractStartTick);
+    }
+
+    /** Reveal duration (ticks) at the moment aggro last dropped — freezes the orbit clock. */
+    public int clientLastRevealTicks() {
+        return this.clientLastRevealTicks;
     }
 
     /** Soul-escape cue + {@code arm_wisps} Quasar burst, then gone (no drops). */

@@ -16,7 +16,6 @@ import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.client.renderer.entity.MobRenderer;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.FastColor;
-import net.minecraft.util.Mth;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.api.distmarker.OnlyIn;
 
@@ -36,9 +35,6 @@ public final class EchoGhostWolfRenderer
             EclipseMod.MOD_ID, "textures/entity/echo_ghost_wolf.png");
 
     private static final float BODY_ALPHA = 0.35F;
-    private static final float GLOW_ALPHA = 0.20F;
-    private static final float SHIMMER_ALPHA = 0.04F;
-    private static final float SHIMMER_SPEED = 0.09F;
 
     public EchoGhostWolfRenderer(EntityRendererProvider.Context context) {
         super(context, new EchoWolfModel(context.bakeLayer(ModelLayers.WOLF)), 0.0F);
@@ -63,19 +59,14 @@ public final class EchoGhostWolfRenderer
     @Override
     public void render(EchoGhostWolfEntity entity, float entityYaw, float partialTick,
             PoseStack poseStack, MultiBufferSource bufferSource, int packedLight) {
-        ((EchoWolfModel) this.model).alpha = computeAlpha(entity, entity.tickCount + partialTick);
+        // MC4: shared family alpha curve (EchoGhostRenderer.echoAlpha) — same glow×fade
+        // fix as the humanoid echoes, and the wolf now shimmers on the family's hashed
+        // phase clock instead of its own ad-hoc multiply.
+        ((EchoWolfModel) this.model).alpha = EchoGhostRenderer.echoAlpha(
+                entity.echoFade() / (float) EchoActor.FADE_TICKS, entity.echoGlow(),
+                entity.getId(), entity.tickCount + partialTick,
+                EclipseClientConfig.reducedFx());
         super.render(entity, entityYaw, partialTick, poseStack, bufferSource, packedLight);
-    }
-
-    private static float computeAlpha(EchoGhostWolfEntity entity, float time) {
-        float fade = entity.echoFade() / (float) EchoActor.FADE_TICKS;
-        float alpha = BODY_ALPHA * fade + GLOW_ALPHA * entity.echoGlow();
-        if (EclipseClientConfig.reducedFx()) {
-            return Mth.clamp(alpha, 0.0F, 0.8F);
-        }
-        float phase = (entity.getId() * 0x9E3779B9) & 0xFF;
-        return Mth.clamp(alpha + Mth.sin((time + phase) * SHIMMER_SPEED)
-                * SHIMMER_ALPHA * fade, 0.0F, 0.8F);
     }
 
     /** {@link WolfModel} with renderer-driven whole-model alpha (the GhostModel technique). */

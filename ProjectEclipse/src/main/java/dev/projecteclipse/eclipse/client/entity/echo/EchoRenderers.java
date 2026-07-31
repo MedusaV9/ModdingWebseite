@@ -13,10 +13,12 @@ import net.neoforged.neoforge.client.event.EntityRenderersEvent;
  * pattern, minus the lookup guard: {@code EchoGroveEntities} lives in this
  * feature's own compile unit, so the holders are always present and typed
  * registration is safe (the guard existed for cross-worker registration races
- * that cannot happen here).
+ * that cannot happen here). MC4: dropped the deprecated explicit {@code bus =}
+ * attribute — NeoForge picks the mod bus from the event type, exactly like the
+ * GhostRenderers original this file mirrors.
  */
 @OnlyIn(Dist.CLIENT)
-@EventBusSubscriber(modid = EclipseMod.MOD_ID, value = Dist.CLIENT, bus = EventBusSubscriber.Bus.MOD)
+@EventBusSubscriber(modid = EclipseMod.MOD_ID, value = Dist.CLIENT)
 public final class EchoRenderers {
     private EchoRenderers() {}
 

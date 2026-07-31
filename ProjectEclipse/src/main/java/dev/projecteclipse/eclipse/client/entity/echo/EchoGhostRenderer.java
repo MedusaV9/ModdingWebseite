@@ -113,12 +113,25 @@ public final class EchoGhostRenderer extends LivingEntityRenderer<EchoGhostEntit
 
     /** fade-scaled base + glow boost + idle shimmer (constant under reducedFx). */
     private static float computeAlpha(EchoGhostEntity entity, float time) {
-        float fade = entity.echoFade() / (float) EchoActor.FADE_TICKS;
-        float alpha = BODY_ALPHA * fade + GLOW_ALPHA * entity.echoGlow();
-        if (EclipseClientConfig.reducedFx()) {
+        return echoAlpha(entity.echoFade() / (float) EchoActor.FADE_TICKS,
+                entity.echoGlow(), entity.getId(), time, EclipseClientConfig.reducedFx());
+    }
+
+    /**
+     * Shared echo-family alpha curve (the wolf renderer reuses it): {@code (base +
+     * glow·boost) × fade + shimmer × fade}. MC4 alpha-curve fix: the flood/finale glow
+     * boost now rides INSIDE the fade envelope — previously it was added un-faded, so an
+     * actor materializing or releasing DURING a flood popped in/out at {@code 0.20 ×
+     * glow} instead of easing from/to zero (the {@code MoonGlowLayer} always faded
+     * correctly, which made the body pop stand out even more). At full fade the value is
+     * unchanged. Package-visible + primitive args for the MC4 offline harness (report §5).
+     */
+    static float echoAlpha(float fade, float glow, int entityId, float time, boolean reducedFx) {
+        float alpha = (BODY_ALPHA + GLOW_ALPHA * glow) * fade;
+        if (reducedFx) {
             return Mth.clamp(alpha, 0.0F, 0.8F);
         }
-        float shimmerPhase = hash(entity.getId(), 0x5A11E) & 0xFF;
+        float shimmerPhase = hash(entityId, 0x5A11E) & 0xFF;
         return Mth.clamp(alpha + Mth.sin((time + shimmerPhase) * SHIMMER_SPEED)
                 * SHIMMER_ALPHA * fade, 0.0F, 0.8F);
     }
@@ -155,7 +168,15 @@ public final class EchoGhostRenderer extends LivingEntityRenderer<EchoGhostEntit
                 this.leftArm.xRot = (float) Math.PI * 0.95F;
                 this.leftArm.zRot = 0.35F + Mth.sin(ageInTicks * 0.35F) * 0.25F;
                 this.leftSleeve.copyFrom(this.leftArm);
+                // MC4: the head leans gently toward the raised arm, counter-phased to
+                // the sway — a greeting with warmth, not a mannequin with a flag.
+                this.head.zRot = 0.06F + Mth.sin(ageInTicks * 0.35F + (float) Math.PI) * 0.04F;
+            } else {
+                // Vanilla never writes head.zRot — reset absolutely (shared model
+                // instance; a stale wave tilt would leak onto every other echo).
+                this.head.zRot = 0.0F;
             }
+            this.hat.copyFrom(this.head); // re-sync: super copied before the tilt
         }
 
         @Override

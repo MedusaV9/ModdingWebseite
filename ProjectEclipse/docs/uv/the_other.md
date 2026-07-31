@@ -24,3 +24,17 @@ Both layers must be edited — the uniform skin's hat-layer face is opaque and c
 **Renderer notes:** `TheOtherRenderer` extends `HumanoidMobRenderer`; no emissive layer.
 The mob is silent and player-like — do NOT add glowing features that would break the
 doppelganger read.
+
+**Fragment cubes (MOB-GLITCH, MC4 orbital-stagger polish):** `TheOtherModel` adds three
+tiny cubes that are invisible until aggro and then tear out of the silhouette into
+staggered orbits (detach 8 t → orbit → retract 6 t on aggro loss). They deliberately
+sample EXISTING uniform-skin regions — no new art, no texture change needed, ever:
+
+| Fragment | Cube | texOffs (box-UV) | Samples |
+|---|---|---|---|
+| `frag_crown` (head space) | 2×2×2 | (0, 0) | head strip |
+| `frag_shoulder` (body space) | 3×3×3 | (16, 16) | jacket top |
+| `frag_hip` (body space) | 2×2×2 | (40, 16) | arm strip |
+
+If the skin art is ever redrawn, keep those regions body-toned so the shards still read
+as chunks OF the body.
