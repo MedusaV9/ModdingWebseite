@@ -1,0 +1,228 @@
+{
+ "format_version": "1.8.0",
+ "animations": {
+  "animation.umbral_pick.idle": {
+   "loop": true,
+   "animation_length": 6.0,
+   "bones": {
+    "root": {
+     "rotation": [
+      0,
+      0,
+      "math.sin(query.anim_time * 60) * 0.7"
+     ],
+     "position": [
+      0,
+      "math.sin(query.anim_time * 120) * 0.08",
+      0
+     ]
+    },
+    "head_carrier": {
+     "rotation": [
+      "math.sin(query.anim_time * 60 + 60) * 0.6",
+      0,
+      0
+     ]
+    },
+    "glow_moon_gem": {
+     "scale": [
+      "1 + math.sin(query.anim_time * 120) * 0.14",
+      "1 + math.sin(query.anim_time * 120) * 0.14",
+      "1 + math.sin(query.anim_time * 120) * 0.14"
+     ]
+    },
+    "glow_vein_h": {
+     "scale": [
+      "1 + math.sin(query.anim_time * 120 - 30) * 0.2",
+      "1",
+      "1"
+     ]
+    },
+    "glow_seam_f": {
+     "scale": [
+      "1 + math.sin(query.anim_time * 120) * 0.25",
+      "1",
+      "1 + math.sin(query.anim_time * 120) * 0.12"
+     ]
+    },
+    "glow_seam_b": {
+     "scale": [
+      "1 + math.sin(query.anim_time * 120 + 180) * 0.25",
+      "1",
+      "1 + math.sin(query.anim_time * 120 + 180) * 0.12"
+     ]
+    }
+   }
+  },
+  "animation.umbral_pick.night_bite": {
+   "loop": false,
+   "animation_length": 0.5,
+   "bones": {
+    "head_carrier": {
+     "rotation": {
+      "0.0": [
+       0,
+       0,
+       0
+      ],
+      "0.06": [
+       -5,
+       0,
+       0
+      ],
+      "0.16": [
+       2,
+       0,
+       0
+      ],
+      "0.3": [
+       -1,
+       0,
+       0
+      ],
+      "0.5": [
+       0,
+       0,
+       0
+      ]
+     }
+    },
+    "prong_f_tip": {
+     "rotation": {
+      "0.0": [
+       0,
+       0,
+       0
+      ],
+      "0.08": [
+       9,
+       0,
+       0
+      ],
+      "0.2": [
+       -3,
+       0,
+       0
+      ],
+      "0.5": [
+       0,
+       0,
+       0
+      ]
+     }
+    },
+    "prong_b_tip": {
+     "rotation": {
+      "0.0": [
+       0,
+       0,
+       0
+      ],
+      "0.08": [
+       -9,
+       0,
+       0
+      ],
+      "0.2": [
+       3,
+       0,
+       0
+      ],
+      "0.5": [
+       0,
+       0,
+       0
+      ]
+     }
+    },
+    "glow_seam_f": {
+     "scale": {
+      "0.0": [
+       1,
+       1,
+       1
+      ],
+      "0.08": [
+       1.7,
+       1,
+       1.7
+      ],
+      "0.2": [
+       1.15,
+       1,
+       1.15
+      ],
+      "0.35": [
+       1.4,
+       1,
+       1.4
+      ],
+      "0.5": [
+       1,
+       1,
+       1
+      ]
+     }
+    },
+    "glow_seam_b": {
+     "scale": {
+      "0.0": [
+       1,
+       1,
+       1
+      ],
+      "0.08": [
+       1.7,
+       1,
+       1.7
+      ],
+      "0.2": [
+       1.15,
+       1,
+       1.15
+      ],
+      "0.35": [
+       1.4,
+       1,
+       1.4
+      ],
+      "0.5": [
+       1,
+       1,
+       1
+      ]
+     }
+    },
+    "glow_moon_gem": {
+     "scale": {
+      "0.0": [
+       1,
+       1,
+       1
+      ],
+      "0.07": [
+       1.8,
+       1.8,
+       1.8
+      ],
+      "0.18": [
+       0.9,
+       0.9,
+       0.9
+      ],
+      "0.32": [
+       1.25,
+       1.25,
+       1.25
+      ],
+      "0.5": [
+       1,
+       1,
+       1
+      ]
+     }
+    }
+   }
+  }
+ }
+}

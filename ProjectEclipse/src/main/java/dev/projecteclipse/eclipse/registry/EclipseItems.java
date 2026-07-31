@@ -5,7 +5,10 @@ import java.util.function.Supplier;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.artifact.ArmArtifactItem;
+import dev.projecteclipse.eclipse.economy.FerrymanTollItem;
 import dev.projecteclipse.eclipse.economy.GraveDowserItem;
+import dev.projecteclipse.eclipse.economy.UmbralBladeItem;
+import dev.projecteclipse.eclipse.economy.UmbralPickItem;
 import dev.projecteclipse.eclipse.economy.UmbralShardItem;
 import dev.projecteclipse.eclipse.economy.UmbralTier;
 import dev.projecteclipse.eclipse.economy.VitaeShardItem;
@@ -106,16 +109,24 @@ public final class EclipseItems {
                     .component(DataComponents.ENCHANTMENT_GLINT_OVERRIDE, Boolean.TRUE)
                     .component(DataComponents.LORE, loreLine("vitae_shard"))));
 
-    /** 12 shards: diamond-class pick, +50% break speed under open night sky; unrepairable. */
-    public static final Supplier<PickaxeItem> UMBRAL_PICK = ITEMS.register("umbral_pick",
-            () -> new PickaxeItem(UmbralTier.INSTANCE, new Item.Properties()
+    /**
+     * 12 shards: diamond-class pick, +50% break speed under open night sky; unrepairable.
+     * POLISH3: {@code economy.UmbralPickItem} = same {@code PickaxeItem} gameplay + GeckoLib
+     * hand-3D geo (gui/ground/fixed keep the 2D icon via separate_transforms).
+     */
+    public static final Supplier<UmbralPickItem> UMBRAL_PICK = ITEMS.register("umbral_pick",
+            () -> new UmbralPickItem(UmbralTier.INSTANCE, new Item.Properties()
                     .rarity(Rarity.RARE)
                     .component(DataComponents.LORE, loreLine("umbral_pick"))
                     .attributes(PickaxeItem.createAttributes(UmbralTier.INSTANCE, 1.0F, -2.8F))));
 
-    /** 16 shards: diamond-class blade, +1 heart lifesteal on player kill (lives.LifecycleEvents); unrepairable. */
-    public static final Supplier<SwordItem> UMBRAL_BLADE = ITEMS.register("umbral_blade",
-            () -> new SwordItem(UmbralTier.INSTANCE, new Item.Properties()
+    /**
+     * 16 shards: diamond-class blade, +1 heart lifesteal on player kill (lives.LifecycleEvents);
+     * unrepairable. POLISH3: {@code economy.UmbralBladeItem} = same {@code SwordItem} gameplay +
+     * GeckoLib hand-3D geo (gui/ground/fixed keep the 2D icon via separate_transforms).
+     */
+    public static final Supplier<UmbralBladeItem> UMBRAL_BLADE = ITEMS.register("umbral_blade",
+            () -> new UmbralBladeItem(UmbralTier.INSTANCE, new Item.Properties()
                     .rarity(Rarity.RARE)
                     .component(DataComponents.LORE, loreLine("umbral_blade"))
                     .attributes(SwordItem.createAttributes(UmbralTier.INSTANCE, 3, -2.4F))));
@@ -154,9 +165,11 @@ public final class EclipseItems {
     /**
      * Guaranteed Ferryman drop (W12, spec §2.2): the day-14 finale trophy. W13 decides its
      * economy uses (credits/epilogue); nothing consumes it yet. Trophy — no glint.
+     * POLISH3: {@code economy.FerrymanTollItem} = same no-op trophy + GeckoLib hand-3D
+     * spectral coin (gui/ground/fixed keep the 2D icon via separate_transforms).
      */
-    public static final Supplier<Item> FERRYMAN_TOLL = ITEMS.register("ferryman_toll",
-            () -> new Item(new Item.Properties()
+    public static final Supplier<FerrymanTollItem> FERRYMAN_TOLL = ITEMS.register("ferryman_toll",
+            () -> new FerrymanTollItem(new Item.Properties()
                     .stacksTo(16)
                     .rarity(Rarity.EPIC)
                     .component(DataComponents.LORE, loreLine("ferryman_toll"))));

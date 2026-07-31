@@ -1,0 +1,378 @@
+{
+ "format_version": "1.12.0",
+ "minecraft:geometry": [
+  {
+   "description": {
+    "identifier": "geometry.umbral_pick",
+    "texture_width": 64,
+    "texture_height": 64,
+    "visible_bounds_width": 2.5,
+    "visible_bounds_height": 2.5,
+    "visible_bounds_offset": [
+     0,
+     0.5,
+     0
+    ]
+   },
+   "bones": [
+    {
+     "name": "root",
+     "pivot": [
+      0,
+      0,
+      0
+     ]
+    },
+    {
+     "name": "grip",
+     "parent": "root",
+     "pivot": [
+      0,
+      0,
+      0
+     ],
+     "cubes": [
+      {
+       "origin": [
+        -0.5,
+        0,
+        -0.5
+       ],
+       "size": [
+        1,
+        12,
+        1
+       ],
+       "uv": [
+        0,
+        0
+       ]
+      },
+      {
+       "origin": [
+        -1,
+        3,
+        -1
+       ],
+       "size": [
+        2,
+        2,
+        2
+       ],
+       "inflate": -0.35,
+       "uv": [
+        6,
+        0
+       ]
+      }
+     ]
+    },
+    {
+     "name": "glow_vein_h",
+     "parent": "grip",
+     "pivot": [
+      0,
+      6,
+      0
+     ],
+     "cubes": [
+      {
+       "origin": [
+        -0.5,
+        6,
+        0.55
+       ],
+       "size": [
+        1,
+        6,
+        0
+       ],
+       "uv": [
+        22,
+        16
+       ]
+      }
+     ]
+    },
+    {
+     "name": "collar",
+     "parent": "root",
+     "pivot": [
+      0,
+      12,
+      0
+     ],
+     "cubes": [
+      {
+       "origin": [
+        -1,
+        11,
+        -1
+       ],
+       "size": [
+        2,
+        2,
+        2
+       ],
+       "inflate": -0.1,
+       "uv": [
+        16,
+        0
+       ]
+      }
+     ]
+    },
+    {
+     "name": "head_carrier",
+     "parent": "root",
+     "pivot": [
+      0,
+      13,
+      0
+     ]
+    },
+    {
+     "name": "head_core",
+     "parent": "head_carrier",
+     "pivot": [
+      0,
+      13,
+      0
+     ],
+     "cubes": [
+      {
+       "origin": [
+        -1,
+        12,
+        -1.5
+       ],
+       "size": [
+        2,
+        2,
+        3
+       ],
+       "uv": [
+        26,
+        0
+       ]
+      }
+     ]
+    },
+    {
+     "name": "prong_f",
+     "parent": "head_carrier",
+     "pivot": [
+      0,
+      13,
+      -1.5
+     ],
+     "rotation": [
+      4,
+      0,
+      0
+     ],
+     "cubes": [
+      {
+       "origin": [
+        -1,
+        12,
+        -5.5
+       ],
+       "size": [
+        2,
+        2,
+        4
+       ],
+       "inflate": -0.12,
+       "uv": [
+        38,
+        0
+       ]
+      }
+     ]
+    },
+    {
+     "name": "prong_f_tip",
+     "parent": "prong_f",
+     "pivot": [
+      0,
+      13,
+      -5.5
+     ],
+     "rotation": [
+      10,
+      0,
+      0
+     ],
+     "cubes": [
+      {
+       "origin": [
+        -0.5,
+        12.5,
+        -7.5
+       ],
+       "size": [
+        1,
+        1,
+        2
+       ],
+       "inflate": -0.08,
+       "uv": [
+        0,
+        16
+       ]
+      }
+     ]
+    },
+    {
+     "name": "prong_b",
+     "parent": "head_carrier",
+     "pivot": [
+      0,
+      13,
+      1.5
+     ],
+     "rotation": [
+      -4,
+      0,
+      0
+     ],
+     "cubes": [
+      {
+       "origin": [
+        -1,
+        12,
+        1.5
+       ],
+       "size": [
+        2,
+        2,
+        4
+       ],
+       "inflate": -0.12,
+       "uv": [
+        50,
+        0
+       ]
+      }
+     ]
+    },
+    {
+     "name": "prong_b_tip",
+     "parent": "prong_b",
+     "pivot": [
+      0,
+      13,
+      5.5
+     ],
+     "rotation": [
+      -10,
+      0,
+      0
+     ],
+     "cubes": [
+      {
+       "origin": [
+        -0.5,
+        12.5,
+        5.5
+       ],
+       "size": [
+        1,
+        1,
+        2
+       ],
+       "inflate": -0.08,
+       "uv": [
+        8,
+        16
+       ]
+      }
+     ]
+    },
+    {
+     "name": "glow_seam_f",
+     "parent": "prong_f",
+     "pivot": [
+      0,
+      14,
+      -3.5
+     ],
+     "cubes": [
+      {
+       "origin": [
+        -0.5,
+        14.05,
+        -5.5
+       ],
+       "size": [
+        1,
+        0,
+        4
+       ],
+       "uv": [
+        26,
+        16
+       ]
+      }
+     ]
+    },
+    {
+     "name": "glow_seam_b",
+     "parent": "prong_b",
+     "pivot": [
+      0,
+      14,
+      3.5
+     ],
+     "cubes": [
+      {
+       "origin": [
+        -0.5,
+        14.05,
+        1.5
+       ],
+       "size": [
+        1,
+        0,
+        4
+       ],
+       "uv": [
+        38,
+        16
+       ]
+      }
+     ]
+    },
+    {
+     "name": "glow_moon_gem",
+     "parent": "head_carrier",
+     "pivot": [
+      0,
+      14,
+      0
+     ],
+     "cubes": [
+      {
+       "origin": [
+        -0.5,
+        13.9,
+        -0.5
+       ],
+       "size": [
+        1,
+        1,
+        1
+       ],
+       "inflate": 0.16,
+       "uv": [
+        16,
+        16
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

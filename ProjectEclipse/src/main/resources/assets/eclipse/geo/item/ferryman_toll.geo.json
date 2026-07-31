@@ -1,0 +1,351 @@
+{
+ "format_version": "1.12.0",
+ "minecraft:geometry": [
+  {
+   "description": {
+    "identifier": "geometry.ferryman_toll",
+    "texture_width": 64,
+    "texture_height": 64,
+    "visible_bounds_width": 2.5,
+    "visible_bounds_height": 2,
+    "visible_bounds_offset": [
+     0,
+     0.4,
+     0
+    ]
+   },
+   "bones": [
+    {
+     "name": "root",
+     "pivot": [
+      0,
+      0,
+      0
+     ]
+    },
+    {
+     "name": "tilt",
+     "parent": "root",
+     "pivot": [
+      0,
+      5,
+      0
+     ],
+     "rotation": [
+      10,
+      0,
+      0
+     ]
+    },
+    {
+     "name": "spin",
+     "parent": "tilt",
+     "pivot": [
+      0,
+      5,
+      0
+     ]
+    },
+    {
+     "name": "disc",
+     "parent": "spin",
+     "pivot": [
+      0,
+      5,
+      0
+     ],
+     "cubes": [
+      {
+       "origin": [
+        -3,
+        1,
+        -0.5
+       ],
+       "size": [
+        6,
+        8,
+        1
+       ],
+       "uv": [
+        0,
+        0
+       ]
+      },
+      {
+       "origin": [
+        -4,
+        2,
+        -0.5
+       ],
+       "size": [
+        8,
+        6,
+        1
+       ],
+       "uv": [
+        16,
+        0
+       ]
+      }
+     ]
+    },
+    {
+     "name": "emboss",
+     "parent": "disc",
+     "pivot": [
+      0,
+      5,
+      0
+     ],
+     "cubes": [
+      {
+       "origin": [
+        -1,
+        4,
+        -1
+       ],
+       "size": [
+        2,
+        2,
+        2
+       ],
+       "inflate": -0.3,
+       "uv": [
+        36,
+        0
+       ]
+      }
+     ]
+    },
+    {
+     "name": "glow_face_f",
+     "parent": "disc",
+     "pivot": [
+      0,
+      5,
+      0
+     ],
+     "cubes": [
+      {
+       "origin": [
+        -4,
+        1,
+        0.55
+       ],
+       "size": [
+        8,
+        8,
+        0
+       ],
+       "uv": {
+        "south": {
+         "uv": [
+          32,
+          16
+         ],
+         "uv_size": [
+          16,
+          16
+         ]
+        }
+       }
+      }
+     ]
+    },
+    {
+     "name": "glow_face_b",
+     "parent": "disc",
+     "pivot": [
+      0,
+      5,
+      0
+     ],
+     "cubes": [
+      {
+       "origin": [
+        -4,
+        1,
+        -0.55
+       ],
+       "size": [
+        8,
+        8,
+        0
+       ],
+       "uv": {
+        "north": {
+         "uv": [
+          48,
+          16
+         ],
+         "uv_size": [
+          16,
+          16
+         ]
+        }
+       }
+      }
+     ]
+    },
+    {
+     "name": "glow_rim",
+     "parent": "disc",
+     "pivot": [
+      0,
+      5,
+      0
+     ],
+     "cubes": [
+      {
+       "origin": [
+        -3,
+        8,
+        -0.5
+       ],
+       "size": [
+        6,
+        1,
+        1
+       ],
+       "inflate": 0.15,
+       "uv": [
+        46,
+        0
+       ]
+      },
+      {
+       "origin": [
+        -3,
+        1,
+        -0.5
+       ],
+       "size": [
+        6,
+        1,
+        1
+       ],
+       "inflate": 0.15,
+       "uv": [
+        0,
+        12
+       ]
+      },
+      {
+       "origin": [
+        -4,
+        2,
+        -0.5
+       ],
+       "size": [
+        1,
+        6,
+        1
+       ],
+       "inflate": 0.15,
+       "uv": [
+        16,
+        10
+       ]
+      },
+      {
+       "origin": [
+        3,
+        2,
+        -0.5
+       ],
+       "size": [
+        1,
+        6,
+        1
+       ],
+       "inflate": 0.15,
+       "uv": [
+        24,
+        10
+       ]
+      }
+     ]
+    },
+    {
+     "name": "halo",
+     "parent": "root",
+     "pivot": [
+      0,
+      5,
+      0
+     ],
+     "rotation": [
+      18,
+      0,
+      0
+     ]
+    },
+    {
+     "name": "halo_spin",
+     "parent": "halo",
+     "pivot": [
+      0,
+      5,
+      0
+     ]
+    },
+    {
+     "name": "glow_obol_a",
+     "parent": "halo_spin",
+     "pivot": [
+      0,
+      5,
+      0
+     ],
+     "cubes": [
+      {
+       "origin": [
+        -0.5,
+        4.5,
+        5.5
+       ],
+       "size": [
+        1,
+        1,
+        1
+       ],
+       "inflate": -0.15,
+       "uv": [
+        32,
+        8
+       ]
+      }
+     ]
+    },
+    {
+     "name": "glow_obol_b",
+     "parent": "halo_spin",
+     "pivot": [
+      0,
+      5,
+      0
+     ],
+     "cubes": [
+      {
+       "origin": [
+        -0.5,
+        4.5,
+        -6.5
+       ],
+       "size": [
+        1,
+        1,
+        1
+       ],
+       "inflate": -0.15,
+       "uv": [
+        40,
+        8
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

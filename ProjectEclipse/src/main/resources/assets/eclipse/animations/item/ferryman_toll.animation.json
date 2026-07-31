@@ -1,0 +1,316 @@
+{
+ "format_version": "1.8.0",
+ "animations": {
+  "animation.ferryman_toll.idle": {
+   "loop": true,
+   "animation_length": 8.0,
+   "bones": {
+    "root": {
+     "position": [
+      0,
+      "math.sin(query.anim_time * 90) * 0.25",
+      0
+     ]
+    },
+    "tilt": {
+     "rotation": [
+      "math.sin(query.anim_time * 45) * 2.5",
+      0,
+      "math.cos(query.anim_time * 45) * 2.5"
+     ]
+    },
+    "spin": {
+     "rotation": {
+      "0.0": [
+       0,
+       0,
+       0
+      ],
+      "8.0": [
+       0,
+       360,
+       0
+      ]
+     }
+    },
+    "halo_spin": {
+     "rotation": {
+      "0.0": [
+       0,
+       0,
+       0
+      ],
+      "8.0": [
+       0,
+       -360,
+       0
+      ]
+     }
+    },
+    "glow_rim": {
+     "scale": [
+      "1 + math.sin(query.anim_time * 90) * 0.05",
+      "1 + math.sin(query.anim_time * 90) * 0.05",
+      "1 + math.sin(query.anim_time * 90) * 0.05"
+     ]
+    },
+    "glow_face_f": {
+     "scale": [
+      "1 + math.sin(query.anim_time * 45) * 0.04",
+      "1 + math.sin(query.anim_time * 45) * 0.04",
+      "1"
+     ]
+    },
+    "glow_face_b": {
+     "scale": [
+      "1 + math.sin(query.anim_time * 45 + 180) * 0.04",
+      "1 + math.sin(query.anim_time * 45 + 180) * 0.04",
+      "1"
+     ]
+    },
+    "glow_obol_a": {
+     "position": [
+      0,
+      "math.sin(query.anim_time * 90 + 90) * 0.3",
+      0
+     ],
+     "scale": [
+      "1 + math.sin(query.anim_time * 180) * 0.1",
+      "1 + math.sin(query.anim_time * 180) * 0.1",
+      "1 + math.sin(query.anim_time * 180) * 0.1"
+     ]
+    },
+    "glow_obol_b": {
+     "position": [
+      0,
+      "math.sin(query.anim_time * 90 - 90) * 0.3",
+      0
+     ],
+     "scale": [
+      "1 + math.sin(query.anim_time * 180 + 180) * 0.1",
+      "1 + math.sin(query.anim_time * 180 + 180) * 0.1",
+      "1 + math.sin(query.anim_time * 180 + 180) * 0.1"
+     ]
+    }
+   }
+  },
+  "animation.ferryman_toll.present": {
+   "loop": false,
+   "animation_length": 2.0,
+   "bones": {
+    "root": {
+     "position": {
+      "0.0": [
+       0,
+       0,
+       0
+      ],
+      "0.35": {
+       "post": [
+        0,
+        3,
+        0
+       ],
+       "lerp_mode": "catmullrom"
+      },
+      "0.9": [
+       0,
+       2.6,
+       0
+      ],
+      "1.5": [
+       0,
+       0.4,
+       0
+      ],
+      "2.0": [
+       0,
+       0,
+       0
+      ]
+     }
+    },
+    "tilt": {
+     "rotation": {
+      "0.0": [
+       0,
+       0,
+       0
+      ],
+      "0.3": [
+       -10,
+       0,
+       0
+      ],
+      "1.4": [
+       -10,
+       0,
+       0
+      ],
+      "2.0": [
+       0,
+       0,
+       0
+      ]
+     }
+    },
+    "disc": {
+     "rotation": {
+      "0.0": [
+       0,
+       0,
+       0
+      ],
+      "0.2": [
+       -24,
+       0,
+       0
+      ],
+      "0.55": {
+       "post": [
+        186,
+        0,
+        0
+       ],
+       "lerp_mode": "catmullrom"
+      },
+      "0.75": [
+       178,
+       0,
+       0
+      ],
+      "0.85": [
+       180,
+       0,
+       0
+      ],
+      "1.25": [
+       180,
+       0,
+       0
+      ],
+      "1.45": [
+       196,
+       0,
+       0
+      ],
+      "1.8": {
+       "post": [
+        -6,
+        0,
+        0
+       ],
+       "lerp_mode": "catmullrom"
+      },
+      "2.0": [
+       0,
+       0,
+       0
+      ]
+     }
+    },
+    "glow_rim": {
+     "scale": {
+      "0.0": [
+       1,
+       1,
+       1
+      ],
+      "0.4": [
+       1.3,
+       1.3,
+       1.3
+      ],
+      "0.9": [
+       1.18,
+       1.18,
+       1.18
+      ],
+      "1.3": [
+       1.3,
+       1.3,
+       1.3
+      ],
+      "2.0": [
+       1,
+       1,
+       1
+      ]
+     }
+    },
+    "glow_obol_a": {
+     "scale": {
+      "0.0": [
+       1,
+       1,
+       1
+      ],
+      "0.35": [
+       1.6,
+       1.6,
+       1.6
+      ],
+      "1.3": [
+       1.35,
+       1.35,
+       1.35
+      ],
+      "2.0": [
+       1,
+       1,
+       1
+      ]
+     }
+    },
+    "glow_obol_b": {
+     "scale": {
+      "0.0": [
+       1,
+       1,
+       1
+      ],
+      "0.4": [
+       1.6,
+       1.6,
+       1.6
+      ],
+      "1.35": [
+       1.35,
+       1.35,
+       1.35
+      ],
+      "2.0": [
+       1,
+       1,
+       1
+      ]
+     }
+    },
+    "emboss": {
+     "scale": {
+      "0.0": [
+       1,
+       1,
+       1
+      ],
+      "0.6": [
+       1,
+       1,
+       1.3
+      ],
+      "1.2": [
+       1,
+       1,
+       1.15
+      ],
+      "2.0": [
+       1,
+       1,
+       1
+      ]
+     }
+    }
+   }
+  }
+ }
+}
