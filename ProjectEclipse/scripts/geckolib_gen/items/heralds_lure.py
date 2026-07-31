@@ -7,6 +7,11 @@ CRIMSON at the heart and cools to herald GOLD at the rim — the recipe (heart
 fragment) and the summoned boss (herald gold) in one emissive. The spark cube on
 top is the offering's rising ember.
 
+MD3 added the two crossed `glow_flare_*` corona planes that carry the idle's
+double-blink accent. They are HOLLOW on purpose: the planes pass straight through the
+core box, so every texel inside r = 3.2 (which is where the core and its spark sit)
+is dropped — otherwise the corona would z-fight the cube it is supposed to halo.
+
 Run from the ProjectEclipse root (deterministic — reruns are byte-identical):
     python3 scripts/geckolib_gen/items/heralds_lure.py
 """
@@ -63,6 +68,27 @@ def heart_core(px):
 
 heart_core.shadeless = True
 
+# Corona geometry: 9x9 plane, centre texel (4, 4). Everything closer than this is
+# inside the core cube (half-diagonal 2.12) or the ember spark (3.04) — see docstring.
+FLARE_HOLE = 3.2
+
+
+def flare_plane(px):
+    """Eight-point corona spike ring; hollow centre, CRIMSON root cooling to GOLD."""
+    dx, dy = px.fx - 4, px.fy - 4
+    d = math.hypot(dx, dy)
+    if d < FLARE_HOLE:
+        return None
+    # EXACT axes + diagonals only. A 1px tolerance here still fills the whole
+    # annulus at this radius and paints a gear, not a corona.
+    if not (dx == 0 or dy == 0 or abs(dx) == abs(dy)):
+        return None
+    t = min(1.0, (d - FLARE_HOLE) / 2.6 + (px.noise(31) - 0.5) * 0.25)
+    return mix(mix(SCARLET, CRIMSON, 0.3), GOLD_LIGHT, max(0.0, t))
+
+
+flare_plane.shadeless = True
+
 
 def main():
     painter = GeoPainter(GEO, seed=SEED)
@@ -70,6 +96,7 @@ def main():
     painter.set_material("glow_core", heart_core)
     # The rising ember spark above the heart stays herald gold.
     painter.set_cube_material("glow_core", 1, flame(GOLD_LIGHT, GOLD, salt=19))
+    painter.set_material("glow_flare_*", flare_plane)
     painter.paint(OUT)
 
 

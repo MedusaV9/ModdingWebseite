@@ -25,6 +25,23 @@
           ]
         },
         {
+          "name": "glow_flare_a",
+          "parent": "root",
+          "pivot": [0, 4.5, 0],
+          "cubes": [
+            {"origin": [-4.5, 0, 0], "size": [9, 9, 0], "uv": [0, 24]}
+          ]
+        },
+        {
+          "name": "glow_flare_b",
+          "parent": "root",
+          "pivot": [0, 4.5, 0],
+          "rotation": [0, 90, 0],
+          "cubes": [
+            {"origin": [-4.5, 0, 0], "size": [9, 9, 0], "uv": [20, 24]}
+          ]
+        },
+        {
           "name": "prongs",
           "parent": "root",
           "pivot": [0, 0, 0]

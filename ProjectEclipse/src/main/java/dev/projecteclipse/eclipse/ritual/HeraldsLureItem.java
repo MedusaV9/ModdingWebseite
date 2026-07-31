@@ -11,8 +11,12 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
+import net.minecraft.world.InteractionResultHolder;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
@@ -36,11 +40,16 @@ import software.bernie.geckolib.util.GeckoLibUtil;
  * clicks land in {@code AltarBlock#useItemOn} → milestone deposit, which special-cases the
  * lure into an action-bar hint instead of "wrong item".</p>
  *
- * <p>GeckoLib item (PLAN-ITEMS B2): obsidian shard prongs caging a heart-fragment core.
- * The {@code base} controller loops {@code animation.heralds_lure.idle} (core pulse +
- * prong counter-rotation); the {@code action} controller holds the triggerable
- * {@value #ANIM_OFFERING} one-shot (prongs open, core surges), fired below on the
- * altar-use success path right before the stack shrinks.</p>
+ * <p>GeckoLib item (PLAN-ITEMS B2, MD3 crescendo pass): obsidian shard prongs caging a
+ * heart-fragment core, haloed by two crossed {@code glow_flare_*} corona planes. The
+ * {@code base} controller loops {@code animation.heralds_lure.idle} — a 3-second hunger
+ * crescendo (core swell + prongs clenching inward) that tops out in a hard DOUBLE BLINK
+ * on the corona. The {@code action} controller holds two triggerable one-shots:
+ * {@value #ANIM_OFFERING} (prongs open, core surges), fired below on the altar-use
+ * success path right before the stack shrinks, and {@value #ANIM_OFFERING_PREP} (rear
+ * back, tremble), fired from {@link #use} — hefting the lure is the beat right before
+ * you press it onto the altar, and it is the only pre-offering seam that exists without
+ * turning the lure into a charged-use item.</p>
  */
 public class HeraldsLureItem extends Item implements GeoItem {
     /** First day the altar accepts the lure (the Herald is the day-7 boss; mirrors {@link FinaleRitual#FINALE_DAY}). */
@@ -51,6 +60,9 @@ public class HeraldsLureItem extends Item implements GeoItem {
 
     /** Triggerable one-shot: prongs open + core surge when the altar accepts the offering. */
     public static final String ANIM_OFFERING = "offering";
+
+    /** Triggerable one-shot: the lure rears back and trembles as it is readied. */
+    public static final String ANIM_OFFERING_PREP = "offering_prep";
 
     private final AnimatableInstanceCache geoCache = GeckoLibUtil.createInstanceCache(this);
 
@@ -75,10 +87,28 @@ public class HeraldsLureItem extends Item implements GeoItem {
         AnimationController<HeraldsLureItem> action = new AnimationController<>(this,
                 EclipseGeoAnimations.CONTROLLER_ACTION, 0, state -> PlayState.STOP);
         action.triggerableAnim(ANIM_OFFERING, EclipseGeoAnimations.once(GEO_ID, ANIM_OFFERING));
+        action.triggerableAnim(ANIM_OFFERING_PREP,
+                EclipseGeoAnimations.once(GEO_ID, ANIM_OFFERING_PREP));
         controllers.add(action);
     }
 
     // ------------------------------------------------------------------ interaction
+
+    /**
+     * Readying the lure: cosmetic only. Returns {@link InteractionResultHolder#pass} so
+     * nothing about the item's behaviour changes — {@link #useOn} still owns every
+     * altar interaction, and this only fires when the click did NOT land on an altar.
+     */
+    @Override
+    public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
+        ItemStack stack = player.getItemInHand(hand);
+        if (!level.isClientSide && player instanceof ServerPlayer serverPlayer
+                && level instanceof ServerLevel serverLevel) {
+            triggerAnim(serverPlayer, GeoItem.getOrAssignId(stack, serverLevel),
+                    EclipseGeoAnimations.CONTROLLER_ACTION, ANIM_OFFERING_PREP);
+        }
+        return InteractionResultHolder.pass(stack);
+    }
 
     @Override
     public InteractionResult useOn(UseOnContext context) {
