@@ -1,8 +1,8 @@
 # UV map — Pale Sentinel (`assets/eclipse/textures/entity/pale_sentinel.png` + `_glowmask.png`)
 
 **Texture size:** 64×64 (both files — GeckoLib's `AutoGlowingTexture` enforces matching
-canvases). Model: `assets/eclipse/geo/entity/pale_sentinel.geo.json` (GeckoLib, 16 bones /
-18 cubes — 2.4-block gaunt tree-revenant, hitbox 0.8×2.6). The geo file **is** the UV
+canvases). Model: `assets/eclipse/geo/entity/pale_sentinel.geo.json` (GeckoLib, 24 bones /
+22 cubes — 2.4-block gaunt tree-revenant, hitbox 0.8×2.6). The geo file **is** the UV
 source of truth — the painter (`scripts/geckolib_gen/paint_lib.py`) parses it and computes
 every face rect itself, so only the layout is frozen here:
 
@@ -15,6 +15,10 @@ every face rect itself, so only the layout is frozen here:
 | tendril_b | root | 2×8×1 | box-UV (38,35) | longest tendril, rear-right |
 | tendril_c | root | 2×7×1 | box-UV (44,35) | rear-center |
 | torso | log trunk | 8×10×5 | box-UV (24,8) | pale-oak grain + dark fissures |
+| petal_shoulder_right | sepal plate | 4×5×0 | per-face: N (0,52), S (5,52) | flat plate rolled −24°; sepal white, mid vein, rose-blush tip rows |
+| petal_shoulder_left | sepal plate | 4×5×0 | per-face: N (10,52), S (15,52) | rolled +24°, separate UV |
+| petal_chest | sepal plate | 5×6×0 | per-face: N (20,52), S (26,52) | pitched −12° off the chest |
+| petal_back | sepal plate | 5×7×0 | per-face: N (32,52), S (38,52) | tallest plate, pitched +10° |
 | head | skull block | 5×6×5 | box-UV (0,24) | head-tracked; **hollow face** rows 1-4 / cols 1-3 of the north face; ember eyes at face (1,2) + (3,2) |
 | antler_right | twig main | 1×6×1 | box-UV (50,0) | crown, rolled −16° |
 | antler_right | twig tine | 2×1×1 | box-UV (54,0) | |
@@ -27,14 +31,20 @@ every face rect itself, so only the layout is frozen here:
 | hand_left | finger long | 1×5×1 | box-UV (24,35) | |
 | hand_left | finger short | 1×4×1 | box-UV (28,35) | |
 
-`body` (pivot 0,18,0) is the cube-less locomotion root; `root` stays clean so the
-scripted death crumble (`tickDeath`) and burrow sink can move the whole model.
+**Cube-less locator bones (no UV, no paint):** `body` (pivot 0,18,0) is the locomotion
+root; `root` stays clean so the scripted death crumble (`tickDeath`) and burrow sink can
+move the whole model. The four **`petal_tip_*` locators (MB6, B2 orbit anchors)** hang off
+the petal plates at the free outer tip of each sepal — `petal_tip_right` (−8,25.5,0 on
+petal_shoulder_right), `petal_tip_left` (8,25.5,0), `petal_tip_chest` (0,24,−2.9),
+`petal_tip_back` (0,23.5,2.9). They inherit the full petal FK (flutter/bloom/freeze), so
+FX paired to them ride the petal motion; the painter ignores cube-less bones.
 
 **Art brief (design sheet §2.3 "pale_sentinel"):** pale-oak log grain `#D8D2C4`/`#B9B2A2`
 split by near-black bark fissures `#575044`; root-claw hands and skirt tendrils in dry
-root grey `#8C8474` with darker node rings and stained tips; dead-twig antlers `#6E6555`.
-The face caves into a `#2A261E` hollow — the **orange-ember eyes `#FF9A3C`
-(cores `#FFD9A0`) are the only glow on the whole mob**.
+root grey `#8C8474` with darker node rings and stained tips; dead-twig antlers `#6E6555`;
+petal-armor sepals `#E9E2D2` with a dark mid vein and faint rose blush `#C9A3A8` on the
+drooping tip rows. The face caves into a `#2A261E` hollow — the **orange-ember eyes
+`#FF9A3C` (cores `#FFD9A0`) are the only glow on the whole mob**.
 
 **Emissive (glowmask):** ONLY the two eye pixels on the head's north face (custom glow
 painter, alpha 235/205 — deliberately faint). There are no `glow_*` bones in this geo.

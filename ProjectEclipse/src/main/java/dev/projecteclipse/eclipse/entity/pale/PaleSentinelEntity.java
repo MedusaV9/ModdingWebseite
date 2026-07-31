@@ -35,6 +35,7 @@ import net.minecraft.world.phys.Vec3;
 import software.bernie.geckolib.animation.AnimationController;
 import software.bernie.geckolib.animation.AnimationState;
 import software.bernie.geckolib.animation.PlayState;
+import software.bernie.geckolib.animation.RawAnimation;
 
 /**
  * Pale Sentinel / Fahler Wächter — the Pale Garden's weeping-angel guardian
@@ -58,8 +59,11 @@ import software.bernie.geckolib.animation.PlayState;
  *       controlled 1-block root-step flinch;</li>
  *   <li>bark hardens: non-bypass damage is halved ({@value #FROZEN_DAMAGE_FACTOR}×),
  *       answered with a pale petal burst + flinch backward;</li>
- *   <li>the {@code base} animation controller plays the held {@code freeze} statue pose
- *       (blended over {@link #baseTransitionTicks()} ticks — a dead stop, no snap);</li>
+ *   <li>the {@code base} animation controller plays the {@code freeze_in} arrest
+ *       (a 0.3 s damped ring-down — momentum visibly bleeding out of the light
+ *       appendages) chained into the held {@code freeze} statue pose, entered over
+ *       {@link #baseTransitionTicks()} blend ticks — an audible-in-the-bones dead stop,
+ *       not a loop cut;</li>
  *   <li>dread garnish: players within {@value #CREAK_RANGE} blocks hear faint private
  *       wood creaks at their ear every ~{@value #CREAK_INTERVAL_TICKS}t
  *       ({@code playNotifySound} — the {@code EclipseSpawner.howlAround} trick).</li>
@@ -77,6 +81,13 @@ public class PaleSentinelEntity extends EclipseGeoMonster {
     public static final String GEO_ID = "pale_sentinel";
     /** Statue-pose loop played on the {@code base} controller while observed. */
     public static final String ANIM_FREEZE = "freeze";
+    /**
+     * The 0.3 s arrest transition played ONCE in front of {@link #ANIM_FREEZE}: a damped
+     * ring-down (residual swing bleeding out of petals/tendrils/antlers/claws by mass —
+     * heavy bones die first, paper petals last) that ends EXACTLY on the statue pose, so
+     * the follow-up {@code freeze} loop is a seamless dead stop instead of a loop cut.
+     */
+    public static final String ANIM_FREEZE_IN = "freeze_in";
     /** MOB-AMBIENT one-shot: petal-armor bloom-open the instant the statue thaws. */
     public static final String ANIM_BLOOM = "bloom";
     /** Scripted death window (sheet: 35t crumble to a bark pile). */
@@ -95,6 +106,14 @@ public class PaleSentinelEntity extends EclipseGeoMonster {
     /** True while observed (statue). Synced so the client plays the freeze pose. */
     private static final EntityDataAccessor<Boolean> DATA_FROZEN =
             SynchedEntityData.defineId(PaleSentinelEntity.class, EntityDataSerializers.BOOLEAN);
+
+    /**
+     * Cached {@code freeze_in -> freeze} composite for the {@code base} controller.
+     * Client-side lazy singleton (same pattern as the frozen base class's cached
+     * idle/walk): {@code setAndContinue} only restarts an animation when the instance
+     * changes, so the arrest plays once per freeze and the statue loop holds after it.
+     */
+    private RawAnimation cachedFreezeSequence;
 
     /** Consecutive server ticks WITHOUT any observer (hysteresis counter). */
     private int unseenTicks;
@@ -127,13 +146,28 @@ public class PaleSentinelEntity extends EclipseGeoMonster {
         return GEO_ID;
     }
 
-    /** Frozen → held statue pose; otherwise the default walk/idle switch. */
+    /**
+     * Frozen → the arrest sequence ({@link #ANIM_FREEZE_IN} once, then the held
+     * {@link #ANIM_FREEZE} statue loop); otherwise the default walk/idle switch. The
+     * sequence restarts from the ring-down on every fresh freeze because the thaw path
+     * switches the controller back to idle/walk first (new animation instance).
+     */
     @Override
     protected PlayState handleBaseState(AnimationState<?> state) {
         if (isFrozen()) {
-            return state.setAndContinue(EclipseGeoAnimations.loop(GEO_ID, ANIM_FREEZE));
+            return state.setAndContinue(freezeSequence());
         }
         return super.handleBaseState(state);
+    }
+
+    /** {@code freeze_in} (play once) chained into the {@code freeze} statue loop. */
+    private RawAnimation freezeSequence() {
+        if (cachedFreezeSequence == null) {
+            cachedFreezeSequence = RawAnimation.begin()
+                    .thenPlay(EclipseGeoAnimations.animId(GEO_ID, ANIM_FREEZE_IN))
+                    .thenLoop(EclipseGeoAnimations.animId(GEO_ID, ANIM_FREEZE));
+        }
+        return cachedFreezeSequence;
     }
 
     /** Snappier blend so the dead stop reads within 3t (default 4). */

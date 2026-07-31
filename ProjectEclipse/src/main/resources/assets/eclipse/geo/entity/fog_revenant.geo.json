@@ -137,7 +137,15 @@
 					"pivot": [-2, 4, -3.5],
 					"rotation": [3, 0, 2],
 					"cubes": [
-						{"origin": [-3.5, 0, -4], "size": [3, 4, 1], "uv": [0, 58]}
+						{"origin": [-3.5, 2, -4], "size": [3, 2, 1], "uv": [0, 58]}
+					]
+				},
+				{
+					"name": "tatter_a_tip",
+					"parent": "tatter_a",
+					"pivot": [-2, 2, -3.5],
+					"cubes": [
+						{"origin": [-3.5, 0, -4], "size": [3, 2, 1], "uv": [28, 18]}
 					]
 				},
 				{
@@ -146,7 +154,15 @@
 					"pivot": [2, 4, 3.5],
 					"rotation": [-4, 0, -2],
 					"cubes": [
-						{"origin": [0.5, 0, 3], "size": [3, 4, 1], "uv": [8, 58]}
+						{"origin": [0.5, 2, 3], "size": [3, 2, 1], "uv": [8, 58]}
+					]
+				},
+				{
+					"name": "tatter_b_tip",
+					"parent": "tatter_b",
+					"pivot": [2, 2, 3.5],
+					"cubes": [
+						{"origin": [0.5, 0, 3], "size": [3, 2, 1], "uv": [28, 21]}
 					]
 				},
 				{
@@ -155,7 +171,15 @@
 					"pivot": [-4.5, 4, 0],
 					"rotation": [0, 0, 5],
 					"cubes": [
-						{"origin": [-5, 0, -1], "size": [1, 4, 2], "uv": [16, 58]}
+						{"origin": [-5, 2, -1], "size": [1, 2, 2], "uv": [16, 58]}
+					]
+				},
+				{
+					"name": "tatter_c_tip",
+					"parent": "tatter_c",
+					"pivot": [-4.5, 2, 0],
+					"cubes": [
+						{"origin": [-5, 0, -1], "size": [1, 2, 2], "uv": [53, 32]}
 					]
 				},
 				{
@@ -164,7 +188,15 @@
 					"pivot": [4.5, 4, 1],
 					"rotation": [0, 0, -4],
 					"cubes": [
-						{"origin": [4, 0, 0], "size": [1, 4, 2], "uv": [24, 58]}
+						{"origin": [4, 2, 0], "size": [1, 2, 2], "uv": [24, 58]}
+					]
+				},
+				{
+					"name": "tatter_d_tip",
+					"parent": "tatter_d",
+					"pivot": [4.5, 2, 1],
+					"cubes": [
+						{"origin": [4, 0, 0], "size": [1, 2, 2], "uv": [53, 36]}
 					]
 				},
 				{

@@ -96,6 +96,11 @@
 					]
 				},
 				{
+					"name": "petal_tip_right",
+					"parent": "petal_shoulder_right",
+					"pivot": [-8, 25.5, 0]
+				},
+				{
 					"name": "petal_shoulder_left",
 					"parent": "torso",
 					"pivot": [4, 30.5, 0],
@@ -110,6 +115,11 @@
 							}
 						}
 					]
+				},
+				{
+					"name": "petal_tip_left",
+					"parent": "petal_shoulder_left",
+					"pivot": [8, 25.5, 0]
 				},
 				{
 					"name": "petal_chest",
@@ -128,6 +138,11 @@
 					]
 				},
 				{
+					"name": "petal_tip_chest",
+					"parent": "petal_chest",
+					"pivot": [0, 24, -2.9]
+				},
+				{
 					"name": "petal_back",
 					"parent": "torso",
 					"pivot": [0, 30, 2.5],
@@ -142,6 +157,11 @@
 							}
 						}
 					]
+				},
+				{
+					"name": "petal_tip_back",
+					"parent": "petal_back",
+					"pivot": [0, 23.5, 2.9]
 				},
 				{
 					"name": "head",

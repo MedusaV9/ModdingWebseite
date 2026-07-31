@@ -4,7 +4,8 @@
 Design sheet (docs/plans_v3/P6_mobs_models_builds.md §2.3) + the MOB-FOG palette pass
 (docs/plans_v3/plans_v5/fxteams/MOB-FOG.md): a tall thin wraith consumed by the fog
 storm — torn near-black robe cone (#23262E) with a ragged alpha-cutout hem and four
-trailing TATTER strips (the `tatter_*` bones), long grasp arms with a new forearm
+trailing TATTER strips, each a 2-segment chain since MB6 (`tatter_*` root +
+`tatter_*_tip` free end — the rag cut lives on the tips), long grasp arms with a new forearm
 segment reaching almost to the ground, bone claws (#C9C4B4), a skull face lost in
 shadow under the hood with two sick-green eye slits (#A9F07E -> #E9FFD8 core), fog-coral
 growths shading toward pale violet (#B9B3DC), three orbiting soul wisps (pale green core
@@ -67,17 +68,34 @@ def skirt(px):
     return col
 
 
-def tatter(px):
-    """Trailing robe strips below the hem: heavier rag cuts (up to half the strip) and
-    a stronger violet mist wash — these are the pieces the storm is actively eating."""
-    if px.face in ("north", "south", "east", "west"):
-        n = px.noise(59, x=px.gx, y=0)
-        cut = 0 if n < 0.25 else (1 if n < 0.7 else 2)
-        if px.fy >= px.fh - cut:
-            return None
+def _tatter_col(px, row, total_rows):
+    """Rag cloth for one row of the 2-segment tatter chains: `row` counts from the
+    skirt hem down the FULL chain (both segments), so the violet mist wash runs
+    continuously across the root/tip joint instead of restarting per cube."""
     col = _robe_weave(px)
-    t = px.fy / max(px.fh - 1.0, 1.0)
+    t = row / max(total_rows - 1.0, 1.0)
     return mix(col, MIST_VIOLET, 0.2 + t * 0.4)
+
+
+def tatter_root(px):
+    """Upper tatter segment (MB6 chain split): mid-strip cloth — NO rag cut here, the
+    torn edge lives on the free-swinging tip segment below."""
+    if px.face in ("up", "down"):
+        return _tatter_col(px, 1, 4)
+    return _tatter_col(px, px.fy, 4)
+
+
+def tatter_tip(px):
+    """Free end of the tatter chain: the raggedest cloth on the mob (these are the
+    pieces the storm is actively eating — the same hem the `revenant_fog_ribbons`
+    streamers tear at) with the strongest mist wash. The cut is capped at 1 of the
+    tip's 2 rows so no chain ever loses its whole end cube."""
+    if px.face in ("north", "south", "east", "west"):
+        if px.noise(59, x=px.gx, y=0) >= 0.55 and px.fy >= px.fh - 1:
+            return None  # ragged free end
+    if px.face in ("up", "down"):
+        return _tatter_col(px, 3, 4)
+    return _tatter_col(px, px.fy + 2, 4)
 
 
 def sleeve(px):
@@ -157,7 +175,8 @@ def main():
     painter = GeoPainter(GEO, seed=SEED)
     painter.set_material("torso", weave(ROBE, direction=1, amp=0.26))
     painter.set_material("skirt_*", skirt)
-    painter.set_material("tatter_*", tatter)
+    painter.set_material("tatter_*", tatter_root)
+    painter.set_material("tatter_*_tip", tatter_tip)  # later declaration wins on tips
     painter.set_material("hood", hood)
     painter.set_material("head", head)
     painter.set_material("arm_*", sleeve)
