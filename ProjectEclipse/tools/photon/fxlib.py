@@ -29,6 +29,12 @@ Quick start (see tools/photon/README.md for the full API table):
 File id contract: `assets/eclipse/fx/<path>.fx`  <->  ResourceLocation `eclipse:<path>`
 (loaded by Photon's FXHelper through the vanilla ResourceManager; no registration call).
 
+Custom shaders (A0): `material_shader("eclipse:soft_particle", uniforms=..., textures=...)`
+attaches a `custom_shader` material; `eclipse:<name>` resolves to
+`assets/eclipse/shaders/core/<name>.json` and `validate` fails on unresolvable shader
+references or overrides of undeclared uniform/sampler names. House shaders + uniform
+tables: docs/plans_v3/session_0730/A0_SHADER_FOUNDATION.md.
+
 CLI:
     python3 tools/photon/fxlib.py selfcheck          # templates + full-tree lint vs baseline
     python3 tools/photon/fxlib.py templates          # (re)generate the two smoke-test .fx assets
@@ -46,6 +52,7 @@ from __future__ import annotations
 
 import gzip
 import io
+import json
 import math
 import struct
 import sys
@@ -533,20 +540,89 @@ def block_atlas_material(blend=None, cull=True, depth_test=True, depth_mask=Fals
     return _material_entry(mat, blend or BLEND_ALPHA, cull, depth_test, depth_mask)
 
 
+def material_shader(shader, uniforms=None, textures=None, curves=None, gradients=None,
+                    blend=None, cull=True, depth_test=True, depth_mask=False):
+    """`custom_shader` material — per-emitter GLSL (the A0 shader foundation).
+
+    shader: `<ns>:<name>` core-shader reference; LDLib2 resolves it to
+    `assets/<ns>/shaders/core/<name>.json` (jar-verified: `LDShaderInstance.create`
+    builds `"shaders/core/" + path + ".json"`). House shaders (uniform knobs, recipes,
+    blend guidance: docs/plans_v3/session_0730/A0_SHADER_FOUNDATION.md):
+
+        eclipse:soft_particle      SceneDepth fade at geometry + camera (fog/smoke)
+        eclipse:fresnel_shell      force-field: fresnel rim + SceneDepth seam glow
+        eclipse:rgb_split_distort  SceneColor chromatic aberration + UV wobble
+
+    uniforms: {name: scalar | (v, ...)} overrides of the JSON defaults, persisted like
+    editor knobs (`_additional.shaderData.uniforms`). All-int values write an IntArray
+    (int uniforms), anything else a Float list — write floats as floats (1.0, not 1).
+    textures: {sampler_name: "<ns>:textures/....png"} for user-assignable samplers
+    (names NOT starting with "Sampler", e.g. soft_particle's MainTexture) — persisted
+    under `shaderData.samplers`; without an entry the sampler is unbound (black).
+    curves / gradients: lists of `curve(...)` / `gradient(...)` NumberFunctions (or
+    (alpha_pts, rgb_pts) tuples for gradients), baked row-by-row into the material's
+    128x128 LUTs — GLSL reads them via getCurveValue/getGradientValue(row).
+    Compile errors fail soft at runtime (fallback photon:hdr_particle + editor error);
+    `validate` resolves the reference chain at authoring time instead.
+    """
+    data = {"shaderLocation": str(shader)}
+    if curves:
+        rows = []
+        for c in curves:
+            if not (isinstance(c, dict) and c.get("type") == "curve"
+                    and isinstance(c.get("data"), dict)):
+                raise ValueError("material_shader curves entries must be curve(...) NFs")
+            rows.append(dict(c["data"]))
+        data["curveTexture"] = L(rows)  # CurveTexture serializes as a bare ListTag
+    if gradients:
+        rows = []
+        for g in gradients:
+            if isinstance(g, dict) and g.get("type") == "gradient" \
+                    and isinstance(g.get("data"), dict):
+                rows.append(dict(g["data"]["gradientColor"]))
+            elif isinstance(g, (list, tuple)) and len(g) == 2:
+                rows.append(_gradient_color(g[0], g[1]))
+            else:
+                raise ValueError("material_shader gradients entries must be gradient(...)"
+                                 " NFs or (alpha_pts, rgb_pts) tuples")
+        data["gradientTexture"] = L(rows)  # GradientTexture serializes as a bare ListTag
+    shader_data = {}
+    if uniforms:
+        packed = {}
+        for name, value in uniforms.items():
+            vals = list(value) if isinstance(value, (list, tuple)) else [value]
+            if not vals:
+                raise ValueError(f"material_shader uniform {name!r} has no values")
+            if all(isinstance(v, int) and not isinstance(v, bool) for v in vals):
+                packed[name] = IA([int(v) for v in vals])
+            else:
+                packed[name] = L([F(float(v)) for v in vals])
+        shader_data["uniforms"] = packed
+    if textures:
+        shader_data["samplers"] = {
+            str(name): {"type": "texture", "resource": str(rl)}
+            for name, rl in textures.items()}
+    if shader_data:
+        data["_additional"] = {"shaderData": shader_data}
+    mat = {"type": "custom_shader", "data": data}
+    return _material_entry(mat, blend or BLEND_ALPHA, cull, depth_test, depth_mask)
+
+
 def custom_shader_material(shader="photon:circle", curves=None, gradients=None,
                            blend=None, cull=True, depth_test=True, depth_mask=False):
-    """Own fragment shader; authored curves/gradients upload as 128x128 LUT textures.
+    """DEPRECATED pre-A0 alias of material_shader (never shipped in any .fx). Fixed to
+    write the jar-true bare-ListTag LUT layout — the old compound layout never loaded.
 
-    curves: list of `curve(...)['data']['curves']`-style segment lists; gradients: list of
-    (alpha_pts, rgb_pts) tuples.
+    curves: raw 8-float segment lists (wrapped as 0..1 lifetime curves); gradients:
+    (alpha_pts, rgb_pts) tuples. New code: use material_shader directly.
     """
-    data = {"shaderLocation": shader}
-    if curves is not None:
-        data["curveTexture"] = {"curves": L([L([L([F(float(x)) for x in seg]) for seg in c]) for c in curves])}
-    if gradients is not None:
-        data["gradientTexture"] = {"gradients": L([_gradient_color(a, rgb) for a, rgb in gradients])}
-    mat = {"type": "custom_shader", "data": data}
-    return _material_entry(mat, blend or BLEND_ADDITIVE, cull, depth_test, depth_mask)
+    return material_shader(
+        shader,
+        curves=[curve(0.0, 1.0, segs, "lifetime", "value") for segs in curves]
+        if curves else None,
+        gradients=list(gradients) if gradients else None,
+        blend=blend or BLEND_ADDITIVE, cull=cull, depth_test=depth_test,
+        depth_mask=depth_mask)
 
 
 # ---------------------------------------------------------------------------
@@ -1143,10 +1219,12 @@ class FxBuilder:
         return raw, gzip.compress(raw, compresslevel=6, mtime=0)
 
     def write(self, path, validate=True) -> tuple[int, int]:
-        """Writes the gzip NBT .fx file; round-trip-validates by default. Returns sizes."""
+        """Writes the gzip NBT .fx file; round-trip-validates by default (incl. A0
+        custom_shader reference resolution). Returns sizes."""
         raw, gz = self.to_bytes()
         if validate:
             errors = validate_tree(read_root(raw))
+            errors.extend(_shader_ref_errors(read_root(raw)))
             if read_root(raw) != self.build() or write_root(read_root(raw)) != raw:
                 errors.append("round-trip mismatch (writer/reader disagree)")
             if errors:
@@ -1369,9 +1447,14 @@ def _validate_nf_wrappers(node, path) -> list:
                     errors.extend(_validate_nf_data(nf_type, node["data"], path))
                 else:
                     errors.append(f"{path}: NF {nf_type} data is not a compound")
+            elif nf_type == "custom_shader":
+                if isinstance(node["data"], dict):
+                    errors.extend(_validate_custom_shader_data(node["data"], path))
+                else:
+                    errors.append(f"{path}: custom_shader data is not a compound")
             elif nf_type not in (
                     "dot", "sphere", "circle", "cone", "cylinder", "box", "mesh", "function",
-                    "texture", "sprite", "block_atlas", "custom_shader"):
+                    "texture", "sprite", "block_atlas"):
                 errors.append(f"{path}: unknown {{type,data}} registry key {nf_type!r}")
         for key, value in node.items():
             errors.extend(_validate_nf_wrappers(value, f"{path}.{key}"))
@@ -1437,8 +1520,150 @@ def _validate_gradient_color(gc, path) -> list:
     return errors
 
 
+def _validate_custom_shader_data(data: dict, path) -> list:
+    """custom_shader material data (A0, jar-verified layout): `shaderLocation` string,
+    bare-ListTag `curveTexture`/`gradientTexture` LUT rows, and the
+    `_additional.shaderData.{uniforms,samplers}` override compounds."""
+    errors = []
+    loc = data.get("shaderLocation")
+    if not isinstance(loc, str) or not loc:
+        errors.append(f"{path}: custom_shader data.shaderLocation missing/not a String")
+    for key in ("curveTexture", "gradientTexture"):
+        rows = data.get(key)
+        if rows is None:
+            continue
+        if not isinstance(rows, L):
+            errors.append(f"{path}: custom_shader data.{key} is not a bare ListTag "
+                          "(the pre-A0 compound layout never loads — regenerate)")
+            continue
+        for idx, row in enumerate(rows.items):
+            if not isinstance(row, dict):
+                errors.append(f"{path}: {key}[{idx}] is not a compound")
+            elif key == "curveTexture":
+                errors.extend(_validate_nf_data("curve", row, f"{path}.{key}[{idx}]"))
+            else:
+                errors.extend(_validate_gradient_color(row, f"{path}.{key}[{idx}]"))
+    additional = data.get("_additional")
+    if additional is None:
+        return errors
+    shader_data = additional.get("shaderData") if isinstance(additional, dict) else None
+    if not isinstance(shader_data, dict):
+        errors.append(f"{path}: custom_shader _additional.shaderData missing/not a compound")
+        return errors
+    uniforms = shader_data.get("uniforms")
+    if uniforms is not None and not isinstance(uniforms, dict):
+        errors.append(f"{path}: shaderData.uniforms is not a compound")
+    elif isinstance(uniforms, dict):
+        for name, value in uniforms.items():
+            ok = isinstance(value, IA) or (isinstance(value, L) and value.items
+                                           and all(isinstance(x, F) for x in value.items))
+            if not ok:
+                errors.append(f"{path}: shaderData.uniforms.{name} must be a Float List "
+                              "(float uniform) or an IntArray (int uniform)")
+    samplers = shader_data.get("samplers")
+    if samplers is not None and not isinstance(samplers, dict):
+        errors.append(f"{path}: shaderData.samplers is not a compound")
+    elif isinstance(samplers, dict):
+        for name, value in samplers.items():
+            if not (isinstance(value, dict) and value.get("type") == "texture"
+                    and isinstance(value.get("resource"), str)):
+                errors.append(f"{path}: shaderData.samplers.{name} must be "
+                              "{type: \"texture\", resource: \"<rl>\"}")
+    return errors
+
+
+#: custom_shader references shipped INSIDE the Photon 2.1.5 jar
+#: (`assets/photon/shaders/core/*.json`, jar-verified) — resolvable without our assets.
+PHOTON_JAR_SHADERS = {
+    "photon:circle", "photon:hdr_particle", "photon:sprite_hdr_particle",
+    "photon:pixel_hdr_particle"}
+
+
+def _walk_shader_materials(node, out):
+    """Collects every custom_shader material `data` compound in a tree."""
+    if isinstance(node, dict):
+        if node.get("type") == "custom_shader" and isinstance(node.get("data"), dict):
+            out.append(node["data"])
+        for value in node.values():
+            _walk_shader_materials(value, out)
+    elif isinstance(node, L):
+        for item in node.items:
+            _walk_shader_materials(item, out)
+
+
+def _shader_ref_errors(tree) -> list:
+    """A0 validate hook — custom_shader references must resolve at authoring time
+    (runtime is fail-soft: a missing/broken shader silently renders photon:hdr_particle).
+
+    Per material: `shaderLocation` must be in PHOTON_JAR_SHADERS or resolve to
+    `assets/eclipse/shaders/core/<name>.json`; that JSON must parse with vertex+fragment
+    programs whose eclipse: files exist; every uniform/texture override must target a
+    name declared in the JSON (a typo'd override is a silent no-op in-game)."""
+    materials = []
+    _walk_shader_materials(tree, materials)
+    errors = []
+    for data in materials:
+        loc = data.get("shaderLocation")
+        if not isinstance(loc, str) or not loc:
+            continue  # _validate_custom_shader_data already flagged it
+        if loc in PHOTON_JAR_SHADERS:
+            continue  # jar-shipped; overrides not introspectable from here
+        ns, _, name = loc.partition(":")
+        if not name:
+            ns, name = "minecraft", ns
+        if ns != "eclipse":
+            errors.append(f"custom_shader {loc!r}: unknown shader reference (known: "
+                          f"eclipse:* under assets/eclipse/shaders/core/ or the photon "
+                          f"jar set {sorted(PHOTON_JAR_SHADERS)})")
+            continue
+        json_path = SHADER_ASSETS_DIR / (name + ".json")
+        if not json_path.exists():
+            errors.append(f"custom_shader {loc!r}: no {name}.json under "
+                          f"{SHADER_ASSETS_DIR.relative_to(REPO_ROOT)} "
+                          "(runtime fail-soft = falls back to photon:hdr_particle)")
+            continue
+        try:
+            spec = json.loads(json_path.read_text(encoding="utf-8"))
+        except Exception as exc:
+            errors.append(f"custom_shader {loc!r}: {json_path.name} is not valid JSON: {exc}")
+            continue
+        for key, ext in (("vertex", ".vsh"), ("fragment", ".fsh"), ("geometry", ".gsh")):
+            prog = spec.get(key)
+            if prog is None:
+                if key != "geometry":  # geometry is the optional LDLib2 extension
+                    errors.append(f"custom_shader {loc!r}: {json_path.name} lacks the "
+                                  f"required {key!r} program")
+                continue
+            p_ns, _, p_name = str(prog).partition(":")
+            if not p_name:
+                p_ns, p_name = "minecraft", p_ns
+            if p_ns == "eclipse" and not (SHADER_ASSETS_DIR / (p_name + ext)).exists():
+                errors.append(f"custom_shader {loc!r}: {key} program {prog!r} has no "
+                              f"{p_name}{ext} under "
+                              f"{SHADER_ASSETS_DIR.relative_to(REPO_ROOT)}")
+        declared_uniforms = {u.get("name") for u in spec.get("uniforms", ())
+                             if isinstance(u, dict)}
+        declared_samplers = {s.get("name") for s in spec.get("samplers", ())
+                             if isinstance(s, dict)}
+        additional = data.get("_additional")
+        shader_data = additional.get("shaderData") if isinstance(additional, dict) else None
+        shader_data = shader_data if isinstance(shader_data, dict) else {}
+        uniforms = shader_data.get("uniforms")
+        for uname in (uniforms.keys() if isinstance(uniforms, dict) else ()):
+            if uname not in declared_uniforms:
+                errors.append(f"custom_shader {loc!r}: uniform override {uname!r} is not "
+                              f"declared in {json_path.name} (silent no-op in-game)")
+        samplers = shader_data.get("samplers")
+        for sname in (samplers.keys() if isinstance(samplers, dict) else ()):
+            if sname not in declared_samplers:
+                errors.append(f"custom_shader {loc!r}: texture override {sname!r} is not "
+                              f"a declared sampler in {json_path.name}")
+    return errors
+
+
 def validate_file(path) -> list:
-    """Full check of an on-disk .fx: gzip + parse + structure + writer/reader round-trip."""
+    """Full check of an on-disk .fx: gzip + parse + structure + shader-reference
+    resolution + writer/reader round-trip."""
     try:
         raw = gzip.decompress(Path(path).read_bytes())
     except Exception as exc:
@@ -1448,6 +1673,7 @@ def validate_file(path) -> list:
     except Exception as exc:
         return [f"NBT parse failed: {exc}"]
     errors = validate_tree(tree)
+    errors.extend(_shader_ref_errors(tree))
     if write_root(tree) != raw:
         errors.append("round-trip mismatch: re-serialized NBT differs from file bytes")
     return errors
@@ -1576,10 +1802,30 @@ def _walk_nf(node, path, out):
 
 
 def _hdr_rgb(material) -> tuple:
-    """(r, g, b) of a material's hdr vector, or (0, 0, 0) when absent."""
-    hdr = material.get("data", {}).get("hdr") if isinstance(material, dict) else None
+    """(r, g, b) of a material's hdr vector, or (0, 0, 0) when absent. custom_shader
+    materials report their strongest `*HDR*` vec4 uniform override as rgb * a (the
+    house `color.rgb += HDR.a * HDR.rgb` convention), so the bloom lints still bite."""
+    if not isinstance(material, dict):
+        return (0.0, 0.0, 0.0)
+    data = material.get("data", {})
+    data = data if isinstance(data, dict) else {}
+    hdr = data.get("hdr")
     if isinstance(hdr, L) and len(hdr.items) >= 3 and all(isinstance(x, F) for x in hdr.items[:3]):
         return tuple(x.v for x in hdr.items[:3])
+    if material.get("type") == "custom_shader":
+        best = (0.0, 0.0, 0.0)
+        additional = data.get("_additional")
+        shader_data = additional.get("shaderData") if isinstance(additional, dict) else None
+        uniforms = shader_data.get("uniforms") if isinstance(shader_data, dict) else None
+        for name, value in (uniforms.items() if isinstance(uniforms, dict) else ()):
+            if "hdr" not in name.lower() or not isinstance(value, L):
+                continue
+            vals = [x.v for x in value.items if isinstance(x, F)]
+            if len(vals) >= 4:
+                boosted = tuple(v * vals[3] for v in vals[:3])
+                if max(boosted) > max(best):
+                    best = boosted
+        return best
     return (0.0, 0.0, 0.0)
 
 
@@ -1930,6 +2176,9 @@ def dump(node, indent=0) -> str:
 # ---------------------------------------------------------------------------
 REPO_ROOT = Path(__file__).resolve().parents[2]
 FX_ASSETS_DIR = REPO_ROOT / "src/main/resources/assets/eclipse/fx"
+#: A0 custom-shader home: `eclipse:<name>` <-> `assets/eclipse/shaders/core/<name>.json`
+#: (LDLib2 path law, see material_shader / A0_SHADER_FOUNDATION.md).
+SHADER_ASSETS_DIR = REPO_ROOT / "src/main/resources/assets/eclipse/shaders/core"
 
 
 def build_template_burst() -> FxBuilder:
