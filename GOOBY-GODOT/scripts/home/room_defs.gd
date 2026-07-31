@@ -120,6 +120,19 @@ static func door_world_pos(room_def: Dictionary, door_def: Dictionary) -> Vector
 	return Vector3(grid.x * GridData.CELL_SIZE, 0.0, offset * GridData.CELL_SIZE + half)
 
 
+## W15/DOORTRAVEL: Tür-Anker (raumlokal) — Türmitte am Boden plus
+## Innenrichtung; Basis der additiven Quell↔Ziel-Ausrichtung der Tür-Fahrt
+## (DoorTravelFahrt.ziel_ausrichtung). {} bei unbekannter Tür.
+static func door_anker(room_id: String, door_id: String) -> Dictionary:
+	var door_def := door(room_id, door_id)
+	if door_def.is_empty():
+		return {}
+	return {
+		"pos": door_world_pos(room(room_id), door_def),
+		"inward": wall_inward(str(door_def.get("wall", "N"))),
+	}
+
+
 ## Richtung von der Wand in den Raum hinein.
 static func wall_inward(wall: String) -> Vector3:
 	match wall:

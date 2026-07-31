@@ -18,13 +18,18 @@ extends Node
 ##
 ## Reise-Typen (API FROZEN nach W1, Handoff W1a-core.md):
 ## - VEIL_TRAVEL: voller Ladescreen (Haus↔Stadt, Minigames, Orte).
-## - DOOR_TRAVEL: kurzer Tür-Wisch OHNE Vollveil (EF-3/EVAL-1 F1): das Veil
-##   zeigt einen ~330-ms-Wisch statt Karte+Blende, und die Mindestanzeige
-##   fällt auf door_min_shown_ms (0) — ein Raumwechsel fühlt sich wie ein
-##   Schritt durch die Tür an, nicht wie ein Ladebildschirm. W2-HOUSE ruft
+## - DOOR_TRAVEL: Raumwechsel im Haus. W15/DOORTRAVEL (Doc A §1.4): der
+##   Zielraum wird ADDITIV neben den Quellraum gemountet und die Kamera
+##   fährt auf einer Path3D-Kurve durch den Türrahmen (_door_fahrt →
+##   DoorTravelFahrt; Gooby läuft voraus, danach Quelle entladen). Fällt
+##   die Fahrt aus (Reduced Motion, Low-End, additive Ladezeit über
+##   DoorTravelFahrt.LADE_BUDGET_MS, fremde Szenen/Fixtures), bleibt der
+##   kurze Tür-Wisch (EF-3/EVAL-1 F1) der Codepfad: ~330-ms-Wisch statt
+##   Karte+Blende, Mindestanzeige door_min_shown_ms (0). W2-HOUSE ruft
 ##   goto(..., TravelType.DOOR_TRAVEL) NACH seiner Tür-Gag-/Lauf-Sequenz
 ##   auf; der Zielraum lädt derweil threaded im Hintergrund (preload_target
-##   beim Tür-Tap). Signatur unverändert.
+##   beim Tür-Tap). Signatur unverändert — die Fahrt ist eine INNERE
+##   Variante, API/Signale/Timeouts des Routers bleiben frozen.
 ##
 ## FIX1 — EIN gemeinsamer Zurück-Pfad (P0 „Zurück-Button geht meist nicht“):
 ## - Der Router führt eine Reise-HISTORY; `back()` reist zum vorherigen Ziel.
@@ -246,25 +251,84 @@ func _travel(target: StringName, params: Dictionary, travel_type: int, record :=
 	travel_started.emit(target, travel_type)
 	preload_target(target)
 
-	_set_state(State.COVER)
-	await _veil.cover(_reduced_motion())
+	# W15/DOORTRAVEL (Doc A §1.4): additive Tür-Fahrt als INNERE Variante
+	# von DOOR_TRAVEL — gleiche States/Signale/Timeouts. Jede Nicht-Eignung
+	# (fremde Szene/Fixture, Reduced Motion, Low-End, Ladezeit über Budget)
+	# fällt auf den bewährten Wisch-Pfad darunter zurück.
+	var gefahren := false
+	if travel_type == TravelType.DOOR_TRAVEL:
+		gefahren = await _door_fahrt(target, params, cover_started_ms)
 
+	if not gefahren:
+		_set_state(State.COVER)
+		await _veil.cover(_reduced_motion())
+
+		_set_state(State.SWAP)
+		if is_instance_valid(_current_scene):
+			_current_scene.queue_free()
+		_current_scene = null
+		await get_tree().process_frame
+		var ready_state := {"ready": false}
+		var packed := await _finish_threaded_load(String(_routes[target]))
+		if packed != null:
+			_mount_scene(packed, params, ready_state)
+		else:
+			push_error("SceneRouter: Szene für '%s' konnte nicht geladen werden." % target)
+			ready_state["ready"] = true
+
+		_set_state(State.WAIT_READY)
+		var min_shown := (
+			door_min_shown_ms if travel_type == TravelType.DOOR_TRAVEL else min_shown_ms
+		)
+		var clean := await _wait_until_ready(ready_state, cover_started_ms, min_shown)
+		if not clean:
+			push_warning(
+				(
+					"SceneRouter: Hard-Timeout (%d ms) für '%s' — Force-Reveal."
+					% [hard_timeout_ms, target]
+				)
+			)
+			travel_force_revealed.emit(target)
+
+		_set_state(State.REVEAL)
+		await _veil.reveal(_reduced_motion())
+
+	_set_state(State.IDLE)
+	_busy = false
+	travel_finished.emit(target)
+	_drain_pending()
+
+
+## W15: additive Tür-Fahrt (Kamera fährt DURCH die Tür statt Wisch).
+## true = Fahrt komplett gelaufen (Ziel gemountet, Quelle entladen, States
+## COVER→SWAP→WAIT_READY→REVEAL bedient); false = Aufrufer nimmt den Wisch.
+func _door_fahrt(target: StringName, params: Dictionary, started_ms: int) -> bool:
+	if _mount_point == null or not is_instance_valid(_current_scene):
+		return false
+	var grund := DoorTravelFahrt.fallback_grund(
+		_reduced_motion(), DoorTravelFahrt.ist_low_end(get_tree().root), 0
+	)
+	if grund != "":
+		return false
+	var plan := DoorTravelFahrt.fahrt_plan(_current_scene, target, params)
+	if plan.is_empty():
+		return false
+	var packed := await _lade_im_budget(String(_routes[target]), started_ms)
+	if packed == null:
+		return false
+
+	_set_state(State.COVER)
 	_set_state(State.SWAP)
-	if is_instance_valid(_current_scene):
-		_current_scene.queue_free()
-	_current_scene = null
-	await get_tree().process_frame
+	var quelle := _current_scene
 	var ready_state := {"ready": false}
-	var packed := await _finish_threaded_load(String(_routes[target]))
-	if packed != null:
-		_mount_scene(packed, params, ready_state)
-	else:
-		push_error("SceneRouter: Szene für '%s' konnte nicht geladen werden." % target)
-		ready_state["ready"] = true
+	_mount_scene(packed, params, ready_state)
+	var fahrt := DoorTravelFahrt.new()
+	fahrt.name = "DoorTravelFahrt"
+	_mount_point.add_child(fahrt)
+	fahrt.vorbereiten(quelle as Node3D, _current_scene as Node3D, plan)
 
 	_set_state(State.WAIT_READY)
-	var min_shown := door_min_shown_ms if travel_type == TravelType.DOOR_TRAVEL else min_shown_ms
-	var clean := await _wait_until_ready(ready_state, cover_started_ms, min_shown)
+	var clean := await _wait_until_ready(ready_state, started_ms, door_min_shown_ms)
 	if not clean:
 		push_warning(
 			"SceneRouter: Hard-Timeout (%d ms) für '%s' — Force-Reveal." % [hard_timeout_ms, target]
@@ -272,12 +336,33 @@ func _travel(target: StringName, params: Dictionary, travel_type: int, record :=
 		travel_force_revealed.emit(target)
 
 	_set_state(State.REVEAL)
-	await _veil.reveal(_reduced_motion())
+	await fahrt.abfahren(not clean)
+	if is_instance_valid(quelle):
+		quelle.queue_free()
+	fahrt.queue_free()
+	return true
 
-	_set_state(State.IDLE)
-	_busy = false
-	travel_finished.emit(target)
-	_drain_pending()
+
+## W15: threaded Load mit hartem Zeitbudget (DoorTravelFahrt.LADE_BUDGET_MS,
+## gemessen ab Reisebeginn). Nicht rechtzeitig fertig → null; der Wisch-Pfad
+## lädt dann wie bisher zu Ende (inklusive Veil-Fortschritt).
+func _lade_im_budget(path: String, started_ms: int) -> PackedScene:
+	if ResourceLoader.has_cached(path):
+		var cached := load(path)
+		return cached if cached is PackedScene else null
+	if not _requested_paths.has(path):
+		return null
+	var deadline := started_ms + DoorTravelFahrt.LADE_BUDGET_MS
+	while Time.get_ticks_msec() < deadline:
+		var status := ResourceLoader.load_threaded_get_status(path)
+		if status == ResourceLoader.THREAD_LOAD_LOADED:
+			_requested_paths.erase(path)
+			var res := ResourceLoader.load_threaded_get(path)
+			return res if res is PackedScene else null
+		if status != ResourceLoader.THREAD_LOAD_IN_PROGRESS:
+			return null
+		await get_tree().process_frame
+	return null
 
 
 func _mount_scene(packed: PackedScene, params: Dictionary, ready_state: Dictionary) -> void:
