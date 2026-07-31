@@ -1,17 +1,17 @@
-// Generische Rooms (Doc C §1.3): visit:/board:/drive:/mg: — join/leave/msg-Relay.
+// Generische Rooms (Doc C §1.3): visit:/board:/drive:/mg:/gobnom: — join/leave/msg-Relay.
 // Server validiert NUR: Mitgliedschaft, Payload-Größe (≤ 8 KB), Rate, Kind-Format.
 // Feature-Logik dockt über kindHooks (z. B. Boardgames-Turn-Ownership) und joinGuards an.
 // Geld/Items laufen NIE über ROOM_MSG (eigene validierte Typen, z. B. PAL_SEND).
 
 import { LIMITS } from './ratelimit.js';
 
-const ROOM_RE = /^(visit|board|drive|mg):[A-Za-z0-9._-]{1,64}$/;
+const ROOM_RE = /^(visit|board|drive|mg|gobnom):[A-Za-z0-9._-]{1,64}$/;
 const KIND_RE = /^[A-Z][A-Z0-9_]{0,23}$/;
 // Kapazität PRO PRÄFIX (RANCH-DLC-IDEAS-4 §1.1 Punkt 1): ein globales
 // MAX_MEMBERS=4 würde Besuche/Brettspiele unbeabsichtigt zu Mehrpersonen-
 // räumen machen. mg: (Ranch-Minispiele/Ausritt) darf 4; Rest bleibt 2.
 // room.meta.maxMembers (z. B. Besuch über mg: = 2) deckelt zusätzlich.
-const MAX_MEMBERS_BY_PREFIX = { visit: 2, board: 2, drive: 2, mg: 4 };
+const MAX_MEMBERS_BY_PREFIX = { visit: 2, board: 2, drive: 2, mg: 4, gobnom: 2 };
 
 export class Rooms {
   constructor(ctx) {

@@ -19,6 +19,7 @@ import * as events from './events.js';
 import * as visits from './visits.js';
 import * as boardgames from './boardgames.js';
 import * as ranchmp from './ranchmp.js';
+import * as gobnommp from './gobnommp.js';
 import * as mail from './mail.js';
 
 export const MODULES = [
@@ -33,6 +34,7 @@ export const MODULES = [
   visits,
   boardgames,
   ranchmp,
+  gobnommp,
   mail,
   move,
 ];
