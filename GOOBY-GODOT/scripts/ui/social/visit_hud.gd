@@ -134,7 +134,13 @@ func enable_build_controls(storage_items: Array) -> void:
 			continue
 		var item_id := str((entry as Dictionary).get("item", ""))
 		var def := FurnitureCatalog.def(item_id)
-		if def.is_empty() or int(def["layer"]) == GridData.Layer.WALL:
+		if def.is_empty():
+			continue
+		# W13B: WALL und CEILING bleiben Besuchs-tabu — die Bau-Leiste
+		# platziert nur Boden-Ebenen (CEILING kam mit dem Girlanden-Layer
+		# dazu und wäre sonst implizit erlaubt gewesen).
+		var item_layer := int(def["layer"])
+		if item_layer == GridData.Layer.WALL or item_layer == GridData.Layer.CEILING:
 			continue
 		var btn := Button.new()
 		btn.theme_type_variation = &"GhostButton"

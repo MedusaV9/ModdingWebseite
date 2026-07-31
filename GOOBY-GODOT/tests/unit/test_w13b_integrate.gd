@@ -181,6 +181,35 @@ func test_energie_buff_chip_traegt_sonne_bei_erholt() -> void:
 	ohne.free()
 
 
+## ---------------------------------------------- Besuchs-Bau-Leiste (CEILING)
+
+
+## CEILING-Empfehlung: die Host-Bau-Leiste der Besuchs-Szene zeigt nur
+## Boden-Ebenen — WALL war schon tabu, CEILING (neuer Girlanden-Layer)
+## wäre nach der Migration implizit erlaubt gewesen.
+func test_besuchs_bau_leiste_schliesst_wall_und_ceiling_aus() -> void:
+	var hud := VisitHud.new()
+	tree.root.add_child(hud)
+	await wait_frames(1)
+	(
+		hud
+		. enable_build_controls(
+			[
+				{"item": "bedSingle"},
+				{"item": "lampWall"},
+				{"item": "lampSquareCeiling"},
+				{"item": "ceilingFan"},
+			]
+		)
+	)
+	var labels: Array[String] = []
+	for knopf: Variant in hud._item_buttons.keys():
+		labels.append(str(knopf))
+	assert_eq(labels, ["bedSingle"] as Array[String], "nur das FLOOR-Item bekommt einen Knopf")
+	tree.root.remove_child(hud)
+	hud.free()
+
+
 ## ---------------------------------------------- Lambda-Tripwire (REISEPASS)
 
 
