@@ -41,6 +41,7 @@ var _list_box: VBoxContainer
 var _back_btn: Button
 var _nav_btns: Array[Button] = []
 var _portrait: Control
+var _pass_card: PassportCard
 
 
 ## HUD-Dispatch (home_entry._dispatch_to_screens): Profil-Knopf → dieser
@@ -150,6 +151,7 @@ func _build_pass_card() -> Control:
 	card.name = "PassCard"
 	card.gs = _gs
 	_portrait = card.foto_slot
+	_pass_card = card
 	return card
 
 
@@ -527,9 +529,22 @@ func _apply_metrics() -> void:
 	for btn in _nav_btns:
 		if is_instance_valid(btn):
 			ScreenShell.touch_target(btn, m)
+	# Nutzbare Zeilenbreite (Canvas minus Insets minus Screen-Ränder).
+	var canvas: Vector2 = m["canvas"]
+	var insets: Dictionary = m["insets"]
+	var avail := canvas.x - float(insets["left"]) - float(insets["right"]) - 48.0 * f
 	if _portrait != null:
+		# W14: Im schmalen Hochformat drückte der Foto-Slot (168×f) die
+		# Reisepass-Karte über den Canvas — auf einen Anteil der nutzbaren
+		# Zeilenbreite kappen, damit die Felder-Spalte Platz behält.
 		var side := maxf(PORTRAIT_BASE * f, float(m["floor_px"]) * 2.4)
+		side = minf(side, maxf(avail * 0.36, float(m["floor_px"])))
 		_portrait.custom_minimum_size = Vector2(side, side)
+	if _pass_card != null and is_instance_valid(_pass_card):
+		# Schmal-Schwelle: unter ~560 Design-px Zeilenbreite stapeln die
+		# Pass-Feldzeilen (Web-Referenz .b3-pass-field) — trifft Hochformat-
+		# Telefone, Querformate und iPad bleiben einzeilig.
+		_pass_card.setze_schmal(avail < 560.0 * f)
 
 
 func _on_achievements_pressed() -> void:

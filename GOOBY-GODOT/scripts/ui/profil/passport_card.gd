@@ -69,6 +69,10 @@ var _vorn: VBoxContainer
 var _hinten: VBoxContainer
 var _flipping := false
 var _picker: CanvasLayer
+## W14: Schmal-Modus (Hochformat-Telefone) — Feldzeilen stapeln Schlüssel
+## über Wert wie die Web-Referenz (.b3-pass-field); breit bleibt einzeilig.
+var _schmal := false
+var _feld_reihen: Array[BoxContainer] = []
 
 
 func _init() -> void:
@@ -309,6 +313,7 @@ static func _mono_font() -> Font:
 
 
 func _baue_vorderseite() -> VBoxContainer:
+	_feld_reihen.clear()
 	var box := VBoxContainer.new()
 	box.name = "Vorderseite"
 	box.add_theme_constant_override("separation", 8)
@@ -353,6 +358,7 @@ func _baue_vorderseite() -> VBoxContainer:
 	name_label.name = "GoobyName"
 	name_label.theme_type_variation = &"TitleLabel"
 	name_label.text = str(_wert("meta.goobyNickname", "Gooby"))
+	name_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	felder.add_child(name_label)
 	felder.add_child(
 		_field_row("SpielerName", I18nService.t("reisepass.name"), _spieler_name_text())
@@ -361,6 +367,7 @@ func _baue_vorderseite() -> VBoxContainer:
 	ausgestellt.name = "DabeiSeit"
 	ausgestellt.theme_type_variation = &"SoftLabel"
 	ausgestellt.text = I18nService.t("reisepass.ausgestellt", {"date": _ausstellungs_datum()})
+	ausgestellt.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	felder.add_child(ausgestellt)
 	felder.add_child(_baue_level_row())
 	felder.add_child(_field_row("Spielzeit", I18nService.t("profil.spielzeit"), _spielzeit_text()))
@@ -388,6 +395,7 @@ func _baue_vorderseite() -> VBoxContainer:
 	hinweis.name = "FlipHinweis"
 	hinweis.theme_type_variation = &"CaptionLabel"
 	hinweis.text = I18nService.t("reisepass.flip_hinweis")
+	hinweis.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	hinweis.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	hinweis.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	hinweis.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -784,7 +792,7 @@ func _jetzt_ms() -> int:
 
 
 func _field_row(zeilen_name: String, key_text: String, value_text: String) -> Control:
-	var row := HBoxContainer.new()
+	var row := BoxContainer.new()
 	row.name = "Row%s" % zeilen_name
 	row.add_theme_constant_override("separation", 8)
 	var key := Label.new()
@@ -797,8 +805,39 @@ func _field_row(zeilen_name: String, key_text: String, value_text: String) -> Co
 	value.name = "Wert"
 	value.theme_type_variation = &"HeadlineLabel"
 	value.text = value_text
+	# W14: lange Werte (z. B. Merkmale) umbrechen statt die Karte im
+	# Hochformat übers Canvas zu drücken — kurze Werte bleiben unverändert
+	# rechtsbündig am Zeilenende.
+	value.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	value.size_flags_stretch_ratio = 1.6
+	value.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	row.add_child(value)
+	_feld_reihen.append(row)
+	_wende_schmal_an(row)
 	return row
+
+
+## Vom Profil-Screen (Metrics-Hook) gerufen: schmale Formate stapeln die
+## Feldzeilen vertikal (Schlüssel über Wert, Web-Referenz .b3-pass-field)
+## und lassen den Foto-Slot quadratisch oben statt zeilenhoch mitwachsen.
+func setze_schmal(schmal: bool) -> void:
+	if _schmal == schmal:
+		return
+	_schmal = schmal
+	foto_slot.size_flags_vertical = (Control.SIZE_SHRINK_BEGIN if schmal else Control.SIZE_FILL)
+	for row in _feld_reihen:
+		if is_instance_valid(row):
+			_wende_schmal_an(row)
+
+
+func _wende_schmal_an(row: BoxContainer) -> void:
+	row.vertical = _schmal
+	var value := row.find_child("Wert", true, false) as Label
+	if value != null:
+		value.horizontal_alignment = (
+			HORIZONTAL_ALIGNMENT_LEFT if _schmal else HORIZONTAL_ALIGNMENT_RIGHT
+		)
 
 
 func _zeige_toast(text: String) -> void:
