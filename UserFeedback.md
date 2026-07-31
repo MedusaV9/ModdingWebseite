@@ -20,21 +20,20 @@ schreibt dazu, WAS er gemacht hat.
 > **Hier reinschreiben.** Stichworte reichen, z. B. „HUD im Querformat zu weit links"
 > oder „Taxi-Sound zu laut". Der Agent hakt sie ab und schreibt dazu, was er gemacht hat.
 
-_(Runde W14 mit deinen Meldungen vom 31. Juli ist FERTIG — Details unten in „Erledigt". Offen/zurückgestellt aus der Runde:)_
+_(Runden W14 UND W15 sind FERTIG — Details unten in „Erledigt". Aktueller Stand:)_
 
-- [~] **Urlaub begleiten** (Gooby im Urlaub besuchen, neue Bereiche) — noch nicht gebaut,
-      steht als nächster großer Punkt auf dem Plan (Runde W15)
-- [~] **Minispiel-Qualität, Gruppe 2** — die nächsten Kandidaten sind schon notiert
-      (purblePlace-UI, Steuergefühl ranchHerde/rocketRescue, gardenRush-Kulisse,
-      danceParty-Bühne, Level-Menü-Charme)
-- [~] **DLC-Umsetzung „Goo und Bye" + „McGooby"** — die kompletten Design-Dokumente
-      stehen (docs/godot-rewrite/DLC-GOO-UND-BYE.md + DLC-MCGOOBY.md), der DLC-Hub
-      zeigt beide als „BALD" — die Spiele selbst sind Mehr-Runden-Projekte
+- [~] **DLC-Umsetzung „Goo und Bye" + „McGooby"** — Design-Docs komplett, DLC-Hub zeigt
+      beide als „BALD"; nächster Schritt ist Welle A des Goo-und-Bye-Fundaments
+- [~] **Minispiel-Qualität, Gruppe 3** — Kandidaten notiert (starHopper-Bühne,
+      trampoline-Gym, carrotGuard-HUD, hideSeek-Wiese, cityDrive-Feedback,
+      Ranch-Arena-Überstrahlung)
+- [~] **GvZ-PvP übers Netz** — das GOB-NOM-Lockstep-Protokoll (W15) ist die fertige
+      Vorlage dafür
+- [~] **Trailer-Refresh** — der 57,6-s-Trailer zeigt noch das Vor-W14-UI; Neuaufnahme
+      der Clips mit dem neuen Look steht an
 - [-] **Dynamic Island / Live Activities + iOS-Homescreen-Widget** — braucht native
-      Extensions, die nur in einer SIGNIERTEN App auf echtem Gerät laufen (die
-      unsignierte Sideload-.ipa kann keine Widget-/ActivityKit-Extension registrieren).
-      Ehrlich zurückgestellt, nicht vergessen; die Godot-Seite hat die Andockpunkte
-      (LiveActivityBridge/NotifyStub) schon.
+      Extensions in einer SIGNIERTEN App (Sideload-.ipa kann das nicht registrieren).
+      Ehrlich zurückgestellt; Godot-Andockpunkte existieren.
 
 ---
 
@@ -105,6 +104,35 @@ der Agent arbeitet gerade an Welle C:
 ## 4. Erledigt
 
 Chronologisch nach Meldung; die Erklärung steht jeweils darunter.
+
+- [x] **Runde W15 (31. Juli): Updates über DIESES Repo + 9 weitere Pakete**
+      **App-Updates laufen jetzt komplett über dieses Repo** (dein Wunsch): Pack-Releases
+      per Tag `packs-v*` (rollender `updates`-Release), der Client lädt über die
+      GitHub-API mit Zugangsschlüssel (Einstellungen → Updates → „GitHub-Token";
+      da das Repo privat ist, brauchen Freunde einen Lese-Token von dir — Anleitung
+      in docs/UPDATES.md §6a), und der ipa-Release-Job pflegt latest_native jetzt
+      automatisch. KEINE Extra-Repo-Aktion mehr nötig!
+      Außerdem: **Gooby im Urlaub besuchen** (Strand/Berge/Stadt-Szenen + Raumstation,
+      Streicheln/Foto/Muschel-Sammeln/Souvenir-Spot, 24 neue Urlaubs-Sprüche);
+      **Minispiel-Gruppe 2 poliert** (purblePlace-UI-Redesign, ranchHerde-Treiben mit
+      Einfluss-Ring, rocketRescue-Kamera, gardenRush-Kulisse, danceParty-Publikum,
+      AC-Level-Menüs mit Sterne-Stempeln); **4 neue Garten-Crops** (Radieschen, Mais
+      mit Wind-Empfindlichkeit, Aubergine, Kürbis) → das Gemüse-Sammelset ist jetzt
+      8/8 erspielbar und ALLE 4 Sammlungen sind komplettierbar; **GOB-NOM-Coop übers
+      Netz** (2 Geräte, Lockstep mit Desync-Wächter + Rejoin — zugleich die Vorlage
+      für GvZ-PvP); **Kamera fährt jetzt wirklich DURCH die Tür** beim Raumwechsel
+      (additiv geladener Zielraum, Gooby läuft voraus; Fallback auf den Wisch bei
+      Reduced-Motion/Low-End); **Wochenmarkt-Eigenstand** (Stand bestücken, Preise
+      per Slider, deterministische Verkaufs-Sim mit Tagestrend „Heute lieben alle
+      Kürbisse!", Abrechnungs-Karte) + 3 neue Craft-Rezepte mit 3D-Vorschau
+      (Vogelhäuschen, Kräuterkasten der wöchentlich Markt-Ware liefert, drehendes
+      Windrad); **danceParty-Timing-Kalibrierung** (Audio-Latenz-Ausgleich + 8-Beat-
+      Antipp-Kalibrierung); **HDR-Glow-Auto-Downgrade** auf schwachen Geräten;
+      **GOB-NOM-Level-EDITOR** im Godot-Editor (Level visuell bauen, Solver-Check);
+      **neue Gooby-Clips phone_up/phone_tap** (Selfie-Emote echt) + Streichel-Übermut-
+      Gag („Paus-e-e!"); **30 von 38 Minispielen sind jetzt bit-genau gegen die alte
+      Web-Version zertifiziert** (vorher 12). Qualität: 3.010 Haupt-Tests, 24.815
+      UI-Checks, 140 Server-Tests — alles grün, Preflight grün.
 
 - [x] **Runde W14 (31. Juli): dein komplettes Feedback vom Morgen — 12 Arbeitspakete**
       **UI-Full-Rework:** Buttons/Karten exakt an der alten Web-Version geeicht (Press-Squish
