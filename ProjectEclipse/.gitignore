@@ -8,6 +8,7 @@ dist/
 
 ### Run directories ###
 run/
+run-*/
 runs/
 repo/
 **/src/generated/**/.cache/
