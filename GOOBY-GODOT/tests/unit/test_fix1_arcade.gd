@@ -20,6 +20,18 @@ func test_grid_columns_pure_aus_der_breite() -> void:
 	assert_eq(ArcadeScreen.grid_columns(99_999.0, 1.0), ArcadeScreen.MAX_COLUMNS, "riesig → Deckel")
 
 
+func test_jedes_registrierte_spiel_hat_ein_cover() -> void:
+	# W16-Wache gegen die beige „?“-Kachel: _build_cover() fällt auf den
+	# Platzhalter zurück, sobald assets/covers/<id>.png fehlt (Befund: die
+	# 5 Ranch-Wettbewerbe). Neue Spiele MÜSSEN ihr Cover mitliefern.
+	var games := MinigameRegistry.all_games()
+	assert_true(games.size() > 0, "Registry kennt Spiele")
+	for game: Dictionary in games:
+		var id := str(game.get("id", "?"))
+		var pfad := MinigameRegistry.cover_path(id)
+		assert_true(FileAccess.file_exists(pfad), "Spiel '%s' braucht ein Cover: %s" % [id, pfad])
+
+
 func test_cover_importe_generieren_mipmaps() -> void:
 	# Wache gegen Regression: OHNE `mipmaps/generate=true` flimmern die
 	# heruntergerechneten Cover (der gemeldete „kein Smoothing“-Bug).
