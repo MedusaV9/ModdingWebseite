@@ -291,10 +291,14 @@ Was willst du ändern?
      └─▶ IPA. IMMER. (iOS erlaubt kein natives Nachladen.)
 ```
 
-`latest_native` im Manifest wird beim IPA-Release gebumpt → alle Clients sehen
-„Neue App-Version nötig“. Die App-Version kommt aus `application/config/version`
-(project.godot, aktuell 5.0.0) und wird beim iOS-Export zu
-`CFBundleShortVersionString`.
+`latest_native` im Manifest soll beim IPA-Release gebumpt werden → alle Clients
+sehen „Neue App-Version nötig“. **Dieser Automatismus ist geplant (Backlog
+GODOT-PLAN §6 → B §5.2), existiert aber noch nicht:** der `ios-ipa`-Job lädt die
+.ipa bislang nur als CI-Artefakt hoch; ein Release-Asset-Step und der
+Manifest-Bump fehlen. Bis dahin wird `latest_native` bei Bedarf manuell über
+einen `gooby-packs`-Lauf gepflegt. Die App-Version kommt aus
+`application/config/version` (project.godot, aktuell 5.0.0) und wird beim
+iOS-Export zu `CFBundleShortVersionString`.
 
 ### CI-Werkzeuge (dieses Repo)
 
@@ -306,9 +310,10 @@ Was willst du ändern?
   Smoketest → Manifest). `RELEASE_BASE_URL` leer = `file://`-URLs für Tests.
 - `tools/packs/build_manifest.mjs` — Manifest-Generator (`--tag-mode single`
   heute; `per-pack` für unveränderliche `<id>-v<ver>`-Tags, Zielbild Doc B §1.3).
-- Export-Presets: `GOOBY-GODOT/export_presets.cfg` (`pack-<id>` + iOS-Skeleton;
-  der W1a-ios-Workflow-Job bleibt `if: false`, scharfschalten macht der
-  Orchestrator).
+- Export-Presets: `GOOBY-GODOT/export_presets.cfg` (`pack-<id>` + `ios`). Der
+  `ios-ipa`-Job in `.github/workflows/gooby-godot.yml` ist seit W6 scharf und
+  baut bei jedem Push eine verifizierte unsignierte .ipa (Artefakt
+  `GOOBY-godot-unsigned-ipa`; Runbook: `docs/godot-rewrite/IOS-BUILD.md`).
 
 ### EHRLICH: öffentliches Content-Repo fehlt noch
 

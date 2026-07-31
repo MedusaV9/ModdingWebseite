@@ -62,7 +62,7 @@ xvfb-run -a godot --path GOOBY-GODOT --rendering-method gl_compatibility \
 | `scripts/updates/` | PackLoader, Boot-Guard, ContentRegistry, UpdateService |
 | `scripts/events/`, `scripts/character/` | Random-Events/Buffs, Gooby-Rig-Runtime |
 | `strings/` | DE führend + EN-Parität, Domain-Dateien, Ownership: `strings/OWNERSHIP.md` |
-| `content/` | Pack-Quellordner (core/balance/events/cosmetics/stickers/codes/config) |
+| `content/` | 14 Pack-Quellordner (core, balance, events, cosmetics, stickers, codes, config, achievements, quests, soul, furniture, ranch, ranch_bau, ranch_quests) |
 | `themes/` | AC-Theme 2.0: `tokens.gd` → `build_theme.gd` → `ac_theme.tres` (nur Tokens verwenden!) |
 | `tests/` | Beide Runner + `tests/unit/test_*.gd` + Fixtures/Goldwerte |
 | `../tools/` | Blender-Pipelines (Gooby, Stadt), `cross_check.mjs` (Web-Goldwerte), CI-Helfer, Pack-Tools |
@@ -84,16 +84,20 @@ Export-Presets `pack-<id>` in `export_presets.cfg`.
 
 ## iOS-Build — ehrlicher Stand
 
-- Ein `ios`-Export-Preset existiert in `export_presets.cfg` (W2b), und
-  `.github/workflows/gooby-godot.yml` enthält ein **dokumentiertes, per `if: false`
-  deaktiviertes** `ios-ipa-skeleton`-Gerüst (macOS-Runner, Export-Templates, unsigned IPA).
-- Es gibt **noch keinen laufenden iOS-Build**: kein Signing, keine Templates im CI-Cache
-  verifiziert, kein Gerätetest. Scharfschalten ist Backlog M2
-  (`GODOT-PLAN.md` §6 → B §5.2); Ziel bleibt eine unsignierte IPA zum Sideloaden
-  (AltStore/Sideloadly), wie beim Web-Spiel (`gooby-ios.yml` — Achtung: dieser
-  Workflow gehört zum ALTEN Web-Spiel unter `GOOBY/**`).
-- Das native iOS-Notification-Plugin und der NSUserDefaults-Legacy-Reader sind Stubs
-  mit dokumentiertem Goldweg (Backlog, siehe STATUS.md).
+- Der Job `ios-ipa` in `.github/workflows/gooby-godot.yml` ist **scharf und läuft
+  grün**: jeder Push exportiert auf einem macOS-Runner das Xcode-Projekt, baut die
+  unsignierte `GOOBY-godot-unsigned.ipa`, verifiziert sie forensisch
+  (`tools/ci/verify_ipa.py`: Bundle-ID, iPhone+iPad, arm64, Icons, PCK) und lädt
+  sie als Artefakt **`GOOBY-godot-unsigned-ipa`** (~189 MB) hoch.
+- Download, Installation per Sideload (AltStore/Sideloadly), Spielstand-Erhalt und
+  Troubleshooting: **`docs/godot-rewrite/IOS-BUILD.md`** (aktuell und korrekt).
+- Bewusst offen: Store-/Dauer-Signing (Sideload-Modell, 7-Tage-Signatur mit freier
+  Apple-ID) sowie der automatische Release-Asset-/`latest_native`-Bump
+  (Backlog `GODOT-PLAN.md` §6 → B §5.2).
+- Der NSUserDefaults-Legacy-Reader ist seit FIX-6 **kein Stub mehr**
+  (GDScript-bplist-Parser + Auto-Import beim Erststart + Settings-Zeile
+  „Spielstand übertragen“). Nur das native Notification-Plugin bleibt ein
+  dokumentierter Andockpunkt (siehe STATUS.md).
 
 ## Server
 
