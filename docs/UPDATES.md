@@ -11,25 +11,35 @@ Offline-first: ohne Netz läuft das Spiel immer normal weiter.
 
 ## 1. Überblick & Architektur
 
+**Host der Updates ist DIESES private Repo** (`MedusaV9/CustomServerPrivate`;
+User-Entscheidung W15 — das früher geplante separate public Content-Repo
+`gooby-updates` entfällt endgültig). Weil das Repo privat ist, liefern
+tokenlose browser-download-URLs (`releases/download/…`) 404 — der Client lädt
+deshalb über die **GitHub-Release-API** mit einem Zugangsschlüssel
+(fine-grained PAT, → §6a).
+
 ```
 ┌─────────────────────────┐     baut .pck + manifest.json
-│ privates Haupt-Repo     │────────────────────────────────┐
+│ DIESES private Repo     │────────────────────────────────┐
 │ (content/<pack>/**)     │  GitHub Actions                │
 └─────────────────────────┘  (.github/workflows/           ▼
-                              gooby-packs.yml)   ┌──────────────────────┐
-                                                 │ GitHub-Release       │
+     Tag packs-v* oder        gooby-packs.yml)   ┌──────────────────────┐
+     Dispatch publish=true                       │ GitHub-Release       │
                                                  │ Tag `updates`:       │
                                                  │  manifest.json       │
                                                  │  config.json         │
                                                  │  <id>-v<x.y.z>.pck   │
                                                  └──────────┬───────────┘
-                                                            │ HTTPS (eine feste URL)
+                                                            │ GitHub-Release-API
+                                                            │ (Token; Assets via
+                                                            │  Accept: octet-stream)
                                                             ▼
 ┌──────────────────────────────────────────────────────────────────────────┐
 │ CLIENT (iPhone, Sideload-IPA)                                            │
 │                                                                          │
 │ Settings-Knopf ──▶ UpdateManager (scripts/updates/update_service.gd)     │
-│                      manifest holen → vergleichen → laden → sha256       │
+│                      Release am Tag holen → manifest.json-Asset laden    │
+│                      → vergleichen → Assets laden → sha256               │
 │                      → user://packs/<id>-v<ver>.pck + installed.json     │
 │                                                                          │
 │ Boot:  PackLoader (pack_loader.gd)  ── Boot-Guard (boot_guard.gd)        │
@@ -46,6 +56,9 @@ Grundprinzipien (Doc B, Kurzfassung):
 - **Data-only:** Packs enthalten JSON/Assets, **niemals GDScript**. Neues *Verhalten*
   braucht bewusst eine neue IPA (→ §6).
 - **Selbstheilung:** Boot-Guard mit Crash-Zähler; das Spiel ist nie soft-locked (→ §5.3).
+- **Abwärtskompatibel:** Direkte Manifest-URLs (eigener Server, öffentliches
+  Repo, `file://`-DEV-Tests) funktionieren unverändert — der API-Weg greift
+  nur bei `api.github.com`-URLs oder gesetztem Token (→ §5.1).
 
 ## 2. Pack-Typen & Zuständigkeiten
 
@@ -88,7 +101,19 @@ Grundprinzipien (Doc B, Kurzfassung):
 
 ## 3. manifest.json-Referenz
 
-Eine feste URL liefert den kompletten Update-Stand (Release-Asset am Tag `updates`):
+Eine feste URL liefert den kompletten Update-Stand (Release-Asset am Tag
+`updates`). Default im eingebauten `config`-Pack ist die **Release-API-URL**
+dieses Repos:
+
+```
+https://api.github.com/repos/MedusaV9/CustomServerPrivate/releases/tags/updates
+```
+
+Der Client holt darüber die Assets-Liste des Releases, lädt daraus das
+`manifest.json`-Asset (mit `Accept: application/octet-stream`) und schreibt
+die browser-URLs der Pack-Einträge auf ihre Asset-API-URLs um. Das Manifest
+selbst behält die browser-URLs (`releases/download/…`) — so bleibt es für
+öffentliche Repos/eigene Server unverändert benutzbar:
 
 ```json
 {
@@ -141,10 +166,19 @@ Erzeugt wird das Manifest von `tools/packs/build_manifest.mjs` (nie von Hand!).
    die Spieler im Update-Panel.
 3. **PR + Merge:** Branch → PR → Merge auf `main`. (CODEOWNERS kann
    `content/cosmetics/` fest dem Team zuordnen.)
-4. **Workflow starten:** GitHub → Actions → **gooby-packs** → „Run workflow“
-   (Input `packs`: `cosmetics` oder `all`, `publish`: `true`). Die CI baut das
-   Pack (`--export-pack`), lädt es probeweise (Smoketest!), berechnet sha256,
-   regeneriert `manifest.json` und hängt alles an den Release-Tag `updates`.
+4. **Release fahren:** EIN Tag-Push genügt (→ „Release fahren (Packs)“ in §6):
+
+   ```bash
+   git tag packs-v1.0.0 && git push origin packs-v1.0.0
+   ```
+
+   Der Tag triggert **gooby-packs** mit implizit `packs=all` + `publish=true`.
+   Alternativ ohne Tag: GitHub → Actions → **gooby-packs** → „Run workflow“
+   (Input `packs`: `cosmetics` oder `all`; `publish=true` veröffentlicht,
+   `publish=false` ist der Probe-Lauf mit reinem Build-Artefakt). Die CI baut
+   das Pack (`--export-pack`), lädt es probeweise (Smoketest!), berechnet
+   sha256, regeneriert `manifest.json` und hängt alles an den Release-Tag
+   `updates`.
 5. **Fertig.** Spieler drücken in den Einstellungen „Nach Updates suchen“ →
    nur das Cosmetics-Pack wird geladen; aktiv nach Neustart. Kein anderes Team,
    kein IPA-Build involviert. Der nächste IPA-Build bettet den neuen Stand
@@ -162,10 +196,18 @@ das kann man dem UpdateService direkt als `manifest_url_override` füttern
 Kette: W1c-`settings_screen.gd` feuert `update_check_requested` und ruft
 `/root/UpdateManager.check_for_updates()` (Duck-Typing). Ablauf im Service:
 
-1. Manifest von der konfigurierten URL holen (10 s Timeout). Quelle: Override →
-   Remote-Config (`user://packs/config.json`) → eingebauter `config`-Pack
-   (`manifest_url`). Offline/Fehler → Ergebnis `ERROR`, Toast „Gerade nicht
-   erreichbar — du kannst ganz normal weiterspielen“. Niemals blockierend.
+1. Manifest von der konfigurierten URL holen (10 s Timeout). URL-Quelle:
+   Override → Remote-Config (`user://packs/config.json`) → eingebauter
+   `config`-Pack (`manifest_url`). Zeigt die URL auf `api.github.com` ODER
+   ist ein Token gesetzt (Kette: Override → user://-Settings aus der
+   Updates-Sektion → config-Pack-Feld `github_token`), läuft der Abruf über
+   die **Release-API** (§1/§3); `Authorization: Bearer <token>` geht dabei
+   NUR an API-Hosts, nie an fremde Server. Privates Repo ohne Token →
+   Ergebnis `ERROR` mit klarem Panel-Hinweis „Updates brauchen einen
+   Zugangsschlüssel — Einstellungen → Updates“ (details.token_required →
+   Toast-Key `updates.token_fehlt`). Sonstige Offline-/Fehlerfälle →
+   Ergebnis `ERROR`, Toast „Gerade nicht erreichbar — du kannst ganz normal
+   weiterspielen“. Niemals blockierend.
 2. `latest_native` > App-Version → `NEEDS_NATIVE` („Neue App-Version nötig —
    bitte neue IPA installieren“). Keine Auto-IPA-Downloads.
 3. Pro Pack: effektive Version = `max(eingebaut, user://-installiert)`. Manifest
@@ -322,18 +364,34 @@ Was willst du ändern?
      └─▶ IPA. IMMER. (iOS erlaubt kein natives Nachladen.)
 ```
 
-`latest_native` im Manifest soll beim IPA-Release gebumpt werden → alle Clients
-sehen „Neue App-Version nötig“. **Stand W13C:** die Release-Hälfte von B §5.2
-existiert (Job `release` in `.github/workflows/gooby-godot.yml`, s. „Release
-fahren“ unten); der Manifest-Bump ist als Script
-`tools/ci/bump_latest_native.mjs` + auskommentierter Job-Step vorbereitet und
-wird scharf geschaltet, sobald die Manifest-Quelle existiert (erster
-`gooby-packs`-Lauf mit `publish=true` bzw. das public Repo `gooby-updates`).
-Bis dahin wird `latest_native` bei Bedarf manuell über einen
-`gooby-packs`-Lauf gepflegt (`LATEST_NATIVE`-Env überschreibt dort die aus
-`project.godot` gelesene Version). Die App-Version kommt aus
+`latest_native` im Manifest wird beim IPA-Release gebumpt → alle Clients
+sehen „Neue App-Version nötig“. **Stand W15:** der Bump ist SCHARF — der
+`release`-Job in `.github/workflows/gooby-godot.yml` lädt nach dem
+IPA-Release das `manifest.json`-Asset vom rollenden `updates`-Release dieses
+Repos, patcht es mit `tools/ci/bump_latest_native.mjs` (fail-closed:
+striktes Semver, Schema-Check, Downgrade-Verweigerung, idempotente Re-Runs;
+NUR `latest_native`/`published_at` ändern sich) und lädt es mit `--clobber`
+wieder hoch. Existiert der `updates`-Release noch nicht (erster Pack-Release
+steht aus) oder fehlt das Manifest-Asset, überspringt sich der Step sauber
+mit einer Notice statt rot zu werden. Die App-Version kommt aus
 `application/config/version` (project.godot, aktuell 5.0.0) und wird beim
 iOS-Export zu `CFBundleShortVersionString`.
+
+### Release fahren (Packs)
+
+Ein Pack-Release ist EIN Tag-Push — der Tag triggert `gooby-packs.yml` mit
+implizit `packs=all` + `publish=true`:
+
+```bash
+# Tag-Name dokumentiert nur den Anlass; die Pack-Versionen kommen aus
+# content/<id>/pack.json (vorher bumpen, §4 Schritt 2!):
+git tag packs-v1.0.0 && git push origin packs-v1.0.0
+```
+
+Alternativ ohne Tag: GitHub → Actions → **gooby-packs** → „Run workflow“
+(Inputs `packs`/`publish`; `publish=false` = Probe-Lauf, nur Artefakt).
+Der Lauf baut, verifiziert (Smoketest), regeneriert `manifest.json` und
+aktualisiert den rollenden Release `updates`.
 
 ### Release fahren (IPA)
 
@@ -356,11 +414,12 @@ Der Job dann:
 2. benennt sie versioniert um (`GOOBY-godot-unsigned-v5.1.0.ipa`),
 3. erstellt/aktualisiert das GitHub-Release `ipa-v5.1.0` mit deutschem
    Release-Notes-Gerüst („Was ist neu?“ nach dem Lauf ausfüllen!),
-4. *(vorbereitet, Step noch auskommentiert)* bumpt `latest_native` im
-   `updates`-Manifest via `tools/ci/bump_latest_native.mjs` — das Script ist
-   fail-closed (striktes Semver, Schema-Check, Downgrade-Verweigerung,
-   idempotente Re-Runs) und patcht NUR `latest_native`/`published_at`, die
-   Pack-Einträge bleiben unangetastet.
+4. bumpt `latest_native` im `updates`-Manifest via
+   `tools/ci/bump_latest_native.mjs` — das Script ist fail-closed (striktes
+   Semver, Schema-Check, Downgrade-Verweigerung, idempotente Re-Runs) und
+   patcht NUR `latest_native`/`published_at`, die Pack-Einträge bleiben
+   unangetastet. Kein `updates`-Release/Manifest-Asset vorhanden → Step
+   überspringt sich mit Notice (nie rot).
 
 Nicht vergessen: `application/config/version` in `project.godot` sollte zur
 Release-Version passen (Owner: Orchestrator/Core — Request stellen), sonst
@@ -368,7 +427,8 @@ meldet die frisch installierte App sich selbst als „zu alt“.
 
 ### CI-Werkzeuge (dieses Repo)
 
-- `.github/workflows/gooby-packs.yml` — `workflow_dispatch` (Inputs: `packs`,
+- `.github/workflows/gooby-packs.yml` — Tag-Push `packs-v*` (implizit
+  `packs=all` + `publish=true`) oder `workflow_dispatch` (Inputs: `packs`,
   `publish`): baut, verifiziert, erzeugt Manifest, hängt Assets an den
   rollenden Release-Tag `updates` (softprops/action-gh-release).
   `concurrency: manifest-update` verhindert Manifest-Races.
@@ -376,29 +436,43 @@ meldet die frisch installierte App sich selbst als „zu alt“.
   Smoketest → Manifest). `RELEASE_BASE_URL` leer = `file://`-URLs für Tests.
 - `tools/packs/build_manifest.mjs` — Manifest-Generator (`--tag-mode single`
   heute; `per-pack` für unveränderliche `<id>-v<ver>`-Tags, Zielbild Doc B §1.3).
+- `tools/ci/bump_latest_native.mjs` — patcht `latest_native`/`published_at`
+  im Release-Manifest (läuft automatisch im `release`-Job, s. oben).
 - Export-Presets: `GOOBY-GODOT/export_presets.cfg` (`pack-<id>` + `ios`). Der
   `ios-ipa`-Job in `.github/workflows/gooby-godot.yml` ist seit W6 scharf und
   baut bei jedem Push eine verifizierte unsignierte .ipa (Artefakt
   `GOOBY-godot-unsigned-ipa`; Runbook: `docs/godot-rewrite/IOS-BUILD.md`).
 
-### EHRLICH: öffentliches Content-Repo fehlt noch
+## 6a. Token für Spieler (privates Repo)
 
-Doc B §3 empfiehlt Option (A): separates **öffentliches** Artefakt-Repo
-`MedusaV9/gooby-updates` (nur Releases, kein Quellcode) — tokenlos, CDN-gestützt,
-kein API-Rate-Limit. Das Repo **existiert noch nicht** (User-Action, Backlog
-GODOT-PLAN §6/B). Bis dahin released `gooby-packs.yml` ins **Haupt-Repo**:
-Downloads funktionieren dann tokenlos nur, wenn das Haupt-Repo öffentlich ist —
-ist es privat, ist der Update-Weg bis zum Umzug faktisch DEV-only
-(`file://`-Manifeste, lokale Builds). Umzug später in 3 Schritten:
+Dieses Repo ist privat — jeder Spieler-Client braucht deshalb einen
+**Zugangsschlüssel** (GitHub-PAT) für die Update-Suche. So verteilt ihn der
+Server-Betreiber:
 
-1. GitHub-Repo `gooby-updates` anlegen (leerer `main` + README genügt).
-2. Fine-grained PAT (nur dieses Repo, nur `contents: write`) als Actions-Secret
-   `GH_CONTENT_TOKEN` im Haupt-Repo hinterlegen.
-3. In `gooby-packs.yml` beim Release-Step `repository:` + `token:` einkommentieren
-   und `RELEASE_BASE_URL` auf das neue Repo stellen; danach
-   `content/config/data/config.json` → `manifest_url` auf die neue URL bumpen
-   (das ist selbst ein config-Pack-Update — ohne IPA!). Die eingebaute
-   Fallback-URL wandert mit dem nächsten IPA-Build mit.
+1. **PAT erzeugen:** GitHub → Settings → Developer settings →
+   Personal access tokens → **Fine-grained tokens** → „Generate new token“.
+   - *Repository access:* **Only select repositories** →
+     `MedusaV9/CustomServerPrivate` (NUR dieses Repo!).
+   - *Permissions:* **Contents: Read-only** — sonst NICHTS. (Der Token kann
+     damit Releases/Code dieses Repos lesen, mehr nicht.)
+   - Ablaufdatum nach Geschmack (GitHub erzwingt eines; rechtzeitig neu
+     erzeugen und nachverteilen).
+2. **An die Freunde geben:** Token (Form `github_pat_…`) per DM o. Ä.
+   verschicken. Jeder Spieler trägt ihn einmal in der App ein:
+   **Einstellungen → Updates → „GitHub-Token (für App-Updates)“** (maskiertes
+   Feld; gespeichert in `user://updates_user_override.json`, gilt ab der
+   nächsten Update-Suche).
+3. **Alternative für gemeinsame Geräte:** das optionale config-Pack-Feld
+   `github_token` (s. `content/config/config.example.json`) — die
+   User-Settings gewinnen immer. ACHTUNG: Ein Token im config-Pack landet im
+   Release-Asset; im privaten Repo okay, aber bewusst entscheiden.
+4. **Kompromittiert/Spieler entfernen?** Token auf GitHub widerrufen
+   (revoke), neuen erzeugen, neu verteilen. Clients ohne gültigen Token
+   sehen im Panel „Updates brauchen einen Zugangsschlüssel — Einstellungen →
+   Updates“; das Spiel läuft normal weiter (offline-first).
+
+Ohne Token funktioniert weiterhin alles außer der Update-Suche — die App
+bleibt voll spielbar (eingebauter Content-Stand).
 
 ## 7. Server-IP/Port ändern — ohne neue IPA
 
@@ -419,6 +493,9 @@ Der `config`-Pack ist der „Sofort-Kanal“ (kein PCK, kein Neustart):
 | Symptom | Ursache | Fix |
 |---|---|---|
 | „Gerade nicht erreichbar“ beim Suchen | Offline / Manifest-URL falsch / Release fehlt | `manifest_url` in der Config prüfen; Release-Tag `updates` existiert? Client spielt normal weiter. |
+| „Updates brauchen einen Zugangsschlüssel…“ | privates Repo ohne (gültigen) Token angefragt | Token vom Betreiber holen (§6a) und unter Einstellungen → Updates eintragen. |
+| „Zugangsschlüssel abgelehnt (http=…)“ | Token abgelaufen/widerrufen/falsches Repo im PAT-Scope | Neuen fine-grained PAT erzeugen (nur dieses Repo, contents:read) und neu eintragen. |
+| „Asset '…' fehlt im Release“ | Manifest und Release-Assets nicht synchron (Upload halb durch) | Pack-Release neu fahren (`packs-v*`-Tag) — der Workflow regeneriert Manifest + Assets zusammen. |
 | „sha256-Mismatch … verworfen“ | Unterbrochener/manipulierter Download, oder Manifest wurde nicht regeneriert | Workflow neu laufen lassen (Manifest IMMER via build_manifest.mjs); Retry im Panel. |
 | Pack geladen, Inhalt fehlt nach Neustart | `min_native`-Gate greift (App zu alt) oder Pack `enabled=false` | `user://packs/installed.json` ansehen; „braucht neue IPA“-Hinweis beachten. |
 | „Ein Update hat Probleme gemacht…“ | Boot-Guard hat nach 2 Crashes das jüngste Pack deaktiviert/zurückgerollt | Pack-Daten fixen, PATCH-Version shippen. Eintrag steht auf `enabled=false`. |
@@ -446,9 +523,12 @@ Pack-Load gelesen und sind zur Laufzeit inert (verifiziert im Flow-Test).
   beliebigen Code auf allen Geräten ausführen — sha256 schützt nur den
   Transport, nicht die Quelle; (3) Teams können so keine Spiellogik kaputt
   machen; (4) App-Store-Tür bleibt offen.
-- **Kein Token in der App:** eingebettete PATs sind extrahierbar (→ Lesezugriff
-  aufs private Repo) und werden von GitHub-Secret-Scanning gern auto-revoked
-  (→ Updates fallen plötzlich aus). Deshalb öffentliches Artefakt-Repo (§6).
+- **Kein fest eingebautes Token in der IPA:** eingebettete PATs wären
+  extrahierbar und werden von GitHub-Secret-Scanning gern auto-revoked
+  (→ Updates fallen plötzlich aus). Stattdessen trägt jeder Spieler seinen
+  vom Betreiber verteilten fine-grained PAT selbst ein (§6a) — Scope NUR
+  dieses Repo, NUR `contents: read`; Blast-Radius bei Leak = Lesezugriff auf
+  dieses eine Repo, Widerruf jederzeit per GitHub-Revoke.
 - **Manifest-Quelle = Vertrauensanker:** Wer den `updates`-Release schreiben
   kann, steuert den Content aller Geräte. Token-Hygiene: fine-grained,
   minimaler Scope, nur als Actions-Secret. Härtung V2 (Backlog): Manifest-
