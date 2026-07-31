@@ -1,6 +1,12 @@
 #!/usr/bin/env python3
 """C18 Backrooms art companion (IDEAS-backrooms_finale §A3.1/§A4; MOB-GLITCH v2).
 
+MB5 (MOB_ITEM_CENSUS §5 Welle M-B) moved this driver out of the `scripts/skin_gen/`
+outlier slot (census §7 falle F-11) into `scripts/geckolib_gen/mobs/` next to its 19
+siblings. The file name stays `backrooms_wanderer` (not `glitched_wanderer`) because
+this driver is the Backrooms ART COMPANION, not a single mob's skin painter: it also
+writes `textures/gui/backrooms_scare.png`, which belongs to no geo triple.
+
 Generates the Wanderer's asset set from the shipped glitched_husk sources —
 run from the ProjectEclipse root; deterministic (seeded), idempotent:
 
@@ -10,13 +16,18 @@ run from the ProjectEclipse root; deterministic (seeded), idempotent:
      deflated small (inflate < 0), the dislocated jaw's UV re-parked clear of
      the taller arm strip. The proportions are off by just enough to read as
      "person-shaped, but no" down a long corridor.
+     MB5 additionally appends the cubeless locator `fx_shroud_anchor` — the
+     published emitter anchor for B2's `eclipse:wanderer_static_shroud`
+     (see docs/uv/backrooms_wanderer.md §FX).
   2. animations: the husk set re-keyed to `animation.glitched_wanderer.*`
-     (load-bearing: GlitchedMonster builds anim ids off geoId()) with three
+     (load-bearing: GlitchedMonster builds anim ids off geoId()) with four
      bespoke replacements/additions — `idle` (near-still + the head-turn-TOO-FAR
-     beat), `walk` (unsettling slow corridor pace, head locked level) and the
-     NEW `sprint` (the lookaway burst — GlitchedWandererEntity plays it while a
-     gaze-burst speed modifier is live). attack/glitch_blink/death stay the
-     renamed husk one-shots.
+     beat), `walk` (unsettling slow corridor pace, head locked level), `sprint`
+     (the lookaway burst — GlitchedWandererEntity plays it while a gaze-burst
+     speed modifier is live) and `notice` (the freeze-and-stare that precedes it).
+     `notice` -> `sprint` is THE Backrooms horror beat; both clips are written on
+     the 0.05 s tick grid so the server freeze and B5/B2's cues can line up with
+     them exactly. attack/glitch_blink/death stay the renamed husk one-shots.
   3. textures/entity/glitched_wanderer{,_alt,_glowmask,_alt_glowmask}.png —
      painted directly on the WARPED geo with the husk's own material set
      (`glitched_husk.build`), then mono-yellow "wet paint" regraded: luminance
@@ -34,17 +45,20 @@ from pathlib import Path
 
 from PIL import Image
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 ASSETS = ROOT / "src/main/resources/assets/eclipse"
 ENT = ASSETS / "textures/entity"
 GUI = ASSETS / "textures/gui"
 
-sys.path.insert(0, str(ROOT / "scripts/geckolib_gen/mobs"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 import glitched_husk as husk  # noqa: E402
 
 WGEO = ASSETS / "geo/entity/glitched_wanderer.geo.json"
 
 RNG = random.Random(0xBAC2)  # deterministic output; re-runs are byte-stable
+
+# MB5 (census §5 row MB5-d): published emitter locator for `wanderer_static_shroud`.
+FX_ANCHOR_BONE = "fx_shroud_anchor"
 
 # Rot-yellow luminance ramp: damp baseboard black -> ochre -> pale fluorescent.
 RAMP = [
@@ -175,6 +189,23 @@ def _warp_geo(geo):
     # The taller arm_right strip (ends y39) would collide with the jaw UV at
     # (32,36) — re-park the wanderer's jaw strip below it.
     bones["jaw_shard"]["cubes"][0]["uv"] = [32, 40]
+    # MB5 (census §5 row MB5-d): the published FX locator for B2's
+    # `wanderer_static_shroud`. Cubeless (paints nothing, costs nothing), parented to
+    # `root` and NOT `body` on purpose — the shroud is a column of haze around the
+    # thing, so it must NOT inherit the 20 deg sprint torso pitch.
+    # Pivot y = 15.36 px reproduces B2's shipped anchor at rest: the LoopRow in
+    # PhotonMobFx offsets `eye + (0,-0.7,0)`, eyeHeight is 1.66 (BackroomsEntities),
+    # so 1.66 - 0.70 = 0.96 blocks = 15.36 model px.
+    # The bone carries NO animation channel of its own in any clip, so a bone-bound
+    # emitter differs from today's world-space row by exactly the `root` bone's motion
+    # and nothing else: 0 px in idle/notice-hold, <=1.35 px (0.084 blocks) in sprint,
+    # plus the glitch_blink stutter and the death sink — which is precisely the drift a
+    # shroud SHOULD inherit. See docs/uv/backrooms_wanderer.md §FX.
+    geo["minecraft:geometry"][0]["bones"].append({
+        "name": FX_ANCHOR_BONE,
+        "parent": "root",
+        "pivot": [0, 15.36, 0],
+    })
 
 
 # --- bespoke wanderer animations (MOB-GLITCH) --------------------------------
@@ -316,137 +347,308 @@ WALK = {
     },
 }
 
+# MB5 (census §5 row MB5-b) — the sprint is the LOOKAWAY BURST, and it must not read
+# as "a person running fast". Four deliberate wrongnesses, all verified against
+# GeckoLib 4.9.2's own parser (see MB5_WANDERER_REPORT §4):
+#
+#   1. RIGID ARMS. They do not swing at all. Both are pinned to a fixed, asymmetric
+#      pose and, because they hang off a torso pitched 20 deg forward, they trail
+#      straight back like a dragged mannequin's. The only motion is a sub-degree
+#      rattle (right) and two 1-tick spasms (left).
+#   2. STEPPED TORSO / HEAD. `{"pre": .., "post": ..}` is a TRUE step in GeckoLib
+#      (the pre key lands at t-0.001 s = 0.02 ticks — measured, not assumed), so the
+#      torso yaw advances in four discrete jumps instead of rolling, and the head
+#      snaps sideways for exactly one tick, twice per cycle. That is the
+#      "ruckelnde Frame-Versätze" of the census row.
+#   3. BROKEN GAIT. The legs are NOT contralateral: the right leg peaks forward at
+#      0.00 s, the left at 0.40 s of a 0.60 s cycle (240 deg apart, not 180 deg), with
+#      different amplitudes (62/-44 vs 46/-34) — a limping scuttle. The right leg
+#      additionally DROPS A FRAME at the back of its stride (0.30 s and 0.35 s carry
+#      the same value) and then catches up on a steeper slope.
+#   4. DEAD-LEVEL HEAD. head.x = -20 exactly cancels body.x = +20, so the skull stays
+#      world-level and locked on you while the body is thrown forward — except during
+#      the 2-tick torso pitch hitch (0.30-0.40 s), where the head does NOT compensate
+#      and dips 6 deg. All linear: no catmullrom anywhere in the cycle.
+#
+# Cycle length 0.55 -> 0.60 s: 12 ticks, so every beat lands on a whole tick AND the
+# molang base frequency becomes exactly 360/0.6 = 600 deg/s (harmonics 1200/1800), i.e.
+# value- AND derivative-continuous over the loop seam. The old 654.5/981.8 pair closed
+# only to ~1e-4 deg and 981.8 (= 1.5 cycles) flipped its derivative at the seam.
 SPRINT = {
     "loop": True,
-    "animation_length": 0.55,
+    "animation_length": 0.6,
     "bones": {
+        # Limp bob: high hop on the strong side (1.35 px, lists +X), a barely-there
+        # 0.60 px lift on the weak side, and a hard landing that undershoots to -0.15 Z.
         "root": {
             "position": {
-                "0.0": {"post": [0, 0, 0], "lerp_mode": "catmullrom"},
-                "0.1375": {"post": [0, 0.9, 0], "lerp_mode": "catmullrom"},
-                "0.275": {"post": [0, 0, 0], "lerp_mode": "catmullrom"},
-                "0.4125": {"post": [0, 0.9, 0], "lerp_mode": "catmullrom"},
-                "0.55": {"post": [0, 0, 0], "lerp_mode": "catmullrom"},
+                "0.0": [0, 0, 0],
+                "0.05": [0, 0.55, 0],
+                "0.1": [0.15, 1.35, 0],
+                "0.15": [0.15, 1.1, 0],
+                "0.2": [0.05, 0.35, 0],
+                "0.25": [0, 0, -0.15],
+                "0.3": [0, 0.05, 0],
+                "0.35": [-0.12, 0.42, 0],
+                "0.4": [-0.12, 0.6, 0],
+                "0.45": [-0.12, 0.48, 0],
+                "0.5": [0, 0.18, 0],
+                "0.55": [0, 0, 0],
+                "0.6": [0, 0, 0],
             }
         },
         "body": {
             "rotation": {
-                "0.0": {"post": [16, 0, 2], "lerp_mode": "catmullrom"},
-                "0.275": {"post": [16, 0, -2], "lerp_mode": "catmullrom"},
-                "0.55": {"post": [16, 0, 2], "lerp_mode": "catmullrom"},
+                "0.0": [20, 0, 2],
+                "0.15": {"pre": [20, 0, 2], "post": [20, -5, 2]},
+                "0.3": {"pre": [20, -5, 2], "post": [26, 4, -2]},
+                "0.4": {"pre": [26, 4, -2], "post": [20, 4, -2]},
+                "0.45": {"pre": [20, 4, -2], "post": [20, -3, 2]},
+                "0.55": {"pre": [20, -3, 2], "post": [20, 0, 2]},
+                "0.6": [20, 0, 2],
             }
         },
         "leg_right": {
             "rotation": {
-                "0.0": {"post": [50, 0, 0], "lerp_mode": "catmullrom"},
-                "0.275": {"post": [-50, 0, 0], "lerp_mode": "catmullrom"},
-                "0.55": {"post": [50, 0, 0], "lerp_mode": "catmullrom"},
+                "0.0": [62, 0, 0],
+                "0.15": [12, 0, 0],
+                "0.3": [-44, 0, 0],
+                "0.35": [-44, 0, 0],
+                "0.45": [4, 0, 0],
+                "0.6": [62, 0, 0],
             }
         },
         "leg_left": {
             "rotation": {
-                "0.0": {"post": [-50, 0, 0], "lerp_mode": "catmullrom"},
-                "0.275": {"post": [50, 0, 0], "lerp_mode": "catmullrom"},
-                "0.55": {"post": [-50, 0, 0], "lerp_mode": "catmullrom"},
+                "0.0": [-24, 0, 0],
+                "0.1": [-34, 0, 0],
+                "0.25": [8, 0, 0],
+                "0.4": [46, 0, 0],
+                "0.5": [16, 0, 0],
+                "0.6": [-24, 0, 0],
             }
         },
+        # Rigid. 1800*0.6 = 1080 deg = 3 whole cycles -> seamless.
         "arm_right": {
-            "rotation": {
-                "0.0": {"post": [-60, 0, -18], "lerp_mode": "catmullrom"},
-                "0.275": {"post": [30, 0, -12], "lerp_mode": "catmullrom"},
-                "0.55": {"post": [-60, 0, -18], "lerp_mode": "catmullrom"},
-            }
+            "rotation": ["3 + math.sin(query.anim_time * 1800) * 1.4", 0, -5]
         },
         "arm_left": {
             "rotation": {
-                "0.0": {"post": [30, 0, 12], "lerp_mode": "catmullrom"},
-                "0.275": {"post": [-60, 0, 18], "lerp_mode": "catmullrom"},
-                "0.55": {"post": [30, 0, 12], "lerp_mode": "catmullrom"},
+                "0.0": [-7, 0, 8],
+                "0.1": {"pre": [-7, 0, 8], "post": [-11, 0, 8]},
+                "0.15": {"pre": [-11, 0, 8], "post": [-7, 0, 8]},
+                "0.35": {"pre": [-7, 0, 8], "post": [-7, 0, 17]},
+                "0.4": {"pre": [-7, 0, 17], "post": [-7, 0, 8]},
+                "0.6": [-7, 0, 8],
             }
         },
-        # REPASS-MOB: jitter periods snapped to the 0.55 s loop (654.5*0.55 = 360deg,
-        # 981.8*0.55 = 540deg half-period zero-crossing) — the old 700-1000 deg/s sines
-        # wrapped mid-phase, the worst a ~10deg jaw snap every loop.
         "head": {
-            "rotation": ["-12", "math.sin(query.anim_time * 981.8) * 4", 0]
+            "rotation": {
+                "0.0": [-20, 0, 3],
+                "0.2": {"pre": [-20, 0, 3], "post": [-20, 11, 3]},
+                "0.25": {"pre": [-20, 11, 3], "post": [-20, 0, 3]},
+                "0.5": {"pre": [-20, 0, 3], "post": [-19, -7, 3]},
+                "0.55": {"pre": [-19, -7, 3], "post": [-20, 0, 3]},
+                "0.6": [-20, 0, 3],
+            }
         },
         "jaw_shard": {
-            "rotation": ["20 + math.sin(query.anim_time * 654.5) * 10", 0, 0]
+            "rotation": ["26 + math.sin(query.anim_time * 1800) * 10", 0,
+                         "math.sin(query.anim_time * 1200) * 5"]
         },
+        # The loose face plate does not slide — it TELEPORTS, once per step.
         "head_shard": {
-            "position": ["math.sin(query.anim_time * 981.8) * 0.3", 0, 0]
+            "position": {
+                "0.0": [0, 0, 0],
+                "0.25": {"pre": [0, 0, 0], "post": [0.6, -0.25, 0]},
+                "0.3": {"pre": [0.6, -0.25, 0], "post": [0, 0, 0]},
+                "0.45": {"pre": [0, 0, 0], "post": [-0.45, 0.2, 0]},
+                "0.5": {"pre": [-0.45, 0.2, 0], "post": [0, 0, 0]},
+                "0.6": [0, 0, 0],
+            }
         },
         "shard_torso": {
-            "position": [0, 0, "math.sin(query.anim_time * 981.8 + 180) * 0.3"]
+            "position": ["math.sin(query.anim_time * 600) * 0.35", 0,
+                         "math.sin(query.anim_time * 1200 + 180) * 0.3"]
         },
+        # Two flares per cycle, phased onto the two footfalls (t = 0.00 / 0.30 s).
         "glow_seam": {
-            "scale": ["1.3 + math.sin(query.anim_time * 654.5) * 0.2", 1, "1.3 + math.sin(query.anim_time * 654.5) * 0.2"]
+            "scale": ["1.3 + math.sin(query.anim_time * 1200 + 90) * 0.35", 1,
+                      "1.3 + math.sin(query.anim_time * 1200 + 90) * 0.35"]
         },
+        # FX_ANCHOR_BONE is deliberately NOT keyed here (nor in any other clip) — see
+        # _warp_geo(): the anchor's whole value to B2 is that it is PREDICTABLE.
     },
 }
 
-# REPASS-MOB personality one-shot: the full-body "notice" FREEZE — fired by
-# GlitchedWandererEntity.setTarget on first target acquisition (the Storm Hound
-# howl trigger pattern). Hard linear snaps on purpose: the stalker locks up
-# head-to-toe for half a second, seam flaring, then releases into the kill walk.
+# MB5 (census §5 row MB5-a) — THE horror beat of the Backrooms. Five acts over
+# 1.05 s = 21 ticks. TICK GRID LAW: every single timestamp below is a multiple of
+# 0.05 s, because the two consumers of this clip can only act on whole ticks — the
+# server freeze (GlitchedWandererEntity.NoticeFreezeGoal holds MOVE+LOOK for exactly
+# NOTICE_TICKS, so the mob cannot slide while its legs are planted) and B5/B2, whose
+# flicker/audio cues are scheduled off the trigger tick. A beat at 0.04 s or 0.86 s
+# cannot be cued; a beat at 0.05 s or 0.85 s can. Full timing analysis + the cue table
+# live in MB5_WANDERER_REPORT §3.
+#
+#   ANTICIPATION  0.00-0.05  t+0..t+1. Head turns 9 deg AWAY (it was looking somewhere
+#              (t+0..1)      else — no it wasn't), seam INHALES to 0.82x. The tell.
+#   SNAP          0.10       t+2. TRUE step (pre/post): 18 deg pitch + 12 deg yaw +
+#              (t+2)         10 deg roll in one frame, jaw drops 40 deg, seam flares
+#                            0.82 -> 2.05, root jolts back. The census asks for a 0.1 s
+#                            head snap; this one ARRIVES at exactly 0.10 s and the
+#                            travel itself is instantaneous — necks do not do that.
+#                            NB the head channel is ADDITIVE over GeckoLib's live head
+#                            tracking (DefaultedEntityGeoModel does head.setRotX(
+#                            head.getRotX() + headPitch)), so the snap is a delta on top
+#                            of wherever you are standing: it can never be swallowed.
+#   CATCH-UP      0.15/0.20  t+3 / t+4. The BODY arrives ONE TICK after the head — the
+#              (t+3..4)      single strongest "that is not a person" read — and the left
+#                            limbs one tick after the right (the rig is asymmetric, so
+#                            the catch-up is too).
+#   HOLD          0.25-0.85  t+5..t+17. 0.60 s / 12 ticks of frozen stare. Not perfectly
+#              (t+5..17)     still: `shard_torso` carries a sub-pixel 3.3 Hz tremor, the
+#                            seam breathes down 1.75 -> 1.58, and ONE dropped-frame
+#                            corruption twitch fires at 0.50 s (head) / 0.55 s (jaw +
+#                            seam) — 1 tick apart, so the face tears before the jaw does.
+#   LOAD/RELEASE  0.85-1.05  t+17..t+21. It coils (torso pitches +12, legs load, seam
+#              (t+17..21)    swells 2.35x) and uncoils to EXACT neutral. Landing on
+#                            neutral is deliberate: when the one-shot ends, the action
+#                            controller (transitionLength 0) drops its bones with no
+#                            blend, and `idle` sits within ~1 deg of neutral, so the
+#                            handoff to idle/walk/sprint is invisible.
 NOTICE = {
     "loop": False,
-    "animation_length": 0.7,
+    "animation_length": 1.05,
     "bones": {
         "root": {
             "position": {
                 "0.0": [0, 0, 0],
-                "0.05": [0.4, 0, -0.3],
-                "0.1": [0, 0, 0],
-                "0.7": [0, 0, 0],
+                "0.05": [0, 0.15, 0.2],
+                "0.1": {"pre": [0, 0.15, 0.2], "post": [0.45, -0.25, -0.4]},
+                "0.15": [0, -0.1, -0.15],
+                "0.25": [0, 0, 0],
+                "0.85": [0, 0, 0],
+                "0.95": [0, -0.55, 0.25],
+                "1.05": [0, 0, 0],
             }
         },
+        # The body does NOT move on the snap — it arrives one full tick late, hard.
         "body": {
             "rotation": {
                 "0.0": [0, 0, 0],
-                "0.06": [-6, 0, -2],
-                "0.55": [-6, 0, -2],
-                "0.7": [0, 0, 0],
+                "0.05": [1.5, 0, 0],
+                "0.1": [1.5, 0, 0],
+                "0.15": {"pre": [1.5, 0, 0], "post": [-8, 5, -3]},
+                "0.25": [-7, 4.5, -2.6],
+                "0.85": [-7, 4.5, -2.6],
+                "0.95": [12, 2, -1],
+                "1.05": [0, 0, 0],
             }
         },
         "head": {
             "rotation": {
                 "0.0": [0, 0, 0],
-                "0.06": [-10, 0, 4],
-                "0.55": [-10, 0, 4],
-                "0.7": [0, 0, 0],
+                "0.05": [4, 9, -3],
+                "0.1": {"pre": [4, 9, -3], "post": [-14, -3, 7]},
+                "0.25": [-14, -3, 7],
+                "0.5": {"pre": [-14, -3, 7], "post": [-15.5, -12, 9]},
+                "0.55": {"pre": [-15.5, -12, 9], "post": [-14, -3, 7]},
+                "0.85": [-14, -3, 7],
+                "0.95": [-4, -1, 4],
+                "1.05": [0, 0, 0],
             }
         },
         "arm_right": {
             "rotation": {
                 "0.0": [0, 0, 0],
-                "0.06": [-18, 0, -6],
-                "0.55": [-18, 0, -6],
-                "0.7": [0, 0, 0],
+                "0.15": {"pre": [0, 0, 0], "post": [-24, 0, -10]},
+                "0.85": [-24, 0, -10],
+                "0.95": [-34, 0, -14],
+                "1.05": [0, 0, 0],
             }
         },
         "arm_left": {
             "rotation": {
                 "0.0": [0, 0, 0],
-                "0.06": [14, 0, 5],
-                "0.55": [14, 0, 5],
-                "0.7": [0, 0, 0],
+                "0.2": {"pre": [0, 0, 0], "post": [17, 0, 8]},
+                "0.85": [17, 0, 8],
+                "0.95": [26, 0, 12],
+                "1.05": [0, 0, 0],
+            }
+        },
+        # MB5 bug fix: the 0.7 s version animated no legs at all, so the base
+        # controller kept striding underneath and the "full-body freeze" walked.
+        "leg_right": {
+            "rotation": {
+                "0.0": [0, 0, 0],
+                "0.15": {"pre": [0, 0, 0], "post": [9, 0, 0]},
+                "0.85": [9, 0, 0],
+                "0.95": [-14, 0, 0],
+                "1.05": [0, 0, 0],
+            }
+        },
+        "leg_left": {
+            "rotation": {
+                "0.0": [0, 0, 0],
+                "0.2": {"pre": [0, 0, 0], "post": [-7, 0, 0]},
+                "0.85": [-7, 0, 0],
+                "0.95": [16, 0, 0],
+                "1.05": [0, 0, 0],
             }
         },
         "jaw_shard": {
             "rotation": {
                 "0.0": [0, 0, 0],
-                "0.06": [26, -8, 6],
-                "0.55": [26, -8, 6],
-                "0.7": [0, 0, 0],
+                "0.05": [-6, 0, 0],
+                "0.1": {"pre": [-6, 0, 0], "post": [34, -10, 8]},
+                "0.25": [30, -9, 7],
+                "0.5": [30, -9, 7],
+                "0.55": {"pre": [30, -9, 7], "post": [40, -15, 11]},
+                "0.6": {"pre": [40, -15, 11], "post": [30, -9, 7]},
+                "0.85": [30, -9, 7],
+                "0.95": [22, -4, 4],
+                "1.05": [0, 0, 0],
             }
+        },
+        # The face plate does not follow the skull — it slides on, one tick late.
+        "head_shard": {
+            "position": {
+                "0.0": [0, 0, 0],
+                "0.1": [0, 0, 0],
+                "0.15": [0.55, -0.2, -0.35],
+                "0.25": [0.2, -0.05, -0.12],
+                "0.85": [0.2, -0.05, -0.12],
+                "1.05": [0, 0, 0],
+            },
+        },
+        "shard_torso": {
+            # A hold that is PERFECTLY still reads as a frozen GAME, not a frozen mob:
+            # a sub-pixel tremor keeps it alive without breaking the stare. 1200 and
+            # 2400 deg/s are the two lowest harmonics that are exactly 0 at BOTH ends of
+            # a 1.05 s clip (1200*1.05 = 1260 = 7*180; 2400*1.05 = 2520 = 14*180), so the
+            # tremor neither pops in at t=0 nor leaves a residual offset behind when the
+            # controller drops the bone at t=1.05.
+            "position": ["math.sin(query.anim_time * 1200) * 0.09", 0,
+                         "math.sin(query.anim_time * 2400) * 0.07"],
+            "rotation": {
+                "0.0": [0, 0, 0],
+                "0.15": {"pre": [0, 0, 0], "post": [0, -11, 3]},
+                "0.85": [0, -11, 3],
+                "1.05": [0, 0, 0],
+            },
         },
         "glow_seam": {
             "scale": {
                 "0.0": [1, 1, 1],
-                "0.1": [1.6, 1, 1.6],
-                "0.5": [1.6, 1, 1.6],
-                "0.7": [1, 1, 1],
+                "0.05": [0.82, 1, 0.82],
+                "0.1": {"pre": [0.82, 1, 0.82], "post": [2.05, 1.15, 2.05]},
+                "0.2": [1.75, 1.08, 1.75],
+                "0.5": [1.62, 1.05, 1.62],
+                "0.55": {"pre": [1.62, 1.05, 1.62], "post": [2.0, 1.12, 2.0]},
+                "0.6": [1.66, 1.06, 1.66],
+                "0.85": [1.58, 1.04, 1.58],
+                "0.95": [2.35, 1.2, 2.35],
+                "1.05": [1, 1, 1],
             }
         },
     },
