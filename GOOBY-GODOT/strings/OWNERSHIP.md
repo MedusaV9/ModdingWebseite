@@ -49,6 +49,8 @@ DE ist führend; EN muss für jede Domain paritätisch sein (Test:
 | `postkarten.*` (Datei `strings/<locale>/postkarten.json` — Postkarten-Archiv, Souvenirregal, Set-Bonus, Kartentexte) | REST-4 | REST |
 | `revents.*` (Datei `strings/<locale>/ranch_events.json` — Ranch-Random-Events: Bubbles, Krähen-/Danke-Zeilen) | W13 RANCH | W13 |
 | `nougat.*` (Datei `strings/<locale>/nougat.json` — Nougatschleuse: Install, Refusals, Klecks-Zeilen) + NEUE `rewards.food.*`-Keys der W13-Speisen (additiv in `rewards.json`) | W13 FOOD | W13 |
+| `coop.*` (Datei `strings/<locale>/coop.json` — Coop-Fahrt: Einladung, Beifahrer-Radio, Kaufhinweis) + NEUE `social.nap.*`-Keys der Besucher-Couch-Regel (additiv in `social.json`) | W13B COUCH-COOP | W13 |
+| NEUE `build.ebene.*`- + `build.girlande.*`-Keys (additiv in `home.json` — Ebenen-Umschalter Boden/Wand/Decke, Girlanden-Spann-Flow) | W13B CEILING | W13 |
 
 Regeln:
 1. Nur der Owner editiert Keys seines Prefixes (in de.json/en.json NUR im
@@ -76,3 +78,21 @@ Regeln:
   siezen NPCs, NPCs duzen zurück — das bleibt so.
 - **Typografie:** Ellipse `…` (nie `...`), Apostroph `’` (nie `'`),
   Anführungszeichen `„…“` paarig.
+
+- `mail.*` (Datei `strings/<locale>/mail.json` — Post/Mail-Multiplayer: Briefe-Schalter, Briefkasten, Brief-schreiben-Flow, Fehler-Toasts) → Owner **W13B MAIL** (Welle W13). *(per >> angehängt — beim nächsten Doku-Pass in die Tabelle oben heben)*
+
+## W13-B Nachträge (append-only, per >>)
+
+| Prefix | Owner | Welle |
+|---|---|---|
+| `phone.gooberando.*` + `phone.guber.surge` (Datei `strings/<locale>/phone.json`) | W13B GOBERANDO | W13-B |
+| `city_leben.*` (NEUE Datei `strings/<locale>/city_leben.json`) | W13B GOBERANDO | W13-B |
+
+## W13B-Nachtrag (per >> angehängt — Orchestrator: bitte in die Tabelle oben mergen)
+
+| Prefix | Owner | Welle |
+|---|---|---|
+| `shake.*` (Datei `strings/<locale>/shake.json` — Schüttel-Secret: Stufen-Bubbles, Schrei, Beschwerde) | W13B GESCHICHTEN | W13 |
+| NEUE `sleep.story.*`-Keys (additiv in `sleep.json` — Bücherregal, Abnutzung, Seiten, REHWEI-Hinweis) | W13B GESCHICHTEN | W13 |
+
+- `mg.cityDrive.*` + `mg.host.strike_*` + `mg.pregame.car` (Datei `strings/<locale>/citydrive.json` — City-Drive-Arcade-Runde, 3-Strikes-Teleport-Cutscene des Hosts, Pregame-Auto-Zeile) → Owner **W13B DRIVE** (Welle W13-B). *(per >> angehängt — beim nächsten Doku-Pass in die Tabelle oben heben)*
