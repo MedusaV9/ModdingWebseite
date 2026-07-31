@@ -22,6 +22,11 @@ const CRITTER_COLORS: Array[Color] = [
 ]
 ## Entwurfs-Kurzkante — Pixelmaße der Bedienleiste skalieren damit.
 const DESIGN_SHORT := 390.0
+## W16 Intro-Beat (s): Kamera-Totale des Gartens + „Finde die Tierchen!" —
+## die Sim (elapsed/wave_t/Lugen) wartet, der Lauf bleibt zahlengleich.
+const INTRO_S := 1.5
+## Der Bedien-Hinweis blendet nach so vielen Spielsekunden aus (M6-Muster).
+const HINT_FADE_AT := 5.0
 
 var tune: Dictionary = {}
 var rng: GoobyRng
@@ -49,6 +54,9 @@ var _wave_label: Label
 var _hint_label: Label
 var _banner := ""
 var _banner_t := 0.0
+var _banner_gold := false
+var _banner_plate: StyleBoxFlat
+var _intro_left := 0.0
 
 
 func setup(context: MinigameCtx) -> void:
@@ -60,6 +68,8 @@ func setup(context: MinigameCtx) -> void:
 	_build_hud()
 	_start_wave(0)
 	_fit_viewport()
+	_intro_left = INTRO_S
+	_set_banner(I18nService.t("mg.hideSeek.intro"), false, INTRO_S + 0.7)
 	if is_inside_tree():
 		get_viewport().size_changed.connect(_fit_viewport)
 
@@ -119,6 +129,17 @@ func _layout_hud() -> void:
 
 func _process(delta: float) -> void:
 	if not is_active() or finished:
+		return
+	# W16 Intro-Beat: Kamera schwebt aus der Garten-Totale in die Suchpose,
+	# das Ziel steht als Banner — Uhr, Welle und Lugen warten so lange.
+	if _intro_left > 0.0:
+		_intro_left = maxf(0.0, _intro_left - delta)
+		if _stage != null:
+			_stage.establish(1.0 - _intro_left / INTRO_S)
+		_banner_t = maxf(0.0, _banner_t - delta)
+		_sync_stage(delta)
+		_update_labels()
+		queue_redraw()
 		return
 	elapsed += delta
 	_banner_t = maxf(0.0, _banner_t - delta)
@@ -194,7 +215,7 @@ func _mood() -> String:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if not is_active() or finished or phase != "play":
+	if not is_active() or finished or phase != "play" or _intro_left > 0.0:
 		return
 	if event is InputEventScreenTouch and event.pressed:
 		var spot := _spot_at(event.position)
@@ -259,6 +280,8 @@ func _build_hud() -> void:
 	_hint_label.add_theme_color_override("font_outline_color", Color(0.16, 0.28, 0.14, 0.42))
 	_hint_label.add_theme_constant_override("outline_size", 7)
 	add_child(_hint_label)
+	_banner_plate = StyleBoxFlat.new()
+	_banner_plate.set_corner_radius_all(12)
 	_update_labels()
 
 
@@ -352,13 +375,16 @@ func _clear_wave() -> void:
 	if score != prev:
 		ctx.report_score(score, score - prev)
 	AudioDirector.try_play(self, "mg_perfect")
-	_set_banner(I18nService.t("mg.hideSeek.wave_clear", {"n": int(tune["WAVE_BONUS"])}))
+	_set_banner(I18nService.t("mg.hideSeek.wave_clear", {"n": int(tune["WAVE_BONUS"])}), true)
 	if _stage != null:
 		_stage.cheer("wave")
 		_stage.pulse_glow(0.95)
 	if ctx.juice != null:
 		ctx.juice.bloom_pulse(0.9)
 		ctx.juice.shake(0.12)
+		# Die geräumte Welle ist DER Feier-Moment (M8) — Konfetti wie beim
+		# carrotGuard-König; Reduced Motion filtert das Kit selbst.
+		ctx.juice.confetti(40)
 	phase = "serve"
 	serve_t = float(tune["SERVE_SEC"])
 
@@ -386,9 +412,10 @@ func _finish() -> void:
 	ctx.report_end({"score": score, "waves": wave + 1, "found": found_total, "expired": expired})
 
 
-func _set_banner(text: String) -> void:
+func _set_banner(text: String, gold := false, sec := 1.4) -> void:
 	_banner = text
-	_banner_t = 1.4
+	_banner_gold = gold
+	_banner_t = sec
 
 
 func _update_labels() -> void:
@@ -400,6 +427,24 @@ func _update_labels() -> void:
 		var left := maxi(0, int(ceil(float(tune["DURATION_SEC"]) - elapsed)))
 		_time_label.text = I18nService.t("mg.game.time", {"sec": left})
 	_wave_label.text = I18nService.t("mg.hideSeek.wave", {"n": wave + 1, "left": _hidden.size()})
+	_hint_label.modulate.a = _hint_alpha()
+
+
+## Der Hinweis blendet nach ein paar Sekunden aus (M6-Muster carrotGuard) —
+## die Wiese gehört dann ganz den Tierchen. `elapsed` steht während des
+## Intros still, die Lesezeit beginnt also erst mit der Eingabefreigabe.
+func _hint_alpha() -> float:
+	return clampf(1.0 - (elapsed - HINT_FADE_AT) / 1.5, 0.0, 1.0)
+
+
+## Reduced-Motion-Abfrage (Duck-Typing wie im JuiceKit — ohne Autoload = aus).
+func _reduced_motion() -> bool:
+	if not is_inside_tree():
+		return true
+	var settings := get_node_or_null("/root/AppSettings")
+	if settings != null and settings.has_method("is_reduced_motion"):
+		return settings.is_reduced_motion()
+	return false
 
 
 ## Nur noch HUD: Garten, Verstecke und Tierchen sind 3D (Garden3D).
@@ -408,31 +453,51 @@ func _draw() -> void:
 	_draw_banner()
 
 
+## Wellen-Uhr: mit _ui skaliert statt fixer 12 px; im Endspurt (<30 %) atmet
+## die Bar im Takt — unter Reduced Motion bleibt nur der Farbwechsel.
 func _draw_timer_bar() -> void:
 	var frac := maxf(0.0, 1.0 - wave_t / maxf(0.001, wave_sec))
+	var urgent := frac < 0.3
+	var grow := 0.0
+	if urgent and not _reduced_motion():
+		grow = (1.5 + 1.5 * sin(wave_t * 9.0)) * _ui
 	var w := view_size.x * 0.72
+	var h := 12.0 * _ui + grow
 	var x := (view_size.x - w) * 0.5
-	var y := view_size.y * (0.13 if landscape else 0.115)
-	draw_rect(Rect2(x, y, w, 12.0), Color(1.0, 1.0, 1.0, 0.5), true)
-	var col := Color(0.96, 0.55, 0.43) if frac < 0.3 else Color(0.35, 0.79, 0.73)
-	draw_rect(Rect2(x, y, w * frac, 12.0), col, true)
-	draw_rect(Rect2(x, y, w, 12.0), Color(0.35, 0.3, 0.3, 0.35), false, 2.0)
+	var y := view_size.y * (0.13 if landscape else 0.115) - grow * 0.5
+	draw_rect(Rect2(x, y, w, h), Color(1.0, 1.0, 1.0, 0.5), true)
+	var col := Color(0.96, 0.55, 0.43) if urgent else Color(0.35, 0.79, 0.73)
+	draw_rect(Rect2(x, y, w * frac, h), col, true)
+	draw_rect(Rect2(x, y, w, h), Color(0.35, 0.3, 0.3, 0.35), false, 2.0 * _ui)
 
 
+## Banner mit Milchglas-Plate und Kontur (M6/M7): dunkler Text direkt auf der
+## Wiese war beim Gold-Moment „Alle gefunden!" kaum lesbar; lange Texte
+## brechen jetzt um, statt mitten im Wort abzuschneiden.
 func _draw_banner() -> void:
 	if _banner_t <= 0.0 or _banner.is_empty():
 		return
 	var font := ThemeService.font(800)
 	var alpha := clampf(_banner_t * 1.4, 0.0, 1.0)
-	# Breite mit _ui skalieren — fest 380 px schnitt „Neue Welle: 4 verstecken
-	# sich" auf großen Bildschirmen mitten im Wort ab.
+	var font_size := int(26.0 * _ui)
 	var w := minf(view_size.x * 0.92, 460.0 * _ui)
-	draw_string(
-		font,
-		Vector2((view_size.x - w) * 0.5, view_size.y * 0.36),
-		_banner,
-		HORIZONTAL_ALIGNMENT_CENTER,
-		w,
-		32,
-		Color(0.32, 0.24, 0.28, alpha)
+	var text_size := font.get_multiline_string_size(
+		_banner, HORIZONTAL_ALIGNMENT_CENTER, w, font_size
 	)
+	var top := view_size.y * 0.33
+	var pad := Vector2(18.0 * _ui, 10.0 * _ui)
+	_banner_plate.set_corner_radius_all(int(12.0 * _ui))
+	_banner_plate.bg_color = (
+		Color(1.0, 0.93, 0.62, 0.82 * alpha)
+		if _banner_gold
+		else Color(1.0, 0.99, 0.94, 0.74 * alpha)
+	)
+	var plate_pos := Vector2((view_size.x - text_size.x) * 0.5, top) - pad
+	draw_style_box(_banner_plate, Rect2(plate_pos, text_size + pad * 2.0))
+	var ink := Color(0.62, 0.4, 0.1, alpha) if _banner_gold else Color(0.32, 0.24, 0.28, alpha)
+	var rim := Color(1.0, 1.0, 1.0, 0.75 * alpha)
+	var at := Vector2((view_size.x - w) * 0.5, top + font.get_ascent(font_size))
+	draw_multiline_string_outline(
+		font, at, _banner, HORIZONTAL_ALIGNMENT_CENTER, w, font_size, -1, int(5.0 * _ui), rim
+	)
+	draw_multiline_string(font, at, _banner, HORIZONTAL_ALIGNMENT_CENTER, w, font_size, -1, ink)

@@ -45,6 +45,7 @@
     "hideSeek": {
       "title": "Guck-guck-Garten",
       "hint": "Tippe das Versteck an, aus dem es guckt!",
+      "intro": "Finde die Tierchen!",
       "found": "Gefunden!",
       "empty": "Leer …",
       "wave": "Welle {n} · noch {left}",

@@ -41,12 +41,18 @@ const GOOBY_HEIGHT := 0.2
 const RIG_HEIGHT := 1.132
 ## Dauer des Freuden-Hüpfers gefundener Tierchen (Sekunden).
 const HOP_SEC := 0.7
+## W16 Intro-Beat: Kamera-Hub der Garten-Totale und zusätzlicher Blick nach
+## unten — bei k=1 steht die Kamera wieder EXAKT auf CAM_POS/CAM_PITCH.
+const INTRO_LIFT := Vector3(0.0, 2.4, 3.4)
+const INTRO_PITCH := -7.0
 
 var gooby: GoobyRig
 
 var _spots: Array[Node3D] = []
 var _props: Array[Node3D] = []
 var _critters: Array[Node3D] = []
+## Versteck-Index → [linkes Auge, rechtes Auge] (für den Lidschlag in sync()).
+var _critter_eyes: Array[Array] = []
 var _leaves: GPUParticles3D
 var _sparkle: GPUParticles3D
 var _gooby_shade: MeshInstance3D
@@ -55,6 +61,10 @@ var _butterflies: Array[Dictionary] = []
 ## Versteck-Index → Restzeit des Freuden-Hüpfers (gefundene Tierchen springen).
 var _hops: Dictionary = {}
 var _sky_t := 0.0
+## Layout-abhängige Garten-Bordüren (Hecken + Trittsteine), werden bei jedem
+## layout() deterministisch neu gestreut.
+var _hedges: Array[Node3D] = []
+var _path_stones: Node3D
 
 
 func setup_stage(spot_count: int) -> void:
@@ -106,6 +116,12 @@ func setup_stage(spot_count: int) -> void:
 ## Raster neu einmessen: jeder Bildschirmmittelpunkt wird auf den Hang
 ## gestrahlt, die projizierte Zellbreite bestimmt die Requisitengröße.
 func layout(centers: Array, cell: Vector2, size: Vector2) -> void:
+	# Projektion IMMER aus der End-Kamerapose rechnen: während des Intro-Beats
+	# schwebt die Kamera in der Totale, das Raster muss aber zur Spielpose
+	# passen — sonst bäckt ein Resize im Intro falsche Versteck-Positionen ein.
+	var pose := camera.transform
+	camera.position = CAM_POS
+	camera.rotation_degrees = Vector3(CAM_PITCH, 0.0, 0.0)
 	for i in mini(_spots.size(), centers.size()):
 		var screen: Vector2 = centers[i]
 		var here := bed_point(screen)
@@ -118,7 +134,17 @@ func layout(centers: Array, cell: Vector2, size: Vector2) -> void:
 		var span := minf(here.distance_to(side), here.distance_to(below) * 1.35)
 		_spots[i].position = here
 		_spots[i].scale = Vector3.ONE * (maxf(0.3, span) / CELL_REF)
+	_frame_garden(centers, cell)
 	_place_gooby(size)
+	camera.transform = pose
+
+
+## W16 Intro-Beat: Kamera schwebt aus einer erhöhten Garten-Totale (k=0) in
+## die Suchpose (k=1) — dieselbe Ease-Kurve wie star_hopper.establish().
+func establish(k: float) -> void:
+	var e := 1.0 - ease(clampf(k, 0.0, 1.0), 0.4)
+	camera.position = CAM_POS + INTRO_LIFT * e
+	camera.rotation_degrees = Vector3(CAM_PITCH + INTRO_PITCH * e, 0.0, 0.0)
 
 
 ## Tierchen-Aufsteiger je Versteck (0 = versteckt, 1 = ganz draußen).
@@ -138,6 +164,12 @@ func sync(rises: Array, elapsed: float) -> void:
 		# Je weiter draußen, desto lebhafter der Blick umher — ein lugendes
 		# Tierchen SOLL zappeln, das zieht den Blick aufs richtige Versteck.
 		critter.rotation.y = sin(elapsed * (2.2 + rise * 2.4) + i) * (0.25 + rise * 0.35)
+		# Blinzeln beim Lugen (W16): kurzer Lidschlag alle ~3 s, je Tierchen
+		# phasenversetzt — die Figuren wirken wach statt aufgezogen.
+		if i < _critter_eyes.size():
+			var lid := 0.15 if fmod(elapsed * 0.9 + float(i) * 1.37, 3.1) < 0.13 else 1.0
+			for eye: MeshInstance3D in _critter_eyes[i]:
+				eye.scale = Vector3(1.0, lid, 1.0)
 
 
 ## Requisiten-Wackler beim Tippen (Feedback am Versteck selbst).
@@ -293,6 +325,93 @@ func _scatter(
 	add_child(Models.swarm(parts, poses, 30.0))
 
 
+## Garten-STRUKTUR ums Raster (W16): Hecken-Bordüren links/rechts und ein
+## Trittstein-Pfad zwischen den Zellreihen. Beides hängt an der projizierten
+## Rasterlage und wird deshalb bei jedem layout() deterministisch neu gestreut
+## (Layout läuft nur bei Setup/Resize — der Neubau ist billig).
+func _frame_garden(centers: Array, cell: Vector2) -> void:
+	for hedge in _hedges:
+		hedge.queue_free()
+	_hedges.clear()
+	if _path_stones != null:
+		_path_stones.queue_free()
+		_path_stones = null
+	if _spots.is_empty() or centers.size() < 2:
+		return
+	var min_x := INF
+	var max_x := -INF
+	var min_z := INF
+	var max_z := -INF
+	var margin := 0.0
+	for spot in _spots:
+		min_x = minf(min_x, spot.position.x)
+		max_x = maxf(max_x, spot.position.x)
+		min_z = minf(min_z, spot.position.z)
+		max_z = maxf(max_z, spot.position.z)
+		margin = maxf(margin, spot.scale.x * CELL_REF * 0.62)
+	var z_from := maxf(min_z - margin * 0.6, BED_TOP_Z + 0.4)
+	var z_to := minf(max_z + margin * 0.8, 5.6)
+	_hedges.append(_hedge_row(min_x - margin - 0.55, z_from, z_to, 4711))
+	_hedges.append(_hedge_row(max_x + margin + 0.55, z_from, z_to, 4712))
+	_lay_stepping_stones(centers, cell)
+
+
+## Eine Hecken-Bordüre: Busch-Reihe entlang des Hangs (1 Swarm, 1 Draw-Call
+## je Teilmesh) — rahmt das Versteck-Raster seitlich ein.
+func _hedge_row(x: float, z_from: float, z_to: float, seed_val: int) -> Node3D:
+	var parts := Models.parts(DIR + "plant_bush.glb", 1.15, true)
+	if parts.is_empty():
+		return Node3D.new()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_val
+	var poses: Array = []
+	var z := z_from
+	while z <= z_to:
+		var pos := Vector3(x + rng.randf_range(-0.2, 0.2), BASE - SLOPE * z - 0.12, z)
+		var basis := Basis.IDENTITY.rotated(Vector3.UP, rng.randf() * TAU).scaled(
+			Vector3.ONE * rng.randf_range(0.85, 1.25)
+		)
+		poses.append(Transform3D(basis, pos))
+		z += 1.05
+	var row := Models.swarm(parts, poses, 30.0)
+	add_child(row)
+	return row
+
+
+## Trittsteine zwischen senkrecht benachbarten Verstecken: die Spaltenzahl
+## steckt in den Bildschirm-Zentren (Reihenwechsel = y-Sprung), die Steine
+## liegen flachgedrückt auf halber Strecke zwischen den Beeten.
+func _lay_stepping_stones(centers: Array, cell: Vector2) -> void:
+	var parts := Models.parts(DIR + "rock_smallA.glb", 0.42, true)
+	if parts.is_empty():
+		return
+	var cols := 1
+	while (
+		cols < centers.size()
+		and absf((centers[cols] as Vector2).y - (centers[0] as Vector2).y) < cell.y * 0.5
+	):
+		cols += 1
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 90210
+	var poses: Array = []
+	for i in _spots.size():
+		var below := i + cols
+		if below >= _spots.size():
+			continue
+		var a := _spots[i].position
+		var b := _spots[below].position
+		for t: float in [0.38, 0.66]:
+			var pos := a.lerp(b, t + rng.randf_range(-0.04, 0.04))
+			pos.x += rng.randf_range(-0.22, 0.22)
+			pos.y = BASE - SLOPE * pos.z - 0.05
+			var basis := Basis.IDENTITY.rotated(Vector3.UP, rng.randf() * TAU).scaled(
+				Vector3(1.0, 0.45, 1.0) * rng.randf_range(0.8, 1.15)
+			)
+			poses.append(Transform3D(basis, pos))
+	_path_stones = Models.swarm(parts, poses, 30.0)
+	add_child(_path_stones)
+
+
 ## Über dem Hangrücken: Baumkronen, Zaunkrone und ein Vogel im Himmel. Die
 ## Stämme verschwinden hinter dem Rücken — genau wie an einem echten Hang.
 func _build_skyline() -> void:
@@ -446,6 +565,7 @@ func _build_spot(index: int) -> void:
 	add_child(holder)
 	_spots.append(holder)
 	holder.add_child(_make_bed())
+	holder.add_child(_make_bed_edge(index))
 	var critter := _make_critter(index)
 	critter.visible = false
 	holder.add_child(critter)
@@ -497,7 +617,35 @@ func _make_bed() -> MeshInstance3D:
 	return disc
 
 
-## Verstecktes Tierchen: kleine Pastellfigur, die hinter der Requisite aufsteigt.
+## Beet-Einfassung (W16): ein Kranz kleiner Steine um jede Erdscheibe — die
+## Beete schwebten sonst als nackte Scheiben im Grün. Als Kind des Versteck-
+## Halters wandert und skaliert der Kranz mit dem Raster mit.
+func _make_bed_edge(index: int) -> Node3D:
+	var parts := Models.parts(DIR + "rock_smallA.glb", 0.3, true)
+	if parts.is_empty():
+		return Node3D.new()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7300 + index
+	var tilt := Basis(Vector3.RIGHT, atan(SLOPE))
+	var poses: Array = []
+	for i in 9:
+		var around := TAU * (float(i) + rng.randf() * 0.35) / 9.0
+		var radius := 0.98 + rng.randf() * 0.1
+		var pos := (
+			Vector3(0.0, 0.02, 0.05)
+			+ tilt * Vector3(cos(around) * radius, 0.0, sin(around) * radius)
+		)
+		var basis := Basis.IDENTITY.rotated(Vector3.UP, rng.randf() * TAU).scaled(
+			Vector3.ONE * rng.randf_range(0.75, 1.2)
+		)
+		poses.append(Transform3D(basis, pos))
+	return Models.swarm(parts, poses, 30.0)
+
+
+## Verstecktes Tierchen: kleine Pastellfigur, die hinter der Requisite
+## aufsteigt. W16: drei Silhouetten statt Einheits-Blob — Häschen (lange
+## Ohren, Puschelschwanz), Mausi (runde Ohren, Schnurschwanz) und Bärchen
+## (Knopfohren, helle Schnauze). Farbe UND Form unterscheiden die Tierchen.
 func _make_critter(index: int) -> Node3D:
 	const TINTS: Array[Color] = [
 		Color(1.0, 0.66, 0.78),
@@ -508,32 +656,41 @@ func _make_critter(index: int) -> Node3D:
 	]
 	var holder := Node3D.new()
 	holder.position = Vector3(0.0, -1.0, 0.72)
+	var tint := TINTS[index % TINTS.size()]
 	var fur := StandardMaterial3D.new()
-	fur.albedo_color = TINTS[index % TINTS.size()]
+	fur.albedo_color = tint
 	fur.roughness = 0.95
-	var body := MeshInstance3D.new()
-	var body_mesh := SphereMesh.new()
-	body_mesh.radius = 0.46
-	body_mesh.height = 0.8
-	body_mesh.radial_segments = 12
-	body_mesh.rings = 7
-	body_mesh.material = fur
-	body.mesh = body_mesh
+	var bright := StandardMaterial3D.new()
+	bright.albedo_color = tint.lightened(0.4)
+	bright.roughness = 0.95
+	var body := _blob(fur, 0.46, 0.8)
 	body.position = Vector3(0.0, 0.4, 0.0)
 	holder.add_child(body)
-	var head := MeshInstance3D.new()
-	var head_mesh := SphereMesh.new()
-	head_mesh.radius = 0.34
-	head_mesh.height = 0.66
-	head_mesh.radial_segments = 12
-	head_mesh.rings = 7
-	head_mesh.material = fur
-	head.mesh = head_mesh
+	var head := _blob(fur, 0.34, 0.66)
 	head.position = Vector3(0.0, 0.98, 0.04)
 	holder.add_child(head)
 	var eye_mat := StandardMaterial3D.new()
 	eye_mat.albedo_color = Color(0.16, 0.12, 0.18)
-	for side in [-1.0, 1.0]:
+	var eyes: Array = []
+	for side: float in [-1.0, 1.0]:
+		var eye := _blob(eye_mat, 0.07, 0.14)
+		eye.position = Vector3(side * 0.14, 1.04, 0.31)
+		holder.add_child(eye)
+		eyes.append(eye)
+	_critter_eyes.append(eyes)
+	match index % 3:
+		0:
+			_add_bunny_parts(holder, fur, bright)
+		1:
+			_add_mouse_parts(holder, fur)
+		_:
+			_add_bear_parts(holder, fur, bright)
+	return holder
+
+
+## Häschen: lange Kapsel-Ohren + Puschelschwanz.
+func _add_bunny_parts(holder: Node3D, fur: Material, bright: Material) -> void:
+	for side: float in [-1.0, 1.0]:
 		var ear := MeshInstance3D.new()
 		var ear_mesh := CapsuleMesh.new()
 		ear_mesh.radius = 0.1
@@ -545,17 +702,56 @@ func _make_critter(index: int) -> Node3D:
 		ear.position = Vector3(side * 0.18, 1.4, -0.02)
 		ear.rotation_degrees = Vector3(0.0, 0.0, side * 13.0)
 		holder.add_child(ear)
-		var eye := MeshInstance3D.new()
-		var eye_mesh := SphereMesh.new()
-		eye_mesh.radius = 0.07
-		eye_mesh.height = 0.14
-		eye_mesh.radial_segments = 8
-		eye_mesh.rings = 5
-		eye_mesh.material = eye_mat
-		eye.mesh = eye_mesh
-		eye.position = Vector3(side * 0.14, 1.04, 0.31)
-		holder.add_child(eye)
-	return holder
+	var tail := _blob(bright, 0.15, 0.3)
+	tail.position = Vector3(0.0, 0.48, -0.42)
+	holder.add_child(tail)
+
+
+## Mausi: runde, flache Teller-Ohren + dünner Schnurschwanz.
+func _add_mouse_parts(holder: Node3D, fur: Material) -> void:
+	for side: float in [-1.0, 1.0]:
+		var ear := _blob(fur, 0.17, 0.34)
+		ear.position = Vector3(side * 0.26, 1.3, -0.02)
+		ear.scale = Vector3(1.0, 1.0, 0.45)
+		holder.add_child(ear)
+	var tail := MeshInstance3D.new()
+	var tail_mesh := CapsuleMesh.new()
+	tail_mesh.radius = 0.04
+	tail_mesh.height = 0.62
+	tail_mesh.radial_segments = 6
+	tail_mesh.rings = 3
+	tail_mesh.material = fur
+	tail.mesh = tail_mesh
+	tail.position = Vector3(0.0, 0.32, -0.5)
+	tail.rotation_degrees = Vector3(58.0, 0.0, 0.0)
+	holder.add_child(tail)
+
+
+## Bärchen: kleine Knopfohren, helle Schnauze + Stummelschwanz.
+func _add_bear_parts(holder: Node3D, fur: Material, bright: Material) -> void:
+	for side: float in [-1.0, 1.0]:
+		var ear := _blob(fur, 0.12, 0.24)
+		ear.position = Vector3(side * 0.2, 1.34, 0.0)
+		holder.add_child(ear)
+	var snout := _blob(bright, 0.13, 0.2)
+	snout.position = Vector3(0.0, 0.92, 0.32)
+	holder.add_child(snout)
+	var tail := _blob(bright, 0.1, 0.2)
+	tail.position = Vector3(0.0, 0.44, -0.4)
+	holder.add_child(tail)
+
+
+## Kleine Kugel-Requisite der Tierchen (Körper, Ohren, Augen, Schwänzchen).
+func _blob(material: Material, radius: float, height: float) -> MeshInstance3D:
+	var node := MeshInstance3D.new()
+	var mesh := SphereMesh.new()
+	mesh.radius = radius
+	mesh.height = height
+	mesh.radial_segments = 10
+	mesh.rings = 6
+	mesh.material = material
+	node.mesh = mesh
+	return node
 
 
 func _build_effects() -> void:

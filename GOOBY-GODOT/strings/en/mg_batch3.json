@@ -45,6 +45,7 @@
     "hideSeek": {
       "title": "Peekaboo Garden",
       "hint": "Tap the hiding spot that peeks!",
+      "intro": "Find the little critters!",
       "found": "Found!",
       "empty": "Empty …",
       "wave": "Wave {n} · {left} left",
