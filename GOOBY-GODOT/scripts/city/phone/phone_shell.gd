@@ -233,6 +233,10 @@ func _baue_kachel(app: Dictionary) -> Control:
 	if app_id == Fahrdienst.TAXI and Fahrdienst.ist_rettungsweg(gs):
 		btn.modulate = AcTokens.GOLD
 	btn.pressed.connect(func() -> void: oeffne_app(app_id))
+	# W13C INSTANT: Ungelesen-Badge am App-Icon (nur InstantGooby, nur > 0).
+	var badge := InstantGoobyApp.unread_badge(app_id)
+	if badge != null:
+		btn.add_child(badge)
 	kachel.add_child(btn)
 	var name_label := Label.new()
 	name_label.theme_type_variation = "CaptionLabel"
@@ -248,6 +252,8 @@ func _baue_kachel(app: Dictionary) -> Control:
 
 ## App-Inhalt bauen — EINE Stelle, an der Id auf UI trifft.
 func _baue_app(app_id: String) -> Control:
+	# W13C INSTANT: Variable statt 7. return (gdlint max-returns).
+	var inhalt: Control = null
 	match app_id:
 		Fahrdienst.TAXI, Fahrdienst.GUBER:
 			var fahrt := FahrdienstApp.new()
@@ -268,7 +274,11 @@ func _baue_app(app_id: String) -> Control:
 			return PhoneSocialApps.freunde(host)
 		"goobypal":
 			return PhoneSocialApps.goobypal(gs, _on_pal_freund)
-	return null
+		InstantGoobyApp.APP_ID:
+			var feed := InstantGoobyApp.new()
+			feed.gs = gs
+			inhalt = feed
+	return inhalt
 
 
 ## --------------------------------------------------------------- Actions

@@ -4,7 +4,7 @@ extends TestCase
 ## TaxiLogic-Maschine teilen und sich deshalb gegenseitig blockieren.
 
 const ERWARTETE_REIHENFOLGE: Array[String] = [
-	"taxi", "guber", "gooberando", "kamera", "freunde", "goobypal"
+	"taxi", "guber", "gooberando", "kamera", "freunde", "goobypal", "instant"
 ]
 
 

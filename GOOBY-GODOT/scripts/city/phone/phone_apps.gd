@@ -55,6 +55,13 @@ const MANIFEST: Array[Dictionary] = [
 		"icon": "app_goobypal",
 		"gate": "online",
 	},
+	{
+		"id": "instant",
+		"name_key": "phone.app.instant",
+		"text_key": "phone.app.instant_text",
+		"icon": "app_instant",
+		"gate": "online",
+	},
 ]
 
 
