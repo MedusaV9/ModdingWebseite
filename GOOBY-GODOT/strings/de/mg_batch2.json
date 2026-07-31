@@ -51,7 +51,8 @@
 			"shield": "Schild aktiv!",
 			"shield_pop": "Das Schild hat dich gerettet!",
 			"shower": "Meteorschauer!",
-			"wormhole": "Wurmloch!"
+			"wormhole": "Wurmloch!",
+			"speed_up": "Tempo hoch!"
 		},
 		"rocketRescue": {
 			"title": "Raketen-Rettung",

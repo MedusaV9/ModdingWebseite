@@ -25,6 +25,17 @@ const PICKUP_POOL := 8
 ## W14 Kulisse: Leucht-Pylonen-Paare neben der Bahn (Abstand in wu).
 const PYLON_STEP := 6.4
 const PYLON_PAIRS := 5
+## W16 Tempo-Gefühl (M10): Basis-Blickwinkel + FOV-Kick Richtung Vmax.
+const HFOV_BASE := 54.0
+const HFOV_MIN_V := 49.0
+const HFOV_KICK := 7.0
+## W16 Kulisse: Asteroiden-Gürtel unter/neben der Bahn. Der Gürtel ist in z
+## PERIODISCH (BELT_UNIQUE Felsen je BELT_WRAP wu, BELT_BANDS Bänder), damit
+## der fposmod-Wrap in _sync_scroll nahtlos bleibt (Pylonen-Prinzip).
+const BELT_UNIQUE := 12
+const BELT_BANDS := 4
+const BELT_WRAP := 10.5
+const COMET_COUNT := 3
 
 var lane_x: Array = [-1.15, 0.0, 1.15]
 var gooby: GoobyRig
@@ -46,6 +57,10 @@ var _meteor_meshes: Array[Mesh] = []
 var _star_mesh: Mesh
 var _gold: Node3D
 var _emotion := "happy"
+var _lane_mats: Array[StandardMaterial3D] = []
+var _belt: Node3D
+var _comets: Node3D
+var _speed_band := -1.0
 
 
 func setup_stage(lanes: Array) -> void:
@@ -75,7 +90,7 @@ func setup_stage(lanes: Array) -> void:
 	# 54° waagerecht hält die drei Bahnen in beiden Formaten gleich breit; die
 	# 49° senkrechte Untergrenze ist das Querformat-Sicherheitsnetz: das Schiff
 	# steht 16,6° unter der Blickachse und fiele sonst aus dem Bild.
-	set_hfov(54.0, 49.0)
+	set_hfov(HFOV_BASE, HFOV_MIN_V)
 	camera.position = Vector3(0.0, 2.1, 4.3)
 	camera.look_at_from_position(camera.position, Vector3(0.0, 0.75, -4.0), Vector3.UP)
 	_build_nebula()
@@ -84,15 +99,29 @@ func setup_stage(lanes: Array) -> void:
 	_build_pylons()
 	_build_ship()
 	_build_pools()
+	_build_belt()
 	_build_effects()
 
 
 ## W14 Intro-Beat: Kamera schwebt aus erhöhter Totale (k=0) in die Spielpose
 ## (k=1) — reine Optik, die Bahn-Projektion für Popups läuft erst im Spiel.
+## W16: Totale weiter raus und leicht nach links Richtung Ringplanet — vorher
+## hob sie nur 1,4 m und der schöne Planet kam im Intro nie ins Bild.
 func establish(k: float) -> void:
 	var e := 1.0 - ease(clampf(k, 0.0, 1.0), 0.4)
-	camera.position = Vector3(0.0, 2.1 + 1.4 * e, 4.3 + 1.1 * e)
-	camera.look_at_from_position(camera.position, Vector3(0.0, 0.75, -4.0), Vector3.UP)
+	camera.position = Vector3(-2.4 * e, 2.1 + 3.3 * e, 4.3 + 2.9 * e)
+	var look := Vector3(-1.6 * e, 0.75 + 1.4 * e, -4.0)
+	camera.look_at_from_position(camera.position, look, Vector3.UP)
+
+
+## W16 Tempo-Gefühl: FOV-Kick Richtung Vmax (M10, set_hfov-Bonus — das
+## 3dc-Kit hat kein set_fov_bonus). band01 = 0 bei Basistempo, 1 bei Vmax.
+func set_speed_band(band01: float) -> void:
+	var band := clampf(band01, 0.0, 1.0)
+	if is_equal_approx(band, _speed_band):
+		return
+	_speed_band = band
+	set_hfov(HFOV_BASE + HFOV_KICK * band, HFOV_MIN_V)
 
 
 func _exit_tree() -> void:
@@ -284,14 +313,18 @@ func _build_milky_way(mat: StandardMaterial3D) -> void:
 
 
 func _build_track() -> void:
-	# Bahnen als schwebende Glasstreifen + leuchtende Kanten.
+	# Bahnen als schwebende Glasstreifen + leuchtende Kanten. W16: Alpha
+	# 0,2 → 0,35 — vorher waren die drei Streifen vor dem dunklen Feld fast
+	# unsichtbar; die Materialien wandern in _lane_mats, damit _sync_ship
+	# die AKTIVE Bahn atmen lassen kann (Befund 1).
+	_lane_mats.clear()
 	for i in lane_x.size():
 		var strip := MeshInstance3D.new()
 		var mesh := BoxMesh.new()
 		mesh.size = Vector3(1.02, 0.03, TRACK_WU * 2.0)
 		strip.mesh = mesh
 		var mat := StandardMaterial3D.new()
-		mat.albedo_color = Color(0.3, 0.36, 0.78, 0.2)
+		mat.albedo_color = Color(0.3, 0.36, 0.78, 0.35)
 		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		mat.emission_enabled = true
 		mat.emission = Color(0.22, 0.34, 0.8)
@@ -299,6 +332,7 @@ func _build_track() -> void:
 		strip.mesh.material = mat
 		strip.position = Vector3(float(lane_x[i]), -0.42, -TRACK_WU * 0.55)
 		add_child(strip)
+		_lane_mats.append(mat)
 	for i in lane_x.size() + 1:
 		var edge := MeshInstance3D.new()
 		var mesh := BoxMesh.new()
@@ -525,6 +559,92 @@ func _make_pickup() -> Node3D:
 	return holder
 
 
+## W16 Befund 3: Asteroiden-Gürtel unter/neben der Bahn — füllt die leere
+## untere Bildhälfte/Flanken im Hochkant. EIN MultiMesh (1 Draw-Call); die
+## Felsen wiederholen sich exakt alle BELT_WRAP wu, damit der Wrap in
+## _sync_scroll nahtlos ist. Deterministischer Seed, spart den Korridor aus.
+func _build_belt() -> void:
+	var rock: Mesh = SphereMesh.new()
+	if not _meteor_meshes.is_empty():
+		rock = _meteor_meshes[0]
+	var box := rock.get_aabb()
+	var longest := maxf(0.01, maxf(box.size.x, maxf(box.size.y, box.size.z)))
+	var fit := 0.8 / longest
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.mesh = rock
+	mm.instance_count = BELT_UNIQUE * BELT_BANDS
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 20260731
+	for i in BELT_UNIQUE:
+		# Flanken ab |x| 3,4 und unter y −1,6: nah genug für Tiefe, aber ohne
+		# die Bahn zu überlappen (sonst lesen sich Felsen als Hindernis).
+		var side := -1.0 if rng.randf() < 0.5 else 1.0
+		var pos := Vector3(
+			side * rng.randf_range(3.4, 9.0),
+			rng.randf_range(-4.8, -2.0),
+			rng.randf_range(2.0 - BELT_WRAP, 2.0)
+		)
+		if rng.randf() < 0.35:
+			pos.x = rng.randf_range(-6.0, 6.0)
+			pos.y = rng.randf_range(-7.0, -3.6)
+		var spin := Vector3(rng.randf() * TAU, rng.randf() * TAU, rng.randf() * TAU)
+		var basis := Basis.from_euler(spin).scaled(Vector3.ONE * fit * rng.randf_range(0.6, 1.8))
+		for band in BELT_BANDS:
+			var shifted := pos + Vector3(0.0, 0.0, -float(band) * BELT_WRAP)
+			mm.set_instance_transform(band * BELT_UNIQUE + i, Transform3D(basis, shifted))
+	var mmi := MultiMeshInstance3D.new()
+	mmi.multimesh = mm
+	mmi.extra_cull_margin = 60.0
+	# Dunkles Einheitsmaterial: nahe Felsen fingen sonst das rosa Fülllicht
+	# und überstrahlten — der Gürtel soll Silhouette bleiben, nicht Hindernis.
+	var rock_mat := StandardMaterial3D.new()
+	rock_mat.albedo_color = Color(0.34, 0.26, 0.22)
+	rock_mat.roughness = 1.0
+	mmi.material_override = rock_mat
+	_belt = Node3D.new()
+	_belt.add_child(mmi)
+	add_child(_belt)
+	_build_comets()
+
+
+## W16 Befund 3 (Teil 2): drei ferne Kometen-Streifen in der Tiefe — ziehen
+## mit eigener, langsamer Parallaxe vorbei (Sternenfeld-Wrap-Prinzip).
+func _build_comets() -> void:
+	var quad := QuadMesh.new()
+	quad.size = Vector2(0.18, 3.0)
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	mat.albedo_texture = load(DIR + "vfx/star_03.png")
+	mat.vertex_color_use_as_albedo = true
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.use_colors = true
+	mm.mesh = quad
+	mm.instance_count = COMET_COUNT
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 987654
+	for i in COMET_COUNT:
+		var side := -1.0 if i % 2 == 0 else 1.0
+		var pos := Vector3(
+			side * rng.randf_range(7.0, 15.0),
+			rng.randf_range(-5.0, 3.0),
+			rng.randf_range(-38.0, -16.0)
+		)
+		var basis := Basis.from_euler(Vector3(0.0, rng.randf_range(-0.5, 0.5), side * 0.6))
+		mm.set_instance_transform(i, Transform3D(basis.scaled(Vector3.ONE), pos))
+		mm.set_instance_color(i, Color(0.75, 0.92, 1.0, 0.28 + rng.randf() * 0.18))
+	var mmi := MultiMeshInstance3D.new()
+	mmi.multimesh = mm
+	mmi.extra_cull_margin = 60.0
+	_comets = Node3D.new()
+	_comets.add_child(mmi)
+	add_child(_comets)
+
+
 func _build_wormhole() -> void:
 	_wormhole = Node3D.new()
 	_wormhole.position = Vector3(0.0, 0.3, -5.5)
@@ -621,10 +741,21 @@ func _sync_scroll(traveled: float) -> void:
 	_pylons.position.z = fposmod(traveled * WU_PER_M, PYLON_STEP)
 	# Sternenfeld mit Parallaxe (viel langsamer als die Bahn).
 	_stars.position.z = fposmod(traveled * WU_PER_M * 0.12, 6.0)
+	# W16: Gürtel driftet mit halber Bahngeschwindigkeit (Tiefen-Parallaxe),
+	# der Wrap ist dank z-periodischem Muster nahtlos; Kometen sehr langsam.
+	_belt.position.z = fposmod(traveled * WU_PER_M * 0.5, BELT_WRAP)
+	_comets.position.z = fposmod(traveled * WU_PER_M * 0.18, 7.0)
 
 
 func _sync_ship(s: Dictionary, elapsed: float) -> void:
 	var lane_f := float(s["lane_visual"])
+	# W16 Befund 1: die Bahn unter dem Schiff ATMET (Emission pulsiert),
+	# Nachbarbahnen bleiben auf Grundhelligkeit — die aktive Spur ist endlich
+	# markiert, der Bahnwechsel blendet weich über lane_visual mit.
+	for i in _lane_mats.size():
+		var near := clampf(1.0 - absf(lane_f - float(i)), 0.0, 1.0)
+		var breathe := 0.55 + 0.2 * sin(elapsed * 5.0)
+		_lane_mats[i].emission_energy_multiplier = 0.16 + near * breathe
 	_ship.position.x = lane_pos(lane_f)
 	_ship.position.y = 0.02 + sin(elapsed * 2.2) * 0.03
 	var tilt := (lane_f - float(s["lane"])) * 0.55

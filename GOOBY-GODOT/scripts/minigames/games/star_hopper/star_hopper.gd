@@ -13,6 +13,7 @@ extends MinigameBase
 const Logic := preload("res://scripts/minigames/games/star_hopper/star_hopper_logic.gd")
 const Bot := preload("res://scripts/minigames/games/star_hopper/star_hopper_bot.gd")
 const Stage := preload("res://scripts/minigames/games/star_hopper/star_hopper_stage.gd")
+const SpeedLines := preload("res://scripts/minigames/games/_3db_stage/speed_lines.gd")
 
 ## Sichtbare Strecke oberhalb des Schiffs (m) — das ist die Vorwarnzeit.
 const VIEW_AHEAD_M := 62.0
@@ -25,6 +26,12 @@ const SWIPE_MIN_PX := 40.0
 const SWIPE_MIN_FRAC := 0.08
 ## W14 Intro-Beat (s): Kamera schwebt ein + Ziel-Einblendung, Sim wartet.
 const INTRO_S := 1.5
+## W16 M9: Entwurfs-Kurzkante — HUD-Pixelmaße skalieren damit (hide_seek-Muster).
+const DESIGN_SHORT := 390.0
+## W16 M10: Tempo-Striche — [[Tempo m/s, Striche/s], …] (SpeedLines-Rampe).
+const STREAK_RATE: Array = [[11.0, 0.0], [14.0, 4.0], [19.0, 11.0]]
+## W16 Befund 6: Tick-Abstand (s) des Countdown-Sounds in der Schauer-Warnung.
+const WARN_TICK_SEC := 0.33
 
 const STAR_COLOR := Color(1.0, 0.88, 0.4)
 const GOLD_COLOR := Color(1.0, 0.62, 0.2)
@@ -66,6 +73,11 @@ var _intro_left := 0.0
 ## Eigene große Aufsammel-Popups (Pos, Text, Farbe, Restzeit) — das kleine
 ## JuiceKit-float_text ging im Weltraum unter.
 var _popups: Array[Dictionary] = []
+var _ui := 1.0
+var _streaks: MultiMeshInstance3D
+var _speed_prev := -1.0
+var _speed_steps := 0
+var _warn_tick := 0.0
 var _dist_label: Label
 var _state_label: Label
 var _hint_label: Label
@@ -78,6 +90,7 @@ func setup(context: MinigameCtx) -> void:
 	_stream = func() -> float: return rng.next()
 	_shower_at = float(tune["SHOWER_EVERY_SEC"])
 	_build_stage()
+	_build_streaks()
 	_build_hud()
 	_fit_viewport()
 	_intro_left = INTRO_S
@@ -102,20 +115,42 @@ func _build_stage() -> void:
 		ctx.juice.world_environment = _stage.world_env
 
 
+## W16 M10: Tempo-Striche an der Kamera (geteiltes SpeedLines-Kit, 1 Draw-
+## Call) — city_drive/runner-Muster; Update läuft in _sync_tempo_feel.
+func _build_streaks() -> void:
+	_streaks = SpeedLines.new()
+	(_stage.get("camera") as Camera3D).add_child(_streaks)
+	_streaks.call("build", 18, Vector2(2.4, 3.5), Vector2(4.0, 9.0))
+	_streaks.set("enabled", not _reduced_motion())
+
+
 ## Pflicht-Layouthook: beide Orientierungen laufen über DIESE Funktion.
 func apply_view(size: Vector2) -> void:
 	if size.x > 1.0 and size.y > 1.0:
 		view_size = size
 	landscape = view_size.x > view_size.y
+	_ui = clampf(minf(view_size.x, view_size.y) / DESIGN_SHORT, 0.75, 3.0)
 	position = Vector2.ZERO
 	if _stage != null:
 		_stage.apply_size(view_size)
-	if _dist_label != null:
-		_dist_label.position = Vector2(16.0, 10.0)
-		_state_label.position = Vector2(16.0, 48.0)
-		_hint_label.position = Vector2(view_size.x * 0.5 - 150.0, view_size.y - 48.0)
-		_hint_label.size = Vector2(300.0, 40.0)
+	_layout_hud()
 	queue_redraw()
+
+
+## W16 M9: Bedienleiste in Entwurfspixeln, mit _ui skaliert — vorher standen
+## die Labels mit festen 16/10/48-px-Offsets verloren auf iPad-Screens.
+func _layout_hud() -> void:
+	if _dist_label == null:
+		return
+	var pad := 16.0 * _ui
+	_dist_label.position = Vector2(pad, 10.0 * _ui)
+	_dist_label.add_theme_font_size_override("font_size", int(34.0 * _ui))
+	_state_label.position = Vector2(pad, 48.0 * _ui)
+	_state_label.add_theme_font_size_override("font_size", int(15.0 * _ui))
+	var hint_w := minf(view_size.x - pad * 2.0, 360.0 * _ui)
+	_hint_label.add_theme_font_size_override("font_size", int(15.0 * _ui))
+	_hint_label.position = Vector2((view_size.x - hint_w) * 0.5, view_size.y - 48.0 * _ui)
+	_hint_label.size = Vector2(hint_w, 42.0 * _ui)
 
 
 func _process(delta: float) -> void:
@@ -144,9 +179,52 @@ func _process(delta: float) -> void:
 	if not bool(tune["ENDLESS"]) and elapsed >= float(tune["DURATION_SEC"]):
 		_finish()
 		return
+	_step_tempo()
+	_sync_tempo_feel(delta)
 	_sync_stage()
 	_update_labels()
 	queue_redraw()
+
+
+## W16 Befund 2: Der Web-Kick „Tempo +5 % alle 10 s" wird ein sichtbarer
+## MOMENT — Popup + Combo-Ton (Pitch steigt je Stufe) + kurzer Glow-Puls.
+## Reine Präsentation: die Stufe wird aus Logic.speed_at ABGELESEN.
+func _step_tempo() -> void:
+	var v := Logic.speed_at(elapsed, tune)
+	if _speed_prev < 0.0:
+		_speed_prev = v
+		return
+	if v > _speed_prev + 0.0001:
+		_speed_steps += 1
+		_flash_text = I18nService.t("mg.starHopper.speed_up")
+		_flash = 1.1
+		_stage.pulse_glow(0.4)
+		if ctx.juice != null:
+			ctx.juice.combo_tone(_speed_steps)
+	_speed_prev = v
+
+
+## W16 M10 (Tempo-Gefühl): FOV-Kick Richtung Vmax + Tempo-Striche an der
+## Kamera. Reduced Motion schaltet die Striche hart ab (SpeedLines-Regel).
+func _sync_tempo_feel(delta: float) -> void:
+	var v := Logic.speed_at(elapsed, tune)
+	var base := float(tune["BASE_SPEED"])
+	var vmax := float(tune["MAX_SPEED"])
+	if not is_finite(vmax):
+		vmax = float(Logic.HOPPER["MAX_SPEED"])
+	var band := clampf((v - base) / maxf(0.001, vmax - base), 0.0, 1.0)
+	_stage.set_speed_band(band)
+	if _streaks == null:
+		return
+	_streaks.set("enabled", not _reduced_motion())
+	_streaks.call("update", delta, v, SpeedLines.rate_at(v, STREAK_RATE))
+
+
+func _reduced_motion() -> bool:
+	var settings := get_node_or_null(^"/root/AppSettings")
+	if settings != null and settings.has_method("is_reduced_motion"):
+		return bool(settings.call("is_reduced_motion"))
+	return false
 
 
 ## Die 3D-Bühne bekommt EINEN Zustandsschnappschuss — sie rechnet nur Optik.
@@ -301,9 +379,11 @@ func _step_showers(delta: float) -> void:
 				_shower_lanes = Logic.pick_shower_lanes(_stream, tune)
 				_shower_state = "warn"
 				_shower_left = float(tune["SHOWER_TELEGRAPH_SEC"])
+				_warn_tick = WARN_TICK_SEC
 				AudioDirector.try_play(self, "mg_junk", 0.6)
 		"warn":
 			_shower_left -= delta
+			_step_warn_tick(delta)
 			if _shower_left <= 0.0:
 				_shower_state = "active"
 				_shower_left = float(tune["SHOWER_DURATION_SEC"])
@@ -328,6 +408,19 @@ func _step_showers(delta: float) -> void:
 			if _shower_left <= 0.0:
 				_shower_state = "idle"
 				_shower_at = elapsed + float(tune["SHOWER_EVERY_SEC"])
+
+
+## W16 Befund 6: tickender Countdown WÄHREND der Schauer-Warnung — der Pitch
+## steigt, je näher der Schauer rückt (leiser ui_tick, kein neues Audio-Asset;
+## vorher blinkte die Warnung nach dem einmaligen mg_junk stumm).
+func _step_warn_tick(delta: float) -> void:
+	_warn_tick -= delta
+	if _warn_tick > 0.0:
+		return
+	_warn_tick = WARN_TICK_SEC
+	var total := maxf(0.001, float(tune["SHOWER_TELEGRAPH_SEC"]))
+	var k := clampf(1.0 - _shower_left / total, 0.0, 1.0)
+	AudioDirector.try_play(self, "ui_tick", 0.9 + 0.5 * k)
 
 
 func _step_wormhole(delta: float) -> void:
@@ -496,16 +589,26 @@ func _draw() -> void:
 func _draw_popups() -> void:
 	for p in _popups:
 		var t := float(p["t"])
-		var rise := (0.9 - t) * 46.0
+		var rise := (0.9 - t) * 46.0 * _ui
 		var color: Color = p["color"]
 		color.a = clampf(t / 0.35, 0.0, 1.0)
-		var at: Vector2 = p["pos"] + Vector2(-60.0, -rise)
+		var at: Vector2 = p["pos"] + Vector2(-60.0 * _ui, -rise)
 		var font := ThemeService.font(800)
 		var outline := Color(0.1, 0.08, 0.2, color.a)
+		var width := 120.0 * _ui
 		draw_string_outline(
-			font, at, str(p["text"]), HORIZONTAL_ALIGNMENT_CENTER, 120, 30, 6, outline
+			font,
+			at,
+			str(p["text"]),
+			HORIZONTAL_ALIGNMENT_CENTER,
+			width,
+			int(30.0 * _ui),
+			maxi(3, int(6.0 * _ui)),
+			outline
 		)
-		draw_string(font, at, str(p["text"]), HORIZONTAL_ALIGNMENT_CENTER, 120, 30, color)
+		draw_string(
+			font, at, str(p["text"]), HORIZONTAL_ALIGNMENT_CENTER, width, int(30.0 * _ui), color
+		)
 
 
 func _draw_shower_warning() -> void:
@@ -516,7 +619,7 @@ func _draw_shower_warning() -> void:
 		I18nService.t("mg.starHopper.shower"),
 		HORIZONTAL_ALIGNMENT_CENTER,
 		view_size.x,
-		26,
+		int(26.0 * _ui),
 		Color(1.0, 0.5, 0.45, 0.6 + pulse)
 	)
 
@@ -525,12 +628,19 @@ func _draw_flash() -> void:
 	if _flash <= 0.0 or _flash_text.is_empty():
 		return
 	var alpha := clampf(_flash, 0.0, 1.0)
+	var font := ThemeService.font(800)
+	# Fit-to-Width: lange Zeilen (Intro-Ziel) sonst rechts abgeschnitten.
+	var size := int(30.0 * _ui)
+	var avail := view_size.x - 24.0 * _ui
+	var text_w := font.get_string_size(_flash_text, HORIZONTAL_ALIGNMENT_CENTER, -1, size).x
+	if text_w > avail:
+		size = maxi(16, int(float(size) * avail / text_w))
 	draw_string(
-		ThemeService.font(800),
+		font,
 		Vector2(0.0, view_size.y * 0.32),
 		_flash_text,
 		HORIZONTAL_ALIGNMENT_CENTER,
 		view_size.x,
-		30,
+		size,
 		Color(1.0, 0.85, 0.45, alpha)
 	)

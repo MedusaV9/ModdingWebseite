@@ -51,7 +51,8 @@
 			"shield": "Shield up!",
 			"shield_pop": "The shield saved you!",
 			"shower": "Meteor shower!",
-			"wormhole": "Wormhole!"
+			"wormhole": "Wormhole!",
+			"speed_up": "Speed up!"
 		},
 		"rocketRescue": {
 			"title": "Rocket Rescue",
