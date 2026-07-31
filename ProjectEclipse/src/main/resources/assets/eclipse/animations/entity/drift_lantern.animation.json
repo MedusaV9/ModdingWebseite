@@ -70,6 +70,12 @@
 		"animation.drift_lantern.flicker": {
 			"loop": false,
 			"animation_length": 0.8,
+			"timeline": {
+				"0.06": "photon:flicker_dip 0.42",
+				"0.26": "photon:flicker_dip 0.30",
+				"0.46": "photon:flicker_dip 0.48",
+				"0.58": "photon:flicker_surge 1.20"
+			},
 			"bones": {
 				"glow_flame": {
 					"scale": {

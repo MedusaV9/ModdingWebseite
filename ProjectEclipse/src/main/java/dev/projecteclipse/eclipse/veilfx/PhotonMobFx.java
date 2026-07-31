@@ -16,6 +16,7 @@ import dev.projecteclipse.eclipse.backrooms.GlitchedWandererEntity;
 import dev.projecteclipse.eclipse.entity.DeckhandEntity;
 import dev.projecteclipse.eclipse.entity.GazerEntity;
 import dev.projecteclipse.eclipse.entity.TheOtherEntity;
+import dev.projecteclipse.eclipse.entity.UmbralStalkerEntity;
 import dev.projecteclipse.eclipse.entity.dungeon.ShadowBoltProjectile;
 import dev.projecteclipse.eclipse.entity.fog.FogRevenantEntity;
 import dev.projecteclipse.eclipse.entity.glitch.GlitchedMonster;
@@ -161,7 +162,21 @@ public final class PhotonMobFx {
                     PhotonBridge.AUTO_ROTATE_NONE, new Vec3(0.0D, 0.55D, 0.0D),
                     24.0D, 8, ALWAYS,
                     entity -> ((DeckhandEntity) entity).isHostile(),
-                    fx("deckhand_soul_flare"), new Vec3(0.0D, 0.55D, 0.0D)));
+                    fx("deckhand_soul_flare"), new Vec3(0.0D, 0.55D, 0.0D)),
+            // MC2 §0/§9.4.6 (POLISH1) — sprint smear off the empty fx_smear_l/r anchor
+            // bones: two dark ara wisp ribbons + distanceRate umbral flecks, alive only
+            // while the client-side gallop actually covers ground (the entity's own
+            // latched isSprintSmearing() verdict — hunt/flee gait AND real speed).
+            // XROT turns the effect root with the body yaw, so the flank pivots baked
+            // into the asset (local ±0.219 off the spine, +0.125 toward the shoulder
+            // line) STAY on the bones through the whole gallop; the eye offset drops
+            // the anchor to the pivots' 11 px height (0.6875 − eye 0.85). Nearest-4:
+            // pack size is 3–4, doubled packs on Umbral Nights stay budget-capped.
+            new LoopRow(UmbralStalkerEntity.class, fx("stalker_sprint_smear"),
+                    PhotonBridge.AUTO_ROTATE_XROT, new Vec3(0.0D, -0.1625D, 0.0D),
+                    32.0D, 4,
+                    entity -> ((UmbralStalkerEntity) entity).isSprintSmearing(),
+                    null, null));
 
     /** Per-row attached entities (client main thread only), parallel to {@link #ROWS}. */
     private static final List<Map<Integer, Entity>> ATTACHED = buildPerRow();

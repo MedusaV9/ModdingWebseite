@@ -414,6 +414,14 @@ public class WizardOrinEntity extends EclipseGeoMob {
         this.starZone = attacker.position();
         setCasting(true);
         triggerAction(ANIM_STAR_CALL);
+        // MB2 §7.3 / POLISH1: the star_call Photon partner rides the SAME tick as the
+        // anim trigger so the client column starts with the raise. a = seconds to the
+        // release beat (the WizardFxRows leg picks the _fast asset off it), b = shower
+        // seconds; both mirror the telegraph/bolt constants below.
+        FxPayloads.sendFxEntityEvent(level, FxCues.CUE_WIZARD_STAR_CALL, this,
+                unveiled ? 0.95F : 1.30F,
+                (unveiled ? STAR_CALL_BOLTS_UNVEILED : STAR_CALL_BOLTS) * 0.25F,
+                64.0D);
         this.getNavigation().stop();
         level.playSound(null, this.blockPosition(), SoundEvents.EVOKER_PREPARE_SUMMON,
                 SoundSource.NEUTRAL, 0.9F, 1.5F);

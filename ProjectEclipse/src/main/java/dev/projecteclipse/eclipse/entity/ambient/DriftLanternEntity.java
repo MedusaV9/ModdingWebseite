@@ -25,6 +25,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
+import software.bernie.geckolib.animatable.GeoAnimatable;
 import software.bernie.geckolib.animation.AnimationController;
 import software.bernie.geckolib.animation.AnimationState;
 import software.bernie.geckolib.animation.PlayState;
@@ -117,6 +118,47 @@ public class DriftLanternEntity extends EclipseGeoMob {
         action.triggerableAnim(ANIM_FLICKER, EclipseGeoAnimations.once(GEO_ID, ANIM_FLICKER));
         action.triggerableAnim(EclipseGeoAnimations.ANIM_ATTACK,
                 EclipseGeoAnimations.once(GEO_ID, EclipseGeoAnimations.ANIM_ATTACK)); // unused flare (sheet)
+        wireFlickerTimeline(action);
+    }
+
+    /**
+     * MC3 §7 / POLISH1: the flicker↔Photon coupling point. The {@code timeline} block of
+     * {@code animation.drift_lantern.flicker} (four keys: the three {@code glow_flame}
+     * scale troughs + the 0.58 s overshoot, each carrying the scale factor at that
+     * frame) is the SINGLE SOURCE OF TRUTH — no parallel Java timer that could drift
+     * against the sheet. Whoever retimes the scale curve must drag the timeline along.
+     *
+     * <p>The handler hears the keyframes of EVERY animation on the shared {@code action}
+     * controller (MC3 §7 Randbedingung 2 — {@code death} may grow a timeline later), so
+     * it filters on the {@code photon:} instruction prefix and lets
+     * {@code DriftLanternFx} ignore unknown ids. Keyframe events only fire from the
+     * client render pass; the explicit client guard additionally keeps the client-only
+     * FX class out of a dedicated server's classloader if GeckoLib ever grows a
+     * server-side keyframe path. Purely cosmetic by law (Randbedingung 3): the trigger
+     * came from the server, the pulse must never do anything authoritative.</p>
+     */
+    private static <T extends GeoAnimatable> void wireFlickerTimeline(AnimationController<T> action) {
+        action.setCustomInstructionKeyframeHandler(event -> {
+            if (!(event.getAnimatable() instanceof DriftLanternEntity lantern)
+                    || !lantern.level().isClientSide) {
+                return;
+            }
+            String instruction = event.getKeyframeData().getInstructions().trim();
+            if (!instruction.startsWith("photon:")) {
+                return;
+            }
+            String[] parts = instruction.substring("photon:".length()).split("\\s+");
+            float factor = 1.0F;
+            if (parts.length > 1) {
+                try {
+                    factor = Float.parseFloat(parts[1]);
+                } catch (NumberFormatException ignored) {
+                    // Malformed sheet entry: still pulse, at the neutral factor.
+                }
+            }
+            dev.projecteclipse.eclipse.client.entity.ambient.DriftLanternFx
+                    .pulse(lantern, parts[0], factor);
+        });
     }
 
     /**

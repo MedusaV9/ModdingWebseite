@@ -86,6 +86,14 @@ public class UmbralStalkerEntity extends EclipseGeoMonster {
     public static final int DEATH_ANIM_TICKS = 28;
     /** Client-side gallop hold — see {@link #updateSprintGate()}. */
     private static final int SPRINT_HOLD_TICKS = 8;
+    /** Client-side smear latch — see {@link #updateSmearGate()}. */
+    private static final int SMEAR_HOLD_TICKS = 6;
+    /**
+     * Horizontal speed² gate (blocks²/tick²) below which the gallop is not visibly
+     * covering ground: 0.08 b/t = 1.6 b/s. A* micro-pauses and wall-pinned pathing dip
+     * under it; the bounding hunt gallop (~0.3+ b/t) sits far above.
+     */
+    private static final double SMEAR_MIN_SPEED_SQ = 0.08D * 0.08D;
 
     /** Synced so the client can play {@code sprint} during the dawn flight, when the
      * target (and with it {@code isAggressive()}) has already been dropped. */
@@ -102,6 +110,8 @@ public class UmbralStalkerEntity extends EclipseGeoMonster {
 
     /** Client-only gallop latch (ticks remaining); never read or written server-side. */
     private int sprintHold;
+    /** Client-only smear latch (ticks remaining); never read or written server-side. */
+    private int smearHold;
     private RawAnimation cachedCrawlAnim;
     private RawAnimation cachedSprintAnim;
     private RawAnimation cachedStalkLowAnim;
@@ -195,6 +205,37 @@ public class UmbralStalkerEntity extends EclipseGeoMonster {
         }
     }
 
+    /**
+     * MC2 §0/§9.4.6 / POLISH1: the sprint-smear gate behind the {@code
+     * stalker_sprint_smear} loop row in {@code veilfx/PhotonMobFx}. Same verdict the
+     * base controller uses for the {@code sprint} gait — hunt latch OR dawn flight —
+     * but additionally requires the gallop to actually COVER GROUND (client per-tick
+     * position delta ≥ {@value #SMEAR_MIN_SPEED_SQ}²-gate): a stalker snarling in
+     * melee range is sprint-postured yet stationary, and a speed smear on a standing
+     * mob would be a lie. Its own {@value #SMEAR_HOLD_TICKS}t latch bridges A*
+     * micro-pauses so the ribbons fade once per chase, not once per repath.
+     */
+    private void updateSmearGate() {
+        double dx = this.getX() - this.xOld;
+        double dz = this.getZ() - this.zOld;
+        boolean galloping = (this.sprintHold > 0 || this.isFleeing())
+                && dx * dx + dz * dz >= SMEAR_MIN_SPEED_SQ;
+        if (galloping && this.isAlive()) {
+            this.smearHold = SMEAR_HOLD_TICKS;
+        } else if (this.smearHold > 0) {
+            this.smearHold--;
+        }
+    }
+
+    /**
+     * True while the client-side gallop is visibly covering ground — the attach
+     * predicate of the {@code stalker_sprint_smear} row ({@code veilfx/PhotonMobFx}).
+     * Client-only, like the {@code sprintHold} latch it derives from.
+     */
+    public boolean isSprintSmearing() {
+        return this.smearHold > 0;
+    }
+
     @Override
     protected void registerActionTriggers(AnimationController<?> action) {
         super.registerActionTriggers(action); // death (played-and-held)
@@ -216,6 +257,7 @@ public class UmbralStalkerEntity extends EclipseGeoMonster {
             this.stalkAmount = Mth.clamp(
                     this.stalkAmount + (this.isAggressive() ? 0.08F : -0.05F), 0.0F, 1.0F);
             updateSprintGate();
+            updateSmearGate();
         }
         if (this.level().isClientSide || !this.isAlive()) {
             return;
