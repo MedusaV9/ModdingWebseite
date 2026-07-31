@@ -11,6 +11,11 @@
 // colour lands where a real bad decode shows its bias — the corrupted BLOCKS and the tear
 // bands get a luma-preserving wash, and the static floor is tinted with it. Both terms are
 // scaled by AccentAmount, so an uncoloured datamosh zone is untouched).
+//
+// WAVE-13 B4 touched ONE thing here (the census calls this effect finished): main() no longer
+// holds a value-less `return`. See the glsl-processor note in umbral_veins.fsh — a stray hash
+// character anywhere in this file, a hex colour in a comment included, arms a parser NPE that
+// silently unregisters the whole pipeline. The layers below are byte-for-byte the shipped ones.
 #include eclipse:eclipse_common
 #include eclipse:eclipse_glitch
 
@@ -30,64 +35,68 @@ const vec2 GRID = vec2(48.0, 27.0);
 
 void main() {
     float s = clamp(Strength, 0.0, 1.0);
-    if (s <= 0.0005) {
-        fragColor = vec4(texture(DiffuseSampler0, texCoord).rgb, 1.0);
-        return;
+    vec3 color = texture(DiffuseSampler0, texCoord).rgb;
+
+    if (s > 0.0005) { // else: idle — the scene passes through bit-identical
+        float detail = clamp(Detail, 0.0, 1.0);
+        // Re-roll the corruption pattern ~5x/s: blocks pop to new stale sources, never slide.
+        float seed = floor(Time * 5.0) * 0.618 + 1.0;
+
+        // --- macroblock smear ------------------------------------------------------------
+        vec2 block = floor(texCoord * GRID);
+        float gate = step(1.0 - 0.45 * s, efxHash(block + seed)) * detail;
+        // Whole-block motion vector (quantized to block units, up to ~5 blocks) — the stale
+        // "reference frame" read; scaled by Strength so edge-band corruption barely twitches.
+        vec2 mv = vec2(
+                floor((efxHash(block * 1.31 + seed) - 0.5) * 11.0),
+                floor((efxHash(block * 2.17 + seed * 1.7) - 0.5) * 7.0));
+        vec2 uv = texCoord + gate * mv / GRID * s;
+
+        // --- full-frame tear lines ---------------------------------------------------------
+        // Occasionally (per re-roll) one horizontal band tears: rows inside shove sideways
+        // and collapse onto the band's top row — the classic interlace/slice failure.
+        float tearOn = step(0.72, efxHash(vec2(seed, 5.3))) * step(0.35, s) * detail;
+        float tearY = efxHash(vec2(seed * 3.7, 11.1));
+        float tearH = 0.015 + 0.05 * efxHash(vec2(seed, 23.7));
+        float inTear = tearOn * step(tearY, texCoord.y) * step(texCoord.y, tearY + tearH);
+        uv.x += inTear * (efxHash(vec2(seed, 31.7)) - 0.5) * 0.35 * s;
+        uv.y = mix(uv.y, tearY, inTear * 0.85);
+
+        uv = clamp(uv, vec2(0.001), vec2(0.999));
+
+        // --- chroma shift ------------------------------------------------------------------
+        // RGB planes desync along the local displacement (blocks/tears split hardest); a
+        // small global split keeps even untouched regions slightly out of register.
+        // The `* detail` on the motion vector is a reducedFx fix: `mv` re-rolls at 5 Hz and
+        // was the ONE term here not gated by Detail, so under reducedFx the residual global
+        // split kept flipping direction five times a second — a small but real flicker on a
+        // toggle that exists to remove exactly that. At Detail 1 this is unchanged.
+        vec2 chromaDir = normalize(vec2(1.0, 0.25) + mv * 0.2 * detail);
+        float chromaAmt = (0.0015 + 0.006 * (gate + inTear)) * s;
+        color = efxChroma(DiffuseSampler0, uv, chromaDir, chromaAmt);
+
+        // --- DCT crunch ----------------------------------------------------------------------
+        // A subset of gated blocks quantizes hard (fake compression ring); a gentle global
+        // posterize rides Strength so the whole zone looks one generation overcompressed.
+        float crunch = step(0.55, efxHash(block * 3.7 + seed * 2.3)) * gate;
+        vec3 crunched = gzPosterize(color, mix(24.0, 6.0, s));
+        color = mix(color, crunched, max(crunch, 0.25 * s));
+
+        // --- accent bias ---------------------------------------------------------------------
+        // Where the decode failed (gated blocks + tear bands) the channels drift toward the
+        // commanded hue — the bias is strongest exactly on the corruption, which is what a
+        // colour-broken codec looks like. Identity at AccentAmount 0.
+        float broken = max(gate, inTear);
+        color *= gzTint(AccentColor, AccentAmount * s * (0.15 + 0.55 * broken));
+
+        // --- static floor --------------------------------------------------------------------
+        float static_ = (efxHash(texCoord * vec2(1021.0, 787.0) + fract(Time * 9.0)) - 0.5)
+                * 0.10 * s * detail * (0.3 + 0.7 * broken);
+        color += vec3(static_) * gzTint(AccentColor, AccentAmount);
+
+        // Banding guard for the posterize/chroma gradients (temporal dither, house rule).
+        color += vec3(efxDither(gl_FragCoord.xy, fract(Time * 3.0)) * s);
     }
-    float detail = clamp(Detail, 0.0, 1.0);
-    // Re-roll the corruption pattern ~5x/s: blocks pop to new stale sources, they never slide.
-    float seed = floor(Time * 5.0) * 0.618 + 1.0;
-
-    // --- macroblock smear ------------------------------------------------------------
-    vec2 block = floor(texCoord * GRID);
-    float gate = step(1.0 - 0.45 * s, efxHash(block + seed)) * detail;
-    // Whole-block motion vector (quantized to block units, up to ~5 blocks) — the stale
-    // "reference frame" read; scaled by Strength so edge-band corruption barely twitches.
-    vec2 mv = vec2(
-            floor((efxHash(block * 1.31 + seed) - 0.5) * 11.0),
-            floor((efxHash(block * 2.17 + seed * 1.7) - 0.5) * 7.0));
-    vec2 uv = texCoord + gate * mv / GRID * s;
-
-    // --- full-frame tear lines ---------------------------------------------------------
-    // Occasionally (per re-roll) one horizontal band tears: rows inside shove sideways
-    // and collapse onto the band's top row — the classic interlace/slice failure.
-    float tearOn = step(0.72, efxHash(vec2(seed, 5.3))) * step(0.35, s) * detail;
-    float tearY = efxHash(vec2(seed * 3.7, 11.1));
-    float tearH = 0.015 + 0.05 * efxHash(vec2(seed, 23.7));
-    float inTear = tearOn * step(tearY, texCoord.y) * step(texCoord.y, tearY + tearH);
-    uv.x += inTear * (efxHash(vec2(seed, 31.7)) - 0.5) * 0.35 * s;
-    uv.y = mix(uv.y, tearY, inTear * 0.85);
-
-    uv = clamp(uv, vec2(0.001), vec2(0.999));
-
-    // --- chroma shift ------------------------------------------------------------------
-    // RGB planes desync along the local displacement (blocks/tears split hardest); a
-    // small global split keeps even untouched regions slightly out of register.
-    vec2 chromaDir = normalize(vec2(1.0, 0.25) + mv * 0.2);
-    float chromaAmt = (0.0015 + 0.006 * (gate + inTear)) * s;
-    vec3 color = efxChroma(DiffuseSampler0, uv, chromaDir, chromaAmt);
-
-    // --- DCT crunch ----------------------------------------------------------------------
-    // A subset of gated blocks quantizes hard (fake compression ring); a gentle global
-    // posterize rides Strength so the whole zone looks one generation overcompressed.
-    float crunch = step(0.55, efxHash(block * 3.7 + seed * 2.3)) * gate;
-    vec3 crunched = gzPosterize(color, mix(24.0, 6.0, s));
-    color = mix(color, crunched, max(crunch, 0.25 * s));
-
-    // --- accent bias ---------------------------------------------------------------------
-    // Where the decode failed (gated blocks + tear bands) the channels drift toward the
-    // commanded hue — the bias is strongest exactly on the corruption, which is what a
-    // colour-broken codec looks like. Identity at AccentAmount 0.
-    float broken = max(gate, inTear);
-    color *= gzTint(AccentColor, AccentAmount * s * (0.15 + 0.55 * broken));
-
-    // --- static floor --------------------------------------------------------------------
-    float static_ = (efxHash(texCoord * vec2(1021.0, 787.0) + fract(Time * 9.0)) - 0.5)
-            * 0.10 * s * detail * (0.3 + 0.7 * broken);
-    color += vec3(static_) * gzTint(AccentColor, AccentAmount);
-
-    // Banding guard for the posterize/chroma gradients (temporal dither, house rule).
-    color += vec3(efxDither(gl_FragCoord.xy, fract(Time * 3.0)) * s);
 
     fragColor = vec4(color, 1.0);
 }

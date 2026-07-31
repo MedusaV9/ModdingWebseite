@@ -1,16 +1,47 @@
 // eclipse:glitch_outline — GLITCHZONE flagship (TRANSITION priority): the world renders
-// BLACK and only GREEN EDGE OUTLINES remain, a wireframe/thermal-scanner readout. Edge
-// signal = depth-Laplacian on LINEARIZED depth (silhouettes + creases; the second
-// derivative is ~0 on flat surfaces at any slant, so grazing floors do not false-edge)
-// + reconstructed view-space NORMAL disagreement (screenToViewSpace on the same 5 depth
-// taps — surface-orientation breaks that share a depth plane) + a Roberts luminance term
-// (texture/block boundaries, weighted low so geometry wins). Fed per frame by
-// client.GlitchZoneFx through the VeilPostController row (never under an Iris
-// shaderpack): Strength (0..1 zone ramp — MUST be a no-op at 0), Time (wall-clock
-// seconds), Detail (0 under reduced FX: sweep bar, flicker and grain freeze/flatten;
-// the scanner grade itself survives), AccentColor/AccentAmount (F-049: the phosphor hue —
-// at amount 0 the shipped scanner green, luma-matched to any commanded colour at 1; the
-// dim fill wash and the grain ride the same accent so the readout stays one colour).
+// BLACK and only EDGE OUTLINES remain, a wireframe/thermal-scanner readout.
+//
+// WAVE-13 B4 "TIEFEN-TRACE". The census asked for an edge trace that reads DEPTH instead of
+// sticking to the frame, and the brief asked for clean object silhouettes on black. Three
+// things changed, all of them driven by DiffuseDepthSampler rather than by colour:
+//
+//   [O1] The tap cross is DEPTH-SCALED. A fixed one-texel cross draws the same hairline on a
+//        block two metres away and on a mountain — thickness carries no information and the
+//        readout reads flat. The cross now spans ~2.6 texels up close and tightens to a
+//        single texel past ~34 blocks, so line weight IS the distance cue.
+//   [O2] The silhouette term is SIGNED. An undirected depth Laplacian fires on BOTH sides of
+//        a discontinuity (the object and the wall behind it), which is why the shipped edges
+//        read as soft bands. `behind` measures how much FARTHER the farthest neighbour sits,
+//        so it is positive only on the NEAR side of the step: the trace lands on the object
+//        and produces a true cut-out. That is the "everything black, only outlines" read.
+//   [O5] A depth TRACE PLANE racks from 2 out to 220 blocks and back, EXPONENTIALLY (depth
+//        reads logarithmically — a linear rack crawls through the near field and then
+//        teleports through the distance). Edges inside its slab flare and everything it has
+//        already passed keeps a short phosphor afterglow, so the wireframe is drawn INTO the
+//        scene instead of sitting on the glass. Its 6.25 s period divides the 100 s Time
+//        wrap, so the rack never jumps. This is deliberately a PLANE receding from the
+//        camera — glitch_void owns radial shells around an origin.
+//
+// The crease (depth Laplacian), view-normal disagreement and Roberts luma terms survive as
+// secondary traces, reweighted so geometry wins; the fill wash drops from 0.30 to 0.16 so
+// the world actually goes black under the readout.
+//
+// HARDENING: every depth-derived term is gated by gzDepthValid and the reconstructed normals
+// go through gzNormalizeSafe. On a dead depth attachment (flat 0.0) the five reconstruction
+// taps collapse onto one point and a raw normalize() would return NaN across the whole
+// frame; the pass now degrades to its Roberts-luma trace instead.
+//
+// Fed per frame by client.GlitchZoneFx through the VeilPostController row (never under an
+// Iris shaderpack): Strength (0..1 zone ramp — MUST be a no-op at 0), Time (wall-clock
+// seconds), Detail (0 under reduced FX: the trace plane parks at 24 blocks and sweep bar,
+// flicker and grain freeze/flatten; the scanner grade itself survives),
+// AccentColor/AccentAmount (F-049: the phosphor hue — at amount 0 the shipped scanner green,
+// luma-matched to any commanded colour at 1; the dim fill wash and the grain ride the same
+// accent so the readout stays one colour).
+//
+// No value-less `return` in main() — see the glsl-processor note in umbral_veins.fsh: a
+// stray hash character anywhere in this file (a hex colour in a comment is enough) arms a
+// parser NPE that silently unregisters the whole pipeline.
 #include eclipse:eclipse_common
 #include eclipse:eclipse_glitch
 #include veil:space_helper
@@ -31,92 +62,152 @@ out vec4 fragColor;
 const vec3 EDGE_GREEN = vec3(0.10, 1.00, 0.32);
 const vec3 FILL_GREEN = vec3(0.04, 0.22, 0.09);
 
+// [O1] Trace width in texels at point-blank range, and the distance it has tightened to one
+// texel over.
+const float TRACE_WIDE = 2.6;
+const float TRACE_WIDE_RANGE = 34.0;
+// [O5] Rack of the depth trace plane: near/far bound in blocks, period in seconds (a divisor
+// of the 100 s Time wrap), and the distance it parks at under reduced FX.
+const float TRACE_NEAR = 2.0;
+const float TRACE_FAR = 220.0;
+const float TRACE_PERIOD = 6.25;
+const float TRACE_PARK = 24.0;
+// How much of the scene's own luma survives as a fill wash under the readout. Low on
+// purpose: the mandate is a black world with outlines, the wash only keeps mass legible.
+const float FILL_GAIN = 0.16;
+
 void main() {
     float s = clamp(Strength, 0.0, 1.0);
     vec3 scene = texture(DiffuseSampler0, texCoord).rgb;
-    if (s <= 0.0005) {
-        fragColor = vec4(scene, 1.0);
-        return;
+    vec3 color = scene;
+
+    if (s > 0.0005) { // else: idle — the scene passes through bit-identical
+        float detail = clamp(Detail, 0.0, 1.0);
+        vec2 texel = 1.0 / vec2(textureSize(DiffuseSampler0, 0));
+        float near = VeilCamera.NearPlane;
+        float far = VeilCamera.FarPlane;
+
+        // Centre tap first: the cross spacing is a function of the centre distance.
+        float dC = texture(DiffuseDepthSampler, texCoord).r;
+        float depthOk = gzDepthValid(dC);
+        float lC = gzLinearDepth(dC, near, far);
+
+        // [O1] Depth-scaled trace width.
+        float width = mix(TRACE_WIDE, 1.0, clamp(lC / TRACE_WIDE_RANGE, 0.0, 1.0));
+        vec2 stepX = vec2(texel.x * width, 0.0);
+        vec2 stepY = vec2(0.0, texel.y * width);
+
+        // 4-tap cross: raw depth (for position reconstruction) + linearized (for edges).
+        float dR = texture(DiffuseDepthSampler, texCoord + stepX).r;
+        float dL = texture(DiffuseDepthSampler, texCoord - stepX).r;
+        float dU = texture(DiffuseDepthSampler, texCoord + stepY).r;
+        float dD = texture(DiffuseDepthSampler, texCoord - stepY).r;
+        float lR = gzLinearDepth(dR, near, far);
+        float lL = gzLinearDepth(dL, near, far);
+        float lU = gzLinearDepth(dU, near, far);
+        float lD = gzLinearDepth(dD, near, far);
+
+        // [O2] Silhouette: signed depth step, normalized by the centre distance so the
+        // threshold means "a step of this many percent of the viewing distance" at any range.
+        //
+        // Per axis the term is min(behind, planar residual). `behind` alone (how much farther
+        // the farther neighbour sits) is positive on the near side of a real depth step, but
+        // it is ALSO large on any surface seen at a grazing angle — a floor stretching to the
+        // horizon steps several centimetres per texel, so the plain signed test lit the whole
+        // ground and buried the "black world, only outlines" read. The planar residual
+        // |lR + lL - 2*lC| is ~0 on a plane at ANY slant and equals the step height at a
+        // silhouette, so the min() keeps true cut-outs and rejects slanted planes.
+        float behindX = max(lR, lL) - lC;
+        float behindY = max(lU, lD) - lC;
+        float behind = max(min(behindX, abs(lR + lL - 2.0 * lC)),
+                min(behindY, abs(lU + lD - 2.0 * lC)));
+        float silhouette = smoothstep(0.30, 1.20, behind / max(lC * 0.045, 0.22));
+
+        // [O3] Crease: second derivative of linear depth. Convex/concave folds that share a
+        // depth plane; ~0 on planar runs at any slant, so grazing floors do not false-edge.
+        float crease = smoothstep(0.06, 0.22,
+                (abs(lR + lL - 2.0 * lC) + abs(lU + lD - 2.0 * lC)) / max(lC * 0.5, 0.5));
+
+        // [O4] Normal disagreement: view-space normals from the reconstructed position cross
+        // products of the right/up vs left/down tap pairs — corners and face changes
+        // disagree, flats agree. gzNormalizeSafe keeps a dead depth buffer from going NaN.
+        vec3 pC = screenToViewSpace(texCoord, dC).xyz;
+        vec3 pR = screenToViewSpace(texCoord + stepX, dR).xyz;
+        vec3 pL = screenToViewSpace(texCoord - stepX, dL).xyz;
+        vec3 pU = screenToViewSpace(texCoord + stepY, dU).xyz;
+        vec3 pD = screenToViewSpace(texCoord - stepY, dD).xyz;
+        vec3 n1 = gzNormalizeSafe(cross(pR - pC, pU - pC), vec3(0.0, 0.0, 1.0));
+        vec3 n2 = gzNormalizeSafe(cross(pC - pL, pC - pD), vec3(0.0, 0.0, 1.0));
+        float normalEdge = smoothstep(0.10, 0.55, 1.0 - dot(n1, n2));
+
+        // Luminance term (Roberts on the colour taps): block/texture boundaries as faint
+        // secondary traces, and the ONLY term left standing on a dead depth buffer.
+        float lumaEdge = abs(gzLuma(texture(DiffuseSampler0, texCoord + stepX).rgb)
+                        - gzLuma(texture(DiffuseSampler0, texCoord - stepX).rgb))
+                + abs(gzLuma(texture(DiffuseSampler0, texCoord + stepY).rgb)
+                        - gzLuma(texture(DiffuseSampler0, texCoord - stepY).rgb));
+        lumaEdge = smoothstep(0.12, 0.45, lumaEdge) * 0.35;
+
+        float sky = step(0.9999, dC);
+        // Sky pixels have no geometry: silhouette edges against sky come from the NEIGHBOR
+        // taps (their depth terms fire on the geometry side), so the sky itself stays pure
+        // void. Distant edges thin out instead of dissolving into shimmer.
+        float distanceFade = 1.0 / (1.0 + lC * 0.006);
+        float geometryEdge = (silhouette + crease * 0.55 + normalEdge * 0.60) * depthOk;
+        float edge = clamp(geometryEdge + lumaEdge, 0.0, 1.0) * (1.0 - sky) * distanceFade;
+
+        // [O5] Depth trace plane + its afterglow. The slab widens with distance so the plane
+        // keeps a constant apparent thickness as it recedes; the tail decays over a window
+        // that grows the same way, but only a THIRD as fast — a tail proportional to the full
+        // rack distance would still be lighting the whole near field when the plane reaches
+        // 220 blocks, and the rack reset would then read as a full-frame flash-off.
+        // Parked (static depth band) under reduced FX.
+        //
+        // The `max(..., 0.0)` inside the tail is not cosmetic. Sky and far terrain sit far
+        // BEHIND the plane, so the raw difference goes strongly negative and exp() of it
+        // overflows to +inf in fp32 (a 512-block far plane against a 2-block rack start is
+        // already e^108); step() then multiplies 0 * inf = NaN and the NaN paints the whole
+        // frame for the first second of every rack. Clamping the argument keeps the factor
+        // at exactly 1.0 out there, where step() legitimately zeroes it.
+        float rack = TRACE_NEAR * pow(TRACE_FAR / TRACE_NEAR, fract(Time / TRACE_PERIOD));
+        float planeDist = mix(TRACE_PARK, rack, detail);
+        float traceHit = exp(-abs(lC - planeDist) / max(planeDist * 0.22, 0.8));
+        float traceTail = step(lC, planeDist)
+                * exp(-max(planeDist - lC, 0.0) / (planeDist * 0.35 + 4.0)) * 0.35;
+        float trace = (traceHit + traceTail) * (1.0 - sky) * depthOk;
+
+        // Screen-space scanner layers: a slow sweep bar rolling down, per-line flicker and a
+        // breath of static — all frozen/flattened under reduced FX. The bar is quieter than
+        // it shipped so the depth rack owns the motion.
+        float flicker = mix(1.0, 0.82 + 0.18 * efxNoise(vec2(Time * 24.0, texCoord.y * 3.0)), detail);
+        float sweepPos = fract(Time * 0.11) * 1.3 - 0.15;
+        float sweep = exp(-abs(texCoord.y - sweepPos) * 40.0) * detail;
+        float grain = (efxHash(texCoord * vec2(853.0, 997.0) + fract(Time * 7.0)) - 0.5) * 0.05 * detail;
+
+        // Accent swap: the edge phosphor is luma-matched, the fill wash and the grain are
+        // derived from the SAME hue (their shipped values are the edge green at ~22% and a
+        // green/blue grain split — both within a hair of accent * k, so amount 0 is a no-op).
+        vec3 edgeAccent = gzAccent(EDGE_GREEN, AccentColor, AccentAmount);
+        vec3 fillAccent = mix(FILL_GREEN, edgeAccent * (gzLuma(FILL_GREEN) / gzLuma(EDGE_GREEN)),
+                clamp(AccentAmount, 0.0, 1.0));
+        vec3 grainAccent = mix(vec3(0.0, 1.0, 0.4), edgeAccent / max(gzLuma(edgeAccent), 0.001) * 0.65,
+                clamp(AccentAmount, 0.0, 1.0));
+
+        vec3 readout = fillAccent * gzLuma(scene) * FILL_GAIN * (1.0 - sky)
+                + edgeAccent * edge * (0.80 * flicker + 0.35 * sweep + 0.95 * trace)
+                + edgeAccent * 0.02 * sweep
+                + edgeAccent * trace * 0.030 * (1.0 - sky)
+                + grainAccent * grain;
+
+        // Soft scanner vignette so the readout sits inside a tube, not a flat page.
+        float vign = 1.0 - 0.35 * smoothstep(0.45, 0.95, length(texCoord - 0.5) * 1.5);
+        readout *= vign;
+
+        // Ramp law: the scene sinks to black and the readout rises with Strength; at 0 the
+        // pass is bit-exact passthrough (idle branch), at 1 the world is the readout.
+        color = mix(scene, readout, s);
+        color += vec3(efxDither(gl_FragCoord.xy, fract(Time * 3.0)) * s);
     }
-
-    vec2 texel = 1.0 / vec2(textureSize(DiffuseSampler0, 0));
-    float near = VeilCamera.NearPlane;
-    float far = VeilCamera.FarPlane;
-
-    // 5-tap cross: raw depth (for position reconstruction) + linearized (for edges).
-    float dC = texture(DiffuseDepthSampler, texCoord).r;
-    float dR = texture(DiffuseDepthSampler, texCoord + vec2(texel.x, 0.0)).r;
-    float dL = texture(DiffuseDepthSampler, texCoord - vec2(texel.x, 0.0)).r;
-    float dU = texture(DiffuseDepthSampler, texCoord + vec2(0.0, texel.y)).r;
-    float dD = texture(DiffuseDepthSampler, texCoord - vec2(0.0, texel.y)).r;
-    float lC = gzLinearDepth(dC, near, far);
-    float lR = gzLinearDepth(dR, near, far);
-    float lL = gzLinearDepth(dL, near, far);
-    float lU = gzLinearDepth(dU, near, far);
-    float lD = gzLinearDepth(dD, near, far);
-
-    // Depth term: second derivative of linear depth, scale-normalized by the centre
-    // distance. Silhouettes spike it; planar runs (even steep ones) stay near zero.
-    float depthEdge = (abs(lR + lL - 2.0 * lC) + abs(lU + lD - 2.0 * lC)) / max(lC * 0.5, 0.5);
-    depthEdge = smoothstep(0.06, 0.22, depthEdge);
-
-    // Normal term: view-space normals from the reconstructed position cross products of
-    // the right/up vs left/down tap pairs — corners and face changes disagree, flats agree.
-    vec3 pC = screenToViewSpace(texCoord, dC).xyz;
-    vec3 pR = screenToViewSpace(texCoord + vec2(texel.x, 0.0), dR).xyz;
-    vec3 pL = screenToViewSpace(texCoord - vec2(texel.x, 0.0), dL).xyz;
-    vec3 pU = screenToViewSpace(texCoord + vec2(0.0, texel.y), dU).xyz;
-    vec3 pD = screenToViewSpace(texCoord - vec2(0.0, texel.y), dD).xyz;
-    vec3 n1 = normalize(cross(pR - pC, pU - pC));
-    vec3 n2 = normalize(cross(pC - pL, pC - pD));
-    float normalEdge = smoothstep(0.10, 0.55, 1.0 - dot(n1, n2));
-
-    // Luminance term (Roberts on the colour taps): block/texture boundaries as faint
-    // secondary traces so the readout keeps detail inside large flat faces.
-    float lumaEdge = abs(gzLuma(texture(DiffuseSampler0, texCoord + vec2(texel.x, 0.0)).rgb)
-                    - gzLuma(texture(DiffuseSampler0, texCoord - vec2(texel.x, 0.0)).rgb))
-            + abs(gzLuma(texture(DiffuseSampler0, texCoord + vec2(0.0, texel.y)).rgb)
-                    - gzLuma(texture(DiffuseSampler0, texCoord - vec2(0.0, texel.y)).rgb));
-    lumaEdge = smoothstep(0.12, 0.45, lumaEdge) * 0.35;
-
-    float sky = step(0.9999, dC);
-    // Sky pixels have no geometry: silhouette edges against sky come from the NEIGHBOR
-    // taps (their depth Laplacian fires on the geometry side), so the sky itself stays
-    // pure void. Distant edges thin out instead of dissolving into shimmer.
-    float distanceFade = 1.0 / (1.0 + lC * 0.006);
-    float edge = clamp(depthEdge + normalEdge + lumaEdge, 0.0, 1.0) * (1.0 - sky) * distanceFade;
-
-    // Scanner readout: black world, a whisper of green-mapped luma so mass reads as mass,
-    // phosphor edges on top. Detail layers: a slow sweep bar rolling down, per-line
-    // flicker and a breath of static — all frozen/flattened under reduced FX.
-    float detail = clamp(Detail, 0.0, 1.0);
-    float flicker = mix(1.0, 0.82 + 0.18 * efxNoise(vec2(Time * 24.0, texCoord.y * 3.0)), detail);
-    float sweepPos = fract(Time * 0.11) * 1.3 - 0.15;
-    float sweep = exp(-abs(texCoord.y - sweepPos) * 40.0) * detail;
-    float grain = (efxHash(texCoord * vec2(853.0, 997.0) + fract(Time * 7.0)) - 0.5) * 0.05 * detail;
-
-    // Accent swap: the edge phosphor is luma-matched, the fill wash and the grain are
-    // derived from the SAME hue (their shipped values are the edge green at ~22% and a
-    // green/blue grain split — both within a hair of accent · k, so amount 0 is a no-op).
-    vec3 edgeAccent = gzAccent(EDGE_GREEN, AccentColor, AccentAmount);
-    vec3 fillAccent = mix(FILL_GREEN, edgeAccent * (gzLuma(FILL_GREEN) / gzLuma(EDGE_GREEN)),
-            clamp(AccentAmount, 0.0, 1.0));
-    vec3 grainAccent = mix(vec3(0.0, 1.0, 0.4), edgeAccent / max(gzLuma(edgeAccent), 0.001) * 0.65,
-            clamp(AccentAmount, 0.0, 1.0));
-
-    vec3 readout = fillAccent * gzLuma(scene) * 0.30 * (1.0 - sky)
-            + edgeAccent * edge * (0.85 * flicker + 0.45 * sweep)
-            + edgeAccent * 0.02 * sweep
-            + grainAccent * grain;
-
-    // Soft scanner vignette so the readout sits inside a tube, not a flat page.
-    float vign = 1.0 - 0.35 * smoothstep(0.45, 0.95, length(texCoord - 0.5) * 1.5);
-    readout *= vign;
-
-    // Ramp law: the scene sinks to black and the readout rises with Strength; at 0 the
-    // pass is bit-exact passthrough (early-out above), at 1 the world is the readout.
-    vec3 color = mix(scene, readout, s);
-    color += vec3(efxDither(gl_FragCoord.xy, fract(Time * 3.0)) * s);
 
     fragColor = vec4(color, 1.0);
 }
