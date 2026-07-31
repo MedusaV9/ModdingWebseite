@@ -119,6 +119,10 @@ func _build_hud() -> void:
 	add_child(_time_label)
 	_carrot_label = Label.new()
 	_carrot_label.theme_type_variation = &"CaptionLabel"
+	# W14 Quick-Win: der Karotten-Zähler ist DIE Verlust-Anzeige des Spiels,
+	# war aber als Mini-Caption im Schild kaum lesbar (Audit: HUD gequetscht).
+	_carrot_label.add_theme_font_size_override("font_size", 22)
+	_carrot_label.add_theme_color_override("font_color", Color(0.82, 0.42, 0.16))
 	add_child(_carrot_label)
 	_hint_label = Label.new()
 	_hint_label.theme_type_variation = &"SoftLabel"
