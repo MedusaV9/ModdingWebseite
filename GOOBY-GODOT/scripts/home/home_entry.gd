@@ -112,6 +112,8 @@ func _on_travel_finished(target: Variant = null) -> void:
 	GoobyReactions.attach_to(room)
 	# REST-3: Schlaf-/Krankheits-/Gewichts-Optik (Pflege-Kreislauf sichtbar).
 	PflegeRunner.attach_to(room)
+	# W13B: Schüttel-Secret (Accelerometer, Doc F §5) lauscht pro Raum.
+	ShakeSecret.attach_to(room)
 
 
 ## HUD nur im Raum (RoomBase) zeigen — Album/Arcade/Social/Stadt sind
