@@ -16,11 +16,19 @@ const SCHRAEGE_TIEFE := 1.15
 ## … und so hoch steigt sie dabei an.
 const SCHRAEGE_HUB := 0.85
 const SPARREN_ABSTAND := 1.4
+## Fade (W14): darunter schlafen die Geometrie-Kinder (spart Vertex-Pass),
+## darüber wird das Material wieder opak (kein Alpha-Sortier-Aufwand).
+const FADE_WEG_UNTER := 0.02
+const FADE_VOLL_AB := 0.995
 
 var _schraege := false
+var _fade_alpha := 1.0
+var _fade_mats: Array[StandardMaterial3D] = []
 
 
-## Ans RoomBase hängen (nur Innenräume; idempotent).
+## Ans RoomBase hängen (nur Innenräume; idempotent). Hängt auch die
+## Decken-Ausblendung (DeckenFade, W14) an den Raum — sie fadet Balken/
+## Schräge UND die CEILING-Deko, sobald die Kamera von oben reinschaut.
 static func attach_to(room: Node) -> DachInnen:
 	var room_def: Dictionary = room.room_def()
 	if bool(room_def.get("outdoor", false)):
@@ -35,6 +43,7 @@ static func attach_to(room: Node) -> DachInnen:
 	var welt := Vector2(groesse.x * GridData.CELL_SIZE, groesse.y * GridData.CELL_SIZE)
 	dach.baue(room_id, welt, HouseStyleState.style(room.game_state()))
 	room.add_child(dach)
+	DeckenFade.attach_to(room, dach)
 	return dach
 
 
@@ -52,6 +61,40 @@ func hat_schraege() -> bool:
 	return _schraege
 
 
+## Decken-Fade (W14): 1 = voll sichtbar, 0 = ausgeblendet. Sanft via
+## Material-Alpha (die Materialien sind duplizierte Flats, kein geteilter
+## Cache); ganz ausgeblendet schlafen die Geometrie-Kinder. Das visible-
+## Flag des DachInnen selbst bleibt unberührt (gehört dem Baumodus-Toggle
+## in HausKontext).
+func set_fade_alpha(alpha: float) -> void:
+	alpha = clampf(alpha, 0.0, 1.0)
+	if is_equal_approx(alpha, _fade_alpha):
+		return
+	_fade_alpha = alpha
+	var voll := alpha >= FADE_VOLL_AB
+	for mat in _fade_mats:
+		mat.transparency = (
+			BaseMaterial3D.TRANSPARENCY_DISABLED if voll else BaseMaterial3D.TRANSPARENCY_ALPHA
+		)
+		mat.albedo_color.a = alpha
+	for child in get_children():
+		if child is GeometryInstance3D:
+			(child as GeometryInstance3D).visible = alpha > FADE_WEG_UNTER
+
+
+## Aktueller Fade-Wert (Tests/Debug).
+func fade_alpha() -> float:
+	return _fade_alpha
+
+
+## Eigenes (fade-bares) Exemplar einer Flat-Farbe — CustomizeMaterials.flat
+## liefert geteilte Cache-Materialien, die dürfen wir nicht animieren.
+func _fade_material(farb_id: String) -> StandardMaterial3D:
+	var mat: StandardMaterial3D = CustomizeMaterials.flat(farb_id).duplicate()
+	_fade_mats.append(mat)
+	return mat
+
+
 ## Deckenbalken quer über den Raum (EIN MultiMesh). Im Dachgeschoss werden
 ## es Kehlbalken auf Schrägen-Höhe, im Erdgeschoss liegen sie auf der
 ## Wandkrone.
@@ -66,7 +109,7 @@ func _baue_balken(welt: Vector2) -> void:
 		z += BALKEN_ABSTAND
 	var mesh := BoxMesh.new()
 	mesh.size = Vector3(welt.x + 0.16, BALKEN_DICKE, BALKEN_DICKE)
-	mesh.material = CustomizeMaterials.flat("nussbaum")
+	mesh.material = _fade_material("nussbaum")
 	var multi := MultiMesh.new()
 	multi.transform_format = MultiMesh.TRANSFORM_3D
 	multi.mesh = mesh
@@ -90,7 +133,7 @@ func _baue_schraege(welt: Vector2) -> void:
 	var box := BoxMesh.new()
 	box.size = Vector3(welt.x + 0.16, 0.07, laenge)
 	platte.mesh = box
-	platte.material_override = CustomizeMaterials.flat("eiche_hell")
+	platte.material_override = _fade_material("eiche_hell")
 	platte.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	# Um X kippen: Nordkante (z=0) liegt auf der Wandkrone, die Innenkante
 	# steigt Richtung Raummitte an.
@@ -112,7 +155,7 @@ func _baue_schraege(welt: Vector2) -> void:
 		x += SPARREN_ABSTAND
 	var sparren_mesh := BoxMesh.new()
 	sparren_mesh.size = Vector3(0.11, 0.11, laenge)
-	sparren_mesh.material = CustomizeMaterials.flat("nussbaum")
+	sparren_mesh.material = _fade_material("nussbaum")
 	var multi := MultiMesh.new()
 	multi.transform_format = MultiMesh.TRANSFORM_3D
 	multi.mesh = sparren_mesh
