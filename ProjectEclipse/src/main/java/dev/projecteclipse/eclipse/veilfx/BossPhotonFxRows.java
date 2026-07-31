@@ -35,11 +35,15 @@ public final class BossPhotonFxRows {
 
     @SubscribeEvent
     static void onClientSetup(FMLClientSetupEvent event) {
-        // IDEAS-boss #2 — C8 thunderclap death implosion (two-asset delivery: the debris
-        // emitter's FirstCollision sub-emitters reference eclipse:boss/fog_debris_puff).
+        // IDEAS-boss #2 — C8 thunderclap death implosion. Wave-13/A5 repoints the cue
+        // from the single-stage `tyrant_death_implosion` onto the four-asset
+        // `tyrant_death_collapse` cascade (tools/photon/tyrant_death_fx.py): the root
+        // in-fall stamps a Birth sub-emitter chain collapse core -> shock ring -> soul
+        // wisps, so the whole payoff after t=30 is Photon-side and the server still
+        // sends exactly this one cue. Fallback/mode/budget unchanged.
         PhotonFxRegistry.registerRow(new PhotonFxRegistry.Row(
                 FxCues.CUE_TYRANT_DEATH_IMPLOSION,
-                fx("boss/tyrant_death_implosion"),
+                fx("boss/tyrant_death_collapse"),
                 fx("boss_slam"),
                 FxBudget.Channel.BURST,
                 PhotonFxRegistry.Mode.LAYER,

@@ -98,8 +98,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from fxlib import (  # noqa: E402
     B, BLEND_ALPHA, F, FX_ASSETS_DIR, FxBuilder, I, REPO_ROOT,
     aabb, blend, box, burst, circle, cone, constant, curve, cylinder, dot, gradient,
-    mesh, nf3, random_between, random_curve, random_gradient, rom, sphere,
-    texture_material, validate_file,
+    material_shader, mesh, nf3, random_between, random_curve, random_gradient, rom,
+    sphere, texture_material, validate_file,
 )
 
 TEX_CIRCLE = "photon:textures/particle/circle.png"
@@ -151,6 +151,21 @@ def eased(points, lock=True):
         third = (x1 - x0) / 3.0
         segments.append((x0, y0, x0 + third, y0, x1 - third, y1, x1, y1))
     return curve(lo, hi if hi != lo else lo + 1.0, segments, lock=lock)
+
+
+# Noise remap curves (NoiseSetting.remap, jar-default output band -1..1, xAxis "base
+# noise"). Photon's default remap is the identity ramp, which spreads the fBm evenly and
+# reads as uniform jitter. Reshaping the histogram is what turns jitter into BILLOWING:
+#   FOG_BILLOW_REMAP  soft S with plateaus near both ends — the field lingers in a lobe,
+#                     then slews across: slow, organic, cloud-like folding.
+#   FOG_SHRED_REMAP   near-binary step — the field snaps between two states, so small
+#                     rags flick sideways instead of wandering.
+FOG_BILLOW_REMAP = curve(-1.0, 1.0, [
+    (0.0, 0.0, 0.30, 0.02, 0.42, 0.10, 0.5, 0.5),
+    (0.5, 0.5, 0.58, 0.90, 0.70, 0.98, 1.0, 1.0)], "base noise", "remap result")
+FOG_SHRED_REMAP = curve(-1.0, 1.0, [
+    (0.0, 0.06, 0.34, 0.0, 0.44, 0.04, 0.5, 0.5),
+    (0.5, 0.5, 0.56, 0.96, 0.66, 1.0, 1.0, 0.94)], "base noise", "remap result")
 
 
 def ribbon_renderer(material_entry, sorting="NONE", cull_box=None):
@@ -343,21 +358,47 @@ def build_tyrant_fog_arms() -> FxBuilder:
     0.8<->1.15) and precesses (shape rotation y 0->72°) so successive arms trace around
     the body; Noise3D writhes them. Rides the tyrant via spawnOnEntity(FORWARD) —
     Local space, the rig walks and faces with the boss. Translucent alpha-sorted fog,
-    never a wall (alpha peak 0.55), zero bloom — fog is weather."""
+    never a wall, zero bloom — fog is weather.
+
+    WAVE-13/A5 pass (three changes, all inside this one asset):
+
+    1. `eclipse:soft_particle` (A0 custom shader) on every fog body. The quads used to
+       cut a razor edge wherever they crossed terrain or the boss walked them into a
+       wall; the SceneDepth fade now dissolves them at the contact plane and at the
+       camera near-plane, so P3 fog stops clipping and you can walk INTO the arms.
+    2. Curve-remapped Noise3D instead of raw fBm. `NoiseSetting$Remap.remapCurve`
+       (jar-default -1..1, xAxis "base noise") reshapes the noise histogram before it
+       drives the offset: an S with soft plateaus makes the field HOLD a shape and then
+       slew, i.e. billowing, where the linear default only jitters. Two frequencies:
+       0.42 for the slab base, 1.7 for the shreds.
+    3. Depth stratification (the mass law read as fog): a sluggish DARK slab base
+       (34-52 t lives, big bodies, ~0.6 blk/s) with faster torn shreds ON TOP
+       (12-20 t, small bodies, ~2 blk/s) plus a soft_particle GROUND BANK pooling at
+       the boss's feet. Three read distances instead of one flat curtain.
+
+    Stacking law (V2.1, learned on tyrant_step): birth tint is STM_SLATE, never the
+    light FOG_TEAL — 90 alpha quads born inside one volume converge to their birth
+    tint, and a light birth tint is exactly the white ball the style guide forbids.
+    Speeds are Photon units: startSpeed/linear x0.05 per tick = blocks/SECOND, radial
+    x0.01 per tick = 0.2 blk/s per unit (the pre-wave values sat below the perception
+    floor at ~0.05 blk/s)."""
     fx = FxBuilder("boss/tyrant_fog_arms")
 
+    cull = ((-10.0, -2.5, -10.0), (10.0, 6.5, 10.0))
     pivot = fx.empty("arm_pivot").at(0.0, 1.8, 0.0)
 
+    # L1 arm slab: the slow, heavy body of the arms. Long lives, fat quads, low noise
+    # frequency — this layer is the silhouette, so it must drift, not flicker.
     (fx.particle_emitter(
             "fog_arms",
             duration=200, looping=False,
-            start_lifetime=random_between(25, 40),
-            start_speed=constant(0.05),
-            start_size=nf3(random_between(0.35, 0.7), random_between(0.35, 0.7),
-                           random_between(0.35, 0.7)),
-            simulation_space="Local", max_particles=150)
+            start_lifetime=random_between(34, 52),
+            start_speed=random_between(0.4, 0.9),      # blk/s
+            start_size=nf3(random_between(0.5, 0.95), random_between(0.5, 0.95),
+                           random_between(0.5, 0.95)),
+            simulation_space="Local", max_particles=90)
        .child_of(pivot)
-       .with_emission(rate=constant(1.6))
+       .with_emission(rate=constant(1.15))
        .with_shape(mesh(model="eclipse:item/fog_tendril", emit_from="Triangle"),
                    scale=(eased([(0.0, 0.8), (0.3, 1.15), (0.6, 0.85), (1.0, 1.1)]),
                           eased([(0.0, 0.8), (0.35, 1.1), (0.7, 0.9), (1.0, 1.15)]),
@@ -365,40 +406,121 @@ def build_tyrant_fog_arms() -> FxBuilder:
                    rotation=(constant(0.0),
                              eased([(0.0, 0.0), (1.0, 72.0)]),
                              constant(0.0)))
-       .with_material(texture_material(TEX_SMOKE, blend=BLEND_ALPHA))
+       .with_material(material_shader(
+            "eclipse:soft_particle",
+            textures={"MainTexture": TEX_SMOKE},
+            uniforms={"SoftDistance": 1.35, "NearFade": 0.9},
+            blend=BLEND_ALPHA))
        .with_renderer(vertex_sorting="DISTANCE", shade=True)
        .with_curves(
             size_over_lifetime=eased([(0.0, 0.55), (0.5, 1.3), (1.0, 1.8)]),
-            noise=dict(frequency=0.6, quality="Noise3D",
-                       position=nf3(constant(0.15), constant(0.06), constant(0.15)),
-                       size=constant(0.1)),
+            noise=dict(frequency=0.42, quality="Noise3D",
+                       position=nf3(constant(0.22), constant(0.09), constant(0.22)),
+                       size=constant(0.12),
+                       remap_curve=FOG_BILLOW_REMAP),
             color_over_lifetime=gradient(
-                [(0.0, 0.0), (0.25, 0.55), (0.7, 0.4), (1.0, 0.0)],
-                [(0.0, *FOG_TEAL), (0.7, *STM_SLATE), (1.0, *GLI_DEAD)]))
-       .with_cull_box((-9.0, -2.0, -9.0), (9.0, 6.0, 9.0)))
+                [(0.0, 0.0), (0.25, 0.42), (0.7, 0.3), (1.0, 0.0)],
+                [(0.0, *STM_SLATE), (0.55, *FOG_TEAL), (1.0, *GLI_DEAD)]))
+       .with_cull_box(*cull))
 
-    # arm_motes: sparse fog flecks shed off the reaching arms and sinking — the v7
+    # L2 arm shreds: short-lived rags torn off the slab and thrown outward/up, on a
+    # much harsher remap (near-binary noise = the field snaps between lobes). This is
+    # the layer that sells MOTION; the slab underneath sells MASS.
+    (fx.particle_emitter(
+            "arm_shreds",
+            duration=200, looping=False,
+            start_lifetime=random_between(12, 20),
+            start_speed=random_between(1.6, 2.8),      # blk/s
+            start_size=nf3(random_between(0.18, 0.36), random_between(0.18, 0.36),
+                           random_between(0.18, 0.36)),
+            simulation_space="Local", max_particles=40)
+       .child_of(pivot)
+       .with_emission(rate=constant(0.85))
+       .with_shape(mesh(model="eclipse:item/fog_tendril", emit_from="Triangle"),
+                   scale=(eased([(0.0, 1.05), (0.4, 0.85), (1.0, 1.1)]),
+                          eased([(0.0, 1.0), (0.5, 1.2), (1.0, 0.9)]),
+                          eased([(0.0, 1.05), (0.4, 0.85), (1.0, 1.1)])),
+                   rotation=(constant(0.0),
+                             eased([(0.0, 40.0), (1.0, 118.0)]),  # counter-phase to L1
+                             constant(0.0)))
+       .with_material(material_shader(
+            "eclipse:soft_particle",
+            textures={"MainTexture": TEX_SMOKE},
+            uniforms={"SoftDistance": 0.85, "NearFade": 0.55},
+            blend=BLEND_ALPHA))
+       .with_renderer(vertex_sorting="DISTANCE", shade=True)
+       .with_curves(
+            velocity_over_lifetime=dict(
+                linear=nf3(constant(0.0), random_between(0.3, 1.1), constant(0.0)),
+                radial=constant(3.5)),                 # 0.7 blk/s outward drift
+            size_over_lifetime=eased([(0.0, 0.4), (0.35, 1.0), (1.0, 0.45)]),
+            noise=dict(frequency=1.7, quality="Noise3D",
+                       position=nf3(constant(0.34), constant(0.2), constant(0.34)),
+                       rotation=constant(0.6),
+                       remap_curve=FOG_SHRED_REMAP),
+            color_over_lifetime=gradient(
+                [(0.0, 0.0), (0.2, 0.34), (0.65, 0.26), (1.0, 0.0)],
+                [(0.0, *STM_SLATE), (0.5, *FOG_TEAL), (1.0, *GLI_DEAD)]))
+       .with_cull_box(*cull))
+
+    # L3 ground bank: the fog the arms are FED from. Horizontal quads pooling at the
+    # feet and creeping outward — the single biggest soft_particle win in this asset,
+    # because a ground-hugging quad clips into every slope it crosses without it.
+    # Anchored on the fx root (not the chest pivot) so it stays welded to the floor.
+    (fx.particle_emitter(
+            "ground_bank",
+            duration=200, looping=False,
+            start_lifetime=random_between(60, 95),
+            start_speed=constant(0.0),
+            start_size=nf3(random_between(1.7, 2.9), random_between(1.7, 2.9),
+                           random_between(1.7, 2.9)),
+            simulation_space="Local", max_particles=24)
+       .at(0.0, 0.14, 0.0)
+       .with_emission(rate=constant(0.32))
+       .with_shape(circle(radius=2.6, thickness=0.6))
+       .with_material(material_shader(
+            "eclipse:soft_particle",
+            textures={"MainTexture": TEX_SMOKE},
+            uniforms={"SoftDistance": 1.6, "NearFade": 0.7},
+            blend=BLEND_ALPHA))
+       .with_renderer(render_mode="Horizontal", vertex_sorting="DISTANCE", shade=True)
+       .with_curves(
+            velocity_over_lifetime=dict(radial=constant(2.2)),  # 0.44 blk/s creep
+            size_over_lifetime=eased([(0.0, 0.6), (0.45, 1.15), (1.0, 1.45)]),
+            noise=dict(frequency=0.3, quality="Noise2D",
+                       position=nf3(constant(0.16), constant(0.02), constant(0.16)),
+                       remap_curve=FOG_BILLOW_REMAP),
+            color_over_lifetime=gradient(
+                [(0.0, 0.0), (0.3, 0.26), (0.72, 0.2), (1.0, 0.0)],
+                [(0.0, *STM_SLATE), (0.6, *FOG_TEAL), (1.0, *GLI_DEAD)]))
+       .with_cull_box(*cull))
+
+    # L4 arm_motes: sparse fog flecks shed off the reaching arms and sinking — the v7
     # second-emitter depth read for a boss-tier hero effect (budget ~10 live).
     (fx.particle_emitter(
             "arm_motes",
             duration=200, looping=False,
             start_lifetime=random_between(18, 28),
-            start_speed=random_between(0.01, 0.04),
+            start_speed=random_between(0.2, 0.8),      # blk/s
             start_size=nf3(random_between(0.12, 0.22), random_between(0.12, 0.22),
                            random_between(0.12, 0.22)),
             simulation_space="Local", max_particles=12)
        .child_of(pivot)
        .with_emission(rate=constant(0.4))
        .with_shape(sphere(radius=2.6, thickness=0.25))
-       .with_material(texture_material(TEX_SMOKE, blend=BLEND_ALPHA))
+       .with_material(material_shader(
+            "eclipse:soft_particle",
+            textures={"MainTexture": TEX_SMOKE},
+            uniforms={"SoftDistance": 0.7, "NearFade": 0.45},
+            blend=BLEND_ALPHA))
        .with_renderer(vertex_sorting="DISTANCE", shade=True)
        .with_curves(
-            velocity_over_lifetime=dict(linear=nf3(constant(0.0), constant(-0.03),
+            velocity_over_lifetime=dict(linear=nf3(constant(0.0), constant(-0.6),
                                                    constant(0.0))),
             color_over_lifetime=gradient(
-                [(0.0, 0.0), (0.3, 0.35), (1.0, 0.0)],
-                [(0.0, *FOG_TEAL), (1.0, *GLI_DEAD)]))
-       .with_cull_box((-9.0, -2.0, -9.0), (9.0, 6.0, 9.0)))
+                [(0.0, 0.0), (0.3, 0.32), (1.0, 0.0)],
+                [(0.0, *STM_SLATE), (0.6, *FOG_TEAL), (1.0, *GLI_DEAD)]))
+       .with_cull_box(*cull))
     return fx
 
 
