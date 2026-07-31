@@ -54,6 +54,11 @@ const PLAUDER_MAX_S := 110.0
 const WIEDERSEHEN_MIN_MS := SoulTriggers.MS_PER_DAY
 const WIEDERSEHEN_PAUSE_S := 3.2
 
+## W15/VOICE2: der zuletzt aufgestellte SeeleRunner — statischer Zugang für
+## Feature-Dateien OHNE Raum-Referenz (Ort-Szenen, Wardrobe, Ranch,
+## Minispiel-Results, Reward-Hub). setup() registriert, _exit_tree räumt auf.
+static var _aktive_seele: SeeleRunner = null
+
 ## Der GoobyReactions-Runner (bewusst untypisiert — kein Klassen-Zyklus).
 var runner: Node = null
 
@@ -112,8 +117,19 @@ static func kommentar_im_raum(room: Node, kategorie: String) -> String:
 	return ""
 
 
+## W15/VOICE2: None-sicherer 1-Zeilen-Einstieg OHNE Raum-Referenz (Ort-
+## Szenen wie die Raumstation, Ranch-Events, Results, Feiern): spricht über
+## den zuletzt aktiven SeeleRunner. Lebt gerade keiner (Szene ohne Home-
+## Runner, nackte Tests) oder hält die Bremse: still, gibt "".
+static func kommentar_global(kategorie: String) -> String:
+	if _aktive_seele == null or not is_instance_valid(_aktive_seele):
+		return ""
+	return _aktive_seele.kommentar(kategorie)
+
+
 func setup(target_runner: Node) -> void:
 	runner = target_runner
+	_aktive_seele = self
 	# W14/VOICE: Lücke JETZT lesen — der Betreten-Moment stempelt gleich
 	# lastVisitAt neu (SoulState.touch_visit in _run_enter).
 	_besuchs_luecke_ms = _luecke_vor_besuch()
@@ -121,6 +137,13 @@ func setup(target_runner: Node) -> void:
 	_setup_ausdruck_und_stimme()
 	_feel_snapshots_init()
 	refresh_stimmung()
+
+
+## W15/VOICE2: die statische Registrierung nie auf einen toten Runner
+## zeigen lassen — ein neuer setup() übernimmt sie ohnehin.
+func _exit_tree() -> void:
+	if _aktive_seele == self:
+		_aktive_seele = null
 
 
 ## Ausdrucks-Schicht ans Rig hängen, Stimme an Gooby (beide idempotent) —

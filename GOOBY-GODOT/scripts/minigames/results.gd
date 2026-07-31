@@ -107,6 +107,8 @@ func show_results(breakdown: Dictionary, meta: Dictionary, juice: JuiceKit = nul
 	if new_best:
 		var best_line := _add_line(I18nService.t("mg.results.new_best"), Color(1.0, 0.62, 0.16))
 		_celebrate_record(best_line)
+		# W15/VOICE2 (W13-Request): neuer Rekord → Gooby feiert mit (None-sicher).
+		SeeleRunner.kommentar_global("minispiel.rekord")
 	else:
 		_add_line(
 			I18nService.t("mg.results.best", {"best": int(breakdown.get("best", 0))}),

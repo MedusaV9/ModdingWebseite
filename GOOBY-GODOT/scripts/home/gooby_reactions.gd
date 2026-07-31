@@ -54,6 +54,10 @@ const FUND_KEYS: Array[String] = ["rewards.fund.a", "rewards.fund.b", "rewards.f
 const PET_BONUS_JEDER := 10
 const PET_PITCH_SCHRITT := 0.04
 const PET_BONUS_COINS := 1
+## W15/VOICE2 Streichel-Übermut-Gag: MEHR als 10 Streichler in 30 s → Gooby
+## wehrt EINMAL knuffig ab (refuse-Clip aus W13C) und bittet um eine Pause;
+## danach hält eine Abkühlzeit den Gag still (kein Dauer-Meckern).
+const UEBERMUT_LINE_KEY := "soul.linie.uebermut.pause"
 
 var room: Node = null
 var gs: Object = null
@@ -79,6 +83,9 @@ var _tap_area: Area3D = null
 var _emotion_revert: SceneTreeTimer = null
 ## SEELE-2: Stimmung/Ausdruck/Stimme/Absichten (scripts/soul/seele_runner.gd).
 var _seele: SeeleRunner = null
+## W15/VOICE2: pure, zeitinjizierte Übermut-Zustandsmaschine
+## (scripts/home/streichel_uebermut.gd).
+var _uebermut := StreichelUebermut.new()
 
 
 ## Runner erzeugen und an einen RoomBase hängen (idempotent pro Raum).
@@ -249,6 +256,11 @@ func handle_tap() -> void:
 	var pets_today := _count_pet()
 	_pet_feedback(pets_today)
 	_seele.stoss_streicheln(pets_today)
+	# W15/VOICE2: zu viel des Guten (>10 Streichler in 30 s) → einmal refuse
+	# + Pausen-Bitte; der Gag ersetzt diese Runde das Tipp-Stufen-Moment.
+	if _uebermut.registriere(_now_ms()):
+		_uebermut_gag()
+		return
 	var stage := tap_stage(_tap_count)
 	if stage.is_empty():
 		return
@@ -302,6 +314,14 @@ func _count_tickle() -> void:
 			counters["tickles"] = int(counters.get("tickles", 0)) + 1
 	)
 	RewardHub.note_action(gs)
+
+
+## W15/VOICE2: der Übermut-Moment selbst — refuse-Clip (Kern-Feedback,
+## läuft IMMER) + „Paus-e-e!“-Zeile über die vorhandene Bubble/Stimme.
+func _uebermut_gag() -> void:
+	if gooby != null and gooby.get("rig") is GoobyRig:
+		gooby.rig.play_clip(GoobyRig.CLIP_REFUSE)
+	_say(I18nService.t(UEBERMUT_LINE_KEY), "angry")
 
 
 # ── Idle-Leben (Hintergrund) ──────────────────────────────────────────────────

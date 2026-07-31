@@ -104,6 +104,8 @@ func tippe_zelle(cell: Vector2i) -> String:
 	abbrechen()
 	refresh()
 	geaendert.emit()
+	# W15/VOICE2 (W13-Request): frisch gespannte Girlande → Gooby-Kommentar.
+	SeeleRunner.kommentar_im_raum(_room as Node, "w13.girlande")
 	return "gespannt"
 
 

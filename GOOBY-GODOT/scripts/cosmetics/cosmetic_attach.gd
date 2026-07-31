@@ -137,12 +137,17 @@ func apply_fell(id: String) -> void:
 		_mesh.set_surface_override_material(0, null)
 		return
 	var material: Material = null
-	if str(CosmeticParts.param(def, "shader", "")) == "galaxie":
+	var ist_galaxie := str(CosmeticParts.param(def, "shader", "")) == "galaxie"
+	if ist_galaxie:
 		material = _galaxie_material(def)
 	if material == null:
 		material = _palette_material(def)
 	if material != null:
 		_mesh.set_surface_override_material(0, material)
+		# W15/VOICE2 (W13-Request): Galaxie-Fell angelegt → Gooby staunt
+		# (None-sicher; ohne lebenden SeeleRunner bleibt es still).
+		if ist_galaxie:
+			SeeleRunner.kommentar_global("w13.galaxie")
 
 
 ## Charakter-Morphs übernehmen (`meta.charMorphs` aus dem Save):

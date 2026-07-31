@@ -81,6 +81,10 @@ func _ready() -> void:
 	ArcadeScreen.register_routes()
 	UrlaubsBonus.sync(game_state(), _now_ms(), self)
 	_starte_schwebe_hop()
+	# W15/VOICE2 (W13-Request): Station betreten → Weltraum-Kommentar. Die
+	# Ort-Szene hat keinen eigenen GoobyReactions-Runner — der statische
+	# Einstieg spricht über den zuletzt aktiven SeeleRunner (None-sicher).
+	SeeleRunner.kommentar_global("w13.raumstation")
 
 
 ## ---------------------------------------------------------------- Aufbau

@@ -190,6 +190,8 @@ func _celebrate(def: Dictionary) -> void:
 	if bool(feier["funkeln"]):
 		StickerCard.funkel_burst(_toasts, breite)
 	_maybe_claim_set_reward(str(def.get("page", "")))
+	# W15/VOICE2 (W13-Request): Sticker-Feier → Gooby jubelt mit (None-sicher).
+	SeeleRunner.kommentar_global("feier.sticker")
 	sticker_celebrated.emit(def)
 
 
@@ -209,6 +211,8 @@ func _celebrate_achievement(def: Dictionary) -> void:
 	if viewport != null:
 		breite = viewport.get_visible_rect().size.x
 	RewardFx.konfetti_2d(_toasts, KONFETTI_TEILE, breite)
+	# W15/VOICE2 (W13-Request): Erfolgs-Feier → Gooby jubelt mit (None-sicher).
+	SeeleRunner.kommentar_global("feier.erfolg")
 	achievement_celebrated.emit(def)
 
 

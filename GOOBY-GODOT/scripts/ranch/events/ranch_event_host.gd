@@ -229,6 +229,8 @@ func _resolve() -> void:
 	_clear_props()
 	_running = false
 	_def = {}
+	# W15/VOICE2 (W13-Request): Ranch-Event erledigt → Ranch-Kommentar.
+	SeeleRunner.kommentar_global("w13.ranch")
 	event_resolved.emit(event_id)
 
 
