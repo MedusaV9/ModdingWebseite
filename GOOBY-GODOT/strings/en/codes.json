@@ -14,7 +14,10 @@
 			"titel": "Code redeemed!",
 			"muenzen": "+{n} coins",
 			"sticker": "New sticker in the album!",
-			"buff": "Double coins for {min} minutes!"
+			"buff": "Double coins for {min} minutes!",
+			"flag": {
+				"goldiGold": "Goldi hops into your GvZ team — he is already gleaming with pride!"
+			}
 		},
 		"buff_aktiv": "Double coins active: {rest} left",
 		"verlauf": {
@@ -24,7 +27,8 @@
 		},
 		"name": {
 			"updateLiebe": "UpdateLove",
-			"herzGooby": "Heart Gooby"
+			"herzGooby": "Heart Gooby",
+			"goldiGold": "GoldiGold"
 		},
 		"zurueck": "Back",
 		"settings_eintrag": "Redeem action codes"

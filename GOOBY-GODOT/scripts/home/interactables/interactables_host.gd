@@ -71,6 +71,9 @@ func rescan() -> void:
 		elif POSTKARTEN_IDS.has(item_id):
 			# REST-4 (EVAL Rang 15): Wand/Regal öffnen das Postkarten-Archiv.
 			_dock(PostkartenWand.new(), node)
+		elif item_id == "nougatschleuse":
+			# W13/FOOD: Küchen-Nougatschleuse (Web-Easter-Egg §C6.4).
+			_dock(Nougatschleuse.new(), node)
 
 
 ## Tap-Zone über einem Möbel (Area3D + Box um die Möbel-AABB) — geteilter

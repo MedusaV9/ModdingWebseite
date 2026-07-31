@@ -49,6 +49,8 @@ func setup(room: Node) -> void:
 		return
 	GardenState.tick(_gs, jetzt_s())
 	GardenWorld.refresh_spots(_gs, jetzt_s(), _rng)
+	# W13/WETTER-FX: sichtbarer Regen/Schnee im Garten (Plan aus SoulWetter).
+	GardenWorld.wetter_fx_anhaengen(room)
 	_view = GardenView.new()
 	_view.name = "GardenView"
 	add_child(_view)
