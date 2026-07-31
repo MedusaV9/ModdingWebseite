@@ -20,6 +20,8 @@ const TURNIERTAG_SEED := 777
 ## Session-Punkte: Grundwert + Liga-Punkte × Faktor (Platz 1 = 120).
 const SCORE_BASIS := 20
 const SCORE_JE_LIGA_PUNKT := 10
+## W14/GAMESQA Intro-Beat: Arena steht 1,5 s mit Disziplin-Callout, dann Startschuss.
+const INTRO_S := 1.5
 
 var phase := Phase.MENU
 var session_score := 0
@@ -41,6 +43,7 @@ var _pferd_id := ""
 var _pferd: Dictionary = {}
 var _menu: Control
 var _panel: Control
+var _intro_left := 0.0
 
 
 func setup(context: MinigameCtx) -> void:
@@ -80,8 +83,9 @@ func apply_view(size: Vector2) -> void:
 		lauf.apply_size(view_size)
 	# Controls unter einer Node2D-Wurzel erben KEINE Viewport-Anker —
 	# Vollbild-Schalen bekommen ihre Größe deshalb explizit (Muster
-	# RcompLevelSelect._fit_viewport).
-	for control: Control in [_menu, _panel]:
+	# RcompLevelSelect._fit_viewport). W14: hud gehört dazu, sonst liegen
+	# Zeit-Panel und Callouts unsichtbar außerhalb des Bildes.
+	for control: Control in [_menu, _panel, hud]:
 		if control != null and is_instance_valid(control):
 			control.position = Vector2.ZERO
 			control.size = view_size
@@ -89,6 +93,15 @@ func apply_view(size: Vector2) -> void:
 
 func _fit_viewport() -> void:
 	apply_view(get_viewport_rect().size)
+
+
+func _process(delta: float) -> void:
+	if not is_active() or finished or _intro_left <= 0.0:
+		return
+	_intro_left -= delta
+	if _intro_left <= 0.0 and lauf != null and phase == Phase.LAUF:
+		lauf.starte()
+		AudioDirector.try_play(self, "mg_go")
 
 
 func _game_state() -> Object:
@@ -424,7 +437,7 @@ func _starte_lauf() -> void:
 		"seed": _lauf_seed(),
 		"balance": _balance,
 		"pferd": _pferd,
-		"zuschauer": 8 + RanchCompKatalog.klasse_index(_klasse) * 5,
+		"zuschauer": 14 + RanchCompKatalog.klasse_index(_klasse) * 5,
 	}
 	if _geist_an:
 		cfg["geist_b64"] = str(RanchCompState.geist(gs, _disziplin).get("b64", ""))
@@ -445,9 +458,11 @@ func _starte_lauf() -> void:
 	hud = RcompHud.new()
 	hud.lauf = lauf
 	add_child(hud)
-	lauf.starte()
+	hud.position = Vector2.ZERO
+	hud.size = view_size
+	_intro_left = INTRO_S
 	hud.zeige_callout(I18nService.t("rcomp.disziplin.%s" % _disziplin))
-	AudioDirector.try_play(self, "mg_go")
+	AudioDirector.try_play(self, "ui_confirm")
 
 
 ## Deterministischer Lauf-Seed: Run-Seed + Disziplin + bisherige Teilnahmen
@@ -459,6 +474,7 @@ func _lauf_seed() -> int:
 
 
 func _teardown_lauf() -> void:
+	_intro_left = 0.0
 	for node: Node in [hud, lauf]:
 		if node != null and is_instance_valid(node):
 			node.queue_free()

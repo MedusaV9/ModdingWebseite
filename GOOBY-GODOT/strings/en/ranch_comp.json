@@ -6,12 +6,14 @@
 		"ranchTonnen": {
 			"title": "Barrel Racing",
 			"hint": "Round all 3 barrels and dash back — bumping one costs 5 s!",
+			"intro": "Run {n}: Round all 3 barrels — get ready!",
 			"level": "Run {n}",
 			"geschafft": "Finish! {s} s · {stars} stars"
 		},
 		"ranchZeit": {
 			"title": "Time Trial",
 			"hint": "Ride through every gate to the finish — your best run rides along as a ghost!",
+			"intro": "Course {n}: Through every flag gate — get ready!",
 			"level": "Route {n}",
 			"geschafft": "Finish! {s} s · {stars} stars",
 			"geist_zeit": "Ghost: {s} s",

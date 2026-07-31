@@ -8,6 +8,8 @@ extends MinigameBase
 
 const SPIEL := "zeit"
 const ENDE_WARTE_S := 2.2
+## W14/GAMESQA Intro-Beat: Arena steht 1,5 s mit Ziel-Callout, dann Startschuss.
+const INTRO_S := 1.5
 
 var level_id := 0
 var session_score := 0
@@ -20,6 +22,7 @@ var hud: RcompHud
 var _select: RcompLevelSelect
 var _balance: Dictionary = {}
 var _ende_timer := 0.0
+var _intro_left := 0.0
 
 
 func setup(context: MinigameCtx) -> void:
@@ -53,6 +56,11 @@ func apply_view(size: Vector2) -> void:
 		view_size = size
 	if lauf != null:
 		lauf.apply_size(view_size)
+	# W14: HUD unter Node2D-Wurzel erbt KEINE Viewport-Anker → explizit größen,
+	# sonst liegen Zeit-Panel und Callouts (Start/Ziel/Geist) unsichtbar außerhalb.
+	if hud != null and is_instance_valid(hud):
+		hud.position = Vector2.ZERO
+		hud.size = view_size
 
 
 func _fit_viewport() -> void:
@@ -61,6 +69,11 @@ func _fit_viewport() -> void:
 
 func _process(delta: float) -> void:
 	if not is_active() or finished:
+		return
+	if _intro_left > 0.0:
+		_intro_left -= delta
+		if _intro_left <= 0.0 and lauf != null:
+			_starte_lauf()
 		return
 	if not level_running and _ende_timer > 0.0:
 		_ende_timer -= delta
@@ -130,7 +143,7 @@ func _on_level_chosen(id: int) -> void:
 				"pferd": bestes.get("pferd", {}),
 				"route": RanchCompArcade.zeit_route(id),
 				"ziel_s": RanchCompArcade.zeit_ziel_s(id),
-				"zuschauer": 6,
+				"zuschauer": 14,
 				"geist_b64": str(geist.get("b64", "")),
 			}
 		)
@@ -140,20 +153,31 @@ func _on_level_chosen(id: int) -> void:
 	hud = RcompHud.new()
 	hud.lauf = lauf
 	add_child(hud)
+	hud.position = Vector2.ZERO
+	hud.size = view_size
 	level_running = true
+	_intro_left = INTRO_S
+	hud.zeige_callout(I18nService.t("mg.ranchZeit.intro", {"n": id}))
+	AudioDirector.try_play(self, "ui_confirm")
+
+
+## Nach dem Intro-Beat: Startschuss + Geist-Hinweis (der Lauf zählt ab jetzt).
+func _starte_lauf() -> void:
 	lauf.starte()
+	var geist := RanchCompState.geist(_game_state(), RanchCompArcade.zeit_geist_key(level_id))
 	if geist.is_empty():
-		hud.zeige_callout(I18nService.t("mg.ranchZeit.level", {"n": id}))
+		hud.zeige_callout(I18nService.t("mg.ranchZeit.level", {"n": level_id}))
 	else:
 		hud.zeige_callout(
 			I18nService.t("mg.ranchZeit.geist_zeit", {"s": "%.1f" % float(geist.get("wert", 0.0))}),
 			RcompHud.TEAL
 		)
-	AudioDirector.try_play(self, "ui_confirm")
+	AudioDirector.try_play(self, "mg_go")
 
 
 func _teardown_lauf() -> void:
 	level_running = false
+	_intro_left = 0.0
 	for node: Node in [hud, lauf]:
 		if node != null and is_instance_valid(node):
 			node.queue_free()

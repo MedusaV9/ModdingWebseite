@@ -6,12 +6,14 @@
 		"ranchTonnen": {
 			"title": "Tonnenrennen",
 			"hint": "Umrunde alle 3 Tonnen und flitze zurück — Anrempeln kostet 5 s!",
+			"intro": "Lauf {n}: Umrunde alle 3 Tonnen — gleich geht’s los!",
 			"level": "Lauf {n}",
 			"geschafft": "Ziel! {s} s · {stars} Sterne"
 		},
 		"ranchZeit": {
 			"title": "Zeitrennen",
 			"hint": "Durch alle Tore zum Ziel — dein bester Lauf reitet als Geist mit!",
+			"intro": "Strecke {n}: Durch alle Flaggentore — gleich geht’s los!",
 			"level": "Strecke {n}",
 			"geschafft": "Ziel! {s} s · {stars} Sterne",
 			"geist_zeit": "Geist: {s} s",
