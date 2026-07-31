@@ -25,15 +25,27 @@ var _badge: Button
 var _net_log: Array[Dictionary] = []
 var _net_connected := false
 var _menu: Control
+## W14/NETSET: Uhr-Offset (ms) fürs Dev-Menü — TRANSIENT (nie im Save).
+## Solange > 0, re-pinnt _process die öffentliche GameState-Uhr pro Frame
+## auf „Systemzeit + Offset“ (DevZeit), damit sie mit Offset WEITERLÄUFT.
+var _clock_offset_ms := 0
 
 
 func _ready() -> void:
+	set_process(false)
 	var settings := _settings()
 	if settings != null and settings.has_method("is_dev_enabled"):
 		if bool(settings.get_setting("dev.was_active", false)):
 			_register_slice_deferred()
 		if settings.is_dev_enabled():
 			_activate_ui()
+
+
+func _process(_delta: float) -> void:
+	if _clock_offset_ms <= 0:
+		set_process(false)
+		return
+	DevZeit.apply_offset(_game_clock(), _clock_offset_ms)
 
 
 func is_enabled() -> bool:
@@ -58,6 +70,7 @@ func disable() -> void:
 	var settings := _settings()
 	if settings != null:
 		settings.set_setting("dev.enabled", false)
+	set_clock_offset_ms(0)
 	close_menu()
 	_remove_badge()
 	dev_mode_changed.emit(false)
@@ -94,6 +107,31 @@ func is_menu_open() -> bool:
 ## Redigierter Netzwerk-Log (neueste zuletzt; Kopie).
 func net_log() -> Array[Dictionary]:
 	return _net_log.duplicate()
+
+
+## W14/NETSET: Uhr-Offset setzen (ms; 0 = Echtzeit). Wendet den Offset
+## SOFORT auf die öffentliche GameState-Uhr an und holt per run_catch_up()
+## die „übersprungene“ Zeit nach (Stats/Schlaf/Urlaub ziehen sofort nach).
+func set_clock_offset_ms(offset_ms: int) -> void:
+	_clock_offset_ms = maxi(0, offset_ms)
+	DevZeit.apply_offset(_game_clock(), _clock_offset_ms)
+	set_process(_clock_offset_ms > 0)
+	var gs := get_node_or_null("/root/GameState")
+	if gs != null and gs.has_method("run_catch_up") and gs.has_method("is_loaded"):
+		if bool(gs.is_loaded()):
+			gs.run_catch_up()
+
+
+func clock_offset_ms() -> int:
+	return _clock_offset_ms
+
+
+func _game_clock() -> Object:
+	var gs := get_node_or_null("/root/GameState")
+	if gs == null:
+		return null
+	var clock: Variant = gs.get("clock")
+	return clock if clock is Object else null
 
 
 func _activate_ui() -> void:
