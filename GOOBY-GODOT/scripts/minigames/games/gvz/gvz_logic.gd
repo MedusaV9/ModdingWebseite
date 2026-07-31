@@ -67,6 +67,10 @@ static func new_run(
 		"next_id": 1,
 		"goldi": bool(opts.get("goldi", false)),
 		"events": [],
+		# Run-Statistik für die Sticker-Counter (W13/GVZ, stickers.json):
+		# deterministisch in der Sim gezählt, von der Szene am Rundenende in
+		# achievements.counters gebucht. NICHT Teil von state_hash (PvP-safe).
+		"stats": {"drops_collected": 0, "eis_placed": 0, "bert_placed": 0, "moehren_shots": 0},
 	}
 	return state
 
@@ -138,6 +142,10 @@ static func place_tower(state: Dictionary, type: String, lane: int, col: int) ->
 		state["cooldowns"][type] = int(state["tick"]) + int(row.get("cooldown_ticks", 0))
 	var tower := _make_tower(state, type, lane, col)
 	state["towers"][cell_key(lane, col)] = tower
+	if type == "eis_gooby":
+		bump_stat(state, "eis_placed")
+	elif type == "dicker_bert":
+		bump_stat(state, "bert_placed")
 	push_event(state, "place", {"type": type, "lane": lane, "col": col})
 	return {"ok": true, "reason": ""}
 
@@ -172,6 +180,7 @@ static func collect_drop(state: Dictionary, drop_id: int) -> int:
 			var amount := int(drops[i]["amount"])
 			var max_n := int(state["balance"]["economy"].get("max_nutella", 9975))
 			state["nutella"] = mini(max_n, int(state["nutella"]) + amount)
+			bump_stat(state, "drops_collected")
 			push_event(
 				state,
 				"collect",
@@ -236,6 +245,14 @@ static func state_hash(state: Dictionary) -> int:
 	]:
 		parts.append(var_to_str(state[key]))
 	return hash("\n".join(parts))
+
+
+## Run-Statistik-Zähler erhöhen (auch von GvzCombat; Keys s. new_run).
+static func bump_stat(state: Dictionary, key: String, amount := 1) -> void:
+	if not (state.get("stats") is Dictionary):
+		state["stats"] = {}
+	var stats: Dictionary = state["stats"]
+	stats[key] = int(stats.get(key, 0)) + amount
 
 
 ## Ereignis an den Tick-Report anhängen (auch von GvzCombat/GvzZombies).

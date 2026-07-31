@@ -24,6 +24,21 @@ const TOP_PAD := 6.0
 const MOWER_GUTTER := 44.0
 const BANNER_SEC := 2.2
 
+## W13/GVZ (P5-Report G18): Meilenstein-Siege feuern Event-Hooks über den
+## bestehenden Sticker-Mechanismus (Doc G §4.4 „1× Sticker bei L5/10/15“).
+## L15 = gvz_kampagne → Sticker „Garten gerettet!“ (stickers.json); die
+## Hooks gvz_l5/gvz_l10 warten auf ihre Katalog-Sticker (Request an den
+## Orchestrator — der Katalog ist auf 141 Einträge + Assets verplombt).
+const MILESTONE_HOOKS := {5: "gvz_l5", 10: "gvz_l10", 15: "gvz_kampagne"}
+## Run-Stats der puren Sim (GvzLogic state.stats) → achievements.counters
+## (exakt die Counter-Keys der 6 GvZ-Sticker-Conds in stickers.json).
+const STAT_COUNTERS := {
+	"drops_collected": "gvzNutella",
+	"eis_placed": "gvzEisEinsaetze",
+	"bert_placed": "gvzBertEinsaetze",
+	"moehren_shots": "gvzMoehrenSchuesse",
+}
+
 ## Testschalter: GameState-Double VOR setup() setzen (Muster W2a RoomBase).
 var game_state_override: Object
 
@@ -239,6 +254,7 @@ func _report_live_score() -> void:
 func _on_run_over() -> void:
 	if phase != "battle":
 		return
+	_book_sticker_progress(str(state["outcome"]) == "won")
 	if str(state["outcome"]) == "won":
 		var mowers_used := 0
 		for lane: Variant in state["mowers"]:
@@ -271,6 +287,39 @@ func _on_run_over() -> void:
 			ctx.juice.hit_freeze(120)
 		_build_end_overlay(false, 0, 0, false)
 	queue_redraw()
+
+
+## Rundenende → Sticker-Verdrahtung (W13/GVZ): Run-Stats in die Counter der
+## stickers.json-Conds buchen (Sieg UND Niederlage — gesammelt ist gesammelt),
+## Meilenstein-Hook bei L5/10/15-Sieg feuern, RewardHub-Auswertung anstoßen.
+func _book_sticker_progress(won: bool) -> void:
+	var gs := _game_state()
+	if gs == null or not gs.has_method("update"):
+		return
+	var stats: Dictionary = state.get("stats", {})
+	var kills := int(state.get("kills", 0))
+	gs.update(
+		func(save: Dictionary) -> void:
+			if not (save.get("achievements") is Dictionary):
+				save["achievements"] = {"unlocked": {}, "counters": {}}
+			var achievements: Dictionary = save["achievements"]
+			if not (achievements.get("counters") is Dictionary):
+				achievements["counters"] = {}
+			var counters: Dictionary = achievements["counters"]
+			for stat_key: String in STAT_COUNTERS:
+				_bump_counter(counters, str(STAT_COUNTERS[stat_key]), int(stats.get(stat_key, 0)))
+			_bump_counter(counters, "gvzZombiesGestoppt", kills)
+	)
+	if won and MILESTONE_HOOKS.has(level_id):
+		StickerUnlocks.fire_event_hook(gs, str(MILESTONE_HOOKS[level_id]))
+	RewardHub.note_action(gs)
+
+
+static func _bump_counter(counters: Dictionary, key: String, delta: int) -> void:
+	if delta <= 0:
+		return
+	var raw: Variant = counters.get(key, 0)
+	counters[key] = (int(raw) if raw is int or raw is float else 0) + delta
 
 
 ## ── Eingabe (Gefecht) ────────────────────────────────────────────────────
@@ -833,8 +882,11 @@ func _build_select_screen() -> void:
 	_select_screen.level_chosen.connect(open_level)
 	_select_screen.done_pressed.connect(finish_session)
 	add_child(_select_screen)
-	# and_offsets: nur Anker setzen würde das aktuelle Rect behalten (E14-P0).
-	_select_screen.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	# B11-Fix (W13/GVZ): KEIN FULL_RECT-Preset mehr — unter dem Node2D-Parent
+	# (MinigameBase) ist das Anchor-Rect 0×0, und Anker+size-Setzung auf
+	# demselben Node warf „Nodes with non-equal opposite anchors …“. Der
+	# Select-Screen bindet sich selbst an den Viewport (_fit_viewport in
+	# _ready + size_changed, GOB-NOM-Muster) — Anker bleiben gleichseitig.
 
 
 func _build_end_overlay(won: bool, stars: int, total: int, first_clear: bool) -> void:

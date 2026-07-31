@@ -118,6 +118,10 @@ static func _fire(state: Dictionary, tower: Dictionary, row: Dictionary) -> bool
 			continue
 		fired = true
 		var volley := int(row.get("volley", 1))
+		if kind == "carrot" or kind == "frost":
+			# Sticker-Zähler „Möhrenschütze“: jede Möhre zählt — auch die
+			# Frost-Möhren des Eis-Goobys und beide einer Doppelmöhren-Salve.
+			GvzLogic.bump_stat(state, "moehren_shots", volley)
 		for shot in volley:
 			(
 				(state["projectiles"] as Array)
