@@ -18,6 +18,7 @@ extends MinigameBase
 
 const Logic := preload("res://scripts/minigames/games/dance_party/dance_party_logic.gd")
 const Stage := preload("res://scripts/minigames/games/dance_party/dance_party_stage3d.gd")
+const Timing := preload("res://scripts/minigames/games/dance_party/dance_timing.gd")
 
 ## Bildschirmhöhe der Trefferlinie (Anteil von oben).
 const HIT_LINE_FRAC := 0.74
@@ -42,6 +43,10 @@ var score := 0
 var finished := false
 var view_size := Vector2(390.0, 844.0)
 var landscape := false
+## W15/TECHKIT (Doc G §9 R5): kompensierte Timing-Quelle — Note-Position und
+## Treffer-Fenster laufen über timing.play_time(song_time); Score-Formel,
+## Rundendauer und Fieber/Zugabe bleiben auf der rohen Uhr (zahlengleich).
+var timing := Timing.new()
 
 var _chart_segment := 0
 var _head := 0
@@ -64,6 +69,7 @@ func setup(context: MinigameCtx) -> void:
 	fever = Logic.create_fever_chain()
 	endless_state = Logic.create_endless_state()
 	song_time = -float(tune["LEAD_IN_SEC"])
+	timing = Timing.from_audio_server(Timing.manual_offset_from_state(_save_state()))
 	_append_segment()
 	_stage = Stage.new()
 	_stage.name = "Club3D"
@@ -149,7 +155,7 @@ func _sync_stage(delta: float) -> void:
 		var n: Dictionary = notes[i]
 		if bool(n["hit"]) or bool(n["missed"]):
 			continue
-		var life := Logic.note_lifecycle(float(n["time"]), song_time, tune)
+		var life := Logic.note_lifecycle(float(n["time"]), play_time(), tune)
 		if life == "future":
 			break
 		if life != "visible":
@@ -203,10 +209,24 @@ func lane_x(lane: int) -> float:
 	return view_size.x * 0.5 + (lane - 1.0) * lane_span()
 
 
-## Bildschirm-y einer Note zur aktuellen Songzeit.
+## W15/TECHKIT: die latenz-kompensierte Songzeit (Basis + manueller Offset)
+## — DIE Zeitachse für Note-Position, Sichtbarkeit und Treffer-Fenster.
+func play_time() -> float:
+	return timing.play_time(song_time)
+
+
+## Save-Zustand für den Kalibrier-Offset (ohne GameState = {} → Offset 0).
+func _save_state() -> Dictionary:
+	var gs := get_node_or_null("/root/GameState")
+	if gs != null and gs.has_method("state"):
+		return gs.state()
+	return {}
+
+
+## Bildschirm-y einer Note zur aktuellen (kompensierten) Songzeit.
 func note_y(note_time: float) -> float:
 	var travel := float(tune["NOTE_TRAVEL_SEC"])
-	var t := clampf((note_time - song_time) / travel, -0.4, 1.4)
+	var t := clampf((note_time - play_time()) / travel, -0.4, 1.4)
 	return view_size.y * HIT_LINE_FRAC - t * view_size.y * TRAVEL_FRAC
 
 
@@ -274,7 +294,7 @@ func _expire_notes() -> void:
 		if bool(n["hit"]) or bool(n["missed"]):
 			_head += 1
 			continue
-		if Logic.note_lifecycle(float(n["time"]), song_time, tune) != "expired":
+		if Logic.note_lifecycle(float(n["time"]), play_time(), tune) != "expired":
 			break
 		n["missed"] = true
 		_head += 1
@@ -284,12 +304,12 @@ func _expire_notes() -> void:
 func _tap_lane(lane: int) -> void:
 	_lane_flash[lane] = 0.18
 	var window: Array[Dictionary] = notes.slice(_head, mini(notes.size(), _head + 48))
-	var idx := Logic.judge_tap(window, lane, song_time, tune)
+	var idx := Logic.judge_tap(window, lane, play_time(), tune)
 	if idx == -1:
 		return
 	var note: Dictionary = window[idx]
 	note["hit"] = true
-	var kind := Logic.classify_hit(float(note["time"]) - song_time, tune)
+	var kind := Logic.classify_hit(float(note["time"]) - play_time(), tune)
 	_judge(kind if not kind.is_empty() else "miss", lane_x(lane))
 
 
