@@ -116,7 +116,7 @@ func _build_night_entries(box: VBoxContainer, flat: Dictionary) -> void:
 		)
 		nick.pressed.connect(_on_sleep_chosen.bind(true))
 		box.add_child(nick)
-	if not StoryTime.stories_from_registry().is_empty():
+	if StoryTime.story_option_available():
 		var geschichte := _menu_button(I18nService.t("sleep.bett.geschichte"), "AccentButton")
 		geschichte.pressed.connect(_on_story_chosen)
 		box.add_child(geschichte)
@@ -260,8 +260,15 @@ func _on_wake_chosen() -> void:
 func _on_story_chosen() -> void:
 	AudioDirector.try_play(self, "ui_click")
 	_close_panel()
+	if _story == null:
+		return
+	# W13B: mit Bücher-Katalog öffnet sich Goobys Bücherregal (Abnutzung,
+	# REHWEI-Nachschub); ohne Pack bleibt der Legacy-Zufallspfad erhalten.
+	if not StoryBooks.books_from_registry().is_empty():
+		_story.open_library()
+		return
 	var stories := StoryTime.stories_from_registry()
-	if stories.is_empty() or _story == null:
+	if stories.is_empty():
 		return
 	_story.open_book(stories[_rng.randi_range(0, stories.size() - 1)])
 

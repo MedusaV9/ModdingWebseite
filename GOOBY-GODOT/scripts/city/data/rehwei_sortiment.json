@@ -30,5 +30,13 @@
     {"id": "pizza", "name_de": "Pizza", "preis": 30, "glb": "pizza.glb", "hunger": 45, "spass": 8, "hygiene": -2, "junk": true, "gooberando": true},
     {"id": "cake", "name_de": "Torte", "preis": 40, "glb": "cake.glb", "hunger": 30, "spass": 20, "junk": true},
     {"id": "nutella", "name_de": "Nutella-Glas", "preis": 45, "glb": "nutella.glb", "hunger": 18, "spass": 6, "hygiene": -4, "junk": true}
+  ],
+  "kommentar_buecher": "W13B/GESCHICHTEN (Doc F §3.2): Bücher-Kategorie für die Geschichten-Stunde — Ids/Preise 1:1 aus content/books/data/books.json (Wache: tests/unit/test_w13b_geschichten.gd). inventar=BuchId → HaendlerSheet.kaufe legt den Kauf in inventory.items ab, StoryBooks.owned_book_ids liest ihn. Das Startbuch (buch_moehrenmond) ist gratis und steht bewusst NICHT im Laden. Einbindung ins REHWEI-Sheet: Request [GESCHICHTEN] in /tmp/gooby-godot/handoffs/W13-requests.md (CitySortiment.buecher + OrtRehwei.oeffne_laden).",
+  "buecher": [
+    {"id": "buch_weltraum", "name_de": "Weltraum-Hoppel", "preis": 35, "inventar": "buch_weltraum", "kategorie": "buch"},
+    {"id": "buch_piraten", "name_de": "Der Piraten-Nutella-Schatz", "preis": 40, "inventar": "buch_piraten", "kategorie": "buch"},
+    {"id": "buch_ritter", "name_de": "Ritter Gooby von Flauschfels", "preis": 45, "inventar": "buch_ritter", "kategorie": "buch"},
+    {"id": "buch_tiefsee", "name_de": "Die Tiefsee-Schnarchnasen", "preis": 50, "inventar": "buch_tiefsee", "kategorie": "buch"},
+    {"id": "buch_traumbaeckerei", "name_de": "Die Traumbäckerei", "preis": 60, "inventar": "buch_traumbaeckerei", "kategorie": "buch"}
   ]
 }

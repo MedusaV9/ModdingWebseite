@@ -21,6 +21,16 @@
 		"gute_nacht": "Gute Nacht, {gooby}. Träum was Weiches.",
 		"frueh_geweckt": "Hmpf … fünf Minuten noch …",
 		"aufgewacht": "Guten Morgen! Gooby hat wunderbar geschlafen.",
-		"gaehnen": "Gooby gähnt herzhaft. Ein Nickerchen wäre schön."
+		"gaehnen": "Gooby gähnt herzhaft. Ein Nickerchen wäre schön.",
+		"story": {
+			"bibliothek_titel": "Goobys Bücherregal",
+			"waehlen": "Welches Buch lesen wir heute?",
+			"frisch": "Knisterfrisch und furchtbar spannend!",
+			"gelesen": "Schon {mal}× vorgelesen.",
+			"abgenutzt": "Das kennt Gooby schon fast auswendig …",
+			"naechste_seite": "Gooby blinzelt noch … noch eine Seite!",
+			"gesperrt": "Bei REHWEI kaufen ({preis} ᴳ)",
+			"nachschub": "Nachschub für müde Ohren gibt’s bei REHWEI in der Stadt."
+		}
 	}
 }

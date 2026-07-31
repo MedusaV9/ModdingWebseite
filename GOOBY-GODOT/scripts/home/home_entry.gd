@@ -33,6 +33,8 @@ func _ready() -> void:
 	RandomEventEngine.register_slice()
 	GoobyBuffs.register_slice()
 	BadState.register_slice()
+	# W13B: Bücher-Abnutzung der Geschichten-Stunde (story-Slice).
+	StoryTime.register_slice()
 	_router = get_node_or_null("/root/SceneRouter")
 	_gs = get_node_or_null("/root/GameState")
 	if _router != null:
