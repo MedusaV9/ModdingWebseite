@@ -20,6 +20,9 @@ schreibt dazu, WAS er gemacht hat.
 Das Gesammte UI ist hässlich null gleich und es sieht halt dazu auch noch null gut aus ich will das du das gesammte UI einmal ein Rework machst. Ein full Rework schau dir an wie Buttons in der nicht Godot Version davor aussahen etc und versuche den Stil wieder besser zu treffen überarbeite auch das sich zb notifactions und so nicht mit Goobys Text bubble unten überschenidet. Verbessere das gesammte UI im Spiel ich will wie gesagt einen full rework und dann sollst du den UI Stil von Animal Crossing new Horizons besser nachmachen also ich will zb so animierte Runde süße Sprechblasen ich will das die Knöpfe haptisches Feedback haben etc 
 Ich will das du einmal jedes UI Reworken tust jedes also auch Settings, Arcade etc
 
+Ich will das für Sachen wie Lieferungen etc zb auch Dynamic Island genutzt wird damit man sieht wie lange noch bzw. das live activities genutzt werden 
+
+ich will das du ein Gooby Widget hinzufügen tust das man bei IOS auf seinem Homscreen haben kann in verschiedenen Größen wo man seinen Gooby sieht plus einen Text was der so redet halt bzw das man dort zb auch sieht wenn gooby hingefallen ist etc und das man dort auch seine Stats sieht wie es ihm geht etc baue das vollständig mit in die App ein und mach das wirklich perfekt ist und niedlich als auch cool und das man es recht viel in den Settings auch noch mehr anpassen kann was dort landet welches Farb Schema etc 
 
 Gehe nochmal mit jeweils pro Spiel 5 Fable 5 Max Thinking Subagents durch und bewerte jedes Soiel einzeln komplett und dann verbessere jedes und stelle sicher das es unsere Qualität Standards vollständig erreichen tust und übertriffst
 
