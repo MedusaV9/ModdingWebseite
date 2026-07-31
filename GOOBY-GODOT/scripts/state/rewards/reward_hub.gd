@@ -173,15 +173,22 @@ func _drain_queue() -> void:
 	_draining = false
 
 
+## W13B/STICKER (H §3.4): Feier nach Rarity differenziert — Mapping pur in
+## StickerCard.celebration_for (normal = Toast; Silber = Toast + kleines
+## Funkeln; Gold = Toast + Konfetti + eigener Jingle aus der SFX-Palette).
 func _celebrate(def: Dictionary) -> void:
 	var sticker_name := str(def.get("name_de", def.get("id", "")))
-	_toasts.show_toast(I18nService.t("album.unlock_toast", {"name": sticker_name}))
-	AudioDirector.try_play(self, "ui_sticker")
+	var feier := StickerCard.celebration_for(str(def.get("rarity", "haeufig")))
+	_toasts.show_toast(I18nService.t(str(feier["toast_key"]), {"name": sticker_name}))
+	AudioDirector.try_play(self, str(feier["sfx"]))
 	var breite := 640.0
 	var viewport := get_viewport()
 	if viewport != null:
 		breite = viewport.get_visible_rect().size.x
-	RewardFx.konfetti_2d(_toasts, KONFETTI_TEILE, breite)
+	if bool(feier["konfetti"]):
+		RewardFx.konfetti_2d(_toasts, KONFETTI_TEILE, breite)
+	if bool(feier["funkeln"]):
+		StickerCard.funkel_burst(_toasts, breite)
 	_maybe_claim_set_reward(str(def.get("page", "")))
 	sticker_celebrated.emit(def)
 

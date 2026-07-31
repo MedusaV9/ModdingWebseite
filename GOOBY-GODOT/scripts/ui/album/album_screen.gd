@@ -488,6 +488,11 @@ func _build_sticker_card(def: Dictionary) -> Control:
 	content.add_child(_build_name_band(def, unlocked))
 	if unlocked and not _is_seen(id):
 		card.add_child(_build_new_badge())
+	# W13B/STICKER (H §3.4): freigeschaltete GOLD-Sticker glitzern dezent
+	# (Shimmer-Shader; Reduced Motion = statischer Glanz). Mystery-Slots
+	# bleiben effektfrei — die Rarity soll nichts leaken.
+	if unlocked:
+		StickerCard.attach_glitter(card, str(def.get("rarity", "")), RewardFx.reduced_motion(self))
 	return card
 
 
@@ -584,6 +589,13 @@ func _on_sticker_tapped(def: Dictionary) -> void:
 		if art != null:
 			art.custom_minimum_size = Vector2(0, 220.0 * _f)
 			body.add_child(art)
+	if unlocked:
+		# W13B/STICKER: Rarity-Begriff im Detail-Sheet (strings album.rarity_*).
+		var rarity_label := Label.new()
+		rarity_label.text = I18nService.t("album.rarity_%s" % str(def.get("rarity", "haeufig")))
+		rarity_label.theme_type_variation = &"SoftLabel"
+		_scale_font(rarity_label, 13)
+		body.add_child(rarity_label)
 	var text := Label.new()
 	text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_scale_font(text, 16)
