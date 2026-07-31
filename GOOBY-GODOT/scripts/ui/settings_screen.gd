@@ -1,8 +1,10 @@
 class_name SettingsScreen
-extends Control
+extends SettingsRowsBasis
 ## Settings-Screen (H §5.2 + RW-7). Schreibt sofort nach /root/AppSettings;
 ## Quality/Audio/Notify lauschen. Versteckter Dev-Modus: 3× Tip auf aktives
 ## „Deutsch“. Skaliert mit UiScale; bei Resize/_rebuild neu.
+## W14: generische Row-/Karten-Builder + AppSettings-Leser wohnen in der
+## Basisklasse SettingsRowsBasis (scripts/ui/settings/settings_rows_basis.gd).
 
 signal setting_changed(key: StringName, value: Variant)
 signal update_check_requested
@@ -12,6 +14,43 @@ signal back_pressed
 const ICON_DIR := "res://assets/ui/icons/"
 const NEWS_PANEL_SCENE := "res://scripts/ui/news_50_panel.tscn"
 const VERSION_FALLBACK := "5.0.0-dev"
+## W14/UISCREENS-A: die 6 klar benannten Gruppen (ACNH-Aufräumung). Jede
+## Gruppe trägt einen Icon-Glyph-Header über den bestehenden Sektions-Karten;
+## die Karten-Node-Namen (SectionGrafik, …) bleiben W1c-/RW-7-Kontrakt.
+## `sections` listet die Karten-Namen in Anzeige-Reihenfolge (pure, testbar).
+const GRUPPEN: Array = [
+	{
+		"id": "spiel",
+		"icon": "gamepad",
+		"titel_key": "settings.gruppe_spiel",
+		"sections": ["Allgemein", "Steuerung", "Spiel", "DLC", "Benachrichtigungen"],
+	},
+	{
+		"id": "anzeige",
+		"icon": "eye",
+		"titel_key": "settings.gruppe_anzeige",
+		"sections": ["Grafik", "Anzeige", "Barrierefreiheit"],
+	},
+	{"id": "ton", "icon": "music", "titel_key": "settings.gruppe_ton", "sections": ["Audio"]},
+	{
+		"id": "mehrspieler",
+		"icon": "phone",
+		"titel_key": "settings.gruppe_mehrspieler",
+		"sections": ["Mehrspieler"],
+	},
+	{
+		"id": "spielstand",
+		"icon": "suitcase",
+		"titel_key": "settings.gruppe_spielstand",
+		"sections": ["Spielstand"],
+	},
+	{
+		"id": "info",
+		"icon": "book",
+		"titel_key": "settings.gruppe_info",
+		"sections": ["Updates", "Ueber"],
+	},
+]
 ## Slider-Key → AppSettings-Key (W1a-FROZEN `audio.*`; RW-7 ergaenzt voice).
 const AUDIO_KEYS := {
 	"volume_master": "master",
@@ -45,16 +84,12 @@ var _values: Dictionary = {
 	"volume_voice": 0.8,
 }
 var _news_panel: PanelSheet
-## Aktueller UiScale-Faktor (FIX1) — setzt _rebuild, nutzen die Row-Builder.
-var _f := 1.0
-## Font-Faktor (= _f x Textgroesse-Regler).
-var _tf := 1.0
 var _dev_trigger := DevTrigger.new()
 var _dev_dialog: Control
 var _preset_pick: OptionButton
-var _scroll_dragging := false
+## W14: Einblend-Stagger nur beim ERSTEN Aufbau (Resize-Rebuilds ploppen nicht).
+var _revealed := false
 
-@onready var _sections: VBoxContainer = %SectionsVBox
 @onready var _title: Label = %HeaderTitle
 @onready var _toast: ToastLayer = %Toast
 @onready var _back: Button = %BackButton
@@ -62,7 +97,10 @@ var _scroll_dragging := false
 
 
 func _ready() -> void:
-	_back.icon = load(ICON_DIR + "arrow_left.svg")
+	_sections = %SectionsVBox
+	# W14: konsistente Kopfzeile — Zurück ist überall die Ghost-Outline-Pill
+	# mit ‹-Text (wie Arcade/Album/Profil), nicht der Icon-Quadrat-Knopf.
+	_back.theme_type_variation = &"GhostButton"
 	_back.pressed.connect(func() -> void: back_pressed.emit())
 	_load_from_settings_autoload()
 	get_viewport().size_changed.connect(_on_viewport_resized)
@@ -187,22 +225,36 @@ func _rebuild() -> void:
 	_tf = UiScale.font_scale(get_viewport())
 	_apply_scale()
 	_title.text = I18nService.t("settings.titel")
+	_back.text = I18nService.t("settings.zurueck")
 	for child in _sections.get_children():
 		child.queue_free()
-	_build_general_section()
-	_build_graphics_section()
-	_build_display_section()
-	_build_controls_section()
-	_build_accessibility_section()
-	_build_audio_section()
-	_build_notify_section()
-	_build_game_section()
-	_build_transfer_section()
-	_build_updates_section()
-	_build_about_section()
+	# W14: EINE Hierarchie pro Bild — 6 Icon-Gruppen, darunter die Themen-
+	# Karten (Reihenfolge und Zuordnung kommen aus GRUPPEN).
+	var builders := {
+		"Allgemein": _build_general_section,
+		"Steuerung": _build_controls_section,
+		"Spiel": _build_game_section,
+		"DLC": func() -> void: DlcSektion.baue(self, _sections, _f, _tf),
+		"Benachrichtigungen": _build_notify_section,
+		"Grafik": _build_graphics_section,
+		"Anzeige": _build_display_section,
+		"Barrierefreiheit": _build_accessibility_section,
+		"Audio": _build_audio_section,
+		"Mehrspieler": _build_multiplayer_section,
+		"Spielstand": _build_transfer_section,
+		"Updates": _build_updates_section,
+		"Ueber": _build_about_section,
+	}
+	for gruppe: Dictionary in GRUPPEN:
+		_sections.add_child(_build_gruppe_header(gruppe))
+		for section: String in gruppe["sections"]:
+			(builders[section] as Callable).call()
 	_sections.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	if scroll != null:
 		scroll.set_deferred("scroll_vertical", keep_y)
+	if not _revealed:
+		_revealed = true
+		UiMotion.stagger_in(_sections.get_children(), 0.03)
 
 
 ## FIX1: Chrome (Raender/Header/Sektions-Breite) an Faktor + Safe-Area ziehen.
@@ -214,8 +266,10 @@ func _apply_scale() -> void:
 	_margin.add_theme_constant_override("margin_right", int(24.0 + float(insets["right"])))
 	_margin.add_theme_constant_override("margin_bottom", int(16.0 + float(insets["bottom"])))
 	var floor_px := HudLayoutLogic.touch_floor_canvas(canvas)
-	_back.custom_minimum_size = Vector2.ONE * maxf(56.0 * _f, floor_px)
-	_title.add_theme_font_size_override("font_size", int(AcTokens.FONT_SIZE_HEADLINE * _tf))
+	_back.custom_minimum_size = Vector2(0.0, maxf(48.0 * _f, floor_px))
+	_back.add_theme_font_size_override("font_size", int(AcTokens.FONT_SIZE_BODY * _tf))
+	# W14: Kopfzeilen-Konsistenz — Titelgröße wie auf allen anderen Screens.
+	_title.add_theme_font_size_override("font_size", int(AcTokens.FONT_SIZE_TITLE * _tf))
 	var avail := canvas.x - float(insets["left"]) - float(insets["right"]) - 48.0
 	_sections.custom_minimum_size = Vector2(minf(660.0 * _f, maxf(avail, 1.0)), 0.0)
 	_sections.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -223,6 +277,48 @@ func _apply_scale() -> void:
 
 
 ## ------------------------------------------------------------- Abschnitte
+
+
+## W14: Gruppen-Header mit Icon-Glyph (ACNH-Muster) — sitzt ÜBER den Karten
+## der Gruppe und trennt die 6 Themen mit Luft nach dem 8er-Raster.
+func _build_gruppe_header(gruppe: Dictionary) -> Control:
+	var wrap := MarginContainer.new()
+	wrap.name = "Gruppe" + str(gruppe["id"]).to_pascal_case()
+	wrap.add_theme_constant_override("margin_top", int(16.0 * _f))
+	wrap.add_theme_constant_override("margin_left", int(8.0 * _f))
+	var row := HBoxContainer.new()
+	row.name = "GruppeHeader"
+	row.add_theme_constant_override("separation", int(8.0 * _f))
+	var glyph := TextureRect.new()
+	glyph.name = "GruppeIcon"
+	var icon_path := "%s%s.svg" % [ICON_DIR, str(gruppe["icon"])]
+	if ResourceLoader.exists(icon_path):
+		glyph.texture = load(icon_path)
+	glyph.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	glyph.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	glyph.custom_minimum_size = Vector2.ONE * roundf(24.0 * _tf)
+	glyph.self_modulate = AcTokens.INK
+	glyph.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	glyph.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(glyph)
+	var title := Label.new()
+	title.name = "GruppeTitel"
+	title.theme_type_variation = "TitleLabel"
+	title.text = I18nService.t(str(gruppe["titel_key"]))
+	title.add_theme_font_size_override("font_size", int(AcTokens.FONT_SIZE_TITLE * _tf))
+	row.add_child(title)
+	wrap.add_child(row)
+	return wrap
+
+
+## W14: Mehrspieler-Sektions-HÜLLE — die eigentlichen Zeilen baut W14/NETSET
+## ADDITIV in dieses Rows-VBox (Node-Name „SectionMehrspieler“ ist Kontrakt).
+## Der Gruppen-Header direkt darüber trägt den Titel, die Karte selbst nicht.
+func _build_multiplayer_section() -> void:
+	var rows := _add_section("Mehrspieler", "", false)
+	# >> W14/NETSET Andock-Zeile (minimal): Server/Port/Secret-Zeilen samt
+	# Verbindungstest leben in scripts/ui/settings/mehrspieler_sektion.gd.
+	rows.add_child(MehrspielerSektion.new())
 
 
 func _build_general_section() -> void:
@@ -449,10 +545,12 @@ func _build_controls_section() -> void:
 		func(on: bool) -> void: _set_app("controls.steering_assist", on)
 	)
 	_add_help(rows, "AssistHelp", I18nService.t("settings.lenkassistent_hilfe"))
+	# W14: umbenannt zu „Haptik-Stärke“ — der Hauptschalter „Haptik“
+	# (game.haptik) wohnt in der Spiel-Sektion.
 	_add_pick_row(
 		rows,
 		"controls_haptics",
-		I18nService.t("settings.haptik"),
+		I18nService.t("settings.haptik_staerke"),
 		[
 			["aus", I18nService.t("settings.haptik_aus")],
 			["dezent", I18nService.t("settings.haptik_dezent")],
@@ -601,6 +699,18 @@ func _build_game_section() -> void:
 		GyroParallax.setting_aktiv(_app(), get_node_or_null("/root/GameState")),
 		func(on: bool) -> void: _set_app("game.parallax", on)
 	)
+	# W14/UIKERN-Kontrakt: Haptik-Hauptschalter `game.haptik` (Default AN) —
+	# den zentralen Button-Pfad (Haptics.tap/success/warn) gated UIKERN.
+	# Default explizit über get_setting(…, true): AppSettings._defaults kennt
+	# den Key noch nicht, is_on() würde sonst fälschlich AUS liefern.
+	_add_switch_row(
+		rows,
+		"game_haptik",
+		I18nService.t("settings.haptik_an"),
+		_app_on_default("game.haptik", true),
+		func(on: bool) -> void: _set_app("game.haptik", on)
+	)
+	_add_help(rows, "HaptikAnHelp", I18nService.t("settings.haptik_an_hilfe"))
 	_add_help(rows, "AutosaveHelp", I18nService.t("settings.autosave_hilfe"))
 	var reset_btn := _section_button(rows, "TutorialResetButton", "settings.tutorial_reset")
 	reset_btn.pressed.connect(_on_tutorial_reset)
@@ -618,7 +728,8 @@ func _build_updates_section() -> void:
 ## W6/FIX-6: Weg zum Uebernahme-Screen fuer den Spielstand der alten App —
 ## der User fand ihn sonst nicht ("Wo genau uebertraegt man seinen Save?").
 func _build_transfer_section() -> void:
-	var rows := _add_section("Spielstand", I18nService.t("settings.spielstand"))
+	# W14: Titel trägt der Gruppen-Header „Spielstand“ direkt darüber.
+	var rows := _add_section("Spielstand", "", false)
 	var btn := _section_button(rows, "TransferButton", "settings.spielstand_uebertragen")
 	btn.pressed.connect(_on_transfer_pressed)
 	# W13-C (Doc C §7): Server-Identitäts-Umzug per Panel-Code — der lokale
@@ -774,127 +885,6 @@ func _hour_options() -> Array:
 	return out
 
 
-func _add_section(node_name: String, title: String) -> VBoxContainer:
-	var card := PanelContainer.new()
-	card.name = "Section" + node_name
-	card.theme_type_variation = "AcCard"
-	card.mouse_filter = Control.MOUSE_FILTER_PASS
-	var rows := VBoxContainer.new()
-	rows.name = "Rows"
-	rows.mouse_filter = Control.MOUSE_FILTER_PASS
-	rows.add_theme_constant_override("separation", int(10.0 * _f))
-	var title_label := Label.new()
-	title_label.name = "SectionTitle"
-	title_label.theme_type_variation = "TitleLabel"
-	title_label.text = title
-	title_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	title_label.add_theme_font_size_override("font_size", int(AcTokens.FONT_SIZE_TITLE * _tf))
-	rows.add_child(title_label)
-	card.add_child(rows)
-	_sections.add_child(card)
-	return rows
-
-
-## Zentrierter Aktions-Button innerhalb einer Sektion (Text via String-Key).
-func _section_button(rows: VBoxContainer, node_name: String, text_key: String) -> SquishButton:
-	var btn := SquishButton.new()
-	btn.name = node_name
-	btn.theme_type_variation = "BtnTeal"
-	btn.text = I18nService.t(text_key)
-	btn.custom_minimum_size = Vector2(0, 52.0 * _f)
-	btn.add_theme_font_size_override("font_size", int(AcTokens.FONT_SIZE_BUTTON * _tf))
-	btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	btn.focus_mode = Control.FOCUS_NONE
-	rows.add_child(btn)
-	return btn
-
-
-## Kurzerklaerung unter einer Row (SoftLabel, Caption-Groesse).
-func _add_help(rows: VBoxContainer, node_name: String, text: String) -> void:
-	var label := Label.new()
-	label.name = node_name
-	label.theme_type_variation = "SoftLabel"
-	label.text = text
-	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	label.add_theme_font_size_override("font_size", int(AcTokens.FONT_SIZE_CAPTION * _tf))
-	rows.add_child(label)
-
-
-## OptionButton-Row (generisch): options = [[id, label], ...],
-## handler(id: String) wird bei Auswahl gerufen.
-func _add_pick_row(
-	rows: VBoxContainer,
-	key: String,
-	label_text: String,
-	options: Array,
-	current_id: String,
-	handler: Callable
-) -> OptionButton:
-	var row := _make_row(rows, key, label_text)
-	var picker := OptionButton.new()
-	picker.name = "Value"
-	picker.focus_mode = Control.FOCUS_NONE
-	picker.custom_minimum_size = Vector2(210.0 * _f, AcTokens.TOUCH_FLOOR * _f)
-	picker.add_theme_font_size_override("font_size", int(AcTokens.FONT_SIZE_BODY * _tf))
-	for i in options.size():
-		picker.add_item(str(options[i][1]), i)
-		if str(options[i][0]) == current_id:
-			picker.select(i)
-	picker.item_selected.connect(func(index: int) -> void: handler.call(str(options[index][0])))
-	row.add_child(picker)
-	return picker
-
-
-## CheckButton-Row (generisch): handler(on: bool).
-func _add_switch_row(
-	rows: VBoxContainer, key: String, label_text: String, initial: bool, handler: Callable
-) -> CheckButton:
-	var row := _make_row(rows, key, label_text)
-	var toggle := CheckButton.new()
-	toggle.name = "Value"
-	toggle.focus_mode = Control.FOCUS_NONE
-	toggle.custom_minimum_size = Vector2(0, AcTokens.TOUCH_FLOOR * _f)
-	toggle.button_pressed = initial
-	toggle.toggled.connect(func(on: bool) -> void: handler.call(on))
-	row.add_child(toggle)
-	return toggle
-
-
-## HSlider-Row (generisch): handler(value: float) bei jeder Aenderung;
-## rebuild_on_release baut den Screen nach dem Loslassen neu (Anzeige-Regler,
-## die die Skalierung dieses Screens selbst veraendern).
-func _add_range_row(
-	rows: VBoxContainer,
-	key: String,
-	label_text: String,
-	min_value: float,
-	max_value: float,
-	step: float,
-	initial: float,
-	handler: Callable,
-	rebuild_on_release := false
-) -> HSlider:
-	var row := _make_row(rows, key, label_text)
-	var slider := HSlider.new()
-	slider.name = "Value"
-	slider.focus_mode = Control.FOCUS_NONE
-	slider.min_value = min_value
-	slider.max_value = max_value
-	slider.step = step
-	slider.value = clampf(initial, min_value, max_value)
-	slider.custom_minimum_size = Vector2(240.0 * _f, AcTokens.TOUCH_FLOOR * _f)
-	slider.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	slider.value_changed.connect(func(value: float) -> void: handler.call(value))
-	if rebuild_on_release:
-		slider.drag_ended.connect(
-			func(changed: bool) -> void:
-				if changed and not _scroll_dragging:
-					call_deferred("_rebuild")
-		)
-	row.add_child(slider)
-	return slider
-
-
 ## Audio-Slider (Legacy-Kontrakt: schreibt _values + audio.<bus>).
 func _add_slider_row(rows: VBoxContainer, key: String, label_text: String) -> void:
 	_add_range_row(
@@ -907,50 +897,6 @@ func _add_slider_row(rows: VBoxContainer, key: String, label_text: String) -> vo
 		float(_values.get(key, 0.8)),
 		func(value: float) -> void: _set_value(key, value)
 	)
-
-
-func _make_row(rows: VBoxContainer, key: String, label_text: String) -> HBoxContainer:
-	var row := HBoxContainer.new()
-	row.name = "Row" + key.to_pascal_case()
-	row.add_theme_constant_override("separation", int(12.0 * _f))
-	var label := Label.new()
-	label.name = "RowLabel"
-	label.text = label_text
-	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	label.add_theme_font_size_override("font_size", int(AcTokens.FONT_SIZE_BODY * _tf))
-	row.add_child(label)
-	rows.add_child(row)
-	return row
-
-
-func _select_pick(picker: OptionButton, id: String, options: Array) -> void:
-	if picker == null or not is_instance_valid(picker):
-		return
-	for i in options.size():
-		if str(options[i][0]) == id:
-			picker.select(i)
-			return
-
-
-func _app_value(key: String, fallback: Variant) -> Variant:
-	var app := _app()
-	if app != null and app.has_method("value_of"):
-		var value: Variant = app.value_of(key)
-		if value != null:
-			return value
-	return fallback
-
-
-func _app_on(key: String, fallback: bool) -> bool:
-	var app := _app()
-	if app != null and app.has_method("is_on"):
-		return app.is_on(key)
-	return fallback
-
-
-func _app() -> Node:
-	return get_node_or_null("/root/AppSettings")
 
 
 func _on_update_check() -> void:

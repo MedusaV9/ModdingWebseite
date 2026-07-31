@@ -95,7 +95,17 @@
 			"„Stream Sounds“ — kurt (OpenGameArt), CC-BY 3.0",
 			"„Free Crowd Cheering Sounds“ — Gregor Quendel, CC-BY 4.0",
 			"„Jumping Jamboree“ — tcarisland, CC-BY 4.0"
-		]
+		],
+		"zurueck": "‹ Zurück",
+		"gruppe_spiel": "Spiel",
+		"gruppe_anzeige": "Anzeige",
+		"gruppe_ton": "Ton",
+		"gruppe_mehrspieler": "Mehrspieler",
+		"gruppe_spielstand": "Spielstand",
+		"gruppe_info": "Info",
+		"haptik_an": "Haptik",
+		"haptik_an_hilfe": "Vibriert sanft bei Tipps, Erfolgen und Warnungen.",
+		"haptik_staerke": "Haptik-Stärke"
 	},
 	"dev": {
 		"titel": "Entwicklermenü",

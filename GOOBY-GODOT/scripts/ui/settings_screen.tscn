@@ -50,13 +50,13 @@ unique_name_in_owner = true
 custom_minimum_size = Vector2(56, 56)
 layout_mode = 2
 focus_mode = 0
-theme_type_variation = &"HudIconButton"
+theme_type_variation = &"GhostButton"
 script = ExtResource("3_squish")
 
 [node name="HeaderTitle" type="Label" parent="Margin/Layout/Header"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_type_variation = &"HeadlineLabel"
+theme_type_variation = &"TitleLabel"
 
 [node name="HeaderSpacer" type="Control" parent="Margin/Layout/Header"]
 layout_mode = 2
