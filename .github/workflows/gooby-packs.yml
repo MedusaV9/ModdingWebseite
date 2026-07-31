@@ -1,22 +1,33 @@
-# GOOBY Pack-Build & -Release (W2b UPDATES; Doc B §5.1).
+# GOOBY Pack-Build & -Release (W2b UPDATES; W15/UPDREPO; Doc B §5.1).
 #
 # Baut die Daten-Packs (GOOBY-GODOT/content/<id>/ → .pck via
 # `godot --headless --export-pack`, config als plain JSON), erzeugt
 # manifest.json und hängt alles an den rollenden Release-Tag `updates`.
 #
-# EHRLICHER STAND (Doc B §3, Entscheidung A): Das öffentliche Content-Repo
-# `MedusaV9/gooby-updates` existiert noch NICHT (User-Action; Backlog B §5/M2).
-# Bis dahin released dieser Workflow ins HAUPT-Repo — tokenlos funktioniert
-# der Download dann nur, solange das Haupt-Repo öffentlich ist. Umzug aufs
-# public Content-Repo (3 Zeilen, s. docs/UPDATES.md §6):
-#   1. Repo `gooby-updates` anlegen (leerer main + README genügt).
-#   2. Fine-grained PAT (nur dieses Repo, nur contents:write) als Secret
-#      GH_CONTENT_TOKEN hinterlegen.
-#   3. Im Release-Step unten `repository:` + `token:` einkommentieren und
-#      RELEASE_BASE_URL auf das public Repo stellen.
+# HOST = DIESES Repo (User-Entscheidung W15): Die GOOBY-Updates laufen über
+# MedusaV9/CustomServerPrivate; das früher geplante separate public
+# Content-Repo `gooby-updates` entfällt ENDGÜLTIG. Da dieses Repo PRIVAT
+# ist, liefern tokenlose browser-download-URLs (releases/download/…) 404 —
+# der Client lädt deshalb über die GitHub-Release-API (api.github.com,
+# Asset-Download mit Accept: application/octet-stream) und einem
+# fine-grained PAT (nur dieses Repo, nur contents:read), den der Betreiber
+# an die Spieler verteilt. Details: docs/UPDATES.md.
+#
+# Release fahren — zwei Wege:
+#   1. Tag-Push (kontrollierter Release, der Standard-Weg):
+#        git tag packs-v1.0.0 && git push origin packs-v1.0.0
+#      → implizit packs=all + publish=true.
+#   2. workflow_dispatch (Actions → gooby-packs → Run workflow) mit den
+#      Inputs `packs`/`publish` — publish=false ist der Probe-Lauf
+#      (nur Build-Artefakt, kein Release).
 name: gooby-packs
 
 on:
+  push:
+    # Kontrollierter Release per Tag: packs-v<beliebige Versionsnotiz>.
+    # Die Pack-Versionen selbst kommen IMMER aus content/<id>/pack.json —
+    # der Tag-Name dokumentiert nur den Release-Anlass.
+    tags: ["packs-v*"]
   workflow_dispatch:
     inputs:
       packs:
@@ -28,9 +39,9 @@ on:
         type: boolean
         required: false
         default: false
-  # Bewusst KEIN push-Trigger, solange das Release-Ziel das Haupt-Repo ist —
-  # sonst überschreibt jeder main-Push den Live-Manifest-Stand (Doc B §5.1
-  # sieht push+paths erst mit dem public Content-Repo vor).
+  # Bewusst KEIN branch-push-Trigger: der `updates`-Release ist der
+  # LIVE-Stand aller Clients — veröffentlicht wird nur kontrolliert per
+  # packs-v*-Tag oder explizitem Dispatch mit publish=true.
 
 concurrency: manifest-update # verhindert Races zweier paralleler Pack-Builds
 
@@ -52,6 +63,7 @@ jobs:
       - name: Godot installieren
         run: bash tools/ci/install_godot.sh
 
+      # Tag-Trigger: inputs sind leer → Fallback 'all' greift (implizit alles).
       - name: Packs bauen + verifizieren + manifest.json
         env:
           RELEASE_BASE_URL: https://github.com/${{ github.repository }}/releases/download
@@ -67,18 +79,19 @@ jobs:
             GOOBY-GODOT/build/packs/config.json
             GOOBY-GODOT/build/packs/manifest.json
 
+      # Publish-Gate: packs-v*-Tag = implizit publish=true; beim Dispatch
+      # entscheidet der Input. GITHUB_TOKEN reicht (Release im selben Repo).
       - name: Release 'updates' aktualisieren (rollender Tag, Doc B §1.3)
-        if: ${{ github.event.inputs.publish == 'true' }}
+        if: >-
+          ${{ startsWith(github.ref, 'refs/tags/packs-v') ||
+              github.event.inputs.publish == 'true' }}
         uses: softprops/action-gh-release@v2
         with:
           tag_name: updates
           name: "GOOBY Updates (rollend)"
-          body: "Rollender Update-Release: manifest.json + aktuelle Packs. Details: docs/UPDATES.md"
+          body: "Rollender Update-Release: manifest.json + aktuelle Packs. Download läuft clientseitig über die GitHub-Release-API (privates Repo, Token nötig). Details: docs/UPDATES.md"
           prerelease: false
           files: |
             GOOBY-GODOT/build/packs/*.pck
             GOOBY-GODOT/build/packs/config.json
             GOOBY-GODOT/build/packs/manifest.json
-          # --- Zielbild public Content-Repo (einkommentieren, sobald es existiert):
-          # repository: MedusaV9/gooby-updates
-          # token: ${{ secrets.GH_CONTENT_TOKEN }}
