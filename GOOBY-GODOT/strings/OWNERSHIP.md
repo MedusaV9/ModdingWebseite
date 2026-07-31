@@ -110,3 +110,5 @@ Regeln:
 - NEUE `city.laden.buecher_titel` + `city.laden.im_regal`-Keys (additiv in `strings/<locale>/city.json` — Bücher-Abschnitt im REHWEI-Laden, „Im Regal“-Ausgrauung; DE↔EN-paritätisch) → Owner **W13B INTEGRATE** (Welle W13-B). *(per >> angehängt — beim nächsten Doku-Pass in die Tabelle oben heben)*
 
 - NEUE `rewards.food.candy-bar` + `rewards.food.lollypop`-Keys (additiv in `strings/<locale>/rewards.json` — Anzeigenamen der letzten zwei treats-Set-Speisen, SAMMLUNG-Request; DE↔EN-paritätisch) → Owner **W13B INTEGRATE** (Welle W13-B). *(per >> angehängt — beim nächsten Doku-Pass in die Tabelle oben heben)*
+
+- `gobty.*` (NEUE Datei `strings/<locale>/gobty.json` — GOB.TY-Fernsehsender: Sender-UI (Aus-Knopf, Zapp-Hinweis), 5 Clip-Titel, 10 News-Schlagzeilen, Koch-/Sport-/Wetter-/Gute-Nacht-Banner inkl. `{symbole}`/`{datum}`-Wetter-Platzhalter; DE↔EN-paritätisch) → Owner **W13C GOBTY** (Welle W13-C). *(per >> angehängt — beim nächsten Doku-Pass in die Tabelle oben heben)*
