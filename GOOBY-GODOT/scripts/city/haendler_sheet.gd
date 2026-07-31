@@ -39,9 +39,13 @@ func _ready() -> void:
 	aktualisiere()
 
 
-## Warenliste (neu) rendern — nach jedem Kauf.
+## Warenliste (neu) rendern — nach jedem Kauf. Alte Zeilen SOFORT aus dem
+## Baum nehmen (nicht nur queue_free): sonst kollidieren die benannten
+## Buch-Zeilen („Buch_<id>“) mit ihren Nachfolgern und Godot benennt die
+## neuen um — find_child fände sie nicht mehr.
 func aktualisiere() -> void:
 	for kind in _liste.get_children():
+		_liste.remove_child(kind)
 		kind.queue_free()
 	_coins_label.text = I18nService.t("city.laden.coins").format({"coins": _coins()})
 	for ware: Dictionary in waren:
