@@ -270,6 +270,8 @@ const ALIASES := {
 var context := ""
 
 var _mat: ShaderMaterial
+## W13-C: Kachel-Zahl gemerkt für die px→UV-Umrechnung des Parallax-Schubs.
+var _tile_count := 3.0
 
 
 ## DIE Ein-Zeilen-API für alle Screens: fertig gestimmter Hintergrund pro
@@ -328,10 +330,17 @@ func _ready() -> void:
 	_update_rect_size()
 	resized.connect(_update_rect_size)
 	_hook_reduced_motion()
+	# W13-C: sanfter Gyro-/Pointer-Parallax auf dem Pattern (gyro_parallax.gd).
+	GyroParallax.registriere(self)
 
 
 func set_pattern_by_name(name_without_prefix: String) -> void:
 	pattern = name_without_prefix
+
+
+## W13-C Parallax-Senke (GyroParallax): px → Kachel-UV, in den Shader.
+func set_parallax_offset(offset_px: Vector2) -> void:
+	_set_uniform("parallax_uv", offset_px * (_tile_count / maxf(size.x, 1.0)))
 
 
 func _apply_pattern() -> void:
@@ -351,7 +360,8 @@ func _update_rect_size() -> void:
 	if not is_inside_tree():
 		return
 	var f := UiScale.for_viewport(get_viewport())
-	_set_uniform("tile_count", maxf(size.x / (TILE_DESIGN_PX * f), 0.5))
+	_tile_count = maxf(size.x / (TILE_DESIGN_PX * f), 0.5)
+	_set_uniform("tile_count", _tile_count)
 
 
 func _set_uniform(uniform: String, value: Variant) -> void:

@@ -593,6 +593,14 @@ func _build_game_section() -> void:
 		_app_on("game.autosave", true),
 		func(on: bool) -> void: _set_app("game.autosave", on)
 	)
+	# W13-C FOTOWERK: Gyro-/Pointer-Parallax (Fallback = migriertes settings.gyro).
+	_add_switch_row(
+		rows,
+		"game_parallax",
+		I18nService.t("settings.parallax"),
+		GyroParallax.setting_aktiv(_app(), get_node_or_null("/root/GameState")),
+		func(on: bool) -> void: _set_app("game.parallax", on)
+	)
 	_add_help(rows, "AutosaveHelp", I18nService.t("settings.autosave_hilfe"))
 	var reset_btn := _section_button(rows, "TutorialResetButton", "settings.tutorial_reset")
 	reset_btn.pressed.connect(_on_tutorial_reset)

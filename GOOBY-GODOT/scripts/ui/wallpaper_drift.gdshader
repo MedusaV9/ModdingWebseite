@@ -15,11 +15,13 @@ uniform float opacity: hint_range(0.0, 1.0) = 0.45;
 uniform vec4 wash: source_color = vec4(1.0, 0.965, 0.925, 1.0); // BG_CREAM
 uniform vec2 rect_size = vec2(1280.0, 720.0); // vom Control gesetzt (Aspect)
 uniform float motion_scale: hint_range(0.0, 1.0) = 1.0; // 0 = Reduced Motion
+// W13-C: Gyro-/Pointer-Parallax (gyro_parallax.gd) — additiver UV-Schub.
+uniform vec2 parallax_uv = vec2(0.0);
 
 void fragment() {
 	float aspect = rect_size.y / max(rect_size.x, 1.0);
 	vec2 uv = UV * tile_count * vec2(1.0, aspect);
-	uv += TIME * drift * motion_scale;
+	uv += TIME * drift * motion_scale + parallax_uv * motion_scale;
 	vec4 c = texture(tile, uv);
 	COLOR = vec4(mix(wash.rgb, c.rgb, c.a * opacity), wash.a);
 }
