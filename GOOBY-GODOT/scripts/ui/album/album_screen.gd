@@ -22,6 +22,9 @@ const Economy := preload("res://scripts/logic/economy.gd")
 const ICON_DIR := "res://assets/ui/icons/"
 const ROUTE_ALBUM := &"album"
 const ROUTES := {ROUTE_ALBUM: "res://scripts/ui/album/album_screen.tscn"}
+## W13/SAMMLUNG: Pseudo-Seiten-ID des Sammlungs-Bereichs (4 Web-Sets mit
+## Claim-Belohnung, CollectionsView) — hängt als eigener Chip in der Rail.
+const COLLECTIONS_PAGE := "__sammlungen__"
 const RARITY_BORDER := {
 	"haeufig": Color("#FFFFFF"),
 	"selten": Color("#C7CBD6"),
@@ -59,6 +62,10 @@ var _rows_box: VBoxContainer
 var _rail_scroll: ScrollContainer
 var _back_btn: Button
 var _title_label: Label
+## W13/SAMMLUNG: Grid-Scroller + lazily gebaute Sammlungs-View der
+## Pseudo-Seite (Sichtbarkeit wird in _show_page umgeschaltet).
+var _grid_scroll: ScrollContainer
+var _collections_view: CollectionsView
 
 
 ## Album-Route am SceneRouter anmelden (idempotent).
@@ -147,6 +154,9 @@ func _apply_metrics() -> void:
 	_grid.columns = cols
 	var tile_w := (avail - 14.0 * float(cols - 1)) / float(cols)
 	_tile = Vector2(tile_w, tile_w * 200.0 / 190.0)
+	# W13/SAMMLUNG: UI-Faktor an die Sammlungs-View weiterreichen (FIX1).
+	if _collections_view != null:
+		_collections_view.apply_ui_factor(_f)
 
 
 ## Font nur bei echtem Faktor überschreiben — bei 1.0 bleibt das Theme.
@@ -240,9 +250,38 @@ func _build_rail() -> Control:
 	_rail_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_rail_box.add_theme_constant_override("separation", 8)
 	scroll.add_child(_rail_box)
+	# W13/SAMMLUNG: der Sammlungs-Chip steht VOR den Sticker-Seiten (Web:
+	# „Sticker“-Tab mit den 4 Sets ist der erste Album-Tab).
+	_rail_box.add_child(_build_collections_chip())
 	for page: Dictionary in _pages:
 		_rail_box.add_child(_build_page_chip(page))
 	return scroll
+
+
+## Rail-Chip der Sammlungs-Seite (W13/SAMMLUNG) — gleiches AcChip-Muster wie
+## die Seiten-Chips, Fortschritt über alle 4 Sets (n/32).
+func _build_collections_chip() -> Control:
+	var chip := SquishButton.new()
+	chip.name = "PageChip_%s" % COLLECTIONS_PAGE
+	chip.theme_type_variation = &"AcChip"
+	chip.text = _collections_chip_text()
+	chip.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	chip.focus_mode = Control.FOCUS_NONE
+	chip.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var icon_path := str(CollectionsView.SET_ICONS.get("fish", ""))
+	if ResourceLoader.exists(icon_path):
+		chip.icon = load(icon_path)
+	chip.self_modulate = Color("#FFE3F0")
+	chip.pressed.connect(_show_page.bind(COLLECTIONS_PAGE))
+	return chip
+
+
+func _collections_chip_text() -> String:
+	var title := I18nService.t("collections.chip")
+	if _gs == null:
+		return title
+	var progress := CollectionsLogic.total_progress(_collections_slice())
+	return "%s  %d/%d" % [title, int(progress["have"]), int(progress["total"])]
 
 
 func _build_page_chip(page: Dictionary) -> Control:
@@ -284,6 +323,9 @@ func _refresh_rail() -> void:
 		var chip := _rail_box.get_node_or_null("PageChip_%s" % str(page.get("id", "")))
 		if chip is Button:
 			(chip as Button).text = _chip_text(page)
+	var collections_chip := _rail_box.get_node_or_null("PageChip_%s" % COLLECTIONS_PAGE)
+	if collections_chip is Button:
+		(collections_chip as Button).text = _collections_chip_text()
 
 
 ## Anzahl freigeschalteter, aber noch nie angetippter Sticker der Seite.
@@ -317,17 +359,43 @@ func _build_page_panel() -> Control:
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	scroll.scroll_deadzone = 24
 	panel.add_child(scroll)
+	_grid_scroll = scroll
 	_grid = GridContainer.new()
 	_grid.columns = 3
 	_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_grid.add_theme_constant_override("h_separation", 14)
 	_grid.add_theme_constant_override("v_separation", 14)
 	scroll.add_child(_grid)
+	# W13/SAMMLUNG: die Sammlungs-View liegt als Geschwister des Grids im
+	# Panel — _show_page schaltet zwischen beiden um.
+	_collections_view = CollectionsView.new()
+	_collections_view.name = "CollectionsView"
+	_collections_view.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_collections_view.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_collections_view.visible = false
+	_collections_view.set_claimed.connect(_on_collection_set_claimed)
+	panel.add_child(_collections_view)
+	_collections_view.setup(_gs)
 	return panel
 
 
 func _show_page(page_id: String) -> void:
 	_current_page = page_id
+	# W13/SAMMLUNG: Pseudo-Seite — Grid aus, Sammlungs-View an (und zurück).
+	if page_id == COLLECTIONS_PAGE:
+		if _page_title != null:
+			_page_title.text = I18nService.t("collections.titel")
+		_refresh_collections_progress()
+		if _grid_scroll != null:
+			_grid_scroll.visible = false
+		if _collections_view != null:
+			_collections_view.visible = true
+			_collections_view.refresh()
+		return
+	if _grid_scroll != null:
+		_grid_scroll.visible = true
+	if _collections_view != null:
+		_collections_view.visible = false
 	var page := _page_def(page_id)
 	if _page_title != null:
 		_page_title.text = str(page.get("title_de", page_id))
@@ -341,6 +409,49 @@ func _show_page(page_id: String) -> void:
 		child.queue_free()
 	for def: Dictionary in _by_page.get(page_id, []):
 		_grid.add_child(_build_sticker_card(def))
+
+
+## Fortschrittszeile der Sammlungs-Seite („n von 32 Schätzen gefunden“).
+func _refresh_collections_progress() -> void:
+	if _page_progress == null:
+		return
+	var progress := CollectionsLogic.total_progress(_collections_slice())
+	_page_progress.text = I18nService.t(
+		"collections.gesamt", {"n": int(progress["have"]), "total": int(progress["total"])}
+	)
+
+
+func _collections_slice() -> Dictionary:
+	if _gs == null:
+		return CollectionsLogic.normalize_slice(null)
+	return CollectionsLogic.normalize_slice(_gs.state().get("collections"))
+
+
+## Claim-Feier (W13/SAMMLUNG): Toast + Konfetti + Sticker-Pluck über die
+## VORHANDENEN Mechanismen (eigene ToastLayer, _confetti_burst, Audio) — die
+## setsClaimed-Sticker/Erfolge feiert der globale RewardHub von selbst, weil
+## apply_claim slice_changed("collections") notifiziert.
+func _on_collection_set_claimed(set_id: String, reward: Dictionary) -> void:
+	(
+		_toasts
+		. show_toast(
+			(
+				I18nService
+				. t(
+					"collections.claim_toast",
+					{
+						"name": I18nService.t("collections.set.%s" % set_id),
+						"coins": int(reward.get("coins", 0)),
+						"item": I18nService.t("collections.reward.%s" % set_id),
+					}
+				)
+			)
+		)
+	)
+	AudioDirector.try_play(self, "ui_sticker")
+	_confetti_burst()
+	_refresh_rail()
+	_refresh_collections_progress()
 
 
 ## Set-Fortschritt unter dem Seitentitel ("n von N gefunden" + Belohnungs-
