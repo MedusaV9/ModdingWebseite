@@ -370,16 +370,18 @@ def _jet_stream(fx: FxBuilder, root, name: str, down: bool):
                 [(0.0, *VIOLET_BIRTH), (0.1, *VIOLET_HOT), (0.55, *VIOLET_MID),
                  (1.0, *VIOLET_DEEP)],
                 [(0.0, *VIOLET_BIRTH), (0.12, *VIOLET_HOT_ALT), (0.55, *VIOLET_MID_ALT),
-                 (1.0, *VIOLET_DEEP)]))
-        # Fat head knots, thin tail stubs — the same 12-24 b/s window as the curve pair.
-        # Raw `with_module`: fxlib's `size_by_speed` helper writes the Range as min/max,
-        # and the LDLib2 `Range` codec reads a/b (see the report's patch snippet).
-        .with_module("sizeBySpeed", {
-            "size": nf3(curve(0.75, 1.5, [SEG_SPEED_RISE], "speed", "size")),
-            "speedRange": {"a": F(JET_SPEED_LO), "b": F(JET_SPEED_HI)}})
-        .with_module("lifetime_by_emitter_speed", {
-            "multiplier": curve(1.0, 1.8, [SEG_SPEED_RISE], "speed", "multiplier"),
-            "speedRange": {"a": F(0.0), "b": F(6.0)}})
+                 (1.0, *VIOLET_DEEP)]),
+            # Fat head knots, thin tail stubs — the same 12-24 b/s window as the curve
+            # pair. Back on the fxlib helpers since C2 fixed `_min_max` to the a/b keys
+            # the LDLib2 `Range` codec actually reads (the raw with_module dicts were a
+            # C5-local workaround; byte-identity of the rebuild is verified in the C2
+            # report).
+            size_by_speed=dict(
+                size=nf3(curve(0.75, 1.5, [SEG_SPEED_RISE], "speed", "size")),
+                range=(JET_SPEED_LO, JET_SPEED_HI)),
+            lifetime_by_emitter_speed=dict(
+                multiplier=curve(1.0, 1.8, [SEG_SPEED_RISE], "speed", "multiplier"),
+                range=(0.0, 6.0)))
         .with_material(texture_material(CIRCLE_TEX, hdr=hdr(1.35, 1.1, 1.8)))
         .with_renderer(render_mode="StretchedBillboard", velocity_scale=2.0,
                        length_scale=1.8)

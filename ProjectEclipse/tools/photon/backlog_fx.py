@@ -849,7 +849,9 @@ def build_wizard_hearth() -> FxBuilder:
     # two-hump curve over the emitter cycle — gusts, not a metronome.
     (fx.particle_emitter(
             "chimney_sparks",
-            duration=90, looping=True,
+            # prewarm = max startLifetime (LINT-PREWARM-FILL): the hut pre-exists any
+            # observer, so the hearth must look established at chunk-load, not ignite.
+            duration=90, looping=True, prewarm=40,
             start_lifetime=random_between(24, 40),
             start_speed=random_between(0.08, 0.18),
             start_size=nf3(random_between(0.04, 0.09), random_between(0.04, 0.09),
@@ -877,7 +879,9 @@ def build_wizard_hearth() -> FxBuilder:
     # single lazy smoke ribbon, swaying on low-frequency noise.
     wisp = (fx.particle_emitter(
             "smoke_wisp",
-            duration=90, looping=True,
+            # prewarm = the carrier's life: the ribbon is mid-sky at chunk-load
+            # (LINT-PREWARM-FILL; trails simulate through prewarm, jar-verified).
+            duration=90, looping=True, prewarm=80,
             start_lifetime=constant(80), start_speed=constant(0.0),
             start_size=nf3(0.09), simulation_space="World", max_particles=2)
         .at(1.5, 6.7, -1.0)
@@ -917,7 +921,9 @@ def build_wizard_hearth() -> FxBuilder:
     # through the portholes at night. Noise drift only; faint additive + forced light.
     (fx.particle_emitter(
             "window_motes",
-            duration=120, looping=True,
+            # prewarm = max startLifetime: the lantern dust hangs full at chunk-load
+            # instead of drizzling in over 5 s (LINT-PREWARM-FILL).
+            duration=120, looping=True, prewarm=100,
             start_lifetime=random_between(60, 100),
             start_speed=constant(0.0),
             start_size=nf3(random_between(0.02, 0.05), random_between(0.02, 0.05),

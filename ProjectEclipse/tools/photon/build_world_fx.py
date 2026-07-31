@@ -426,7 +426,10 @@ def build_breach_ember_updraft() -> FxBuilder:
 
     risers = (fx.particle_emitter(
             "ember_risers",
-            duration=200, looping=True,
+            # prewarm = the riser's life: all 4 carriers are mid-corkscrew with full
+            # ribbons at chunk-load instead of the thermal standing empty for ~9 s
+            # (LINT-PREWARM-FILL; trails simulate through prewarm, jar-verified).
+            duration=200, looping=True, prewarm=190,
             start_lifetime=constant(190), start_speed=constant(0),
             start_size=nf3(0.1), simulation_space="World", max_particles=4)
         .with_emission(rate=constant(0.021))  # ~ one new riser as one dies

@@ -305,6 +305,9 @@ def build_pillar() -> FxBuilder:
         .child_of(root)
         .with_material(texture_material(BEAM_CORE, hdr=hdr(1.8, 1.3, 3.0),
                                         blend=BLEND_ADDITIVE, cull=False))
+        # LINT-CULL-LONGSHOT: a 620-t one-shot is a loop for culling purposes — same
+        # box as climb_streaks (the +270 lid IS the authored column, beam width ≤ 5.4).
+        .with_cull_box((-6.0, -2.0, -6.0), (6.0, PILLAR_MODEL_HEIGHT + 10.0, 6.0))
         .with_lights(sky=15, block=15))
 
     # Climbing streak traffic: fast violet sparks racing up inside the column. The

@@ -90,6 +90,7 @@ Leaf-type NBT encodings (from `AccessorRegistries` + `LDLibExtraCodecs`):
 | `UUID` | String |
 | `ResourceLocation` | String |
 | `AABB` | `{min: List<Double>[3], max: List<Double>[3]}` |
+| `Range` (ldlib2) | `{a: Float, b: Float}` — keys are the record field names `a`/`b`, **not** `min`/`max` (jar-verified `Range.CODEC`); used by all `speedRange` fields |
 | `GradientColor` | `{a: List<Float> flat (t,alpha)*, rgb: List<Float> flat (t,r,g,b)*}` (floats 0–1) |
 | `ECBCurves` | List of segments; each segment = List\<Float\>[8] = p0x,p0y,c0x,c0y,c1x,c1y,p1x,p1y (x and y normalized 0–1) |
 
@@ -198,14 +199,14 @@ arcSpeed: NF}` — Unity's arc emission modes for ring sweeps.
 | `lights` | `skyLight: NF=15, blockLight: NF=15` | **forced lightmap** over particle lifetime (fake glow, not a dynamic light) |
 | `velocityOverLifetime` | `linear: NF3, orbitalMode: AngularVelocity\|LinearVelocity\|FixedVelocity, orbital: NF3, offset: NF3 (orbit center), radial: NF, speedModifier: NF=1` | particle t |
 | `inheritVelocity` | `mode: CURRENT\|INITIAL, multiply: NF=1` | emitter velocity → particle |
-| `lifetimeByEmitterSpeed` | `multiplier: NF=1, speedRange: {min,max}=0–1` | kill faster when emitter fast |
+| `lifetimeByEmitterSpeed` | `multiplier: NF=1, speedRange: {a,b}=0–1` (LDLib2 `Range` codec keys are `a`/`b`, NOT `min`/`max`) | kill faster when emitter fast |
 | `forceOverLifetime` | `force: NF3, simulationSpace: Local\|World` | acceleration/tick |
 | `colorOverLifetime` | `color: NF gradient-family` | multiplied with startColor |
-| `colorBySpeed` | `color: NF gradient-family, speedRange: {min,max}` | speed remap 0–1 |
+| `colorBySpeed` | `color: NF gradient-family, speedRange: {a,b}` | speed remap 0–1 |
 | `sizeOverLifetime` | `size: NF3` | multiplier |
-| `sizeBySpeed` | `size: NF3, speedRange` | multiplier |
+| `sizeBySpeed` | `size: NF3, speedRange: {a,b}` | multiplier |
 | `rotationOverLifetime` | `roll, pitch, yaw: NF` (deg/tick) | additive spin |
-| `rotationBySpeed` | `roll, pitch, yaw: NF, speedRange` | |
+| `rotationBySpeed` | `roll, pitch, yaw: NF, speedRange: {a,b}` | |
 | `noise` | `frequency: 1.0, quality: Noise1D\|Noise2D\|Noise3D, remap: {_enable, remapCurve: NF curve}, position: NF3=0.1, rotation: NF=0, size: NF=0` | procedural turbulence on pos/rot/size |
 | `uvAnimation` | `tiles: [Int,Int]=[1,1], animation: WholeSheet\|SingleRow, frameOverTime: NF=0, startFrame: NF=0, cycle: Float=1` | sprite-sheet flipbook over lifetime |
 | `trails` | `ratio:1.0, lifetime: NF 0–1 (fraction of particle lifetime), dieWithParticles:0b, sizeAffectsWidth:1b, sizeAffectsLifetime:0b, inheritParticleColor:1b, colorOverLifetime: NF color-family, trailType: TRAIL\|ARA_TRAIL` **plus embedded full `config` (TrailConfig §4.2) and `araConfig` (AraTrailConfig §4.3)** | per-particle ribbon trails |

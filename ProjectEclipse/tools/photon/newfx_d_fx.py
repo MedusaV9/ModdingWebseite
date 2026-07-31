@@ -181,7 +181,10 @@ def build_breach_drift_cocoon() -> FxBuilder:
     # ribbons are the "stretched light-threads" that snap and re-form.
     carriers = (fx.particle_emitter(
             "thread_carriers",
-            duration=60, looping=True,
+            # prewarm = the carrier's life: the cocoon is fully wrapped the moment the
+            # faller is first seen, instead of dressing itself over ~3 s
+            # (LINT-PREWARM-FILL; trails simulate through prewarm, jar-verified).
+            duration=60, looping=True, prewarm=55,
             start_lifetime=constant(55), start_speed=constant(0.0),
             start_size=nf3(0.09), simulation_space="Local", max_particles=3)
         .with_emission(rate=constant(0.055))  # ~one new carrier as one dies

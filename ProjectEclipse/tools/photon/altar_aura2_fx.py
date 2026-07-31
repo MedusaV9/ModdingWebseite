@@ -169,7 +169,10 @@ def _rim_streamers(fx, burst_count, probability, hdr):
     """Occasional quick up-streamers on the pillar ring (mid/hi tiers only)."""
     (fx.particle_emitter(
             "rim_streamers",
-            duration=50, looping=True, prewarm=0,
+            # prewarm one full cycle (LINT-PREWARM caps at duration): the t=20 burst is
+            # already mid-climb at chunk-load like the rim_motes/_fog siblings, instead
+            # of the ring standing bare for a second (LINT-PREWARM-FILL).
+            duration=50, looping=True, prewarm=50,
             start_lifetime=random_between(38, 55),
             start_speed=constant(0.0),
             start_size=nf3(random_between(0.16, 0.26)),

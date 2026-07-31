@@ -146,6 +146,9 @@ def build_bahn() -> FxBuilder:
     beam._config["width"] = curve(
         0.22, 0.42,
         [(0.0, 0.0, 0.2, 1.0, 0.3, 1.0, 0.5, 0.5), (0.5, 0.5, 0.7, 0.0, 0.8, 0.0, 1.0, 0.0)])
+    # LINT-CULL-LOOP (loop beams cull too): identical to path_motes' box so the whole
+    # edge FX culls as one unit — local space is the unit-Z edge the executor stretches.
+    beam.with_cull_box((-2.0, -2.0, -1.1), (2.0, 2.0, 0.1))
     beam.with_lights(sky=14, block=13)
 
     # (b) wandering motes: spawn along z 0→−1 (emitter-t sweep), drifting toward the
@@ -189,6 +192,9 @@ def build_far_shaft() -> FxBuilder:
     beam._config["width"] = curve(
         0.5, 0.9,
         [(0.0, 0.5, 0.25, 1.0, 0.4, 1.0, 0.5, 0.5), (0.5, 0.5, 0.75, 0.0, 0.9, 0.0, 1.0, 0.5)])
+    # LINT-CULL-LOOP (loop beams cull too): the 60-block shaft plus margin — tighter
+    # than orbit_glints' ±5 ring box because the beam stays on the axis (width ≤ 0.9).
+    beam.with_cull_box((-2.0, -1.0, -2.0), (2.0, 62.0, 2.0))
     beam.with_lights(sky=15, block=15)
 
     # 2 orbit glints circling the shaft mid-height (arc Loop = steady procession).

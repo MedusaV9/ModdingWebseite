@@ -697,18 +697,33 @@ SEG_DECAY_TAIL = (0.0, 1.0, 0.35, 0.9, 0.7, 0.25, 1.0, 0.0)
 # ---------------------------------------------------------------------------
 # Emitter builders
 # ---------------------------------------------------------------------------
+#: Fixed Eclipse namespace for DETERMINISTIC transform UUIDs (C2 Paket 1, C4 §6.1 find):
+#: uuid4-per-run made every generator run rewrite ALL of its assets byte-differently
+#: (pure UUID churn = guaranteed binary merge conflicts on shared generators).
+#: FxBuilder.build() derives every object's UUID via uuid5(_FX_UUID_NS,
+#: "<builder.name>/<hierarchical path>") — see FxBuilder._assign_deterministic_uuids.
+_FX_UUID_NS = _uuid.UUID("6f1d2c4a-0b3e-4a9f-8c71-2d5e9a0b4c13")
+
+
 class _FxObject:
     """Base: transform handling + UUID parent linking shared by every fx object kind."""
 
     def __init__(self, fx_type: str, name: str):
         self.fx_type = fx_type
         self.name = name
+        # Placeholder only: FxBuilder.build() re-derives a DETERMINISTIC uuid5 for every
+        # object it owns. The uuid4 fallback keeps standalone obj.build() (no FxBuilder)
+        # behaving exactly as before — no shipping generator does that.
         self.uuid = str(_uuid.uuid4())
         self._position = (0.0, 0.0, 0.0)
         self._rotation = (0.0, 0.0, 0.0, 1.0)
         self._scale = (1.0, 1.0, 1.0)
         self._parent_id = None
         self._children_ids = []
+        # Object references mirroring _parent_id/_children_ids so FxBuilder.build() can
+        # re-link after deterministic UUID (re)assignment (idempotent across calls).
+        self._parent_obj = None
+        self._children_objs = []
 
     # -- transform ----------------------------------------------------------
     def at(self, x, y, z):
@@ -734,6 +749,8 @@ class _FxObject:
             raise ValueError(f"{self.name!r} already has a parent")
         self._parent_id = parent.uuid
         parent._children_ids.append(self.uuid)
+        self._parent_obj = parent
+        parent._children_objs.append(self)
         return self
 
     def _transform(self) -> dict:
@@ -939,7 +956,10 @@ class ParticleEmitter(_FxObject, _RendererMixin):
         color_over_lifetime = NF color-family (gradient/color/random_*)
         size_over_lifetime / size_by_speed = NF or NF3 multiplier
         rotation_over_lifetime / rotation_by_speed = NF roll (deg/tick) or dict(roll=, pitch=, yaw=)
-        color_by_speed = dict(color=NF-color, range=(min, max))
+        color_by_speed = dict(color=NF-color, range=(lo, hi))
+        lifetime_by_emitter_speed = NF multiplier or dict(multiplier=NF, range=(lo, hi))
+          (NOTE: scales by the EMITTER's world speed — a no-op on static anchors,
+           see credits4_fx.py's jar autopsy)
         velocity_over_lifetime = dict(linear=NF3, orbital=NF3, orbital_mode=..., offset=NF3,
                                       radial=NF, speed_modifier=NF)
         force_over_lifetime = dict(force=NF3, simulation_space="Local"|"World")
@@ -968,6 +988,12 @@ class ParticleEmitter(_FxObject, _RendererMixin):
             elif key == "color_by_speed":
                 self.with_module("colorBySpeed", {
                     "color": value["color"], "speedRange": _min_max(value.get("range", (0, 1)))})
+            elif key == "lifetime_by_emitter_speed":
+                body = {"multiplier": _nf(value["multiplier"]),
+                        "speedRange": _min_max(value.get("range", (0, 1)))} \
+                    if isinstance(value, dict) \
+                    else {"multiplier": _nf(value), "speedRange": _min_max((0, 1))}
+                self.with_module("lifetimeByEmitterSpeed", body)
             elif key == "velocity_over_lifetime":
                 v = value
                 self.with_module("velocityOverLifetime", {
@@ -1031,7 +1057,13 @@ class ParticleEmitter(_FxObject, _RendererMixin):
 
 
 def _min_max(pair) -> dict:
-    return {"min": F(float(pair[0])), "max": F(float(pair[1]))}
+    """LDLib2 `Range` codec payload (speedRange & friends). The record fields AND the
+    codec keys are `a`/`b` — `Range.CODEC` is a RecordCodecBuilder over `fieldOf("a")`/
+    `fieldOf("b")` (jar-verified, ldlib2 2.2.29). This helper used to write `min`/`max`,
+    which silently deserialized every authored range back to the setting's default
+    (C5 §3 / B2 / B6 / A1 / A3 finds — the reason a dozen generators grew local
+    `with_module` workarounds). Keys stay ordered (a, b) = (lo, hi)."""
+    return {"a": F(float(pair[0])), "b": F(float(pair[1]))}
 
 
 class BeamEmitter(_FxObject, _RendererMixin):
@@ -1207,10 +1239,42 @@ class FxBuilder:
     def empty(self, name) -> EmptyObject:
         return self._add(EmptyObject(name))
 
+    def _assign_deterministic_uuids(self):
+        """Derives every object's transform UUID as uuid5(_FX_UUID_NS, key) with
+        key = "<builder.name>/<hierarchical path>" (C2 Paket 1).
+
+        The path is the root->object name chain through child_of nesting; same-named
+        siblings under the same parent path get an occurrence index ("name", "name#1",
+        "name#2", ... in flat-object-list order, which is generator-deterministic), so
+        the key is hierarchically unique by construction — duplicate emitter names in
+        one asset and nested duplicates both stay collision-free. _parentId/_childrenId
+        are re-linked from the object references afterwards, which makes repeated
+        build() calls idempotent (write() round-trips call build() several times, and
+        .fx/.fxproj of one builder must embed identical UUIDs)."""
+        paths = {}       # id(obj) -> hierarchical path string
+        counters = {}    # (parent_path, name) -> occurrences seen so far
+
+        def path_of(obj):
+            key = id(obj)
+            if key not in paths:
+                prefix = (path_of(obj._parent_obj) + "/") if obj._parent_obj is not None else ""
+                n = counters.get((prefix, obj.name), 0)
+                counters[(prefix, obj.name)] = n + 1
+                paths[key] = prefix + (obj.name if n == 0 else f"{obj.name}#{n}")
+            return paths[key]
+
+        for obj in self.objects:
+            obj.uuid = str(_uuid.uuid5(_FX_UUID_NS, f"{self.name}/{path_of(obj)}"))
+        for obj in self.objects:
+            if obj._parent_obj is not None:
+                obj._parent_id = obj._parent_obj.uuid
+            obj._children_ids = [c.uuid for c in obj._children_objs]
+
     def build(self) -> dict:
         """Root compound: {fxData: {fxObjects: [{type, data}, ...]}} (flat, all objects)."""
         if not self.objects:
             raise ValueError(f"FxBuilder({self.name!r}) has no objects")
+        self._assign_deterministic_uuids()
         return {"fxData": {"fxObjects": L([o.build() for o in self.objects])}}
 
     def to_bytes(self) -> tuple[bytes, bytes]:
@@ -1705,6 +1769,16 @@ PALETTE_TOKENS = {
 }
 #: Advisory RGB distance (unit cube, Euclidean) beyond which a stop is off-palette.
 PALETTE_TOLERANCE = 0.25
+#: LINT-CULL-LONGSHOT threshold: one-shot emitters whose visibility window (see
+#: _visibility_window) exceeds this many ticks must carry a cull box like loops do.
+#: Calibrated on the Wave-13 fleet (C2 audit): the fleet convention holds up to
+#: ~200 t (94 of 95 one-shots above the line already cull; bands below are dominated
+#: by deliberately short cues), so 200 yields true finds without noise.
+LONGSHOT_WINDOW_TICKS = 200
+#: LINT-PREWARM-FILL threshold: a looping particle emitter with prewarm 0 visibly
+#: fills up from empty for max(startLifetime) ticks after (chunk-)load. >= 60 t
+#: (3 s) is where the fleet's ambient loops start to read as "broken on arrival".
+PREWARM_FILL_TICKS = 60
 
 
 class LintFinding:
@@ -1756,6 +1830,23 @@ def _nf_max(nf, default=0.0):
     if nf["type"] in ("curve", "random_curve"):
         return _num_val(data.get("upper"), _num_val(data.get("max"), default))
     return default
+
+
+def _visibility_window(fx_type, config) -> float:
+    """Upper bound (ticks) on how long one playback of the emitter stays visible:
+    emission window plus the longest tail a spawned element can outlive it by.
+    particle: duration + max startLifetime + max startDelay; trail: duration + time
+    (segment life); beam: duration + startDelay; ara: duration dominates (`time` is
+    seconds-scaled physics lag, negligible next to the 200 t lint threshold)."""
+    duration = _num_val(config.get("duration"), 100)
+    if fx_type == "particle_emitter":
+        return duration + _nf_max(config.get("startLifetime"), 0.0) \
+            + _nf_max(config.get("startDelay"), 0.0)
+    if fx_type == "trail_emitter":
+        return duration + _num_val(config.get("time"), 0)
+    if fx_type == "beam_emitter":
+        return duration + _num_val(config.get("startDelay"), 0)
+    return duration
 
 
 def _segment_linear(seg, tol=LINEAR_CURVE_TOL) -> bool:
@@ -1916,7 +2007,8 @@ def _child_burst_sum(path: Path) -> float:
 
 
 def lint_file(path) -> list:
-    """The 15 PHOTON-QUALITY.md §5.2 lint rules over one on-disk .fx file.
+    """The PHOTON-QUALITY.md §5.2 lint rules (15 legacy + Wave-13 C2's
+    LINT-CULL-LONGSHOT/LINT-PREWARM-FILL) over one on-disk .fx file.
 
     Returns a list of LintFinding (severity error/warn/info). Structural validity is
     assumed — run validate_file first; a parse failure yields a single error finding.
@@ -1960,11 +2052,23 @@ def lint_file(path) -> list:
         cull_on = isinstance(renderer.get("cull"), dict) \
             and _num_val(renderer["cull"].get("_enable"), 0) == 1
 
-        # LINT-CULL-LOOP (error) — golden rule: every looping emitter carries a cull box.
-        if fx_type in ("particle_emitter", "trail_emitter", "ara_trail_emitter") \
-                and looping and not cull_on:
+        # LINT-CULL-LOOP (error) — golden rule: every looping emitter carries a cull
+        # box. All four renderable kinds INCLUDING beam_emitter (Wave-13 C2 closed the
+        # beam gap: the rule text says "every looping emitter", and loop beams render
+        # every frame just like particle loops).
+        if looping and not cull_on:
             findings.append(LintFinding("LINT-CULL-LOOP", "error", file_id, name,
                                         "looping emitter without renderer.cull._enable: 1b"))
+        # LINT-CULL-LONGSHOT (warn) — one-shots that stay visible past
+        # LONGSHOT_WINDOW_TICKS are loops for culling purposes: a 600-t pillar parked
+        # behind the player renders for 30 s with no cheap skip.
+        if not looping and not cull_on:
+            window = _visibility_window(fx_type, config)
+            if window > LONGSHOT_WINDOW_TICKS:
+                findings.append(LintFinding(
+                    "LINT-CULL-LONGSHOT", "warn", file_id, name,
+                    f"one-shot visibility window ~{window:g} t > {LONGSHOT_WINDOW_TICKS} t "
+                    "without renderer.cull._enable: 1b"))
 
         if fx_type == "particle_emitter":
             max_particles = _num_val(config.get("maxParticles"))
@@ -1994,6 +2098,18 @@ def lint_file(path) -> list:
                 findings.append(LintFinding(
                     "LINT-PREWARM", "error", file_id, name,
                     f"prewarm {prewarm} > duration {duration}"))
+            # LINT-PREWARM-FILL (info, advisory) — a loop with prewarm 0 and long-lived
+            # particles visibly fills up from empty after (chunk-)load. Deliberate for
+            # action/sequence FX (player trails, cutscene choreography), wrong for
+            # stationary ambients — only the author knows which, hence info-only.
+            # Fix pattern: prewarm ≈ min(max startLifetime, duration).
+            if looping and prewarm == 0:
+                fill = _nf_max(config.get("startLifetime"), 0.0)
+                if fill >= PREWARM_FILL_TICKS:
+                    findings.append(LintFinding(
+                        "LINT-PREWARM-FILL", "info", file_id, name,
+                        f"looping emitter with prewarm 0 fills up for ~{fill:g} t after "
+                        "load (advisory — set prewarm if this is a stationary ambient)"))
             # LINT-BURST-WINDOW (warn) — one-shot bursts must land inside the window.
             if not looping:
                 bursts = config.get("emission", {}).get("bursts", {})

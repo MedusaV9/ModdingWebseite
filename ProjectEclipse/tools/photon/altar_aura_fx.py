@@ -229,6 +229,9 @@ def build_altar_aura_pillar() -> FxBuilder:
     beam._config["width"] = curve(
         0.45, 0.8,
         [(0.0, 0.5, 0.2, 1.0, 0.3, 1.0, 0.5, 0.5), (0.5, 0.5, 0.7, 0.0, 0.8, 0.0, 1.0, 0.5)])
+    # LINT-CULL-LOOP (loop beams cull too): same box as the pillar_motes sibling —
+    # the 42-block column plus margin; the beam itself is only 0.8 wide.
+    beam.with_cull_box((-2.0, -1.0, -2.0), (2.0, 44.0, 2.0))
     beam.with_lights(sky=15, block=15)
 
     # --- a few climbing motes inside the column (cheap depth cue) ------------

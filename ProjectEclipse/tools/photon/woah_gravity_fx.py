@@ -94,6 +94,9 @@ def build_light_column() -> FxBuilder:
     beam._config["width"] = curve(
         0.6, 1.1,
         [(0.0, 0.0, 0.2, 1.0, 0.3, 1.0, 0.5, 0.5), (0.5, 0.5, 0.7, 0.0, 0.8, 0.0, 1.0, 0.0)])
+    # LINT-CULL-LOOP (loop beams cull too): the 90-block shaft plus margin — tighter
+    # than rise_streaks' ±5 box because the beam never leaves the axis (width ≤ 1.1).
+    beam.with_cull_box((-2.0, -1.0, -2.0), (2.0, 92.0, 2.0))
     beam.with_lights(sky=15, block=15)
 
     # (b) rising streaks: fast up-drifting stretched motes hugging the beam shaft —
