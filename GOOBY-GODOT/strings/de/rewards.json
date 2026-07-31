@@ -56,7 +56,14 @@
 			"pancakes": "Pfannkuchen",
 			"cottonCandy": "Zuckerwatte",
 			"softServe": "Softeis",
-			"waffle": "Waffel"
+			"waffle": "Waffel",
+			"ice-cream": "Eistüte",
+			"cake": "Torte",
+			"pumpkin": "Kürbis",
+			"sundae": "Eisbecher",
+			"cinnamonRoll": "Zimtschnecke",
+			"cupcakePink": "Rosa Törtchen",
+			"nutella": "Nutella-Glas"
 		}
 	}
 }

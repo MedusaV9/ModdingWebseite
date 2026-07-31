@@ -64,6 +64,18 @@ const FOODS := {
 	"pilz": {"hunger": 12, "fun": 2, "energy": 1},
 	"ananas": {"hunger": 14, "fun": 7},
 	"chili": {"hunger": 6, "fun": 8, "energy": 4},
+	# ── W13/FOOD (P1 Punkte 2+17, Web-Parität 32→39): sechs FOOD_TABLE-
+	# Speisen, deren GLBs jetzt unter assets/city/essen/ liegen, plus
+	# `nutella` (Web foods.js V3/G35: teuerster Treat UND Treibstoff der
+	# Nougatschleuse — s. scripts/logic/nougat_logic.gd). Deltas verbatim
+	# aus GOOBY/src/data/constants.js FOOD_TABLE bzw. foods.js. ──
+	"ice-cream": {"hunger": 6, "fun": 15, "energy": 5, "junk": true},
+	"cake": {"hunger": 30, "fun": 20, "junk": true},
+	"pumpkin": {"hunger": 26, "fun": 4},
+	"sundae": {"hunger": 7, "fun": 14, "energy": 3, "junk": true},
+	"cinnamonRoll": {"hunger": 16, "fun": 8, "energy": 3, "hygiene": -2, "junk": true},
+	"cupcakePink": {"hunger": 10, "fun": 10, "energy": 2, "hygiene": -2, "junk": true},
+	"nutella": {"hunger": 18, "fun": 6, "energy": 2, "hygiene": -4, "junk": true},
 }
 
 ## Fallback für unbekannte Inventar-Ids: generischer kleiner Snack.

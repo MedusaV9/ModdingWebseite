@@ -56,7 +56,14 @@
 			"pancakes": "Pancakes",
 			"cottonCandy": "Cotton candy",
 			"softServe": "Soft serve",
-			"waffle": "Waffle"
+			"waffle": "Waffle",
+			"ice-cream": "Ice cream cone",
+			"cake": "Cake",
+			"pumpkin": "Pumpkin",
+			"sundae": "Sundae",
+			"cinnamonRoll": "Cinnamon roll",
+			"cupcakePink": "Pink cupcake",
+			"nutella": "Nutella jar"
 		}
 	}
 }
