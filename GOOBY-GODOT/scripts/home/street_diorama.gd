@@ -19,9 +19,19 @@ const AUTO_TEMPO := 2.1
 const AUTO_GLB := "res://assets/city/autos/sedan.glb"
 
 var vista := VISTA_STRASSE
+## W13/WETTER-FX: Tests/Screenshots erzwingen eine Wetterlage
+## ({} = echter SoulWetter-Tagesplan von heute).
+var wetter_override: Dictionary = {}
+## Uhrzeit für den Wetterplan (< 0 = Systemuhr; RoomBase reicht sein
+## `stunde_override` herein, damit Screenshots deterministisch bleiben).
+var stunde_override := -1.0
 
 var _autos: Array[Node3D] = []
 var _laenge := STRASSE_LAENGE
+var _wetter_fx: WetterFx
+var _blitz_tafel: MeshInstance3D
+var _blitz_mat: StandardMaterial3D
+var _blitz_rest := 0.0
 
 
 ## Baut das Diorama für `wall` hinter einem Raum der Größe `world_size`,
@@ -35,10 +45,17 @@ static func attach_if_needed(
 	diorama.name = "Diorama_%s" % wall
 	diorama.vista = vista_id
 	diorama._laenge = maxf(STRASSE_LAENGE, maxf(world_size.x, world_size.y) * 2.5)
+	diorama.stunde_override = _raum_stunde(room)
 	room.add_child(diorama)
 	diorama.position = _diorama_position(wall, world_size)
 	diorama.rotation.y = _diorama_yaw(wall)
 	return diorama
+
+
+## Uhrzeit des Raums übernehmen (RoomBase.stunde_override, falls gesetzt).
+static func _raum_stunde(room: Node3D) -> float:
+	var wert: Variant = room.get("stunde_override")
+	return float(wert) if wert is float else -1.0
 
 
 ## Hängt an dieser Wand mindestens ein Fenster (WALL-Item mit `exterior`)?
@@ -56,15 +73,75 @@ func _ready() -> void:
 	_build_kulisse()
 	if vista == VISTA_STRASSE:
 		_build_autos()
+	_haenge_wetter()
 
 
 func _process(delta: float) -> void:
-	if _autos.is_empty():
-		return
+	_tick_blitz(delta)
 	for auto in _autos:
 		auto.position.x += AUTO_TEMPO * delta * (1.0 if auto.rotation.y == 0.0 else -1.0)
 		if absf(auto.position.x) > _laenge * 0.5:
 			auto.position.x = -sign(auto.position.x) * _laenge * 0.5
+
+
+## W13/WETTER-FX: dezenter Regen-/Schnee-Vorhang hinter der Scheibe
+## (Indoor-Band ohne Spritzer) + Blitz-Tafel vor der Himmels-Rückwand bei
+## Gewitter; das gedämpfte Donner-Grollen kommt aus den WetterFx-Loops.
+## Der Plan kommt IMMER aus SoulWetter (deterministisch pro Tag+Stunde).
+func _haenge_wetter() -> void:
+	var zustand := wetter_override
+	if zustand.is_empty():
+		zustand = SoulWetter.zustand(RanchWetter.datum_heute(), _stunde())
+	_wetter_fx = WetterFx.fuer_diorama(_laenge, zustand)
+	add_child(_wetter_fx)
+	_wetter_fx.position = Vector3(0.0, 0.0, 0.6)
+	_wetter_fx.blitz_gezuendet.connect(_on_blitz_gezuendet)
+	_baue_blitz_tafel()
+
+
+func wetter_fx() -> WetterFx:
+	return _wetter_fx
+
+
+func _stunde() -> float:
+	if stunde_override >= 0.0:
+		return stunde_override
+	var jetzt := Time.get_time_dict_from_system()
+	return float(jetzt["hour"]) + float(jetzt["minute"]) / 60.0
+
+
+## Unshaded Flash-Quad knapp vor der Himmel-Wand — EIGENES Material
+## (HomeProps-Materialien sind geteilt und dürfen nicht blinken).
+func _baue_blitz_tafel() -> void:
+	_blitz_tafel = MeshInstance3D.new()
+	_blitz_tafel.name = "BlitzTafel"
+	var quad := QuadMesh.new()
+	# Nur Fensterhöhe: bleibt unter der Wandkrone (Budget-Test), mehr ist
+	# durch die Scheibe ohnehin nicht sichtbar.
+	quad.size = Vector2(_laenge, 2.3)
+	_blitz_mat = StandardMaterial3D.new()
+	_blitz_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_blitz_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_blitz_mat.albedo_color = Color(HomeLicht.BLITZ_FARBE, 0.0)
+	quad.material = _blitz_mat
+	_blitz_tafel.mesh = quad
+	_blitz_tafel.position = Vector3(0.0, 1.15, -2.1)
+	_blitz_tafel.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_blitz_tafel.visible = false
+	add_child(_blitz_tafel)
+
+
+func _on_blitz_gezuendet(_staerke: float) -> void:
+	_blitz_rest = HomeLicht.BLITZ_DAUER_S
+
+
+func _tick_blitz(delta: float) -> void:
+	if _blitz_rest <= 0.0 or _blitz_tafel == null:
+		return
+	_blitz_rest -= delta
+	var faktor := HomeLicht.blitz_faktor(_blitz_rest)
+	_blitz_mat.albedo_color = Color(HomeLicht.BLITZ_FARBE, 0.55 * faktor)
+	_blitz_tafel.visible = faktor > 0.01
 
 
 func _build_kulisse() -> void:

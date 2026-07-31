@@ -42,6 +42,23 @@ static func lichter_an(stunde: float) -> bool:
 	return tageslicht(stunde) < LICHTER_AN_UNTER
 
 
+## W13/WETTER-FX: Licht-Profil vom Wetter gedimmt/entsättigt (pur
+## destilliert aus RanchWetterController._wende_licht_an) — Regen/Wolken
+## nehmen der Sonne Energie und ziehen ihre Farbe Richtung Grau. Schnee
+## dimmt wie ein bedeckter Tag (die Basis-Tabellen kennen keinen Schnee).
+static func wetter_licht_profil(profil: Dictionary, zustand: Dictionary) -> Dictionary:
+	var typ := str(zustand.get("typ", "sonne"))
+	if typ == "schnee":
+		typ = "wolken"
+	var faktor := float(RanchWetter.LICHT_FAKTOR.get(typ, 1.0))
+	var grau := float(RanchWetter.BEWOELKUNG.get(typ, 0.0)) * 0.55
+	var out := profil.duplicate()
+	out["sonnen_energie"] = float(profil["sonnen_energie"]) * lerpf(1.0, faktor, 0.85)
+	out["sonnen_farbe"] = (profil["sonnen_farbe"] as Color).lerp(Color(0.82, 0.84, 0.88), grau)
+	out["ambient_energie"] = float(profil["ambient_energie"]) * lerpf(1.0, faktor, 0.75)
+	return out
+
+
 ## Komplettes Licht-Profil der Stadt zur Stunde (0..24, Bruchteile ok).
 static func licht_profil(stunde: float) -> Dictionary:
 	var licht := tageslicht(stunde)

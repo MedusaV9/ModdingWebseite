@@ -15,6 +15,39 @@ const KAUFBAR: Array[String] = ["werkstatt", "gewaechshaus", "sprinkler", "baum"
 const SPOT_MATERIALIEN: Array[String] = ["stock", "stock", "stock", "blatt"]
 
 
+## W13/WETTER-FX: Sichtbares Wetter im Garten — hängt die geteilte
+## WetterFx-Komponente an den Garten-Raum (idempotent, nur room_id
+## "garden"). Der Plan kommt IMMER aus SoulWetter (deterministisch; Datum/
+## Stunde für Tests injizierbar, sonst Systemuhr bzw. das
+## `stunde_override` des Raums). Der Garten NUTZT Regen schon fürs Gießen
+## (GardenGrowth.wasser_faktor) — jetzt sieht man ihn auch.
+## Aufruf-Wiring: GardenHost.setup (Request, s. W13-requests.md).
+static func wetter_fx_anhaengen(room: Node, datum := "", stunde := -1.0) -> WetterFx:
+	if room == null or str(room.get("room_id")) != "garden":
+		return null
+	var vorhanden := room.get_node_or_null("WetterFx")
+	if vorhanden is WetterFx:
+		return vorhanden
+	var tag := datum if not datum.is_empty() else RanchWetter.datum_heute()
+	var h := stunde
+	if h < 0.0 and room.get("stunde_override") != null:
+		h = float(room.get("stunde_override"))
+	if h < 0.0:
+		var jetzt := Time.get_time_dict_from_system()
+		h = float(jetzt["hour"]) + float(jetzt["minute"]) / 60.0
+	var zellen: Vector2i = RoomDefs.room("garden").get("grid", Vector2i(28, 24))
+	var groesse := Vector2(zellen.x * GridData.CELL_SIZE, zellen.y * GridData.CELL_SIZE)
+	var fx := WetterFx.new()
+	fx.name = "WetterFx"
+	fx.extents = Vector3(groesse.x * 0.6, 2.0, groesse.y * 0.6)
+	fx.hoehe = 12.0
+	fx.seed_wert = RanchWetter.tages_seed(tag, SoulWetter.HOME_SEED)
+	room.add_child(fx)
+	fx.position = Vector3(groesse.x * 0.5, 0.0, groesse.y * 0.5)
+	fx.wende_zustand_an(SoulWetter.zustand(tag, h))
+	return fx
+
+
 ## Spawnt fehlende Sammel-Spots auf freien Zellen und lässt abgesammelte
 ## nachwachsen. Idempotent — läuft bei jedem Garten-Betreten.
 static func refresh_spots(gs: Object, jetzt_s: float, rng: RandomNumberGenerator) -> void:

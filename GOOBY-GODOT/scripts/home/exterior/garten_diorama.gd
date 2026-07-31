@@ -18,8 +18,18 @@ const BREITE_MIN := 18.0
 ## Alles bleibt unter RoomBase.WALL_HEIGHT (sonst lugt es ins Zimmer).
 const MAX_HOEHE := 2.35
 
+## W13/WETTER-FX: Tests/Screenshots erzwingen eine Wetterlage
+## ({} = echter SoulWetter-Tagesplan von heute).
+var wetter_override: Dictionary = {}
+## Uhrzeit für den Wetterplan (< 0 = Systemuhr; kommt aus RoomBase).
+var stunde_override := -1.0
+
 var _laenge := BREITE_MIN
 var _style: Dictionary = {}
+var _wetter_fx: WetterFx
+var _blitz_tafel: MeshInstance3D
+var _blitz_mat: StandardMaterial3D
+var _blitz_rest := 0.0
 
 
 ## Vista-Weiche für RoomBase: „garten" bekommt dieses Diorama, alle
@@ -44,6 +54,9 @@ static func attach_if_needed(
 	diorama._laenge = maxf(BREITE_MIN, maxf(world_size.x, world_size.y) * 2.5)
 	if room.has_method("game_state"):
 		diorama._style = HouseStyleState.style(room.call("game_state"))
+	var stunde: Variant = room.get("stunde_override")
+	if stunde is float:
+		diorama.stunde_override = float(stunde)
 	room.add_child(diorama)
 	diorama.position = _diorama_position(wall, world_size)
 	diorama.rotation.y = _diorama_yaw(wall)
@@ -69,6 +82,72 @@ func _ready() -> void:
 	_baue_beete()
 	_baue_gruen()
 	_baue_himmel()
+	_haenge_wetter()
+
+
+## Blitz-Abklingen ist der EINZIGE _process-Grund dieses Dioramas —
+## deshalb schläft _process, bis wirklich ein Blitz zündet.
+func _process(delta: float) -> void:
+	if _blitz_rest <= 0.0 or _blitz_tafel == null:
+		set_process(false)
+		return
+	_blitz_rest -= delta
+	var faktor := HomeLicht.blitz_faktor(_blitz_rest)
+	_blitz_mat.albedo_color = Color(HomeLicht.BLITZ_FARBE, 0.55 * faktor)
+	_blitz_tafel.visible = faktor > 0.01
+
+
+## W13/WETTER-FX: dezenter Regen-/Schnee-Vorhang hinter der Scheibe
+## (Indoor-Band ohne Spritzer) + Blitz-Tafel vor der Himmels-Rückwand bei
+## Gewitter; das gedämpfte Donner-Grollen kommt aus den WetterFx-Loops.
+## Der Plan kommt IMMER aus SoulWetter (deterministisch pro Tag+Stunde).
+func _haenge_wetter() -> void:
+	var zustand := wetter_override
+	if zustand.is_empty():
+		zustand = SoulWetter.zustand(RanchWetter.datum_heute(), _stunde())
+	_wetter_fx = WetterFx.fuer_diorama(_laenge, zustand)
+	add_child(_wetter_fx)
+	_wetter_fx.position = Vector3(0.0, 0.0, -0.5)
+	_wetter_fx.blitz_gezuendet.connect(_on_blitz_gezuendet)
+	_baue_blitz_tafel()
+	set_process(false)
+
+
+func wetter_fx() -> WetterFx:
+	return _wetter_fx
+
+
+func _stunde() -> float:
+	if stunde_override >= 0.0:
+		return stunde_override
+	var jetzt := Time.get_time_dict_from_system()
+	return float(jetzt["hour"]) + float(jetzt["minute"]) / 60.0
+
+
+## Unshaded Flash-Quad knapp vor der Himmel-Wand — EIGENES Material
+## (HomeProps-Materialien sind geteilt und dürfen nicht blinken).
+func _baue_blitz_tafel() -> void:
+	_blitz_tafel = MeshInstance3D.new()
+	_blitz_tafel.name = "BlitzTafel"
+	var quad := QuadMesh.new()
+	# Nur Fensterhöhe: bleibt unter der Wandkrone (Budget-Test), mehr ist
+	# durch die Scheibe ohnehin nicht sichtbar.
+	quad.size = Vector2(_laenge, 2.3)
+	_blitz_mat = StandardMaterial3D.new()
+	_blitz_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_blitz_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_blitz_mat.albedo_color = Color(HomeLicht.BLITZ_FARBE, 0.0)
+	quad.material = _blitz_mat
+	_blitz_tafel.mesh = quad
+	_blitz_tafel.position = Vector3(0.0, 1.15, -3.4)
+	_blitz_tafel.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_blitz_tafel.visible = false
+	add_child(_blitz_tafel)
+
+
+func _on_blitz_gezuendet(_staerke: float) -> void:
+	_blitz_rest = HomeLicht.BLITZ_DAUER_S
+	set_process(true)
 
 
 ## Rasen im Belag des Spieler-Grundstücks (derselbe wie im echten Garten).

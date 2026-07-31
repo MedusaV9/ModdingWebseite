@@ -31,10 +31,16 @@ var ampel_mm: MultiMesh
 var ampel_achsen: Array[bool] = []
 var ampel_lookup: Dictionary = {}
 
+## W13/WETTER-FX: Tests/Screenshots erzwingen eine Wetterlage ({} = echter
+## SoulWetter-Tagesplan, gleiche API wie das Zuhause).
+var wetter_override: Dictionary = {}
+
 var _szene: Node3D
 var _karte: CityMap
 var _profil: Dictionary
 var _stunde := 12.0
+var _wetter: Dictionary = {}
+var _wetter_fx: WetterFx
 
 var _glb_mesh_cache: Dictionary = {}
 var _markisen: Array[Dictionary] = []
@@ -59,17 +65,23 @@ func tick(delta: float) -> void:
 
 ## Tag/Nacht-Licht (W4-P3 POLISH-8): komplette 24-h-Kurve aus CityAmbiente
 ## — nachts fahler Mond, dunkler Himmel, Laternen + Autolichter an.
+## W13/WETTER-FX: Himmel + Licht folgen jetzt dem ECHTEN Tagesplan
+## (SoulWetter, wie das Zuhause) statt des alten Hardcodes {"typ":"sonne"};
+## dazu hängt die geteilte WetterFx-Komponente in der Szene (Regen über der
+## Stadt, Schnee im Winter, seltenes Gewitter mit Blitz + Donner).
 func baue_licht() -> void:
+	_wetter = wetter_override if not wetter_override.is_empty() else wetter_jetzt(_stunde)
+	var licht := CityAmbiente.wetter_licht_profil(_profil, _wetter)
 	var env := WorldEnvironment.new()
 	var e := Environment.new()
 	# FB-2: prozeduraler GOOBY-Himmel (gleicher Shader wie die Ranch) —
-	# die Stadt hat kein Wetter, also einmal zur Bau-Stunde einstellen.
+	# einmal zur Bau-Stunde + Bau-Wetterlage einstellen.
 	var himmel := GoobyHimmel.new()
-	himmel.wende_an(_stunde, {"typ": "sonne"})
+	himmel.wende_an(_stunde, WetterFx.himmel_zustand(_wetter))
 	e.background_mode = Environment.BG_SKY
 	e.sky = himmel.sky
 	e.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	e.ambient_light_energy = _profil["ambient_energie"]
+	e.ambient_light_energy = licht["ambient_energie"]
 	env.environment = e
 	_szene.add_child(env)
 	var sonne := DirectionalLight3D.new()
@@ -82,9 +94,43 @@ func baue_licht() -> void:
 	sonne.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL
 	sonne.directional_shadow_max_distance = 175.0
 	sonne.rotation_degrees = Vector3(-float(_profil["elevation"]), -35.0, 0.0)
-	sonne.light_color = _profil["sonnen_farbe"]
-	sonne.light_energy = _profil["sonnen_energie"]
+	sonne.light_color = licht["sonnen_farbe"]
+	sonne.light_energy = licht["sonnen_energie"]
 	_szene.add_child(sonne)
+	_haenge_wetter_fx(e, sonne)
+
+
+## Der echte Stadt-Wetterplan: gleiche API wie das Zuhause (SoulWetter,
+## deterministisch aus Datum + Stunde — nichts wird hier gewürfelt).
+static func wetter_jetzt(stunde: float, datum := "") -> Dictionary:
+	var tag := datum if not datum.is_empty() else RanchWetter.datum_heute()
+	return SoulWetter.zustand(tag, stunde)
+
+
+## Bau-Wetterlage der Stadt (für Tests/andere Systeme).
+func wetter() -> Dictionary:
+	return _wetter.duplicate()
+
+
+## Die eingehängte Wetter-Komponente (für Tests/Debug; null vor baue_licht).
+func wetter_fx() -> WetterFx:
+	return _wetter_fx
+
+
+## Geteilte WetterFx-Komponente über der Stadt: folgt der Kamera, schreibt
+## Nebel ins Environment und blitzt über die Szenen-Sonne (Budget: ein
+## GPUParticles3D pro Effekt, skaliert über Quality.particle_factor()).
+func _haenge_wetter_fx(e: Environment, sonne: DirectionalLight3D) -> void:
+	_wetter_fx = WetterFx.new()
+	_wetter_fx.name = "WetterFx"
+	_wetter_fx.extents = Vector3(46.0, 3.0, 46.0)
+	_wetter_fx.hoehe = 24.0
+	_wetter_fx.folge_kamera = true
+	_wetter_fx.seed_wert = _karte.deko_seed()
+	_wetter_fx.env = e
+	_wetter_fx.sonne = sonne
+	_szene.add_child(_wetter_fx)
+	_wetter_fx.wende_zustand_an(_wetter)
 
 
 func baue_boden() -> void:

@@ -52,6 +52,11 @@ const RAUM_PROFILE := {
 	},
 }
 
+## W13/WETTER-FX: Blitz-Flash durchs Fenster (Dioramen) — Dauer und
+## kühle Blitzfarbe zentral, damit alle Fenster gleich flackern.
+const BLITZ_DAUER_S := 0.22
+const BLITZ_FARBE := Color(0.95, 0.96, 1.0)
+
 ## Basis-Energien (Tag, drinnen). Nachts wird Richtung NACHT_* gelerpt.
 const AMBIENT_TAG := 0.52
 const SONNE_TAG := 0.5
@@ -67,6 +72,15 @@ static func tageslicht(stunde: float) -> float:
 	var auf := smoothstep(5.5, 8.5, s)
 	var ab := 1.0 - smoothstep(17.5, 20.5, s)
 	return clampf(minf(auf, ab), 0.0, 1.0)
+
+
+## W13/WETTER-FX: Abkling-Kurve des Fenster-Blitzes (PURE) — 1.0 beim
+## Zünden, linear auf 0 über BLITZ_DAUER_S. Die Dioramen treiben damit die
+## Deckung ihrer Flash-Tafel.
+static func blitz_faktor(rest_s: float, dauer_s := BLITZ_DAUER_S) -> float:
+	if dauer_s <= 0.0:
+		return 0.0
+	return clampf(rest_s / dauer_s, 0.0, 1.0)
 
 
 ## Sonnenhöhe in Grad über die Uhrzeit (für draußen; Nacht = Mondstand).
