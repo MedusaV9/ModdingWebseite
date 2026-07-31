@@ -254,6 +254,10 @@ CLIP_LIST = {
     "ceiling_cling":   (2.4, True),    # SPIDERGOOBY: hängt an der Decke, Ohren baumeln
     "idle_ear_flick":  (2.2, True),    # Ohr zuckt + Blinzeln (Idle-Variety)
     "idle_stretch":    (2.6, True),    # genüsslich strecken (+ Gähn-Morph zur Laufzeit)
+    # --- W15/VOICE2: IGohbie-Selfie-Clips (FOTOWERK-Request aus W13C) --------
+    "phone_up":        (2.4, True),    # Selfie-Haltepose: Pfote mit Handy vor sich,
+                                       # leicht schräg, stolzer Blick (Halte-Loop)
+    "phone_tap":       (1.6, False),   # kurzes Display-Tippen (Idle-Gag, One-Shot)
 }
 
 ANIM_FPS = 24

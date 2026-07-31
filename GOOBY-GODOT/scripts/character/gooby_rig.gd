@@ -53,6 +53,12 @@ const W13C_LOOP_CLIPS: Array[String] = [
 	CLIP_IDLE_STRETCH,
 ]
 const W13C_ONESHOT_CLIPS: Array[String] = [CLIP_REFUSE, CLIP_TOMATO_THROW]
+## W15/VOICE2: IGohbie-Selfie-Clips (FOTOWERK-Request aus W13C). phone_up ist
+## eine Halte-Loop (Selfie-Pose bis zum Abbruch), phone_tap ein One-Shot-Gag.
+const CLIP_PHONE_UP := "phone_up"
+const CLIP_PHONE_TAP := "phone_tap"
+const W15_LOOP_CLIPS: Array[String] = [CLIP_PHONE_UP]
+const W15_ONESHOT_CLIPS: Array[String] = [CLIP_PHONE_TAP]
 ## Loop-Clips, die als StateMachine-Zustände leben (idle/walk stecken im BlendSpace).
 const LOOP_STATES: Array[String] = [
 	"sit",
@@ -66,6 +72,7 @@ const LOOP_STATES: Array[String] = [
 	CLIP_CEILING_CLING,
 	CLIP_IDLE_EAR_FLICK,
 	CLIP_IDLE_STRETCH,
+	CLIP_PHONE_UP,
 ]
 const EMOTION_LERP_SPEED := 4.0  # 1/0.25 s
 const LOOK_CLAMP_DEG := 25.0

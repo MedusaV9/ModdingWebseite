@@ -3,9 +3,9 @@ extends TestCase
 ## auf existierende W1b-Clips/-Emotionen, Rad-Geometrie und der Client-
 ## Spiegel des Server-Tomaten-Limits (1×/Spieler/Runde).
 
-## W1b-M1-Clipliste (Handoff W1b-rig-api.md) + die 8 W13C-P1-Clips —
-## Emotes dürfen NUR auf diese Clips zeigen, sonst spielt das Rig nichts
-## ab (test_w13c_clips pinnt die echte GLB-Liste auf exakt diese 19).
+## W1b-M1-Clipliste (Handoff W1b-rig-api.md) + die 8 W13C-P1-Clips + die 2
+## W15-Selfie-Clips — Emotes dürfen NUR auf diese Clips zeigen, sonst spielt
+## das Rig nichts ab (test_w13c_clips pinnt die echte GLB-Liste auf exakt 21).
 const RIG_CLIPS: Array[String] = [
 	"idle",
 	"idle_lookaround",
@@ -26,6 +26,8 @@ const RIG_CLIPS: Array[String] = [
 	"ceiling_cling",
 	"idle_ear_flick",
 	"idle_stretch",
+	"phone_up",
+	"phone_tap",
 ]
 const RIG_EMOTIONS: Array[String] = [
 	"neutral", "happy", "sad", "sleepy", "ecstatic", "angry", "scared", "dizzy"
@@ -64,6 +66,8 @@ func test_selfie_extra_emote_gueltig_aber_nicht_im_rad() -> void:
 		RIG_CLIPS.has(BoardEmotes.clip_for("selfie")),
 		"Selfie-Clip %s existiert nicht im Rig" % BoardEmotes.clip_for("selfie")
 	)
+	# W15/VOICE2: der W13C-Request ist eingelöst — selfie posiert mit phone_up.
+	assert_eq(BoardEmotes.clip_for("selfie"), "phone_up", "selfie nutzt den echten Clip")
 	assert_eq(BoardEmotes.emotion_for("selfie"), "happy")
 	assert_eq(str(BoardEmotes.def("selfie").get("label_key", "")), "board.emote.selfie")
 

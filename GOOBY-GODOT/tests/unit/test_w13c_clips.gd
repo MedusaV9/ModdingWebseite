@@ -16,6 +16,9 @@ const NEUE_LOOPS: Array[String] = [
 	"idle_stretch",
 ]
 const NEUE_ONESHOTS: Array[String] = ["refuse", "tomato_throw"]
+## W15/VOICE2: IGohbie-Selfie-Clips (19→21; phone_up loopt als Haltepose).
+const W15_LOOPS: Array[String] = ["phone_up"]
+const W15_ONESHOTS: Array[String] = ["phone_tap"]
 ## Alt-Clips (W1-Vertrag) — dürfen durch den Rebuild NICHT verschwinden.
 const ALT_CLIPS: Array[String] = [
 	"idle",
@@ -43,6 +46,8 @@ func test_glb_hat_alle_alt_und_neu_clips_exakt() -> void:
 		erwartet.append_array(ALT_CLIPS)
 		erwartet.append_array(NEUE_LOOPS)
 		erwartet.append_array(NEUE_ONESHOTS)
+		erwartet.append_array(W15_LOOPS)
+		erwartet.append_array(W15_ONESHOTS)
 		for clip in erwartet:
 			assert_true(clip in have, "Clip fehlt (Name exakt): %s" % clip)
 		assert_eq(have.size(), erwartet.size(), "unerwartete Extra-Clips: %s" % [have])
@@ -54,12 +59,12 @@ func test_neue_clips_loop_flags() -> void:
 	var player: AnimationPlayer = model.find_child("AnimationPlayer", true, false)
 	assert_true(player != null, "kein AnimationPlayer im GLB")
 	if player != null:
-		for clip in NEUE_LOOPS:
+		for clip in NEUE_LOOPS + W15_LOOPS:
 			var anim := player.get_animation(clip)
 			assert_true(
 				anim != null and anim.loop_mode != Animation.LOOP_NONE, "%s muss loopen" % clip
 			)
-		for clip in NEUE_ONESHOTS:
+		for clip in NEUE_ONESHOTS + W15_ONESHOTS:
 			var anim := player.get_animation(clip)
 			assert_true(
 				anim != null and anim.loop_mode == Animation.LOOP_NONE,
@@ -100,9 +105,14 @@ func test_rig_api_mapping_vollstaendig() -> void:
 	assert_eq(GoobyRig.CLIP_IDLE_STRETCH, "idle_stretch")
 	assert_eq(GoobyRig.W13C_LOOP_CLIPS, NEUE_LOOPS, "Loop-Mapping unvollständig")
 	assert_eq(GoobyRig.W13C_ONESHOT_CLIPS, NEUE_ONESHOTS, "One-Shot-Mapping unvollständig")
-	for clip in NEUE_LOOPS:
+	# W15/VOICE2: Selfie-Clip-Konstanten (phone_up loopt, phone_tap nicht).
+	assert_eq(GoobyRig.CLIP_PHONE_UP, "phone_up")
+	assert_eq(GoobyRig.CLIP_PHONE_TAP, "phone_tap")
+	assert_eq(GoobyRig.W15_LOOP_CLIPS, W15_LOOPS, "W15-Loop-Mapping unvollständig")
+	assert_eq(GoobyRig.W15_ONESHOT_CLIPS, W15_ONESHOTS, "W15-One-Shot-Mapping unvollständig")
+	for clip in NEUE_LOOPS + W15_LOOPS:
 		assert_true(GoobyRig.LOOP_STATES.has(clip), "LOOP_STATES ohne %s" % clip)
-	for clip in NEUE_ONESHOTS:
+	for clip in NEUE_ONESHOTS + W15_ONESHOTS:
 		assert_false(GoobyRig.LOOP_STATES.has(clip), "%s darf kein Loop-State sein" % clip)
 
 

@@ -27,6 +27,9 @@ const EXPECTED_CLIPS: Array[String] = [
 	"ceiling_cling",
 	"idle_ear_flick",
 	"idle_stretch",
+	# W15/VOICE2: IGohbie-Selfie-Clips (phone_up = Halte-Loop, phone_tap = Gag)
+	"phone_up",
+	"phone_tap",
 ]
 const LOOPING_CLIPS: Array[String] = [
 	"idle",
@@ -43,6 +46,8 @@ const LOOPING_CLIPS: Array[String] = [
 	"ceiling_cling",
 	"idle_ear_flick",
 	"idle_stretch",
+	# W15/VOICE2: Selfie-Haltepose loopt (One-Shot: phone_tap)
+	"phone_up",
 ]
 const EXPECTED_BONES: Array[String] = [
 	"root",

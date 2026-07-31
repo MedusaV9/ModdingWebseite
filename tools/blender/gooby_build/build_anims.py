@@ -1,5 +1,6 @@
 # build_anims.py — Stage 3: die 11 M1-Clips + 8 W13C-Clips (6 P1-Clips aus
-# F §1.4 + 2 Idle-Variety) als deterministische Keyframe-Tabellen. Jeder Clip
+# F §1.4 + 2 Idle-Variety) + 2 W15-Selfie-Clips (phone_up/phone_tap) als
+# deterministische Keyframe-Tabellen. Jeder Clip
 # ist eine Pose-Funktion pose(t) (Portierung der goobyAnims.js-Sinus/Ease-
 # Mathematik auf Bones), gesampelt mit 24 fps in eine bpy-Action; jede Action
 # landet auf einem eigenen NLA-Track
@@ -451,6 +452,60 @@ def pose_idle_stretch(t):
     }
 
 
+# ---------------------------------------------------------------------------
+# W15/VOICE2: IGohbie-Selfie-Clips (FOTOWERK-Request aus W13C).
+# ---------------------------------------------------------------------------
+def pose_phone_up(t):
+    # Selfie-Haltepose: die rechte Pfote hält das Handy vor sich (leicht
+    # schräg), stolzer Blick (Kopf minimal in den Nacken + Neigung zum
+    # Display), dazu Atem/Sway-Loop. Wie ceiling_cling ist das eine
+    # STATISCHE Haltung — das Anheben macht der StateMachine-Crossfade.
+    ph = t / 2.4
+    breathe = math.sin(ph * TAU - math.pi / 2) * 0.5 + 0.5
+    sway = math.sin(ph * TAU)
+    return {
+        ("root", "scale"): (1 - breathe * 0.008, 1 + breathe * 0.028,
+                            1 - breathe * 0.008),
+        ("hips", "rotation_euler"): (0, 0, sway * 0.02),
+        ("chest", "rotation_euler"): (-0.06, sway * 0.03, 0),
+        ("head", "rotation_euler"): (-0.14, sway * 0.04, 0.10 + sway * 0.015),
+        # Handy-Arm hoch vors Gesicht (wave-Hebe-Winkel), leicht schräg raus.
+        ("arm.R", "rotation_euler"): (2.15 + sway * 0.04, 0,
+                                      0.32 + sway * 0.03),
+        ("arm.L", "rotation_euler"): (0.15, 0, -0.08 - breathe * 0.04),
+        ("ear.L.01", "rotation_euler"): (-0.12, 0, sway * 0.03 + 0.04),
+        ("ear.R.01", "rotation_euler"): (-0.12, 0, sway * 0.03 - 0.04),
+        ("ear.L.02", "rotation_euler"): (-0.08, 0, sway * 0.04),
+        ("ear.R.02", "rotation_euler"): (-0.08, 0, sway * 0.04),
+        ("tail", "rotation_euler"): (0, 0, sway * 0.12),
+    }
+
+
+def pose_phone_tap(t):
+    # Display-Tipp-Gag (One-Shot): linke Pfote hält das Handy hoch, Blick
+    # aufs Display (Kopf runter), die rechte Pfote tippt 3× — die Hüllkurve
+    # fährt an beiden Enden sauber in die Ruhepose (wave-Muster).
+    d = 1.6
+    env = ss(t / 0.28) * ss((d - t) / 0.3)
+    if t > 0.45:
+        tap_gate = ss((t - 0.45) / 0.1) * ss((1.25 - t) / 0.1)
+        tap = abs(math.sin((t - 0.45) / 0.8 * math.pi * 3)) * tap_gate
+    else:
+        tap = 0.0
+    return {
+        ("arm.L", "rotation_euler"): (env * 2.0, 0, -env * 0.25),
+        ("arm.R", "rotation_euler"): (env * (1.1 + tap * 0.55), 0,
+                                      env * (0.15 - tap * 0.1)),
+        ("head", "rotation_euler"): (env * 0.24, 0, -env * 0.06),
+        ("chest", "rotation_euler"): (env * 0.06, 0, 0),
+        ("root", "scale"): (1 + tap * 0.015, 1 - tap * 0.02, 1 + tap * 0.015),
+        ("ear.L.01", "rotation_euler"): (env * 0.10 + tap * 0.08, 0, 0.03),
+        ("ear.R.01", "rotation_euler"): (env * 0.10 + tap * 0.08, 0, -0.03),
+        ("ear.L.02", "rotation_euler"): (tap * 0.10, 0, 0),
+        ("ear.R.02", "rotation_euler"): (tap * 0.10, 0, 0),
+    }
+
+
 CLIP_POSES = {
     "idle": pose_idle,
     "idle_lookaround": pose_idle_lookaround,
@@ -471,6 +526,8 @@ CLIP_POSES = {
     "ceiling_cling": pose_ceiling_cling,
     "idle_ear_flick": pose_idle_ear_flick,
     "idle_stretch": pose_idle_stretch,
+    "phone_up": pose_phone_up,
+    "phone_tap": pose_phone_tap,
 }
 
 REST = {"location": (0.0, 0.0, 0.0), "rotation_euler": (0.0, 0.0, 0.0),
