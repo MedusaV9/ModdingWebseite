@@ -43,6 +43,8 @@ const EXPECTED_DOMAINS := [
 	# W13B/RAUMSTATION (strings/de+en/raumstation.json, s. OWNERSHIP.md).
 	"raumstation.",
 	"gfree.",
+	# W13B/REISEPASS (strings/de+en/reisepass.json, s. OWNERSHIP.md).
+	"reisepass.",
 ]
 ## Stadt-Dialoge: DE-Bäume + EN-Pendants (E6 P2-13; Wiring s. Handoff
 ## FIXG-text-requests.md — der Loader wählt bei locale=en das en/-Pendant).

@@ -26,9 +26,9 @@ const BANNER_SEC := 2.2
 
 ## W13/GVZ (P5-Report G18): Meilenstein-Siege feuern Event-Hooks über den
 ## bestehenden Sticker-Mechanismus (Doc G §4.4 „1× Sticker bei L5/10/15“).
-## L15 = gvz_kampagne → Sticker „Garten gerettet!“ (stickers.json); die
-## Hooks gvz_l5/gvz_l10 warten auf ihre Katalog-Sticker (Request an den
-## Orchestrator — der Katalog ist auf 141 Einträge + Assets verplombt).
+## L15 = gvz_kampagne → Sticker „Garten gerettet!“ (stickers.json); auf
+## gvz_l5/gvz_l10 hängen seit W13B „Zaunheld“ + „Nutella-Kommandant“
+## (b7de0efc, Katalog 143 Einträge).
 const MILESTONE_HOOKS := {5: "gvz_l5", 10: "gvz_l10", 15: "gvz_kampagne"}
 ## Run-Stats der puren Sim (GvzLogic state.stats) → achievements.counters
 ## (exakt die Counter-Keys der 6 GvZ-Sticker-Conds in stickers.json).
