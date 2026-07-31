@@ -1,12 +1,18 @@
 package dev.projecteclipse.eclipse.client.wand;
 
+import javax.annotation.Nullable;
+
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.network.fx.FxCues;
 import dev.projecteclipse.eclipse.veilfx.FxBudget;
 import dev.projecteclipse.eclipse.veilfx.PhotonBridge;
 import dev.projecteclipse.eclipse.veilfx.PhotonFxRegistry;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.phys.Vec3;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -26,6 +32,15 @@ import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
  * at a fixed radius and scaled by the cue's live {@code a} radius so config retunes stay
  * visually honest; the {@link #tierScale}d muzzle is the one place spell TIER (cue
  * {@code b}) drives size — the F-070 tier-escalation contract.</p>
+ *
+ * <p><b>Wave-13 A1 movement package.</b> The assets now carry Photon's
+ * {@code emission.distanceRate} and {@code inheritVelocity}, both of which are driven by
+ * the EXECUTOR's per-tick position delta — they are literally no-ops on a fixed world
+ * anchor. The three ENTITY-lane rows (echo blade, guardian, blessing) already ride the
+ * caster and get them for free; the muzzle row re-anchors onto the casting player so the
+ * cast flash does too (see {@link #casterAt}). The remaining rows are position cues by
+ * design (a ground seal or a detonation must not follow the caster) and lean on the
+ * asset-side {@code colorBySpeed}/{@code random_gradient} half of the package instead.</p>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID, value = Dist.CLIENT, bus = EventBusSubscriber.Bus.MOD)
 public final class WandFx2PhotonRows {
@@ -46,6 +61,15 @@ public final class WandFx2PhotonRows {
     private static final double BODY_OFFSET = -0.6D;
     /** Entity-lane feet offset for assets authored above a feet origin (sprung precedent). */
     private static final double FEET_OFFSET = -1.5D;
+    /**
+     * Squared eye-to-cue distance within which a local player counts as the caster of a
+     * {@code CUE_WANDFX2_MUZZLE} (the cue carries a position, not an entity — see
+     * {@link #casterAt}). {@code WandPowers.castFlourish} builds the hand point as
+     * {@code eye + look*0.55 + side*0.35 - 0.25y}, i.e. never further than ~0.7 blocks
+     * from the eye; 1.0 leaves headroom for the client/server position lerp without ever
+     * reaching a bystander.
+     */
+    private static final double MUZZLE_CASTER_RANGE_SQR = 1.0D;
 
     private WandFx2PhotonRows() {}
 
@@ -55,6 +79,16 @@ public final class WandFx2PhotonRows {
         // Muzzle flash: one row, three assets — the leg switches on a = path id and
         // tier-scales on b so a T5 capstone cast flares visibly bigger than a T1 poke.
         // pos = the casting hand point WandPowers.castFlourish already computes.
+        //
+        // A1 movement package: the muzzle assets carry emission.distanceRate and
+        // inheritVelocity, and BOTH read the executor's per-tick position delta — on a
+        // fixed world anchor that delta is zero and the two modules are dead weight. So
+        // the leg re-anchors the flash onto the casting player (found by proximity, since
+        // CUE_WANDFX2_MUZZLE is a position cue and carries no entity) and keeps the hand
+        // point as a world-axis offset off the eye. AUTO_ROTATE_NONE deliberately: the
+        // muzzle cones fountain along local +Y and would tilt with a LOOK-rotated
+        // executor. No caster in range (bystander view of a desynced cast, or a
+        // non-player sender) degrades to the old fixed-position spawn.
         PhotonFxRegistry.registerRow(new PhotonFxRegistry.Row(
                 FxCues.CUE_WANDFX2_MUZZLE,
                 MUZZLES[0],
@@ -65,10 +99,17 @@ public final class WandFx2PhotonRows {
                 (photonFx, pos, entity, a, b) -> {
                     int pathIndex = Mth.clamp((int) a - 1, 0, MUZZLES.length - 1);
                     float scale = tierScale(b);
-                    return PhotonBridge.spawn(MUZZLES[pathIndex], pos,
-                            PhotonBridge.SpawnOptions.DEFAULT
-                                    .withScale(scale, scale, scale)
-                                    .withAllowMulti(true));
+                    PhotonBridge.SpawnOptions options = PhotonBridge.SpawnOptions.DEFAULT
+                            .withScale(scale, scale, scale)
+                            .withAllowMulti(true);
+                    Player caster = entity instanceof Player player ? player : casterAt(pos);
+                    if (caster != null) {
+                        Vec3 hand = pos.subtract(caster.getEyePosition());
+                        return PhotonBridge.spawnOnEntity(MUZZLES[pathIndex], caster,
+                                PhotonBridge.AUTO_ROTATE_NONE,
+                                options.withOffset(hand.x, hand.y, hand.z));
+                    }
+                    return PhotonBridge.spawn(MUZZLES[pathIndex], pos, options);
                 }));
 
         // ------------------------------------------------------------------ GLUT
@@ -208,6 +249,29 @@ public final class WandFx2PhotonRows {
                     return PhotonBridge.spawn(photonFx, pos,
                             PhotonBridge.SpawnOptions.DEFAULT.withAllowMulti(true));
                 }));
+    }
+
+    /**
+     * The player whose casting hand a muzzle cue's position belongs to, or {@code null}
+     * when none is close enough. Cheap: the client player list is tiny, and the muzzle
+     * fires once per cast.
+     */
+    @Nullable
+    private static Player casterAt(Vec3 pos) {
+        ClientLevel level = Minecraft.getInstance().level;
+        if (level == null) {
+            return null;
+        }
+        Player best = null;
+        double bestSqr = MUZZLE_CASTER_RANGE_SQR;
+        for (Player player : level.players()) {
+            double distSqr = player.getEyePosition().distanceToSqr(pos);
+            if (distSqr < bestSqr) {
+                bestSqr = distSqr;
+                best = player;
+            }
+        }
+        return best;
     }
 
     /**
