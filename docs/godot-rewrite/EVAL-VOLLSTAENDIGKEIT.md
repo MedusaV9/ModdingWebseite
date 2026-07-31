@@ -11,6 +11,18 @@ Stand: 27. Juli 2026 · Godot 4.4.1 · Vergleichsquelle: aktueller Inhalt von
 > neue Belege dieser Revision liegen unter
 > `/tmp/gooby-godot/artifacts/FERTIG1/`.
 
+> **Revision W13 (31. Juli 2026, statische Code-Nachprüfung der
+> W13-Planungswelle):** Die Bug-Zeilen B2–B11 wurden nach dem
+> W10/REST5-Bug-Sweep (Commit `3e1d6c29`, „533 warnings → 5“) erneut am Code
+> geprüft. **B2, B3, B5, B8, B9 und B10 sind BEHOBEN** (Belege in der
+> Bug-Tabelle), **B4 ist teilweise behoben** (Nav-Map-RIDs werden freigegeben,
+> Star-Hopper-Vorlagen-Leak gefixt; ein systematisches Leak-Gate über alle
+> 37 Spiele fehlt), **B11 bleibt offen** und ist in W13 beim GvZ-Paket in
+> Arbeit. Die Restlisten-Zeilen 23–28 sind entsprechend aktualisiert. Die
+> FERTIG-1-Zahlen (70/79) und das Kurzurteil bleiben unverändert gültig; die
+> offenen Feature-Restpunkte (Ball, Sammlungssets, Wetter-FX, Speisen/Nougat,
+> Radio-Gate u. a.) sind Gegenstand der laufenden W13-Runde.
+
 ## Kurzurteil
 
 Die Aussage **„fast alles von davor fehlt“ ist nicht mehr haltbar** — und
@@ -221,16 +233,16 @@ diese sieben Extras erhöhen die Web-Paritätsquote nicht.
 | ID | Schwere | Fund | Reproduktion | Beleg |
 |---|---|---|---|---|
 | B1 | ~~P1~~ **BEHOBEN** | HUD-„Profil“ öffnete den Social-Screen statt eines Profils. | Fix (REST-1): `home_entry.gd` dispatcht `profil` an `ProfilScreen.handle_hud_action`; „Freunde & Besuche“ bleibt aus dem Profil erreichbar. | `scripts/ui/profil/profil_screen.gd`, Test `test_rest1_profil.gd`. |
-| B2 | **P1** | Freigegebene Lambda-Captures werden nach Szenenwechseln auf `null` gesetzt. | `godot --headless --path GOOBY-GODOT --script res://tests/tools/bughunt_fuzz.gd`; Fälle `alles_null`, `alles_voll`, `negativ`, Urlaub, Wecker, 30 Tage, Teilkorruption und Backup. | `extreme-save-route-fuzz.log`: wiederholt `ERROR: Lambda capture at index 0 was freed`. Auch nach Route `album` im Walkthrough. |
-| B3 | **P1** | Navigation-Map-Synchronisierung meldet überlappende/inkompatible Kanten. | Hauptsuite headless ausführen; Navigation/Room-Aufbau abwarten. | `godot-main-tests.log`: `ERROR: Navigation map synchronization error`. |
-| B4 | **P1** | Renderer-/ObjectDB-/Resource-Leaks bei langen Durchläufen. | Hauptsuite oder 37-Spiele-Walkthrough bis zum regulären Quit laufen lassen. | Hauptsuite: 15 Texturen, 12 Meshes, 9 Materialien, 3 Shader, 10 Instanzen und 23 Ressourcen; Walkthrough ebenfalls RID-/Resource-Leaks. |
-| B5 | **P1** | Navigationsmesh wird zur Laufzeit aus GPU-Render-Meshes zurückgelesen. | Haus/Stadt im Headless- oder Renderer-Lauf laden. | Alle großen Läufe: `Source geometry parsing ... RenderingServer meshes ... significant performance issues`. Auf Mobilgeräten ein reales Hitch-/Akku-Risiko. |
+| B2 | ~~P1~~ **BEHOBEN** | Freigegebene Lambda-Captures werden nach Szenenwechseln auf `null` gesetzt. | Fix (W10/REST5): Methoden-Callables statt Timer-Lambdas (u. a. `gooby_reactions.gd`); Tripwire-Test scannt den GESAMTEN Quellbaum auf `timeout.connect(func…)` (Allowlist: 2 verifiziert sichere Fälle in `funkelpark.gd`). | `tests/unit/test_rest5_bugfixes.gd::test_keine_timer_lambdas_im_quellcode`. |
+| B3 | ~~P1~~ **BEHOBEN** | Navigation-Map-Synchronisierung meldet überlappende/inkompatible Kanten. | Fix (W10/REST5): private `NavigationServer3D`-Map je Raum (`scripts/home/room_navmesh.gd::attach_private_map`), genutzt in `room_base.gd` und `visit_room_view.gd`. | Tests `test_rest5_bugfixes.gd::test_private_map_lebenszyklus`, `::test_zwei_raeume_bekommen_verschiedene_maps`. |
+| B4 | **P1 — teilweise behoben** | Renderer-/ObjectDB-/Resource-Leaks bei langen Durchläufen. | Teil-Fix (W10/REST5): private Nav-Map-RIDs werden freigegeben (`room_navmesh.gd::free_private_map`, aufgerufen aus `room_base.gd`/`visit_room_view.gd`), Star-Hopper-Vorlagen-Leak gefixt (weakref-Test); Commit nennt „533 warnings → 5“. OFFEN: kein systematisches Teardown-/Leak-Gate über alle 37 Spiele. | `test_rest5_bugfixes.gd::test_star_hopper_gold_vorlage_wird_freigegeben`; Restrisiko s. Restliste #26. |
+| B5 | ~~P1~~ **BEHOBEN** | Navigationsmesh wird zur Laufzeit aus GPU-Render-Meshes zurückgelesen. | Fix (W10/REST5): CPU-Quellgeometrie-Bake — `room_navmesh.gd::bake()` baut `NavigationMeshSourceGeometryData3D` aus Boden-Faces + projizierten Blocker-AABBs; `bake_navigation_mesh()` kommt im Quellbaum nur noch in Kommentaren vor. | Tests `::test_cpu_bake_erzeugt_polygone`, `::test_cpu_bake_blocker_verkleinert_flaeche`. |
 | B6 | ~~P1~~ **BEHOBEN** | Postkarten-/Post-Aktion endete sichtbar in „Bald“ statt in einem Archivloop. | Fix (REST-4 + FERTIG-1): Archivgenerator portiert (`ui/postkarten/postkarten_logic.gd`), Post-Schalter durch das Tagespaket ersetzt (`city/ui/post_logic.gd`); der String `city.post.bald` existiert nicht mehr. | Tests `test_rest4_postkarten.gd`, `test_post_paket.gd`, `test_keine_platzhalter.gd`. |
 | B7 | ~~P1~~ **BEHOBEN** | Gewicht veränderte den gespeicherten Wert, aber nicht Goobys sichtbare Silhouette. | Fix (REST-3): `gooby_rig.gd` skaliert den Körper wie die Web-`TIER_SCALE` über `Weight.body_scale()` (X/Z), plus Kränklichkeits-Optik. | `scripts/character/gooby_rig.gd`, Test `test_rest3_gewicht.gd`. |
-| B8 | **P2** | Garderoben-/Preview-SubViewports versuchen bei aktivem Stretch ihre Größe zu setzen. | HUD → Möbel/Garderobe bzw. UI-Audit; Viewport wechseln. | `full-route-minigame-walkthrough.log`, `extreme-save-route-fuzz.log`, `ui-final.log`: `Can't change the size of a SubViewport...`. |
-| B9 | **P2** | Importierte 3.x-Materialien referenzieren den nicht gemappten Parameter `specular`. | Einen Großteil der Arcade-Spiele starten. | Hunderte `Godot 3.x SpatialMaterial remapped parameter not found: specular` im Walkthrough/Haupttest. |
-| B10 | **P2** | Navigation-Agentenwerte werden an Voxelgrößen gerundet und verlieren Präzision. | Räume/Stadt laden bzw. Navmesh backen. | Wiederholte `agent_max_climb ... loses precision` und `agent_radius ... loses precision`. |
-| B11 | **P2** | Ein Control hat gegensätzliche ungleiche Anchors und verliert seine gesetzte Größe nach `_ready()`. | GvZ im Walkthrough starten. | `full-route-minigame-walkthrough.log`: `Nodes with non-equal opposite anchors...`. |
+| B8 | ~~P2~~ **BEHOBEN** | Garderoben-/Preview-SubViewports versuchen bei aktivem Stretch ihre Größe zu setzen. | Fix (W10/REST5): manuelles `_on_resized`-Handling in `furniture_showcase.gd` entfernt — `SubViewportContainer.stretch` bestimmt die Größe; die Garderobe (`wardrobe_screen.gd`) nutzt dasselbe Muster. | Test `test_rest5_bugfixes.gd::test_showcase_ueberlaesst_groesse_dem_stretch_container`. |
+| B9 | ~~P2~~ **BEHOBEN** | Importierte 3.x-Materialien referenzieren den nicht gemappten Parameter `specular`. | Fix (W10/REST5): Quelle war `scripts/minigames/games/_3db_stage/fx3d.gd` (setzte das Godot-3-Property `specular`, über `fx3d.flat()` in vielen Spielen); jetzt `metallic_specular` — keine `.specular`-Zuweisung mehr im `scripts/`-Baum. | Quelltext-Guard `test_rest5_bugfixes.gd::test_fx3d_flat_nutzt_metallic_specular`. |
+| B10 | ~~P2~~ **BEHOBEN** | Navigation-Agentenwerte werden an Voxelgrößen gerundet und verlieren Präzision. | Fix (W10/REST5): `room_navmesh.gd::make_mesh()` setzt `agent_radius`/`agent_max_climb` voxel-exakt auf das Raster (`CELL = 0.25`). | Test `test_rest5_bugfixes.gd::test_navmesh_werte_voxel_exakt` (fmod-Prüfung gegen cell_size/cell_height). |
+| B11 | **P2 — offen (W13 in Arbeit)** | Ein Control hat gegensätzliche ungleiche Anchors und verliert seine gesetzte Größe nach `_ready()`. | GvZ im Walkthrough starten. Kandidat: `gvz_level_select.gd` (`_progress_fill` mit PRESET_FULL_RECT + variablem `anchor_right`). Der Fix läuft in W13 beim GvZ-Verdrahtungs-Paket. | `full-route-minigame-walkthrough.log`: `Nodes with non-equal opposite anchors...`. |
 
 **P0-Ergebnis:** Kein Absturz und kein Datenverlust reproduziert. Korrupte Saves
 werden nicht still überschrieben: abgeschnittene und Zukunfts-Saves lösen
@@ -344,8 +356,9 @@ alten Sammlungssets fehlen als eigenes Album-UI (Zeile A-27).
 - Wetter hat einen Dienst, aber keine sichtbaren Regen-/Schnee-Partikel
   in Haus/Stadt.
 - Technische Hygiene: die EVAL-2-Engine-Befunde B2–B5 und B8–B11
-  (Lambda-Captures, Navigation, Leaks, Materialwarnungen) sind weiterhin
-  offen.
+  (Lambda-Captures, Navigation, Leaks, Materialwarnungen) waren zur
+  FERTIG-1-Revision noch offen. *(Revision W13: B2/B3/B5/B8/B9/B10 sind seit
+  dem W10/REST5-Sweep behoben; offen bleiben B4 — teilweise — und B11.)*
 
 ## Priorisierte Restliste (Top 30) — Stand Revision FERTIG-1
 
@@ -376,12 +389,12 @@ Umfang: **S** = lokal/geringes Risiko, **M** = mehrere Dateien/ein System,
 | 20 | Vier alte Sammlungssets im Album wieder sichtbar machen | **M** | offen | Collections-Slice wird für Erfolge/Sticker ausgewertet, aber kein Set-UI. |
 | 21 | Gyro-/Pointer-Parallax portieren oder offiziell entfernen | **M** | offen | Entscheidung steht aus; nur Ranch-Fahrsteuerung nutzt Gyro. |
 | 22 | City Drive als Arcade-Runde mit Score/Resultat ergänzen | **M** | offen | Freie Fahrt existiert; Arcade-Runden-Loop fehlt. |
-| 23 | Lambda-Capture-Lebenszyklusfehler beseitigen | **M** | offen | Album/Routen/Callbacks, Save-Fuzz; Risiko still ausfallender UI-Aktionen. |
-| 24 | Navigation-Synchronisierungsfehler reproduzierbar lokalisieren/fixen | **L** | offen | Raum-Navmeshes, Kanten/Cell-Size, dynamischer Rebuild. |
-| 25 | Laufzeit-Navmesh-Bake von Render-Meshes entfernen | **L** | offen | Collision-Quellen/prozedurale Geometrie; Mobile-Hitch-/Akku-Risiko. |
-| 26 | Renderer-/RID-/ObjectDB-Leaks schließen | **L** | offen | Minigame-/Scene-Teardown, SubViewports, Materialien, Ressourcen. |
-| 27 | SubViewport-Stretch-/Resize-Konflikt korrigieren | **S** | offen | Garderobe/Möbel-/3D-Preview; Warnspam und mögliches falsches Preview-Seitenverhältnis. |
-| 28 | Alte SpatialMaterial-`specular`-Imports bereinigen | **M** | offen | Viele Minigame-Assets; Logsignal und Materialparität. |
+| 23 | Lambda-Capture-Lebenszyklusfehler beseitigen | **M** | **ERLEDIGT** | W10/REST5 (B2): Methoden-Callables statt Timer-Lambdas + repoweiter Tripwire-Test (`test_rest5_bugfixes.gd`). |
+| 24 | Navigation-Synchronisierungsfehler reproduzierbar lokalisieren/fixen | **L** | **ERLEDIGT** | W10/REST5 (B3): private Nav-Maps je Raum (`room_navmesh.gd::attach_private_map`) + Lebenszyklus-Tests. |
+| 25 | Laufzeit-Navmesh-Bake von Render-Meshes entfernen | **L** | **ERLEDIGT** | W10/REST5 (B5): CPU-Quellgeometrie-Bake (`room_navmesh.gd::bake()`); kein `bake_navigation_mesh()` mehr im Quellbaum. |
+| 26 | Renderer-/RID-/ObjectDB-Leaks schließen | **L** | teilweise | W10/REST5 (B4): Nav-Map-RIDs freigegeben + Star-Hopper-Vorlagen-Fix („533 → 5“); systematisches Leak-Gate über alle 37 Spiele fehlt. |
+| 27 | SubViewport-Stretch-/Resize-Konflikt korrigieren | **S** | **ERLEDIGT** | W10/REST5 (B8): `furniture_showcase.gd` ohne manuelles Resize — `SubViewportContainer.stretch` bestimmt die Größe. |
+| 28 | Alte SpatialMaterial-`specular`-Imports bereinigen | **M** | **ERLEDIGT** | W10/REST5 (B9): Quelle war `fx3d.gd`, nutzt jetzt `metallic_specular`; Quelltext-Guard-Test. |
 | 29 | Einheitlichen Wetterdienst für Haus/Garten/Stadt verdrahten | **M** | teilweise | `soul_wetter.gd` speist Garten/Ticker/Reaktionen; sichtbare Regen-/Schnee-FX fehlen. |
 | 30 | Semantischen E2E-„erste Stunde“-Test ergänzen | **L** | offen | Echter Input: Tutorial, Care, Shop, Quest, Garten, 3 Spiele, Save/Reload; aktuelle Smoke-Tests prüfen primär Erreichbarkeit. |
 
@@ -401,6 +414,7 @@ gibt es nicht mehr; die verbliebenen Guard-Strings sind per Vertragstest
 Offen bleiben drei kleine Feature-Lücken (Ball-Wurf, Sammlungsset-UI,
 Gyro-Parallax), vier Teilaspekte (Katalog-Rest, Wetter-FX,
 Fotomodus-Werkzeuge, Nougatschleuse) und die technischen EVAL-2-Befunde
-B2–B5/B8–B11. Die faire Einordnung lautet jetzt: **inhaltlich komplettes
+B2–B5/B8–B11 *(Revision W13: davon sind nur noch B4 — teilweise — und B11
+offen)*. Die faire Einordnung lautet jetzt: **inhaltlich komplettes
 Spiel in der Feinschliff-Phase** — nicht mehr Alpha, für ein poliertes
 Release fehlen Engine-Hygiene und die letzten Nischen-Features.
