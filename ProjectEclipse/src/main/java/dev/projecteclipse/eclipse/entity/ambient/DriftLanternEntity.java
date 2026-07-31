@@ -12,6 +12,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundEvents;
+import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
@@ -34,13 +35,21 @@ import software.bernie.geckolib.animation.PlayState;
  * drifts 0–6 blocks above the limbo water along the buoy lane, glass cage aglow, four
  * kelp-chain tendrils trailing.
  *
+ * <p>MC3 (F-098 wave M-C) hung it on a two-segment SUSPENSION CHAIN
+ * ({@code chain_upper} -> {@code chain_lower} -> {@code body}, the lantern pivoting about
+ * its hanger at y=17): the loops drive it as a double pendulum whose 2.0 s period is the
+ * physically correct one for the 1 m from the chain's fog anchor down to the flame
+ * ({@code T = 2*pi*sqrt(L/g)}), and the lantern now turns into its drift heading so the
+ * chain trails behind the travel direction.</p>
+ *
  * <p>No goals — like {@link dev.projecteclipse.eclipse.entity.SunmoteEntity} the motion
  * is position-driven in {@link #tick()}: a slow glide toward a random waypoint within
  * {@value #WANDER_RADIUS} blocks of its anchor (first tick / spawn position, persisted),
  * with hover pauses between legs (the {@code base} controller reads the actual per-tick
- * position delta, so gliding plays {@code walk} = stronger tendril sway and hovering
- * plays {@code idle}). Every 12–24s it rolls the {@code flicker} trigger (flame gutter +
- * a soul-particle puff). Limbo-only: it discards itself anywhere else (Deckhand rule).
+ * position delta via {@link DriftTracker}, so gliding plays {@code walk} = stronger
+ * pendulum + tendril sway and hovering plays {@code idle}). Every 12–24s it rolls the
+ * {@code flicker} trigger (flame gutter + a soul-particle puff). Limbo-only: it discards
+ * itself anywhere else (Deckhand rule).
  * 6 HP, killable — drops one glowstone dust; death is a scripted upright
  * {@value #DEATH_ANIM_TICKS}t collapse ({@code death} anim held on the last frame, sink +
  * soul wisps, vanilla poof afterwards).</p>
@@ -62,6 +71,8 @@ public class DriftLanternEntity extends EclipseGeoMob {
 
     private static final double DRIFT_SPEED = 0.025D;
     private static final double WANDER_RADIUS = 10.0D;
+    /** Yaw lerp factor per tick toward the drift heading (~1.5 s for a 180° turn). */
+    private static final float TURN_RATE = 0.06F;
 
     private static final String TAG_ANCHOR_X = "AnchorX";
     private static final String TAG_ANCHOR_Y = "AnchorY";
@@ -76,6 +87,8 @@ public class DriftLanternEntity extends EclipseGeoMob {
     private int repickTicks;
     private int flickerTicks = 100;
     private int waterlineY = Integer.MIN_VALUE;
+    /** F-9: the real per-tick travel verdict behind {@link #handleBaseState}. */
+    private final DriftTracker drift = new DriftTracker();
 
     public DriftLanternEntity(EntityType<? extends DriftLanternEntity> entityType, Level level) {
         super(entityType, level);
@@ -107,16 +120,15 @@ public class DriftLanternEntity extends EclipseGeoMob {
     }
 
     /**
-     * Drift is too slow for vanilla's limb-swing threshold ({@code state.isMoving()}
-     * stays false), so glide-vs-hover is read straight off the client-interpolated
-     * per-tick position delta.
+     * Census falle F-9 — see {@link DriftTracker} for why {@code state.isMoving()} can
+     * never fire for this mob. The old inline read of {@code getX() - xOld} right here
+     * was correct in principle but sampled on the RENDER thread, where the value is 0 on
+     * the two ticks out of three in which no position packet arrived: the base controller
+     * flapped walk/idle at ~7 Hz. The tracker samples once per tick and holds.
      */
     @Override
     protected PlayState handleBaseState(AnimationState<?> state) {
-        double dx = this.getX() - this.xOld;
-        double dz = this.getZ() - this.zOld;
-        boolean gliding = dx * dx + dz * dz > 1.0E-5D;
-        return state.setAndContinue(gliding ? walkAnim() : idleAnim());
+        return state.setAndContinue(this.drift.gliding() ? walkAnim() : idleAnim());
     }
 
     // --- drift brain ---
@@ -124,6 +136,13 @@ public class DriftLanternEntity extends EclipseGeoMob {
     @Override
     public void tick() {
         super.tick();
+        driftTick();
+        // Last, deliberately: on the client super.tick() has applied the interpolation
+        // step, on the server driftTick() has applied the teleport (F-9).
+        this.drift.track(this.getX() - this.xOld, this.getZ() - this.zOld);
+    }
+
+    private void driftTick() {
         if (this.level().isClientSide || !this.isAlive()) {
             return;
         }
@@ -162,6 +181,26 @@ public class DriftLanternEntity extends EclipseGeoMob {
         Vec3 step = to.scale(Math.min(DRIFT_SPEED, distance) / distance);
         this.setDeltaMovement(step);
         this.setPos(this.getX() + step.x, this.getY() + step.y, this.getZ() + step.z);
+        faceDrift(step);
+    }
+
+    /**
+     * Turns the lantern into its drift direction (MC3). The suspension chain's
+     * {@code walk} loop trails the lantern BACKWARD out of the travel direction, which is
+     * only meaningful if the mob's yaw actually follows that direction — before this the
+     * lantern kept the random yaw it was spawned with forever. Slow {@link Mth#rotLerp}
+     * so a fresh waypoint never snaps the silhouette around; nearly-vertical legs keep
+     * the old heading (their horizontal component is noise).
+     */
+    private void faceDrift(Vec3 step) {
+        if (step.x * step.x + step.z * step.z < 1.0E-6D) {
+            return;
+        }
+        float target = (float) (Mth.atan2(step.z, step.x) * Mth.RAD_TO_DEG) - 90.0F;
+        float yaw = Mth.rotLerp(TURN_RATE, this.getYRot(), target);
+        this.setYRot(yaw);
+        this.yBodyRot = yaw;
+        this.yHeadRot = yaw;
     }
 
     /** New drift target within {@value #WANDER_RADIUS} of the anchor, 0–6 above the water. */

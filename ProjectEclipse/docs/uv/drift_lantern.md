@@ -1,33 +1,57 @@
 # UV map — Drift Lantern (`assets/eclipse/textures/entity/drift_lantern.png` + `_glowmask.png`)
 
 **Texture size:** 64×64 (both files — GeckoLib's `AutoGlowingTexture` enforces matching
-canvases). Model: `assets/eclipse/geo/entity/drift_lantern.geo.json` (GeckoLib, 8 bones /
-9 cubes, box-UV). Unlike the hand-coded models, the geo file **is** the UV source of
+canvases). Model: `assets/eclipse/geo/entity/drift_lantern.geo.json` (GeckoLib, 11 bones /
+13 cubes, box-UV). Unlike the hand-coded models, the geo file **is** the UV source of
 truth — the painter (`scripts/geckolib_gen/paint_lib.py`) parses it and computes every
 face rect itself, so only the box-UV origins are frozen here:
 
 | Bone | Cube | Box W×H×D | UV origin | Strip (x0,y0)-(x1,y1) |
 |---|---|---|---|---|
+| chain_upper | chain rod | 2×6×2 | (0,28) | (0,28)-(8,36) |
+| chain_lower | chain rod | 2×4×2 | (10,28) | (10,28)-(18,34) |
+| chain_lower | shackle ring | 3×1×3 | (20,28) | (20,28)-(32,32) |
 | body | bottom plate | 4×1×4 | (0,21) | (0,21)-(16,26) |
 | body | top plate | 5×1×5 | (0,14) | (0,14)-(20,20) |
 | body | hanger loop | 2×1×2 | (24,0) | (24,0)-(32,3) |
 | glow_flame | soul flame | 3×4×3 | (24,4) | (24,4)-(36,11) |
+| glow_flame_core | flame core | 1.5×1.5×1.5 | per-face | (32,14)-(38,17) |
 | cage | glass cage | 6×6×6 | (0,0) | (0,0)-(24,12) |
 | tendril_a..d | kelp chain | 2×8×1 | (40,0) / (48,0) / (40,10) / (48,10) | 6×9 each |
 
+`glow_flame_core` is the only cube on per-face UVs: a 1.5³ cube's box strip would land on
+half texels, so each face is pinned to its own 2×2 rect by hand (the `down` face carries
+the flipped `uv_size` `[2,-2]` that box-UV would have generated).
+
+**Suspension chain (MC3):** `chain_upper` hangs from the fog anchor at y=28,
+`chain_lower` from y=22, and the lantern `body` pivots under it at y=17 — a double
+pendulum, so the two rods get the chain material and the shackle ring gets a brighter
+worn variant. Both rods are painted with **alpha cut-outs between the links** (the gaps
+are what make a chain read as a chain and not as a pole) and `chain_upper` additionally
+fades toward its top: it disappears into the limbo fog rather than ending in a hard,
+obviously-unattached stump.
+
 **Art brief (design sheet §2.3, plans_v3/P6):** a soul-lantern "jellyfish" — brushed-iron
-plates and hanger (`#3B3F46`), glass cage at **40% alpha** panes (`#9FB8C4`, rim slightly
-more opaque; the renderer uses `entityTranslucent`, so partial alpha really blends), soul
-flame `#7FE3D2` with a near-white core (`#E9FFF9`), waterlogged kelp tendrils `#2E4A44`
-with ragged alpha-cutout hems and chain-node bands.
+plates and hanger (`#3B3F46`), suspension chain one step lighter (`#5A626D`) so the links
+read against the limbo fog instead of merging with the cage, glass cage at **40% alpha**
+panes (`#9FB8C4`, rim slightly more opaque; the renderer uses `entityTranslucent`, so
+partial alpha really blends), soul flame `#7FE3D2` with a near-white core (`#E9FFF9`),
+waterlogged kelp tendrils `#2E4A44` with ragged alpha-cutout hems and chain-node bands.
 
 **Emissive (glowmask):** the flame cube at full painted brightness, PLUS the
 shine-through: a center-weighted soul-tinted blob on every cage face except the bottom
 (max alpha ≈ 230 at the pane center) and a faint speckled rim (alpha 60). The
 shine-through lives on the CAGE's pixels because the glow layer's re-render of the inner
 flame bone is depth-rejected underneath translucent glass — see the "inner glow through
-translucent shells" rule in `docs/plans_v3/handoff/P6_geckolib_conventions.md`. Iron and
-tendrils stay fully transparent in the glowmask.
+translucent shells" rule in `docs/plans_v3/handoff/P6_geckolib_conventions.md`. The
+lowest three texel rows of `chain_lower` get a soul-tinted catch-light (alpha 75 → 31
+upward) because the flame hangs directly beneath them. Frame iron, the shackle ring, the
+upper chain and the tendrils stay fully transparent in the glowmask.
+
+Because the shine-through is baked into the cage texture it is **static**: when the
+`flicker` one-shot guts the flame the cage keeps glowing at constant brightness. Closing
+that gap is what the Photon coupling spec in `docs/plans_v3/session_0730/MC3_AMBIENT_REPORT.md`
+§7 is for — it cannot be solved in the texture or in GeckoLib.
 
 **Generator (deterministic, byte-identical reruns):**
 
