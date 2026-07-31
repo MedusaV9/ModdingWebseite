@@ -11,7 +11,7 @@ Zentrale Plattform-Schicht nach `docs/godot-rewrite/RANCH-DLC-IDEAS-4.md` §3/§
 | `color_filter.gd` | Farbfehlsichtigkeits-/Kontrast-Overlay (Daltonisierung) |
 | `notify_rules.gd` | Kategorien, Gates, Ruhezeiten (pur, testbar) |
 | `notification_service.gd` | Autoload `Notify`: Planung + In-App-Zustellung |
-| `haptics.gd` | Haptik-Stufen (aus/dezent/normal/stark) |
+| — (W14: `scripts/ui/components/haptics.gd`) | Haptik ist in den UI-Kern gezogen (tap/success/warn, Gate `game.haptik`) |
 
 ## Ehrlichkeit: Was kommt beim Spieler wirklich an?
 
