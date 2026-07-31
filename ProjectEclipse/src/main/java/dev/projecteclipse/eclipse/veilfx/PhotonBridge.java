@@ -365,6 +365,13 @@ public final class PhotonBridge {
      *         fallback — and every cue without an enhancement)
      */
     public static boolean enhanceQuasarCue(ResourceLocation emitterId, Vec3 pos) {
+        // FX-WAVE-13/B1 hero legs (heart_burst / boss_slam / map_expand_materialize):
+        // the full table + REPLACE/LAYER semantics live in Wave13bPhotonFxRows; null
+        // means "not a B1 cue" and falls through to the legacy chain below.
+        Boolean b1 = Wave13bPhotonFxRows.enhanceQuasarCue(emitterId, pos);
+        if (b1 != null) {
+            return b1;
+        }
         if (S2CQuasarPayload.ALTAR_LEVELUP_RING.equals(emitterId)) {
             // Deliberate LAYER (PHOTON-QUALITY §6 "considered and kept"): ring + bloom
             // both play — D12 "Photon is garnish" law.
