@@ -10,7 +10,7 @@
 
 ## NEUES FEEDBACK (hier eintragen!)
 
-_(leer — hier neue Punkte reinschreiben; zuletzt gezogen: 30.07. ~23:35 UTC — keine neuen Einträge, Mob/Item-Wellen M-B/M-D laufen)_
+_(leer — hier neue Punkte reinschreiben; zuletzt gezogen: 31.07. ~00:15 UTC — keine neuen Einträge, letzte Mob/Item-Welle M-C läuft)_
 
 ## Aktuell in Arbeit
 
@@ -19,7 +19,7 @@ _(leer — hier neue Punkte reinschreiben; zuletzt gezogen: 30.07. ~23:35 UTC �
 | F-095 | **Re-Verifikations-Audit** ✅: Audit-Team hat F-001…F-094 im Code gegengeprüft (`docs/plans_v3/session_0730/AUDIT_REVERIFY.md`), 5 Lücken gefunden und ALLE gefixt (rim_recede.fx gebaut, Woah-Items ins ItemLexicon, Scythe-Detach beim Storm-Step, AGENTS.md-Doku, Woah-Audio dokumentiert) | 🟢 |
 | F-096 | **Sturm-Masse-Upgrade**: Volumen-Shader auf 2 Dichte-Schalen + Höhenprofil v2 (Wallcloud-Basis, Konvektionstürme, Amboss-Fransen), Powder-Term + Dual-Lobe-Phase + radiale AO (B1/B5/B9/B2/B3/B7 fertig); Kampf-Uniforms (SiegeChurn/CoreFade) verdrahtet; Rest: B4 Wetter-Layer, B6 Nahfeld-Parallaxe, B8 Burst-Integration, B10 Perf-Pass | 🟡 |
 | F-097 | **Per-Effekt-Polish-Wellen** KOMPLETT: Welle A (A0–A9) + Welle B (B1–B7) + Welle C fertig — C2 fxlib-Infrastruktur (UUID5-Determinismus: Generator-Läufe jetzt byte-identisch; Range-Codec a/b-Fix: Photon las min/max gar nicht; CullBox/Prewarm-Lint), C3 Woah-Feinschliff (=F-062 ✅), C4 kleine Cues + N8 Vertrags-Brandsiegel/N10 End-Static/N14 Sanctum-Gebet, C5 Credits/End-Feinschliff inkl. Reparatur der KOMPLETT TOTEN black_hole.fsh-Pipeline (glsl-processor-NPE) | 🟢 |
-| F-098 | BlockDisplay-Effekte ✅ (B3) + Cutscenes ✅ (B7); Custom-Mobs/Items: **Welle M-A ✅** (MA1 Tyrant, MA2 Warden, MA3 Herald→GeckoLib, MA4 Ferryman→GeckoLib, MA5 Finale-Props, MA6 Fog-Eliten) + **MD3 Items-B ✅**; **jetzt in Arbeit: Welle M-B** (MB1 Deckhand, MB2 Orin, MB3 Cultist+Bolt, MB4 Glitch-Trio, MB5 Wanderer, MB6 Sentinel+Revenant) **+ MD1 Eclipse Wand + MD2 Items-A**; danach Welle M-C (5 Konversionen: Gazer, Stalker, Sunmote+Lantern, TheOther/Ghosts, Glitch Emitter) + MD4 | 🟡 |
+| F-098 | BlockDisplay-Effekte ✅ (B3) + Cutscenes ✅ (B7); Custom-Mobs/Items: **Welle M-A ✅** (MA1–MA6) + **Welle M-B ✅** (MB1 Deckhand-Gesichtskarten + 3 Bugfixes, MB2 Orin star_call-Retiming + 5 Bugfixes, MB3 Dungeon-Familie mit Ziel-Taumel-Bolt, MB4 Glitch-Trio-Familientakt 2 Hz + 14 geschlossene Loop-Nähte, MB5 Wanderer-Horror-Beat Kopf-Snap + 7 Bugfixes, MB6 Sentinel-freeze_in + Revenant-Saumwellen) + **MD1 Eclipse Wand ✅** (Pro-Pfad-use-Anims, 25-Bone-Zeremonien; Painter hätte finale wizard_catalyst-Kunst überschrieben — gefixt) + **MD2 Items-A ✅** + **MD3 Items-B ✅**; **jetzt in Arbeit: Welle M-C** (MC1 Gazer-, MC2 Stalker-, MC3 Sunmote+Lantern-Konversionen, MC4 TheOther/Ghosts-Polish, MC5 Glitch Emitter) + MD4 Block-Geo-Paar | 🟡 |
 | F-099 | **Eval-Runde** (Sol 5.6) über die gesamte Session-Arbeit, bei „zu simpel"-Befunden → Nach-Polish-Runden | 🔴 |
 | F-080 | Server/Welt-Verlassen hängt für immer im SAVING-State statt sauber zu stoppen — Fix implementiert (Stop-Sweep räumt FX-Schwärme VOR dem Save, kein Sync-Chunkload im Stop mehr, Arena-Pit-Chunks werden freigegeben); dedizierter Server-Stop in ~10 s verifiziert ✅ | 🟢 |
 | F-082 | Tod im Sturm-Bosskampf ⇒ Wipe-Reset (Boss heilt/despawnt, Statue re-armt nach 30 s, KEINE Blockschreibungen ⇒ Gräber sicher) — im Client-Test verifiziert (s. F-081..087 unten) ✅ | 🟢 |
