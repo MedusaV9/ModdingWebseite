@@ -709,6 +709,7 @@ func _setup_netz() -> void:
 	netz_session.hash_received.connect(_on_netz_hash)
 	netz_session.cursor_received.connect(_on_netz_cursor)
 	netz_session.desync_reported.connect(_on_netz_desync)
+	netz_session.result_confirmed.connect(_on_netz_result)
 	netz_session.session_aborted.connect(_on_netz_aborted)
 	netz_session.peer_connection_changed.connect(_on_netz_peer_changed)
 	netz_session.snapshot_received.connect(_on_netz_snapshot)
@@ -775,6 +776,17 @@ func _on_netz_desync(_tick: int) -> void:
 	if netz_session != null:
 		netz_session.leave()
 	_netz_abort("gobnom.netz.desync")
+
+
+## Ergebnis bestätigt: die Session ist verbraucht (der Server erlaubt nach
+## 'done' kein neues Level-Voting) — sauber gehen, sonst blockiert die tote
+## Paarung serverseitig JEDE neue Einladung (GAME_RUNNING). Nächste Runde =
+## neue Einladung über das wieder freie Panel.
+func _on_netz_result(_data: Dictionary) -> void:
+	if netz_session != null:
+		netz_session.leave()
+	if _netz_panel != null:
+		_netz_panel.refresh()
 
 
 func _on_netz_aborted(_reason: String, _by: String) -> void:
