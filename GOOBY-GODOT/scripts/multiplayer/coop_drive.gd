@@ -59,9 +59,10 @@ var _prev_presence_kind := ""
 
 
 ## Öffentlicher MusicDirector-Adapter (nur radio_play/play_track/
-## current_track_id — scripts/audio bleibt unangetastet). Ohne Seek-API
-## startet der Track bei 0; der Offset ist bewusst ignoriert (Request an
-## den RADIO-Owner, leichte Drift laut Design ok).
+## current_track_id — scripts/audio bleibt unangetastet). W13B/INTEGRATE:
+## play_track kann jetzt bei from_position_s einsteigen (Seek-Hook aus dem
+## COUCH-COOP-Request) — der Offset reist mit; spielt der Sender zufällig
+## schon den Zieltrack, bleibt die leichte Drift (laut Design ok).
 class MusicRadioAdapter:
 	extends RefCounted
 
@@ -70,11 +71,11 @@ class MusicRadioAdapter:
 	func _init(node: Node) -> void:
 		from = node
 
-	func sender_setzen(station_id: String, track_id: String, _offset_s: float) -> void:
+	func sender_setzen(station_id: String, track_id: String, offset_s: float) -> void:
 		var music := MusicDirector.get_or_create(from)
 		music.radio_play(station_id)
 		if music.current_track_id() != track_id:
-			music.play_track(track_id, MusicDirector.RADIO_FADE_S, false)
+			music.play_track(track_id, MusicDirector.RADIO_FADE_S, false, maxf(0.0, offset_s))
 
 
 func setup(net_client: Node) -> void:

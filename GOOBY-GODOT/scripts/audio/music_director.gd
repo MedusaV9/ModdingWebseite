@@ -169,10 +169,14 @@ func stop_music(fade_s := CROSSFADE_S) -> void:
 
 ## Direkt einen bestimmten Track spielen (Cutscenes/Recap) — verlässt den
 ## Kontext-Modus, bis wieder set_context()/radio_play() gerufen wird.
-func play_track(track_id: String, fade_s := CROSSFADE_S, loop := true) -> void:
+## `from_position_s` (W13B COUCH-COOP-Request): Startposition in Sekunden
+## für den exakten Coop-Radio-Sync (0.0 = wie bisher von vorn).
+func play_track(
+	track_id: String, fade_s := CROSSFADE_S, loop := true, from_position_s := 0.0
+) -> void:
 	_base_context = ""
 	_overlays.clear()
-	_crossfade_to(track_id, fade_s, loop)
+	_crossfade_to(track_id, fade_s, loop, from_position_s)
 
 
 # ── Radio (Sender-Queue, ersetzt Kontext-Musik) ──────────────────────────────
@@ -268,7 +272,7 @@ func _apply() -> void:
 	_crossfade_to(track, CROSSFADE_S)
 
 
-func _crossfade_to(track_id: String, fade_s: float, loop := true) -> void:
+func _crossfade_to(track_id: String, fade_s: float, loop := true, from_position_s := 0.0) -> void:
 	if track_id == _current_track:
 		return
 	_current_track = track_id
@@ -289,7 +293,7 @@ func _crossfade_to(track_id: String, fade_s: float, loop := true) -> void:
 		(stream as AudioStreamOggVorbis).loop = loop
 	next.stream = stream
 	next.volume_db = FADE_OUT_DB
-	next.play()
+	next.play(maxf(0.0, from_position_s))
 	_fade_volume(next, MusicRegistry.trim_db(track_id), fade_s)
 	track_changed.emit(track_id)
 
