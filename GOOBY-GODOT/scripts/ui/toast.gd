@@ -8,6 +8,13 @@ extends Control
 ## Radius 22, Outline-Ring + Shadow-Pop, Ink-Text 700; federt mit kleinem
 ## Hüpfer herein (@keyframes toast-in) und sinkt beim Ausblenden sanft ab
 ## (.toast-out). Größen skalieren über die ZENTRALE `UiScale`-Regel.
+##
+## W14/UISCREENS-B (User-Bug „Notifications und Goobys Bubble überschneiden
+## sich unten"): Toasts reservieren die TOP-Zone (UIKERN-Vertrag
+## `UiAnchors`), rutschen unter andere Top-Belegungen (Notify-Banner) und
+## werden per `dodge` ÜBER jede Bottom-Belegung (Goobys Sprechblase,
+## dialog_bubble.gd/AcBubble) gehoben — auch der Hint-Karten-Dodge kann
+## sie nie mehr in die Blase drücken.
 
 const HOLD_SEC := 2.2
 const FADE_SEC := 0.25
@@ -67,6 +74,11 @@ func _ready() -> void:
 	add_child(_hold_timer)
 
 
+func _exit_tree() -> void:
+	if _panel != null:
+		UiAnchors.release(UiAnchors.ZONE_TOP, _panel)
+
+
 ## Toast anfordern; wird ggf. eingereiht (nie gestapelt). `error = true`
 ## spielt den Fehler-Blip (W4P1-SFX-Wiring: Erfolgs-Toasts bleiben stumm).
 func show_toast(text: String, error := false) -> void:
@@ -85,6 +97,7 @@ func _show_next() -> void:
 	var text := queue.advance()
 	if text.is_empty():
 		_panel.visible = false
+		UiAnchors.release(UiAnchors.ZONE_TOP, _panel)
 		return
 	_apply_scale()
 	_label.text = text
@@ -136,6 +149,23 @@ func _reposition() -> void:
 	var top := maxf(area.y * TOP_SHARE, float(insets["top"]) + 8.0 * f)
 	var rest := Vector2((area.x - natural.x) / 2.0, top)
 	rest.y = _dodge_hint_card(Rect2(rest, natural), f)
+	# W14-Zonen-Regel (UIKERN-Vertrag): unter andere Top-Belegungen
+	# (Notify-Banner) rutschen, aber NIE in ein Bottom-Rect (Goobys
+	# Sprechblase) hinein — das war der Überschneidungs-Bug.
+	var rect := Rect2(rest, natural)
+	rect = UiAnchors.dodge(
+		rect, UiAnchors.occupied_rects(UiAnchors.ZONE_TOP, _panel), UiAnchors.ZONE_TOP
+	)
+	# Gap > 12·f: die Einblende-Animation startet 12 px UNTER der Ruhelage
+	# (_animate_in) — der Abstand deckt auch diese Zwischenframes ab.
+	rect = UiAnchors.dodge(
+		rect,
+		UiAnchors.occupied_rects(UiAnchors.ZONE_BOTTOM, _panel),
+		UiAnchors.ZONE_BOTTOM,
+		14.0 * f
+	)
+	rest.y = maxf(rect.position.y, float(insets["top"]) + 8.0 * f)
+	UiAnchors.reserve(UiAnchors.ZONE_TOP, _panel)
 	_panel.position = rest
 	_animate_in(rest, f)
 

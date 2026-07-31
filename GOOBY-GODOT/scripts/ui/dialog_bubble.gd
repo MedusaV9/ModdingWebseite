@@ -3,6 +3,15 @@ extends Control
 ## Text-Bubble für Gooby-Sprüche (DEUTSCH über strings/). Zeigt eine
 ## Zeilen-Sequenz; JEDER Tap auf die Bubble blättert weiter („Weiter-Tap“).
 ## Signale: `advanced(index)` pro Blättern, `finished` nach der letzten Zeile.
+##
+## W14/UISCREENS-B (User-Bug „Notifications und Goobys Bubble überschneiden
+## sich unten"): Die Bubble reserviert die BOTTOM-Zone über den UIKERN-
+## Vertrag (`UiAnchors.reserve("bottom", kapsel)`) und weicht Top-Belegungen
+## (Notify-Banner, Toasts) per `UiAnchors.dodge` aus; Toasts wiederum
+## rutschen NIE in Bottom-Rects hinein (toast.gd) — Überschneidung ist
+## damit strukturell unmöglich. Dazu Buchstaben-Typewriter im Gebrabbel-
+## Tempo (DialogTypewriter, wie die Stadt-Dialoge): erster Tap zeigt die
+## Zeile komplett, zweiter blättert weiter.
 
 signal advanced(index: int)
 signal finished
@@ -12,9 +21,13 @@ const MAX_WIDTH_PX := 600.0
 ## Luft zwischen Blase und HUD-Bodenzeile bzw. Safe-Area-Unterkante.
 const BOTTOM_GAP := 10.0
 
+## Test-Hook: -1 = Settings/Reduced-Motion fragen, 0/1 = sofort erzwingen.
+var sofort_override := -1
+
 var _lines: Array[String] = []
 var _index := -1
 var _hud_ref: Control
+var _typewriter := DialogTypewriter.new()
 
 @onready var _bubble: PanelContainer = %Bubble
 @onready var _text: Label = %BubbleText
@@ -26,7 +39,13 @@ func _ready() -> void:
 	_hint.text = I18nService.t("dialog.weiter_hinweis")
 	_bubble.gui_input.connect(_on_bubble_input)
 	get_viewport().size_changed.connect(_relayout)
+	set_process(false)
 	_relayout()
+
+
+func _exit_tree() -> void:
+	if _bubble != null:
+		UiAnchors.release(UiAnchors.ZONE_BOTTOM, _bubble)
 
 
 ## Sequenz anzeigen (ersetzt eine laufende Sequenz).
@@ -36,6 +55,7 @@ func show_lines(lines: Array[String]) -> void:
 	_lines = lines.duplicate()
 	_index = -1
 	visible = true
+	UiAnchors.reserve(UiAnchors.ZONE_BOTTOM, _bubble)
 	_relayout()
 	_advance()
 
@@ -75,6 +95,21 @@ func _relayout() -> void:
 func _fit_height() -> void:
 	var needed := _bubble.get_combined_minimum_size().y
 	_bubble.offset_top = _bubble.offset_bottom - maxf(needed, 96.0)
+	# W14-Zonen-Regel (UIKERN-Vertrag): Top-Belegungen (Banner/Toasts) nie
+	# überdecken — schneidet die Blase ein Top-Rect, rückt `dodge` sie
+	# darunter; wir übernehmen nur die abgesenkte OBERkante (Unterkante
+	# bleibt in der Boden-Lane verankert, die Blase wird schlicht flacher).
+	var canvas := Vector2(get_viewport().get_visible_rect().size)
+	var rect := Rect2(
+		Vector2(canvas.x / 2.0 + _bubble.offset_left, canvas.y + _bubble.offset_top),
+		Vector2(
+			_bubble.offset_right - _bubble.offset_left, _bubble.offset_bottom - _bubble.offset_top
+		)
+	)
+	var gedodgt := UiAnchors.dodge(
+		rect, UiAnchors.occupied_rects(UiAnchors.ZONE_TOP, _bubble), UiAnchors.ZONE_TOP
+	)
+	_bubble.offset_top = maxf(_bubble.offset_top, gedodgt.position.y - canvas.y)
 
 
 func _fit_height_settled() -> void:
@@ -108,16 +143,46 @@ func current_line() -> String:
 	return _text.text
 
 
+## Buchstaben-Typewriter (W14): Zeichen erscheinen im Gebrabbel-Tempo.
+func _process(delta: float) -> void:
+	if not _typewriter.laeuft():
+		set_process(false)
+		return
+	_typewriter.tick(delta)
+	_zeige_zeichen()
+	if _typewriter.ist_fertig():
+		set_process(false)
+
+
 func _advance() -> void:
 	_index += 1
 	if _index >= _lines.size():
 		visible = false
+		UiAnchors.release(UiAnchors.ZONE_BOTTOM, _bubble)
 		finished.emit()
 		return
 	_text.text = _lines[_index]
+	_typewriter.start(_lines[_index], _sofort_modus())
+	_zeige_zeichen()
+	set_process(_typewriter.laeuft())
 	_hint.visible = _index < _lines.size() - 1
 	advanced.emit(_index)
 	_pop()
+
+
+func _zeige_zeichen() -> void:
+	_text.visible_characters = -1 if _typewriter.ist_fertig() else _typewriter.sichtbar
+
+
+## Sofort-Modus wie die Stadt-Dialoge: Reduced Motion oder die Einstellung
+## „Schnelle Dialoge“ zeigen die Zeile ohne Ticks komplett.
+func _sofort_modus() -> bool:
+	if sofort_override >= 0:
+		return sofort_override == 1
+	if ThemeService.is_reduced_motion(self):
+		return true
+	var settings := get_node_or_null("/root/AppSettings")
+	return settings != null and bool(settings.call("get_setting", "game.schnelle_dialoge", false))
 
 
 func _pop() -> void:
@@ -132,4 +197,10 @@ func _pop() -> void:
 
 func _on_bubble_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed:
+		# Erster Tap: laufende Zeile sofort komplett; zweiter blättert.
+		if _typewriter.laeuft():
+			_typewriter.skip()
+			_zeige_zeichen()
+			set_process(false)
+			return
 		_advance()

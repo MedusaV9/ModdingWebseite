@@ -145,21 +145,71 @@ func test_toast_layer_zeigt_nie_zwei() -> void:
 	unmount(layer)
 
 
+## W14/UISCREENS-B Regression (User-Bug „Notifications und Goobys Bubble
+## überschneiden sich unten"): selbst wenn der Hint-Karten-Dodge den Toast
+## weit nach unten drücken will, hebt die UiAnchors-BOTTOM-Zone ihn über
+## die Sprechblase — die Rects schneiden sich NIE.
+func test_toast_ueberlappt_gooby_bubble_nie() -> void:
+	UiAnchors.reset_for_tests()
+	var bubble := BUBBLE_SCENE.instantiate()
+	mount(bubble)
+	await tree.process_frame
+	var lines: Array[String] = ["Ich bin Goobys Blase unten."]
+	bubble.show_lines(lines)
+	await tree.process_frame
+	# Fiese Hint-Karte: reicht bis 85 % Canvas-Höhe — der alte Dodge hätte
+	# den Toast damit mitten IN die Blase geschoben.
+	var karte := Control.new()
+	karte.add_to_group(&"wasnun_karte")
+	mount(karte)
+	var canvas := Vector2(tree.root.get_visible_rect().size)
+	karte.position = Vector2.ZERO
+	karte.size = Vector2(canvas.x, canvas.y * 0.85)
+	var layer := ToastLayer.new()
+	mount(layer)
+	await tree.process_frame
+	layer.show_toast("Banner oben!")
+	for _i in 4:
+		await tree.process_frame
+	var panel := layer.get_node("ToastPanel") as PanelContainer
+	var kapsel := bubble.get_node("%Bubble") as PanelContainer
+	check(panel.visible, "Toast sichtbar")
+	check_eq(UiAnchors.occupants("bottom").size(), 1, "Blase reserviert die bottom-Zone")
+	check_eq(UiAnchors.occupants("top").size(), 1, "Toast reserviert die top-Zone")
+	check(
+		not panel.get_global_rect().intersects(kapsel.get_global_rect()),
+		"Toast %s schneidet Bubble %s nicht" % [panel.get_global_rect(), kapsel.get_global_rect()]
+	)
+	unmount(layer)
+	unmount(karte)
+	unmount(bubble)
+	UiAnchors.reset_for_tests()
+
+
 func test_dialog_bubble_weiter_tap() -> void:
 	var bubble := BUBBLE_SCENE.instantiate()
 	mount(bubble)
 	await tree.process_frame
 	var finished := [false]
 	bubble.finished.connect(func() -> void: finished[0] = true)
+	# W14/UISCREENS-B: Buchstaben-Typewriter — der ERSTE Tap zeigt die
+	# laufende Zeile komplett, erst der ZWEITE blättert (wie Stadt-Dialoge).
+	bubble.sofort_override = 0
 	var lines: Array[String] = ["Zeile 1", "Zeile 2"]
 	bubble.show_lines(lines)
 	check(bubble.is_active(), "Bubble aktiv")
 	check_eq(bubble.current_line(), "Zeile 1", "erste Zeile sichtbar")
+	var text: Label = bubble.get_node("%BubbleText")
+	check(text.visible_characters >= 0, "Typewriter tickt — Zeichen noch gedeckelt")
 	var click := InputEventMouseButton.new()
 	click.pressed = true
 	click.button_index = MOUSE_BUTTON_LEFT
 	bubble.get_node("%Bubble").gui_input.emit(click)
-	check_eq(bubble.current_line(), "Zeile 2", "Tap blättert weiter")
+	check_eq(bubble.current_line(), "Zeile 1", "erster Tap blättert NICHT")
+	check_eq(text.visible_characters, -1, "erster Tap zeigt alle Zeichen")
+	bubble.get_node("%Bubble").gui_input.emit(click)
+	check_eq(bubble.current_line(), "Zeile 2", "zweiter Tap blättert weiter")
+	bubble.get_node("%Bubble").gui_input.emit(click)
 	bubble.get_node("%Bubble").gui_input.emit(click)
 	check(finished[0], "finished nach letzter Zeile")
 	check(not bubble.visible, "Bubble versteckt sich")

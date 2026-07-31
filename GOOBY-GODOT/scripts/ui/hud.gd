@@ -88,18 +88,9 @@ const ACTIONS: Array[Dictionary] = [
 	# REST-2: Tagesquests (DailyQuestService) — 10. Kachel macht das Dock 5+5.
 	{"id": &"quests", "icon": "check", "tint": AcTokens.LEAF_DARK},
 ]
-const COLUMN_ORDER: Array[StringName] = [
-	&"bau",
-	&"gestalten",
-	&"reise",
-	&"arcade",
-	&"quests",
-	&"album",
-	&"wardrobe",
-	&"ikea",
-	&"profil",
-	&"igohbie",
-]
+# W14/UISCREENS-B: die Reihenfolge beider Layouts liegt als PURE Logik in
+# `hud/hud_button_order.gd` (H-Doc §1.3 „Daumen-Bogen"/„Cockpit": Haupt-
+# Aktionen in die Daumen-Zeile/-Spalte, Zweitrangiges eine Ebene weiter).
 const STATS := [
 	{"id": "hunger", "icon": "hunger", "type": "StatHunger", "color": AcTokens.STAT_HUNGER},
 	{"id": "energie", "icon": "energy", "type": "StatEnergy", "color": AcTokens.STAT_ENERGY},
@@ -205,12 +196,11 @@ func apply_layout(layout: HudLayoutLogic.Layout) -> void:
 	var label_h := 0.0 if portrait else LABEL_PAD * f
 	_column_top = EDGE_PAD + float(insets["top"]) + maxf(56.0 * f, floor_px) + 12.0
 	var button_parent: Container = _portrait_dock if portrait else _landscape_column
-	var order: Array = []
-	if portrait:
-		for action in ACTIONS:
-			order.append(action["id"])
-	else:
-		order = COLUMN_ORDER.duplicate()
+	# W14: Daumen-Ordnung (H-Doc §1.3) — Hochkant fix, Cockpit wird nach dem
+	# Spalten-Messpass in _fit_landscape_column ggf. verschränkt umgehängt.
+	var order: Array[StringName] = (
+		HudButtonOrder.portrait_order() if portrait else HudButtonOrder.landscape_order(1)
+	)
 	var icon_base := DOCK_ICON if portrait else HudLayoutLogic.LANDSCAPE_ICON
 	for id: StringName in order:
 		var btn: Button = _buttons[id]
@@ -293,11 +283,12 @@ func apply_layout(layout: HudLayoutLogic.Layout) -> void:
 func _fit_landscape_column(
 	canvas: Vector2, insets: Dictionary, btn_size: float, label_h: float, floor_px: float
 ) -> float:
-	var count := COLUMN_ORDER.size()
+	var ids := HudButtonOrder.landscape_order(1)
+	var count := ids.size()
 	var avail := canvas.y - _column_top - (EDGE_PAD + float(insets["bottom"]))
 	# Irreduzible Knopf-Minima messen (ohne custom_minimum_size).
 	var theme_min := Vector2.ZERO
-	for id: StringName in COLUMN_ORDER:
+	for id: StringName in ids:
 		var btn: Button = _buttons[id]
 		var saved := btn.custom_minimum_size
 		btn.custom_minimum_size = Vector2.ZERO
@@ -311,11 +302,17 @@ func _fit_landscape_column(
 	while columns < count and float(rows) * theme_min.y + COLUMN_SEP * float(rows - 1) > avail:
 		columns += 1
 		rows = int(ceilf(float(count) / float(columns)))
+	# W14 (H-Doc §1.3 „Cockpit"): jetzt, wo die Spaltenzahl feststeht, die
+	# Knöpfe so umhängen, dass die Haupt-Aktionen die rechte Außenspalte
+	# (Daumen-Kante) bilden — row-major-Grid braucht dafür Verschränkung.
+	ids = HudButtonOrder.landscape_order(columns)
+	for i in ids.size():
+		_landscape_column.move_child(_buttons[ids[i]], i)
 	# Knopfgröße so eindampfen, dass `rows` Zeilen à max(btn+label, Minimum)
 	# in den freien Streifen passen — nie unter den Touch-Floor.
 	var cap := (avail - COLUMN_SEP * float(rows - 1)) / float(rows) - label_h
 	btn_size = maxf(minf(btn_size, cap), floor_px)
-	for id: StringName in COLUMN_ORDER:
+	for id: StringName in ids:
 		var btn: Button = _buttons[id]
 		btn.custom_minimum_size = Vector2(btn_size, btn_size + label_h)
 	_landscape_column.columns = columns
