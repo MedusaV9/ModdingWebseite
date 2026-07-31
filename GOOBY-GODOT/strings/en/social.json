@@ -47,6 +47,15 @@
 				"no_coins": "You don't have that many coins.",
 				"generic": "That didn't work."
 			}
+		},
+		"nap": {
+			"host_bubble": "Your buddy is snoozing on your couch. Cozy!",
+			"host_bubble_boden": "No couch around — your buddy naps right on the floor. Still cozy!",
+			"host_wake": "The visiting Gooby is awake again!",
+			"guest_bubble": "It's late and everyone's tired — your Gooby snuggles up on the couch…",
+			"guest_bubble_boden": "No couch found — your Gooby just naps on the floor. Legend!",
+			"wake_button": "Wake up",
+			"wake_toast_guest": "Gently woken — your Gooby blinks awake."
 		}
 	},
 	"board": {

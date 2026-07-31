@@ -19,6 +19,9 @@ signal peer_pos(pos: Vector3, anim: String, room_id: String)
 signal peer_emote(emote_id: String)
 signal build_warning
 signal build_delta_received(delta: Dictionary)
+## W13B COUCH-COOP: NAP-Relay (Besucher-Couch-Regel §C32) — Body reist roh,
+## CouchLogic.parse_nap macht die Robustheit beim Empfänger.
+signal peer_nap(data: Dictionary)
 
 const ROLE_NONE := ""
 const ROLE_HOST := "host"
@@ -32,6 +35,10 @@ var peer_name := ""
 var peer_gooby_name := ""
 var peer_room_id := ""
 var snapshot_rev := 0
+## W13B COUCH-COOP: letzter Energie-/Stunden-Sync des Peers aus dem
+## POS-Relay (−1 = noch nichts angekommen; `peer_hour` schickt nur der Host).
+var peer_energy := -1.0
+var peer_hour := -1
 
 ## Tests/Integration: REST-Ziel {host, port, tls} statt NetClient-Config.
 var rest_override: Dictionary = {}
@@ -129,20 +136,33 @@ func end_visit() -> Dictionary:
 
 ## Eigene Position ins Relay (fire-and-forget, client-seitig 5 Hz gedrosselt —
 ## der Server drosselt zusätzlich, W2c §4.4). force=true umgeht den Takt
-## (Raumwechsel soll SOFORT sichtbar sein).
-func send_pos(world_pos: Vector3, anim: String, my_room_id: String, force := false) -> bool:
+## (Raumwechsel soll SOFORT sichtbar sein). `energie`/`stunde` sind der
+## additive W13B-Sync für die Couch-Regel (−1 = nicht mitschicken).
+func send_pos(
+	world_pos: Vector3,
+	anim: String,
+	my_room_id: String,
+	force := false,
+	energie := -1.0,
+	stunde := -1
+) -> bool:
 	if not is_active():
 		return false
 	var now := Time.get_ticks_msec()
 	if not force and not VisitLogic.should_send_pos(_last_pos_ms, now):
 		return false
 	_last_pos_ms = now
-	_send_room_msg("POS", VisitLogic.pos_payload(world_pos, anim, my_room_id))
+	_send_room_msg("POS", VisitLogic.pos_payload(world_pos, anim, my_room_id, energie, stunde))
 	return true
 
 
 func send_emote(emote_id: String) -> void:
 	_send_room_msg("EMOTE", {"id": emote_id})
+
+
+## W13B COUCH-COOP: NAP-Zustand des Besucher-Goobys ins Relay (Gast → Host).
+func send_nap(an: bool, cell: Vector2i, boden: bool) -> void:
+	_send_room_msg("NAP", CouchLogic.nap_payload(an, cell, boden))
 
 
 ## Bau-Warnung an beide Seiten (Toast macht die Szene; lokal via Signal).
@@ -211,10 +231,17 @@ func _on_room_msg(kind: String, body: Variant) -> void:
 			var parsed := VisitLogic.parse_pos(body)
 			if parsed["ok"]:
 				peer_room_id = str(parsed["room_id"])
+				if float(parsed["energy"]) >= 0.0:
+					peer_energy = float(parsed["energy"])
+				if int(parsed["hour"]) >= 0:
+					peer_hour = int(parsed["hour"])
 				peer_pos.emit(parsed["pos"], str(parsed["anim"]), peer_room_id)
 		"EMOTE":
 			if body is Dictionary:
 				peer_emote.emit(str((body as Dictionary).get("id", "")))
+		"NAP":
+			if body is Dictionary:
+				peer_nap.emit(body)
 		"BUILD_START":
 			build_warning.emit()
 		"BUILD_DELTA":
@@ -228,6 +255,8 @@ func _reset() -> void:
 	host_code = ""
 	guest_code = ""
 	peer_room_id = ""
+	peer_energy = -1.0
+	peer_hour = -1
 	_last_pos_ms = -1
 
 

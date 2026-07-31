@@ -28,6 +28,8 @@ var room_view: VisitRoomView
 var my_gooby: GoobyHome
 var remote: RemoteGooby
 var hud: VisitHud
+## W13B COUCH-COOP: Besucher-Couch-Regel (§C32) + Coop-Fahrt (Doc C §3.6).
+var couch_coop: VisitManager
 
 var _services: Node = null
 var _camera_rig: HomeCameraRig
@@ -70,6 +72,7 @@ func _ready() -> void:
 	_build_hud()
 	_switch_room(start, "")
 	_wire_service()
+	_setup_couch_coop()
 
 
 func visit_service() -> VisitService:
@@ -163,6 +166,15 @@ func _wire_service() -> void:
 	vs.visit_ended.connect(_on_visit_ended)
 
 
+## W13B COUCH-COOP: der komplette Besuchs-Zusatz (Couch-Regel + Coop-Fahrt)
+## lebt im VisitManager (scripts/multiplayer/) — die Szene hängt ihn nur an.
+func _setup_couch_coop() -> void:
+	couch_coop = VisitManager.new()
+	couch_coop.name = "CouchCoop"
+	add_child(couch_coop)
+	couch_coop.setup(self)
+
+
 func _process(_delta: float) -> void:
 	_send_pos(false)
 
@@ -189,7 +201,11 @@ func _send_pos(force: bool) -> void:
 		return
 	var pos := my_gooby.global_position
 	var moving := _last_pos != Vector3.INF and (pos - _last_pos).length() > MOVE_EPSILON
-	vs.send_pos(pos, VisitLogic.anim_for(moving), my_room_id, force)
+	# W13B COUCH-COOP: Energie (beide) + Lokal-Stunde (nur Host) reisen als
+	# additive POS-Felder mit — Grundlage der Besucher-Couch-Regel (§C32).
+	var energie := couch_coop.energie_fuer_relay() if couch_coop != null else -1.0
+	var stunde := couch_coop.stunde_fuer_relay() if couch_coop != null else -1
+	vs.send_pos(pos, VisitLogic.anim_for(moving), my_room_id, force, energie, stunde)
 	_last_pos = pos
 
 

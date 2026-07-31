@@ -21,17 +21,31 @@ static func should_send_pos(last_sent_ms: int, now_ms: int) -> bool:
 
 ## POS-Body (W2c §4.5): {pos:[x,z], anim, roomId} — Welt-XZ, y ist im Haus
 ## immer 0 (Möbel-Höhen macht die Szene selbst).
-static func pos_payload(world_pos: Vector3, anim: String, room_id: String) -> Dictionary:
-	return {
+## W13B COUCH-COOP (additiv, §C32): `energy` (eigener Energie-Stat, beide
+## Rollen) und `hour` (Lokal-Stunde, nur der HOST schickt sie) reisen als
+## optionale Felder mit — −1 heißt „nicht dabei“, der Payload bleibt dann
+## byte-identisch zum W3c-Schema.
+static func pos_payload(
+	world_pos: Vector3, anim: String, room_id: String, energie := -1.0, stunde := -1
+) -> Dictionary:
+	var out := {
 		"pos": [snappedf(world_pos.x, 0.001), snappedf(world_pos.z, 0.001)],
 		"anim": anim,
 		"roomId": room_id,
 	}
+	if energie >= 0.0:
+		out["energy"] = snappedf(energie, 0.1)
+	if stunde >= 0:
+		out["hour"] = stunde
+	return out
 
 
 ## POS-Body robust parsen (unbekannte Felder ignorieren, W2c §1).
+## `energy`/`hour` fehlen bei Alt-Clients → −1 (CouchLogic schaltet dann aus).
 static func parse_pos(body: Variant) -> Dictionary:
-	var out := {"ok": false, "pos": Vector3.ZERO, "anim": "idle", "room_id": ""}
+	var out := {
+		"ok": false, "pos": Vector3.ZERO, "anim": "idle", "room_id": "", "energy": -1.0, "hour": -1
+	}
 	if not (body is Dictionary):
 		return out
 	var data: Dictionary = body
@@ -42,6 +56,12 @@ static func parse_pos(body: Variant) -> Dictionary:
 	out["pos"] = Vector3(float(pos[0]), 0.0, float(pos[1]))
 	out["anim"] = str(data.get("anim", "idle"))
 	out["room_id"] = str(data.get("roomId", ""))
+	var energie: Variant = data.get("energy")
+	if energie is float or energie is int:
+		out["energy"] = float(energie)
+	var stunde: Variant = data.get("hour")
+	if stunde is int or stunde is float:
+		out["hour"] = int(stunde)
 	return out
 
 

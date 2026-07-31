@@ -47,6 +47,15 @@
 				"no_coins": "So viele Münzen hast du nicht.",
 				"generic": "Das hat nicht geklappt."
 			}
+		},
+		"nap": {
+			"host_bubble": "Dein Kumpel pennt auf deiner Couch. Gemütlich!",
+			"host_bubble_boden": "Keine Couch da — dein Kumpel macht ein Boden-Nickerchen. Auch gemütlich!",
+			"host_wake": "Der Besucher-Gooby ist wieder wach!",
+			"guest_bubble": "Es ist spät und alle sind müde — dein Gooby kuschelt sich auf die Couch…",
+			"guest_bubble_boden": "Keine Couch gefunden — dein Gooby pennt einfach auf dem Boden. Legende!",
+			"wake_button": "Aufwecken",
+			"wake_toast_guest": "Sanft geweckt — dein Gooby blinzelt sich wach."
 		}
 	},
 	"board": {

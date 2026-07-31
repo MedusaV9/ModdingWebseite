@@ -6,6 +6,8 @@ extends Node3D
 
 const LERP_SPEED := 8.0
 const LABEL_HEIGHT := 1.35
+## Zzz-Symbol schwebt leicht versetzt über dem schlafenden Gooby (W13B §C32).
+const NAP_SYMBOL_OFFSET := Vector3(0.25, 1.5, 0.0)
 
 var rig: GoobyRig
 
@@ -13,6 +15,8 @@ var _label: Label3D
 var _target := Vector3.ZERO
 var _has_target := false
 var _anim := "idle"
+var _napping := false
+var _nap_symbol: EmoteSymbol = null
 
 
 func _ready() -> void:
@@ -35,11 +39,15 @@ func set_display_name(display_name: String) -> void:
 
 
 ## Ziel aus dem POS-Relay übernehmen (snap beim allerersten Update).
+## Während des Nickerchens (W13B) bleibt die sleep-Pose stehen — POS-Herzschläge
+## mit anim idle/walk wecken den Gooby NICHT (das macht nur NAP off).
 func apply_state(pos: Vector3, anim: String) -> void:
 	_target = pos
 	if not _has_target:
 		_has_target = true
 		global_position = pos
+	if _napping:
+		return
 	if anim != _anim:
 		_anim = anim
 		if anim != "walk" and anim != "idle":
@@ -53,8 +61,42 @@ func play_emote(emote_id: String) -> void:
 	rig.play_clip(BoardEmotes.clip_for(emote_id))
 
 
+## W13B COUCH-COOP (§C32): Besucher-Gooby pennt — sleep-Loop-Pose der
+## Rig-API + dauerhaftes Zzz-Symbol (EmoteSymbol bleibt bis end_nap()).
+func start_nap(world_pos: Vector3) -> void:
+	_target = world_pos
+	_has_target = true
+	global_position = world_pos
+	_napping = true
+	_anim = "sleep"
+	if rig != null:
+		rig.set_emotion("sleepy")
+		rig.play_clip("sleep")
+	if _nap_symbol == null:
+		_nap_symbol = EmoteSymbol.erzeuge("zzz", false)
+		_nap_symbol.position = NAP_SYMBOL_OFFSET
+		add_child(_nap_symbol)
+
+
+func end_nap() -> void:
+	if not _napping:
+		return
+	_napping = false
+	_anim = "idle"
+	if rig != null:
+		rig.set_emotion("neutral")
+		rig.play_clip("idle")
+	if _nap_symbol != null:
+		_nap_symbol.verschwinde()
+		_nap_symbol = null
+
+
+func is_napping() -> bool:
+	return _napping
+
+
 func _process(delta: float) -> void:
-	if not _has_target or rig == null:
+	if not _has_target or rig == null or _napping:
 		return
 	var to_target := _target - global_position
 	to_target.y = 0.0
