@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """nether_open_fx — Photon assets for the day-2 NETHER OPENING sequence.
 
-Committed fxlib source of truth (binary-blob diff law, FX_FORMAT.md §7) for the four
-`.fx` blobs of `sequence/NetherOpeningSequence`:
+Committed fxlib source of truth (binary-blob diff law, FX_FORMAT.md §7) for the five
+`.fx` blobs of `sequence/NetherOpeningSequence` + the breach ambience:
 
   phase 1 OMEN      eclipse:nether_omen_ash        one-shot 240t: ash column creeping out
                                                    of the un-broken ground + lava glints
@@ -12,29 +12,56 @@ Committed fxlib source of truth (binary-blob diff law, FX_FORMAT.md §7) for the
                                                    (jagged randomA line) + its dust lift;
                                                    the client stamps several around the rim
   phase 3 RUPTURE   eclipse:nether_eruption        one-shot 200t: fire column + colliding
-                                                   ember shrapnel + smoke pillar + the
-                                                   ground shock ring
+                                                   ember shrapnel + flipbook smoke pillar +
+                                                   THREE staggered ground shock rings (the
+                                                   echo waves land on the aftershock sound
+                                                   stack) + tall dust curtains rolling
+                                                   outward over the halo (W13/A6)
   phase 4 AFTERMATH eclipse:nether_pit_plume       WINDOWED loop: the permanent smoke cloud
-                                                   hanging over the pit — dense dark swathes
-                                                   rotating slowly, orange fire tongues
-                                                   glowing THROUGH them from the inside,
-                                                   periodic spark spurts and a faint heat
-                                                   glow (no real refraction — Photon has no
-                                                   distortion module, the ask's "sonst
-                                                   weglassen" branch)
+                                                   hanging over the pit — GPU-instanced
+                                                   flipbook soot swathes (ember veins twitch
+                                                   through the 4-frame boil), fire tongues
+                                                   burning inside them, IRREGULAR ember-jet
+                                                   burst cascades (startDelay spread +
+                                                   burst probability instead of a uniform
+                                                   spurt loop), soft-particle ground smoke
+                                                   hugging the crater lip (SceneDepth fade,
+                                                   eclipse:soft_particle), and a whisper-
+                                                   subtle rgb_split heat shimmer directly
+                                                   over the mouth (A0 distortion shader —
+                                                   Photon's own stack has no refraction)
+  ambient           eclipse:nether_ash_snow        WINDOWED loop (N11): sparse dark ash
+                                                   flakes snowing over a wide radius around
+                                                   the pit + faint drifting soot haze —
+                                                   random_gradient grey variation, tiny
+                                                   counts, GPU-instanced
 
-Loop law (INTEGRATION.md §4): the plume carries a renderer cull box + hard maxParticles on
-every emitter. Collision emitters keep parallelUpdate 0b (FX_FORMAT §3.1/§3.3 — collision
-does real level queries and is forbidden on the parallel path). Textures stay on the two
-Photon-bundled particles (circle.png / smoke.png).
+Loop law (INTEGRATION.md §4): every looping emitter carries a renderer cull box + hard
+maxParticles. Collision emitters keep parallelUpdate 0b (FX_FORMAT §3.1/§3.3 — collision
+does real level queries and is forbidden on the parallel path); GPU-instanced emitters
+carry NO physics (LINT-GPU-PHYSICS). W13 stacking law: dark birth tints, HDR <= 1.45 on
+every plume/ash material (permanent loops must not own the bloom budget), heavy elements
+low + slow.
 
-Run:  python3 tools/photon/nether_open_fx.py     # writes + validates all 4 assets
+Flipbook sheet: nether_plume_atlas.png (4x4, authored below, storm_puff_atlas school) —
+each ROW is one soot-puff variant boiling through a seamless 4-frame loop with ember
+veins baked in whose gain PULSES across the frames (the "zuckende Glut"); Photon
+`uvAnimation {tiles:[4,4], animation:SingleRow}` memoizes a random row per particle and
+frameOverTime plays the twitch. Verified against the Photon 2.1.5 jar:
+UVAnimationSetting{tiles:Vector2i, animation:WholeSheet|SingleRow, frameOverTime:NF,
+startFrame:NF, cycle:float}; the GPU-instanced path uploads TileParticle.getRealUVs()
+per instance, so flipbook + useGPUInstance compose (ParticleInstanceRenderer.upload).
+
+Run:  python3 tools/photon/nether_open_fx.py            # writes + validates all 5 assets
+      python3 tools/photon/nether_open_fx.py --atlas    # force-regenerate the atlas PNG
 """
 from fxlib import *  # noqa: F401,F403 - the authoring DSL is the point
 from fxlib import B, F, I, L  # explicit for the raw module compounds
 
 CIRCLE = "photon:textures/particle/circle.png"
 SMOKE = "photon:textures/particle/smoke.png"
+PLUME_ATLAS = "eclipse:textures/particle/nether_plume_atlas.png"
+PLUME_ATLAS_PATH = REPO_ROOT / "src/main/resources/assets/eclipse/textures/particle/nether_plume_atlas.png"
 
 # Crater geometry the assets are authored against (BreachGeometry): mouth r 16, creep halo
 # r 28. Cull boxes are sized off the halo so nothing pops while the camera orbits the rim.
@@ -70,6 +97,89 @@ def ribbon_renderer(material_entry):
     written explicitly so ribbons never fall back to the MISSING (pink) material."""
     return {"materials": rom([material_entry]), "layer": "Translucent",
             "cull": {"_enable": B(0)}, "orderInLayer": I(0), "vertexSortingMode": "NONE"}
+
+
+# ---------------------------------------------------------------------------
+# nether_plume_atlas.png — 1024², 4x4 (W13/A6, storm_puff_atlas school)
+# ---------------------------------------------------------------------------
+def generate_plume_atlas(path, size=1024, grid=4, seed=20260731):
+    """16 soot puffs: each ROW is one variant boiling through a seamless 4-frame loop
+    (blob offsets 2π-periodic in the frame phase) for Photon `uvAnimation {tiles:[4,4],
+    animation:SingleRow}` — the memoized random row picks the variant, frameOverTime
+    plays the boil. What makes it a NETHER sheet: the RGB bakes fire-from-below light
+    (bottom warm, top soot-dark) plus discrete ember VEINS whose gain pulses across the
+    4 frames on per-vein phases — played back, the glut visibly twitches INSIDE the
+    smoke. Rows carry rising ember intensity (0.30/0.55/0.80/1.05), so the random row
+    also varies how fiery each swathe reads. Deterministic seed."""
+    import numpy as np
+    from PIL import Image
+
+    rng = np.random.default_rng(seed)
+    cell = size // grid
+    img = np.zeros((size, size, 4), np.float32)
+    yy, xx = (np.mgrid[0:cell, 0:cell].astype(np.float32) + 0.5) / cell
+
+    def smoothstep(a, b, x):
+        t = np.clip((x - a) / (b - a), 0.0, 1.0)
+        return t * t * (3.0 - 2.0 * t)
+
+    # Transparent margin so bilinear/mip sampling never bleeds across cells.
+    edge = np.minimum(np.minimum(xx, 1.0 - xx), np.minimum(yy, 1.0 - yy))
+    margin = smoothstep(0.015, 0.09, edge)
+
+    ember_rgb = np.array((1.0, 0.44, 0.16), np.float32)   # FX-STYLE ember family
+    row_ember = (0.30, 0.55, 0.80, 1.05)                  # per-row glut gain
+
+    for row in range(grid):
+        # Roundish cauliflower cluster (the plume swathes are volumetric, not flat).
+        nblobs = 17
+        ang = rng.uniform(0.0, 2.0 * np.pi, nblobs)
+        dist = rng.uniform(0.0, 1.0, nblobs) ** 0.6
+        bx = 0.5 + 0.27 * dist * np.cos(ang)
+        by = 0.5 + 0.24 * dist * np.sin(ang)
+        br = rng.uniform(0.085, 0.14, nblobs) * (1.2 - 0.4 * dist)
+        bw = rng.uniform(0.6, 1.0, nblobs)
+        ph = rng.uniform(0.0, 2.0 * np.pi, (nblobs, 2))
+        amp = rng.uniform(0.02, 0.05, nblobs)
+        ramp = rng.uniform(0.10, 0.20, nblobs)
+        # Ember veins: a handful of small warm cores buried low in the cluster; each
+        # vein's gain pulses on its own phase — THE twitching-glut mechanism.
+        nveins = 6
+        vx = 0.5 + rng.uniform(-0.24, 0.24, nveins)
+        vy = 0.60 + rng.uniform(-0.08, 0.16, nveins)      # low = fire side
+        vr = rng.uniform(0.030, 0.055, nveins)
+        vph = rng.uniform(0.0, 2.0 * np.pi, nveins)
+        vgain = rng.uniform(0.55, 1.0, nveins) * row_ember[row]
+        for frame in range(grid):
+            phase = 2.0 * np.pi * frame / grid
+            density = np.zeros((cell, cell), np.float32)
+            for i in range(nblobs):
+                cx = bx[i] + amp[i] * np.sin(phase + ph[i, 0])
+                cy = by[i] + amp[i] * np.cos(phase + ph[i, 1])
+                r = br[i] * (1.0 + ramp[i] * np.sin(phase + ph[i, 0] + ph[i, 1]))
+                density += bw[i] * np.exp(-((xx - cx) ** 2 + (yy - cy) ** 2) / (2.0 * r * r))
+            density /= np.percentile(density, 99.2)
+            alpha = smoothstep(0.24, 0.62, density) * margin
+            # Soot body lit from BELOW (yy grows downward on the sheet): bottom warm-grey,
+            # top near-black. Dark birth tints live in the sheet itself (stacking law).
+            light = 0.09 + 0.23 * yy + 0.08 * np.clip(density, 0.0, 1.0)
+            rgb = light[..., None] * np.array((1.0, 0.92, 0.88), np.float32)[None, None, :]
+            rgb[..., 0] += 0.04 * yy                       # faint ember cast low
+            # Twitching glut: pulse each vein's gain over the 4-frame loop.
+            glow = np.zeros((cell, cell), np.float32)
+            for i in range(nveins):
+                pulse = 0.35 + 0.65 * (0.5 + 0.5 * np.sin(phase * 2.0 + vph[i]))
+                glow += vgain[i] * pulse * np.exp(
+                    -((xx - vx[i]) ** 2 + (yy - vy[i]) ** 2) / (2.0 * vr[i] * vr[i]))
+            glow *= np.clip(density, 0.0, 1.0)             # veins live INSIDE the smoke
+            rgb += glow[..., None] * ember_rgb[None, None, :]
+            tile = np.concatenate([np.clip(rgb, 0.0, 1.0), alpha[..., None]], axis=-1)
+            img[row * cell:(row + 1) * cell, frame * cell:(frame + 1) * cell] = tile
+
+    out = (np.clip(img, 0.0, 1.0) * 255.0 + 0.5).astype(np.uint8)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    Image.fromarray(out, "RGBA").save(path, optimize=True)
+    return path.stat().st_size
 
 
 # ---------------------------------------------------------------------------
@@ -366,6 +476,9 @@ def build_nether_eruption() -> FxBuilder:
 
     # Black smoke pillar — the visual handover to the permanent plume: it climbs to roughly
     # the plume's hover height and is still fading when the loop window materialises.
+    # W13: boils through the shared 4x4 flipbook (SingleRow variant per puff) instead of
+    # the static smoke PNG; the near-white gradient only shapes alpha/cooling — the soot
+    # darkness and ember under-light live in the sheet.
     (fx.particle_emitter(
             "smoke_pillar",
             duration=ERUPTION_TICKS, looping=False,
@@ -383,27 +496,36 @@ def build_nether_eruption() -> FxBuilder:
                 orbital=nf3(constant(0), constant(0.12), constant(0))),
             noise=dict(frequency=0.4, quality="Noise2D",
                        position=nf3(constant(0.07), constant(0.04), constant(0.07))),
-            color_over_lifetime=gradient(  # lit-from-below grey -> soot black
-                [(0.0, 0.0), (0.12, 0.75), (1.0, 0.0)],
-                [(0.0, 0.4, 0.31, 0.28), (0.45, 0.24, 0.18, 0.18),
-                 (1.0, 0.12, 0.098, 0.11)]),
+            uv_animation=dict(tiles=(4, 4), animation="SingleRow",
+                              frame_over_time=curve(0.0, 1.0, [SEG_LINEAR_UP]),
+                              start_frame=random_between(0.0, 4.0), cycle=3.0),
+            color_over_lifetime=gradient(  # alpha envelope + cooling; sheet is dark
+                [(0.0, 0.0), (0.12, 0.8), (1.0, 0.0)],
+                [(0.0, 1.0, 0.97, 0.94), (0.45, 0.78, 0.72, 0.7),
+                 (1.0, 0.5, 0.44, 0.46)]),
             size_over_lifetime=curve(
                 0.8, 2.4,
                 [(0.0, 0.0, 0.25, 0.4, 0.55, 0.85, 1.0, 1.0)]))
-       .with_material(texture_material(SMOKE, blend=BLEND_ALPHA))
+       .with_material(texture_material(PLUME_ATLAS, discard=0.02, blend=BLEND_ALPHA))
        .with_renderer(vertex_sorting="DISTANCE", shade=True)
        .with_cull_box((-HALO_R - 8.0, -20.0, -HALO_R - 8.0), (HALO_R + 8.0, 80.0, HALO_R + 8.0)))
 
-    # Ground shock ring: one flat dust wave racing out over the halo at t=0.
+    # Ground shock rings: W13 — THREE flat dust waves racing out over the halo. The echo
+    # waves land ON the aftershock sound stack (NetherOpeningSequence.tickRupture fires
+    # explosion/ghast echoes at local t=18/46), and the start_speed envelope makes each
+    # later wave slower — aftershocks, not copies.
     (fx.particle_emitter(
             "shock_ring",
-            duration=60, looping=False,
+            duration=90, looping=False,
             start_lifetime=random_between(24, 42),
-            start_speed=random_between(1.6, 2.6),
+            start_speed=curve(1.35, 2.5, [SEG_TEAR_OFF]),  # wave 1 fast, echoes lazier
             start_size=nf3(random_between(0.9, 2.0), random_between(0.9, 2.0),
                            random_between(0.9, 2.0)),
-            simulation_space="World", max_particles=90)
-       .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(72), cycles=1)])
+            simulation_space="World", max_particles=124)
+       .with_emission(rate=constant(0.0),
+                      bursts=[burst(time=0, count=constant(72), cycles=1),
+                              burst(time=22, count=constant(48), cycles=1),
+                              burst(time=50, count=constant(36), cycles=1)])
        .with_shape(circle(radius=CRATER_R * 0.6, thickness=0.0))
        .with_curves(
             velocity_over_lifetime=dict(linear=nf3(constant(0), constant(0.04), constant(0))),
@@ -413,27 +535,98 @@ def build_nether_eruption() -> FxBuilder:
        .with_material(texture_material(SMOKE, blend=BLEND_ALPHA))
        .with_renderer(vertex_sorting="DISTANCE", shade=True)
        .with_cull_box((-HALO_R - 16.0, -6.0, -HALO_R - 16.0), (HALO_R + 16.0, 20.0, HALO_R + 16.0)))
+
+    # Dust curtains: W13 — tall, heavy walls of desert dust shoved off the crater rim,
+    # ROLLING outward over the halo (radial launch spent fast, then a slow crawl; a lazy
+    # per-particle roll sells the "wälzen"). Heavy = low + slow (mass law): they never
+    # climb, they only spread and thin out. Boil rides the shared flipbook.
+    (fx.particle_emitter(
+            "dust_curtains",
+            duration=ERUPTION_TICKS, looping=False,
+            start_lifetime=random_between(90, 150),
+            start_speed=random_between(0.5, 0.9),
+            start_size=nf3(random_between(2.2, 3.6), random_between(3.6, 6.0),
+                           random_between(2.2, 3.6)),
+            simulation_space="World", max_particles=60)
+       .with_emission(rate=constant(0.0),
+                      bursts=[burst(time=8, count=constant(24), cycles=1),
+                              burst(time=30, count=constant(18), cycles=1),
+                              burst(time=56, count=constant(14), cycles=1)])
+       .with_shape(circle(radius=CRATER_R * 0.85, thickness=0.15))
+       .with_curves(
+            velocity_over_lifetime=dict(  # launch spent by ~1/4 life, then creep
+                speed_modifier=curve(0.0, 1.0, SEG_APEX_DRAG),
+                radial=constant(0.05)),
+            rotation_over_lifetime=dict(roll=random_between(-0.35, 0.35)),
+            noise=dict(frequency=0.28, quality="Noise2D",
+                       position=nf3(constant(0.05), constant(0.02), constant(0.05))),
+            uv_animation=dict(tiles=(4, 4), animation="SingleRow",
+                              frame_over_time=curve(0.0, 1.0, [SEG_LINEAR_UP]),
+                              start_frame=random_between(0.0, 4.0), cycle=2.0),
+            color_over_lifetime=gradient(  # dark desert dust, alpha ceiling 0.42
+                [(0.0, 0.0), (0.12, 0.42), (0.75, 0.3), (1.0, 0.0)],
+                [(0.0, 0.86, 0.76, 0.68), (0.5, 0.62, 0.53, 0.47),
+                 (1.0, 0.4, 0.33, 0.3)]),
+            size_over_lifetime=curve(
+                0.75, 1.5,
+                [(0.0, 0.0, 0.2, 0.45, 0.55, 0.9, 1.0, 1.0)]))
+       .with_material(texture_material(PLUME_ATLAS, discard=0.02, blend=BLEND_ALPHA))
+       .with_renderer(vertex_sorting="DISTANCE", shade=True)
+       .with_cull_box((-HALO_R - 16.0, -6.0, -HALO_R - 16.0), (HALO_R + 16.0, 26.0, HALO_R + 16.0)))
     return fx
 
 
 # ---------------------------------------------------------------------------
 # Phase 4 — AFTERMATH: the permanent plume (WINDOWED loop, NetherPitPlume owns it)
 # ---------------------------------------------------------------------------
-# Spark spurts: two gusts per 10 s cycle, shared by the spark rate and its speed.
-SPURT_HUMPS = [(0.0, 0.05, 0.08, 0.9, 0.16, 0.35, 0.45, 0.05),
-               (0.45, 0.05, 0.55, 0.85, 0.66, 0.3, 1.0, 0.05)]
+# The plume anchor sits PLUME_HOVER blocks over the lip plane (NetherPitPlume) — the
+# ground-hugging layers below are authored at this offset under the emitter origin.
+PLUME_HOVER = 14.0
+
+# Ember jets (W13): three desynced cascades instead of ONE uniform spurt loop. Each jet
+# owns a co-prime-ish cycle length, a random startDelay (rolled once per materialize, so
+# every window opening phases differently) and probability-gated bursts — the pit spits
+# WHEN IT WANTS TO, not on a metronome.  (name, cycle ticks, delay band, mouth offset,
+# cone tilt deg (x, z), burst rows)
+EMBER_JETS = (
+    ("jet_a", 190, (0.0, 50.0), (3.5, 0.0), (7.0, -4.0),
+     ((24, 10, 2, 9, 0.6), (130, 7, 1, 1, 0.45))),
+    ("jet_b", 230, (15.0, 90.0), (-2.5, 2.5), (-6.0, 6.0),
+     ((60, 12, 3, 8, 0.5), (170, 8, 1, 1, 0.4))),
+    ("jet_c", 270, (40.0, 130.0), (-1.0, -3.5), (3.0, 8.0),
+     ((10, 9, 2, 11, 0.55), (205, 11, 2, 7, 0.35))),
+)
+
+#: Ember-jet drag: launch spent over the first ~third, then the sparks hang and tip over.
+SEG_JET_DRAG = [(0.0, 1.0, 0.06, 0.72, 0.16, 0.34, 0.32, 0.18),
+                (0.32, 0.18, 0.55, 0.09, 0.78, 0.04, 1.0, 0.0)]
 
 
 def build_nether_pit_plume() -> FxBuilder:
-    """eclipse:nether_pit_plume — the permanent cloud hanging over the opened pit, anchored
-    by NetherPitPlume at (centerX, lipY + PLUME_HOVER, centerZ). Four layers: dense dark
-    swathes turning slowly around the axis, orange fire tongues burning INSIDE them (lit +
-    HDR, so they glow through the smoke), periodic spark spurts, and a faint wide heat glow.
-    A real heat-shimmer refraction is NOT possible (Photon ships no distortion module) — the
-    glow layer is the sanctioned stand-in."""
+    """eclipse:nether_pit_plume — the permanent cloud over the opened pit, anchored by
+    NetherPitPlume at (centerX, lipY + PLUME_HOVER, centerZ). W13/A6 rebuild, six layers:
+
+      smoke_swathes  GPU-instanced flipbook soot body (4x4 SingleRow off the authored
+                     atlas — ember veins twitch through the 4-frame boil), parallel
+                     update, slow orbital churn
+      inner_fire     orange tongues burning INSIDE the swathes (HDR clamped to the 1.45
+                     stacking budget, random_gradient so no two tongues repeat)
+      ember_jet_a/b/c irregular burst cascades out of the mouth (startDelay spread +
+                     burst probability — never a metronome), thin ara-ribbon streaks
+      rim_smoke      ground swathes hugging the crater lip on eclipse:soft_particle —
+                     SceneDepth fade instead of the old hard clip against the rim
+      heat_shimmer   a whisper of eclipse:rgb_split_distort directly over the mouth
+                     (the scene wobbles through the hot air; VERY subtle by law)
+      heat_glow      the wide dull-orange breathing wash under it all (unchanged)
+
+    Loop law: WINDOWED-only (hysteresis in NetherPitPlume), every emitter cull-boxed +
+    hard-capped; GPU emitters carry no physics; HDR <= 1.45 everywhere in this file."""
     fx = FxBuilder("nether_pit_plume")
 
-    # Layer 1 — the smoke body: big soft swathes, slow orbital turn, noise churn.
+    # Layer 1 — the smoke body: GPU-instanced flipbook swathes. The sheet bakes the soot
+    # darkness + the twitching ember veins; the gradient only shapes alpha and a gentle
+    # cooling multiplier (storm_cloud_belt school). No physics, no level access ->
+    # useGPUInstance + parallelUpdate are legal (LINT-GPU-PHYSICS).
     (fx.particle_emitter(
             "smoke_swathes",
             duration=200, looping=True, prewarm=60,
@@ -441,8 +634,8 @@ def build_nether_pit_plume() -> FxBuilder:
             start_speed=random_between(0.01, 0.06),
             start_size=nf3(random_between(2.2, 5.0), random_between(2.2, 5.0),
                            random_between(2.2, 5.0)),
-            simulation_space="World", max_particles=110)
-       .with_emission(rate=constant(0.5))
+            simulation_space="World", max_particles=150, parallel_update=True)
+       .with_emission(rate=constant(0.62))
        .with_shape(cylinder(radius=CRATER_R * 0.72, thickness=0.75), scale=[1.0, 0.45, 1.0])
        .with_curves(
             velocity_over_lifetime=dict(  # the cloud ROTATES; it barely climbs
@@ -451,19 +644,26 @@ def build_nether_pit_plume() -> FxBuilder:
                 orbital=nf3(constant(0), constant(0.085), constant(0))),
             noise=dict(frequency=0.22, quality="Noise3D",
                        position=nf3(constant(0.05), constant(0.025), constant(0.05))),
-            color_over_lifetime=gradient(  # #4A3B38 -> #241C1D soot
+            uv_animation=dict(tiles=(4, 4), animation="SingleRow",
+                              frame_over_time=curve(0.0, 1.0, [SEG_LINEAR_UP]),
+                              start_frame=random_between(0.0, 4.0), cycle=3.0),
+            color_over_lifetime=gradient(  # alpha body + soot cooling; sheet is dark
                 [(0.0, 0.0), (0.18, 0.72), (0.8, 0.6), (1.0, 0.0)],
-                [(0.0, 0.29, 0.231, 0.22), (1.0, 0.141, 0.11, 0.114)]),
+                [(0.0, 1.0, 0.96, 0.93), (0.55, 0.78, 0.72, 0.72),
+                 (1.0, 0.52, 0.46, 0.48)]),
             size_over_lifetime=curve(
                 0.75, 1.35,
                 [(0.0, 0.0, 0.12, 0.55, 0.3, 1.0, 0.5, 1.0),
                  (0.5, 1.0, 0.72, 1.0, 0.88, 0.15, 1.0, 0.0)]))
-       .with_material(texture_material(SMOKE, blend=BLEND_ALPHA))
-       .with_renderer(vertex_sorting="DISTANCE", shade=True)
+       .with_material(texture_material(PLUME_ATLAS, discard=0.02, blend=BLEND_ALPHA))
+       .with_lights(sky=3, block=8)  # under-lit by the fire, never fullbright
+       .with_renderer(use_gpu_instance=True, shade=False, vertex_sorting="DISTANCE")
        .with_cull_box((-HALO_R, -26.0, -HALO_R), (HALO_R, 30.0, HALO_R)))
 
     # Layer 2 — fire tongues burning INSIDE the cloud: same orbital rate as the smoke, so
-    # they ride WITH the swathes instead of drifting out of them.
+    # they ride WITH the swathes instead of drifting out of them. W13: HDR pulled from 2.3
+    # to the 1.45 stacking budget (a permanent loop must not own the bloom), and a
+    # random_gradient splits the tongues into a hot and a sooty ramp — no two repeat.
     (fx.particle_emitter(
             "inner_fire",
             duration=200, looping=True, prewarm=30,
@@ -474,7 +674,7 @@ def build_nether_pit_plume() -> FxBuilder:
             simulation_space="World", max_particles=56)
        .with_emission(rate=constant(0.75))
        .with_shape(sphere(radius=CRATER_R * 0.42, thickness=0.85), scale=[1.0, 0.5, 1.0])
-       .with_material(texture_material(CIRCLE, hdr=(2.3, 1.0, 0.32)))
+       .with_material(texture_material(CIRCLE, hdr=(1.45, 0.72, 0.26)))
        .with_lights(sky=15, block=15)
        .with_renderer(render_mode="StretchedBillboard", velocity_scale=0.9,
                       length_scale=1.8, vertex_sorting="NONE")
@@ -484,44 +684,150 @@ def build_nether_pit_plume() -> FxBuilder:
                 orbital_mode="AngularVelocity",
                 orbital=nf3(constant(0), constant(0.085), constant(0))),
             noise=dict(frequency=0.5, quality="Noise2D",
-                       position=nf3(constant(0.04), constant(0.03), constant(0.04))),
-            color_over_lifetime=gradient(  # #FFB25E -> #FF7B3C -> #6B1E10
+                       position=nf3(constant(0.04), constant(0.03), constant(0.04)),
+                       # gusty billowing instead of even wobble (remap steps the noise)
+                       remap_curve=curve(0.0, 1.0,
+                                         [(0.0, 0.0, 0.4, 0.06, 0.55, 0.9, 1.0, 1.0)])),
+            color_over_lifetime=random_gradient(  # hot ramp <-> sooty ramp per tongue
                 [(0.0, 0.0), (0.14, 0.95), (0.7, 0.7), (1.0, 0.0)],
                 [(0.0, 1.0, 0.698, 0.369), (0.45, 1.0, 0.482, 0.235),
-                 (1.0, 0.42, 0.118, 0.063)]),
+                 (1.0, 0.42, 0.118, 0.063)],
+                [(0.0, 0.0), (0.14, 0.8), (0.7, 0.55), (1.0, 0.0)],
+                [(0.0, 1.0, 0.55, 0.25), (0.45, 0.8, 0.36, 0.16),
+                 (1.0, 0.3, 0.09, 0.05)]),
             size_over_lifetime=curve(
                 0.25, 1.0,
                 [(0.0, 0.15, 0.1, 0.95, 0.25, 1.0, 0.45, 1.0),
                  (0.45, 1.0, 0.66, 0.85, 0.86, 0.12, 1.0, 0.0)]))
        .with_cull_box((-HALO_R, -26.0, -HALO_R), (HALO_R, 26.0, HALO_R)))
 
-    # Layer 3 — spark spurts: two gusts per cycle punched up through the cloud.
-    (fx.particle_emitter(
-            "spark_spurts",
-            duration=200, looping=True,
-            start_lifetime=random_between(30, 65),
-            start_speed=curve(0.3, 1.5, SPURT_HUMPS),
-            start_size=nf3(random_between(0.07, 0.18), random_between(0.07, 0.18),
-                           random_between(0.07, 0.18)),
-            simulation_space="World", max_particles=44)
-       .with_emission(rate=curve(0.0, 3.4, SPURT_HUMPS))  # no bursts: loop-safe
-       .with_shape(cone(angle=26.0, radius=CRATER_R * 0.3))
-       .with_material(texture_material(CIRCLE, hdr=(2.1, 1.1, 0.5)))
-       .with_lights(sky=15, block=15)
-       .with_renderer(render_mode="StretchedBillboard", velocity_scale=1.5,
-                      length_scale=2.0, vertex_sorting="NONE")
-       .with_curves(
-            velocity_over_lifetime=dict(
-                linear=nf3(constant(0), random_between(-0.03, 0.02), constant(0))),
-            color_over_lifetime=gradient(
-                [(0.0, 1.0), (0.65, 0.8), (1.0, 0.0)],
-                [(0.0, 1.0, 0.953, 0.769), (0.4, 1.0, 0.698, 0.369),
-                 (1.0, 1.0, 0.482, 0.235)]))
-       .with_cull_box((-HALO_R, -26.0, -HALO_R), (HALO_R, 40.0, HALO_R)))
+    # Layer 3 — ember jets (replaces the old uniform spark_spurts): three desynced,
+    # probability-gated burst cascades shooting out of the pit mouth at different tilts.
+    # Each spark drags a thin ara ribbon (the census "Funken-Trails"). Loop-legal: bursts
+    # re-roll every cycle, the WINDOWED controller owns start/stop.
+    for name, cycle_t, delay_band, (mx, mz), (tilt_x, tilt_z), rows in EMBER_JETS:
+        jet = (fx.particle_emitter(
+                name,
+                duration=cycle_t, looping=True,
+                start_delay=random_between(*delay_band),
+                start_lifetime=random_between(38, 70),
+                start_speed=random_between(2.2, 3.4),
+                start_size=nf3(random_between(0.08, 0.2), random_between(0.08, 0.2),
+                               random_between(0.08, 0.2)),
+                simulation_space="World", max_particles=26)
+           .with_emission(rate=constant(0.0),
+                          bursts=[burst(time=t, count=constant(c), cycles=cy,
+                                        interval=iv, probability=p)
+                                  for t, c, cy, iv, p in rows])
+           .with_shape(cone(angle=6.5, radius=1.8),
+                       position=[mx, -PLUME_HOVER + 1.5, mz],
+                       rotation=[tilt_x, 0.0, tilt_z])
+           .with_material(texture_material(CIRCLE, hdr=(1.45, 0.7, 0.25)))
+           .with_lights(sky=15, block=15)
+           .with_renderer(render_mode="StretchedBillboard", velocity_scale=1.5,
+                          length_scale=2.2, vertex_sorting="NONE")
+           .with_curves(
+                velocity_over_lifetime=dict(  # launch spent, hang, tip over
+                    speed_modifier=curve(0.0, 1.0, SEG_JET_DRAG),
+                    linear=nf3(constant(0), random_between(-0.06, -0.02), constant(0))),
+                color_over_lifetime=gradient(  # white-hot birth -> cooling ember
+                    [(0.0, 1.0), (0.6, 0.8), (1.0, 0.0)],
+                    [(0.0, 1.0, 0.953, 0.769), (0.35, 1.0, 0.698, 0.369),
+                     (1.0, 0.42, 0.118, 0.063)]))
+           .with_cull_box((-HALO_R, -26.0, -HALO_R), (HALO_R, 44.0, HALO_R)))
+        jet.with_module("trails", {
+            "ratio": F(0.3), "lifetime": constant(1.0),
+            "dieWithParticles": B(0), "sizeAffectsWidth": B(0),
+            "inheritParticleColor": B(1),
+            "trailType": "ARA_TRAIL",
+            "araConfig": {
+                "space": "World", "alignment": "View",
+                "thickness": F(0.06), "smoothness": I(4),
+                "highQualityCorners": B(0),
+                "time": F(0.35), "timeInterval": F(0.05), "minDistance": F(0.12),
+                "thicknessOverLength": curve(
+                    0.0, 1.0, [(0.0, 1.0, 0.2, 0.82, 0.62, 0.28, 1.0, 0.0)]),
+                "colorOverLength": gradient(
+                    [(0.0, 0.7), (0.5, 0.4), (1.0, 0.0)],
+                    [(0.0, 1.0, 0.698, 0.369), (1.0, 0.42, 0.118, 0.063)]),
+                "physicsSetting": {
+                    "warmup": F(0.0), "gravity": L([F(0.0), F(0.0), F(0.0)]),
+                    "inertia": F(0.2), "velocitySmoothing": F(0.6), "damping": F(0.85)},
+                "renderer": ribbon_renderer(
+                    texture_material(CIRCLE, hdr=(1.3, 0.62, 0.24))),
+            }})
 
-    # Layer 4 — heat glow: a few huge, almost invisible additive sheets breathing under the
-    # cloud. Not refraction (Photon has no distortion module) — it fakes the hot-air haze by
-    # washing the pit mouth in a dull orange bloom.
+    # Layer 4 — rim smoke on eclipse:soft_particle: heavy ground swathes creeping out of
+    # the mouth and over the crater lip. The SceneDepth fade ends the old hard clip where
+    # the quads meet the rim geometry (A0 §2.1 recipe: BLEND_ALPHA + DISTANCE sorting +
+    # depth_mask off). Heavy = low + slow: it never climbs, it only crawls outward.
+    (fx.particle_emitter(
+            "rim_smoke",
+            duration=200, looping=True, prewarm=80,
+            start_lifetime=random_between(150, 240),
+            start_speed=random_between(0.01, 0.04),
+            start_size=nf3(random_between(2.4, 4.2), random_between(2.4, 4.2),
+                           random_between(2.4, 4.2)),
+            simulation_space="World", max_particles=36)
+       .with_emission(rate=constant(0.16))
+       .with_shape(cylinder(radius=CRATER_R * 0.9, thickness=0.5),
+                   position=[0.0, -PLUME_HOVER + 0.9, 0.0], scale=[1.0, 0.12, 1.0])
+       .with_material(material_shader(
+            "eclipse:soft_particle",
+            textures={"MainTexture": SMOKE},
+            uniforms={"SoftDistance": 1.1, "NearFade": 0.6},
+            blend=BLEND_ALPHA))
+       .with_renderer(vertex_sorting="DISTANCE")
+       .with_curves(
+            velocity_over_lifetime=dict(  # radial creep over the lip, no climb
+                radial=random_between(0.03, 0.08),
+                linear=nf3(constant(0), random_between(0.002, 0.012), constant(0))),
+            noise=dict(frequency=0.18, quality="Noise2D",
+                       position=nf3(constant(0.03), constant(0.008), constant(0.03))),
+            color_over_lifetime=gradient(  # #2E2624 -> #1A1516, alpha ceiling 0.5
+                [(0.0, 0.0), (0.2, 0.5), (0.75, 0.38), (1.0, 0.0)],
+                [(0.0, 0.18, 0.149, 0.141), (1.0, 0.102, 0.082, 0.086)]),
+            size_over_lifetime=curve(
+                0.65, 1.5,
+                [(0.0, 0.0, 0.18, 0.5, 0.5, 0.9, 1.0, 1.0)]))
+       .with_cull_box((-HALO_R - 6.0, -26.0, -HALO_R - 6.0), (HALO_R + 6.0, 8.0, HALO_R + 6.0)))
+
+    # Layer 5 — heat shimmer directly over the mouth: a handful of large, slowly rising
+    # eclipse:rgb_split_distort quads. Deliberately homeopathic (SplitStrength ~1/4 of the
+    # shader default, warm tint alpha 0.10) — the scene behind the pit mouth WAVERS, it
+    # never "glitches". Overlapping shimmer quads do not stack (SceneColor is a pre-pass
+    # copy, A0 §5), so counts stay tiny and spread out.
+    (fx.particle_emitter(
+            "heat_shimmer",
+            duration=200, looping=True, prewarm=60,
+            start_lifetime=random_between(100, 160),
+            start_speed=constant(0.0),
+            start_size=nf3(random_between(2.4, 3.8), random_between(2.4, 3.8),
+                           random_between(2.4, 3.8)),
+            simulation_space="World", max_particles=10)
+       .with_emission(rate=constant(0.06))
+       .with_shape(cylinder(radius=CRATER_R * 0.4, thickness=1.0),
+                   position=[0.0, -8.5, 0.0], scale=[1.0, 3.0, 1.0])
+       .with_material(material_shader(
+            "eclipse:rgb_split_distort",
+            uniforms={"SplitStrength": 0.0018, "WobbleAmp": 0.0035,
+                      "WobbleSpeed": 1.15,
+                      "TintColor": (1.0, 0.52, 0.28, 0.10)},
+            blend=BLEND_ALPHA))
+       .with_renderer(vertex_sorting="DISTANCE")
+       .with_curves(
+            velocity_over_lifetime=dict(  # hot air rises, slowly
+                linear=nf3(constant(0), random_between(0.02, 0.05), constant(0))),
+            color_over_lifetime=gradient(  # alpha ramps the distortion in and out
+                [(0.0, 0.0), (0.25, 0.85), (0.75, 0.7), (1.0, 0.0)],
+                [(0.0, 1.0, 1.0, 1.0)]),
+            size_over_lifetime=curve(
+                0.7, 1.25,
+                [(0.0, 0.0, 0.2, 0.55, 0.55, 0.95, 1.0, 1.0)]))
+       .with_cull_box((-HALO_R, -26.0, -HALO_R), (HALO_R, 14.0, HALO_R)))
+
+    # Layer 6 — heat glow: a few huge, almost invisible additive sheets breathing under the
+    # cloud (the wide dull bloom the shimmer quads sit inside). Unchanged from W11.
     (fx.particle_emitter(
             "heat_glow",
             duration=200, looping=True, prewarm=40,
@@ -550,6 +856,85 @@ def build_nether_pit_plume() -> FxBuilder:
 
 
 # ---------------------------------------------------------------------------
+# Ambient — ASH SNOW (N11): the desert remembers the fire (WINDOWED loop)
+# ---------------------------------------------------------------------------
+ASH_RADIUS = 46.0   # flake field radius around the pit (inside the 128-block window)
+ASH_CULL = 52.0
+
+
+def build_nether_ash_snow() -> FxBuilder:
+    """eclipse:nether_ash_snow — sparse dark ash snowing over a wide radius around the
+    opened pit, plus a faint drifting soot haze. Anchored at the SAME plume anchor
+    (lipY + PLUME_HOVER) by NetherPitPlume's window controller — one probe, one window,
+    two loops. Deliberately ambient: no distanceRate, tiny counts, near-invisible
+    per-particle cost (flakes are GPU-instanced, no physics). random_gradient rolls a
+    warm-grey and a cold-grey ramp per flake so the fall never bands."""
+    fx = FxBuilder("nether_ash_snow")
+
+    # Flakes: born in a wide slab well above the desert, sinking slowly with a lazy sway.
+    # Heavy = low + slow law inverted for ash: the flakes are LIGHT, so they drift — the
+    # sway noise leads, the fall barely wins.
+    (fx.particle_emitter(
+            "ash_flakes",
+            duration=240, looping=True, prewarm=200,
+            start_lifetime=random_between(260, 420),
+            start_speed=constant(0.0),
+            start_size=nf3(random_between(0.05, 0.13), random_between(0.05, 0.13),
+                           random_between(0.05, 0.13)),
+            simulation_space="World", max_particles=120, parallel_update=True)
+       .with_emission(rate=constant(0.32))
+       .with_shape(cylinder(radius=ASH_RADIUS, thickness=1.0),
+                   position=[0.0, 9.0, 0.0], scale=[1.0, 5.0, 1.0])
+       .with_curves(
+            velocity_over_lifetime=dict(
+                linear=nf3(constant(0), random_between(-0.10, -0.045), constant(0))),
+            noise=dict(frequency=0.16, quality="Noise2D",
+                       position=nf3(constant(0.045), constant(0.008), constant(0.045))),
+            color_over_lifetime=random_gradient(  # warm-grey <-> cold-grey per flake
+                [(0.0, 0.0), (0.1, 0.85), (0.85, 0.7), (1.0, 0.0)],
+                [(0.0, 0.45, 0.42, 0.40), (1.0, 0.22, 0.20, 0.20)],
+                [(0.0, 0.0), (0.1, 0.7), (0.85, 0.6), (1.0, 0.0)],
+                [(0.0, 0.32, 0.30, 0.31), (1.0, 0.14, 0.12, 0.13)]),
+            size_over_lifetime=curve(
+                0.7, 1.0,
+                [(0.0, 1.0, 0.55, 0.95, 0.85, 0.55, 1.0, 0.0)]))
+       .with_material(texture_material(SMOKE, blend=BLEND_ALPHA))
+       .with_renderer(use_gpu_instance=True, shade=True, vertex_sorting="DISTANCE")
+       .with_cull_box((-ASH_CULL, -34.0, -ASH_CULL), (ASH_CULL, 20.0, ASH_CULL)))
+
+    # Haze: a handful of huge, nearly invisible soot veils drifting through the field —
+    # the connective tissue between the flakes and the plume.
+    (fx.particle_emitter(
+            "ash_haze",
+            duration=240, looping=True, prewarm=160,
+            start_lifetime=random_between(180, 260),
+            start_speed=random_between(0.005, 0.02),
+            start_size=nf3(random_between(5.5, 8.5), random_between(5.5, 8.5),
+                           random_between(5.5, 8.5)),
+            simulation_space="World", max_particles=12)
+       .with_emission(rate=constant(0.05))
+       .with_shape(cylinder(radius=ASH_RADIUS * 0.65, thickness=0.8),
+                   position=[0.0, 2.0, 0.0], scale=[1.0, 2.5, 1.0])
+       .with_curves(
+            velocity_over_lifetime=dict(
+                orbital_mode="AngularVelocity",
+                orbital=nf3(constant(0), constant(0.02), constant(0)),
+                linear=nf3(constant(0), random_between(-0.015, -0.004), constant(0))),
+            noise=dict(frequency=0.12, quality="Noise2D",
+                       position=nf3(constant(0.02), constant(0.006), constant(0.02))),
+            color_over_lifetime=gradient(  # alpha ceiling 0.09 — a veil, not a wall
+                [(0.0, 0.0), (0.25, 0.09), (0.75, 0.07), (1.0, 0.0)],
+                [(0.0, 0.27, 0.24, 0.24), (1.0, 0.15, 0.13, 0.14)]),
+            size_over_lifetime=curve(
+                0.85, 1.2,
+                [(0.0, 0.0, 0.2, 0.5, 0.55, 0.95, 1.0, 1.0)]))
+       .with_material(texture_material(SMOKE, blend=BLEND_ALPHA))
+       .with_renderer(vertex_sorting="DISTANCE", shade=True)
+       .with_cull_box((-ASH_CULL, -34.0, -ASH_CULL), (ASH_CULL, 16.0, ASH_CULL)))
+    return fx
+
+
+# ---------------------------------------------------------------------------
 # main
 # ---------------------------------------------------------------------------
 BUILDERS = {
@@ -557,11 +942,15 @@ BUILDERS = {
     "nether_quake_fissure.fx": build_nether_quake_fissure,
     "nether_eruption.fx": build_nether_eruption,
     "nether_pit_plume.fx": build_nether_pit_plume,
+    "nether_ash_snow.fx": build_nether_ash_snow,
 }
 
 
-def main() -> int:
+def main(force_atlas: bool = False) -> int:
     rc = 0
+    if force_atlas or not PLUME_ATLAS_PATH.exists():
+        atlas_len = generate_plume_atlas(PLUME_ATLAS_PATH)
+        print(f"WROTE {PLUME_ATLAS_PATH.relative_to(REPO_ROOT)} ({atlas_len} B)")
     for name, builder_fn in BUILDERS.items():
         path = FX_ASSETS_DIR / name
         builder = builder_fn()
@@ -578,4 +967,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     import sys
-    sys.exit(main())
+    sys.exit(main(force_atlas="--atlas" in sys.argv[1:]))

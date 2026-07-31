@@ -38,6 +38,8 @@ public final class NetherOpenPhotonFxRows {
     public static final ResourceLocation FX_NETHER_ERUPTION = fx("nether_eruption");
     /** Phase 4 — the permanent smoke-and-fire cloud over the pit (WINDOWED loop). */
     public static final ResourceLocation FX_NETHER_PIT_PLUME = fx("nether_pit_plume");
+    /** Ambient — sparse dark ash snowing around the opened pit (WINDOWED loop, W13/N11). */
+    public static final ResourceLocation FX_NETHER_ASH_SNOW = fx("nether_ash_snow");
 
     /**
      * Logical cue id of the plume loop row. Minted through {@link FxCues#cue} so it obeys
@@ -46,16 +48,27 @@ public final class NetherOpenPhotonFxRows {
      * (INTEGRATION.md §4) and never crosses the wire.
      */
     public static final ResourceLocation CUE_NETHER_PIT_PLUME = FxCues.cue("nether_pit_plume");
+    /** Cue id of the ash-snow loop row — same WINDOWED-only law as the plume cue. */
+    public static final ResourceLocation CUE_NETHER_ASH_SNOW = FxCues.cue("nether_ash_snow");
 
     private NetherOpenPhotonFxRows() {}
 
     @SubscribeEvent
     static void onClientSetup(FMLClientSetupEvent event) {
-        // WINDOWED-only: payload-firing this row is a warned no-op; the hysteresis window
-        // lives in client/nether/NetherPitPlume.
+        // WINDOWED-only: payload-firing these rows is a warned no-op; the hysteresis window
+        // for BOTH loops lives in client/nether/NetherPitPlume (one probe, one window).
         PhotonFxRegistry.registerRow(new PhotonFxRegistry.Row(
                 CUE_NETHER_PIT_PLUME,
                 FX_NETHER_PIT_PLUME,
+                null,
+                FxBudget.Channel.AMBIENT,
+                PhotonFxRegistry.Mode.LAYER,
+                true));
+        // Quasar leg null BY DESIGN, same degradation law as the plume row: the
+        // photon-less baseline around the pit stays the shipped server ambience.
+        PhotonFxRegistry.registerRow(new PhotonFxRegistry.Row(
+                CUE_NETHER_ASH_SNOW,
+                FX_NETHER_ASH_SNOW,
                 null,
                 FxBudget.Channel.AMBIENT,
                 PhotonFxRegistry.Mode.LAYER,

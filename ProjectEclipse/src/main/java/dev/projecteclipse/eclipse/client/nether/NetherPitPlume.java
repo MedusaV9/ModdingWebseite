@@ -41,10 +41,12 @@ import net.neoforged.neoforge.client.event.ClientTickEvent;
  * there. {@link #onOpened()} only skips the retry backoff at the end of the live show so the
  * plume is up the same tick.</p>
  *
- * <p><b>Cost</b>: while open, one Photon executor (four emitters, all cull-boxed and hard-
- * capped: 110 smoke + 56 fire + 44 sparks + 18 haze) and one sound every
+ * <p><b>Cost</b>: while open, two Photon executors sharing this one window — the plume
+ * (eight emitters, all cull-boxed and hard-capped: 150 GPU-instanced flipbook smoke + 56
+ * fire + 3×26 ember jets + 36 soft-particle rim smoke + 10 heat shimmer + 18 haze) and the
+ * W13 ash-snow ambient (120 GPU-instanced flakes + 12 haze veils) — plus one sound every
  * {@value #CRACKLE_INTERVAL_TICKS}/{@value #RUMBLE_INTERVAL_TICKS} ticks. While far away,
- * one distance check per tick. Photon absent or {@code reducedFx} ⇒ the loop never spawns
+ * one distance check per tick. Photon absent or {@code reducedFx} ⇒ the loops never spawn
  * and the shipped server ambience is the whole read.</p>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID, value = Dist.CLIENT)
@@ -124,11 +126,15 @@ public final class NetherPitPlume {
             return;
         }
         open = true;
-        boolean live = PhotonFxRegistry.ensureLoop(
+        boolean plumeLive = PhotonFxRegistry.ensureLoop(
                 NetherOpenPhotonFxRows.CUE_NETHER_PIT_PLUME, anchor);
-        // Healthy leg: re-ensure every tick (idempotent prune + re-spawn of a pruned leg).
+        // W13 ash snow shares the plume's window and anchor (the asset is authored
+        // against the same lipY + PLUME_HOVER origin).
+        boolean ashLive = PhotonFxRegistry.ensureLoop(
+                NetherOpenPhotonFxRows.CUE_NETHER_ASH_SNOW, anchor);
+        // Healthy legs: re-ensure every tick (idempotent prune + re-spawn of a pruned leg).
         // Refused (photon absent / missing asset / executor budget): back off RETRY_TICKS.
-        retryCountdown = live ? 1 : RETRY_TICKS;
+        retryCountdown = plumeLive && ashLive ? 1 : RETRY_TICKS;
     }
 
     /** Quiet fire-crackle + deep-rumble bed under the cloud (vanilla distance falloff). */
@@ -154,6 +160,7 @@ public final class NetherPitPlume {
     private static void close(boolean graceful) {
         if (open) {
             PhotonFxRegistry.releaseLoop(NetherOpenPhotonFxRows.CUE_NETHER_PIT_PLUME, graceful);
+            PhotonFxRegistry.releaseLoop(NetherOpenPhotonFxRows.CUE_NETHER_ASH_SNOW, graceful);
         }
         open = false;
         retryCountdown = 0;
