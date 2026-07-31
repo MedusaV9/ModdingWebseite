@@ -292,13 +292,48 @@ Was willst du ändern?
 ```
 
 `latest_native` im Manifest soll beim IPA-Release gebumpt werden → alle Clients
-sehen „Neue App-Version nötig“. **Dieser Automatismus ist geplant (Backlog
-GODOT-PLAN §6 → B §5.2), existiert aber noch nicht:** der `ios-ipa`-Job lädt die
-.ipa bislang nur als CI-Artefakt hoch; ein Release-Asset-Step und der
-Manifest-Bump fehlen. Bis dahin wird `latest_native` bei Bedarf manuell über
-einen `gooby-packs`-Lauf gepflegt. Die App-Version kommt aus
+sehen „Neue App-Version nötig“. **Stand W13C:** die Release-Hälfte von B §5.2
+existiert (Job `release` in `.github/workflows/gooby-godot.yml`, s. „Release
+fahren“ unten); der Manifest-Bump ist als Script
+`tools/ci/bump_latest_native.mjs` + auskommentierter Job-Step vorbereitet und
+wird scharf geschaltet, sobald die Manifest-Quelle existiert (erster
+`gooby-packs`-Lauf mit `publish=true` bzw. das public Repo `gooby-updates`).
+Bis dahin wird `latest_native` bei Bedarf manuell über einen
+`gooby-packs`-Lauf gepflegt (`LATEST_NATIVE`-Env überschreibt dort die aus
+`project.godot` gelesene Version). Die App-Version kommt aus
 `application/config/version` (project.godot, aktuell 5.0.0) und wird beim
 iOS-Export zu `CFBundleShortVersionString`.
+
+### Release fahren (IPA)
+
+Ein IPA-Release ist EIN Tag-Push — der `release`-Job im bestehenden
+`gooby-godot.yml` übernimmt den Rest (strikt gated: er läuft NUR bei
+`ipa-v*`-Tags oder explizitem Dispatch-Input, nie bei normalen Branch-Pushes,
+und nur nach GRÜNEN `linux-checks` + `ios-ipa`):
+
+```bash
+# Version im Tag = Release-Version (striktes MAJOR.MINOR.PATCH):
+git tag ipa-v5.1.0 && git push origin ipa-v5.1.0
+```
+
+Alternativ ohne Tag: GitHub → Actions → **GOOBY Godot** → „Run workflow“ →
+Input `release_version` = `5.1.0` (leer lassen = normaler Build ohne Release).
+
+Der Job dann:
+
+1. baut wie bei jedem Push die verifizierte unsignierte .ipa (`ios-ipa`),
+2. benennt sie versioniert um (`GOOBY-godot-unsigned-v5.1.0.ipa`),
+3. erstellt/aktualisiert das GitHub-Release `ipa-v5.1.0` mit deutschem
+   Release-Notes-Gerüst („Was ist neu?“ nach dem Lauf ausfüllen!),
+4. *(vorbereitet, Step noch auskommentiert)* bumpt `latest_native` im
+   `updates`-Manifest via `tools/ci/bump_latest_native.mjs` — das Script ist
+   fail-closed (striktes Semver, Schema-Check, Downgrade-Verweigerung,
+   idempotente Re-Runs) und patcht NUR `latest_native`/`published_at`, die
+   Pack-Einträge bleiben unangetastet.
+
+Nicht vergessen: `application/config/version` in `project.godot` sollte zur
+Release-Version passen (Owner: Orchestrator/Core — Request stellen), sonst
+meldet die frisch installierte App sich selbst als „zu alt“.
 
 ### CI-Werkzeuge (dieses Repo)
 

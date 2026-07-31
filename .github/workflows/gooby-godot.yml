@@ -27,15 +27,38 @@
 # Export-Preset ABGELEITET — ein hart kodierter Orientierungs-Set-Vergleich
 # hat nach dem bewussten Preset-Wechsel in W6/FIX 8 Runs in Folge rot
 # gemacht). Artefakt: GOOBY-godot-unsigned-ipa.
+#
+# Job release (W13C, B §5.2): läuft NUR bei Tag-Push `ipa-v*` oder bei
+# workflow_dispatch MIT gesetztem Input `release_version` — normale
+# Branch-Pushes erreichen den Job nie (if-Gate + needs auf grüne
+# linux-checks UND ios-ipa). Er benennt die .ipa versioniert um und legt
+# sie als GitHub-Release-Asset ab. Der latest_native-Manifest-Bump ist als
+# auskommentierter Step vorbereitet (Manifest-Quelle fehlt noch, s. unten).
 name: GOOBY Godot
 
 on:
   push:
+    # `branches: ["**"]` ist das EXPLIZITE Abbild des bisherigen Verhaltens
+    # (jeder Branch-Push, gefiltert über paths). Nötig, weil ein nacktes
+    # `tags:` sonst alle Branch-Pushes abschalten würde (GitHub-Semantik:
+    # nur definierte Ref-Filter triggern). paths-Filter werden bei
+    # Tag-Pushes von GitHub IGNORIERT — der ipa-v*-Tag triggert also
+    # zuverlässig die volle Kette lint/linux-checks/ios-ipa/release.
+    branches: ["**"]
+    tags: ["ipa-v*"]
     paths:
       - "GOOBY-GODOT/**"
       - "tools/ci/**"
       - ".github/workflows/gooby-godot.yml"
   workflow_dispatch:
+    inputs:
+      # Leer (Default) = Verhalten wie bisher: nur Build, KEIN Release.
+      # Gesetzt (z. B. "5.1.0") = Release-Job läuft und erzeugt/aktualisiert
+      # das GitHub-Release ipa-v<version> samt versionierter .ipa.
+      release_version:
+        description: "IPA-Release bauen? Semver ohne Präfix (z. B. 5.1.0); leer = kein Release."
+        required: false
+        default: ""
 
 env:
   GODOT_VERSION: "4.4.1"
@@ -261,3 +284,125 @@ jobs:
         with:
           name: GOOBY-godot-unsigned-ipa-UNVERIFIED-linux-${{ needs.linux-checks.result }}
           path: build/ios/GOOBY-godot-unsigned.ipa
+
+  # ---------------------------------------------------------------------------
+  # IPA-Release (W13C; Doc B §5.2): NUR bei Tag-Push `ipa-v*` oder bei
+  # workflow_dispatch mit gesetztem Input `release_version`. Doppelt gegated:
+  # needs verlangt GRÜNE linux-checks UND ios-ipa (eine UNVERIFIED-.ipa aus
+  # rotem Linux-Vorlauf wird nie released), das if prüft zusätzlich den
+  # Trigger. Für Branch-Pushes ist der Job damit unerreichbar — der
+  # bestehende Push-Flow bleibt unangetastet.
+  #
+  # Release fahren (docs/UPDATES.md §6 „Release fahren“):
+  #   git tag ipa-v5.1.0 && git push origin ipa-v5.1.0
+  # oder Actions → „GOOBY Godot“ → Run workflow → release_version=5.1.0.
+  # ---------------------------------------------------------------------------
+  release:
+    runs-on: ubuntu-latest
+    needs: [linux-checks, ios-ipa]
+    if: >-
+      ${{ needs.linux-checks.result == 'success' &&
+          needs.ios-ipa.result == 'success' &&
+          (startsWith(github.ref, 'refs/tags/ipa-v') ||
+           (github.event_name == 'workflow_dispatch' &&
+            inputs.release_version != '')) }}
+    timeout-minutes: 15
+    # Standard-GITHUB_TOKEN reicht fürs Release IM SELBEN Repo — aber nur mit
+    # expliziter contents:write-Permission am Job (Default ist read-only).
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      # Version fail-closed ermitteln: aus dem Tag (ipa-v5.1.0 → 5.1.0) oder
+      # aus dem Dispatch-Input. Kein strenges Semver → Job bricht ab, BEVOR
+      # irgendetwas veröffentlicht wird. Input kommt über env in die Shell
+      # (nie direkt in Skripttext interpolieren — Script-Injection).
+      - name: Release-Version ermitteln
+        id: version
+        env:
+          INPUT_VERSION: ${{ inputs.release_version }}
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REF" == refs/tags/ipa-v* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/ipa-v}"
+          else
+            VERSION="$INPUT_VERSION"
+          fi
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Ungültige Release-Version '$VERSION' — erwartet strikt MAJOR.MINOR.PATCH (z. B. 5.1.0)."
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "IPA-Release-Version: $VERSION"
+
+      # Das im SELBEN Lauf gebaute, verifizierte Artefakt — nicht irgendein
+      # alter Stand. (needs garantiert: ios-ipa hat es gerade hochgeladen.)
+      - name: Verifizierte .ipa aus diesem Lauf laden
+        uses: actions/download-artifact@v8
+        with:
+          name: GOOBY-godot-unsigned-ipa
+          path: release-staging
+
+      - name: .ipa versioniert benennen
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          test -f release-staging/GOOBY-godot-unsigned.ipa
+          mv release-staging/GOOBY-godot-unsigned.ipa \
+            "release-staging/GOOBY-godot-unsigned-v${VERSION}.ipa"
+          ls -la release-staging
+
+      # Erstellt das Release, falls der Tag frisch gepusht wurde; bei
+      # workflow_dispatch legt die Action Tag+Release am aktuellen Commit an.
+      # Existiert das Release schon, werden Assets/Notes aktualisiert.
+      - name: GitHub-Release erstellen/aktualisieren
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ipa-v${{ steps.version.outputs.version }}
+          name: "GOOBY v${{ steps.version.outputs.version }} — unsignierte iOS-IPA"
+          prerelease: false
+          files: release-staging/GOOBY-godot-unsigned-v${{ steps.version.outputs.version }}.ipa
+          body: |
+            ## GOOBY v${{ steps.version.outputs.version }} — unsignierte iOS-IPA (Sideload)
+
+            ### Was ist neu?
+            _Bitte nach dem Release-Lauf ausfüllen (Stichpunkte reichen)._
+
+            ### Installation
+            - `GOOBY-godot-unsigned-v${{ steps.version.outputs.version }}.ipa` laden und
+              per AltStore/Sideloadly aufs Gerät bringen (Runbook:
+              `docs/godot-rewrite/IOS-BUILD.md`).
+            - Die IPA ist **unsigniert** — kein App-Store-Download, keine Apple-Zertifikate.
+
+            ### Hinweise
+            - Daten-Updates (Cosmetics, Sticker, Balance, …) kommen weiterhin OHNE neue
+              IPA über „Nach Updates suchen“ in den Einstellungen (`docs/UPDATES.md`).
+            - Diese App-Version gehört als `latest_native` ins Update-Manifest, damit
+              ältere Apps den „Neue App-Version nötig“-Hinweis zeigen (s. Workflow-Step
+              bzw. `docs/UPDATES.md` §6, solange der Step noch auskommentiert ist).
+
+      # --- latest_native-Bump (zweite Hälfte von B §5.2) — VORBEREITET, noch AUS ---
+      # Der Client liest latest_native aus manifest.json am rollenden
+      # Release-Tag `updates` (docs/UPDATES.md §3; Parser scripts/updates/
+      # manifest.gd). Diesen `updates`-Release gibt es erst nach dem ersten
+      # gooby-packs.yml-Lauf mit publish=true; Zielbild ist sogar ein eigenes
+      # public Content-Repo `gooby-updates` (existiert noch nicht — User-Action,
+      # docs/UPDATES.md §6). Solange die Manifest-Quelle fehlt, wäre dieser Step
+      # zwangsläufig rot — deshalb auskommentiert statt fail-open.
+      # Einkommentieren, sobald der `updates`-Release existiert. Fürs Haupt-Repo
+      # reicht das GITHUB_TOKEN unten; fürs public Content-Repo stattdessen
+      # GH_TOKEN auf secrets.GH_CONTENT_TOKEN setzen und beide gh-Aufrufe um
+      # `--repo MedusaV9/gooby-updates` ergänzen.
+      #
+      # - name: latest_native im Update-Manifest bumpen
+      #   env:
+      #     GH_TOKEN: ${{ github.token }}
+      #     VERSION: ${{ steps.version.outputs.version }}
+      #   run: |
+      #     set -euo pipefail
+      #     gh release download updates --pattern manifest.json --dir manifest-bump
+      #     node tools/ci/bump_latest_native.mjs \
+      #       --manifest manifest-bump/manifest.json --version "$VERSION"
+      #     gh release upload updates manifest-bump/manifest.json --clobber
