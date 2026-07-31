@@ -396,7 +396,9 @@ func _build_lantern() -> void:
 	_lantern_light.position.y = 0.3
 	_lantern.add_child(_lantern_light)
 	# Körbchen an Schnüren, Gooby sitzt darin und schaut in die Nacht.
-	var strings := MeshInstance3D.new()
+	# (W13C-Leak-Gate: hier hing ein nie eingehängtes MeshInstance3D —
+	# ein Waisen-Node + Renderer-RID pro Stage-Aufbau. Die Schnüre sind
+	# die beiden `line`-Nodes unten, `string_mesh` wird geteilt.)
 	var string_mesh := CylinderMesh.new()
 	string_mesh.top_radius = 0.012
 	string_mesh.bottom_radius = 0.012

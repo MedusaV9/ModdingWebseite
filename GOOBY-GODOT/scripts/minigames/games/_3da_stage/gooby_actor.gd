@@ -180,6 +180,9 @@ func _mount_props() -> void:
 	for entry: Dictionary in _pending_props:
 		var idx := skeleton.find_bone(str(entry["bone"]))
 		if idx < 0:
+			# W13C-Leak-Gate: nie montierte Requisiten nicht als Waisen
+			# liegen lassen — die Schlange wird unten geleert.
+			(entry["node"] as Node).queue_free()
 			continue
 		var attach := BoneAttachment3D.new()
 		attach.bone_name = str(entry["bone"])

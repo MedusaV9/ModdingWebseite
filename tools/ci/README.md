@@ -53,6 +53,27 @@ Zeilenlänge 100 (siehe `.editorconfig` + `.gdlintrc` in `GOOBY-GODOT/`).
   damit ein testbares Build verfügbar bleibt; dieses Artefakt heißt dann klar
   `GOOBY-godot-unsigned-ipa-UNVERIFIED-linux-<status>`.
 
+## Leak-Gate über alle Minigames (Preflight-fähig, W13C)
+
+`GOOBY-GODOT/tests/tools/leak_gate.gd` startet jedes registrierte Minigame
+regulär über den echten `MinigameHost` (Countdown 0, fester Seed), lässt es
+2 s laufen, beendet über den Quit-Pfad und misst danach Waisen:
+Orphan-Nodes (`Performance.OBJECT_ORPHAN_NODE_COUNT`), Node-Drift im Baum
+(rekursive Zählung ab root) und — nur als Report — ObjectDB-Zuwachs
+(`OBJECT_COUNT`/`OBJECT_RESOURCE_COUNT`; der Resource-Cache behält beim
+ersten Laden eines Spiels dessen Assets legitim). Ein ungemessener
+Warm-up-Lauf vor der ersten Baseline fängt lazy Framework-Zustand ab.
+
+```bash
+bash tools/ci/run_godot_isolated.sh \
+  godot --headless --path GOOBY-GODOT --script res://tests/tools/leak_gate.gd
+```
+
+Gate: pro Spiel Orphan-Zuwachs == 0 UND Node-Drift == 0. Verstöße erscheinen
+als `LEAK <spiel>: +n orphans, +m nodes`; Exit-Code 0 = dicht, 1 = Leck.
+Laufzeit ~2 min (38 Spiele × ~3 s). NICHT automatisch in `preflight.sh`/CI
+eingehängt — das entscheidet der Orchestrator.
+
 ## Konventionen für neue Tests (alle Wellen)
 
 - Datei `GOOBY-GODOT/tests/unit/test_<thema>.gd`, erbt von `TestCase`,
