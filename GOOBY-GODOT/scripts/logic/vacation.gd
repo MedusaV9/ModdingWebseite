@@ -63,6 +63,11 @@ static func default_slice() -> Dictionary:
 		"erholtBis": 0,
 		"weltengoobyAt": 0,
 		"weltengoobyGefeiert": false,
+		# W15/URLAUB (additiv): Besuchs-Erinnerungen — welche Ziele der
+		# Spieler VOR ORT besucht hat (UrlaubsBesuch) + Tages-Latch des
+		# Souvenir-Spots (UTC-Tagesindex, zeitinjiziert).
+		"besuche": {},
+		"souvenirTag": 0,
 	}
 
 
@@ -87,6 +92,11 @@ static func slice_of(state: Dictionary) -> Dictionary:
 		"archive": raw.get("archive").duplicate(true) if raw.get("archive") is Array else [],
 		"lastPostcardDayProcessed": maxi(0, int(floor(_num(raw.get("lastPostcardDayProcessed"))))),
 		"visited": _normalize_visited(raw.get("visited")),
+		# W15/URLAUB (additiv): Besuchs-Flags + Souvenir-Tag — gleiche Regel
+		# wie die W13B-Latches (ohne Normalisierung würfe die nächste
+		# Abholung die Erinnerungen weg).
+		"besuche": _normalize_visited(raw.get("besuche")),
+		"souvenirTag": maxi(0, int(_num(raw.get("souvenirTag")))),
 		# W13B: Urlaubs-Nutzen-Latches (additiv) — MÜSSEN hier durch die
 		# Normalisierung, sonst würde die nächste Abholung sie wegwerfen.
 		"erholtBis": maxi(0, int(_num(raw.get("erholtBis")))),
