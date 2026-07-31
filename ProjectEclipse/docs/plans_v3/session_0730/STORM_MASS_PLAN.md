@@ -457,6 +457,21 @@ Temporal-Artefakte zudem unbeurteilbar (§7).
 > Halbres-Kanten gegenüber dem B3-Stand; `storm_volume_upsample.fsh` bleibt
 > unangetastet. Falls In-Game-Screenshots (Verifikationsplan §6, S3/S4) doch
 > Turm-Kanten zeigen, ist die L70-Formel oben der vorbereitete nächste Schritt.
+>
+> ✅ **Deferral BESTÄTIGT durch In-Game-Abnahme** (Session 0731, dediz. Server +
+> Dev-Client, `/eclipsefx storm add 48 96 sphere` bei (250,100,0), time 1000):
+> S2 (180 bl) Blend-Zone-Silhouette rund ausmodelliert, KEINE Treppen-/Halbres-
+> Kanten an den Turmrändern; S3 (100 bl, Sonne hinterm Sturm) Masse-Tiefe +
+> Rand-Aufhellung; S4 (100 bl erhöht, Sonne im Rücken) Schattenbäuche + radiale
+> Abdunklung (B5) + innere Schale in Lücken lesbar (B2) — Kanten weich; S5
+> (Interior) Handover weich, Kern blickdicht mit Herz-Glow. B10 bleibt gestrichen.
+> **S6 (Blitz v2) ist auf dieser VM nicht fotografierbar:** FLASH_TICKS=7 (0,35 s)
+> gegen llvmpipe-Frametimes von Sekunden pro Frame — 14-Shot-Burst über 37 s ohne
+> Treffer, Frame-Differenzanalyse < 23/255. Beleg für B6 bleibt statisch: Shader
+> kompiliert (56/56 nach F3+T), Scheduler-Gates (sphere/ACTIVE/vis/Tier≥1/Range)
+> im Code verifiziert, Idle-Regel „alle Uniforms 0 ⇒ bit-identisch" aus dem
+> B4/B6/B8-Paket. S7/B7 war bereits über den Sturm-Boss-Kampftest (F-081..087)
+> abgenommen.
 
 ---
 
