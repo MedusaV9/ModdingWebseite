@@ -15,6 +15,9 @@ const ICON_PX := 22
 const CARD_MIN := Vector2(720, 430)
 ## Fortschritt läuft nie länger als das, egal was das Rezept sagt.
 const MAX_CRAFT_S := 6.0
+## Kantenlänge der 3D-Ergebnis-Vorschau (W15/MARKT, geteilter
+## SubViewport-Renderer wie Kühlschrank/Cosmetics).
+const VORSCHAU_PX := 132
 
 var _gs: Object
 var _room: Node
@@ -27,6 +30,8 @@ var _detail: VBoxContainer
 var _status: Label
 var _progress: ProgressBar
 var _craft_button: Button
+var _vorschau: CraftVorschau
+var _vorschau_rect: TextureRect
 
 
 ## Panel in eine UI-Ebene hängen und öffnen. `room` (optional) bekommt die
@@ -57,7 +62,10 @@ func close() -> void:
 
 
 ## Materialleiste, Rezeptliste und Detailspalte neu aufbauen.
+## Vorher (W15/MARKT-Bridge): City-Baumarkt-Einkäufe (Bretter/Nägel/…)
+## aus inventory.items ins Werkstatt-Lager übernehmen.
 func refresh() -> void:
+	CraftState.uebernehme_baumarkt_einkaeufe(_gs)
 	_refresh_materials()
 	_refresh_recipes()
 	_refresh_detail()
@@ -139,6 +147,9 @@ func _build_ui() -> void:
 	_status = Label.new()
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(_status)
+	_vorschau = CraftVorschau.new()
+	_vorschau.fertig.connect(_on_vorschau_fertig)
+	add_child(_vorschau)
 
 
 func _build_header() -> Control:
@@ -220,6 +231,7 @@ func _refresh_detail() -> void:
 		child.queue_free()
 	_progress = null
 	_craft_button = null
+	_vorschau_rect = null
 	if _recipe_id == "":
 		var hinweis := Label.new()
 		hinweis.text = I18nService.t("craft.kein_rezept")
@@ -231,6 +243,7 @@ func _refresh_detail() -> void:
 	kopf.text = I18nService.t("craft.rezept.%s" % _recipe_id)
 	kopf.theme_type_variation = "TitleLabel"
 	_detail.add_child(kopf)
+	_detail.add_child(_build_vorschau(str(recipe["output"]["item"])))
 	for material_id: String in recipe["materialien"]:
 		_detail.add_child(
 			_material_zeile(material_id, int(recipe["materialien"][material_id]), lager)
@@ -241,6 +254,28 @@ func _refresh_detail() -> void:
 		hinweis.text = I18nService.t("craft.kosten_baumarkt", {"preis": kosten})
 		_detail.add_child(hinweis)
 	_detail.add_child(_build_craft_row())
+
+
+## 3D-Vorschau des Ergebnis-Items (W15/MARKT): Textur kommt aus der
+## geteilten CraftVorschau-Bäckerei — sofort aus dem Cache oder später
+## per fertig-Signal (bis dahin bleibt das Rect leer, kein Platzhalter-Ruck).
+func _build_vorschau(item_id: String) -> Control:
+	_vorschau_rect = TextureRect.new()
+	_vorschau_rect.name = "CraftVorschauRect"
+	_vorschau_rect.custom_minimum_size = Vector2(VORSCHAU_PX, VORSCHAU_PX)
+	_vorschau_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_vorschau_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_vorschau_rect.set_meta("item_id", item_id)
+	if _vorschau != null:
+		_vorschau_rect.texture = _vorschau.hole_item(item_id)
+	return _vorschau_rect
+
+
+func _on_vorschau_fertig(key: String, textur: Texture2D) -> void:
+	if _vorschau_rect == null or not is_instance_valid(_vorschau_rect):
+		return
+	if key == CraftVorschau.PREFIX + str(_vorschau_rect.get_meta("item_id", "")):
+		_vorschau_rect.texture = textur
 
 
 func _material_zeile(material_id: String, brauchen: int, lager: Dictionary) -> Control:

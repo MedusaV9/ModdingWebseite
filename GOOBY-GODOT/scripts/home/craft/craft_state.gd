@@ -15,6 +15,17 @@ extends RefCounted
 
 const Economy := preload("res://scripts/logic/economy.gd")
 
+## Zuordnung City-Baumarkt-Einkauf (inventory.items) → Werkstatt-Material
+## (home.materials) für die W15/MARKT-Bridge: bewusst eine feste Tabelle
+## (5 Bretter = 5 Holz usw.), fremde Items bleiben unangetastet liegen.
+const BAUMARKT_MATERIAL_MAP := {
+	"bretter": "holz",
+	"stoecke": "stock",
+	"naegel": "naegel",
+	"eisen": "eisen",
+	"saatgut": "saatgut",
+}
+
 
 static func materials(gs: Object) -> Dictionary:
 	var raw: Variant = gs.get_value("home.materials", {})
@@ -54,9 +65,21 @@ static func kaufe_material(gs: Object, material_id: String, menge := 1) -> bool:
 	return true
 
 
+## Vereinte Bauplan-Sicht (W15/MARKT-Bridge, additiv): home.blueprints
+## (CraftState.add_blueprint) PLUS die im City-Baumarkt gekauften
+## bauplan_*-Flag-Items (inventory.items) — deren `werkstatt_id` schaltet
+## per Konvention das Rezept mit bauplan "bp_<werkstatt_id>" frei.
 static func blueprints(gs: Object) -> Array:
 	var raw: Variant = gs.get_value("home.blueprints", [])
-	return raw if raw is Array else []
+	var eigene: Array = raw if raw is Array else []
+	var out := eigene.duplicate()
+	for werkstatt_id: String in BaumarktKatalog.freigeschaltete_rezepte(gs):
+		if werkstatt_id.is_empty():
+			continue
+		var bp := "bp_%s" % werkstatt_id
+		if not out.has(bp):
+			out.append(bp)
+	return out
 
 
 static func has_blueprint(gs: Object, blueprint_id: String) -> bool:
@@ -70,6 +93,39 @@ static func add_blueprint(gs: Object, blueprint_id: String) -> bool:
 	gs.update(func(state: Dictionary) -> void: state["home"]["blueprints"].append(blueprint_id))
 	gs.notify_slice_changed("home")
 	return true
+
+
+## City-Baumarkt-Einkäufe (inventory.items, BaumarktSheet) ins
+## Werkstatt-Lager (home.materials) übernehmen — W15/MARKT-Bridge, additiv.
+## Das Craft-Panel ruft das beim Öffnen/Refresh (BAUMARKT_MATERIAL_MAP oben).
+static func uebernehme_baumarkt_einkaeufe(gs: Object) -> void:
+	if gs == null:
+		return
+	var offen := false
+	for item_id: String in BAUMARKT_MATERIAL_MAP:
+		if int(gs.get_value("inventory.items.%s" % item_id, 0)) > 0:
+			offen = true
+			break
+	if not offen:
+		return
+	gs.update(
+		func(state: Dictionary) -> void:
+			if not (state.get("inventory") is Dictionary):
+				return
+			var inventory: Dictionary = state["inventory"]
+			if not (inventory.get("items") is Dictionary):
+				return
+			var items: Dictionary = inventory["items"]
+			for item_id: String in BAUMARKT_MATERIAL_MAP:
+				var menge := maxi(0, int(items.get(item_id, 0)))
+				if menge <= 0:
+					continue
+				items.erase(item_id)
+				CraftLogic.add(
+					state["home"]["materials"], str(BAUMARKT_MATERIAL_MAP[item_id]), menge
+				)
+	)
+	gs.notify_slice_changed("home")
 
 
 ## Steht die Werkstatt im Garten? (Ohne sie ist die Werkbank nicht nutzbar.)

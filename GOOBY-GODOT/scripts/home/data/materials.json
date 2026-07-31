@@ -41,14 +41,26 @@
 			"quelle": "baumarkt",
 			"preis": 15,
 			"icon": "naegel"
+		},
+		{
+			"id": "saatgut",
+			"name_de": "Saatgut (Kräutermischung)",
+			"name_en": "Seed Mix (Herbs)",
+			"quelle": "baumarkt",
+			"preis": 12,
+			"icon": "blatt"
 		}
 	],
 	"baumarkt": [
 		{ "art": "material", "id": "eisen", "preis": 40 },
 		{ "art": "material", "id": "naegel", "preis": 15 },
+		{ "art": "material", "id": "saatgut", "preis": 12 },
 		{ "art": "bauplan", "id": "bp_gartentisch", "preis": 350 },
 		{ "art": "bauplan", "id": "bp_regal_rustikal", "preis": 500 },
 		{ "art": "bauplan", "id": "bp_gewaechshaus", "preis": 900 },
+		{ "art": "bauplan", "id": "bp_vogelhaus", "preis": 55 },
+		{ "art": "bauplan", "id": "bp_kraeuterkasten", "preis": 80 },
+		{ "art": "bauplan", "id": "bp_windrad_deko", "preis": 110 },
 		{ "art": "struktur", "id": "werkstatt", "preis": 2500 },
 		{ "art": "struktur", "id": "gewaechshaus", "preis": 1800 },
 		{ "art": "struktur", "id": "sprinkler", "preis": 1200 },

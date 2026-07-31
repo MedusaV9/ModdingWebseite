@@ -4061,6 +4061,54 @@
       "lagerwert": 2,
       "pflicht": "",
       "kategorie": "kueche"
+    },
+    {
+      "id": "vogelhaus",
+      "name_de": "Vogelhäuschen",
+      "name_en": "Birdhouse",
+      "glb": "../ranch/gebaeude/huehnerstall.glb",
+      "footprint": [
+        1,
+        1
+      ],
+      "layer": "FLOOR",
+      "preis": 0,
+      "verkaufswert": 35,
+      "lagerwert": 1,
+      "kategorie": "garten",
+      "pflicht": ""
+    },
+    {
+      "id": "kraeuterkasten",
+      "name_de": "Kräuterkasten",
+      "name_en": "Herb Box",
+      "glb": "kenney-suburb/planter.glb",
+      "footprint": [
+        1,
+        1
+      ],
+      "layer": "FLOOR",
+      "preis": 0,
+      "verkaufswert": 40,
+      "lagerwert": 1,
+      "kategorie": "garten",
+      "pflicht": ""
+    },
+    {
+      "id": "windrad_deko",
+      "name_de": "Windrad-Deko",
+      "name_en": "Pinwheel Decoration",
+      "glb": "../ranch/gebaeude/windmuehle.glb",
+      "footprint": [
+        1,
+        1
+      ],
+      "layer": "FLOOR",
+      "preis": 0,
+      "verkaufswert": 55,
+      "lagerwert": 1,
+      "kategorie": "garten",
+      "pflicht": ""
     }
   ]
 }

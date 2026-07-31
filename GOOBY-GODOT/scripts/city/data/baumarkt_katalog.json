@@ -40,6 +40,14 @@
       "menge": 1,
       "preis": 26,
       "spruch_de": "Deckt in einem Anstrich. In zweien wirklich."
+    },
+    {
+      "id": "saatgut",
+      "name_de": "Saatgut (Kräutermischung, 3 Tüten)",
+      "inventar": "saatgut",
+      "menge": 3,
+      "preis": 36,
+      "spruch_de": "Wächst garantiert. Irgendwas. Bodo tippt auf Kräuter."
     }
   ],
   "bauplaene": [
@@ -97,6 +105,28 @@
       "preis": 140,
       "material_de": "8 Bretter · 1 Eisenstange",
       "spruch_de": "Rückenschonend. Für einen Hasen mit Rücken."
+    },
+    {
+      "id": "bauplan_kraeuterkasten",
+      "name_de": "Bauplan: Kräuterkasten",
+      "inventar": "bauplan_kraeuterkasten",
+      "werkstatt_id": "kraeuterkasten",
+      "menge": 1,
+      "einmalig": true,
+      "preis": 80,
+      "material_de": "2 Holz · 2 Saatgut",
+      "spruch_de": "Wächst von allein. Verkauft sich fast von allein."
+    },
+    {
+      "id": "bauplan_windrad",
+      "name_de": "Bauplan: Windrad-Deko",
+      "inventar": "bauplan_windrad",
+      "werkstatt_id": "windrad_deko",
+      "menge": 1,
+      "einmalig": true,
+      "preis": 110,
+      "material_de": "2 Holz · 1 Eisenstange",
+      "spruch_de": "Dreht sich bei Wind. Bei Flaute ist es Kunst."
     }
   ]
 }
