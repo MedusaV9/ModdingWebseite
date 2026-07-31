@@ -17,10 +17,19 @@ into a 1px magenta/cyan checker — heavier on the alt frame); :func:`dropout` f
 missing polygons via alpha holes (hound); :func:`glitch_scars` stamps sparse emissive
 scar slivers into glowmasks; :func:`combine_glow` stacks glow painters per bone.
 
+MB4 (F-098) addition — the FAMILY JITTER CLOCK: the one shared tremor frequency that
+makes husk/hound/tick read as ONE corruption (census §5 row MB4, "Familien-Kohärenz").
+:data:`GLITCH_JITTER_FREQ` is the canonical Molang frequency (``math.sin`` works in
+DEGREES, ``query.anim_time`` in seconds — 720 °/s = 2.0 Hz) and
+:func:`assert_family_jitter` is the enforcement gate every glitch driver runs before
+painting, so a drifted animation file fails the deterministic painter run loudly.
+
 Not a driver — imported by `glitched_husk.py` / `glitched_hound.py` /
 `glitched_tick.py` (each still writes its own 4 PNGs deterministically).
 """
 
+import json
+import re
 import sys
 from pathlib import Path
 
@@ -32,6 +41,86 @@ CYAN = hexc("#37F2E5")
 WHITE = hexc("#F4F0FF")
 HEART_CORE = hexc("#FF6BF2")
 HEART_HALO = hexc("#C13BFF")
+
+# ---------------------------------------------------------------------------
+# family jitter clock (MB4) — the ANIMATION-side family contract
+# ---------------------------------------------------------------------------
+# One tremor clock for the whole family: 2.0 Hz. In GeckoLib Molang terms
+# (math.sin takes DEGREES, query.anim_time is SECONDS) that is 720 °/s; the
+# period is 0.5 s. Every glitch loop length sits on that 0.5-s grid (husk
+# idle 3.0 / walk 1.0, hound idle 2.5 / walk 0.5, tick idle 2.0 / walk 0.5),
+# so the shared tremor closes seamlessly in ALL of them. Fine rattles may use
+# integer harmonics (1440 = 4 Hz); slow per-mob sway channels stay free but
+# MUST close their own loop (freq multiple of 360/length — the MA6 lesson).
+GLITCH_JITTER_HZ = 2.0
+GLITCH_JITTER_FREQ = 360.0 * GLITCH_JITTER_HZ   # 720.0 — use THIS in Molang sin()
+GLITCH_JITTER_PERIOD = 1.0 / GLITCH_JITTER_HZ   # 0.5 s — loop lengths sit on this grid
+# Molang channels at/above this rate are "jitter class" and must be exact
+# integer harmonics of GLITCH_JITTER_FREQ; slower ones are per-mob sway.
+_JITTER_CLASS_MIN_FREQ = 300.0
+
+_ANIM_DIR = Path(__file__).resolve().parents[3] \
+    / "src/main/resources/assets/eclipse/animations/entity"
+GLITCH_FAMILY_ANIMS = tuple(
+    _ANIM_DIR / f"glitched_{kind}.animation.json" for kind in ("husk", "hound", "tick"))
+_FREQ_RE = re.compile(r"query\.anim_time\s*\*\s*(-?\d+(?:\.\d+)?)")
+
+
+def _molang_freqs(node):
+    """All `query.anim_time * F` frequencies (absolute) in a channel subtree."""
+    if isinstance(node, str):
+        return [abs(float(f)) for f in _FREQ_RE.findall(node)]
+    if isinstance(node, list):
+        return [f for item in node for f in _molang_freqs(item)]
+    if isinstance(node, dict):
+        return [f for item in node.values() for f in _molang_freqs(item)]
+    return []
+
+
+def assert_family_jitter(paths=GLITCH_FAMILY_ANIMS):
+    """Family-coherence gate (MB4): every glitch driver calls this before painting.
+
+    Checks, for every ``loop: true`` animation of the family sheets:
+      1. the loop length is an integer multiple of :data:`GLITCH_JITTER_PERIOD`;
+      2. every Molang ``query.anim_time * F`` channel CLOSES the loop
+         (``F * length ≡ 0 (mod 360)`` — otherwise the loop seam pops);
+      3. every jitter-class frequency (≥ 300 °/s) is an exact integer harmonic
+         of :data:`GLITCH_JITTER_FREQ` (720/1440/… — ONE family clock);
+      4. the family tremor never sleeps: at least one channel per loop runs at a
+         :data:`GLITCH_JITTER_FREQ` harmonic.
+
+    Raises ``AssertionError`` with the offending animation/frequency."""
+    problems = []
+    for path in paths:
+        data = json.loads(Path(path).read_text(encoding="utf-8"))
+        for anim_name, anim in data.get("animations", {}).items():
+            if anim.get("loop") is not True:
+                continue  # one-shots don't loop — no seam/grid constraints
+            length = float(anim.get("animation_length", 0.0))
+            grid = length / GLITCH_JITTER_PERIOD
+            if abs(grid - round(grid)) > 1e-6:
+                problems.append(f"{anim_name}: length {length}s off the "
+                                f"{GLITCH_JITTER_PERIOD}s family jitter grid")
+            freqs = [f for bone in anim.get("bones", {}).values()
+                     for channel in bone.values() for f in _molang_freqs(channel)]
+            for freq in freqs:
+                if abs((freq * length) % 360.0) > 1e-4 \
+                        and abs((freq * length) % 360.0 - 360.0) > 1e-4:
+                    problems.append(f"{anim_name}: sin freq {freq} does not close "
+                                    f"the {length}s loop (seam pop)")
+                if freq >= _JITTER_CLASS_MIN_FREQ:
+                    harmonic = freq / GLITCH_JITTER_FREQ
+                    if abs(harmonic - round(harmonic)) > 1e-6 or round(harmonic) < 1:
+                        problems.append(f"{anim_name}: jitter-class freq {freq} is not "
+                                        f"a harmonic of {GLITCH_JITTER_FREQ}")
+            if not any(abs(f / GLITCH_JITTER_FREQ - round(f / GLITCH_JITTER_FREQ)) < 1e-6
+                       and round(f / GLITCH_JITTER_FREQ) >= 1 for f in freqs):
+                problems.append(f"{anim_name}: no channel on the family jitter clock "
+                                f"({GLITCH_JITTER_FREQ} °/s)")
+    if problems:
+        raise AssertionError("family jitter contract violated:\n  "
+                             + "\n  ".join(problems))
+    return True
 
 
 def glitch_body(base, salt=31, alt=False, tint=None):

@@ -4,9 +4,10 @@
 `glitched_husk_alt.png` (corruption frame the renderer flickers to for 2–4 t bursts),
 and a `_glowmask.png` for EACH (GeckoLib's `AutoGlowingTexture` appends `_glowmask` to
 whichever albedo is active, so the alt frame needs its own mask at the same canvas
-size). Model: `assets/eclipse/geo/entity/glitched_husk.geo.json` (GeckoLib, 10 bones /
+size). Model: `assets/eclipse/geo/entity/glitched_husk.geo.json` (GeckoLib, 11 bones /
 11 cubes — humanoid but WRONG: torso split, one arm 6px longer, head tilted with a
-displaced face shard). The geo file **is** the UV source of truth; layout:
+displaced face shard and a sheared-off jaw). The geo file **is** the UV source of
+truth; layout:
 
 | Bone | Cube | Box W×H×D | UV | Notes |
 |---|---|---|---|---|
@@ -15,6 +16,7 @@ displaced face shard). The geo file **is** the UV source of truth; layout:
 | glow_seam | seam slivers | 6×1×6 / 1×10×1 (+0.2 infl) | box-UV (0,43) / (24,43) | fully emissive |
 | head | skull | 8×8×8 | box-UV (24,0) | baked 12° tilt; head-tracked as a cluster |
 | head_shard | displaced half-face | 5×4×3 | box-UV (16,16) | one step behind the skull |
+| jaw_shard | sheared jaw | 4×2×2 | box-UV (32,36) | hangs offset under the skull; detach-beat target |
 | arm_right | LONG arm | 3×16×3 | box-UV (32,16) | drags to knee height |
 | arm_left | short arm | 3×10×3 | box-UV (44,16) | the asymmetry read |
 | leg_right / leg_left | legs | 4×12×4 | box-UV (0,27) / (16,27) | uneven shamble in anim |

@@ -4,16 +4,18 @@
 `glitched_hound_alt.png` (corruption frame the renderer flickers to for 2–4 t bursts),
 plus a `_glowmask.png` for each (GeckoLib appends `_glowmask` to whichever albedo is
 active — matching canvases enforced). Model:
-`assets/eclipse/geo/entity/glitched_hound.geo.json` (GeckoLib, 13 bones / 13 cubes —
+`assets/eclipse/geo/entity/glitched_hound.geo.json` (GeckoLib, 16 bones / 16 cubes —
 lean quadruped on umbral-stalker proportions, datamoshed: the neck is a FRAGMENTED
 FLOATING segment, the head+jaw detach from it, one ear is a displaced shard, the hips
-have broken off-axis). The geo file **is** the UV source of truth; layout:
+have broken off-axis, and three spine shards ride loose above the trunk). The geo
+file **is** the UV source of truth; layout:
 
 | Bone | Cube | Box W×H×D | UV | Notes |
 |---|---|---|---|---|
 | body | trunk | 8×7×16 | box-UV (0,0) | heart-core glows through rib cracks (mask) |
 | hips_shard | broken hip block | 5×6×5 | box-UV (24,23) | rides 1–2px off-axis |
 | glow_seam | seam slivers | 3×2×1 / 1×5×6 | box-UV (54,7) / (0,44) | fully emissive |
+| spine_shard_a/b/c | loose vertebrae | 2×3×2 / 2×4×2 / 2×2×2 | box-UV (16,46)/(26,46)/(36,46) | float over the trunk; jitter-clock riders |
 | neck_shard | floating fragment | 5×4×3 | box-UV (48,0) | gap of air between body and head |
 | head | skull | 6×5×6 | box-UV (0,23) | head-tracked; pinpoint eyes on mask |
 | jaw | underslung jaw | 5×2×5 | box-UV (44,23) | "arrives before the head" — leads in anim |

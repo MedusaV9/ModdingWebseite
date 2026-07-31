@@ -4,10 +4,11 @@
 `glitched_tick_alt.png` (corruption frame the renderer flickers to for 2–4 t bursts),
 plus a `_glowmask.png` for each (GeckoLib appends `_glowmask` to whichever albedo is
 active — matching canvases enforced). Model:
-`assets/eclipse/geo/entity/glitched_tick.geo.json` (GeckoLib, 8 bones / 14 cubes —
-0.5-block shard-mite: 6 stub legs grouped into two rows, SPLIT carapace with the
-magenta core exposed in the gap, mandibled head). The geo file **is** the UV source of
-truth; layout:
+`assets/eclipse/geo/entity/glitched_tick.geo.json` (GeckoLib, 14 bones / 13 cubes —
+0.5-block shard-mite: 6 stub legs as INDIVIDUAL child bones under two row-parents
+(MB4: the `latch` clamp chain grips leg by leg), SPLIT carapace with the magenta core
+exposed in the gap, mandibled head). The geo file **is** the UV source of truth;
+layout:
 
 | Bone | Cube | Box W×H×D | UV | Notes |
 |---|---|---|---|---|
@@ -16,8 +17,8 @@ truth; layout:
 | carapace_right | split plate | 4×2×8 | box-UV (28,0) | cants outward — the split read |
 | carapace_left | split plate | 4×2×8 | box-UV (28,10) | mirrored cant |
 | head | head + mandibles | 4×3×3 / 2×2×1 ×2 | box-UV (0,19) / (14,19) / (14,22) | mandibles twitch; no head tracking |
-| legs_right | 3 stubs | 2×2×1 ×3 | box-UV (0,25)/(6,25)/(12,25) | animated as one row (skitter) |
-| legs_left | 3 stubs | 2×2×1 ×3 | box-UV (18,25)/(24,25)/(30,25) | opposite phase |
+| legs_right_f/m/b | 1 stub each | 2×2×1 | box-UV (0,25)/(6,25)/(12,25) | children of cube-less `legs_right` row-parent; tripod gait + `latch` chain |
+| legs_left_f/m/b | 1 stub each | 2×2×1 | box-UV (18,25)/(24,25)/(30,25) | children of `legs_left`; opposite tripod phase |
 
 **Art brief (design sheet §2.3 "glitched", kind TICK):** shared glitch language
 (`scripts/geckolib_gen/mobs/glitch_lib.py`) — desaturated `#4A4A52`-family body, the

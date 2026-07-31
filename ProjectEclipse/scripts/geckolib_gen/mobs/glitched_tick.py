@@ -18,7 +18,10 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from glitch_lib import CYAN, HEART_CORE, HEART_HALO, WHITE, glitch_body, glow_eyes, seam  # noqa: E402
+from glitch_lib import (  # noqa: E402
+    CYAN, HEART_CORE, HEART_HALO, WHITE, assert_family_jitter, glitch_body, glow_eyes,
+    seam,
+)
 from paint_lib import GeoPainter, flame, hexc, mix  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -80,6 +83,7 @@ def _plate_rim_glow(inner_is_max_fx, alt):
 
 
 def main():
+    assert_family_jitter()  # MB4: one family jitter clock — fail loud before painting
     paint(alt=False)
     paint(alt=True)
 

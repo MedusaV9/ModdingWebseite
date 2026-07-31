@@ -19,7 +19,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from glitch_lib import (  # noqa: E402
-    CYAN, MAGENTA, combine_glow, glitch_body, glitch_scars, glow_eyes, heart_glow, seam,
+    CYAN, MAGENTA, assert_family_jitter, combine_glow, glitch_body, glitch_scars,
+    glow_eyes, heart_glow, seam,
 )
 from paint_lib import GeoPainter, hexc, mix, mul  # noqa: E402
 
@@ -95,6 +96,7 @@ def _with_rag_band(fn):
 
 
 def main():
+    assert_family_jitter()  # MB4: one family jitter clock — fail loud before painting
     paint(alt=False)
     paint(alt=True)
 
