@@ -14,7 +14,10 @@
 			"titel": "Code eingelöst!",
 			"muenzen": "+{n} Münzen",
 			"sticker": "Neuer Sticker im Album!",
-			"buff": "Doppelte Münzen für {min} Minuten!"
+			"buff": "Doppelte Münzen für {min} Minuten!",
+			"flag": {
+				"goldiGold": "Goldi hoppelt in dein GvZ-Team — er glänzt schon vor Stolz!"
+			}
 		},
 		"buff_aktiv": "Doppel-Münzen aktiv: noch {rest}",
 		"verlauf": {
@@ -24,7 +27,8 @@
 		},
 		"name": {
 			"updateLiebe": "UpdateLiebe",
-			"herzGooby": "Herz-Gooby"
+			"herzGooby": "Herz-Gooby",
+			"goldiGold": "GoldiGold"
 		},
 		"zurueck": "Zurück",
 		"settings_eintrag": "Aktionscodes einlösen"

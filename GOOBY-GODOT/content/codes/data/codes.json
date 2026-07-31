@@ -15,6 +15,13 @@
 			"once": false,
 			"dev_only": true,
 			"notes_de": "DEV-Code mit Klartext-Secret — nur für lokale Tests, CI-Releases sollten dev_only-Codes filtern."
+		},
+		{
+			"id": "goldiGold",
+			"secret_sha256": "21c75081907547c670a3f0da8e857774aa893c5dcdc17c98333cfe48a0dddc11",
+			"effect": { "type": "unlock_flag", "flag": "gvz.goldi" },
+			"once": true,
+			"notes_de": "W13/GVZ: schaltet den Goldi-Turm in Goobys vs. Zombies frei (Doc G §4.2). Engine-Pendant: CodesEngine.CODES id goldiGold."
 		}
 	]
 }

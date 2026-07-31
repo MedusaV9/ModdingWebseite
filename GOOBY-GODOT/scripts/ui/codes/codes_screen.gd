@@ -9,7 +9,10 @@ extends Control
 ## Effekte wendet DIESER Aufrufer im selben gs.update an (§B6):
 ## Münzen über Economy.award(reason "code"), Buff über
 ## codes.buffs.doubleCoinsUntil, Sticker über den RewardHub (Cond-Typ
-## "code" liest codes.redeemed). Erreichbar über die Route `codes`
+## "code" liest codes.redeemed), unlock_flag setzt einen Save-Pfad auf
+## true (W13/GVZ: "gvz.goldi" schaltet den Goldi-Turm frei — GvZ liest
+## das Flag bei jedem Levelstart über GvzProgress.goldi_unlocked).
+## Erreichbar über die Route `codes`
 ## (Settings → Spiel → "Aktionscodes einlösen").
 
 signal ready_for_reveal
@@ -211,10 +214,19 @@ func _on_redeem_pressed() -> Dictionary:
 				codes["buffs"]["doubleCoinsUntil"] = (
 					now + int(effect.get("minutes", 0)) * 60 * 1000
 				)
+			if effect.has("unlock_flag"):
+				_setze_flag(state, str(effect["unlock_flag"]))
 			_zaehle_counter(state)
 	)
 	var result: Dictionary = box["result"]
 	_gs.notify_slice_changed("codes")
+	if bool(result.get("ok", false)):
+		var effect: Dictionary = (result["code"] as Dictionary).get("effect", {})
+		if effect.has("unlock_flag"):
+			# Konsumenten des Flags (z. B. GvZ-Level-Select) hören auf den
+			# Slice des Pfad-Kopfs — der Save selbst wurde schon im update
+			# geschrieben.
+			_gs.notify_slice_changed(str(effect["unlock_flag"]).get_slice(".", 0))
 	if bool(result.get("ok", false)):
 		_feiere(result["code"])
 	else:
@@ -222,6 +234,19 @@ func _on_redeem_pressed() -> Dictionary:
 	_refresh_verlauf()
 	_refresh_buff()
 	return result
+
+
+## unlock_flag-Effekt: gepunkteten Save-Pfad auf true setzen (fehlende
+## Zwischen-Dicts entstehen; die Slice-Normalisierung des Besitzers heilt
+## den Rest beim nächsten Load — GvzProgress.normalize_slice behält goldi).
+static func _setze_flag(state: Dictionary, path: String) -> void:
+	var teile := path.split(".")
+	var node: Dictionary = state
+	for i in teile.size() - 1:
+		if not (node.get(teile[i]) is Dictionary):
+			node[teile[i]] = {}
+		node = node[teile[i]]
+	node[teile[teile.size() - 1]] = true
 
 
 func _zaehle_counter(state: Dictionary) -> void:
@@ -244,6 +269,11 @@ func _feiere(code: Dictionary) -> void:
 		zeilen.append(I18nService.t("codes.erfolg.sticker"))
 	if str(effect.get("buff", "")) == "doubleCoins":
 		zeilen.append(I18nService.t("codes.erfolg.buff", {"min": int(effect.get("minutes", 0))}))
+	if effect.has("unlock_flag"):
+		# Feier-Text pro Code (z. B. codes.erfolg.flag.goldiGold).
+		var flag_key := "codes.erfolg.flag.%s" % str(code.get("id", ""))
+		if I18nService.has_key(flag_key):
+			zeilen.append(I18nService.t(flag_key))
 	_feedback.text = "  ".join(zeilen)
 	_feedback.remove_theme_color_override("font_color")
 	_toasts.show_toast(I18nService.t("codes.erfolg.titel"))

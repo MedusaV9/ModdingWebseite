@@ -17,7 +17,13 @@ const LOCK_AFTER := 5
 const LOCK_WINDOW_SEC := 60
 const LOCK_SEC := 30
 
-## Katalog (Web data/codes.js, verbatim): secret ist die NORMALISIERTE Form.
+## Katalog (Web data/codes.js, verbatim + Godot-Zusätze): secret ist die
+## NORMALISIERTE Form. Effekt-Vokabular (wendet der AUFRUFER an, §B6):
+##   coins        Münzen über Economy.award(reason "code")
+##   buff/minutes doubleCoins-Buff (codes.buffs.doubleCoinsUntil)
+##   sticker      Sticker über den RewardHub (Cond-Typ "code")
+##   unlock_flag  setzt einen Save-Pfad auf true (z. B. "gvz.goldi" —
+##                der Goldi-Turm, Doc G §4.2 "NUR per Einlöse-Code")
 const CODES: Array[Dictionary] = [
 	{
 		"id": "updateLiebe",
@@ -29,6 +35,14 @@ const CODES: Array[Dictionary] = [
 		"id": "herzGooby",
 		"secret": "ichlie3bdich",
 		"effect": {"sticker": "herzGooby", "coins": 50},
+		"once": true,
+	},
+	# W13/GVZ: „GOLDIGOLD“ schaltet Goldi frei (Pack-Pendant:
+	# content/codes/data/codes.json, Eintrag goldiGold).
+	{
+		"id": "goldiGold",
+		"secret": "goldigold",
+		"effect": {"unlock_flag": "gvz.goldi"},
 		"once": true,
 	},
 ]
