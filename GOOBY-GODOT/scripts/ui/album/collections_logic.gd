@@ -97,6 +97,22 @@ static func entry_key(set_id: String, entry_id: String) -> String:
 	return "%s.%s" % [set_id, entry_id]
 
 
+## Sticker verdienen (Web §B7 award): erhöht entries["<setId>.<entryId>"] um n.
+## "first" ist nur beim allerersten Exemplar true — der Aufrufer zeigt genau
+## dann den Sticker-Toast. Liefert {"c": neue Slice-Kopie, "first": bool};
+## bei n <= 0 oder leeren Ids bleibt die Eingabe-Slice unverändert (Web-verbatim
+## KEINE Set-Zugehörigkeits-Prüfung). Award-Verdrahtung der Spielsysteme
+## (Angeln/Garten/Stadt/Füttern) passiert bei deren Besitzern — siehe Handoff.
+static func award(c: Dictionary, set_id: String, entry_id: String, n := 1) -> Dictionary:
+	var amount := int(floor(_num(n, 0.0)))
+	if set_id.is_empty() or entry_id.is_empty() or amount <= 0:
+		return {"c": c, "first": false}
+	var prev := count_of(c, set_id, entry_id)
+	var next := normalize_slice(c)
+	next["entries"][entry_key(set_id, entry_id)] = prev + amount
+	return {"c": next, "first": prev == 0}
+
+
 ## Kaputte/fremde Slices heilen (self-heal wie Web-mergeDefaults): liefert
 ## IMMER {"entries": {String: int >= 1}, "claimedSets": {String: int ms}} —
 ## Nicht-Dicts, leere Keys und Counts < 1 fliegen raus; ein vorhandener

@@ -75,6 +75,23 @@ func test_vollstaendigkeit_und_fortschritt() -> void:
 	assert_eq(CollectionsLogic.count_of(c, "landmarks", "windmillCafe"), 3, "×n-Zähler")
 
 
+func test_award_pur_web_semantik() -> void:
+	var c := {"entries": {}, "claimedSets": {"fish": 123}}
+	var first := CollectionsLogic.award(c, "fish", "pinkKoi")
+	assert_true(bool(first["first"]), "erstes Exemplar → first=true (Toast-Signal)")
+	assert_eq(CollectionsLogic.count_of(first["c"], "fish", "pinkKoi"), 1, "Zähler = 1")
+	assert_eq(int(first["c"]["claimedSets"]["fish"]), 123, "claimedSets bleibt erhalten")
+	assert_eq(c["entries"].size(), 0, "pure: Eingabe-Slice unverändert")
+	var again := CollectionsLogic.award(first["c"], "fish", "pinkKoi", 2)
+	assert_false(bool(again["first"]), "Wiederholung → first=false")
+	assert_eq(CollectionsLogic.count_of(again["c"], "fish", "pinkKoi"), 3, "n=2 addiert auf 3")
+	var noop := CollectionsLogic.award(c, "fish", "pinkKoi", 0)
+	assert_false(bool(noop["first"]), "n<=0 → first=false")
+	assert_true(noop["c"] == c, "n<=0 → selbe Slice-Referenz (Web-verbatim)")
+	var leer := CollectionsLogic.award(c, "", "pinkKoi")
+	assert_false(bool(leer["first"]), "leere setId → abgelehnt")
+
+
 func test_claim_pur_einmalig() -> void:
 	var c := _full_set_slice("fish")
 	var denied := CollectionsLogic.claim_set({"entries": {}, "claimedSets": {}}, "fish", NOW_MS)
