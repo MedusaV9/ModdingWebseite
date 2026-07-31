@@ -194,16 +194,81 @@ public final class EndShatterSequence {
      * staggered wave — never one single-tick spike), every display ships a
      * {@value #DEBRIS_VIEW_RANGE}× view range so distant chunks cull client-side, and
      * the {@value #DEBRIS_TTL_TICKS}t TTL + dissolve bounds the population from above.
+     * W13-B3: caps raised 260/420 → 320/520 (W12 order of magnitude — StormDebris runs
+     * 450/600) now that the {@link #tickMsptGuard MSPT guard} below carries the risk.
      */
-    private static final int DEBRIS_FIELD_CAP = 260;
+    private static final int DEBRIS_FIELD_CAP = 320;
     private static final int BURST_PER_CRACK = 22;
     private static final int CARVE_BURST_PER_CRACK = 8;
-    private static final int DEBRIS_HARD_CAP = 420;
+    private static final int DEBRIS_HARD_CAP = 520;
     private static final int DEBRIS_SPAWN_PER_TICK = 20;
     private static final float DEBRIS_VIEW_RANGE = 4.0F;
     private static final int DEBRIS_TTL_TICKS = 300;
     /** Debris keyframe cadence — interpolation duration matches (DisplayAnimator law). */
     private static final int DEBRIS_UPDATE_TICKS = 4;
+    /**
+     * W13-B3 mass law (the {@code StormDebrisFx}/{@code DayRiftOrbits.paramsFor}
+     * sediment pattern, retrofitted — this class predates the W12 audit): the SIZE is
+     * rolled first and everything else is DERIVED from it. Field slabs span
+     * {@value #FIELD_MIN_SCALE}–{@value #FIELD_MAX_SCALE} (pow-1.6 bias toward shards),
+     * burst shards {@value #BURST_MIN_SCALE}–{@value #BURST_MAX_SCALE}.
+     * {@code mass01 = (scale − min) / (max − min)} feeds three reads: heavy slabs spawn
+     * LOW (down to {@value #MASS_ANCHOR_HEAVY} blocks under the break face vs
+     * +{@value #MASS_ANCHOR_LIGHT} for shards), drift SLOW
+     * (×{@value #MASS_SPEED_LIGHT} light → ×{@value #MASS_SPEED_HEAVY} heavy) and
+     * tumble LAZY ({@value #DEBRIS_SPIN_MAX_DEG}°/t light →
+     * {@value #DEBRIS_SPIN_MIN_DEG}°/t heavy). Small jitters keep the correlation off
+     * the stairs; the three classes (light &lt; 1/3 ≤ medium &lt; 2/3 ≤ heavy) emerge
+     * from the continuous derivation rather than hard-coded branches.
+     */
+    private static final float FIELD_MIN_SCALE = 0.55F;
+    private static final float FIELD_MAX_SCALE = 1.45F;
+    private static final float BURST_MIN_SCALE = 0.35F;
+    private static final float BURST_MAX_SCALE = 1.05F;
+    /** Vertical spawn-anchor offset (blocks vs the break face): light high, heavy low. */
+    private static final double MASS_ANCHOR_LIGHT = 3.5D;
+    private static final double MASS_ANCHOR_HEAVY = -1.0D;
+    /** Drift-speed factors: the lightest shard whips, the heaviest slab grinds. */
+    private static final double MASS_SPEED_LIGHT = 1.35D;
+    private static final double MASS_SPEED_HEAVY = 0.65D;
+    private static final double MASS_SPEED_JITTER = 0.06D;
+    /** Launch vy0 bands (blocks/tick), light → heavy. */
+    private static final double FIELD_VY_LIGHT = 0.10D;
+    private static final double FIELD_VY_HEAVY = 0.03D;
+    private static final double BURST_VY_LIGHT = 0.52D;
+    private static final double BURST_VY_HEAVY = 0.24D;
+    /**
+     * Roughly one field chunk in {@value #KEYSTONE_EVERY} is a KEYSTONE slab
+     * (deterministic column hash): ×{@value #KEYSTONE_SCALE} scale, pinned at the
+     * lowest anchor, slowest drift, {@value #KEYSTONE_SPIN_DEG}°/t tumble, zero jitter
+     * — the anchor rocks the eye reads the whole field's mass off (W12 accent law).
+     */
+    private static final int KEYSTONE_EVERY = 12;
+    private static final float KEYSTONE_SCALE = 2.4F;
+    private static final double KEYSTONE_SPIN_DEG = 0.5D;
+    /**
+     * W13-B3 sub-volleys: a crack flash no longer dumps its whole
+     * {@value #BURST_PER_CRACK}-chunk fountain into one queue instant — it vents in
+     * {@value #CRACK_VOLLEYS} waves {@value #CRACK_VOLLEY_DELAY_TICKS} ticks apart
+     * (carve stingers: {@value #CARVE_VOLLEYS} waves every
+     * {@value #CARVE_VOLLEY_DELAY_TICKS} t), so each fissure PULSES debris instead of
+     * burping once. Implemented as a due-tick on the pending queue; the drain stops at
+     * a not-yet-due head (FIFO preserved, max hold 12 t).
+     */
+    private static final int CRACK_VOLLEYS = 3;
+    private static final int CRACK_VOLLEY_DELAY_TICKS = 6;
+    private static final int CARVE_VOLLEYS = 2;
+    private static final int CARVE_VOLLEY_DELAY_TICKS = 8;
+    /**
+     * PERF — the {@code StormDebrisFx.tickMsptGuard} lever, ported with the W13-B3 cap
+     * raise: over {@value #MSPT_DEGRADE_NANOS} ns average tick time the spawn drain
+     * pauses (queue retained, never dropped) and the debris push window doubles
+     * (4 t → 8 t half-rate interpolation); recovery below {@value #MSPT_RECOVER_NANOS}
+     * ns (hysteresis). Degraded = slower tweens, never a cut show.
+     */
+    private static final long MSPT_DEGRADE_NANOS = 45_000_000L;
+    private static final long MSPT_RECOVER_NANOS = 38_000_000L;
+    private static final int MSPT_CHECK_INTERVAL_TICKS = 20;
     /** Gravity-lite pull on drifting debris (blocks/tick² — a lazy void-fall, not a drop). */
     private static final double DEBRIS_GRAVITY = -0.003D;
     /** Terminal fall speed: caps the per-window delta so 4 t tweens stay dense enough. */
@@ -361,10 +426,14 @@ public final class EndShatterSequence {
      */
     private static final Set<UUID> LIVE_DEBRIS = Collections.synchronizedSet(new HashSet<>());
 
-    /** One prepared debris spawn (FIN-2): parameters only — the entity is born at drain. */
+    /**
+     * One prepared debris spawn (FIN-2): parameters only — the entity is born at drain.
+     * {@code dueDrainTick} is the {@link #drainClock} value the spawn becomes eligible
+     * at (W13-B3 sub-volleys); 0 = immediately.
+     */
     private record PendingSpawn(Vec3 origin, double vx, double vy0, double vz, Vector3f axis,
             double spinRate, double spinPhase, double precessRate, float scale,
-            boolean straggler, Block block) {}
+            boolean straggler, Block block, long dueDrainTick) {}
 
     /**
      * FIN-2 staggered spawn wave (server thread only): field/burst generators QUEUE
@@ -373,6 +442,11 @@ public final class EndShatterSequence {
      * cosmetic — a restart drops the queue with the rest of the presentation.
      */
     private static final java.util.ArrayDeque<PendingSpawn> PENDING = new java.util.ArrayDeque<>();
+
+    /** Monotonic drain-tick counter the sub-volley due times count against. */
+    private static long drainClock;
+    /** True while the MSPT guard has the debris system degraded (see the constant doc). */
+    private static boolean msptDegraded;
 
     /** One scheduled CUT-END presentation beat, {@code delayTicks} after beat-clock zero. */
     private record Beat(int delayTicks, Runnable action) {}
@@ -527,6 +601,8 @@ public final class EndShatterSequence {
         BEATS.clear();
         beatZeroGameTime = -1L;
         beatArmDeadline = -1L;
+        drainClock = 0L;
+        msptDegraded = false;
     }
 
     /**
@@ -559,6 +635,9 @@ public final class EndShatterSequence {
             if (beatZeroGameTime >= 0L) {
                 tickBeats(gameTime);
             }
+        }
+        if (!PENDING.isEmpty() || !DEBRIS.isEmpty()) {
+            tickMsptGuard(server);
         }
         if (!PENDING.isEmpty()) {
             drainPending(server.overworld());
@@ -795,8 +874,10 @@ public final class EndShatterSequence {
                 overworld.playSound(null, BlockPos.containing(flash),
                         EclipseSounds.EVENT_END_SHATTER_CRACK.get(), SoundSource.HOSTILE, 3.0F, pitch);
                 // FIN-2: the freshly-opened fissure VENTS — a fountain of display chunks
-                // erupts out of the crack (queued through the global spawn budget).
-                queueCrackBurst(flash, BURST_PER_CRACK, mix(layout.seed() ^ SALT_BURST, islet, 0L));
+                // erupts out of the crack (queued through the global spawn budget), in
+                // W13-B3 sub-volleys so each fissure pulses instead of burping once.
+                queueCrackBurst(flash, BURST_PER_CRACK, mix(layout.seed() ^ SALT_BURST, islet, 0L),
+                        CRACK_VOLLEYS, CRACK_VOLLEY_DELAY_TICKS);
             }));
         }
 
@@ -967,7 +1048,6 @@ public final class EndShatterSequence {
                         || to01(mix(seed ^ SALT_DEBRIS, bx, bz)) > 0.80D) {
                     continue;
                 }
-                int y = EndDiscGeometry.surfaceYAt(bx, bz) + 1;
                 Block block = to01(mix(seed ^ SALT_DEBRIS, bx, bz + 1)) < 0.2D
                         ? Blocks.OBSIDIAN : Blocks.END_STONE;
                 double dist = Math.max(1.0D, Math.sqrt((double) x * x + (double) z * z));
@@ -977,31 +1057,53 @@ public final class EndShatterSequence {
                 double h1 = to01(mix(seed ^ SALT_DEBRIS, bx, bz + 2));
                 double h2 = to01(mix(seed ^ SALT_DEBRIS, bx, bz + 3));
                 double h3 = to01(mix(seed ^ SALT_DEBRIS, bx, bz + 4));
+                double h4 = to01(mix(seed ^ SALT_DEBRIS, bx, bz + 5));
                 Vector3f axis = new Vector3f(
                         (float) (h1 * 2.0D - 1.0D), 1.0F,
                         (float) (h2 * 2.0D - 1.0D)).normalize();
-                double spinRate = Math.toRadians(DEBRIS_SPIN_MIN_DEG
-                        + (DEBRIS_SPIN_MAX_DEG - DEBRIS_SPIN_MIN_DEG) * h3)
-                        * (jitter < 0.0D ? -1.0D : 1.0D);
                 double precessRate = Math.toRadians(DEBRIS_PRECESS_MIN_DEG
                         + (DEBRIS_PRECESS_MAX_DEG - DEBRIS_PRECESS_MIN_DEG) * h1);
+                // W13-B3 mass law: SIZE first (pow-1.6 bias toward shards, ~1 in
+                // KEYSTONE_EVERY columns promoted to a ×2.4 keystone slab), everything
+                // below DERIVED from it — anchor height, drift speed, launch, tumble.
+                boolean keystone = h4 < 1.0D / KEYSTONE_EVERY;
+                float scale = keystone ? KEYSTONE_SCALE
+                        : FIELD_MIN_SCALE + (FIELD_MAX_SCALE - FIELD_MIN_SCALE)
+                                * (float) Math.pow(h2, 1.6D);
+                double mass = keystone ? 1.0D : Mth.clamp(
+                        (scale - FIELD_MIN_SCALE) / (double) (FIELD_MAX_SCALE - FIELD_MIN_SCALE),
+                        0.0D, 1.0D);
+                // Heavy slabs hang LOW on the break face, shards leap off the top.
+                double anchorLift = MASS_ANCHOR_LIGHT
+                        - mass * (MASS_ANCHOR_LIGHT - MASS_ANCHOR_HEAVY)
+                        + (keystone ? 0.0D : (h3 * 2.0D - 1.0D) * 1.2D);
+                double y = EndDiscGeometry.surfaceYAt(bx, bz) + 1 + anchorLift;
+                double massSpeed = Mth.clamp(
+                        MASS_SPEED_LIGHT - mass * (MASS_SPEED_LIGHT - MASS_SPEED_HEAVY)
+                                + (keystone ? 0.0D : (jitter * 2.0D) * MASS_SPEED_JITTER),
+                        MASS_SPEED_HEAVY, MASS_SPEED_LIGHT);
+                double vy0 = FIELD_VY_LIGHT - mass * (FIELD_VY_LIGHT - FIELD_VY_HEAVY);
+                double spinDeg = keystone ? KEYSTONE_SPIN_DEG
+                        : DEBRIS_SPIN_MAX_DEG - mass * (DEBRIS_SPIN_MAX_DEG - DEBRIS_SPIN_MIN_DEG);
+                double spinRate = Math.toRadians(spinDeg) * (jitter < 0.0D ? -1.0D : 1.0D);
                 // REPASS-BD stragglers: fixed queue ordinals — the seed-hashed grid scan
                 // is deterministic, so the same 1–2 columns straggle on every replay.
                 boolean straggler = queued == STRAGGLER_ORDINAL_A || queued == STRAGGLER_ORDINAL_B;
                 Vec3 origin = new Vec3(bx + 0.5D, y, bz + 0.5D);
-                double vx = x / dist * 0.10D + jitter * 0.06D;
-                double vz = z / dist * 0.10D - jitter * 0.06D;
-                PENDING.addLast(new PendingSpawn(origin, vx, 0.06D, vz,
+                double vx = (x / dist * 0.10D + jitter * 0.06D) * massSpeed;
+                double vz = (z / dist * 0.10D - jitter * 0.06D) * massSpeed;
+                PENDING.addLast(new PendingSpawn(origin, vx, vy0, vz,
                         axis, spinRate, h3 * Math.PI * 2.0D, precessRate,
-                        (float) (0.70D + 0.45D * h2), straggler, block));
+                        scale, straggler, block, 0L));
                 queued++;
-                // "Crumble chunks further": a second, smaller shard above the break face.
-                if (h1 < 0.34D && queued < DEBRIS_FIELD_CAP) {
+                // "Crumble chunks further": a second, smaller shard above the break face
+                // — light by construction, so it rides the fast end of the mass law.
+                if (h1 < 0.34D && queued < DEBRIS_FIELD_CAP && !keystone) {
                     PENDING.addLast(new PendingSpawn(
                             origin.add(jitter * 1.5D, 2.0D + h2 * 3.0D, -jitter * 1.5D),
                             vx * 1.6D, 0.16D, vz * 1.6D,
                             axis, -spinRate, h2 * Math.PI * 2.0D, precessRate,
-                            (float) (0.30D + 0.30D * h3), false, block));
+                            (float) (0.30D + 0.30D * h3), false, block, 0L));
                     queued++;
                 }
             }
@@ -1013,44 +1115,98 @@ public final class EndShatterSequence {
     /**
      * FIN-2 crack vent: a fountain of small display chunks erupting OUT of one opened
      * fissure — end stone, obsidian, and the odd purpur shard (the buried structures
-     * bleeding through). Rising launches (+0.22…+0.52/t) arc over gravity-lite and fall
-     * to the void on the shared TTL. Queued, never spawned directly, so the global
-     * spawn budget and the hard cap always hold.
+     * bleeding through). Rising launches arc over gravity-lite and fall to the void on
+     * the shared TTL. Queued, never spawned directly, so the global spawn budget and
+     * the hard cap always hold.
+     *
+     * <p>W13-B3: the fountain PULSES — {@code volleys} sub-volleys
+     * {@code volleyDelayTicks} apart instead of one instant burp — and rides the mass
+     * law: size first ({@value #BURST_MIN_SCALE}–{@value #BURST_MAX_SCALE}, pow-1.4),
+     * launch {@value #BURST_VY_LIGHT} → {@value #BURST_VY_HEAVY} blocks/t and spin
+     * {@value #DEBRIS_SPIN_MAX_DEG} → {@value #DEBRIS_SPIN_MIN_DEG}°/t derived from it
+     * — the light shards lead each volley high, the heavy lumps loft short and low.</p>
      */
-    private static void queueCrackBurst(Vec3 flash, int count, long salt) {
+    private static void queueCrackBurst(Vec3 flash, int count, long salt,
+            int volleys, int volleyDelayTicks) {
+        int volleySize = Math.max(1, (count + volleys - 1) / volleys);
         for (int i = 0; i < count; i++) {
             double h1 = to01(mix(salt, i, 1L));
             double h2 = to01(mix(salt, i, 2L));
             double h3 = to01(mix(salt, i, 3L));
             double angle = h1 * Math.PI * 2.0D;
-            double speed = 0.06D + h2 * 0.12D;
+            float scale = BURST_MIN_SCALE + (BURST_MAX_SCALE - BURST_MIN_SCALE)
+                    * (float) Math.pow(h1, 1.4D);
+            double mass = Mth.clamp(
+                    (scale - BURST_MIN_SCALE) / (double) (BURST_MAX_SCALE - BURST_MIN_SCALE),
+                    0.0D, 1.0D);
+            double massSpeed = Mth.clamp(
+                    MASS_SPEED_LIGHT - mass * (MASS_SPEED_LIGHT - MASS_SPEED_HEAVY)
+                            + (h2 * 2.0D - 1.0D) * MASS_SPEED_JITTER,
+                    MASS_SPEED_HEAVY, MASS_SPEED_LIGHT);
+            double speed = (0.06D + h2 * 0.12D) * massSpeed;
+            double vy0 = BURST_VY_LIGHT - mass * (BURST_VY_LIGHT - BURST_VY_HEAVY)
+                    + (h2 - 0.5D) * 0.04D;
             Vector3f axis = new Vector3f((float) (h2 * 2.0D - 1.0D), 1.0F,
                     (float) (h3 * 2.0D - 1.0D)).normalize();
-            double spinRate = Math.toRadians(DEBRIS_SPIN_MIN_DEG
-                    + (DEBRIS_SPIN_MAX_DEG - DEBRIS_SPIN_MIN_DEG) * h3)
+            double spinRate = Math.toRadians(DEBRIS_SPIN_MAX_DEG
+                    - mass * (DEBRIS_SPIN_MAX_DEG - DEBRIS_SPIN_MIN_DEG))
                     * (h1 < 0.5D ? -1.0D : 1.0D);
             Block block = h3 < 0.12D ? Blocks.OBSIDIAN
                     : h3 < 0.30D ? Blocks.PURPUR_BLOCK : Blocks.END_STONE;
+            long due = drainClock + (long) (i / volleySize) * volleyDelayTicks;
             PENDING.addLast(new PendingSpawn(
                     flash.add(h2 * 2.0D - 1.0D, 0.0D, h3 * 2.0D - 1.0D),
                     Math.cos(angle) * speed,
-                    0.22D + h2 * 0.30D,
+                    vy0,
                     Math.sin(angle) * speed,
                     axis, spinRate, h1 * Math.PI * 2.0D,
                     Math.toRadians(DEBRIS_PRECESS_MIN_DEG
                             + (DEBRIS_PRECESS_MAX_DEG - DEBRIS_PRECESS_MIN_DEG) * h2),
-                    (float) (0.35D + 0.35D * h1), false, block));
+                    scale, false, block, due));
+        }
+    }
+
+    /**
+     * The {@code StormDebrisFx.tickMsptGuard} lever (W13-B3, with the 320/520 cap
+     * raise): over {@value #MSPT_DEGRADE_NANOS} ns average tick time the drain pauses
+     * (queue retained) and {@link #tickDebris} doubles its push window; recovery below
+     * {@value #MSPT_RECOVER_NANOS} ns (hysteresis). Never cuts the show.
+     */
+    private static void tickMsptGuard(MinecraftServer server) {
+        if (server.getTickCount() % MSPT_CHECK_INTERVAL_TICKS != 0) {
+            return;
+        }
+        long avgNanos = server.getAverageTickTimeNanos();
+        if (msptDegraded) {
+            if (avgNanos < MSPT_RECOVER_NANOS) {
+                msptDegraded = false;
+                EclipseMod.LOGGER.info("EndShatterSequence: MSPT recovered ({} ms) — full debris cadence",
+                        avgNanos / 1_000_000L);
+            }
+        } else if (avgNanos > MSPT_DEGRADE_NANOS) {
+            msptDegraded = true;
+            EclipseMod.LOGGER.info("EndShatterSequence: MSPT guard tripped ({} ms > 45 ms) — "
+                    + "debris spawns paused, pushes halved", avgNanos / 1_000_000L);
         }
     }
 
     /**
      * Births at most {@value #DEBRIS_SPAWN_PER_TICK} queued spawns per tick. At the
      * {@value #DEBRIS_HARD_CAP} live ceiling the REST of the queue is dropped (logged)
-     * — a bounded spectacle beats an unbounded backlog.
+     * — a bounded spectacle beats an unbounded backlog. W13-B3: the drain stops at a
+     * not-yet-due head (sub-volley pulse; FIFO preserved, delays are ≤ 12 t) and holds
+     * entirely while the MSPT guard is tripped (paused, never dropped).
      */
     private static void drainPending(ServerLevel level) {
+        drainClock++;
+        if (msptDegraded) {
+            return; // spawn pause: the queue drains once the server breathes again
+        }
         int spawned = 0;
         while (!PENDING.isEmpty() && spawned < DEBRIS_SPAWN_PER_TICK) {
+            if (PENDING.peekFirst().dueDrainTick() > drainClock) {
+                return; // head volley not due yet — the queue pulses instead of burping
+            }
             if (DEBRIS.size() >= DEBRIS_HARD_CAP) {
                 int dropped = PENDING.size();
                 PENDING.clear();
@@ -1133,11 +1289,14 @@ public final class EndShatterSequence {
                 iterator.remove();
                 continue;
             }
-            // One batched keyframe pass every DEBRIS_UPDATE_TICKS (all chunks share the
-            // separation-beat spawn tick, so every push lands on one server tick). The
-            // pushed pose is the one this window ENDS on — the client tween covers the
-            // gap between keyframes; nothing is ever teleported.
-            if (age % DEBRIS_UPDATE_TICKS == 0) {
+            // One batched keyframe pass every DEBRIS_UPDATE_TICKS (pieces are already
+            // phase-spread by the staggered spawn drain, so pushes spread over the
+            // window). The pushed pose is the one this window ENDS on — the client
+            // tween covers the gap between keyframes; nothing is ever teleported.
+            // Under the MSPT guard the window doubles (half the packets, same
+            // choreography — poses are pure functions of the age).
+            int interval = msptDegraded ? DEBRIS_UPDATE_TICKS * 2 : DEBRIS_UPDATE_TICKS;
+            if (age % interval == 0) {
                 float dissolveT = dissolveT(age);
                 if (dissolveT >= 0.67F && debris.dissolveStage < 2) {
                     debris.dissolveStage = 2;
@@ -1147,8 +1306,8 @@ public final class EndShatterSequence {
                     DisplayBrightnessFx.set(display, 4, 8);
                 }
                 display.setTransformationInterpolationDelay(0);
-                display.setTransformationInterpolationDuration(DEBRIS_UPDATE_TICKS);
-                display.setTransformation(debrisPoseAt(debris, age + DEBRIS_UPDATE_TICKS));
+                display.setTransformationInterpolationDuration(interval);
+                display.setTransformation(debrisPoseAt(debris, age + interval));
             }
             // CUT-END shot 3: a rotating handful of the tumbling chunks sheds a one-shot
             // ember burst every DEBRIS_TRAIL_INTERVAL_TICKS — the "debris trail" read.
@@ -1286,7 +1445,8 @@ public final class EndShatterSequence {
             // FIN-2: the carve's cracks keep VENTING through the whole pass — a small
             // budgeted fountain rides every stinger (dropped silently at the hard cap).
             queueCrackBurst(new Vec3(pos.getX() + 0.5D, pos.getY() + 1.0D, pos.getZ() + 0.5D),
-                    CARVE_BURST_PER_CRACK, mix(this.layout.seed() ^ SALT_BURST, this.cursor, 17L));
+                    CARVE_BURST_PER_CRACK, mix(this.layout.seed() ^ SALT_BURST, this.cursor, 17L),
+                    CARVE_VOLLEYS, CARVE_VOLLEY_DELAY_TICKS);
         }
 
         /** Seam columns clear; islet columns translate by dy (copy-then-clear). */

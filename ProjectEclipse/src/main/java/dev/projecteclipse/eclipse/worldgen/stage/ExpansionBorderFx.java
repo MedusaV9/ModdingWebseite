@@ -114,10 +114,13 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * (= {@value #VIEW_RANGE} × 64 blocks) so it is drawn everywhere inside the 160-block
  * entity-tracking horizon rather than only within 64.
  *
- * <p><b>Caps</b>: {@value #RING_BOULDERS} boulders per gate, {@value #SHARDS_MIN}–{@value
- * #SHARDS_MAX} slab displays each, {@value #BOULDERS_PER_TICK} boulders raised per tick,
- * pose updates every {@link ExpansionTiming#BOULDER_UPDATE_INTERVAL_TICKS} ticks with
- * matching client interpolation, and guaranteed cleanup: sink-and-discard on release,
+ * <p><b>Caps</b>: {@value #RING_BOULDERS} near boulders per gate ({@value #SHARDS_MIN}–
+ * {@value #SHARDS_MAX} slab displays each) plus {@value #FAR_BAND_BOULDERS} far
+ * silhouettes ({@value #FAR_SHARDS} slabs each — W13-B3), {@value #BOULDERS_PER_TICK}
+ * boulders raised per tick (one under the MSPT guard), pose updates every
+ * {@link ExpansionTiming#BOULDER_UPDATE_INTERVAL_TICKS} ticks with matching client
+ * interpolation (window doubled while the MSPT guard is tripped), and guaranteed
+ * cleanup: sink-and-discard on release,
  * instant discard on gate replacement, a sweep-stopped fallback release, an absolute
  * {@value #GATE_WATCHDOG_TICKS}-tick watchdog, a boot-time sweep of loaded levels, the
  * join-time stray sweep for crash/restart leftovers, and a full clear on server stop.</p>
@@ -184,6 +187,53 @@ public final class ExpansionBorderFx {
     /** Quake amplitude (blocks) and angular speed of the per-slab oscillation. */
     private static final float SHAKE_AMPLITUDE = 0.12F;
     private static final float SHAKE_SPEED = 0.45F;
+    /**
+     * W13-B3 mass law on the quake: the taller (heavier) a monolith, the slower it
+     * strains — the heaviest near rock oscillates at this fraction of {@link #SHAKE_SPEED}
+     * and heaves out of the ground over up to {@value #MASS_RISE_MAX_FACTOR}× the base
+     * {@link ExpansionTiming#BOULDER_RISE_TICKS} (the StormDebrisFx sediment rule:
+     * heavy = deep + slow, light = quick + jittery).
+     */
+    private static final float MASS_SHAKE_SPEED_MIN_FACTOR = 0.62F;
+    private static final float MASS_RISE_MAX_FACTOR = 1.5F;
+
+    // --- W13-B3 far silhouette band (the W12 StormDebrisFx FAR-band pattern) ---
+
+    /**
+     * Silhouette monoliths raised on the NEXT-nearest ring slots past the near cluster,
+     * so the strain reads along the whole horizon instead of stopping at the last prop
+     * a watcher stands next to. Copied from StormDebrisFx's FX-Wave-12 FAR band (25%
+     * share, half speed, hard size floor) and adapted to the rim: the "share" becomes
+     * a fixed count of arc-extension slots, "half speed" the quake tempo, and the size
+     * floor a taller height band — horizon-scale standing stones, not pebbles.
+     */
+    private static final int FAR_BAND_BOULDERS = 10;
+    /** Silhouettes are slab-poor: an embedded base plus a crown — 2 displays each. */
+    private static final int FAR_SHARDS = 2;
+    /** Horizon-scale height band (~×1.7 the near rocks) with a slender standing-stone girth. */
+    private static final float FAR_HEIGHT_MIN = 12.0F;
+    private static final float FAR_HEIGHT_MAX = 24.0F;
+    private static final float FAR_GIRTH_MIN_FACTOR = 0.26F;
+    private static final float FAR_GIRTH_MAX_FACTOR = 0.42F;
+    /** Mass law, heavy class: silhouettes heave slower and quake at roughly half tempo. */
+    private static final float FAR_RISE_FACTOR = 1.6F;
+    private static final float FAR_SHAKE_AMPLITUDE_FACTOR = 0.55F;
+    private static final float FAR_SHAKE_SPEED_FACTOR = 0.5F;
+    /** Darker light override than the near rocks — the far band must READ as silhouette. */
+    private static final int FAR_BRIGHTNESS_BLOCK = 1;
+    private static final int FAR_BRIGHTNESS_SKY = 11;
+
+    // --- W13-B3 MSPT guard (the shared StormSiege lever) ---
+
+    /**
+     * PERF — over {@value #MSPT_DEGRADE_NANOS} ns average tick time the pose-push window
+     * doubles (2 t → 4 t) and boulder raising drops to one per tick, recovering below
+     * {@value #MSPT_RECOVER_NANOS} ns (hysteresis, checked every
+     * {@value #MSPT_CHECK_INTERVAL_TICKS} ticks).
+     */
+    private static final long MSPT_DEGRADE_NANOS = 45_000_000L;
+    private static final long MSPT_RECOVER_NANOS = 38_000_000L;
+    private static final int MSPT_CHECK_INTERVAL_TICKS = 20;
 
     // --- fx ---
 
@@ -212,6 +262,13 @@ public final class ExpansionBorderFx {
             Blocks.ANDESITE.defaultBlockState(),
             Blocks.SMOOTH_BASALT.defaultBlockState()};
 
+    /** Dark-first palette for the far band — silhouettes, not lit props. */
+    private static final BlockState[] SILHOUETTE_BLOCKS = {
+            Blocks.DEEPSLATE.defaultBlockState(),
+            Blocks.SMOOTH_BASALT.defaultBlockState(),
+            Blocks.TUFF.defaultBlockState(),
+            Blocks.COBBLED_DEEPSLATE.defaultBlockState()};
+
     /** Keeps a boulder's chunk resident so its display stays in a TRACKED entity section. */
     private static final TicketType<ChunkPos> BOULDER_TICKET = TicketType.create(
             "eclipse_border_boulder", Comparator.comparingLong(ChunkPos::toLong),
@@ -222,6 +279,8 @@ public final class ExpansionBorderFx {
     /** UUIDs of displays spawned THIS session; tagged joiners outside it are crash strays. */
     private static final Set<UUID> LIVE_DISPLAYS = Collections.synchronizedSet(new HashSet<>());
     private static final AtomicBoolean LISTENERS_REGISTERED = new AtomicBoolean();
+    /** True while the shared MSPT guard has all gates on the halved pose cadence. */
+    private static boolean msptDegraded;
 
     private ExpansionBorderFx() {}
 
@@ -308,6 +367,7 @@ public final class ExpansionBorderFx {
         // made it to disk are swept by the boot/join-time stray checks on the next boot.
         GATES.clear();
         LIVE_DISPLAYS.clear();
+        msptDegraded = false;
     }
 
     /**
@@ -375,6 +435,7 @@ public final class ExpansionBorderFx {
             return;
         }
         MinecraftServer server = event.getServer();
+        tickMsptGuard(server);
         for (DiscProfile profile : GATES.keySet().toArray(new DiscProfile[0])) {
             Gate gate = GATES.get(profile);
             if (gate == null || gate.level.getServer() != server) {
@@ -384,6 +445,27 @@ public final class ExpansionBorderFx {
             if (gate.done) {
                 GATES.remove(profile, gate);
             }
+        }
+    }
+
+    /** The shared W12 MSPT lever: halved pose cadence over 45 ms, recovery below 38 ms. */
+    private static void tickMsptGuard(MinecraftServer server) {
+        if (server.getTickCount() % MSPT_CHECK_INTERVAL_TICKS != 0) {
+            return;
+        }
+        long avgNanos = server.getAverageTickTimeNanos();
+        if (msptDegraded) {
+            if (avgNanos < MSPT_RECOVER_NANOS) {
+                msptDegraded = false;
+                EclipseMod.LOGGER.info(
+                        "ExpansionBorderFx: MSPT recovered ({} ms) — full pose cadence",
+                        avgNanos / 1_000_000L);
+            }
+        } else if (avgNanos > MSPT_DEGRADE_NANOS) {
+            msptDegraded = true;
+            EclipseMod.LOGGER.info(
+                    "ExpansionBorderFx: MSPT guard tripped ({} ms > 45 ms) — pose pushes halved",
+                    avgNanos / 1_000_000L);
         }
     }
 
@@ -408,17 +490,30 @@ public final class ExpansionBorderFx {
         }
     }
 
-    /** One straining monolith: heave out of the ground → quake → sink → discard. */
+    /**
+     * One straining monolith: heave out of the ground → quake → sink → discard.
+     * W13-B3: rise duration, quake amplitude and quake tempo are per-boulder now —
+     * derived from the mass law (taller = heavier = slower) and the far-band class.
+     */
     private static final class Boulder {
         final Vec3 base;
         final float height;
         final List<Shard> shards;
+        final boolean silhouette;
+        final int riseTicks;
+        final float shakeAmplitude;
+        final float shakeSpeed;
         int spawnAge = -1;
 
-        Boulder(Vec3 base, float height, List<Shard> shards) {
+        Boulder(Vec3 base, float height, List<Shard> shards, boolean silhouette,
+                int riseTicks, float shakeAmplitude, float shakeSpeed) {
             this.base = base;
             this.height = height;
             this.shards = shards;
+            this.silhouette = silhouette;
+            this.riseTicks = riseTicks;
+            this.shakeAmplitude = shakeAmplitude;
+            this.shakeSpeed = shakeSpeed;
         }
     }
 
@@ -433,8 +528,10 @@ public final class ExpansionBorderFx {
         /** Where the GROUND ends: the committed stage's outer radius, i.e. the map edge. */
         final double rimRadius;
         final RandomSource random;
-        final List<Boulder> boulders = new ArrayList<>(RING_BOULDERS);
+        final List<Boulder> boulders = new ArrayList<>(RING_BOULDERS + FAR_BAND_BOULDERS);
         final Deque<Double> pendingAngles = new ArrayDeque<>(RING_BOULDERS);
+        /** W13-B3 far band: silhouette slots, raised after the near cluster is up. */
+        final Deque<Double> pendingFarAngles = new ArrayDeque<>(FAR_BAND_BOULDERS);
 
         int age = -1;
         int lastTicketRefreshAge = -1;
@@ -479,10 +576,11 @@ public final class ExpansionBorderFx {
                         EclipseSounds.EVENT_RIFT_DRONE.get(), SoundSource.AMBIENT, 1.0F, 0.6F);
             }
             EclipseMod.LOGGER.info(
-                    "ExpansionBorderFx: {} gate ARMED at rim radius {} (ring {}) — {} boulder(s) queued",
+                    "ExpansionBorderFx: {} gate ARMED at rim radius {} (ring {}) — {} boulder(s) "
+                            + "+ {} far silhouette(s) queued",
                     profile.name(), String.format(java.util.Locale.ROOT, "%.1f", rimRadius),
                     String.format(java.util.Locale.ROOT, "%.1f", heldRadius),
-                    pendingAngles.size());
+                    pendingAngles.size(), pendingFarAngles.size());
         }
 
         /**
@@ -509,6 +607,11 @@ public final class ExpansionBorderFx {
          * when the sequence armed us (that is where every gathered watcher is about to
          * stand), otherwise the players themselves. With neither, the ring is filled evenly
          * — the show still has to exist for whoever walks up to the edge.
+         *
+         * <p>W13-B3: the {@value #FAR_BAND_BOULDERS} NEXT-nearest slots after the near
+         * cluster become the far silhouette band, extending the strain along the horizon
+         * arc left and right of the watchers. The attractor-less even-spread fallback
+         * skips the band — an even ring has no "near cluster" to extend.</p>
          */
         private void planAngles(@Nullable Vec3 anchor) {
             List<Vec3> attractors = new ArrayList<>();
@@ -544,6 +647,10 @@ public final class ExpansionBorderFx {
             for (int i = 0; i < Math.min(RING_BOULDERS, slots.size()); i++) {
                 pendingAngles.add(slots.get(i).angle());
             }
+            int farEnd = Math.min(RING_BOULDERS + FAR_BAND_BOULDERS, slots.size());
+            for (int i = RING_BOULDERS; i < farEnd; i++) {
+                pendingFarAngles.add(slots.get(i).angle());
+            }
         }
 
         void tick() {
@@ -571,21 +678,33 @@ public final class ExpansionBorderFx {
                 }
                 refreshTickets();
             }
-            if (this.age % UPDATE_INTERVAL_TICKS == 0) {
+            // Push-cadence law: the interpolation duration IS the push interval; under
+            // the MSPT guard the window doubles (2 t → 4 t) and the client tween simply
+            // spans the longer window — motion stays continuous, packets halve.
+            int interval = msptDegraded ? UPDATE_INTERVAL_TICKS * 2 : UPDATE_INTERVAL_TICKS;
+            if (this.age % interval == 0) {
                 for (Boulder boulder : boulders) {
-                    animate(boulder);
+                    animate(boulder, interval);
                 }
             }
-            if (this.released && this.age - this.releaseAge > SINK_TICKS + UPDATE_INTERVAL_TICKS) {
+            if (this.released && this.age - this.releaseAge > SINK_TICKS + UPDATE_INTERVAL_TICKS * 2) {
                 discardBoulders();
                 this.done = true;
             }
         }
 
-        /** Resolves and raises up to {@value #BOULDERS_PER_TICK} queued rim slots. */
+        /**
+         * Resolves and raises up to {@value #BOULDERS_PER_TICK} queued rim slots per tick
+         * (one under the MSPT guard). The near cluster drains first — the props the
+         * gathered watchers stand among — then the far silhouette band fills the horizon.
+         */
         private void raiseQueuedBoulders() {
-            for (int i = 0; i < BOULDERS_PER_TICK && !pendingAngles.isEmpty(); i++) {
-                Boulder boulder = resolveBoulder(pendingAngles.poll());
+            int budget = msptDegraded ? 1 : BOULDERS_PER_TICK;
+            for (int i = 0; i < budget
+                    && !(pendingAngles.isEmpty() && pendingFarAngles.isEmpty()); i++) {
+                boolean silhouette = pendingAngles.isEmpty();
+                double angle = silhouette ? pendingFarAngles.poll() : pendingAngles.poll();
+                Boulder boulder = resolveBoulder(angle, silhouette);
                 if (boulder == null) {
                     continue; // void column all the way inward — that stretch of rim stays bare
                 }
@@ -596,15 +715,17 @@ public final class ExpansionBorderFx {
                 boulders.add(boulder);
                 raiseFx(boulder);
             }
-            if (pendingAngles.isEmpty() && !this.queueDrained) {
+            if (pendingAngles.isEmpty() && pendingFarAngles.isEmpty() && !this.queueDrained) {
                 this.queueDrained = true;
                 if (boulders.isEmpty()) {
                     EclipseMod.LOGGER.warn(
                             "ExpansionBorderFx: {} gate found no solid rim column — no boulders raised",
                             profile.name());
                 } else {
+                    long farCount = boulders.stream().filter(b -> b.silhouette).count();
                     EclipseMod.LOGGER.info("ExpansionBorderFx: {} gate raised {} rim monolith(s) "
-                            + "({} display(s)) at radius ~{}", profile.name(), boulders.size(),
+                            + "({} far silhouette(s), {} display(s)) at radius ~{}",
+                            profile.name(), boulders.size(), farCount,
                             boulders.stream().mapToInt(b -> b.shards.size()).sum(),
                             String.format(java.util.Locale.ROOT, "%.1f", rimRadius - RIM_INSET));
                 }
@@ -617,7 +738,7 @@ public final class ExpansionBorderFx {
          * probe, walking inward until a solid column is found.
          */
         @Nullable
-        private Boulder resolveBoulder(double angle) {
+        private Boulder resolveBoulder(double angle, boolean silhouette) {
             Vec3 center = SoftBorder.center(level.getServer());
             for (int step = 0; step < GROUND_PROBE_STEPS; step++) {
                 double r = Math.max(16.0D, rimRadius - RIM_INSET - step * GROUND_PROBE_STEP_BLOCKS);
@@ -628,7 +749,8 @@ public final class ExpansionBorderFx {
                 level.getChunk(chunkPos.x, chunkPos.z);
                 int groundY = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
                 if (groundY > level.getMinBuildHeight()) {
-                    return buildBoulder(new Vec3(x + 0.5D, groundY, z + 0.5D));
+                    Vec3 base = new Vec3(x + 0.5D, groundY, z + 0.5D);
+                    return silhouette ? buildSilhouette(base) : buildBoulder(base);
                 }
             }
             return null;
@@ -667,7 +789,48 @@ public final class ExpansionBorderFx {
                 shards.add(new Shard(offset, new Vector3f(slabWidth, slabHeight, slabDepth),
                         rotation, state, random.nextFloat() * Mth.TWO_PI));
             }
-            return new Boulder(base, height, shards);
+            // W13-B3 mass law: mass01 from the height band; the heaviest rock strains at
+            // 62% tempo and heaves out over ×1.5 the base rise.
+            float mass01 = (height - HEIGHT_MIN) / (HEIGHT_MAX - HEIGHT_MIN);
+            int riseTicks = Math.round(RISE_TICKS * Mth.lerp(mass01, 1.0F, MASS_RISE_MAX_FACTOR));
+            float shakeSpeed = SHAKE_SPEED * Mth.lerp(mass01, 1.0F, MASS_SHAKE_SPEED_MIN_FACTOR);
+            return new Boulder(base, height, shards, false, riseTicks, SHAKE_AMPLITUDE, shakeSpeed);
+        }
+
+        /**
+         * W13-B3 far-band builder: a horizon-scale standing stone out of {@value
+         * #FAR_SHARDS} slabs — a broad embedded base and a slender tilted crown taking
+         * most of the height. Dark-first palette, half quake tempo, ×{@value
+         * #FAR_RISE_FACTOR} rise: the far band is the heavy class of the mass law and
+         * must move like it.
+         */
+        private Boulder buildSilhouette(Vec3 base) {
+            float height = FAR_HEIGHT_MIN + random.nextFloat() * (FAR_HEIGHT_MAX - FAR_HEIGHT_MIN);
+            float girth = height * (FAR_GIRTH_MIN_FACTOR
+                    + random.nextFloat() * (FAR_GIRTH_MAX_FACTOR - FAR_GIRTH_MIN_FACTOR));
+            List<Shard> shards = new ArrayList<>(FAR_SHARDS);
+            for (int i = 0; i < FAR_SHARDS; i++) {
+                boolean crown = i > 0;
+                float slabHeight = crown ? height * 0.82F : height * 0.34F;
+                float slabGirth = crown ? girth * 0.72F : girth * 1.35F;
+                Vector3f offset = new Vector3f(
+                        (random.nextFloat() - 0.5F) * girth * 0.16F,
+                        crown ? height * 0.42F : height * 0.05F,
+                        (random.nextFloat() - 0.5F) * girth * 0.16F);
+                Quaternionf rotation = new Quaternionf()
+                        .rotateY((random.nextFloat() - 0.5F) * 1.2F)
+                        .rotateX((random.nextFloat() - 0.5F) * (crown ? 0.16F : 0.08F))
+                        .rotateZ((random.nextFloat() - 0.5F) * (crown ? 0.16F : 0.08F));
+                BlockState state = SILHOUETTE_BLOCKS[(int) (random.nextFloat() * random.nextFloat()
+                        * SILHOUETTE_BLOCKS.length)];
+                shards.add(new Shard(offset,
+                        new Vector3f(slabGirth, slabHeight, slabGirth * (0.85F + random.nextFloat() * 0.3F)),
+                        rotation, state, random.nextFloat() * Mth.TWO_PI));
+            }
+            return new Boulder(base, height, shards, true,
+                    Math.round(RISE_TICKS * FAR_RISE_FACTOR),
+                    SHAKE_AMPLITUDE * FAR_SHAKE_AMPLITUDE_FACTOR,
+                    SHAKE_SPEED * FAR_SHAKE_SPEED_FACTOR);
         }
 
         private void spawn(Boulder boulder, Shard shard) {
@@ -680,38 +843,45 @@ public final class ExpansionBorderFx {
             display.setTransformation(poseOf(boulder, shard, 0));
             // One NBT round-trip for BOTH private setters: a readable dusk-stone brightness
             // (the anchor sits on the ground, the crown does not) and the wide view range
-            // without which the rim rocks are simply not drawn past 64 blocks.
-            DisplayBrightnessFx.set(display, BRIGHTNESS_BLOCK, BRIGHTNESS_SKY, VIEW_RANGE);
+            // without which the rim rocks are simply not drawn past 64 blocks. The far
+            // band gets a darker override — it must read as silhouette, not lit prop.
+            if (boulder.silhouette) {
+                DisplayBrightnessFx.set(display, FAR_BRIGHTNESS_BLOCK, FAR_BRIGHTNESS_SKY, VIEW_RANGE);
+            } else {
+                DisplayBrightnessFx.set(display, BRIGHTNESS_BLOCK, BRIGHTNESS_SKY, VIEW_RANGE);
+            }
             LIVE_DISPLAYS.add(display.getUUID());
             level.addFreshEntity(display);
             shard.display = display;
         }
 
-        private void animate(Boulder boulder) {
+        private void animate(Boulder boulder, int interval) {
             // Keyframe lead (SanctumOrbitals law): push the pose this interpolation
             // window ENDS on, so the client tween never trails the server.
-            int poseAge = this.age - boulder.spawnAge + UPDATE_INTERVAL_TICKS;
+            int poseAge = this.age - boulder.spawnAge + interval;
             for (Shard shard : boulder.shards) {
                 Display.BlockDisplay display = shard.display;
                 if (display == null || display.isRemoved()) {
                     continue;
                 }
                 display.setTransformationInterpolationDelay(0);
-                display.setTransformationInterpolationDuration(UPDATE_INTERVAL_TICKS);
+                display.setTransformationInterpolationDuration(interval);
                 display.setTransformation(poseOf(boulder, shard, poseAge));
             }
         }
 
         /**
-         * Slab pose at a given age: an eased {@value #RISE_TICKS}-tick heave from fully
-         * below the surface, a continuous quake while the frontier is held, and after
-         * release an accelerating {@value #SINK_TICKS}-tick sink back under the ground.
-         * The entity anchor never moves; all motion lives in the transformation (the
-         * DisplayPlacerService law), and the slab box is centred on its offset so the
-         * tilt rotates the rock about itself instead of swinging it around a corner.
+         * Slab pose at a given age: an eased heave from fully below the surface over the
+         * boulder's own rise window, a continuous quake while the frontier is held, and
+         * after release an accelerating {@value #SINK_TICKS}-tick sink back under the
+         * ground. W13-B3: rise, amplitude and tempo are the boulder's mass-law fields —
+         * heavy rocks and the far band strain slower. The entity anchor never moves; all
+         * motion lives in the transformation (the DisplayPlacerService law), and the slab
+         * box is centred on its offset so the tilt rotates the rock about itself instead
+         * of swinging it around a corner.
          */
         private Transformation poseOf(Boulder boulder, Shard shard, int poseAge) {
-            float riseT = Mth.clamp(poseAge / (float) RISE_TICKS, 0.0F, 1.0F);
+            float riseT = Mth.clamp(poseAge / (float) boulder.riseTicks, 0.0F, 1.0F);
             float riseEase = 1.0F - (1.0F - riseT) * (1.0F - riseT) * (1.0F - riseT);
             float yOff = -(boulder.height + 1.5F) * (1.0F - riseEase);
             if (this.released) {
@@ -719,10 +889,11 @@ public final class ExpansionBorderFx {
                 float sinkT = Mth.clamp(sinkAge / (float) SINK_TICKS, 0.0F, 1.0F);
                 yOff -= (boulder.height + 2.5F) * sinkT * sinkT;
             }
-            float quake = SHAKE_AMPLITUDE * riseEase;
-            float shakeX = Mth.sin(shard.phase + poseAge * SHAKE_SPEED) * quake;
-            float shakeZ = Mth.cos(shard.phase * 1.7F + poseAge * SHAKE_SPEED * 0.83F) * quake;
-            float shakeY = Mth.sin(shard.phase * 0.6F + poseAge * SHAKE_SPEED * 1.31F) * quake * 0.45F;
+            float quake = boulder.shakeAmplitude * riseEase;
+            float speed = boulder.shakeSpeed;
+            float shakeX = Mth.sin(shard.phase + poseAge * speed) * quake;
+            float shakeZ = Mth.cos(shard.phase * 1.7F + poseAge * speed * 0.83F) * quake;
+            float shakeY = Mth.sin(shard.phase * 0.6F + poseAge * speed * 1.31F) * quake * 0.45F;
             Quaternionf rotation = new Quaternionf(shard.rotation);
             Vector3f half = new Vector3f(shard.size).mul(0.5F).rotate(rotation);
             Vector3f translation = new Vector3f(
@@ -733,9 +904,18 @@ public final class ExpansionBorderFx {
                     new Quaternionf());
         }
 
-        /** A monolith tearing out of the ground: quarry crack, stone slam, local shake. */
+        /**
+         * A monolith tearing out of the ground: quarry crack, stone slam, local shake.
+         * The far band only gets a low distant crack — ten more full slams back-to-back
+         * would read as noise, and nobody stands next to a silhouette.
+         */
         private void raiseFx(Boulder boulder) {
             Vec3 pos = boulder.base;
+            if (boulder.silhouette) {
+                level.playSound(null, pos.x, pos.y, pos.z, SoundEvents.DEEPSLATE_BREAK,
+                        SoundSource.BLOCKS, 1.6F, 0.34F + random.nextFloat() * 0.08F);
+                return;
+            }
             PacketDistributor.sendToPlayersNear(level, null, pos.x, pos.y, pos.z, FX_RANGE,
                     S2CShakePayload.shake(0.30F, 16));
             level.playSound(null, pos.x, pos.y, pos.z, SoundEvents.DEEPSLATE_BREAK,
@@ -777,6 +957,7 @@ public final class ExpansionBorderFx {
             this.released = true;
             this.releaseAge = Math.max(this.age, 0);
             this.pendingAngles.clear(); // never raise new rocks into the goodbye
+            this.pendingFarAngles.clear();
             SoftBorder.releaseGrowthHold(level.getServer(), profile,
                     ExpansionTiming.BORDER_RELEASE_LERP_MS);
             PacketDistributor.sendToPlayersInDimension(level, new S2CCaptionPayload(
@@ -825,6 +1006,7 @@ public final class ExpansionBorderFx {
 
         void discardBoulders() {
             this.pendingAngles.clear();
+            this.pendingFarAngles.clear();
             for (Boulder boulder : boulders) {
                 for (Shard shard : boulder.shards) {
                     Display.BlockDisplay display = shard.display;

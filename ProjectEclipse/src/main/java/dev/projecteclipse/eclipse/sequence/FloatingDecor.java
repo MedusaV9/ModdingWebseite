@@ -85,6 +85,27 @@ public final class FloatingDecor {
     private static final double BOB_MAX_AMPLITUDE = 0.25D;
     private static final double BOB_MIN_PERIOD_TICKS = 80.0D;
     private static final double BOB_MAX_PERIOD_TICKS = 200.0D;
+    /**
+     * W13-B3 mass law (the W12 {@code StormDebrisFx}/{@code DayRiftOrbits.paramsFor}
+     * sediment pattern on the intro orbit field): the fragment SIZE is rolled first
+     * (unchanged salt-4 hash) and the band height, tumble rate and bob are DERIVED
+     * from {@code mass01 = (scale − 0.3) / 1.3} instead of independent rolls — heavy
+     * chunks hang DEEP in the rip (vertical ≈ 0.05–0.20 of the band) and grind at
+     * ~{@value #SPIN_MIN_DEG_PER_TICK}°/t with a lazy long-period bob, light shards
+     * ride the top (≈ 0.65–0.95) and flutter at up to
+     * {@value #SPIN_MAX_DEG_PER_TICK}°/t. ±{@value #MASS_BAND_JITTER} band jitter
+     * keeps the correlation off the stairs. Everything stays a pure function of the
+     * anchor index, so ensure/reconcile still rebuilds the identical cloud.
+     */
+    private static final double MASS_BAND_JITTER = 0.15D;
+    /**
+     * Keystone accents: {@value #KEYSTONE_SHARE} of the anchors (salt-17 hash, ≈ 3 of
+     * {@value #COUNT}) become ×{@value #KEYSTONE_SCALE} KEYSTONE boulders — mass 1.0,
+     * zero jitter, pinned to the deepest slot with the slowest tumble: the anchor
+     * rocks the eye reads the whole rip's weight off (W12 accent law).
+     */
+    private static final double KEYSTONE_SHARE = 0.10D;
+    private static final float KEYSTONE_SCALE = 2.4F;
 
     /** Tag-scan half extent around the altar column (covers the cloud + margin). */
     private static final int SCAN_XZ_MARGIN = 28;
@@ -260,17 +281,45 @@ public final class FloatingDecor {
         return display;
     }
 
+    // ------------------------------------------------------------------ mass law
+
+    /** Whether anchor {@code index} is one of the ×{@value #KEYSTONE_SCALE} keystones. */
+    private static boolean isKeystone(int index) {
+        return hash01(index, 17) < KEYSTONE_SHARE;
+    }
+
+    /** Final fragment scale — rolled FIRST; the mass law derives everything from it. */
+    private static float scaleOf(int index) {
+        return isKeystone(index) ? KEYSTONE_SCALE
+                : MIN_SCALE + (MAX_SCALE - MIN_SCALE) * (float) Math.pow(hash01(index, 4), 1.3D);
+    }
+
+    /** 0 = the lightest shard, 1 = the heaviest chunk (keystones clamp in at 1). */
+    private static double massOf(int index) {
+        if (isKeystone(index)) {
+            return 1.0D;
+        }
+        return Math.min(1.0D, Math.max(0.0D,
+                (scaleOf(index) - MIN_SCALE) / (double) (MAX_SCALE - MIN_SCALE)));
+    }
+
     /**
      * Deterministic fragment position: golden-angle ring band r 11–23 around the altar
-     * column, vertically spread from just above the crater floor up to slightly above the
-     * island top — biased low so the rip underside reads from ground level.
+     * column; the band HEIGHT is the W13-B3 sediment read — heavy chunks sink toward
+     * the crater floor (vertical ≈ 0.05–0.20), light shards ride up near the island
+     * top (≈ 0.65–0.95, ±{@value #MASS_BAND_JITTER} jitter), keystones pin lowest with
+     * no jitter — so the rip reads bottom-up as heaviest-first instead of sprinkled.
      */
     private static Vec3 anchorPos(BlockPos altarPos, int index) {
         double angle = index * GOLDEN_ANGLE + hash01(index, 1) * 0.6D;
         double radius = MIN_RADIUS + (MAX_RADIUS - MIN_RADIUS) * hash01(index, 2);
         int topY = FloatingSanctumBuilder.islandTopY(altarPos);
         int groundY = FloatingSanctumBuilder.groundY(altarPos);
-        double vertical = Math.pow(hash01(index, 3), 1.35D); // bias toward the underside
+        double mass = massOf(index);
+        double vertical = isKeystone(index)
+                ? 0.05D + hash01(index, 3) * 0.05D
+                : Math.min(1.0D, Math.max(0.02D, 0.05D + (1.0D - mass) * 0.75D
+                        + (hash01(index, 3) - 0.5D) * 2.0D * MASS_BAND_JITTER));
         double y = groundY + 2.0D + (topY + 4.0D - (groundY + 2.0D)) * vertical;
         return new Vec3(
                 altarPos.getX() + 0.5D + Math.cos(angle) * radius,
@@ -304,7 +353,9 @@ public final class FloatingDecor {
     /**
      * Absolute pose of one fragment at {@code gameTime}: tumble about a fixed per-index
      * axis + vertical bob, with the scaled block re-centered on its anchor point through
-     * the rotation (the SanctumOrbitals {@code T·L·S} math).
+     * the rotation (the SanctumOrbitals {@code T·L·S} math). W13-B3: scale comes from
+     * {@link #scaleOf} (keystones ×{@value #KEYSTONE_SCALE}) and tumble/bob ride the
+     * mass law — see the {@link #MASS_BAND_JITTER} constant doc.
      *
      * <p>BD-STRUCT tumble craft: the axis is never re-rolled — angular momentum stays
      * consistent — but the pole PRECESSES slowly around Y (per-index period 80–120 s),
@@ -313,9 +364,15 @@ public final class FloatingDecor {
      * -tween threshold.</p>
      */
     private static Transformation poseAt(int index, long gameTime) {
-        float scale = MIN_SCALE + (MAX_SCALE - MIN_SCALE) * (float) Math.pow(hash01(index, 4), 1.3D);
-        double spinRate = Math.toRadians(SPIN_MIN_DEG_PER_TICK
-                + (SPIN_MAX_DEG_PER_TICK - SPIN_MIN_DEG_PER_TICK) * hash01(index, 5));
+        float scale = scaleOf(index);
+        double mass = massOf(index);
+        // W13-B3 mass law: tumble and bob are DERIVED from the size — light shards
+        // flutter fast on a quick shallow-ish bob, heavy chunks (keystones most of
+        // all) grind slowly on a lazy long-period swell. The hash-5/12/13 rolls stay
+        // as ±15–20% jitter so equal-mass fragments never move in lockstep.
+        double spinDeg = SPIN_MAX_DEG_PER_TICK
+                - mass * (SPIN_MAX_DEG_PER_TICK - SPIN_MIN_DEG_PER_TICK);
+        double spinRate = Math.toRadians(spinDeg) * (0.85D + 0.3D * hash01(index, 5));
         double direction = hash01(index, 6) < 0.5D ? 1.0D : -1.0D;
         float spinAngle = (float) (hash01(index, 8) * Math.PI * 2.0D + direction * spinRate * gameTime);
         double precession = (Math.PI * 2.0D / (1600.0D + 800.0D * hash01(index, 15))) * gameTime
@@ -327,10 +384,10 @@ public final class FloatingDecor {
                 .rotateY((float) precession);
         Quaternionf rotation = new Quaternionf().rotationAxis(spinAngle, axis);
 
-        double amplitude = BOB_MIN_AMPLITUDE
-                + (BOB_MAX_AMPLITUDE - BOB_MIN_AMPLITUDE) * hash01(index, 12);
-        double period = BOB_MIN_PERIOD_TICKS
-                + (BOB_MAX_PERIOD_TICKS - BOB_MIN_PERIOD_TICKS) * hash01(index, 13);
+        double amplitude = (BOB_MAX_AMPLITUDE
+                - mass * (BOB_MAX_AMPLITUDE - BOB_MIN_AMPLITUDE)) * (0.8D + 0.4D * hash01(index, 12));
+        double period = (BOB_MIN_PERIOD_TICKS
+                + mass * (BOB_MAX_PERIOD_TICKS - BOB_MIN_PERIOD_TICKS)) * (0.85D + 0.3D * hash01(index, 13));
         float bob = (float) (Math.sin((Math.PI * 2.0D / period) * gameTime
                 + hash01(index, 14) * Math.PI * 2.0D) * amplitude);
 

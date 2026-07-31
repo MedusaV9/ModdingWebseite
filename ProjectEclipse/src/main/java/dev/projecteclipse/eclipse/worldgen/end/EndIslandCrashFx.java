@@ -14,10 +14,13 @@ import org.joml.Vector3f;
 import com.mojang.math.Transformation;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.network.fx.FxCues;
+import dev.projecteclipse.eclipse.network.fx.FxPayloads;
 import dev.projecteclipse.eclipse.worldgen.DiscProfile;
 import dev.projecteclipse.eclipse.worldgen.stage.BudgetedBlockWriter;
 import dev.projecteclipse.eclipse.worldgen.stage.DisplayBrightnessFx;
 import net.minecraft.core.BlockPos;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.Mth;
@@ -68,10 +71,10 @@ public final class EndIslandCrashFx {
 
     // ------------------------------------------------------------------ tuning constants
 
-    /** Fragments per crashing islet (the "big fragment cluster" read). */
-    private static final int CLUSTER_PIECES = 34;
+    /** Fragments per crashing islet (W13-B3: 34 → 42, guarded by the MSPT lever below). */
+    private static final int CLUSTER_PIECES = 42;
     /** Absolute live ceiling across all concurrent clusters. */
-    private static final int HARD_CAP = 160;
+    private static final int HARD_CAP = 190;
     /** Transform push cadence == interpolation duration (DisplayAnimator law). */
     private static final int UPDATE_INTERVAL_TICKS = 4;
     /** Force-clear a cluster this long after launch even if its landing never arrives. */
@@ -86,6 +89,40 @@ public final class EndIslandCrashFx {
     /** Tumble rate band (degrees per tick). */
     private static final double SPIN_MIN_DEG = 0.8D;
     private static final double SPIN_MAX_DEG = 3.4D;
+    /**
+     * W13-B3 mass law (the {@code StormDebrisFx} sediment pattern): the fragment SIZE
+     * is rolled first and the impact STAGGER is derived from it — light shards land
+     * FIRST (lag up to {@value #LAG_LIGHT} of the fall), heavy plates land LAST and on
+     * the beat (lag down to {@value #LAG_HEAVY}), ±{@value #LAG_JITTER} jitter — so an
+     * islet impact reads as a light→heavy drum roll into the main slam instead of one
+     * undifferentiated clump. Tumble is derived too: light whips at
+     * {@value #SPIN_MAX_DEG}°/t, heavy grinds at {@value #SPIN_MIN_DEG}°/t.
+     */
+    private static final double LAG_LIGHT = 0.30D;
+    private static final double LAG_HEAVY = 0.04D;
+    private static final double LAG_JITTER = 0.04D;
+    /**
+     * Every {@value #KEYSTONE_EVERY}th fragment is a KEYSTONE plate: scale
+     * {@value #KEYSTONE_SCALE} (≈ ×2.4 the 2.8 band mean), zero head-start, lag ≤ 0.04
+     * — it hits exactly on the main beat and stamps a GROUND SHOCKRING cue at its
+     * impact column ({@code FX_SHOCKWAVE} + the existing {@code CUE_STRUCTURE_SLAM}
+     * dust mushroom, {@code a} = its scale → small client mushroom). Rings rate-limit
+     * at {@value #KEYSTONE_FX_COOLDOWN_TICKS} t so stacked keystones cannot strobe.
+     */
+    private static final int KEYSTONE_EVERY = 9;
+    private static final float KEYSTONE_SCALE = 6.8F;
+    private static final int KEYSTONE_FX_COOLDOWN_TICKS = 5;
+    /** Shockring cue parameters (existing frozen FX ids only — no new registrar rows). */
+    private static final float KEYSTONE_SHOCKWAVE_STRENGTH = 0.5F;
+    private static final float KEYSTONE_SHOCKWAVE_TICKS = 24.0F;
+    /**
+     * PERF — the StormSiege/StormDebrisFx MSPT lever, shared across clusters: over
+     * {@value #MSPT_DEGRADE_NANOS} ns average tick time the push window doubles
+     * (4 t → 8 t), recovering below {@value #MSPT_RECOVER_NANOS} ns (hysteresis).
+     */
+    private static final long MSPT_DEGRADE_NANOS = 45_000_000L;
+    private static final long MSPT_RECOVER_NANOS = 38_000_000L;
+    private static final int MSPT_CHECK_INTERVAL_TICKS = 20;
     /** Fragments dim as they leave the lit sky band. */
     private static final int DEBRIS_BLOCK_LIGHT = 3;
     private static final int MAX_SKY_LIGHT = 15;
@@ -107,6 +144,8 @@ public final class EndIslandCrashFx {
     private static final List<Cluster> CLUSTERS = new ArrayList<>();
     /** UUIDs of fragments spawned THIS session; tagged joiners outside it are strays. */
     private static final Set<UUID> LIVE_DISPLAYS = Collections.synchronizedSet(new HashSet<>());
+    /** True while the shared MSPT guard has the clusters on the halved push cadence. */
+    private static boolean msptDegraded;
 
     private EndIslandCrashFx() {}
 
@@ -174,6 +213,7 @@ public final class EndIslandCrashFx {
     static void onServerStopped(ServerStoppedEvent event) {
         CLUSTERS.clear();
         LIVE_DISPLAYS.clear();
+        msptDegraded = false;
     }
 
     /** A tagged display we did not spawn this session is a crash stray. */
@@ -192,6 +232,7 @@ public final class EndIslandCrashFx {
         if (CLUSTERS.isEmpty()) {
             return;
         }
+        tickMsptGuard(event.getServer());
         Iterator<Cluster> iterator = CLUSTERS.iterator();
         while (iterator.hasNext()) {
             Cluster cluster = iterator.next();
@@ -206,6 +247,25 @@ public final class EndIslandCrashFx {
         }
     }
 
+    /** The shared W12 MSPT lever: halved push cadence over 45 ms, recovery below 38 ms. */
+    private static void tickMsptGuard(MinecraftServer server) {
+        if (server.getTickCount() % MSPT_CHECK_INTERVAL_TICKS != 0) {
+            return;
+        }
+        long avgNanos = server.getAverageTickTimeNanos();
+        if (msptDegraded) {
+            if (avgNanos < MSPT_RECOVER_NANOS) {
+                msptDegraded = false;
+                EclipseMod.LOGGER.info("EndIslandCrashFx: MSPT recovered ({} ms) — full push cadence",
+                        avgNanos / 1_000_000L);
+            }
+        } else if (avgNanos > MSPT_DEGRADE_NANOS) {
+            msptDegraded = true;
+            EclipseMod.LOGGER.info("EndIslandCrashFx: MSPT guard tripped ({} ms > 45 ms) — pushes halved",
+                    avgNanos / 1_000_000L);
+        }
+    }
+
     // ------------------------------------------------------------------ the cluster
 
     /** One falling fragment; every pose is a closed-form function of the cluster age. */
@@ -215,17 +275,22 @@ public final class EndIslandCrashFx {
         final double offsetZ;
         /** Vertical head start (blocks) — the islet does not tear off as one flat slab. */
         final double lead;
-        /** Fraction of the fall this fragment lags behind the cluster (0…0.25). */
+        /** Fraction of the fall this fragment lags behind the cluster (mass-derived). */
         final double lag;
         final float scale;
         final Vector3f spinAxis;
         final double spinRate;
         final double spinPhase;
+        /** Assigned over the DOUBLED window so the degraded cadence stays evenly spread. */
         final int pushPhase;
+        /** Keystone plate: lands on the beat and stamps the ground shockring cue. */
+        final boolean keystone;
+        /** One-shot latch for the keystone's landing FX. */
+        boolean landedFx;
 
         Piece(Display.BlockDisplay display, double offsetX, double offsetZ, double lead,
                 double lag, float scale, Vector3f spinAxis, double spinRate, double spinPhase,
-                int pushPhase) {
+                int pushPhase, boolean keystone) {
             this.display = display;
             this.offsetX = offsetX;
             this.offsetZ = offsetZ;
@@ -236,6 +301,7 @@ public final class EndIslandCrashFx {
             this.spinRate = spinRate;
             this.spinPhase = spinPhase;
             this.pushPhase = pushPhase;
+            this.keystone = keystone;
         }
     }
 
@@ -249,6 +315,7 @@ public final class EndIslandCrashFx {
         final Vec3 mount;
         final List<Piece> pieces = new ArrayList<>(CLUSTER_PIECES);
         int age;
+        int lastKeystoneFxAge = -KEYSTONE_FX_COOLDOWN_TICKS;
         boolean done;
 
         Cluster(ServerLevel level, Vec3 from, Vec3 impact, int fallTicks, long seed) {
@@ -288,16 +355,32 @@ public final class EndIslandCrashFx {
                     axis.set(0.0F, 1.0F, 0.0F);
                 }
                 axis.normalize();
+                // W13-B3 mass law: size FIRST (every KEYSTONE_EVERYth ordinal promoted
+                // to a KEYSTONE plate — deterministic, so replays match), then lag,
+                // head-start and tumble DERIVED from it: light shards tear off high,
+                // spin fast and land first; heavy plates tear off low, grind slowly
+                // and hammer in last — the drum-roll into the main slam.
+                boolean keystone = i % KEYSTONE_EVERY == KEYSTONE_EVERY / 2;
+                float scale = keystone ? KEYSTONE_SCALE
+                        : (float) (MIN_SCALE + (MAX_SCALE - MIN_SCALE) * Math.pow(h2, 1.7D));
+                double mass = keystone ? 1.0D
+                        : Mth.clamp((scale - MIN_SCALE) / (double) (MAX_SCALE - MIN_SCALE),
+                                0.0D, 1.0D);
+                double lag = keystone ? h4 * LAG_HEAVY
+                        : Mth.clamp(LAG_HEAVY + (LAG_LIGHT - LAG_HEAVY) * (1.0D - mass)
+                                + (h4 - 0.5D) * 2.0D * LAG_JITTER, 0.0D, LAG_LIGHT + LAG_JITTER);
+                double lead = keystone ? 0.0D : (1.0D - mass) * LAUNCH_STAGGER * (0.5D + h3);
+                double spinDeg = SPIN_MAX_DEG - mass * (SPIN_MAX_DEG - SPIN_MIN_DEG);
                 Piece piece = new Piece(display,
                         Math.cos(angle) * radius, Math.sin(angle) * radius,
-                        h3 * LAUNCH_STAGGER,
-                        h4 * 0.25D,
-                        (float) (MIN_SCALE + (MAX_SCALE - MIN_SCALE) * Math.pow(h2, 1.7D)),
+                        Math.min(lead, LAUNCH_STAGGER),
+                        lag,
+                        scale,
                         axis,
-                        Math.toRadians(SPIN_MIN_DEG + (SPIN_MAX_DEG - SPIN_MIN_DEG) * h4)
-                                * (h1 < 0.5D ? -1.0D : 1.0D),
+                        Math.toRadians(spinDeg) * (h1 < 0.5D ? -1.0D : 1.0D),
                         h1 * Math.PI * 2.0D,
-                        i % UPDATE_INTERVAL_TICKS);
+                        i % (UPDATE_INTERVAL_TICKS * 2),
+                        keystone);
                 display.setTransformationInterpolationDelay(0);
                 display.setTransformationInterpolationDuration(0);
                 display.setTransformation(poseAt(piece, 0));
@@ -320,10 +403,22 @@ public final class EndIslandCrashFx {
             if (!playerNear()) {
                 return; // presence gate: fragments hold their last pose, zero packets
             }
-            int slice = this.age % UPDATE_INTERVAL_TICKS;
+            // Push-cadence law: the interpolation duration IS the push interval; under
+            // the MSPT guard the window doubles (slices were assigned mod 8, so the
+            // degraded cadence stays evenly spread — the StormDebrisFx pattern).
+            int interval = msptDegraded ? UPDATE_INTERVAL_TICKS * 2 : UPDATE_INTERVAL_TICKS;
+            int slice = this.age % interval;
             boolean missing = false;
             for (Piece piece : this.pieces) {
-                if (piece.pushPhase != slice) {
+                if (piece.keystone && !piece.landedFx
+                        && this.age >= this.fallTicks * (1.0D - piece.lag)) {
+                    piece.landedFx = true;
+                    keystoneShockring(piece);
+                }
+                boolean pushNow = msptDegraded
+                        ? piece.pushPhase == slice
+                        : piece.pushPhase % UPDATE_INTERVAL_TICKS == slice;
+                if (!pushNow) {
                     continue;
                 }
                 if (piece.display.isRemoved()) {
@@ -331,12 +426,32 @@ public final class EndIslandCrashFx {
                     continue;
                 }
                 piece.display.setTransformationInterpolationDelay(0);
-                piece.display.setTransformationInterpolationDuration(UPDATE_INTERVAL_TICKS);
-                piece.display.setTransformation(poseAt(piece, this.age + UPDATE_INTERVAL_TICKS));
+                piece.display.setTransformationInterpolationDuration(interval);
+                piece.display.setTransformation(poseAt(piece, this.age + interval));
             }
             if (missing) {
                 this.pieces.removeIf(piece -> piece.display.isRemoved());
             }
+        }
+
+        /**
+         * W13-B3 keystone impact: one ground shockring + dust mushroom at the plate's
+         * own impact column, fired at its landing instant (existing frozen cues only:
+         * {@code FX_SHOCKWAVE} radial distortion + {@code CUE_STRUCTURE_SLAM} mushroom
+         * with {@code a} = plate scale → small executor scale on the client). The
+         * cluster-wide cooldown keeps stacked keystones from strobing the ring.
+         */
+        private void keystoneShockring(Piece piece) {
+            if (this.age - this.lastKeystoneFxAge < KEYSTONE_FX_COOLDOWN_TICKS) {
+                return;
+            }
+            this.lastKeystoneFxAge = this.age;
+            Vec3 ground = new Vec3(this.impact.x + piece.offsetX * 0.35D,
+                    this.impact.y, this.impact.z + piece.offsetZ * 0.35D);
+            FxPayloads.sendFxEvent(this.level, FxPayloads.FX_SHOCKWAVE, ground,
+                    KEYSTONE_SHOCKWAVE_STRENGTH, KEYSTONE_SHOCKWAVE_TICKS, PLAYER_GATE_RANGE);
+            FxPayloads.sendFxEvent(this.level, FxCues.CUE_STRUCTURE_SLAM, ground,
+                    piece.scale, 0.0F, PLAYER_GATE_RANGE);
         }
 
         private boolean playerNear() {

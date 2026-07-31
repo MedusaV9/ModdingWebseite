@@ -26,6 +26,7 @@ import com.mojang.math.Transformation;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.network.S2CShakePayload;
+import dev.projecteclipse.eclipse.network.fx.FxCues;
 import dev.projecteclipse.eclipse.network.fx.FxPayloads;
 import dev.projecteclipse.eclipse.network.fx.S2CCaptionPayload;
 import dev.projecteclipse.eclipse.registry.EclipseSounds;
@@ -163,6 +164,17 @@ public final class StructureFlightFx {
      */
     private static final int BATCH_SIZE = 28;
     private static final int BATCH_STAGGER_TICKS = 2;
+    /**
+     * W13-B3 per-piece launch stagger: on top of the batch clock every piece adds a
+     * golden-ratio-hash offset of 0…{@value #LAUNCH_STAGGER_SPREAD_TICKS}−1 ticks
+     * (the P3-rib `goldenFraction` idiom — equidistributed, never visibly periodic),
+     * so up to 640 pieces no longer share ONE clock per 28-batch: launches smear into
+     * a continuous stream (~⌈28/7⌉ ≈ 4 pieces per batch per tick) while the spiral /
+     * bottom-up band ORDER is untouched (the offset is smaller than two batch strides).
+     */
+    private static final int LAUNCH_STAGGER_SPREAD_TICKS = 7;
+    /** Conjugate golden ratio (1/φ) — the fractional-part hash constant. */
+    private static final double GOLDEN_FRACTION = 0.6180339887498949D;
     /** Per-piece flight length range (plan: "30–60 t"). */
     private static final int MIN_FLIGHT_TICKS = 30;
     private static final int MAX_FLIGHT_TICKS = 60;
@@ -173,6 +185,34 @@ public final class StructureFlightFx {
      */
     private static final int MIN_HOVER_TICKS = 10;
     private static final int MAX_HOVER_TICKS = 26;
+    /**
+     * W13-B3 mass stratification (the W12 sediment law, with the material's explosion
+     * resistance as the mass proxy — the same read the landing dust already uses):
+     * {@code mass01 = min(resistance, 9) / 9} (wool 0.09, planks 0.33, stone 0.67,
+     * obsidian 1.0). Heavy masonry flies LONG and flat (52–60 t, control-point lift
+     * ×0.55) with ONE lazy spin turn and drops out of a SHORT hover (10–14 t); light
+     * pieces dart (30–38 t), loop up to two turns and swirl the full 22–26 t dwell —
+     * the delivery reads bottom-heavy instead of uniformly floaty.
+     */
+    private static final float MASS_RESISTANCE_CAP = 9.0F;
+    /** Flight/hover derivation jitters (ticks) — keep the correlation off the stairs. */
+    private static final int FLIGHT_MASS_JITTER_TICKS = 9;
+    private static final int HOVER_MASS_JITTER_TICKS = 5;
+    /** Control-point lift shrink for the heaviest piece (flat, ponderous arcs). */
+    private static final double MASS_ARC_FLATTEN = 0.45D;
+    /**
+     * Landing slam of a HEAVY piece ({@code mass ≥} {@value #HEAVY_MASS_THRESHOLD}):
+     * the existing {@code CUE_STRUCTURE_SLAM} dust mushroom (a =
+     * {@value #HEAVY_SLAM_CUE_SCALE} → small executor scale) plus a soft
+     * {@code FX_SHOCKWAVE}, on their own {@value #HEAVY_SLAM_COOLDOWN_TICKS}-tick
+     * cooldown — separate from the thud/shake limiter, so a heavy landing always
+     * reads even while light pieces hail around it. Existing frozen cues only.
+     */
+    private static final float HEAVY_MASS_THRESHOLD = 0.55F;
+    private static final int HEAVY_SLAM_COOLDOWN_TICKS = 8;
+    private static final float HEAVY_SLAM_CUE_SCALE = 5.0F;
+    private static final float HEAVY_SHOCKWAVE_STRENGTH = 0.30F;
+    private static final float HEAVY_SHOCKWAVE_TICKS = 16.0F;
     /**
      * Hover swirl shape: the piece rides one full closed orbit of
      * {@value #HOVER_SWIRL_BLOCKS} blocks around its cell while yawing up to
@@ -441,6 +481,10 @@ public final class StructureFlightFx {
         final boolean plunge;
         /** Ore/crystal-bearing material: holds a warmer block-light through the flight. */
         final boolean warmGlow;
+        /** Material mass 0…1 (explosion-resistance proxy — the W13-B3 sediment law). */
+        final float mass;
+        /** Heavy masonry: fires the landing slam dust on top of the shared thud/shake. */
+        final boolean heavy;
 
         @Nullable
         Display.BlockDisplay display;
@@ -466,6 +510,8 @@ public final class StructureFlightFx {
             this.spinAxis = spinAxis;
             this.plunge = plunge;
             this.warmGlow = state.getLightEmission() > 0 || ORE_GLOW_BLOCKS.contains(state.getBlock());
+            this.mass = massOf(state);
+            this.heavy = this.mass >= HEAVY_MASS_THRESHOLD;
         }
 
         /** Ticks from launch to full rest: ballistic arc + hover swirl + damped settle. */
@@ -490,6 +536,7 @@ public final class StructureFlightFx {
 
         int age = -1;
         int lastLandingFxAge = -LANDING_FX_COOLDOWN_TICKS;
+        int lastHeavySlamAge = -HEAVY_SLAM_COOLDOWN_TICKS;
         boolean completed;
         int completedAge;
         boolean done;
@@ -557,6 +604,9 @@ public final class StructureFlightFx {
                     piece.fxDueAge = -1;
                     landingDust(piece); // per piece — the thud/shake below rate-limit
                     landingFx(piece);
+                    if (piece.heavy) {
+                        heavySlam(piece); // W13-B3: slam dust per heavy piece, own limiter
+                    }
                     if (piece.glowStage < 2 && piece.display != null && !piece.display.isRemoved()) {
                         DisplayBrightnessFx.clear(piece.display);
                     }
@@ -752,6 +802,24 @@ public final class StructureFlightFx {
                     piece.target.z, FX_RANGE, S2CShakePayload.shake(0.12F, 8));
         }
 
+        /**
+         * W13-B3 heavy-piece touchdown: the existing structure-slam dust mushroom
+         * ({@code a} = {@value #HEAVY_SLAM_CUE_SCALE} → small client executor scale)
+         * plus a soft radial shockwave at the piece's own cell. Own cooldown — the
+         * shared thud/shake limiter above must not eat the heavy read.
+         */
+        private void heavySlam(Piece piece) {
+            if (this.age - this.lastHeavySlamAge < HEAVY_SLAM_COOLDOWN_TICKS) {
+                return;
+            }
+            this.lastHeavySlamAge = this.age;
+            Vec3 ground = new Vec3(piece.target.x, piece.entityPos.y, piece.target.z);
+            FxPayloads.sendFxEvent(level, FxCues.CUE_STRUCTURE_SLAM, ground,
+                    HEAVY_SLAM_CUE_SCALE, 0.0F, FX_RANGE);
+            FxPayloads.sendFxEvent(level, FxPayloads.FX_SHOCKWAVE, ground,
+                    HEAVY_SHOCKWAVE_STRENGTH, HEAVY_SHOCKWAVE_TICKS, FX_RANGE);
+        }
+
         /** All pieces down: tear snaps shut, resolve chord, and the REAL placement runs. */
         private void complete() {
             this.completed = true;
@@ -919,17 +987,19 @@ public final class StructureFlightFx {
             }
             Vec3 entityPos = new Vec3(x + 0.5D, y, z + 0.5D);
             Vec3 target = new Vec3(x + 0.5D, y + PIECE_SCALE * 0.5D, z + 0.5D);
+            // Surface-first weighting: index² biases hard toward the primary material.
+            // Rolled BEFORE the arc: the W13-B3 mass law derives the arc from the state.
+            BlockState state = palette.get((int) (random.nextFloat() * random.nextFloat() * palette.size()));
+            float mass = massOf(state);
             Vec3 launch = mouth.add((random.nextDouble() - 0.5D) * mouthScatter * 2.0D,
                     -random.nextDouble() * 1.5D,
                     (random.nextDouble() - 0.5D) * mouthScatter * 2.0D);
             Vec3 control = launch.add(target).scale(0.5D)
                     .add((random.nextDouble() - 0.5D) * 8.0D,
-                            6.0D + random.nextDouble() * 8.0D,
+                            (6.0D + random.nextDouble() * 8.0D) * (1.0D - MASS_ARC_FLATTEN * mass),
                             (random.nextDouble() - 0.5D) * 8.0D);
-            // Surface-first weighting: index² biases hard toward the primary material.
-            BlockState state = palette.get((int) (random.nextFloat() * random.nextFloat() * palette.size()));
-            int flightTicks = MIN_FLIGHT_TICKS + random.nextInt(MAX_FLIGHT_TICKS - MIN_FLIGHT_TICKS + 1);
-            float spinTurns = (1 + random.nextInt(2)) * (random.nextBoolean() ? 1.0F : -1.0F);
+            int flightTicks = flightTicksOf(random, mass);
+            float spinTurns = spinTurnsOf(random, mass);
             Vector3f spinAxis = new Vector3f(random.nextFloat() - 0.5F, random.nextFloat() - 0.5F,
                     random.nextFloat() - 0.5F);
             if (spinAxis.lengthSquared() < 1.0E-4F) {
@@ -937,7 +1007,7 @@ public final class StructureFlightFx {
             }
             spinAxis.normalize();
             pieces.add(new Piece(launch, control, target, entityPos, state,
-                    flightTicks, hoverTicksOf(random, cavity), random.nextFloat() * Mth.TWO_PI,
+                    flightTicks, hoverTicksOf(random, cavity, mass), random.nextFloat() * Mth.TWO_PI,
                     spinTurns, spinAxis, cavity));
         }
         // Launch stagger: center-out SPIRAL order (BD-STRUCT — never a random hail).
@@ -947,9 +1017,7 @@ public final class StructureFlightFx {
         // targets and a stable sort — replays stay identical on every client.
         pieces.sort((a, b) -> Double.compare(
                 spiralKey(a, surfaceCenter), spiralKey(b, surfaceCenter)));
-        for (int i = 0; i < pieces.size(); i++) {
-            pieces.get(i).launchTick = (i / BATCH_SIZE) * BATCH_STAGGER_TICKS;
-        }
+        assignLaunchTicks(pieces);
         return pieces;
     }
 
@@ -977,15 +1045,16 @@ public final class StructureFlightFx {
             int cellY = plunge ? surfaceY : sample.pos().getY();
             Vec3 entityPos = new Vec3(x + 0.5D, cellY, z + 0.5D);
             Vec3 target = new Vec3(x + 0.5D, cellY + PIECE_SCALE * 0.5D, z + 0.5D);
+            float mass = massOf(sample.state());
             Vec3 launch = mouth.add((random.nextDouble() - 0.5D) * mouthScatter * 2.0D,
                     -random.nextDouble() * 1.5D,
                     (random.nextDouble() - 0.5D) * mouthScatter * 2.0D);
             Vec3 control = launch.add(target).scale(0.5D)
                     .add((random.nextDouble() - 0.5D) * 8.0D,
-                            6.0D + random.nextDouble() * 8.0D,
+                            (6.0D + random.nextDouble() * 8.0D) * (1.0D - MASS_ARC_FLATTEN * mass),
                             (random.nextDouble() - 0.5D) * 8.0D);
-            int flightTicks = MIN_FLIGHT_TICKS + random.nextInt(MAX_FLIGHT_TICKS - MIN_FLIGHT_TICKS + 1);
-            float spinTurns = (1 + random.nextInt(2)) * (random.nextBoolean() ? 1.0F : -1.0F);
+            int flightTicks = flightTicksOf(random, mass);
+            float spinTurns = spinTurnsOf(random, mass);
             Vector3f spinAxis = new Vector3f(random.nextFloat() - 0.5F, random.nextFloat() - 0.5F,
                     random.nextFloat() - 0.5F);
             if (spinAxis.lengthSquared() < 1.0E-4F) {
@@ -993,7 +1062,7 @@ public final class StructureFlightFx {
             }
             spinAxis.normalize();
             pieces.add(new Piece(launch, control, target, entityPos, sample.state(),
-                    flightTicks, hoverTicksOf(random, plunge), random.nextFloat() * Mth.TWO_PI,
+                    flightTicks, hoverTicksOf(random, plunge, mass), random.nextFloat() * Mth.TWO_PI,
                     spinTurns, spinAxis, plunge));
             minY = Math.min(minY, target.y);
         }
@@ -1003,20 +1072,59 @@ public final class StructureFlightFx {
         double baseY = minY;
         pieces.sort((a, b) -> Double.compare(
                 sampledLaunchKey(a, center, baseY), sampledLaunchKey(b, center, baseY)));
-        for (int i = 0; i < pieces.size(); i++) {
-            pieces.get(i).launchTick = (i / BATCH_SIZE) * BATCH_STAGGER_TICKS;
-        }
+        assignLaunchTicks(pieces);
         return pieces;
+    }
+
+    /**
+     * W13-B3 launch clock: batch base plus a per-piece golden-ratio-hash offset
+     * (⌊frac(i·1/φ)·{@value #LAUNCH_STAGGER_SPREAD_TICKS}⌋ — the P3-rib
+     * {@code goldenFraction} idiom). Equidistributed by construction: every batch
+     * smears evenly over the next {@value #LAUNCH_STAGGER_SPREAD_TICKS} ticks with no
+     * visible period, no tick spawns more than before, and the sort order above still
+     * dominates (the offset spans fewer than four batch strides). Pure function of the
+     * index — replays stay identical.
+     */
+    private static void assignLaunchTicks(List<Piece> pieces) {
+        for (int i = 0; i < pieces.size(); i++) {
+            double golden = i * GOLDEN_FRACTION;
+            int offset = (int) ((golden - Math.floor(golden)) * LAUNCH_STAGGER_SPREAD_TICKS);
+            pieces.get(i).launchTick = (i / BATCH_SIZE) * BATCH_STAGGER_TICKS + offset;
+        }
+    }
+
+    /** Material mass 0…1: explosion resistance capped at {@value #MASS_RESISTANCE_CAP}. */
+    private static float massOf(BlockState state) {
+        return Math.min(state.getBlock().getExplosionResistance(), MASS_RESISTANCE_CAP)
+                / MASS_RESISTANCE_CAP;
+    }
+
+    /** Mass-derived flight length: light darts 30–38 t, heavy sails 52–60 t. */
+    private static int flightTicksOf(RandomSource random, float mass) {
+        int base = MIN_FLIGHT_TICKS + (int) (mass
+                * (MAX_FLIGHT_TICKS - MIN_FLIGHT_TICKS - FLIGHT_MASS_JITTER_TICKS + 1));
+        return Math.min(MAX_FLIGHT_TICKS, base + random.nextInt(FLIGHT_MASS_JITTER_TICKS));
+    }
+
+    /** Mass-derived spin: light pieces loop up to two full turns, heavy masonry one. */
+    private static float spinTurnsOf(RandomSource random, float mass) {
+        int turns = 1 + (random.nextFloat() < 1.0F - mass ? 1 : 0);
+        return turns * (random.nextBoolean() ? 1.0F : -1.0F);
     }
 
     /**
      * Hover dwell of one piece. Plunging (cavity) pieces skip the swirl entirely — they
      * are meant to punch straight through the surface, and a hover inside solid terrain
-     * would read as a piece stuck in the ground.
+     * would read as a piece stuck in the ground. W13-B3: the dwell is mass-derived —
+     * light shards swirl the full 22–26 t, heavy masonry drops out after 10–14 t.
      */
-    private static int hoverTicksOf(RandomSource random, boolean plunge) {
-        return plunge ? 0
-                : MIN_HOVER_TICKS + random.nextInt(MAX_HOVER_TICKS - MIN_HOVER_TICKS + 1);
+    private static int hoverTicksOf(RandomSource random, boolean plunge, float mass) {
+        if (plunge) {
+            return 0;
+        }
+        int top = MAX_HOVER_TICKS - (int) (mass
+                * (MAX_HOVER_TICKS - MIN_HOVER_TICKS - HOVER_MASS_JITTER_TICKS + 1));
+        return Math.max(MIN_HOVER_TICKS, top - random.nextInt(HOVER_MASS_JITTER_TICKS));
     }
 
     /** Height of one bottom-up launch band of the sampled-block delivery (blocks). */
