@@ -49,6 +49,8 @@ var _by_page: Dictionary = {}
 var _current_page := ""
 var _grid: GridContainer
 var _page_title: Label
+## W14: Icon-Glyph im Seiten-Header (ACNH-Abschnitts-Header-Muster).
+var _page_icon: TextureRect
 var _page_progress: Label
 var _count_label: Label
 var _rail_box: VBoxContainer
@@ -102,7 +104,7 @@ func _ready() -> void:
 	_build_ui()
 	_apply_metrics()
 	get_viewport().size_changed.connect(_on_viewport_resized)
-	_show_page(_current_page)
+	_show_page(_current_page, true)
 	_attach_unlock_service()
 	ready_for_reveal.emit()
 
@@ -135,6 +137,8 @@ func _apply_metrics() -> void:
 	_scale_font(_title_label, AcTokens.FONT_SIZE_TITLE)
 	_scale_font(_count_label, AcTokens.FONT_SIZE_CAPTION)
 	_scale_font(_page_title, 24)
+	if _page_icon != null:
+		_page_icon.custom_minimum_size = Vector2.ONE * roundf(24.0 * maxf(_f, 1.0))
 	# Rail wächst mit, bleibt aber unter ~1/3 der Breite (Hochkant).
 	_rail_scroll.custom_minimum_size = Vector2(minf(240.0 * _f, canvas.x * 0.32), 0.0)
 	for chip in _rail_box.get_children():
@@ -142,17 +146,18 @@ func _apply_metrics() -> void:
 			(chip as Control).custom_minimum_size = Vector2(0.0, maxf(40.0 * _f, floor_px))
 			_scale_font(chip as Control, AcTokens.FONT_SIZE_CAPTION)
 	# Kacheln: Restbreite auf 2..4 Spalten aufteilen (Seitenverhältnis wie
-	# die alte 190×200-Kachel).
+	# die alte 190×200-Kachel). W14: Lücken aufs 8er-Raster (16 statt 14) —
+	# MUSS zur split-/Grid-Separation in _build_ui/_build_page_panel passen.
 	var avail := (
 		canvas.x
 		- (24.0 + float(insets["left"]))
 		- (24.0 + float(insets["right"]))
 		- _rail_scroll.custom_minimum_size.x
-		- 14.0
+		- 16.0
 	)
-	var cols := clampi(int(floorf((avail + 14.0) / (190.0 * _f + 14.0))), 2, 4)
+	var cols := clampi(int(floorf((avail + 16.0) / (190.0 * _f + 16.0))), 2, 4)
 	_grid.columns = cols
-	var tile_w := (avail - 14.0 * float(cols - 1)) / float(cols)
+	var tile_w := (avail - 16.0 * float(cols - 1)) / float(cols)
 	_tile = Vector2(tile_w, tile_w * 200.0 / 190.0)
 	# W13/SAMMLUNG: UI-Faktor an die Sammlungs-View weiterreichen (FIX1).
 	if _collections_view != null:
@@ -179,9 +184,8 @@ func unlocked_count() -> int:
 
 
 func _build_ui() -> void:
-	var wallpaper := AcWallpaper.new()
-	wallpaper.set_anchors_preset(Control.PRESET_FULL_RECT)
-	add_child(wallpaper)
+	# W14: Album-Stimmung (Web-V6 „album“) statt Standard-Blätter.
+	add_child(AcWallpaper.for_context("album"))
 
 	var rows := VBoxContainer.new()
 	rows.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -189,14 +193,15 @@ func _build_ui() -> void:
 	rows.offset_right = -24.0
 	rows.offset_top = 16.0
 	rows.offset_bottom = -16.0
-	rows.add_theme_constant_override("separation", 12)
+	# W14: 8er-Raster (12 war rasterfremd).
+	rows.add_theme_constant_override("separation", 16)
 	add_child(rows)
 	_rows_box = rows
 	rows.add_child(_build_header())
 
 	var split := HBoxContainer.new()
 	split.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	split.add_theme_constant_override("separation", 14)
+	split.add_theme_constant_override("separation", 16)
 	rows.add_child(split)
 	split.add_child(_build_rail())
 	split.add_child(_build_page_panel())
@@ -212,7 +217,7 @@ func _build_ui() -> void:
 
 func _build_header() -> Control:
 	var header := HBoxContainer.new()
-	header.add_theme_constant_override("separation", 12)
+	header.add_theme_constant_override("separation", 16)
 	# UIFINAL: Kopfzeilen-Konsistenz — Zurück ist überall die Ghost-Outline-
 	# Pill mit ‹-Pfeil (wie Arcade/Freunde/Profil), nicht die weiße Paper-Pill.
 	var back := SquishButton.new()
@@ -268,12 +273,23 @@ func _build_collections_chip() -> Control:
 	chip.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	chip.focus_mode = Control.FOCUS_NONE
 	chip.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_clamp_chip_text(chip)
 	var icon_path := str(CollectionsView.SET_ICONS.get("fish", ""))
 	if ResourceLoader.exists(icon_path):
 		chip.icon = load(icon_path)
 	chip.self_modulate = Color("#FFE3F0")
-	chip.pressed.connect(_show_page.bind(COLLECTIONS_PAGE))
+	chip.pressed.connect(_show_page.bind(COLLECTIONS_PAGE, true))
 	return chip
+
+
+## W14-P0 (FB3-Audit „Sticker laufen rechts aus dem Bild“): lange Chip-Texte
+## („Morgenmuffel 3/6 NEU“) blähten die Mindestbreite der Rail auf — der
+## ScrollContainer (horizontal_scroll DISABLED) erbt die Kind-Mindestbreite,
+## das Grid rechnete aber mit der SOLL-Rail-Breite und lief übers Canvas.
+## clip_text nimmt den Text aus der Mindestbreiten-Rechnung, „…“ kürzt sauber.
+func _clamp_chip_text(chip: Button) -> void:
+	chip.clip_text = true
+	chip.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 
 
 func _collections_chip_text() -> String:
@@ -293,11 +309,12 @@ func _build_page_chip(page: Dictionary) -> Control:
 	chip.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	chip.focus_mode = Control.FOCUS_NONE
 	chip.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_clamp_chip_text(chip)
 	var icon_path := "%s%s.svg" % [ICON_DIR, str(page.get("icon", "star"))]
 	if ResourceLoader.exists(icon_path):
 		chip.icon = load(icon_path)
 	chip.self_modulate = Color(str(page.get("tint", "#FFFFFF")))
-	chip.pressed.connect(_show_page.bind(page_id))
+	chip.pressed.connect(_show_page.bind(page_id, true))
 	return chip
 
 
@@ -347,9 +364,24 @@ func _build_page_panel() -> Control:
 	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	panel.add_theme_constant_override("separation", 8)
+	# W14: Seiten-Header mit Icon-Glyph (Settings-Gruppen-Muster) — das
+	# Seiten-Icon der Rail wandert mit in die Überschrift.
+	var head := HBoxContainer.new()
+	head.name = "PageHead"
+	head.add_theme_constant_override("separation", 8)
+	panel.add_child(head)
+	_page_icon = TextureRect.new()
+	_page_icon.name = "PageIcon"
+	_page_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_page_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_page_icon.custom_minimum_size = Vector2.ONE * 24.0
+	_page_icon.self_modulate = AcTokens.INK
+	_page_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_page_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	head.add_child(_page_icon)
 	_page_title = Label.new()
 	_page_title.theme_type_variation = &"HeadlineLabel"
-	panel.add_child(_page_title)
+	head.add_child(_page_title)
 	_page_progress = Label.new()
 	_page_progress.theme_type_variation = &"SoftLabel"
 	panel.add_child(_page_progress)
@@ -363,8 +395,8 @@ func _build_page_panel() -> Control:
 	_grid = GridContainer.new()
 	_grid.columns = 3
 	_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_grid.add_theme_constant_override("h_separation", 14)
-	_grid.add_theme_constant_override("v_separation", 14)
+	_grid.add_theme_constant_override("h_separation", 16)
+	_grid.add_theme_constant_override("v_separation", 16)
 	scroll.add_child(_grid)
 	# W13/SAMMLUNG: die Sammlungs-View liegt als Geschwister des Grids im
 	# Panel — _show_page schaltet zwischen beiden um.
@@ -379,12 +411,15 @@ func _build_page_panel() -> Control:
 	return panel
 
 
-func _show_page(page_id: String) -> void:
+## W14: animate=true (Erstaufbau + Rail-Chip-Tap) staffelt die Kacheln weich
+## ein; Refresh-Pfade (Resize, Unlock, Gesehen-Markierung) bleiben ruhig.
+func _show_page(page_id: String, animate := false) -> void:
 	_current_page = page_id
 	# W13/SAMMLUNG: Pseudo-Seite — Grid aus, Sammlungs-View an (und zurück).
 	if page_id == COLLECTIONS_PAGE:
 		if _page_title != null:
 			_page_title.text = I18nService.t("collections.titel")
+		_set_page_icon(str(CollectionsView.SET_ICONS.get("fish", "")))
 		_refresh_collections_progress()
 		if _grid_scroll != null:
 			_grid_scroll.visible = false
@@ -399,6 +434,7 @@ func _show_page(page_id: String) -> void:
 	var page := _page_def(page_id)
 	if _page_title != null:
 		_page_title.text = str(page.get("title_de", page_id))
+	_set_page_icon("%s%s.svg" % [ICON_DIR, str(page.get("icon", "star"))])
 	_refresh_page_progress(page_id)
 	if _grid == null:
 		return
@@ -407,8 +443,23 @@ func _show_page(page_id: String) -> void:
 		# Karten mit den noch nicht freigegebenen alten (Auto-Rename).
 		_grid.remove_child(child)
 		child.queue_free()
+	var cards: Array = []
 	for def: Dictionary in _by_page.get(page_id, []):
-		_grid.add_child(_build_sticker_card(def))
+		var card := _build_sticker_card(def)
+		_grid.add_child(card)
+		cards.append(card)
+	if animate:
+		UiMotion.stagger_in(cards, 0.02)
+
+
+## Seiten-Icon setzen (fehlt die Datei, verschwindet der Glyph statt ein
+## leeres Quadrat zu lassen).
+func _set_page_icon(icon_path: String) -> void:
+	if _page_icon == null:
+		return
+	var has_icon := not icon_path.is_empty() and ResourceLoader.exists(icon_path)
+	_page_icon.texture = load(icon_path) if has_icon else null
+	_page_icon.visible = has_icon
 
 
 ## Fortschrittszeile der Sammlungs-Seite („n von 32 Schätzen gefunden“).
@@ -449,6 +500,8 @@ func _on_collection_set_claimed(set_id: String, reward: Dictionary) -> void:
 		)
 	)
 	AudioDirector.try_play(self, "ui_sticker")
+	# W14/UIKERN-Kontrakt: Set-Claim ist eine Spezial-Interaktion → success.
+	Haptics.success(self)
 	_confetti_burst()
 	_refresh_rail()
 	_refresh_collections_progress()
@@ -681,6 +734,8 @@ func _maybe_claim_set_reward(page_id: String) -> void:
 	_toasts.show_toast(
 		I18nService.t("album.set_belohnung", {"title": title, "coins": SET_REWARD_COINS})
 	)
+	# W14/UIKERN-Kontrakt: Seiten-komplett-Belohnung → success-Haptik.
+	Haptics.success(self)
 	_confetti_burst()
 	_refresh_page_progress(_current_page)
 
