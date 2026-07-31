@@ -92,6 +92,7 @@
     "runner": {
       "title": "Gooby-Renner",
       "hint": "Wischen: seitlich = Spur, hoch = Sprung, runter = Rutschen",
+      "intro": "Weich allem aus — sammle Münzen!",
       "distance": "{m} m",
       "stats": "{coins} Münzen · {left} Leben",
       "combo": "Combo ×{mult}!",

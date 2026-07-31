@@ -92,6 +92,7 @@
     "runner": {
       "title": "Gooby Runner",
       "hint": "Swipe: sideways = lane, up = jump, down = slide",
+      "intro": "Dodge everything — grab the coins!",
       "distance": "{m} m",
       "stats": "{coins} coins · {left} lives",
       "combo": "Combo ×{mult}!",

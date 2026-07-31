@@ -54,6 +54,8 @@ const STREAK_RATE: Array = [[9.0, 0.0], [11.0, 4.0], [13.0, 9.0]]
 const DESIGN_SHORT := 390.0
 ## Nach so vielen Sekunden blendet der Wisch-Hinweis aus.
 const HINT_FADE_SEC := 5.0
+const INTRO_S := 1.5  # W14 Intro-Beat (s): Totale + Ziel-Banner, Sim wartet.
+const INTRO_CAM_BACK := 5.0  # Kamera-Rückzug (m), klingt über INTRO_S auf 0 ab.
 
 ## Autohaus-Haken: später vom Host befüllbar (Skin-Id / Tempo-Bonus).
 var car_skin := ""
@@ -112,6 +114,7 @@ var _stat_label: Label
 var _hint_label: Label
 var _banner := ""
 var _banner_t := 0.0
+var _intro_left := 0.0
 
 
 func setup(context: MinigameCtx) -> void:
@@ -122,6 +125,9 @@ func setup(context: MinigameCtx) -> void:
 	_build_stage()
 	_build_hud()
 	_fit_viewport()
+	_intro_left = INTRO_S
+	_banner = I18nService.t("mg.runner.intro")
+	_banner_t = INTRO_S + 0.7
 	if is_inside_tree():
 		get_viewport().size_changed.connect(_fit_viewport)
 
@@ -149,6 +155,17 @@ func _process(delta: float) -> void:
 	if not is_active() or finished:
 		return
 	var dt := minf(delta, 0.1)
+	# Intro-Beat: Kamera schwebt aus der Totale ein, die Sim wartet (zahlengleich).
+	if _intro_left > 0.0:
+		_intro_left = maxf(_intro_left - dt, 0.0)
+		_banner_t = maxf(0.0, _banner_t - dt)
+		_stage.call("tick", dt)
+		_gooby.call("tick", dt)
+		_gooby.call("run", 0.25)
+		_sync_props()
+		_place_camera(INTRO_CAM_BACK * ease(_intro_left / INTRO_S, 1.6))
+		queue_redraw()
+		return
 	elapsed += dt
 	_banner_t = maxf(0.0, _banner_t - dt)
 	_invuln = maxf(0.0, _invuln - dt)
@@ -173,7 +190,7 @@ func _process(delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if not is_active() or finished:
+	if not is_active() or finished or _intro_left > 0.0:
 		return
 	if event is InputEventScreenTouch:
 		if event.pressed:
@@ -228,10 +245,11 @@ func _build_stage() -> void:
 				"fog_from": 34.0,
 				"fog_to": 92.0,
 				"glow": 0.22,
-				# Web: DirectionalLight(0xfff2dd, 1.0) bei (4, 9, 6).
+				# Web: DirectionalLight(0xfff2dd, 1.0) bei (4, 9, 6). W14: +12 %
+				# Sonne holt Baumkronen/Fassaden aus dem Fast-Schwarz (Audit c=2).
 				"sun_dir": Vector3(-0.35, -0.79, -0.53),
 				"sun_color": Color(1.0, 0.949, 0.867),
-				"sun_energy": 1.0,
+				"sun_energy": 1.12,
 				# Web: HemisphereLight(0xfff5e8, 0xb8a898, 1.0) — der Mittelwert
 				# beider Halbkugeln ist das, was eine senkrechte Fassade sieht.
 				"ambient_color": Color(0.861, 0.81, 0.753),
@@ -241,10 +259,10 @@ func _build_stage() -> void:
 				# Asphalt zu Lavendel-Weiß aus — genau das war der „alles wirkt
 				# 2D"-Eindruck: ohne dunkle Fahrbahn fehlt dem Korridor Tiefe.
 				"ambient": 2.2,
-				# Winziges Gegenlicht von der Schattenseite (das Web hat keins,
-				# aber ACES zieht dort stärker an als three.js' NoToneMapping).
-				"fill_energy": 0.8,
-				"fill_color": Color(0.8, 0.85, 0.95),
+				# Gegenlicht von der Schattenseite (Web-ACES-Ausgleich). W14:
+				# 0,8→1,0 + wärmer — die Baum-Schattenseiten soffen schwarz ab.
+				"fill_energy": 1.0,
+				"fill_color": Color(0.88, 0.86, 0.82),
 				# Die Kenney-Häuser tragen fast schwarze Sockelbänder. Mit dem
 				# Bühnen-Kontrast (1,05) soffen sie zu einem Loch ab: ein
 				# Viertel des Bildes lag unter Luma 30, im Web sind es 0,4 %.
