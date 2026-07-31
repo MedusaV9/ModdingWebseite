@@ -13,6 +13,10 @@ const Economy := preload("res://scripts/logic/economy.gd")
 
 var gs: Object
 var waren: Array = []
+## W13B (Doc F §3.2): optionale Bücher-Kategorie (REHWEI) — `inventar` =
+## Buch-Id, Kauf landet via kaufe() in inventory.items; schon gekaufte
+## Bücher stehen ausgegraut „im Regal“ (Bücher kauft man nur einmal).
+var buecher: Array = []
 
 var _liste: VBoxContainer
 var _coins_label: Label
@@ -42,6 +46,15 @@ func aktualisiere() -> void:
 	_coins_label.text = I18nService.t("city.laden.coins").format({"coins": _coins()})
 	for ware: Dictionary in waren:
 		_liste.add_child(_zeile(ware))
+	if buecher.is_empty():
+		return
+	var titel := Label.new()
+	titel.name = "BuecherTitel"
+	titel.theme_type_variation = "HeadlineLabel"
+	titel.text = I18nService.t("city.laden.buecher_titel")
+	_liste.add_child(titel)
+	for buch: Dictionary in buecher:
+		_liste.add_child(_buch_zeile(buch))
 
 
 func kann_kaufen(ware: Dictionary) -> bool:
@@ -74,6 +87,47 @@ func kaufe(ware: Dictionary) -> bool:
 	gekauft.emit(id)
 	aktualisiere()
 	return true
+
+
+## Steht das Buch schon im Regal? (Bücher kauft man genau einmal.)
+func im_regal(buch: Dictionary) -> bool:
+	if gs == null:
+		return false
+	var key := str(buch.get("inventar", buch.get("id", "")))
+	return int(gs.get_value("inventory.items.%s" % key, 0)) > 0
+
+
+## Buch-Zeile: gekaufte Bücher sind ausgegraut „im Regal“, der Rest kauft
+## über den normalen kaufe()-Pfad (inventar gesetzt → inventory.items).
+func _buch_zeile(buch: Dictionary) -> Control:
+	var zeile := HBoxContainer.new()
+	zeile.name = "Buch_%s" % str(buch.get("id", "?"))
+	zeile.add_theme_constant_override("separation", 12)
+	var name_label := Label.new()
+	name_label.text = str(buch.get("name_de", buch.get("id", "?")))
+	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	zeile.add_child(name_label)
+	var btn := Button.new()
+	btn.name = "BuchKnopf"
+	btn.theme_type_variation = "AccentButton"
+	var schon := im_regal(buch)
+	if schon:
+		zeile.modulate = Color(1.0, 1.0, 1.0, 0.55)
+		btn.text = I18nService.t("city.laden.im_regal")
+		btn.disabled = true
+	else:
+		btn.text = I18nService.t("city.laden.kaufen").format({"preis": int(buch.get("preis", 0))})
+		btn.disabled = not kann_kaufen(buch)
+		btn.pressed.connect(func() -> void: kaufe_buch(buch))
+	zeile.add_child(btn)
+	return zeile
+
+
+## Buch-Kauf: wie kaufe(), aber Doppelkäufe prallen ab (schon im Regal).
+func kaufe_buch(buch: Dictionary) -> bool:
+	if im_regal(buch):
+		return false
+	return kaufe(buch)
 
 
 func _zeile(ware: Dictionary) -> Control:

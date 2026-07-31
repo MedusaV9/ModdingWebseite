@@ -37,7 +37,9 @@
       "titel": "Einkaufen",
       "coins": "Du hast {coins} Münzen",
       "kaufen": "{preis} ᴳ",
-      "rezept_noetig": "Nur mit Rezept!"
+      "rezept_noetig": "Nur mit Rezept!",
+      "buecher_titel": "Bücher",
+      "im_regal": "Im Regal"
     },
     "pow": {
       "sheet_titel": "POW! — Alles, was Krach macht",

@@ -103,6 +103,60 @@ func test_baumarkt_kauf_feuert_signal_und_bucht_material() -> void:
 	sheet.free()
 
 
+## ---------------------------------------------- REHWEI-Bücher (GESCHICHTEN)
+
+
+## GESCHICHTEN-Request: der REHWEI-Laden rendert die buecher-Kategorie —
+## Kauf bucht Münzen ab und legt die Buch-Id in inventory.items, danach
+## steht das Buch ausgegraut „im Regal“ (kein Doppelkauf).
+func test_rehwei_laden_rendert_buecher_und_kauf_landet_im_regal() -> void:
+	var gs := FakeGameState.new()
+	var sheet := HaendlerSheet.new()
+	sheet.gs = gs
+	sheet.waren = CitySortiment.laden(CitySortiment.REHWEI_PFAD)
+	sheet.buecher = CitySortiment.buecher(CitySortiment.REHWEI_PFAD)
+	assert_eq(sheet.buecher.size(), 5, "5 kaufbare Bücher im Sortiment")
+	tree.root.add_child(sheet)
+	await wait_frames(1)
+	assert_true(sheet.find_child("BuecherTitel", true, false) != null, "Bücher-Überschrift")
+	var buch: Dictionary = sheet.buecher[0]
+	var buch_id := str(buch.get("id", ""))
+	var zeile: Control = sheet.find_child("Buch_%s" % buch_id, true, false)
+	assert_true(zeile != null, "Buch-Zeile gerendert")
+	assert_true(sheet.kaufe_buch(buch), "Kauf klappt mit vollen Taschen")
+	assert_eq(
+		int(gs.get_value("inventory.items.%s" % buch_id, 0)), 1, "Buch liegt in inventory.items"
+	)
+	assert_eq(
+		int(gs.get_value("economy.coins", 0)), 300 - int(buch.get("preis", 0)), "Münzen abgebucht"
+	)
+	assert_false(sheet.kaufe_buch(buch), "Doppelkauf prallt ab (schon im Regal)")
+	assert_eq(int(gs.get_value("inventory.items.%s" % buch_id, 0)), 1, "weiterhin genau 1x")
+	await wait_frames(1)
+	zeile = sheet.find_child("Buch_%s" % buch_id, true, false)
+	var knopf: Button = zeile.find_child("BuchKnopf", true, false)
+	assert_true(knopf != null and knopf.disabled, "Regal-Knopf ist ausgegraut")
+	assert_eq(knopf.text, I18nService.t("city.laden.im_regal"), "„Im Regal“-Text")
+	tree.root.remove_child(sheet)
+	sheet.free()
+
+
+## Der REHWEI-Ort reicht die Bücher wirklich in sein Laden-Sheet durch.
+func test_rehwei_ort_befuellt_laden_mit_buechern() -> void:
+	assert_false(
+		CitySortiment.buecher(CitySortiment.REHWEI_PFAD).is_empty(),
+		"REHWEI-Sortiment hat die buecher-Kategorie"
+	)
+	var quelle := FileAccess.get_file_as_string("res://scripts/city/orte/rehwei.gd")
+	assert_true(
+		quelle.contains("inhalt.buecher = CitySortiment.buecher"),
+		"OrtRehwei.oeffne_laden befüllt HaendlerSheet.buecher"
+	)
+
+
+## ---------------------------------------------- Lambda-Tripwire (REISEPASS)
+
+
 ## Quelltext-Tripwire für ALLE gemeldeten Kauf-Pfade: das Wert-Capture-
 ## Muster (`var bezahlt …` als lokaler bool) darf nicht zurückkommen —
 ## wer den Kauf-Guard anfasst, MUSS beim Dictionary-Capture bleiben.

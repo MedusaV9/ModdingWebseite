@@ -10,12 +10,23 @@ const GOOBYTHEKE_PFAD := "res://scripts/city/data/goobytheke_sortiment.json"
 
 ## Warenliste laden (Array of Dictionary, [] bei kaputter Datei).
 static func laden(pfad: String) -> Array:
+	return _liste(pfad, "waren")
+
+
+## Bücher-Kategorie laden (W13B, Doc F §3.2: Geschichten-Bücher bei REHWEI —
+## `inventar` = Buch-Id aus content/books, Kauf landet in inventory.items).
+static func buecher(pfad: String) -> Array:
+	return _liste(pfad, "buecher")
+
+
+static func _liste(pfad: String, feld: String) -> Array:
 	var raw := FileAccess.get_file_as_string(pfad)
 	var json := JSON.new()
 	if json.parse(raw) != OK or not (json.data is Dictionary):
 		push_error("Sortiment kaputt: %s" % pfad)
 		return []
-	return json.data.get("waren", [])
+	var liste: Variant = json.data.get(feld, [])
+	return liste if liste is Array else []
 
 
 static func ware(waren: Array, id: String) -> Dictionary:

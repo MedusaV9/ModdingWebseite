@@ -106,3 +106,5 @@ Regeln:
 - `city_leben.*` (NEUE Datei `strings/<locale>/city_leben.json` — Ziel-Chevron-GPS-Toasts im Fahr-HUD) → Owner **W13B GOBERANDO** (Welle W13-B). *(per >> angehängt — beim nächsten Doku-Pass in die Tabelle oben heben)*
 
 - `raumstation.*` + `gfree.*` + `rewards.food.weltraumMoehre` (NEUE Datei `strings/<locale>/raumstation.json` — Raumstation GOOB-1: Astro-Snack-Automat, Sternenfoto-Spot, Weltengooby-Toast; GOOBY-FREE-Shop am Flughafen inkl. Shuttle-Knopf; Anzeigename der Weltraum-Möhre) → Owner **W13B RAUMSTATION** (Welle W13-B). *(per >> angehängt — beim nächsten Doku-Pass in die Tabelle oben heben)*
+
+- NEUE `city.laden.buecher_titel` + `city.laden.im_regal`-Keys (additiv in `strings/<locale>/city.json` — Bücher-Abschnitt im REHWEI-Laden, „Im Regal“-Ausgrauung; DE↔EN-paritätisch) → Owner **W13B INTEGRATE** (Welle W13-B). *(per >> angehängt — beim nächsten Doku-Pass in die Tabelle oben heben)*

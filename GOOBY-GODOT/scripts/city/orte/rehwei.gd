@@ -18,6 +18,17 @@ func _baue_innenraum() -> void:
 	_prop("%s/fridge_A.gltf" % INNEN, Vector3(-5.2, 0.0, -3.2), 0.0, 0.9)
 
 
+## W13B (Doc F §3.2): REHWEI führt neben den Lebensmitteln auch die
+## Geschichten-Bücher — gleiche HaendlerSheet-UI, plus Bücher-Abschnitt
+## (gekaufte Bücher stehen ausgegraut „im Regal“).
+func oeffne_laden() -> void:
+	var inhalt := HaendlerSheet.new()
+	inhalt.gs = game_state()
+	inhalt.waren = CitySortiment.laden(_sortiment_pfad())
+	inhalt.buecher = CitySortiment.buecher(_sortiment_pfad())
+	zeige_sheet(I18nService.t("city.laden.titel"), inhalt)
+
+
 func _dialog_pfad() -> String:
 	return "res://scripts/city/data/dialoge/rehwei.json"
 

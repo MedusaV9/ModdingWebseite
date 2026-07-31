@@ -37,7 +37,9 @@
       "titel": "Shopping",
       "coins": "You have {coins} coins",
       "kaufen": "{preis} ᴳ",
-      "rezept_noetig": "Prescription only!"
+      "rezept_noetig": "Prescription only!",
+      "buecher_titel": "Books",
+      "im_regal": "On the shelf"
     },
     "pow": {
       "sheet_titel": "POW! — Everything that makes noise",
