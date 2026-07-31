@@ -20,10 +20,39 @@ signal unread_changed(unread: int)
 ## Outbox-Brief wurde ENDGÜLTIG abgewiesen (z. B. NOT_FRIENDS) — der Eintrag
 ## ist raus; Zuhörer können Geschenk/Porto zurückbuchen (payload.item).
 signal mail_bounced(payload: Dictionary, code: String)
+## InstantGooby (W13C): neuer Post im Feed (Push INSTANT_NEW).
+signal instant_new(post: Dictionary)
+## Ungesehen-Zähler des Feeds hat sich geändert (Badge am App-Icon).
+signal instant_unseen_changed(unseen: int)
+## Ein Freund hat eine Möhre da gelassen (Push INSTANT_LIKE an den Autor).
+signal instant_liked(data: Dictionary)
+## Outbox-Post wurde ENDGÜLTIG abgewiesen (z. B. Foto weg) — Eintrag ist raus.
+signal instant_bounced(payload: Dictionary, code: String)
 
 const OUTBOX_KIND := "mail"
 const TEXT_MAX := 500
 const META_KEY := "gooby_mail_service"
+
+## ---- InstantGooby (W13C, additiv — Anschluss laut W13B-Mail-Handoff) ----
+const INSTANT_OUTBOX_KIND := "instant"
+const CAPTION_MAX := 120
+const FEED_CAP := 30
+
+## Fehler-Code → i18n-Key des Feeds (strings/<locale>/instant.json).
+const INSTANT_ERROR_KEYS := {
+	"OFFLINE": "instant.err.offline",
+	"TIMEOUT": "instant.err.offline",
+	"QUEUED": "instant.toast.queued",
+	"DAILY_LIMIT": "instant.err.daily_limit",
+	"NO_PHOTO": "instant.err.no_photo",
+	"NO_FRIENDS": "instant.err.no_friends",
+	"CAPTION_TOO_LONG": "instant.err.caption_too_long",
+	"BAD_PHOTO": "instant.err.photo",
+	"PHOTO_TOO_LARGE": "instant.err.photo",
+	"NOT_FOUND": "instant.err.not_found",
+	"SELF": "instant.err.self",
+	"RATE_LIMIT": "instant.err.rate_limit",
+}
 
 ## Fehler-Code → i18n-Key (Toasts, DEUTSCH — strings/<locale>/mail.json).
 const ERROR_KEYS := {
@@ -47,6 +76,8 @@ const ERROR_KEYS := {
 const RETRYABLE := ["OFFLINE", "TIMEOUT", "DAILY_LIMIT", "MAILBOX_FULL", "RATE_LIMIT"]
 
 var unread := 0
+## InstantGooby: Anzahl noch nicht gesehener Freundes-Posts im Feed.
+var instant_unseen := 0
 ## Tests: poster.call(url, headers, body) -> Dictionary|null (Transportfehler).
 var poster: Callable = Callable()
 ## Tests: getter.call(url, headers) -> Dictionary|null.
@@ -206,7 +237,169 @@ func flush() -> void:
 			break
 		_outbox.remove(str(entry["id"]))
 		mail_bounced.emit(payload, code)
+	await _flush_instant()
 	_flush_in_flight = false
+
+
+# ---- InstantGooby (W13C, additiv): Feed über dem Mail-Backend ----
+
+
+static func instant_error_key(code: String) -> String:
+	return str(INSTANT_ERROR_KEYS.get(code, "instant.err.generic"))
+
+
+func instant_outbox_count() -> int:
+	return _outbox.entries(INSTANT_OUTBOX_KIND).size() if _outbox != null else 0
+
+
+## Post an ALLE Freunde (Fan-out macht der Server, zählt 1× gegen die
+## Tages-Quota). Foto ist PFLICHT, Caption ≤ 120. Offline/Transportfehler →
+## persistenter Outbox-Eintrag (kind "instant", upsert über clientId).
+func post_instant(caption: String, foto_pfad: String) -> Dictionary:
+	if foto_pfad.is_empty():
+		return _instant_fail("NO_PHOTO")
+	if caption.length() > CAPTION_MAX:
+		return _instant_fail("CAPTION_TOO_LONG")
+	var payload := {
+		"caption": caption,
+		"fotoPfad": foto_pfad,
+		"clientId": NetClient.uuid4(),
+	}
+	if not is_online():
+		_enqueue_instant(payload)
+		return _instant_queued()
+	var res := await _post_instant_now(payload)
+	var code := str(res.get("code", ""))
+	if code == "OFFLINE" or code == "TIMEOUT":
+		_enqueue_instant(payload)
+		return _instant_queued()
+	return res
+
+
+## Feed holen (Server sortiert: jüngste zuerst; Ringpuffer-Cap 30).
+func fetch_feed(offset := 0, limit := FEED_CAP) -> Dictionary:
+	if not is_online():
+		return _instant_fail("OFFLINE")
+	var res: Dictionary = await _net.request("FEED_LIST", {"offset": offset, "limit": limit})
+	if not bool(res["ok"]):
+		return _instant_fail(str(res["code"]))
+	var data: Dictionary = res["d"]
+	_set_instant_unseen(int(data.get("unseen", instant_unseen)))
+	return {
+		"ok": true,
+		"posts": data.get("posts", []),
+		"total": int(data.get("total", 0)),
+		"cap": int(data.get("cap", FEED_CAP)),
+		"unseen": instant_unseen,
+	}
+
+
+## Alles gesehen — setzt das Badge zurück (server-idempotent).
+func ack_feed() -> Dictionary:
+	if not is_online():
+		return _instant_fail("OFFLINE")
+	var res: Dictionary = await _net.request("FEED_ACK", {})
+	if not bool(res["ok"]):
+		return _instant_fail(str(res["code"]))
+	_set_instant_unseen(int((res["d"] as Dictionary).get("unseen", 0)))
+	return {"ok": true, "unseen": instant_unseen}
+
+
+## Möhre da lassen 🥕 — der Server hält 1 Like pro Freund pro Post
+## (already:true beim zweiten Mal, kein Doppel-Push an den Autor).
+func like_post(post_id: String) -> Dictionary:
+	if not is_online():
+		return _instant_fail("OFFLINE")
+	var res: Dictionary = await _net.request("INSTANT_LIKE", {"id": post_id})
+	if not bool(res["ok"]):
+		return _instant_fail(str(res["code"]))
+	var data: Dictionary = res["d"]
+	return {
+		"ok": true,
+		"likes": int(data.get("likes", 0)),
+		"already": bool(data.get("already", false)),
+	}
+
+
+## Feed-Foto lazy nachladen (REST) → {ok, photo_b64}.
+func fetch_instant_photo(photo_id: String) -> Dictionary:
+	if photo_id.is_empty():
+		return _instant_fail("NOT_FOUND")
+	var data: Variant = await _http_get("/api/instant/blob/%s" % photo_id)
+	if not (data is Dictionary):
+		return _instant_fail("OFFLINE")
+	if not bool((data as Dictionary).get("ok", false)):
+		return _instant_fail(str((data as Dictionary).get("code", "NOT_FOUND")))
+	return {"ok": true, "photo_b64": str((data as Dictionary).get("photoB64", ""))}
+
+
+func _instant_queued() -> Dictionary:
+	return {"ok": false, "code": "QUEUED", "queued": true, "message_key": "instant.toast.queued"}
+
+
+func _instant_fail(code: String) -> Dictionary:
+	return {"ok": false, "code": code, "queued": false, "message_key": instant_error_key(code)}
+
+
+func _enqueue_instant(payload: Dictionary) -> void:
+	if _outbox == null:
+		return
+	_outbox.upsert(INSTANT_OUTBOX_KIND, "instant:%s" % str(payload.get("clientId", "")), payload)
+
+
+## Einen Post JETZT hochladen — immer REST (Foto ist Pflicht und passt
+## nicht in den 16-KB-WS-Frame). Fehlendes/leeres Foto = endgültig NO_PHOTO.
+func _post_instant_now(payload: Dictionary) -> Dictionary:
+	var photo_b64 := _encode_photo(str(payload.get("fotoPfad", "")))
+	if photo_b64.is_empty():
+		return _instant_fail("NO_PHOTO")
+	var data := {
+		"caption": str(payload.get("caption", "")),
+		"photoB64": photo_b64,
+		"clientId": str(payload.get("clientId", "")),
+	}
+	var response: Variant = await _http_post("/api/instant", data)
+	if not (response is Dictionary):
+		return _instant_fail("OFFLINE")
+	var body: Dictionary = response
+	if not bool(body.get("ok", false)):
+		return _instant_fail(str(body.get("code", "ERROR")))
+	return {
+		"ok": true,
+		"id": str(body.get("id", "")),
+		"dupe": bool(body.get("dupe", false)),
+		"recipients": int(body.get("recipients", 0)),
+		"sent_today": int(body.get("sentToday", 0)),
+		"daily_limit": int(body.get("dailyLimit", 0)),
+	}
+
+
+## Outbox-Flush der Instant-Posts (nach den Briefen; gleiche Semantik:
+## Erfolg räumt ab, retrybare Fehler warten, endgültige feuern *_bounced).
+func _flush_instant() -> void:
+	if _outbox == null:
+		return
+	for entry in _outbox.entries(INSTANT_OUTBOX_KIND):
+		if not is_online():
+			break
+		var payload: Dictionary = entry["payload"]
+		var res := await _post_instant_now(payload)
+		if bool(res.get("ok", false)):
+			_outbox.remove(str(entry["id"]))
+			continue
+		var code := str(res.get("code", ""))
+		if RETRYABLE.has(code):
+			break
+		_outbox.remove(str(entry["id"]))
+		instant_bounced.emit(payload, code)
+
+
+func _set_instant_unseen(value: int) -> void:
+	var clean := maxi(0, value)
+	if clean == instant_unseen:
+		return
+	instant_unseen = clean
+	instant_unseen_changed.emit(instant_unseen)
 
 
 func _queued() -> Dictionary:
@@ -271,17 +464,26 @@ func _encode_photo(path: String) -> String:
 
 
 func _on_push(type: String, data: Dictionary) -> void:
-	if type != "MAIL_NEW":
-		return
-	_set_unread(int(data.get("unread", unread + 1)))
-	var mail: Variant = data.get("mail", {})
-	if mail is Dictionary:
-		mail_new.emit(mail)
+	match type:
+		"MAIL_NEW":
+			_set_unread(int(data.get("unread", unread + 1)))
+			var mail: Variant = data.get("mail", {})
+			if mail is Dictionary:
+				mail_new.emit(mail)
+		"INSTANT_NEW":
+			_set_instant_unseen(int(data.get("unseen", instant_unseen + 1)))
+			var post: Variant = data.get("post", {})
+			if post is Dictionary:
+				instant_new.emit(post)
+		"INSTANT_LIKE":
+			instant_liked.emit(data)
 
 
 func _on_welcome(data: Dictionary) -> void:
 	if data.has("mailUnread"):
 		_set_unread(int(data.get("mailUnread", 0)))
+	if data.has("instantUnseen"):
+		_set_instant_unseen(int(data.get("instantUnseen", 0)))
 
 
 func _on_status_changed(status: int) -> void:

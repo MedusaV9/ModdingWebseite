@@ -15,7 +15,9 @@
       "freunde": "Friends",
       "freunde_text": "Visit, play, wave.",
       "goobypal": "GoobyPal",
-      "goobypal_text": "Send coins to friends."
+      "goobypal_text": "Send coins to friends.",
+      "instant": "InstantGooby",
+      "instant_text": "Photos for all your friends. Carrots included."
     },
     "fahrdienst": {
       "rufen": "Call a car ({preis} ᴳ)",

@@ -15,7 +15,9 @@
       "freunde": "Freunde",
       "freunde_text": "Besuchen, spielen, winken.",
       "goobypal": "GoobyPal",
-      "goobypal_text": "Münzen an Freunde schicken."
+      "goobypal_text": "Münzen an Freunde schicken.",
+      "instant": "InstantGooby",
+      "instant_text": "Fotos für alle Freunde. Möhren inklusive."
     },
     "fahrdienst": {
       "rufen": "Wagen rufen ({preis} ᴳ)",
