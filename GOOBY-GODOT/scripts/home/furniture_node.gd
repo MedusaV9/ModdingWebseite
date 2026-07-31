@@ -21,8 +21,9 @@ var _top_y := 0.0
 var _light: OmniLight3D
 
 
-## Boden-Layer-Item (RUG/FLOOR/SURFACE). `base_y` hebt SURFACE-Items auf die
-## Trägerfläche. Liefert null bei fehlendem/kaputtem GLB (weich degradieren).
+## Zellen-Layer-Item (RUG/FLOOR/SURFACE/CEILING). `base_y` hebt SURFACE-Items
+## auf die Trägerfläche; CEILING-Items hängen mit der Oberkante an der Decke
+## (W13B). Liefert null bei fehlendem/kaputtem GLB (weich degradieren).
 static func create(def: Dictionary, at: Vector2i, rot: int, item_uid: String) -> FurnitureNode:
 	var node := _build(def, item_uid)
 	if node == null:
@@ -30,6 +31,8 @@ static func create(def: Dictionary, at: Vector2i, rot: int, item_uid: String) ->
 	var center := GridData.world_center(at, def["footprint"], rot)
 	node.position = center
 	node.rotation.y = -rot * PI / 2.0
+	if int(def["layer"]) == GridData.Layer.CEILING:
+		node.position.y = GridData.DECKEN_HOEHE - node.top_y()
 	return node
 
 
@@ -107,6 +110,9 @@ static func _make_model(def: Dictionary) -> Node3D:
 	if proc == "souvenirregal":
 		# REST-4 (EVAL Rang 15): ein Mini je besuchtem Reiseziel.
 		return PostkartenProps.souvenirregal()
+	if proc == "girlande":
+		# W13B: Drawer-/Shop-Vorschau — die echte Spann-Deko baut GirlandenBau.
+		return Girlande.vorschau(str(def.get("id", "")))
 	if proc != "":
 		push_warning("Unbekanntes Prop: %s (%s)" % [proc, def.get("id", "?")])
 		return null

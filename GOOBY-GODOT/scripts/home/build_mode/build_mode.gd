@@ -10,12 +10,20 @@ extends Node
 ## Der Ghost wird GEPOOLT (ein Node pro Aufnahme statt Neuaufbau pro
 ## Drag-Event) — das war der Ruckler beim Ziehen.
 ##
+## W13B: Ebenen-Umschalter Boden/Wand/Decke (Doc D §2.1). Im Decken-Modus
+## wandert das Grid-Overlay an die Decke, die Kamera neigt sich sanft nach
+## oben (BuildCamera.set_decken_blick) und Taps picken CEILING-Items bzw.
+## treiben den Girlanden-2-Tap-Spann-Flow (GirlandenBau, Doc H §6.3).
+##
 ## Die 3D-Seite (Overlay, Möbel-Nodes, Gooby, Kamera) gehört RoomBase —
 ## BuildMode steuert sie über die in setup() übergebenen Referenzen.
 
 signal opened
 signal closed
 signal furniture_changed
+
+## Bau-Ebenen des Umschalters (Doc D §2.1) — BODEN deckt RUG/FLOOR/SURFACE.
+enum Ebene { BODEN, WAND, DECKE }
 
 const DRAWER_HEIGHT := 168.0
 ## VIS-2: Innenabstand der Lager-Schublade zum Bildschirmrand. Die Chips
@@ -48,6 +56,9 @@ var _capacity_label: Label
 var _drawer_sig := ""
 var _action_bar: HBoxContainer
 var _kamera_leiste: VBoxContainer
+var _ebenen_leiste: HBoxContainer
+var _ebene := Ebene.BODEN
+var _girlanden: GirlandenBau
 var _ghost: FurnitureNode
 var _ghost_state: Dictionary = {}
 var _ghost_sig := ""
@@ -75,6 +86,13 @@ func setup(
 	_build_camera = BuildCamera.new()
 	_build_camera.name = "BuildCamera"
 	add_child(_build_camera)
+	# Girlanden (W13B): rendern auch außerhalb des Baumodus — der Host hängt
+	# seinen Mount unter den GridMount des Raums.
+	_girlanden = GirlandenBau.new()
+	_girlanden.name = "GirlandenBau"
+	add_child(_girlanden)
+	_girlanden.setup(room, grid, _gs)
+	_girlanden.geaendert.connect(_refresh_drawer)
 	_build_ui(ui_layer)
 	set_process_unhandled_input(false)
 	# Shader der Overlay-/Ghost-Materialien schon beim Raumaufbau (unter dem
@@ -106,6 +124,7 @@ func open() -> void:
 	_overlay.visible = true
 	_camera_rig.set_build_mode(true)
 	_build_camera.activate(_camera_rig, _room_world_size())
+	set_ebene(Ebene.BODEN)
 	set_process_unhandled_input(true)
 	_refresh_drawer()
 	opened.emit()
@@ -118,7 +137,9 @@ func close() -> void:
 	if _bed_quest_active():
 		_room.say(I18nService.t("build.bett_quest"))
 		return
+	_girlanden.abbrechen()
 	_cancel_ghost()
+	set_ebene(Ebene.BODEN)
 	_active = false
 	_reset_gesten()
 	_ui.visible = false
@@ -127,6 +148,40 @@ func close() -> void:
 	_camera_rig.set_build_mode(false)
 	set_process_unhandled_input(false)
 	closed.emit()
+
+
+# ── Ebenen-Umschalter (W13B, Doc D §2.1) ─────────────────────────────────────
+
+
+func ebene() -> int:
+	return _ebene
+
+
+## Aktive Bau-Ebene setzen: Decke hebt das Overlay auf Deckenhöhe und neigt
+## die Kamera sanft nach oben; Boden/Wand holen beides zurück.
+func set_ebene(ebene_neu: int) -> void:
+	_ebene = ebene_neu
+	_overlay.set_ebene_hoehe(GridData.DECKEN_HOEHE if _ebene == Ebene.DECKE else 0.0)
+	_build_camera.set_decken_blick(_ebene == Ebene.DECKE)
+	_update_ebenen_leiste()
+
+
+## Passende Ebene für eine Katalog-Def (Auto-Umschalten beim Aufnehmen).
+static func ebene_fuer_def(def: Dictionary) -> int:
+	match int(def.get("layer", GridData.Layer.FLOOR)):
+		GridData.Layer.CEILING:
+			return Ebene.DECKE
+		GridData.Layer.WALL:
+			return Ebene.WAND
+	return Ebene.BODEN
+
+
+func _on_ebene_gewaehlt(ebene_neu: int) -> void:
+	_girlanden.abbrechen()
+	_overlay.clear_highlight()
+	_cancel_ghost()
+	set_ebene(ebene_neu)
+	_update_action_bar()
 
 
 # ── Eingabe (FIX-3: Greifen vs. Schwenken vs. Pinch) ─────────────────────────
@@ -245,6 +300,8 @@ func _reset_gesten() -> void:
 ## Tap-Entscheidung. true = Möbel-Interaktion (Ghost bewegen/greifen),
 ## false = nichts getroffen → Aufrufer startet den Kameraschwenk.
 func _on_tap(pos: Vector2) -> bool:
+	if _ebene == Ebene.DECKE:
+		return _decken_tap(pos)
 	var world := _pointer_to_floor(pos)
 	if world == Vector3.INF:
 		return false
@@ -269,9 +326,62 @@ func _on_tap(pos: Vector2) -> bool:
 	return false
 
 
-## Ghost aus dem Lager starten (Drawer-Tap).
+## Tap im Decken-Modus (W13B): Girlanden-Spann-Flow > Ghost > Decken-Item
+## greifen > Girlanden-Anker (Entfernen). Nichts getroffen → Kameraschwenk.
+func _decken_tap(pos: Vector2) -> bool:
+	var world := _pointer_to_plane(pos, GridData.DECKEN_HOEHE)
+	if world == Vector3.INF:
+		return false
+	var cell := GridData.cell_of(world)
+	if _girlanden.aktiv():
+		_girlanden_tap(cell)
+		return true
+	if not _ghost_state.is_empty():
+		_dragging = true
+		_move_ghost_to_pointer(pos)
+		return true
+	var uid := _grid.item_at(cell, GridData.Layer.CEILING)
+	if uid != "":
+		_begin_move(uid)
+		_dragging = true
+		return true
+	var status := _girlanden.entferne_an(cell)
+	if status == "entfernt":
+		_room.say(I18nService.t("build.girlande.entfernt"))
+	elif status == "lager_voll":
+		_room.say(I18nService.t("build.lager_voll"))
+	return status != ""
+
+
+## Ein Schritt des Girlanden-2-Tap-Flows + zugehörige Toasts/Marker.
+func _girlanden_tap(cell: Vector2i) -> void:
+	match _girlanden.tippe_zelle(cell):
+		"punkt_a":
+			_overlay.highlight([cell] as Array[Vector2i], true)
+			_room.say(I18nService.t("build.girlande.punkt_b"))
+		"gespannt":
+			_overlay.clear_highlight()
+			_room.say(I18nService.t("build.girlande.haengt"))
+		"ungueltig":
+			_room.say(I18nService.t("build.girlande.ungueltig"))
+		"fehlgeschlagen":
+			_overlay.clear_highlight()
+			_room.say(I18nService.t("build.girlande.ungueltig"))
+	_update_action_bar()
+
+
+## Ghost aus dem Lager starten (Drawer-Tap). Girlanden (Doc H §6.3) haben
+## keinen Ghost — sie starten den 2-Tap-Spann-Flow im Decken-Modus.
 func _begin_new(def: Dictionary) -> void:
 	_cancel_ghost()
+	_girlanden.abbrechen()
+	set_ebene(ebene_fuer_def(def))
+	if str(def.get("kategorie", "")) == "girlanden":
+		_overlay.clear_highlight()
+		_girlanden.starte(str(def["id"]))
+		_room.say(I18nService.t("build.girlande.punkt_a"))
+		_update_action_bar()
+		return
 	var center := Vector2i(_grid.size.x / 2, _grid.size.y / 2)
 	var fp: Vector2i = def["footprint"]
 	_ghost_state = {
@@ -292,6 +402,7 @@ func _begin_move(uid: String) -> void:
 		return
 	_cancel_ghost()
 	var def: Dictionary = item["def"]
+	set_ebene(ebene_fuer_def(def))
 	_ghost_state = {
 		"def": def,
 		"at": item["at"],
@@ -307,10 +418,13 @@ func _begin_move(uid: String) -> void:
 
 
 func _move_ghost_to_pointer(pos: Vector2) -> void:
-	var world := _pointer_to_floor(pos)
-	if world == Vector3.INF or _ghost_state.is_empty():
+	if _ghost_state.is_empty():
 		return
 	var def: Dictionary = _ghost_state["def"]
+	var ist_decke := int(def["layer"]) == GridData.Layer.CEILING
+	var world := _pointer_to_plane(pos, GridData.DECKEN_HOEHE if ist_decke else 0.0)
+	if world == Vector3.INF:
+		return
 	if int(def["layer"]) == GridData.Layer.WALL:
 		var slot := _nearest_wall_slot(world, int(def["wall_size"]))
 		_ghost_state["wall"] = slot["wall"]
@@ -358,6 +472,10 @@ func _rebuild_ghost() -> void:
 			_ghost.rotation.y = -rot * PI / 2.0
 			if int(def["layer"]) == GridData.Layer.SURFACE:
 				_ghost.position.y = _room.surface_height_at(at)
+			elif int(def["layer"]) == GridData.Layer.CEILING:
+				# Gepoolter Ghost: hängt wie das echte Item mit der
+				# Oberkante an der Decke (FurnitureNode.create).
+				_ghost.position.y = GridData.DECKEN_HOEHE - _ghost.top_y()
 		_overlay.highlight(GridData.cells_for(at, def["footprint"], rot), ok)
 	if _ghost != null and int(ok) != _ghost_gueltig:
 		_ghost.set_ghost(ok)
@@ -558,6 +676,7 @@ func _build_ui(ui_layer: Node) -> void:
 	ui_layer.add_child(_ui)
 	_build_action_bar()
 	_build_kamera_leiste()
+	_build_ebenen_leiste()
 	_build_drawer()
 
 
@@ -571,7 +690,46 @@ func _build_action_bar() -> void:
 	_add_action_button("build.rotieren", "GhostButton", _rotate_ghost)
 	_add_action_button("build.bestaetigen", "AccentButton", _confirm_ghost)
 	_add_action_button("build.einlagern", "GhostButton", _store_ghost)
-	_add_action_button("build.abbrechen", "GhostButton", _cancel_ghost)
+	_add_action_button("build.abbrechen", "GhostButton", _on_abbrechen)
+
+
+## Ebenen-Umschalter (W13B, Doc D §2.1): Boden/Wand/Decke als Chips oben
+## mittig — Auto-Umschalten beim Item-Aufnehmen setzt den aktiven Chip mit.
+func _build_ebenen_leiste() -> void:
+	_ebenen_leiste = HBoxContainer.new()
+	_ebenen_leiste.name = "EbenenLeiste"
+	_ebenen_leiste.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	_ebenen_leiste.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_ebenen_leiste.position.y += DRAWER_RAND_Y + 8.0
+	_ebenen_leiste.add_theme_constant_override("separation", 8)
+	_ui.add_child(_ebenen_leiste)
+	for eintrag: Array in [
+		["build.ebene.boden", Ebene.BODEN],
+		["build.ebene.wand", Ebene.WAND],
+		["build.ebene.decke", Ebene.DECKE],
+	]:
+		var btn := Button.new()
+		btn.text = I18nService.t(str(eintrag[0]))
+		btn.theme_type_variation = "AcChip"
+		btn.focus_mode = Control.FOCUS_NONE
+		btn.pressed.connect(_on_ebene_gewaehlt.bind(int(eintrag[1])))
+		_ebenen_leiste.add_child(btn)
+	_update_ebenen_leiste()
+
+
+## Aktiver Ebenen-Chip ist deaktiviert (= gedrückt-Optik ohne Toggle-Logik).
+func _update_ebenen_leiste() -> void:
+	if _ebenen_leiste == null:
+		return
+	for i in _ebenen_leiste.get_child_count():
+		(_ebenen_leiste.get_child(i) as Button).disabled = i == _ebene
+
+
+## Abbrechen-Knopf: beendet auch einen laufenden Girlanden-Spann-Flow.
+func _on_abbrechen() -> void:
+	_girlanden.abbrechen()
+	_overlay.clear_highlight()
+	_cancel_ghost()
 
 
 ## Kamera-Knöpfe (FIX-3): Draufsicht/Schrägsicht + 2×90°-Drehung, rechts am
@@ -709,17 +867,29 @@ func _open_goobay() -> void:
 
 func _update_action_bar(ok := false) -> void:
 	var has_ghost := not _ghost_state.is_empty()
-	_action_bar.visible = has_ghost
-	if not has_ghost:
+	var girlande := _girlanden != null and _girlanden.aktiv()
+	_action_bar.visible = has_ghost or girlande
+	if not _action_bar.visible:
 		return
+	# Girlanden-Spann-Flow (W13B): kein Ghost — nur Abbrechen ist sinnvoll.
+	(_action_bar.get_child(0) as Button).visible = has_ghost
+	(_action_bar.get_child(1) as Button).visible = has_ghost
 	(_action_bar.get_child(1) as Button).disabled = not ok
-	(_action_bar.get_child(2) as Button).visible = _ghost_state.get("mode", "") == "move"
+	(_action_bar.get_child(2) as Button).visible = (
+		has_ghost and _ghost_state.get("mode", "") == "move"
+	)
 
 
 # ── Picking-Helfer ───────────────────────────────────────────────────────────
 
 
 func _pointer_to_floor(screen_pos: Vector2) -> Vector3:
+	return _pointer_to_plane(screen_pos, 0.0)
+
+
+## Schnittpunkt des Taps mit einer horizontalen Ebene auf `hoehe` — 0 =
+## Boden, GridData.DECKEN_HOEHE = Decken-Picking (W13B). INF = kein Schnitt.
+func _pointer_to_plane(screen_pos: Vector2, hoehe: float) -> Vector3:
 	var camera := _camera_rig.camera
 	if camera == null:
 		return Vector3.INF
@@ -727,7 +897,7 @@ func _pointer_to_floor(screen_pos: Vector2) -> Vector3:
 	var dir := camera.project_ray_normal(screen_pos)
 	if absf(dir.y) < 0.0001:
 		return Vector3.INF
-	var t := -origin.y / dir.y
+	var t := (hoehe - origin.y) / dir.y
 	if t < 0.0:
 		return Vector3.INF
 	return origin + dir * t

@@ -3,7 +3,11 @@ extends TestCase
 ## Default-Layouts kollisionsfrei, Tür-Symmetrie (Doc D §1.3/§2.4).
 
 const VALID_LAYERS := [
-	GridData.Layer.RUG, GridData.Layer.FLOOR, GridData.Layer.SURFACE, GridData.Layer.WALL
+	GridData.Layer.RUG,
+	GridData.Layer.FLOOR,
+	GridData.Layer.SURFACE,
+	GridData.Layer.WALL,
+	GridData.Layer.CEILING,
 ]
 
 

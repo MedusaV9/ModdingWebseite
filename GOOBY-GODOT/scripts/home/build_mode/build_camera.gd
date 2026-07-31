@@ -16,6 +16,11 @@ extends Node
 const PITCH_SCHRAEG := 1.1314  # atan2(6.8, 3.2) ≈ 64,8°
 ## Draufsicht: knapp unter 90°, damit look_at mit Vector3.UP stabil bleibt.
 const PITCH_OBEN := 1.5184  # 87°
+## Decken-Bau (W13B, Doc D §2.1): flachere Neigung + Blickpunkt an der
+## Decke — die Kamera schaut leicht nach oben.
+const PITCH_DECKE := 0.62  # ≈ 35,5°
+const BLICK_BODEN := 0.4
+const BLICK_DECKE := 2.1
 const GLAETTUNG := 9.0
 const DIST_MIN := 3.5
 ## Maximal so weit raus wie die alte Fix-Kamera × Faktor (Stadt-Kulisse!).
@@ -31,6 +36,8 @@ var _dist := 8.0
 var _dist_max := 18.0
 var _anzeige_pivot := Vector3.ZERO
 var _aktiv := false
+var _decken_blick := false
+var _blick_y := BLICK_BODEN
 
 
 ## Kamera-Offset (Pivot → Kamera) aus Gier/Neigung/Distanz — pure.
@@ -64,6 +71,8 @@ func activate(rig: HomeCameraRig, room_size: Vector2) -> void:
 	_anzeige_pivot = _pivot
 	_yaw = 0.0
 	_pitch = PITCH_SCHRAEG
+	_decken_blick = false
+	_blick_y = BLICK_BODEN
 	_aktiv = true
 	_rig.set_process(false)
 	set_process(true)
@@ -122,11 +131,33 @@ func schnapp_90(richtung: int) -> void:
 
 
 func set_draufsicht(oben: bool) -> void:
-	_pitch = PITCH_OBEN if oben else PITCH_SCHRAEG
+	_pitch = PITCH_OBEN if oben else _pitch_flach()
 
 
 func ist_draufsicht() -> bool:
 	return _pitch > (PITCH_OBEN + PITCH_SCHRAEG) * 0.5
+
+
+## Decken-Bau (W13B): Neigung wird flacher, der Blickpunkt wandert zur
+## Decke — beides gleitet über das vorhandene exponentielle Nachziehen in
+## _process weich hinterher (sanfter Tween ohne Tween-Node).
+func set_decken_blick(aktiv: bool) -> void:
+	_decken_blick = aktiv
+	if not ist_draufsicht():
+		_pitch = _pitch_flach()
+
+
+func ist_decken_blick() -> bool:
+	return _decken_blick
+
+
+## Ziel-Höhe des look_at-Punkts (der Ist-Wert _blick_y gleitet hinterher).
+func blick_ziel_y() -> float:
+	return BLICK_DECKE if _decken_blick else BLICK_BODEN
+
+
+func _pitch_flach() -> float:
+	return PITCH_DECKE if _decken_blick else PITCH_SCHRAEG
 
 
 func _process(delta: float) -> void:
@@ -134,10 +165,11 @@ func _process(delta: float) -> void:
 		return
 	var t := 1.0 - exp(-GLAETTUNG * delta)
 	_anzeige_pivot = _anzeige_pivot.lerp(_pivot, t)
+	_blick_y = lerpf(_blick_y, blick_ziel_y(), t)
 	var ziel := _anzeige_pivot + offset_fuer(_yaw, _pitch, _dist)
 	var camera := _rig.camera
 	camera.global_position = camera.global_position.lerp(ziel, t)
-	camera.look_at(_anzeige_pivot + Vector3(0, 0.4, 0), Vector3.UP)
+	camera.look_at(_anzeige_pivot + Vector3(0, _blick_y, 0), Vector3.UP)
 
 
 func _boden_punkt(screen_pos: Vector2) -> Vector3:

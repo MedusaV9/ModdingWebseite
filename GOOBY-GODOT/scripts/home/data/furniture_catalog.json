@@ -2410,7 +2410,7 @@
         1,
         1
       ],
-      "layer": "WALL",
+      "layer": "CEILING",
       "preis": 80,
       "lagerwert": 1,
       "pflicht": "",
@@ -2421,8 +2421,7 @@
         "mint",
         "butter"
       ],
-      "can_toggle_light": true,
-      "wall_size": 1
+      "can_toggle_light": true
     },
     {
       "id": "ceilingFan",
@@ -2433,7 +2432,7 @@
         2,
         2
       ],
-      "layer": "WALL",
+      "layer": "CEILING",
       "preis": 170,
       "lagerwert": 2,
       "pflicht": "",
@@ -2444,8 +2443,7 @@
         "mint",
         "butter"
       ],
-      "can_toggle_light": true,
-      "wall_size": 2
+      "can_toggle_light": true
     },
     {
       "id": "radioRetro",
@@ -2600,7 +2598,7 @@
         1,
         1
       ],
-      "layer": "WALL",
+      "layer": "CEILING",
       "preis": 45,
       "lagerwert": 1,
       "pflicht": "",
@@ -2611,8 +2609,52 @@
         "mint",
         "butter"
       ],
-      "can_toggle_light": true,
-      "wall_size": 1
+      "can_toggle_light": true
+    },
+    {
+      "id": "girlande_wimpel",
+      "name_de": "Wimpel-Girlande",
+      "name_en": "Pennant Garland",
+      "proc": "girlande",
+      "footprint": [
+        1,
+        1
+      ],
+      "layer": "CEILING",
+      "preis": 120,
+      "lagerwert": 1,
+      "pflicht": "",
+      "kategorie": "girlanden"
+    },
+    {
+      "id": "girlande_lichter",
+      "name_de": "Lichterketten-Girlande",
+      "name_en": "Fairy Light Garland",
+      "proc": "girlande",
+      "footprint": [
+        1,
+        1
+      ],
+      "layer": "CEILING",
+      "preis": 180,
+      "lagerwert": 1,
+      "pflicht": "",
+      "kategorie": "girlanden"
+    },
+    {
+      "id": "girlande_pompons",
+      "name_de": "Pompon-Girlande",
+      "name_en": "Pompom Garland",
+      "proc": "girlande",
+      "footprint": [
+        1,
+        1
+      ],
+      "layer": "CEILING",
+      "preis": 140,
+      "lagerwert": 1,
+      "pflicht": "",
+      "kategorie": "girlanden"
     },
     {
       "id": "lampionStanding",

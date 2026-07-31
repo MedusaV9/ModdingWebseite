@@ -17,6 +17,9 @@ extends RefCounted
 ##   home.garden{} (Garten 2.0, GardenState),
 ##   home.goobay{} (Verkaufs-Cooldowns + Tagesnachfrage, GoobayState),
 ##   home.lieferungen[] (bestellte Möbel, DeliveryCutscene).
+## W13B-ERWEITERUNG (additiv): home.rooms[id].girlanden[] (Spann-Deko,
+##   Doc H §6.3 — {"typ", "zelle_a": [x,y], "zelle_b": [x,y]}) sowie die
+##   sanfte WALL→CEILING-Umbuchung im Ladepfad (normalize_ceiling_entries).
 ## Alte Saves ohne diese Keys heilen beim nächsten Load über normalize_slice.
 
 const SaveSchema := preload("res://scripts/state/save_schema.gd")
@@ -80,6 +83,7 @@ static func normalize_slice(raw: Variant) -> Dictionary:
 		if not (storage[i] is Dictionary) or str(storage[i].get("item", "")) == "":
 			storage.remove_at(i)
 	_normalize_m2(home)
+	_normalize_girlanden(home)
 	return home
 
 
@@ -98,6 +102,34 @@ static func _normalize_m2(home: Dictionary) -> void:
 	home["shedStufe"] = ShedLogic.clamp_stufe(int(home.get("shedStufe", 0)))
 	home["garden"] = GardenState.normalize(home.get("garden"))
 	home["goobay"] = GoobayState.normalize(home.get("goobay"))
+
+
+## W13B: Spann-Deko-Listen der Räume heilen — kaputte Einträge (kein Dict,
+## typ leer, Zellen fehlen) fliegen raus, gültige bleiben VERBATIM.
+static func _normalize_girlanden(home: Dictionary) -> void:
+	for room_id: Variant in home["rooms"].keys():
+		var raum: Variant = home["rooms"][room_id]
+		if not (raum is Dictionary) or not (raum as Dictionary).has("girlanden"):
+			continue
+		var roh: Variant = raum["girlanden"]
+		var sauber: Array = []
+		if roh is Array:
+			for eintrag: Variant in roh:
+				if _girlande_gueltig(eintrag):
+					sauber.append(eintrag)
+		raum["girlanden"] = sauber
+
+
+static func _girlande_gueltig(eintrag: Variant) -> bool:
+	if not (eintrag is Dictionary):
+		return false
+	if str((eintrag as Dictionary).get("typ", "")) == "":
+		return false
+	for key: String in ["zelle_a", "zelle_b"]:
+		var zelle: Variant = (eintrag as Dictionary).get(key)
+		if not (zelle is Array) or (zelle as Array).size() < 2:
+			return false
+	return true
 
 
 ## Erstbezug/Umzugstag: leere home.rooms werden mit dem liebevollen
@@ -138,13 +170,18 @@ static func ensure_initialized(gs: Object) -> void:
 
 
 ## Baut das GridData eines Raums aus dem Save; Leftovers (unbekannte Items,
-## Kollisionen nach Katalog-Update) wandern automatisch ins Lager.
+## Kollisionen nach Katalog-Update) wandern automatisch ins Lager. W13B:
+## Alt-Save-Einträge von Items, die im Katalog von WALL auf CEILING wanderten,
+## werden vorher sanft auf die Decke umgebucht (Position bleibt erhalten).
 static func load_room_grid(gs: Object, room_id: String) -> GridData:
-	var entries: Variant = gs.get_value("home.rooms.%s.items" % room_id, [])
+	var raw: Variant = gs.get_value("home.rooms.%s.items" % room_id, [])
+	var grid_size: Vector2i = RoomDefs.room(room_id).get("grid", Vector2i(8, 8))
+	var entries: Array = (raw as Array).duplicate(true) if raw is Array else []
+	var umgebucht := normalize_ceiling_entries(entries, FurnitureCatalog.defs(), grid_size)
 	var result := GridData.from_save(
-		entries if entries is Array else [],
+		entries,
 		FurnitureCatalog.defs(),
-		RoomDefs.room(room_id).get("grid", Vector2i(8, 8)),
+		grid_size,
 		RoomDefs.blocked_cells(RoomDefs.room(room_id)),
 		RoomDefs.wall_door_spans(RoomDefs.room(room_id)),
 		RoomDefs.exterior_walls(RoomDefs.room(room_id))
@@ -170,8 +207,52 @@ static func load_room_grid(gs: Object, room_id: String) -> GridData:
 					else:
 						StorageLogic.add(storage, item_id)
 		)
+	if umgebucht or not leftovers.is_empty():
 		save_room_grid(gs, room_id, result["grid"])
 	return result["grid"]
+
+
+## W13B CEILING-Migration (Doc D §1.2 / P4-D1): Items, die im Katalog von
+## WALL auf CEILING gewandert sind (Deckenlampe, Deckenventilator,
+## Lampion-Kette), liegen in Alt-Saves noch als Wand-Platzierung
+## {"wall", "at": [offset, 0]}. Bucht solche Einträge IN PLACE auf die
+## Decken-Zelle an der jeweiligen Wandkante um — der Footprint wird in die
+## Bounds geklemmt, nichts verschwindet. true = mindestens 1 Eintrag wanderte.
+static func normalize_ceiling_entries(
+	entries: Array, defs: Dictionary, grid_size: Vector2i
+) -> bool:
+	var geaendert := false
+	for entry: Variant in entries:
+		if not (entry is Dictionary) or not (entry as Dictionary).has("wall"):
+			continue
+		var def: Dictionary = defs.get(str((entry as Dictionary).get("item", "")), {})
+		if def.is_empty() or int(def["layer"]) != GridData.Layer.CEILING:
+			continue
+		var at_raw: Array = (entry as Dictionary).get("at", [0, 0])
+		var zelle := _decken_zelle_fuer_wand(
+			str(entry["wall"]), int(at_raw[0]) if at_raw.size() >= 1 else 0, grid_size
+		)
+		var fp: Vector2i = def["footprint"]
+		zelle.x = clampi(zelle.x, 0, maxi(0, grid_size.x - fp.x))
+		zelle.y = clampi(zelle.y, 0, maxi(0, grid_size.y - fp.y))
+		entry.erase("wall")
+		entry["at"] = [zelle.x, zelle.y]
+		entry["rot"] = 0
+		geaendert = true
+	return geaendert
+
+
+## Decken-Zelle direkt an der Kante der Alt-Wand (Offset = Slot entlang der
+## Wand): N = obere Reihe, S = untere, W = linke Spalte, E = rechte.
+static func _decken_zelle_fuer_wand(wall: String, offset: int, grid_size: Vector2i) -> Vector2i:
+	match wall:
+		"S":
+			return Vector2i(offset, grid_size.y - 1)
+		"W":
+			return Vector2i(0, offset)
+		"E":
+			return Vector2i(grid_size.x - 1, offset)
+	return Vector2i(offset, 0)
 
 
 ## Persistiert den Grid-Zustand eines Raums (nur items — Zellen werden nie
@@ -212,6 +293,73 @@ static func take_from_storage(gs: Object, item_id: String) -> bool:
 		return false
 	gs.update(
 		func(state: Dictionary) -> void: StorageLogic.take(state[SLICE_ID]["storage"], item_id)
+	)
+	gs.notify_slice_changed(SLICE_ID)
+	return true
+
+
+# ── Girlanden / Spann-Deko (W13B, Doc H §6.3) ────────────────────────────────
+
+
+## Spann-Deko-Liste eines Raums: [{"typ", "zelle_a": [x,y], "zelle_b": [x,y]}].
+static func girlanden(gs: Object, room_id: String) -> Array:
+	var raw: Variant = gs.get_value("home.rooms.%s.girlanden" % room_id, [])
+	return raw if raw is Array else []
+
+
+## Zelle eines Girlanden-Eintrags ("zelle_a"/"zelle_b") als Vector2i.
+static func girlande_zelle(eintrag: Dictionary, key: String) -> Vector2i:
+	var zelle: Variant = eintrag.get(key, [0, 0])
+	if zelle is Array and (zelle as Array).size() >= 2:
+		return Vector2i(int(zelle[0]), int(zelle[1]))
+	return Vector2i.ZERO
+
+
+## Spannt eine Girlande zwischen zwei Decken-Zellen. Lager-Regeln wie Möbel:
+## nimmt 1 Exemplar `typ` aus dem Lager. false = ungültig oder nicht im Lager.
+static func add_girlande(
+	gs: Object, room_id: String, typ: String, zelle_a: Vector2i, zelle_b: Vector2i
+) -> bool:
+	if typ == "" or zelle_a == zelle_b:
+		return false
+	if not take_from_storage(gs, typ):
+		return false
+	gs.update(
+		func(state: Dictionary) -> void:
+			var rooms: Dictionary = state[SLICE_ID]["rooms"]
+			if not (rooms.get(room_id) is Dictionary):
+				rooms[room_id] = {"items": []}
+			var raum: Dictionary = rooms[room_id]
+			if not (raum.get("girlanden") is Array):
+				raum["girlanden"] = []
+			(
+				raum["girlanden"]
+				. append(
+					{
+						"typ": typ,
+						"zelle_a": [zelle_a.x, zelle_a.y],
+						"zelle_b": [zelle_b.x, zelle_b.y],
+					}
+				)
+			)
+	)
+	gs.notify_slice_changed(SLICE_ID)
+	return true
+
+
+## Nimmt die Girlande `index` ab und legt sie zurück ins Lager.
+## false = Index ungültig ODER Lager voll (Girlande bleibt dann hängen).
+static func remove_girlande(gs: Object, room_id: String, index: int) -> bool:
+	var liste := girlanden(gs, room_id)
+	if index < 0 or index >= liste.size() or not (liste[index] is Dictionary):
+		return false
+	var typ := str((liste[index] as Dictionary).get("typ", ""))
+	if not store_item(gs, typ):
+		return false
+	gs.update(
+		func(state: Dictionary) -> void:
+			var raum: Dictionary = state[SLICE_ID]["rooms"][room_id]
+			(raum["girlanden"] as Array).remove_at(index)
 	)
 	gs.notify_slice_changed(SLICE_ID)
 	return true

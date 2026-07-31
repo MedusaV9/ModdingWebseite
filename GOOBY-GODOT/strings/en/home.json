@@ -70,6 +70,18 @@
 			"bett": "Gooby needs his bed! 😤",
 			"couch": "Gooby needs his couch! 😤",
 			"kuehlschrank": "Gooby needs his fridge! 😤"
+		},
+		"ebene": {
+			"boden": "Floor",
+			"wand": "Wall",
+			"decke": "Ceiling"
+		},
+		"girlande": {
+			"punkt_a": "Tap the first ceiling spot!",
+			"punkt_b": "Now the second one — watch it drape!",
+			"haengt": "Tadaa! The garland is dangling!",
+			"ungueltig": "Oops, that won't work — pick two ceiling cells!",
+			"entfernt": "Garland taken down and stored!"
 		}
 	}
 }

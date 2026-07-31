@@ -7,7 +7,9 @@ extends RefCounted
 ##   ausschließlich in Zellen).
 ## - Layer: RUG (Teppiche, Möbel dürfen DRAUF stehen), FLOOR (blockt Gooby per
 ##   Item-Flag), SURFACE (auf FLOOR-Items mit `surface`-Def), WALL (N/E/S/W,
-##   1 Höhenreihe in M1 — Doc D §1.2, Wand-/Decken-Vollausbau = Backlog M2).
+##   1 Höhenreihe in M1 — Doc D §1.2), CEILING (W13B: Decken-Raster, gleiche
+##   XY wie der Boden — Doc D §1.2 Zeile „CEILING“; kollidiert NUR gegen
+##   andere Decken-Items, Türzonen gelten an der Decke nicht).
 ## - Footprints [Breite, Tiefe] bei Rotation 0; `rot` in {0,1,2,3} (×90° im
 ##   Uhrzeigersinn) — bei 1/3 tauschen Breite/Tiefe.
 ## - `blocked` = Tür-Freihaltezonen: nie bebaubar, aber für Gooby begehbar.
@@ -17,13 +19,18 @@ extends RefCounted
 ## Save-Format (Doc D §1.4, home.rooms[id].items):
 ##   Boden:  {"uid", "item", "at": [x, y], "rot": 0..3}
 ##   Wand:   {"uid", "item", "wall": "N|E|S|W", "at": [offset, 0]}
+##   Decke:  wie Boden ({"at", "rot"}) — der Layer kommt aus der Katalog-Def.
 ## Zellen werden NIE als belegt gespeichert — Belegung wird beim Laden aus den
 ## Items + Katalog-Footprints rekonstruiert; Konflikte/Unbekanntes wandert als
 ## Leftover zurück (HomeState legt es ins Lager).
 
-enum Layer { RUG, FLOOR, SURFACE, WALL }
+enum Layer { RUG, FLOOR, SURFACE, WALL, CEILING }
 
 const CELL_SIZE := 0.5
+## Welt-Höhe der Raumdecke fürs Rendern/Picken von CEILING-Items und
+## Girlanden — knapp unter der 2,5-m-Wand (RoomBase.WALL_HEIGHT, hier als
+## Literal gegen zyklische class_name-Referenzen; vgl. FurnitureNode).
+const DECKEN_HOEHE := 2.45
 const WALLS: Array[String] = ["N", "E", "S", "W"]
 
 ## Ablehnungsgründe von can_place*/place* (stabile Strings für UI/Tests).
@@ -46,6 +53,7 @@ var _rug_cells: Dictionary = {}  # Vector2i -> uid
 var _floor_cells: Dictionary = {}  # Vector2i -> uid
 var _surface_cells: Dictionary = {}  # Vector2i -> uid
 var _wall_slots: Dictionary = {}  # "N:3" -> uid
+var _ceiling_cells: Dictionary = {}  # Vector2i -> uid (W13B Decken-Layer)
 
 
 func _init(
@@ -82,7 +90,7 @@ func in_bounds(cell: Vector2i) -> bool:
 	return cell.x >= 0 and cell.y >= 0 and cell.x < size.x and cell.y < size.y
 
 
-## Kollisionsprüfung für Boden-Layer (RUG/FLOOR/SURFACE).
+## Kollisionsprüfung für Zellen-Layer (RUG/FLOOR/SURFACE/CEILING).
 ## Liefert {"ok": bool, "reason": String}. `ignore_uid` = beim Verschieben.
 func can_place(def: Dictionary, at: Vector2i, rot: int, ignore_uid := "") -> Dictionary:
 	if def.is_empty() or int(def["layer"]) == Layer.WALL:
@@ -96,10 +104,14 @@ func can_place(def: Dictionary, at: Vector2i, rot: int, ignore_uid := "") -> Dic
 	return {"ok": true, "reason": REASON_OK}
 
 
-## Ablehnungsgrund für EINE Zelle eines Boden-Layer-Items (REASON_OK = frei).
+## Ablehnungsgrund für EINE Zelle eines Zellen-Layer-Items (REASON_OK = frei).
+## CEILING prüft nur Bounds + andere Decken-Items — Tür-Freihaltezonen sind
+## ein Boden-Konzept und gelten an der Decke nicht (Doc D §1.2).
 func _cell_reason(layer: int, cell: Vector2i, ignore_uid: String) -> String:
 	if not in_bounds(cell):
 		return REASON_OOB
+	if layer == Layer.CEILING:
+		return REASON_OCCUPIED if _taken(_ceiling_cells, cell, ignore_uid) else REASON_OK
 	if layer != Layer.SURFACE and blocked.has(cell):
 		return REASON_BLOCKED
 	var cells_of_layer: Dictionary = [_rug_cells, _floor_cells, _surface_cells][layer]
@@ -110,7 +122,7 @@ func _cell_reason(layer: int, cell: Vector2i, ignore_uid: String) -> String:
 	return REASON_OK
 
 
-## Platziert ein Boden-Layer-Item. Liefert can_place-Resultat.
+## Platziert ein Zellen-Layer-Item (auch CEILING). Liefert can_place-Resultat.
 func place(def: Dictionary, at: Vector2i, rot: int, uid: String) -> Dictionary:
 	var check := can_place(def, at, rot)
 	if not check["ok"]:
@@ -206,6 +218,8 @@ func item_at(cell: Vector2i, layer: int) -> String:
 			return _floor_cells.get(cell, "")
 		Layer.SURFACE:
 			return _surface_cells.get(cell, "")
+		Layer.CEILING:
+			return _ceiling_cells.get(cell, "")
 	return ""
 
 
@@ -295,7 +309,7 @@ func to_items_array() -> Array:
 ## Kollisions-Konflikte (Katalog-Update!) landen in "leftovers" — der Aufrufer
 ## legt sie ins Lager (Doc D §1.4: niemals Daten verlieren, weich degradieren).
 ##
-## Zwei Durchläufe: erst alle Träger (RUG/FLOOR/WALL), dann die
+## Zwei Durchläufe: erst alle Träger (RUG/FLOOR/WALL/CEILING), dann die
 ## SURFACE-Aufbauten. `to_items_array` sortiert nach uid — ein SURFACE-Item
 ## mit kleinerer uid als sein Träger würde in Array-Reihenfolge sonst an
 ## `needs_surface` scheitern und still im Lager landen (E9 P1-1).
@@ -370,10 +384,12 @@ func _write_cells(item: Dictionary, uid: String) -> void:
 				_floor_cells[cell] = uid
 			Layer.SURFACE:
 				_surface_cells[cell] = uid
+			Layer.CEILING:
+				_ceiling_cells[cell] = uid
 
 
 func _erase_cells(uid: String) -> void:
-	for map: Dictionary in [_rug_cells, _floor_cells, _surface_cells, _wall_slots]:
+	for map: Dictionary in [_rug_cells, _floor_cells, _surface_cells, _wall_slots, _ceiling_cells]:
 		for key: Variant in map.keys():
 			if map[key] == uid:
 				map.erase(key)

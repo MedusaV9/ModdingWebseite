@@ -28,6 +28,7 @@ const LAYER_NAMES := {
 	"FLOOR": GridData.Layer.FLOOR,
 	"SURFACE": GridData.Layer.SURFACE,
 	"WALL": GridData.Layer.WALL,
+	"CEILING": GridData.Layer.CEILING,
 }
 
 static var _defs: Dictionary = {}

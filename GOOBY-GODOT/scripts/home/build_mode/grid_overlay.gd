@@ -34,6 +34,15 @@ func highlight(cells: Array[Vector2i], valid: bool) -> void:
 	_fill_cells(_highlight, cells, VALID_TINT if valid else INVALID_TINT, HIGHLIGHT_Y)
 
 
+## W13B Decken-Modus: hebt das komplette Overlay auf die Decken-Höhe — das
+## Decken-Raster ist das Boden-Raster, gespiegelt an der Raumdecke
+## (Doc D §2.1). Türzonen-Schraffur ist ein Boden-Konzept und wird oben
+## ausgeblendet.
+func set_ebene_hoehe(hoehe: float) -> void:
+	position.y = hoehe
+	_blocked.visible = hoehe <= 0.001
+
+
 func clear_highlight() -> void:
 	(_highlight.mesh as ImmediateMesh).clear_surfaces()
 

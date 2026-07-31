@@ -70,6 +70,18 @@
 			"bett": "Gooby braucht sein Bett! 😤",
 			"couch": "Gooby braucht seine Couch! 😤",
 			"kuehlschrank": "Gooby braucht seinen Kühlschrank! 😤"
+		},
+		"ebene": {
+			"boden": "Boden",
+			"wand": "Wand",
+			"decke": "Decke"
+		},
+		"girlande": {
+			"punkt_a": "Tipp den ersten Decken-Punkt an!",
+			"punkt_b": "Und jetzt den zweiten — dann hängt sie schön durch!",
+			"haengt": "Tadaa! Die Girlande baumelt!",
+			"ungueltig": "Huch, so klappt das nicht — such dir zwei Decken-Zellen aus!",
+			"entfernt": "Girlande abgenommen und eingelagert!"
 		}
 	}
 }
