@@ -209,6 +209,46 @@ func test_rehwei_buecher_kategorie_synchron() -> void:
 		assert_false(str(eintrag.get("id", "")).begins_with("buch_"), "kein Buch in waren")
 
 
+## Minimal-Raum für die StoryTime-Session (InteractablesHost-API).
+class FakeStoryRoom:
+	extends Node3D
+
+	var gs: Object
+
+	func game_state() -> Object:
+		return gs
+
+
+## W13C (Request GOOBYMAN): die gekaufte Schlafmaske wirkt in der ECHTEN
+## Vorlese-Session — story_time._on_book_chosen rechnet die benötigten
+## Wörter durch GoobymanKatalog.schlafmaske_woerter (Boden WORDS_MIN).
+func test_schlafmaske_wirkt_in_der_vorlese_session() -> void:
+	var gs := _fresh_game_state()
+	var buch := _start_book(_books())
+	var buch_id := str(buch.get("id", ""))
+	# Buch abnutzen (6 reads → Basis 6), damit der 10-%-Rabatt nicht im
+	# WORDS_MIN-Boden verschwindet.
+	for _i in 6:
+		StoryBooks.bump_read(gs, buch_id)
+	var room := FakeStoryRoom.new()
+	room.gs = gs
+	tree.root.add_child(room)
+	var host := InteractablesHost.attach_to(room)
+	var story_time := StoryTime.new()
+	room.add_child(story_time)
+	story_time._host = host
+	story_time._on_book_chosen(buch)
+	assert_eq(story_time._session_needed, 6, "ohne Maske: abgenutztes Startbuch = 6 Wörter")
+	var items: Dictionary = gs.get_value("inventory.items", {})
+	items["schlafmaske"] = 1
+	gs.set_value("inventory.items", items)
+	story_time._on_book_chosen(buch)
+	assert_eq(story_time._session_needed, 5, "mit Maske: floor(6 × 0,9) = 5 Wörter")
+	room.queue_free()
+	await wait_frames(1)
+	gs.free()
+
+
 func test_haendler_kauf_bibliothek_waechst() -> void:
 	var gs := _fresh_game_state()
 	gs.set_value("economy.coins", 100)

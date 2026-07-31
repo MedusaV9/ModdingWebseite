@@ -224,7 +224,12 @@ func _on_book_chosen(book: Dictionary) -> void:
 	_session_pages = stories.duplicate()
 	_session_pages.shuffle()
 	_session_page_index = 0
-	_session_needed = StoryBooks.needed_words(int(book.get("entertainment", 1)), reads)
+	# W13C (Request GOOBYMAN, H §6.4): gekaufte Schlafmaske = 10 % weniger
+	# Vorlese-Wörter bis zum Einschlafen (Boden StoryBooks.WORDS_MIN).
+	_session_needed = GoobymanKatalog.schlafmaske_woerter(
+		StoryBooks.needed_words(int(book.get("entertainment", 1)), reads),
+		GoobymanKatalog.schlafmaske_gekauft(state)
+	)
 	_session_placed = 0
 	_session_wrong = 0
 	if StoryBooks.is_worn(reads):
