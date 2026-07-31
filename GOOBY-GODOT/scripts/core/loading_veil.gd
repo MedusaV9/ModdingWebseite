@@ -17,6 +17,11 @@ extends CanvasLayer
 ##   so wie ein Schritt durch die Tür an, nicht wie ein Ladebildschirm.
 ## - Sonst: hüpfender Mini-Gooby (`loading_veil_gooby.gd`) + `veil.laedt`.
 ##
+## W14/LOADING-Politur: lebendigeres Kachel-Drift des Backdrops, hüpfende
+## Fortschritts-Punkte (`loading_veil_punkte.gd`) statt Spinner-Gefühl
+## (sie weichen dem echten Balken, sobald set_progress > 0 meldet) und
+## Tipp-Texte im ACNH-Ton (`veil.tips`).
+##
 ## Contract (nach W1 FROZEN, W1a-Handoff): cover(reduced_motion) /
 ## reveal(reduced_motion) sind awaitbare Coroutinen (Router:
 ## `await veil.cover(rm)`); Signale covered/revealed feuern zusätzlich.
@@ -36,6 +41,11 @@ const DOOR_REVEAL_DURATION := 0.2
 const DOOR_EDGE_FRAC := 0.18
 const TIP_ROTATE_SEC := 3.2
 const TIPS_KEY := "veil.tips"
+## W14/LOADING: lebendigeres Kachel-Pattern — gleiche Drift-Richtung wie der
+## AcTokens-Standard, nur spürbar flotter + etwas präsenter (nur im Veil;
+## der Shader nullt die Drift unter Reduced Motion selbst).
+const PATTERN_DRIFT_FAKTOR := 2.6
+const PATTERN_OPACITY_VEIL := 0.58
 
 static var _travel_hint: Dictionary = {}
 static var _tip_cursor := 0
@@ -55,6 +65,8 @@ var _tip_timer: Timer
 ## EF-3 F1: aktiver Tür-Wisch-Modus (gesetzt via prepare_for_travel).
 var _door_aktiv := false
 var _door_wipe: Control
+## W14/LOADING: hüpfende Fortschritts-Punkte (statt Spinner) in der Karte.
+var _punkte: LoadingVeilPunkte
 
 @onready var _root: Control = $Root
 @onready var _backdrop: AcWallpaper = $Root/Backdrop
@@ -74,6 +86,15 @@ func _ready() -> void:
 	# CanvasLayer-Gotcha (W3d-Handoff): Window-Theme kommt hier nicht an.
 	_root.theme = ThemeService.theme()
 	_laedt_label.text = I18nService.t("veil.laedt")
+	# W14/LOADING: lebendigeres Drift + Fortschritts-Punkte unterm Lädt-Text.
+	_backdrop.drift = _backdrop.drift * PATTERN_DRIFT_FAKTOR
+	_backdrop.pattern_opacity = PATTERN_OPACITY_VEIL
+	_punkte = LoadingVeilPunkte.new()
+	_punkte.name = "Punkte"
+	_punkte.set_animated(false)
+	var card_box := _laedt_label.get_parent()
+	card_box.add_child(_punkte)
+	card_box.move_child(_punkte, _laedt_label.get_index() + 1)
 	_tip_timer = Timer.new()
 	_tip_timer.wait_time = TIP_ROTATE_SEC
 	_tip_timer.timeout.connect(_on_tip_timer)
@@ -127,6 +148,7 @@ func cover(reduced_motion := false) -> void:
 	_root.visible = true
 	set_progress(0.0)
 	_gooby.set_animated(not reduced_motion and not _ranch_aktiv)
+	_punkte.set_animated(not reduced_motion and not _ranch_aktiv)
 	if _ranch_screen != null:
 		_ranch_screen.set_animated(not reduced_motion and _ranch_aktiv)
 	if _tip_label.visible or _ranch_aktiv:
@@ -164,6 +186,7 @@ func reveal(reduced_motion := false) -> void:
 		await tween.finished
 	visible = false
 	_gooby.set_animated(false)
+	_punkte.set_animated(false)
 	if _ranch_screen != null:
 		_ranch_screen.set_animated(false)
 	revealed.emit()
@@ -174,6 +197,9 @@ func set_progress(ratio: float) -> void:
 	if _progress_bar != null:
 		_progress_bar.value = _progress
 		_progress_bar.visible = _progress > 0.0 and _progress < 1.0 and not _ranch_aktiv
+	# W14/LOADING: Punkte weichen dem ECHTEN Balken — nie beide gleichzeitig.
+	if _punkte != null and _progress_bar != null:
+		_punkte.visible = not _progress_bar.visible
 	if _ranch_screen != null:
 		_ranch_screen.set_progress(_progress if _ranch_aktiv else 0.0)
 

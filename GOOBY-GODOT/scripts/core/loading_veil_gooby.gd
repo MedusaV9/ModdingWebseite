@@ -7,8 +7,10 @@ extends Control
 ##
 ## Hop-Zyklus mit Squash & Stretch: am Boden gestaucht, in der Luft
 ## gestreckt; Ohren schlackern der Bewegung hinterher, der Schatten
-## atmet mit. `set_animated(false)` = Reduced Motion (Ruhepose, kein
-## _process) — das Veil reicht seinen reduced_motion-Flag durch.
+## atmet mit; beim Aufsetzen pufft ein kleines Staubwölkchen zur Seite
+## (W14/LOADING-Politur). `set_animated(false)` = Reduced Motion
+## (Ruhepose, kein _process) — das Veil reicht seinen reduced_motion-Flag
+## durch.
 
 const FUR := Color("#F2E5CE")
 const FUR_SHADE := Color("#E3D2B8")
@@ -16,6 +18,7 @@ const EAR_PINK := Color("#FFC7D8")
 const CHEEK_PINK := Color(1.0, 0.4824, 0.6627, 0.55)
 const OUTLINE := Color("#4A3B36")
 const SHADOW := Color(0.2902, 0.2314, 0.2118, 0.16)
+const PUFF := Color(0.9137, 0.8471, 0.7333, 0.5)
 
 const HOP_HZ := 1.4  # Hüpfer pro Sekunde
 const HOP_HEIGHT := 0.30  # Anteil der Control-Höhe
@@ -59,6 +62,8 @@ func _draw() -> void:
 	var sx := 1.0 + 0.14 * ground_k - 0.07 * air_k
 	var sy := 1.0 - 0.16 * ground_k + 0.10 * air_k
 	_draw_shadow(ground, s, phase)
+	if _animated:
+		_draw_puff(ground, s, ground_k)
 	var base := ground + Vector2(0.0, -hop)
 	_draw_body(base, s, sx, sy)
 	_draw_head(base, s, sx, sy, vel, air_k)
@@ -71,6 +76,20 @@ func _draw_shadow(ground: Vector2, s: float, phase: float) -> void:
 	draw_set_transform(ground + Vector2(0.0, 6.0 * s), 0.0, Vector2(1.0, 0.32))
 	draw_circle(Vector2.ZERO, shadow_w, shadow)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+## Lande-Staubwölkchen (W14/LOADING): pufft beim Aufsetzen seitlich weg —
+## je flacher der Squash abklingt, desto weiter außen und blasser.
+func _draw_puff(ground: Vector2, s: float, ground_k: float) -> void:
+	if ground_k <= 0.05:
+		return
+	var weite := 1.0 - ground_k
+	var farbe := PUFF
+	farbe.a = PUFF.a * ground_k
+	for side in [-1.0, 1.0]:
+		var pos := ground + Vector2(side * (26.0 + 14.0 * weite) * s, (2.0 - 6.0 * weite) * s)
+		draw_circle(pos, (5.0 + 3.5 * weite) * s, farbe)
+		draw_circle(pos + Vector2(side * 7.0 * s, -3.0 * s), (2.6 + 2.0 * weite) * s, farbe)
 
 
 func _draw_body(base: Vector2, s: float, sx: float, sy: float) -> void:
