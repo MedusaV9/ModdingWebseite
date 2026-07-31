@@ -135,10 +135,10 @@ g_fwd 0.60 / g_bwd −0.22 / Lobe-Mix 0.32.
 **Fallen:** F8 beachtet — Kontrast kommt ausschließlich aus dem Licht. Tuning-Risiko:
 Powder-k zu hoch ⇒ Ränder „glühen"; mit L264-Silver-Lining gegenprüfen (Screenshot S3).
 
-> ✅ **umgesetzt** (Session 0730, Paket B1/B5/B9-Basis) — `storm_volume.fsh`:
-> Dual-Lobe-Phase L332–338, Powder L233–236, dichteabhängige Albedo L237–241,
-> Combine (albedo × [sun·powder + ms] + ambient, Flash bleibt Emission danach)
-> L241–248; `volumeLight`-Signatur erweitert um `rl`/`dens` (L201).
+> ✅ **umgesetzt** (Session 0730, Paket B1/B5/B9-Basis; Zeilen: Stand nach B2/B3/B7) —
+> `storm_volume.fsh`: Dual-Lobe-Phase L413–418, Powder L313–316, dichteabhängige
+> Albedo L317–321, Combine (albedo × [sun·powder + ms] + ambient, Flash bleibt
+> Emission danach) L321–328; `volumeLight`-Signatur erweitert um `rl`/`dens` (L281).
 > Abweichung: Powder/Albedo nutzen die PREMULTIPLIZIERTE Sample-Dichte (`dens`
 > enthält in der Marschschleife bereits `densMul`) — für Powder ist das exakt die
 > Plan-Formel `raw · densMul`; die Albedo greift dadurch bei fadenden Stürmen
@@ -168,6 +168,19 @@ sie darf NIE heller sein als die äußere. **Defaults:** inner-Gewicht 0.62, Lea
 + 0.035 rad/s. **Fallen:** Schatten-Rays (detail 0) überspringen `cell2` (Midline 0.5
 einsetzen) — sonst +1 N × Taps. Auge nicht zuschütten: band2 endet bei rl 0.16, das
 Interior-Handover (L262) und die F-032-Kernauflösung (B7) bleiben funktional.
+
+> ✅ **umgesetzt** (Session 0730, Paket B2/B3/B7) — `storm_volume.fsh`: band2/innerProf
+> L201–208 (Early-out schließt innerProf ein, damit Löcher der äußeren Schale keine
+> innere Substanz überspringen), inner-Block mit eigener Winkeluhr + `cell2` (Tier ≥ 2,
+> Camera-only, Midline 0.775 sonst) L240–252.
+> **Abweichung (wichtig):** Die Plan-Skizze kombinierte `prof = max(prof, inner·0.62)`
+> VOR dem Carve-Remap — dort multipliziert die finale Formel `(body·1.5 − 0.35)` die
+> innere Schale mit genau dem Loch, das sie enthüllen soll (Anti-Phase: body niedrig ⇒
+> Faktor ≤ 0 ⇒ innere Schale unsichtbar). Implementiert ist die treue Variante: outer
+> und inner werden GETRENNT geformt (inner = innerProf × max((1−body)·1.4−0.30, 0) ×
+> cellMul × 0.62, geteilte Vertikal-Hülle `vert`) und erst NACH dem Carve per
+> `max(outer, inner)` kombiniert (F8: max, nie Summe). `spin2` nutzt die B7-Churn-Uhr
+> (`spinT`) statt roher `Time` — Eskalation bleibt winkelstetig.
 
 ### B3 — Höhenprofil v2: Wallcloud-Basis + Konvektionstürme + ausfransende Decke
 **Ziel:** Der Sturm liest vertikal: schwere dunkle Basis, aufsteigende Türme über der
@@ -200,6 +213,23 @@ rEff += 0.14 * towerCol * smoothstep(0.55, 0.90, ny);
   ALU) — reklamiert von oben/unten gesehen mehr Marschweg zurück als die Margin kostet.
 **Fallen:** VolYScale staucht ny mit — bei Spawn (heightScale 0.25, `StormWallRenderer`
 L1880–1888) sind Türme automatisch flach: gewollt. Fullscreen-Cap 48 Steps unangetastet.
+
+> ✅ **umgesetzt** (Session 0730, Paket B2/B3/B7) — `storm_volume.fsh`: ny-Cut 1.22→1.42
+> L139–143, convCell/towerCol (Tier ≥ 1 Camera, Midline 0.5 für Tier 0 + Schatten)
+> L166–174, rEff-Umbau (anvil 0.12→0.08, +0.14·towerCol·Gate) L175–181, towerTop/vert
+> L188–195, wallCloud (ersetzt den skirt×band-Boost) L196–199, Fray L253–257.
+> `BOUNDS_MARGIN` 1.55→1.70 BEIDSEITIG (fsh L94, `StormVolumeFx.java` L87). Y-Slab
+> (B9, bereits [−0.25, 1.45]) brauchte wie geplant keine Änderung — Decke 1.30 < Cut
+> 1.42 < Slab 1.45. **rEff-Bilanz nachgerechnet** (Scan über ny, worst case Noise=1):
+> Ridge-Max 0.2008 bei ny≈0.836 (Anvil- und Turm-Gate ÜBERLAPPEN dort — der Plan-Wert
+> 1.50 war leicht zu optimistisch geschätzt), + bulge 0.174 + tower 0.105 ⇒
+> **max rEff = 1.4802, ×1.05 = 1.5542 < 1.70 ✓ (Luft 0.146)**. Tier-0-Gegenprobe
+> (towerCol 0.5): max rEff 1.4179, ×1.05 = 1.4888.
+> Abweichungen: Fray wirkt auf das kombinierte Feld statt nur auf prof (die innere
+> Schale erreicht ny > 0.72 praktisch nicht — visuell identisch, Code einfacher);
+> Tier 0 erhält die NEUE Profilform mit konstanter Decke 1.125 (Plan: „Profilform
+> bleibt, Säulenvariation entfällt") — der Tier-0-Look ist damit bewusst v2, nicht
+> der alte 0.92–1.04-Fade.
 
 ### B4 — Warp v2: Zeit-Rotor + zweite Warp-Ebene (Tier 2 only)
 **Ziel:** Das Wabern: Billows falten sich ineinander statt zu scrollen. Kosten: **+1 N**
@@ -234,13 +264,13 @@ float lightT = exp(-sh * ...) * macroShadow;
 sich mit den Taps — Gesamtabdunklung gegen die „nicht zum Silhouetten-Klumpen
 crushen"-Regel (L187–191) per Screenshot S3/S4 ausbalancieren.
 
-> ✅ **umgesetzt** (Session 0730, Paket B1/B5/B9-Basis) — `storm_volume.fsh`:
-> macroShadow (analytische Sonnen-Großraumtiefe, multipliziert `lightT`) L211–217,
-> radialAo (multipliziert `ambient`) L221–226. Abweichung: `rl` steht in
-> `volumeLight` nicht nativ zur Verfügung — statt die Silhouettenterme dort neu zu
-> rechnen (+2 N) exportiert `stormDensity` die bereits bezahlte Profilkoordinate
-> als `out`-Parameter (L113–119, L147–148); die Schatten-Taps rufen unverändert
-> einen 2-Arg-Wrapper (L185–189). Kosten damit wie geplant 0 N.
+> ✅ **umgesetzt** (Session 0730, Paket B1/B5/B9-Basis; Zeilen: Stand nach B2/B3/B7) —
+> `storm_volume.fsh`: macroShadow (analytische Sonnen-Großraumtiefe, multipliziert
+> `lightT`) L291–297, radialAo (multipliziert `ambient`) L301–306. Abweichung: `rl`
+> steht in `volumeLight` nicht nativ zur Verfügung — statt die Silhouettenterme dort
+> neu zu rechnen (+2 N) exportiert `stormDensity` die bereits bezahlte
+> Profilkoordinate als `out`-Parameter (L132–138, L181–182); die Schatten-Taps rufen
+> unverändert einen 2-Arg-Wrapper (L265–269). Kosten damit wie geplant 0 N.
 
 ### B6 — Blitz v2: zweiter Flash-Slot + Emissions-Adern
 **Ziel:** Interne Blitze als räumliche Dichte-Emission: zwei gleichzeitige Zellen,
@@ -290,6 +320,20 @@ WINKELGESCHWINDIGKEIT; damit der Winkel stetig bleibt, in Java stattdessen eine
 wirken lassen und Spin-Boost über eine separat integrierte `SpinPhase`-Uniform). Der
 Siege-Step-Cap 32 (L97) bleibt — Kampf-Features müssen im gekappten Budget lesbar sein.
 
+> ✅ **umgesetzt** (Session 0730, Paket B2/B3/B7) — die Falle wurde per Plan-Option
+> „integrierte Winkeluhr" gelöst, dafür gibt es ein DRITTES Uniform:
+> `SiegeChurn`/`ChurnTime`/`CoreFade` (fsh L52–64). `ChurnTime = ∫churn·dt` wird in
+> `StormVolumeFx` pro Client-Tick akkumuliert (Feld L109–121, Uhr L168–171, Reset
+> L376) und im Shader als `spinT = Time + 1.6·ChurnTime` (L144–150) bzw. Updraft-Scroll
+> `Time + 2.0·ChurnTime` (L223–224) addiert — Raten ×2.6/×3.0 bei Voll-Siege, Winkel
+> stetig. „Mehr Turbulenz": Warp-AMPLITUDE ×(1 + 0.18·SiegeChurn) (L227) — Deckel
+> 1.6·1.18 = 1.888 < 1.9 (B4-Falle eingehalten). CoreFade-Aufriss exakt nach Plan-Formel
+> auf das kombinierte Feld (L258–261). Java-Quellen: `storm.siegeCoreFade(partialTick)`
+> (F-032-Ramp, `StormFxClient` ClientStorm), churn = clamp((siegeScale−1)/
+> (siegeRadiusScale−1)) — normalisiert gegen den PAYLOAD-Scale statt des server-privaten
+> `StormSiege.RADIUS_SCALE` (Helper `siegeChurn` L330–340, Feeds L251–258).
+> Flash v2 (B6) ist NICHT Teil dieses Pakets — `StormWeatherFx` blieb unangetastet.
+
 ### B8 — Photon-Parallax-Sync: `eclStormSpin` + rotierende Regen-/Fetzenbänder
 **Ziel:** „Von weiter weg simple Veil, näher Photon-Nahfeld" wird eine echte
 Parallaxe-Sandwich: Photon-Bänder orbiten MIT der Volumenrotation. Kosten: 0 GPU;
@@ -324,17 +368,20 @@ zwei Raten (1× Rim, 2× obere Strata), nicht mehr; der Rest der Kohärenz kommt
   Marschchord. Nur zusammen mit B2 (innere Schale deckt den Kern), Sichtprüfung S5
   Pflicht: Never-see-inside darf nicht aufweichen. Bei Zweifel: 0.30 behalten.
 
-> ✅ **B9-Basis umgesetzt** (Session 0730, Paket B1/B5/B9-Basis):
-> `DetailTier`-Uniform deklariert (`storm_volume.fsh` L44–47) und aus
-> `effectiveTier(storm)` gefüttert (`StormVolumeFx.java` L230–233, Javadoc-Vertrag
-> L52–53); Y-Slab-Clip ny ∈ [−0.25, 1.45] im gestauchten Raum für ALLE Tiers
-> (Konstanten `SLAB_NY_MIN/MAX` fsh L76–83, Plane-Schnitte L281–299). Der Slab
-> deckt den heutigen Dichte-Cut (−0.20/1.22) UND die geplante B3-Decke (1.42) ab —
-> B3 braucht hier keine Bounds-Änderung mehr. `BOUNDS_MARGIN` blieb beidseitig
-> 1.55 (kein neuer Silhouettenterm; Bilanz nachgerechnet: max rEff 1.3994 × 1.05 =
-> 1.469 < 1.55, Luft 0.081). Noch offen aus B9: die Tier-Gates selbst (kommen mit
-> B2/B3/B4 — bis dahin gated der Shader nichts über `DetailTier`; Tier 0 = Ist-Look
-> per Konstruktion) und das markierte OCC-Experiment (nicht angefasst, 0.30 bleibt).
+> ✅ **B9-Basis umgesetzt** (Session 0730, Paket B1/B5/B9-Basis; Zeilen: Stand nach
+> B2/B3/B7): `DetailTier`-Uniform deklariert (`storm_volume.fsh` L51–54) und aus
+> `effectiveTier(storm)` gefüttert (`StormVolumeFx.java` L246–250); Y-Slab-Clip
+> ny ∈ [−0.25, 1.45] im gestauchten Raum für ALLE Tiers (Konstanten `SLAB_NY_MIN/MAX`
+> fsh L95–102, Plane-Schnitte L360–378). Der Slab deckte den damaligen Dichte-Cut
+> (−0.20/1.22) UND die B3-Decke (1.42) ab — B3 brauchte hier wie vorgesehen keine
+> Bounds-Änderung.
+>
+> **Nachtrag (Paket B2/B3/B7):** Die Tier-Gates sind jetzt LIVE — B3 `convCell` Tier
+> ≥ 1 (fsh L170–174), B2 `cell2` Tier ≥ 2 (L243–249); Schatten-Diät hält (detail <
+> 0.5 ⇒ Midlines 0.5/0.775, weiterhin 4 N pro Tap). `BOUNDS_MARGIN` wurde mit B3 auf
+> 1.70 angehoben (Bilanz siehe B3-Vermerk). Das markierte OCC-Experiment
+> (`OCC_VOLUMETRIC_CORE` 0.30 → 0.25) bleibt NICHT umgesetzt — 0.30 steht. B4 (Warp
+> v2 Tier 2) ist weiterhin offen.
 
 ### B10 (optional) — Upsample-Politur: Transmittanz-Kantenschärfung
 **Ziel:** Halbres-Kanten an Turm-Silhouetten (B3 macht die Silhouette komplexer).

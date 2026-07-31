@@ -55,7 +55,9 @@ import net.neoforged.neoforge.client.event.ClientTickEvent;
  * (tick-clock seconds, pause-safe), {@code SunDir} ({@link SunTracker}), {@code Interior}
  * ({@link StormInteriorFx#interiorAmount()} — the grade hand-over), {@code FlashPos} +
  * {@code FlashAmount} (the W-B intra-wall flash injected as emissive light inside the
- * mass; anchor mirrors {@code StormWeatherFx.claimLight}).</p>
+ * mass; anchor mirrors {@code StormWeatherFx.claimLight}), {@code SiegeChurn} +
+ * {@code ChurnTime} + {@code CoreFade} (STORM-MASS B7 — the F-031/F-032 combat state
+ * mirrored into the volume: turbulence, continuous rate escalation, core tear-open).</p>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID, value = Dist.CLIENT)
 public final class StormVolumeFx {
@@ -77,8 +79,12 @@ public final class StormVolumeFx {
     private static final float STEPS_TIER1 = 40.0F;
     private static final float STEPS_TIER0 = 24.0F;
     // --- AUDITFIX-4 coverage ladder (see stepCount) ---
-    /** Silhouette padding of the raymarch bounds — MUST mirror storm_volume.fsh BOUNDS_MARGIN. */
-    private static final float BOUNDS_MARGIN = 1.55F;
+    /**
+     * Silhouette padding of the raymarch bounds — MUST mirror storm_volume.fsh
+     * BOUNDS_MARGIN. STORM-MASS B3 raised it 1.55 → 1.70 for the convection towers
+     * (max rEff ≈ 1.478, ×1.05 = 1.552 &lt; 1.70).
+     */
+    private static final float BOUNDS_MARGIN = 1.70F;
     /** Coverage (sine of the storm's angular radius) at/above which the full budget applies. */
     private static final float COVERAGE_FULL_STEPS = 0.60F;
     /** Coverage at/below which the budget bottoms out at {@link #MIN_STEP_FRACTION}. */
@@ -105,6 +111,14 @@ public final class StormVolumeFx {
     private static StormFxClient.ClientStorm targetStorm;
     /** Cached per tick: the pipeline is genuinely active in Veil's post manager. */
     private static boolean pipelineLive;
+    /**
+     * STORM-MASS B7: the integrated churn clock (∫ churn dt, seconds) — the shader adds
+     * it to {@code Time} so siege escalation multiplies the rotation/updraft RATES while
+     * every angle stays continuous (a raw {@code rate × (1 + k·churn)} would scrub the
+     * whole field by {@code Time × Δrate} on each churn change). Accumulated per client
+     * tick (pause-safe, same clock as {@code Time}); stops growing the tick churn hits 0.
+     */
+    private static float churnTime;
 
     static {
         // Feature-owned registration (StormInteriorFx static-init seam) — FEATURE
@@ -152,6 +166,9 @@ public final class StormVolumeFx {
         // Manager-confirmed (not just predicate-desired): eviction and the failure fuse
         // both read as "volume off" to the renderer, which then keeps its full stack.
         pipelineLive = targetStorm != null && VeilPostController.isActive(STORM_VOLUME_POST);
+        if (targetStorm != null) {
+            churnTime += siegeChurn(targetStorm, 1.0F) * 0.05F; // B7 clock, 1 tick = 50 ms
+        }
     }
 
     /**
@@ -231,6 +248,14 @@ public final class StormVolumeFx {
         // tier-priced density terms (B2/B3/B4) gate in-shader instead of abusing the
         // ShadowTaps proxy. Tier 0 (the default floor) keeps every gate closed.
         pipeline.getUniform("DetailTier").setFloat(effectiveTier(storm));
+        // STORM-MASS B7: combat state → shader. SiegeChurn (the F-031a growth ramp,
+        // normalized against the payload's radius scale) drives warp turbulence;
+        // ChurnTime (integrated, see field) escalates rotation/updraft continuously;
+        // CoreFade mirrors the F-032 occluder dissolve so the volume opens the arena
+        // in sync with the geometry.
+        pipeline.getUniform("SiegeChurn").setFloat(siegeChurn(storm, partialTick));
+        pipeline.getUniform("ChurnTime").setFloat(churnTime);
+        pipeline.getUniform("CoreFade").setFloat(storm.siegeCoreFade(partialTick));
         // Tick clock, not wall clock: pause-safe and continuous (the shader integrates
         // rotation angles from it — a wall-clock wrap would snap the churn).
         pipeline.getUniform("Time").setFloat((StormFxClient.ticks() + partialTick) / 20.0F);
@@ -304,6 +329,17 @@ public final class StormVolumeFx {
     }
 
     /**
+     * STORM-MASS B7: siege churn 0..1 — the F-031a growth ramp position, normalized
+     * against the payload's own radius scale (default 1.3, {@code StormSiege.RADIUS_SCALE}
+     * is server-private). 0 for storms that never saw a siege ({@code siegeScale} rests
+     * at 1); ramps back to 0 over the same clock when the siege ends.
+     */
+    private static float siegeChurn(StormFxClient.ClientStorm storm, float partialTick) {
+        float denom = Math.max(storm.siegeRadiusScale - 1.0F, 0.05F);
+        return Mth.clamp((storm.siegeScale(partialTick) - 1.0F) / denom, 0.0F, 1.0F);
+    }
+
+    /**
      * F-031b: the config quality tier, dropped ONE tier while this storm is under siege
      * (the client's automatic combat downgrade — restored the tick the siege ends).
      */
@@ -337,5 +373,6 @@ public final class StormVolumeFx {
     private static void reset() {
         targetStorm = null;
         pipelineLive = false;
+        churnTime = 0.0F; // B7: the clock is a Time offset — zeroing while idle is invisible
     }
 }

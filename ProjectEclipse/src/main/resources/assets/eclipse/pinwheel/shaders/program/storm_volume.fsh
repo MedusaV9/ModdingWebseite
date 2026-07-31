@@ -24,7 +24,14 @@
 // stormfx.StormVolumeFx through the VeilPostController row (never under an Iris
 // shaderpack; StormWallRenderer's shell stack is the fallback there): VolCenter
 // (camera-relative), VolRadius, VolYScale, Visibility, Strength, StepCount, ShadowTaps,
-// DetailTier, Time, SunDir, Interior, FlashPos, FlashAmount.
+// DetailTier, Time, SunDir, Interior, FlashPos, FlashAmount, SiegeChurn, ChurnTime,
+// CoreFade.
+//
+// STORM-MASS (B2/B3): the density field is now TWO shells — the outer band carved by
+// the fBm body, plus an inner counter-clocked shell (rl 0.16–0.50) built from the
+// ANTI-PHASE body, so holes in the outer wall reveal a darker layer turning behind
+// them — under a height profile v2 (wallcloud base ring, convection towers that raise
+// the ceiling locally, a body-frayed anvil top).
 #include eclipse:eclipse_volume
 #include veil:space_helper
 
@@ -42,9 +49,19 @@ uniform float Interior;
 uniform vec3 FlashPos;
 uniform float FlashAmount;
 // STORM-MASS B9 foundation: effective quality tier (0/1/2, StormVolumeFx.effectiveTier)
-// — the in-shader gate for tier-priced density terms (B2/B3/B4 key off it; nothing in
-// this file gates on it yet). Contract: tier 0 must always mean "baseline look".
+// — the in-shader gate for tier-priced density terms. Live gates: B3 convection cells
+// (tier ≥ 1), B2 inner-shell cells (tier ≥ 2). Contract: tier 0 = cheapest look.
 uniform float DetailTier;
+// STORM-MASS B7 combat uniforms (F-031/F-032 mirror, all client-derived):
+// SiegeChurn 0..1 = the siege growth ramp — drives warp turbulence (amplitude-safe).
+uniform float SiegeChurn;
+// ChurnTime = ∫ SiegeChurn dt (seconds, Java-integrated) — added to Time it escalates
+// rotation/updraft RATES with a continuous angle; multiplying the rates by
+// (1 + k·churn) directly would scrub the whole field on every churn change.
+uniform float ChurnTime;
+// CoreFade 0..1 mirrors the F-032 occluder-core dissolve: the band's inner edge and
+// the inner shell thin out so the combat arena opens in the volume too.
+uniform float CoreFade;
 
 in vec2 texCoord;
 
@@ -68,11 +85,13 @@ const float UPDRAFT = 0.018;
 // pre-audit ~0.36·R reach AND optical depth of the old 4 taps at 0.09 (the transmittance
 // term multiplies the tap sum by this spacing), at 3/4 of the samples.
 const float SHADOW_STEP_N = 0.12;
-// Silhouette headroom beyond the nominal radius (anvil bulge + tower lumps live there).
-// Must exceed max(rEff) · 1.05, otherwise the bounds sphere clips the lumps flat and
-// prints back the perfectly round edge the lumps exist to break. Empty-space skipping
-// pays for the extra slack.
-const float BOUNDS_MARGIN = 1.55;
+// Silhouette headroom beyond the nominal radius (anvil bulge + tower lumps + B3
+// convection towers live there). Must exceed max(rEff) · 1.05, otherwise the bounds
+// sphere clips the lumps flat and prints back the perfectly round edge the lumps exist
+// to break. B3 balance: max rEff ≈ 1.478 (bulge 0.174 + tower 0.105 + anvil/conv ridge
+// ≈ 0.199), ×1.05 = 1.552 < 1.70. MUST mirror StormVolumeFx.BOUNDS_MARGIN. The Y-slab
+// clip + empty-space skipping pay for the extra slack.
+const float BOUNDS_MARGIN = 1.70;
 // STORM-MASS B9: the density field only lives inside this normalized-height slab while
 // the bounds SPHERE spans ±BOUNDS_MARGIN vertically — clipping the march segment
 // against the two horizontal planes up front reclaims 15–30% of the chord for
@@ -117,12 +136,17 @@ float stormDensity(vec3 u, float detail, out float rlOut) {
     float ny = u.y;
     float lenH = length(u);
     rlOut = lenH;
-    if (lenH > BOUNDS_MARGIN || ny > 1.22 || ny < -0.20) {
+    // B3: the vertical cut rises 1.22 → 1.42 so convection towers (ceiling up to 1.30)
+    // never hit a hard lid; the Y-slab clip (1.45) still brackets it.
+    if (lenH > BOUNDS_MARGIN || ny > 1.42 || ny < -0.20) {
         return 0.0;
     }
+    // B7: siege escalation rides the INTEGRATED churn clock — d(spinT)/dt = 1 + 1.6·churn,
+    // so rotation runs up to 2.6× under full siege while the angle stays continuous.
+    float spinT = Time + 1.6 * ChurnTime;
     // Differential rotation: angular velocity varies with height (stratum ladder) AND
     // radius (inner mass leads the rim) — sampling position, not geometry, rotates.
-    float spin = Time * ROT_SPEED * stratumSpeed(clamp(ny, 0.0, 1.0))
+    float spin = spinT * ROT_SPEED * stratumSpeed(clamp(ny, 0.0, 1.0))
             * (1.4 - 0.7 * clamp(lenH, 0.0, 1.0));
     float cs = cos(spin);
     float sn = sin(spin);
@@ -139,11 +163,21 @@ float stormDensity(vec3 u, float detail, out float rlOut) {
     float anvil = smoothstep(0.45, 0.72, ny) * (1.0 - smoothstep(0.80, 1.00, ny));
     float skirt = 1.0 - smoothstep(0.00, 0.30, ny);
     float lumpGate = smoothstep(0.42, 0.92, lenH);
+    // B3 convection cells: a vertically COHERENT column field (the sample is y-free, so
+    // a cell reads identically over the whole height — that is what makes it a tower
+    // instead of a blob). Tier 0 and shadow rays take the midline: the v2 profile SHAPE
+    // stays, only the per-column variation is a paid tier-≥1 camera feature.
+    float towerCol = 0.5;
+    if (detail > 0.5 && DetailTier > 0.5) {
+        towerCol = smoothstep(0.55, 0.85,
+                evNoise3(vec3(q.x * 3.2, Time * 0.02, q.z * 3.2))); // +1 N (tier ≥ 1)
+    }
     float rEff = 1.0
-            + 0.12 * anvil
+            + 0.08 * anvil // B3: reduced from 0.12 — the towers own the top silhouette now
             + 0.06 * skirt
             + 0.30 * (bulge - 0.42) * lumpGate
-            + 0.17 * (tower - 0.38) * smoothstep(0.62, 0.98, lenH);
+            + 0.17 * (tower - 0.38) * smoothstep(0.62, 0.98, lenH)
+            + 0.14 * towerCol * smoothstep(0.55, 0.90, ny); // B3: towers break the top edge
     float rl = lenH / max(rEff, 0.5);
     rlOut = rl;
 
@@ -151,11 +185,25 @@ float stormDensity(vec3 u, float detail, out float rlOut) {
     // the core (thin haze floor keeps it breathing) and a soft falloff past the rim.
     float band = smoothstep(0.30, 0.62, rl) * (1.0 - smoothstep(0.94, 1.05, rl));
     float prof = max(band, 0.10 * smoothstep(0.08, 0.30, rl));
-    // Vertical profile: fade over the apex, cut below the ground skirt, thicken the base.
-    prof *= 1.0 - smoothstep(0.92, 1.04, ny);
-    prof *= smoothstep(-0.18, -0.06, ny);
-    prof *= 1.0 + 0.5 * skirt * band;
-    if (prof <= 0.003) {
+    // B3 vertical profile v2: the ceiling rises locally where a convection tower stands
+    // (0.95 → up to 1.30 BEFORE VolYScale squashes it) instead of one flat apex fade;
+    // the base cut below the ground skirt is unchanged. The envelope is kept separate
+    // (vert) because the B2 inner shell shares it.
+    float towerTop = 0.95 + 0.35 * towerCol;
+    float vert = (1.0 - smoothstep(towerTop - 0.14, towerTop, ny))
+            * smoothstep(-0.18, -0.06, ny);
+    prof *= vert;
+    // B3 wallcloud: a lowered, THICKENED base ring (ny < 0.30, outer radii) — the heavy
+    // dark foot every big storm hangs from (replaces the old skirt×band boost).
+    float wallCloud = smoothstep(0.30, 0.10, ny) * smoothstep(0.55, 0.80, rl);
+    prof *= 1.0 + 0.55 * wallCloud;
+
+    // B2 inner-shell skeleton: a second radial band rl 0.16–0.50 under the same
+    // vertical envelope — cheap enough to evaluate before the early-out so holes in
+    // the outer band cannot skip real inner substance.
+    float band2 = smoothstep(0.16, 0.34, rl) * (1.0 - smoothstep(0.44, 0.56, rl));
+    float innerProf = band2 * vert;
+    if (max(prof, innerProf) <= 0.003) {
         return 0.0;
     }
 
@@ -169,17 +217,49 @@ float stormDensity(vec3 u, float detail, out float rlOut) {
 
     // Domain-warped fBm body: the warp folds the octaves into billowing curls (camera
     // rays only — shadow rays read the cheap unwarped 2-octave mass, see header).
-    vec3 np = q * NOISE_FREQ + vec3(0.0, -Time * UPDRAFT * NOISE_FREQ, 0.0);
+    // B7: the updraft scroll rides the churn clock (up to 3× under full siege) and the
+    // warp AMPLITUDE grows with churn — capped so the total stays ≤ 1.9 (beyond that
+    // the billows tear and the noise lattice shows through).
+    vec3 np = q * NOISE_FREQ
+            + vec3(0.0, -(Time + 2.0 * ChurnTime) * UPDRAFT * NOISE_FREQ, 0.0);
     float body;
     if (detail > 0.5) {
-        body = evFbm5(np + evCurlWarp(np * 0.5, Time));
+        body = evFbm5(np + evCurlWarp(np * 0.5, Time) * (1.0 + 0.18 * SiegeChurn));
     } else {
         body = evFbm2(np);
     }
-    // Remap so the noise CARVES holes through the profile instead of only dimming it.
-    // DENSITY_GAIN keeps the mass heavy: at 1.0 the ball reads as thin haze from a
-    // distance because the average sample sits well below the peak.
-    return max(prof * armMul * (body * 1.5 - 0.35), 0.0) * DENSITY_GAIN;
+    // Outer field: remap so the noise CARVES holes through the profile instead of only
+    // dimming it. DENSITY_GAIN keeps the mass heavy: at 1.0 the ball reads as thin haze
+    // from a distance because the average sample sits well below the peak.
+    float outer = max(prof * armMul * (body * 1.5 - 0.35), 0.0);
+    // B2 inner shell: leads the outer rotation by 0.35 rad plus its own 0.035 rad/s
+    // clock, and takes the ANTI-PHASE body (1 − body): where the outer carve opens a
+    // hole, the inner layer has substance — the "there is more behind it" read.
+    // Combined via max AFTER the carve (never a sum — F8): sharing the outer remap
+    // would multiply the inner shell by the very hole that is supposed to reveal it.
+    float inner = 0.0;
+    if (innerProf > 0.003) {
+        float cellMul = 0.775; // midline — the cell field is a tier-2 camera luxury
+        if (detail > 0.5 && DetailTier > 1.5) {
+            float spin2 = spin + 0.35 + spinT * 0.035;
+            float cs2 = cos(spin2);
+            float sn2 = sin(spin2);
+            vec3 q2 = vec3(cs2 * u.x - sn2 * u.z, u.y, sn2 * u.x + cs2 * u.z);
+            cellMul = 0.55
+                    + 0.45 * evNoise3(q2 * 3.4 + vec3(0.0, -Time * 0.03, 7.7)); // +1 N (tier 2)
+        }
+        inner = innerProf * max((1.0 - body) * 1.4 - 0.30, 0.0) * cellMul * 0.62;
+    }
+    float dens = max(outer, inner);
+    // B3 fray: the anvil ceiling shreds along the body instead of ending in a clean
+    // line (0 N — body is already paid). The inner shell barely reaches ny > 0.72, so
+    // applying it to the combined field is visually identical to outer-only.
+    dens *= mix(1.0, smoothstep(0.30, 0.62, body), smoothstep(0.72, 1.0, ny));
+    // B7/F-032 mirror: while the occluder core dissolves for combat sight, the band's
+    // inner edge and the whole inner shell thin away — the arena opens in the volume
+    // in sync with the geometry instead of hiding the fight behind fog.
+    dens *= 1.0 - CoreFade * (1.0 - smoothstep(0.35, 0.62, rl));
+    return dens * DENSITY_GAIN;
 }
 
 // Shadow-tap variant: the sun taps only need the density, not the profile coordinate.

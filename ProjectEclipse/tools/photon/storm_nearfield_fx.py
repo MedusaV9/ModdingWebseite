@@ -160,7 +160,9 @@ def build_storm_nearfield_wisps() -> FxBuilder:
             size_over_lifetime=eased([(0.0, 0.5), (0.15, 1.0), (0.85, 0.9), (1.0, 0.3)], "out"))
         .with_material(texture_material(CIRCLE, blend=BLEND_ALPHA))
         .with_lights(sky=8, block=2)
-        .with_renderer(vertex_sorting="NONE")
+        # LINT-ALPHA-NOSORT: alpha-blended carriers need per-frame ordering (8 quads —
+        # the sort is free; additive would wash the fog-green carriers to white).
+        .with_renderer(vertex_sorting="DISTANCE")
         .with_cull_box((-60.0, -4.0, -60.0), (60.0, 40.0, 60.0)))
     racers.with_module("trails", {
         "ratio": F(1.0), "lifetime": constant(1.0),
@@ -207,7 +209,9 @@ def build_storm_nearfield_wisps() -> FxBuilder:
             size_over_lifetime=eased([(0.0, 0.7), (0.55, 1.05), (1.0, 1.15)]))
         .with_material(texture_material(SMOKE, blend=BLEND_ALPHA))
         .with_lights(sky=8, block=2)
-        .with_renderer(vertex_sorting="NONE", shade=True)
+        # LINT-ALPHA-NOSORT: big overlapping veils are the worst-case popping source —
+        # DISTANCE sorting keeps the layered fog read (dark veils cannot go additive).
+        .with_renderer(vertex_sorting="DISTANCE", shade=True)
         .with_cull_box((-60.0, -4.0, -60.0), (60.0, 40.0, 60.0)))
     return fx
 
@@ -246,7 +250,9 @@ def build_storm_ground_scud() -> FxBuilder:
             size_over_lifetime=eased([(0.0, 0.65), (0.4, 1.0), (1.0, 1.25)], "out"))
         .with_material(texture_material(SMOKE, blend=BLEND_ALPHA))
         .with_lights(sky=7, block=2)
-        .with_renderer(vertex_sorting="NONE", shade=True)
+        # LINT-ALPHA-NOSORT: dusty slate shreds MUST stay alpha (additive would glow at
+        # ground level) — DISTANCE sorting fixes the overlap ordering instead.
+        .with_renderer(vertex_sorting="DISTANCE", shade=True)
         .with_cull_box((-62.0, -6.0, -62.0), (62.0, 14.0, 62.0)))
 
     (fx.particle_emitter(
@@ -272,7 +278,8 @@ def build_storm_ground_scud() -> FxBuilder:
             size_over_lifetime=eased([(0.0, 1.0), (0.7, 0.8), (1.0, 0.35)], "in"))
         .with_material(texture_material(CIRCLE, blend=BLEND_ALPHA))
         .with_lights(sky=7, block=2)
-        .with_renderer(vertex_sorting="NONE", shade=True)
+        # LINT-ALPHA-NOSORT: dark grit is the textbook "needs alpha + sorting" case.
+        .with_renderer(vertex_sorting="DISTANCE", shade=True)
         .with_cull_box((-62.0, -6.0, -62.0), (62.0, 14.0, 62.0)))
     return fx
 
@@ -320,7 +327,9 @@ def build_storm_updraft_motes() -> FxBuilder:
             size_over_lifetime=eased([(0.0, 0.6), (0.3, 1.0), (1.0, 0.7)], "out"))
         .with_material(texture_material(CIRCLE, blend=BLEND_ALPHA))
         .with_lights(sky=8, block=3)
-        .with_renderer(vertex_sorting="NONE")
+        # LINT-ALPHA-NOSORT: the mote columns are LDR mass (stacking law) — keep alpha,
+        # sort the ≤60 quads (the sibling HDR glints stay additive-default unsorted).
+        .with_renderer(vertex_sorting="DISTANCE")
         .with_cull_box((-48.0, -4.0, -48.0), (48.0, 50.0, 48.0)))
 
     (fx.particle_emitter(
@@ -420,7 +429,9 @@ def build_storm_burst_shockwave() -> FxBuilder:
             size_over_lifetime=eased([(0.0, 0.6), (0.45, 1.15), (1.0, 1.45)], "out"))
         .with_material(texture_material(SMOKE, blend=BLEND_ALPHA))
         .with_lights(sky=8, block=2)
-        .with_renderer(vertex_sorting="NONE", shade=True)
+        # LINT-ALPHA-NOSORT: matches the sibling shock_dust_wall/shock_updraft, which
+        # already sorted their dark alpha smoke by DISTANCE.
+        .with_renderer(vertex_sorting="DISTANCE", shade=True)
         .with_cull_box((-150.0, -6.0, -150.0), (150.0, SHOCK_CULL_TOP, 150.0)))
 
     # Spark fling: HDR arc sparks riding the wavefront out + slightly up.
