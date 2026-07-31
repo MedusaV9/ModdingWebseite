@@ -44,6 +44,23 @@ public final class ArmArtifactRenderer extends GeoItemRenderer<ArmArtifactItem> 
                 "textures/item/artifact/arm_artifact.png");
     }
 
+    /**
+     * Whether the ledger holds entries the player has not opened the handbook for since —
+     * drives the {@code base} controller's {@code idle}↔{@code idle_unread} swap
+     * ({@code ArmArtifactItem#registerControllers} references this fully-qualified so the
+     * class never loads on a dedicated server). The state itself lives in
+     * {@code ItemsAClientExtensions}, which owns the client tick hook that maintains it;
+     * this method is only the seam, mirroring {@code HeartExtractorRenderer#isClientChanneling}.
+     *
+     * <p>The flag is the LOCAL player's, by construction — nothing about "unread" is
+     * networked. A remote player's artifact therefore breathes to the viewer's ledger, not
+     * its holder's. Harmless in practice: the artifact is pinned in the inventory and can
+     * only sit in a hand transiently.</p>
+     */
+    public static boolean hasUnreadLedgerEntries() {
+        return ItemsAClientExtensions.hasUnreadLedgerEntries();
+    }
+
     @Override
     public void renderByItem(ItemStack stack, ItemDisplayContext transformType, PoseStack poseStack,
             MultiBufferSource bufferSource, int packedLight, int packedOverlay) {

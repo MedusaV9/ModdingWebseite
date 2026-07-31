@@ -6,7 +6,7 @@
         "identifier": "geometry.arm_artifact",
         "texture_width": 64,
         "texture_height": 64,
-        "visible_bounds_width": 2.5,
+        "visible_bounds_width": 3.0,
         "visible_bounds_height": 2.5,
         "visible_bounds_offset": [0, 0.5, 0]
       },
@@ -57,12 +57,54 @@
           ]
         },
         {
-          "name": "glow_ledger",
+          "name": "ledger",
           "parent": "hand",
+          "pivot": [0, 14, 0]
+        },
+        {
+          "name": "ledger_spin",
+          "parent": "ledger",
+          "pivot": [0, 14, 0]
+        },
+        {
+          "name": "glow_ledger",
+          "parent": "ledger_spin",
           "pivot": [0, 14, 0],
           "rotation": [45, 0, 45],
           "cubes": [
             {"origin": [-1, 13, -1], "size": [2, 2, 2], "uv": [20, 16]}
+          ]
+        },
+        {
+          "name": "glow_page_a",
+          "parent": "ledger",
+          "pivot": [0, 14, 0],
+          "cubes": [
+            {"origin": [0, 12, 0.03], "size": [4, 5, 0], "uv": [0, 21]}
+          ]
+        },
+        {
+          "name": "glow_page_b",
+          "parent": "ledger",
+          "pivot": [0, 14, 0],
+          "cubes": [
+            {"origin": [0, 12, 0.01], "size": [4, 5, 0], "uv": [8, 21]}
+          ]
+        },
+        {
+          "name": "glow_page_c",
+          "parent": "ledger",
+          "pivot": [0, 14, 0],
+          "cubes": [
+            {"origin": [-4, 12, -0.01], "size": [4, 5, 0], "uv": [16, 21]}
+          ]
+        },
+        {
+          "name": "glow_page_d",
+          "parent": "ledger",
+          "pivot": [0, 14, 0],
+          "cubes": [
+            {"origin": [-4, 12, -0.03], "size": [4, 5, 0], "uv": [24, 21]}
           ]
         }
       ]

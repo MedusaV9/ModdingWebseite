@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Arm artifact texture driver (PLAN-ITEMS A2) — GeckoLib ITEM geo upgrade.
+"""Arm artifact texture driver (PLAN-ITEMS A2, MD2 polish) — GeckoLib ITEM geo upgrade.
 
 Paints `geo/item/arm_artifact.geo.json` (64x64): a severed, mummified forearm in the
 frozen bone/parchment ramp (`scripts/item_art/eclipse_palette.py` BONE_* tones), a
@@ -7,6 +7,17 @@ crimson stump ring (`glow_stump`, DANGER-crimson emissive) and the floating ledg
 mote the palm cups (`glow_ledger`, ACCENT `#B98CFF` — the artifact-menu identity color).
 A faint ACCENT light-spill is painted into the PALM's glowmask pixels (up face only), so
 the mote reads as actually lighting the hand (drift_lantern shine-through convention).
+
+MD2 additions (Welle M-D, Zensus §5 Zeile MD2):
+
+* `glow_page_a..d` — the four ledger-light leaves that fan out of the mote in
+  `animation.arm_artifact.open`. Emissive ACCENT parchment with a bright edge frame and
+  broken ruled writing lines, deliberately ORIENTATION-SYMMETRIC (edge frame + vertical
+  gradient, no left/right spine highlight) because a zero-depth plane's north and south
+  face rects mirror each other in the box-UV strip.
+* Two extra glowmask accents (the §5-(c) "Glow-Akzente" pass): faint ACCENT rune ticks
+  riding the forearm's bandage seams (the ledger writes itself onto the arm) and a
+  fingertip light-spill so the fingers that cup the mote catch its light too.
 
 Writes `textures/item/artifact/arm_artifact.png` + `_glowmask.png`.
 
@@ -95,6 +106,52 @@ def palm_spill(px):
     return (r, g, b, alpha)
 
 
+def fingertip_spill(px):
+    """The mote lights the fingers that cup it: a soft ACCENT wash on the fingertip
+    (up) faces plus a single tick on the top row of each side face (glowmask only)."""
+    if px.face == "up":
+        return (ACCENT[0], ACCENT[1], ACCENT[2], 130)
+    if px.face in ("north", "south", "east", "west") and px.fy == 0:
+        r, g, b, _ = mix(ACCENT_DEEP, ACCENT, 0.6)
+        return (r, g, b, 80)
+    return None
+
+
+def seam_runes(px):
+    """Ledger script bleeding through the bandages: sparse ACCENT ticks on the forearm's
+    wrap seams (same every-3-rows lattice `mummy()` darkens), glowmask only. Sparse on
+    purpose — this must read as writing, not as a glowing sleeve."""
+    if px.face not in ("north", "south", "east", "west"):
+        return None
+    if (px.gy + int(px.noise(14, y=0) * 3)) % 3 != 0:
+        return None
+    n = px.noise(19)
+    if n < 0.72:
+        return None
+    r, g, b, _ = mix(ACCENT_DEEP, ACCENT, (n - 0.72) / 0.28)
+    return (r, g, b, int(70 + 110 * (n - 0.72) / 0.28))
+
+
+def ledger_page(salt):
+    """Emissive ledger leaf: a bright ACCENT edge frame around dimmer parchment with
+    broken ruled writing lines. The gradient runs VERTICALLY only — a zero-depth plane's
+    north/south box-UV rects mirror horizontally, so a left/right spine highlight would
+    land on opposite sides of the same leaf."""
+    def fn(px):
+        t = px.fy / max(px.fh - 1, 1)
+        col = mix(mix(ACCENT, WHITE, 0.42), ACCENT_DEEP, 0.15 + 0.55 * t)
+        on_edge = (px.fx == 0 or px.fy == 0
+                   or px.fx == px.fw - 1 or px.fy == px.fh - 1)
+        if on_edge:
+            return mix(col, WHITE, 0.6)
+        # Ruled writing: every other interior row, broken into word-runs by noise.
+        if px.fy % 2 == 1 and px.noise(salt, x=px.gx // 2) > 0.3:
+            col = mix(col, WHITE, 0.4)
+        return col
+    fn.shadeless = True
+    return fn
+
+
 def main():
     painter = GeoPainter(GEO, seed=SEED)
     painter.set_material("forearm", mummy(BONE, salt=11))
@@ -103,7 +160,14 @@ def main():
     painter.set_material("glow_stump", stump)
     painter.set_material("glow_ledger",
                          flame(mix(ACCENT, WHITE, 0.55), mix(ACCENT, ACCENT_DEEP, 0.5), salt=23))
+    # One salt per leaf so the four fanned pages carry visibly different writing.
+    painter.set_material("glow_page_a", ledger_page(salt=31))
+    painter.set_material("glow_page_b", ledger_page(salt=37))
+    painter.set_material("glow_page_c", ledger_page(salt=41))
+    painter.set_material("glow_page_d", ledger_page(salt=43))
     painter.set_glow_painter("hand", palm_spill)
+    painter.set_glow_painter("fingers", fingertip_spill)
+    painter.set_glow_painter("forearm", seam_runes)
     painter.paint(OUT)
 
 

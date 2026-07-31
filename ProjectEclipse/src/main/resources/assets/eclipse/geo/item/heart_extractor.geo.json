@@ -34,6 +34,30 @@
           ]
         },
         {
+          "name": "clamp_n",
+          "parent": "frame",
+          "pivot": [0, 6.5, -1.5],
+          "cubes": [
+            {"origin": [-1.5, 6, -2.5], "size": [3, 1, 1], "uv": [24, 16]}
+          ]
+        },
+        {
+          "name": "clamp_s",
+          "parent": "frame",
+          "pivot": [0, 6.5, 1.5],
+          "cubes": [
+            {"origin": [-1.5, 6, 1.5], "size": [3, 1, 1], "uv": [32, 16]}
+          ]
+        },
+        {
+          "name": "glow_gauge",
+          "parent": "frame",
+          "pivot": [0, 4.5, -2],
+          "cubes": [
+            {"origin": [-1.5, 3.5, -2.5], "size": [3, 2, 1], "uv": [40, 16]}
+          ]
+        },
+        {
           "name": "glow_vitae",
           "parent": "root",
           "pivot": [0, 5, 0],
@@ -44,9 +68,22 @@
         {
           "name": "chamber",
           "parent": "root",
+          "pivot": [0, 5, 0]
+        },
+        {
+          "name": "chamber_body",
+          "parent": "chamber",
           "pivot": [0, 5, 0],
           "cubes": [
-            {"origin": [-1.5, 5, -1.5], "size": [3, 4, 3], "uv": [8, 8]}
+            {"origin": [-1.5, 5, -1.5], "size": [3, 3, 3], "uv": [0, 16]}
+          ]
+        },
+        {
+          "name": "chamber_lid",
+          "parent": "chamber",
+          "pivot": [0, 8, -1.5],
+          "cubes": [
+            {"origin": [-1.5, 8, -1.5], "size": [3, 1, 3], "uv": [12, 16]}
           ]
         },
         {

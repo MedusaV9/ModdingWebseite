@@ -16,6 +16,8 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.level.Level;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.fml.loading.FMLEnvironment;
 import software.bernie.geckolib.animatable.GeoItem;
 import software.bernie.geckolib.animatable.SingletonGeoAnimatable;
 import software.bernie.geckolib.animatable.instance.AnimatableInstanceCache;
@@ -68,6 +70,14 @@ public class ArmArtifactItem extends Item implements GeoItem {
     public static final String GEO_ID = "arm_artifact";
     /** Triggerable one-shot on the {@code action} controller: the ledger-open flick. */
     public static final String ANIM_OPEN = "open";
+    /** Base-controller loop while the ledger holds unread entries (breathing pulse). */
+    public static final String ANIM_IDLE_UNREAD = "idle_unread";
+    /**
+     * Triggerable one-shot on the {@code action} controller: the draw/reveal flourish.
+     * Fired CLIENT-side only, by {@code client/item/ItemsAClientExtensions} — drawing an
+     * item is cosmetic, so it never travels over the wire.
+     */
+    public static final String ANIM_EQUIP = "equip";
 
     /** Mirrors the client suite's {@code EclipseUiTheme.ACCENT} (that class is client-only). */
     private static final int TOOLTIP_ACCENT = 0xB98CFF;
@@ -89,11 +99,19 @@ public class ArmArtifactItem extends Item implements GeoItem {
 
     @Override
     public void registerControllers(AnimatableManager.ControllerRegistrar controllers) {
-        controllers.add(new AnimationController<>(this, EclipseGeoAnimations.CONTROLLER_BASE, 4,
-                state -> state.setAndContinue(EclipseGeoAnimations.loop(GEO_ID, EclipseGeoAnimations.ANIM_IDLE))));
+        controllers.add(new AnimationController<>(this, EclipseGeoAnimations.CONTROLLER_BASE, 4, state -> {
+            if (FMLEnvironment.dist == Dist.CLIENT
+                    // Lazy fully-qualified client reference (HeartExtractorItem pattern) —
+                    // the predicate only executes while a client renders the item.
+                    && dev.projecteclipse.eclipse.client.item.ArmArtifactRenderer.hasUnreadLedgerEntries()) {
+                return state.setAndContinue(EclipseGeoAnimations.loop(GEO_ID, ANIM_IDLE_UNREAD));
+            }
+            return state.setAndContinue(EclipseGeoAnimations.loop(GEO_ID, EclipseGeoAnimations.ANIM_IDLE));
+        }));
         AnimationController<ArmArtifactItem> action = new AnimationController<>(this,
                 EclipseGeoAnimations.CONTROLLER_ACTION, 0, state -> PlayState.STOP);
         action.triggerableAnim(ANIM_OPEN, EclipseGeoAnimations.once(GEO_ID, ANIM_OPEN));
+        action.triggerableAnim(ANIM_EQUIP, EclipseGeoAnimations.once(GEO_ID, ANIM_EQUIP));
         controllers.add(action);
     }
 

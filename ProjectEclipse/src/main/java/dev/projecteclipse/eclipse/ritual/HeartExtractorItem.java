@@ -60,6 +60,12 @@ public class HeartExtractorItem extends Item implements GeoItem {
     public static final String ANIM_CHANNEL = "channel";
     public static final String ANIM_EXTRACT = "extract";
     public static final String ANIM_REFUSE = "refuse";
+    /**
+     * Triggerable one-shot on the {@code action} controller: the draw flourish.
+     * Fired CLIENT-side only, by {@code client/item/ItemsAClientExtensions} — drawing an
+     * item is cosmetic, so it never travels over the wire.
+     */
+    public static final String ANIM_EQUIP = "equip";
 
     /** Hold duration in ticks (60t = 3 s). */
     public static final int USE_DURATION_TICKS = 60;
@@ -98,6 +104,7 @@ public class HeartExtractorItem extends Item implements GeoItem {
                 EclipseGeoAnimations.CONTROLLER_ACTION, 0, state -> PlayState.STOP);
         action.triggerableAnim(ANIM_EXTRACT, EclipseGeoAnimations.once(GEO_ID, ANIM_EXTRACT));
         action.triggerableAnim(ANIM_REFUSE, EclipseGeoAnimations.once(GEO_ID, ANIM_REFUSE));
+        action.triggerableAnim(ANIM_EQUIP, EclipseGeoAnimations.once(GEO_ID, ANIM_EQUIP));
         controllers.add(action);
     }
 
