@@ -1,37 +1,41 @@
 // eclipse:glitch_invert — GLITCHZONE effect (TRANSITION priority): the palette flips
-// negative and cannot hold itself together.
+// negative in WAVES that run outward from the centre of vision and cannot hold themselves
+// together.
 //
-// WAVE-13 B4 "fBm-FLECKEN". The inversion is no longer a full-screen uniform pop. It lives
-// in organic blotches that GROW and SHRINK:
+// F-102 GLITCH-FAMILY POLISH "INVERT-PULSE". The wave-13 build inverted inside breathing fBm
+// blotches — organic, but static in character: a still frame read as coloured patches, not as
+// a PULSE, and nothing travelled anywhere. The mandate is travelling inversion waves from the
+// centre, so the blot field is replaced by a radial wave engine (the fBm survives as the
+// thing that makes the waves ragged):
 //
-//   [I1] One 4-octave fBm (the census octave budget for llvmpipe) in aspect-corrected screen
-//        space, so the patches are round instead of letterboxed, with a slow domain drift so
-//        they crawl as well as breathe.
-//   [I2] The THRESHOLD is the growth knob, not the amplitude: a high threshold leaves a few
-//        small islands, a low one lets the islands merge into a continent. Two incommensurate
-//        clocks (12.5 s breath, 25 s swell — both divisors of the 100 s Time wrap, so neither
-//        jumps) keep the coverage off an obvious beat, and Strength slides the whole breathing
-//        band downward, so the zone edge shows a couple of patches while deep inside the frame
-//        is nearly taken. It stays a takeover; it just stops being a rectangle.
-//   [I4] Everything else is weighted BY the blot: the negative, the hue snap and the
-//        posterize all run at full inside a blot and at a fraction outside, so the contrast
-//        between corrupted and merely-degraded pixels is the effect.
-//   [I5] The accent burns on the blot ISO-CONTOUR — a boundary layer where the negative is
-//        tearing into the positive. This replaces the shipped posterize-band seam shimmer:
-//        same role (the accent lives on an edge), stronger read, and it derives from the fBm
-//        field that is already in a register, so it is a texture tap cheaper.
+//   [I1] CONCENTRIC WAVEFRONTS in aspect-corrected screen space: an asymmetric bell
+//        (steep leading edge, long trailing decay) runs 0 -> corner every WAVE_PERIOD along
+//        the radius, wavelength ~0.55 r-units, so 1-2 travelling rings are on screen at any
+//        moment. Inside a band the image is NEGATIVE; between bands it is the un-flipped
+//        scene under a mild grade — the contrast between flipped ring and normal world IS
+//        the effect, and it reads instantly in a still.
+//   [I2] RAGGED FRONTS: the radius is warped by the 4-octave fBm (slow 50 s circular domain
+//        drift, the wave-13 orbit law) before the wave lookup, so the rings run corroded and
+//        glitchy instead of compass-perfect — snap, never flow.
+//   [I3] The wave phase never jumps: WAVE_PERIOD divides the 100 s Time wrap exactly, and
+//        under reduced FX the ring field PARKS mid-frame (fixed phase) instead of running.
+//   [I4] Hue snap and posterize are weighted BY the band, exactly like they were weighted by
+//        the blot before — full corruption inside a wave, a fraction between waves.
+//   [I5] The accent burns on the LEADING EDGE of each front (shipped violet, luma-matched to
+//        any commanded colour), and the front REFRACTS: a small radial UV ripple rides the
+//        rim, so the wavefront bends the world like a pressure wave (one extra tap).
+//   [I6] A faint source glow sits at the centre of vision, pulsing with each launched wave —
+//        the "where do they come from" anchor.
 //
-// Surviving shipped layers: the hue keeps ROTATING in unstable quantized snaps (a drifting
-// wander that locks to ~22.5-degree detents and occasionally pops a whole detent), the
-// posterize collapses toward a handful of levels, and brief gated inversion "drops" let the
-// negative collapse back toward positive for a re-roll — film slipping in the gate.
+// Surviving shipped layers: unstable quantized hue snaps (22.5-degree detents with pops),
+// posterize collapse, gated inversion "drops" (the negative almost recovers, then flips
+// back — global on purpose: one broken signal, not blotches doing their own thing).
 //
 // Fed by client.GlitchZoneFx: Strength (0..1 ramp — no-op at 0), Time (wall-clock seconds),
-// Detail (0 under reduced FX: hue wander freezes at a fixed angle, the drops stop, and the
-// patches hold still at mid-growth instead of breathing — the static negative + posterize
-// grade inside them survives), AccentColor/AccentAmount (F-049: the blot rim is the accent —
-// shipped violet, luma-matched to any commanded colour — plus a light wash over the negative
-// so the whole frame leans that way).
+// Detail (0 under reduced FX: waves park at a fixed phase, hue wander freezes at a fixed
+// detent, drops stop, fronts stop refracting — the parked negative rings + posterize grade
+// survive), AccentColor/AccentAmount (F-049: the front rim is the accent — shipped violet —
+// plus a light wash over the negative so the whole frame leans that way).
 //
 // No value-less `return` in main() — see the glsl-processor note in umbral_veins.fsh.
 #include eclipse:eclipse_common
@@ -50,19 +54,24 @@ out vec4 fragColor;
 
 const float TAU = 6.28318530718;
 
-// [I1] Patch field: fBm cells across the frame height, and the domain drift. The drift is a
-// slow CIRCLE, not a straight line: Time wraps at 100 s, so a linear drift would snap the
-// whole field back by the accumulated offset once per wrap. A 50 s orbit divides the wrap
-// and closes on itself, and at this radius it still reads as crawling.
-const float PATCH_FREQ = 2.6;
-const float PATCH_DRIFT_PERIOD = 50.0;
-const float PATCH_DRIFT_RADIUS = 0.7;
-// [I3] Width of the threshold ramp. Narrow enough that a blot has an EDGE (the whole point),
-// wide enough not to alias on the diagonal.
-const float PATCH_BAND = 0.055;
-// [I5] Shipped rim colour (the old seam violet) and its additive gain.
+// [I1] Wave engine. One front launches from the centre every WAVE_PERIOD (4 s divides the
+// 100 s Time wrap: 25 whole cycles, no phase jump); WAVELENGTH is the ring spacing in
+// aspect-corrected radius units (corner sits at r ~1.0, so ~0.55 keeps 1-2 rings visible).
+const float WAVE_PERIOD = 4.0;
+const float WAVELENGTH = 0.55;
+// [I2] Ragged fronts: fBm domain frequency, warp depth in r-units, and the slow circular
+// domain drift (a 50 s orbit divides the wrap and closes on itself — the wave-13 law).
+const float RAGGED_FREQ = 3.1;
+const float RAGGED_DEPTH = 0.10;
+const float DRIFT_PERIOD = 50.0;
+const float DRIFT_RADIUS = 0.7;
+// [I5] Shipped rim colour (the seam violet), its additive gain, and the refraction depth of
+// the leading edge in UV units.
 const vec3 SEAM_VIOLET = vec3(0.35, 0.10, 0.45);
-const float RIM_GAIN = 0.45;
+const float RIM_GAIN = 0.60;
+const float RIPPLE_UV = 0.007;
+// [I3] Parked wave phase under reduced FX (mid-run: one full ring on screen, readable).
+const float PARK_PHASE = 0.35;
 
 void main() {
     float s = clamp(Strength, 0.0, 1.0);
@@ -73,20 +82,40 @@ void main() {
         float detail = clamp(Detail, 0.0, 1.0);
         float seed = floor(Time * 4.0);
 
-        // --- [I1/I2/I3] organic inversion patches --------------------------------------
+        // --- [I1/I2] radial wave field ----------------------------------------------------
         vec2 screenSize = vec2(textureSize(DiffuseSampler0, 0));
         float aspect = screenSize.x / max(screenSize.y, 1.0);
-        float driftAngle = TAU * Time / PATCH_DRIFT_PERIOD;
-        vec2 drift = vec2(sin(driftAngle), cos(driftAngle)) * PATCH_DRIFT_RADIUS * detail;
-        vec2 patchUv = vec2(texCoord.x * aspect, texCoord.y) * PATCH_FREQ + drift;
-        float field = gzFbm(patchUv);
+        vec2 qa = (texCoord - 0.5) * vec2(aspect, 1.0);
+        float r = length(qa);
+        // Radial direction, defined at the exact centre (the rim weight is ~0 there anyway).
+        vec2 radial = qa / max(r, 1.0e-4);
 
-        float breath = 0.5 + 0.5 * sin(TAU * Time / 12.5);
-        float swell = 0.5 + 0.5 * sin(TAU * Time / 25.0 + 1.7);
-        // Frozen at mid-growth under reduced FX: the patches stay, the breathing stops.
-        float grow = mix(0.5, mix(breath, swell, 0.45), detail);
-        float threshold = mix(mix(0.70, 0.52, s), mix(0.60, 0.30, s), grow);
-        float blot = smoothstep(threshold, threshold + PATCH_BAND, field);
+        // Ragged radius: the fBm warps the wave lookup, so the fronts run corroded. Same
+        // slow circular domain drift as the wave-13 blot field (50 s orbit, closes on the
+        // 100 s wrap, frozen under reduced FX).
+        float driftAngle = TAU * Time / DRIFT_PERIOD;
+        vec2 drift = vec2(sin(driftAngle), cos(driftAngle)) * DRIFT_RADIUS * detail;
+        float rw = r + (gzFbm(qa * RAGGED_FREQ + drift) - 0.5) * RAGGED_DEPTH;
+
+        // [I3] Travelling phase; parked mid-run under reduced FX. As phase grows, a fixed
+        // point on the bell sits at a growing radius — the wave runs OUTWARD from centre.
+        float phase = mix(PARK_PHASE, fract(Time / WAVE_PERIOD), detail);
+        float wv = fract(rw / WAVELENGTH - phase);
+        // Asymmetric bell with the STEEP edge on the OUTSIDE: larger wv = larger radius, so
+        // the leading edge of an outward wave is the top of the support (hard cut at 0.52)
+        // and the long decay tail trails INWARD (soft rise from 0.12). Getting this backwards
+        // puts the wake in front of the wave (iteration-1 finding). Support is ~40% of the
+        // cycle, so flipped rings and normal world alternate readably in a still.
+        float band = smoothstep(0.12, 0.42, wv) * (1.0 - smoothstep(0.45, 0.52, wv));
+        // Narrow spike exactly on the leading edge — the accent rim and the refraction.
+        float rim = smoothstep(0.36, 0.45, wv) * (1.0 - smoothstep(0.45, 0.53, wv));
+
+        // [I5] The front refracts: one extra tap with a small radial ripple on the rim, so
+        // the wavefront bends the world like a pressure wave. At rim 0 the coordinate is
+        // texCoord and the tap is bit-identical to `scene` (branchless no-op).
+        vec2 ruv = clamp(texCoord + radial * rim * RIPPLE_UV * s * detail,
+                vec2(0.001), vec2(0.999));
+        vec3 waveScene = texture(DiffuseSampler0, ruv).rgb;
 
         // --- unstable hue rotation --------------------------------------------------------
         // A slow noise wander sets the target angle; it locks to 16 detents (22.5-degree
@@ -100,37 +129,39 @@ void main() {
         // --- inversion with gated drops -----------------------------------------------------
         // invPulse is 1 (full negative) most of the time; ~1 re-roll in 6 dips toward 0.35
         // for one pattern step — the image "almost recovers", then flips back. The drop is
-        // deliberately GLOBAL: every blot loses the negative at once, so it still reads as
-        // one broken signal rather than as blotches doing their own thing.
+        // deliberately GLOBAL: every ring loses the negative at once, so it still reads as
+        // one broken signal rather than as rings doing their own thing.
         float drop = step(0.84, efxHash(vec2(seed, 41.3))) * detail;
         float invPulse = 1.0 - 0.65 * drop;
-        vec3 negative = vec3(1.0) - scene;
-        color = mix(scene, negative, s * invPulse * blot);
-        color = gzHueRotate(color, angle * s * mix(0.25, 1.0, blot));
+        vec3 negative = vec3(1.0) - waveScene;
+        color = mix(waveScene, negative, s * invPulse * band);
+        color = gzHueRotate(color, angle * s * mix(0.20, 1.0, band));
 
         // --- posterization steps ---------------------------------------------------------
-        // Levels collapse with Strength (deep inside a blot ~5 per channel, ~14 outside).
+        // Levels collapse with Strength (inside a wave ~5 per channel, ~14 between waves).
         // The banding is the point here, so no dither on this layer — the steps must read as
-        // steps; only the smooth blot rim below gets a dither.
-        float levels = mix(48.0, 5.0, s * mix(0.35, 1.0, blot));
-        color = mix(color, gzPosterize(color, levels), s * mix(0.30, 1.0, blot));
+        // steps; only the smooth rim/band gradients below get a dither.
+        float levels = mix(48.0, 5.0, s * mix(0.35, 1.0, band));
+        color = mix(color, gzPosterize(color, levels), s * mix(0.25, 1.0, band));
 
         // --- accent wash --------------------------------------------------------------------
         // A light lean of the whole negative toward the commanded hue (identity at amount 0),
         // so a coloured invert zone is not just a violet rim on a neutral negative.
         color *= gzTint(AccentColor, AccentAmount * 0.35 * s);
 
-        // --- [I5] blot rim + [I6] blot grain -------------------------------------------
-        // The rim peaks exactly on the 0.5 iso-line of the blot mask, so its width tracks
-        // PATCH_BAND and it can never drift off the blotch it belongs to.
-        float rim = 1.0 - abs(blot - 0.5) * 2.0;
-        rim *= rim;
-        color += gzAccent(SEAM_VIOLET, AccentColor, AccentAmount) * rim * RIM_GAIN * s;
-        // A breath of grain inside the patches so they read as corruption, not as vector art.
+        // --- [I5] front rim + [I6] source glow + wave grain ---------------------------------
+        // The accent burns on the leading edge of every front.
+        vec3 rimAccent = gzAccent(SEAM_VIOLET, AccentColor, AccentAmount);
+        color += rimAccent * rim * RIM_GAIN * s;
+        // [I6] Source glow: a soft anchor at the centre of vision that flares as each wave
+        // launches (phase near 0) and settles between launches. Parked dim under reduced FX.
+        float launch = 1.0 - smoothstep(0.0, 0.30, phase);
+        color += rimAccent * exp(-r * 9.0) * (0.30 + 0.70 * launch) * 0.30 * s;
+        // A breath of grain inside the waves so they read as corruption, not as vector art.
         color += vec3((efxHash(texCoord * vec2(717.0, 913.0) + fract(Time * 6.0)) - 0.5)
-                * 0.06 * s * detail * blot);
-        // Banding guard for the rim gradient only (the posterize steps stay undithered).
-        color += vec3(efxDither(gl_FragCoord.xy, fract(Time * 3.0)) * rim * s);
+                * 0.06 * s * detail * band);
+        // Banding guard for the smooth wave gradients (the posterize steps stay undithered).
+        color += vec3(efxDither(gl_FragCoord.xy, fract(Time * 3.0)) * max(rim, band) * s);
 
         color = clamp(color, 0.0, 1.0);
     }
