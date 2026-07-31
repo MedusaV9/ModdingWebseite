@@ -65,6 +65,14 @@ public final class WandPhotonFxRows {
      * asset bakes the same window ({@code HORIZON_WINDOW} in wand2_fx.py).
      */
     private static final int HORIZON_DEFAULT_DURATION = 120;
+    /**
+     * W13/A2: ticks the {@code wand_horizon_collapse} in-fall needs before its seed
+     * particle Birth-chains the kernel snap. MUST stay in sync with
+     * {@code HORIZON_COLLAPSE_LEAD} in {@code tools/photon/wand2_fx.py}: the collapse
+     * root is delayed by {@code durationTicks − this} so the chain's HDR bite lands
+     * exactly on the server's finale damage tick.
+     */
+    private static final int HORIZON_COLLAPSE_LEAD = 8;
     /** Body-center offset for the entity-anchored Sternenschild dome (eye − 0.6). */
     private static final double SCHILD_BODY_OFFSET = -0.6D;
 
@@ -165,9 +173,11 @@ public final class WandPhotonFxRows {
                 false,
                 (photonFx, pos, entity, a, b) -> PhotonBridge.spawn(photonFx, pos,
                         PhotonBridge.SpawnOptions.DEFAULT.withAllowMulti(true))));
-        // Ereignishorizont — standing vortex (baked ~120t) + a riss_maw_snap REUSED as
-        // the collapse beat, parked behind setDelay(a = durationTicks) so the snap lands
-        // exactly on the server's finale damage tick even when wand.json retunes it.
+        // Ereignishorizont — standing vortex (baked ~120t) + the W13/A2 collapse chain:
+        // wand_horizon_collapse (in-fall → Birth kernel bite → Birth shockwave, blueprint
+        // tyrant_death_fx) is parked behind setDelay(a − HORIZON_COLLAPSE_LEAD) so the
+        // kernel's HDR snap lands exactly on the server's finale damage tick even when
+        // wand.json retunes durationTicks.
         PhotonFxRegistry.registerRow(new PhotonFxRegistry.Row(
                 FxCues.CUE_WAND_HORIZON,
                 fx("wand_event_horizon"),
@@ -178,12 +188,12 @@ public final class WandPhotonFxRows {
                 (photonFx, pos, entity, a, b) -> {
                     boolean vortex = PhotonBridge.spawn(photonFx, pos,
                             PhotonBridge.SpawnOptions.DEFAULT.withAllowMulti(true));
-                    int collapseDelay = a > 0.0F ? (int) a : HORIZON_DEFAULT_DURATION;
-                    boolean snap = PhotonBridge.spawn(fx("riss_maw_snap"), pos,
+                    int finaleTick = a > 0.0F ? (int) a : HORIZON_DEFAULT_DURATION;
+                    boolean collapse = PhotonBridge.spawn(fx("wand_horizon_collapse"), pos,
                             PhotonBridge.SpawnOptions.DEFAULT
-                                    .withDelay(collapseDelay)
+                                    .withDelay(Math.max(0, finaleTick - HORIZON_COLLAPSE_LEAD))
                                     .withAllowMulti(true));
-                    return vortex || snap;
+                    return vortex || collapse;
                 }));
         // Sonnenkern — the whole solar detonation is delayed by a = telegraphTicks so
         // asset-t0 IS the damage tick (stern_komet_impact pattern); the telegraph reads
