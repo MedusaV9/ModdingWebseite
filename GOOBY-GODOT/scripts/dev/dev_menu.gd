@@ -34,6 +34,8 @@ var _layout: VBoxContainer
 var _tabs: TabContainer
 var _toast: ToastLayer
 var _perf_label: Label
+## W15/TECHKIT: Glow-Downgrade-Liste im Perf-Tab (PerfGlowWatch-Merker).
+var _glow_label: Label
 var _net_label: Label
 var _net_config_label: Label
 var _outbox_label: Label
@@ -478,6 +480,20 @@ func _build_performance(parent: VBoxContainer) -> void:
 	_perf_label.theme_type_variation = "SoftLabel"
 	_perf_label.add_theme_font_size_override("font_size", int(AcTokens.FONT_SIZE_CAPTION * _tf))
 	rows.add_child(_perf_label)
+	_build_glow_watch(parent)
+
+
+## W15/TECHKIT (Doc G §9 R2): Glow-Downgrade-Merker (PerfGlowWatch,
+## user://) — Liste der gedrosselten Spiele + Reset für frische Messfahrten.
+func _build_glow_watch(parent: VBoxContainer) -> void:
+	var rows := _section(parent, "GlowWatch", I18nService.t("dev.glow_titel"))
+	_glow_label = Label.new()
+	_glow_label.name = "GlowListe"
+	_glow_label.theme_type_variation = "SoftLabel"
+	_glow_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_glow_label.add_theme_font_size_override("font_size", int(AcTokens.FONT_SIZE_CAPTION * _tf))
+	rows.add_child(_glow_label)
+	rows.add_child(_button("GlowReset", I18nService.t("dev.glow_reset"), _on_glow_reset))
 
 
 func _build_footer() -> void:
@@ -499,6 +515,14 @@ func _on_perf_toggled(shown: bool) -> void:
 	var overlay := get_node_or_null("/root/PerfOverlay")
 	if overlay != null and overlay.has_method("set_shown"):
 		overlay.set_shown(shown)
+
+
+## W15/TECHKIT: alle Glow-Downgrade-Merker löschen — die betroffenen Spiele
+## messen beim nächsten Start wieder frisch.
+func _on_glow_reset() -> void:
+	PerfGlowWatch.clear_store()
+	_refresh_live()
+	_toast.show_toast(I18nService.t("dev.glow_reset_ok"))
 
 
 func _on_zeit_anwenden() -> void:
@@ -769,12 +793,27 @@ func _refresh_live() -> void:
 				"FPS %d · %.1f ms · Draw Calls %d · Nodes %d · VRAM %.1f MB"
 				% [int(m["fps"]), m["frame_ms"], m["draw_calls"], m["nodes"], m["vram_mb"]]
 			)
+	if _glow_label != null:
+		_glow_label.text = _glow_text()
 	if _net_label != null:
 		_net_label.text = _net_text()
 	if _net_config_label != null:
 		_net_config_label.text = _net_config_text()
 	if _outbox_label != null:
 		_outbox_label.text = _outbox_text()
+
+
+## W15/TECHKIT: Merker-Liste des Glow-Wächters (leer = nichts gedrosselt).
+func _glow_text() -> String:
+	var rows := PerfGlowWatch.entries()
+	if rows.is_empty():
+		return I18nService.t("dev.glow_leer")
+	var lines: Array[String] = []
+	for row: Dictionary in rows:
+		lines.append(
+			"%s · p95 %.1f ms · %s" % [str(row["game"]), float(row["p95_ms"]), str(row["at"])]
+		)
+	return "\n".join(lines)
 
 
 func _net_text() -> String:

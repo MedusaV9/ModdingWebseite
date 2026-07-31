@@ -237,6 +237,11 @@ func _on_setting_changed(key: String, _value: Variant) -> void:
 
 
 func _on_node_added(node: Node) -> void:
+	# W15/TECHKIT (Doc G §9 R2): jedes startende Minigame bekommt den
+	# Glow-Telemetrie-Wächter (5-s-p95 gegen das Budget des aktiven Bündels,
+	# Session-Downgrade + user://-Merker — Logik komplett in PerfGlowWatch).
+	if node is MinigameBase:
+		PerfGlowWatch.attach_to(node)
 	if not ("linkshaender" in node or "zuegel_modus" in node):
 		return
 	var settings := _settings()
