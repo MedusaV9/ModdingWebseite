@@ -33,7 +33,7 @@ DE ist führend; EN muss für jede Domain paritätisch sein (Test:
 | `events.*`, `stickers.*`, `interactions.*` | W3d CONTENT | W3 |
 | `album.*`, `bad.*` (Dateien `strings/<locale>/events.json` + `album.json` + `bad.json`) | W3d CONTENT | W3 |
 | `sys.*` (Datei `strings/<locale>/system.json` — Save-Recovery, Netz-Fehler) | W4-P4 TEXT | W4 |
-| `veil.*` (Datei `strings/<locale>/veil.json` — LoadingVeil: `laedt` + `tips`-Array) | W4-P4 TEXT | W4 |
+| `veil.*` (Datei `strings/<locale>/veil.json` — LoadingVeil: `laedt` + `tips`-Array; W14/LOADING hat die 6 `tips`-WERTE im ACNH-Ton neu getextet — Keys/Anzahl unverändert, Ownership bleibt bei TEXT, Umformulieren jederzeit erlaubt) | W4-P4 TEXT | W4 |
 | `craft.*`, `goobay.*`, `garten.*`, `shed.*`, `lieferung.*` (Datei `strings/<locale>/craft.json`) | M2 HAUS | M2 |
 | `phone.*` (Datei `strings/<locale>/phone.json` — IGohbie-Shell, Apps, Fotomodus) | M2 ORTE | M2 |
 | `audio.*` (Datei `strings/<locale>/audio.json` — Radiosender-Namen) | FIX-4 AUDIO | FIX |
@@ -50,7 +50,27 @@ DE ist führend; EN muss für jede Domain paritätisch sein (Test:
 | `revents.*` (Datei `strings/<locale>/ranch_events.json` — Ranch-Random-Events: Bubbles, Krähen-/Danke-Zeilen) | W13 RANCH | W13 |
 | `nougat.*` (Datei `strings/<locale>/nougat.json` — Nougatschleuse: Install, Refusals, Klecks-Zeilen) + NEUE `rewards.food.*`-Keys der W13-Speisen (additiv in `rewards.json`) | W13 FOOD | W13 |
 | `coop.*` (Datei `strings/<locale>/coop.json` — Coop-Fahrt: Einladung, Beifahrer-Radio, Kaufhinweis) + NEUE `social.nap.*`-Keys der Besucher-Couch-Regel (additiv in `social.json`) | W13B COUCH-COOP | W13 |
-| NEUE `build.ebene.*`- + `build.girlande.*`-Keys (additiv in `home.json` — Ebenen-Umschalter Boden/Wand/Decke, Girlanden-Spann-Flow) | W13B CEILING | W13 |
+| NEUE `build.ebene.*`- + `build.girlande.*`-Keys (additiv in `home.json` — Ebenen-Umschalter Boden/Wand/Decke, Girlanden-Spann-Flow) + `shop.kategorie.girlanden` (EIN additiver Key in `shop.json` — Shop-Kategorie der Girlanden-Items) | W13B CEILING | W13 |
+| `mail.*` (Datei `strings/<locale>/mail.json` — Post/Mail-Multiplayer: Briefe-Schalter, Briefkasten, Brief-schreiben-Flow, Fehler-Toasts) | W13B MAIL | W13-B |
+| `shake.*` (Datei `strings/<locale>/shake.json` — Schüttel-Secret: Stufen-Bubbles, Schrei, Beschwerde) + NEUE `sleep.story.*`-Keys (additiv in `sleep.json` — Bücherregal, Abnutzung, Seiten, REHWEI-Hinweis) | W13B GESCHICHTEN | W13-B |
+| `mg.cityDrive.*` + `mg.host.strike_*` + `mg.pregame.car` (Datei `strings/<locale>/citydrive.json` — City-Drive-Arcade-Runde, 3-Strikes-Teleport-Cutscene des Hosts, Pregame-Auto-Zeile) | W13B DRIVE | W13-B |
+| `reisepass.*` (Datei `strings/<locale>/reisepass.json` — Reisepass 2.0: Pass-Vorder-/Stempelseite, MRZ-Gag, Galerie-Picker, Abflugtafel `reisepass.tafel.*`, Boarding-Pass `reisepass.pass.*`) | W13B REISEPASS | W13-B |
+| `phone.gooberando.*` + `phone.guber.surge` (additiv in `strings/<locale>/phone.json` — Restaurant-Wahl/Warenkorb/Live-Karte der GOOBERANDO-App, Guber-Surge-Spruch) | W13B GOBERANDO | W13-B |
+| `city_leben.*` (Datei `strings/<locale>/city_leben.json` — Ziel-Chevron-GPS-Toasts im Fahr-HUD) | W13B GOBERANDO | W13-B |
+| `raumstation.*` + `gfree.*` + `rewards.food.weltraumMoehre` (Datei `strings/<locale>/raumstation.json` — Raumstation GOOB-1: Astro-Snack-Automat, Sternenfoto-Spot, Weltengooby-Toast; GOOBY-FREE-Shop am Flughafen inkl. Shuttle-Knopf; Anzeigename der Weltraum-Möhre) | W13B RAUMSTATION | W13-B |
+| NEUE `city.laden.buecher_titel` + `city.laden.im_regal`-Keys (additiv in `city.json` — Bücher-Abschnitt im REHWEI-Laden, „Im Regal“-Ausgrauung) | W13B INTEGRATE | W13-B |
+| NEUE `rewards.food.candy-bar` + `rewards.food.lollypop`-Keys (additiv in `rewards.json` — Anzeigenamen der letzten zwei treats-Set-Speisen) | W13B INTEGRATE | W13-B |
+| `umzug.*` (Datei `strings/<locale>/umzug.json` — Account-Umzug per Panel-Code: Settings-Zeile, Umzugs-Sheet, Erfolgs-/Fehlertexte inkl. „Spielstand bleibt lokal“-Klartext) | W13C PANEL | W13-C |
+| `instant.*` (Datei `strings/<locale>/instant.json` — InstantGooby-Feed: Feed-Karten, Möhren-Like, Posten-Flow, Fehler-Toasts) + `phone.app.instant`/`phone.app.instant_text` (additiv in `phone.json`) | W13C INSTANT | W13-C |
+| `gobty.*` (Datei `strings/<locale>/gobty.json` — GOB.TY-Fernsehsender: Sender-UI, 5 Clip-Titel, 10 News-Schlagzeilen, Koch-/Sport-/Wetter-/Gute-Nacht-Banner inkl. `{symbole}`/`{datum}`-Platzhalter) | W13C GOBTY | W13-C |
+| `goobyman.*` (Datei `strings/<locale>/goobyman.json` — GOOBYMAN-Drogerie: Laden-Sheet, Zahnputz-Blocker, Erste-Male-Bruch-Info, Umhang-Gag) + `city.ort.goobyman` (additiv in `city.json`) | W13C GOOBYMAN | W13-C |
+| `garage.*` (Datei `strings/<locale>/garage.json` — Garage am Haus: Bau-Knopf, Rolltor, Kein-Auto-Hinweis) + NEUE `build.preset.*`-Keys (additiv in `home.json` — Layout-Presets „Raum speichern“) | W13C GARAGE | W13-C |
+| `foto.*` + `settings.parallax` + `board.emote.selfie` (Datei `strings/<locale>/foto.json` — Fotomodus: Werkzeuge/Posen/Emotionen/Rahmen/Selfie; `settings.parallax` liegt BEWUSST in foto.json, weil settings.json fremd ist — Loader merged flach) + `social.selfie.*`-Block (additiv in `social.json`) | W13C FOTOWERK | W13-C |
+| `fuettern.*` (Datei `strings/<locale>/fuettern.json` — Kühlschrank 2.0: Regal-Grid, Kategorien-Chips, Vorrats-Badge, Zucker-Warnung, Leerzustand, Mampf-Sprüche; die `rewards.kuehlschrank.*`/`rewards.fuettern.satt`-Keys bleiben beim EF-1-Owner; `fuettern.kommentar.*` gehört VOICE, s. u.) | W14 FRIDGE | W14 |
+| `dlc.*` (Datei `strings/<locale>/dlc.json` — DLC-Hub: Settings-Sektion „DLC“, Bibliothek-Screen mit Ribbons NEU/BALD/INSTALLIERT, Detail-Sheet, Kommt-bald-Hammer-Gag) | W14 DLCHUB | W14 |
+| `netset.*` (Datei `strings/<locale>/netset.json` — Mehrspieler-Settings `netset.mp.*` inkl. Fehlertext-Mapping `netset.mp.fehler.*` + Dev-Werkzeugkasten `netset.dev.*`) | W14 NETSET | W14 |
+| `soul.linie.*` + `gespraech.*` + `fuettern.kommentar.*` (Datei `strings/<locale>/soul_lines.json` — 120 Gooby-Lines: Tageszeit/Wetter/W13-Features/Minispiel/Idle/Feiern/Wiedersehen + Mini-Dialog-Chips `gespraech.*` (Daten: `content/soul/data/gespraeche.json`) + Fütter-Kommentar-Schnittstelle für FRIDGE — kollisionsfrei zu deren `fuettern.*`-UI-Keys) | W14 VOICE | W14 |
+| `loading.*` (Datei `strings/<locale>/loading.json` — Lade-Schirme, W7; NEUE `loading.boot.sprueche`-Keys additiv von W14 LOADING: 10 Boot-Cover-Sprüche) | W7 RANCH2 (Boot-Sprüche: W14 LOADING) | W7/W14 |
 
 Regeln:
 1. Nur der Owner editiert Keys seines Prefixes (in de.json/en.json NUR im
@@ -79,54 +99,6 @@ Regeln:
 - **Typografie:** Ellipse `…` (nie `...`), Apostroph `’` (nie `'`),
   Anführungszeichen `„…“` paarig.
 
-- `mail.*` (Datei `strings/<locale>/mail.json` — Post/Mail-Multiplayer: Briefe-Schalter, Briefkasten, Brief-schreiben-Flow, Fehler-Toasts) → Owner **W13B MAIL** (Welle W13). *(per >> angehängt — beim nächsten Doku-Pass in die Tabelle oben heben)*
-
-## W13-B Nachträge (append-only, per >>)
-
-| Prefix | Owner | Welle |
-|---|---|---|
-| `phone.gooberando.*` + `phone.guber.surge` (Datei `strings/<locale>/phone.json`) | W13B GOBERANDO | W13-B |
-| `city_leben.*` (NEUE Datei `strings/<locale>/city_leben.json`) | W13B GOBERANDO | W13-B |
-
-## W13B-Nachtrag (per >> angehängt — Orchestrator: bitte in die Tabelle oben mergen)
-
-| Prefix | Owner | Welle |
-|---|---|---|
-| `shake.*` (Datei `strings/<locale>/shake.json` — Schüttel-Secret: Stufen-Bubbles, Schrei, Beschwerde) | W13B GESCHICHTEN | W13 |
-| NEUE `sleep.story.*`-Keys (additiv in `sleep.json` — Bücherregal, Abnutzung, Seiten, REHWEI-Hinweis) | W13B GESCHICHTEN | W13 |
-
-- `mg.cityDrive.*` + `mg.host.strike_*` + `mg.pregame.car` (Datei `strings/<locale>/citydrive.json` — City-Drive-Arcade-Runde, 3-Strikes-Teleport-Cutscene des Hosts, Pregame-Auto-Zeile) → Owner **W13B DRIVE** (Welle W13-B). *(per >> angehängt — beim nächsten Doku-Pass in die Tabelle oben heben)*
-
-- `shop.kategorie.girlanden` (EIN additiver Key in `strings/<locale>/shop.json` — Shop-Kategorie der neuen Girlanden-Items, DE↔EN-paritätisch) → Owner **W13B CEILING** (Welle W13-B). *(per >> angehängt — beim nächsten Doku-Pass in die Tabelle oben heben)*
-
-- `reisepass.*` (NEUE Datei `strings/<locale>/reisepass.json` — Reisepass 2.0: Pass-Vorder-/Stempelseite, MRZ-Gag, Galerie-Picker, Abflugtafel `reisepass.tafel.*`, Boarding-Pass `reisepass.pass.*`) → Owner **W13B REISEPASS** (Welle W13-B). *(per >> angehängt — beim nächsten Doku-Pass in die Tabelle oben heben)*
-
-- `phone.gooberando.*` + `phone.guber.surge` (additiv in `strings/<locale>/phone.json` — Restaurant-Wahl/Warenkorb/Live-Karte der GOOBERANDO-App, Guber-Surge-Spruch; Guber-`pitch` 25→30 mitgezogen) → Owner **W13B GOBERANDO** (Welle W13-B). *(per >> angehängt — beim nächsten Doku-Pass in die Tabelle oben heben)*
-
-- `city_leben.*` (NEUE Datei `strings/<locale>/city_leben.json` — Ziel-Chevron-GPS-Toasts im Fahr-HUD) → Owner **W13B GOBERANDO** (Welle W13-B). *(per >> angehängt — beim nächsten Doku-Pass in die Tabelle oben heben)*
-
-- `raumstation.*` + `gfree.*` + `rewards.food.weltraumMoehre` (NEUE Datei `strings/<locale>/raumstation.json` — Raumstation GOOB-1: Astro-Snack-Automat, Sternenfoto-Spot, Weltengooby-Toast; GOOBY-FREE-Shop am Flughafen inkl. Shuttle-Knopf; Anzeigename der Weltraum-Möhre) → Owner **W13B RAUMSTATION** (Welle W13-B). *(per >> angehängt — beim nächsten Doku-Pass in die Tabelle oben heben)*
-
-- NEUE `city.laden.buecher_titel` + `city.laden.im_regal`-Keys (additiv in `strings/<locale>/city.json` — Bücher-Abschnitt im REHWEI-Laden, „Im Regal“-Ausgrauung; DE↔EN-paritätisch) → Owner **W13B INTEGRATE** (Welle W13-B). *(per >> angehängt — beim nächsten Doku-Pass in die Tabelle oben heben)*
-
-- NEUE `rewards.food.candy-bar` + `rewards.food.lollypop`-Keys (additiv in `strings/<locale>/rewards.json` — Anzeigenamen der letzten zwei treats-Set-Speisen, SAMMLUNG-Request; DE↔EN-paritätisch) → Owner **W13B INTEGRATE** (Welle W13-B). *(per >> angehängt — beim nächsten Doku-Pass in die Tabelle oben heben)*
-
-- `umzug.*` (NEUE Datei `strings/<locale>/umzug.json` — Account-Umzug per Panel-Code: Settings-Zeile, Umzugs-Sheet, Erfolgs-/Fehlertexte inkl. „Spielstand bleibt lokal“-Klartext; DE↔EN-paritätisch) → Owner **W13C PANEL** (Welle W13-C). *(per >> angehängt — beim nächsten Doku-Pass in die Tabelle oben heben)*
-
-- `instant.*` (NEUE Datei `strings/<locale>/instant.json` — InstantGooby-Feed: Feed-Karten, Möhren-Like, Posten-Flow, Fehler-Toasts) + `phone.app.instant`/`phone.app.instant_text` (additiv in `strings/<locale>/phone.json`) → Owner **W13C INSTANT** (Welle W13-C). *(per >> angehängt — beim nächsten Doku-Pass in die Tabelle oben heben; von W13C/RELEASE nach einem Stash-Zwischenfall wiederhergestellt)*
-
-
-- `gobty.*` (NEUE Datei `strings/<locale>/gobty.json` — GOB.TY-Fernsehsender: Sender-UI (Aus-Knopf, Zapp-Hinweis), 5 Clip-Titel, 10 News-Schlagzeilen, Koch-/Sport-/Wetter-/Gute-Nacht-Banner inkl. `{symbole}`/`{datum}`-Wetter-Platzhalter; DE↔EN-paritätisch) → Owner **W13C GOBTY** (Welle W13-C). *(per >> angehängt — beim nächsten Doku-Pass in die Tabelle oben heben)*
-
-- `goobyman.*` (NEUE Datei `strings/<locale>/goobyman.json` — GOOBYMAN-Drogerie: Laden-Sheet (Abschnitte, Haltbarkeits-/Status-Zeilen, Kauf-Hinweise), Zahnputz-Blocker/Neue-Bürste-Sprüche, Erste-Male-Bruch-Info, Umhang-Gag; DE↔EN-paritätisch) + `city.ort.goobyman` (additiv in `strings/<locale>/city.json`) → Owner **W13C GOOBYMAN** (Welle W13-C). *(per >> angehängt — beim nächsten Doku-Pass in die Tabelle oben heben)*
-
-- `garage.*` (NEUE Datei `strings/<locale>/garage.json` — Garage am Haus: Bau-Knopf/Fertig-Spruch, Rolltor auf/zu, Kein-Auto-Hinweis) + NEUE `build.preset.*`-Keys (additiv in `strings/<locale>/home.json` — Layout-Presets „Raum speichern“: Sheet, Slots, Speichern/Anwenden/Löschen, Sicherheitsnetz-Meldungen; DE↔EN-paritätisch) → Owner **W13C GARAGE** (Welle W13-C). *(per >> angehängt — beim nächsten Doku-Pass in die Tabelle oben heben)*
-- `foto.*` + `settings.parallax` + `board.emote.selfie` (NEUE Datei `strings/<locale>/foto.json` — Fotomodus-Werkzeuge: `foto.werkzeug.*`, `foto.pose.*`, `foto.emotion.*`, `foto.rahmen.*`, `foto.selfie.*`; der EINE Key `settings.parallax` liegt bewusst in foto.json, weil settings.json fremd ist — der Loader merged flach, kollisionsfrei) + `social.selfie.*`-Block und `board.emote.selfie` (additiv in `strings/<locale>/social.json`) → Owner **W13C FOTOWERK** (Welle W13-C; Selfie-Emote-Label via W13C INTEGRATE). *(per >> angehängt — beim nächsten Doku-Pass in die Tabelle oben heben)*
-
-- `fuettern.*` (NEUE Datei `strings/<locale>/fuettern.json` — Kühlschrank 2.0: Regal-Grid (Kategorien-Chips, Vorrats-Badge, Stat-Pillen, Zucker-Warnung), knuffiger Leerzustand + REHWEI-Knopf, 8 rotierende Mampf-Sprüche je Kategorie; die bestehenden `rewards.kuehlschrank.*`/`rewards.fuettern.satt`-Keys bleiben beim EF-1-Owner) → Owner **W14 FRIDGE** (Welle W14). *(per >> angehängt — beim nächsten Doku-Pass in die Tabelle oben heben)*
-
-- `dlc.*` (NEUE Datei `strings/<locale>/dlc.json` — DLC-Hub W14: Settings-Sektion „DLC“, Bibliothek-Screen (Ribbons NEU/BALD/INSTALLIERT, Detail-Sheet, Kommt-bald-Hammer-Gag); DE↔EN-paritätisch) → Owner **W14 DLCHUB** (Welle W14). *(per >> angehängt — beim nächsten Doku-Pass in die Tabelle oben heben)*
-
-- `netset.*` (NEUE Datei `strings/<locale>/netset.json` — W14/NETSET: Mehrspieler-Settings `netset.mp.*` (Server/Port/Secret-Zeilen, Verbindungstest-Chip, Fehlertext-Mapping `netset.mp.fehler.*` inkl. SECRET_REQUIRED/SECRET_WRONG) + Dev-Werkzeugkasten `netset.dev.*` (Tab-Titel, XP/Stats/Erfolge/Export-Code/Fixtures, Uhr-Offset, Event/Taxi/Lieferung, Item-Suche, Netz-Dump/Outbox-Flush); DE↔EN-paritätisch) → Owner **W14 NETSET** (Welle W14). *(per >> angehängt — beim nächsten Doku-Pass in die Tabelle oben heben)*
-
-- `soul.linie.*` + `gespraech.*` + `fuettern.kommentar.*` (NEUE Datei `strings/<locale>/soul_lines.json` — W14/VOICE: 120 neue Gooby-Lines (Tageszeit-Grüße, Wetter inkl. bisher stummer FX-Typen, W13-Feature-Reaktionen Ball/Nougat/GOB.TY/Girlanden/Galaxie/Raumstation/Ranch, Minispiel-Ergebnisse, Idle-Selbstgespräche, Sticker-/Erfolgs-Feiern, „lange nicht gesehen“-Staffel) + Mini-Dialog-Chips/Follow-ups `gespraech.*` (Daten: `content/soul/data/gespraeche.json`) + Fütter-Kommentar-Schnittstelle `fuettern.kommentar.<kategorie>.<n>` für W14/FRIDGE (deren `fuettern.*`-UI-Keys in fuettern.json bleiben unberührt — kollisionsfrei, Gate grün); DE↔EN-paritätisch) → Owner **W14 VOICE** (Welle W14). *(per >> angehängt — beim nächsten Doku-Pass in die Tabelle oben heben)*
+*(Doku-Pass W14/INTEGRATE: alle zuvor per >> angehängten W13B/W13C/W14-Domains
+sind in die Tabelle oben gehoben — neue Nachträge bitte wieder ans Dateiende
+per >> anhängen, der nächste Doku-Pass hebt sie.)*
