@@ -332,13 +332,13 @@ func _build_landmarks() -> void:
 		var pole := CylinderMesh.new()
 		pole.top_radius = 0.16
 		pole.bottom_radius = 0.24
-		pole.height = 7.0
+		pole.height = 10.0
 		pole.radial_segments = 8
 		pole.rings = 1
 		pole.material = Fx.flat(tint.darkened(0.15))
 		var mi := MeshInstance3D.new()
 		mi.mesh = pole
-		mi.position = Vector3(float(row["x"]), 3.5, float(row["z"]))
+		mi.position = Vector3(float(row["x"]), 5.0, float(row["z"]))
 		add_child(mi)
 		var ball := SphereMesh.new()
 		ball.radius = 0.5
@@ -348,7 +348,9 @@ func _build_landmarks() -> void:
 		ball.material = Fx.glow(tint, 1.05)
 		var top := MeshInstance3D.new()
 		top.mesh = ball
-		top.position = Vector3(float(row["x"]), 7.5, float(row["z"]))
+		# W14 Quick-Win: 7,5 m lag EXAKT auf Hochkant-Kamerahöhe (7,6 m) — an
+		# Abwurfringen fraß die Kugel den Bildschirm. 10,5 m ist sicher darüber.
+		top.position = Vector3(float(row["x"]), 10.5, float(row["z"]))
 		add_child(top)
 
 
