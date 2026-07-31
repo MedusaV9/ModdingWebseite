@@ -29,6 +29,17 @@ var on_coin_chunk: Callable = Callable()
 ## gluecksrolle?}) oder {} ohne Event. Alle Effekte wirken ZENTRAL im
 ## Host/Award; Spiele LESEN hier nur, wenn sie zusätzlich reagieren wollen.
 var modifier: Dictionary = {}
+## W13B/DRIVE (Doc G §6): das AUSGEWÄHLTE Autohaus-Auto für Fahr-Spiele
+## (FrameworkLogic.CAR_GAMES) — CarDef-Kopie + {"farbe": hex, "mults":
+## {"speed", "handling", "boost"}} aus CarStatsLogic. {} bei Nicht-Fahr-
+## Spielen oder ohne GameState (Tests): Spiele MÜSSEN ohne auskommen
+## (Neutralbasis = alle Multiplikatoren 1.0).
+var car: Dictionary = {}
+## Host-Callback für strike() — liefert {"strikes": int, "teleport": bool}.
+var on_strike: Callable = Callable()
+
+## Fallback-Zähler, wenn kein Host verdrahtet ist (reine Logik-Tests).
+var _local_strikes := 0
 
 
 ## Deterministischer mulberry32-RNG; ohne Argument mit dem Lauf-Seed.
@@ -50,3 +61,17 @@ func report_end(result: Dictionary) -> void:
 func report_coin_chunk(amount: int) -> void:
 	if on_coin_chunk.is_valid():
 		on_coin_chunk.call(amount)
+
+
+## POLISH-E/W13B: einen Strike melden (z. B. Crash im City Drive). Der Host
+## zählt über MinigameFrameworkLogic.apply_strike und beendet die Runde AB
+## dem 3. Strike mit der Teleport-Cutscene (Award läuft regulär über den
+## aktuellen Score). Rückgabe wie apply_strike: {"strikes": n, "teleport":
+## bool} — Spiele dürfen darauf reagieren (Grimasse, Banner), MÜSSEN aber
+## nichts tun: das Rundenende gehört dem Host.
+func strike() -> Dictionary:
+	if on_strike.is_valid():
+		return on_strike.call()
+	var result := MinigameFrameworkLogic.apply_strike(_local_strikes)
+	_local_strikes = int(result["strikes"])
+	return result

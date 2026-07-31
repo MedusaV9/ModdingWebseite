@@ -28,6 +28,10 @@ const END_MOMENT_DELAY_SEC := 0.12
 ## Ein spieleigener win_moment() innerhalb dieses Fensters (ms) unterdrückt
 ## den Auto-Moment (die 5 Selbst-Feierer zünden ihn direkt am Rundenende).
 const END_MOMENT_GRACE_MS := 1100
+## POLISH-E/W13B: so lange steht die Teleport-Cutscene (Veil + Text über dem
+## eingefrorenen letzten Spielbild samt Gooby-Grimasse), bevor der Host die
+## Runde regulär beendet (Echtzeit — Zeitlupen dehnen nichts).
+const STRIKE_CUTSCENE_SEC := 1.8
 
 ## Sekunden pro Countdown-Schritt (Tests drehen auf ~0).
 ## EF-3 F4: 0,6 statt 0,8 — der Auftakt bleibt lesbar, wartet aber nicht.
@@ -73,6 +77,13 @@ var _coin_chunks: Array[int] = []
 ## (coin_mult/score_mult/xp_mult/energy_free/gluecksrolle) für den Award.
 var _modifier_snapshot: Dictionary = {}
 var _modifier_params: Dictionary = {}
+## POLISH-E/W13B: Strikes der laufenden Runde (ctx.strike() zählt über
+## MinigameFrameworkLogic.apply_strike) + Flags/Overlay der Teleport-
+## Cutscene ab dem 3. Strike. Spiele OHNE strike()-Aufrufe (die 36
+## Bestandsspiele) berühren diesen Pfad nie.
+var _strikes := 0
+var _strike_out := false
+var _strike_veil: Control
 
 
 func receive_params(params: Dictionary) -> void:
@@ -241,6 +252,8 @@ func _mount_game() -> void:
 	_ctx.on_score = _on_game_score
 	_ctx.on_end = _on_game_end
 	_ctx.on_coin_chunk = _on_coin_chunk
+	_ctx.on_strike = _on_game_strike
+	_apply_car_context()
 	_viewport.add_child(_game)
 	_game.setup(_ctx)
 
@@ -395,6 +408,10 @@ func _schedule_end_moment(breakdown: Dictionary) -> void:
 func _zuende_end_moment(breakdown: Dictionary) -> void:
 	if not _round_over or juice == null:
 		return
+	# W13B: nach 3 Strikes IST die Teleport-Cutscene der End-Moment — kein
+	# Sieg-Konfetti über dem „nach Hause teleportiert“-Veil.
+	if _strike_out:
+		return
 	if Time.get_ticks_msec() - juice.win_moment_msec <= END_MOMENT_GRACE_MS:
 		return
 	var kind := "win" if int(breakdown.get("score", 0)) > 0 else "lose"
@@ -545,6 +562,12 @@ func _restart_round() -> void:
 	_round_over = false
 	score = 0
 	_coin_chunks = []
+	# W13B: Strike-Zustand + Cutscene-Reste der Vorrunde aufräumen.
+	_strikes = 0
+	_strike_out = false
+	if _strike_veil != null:
+		_strike_veil.hide()
+	_set_game_frozen(false)
 	run_seed = maxi(1, randi() & 0x7FFFFFFF)
 	_score_label.text = I18nService.t("mg.host.score", {"score": 0})
 	_pause_button.disabled = true
@@ -594,6 +617,129 @@ func _resolve_state() -> Node:
 func _on_coin_chunk(amount: int) -> void:
 	if amount > 0:
 		_coin_chunks.append(amount)
+
+
+## POLISH-E/W13B: ctx.strike()-Callback — zählt über apply_strike und zündet
+## AB dem 3. Strike die Teleport-Cutscene. Rückgabe ans Spiel wie
+## apply_strike ({"strikes": n, "teleport": bool}).
+func _on_game_strike() -> Dictionary:
+	var result := MinigameFrameworkLogic.apply_strike(_strikes)
+	_strikes = int(result["strikes"])
+	if bool(result["teleport"]) and not _round_over and not _strike_out:
+		_strike_out = true
+		_run_strike_cutscene()
+	return result
+
+
+## Mini-Cutscene nach dem Results-/Pause-Overlay-Muster (KEIN neues
+## Cinematic-System): die Spielzeit friert ein (das letzte Bild mit Goobys
+## Grimasse bleibt unter dem Veil stehen — die „Emotion“ liefert das Spiel
+## selbst, z. B. City Drives dizzy-Emote beim 3. Crash), darüber Veil +
+## „nach Hause teleportiert“-Text. Nach STRIKE_CUTSCENE_SEC endet die Runde
+## regulär mit dem aktuellen Score — der Award bleibt unverändert korrekt.
+func _run_strike_cutscene() -> void:
+	_pause_button.disabled = true
+	if _game != null:
+		_game.pause()
+	_set_game_frozen(true)
+	_zeige_strike_veil()
+	FeelSfx.play(self, "game_lose")
+	if juice != null:
+		juice.hit_flash(Color(0.9, 0.4, 0.25, 0.18), 260)
+	if get_tree() == null:
+		_ende_strike_runde()
+		return
+	# Echtzeit-Timer + gebundene Methode (REST5, B2): stirbt der Host vorher,
+	# trennt Godot die Verbindung automatisch.
+	get_tree().create_timer(STRIKE_CUTSCENE_SEC, true, false, true).timeout.connect(
+		_ende_strike_runde
+	)
+
+
+func _ende_strike_runde() -> void:
+	if not _strike_out or _round_over:
+		return
+	if _game != null:
+		_game.end()
+	_on_game_end({"score": score})
+
+
+func _zeige_strike_veil() -> void:
+	if _strike_veil == null:
+		_strike_veil = _baue_strike_veil()
+		add_child(_strike_veil)
+		# UNTER dem Results-Screen einsortieren: der Rundenreport deckt die
+		# Cutscene nachher ab, nicht umgekehrt.
+		if _results != null:
+			move_child(_strike_veil, _results.get_index())
+	_strike_veil.show()
+	if juice != null:
+		var title := _strike_veil.get_node_or_null("Rows/StrikeTitle")
+		if title != null:
+			juice.scale_pop(title, 1.35, 320)
+
+
+func _baue_strike_veil() -> Control:
+	var veil := Control.new()
+	veil.name = "StrikeVeil"
+	veil.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	veil.mouse_filter = Control.MOUSE_FILTER_STOP
+	var dim := ColorRect.new()
+	dim.color = Color(0.24, 0.16, 0.12, 0.62)
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	veil.add_child(dim)
+	var rows := VBoxContainer.new()
+	rows.name = "Rows"
+	rows.alignment = BoxContainer.ALIGNMENT_CENTER
+	rows.add_theme_constant_override("separation", 10)
+	rows.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	rows.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	rows.grow_vertical = Control.GROW_DIRECTION_BOTH
+	veil.add_child(rows)
+	var title := Label.new()
+	title.name = "StrikeTitle"
+	title.theme_type_variation = &"TitleLabel"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.text = I18nService.t("mg.host.strike_title")
+	rows.add_child(title)
+	var text := Label.new()
+	text.name = "StrikeText"
+	text.theme_type_variation = &"HeadlineLabel"
+	text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	text.custom_minimum_size = Vector2(320.0, 0.0)
+	text.text = I18nService.t("mg.host.strike_teleport")
+	rows.add_child(text)
+	var count := Label.new()
+	count.name = "StrikeCount"
+	count.theme_type_variation = &"CaptionLabel"
+	count.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	count.text = I18nService.t(
+		"mg.host.strike_count", {"n": _strikes, "max": MinigameFrameworkLogic.STRIKES_FOR_TELEPORT}
+	)
+	rows.add_child(count)
+	return veil
+
+
+## W13B/DRIVE (Doc G §6): bei Fahr-Spielen (FrameworkLogic.CAR_GAMES) das
+## AUSGEWÄHLTE Autohaus-Auto in den Kontext legen und den BESTEHENDEN
+## `car_speed_mult`-Hook des Spiels bedienen (deliveryRush deklariert ihn
+## seit 3D-B als „Autohaus-Hook“; cityDrive liest ctx.car direkt). Ohne
+## GameState (Tests) bleibt ctx.car {} — Neutralbasis, alles fährt wie
+## bisher. toyRacer/shoppingSurf sind KEINE CAR_GAMES (Spielzeug/Wagen).
+func _apply_car_context() -> void:
+	if not MinigameFrameworkLogic.CAR_GAMES.has(game_id):
+		return
+	var gs := _resolve_state()
+	if gs == null or not gs.has_method("get_value"):
+		return
+	var auto := AutoKatalog.aktives_auto(gs)
+	if auto.is_empty():
+		return
+	auto["mults"] = CarStatsLogic.multipliers(auto.get("stats", {}))
+	_ctx.car = auto
+	if _game != null and "car_speed_mult" in _game:
+		_game.set("car_speed_mult", float((auto["mults"] as Dictionary)["speed"]))
 
 
 func _reduced_motion() -> bool:

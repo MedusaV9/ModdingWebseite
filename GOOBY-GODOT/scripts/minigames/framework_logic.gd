@@ -20,9 +20,18 @@ const ENDLESS_FLAT_COINS := 5
 ## §G5.5 — ENDLOS-Pill braucht beaten[id].hard UND Level >= 10.
 const ENDLESS_MIN_LEVEL := 10
 ## §G5.1 — cityDrive (Trip-Semantik) + goobyWelt (Chill-Special) ohne Modi.
+## W13B/DRIVE: die Web-Parität bleibt der DEFAULT (Golden-Fixtures/Tests
+## erwarten sie ohne Meta) — die neue ARCADE-Runde von City Drive schaltet
+## sich stattdessen per Manifest-Flag `difficulty_opt_in: true` frei
+## (s. difficulty_enabled; Trip-Launches mit params.mode bleiben 'normal').
 const DIFFICULTY_EXCLUDED_GAMES: Array[String] = ["cityDrive", "goobyWelt"]
 ## POLISH-E — Strikes bis zum Teleport (Spiegel von DRIVE.CRASHES_FOR_TOW).
 const STRIKES_FOR_TELEPORT := 3
+## W13B/DRIVE (Doc G §6) — Spiegel von Web data/minigames.js CAR_GAMES: nur
+## DIESE Spiele fahren das Autohaus-Auto (Pregame-Auto-Zeile + ctx.car +
+## car_speed_mult-Hook). toyRacer (Spielzeugautos) und shoppingSurf
+## (Einkaufswagen) sind bewusst NICHT dabei.
+const CAR_GAMES: Array[String] = ["cityDrive", "deliveryRush"]
 
 
 ## JS Math.round rundet .5 Richtung +unendlich; für x >= 0 == floor(x + 0.5).
@@ -37,10 +46,15 @@ static func normalize_difficulty(mode: Variant) -> String:
 
 
 ## Ist das Difficulty-System für dieses Spiel überhaupt aktiv (§G5.1)?
+## W13B/DRIVE: `difficulty_opt_in: true` im game.json-Manifest hebt den
+## §G5.1-Ausschluss auf — die City-Drive-ARCADE-Runde hat echte Modi,
+## während Trips (params.mode) über effective_difficulty 'normal' bleiben.
 static func difficulty_enabled(game_id: String, meta: Dictionary = {}) -> bool:
-	if DIFFICULTY_EXCLUDED_GAMES.has(game_id):
-		return false
 	if meta.get("dev", false) == true:
+		return false
+	if meta.get("difficulty_opt_in", false) == true:
+		return true
+	if DIFFICULTY_EXCLUDED_GAMES.has(game_id):
 		return false
 	return true
 
