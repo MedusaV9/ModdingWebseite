@@ -38,6 +38,20 @@
 // luma-matched, which is where void_purple comes from. The star field runs through the same
 // helper against a cold-white shipped constant, so a purple zone has purple stars.
 //
+// F-102 GLITCH-FAMILY POLISH "SOG" — the pass was a scanner, not a maw. Two additions give
+// the void PULL:
+//   [V2] EVENT-HORIZON RING. A stationary glow shell at a fixed WORLD distance
+//        (HORIZON_R blocks) around the impulse origin, on the same range read the sonar
+//        already pays for — with the altar origin it is a standing ring around the altar;
+//        with the camera origin you carry your own horizon. On the shell the accent burns
+//        with a slow noise shimmer; INSIDE it even the drained wash dies out, so the sphere
+//        around the origin reads "past this line the light does not come back".
+//   [V3] RADIAL INFALL. The world origin is projected to a screen-space SINK (frame centre
+//        when the origin is the camera or sits behind it) and the drained image is built
+//        from two taps pulled toward that sink — the residual mass streaks INWARD, which is
+//        the suction read in a still frame. Time-invariant by construction (no flicker to
+//        gate for reduced FX); cost is 2 extra colour taps.
+//
 // HARDENING: on a dead depth attachment (flat 0.0 — the A0 session-0731 heuristic) the sonar,
 // the contours and the edge whisper all switch off and the pass degrades to the pure star
 // field, which needs only the ray direction. Black screen was the old failure mode.
@@ -88,6 +102,14 @@ const float VOID_WRAP = 512.0;
 // Cold white: the shipped star colour, luma-matched to any commanded accent.
 const vec3 STAR_COLD = vec3(0.72, 0.80, 1.00);
 const float STAR_GAIN = 0.90;
+// [V2] Event horizon: shell distance in blocks, shell softness (blocks of falloff), and
+// how dead the inside goes. 14 blocks sits well inside the altar zone's 28-block radius,
+// so the standing ring is on screen for anyone near the altar.
+const float HORIZON_R = 14.0;
+const float HORIZON_W = 1.6;
+const float SWALLOW = 0.85;
+// [V3] Infall: peak UV pull toward the sink and the tail spread of the second tap.
+const float SUCTION_UV = 0.028;
 
 void main() {
     float s = clamp(Strength, 0.0, 1.0);
@@ -111,9 +133,36 @@ void main() {
             range = length(screenToLocalSpace(texCoord, depth).xyz - Origin);
         }
 
+        // --- [V3] radial infall ---------------------------------------------------------
+        // Screen-space sink: the projected impulse origin (fully coherent uniform branch),
+        // or the frame centre for the camera origin. An origin behind the camera (clip.w
+        // small/negative) also falls back to the centre — the pull direction is undefined
+        // there and the centre keeps the read stable while the player turns.
+        vec2 sinkUv = vec2(0.5);
+        if (OriginMode > 0.5) {
+            vec4 clip = VeilCamera.ProjMat * (VeilCamera.ViewMat * vec4(Origin, 1.0));
+            if (clip.w > 0.1) {
+                // Clamped one half-frame out: an off-screen origin still pulls sideways
+                // without degenerate UV magnitudes.
+                sinkUv = clamp(clip.xy / clip.w * 0.5 + 0.5, vec2(-0.5), vec2(1.5));
+            }
+        }
+        vec2 toSink = sinkUv - texCoord;
+        float sinkDist = length(toSink);
+        vec2 sinkDir = toSink / max(sinkDist, 1.0e-4);
+        // Pull grows toward the sink and keeps a floor at the frame edge, so the whole
+        // frame leans inward, not just a bullseye. Time-invariant: nothing to freeze.
+        float pull = SUCTION_UV * s * (0.35 + 0.65 * exp(-sinkDist * 2.0));
+        vec3 drawn1 = texture(DiffuseSampler0,
+                clamp(texCoord + sinkDir * pull, vec2(0.001), vec2(0.999))).rgb;
+        vec3 drawn2 = texture(DiffuseSampler0,
+                clamp(texCoord + sinkDir * pull * 2.3, vec2(0.001), vec2(0.999))).rgb;
+        vec3 sucked = scene * 0.40 + drawn1 * 0.35 + drawn2 * 0.25;
+
         // --- drained base ---------------------------------------------------------------
-        // Cold near-black: 5% luma with a blue-grey cast; the sky drains completely.
-        vec3 base = vec3(gzLuma(scene)) * vec3(0.045, 0.05, 0.065) * (1.0 - sky);
+        // Cold near-black: 5% luma with a blue-grey cast; the sky drains completely. Built
+        // from the infall-smeared image, so the residual mass streaks toward the sink.
+        vec3 base = vec3(gzLuma(sucked)) * vec3(0.045, 0.05, 0.065) * (1.0 - sky);
 
         // --- sonar ping -------------------------------------------------------------------
         // The live shell: bright, thin, with an exponential afterglow tail BEHIND the front
@@ -131,6 +180,15 @@ void main() {
         float energy = mix(0.6, 1.0 - 0.65 * phase, detail);
         float ping = (ring * 1.0 + behind * 0.22) * energy * (1.0 - sky)
                 * step(range, PING_RANGE + 8.0) * depthOk;
+
+        // --- [V2] event horizon ------------------------------------------------------------
+        // Standing shell at HORIZON_R blocks from the origin, on the range read the ping
+        // already paid for. The shell shimmers slowly (frozen to a steady glow under
+        // reduced FX); inside it the drained wash dies out — light does not come back.
+        float horizon = exp(-abs(range - HORIZON_R) / HORIZON_W) * (1.0 - sky) * depthOk;
+        float shimmer = mix(0.9, 0.72 + 0.28 * efxNoise(vec2(Time * 5.0, range * 0.9)), detail);
+        float swallow = (1.0 - smoothstep(HORIZON_R * 0.5, HORIZON_R, range)) * depthOk;
+        base *= 1.0 - SWALLOW * swallow;
 
         // --- static depth contours ---------------------------------------------------------
         // Faint equidistance lines every 6 blocks (triangle-wave band around the contour),
@@ -165,14 +223,20 @@ void main() {
         // Where the void shows through. Full in the sky; on geometry it opens up as the
         // drained image darkens AND recedes, so near-field mass stays solid and the far dark
         // dissolves into star field. On a dead depth buffer the whole frame opens up.
-        float thin = mix((1.0 - smoothstep(0.02, 0.30, gzLuma(scene)))
+        float thin = mix((1.0 - smoothstep(0.02, 0.30, gzLuma(sucked)))
                 * smoothstep(18.0, 90.0, dist) * 0.65, 1.0, sky);
         thin = max(thin, 1.0 - depthOk);
+        // [V2] Inside the event horizon the swallowed ground DECAYS INTO STARS: the near-
+        // field distance gate above would keep the void closed there, but the horizon
+        // interior is precisely where the world should already be a hole into infinity
+        // (the mandate's "Sternenreste"). swallow is 0 on the sky by construction.
+        thin = max(thin, swallow * 0.40);
         // The ping owns the frame while it passes: stars duck under it instead of competing.
         stars *= thin * (1.0 - 0.55 * clamp(ping, 0.0, 1.0));
 
         vec3 voided = base
                 + sonar * ping * 0.85
+                + sonar * horizon * shimmer * 0.70
                 + sonar * contour
                 + sonar * edge * 0.12
                 + gzAccent(STAR_COLD, AccentColor, AccentAmount) * stars * STAR_GAIN;
