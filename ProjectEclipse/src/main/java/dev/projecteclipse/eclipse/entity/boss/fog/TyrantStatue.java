@@ -22,6 +22,7 @@ import dev.projecteclipse.eclipse.network.S2CShakePayload;
 import dev.projecteclipse.eclipse.network.fx.FxCues;
 import dev.projecteclipse.eclipse.network.fx.FxPayloads;
 import dev.projecteclipse.eclipse.stormfx.StormSiege;
+import dev.projecteclipse.eclipse.wand.WandTickService;
 import dev.projecteclipse.eclipse.worldgen.stage.DisplayBrightnessFx;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.GlobalPos;
@@ -64,7 +65,8 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * {@code CUE_TYRANT_STATUE_IDLE} + vanilla spark-spiral baseline + one-shot action-bar
  * hint) → {@code AWAKENING} (struck: {@value #AWAKEN_TICKS}t shake / display
  * micro-jitter / rising resonate telegraph, the lair disarms NOW) → {@code FIGHT}
- * (statue burst-discarded, {@link FogTyrantEntity#summonAt} fired — its arrival FX and
+ * ({@link FogTyrantEntity#summonAt} fired under the cover burst, displays discarded
+ * {@value #HANDOFF_VANISH_COVER_TICKS}t later inside the fog — its arrival FX and
  * intro title already exist) → {@code COOLDOWN} (a fight reset re-arms the statue after
  * {@value #REARM_TICKS}t via {@link #onFightReset} — this also closes re-arm gap G-1:
  * abandoned fights re-arm IN-SESSION) → {@code ARMED}. Victory retires the entry
@@ -87,6 +89,18 @@ public final class TyrantStatue {
 
     /** Awaken telegraph length (~3 s): hit → shake/jitter/rising chime → summon. */
     private static final int AWAKEN_TICKS = 60;
+    /**
+     * MA1 refinement of the F-081..087 handoff flicker: the statue displays used to
+     * discard on the SAME server tick that sent the awaken burst + arrival fog, so the
+     * discard packet could beat the particle packets and the statue blinked out in
+     * clear air (the "scythe detach" read — the effigy's hard silhouette vanishing a
+     * frame before the fog covers the swap). The displays now vanish this many ticks
+     * AFTER the cover fog is on the wire, mirroring the tyrant's own G-4
+     * {@code STEP_VANISH_HIDE_TICKS}=2 fold-snap cut ({@link FogTyrantEntity}): the
+     * body swap always happens BEHIND the fog, never in front of it. The freshly
+     * summoned tyrant stands inside the burst for these 2 ticks, fully covered.
+     */
+    private static final int HANDOFF_VANISH_COVER_TICKS = 2;
     /** Cooldown after a fight reset before the statue (and lair) re-arm (30 s). */
     private static final int REARM_TICKS = 600;
     /** Slow-cadence work (orphan sweep, FIGHT backstop) — matches FogBankMarker's tick. */
@@ -369,10 +383,14 @@ public final class TyrantStatue {
         }
     }
 
-    /** The burst beat: statue discards, the monarch rises exactly where it stood. */
+    /**
+     * The burst beat: the cover fog goes out FIRST (burst particles + the summon's own
+     * arrival fog banks), the monarch rises where the effigy stands, and only
+     * {@value #HANDOFF_VANISH_COVER_TICKS}t later do the displays discard — inside the
+     * fog, never in clear air (the F-081..087 flicker refinement).
+     */
     private static void awaken(ServerLevel level, Statue statue) {
         Vec3 center = fxCenter(statue);
-        discardPieces(level, statue);
         statue.state = State.FIGHT;
         level.sendParticles(ParticleTypes.CLOUD, center.x, center.y, center.z,
                 40, 0.8D, 1.2D, 0.8D, 0.08D);
@@ -383,8 +401,14 @@ public final class TyrantStatue {
         PacketDistributor.sendToPlayersNear(level, null, center.x, center.y, center.z,
                 48.0D, S2CShakePayload.shake(0.6F, 14));
         FogTyrantEntity.summonAt(level, statue.lair.pos());
-        EclipseMod.LOGGER.info("TyrantStatue: statue at {} shattered — the Fog Tyrant answers",
-                statue.lair.pos().toShortString());
+        // Display vanish rides BEHIND the cover fog (statue.state is already FIGHT, so
+        // no self-heal can respawn pieces in the window; discardPieces is idempotent —
+        // any reset/retire racing these 2 ticks just empties the list first).
+        WandTickService.schedule(level, HANDOFF_VANISH_COVER_TICKS,
+                () -> discardPieces(level, statue));
+        EclipseMod.LOGGER.info("TyrantStatue: statue at {} shattered — the Fog Tyrant answers "
+                + "(displays vanish in {}t behind the cover fog)",
+                statue.lair.pos().toShortString(), HANDOFF_VANISH_COVER_TICKS);
     }
 
     // ------------------------------------------------------------------ statue body

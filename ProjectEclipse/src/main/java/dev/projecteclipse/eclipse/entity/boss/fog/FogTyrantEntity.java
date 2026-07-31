@@ -144,7 +144,9 @@ import software.bernie.geckolib.animation.RawAnimation;
  * G-1 in-session re-arm fix). <b>Death</b>:
  * {@value #DEATH_DURATION_TICKS}t scripted storm-burst — the crown falls first (anim),
  * the chest core gutters (synced {@code CORE_LIT} flag, Ferryman lantern pattern),
- * the body collapses, final thunderclap + camera shake. C8 death beat: at the
+ * the body collapses, final thunderclap + camera shake, then the held collapse
+ * silhouette is consumed by the A5 implosion (removal behind the fresnel snap — see
+ * {@link #DEATH_DURATION_TICKS}). C8 death beat: at the
  * thunderclap the HOST SITE STORM EXPLODES — {@link StormRegistry#explode} bursts the
  * sphere shell (shockwave expansion + white-out + debris client-side), the shatter
  * stinger + {@code FX_SHOCKWAVE} land, and {@link FogStormSites#stormEnded} retires the
@@ -179,8 +181,20 @@ public class FogTyrantEntity extends EclipseGeoMonster {
     public static final String ANIM_ENRAGE = "enrage";
 
     public static final float BASE_MAX_HEALTH = 350.0F;
-    /** Scripted death storm-burst length (vanilla tips over after 20t; see {@link #tickDeath}). */
-    public static final int DEATH_DURATION_TICKS = 70;
+    /**
+     * Scripted death storm-burst length (vanilla tips over after 20t; see {@link #tickDeath}).
+     *
+     * <p>MA1 (mob census): 90, not the anim sheet's 70 (3.5s). The A5 implosion cascade
+     * ({@code tools/photon/tyrant_death_fx.py}, fired at {@value #DEATH_THUNDERCLAP_TICK})
+     * bursts its {@code collapse_seed} at fx t=30 — the fresnel dome SNAP therefore lands
+     * at deathTime ≈ {@value #DEATH_THUNDERCLAP_TICK}+30. The death anim is
+     * {@code hold_on_last_frame}, so ticks 70..90 hold the compact collapse silhouette
+     * while the slab in-fall converges ONTO it, and the body is removed exactly behind
+     * the snap — the same "disappear behind the brightest beat" trick as the G-4
+     * {@link #STEP_VANISH_HIDE_TICKS} fold-snap cut. At the old 70 the corpse poofed 20t
+     * BEFORE the snap and the in-fall converged on empty air.
+     */
+    public static final int DEATH_DURATION_TICKS = 90;
     /** Command tag stamped on every summoned add so reset hygiene can find them. */
     public static final String ADD_TAG = "eclipse_tyrant_add";
 
@@ -468,9 +482,10 @@ public class FogTyrantEntity extends EclipseGeoMonster {
         action.triggerableAnim(ANIM_SQUALL, EclipseGeoAnimations.once(GEO_ID, ANIM_SQUALL));
         action.triggerableAnim(ANIM_ENRAGE, EclipseGeoAnimations.once(GEO_ID, ANIM_ENRAGE));
         // No death speed handler: the W4 slow-mo (0.2x floor) advanced only ~0.84s of the
-        // 3.5s death collapse before the 70t removal (EVAL-V6-MOB D2). The MOB-BOSS2 wisp
+        // 3.5s death collapse before the removal (EVAL-V6-MOB D2). The MOB-BOSS2 wisp
         // rise/unroll/dissipate keys (1.0/1.8/2.6/3.5s) are authored to fill exactly
-        // 3.5s = 70t at 1x, feeding the storm explode() finale.
+        // 3.5s = 70t at 1x; MA1 holds the last frame for 20 more ticks so the A5
+        // implosion in-fall converges on the held silhouette (see DEATH_DURATION_TICKS).
     }
 
     // --- synced state accessors ---
@@ -1443,7 +1458,8 @@ public class FogTyrantEntity extends EclipseGeoMonster {
                         Locale.ROOT, "%.1f", this.arena.horizontalDistance(attacker.position())));
     }
 
-    // --- death (70t storm-burst: crown falls, core gutters, thunderclap collapse) ---
+    // --- death (90t storm-burst: crown falls, core gutters, thunderclap collapse,
+    //     held silhouette consumed by the A5 implosion's fresnel snap) ---
 
     @Override
     public void die(DamageSource damageSource) {

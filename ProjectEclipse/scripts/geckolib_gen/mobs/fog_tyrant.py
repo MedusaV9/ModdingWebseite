@@ -13,6 +13,10 @@ cage whose inner rows catch the core light.
 The robe carries the MOB-BOSS2 LAYERED FOG GRADIENT: four dither-edged fog strata that
 lighten toward the hem, so the monarch reads as wading hip-deep in his own storm.
 
+MA1 (mob census wave): the cloak is now a 4-SEGMENT CHAIN (cloak_back → cloak_mid →
+cloak_low → cloak_hem, follow-through keyframes in the anim sheet); the cloak gradient
+runs across the whole chain via `storm_cloak_chain(seg)` so the plates read as one cape.
+
 Emissive (glowmask): the crown shards (`glow_crown_*` auto-included) + the chest core
 (`glow_core` auto-included, white-hot heart + arc-flicker rim) + the two eyes + the
 lance edge centerlines + the electric seams + a faint rim on the crown ring + the
@@ -175,17 +179,24 @@ def cage_glow(px):
     return None
 
 
-def storm_cloak(px):
-    """Layered storm-cloak: dark shoulders fading to fog-bank pale toward the hem,
-    with a ragged alpha-cutout hem on the bottom rows (kelp-style)."""
-    if px.face in ("north", "south", "east", "west"):
-        n = px.noise(97, x=px.gx, y=0)
-        cut = 0 if n < 0.3 else (1 if n < 0.7 else 3)
-        if px.fy >= px.fh - cut:
-            return None  # ragged hem
-    t = (px.fy + 0.5) / px.fh  # down = pale (fog gathering at the hem)
-    col = mix(CLOAK, CLOAK_HEM, t * 0.85)
-    return mul(col, 0.86 + px.noise(53, y=px.gy // 3) * 0.28)
+def storm_cloak_chain(seg, total=4):
+    """One segment of the MA1 4-segment cloak chain (cloak_back → mid → low → hem):
+    the dark→fog-bank-pale gradient runs across the WHOLE chain — the segment index
+    offsets the band, so the four plates read as one cape even when the follow-through
+    keyframes fan them apart. Ragged kelp-style alpha hem only on the LAST segment
+    (intermediate cut rows would open horizontal slits at every hinge)."""
+
+    def fn(px):
+        if seg == total - 1 and px.face in ("north", "south", "east", "west"):
+            n = px.noise(97, x=px.gx, y=0)
+            cut = 0 if n < 0.3 else (1 if n < 0.7 else 3)
+            if px.fy >= px.fh - cut:
+                return None  # ragged hem (chain terminus only)
+        t = (seg + (px.fy + 0.5) / px.fh) / total  # down THE CHAIN = pale
+        col = mix(CLOAK, CLOAK_HEM, t * 0.85)
+        return mul(col, 0.86 + px.noise(53, y=px.gy // 3) * 0.28)
+
+    return fn
 
 
 def hooded_head(px):
@@ -240,8 +251,10 @@ def main():
     painter.set_material("robe_tatter_*", kelp(TATTER, salt=43, max_cut=3))
     painter.set_material("torso", storm_slate(SLATE, salt=13))
     painter.set_material("chest_cage", cage_bar)
-    painter.set_material("cloak_back", storm_cloak)
-    painter.set_material("cloak_mid", storm_cloak)
+    painter.set_material("cloak_back", storm_cloak_chain(0))
+    painter.set_material("cloak_mid", storm_cloak_chain(1))
+    painter.set_material("cloak_low", storm_cloak_chain(2))
+    painter.set_material("cloak_hem", storm_cloak_chain(3))
     painter.set_material("shoulder_*", storm_slate(SLATE, salt=37))
     painter.set_material("wisp_*", fog_wisp)
     painter.set_material("arm_*", storm_slate(ROBE_DARK, salt=47, seams=False))
