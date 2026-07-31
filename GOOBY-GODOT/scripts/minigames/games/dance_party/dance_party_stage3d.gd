@@ -116,7 +116,9 @@ func _build_lanes() -> void:
 		var lane := MeshInstance3D.new()
 		var quad := QuadMesh.new()
 		quad.size = Vector2.ONE
-		quad.material = Fx.glass(Color(LANE_COLORS[i], 0.12), true)
+		# W14 Quick-Win: 0,12-Glas soff unter den Scheinwerferkegeln ab —
+		# die Bahnen waren nur Haarlinien (Audit a=3). 0,2 macht sie zu Flächen.
+		quad.material = Fx.glass(Color(LANE_COLORS[i], 0.2), true)
 		lane.mesh = quad
 		lane.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		add_child(lane)
@@ -124,8 +126,8 @@ func _build_lanes() -> void:
 		for _side in 2:
 			var rail := MeshInstance3D.new()
 			var rail_mesh := BoxMesh.new()
-			rail_mesh.size = Vector3(0.045, 1.0, 0.045)
-			rail_mesh.material = Fx.glow(LANE_COLORS[i], 0.55)
+			rail_mesh.size = Vector3(0.09, 1.0, 0.09)  # W14 Quick-Win: 0,045 zu dünn
+			rail_mesh.material = Fx.glow(LANE_COLORS[i], 0.7)
 			rail.mesh = rail_mesh
 			rail.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			add_child(rail)
