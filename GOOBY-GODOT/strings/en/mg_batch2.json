@@ -45,6 +45,7 @@
 		"starHopper": {
 			"title": "Star Hopper",
 			"hint": "Swipe sideways to switch lanes.",
+			"intro": "Dodge the meteors — grab the stars!",
 			"distance": "{m} m",
 			"speed": "Speed {v}",
 			"shield": "Shield up!",

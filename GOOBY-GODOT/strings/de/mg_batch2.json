@@ -45,6 +45,7 @@
 		"starHopper": {
 			"title": "Sternenhüpfer",
 			"hint": "Seitlich wischen, um die Spur zu wechseln.",
+			"intro": "Weich den Meteoren aus — sammle Sterne!",
 			"distance": "{m} m",
 			"speed": "Tempo {v}",
 			"shield": "Schild aktiv!",

@@ -20,6 +20,11 @@ const VIEW_AHEAD_M := 62.0
 const SHIP_ANCHOR := 0.22
 ## Mindest-Wischweg (px) für einen Zwei-Bahn-Wechsel.
 const SWIPE_MIN_PX := 40.0
+## W14 Forgiveness: auf breiten Screens skaliert der Wischweg mit (8 % Breite),
+## sonst werden unruhige Tipper zu ungewollten Zwei-Bahn-Sprüngen.
+const SWIPE_MIN_FRAC := 0.08
+## W14 Intro-Beat (s): Kamera schwebt ein + Ziel-Einblendung, Sim wartet.
+const INTRO_S := 1.5
 
 const STAR_COLOR := Color(1.0, 0.88, 0.4)
 const GOLD_COLOR := Color(1.0, 0.62, 0.2)
@@ -57,6 +62,10 @@ var _roll := 0.0
 var _touch_from := Vector2.ZERO
 var _flash := 0.0
 var _flash_text := ""
+var _intro_left := 0.0
+## Eigene große Aufsammel-Popups (Pos, Text, Farbe, Restzeit) — das kleine
+## JuiceKit-float_text ging im Weltraum unter.
+var _popups: Array[Dictionary] = []
 var _dist_label: Label
 var _state_label: Label
 var _hint_label: Label
@@ -71,6 +80,9 @@ func setup(context: MinigameCtx) -> void:
 	_build_stage()
 	_build_hud()
 	_fit_viewport()
+	_intro_left = INTRO_S
+	_flash_text = I18nService.t("mg.starHopper.intro")
+	_flash = INTRO_S + 0.6
 	if is_inside_tree():
 		get_viewport().size_changed.connect(_fit_viewport)
 
@@ -110,11 +122,21 @@ func _process(delta: float) -> void:
 	if not is_active() or finished:
 		return
 	_stage.tick(delta)
+	# Intro-Beat: Kamera schwebt in die Spielpose, Ziel steht — die Sim
+	# (elapsed/traveled) wartet, der Lauf bleibt danach zahlengleich.
+	if _intro_left > 0.0:
+		_intro_left = maxf(_intro_left - delta, 0.0)
+		_stage.establish(1.0 - _intro_left / INTRO_S)
+		_flash = maxf(_flash - delta, 0.0)
+		_sync_stage()
+		queue_redraw()
+		return
 	elapsed += delta
 	invuln = maxf(0.0, invuln - delta)
 	_pop = maxf(0.0, _pop - delta)
 	_roll = maxf(0.0, _roll - delta)
 	_flash = maxf(0.0, _flash - delta)
+	_step_popups(delta)
 	lane_visual = move_toward(lane_visual, float(lane), delta / float(tune["LANE_CHANGE_SEC"]))
 	var dm := Logic.speed_at(elapsed, tune) * delta
 	_step_wormhole(delta)
@@ -172,7 +194,7 @@ func _mood() -> String:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if not is_active() or finished:
+	if not is_active() or finished or _intro_left > 0.0:
 		return
 	if event is InputEventScreenTouch:
 		if event.pressed:
@@ -213,7 +235,7 @@ func _fit_viewport() -> void:
 func _resolve_gesture(to: Vector2) -> void:
 	var d := to - _touch_from
 	var gesture := {}
-	if absf(d.x) >= SWIPE_MIN_PX:
+	if absf(d.x) >= swipe_threshold_px(view_size.x):
 		gesture = {"kind": "swipe", "dir": "left" if d.x < 0.0 else "right"}
 	else:
 		gesture = {"kind": "tap", "side": "left" if to.x < view_size.x * 0.5 else "right"}
@@ -222,6 +244,12 @@ func _resolve_gesture(to: Vector2) -> void:
 		lane = next
 		_stage.cheer("hop")
 		AudioDirector.try_play(self, "mg_good", 1.15)
+
+
+## W14 Forgiveness (nur Input-Mapping, PUR für Tests): der Zwei-Bahn-Wisch
+## braucht auf breiten Screens mehr Weg, sonst springen unruhige Tipper.
+static func swipe_threshold_px(width: float) -> float:
+	return maxf(SWIPE_MIN_PX, width * SWIPE_MIN_FRAC)
 
 
 func _advance(dm: float, delta: float) -> void:
@@ -361,13 +389,29 @@ func _on_pickup(p: Dictionary) -> void:
 		if ctx.juice != null:
 			ctx.juice.bloom_pulse(0.8)
 			ctx.juice.hit_freeze(50)
-			ctx.juice.float_text(pos, "+%d" % int(p["points"]), GOLD_COLOR)
+		_popup_at(pos, "+%d" % int(p["points"]), GOLD_COLOR)
 	else:
 		_pop = float(Logic.HOPPER_JUICE["POP_SEC"])
 		_stage.spark_at(_stage.ship_position() + Vector3(0.0, 0.35, 0.0), STAR_COLOR)
 		AudioDirector.try_play(self, "mg_good", 1.2)
-		if ctx.juice != null:
-			ctx.juice.float_text(pos, "+%d" % int(p["points"]), STAR_COLOR)
+		_popup_at(pos, "+%d" % int(p["points"]), STAR_COLOR)
+
+
+## W14: großes, konturiertes Aufsammel-Popup (das JuiceKit-float_text war im
+## dunklen Weltraum zu klein, Audit-Achse d).
+func _popup_at(pos: Vector2, text: String, color: Color) -> void:
+	_popups.append({"pos": pos, "text": text, "color": color, "t": 0.9})
+	if _popups.size() > 6:
+		_popups.pop_front()
+
+
+func _step_popups(delta: float) -> void:
+	var kept: Array[Dictionary] = []
+	for p in _popups:
+		p["t"] = float(p["t"]) - delta
+		if float(p["t"]) > 0.0:
+			kept.append(p)
+	_popups = kept
 
 
 func _check_hits(before: float, dm: float) -> void:
@@ -446,6 +490,22 @@ func _draw() -> void:
 	if _shower_state == "warn":
 		_draw_shower_warning()
 	_draw_flash()
+	_draw_popups()
+
+
+func _draw_popups() -> void:
+	for p in _popups:
+		var t := float(p["t"])
+		var rise := (0.9 - t) * 46.0
+		var color: Color = p["color"]
+		color.a = clampf(t / 0.35, 0.0, 1.0)
+		var at: Vector2 = p["pos"] + Vector2(-60.0, -rise)
+		var font := ThemeService.font(800)
+		var outline := Color(0.1, 0.08, 0.2, color.a)
+		draw_string_outline(
+			font, at, str(p["text"]), HORIZONTAL_ALIGNMENT_CENTER, 120, 30, 6, outline
+		)
+		draw_string(font, at, str(p["text"]), HORIZONTAL_ALIGNMENT_CENTER, 120, 30, color)
 
 
 func _draw_shower_warning() -> void:

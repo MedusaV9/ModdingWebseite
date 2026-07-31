@@ -22,6 +22,9 @@ const RUNG_COUNT := 16
 const STAR_COUNT := 260
 const METEOR_POOL := 14
 const PICKUP_POOL := 8
+## W14 Kulisse: Leucht-Pylonen-Paare neben der Bahn (Abstand in wu).
+const PYLON_STEP := 6.4
+const PYLON_PAIRS := 5
 
 var lane_x: Array = [-1.15, 0.0, 1.15]
 var gooby: GoobyRig
@@ -31,6 +34,7 @@ var _ship_tilt: Node3D
 var _meteors: Node3D
 var _pickups: Node3D
 var _rungs: Node3D
+var _pylons: Node3D
 var _stars: Node3D
 var _shield_bubble: MeshInstance3D
 var _wormhole: Node3D
@@ -77,9 +81,18 @@ func setup_stage(lanes: Array) -> void:
 	_build_nebula()
 	_build_starfield()
 	_build_track()
+	_build_pylons()
 	_build_ship()
 	_build_pools()
 	_build_effects()
+
+
+## W14 Intro-Beat: Kamera schwebt aus erhöhter Totale (k=0) in die Spielpose
+## (k=1) — reine Optik, die Bahn-Projektion für Popups läuft erst im Spiel.
+func establish(k: float) -> void:
+	var e := 1.0 - ease(clampf(k, 0.0, 1.0), 0.4)
+	camera.position = Vector3(0.0, 2.1 + 1.4 * e, 4.3 + 1.1 * e)
+	camera.look_at_from_position(camera.position, Vector3(0.0, 0.75, -4.0), Vector3.UP)
 
 
 func _exit_tree() -> void:
@@ -330,6 +343,36 @@ func _build_rungs() -> void:
 	add_child(_rungs)
 
 
+## W14 Kulissen-Dichte: Leucht-Pylonen-Paare ziehen als Tor-Reihe am Korridor
+## vorbei — füllt die leeren Blau-Flächen NEBEN der Bahn und verstärkt das
+## Tempogefühl. Ein MultiMesh, wrappt in _sync_scroll.
+func _build_pylons() -> void:
+	var post := BoxMesh.new()
+	post.size = Vector3(0.09, 1.1, 0.09)
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(0.32, 0.5, 0.9)
+	mat.emission_enabled = true
+	mat.emission = Color(0.36, 0.7, 1.0)
+	mat.emission_energy_multiplier = 1.1
+	post.material = mat
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.mesh = post
+	mm.instance_count = PYLON_PAIRS * 2
+	var span := absf(float(lane_x[lane_x.size() - 1])) + 1.0
+	for i in PYLON_PAIRS:
+		var z := -float(i) * PYLON_STEP
+		var basis := Basis.IDENTITY
+		mm.set_instance_transform(i * 2, Transform3D(basis, Vector3(-span, 0.12, z)))
+		mm.set_instance_transform(i * 2 + 1, Transform3D(basis, Vector3(span, 0.12, z)))
+	var mmi := MultiMeshInstance3D.new()
+	mmi.multimesh = mm
+	mmi.extra_cull_margin = 40.0
+	_pylons = Node3D.new()
+	_pylons.add_child(mmi)
+	add_child(_pylons)
+
+
 func _build_warn_lanes() -> void:
 	for i in lane_x.size():
 		var warn := MeshInstance3D.new()
@@ -575,6 +618,7 @@ func _build_effects() -> void:
 func _sync_scroll(traveled: float) -> void:
 	var wrap := fposmod(traveled * WU_PER_M, RUNG_STEP)
 	_rungs.position.z = wrap
+	_pylons.position.z = fposmod(traveled * WU_PER_M, PYLON_STEP)
 	# Sternenfeld mit Parallaxe (viel langsamer als die Bahn).
 	_stars.position.z = fposmod(traveled * WU_PER_M * 0.12, 6.0)
 
