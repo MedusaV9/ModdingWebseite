@@ -4003,6 +4003,22 @@
         "mint",
         "butter"
       ]
+    },
+    {
+      "id": "nougatschleuse",
+      "name_de": "Nougatschleuse",
+      "name_en": "Nougat Chute",
+      "glb": "nougatschleuse.glb",
+      "footprint": [
+        2,
+        1
+      ],
+      "layer": "WALL",
+      "wall_size": 2,
+      "preis": 400,
+      "lagerwert": 2,
+      "pflicht": "",
+      "kategorie": "kueche"
     }
   ]
 }
