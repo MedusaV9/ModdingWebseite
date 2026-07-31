@@ -68,8 +68,14 @@ const HUD_BTN_LIP := Color(0.2902, 0.2314, 0.2118, 0.14)
 # ── Motion (Sekunden) ───────────────────────────────────────────────────────
 const DUR_POP := 0.18  # --dur-pop
 const DUR_SHEET := 0.24  # --dur-sheet
-const PRESS_SCALE := 0.96  # SquishButton-Zieldruck
-# --ease-spring cubic-bezier(0.34,1.56,0.64,1) → Tween.TRANS_BACK/EASE_OUT
+# W14/UIKERN: satterer Squish. Web `.btn:active` = scale(.96) + translateY(2px)
+# — den 2-px-Sink kann der reine Scale-Tween nicht abbilden, 0.94 gleicht die
+# fehlende Versatz-Tiefe optisch aus (User-Feedback: Press war kaum spürbar).
+const PRESS_SCALE := 0.94  # SquishButton-Zieldruck
+# Release-Overshoot: --ease-spring cubic-bezier(0.34,1.56,0.64,1) schießt im
+# Web sichtbar ÜBER die Ruhelage — SquishButton fährt erst hierhin, dann
+# federnd (TRANS_BACK/EASE_OUT) zurück auf 1.0.
+const SQUISH_OVERSHOOT := 1.04
 
 # ── Wallpaper-Drift (H §1.2 Guardrails) ─────────────────────────────────────
 const DRIFT_TILES_PER_SEC := Vector2(-0.010, 0.007)  # ~100 s/Kachel, schräg
@@ -124,6 +130,10 @@ const COLORS := {
 }
 
 
-## Boden-Lippen-Farbe eines Pill-Buttons: Fill × 0.82 (H §1.1).
+## Boden-Lippen-Farbe eines Pill-Buttons. W14/UIKERN Web-Eichung: die Lippe
+## ist im Web KEIN abgedunkelter Fill, sondern brauner Ink ÜBER dem Fill
+## (`.btn` inset-shadow `rgba(74,59,54,.18)`) — Blend Richtung INK statt
+## ×0.82 macht den Rand wärmer und sichtbarer („dickerer Outline-Look“).
 static func lip_color(fill: Color) -> Color:
-	return Color(fill.r * 0.82, fill.g * 0.82, fill.b * 0.82, fill.a)
+	var blended := Color(fill.r, fill.g, fill.b, 1.0).lerp(INK, 0.18)
+	return Color(blended.r, blended.g, blended.b, fill.a)
