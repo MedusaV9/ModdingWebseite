@@ -1,6 +1,6 @@
 package dev.projecteclipse.eclipse.ritual;
 
-import java.util.List;
+import java.util.Arrays;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -130,7 +130,10 @@ public final class CreditsDisplayBudget {
                     "verify = low counts for headless/llvmpipe acceptance runs,",
                     "standard = the default live show, epic = thousands (real GPUs).",
                     "/dev credits tier <tier> overrides this until the next restart.")
-            .defineInList("displayTier", "standard", List.of("verify", "standard", "epic"));
+            // Arrays.asList, NOT List.of: ConfigTracker.createDefaultConfig corrects a fresh
+            // file by calling ValueSpec.test(null), and List.of(...).contains(null) throws NPE
+            // (booted the whole server). Arrays.asList tolerates the null probe.
+            .defineInList("displayTier", "standard", Arrays.asList("verify", "standard", "epic"));
     public static final ModConfigSpec COMMON_SPEC = COMMON_BUILDER.build();
 
     private static final AtomicBoolean REGISTERED = new AtomicBoolean();
