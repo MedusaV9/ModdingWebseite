@@ -10,14 +10,13 @@ extends CanvasLayer
 ##
 ## Der Ablauf (Countdown) ist eine PURE, zeitinjizierte Statemaschine
 ## (`Ablauf.takt(dt)`) — headless testbar ohne Szene. Zum Peer wird das
-## Posieren als vorhandenes „laugh“-Emote relayt (wave + happy), weil das
-## Emote-Rad-Vokabular BoardEmotes gehört; ein echtes selfie-Emote ist als
-## Request an den Emote-Owner vermerkt.
+## Posieren als echtes „selfie“-Emote relayt (W13C: BoardEmotes.
+## EXTRA_EMOTES, happy + wave; Clip wird phone_up, sobald CLIPS liefert).
 
 signal fertig(pfad: String)
 
-## Relay-Emote zum Peer (vorhandenes Vokabular, wave-basiert).
-const RELAY_EMOTE := "laugh"
+## Relay-Emote zum Peer (BoardEmotes-EXTRA-Vokabular, W13C).
+const RELAY_EMOTE := "selfie"
 ## Der Gast hoppelt seitlich neben den eigenen Gooby ins Bild.
 const GAST_VERSATZ := Vector3(0.9, 0.0, 0.15)
 

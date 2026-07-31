@@ -55,6 +55,19 @@ func test_vier_emotes_mit_gueltigen_clips() -> void:
 	assert_eq(BoardEmotes.emotion_for("quatsch"), "neutral")
 
 
+func test_selfie_extra_emote_gueltig_aber_nicht_im_rad() -> void:
+	# W13C FOTOWERK-Request: selfie ist Relay-Vokabular (SnapAGooby),
+	# bekommt aber KEINEN Knopf im 4er-Rad.
+	assert_false(BoardEmotes.ids().has("selfie"), "selfie bleibt aus dem Rad")
+	assert_true(BoardEmotes.is_valid("selfie"), "selfie ist Relay-gültig")
+	assert_true(
+		RIG_CLIPS.has(BoardEmotes.clip_for("selfie")),
+		"Selfie-Clip %s existiert nicht im Rig" % BoardEmotes.clip_for("selfie")
+	)
+	assert_eq(BoardEmotes.emotion_for("selfie"), "happy")
+	assert_eq(str(BoardEmotes.def("selfie").get("label_key", "")), "board.emote.selfie")
+
+
 func test_tomaten_wurf_clip_fallback() -> void:
 	assert_eq(
 		BoardEmotes.throw_clip(RIG_CLIPS),

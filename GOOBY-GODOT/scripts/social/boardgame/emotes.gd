@@ -16,6 +16,15 @@ const EMOTES: Array[Dictionary] = [
 	{"id": "sleep", "clip": "sleep", "emotion": "sleepy", "label_key": "board.emote.sleep"},
 ]
 
+## Zusatz-Vokabular AUSSERHALB des 4er-Rads (W13C, FOTOWERK-Request):
+## gültig für Relay/Validierung (RemoteGooby.play_emote), bekommt aber
+## keinen Rad-Knopf — ids() bleibt bei den 4 Auftrags-Emotes. Das
+## Besuchs-Selfie (SnapAGooby.RELAY_EMOTE) posiert damit den Peer.
+## Clip wird phone_up, sobald CLIPS ihn ins Rig legt (heute wave).
+const EXTRA_EMOTES: Array[Dictionary] = [
+	{"id": "selfie", "clip": "wave", "emotion": "happy", "label_key": "board.emote.selfie"},
+]
+
 ## Tomaten-Wurf: `tomato_throw` liegt seit W13C im GLB und wird von
 ## throw_clip() automatisch gewählt; wave bleibt Fallback für Alt-Rigs.
 const TOMATO_THROW_CLIP := "tomato_throw"
@@ -34,6 +43,9 @@ static func ids() -> Array[String]:
 
 static func def(emote_id: String) -> Dictionary:
 	for emote in EMOTES:
+		if str(emote["id"]) == emote_id:
+			return emote
+	for emote in EXTRA_EMOTES:
 		if str(emote["id"]) == emote_id:
 			return emote
 	return {}
