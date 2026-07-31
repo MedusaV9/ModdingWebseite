@@ -58,6 +58,15 @@
 //                  to terrain, not to the screen. Total darkening ≤ ~0.10 (uncanny, not
 //                  loud), sky-masked, distance-faded, Detail-gated (pure motion layer).
 //                  0 = bit-identical frame.
+// v7 additive uniform (FX-13 B5 census N3 "Herzschlag-Dread" — same feeder, same commit):
+//   DreadPulse   — 0..1 FINISHED heartbeat strength: the vignette pulls inward and the
+//                  desaturation lifts on a lub-dub beat while the local player is under
+//                  3 hearts or standing in a dread zone (the backrooms). The whole curve
+//                  (double gaussian, 1.10 s → 0.70 s cycle, severity ladder, slew,
+//                  reducedFx flattening) lives in VeilPostController.dreadPulseUniform —
+//                  this shader does NO time math, it just reads the beat, which is why
+//                  it is pure ALU on the already-computed center distance (no extra tap,
+//                  llvmpipe-cheap). 0 = bit-identical frame.
 #include eclipse:eclipse_common
 #include veil:space_helper
 
@@ -77,6 +86,7 @@ uniform float HeatTint;
 uniform float HeatShimmer;
 uniform float BloodDusk;
 uniform float ShadowBands;
+uniform float DreadPulse;
 
 in vec2 texCoord;
 
@@ -263,6 +273,25 @@ void main() {
                     + smoothstep(0.55, 0.95, snake2) * 0.038;
             color *= 1.0 - shade * bandsAmt * bandFade;
         }
+    }
+
+    // [v7] FX-13 B5 heartbeat dread: under 3 hearts, or inside a dread zone, the frame
+    // itself gets a pulse. The BEAT is finished CPU-side (a double gaussian lub-dub on a
+    // 1.10 s → 0.70 s cycle — see VeilPostController), so this layer is two cheap terms
+    // on the vignette distance the [i2] breath already computed:
+    //   · the vignette CLOSES with each systole — the inner edge of the falloff walks
+    //     from 0.34 in to 0.10, so the frame squeezes instead of only losing its corners
+    //     (corner darkening ~23 % at the one-heart systole, ~3 % at the 2.75-heart
+    //     whisper — the severity ladder lives in the uniform, not here);
+    //   · the desaturation lifts on the same beat, edge-weighted (14 % center, 37 % corner)
+    //     — tunnel vision that leaves the middle of a hardcore frame readable.
+    // Between the two beats the pulse releases to its 0.15 floor. Zero uniform =
+    // bit-identical frame; the feeder also flattens the beat entirely under reducedFx.
+    if (DreadPulse > 0.001) {
+        float dreadEdge = smoothstep(mix(0.34, 0.10, DreadPulse), 0.86, d);
+        color *= 1.0 - dreadEdge * DreadPulse * 0.26;
+        float dreadLuma = dot(color, vec3(0.299, 0.587, 0.114));
+        color = mix(color, vec3(dreadLuma), DreadPulse * (0.14 + 0.26 * dreadEdge));
     }
 
     // Exposure dip (0.62 during eclipse TOTAL, eased CPU-side over 60 ticks — the old

@@ -11,11 +11,17 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
+import javax.annotation.Nullable;
+
 import org.joml.Vector4f;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.backrooms.BackroomsDimension;
+import dev.projecteclipse.eclipse.backrooms.BackroomsLayers;
+import dev.projecteclipse.eclipse.backrooms.GlitchedWandererEntity;
 import dev.projecteclipse.eclipse.client.sky.EclipseIrisState;
 import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
+import dev.projecteclipse.eclipse.limbo.LimboDimension;
 import foundry.veil.api.client.render.VeilRenderSystem;
 import foundry.veil.api.client.render.post.PostPipeline;
 import foundry.veil.api.client.render.post.PostProcessingManager;
@@ -23,6 +29,7 @@ import foundry.veil.platform.VeilEventPlatform;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.minecraft.world.level.Level;
@@ -170,14 +177,29 @@ public final class VeilPostController {
 
     // --- world_grade -------------------------------------------------------------------
 
+    /**
+     * The dimensions whose sky/weather story this grade tells (the pre-B5 gate, unchanged).
+     * Everything else either owns its own grade (limbo) or, since FX-13 B5, borrows the pass
+     * for the dread heartbeat ALONE — see {@link #feedWorldGrade}, which idles every sky
+     * lane out there so the borrowed pass cannot smuggle the overworld grade with it.
+     */
+    private static boolean gradedDimension(@Nullable ClientLevel level) {
+        return level != null
+                && (level.dimension() == Level.OVERWORLD || level.dimension() == Level.NETHER);
+    }
+
     private static boolean wantWorldGrade() {
         ClientLevel level = Minecraft.getInstance().level;
         if (level == null) {
             return false;
         }
-        boolean gradedDimension = level.dimension() == Level.OVERWORLD || level.dimension() == Level.NETHER;
-        if (!gradedDimension) {
-            return false; // limbo owns its own grade
+        // FX-13 B5 (census N3): the dread heartbeat is the only lane here that is not a sky
+        // story, and its dread zone IS a whole dimension (the backrooms) — so it keeps the
+        // pass alive outside the graded dimensions too. limbo stays excluded: it owns its
+        // own GRADE pass and two of them would fight over the same frame there.
+        boolean dread = easedDread > MIN_DREAD && level.dimension() != LimboDimension.LIMBO;
+        if (!gradedDimension(level)) {
+            return dread;
         }
         float partialTick = partialTick();
         // F-077 V2: the End-arrival grade feeds keep the pass alive in plain daylight
@@ -191,7 +213,9 @@ public final class VeilPostController {
                 // FX-13 A9: the blood-dusk window OPENS while the sun is still ~17° above
                 // the horizon, where dayFactor is 1 and NightAmount is exactly 0 — the
                 // lean must keep the pass alive on its own (the FX-12 heat precedent).
-                || bloodDusk(level, partialTick) > 0.005F;
+                || bloodDusk(level, partialTick) > 0.005F
+                // FX-13 B5: the heartbeat fires at high noon just as readily.
+                || dread;
     }
 
     /** FX-12: the heat haze runs at this share of the ember lean (one state value, two uniforms). */
@@ -205,11 +229,19 @@ public final class VeilPostController {
     private static void feedWorldGrade(PostPipeline pipeline) {
         ClientLevel level = Minecraft.getInstance().level;
         float partialTick = partialTick();
-        float eclipse = EclipseFxState.eclipseAmount(partialTick);
+        // FX-13 B5: before B5 this pass only ever ran in OVERWORLD/NETHER; now the dread
+        // heartbeat can borrow it anywhere (the backrooms ARE the dread zone). Outside the
+        // graded dimensions every sky/weather lane therefore feeds its IDLE value — the
+        // borrowed pass carries the heartbeat and nothing else, so an eclipse running up
+        // top can never crush the yellow rooms. (NightAmount, PhaseTint, BloodDusk and
+        // ShadowBands are already dimension-gated inside their own feeds.)
+        boolean graded = gradedDimension(level);
+        float eclipse = graded ? EclipseFxState.eclipseAmount(partialTick) : 0.0F;
         pipeline.getUniform("EclipseAmount").setFloat(eclipse);
         pipeline.getUniform("NightAmount").setFloat(level == null ? 0.0F : nightAmount(level, partialTick));
         pipeline.getUniform("DesatAmount").setFloat(eclipse * 0.5F);
-        pipeline.getUniform("ExposureMul").setFloat(EclipseFxState.exposureMul(partialTick));
+        pipeline.getUniform("ExposureMul").setFloat(
+                graded ? EclipseFxState.exposureMul(partialTick) : 1.0F);
         // v2 (FX team GRADE): grain/breath/seethe clock (limbo hour-wrap pattern), the
         // true-horizon band line, and the reducedFx detail gate.
         pipeline.getUniform("Time").setFloat((System.currentTimeMillis() % 3_600_000L) / 1000.0F);
@@ -220,11 +252,13 @@ public final class VeilPostController {
         pipeline.getUniform("PhaseTint").setFloat(phaseTint(level, partialTick));
         // v4 (F-077 V2): End-arrival event uniforms — same feeder, same commit (the
         // additive rule). Both read 0 outside the cinematic (bit-identical frame).
-        pipeline.getUniform("ArrivalDim").setFloat(EclipseFxState.arrivalDim(partialTick));
-        pipeline.getUniform("EndTintPulse").setFloat(EclipseFxState.endTintPulse(partialTick));
+        pipeline.getUniform("ArrivalDim").setFloat(
+                graded ? EclipseFxState.arrivalDim(partialTick) : 0.0F);
+        pipeline.getUniform("EndTintPulse").setFloat(
+                graded ? EclipseFxState.endTintPulse(partialTick) : 0.0F);
         // v5 (FX-12 nether opening): one state value feeds both heat uniforms — the
         // shimmer is the softer half of the same ramp, so they can never disagree.
-        float heat = EclipseFxState.netherHeat(partialTick);
+        float heat = graded ? EclipseFxState.netherHeat(partialTick) : 0.0F;
         pipeline.getUniform("HeatTint").setFloat(heat);
         pipeline.getUniform("HeatShimmer").setFloat(heat * HEAT_SHIMMER_SHARE);
         // v6 (FX-13 A9): totality shadow bands (TotalityPeakFx crescent-window driver —
@@ -232,6 +266,9 @@ public final class VeilPostController {
         // the day-10+ blood-dusk lean. Both read 0 in idle (bit-identical frame).
         pipeline.getUniform("ShadowBands").setFloat(TotalityPeakFx.shadowBands());
         pipeline.getUniform("BloodDusk").setFloat(bloodDusk(level, partialTick));
+        // v7 (FX-13 B5): the finished heartbeat beat — 0 whenever the eased dread is
+        // idle, so the shader block is skipped and the frame stays bit-identical.
+        pipeline.getUniform("DreadPulse").setFloat(dreadPulseUniform(partialTick));
     }
 
     // --- v3 (VEIL-REPASS-1): world_grade color script -----------------------------------
@@ -339,6 +376,236 @@ public final class VeilPostController {
         return lean * edge;
     }
 
+    // --- v7 (FX-13 B5, census N3): heartbeat dread ---------------------------------------
+
+    /** Health (in hearts) at which the dread window starts to open. */
+    private static final float DREAD_HEARTS_ENTER = 3.0F;
+    /** …and at which it is fully open — a smoothstep half-heart wide, so the line never flickers. */
+    private static final float DREAD_HEARTS_OPEN = 2.5F;
+    /** Severity ladder floor: at one heart the beat is at full amplitude. */
+    private static final float DREAD_HEARTS_LOUD = 1.0F;
+    /** Amplitude at the top of the window (2.5 hearts) — "subtil bei 2.5–3 Herzen". */
+    private static final float DREAD_HP_SUBTLE = 0.35F;
+    /** Dread-zone floor on backrooms level 1 (the Yellow Rooms just hum). */
+    private static final float DREAD_ZONE_BASE = 0.20F;
+    /** …deepening per level down the stack (level 5, The Hollow, sits at 0.42). */
+    private static final float DREAD_ZONE_PER_LEVEL = 0.055F;
+    /** Dread with a Wanderer on top of you — the zone's own panic ceiling. */
+    private static final float DREAD_ZONE_HUNTED = 0.85F;
+    /** Wanderer proximity range feeding {@link #DREAD_ZONE_HUNTED} (the BackroomsBuzz hush law). */
+    private static final double DREAD_HUNT_RANGE = 14.0D;
+    /** Wanderer scan cadence in ticks (the UmbralVeinsFx backstop-scan law). */
+    private static final int DREAD_SCAN_CADENCE = 5;
+    /** Rise slew: the beat grows in over ~0.5 s instead of snapping on with the hit. */
+    private static final float DREAD_RISE_PER_TICK = 0.10F;
+    /** Release slew: ~1 s of fading out after healing up / leaving the zone. */
+    private static final float DREAD_FALL_PER_TICK = 0.05F;
+    /** Below this the dread is over: the uniform reads exactly 0 and the row is dropped. */
+    private static final float MIN_DREAD = 0.002F;
+    /** Cycle length at the calm end of the window (ticks) — a resting 55 bpm. */
+    private static final float DREAD_PERIOD_CALM_TICKS = 22.0F;
+    /** …and at full dread (ticks): ~86 bpm, the "one hit left" tempo. */
+    private static final float DREAD_PERIOD_PANIC_TICKS = 14.0F;
+    /** Gaussian half-width of the first (LUB) beat, seconds. */
+    private static final float DREAD_LUB_SIGMA = 0.075F;
+    /** Gaussian half-width of the second (DUB) beat, seconds. */
+    private static final float DREAD_DUB_SIGMA = 0.060F;
+    /** The DUB is the quieter of the pair. */
+    private static final float DREAD_DUB_AMPLITUDE = 0.70F;
+    /**
+     * S1→S2 spacing in SECONDS, deliberately not a fraction of the cycle: physiologically
+     * the interval barely shortens when the heart speeds up, and holding it fixed keeps
+     * the fastest beat at 2 peaks / 0.70 s ≈ 2.9 Hz — under the flash ceiling the
+     * {@code BackroomsFlickerOverlay} photosensitivity rule draws.
+     */
+    private static final float DREAD_DUB_DELAY = 0.22F;
+    /** Sustain between the beats: the frame releases to this share, it does not strobe. */
+    private static final float DREAD_FLOOR = 0.15F;
+    /** reducedFx: one steady pressure at this share instead of the beat (no modulation). */
+    private static final float DREAD_REDUCED_LEVEL = 0.45F;
+
+    /** Eased dread severity 0..1 — the amplitude AND the tempo of the beat. */
+    private static float easedDread;
+    /** Heartbeat phase 0..1, accumulated per tick so a tempo change never jumps it. */
+    private static float dreadPhase;
+    /** Last Wanderer proximity 0..1 (0 = none in range), refreshed on the scan cadence. */
+    private static float dreadHunterProximity;
+    private static int dreadScanCountdown;
+
+    /**
+     * The {@code world_grade DreadPulse} uniform: the FINISHED beat strength, i.e. the
+     * eased severity times the heartbeat envelope. Doing the curve here (and not in GLSL)
+     * keeps the shader a two-term ALU block and this math testable.
+     *
+     * <p>Exactly {@code 0.0} while the dread is idle — the shader block is skipped and the
+     * frame is bit-identical (the additive-uniform law). Under {@code reducedFx} the beat
+     * is flattened to one steady pressure: the danger signal survives, the flicker does
+     * not ({@code BackroomsFlickerOverlay}'s "one slow dim instead of the train" rule).</p>
+     */
+    private static float dreadPulseUniform(float partialTick) {
+        if (easedDread <= MIN_DREAD) {
+            return 0.0F;
+        }
+        if (EclipseClientConfig.reducedFx()) {
+            return easedDread * DREAD_REDUCED_LEVEL;
+        }
+        float periodTicks = dreadPeriodTicks();
+        float phase = dreadPhase + partialTick / periodTicks;
+        phase -= (float) Math.floor(phase);
+        return easedDread * (DREAD_FLOOR
+                + (1.0F - DREAD_FLOOR) * heartbeatPulse(phase, periodTicks / 20.0F));
+    }
+
+    /**
+     * The lub-dub curve — deliberately NOT a sine: two gaussian peaks, the loud S1 at
+     * {@code t = 0} and the softer S2 {@value #DREAD_DUB_DELAY} s later, then a long
+     * diastolic rest for the remainder of the cycle. Peak → 0.14 trough → 0.70 second
+     * peak → silence.
+     *
+     * @param phase         cycle position in {@code [0,1)}
+     * @param periodSeconds current cycle length
+     * @return beat strength in {@code [0,1]}
+     */
+    static float heartbeatPulse(float phase, float periodSeconds) {
+        float t = phase * periodSeconds;
+        float lub = gaussianBeat(cyclicDistance(t, 0.0F, periodSeconds), DREAD_LUB_SIGMA);
+        float dub = gaussianBeat(cyclicDistance(t, DREAD_DUB_DELAY, periodSeconds), DREAD_DUB_SIGMA);
+        return Math.min(1.0F, lub + DREAD_DUB_AMPLITUDE * dub);
+    }
+
+    /** Shortest distance from {@code t} to {@code center} on a ring of length {@code period}. */
+    private static float cyclicDistance(float t, float center, float period) {
+        float d = Math.abs(t - center);
+        return Math.min(d, period - d);
+    }
+
+    private static float gaussianBeat(float distance, float sigma) {
+        float x = distance / sigma;
+        return (float) Math.exp(-x * x);
+    }
+
+    /** Current cycle length: {@value #DREAD_PERIOD_CALM_TICKS} t calm → panic. */
+    private static float dreadPeriodTicks() {
+        return Mth.lerp(easedDread, DREAD_PERIOD_CALM_TICKS, DREAD_PERIOD_PANIC_TICKS);
+    }
+
+    /**
+     * Per-tick dread slew + phase clock ({@link #tickPhaseLeanEase} law). Frozen while the
+     * game is paused, so the beat holds still on the pause screen like every other eased FX
+     * clock; the first thud lands the moment the dread starts (the {@code BackroomsDread}
+     * pursuit-audio beat).
+     */
+    private static void tickDreadPulse() {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.isPaused()) {
+            return;
+        }
+        ClientLevel level = minecraft.level;
+        LocalPlayer player = minecraft.player;
+        tickHunterScan(level, player);
+        advanceDread(dreadTarget(level, player));
+    }
+
+    /**
+     * Slew + phase clock — the half of {@link #tickDreadPulse} that touches no client state,
+     * so the beat's rise/fall shape can be exercised without a running game.
+     */
+    static void advanceDread(float target) {
+        boolean wasIdle = easedDread <= MIN_DREAD;
+        if (easedDread < target) {
+            easedDread = Math.min(target, easedDread + DREAD_RISE_PER_TICK);
+        } else if (easedDread > target) {
+            easedDread = Math.max(target, easedDread - DREAD_FALL_PER_TICK);
+        }
+        if (wasIdle && easedDread > MIN_DREAD) {
+            dreadPhase = 0.0F; // the first thud lands the moment the dread starts
+        } else {
+            dreadPhase += 1.0F / dreadPeriodTicks();
+            dreadPhase -= (float) Math.floor(dreadPhase);
+        }
+    }
+
+    /** Dread target 0..1: the louder of the two independent sources (the mandate's OR). */
+    private static float dreadTarget(@Nullable ClientLevel level, @Nullable LocalPlayer player) {
+        if (level == null || player == null || !player.isAlive()
+                || player.isSpectator() || player.isCreative()) {
+            return 0.0F; // no danger, no dread — ghosts and builders keep a clean frame
+        }
+        return Math.max(dreadFromHearts(player.getHealth() * 0.5F), dreadFromZone(level, player));
+    }
+
+    /**
+     * Source (a): the player's own hearts, read straight off {@code Minecraft.player} —
+     * ABSOLUTE, not a fraction, because {@code HeartsService} hangs max health off the
+     * Leben count (1 Leben = 2 hearts), and "three hearts left" has to mean the same thing
+     * at every Leben stand.
+     *
+     * <p>The window opens over a smoothstep from {@value #DREAD_HEARTS_ENTER} down to
+     * {@value #DREAD_HEARTS_OPEN} hearts (a binary line would flicker on regen ticks), and
+     * the amplitude then climbs the severity ladder to full at
+     * {@value #DREAD_HEARTS_LOUD} heart: 0.18 at 2.75 hearts (a whisper), 0.78 at 1.5,
+     * 1.0 at one heart.</p>
+     */
+    static float dreadFromHearts(float hearts) {
+        float window = 1.0F - Mth.clamp((hearts - DREAD_HEARTS_OPEN)
+                / (DREAD_HEARTS_ENTER - DREAD_HEARTS_OPEN), 0.0F, 1.0F);
+        window = window * window * (3.0F - 2.0F * window);
+        float severity = Mth.clamp((DREAD_HEARTS_OPEN - hearts)
+                / (DREAD_HEARTS_OPEN - DREAD_HEARTS_LOUD), 0.0F, 1.0F);
+        return window * (DREAD_HP_SUBTLE + (1.0F - DREAD_HP_SUBTLE) * severity);
+    }
+
+    /**
+     * Source (b): dread zones. The backrooms dread system is server-side
+     * ({@code BackroomsDread} sends sounds and the flicker envelope, it syncs no level), so
+     * the client reads the zone off the two public facts it already has — the dimension
+     * ({@code BackroomsDimension.isBackrooms}) and the depth
+     * ({@code BackroomsLayers.layerOf}) — plus how close the Wanderer is, exactly the
+     * hush-when-stalked signal {@code client.backrooms.BackroomsBuzz} keys its volume off.
+     * No new packet, no new hook in a foreign class.
+     *
+     * <p>The floor stays low ({@value #DREAD_ZONE_BASE} on level 1 …0.42 in The Hollow) so
+     * a 20-minute instance does not become one long drone; the beat only swells toward
+     * {@value #DREAD_ZONE_HUNTED} while something is actually walking up on you.</p>
+     */
+    private static float dreadFromZone(ClientLevel level, LocalPlayer player) {
+        if (!BackroomsDimension.isBackrooms(level.dimension())) {
+            return 0.0F;
+        }
+        int depth = BackroomsLayers.layerOf(player.getBlockY()).level();
+        float base = Math.min(DREAD_ZONE_HUNTED,
+                DREAD_ZONE_BASE + DREAD_ZONE_PER_LEVEL * (depth - 1));
+        return base + (DREAD_ZONE_HUNTED - base) * dreadHunterProximity;
+    }
+
+    /**
+     * Refreshes {@link #dreadHunterProximity} every {@value #DREAD_SCAN_CADENCE} ticks
+     * while the player is in the backrooms (and zeroes it everywhere else). Client-side
+     * entity read only — the slew smooths the cadence steps away.
+     */
+    private static void tickHunterScan(@Nullable ClientLevel level, @Nullable LocalPlayer player) {
+        if (level == null || player == null || !BackroomsDimension.isBackrooms(level.dimension())) {
+            dreadHunterProximity = 0.0F;
+            dreadScanCountdown = 0;
+            return;
+        }
+        if (--dreadScanCountdown > 0) {
+            return;
+        }
+        dreadScanCountdown = DREAD_SCAN_CADENCE;
+        double nearestSqr = DREAD_HUNT_RANGE * DREAD_HUNT_RANGE;
+        for (GlitchedWandererEntity wanderer : level.getEntitiesOfClass(
+                GlitchedWandererEntity.class, player.getBoundingBox().inflate(DREAD_HUNT_RANGE))) {
+            nearestSqr = Math.min(nearestSqr, wanderer.distanceToSqr(player));
+        }
+        dreadHunterProximity = 1.0F - (float) (Math.sqrt(nearestSqr) / DREAD_HUNT_RANGE);
+    }
+
+    /** Dev/QA introspection: the eased dread severity currently driving the beat. */
+    public static float dreadSeverity() {
+        return easedDread;
+    }
+
     /** R3: {@code clamp(1 − dayFactor) · 0.55} — overworld only (the nether has no day cycle). */
     private static float nightAmount(ClientLevel level, float partialTick) {
         if (level.dimension() != Level.OVERWORLD) {
@@ -438,6 +705,7 @@ public final class VeilPostController {
     static void onClientTick(ClientTickEvent.Post event) {
         tickSunOcclusionEase();
         tickPhaseLeanEase();
+        tickDreadPulse();
         boolean gate = EclipseIrisState.postFxAllowed();
         DESIRED.clear();
         if (gate) {
@@ -479,6 +747,10 @@ public final class VeilPostController {
     static void onLoggingOut(ClientPlayerNetworkEvent.LoggingOut event) {
         OVERRIDES.clear();
         easedPhaseLean = 0.0F; // the color script never leaks into the next session
+        easedDread = 0.0F; // …and neither does the heartbeat (FX-13 B5)
+        dreadPhase = 0.0F;
+        dreadHunterProximity = 0.0F;
+        dreadScanCountdown = 0;
         synchronized (VeilPostController.class) {
             for (Row row : ROWS.values()) {
                 removeQuietly(row.spec().id());
