@@ -318,6 +318,92 @@ func _run_checks(screen: String) -> void:
 					"%s × %s" % [_describe(controls[i]), _describe(controls[j])],
 					"Überlappung %s" % overlap
 				)
+	_check_content_column(screen, controls)
+
+
+## Inhaltsspalte W16, Kategorie content_mitte: markierte Spalten-Container
+## (Meta ScreenShell.META_CONTENT_COLUMN) müssen mittig im SAFE-Rechteck
+## sitzen (±2 px) und den Breiten-Deckel einhalten; jeder sichtbare Button
+## des Screens (außer HUD-/Toast-/Bubble-/PanelSheet-Ebenen) muss in einer
+## Spalte grow(4) liegen. Screens OHNE Meta-Flag überspringen die Kategorie
+## (HUD-Cockpit, Sheets und Minigames zentrieren bewusst nicht).
+func _check_content_column(screen: String, controls: Array[Control]) -> void:
+	var columns := _content_columns()
+	if columns.is_empty():
+		return
+	var f := UiScale.for_viewport(root)
+	var max_w := minf(
+		AcTokens.CONTENT_MAX_WIDTH * f, _safe_rect.size.x - 2.0 * AcTokens.CONTENT_EDGE_X * f
+	)
+	for col in columns:
+		var rect := col.get_global_rect()
+		var delta := absf(rect.get_center().x - _safe_rect.get_center().x)
+		if delta > 2.0:
+			_add_finding(
+				screen,
+				"content_mitte",
+				_describe(col),
+				"Spalte nicht im Safe-Zentrum: Abweichung %.1f px" % delta
+			)
+		if rect.size.x > max_w + 2.0:
+			_add_finding(
+				screen,
+				"content_mitte",
+				_describe(col),
+				"Spalte zu breit: %.0f px (Deckel %.0f px)" % [rect.size.x, max_w]
+			)
+	for ctl in controls:
+		if not (ctl is Button) or _in_overlay_layer(ctl):
+			continue
+		var rect := _effective_rect(ctl)
+		if rect.size.x <= 0.0 or rect.size.y <= 0.0:
+			continue
+		var drin := false
+		for col in columns:
+			if col.get_global_rect().grow(4.0).encloses(rect):
+				drin = true
+				break
+		if not drin:
+			_add_finding(
+				screen, "content_mitte", _describe(ctl), "Button außerhalb der Spalte: %s" % rect
+			)
+
+
+## Sichtbare Container mit dem W16-Spalten-Meta-Flag (Hauptviewport).
+func _content_columns() -> Array[Control]:
+	var out: Array[Control] = []
+	var stack: Array[Node] = [root]
+	while not stack.is_empty():
+		var node: Node = stack.pop_back()
+		if node is SubViewport and node != root:
+			continue
+		stack.append_array(node.get_children())
+		if not (node is Control):
+			continue
+		var ctl := node as Control
+		if ctl.is_visible_in_tree() and ctl.has_meta(ScreenShell.META_CONTENT_COLUMN):
+			out.append(ctl)
+	return out
+
+
+## Overlay-Ebenen, deren Knöpfe NICHT in die Spalte gehören (HUD-Daumen-
+## Kanten, Toasts, Sprechblasen, Bottom-Sheets, Hinweis-Karten der
+## HUD-Kopf-Zone — W14-/REST-2-Verträge).
+func _in_overlay_layer(ctl: Control) -> bool:
+	var node: Node = ctl
+	while node != null:
+		var overlay := (
+			node is Hud
+			or node is ToastLayer
+			or node is AcBubble
+			or node is PanelSheet
+			or node is OnboardingGuide
+			or node is WhatsNextHint
+		)
+		if overlay:
+			return true
+		node = node.get_parent()
+	return false
 
 
 ## Sichtbare Bedienelemente des HAUPT-Viewports (SubViewport-Inhalte haben

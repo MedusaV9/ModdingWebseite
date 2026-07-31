@@ -151,10 +151,13 @@ func _apply_metrics() -> void:
 	if not is_inside_tree():
 		return
 	_m = ScreenShell.metrics(get_viewport())
-	ScreenShell.frame(_rows, _m, 24.0, 16.0)
+	# Inhaltsspalte W16: zentriert + breiten-gedeckelt statt voller Safe-Breite.
+	ScreenShell.content_frame(_rows, _m)
 	ScreenShell.scale_fonts(self, float(_m["f"]))
-	var canvas: Vector2 = _m["canvas"]
-	_grid.columns = clampi(int(canvas.x / (240.0 * float(_m["f"]))), 2, 5)
+	# Spaltenzahl aus der SPALTEN-Breite (vorher volle Canvas-Breite) —
+	# sonst überliefe das Foto-Raster die zentrierte Spalte.
+	var spalte := ScreenShell.content_width(_m)
+	_grid.columns = clampi(int(spalte / (240.0 * float(_m["f"]))), 2, 5)
 
 
 ## ---------------------------------------------------------------- Raster

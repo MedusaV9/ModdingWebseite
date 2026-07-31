@@ -523,7 +523,8 @@ func _on_viewport_resized() -> void:
 func _apply_metrics() -> void:
 	var m := ScreenShell.metrics(get_viewport())
 	var f: float = m["f"]
-	ScreenShell.frame(_rows_box, m, 24.0, 16.0)
+	# Inhaltsspalte W16: zentriert + breiten-gedeckelt statt voller Safe-Breite.
+	ScreenShell.content_frame(_rows_box, m)
 	ScreenShell.scale_fonts(self, f)
 	ScreenShell.touch_target(_back_btn, m)
 	for btn in _nav_btns:

@@ -134,6 +134,10 @@ func _add_edit_row(
 	label.text = label_text
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	# W16-Inhaltsspalte: ohne Umbruch erzwingt der Label-Text eine
+	# Mindest-Zeilenbreite (Label + 240·f-Feld > Spalten-Deckel auf hohen
+	# Faktoren) — mit Autowrap passt sich die Zeile der Spalte an.
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	label.add_theme_font_size_override("font_size", int(AcTokens.FONT_SIZE_BODY * _tf))
 	row.add_child(label)
 	var edit := LineEdit.new()

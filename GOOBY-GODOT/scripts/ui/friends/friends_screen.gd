@@ -201,7 +201,8 @@ func _apply_metrics() -> void:
 	if _rows == null:
 		return
 	var m := ScreenShell.metrics(get_viewport())
-	ScreenShell.frame(_rows, m)
+	# Inhaltsspalte W16: zentriert + breiten-gedeckelt statt voller Safe-Breite.
+	ScreenShell.content_frame(_rows, m)
 	for ctl: Control in [_back, _copy_button, _add_button, _status_chip, _add_input]:
 		ScreenShell.touch_target(ctl, m)
 	ScreenShell.scale_fonts(self, m["f"])

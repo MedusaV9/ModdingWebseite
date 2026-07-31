@@ -395,7 +395,26 @@ func _find_hud() -> Control:
 		if node is Hud:
 			_hud_ref = node
 			break
+	if _hud_ref != null:
+		_hud_ref.visibility_changed.connect(_sync_card_visible)
 	return _hud_ref
+
+
+## W16 (FB3-Audit content_mitte): über Einstellungen/Patchnotes versteckt
+## home_entry das HUD OHNE Router-Travel — die Tour-Karte duckt sich dann
+## ebenfalls (WhatsNextHint-W14-Regel), statt über der zentrierten
+## Settings-Spalte zu schweben (Overlap GuideWeiter × Sprachzeile).
+func _sync_card_visible() -> void:
+	if _card == null:
+		return
+	if _hud_ref != null and is_instance_valid(_hud_ref) and not _hud_ref.visible:
+		_card.visible = false
+		return
+	var router := get_node_or_null("/root/SceneRouter")
+	if router == null or not router.has_method("get_current_scene"):
+		_card.visible = true
+		return
+	_card.visible = router.get_current_scene() is RoomBase
 
 
 ## Über Vollbild-Screens (Arcade/Album/...) hält die Karte den Mund; die
@@ -415,11 +434,7 @@ func _on_travel_started(_target: StringName = &"", _travel_type: int = 0) -> voi
 
 
 func _on_travel_finished(_target: Variant = null) -> void:
-	var router := get_node_or_null("/root/SceneRouter")
-	if router == null or not router.has_method("get_current_scene"):
-		_card.visible = true
-		return
-	_card.visible = router.get_current_scene() is RoomBase
+	_sync_card_visible()
 
 
 ## --- Save --------------------------------------------------------------------

@@ -19,6 +19,9 @@ const EDGE_Y := 12.0
 ## Meta-Keys: gemerkte Design-Basis bzw. Opt-out fürs Schrift-Skalieren.
 const META_FONT_BASE := "fb3_font_base"
 const META_FONT_SKIP := "fb3_font_skip"
+## Meta-Flag der Inhaltsspalte W16 (content_frame bzw. SHRINK_CENTER-Muster)
+## — der FB3-Audit prüft markierte Container auf Safe-Zentrierung + Deckel.
+const META_CONTENT_COLUMN := "w16_content_column"
 
 
 ## Alle Layout-Kenngrößen EINMAL pro Durchlauf einsammeln.
@@ -49,6 +52,32 @@ static func frame(rows: Control, m: Dictionary, edge_x := EDGE_X, edge_y := EDGE
 	rows.offset_right = -float(insets["right"]) - edge_x * f
 	rows.offset_top = float(insets["top"]) + edge_y * f
 	rows.offset_bottom = -float(insets["bottom"]) - edge_y * f
+
+
+## Breite der zentrierten Inhaltsspalte (pur, Inhaltsspalte W16) — nutzt
+## die vorhandene Safe-Klemmung von card_width.
+static func content_width(m: Dictionary, base := AcTokens.CONTENT_MAX_WIDTH) -> float:
+	return card_width(m, base)
+
+
+## Wie frame(), aber horizontal ZENTRIERT + breiten-gedeckelt (Inhaltsspalte
+## W16): Zentrierung im SAFE-Rechteck (asymmetrische Insets!), gleiche
+## FULL_RECT+Offsets-Mechanik wie frame(). Der Hintergrund (AcWallpaper,
+## separates FULL_RECT-Kind) läuft weiter vollflächig durch.
+static func content_frame(rows: Control, m: Dictionary, base := AcTokens.CONTENT_MAX_WIDTH) -> void:
+	var canvas: Vector2 = m["canvas"]
+	var insets: Dictionary = m["insets"]
+	var f: float = m["f"]
+	var w := content_width(m, base)
+	var safe_l := float(insets["left"])
+	var safe_r := canvas.x - float(insets["right"])
+	var x := safe_l + ((safe_r - safe_l) - w) / 2.0
+	rows.set_anchors_preset(Control.PRESET_FULL_RECT)
+	rows.offset_left = x
+	rows.offset_right = -(canvas.x - x - w)
+	rows.offset_top = float(insets["top"]) + EDGE_Y * f
+	rows.offset_bottom = -float(insets["bottom"]) - EDGE_Y * f
+	rows.set_meta(META_CONTENT_COLUMN, true)
 
 
 ## Tippfläche auf den physischen Touch-Floor heben (beide Achsen — kurze

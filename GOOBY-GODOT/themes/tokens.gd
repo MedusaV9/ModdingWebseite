@@ -45,6 +45,10 @@ const RADIUS_CARD_LG := 36  # --card-radius-lg 1.75rem
 const RADIUS_ROW := 14  # --radius-row 0.875rem
 const RADIUS_PILL := 999  # Pill-Sentinel (StyleBox clampt auf Halbhöhe)
 
+# ── Inhaltsspalte W16 (Rework „Inhalte in die Mitte“) ───────────────────────
+const CONTENT_MAX_WIDTH := 660.0  # Design-px; = geeichte Settings-Sektionsbreite
+const CONTENT_EDGE_X := 16.0  # Mindest-Seitenrand in der Safe-Area (ScreenShell.EDGE_X)
+
 # ── Schatten ────────────────────────────────────────────────────────────────
 const SHADOW_COLOR := Color(0.2902, 0.2314, 0.2118, 0.18)  # --shadow-pop
 const SHADOW_SIZE := 10

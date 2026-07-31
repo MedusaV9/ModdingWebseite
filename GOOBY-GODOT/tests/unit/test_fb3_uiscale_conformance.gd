@@ -39,6 +39,26 @@ const MUST_USE_SAFE_AREA: Array[String] = [
 	"res://scripts/minigames/ui/pause_modal.gd",
 ]
 const SAFE_MARKERS: Array[String] = ["safe_insets_canvas", "ScreenShell.metrics", "_safe_insets"]
+## Inhaltsspalte W16: umgestellte Screens MÜSSEN zentriert bauen — direkt
+## über ScreenShell.content_frame( ODER über das dokumentierte Alternativ-
+## Muster für Ganzseiten-Scroller/Settings (EXPAND|SHRINK_CENTER-Content
+## plus Breiten-Deckel), das das Meta-Flag ScreenShell.META_CONTENT_COLUMN
+## setzt. Der FB3-Audit prüft die Geometrie; DIESER Scan hält die Screens
+## headless (bei jedem Push) auf dem Muster.
+const MUST_USE_CONTENT_COLUMN: Array[String] = [
+	"res://scripts/ui/friends/friends_screen.gd",
+	"res://scripts/ui/profil/profil_screen.gd",
+	"res://scripts/ui/profil/achievements_screen.gd",
+	"res://scripts/ui/postkarten/postkarten_screen.gd",
+	"res://scripts/ui/codes/codes_screen.gd",
+	"res://scripts/ui/dlc/dlc_screen.gd",
+	"res://scripts/ui/galerie/galerie_screen.gd",
+	"res://scripts/ui/settings_screen.gd",
+]
+const CONTENT_COLUMN_MARKERS: Array[String] = [
+	"ScreenShell.content_frame(",
+	"ScreenShell.META_CONTENT_COLUMN",
+]
 
 
 func _source(path: String) -> String:
@@ -69,6 +89,18 @@ func test_screens_respektieren_die_safe_area() -> void:
 				found = true
 				break
 		assert_true(found, "%s zieht die Safe-Area-Insets" % path)
+
+
+func test_screens_nutzen_die_inhaltsspalte() -> void:
+	for path in MUST_USE_CONTENT_COLUMN:
+		var src := _source(path)
+		assert_true(not src.is_empty(), "%s lesbar" % path)
+		var found := false
+		for marker in CONTENT_COLUMN_MARKERS:
+			if src.contains(marker):
+				found = true
+				break
+		assert_true(found, "%s nutzt die W16-Inhaltsspalte (content_frame/Meta-Flag)" % path)
 
 
 func test_pause_modal_bleibt_kompakt_konfiguriert() -> void:

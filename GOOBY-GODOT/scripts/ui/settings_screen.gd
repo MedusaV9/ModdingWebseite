@@ -107,6 +107,10 @@ func _ready() -> void:
 	var scroll := _scroll()
 	if scroll != null:
 		scroll.scroll_deadzone = 0
+		# Inhaltsspalte W16: der sichtbare Scrollbalken WÜRDE dem Scroll-Kind
+		# Layout-Breite stehlen (~4 px) und die zentrierte Sektions-Spalte
+		# aus dem Safe-Zentrum schieben — Touch-Drag/Mausrad bleiben.
+		scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
 		scroll.gui_input.connect(_on_scroll_gui_input)
 	_rebuild()
 
@@ -275,10 +279,23 @@ func _apply_scale() -> void:
 	_back.add_theme_font_size_override("font_size", int(AcTokens.FONT_SIZE_BODY * _tf))
 	# W14: Kopfzeilen-Konsistenz — Titelgröße wie auf allen anderen Screens.
 	_title.add_theme_font_size_override("font_size", int(AcTokens.FONT_SIZE_TITLE * _tf))
-	var avail := canvas.x - float(insets["left"]) - float(insets["right"]) - 48.0
-	_sections.custom_minimum_size = Vector2(minf(660.0 * _f, maxf(avail, 1.0)), 0.0)
-	_sections.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	# Inhaltsspalte W16: Sektionen zentriert + WIRKSAM gedeckelt — vorher
+	# ließ EXPAND_FILL die 660er-Breite nur als Mindestbreite wirken. Das
+	# EXPAND-Bit ist nötig: erst damit gibt der ScrollContainer die volle
+	# Breite zum Zentrieren her (SHRINK_CENTER allein = linksbündig).
+	var avail := canvas.x - float(insets["left"]) - float(insets["right"])
+	avail -= 2.0 * AcTokens.CONTENT_EDGE_X * _f
+	var spalte := minf(AcTokens.CONTENT_MAX_WIDTH * _f, maxf(avail, 1.0))
+	_sections.custom_minimum_size = Vector2(spalte, 0.0)
+	_sections.size_flags_horizontal = Control.SIZE_EXPAND | Control.SIZE_SHRINK_CENTER
 	_sections.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	_sections.set_meta(ScreenShell.META_CONTENT_COLUMN, true)
+	# Kopfzeile in derselben Spalte: der Zurück-Knopf rückt mit „in die
+	# Mitte“ (Leitidee W16 + FB3-Check content_mitte, Vollständigkeit).
+	var header := _back.get_parent() as Control
+	header.custom_minimum_size = Vector2(spalte, 0.0)
+	header.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	header.set_meta(ScreenShell.META_CONTENT_COLUMN, true)
 
 
 ## ------------------------------------------------------------- Abschnitte

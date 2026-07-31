@@ -99,6 +99,9 @@ func _build_ui() -> void:
 	_scroll = ScrollContainer.new()
 	_scroll.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	# Inhaltsspalte W16: sichtbarer Scrollbalken stiehlt dem Scroll-Kind
+	# Layout-Breite und schöbe die zentrierte Spalte aus der Mitte.
+	_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
 	_scroll.scroll_deadzone = 24
 	add_child(_scroll)
 	_rows = VBoxContainer.new()
@@ -365,7 +368,14 @@ func _apply_metrics() -> void:
 		return
 	_m = ScreenShell.metrics(get_viewport())
 	var f := float(_m["f"])
-	ScreenShell.frame(_rows, _m, 24.0, 16.0)
+	# Inhaltsspalte W16, Scroll-Ergonomie-Variante: der GANZE Screen scrollt
+	# (Scroll = FULL_RECT-Wurzel, volle Wisch-Fläche bleibt) — daher kein
+	# content_frame, sondern die Content-VBox im Scroll zentrieren + deckeln.
+	# EXPAND-Bit nötig: erst damit gibt der ScrollContainer die volle Breite
+	# zum Zentrieren her (SHRINK_CENTER allein = linksbündig, engine-geprüft).
+	_rows.size_flags_horizontal = Control.SIZE_EXPAND | Control.SIZE_SHRINK_CENTER
+	_rows.custom_minimum_size.x = ScreenShell.content_width(_m)
+	_rows.set_meta(ScreenShell.META_CONTENT_COLUMN, true)
 	ScreenShell.scale_fonts(self, f)
 	for paar: Dictionary in _parallax_cover:
 		var rahmen: Control = paar["rahmen"]
