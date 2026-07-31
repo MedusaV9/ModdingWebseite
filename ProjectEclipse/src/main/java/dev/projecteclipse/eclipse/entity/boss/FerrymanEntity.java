@@ -13,6 +13,8 @@ import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
 import dev.projecteclipse.eclipse.core.state.LivesApi;
 import dev.projecteclipse.eclipse.entity.DeckhandEntity;
 import dev.projecteclipse.eclipse.entity.EclipseEntities;
+import dev.projecteclipse.eclipse.entity.geo.EclipseGeoAnimations;
+import dev.projecteclipse.eclipse.entity.geo.EclipseGeoMonster;
 import dev.projecteclipse.eclipse.ferryman.ArenaBuilder;
 import dev.projecteclipse.eclipse.lang.ServerLang;
 import dev.projecteclipse.eclipse.ferryman.ArenaDimension;
@@ -58,12 +60,15 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MoverType;
 import net.minecraft.world.entity.ai.attributes.Attributes;
-import net.minecraft.world.entity.monster.Monster;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.network.PacketDistributor;
+import software.bernie.geckolib.animation.AnimationController;
+import software.bernie.geckolib.animation.AnimationState;
+import software.bernie.geckolib.animation.PlayState;
+import software.bernie.geckolib.animation.RawAnimation;
 
 /**
  * The Ferryman — day-14 finale boss on the limbo ghost ship
@@ -109,8 +114,14 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * ship restored, everyone stays a ghost. If no living fighter boards for
  * {@value #RESET_TICKS}t the fight resets the same way (minus the announcement).</p>
  */
-public class FerrymanEntity extends Monster {
+public class FerrymanEntity extends EclipseGeoMonster {
     public static final float BASE_MAX_HEALTH = 400.0F;
+    // GeckoLib one-shot names on the frozen `action` controller (MA4 conversion). The
+    // sheet lives in assets/eclipse/animations/entity/ferryman.animation.json; loops
+    // (idle_row / walk / idle_plant / kneel_loop) run on the `base` controller instead.
+    public static final String ANIM_KNEEL = "kneel";
+    public static final String ANIM_OAR_SWEEP = "oar_sweep";
+    public static final String ANIM_HARVEST = "harvest";
     /**
      * Deck X of the stern anchor (bow is +X): six blocks inboard of the stern cap
      * (x=−13). C9: −16 put the spawn 1.5 blocks off the DOOR_X=−17 bulkhead and the
@@ -265,6 +276,82 @@ public class FerrymanEntity extends Monster {
         this.noCulling = true;
         this.setPersistenceRequired();
         this.xpReward = 100;
+    }
+
+    // --- GeckoLib (MA4 conversion: geo/animations/textures resolve off "ferryman") ---
+
+    /** Rowing idle (8 s loop with the deck-swell Molang — replaces the old bob code). */
+    private static final RawAnimation IDLE_ROW_ANIM =
+            EclipseGeoAnimations.loop("ferryman", "idle_row");
+    /** P2 kneel sustain (breathing loop under the guttered coronas). */
+    private static final RawAnimation KNEEL_LOOP_ANIM =
+            EclipseGeoAnimations.loop("ferryman", "kneel_loop");
+    /** P3 planted-oar idle (the toll stance; the oar stands beside him). */
+    private static final RawAnimation IDLE_PLANT_ANIM =
+            EclipseGeoAnimations.loop("ferryman", "idle_plant");
+
+    @Override
+    public String geoId() {
+        return "ferryman";
+    }
+
+    /** The idle slot is the rowing loop ({@code idle_row}, not the frozen "idle" name). */
+    @Override
+    protected RawAnimation idleAnim() {
+        return IDLE_ROW_ANIM;
+    }
+
+    /** Heavier blend than the plan default 4: kneel/plant stance changes read weighty. */
+    @Override
+    protected int baseTransitionTicks() {
+        return 6;
+    }
+
+    /**
+     * {@code base} controller state machine, keyed off the synced fight flags:
+     * kneel_loop while kneeling (P2), walk while stalking, idle_plant in the P3 planted
+     * stance, idle_row otherwise. During the scripted death collapse the controller
+     * STOPS — the held {@code death} one-shot on the {@code action} controller owns
+     * every bone until the body fades.
+     *
+     * <p>Stalking is read off the client-interpolated position delta, NOT
+     * {@code state.isMoving()} — the boss is a gravity-free {@code setDeltaMovement}
+     * drifter whose limb swing never crosses vanilla's threshold (census pitfall F-9;
+     * DriftLantern pattern).</p>
+     */
+    @Override
+    protected PlayState handleBaseState(AnimationState<?> state) {
+        if (this.deathTime > 0) {
+            return PlayState.STOP;
+        }
+        if (isKneeling()) {
+            return state.setAndContinue(KNEEL_LOOP_ANIM);
+        }
+        double dx = this.getX() - this.xOld;
+        double dz = this.getZ() - this.zOld;
+        if (dx * dx + dz * dz > 1.0E-4D) {
+            return state.setAndContinue(walkAnim());
+        }
+        if (isPlanted()) {
+            return state.setAndContinue(IDLE_PLANT_ANIM);
+        }
+        return state.setAndContinue(idleAnim());
+    }
+
+    /**
+     * One-shots on the frozen {@code action} controller: {@code kneel} (P2 sink-down,
+     * fired with CUE_FERRY_KNEEL_CORONA), {@code oar_sweep} (fired at telegraph START —
+     * its 1.3 s strike beat lands on the {@value #SWEEP_TELEGRAPH_TICKS}t contact tick
+     * with CUE_FERRY_OAR_SWEEP), {@code harvest} (Seelenernte — B7's
+     * {@code FerrymanSpecialAttacks.startHarvest} triggers it; timed to A3's
+     * ferry_harvest_ring 2.0 s contraction) and the inherited held {@code death}.
+     */
+    @Override
+    protected void registerActionTriggers(AnimationController<?> action) {
+        super.registerActionTriggers(action);
+        action.triggerableAnim(ANIM_KNEEL, EclipseGeoAnimations.once(geoId(), ANIM_KNEEL));
+        action.triggerableAnim(ANIM_OAR_SWEEP, EclipseGeoAnimations.once(geoId(), ANIM_OAR_SWEEP));
+        action.triggerableAnim(ANIM_HARVEST, EclipseGeoAnimations.once(geoId(), ANIM_HARVEST));
     }
 
     // --- summoning ---
@@ -545,6 +632,10 @@ public class FerrymanEntity extends Monster {
             }
             this.telegraphTimer = SWEEP_TELEGRAPH_TICKS;
             setTelegraphing(true);
+            // MA4: the 2.2 s oar_sweep one-shot fires NOW — its coil (0–1.1 s) is the
+            // readable telegraph and its 1.3 s whip lands on this telegraph's contact
+            // tick (25t), the same tick doSweep() deals damage + CUE_FERRY_OAR_SWEEP.
+            triggerAction(ANIM_OAR_SWEEP);
             level.playSound(null, this.blockPosition(), SoundEvents.TRIDENT_RIPTIDE_3.value(),
                     SoundSource.HOSTILE, 1.2F, 0.8F);
             EclipseMod.LOGGER.info("Ferryman sweep telegraph: oar raised ({}t windup)", SWEEP_TELEGRAPH_TICKS);
@@ -667,6 +758,10 @@ public class FerrymanEntity extends Monster {
     private void startCrewPhase(ServerLevel level) {
         this.crewActive = true;
         setKneeling(true);
+        // MA4: the 1 s kneel one-shot sinks him down (body drop lands at ~0.55 s, under
+        // the CUE_FERRY_KNEEL_CORONA bloom below); the base controller then holds
+        // kneel_loop for as long as DATA_KNEELING stays set.
+        triggerAction(ANIM_KNEEL);
         this.kneelHintShown.clear(); // Each crew phase re-teaches the counter once per player.
         if (inArena()) {
             // C10 arena beat: the ring lanterns blow out and the kneel simply holds for
@@ -1105,6 +1200,10 @@ public class FerrymanEntity extends Monster {
             setKneeling(false);
             setGazing(false);
             setPlanted(true);
+            // MA4: the 5 s held death one-shot (stagger → oar plant → lantern gutter →
+            // upright fold, final shudder on the DEATH_BELL_TICK toll) — same 100t
+            // length as the scripted tickDeath collapse.
+            triggerAction(EclipseGeoAnimations.ANIM_DEATH);
             this.noPhysics = true; // The deck no longer holds him: the body sinks through it.
             this.bossEvent.removeAllPlayers(); // No bar lingering at 0% through the collapse.
             restoreShip(serverLevel, "boss defeated");
@@ -1225,7 +1324,12 @@ public class FerrymanEntity extends Monster {
         }
     }
 
-    /** Client pose hook: 0..1 through the scripted death collapse ({@code 0} while alive). */
+    /**
+     * Client pose hook: 0..1 through the scripted death collapse ({@code 0} while alive).
+     * @deprecated MA4: only the legacy {@code FerrymanModel} reads this — the GeckoLib
+     *             {@code death} sheet owns the collapse now. Remove with the old model.
+     */
+    @Deprecated
     public float deathProgress(float partialTick) {
         if (this.deathTime <= 0) {
             return 0.0F;
@@ -1236,7 +1340,8 @@ public class FerrymanEntity extends Monster {
     /**
      * Client render hook: whether the lantern flame still burns. During the death collapse
      * it gutters — a 4t on/off sputter for the first {@value #DEATH_FLAME_OUT_TICKS}t, then
-     * dead for good ({@code FerrymanRenderer.EmissiveLayer} drops it from the glow pass).
+     * dead for good ({@code FerrymanGeoRenderer} hides the {@code glow_flame} and
+     * {@code glow_robe} bones off this).
      */
     public boolean isLanternFlameLit() {
         if (this.deathTime <= 0) {
@@ -1349,9 +1454,19 @@ public class FerrymanEntity extends Monster {
         }
     }
 
-    // --- client animation hooks ---
+    // --- legacy client animation hooks (MA4: superseded by the GeckoLib sheet) ---
+    //
+    // The GeckoLib controllers above own every pose now; this block only keeps the
+    // @Deprecated FerrymanModel/FerrymanRenderer pair compiling (they are overwritten in
+    // the renderer map by FerrymanRenderers' LOW-priority registration and never draw).
+    // Delete the whole block together with those classes + the EclipseEntityRenderers
+    // lines (patch in docs/plans_v3/session_0730/MA4_FERRYMAN_REPORT.md).
 
-    /** Advances the smooth clock and eases the raise/kneel/plant pose weights (client only). */
+    /**
+     * Advances the smooth clock and eases the raise/kneel/plant pose weights (client only).
+     * @deprecated MA4: feeds only the legacy vanilla model — remove with it.
+     */
+    @Deprecated
     private void tickClientAnim() {
         // W4 IDEA-16 #3 death slow-mo: the final-bell collapse plays at ~0.2x clock speed
         // (Herald tickClientAnim lerp pattern; client-only illusion, server untouched).
@@ -1388,27 +1503,47 @@ public class FerrymanEntity extends Monster {
         this.swayBoost += (Mth.clamp(drift * 4.0F, 0.0F, 1.0F) - this.swayBoost) * 0.1F;
     }
 
-    /** Smooth model animation age (rowing idle, chain swing; advances ×1.4 in P3). */
+    /**
+     * Smooth model animation age (rowing idle, chain swing; advances ×1.4 in P3).
+     * @deprecated MA4: legacy vanilla-model hook — remove with {@code FerrymanModel}.
+     */
+    @Deprecated
     public float animAge(float partialTick) {
         return Mth.lerp(partialTick, this.animAgePrev, this.animAge);
     }
 
-    /** 0..1 blend toward the raised-oar telegraph pose. */
+    /**
+     * 0..1 blend toward the raised-oar telegraph pose.
+     * @deprecated MA4: legacy vanilla-model hook — remove with {@code FerrymanModel}.
+     */
+    @Deprecated
     public float raiseAmount(float partialTick) {
         return Mth.lerp(partialTick, this.raiseLerpPrev, this.raiseLerp);
     }
 
-    /** 0..1 blend toward the P2 kneel-at-the-stern pose. */
+    /**
+     * 0..1 blend toward the P2 kneel-at-the-stern pose.
+     * @deprecated MA4: legacy vanilla-model hook — remove with {@code FerrymanModel}.
+     */
+    @Deprecated
     public float kneelAmount(float partialTick) {
         return Mth.lerp(partialTick, this.kneelLerpPrev, this.kneelLerp);
     }
 
-    /** 0..1 blend toward the P3 planted-oar pose. */
+    /**
+     * 0..1 blend toward the P3 planted-oar pose.
+     * @deprecated MA4: legacy vanilla-model hook — remove with {@code FerrymanModel}.
+     */
+    @Deprecated
     public float plantAmount(float partialTick) {
         return Mth.lerp(partialTick, this.plantLerpPrev, this.plantLerp);
     }
 
-    /** 0..1 progress through the one-shot sweep-contact swing, or −1 while idle. */
+    /**
+     * 0..1 progress through the one-shot sweep-contact swing, or −1 while idle.
+     * @deprecated MA4: legacy vanilla-model hook — remove with {@code FerrymanModel}.
+     */
+    @Deprecated
     public float sweepSwing(float partialTick) {
         if (this.swingTicks < 0) {
             return -1.0F;
@@ -1416,7 +1551,11 @@ public class FerrymanEntity extends Monster {
         return Math.min(1.0F, (this.swingTicks + partialTick) / SWEEP_SWING_TICKS);
     }
 
-    /** 0..1 eased deck-drift factor (lantern chain + tatter sway amplitude). */
+    /**
+     * 0..1 eased deck-drift factor (lantern chain + tatter sway amplitude).
+     * @deprecated MA4: legacy vanilla-model hook — remove with {@code FerrymanModel}.
+     */
+    @Deprecated
     public float swayBoost(float partialTick) {
         return Mth.lerp(partialTick, this.swayBoostPrev, this.swayBoost);
     }

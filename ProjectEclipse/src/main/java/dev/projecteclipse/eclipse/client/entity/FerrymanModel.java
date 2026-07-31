@@ -37,7 +37,14 @@ import net.neoforged.api.distmarker.OnlyIn;
  * vertically beside him ({@code plantAmount}; a running telegraph still lifts it — plant
  * is applied first, raise last). The death collapse folds the body toward the lantern
  * while the chain stills so the last light hangs plumb.</p>
+ *
+ * @deprecated MA4 GeckoLib conversion: superseded by {@code geo/entity/ferryman.geo.json}
+ *             + {@code FerrymanGeoRenderer} (registered LAST via {@code FerrymanRenderers},
+ *             so this model never draws). Still referenced by the SHARED
+ *             {@code EclipseEntityRenderers} — delete this class together with those
+ *             lines per the patch in {@code docs/plans_v3/session_0730/MA4_FERRYMAN_REPORT.md}.
  */
+@Deprecated
 @OnlyIn(Dist.CLIENT)
 public class FerrymanModel extends HierarchicalModel<FerrymanEntity> {
     /** Robe pivot height in px above ground (root sits at y=24 = ground). */

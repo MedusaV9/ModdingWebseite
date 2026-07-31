@@ -24,7 +24,14 @@ import net.neoforged.api.distmarker.OnlyIn;
  * burning inside the hood at any light level, and pulls the whole lantern housing into the
  * glow pass while the P3 Lantern Gaze is marking a player (the server syncs
  * {@code isGazing()}).
+ *
+ * @deprecated MA4 GeckoLib conversion: superseded by {@code FerrymanGeoRenderer}
+ *             (registered LAST via {@code FerrymanRenderers}' LOW-priority subscriber,
+ *             so this renderer never draws). Still referenced by the SHARED
+ *             {@code EclipseEntityRenderers} — delete this class together with those
+ *             lines per the patch in {@code docs/plans_v3/session_0730/MA4_FERRYMAN_REPORT.md}.
  */
+@Deprecated
 @OnlyIn(Dist.CLIENT)
 public class FerrymanRenderer extends MobRenderer<FerrymanEntity, FerrymanModel> {
     public static final ResourceLocation TEXTURE =
