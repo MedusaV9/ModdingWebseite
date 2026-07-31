@@ -20,6 +20,7 @@
         { "name": "HDR", "type": "float", "count": 4, "values": [ 0.0, 0.0, 0.0, 1.0 ] },
         { "name": "HDRMode", "type": "int", "count": 1, "values": [ 0 ] },
         { "name": "SoftDistance", "type": "float", "count": 1, "values": [ 0.75 ] },
-        { "name": "NearFade", "type": "float", "count": 1, "values": [ 0.5 ] }
+        { "name": "NearFade", "type": "float", "count": 1, "values": [ 0.5 ] },
+        { "name": "SceneDepthValid", "type": "float", "count": 1, "values": [ 1.0 ] }
     ]
 }

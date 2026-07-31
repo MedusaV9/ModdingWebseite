@@ -6,6 +6,13 @@
 // procedural soft disc from the quad UVs masks the effect, so no texture is needed;
 // particle alpha (colorOverLifetime) scales the whole distortion. GameTime is the
 // vanilla day-fraction uniform — multiplied back to ticks for the wobble clock.
+//
+// Degenerate-scene-sampler hardening: if the scene color copy is dead (sample is
+// exactly black — the copy target's clear color; see A0_SHADER_FOUNDATION.md §7) or
+// SceneColorValid is set to 0.0, the shader falls back to a low-key translucent
+// TintColor accent instead of stamping a dark disc over the world. On pitch-black
+// scene pixels (void/unlit caves) the same fallback yields a faint tint shimmer,
+// which reads better than an invisible glitch anyway.
 
 uniform sampler2D SamplerSceneColor;
 
@@ -18,6 +25,7 @@ uniform float SplitStrength;
 uniform float WobbleAmp;
 uniform float WobbleSpeed;
 uniform vec4 TintColor;
+uniform float SceneColorValid;
 
 in float vertexDistance;
 in vec2 texCoord0;
@@ -49,7 +57,12 @@ void main() {
     float r = texture(SamplerSceneColor, clamp(uv + split, vec2(0.001), vec2(0.999))).r;
     float g = texture(SamplerSceneColor, uv).g;
     float b = texture(SamplerSceneColor, clamp(uv - split, vec2(0.001), vec2(0.999))).b;
+    vec3 sceneRGB = vec3(r, g, b);
 
-    vec3 scene = vec3(r, g, b) * mix(vec3(1.0), TintColor.rgb * vertexColor.rgb, TintColor.a * mask);
-    fragColor = vec4(scene, alpha);
+    // Degenerate scene color -> low-key TintColor accent (no dark-disc artifact).
+    float sceneLive = step(1.0e-6, dot(sceneRGB, vec3(1.0))) * step(0.5, SceneColorValid);
+    vec3 tinted = sceneRGB * mix(vec3(1.0), TintColor.rgb * vertexColor.rgb, TintColor.a * mask);
+    vec3 fallbackRGB = TintColor.rgb * vertexColor.rgb;
+    float fallbackAlpha = alpha * 0.45 * TintColor.a;
+    fragColor = vec4(mix(fallbackRGB, tinted, sceneLive), mix(fallbackAlpha, alpha, sceneLive));
 }

@@ -135,6 +135,7 @@ der Kamera aus. Für Nebel/Rauch/Staub, der nicht mehr hart im Boden clippen sol
 |---|---|---|
 | `SoftDistance` | 0.75 | Blöcke, über die an Geometrie ausgeblendet wird |
 | `NearFade` | 0.5 | Blöcke Kamera-Nahblende |
+| `SceneDepthValid` | 1.0 | 0.0 = Depth-Read manuell deaktivieren (Fallback auf normales Alpha, siehe §7) |
 | `MainTexture` (Sampler) | — | Partikeltextur, PFLICHT via `textures=` |
 | `HDR`/`HDRMode` | aus | wie hdr_particle (Bloom) |
 
@@ -153,6 +154,7 @@ Kugel-Impostor auf dem Partikel-Quad: Fresnel-Rim glüht (HDR-fähig via `RimHDR
 | `FresnelPower` | 2.5 | Kantenschärfe des Rims |
 | `FaceAlpha` | 0.08 | Restdeckung der Fläche |
 | `IntersectWidth` | 0.35 | Breite der Geometrie-Schnittnaht (Blöcke) |
+| `SceneDepthValid` | 1.0 | 0.0 = Schnittnaht manuell deaktivieren (Rim/Fläche unberührt, siehe §7) |
 
 ### 2.3 `eclipse:rgb_split_distort` — Glitch-Akzent
 
@@ -165,7 +167,8 @@ auf dem Quad. KEINE Textur nötig.
 | `SplitStrength` | 0.006 | Kanaltrennung (Screen-UV-Einheiten) |
 | `WobbleAmp` | 0.004 | UV-Wobble-Amplitude |
 | `WobbleSpeed` | 1.6 | Wobble-Frequenz-Multiplikator |
-| `TintColor` | (1.0, 0.45, 0.95, 0.25) | Einfärbung, Alpha = Mischanteil |
+| `TintColor` | (1.0, 0.45, 0.95, 0.25) | Einfärbung, Alpha = Mischanteil; auch Fallback-Farbe (§7) |
+| `SceneColorValid` | 1.0 | 0.0 = SceneColor-Read manuell deaktivieren (TintColor-Fallback, siehe §7) |
 
 Achtung: liest die Szene VOR dem Partikel-Pass — mehrere überlappende
 rgb_split-Partikel sehen einander nicht (kein Stacking der Verzerrung).
@@ -261,3 +264,72 @@ komplette Referenzkette jedes `custom_shader`-Materials:
   auf GLI-MAGENTA-Palette setzen.
 - **A7 (neue Shader)**: `particle_fx.vsh` wiederverwenden, JSON + .fsh nach Schema 1.3
   daneben legen — `material_shader("eclipse:<neu>")` und validate greifen automatisch.
+
+## 7. Degenerierte-Szenen-Sampler-Verhalten (A0-Follow-up, Session 0731)
+
+### 7.1 Forensik: warum `SamplerSceneDepth`/`SamplerSceneColor` schwarz bleiben können
+
+A3 fand in-game (llvmpipe/Mesa 25.2.8): >16.000 ×
+`GL_INVALID_OPERATION in glBlitFramebuffer(depth attachment format mismatch)`,
+ausschließlich wenn ein Custom-Shader mit Szenen-Sampler zeichnet. Bytecode-Forensik
+(Photon 2.1.5 `RenderPassPipeline` + LDLib2 `HDRTarget`, alle Konstanten dekodiert):
+
+1. Photon hängt zu Pass-Beginn **Minecrafts Haupt-Depth-TEXTUR direkt** als Attachment
+   an sein `DRAW_TARGET` (`attachDepthBuffer(getMainRenderTarget())` — zero-copy).
+2. Fordert ein Material einen Szenen-Sampler an, füllt `updateSceneSampler()` lazy den
+   `SCENE_SAMPLER` per **einem einzigen** `glBlitFramebuffer` mit Maske
+   `0x4100 = COLOR|DEPTH` (`HDRTarget.copyDepthAndColorFrom` →
+   `copyFromInternal(src, w, h, 16640, 9728)`).
+3. `SCENE_SAMPLER` alloziert sein Depth als **unsized** `GL_DEPTH_COMPONENT` (6402) +
+   `GL_FLOAT` (`HDRTarget.createBuffers`, Nicht-Stencil-Pfad). Vanillas `MainTarget`
+   tut dasselbe — solange NICHTS das Main-Target anfasst, matchen die Formate.
+4. **ABER**: Supplementaries ruft client-seitig
+   `Minecraft.getMainRenderTarget().enableStencil()` auf
+   (`SupplementariesForgeClient`, bytecode-verifiziert; einziger `enableStencil`-Treffer
+   im gesamten Mod-Set). NeoForges Stencil-Patch realloziert das Main-Depth dann als
+   **sized `GL_DEPTH32F_STENCIL8`** (Z32F+S8, `RenderTarget.java` Zeile 110).
+5. Damit blittet Schritt 2 Depth zwischen `Z32F_S8` (Quelle = Main-Depth via
+   DRAW_TARGET) und `Z24X8/Z32F ohne Stencil` (Ziel = SCENE_SAMPLER). Die GL-Spez
+   (§18.3.2 BlitFramebuffer) verlangt bei `GL_DEPTH_BUFFER_BIT` **identische**
+   Depth-Formate → `GL_INVALID_OPERATION`, und der GESAMTE Blit unterbleibt —
+   **auch der Farbteil**. Deshalb sind Depth UND Color schwarz (Clear-Werte).
+
+**Einordnung: strukturell, nicht llvmpipe-only.** Mesa (llvmpipe, radeonsi/AMD,
+iris/Intel — also praktisch alle Linux-Spieler) erzwingt den Format-Match strikt
+(Vergleich Z-Bits + Datentyp). NVIDIAs proprietärer Treiber ist hier notorisch
+tolerant und führt den Blit trotzdem aus — darum fiel es upstream nie auf. Trigger ist
+JEDER Mod, der `enableStencil()` aufs Main-Target ruft (in unserem Pack:
+Supplementaries, unkonditional beim Client-Start). Kein Photon-/LDLib2-Konfig-Schalter
+und kein alternativer Kopierpfad (z. B. `glCopyTexSubImage2D`) existiert —
+`copyFromInternal` ist die einzige Implementierung, `PhotonConfig` kennt nur
+Bloom-/Iris-Optionen. Ein echter Fix wäre ein Mixin (Depth-Blit vom Color-Blit trennen
+oder SCENE_SAMPLER-Depth-Format ans Main-Target angleichen) — Empfehlung ans
+Core-Team, NICHT Teil von A0 (geteilte Java-Pfade).
+
+### 7.2 Shader-seitige Härtung (seit Session 0731 in allen 3 Haus-Shadern)
+
+Erkennungs-Heuristik: Ein Raw-Depth-Sample von **exakt 0.0** kann nie von gerenderter
+Geometrie stammen (das wäre AUF der Near-Plane); die tote Szenen-Kopie liefert
+flächig 0.0. SceneColor-seitig ist die tote Kopie exakt schwarz (Clear-Farbe 0,0,0,0).
+
+| Shader | Verhalten bei toter Szenen-Kopie | Manueller Schalter |
+|---|---|---|
+| `soft_particle` | Soft-Term → 1.0: rendert als **normales Alpha-Quad** (NearFade bleibt aktiv) statt Komplett-Discard | `SceneDepthValid = 0.0` |
+| `fresnel_shell` | Schnittnaht → 0.0 (kein Bogus-Glühen); Rim + Fläche unverändert | `SceneDepthValid = 0.0` |
+| `rgb_split_distort` | Pro Pixel Fallback auf **TintColor-Akzent** mit reduziertem Alpha (`alpha * 0.45 * TintColor.a`) — keine dunkle Scheibe | `SceneColorValid = 0.0` |
+
+Konsequenzen für Abnehmer:
+
+- **Kein Verlust auf gesunden Treibern**: Heuristik greift nur bei exakt-0.0-Samples.
+- Auf kaputten Treibern sehen soft_particle-Effekte wie normale Alpha-Partikel aus
+  (kein Soft-Fade an Geometrie — Design-Degradation, kein Totalausfall mehr).
+- rgb_split-Effekte: auf stockschwarzen Szenen-Pixeln (Void, unbeleuchtete Höhle)
+  greift der TintColor-Fallback pro Pixel — ein schwacher Farbschimmer statt
+  Unsichtbarkeit; gewollt.
+- Der GL-Error-Spam im Log bleibt (Photon versucht die Kopie weiterhin jeden Frame,
+  in dem ein Szenen-Sampler-Material sichtbar ist) — kosmetisch, kein Crash.
+- In-Game-Verifikation auf dieser VM (llvmpipe = Kaputt-Treiber-Referenzfall):
+  vorher soft_mist komplett unsichtbar, nach FX-Cache-Clear
+  (`/photon_client clear_client_fx_cache`) + Respawn deutlich sichtbare Mist-Quads;
+  kein Shader-Compile-Fehler, kein hdr_particle-Fallback im Log.
+

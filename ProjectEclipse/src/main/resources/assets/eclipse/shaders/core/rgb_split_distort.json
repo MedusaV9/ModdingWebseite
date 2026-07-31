@@ -19,6 +19,7 @@
         { "name": "SplitStrength", "type": "float", "count": 1, "values": [ 0.006 ] },
         { "name": "WobbleAmp", "type": "float", "count": 1, "values": [ 0.004 ] },
         { "name": "WobbleSpeed", "type": "float", "count": 1, "values": [ 1.6 ] },
-        { "name": "TintColor", "type": "float", "count": 4, "values": [ 1.0, 0.45, 0.95, 0.25 ] }
+        { "name": "TintColor", "type": "float", "count": 4, "values": [ 1.0, 0.45, 0.95, 0.25 ] },
+        { "name": "SceneColorValid", "type": "float", "count": 1, "values": [ 1.0 ] }
     ]
 }

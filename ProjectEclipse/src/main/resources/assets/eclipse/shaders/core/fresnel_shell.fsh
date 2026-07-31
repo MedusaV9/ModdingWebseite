@@ -6,6 +6,11 @@
 // ramp, and wherever the shell passes near world geometry a SceneDepth seam highlight
 // lights up (the official Photon force-field tutorial recipe). RimHDRColor.rgb *
 // RimHDRColor.a feeds bloom on the rim/seam only, so the face never blooms.
+//
+// Degenerate-scene-sampler hardening: if the scene depth copy is dead (raw sample
+// exactly 0.0, see A0_SHADER_FOUNDATION.md §7) or SceneDepthValid is set to 0.0,
+// the seam term is dropped (0.0) instead of glowing at the bogus near-plane
+// distance — the fresnel rim and face are unaffected and keep the design intact.
 
 #moj_import <fog.glsl>
 
@@ -24,6 +29,7 @@ uniform vec4 RimHDRColor;
 uniform float FresnelPower;
 uniform float FaceAlpha;
 uniform float IntersectWidth;
+uniform float SceneDepthValid;
 
 in float vertexDistance;
 in vec2 texCoord0;
@@ -32,11 +38,24 @@ in float viewZ;
 
 out vec4 fragColor;
 
-float sceneViewZ(vec2 screenUV) {
-    float depth = texture(SamplerSceneDepth, screenUV).r;
+float sceneViewZFromDepth(float depth, vec2 screenUV) {
     vec4 ndc = vec4(screenUV * 2.0 - 1.0, depth * 2.0 - 1.0, 1.0);
     vec4 view = U_InverseProjectionMatrix * ndc;
     return -view.z / view.w;
+}
+
+// Geometry-intersection seam; 0.0 (= no seam) whenever the scene depth is unusable.
+float seamTerm(vec2 screenUV) {
+    if (SceneDepthValid < 0.5) {
+        return 0.0;
+    }
+    float depth = texture(SamplerSceneDepth, screenUV).r;
+    if (depth <= 0.0) {
+        return 0.0;
+    }
+    float seam = 1.0 - clamp(abs(sceneViewZFromDepth(depth, screenUV) - viewZ)
+                             / max(IntersectWidth, 1.0e-4), 0.0, 1.0);
+    return seam * seam;
 }
 
 void main() {
@@ -54,8 +73,7 @@ void main() {
     // Intersection seam: highlight where the shell meets world geometry (flat-quad
     // depth approximation — good enough for the "touching the ground" ring read).
     vec2 screenUV = (gl_FragCoord.xy - U_ViewPort.xy) / U_ViewPort.zw;
-    float seam = 1.0 - clamp(abs(sceneViewZ(screenUV) - viewZ) / max(IntersectWidth, 1.0e-4), 0.0, 1.0);
-    seam *= seam;
+    float seam = seamTerm(screenUV);
 
     float glow = max(fresnel, seam);
     vec4 color = ShellColor * vertexColor * ColorModulator;
