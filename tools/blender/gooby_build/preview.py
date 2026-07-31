@@ -6,7 +6,8 @@
 #   blender --background --factory-startup --python preview.py -- \
 #       --blend /tmp/gooby_build/stage1_mesh.blend \
 #       --out /tmp/gooby_build/previews --prefix mesh \
-#       [--action idle --frame 12] [--shapekey emotion_happy=1.0 ...]
+#       [--action idle --frame 12] [--shapekey emotion_happy=1.0 ...] \
+#       [--views front,three_quarter,side]   (Default: alle drei)
 
 import math
 import os
@@ -33,6 +34,7 @@ def main():
     action = None
     frame = 1
     shapekeys = {}
+    views_filter = None
     i = 0
     while i < len(argv):
         a = argv[i]
@@ -49,6 +51,8 @@ def main():
         elif a == "--shapekey":
             k, v = argv[i + 1].split("=")
             shapekeys[k] = float(v); i += 2
+        elif a == "--views":
+            views_filter = [v for v in argv[i + 1].split(",") if v]; i += 2
         else:
             i += 1
 
@@ -108,6 +112,11 @@ def main():
         "three_quarter": (1.4, -1.6, 0.75),
         "side": (2.1, 0.0, 0.62),
     }
+    if views_filter:
+        unbekannt = [v for v in views_filter if v not in views]
+        if unbekannt:
+            raise SystemExit(f"FEHLER: unbekannte Views: {unbekannt}")
+        views = {k: views[k] for k in views_filter}
     os.makedirs(out_dir, exist_ok=True)
     for name, loc in views.items():
         cam.location = loc

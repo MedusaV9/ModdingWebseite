@@ -45,6 +45,18 @@ const TAT_FRISCH_MS := 120_000
 const KOMM_HER_DISTANZ := 1.2
 ## Näher als das steht er schon beim Spieler — kein Extra-Lauf nötig.
 const KOMM_HER_MIN := 1.5
+## W13C: Idle-Akt-Rotation — beim Wander-Takt gönnt sich Gooby manchmal
+## einen Idle-Variety-Clip an Ort und Stelle statt loszulaufen. Die zwei
+## neuen Rig-Clips sind bewusst selten (zusammen ~10 % der Akte), der Rest
+## bleibt der bekannte Streifzug. Auswahl ist PURE (Roll wird injiziert).
+const IDLE_AKT_WANDER := "wander"
+const IDLE_AKTE: Array[Dictionary] = [
+	{"akt": IDLE_AKT_WANDER, "gewicht": 0.90},
+	{"akt": "idle_ear_flick", "gewicht": 0.05},
+	{"akt": "idle_stretch", "gewicht": 0.05},
+]
+## Wie lange ein Idle-Variety-Loop steht, bevor der Rig in move zurückkehrt.
+const IDLE_CLIP_DAUER_S := 2.6
 
 ## Schlaf-Logik (pure) für die Tat-Bubble („Psst… er schläft").
 const Sleep := preload("res://scripts/logic/sleep.gd")
@@ -354,9 +366,37 @@ func _physics_process(delta: float) -> void:
 	_wander_timer -= delta
 	if _wander_timer <= 0.0:
 		_wander_timer = _rng.randf_range(WANDER_WAIT_MIN, WANDER_WAIT_MAX)
+		var akt := waehle_idle_akt(_rng.randf())
+		if akt != IDLE_AKT_WANDER:
+			_spiele_idle_clip(akt)
+			return
 		var spot := _pick_idle_spot()
 		if spot != Vector3.INF:
 			_start_walking(spot)
+
+
+## W13C PURE: gewichteter Idle-Akt für einen Roll 0..1 — "wander" (Streifzug
+## wie bisher) oder einer der Idle-Variety-Clips (je ~5 %).
+static func waehle_idle_akt(roll: float) -> String:
+	var total := 0.0
+	for eintrag: Dictionary in IDLE_AKTE:
+		total += float(eintrag["gewicht"])
+	var r := clampf(roll, 0.0, 0.999999) * total
+	var summe := 0.0
+	for eintrag: Dictionary in IDLE_AKTE:
+		summe += float(eintrag["gewicht"])
+		if r < summe:
+			return str(eintrag["akt"])
+	return IDLE_AKT_WANDER
+
+
+## W13C: Idle-Variety-Clip an Ort und Stelle — der Rig kehrt über
+## play_clip_for selbst in den move-State zurück, das Wandern pausiert nur
+## über den normalen _wander_timer.
+func _spiele_idle_clip(clip: String) -> void:
+	if rig == null:
+		return
+	rig.play_clip_for(clip, IDLE_CLIP_DAUER_S)
 
 
 ## Freie-Standplatz-Suche (Doc F §7): 12 Samples aus freien Grid-Zellen,

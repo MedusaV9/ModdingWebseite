@@ -32,6 +32,27 @@ const EMOTIONS: Array[String] = [
 	"dizzy",
 ]
 const EDITOR_MORPHS: Array[String] = ["eye_width", "eye_size", "ear_length"]
+## W13C-Rig-Vertrag: die 6 P1-Clips (F §1.4) + 2 Idle-Variety-Clips aus der
+## Blender-Pipeline (tools/blender/gooby_build). Namen sind Frozen-Contract.
+const CLIP_DANCE := "dance"
+const CLIP_REFUSE := "refuse"
+const CLIP_RAGDOLL_FLAIL := "ragdoll_flail"
+const CLIP_GRIP_FLOOR := "grip_floor"
+const CLIP_TOMATO_THROW := "tomato_throw"
+const CLIP_CEILING_CLING := "ceiling_cling"
+const CLIP_IDLE_EAR_FLICK := "idle_ear_flick"
+const CLIP_IDLE_STRETCH := "idle_stretch"
+## W13C: Loop-Semantik der neuen Clips (Loops leben als StateMachine-
+## Zustände, One-Shots laufen über den OneShot-Layer).
+const W13C_LOOP_CLIPS: Array[String] = [
+	CLIP_DANCE,
+	CLIP_RAGDOLL_FLAIL,
+	CLIP_GRIP_FLOOR,
+	CLIP_CEILING_CLING,
+	CLIP_IDLE_EAR_FLICK,
+	CLIP_IDLE_STRETCH,
+]
+const W13C_ONESHOT_CLIPS: Array[String] = [CLIP_REFUSE, CLIP_TOMATO_THROW]
 ## Loop-Clips, die als StateMachine-Zustände leben (idle/walk stecken im BlendSpace).
 const LOOP_STATES: Array[String] = [
 	"sit",
@@ -39,6 +60,12 @@ const LOOP_STATES: Array[String] = [
 	"squeeze_door",
 	"brush_teeth",
 	"build_hammer",
+	CLIP_DANCE,
+	CLIP_RAGDOLL_FLAIL,
+	CLIP_GRIP_FLOOR,
+	CLIP_CEILING_CLING,
+	CLIP_IDLE_EAR_FLICK,
+	CLIP_IDLE_STRETCH,
 ]
 const EMOTION_LERP_SPEED := 4.0  # 1/0.25 s
 const LOOK_CLAMP_DEG := 25.0
@@ -93,6 +120,9 @@ const SAVE_MORPH_MAP := {
 ## 0.3 quetscht sichtbar (~17 % schmaler) und lässt das Gesicht komplett.
 const SQUEEZE_DOOR_AMOUNT := 0.3
 const SQUEEZE_LERP_SPEED := 5.0
+## W13C: Gähn-Öffnung des mouth_open-Morphs beim idle_stretch (unter 1.0 —
+## voll auf verschluckt der Kopf die Mund-Decals, s. SQUEEZE-Befund).
+const YAWN_OPEN := 0.85
 
 ## REST-3 Pflege-Darstellung (P1-Bug Gewicht + Krankheits-/Müdigkeits-Optik).
 ## Gewicht läuft NICHT über einen Shapekey (der Rig-Vertrag hat keinen
@@ -120,6 +150,9 @@ var _tree: AnimationTree
 var _action_clip: AnimationNodeAnimation
 var _clip_map: Dictionary = {}  # logischer Name -> Animation-Name im Player
 var _pending_oneshot := ""
+## W13C: gerade laufender zeitbegrenzter Loop-Clip (play_clip_for).
+var _timed_clip := ""
+var _yawn_tween: Tween
 
 var _emotion := "neutral"
 var _emotion_weights: Dictionary = {}  # emotion -> aktuelles Gewicht
@@ -366,6 +399,53 @@ func play_clip(clip: String) -> void:
 		_pending_oneshot = logical
 		_tree.set("parameters/action/request", AnimationNodeOneShot.ONE_SHOT_REQUEST_FIRE)
 	squeeze(SQUEEZE_DOOR_AMOUNT if logical == "squeeze_door" else 0.0)
+	# W13C: der Streck-Clip gähnt über den BESTEHENDEN mouth_open-Morph mit
+	# (die Bones macht der GLB-Clip — der Rig-Vertrag bleibt unangetastet).
+	if logical == CLIP_IDLE_STRETCH:
+		_start_yawn()
+
+
+## W13C: Loop-Clip zeitbegrenzt spielen (Idle-Variety, Tanz-Momente,
+## Halteposen) — danach zurück in den move-State + clip_finished wie bei
+## One-Shots. Einmal-Clips laufen unverändert über den OneShot-Layer.
+## Ein zweiter Aufruf übernimmt den Timer (der alte endet dann früher —
+## für die seltenen Idle-Akte bewusst simpel gehalten).
+func play_clip_for(clip: String, seconds: float) -> void:
+	var logical := clip.trim_suffix("-loop")
+	play_clip(logical)
+	if not LOOP_STATES.has(logical) or not is_inside_tree():
+		return
+	_timed_clip = logical
+	# Methoden-Callable statt Lambda (B2): stirbt der Rig vor dem Timeout,
+	# trennt Godot die Verbindung automatisch.
+	get_tree().create_timer(maxf(seconds, 0.05)).timeout.connect(_end_timed_clip)
+
+
+func _end_timed_clip() -> void:
+	if _timed_clip.is_empty():
+		return
+	var done := _timed_clip
+	_timed_clip = ""
+	if current_state() == done:
+		_playback().travel("move")
+	clip_finished.emit(done)
+
+
+## W13C: Gähn-Mund zum idle_stretch — genüsslich auf, kurz halten, zu.
+func _start_yawn() -> void:
+	if _mesh == null or not is_inside_tree():
+		return
+	if _yawn_tween != null and _yawn_tween.is_valid():
+		_yawn_tween.kill()
+	_yawn_tween = create_tween()
+	_yawn_tween.tween_interval(0.35)
+	_yawn_tween.tween_method(_set_yawn, 0.0, YAWN_OPEN, 0.55)
+	_yawn_tween.tween_interval(0.5)
+	_yawn_tween.tween_method(_set_yawn, YAWN_OPEN, 0.0, 0.6)
+
+
+func _set_yawn(value: float) -> void:
+	_set_shape("mouth_open", value)
 
 
 ## 0.0 = idle, 1.0 = walk (BlendSpace1D).

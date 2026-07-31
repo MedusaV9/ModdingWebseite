@@ -1,7 +1,8 @@
-# build_anims.py — Stage 3: die 11 M1-Clips als deterministische Keyframe-
-# Tabellen. Jeder Clip ist eine Pose-Funktion pose(t) (Portierung der
-# goobyAnims.js-Sinus/Ease-Mathematik auf Bones), gesampelt mit 24 fps in
-# eine bpy-Action; jede Action landet auf einem eigenen NLA-Track
+# build_anims.py — Stage 3: die 11 M1-Clips + 8 W13C-Clips (6 P1-Clips aus
+# F §1.4 + 2 Idle-Variety) als deterministische Keyframe-Tabellen. Jeder Clip
+# ist eine Pose-Funktion pose(t) (Portierung der goobyAnims.js-Sinus/Ease-
+# Mathematik auf Bones), gesampelt mit 24 fps in eine bpy-Action; jede Action
+# landet auf einem eigenen NLA-Track
 # (Track-Name = Clip-Name, Loops mit "-loop"-Suffix für den Godot-Import).
 #
 # Aufruf:
@@ -244,6 +245,212 @@ def pose_celebrate(t):
     }
 
 
+# ---------------------------------------------------------------------------
+# W13C: die 6 P1-Clips (F §1.4) + 2 Idle-Variety-Clips.
+# Loop-Funktionen sind periodisch über die Clip-Dauer (Sinus mit ganzzahliger
+# Frequenz bzw. Hüllkurven, die an beiden Enden auf 0 stehen).
+# ---------------------------------------------------------------------------
+def pose_dance(t):
+    # Hüft-Wackeln + Ohren-Schwung + kleine Hopser; 1.2 s = 2 Beats @100 BPM
+    ph = t / 1.2
+    step = math.sin(ph * TAU)            # Side-Step links ↔ rechts
+    hop = abs(math.sin(ph * TAU))        # Mini-Hopser auf jeden Beat
+    land = 1.0 - hop
+    return {
+        ("root", "location"): (step * 0.045 * S, 0, hop * 0.055 * S),
+        ("root", "scale"): (1 + land * 0.06, 1 - land * 0.08 + hop * 0.03,
+                            1 + land * 0.06),
+        ("hips", "rotation_euler"): (0, step * 0.28, step * 0.16),
+        ("chest", "rotation_euler"): (0, -step * 0.12, -step * 0.06),
+        ("head", "rotation_euler"): (-hop * 0.05, step * 0.10, -step * 0.08),
+        ("arm.L", "rotation_euler"): (0.9 + step * 0.55, 0, -0.3),  # Arm-Pumps
+        ("arm.R", "rotation_euler"): (0.9 - step * 0.55, 0, 0.3),
+        ("ear.L.01", "rotation_euler"): (hop * 0.3 - 0.1, 0, step * 0.18),
+        ("ear.R.01", "rotation_euler"): (hop * 0.3 - 0.1, 0, step * 0.18),
+        ("ear.L.02", "rotation_euler"): (hop * 0.35, 0, step * 0.12),
+        ("ear.R.02", "rotation_euler"): (hop * 0.35, 0, step * 0.12),
+        ("tail", "rotation_euler"): (0, 0, -step * 0.25),
+    }
+
+
+def pose_refuse(t):
+    # "Mag nicht": Kopfschütteln ×3 + Arme verschränken + Fuß-Stampf
+    d = 1.2
+    env = ss(t / 0.15) * ss((d - t) / 0.3)
+    shake = math.sin((min(t, 0.85) / 0.85) * math.pi * 6) * env
+    cross = ss(t / 0.35) * ss((d - t) / 0.25)
+    if t < 0.5:
+        lift = 0.0
+    elif t < 0.68:
+        lift = ss((t - 0.5) / 0.18)          # Fuß hebt
+    else:
+        lift = 1.0 - ss((t - 0.68) / 0.1)    # ... und stampft schnell
+    stomp = math.sin(max(0.0, min(1.0, (t - 0.74) / 0.24)) * math.pi)
+    return {
+        ("head", "rotation_euler"): (0.06 * env, shake * 0.5, 0),
+        ("chest", "rotation_euler"): (0, shake * 0.1, 0),
+        # verschränken = zur Brust hoch + einwärts (L: +z, R: −z)
+        ("arm.L", "rotation_euler"): (cross * 1.15, 0, cross * 0.55),
+        ("arm.R", "rotation_euler"): (cross * 1.15, 0, -cross * 0.55),
+        ("leg.R", "rotation_euler"): (-lift * 0.55, 0, 0),
+        ("foot.R", "rotation_euler"): (lift * 0.5, 0, 0),
+        ("root", "scale"): (1 + stomp * 0.08, 1 - stomp * 0.1, 1 + stomp * 0.08),
+        ("ear.L.01", "rotation_euler"): (0.25 * env, 0, shake * 0.12),
+        ("ear.R.01", "rotation_euler"): (0.25 * env, 0, shake * 0.12),
+        ("ear.L.02", "rotation_euler"): (0.15 * env, 0, shake * 0.15),
+        ("ear.R.02", "rotation_euler"): (0.15 * env, 0, shake * 0.15),
+    }
+
+
+def pose_ragdoll_flail(t):
+    # Schüttel-Stufe 3: panisches Rudern aller Glieder (statt Pur-Tween)
+    ph = t / 1.0
+    f = math.sin(ph * TAU * 3)
+    fb = math.sin(ph * TAU * 3 + math.pi)
+    wob = math.sin(ph * TAU * 2)
+    return {
+        ("root", "rotation_euler"): (wob * 0.12, 0,
+                                     math.sin(ph * TAU * 2 + 0.6) * 0.1),
+        ("root", "location"): (0, 0, abs(f) * 0.02 * S),
+        ("arm.L", "rotation_euler"): (1.2 + f * 1.0, 0, -0.5 - fb * 0.25),
+        ("arm.R", "rotation_euler"): (1.2 + fb * 1.0, 0, 0.5 + f * 0.25),
+        ("leg.L", "rotation_euler"): (f * 0.45, 0, 0),
+        ("leg.R", "rotation_euler"): (fb * 0.45, 0, 0),
+        ("foot.L", "rotation_euler"): (0.3 + fb * 0.4, 0, 0),
+        ("foot.R", "rotation_euler"): (0.3 + f * 0.4, 0, 0),
+        ("head", "rotation_euler"): (-0.15 + wob * 0.08, f * 0.1, 0),
+        ("ear.L.01", "rotation_euler"): (-0.3 + f * 0.35, 0, 0.15),
+        ("ear.R.01", "rotation_euler"): (-0.3 + fb * 0.35, 0, -0.15),
+        ("ear.L.02", "rotation_euler"): (f * 0.4, 0, 0.1),
+        ("ear.R.02", "rotation_euler"): (fb * 0.4, 0, -0.1),
+    }
+
+
+def pose_grip_floor(t):
+    # Schüttel-Stufe 2: geduckt, Pfoten krallen den Boden, Ohren flach
+    ph = t / 2.0
+    tremble = math.sin(ph * TAU * 8)
+    claw = math.sin(ph * TAU * 2)
+    return {
+        ("root", "location"): (tremble * 0.004 * S, 0, -0.06 * S),
+        ("root", "rotation_euler"): (0.45, 0, 0),      # nach vorn ducken
+        ("root", "scale"): (1.06, 0.82, 1.06),
+        ("head", "rotation_euler"): (-0.35, 0, tremble * 0.02),
+        ("ear.L.01", "rotation_euler"): (0.55, 0, 0.1),
+        ("ear.R.01", "rotation_euler"): (0.55, 0, -0.1),
+        ("ear.L.02", "rotation_euler"): (0.45, 0, 0.05),
+        ("ear.R.02", "rotation_euler"): (0.45, 0, -0.05),
+        ("arm.L", "rotation_euler"): (0.9 + claw * 0.12, 0, -0.25),
+        ("arm.R", "rotation_euler"): (0.9 - claw * 0.12, 0, 0.25),
+        ("leg.L", "rotation_euler"): (0.35, 0, 0),
+        ("leg.R", "rotation_euler"): (0.35, 0, 0),
+        ("foot.L", "rotation_euler"): (0.55 + claw * 0.15, 0, 0),
+        ("foot.R", "rotation_euler"): (0.55 - claw * 0.15, 0, 0),
+        ("tail", "rotation_euler"): (0.3, 0, 0),
+    }
+
+
+def pose_tomato_throw(t):
+    # Battleship-Tomate: ausholen → Wurf mit Körperdrehung → Follow-Through
+    if t < 0.35:
+        wind = ss(t / 0.35)
+        rel = 0.0
+    elif t < 0.5:
+        wind = 1.0 - ss((t - 0.35) / 0.15)
+        rel = ss((t - 0.35) / 0.15)          # der Wurf selbst ist SCHNELL
+    else:
+        wind = 0.0
+        rel = 1.0 - ss((t - 0.5) / 0.3) * 0.45
+    follow = math.sin(max(0.0, min(1.0, (t - 0.5) / 0.3)) * math.pi)
+    return {
+        ("hips", "rotation_euler"): (0, -wind * 0.35 + rel * 0.4, 0),
+        ("chest", "rotation_euler"): (-wind * 0.15 + rel * 0.2,
+                                      -wind * 0.4 + rel * 0.5, 0),
+        ("head", "rotation_euler"): (wind * 0.1 - rel * 0.1,
+                                     -wind * 0.25 + rel * 0.2, 0),
+        ("arm.R", "rotation_euler"): (-wind * 0.8 + rel * 2.6, 0,
+                                      wind * 0.5 + rel * 0.2),
+        ("arm.L", "rotation_euler"): (rel * 0.4, 0, -rel * 0.2),
+        ("root", "scale"): (1 + follow * 0.05, 1 - follow * 0.06,
+                            1 + follow * 0.05),
+        ("ear.L.01", "rotation_euler"): (rel * 0.3, 0, 0.08),
+        ("ear.R.01", "rotation_euler"): (rel * 0.3, 0, -0.08),
+    }
+
+
+def pose_ceiling_cling(t):
+    # SPIDERGOOBY: alle Viere gespreizt (der Gag flippt den Rig kopfüber —
+    # die gestreckten Ohren baumeln dann nach unten und pendeln sanft)
+    ph = t / 2.4
+    sway = math.sin(ph * TAU)
+    sway2 = math.sin(ph * TAU + 0.8)
+    breathe = math.sin(ph * TAU * 2 - math.pi / 2) * 0.5 + 0.5
+    return {
+        ("root", "rotation_euler"): (0.06, 0, sway * 0.05),
+        ("root", "scale"): (1 + breathe * 0.01, 1 + breathe * 0.025,
+                            1 + breathe * 0.01),
+        ("arm.L", "rotation_euler"): (1.6, 0, -0.75),
+        ("arm.R", "rotation_euler"): (1.6, 0, 0.75),
+        ("leg.L", "rotation_euler"): (-0.25, 0, 0),
+        ("leg.R", "rotation_euler"): (-0.25, 0, 0),
+        ("foot.L", "rotation_euler"): (0.5, 0, 0),
+        ("foot.R", "rotation_euler"): (0.5, 0, 0),
+        ("head", "rotation_euler"): (-0.2, sway * 0.06, 0),
+        ("ear.L.01", "rotation_euler"): (-0.08, 0, sway * 0.16 + 0.06),
+        ("ear.R.01", "rotation_euler"): (-0.08, 0, sway * 0.16 - 0.06),
+        ("ear.L.02", "rotation_euler"): (0, 0, sway2 * 0.2),
+        ("ear.R.02", "rotation_euler"): (0, 0, sway2 * 0.2),
+        ("tail", "rotation_euler"): (0.15, 0, sway * 0.1),
+    }
+
+
+def pose_idle_ear_flick(t):
+    # Idle-Variety: ruhiges Atmen, das linke Ohr zuckt doppelt, dazu ein
+    # Blinzeln (Augen-Bone-Squash — der Laufzeit-Blink bleibt unberührt)
+    d = 2.2
+    ph = t / d
+    breathe = math.sin(ph * TAU - math.pi / 2) * 0.5 + 0.5
+    fl_env = ss((t - 0.85) / 0.12) * ss((1.45 - t) / 0.15)
+    flick = math.sin((t - 0.85) * TAU * 5.0) * fl_env
+    blink = math.sin(max(0.0, min(1.0, (t - 0.95) / 0.16)) * math.pi)
+    eye_sq = 1.0 - blink * 0.85
+    return {
+        ("root", "scale"): (1 - breathe * 0.008, 1 + breathe * 0.03,
+                            1 - breathe * 0.008),
+        ("head", "rotation_euler"): (0, 0, fl_env * 0.06),
+        ("ear.L.01", "rotation_euler"): (flick * 0.3 - fl_env * 0.22, 0,
+                                         flick * 0.18),
+        ("ear.L.02", "rotation_euler"): (flick * 0.45 - fl_env * 0.15, 0,
+                                         flick * 0.12),
+        ("ear.R.01", "rotation_euler"): (math.sin(ph * TAU) * 0.03, 0, 0),
+        ("eye.L", "scale"): (1.0, 1.0, eye_sq),
+        ("eye.R", "scale"): (1.0, 1.0, eye_sq),
+        ("arm.L", "rotation_euler"): (0, 0, -breathe * 0.05),
+        ("arm.R", "rotation_euler"): (0, 0, breathe * 0.05),
+    }
+
+
+def pose_idle_stretch(t):
+    # Idle-Variety: genüsslich strecken (Gähn-Mund macht gooby_rig.gd zur
+    # Laufzeit über den bestehenden mouth_open-Morph)
+    d = 2.6
+    k = ss((t - 0.25) / 0.55) * ss((d - 0.35 - t) / 0.6)
+    quiver = math.sin(t * TAU * 4) * 0.02 * k
+    return {
+        ("root", "scale"): (1 - k * 0.05, 1 + k * 0.11 + quiver, 1 - k * 0.05),
+        ("root", "rotation_euler"): (-k * 0.14, 0, 0),   # nach hinten räkeln
+        ("chest", "rotation_euler"): (-k * 0.18, 0, 0),
+        ("head", "rotation_euler"): (-k * 0.38, 0, 0),   # Kopf in den Nacken
+        ("arm.L", "rotation_euler"): (k * 2.3, 0, -k * 0.5),
+        ("arm.R", "rotation_euler"): (k * 2.3, 0, k * 0.5),
+        ("ear.L.01", "rotation_euler"): (k * 0.35, 0, k * 0.1),
+        ("ear.R.01", "rotation_euler"): (k * 0.35, 0, -k * 0.1),
+        ("ear.L.02", "rotation_euler"): (k * 0.25, 0, 0),
+        ("ear.R.02", "rotation_euler"): (k * 0.25, 0, 0),
+        ("tail", "rotation_euler"): (k * 0.2, 0, 0),
+    }
+
+
 CLIP_POSES = {
     "idle": pose_idle,
     "idle_lookaround": pose_idle_lookaround,
@@ -256,6 +463,14 @@ CLIP_POSES = {
     "brush_teeth": pose_brush_teeth,
     "build_hammer": pose_build_hammer,
     "celebrate": pose_celebrate,
+    "dance": pose_dance,
+    "refuse": pose_refuse,
+    "ragdoll_flail": pose_ragdoll_flail,
+    "grip_floor": pose_grip_floor,
+    "tomato_throw": pose_tomato_throw,
+    "ceiling_cling": pose_ceiling_cling,
+    "idle_ear_flick": pose_idle_ear_flick,
+    "idle_stretch": pose_idle_stretch,
 }
 
 REST = {"location": (0.0, 0.0, 0.0), "rotation_euler": (0.0, 0.0, 0.0),

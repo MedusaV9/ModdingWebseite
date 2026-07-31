@@ -18,6 +18,15 @@ const EXPECTED_CLIPS: Array[String] = [
 	"brush_teeth",
 	"build_hammer",
 	"celebrate",
+	# W13C: 6 P1-Clips (F §1.4) + 2 Idle-Variety-Clips
+	"dance",
+	"refuse",
+	"ragdoll_flail",
+	"grip_floor",
+	"tomato_throw",
+	"ceiling_cling",
+	"idle_ear_flick",
+	"idle_stretch",
 ]
 const LOOPING_CLIPS: Array[String] = [
 	"idle",
@@ -27,6 +36,13 @@ const LOOPING_CLIPS: Array[String] = [
 	"squeeze_door",
 	"brush_teeth",
 	"build_hammer",
+	# W13C: Loops (One-Shots: refuse, tomato_throw)
+	"dance",
+	"ragdoll_flail",
+	"grip_floor",
+	"ceiling_cling",
+	"idle_ear_flick",
+	"idle_stretch",
 ]
 const EXPECTED_BONES: Array[String] = [
 	"root",

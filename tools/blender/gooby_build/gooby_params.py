@@ -244,6 +244,16 @@ CLIP_LIST = {
     "brush_teeth":     (1.1, True),
     "build_hammer":    (0.9, True),
     "celebrate":       (0.9, False),
+    # --- W13C: die 6 P1-Clips (F §1.4) + 2 Idle-Variety-Clips ---------------
+    # Loop/One-Shot semantisch: Zustände/Halteposen loopen, Aktionen enden.
+    "dance":           (1.2, True),    # Side-Steps + Arm-Pumps, 100 BPM (2 Beats)
+    "refuse":          (1.2, False),   # Kopfschütteln ×3 + Arme verschränken + Stampf
+    "ragdoll_flail":   (1.0, True),    # panisches Rudern (Schüttel-Stufe 3)
+    "grip_floor":      (2.0, True),    # geduckt, Pfoten krallen den Boden (Stufe 2)
+    "tomato_throw":    (0.8, False),   # ausholen → Wurf mit Körperdrehung
+    "ceiling_cling":   (2.4, True),    # SPIDERGOOBY: hängt an der Decke, Ohren baumeln
+    "idle_ear_flick":  (2.2, True),    # Ohr zuckt + Blinzeln (Idle-Variety)
+    "idle_stretch":    (2.6, True),    # genüsslich strecken (+ Gähn-Morph zur Laufzeit)
 }
 
 ANIM_FPS = 24
