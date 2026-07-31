@@ -40,6 +40,8 @@ var _bunnies: Array[Node3D] = []
 var _cans: Array[Node3D] = []
 var _carried: Node3D
 var _wind: GPUParticles3D
+## W15: großer Feier-Burst für die geglückte Rettung (Audit: Feedback dünn).
+var _rescue_burst: GPUParticles3D
 var _emotion := "happy"
 
 
@@ -109,6 +111,12 @@ func cheer(clip: String) -> void:
 ## Funkenwolke an einer Weltstelle (Landung, Rettung, Aufsammeln).
 func spark_at(wx: float, wy: float, color: Color) -> void:
 	Puff.fire(_spark, Vector3(wx, wy, 0.0), color)
+
+
+## W15: die GROSSE Rettungs-Fontäne über der Station — goldene Sterne
+## steigen als Garbe auf und regnen aus (zusätzlich zum kleinen spark_at).
+func rescue_burst_at(wx: float, wy: float) -> void:
+	Puff.fire(_rescue_burst, Vector3(wx, wy, 0.0))
 
 
 ## Bildschirmpixel eines Weltpunkts (2D-Overlays über der Bühne).
@@ -585,6 +593,26 @@ func _build_effects() -> void:
 	)
 	_wind.position = Vector3(-11.0, 6.5, 0.0)
 	add_child(_wind)
+	_rescue_burst = (
+		Puff
+		. burst(
+			DIR + "vfx/star_03.png",
+			{
+				"amount": 60,
+				"lifetime": 1.3,
+				"size": 0.42,
+				"dir": Vector3.UP,
+				"spread": 40.0,
+				"speed": Vector2(3.5, 7.0),
+				"gravity": Vector3(0.0, -3.4, 0.0),
+				"color": Color(1.0, 0.88, 0.5, 1.0),
+				"color_end": Color(1.0, 0.55, 0.75, 0.0),
+				"scale_range": Vector2(0.8, 1.6),
+				"local": false,
+			}
+		)
+	)
+	add_child(_rescue_burst)
 
 
 # ── Takt ──────────────────────────────────────────────────────────────────

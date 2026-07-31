@@ -13,6 +13,15 @@ extends MinigameBase
 ## so lesbar wie in der flachen Ansicht (das war im Web das 3D-Problem).
 ## Hochkant folgt die Kamera dem Schiff (die Welt ist 16 m breit), quer passt
 ## das ganze Feld ins Bild.
+##
+## W15/GAMESQA2-Steuergefühl (Audit: "Schub-Steuerung schwammig, Rettungs-
+## Feedback dünn"): die unsichtbaren Bildschirmdrittel sind jetzt als
+## Zonen-Leiste ◀ ▲ ▶ am unteren Rand SICHTBAR, die aktive Zone leuchtet
+## unter dem Finger auf (die zertifizierte Drittel-Zuordnung in
+## Logic.tilt_command_for bleibt zahlengleich). Hochkant folgt die Kamera
+## GEGLÄTTET mit Blickvorsprung in Flugrichtung (cam_target, pure) statt
+## hart zu klemmen, und die Rettung feiert mit einem großen Herz-Funken-
+## Burst der Bühne. Engine/Sim unverändert (zertifiziert).
 
 const Logic := preload("res://scripts/minigames/games/rocket_rescue/rocket_rescue_logic.gd")
 const Lander := preload("res://scripts/minigames/games/rocket_rescue/rocket_rescue_engine.gd")
@@ -24,6 +33,10 @@ const WORLD_H_FRAC := 0.8
 const GROUND_FRAC := 0.88
 
 const FUEL_COLOR := Color(0.45, 0.86, 0.6)
+
+## W15: Kameraglättung (1/s) + Blickvorsprung (s Flugzeit) fürs Hochkant-Follow.
+const CAM_SMOOTH := 6.0
+const CAM_LOOKAHEAD_S := 0.4
 
 var tune: Dictionary = {}
 var engine: RocketRescueEngine
@@ -88,7 +101,8 @@ func apply_view(size: Vector2) -> void:
 	if _fuel_label != null:
 		_fuel_label.position = Vector2(16.0, 10.0)
 		_rescue_label.position = Vector2(16.0, 48.0)
-		_hint_label.position = Vector2(view_size.x * 0.5 - 160.0, view_size.y - 46.0)
+		# W15: der Hinweis rückt ÜBER die neue Zonen-Leiste am unteren Rand.
+		_hint_label.position = Vector2(view_size.x * 0.5 - 160.0, view_size.y - 112.0)
 		_hint_label.size = Vector2(320.0, 40.0)
 	queue_redraw()
 
@@ -104,7 +118,7 @@ func _process(delta: float) -> void:
 		_handle_event(event)
 	score = engine.score()
 	ctx.report_score(score, 0)
-	_track_camera()
+	_track_camera(delta)
 	_sync_stage()
 	_update_labels()
 	queue_redraw()
@@ -194,15 +208,24 @@ func _fit_viewport() -> void:
 	apply_view(get_viewport_rect().size)
 
 
-## Hochkant folgt die Kamera dem Schiff, quer bleibt das Feld zentriert.
-func _track_camera() -> void:
+## Hochkant folgt die Kamera dem Schiff — W15: GEGLÄTTET plus Blickvorsprung
+## in Flugrichtung, statt hart am Schiff zu kleben (Framing-Audit).
+func _track_camera(delta: float) -> void:
 	var half_w := float(tune["WORLD_HALF_W"])
 	var visible_half := view_size.x * 0.5 / _world_scale
 	if visible_half >= half_w:
 		_cam_x = 0.0
 		return
-	var limit := half_w - visible_half
-	_cam_x = clampf(float(engine.state["x"]), -limit, limit)
+	var want := cam_target(
+		float(engine.state["x"]), float(engine.state["vx"]), half_w - visible_half
+	)
+	_cam_x += (want - _cam_x) * minf(1.0, CAM_SMOOTH * delta)
+
+
+## PURE Kamera-Zielposition (W15, testbar): Schiff + Blickvorsprung in
+## Flugrichtung, geklemmt auf die sichtbaren Weltränder.
+static func cam_target(x: float, vx: float, limit: float) -> float:
+	return clampf(x + vx * CAM_LOOKAHEAD_S, -limit, limit)
 
 
 func _handle_event(event: Dictionary) -> void:
@@ -267,6 +290,8 @@ func _on_rescue() -> void:
 	_beacon = float(Logic.ROCKET_JUICE["BEACON_POP_SEC"])
 	var pad: Dictionary = engine.layout["pad"]
 	_stage.spark_at(float(pad["x"]), float(pad["y"]) + 0.6, Color(1.0, 0.86, 0.45))
+	# W15: DIE Belohnung des Spiels bekommt die große Sterne-Fontäne.
+	_stage.rescue_burst_at(float(pad["x"]), float(pad["y"]) + 0.8)
 	_stage.pulse_glow(0.9)
 	_stage.cheer("celebrate")
 	_banner("mg.rocketRescue.saved", Color(0.99, 0.8, 0.45))
@@ -325,7 +350,36 @@ func _pad_pos() -> Vector2:
 ## Die WELT lebt in der 3D-Bühne — 2D bleibt nur, was Schrift und Balken ist.
 func _draw() -> void:
 	_draw_fuel_bar()
+	_draw_zone_guide()
 	_draw_flash()
+
+
+## W15: die drei unsichtbaren Touch-Drittel als lesbare Zonen-Leiste
+## ◀ ▲ ▶ — die Zone unter dem Finger leuchtet auf, solange er das Glas
+## berührt (Halten = Schub, Seite = Neigung; Mapping bleibt zahlengleich).
+func _draw_zone_guide() -> void:
+	var y := view_size.y - 74.0
+	var h := 58.0
+	var third := view_size.x / 3.0
+	var font := ThemeService.font(800)
+	var labels := ["◀", "▲", "▶"]
+	for i in 3:
+		var zone := i - 1
+		var active := _touching and _tilt_dir == zone
+		var rect := Rect2(third * i + 6.0, y, third - 12.0, h)
+		var bg := Color(0.5, 0.6, 1.0, 0.3) if active else Color(0.2, 0.2, 0.4, 0.16)
+		draw_rect(rect, bg)
+		draw_rect(rect, Color(0.8, 0.85, 1.0, 0.5 if active else 0.2), false, 2.0)
+		var col := Color(1.0, 0.95, 0.75, 0.95) if active else Color(0.8, 0.84, 1.0, 0.5)
+		draw_string(
+			font,
+			Vector2(rect.position.x, y + h * 0.68),
+			labels[i],
+			HORIZONTAL_ALIGNMENT_CENTER,
+			rect.size.x,
+			24,
+			col
+		)
 
 
 func _draw_fuel_bar() -> void:
