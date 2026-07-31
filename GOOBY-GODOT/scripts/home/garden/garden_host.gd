@@ -104,7 +104,18 @@ func pflanzen(crop_id: String) -> bool:
 	var ok := GardenState.pflanzen(_gs, _auswahl, crop_id)
 	if ok:
 		AudioDirector.try_play(self, "ui_confirm")
-	_nach_aktion(ok, "" if ok else I18nService.t("garten.kein_platz"))
+	var text := ""
+	if not ok:
+		# W15/CROPS: Saatgut-Crops scheitern meist am leeren Samen-Beutel —
+		# dann hilft der REHWEI-Hinweis statt „passt nicht hin“.
+		text = I18nService.t(
+			(
+				"garten.samen_fehlt"
+				if GardenState.samen_count(_gs, crop_id) == 0
+				else "garten.kein_platz"
+			)
+		)
+	_nach_aktion(ok, text)
 	return ok
 
 
@@ -124,6 +135,10 @@ func ernten() -> void:
 			"garten.ernte_erhalten",
 			{"menge": menge, "name": GardenCrops.display_name(crop_id, I18nService.get_locale())}
 		)
+		# W15/CROPS: knuffiger Gooby-Ernte-Kommentar, wo einer existiert
+		# (garten.spruch.<crop_id>, de+en) — hängt an der Ernte-Zeile.
+		if I18nService.has_key("garten.spruch.%s" % crop_id):
+			text += "\n" + I18nService.t("garten.spruch.%s" % crop_id)
 		AudioDirector.try_play(self, "ui_confirm")
 	_nach_aktion(menge > 0, text)
 
@@ -449,6 +464,12 @@ func _pflanzen_menue() -> void:
 		var btn := Button.new()
 		btn.theme_type_variation = "AcChip"
 		btn.text = GardenCrops.display_name(str(crop["id"]), I18nService.get_locale())
+		# W15/CROPS: Saatgut-Crops zeigen den Samen-Vorrat und sperren bei 0
+		# (Samen gibt es bei REHWEI; Alt-Crops bleiben frei pflanzbar).
+		var samen := GardenState.samen_count(_gs, str(crop["id"]))
+		if samen >= 0:
+			btn.text += " · " + I18nService.t("garten.samen_kurz", {"n": samen})
+			btn.disabled = samen <= 0
 		btn.pressed.connect(pflanzen.bind(str(crop["id"])))
 		zeile.add_child(btn)
 

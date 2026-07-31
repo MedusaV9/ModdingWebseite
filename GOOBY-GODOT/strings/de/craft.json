@@ -36,7 +36,10 @@
 			"r_hocker_rustikal": "Rustikaler Hocker",
 			"r_blumenkasten": "Blumenkasten",
 			"r_gartentisch": "Rustikaler Gartentisch",
-			"r_regal_rustikal": "Rustikales Regal"
+			"r_regal_rustikal": "Rustikales Regal",
+			"r_vogelhaus": "Vogelhäuschen",
+			"r_kraeuterkasten": "Kräuterkasten",
+			"r_windrad_deko": "Windrad-Deko"
 		}
 	},
 	"goobay": {
@@ -96,7 +99,15 @@
 		"zaun": "Zaun setzen",
 		"zaun_fehlt": "Dafür fehlen Zaun-Teile — bau welche in der Werkstatt!",
 		"tuer_waehlen": "Wähl die Tür-Zelle!",
-		"kein_platz": "Da passt es nicht hin."
+		"kein_platz": "Da passt es nicht hin.",
+		"samen_kurz": "Samen: {n}",
+		"samen_fehlt": "Dafür fehlen Samen — REHWEI verkauft welche!",
+		"spruch": {
+			"radish": "Radieschen! Klein, rund, ratzfatz — genau wie meine Geduld. Hihi.",
+			"corn": "Der Mais ist größer als ich! Ich hab trotzdem gewonnen. Knick, knack, meins!",
+			"eggplant": "Eine Aubergine! So glänzend, ich kann mich drin spiegeln. Hallo, ich!",
+			"pumpkin": "KÜRBIS! Der König des Gartens! Und ich bin sein flauschiger Ritter."
+		}
 	},
 	"shed": {
 		"titel": "Shed",

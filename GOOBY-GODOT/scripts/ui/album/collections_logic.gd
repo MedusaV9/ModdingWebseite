@@ -20,7 +20,10 @@ const XP_SET_COMPLETE := 50
 
 ## Godot-Garten-Crop-Id → veggies-Set-Eintrag (Web-Id). Nur Aliasse, die vom
 ## Web-Namen abweichen; Crops ohne Set-Pendant (pilz/ananas/chili) mappen
-## auf "" (kein Award).
+## auf "" (kein Award). W15/CROPS: radish/corn/eggplant/pumpkin sind jetzt
+## Garten-Crops mit WEB-IDENTISCHEN Ids — sie buchen über den Identitäts-
+## Fallback in veggie_entry_for_crop, brauchen also KEINEN Alias. Damit ist
+## das veggies-Set 8/8 erspielbar (Wache: tests/unit/test_w15_crops.gd).
 const VEGGIE_BY_CROP := {"tomate": "tomato", "melone": "watermelon", "salat": "salad"}
 
 ## Godot-Food-Katalog-Id → treats-Set-Eintrag (Web-Id). Nur Aliasse; Foods

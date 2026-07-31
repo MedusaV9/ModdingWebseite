@@ -12,6 +12,9 @@ extends RefCounted
 const WASSER_TROCKEN := 0.0
 const WASSER_NASS := 1.0
 const WIND_MALUS := 0.85
+## W15/CROPS: wind-empfindliche Crops (Mais) knicken im Randwind stärker
+## ein — dafür lohnt der Zaun doppelt (geschützt = NEUTRAL wie immer).
+const WIND_MALUS_EMPFINDLICH := 0.7
 const WIND_RING := 2
 const SCHATTEN_SONNE := 0.75
 const SCHATTEN_SCHATTEN := 1.1
@@ -38,16 +41,23 @@ static func wasser_faktor(
 
 
 ## Wind-Faktor: die äußeren WIND_RING Zellringe sind zugig, außer ein Zaun
-## schirmt sie ab oder sie liegen im Gewächshaus.
+## schirmt sie ab oder sie liegen im Gewächshaus. W15/CROPS: empfindliche
+## Crops (GardenCrops "wind": "empfindlich") trifft der Randwind härter.
 static func wind_faktor(
-	cell: Vector2i, size: Vector2i, geschuetzt: Dictionary, im_gewaechshaus: bool
+	cell: Vector2i,
+	size: Vector2i,
+	geschuetzt: Dictionary,
+	im_gewaechshaus: bool,
+	empfindlich := false
 ) -> float:
 	if im_gewaechshaus or geschuetzt.has(cell):
 		return NEUTRAL
 	var rand_abstand: int = mini(
 		mini(cell.x, cell.y), mini(size.x - 1 - cell.x, size.y - 1 - cell.y)
 	)
-	return NEUTRAL if rand_abstand >= WIND_RING else WIND_MALUS
+	if rand_abstand >= WIND_RING:
+		return NEUTRAL
+	return WIND_MALUS_EMPFINDLICH if empfindlich else WIND_MALUS
 
 
 ## Schatten-Faktor: Sonnen-Crops leiden im Schatten, Schatten-Crops mögen ihn.
@@ -78,11 +88,18 @@ static func faktoren(
 ) -> Dictionary:
 	var data := grid.cell(at)
 	var im_gh: bool = grid.greenhouse_cells().has(at)
-	var licht := str(GardenCrops.crop(str(data.get("crop", ""))).get("licht", "neutral"))
+	var crop := GardenCrops.crop(str(data.get("crop", "")))
+	var licht := str(crop.get("licht", "neutral"))
 	var wasser := wasser_faktor(
 		float(data.get("watered_until", 0.0)), jetzt_s, regen, grid.sprinkler_cells().has(at), im_gh
 	)
-	var wind := wind_faktor(at, grid.size, grid.fence_shielded_cells(), im_gh)
+	var wind := wind_faktor(
+		at,
+		grid.size,
+		grid.fence_shielded_cells(),
+		im_gh,
+		str(crop.get("wind", "normal")) == "empfindlich"
+	)
 	var schatten := schatten_faktor(schatten_zellen.has(at) and not im_gh, licht)
 	var gewaechshaus := gewaechshaus_faktor(im_gh)
 	return {

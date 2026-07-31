@@ -120,6 +120,9 @@ static func erweitern(gs: Object) -> bool:
 
 
 ## Beet anlegen bzw. bepflanzen. Exoten nur im Gewächshaus (Doc D §6.2).
+## W15/CROPS: Saatgut-Crops (GardenCrops.samen_item != "") verbrauchen beim
+## Pflanzen einen Samen aus inventory.items — ohne Samen kein Beet.
+## Alt-Crops ohne samen-Feld bleiben frei pflanzbar (unverändert).
 static func pflanzen(gs: Object, at: Vector2i, crop_id: String) -> bool:
 	var garden_grid := grid(gs)
 	var crop := GardenCrops.crop(crop_id)
@@ -131,6 +134,9 @@ static func pflanzen(gs: Object, at: Vector2i, crop_id: String) -> bool:
 		return false
 	var data := garden_grid.cell(at)
 	if str(data.get("crop", "")) != "":
+		return false
+	var samen := str(crop.get("samen", ""))
+	if samen != "" and samen_count(gs, crop_id) <= 0:
 		return false
 	(
 		garden_grid
@@ -146,10 +152,29 @@ static func pflanzen(gs: Object, at: Vector2i, crop_id: String) -> bool:
 		)
 	)
 	save_grid(gs, garden_grid)
+	if samen != "":
+		gs.update(
+			func(state: Dictionary) -> void:
+				var items: Dictionary = state["inventory"]["items"]
+				var rest := int(items.get(samen, 0)) - 1
+				if rest <= 0:
+					items.erase(samen)
+				else:
+					items[samen] = rest
+		)
 	# REST-2: Lebenszeit-Zähler für Quests/Sticker/Erinnerungen (der Key
 	# existiert seit v1 im Schema, wurde aber nie gebucht).
 	_bump_counter(gs, "plantings")
 	return true
+
+
+## W15/CROPS: wie viele Samen des Crops liegen im Inventar? (-1 = das Crop
+## braucht gar keine Samen — Alt-Crops sind frei pflanzbar.)
+static func samen_count(gs: Object, crop_id: String) -> int:
+	var samen := GardenCrops.samen_item(crop_id)
+	if samen == "":
+		return -1
+	return int(gs.get_value("inventory.items.%s" % samen, 0))
 
 
 ## Von Hand gießen (Eimer-Animation) — hält GIESS_STUNDEN.

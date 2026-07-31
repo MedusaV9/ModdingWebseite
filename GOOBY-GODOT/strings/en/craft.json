@@ -36,7 +36,10 @@
 			"r_hocker_rustikal": "Rustic stool",
 			"r_blumenkasten": "Planter box",
 			"r_gartentisch": "Rustic garden table",
-			"r_regal_rustikal": "Rustic shelf"
+			"r_regal_rustikal": "Rustic shelf",
+			"r_vogelhaus": "Birdhouse",
+			"r_kraeuterkasten": "Herb box",
+			"r_windrad_deko": "Pinwheel decoration"
 		}
 	},
 	"goobay": {
@@ -96,7 +99,15 @@
 		"zaun": "Place fence",
 		"zaun_fehlt": "You need fence pieces — craft some in the workshop!",
 		"tuer_waehlen": "Pick the door cell!",
-		"kein_platz": "That doesn't fit here."
+		"kein_platz": "That doesn't fit here.",
+		"samen_kurz": "Seeds: {n}",
+		"samen_fehlt": "You need seeds for that — REHWEI sells some!",
+		"spruch": {
+			"radish": "Radishes! Small, round, super speedy — just like my patience. Hehe.",
+			"corn": "The corn is taller than me! I still won. Snip, snap, mine!",
+			"eggplant": "An eggplant! So shiny I can see myself in it. Hello, me!",
+			"pumpkin": "PUMPKIN! King of the garden! And I'm its fluffiest knight."
+		}
 	},
 	"shed": {
 		"titel": "Shed",

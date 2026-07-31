@@ -42,6 +42,41 @@ const CROP_GLBS := {
 	"pilz": "res://assets/furniture/garten/mushroom_red.glb",
 }
 
+## W15/CROPS: Stufen-Modelle (Spross → … → reif) je Crop — verallgemeinert
+## das Salat-Zweistufen-Muster. LETZTER Eintrag = erntereifer Look, die
+## früheren verteilen sich gleichmäßig über die Wachstumsphase (Web-Referenz
+## GOOBY/src/data/crops.js STAGE_MODELS). Kürbis/Mais-Spätstufen nutzen die
+## schon committeten Ranch-GLBs, die Auberginen-Frucht das Food-Kit-GLB —
+## bewusst KEINE Duplikate im Repo.
+const CROP_STUFEN_GLBS := {
+	"radish":
+	[
+		"res://assets/furniture/garten/crops_leafsStageA.glb",
+		"res://assets/furniture/garten/crop_turnip.glb",
+	],
+	"corn":
+	[
+		"res://assets/furniture/garten/crops_cornStageA.glb",
+		"res://assets/furniture/garten/crops_cornStageB.glb",
+		"res://assets/ranch/natur/crops_cornStageC.glb",
+		"res://assets/ranch/natur/crops_cornStageD.glb",
+	],
+	"eggplant":
+	[
+		"res://assets/furniture/garten/crops_leafsStageA.glb",
+		"res://assets/furniture/garten/crops_leafsStageB.glb",
+		"res://assets/city/essen/eggplant.glb",
+	],
+	"pumpkin":
+	[
+		"res://assets/furniture/garten/crops_leafsStageA.glb",
+		"res://assets/ranch/natur/crop_pumpkin.glb",
+	],
+}
+
+## Ziel-Höhe (Meter) der reifen Pflanze — Mais wächst sichtbar HOCH.
+const CROP_STUFEN_HOEHE := {"radish": 0.3, "corn": 0.95, "eggplant": 0.45, "pumpkin": 0.4}
+
 
 ## Selbstgebautes Prop-GLB laden (1 Unit = 1 m, Ursprung am Boden bzw. wie
 ## im jeweiligen Builder dokumentiert). null, wenn das Asset fehlt — die
@@ -372,12 +407,28 @@ static func pflanze(crop_id: String, anteil: float) -> Node3D:
 			else "res://assets/furniture/garten/crops_leafsStageA.glb"
 		)
 		return modell_glb(stufe_pfad, 0.1 + 0.22 * anteil)
+	if CROP_STUFEN_GLBS.has(crop_id):
+		var stufen: Array = CROP_STUFEN_GLBS[crop_id]
+		var pfad := str(stufen[crop_stufen_index(stufen.size(), anteil)])
+		var max_h := float(CROP_STUFEN_HOEHE.get(crop_id, 0.4))
+		return modell_glb(pfad, max_h * (0.3 + 0.7 * anteil))
 	if CROP_GLBS.has(crop_id):
 		return modell_glb(str(CROP_GLBS[crop_id]), 0.12 + 0.3 * anteil)
 	var eigen := prop_glb("pflanze_%s" % crop_id)
 	if eigen != null:
 		eigen.scale = Vector3.ONE * (0.35 + 0.65 * anteil)
 	return eigen
+
+
+## W15/CROPS: Stufen-Modell-Index — reif (anteil 1.0) zeigt IMMER den
+## letzten Eintrag, die Wachstumsphase verteilt sich auf die früheren
+## (Web-Semantik aus GOOBY/src/data/crops.js). PURE, testbar.
+static func crop_stufen_index(anzahl: int, anteil: float) -> int:
+	if anzahl <= 1:
+		return 0
+	if anteil >= 1.0:
+		return anzahl - 1
+	return mini(anzahl - 2, int(maxf(0.0, anteil) * float(anzahl - 1)))
 
 
 ## Sammel-Spot: ein Stöckchen bzw. ein Blatt, das im Garten herumliegt.

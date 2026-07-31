@@ -71,6 +71,8 @@ DE ist führend; EN muss für jede Domain paritätisch sein (Test:
 | `netset.*` (Datei `strings/<locale>/netset.json` — Mehrspieler-Settings `netset.mp.*` inkl. Fehlertext-Mapping `netset.mp.fehler.*` + Dev-Werkzeugkasten `netset.dev.*`) | W14 NETSET | W14 |
 | `soul.linie.*` + `gespraech.*` + `fuettern.kommentar.*` (Datei `strings/<locale>/soul_lines.json` — 120 Gooby-Lines: Tageszeit/Wetter/W13-Features/Minispiel/Idle/Feiern/Wiedersehen + Mini-Dialog-Chips `gespraech.*` (Daten: `content/soul/data/gespraeche.json`) + Fütter-Kommentar-Schnittstelle für FRIDGE — kollisionsfrei zu deren `fuettern.*`-UI-Keys) | W14 VOICE | W14 |
 | `loading.*` (Datei `strings/<locale>/loading.json` — Lade-Schirme, W7; NEUE `loading.boot.sprueche`-Keys additiv von W14 LOADING: 10 Boot-Cover-Sprüche) | W7 RANCH2 (Boot-Sprüche: W14 LOADING) | W7/W14 |
+| NEUE `garten.samen_kurz`/`garten.samen_fehlt`/`garten.spruch.*`-Keys (additiv in `craft.json` — Saatgut-Anzeige + 4 Ernte-Sprüche der neuen Crops; `garten.*` bleibt M2-HAUS-Domain), `city.laden.saatgut_titel` (additiv in `city.json` — Saatgut-Abschnitt im REHWEI-Laden) + `rewards.food.radish`/`rewards.food.eggplant` (additiv in `rewards.json` — Anzeigenamen der neuen Ernte-Foods) | W15 CROPS | W15 |
+| `markt.*` (Datei `strings/<locale>/markt.json` — Eigenstand des Wochenmarkts: Sheet-Tabs, Bestücken/Preis-Slider, Markttag-Replay, Abrechnungs-Karte, Tages-Kommentare, Schürze-Gag, Kräuterkasten-Hinweis; die `city.markt.*`-Ankauf-Keys bleiben bei W3a CITY) + NEUE `craft.rezept.r_vogelhaus`/`r_kraeuterkasten`/`r_windrad_deko`-Keys (additiv in `craft.json` — die drei W15-Rezepte) | W15 MARKT | W15 |
 
 Regeln:
 1. Nur der Owner editiert Keys seines Prefixes (in de.json/en.json NUR im
