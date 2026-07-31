@@ -48,6 +48,9 @@ const ZIEL_GLYPHEN := {
 }
 const UMZUG_GLYPH := "📦"
 const UMZUG_ID := "umzug"
+## W13B (RAUMSTATION-Request): goldener Sonderstempel bei 9/9 Zielen.
+const WELTENGOOBY_GLYPH := "🌍"
+const WELTENGOOBY_ID := "weltengooby"
 
 static var _mono_cache: Font = null
 
@@ -210,6 +213,22 @@ static func stempel_von(state: Dictionary) -> Array:
 					"at_ms": _juengste_karte_ms(archiv, ziel_id),
 					"drehung": stempel_drehung(ziel_id),
 					"farbe": stempel_farbe(ziel_id),
+				}
+			)
+		)
+	# W13B (RAUMSTATION-Request): goldener WELTENGOOBY-Stempel, sobald
+	# reise_logic.abholen den 9/9-Titel gelatcht hat (Vacation.weltengooby).
+	if Vacation.weltengooby(v):
+		(
+			out
+			. append(
+				{
+					"id": WELTENGOOBY_ID,
+					"glyph": WELTENGOOBY_GLYPH,
+					"name_key": "reisepass.stempel_weltengooby",
+					"at_ms": int(v["weltengoobyAt"]),
+					"drehung": stempel_drehung(WELTENGOOBY_ID),
+					"farbe": AcTokens.YELLOW_DARK,
 				}
 			)
 		)

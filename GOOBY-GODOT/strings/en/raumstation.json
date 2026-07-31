@@ -11,7 +11,8 @@
 			"keine_kamera": "No camera, no star photo! Bäm at POW! surely has one for you."
 		},
 		"weltengooby": {
-			"toast": "WORLD GOOBY! All 9 destinations visited — Gooby is at home everywhere now. Even in space!"
+			"toast": "WORLD GOOBY! All 9 destinations visited — Gooby is at home everywhere now. Even in space!",
+			"badge": "🌍 World Gooby"
 		}
 	},
 	"gfree": {

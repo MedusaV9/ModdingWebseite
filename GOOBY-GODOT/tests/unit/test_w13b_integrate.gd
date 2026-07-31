@@ -20,6 +20,8 @@ const KAUF_DATEIEN: Array[String] = [
 
 const NOW := 1_784_980_800_000
 
+const SaveSchema := preload("res://scripts/state/save_schema.gd")
+
 
 class FakeGameState:
 	extends RefCounted
@@ -50,6 +52,31 @@ class FakeGameState:
 
 	func update(mutator: Callable) -> void:
 		mutator.call(state)
+
+	func notify_slice_changed(_slice_id: String) -> void:
+		pass
+
+
+## Fake fürs PostkartenScreen-API (braucht state()-Methode — im
+## FakeGameState oben heißt das Feld selbst schon `state`).
+class FakeScreenGs:
+	extends RefCounted
+	var s: Dictionary = {}
+
+	func state() -> Dictionary:
+		return s
+
+	func get_value(path: String, fallback: Variant = null) -> Variant:
+		var node: Variant = s
+		for part in path.split("."):
+			if node is Dictionary and (node as Dictionary).has(part):
+				node = node[part]
+			else:
+				return fallback
+		return node
+
+	func update(mutator: Callable) -> void:
+		mutator.call(s)
 
 	func notify_slice_changed(_slice_id: String) -> void:
 		pass
@@ -179,6 +206,40 @@ func test_energie_buff_chip_traegt_sonne_bei_erholt() -> void:
 	assert_false(label_ohne.text.begins_with("☀"), "ohne erholt keine Sonne")
 	content.free()
 	ohne.free()
+
+
+## ---------------------------------------------- Weltengooby (RAUMSTATION)
+
+
+## RAUMSTATION-Request: goldener WELTENGOOBY-Sonderstempel auf der
+## Pass-Rückseite + Abzeichen im Souvenirregal, sobald reise_logic.abholen
+## den 9/9-Titel gelatcht hat — ohne Latch bleibt beides unsichtbar.
+func test_weltengooby_stempel_und_souvenir_badge() -> void:
+	var state := SaveSchema.default_state(NOW)
+	for ziel: String in ReiseLogic.ZIELE:
+		state["vacation"]["visited"][ziel] = true
+	assert_eq(PassportCard.stempel_von(state).size(), 9, "ohne Latch kein Gold-Stempel")
+	state["vacation"]["weltengoobyAt"] = NOW
+	var stempel := PassportCard.stempel_von(state)
+	assert_eq(stempel.size(), 10, "9 Ziel-Stempel + WELTENGOOBY")
+	var gold: Dictionary = stempel[stempel.size() - 1]
+	assert_eq(str(gold["id"]), "weltengooby", "Sonderstempel hängt hinten an")
+	assert_eq(str(gold["name_key"]), "reisepass.stempel_weltengooby", "String-Key sitzt")
+	assert_eq(int(gold["at_ms"]), NOW, "Datum = Latch-Zeitpunkt")
+	# Souvenirregal: goldenes Abzeichen VOR den 9 Ziel-Slots — nur mit Latch.
+	var gs := FakeScreenGs.new()
+	gs.s = state
+	var screen: PostkartenScreen = load("res://scripts/ui/postkarten/postkarten_screen.gd").new()
+	screen.gs_override = gs
+	screen.now_override = NOW
+	screen.auto_navigate = false
+	tree.root.add_child(screen)
+	await wait_frames(2)
+	var chips := screen.souvenir_chips()
+	assert_eq(chips.size(), PostkartenLogic.DEST_IDS.size() + 1, "Abzeichen + 9 Slots")
+	assert_eq(chips[0], "WeltengoobyBadge", "Abzeichen steht vor den Ziel-Slots")
+	screen.queue_free()
+	await wait_frames(1)
 
 
 ## ---------------------------------------------- treats-Lücken (SAMMLUNG)

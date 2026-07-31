@@ -11,6 +11,7 @@ extends Control
 signal ready_for_reveal
 
 const Economy := preload("res://scripts/logic/economy.gd")
+const Vacation := preload("res://scripts/logic/vacation.gd")
 
 const ROUTE := &"postkarten"
 const ROUTES := {ROUTE: "res://scripts/ui/postkarten/postkarten_screen.tscn"}
@@ -257,6 +258,18 @@ func _refresh_souvenirs(state: Dictionary) -> void:
 			{"n": besucht.size(), "gesamt": PostkartenLogic.DEST_IDS.size()}
 		)
 	)
+	# W13B (RAUMSTATION-Request): goldenes Weltengooby-Abzeichen vor den
+	# Ziel-Slots, sobald alle 9 Ziele besucht sind (Latch aus reise_logic).
+	if Vacation.weltengooby(Vacation.slice_of(state)):
+		var badge := PanelContainer.new()
+		badge.name = "WeltengoobyBadge"
+		badge.theme_type_variation = &"StatusCapsule"
+		var badge_label := Label.new()
+		badge_label.theme_type_variation = &"SoftLabel"
+		badge_label.text = I18nService.t("raumstation.weltengooby.badge")
+		badge_label.add_theme_color_override("font_color", AcTokens.YELLOW_DARK)
+		badge.add_child(badge_label)
+		_souvenir_flow.add_child(badge)
 	for dest_id: String in PostkartenLogic.DEST_IDS:
 		var chip := PanelContainer.new()
 		chip.theme_type_variation = &"StatusCapsule"
