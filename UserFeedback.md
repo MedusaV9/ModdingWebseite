@@ -10,16 +10,16 @@
 
 ## NEUES FEEDBACK (hier eintragen!)
 
-_(leer — hier neue Punkte reinschreiben; zuletzt gezogen: 30.07.-Auftrag „Weiter machen + Polish-Wellen" → einsortiert als F-095…F-099)_
+_(leer — hier neue Punkte reinschreiben; zuletzt gezogen: 30.07. ~23:30 UTC — keine neuen Einträge, Polish-Wellen laufen weiter)_
 
 ## Aktuell in Arbeit
 
 | # | Punkt | Status |
 |---|-------|--------|
-| F-095 | **Re-Verifikations-Audit**: jede Aufgabe aus den bisherigen Feedback-Listen nochmal im Code gegenprüfen, Lücken als neue Backlog-Punkte eintragen (Auftrag 30.07.: „geh nochmal jede Aufgabe durch und stell sicher, dass wirklich alles absolviert ist") | 🟡 |
-| F-096 | **Sturm-Masse-Upgrade**: Stürme visuell nochmal krasser — echte Kugeln aus Wind & Wetter, VIELE Layer, dicke Masse mit Tiefe und Höhe statt weniger Schalen (volumetrisches Rendering ausbauen) | 🟡 |
-| F-097 | **Per-Effekt-Polish-Wellen**: JEDER Veil- und JEDER Photon-Effekt bekommt ein eigenes Subagent-Team (Planner → Ideen → mehrfache Polish-Iterationen), Ziel: jedes Asset auf ein neues Level; dazu NEUE Veil-/Photon-Effekte bauen | 🟡 |
-| F-098 | Gleiches Team-Schema für jeden BlockDisplay-Effekt, jede Cutscene, jedes Custom-Mob und Custom-Item (inkl. Blockbench/GeckoLib-Modelle) | 🟡 |
+| F-095 | **Re-Verifikations-Audit** ✅: Audit-Team hat F-001…F-094 im Code gegengeprüft (`docs/plans_v3/session_0730/AUDIT_REVERIFY.md`), 5 Lücken gefunden und ALLE gefixt (rim_recede.fx gebaut, Woah-Items ins ItemLexicon, Scythe-Detach beim Storm-Step, AGENTS.md-Doku, Woah-Audio dokumentiert) | 🟢 |
+| F-096 | **Sturm-Masse-Upgrade**: Volumen-Shader auf 2 Dichte-Schalen + Höhenprofil v2 (Wallcloud-Basis, Konvektionstürme, Amboss-Fransen), Powder-Term + Dual-Lobe-Phase + radiale AO (B1/B5/B9/B2/B3/B7 fertig); Kampf-Uniforms (SiegeChurn/CoreFade) verdrahtet; Rest: B4 Wetter-Layer, B6 Nahfeld-Parallaxe, B8 Burst-Integration, B10 Perf-Pass | 🟡 |
+| F-097 | **Per-Effekt-Polish-Wellen**: Welle 13 A0–A9 FERTIG (10 Teams × Planner/Ideen/Polish): A0 Custom-Shader-Fundament (soft_particle/fresnel_shell/rgb_split_distort + llvmpipe-Härtung), A1 Wand-Bewegung, A2 Zauber-Setpieces (Event-Horizont, Sonnenkern, Judgment), A3 Ferryman/Arena, A4 Herald/Warden-Laser, A5 Fog-Tyrant-Todeskette, A6 Nether-Öffnung (Flipbook-Atlas, GPU-Instancing), A7 Altar-Monument-Emission, A8 Stern-Komet-Kette, A9 Eclipse-Himmel (Shadow-Bands, Schwarze-Sonne-Snap, Blood-Dusk ab Tag 10); NEU dazu: grave_soul_lantern, umbral_veins-Post-Pipeline, wand_overcharge_arcs — nächste Welle (B-Prioritäten des FX-Zensus) startet | 🟡 |
+| F-098 | Gleiches Team-Schema für jeden BlockDisplay-Effekt, jede Cutscene, jedes Custom-Mob und Custom-Item (inkl. Blockbench/GeckoLib-Modelle) — Teams starten jetzt (Zensus: 24 BlockDisplay-Choreos, 8 Cutscenes) | 🟡 |
 | F-099 | **Eval-Runde** (Sol 5.6) über die gesamte Session-Arbeit, bei „zu simpel"-Befunden → Nach-Polish-Runden | 🔴 |
 | F-080 | Server/Welt-Verlassen hängt für immer im SAVING-State statt sauber zu stoppen — Fix implementiert (Stop-Sweep räumt FX-Schwärme VOR dem Save, kein Sync-Chunkload im Stop mehr, Arena-Pit-Chunks werden freigegeben); dedizierter Server-Stop in ~10 s verifiziert ✅ | 🟢 |
 | F-082 | Tod im Sturm-Bosskampf ⇒ Wipe-Reset (Boss heilt/despawnt, Statue re-armt nach 30 s, KEINE Blockschreibungen ⇒ Gräber sicher) — im Client-Test verifiziert (s. F-081..087 unten) ✅ | 🟢 |
