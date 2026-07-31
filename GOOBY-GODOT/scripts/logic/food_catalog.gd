@@ -85,6 +85,11 @@ const FOODS := {
 	# verkauft weltraumMoehre in inventory.food — analog carrot, nur
 	# festlicher (Anzeigename via rewards.food.weltraumMoehre). ──
 	"weltraumMoehre": {"hunger": 12, "fun": 6, "energy": 2, "favorit": true},
+	# ── W15/CROPS: die zwei letzten Garten-Ernten ohne Katalog-Eintrag —
+	# radish + eggplant (Kenney-GLBs liegen jetzt unter assets/city/essen/).
+	# Deltas verbatim aus GOOBY/src/data/constants.js FOOD_TABLE. ──
+	"radish": {"hunger": 8, "fun": 1},
+	"eggplant": {"hunger": 16, "fun": 1},
 }
 
 ## Fallback für unbekannte Inventar-Ids: generischer kleiner Snack.
@@ -114,6 +119,8 @@ const FOOD_KATEGORIE := {
 	"ananas": "gemuese",
 	"chili": "gemuese",
 	"weltraumMoehre": "gemuese",
+	"radish": "gemuese",
+	"eggplant": "gemuese",
 	# ── Süßes (Treats — deckt sich mit den junk-Naschereien) ──
 	"cupcake": "suesses",
 	"cookie": "suesses",
