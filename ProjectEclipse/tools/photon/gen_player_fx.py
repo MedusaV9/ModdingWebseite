@@ -5,9 +5,14 @@ Authors the wand + player-attached effect files programmatically via fxlib (the 
 diffable source of truth for these binary assets — regenerate, never hand-edit):
 
   concept 1  eclipse:wand_soulbind_flash   soulbind ceremony HDR bloom pop (entity one-shot)
-  concept 2  eclipse:stern_komet_fall      Kometenschlag descent head + ara ribbon (+ Tick sub)
-             eclipse:stern_komet_sparkle     glitter motes shed by the falling head
+  concept 2  eclipse:stern_komet_fall      Kometenschlag descent head, 3-ribbon ara stack,
+                                           speed-coupled spark wake (+ Tick/FirstCollision subs)
+             eclipse:stern_komet_sparkle     glitter motes shed by the falling head (Tick)
+             eclipse:stern_komet_touchdown   FirstCollision stamp where the head hits terrain
              eclipse:stern_komet_impact    delayed HDR detonation (setDelay(telegraph) caller-side)
+             eclipse:stern_komet_crater_glow  Birth stage 1 — crater glow + rim seeds
+             eclipse:stern_komet_ember_motes  Birth stage 2 — rising ember motes
+             eclipse:stern_komet_star_glint   Birth stage 3 — fading star glints (chain leaf)
   concept 4  eclipse:riss_schlag_maw       maw implosion: negative radial + Death sub-chain
              eclipse:riss_glitch_pop         3-particle static burst (sub-emitter target)
   concept 5  eclipse:glut_sprung_crater    eruption: 14 physics colliders + Collision/Death subs
@@ -81,6 +86,38 @@ def write_star_2x2(path: Path, frame: int = 64) -> None:
 # Ticks the komet head needs to cover its baked ~18-block descent. MUST stay in sync with
 # WandPhotonFxRows.KOMET_FALL_TICKS (the client subtracts it from the telegraph delay).
 KOMET_FALL_TICKS = 13
+
+#: Stacking-law HDR ceiling (FX_CENSUS_WAVE13 §8.4). Many additive quads converge to white
+#: above it, and the komet stacks head + 3 ribbons + wake inside one half-block.
+HDR_CEILING = 1.45
+
+
+def hdr(r, g, b):
+    """Clamps an HDR triple to `HDR_CEILING`, keeping the channel ratio (= the hue)."""
+    peak = max(r, g, b)
+    if peak <= HDR_CEILING:
+        return (r, g, b)
+    k = HDR_CEILING / peak
+    return (round(r * k, 3), round(g * k, 3), round(b * k, 3))
+
+
+def ara_toggles_on(compound):
+    """Marks an ara config's `section` / `physicsSetting` toggle groups as enabled.
+
+    Both extend LDLib2's `ToggleGroup`, whose `deserializeNBT` reads `_enable` FIRST and
+    then short-circuits (`if (!isEnable() && skipDisableSerialize()) return;`, the latter
+    hard-coded true) — a compound written without the flag deserialises DISABLED and its
+    payload is never read. `AraTrailParticle.updatePhysics` gates the whole integrator on
+    `config.physicsSetting.isEnable()`, so the lag/gravity block below is inert without it.
+    A4 (`fx_boss_herald_ferryman.ara_toggles_on`) patches its standalone emitters; the komet
+    ribbons are EMBEDDED ara configs (see `_komet_ribbon`), so the flag is stamped on the
+    `araConfig` compound instead. fxlib is A0 ground this wave — patch here, not there.
+    """
+    for key in ("section", "physicsSetting"):
+        block = compound.get(key)
+        if isinstance(block, dict):
+            block["_enable"] = B(1)
+    return compound
 
 
 def ribbon_renderer(material_entry, cull_box=None):
@@ -163,50 +200,260 @@ def build_wand_soulbind_flash() -> FxBuilder:
 
 
 # ---------------------------------------------------------------------------
-# Concept 2 — eclipse:stern_komet_fall / _sparkle / _impact
+# Concept 2 — the Stern-Komet chain (FX census wave 13 / team A8)
+#
+# The census asks for the first 3-stage Birth/Collision chain on the PLAYER side, so the
+# Kometenschlag set-piece is now a seven-file tree instead of two flat one-shots:
+#
+#   eclipse:stern_komet_fall                    Row CUE_STERN_KOMET, spawned at aim+18y,
+#   │                                           delay = telegraph − KOMET_FALL_TICKS
+#   │  head  ── Tick/4 ─────────► eclipse:stern_komet_sparkle
+#   │        └─ FirstCollision ─► eclipse:stern_komet_touchdown   (flash+ring+splinters)
+#   │  tail_veil / tail_ribbon / tail_core      3-layer embedded ara stack (A4 pattern)
+#   │  spark_wake                               speed-coupled shed sparks + colorBySpeed
+#   │
+#   eclipse:stern_komet_impact                  same Row, spawned at aim, delay = telegraph
+#      core_flash ── Birth ─────► eclipse:stern_komet_crater_glow
+#                                    rim_seeds ── Birth p0.5 ─► eclipse:stern_komet_ember_motes
+#                                                                  motes ── Birth p0.45 ─►
+#                                                                     eclipse:stern_komet_star_glint
+#
+# Fan-out (A5 consequence 3, every stamp deep-copies a runtime): 1 → 1 → 6×0.5 = 3 →
+# 3×4×0.45 ≈ 5.4 → ×3 glints ≈ 16 particles. Every child file's burst sum stays ≤ 8
+# (LINT-SUBEM-FAT): touchdown 1+1+6 = 8, crater_glow 1+6 = 7, ember_motes 4+2 = 6,
+# star_glint 3.
+#
+# FOUR RUNTIME FACTS THIS SECTION IS BUILT ON (photon-neoforge-1.21.1-2.1.5, decompiled):
+#
+#  1. `distanceRate` CANNOT drive the spark wake here. `EmissionSetting.getEmissionCount`
+#     reads `particleEmitter.getAccumulatedDistance()`, which `ParticleEmitter.emitParticle`
+#     grows by `getVelocity().length()` — and `Emitter.updateTick` derives that velocity
+#     from `transform.position()` deltas of the EMITTER. A `BlockEffectExecutor` root never
+#     moves, so the accumulator stays 0.0 and `distanceRate` is a silent no-op on every
+#     world-anchored asset (it only works on entity-followed FX, e.g. A1's wandfx2 trails).
+#     What the census actually wants — constant spark density per BLOCK travelled — is
+#     reproduced exactly by an `emissionRate` curve proportional to |v| (see `_WAKE_*`).
+#  2. The particle, not the emitter, is what moves. So the ribbons ride EMBEDDED
+#     `trails/araConfig` blocks on carrier particles; standalone `ara_trail_emitter`s (A4's
+#     shape) would sit still at the anchor.
+#  3. `araConfig.time` is dead for embedded trails: `AraTrailParticle.updateDynamicData`
+#     takes `lifetimeSupplier` when present, and `TrailsSetting.setup` always installs one
+#     (`trails.lifetime × particle.getLifetime() / 20` SECONDS). Ribbon length is therefore
+#     tuned through `trails.lifetime`, and `time` is left out entirely.
+#  4. `removedWhenCollided` fires Death AND Collision AND FirstCollision from the same
+#     `TileParticle.updateCollisionBounce` call, so the head hangs its touchdown on
+#     FirstCollision only — a Death row would double-stamp.
 # ---------------------------------------------------------------------------
+#: Baked descent. `SEG_KOMET_GRAV` runs 1 → 0, so `curve(lower, upper, …)` reads `upper`
+#: (slow) at t=0 and `lower` (fast) at t=1: an ACCELERATING fall, not a constant ramp.
+#: Photon linear velocity is blocks/SECOND (`VelocityOverLifetimeSetting` × 0.05/tick), so
+#: −16.0 → −56.66 b/s integrates over the 13 discrete emitter ticks to exactly 18.000
+#: blocks — the KOMET_SPAWN_HEIGHT the registrar offsets the root by.
+SEG_KOMET_GRAV = (0.0, 1.0, 0.30, 0.98, 0.62, 0.72, 1.0, 0.0)
+KOMET_V_TOP = -16.0
+KOMET_V_FLOOR = -56.66
+KOMET_FALL_BLOCKS = 18.0
+
+#: Spark-wake emission origin. `Function` (shape type `function`) evaluates x/y/z per
+#: PARTICLE with `t` = the emitter's t and fresh `randomA..E` rolls, so this is the exact
+#: closed form of the head's discrete descent (Faulhaber sum of the GRAV cubic, quartic in
+#: t) plus a `randomA` smear across the block band the head sweeps during that tick. Sparks
+#: therefore land ON the swept path with no beading and no gaps; the ±0.5 recentring keeps
+#: them straddling the nucleus whichever of the two emitters the render queue ticks first.
+#: Verified against Photon's own bundled `expr.Parser`: y(1.0) = −18.0003.
+_WAKE_FALL = "10.3578*t + 0.069591*t*t + 6.11933*t*t*t + 1.45359*t*t*t*t"
+_WAKE_STEP = "0.8 + 0.12198*t + 1.46376*t*t + 0.44726*t*t*t"     # blocks fallen this tick
+#: `step(t)` endpoints — blocks the head covers during the first and the last emitter tick.
+#: `step` is affine in the GRAV bezier, so `curve(lower, upper, [SEG_KOMET_GRAV])` reproduces
+#: it exactly; scaling both ends by WAKE_PER_BLOCK gives a rate curve that emits a CONSTANT
+#: number of sparks per BLOCK — the density `distanceRate` would have produced if the
+#: accumulator were not pinned at zero on a static anchor (≈23 sparks over the 18 blocks).
+WAKE_STEP_TOP = 0.800      # step(0), = |KOMET_V_TOP| × 0.05
+WAKE_STEP_FLOOR = 2.833    # step(1), = |KOMET_V_FLOOR| × 0.05
+WAKE_PER_BLOCK = 1.30
+
+
+def _komet_descent() -> dict:
+    """The shared 18-blocks-in-13-ticks velocity ramp (head + all three ribbon carriers)."""
+    return dict(linear=nf3(constant(0),
+                           curve(KOMET_V_FLOOR, KOMET_V_TOP, [SEG_KOMET_GRAV],
+                                 "lifetime", "velocity"),
+                           constant(0)))
+
+
+def _komet_taper(knee: float) -> dict:
+    """Ribbon width over length: full at the nucleus, `knee` at mid-tail, out to a point."""
+    return curve(0.0, 1.0,
+                 [(0.0, 1.0, 0.16, 0.98, 0.4, knee + 0.16, 0.52, knee),
+                  (0.52, knee, 0.72, knee * 0.5, 0.89, 0.05, 1.0, 0.0)],
+                 "length", "thickness")
+
+
+def _komet_ribbon(thickness, smoothness, trail_lifetime, color_over_length,
+                  knee, hdr_rgb, physics):
+    """One layer of the 3-ribbon ara stack as an embedded `trails` module compound.
+
+    `highQualityCorners` stays OFF on purpose (A4 finding): `appendFlatTrail` compensates
+    miter joins with `thickness / max(bitangent · nextBitangent, 0.15)`, i.e. up to 6.67x
+    over-thick on the near-degenerate segments a 2.5 blocks/tick head produces — a comb of
+    spikes instead of a band. `dieWithParticles` stays OFF too, so the ribbon keeps fading
+    after the head is removed by its terrain collision instead of blinking out with it.
+    """
+    return {
+        "ratio": F(1.0), "lifetime": constant(trail_lifetime),
+        "dieWithParticles": B(0), "sizeAffectsWidth": B(0), "sizeAffectsLifetime": B(0),
+        "inheritParticleColor": B(0),
+        "colorOverLifetime": gradient([(0.0, 1.0), (1.0, 1.0)], [(0.0, 1.0, 1.0, 1.0)]),
+        "trailType": "ARA_TRAIL",
+        "araConfig": ara_toggles_on({
+            "thickness": F(thickness), "smoothness": I(smoothness),
+            "minDistance": F(0.07), "timeInterval": F(0.04),
+            "alignment": "View", "space": "World", "sorting": "NewerOnTop",
+            "textureMode": "Stretch", "highQualityCorners": B(0),
+            "thicknessOverLength": _komet_taper(knee),
+            "colorOverLength": color_over_length,
+            "physicsSetting": {
+                "warmup": F(0.0),
+                "gravity": L([F(0.0), F(physics["gravity"]), F(0.0)]),
+                "inertia": F(physics["inertia"]),
+                "velocitySmoothing": F(physics["velocity_smoothing"]),
+                "damping": F(physics["damping"])},
+            "renderer": ribbon_renderer(
+                texture_material(CIRCLE, hdr=hdr(*hdr_rgb), blend=BLEND_ADDITIVE))})}
+
+
+def _komet_carrier(fx, name, ribbon):
+    """A near-invisible particle whose only job is to drag one ribbon layer down the path.
+
+    Carries the head's physics as well so the ribbon stops where the terrain does (the
+    carrier dies on contact; `dieWithParticles: 0b` lets its tail keep fading).
+    """
+    return (fx.particle_emitter(name,
+                duration=20, looping=False, start_lifetime=constant(KOMET_FALL_TICKS),
+                start_speed=constant(0), start_size=nf3(0.02),
+                start_color=color(0x14FFFFFF),  # the ribbon is the show, not the carrier
+                simulation_space="World", max_particles=4)
+            .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(1))])
+            .with_shape(dot())
+            .with_material(texture_material(CIRCLE, blend=BLEND_ADDITIVE))
+            .with_physics(collision=True, removed_when_collided=True, friction=1.0,
+                          gravity=0.0, bounce_chance=0.0)
+            .with_curves(velocity_over_lifetime=_komet_descent())
+            .with_module("trails", ribbon))
+
+
 def build_stern_komet_fall() -> FxBuilder:
-    """One falling HDR head dragging an ara ribbon: ~18 blocks in KOMET_FALL_TICKS ticks.
+    """The descent: HDR nucleus + 3-layer ara tail + speed-coupled spark wake.
 
     Spawned by the client at target + (0, 18, 0); the descent velocity is baked here so the
-    server owns only the telegraph timing (delay = telegraph - KOMET_FALL_TICKS).
+    server owns only the telegraph timing (delay = telegraph − KOMET_FALL_TICKS). Object
+    order matters: `head` is declared first so it is registered — and therefore ticked —
+    ahead of the wake (`FXRuntime.objects` is a LinkedHashMap fed in file order).
     """
     fx = FxBuilder("stern_komet_fall")
+
+    # 1. The nucleus. hasCollision + removedWhenCollided is what turns "a sprite that
+    #    reaches y+0" into a real terrain hit: `TileParticle.updatePositionAndInternalVelocity`
+    #    sweeps the 0.9-block box with `Entity.collideBoundingBox` (peak step 56.66 b/s ×
+    #    0.05 = 2.83 b/t → v² = 8.0, far under the 10000 MAXIMUM_COLLISION_VELOCITY_SQUARED
+    #    bail-out that would silently skip the sweep on the fastest ticks), and the
+    #    clamp fires FirstCollision wherever the ground actually is — a ceiling, a roof, or
+    #    the aim point. The delayed `stern_komet_impact` stays the guaranteed detonation.
     (fx.particle_emitter("head",
             duration=20, looping=False, start_lifetime=constant(KOMET_FALL_TICKS),
             start_speed=constant(0), start_size=nf3(0.9), simulation_space="World",
             max_particles=4)
        .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(1))])
        .with_shape(dot())
-       .with_material(texture_material(CIRCLE, hdr=(1.8, 1.8, 2.6), blend=BLEND_ADDITIVE))
-       # Real ease-in descent (PHOTON-QUALITY §2 runner-up / §6 stern_komet_core
-       # retirement note): hold near -0.9 blocks/t, then commit to -1.9 — an
-       # accelerating fall instead of the old constant-speed linear ramp. Average
-       # bezier y = 0.5375, so displacement stays ~17.7 blocks over the 13t
-       # KOMET_FALL_TICKS window (was ~18.2 linear) — the +18 spawn anchor and the
-       # delayed impact bloom keep their sync.
-       .with_curves(velocity_over_lifetime=dict(
-            linear=nf3(constant(0),
-                       curve(-1.9, -0.9, [SEG_DECAY_TAIL], "lifetime", "velocity"),
-                       constant(0))))
-       .with_module("trails", {
-            "ratio": F(1.0), "lifetime": constant(1.0),
-            "dieWithParticles": B(0), "sizeAffectsWidth": B(0), "sizeAffectsLifetime": B(0),
-            "inheritParticleColor": B(0),
-            "colorOverLifetime": gradient([(0.0, 1.0), (1.0, 0.0)], [(0.0, 1.0, 1.0, 1.0)]),
-            "trailType": "ARA_TRAIL",
-            "araConfig": {
-                "thickness": F(0.35), "time": F(0.9), "alignment": "View", "space": "World",
-                "colorOverLength": gradient(  # white core -> transparent blue tail
-                    [(0.0, 1.0), (1.0, 0.0)],
-                    [(0.0, 1.0, 1.0, 1.0), (0.4, 0.75, 0.85, 1.0), (1.0, 0.45, 0.6, 1.0)]),
-                "physicsSetting": {"warmup": F(0.0), "gravity": L([F(0.0), F(0.0), F(0.0)]),
-                                   "inertia": F(0.25), "velocitySmoothing": F(0.75),
-                                   "damping": F(0.8)},
-                "renderer": ribbon_renderer(
-                    texture_material(CIRCLE, hdr=(1.2, 1.3, 1.9), blend=BLEND_ADDITIVE))}})
-       .with_sub_emitters(sub_emitter("eclipse:stern_komet_sparkle", event="Tick",
-                                      probability=1.0, tick_interval=2))
+       .with_material(texture_material(CIRCLE, hdr=hdr(1.8, 1.8, 2.6), blend=BLEND_ADDITIVE))
+       .with_physics(collision=True, removed_when_collided=True, friction=1.0,
+                     gravity=0.0, bounce_chance=0.0)
+       .with_curves(
+            velocity_over_lifetime=_komet_descent(),
+            # Compression heating: the head swells and whitens as it dives.
+            size_over_lifetime=curve(1.0, 1.35, [SEG_SMOOTH_UP], "lifetime", "size"),
+            color_over_lifetime=gradient(
+                [(0.0, 0.85), (0.25, 1.0), (1.0, 1.0)],
+                [(0.0, 0.62, 0.74, 1.0), (0.45, 0.86, 0.92, 1.0), (1.0, 1.0, 1.0, 1.0)]))
+       .with_sub_emitters(
+            sub_emitter("eclipse:stern_komet_touchdown", event="FirstCollision",
+                        probability=1.0),
+            # Kept from the shipped asset but halved in cadence — the dense wake below now
+            # owns the streak, the sparkle is the slower glitter shed on top of it.
+            sub_emitter("eclipse:stern_komet_sparkle", event="Tick",
+                        probability=1.0, tick_interval=4))
+       .with_lights(sky=15, block=15))
+
+    # 2. Three co-located carriers, staggered by ara physics so the layers separate.
+    #    `inertia` is the fraction of the head's velocity each freshly emitted trail point
+    #    keeps (`AraTrailParticle.emitPoint`), `damping`/`gravity` then drive
+    #    `physicsStep` — the veil smears and lifts like shed coma gas, the core stays
+    #    welded to the nucleus with no physics at all.
+    _komet_carrier(fx, "tail_veil", _komet_ribbon(
+        thickness=0.85, smoothness=3, trail_lifetime=1.0, knee=0.68,
+        color_over_length=gradient(
+            [(0.0, 0.34), (0.4, 0.26), (0.78, 0.11), (1.0, 0.0)],
+            [(0.0, 0.62, 0.74, 1.0), (0.45, 0.34, 0.42, 0.9), (1.0, 0.16, 0.19, 0.52)]),
+        hdr_rgb=(0.5, 0.62, 1.05),
+        physics=dict(gravity=1.1, inertia=0.45, velocity_smoothing=0.6, damping=0.9)))
+
+    _komet_carrier(fx, "tail_ribbon", _komet_ribbon(
+        thickness=0.40, smoothness=6, trail_lifetime=0.72, knee=0.5,
+        color_over_length=gradient(
+            [(0.0, 0.92), (0.3, 0.78), (0.75, 0.36), (1.0, 0.0)],
+            [(0.0, 1.0, 1.0, 1.0), (0.3, 0.78, 0.88, 1.0),
+             (0.72, 0.42, 0.6, 1.0), (1.0, 0.2, 0.26, 0.66)]),
+        hdr_rgb=(0.95, 1.1, 1.45),
+        physics=dict(gravity=0.35, inertia=0.2, velocity_smoothing=0.7, damping=0.84)))
+
+    _komet_carrier(fx, "tail_core", _komet_ribbon(
+        thickness=0.13, smoothness=4, trail_lifetime=0.38, knee=0.4,
+        color_over_length=gradient(
+            [(0.0, 1.0), (0.42, 0.66), (1.0, 0.0)],
+            [(0.0, 1.0, 1.0, 1.0), (1.0, 0.78, 0.88, 1.0)]),
+        hdr_rgb=(1.45, 1.45, 1.45),
+        physics=dict(gravity=0.0, inertia=0.0, velocity_smoothing=0.75, damping=0.0)))
+
+    # 3. The spark wake. duration == KOMET_FALL_TICKS so the emitter's t IS the descent
+    #    parameter the `function` shape and the rate curve are written against; the emitter
+    #    dies at t=1 while `Emitter.isAlive` keeps the runtime up for the live sparks.
+    #    `start_speed` is sampled at the EMITTER's t (`TileParticle.setup`), so it tracks
+    #    the nucleus (6 → 34 b/s vs. the head's 16 → 56.66) — which is what finally gives
+    #    `colorBySpeed` a real signal to read: sparks shed late streak out white-hot, the
+    #    early slow ones stay deep star-blue.
+    (fx.particle_emitter("spark_wake",
+            duration=KOMET_FALL_TICKS, looping=False,
+            start_lifetime=random_between(7, 15),
+            start_speed=curve(34.0, 6.0, [SEG_KOMET_GRAV], "emitter lifetime", "speed"),
+            start_size=nf3(random_between(0.05, 0.11), random_between(0.05, 0.11),
+                           random_between(0.05, 0.11)),
+            simulation_space="World", max_particles=32)
+       .with_emission(rate=curve(WAKE_PER_BLOCK * WAKE_STEP_FLOOR,
+                                 WAKE_PER_BLOCK * WAKE_STEP_TOP,
+                                 [SEG_KOMET_GRAV], "emitter lifetime", "particles/tick"))
+       .with_shape(function_shape(
+            x="0.42*(randomB - 0.5)",
+            y=f"-(({_WAKE_FALL}) + (randomA - 0.5)*({_WAKE_STEP}))",
+            z="0.42*(randomC - 0.5)",
+            # Direction only — `Function.nextPosVel` normalises the speed vector and lets
+            # startSpeed carry the magnitude. Mostly down, scattered sideways.
+            speed_x="1.6*(randomD - 0.5)", speed_y="-1.0", speed_z="1.6*(randomE - 0.5)"))
+       .with_material(texture_material(CIRCLE, hdr=hdr(1.1, 1.2, 1.7), blend=BLEND_ADDITIVE))
+       .with_renderer(render_mode="StretchedBillboard", velocity_scale=0.5, length_scale=1.6)
+       # Snuffed out by terrain instead of sinking through it (cheapest collision mode:
+       # no bounce maths, and the head's own touchdown owns the ground read).
+       .with_physics(collision=True, removed_when_collided=True, friction=0.9,
+                     gravity=0.25, bounce_chance=0.0)
+       # colorBySpeed MULTIPLIES the lifetime colour and reads |realVelocity| × 20 (b/s),
+       # and its `speedRange` is an LDLib2 `Range` whose codec fields are a/b — NOT the
+       # min/max pair `fxlib._min_max` writes, hence the raw module (A3 finding).
+       .with_module("colorBySpeed", {
+            "color": gradient([(0.0, 1.0), (1.0, 1.0)],
+                              [(0.0, 0.34, 0.46, 1.0), (1.0, 1.0, 1.0, 1.0)]),
+            "speedRange": {"a": F(4.0), "b": F(32.0)}})
+       .with_curves(color_over_lifetime=gradient(
+            [(0.0, 1.0), (0.55, 0.72), (1.0, 0.0)],
+            [(0.0, 1.0, 1.0, 1.0), (0.5, 0.7, 0.82, 1.0), (1.0, 0.3, 0.4, 0.9)]))
        .with_lights(sky=15, block=15))
     return fx
 
@@ -216,21 +463,86 @@ def build_stern_komet_sparkle() -> FxBuilder:
     fx = FxBuilder("stern_komet_sparkle")
     (fx.particle_emitter("glitter",
             duration=8, looping=False, start_lifetime=random_between(8, 14),
-            start_speed=random_between(0.02, 0.08),
+            start_speed=random_between(0.4, 1.6),
             start_size=nf3(random_between(0.04, 0.08), random_between(0.04, 0.08),
                            random_between(0.04, 0.08)),
             simulation_space="World", max_particles=8)
        .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(4))])
        .with_shape(sphere(radius=0.25, thickness=1.0))
-       .with_material(texture_material(CIRCLE, hdr=(1.2, 1.2, 1.7), blend=BLEND_ADDITIVE))
+       .with_material(texture_material(CIRCLE, hdr=hdr(1.2, 1.2, 1.7), blend=BLEND_ADDITIVE))
        .with_curves(color_over_lifetime=gradient(
             [(0.0, 1.0), (1.0, 0.0)], [(0.0, 0.85, 0.9, 1.0)]))
        .with_lights(sky=15, block=15))
     return fx
 
 
+def build_stern_komet_touchdown() -> FxBuilder:
+    """Terrain contact stamp — the head's FirstCollision child (burst sum 1+1+6 = 8 ≤ 8).
+
+    Fires wherever the 0.9-block head box is actually stopped, which is NOT necessarily the
+    aim point: a roof, an overhang or a cliff face terminates the descent early and this is
+    what sells that the comet hit SOMETHING. The delayed `stern_komet_impact` remains the
+    guaranteed detonation on the damage tick.
+    """
+    fx = FxBuilder("stern_komet_touchdown")
+    root = fx.empty("touchdown")
+
+    (fx.particle_emitter("flash",
+            duration=30, looping=False, start_lifetime=constant(7), start_speed=constant(0),
+            start_size=nf3(1.7), simulation_space="Local", max_particles=4)
+       .child_of(root)
+       .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(1))])
+       .with_shape(dot())
+       .with_material(texture_material(CIRCLE, hdr=hdr(1.4, 1.4, 1.45), blend=BLEND_ADDITIVE))
+       .with_curves(size_over_lifetime=curve(
+            0.0, 1.0, [(0.0, 0.25, 0.06, 1.0, 0.68, 0.45, 1.0, 0.0)], "lifetime", "size"))
+       .with_lights(sky=15, block=15))
+
+    (fx.particle_emitter("shockring",
+            duration=30, looping=False, start_lifetime=constant(13), start_speed=constant(0),
+            start_size=nf3(0.6), simulation_space="Local", max_particles=4)
+       .child_of(root)
+       .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(1))])
+       .with_shape(dot())
+       .with_material(texture_material(CIRCLE, hdr=hdr(1.0, 1.1, 1.45), blend=BLEND_ADDITIVE))
+       .with_renderer(render_mode="Horizontal")
+       .with_curves(
+            size_over_lifetime=curve(
+                1.0, 11.0, [(0.0, 0.0, 0.16, 0.86, 0.5, 1.0, 1.0, 1.0)], "lifetime", "size"),
+            color_over_lifetime=gradient(
+                [(0.0, 0.8), (1.0, 0.0)], [(0.0, 1.0, 1.0, 1.0), (1.0, 0.42, 0.58, 1.0)])))
+
+    # Splinters. Photon start_speed is blocks/SECOND (×0.05 per tick): the census reference
+    # figure — 24 blocks of reach in 10 ticks — is 48.0, not 2.4. Damped by friction 0.92
+    # plus gravity they land ~9-13 blocks out, which matches the 5-block damage radius plus
+    # the splinter follow-ups the server throws.
+    (fx.particle_emitter("splinters",
+            duration=30, looping=False, start_lifetime=random_between(14, 26),
+            start_speed=random_between(34.0, 48.0),
+            start_size=nf3(random_between(0.07, 0.14), random_between(0.07, 0.14),
+                           random_between(0.07, 0.14)),
+            simulation_space="World", max_particles=8)
+       .child_of(root)
+       .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(6))])
+       .with_shape(cone(angle=62.0, radius=0.2))
+       .with_material(texture_material(CIRCLE, hdr=hdr(1.05, 1.1, 1.45), blend=BLEND_ADDITIVE))
+       .with_renderer(render_mode="StretchedBillboard", velocity_scale=0.7, length_scale=2.2)
+       .with_physics(collision=True, friction=0.92, collided_friction=0.55, gravity=0.55,
+                     bounce_chance=0.55, bounce_rate=0.3, bounce_spread=0.12)
+       .with_curves(color_over_lifetime=gradient(
+            [(0.0, 1.0), (0.65, 0.72), (1.0, 0.0)],
+            [(0.0, 1.0, 1.0, 1.0), (0.55, 0.66, 0.8, 1.0), (1.0, 0.24, 0.3, 0.7)]))
+       .with_lights(sky=15, block=15))
+    return fx
+
+
 def build_stern_komet_impact() -> FxBuilder:
-    """HDR detonation on the damage tick — caller applies setDelay(telegraph)."""
+    """HDR detonation on the damage tick — caller applies setDelay(telegraph).
+
+    `core_flash` is a single burst particle, so its Birth row stamps the afterglow cascade
+    exactly once (A5 consequence 2: children inherit position, never timing — the cascade is
+    sequenced by staggering the PARENT bursts inside each stage, not by delaying children).
+    """
     fx = FxBuilder("stern_komet_impact")
     root = fx.empty("impact")
 
@@ -240,20 +552,22 @@ def build_stern_komet_impact() -> FxBuilder:
        .child_of(root)
        .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(1))])
        .with_shape(dot())
-       .with_material(texture_material(CIRCLE, hdr=(2.2, 2.0, 3.0), blend=BLEND_ADDITIVE))
+       .with_material(texture_material(CIRCLE, hdr=hdr(2.2, 2.0, 3.0), blend=BLEND_ADDITIVE))
        .with_curves(size_over_lifetime=curve(
             0.0, 1.0, [(0.0, 0.3, 0.06, 1.0, 0.7, 0.5, 1.0, 0.0)], "lifetime", "size"))
+       .with_sub_emitters(sub_emitter("eclipse:stern_komet_crater_glow", event="Birth",
+                                      probability=1.0))
        .with_lights(sky=15, block=15))
 
     # Vertical light pillar: stretched along a slow upward velocity.
     (fx.particle_emitter("pillar",
             duration=40, looping=False, start_lifetime=constant(16),
-            start_speed=constant(0.4), start_size=nf3(0.9), simulation_space="Local",
+            start_speed=constant(4.0), start_size=nf3(0.9), simulation_space="Local",
             max_particles=4)
        .child_of(root)
        .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(1))])
        .with_shape(cone(angle=0.5, radius=0.05))
-       .with_material(texture_material(CIRCLE, hdr=(1.6, 1.6, 2.2), blend=BLEND_ADDITIVE))
+       .with_material(texture_material(CIRCLE, hdr=hdr(1.6, 1.6, 2.2), blend=BLEND_ADDITIVE))
        .with_renderer(render_mode="StretchedBillboard", velocity_scale=0.0, length_scale=4.0)
        .with_curves(color_over_lifetime=gradient(
             [(0.0, 1.0), (0.6, 0.7), (1.0, 0.0)], [(0.0, 0.9, 0.95, 1.0)]))
@@ -265,7 +579,7 @@ def build_stern_komet_impact() -> FxBuilder:
        .child_of(root)
        .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(1))])
        .with_shape(dot())
-       .with_material(texture_material(CIRCLE, hdr=(1.2, 1.2, 1.8), blend=BLEND_ADDITIVE))
+       .with_material(texture_material(CIRCLE, hdr=hdr(1.2, 1.2, 1.8), blend=BLEND_ADDITIVE))
        .with_renderer(render_mode="Horizontal")
        .with_curves(
             size_over_lifetime=curve(
@@ -274,14 +588,18 @@ def build_stern_komet_impact() -> FxBuilder:
 
     (fx.particle_emitter("debris",
             duration=40, looping=False, start_lifetime=random_between(20, 35),
-            start_speed=random_between(0.4, 1.0),
+            # Blocks/SECOND again: the shipped 0.4-1.0 was 0.02-0.05 blocks/TICK, i.e.
+            # debris that never left the crater (the same unit slip A1/A3/A4 corrected
+            # across the tree). 6-16 b/s = 0.3-0.8 b/t, damped onto the ground by
+            # friction 0.98 + gravity 0.4 inside the impact's 5-block damage radius.
+            start_speed=random_between(6.0, 16.0),
             start_size=nf3(random_between(0.06, 0.12), random_between(0.06, 0.12),
                            random_between(0.06, 0.12)),
             simulation_space="World", max_particles=48)
        .child_of(root)
        .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(30))])
        .with_shape(sphere(radius=0.5, thickness=0.0))
-       .with_material(texture_material(CIRCLE, hdr=(1.1, 1.1, 1.5), blend=BLEND_ADDITIVE))
+       .with_material(texture_material(CIRCLE, hdr=hdr(1.1, 1.1, 1.5), blend=BLEND_ADDITIVE))
        .with_physics(collision=True, friction=0.98, collided_friction=0.6, gravity=0.4,
                      bounce_chance=0.5, bounce_rate=0.35, bounce_spread=0.1)
        .with_curves(color_over_lifetime=gradient(
@@ -304,6 +622,128 @@ def build_stern_komet_impact() -> FxBuilder:
             color_over_lifetime=gradient(
                 [(0.0, 0.0), (0.25, 0.3), (1.0, 0.0)],
                 [(0.0, 0.75, 0.8, 1.0), (1.0, 0.45, 0.55, 0.85)])))
+    return fx
+
+
+# --- Birth cascade: crater glow -> ember motes -> star glints -----------------
+def build_stern_komet_crater_glow() -> FxBuilder:
+    """Afterglow stage 1 — scorched crater disc plus the six rim seeds that carry stage 2.
+
+    A5 consequence 1: Birth fires on the particle's FIRST tick, at its EMISSION point, so a
+    link that must fan out in space has to be BORN fanned out — the seeds are burst on a
+    r=2.4 circle rather than travelling there. Their burst sits at tick 6, which is the only
+    way to sequence a cascade (children never inherit timing). Burst sum 1 + 6 = 7 ≤ 8.
+    """
+    fx = FxBuilder("stern_komet_crater_glow")
+
+    (fx.particle_emitter("crater",
+            duration=70, looping=False, start_lifetime=constant(55), start_speed=constant(0),
+            start_size=nf3(1.6), simulation_space="Local", max_particles=4)
+       .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(1))])
+       .with_shape(dot())
+       .with_material(texture_material(CIRCLE, hdr=hdr(0.85, 0.62, 0.45), blend=BLEND_ADDITIVE))
+       .with_renderer(render_mode="Horizontal")
+       .with_curves(
+            size_over_lifetime=curve(1.0, 3.1, [SEG_EASE_OUT_CREST], "lifetime", "size"),
+            # Dark birth tint (stacking law): the glow OPENS deep ember-brown and only
+            # briefly licks warm, so 40+ overlapping afterglow quads never converge to white.
+            color_over_lifetime=gradient(
+                [(0.0, 0.0), (0.12, 0.55), (0.5, 0.34), (1.0, 0.0)],
+                [(0.0, 0.34, 0.14, 0.1), (0.3, 0.86, 0.44, 0.2),
+                 (1.0, 0.26, 0.12, 0.14)])))
+
+    (fx.particle_emitter("rim_seeds",
+            duration=70, looping=False, start_lifetime=random_between(26, 38),
+            start_speed=random_between(0.6, 2.2),
+            start_size=nf3(random_between(0.09, 0.16), random_between(0.09, 0.16),
+                           random_between(0.09, 0.16)),
+            simulation_space="World", max_particles=8)
+       .with_emission(rate=constant(0.0), bursts=[burst(time=6, count=constant(6))])
+       .with_shape(circle(radius=2.4, thickness=0.35))
+       .with_material(texture_material(CIRCLE, hdr=hdr(0.95, 0.7, 0.5), blend=BLEND_ADDITIVE))
+       .with_physics(collision=False, gravity=0.08, bounce_chance=0.0)
+       .with_sub_emitters(sub_emitter("eclipse:stern_komet_ember_motes", event="Birth",
+                                      probability=0.5))
+       .with_curves(color_over_lifetime=gradient(
+            [(0.0, 0.0), (0.18, 0.8), (1.0, 0.0)],
+            [(0.0, 0.3, 0.15, 0.12), (0.35, 1.0, 0.66, 0.34), (1.0, 0.4, 0.16, 0.1)]))
+       .with_lights(sky=15, block=15))
+    return fx
+
+
+def build_stern_komet_ember_motes() -> FxBuilder:
+    """Afterglow stage 2 — heavy soot settles, light embers rise (burst sum 2 + 4 = 6 ≤ 8).
+
+    Mass law (census §8.4): the soot is the heavy element, so it sits LOW and SLOW under the
+    motes that carry stage 3 upward.
+    """
+    fx = FxBuilder("stern_komet_ember_motes")
+
+    (fx.particle_emitter("soot",
+            duration=60, looping=False, start_lifetime=random_between(30, 44),
+            start_speed=random_between(0.3, 0.9),
+            start_size=nf3(random_between(0.22, 0.4), random_between(0.22, 0.4),
+                           random_between(0.22, 0.4)),
+            simulation_space="World", max_particles=4)
+       .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(2))])
+       .with_shape(cone(angle=32.0, radius=0.25))
+       .with_material(texture_material(SMOKE, blend=BLEND_ALPHA))
+       .with_renderer(vertex_sorting="DISTANCE")
+       .with_curves(
+            size_over_lifetime=curve(1.0, 1.9, [SEG_EASE_OUT_CREST], "lifetime", "size"),
+            color_over_lifetime=gradient(
+                [(0.0, 0.0), (0.22, 0.34), (1.0, 0.0)],
+                [(0.0, 0.2, 0.15, 0.14), (1.0, 0.1, 0.08, 0.09)])))
+
+    (fx.particle_emitter("motes",
+            duration=60, looping=False, start_lifetime=random_between(34, 48),
+            start_speed=random_between(1.4, 3.4),
+            start_size=nf3(random_between(0.05, 0.1), random_between(0.05, 0.1),
+                           random_between(0.05, 0.1)),
+            simulation_space="World", max_particles=8)
+       .with_emission(rate=constant(0.0), bursts=[burst(time=5, count=constant(4))])
+       .with_shape(cone(angle=22.0, radius=0.4))
+       .with_material(texture_material(CIRCLE, hdr=hdr(1.0, 0.66, 0.34), blend=BLEND_ADDITIVE))
+       .with_curves(
+            # Thermal wander on the way up so the embers do not read as a straight fountain.
+            noise=dict(frequency=0.35, quality="Noise2D",
+                       position=nf3(constant(0.035), constant(0.012), constant(0.035)),
+                       rotation=constant(0), size=constant(0)),
+            color_over_lifetime=gradient(
+                [(0.0, 0.0), (0.15, 0.85), (0.7, 0.5), (1.0, 0.0)],
+                [(0.0, 0.36, 0.16, 0.1), (0.3, 1.0, 0.7, 0.36), (1.0, 0.42, 0.14, 0.08)]))
+       .with_sub_emitters(sub_emitter("eclipse:stern_komet_star_glint", event="Birth",
+                                      probability=0.45))
+       .with_lights(sky=15, block=15))
+    return fx
+
+
+def build_stern_komet_star_glint() -> FxBuilder:
+    """Afterglow stage 3, chain leaf — three fading star glints (burst sum 3 ≤ 8).
+
+    The path identity closes the loop: real 4-point-star sprites off star_2x2.png with the
+    2x2 flipbook AS the twinkle, same as the Stern idle aura.
+    """
+    fx = FxBuilder("stern_komet_star_glint")
+    (fx.particle_emitter("glints",
+            duration=40, looping=False, start_lifetime=random_between(20, 32),
+            start_speed=random_between(0.4, 1.3),
+            start_size=nf3(random_between(0.09, 0.17), random_between(0.09, 0.17),
+                           random_between(0.09, 0.17)),
+            simulation_space="World", max_particles=6)
+       .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(3))])
+       .with_shape(sphere(radius=0.5, thickness=1.0))
+       .with_material(texture_material(STAR_2X2, hdr=hdr(1.0, 1.05, 1.45),
+                                       blend=BLEND_ADDITIVE))
+       .with_curves(
+            uv_animation=dict(tiles=(2, 2), animation="WholeSheet",
+                              frame_over_time=curve(0.0, 4.0, [SEG_FLICKER_COMMIT]),
+                              start_frame=random_between(0.0, 3.0), cycle=2.0),
+            size_over_lifetime=curve(0.25, 1.0, [SEG_POP_SHRINK], "lifetime", "size"),
+            color_over_lifetime=gradient(
+                [(0.0, 0.0), (0.2, 0.9), (1.0, 0.0)],
+                [(0.0, 0.24, 0.2, 0.4), (0.4, 0.9, 0.94, 1.0), (1.0, 0.4, 0.5, 0.95)]))
+       .with_lights(sky=15, block=15))
     return fx
 
 
@@ -637,7 +1077,11 @@ BUILDERS = {
     "wand_soulbind_flash.fx": build_wand_soulbind_flash,
     "stern_komet_fall.fx": build_stern_komet_fall,
     "stern_komet_sparkle.fx": build_stern_komet_sparkle,
+    "stern_komet_touchdown.fx": build_stern_komet_touchdown,
     "stern_komet_impact.fx": build_stern_komet_impact,
+    "stern_komet_crater_glow.fx": build_stern_komet_crater_glow,
+    "stern_komet_ember_motes.fx": build_stern_komet_ember_motes,
+    "stern_komet_star_glint.fx": build_stern_komet_star_glint,
     "riss_schlag_maw.fx": build_riss_schlag_maw,
     "riss_glitch_pop.fx": build_riss_glitch_pop,
     "glut_sprung_crater.fx": build_glut_sprung_crater,
