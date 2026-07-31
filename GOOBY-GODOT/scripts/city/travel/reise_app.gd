@@ -242,6 +242,15 @@ func _render_weg(vac: Dictionary) -> void:
 	var rest_ms := maxi(0, int(vac["returnAt"]) - now_ms())
 	_label(I18nService.t("travel.weg.titel"), "HeadlineLabel")
 	_label(I18nService.t("travel.weg.rest").format({"tage": ceili(rest_ms / 86400000.0)}), "")
+	# W15/URLAUB (additiv): solange Gooby VOR ORT ist, kann man ihn dort
+	# besuchen — reine Ansicht, keine Phasen-Änderung (UrlaubsBesuch).
+	if UrlaubsBesuch.verfuegbar(gs.state(), now_ms()):
+		var besuchen := Button.new()
+		besuchen.name = "GoobyBesuchen"
+		besuchen.theme_type_variation = "PrimaryButton"
+		besuchen.text = I18nService.t("urlaub.knopf.besuchen")
+		besuchen.pressed.connect(_on_gooby_besuchen)
+		_box.add_child(besuchen)
 
 
 func _render_abholen(overdue: bool) -> void:
@@ -339,6 +348,17 @@ func _on_cutscene_fertig(cutscene: Node, ziel_id: String) -> void:
 	var router := get_node_or_null("/root/SceneRouter")
 	if router != null and not router.is_busy():
 		router.goto(&"home/living", {})
+
+
+## W15/URLAUB (additiv): Besuchs-Reise starten — Sheet zu, Route über
+## UrlaubsBesuch (space → bestehende Raumstation), Rückweg = Router-back.
+func _on_gooby_besuchen() -> void:
+	var router := get_node_or_null("/root/SceneRouter")
+	if router == null or router.is_busy():
+		return
+	AudioDirector.try_play(self, "ui_click")
+	sheet.close()
+	UrlaubsBesuch.besuche(gs, router, now_ms())
 
 
 func _on_abholen(overdue: bool) -> void:

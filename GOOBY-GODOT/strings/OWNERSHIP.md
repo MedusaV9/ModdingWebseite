@@ -102,3 +102,10 @@ Regeln:
 *(Doku-Pass W14/INTEGRATE: alle zuvor per >> angehängten W13B/W13C/W14-Domains
 sind in die Tabelle oben gehoben — neue Nachträge bitte wieder ans Dateiende
 per >> anhängen, der nächste Doku-Pass hebt sie.)*
+
+>> `urlaub.*` (Datei `strings/<locale>/urlaub.json` — „Gooby im Urlaub
+besuchen“: Besuchen-Knopf/Szenen-Titel/Aktions-Toasts, 9 Souvenir-Namen
+(`urlaub.souvenir.<destId>`), 3×8 AcBubble-Lines je Archetyp
+(`urlaub.bubble.strand/berge/stadt`), Café-Bestell-Gag `urlaub.bestellung`,
+Soul-Erinnerungen `urlaub.soul.*`) → **W15 URLAUB**, seit W15 — beim
+nächsten Doku-Pass in die Tabelle heben.
