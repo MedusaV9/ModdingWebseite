@@ -1,5 +1,6 @@
 package dev.projecteclipse.eclipse.sequence;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -15,11 +16,16 @@ import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.network.fx.FxCues;
+import dev.projecteclipse.eclipse.network.fx.FxPayloads;
 import dev.projecteclipse.eclipse.worldgen.stage.DisplayBrightnessFx;
 import net.minecraft.core.BlockPos;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.Display;
@@ -45,7 +51,14 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
  *       kicked loose all over the crater footprint, ride a short parabola
  *       ({@value #HOP_TICKS} ticks) with a drunken tilt and slam back down. The wave cadence
  *       breathes with {@link #hopWavePressure}, so the quake reads as swells rather than
- *       popcorn.</li>
+ *       popcorn. F-102 <b>slam beats</b>: the tick a wave lands back in the ground (spawn +
+ *       {@value #HOP_TICKS}, rate-limited to one beat per {@value #SLAM_BEAT_MIN_INTERVAL}
+ *       ticks) the swarm plays a muffled ground thud and fires the
+ *       {@code eclipse:fx/cue/nether_tremor_slam} cue over the SHIPPED position cue lane
+ *       ({@code S2CFxEventPayload} — nothing new on the wire, the B7 ember-tear precedent);
+ *       the client row ({@code veilfx.NetherOpenPhotonFxRows}) answers with a dust-ring
+ *       stamp + camera kick, so the visible block slam, the thud and the shake are ONE
+ *       fühlbarer Einschlag-Beat. {@code a} carries the pressure at the landing tick.</li>
  *   <li>{@link #erupt} — phase 3: the whole footprint is blown out at once as up to
  *       {@value #FOUNTAIN_PIECES} pieces on ballistic fountain arcs (up + outward, faster
  *       and steeper towards the middle), tumbling hard and scaling to zero as they fall,
@@ -141,6 +154,33 @@ public final class NetherUpheavalFx {
      * ~90–120 block column the recipe was actually describing.
      */
     private static final double JET_GRAVITY_FACTOR = 1.0D;
+
+    // --- F-102 slam beats (the fühlbare Einschlag-Beats of phase 2) ---
+    /**
+     * Cue id of the hop-wave slam beat. Both sides derive the same
+     * {@code FxCues.cue("nether_tremor_slam")} id (the CreditsSequence naming-contract
+     * precedent, so {@code FxCues.java} stays untouched); the client row lives in
+     * {@code veilfx.NetherOpenPhotonFxRows}.
+     */
+    private static final ResourceLocation CUE_TREMOR_SLAM = FxCues.cue("nether_tremor_slam");
+    /**
+     * Minimum ticks between two slam beats. Waves land every 14–56 ticks (the pressure
+     * cadence); un-limited that is a machine gun, limited to one per ~2.4 s the tremor
+     * gets 6–7 clean, growing beats over its 18 s — beats, not texture.
+     */
+    private static final int SLAM_BEAT_MIN_INTERVAL = 48;
+    /**
+     * Cue broadcast range (blocks). The camera kick fades to zero at 120 anyway
+     * ({@code NetherOpenClientFx.SHAKE_RANGE}) and a ring stamp nobody can see would
+     * only burn a Photon executor slot — no reason to ship the beat dimension-wide the
+     * way the phase entries are.
+     */
+    private static final double SLAM_CUE_RANGE = 160.0D;
+    /** Slam thud volume/pitch bands, scaled by the pressure at the landing tick. */
+    private static final float SLAM_THUD_VOLUME_MIN = 0.9F;
+    private static final float SLAM_THUD_VOLUME_SPAN = 0.7F;
+    private static final float SLAM_THUD_PITCH_MIN = 0.3F;
+    private static final float SLAM_THUD_PITCH_SPAN = 0.08F;
 
     /** Transform push cadence == interpolation duration (DisplayAnimator law). */
     private static final int UPDATE_INTERVAL_TICKS = 3;
@@ -365,6 +405,10 @@ public final class NetherUpheavalFx {
         int fountainSpawned;
         boolean released;
         boolean done;
+        /** Swarm ages at which a spawned hop wave slams back down (spawn + HOP_TICKS). */
+        final ArrayDeque<Integer> pendingSlamAges = new ArrayDeque<>();
+        /** Age of the last fired slam beat (rate limiter). */
+        int lastSlamAge = -SLAM_BEAT_MIN_INTERVAL;
 
         Swarm(ServerLevel level, BlockPos center, double radius) {
             this.level = level;
@@ -394,6 +438,7 @@ public final class NetherUpheavalFx {
                     spawnHopWave();
                 }
             }
+            tickSlamBeats();
             reap();
             if (this.released && this.pieces.isEmpty()) {
                 this.done = true; // last arc landed: the swarm retires itself
@@ -426,6 +471,7 @@ public final class NetherUpheavalFx {
             if (hopWavePressure <= 0.0F) {
                 return;
             }
+            int before = this.pieces.size();
             int batch = Math.max(1, Math.round(HOP_WAVE * hopWavePressure));
             for (int i = 0; i < batch; i++) {
                 Column column = surfacePoint(Math.sqrt(this.random.nextDouble()) * this.radius);
@@ -440,6 +486,47 @@ public final class NetherUpheavalFx {
                         HOP_SPIN_MAX_DEG_PER_TICK * 0.15D, HOP_SPIN_MAX_DEG_PER_TICK,
                         this.random.nextDouble()));
             }
+            if (this.pieces.size() > before) {
+                // F-102: the wave WILL slam back down at spawn + HOP_TICKS — that landing
+                // tick (not the launch) is the beat. Only waves that really put pieces in
+                // the air queue one; skipped/unloaded columns never fake a beat.
+                this.pendingSlamAges.addLast(this.age + HOP_TICKS);
+            }
+        }
+
+        /**
+         * F-102 slam beats: fires the thud + {@link #CUE_TREMOR_SLAM} cue when a queued
+         * hop wave lands, rate-limited to one beat per {@value #SLAM_BEAT_MIN_INTERVAL}
+         * ticks (over-cadenced landings merge into the running beat). The eruption drops
+         * every pending beat — the RUPTURE punch owns the frame from that tick on.
+         */
+        private void tickSlamBeats() {
+            if (this.erupting || this.released) {
+                this.pendingSlamAges.clear();
+                return;
+            }
+            boolean due = false;
+            while (!this.pendingSlamAges.isEmpty() && this.pendingSlamAges.peekFirst() <= this.age) {
+                this.pendingSlamAges.removeFirst();
+                due = true;
+            }
+            if (!due || this.age - this.lastSlamAge < SLAM_BEAT_MIN_INTERVAL) {
+                return;
+            }
+            this.lastSlamAge = this.age;
+            float pressure = hopWavePressure;
+            // Muffled body thump, growing with the quake (the rupture keeps its 4.0/0.5
+            // GENERIC_EXPLODE headroom — these stay well under it).
+            this.level.playSound(null, this.center, SoundEvents.GENERIC_EXPLODE.value(),
+                    SoundSource.BLOCKS,
+                    SLAM_THUD_VOLUME_MIN + SLAM_THUD_VOLUME_SPAN * pressure,
+                    SLAM_THUD_PITCH_MIN + SLAM_THUD_PITCH_SPAN * pressure);
+            // Existing position cue lane (S2CFxEventPayload) — the client row stamps the
+            // dust ring and kicks the camera, proximity-scaled on its own side. Anchor =
+            // lip-plane block center, the same (x+0.5, y+0.5, z+0.5) the phase one-shots
+            // use (SURFACE_LIFT), so ring and fissure star share one ground plane.
+            FxPayloads.sendFxEvent(this.level, CUE_TREMOR_SLAM,
+                    Vec3.atCenterOf(this.center), pressure, 0.0F, SLAM_CUE_RANGE);
         }
 
         private void spawnFountainBatch() {

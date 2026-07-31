@@ -1,22 +1,49 @@
 #!/usr/bin/env python3
 """nether_open_fx — Photon assets for the day-2 NETHER OPENING sequence.
 
-Committed fxlib source of truth (binary-blob diff law, FX_FORMAT.md §7) for the five
-`.fx` blobs of `sequence/NetherOpeningSequence` + the breach ambience:
+Committed fxlib source of truth (binary-blob diff law, FX_FORMAT.md §7) for the eight
+`.fx` blobs of `sequence/NetherOpeningSequence` + the breach ambience. F-102 ("Nether-
+Masse") re-tuned the pre-eruption phases for STILL-FRAME readability: every phase owns a
+dominant silhouette (Kegel -> Ringe -> Speichen-Stern -> Pilz-Säule -> Glutflocken), not
+just a particle-count ramp — the in-game replay acceptance showed phases 1-2 reading as
+static until the eruption:
 
-  phase 1 OMEN      eclipse:nether_omen_ash        one-shot 240t: ash column creeping out
-                                                   of the un-broken ground + lava glints
-                                                   seeping from the ritzen + a flat ground
-                                                   seep skirt
+  phase 1 OMEN      eclipse:nether_omen_ash        one-shot 240t: THE silhouette is a dark
+                                                   ash VEIL CONE (apex ~22 blocks up) whose
+                                                   soot slides down the lateral surface;
+                                                   under it the W11 ash swell + lava glints
+                                                   + ground seep skirt. veil_slump bakes
+                                                   the mid-omen ground-shock poff at t=120
+                                                   (NetherOpenClientFx kicks the camera on
+                                                   the same tick)
   phase 2 TREMOR    eclipse:nether_quake_fissure   one-shot 140t: ONE glowing ground crack
                                                    (jagged randomA line) + its dust lift;
                                                    the client stamps several around the rim
-  phase 3 RUPTURE   eclipse:nether_eruption        one-shot 200t: fire column + colliding
+                    eclipse:nether_tremor_waves    one-shot 360t (F-102): the quake carpet —
+                                                   pebbles POPPING off the whole footprint
+                                                   (real collision physics) under a boiling
+                                                   flipbook ground-dust heave, both swelling
+                                                   with the phase
+                    eclipse:nether_tremor_ring     one-shot 50t (F-102): ONE beat stamp —
+                                                   a flat dust ring racing outward + a
+                                                   kiesel splash + grit glints; fired per
+                                                   hop-wave SLAM via the
+                                                   fx/cue/nether_tremor_slam cue lane
+  phase 3 RUPTURE   eclipse:nether_rupture_spoke   one-shot 130t (F-102): ONE radial ember
+                                                   RISS-SPEICHE (jagged glowing line local
+                                                   +X 3..15) + rubble fountains popping
+                                                   along it + tear dust; the client stamps
+                                                   a 6-spoke star, each yawed outward
+                    eclipse:nether_eruption        one-shot 200t: fire column + colliding
                                                    ember shrapnel + flipbook smoke pillar +
                                                    THREE staggered ground shock rings (the
                                                    echo waves land on the aftershock sound
                                                    stack) + tall dust curtains rolling
-                                                   outward over the halo (W13/A6)
+                                                   outward over the halo (W13/A6) + the
+                                                   F-102 MUSHROOM CAP: a crown of flipbook
+                                                   puffs materialising around the column
+                                                   apex and spreading laterally — the
+                                                   still-frame reads Säule + Pilz
   phase 4 AFTERMATH eclipse:nether_pit_plume       WINDOWED loop: the permanent smoke cloud
                                                    hanging over the pit — GPU-instanced
                                                    flipbook soot swathes (ember veins twitch
@@ -29,12 +56,18 @@ Committed fxlib source of truth (binary-blob diff law, FX_FORMAT.md §7) for the
                                                    eclipse:soft_particle), and a whisper-
                                                    subtle rgb_split heat shimmer directly
                                                    over the mouth (A0 distortion shader —
-                                                   Photon's own stack has no refraction)
+                                                   Photon's own stack has no refraction).
+                                                   F-102 thickening: lazy dark FOG SHELLS
+                                                   around the body, twitching EMBER MOTES
+                                                   inside it, and probability-gated FIRE
+                                                   TONGUES licking out of the mouth
   ambient           eclipse:nether_ash_snow        WINDOWED loop (N11): sparse dark ash
                                                    flakes snowing over a wide radius around
                                                    the pit + faint drifting soot haze —
                                                    random_gradient grey variation, tiny
-                                                   counts, GPU-instanced
+                                                   counts, GPU-instanced. F-102 Nachglut:
+                                                   a handful of TRÄGE GLUTFLOCKEN (slow
+                                                   glowing flakes) sinking among them
 
 Loop law (INTEGRATION.md §4): every looping emitter carries a renderer cull box + hard
 maxParticles. Collision emitters keep parallelUpdate 0b (FX_FORMAT §3.1/§3.3 — collision
@@ -52,7 +85,7 @@ UVAnimationSetting{tiles:Vector2i, animation:WholeSheet|SingleRow, frameOverTime
 startFrame:NF, cycle:float}; the GPU-instanced path uploads TileParticle.getRealUVs()
 per instance, so flipbook + useGPUInstance compose (ParticleInstanceRenderer.upload).
 
-Run:  python3 tools/photon/nether_open_fx.py            # writes + validates all 5 assets
+Run:  python3 tools/photon/nether_open_fx.py            # writes + validates all 8 assets
       python3 tools/photon/nether_open_fx.py --atlas    # force-regenerate the atlas PNG
 """
 from fxlib import *  # noqa: F401,F403 - the authoring DSL is the point
@@ -72,7 +105,21 @@ HALO_R = 28.0
 # (the assets are finite one-shots; a shorter asset would die mid-phase).
 OMEN_TICKS = 240
 FISSURE_TICKS = 140
+TREMOR_TICKS = 360          # TREMOR_END - OMEN_TICKS (the quake-carpet asset spans it)
 ERUPTION_TICKS = 200
+
+# F-102 silhouette geometry: the omen veil cone (apex height over the lip plane) and the
+# rupture spoke line (local +X band; the client stamps SPOKE-many, each yawed outward).
+VEIL_H = 22.0
+SPOKE_X_MIN = 3.0
+SPOKE_X_LEN = 12.0
+# Beat tick of the mid-omen ground shock INSIDE the omen asset (= phase-local t): the
+# veil_slump burst below and NetherOpenClientFx.OMEN_BEAT_AT must agree, or the camera
+# kick and the dust poff drift apart.
+OMEN_BEAT_TICK = 120
+# Beat stamp length of the tremor ring asset (must outlive its ring+splash particles).
+TREMOR_RING_TICKS = 50
+SPOKE_TICKS = 130
 
 
 #: Eased 0->1 swell over the emitter lifetime (LINT-LINEAR-CURVE: never ship chord-collinear
@@ -192,6 +239,70 @@ def build_nether_omen_ash() -> FxBuilder:
     halo, and single lava glints wink in the hairline cracks. Ramped in over the first
     ~third so the phase starts almost imperceptibly."""
     fx = FxBuilder("nether_omen_ash")
+
+    # F-102: THE omen silhouette — a dark veil CONE standing over the mouth (apex
+    # {VEIL_H} blocks up), its soot sliding down the lateral surface. randomB picks the
+    # radius fraction, so a uniform roll lands MORE quads near the apex (r ~ B but the
+    # area grows with B²) and the tip reads solid in a still frame; the sink + radial
+    # creep approximate the slide down the cone. Big, few, DARK quads (stacking law +
+    # llvmpipe still-frame read) — the phase starts almost empty and the cone condenses
+    # out of nothing over the first third (swell ramp).
+    (fx.particle_emitter(
+            "veil_cone",
+            duration=OMEN_TICKS, looping=False,
+            start_lifetime=random_between(80, 140),
+            start_speed=constant(0.0),
+            start_size=nf3(random_between(2.2, 4.2), random_between(2.2, 4.2),
+                           random_between(2.2, 4.2)),
+            simulation_space="World", max_particles=110)
+       .with_emission(rate=swell(0.5, 3.4))
+       .with_shape(function_shape(
+            x=f"cos(randomA*2*PI)*{CRATER_R - 2.0}*randomB",
+            y=f"{VEIL_H}*(1-randomB)",
+            z=f"sin(randomA*2*PI)*{CRATER_R - 2.0}*randomB"))
+       .with_curves(
+            velocity_over_lifetime=dict(  # the veil FALLS (inverted sacred vertical)
+                linear=nf3(constant(0), random_between(-0.14, -0.06), constant(0)),
+                radial=random_between(0.02, 0.05)),
+            noise=dict(frequency=0.3, quality="Noise2D",
+                       position=nf3(constant(0.04), constant(0.015), constant(0.04))),
+            color_over_lifetime=gradient(  # #453B38 -> #1F1A1C, in-hold-out, ceiling 0.5
+                [(0.0, 0.0), (0.18, 0.5), (0.8, 0.42), (1.0, 0.0)],
+                [(0.0, 0.27, 0.231, 0.22), (1.0, 0.122, 0.102, 0.11)]),
+            size_over_lifetime=curve(
+                0.7, 1.4,
+                [(0.0, 0.0, 0.15, 0.4, 0.5, 0.9, 1.0, 1.0)]))
+       .with_material(texture_material(SMOKE, blend=BLEND_ALPHA))
+       .with_renderer(vertex_sorting="DISTANCE", shade=True)
+       .with_cull_box((-HALO_R, -6.0, -HALO_R), (HALO_R, VEIL_H + 12.0, HALO_R)))
+
+    # F-102 omen BEAT poff: the veil slumps once at t={OMEN_BEAT_TICK} — a flat dark
+    # dust ring rolling off the mouth footprint the tick the client's mid-omen ground
+    # shock lands (NetherOpenClientFx schedules the camera kick + boom off the same
+    # phase payload, so both sides stay in lockstep without any new sync).
+    (fx.particle_emitter(
+            "veil_slump",
+            duration=OMEN_TICKS, looping=False,
+            start_lifetime=random_between(30, 52),
+            start_speed=random_between(0.7, 1.4),
+            start_size=nf3(random_between(1.2, 2.2), random_between(1.2, 2.2),
+                           random_between(1.2, 2.2)),
+            simulation_space="World", max_particles=34)
+       .with_emission(rate=constant(0.0),
+                      bursts=[burst(time=OMEN_BEAT_TICK, count=constant(30), cycles=1)])
+       .with_shape(circle(radius=CRATER_R * 0.7, thickness=0.1))
+       .with_curves(
+            velocity_over_lifetime=dict(  # launch spent fast, then the ring only creeps
+                speed_modifier=curve(0.0, 1.0, SEG_APEX_DRAG)),
+            color_over_lifetime=gradient(
+                [(0.0, 0.0), (0.12, 0.55), (1.0, 0.0)],
+                [(0.0, 0.42, 0.36, 0.32), (1.0, 0.2, 0.16, 0.16)]),
+            size_over_lifetime=curve(
+                0.6, 1.5,
+                [(0.0, 0.0, 0.15, 0.55, 0.5, 0.92, 1.0, 1.0)]))
+       .with_material(texture_material(SMOKE, blend=BLEND_ALPHA))
+       .with_renderer(vertex_sorting="DISTANCE", shade=True)
+       .with_cull_box((-HALO_R, -4.0, -HALO_R), (HALO_R, 12.0, HALO_R)))
 
     # Ash welling up out of the ground: rate RAMPS over the phase (the omen builds).
     (fx.particle_emitter(
@@ -327,6 +438,162 @@ def build_nether_quake_fissure() -> FxBuilder:
 
 
 # ---------------------------------------------------------------------------
+# Phase 2b — TREMOR carpet + beat stamp (F-102)
+# ---------------------------------------------------------------------------
+def build_nether_tremor_waves() -> FxBuilder:
+    """eclipse:nether_tremor_waves — the quake CARPET, block-anchored at the crater centre
+    for the whole 360-t tremor (spawned once on the TREMOR phase payload). Two reads that
+    make the pre-eruption quake land in a still frame:
+
+      pebble_pops   Kiesel popping off the whole footprint on REAL collision physics
+                    (they land and skitter instead of sinking through the sand); the
+                    pop rate swells with the phase exactly like the hop-wave pressure
+      heave_dust    a boiling flipbook ground-dust heave hugging the footprint — the
+                    "Boden kocht" connective tissue under the pebbles
+
+    Collision law: pebbles keep parallelUpdate off (FX_FORMAT §3.1)."""
+    fx = FxBuilder("nether_tremor_waves")
+
+    # Kiesel: small dark grit thrown 1-3 blocks up all over the mouth footprint,
+    # falling back onto the REAL surface and bouncing out. Deliberately not glowing —
+    # the quake is mechanical, the fire only arrives with the rupture.
+    (fx.particle_emitter(
+            "pebble_pops",
+            duration=TREMOR_TICKS, looping=False,
+            start_lifetime=random_between(24, 44),
+            start_speed=random_between(0.5, 1.1),
+            start_size=nf3(random_between(0.07, 0.18), random_between(0.07, 0.18),
+                           random_between(0.07, 0.18)),
+            simulation_space="World", max_particles=110,
+            parallel_update=False)  # collision law (FX_FORMAT §3.1)
+       .with_emission(rate=swell(1.5, 6.5))
+       .with_shape(cone(angle=12.0, radius=CRATER_R * 0.95))
+       .with_physics(collision=True, removed_when_collided=False, gravity=0.3,
+                     friction=0.98, collided_friction=0.5, bounce_chance=0.55,
+                     bounce_rate=0.35, bounce_spread=0.25)
+       .with_curves(color_over_lifetime=random_gradient(  # sand grit <-> tuff grit
+            [(0.0, 0.0), (0.08, 0.9), (0.85, 0.75), (1.0, 0.0)],
+            [(0.0, 0.42, 0.369, 0.322), (1.0, 0.229, 0.196, 0.173)],
+            [(0.0, 0.0), (0.08, 0.85), (0.85, 0.7), (1.0, 0.0)],
+            [(0.0, 0.322, 0.298, 0.286), (1.0, 0.173, 0.157, 0.149)]))
+       .with_material(texture_material(SMOKE, blend=BLEND_ALPHA))
+       .with_renderer(vertex_sorting="DISTANCE", shade=True)
+       .with_cull_box((-HALO_R, -6.0, -HALO_R), (HALO_R, 14.0, HALO_R)))
+
+    # Ground heave: a low boiling dust blanket over the footprint (flipbook boil rides
+    # the shared 4x4 sheet). Heavy = low + slow: it never climbs past a few blocks.
+    (fx.particle_emitter(
+            "heave_dust",
+            duration=TREMOR_TICKS, looping=False,
+            start_lifetime=random_between(60, 110),
+            start_speed=random_between(0.02, 0.08),
+            start_size=nf3(random_between(1.6, 3.0), random_between(1.6, 3.0),
+                           random_between(1.6, 3.0)),
+            simulation_space="World", max_particles=70)
+       .with_emission(rate=swell(0.4, 2.2))
+       .with_shape(cylinder(radius=CRATER_R * 0.95, thickness=1.0), scale=[1.0, 0.08, 1.0])
+       .with_curves(
+            velocity_over_lifetime=dict(
+                linear=nf3(constant(0), random_between(0.03, 0.09), constant(0))),
+            noise=dict(frequency=0.32, quality="Noise2D",
+                       position=nf3(constant(0.05), constant(0.015), constant(0.05))),
+            uv_animation=dict(tiles=(4, 4), animation="SingleRow",
+                              frame_over_time=curve(0.0, 1.0, [SEG_LINEAR_UP]),
+                              start_frame=random_between(0.0, 4.0), cycle=2.0),
+            color_over_lifetime=gradient(  # dark desert dust, alpha ceiling 0.4
+                [(0.0, 0.0), (0.15, 0.4), (0.75, 0.3), (1.0, 0.0)],
+                [(0.0, 0.78, 0.69, 0.61), (0.5, 0.55, 0.47, 0.42),
+                 (1.0, 0.35, 0.29, 0.27)]),
+            size_over_lifetime=curve(
+                0.7, 1.6,
+                [(0.0, 0.0, 0.18, 0.45, 0.55, 0.9, 1.0, 1.0)]))
+       .with_material(texture_material(PLUME_ATLAS, discard=0.02, blend=BLEND_ALPHA))
+       .with_renderer(vertex_sorting="DISTANCE", shade=True)
+       .with_cull_box((-HALO_R, -6.0, -HALO_R), (HALO_R, 16.0, HALO_R)))
+    return fx
+
+
+def build_nether_tremor_ring() -> FxBuilder:
+    """eclipse:nether_tremor_ring — ONE quake-beat stamp: a flat dust ring racing out over
+    the halo + a Kiesel splash + grit glints. Fired through the
+    {@code eclipse:fx/cue/nether_tremor_slam} cue lane every time a hop wave SLAMS back
+    down (NetherUpheavalFx sends the cue on the landing tick, rate-limited), so the
+    visible ring, the camera kick and the thud are ONE beat. Successive stamps share the
+    crater anchor inside this asset's ~50-t life, hence the row spawns with allowMulti."""
+    fx = FxBuilder("nether_tremor_ring")
+
+    # The dust wave: launched hard off the mouth rim, drag-spent within its first
+    # quarter (the slam pushes, then the dust only rolls).
+    (fx.particle_emitter(
+            "dust_ring",
+            duration=TREMOR_RING_TICKS, looping=False,
+            start_lifetime=random_between(22, 36),
+            start_speed=random_between(1.5, 2.3),
+            start_size=nf3(random_between(0.9, 1.8), random_between(0.9, 1.8),
+                           random_between(0.9, 1.8)),
+            simulation_space="World", max_particles=50)
+       .with_emission(rate=constant(0.0),
+                      bursts=[burst(time=0, count=constant(46), cycles=1)])
+       .with_shape(circle(radius=CRATER_R * 0.55, thickness=0.0))
+       .with_curves(
+            velocity_over_lifetime=dict(speed_modifier=curve(0.0, 1.0, SEG_APEX_DRAG)),
+            color_over_lifetime=gradient(
+                [(0.0, 0.0), (0.12, 0.6), (1.0, 0.0)],
+                [(0.0, 0.45, 0.39, 0.34), (1.0, 0.23, 0.19, 0.18)]),
+            size_over_lifetime=curve(
+                0.55, 1.4,
+                [(0.0, 0.0, 0.12, 0.6, 0.5, 0.95, 1.0, 1.0)]))
+       .with_material(texture_material(SMOKE, blend=BLEND_ALPHA))
+       .with_renderer(vertex_sorting="DISTANCE", shade=True)
+       .with_cull_box((-HALO_R - 8.0, -4.0, -HALO_R - 8.0), (HALO_R + 8.0, 10.0, HALO_R + 8.0)))
+
+    # Kiesel splash: a clustered burst of grit jumping off the footprint with the slam
+    # (one tick behind the ring — the ground answers the impact).
+    (fx.particle_emitter(
+            "kiesel_burst",
+            duration=TREMOR_RING_TICKS, looping=False,
+            start_lifetime=random_between(24, 40),
+            start_speed=random_between(0.7, 1.5),
+            start_size=nf3(random_between(0.08, 0.2), random_between(0.08, 0.2),
+                           random_between(0.08, 0.2)),
+            simulation_space="World", max_particles=26,
+            parallel_update=False)  # collision law (FX_FORMAT §3.1)
+       .with_emission(rate=constant(0.0),
+                      bursts=[burst(time=1, count=constant(22), cycles=1)])
+       .with_shape(cone(angle=26.0, radius=CRATER_R * 0.55))
+       .with_physics(collision=True, removed_when_collided=False, gravity=0.3,
+                     friction=0.98, collided_friction=0.5, bounce_chance=0.6,
+                     bounce_rate=0.35, bounce_spread=0.3)
+       .with_curves(color_over_lifetime=gradient(
+            [(0.0, 0.0), (0.08, 0.9), (0.8, 0.7), (1.0, 0.0)],
+            [(0.0, 0.42, 0.369, 0.322), (1.0, 0.2, 0.173, 0.157)]))
+       .with_material(texture_material(SMOKE, blend=BLEND_ALPHA))
+       .with_renderer(vertex_sorting="DISTANCE", shade=True)
+       .with_cull_box((-HALO_R, -6.0, -HALO_R), (HALO_R, 12.0, HALO_R)))
+
+    # Grit glints: a pinch of warm sparks in the splash — each slam squeezes a little
+    # more glow out of the hairline cracks (the omen glints answering the quake).
+    (fx.particle_emitter(
+            "grit_glints",
+            duration=TREMOR_RING_TICKS, looping=False,
+            start_lifetime=random_between(10, 20),
+            start_speed=random_between(0.1, 0.3),
+            start_size=nf3(random_between(0.05, 0.11), random_between(0.05, 0.11),
+                           random_between(0.05, 0.11)),
+            simulation_space="World", max_particles=12)
+       .with_emission(rate=constant(0.0),
+                      bursts=[burst(time=0, count=constant(9), cycles=1)])
+       .with_shape(cylinder(radius=CRATER_R * 0.6, thickness=1.0), scale=[1.0, 0.05, 1.0])
+       .with_material(texture_material(CIRCLE, hdr=(1.6, 0.7, 0.26)))
+       .with_lights(sky=15, block=15)
+       .with_curves(color_over_lifetime=gradient(  # #FFB25E -> #FF7B3C -> out
+            [(0.0, 0.0), (0.2, 0.9), (1.0, 0.0)],
+            [(0.0, 1.0, 0.698, 0.369), (1.0, 1.0, 0.482, 0.235)]))
+       .with_cull_box((-HALO_R, -4.0, -HALO_R), (HALO_R, 8.0, HALO_R)))
+    return fx
+
+
+# ---------------------------------------------------------------------------
 # Phase 3 — RUPTURE: the hole is torn open
 # ---------------------------------------------------------------------------
 # One violent throat-punch, then a long tail: shared emitter-t envelope for the fire and
@@ -344,6 +611,109 @@ DEBRIS_Y_MIN = 30.0
 DEBRIS_Y_SPAN = 25.0
 #: Apex of the eruption silhouette — every emitter that can reach it culls to this top.
 ERUPT_CULL_TOP = 80.0
+
+
+def build_nether_rupture_spoke() -> FxBuilder:
+    """eclipse:nether_rupture_spoke — ONE radial RISS-GLUT-SPEICHE of the rupture moment:
+    a jagged white-hot ember line torn along local +X ({@code SPOKE_X_MIN} ..
+    {@code SPOKE_X_MIN + SPOKE_X_LEN} blocks from the crater axis), rubble fountains
+    popping up along it (real collision, the Schutt lands and skitters) and tear dust
+    lifting off the seam. The client stamps a 6-spoke star at the crater centre on the
+    RUPTURE payload, each stamp yawed outward (the fissure-star precedent) — the ground
+    around the erupting throat reads as a glowing star in a single frame.
+
+    Cull boxes are rotation-symmetric (the executor yaw rotates the whole fx transform,
+    so an asymmetric box could cull a rotated stamp wrongly — the fissure lesson)."""
+    fx = FxBuilder("nether_rupture_spoke")
+
+    # The glowing seam: hotter and wider than the tremor fissures — this is the moment
+    # the ground actually gives way. tear_off front-loads the whole line (it RIPS).
+    (fx.particle_emitter(
+            "spoke_glow",
+            duration=SPOKE_TICKS, looping=False,
+            start_lifetime=random_between(50, 105),
+            start_speed=constant(0.0),
+            start_size=nf3(random_between(0.22, 0.5), random_between(0.22, 0.5),
+                           random_between(0.22, 0.5)),
+            simulation_space="World", max_particles=36)
+       .with_emission(rate=tear_off(0.4, 6.5))
+       .with_shape(function_shape(
+            x=f"{SPOKE_X_MIN}+randomA*{SPOKE_X_LEN}",
+            y="0.08",
+            z="sin(randomA*29)*0.5 + (randomB*2-1)*0.22"))
+       .with_material(texture_material(CIRCLE, hdr=(2.4, 1.0, 0.32)))
+       .with_lights(sky=15, block=15)
+       .with_curves(
+            velocity_over_lifetime=dict(  # the seam exhales, barely
+                linear=nf3(constant(0), random_between(0.004, 0.02), constant(0))),
+            color_over_lifetime=gradient(  # #FFF3C4 -> #FF7B3C -> #6B1E10 out
+                [(0.0, 0.0), (0.08, 1.0), (0.7, 0.75), (1.0, 0.0)],
+                [(0.0, 1.0, 0.953, 0.769), (0.3, 1.0, 0.482, 0.235),
+                 (1.0, 0.42, 0.118, 0.063)]),
+            size_over_lifetime=curve(
+                0.4, 1.0,
+                [(0.0, 0.0, 0.1, 0.95, 0.25, 1.0, 0.55, 1.0),
+                 (0.55, 1.0, 0.72, 0.95, 0.88, 0.12, 1.0, 0.0)]))
+       .with_cull_box((-SPOKE_X_MIN - SPOKE_X_LEN - 3.0, -4.0, -SPOKE_X_MIN - SPOKE_X_LEN - 3.0),
+                      (SPOKE_X_MIN + SPOKE_X_LEN + 3.0, 12.0, SPOKE_X_MIN + SPOKE_X_LEN + 3.0)))
+
+    # Schuttfontänen: rubble slugs punched UP out of the tearing seam in waves (the
+    # shape's speed vector is straight +Y; start_speed scales it), landing back on the
+    # real ground. Warm at birth — torn loose glowing — then dead dark rubble.
+    (fx.particle_emitter(
+            "spoke_rubble",
+            duration=SPOKE_TICKS, looping=False,
+            start_lifetime=random_between(40, 80),
+            start_speed=random_between(0.9, 1.9),
+            start_size=nf3(random_between(0.12, 0.3), random_between(0.12, 0.3),
+                           random_between(0.12, 0.3)),
+            simulation_space="World", max_particles=26,
+            parallel_update=False)  # collision law (FX_FORMAT §3.1)
+       .with_emission(rate=constant(0.0),
+                      bursts=[burst(time=0, count=constant(9), cycles=1),
+                              burst(time=10, count=constant(6), cycles=4, interval=18)])
+       .with_shape(function_shape(
+            x=f"{SPOKE_X_MIN}+randomA*{SPOKE_X_LEN}",
+            y="0.3",
+            z="sin(randomA*29)*0.5",
+            speed_y="1"))
+       .with_physics(collision=True, removed_when_collided=False, gravity=0.32,
+                     friction=0.98, collided_friction=0.5, bounce_chance=0.55,
+                     bounce_rate=0.3, bounce_spread=0.3)
+       .with_curves(color_over_lifetime=gradient(  # glowing birth -> dead rubble
+            [(0.0, 0.0), (0.06, 0.95), (0.7, 0.8), (1.0, 0.0)],
+            [(0.0, 1.0, 0.698, 0.369), (0.3, 0.42, 0.318, 0.263),
+             (1.0, 0.2, 0.165, 0.149)]))
+       .with_material(texture_material(SMOKE, blend=BLEND_ALPHA))
+       .with_renderer(vertex_sorting="DISTANCE", shade=True)
+       .with_cull_box((-SPOKE_X_MIN - SPOKE_X_LEN - 4.0, -6.0, -SPOKE_X_MIN - SPOKE_X_LEN - 4.0),
+                      (SPOKE_X_MIN + SPOKE_X_LEN + 4.0, 14.0, SPOKE_X_MIN + SPOKE_X_LEN + 4.0)))
+
+    # Tear dust: grey lift off the seam — the connective read between glow and rubble.
+    (fx.particle_emitter(
+            "spoke_dust",
+            duration=SPOKE_TICKS, looping=False,
+            start_lifetime=random_between(30, 60),
+            start_speed=random_between(0.1, 0.3),
+            start_size=nf3(random_between(0.5, 1.1), random_between(0.5, 1.1),
+                           random_between(0.5, 1.1)),
+            simulation_space="World", max_particles=16)
+       .with_emission(rate=tear_off(0.2, 2.6))
+       .with_shape(function_shape(
+            x=f"{SPOKE_X_MIN}+randomA*{SPOKE_X_LEN}",
+            y="0.15",
+            z="sin(randomA*29)*0.5"))
+       .with_curves(
+            velocity_over_lifetime=dict(
+                linear=nf3(constant(0), random_between(0.05, 0.12), constant(0))),
+            color_over_lifetime=gradient(
+                [(0.0, 0.0), (0.18, 0.55), (1.0, 0.0)],
+                [(0.0, 0.44, 0.38, 0.33), (1.0, 0.2, 0.16, 0.15)]))
+       .with_material(texture_material(SMOKE, blend=BLEND_ALPHA))
+       .with_renderer(vertex_sorting="DISTANCE", shade=True)
+       .with_cull_box((-SPOKE_X_MIN - SPOKE_X_LEN - 3.0, -4.0, -SPOKE_X_MIN - SPOKE_X_LEN - 3.0),
+                      (SPOKE_X_MIN + SPOKE_X_LEN + 3.0, 14.0, SPOKE_X_MIN + SPOKE_X_LEN + 3.0)))
+    return fx
 
 
 def build_nether_eruption() -> FxBuilder:
@@ -409,6 +779,53 @@ def build_nether_eruption() -> FxBuilder:
        .with_renderer(render_mode="StretchedBillboard", velocity_scale=1.8,
                       length_scale=2.8, vertex_sorting="DISTANCE", shade=True)
        .with_cull_box((-HALO_R, -20.0, -HALO_R), (HALO_R, ERUPT_CULL_TOP, HALO_R)))
+
+    # F-102 PILZWOLKE: the cap that turns the column into a mushroom. Big flipbook puffs
+    # are born directly in a crown ring around the column apex as the soot core arrives
+    # up there (bursts at t=34/54/78 — the core's 2.5-3.5 blk/t launch reaches y~45 in
+    # that window) and spread LATERALLY: each puff's velocity is its own crown angle
+    # baked into the shape's speed vector, drag-spent over the first quarter, so the cap
+    # widens ~7 blocks and then hangs. A still frame reads Säule + Pilz.
+    (fx.particle_emitter(
+            "mushroom_cap",
+            duration=ERUPTION_TICKS, looping=False,
+            start_lifetime=random_between(100, 160),
+            start_speed=random_between(0.25, 0.45),
+            start_size=nf3(random_between(3.5, 6.5), random_between(3.5, 6.5),
+                           random_between(3.5, 6.5)),
+            simulation_space="World", max_particles=46)
+       .with_emission(rate=constant(0.0),
+                      bursts=[burst(time=34, count=constant(16), cycles=1),
+                              burst(time=54, count=constant(14), cycles=1),
+                              burst(time=78, count=constant(12), cycles=1)])
+       .with_shape(function_shape(
+            x="cos(randomA*2*PI)*(5+randomB*9)",
+            y="43+randomC*9",
+            z="sin(randomA*2*PI)*(5+randomB*9)",
+            speed_x="cos(randomA*2*PI)",
+            speed_y="0.12",
+            speed_z="sin(randomA*2*PI)"))
+       .with_curves(
+            velocity_over_lifetime=dict(  # crown spread spent by ~1/4 life, then hang
+                speed_modifier=curve(0.0, 1.0, SEG_APEX_DRAG),
+                linear=nf3(constant(0), random_between(0.006, 0.024), constant(0))),
+            rotation_over_lifetime=dict(roll=random_between(-0.3, 0.3)),
+            noise=dict(frequency=0.24, quality="Noise2D",
+                       position=nf3(constant(0.05), constant(0.02), constant(0.05))),
+            uv_animation=dict(tiles=(4, 4), animation="SingleRow",
+                              frame_over_time=curve(0.0, 1.0, [SEG_LINEAR_UP]),
+                              start_frame=random_between(0.0, 4.0), cycle=2.0),
+            color_over_lifetime=gradient(  # alpha body + cooling; the sheet is dark
+                [(0.0, 0.0), (0.14, 0.66), (0.75, 0.5), (1.0, 0.0)],
+                [(0.0, 1.0, 0.96, 0.92), (0.5, 0.72, 0.66, 0.65),
+                 (1.0, 0.46, 0.4, 0.42)]),
+            size_over_lifetime=curve(
+                0.75, 1.6,
+                [(0.0, 0.0, 0.15, 0.5, 0.5, 0.92, 1.0, 1.0)]))
+       .with_material(texture_material(PLUME_ATLAS, discard=0.02, blend=BLEND_ALPHA))
+       .with_renderer(vertex_sorting="DISTANCE", shade=True)
+       .with_cull_box((-HALO_R - 8.0, -20.0, -HALO_R - 8.0),
+                      (HALO_R + 8.0, ERUPT_CULL_TOP, HALO_R + 8.0)))
 
     # Debris rain-back: chunks born HIGH over the crater halo (y 30-55) falling back as
     # −y streaks in three waves — the column's own mass returning, which is what sells
@@ -618,6 +1035,16 @@ def build_nether_pit_plume() -> FxBuilder:
       heat_shimmer   a whisper of eclipse:rgb_split_distort directly over the mouth
                      (the scene wobbles through the hot air; VERY subtle by law)
       heat_glow      the wide dull-orange breathing wash under it all (unchanged)
+
+    F-102 thickening (the user's "Rauchwolke mit Feuer drin", multi-shell):
+
+      fog_shells     a handful of HUGE lazy near-black fog shells turning around the
+                     smoke body — the dark halo that gives the cloud volume from afar
+                     (wide shells + dark tints: exactly the stacking-law recipe)
+      ember_motes    tiny GPU-instanced sparks twitching INSIDE the body (short lives =
+                     the twinkle; the distance read of "fire inside the smoke")
+      tongue_flares  probability-gated bursts of bigger fire tongues licking out of the
+                     mouth every few seconds — occasional by design, never a metronome
 
     Loop law: WINDOWED-only (hysteresis in NetherPitPlume), every emitter cull-boxed +
     hard-capped; GPU emitters carry no physics; HDR <= 1.45 everywhere in this file."""
@@ -852,6 +1279,105 @@ def build_nether_pit_plume() -> FxBuilder:
                 [(0.0, 0.2, 0.15, 0.2, 0.3, 1.0, 0.5, 1.0),
                  (0.5, 1.0, 0.7, 1.0, 0.85, 0.2, 1.0, 0.2)]))
        .with_cull_box((-HALO_R, -26.0, -HALO_R), (HALO_R, 24.0, HALO_R)))
+
+    # Layer 7 (F-102) — fog shells: very few, very large, very dark veils on a wide
+    # shell around the smoke body, turning with it. They read from 100+ blocks as the
+    # cloud's dark OUTLINE — the "träge dunkle Fog-Schalen" of the census ask. Alpha
+    # ceiling 0.2: a silhouette thickener, never a wall.
+    (fx.particle_emitter(
+            "fog_shells",
+            duration=240, looping=True, prewarm=200,
+            start_lifetime=random_between(220, 340),
+            start_speed=constant(0.0),
+            start_size=nf3(random_between(6.0, 11.0), random_between(6.0, 11.0),
+                           random_between(6.0, 11.0)),
+            simulation_space="World", max_particles=20)
+       .with_emission(rate=constant(0.05))
+       .with_shape(sphere(radius=CRATER_R * 0.85, thickness=0.25), scale=[1.0, 0.55, 1.0])
+       .with_curves(
+            velocity_over_lifetime=dict(  # rides the body's churn, half speed
+                orbital_mode="AngularVelocity",
+                orbital=nf3(constant(0), constant(0.045), constant(0)),
+                linear=nf3(constant(0), random_between(0.002, 0.012), constant(0))),
+            noise=dict(frequency=0.14, quality="Noise3D",
+                       position=nf3(constant(0.03), constant(0.012), constant(0.03))),
+            color_over_lifetime=gradient(  # #241D1D -> #120E10, alpha ceiling 0.2
+                [(0.0, 0.0), (0.22, 0.2), (0.78, 0.16), (1.0, 0.0)],
+                [(0.0, 0.141, 0.114, 0.114), (1.0, 0.071, 0.055, 0.063)]),
+            size_over_lifetime=curve(
+                0.85, 1.25,
+                [(0.0, 0.0, 0.2, 0.5, 0.55, 0.95, 1.0, 1.0)]))
+       .with_material(texture_material(SMOKE, blend=BLEND_ALPHA))
+       .with_renderer(vertex_sorting="DISTANCE", shade=True)
+       .with_cull_box((-HALO_R, -26.0, -HALO_R), (HALO_R, 30.0, HALO_R)))
+
+    # Layer 8 (F-102) — ember motes: tiny sparks twitching INSIDE the smoke body. The
+    # twinkle is the short life (20-40t pop in/out); at distance dozens of them are THE
+    # "Feuer drin" read even when single tongues are too small to resolve. No physics,
+    # no level access -> GPU-instanced + parallel (LINT-GPU-PHYSICS).
+    (fx.particle_emitter(
+            "ember_motes",
+            duration=200, looping=True, prewarm=40,
+            start_lifetime=random_between(20, 40),
+            start_speed=random_between(0.02, 0.08),
+            start_size=nf3(random_between(0.06, 0.14), random_between(0.06, 0.14),
+                           random_between(0.06, 0.14)),
+            simulation_space="World", max_particles=60, parallel_update=True)
+       .with_emission(rate=constant(1.2))
+       .with_shape(sphere(radius=CRATER_R * 0.6, thickness=0.9), scale=[1.0, 0.5, 1.0])
+       .with_material(texture_material(CIRCLE, hdr=(1.45, 0.6, 0.22)))
+       .with_lights(sky=15, block=15)
+       .with_renderer(use_gpu_instance=True, vertex_sorting="NONE")
+       .with_curves(
+            velocity_over_lifetime=dict(
+                linear=nf3(constant(0), random_between(0.01, 0.05), constant(0))),
+            color_over_lifetime=random_gradient(  # hot mote <-> sooty mote per spark
+                [(0.0, 0.0), (0.25, 1.0), (0.6, 0.85), (1.0, 0.0)],
+                [(0.0, 1.0, 0.698, 0.369), (1.0, 1.0, 0.482, 0.235)],
+                [(0.0, 0.0), (0.25, 0.75), (0.6, 0.6), (1.0, 0.0)],
+                [(0.0, 1.0, 0.55, 0.25), (1.0, 0.42, 0.118, 0.063)]),
+            size_over_lifetime=curve(
+                0.4, 1.0,
+                [(0.0, 0.1, 0.2, 1.0, 0.6, 0.85, 1.0, 0.0)]))
+       .with_cull_box((-HALO_R, -26.0, -HALO_R), (HALO_R, 26.0, HALO_R)))
+
+    # Layer 9 (F-102) — tongue flares: every few seconds (probability-gated, co-prime
+    # 170t cycle against the 200t body and the 190/230/270t jets) a couple of BIGGER
+    # fire tongues lick out of the mouth and up into the smoke — the occasional flare
+    # that proves the fire is alive. HDR pinned to the 1.45 stacking budget.
+    (fx.particle_emitter(
+            "tongue_flares",
+            duration=170, looping=True,
+            start_lifetime=random_between(30, 55),
+            start_speed=random_between(0.5, 0.9),
+            start_size=nf3(random_between(1.2, 2.4), random_between(1.2, 2.4),
+                           random_between(1.2, 2.4)),
+            simulation_space="World", max_particles=14)
+       .with_emission(rate=constant(0.0),
+                      bursts=[burst(time=20, count=constant(3), cycles=2, interval=30,
+                                    probability=0.55),
+                              burst(time=120, count=constant(2), cycles=1,
+                                    probability=0.4)])
+       .with_shape(cone(angle=24.0, radius=CRATER_R * 0.3),
+                   position=[0.0, -4.0, 0.0])
+       .with_material(texture_material(CIRCLE, hdr=(1.45, 0.72, 0.26)))
+       .with_lights(sky=15, block=15)
+       .with_renderer(render_mode="StretchedBillboard", velocity_scale=1.0,
+                      length_scale=2.6, vertex_sorting="NONE")
+       .with_curves(
+            velocity_over_lifetime=dict(
+                linear=nf3(constant(0), random_between(0.03, 0.09), constant(0))),
+            noise=dict(frequency=0.45, quality="Noise2D",
+                       position=nf3(constant(0.04), constant(0.03), constant(0.04))),
+            color_over_lifetime=gradient(  # hot birth -> ember -> out
+                [(0.0, 1.0), (0.55, 0.8), (1.0, 0.0)],
+                [(0.0, 1.0, 0.953, 0.769), (0.35, 1.0, 0.698, 0.369),
+                 (1.0, 1.0, 0.482, 0.235)]),
+            size_over_lifetime=curve(
+                0.3, 1.0,
+                [(0.0, 0.2, 0.12, 0.95, 0.3, 1.0, 0.5, 1.0),
+                 (0.5, 1.0, 0.68, 0.85, 0.86, 0.12, 1.0, 0.0)]))
+       .with_cull_box((-HALO_R, -26.0, -HALO_R), (HALO_R, 26.0, HALO_R)))
     return fx
 
 
@@ -931,6 +1457,40 @@ def build_nether_ash_snow() -> FxBuilder:
        .with_material(texture_material(SMOKE, blend=BLEND_ALPHA))
        .with_renderer(vertex_sorting="DISTANCE", shade=True)
        .with_cull_box((-ASH_CULL, -34.0, -ASH_CULL), (ASH_CULL, 16.0, ASH_CULL)))
+
+    # F-102 NACHGLUT — träge Glutflocken: a sparse handful of glowing flakes sinking
+    # even slower than the ash (the fire keeps falling out of the sky long after the
+    # eruption). GPU-instanced, no physics; HDR pinned to the 1.45 permanent budget.
+    (fx.particle_emitter(
+            "glut_flakes",
+            duration=240, looping=True, prewarm=200,
+            start_lifetime=random_between(200, 320),
+            start_speed=constant(0.0),
+            start_size=nf3(random_between(0.05, 0.11), random_between(0.05, 0.11),
+                           random_between(0.05, 0.11)),
+            simulation_space="World", max_particles=40, parallel_update=True)
+       .with_emission(rate=constant(0.1))
+       .with_shape(cylinder(radius=ASH_RADIUS * 0.8, thickness=1.0),
+                   position=[0.0, 9.0, 0.0], scale=[1.0, 5.0, 1.0])
+       .with_material(texture_material(CIRCLE, hdr=(1.4, 0.6, 0.22)))
+       .with_lights(sky=15, block=15)
+       .with_renderer(use_gpu_instance=True, vertex_sorting="NONE")
+       .with_curves(
+            velocity_over_lifetime=dict(  # träger than the ash: barely sinking
+                linear=nf3(constant(0), random_between(-0.06, -0.03), constant(0))),
+            noise=dict(frequency=0.14, quality="Noise2D",
+                       position=nf3(constant(0.04), constant(0.006), constant(0.04))),
+            color_over_lifetime=random_gradient(  # bright glut <-> dimming glut
+                [(0.0, 0.0), (0.12, 0.95), (0.8, 0.7), (1.0, 0.0)],
+                [(0.0, 1.0, 0.698, 0.369), (0.6, 1.0, 0.482, 0.235),
+                 (1.0, 0.42, 0.118, 0.063)],
+                [(0.0, 0.0), (0.12, 0.7), (0.8, 0.5), (1.0, 0.0)],
+                [(0.0, 1.0, 0.55, 0.25), (0.6, 0.62, 0.26, 0.12),
+                 (1.0, 0.3, 0.09, 0.05)]),
+            size_over_lifetime=curve(
+                0.7, 1.0,
+                [(0.0, 1.0, 0.5, 0.95, 0.85, 0.5, 1.0, 0.0)]))
+       .with_cull_box((-ASH_CULL, -34.0, -ASH_CULL), (ASH_CULL, 20.0, ASH_CULL)))
     return fx
 
 
@@ -940,6 +1500,9 @@ def build_nether_ash_snow() -> FxBuilder:
 BUILDERS = {
     "nether_omen_ash.fx": build_nether_omen_ash,
     "nether_quake_fissure.fx": build_nether_quake_fissure,
+    "nether_tremor_waves.fx": build_nether_tremor_waves,
+    "nether_tremor_ring.fx": build_nether_tremor_ring,
+    "nether_rupture_spoke.fx": build_nether_rupture_spoke,
     "nether_eruption.fx": build_nether_eruption,
     "nether_pit_plume.fx": build_nether_pit_plume,
     "nether_ash_snow.fx": build_nether_ash_snow,
