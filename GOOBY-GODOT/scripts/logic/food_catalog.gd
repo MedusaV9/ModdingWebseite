@@ -76,6 +76,11 @@ const FOODS := {
 	"cinnamonRoll": {"hunger": 16, "fun": 8, "energy": 3, "hygiene": -2, "junk": true},
 	"cupcakePink": {"hunger": 10, "fun": 10, "energy": 2, "hygiene": -2, "junk": true},
 	"nutella": {"hunger": 18, "fun": 6, "energy": 2, "hygiene": -4, "junk": true},
+	# ── W13B/INTEGRATE (SAMMLUNG-Request): die letzten zwei treats-Lücken —
+	# candy-bar + lollypop (Web FOOD_TABLE verbatim, Ids Web-identisch,
+	# Bezugsquelle REHWEI; apply_feed bucht sie damit ins treats-Set). ──
+	"candy-bar": {"hunger": 4, "fun": 11, "junk": true},
+	"lollypop": {"hunger": 2, "fun": 8, "junk": true},
 	# ── W13B/RAUMSTATION: Astro-Snack-Automat (raumstation.gd MOEHRE_ID)
 	# verkauft weltraumMoehre in inventory.food — analog carrot, nur
 	# festlicher (Anzeigename via rewards.food.weltraumMoehre). ──

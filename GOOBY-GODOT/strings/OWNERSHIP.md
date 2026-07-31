@@ -108,3 +108,5 @@ Regeln:
 - `raumstation.*` + `gfree.*` + `rewards.food.weltraumMoehre` (NEUE Datei `strings/<locale>/raumstation.json` — Raumstation GOOB-1: Astro-Snack-Automat, Sternenfoto-Spot, Weltengooby-Toast; GOOBY-FREE-Shop am Flughafen inkl. Shuttle-Knopf; Anzeigename der Weltraum-Möhre) → Owner **W13B RAUMSTATION** (Welle W13-B). *(per >> angehängt — beim nächsten Doku-Pass in die Tabelle oben heben)*
 
 - NEUE `city.laden.buecher_titel` + `city.laden.im_regal`-Keys (additiv in `strings/<locale>/city.json` — Bücher-Abschnitt im REHWEI-Laden, „Im Regal“-Ausgrauung; DE↔EN-paritätisch) → Owner **W13B INTEGRATE** (Welle W13-B). *(per >> angehängt — beim nächsten Doku-Pass in die Tabelle oben heben)*
+
+- NEUE `rewards.food.candy-bar` + `rewards.food.lollypop`-Keys (additiv in `strings/<locale>/rewards.json` — Anzeigenamen der letzten zwei treats-Set-Speisen, SAMMLUNG-Request; DE↔EN-paritätisch) → Owner **W13B INTEGRATE** (Welle W13-B). *(per >> angehängt — beim nächsten Doku-Pass in die Tabelle oben heben)*

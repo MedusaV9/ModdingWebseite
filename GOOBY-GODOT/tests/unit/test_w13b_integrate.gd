@@ -181,6 +181,46 @@ func test_energie_buff_chip_traegt_sonne_bei_erholt() -> void:
 	ohne.free()
 
 
+## ---------------------------------------------- treats-Lücken (SAMMLUNG)
+
+
+## SAMMLUNG-Request: candy-bar + lollypop (Web-Ids verbatim) schließen die
+## letzten zwei treats-Set-Lücken — Katalog-Deltas aus der Web-FOOD_TABLE,
+## Bezugsquelle REHWEI (preis-sortiert, GLB vorhanden), Füttern bucht den
+## Album-Eintrag über den bestehenden apply_feed-Pfad.
+func test_treats_luecken_candy_bar_und_lollypop_geschlossen() -> void:
+	var web := {
+		"candy-bar": {"hunger": 4.0, "fun": 11.0, "preis": 10},
+		"lollypop": {"hunger": 2.0, "fun": 8.0, "preis": 6},
+	}
+	var waren := CitySortiment.laden(CitySortiment.REHWEI_PFAD)
+	for id: String in web:
+		assert_true(FoodCatalog.FOODS.has(id), "FoodCatalog-Eintrag fehlt: %s" % id)
+		var d := FoodCatalog.deltas(id)
+		assert_almost(float(d["hunger"]), float(web[id]["hunger"]), 1e-6, "%s hunger" % id)
+		assert_almost(float(d["fun"]), float(web[id]["fun"]), 1e-6, "%s fun" % id)
+		assert_true(FoodCatalog.is_junk(id), "%s ist Junk (Web)" % id)
+		assert_eq(CollectionsLogic.treat_entry_for_food(id), id, "treats-Mapping greift: %s" % id)
+		var eintrag := CitySortiment.ware(waren, id)
+		assert_eq(int(eintrag.get("preis", -1)), int(web[id]["preis"]), "%s Web-Preis" % id)
+		var glb := "res://assets/city/essen/%s" % str(eintrag.get("glb", ""))
+		assert_true(FileAccess.file_exists(glb), "GLB fehlt: %s" % glb)
+		for locale: String in ["de", "en"]:
+			assert_true(
+				I18nService.table(locale).has("rewards.food." + id),
+				"%s-Name fehlt: %s" % [locale, id]
+			)
+	# Füttern bucht den Album-Eintrag (kein firstOnly — zählt hoch).
+	var state := {
+		"gooby": {"stats": {"hunger": 40.0, "fun": 50.0, "energy": 50.0, "hygiene": 50.0}},
+		"inventory": {"food": {"candy-bar": 1}},
+	}
+	var res := FoodCatalog.apply_feed(state, "candy-bar")
+	assert_eq(str(res.get("id", "")), "candy-bar", "Fütterung klappt")
+	var entries: Dictionary = state["collections"]["entries"]
+	assert_eq(int(entries.get("treats.candy-bar", 0)), 1, "treats-Eintrag gebucht")
+
+
 ## ---------------------------------------------- Besuchs-Bau-Leiste (CEILING)
 
 
