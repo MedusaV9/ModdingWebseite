@@ -154,7 +154,9 @@ func test_level_select_locks_and_refresh() -> void:
 	GvzProgress.record_win(gs, 1, 3, 100)
 	select.refresh()
 	assert_false((buttons[2] as Button).disabled, "L2 nach L1-Sieg offen")
-	assert_true((buttons[1] as Button).text.contains("★★★"), "Sterne auf der Kachel")
+	# W15/GAMESQA2: Sterne wohnen jetzt im goldenen Stempel-Label der Kachel.
+	var stamps: Dictionary = select.get("_stamps")
+	assert_true((stamps[1] as Label).text.contains("★★★"), "Sterne auf dem Kachel-Stempel")
 	var chosen: Array = []
 	select.level_chosen.connect(func(id: int) -> void: chosen.append(id))
 	(buttons[1] as Button).pressed.emit()

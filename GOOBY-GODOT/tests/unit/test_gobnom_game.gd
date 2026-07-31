@@ -209,7 +209,9 @@ func test_level_select_locks_tracks_and_refresh() -> void:
 	GobnomProgress.record_win(gs, GobnomProgress.TRACK_CAMPAIGN, 1, 3, 100)
 	select.refresh()
 	assert_false((buttons["c2"] as Button).disabled, "L2 nach L1-Sieg offen")
-	assert_true((buttons["c1"] as Button).text.contains("★★★"), "Sterne auf der Kachel")
+	# W15/GAMESQA2: Sterne wohnen jetzt im goldenen Stempel-Label der Kachel.
+	var stamps: Dictionary = select.get("_stamps")
+	assert_true((stamps["c1"] as Label).text.contains("★★★"), "Sterne auf dem Kachel-Stempel")
 	var chosen: Array = []
 	select.level_chosen.connect(func(track: String, id: int) -> void: chosen.append([track, id]))
 	(buttons["n1"] as Button).pressed.emit()

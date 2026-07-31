@@ -4,12 +4,20 @@ extends Control
 ## GameState-Slice "gvz" (GvzProgress), gesperrte Level ausgegraut; unten
 ## Gesamt-Sterne + Fertig-Knopf (meldet die Session ans Framework zurück).
 ## Layout ist Anchor-basiert und funktioniert quer UND hochkant.
+## W15/GAMESQA2 Level-Menü-Charme: Kacheln als AC-Sticker-Karten (Schatten,
+## Hover-Lift, Druck-Senkung), goldene Sterne-Stempel als eigenes Label,
+## Locked = flach + "· · ·", gestaffelte Seiten-Blätter-Animation beim
+## refresh() (Reduced Motion respektiert), Haptics.tap auf jeder Kachel.
 
 signal level_chosen(level_id: int)
 signal done_pressed
 
 const COLS_LANDSCAPE := 5
 const COLS_PORTRAIT := 3
+const PAGE_TURN_S := 0.22
+const PAGE_TURN_STAGGER_S := 0.03
+const PAGE_TURN_MAX_DELAY_S := 0.36
+const PAGE_TURN_DEBOUNCE_MS := 600
 
 ## Duck-Typing: /root/GameState ODER Test-Double (von gvz_game gesetzt).
 var game_state: Object
@@ -17,10 +25,14 @@ var game_state: Object
 var _grid: GridContainer
 var _stars_label: Label
 var _buttons: Dictionary = {}
+## Level-Id → Sterne-Stempel-Label (goldene Sterne unter der Level-Nummer).
+var _stamps: Dictionary = {}
 ## Level-Id → neues Element ("tower"/"zombie") für das NEU-Badge (E11 §Intro).
 var _new_element: Dictionary = {}
 ## Gesamt-Sterne-Fortschritt als goldener Balken (der Fortschritt FEIERT).
 var _progress_fill: ColorRect
+## Entprellung der Blätter-Animation (refresh() feuert bei Bau UND Sieg).
+var _page_turn_ms := -PAGE_TURN_DEBOUNCE_MS
 
 
 func _ready() -> void:
@@ -65,6 +77,7 @@ func _ready() -> void:
 	done.custom_minimum_size = Vector2(140, 48)
 	done.pressed.connect(
 		func() -> void:
+			Haptics.tap(self)
 			AudioDirector.try_play(self, "ui_back")
 			done_pressed.emit()
 	)
@@ -88,8 +101,25 @@ func _build_tiles() -> void:
 		tile.add_theme_color_override("font_focus_color", GvzArt.OUTLINE)
 		tile.add_theme_color_override("font_disabled_color", Color("#B3A99C"))
 		tile.pressed.connect(_on_tile.bind(id))
+		tile.add_child(_build_stamp(id))
 		_grid.add_child(tile)
 		_buttons[id] = tile
+
+
+## Sterne-Stempel: eigenes Label in der unteren Kartenhälfte, damit die
+## Sterne GOLD sein können (Button-Text kann nur eine Farbe). Heller
+## Outline-Rand gibt den Stempel-/Sticker-Look.
+func _build_stamp(id: int) -> Label:
+	var stamp := Label.new()
+	stamp.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	stamp.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	stamp.anchor_top = 0.5
+	stamp.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	stamp.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	stamp.add_theme_font_size_override("font_size", 20)
+	stamp.add_theme_constant_override("outline_size", 3)
+	_stamps[id] = stamp
+	return stamp
 
 
 ## Sterne/Sperren neu aus dem Fortschritt lesen (nach jedem Sieg). Kacheln
@@ -99,12 +129,15 @@ func refresh() -> void:
 	var unlocked := GvzProgress.max_unlocked(game_state)
 	for id in range(1, GvzProgress.LEVEL_COUNT + 1):
 		var tile: Button = _buttons[id]
+		var stamp: Label = _stamps[id]
 		var stars := GvzProgress.level_stars(game_state, id)
 		var badge := " · BOSS" if id == 15 else ""
 		if id > unlocked:
 			tile.disabled = true
-			tile.text = "%d%s" % [id, badge]
-			_style_tile(tile, Color("#E7DFD3"), Color("#CDBFAE"), 2)
+			tile.text = "%d%s\n" % [id, badge]
+			stamp.text = stamp_text(0, true)
+			_tint_stamp(stamp, Color("#B3A99C"))
+			_style_tile(tile, Color("#E7DFD3"), Color("#CDBFAE"), 2, true)
 			continue
 		tile.disabled = false
 		var cleared := GvzProgress.is_cleared(game_state, id)
@@ -112,10 +145,9 @@ func refresh() -> void:
 		# jetzt AN der Kachel (bis es abgeschlossen wurde).
 		if not cleared and _new_element.has(id):
 			badge += " · %s" % I18nService.t("gvz.select.new")
-		var star_row := "☆☆☆"
-		if stars > 0:
-			star_row = "★".repeat(stars) + "☆".repeat(3 - stars)
-		tile.text = "%d%s\n%s" % [id, badge, star_row]
+		tile.text = "%d%s\n" % [id, badge]
+		stamp.text = stamp_text(stars, false)
+		_tint_stamp(stamp, GvzArt.STAR_GOLD if stars > 0 else Color("#C9BCA9"))
 		var fill := Color("#DFF2CF") if cleared else Color("#FFF6E3")
 		var border := GvzArt.OUTLINE
 		var width := 3
@@ -127,12 +159,36 @@ func refresh() -> void:
 			width = 4
 		if id == 15:
 			border = GvzArt.BERRY_RED
-		_style_tile(tile, fill, border, width)
+		_style_tile(tile, fill, border, width, false)
 	var total := GvzProgress.total_stars(game_state)
 	_stars_label.text = I18nService.t("gvz.select.stars", {"n": total, "max": 45})
 	if _progress_fill != null:
 		_progress_fill.visible = total > 0
 		_progress_fill.anchor_right = clampf(float(total) / 45.0, 0.05, 1.0)
+	_maybe_page_turn()
+
+
+## Stempel-Farbe samt dunklerem Rand — der Rand macht die goldenen Sterne
+## auf Creme/Mint erst richtig "gestempelt" (satt statt ausgewaschen).
+static func _tint_stamp(stamp: Label, color: Color) -> void:
+	stamp.add_theme_color_override("font_color", color)
+	stamp.add_theme_color_override("font_outline_color", color.darkened(0.55))
+
+
+## PURE: Stempel-Zeile einer Kachel — Gold-Sterne offen, "· · ·" gesperrt
+## (bewusst KEIN Schloss-Emoji: Font-Fallback ist auf Geräten unzuverlässig).
+static func stamp_text(stars: int, locked: bool) -> String:
+	if locked:
+		return "· · ·"
+	if stars <= 0:
+		return "☆☆☆"
+	return "★".repeat(clampi(stars, 0, 3)) + "☆".repeat(3 - clampi(stars, 0, 3))
+
+
+## PURE: Staffel-Verzögerung der Blätter-Animation je Kachel-Index —
+## gedeckelt, damit auch lange Listen (GOB-NOM: 25) flott fertig blättern.
+static func page_turn_delay(index: int) -> float:
+	return minf(maxi(index, 0) * PAGE_TURN_STAGGER_S, PAGE_TURN_MAX_DELAY_S)
 
 
 ## new_towers/new_zombies aus den Level-Daten für die Badges einlesen.
@@ -171,17 +227,77 @@ func _build_progress_bar() -> Control:
 
 ## Pastell-Kachel im Sticker-Look: Creme offen, Mint geschafft, Gold-Glanz
 ## bei 3 Sternen, blass gesperrt; Rahmenfarbe markiert Frontier/Boss.
-static func _style_tile(tile: Button, fill: Color, border: Color, width: int) -> void:
+static func _style_tile(tile: Button, fill: Color, border: Color, width: int, locked: bool) -> void:
 	for state_name in ["normal", "hover", "pressed", "disabled", "focus"]:
-		var style := StyleBoxFlat.new()
-		style.bg_color = fill.darkened(0.06) if state_name == "pressed" else fill
-		style.set_corner_radius_all(14)
-		style.set_border_width_all(width)
-		style.border_color = border
-		tile.add_theme_stylebox_override(state_name, style)
+		tile.add_theme_stylebox_override(
+			state_name, card_style(state_name, fill, border, width, locked)
+		)
+
+
+## PURE: AC-Karten-StyleBox je Button-Zustand — offene Karten werfen einen
+## weichen Schatten (liegen "auf" dem Album), Hover hebt die Karte an,
+## Druck senkt sie (Schatten weg); gesperrte Karten liegen flach.
+static func card_style(
+	state_name: String, fill: Color, border: Color, width: int, locked: bool
+) -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = fill
+	style.set_corner_radius_all(16)
+	style.set_border_width_all(width)
+	style.border_color = border
+	if locked:
+		return style
+	style.shadow_color = Color(0.35, 0.24, 0.18, 0.18)
+	style.shadow_size = 4
+	style.shadow_offset = Vector2(0.0, 3.0)
+	match state_name:
+		"hover":
+			style.bg_color = fill.lightened(0.04)
+			style.shadow_size = 7
+			style.shadow_offset = Vector2(0.0, 5.0)
+		"pressed":
+			style.bg_color = fill.darkened(0.06)
+			style.shadow_size = 0
+			style.shadow_offset = Vector2.ZERO
+	return style
+
+
+## Seiten-Blätter-Effekt: Kacheln klappen gestaffelt auf wie beim Umblättern
+## in einem Sticker-Album. Entprellt (refresh() feuert bei Bau UND nach jedem
+## Sieg kurz hintereinander) und respektiert Reduced Motion.
+func _maybe_page_turn() -> void:
+	if not is_inside_tree() or ThemeService.is_reduced_motion(self):
+		return
+	var now := Time.get_ticks_msec()
+	if now - _page_turn_ms < PAGE_TURN_DEBOUNCE_MS:
+		return
+	_page_turn_ms = now
+	# Deferred: erst nach dem Layout-Pass kennen die Kacheln ihre Größe
+	# (pivot_offset für die Mitten-Klappe braucht sie).
+	_play_page_turn.call_deferred()
+
+
+func _play_page_turn() -> void:
+	if not is_inside_tree():
+		return
+	var index := 0
+	for id: int in _buttons:
+		var tile: Button = _buttons[id]
+		tile.pivot_offset = tile.size / 2.0
+		tile.scale = Vector2(0.0, 1.0)
+		var tween := tile.create_tween()
+		tween.tween_interval(page_turn_delay(index))
+		(
+			tween
+			. tween_property(tile, "scale", Vector2.ONE, PAGE_TURN_S)
+			. set_trans(Tween.TRANS_BACK)
+			. set_ease(Tween.EASE_OUT)
+		)
+		index += 1
 
 
 func _on_tile(id: int) -> void:
+	Haptics.tap(self)
 	AudioDirector.try_play(self, "ui_confirm")
 	level_chosen.emit(id)
 
