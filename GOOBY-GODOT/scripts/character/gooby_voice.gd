@@ -47,6 +47,24 @@ const EMOTION_PITCH: Dictionary = {
 ## Silben (SEELE-2, kuerze_plan).
 const MIN_SILBEN := 4
 
+## W14/VOICE: Gebrabbel-„Melodien“ — Silben-Sequenz-Presets auf den
+## VORHANDENEN Silben-WAVs (nur Pitch/Tempo/Bogen, keine neuen Audios):
+##   fragend   — etwas getragener, Tonhöhe steigt zum Satzende hin (↗)
+##   aufgeregt — schnell und hell (Plapper-Modus)
+##   schlaefrig— langsam und tief, sinkt über den Satz ab
+## Auswahl automatisch über melodie_fuer (Stimmung/Emotion/Fragezeichen),
+## explizit über sagt(text, emotion, melodie).
+const MELODIEN: Dictionary = {
+	"fragend": {"pitch": 1.02, "tempo": 0.94, "bogen": "rauf"},
+	"aufgeregt": {"pitch": 1.07, "tempo": 1.35, "bogen": "runter"},
+	"schlaefrig": {"pitch": 0.86, "tempo": 0.68, "bogen": "tief"},
+}
+const MELODIE_NEUTRAL: Dictionary = {"pitch": 1.0, "tempo": 1.0, "bogen": ""}
+## Stärke der Melodie-Bögen (rauf: Anstieg der zweiten Satzhälfte,
+## tief: gleichmäßiges Absinken über den ganzen Satz).
+const BOGEN_RAUF := 0.16
+const BOGEN_TIEF := 0.12
+
 var _streams: Array[AudioStream] = []
 var _pool: Array[AudioStreamPlayer3D] = []
 var _pool_index := 0
@@ -134,6 +152,50 @@ static func modulation(stimmung_wert: float, emotion: String) -> Dictionary:
 	}
 
 
+## PURE (W14/VOICE): Melodie-Parameter eines Presets (unbekannt/leer =
+## neutral — das Gebrabbel klingt dann exakt wie vor W14).
+static func melodie_params(melodie: String) -> Dictionary:
+	var params: Variant = MELODIEN.get(melodie)
+	return params if params is Dictionary else MELODIE_NEUTRAL
+
+
+## PURE (W14/VOICE): Stimmung/Emotion/Satzzeichen → Melodie-Preset.
+## Fragen brabbeln immer fragend; ein müder oder elender Gooby wird nie
+## aufgeregt plappern; beste Laune oder ecstatic-Momente plappern schnell.
+static func melodie_fuer(stimmung_wert: float, emotion: String, text: String) -> String:
+	if text.strip_edges().ends_with("?"):
+		return "fragend"
+	if emotion == "sleepy" or SoulMood.band(stimmung_wert) == "miserable":
+		return "schlaefrig"
+	if emotion == "ecstatic" or SoulMood.band(stimmung_wert) == "ecstatic":
+		return "aufgeregt"
+	return ""
+
+
+## PURE (W14/VOICE): Tonhöhen-Bogen einer Silbe (Faktor auf den Grundton).
+## bogen "" = das bisherige Verhalten (Satzende-Bogen über die letzten 3
+## Silben: runter, bei '?' rauf); "rauf" steigt über die zweite Satzhälfte,
+## "runter" fällt am Ende IMMER, "tief" sinkt gleichmäßig über den Satz.
+static func melodie_bogen(bogen: String, index: int, count: int, question: bool) -> float:
+	var progress := 0.0 if count <= 1 else float(index) / float(count - 1)
+	match bogen:
+		"rauf":
+			return 1.0 + BOGEN_RAUF * maxf(0.0, progress - 0.5) * 2.0
+		"tief":
+			return 1.0 - BOGEN_TIEF * progress
+		"runter":
+			var fall_end := count - 1 - index
+			if fall_end < 3:
+				return 1.0 - (3 - fall_end) * 0.06
+			return 1.0
+		_:
+			var from_end := count - 1 - index
+			if from_end < 3:
+				var lift := (3 - from_end) * 0.06
+				return 1.0 + lift if question else 1.0 - lift
+			return 1.0
+
+
 ## PURE (SEELE-2): Silben-Plan auf laenge (0..1) kürzen — ein matter Gooby
 ## brabbelt kurz. Nie unter MIN_SILBEN klingende Silben, Pausen zählen nicht.
 static func kuerze_plan(plan: Array[Dictionary], laenge: float) -> Array[Dictionary]:
@@ -158,36 +220,37 @@ static func kuerze_plan(plan: Array[Dictionary], laenge: float) -> Array[Diction
 
 
 ## Text → Gebrabbel. Läuft asynchron; ein neuer Aufruf bricht den alten ab.
-func sagt(text: String, emotion: String = "neutral") -> void:
+## W14/VOICE: optionale melodie ("fragend"/"aufgeregt"/"schlaefrig") —
+## ohne Angabe wählt melodie_fuer automatisch nach Stimmung/Emotion/Frage.
+func sagt(text: String, emotion: String = "neutral", melodie: String = "") -> void:
 	_token += 1
-	_babble(text, emotion, _token)
+	if melodie.is_empty():
+		melodie = melodie_fuer(_stimmung, emotion, text)
+	_babble(text, emotion, melodie, _token)
 
 
-func _babble(text: String, emotion: String, token: int) -> void:
+func _babble(text: String, emotion: String, melodie: String, token: int) -> void:
 	if _streams.is_empty():
 		fertig.emit()
 		return
 	var stimme := modulation(_stimmung, emotion)
+	var melo := melodie_params(melodie)
 	var plan := kuerze_plan(_plan_syllables(text), float(stimme["laenge"]))
 	if plan.is_empty():
 		fertig.emit()
 		return
 	_talking = true
-	var base_pitch: float = stimme["pitch"]
+	var base_pitch: float = float(stimme["pitch"]) * float(melo["pitch"])
 	var question := text.strip_edges().ends_with("?")
-	var interval := 1.0 / (RATE * float(stimme["tempo"]))
+	var interval := 1.0 / (RATE * float(stimme["tempo"]) * float(melo["tempo"]))
 	var count := plan.size()
 	for i in count:
 		if token != _token or not is_inside_tree():
 			break
 		var step: Dictionary = plan[i]
 		if not step["pause"]:
-			# Satzende-Bogen über die letzten 3 Silben: runter, bei '?' rauf.
-			var arc := 1.0
-			var from_end := count - 1 - i
-			if from_end < 3:
-				var lift := (3 - from_end) * 0.06
-				arc = 1.0 + lift if question else 1.0 - lift
+			# Tonhöhen-Bogen der Melodie (pur, s. melodie_bogen).
+			var arc := melodie_bogen(str(melo["bogen"]), i, count, question)
 			var jitter := 1.0 + _hash01(step["seed"]) * 2.0 * PITCH_JITTER - PITCH_JITTER
 			var player := _pool[_pool_index]
 			_pool_index = (_pool_index + 1) % POOL_SIZE
