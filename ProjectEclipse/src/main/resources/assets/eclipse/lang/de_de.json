@@ -954,6 +954,8 @@
   "dev.eclipse.doc.fx.rift": "Öffnet einen Riss-Effekt an einer Position mit der angegebenen Breite; 'rift close' schließt deinen letzten.",
   "dev.eclipse.doc.fx.sequence": "Spielt eine Phase einer Skript-Sequenz im Nur-FX-Modus erneut ab (keine Welt-/Zustandsänderungen).",
   "dev.eclipse.doc.fx.storm": "Spawnt/löst einen Dev-Sturm (Wand oder Wirbel) an deiner Position auf oder feuert einen Blitz auf deinen Blickpunkt.",
+  "dev.eclipse.doc.fx.storm.flashhold": "Hält beide B6-Blitz-Zellen im Sturmvolumen auf DEINEM Client auf fester Hüllkurve (Adern-Seed wechselt alle 2 s), damit der 0,35-s-Doppelblitz inspizierbar wird; off stellt den Live-Scheduler bit-identisch wieder her.",
+  "dev.eclipse.doc.fx.storm.perfprobe": "Misst die Render-Frametime deines Clients für N Sekunden und meldet min/avg/p95/max samt Sturmvolumen-Tier-Kontext in Chat und Client-Log (das V6-A/B-Perf-Werkzeug).",
   "dev.eclipse.doc.fx.sun.debug": "Schaltet das Sonnen-Debug-HUD-Kreuz am CPU-projizierten Sonnenpunkt um (Vergleich mit der Scheibe).",
   "dev.eclipse.doc.fx.supplybeam": "Schaltet einen Test-Versorgungsstrahl-Marker an deiner Position um (erster Aufruf setzt, zweiter entfernt).",
   "dev.eclipse.doc.fx.uniform": "Überschreibt eine Float-Uniform einer Veil-Post-Pipeline auf deinem Client (Debug-Regler).",

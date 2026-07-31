@@ -954,6 +954,8 @@
   "dev.eclipse.doc.fx.rift": "Open a rift tear FX at a position with the given width; 'rift close' closes your last one.",
   "dev.eclipse.doc.fx.sequence": "Replay one phase of a scripted sequence in FX-only mode (no world/state changes).",
   "dev.eclipse.doc.fx.storm": "Spawn/dissipate a dev storm wall or vortex at your position, or fire a lightning bolt where you look.",
+  "dev.eclipse.doc.fx.storm.flashhold": "Hold both B6 intra-storm flash cells at a fixed envelope on YOUR client (vein seed cycles every 2 s) so the 0.35 s double flash becomes inspectable; off restores the live scheduler bit-identically.",
+  "dev.eclipse.doc.fx.storm.perfprobe": "Sample your client's render frametime for N seconds and report min/avg/p95/max plus the storm-volume tier context to chat and the client log (the V6 A/B perf harness).",
   "dev.eclipse.doc.fx.sun.debug": "Toggle the sun-debug HUD cross at the CPU-projected sun point (compare against the disc).",
   "dev.eclipse.doc.fx.supplybeam": "Toggle a test supply-beam marker at your position (add on first run, remove on second).",
   "dev.eclipse.doc.fx.uniform": "Override one float uniform of a Veil post pipeline on your client (debug knob).",
