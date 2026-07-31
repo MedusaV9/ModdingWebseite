@@ -108,6 +108,9 @@ func show_banner(title: String, body: String) -> void:
 	_dismiss_banner()
 	_banner = _build_banner(title, body)
 	_banner_layer.add_child(_banner)
+	# W14/UIKERN: Banner belegt die obere Randzone — AcBubble & Co. fragen
+	# das über UiAnchors ab und weichen aus, statt zu überlappen.
+	UiAnchors.reserve(UiAnchors.ZONE_TOP, _banner)
 	var seconds := BANNER_SECONDS
 	var settings := _settings()
 	if settings != null and String(settings.value_of("accessibility.hint_duration")) == "lang":
@@ -133,6 +136,7 @@ func _os_schedule(_id: String, _title: String, _body: String, _at_ms: int) -> bo
 
 func _dismiss_banner() -> void:
 	if _banner != null and is_instance_valid(_banner):
+		UiAnchors.release(UiAnchors.ZONE_TOP, _banner)
 		_banner.queue_free()
 	_banner = null
 
@@ -150,6 +154,11 @@ func _build_banner(title: String, body: String) -> PanelContainer:
 	var width := minf(520.0 * f, canvas.x - 32.0)
 	panel.custom_minimum_size = Vector2(width, 0.0)
 	panel.position = Vector2((canvas.x - width) * 0.5, float(insets["top"]) + 10.0 * f)
+	# W14/UIKERN: sollte oben schon etwas hängen (z. B. ein zweiter Banner),
+	# rutscht dieser Banner DARUNTER statt darüber zu liegen.
+	var desired := Rect2(panel.position, Vector2(width, 64.0 * f))
+	var blockers := UiAnchors.occupied_rects(UiAnchors.ZONE_TOP, panel)
+	panel.position = UiAnchors.dodge(desired, blockers, UiAnchors.ZONE_TOP).position
 	var rows := VBoxContainer.new()
 	rows.add_theme_constant_override("separation", int(2.0 * f))
 	var title_label := Label.new()
