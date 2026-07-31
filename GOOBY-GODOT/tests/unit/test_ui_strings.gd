@@ -45,6 +45,15 @@ const EXPECTED_DOMAINS := [
 	"gfree.",
 	# W13B/REISEPASS (strings/de+en/reisepass.json, s. OWNERSHIP.md).
 	"reisepass.",
+	# W13C-Domains (je eine NEUE strings/de+en/<domain>.json, s. OWNERSHIP.md):
+	# INSTANT-Feed, GOB.TY-Sender, FOTOWERK-Fotomodus, PANEL-Account-Umzug,
+	# GARAGE am Haus, GOOBYMAN-Drogerie.
+	"instant.",
+	"gobty.",
+	"foto.",
+	"umzug.",
+	"garage.",
+	"goobyman.",
 ]
 ## Stadt-Dialoge: DE-Bäume + EN-Pendants (E6 P2-13; Wiring s. Handoff
 ## FIXG-text-requests.md — der Loader wählt bei locale=en das en/-Pendant).
