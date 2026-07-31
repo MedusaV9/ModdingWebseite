@@ -69,10 +69,11 @@ DE ist führend; EN muss für jede Domain paritätisch sein (Test:
 | `fuettern.*` (Datei `strings/<locale>/fuettern.json` — Kühlschrank 2.0: Regal-Grid, Kategorien-Chips, Vorrats-Badge, Zucker-Warnung, Leerzustand, Mampf-Sprüche; die `rewards.kuehlschrank.*`/`rewards.fuettern.satt`-Keys bleiben beim EF-1-Owner; `fuettern.kommentar.*` gehört VOICE, s. u.) | W14 FRIDGE | W14 |
 | `dlc.*` (Datei `strings/<locale>/dlc.json` — DLC-Hub: Settings-Sektion „DLC“, Bibliothek-Screen mit Ribbons NEU/BALD/INSTALLIERT, Detail-Sheet, Kommt-bald-Hammer-Gag) | W14 DLCHUB | W14 |
 | `netset.*` (Datei `strings/<locale>/netset.json` — Mehrspieler-Settings `netset.mp.*` inkl. Fehlertext-Mapping `netset.mp.fehler.*` + Dev-Werkzeugkasten `netset.dev.*`) | W14 NETSET | W14 |
-| `soul.linie.*` + `gespraech.*` + `fuettern.kommentar.*` (Datei `strings/<locale>/soul_lines.json` — 120 Gooby-Lines: Tageszeit/Wetter/W13-Features/Minispiel/Idle/Feiern/Wiedersehen + Mini-Dialog-Chips `gespraech.*` (Daten: `content/soul/data/gespraeche.json`) + Fütter-Kommentar-Schnittstelle für FRIDGE — kollisionsfrei zu deren `fuettern.*`-UI-Keys) | W14 VOICE | W14 |
+| `soul.linie.*` + `gespraech.*` + `fuettern.kommentar.*` (Datei `strings/<locale>/soul_lines.json` — 124 Gooby-Lines: Tageszeit/Wetter/W13-Features/Minispiel/Idle/Feiern/Wiedersehen + 4 `soul.linie.markt.stand.*`-Lines additiv von W15 INTEGRATE (MARKT-Request) + Mini-Dialog-Chips `gespraech.*` (Daten: `content/soul/data/gespraeche.json`) + Fütter-Kommentar-Schnittstelle für FRIDGE — kollisionsfrei zu deren `fuettern.*`-UI-Keys) | W14 VOICE | W14 |
 | `loading.*` (Datei `strings/<locale>/loading.json` — Lade-Schirme, W7; NEUE `loading.boot.sprueche`-Keys additiv von W14 LOADING: 10 Boot-Cover-Sprüche) | W7 RANCH2 (Boot-Sprüche: W14 LOADING) | W7/W14 |
 | NEUE `garten.samen_kurz`/`garten.samen_fehlt`/`garten.spruch.*`-Keys (additiv in `craft.json` — Saatgut-Anzeige + 4 Ernte-Sprüche der neuen Crops; `garten.*` bleibt M2-HAUS-Domain), `city.laden.saatgut_titel` (additiv in `city.json` — Saatgut-Abschnitt im REHWEI-Laden) + `rewards.food.radish`/`rewards.food.eggplant` (additiv in `rewards.json` — Anzeigenamen der neuen Ernte-Foods) | W15 CROPS | W15 |
 | `markt.*` (Datei `strings/<locale>/markt.json` — Eigenstand des Wochenmarkts: Sheet-Tabs, Bestücken/Preis-Slider, Markttag-Replay, Abrechnungs-Karte, Tages-Kommentare, Schürze-Gag, Kräuterkasten-Hinweis; die `city.markt.*`-Ankauf-Keys bleiben bei W3a CITY) + NEUE `craft.rezept.r_vogelhaus`/`r_kraeuterkasten`/`r_windrad_deko`-Keys (additiv in `craft.json` — die drei W15-Rezepte) | W15 MARKT | W15 |
+| `urlaub.*` (Datei `strings/<locale>/urlaub.json` — „Gooby im Urlaub besuchen“: Besuchen-Knopf/Szenen-Titel/Aktions-Toasts, 9 Souvenir-Namen `urlaub.souvenir.<destId>`, 3×8 AcBubble-Lines je Archetyp `urlaub.bubble.strand/berge/stadt`, Café-Bestell-Gag `urlaub.bestellung`, Soul-Erinnerungen `urlaub.soul.*`) | W15 URLAUB | W15 |
 
 Regeln:
 1. Nur der Owner editiert Keys seines Prefixes (in de.json/en.json NUR im
@@ -101,13 +102,6 @@ Regeln:
 - **Typografie:** Ellipse `…` (nie `...`), Apostroph `’` (nie `'`),
   Anführungszeichen `„…“` paarig.
 
-*(Doku-Pass W14/INTEGRATE: alle zuvor per >> angehängten W13B/W13C/W14-Domains
-sind in die Tabelle oben gehoben — neue Nachträge bitte wieder ans Dateiende
-per >> anhängen, der nächste Doku-Pass hebt sie.)*
-
->> `urlaub.*` (Datei `strings/<locale>/urlaub.json` — „Gooby im Urlaub
-besuchen“: Besuchen-Knopf/Szenen-Titel/Aktions-Toasts, 9 Souvenir-Namen
-(`urlaub.souvenir.<destId>`), 3×8 AcBubble-Lines je Archetyp
-(`urlaub.bubble.strand/berge/stadt`), Café-Bestell-Gag `urlaub.bestellung`,
-Soul-Erinnerungen `urlaub.soul.*`) → **W15 URLAUB**, seit W15 — beim
-nächsten Doku-Pass in die Tabelle heben.
+*(Doku-Pass W15/INTEGRATE: alle zuvor per >> angehängten Domains — zuletzt
+`urlaub.*` — sind in die Tabelle oben gehoben; neue Nachträge bitte wieder
+ans Dateiende per >> anhängen, der nächste Doku-Pass hebt sie.)*
