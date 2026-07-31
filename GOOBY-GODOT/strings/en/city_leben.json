@@ -1,0 +1,8 @@
+{
+  "city_leben": {
+    "ziel_gesetzt": "GPS on: off to {ort}!",
+    "ziel_weg": "GPS off. Just drifting for a bit.",
+    "ziel_erreicht": "Destination reached — {ort} is waiting!",
+    "zuhause": "Home"
+  }
+}
