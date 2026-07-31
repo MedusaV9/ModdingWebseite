@@ -6,6 +6,9 @@
 			"stars": "Stars: {n}/{max}",
 			"new": "NEW"
 		},
+		"intro": {
+			"ziel": "Level {n}: Stop the zombies before the house!"
+		},
 		"hud": {
 			"level": "Level {n}",
 			"wave": "WAVE {n}!",

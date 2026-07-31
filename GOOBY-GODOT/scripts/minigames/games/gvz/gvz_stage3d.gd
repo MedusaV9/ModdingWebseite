@@ -138,6 +138,14 @@ func frame(vp: Vector2) -> void:
 	stage.set_half_height(4.8, 10.0)
 
 
+## W14 Intro-Beat: Kamera schwebt aus leicht erhöhter Totale (k=0) sanft in die
+## Spielpose (k=1). Zellen bleiben welt-verankert, Touch-Mapping unberührt.
+func establish(k: float) -> void:
+	var e := 1.0 - ease(clampf(k, 0.0, 1.0), 0.4)
+	stage.camera.position = Vector3(0.0, 11.5 + 2.4 * e, 8.0 + 1.8 * e)
+	stage.camera.rotation_degrees = Vector3(-52.0 - 4.5 * e, 0.0, 0.0)
+
+
 ## Alle 45 Zellen per Raycast EXAKT unter das 2D-Feld legen; Rasen, Veranda,
 ## Haus, Kulisse und Nebelwand richten sich daran aus. Nach jedem apply_view
 ## und jedem Levelstart neu aufrufen. `fog_px` < 0 = kein Nebel.

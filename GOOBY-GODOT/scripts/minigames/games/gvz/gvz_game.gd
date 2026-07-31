@@ -21,8 +21,9 @@ const TICK_SEC := 0.05
 const CARD_W := 56.0
 const CARD_H := 62.0
 const TOP_PAD := 6.0
-const MOWER_GUTTER := 44.0
+const MOWER_GUTTER := 72.0  # W14: 44 px schnitten die Mäher-Goobys links ab.
 const BANNER_SEC := 2.2
+const INTRO_S := 1.5  # W14 Intro-Beat: Establishing + Ziel-Banner, dann Sim.
 
 ## W13/GVZ (P5-Report G18): Meilenstein-Siege feuern Event-Hooks über den
 ## bestehenden Sticker-Mechanismus (Doc G §4.4 „1× Sticker bei L5/10/15“).
@@ -60,6 +61,8 @@ var _banner_until := 0.0
 ## Banner-Stil ("info" | "wave" | "huge" | "boss") + Startzeit für den Punch.
 var _banner_kind := "info"
 var _banner_start := 0.0
+## Intro-Beat-Restzeit (Sekunden): > 0 = Bühne steht, Sim wartet.
+var _intro_left := 0.0
 ## Nutella-Zähler: letzter Stand + Pop-Startzeit (Zähler feiert Änderungen).
 var _nutella_seen := -1
 var _nutella_pop := -10.0
@@ -125,13 +128,15 @@ func open_level(id: int) -> void:
 	_accum = 0.0
 	_last_run_score = 0
 	_prev_zombie_pos = {}
-	_show_banner(I18nService.t("gvz.hud.level", {"n": id}))
+	_intro_left = INTRO_S
+	_show_banner(I18nService.t("gvz.intro.ziel", {"n": id}), "intro")
 	if _select_screen != null:
 		_select_screen.visible = false
 	if _stage != null:
 		_stage.visible = true
 		_stage.frame(_view_size())
 		_relayout_stage()
+		_stage.establish(0.0)
 	_clear_overlay()
 	queue_redraw()
 
@@ -172,6 +177,11 @@ func finish_session() -> void:
 func _process(delta: float) -> void:
 	if not is_active() or phase != "battle" or state.is_empty():
 		return
+	# Intro-Beat: Kamera schwebt in die Spielpose, Sim läuft (1. Welle kommt spät).
+	if _intro_left > 0.0:
+		_intro_left = maxf(_intro_left - minf(delta, 0.25), 0.0)
+		if _stage != null:
+			_stage.establish(1.0 - _intro_left / INTRO_S)
 	_accum += minf(delta, 0.25)
 	while _accum >= TICK_SEC and not GvzLogic.is_over(state):
 		_accum -= TICK_SEC
@@ -821,19 +831,28 @@ func _draw_banner() -> void:
 	var s := 1.0 + 0.5 * punch * punch
 	var fade := clampf((_banner_until - now) / 0.35, 0.0, 1.0)
 	var danger := _banner_kind == "huge" or _banner_kind == "boss"
-	var w := (340.0 if danger else 300.0) * s
-	var h := (54.0 if danger else 44.0) * s
+	var w := (440.0 if _banner_kind == "intro" else (340.0 if danger else 300.0)) * s
+	var h := (54.0 if danger or _banner_kind == "intro" else 44.0) * s
 	var rect := Rect2(vp.x * 0.5 - w * 0.5, vp.y * 0.32 - (h - 44.0) * 0.5, w, h)
 	var fill := Color(0.29, 0.23, 0.21, 0.8)
 	if _banner_kind == "huge":
 		fill = Color(0.62, 0.2, 0.16, 0.88)
 	elif _banner_kind == "boss":
 		fill = Color(0.42, 0.14, 0.3, 0.9)
+	elif _banner_kind == "intro":
+		fill = Color(0.24, 0.42, 0.2, 0.88)
 	fill.a *= fade
 	_rounded(rect, fill)
 	if danger:
 		draw_rect(rect.grow(-1.5), Color(1.0, 0.83, 0.3, 0.85 * fade), false, 2.5)
-	if _banner_kind != "info":
+	if _banner_kind == "intro":
+		# Ziel-Icon-Duell: links der Möhren-Wächter, rechts sein Zombie.
+		var icon := h * 0.5
+		var links := rect.position + Vector2(-icon - 8.0, h * 0.85)
+		var rechts := rect.position + Vector2(w + icon + 8.0, h * 0.8)
+		GvzArt.draw_tower(self, "moehre", links, icon * 1.3, 0)
+		GvzArt.draw_zombie(self, "schlurfi", rechts, icon, 0)
+	elif _banner_kind != "info":
 		var icon_s := h * 0.42
 		var horde := 3 if _banner_kind == "huge" else 1
 		for i in horde:
