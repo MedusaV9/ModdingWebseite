@@ -1,10 +1,19 @@
 // eclipse:eclipse_glitch — shared helpers for the GLITCHZONE post shaders (glitch_outline,
 // glitch_datamosh, glitch_scanlines, glitch_invert, glitch_void). Owned by the glitchzone
-// feature; eclipse_common stays untouched (its efx* helpers are still used alongside).
+// feature; eclipse_common stays untouched (the .fsh MAIN BODIES still use its efx* helpers).
 // Buffer-free by design: depth linearization takes near/far as parameters so only the .fsh
 // files that actually need the camera pull in veil:space_helper (VeilCamera block) -- that
 // holds for the wave-13 additions too (hardening, fBm, the void lattice all take plain
 // floats/vectors).
+//
+// SELF-CONTAINMENT LAW (session-0731 regression fix): this file must never call a function
+// that lives in another include. Veil splices every `#include` at body index 0
+// (ShaderPreProcessor.Context.include -> tree.getBody().addAll(0, ...)), so multiple
+// includes land in REVERSE source order: with the conventional common-then-glitch include
+// order this file is pasted ABOVE eclipse_common, any efx* reference is
+// declared-below-use, and every GLITCHZONE shader dies at compile with
+// "no function with name 'efxNoise'". Only the .fsh main body (always BELOW all includes)
+// may mix helpers from several includes. Hence the private gzHash/gzNoise copies below.
 // Include with:  #include eclipse:eclipse_glitch
 
 // Raw 0..1 depth-buffer sample -> world-space view distance in blocks (standard
@@ -60,15 +69,34 @@ vec3 gzNormalizeSafe(vec3 v, vec3 fallback) {
     return len2 > 1.0e-12 ? v * inversesqrt(len2) : fallback;
 }
 
+// --- private hash/noise (self-containment law, see header) ----------------------------------
+// Bit-identical math to eclipse_common's efxHash/efxNoise — deliberately DUPLICATED, not
+// shared, so this include compiles regardless of include order (see header). Keep the
+// constants in lockstep with eclipse_common if that file ever changes.
+float gzHash(vec2 p) {
+    return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
+}
+
+float gzNoise(vec2 p) {
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    vec2 u = f * f * (3.0 - 2.0 * f);
+    float a = gzHash(i);
+    float b = gzHash(i + vec2(1.0, 0.0));
+    float c = gzHash(i + vec2(0.0, 1.0));
+    float d = gzHash(i + vec2(1.0, 1.0));
+    return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+}
+
 // --- organic masks -------------------------------------------------------------------------
-// 4-octave value-noise fBm, normalized to the same [0,1] range as efxNoise. Unrolled: the
+// 4-octave value-noise fBm, normalized to the same [0,1] range as gzNoise. Unrolled: the
 // octave count is a hard budget (the wave-13 census caps organic masks at 4-5 octaves for
 // llvmpipe), so a dynamic loop bound would only buy a branch.
 float gzFbm(vec2 p) {
-    return efxNoise(p) * 0.53333
-            + efxNoise(p * 2.03 + vec2(11.7, 3.1)) * 0.26667
-            + efxNoise(p * 4.11 + vec2(5.3, 19.9)) * 0.13333
-            + efxNoise(p * 8.07 + vec2(27.1, 7.7)) * 0.06667;
+    return gzNoise(p) * 0.53333
+            + gzNoise(p * 2.03 + vec2(11.7, 3.1)) * 0.26667
+            + gzNoise(p * 4.11 + vec2(5.3, 19.9)) * 0.13333
+            + gzNoise(p * 8.07 + vec2(27.1, 7.7)) * 0.06667;
 }
 
 // --- parallax void lattice (glitch_void) -----------------------------------------------------
@@ -80,7 +108,7 @@ float gzFbm(vec2 p) {
 // the cell it lives in. That removes the 8-neighbour search a classic 3-D starfield needs
 // and puts the whole layer at ONE hash.
 //
-// The cell index is wrapped to a 32-cell period before hashing. efxHash is sin-based and its
+// The cell index is wrapped to a 32-cell period before hashing. gzHash is sin-based and its
 // argument has to stay in the low hundreds to remain well-conditioned in fp32 (the efxDither
 // note in eclipse_common is the house law here); 32 cells is far more lattice than a camera
 // ever sees at once. Callers that anchor the lattice to a wrapped camera position keep the
@@ -94,7 +122,7 @@ const float GZ_TWINKLE_RATE = 1.25663706;
 
 float gzHash3(vec3 cell) {
     vec3 w = mod(cell, GZ_VOID_CELLS);
-    return efxHash(vec2(dot(w, vec3(1.0, 7.3, 13.1)), dot(w, vec3(17.7, 3.9, 5.1))));
+    return gzHash(vec2(dot(w, vec3(1.0, 7.3, 13.1)), dot(w, vec3(17.7, 3.9, 5.1))));
 }
 
 // One parallax star layer. `density` is the share of cells that carry a star; `detail` gates
