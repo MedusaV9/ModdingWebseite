@@ -57,13 +57,25 @@ func test_kamera_kurve_punkte_tangente_und_hoehe() -> void:
 	var richtung := Vector3(0, 0, -1)
 	var ende := Vector3(-2.0, 6.8, -8.0)
 	var kurve := DoorTravelFahrt.kamera_kurve(start, tuer, richtung, ende)
-	assert_eq(kurve.point_count, 3, "Start/Tür/Ziel")
+	assert_eq(kurve.point_count, 4, "Start/Anflug/Tür/Ziel")
 	assert_eq(kurve.get_point_position(0), start)
-	assert_eq(kurve.get_point_position(1), tuer)
-	assert_eq(kurve.get_point_position(2), ende)
-	# Tangente am Türrahmen = Durchgangsrichtung (Kamera passiert senkrecht).
+	var anflug := tuer - richtung * DoorTravelFahrt.ANFLUG_ABSTAND_M
+	assert_true(
+		(kurve.get_point_position(1) - anflug).length() < 0.0001, "Anflug-Punkt vor der Tür"
+	)
+	assert_eq(kurve.get_point_position(2), tuer)
+	assert_eq(kurve.get_point_position(3), ende)
+	# Anflug→Tür ist ein EBENER Korridor auf Türhöhe (Sinken passiert davor):
+	# die Kamera hängt beim Durchgang nie im Türsturz oder in der Wand.
 	var laenge := kurve.get_baked_length()
+	var anflug_offset := kurve.get_closest_offset(anflug)
 	var tuer_offset := kurve.get_closest_offset(tuer)
+	var schritte := 8
+	for i in schritte + 1:
+		var o := lerpf(anflug_offset, tuer_offset, float(i) / schritte)
+		var p := kurve.sample_baked(o)
+		assert_almost(p.y, tuer.y, 0.01, "Korridor eben auf Türhöhe (Schritt %d)" % i)
+	# Tangente am Türrahmen = Durchgangsrichtung (Kamera passiert senkrecht).
 	var davor := kurve.sample_baked(tuer_offset - 0.1)
 	var danach := kurve.sample_baked(minf(tuer_offset + 0.1, laenge))
 	var tangente := (danach - davor).normalized()

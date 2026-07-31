@@ -40,6 +40,12 @@ const KAMERA_TUER_HOEHE_M := 1.45
 const BLICK_TUER_HOEHE_M := 1.2
 ## Gooby-Ziel hinter der Tür = RoomBase-Spawnpunkt (door_pos + inward*0.7).
 const SPAWN_ABSTAND_M := 0.7
+## Anflug-Punkt VOR dem Türrahmen: ab hier fährt die Kamera eben auf
+## Türhöhe durch die Öffnung (sinken passiert davor, im Quellraum — sonst
+## hängt der Blick beim Durchgang im Türsturz/der Wand).
+const ANFLUG_ABSTAND_M := 1.6
+## Frame-Ruckler (xvfb/Hitches) nie als Kamera-Teleport durchreichen.
+const DELTA_DECKEL_S := 0.05
 ## Ab diesem Fahrt-Anteil blendet die Fahrt-Kamera auf die LIVE-Zielkamera
 ## (die dem frisch gespawnten Ziel-Gooby entgegenfährt) — nahtlose Übergabe.
 const ANGLEICH_AB := 0.65
@@ -99,16 +105,20 @@ static func ziel_ausrichtung(
 	return Transform3D(basis, a_pos - basis * b_pos)
 
 
-## Kamerakurve Start → Türrahmen → Ziel: die Türrahmen-Griffe liegen exakt
-## auf der Durchgangsrichtung — die Kamera passiert den Rahmen senkrecht.
+## Kamerakurve Start → Anflug → Türrahmen → Ziel: das Sinken auf Türhöhe
+## passiert VOR dem Anflug-Punkt im Quellraum; Anflug→Tür ist ein ebener
+## Korridor exakt auf der Durchgangsrichtung — die Kamera passiert den
+## Rahmen senkrecht und mittig statt im Türsturz zu hängen.
 static func kamera_kurve(
 	start: Vector3, tuer: Vector3, richtung: Vector3, ende: Vector3
 ) -> Curve3D:
 	var kurve := Curve3D.new()
 	var r := richtung.normalized()
-	var griff := minf((tuer - start).length(), (ende - tuer).length()) * TUER_GRIFF_ANTEIL
-	kurve.add_point(start, Vector3.ZERO, (tuer - start) * START_GRIFF_ANTEIL)
-	kurve.add_point(tuer, -r * griff, r * griff)
+	var anflug := tuer - r * ANFLUG_ABSTAND_M
+	var korridor_griff := r * (ANFLUG_ABSTAND_M * TUER_GRIFF_ANTEIL)
+	kurve.add_point(start, Vector3.ZERO, (anflug - start) * START_GRIFF_ANTEIL)
+	kurve.add_point(anflug, -korridor_griff, korridor_griff)
+	kurve.add_point(tuer, -korridor_griff, korridor_griff)
 	kurve.add_point(ende, (tuer - ende) * START_GRIFF_ANTEIL, Vector3.ZERO)
 	return kurve
 
@@ -190,7 +200,11 @@ func vorbereiten(quelle: Node3D, ziel: Node3D, plan: Dictionary) -> void:
 		_kaputt = true
 	# Quellraum als Gast Tür-auf-Tür an den Zielraum setzen; sein Rig
 	# einfrieren (dessen Clamp-Rechtecke gelten nur am Raum-Ursprung).
+	# WICHTIG: Kamera-Transform VOR dem Umsetzen einfangen — das Rig hängt
+	# im Raum, nach dem Umsetzen trüge es das Gast-Delta bereits in sich
+	# (Delta würde doppelt angewandt, der Fahrt-Start wäre verdreht).
 	var quell_alt := quelle.global_transform
+	var quell_cam_alt := quell_cam.global_transform if quell_cam != null else Transform3D.IDENTITY
 	var quell_neu := (
 		zt * ziel_ausrichtung(ziel_pos, ziel_inward, quell_anker["pos"], quell_anker["inward"])
 	)
@@ -219,7 +233,7 @@ func vorbereiten(quelle: Node3D, ziel: Node3D, plan: Dictionary) -> void:
 		_cam.fov = quell_cam.fov
 		_cam.near = quell_cam.near
 		_cam.far = quell_cam.far
-		_cam.global_transform = quell_neu * quell_alt.affine_inverse() * quell_cam.global_transform
+		_cam.global_transform = quell_neu * quell_alt.affine_inverse() * quell_cam_alt
 	_cam.make_current()
 	_pfad = Path3D.new()
 	_pfad.name = "CamPath"
@@ -246,7 +260,7 @@ func abfahren(sofort := false) -> void:
 		await get_tree().process_frame
 		if not is_instance_valid(_ziel_cam) or not is_inside_tree():
 			break
-		t = minf(t + get_process_delta_time() / dauer, 1.0)
+		t = minf(t + minf(get_process_delta_time(), DELTA_DECKEL_S) / dauer, 1.0)
 		var e := ease_fahrt(t)
 		_cam.global_position = _pfad.curve.sample_baked(e * laenge)
 		var blick_ende := _ziel_cam.global_position - _ziel_cam.global_basis.z * BLICK_WEITE_M
