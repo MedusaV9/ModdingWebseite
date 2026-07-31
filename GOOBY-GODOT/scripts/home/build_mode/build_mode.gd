@@ -792,6 +792,12 @@ func _build_drawer() -> void:
 	# Wenn der Platz doch mal knapp wird: Ellipse statt hartem Schnitt.
 	_capacity_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	header.add_child(_capacity_label)
+	# Layout-Presets (W13C, Doc D §10) an der Lager-Schublade: Tausch = Grid+Lager.
+	var presets := Button.new()
+	presets.text = I18nService.t("build.preset.knopf")
+	presets.theme_type_variation = "AcChip"
+	presets.pressed.connect(_open_presets)
+	header.add_child(presets)
 	# Goobay (Doc D §5.4): verkauft wird aus dem LAGER — deshalb sitzt der
 	# Einstieg direkt an der Lager-Schublade.
 	var goobay := Button.new()
@@ -863,6 +869,61 @@ func _open_goobay() -> void:
 	var panel := GoobayPanel.open_in(_room.ui_layer(), _gs, _room)
 	panel.verkauft.connect(func(_item: String, _erloes: int) -> void: _refresh_drawer())
 	panel.closed.connect(_refresh_drawer)
+
+
+## Preset-Sheet öffnen (W13C, D §10); Ghost-/Spann-Flows enden sauber vorab.
+func _open_presets() -> void:
+	if _gs == null:
+		return
+	_girlanden.abbrechen()
+	_overlay.clear_highlight()
+	_cancel_ghost()
+	var sheet := PresetSheet.open_in(_room.ui_layer(), _gs, str(_room.room_id))
+	sheet.angewendet.connect(_on_preset_angewendet)
+	sheet.closed.connect(_refresh_drawer)
+
+
+func _on_preset_angewendet(fehlend: int) -> void:
+	reload_grid_from_save()
+	var key := "build.preset.fehlend" if fehlend > 0 else "build.preset.angewendet"
+	_room.say(I18nService.t(key, {"anzahl": fehlend}))
+
+
+## Grid nach einem Preset-Tausch IN PLACE aus dem Save neu füllen — Room,
+## GirlandenBau und Overlay teilen sich die GridData-Referenz, deshalb wird NIE
+## eine neue Instanz zugewiesen. Einträge sind frisch kollisionsgeprüft
+## (LayoutPresetsLogic.apply_slot); SURFACE-Items erst nach ihren Trägern.
+func reload_grid_from_save() -> void:
+	if _gs == null:
+		return
+	for entry: Dictionary in _grid.to_items_array():
+		_grid.remove_item(str(entry["uid"]))
+	var raw: Variant = _gs.get_value("home.rooms.%s.items" % str(_room.room_id), [])
+	var defs := FurnitureCatalog.defs()
+	var surface_entries: Array = []
+	for entry: Variant in raw if raw is Array else []:
+		if not (entry is Dictionary) or not defs.has(str((entry as Dictionary).get("item", ""))):
+			continue
+		var def: Dictionary = defs[str((entry as Dictionary)["item"])]
+		if int(def["layer"]) == GridData.Layer.SURFACE:
+			surface_entries.append(entry)
+			continue
+		_platziere_save_eintrag(def, entry)
+	for entry: Dictionary in surface_entries:
+		_platziere_save_eintrag(defs[str(entry["item"])], entry)
+	_girlanden.refresh()
+	furniture_changed.emit()
+	_refresh_drawer()
+
+
+## Ein Save-Entry (Boden/Decke ODER Wand) ins lebende Grid setzen.
+func _platziere_save_eintrag(def: Dictionary, entry: Dictionary) -> void:
+	var uid := str(entry.get("uid", ""))
+	var at_raw: Array = entry.get("at", [0, 0])
+	if entry.has("wall"):
+		_grid.place_wall(def, str(entry["wall"]), int(at_raw[0]), uid)
+		return
+	_grid.place(def, Vector2i(int(at_raw[0]), int(at_raw[1])), int(entry.get("rot", 0)), uid)
 
 
 func _update_action_bar(ok := false) -> void:

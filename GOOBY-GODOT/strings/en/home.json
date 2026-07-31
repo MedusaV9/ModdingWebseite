@@ -82,6 +82,25 @@
 			"haengt": "Tadaa! The garland is dangling!",
 			"ungueltig": "Oops, that won't work — pick two ceiling cells!",
 			"entfernt": "Garland taken down and stored!"
+		},
+		"preset": {
+			"knopf": "Presets",
+			"titel": "Save room",
+			"schliessen": "Back",
+			"name_platzhalter": "Layout name",
+			"name_hinweis": "Type a name up top first!",
+			"frei": "Empty slot",
+			"info": "{moebel} furniture · {girlanden} garlands",
+			"speichern": "Save",
+			"ueberschreiben": "Overwrite",
+			"anwenden": "Apply",
+			"loeschen": "Delete",
+			"sicher": "Sure?",
+			"gespeichert": "Layout saved!",
+			"geloescht": "Preset deleted.",
+			"angewendet": "Tadaa! Layout swapped!",
+			"fehlend": "Layout swapped — {anzahl} pieces were missing and left out.",
+			"lager_voll": "Storage would overflow — nothing changed!"
 		}
 	}
 }

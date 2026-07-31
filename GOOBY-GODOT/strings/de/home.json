@@ -82,6 +82,25 @@
 			"haengt": "Tadaa! Die Girlande baumelt!",
 			"ungueltig": "Huch, so klappt das nicht — such dir zwei Decken-Zellen aus!",
 			"entfernt": "Girlande abgenommen und eingelagert!"
+		},
+		"preset": {
+			"knopf": "Presets",
+			"titel": "Raum speichern",
+			"schliessen": "Zurück",
+			"name_platzhalter": "Name fürs Layout",
+			"name_hinweis": "Erst oben einen Namen eintippen!",
+			"frei": "Freier Slot",
+			"info": "{moebel} Möbel · {girlanden} Girlanden",
+			"speichern": "Speichern",
+			"ueberschreiben": "Überschreiben",
+			"anwenden": "Anwenden",
+			"loeschen": "Löschen",
+			"sicher": "Sicher?",
+			"gespeichert": "Layout gespeichert!",
+			"geloescht": "Preset gelöscht.",
+			"angewendet": "Tadaa! Layout getauscht!",
+			"fehlend": "Layout getauscht — {anzahl} Teile fehlten und blieben weg.",
+			"lager_voll": "Das Lager würde überlaufen — nichts geändert!"
 		}
 	}
 }

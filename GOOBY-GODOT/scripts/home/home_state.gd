@@ -20,6 +20,9 @@ extends RefCounted
 ## W13B-ERWEITERUNG (additiv): home.rooms[id].girlanden[] (Spann-Deko,
 ##   Doc H §6.3 — {"typ", "zelle_a": [x,y], "zelle_b": [x,y]}) sowie die
 ##   sanfte WALL→CEILING-Umbuchung im Ladepfad (normalize_ceiling_entries).
+## W13C-ERWEITERUNG (additiv): home.presets{room_id: [slot × 3]} — Layout-
+##   Presets „Raum speichern“ (Doc D §10, Logik in LayoutPresetsLogic);
+##   ein Slot ist {} (frei) oder {"name", "items", "girlanden"}.
 ## Alte Saves ohne diese Keys heilen beim nächsten Load über normalize_slice.
 
 const SaveSchema := preload("res://scripts/state/save_schema.gd")
@@ -28,6 +31,8 @@ const EconomyLogic := preload("res://scripts/logic/economy.gd")
 const SLICE_ID := "home"
 const DEFAULT_UNLOCKED := ["hall", "living", "kitchen", "bathroom", "bedroom"]
 const FLAG_BED_PLACED := "bedPlaced"
+## Layout-Preset-Slots pro Raum (W13C, Doc D §10).
+const PRESET_SLOTS := 3
 
 static var _registered := false
 
@@ -59,6 +64,7 @@ static func default_slice() -> Dictionary:
 		"garden": GardenState.default_garden(),
 		"goobay": GoobayState.default_goobay(),
 		"lieferungen": [],
+		"presets": {},
 	}
 
 
@@ -84,6 +90,7 @@ static func normalize_slice(raw: Variant) -> Dictionary:
 			storage.remove_at(i)
 	_normalize_m2(home)
 	_normalize_girlanden(home)
+	_normalize_presets(home)
 	return home
 
 
@@ -130,6 +137,43 @@ static func _girlande_gueltig(eintrag: Variant) -> bool:
 		if not (zelle is Array) or (zelle as Array).size() < 2:
 			return false
 	return true
+
+
+## W13C: Layout-Presets heilen (Doc D §10) — pro Raum IMMER genau
+## PRESET_SLOTS Slots; kaputte Slots (kein Dict, Name leer, kaputte
+## Item-/Girlanden-Einträge) werden geleert bzw. bereinigt, gültige
+## bleiben VERBATIM.
+static func _normalize_presets(home: Dictionary) -> void:
+	if not (home.get("presets") is Dictionary):
+		home["presets"] = {}
+		return
+	var presets: Dictionary = home["presets"]
+	for room_id: Variant in presets.keys():
+		var roh: Variant = presets[room_id]
+		var sauber: Array = []
+		for i in PRESET_SLOTS:
+			var slot: Variant = roh[i] if roh is Array and i < (roh as Array).size() else {}
+			sauber.append(_preset_geheilt(slot))
+		presets[room_id] = sauber
+
+
+static func _preset_geheilt(roh: Variant) -> Dictionary:
+	if not (roh is Dictionary):
+		return {}
+	var name := str((roh as Dictionary).get("name", "")).strip_edges()
+	if name == "":
+		return {}
+	var items: Array = []
+	if (roh as Dictionary).get("items") is Array:
+		for entry: Variant in (roh as Dictionary)["items"]:
+			if entry is Dictionary and str((entry as Dictionary).get("item", "")) != "":
+				items.append(entry)
+	var girlanden: Array = []
+	if (roh as Dictionary).get("girlanden") is Array:
+		for eintrag: Variant in (roh as Dictionary)["girlanden"]:
+			if _girlande_gueltig(eintrag):
+				girlanden.append(eintrag)
+	return {"name": name, "items": items, "girlanden": girlanden}
 
 
 ## Erstbezug/Umzugstag: leere home.rooms werden mit dem liebevollen
