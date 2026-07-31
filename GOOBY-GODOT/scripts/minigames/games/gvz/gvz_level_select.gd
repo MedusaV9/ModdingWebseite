@@ -192,5 +192,9 @@ func _on_resized() -> void:
 
 
 func _fit_viewport() -> void:
+	# B11: dieser Node ist size-verwaltet (Viewport-Bindung) — die Anker
+	# MÜSSEN gleichseitig bleiben (Anker ODER size, nie beides), sonst warnt
+	# Godot „non-equal opposite anchors“ und der Layout-Pass kippt das Rect.
+	set_anchors_preset(Control.PRESET_TOP_LEFT)
 	position = Vector2.ZERO
 	size = get_viewport_rect().size
