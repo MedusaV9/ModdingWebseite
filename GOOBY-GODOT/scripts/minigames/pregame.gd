@@ -158,6 +158,12 @@ func _build_ui() -> void:
 		_touch_buttons.append(btn)
 		_chip_buttons.append(btn)
 
+	# W15/TECHKIT (Doc G §9 R5): danceParty bekommt die Audio-Latenz-
+	# Feinkalibrierung im Pregame — komplette Logik/UI lebt in der neuen
+	# Datei dance_calibration.gd, hier nur der additive Mount.
+	if game_id == "danceParty":
+		DanceCalibration.mount_pregame_section(self, rows, _resolve_state())
+
 	var buttons := HBoxContainer.new()
 	buttons.alignment = BoxContainer.ALIGNMENT_CENTER
 	buttons.add_theme_constant_override("separation", 14)

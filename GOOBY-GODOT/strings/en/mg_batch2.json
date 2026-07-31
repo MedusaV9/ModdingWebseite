@@ -68,7 +68,17 @@
 			"title": "Dance Party",
 			"hint": "Tap the notes on the line — stay on beat!",
 			"encore": "ENCORE!",
-			"breaks": "Combo breaks: {n}/{max}"
+			"breaks": "Combo breaks: {n}/{max}",
+			"kalib_knopf": "Adjust timing ({ms} ms)",
+			"kalib_titel": "Adjust timing",
+			"kalib_text": "Tap along with the 8 metronome beats — your median offset gets saved.",
+			"kalib_offset": "Offset: {ms} ms",
+			"kalib_beat": "Beat {n}/{max}",
+			"kalib_ergebnis": "Your offset: {ms} ms — saved!",
+			"kalib_tap": "TAP!",
+			"kalib_start": "Go!",
+			"kalib_reset": "Reset",
+			"kalib_zu": "Done"
 		},
 		"ghostHunt": {
 			"title": "Ghost Hunt",

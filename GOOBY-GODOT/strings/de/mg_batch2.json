@@ -68,7 +68,17 @@
 			"title": "Tanzparty",
 			"hint": "Tippe die Noten auf der Linie — bleib im Takt!",
 			"encore": "ZUGABE!",
-			"breaks": "Serienbrüche: {n}/{max}"
+			"breaks": "Serienbrüche: {n}/{max}",
+			"kalib_knopf": "Timing anpassen ({ms} ms)",
+			"kalib_titel": "Timing anpassen",
+			"kalib_text": "Tippe im Takt der 8 Metronom-Schläge — dein Median-Offset wird gespeichert.",
+			"kalib_offset": "Offset: {ms} ms",
+			"kalib_beat": "Schlag {n}/{max}",
+			"kalib_ergebnis": "Dein Offset: {ms} ms — gespeichert!",
+			"kalib_tap": "TIPPEN!",
+			"kalib_start": "Los!",
+			"kalib_reset": "Zurücksetzen",
+			"kalib_zu": "Fertig"
 		},
 		"ghostHunt": {
 			"title": "Geisterjagd",
