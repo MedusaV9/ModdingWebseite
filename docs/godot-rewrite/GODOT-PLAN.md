@@ -539,102 +539,106 @@ versenken (Emotes+Tomate) → Save-Migration v4→v5 inkl. Umzugskoffer.
 Format: `[M2|M3] Wunsch — Doc-Verweis`. M2 = nächste Ausbaustufe, M3 = Kirsche/Stretch.
 
 ### A — Engine (Doc A)
-- [M2] DOOR_TRAVEL additiv (Zielraum additiv laden, Kamera fährt DURCH die Tür, Path3D-CamPath) statt M1-Cut — A §1.4/§4/§5
-- [M2] Rückblick (Recap) 2.0: korrekt rotiert + generell verbessert; recapEngine/Director/History-Port — USER §A12, A §8
-- [M2] Restliche System-Logik-Ports (~23: quests, garden-Voll, weather, achievementsEngine, collections, stickerBook-Engine, profileStats, offline, notifyRules, musicRegistry, modifierEngine, cutscene, shopTrip, themePark, postcards-Rest, gallery, nougat, radioQueue, furniturePlacement…) — A §8
-- [M2] Performance-Profiling auf echtem iPhone + `scaling_3d`-Regler + LightmapGI-Option — A §7/§6
+- [M2] DOOR_TRAVEL additiv (Zielraum additiv laden, Kamera fährt DURCH die Tür, Path3D-CamPath) statt M1-Cut — A §1.4/§4/§5 **→ teilweise (bewusste Alternative):** eigener `DOOR_TRAVEL`-Tür-Wisch ohne Voll-Veil + threaded Preload (`scene_router.gd`, `door_transition.gd`; getestet, EF-3/EVAL-1-abgesegnet); additives Laden + CamPath-Kamerafahrt bleiben offen (Polish)
+- [M2] Rückblick (Recap) 2.0: korrekt rotiert + generell verbessert; recapEngine/Director/History-Port — USER §A12, A §8 **✅ erledigt (W6/FIX):** voller Port `scripts/recap/{recap_engine,recap_director,recap_scene,recap_service}.gd`, Kino im Querformat (`_lock_landscape`); Tests `test_recap_*.gd`
+- [M2] Restliche System-Logik-Ports (~23: quests, garden-Voll, weather, achievementsEngine, collections, stickerBook-Engine, profileStats, offline, notifyRules, musicRegistry, modifierEngine, cutscene, shopTrip, themePark, postcards-Rest, gallery, nougat, radioQueue, furniturePlacement…) — A §8 **→ Stand W13: 16/19 erledigt;** real offen nur Sammlungsset-UI im Album, sichtbare Wetter-FX Haus/Stadt und Nougatschleuse — alle drei in W13 in Arbeit
+- [M2] Performance-Profiling auf echtem iPhone + `scaling_3d`-Regler + LightmapGI-Option — A §7/§6 **→ teilweise:** `scaling_3d`-Regler ✅ (`quality_service.gd` + Settings-Grafiksektion, dazu Auto-Profil + Perf-Notbremse); echtes iPhone-Profiling (User-Action: .ipa sideloaden) und LightmapGI-Option offen
 - [M3] Shader-Warmup-Quad im Veil (R2), PhysicalBone-Ragdoll-Experiment (F) — A §Risiken
 
 ### B — Updates (Doc B)
-- [M2] Öffentliches Artefakt-Repo `MedusaV9/gooby-updates` anlegen + `GH_CONTENT_TOKEN` (User-Action!) + Ende-zu-Ende-Release-Test — B §3/§5
-- [M2] ipa-build.yml voll funktionsfähig (Godot-iOS-Export + xcodebuild unsigned + Release-Asset + latest_native-Bump) — B §5.2, W1a-Skeleton vorhanden
-- [M2] Soft-Restart-Flow im Client + „wirksam ab Neustart“-UX-Feinschliff — B §2.4
-- [M2] Server-IP/Port live aus config.json bei jedem Connect (NetClient-Anbindung) — B §1.1/USER §B19
+- [M2] Öffentliches Artefakt-Repo `MedusaV9/gooby-updates` anlegen + `GH_CONTENT_TOKEN` (User-Action!) + Ende-zu-Ende-Release-Test — B §3/§5 **→ Client + Pack-CI fertig vorbereitet** (`gooby-packs.yml` inkl. auskommentiertem Release-Ziel); es fehlt nur die User-Action (Repo + Token), danach der erste echte E2E-Release-Test
+- [M2] ipa-build.yml voll funktionsfähig (Godot-iOS-Export + xcodebuild unsigned + Release-Asset + latest_native-Bump) — B §5.2, W1a-Skeleton vorhanden **→ Build-Kern ✅ (W6 + W11):** `ios-ipa`-Job in `gooby-godot.yml` baut + verifiziert bei jedem Push grüne unsignierte .ipas (Artefakt `GOOBY-godot-unsigned-ipa`, `tools/ci/verify_ipa.py`); offen nur Release-Asset-Step + `latest_native`-Bump
+- [M2] Soft-Restart-Flow im Client + „wirksam ab Neustart“-UX-Feinschliff — B §2.4 **→ teilweise:** Toast „wirksam ab Neustart“ + `ContentRegistry.reload()` existieren; der „Jetzt neu laden“-Soft-Restart-Flow hat keinen Aufrufer
+- [M2] Server-IP/Port live aus config.json bei jedem Connect (NetClient-Anbindung) — B §1.1/USER §B19 **✅ erledigt (W2d):** `net_client.gd::_resolve_net_config()` liest bei JEDEM Verbindungsaufbau frisch aus der ContentRegistry; E2E-Test `test_updates_flow.gd`, Kontrakt `docs/UPDATES.md` §7
 - [M3] Manifest-RSA-Signierung (Härtung V2) — B §7
 - [M3] Mirror #2 über Node-Server — B §3(C)
 
 ### C — Backend/Multiplayer (Doc C)
-- [M2] Post/Mail: Briefe + Fotos (REST-Upload, Quota, Prune) + Item-Geschenke + Post-Ort — C §3.7, USER §C33
+- [M2] Post/Mail: Briefe + Fotos (REST-Upload, Quota, Prune) + Item-Geschenke + Post-Ort — C §3.7, USER §C33 **→ Ort + Storage-Fundament ✅** (`orte/post.gd` mit Offline-Tagespaket; `storage.js` mit Blob-Ablage + Size-Limits); das Mail-Modul selbst (REST, Quota, WS-Push) fehlt
 - [M2] InstantGooby (Feed-UI überm Mail-Backend) — C §3.9
-- [M2] GoobyPal-App-UI (Verlauf, 250/Tag-Anzeige; Server-Seite existiert ab W2c) — C §3.3
-- [M2] Zweites Brettspiel: **Schach** (UCI-Relay, Client-Legalität) — C §3.5 (M1 lieferte Schiffe versenken)
+- [M2] GoobyPal-App-UI (Verlauf, 250/Tag-Anzeige; Server-Seite existiert ab W2c) — C §3.3 **→ teilweise:** Sheet mit Senden + „Heute noch X“-Anzeige ✅ (`goobypal_sheet.gd`, im IGohbie verdrahtet); die Verlaufs-LISTE wird nicht gerendert (Daten liegen in `fetch_history().entries` bereit)
+- [M2] Zweites Brettspiel: **Schach** (UCI-Relay, Client-Legalität) — C §3.5 (M1 lieferte Schiffe versenken) **✅ erledigt:** Client komplett (`scripts/social/boardgame/chess_{logic,ai,session,scene}.gd`), Server relayt über dieselbe Turn-Maschine (`boardgames.js`, `GAMES = ['battleship','chess']`; Zug reist bewusst als `SHOT {move}` statt eigenem `MOVE`-Kind → null Server-Sonderlogik); 12 Boardgame-Tests
 - [M2] Snap A Gooby (First-Person-Selfies + `phone_up`-Emote im Besuch) — USER §E60, C §3.9
-- [M3] Coop-Fahrt: einer fährt, einer steuert Radio (Radio-Sync `drive:`-Room) — C §3.6, USER §C31
-- [M3] Koop-Minigames-Relay: GvZ PvP + GvZ Coop (15 Level) + GOB-NOM-Coop (10 Level) — C §3.8, G §4.5/§4.6/§5.4
+- [M3] Coop-Fahrt: einer fährt, einer steuert Radio (Radio-Sync `drive:`-Room) — C §3.6, USER §C31 **→ Server-Room fertig** (`drive:` in `rooms.js`, Presence-Template existiert); Client fehlt komplett
+- [M3] Koop-Minigames-Relay: GvZ PvP + GvZ Coop (15 Level) + GOB-NOM-Coop (10 Level) — C §3.8, G §4.5/§4.6/§5.4 **→ GOB-NOM-Coop ✅ lokal/hot-seat** (10 Level spielbar, Sim lockstep-vorbereitet mit `state_hash`); GvZ PvP nur Daten-Stub (`gvz_pvp.json`), GvZ-Coop-Level existieren nicht, Netz-Relay überall offen (Ranch-MP liefert das `mg:`-Room-Muster als Kopiervorlage)
 - [M3] ActivityKit-Live-Activity fürs Taxi (Widget-Extension, eigenes Design) — C §8, USER §C37 (M1: lokale Notifications geplant, Plugin-Stub)
-- [M2] `gooby_notify`-iOS-Plugin nativ bauen (UNUserNotificationCenter, ~200 LOC ObjC) — C §8 M1-Plugin, W3a-Stub vorhanden
+- [M2] `gooby_notify`-iOS-Plugin nativ bauen (UNUserNotificationCenter, ~200 LOC ObjC) — C §8 M1-Plugin, W3a-Stub vorhanden **→ Andockpunkt ✅ dokumentiert** (`notification_service.gd::_os_schedule()`; Kategorien/Ruhezeiten in `notify_rules.gd` getestet); das native Plugin selbst fehlt
 - [M3] Account-Umzugs-Code (Panel-generiert) — C §7
 - [M2] Besucher-schläft-auf-Couch-Regel (abends/0 Energie, Couch-Pflichtmöbel-Hook) — USER §C32
-- [M2] wss/TLS-Deploy-Doku + `ws://`-Nur-Heimnetz-Gate — C §7
+- [M2] wss/TLS-Deploy-Doku + `ws://`-Nur-Heimnetz-Gate — C §7 **→ Doku-Teil ✅** (`GOOBY-SERVER/README.md` §TLS: Reverse-Proxy → wss, Heimnetz-Hinweis); das `ws://`-Heimnetz-Gate im Client fehlt noch (verbindet vorbehaltlos)
+- [M3] Companion-App-Modus: Zweitgerät (Handy) zeigt Map/Quests, während auf dem Hauptgerät gespielt wird — expliziter User-Wunsch, bis zur W13-Planungswelle nirgends erfasst (neu aufgenommen W13). Bau = L: eigener Read-only-Client + Server-Room-Typ; Vorstufen: GoobyPal-/IGohbie-Konzepte wiederverwenden
 
 ### D — Haus/Bau/Garten (Doc D)
-- [M2] Wand-/Decken-Layer im Baumodus (WALL/CEILING-Modi, Fenster als WALL-Items mit exterior-Flag) — D §1.2/§2.1
-- [M2] Fenster-Diorama (Straße mit vorbeifahrenden Autos hinterm Portal-Quad) — D §1.2, USER §D43
-- [M2] Werkstatt + Materialien (Stöcke/Holz/Eisen/Nägel) + Rezepte/Baupläne + Crafting-UI — D §5.1–5.3, USER §D46
-- [M2] Goobay-Verhandlungs-Minispiel (Emoji-Eskalation, Abholung/Post-Versand) — D §5.4, USER §D49
-- [M2] Garten 2.0: Wind/Schatten-Faktoren, Erweiterungsstufen, Zäune als Kanten, Bewässerungsanlage, Gewächshaus (2×3, Tür-Zelle, Exoten-Crops) — D §6, USER §D50
-- [M2] Wochenmarkt als ECHTER Ort (Samstag, eigener Stand, Preiselastizität, Info-Schild + Erste-Male-Karte) — D §6.3, USER §D51
-- [M2] Möbel-Bestell-Cutscene (LKW + Clipboard, delivery.glb) — D §3.2, USER §D42
-- [M2] Shed L2/L3-Upgrades (M1: L1) — D §2.3
-- [M2] Baumarkt-Ort (Einkauf, Baupläne, Zäune, „Bodo Balken“) — D §5/E §2.3, USER §D47
-- [M3] Haus-Upgrades: Keller, 2. Etage, Balkon (+ Treppen/Portale, Bau-Overlay) — D §4.1, USER §D43
-- [M3] Garage (Rolltor, Bau-Anim) + Autohaus-Ort + Autos kaufen/Farben (car-kit-Material-Split-Skript) + Auto-Stats — D §7, USER §D48
-- [M3] IKEA-Großladen: 3D-Ausstellung (drehbare Modelle, Kategorien, Farbe/Muster/Stoff, Grid-Bedarf sichtbar, Brettspieltisch, Radio, SEHR viele Möbel) — USER §D52, D/E-Schnittstelle
-- [M3] SURFACE-Layer-Feinschliff + Layout-Presets („Raum speichern“) — D §10 M3
-- [M2] proc:*-Deko-Nachbauten in Blender (Migration reaktiviert `__unknown__`-Items) — D §8/§9
+- [M2] Wand-/Decken-Layer im Baumodus (WALL/CEILING-Modi, Fenster als WALL-Items mit exterior-Flag) — D §1.2/§2.1 **→ WALL-Layer ✅** (`grid_data.gd` WALLS N/E/S/W + `build_mode.gd`, Fenster mit `exterior`-Flag; Tests `test_home_grid.gd`); CEILING fehlt — Decken-Items laufen als WALL-Items
+- [M2] Fenster-Diorama (Straße mit vorbeifahrenden Autos hinterm Portal-Quad) — D §1.2, USER §D43 **✅ erledigt:** `street_diorama.gd` (Straße mit fahrenden Autos) + `exterior/garten_diorama.gd`, Zuordnung über `house_layout.gd`; bewusst Kulisse hinter der Wand statt Portal-Quad-Shader (dokumentiert im Header)
+- [M2] Werkstatt + Materialien (Stöcke/Holz/Eisen/Nägel) + Rezepte/Baupläne + Crafting-UI — D §5.1–5.3, USER §D46 **✅ erledigt:** `scripts/home/craft/` (Materialien mit Quellen, 5 Rezepte + Bauplan-Gate, Crafting-Panel, Werkstatt als Garten-Outbuilding); Tests `test_craft_*.gd`
+- [M2] Goobay-Verhandlungs-Minispiel (Emoji-Eskalation, Abholung/Post-Versand) — D §5.4, USER §D49 **✅ erledigt:** `scripts/home/goobay/` (Verhandlung exakt nach D §5.4 inkl. Käufertypen + Versand-Bonus); Test `test_home_goobay.gd`
+- [M2] Garten 2.0: Wind/Schatten-Faktoren, Erweiterungsstufen, Zäune als Kanten, Bewässerungsanlage, Gewächshaus (2×3, Tür-Zelle, Exoten-Crops) — D §6, USER §D50 **✅ erledigt:** `garden_grid/growth/state.gd` (Kanten-Zäune, Gewächshaus mit Tür-Zelle, Sprinkler 3×3, Wind/Schatten, Stufen 6×5→12×10 — Maße bewusst an die Raumgröße angepasst); Test `test_home_garden.gd`
+- [M2] Wochenmarkt als ECHTER Ort (Samstag, eigener Stand, Preiselastizität, Info-Schild + Erste-Male-Karte) — D §6.3, USER §D51 **✅ erledigt (Kernumfang):** `orte/wochenmarkt.gd` + `markt_preise.gd` (Sa 8–14, Preiselastizität −5 %/Stück, Erste-Male-Karte); nur der eigene Verkaufs-Stand mit Preis-Slider + Kunden-Sim bleibt offen
+- [M2] Möbel-Bestell-Cutscene (LKW + Clipboard, delivery.glb) — D §3.2, USER §D42 **✅ erledigt:** `delivery_cutscene.gd` + `assets/city/autos/delivery.glb` (Klemmbrett, Skip, läuft beim nächsten Gartenbetreten)
+- [M2] Shed L2/L3-Upgrades (M1: L1) — D §2.3 **✅ erledigt:** `shed_logic.gd` (Stufen 0–3, Preise 500/1500/4000) + `shed_l1–l3.glb`; Test `test_home_shed.gd`
+- [M2] Baumarkt-Ort (Einkauf, Baupläne, Zäune, „Bodo Balken“) — D §5/E §2.3, USER §D47 **✅ erledigt:** `orte/baumarkt.gd` („Bodo Balken“) + `baumarkt_katalog.json` (Materialien + Baupläne) + Dialog-JSON; Zäune craftbar über Werkstatt-Rezept
+- [M3] Haus-Upgrades: Keller, 2. Etage, Balkon (+ Treppen/Portale, Bau-Overlay) — D §4.1, USER §D43 **→ nur Etagen-OPTIK ✅** (EG-Deckenbalken/DG-Dachschräge via `house_layout.gd`); Keller/Balkon/kaufbare Etagen/Treppen fehlen
+- [M3] Garage (Rolltor, Bau-Anim) + Autohaus-Ort + Autos kaufen/Farben (car-kit-Material-Split-Skript) + Auto-Stats — D §7, USER §D48 **→ Autohaus ✅** („Blechbert“: `autohaus.gd` + `auto_katalog.gd`, Kauf + Farbwahl + Stats, aktives Auto als Contract); Garage am Haus (Rolltor) fehlt
+- [M3] IKEA-Großladen: 3D-Ausstellung (drehbare Modelle, Kategorien, Farbe/Muster/Stoff, Grid-Bedarf sichtbar, Brettspieltisch, Radio, SEHR viele Möbel) — USER §D52, D/E-Schnittstelle **✅ erledigt (W6, Kernumfang):** `ikea_screen.gd` (Suche, Kategorie-Chips) + 3D-Vitrine mit Drehteller (`furniture_showcase.gd`) + Farb-/Stoff-Varianten + Footprint-Label; 207 Möbel (203 GLB) inkl. Brettspieltisch + Radio. Begehbarer 3D-Ausstellungs-RAUM bleibt Kür
+- [M3] SURFACE-Layer-Feinschliff + Layout-Presets („Raum speichern“) — D §10 M3 **→ SURFACE ✅** (Träger-vor-Aufbau-Ordnung, W4/FIX-D); „Raum speichern“-Presets fehlen komplett
+- [M2] proc:*-Deko-Nachbauten in Blender (Migration reaktiviert `__unknown__`-Items) — D §8/§9 **✅ erledigt:** 203/207 Katalog-Items mit GLB, nur noch 4 gewollte proc-Items (parametrische Fensterrahmen, Postkartenwand, Souvenirregal); `__unknown__`-Items bleiben im Lager erhalten und reaktivieren sich
 
 ### E — Stadt/Orte (Doc E)
-- [M2] Orte-Interieurs: REHWEI, GOOBYTHEKE, GOOUHBUS (Rezept-Flow-Quest!), POW! (Kamera + 3 Tagesangebote), Post, Autohaus, Wochenmarkt — E §2.3/2.4, USER §E59 (M1 hat nur Flughafen minimal)
-- [M2] Dialog-System (JSON-Bäume, dialog_runner, Typewriter-Bubbles, Sprecher-Pitch-Gebrabbel) + alle DE-Dialoge — E §2.2/2.4
-- [M2] GOOBERANDO komplett: 3 Restaurants, Bestell-UI, deterministische Fahrer-Sim auf road_graph, oranger Liefer-Gooby, Übergabe, Trinkgeld-Buff+Hinweis, Logo — E §5, USER §E60
-- [M2] IGohbie-Handy-Shell + Apps (Taxi, Guber, GOOBERANDO, GoobyPal, InstantGooby, Snap A Gooby, Kamera, Freunde-Status) — USER §E60, E §5.1/C §3.9 (M1: Taxi-Ruf minimal)
-- [M2] Stadtkarte/2D-Minimap mit Pins + GPS-Pfeil — E §1.3
-- [M2] Guber (30 ᴳ, sedan-sports, vornehmer Fahrer-Dialog, Surge-Gag) — E §4
-- [M2] Fußgänger-Goobys, Hupe-Reaktionen, Tag/Nacht-Stadt, Near-Miss-Funken — E §1.4/1.5
-- [M2] Urlaubs-Nutzen-Ausbau: physische Souvenirs + Souvenir-Regal + Set-Bonus „Weltengooby“, Erholungs-Boost 48 h, GOOBY-FREE-Shop, Postkarten als WALL-Items — E §3.3 (M1: souvenirCoins+Postkarten+visited)
-- [M2] POW!-Kamera-Gate + Fotomodus + Galerie (Kamera nötig für Fotos) — USER §E61, H §6.5
+- [M2] Orte-Interieurs: REHWEI, GOOBYTHEKE, GOOUHBUS (Rezept-Flow-Quest!), POW! (Kamera + 3 Tagesangebote), Post, Autohaus, Wochenmarkt — E §2.3/2.4, USER §E59 (M1 hat nur Flughafen minimal) **✅ erledigt:** 9 begehbare Interieurs unter `scripts/city/orte/` (inkl. Rezept-Flow im GOOUHBUS, POW!-Kamera-Gate + deterministische Tagesangebote, Tierarzt); Tests `test_city_orte.gd`, `test_city_pow.gd`
+- [M2] Dialog-System (JSON-Bäume, dialog_runner, Typewriter-Bubbles, Sprecher-Pitch-Gebrabbel) + alle DE-Dialoge — E §2.2/2.4 **✅ erledigt (weitgehend):** `dialog_runner.gd` (cond/effekt, EN-Fallback) + Pitch-Gebrabbel (`gooby_voice.gd`), 9 DE-Dialogbäume + EN; nur der Buchstaben-Typewriter fehlt (Bubble poppt zeilenweise)
+- [M2] GOOBERANDO komplett: 3 Restaurants, Bestell-UI, deterministische Fahrer-Sim auf road_graph, oranger Liefer-Gooby, Übergabe, Trinkgeld-Buff+Hinweis, Logo — E §5, USER §E60 **→ teilweise:** Bestell-Flow + oranger Liefer-Gooby + Trinkgeld-Buff + Logo ✅ (`gooberando.gd`/`gooberando_state.gd`); nur 1 Restaurant (REHWEI) und Prep-Timer statt Fahrer-Sim auf dem road_graph
+- [M2] IGohbie-Handy-Shell + Apps (Taxi, Guber, GOOBERANDO, GoobyPal, InstantGooby, Snap A Gooby, Kamera, Freunde-Status) — USER §E60, E §5.1/C §3.9 (M1: Taxi-Ruf minimal) **→ 6 Apps ✅** (Taxi, Guber, GOOBERANDO, Kamera mit POW-Gate, Freunde, GoobyPal — `phone_shell.gd`/`phone_apps.gd`); InstantGooby + Snap A Gooby fehlen
+- [M2] Stadtkarte/2D-Minimap mit Pins + GPS-Pfeil — E §1.3 **→ Minimap ✅** (Karten-Kachel im Fahr-HUD, Orts-Pins, Fahrtrichtungs-Dreieck, `minimap.gd`); Ziel-GPS-Pfeil und Vollbild-Karte fehlen
+- [M2] Guber (30 ᴳ, sedan-sports, vornehmer Fahrer-Dialog, Surge-Gag) — E §4 **✅ erledigt (mit Detail-Abweichungen):** `fahrdienst.gd` (25 statt 30 ᴳ = Design-Entscheid, schneller als Taxi, vornehmer Fahrer-Dialog); Surge-Gag + eigenes Cutscene-Fahrzeug (sedan-sports) fehlen
+- [M2] Fußgänger-Goobys, Hupe-Reaktionen, Tag/Nacht-Stadt, Near-Miss-Funken — E §1.4/1.5 **✅ erledigt (weitgehend):** `city_fussgaenger.gd` (bis 14 Goobys), `city_verkehr.gd` (Ampeln, Nacht-Gelbblinken), Tag/Nacht-Lichtkurve, Near-Miss → Hupe + Toast; Funken-Partikel + Fußgänger-Reaktion auf die Spieler-Hupe fehlen
+- [M2] Urlaubs-Nutzen-Ausbau: physische Souvenirs + Souvenir-Regal + Set-Bonus „Weltengooby“, Erholungs-Boost 48 h, GOOBY-FREE-Shop, Postkarten als WALL-Items — E §3.3 (M1: souvenirCoins+Postkarten+visited) **→ teilweise:** Souvenirregal + Set-Bonus-Stufen + Postkarten-WALL-Item ✅ (`postkarten_logic.gd`/`postkarten_props.gd`); „Weltengooby“-Titel, 48-h-Erholungs-Boost und GOOBY-FREE-Shop fehlen
+- [M2] POW!-Kamera-Gate + Fotomodus + Galerie (Kamera nötig für Fotos) — USER §E61, H §6.5 **✅ erledigt:** `pow_angebote.gd` (`hat_kamera()`-Gate), `foto_modus.gd`, `kamera_app.gd`; Tests `test_city_pow.gd`, `test_rest4_galerie.gd`
 - [M3] Ambient-Audio-Distrikte, Wohnhaus-Varianten, Traffic-Vollausbau (10–14 Wander-Agenten) — E §1.5/§7 M3
-- [M2] Alle Rückblick-Orte erreichbar; Weltraum = „Raumstation GOOB-1“-Hub (rocketRescue+starHopper-Terminals) — USER §E59/§G89, G §7
+- [M2] Alle Rückblick-Orte erreichbar; Weltraum = „Raumstation GOOB-1“-Hub (rocketRescue+starHopper-Terminals) — USER §E59/§G89, G §7 **→ alle 9 Reiseziele buchbar ✅** (inkl. `space`; CatalogSync-Test); der begehbare „Raumstation GOOB-1“-Hub mit den 2 Spiel-Terminals fehlt
 
 ### F — Gooby/Interaktionen (Doc F)
-- [M2] Restliche Random-Events: robo_jagd, kleber_stuhl, wurm_freund, fernbedienung, karton_gooby, gewitter_angst, mehl_unfall + Nutella-Nacht-Voll-Fenster-Mechanik-Feinschliff — F §4.2 (M1: 6 Events)
-- [M2] Idle-Wandern + „Wo ist mein Gooby?“-Kamera-Teleport + Tat-Bubbles — F §4.2/§7, USER §F81
+- [M2] Restliche Random-Events: robo_jagd, kleber_stuhl, wurm_freund, fernbedienung, karton_gooby, gewitter_angst, mehl_unfall + Nutella-Nacht-Voll-Fenster-Mechanik-Feinschliff — F §4.2 (M1: 6 Events) **✅ erledigt:** alle 7 in `content/events/data/events.json` (13 Events gesamt, komplett spielbar via `event_runner.gd`) inkl. Nutella-Voll-Fenster; Tests `test_events_*.gd`. Restlücke: `klopapier_mumie` (M1-Soll aus F §4.2) existiert nirgends
+- [M2] Idle-Wandern + „Wo ist mein Gooby?“-Kamera-Teleport + Tat-Bubbles — F §4.2/§7, USER §F81 **→ Idle-Wandern ✅** (`gooby_home.gd`, BFS im Raum, Test `test_fix2_movement.gd`); der HUD-Chip „Wo ist mein Gooby?“ existierte ohne Consumer — Verkabelung (Kamera-Fokus + Tat-Bubble) in W13 in Arbeit
 - [M2] Schüttel-Secret (Accelerometer, 3 Stufen, Fake-Tumble-Ragdoll, Sticker) — F §5, USER §F69
-- [M2] BODEN-IST-LAVA / SPIDERGOOBY-Flow (Blockade-Erkennung → Choice → Decke) — F §6, USER §F78
-- [M2] Geschichten-Stunde (Buch-UI Lückentext, Bücher-Katalog, Entertainment-Abnutzung) — F §3.2, USER §F74
-- [M2] Duschvorhang-Peek-Varianten (>45 s-Gag mit rotierenden Bubbles) — F §3.2 (M1: Grundfall)
+- [M2] BODEN-IST-LAVA / SPIDERGOOBY-Flow (Blockade-Erkennung → Choice → Decke) — F §6, USER §F78 **✅ erledigt:** Blockade-BFS (`grid_data.gd`) → Beschwerde-Bubble + Choice → `spidergooby_flow` mit Decken-Gag (`room_base.gd`/`gooby_home.gd`); Test `test_home_blocked.gd`
+- [M2] Geschichten-Stunde (Buch-UI Lückentext, Bücher-Katalog, Entertainment-Abnutzung) — F §3.2, USER §F74 **→ Lückentext-UI ✅** (`story_time.gd`, am Bett angebunden); Abnutzungsformel + Bücher-Shop fehlen, Katalog hat erst 2 Stories (expliziter M2-Marker im Code)
+- [M2] Duschvorhang-Peek-Varianten (>45 s-Gag mit rotierenden Bubbles) — F §3.2 (M1: Grundfall) **✅ erledigt:** `klo_dusche.gd` (>45-s-Peek je Fenster, 3 rotierende Sprüche, Silhouette + `duschvorhang.glb`)
 - [M2] P1-Clips (dance, refuse, ragdoll_flail, grip_floor, tomato_throw, ceiling_cling) — F §1.4
 - [M3] Laufband-Gag-Minigame + Sticker, PC/GOBBULL-Zocken (+GOBBULL-Konsole kaufbar) — F §3.2, USER §F75/76
 - [M3] P2-Clips (treadmill, pc_gaming, idle-variety, book_listen), PhysicalBone-Ragdoll — F §1.4/§5
-- [M2] Mehr passive Animationen overall (Idle-Variety-Rotation) — USER §F68
-- [M2] „Interaktions-Anzeige“-Vollausbau (Screen-Space-Icons + Rand-Pfeile) — F §3.1 (M1: Rim-Puls)
+- [M2] Mehr passive Animationen overall (Idle-Variety-Rotation) — USER §F68 **→ Verhaltens-Variety ✅** (6 Idle-Akte im Soul-Pack mit Cooldown-Rotation + 12 W12-Emotionen); zusätzliche Idle-Rig-CLIPS fehlen (Rig hat nur idle/idle_lookaround)
+- [M2] „Interaktions-Anzeige“-Vollausbau (Screen-Space-Icons + Rand-Pfeile) — F §3.1 (M1: Rim-Puls) **→ W13 in Arbeit:** der HUD-Auge-Button existierte ohne Consumer (toter Draht, auch der M1-Rim-Puls fehlte); wird in W13 verdrahtet
 
 ### G — Minigames (Doc G)
-- [M2] 28 restliche Logic-Ports + Szenen (Reihenfolge laut G §3-Tabelle; carrotGuard früh als GvZ-Vorstudie; shoppingSurf zuletzt; cityDrive/deliveryRush/toyRacer nach Autohaus-CarDefs) — G §3
-- [M2] GOB NOM komplett: RopeLink-Physik, 8 Element-Bausteine, 15 SP-Level, Nutella-Glas-Sammlung, @tool-Level-Editor — G §5 (Coop → M3, s. C)
-- [M2] Difficulty-Targets-Zertifizierung aller Ports (cross_check.mjs ausweiten, expected/*.json committen) — G §2.5
+- [M2] 28 restliche Logic-Ports + Szenen (Reihenfolge laut G §3-Tabelle; carrotGuard früh als GvZ-Vorstudie; shoppingSurf zuletzt; cityDrive/deliveryRush/toyRacer nach Autohaus-CarDefs) — G §3 **✅ erledigt (bis auf City Drive):** 37 registrierte Spiele (30 Web-Ports + GvZ + GOB NOM + 5 Ranch); einzig `cityDrive` fehlt als Arcade-Runde (die freie Stadtfahrt existiert)
+- [M2] GOB NOM komplett: RopeLink-Physik, 8 Element-Bausteine, 15 SP-Level, Nutella-Glas-Sammlung, @tool-Level-Editor — G §5 (Coop → M3, s. C) **→ Spiel ✅** (Verlet-Physik, 15 SP- + 10 Coop-Level, alle per `gobnom_solver.gd` lösbar bewiesen, 5 Testdateien); der `@tool`-Level-Editor fehlt
+- [M2] Difficulty-Targets-Zertifizierung aller Ports (cross_check.mjs ausweiten, expected/*.json committen) — G §2.5 **→ teilweise:** echte Web-Fixture-Zertifizierung nur für teaParty + carrotCatch (4 Fixtures unter `tests/expected/`); breite Godot-Bot-Abdeckung (Monotonie-/Plausibilitätstests in 27+ Testdateien) existiert
 - [M2] Auto-Stats-Integration in Fahr-Spiele (car_stats_logic, Pregame-Anzeige) — G §6
-- [M2] Endless-Modi + Endlos-Lock + 3-Strikes-Cutscene-Vollausbau — G §1.2
+- [M2] Endless-Modi + Endlos-Lock + 3-Strikes-Cutscene-Vollausbau — G §1.2 **→ Endless ✅** (29/33 Manifeste + teaParty/carrotCatch, Lock `endless_unlocked`, Award-Pfad); `ctx.strike()` + 3-Strikes-Teleport-Cutscene fehlen (die pure `apply_strike`-Logik existiert ungenutzt)
 - [M3] HDR-2D-Glow-Auto-Downgrade-Telemetrie, danceParty-Audio-Latenz-Kalibrierung — G §9
-- [M2] GvZ: Goldi-Code im Codes-Pack ausliefern; Sticker-Trigger L5/10/15 — G §4.2/4.4
+- [M2] GvZ: Goldi-Code im Codes-Pack ausliefern; Sticker-Trigger L5/10/15 — G §4.2/4.4 **→ W13 in Arbeit:** die Hooks lagen brach (kein Goldi-Code im Codes-Pack, GvZ-Sticker-Counter wurden nirgends inkrementiert → 6 GvZ-Sticker unerreichbar); wird im W13-GvZ-Paket verdrahtet
 
 ### H — UI/Content (Doc H)
-- [M2] Profil-Tab NEU (Reisepass-Karte, Werdegang, Statistiken, Erfolge-Grid 44, Sticker-Schnellzugriff, Web-Rekorde-Karte, Freunde-Karte) — H §2.1, USER §H95
+- [M2] Profil-Tab NEU (Reisepass-Karte, Werdegang, Statistiken, Erfolge-Grid 44, Sticker-Schnellzugriff, Web-Rekorde-Karte, Freunde-Karte) — H §2.1, USER §H95 **✅ erledigt (W10, kleine Kür-Abweichungen):** `profil_screen.gd` (Pass-Karte mit drehbarem 3D-Porträt, Abschluss-Karte, Lifetime-Statistiken, Erfolge n/44 → `achievements_screen.gd`, Sticker-Fortschritt, Rekorde inkl. Web-Rekorde, Freunde-Karte); Tests `test_rest1_profil.gd`, `test_abschluss_logic.gd`
 - [M2] Reisepass 2.0 (Flip-Karte, Passfoto aus Fotomodus, Stempelseite, MRZ-Gag, „5.0 UMZUG“-Stempel) — H §2.2
 - [M2] Flughafen-Abflugtafel-UI im Design-System (Flip-Board, Boarding-Pass) — H §2.4, USER §H94 (M1: minimale Buchung)
-- [M2] Restliche Sticker-Sets ausliefern bis 126+1 (7 Sets × 6; M1 nur gelieferte Bilder) + Rarity-Effekte (Silber/Gold/Glitzer) — H §3.3/3.4
-- [M2] Cosmetics 2.0: Pack-Format + Laufzeit-glb + 36 neue Items + 7 neue Fellfarben (inkl. Galaxie-Shader) + SubViewport-Icon-Renderer; 42 Alt-Outfits + 7 Fellfarben 1:1 — H §4, USER §H99
-- [M2] Radio 2.0: IKEA-Kauf-Gate, Bordmusik-Loop (nur Pause), Sender-Picker, Cover-Art, „Was läuft?“-Ticker — H §6.1, USER §H101 (Grandfathering ist in M1-Migration drin)
+- [M2] Restliche Sticker-Sets ausliefern bis 126+1 (7 Sets × 6; M1 nur gelieferte Bilder) + Rarity-Effekte (Silber/Gold/Glitzer) — H §3.3/3.4 **→ Menge übererfüllt:** 141 Sticker (140 regulär + 1 geheim) in 23 Seiten mit validierter Rarity (`stickers.json`, Pack v1.1.0); die Rarity-Unlock-FX (Silber-Funkel/Gold-Glitzer) fehlen noch. Set-Struktur weicht bewusst von §3.3 ab — IDs sind Save-referenziert, NICHT umbauen
+- [M2] Cosmetics 2.0: Pack-Format + Laufzeit-glb + 36 neue Items + 7 neue Fellfarben (inkl. Galaxie-Shader) + SubViewport-Icon-Renderer; 42 Alt-Outfits + 7 Fellfarben 1:1 — H §4, USER §H99 **→ weitgehend ✅:** 92 Einträge (alle 42 Web-Outfits 1:1 + 37 neue + 7 alte und 6 neue Fellfarben), Pack-Format + geteilter SubViewport-Renderer; offen nur Galaxie-Fell + Shimmer-Shader. Laufzeit-glb bewusst durch prozedurale Builder ersetzt (für Pack-Updates gleichwertig — dokumentierte Abweichung)
+- [M2] Radio 2.0: IKEA-Kauf-Gate, Bordmusik-Loop (nur Pause), Sender-Picker, Cover-Art, „Was läuft?“-Ticker — H §6.1, USER §H101 (Grandfathering ist in M1-Migration drin) **→ Sender-Picker/Now-Playing/Level-Schlösser/Likes ✅** (`radio_sheet.gd`/`radio_logic.gd`, De-facto-Gate übers platzierte IKEA-Radio-Möbel, Grandfathering in der Migration); Bordmusik-Regel (nur Pause) + Kauf-Gate-Härtung + Ticker in W13 in Arbeit; Cover-Art fehlt
 - [M2] GOB.TY: 5 Puppet-Clips als SubViewport-TV — H §6.2, USER §H102
 - [M2] Girlanden/Spann-Deko (Path3D-Catenary, Lichterkette mit echten Lights) — H §6.3, USER §H103
-- [M2] Goobyman-Laden (Zahnbürsten-Haltbarkeit, Bruch-Chance remote-config!) — H §6.4, USER §H104/§B21
-- [M2] iOS-NSUserDefaults-Legacy-Reader als NATIVES Plugin (`legacy_save_reader`, ~40 LOC ObjC) + Gerätetest Bundle-Id/`CapacitorStorage.`-Prefix — H §5.3 (M1: dokumentierter Stub + Umzugskoffer-Fallback funktioniert immer)
-- [M3] bplist-Parser-Fallback in GDScript (~200 LOC) — H §5.3
-- [M2] uiScale-Setting → content_scale_factor-Stufen — H §5.2-settings-Mapping
+- [M2] Goobyman-Laden (Zahnbürsten-Haltbarkeit, Bruch-Chance remote-config!) — H §6.4, USER §H104/§B21 **→ nur der Bürstenbruch-Gag ✅ remote-konfigurierbar** (`zahnbuersten_bruch_chance` im Balance-Pack); Laden, Haltbarkeit/Blocker und Quest fehlen
+- [M2] iOS-NSUserDefaults-Legacy-Reader als NATIVES Plugin (`legacy_save_reader`, ~40 LOC ObjC) + Gerätetest Bundle-Id/`CapacitorStorage.`-Prefix — H §5.3 (M1: dokumentierter Stub + Umzugskoffer-Fallback funktioniert immer) **✅ erledigt (FIX-6, als GDScript-Lösung statt nativem Plugin):** `state/import/bplist.gd` + `legacy_capacitor.gd` + Boot-Hook beim Erststart (`home_entry.gd`) + Settings-Zeile; 12 Tests (`test_migration_transfer.gd`). Das native ~40-LOC-Plugin bleibt Kür für den Gerätetest
+- [M3] bplist-Parser-Fallback in GDScript (~200 LOC) — H §5.3 **✅ erledigt** — ist die produktive Hauptlösung geworden (s. Zeile darüber)
+- [M2] uiScale-Setting → content_scale_factor-Stufen — H §5.2-settings-Mapping **✅ erledigt (andere, zentralere Mechanik):** Slider 0.85–1.3 → `UiScale.user_factor` in der zentralen Skalierungsregel (Safe-Area-/Touch-Floor-bewusst) statt grobem `content_scale_factor`; Web-`uiScale` wird migriert
+- [Notiz] Garderobe-HUD-Knopf: H §„Garderobe-Knopf weg“ wollte ihn entfernen (Anpassen nur über Spiegel im Haus + Shop), W6 hat ihn bewusst zurückgebracht (Sichtbarkeit der 92 Cosmetics). Unprotokollierter Plan↔Code-Konflikt → offener User-Entscheid; aktuell existieren BEIDE Wege (HUD-Knopf + Spiegel)
 
 ### Prozess
-- [M2] Regelmäßige IPA-Builds über Actions ab funktionsfähigem ipa-build.yml — USER §Prozess
-- [M2] Blockbench-Installation nur falls konkreter Bedarf (bisher deckt Blender alles) — USER §Prozess
+- [M2] Regelmäßige IPA-Builds über Actions ab funktionsfähigem ipa-build.yml — USER §Prozess **✅ erledigt:** der `ios-ipa`-Job läuft bei jedem GOOBY-GODOT-Push mit (Artefakt `GOOBY-godot-unsigned-ipa`), zuletzt durchgehend grün
+- [M2] Blockbench-Installation nur falls konkreter Bedarf (bisher deckt Blender alles) — USER §Prozess **✅ erledigt (nie gebraucht):** alle Assets kamen über die Blender-Headless-Pipeline
+- [Notiz] Trailer-Musik: der finale 57,6-s-Trailer (W12) nutzt bewusst den instrumentalen CC-BY-Track „Glitter Blast“ (Kevin MacLeod). Der ursprüngliche Lyrics-Wunsch wurde abgewogen: das Instrumental passt zum Beat-genauen Gameplay-Schnitt (100 BPM = exaktes 36-Frame-Raster bei 60 fps), und eine saubere CC-Lizenz + Beat-Grid sind mit Gesang schwer kombinierbar — dokumentierte Entscheidung (Details: `trailer/CREDITS.md`)
+- [Notiz] Ranch-DLC (W6–W9; lief außerhalb dieses Backlogs über die RANCH-DLC-IDEAS-Docs): Freischalt-Level wird in W13 von 20 auf 15 gesenkt (expliziter User-Wunsch; reine Pack-Daten `content/ranch/data/balance.json`), dazu Ranch-spezifische Random-Events (ebenfalls W13 in Arbeit)
 
 ---
 
