@@ -90,6 +90,59 @@ const FOODS := {
 ## Fallback für unbekannte Inventar-Ids: generischer kleiner Snack.
 const FALLBACK := {"hunger": 10, "fun": 2}
 
+## W14/FRIDGE (additiv): Regal-Kategorien fürs Kühlschrank-Grid. Bewusst als
+## SEPARATE Tabelle statt Feld in FOODS — die Web-Delta-Einträge bleiben
+## verbatim 1:1 vergleichbar (test_w13_food_nougat). `getraenke` ist reserviert
+## (Katalog führt noch kein Getränk); die Chips blenden leere Kategorien aus.
+const KATEGORIEN: Array[String] = ["gemuese", "suesses", "warm", "getraenke"]
+const FOOD_KATEGORIE := {
+	# ── Gemüse & Obst (Frisches, inkl. Garten-Ernten + Weltraum-Möhre) ──
+	"carrot": "gemuese",
+	"apple": "gemuese",
+	"banana": "gemuese",
+	"tomato": "gemuese",
+	"strawberry": "gemuese",
+	"grapes": "gemuese",
+	"watermelon": "gemuese",
+	"corn": "gemuese",
+	"salad": "gemuese",
+	"pumpkin": "gemuese",
+	"tomate": "gemuese",
+	"melone": "gemuese",
+	"salat": "gemuese",
+	"pilz": "gemuese",
+	"ananas": "gemuese",
+	"chili": "gemuese",
+	"weltraumMoehre": "gemuese",
+	# ── Süßes (Treats — deckt sich mit den junk-Naschereien) ──
+	"cupcake": "suesses",
+	"cookie": "suesses",
+	"chocolate": "suesses",
+	"muffin": "suesses",
+	"donut-sprinkles": "suesses",
+	"cottonCandy": "suesses",
+	"softServe": "suesses",
+	"ice-cream": "suesses",
+	"cake": "suesses",
+	"sundae": "suesses",
+	"cinnamonRoll": "suesses",
+	"cupcakePink": "suesses",
+	"nutella": "suesses",
+	"candy-bar": "suesses",
+	"lollypop": "suesses",
+	# ── Warmes & Herzhaftes ──
+	"bread": "warm",
+	"cheese": "warm",
+	"croissant": "warm",
+	"fries": "warm",
+	"sandwich": "warm",
+	"burger": "warm",
+	"pizza": "warm",
+	"hot-dog": "warm",
+	"pancakes": "warm",
+	"waffle": "warm",
+}
+
 
 static func all() -> Dictionary:
 	return FOODS
@@ -121,6 +174,14 @@ static func deltas(food_id: String) -> Dictionary:
 
 static func is_junk(food_id: String) -> bool:
 	return bool(def(food_id).get("junk", false))
+
+
+## W14/FRIDGE (additiv): Regal-Kategorie einer Speise. Unbekannte/feindliche
+## Ids werden hergeleitet (junk → Süßes, sonst Gemüse) — nie leer.
+static func kategorie(food_id: String) -> String:
+	if FOOD_KATEGORIE.has(food_id):
+		return str(FOOD_KATEGORIE[food_id])
+	return "suesses" if is_junk(food_id) else "gemuese"
 
 
 static func is_favorite(food_id: String) -> bool:
