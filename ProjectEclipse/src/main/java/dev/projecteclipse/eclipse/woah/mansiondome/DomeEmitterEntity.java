@@ -29,7 +29,8 @@ import software.bernie.geckolib.animation.PlayState;
  * <p><b>Hit handling</b> — deliberately NOT vanilla health: only a direct player MELEE
  * blow counts (no projectiles, no explosions, no fire — cheese gets a deflection chime
  * instead). Valid hits are gated by a {@value #HIT_IFRAME_TICKS}-tick i-frame window,
- * play the {@value #ANIM_HIT} flinch and delegate the counting to
+ * play the {@value #ANIM_HIT} ring-desync flinch (except the killing blow, which yields
+ * the action controller to the collapse) and delegate the counting to
  * {@link MansionDomeService#onDeviceHit} — {@code MansionDomeState.hitsRemaining} is the
  * authority, the synced {@link #DATA_HITS} only drives client crack/spark feedback
  * (renderer tint + jitter below 4/2 hits).</p>
@@ -100,7 +101,14 @@ public class DomeEmitterEntity extends EclipseGeoMob {
         // Manual flinch feedback: super.hurt is never called (no vanilla health flow),
         // so drive the red-flash timers the renderer reads directly.
         this.hurtTime = this.hurtDuration = 10;
-        triggerAction(ANIM_HIT);
+        // The KILLING blow skips the flinch: onDeviceHit below starts the collapse, whose
+        // t0 beat fires "death" on the SAME action controller a tick later, and GeckoLib
+        // hard-swaps a newly triggered animation mid-play (handleAnimationState ->
+        // setAnimation, no blend at transitionLength 0). The flinch would be cut off one
+        // tick in — at the peak of its recoil — and pop into the collapse's neutral pose.
+        if (this.hitsRemaining() > 1) {
+            triggerAction(ANIM_HIT);
+        }
         if (player instanceof ServerPlayer serverPlayer) {
             MansionDomeService.onDeviceHit(this, serverPlayer);
         }
