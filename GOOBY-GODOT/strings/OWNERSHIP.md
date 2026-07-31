@@ -100,3 +100,7 @@ Regeln:
 - `shop.kategorie.girlanden` (EIN additiver Key in `strings/<locale>/shop.json` — Shop-Kategorie der neuen Girlanden-Items, DE↔EN-paritätisch) → Owner **W13B CEILING** (Welle W13-B). *(per >> angehängt — beim nächsten Doku-Pass in die Tabelle oben heben)*
 
 - `reisepass.*` (NEUE Datei `strings/<locale>/reisepass.json` — Reisepass 2.0: Pass-Vorder-/Stempelseite, MRZ-Gag, Galerie-Picker, Abflugtafel `reisepass.tafel.*`, Boarding-Pass `reisepass.pass.*`) → Owner **W13B REISEPASS** (Welle W13-B). *(per >> angehängt — beim nächsten Doku-Pass in die Tabelle oben heben)*
+
+- `phone.gooberando.*` + `phone.guber.surge` (additiv in `strings/<locale>/phone.json` — Restaurant-Wahl/Warenkorb/Live-Karte der GOOBERANDO-App, Guber-Surge-Spruch; Guber-`pitch` 25→30 mitgezogen) → Owner **W13B GOBERANDO** (Welle W13-B). *(per >> angehängt — beim nächsten Doku-Pass in die Tabelle oben heben)*
+
+- `city_leben.*` (NEUE Datei `strings/<locale>/city_leben.json` — Ziel-Chevron-GPS-Toasts im Fahr-HUD) → Owner **W13B GOBERANDO** (Welle W13-B). *(per >> angehängt — beim nächsten Doku-Pass in die Tabelle oben heben)*

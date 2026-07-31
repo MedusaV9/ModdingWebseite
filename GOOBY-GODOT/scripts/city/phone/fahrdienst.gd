@@ -13,6 +13,9 @@ extends RefCounted
 const TAXI := "taxi"
 const GUBER := "guber"
 const SLICE_KEY := "city.fahrdienst"
+## Tatsächlich bezahlter Preis der laufenden Fahrt (W13B): zu Stoßzeiten
+## kostet Guber mehr — Storno/Verpasst erstatten vom BEZAHLTEN Preis.
+const PREIS_KEY := "city.fahrdienstPreis"
 ## Gebühren, die bei Storno bzw. verpasstem Wagen einbehalten werden.
 ## Beim Taxi ergibt das exakt TaxiLogic.ERSTATTUNG_STORNO/_VERPASST.
 const GEBUEHR_STORNO := 2
@@ -20,6 +23,11 @@ const GEBUEHR_VERPASST := 5
 ## Unter dieser Energie ist das Taxi der Rettungsweg (Doc E §4) und die
 ## Kachel im App-Grid wird hervorgehoben.
 const RETTUNG_ENERGIE := 1.0
+## Guber-Surge-Gag (W13B, Doc E §4): zu Stoßzeiten 18–20 Uhr Lokalzeit
+## kostet der Wagen 45 statt 30 — mit vornehm-entschuldigendem Spruch.
+const GUBER_SURGE_VON_H := 18.0
+const GUBER_SURGE_BIS_H := 20.0
+const GUBER_SURGE_KOSTEN := 45
 
 const DIENSTE := {
 	TAXI:
@@ -31,7 +39,8 @@ const DIENSTE := {
 	},
 	GUBER:
 	{
-		"kosten": 25,
+		# Doc E §4: Guber kostet 30 Münzen (W13B: 25 → 30, Doc-Parität).
+		"kosten": 30,
 		"warte_min_s": 30,
 		"warte_max_s": 90,
 		"debug_key": "debug.guber_warte_s",
@@ -48,10 +57,28 @@ static func kosten(dienst: String) -> int:
 	return int(def(dienst).get("kosten", 0))
 
 
+## Stoßzeit für den Guber-Surge (18–20 Uhr Lokalzeit, Zeit injizierbar).
+static func ist_stosszeit(stunde: float) -> bool:
+	return stunde >= GUBER_SURGE_VON_H and stunde < GUBER_SURGE_BIS_H
+
+
+## Preis zur Stunde: nur Guber kennt den Surge — das Taxi bleibt ehrlich.
+static func kosten_zur_stunde(dienst: String, stunde: float) -> int:
+	if dienst == GUBER and ist_stosszeit(stunde):
+		return GUBER_SURGE_KOSTEN
+	return kosten(dienst)
+
+
 ## Erstattung bei Storno (in GERUFEN) bzw. bei verpasstem Einstiegsfenster.
 static func erstattung(dienst: String, verpasst: bool) -> int:
+	return erstattung_fuer(kosten(dienst), verpasst)
+
+
+## Erstattung vom TATSÄCHLICH bezahlten Preis (W13B: Surge-Fahrten
+## erstatten 45−Gebühr, nicht 30−Gebühr).
+static func erstattung_fuer(preis: int, verpasst: bool) -> int:
 	var gebuehr := GEBUEHR_VERPASST if verpasst else GEBUEHR_STORNO
-	return maxi(0, kosten(dienst) - gebuehr)
+	return maxi(0, preis - gebuehr)
 
 
 ## Ist Gooby zu platt zum Fahren? Dann ist das Taxi der Rettungsweg.
@@ -82,7 +109,26 @@ static func merke_dienst(gs: Object, dienst: String) -> void:
 	if gs == null:
 		return
 	gs.set_value(SLICE_KEY, dienst)
+	if dienst.is_empty():
+		gs.set_value(PREIS_KEY, 0)
 	gs.notify_slice_changed(CityState.SLICE_ID)
+
+
+## Bezahlten Preis der laufenden Fahrt merken (beim Rufen).
+static func merke_preis(gs: Object, preis: int) -> void:
+	if gs == null:
+		return
+	gs.set_value(PREIS_KEY, preis)
+	gs.notify_slice_changed(CityState.SLICE_ID)
+
+
+## Tatsächlich bezahlter Preis der laufenden Fahrt (Fallback: Basispreis —
+## Alt-Saves ohne PREIS_KEY erstatten wie bisher).
+static func bezahlter_preis(gs: Object, dienst: String) -> int:
+	if gs == null:
+		return kosten(dienst)
+	var preis := int(gs.get_value(PREIS_KEY, 0))
+	return preis if preis > 0 else kosten(dienst)
 
 
 ## Wartezeit würfeln (Dev-Harness: `debug.<dienst>_warte_s` überschreibt).

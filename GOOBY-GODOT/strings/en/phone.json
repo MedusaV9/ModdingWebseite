@@ -39,11 +39,28 @@
     },
     "guber": {
       "slogan": "GUBER — Premium Mobility",
-      "pitch": "Twenty-five coins. In return the car is here in under two minutes and the driver says \"very well\".",
+      "pitch": "Thirty coins. In return the car is here in under two minutes and the driver says \"very well\".",
+      "surge": "Regrettably, demand is rather lively at the moment, Sir Gooby.",
       "unterwegs": "Your Guber is approaching",
       "da": "Your Guber is waiting. The driver holds the door.",
       "bestellt": "Very well. The car has been ordered.",
       "fahrt": "\"There you are.\" It smells of fresh leather."
+    },
+    "gooberando": {
+      "restaurants_titel": "Where should it come from today?",
+      "bewertung": "{sterne} ★ — {gag}",
+      "wartezeit": "Kitchen needs approx. {min}–{max} min",
+      "gag_moehrenschmiede": "one star off, the carrot was too crunchy",
+      "gag_pasta_hoppel": "one star off, driver waved, customer was shy",
+      "gag_burger_bau": "one star off, the pickle tower wobbled around the corner",
+      "menue_zurueck": "‹ Other restaurants",
+      "warenkorb": "In the bag: {n} treat(s) · {summe} ᴳ total (incl. {gebuehr} ᴳ delivery)",
+      "warenkorb_leer": "The bag is still empty. Gooby growls reproachfully.",
+      "warenkorb_leeren": "Empty the bag",
+      "bestellen": "Order ({summe} ᴳ)",
+      "fahrer_kueche": "The kitchen is goobying. The driver is pre-warming the saddle …",
+      "fahrer_unterwegs": "The driver is on the way — there goes your food!",
+      "karte_hinweis": "The orange dot is bringing your food. Waving does nothing, but it helps."
     },
     "kamera": {
       "titel": "GOOBY Snapper",

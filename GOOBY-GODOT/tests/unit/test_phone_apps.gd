@@ -123,8 +123,9 @@ func test_erstattung_passt_zur_taxilogic() -> void:
 		TaxiLogic.ERSTATTUNG_VERPASST,
 		"Taxi-Verpasst wie in der Maschine"
 	)
-	assert_eq(Fahrdienst.erstattung(Fahrdienst.GUBER, false), 25 - Fahrdienst.GEBUEHR_STORNO)
-	assert_eq(Fahrdienst.erstattung(Fahrdienst.GUBER, true), 25 - Fahrdienst.GEBUEHR_VERPASST)
+	# W13B: Guber kostet 30 (Doc E §4 — vorher 25, Doc-Parität hergestellt).
+	assert_eq(Fahrdienst.erstattung(Fahrdienst.GUBER, false), 30 - Fahrdienst.GEBUEHR_STORNO)
+	assert_eq(Fahrdienst.erstattung(Fahrdienst.GUBER, true), 30 - Fahrdienst.GEBUEHR_VERPASST)
 	assert_eq(Fahrdienst.erstattung("rikscha", false), 0, "nie negativ")
 
 

@@ -18,6 +18,8 @@ var gs: Object
 var dienst := Fahrdienst.TAXI
 ## Tests injizieren eine feste Uhr (< 0 = echte Systemzeit).
 var now_ms_override := -1
+## Tests injizieren die Lokalzeit-Stunde für den Guber-Surge (< 0 = System).
+var stunde_override := -1.0
 
 var _tick_akku := 0.0
 
@@ -41,6 +43,15 @@ func now_ms() -> int:
 	if gs != null and "clock" in gs:
 		return int(gs.clock.now_ms())
 	return int(Time.get_unix_time_from_system() * 1000.0)
+
+
+## Lokalzeit-Stunde (0–23,99) für den Guber-Surge — gleiche Quelle wie
+## city_scene._stunde (Systemuhr), für Tests injizierbar.
+func stunde_lokal() -> float:
+	if stunde_override >= 0.0:
+		return stunde_override
+	var jetzt := Time.get_time_dict_from_system()
+	return float(jetzt["hour"]) + float(jetzt["minute"]) / 60.0
 
 
 func aktualisiere() -> void:
@@ -71,8 +82,12 @@ func _baue_bestellen() -> void:
 	CitySheetBausteine.label(karte, I18nService.t("phone.%s.pitch" % dienst), "CaptionLabel")
 	if Fahrdienst.ist_rettungsweg(gs):
 		CitySheetBausteine.label(karte, I18nService.t("phone.fahrdienst.rettung"), "CaptionLabel")
+	# Surge-Gag (W13B, Doc E §4): zu Stoßzeiten entschuldigt sich Guber
+	# vornehm — und verlangt 45 statt 30 Münzen.
+	if dienst == Fahrdienst.GUBER and Fahrdienst.ist_stosszeit(stunde_lokal()):
+		CitySheetBausteine.label(karte, I18nService.t("phone.guber.surge"), "CaptionLabel")
 	CitySheetBausteine.coins_zeile(self, _coins())
-	var preis := Fahrdienst.kosten(dienst)
+	var preis := Fahrdienst.kosten_zur_stunde(dienst, stunde_lokal())
 	var btn := Button.new()
 	btn.theme_type_variation = "PrimaryButton"
 	btn.text = I18nService.t("phone.fahrdienst.rufen").format({"preis": preis})
@@ -93,7 +108,7 @@ func _baue_unterwegs(slice: Dictionary) -> void:
 	var storno := Button.new()
 	storno.theme_type_variation = "GhostButton"
 	storno.text = I18nService.t("phone.fahrdienst.storno").format(
-		{"zurueck": Fahrdienst.erstattung(dienst, false)}
+		{"zurueck": Fahrdienst.erstattung_fuer(Fahrdienst.bezahlter_preis(gs, dienst), false)}
 	)
 	storno.pressed.connect(_on_storno)
 	add_child(storno)
@@ -144,7 +159,7 @@ func _tick() -> void:
 
 func _verpasst() -> void:
 	ReiseApp.notifs.storniere_gruppe("taxi.")
-	var zurueck := Fahrdienst.erstattung(dienst, true)
+	var zurueck := Fahrdienst.erstattung_fuer(Fahrdienst.bezahlter_preis(gs, dienst), true)
 	gs.update(
 		func(state: Dictionary) -> void: Economy.award(state["economy"], zurueck, "erstattung")
 	)
@@ -153,7 +168,7 @@ func _verpasst() -> void:
 
 
 func _on_rufen() -> void:
-	var preis := Fahrdienst.kosten(dienst)
+	var preis := Fahrdienst.kosten_zur_stunde(dienst, stunde_lokal())
 	var res := TaxiLogic.rufen(CityState.taxi_slice(gs), now_ms(), _warte_s(), ZIEL)
 	if not bool(res["ok"]):
 		return
@@ -165,6 +180,7 @@ func _on_rufen() -> void:
 		return
 	CityState.save_taxi_slice(gs, res["slice"])
 	Fahrdienst.merke_dienst(gs, dienst)
+	Fahrdienst.merke_preis(gs, preis)
 	for notif: Dictionary in res["notifications"]:
 		ReiseApp.notifs.plane(
 			str(notif["id"]), I18nService.t(str(notif["text_key"])), int(notif["at_ms"])
@@ -179,7 +195,7 @@ func _on_storno() -> void:
 	if not bool(res["ok"]):
 		return
 	ReiseApp.notifs.storniere_gruppe("taxi.")
-	var zurueck := Fahrdienst.erstattung(dienst, false)
+	var zurueck := Fahrdienst.erstattung_fuer(Fahrdienst.bezahlter_preis(gs, dienst), false)
 	gs.update(
 		func(state: Dictionary) -> void: Economy.award(state["economy"], zurueck, "erstattung")
 	)
