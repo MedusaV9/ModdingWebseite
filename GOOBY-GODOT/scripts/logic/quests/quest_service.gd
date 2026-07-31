@@ -134,14 +134,17 @@ func ensure_roll() -> void:
 	var day := today()
 	var quest_pool := pool()
 	var quest_ctx := ctx()
-	var rolled := false
+	# W13C (Request E2E): Dictionary-Capture statt Wert-Capture — GDScript-
+	# Lambdas kapseln lokale WERT-Typen per Kopie, eine Zuweisung im
+	# gs.update-Lambda erreicht die äußere Variable NIE (Muster reise_app).
+	var rolled := {"v": false}
 	_gs.update(
 		func(state: Dictionary) -> void:
-			rolled = DailyQuestEngine.roll_today(
+			rolled["v"] = DailyQuestEngine.roll_today(
 				_slice_of(state), day, quest_pool, quest_ctx, state
 			)
 	)
-	if rolled:
+	if bool(rolled["v"]):
 		_gs.notify_slice_changed("quests")
 		quests_changed.emit()
 
@@ -212,7 +215,10 @@ func claim(id: String) -> Dictionary:
 	var result := {"ok": false, "muenzen": 0, "xp": 0}
 	_gs.update(
 		func(state: Dictionary) -> void:
-			result = DailyQuestEngine.claim(_slice_of(state), id, def, state)
+			# W13C (Request E2E): merge-Mutation statt Reassignment — das
+			# Lambda hält nur eine KOPIE der Variable, `result = …` ließe den
+			# äußeren Rückgabewert für immer auf {"ok": false} stehen.
+			result.merge(DailyQuestEngine.claim(_slice_of(state), id, def, state), true)
 			if not bool(result["ok"]):
 				return
 			_pay(state, int(result["muenzen"]), int(result["xp"]), day, "quest")
@@ -232,17 +238,18 @@ func claim(id: String) -> Dictionary:
 
 ## Abschluss-Bonus zahlen, wenn fällig ({} sonst).
 func _maybe_pay_bonus(day: String) -> Dictionary:
-	var due := false
+	# W13C (Request E2E): Dictionary-Capture — s. Kommentar in ensure_roll().
+	var due := {"v": false}
 	_gs.update(
 		func(state: Dictionary) -> void:
 			var slice := _slice_of(state)
-			due = DailyQuestEngine.bonus_due(slice, day)
-			if not due:
+			due["v"] = DailyQuestEngine.bonus_due(slice, day)
+			if not bool(due["v"]):
 				return
 			DailyQuestEngine.mark_bonus_paid(slice, day)
 			_pay(state, DailyQuestEngine.BONUS_COINS, DailyQuestEngine.BONUS_XP, day, "questBonus")
 	)
-	if not due:
+	if not bool(due["v"]):
 		return {}
 	_gs.notify_slice_changed("quests")
 	_toasts.show_toast(
@@ -258,18 +265,19 @@ func reroll() -> bool:
 	var day := today()
 	var quest_pool := pool()
 	var quest_ctx := ctx()
-	var done := false
+	# W13C (Request E2E): Dictionary-Capture — s. Kommentar in ensure_roll().
+	var done := {"v": false}
 	_gs.update(
 		func(state: Dictionary) -> void:
-			done = DailyQuestEngine.reroll_today(
+			done["v"] = DailyQuestEngine.reroll_today(
 				_slice_of(state), day, quest_pool, quest_ctx, state
 			)
 	)
-	if done:
+	if bool(done["v"]):
 		_gs.notify_slice_changed("quests")
 		_toasts.show_toast(I18nService.t("quests.reroll_toast"))
 		quests_changed.emit()
-	return done
+	return bool(done["v"])
 
 
 ## Münzen + XP über die vorhandenen Pfade buchen (Level-Up-Coins inklusive).

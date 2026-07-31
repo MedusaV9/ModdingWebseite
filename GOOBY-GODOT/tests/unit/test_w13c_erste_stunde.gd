@@ -310,14 +310,19 @@ func test_erste_stunde_neuer_spieler() -> void:
 	assert_eq(_quest_fortschritt(gs, pool_by_id, "pet5"), 5, "pet5: 10 Streichler ≥ Ziel 5")
 	assert_eq(_quest_fortschritt(gs, pool_by_id, "golf70"), 0, "golf70: nie gespielt")
 	assert_eq(_quest_fortschritt(gs, pool_by_id, "play2distinct"), 1, "1 von 2 Spielen probiert")
-	# BEKANNTER SERVICE-BUG (Request „E2E“ in W13-requests.md): quests.claim()
-	# reassigned sein result-Dict INNERHALB der update-Lambda — GDScript-
-	# Lambdas kapseln per Kopie, der Rückgabewert bleibt {"ok": false}, obwohl
-	# Claim + Auszahlung im State durchlaufen. Bis zum Fix prüfen wir den
-	# Claim deshalb SEMANTISCH über den State statt über das Result-Dict.
+	# W13C/INTEGRATE (Request „E2E“, gefixt): claim() nutzt jetzt Dictionary-
+	# Capture (merge-Mutation statt Lambda-Reassignment) und liefert das ECHTE
+	# Ergebnis — direkter Regressions-Anker über das Result-Dict.
 	var muenzen_vor_claim := int(gs.get_value("economy.coins"))
 	var xp_vor_claim := float(gs.get_value("progression.xp"))
-	quests.claim("pet5")
+	var claim_result := quests.claim("pet5")
+	assert_true(bool(claim_result["ok"]), "claim() meldet ok=true (Lambda-Capture-Fix)")
+	assert_eq(int(claim_result["muenzen"]), 15, "claim() meldet die 15 Quest-Münzen")
+	assert_eq(int(claim_result["xp"]), 8, "claim() meldet die 8 Quest-XP")
+	assert_true(
+		(claim_result.get("bonus", {}) as Dictionary).is_empty(),
+		"kein Abschluss-Bonus bei 1/3 geclaimten Quests"
+	)
 	assert_eq(
 		int(gs.get_value("economy.coins")) - muenzen_vor_claim,
 		15 + 10,
