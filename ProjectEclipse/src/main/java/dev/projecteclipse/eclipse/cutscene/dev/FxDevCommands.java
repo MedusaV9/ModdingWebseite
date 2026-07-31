@@ -60,7 +60,9 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * {@code cutscene play|stop|preview <id>} ({@code play} = full GLOBAL_TELEPORT group play
  * with view-distance bump — the W2 acceptance path; {@code preview} = particle-traced
  * flight path, no camera), {@code sequence <id> <phase>} ({@link SequenceReplayable}
- * FX-only replays), {@code storm add|remove|bolt}, {@code rift <x y z> <width> / rift close},
+ * FX-only replays), {@code storm add|remove|bolt|flashhold|perfprobe} (the last two are
+ * client-visual dev overrides: B6 flash HOLD + the V6 frametime probe),
+ * {@code rift <x y z> <width> / rift close},
  * {@code supplybeam test} (toggle), {@code sun debug} (HUD cross), {@code viewdist <n|reset>},
  * {@code caption <style> <key> [ticks]}. Client-only actions travel via
  * {@link FxDevPayloads}.</p>
@@ -187,7 +189,20 @@ public final class FxDevCommands {
                         .then(Commands.literal("bolt")
                                 .executes(ctx -> stormBolt(ctx, 1.0F))
                                 .then(Commands.argument("intensity", FloatArgumentType.floatArg(0.0F, 1.0F))
-                                        .executes(ctx -> stormBolt(ctx, FloatArgumentType.getFloat(ctx, "intensity"))))))
+                                        .executes(ctx -> stormBolt(ctx, FloatArgumentType.getFloat(ctx, "intensity")))))
+                        .then(Commands.literal("flashhold")
+                                .then(Commands.literal("on")
+                                        .executes(ctx -> stormFlashHold(ctx, true, 1.0F))
+                                        .then(Commands.argument("amount", FloatArgumentType.floatArg(0.05F, 2.0F))
+                                                .executes(ctx -> stormFlashHold(ctx, true,
+                                                        FloatArgumentType.getFloat(ctx, "amount")))))
+                                .then(Commands.literal("off")
+                                        .executes(ctx -> stormFlashHold(ctx, false, 1.0F))))
+                        .then(Commands.literal("perfprobe")
+                                .executes(ctx -> stormPerfProbe(ctx, 10))
+                                .then(Commands.argument("seconds", IntegerArgumentType.integer(2, 120))
+                                        .executes(ctx -> stormPerfProbe(ctx,
+                                                IntegerArgumentType.getInteger(ctx, "seconds"))))))
                 .then(Commands.literal("rift")
                         .then(Commands.literal("close").executes(FxDevCommands::riftClose))
                         .then(Commands.argument("pos", Vec3Argument.vec3())
@@ -381,6 +396,40 @@ public final class FxDevCommands {
         return 1;
     }
 
+    /**
+     * POLISH4: {@code storm flashhold on [amount] | off} — flips the CLIENT-side B6
+     * flash-HOLD override ({@code StormFlashDevHold}) on the executing player, via the
+     * same dev lane as {@code post}/{@code sun debug}: the flash state is client-side,
+     * so no server state changes; other players' clients are untouched.
+     */
+    private static int stormFlashHold(CommandContext<CommandSourceStack> ctx, boolean on, float amount)
+            throws CommandSyntaxException {
+        ServerPlayer player = ctx.getSource().getPlayerOrException();
+        FxDevPayloads.sendAction(player, FxDevPayloads.ACTION_STORM_FLASHHOLD,
+                on ? "on" : "off", Vec3.ZERO, amount);
+        reply(ctx, on
+                ? String.format(Locale.ROOT,
+                        "storm flashhold ON (amount %.2f) → your client: both B6 flash cells held,"
+                                + " vein seed cycling — '/eclipsefx storm flashhold off' restores", amount)
+                : "storm flashhold OFF → your client (live 7-tick scheduler resumes)");
+        return 1;
+    }
+
+    /**
+     * POLISH4 / STORM-MASS V6: {@code storm perfprobe [seconds]} — starts the
+     * client-side frametime probe ({@code FrameTimeProbe}) on the executing player;
+     * the report (min/avg/p95/max + tier context) lands in their chat and client log.
+     */
+    private static int stormPerfProbe(CommandContext<CommandSourceStack> ctx, int seconds)
+            throws CommandSyntaxException {
+        ServerPlayer player = ctx.getSource().getPlayerOrException();
+        FxDevPayloads.sendAction(player, FxDevPayloads.ACTION_STORM_PERFPROBE,
+                "", Vec3.ZERO, seconds);
+        reply(ctx, "storm perfprobe " + seconds + " s → your client (report in chat + client log,"
+                + " grep \"V6 perfprobe\")");
+        return 1;
+    }
+
     private static int stormBolt(CommandContext<CommandSourceStack> ctx, float intensity) throws CommandSyntaxException {
         ServerPlayer player = ctx.getSource().getPlayerOrException();
         HitResult hit = player.pick(96.0D, 1.0F, false);
@@ -481,6 +530,10 @@ public final class FxDevCommands {
                 doc("fx.sequence", "/eclipsefx sequence", "dev.eclipse.doc.fx.sequence", Danger.CAUTION,
                         ClickAction.SUGGEST),
                 doc("fx.storm", "/eclipsefx storm", "dev.eclipse.doc.fx.storm", Danger.SAFE, ClickAction.SUGGEST),
+                doc("fx.storm.flashhold", "/eclipsefx storm flashhold", "dev.eclipse.doc.fx.storm.flashhold",
+                        Danger.SAFE, ClickAction.SUGGEST),
+                doc("fx.storm.perfprobe", "/eclipsefx storm perfprobe", "dev.eclipse.doc.fx.storm.perfprobe",
+                        Danger.SAFE, ClickAction.SUGGEST),
                 doc("fx.rift", "/eclipsefx rift", "dev.eclipse.doc.fx.rift", Danger.SAFE, ClickAction.SUGGEST),
                 doc("fx.supplybeam", "/eclipsefx supplybeam test", "dev.eclipse.doc.fx.supplybeam",
                         Danger.SAFE, ClickAction.RUN),

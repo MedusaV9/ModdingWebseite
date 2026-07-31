@@ -276,15 +276,31 @@ public final class StormVolumeFx {
         pipeline.getUniform("SunDir").setVector(sun.x(), sun.y(), sun.z());
         pipeline.getUniform("Interior").setFloat(StormInteriorFx.interiorAmount());
 
+        // POLISH4 dev-only flash HOLD (/eclipsefx storm flashhold): forces BOTH B6 cells
+        // to a fixed envelope with a slowly cycling vein seed so the 0.35 s double flash
+        // becomes inspectable on seconds-per-frame rigs. Every hold branch below is
+        // gated on this flag — OFF (the default) leaves each fed expression exactly as
+        // shipped, so idle frames stay bit-identical (StormFlashDevHold idle rule).
+        boolean hold = StormFlashDevHold.active();
+
         // W-B intra-wall flash → emissive light INSIDE the mass. Anchor mirrors
         // StormWeatherFx.claimLight: horiz = r·0.92·cos(latFrac·π/2), y = latFrac·height.
         float flash = storm.state == S2CStormStatePayload.STATE_ACTIVE
                 ? StormWeatherFx.innerFlashAmount(storm.id)
                 : 0.0F;
+        if (hold) {
+            flash = StormFlashDevHold.amount();
+        }
         pipeline.getUniform("FlashAmount").setFloat(flash);
         if (flash > 0.01F) {
             double bearing = StormWeatherFx.innerFlashBearing(storm.id);
             float latFrac = StormWeatherFx.innerFlashLat(storm.id);
+            if (hold && latFrac <= 0.0F) {
+                // Slot never picked a cell (real picks have lat ≥ FLASH_LAT_MIN = 0.15):
+                // distinct fallback so two separate held cells read immediately.
+                bearing = Math.atan2(dz, dx) - StormFlashDevHold.FALLBACK_SPREAD;
+                latFrac = StormFlashDevHold.FALLBACK_LAT1;
+            }
             double horiz = storm.radius * FLASH_RADIUS_FRAC
                     * Math.cos(latFrac * (Math.PI / 2.0D));
             pipeline.getUniform("FlashPos").setVector(
@@ -302,14 +318,23 @@ public final class StormVolumeFx {
         // no serial, no Photon vein; see StormWeatherFx) plus the shared vein seed.
         // The seed is fed unconditionally: it only modulates INSIDE the Amount gates,
         // so an idle frame stays bit-identical whatever value it holds.
-        pipeline.getUniform("FlashSeed").setFloat(StormWeatherFx.innerFlashSerial() % 64);
+        pipeline.getUniform("FlashSeed").setFloat(hold
+                ? StormFlashDevHold.seed()
+                : StormWeatherFx.innerFlashSerial() % 64);
         float flash2 = storm.state == S2CStormStatePayload.STATE_ACTIVE
                 ? StormWeatherFx.innerFlash2Amount(storm.id)
                 : 0.0F;
+        if (hold) {
+            flash2 = StormFlashDevHold.amount();
+        }
         pipeline.getUniform("Flash2Amount").setFloat(flash2);
         if (flash2 > 0.01F) {
             double bearing2 = StormWeatherFx.innerFlash2Bearing(storm.id);
             float latFrac2 = StormWeatherFx.innerFlash2Lat(storm.id);
+            if (hold && latFrac2 <= 0.0F) {
+                bearing2 = Math.atan2(dz, dx) + StormFlashDevHold.FALLBACK_SPREAD;
+                latFrac2 = StormFlashDevHold.FALLBACK_LAT2;
+            }
             double horiz2 = storm.radius * FLASH_RADIUS_FRAC
                     * Math.cos(latFrac2 * (Math.PI / 2.0D));
             pipeline.getUniform("Flash2Pos").setVector(

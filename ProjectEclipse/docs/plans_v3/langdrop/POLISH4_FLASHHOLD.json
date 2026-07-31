@@ -1,0 +1,10 @@
+{
+  "en_us": {
+    "dev.eclipse.doc.fx.storm.flashhold": "Hold both B6 intra-storm flash cells at a fixed envelope on YOUR client (vein seed cycles every 2 s) so the 0.35 s double flash becomes inspectable; off restores the live scheduler bit-identically.",
+    "dev.eclipse.doc.fx.storm.perfprobe": "Sample your client's render frametime for N seconds and report min/avg/p95/max plus the storm-volume tier context to chat and the client log (the V6 A/B perf harness)."
+  },
+  "de_de": {
+    "dev.eclipse.doc.fx.storm.flashhold": "Hält beide B6-Blitz-Zellen im Sturmvolumen auf DEINEM Client auf fester Hüllkurve (Adern-Seed wechselt alle 2 s), damit der 0,35-s-Doppelblitz inspizierbar wird; off stellt den Live-Scheduler bit-identisch wieder her.",
+    "dev.eclipse.doc.fx.storm.perfprobe": "Misst die Render-Frametime deines Clients für N Sekunden und meldet min/avg/p95/max samt Sturmvolumen-Tier-Kontext in Chat und Client-Log (das V6-A/B-Perf-Werkzeug)."
+  }
+}

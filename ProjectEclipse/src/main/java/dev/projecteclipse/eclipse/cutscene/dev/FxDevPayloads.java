@@ -45,6 +45,10 @@ public final class FxDevPayloads {
     public static final int ACTION_PHOTON_STATUS = 7;
     /** PH-CORE: {@code arg} = fx or cue id, {@code pos} = spawn position (test spawn). */
     public static final int ACTION_PHOTON_TEST = 8;
+    /** POLISH4: B6 flash hold — {@code arg} = "on"/"off", {@code value} = held amount. */
+    public static final int ACTION_STORM_FLASHHOLD = 9;
+    /** POLISH4/V6: frametime probe — {@code value} = sample window in seconds. */
+    public static final int ACTION_STORM_PERFPROBE = 10;
 
     private FxDevPayloads() {}
 

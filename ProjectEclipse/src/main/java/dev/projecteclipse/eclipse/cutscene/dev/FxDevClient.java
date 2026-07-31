@@ -1,6 +1,7 @@
 package dev.projecteclipse.eclipse.cutscene.dev;
 
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -68,6 +69,8 @@ public final class FxDevClient {
             case FxDevPayloads.ACTION_SUN_DEBUG -> toggleSunDebug();
             case FxDevPayloads.ACTION_PHOTON_STATUS -> photonStatus();
             case FxDevPayloads.ACTION_PHOTON_TEST -> photonTest(payload.arg(), payload.pos());
+            case FxDevPayloads.ACTION_STORM_FLASHHOLD -> stormFlashHold("on".equals(payload.arg()), payload.value());
+            case FxDevPayloads.ACTION_STORM_PERFPROBE -> FrameTimeProbe.start(payload.value());
             default -> EclipseMod.LOGGER.warn("FxDevClient: unknown dev action {}", payload.action());
         }
     }
@@ -215,6 +218,24 @@ public final class FxDevClient {
                 + (spawned ? "" : " (photon absent/toggled off, missing .fx, or executor budget"
                 + " — see '/dev photon status')"),
                 spawned ? ChatFormatting.GREEN : ChatFormatting.RED);
+    }
+
+    // --- storm flash hold (POLISH4) ---
+
+    /**
+     * {@code /eclipsefx storm flashhold} — flips the client-visual B6 flash-HOLD
+     * override ({@code StormFlashDevHold}); the volume feed then forces both flash
+     * cells to the held envelope with a slowly cycling vein seed. OFF is the
+     * bit-identical shipped path (see the StormFlashDevHold idle rule).
+     */
+    private static void stormFlashHold(boolean on, float amount) {
+        dev.projecteclipse.eclipse.stormfx.StormFlashDevHold.set(on, amount);
+        feedback(on
+                ? String.format(Locale.ROOT, "storm flashhold ON — both B6 cells held at %.2f,"
+                        + " vein seed cycles every 2 s (volume feed only; scheduler untouched)",
+                        amount)
+                : "storm flashhold OFF — live 7-tick flash scheduler restored (bit-identical)",
+                on ? ChatFormatting.GREEN : ChatFormatting.YELLOW);
     }
 
     // --- sun debug HUD ---
