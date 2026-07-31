@@ -13,6 +13,15 @@ extends MinigameBase
 ##
 ## Die Bandkoordinate s IST die Welt-x-Achse der Bühne; `project(s, y)` fragt
 ## direkt deren Kamera, damit Overlays pixelgenau auf den Requisiten sitzen.
+##
+## W15/GAMESQA2-UI-Redesign (Audit a=3 „untere UI überladen"): das Dock ist
+## EINE Creme-Karte im AC-Look mit zwei Reihen — oben die sichtbaren Düsen,
+## unten Pedale außen und Form-Wähler + „Aufs Band" + Versand innen (das
+## Web-Original fährt dieselbe Wähler/Spawn-Paarung). Alle Knöpfe halten den
+## physischen 44-pt-Touch-Floor, die gerade BENÖTIGTE Station bekommt einen
+## Gold-Rahmen (needed_station), der Versand leuchtet, sobald eine fertige
+## Torte in der Zone steht. Dazu 1,5-s-Intro-Beat (Sim wartet — Läufe bleiben
+## zahlengleich) und ein Ergebnis-Banner mit Konfetti am Schichtende.
 
 const Logic := preload("res://scripts/minigames/games/purble_place/purble_place_logic.gd")
 const Bakery := preload("res://scripts/minigames/games/purble_place/purble_place_bakery.gd")
@@ -32,6 +41,12 @@ const STAGE_METERS := 2.6
 const BELOW_BELT := 0.55
 ## Kurze Kante des Entwurfsformats (390×844) — Basis der UI-Skala.
 const DESIGN_SHORT := 390.0
+## Intro-Beat (W14-Kanon): Werkstatt steht, Ziel-Banner, DANN läuft das Band.
+const INTRO_S := 1.5
+## Physischer Touch-Floor für alle Dock-Knöpfe (iOS-Punkte).
+const TOUCH_MIN_PT := 44.0
+## Gold-Akzent für „hier weitermachen" (benötigte Düse/Versand).
+const GOLD := Color(0.85, 0.66, 0.24)
 
 ## Tastenbelegung: Düsen ohne Maus.
 const KEY_STATIONS := {
@@ -68,6 +83,9 @@ var _stage := Rect2()
 var _belt_px := 0.0
 var _strip := Rect2()
 var _dock_top := 0.0
+var _row1_h := 46.0
+var _row2_h := 56.0
+var _dock_pad := 8.0
 var _scroll := 0.0
 var _cheer := 0.0
 var _oven_heat := 0.0
@@ -80,10 +98,14 @@ var _key_dir := 0
 var _flash := 0.0
 var _flash_text := ""
 var _flash_good := true
+var _intro_left := 0.0
+var _spawn_shape := "round"
+var _need_id := ""
+var _ship_glow := false
 var _time_label: Label
-var _hint_label: Label
 var _nozzle_buttons: Dictionary = {}
-var _shape_buttons: Array[Button] = []
+var _shape_button: Button
+var _spawn_button: Button
 var _pedal_left: Button
 var _pedal_right: Button
 var _ship_button: Button
@@ -100,6 +122,10 @@ func setup(context: MinigameCtx) -> void:
 	_build_hud()
 	_build_dock()
 	_fit_viewport()
+	# Intro-Beat: Werkstatt steht 1,5 s, das Ziel-Banner erklärt den Job —
+	# die Sim WARTET (Band/Uhr bei 0), der Lauf bleibt zahlengleich.
+	_intro_left = INTRO_S
+	_say(I18nService.t("mg.purblePlace.intro"), true, INTRO_S + 0.6)
 	if is_inside_tree():
 		get_viewport().size_changed.connect(_fit_viewport)
 
@@ -127,7 +153,16 @@ func apply_view(size: Vector2) -> void:
 	# Der Host rendert die Bühne in einem SubViewport, der ein Vielfaches des
 	# 390×844-Entwurfs groß ist — alle Pixelmaße hängen deshalb an _ui.
 	_ui = minf(view_size.x, view_size.y) / DESIGN_SHORT
-	var dock_h := clampf(view_size.y * (0.30 if not landscape else 0.36), 118.0 * _ui, 250.0 * _ui)
+	# Kompaktes Zwei-Reihen-Dock: Reihenhöhen halten den physischen
+	# 44-pt-Touch-Floor, die Hinweiszeile ist ins Intro-Banner gewandert —
+	# das Förderband-Fenster gewinnt die gesparte Höhe (Audit: „Fenster klein").
+	var touch_px := (
+		TOUCH_MIN_PT * (UiScale.touch_px_per_pt(get_viewport()) if is_inside_tree() else 1.0)
+	)
+	_dock_pad = 9.0 * _ui
+	_row1_h = maxf(clampf(view_size.y * 0.065, 44.0 * _ui, 58.0 * _ui), touch_px)
+	_row2_h = maxf(clampf(view_size.y * 0.085, 52.0 * _ui, 74.0 * _ui), touch_px)
+	var dock_h := _dock_pad * 3.0 + _row1_h + _row2_h
 	_dock_top = view_size.y - dock_h
 	_strip = Rect2(12.0 * _ui, _dock_top - 30.0 * _ui, view_size.x - 24.0 * _ui, 22.0 * _ui)
 	_stage = Rect2(0.0, 0.0, view_size.x, maxf(80.0, _strip.position.y - 6.0 * _ui))
@@ -146,7 +181,6 @@ func apply_view(size: Vector2) -> void:
 	if _time_label != null:
 		_time_label.position = Vector2(16.0 * _ui, 58.0 * _ui)
 		_time_label.add_theme_font_size_override("font_size", int(20.0 * _ui))
-		_hint_label.add_theme_font_size_override("font_size", int(13.0 * _ui))
 	queue_redraw()
 
 
@@ -154,6 +188,13 @@ func _process(delta: float) -> void:
 	_flash = maxf(0.0, _flash - delta)
 	_cheer = maxf(0.0, _cheer - delta)
 	if not is_active() or finished:
+		queue_redraw()
+		return
+	# Intro-Beat: Bühne lebt (Gooby, Requisiten), die Sim wartet bei t=0.
+	if _intro_left > 0.0:
+		_intro_left = maxf(_intro_left - delta, 0.0)
+		_sync_shop(delta)
+		_sync_dock()
 		queue_redraw()
 		return
 	var belt := signi(_pedal + _key_dir)
@@ -202,7 +243,8 @@ func _unhandled_input(event: InputEvent) -> void:
 	if key.keycode == KEY_SPACE or key.keycode == KEY_ENTER:
 		_ship_request = true
 	elif KEY_SHAPES.has(key.keycode):
-		_queue_spawn(str(KEY_SHAPES[key.keycode]))
+		_spawn_shape = str(KEY_SHAPES[key.keycode])
+		_queue_spawn(_spawn_shape)
 	elif KEY_STATIONS.has(key.keycode):
 		_queue_press(str(KEY_STATIONS[key.keycode]))
 
@@ -391,7 +433,24 @@ func _finish() -> void:
 		return
 	finished = true
 	running = false
-	AudioDirector.try_play(self, "mg_win" if int(line["score"]) >= 120 else "mg_lose")
+	var won := int(line["score"]) >= 120
+	AudioDirector.try_play(self, "mg_win" if won else "mg_lose")
+	# Ergebnis-Moment IN der Werkstatt: Banner mit Torten-Bilanz, bei einer
+	# guten Schicht Konfetti + Jubel-Gooby (das Framework-Panel kommt danach).
+	_say(
+		I18nService.t(
+			"mg.purblePlace.result",
+			{"cakes": int(line["cakesServed"]), "score": int(line["score"])}
+		),
+		won,
+		2.4
+	)
+	if _shop != null:
+		_shop.celebrate(float(tune["SHIP_S"]))
+		_shop.feel("ecstatic" if won else "sad")
+	if won and ctx.juice != null:
+		ctx.juice.confetti(70)
+		ctx.juice.bloom_pulse(0.7)
 	(
 		ctx
 		. report_end(
@@ -413,15 +472,11 @@ func _build_hud() -> void:
 	_time_label = Label.new()
 	_time_label.theme_type_variation = &"HeadlineLabel"
 	add_child(_time_label)
-	_hint_label = Label.new()
-	_hint_label.theme_type_variation = &"SoftLabel"
-	_hint_label.text = I18nService.t("mg.purblePlace.hint")
-	_hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	add_child(_hint_label)
 	_update_labels()
 
 
+## Dock im AC-Look: Düsenreihe oben, unten Pedale außen und die Wähler/Spawn-
+## Paarung des Web-Originals (Form durchblättern, dann „Aufs Band") + Versand.
 func _build_dock() -> void:
 	for st: Dictionary in Logic.STATIONS:
 		if not bool(st["drop"]):
@@ -433,13 +488,14 @@ func _build_dock() -> void:
 		button.pressed.connect(_queue_press.bind(id))
 		add_child(button)
 		_nozzle_buttons[id] = button
-	for shape: String in Logic.SHAPES:
-		var button := _make_button(
-			I18nService.t("mg.purblePlace.btn.%s" % shape), Color(0.62, 0.79, 0.92)
-		)
-		button.pressed.connect(_queue_spawn.bind(shape))
-		add_child(button)
-		_shape_buttons.append(button)
+	_shape_button = _make_button(
+		I18nService.t("mg.purblePlace.btn.%s" % _spawn_shape), Color(0.62, 0.79, 0.92)
+	)
+	_shape_button.pressed.connect(_cycle_shape)
+	add_child(_shape_button)
+	_spawn_button = _make_button(I18nService.t("mg.purblePlace.btn.spawn"), Color(0.79, 0.7, 0.9))
+	_spawn_button.pressed.connect(func() -> void: _queue_spawn(_spawn_shape))
+	add_child(_spawn_button)
 	_ship_button = _make_button(I18nService.t("mg.purblePlace.btn.versand"), Color(0.55, 0.82, 0.6))
 	_ship_button.pressed.connect(func() -> void: _ship_request = true)
 	add_child(_ship_button)
@@ -453,11 +509,21 @@ func _build_dock() -> void:
 		add_child(button)
 
 
+## Formwähler: blättert rund → eckig → herz (Web-Muster `shapeBtn`).
+func _cycle_shape() -> void:
+	var shapes: Array = Logic.SHAPES
+	var i := shapes.find(_spawn_shape)
+	_spawn_shape = str(shapes[(i + 1) % shapes.size()])
+	_shape_button.text = I18nService.t("mg.purblePlace.btn.%s" % _spawn_shape)
+	AudioDirector.try_play(self, "ui_chip")
+
+
 func _make_button(text: String, tint: Color) -> Button:
 	var button := Button.new()
 	button.text = text
 	button.clip_text = true
 	button.focus_mode = Control.FOCUS_NONE
+	button.set_meta("tint", tint)
 	button.add_theme_font_size_override("font_size", int(13.0 * _ui))
 	var dark := tint.get_luminance() < 0.55
 	button.add_theme_color_override(
@@ -470,36 +536,47 @@ func _make_button(text: String, tint: Color) -> Button:
 		"font_pressed_color", Color(1.0, 0.98, 0.96) if dark else Color(0.24, 0.18, 0.16)
 	)
 	button.add_theme_color_override("font_disabled_color", Color(0.55, 0.5, 0.48))
-	button.add_theme_stylebox_override("normal", _box(tint))
-	button.add_theme_stylebox_override("hover", _box(tint.lightened(0.12)))
-	button.add_theme_stylebox_override("pressed", _box(tint.darkened(0.18)))
-	button.add_theme_stylebox_override("focus", _box(tint))
-	button.add_theme_stylebox_override("disabled", _box(tint.lerp(Color(0.85, 0.83, 0.82), 0.75)))
+	_style_button(button, false)
 	return button
 
 
-func _box(tint: Color) -> StyleBoxFlat:
+## Sticker-Styleboxen eines Knopfs (neu) aufsetzen; `gold` legt den
+## „hier weitermachen"-Rahmen um Düse/Spawn/Versand.
+func _style_button(button: Button, gold: bool) -> void:
+	var tint: Color = button.get_meta("tint", Color(0.9, 0.88, 0.85))
+	button.add_theme_stylebox_override("normal", _box(tint, gold))
+	button.add_theme_stylebox_override("hover", _box(tint.lightened(0.12), gold))
+	button.add_theme_stylebox_override("pressed", _box(tint.darkened(0.18), gold))
+	button.add_theme_stylebox_override("focus", _box(tint, gold))
+	button.add_theme_stylebox_override(
+		"disabled", _box(tint.lerp(Color(0.85, 0.83, 0.82), 0.75), false)
+	)
+
+
+func _box(tint: Color, gold := false) -> StyleBoxFlat:
 	var box := StyleBoxFlat.new()
 	box.bg_color = tint
 	box.set_corner_radius_all(int(14.0 * _ui))
-	box.border_color = tint.darkened(0.3)
-	box.set_border_width_all(int(2.0 * _ui))
+	box.border_color = GOLD if gold else tint.darkened(0.3)
+	box.set_border_width_all(int((3.5 if gold else 2.0) * _ui))
 	box.content_margin_left = 2.0 * _ui
 	box.content_margin_right = 2.0 * _ui
+	# Weicher Ablege-Schatten: die Knöpfe liegen als Sticker AUF der Karte.
+	box.shadow_color = Color(0.35, 0.24, 0.18, 0.18)
+	box.shadow_size = int(2.0 * _ui)
+	box.shadow_offset = Vector2(0.0, 1.5 * _ui)
 	return box
 
 
-## Zwei Dock-Reihen: oben die Düsen, die die Bühne gerade zeigt (in Bandreihen-
-## folge, damit links/rechts im Dock links/rechts am Band bedeutet), unten die
-## Pedale außen und Formen + Versand in der Mitte.
+## Zwei Dock-Reihen auf der AC-Karte: oben die Düsen, die die Bühne gerade
+## zeigt (in Bandreihenfolge, damit links/rechts im Dock links/rechts am Band
+## bedeutet), unten die Pedale außen und Wähler + Spawn + Versand in der Mitte.
 func _layout_dock(dock_h: float) -> void:
 	if _ship_button == null:
 		return
-	var pad := 8.0 * _ui
-	var row1_h := clampf(dock_h * 0.26, 46.0 * _ui, 62.0 * _ui)
-	var row2_h := clampf(dock_h * 0.34, 56.0 * _ui, 84.0 * _ui)
+	var pad := _dock_pad
 	var row1_y := _dock_top + pad
-	var row2_y := _dock_top + dock_h - row2_h - pad
+	var row2_y := _dock_top + dock_h - _row2_h - pad
 
 	var shown: Array[Dictionary] = []
 	for st: Dictionary in Logic.STATIONS:
@@ -513,43 +590,89 @@ func _layout_dock(dock_h: float) -> void:
 	var cell := _stage.size.x / maxi(1, shown.size())
 	for i in shown.size():
 		var button: Button = _nozzle_buttons[str(shown[i]["id"])]
-		button.size = Vector2(minf(cell - 6.0 * _ui, 132.0 * _ui), row1_h)
+		button.size = Vector2(minf(cell - 6.0 * _ui, 132.0 * _ui), _row1_h)
 		button.position = Vector2(cell * (i + 0.5) - button.size.x * 0.5, row1_y)
 
 	var pedal_w := clampf(view_size.x * 0.19, 68.0 * _ui, 112.0 * _ui)
-	_pedal_left.size = Vector2(pedal_w, row2_h)
+	_pedal_left.size = Vector2(pedal_w, _row2_h)
 	_pedal_left.position = Vector2(pad, row2_y)
-	_pedal_right.size = Vector2(pedal_w, row2_h)
+	_pedal_right.size = Vector2(pedal_w, _row2_h)
 	_pedal_right.position = Vector2(view_size.x - pedal_w - pad, row2_y)
 	var inner_x := pad * 2.0 + pedal_w
-	var inner_cell := (view_size.x - inner_x * 2.0) / 4.0
-	for i in _shape_buttons.size():
-		var button := _shape_buttons[i]
-		button.size = Vector2(inner_cell - 6.0 * _ui, row2_h)
+	var inner_cell := (view_size.x - inner_x * 2.0) / 3.0
+	var middle: Array[Button] = [_shape_button, _spawn_button, _ship_button]
+	for i in middle.size():
+		var button := middle[i]
+		button.size = Vector2(inner_cell - 6.0 * _ui, _row2_h)
 		button.position = Vector2(inner_x + inner_cell * i + 3.0 * _ui, row2_y)
-	_ship_button.size = Vector2(inner_cell - 6.0 * _ui, row2_h)
-	_ship_button.position = Vector2(inner_x + inner_cell * 3.0 + 3.0 * _ui, row2_y)
-
-	# Der Hinweis lebt in der Lücke zwischen den Dock-Reihen; ist dort kein
-	# Platz (Querformat), bleibt er aus — die Knöpfe sprechen für sich.
-	var gap_top := row1_y + row1_h + 6.0 * _ui
-	var gap_h := row2_y - gap_top - 4.0 * _ui
-	_hint_label.visible = gap_h >= 26.0 * _ui
-	_hint_label.position = Vector2(16.0 * _ui, gap_top)
-	_hint_label.size = Vector2(view_size.x - 32.0 * _ui, gap_h)
 
 
 ## Knopfzustände je Frame: Sperrzeiten grauen die Düsen aus, der Formentrichter
 ## kennt Deckel und Mindestabstand, der Versand braucht eine Form in der Zone.
+## Die gerade BENÖTIGTE Station trägt den Gold-Rahmen (lesbarer Zustand).
 func _sync_dock() -> void:
 	var lockouts: Dictionary = line["lockouts"]
 	for id: String in _nozzle_buttons:
 		(_nozzle_buttons[id] as Button).disabled = float(lockouts.get(id, 0.0)) > 0.0
-	var can: bool = bool(Logic.can_spawn(line)["ok"])
-	for button: Button in _shape_buttons:
-		button.disabled = not can
-	_ship_button.disabled = not _ship_armed()
+	_spawn_button.disabled = not bool(Logic.can_spawn(line)["ok"])
+	var armed := _ship_armed()
+	_ship_button.disabled = not armed
+	if armed != _ship_glow:
+		_ship_glow = armed
+		_style_button(_ship_button, armed)
+	_sync_need_glow()
 	_layout_dock(view_size.y - _dock_top)
+
+
+## Gold-Rahmen an die Station hängen, die die älteste Form als nächstes
+## braucht (bzw. an „Aufs Band", wenn keine Form unterwegs ist).
+func _sync_need_glow() -> void:
+	var need := needed_station(line)
+	if need == _need_id:
+		return
+	var prev := _button_for(_need_id)
+	if prev != null:
+		_style_button(prev, false)
+	_need_id = need
+	var next := _button_for(_need_id)
+	if next != null:
+		_style_button(next, true)
+
+
+func _button_for(need: String) -> Button:
+	if need == "spawn":
+		return _spawn_button
+	if _nozzle_buttons.has(need):
+		return _nozzle_buttons[need]
+	return null
+
+
+## PURE Ansage „hier weitermachen": nächste offene Bauteilstufe der ältesten
+## Form gegen den vordersten Wunsch (Spiegel der Bot-`_next_stage`-Reihung).
+## "" = nichts hervorheben (Ofenphase oder kein Wunsch offen).
+static func needed_station(state: Dictionary) -> String:
+	var tickets: Array = state["tickets"]
+	var pans: Array = state["pans"]
+	if pans.is_empty():
+		return "spawn" if not tickets.is_empty() else ""
+	if tickets.is_empty():
+		return ""
+	var pan: Dictionary = pans[0]
+	for p: Dictionary in pans:
+		if int(p["id"]) < int(pan["id"]):
+			pan = p
+	var spec: Dictionary = (tickets[0] as Dictionary)["spec"]
+	if pan["sponge"] == null:
+		return "teig.%s" % spec["sponge"]
+	if pan["bake"] == null:
+		return ""
+	if str(spec["icing"]) != "none" and pan["icing"] == null:
+		return "guss.%s" % spec["icing"]
+	if str(spec["topping"]) != "none" and pan["topping"] == null:
+		return "deko.%s" % spec["topping"]
+	if int(pan["candles"]) < int(spec["candles"]):
+		return "kerzen"
+	return "ship"
 
 
 func _ship_armed() -> bool:

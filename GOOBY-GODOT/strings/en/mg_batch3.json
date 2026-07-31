@@ -72,7 +72,10 @@
       "baked": "Golden brown! +5",
       "singed": "Burnt! −3",
       "fails": "Fails: {n}/{max}",
+      "intro": "Welcome to the cake shop! Check the order board …",
+      "result": "Shift over! {cakes} cakes · {score} points",
       "btn": {
+        "spawn": "On the belt!",
         "round": "Round",
         "square": "Square",
         "heart": "Heart",

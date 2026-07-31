@@ -72,7 +72,10 @@
       "baked": "Goldbraun! +5",
       "singed": "Angebrannt! −3",
       "fails": "Patzer: {n}/{max}",
+      "intro": "Willkommen in der Tortenwerkstatt! Schau aufs Bestell-Board …",
+      "result": "Schicht vorbei! {cakes} Torten · {score} Punkte",
       "btn": {
+        "spawn": "Aufs Band!",
         "round": "Rund",
         "square": "Eckig",
         "heart": "Herz",
