@@ -115,6 +115,11 @@ func _on_option(index: int) -> void:
 ## stilllegen — ALLE Taps laufen ab jetzt über `_on_fang_input` (erst Zeile
 ## vervollständigen, dann weiterblättern). Runtime-only, kein Bubble-Edit.
 func _install_typewriter() -> void:
+	# W14: DialogBubble tippt inzwischen SELBST (eigener Typewriter, 2-Tap).
+	# Hier ist aber die VIEW der Typewriter-Treiber — die Bubble läuft im
+	# Sofort-Modus, sonst verbraucht ihr Typewriter den durchgereichten
+	# „Weiter“-Klick (_bubble_weiter) als Zeilen-Skip statt zu blättern.
+	_bubble.sofort_override = 1
 	_label = _bubble.get_node("%BubbleText") as Label
 	var panel := _bubble.get_node("%Bubble") as Control
 	if panel == null:
