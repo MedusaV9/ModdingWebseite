@@ -111,4 +111,9 @@ Regeln:
 
 - NEUE `rewards.food.candy-bar` + `rewards.food.lollypop`-Keys (additiv in `strings/<locale>/rewards.json` — Anzeigenamen der letzten zwei treats-Set-Speisen, SAMMLUNG-Request; DE↔EN-paritätisch) → Owner **W13B INTEGRATE** (Welle W13-B). *(per >> angehängt — beim nächsten Doku-Pass in die Tabelle oben heben)*
 
+- `umzug.*` (NEUE Datei `strings/<locale>/umzug.json` — Account-Umzug per Panel-Code: Settings-Zeile, Umzugs-Sheet, Erfolgs-/Fehlertexte inkl. „Spielstand bleibt lokal“-Klartext; DE↔EN-paritätisch) → Owner **W13C PANEL** (Welle W13-C). *(per >> angehängt — beim nächsten Doku-Pass in die Tabelle oben heben)*
+
+- `instant.*` (NEUE Datei `strings/<locale>/instant.json` — InstantGooby-Feed: Feed-Karten, Möhren-Like, Posten-Flow, Fehler-Toasts) + `phone.app.instant`/`phone.app.instant_text` (additiv in `strings/<locale>/phone.json`) → Owner **W13C INSTANT** (Welle W13-C). *(per >> angehängt — beim nächsten Doku-Pass in die Tabelle oben heben; von W13C/RELEASE nach einem Stash-Zwischenfall wiederhergestellt)*
+
+
 - `gobty.*` (NEUE Datei `strings/<locale>/gobty.json` — GOB.TY-Fernsehsender: Sender-UI (Aus-Knopf, Zapp-Hinweis), 5 Clip-Titel, 10 News-Schlagzeilen, Koch-/Sport-/Wetter-/Gute-Nacht-Banner inkl. `{symbole}`/`{datum}`-Wetter-Platzhalter; DE↔EN-paritätisch) → Owner **W13C GOBTY** (Welle W13-C). *(per >> angehängt — beim nächsten Doku-Pass in die Tabelle oben heben)*

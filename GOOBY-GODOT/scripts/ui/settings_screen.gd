@@ -613,6 +613,16 @@ func _build_transfer_section() -> void:
 	var rows := _add_section("Spielstand", I18nService.t("settings.spielstand"))
 	var btn := _section_button(rows, "TransferButton", "settings.spielstand_uebertragen")
 	btn.pressed.connect(_on_transfer_pressed)
+	# W13-C (Doc C §7): Server-Identitäts-Umzug per Panel-Code — der lokale
+	# Spielstand bleibt auf dem Gerät, nur das Online-Konto zieht um.
+	var umzug_btn := _section_button(rows, "UmzugButton", "umzug.settings_eintrag")
+	umzug_btn.pressed.connect(_on_umzug_pressed)
+
+
+func _on_umzug_pressed() -> void:
+	var sheet := UmzugSheet.new()
+	sheet.name = "UmzugSheet"
+	add_child(sheet)
 
 
 func _on_transfer_pressed() -> void:

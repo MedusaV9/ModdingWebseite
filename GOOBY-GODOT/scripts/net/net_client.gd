@@ -211,6 +211,31 @@ func identity() -> Dictionary:
 	}
 
 
+## Account-Umzug (W13-C, Doc C §7): die per MOVE_REDEEM übernommene
+## Server-Identität SOFORT persistieren und mit ihr neu verbinden. Der alte
+## Schlüssel ist serverseitig bereits rotiert (TOFU) — die bisherige lokale
+## Identität dieses Geräts ist damit wertlos und wird überschrieben. Der
+## lokale Spielstand bleibt unberührt (reiner Server-Identitäts-Umzug).
+func adopt_identity(identity_data: Dictionary) -> void:
+	var device_id := str(identity_data.get("deviceId", ""))
+	var secret := str(identity_data.get("deviceSecret", ""))
+	if device_id.is_empty() or secret.is_empty():
+		push_warning("[net] adopt_identity ohne deviceId/deviceSecret ignoriert")
+		return
+	_identity = {
+		"deviceId": device_id,
+		"deviceSecret": secret,
+		"friendCode": str(identity_data.get("friendCode", "")),
+	}
+	friend_code = str(identity_data.get("friendCode", ""))
+	_save_identity()
+	# Frisch verbinden: HELLO läuft ab jetzt mit der übernommenen Identität.
+	var wanted := _want_connected
+	disconnect_now()
+	if wanted:
+		connect_now()
+
+
 static func uuid4() -> String:
 	var crypto := Crypto.new()
 	var bytes := crypto.generate_random_bytes(16)
