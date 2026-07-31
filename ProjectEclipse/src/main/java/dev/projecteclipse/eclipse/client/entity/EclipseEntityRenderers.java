@@ -21,9 +21,6 @@ import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 @EventBusSubscriber(modid = EclipseMod.MOD_ID, value = Dist.CLIENT)
 public final class EclipseEntityRenderers {
     public static final ModelLayerLocation THE_OTHER_LAYER = layer("the_other");
-    public static final ModelLayerLocation GAZER_LAYER = layer("gazer");
-    public static final ModelLayerLocation UMBRAL_STALKER_LAYER = layer("umbral_stalker");
-    public static final ModelLayerLocation SUNMOTE_LAYER = layer("sunmote");
     public static final ModelLayerLocation HERALD_LAYER = layer("herald");
     public static final ModelLayerLocation FERRYMAN_LAYER = layer("ferryman");
 
@@ -39,9 +36,8 @@ public final class EclipseEntityRenderers {
         // player-skin layout per spec §1.1 — plus TheOtherModel's hidden-until-aggro
         // floating fragment cubes (MOB-GLITCH; silhouette unchanged while passive).
         event.registerLayerDefinition(THE_OTHER_LAYER, TheOtherModel::createBodyLayer);
-        event.registerLayerDefinition(GAZER_LAYER, GazerModel::createBodyLayer);
-        event.registerLayerDefinition(UMBRAL_STALKER_LAYER, UmbralStalkerModel::createBodyLayer);
-        event.registerLayerDefinition(SUNMOTE_LAYER, SunmoteModel::createBodyLayer);
+        // Gazer/Umbral Stalker/Sunmote: converted to GeckoLib (MC1/MC2/MC3) — their geo
+        // renderers self-register in client/entity/{gazer,stalker,sunmote}/*Renderers.
         event.registerLayerDefinition(HERALD_LAYER, HeraldModel::createBodyLayer);
         event.registerLayerDefinition(FERRYMAN_LAYER, FerrymanModel::createBodyLayer);
     }
@@ -49,10 +45,8 @@ public final class EclipseEntityRenderers {
     @SubscribeEvent
     static void onRegisterRenderers(EntityRenderersEvent.RegisterRenderers event) {
         event.registerEntityRenderer(EclipseEntities.THE_OTHER.get(), TheOtherRenderer::new);
-        event.registerEntityRenderer(EclipseEntities.GAZER.get(), GazerRenderer::new);
-        event.registerEntityRenderer(EclipseEntities.UMBRAL_STALKER.get(), UmbralStalkerRenderer::new);
         // Deckhand: GeckoLib renderer self-registers in DeckhandRenderer.Registration (P6-W2).
-        event.registerEntityRenderer(EclipseEntities.SUNMOTE.get(), SunmoteRenderer::new);
+        // Gazer/Umbral Stalker/Sunmote: GeckoLib registrars in their own subpackages (MC1/MC2/MC3).
         event.registerEntityRenderer(EclipseEntities.HERALD.get(), HeraldRenderer::new);
         event.registerEntityRenderer(EclipseEntities.FERRYMAN.get(), FerrymanRenderer::new);
         // The corona shard renders as the umbral-shard item sprite (ItemSupplier), scaled
