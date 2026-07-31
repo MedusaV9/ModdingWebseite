@@ -271,8 +271,11 @@ func _crash() -> void:
 	_stage.crash_fx()
 	_sync_stage(0.0)
 	if ctx.juice != null:
-		ctx.juice.shake(0.6)
+		# W14 Quick-Win: Crash beendet die Runde — 0,6er-Shake ohne Blitz wirkte
+		# dafür zu zart (Audit d: „Rums!"-Moment zu klein). Nur Präsentation.
+		ctx.juice.shake(0.9)
 		ctx.juice.hit_freeze(120)
+		ctx.juice.hit_flash(Color(0.92, 0.32, 0.28, 0.3), 180)
 		ctx.juice.float_text(
 			Vector2(view_size.x * 0.5 - 40.0, view_size.y * 0.4),
 			I18nService.t("mg.bunnyHop.crash"),
