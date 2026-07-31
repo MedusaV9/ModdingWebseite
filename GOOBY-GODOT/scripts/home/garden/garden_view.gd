@@ -143,23 +143,26 @@ func _build_strukturen() -> void:
 
 
 func _struktur_node(kind: String, entry: Dictionary) -> Node3D:
+	var node: Node3D = null
 	match kind:
 		"shed":
-			return HomeProps.shed(maxi(1, HomeState.shed_stufe(_gs)))
+			node = HomeProps.shed(maxi(1, HomeState.shed_stufe(_gs)))
 		"werkstatt":
-			return HomeProps.werkstatt()
+			node = HomeProps.werkstatt()
 		"gewaechshaus":
 			var door: Vector2i = entry.get("door", Vector2i(-1, -1))
 			var zellen := GardenGrid.structure_cells(kind, entry["at"], int(entry.get("rot", 0)))
 			var versatz := Vector3.ZERO
 			if _grid.in_bounds(door):
 				versatz = cell_to_world(door) - _zellen_mitte(zellen)
-			return HomeProps.gewaechshaus(versatz)
+			node = HomeProps.gewaechshaus(versatz)
 		"sprinkler":
-			return HomeProps.sprinkler()
+			node = HomeProps.sprinkler()
 		"baum":
-			return _baum()
-	return null
+			node = _baum()
+		"garage":
+			node = GarageProp.create(_gs)
+	return node
 
 
 func _baum() -> Node3D:

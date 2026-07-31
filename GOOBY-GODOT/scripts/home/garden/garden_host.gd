@@ -25,6 +25,8 @@ var _auswahl := Vector2i(-1, -1)
 var _menue: VBoxContainer
 var _rng := RandomNumberGenerator.new()
 var _jetzt_override := -1.0
+## Rolltor-Zustand ist RUNTIME-only (W13C, Doc D §7) — nicht im Save.
+var _rolltor_zustand := GarageLogic.ROLLTOR_ZU
 
 
 ## Host an den Garten-Raum hängen (idempotent; andere Räume ignoriert er).
@@ -84,11 +86,15 @@ func view() -> GardenView:
 	return _view
 
 
-## Zelle auswählen (Tap oder Test).
+## Zelle auswählen (Tap oder Test). Tap auf die Garage = Rolltor auf/zu
+## (W13C, Doc D §7) — nach dem Refresh, damit der Tween den frischen Prop
+## animiert statt eines gerade weggeworfenen.
 func select_cell(cell: Vector2i) -> void:
 	_auswahl = cell
 	_view.highlight(cell)
 	_refresh()
+	if str(_view.garden_grid().structure_at(cell).get("kind", "")) == GarageLogic.KIND:
+		rolltor_toggle()
 
 
 # ── Aktionen ─────────────────────────────────────────────────────────────────
@@ -179,6 +185,43 @@ func shed_bauen() -> bool:
 	await _bau_animation(_auswahl)
 	_nach_aktion(true, I18nService.t("shed.fertig"))
 	return true
+
+
+## Garage kaufen + bauen (W13C, Doc D §7) — einmalig, Muster shed_bauen().
+func garage_bauen() -> bool:
+	var ergebnis := GarageLogic.kaufen(_gs, _auswahl)
+	if not bool(ergebnis["ok"]):
+		var reason := str(ergebnis["reason"])
+		var text := (
+			I18nService.t("garage.schon_gebaut")
+			if reason == GarageLogic.REASON_SCHON_GEBAUT
+			else _bau_fehler(reason)
+		)
+		_nach_aktion(false, text)
+		return false
+	await _bau_animation(_auswahl)
+	_nach_aktion(true, I18nService.t("garage.fertig"))
+	return true
+
+
+## Rolltor auf/zu (Zustandsmaschine GarageLogic; Toggle mitten in der Fahrt
+## kehrt die Richtung um). KEIN _refresh hier — der würde den Prop samt
+## laufendem Tween wegwerfen.
+func rolltor_toggle() -> void:
+	var prop := _garage_prop()
+	if prop == null:
+		return
+	_rolltor_zustand = GarageLogic.rolltor_toggle(_rolltor_zustand)
+	var tween := prop.rolltor_fahren(GarageLogic.rolltor_ziel_anteil(_rolltor_zustand))
+	if tween != null:
+		tween.finished.connect(_rolltor_ende)
+	if prop.auto_id() == "" and _room.has_method("say"):
+		_room.say(I18nService.t("garage.kein_auto"))
+	_leichte_aktualisierung()
+
+
+func rolltor_zustand() -> String:
+	return _rolltor_zustand
 
 
 ## Garten eine Stufe größer machen (kostet Münzen).
@@ -277,7 +320,13 @@ func _refresh() -> void:
 	if _view == null:
 		return
 	_view.rebuild(_room_meter())
+	_garage_sync()
 	_view.highlight(_auswahl)
+	_leichte_aktualisierung()
+
+
+## Nur Menü/Info/Aktionsleiste neu — OHNE View-Rebuild (Rolltor-Tween lebt).
+func _leichte_aktualisierung() -> void:
 	_menue_leeren()
 	_info.text = _info_text()
 	_aktions_leiste()
@@ -357,6 +406,13 @@ func _aktions_leiste() -> void:
 		_knopf("garten.sammeln", "ChipLeaf", sammeln)
 	if _auswahl.x >= 0 and str(grid.structure_at(_auswahl).get("kind", "")) == "baum":
 		_knopf("garten.baum_ernten", "ChipLeaf", baum_ernten)
+	if _auswahl.x >= 0 and str(grid.structure_at(_auswahl).get("kind", "")) == GarageLogic.KIND:
+		var tor_key := (
+			"garage.tor_zu"
+			if GarageLogic.rolltor_ziel_anteil(_rolltor_zustand) > 0.5
+			else "garage.tor_auf"
+		)
+		_knopf(tor_key, "ChipSky", rolltor_toggle)
 	if _auswahl.x >= 0:
 		_knopf("garten.bauen", "AccentButton", _bau_menue)
 	_knopf("craft.titel", "AcChip", werkstatt_oeffnen)
@@ -425,6 +481,16 @@ func _bau_menue() -> void:
 	shed.disabled = shed_preis <= 0
 	shed.pressed.connect(shed_bauen)
 	zeile.add_child(shed)
+	var garage := Button.new()
+	garage.theme_type_variation = "AcChip"
+	garage.text = (
+		I18nService.t("garage.gebaut")
+		if GarageLogic.gebaut(_gs)
+		else "%s (%d ᴳ)" % [I18nService.t("garage.name"), GarageLogic.PREIS]
+	)
+	garage.disabled = GarageLogic.gebaut(_gs)
+	garage.pressed.connect(garage_bauen)
+	zeile.add_child(garage)
 
 
 # ── Helfer ───────────────────────────────────────────────────────────────────
@@ -443,6 +509,31 @@ func _bau_animation(cell: Vector2i) -> void:
 	await HomeBuildAnim.puff(self, welt)
 	_view.rebuild(_room_meter())
 	_room.request_rebake()
+
+
+## Der lebende Garage-Prop im Baum (queue_free-Leichen nach Rebuild filtern).
+func _garage_prop() -> GarageProp:
+	for node in get_tree().get_nodes_in_group(GarageProp.GRUPPE):
+		if node is GarageProp and not node.is_queued_for_deletion():
+			return node
+	return null
+
+
+## Nach jedem View-Rebuild steht der frisch erzeugte Prop wieder auf „zu" —
+## den Torzustand der Zustandsmaschine (Fahrten enden dabei sofort) aufs
+## Prop-Blatt schnappen.
+func _garage_sync() -> void:
+	var prop := _garage_prop()
+	if prop == null:
+		_rolltor_zustand = GarageLogic.ROLLTOR_ZU
+		return
+	_rolltor_zustand = GarageLogic.rolltor_ende(_rolltor_zustand)
+	prop.set_rolltor_anteil(GarageLogic.rolltor_ziel_anteil(_rolltor_zustand))
+
+
+func _rolltor_ende() -> void:
+	_rolltor_zustand = GarageLogic.rolltor_ende(_rolltor_zustand)
+	_leichte_aktualisierung()
 
 
 func _bau_fehler(reason: String) -> String:

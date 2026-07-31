@@ -175,6 +175,8 @@ func _on_hud_action(action: StringName) -> void:
 	if _dispatch_to_screens(action):
 		return
 	if action == &"reise" and _router != null:
+		# W13C/GARAGE (Doc D §7): Garage gebaut + sichtbar? Erst Abfahrt-Sequenz.
+		await GarageAbfahrt.vielleicht_abspielen(self, _gs)
 		_router.goto(CityScene.ROUTE_CITY)
 		return
 	_toasts.show_toast(I18nService.t("home.aktion_bald"))

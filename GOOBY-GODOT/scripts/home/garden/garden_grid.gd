@@ -32,6 +32,7 @@ const STRUCTURE_SIZES := {
 	"gewaechshaus": Vector2i(2, 3),
 	"baum": Vector2i(1, 1),
 	"sprinkler": Vector2i(1, 1),
+	"garage": Vector2i(2, 3),
 }
 ## Reichweite der Bewässerungsanlage (3×3 um die Sprinkler-Zelle).
 const SPRINKLER_RADIUS := 1
