@@ -1,0 +1,10 @@
+{
+  "stages": [
+    {
+      "type": "veil:blit",
+      "shader": "eclipse:umbral_veins",
+      "in": "minecraft:main",
+      "out": "veil:post"
+    }
+  ]
+}
