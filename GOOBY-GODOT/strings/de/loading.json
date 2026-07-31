@@ -1,6 +1,20 @@
 {
 	"loading": {
 		"laedt": "Lädt…",
+		"boot": {
+			"sprueche": [
+				"Möhren werden gewaschen…",
+				"Ohren werden aufgeplustert…",
+				"Sofakissen werden aufgeschüttelt…",
+				"Die Sonne wird aufgezogen…",
+				"Krümel werden unterm Teppich versteckt…",
+				"Blumen bekommen einen Schluck Wasser…",
+				"Fell wird auf Flausch-Stufe gebürstet…",
+				"Der Teppich wird glattgestrichen…",
+				"Die Kuscheldecke wird vorgewärmt…",
+				"Gooby übt schon mal Winken…"
+			]
+		},
 		"tips": [
 			"Der Hufschlag verrät den Boden: Auf Sand klingt es weich, auf Holz hohl, auf Stein hell — und Matsch bremst dein Pferd.",
 			"Streicheln in der Rast schenkt einmal pro Ritt einen zweiten Wind, wenn die Ausdauer leer ist.",

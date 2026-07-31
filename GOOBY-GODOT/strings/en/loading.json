@@ -1,6 +1,20 @@
 {
 	"loading": {
 		"laedt": "Loading…",
+		"boot": {
+			"sprueche": [
+				"Washing the carrots…",
+				"Fluffing up those ears…",
+				"Plumping the sofa cushions…",
+				"Winding up the sun…",
+				"Hiding crumbs under the rug…",
+				"Giving the flowers a sip of water…",
+				"Brushing the fur to maximum fluff…",
+				"Smoothing out the rug…",
+				"Pre-warming the snuggle blanket…",
+				"Gooby is practicing his wave…"
+			]
+		},
 		"tips": [
 			"Hoofbeats reveal the ground: sand sounds soft, wood hollow, stone bright — and mud slows your horse down.",
 			"Petting your horse during a break grants a second wind once per ride when stamina runs out.",
