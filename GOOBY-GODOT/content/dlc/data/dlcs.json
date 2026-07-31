@@ -1,0 +1,74 @@
+{
+	"schema": 1,
+	"items": [
+		{
+			"id": "ranch",
+			"name": "GOOBY RANCH",
+			"status": "verfuegbar",
+			"cover": "res://assets/dlc/ranch.png",
+			"teaser_de": "Ein eigener Hof vor den Toren der Stadt — mit Stall, Koppel und ganz viel Wiese. Wer einmal losreitet, will gar nicht mehr zurück.",
+			"teaser_en": "A farmstead of your own just outside town — with a stable, a paddock and endless meadows. Once you ride out, you won't want to turn back.",
+			"unlock_de": "Ab Level {level} · {preis} Münzen",
+			"unlock_en": "From level {level} · {preis} coins",
+			"features_de": [
+				"Eigene Ranch ausbauen",
+				"Pferde zähmen, pflegen & reiten",
+				"Turniere & Dorffeste",
+				"Gemeinsame Ausritte mit Freunden"
+			],
+			"features_en": [
+				"Build up your own ranch",
+				"Tame, care for & ride horses",
+				"Tournaments & village festivals",
+				"Group rides with friends"
+			],
+			"route": "ranch_angebot"
+		},
+		{
+			"id": "goo_und_bye",
+			"name": "Goo und Bye",
+			"status": "kommt_bald",
+			"cover": "res://assets/dlc/goo_und_bye.png",
+			"teaser_de": "Gooby bekommt die Schlüssel zu einem ganz eigenen Supermarkt. Was aus dem leeren Laden wird, entscheidest du — mehr wird noch nicht verraten.",
+			"teaser_en": "Gooby gets the keys to a supermarket all of his own. What becomes of the empty store is up to you — that's all we're telling for now.",
+			"unlock_de": "In Arbeit — erscheint mit einem späteren Update",
+			"unlock_en": "In the works — arriving with a future update",
+			"features_de": [
+				"Eigenen Markt bauen & einrichten",
+				"Regale mit Ware bestücken",
+				"Mitarbeiter anheuern & einteilen",
+				"Kundschaft glücklich managen"
+			],
+			"features_en": [
+				"Build & furnish your own market",
+				"Stock the shelves with goods",
+				"Hire & schedule staff",
+				"Keep your customers happy"
+			],
+			"route": ""
+		},
+		{
+			"id": "mcgooby",
+			"name": "McGooby",
+			"status": "kommt_bald",
+			"cover": "res://assets/dlc/mcgooby.png",
+			"teaser_de": "Ein Schnellrestaurant mit Goobys Namen über der Tür — es duftet schon nach Pommes. Die Speisekarte? Streng geheim.",
+			"teaser_en": "A fast-food place with Gooby's name above the door — you can already smell the fries. The menu? Top secret.",
+			"unlock_de": "In Arbeit — erscheint mit einem späteren Update",
+			"unlock_en": "In the works — arriving with a future update",
+			"features_de": [
+				"Eigenen Laden eröffnen",
+				"Menüs & Rezepte zusammenstellen",
+				"Küchen-Crew anheuern",
+				"Den Ansturm zur Stoßzeit meistern"
+			],
+			"features_en": [
+				"Open your own restaurant",
+				"Put together menus & recipes",
+				"Hire a kitchen crew",
+				"Master the rush-hour crowd"
+			],
+			"route": ""
+		}
+	]
+}

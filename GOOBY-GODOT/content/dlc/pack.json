@@ -1,0 +1,10 @@
+{
+	"schema": 1,
+	"id": "dlc",
+	"version": "1.0.0",
+	"priority": 520,
+	"min_native": "5.0.0",
+	"domains": ["dlcs"],
+	"name_de": "DLC-Hub",
+	"notes_de": "W14/DLCHUB: Katalog aller Erweiterungen für den DLC-Bereich in den Settings. Pack-updatebar nach dem Ranch-Muster: ein per Updater nachgeliefertes Pack mit höherer Priorität überschattet Einträge per id (append-by-id, Domain dlcs) — so wird ein 'kommt_bald'-Eintrag später ohne App-Update auf 'verfuegbar' gestellt."
+}
