@@ -1,11 +1,19 @@
 extends W1cTestCase
-## W4/POLISH-3+17: LoadingVeil-AC-Optik. Der W1a-Contract (cover/reveal
-## awaitbar, Signale, set_progress, Node-Pfade Root/Backdrop/Spinner) wird
-## weiter von tests/unit/test_loading_veil.gd gehalten — hier kommen die
-## Optik-Varianten dazu: Minigame-Cover-Karte vs. Gooby-„Lädt…“-Karte,
-## Tipp-Rotation, Progress-Bar und die geteilten Arcade-Cover-Texturen.
+## W16/VEIL: LoadingVeil-Karte im Look der alten Web-Version. Der
+## W1a-Contract (cover/reveal awaitbar, Signale, set_progress, Node-Pfade
+## Root/Backdrop/Spinner) wird weiter von tests/unit/test_loading_veil.gd
+## gehalten — hier kommen die Optik-Varianten dazu: die drei Karten-Modi
+## home/trip/game (Titel, Ready-Zeile, Cover, Motiv-Sticker), das statische
+## Blätter-Pattern, Tipp-Rotation je Modus, Indeterminate-Sweep vs. echter
+## Balken und die geteilten Arcade-Cover-Texturen.
+##
+## Bewusste W16-Anpassung (Spez ladebild-alt.md §2.4): statt EINEM
+## `veil.tips`-Pool (5–8) gibt es je Modus einen eigenen Pool mit den
+## 3 Web-Tipps im Original-Wortlaut — geprüft werden jetzt 3–8 Tipps je
+## Modus plus DE/EN-Parität.
 
 const VEIL_SCENE := preload("res://scripts/core/loading_veil.tscn")
+const MODI: Array[String] = ["home", "trip", "game"]
 
 
 func test_node_pfade_und_spinner_versteckt() -> void:
@@ -14,20 +22,60 @@ func test_node_pfade_und_spinner_versteckt() -> void:
 	check(veil.get_node_or_null("Root/Backdrop") != null, "Root/Backdrop-Pfad bleibt")
 	check(veil.get_node_or_null("Root/Spinner") != null, "Root/Spinner-Pfad bleibt")
 	check(not (veil.get_node("Root/Spinner") as Control).visible, "Alt-Spinner ist ausgeblendet")
-	check(veil.get_node("Root/Backdrop") is AcWallpaper, "Backdrop ist Drift-Wallpaper")
+	check(veil.get_node("Root/Backdrop") is AcWallpaper, "Backdrop ist AcWallpaper")
+	var backdrop := veil.get_node("Root/Backdrop") as AcWallpaper
+	check_eq(backdrop.pattern, "leaves", "Vorhang trägt das Blätter-Pattern (Web .acui-veil)")
+	check_eq(backdrop.drift, Vector2.ZERO, "Vorhang ist STATISCH (Web: kein Drift)")
 	check(veil.get_node_or_null("%Card") != null, "Mittige Karte existiert")
 	_cleanup(veil)
 
 
-func test_default_variante_huepfender_gooby() -> void:
+func test_home_variante_alte_karte() -> void:
 	var veil := _fresh_veil()
 	veil.prepare_for_travel(&"home")
-	check((veil.get_node("%Gooby") as Control).visible, "Home-Reise: Mini-Gooby sichtbar")
-	check((veil.get_node("%Laedt") as Control).visible, "Home-Reise: Lädt-Text sichtbar")
+	check((veil.get_node("%Cover") as Control).visible, "Home-Reise: Heim-Cover sichtbar")
+	check(
+		(veil.get_node("%Cover") as TextureRect).texture == load(LoadingVeil.COVER_HOME_PFAD),
+		"Cover-Zone nutzt das portierte veil_home_cover"
+	)
+	check_eq(
+		(veil.get_node("%Title") as Label).text,
+		I18nService.t("veil.home.titel"),
+		"Titel „Trautes Heim“"
+	)
+	check_eq(
+		(veil.get_node("%Ready") as Label).text,
+		I18nService.t("veil.home.bereit"),
+		"Ready-Zeile „Auf dem Heimweg…“"
+	)
+	check((veil.get_node("%Gooby") as Control).visible, "Motiv-Sticker sichtbar")
+	check((veil.get_node("%Laedt") as Control).visible, "Lädt-Text sichtbar")
 	check((veil.get_node("%Laedt") as Label).text != "", "Lädt-Text nicht leer")
-	check(not (veil.get_node("%Cover") as Control).visible, "Home-Reise: kein Cover")
-	check(not (veil.get_node("%Tip") as Control).visible, "Home-Reise: kein Tipp")
-	check_eq((veil.get_node("Root/Backdrop") as AcWallpaper).pattern, "dots", "Pattern dots")
+	check((veil.get_node("%Tip") as Control).visible, "Home-Reise: Tipp sichtbar (Web-Parität)")
+	check((veil.get_node("%Tip") as Label).text != "", "Tipp nicht leer")
+	_cleanup(veil)
+
+
+func test_trip_variante_fuer_shop_und_stadt() -> void:
+	check_eq(LoadingVeil.modus_fuer_ziel(&"ikea"), "trip", "Shop-Reise = trip")
+	check_eq(LoadingVeil.modus_fuer_ziel(&"city"), "trip", "Stadt-Reise = trip")
+	check_eq(LoadingVeil.modus_fuer_ziel(&"city/ort/tierarzt"), "trip", "Klinik (Stadt-Ort) = trip")
+	check_eq(LoadingVeil.modus_fuer_ziel(&"home"), "home", "Rückkehr = home")
+	check_eq(LoadingVeil.modus_fuer_ziel(&"home/kitchen"), "home", "Hausraum = home")
+	check_eq(LoadingVeil.modus_fuer_ziel(&"arcade"), "home", "Sonstige Screens = home")
+	var veil := _fresh_veil()
+	veil.prepare_for_travel(&"ikea")
+	check_eq(
+		(veil.get_node("%Title") as Label).text,
+		I18nService.t("veil.trip.titel"),
+		"Titel „Auf geht’s!“"
+	)
+	check_eq(
+		(veil.get_node("%Ready") as Label).text,
+		I18nService.t("veil.trip.bereit"),
+		"Ready-Zeile „Zeit für einen kleinen Ausflug…“"
+	)
+	check((veil.get_node("%Cover") as Control).visible, "Trip nutzt ebenfalls das Heim-Cover")
 	_cleanup(veil)
 
 
@@ -50,45 +98,80 @@ func test_minigame_variante_cover_titel_tipp() -> void:
 		"Veil nutzt DIESELBE preloaded Textur wie die Arcade-Kachel"
 	)
 	check_eq((veil.get_node("%Title") as Label).text, "Goobys vs Zombies", "Titel gesetzt")
+	check_eq(
+		(veil.get_node("%Ready") as Label).text,
+		I18nService.t("veil.game.bereit"),
+		"Ready-Zeile „Mach dich bereit!“"
+	)
 	check((veil.get_node("%Tip") as Control).visible, "Tipp sichtbar")
 	check((veil.get_node("%Tip") as Label).text != "", "Tipp nicht leer")
-	check(not (veil.get_node("%Gooby") as Control).visible, "MG-Reise: kein Gooby")
-	check_eq((veil.get_node("Root/Backdrop") as AcWallpaper).pattern, "arcade", "Pattern arcade")
+	check((veil.get_node("%Gooby") as Control).visible, "Game-Motiv-Sticker sichtbar")
 	# Hint überlebt die Kette Pregame→Host …
 	veil.prepare_for_travel(&"mg_host")
-	check((veil.get_node("%Cover") as Control).visible, "Hint gilt auch für mg_host")
+	check_eq(
+		(veil.get_node("%Cover") as TextureRect).texture,
+		ArcadeScreen.COVERS["gvz"],
+		"Hint gilt auch für mg_host"
+	)
 	# … und räumt sich bei jedem anderen Ziel selbst auf.
 	veil.prepare_for_travel(&"arcade")
-	check(not (veil.get_node("%Cover") as Control).visible, "Nicht-MG-Ziel löscht den Hint")
-	check((veil.get_node("%Gooby") as Control).visible, "zurück zur Gooby-Variante")
+	check(
+		(veil.get_node("%Cover") as TextureRect).texture != ArcadeScreen.COVERS["gvz"],
+		"Nicht-MG-Ziel löscht den Hint (zurück zum Heim-Cover)"
+	)
+	check_eq(
+		(veil.get_node("%Title") as Label).text,
+		I18nService.t("veil.home.titel"),
+		"zurück zur Home-Variante"
+	)
 	veil.prepare_for_travel(&"mg_pregame")
-	check(not (veil.get_node("%Cover") as Control).visible, "Hint wurde statisch gelöscht")
+	check(
+		(veil.get_node("%Cover") as TextureRect).texture != ArcadeScreen.COVERS["gvz"],
+		"Hint wurde statisch gelöscht"
+	)
 	_cleanup(veil)
 
 
-func test_tipps_deutsch_5_bis_8_und_rotierend() -> void:
-	var tips: Array = LoadingVeil._tips()
-	check(tips.size() >= 5 and tips.size() <= 8, "5–8 Tipps (%d)" % tips.size())
-	for tip: Variant in tips:
-		check(str(tip).length() > 10, "Tipp ist ein echter Satz: %s" % str(tip))
+func test_tipps_je_modus_mit_en_paritaet_und_rotation() -> void:
+	for modus in MODI:
+		var key := LoadingVeil.tips_key(modus)
+		var de: Array = I18nService.table("de").get(key, [])
+		var en: Array = I18nService.table("en").get(key, [])
+		check(de.size() >= 3 and de.size() <= 8, "3–8 Tipps im Modus %s (%d)" % [modus, de.size()])
+		check_eq(en.size(), de.size(), "EN-Parität im Modus %s" % modus)
+		for tip: Variant in de:
+			check(str(tip).length() > 10, "Tipp ist ein echter Satz: %s" % str(tip))
 	var veil := _fresh_veil()
-	LoadingVeil.set_travel_hint({"game_id": "teaParty", "title": "T", "targets": [&"mg_pregame"]})
-	veil.prepare_for_travel(&"mg_pregame")
+	veil.prepare_for_travel(&"home")
 	var first: String = (veil.get_node("%Tip") as Label).text
 	veil._advance_tip()
 	var second: String = (veil.get_node("%Tip") as Label).text
 	check(first != second, "Tipp rotiert weiter")
-	veil.prepare_for_travel(&"home")
 	_cleanup(veil)
 
 
 func test_progress_bar_zeigt_threaded_load() -> void:
 	var veil := _fresh_veil()
+	check((veil.get_node("%Sweep") as Control).visible, "Ohne Fortschritt: Sweep sichtbar")
 	veil.set_progress(0.5)
 	check((veil.get_node("%Progress") as Control).visible, "Progress sichtbar bei 0.5")
 	check_approx((veil.get_node("%Progress") as ProgressBar).value, 0.5, "Wert übernommen")
+	check(
+		not (veil.get_node("%Sweep") as Control).visible,
+		"Echter Balken sichtbar → Sweep weicht (Web-Regel)"
+	)
+	check(
+		(veil.get_node("%Laedt") as Label).text.contains("50%"),
+		"„Lädt… NN%“ nur bei echtem Fortschritt"
+	)
 	veil.set_progress(1.0)
 	check(not (veil.get_node("%Progress") as Control).visible, "bei 1.0 wieder versteckt")
+	check((veil.get_node("%Sweep") as Control).visible, "Sweep kehrt zurück")
+	check_eq(
+		(veil.get_node("%Laedt") as Label).text,
+		I18nService.t("veil.laedt"),
+		"ohne Fortschritt kein Prozent-Text"
+	)
 	veil.set_progress(-2.0)
 	check_approx(veil.get_progress(), 0.0, "Clamp bleibt (W1a-Contract)")
 	_cleanup(veil)

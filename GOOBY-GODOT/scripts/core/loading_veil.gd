@@ -1,51 +1,70 @@
 class_name LoadingVeil
 extends CanvasLayer
-## LoadingVeil — Transition-Fläche des SceneRouters (W1a; Optik W4/POLISH-3).
+## LoadingVeil — Transition-Fläche des SceneRouters (W1a; Optik W4/POLISH-3,
+## W16/VEIL: Alt-Web-Look).
 ##
-## AC-Look statt Cream+Spinner: driftendes Pattern (AcWallpaper-Shader) und
-## eine mittige Karte. Vier Varianten:
-## - Minigame-Reise (ArcadeScreen meldet einen Travel-Hint an): Cover +
-##   Spieltitel + rotierender Tipp (`veil.tips`, lokalisiert).
-## - LANGE Reise (RW-8; LoadingScreenRules: Stadt->Ranch, Ranch-Zonen,
-##   Turnier, Besuch): Vollbild-Ladebildschirm (RanchLoadingScreen) mit
-##   Artwork, Logo, echtem Ladebalken und rotierenden `loading.tips`.
-##   Kurze Wege zeigen den vollen Schirm bewusst NIE.
-## - DOOR_TRAVEL (EF-3/EVAL-1 F1): KEIN Vollveil — ein weicher, cremefarbener
-##   Tür-Wisch (~130 ms rein, ~200 ms raus, durchgehende Bewegungsrichtung)
-##   ohne Karte, ohne Tipps, ohne ui_open/close-Klänge (F9: das Panel-
-##   Vokabular bleibt Panels vorbehalten). Raumwechsel im Haus fühlen sich
-##   so wie ein Schritt durch die Tür an, nicht wie ein Ladebildschirm.
-## - Sonst: hüpfender Mini-Gooby (`loading_veil_gooby.gd`) + `veil.laedt`.
+## W16/VEIL: Der Szenenwechsel-Ladebildschirm trägt wieder den Look der
+## alten Web-Version (User-Wunsch, Spez /tmp/gooby-reports/g1/ladebild-alt.md
+## §2): statisches Blätter-Pattern auf Papier (#FFFAF2) als Vorhang und die
+## POLISH-D-Karte — Cover-Zone mit Lese-Shade + weißer Ready-Zeile,
+## hüpfender Motiv-Sticker (72 px, weiß umrandet, überlappt die Coverkante),
+## Titel, Teal-Verlaufsbalken mit Indeterminate-Sweep, „Lädt… NN%“-Zeile
+## (Prozent nur bei echtem Fortschritt) und rotierende Tipps (2,6 s,
+## 200-ms-Crossfade). Drei Karten-Modi wie im Web:
+## - game: Minigame-Reise (ArcadeScreen-Hint) — Game-Cover + Spieltitel +
+##   „Mach dich bereit!“ + Game-Tipps.
+## - trip: Shop-/Stadt-/Klinik-Ausflüge — „Auf geht’s!“ / „Zeit für einen
+##   kleinen Ausflug…“ + Trip-Tipps.
+## - home: alles andere (Rückkehr/Default) — „Trautes Heim“ /
+##   „Auf dem Heimweg…“ + Home-Tipps.
+## Der Petal-Wipe der Web-Version kommt bewusst in einer SPÄTEREN Welle —
+## Ein/Aus bleibt diese Runde die Modulate-Blende + Karten-Pop-in
+## (220 ms ease-out, scale 0.96→1 + translateY, Web polishd-loading-in).
 ##
-## W14/LOADING-Politur: lebendigeres Kachel-Drift des Backdrops, hüpfende
-## Fortschritts-Punkte (`loading_veil_punkte.gd`) statt Spinner-Gefühl
-## (sie weichen dem echten Balken, sobald set_progress > 0 meldet) und
-## Tipp-Texte im ACNH-Ton (`veil.tips`).
+## Weiter unverändert:
+## - LANGE Reise (RW-8; LoadingScreenRules): Vollbild-Ladebildschirm
+##   (RanchLoadingScreen) mit Artwork, Logo, echtem Balken, `loading.tips`.
+## - DOOR_TRAVEL (EF-3/EVAL-1 F1): KEIN Vollveil — cremefarbener Tür-Wisch
+##   (~130/200 ms) ohne Karte/Tipps/Panel-Klänge.
+## - Travel-Whoosh-Paar (F9) bleibt.
 ##
 ## Contract (nach W1 FROZEN, W1a-Handoff): cover(reduced_motion) /
 ## reveal(reduced_motion) sind awaitbare Coroutinen (Router:
 ## `await veil.cover(rm)`); Signale covered/revealed feuern zusätzlich.
-## set_progress(0..1) bekommt den threaded-Load-Fortschritt vom Router.
-## Node-Pfade Root / Root/Backdrop / Root/Spinner bleiben erhalten
-## (Tests asserten sie) — der Spinner ist nur ausgeblendet.
+## set_progress(0..1) bekommt den threaded-Load-Fortschritt vom Router;
+## %Progress ist nur im Fenster 0<p<1 sichtbar, der Indeterminate-Sweep
+## weicht ihm (Nachfolger der W14-Punkte-Regel). Node-Pfade Root /
+## Root/Backdrop / Root/Spinner bleiben erhalten (Tests asserten sie) —
+## der Spinner ist nur ausgeblendet. %Gooby ist jetzt der Motiv-Sticker
+## (LoadingVeilSticker) und behält die set_animated/is_animated-API.
 
 signal covered
 signal revealed
 
 const COVER_DURATION := 0.25
 const REVEAL_DURATION := 0.3
+## Karten-Pop-in (Web polishd-loading-in): 220 ms ease-out,
+## scale 0.96→1 + translateY 0.5rem→0.
+const KARTE_POP_S := 0.22
+const KARTE_POP_SCALE := 0.96
+const KARTE_POP_SHIFT := 8.0
 ## Tür-Wisch (EF-3 F1): beide zusammen deutlich unter dem 350-ms-Budget.
 const DOOR_COVER_DURATION := 0.13
 const DOOR_REVEAL_DURATION := 0.2
 ## Weiche Wisch-Kante links/rechts als Anteil der Bildschirmbreite.
 const DOOR_EDGE_FRAC := 0.18
-const TIP_ROTATE_SEC := 3.2
-const TIPS_KEY := "veil.tips"
-## W14/LOADING: lebendigeres Kachel-Pattern — gleiche Drift-Richtung wie der
-## AcTokens-Standard, nur spürbar flotter + etwas präsenter (nur im Veil;
-## der Shader nullt die Drift unter Reduced Motion selbst).
-const PATTERN_DRIFT_FAKTOR := 2.6
-const PATTERN_OPACITY_VEIL := 0.58
+## Web VEIL.TIP_ROTATE_MS = 2600 + 200-ms-Crossfade der Tipp-Zeile.
+const TIP_ROTATE_SEC := 2.6
+const TIP_FADE_S := 0.2
+## Assets der Alt-Web-Karte (portiert aus GOOBY/public/assets, §2.5).
+## Fehlt ein Bild, bleibt wie im Web der Akzent-Verlauf (onerror-Fallback).
+const COVER_HOME_PFAD := "res://assets/acui/veil_home_cover.png"
+const MOTIV_WAVE_PFAD := "res://assets/acui/motif_gooby_wave.png"
+const MOTIV_GAME_PFAD := "res://assets/acui/gooby_loading_motif.png"
+## Reiseziele im Web-„trip“-Modus (Shop-/Tierarzt-Ausflüge): der IKEA-Shop
+## und alle Stadt-Ziele (die Klinik ist der Stadt-Ort city/ort/tierarzt).
+const TRIP_ZIELE: Array[String] = ["ikea"]
+const TRIP_PRAEFIXE: Array[String] = ["city"]
 
 static var _travel_hint: Dictionary = {}
 static var _tip_cursor := 0
@@ -58,24 +77,29 @@ var stunde_override := -1.0
 
 var _progress := 0.0
 var _active_hint: Dictionary = {}
+## Karten-Modus wie im Web: "home" | "trip" | "game".
+var _modus := "home"
+var _laedt_basis := ""
 var _ranch_aktiv := false
 var _ranch_ziel := StringName()
 var _ranch_screen: RanchLoadingScreen
 var _tip_timer: Timer
+var _tip_tween: Tween
+var _tips_animiert := true
 ## EF-3 F1: aktiver Tür-Wisch-Modus (gesetzt via prepare_for_travel).
 var _door_aktiv := false
 var _door_wipe: Control
-## W14/LOADING: hüpfende Fortschritts-Punkte (statt Spinner) in der Karte.
-var _punkte: LoadingVeilPunkte
 
 @onready var _root: Control = $Root
 @onready var _backdrop: AcWallpaper = $Root/Backdrop
-@onready var _card: PanelContainer = %Card
+@onready var _card: LoadingVeilKarte = %Card
 @onready var _cover_rect: TextureRect = %Cover
 @onready var _title_label: Label = %Title
-@onready var _gooby: LoadingVeilGooby = %Gooby
+@onready var _ready_label: Label = %Ready
+@onready var _gooby: LoadingVeilSticker = %Gooby
 @onready var _laedt_label: Label = %Laedt
 @onready var _tip_label: Label = %Tip
+@onready var _sweep: LoadingVeilSweep = %Sweep
 @onready var _progress_bar: ProgressBar = %Progress
 
 
@@ -85,16 +109,10 @@ func _ready() -> void:
 	_root.modulate.a = 0.0
 	# CanvasLayer-Gotcha (W3d-Handoff): Window-Theme kommt hier nicht an.
 	_root.theme = ThemeService.theme()
-	_laedt_label.text = I18nService.t("veil.laedt")
-	# W14/LOADING: lebendigeres Drift + Fortschritts-Punkte unterm Lädt-Text.
-	_backdrop.drift = _backdrop.drift * PATTERN_DRIFT_FAKTOR
-	_backdrop.pattern_opacity = PATTERN_OPACITY_VEIL
-	_punkte = LoadingVeilPunkte.new()
-	_punkte.name = "Punkte"
-	_punkte.set_animated(false)
-	var card_box := _laedt_label.get_parent()
-	card_box.add_child(_punkte)
-	card_box.move_child(_punkte, _laedt_label.get_index() + 1)
+	_laedt_basis = I18nService.t("veil.laedt")
+	_laedt_label.text = _laedt_basis
+	_gooby.set_animated(false)
+	_sweep.set_animated(false)
 	_tip_timer = Timer.new()
 	_tip_timer.wait_time = TIP_ROTATE_SEC
 	_tip_timer.timeout.connect(_on_tip_timer)
@@ -115,6 +133,24 @@ static func set_travel_hint(hint: Dictionary) -> void:
 
 static func clear_travel_hint() -> void:
 	_travel_hint = {}
+
+
+## Karten-Modus fürs Ziel (Web-Regel §2.4): Shop-/Stadt-/Klinik-Ausflüge
+## sind „trip“, alles andere (Rückkehr/Default) „home“; „game“ setzt der
+## Minigame-Hint in _apply_variant.
+static func modus_fuer_ziel(target: StringName) -> String:
+	var ziel := String(target)
+	if TRIP_ZIELE.has(ziel):
+		return "trip"
+	for praefix in TRIP_PRAEFIXE:
+		if ziel == praefix or ziel.begins_with(praefix + "/"):
+			return "trip"
+	return "home"
+
+
+## I18n-Key der rotierenden Tipps eines Modus (strings/*/veil.json).
+static func tips_key(modus: String) -> String:
+	return "veil.%s.tips" % modus
 
 
 ## Vom Router-Signal getrieben; Tests dürfen es direkt aufrufen.
@@ -147,8 +183,10 @@ func cover(reduced_motion := false) -> void:
 	visible = true
 	_root.visible = true
 	set_progress(0.0)
+	_tips_animiert = not reduced_motion
+	_stoppe_tip_fade()
 	_gooby.set_animated(not reduced_motion and not _ranch_aktiv)
-	_punkte.set_animated(not reduced_motion and not _ranch_aktiv)
+	_sweep.set_animated(not reduced_motion and not _ranch_aktiv)
 	if _ranch_screen != null:
 		_ranch_screen.set_animated(not reduced_motion and _ranch_aktiv)
 	if _tip_label.visible or _ranch_aktiv:
@@ -156,14 +194,24 @@ func cover(reduced_motion := false) -> void:
 	if reduced_motion:
 		_root.modulate.a = 1.0
 	else:
+		# Web polishd-loading-in: 220 ms ease-out, scale 0.96→1 +
+		# translateY 0.5rem→0 (kein TRANS_BACK-Overshoot mehr).
 		_card.pivot_offset = _card.size / 2.0
-		_card.scale = Vector2.ONE * 0.92
+		_card.scale = Vector2.ONE * KARTE_POP_SCALE
+		var basis_y := _card.position.y
+		_card.position.y = basis_y + KARTE_POP_SHIFT * _card.design_faktor()
 		var tween := create_tween().set_parallel()
 		tween.tween_property(_root, "modulate:a", 1.0, COVER_DURATION)
 		(
 			tween
-			. tween_property(_card, "scale", Vector2.ONE, COVER_DURATION)
-			. set_trans(Tween.TRANS_BACK)
+			. tween_property(_card, "scale", Vector2.ONE, KARTE_POP_S)
+			. set_trans(Tween.TRANS_CUBIC)
+			. set_ease(Tween.EASE_OUT)
+		)
+		(
+			tween
+			. tween_property(_card, "position:y", basis_y, KARTE_POP_S)
+			. set_trans(Tween.TRANS_CUBIC)
 			. set_ease(Tween.EASE_OUT)
 		)
 		await tween.finished
@@ -178,6 +226,7 @@ func reveal(reduced_motion := false) -> void:
 	# F9: Reisen haben ihr eigenes Whoosh-Paar — ui_open bleibt Panels.
 	AudioDirector.try_play(self, "travel_whoosh_auf")
 	_tip_timer.stop()
+	_stoppe_tip_fade()
 	if reduced_motion:
 		_root.modulate.a = 0.0
 	else:
@@ -186,7 +235,7 @@ func reveal(reduced_motion := false) -> void:
 		await tween.finished
 	visible = false
 	_gooby.set_animated(false)
-	_punkte.set_animated(false)
+	_sweep.set_animated(false)
 	if _ranch_screen != null:
 		_ranch_screen.set_animated(false)
 	revealed.emit()
@@ -197,9 +246,11 @@ func set_progress(ratio: float) -> void:
 	if _progress_bar != null:
 		_progress_bar.value = _progress
 		_progress_bar.visible = _progress > 0.0 and _progress < 1.0 and not _ranch_aktiv
-	# W14/LOADING: Punkte weichen dem ECHTEN Balken — nie beide gleichzeitig.
-	if _punkte != null and _progress_bar != null:
-		_punkte.visible = not _progress_bar.visible
+	# Web-Regel (Nachfolger der W14-Punkte): der Indeterminate-Sweep weicht
+	# dem ECHTEN Balken — nie zwei Ladeanzeigen gleichzeitig.
+	if _sweep != null and _progress_bar != null:
+		_sweep.visible = not _progress_bar.visible
+	_update_laedt_zeile()
 	if _ranch_screen != null:
 		_ranch_screen.set_progress(_progress if _ranch_aktiv else 0.0)
 
@@ -210,6 +261,17 @@ func get_progress() -> float:
 
 func _on_travel_started(target: StringName, travel_type: int) -> void:
 	prepare_for_travel(target, travel_type)
+
+
+## „Lädt…“-Zeile wie im Web (loadingVeil.js progress()): Prozent NUR bei
+## echtem Fortschritt, sonst bleibt das nackte Label (Indeterminate).
+func _update_laedt_zeile() -> void:
+	if _laedt_label == null or _laedt_basis.is_empty():
+		return
+	if _progress > 0.0 and _progress < 1.0:
+		_laedt_label.text = "%s %d%%" % [_laedt_basis, roundi(_progress * 100.0)]
+	else:
+		_laedt_label.text = _laedt_basis
 
 
 ## ── Tür-Wisch (EF-3 F1) ─────────────────────────────────────────────────
@@ -295,24 +357,34 @@ void fragment() {
 	return shader
 
 
+## Karte auf den aktiven Modus stellen (Web buildCard): home/trip nutzen
+## das Heim-Cover + Winke-Gooby-Sticker, game das Spiel-Cover aus dem
+## Travel-Hint + das Game-Motiv. Der Vorhang bleibt in ALLEN Modi das
+## statische Blätter-Pattern auf Papier (Web .acui-veil).
 func _apply_variant() -> void:
 	if _root == null:
 		return
 	var minigame := not _active_hint.is_empty()
 	var ranch := _ranch_aktiv and not minigame
-	var cover_tex: Texture2D = _active_hint.get("cover")
-	_cover_rect.visible = minigame and cover_tex != null
-	_cover_rect.texture = cover_tex if minigame else null
-	_title_label.visible = minigame and str(_active_hint.get("title", "")) != ""
-	_title_label.text = str(_active_hint.get("title", ""))
-	_tip_label.visible = minigame
-	_gooby.visible = not minigame
-	_laedt_label.visible = not minigame
+	_modus = "game" if minigame else modus_fuer_ziel(_ranch_ziel)
+	var cover_tex: Texture2D = (
+		_active_hint.get("cover") if minigame else _lade_textur(COVER_HOME_PFAD)
+	)
+	_cover_rect.texture = cover_tex
+	_cover_rect.visible = cover_tex != null
+	var titel := (
+		str(_active_hint.get("title", "")) if minigame else I18nService.t("veil.%s.titel" % _modus)
+	)
+	_title_label.text = titel
+	_title_label.visible = titel != ""
+	_ready_label.text = I18nService.t("veil.%s.bereit" % _modus)
+	_gooby.set_motiv(_lade_textur(MOTIV_GAME_PFAD if minigame else MOTIV_WAVE_PFAD))
+	_gooby.visible = true
+	_laedt_label.visible = true
+	_tip_label.visible = true
 	_card.visible = not ranch
-	_backdrop.pattern = "arcade" if minigame else "dots"
 	_apply_ranch_variant(ranch)
-	if minigame:
-		_advance_tip()
+	_advance_tip()
 
 
 ## Vollbild-Schirm der langen Reisen ein-/ausblenden (RW-8).
@@ -347,6 +419,27 @@ func _advance_tip() -> void:
 	_tip_cursor += 1
 
 
+## Tipp-Wechsel per 200-ms-Crossfade (Web .mg-loading-tip transition) —
+## Reduced Motion wechselt hart.
+func _wechsle_tip_weich() -> void:
+	if not _tips_animiert:
+		_advance_tip()
+		return
+	_stoppe_tip_fade()
+	_tip_tween = create_tween()
+	_tip_tween.tween_property(_tip_label, "modulate:a", 0.0, TIP_FADE_S)
+	_tip_tween.tween_callback(_advance_tip)
+	_tip_tween.tween_property(_tip_label, "modulate:a", 1.0, TIP_FADE_S)
+
+
+func _stoppe_tip_fade() -> void:
+	if _tip_tween != null and _tip_tween.is_valid():
+		_tip_tween.kill()
+	_tip_tween = null
+	if _tip_label != null:
+		_tip_label.modulate.a = 1.0
+
+
 ## Tipp des Vollbild-Schirms aus dem Shuffle-Bag (nie zweimal derselbe).
 func _advance_loading_tip() -> void:
 	if _ranch_screen == null:
@@ -363,8 +456,17 @@ func _on_tip_timer() -> void:
 	if _ranch_aktiv and _ranch_screen != null and _ranch_screen.visible:
 		_advance_loading_tip()
 	elif _tip_label.visible:
-		_advance_tip()
+		_wechsle_tip_weich()
 
 
-static func _tips() -> Array:
-	return I18nService.items(TIPS_KEY)
+## Rotierende Tipps des AKTIVEN Karten-Modus (Web §2.4: 3 je Modus).
+func _tips() -> Array:
+	return I18nService.items(tips_key(_modus))
+
+
+## Asset mit Web-onerror-Verhalten: fehlt das Bild, bleibt der Verlauf.
+static func _lade_textur(pfad: String) -> Texture2D:
+	if not ResourceLoader.exists(pfad):
+		push_warning("Veil-Asset fehlt: %s" % pfad)
+		return null
+	return load(pfad)

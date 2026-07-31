@@ -50,11 +50,11 @@ func _shot_veil_home(file: String) -> void:
 	await process_frame
 	veil.prepare_for_travel(&"home")
 	await veil.cover(true)
-	# Hop wieder anwerfen und exakt am Sprung-Scheitel snappen (cover(true)
-	# friert ein; _t = 1/(2·HOP_HZ) = Apex mit Streck-Pose + Ohren-Lag).
-	var gooby := veil.get_node("%Gooby") as LoadingVeilGooby
-	gooby.set_animated(true)
-	gooby._t = 1.0 / (2.0 * LoadingVeilGooby.HOP_HZ)
+	# Bounce wieder anwerfen und am Sprung-Scheitel snappen (cover(true)
+	# friert ein; Keyframe 32 % = höchste Pose des Web-acui-veil-bounce).
+	var sticker := veil.get_node("%Gooby") as LoadingVeilSticker
+	sticker.set_animated(true)
+	sticker._t = 0.32 * LoadingVeilSticker.BOUNCE_S
 	await process_frame
 	await _snap(file, 0)
 	veil.free()

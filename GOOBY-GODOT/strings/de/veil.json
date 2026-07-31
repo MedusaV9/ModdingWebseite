@@ -1,13 +1,31 @@
 {
 	"veil": {
 		"laedt": "Lädt…",
-		"tips": [
-			"Ein satter Gooby hüpft gleich doppelt so hoch — schau doch mal in den Kühlschrank!",
-			"Im Baumodus dreht ein zweites Tippen das Möbel. Einrichten macht Laune!",
-			"Psst … Sticker verstecken sich überall. Wer sucht, der funkelt!",
-			"Ab Level 10 öffnet der Endlos-Modus seine Tore. Dranbleiben lohnt sich!",
-			"Frisch aufgewacht wartet Gooby am Waschbecken — Zähneputzen nicht vergessen!",
-			"Besuch deine Freunde! Zu zweit ist selbst Nichtstun flauschiger."
-		]
+		"home": {
+			"titel": "Trautes Heim",
+			"bereit": "Auf dem Heimweg…",
+			"tips": [
+				"Kissen werden aufgeschüttelt…",
+				"Der Tee wird aufgesetzt…",
+				"Die Blumen werden gegossen…"
+			]
+		},
+		"trip": {
+			"titel": "Auf geht’s!",
+			"bereit": "Zeit für einen kleinen Ausflug…",
+			"tips": [
+				"Snacks für unterwegs werden eingepackt…",
+				"Der Einkaufszettel wird geprüft…",
+				"Die kleinen Schuhe werden geschnürt…"
+			]
+		},
+		"game": {
+			"bereit": "Mach dich bereit!",
+			"tips": [
+				"Tipp: Mit der Pause-Taste kannst du jederzeit pausieren.",
+				"Tipp: Die erste Runde pro Spiel am Tag bringt doppelte Münzen!",
+				"Tipp: Schwer zahlt ×1,3 Münzen — Endlos ist für den Ruhm."
+			]
+		}
 	}
 }

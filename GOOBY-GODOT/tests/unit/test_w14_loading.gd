@@ -188,24 +188,27 @@ func test_boot_cover_screen_smoke_und_reduced_fade() -> void:
 	await wait_frames(1)
 
 
-func test_veil_punkte_weichen_dem_echten_balken() -> void:
+## W16/VEIL: Der Indeterminate-Sweep (Web .mg-loading-bar-indet) ersetzt
+## die W14-Punkte — die Regel bleibt dieselbe: nie zwei Ladeanzeigen
+## gleichzeitig, und Reduced Motion friert die Deko-Animation ein.
+func test_veil_sweep_weicht_dem_echten_balken() -> void:
 	var veil: LoadingVeil = VEIL_SCENE.instantiate()
 	tree.root.add_child(veil)
 	await wait_frames(1)
-	var punkte: LoadingVeilPunkte = veil.find_child("Punkte", true, false)
-	assert_true(punkte != null, "Fortschritts-Punkte hängen in der Karte.")
-	assert_true(punkte.visible, "Ohne Balken sind die Punkte da.")
+	var sweep: LoadingVeilSweep = veil.find_child("Sweep", true, false)
+	assert_true(sweep != null, "Indeterminate-Sweep hängt in der Karte.")
+	assert_true(sweep.visible, "Ohne Balken ist der Sweep da.")
 	veil.set_progress(0.5)
-	assert_false(punkte.visible, "Echter Balken sichtbar → Punkte weichen.")
+	assert_false(sweep.visible, "Echter Balken sichtbar → Sweep weicht.")
 	veil.set_progress(1.0)
-	assert_true(punkte.visible, "Balken weg → Punkte wieder da.")
+	assert_true(sweep.visible, "Balken weg → Sweep wieder da.")
 	await veil.cover(true)
-	assert_false(punkte.is_animated(), "Reduced Motion: Punkte stehen still.")
+	assert_false(sweep.is_animated(), "Reduced Motion: Sweep steht still.")
 	await veil.reveal(true)
 	await veil.cover(false)
-	assert_true(punkte.is_animated(), "Animierter Pfad: Punkte hüpfen.")
+	assert_true(sweep.is_animated(), "Animierter Pfad: Sweep wischt.")
 	await veil.reveal(false)
-	assert_false(punkte.is_animated(), "Nach reveal ruhen die Punkte.")
+	assert_false(sweep.is_animated(), "Nach reveal ruht der Sweep.")
 	veil.queue_free()
 	await wait_frames(1)
 
