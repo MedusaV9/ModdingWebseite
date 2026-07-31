@@ -1,12 +1,11 @@
 class_name EventRunner
 extends Node3D
-## Event-Runner (W3d CONTENT + BACKLOG-REST, Doc F §4.2): setzt das AKTIVE
-## Random-Event als Szene im Raum um — Gooby-Pose, Props, Tap-Auflösung,
-## Choice-Karten, Licht/Sound-Inszenierung. `szene_setup`-Hooks:
-##   marienkaefer, kuehlschrank, glas_scherben, teller_scherben,
-##   nutella_nacht (Voll-Fenster: Nachtlicht, Schmier-Props, Fleck-Beweis),
-##   sockensuche, robo_jagd, kleber_stuhl, wurm_freund, fernbedienung,
-##   karton_gooby, gewitter_angst, mehl_unfall — alle KOMPLETT SPIELBAR.
+## Event-Runner (W3d CONTENT + BACKLOG-REST, Doc F §4.2): setzt das AKTIVE Random-Event als
+## Szene im Raum um — Gooby-Pose, Props, Tap-Auflösung, Choice-Karten, Licht/Sound-Inszenierung.
+## `szene_setup`-Hooks: marienkaefer, kuehlschrank, glas_scherben, teller_scherben,
+##   nutella_nacht (Voll-Fenster: Nachtlicht, Schmier-Props, Fleck-Beweis), sockensuche,
+##   robo_jagd, kleber_stuhl, wurm_freund, fernbedienung, karton_gooby, gewitter_angst,
+##   mehl_unfall, klopapier_mumie (W13B, ausgelagert in mumie_szene.gd) — KOMPLETT SPIELBAR.
 ##
 ## Einhängen: EventRunner.attach_to(room) nach dem Raum-Aufbau (Hook-Request
 ## an W2a in W3d-home-requests.md). Der Runner liest das aktive Event aus dem
@@ -130,6 +129,8 @@ func start(def: Dictionary) -> void:
 			_setup_gewitter_angst()
 		"mehl_unfall":
 			_setup_mehl_unfall(int(def.get("props", 5)))
+		"klopapier_mumie":
+			MumieSzene.setup(self, int(def.get("props", 5)))
 		_:
 			_running = false
 

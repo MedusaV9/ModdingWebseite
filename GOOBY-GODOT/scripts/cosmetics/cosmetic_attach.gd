@@ -21,6 +21,12 @@ extends Node3D
 ## KOPIE der Palette-Textur und hängt sie als Surface-Override an das Mesh —
 ## das GLB-Material selbst bleibt unangetastet (sonst färbt sich jeder Gooby
 ## in jeder Szene mit um).
+##
+## W13B/GALAXIE (additiv): Fellfarben mit `params.shader == "galaxie"` laufen
+## über denselben Pfad, bekommen aber statt des StandardMaterial-Duplikats
+## ein ShaderMaterial (fell_galaxie.gdshader) mit derselben umgefärbten
+## Palette — Sterne/Nebel nur auf den Fell-Zellen, Augen/Nase bleiben heil.
+## Reduced-Motion friert den Shader ein (bewegung = 0.0).
 
 ## Bones, Anker-Positionen und Maßstäbe stehen alle in KoerperForm — dort
 ## liegen auch die Oberflächen-Radien, mit denen die Builder rechnen.
@@ -30,6 +36,8 @@ const BONES := KoerperForm.BONE
 const PALETTE_GRID := 4
 const PALETTE_ZELLE := 64
 const FELL_ZELLEN := {"body": 0, "belly": 1, "earInner": 2}
+## W13B: Premium-Fell-Shader (params.shader == "galaxie").
+const GALAXIE_SHADER_PFAD := "res://assets/shaders/fell_galaxie.gdshader"
 
 ## Wie stark ein rundes Gooby (`charMorphs.chubby`) die Körperanker aufweitet.
 const CHUBBY_WEITE := 0.18
@@ -42,6 +50,9 @@ const AUGEN_WEITE := 0.3
 const PROPELLER_SPEED := 8.5
 const BALLON_SPEED := 1.35
 const FLUEGEL_SPEED := 8.0
+
+## Test-Hook (Muster wetter_fx.gd): -1 = AppSettings fragen, 0/1 = erzwingen.
+var reduced_motion_override := -1
 
 var _skeleton: Skeleton3D
 var _mesh: MeshInstance3D
@@ -125,7 +136,11 @@ func apply_fell(id: String) -> void:
 	if def.is_empty() or def["kategorie"] != CosmeticsCatalog.FELL or bool(def["standard"]):
 		_mesh.set_surface_override_material(0, null)
 		return
-	var material := _palette_material(def)
+	var material: Material = null
+	if str(CosmeticParts.param(def, "shader", "")) == "galaxie":
+		material = _galaxie_material(def)
+	if material == null:
+		material = _palette_material(def)
 	if material != null:
 		_mesh.set_surface_override_material(0, material)
 
@@ -245,7 +260,40 @@ func _palette_material(def: Dictionary) -> Material:
 	var basis := _mesh.mesh.surface_get_material(0)
 	if not (basis is StandardMaterial3D):
 		return null
-	var quelle := (basis as StandardMaterial3D).albedo_texture
+	var textur := _palette_textur(basis as StandardMaterial3D, def)
+	if textur == null:
+		return null
+	var material := (basis as StandardMaterial3D).duplicate() as StandardMaterial3D
+	material.albedo_texture = textur
+	material.metallic = float(CosmeticParts.param(def, "metallic", 0.0))
+	if material.metallic > 0.0:
+		material.roughness = 0.45
+	return material
+
+
+## W13B: Galaxie-Fell — ShaderMaterial statt Palette-Duplikat. Nutzt dieselbe
+## umgefärbte Palette (Fell-Zellen = die drei Katalogfarben), der Shader legt
+## Nebel + Sterne NUR auf die Fell-Zellen. Reduced-Motion → statisch.
+func _galaxie_material(def: Dictionary) -> Material:
+	var basis := _mesh.mesh.surface_get_material(0)
+	if not (basis is StandardMaterial3D):
+		return null
+	var textur := _palette_textur(basis as StandardMaterial3D, def)
+	if textur == null:
+		return null
+	var shader := load(GALAXIE_SHADER_PFAD) as Shader
+	if shader == null:
+		return null
+	var material := ShaderMaterial.new()
+	material.shader = shader
+	material.set_shader_parameter("palette", textur)
+	material.set_shader_parameter("bewegung", 0.0 if _reduced_motion() else 1.0)
+	return material
+
+
+## Umgefärbte Palette-Kopie (Fell-Zellen ← def.farben, linear wie im GLB).
+func _palette_textur(basis: StandardMaterial3D, def: Dictionary) -> ImageTexture:
+	var quelle := basis.albedo_texture
 	if quelle == null:
 		return null
 	var img := quelle.get_image()
@@ -264,12 +312,14 @@ func _palette_material(def: Dictionary) -> Material:
 		if not hex.is_valid_html_color():
 			continue
 		_male_zelle(img, int(FELL_ZELLEN[teile[i]]), Color(hex).srgb_to_linear())
-	var material := (basis as StandardMaterial3D).duplicate() as StandardMaterial3D
-	material.albedo_texture = ImageTexture.create_from_image(img)
-	material.metallic = float(CosmeticParts.param(def, "metallic", 0.0))
-	if material.metallic > 0.0:
-		material.roughness = 0.45
-	return material
+	return ImageTexture.create_from_image(img)
+
+
+func _reduced_motion() -> bool:
+	if reduced_motion_override >= 0:
+		return reduced_motion_override == 1
+	var settings := get_node_or_null("/root/AppSettings")
+	return settings != null and bool(settings.call("is_reduced_motion"))
 
 
 func _male_zelle(img: Image, index: int, farbe: Color) -> void:

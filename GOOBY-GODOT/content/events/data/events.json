@@ -172,6 +172,19 @@
 			"sticker_hook": "mehl_unfall"
 		},
 		{
+			"id": "klopapier_mumie",
+			"weight": 2,
+			"cooldown_days": 2,
+			"trigger_window": ["09:00", "21:00"],
+			"wahrscheinlichkeit": 0.3,
+			"notification_text_de": "Gooby hat sich als Klopapier-Mumie verkleidet und findet nicht mehr raus!",
+			"timeout_min": 8,
+			"fail_text_de": "Gooby hat es schon alleine hingekriegt -_-",
+			"reward": { "buff_id": "spass_plus", "stat": "fun", "wert": 8, "dauer_h": 4 },
+			"szene_setup": "klopapier_mumie",
+			"props": 5
+		},
+		{
 			"id": "ausgebuext",
 			"context": "ranch",
 			"weight": 3,

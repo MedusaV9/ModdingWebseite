@@ -21,6 +21,7 @@ const EVENT_IDS := [
 	"karton_gooby",
 	"gewitter_angst",
 	"mehl_unfall",
+	"klopapier_mumie",
 ]
 ## W13/RANCH: Ranch-Events (context "ranch") — läuft NICHT im Haus-Runner,
 ## sondern im RanchEventHost (scripts/ranch/events/, test_w13_ranch_events).
@@ -73,6 +74,9 @@ const USED_KEYS := [
 	"events.gewitter.danke",
 	"events.mehl.bubble",
 	"events.mehl.danke",
+	"events.mumie.bubble",
+	"events.mumie.wickel",
+	"events.mumie.danke",
 	"events.story.hinweis",
 	"events.story.kichern",
 	"events.story.einschlafen",
@@ -92,6 +96,7 @@ const RUNNER_SETUPS := [
 	"karton_gooby",
 	"gewitter_angst",
 	"mehl_unfall",
+	"klopapier_mumie",
 ]
 ## Szenen-Hooks des RanchEventHosts (W13, start()-match).
 const RANCH_SETUPS := [
@@ -198,7 +203,7 @@ func test_events_json_defs_vollstaendig() -> void:
 	assert_eq(
 		defs.size(),
 		EVENT_IDS.size() + RANCH_EVENT_IDS.size(),
-		"13 Haus- + 4 Ranch-Event-Defs (M1-6 + Backlog F §4.2 + W13)"
+		"14 Haus- + 4 Ranch-Event-Defs (M1-6 + Backlog F §4.2 + W13 + W13B-Mumie)"
 	)
 	var seen := {}
 	for def: Dictionary in defs:

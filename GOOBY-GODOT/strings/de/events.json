@@ -69,6 +69,11 @@
 			"bubble": "Ich wollte dir Pfannkuchen machen. Der Sack war… explosiver als gedacht.",
 			"danke": "Wieder flauschig statt bestäubt! Und hier: EIN Pfannkuchen. Er ist gelungen."
 		},
+		"mumie": {
+			"bubble": "Ich bin eine MUMIE! …War ich. Jetzt bin ich ein Knäuel. Wickel mich aus!",
+			"wickel": "Weiter, weiter! Ich hab schon wieder ein Ohr frei!",
+			"danke": "Nie wieder! …Oder vielleicht Halloween nochmal."
+		},
 		"story": {
 			"hinweis": "Tippe ein Wort, um die Lücke zu füllen",
 			"kichern": "Hihi… so stand das bestimmt nicht im Buch…",

@@ -1403,6 +1403,22 @@
 			"min_level": 1,
 			"build": "fell",
 			"farben": ["#F7B8D8", "#CDE4FA", "#E88BA0"]
+		},
+		{
+			"id": "fell_galaxie",
+			"kategorie": "fell",
+			"name_de": "Galaxie",
+			"name_en": "Galaxy",
+			"desc_de": "Ein ganzes Universum zum Knuddeln. Vorsicht, funkelt beim Hoppeln.",
+			"desc_en": "A whole universe to cuddle. Careful, it sparkles when hopping.",
+			"preis": 2500,
+			"rarity": "legendaer",
+			"min_level": 1,
+			"build": "fell",
+			"farben": ["#241E3F", "#3A3060", "#9A7BD1"],
+			"params": {
+				"shader": "galaxie"
+			}
 		}
 	]
 }
