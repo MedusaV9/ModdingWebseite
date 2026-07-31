@@ -106,7 +106,9 @@ func _add_switch_row(
 	var toggle := CheckButton.new()
 	toggle.name = "Value"
 	toggle.focus_mode = Control.FOCUS_NONE
-	toggle.custom_minimum_size = Vector2(0, _row_floor())
+	# W14 (FB3-Audit): Floor auf BEIDEN Achsen — die kurze Seite eines
+	# CheckButtons ist seine BREITE (Toggle-Icon ~76 px = 23 pt).
+	toggle.custom_minimum_size = Vector2(_row_floor(), _row_floor())
 	toggle.button_pressed = initial
 	toggle.toggled.connect(func(on: bool) -> void: handler.call(on))
 	row.add_child(toggle)
