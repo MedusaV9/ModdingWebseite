@@ -67,7 +67,14 @@
       "titel": "GoobyPal",
       "text": "Send a friend a few coins. No strings attached. Mostly.",
       "senden": "Send",
-      "offline": "Offline — GoobyPal needs a connection. And friends."
+      "offline": "Offline — GoobyPal needs a connection. And friends.",
+      "verlauf_titel": "History",
+      "verlauf_leer": "No coins have traveled yet. Your history is waiting for its first good deed.",
+      "verlauf_geschickt": "sent",
+      "verlauf_bekommen": "received",
+      "verlauf_heute": "today · {zeit}",
+      "verlauf_gestern": "yesterday · {zeit}",
+      "verlauf_datum": "{monat}/{tag}/{jahr}"
     }
   }
 }

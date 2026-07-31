@@ -5,6 +5,9 @@ extends Control
 ## Tag, server enforced). Fehler kommen als DEUTSCHE Toasts über
 ## toast_requested (der Parent-Screen zeigt sie an). Online-only: offline
 ## ist der Senden-Knopf aus.
+## W13/NETZ (P3 AP-3): unter dem Sende-Teil rendert das Sheet jetzt den
+## PAL_HISTORY-Verlauf (GoobyPalVerlauf) — Daten kommen aus demselben
+## fetch_history()-Aufruf, der schon das Tageslimit speist.
 
 signal toast_requested(text: String)
 signal closed
@@ -19,6 +22,7 @@ var _friend: Dictionary = {}
 var _amount_label: Label
 var _remaining_label: Label
 var _send_button: Button
+var _verlauf_slot: VBoxContainer
 
 
 func setup(pal_service: GoobyPalService, friend: Dictionary) -> void:
@@ -102,6 +106,11 @@ func _ready() -> void:
 	_send_button.pressed.connect(_on_send_pressed)
 	rows.add_child(_send_button)
 
+	rows.add_child(HSeparator.new())
+	_verlauf_slot = VBoxContainer.new()
+	_verlauf_slot.name = "VerlaufSlot"
+	rows.add_child(_verlauf_slot)
+
 	_set_amount(amount)
 	_refresh_remaining()
 
@@ -115,12 +124,37 @@ func _set_amount(value: int) -> void:
 func _refresh_remaining() -> void:
 	if _pal == null:
 		return
+	var entries: Array = []
 	if _pal.is_online():
-		await _pal.fetch_history()
+		var res: Dictionary = await _pal.fetch_history()
 		if not is_instance_valid(self):
 			return
+		if bool(res.get("ok", false)) and res.get("entries") is Array:
+			entries = res["entries"]
 	_remaining_label.text = I18nService.t("social.pal.remaining", {"rest": _pal.remaining_today()})
 	_send_button.disabled = not _pal.is_online()
+	_render_verlauf(entries)
+
+
+## Verlaufs-Sektion neu bauen (P3 AP-3). Der aktuell angeschriebene Freund
+## ist immer benannt, alle weiteren Codes löst /root/Net auf (Fallback: Code).
+func _render_verlauf(entries: Array) -> void:
+	if _verlauf_slot == null:
+		return
+	for child in _verlauf_slot.get_children():
+		child.queue_free()
+	var namen := GoobyPalVerlauf.namen_aus_baum(self)
+	var friend_code := str(_friend.get("friendCode", ""))
+	if not friend_code.is_empty():
+		namen[friend_code] = str(_friend.get("name", friend_code))
+	_verlauf_slot.add_child(
+		GoobyPalVerlauf.build_liste(
+			entries,
+			namen,
+			int(Time.get_unix_time_from_system()),
+			GoobyPalVerlauf.lokaler_offset_min()
+		)
+	)
 
 
 func _on_send_pressed() -> void:
@@ -137,9 +171,8 @@ func _on_send_pressed() -> void:
 				"social.pal.sent", {"amount": amount, "name": str(_friend.get("goobyName", "?"))}
 			)
 		)
-		_remaining_label.text = I18nService.t(
-			"social.pal.remaining", {"rest": _pal.remaining_today()}
-		)
+		# Zieht Limit UND Verlauf frisch — der neue Eintrag erscheint sofort.
+		await _refresh_remaining()
 	else:
 		toast_requested.emit(I18nService.t(str(res["message_key"])))
 

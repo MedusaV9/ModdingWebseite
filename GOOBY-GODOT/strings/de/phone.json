@@ -67,7 +67,14 @@
       "titel": "GoobyPal",
       "text": "Schick einem Freund ein paar Münzen. Ohne Hintergedanken. Meistens.",
       "senden": "Senden",
-      "offline": "Offline — GoobyPal braucht Verbindung. Und Freunde."
+      "offline": "Offline — GoobyPal braucht Verbindung. Und Freunde.",
+      "verlauf_titel": "Verlauf",
+      "verlauf_leer": "Noch keine Münzen gewandert. Der Verlauf wartet auf deine erste gute Tat.",
+      "verlauf_geschickt": "geschickt",
+      "verlauf_bekommen": "bekommen",
+      "verlauf_heute": "heute · {zeit}",
+      "verlauf_gestern": "gestern · {zeit}",
+      "verlauf_datum": "{tag}.{monat}.{jahr}"
     }
   }
 }
