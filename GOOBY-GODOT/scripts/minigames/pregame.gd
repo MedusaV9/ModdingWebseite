@@ -115,6 +115,11 @@ func _build_ui() -> void:
 	)
 	rows.add_child(energy_note)
 
+	# W13B/DRIVE (Doc G §6): NUR Fahr-Spiele zeigen das gewählte Autohaus-
+	# Auto („Dein Auto: <Name> — Tempo ▮▮▯▯▯“) — der Host injiziert dieselben
+	# Stats später als ctx.car/car_speed_mult.
+	_add_car_line(rows)
+
 	# FERTIG-1 (EVAL Rang 12): läuft für DIESES Spiel ein Modifier-Event,
 	# steht es SICHTBAR vor dem Start (Name, Wirkung, Rest-Runden/-Zeit).
 	_add_modifier_banner(rows)
@@ -254,6 +259,38 @@ func _add_modifier_banner(rows: VBoxContainer) -> void:
 	else:
 		rest_label.text = I18nService.t("modifier.pregame.runden", {"n": plays, "rest": rest})
 	lines.add_child(rest_label)
+
+
+## W13B/DRIVE: Auto-Zeile für Fahr-Spiele (FrameworkLogic.CAR_GAMES — Spiegel
+## von Web CAR_GAMES: cityDrive + deliveryRush). Liest das AUSGEWÄHLTE Auto
+## aus dem Autohaus-Besitz (AutoKatalog.aktives_auto: Save-Keys city.autos +
+## city.aktivesAuto, Fallback Start-Sedan) und zeigt die Tempo-Balken aus
+## CarStatsLogic. Ohne GameState (Tests ohne State) erscheint KEINE Zeile.
+func _add_car_line(rows: VBoxContainer) -> void:
+	if not MinigameFrameworkLogic.CAR_GAMES.has(game_id):
+		return
+	var gs := _resolve_state()
+	if gs == null or not gs.has_method("get_value"):
+		return
+	var auto := AutoKatalog.aktives_auto(gs)
+	if auto.is_empty():
+		return
+	var line := Label.new()
+	line.name = "CarLine"
+	line.theme_type_variation = &"CaptionLabel"
+	line.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	line.text = (
+		I18nService
+		. t(
+			"mg.pregame.car",
+			{
+				"name": str(auto.get("name_de", auto.get("id", "?"))),
+				"tempo": CarStatsLogic.bars((auto.get("stats", {}) as Dictionary).get("speed")),
+			}
+		)
+	)
+	rows.add_child(line)
 
 
 func _section_label(text: String) -> Label:
