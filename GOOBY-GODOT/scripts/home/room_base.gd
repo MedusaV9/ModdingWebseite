@@ -57,7 +57,7 @@ var _camera_rig: HomeCameraRig
 var _build_mode: BuildMode
 var _skyline: CitySkyline
 var _ui_layer: CanvasLayer
-var _bubble: DialogBubble
+var _bubble: AcBubble
 var _choice: Control
 var _rebake_pending := false
 var _uid_seq := 0
@@ -138,9 +138,14 @@ func is_build_mode_active() -> bool:
 	return _build_mode != null and _build_mode.is_active()
 
 
-## Gooby-Bubble (W1c DialogBubble).
+## Gooby-Bubble (W14/UIKERN: AcBubble, folgt Goobys Kopf). Der Raum hält EINE
+## Blase: neue Sprüche ERSETZEN sie (Leak-Guard test_build_reliability).
 func say(text: String) -> void:
-	_bubble.show_lines([text])
+	if text.is_empty():
+		return
+	if _bubble != null and is_instance_valid(_bubble) and _bubble.ersetze_text(text):
+		return
+	_bubble = AcBubble.show_bubble(_ui_layer, text, {"speaker_3d": _gooby})
 
 
 func set_furniture_visible(uid: String, furniture_visible: bool) -> void:
@@ -727,11 +732,6 @@ func _build_ui() -> void:
 	_ui_layer = CanvasLayer.new()
 	_ui_layer.layer = 5
 	add_child(_ui_layer)
-	var bubble_scene: PackedScene = load("res://scripts/ui/dialog_bubble.tscn")
-	_bubble = bubble_scene.instantiate()
-	# W3d-Bugreport: Controls unter CanvasLayer erben das Window-Theme nicht.
-	_bubble.theme = ThemeService.theme()
-	_ui_layer.add_child(_bubble)
 	_build_mode = BuildMode.new()
 	_build_mode.name = "BuildMode"
 	add_child(_build_mode)

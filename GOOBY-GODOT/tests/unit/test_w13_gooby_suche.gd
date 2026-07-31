@@ -124,9 +124,14 @@ func test_wo_ist_gooby_bubble_und_rueckkehr() -> void:
 	await _cleanup(room, gs)
 
 
-## Die Raum-Bubble hängt am UI-Layer des Raums (RoomBase._build_ui).
-func _bubble_von(room: RoomBase) -> DialogBubble:
-	return room.ui_layer().get_node("DialogBubble") as DialogBubble
+## Die Raum-Bubble hängt am UI-Layer des Raums. W14/UIKERN: RoomBase.say
+## erzeugt pro Spruch eine AcBubble (Queue max. 2) — die NEUSTE zählt.
+func _bubble_von(room: RoomBase) -> AcBubble:
+	var letzte: AcBubble = null
+	for kind: Node in room.ui_layer().get_children():
+		if kind is AcBubble:
+			letzte = kind
+	return letzte
 
 
 func _fresh_gs() -> Node:
