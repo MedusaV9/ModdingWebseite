@@ -44,6 +44,8 @@ func _ready() -> void:
 	_baue_gooby()
 	_baue_kamera()
 	_baue_hud()
+	# W13/RANCH: Ranch-Random-Events (Muster home_entry → EventRunner).
+	RanchEventHost.attach_to(self)
 	ready_for_reveal.emit()
 	_zeige_toast.call_deferred(
 		I18nService.t("ranch.tor.gekauft" if _frisch_gekauft else "ranch.hof.willkommen")
@@ -72,6 +74,18 @@ func game_state() -> Object:
 func setze_gangart(gang: String) -> void:
 	for pferd in pferde:
 		pferd.set_gangart(gang)
+
+
+## Öffentliche Meldung (W13: RanchEventHost-Vertrag — Fail-Bubbles,
+## Event-Ansagen) über den vorhandenen Hof-Toast.
+func zeige_meldung(text: String) -> void:
+	_zeige_toast(text)
+
+
+## Ankerpunkt der Event-Requisiten (W13): frei einsehbarer Hof-Fleck
+## zwischen Heulager und Hauptweg.
+func event_anker() -> Vector3:
+	return Vector3(10.0, 0.0, 20.0)
 
 
 ## ---------------------------------------------------------------- Aufbau

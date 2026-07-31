@@ -22,6 +22,14 @@ const EVENT_IDS := [
 	"gewitter_angst",
 	"mehl_unfall",
 ]
+## W13/RANCH: Ranch-Events (context "ranch") — läuft NICHT im Haus-Runner,
+## sondern im RanchEventHost (scripts/ranch/events/, test_w13_ranch_events).
+const RANCH_EVENT_IDS := [
+	"ausgebuext",
+	"heudieb",
+	"hufschmied",
+	"karottenregen",
+]
 ## Album/HUD-Keys, die die Runner-Szenen wirklich referenzieren.
 const USED_KEYS := [
 	"events.marienkaefer.bubble",
@@ -84,6 +92,13 @@ const RUNNER_SETUPS := [
 	"karton_gooby",
 	"gewitter_angst",
 	"mehl_unfall",
+]
+## Szenen-Hooks des RanchEventHosts (W13, start()-match).
+const RANCH_SETUPS := [
+	"ranch_ausgebuext",
+	"ranch_heudieb",
+	"ranch_hufschmied",
+	"ranch_karottenregen",
 ]
 
 var _dir_seq := 0
@@ -180,16 +195,28 @@ func test_timeout_und_cooldown_deadlines() -> void:
 
 func test_events_json_defs_vollstaendig() -> void:
 	var defs := _defs()
-	assert_eq(defs.size(), EVENT_IDS.size(), "13 Event-Defs (M1-6 + Backlog F §4.2)")
+	assert_eq(
+		defs.size(),
+		EVENT_IDS.size() + RANCH_EVENT_IDS.size(),
+		"13 Haus- + 4 Ranch-Event-Defs (M1-6 + Backlog F §4.2 + W13)"
+	)
 	var seen := {}
 	for def: Dictionary in defs:
 		var id := str(def.get("id", ""))
 		seen[id] = true
-		assert_true(EVENT_IDS.has(id), "%s: bekannte Event-Id" % id)
+		var context := str(def.get("context", "home"))
+		assert_true(["home", "ranch"].has(context), "%s: context home/ranch" % id)
+		if context == "ranch":
+			assert_true(RANCH_EVENT_IDS.has(id), "%s: bekannte Ranch-Event-Id" % id)
+		else:
+			assert_true(EVENT_IDS.has(id), "%s: bekannte Event-Id" % id)
 		assert_false(str(def.get("notification_text_de", "")).is_empty(), id + ": notification")
 		assert_false(str(def.get("fail_text_de", "")).is_empty(), id + ": fail_text")
 		var setup := str(def.get("szene_setup", ""))
-		assert_true(RUNNER_SETUPS.has(setup), "%s: Runner kennt Szene '%s'" % [id, setup])
+		if context == "ranch":
+			assert_true(RANCH_SETUPS.has(setup), "%s: RanchHost kennt Szene '%s'" % [id, setup])
+		else:
+			assert_true(RUNNER_SETUPS.has(setup), "%s: Runner kennt Szene '%s'" % [id, setup])
 		_check_timeout(def)
 		var chance := float(def.get("wahrscheinlichkeit", 0.0))
 		assert_true(chance > 0.0 and chance <= 1.0, id + ": Wahrscheinlichkeit (0..1]")
@@ -204,7 +231,7 @@ func test_events_json_defs_vollstaendig() -> void:
 			assert_false(str(reward.get("buff_id", "")).is_empty(), id + ": reward.buff_id")
 			assert_false(str(reward.get("stat", "")).is_empty(), id + ": reward.stat")
 			assert_true(float(reward.get("dauer_h", 0)) > 0.0, id + ": reward.dauer_h")
-	assert_eq(seen.size(), EVENT_IDS.size(), "Ids eindeutig")
+	assert_eq(seen.size(), EVENT_IDS.size() + RANCH_EVENT_IDS.size(), "Ids eindeutig")
 
 
 ## timeout_min: Zahl 5..10 ODER Spanne [min,max] innerhalb 5..30 (Nutella

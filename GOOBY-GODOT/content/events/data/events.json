@@ -170,6 +170,64 @@
 			"szene_setup": "mehl_unfall",
 			"props": 5,
 			"sticker_hook": "mehl_unfall"
+		},
+		{
+			"id": "ausgebuext",
+			"context": "ranch",
+			"weight": 3,
+			"cooldown_days": 1,
+			"trigger_window": ["07:00", "20:00"],
+			"wahrscheinlichkeit": 0.35,
+			"notification_text_de": "Wiehern am Zaun — ein Pferd ist ausgebüxt!",
+			"timeout_min": 8,
+			"fail_text_de": "Gooby und die Pferde haben es alleine geregelt -_-",
+			"reward": null,
+			"ranch_reward": { "muenzen": 25, "bindung": 6 },
+			"szene_setup": "ranch_ausgebuext"
+		},
+		{
+			"id": "heudieb",
+			"context": "ranch",
+			"weight": 2,
+			"cooldown_days": 1,
+			"trigger_window": ["06:00", "19:00"],
+			"wahrscheinlichkeit": 0.3,
+			"notification_text_de": "Kraah! Freche Krähen klauen dein Heu!",
+			"timeout_min": 6,
+			"fail_text_de": "Gooby und die Pferde haben es alleine geregelt -_-",
+			"reward": null,
+			"ranch_reward": { "items": { "heu": 2 } },
+			"szene_setup": "ranch_heudieb",
+			"props": 3
+		},
+		{
+			"id": "hufschmied",
+			"context": "ranch",
+			"weight": 2,
+			"cooldown_days": 3,
+			"trigger_window": ["09:00", "17:00"],
+			"wahrscheinlichkeit": 0.25,
+			"notification_text_de": "Der wandernde Hufschmied macht kurz Halt!",
+			"timeout_min": 10,
+			"fail_text_de": "Gooby und die Pferde haben es alleine geregelt -_-",
+			"reward": null,
+			"ranch_reward": { "huf_check_h": 24 },
+			"szene_setup": "ranch_hufschmied"
+		},
+		{
+			"id": "karottenregen",
+			"context": "ranch",
+			"weight": 2,
+			"cooldown_days": 2,
+			"trigger_window": ["08:00", "21:00"],
+			"wahrscheinlichkeit": 0.25,
+			"notification_text_de": "GOOBY-Wetterbericht: Karottenregen über der Lavendelwiese!",
+			"timeout_min": 10,
+			"fail_text_de": "Gooby und die Pferde haben es alleine geregelt -_-",
+			"reward": null,
+			"ranch_reward": { "karotten_max": 10 },
+			"szene_setup": "ranch_karottenregen",
+			"props": 10
 		}
 	]
 }

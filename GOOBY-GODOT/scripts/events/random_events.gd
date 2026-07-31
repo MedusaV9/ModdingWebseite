@@ -4,7 +4,14 @@ extends RefCounted
 ## W2b-Pack `content/events` (Domain "events", append-by-id). Ein Event-Def:
 ##   {id, weight, cooldown_days, trigger_window:["HH:MM","HH:MM"],
 ##    wahrscheinlichkeit, notification_text_de, timeout_min, fail_text_de,
-##    reward:{buff_id,stat,wert,dauer_h}|null, szene_setup, props?}
+##    reward:{buff_id,stat,wert,dauer_h}|null, szene_setup, props?,
+##    context?}
+##
+## W13/RANCH (minimal-additiv): Defs tragen optional ein `context`-Feld
+## ("home" = Default). Roll/Pick nehmen einen context-Parameter entgegen
+## und würfeln NUR Defs des eigenen Orts — der Haus-Roll (home_entry)
+## bleibt unverändert bei "home", der RanchEventHost rollt mit "ranch".
+## Timeout/Fail/Resolve arbeiten weiter kontextfrei über ALLE Defs.
 ##
 ## Die Engine würfelt beim App-Start/Resume (`roll_on_start`), plant die
 ## lokale Notification über `NotifyStub` (Backend-Merge mit W3a — Handoff)
@@ -97,10 +104,13 @@ static func window_contains(window: Array, minutes_of_day: int) -> bool:
 	return minutes_of_day >= start or minutes_of_day <= end
 
 
-## Ist das Event gerade würfelbar? (Fenster + Cooldown + kein aktives Event.)
+## Ist das Event gerade würfelbar? (Ort + Fenster + Cooldown + kein
+## aktives Event.) `context` = Ort des Aufrufers (W13: "home"/"ranch").
 static func is_available(
-	def: Dictionary, slice: Dictionary, now_ms: int, minutes_of_day: int
+	def: Dictionary, slice: Dictionary, now_ms: int, minutes_of_day: int, context := "home"
 ) -> bool:
+	if str(def.get("context", "home")) != context:
+		return false
 	if not (slice.get("active", {}) as Dictionary).is_empty():
 		return false
 	if not window_contains(def.get("trigger_window", []), minutes_of_day):
@@ -118,12 +128,13 @@ static func pick_event(
 	now_ms: int,
 	minutes_of_day: int,
 	roll_pick: float,
-	roll_gate: float
+	roll_gate: float,
+	context := "home"
 ) -> Dictionary:
 	var available: Array = []
 	var total_weight := 0.0
 	for def: Variant in defs:
-		if def is Dictionary and is_available(def, slice, now_ms, minutes_of_day):
+		if def is Dictionary and is_available(def, slice, now_ms, minutes_of_day, context):
 			available.append(def)
 			total_weight += maxf(0.0, float(def.get("weight", 1)))
 	if available.is_empty() or total_weight <= 0.0:
@@ -170,9 +181,15 @@ static func cooldown_until(def: Dictionary, now_ms: int) -> int:
 
 ## App-Start/Resume: (1) abgelaufenes aktives Event → Fail-Bubble vormerken,
 ## (2) sonst ggf. neues Event würfeln + Notification planen. Gibt das neu
-## aktivierte Def zurück ({} wenn keins).
+## aktivierte Def zurück ({} wenn keins). `context` (W13) begrenzt den
+## Roll auf Defs des eigenen Orts; Timeout-Fail räumt kontextfrei auf.
 static func roll_on_start(
-	gs: Object, defs: Array, now_ms: int, minutes_of_day: int, rng: RandomNumberGenerator
+	gs: Object,
+	defs: Array,
+	now_ms: int,
+	minutes_of_day: int,
+	rng: RandomNumberGenerator,
+	context := "home"
 ) -> Dictionary:
 	var slice := _slice_of(gs)
 	var active: Dictionary = slice.get("active", {})
@@ -180,7 +197,7 @@ static func roll_on_start(
 		if is_timed_out(active, now_ms):
 			fail_active(gs, defs, now_ms)
 		return {}
-	var chosen := pick_event(defs, slice, now_ms, minutes_of_day, rng.randf(), rng.randf())
+	var chosen := pick_event(defs, slice, now_ms, minutes_of_day, rng.randf(), rng.randf(), context)
 	if chosen.is_empty():
 		return {}
 	activate(gs, chosen, now_ms, rng.randf())
