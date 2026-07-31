@@ -21,7 +21,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from fxlib import (  # noqa: E402
     FX_ASSETS_DIR, REPO_ROOT, B, F, I, L, FxBuilder, BLEND_ADDITIVE, BLEND_ALPHA,
     SEG_DECAY_TAIL, aabb, burst, color, constant, curve, dot, gradient, nf3,
-    random_between, rom, sphere, cylinder, texture_material, validate_file,
+    random_between, random_gradient, rom, sphere, cylinder, texture_material,
+    validate_file,
 )
 
 CIRCLE = "photon:textures/particle/circle.png"
@@ -30,6 +31,38 @@ RING = "photon:textures/particle/ring.png"
 
 # Ease-out expansion (fast growth, soft settle) for shock rings — x lifetime, y 0..1.
 SEG_EASE_OUT = (0.0, 0.0, 0.15, 0.75, 0.5, 1.0, 1.0, 1.0)
+
+# ---------------------------------------------------------------------------
+# WAVE-13 C4 levers (local — `fxlib.py` is A0 ground this wave).
+#
+# UNITS (the pass's headline finding, same slip B6 found in `ceremony_fx.py`):
+# Photon reads `startSpeed`/`velocityOverLifetime.linear` in blocks per SECOND
+# (`×0.05`/tick) and `radial` in `×0.01`/tick. Every distance promised by a
+# docstring in this file was 20-100x short — see the per-emitter notes below.
+# ---------------------------------------------------------------------------
+#: Stacking-law HDR ceiling (FX_CENSUS_WAVE13 §8.4 / §2 "HDR ~1.45").
+HDR_CEILING = 1.45
+
+
+def hdr(r, g, b):
+    """Clamps an HDR triple to `HDR_CEILING`, keeping the channel ratio (= the hue)."""
+    peak = max(r, g, b)
+    if peak <= HDR_CEILING:
+        return (r, g, b)
+    k = HDR_CEILING / peak
+    return (round(r * k, 3), round(g * k, 3), round(b * k, 3))
+
+
+def varied(alpha_pts, rgb_pts, rgb_alt, alpha_alt=None):
+    """`random_gradient` — the authored ramp plus a sibling inside the same palette."""
+    return random_gradient(alpha_pts, rgb_pts, alpha_alt or alpha_pts, rgb_alt)
+
+
+#: Birth tints (V2.1 stacking law): below each ramp's own fade target, so the wisp
+#: and mote clouds open as a bruise instead of summing to a pale core.
+SOUL_BIRTH = (0.16, 0.07, 0.22)
+GHOST_BIRTH = (0.10, 0.18, 0.14)
+GLIDE_BIRTH = (0.13, 0.16, 0.22)
 
 
 def _ara_trails_module(thickness, time_s, color_over_length, material_entry,
@@ -80,15 +113,19 @@ def build_theft_soul_rise() -> FxBuilder:
             simulation_space="World", max_particles=4)
        .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(1))])
        .with_shape(dot())
-       .with_material(texture_material(CIRCLE, hdr=(1.6, 0.6, 1.8), blend=BLEND_ADDITIVE))
+       .with_material(texture_material(CIRCLE, hdr=hdr(1.6, 0.6, 1.8),
+                                       blend=BLEND_ADDITIVE))
        .with_lights()
+       # UNITS: the docstring promises "rises 1.2 blocks off the corpse"; 0.06 b/s over
+       # 20t is 6 CENTIMETRES, so the soul never left the body and the launch leg fired
+       # from the floor. 1.2 / (0.05 x 20) = 1.2 b/s.
        .with_curves(
-            velocity_over_lifetime=dict(linear=nf3(constant(0), constant(0.06), constant(0))),
+            velocity_over_lifetime=dict(linear=nf3(constant(0), constant(1.2), constant(0))),
             color_over_lifetime=gradient([(0.0, 0.0), (0.15, 1.0), (0.85, 1.0), (1.0, 0.0)],
                                          [(0.0, 1.0, 1.0, 1.0), (1.0, 0.85, 0.55, 1.0)]))
        .with_module("trails", _ara_trails_module(
             0.12, 0.9, VIOLET_FADE,
-            texture_material(CIRCLE, hdr=(1.2, 0.5, 1.5), blend=BLEND_ADDITIVE),
+            texture_material(CIRCLE, hdr=hdr(1.2, 0.5, 1.5), blend=BLEND_ADDITIVE),
             inertia=0.25, damping=0.8)))
     (fx.particle_emitter(
             "in_wisps", duration=22, looping=False,
@@ -98,13 +135,19 @@ def build_theft_soul_rise() -> FxBuilder:
             start_color=color(0xFFB05CE6), simulation_space="World", max_particles=24)
        .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(12))])
        .with_shape(sphere(radius=0.55, thickness=0.0))
-       .with_material(texture_material(CIRCLE, hdr=(1.1, 0.45, 1.3), blend=BLEND_ADDITIVE))
+       .with_material(texture_material(CIRCLE, hdr=hdr(1.1, 0.45, 1.3),
+                                       blend=BLEND_ADDITIVE))
        .with_lights()
+       # UNITS: `radial` is x0.01/tick, so -0.06 pulled the wisps 9 MILLIMETRES of the
+       # 0.55-block shell they are born on — they never reached the soul mote.
+       # 0.55 / (0.01 x 15) ~= 3.7. `orbital` was already rad/s and is left alone.
        .with_curves(
             velocity_over_lifetime=dict(orbital=nf3(constant(0), constant(0.45), constant(0)),
-                                        radial=constant(-0.06)),
-            color_over_lifetime=gradient([(0.0, 0.9), (1.0, 0.0)],
-                                         [(0.0, 0.8, 0.5, 1.0), (1.0, 0.45, 0.15, 0.7)])))
+                                        radial=constant(-3.7)),
+            color_over_lifetime=varied(
+                [(0.0, 0.9), (1.0, 0.0)],
+                [(0.0,) + SOUL_BIRTH, (0.3, 0.8, 0.5, 1.0), (1.0, 0.45, 0.15, 0.7)],
+                [(0.0,) + SOUL_BIRTH, (0.4, 0.62, 0.32, 0.85), (1.0, 0.45, 0.15, 0.7)])))
     return fx
 
 
@@ -114,15 +157,19 @@ def build_theft_soul_launch() -> FxBuilder:
     fx = FxBuilder("theft_soul_launch")
     (fx.particle_emitter(
             "soul_comet", duration=14, looping=False,
-            start_lifetime=constant(10), start_speed=constant(1.5),
+            start_lifetime=constant(10), start_speed=constant(30.0),
             start_size=nf3(0.26), start_color=color(0xFFD9A8FF),
             simulation_space="World", max_particles=4)
        .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(1))])
        .with_shape({"type": "function", "data": {
             "x": "0", "y": "0", "z": "0",
             "speedX": "0", "speedY": "0.08", "speedZ": "1"}})
-       .with_material(texture_material(CIRCLE, hdr=(1.8, 0.8, 2.0), blend=BLEND_ADDITIVE))
+       .with_material(texture_material(CIRCLE, hdr=hdr(1.8, 0.8, 2.0),
+                                       blend=BLEND_ADDITIVE))
        .with_lights()
+       # UNITS: the docstring says "departs at ~1.5 blocks/tick" — that IS 30 b/s.
+       # Read as 1.5 b/s the comet covered 75 cm in its 10t flight, so the soul
+       # "arriving at the killer" landed on the corpse's own feet. 30 b/s = 15 blocks.
        .with_curves(
             force_over_lifetime=dict(force=nf3(constant(0), constant(-0.02), constant(0)),
                                      simulation_space="World"),
@@ -130,7 +177,7 @@ def build_theft_soul_launch() -> FxBuilder:
                                          [(0.0, 1.0, 1.0, 1.0), (1.0, 0.8, 0.5, 1.0)]))
        .with_module("trails", _ara_trails_module(
             0.25, 0.6, VIOLET_FADE,
-            texture_material(CIRCLE, hdr=(1.4, 0.6, 1.7), blend=BLEND_ADDITIVE),
+            texture_material(CIRCLE, hdr=hdr(1.4, 0.6, 1.7), blend=BLEND_ADDITIVE),
             inertia=0.2, damping=0.75, sorting="NewerOnTop")))
     return fx
 
@@ -147,12 +194,17 @@ def build_theft_soul_arrive() -> FxBuilder:
             start_color=color(0xFFB980F5), simulation_space="Local", max_particles=24)
        .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(16))])
        .with_shape(sphere(radius=1.1, thickness=0.0))
-       .with_material(texture_material(CIRCLE, hdr=(1.2, 0.5, 1.4), blend=BLEND_ADDITIVE))
+       .with_material(texture_material(CIRCLE, hdr=hdr(1.2, 0.5, 1.4),
+                                       blend=BLEND_ADDITIVE))
        .with_lights()
+       # UNITS: the "3t in-suck" has to cross a 1.1-block shell; `radial` x0.01/tick
+       # made -0.28 into 1.8 cm. 1.1 / (0.01 x 6) ~= 18.
        .with_curves(
-            velocity_over_lifetime=dict(radial=constant(-0.28)),
-            color_over_lifetime=gradient([(0.0, 0.9), (1.0, 0.0)],
-                                         [(0.0, 0.85, 0.55, 1.0), (1.0, 0.5, 0.2, 0.8)])))
+            velocity_over_lifetime=dict(radial=constant(-18.0)),
+            color_over_lifetime=varied(
+                [(0.0, 0.9), (1.0, 0.0)],
+                [(0.0,) + SOUL_BIRTH, (0.25, 0.85, 0.55, 1.0), (1.0, 0.5, 0.2, 0.8)],
+                [(0.0,) + SOUL_BIRTH, (0.35, 0.7, 0.4, 0.95), (1.0, 0.5, 0.2, 0.8)])))
     (fx.particle_emitter(
             "heart_bloom", duration=30, looping=False,
             start_lifetime=constant(12), start_speed=constant(0),
@@ -160,7 +212,8 @@ def build_theft_soul_arrive() -> FxBuilder:
             simulation_space="Local", max_particles=4)
        .with_emission(rate=constant(0.0), bursts=[burst(time=4, count=constant(1))])
        .with_shape(dot())
-       .with_material(texture_material(CIRCLE, hdr=(1.8, 0.5, 1.5), blend=BLEND_ADDITIVE))
+       .with_material(texture_material(CIRCLE, hdr=hdr(1.8, 0.5, 1.5),
+                                       blend=BLEND_ADDITIVE))
        .with_lights()
        .with_curves(
             size_over_lifetime=nf3(*[curve(0.0, 1.0, [(0.0, 0.2, 0.08, 1.0, 0.85, 0.35, 1.0, 0.0)],
@@ -174,7 +227,8 @@ def build_theft_soul_arrive() -> FxBuilder:
             simulation_space="Local", max_particles=4)
        .with_emission(rate=constant(0.0), bursts=[burst(time=4, count=constant(1))])
        .with_shape(dot())
-       .with_material(texture_material(RING, hdr=(1.1, 0.5, 1.3), blend=BLEND_ADDITIVE))
+       .with_material(texture_material(RING, hdr=hdr(1.1, 0.5, 1.3),
+                                       blend=BLEND_ADDITIVE))
        .with_curves(
             size_over_lifetime=nf3(*[curve(0.4, 1.9, [SEG_EASE_OUT], "lifetime", "size")] * 3),
             color_over_lifetime=gradient([(0.0, 0.8), (1.0, 0.0)], [(0.0, 1.0, 1.0, 1.0)])))
@@ -204,16 +258,20 @@ def build_rebirth_aura(tier: int) -> FxBuilder:
            .with_shape(dot(), position=nf3(constant(radius * math.cos(angle)), constant(0.0),
                                            constant(radius * math.sin(angle))))
            .with_material(texture_material(
-                CIRCLE, hdr=(1.2, 1.0, 0.5) if gold else (1.2, 0.6, 1.6),
+                CIRCLE, hdr=hdr(*((1.2, 1.0, 0.5) if gold else (1.2, 0.6, 1.6))),
                 blend=BLEND_ADDITIVE))
            .with_cull_box((-2.0, -0.5, -2.0), (2.0, 2.5, 2.0))
            .with_lights()
+           # `orbital` is rad/SECOND: 0.35 rad/s = one lap per ~18 s, which is the
+           # authored "slow prestige orbit" — correct as written, left alone.
            .with_curves(
                 velocity_over_lifetime=dict(orbital=nf3(constant(0), constant(0.35), constant(0))))
            .with_module("trails", _ara_trails_module(
                 0.06, 1.2, GOLD_FADE if gold else VIOLET_FADE,
-                texture_material(CIRCLE, hdr=(1.1, 0.9, 0.45) if gold else (1.0, 0.5, 1.3),
-                                 blend=BLEND_ADDITIVE),
+                texture_material(
+                    CIRCLE,
+                    hdr=hdr(*((1.1, 0.9, 0.45) if gold else (1.0, 0.5, 1.3))),
+                    blend=BLEND_ADDITIVE),
                 inertia=0.35, damping=0.7)))
     (fx.particle_emitter(
             "rising_motes", duration=60, looping=True, prewarm=10,
@@ -226,10 +284,17 @@ def build_rebirth_aura(tier: int) -> FxBuilder:
        .with_material(texture_material(SMOKE, blend=BLEND_ALPHA))
        .with_renderer(vertex_sorting="DISTANCE")
        .with_cull_box((-2.0, -0.5, -2.0), (2.0, 2.5, 2.0))
+       # UNITS: the aura's rising motes covered 3.5 CENTIMETRES over a 25-35t life —
+       # a prestige aura whose motes do not visibly rise. 0.8 b/s lifts them ~1.0-1.4
+       # blocks, i.e. from the feet anchor to about chest height, inside the cull box.
+       # (This is the `rebirth_aura_*` emitter B6 flagged and deliberately left alone
+       # because the generator was unassigned — C4 owns it now, so it is fixed here.)
        .with_curves(
-            velocity_over_lifetime=dict(linear=nf3(constant(0), constant(0.02), constant(0))),
-            color_over_lifetime=gradient([(0.0, 0.0), (0.25, 0.55), (1.0, 0.0)],
-                                         [(0.0, 0.62, 0.32, 0.85)])))
+            velocity_over_lifetime=dict(linear=nf3(constant(0), constant(0.8), constant(0))),
+            color_over_lifetime=varied(
+                [(0.0, 0.0), (0.25, 0.55), (1.0, 0.0)],
+                [(0.0,) + SOUL_BIRTH, (0.35, 0.62, 0.32, 0.85), (1.0,) + SOUL_BIRTH],
+                [(0.0,) + SOUL_BIRTH, (0.45, 0.48, 0.24, 0.7), (1.0,) + SOUL_BIRTH])))
     return fx
 
 
@@ -251,12 +316,17 @@ def build_ghost_wisp() -> FxBuilder:
        .with_material(texture_material(SMOKE, blend=BLEND_ALPHA))
        .with_renderer(vertex_sorting="DISTANCE")
        .with_cull_box((-2.0, -1.0, -2.0), (2.0, 2.5, 2.0))
+       # UNITS: 0.015 b/s drifted the ectoplasm 3.4 cm over a 30-45t life, so the
+       # "wisps drifting off a ghost" hung in place. 0.55 b/s lifts them ~0.8-1.2
+       # blocks — a drift, still well inside the 2.5-block loop cull box.
        .with_curves(
-            velocity_over_lifetime=dict(linear=nf3(constant(0), constant(0.015), constant(0))),
+            velocity_over_lifetime=dict(linear=nf3(constant(0), constant(0.55), constant(0))),
             noise=dict(frequency=0.6, quality="Noise2D", position=nf3(0.08),
                        rotation=constant(0), size=constant(0)),
-            color_over_lifetime=gradient([(0.0, 0.0), (0.25, 0.6), (0.8, 0.45), (1.0, 0.0)],
-                                         [(0.0, 0.62, 0.95, 0.7), (1.0, 0.45, 0.9, 0.95)]))
+            color_over_lifetime=varied(
+                [(0.0, 0.0), (0.25, 0.6), (0.8, 0.45), (1.0, 0.0)],
+                [(0.0,) + GHOST_BIRTH, (0.3, 0.62, 0.95, 0.7), (1.0, 0.45, 0.9, 0.95)],
+                [(0.0,) + GHOST_BIRTH, (0.4, 0.45, 0.9, 0.95), (1.0, 0.3, 0.62, 0.7)]))
        # Spec'd optional garnish (IDEAS-player #9 / QUALITY §2 row 4): hairline TRAIL
        # ribbons on 20 % of wisps — drifting streaks of ectoplasm, not every mote.
        .with_module("trails", {
@@ -272,7 +342,7 @@ def build_ghost_wisp() -> FxBuilder:
                 "colorOverTrail": gradient([(0.0, 0.4), (1.0, 0.0)],
                                            [(0.0, 0.62, 0.95, 0.8)]),
                 "renderer": {
-                    "materials": rom([texture_material(CIRCLE, hdr=(0.5, 1.0, 0.8),
+                    "materials": rom([texture_material(CIRCLE, hdr=hdr(0.5, 1.0, 0.8),
                                                        blend=BLEND_ADDITIVE)]),
                     "layer": "Translucent",
                     "cull": {"_enable": B(1),
@@ -285,7 +355,8 @@ def build_ghost_wisp() -> FxBuilder:
             simulation_space="Local", max_particles=4)
        .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(1))])
        .with_shape(dot())
-       .with_material(texture_material(CIRCLE, hdr=(0.5, 1.0, 0.8), blend=BLEND_ADDITIVE))
+       .with_material(texture_material(CIRCLE, hdr=hdr(0.5, 1.0, 0.8),
+                                       blend=BLEND_ADDITIVE))
        # Golden rule (FX_FORMAT §10 / LINT-CULL-LOOP): the loop's one chest mote sits at
        # the local origin — a small box fully contains it (PHOTON-QUALITY §2 row 4 fix).
        .with_cull_box((-1.0, -1.0, -1.0), (1.0, 1.0, 1.0))
@@ -312,7 +383,8 @@ def build_contract_mark() -> FxBuilder:
        .with_emission(rate=constant(0.0),
                       bursts=[burst(time=0, count=constant(1)), burst(time=6, count=constant(1))])
        .with_shape(dot())
-       .with_material(texture_material(RING, hdr=(1.4, 0.6, 0.2), blend=BLEND_ADDITIVE))
+       .with_material(texture_material(RING, hdr=hdr(1.4, 0.6, 0.2),
+                                       blend=BLEND_ADDITIVE))
        .with_renderer(render_mode="Horizontal")
        .with_cull_box((-2.5, -0.5, -2.5), (2.5, 3.0, 2.5))
        .with_lights()
@@ -330,7 +402,8 @@ def build_contract_mark() -> FxBuilder:
             "shapeArc": {"arcMode": "BurstSpread", "arcSpread": F(0.0),
                          "arcSpeed": constant(1.0)}}},
                    position=nf3(constant(0.0), constant(2.2), constant(0.0)))
-       .with_material(texture_material(CIRCLE, hdr=(1.2, 0.5, 0.2), blend=BLEND_ADDITIVE))
+       .with_material(texture_material(CIRCLE, hdr=hdr(1.2, 0.5, 0.2),
+                                       blend=BLEND_ADDITIVE))
        .with_cull_box((-2.5, -0.5, -2.5), (2.5, 3.0, 2.5))
        .with_lights()
        .with_curves(
@@ -363,7 +436,8 @@ def build_glide_trail() -> FxBuilder:
                 color_over_length=GLIDE_FADE,
                 physics=dict(inertia=0.3, velocity_smoothing=0.8, damping=0.7))
            .child_of(wing)
-           .with_material(texture_material(CIRCLE, hdr=(0.9, 1.0, 1.3), blend=BLEND_ADDITIVE))
+           .with_material(texture_material(CIRCLE, hdr=hdr(0.9, 1.0, 1.3),
+                                           blend=BLEND_ADDITIVE))
            .with_cull_box((-4.0, -4.0, -4.0), (4.0, 4.0, 4.0)))
     (fx.particle_emitter(
             "sparkles", duration=60, looping=True,
@@ -373,12 +447,18 @@ def build_glide_trail() -> FxBuilder:
             start_color=color(0xFFDCEBFF), simulation_space="World", max_particles=16)
        .with_emission(rate=constant(0.2), bursts=[])
        .with_shape(sphere(radius=0.4, thickness=1.0))
-       .with_material(texture_material(CIRCLE, hdr=(1.0, 1.1, 1.4), blend=BLEND_ADDITIVE))
+       .with_material(texture_material(CIRCLE, hdr=hdr(1.0, 1.1, 1.4),
+                                       blend=BLEND_ADDITIVE))
        .with_cull_box((-4.0, -4.0, -4.0), (4.0, 4.0, 4.0))
        .with_lights()
+       # UNITS EXCEPTION: `startSpeed` is 0 on purpose — these are World-space sparkles
+       # shed BEHIND a moving glider, so the player's own velocity is the motion.
+       # W13: the alt ramp keeps the wake from reading as one repeated sprite.
        .with_curves(
-            color_over_lifetime=gradient([(0.0, 0.9), (1.0, 0.0)],
-                                         [(0.0, 1.0, 1.0, 1.0), (1.0, 0.6, 0.75, 1.0)])))
+            color_over_lifetime=varied(
+                [(0.0, 0.9), (1.0, 0.0)],
+                [(0.0, 1.0, 1.0, 1.0), (1.0, 0.6, 0.75, 1.0)],
+                [(0.0, 0.85, 0.93, 1.0), (0.5, 0.6, 0.75, 1.0), (1.0,) + GLIDE_BIRTH])))
     return fx
 
 

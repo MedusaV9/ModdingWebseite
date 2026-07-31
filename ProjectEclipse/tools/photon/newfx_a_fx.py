@@ -39,6 +39,25 @@ Style-guide conformance (FX-STYLE-GUIDE.md):
   - Budget: every asset stays under ~40 live particles (worst A1+A2 stack ~60 << the
     §6.6 frame budget); every emitter ships a cull box; one dynamic-light-ish `lights`
     module only on impact-frame emitters.
+
+FX-WAVE-13 C4 PASS — what changed and WHY (census §7 line C4):
+
+  1. UNITS. Photon reads `startSpeed`/`velocityOverLifetime.linear` in blocks per
+     SECOND (`×0.05`/tick) and `radial` in `×0.01`/tick. Where a comment promised a
+     distance, it was 20-100x short: the A2 halo "rises boot->crown" moved 14 cm of
+     the 1.7-block body it is drawn around, the A1 pillar's base glints breathed 5 cm
+     out of the ground, the A4 compass needles "shoot out and stall" 21 cm across a
+     2.1-block rose, and the A5 shards spiralled 19 cm of a 1.5-block indraw.
+     NOTE the deliberate exceptions: `glyph_shards`, `gold_rain` and `catalyst_drop`
+     are physics/cull-box bound (they already fill their boxes) and keep their values
+     — the ×20 law is applied where the DISTANCE is wrong, not mechanically.
+  2. `random_gradient` (via `varied()`) on every emitter with >= 3 particles.
+  3. Dark birth tints (V2.1 stacking law) on the additive stacks.
+  4. HDR clamped to the wave-13 ceiling 1.45 (hue ratio preserved).
+  5. Timing snap on the impact frames (`SEG_SNAP_FLASH`).
+  6. `main()` now also writes the `.fxproj` sibling — it did not, and the sibling
+     embeds the SAME transform UUIDs as the `.fx`, so every regen silently desynced
+     the editor project from the asset (census §8.1 "write_fxproj").
 """
 from __future__ import annotations
 
@@ -49,7 +68,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from fxlib import (  # noqa: E402
     B, BLEND_ADDITIVE, BLEND_ALPHA, F, FX_ASSETS_DIR, FxBuilder, I, L, REPO_ROOT,
     aabb, burst, circle, cone, constant, curve, gradient, nf3, random_between,
-    rom, sphere, texture_material, validate_file,
+    random_gradient, rom, sphere, texture_material, validate_file,
 )
 
 # Photon's shipped particle set + the eclipse-owned soft sprites (all already in-repo).
@@ -91,6 +110,36 @@ SEG_SHRINK = (0.0, 1.0, 0.4, 0.9, 0.8, 0.3, 1.0, 0.0)
 SEG_SWELL = (0.0, 0.0, 0.35, 1.05, 0.65, 1.05, 1.0, 0.0)
 # Smoothstep 0 -> 1 (eased ramps, e.g. the A2 halo rise picking up speed).
 SEG_EASE_UP = (0.0, 0.0, 0.45, 0.0, 0.55, 1.0, 1.0, 1.0)
+# WAVE-13 impact envelope: ~2t attack, long afterglow tail (replaces SEG_FLASH's 8t).
+SEG_SNAP_FLASH = (0.0, 0.22, 0.045, 1.0, 0.4, 0.52, 1.0, 0.0)
+
+# ---------------------------------------------------------------------------
+# WAVE-13 C4 levers (local — `fxlib.py` is A0 ground this wave, so the helper pair
+# is copied from the B6 `ceremony_fx.py` idiom rather than shared).
+# ---------------------------------------------------------------------------
+#: Stacking-law HDR ceiling (FX_CENSUS_WAVE13 §8.4 / §2 "HDR ~1.45").
+HDR_CEILING = 1.45
+
+
+def hdr(r, g, b):
+    """Clamps an HDR triple to `HDR_CEILING`, keeping the channel ratio (= the hue)."""
+    peak = max(r, g, b)
+    if peak <= HDR_CEILING:
+        return (r, g, b)
+    k = HDR_CEILING / peak
+    return (round(r * k, 3), round(g * k, 3), round(b * k, 3))
+
+
+def varied(alpha_pts, rgb_pts, rgb_alt, alpha_alt=None):
+    """`random_gradient` — the authored ramp plus a sibling inside the same palette."""
+    return random_gradient(alpha_pts, rgb_pts, alpha_alt or alpha_pts, rgb_alt)
+
+
+#: Birth tints (V2.1 stacking law): below every ramp's own fade target, so additive
+#: sprites born inside one another open as a bruise instead of a white ball.
+SAC_BIRTH = (0.13, 0.10, 0.21)
+GOLD_BIRTH = (0.20, 0.15, 0.07)
+STM_BIRTH = (0.11, 0.13, 0.19)
 
 
 def sz(lo, hi, seg, x_axis="lifetime"):
@@ -128,13 +177,15 @@ def build_quest_sigil_burst() -> FxBuilder:
             simulation_space="World", max_particles=16)
        .with_emission(rate=constant(1.7))
        .with_shape(circle(radius=0.55, thickness=0.05, arc_mode="Loop", arc_speed=1.0))
-       .with_material(texture_material(TEX_CIRCLE, hdr=(0.7, 0.6, 1.0),
+       .with_material(texture_material(TEX_CIRCLE, hdr=hdr(0.7, 0.6, 1.0),
                                        blend=BLEND_ADDITIVE))
        .with_cull_box(*box)
        .with_curves(
-            color_over_lifetime=gradient(
+            color_over_lifetime=varied(
                 [(0.0, 0.0), (0.25, 0.9), (0.7, 0.75), (1.0, 0.0)],
-                [(0.0,) + SAC_DEEP, (0.55,) + SAC_VIOLET, (1.0,) + SAC_VOID]),
+                [(0.0,) + SAC_BIRTH, (0.3,) + SAC_DEEP, (0.65,) + SAC_VIOLET,
+                 (1.0,) + SAC_VOID],
+                [(0.0,) + SAC_BIRTH, (0.35,) + SAC_VIOLET, (1.0,) + SAC_VOID]),
             size_over_lifetime=sz(0.55, 1.0, SEG_BLOOM)))
     # IMPACT 8->11: the snap-open money frames — hot flash + one expanding ring quad.
     (fx.particle_emitter(
@@ -143,11 +194,11 @@ def build_quest_sigil_burst() -> FxBuilder:
             start_lifetime=constant(4), start_speed=constant(0.0),
             start_size=nf3(0.5), simulation_space="World", max_particles=2)
        .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(1))])
-       .with_material(texture_material(TEX_CIRCLE, hdr=(1.8, 1.6, 1.9),
+       .with_material(texture_material(TEX_CIRCLE, hdr=hdr(1.8, 1.6, 1.9),
                                        blend=BLEND_ADDITIVE))
        .with_cull_box(*box)
        .with_curves(
-            size_over_lifetime=sz(0.35, 1.8, SEG_FLASH),
+            size_over_lifetime=sz(0.35, 1.8, SEG_SNAP_FLASH),
             color_over_lifetime=gradient(
                 [(0.0, 1.0), (0.6, 0.7), (1.0, 0.0)],
                 [(0.0,) + SAC_HOT, (0.55,) + SAC_GOLD, (1.0,) + SAC_VIOLET]))
@@ -158,7 +209,7 @@ def build_quest_sigil_burst() -> FxBuilder:
             start_lifetime=constant(7), start_speed=constant(0.0),
             start_size=nf3(0.6), simulation_space="World", max_particles=2)
        .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(1))])
-       .with_material(texture_material(TEX_RING_SOFT, hdr=(1.0, 0.9, 1.3),
+       .with_material(texture_material(TEX_RING_SOFT, hdr=hdr(1.0, 0.9, 1.3),
                                        blend=BLEND_ADDITIVE))
        .with_renderer(render_mode="Horizontal")
        .with_cull_box(*box)
@@ -168,12 +219,17 @@ def build_quest_sigil_burst() -> FxBuilder:
                 [(0.0, 0.85), (1.0, 0.0)],
                 [(0.0,) + SAC_VIOLET, (0.6,) + SAC_DEEP, (1.0,) + SAC_VOID])))
     # SETTLE 8->~32: the ring shatters UPWARD into glyph shards (gold <= 35%: 6/19).
-    for name, count, cols, hdr in (
+    # UNITS EXCEPTION: 0.45-0.75 b/s carries these 0.45-1.05 blocks, which already
+    # fills the +-1.6 cull box under gravity 0.3 — a x20 here would fling every shard
+    # straight out of its own box and cull it. Left as authored, variety added.
+    for name, count, cols, cols_alt, boost in (
             ("glyph_shards", 13,
              [(0.0,) + SAC_HOT, (0.3,) + SAC_VIOLET, (0.7,) + SAC_DEEP, (1.0,) + SAC_VOID],
+             [(0.0,) + SAC_VIOLET, (0.45,) + SAC_DEEP, (1.0,) + SAC_VOID],
              (0.9, 0.8, 1.2)),
             ("glyph_shards_gold", 6,
              [(0.0,) + SAC_GOLD, (0.55,) + SAC_GOLD_PALE, (1.0,) + SAC_VOID],
+             [(0.0,) + SAC_GOLD_PALE, (0.5,) + SAC_GOLD, (1.0,) + SAC_VOID],
              (1.2, 1.0, 0.6))):
         (fx.particle_emitter(
                 name,
@@ -185,12 +241,13 @@ def build_quest_sigil_burst() -> FxBuilder:
                 simulation_space="World", max_particles=count + 3)
            .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(count))])
            .with_shape(cone(angle=16.0, radius=0.28, thickness=0.4))
-           .with_material(texture_material(TEX_SHARD, hdr=hdr, blend=BLEND_ADDITIVE))
+           .with_material(texture_material(TEX_SHARD, hdr=hdr(*boost),
+                                           blend=BLEND_ADDITIVE))
            .with_cull_box(*box)
            .with_physics(collision=False, gravity=0.3)
            .with_curves(
-                color_over_lifetime=gradient(
-                    [(0.0, 1.0), (0.6, 0.8), (1.0, 0.0)], cols),
+                color_over_lifetime=varied(
+                    [(0.0, 1.0), (0.6, 0.8), (1.0, 0.0)], cols, cols_alt),
                 rotation_over_lifetime=random_between(-140.0, 140.0),
                 size_over_lifetime=sz(0.4, 1.0, SEG_SHRINK)))
     return fx
@@ -211,26 +268,29 @@ def build_quest_sigil_pillar() -> FxBuilder:
             color_nf=gradient(
                 [(0.0, 0.95), (0.6, 0.7), (1.0, 0.0)],
                 [(0.0,) + GLI_WHITE, (0.45,) + SAC_HOT, (1.0,) + SAC_GOLD_PALE]))
-       .with_material(texture_material(TEX_BEAM_CORE, hdr=(1.8, 1.7, 2.1),
+       .with_material(texture_material(TEX_BEAM_CORE, hdr=hdr(1.8, 1.7, 2.1),
                                        blend=BLEND_ADDITIVE))
        .with_cull_box((-1.2, -0.4, -1.2), (1.2, 2.6, 1.2))
        .with_lights(sky=15, block=15))
     # Base glints: five motes breathe up out of the ground for the beat.
+    # UNITS: 0.06 b/t = 1.2 b/s. Authored per tick they rose 5 CENTIMETRES next to a
+    # 2.1-block pillar; 0.8-1.6 b/s lifts them 0.32-0.96 blocks inside the same box.
     (fx.particle_emitter(
             "base_glints",
             duration=6, looping=False, start_delay=constant(8),
-            start_lifetime=random_between(8, 12), start_speed=random_between(0.04, 0.08),
+            start_lifetime=random_between(8, 12), start_speed=random_between(0.8, 1.6),
             start_size=nf3(random_between(0.07, 0.11)),
             simulation_space="World", max_particles=7)
        .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(5))])
        .with_shape(circle(radius=0.4, thickness=0.3))
-       .with_material(texture_material(TEX_CIRCLE, hdr=(1.0, 0.9, 0.7),
+       .with_material(texture_material(TEX_CIRCLE, hdr=hdr(1.0, 0.9, 0.7),
                                        blend=BLEND_ADDITIVE))
        .with_cull_box((-1.2, -0.4, -1.2), (1.2, 2.6, 1.2))
        .with_curves(
-            color_over_lifetime=gradient(
+            color_over_lifetime=varied(
                 [(0.0, 0.9), (1.0, 0.0)],
-                [(0.0,) + SAC_GOLD_PALE, (0.6,) + SAC_VIOLET, (1.0,) + SAC_VOID]),
+                [(0.0,) + SAC_GOLD_PALE, (0.6,) + SAC_VIOLET, (1.0,) + SAC_VOID],
+                [(0.0,) + SAC_GOLD, (0.5,) + SAC_DEEP, (1.0,) + SAC_VOID]),
             size_over_lifetime=sz(0.5, 1.0, SEG_SHRINK)))
     return fx
 
@@ -247,27 +307,35 @@ def build_collection_tier_halo() -> FxBuilder:
     (fx.particle_emitter(
             "halo_rise",
             duration=4, looping=False,
-            start_lifetime=random_between(11, 13), start_speed=constant(0.02),
+            start_lifetime=random_between(11, 13), start_speed=constant(0.4),
             start_size=nf3(random_between(0.06, 0.11)),
             simulation_space="World", max_particles=18)
        .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(16))])
        .with_shape(circle(radius=0.72, thickness=0.1))
-       .with_material(texture_material(TEX_CIRCLE, hdr=(0.9, 0.8, 1.1),
+       .with_material(texture_material(TEX_CIRCLE, hdr=hdr(0.9, 0.8, 1.1),
                                        blend=BLEND_ADDITIVE))
        .with_cull_box(*box)
+       # UNITS: THE headline bug of this asset. The halo is supposed to travel the
+       # player's full height (boot -> crown, ~1.7 blocks) inside its 11-13t life;
+       # authored per tick it climbed 14 cm and the "rise" simply did not read.
+       # 1.7 / (0.05 x 12) = 2.8 b/s at the top of the ease. `radial` is x0.01/tick,
+       # so the 0.72-block ring only tightens if the rate is -2.5, not -0.025.
+       # `orbital` was already rad/s and is left alone.
        .with_curves(
             velocity_over_lifetime=dict(
                 linear=nf3(constant(0),
-                           curve(0.06, 0.22, [SEG_EASE_UP], "lifetime", "velocity"),
+                           curve(1.2, 4.4, [SEG_EASE_UP], "lifetime", "velocity"),
                            constant(0)),
                 orbital=nf3(constant(0), constant(0.55), constant(0)),
-                radial=constant(-0.025)),
+                radial=constant(-2.5)),
             # INVERTED sacred run (DEEP -> HOT): this is an anticipation that builds
             # INTO the crown impact and dies on it — it never settles, so it brightens
             # instead of fading to VOID (§1.1's run governs settle fades).
-            color_over_lifetime=gradient(
+            color_over_lifetime=varied(
                 [(0.0, 0.0), (0.2, 0.9), (0.8, 0.75), (1.0, 0.0)],
-                [(0.0,) + SAC_DEEP, (0.5,) + SAC_VIOLET, (1.0,) + SAC_HOT]),
+                [(0.0,) + SAC_BIRTH, (0.25,) + SAC_DEEP, (0.6,) + SAC_VIOLET,
+                 (1.0,) + SAC_HOT],
+                [(0.0,) + SAC_BIRTH, (0.3,) + SAC_VIOLET, (1.0,) + SAC_GOLD_PALE]),
             size_over_lifetime=sz(0.6, 1.0, SEG_BLOOM)))
     # IMPACT 10->13: crown flash at head height.
     (fx.particle_emitter(
@@ -277,11 +345,11 @@ def build_collection_tier_halo() -> FxBuilder:
             start_size=nf3(0.5), simulation_space="World", max_particles=2)
        .at(0.0, 1.72, 0.0)
        .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(1))])
-       .with_material(texture_material(TEX_CIRCLE, hdr=(1.9, 1.7, 1.2),
+       .with_material(texture_material(TEX_CIRCLE, hdr=hdr(1.9, 1.7, 1.2),
                                        blend=BLEND_ADDITIVE))
        .with_cull_box(*box)
        .with_curves(
-            size_over_lifetime=sz(0.35, 1.7, SEG_FLASH),
+            size_over_lifetime=sz(0.35, 1.7, SEG_SNAP_FLASH),
             color_over_lifetime=gradient(
                 [(0.0, 1.0), (0.55, 0.7), (1.0, 0.0)],
                 [(0.0,) + GLI_WHITE, (0.4,) + SAC_GOLD, (1.0,) + SAC_VIOLET]))
@@ -293,7 +361,7 @@ def build_collection_tier_halo() -> FxBuilder:
             start_size=nf3(0.6), simulation_space="World", max_particles=2)
        .at(0.0, 1.72, 0.0)
        .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(1))])
-       .with_material(texture_material(TEX_RING_SOFT, hdr=(1.2, 1.0, 0.7),
+       .with_material(texture_material(TEX_RING_SOFT, hdr=hdr(1.2, 1.0, 0.7),
                                        blend=BLEND_ADDITIVE))
        .with_renderer(render_mode="Horizontal")
        .with_cull_box(*box)
@@ -306,22 +374,27 @@ def build_collection_tier_halo() -> FxBuilder:
     (fx.particle_emitter(
             "crown_glints",
             duration=6, looping=False, start_delay=constant(12),
-            start_lifetime=random_between(22, 30), start_speed=random_between(0.02, 0.05),
+            start_lifetime=random_between(22, 30), start_speed=random_between(0.4, 1.0),
             start_size=nf3(random_between(0.05, 0.09)),
             simulation_space="World", max_particles=9)
        .at(0.0, 1.8, 0.0)
        .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(7))])
        .with_shape(sphere(radius=0.35, thickness=0.4))
-       .with_material(texture_material(TEX_CIRCLE, hdr=(0.9, 0.8, 0.5),
+       .with_material(texture_material(TEX_CIRCLE, hdr=hdr(0.9, 0.8, 0.5),
                                        blend=BLEND_ADDITIVE))
        .with_cull_box(*box)
+       # UNITS: the glints "sink softly" from the crown at y=1.8 — per tick that was
+       # 5 cm, so they hung motionless around the head. -0.3..-0.7 b/s drops them
+       # 0.45-1.05 blocks over their 22-30t settle, i.e. down past the shoulders.
        .with_curves(
             velocity_over_lifetime=dict(
-                linear=nf3(constant(0), random_between(-0.035, -0.015), constant(0)),
+                linear=nf3(constant(0), random_between(-0.7, -0.3), constant(0)),
                 orbital=nf3(constant(0), constant(0.5), constant(0))),
-            color_over_lifetime=gradient(
+            color_over_lifetime=varied(
                 [(0.0, 0.0), (0.15, 0.85), (0.7, 0.45), (1.0, 0.0)],
-                [(0.0,) + SAC_GOLD_PALE, (0.5,) + SAC_VIOLET, (1.0,) + SAC_VOID]),
+                [(0.0,) + GOLD_BIRTH, (0.2,) + SAC_GOLD_PALE, (0.6,) + SAC_VIOLET,
+                 (1.0,) + SAC_VOID],
+                [(0.0,) + GOLD_BIRTH, (0.25,) + SAC_GOLD, (1.0,) + SAC_VOID]),
             size_over_lifetime=sz(0.45, 1.0, SEG_SHRINK)))
     return fx
 
@@ -343,14 +416,18 @@ def build_collection_tier_gold_rain() -> FxBuilder:
             simulation_space="World", max_particles=18)
        .with_emission(rate=constant(1.3))
        .with_shape(circle(radius=0.8, thickness=0.5))
-       .with_material(texture_material(TEX_CIRCLE, hdr=(1.1, 0.95, 0.55),
+       .with_material(texture_material(TEX_CIRCLE, hdr=hdr(1.1, 0.95, 0.55),
                                        blend=BLEND_ADDITIVE))
        .with_cull_box((-1.6, -3.2, -1.6), (1.6, 0.6, 1.6))
        .with_physics(collision=False, gravity=0.22)
+       # UNITS EXCEPTION: `startSpeed` is 0 by design — the rain is pure gravity, and
+       # `gravity` is its own (non-velocity) unit, so there is nothing to rescale.
        .with_curves(
-            color_over_lifetime=gradient(
+            color_over_lifetime=varied(
                 [(0.0, 0.0), (0.12, 0.9), (0.7, 0.6), (1.0, 0.0)],
-                [(0.0,) + SAC_GOLD, (0.5,) + SAC_GOLD_PALE, (1.0,) + SAC_VOID]),
+                [(0.0,) + GOLD_BIRTH, (0.18,) + SAC_GOLD, (0.6,) + SAC_GOLD_PALE,
+                 (1.0,) + SAC_VOID],
+                [(0.0,) + GOLD_BIRTH, (0.22,) + SAC_GOLD_PALE, (1.0,) + SAC_VOID]),
             size_over_lifetime=sz(0.55, 1.0, SEG_SHRINK)))
     return fx
 
@@ -371,7 +448,7 @@ def build_skill_spend_glint() -> FxBuilder:
             start_lifetime=constant(9), start_speed=constant(0.0),
             start_size=nf3(0.3), simulation_space="World", max_particles=2)
        .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(1))])
-       .with_material(texture_material(TEX_CIRCLE, hdr=(0.5, 0.6, 0.8),
+       .with_material(texture_material(TEX_CIRCLE, hdr=hdr(0.5, 0.6, 0.8),
                                        blend=BLEND_ADDITIVE))
        .with_cull_box(*box)
        .with_curves(
@@ -383,20 +460,28 @@ def build_skill_spend_glint() -> FxBuilder:
     (fx.particle_emitter(
             "constellation",
             duration=4, looping=False,
-            start_lifetime=constant(10), start_speed=constant(0.005),
+            start_lifetime=constant(10), start_speed=constant(0.1),
             start_size=nf3(random_between(0.03, 0.05)),
             simulation_space="World", max_particles=4)
        .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(3))])
        .with_shape(sphere(radius=0.18, thickness=0.2))
-       .with_material(texture_material(TEX_CIRCLE, hdr=(0.4, 0.5, 0.7),
+       .with_material(texture_material(TEX_CIRCLE, hdr=hdr(0.4, 0.5, 0.7),
                                        blend=BLEND_ADDITIVE))
        .with_cull_box(*box)
+       # UNITS: 0.005 b/t = 0.1 b/s. This one is meant to be near-still (a twinkle over
+       # the forearm), so it keeps its restraint — only the unit is now honest.
        .with_curves(
             # Twinkle: alpha hops between quiet levels — a constellation, not a burst.
-            color_over_lifetime=gradient(
+            # W13: the alt ramp offsets each star's hop, so three stars never blink
+            # in lockstep — which is what made this read as one flickering sprite.
+            color_over_lifetime=varied(
                 [(0.0, 0.0), (0.15, 0.5), (0.3, 0.12), (0.5, 0.55),
                  (0.7, 0.15), (0.85, 0.4), (1.0, 0.0)],
-                [(0.0,) + STM_ARC, (0.6,) + STM_DEEP, (1.0,) + STM_SLATE])))
+                [(0.0,) + STM_BIRTH, (0.3,) + STM_ARC, (0.7,) + STM_DEEP,
+                 (1.0,) + STM_SLATE],
+                [(0.0,) + STM_BIRTH, (0.4,) + STM_DEEP, (1.0,) + STM_SLATE],
+                alpha_alt=[(0.0, 0.0), (0.2, 0.42), (0.42, 0.1), (0.62, 0.5),
+                           (0.8, 0.12), (0.92, 0.3), (1.0, 0.0)])))
     return fx
 
 
@@ -418,14 +503,17 @@ def build_landmark_flare() -> FxBuilder:
             simulation_space="World", max_particles=20)
        .with_emission(rate=constant(1.4))
        .with_shape(circle(radius=2.1, thickness=0.04, arc_mode="Loop", arc_speed=1.0))
-       .with_material(texture_material(TEX_CIRCLE, hdr=(0.9, 0.8, 1.1),
+       .with_material(texture_material(TEX_CIRCLE, hdr=hdr(0.9, 0.8, 1.1),
                                        blend=BLEND_ADDITIVE))
        .with_renderer(render_mode="Horizontal")
        .with_cull_box(*box)
        .with_curves(
-            color_over_lifetime=gradient(
+            color_over_lifetime=varied(
                 [(0.0, 0.0), (0.2, 0.85), (0.7, 0.7), (1.0, 0.0)],
-                [(0.0,) + SAC_HOT, (0.5,) + SAC_VIOLET, (1.0,) + SAC_VOID]),
+                [(0.0,) + SAC_BIRTH, (0.22,) + SAC_HOT, (0.6,) + SAC_VIOLET,
+                 (1.0,) + SAC_VOID],
+                [(0.0,) + SAC_BIRTH, (0.3,) + SAC_VIOLET, (0.7,) + SAC_DEEP,
+                 (1.0,) + SAC_VOID]),
             size_over_lifetime=sz(0.6, 1.0, SEG_BLOOM)))
     # IMPACT 12->15: the rose unfurls — four cardinal needles shoot out and stall
     # (impact-fast for 2-4t only, then the eased stall — §2 sacred exception),
@@ -434,34 +522,39 @@ def build_landmark_flare() -> FxBuilder:
             "rose_needles",
             duration=14, looping=False, start_delay=constant(12),
             start_lifetime=random_between(12, 14),
-            start_speed=constant(0.55),
+            start_speed=constant(6.0),
             start_size=nf3(0.1),
             simulation_space="World", max_particles=6)
        .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(4))])
        .with_shape(circle(radius=0.35, thickness=0.0, arc_mode="BurstSpread"))
-       .with_material(texture_material(TEX_CIRCLE, hdr=(1.2, 1.0, 0.6),
+       .with_material(texture_material(TEX_CIRCLE, hdr=hdr(1.2, 1.0, 0.6),
                                        blend=BLEND_ADDITIVE))
        .with_renderer(render_mode="StretchedBillboard", length_scale=3.4,
                       velocity_scale=0.5)
        .with_cull_box(*box)
+       # UNITS: the needles must cross the 2.1-block compass rose in the 2-4t impact
+       # window and then stall. At 0.55 b/s (x the ~0.6 average of the decay curve)
+       # they covered 21 cm — the rose never unfurled. 6.0 b/s puts the tips at
+       # ~2.3 blocks, just inside the 3.4-block cull box, with the stall intact.
        .with_curves(
             velocity_over_lifetime=dict(
                 linear=nf3(0),
                 speed_modifier=curve(0.05, 1.0, [SEG_SHRINK], "lifetime", "value")),
-            color_over_lifetime=gradient(
+            color_over_lifetime=varied(
                 [(0.0, 1.0), (0.6, 0.75), (1.0, 0.0)],
-                [(0.0,) + SAC_GOLD, (0.55,) + SAC_GOLD_PALE, (1.0,) + SAC_VOID])))
+                [(0.0,) + SAC_GOLD, (0.55,) + SAC_GOLD_PALE, (1.0,) + SAC_VOID],
+                [(0.0,) + SAC_GOLD_PALE, (0.5,) + SAC_GOLD, (1.0,) + SAC_VOID])))
     (fx.particle_emitter(
             "reveal_flash",
             duration=18, looping=False, start_delay=constant(12),
             start_lifetime=constant(4), start_speed=constant(0.0),
             start_size=nf3(0.7), simulation_space="World", max_particles=2)
        .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(1))])
-       .with_material(texture_material(TEX_CIRCLE, hdr=(1.9, 1.7, 1.3),
+       .with_material(texture_material(TEX_CIRCLE, hdr=hdr(1.9, 1.7, 1.3),
                                        blend=BLEND_ADDITIVE))
        .with_cull_box(*box)
        .with_curves(
-            size_over_lifetime=sz(0.4, 2.0, SEG_FLASH),
+            size_over_lifetime=sz(0.4, 2.0, SEG_SNAP_FLASH),
             color_over_lifetime=gradient(
                 [(0.0, 1.0), (0.55, 0.7), (1.0, 0.0)],
                 [(0.0,) + GLI_WHITE, (0.4,) + SAC_GOLD, (1.0,) + SAC_VIOLET]))
@@ -471,7 +564,7 @@ def build_landmark_flare() -> FxBuilder:
     (fx.particle_emitter(
             "ink_motes",
             duration=6, looping=False, start_delay=constant(15),
-            start_lifetime=random_between(30, 40), start_speed=constant(0.01),
+            start_lifetime=random_between(30, 40), start_speed=constant(0.2),
             start_size=nf3(random_between(0.14, 0.22)),
             simulation_space="World", max_particles=18)
        .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(16))])
@@ -479,17 +572,21 @@ def build_landmark_flare() -> FxBuilder:
        .with_material(texture_material(TEX_SMOKE, blend=BLEND_ALPHA))
        .with_renderer(vertex_sorting="DISTANCE")
        .with_cull_box(*box)
+       # UNITS: the ink is supposed to SINK toward the site over its 30-40t settle;
+       # per tick that was 11 cm, so it hung in the air. -0.3..-1.1 b/s drops it
+       # 0.45-2.2 blocks, inside the 2.5-block box.
        .with_curves(
             velocity_over_lifetime=dict(
                 linear=nf3(constant(0),
-                           curve(-0.055, -0.015, [SEG_EASE_UP], "lifetime", "velocity"),
+                           curve(-1.1, -0.3, [SEG_EASE_UP], "lifetime", "velocity"),
                            constant(0))),
             noise=dict(frequency=0.5, quality="Noise2D",
                        position=nf3(constant(0.03), constant(0.01), constant(0.03)),
                        rotation=constant(0), size=constant(0)),
-            color_over_lifetime=gradient(
+            color_over_lifetime=varied(
                 [(0.0, 0.0), (0.2, 0.55), (0.75, 0.35), (1.0, 0.0)],
-                [(0.0,) + SAC_DEEP, (1.0,) + SAC_VOID]),
+                [(0.0,) + SAC_DEEP, (1.0,) + SAC_VOID],
+                [(0.0,) + SAC_BIRTH, (0.5,) + SAC_DEEP, (1.0,) + SAC_VOID]),
             size_over_lifetime=sz(0.7, 1.0, SEG_BLOOM)))
     return fx
 
@@ -509,32 +606,36 @@ def build_landmark_echo() -> FxBuilder:
             start_lifetime=constant(3), start_speed=constant(0.0),
             start_size=nf3(0.3), simulation_space="World", max_particles=2)
        .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(1))])
-       .with_material(texture_material(TEX_CIRCLE, hdr=(1.1, 1.0, 0.7),
+       .with_material(texture_material(TEX_CIRCLE, hdr=hdr(1.1, 1.0, 0.7),
                                        blend=BLEND_ADDITIVE))
        .with_cull_box(*box)
        .with_curves(
-            size_over_lifetime=sz(0.4, 1.4, SEG_FLASH),
+            size_over_lifetime=sz(0.4, 1.4, SEG_SNAP_FLASH),
             color_over_lifetime=gradient(
                 [(0.0, 0.9), (1.0, 0.0)],
                 [(0.0,) + SAC_GOLD_PALE, (1.0,) + SAC_VIOLET])))
     (fx.particle_emitter(
             "echo_glints",
             duration=4, looping=False,
-            start_lifetime=random_between(14, 20), start_speed=random_between(0.02, 0.04),
+            start_lifetime=random_between(14, 20), start_speed=random_between(0.4, 0.8),
             start_size=nf3(random_between(0.04, 0.07)),
             simulation_space="World", max_particles=8)
        .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(6))])
        .with_shape(sphere(radius=0.3, thickness=0.2))
-       .with_material(texture_material(TEX_CIRCLE, hdr=(0.9, 0.8, 0.6),
+       .with_material(texture_material(TEX_CIRCLE, hdr=hdr(0.9, 0.8, 0.6),
                                        blend=BLEND_ADDITIVE))
        .with_cull_box(*box)
+       # UNITS: 0.03 b/t = 0.6 b/s — the echo's six glints drifted 4 cm and read as a
+       # frozen dot cluster. 0.4-0.8 b/s lifts them ~0.3-0.8 blocks inside the box.
        .with_curves(
             velocity_over_lifetime=dict(
-                linear=nf3(constant(0), random_between(0.02, 0.04), constant(0)),
+                linear=nf3(constant(0), random_between(0.4, 0.8), constant(0)),
                 orbital=nf3(constant(0), constant(0.7), constant(0))),
-            color_over_lifetime=gradient(
+            color_over_lifetime=varied(
                 [(0.0, 0.0), (0.2, 0.8), (0.75, 0.4), (1.0, 0.0)],
-                [(0.0,) + SAC_GOLD_PALE, (0.55,) + SAC_VIOLET, (1.0,) + SAC_VOID]),
+                [(0.0,) + GOLD_BIRTH, (0.25,) + SAC_GOLD_PALE, (0.6,) + SAC_VIOLET,
+                 (1.0,) + SAC_VOID],
+                [(0.0,) + GOLD_BIRTH, (0.3,) + SAC_VIOLET, (1.0,) + SAC_VOID]),
             size_over_lifetime=sz(0.5, 1.0, SEG_SHRINK)))
     return fx
 
@@ -554,30 +655,35 @@ def build_wizard_catalyst_handover() -> FxBuilder:
             "indraw_amethyst",
             duration=6, looping=False,
             start_lifetime=random_between(10, 13),
-            start_speed=random_between(-0.3, -0.22),
+            start_speed=random_between(-3.0, -2.2),
             start_size=nf3(random_between(0.07, 0.11)),
             start_rotation=nf3(constant(0), constant(0), random_between(0.0, 360.0)),
             simulation_space="World", max_particles=16)
        .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(9)),
                                                   burst(time=4, count=constant(5))])
        .with_shape(sphere(radius=1.5, thickness=0.0))
-       .with_material(texture_material(TEX_SHARD, hdr=(0.8, 0.7, 1.1),
+       .with_material(texture_material(TEX_SHARD, hdr=hdr(0.8, 0.7, 1.1),
                                        blend=BLEND_ADDITIVE))
        .with_cull_box(*box)
+       # UNITS: the shards are born on a 1.5-block shell and must ARRIVE at the staff
+       # tip within their 10-13t life, or the fuse flash fires over an untouched
+       # shell. 1.5 / (0.05 x 11.5) = 2.6 b/s; the old -0.26 covered 19 cm.
        .with_curves(
             # INVERTED run (DEEP -> HOT): anticipation building into the fuse impact
             # (same license as the A2 halo rise); sizes shrink approaching the staff
             # tip — the C6 suction verb — on a smooth ease.
-            color_over_lifetime=gradient(
+            color_over_lifetime=varied(
                 [(0.0, 0.0), (0.25, 0.9), (1.0, 0.85)],
-                [(0.0,) + SAC_DEEP, (0.55,) + SAC_VIOLET, (1.0,) + SAC_HOT]),
+                [(0.0,) + SAC_BIRTH, (0.3,) + SAC_DEEP, (0.65,) + SAC_VIOLET,
+                 (1.0,) + SAC_HOT],
+                [(0.0,) + SAC_BIRTH, (0.4,) + SAC_VIOLET, (1.0,) + SAC_HOT]),
             rotation_over_lifetime=random_between(-120.0, 120.0),
             size_over_lifetime=sz(1.0, 0.55, SEG_EASE_UP)))
     (fx.particle_emitter(
             "indraw_umbral",
             duration=6, looping=False, start_delay=constant(2),
             start_lifetime=random_between(9, 12),
-            start_speed=random_between(-0.26, -0.18),
+            start_speed=random_between(-2.8, -2.0),
             start_size=nf3(random_between(0.08, 0.13)),
             start_rotation=nf3(constant(0), constant(0), random_between(0.0, 360.0)),
             simulation_space="World", max_particles=9)
@@ -589,9 +695,10 @@ def build_wizard_catalyst_handover() -> FxBuilder:
        .with_curves(
             # The matte dark half of the interleave: rises to DEEP then sinks back
             # to the VOID token as it reaches the fuse (never dark -> light).
-            color_over_lifetime=gradient(
+            color_over_lifetime=varied(
                 [(0.0, 0.0), (0.3, 0.6), (0.75, 0.5), (1.0, 0.0)],
-                [(0.0,) + SAC_DEEP, (0.6,) + SAC_DEEP, (1.0,) + SAC_VOID]),
+                [(0.0,) + SAC_DEEP, (0.6,) + SAC_DEEP, (1.0,) + SAC_VOID],
+                [(0.0,) + SAC_BIRTH, (0.55,) + SAC_DEEP, (1.0,) + SAC_VOID]),
             rotation_over_lifetime=random_between(-90.0, 90.0)))
     # IMPACT 12->15: the fuse — one white-violet flash frame at the staff tip.
     (fx.particle_emitter(
@@ -600,11 +707,11 @@ def build_wizard_catalyst_handover() -> FxBuilder:
             start_lifetime=constant(4), start_speed=constant(0.0),
             start_size=nf3(0.4), simulation_space="World", max_particles=2)
        .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(1))])
-       .with_material(texture_material(TEX_CIRCLE, hdr=(2.2, 2.0, 2.6),
+       .with_material(texture_material(TEX_CIRCLE, hdr=hdr(2.2, 2.0, 2.6),
                                        blend=BLEND_ADDITIVE))
        .with_cull_box(*box)
        .with_curves(
-            size_over_lifetime=sz(0.3, 2.0, SEG_FLASH),
+            size_over_lifetime=sz(0.3, 2.0, SEG_SNAP_FLASH),
             color_over_lifetime=gradient(
                 [(0.0, 1.0), (0.5, 0.8), (1.0, 0.0)],
                 [(0.0,) + GLI_WHITE, (0.35,) + SAC_HOT, (1.0,) + SAC_VIOLET]))
@@ -618,7 +725,7 @@ def build_wizard_catalyst_handover() -> FxBuilder:
             start_size=nf3(0.09), simulation_space="World", max_particles=2)
        .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(1))])
        .with_shape(sphere(radius=0.02, thickness=0.0))
-       .with_material(texture_material(TEX_CIRCLE, hdr=(1.5, 1.4, 1.8),
+       .with_material(texture_material(TEX_CIRCLE, hdr=hdr(1.5, 1.4, 1.8),
                                        blend=BLEND_ADDITIVE))
        .with_cull_box(*box)
        .with_physics(collision=True, removed_when_collided=False, friction=0.9,
@@ -647,27 +754,31 @@ def build_wizard_catalyst_handover() -> FxBuilder:
                     "inertia": F(0.2), "velocitySmoothing": F(0.75),
                     "damping": F(0.8)},
                 "renderer": ribbon_renderer(
-                    texture_material(TEX_CIRCLE, hdr=(1.2, 1.1, 1.5),
+                    texture_material(TEX_CIRCLE, hdr=hdr(1.2, 1.1, 1.5),
                                      blend=BLEND_ADDITIVE),
                     cull_box=box)}}))
     (fx.particle_emitter(
             "fuse_sparkles",
             duration=6, looping=False, start_delay=constant(14),
-            start_lifetime=random_between(20, 30), start_speed=random_between(0.03, 0.07),
+            start_lifetime=random_between(20, 30), start_speed=random_between(0.6, 1.2),
             start_size=nf3(random_between(0.04, 0.07)),
             simulation_space="World", max_particles=9)
        .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(7))])
        .with_shape(sphere(radius=0.25, thickness=0.3))
-       .with_material(texture_material(TEX_CIRCLE, hdr=(0.9, 0.8, 1.2),
+       .with_material(texture_material(TEX_CIRCLE, hdr=hdr(0.9, 0.8, 1.2),
                                        blend=BLEND_ADDITIVE))
        .with_cull_box(*box)
+       # UNITS: the wake sparkles covered 5 cm around a staff tip whose box is 2
+       # blocks; 0.6-1.2 b/s spreads them 0.6-1.8 blocks, still inside the box.
        .with_curves(
             velocity_over_lifetime=dict(
-                linear=nf3(constant(0), random_between(0.015, 0.035), constant(0)),
+                linear=nf3(constant(0), random_between(0.3, 0.7), constant(0)),
                 orbital=nf3(constant(0), constant(0.5), constant(0))),
-            color_over_lifetime=gradient(
+            color_over_lifetime=varied(
                 [(0.0, 0.0), (0.2, 0.8), (0.7, 0.4), (1.0, 0.0)],
-                [(0.0,) + SAC_HOT, (0.5,) + SAC_VIOLET, (1.0,) + SAC_VOID]),
+                [(0.0,) + SAC_BIRTH, (0.22,) + SAC_HOT, (0.6,) + SAC_VIOLET,
+                 (1.0,) + SAC_VOID],
+                [(0.0,) + SAC_BIRTH, (0.3,) + SAC_VIOLET, (1.0,) + SAC_VOID]),
             size_over_lifetime=sz(0.5, 1.0, SEG_SHRINK)))
     return fx
 
@@ -691,7 +802,12 @@ def main() -> int:
     rc = 0
     for name, builder_fn in BUILDERS.items():
         path = FX_ASSETS_DIR / name
-        raw_len, gz_len = builder_fn().write(path)  # write() round-trip-validates
+        builder = builder_fn()
+        raw_len, gz_len = builder.write(path)  # write() round-trip-validates
+        # The `.fxproj` sibling embeds the SAME transform UUIDs as the `.fx`, and
+        # `FxObject` mints a fresh `uuid4()` per run — so writing one without the
+        # other leaves the editor project pointing at objects that no longer exist.
+        builder.write_fxproj(path.with_suffix(".fxproj"))
         errors = validate_file(path)
         if errors:
             print(f"FAIL {path}:")

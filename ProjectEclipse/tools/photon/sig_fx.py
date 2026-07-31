@@ -58,7 +58,7 @@ from fxlib import (  # noqa: E402
     B, F, FX_ASSETS_DIR, FxBuilder, REPO_ROOT, TrailEmitter,
     BLEND_ADDITIVE, BLEND_ALPHA, SEG_DECAY_TAIL, SEG_EASE_OUT_CREST, SEG_SMOOTH_UP,
     box, burst, circle, constant, curve, cylinder, gradient, nf3, random_between,
-    sphere, texture_material, validate_file,
+    random_gradient, sphere, texture_material, validate_file,
 )
 
 SIG_DIR = FX_ASSETS_DIR / "sig"
@@ -97,6 +97,36 @@ SEG_SHRINK = (0.0, 1.0, 0.4, 0.9, 0.8, 0.3, 1.0, 0.0)
 # Pillar width envelope: snap to the 0.9 peak inside 3t, relax to the 0.35 tail
 # (0.15 + 0.75*y: y=1 -> 0.9 peak, y=0.27 -> ~0.35 hold).
 SEG_PILLAR = (0.0, 0.0, 0.05, 1.05, 0.4, 0.5, 1.0, 0.27)
+# WAVE-13 impact envelope: ~2t attack, long afterglow tail (replaces SEG_FLASH's 8t).
+SEG_SNAP_FLASH = (0.0, 0.22, 0.045, 1.0, 0.4, 0.52, 1.0, 0.0)
+
+# ---------------------------------------------------------------------------
+# WAVE-13 C4 levers (local — `fxlib.py` is A0 ground this wave).
+# ---------------------------------------------------------------------------
+#: Stacking-law HDR ceiling (FX_CENSUS_WAVE13 §8.4 / §2 "HDR ~1.45"). NOTE this file's
+#: own header still documents the OLD per-asset budget "HDR <= 4.0" — wave 13 lowers
+#: the ceiling globally because the stacking law changed, not because these were wrong.
+HDR_CEILING = 1.45
+
+
+def hdr(r, g, b):
+    """Clamps an HDR triple to `HDR_CEILING`, keeping the channel ratio (= the hue)."""
+    peak = max(r, g, b)
+    if peak <= HDR_CEILING:
+        return (r, g, b)
+    k = HDR_CEILING / peak
+    return (round(r * k, 3), round(g * k, 3), round(b * k, 3))
+
+
+def varied(alpha_pts, rgb_pts, rgb_alt, alpha_alt=None):
+    """`random_gradient` — the authored ramp plus a sibling inside the same palette."""
+    return random_gradient(alpha_pts, rgb_pts, alpha_alt or alpha_pts, rgb_alt)
+
+
+#: Birth tints (V2.1 stacking law): below each ramp's own fade target.
+SAC_BIRTH = (0.13, 0.10, 0.21)
+GOLD_BIRTH = (0.20, 0.15, 0.07)
+DUST_BIRTH = (0.13, 0.13, 0.19)
 
 
 def sz(lo, hi, seg, x_axis="lifetime"):
@@ -127,11 +157,11 @@ def _crown_flash(fx: FxBuilder, impact: int):
             start_size=nf3(1.0), simulation_space="World", max_particles=2)
        .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(1))])
        .with_shape(circle(radius=0.01, thickness=0.0))
-       .with_material(texture_material(TEX_CIRCLE, hdr=(2.6, 2.3, 1.5),
+       .with_material(texture_material(TEX_CIRCLE, hdr=hdr(2.6, 2.3, 1.5),
                                        blend=BLEND_ADDITIVE))
        .with_renderer(vertex_sorting="NONE")
        .with_curves(
-            size_over_lifetime=sz(0.5, 5.2, SEG_FLASH),
+            size_over_lifetime=sz(0.5, 5.2, SEG_SNAP_FLASH),
             color_over_lifetime=gradient(
                 [(0.0, 1.0), (0.45, 0.85), (1.0, 0.0)],
                 [(0.0,) + GLI_WHITE, (0.4,) + SAC_GOLD, (1.0,) + SAC_GOLD_PALE]))
@@ -145,7 +175,7 @@ def _crown_ash(fx: FxBuilder, impact: int):
             "gold_ash",
             duration=impact + 20, looping=False, start_delay=constant(impact + 3),
             start_lifetime=random_between(34, 48),
-            start_speed=random_between(0.01, 0.04),
+            start_speed=random_between(0.2, 0.8),
             start_size=nf3(random_between(0.06, 0.12)),
             simulation_space="World", max_particles=44)
        .at(0.0, 3.6, 0.0)
@@ -153,16 +183,22 @@ def _crown_ash(fx: FxBuilder, impact: int):
                       bursts=[burst(time=0, count=constant(24)),
                               burst(time=6, count=constant(16))])
        .with_shape(cylinder(radius=3.2, thickness=0.8))
-       .with_material(texture_material(TEX_CIRCLE, hdr=(1.1, 0.95, 0.55),
+       .with_material(texture_material(TEX_CIRCLE, hdr=hdr(1.1, 0.95, 0.55),
                                        blend=BLEND_ADDITIVE))
        .with_renderer(vertex_sorting="NONE")
        .with_physics(collision=True, removed_when_collided=False, friction=0.99,
                      collided_friction=0.7, gravity=0.055, bounce_chance=0.15,
                      bounce_rate=0.2, bounce_spread=0.05)
+       # UNITS: the fall is gravity-driven (0.055), so `startSpeed` is only the initial
+       # scatter — rescaled to b/s for consistency, not to change the rain's read.
+       # W13: 40 additive flakes inside one 3.2-block cylinder used to be born on the
+       # SAME pale gold; the dark birth + sibling ramp break the sheet into flakes.
        .with_curves(
-            color_over_lifetime=gradient(
+            color_over_lifetime=varied(
                 [(0.0, 0.0), (0.12, 0.85), (0.65, 0.5), (1.0, 0.0)],
-                [(0.0,) + SAC_GOLD_PALE, (0.45,) + SAC_GOLD, (1.0,) + SAC_VOID]),
+                [(0.0,) + GOLD_BIRTH, (0.18,) + SAC_GOLD_PALE, (0.5,) + SAC_GOLD,
+                 (1.0,) + SAC_VOID],
+                [(0.0,) + GOLD_BIRTH, (0.22,) + SAC_GOLD, (1.0,) + SAC_VOID]),
             size_over_lifetime=sz(0.45, 1.0, SEG_SHRINK),
             # Sideways drift breath so the rain shimmers instead of plumb-falling.
             noise=dict(frequency=0.6, quality="Noise2D",
@@ -178,22 +214,27 @@ def build_crown_verdict() -> FxBuilder:
             "world_indraw",
             duration=14, looping=False,
             start_lifetime=random_between(10, 13),
-            start_speed=random_between(-0.46, -0.36),
+            start_speed=random_between(-11.0, -9.0),
             start_size=nf3(random_between(0.1, 0.18)),
             simulation_space="World", max_particles=28)
        .with_emission(rate=constant(0.0),
                       bursts=[burst(time=0, count=constant(14)),
                               burst(time=4, count=constant(10))])
        .with_shape(sphere(radius=6.0, thickness=0.0, arc_mode="BurstSpread"))
-       .with_material(texture_material(TEX_CIRCLE, hdr=(0.9, 0.75, 1.15),
+       .with_material(texture_material(TEX_CIRCLE, hdr=hdr(0.9, 0.75, 1.15),
                                        blend=BLEND_ADDITIVE))
        .with_renderer(render_mode="StretchedBillboard", length_scale=3.4,
                       velocity_scale=0.3, vertex_sorting="NONE")
+       # UNITS: this docstring's own "~0.4 blk/t" IS 8 b/s — written as 0.4 b/s the
+       # motes crossed 23 cm of their 6-block shell, so the verdict flash fired over
+       # an untouched ring. 6 / (0.05 x 11.5) ~= 10 b/s puts them on the corpse.
        .with_curves(
             # Converge-brighten: DEEP tails -> VIOLET -> HOT arrival (§2 indraw verb).
-            color_over_lifetime=gradient(
+            color_over_lifetime=varied(
                 [(0.0, 0.15), (0.75, 0.95), (1.0, 0.0)],
-                [(0.0,) + SAC_DEEP, (0.65,) + SAC_VIOLET, (1.0,) + SAC_HOT]),
+                [(0.0,) + SAC_BIRTH, (0.3,) + SAC_DEEP, (0.7,) + SAC_VIOLET,
+                 (1.0,) + SAC_HOT],
+                [(0.0,) + SAC_BIRTH, (0.45,) + SAC_VIOLET, (1.0,) + SAC_HOT]),
             size_over_lifetime=sz(0.5, 1.05, SEG_SMOOTH_UP)))
     _crown_flash(fx, 12)
     _crown_ash(fx, 12)
@@ -225,30 +266,34 @@ def build_gold_rush() -> FxBuilder:
             start_size=nf3(1.4), simulation_space="World", max_particles=2)
        .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(1))])
        .with_shape(circle(radius=0.01, thickness=0.0))
-       .with_material(texture_material(TEX_CIRCLE, hdr=(2.0, 1.8, 1.1),
+       .with_material(texture_material(TEX_CIRCLE, hdr=hdr(2.0, 1.8, 1.1),
                                        blend=BLEND_ADDITIVE))
        .with_renderer(vertex_sorting="NONE")
        .with_curves(
-            size_over_lifetime=sz(0.45, 1.0, SEG_FLASH),
+            size_over_lifetime=sz(0.45, 1.0, SEG_SNAP_FLASH),
             color_over_lifetime=gradient(
                 [(0.0, 1.0), (0.5, 0.8), (1.0, 0.0)],
                 [(0.0,) + GLI_WHITE, (0.55,) + SAC_GOLD, (1.0,) + SAC_GOLD_PALE]))
        .with_lights(sky=15, block=15))
     # L3 star shards: burst 30 with real physics (template_burst numbers) + L4 the
     # glint rain — `trails` ratio 0.4, short inherit-color ribbons.
-    ribbon_mat = texture_material(TEX_CIRCLE, hdr=(1.3, 1.1, 0.6),
+    ribbon_mat = texture_material(TEX_CIRCLE, hdr=hdr(1.3, 1.1, 0.6),
                                   blend=BLEND_ADDITIVE)
+    # UNITS: 0.35-0.8 b/s threw the reward burst 31-112 cm — from any distance that
+    # is a stationary gold dot. 2.5-5.0 b/s gives 2.2-7.0 blocks of throw before
+    # gravity 0.35 arcs the shards down; a full x20 would fling them out of the arena.
     (fx.particle_emitter(
             "star_shards",
             duration=30, looping=False,
             start_lifetime=random_between(18, 28),
-            start_speed=random_between(0.35, 0.8),
+            start_speed=random_between(2.5, 5.0),
             start_size=nf3(random_between(0.09, 0.16)),
             start_rotation=nf3(constant(0), constant(0), random_between(0.0, 360.0)),
             simulation_space="World", max_particles=34)
        .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(30))])
        .with_shape(sphere(radius=0.3, thickness=0.4))
-       .with_material(texture_material(TEX_SHARD, discard=0.15, hdr=(1.5, 1.25, 0.7),
+       .with_material(texture_material(TEX_SHARD, discard=0.15,
+                                       hdr=hdr(1.5, 1.25, 0.7),
                                        blend=BLEND_ADDITIVE))
        .with_renderer(vertex_sorting="NONE")
        .with_physics(collision=True, removed_when_collided=False, friction=0.98,
@@ -266,9 +311,10 @@ def build_gold_rush() -> FxBuilder:
                     [(0.0, 0.85), (1.0, 0.0)],
                     [(0.0,) + SAC_GOLD, (1.0,) + SAC_VOID]))})
        .with_curves(
-            color_over_lifetime=gradient(
+            color_over_lifetime=varied(
                 [(0.0, 1.0), (0.55, 0.8), (1.0, 0.0)],
-                [(0.0,) + SAC_GOLD, (0.5,) + SAC_GOLD_PALE, (1.0,) + SAC_VOID]),
+                [(0.0,) + SAC_GOLD, (0.5,) + SAC_GOLD_PALE, (1.0,) + SAC_VOID],
+                [(0.0,) + SAC_GOLD_PALE, (0.45,) + SAC_GOLD, (1.0,) + SAC_VOID]),
             rotation_over_lifetime=dict(roll=random_between(-10.0, 10.0)),
             size_over_lifetime=sz(0.5, 1.0, SEG_SHRINK))
        .with_lights(sky=15, block=15))
@@ -291,7 +337,7 @@ def build_sanctum_bloom() -> FxBuilder:
         color_nf=gradient(
             [(0.0, 0.95), (0.25, 0.8), (1.0, 0.0)],
             [(0.0,) + SAC_HOT, (0.55,) + SAC_VIOLET, (1.0,) + SAC_DEEP])
-    ).with_material(texture_material(TEX_BEAM_CORE, hdr=(1.6, 1.5, 1.8),
+    ).with_material(texture_material(TEX_BEAM_CORE, hdr=hdr(1.6, 1.5, 1.8),
                                      blend=BLEND_ADDITIVE))
     # L3 gold sheath: same envelope, 1.8x wider, softer gold voice.
     fx.beam_emitter(
@@ -301,26 +347,30 @@ def build_sanctum_bloom() -> FxBuilder:
         color_nf=gradient(
             [(0.0, 0.5), (0.3, 0.35), (1.0, 0.0)],
             [(0.0,) + SAC_GOLD, (0.6,) + SAC_GOLD_PALE, (1.0,) + SAC_VOID])
-    ).with_material(texture_material(TEX_BEAM_CORE, hdr=(1.4, 1.2, 0.7),
+    ).with_material(texture_material(TEX_BEAM_CORE, hdr=hdr(1.4, 1.2, 0.7),
                                      blend=BLEND_ADDITIVE))
     # L4 bloom burst: 26 motes off a tight shell at the impact frame, HOT -> GOLD_PALE.
     (fx.particle_emitter(
             "bloom_burst",
             duration=24, looping=False, start_delay=constant(10),
             start_lifetime=random_between(10, 14),
-            start_speed=random_between(0.3, 0.5),
+            start_speed=random_between(6.0, 10.0),
             start_size=nf3(random_between(0.1, 0.18)),
             simulation_space="World", max_particles=30)
        .at(0.0, 1.0, 0.0)
        .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(26))])
        .with_shape(sphere(radius=0.4, thickness=0.0, arc_mode="BurstSpread"))
-       .with_material(texture_material(TEX_WISP, hdr=(1.5, 1.35, 1.1),
+       .with_material(texture_material(TEX_WISP, hdr=hdr(1.5, 1.35, 1.1),
                                        blend=BLEND_ADDITIVE))
        .with_renderer(vertex_sorting="NONE")
+       # UNITS: the consecration bloom expanded 15-35 cm around a 14-block pillar.
+       # 6-10 b/s x the ~0.55 average of its own decay curve = 1.7-3.9 blocks, which
+       # is a bloom you can read from the sanctum rim.
        .with_curves(
-            color_over_lifetime=gradient(
+            color_over_lifetime=varied(
                 [(0.0, 1.0), (0.5, 0.75), (1.0, 0.0)],
-                [(0.0,) + SAC_HOT, (0.55,) + SAC_GOLD_PALE, (1.0,) + SAC_VOID]),
+                [(0.0,) + SAC_HOT, (0.55,) + SAC_GOLD_PALE, (1.0,) + SAC_VOID],
+                [(0.0,) + SAC_GOLD_PALE, (0.5,) + SAC_VIOLET, (1.0,) + SAC_VOID]),
             size_over_lifetime=sz(0.0, 1.1, SEG_EASE_OUT_CREST),
             # The burst decelerates into the settle (sacred: only impacts are fast).
             velocity_over_lifetime=dict(
@@ -356,16 +406,18 @@ def build_deep_rumble_bed() -> FxBuilder:
                      collided_friction=0.8, gravity=0.055, bounce_chance=0.0,
                      bounce_rate=0.0)
        .with_curves(
-            color_over_lifetime=gradient(
+            color_over_lifetime=varied(
                 [(0.0, 0.0), (0.2, 0.32), (0.7, 0.24), (1.0, 0.0)],
-                [(0.0, 0.42, 0.41, 0.5), (0.6,) + ERA_SHADOW, (1.0,) + SAC_VOID]),
+                [(0.0,) + DUST_BIRTH, (0.25, 0.42, 0.41, 0.5), (0.7,) + ERA_SHADOW,
+                 (1.0,) + SAC_VOID],
+                [(0.0,) + DUST_BIRTH, (0.3,) + ERA_SHADOW, (1.0,) + SAC_VOID]),
             size_over_lifetime=sz(0.6, 1.0, SEG_SMOOTH_UP)))
     # L2 pebble hop: every ~30t a 3-pebble micro-burst hops off the shivering floor.
     (fx.particle_emitter(
             "pebble_hops",
             duration=30, looping=True,
             start_lifetime=random_between(10, 16),
-            start_speed=random_between(0.1, 0.16),
+            start_speed=random_between(1.0, 1.8),
             start_size=nf3(random_between(0.035, 0.06)),
             start_rotation=nf3(constant(0), constant(0), random_between(0.0, 360.0)),
             simulation_space="World", max_particles=12)
@@ -379,10 +431,14 @@ def build_deep_rumble_bed() -> FxBuilder:
        .with_physics(collision=True, removed_when_collided=False, friction=0.98,
                      collided_friction=0.55, gravity=0.5, bounce_chance=1.0,
                      bounce_rate=0.35, bounce_spread=0.1)
+       # UNITS: the pebbles "hop off the shivering floor" — at 0.13 b/s they twitched
+       # 13 cm and never left the ground plane. 1.0-1.8 b/s throws them 0.5-1.4
+       # blocks, which gravity 0.5 turns back into a hop inside the 1.5-block box.
        .with_curves(
-            color_over_lifetime=gradient(
+            color_over_lifetime=varied(
                 [(0.0, 0.0), (0.15, 0.55), (0.8, 0.4), (1.0, 0.0)],
-                [(0.0,) + ERA_SHADOW, (1.0,) + SAC_VOID]),
+                [(0.0,) + ERA_SHADOW, (1.0,) + SAC_VOID],
+                [(0.0,) + DUST_BIRTH, (0.5,) + ERA_SHADOW, (1.0,) + SAC_VOID]),
             size_over_lifetime=sz(0.8, 1.0, SEG_DECAY_TAIL)))
     return fx
 

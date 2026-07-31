@@ -26,6 +26,30 @@ particles; both portal loops carry cull boxes + modest maxParticles per the WIND
 law (INTEGRATION.md §4). Textures: Photon's shipped particle set (circle/smoke/ring/
 laser), the worker-authored `square_4x4.png` (mobs_fx.py — the era-pixel identity
 sheet), and `crt_glow_2x2.png` authored HERE (deterministic stdlib writer, no license).
+
+FX-WAVE-13 C4 PASS — SCOPED TO THE PORTAL FAMILY (§5a/§5b/§5c) ONLY. `intro_burst_ring`,
+`credits_*` and `structure_slam_*`/`slam_dust_puff` belong to other wave-13 teams and
+are byte-identical after this pass (verified by regenerating and diffing). What changed
+in the four portal assets:
+
+  1. UNITS. Photon reads `startSpeed`/`velocityOverLifetime.linear` in blocks per
+     SECOND (`×0.05`/tick) and `radial` as `value × 0.01`/tick — the slip B6 found in
+     `ceremony_fx.py`. `portal_loop_xbox`'s star-suck was the worst case in the file:
+     `radial=-0.05` dragged a mote 2 CENTIMETRES over its 40t life, so the signature
+     "era pixels sucked into the star" never happened at all. The iris rim sparks
+     cleared their rim by 12-30 cm, the backrooms soup leaked 4-24 cm, and the moth
+     motes did not flutter. All four are back-solved from the distance their own
+     comments promise.
+  2. `random_gradient` (via `varied()`) on the crowded emitters — the 24-spark rim
+     shell, the 96-mote era swarm and the 48-quad haze bank. The two flicker emitters
+     already had it (they are the file's hero feature) and keep their authored tracks.
+  3. Dark birth tints (V2.1 stacking law) on those same three: additive quads born
+     inside one shell now open on a bruise instead of converging to a white bead.
+  4. HDR clamped to the wave-13 stacking ceiling 1.45, hue ratio preserved (the irises
+     sat at 2.0-2.6, the rim sparks and the CRT glow at 1.6-1.8).
+  5. Timing snap: the portal cues already run on `SEG_IRIS_POP` (full size by x≈0.12,
+     settle back) and on the authored `random_curve` flicker tracks, which are the
+     tightest attacks in the file — no envelope needed re-cutting here.
 """
 from __future__ import annotations
 
@@ -67,6 +91,37 @@ SEG_HOLD_SHRINK = (0.0, 1.0, 0.7, 1.0, 0.9, 0.6, 1.0, 0.0)
 # Punchy deceleration: steep early velocity drop, long floating tail — the slam column
 # "launch then hang" read (PHOTON-QUALITY §2 row 5: the easing IS the mushroom).
 SEG_DECEL_PUNCH = (0.0, 1.0, 0.08, 0.42, 0.45, 0.06, 1.0, 0.0)
+
+# ---------------------------------------------------------------------------
+# WAVE-13 C4 levers — portal family ONLY (§5a/§5b/§5c). The intro/credits/structure
+# builders above are owned by other wave-13 teams and are deliberately untouched, so
+# these helpers are scoped by use, not by file. Same idiom B6 landed in
+# `ceremony_fx.py` (copied, not shared: `fxlib.py` is A0 ground this wave).
+# ---------------------------------------------------------------------------
+#: Stacking-law HDR ceiling (FX_CENSUS_WAVE13 §8.4 / §2 "HDR ~1.45").
+HDR_CEILING = 1.45
+
+
+def hdr(r, g, b):
+    """Clamps an HDR triple to `HDR_CEILING`, keeping the channel ratio (= the hue)."""
+    peak = max(r, g, b)
+    if peak <= HDR_CEILING:
+        return (r, g, b)
+    k = HDR_CEILING / peak
+    return (round(r * k, 3), round(g * k, 3), round(b * k, 3))
+
+
+def varied(alpha_pts, rgb_pts, rgb_alt, alpha_alt=None):
+    """`random_gradient` — the authored ramp plus a sibling inside the same palette;
+    each particle rolls its own memoized lerp, so no two read identical."""
+    return random_gradient(alpha_pts, rgb_pts, alpha_alt or alpha_pts, rgb_alt)
+
+
+#: Birth tints (V2.1 stacking law): darker than the ramp's own fade target, so the
+#: 24-spark rim shell and the 96-mote era swarm open as a bruise instead of a ball.
+XBOX_BIRTH = (0.13, 0.06, 0.22)   # violet portal family, below 0x9E4DFA
+WAX_BIRTH = (0.22, 0.16, 0.05)    # backrooms wax-gold family, below 0xFABD4D
+SOUP_BIRTH = (0.20, 0.18, 0.12)   # backrooms haze — dim sour cream, not white smoke
 
 
 # ---------------------------------------------------------------------------
@@ -400,7 +455,7 @@ def build_slam_dust_puff() -> FxBuilder:
 # ---------------------------------------------------------------------------
 # §5a eclipse:portal_iris_open_{xbox,backrooms} — the open moment
 # ---------------------------------------------------------------------------
-def _build_portal_iris(name: str, iris_hdr, iris_rgb, spark_rgb) -> FxBuilder:
+def _build_portal_iris(name: str, iris_hdr, iris_rgb, spark_rgb, birth_rgb) -> FxBuilder:
     fx = FxBuilder(name)
     # Camera-facing iris ring snapping open exactly when the tear does (overshoot pop).
     (fx.particle_emitter(
@@ -410,7 +465,7 @@ def _build_portal_iris(name: str, iris_hdr, iris_rgb, spark_rgb) -> FxBuilder:
             start_size=nf3(1.0), simulation_space="Local", max_particles=2)
        .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(1))])
        .with_shape(dot())
-       .with_material(texture_material(TEX_RING, hdr=iris_hdr, blend=BLEND_ADDITIVE))
+       .with_material(texture_material(TEX_RING, hdr=hdr(*iris_hdr), blend=BLEND_ADDITIVE))
        .with_renderer(facing_mode="LOOKAT_XYZ", vertex_sorting="NONE")
        .with_curves(
             size_over_lifetime=nf3(*[curve(0.2, PORTAL_WIDTH * 1.3, [SEG_IRIS_POP],
@@ -420,21 +475,30 @@ def _build_portal_iris(name: str, iris_hdr, iris_rgb, spark_rgb) -> FxBuilder:
                 [(0.0, 1.0, 1.0, 1.0), (0.5, *iris_rgb), (1.0, *iris_rgb)])))
     # Rim flash: 24 sparks off a thin shell (orientation-free — the tear plane is
     # camera-dependent at open time).
+    # WAVE-13 units: 0.3-0.5 was authored blocks/TICK, so the sparks crawled 12-30 cm
+    # off a 2.5-block rim and died inside the iris quad. Blocks/SECOND back-solved from
+    # the intent (a spark should clear the rim by ~1-2.5 blocks in its 8-12t life):
+    # 2.4-4.5 b/s x 0.05 x 8..12t = 0.96..2.7 blocks.
     (fx.particle_emitter(
             "rim_flash",
             duration=12, looping=False, start_delay=constant(0),
-            start_lifetime=random_between(8, 12), start_speed=random_between(0.3, 0.5),
+            start_lifetime=random_between(8, 12), start_speed=random_between(2.4, 4.5),
             start_size=nf3(random_between(0.08, 0.16), random_between(0.08, 0.16),
                            random_between(0.08, 0.16)),
             simulation_space="World", max_particles=32)
        .with_emission(rate=constant(0.0), bursts=[burst(time=1, count=constant(24))])
        .with_shape(sphere(radius=PORTAL_WIDTH / 2.0, thickness=0.0, arc_mode="BurstSpread"))
-       .with_material(texture_material(TEX_CIRCLE, hdr=(1.5, 1.4, 1.8),
+       .with_material(texture_material(TEX_CIRCLE, hdr=hdr(1.5, 1.4, 1.8),
                                        blend=BLEND_ADDITIVE))
        .with_renderer(vertex_sorting="NONE")
-       .with_curves(color_over_lifetime=gradient(
-            [(0.0, 1.0), (0.6, 0.6), (1.0, 0.0)],
-            [(0.0, 1.0, 1.0, 1.0), (1.0, *spark_rgb)]))
+       # 24 additive quads leaving one shell: without a birth tint + per-particle ramp
+       # they converge into a white bead at the rim. Ramp A burns white then settles on
+       # the portal hue, ramp B never reaches white and dies back to the bruise.
+       .with_curves(color_over_lifetime=varied(
+            [(0.0, 0.9), (0.6, 0.6), (1.0, 0.0)],
+            [(0.0, *birth_rgb), (0.14, 1.0, 1.0, 1.0), (1.0, *spark_rgb)],
+            [(0.0, *birth_rgb), (0.22, *spark_rgb), (1.0, *birth_rgb)],
+            alpha_alt=[(0.0, 0.7), (0.45, 0.75), (1.0, 0.0)]))
        .with_lights(sky=15, block=15))
     return fx
 
@@ -443,14 +507,16 @@ def build_portal_iris_open_xbox() -> FxBuilder:
     return _build_portal_iris("portal_iris_open_xbox",
                               iris_hdr=(2.0, 1.8, 2.6),
                               iris_rgb=(0.62, 0.3, 0.98),
-                              spark_rgb=(0.62, 0.3, 0.98))
+                              spark_rgb=(0.62, 0.3, 0.98),
+                              birth_rgb=XBOX_BIRTH)
 
 
 def build_portal_iris_open_backrooms() -> FxBuilder:
     return _build_portal_iris("portal_iris_open_backrooms",
                               iris_hdr=(2.6, 2.3, 1.4),
                               iris_rgb=(0.98, 0.74, 0.3),
-                              spark_rgb=(0.98, 0.74, 0.3))
+                              spark_rgb=(0.98, 0.74, 0.3),
+                              birth_rgb=WAX_BIRTH)
 
 
 # ---------------------------------------------------------------------------
@@ -469,7 +535,7 @@ def build_portal_loop_xbox() -> FxBuilder:
     (fx.particle_emitter(
             "era_pixels",
             duration=40, looping=True, prewarm=20, start_delay=constant(0),
-            start_lifetime=random_between(30, 50), start_speed=random_between(0.02, 0.08),
+            start_lifetime=random_between(30, 50), start_speed=random_between(0.2, 0.6),
             start_size=nf3(random_between(0.08, 0.16), random_between(0.08, 0.16),
                            random_between(0.08, 0.16)),
             simulation_space="Local", max_particles=96)
@@ -496,13 +562,22 @@ def build_portal_loop_xbox() -> FxBuilder:
                               # Sanctioned linear scan (bar §5.1 rule 2 exception).
                               frame_over_time=curve(0.0, 1.0, [SEG_LINEAR_UP], "lifetime"),
                               start_frame=random_between(0.0, 15.0), cycle=2.0),
+            # WAVE-13 units: `radial` is applied as value x 0.01 per TICK, so the
+            # authored -0.05 pulled a mote 2 CENTIMETRES over its whole 40t life — the
+            # "sucked into the star" read simply did not exist. The mesh shape scaled
+            # 2.4 seeds motes ~2 blocks out, so the suck must cover that in ~40t:
+            # 2.0 / (0.01 x 40) = 5.0.
             velocity_over_lifetime=dict(
                 orbital_mode="AngularVelocity",
                 orbital=nf3(constant(0), constant(0.5), constant(0)),
-                radial=constant(-0.05)),
-            color_over_lifetime=gradient(
+                radial=constant(-5.0)),
+            # 96 additive squares inside one 2-block shell: birth tint + per-particle
+            # ramp so the swarm reads as chunky individual pixels, not a violet fog.
+            color_over_lifetime=varied(
                 [(0.0, 0.0), (0.15, 0.8), (0.85, 0.6), (1.0, 0.0)],
-                [(0.0, 0.62, 0.3, 0.98), (1.0, 0.4, 0.2, 0.7)])))
+                [(0.0, *XBOX_BIRTH), (0.18, 0.62, 0.3, 0.98), (1.0, 0.4, 0.2, 0.7)],
+                [(0.0, *XBOX_BIRTH), (0.3, 0.4, 0.2, 0.7), (1.0, 0.62, 0.3, 0.98)],
+                alpha_alt=[(0.0, 0.0), (0.25, 0.55), (0.7, 0.75), (1.0, 0.0)])))
     # One CRT screen-glow quad behind the star — the spec'd hero feature (events #5b):
     # random_curve irregular brightness (lights, re-rolled per cycle particle — never a
     # stable pulse) + 2x2 uvAnimation frame jitter off crt_glow_2x2.png (sub-pixel
@@ -515,7 +590,7 @@ def build_portal_loop_xbox() -> FxBuilder:
             start_size=nf3(2.2, 2.2, 2.2), simulation_space="Local", max_particles=3)
        .with_emission(rate=constant(0.025), bursts=[])
        .with_shape(dot())
-       .with_material(texture_material(TEX_CRT_GLOW, hdr=(1.3, 1.1, 1.6),
+       .with_material(texture_material(TEX_CRT_GLOW, hdr=hdr(1.3, 1.1, 1.6),
                                        blend=BLEND_ADDITIVE))
        .with_renderer(facing_mode="LOOKAT_XYZ", vertex_sorting="NONE")
        .with_cull_box((-4.0, -3.0, -4.0), (4.0, 4.0, 4.0))
@@ -578,7 +653,7 @@ def build_portal_loop_backrooms() -> FxBuilder:
        .at(0.0, 2.2, 0.0)
        .with_emission(rate=constant(0.01), bursts=[])
        .with_shape(dot())
-       .with_material(texture_material(TEX_CIRCLE, hdr=(1.4, 1.35, 1.0),
+       .with_material(texture_material(TEX_CIRCLE, hdr=hdr(1.4, 1.35, 1.0),
                                        blend=BLEND_ADDITIVE))
        .with_renderer(vertex_sorting="NONE")
        .with_cull_box((-4.0, -3.0, -4.0), (4.0, 3.0, 4.0))
@@ -609,10 +684,13 @@ def build_portal_loop_backrooms() -> FxBuilder:
              (0.8, 0.05), (1.0, 0.5)],
             [(0.0, 1.0, 0.95, 0.8), (1.0, 0.95, 0.85, 0.6)])))
     # The yellow soup leaking out: big soft near-still smoke, alpha <= 0.15.
+    # WAVE-13 units: 0.01-0.04 blocks/SECOND is 4-24 cm over the whole 80-120t life —
+    # the soup never left the tear. Re-read as the authored blocks/TICK intent
+    # (0.2-0.8 b/s x 0.05 x 80..120t = 0.8..4.8 blocks): it leaks, still slowly.
     (fx.particle_emitter(
             "haze",
             duration=100, looping=True, prewarm=60, start_delay=constant(0),
-            start_lifetime=random_between(80, 120), start_speed=random_between(0.01, 0.04),
+            start_lifetime=random_between(80, 120), start_speed=random_between(0.2, 0.8),
             start_size=nf3(random_between(1.2, 2.0), random_between(1.2, 2.0),
                            random_between(1.2, 2.0)),
             simulation_space="Local", max_particles=48)
@@ -623,9 +701,13 @@ def build_portal_loop_backrooms() -> FxBuilder:
        .with_cull_box((-8.0, -3.0, -8.0), (8.0, 6.0, 8.0))
        .with_curves(
             noise=dict(frequency=0.5, position=nf3(0.04)),
-            color_over_lifetime=gradient(
+            # 48 overlapping smoke quads: even at alpha 0.15 a single ramp banks into
+            # one flat cream slab. Birth tint + a dirtier sibling ramp keeps depth.
+            color_over_lifetime=varied(
                 [(0.0, 0.0), (0.2, 0.15), (0.8, 0.1), (1.0, 0.0)],
-                [(0.0, 0.91, 0.85, 0.63), (1.0, 0.8, 0.7, 0.45)]),
+                [(0.0, *SOUP_BIRTH), (0.25, 0.91, 0.85, 0.63), (1.0, 0.8, 0.7, 0.45)],
+                [(0.0, *SOUP_BIRTH), (0.35, 0.8, 0.7, 0.45), (1.0, *SOUP_BIRTH)],
+                alpha_alt=[(0.0, 0.0), (0.3, 0.11), (0.75, 0.13), (1.0, 0.0)]),
             # Smoothstep swell — the soup billows open, no mechanical ramp.
             size_over_lifetime=nf3(*[curve(1.0, 1.6, [SEG_SMOOTH_UP], "lifetime", "size")
                                      for _ in range(3)])))
@@ -633,7 +715,10 @@ def build_portal_loop_backrooms() -> FxBuilder:
     (fx.particle_emitter(
             "moth_motes",
             duration=100, looping=True, prewarm=50, start_delay=constant(0),
-            start_lifetime=random_between(80, 110), start_speed=random_between(0.03, 0.08),
+            # WAVE-13 units: as blocks/SECOND the specks moved 12-44 cm and just sat in
+            # the tube. 0.15-0.4 b/s x 0.05 x 80..110t = 0.6..2.2 blocks of flutter,
+            # which stays inside the 3-block cull box.
+            start_lifetime=random_between(80, 110), start_speed=random_between(0.15, 0.4),
             start_size=nf3(random_between(0.05, 0.08), random_between(0.05, 0.08),
                            random_between(0.05, 0.08)),
             start_color=0xFF221A10, simulation_space="Local", max_particles=8)

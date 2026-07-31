@@ -25,12 +25,65 @@ level queries, forbidden on the parallel path). Textures are limited to the two
 Photon-bundled particles (circle.png / smoke.png).
 
 Run:  python3 tools/photon/build_world_fx.py     # writes + validates all 8 assets
+
+FX-WAVE-13 C4 PASS — SCOPED TO CONCEPTS 4 AND 5 ONLY (`supply_drop_contrail`,
+`supply_landing_dust`, `sky_launch_charge`, `sky_launch_contrail`). `breach_*` is A6's,
+`end_void_wisps` is C1's GPU-instancing work and `storm_crown_halo` is F-096's; all four
+are byte-identical after this pass (verified by regenerating and diffing). Changes:
+
+  1. UNITS. `startSpeed`, `velocityOverLifetime.linear` and `orbital` are per-SECOND
+     (Photon applies them as `value x 0.05` per tick) — the slip B6 found in
+     `ceremony_fx.py`. `sky_launch_charge` was the headline: `HELIX_VY`/`HELIX_OMEGA`
+     were derived per-TICK straight out of `SkyLauncher.tickCharges`, so the three
+     carriers climbed 12.5 cm of the server spiral's 2.5 blocks and swept 0.63 rad of
+     its 4*PI — the "solid triple helix" the docstring promises was a 12 cm stub around
+     the pad. Both constants now divide by `CHARGE_TICKS * 0.05`, which reproduces the
+     server spiral exactly. The landing skirt, the apex burst and the shed embers are
+     likewise back-solved from the distance their own comments promise.
+  2. `random_gradient` (via `varied()`) on every crowded emitter here: 60 shed embers,
+     the 36-quad dust skirt, the 20-streak apex burst and the 60 slip-ring quads.
+  3. Dark birth tints (V2.1 stacking law) on those same four.
+  4. HDR clamped to the wave-13 ceiling 1.45, hue ratio preserved (the wind-light
+     carriers, their ribbon, the apex burst and the pop sparks sat at 1.6-2.2).
+  5. Timing snap: these four are travel-driven (ara ribbons + ballistic bursts) rather
+     than envelope-driven; the units fix IS the attack fix, so no curve was re-cut.
 """
 from fxlib import *  # noqa: F401,F403 - the authoring DSL is the point
 from fxlib import B, F, I, L  # explicit for the raw module compounds
 
 CIRCLE = "photon:textures/particle/circle.png"
 SMOKE = "photon:textures/particle/smoke.png"
+
+# ---------------------------------------------------------------------------
+# WAVE-13 C4 levers — supply_* / sky_launch_* ONLY (concepts 4 and 5). The breach_*
+# (A6), end_void_wisps (C1) and storm_crown_halo (F-096) builders below belong to
+# other wave-13 teams and are byte-identical after this pass, so these helpers are
+# scoped by use, not by file. Same idiom B6 landed in `ceremony_fx.py`.
+# ---------------------------------------------------------------------------
+#: Stacking-law HDR ceiling (FX_CENSUS_WAVE13 §8.4 / §2 "HDR ~1.45").
+HDR_CEILING = 1.45
+
+
+def hdr(r, g, b):
+    """Clamps an HDR triple to `HDR_CEILING`, keeping the channel ratio (= the hue)."""
+    peak = max(r, g, b)
+    if peak <= HDR_CEILING:
+        return (r, g, b)
+    k = HDR_CEILING / peak
+    return (round(r * k, 3), round(g * k, 3), round(b * k, 3))
+
+
+def varied(alpha_pts, rgb_pts, rgb_alt, alpha_alt=None):
+    """`random_gradient` — the authored ramp plus a sibling inside the same palette;
+    each particle rolls its own memoized lerp, so no two read identical."""
+    return random_gradient(alpha_pts, rgb_pts, alpha_alt or alpha_pts, rgb_alt)
+
+
+#: Birth tints (V2.1 stacking law): darker than the ramp's own fade target, so the
+#: shed embers / dust skirt / apex burst open on a bruise instead of a white bead.
+EMBER_BIRTH = (0.18, 0.08, 0.03)   # supply ember family, below 0xFFBF59
+EARTH_BIRTH = (0.14, 0.12, 0.09)   # landing dust — damp soil, not gray fog
+WIND_BIRTH = (0.07, 0.14, 0.18)    # sky-launch cold wind-light, below 0x7FE7FF
 
 
 def pts_curve(points, lock=True):
@@ -79,7 +132,7 @@ def build_supply_drop_contrail() -> FxBuilder:
                  (1.0, 0.702, 0.49, 1.0)]),
             # tail sags — reads like a real drop streamer
             physics=dict(gravity=(0.0, -0.02, 0.0), inertia=0.2, damping=0.8))
-       .with_material(texture_material(CIRCLE, hdr=(1.6, 1.2, 1.0)))
+       .with_material(texture_material(CIRCLE, hdr=hdr(1.6, 1.2, 1.0)))
        # Entity-local box: the tail hangs ABOVE the falling anchor (crate drops ~60).
        .with_cull_box((-8.0, -2.0, -8.0), (8.0, 40.0, 8.0)))
 
@@ -90,7 +143,11 @@ def build_supply_drop_contrail() -> FxBuilder:
             "ember_shed",
             duration=160, looping=True,
             start_lifetime=random_between(30, 50),
-            start_speed=random_between(0.05, 0.15),
+            # WAVE-13 units: blocks/SECOND. 0.05-0.15 shed the embers 7-37 cm, i.e. they
+            # stayed welded to the crate hull. The shed scatter wants ~0.5-1.5 blocks
+            # across a 30-50t life (the fall itself comes from inheritVelocity+gravity,
+            # so this stays small on purpose): 0.3-0.8 x 0.05 x 30..50t = 0.45..2.0.
+            start_speed=random_between(0.3, 0.8),
             start_size=nf3(random_between(0.06, 0.12), random_between(0.06, 0.12),
                            random_between(0.06, 0.12)),
             simulation_space="World", max_particles=60,
@@ -102,10 +159,15 @@ def build_supply_drop_contrail() -> FxBuilder:
        .with_physics(collision=True, removed_when_collided=True, gravity=0.12)
        .with_sub_emitters(sub_emitter("eclipse:supply_landing_dust",
                                       event="FirstCollision", probability=0.12))
-       .with_material(texture_material(CIRCLE, hdr=(1.4, 0.9, 0.5)))
-       .with_curves(color_over_lifetime=gradient(  # amber -> red -> out
+       .with_material(texture_material(CIRCLE, hdr=hdr(1.4, 0.9, 0.5)))
+       # 60 embers trailing one crate: birth tint + a cooler sibling ramp so the shed
+       # reads as individual sparks instead of one amber smear behind the hull.
+       .with_curves(color_over_lifetime=varied(  # amber -> red -> out
             [(0.0, 0.9), (0.7, 0.75), (1.0, 0.0)],
-            [(0.0, 1.0, 0.75, 0.35), (0.6, 0.9, 0.3, 0.12), (1.0, 0.5, 0.1, 0.05)]))
+            [(0.0, *EMBER_BIRTH), (0.15, 1.0, 0.75, 0.35), (0.6, 0.9, 0.3, 0.12),
+             (1.0, 0.5, 0.1, 0.05)],
+            [(0.0, *EMBER_BIRTH), (0.3, 0.9, 0.3, 0.12), (1.0, *EMBER_BIRTH)],
+            alpha_alt=[(0.0, 0.7), (0.55, 0.8), (1.0, 0.0)]))
        .with_cull_box((-8.0, -2.0, -8.0), (8.0, 64.0, 8.0)))
     return fx
 
@@ -120,7 +182,10 @@ def build_supply_landing_dust() -> FxBuilder:
             "dust_ring",
             duration=20, looping=False,
             start_lifetime=random_between(16, 26),
-            start_speed=random_between(0.5, 0.9),
+            # WAVE-13 units: a crate hitting the ground throws its skirt 1-3 blocks, not
+            # the 0.4-1.2 the old blocks/SECOND value bought off an r=0.8 ring.
+            # 1.2-2.2 x 0.05 x 16..26t = 0.96..2.86 blocks.
+            start_speed=random_between(1.2, 2.2),
             start_size=nf3(random_between(0.16, 0.3), random_between(0.16, 0.3),
                            random_between(0.16, 0.3)),
             simulation_space="World", max_particles=40)
@@ -129,25 +194,33 @@ def build_supply_landing_dust() -> FxBuilder:
        .with_physics(collision=False, gravity=0.06)
        .with_material(texture_material(SMOKE, blend=BLEND_ALPHA))
        .with_renderer(vertex_sorting="DISTANCE", shade=True)
-       .with_curves(color_over_lifetime=gradient(  # earth tones in-hold-out
+       # 36 overlapping alpha smoke quads off one ring: without per-particle ramps the
+       # skirt banks into a single flat disc of dust.
+       .with_curves(color_over_lifetime=varied(  # earth tones in-hold-out
             [(0.0, 0.0), (0.15, 0.7), (1.0, 0.0)],
-            [(0.0, 0.45, 0.38, 0.3), (1.0, 0.3, 0.25, 0.2)])))
+            [(0.0, *EARTH_BIRTH), (0.2, 0.45, 0.38, 0.3), (1.0, 0.3, 0.25, 0.2)],
+            [(0.0, *EARTH_BIRTH), (0.3, 0.3, 0.25, 0.2), (1.0, *EARTH_BIRTH)],
+            alpha_alt=[(0.0, 0.0), (0.25, 0.55), (1.0, 0.0)])))
 
     # 10 additive HDR pop sparks, cone up.
     (fx.particle_emitter(
             "pop_sparks",
             duration=20, looping=False,
             start_lifetime=random_between(8, 14),
-            start_speed=random_between(0.4, 0.9),
+            # WAVE-13 units: 0.16-0.63 blocks was a pop that never left the dust ring.
+            # 2.0-4.0 x 0.05 x 8..14t = 0.8..2.8 blocks up the 25-degree cone.
+            start_speed=random_between(2.0, 4.0),
             start_size=nf3(random_between(0.05, 0.1), random_between(0.05, 0.1),
                            random_between(0.05, 0.1)),
             simulation_space="World", max_particles=12)
        .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(10), cycles=1)])
        .with_shape(cone(angle=25.0, radius=0.3))
-       .with_material(texture_material(CIRCLE, hdr=(1.8, 1.4, 0.9)))
-       .with_curves(color_over_lifetime=gradient(
+       .with_material(texture_material(CIRCLE, hdr=hdr(1.8, 1.4, 0.9)))
+       .with_curves(color_over_lifetime=varied(
             [(0.0, 1.0), (1.0, 0.0)],
-            [(0.0, 1.0, 0.9, 0.6), (1.0, 0.85, 0.4, 0.15)])))
+            [(0.0, *EMBER_BIRTH), (0.12, 1.0, 0.9, 0.6), (1.0, 0.85, 0.4, 0.15)],
+            [(0.0, *EMBER_BIRTH), (0.2, 0.85, 0.4, 0.15), (1.0, *EMBER_BIRTH)],
+            alpha_alt=[(0.0, 0.8), (0.4, 0.7), (1.0, 0.0)])))
     return fx
 
 
@@ -158,8 +231,14 @@ def build_supply_landing_dust() -> FxBuilder:
 # stop wiring: a walk-off simply means the server never sends the launch cue).
 CHARGE_TICKS = 15
 # Server spiral (SkyLauncher.tickCharges): angle = progress*4*PI, r 1.4, y progress*2.5.
-HELIX_VY = 2.5 / CHARGE_TICKS            # blocks/tick straight up
-HELIX_OMEGA = 4.0 * 3.14159265 / CHARGE_TICKS  # rad/tick around Y (4 PI per charge)
+# WAVE-13 units: `velocityOverLifetime.linear` and `orbital` are both applied as
+# value x 0.05 per TICK, i.e. they are per-SECOND quantities. Authoring them per-TICK
+# (the old two lines) ran the whole helix at 1/20 speed: the carriers climbed 12.5 cm
+# of the server spiral's 2.5 blocks and swept 0.63 rad of its 4*PI, so the ribbons drew
+# a stub instead of the triple helix. TICKS_PER_SECOND back-converts both.
+TICK_SECONDS = 0.05
+HELIX_VY = 2.5 / (CHARGE_TICKS * TICK_SECONDS)            # blocks/SECOND straight up
+HELIX_OMEGA = 4.0 * 3.14159265 / (CHARGE_TICKS * TICK_SECONDS)  # rad/SECOND (4 PI/charge)
 
 
 def build_sky_launch_charge() -> FxBuilder:
@@ -186,7 +265,7 @@ def build_sky_launch_charge() -> FxBuilder:
             linear=nf3(constant(0), constant(HELIX_VY), constant(0)),
             orbital_mode="AngularVelocity",
             orbital=nf3(constant(0), constant(HELIX_OMEGA), constant(0))))
-        .with_material(texture_material(CIRCLE, hdr=(1.5, 2.2, 2.0)))  # cold wind-light
+        .with_material(texture_material(CIRCLE, hdr=hdr(1.5, 2.2, 2.0)))  # cold wind-light
         .with_cull_box((-6.0, -1.0, -6.0), (6.0, 8.0, 6.0)))
     carriers.with_module("trails", {
         "ratio": F(1.0),
@@ -206,7 +285,7 @@ def build_sky_launch_charge() -> FxBuilder:
             "physicsSetting": {
                 "warmup": F(0.0), "gravity": L([F(0.0), F(0.0), F(0.0)]),
                 "inertia": F(0.15), "velocitySmoothing": F(0.75), "damping": F(0.85)},
-            "renderer": ribbon_renderer(texture_material(CIRCLE, hdr=(1.5, 2.2, 2.0))),
+            "renderer": ribbon_renderer(texture_material(CIRCLE, hdr=hdr(1.5, 2.2, 2.0))),
         }})
 
     # Release flash at t=14, synced to the throw (charge fires at tick 15).
@@ -214,19 +293,25 @@ def build_sky_launch_charge() -> FxBuilder:
             "apex_burst",
             duration=CHARGE_TICKS, looping=False,
             start_lifetime=random_between(8, 14),
-            start_speed=random_between(1.2, 2.0),
+            # WAVE-13 units: the release flash must clear the pad by a few blocks to
+            # sell the throw; 1.2-2.0 blocks/SECOND only bought 0.48-1.4 over an 8-14t
+            # life. 4.0-8.0 x 0.05 x 8..14t = 1.6..5.6 blocks up the cone. This also
+            # feeds the StretchedBillboard velocityScale, so the streaks now HAVE length.
+            start_speed=random_between(4.0, 8.0),
             start_size=nf3(random_between(0.06, 0.12), random_between(0.06, 0.12),
                            random_between(0.06, 0.12)),
             simulation_space="World", max_particles=24)
        .with_emission(rate=constant(0.0),
                       bursts=[burst(time=CHARGE_TICKS - 1, count=constant(20), cycles=1)])
        .with_shape(cone(angle=20.0, radius=0.4))
-       .with_material(texture_material(CIRCLE, hdr=(1.6, 2.0, 2.2)))
+       .with_material(texture_material(CIRCLE, hdr=hdr(1.6, 2.0, 2.2)))
        .with_renderer(render_mode="StretchedBillboard", velocity_scale=1.6,
                       length_scale=2.4, vertex_sorting="NONE")
-       .with_curves(color_over_lifetime=gradient(
+       .with_curves(color_over_lifetime=varied(
             [(0.0, 1.0), (1.0, 0.0)],
-            [(0.0, 1.0, 1.0, 1.0), (1.0, 0.55, 0.9, 1.0)]))
+            [(0.0, *WIND_BIRTH), (0.1, 1.0, 1.0, 1.0), (1.0, 0.55, 0.9, 1.0)],
+            [(0.0, *WIND_BIRTH), (0.18, 0.55, 0.9, 1.0), (1.0, *WIND_BIRTH)],
+            alpha_alt=[(0.0, 0.75), (0.5, 0.6), (1.0, 0.0)]))
        .with_cull_box((-6.0, -1.0, -6.0), (6.0, 8.0, 6.0)))
     return fx
 
@@ -248,7 +333,7 @@ def build_sky_launch_contrail() -> FxBuilder:
                 [(0.0, 1.0, 1.0, 1.0), (0.45, 0.608, 0.91, 1.0),
                  (1.0, 0.608, 0.91, 1.0)]),
             physics=dict(gravity=(0.0, -0.01, 0.0), inertia=0.25, damping=0.8))
-       .with_material(texture_material(CIRCLE, hdr=(1.3, 1.9, 2.1)))
+       .with_material(texture_material(CIRCLE, hdr=hdr(1.3, 1.9, 2.1)))
        # The flyer climbs fast — the world-space tail hangs BELOW the anchor.
        .with_cull_box((-10.0, -48.0, -10.0), (10.0, 10.0, 10.0)))
 
@@ -265,10 +350,14 @@ def build_sky_launch_contrail() -> FxBuilder:
        .with_emission(rate=constant(0.0),
                       bursts=[burst(time=0, count=constant(6), cycles=10, interval=6)])
        .with_shape(circle(radius=0.7, thickness=0.0, arc_mode="BurstSpread"))
-       .with_material(texture_material(CIRCLE, hdr=(0.8, 1.1, 1.2)))
-       .with_curves(color_over_lifetime=gradient(
+       .with_material(texture_material(CIRCLE, hdr=hdr(0.8, 1.1, 1.2)))
+       # 10 stacked rings x 6 = 60 quads laid along one climb line: per-particle ramps
+       # keep the rings distinguishable as they slip past the flyer.
+       .with_curves(color_over_lifetime=varied(
             [(0.0, 0.0), (0.25, 0.7), (1.0, 0.0)],
-            [(0.0, 0.75, 0.95, 1.0), (1.0, 0.55, 0.8, 1.0)]))
+            [(0.0, *WIND_BIRTH), (0.3, 0.75, 0.95, 1.0), (1.0, 0.55, 0.8, 1.0)],
+            [(0.0, *WIND_BIRTH), (0.4, 0.55, 0.8, 1.0), (1.0, *WIND_BIRTH)],
+            alpha_alt=[(0.0, 0.0), (0.35, 0.55), (1.0, 0.0)]))
        .with_cull_box((-10.0, -48.0, -10.0), (10.0, 10.0, 10.0)))
     return fx
 

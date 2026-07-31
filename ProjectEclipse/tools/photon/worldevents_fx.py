@@ -37,6 +37,26 @@ Style-guide conformance (FX-STYLE-GUIDE.md):
   trace), not a glitch snap; C5 ERA-adjacent drift ≤0.05 blk/t cold dust.
 - Budgets: every one-shot ≤ ~120 spawned particles; the idle loop carries a cull box +
   modest maxParticles per the WINDOWED-loop law (INTEGRATION.md §4).
+
+FX-WAVE-13 C4 PASS — what changed and WHY (census §7 line C4):
+
+  1. UNITS. Photon reads `startSpeed`/`velocityOverLifetime.linear` in blocks per
+     SECOND (`×0.05`/tick), `radial` in `×0.01`/tick, `orbital` in rad/SECOND — the
+     same slip B6 found in `ceremony_fx.py`, and this file had it everywhere. The
+     beacon's indraw motes crawled 9 CENTIMETRES of their authored 2.2-block socket,
+     the omen cinders rose 11 cm, the release's reverse-indraw covered 7 cm of a
+     3.5-block ring, the gray exhale did not move at all, and `supply_herald`'s ember
+     streak fell 3.96 blocks down a drop line its own cull box sizes at 84. Every
+     velocity is now back-solved from the distance its own comment promises
+     (`blocks = v × 0.05 × lifetimeTicks`, radial `× 0.01`).
+  2. `random_gradient` (via `varied()`) on every emitter with more than a couple of
+     particles — this file had ZERO, so every cinder/spark/mote was a colour clone.
+  3. Dark birth tints (V2.1 stacking law): ramps OPEN on a bruise below the fade
+     target and only lick hot at their own peak, so a shell of additive quads inside
+     one half-block stops converging to a white ball.
+  4. HDR clamped to the wave-13 stacking ceiling 1.45 (hue ratio preserved) — the
+     beacon cores, the implosion flash and the gold voices all sat at 1.8-2.4.
+  5. Timing snap — `SEG_SNAP_*`: attack 8t -> 3-5t, decay lengthened.
 """
 from __future__ import annotations
 
@@ -47,7 +67,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from fxlib import (  # noqa: E402
     BLEND_ADDITIVE, BLEND_ALPHA, FX_ASSETS_DIR, FxBuilder, REPO_ROOT, burst, circle,
     cone, constant, curve, dot, function_shape, gradient, nf3, random_between,
-    random_color, sphere, texture_material, validate_file,
+    random_color, random_gradient, sphere, texture_material, validate_file,
 )
 
 TEX_CIRCLE = "photon:textures/particle/circle.png"
@@ -69,6 +89,45 @@ SEG_EASE_IN_OUT_DOWN = (0.0, 1.0, 0.4, 1.0, 0.6, 0.0, 1.0, 0.0)
 SEG_EASE_OUT = (0.0, 0.0, 0.08, 0.7, 0.45, 0.95, 1.0, 1.0)
 # Pop to full then shrink out late.
 SEG_HOLD_SHRINK = (0.0, 1.0, 0.6, 1.0, 0.85, 0.5, 1.0, 0.0)
+# WAVE-13 timing snap: full open by t ~= 0.30 (was ~0.5), then a long exhale.
+SEG_SNAP_SWELL = [(0.0, 0.0, 0.05, 0.66, 0.15, 1.04, 0.3, 1.0),
+                  (0.3, 1.0, 0.56, 0.88, 0.84, 0.28, 1.0, 0.0)]
+# WAVE-13 impact envelope: ~2t attack, long afterglow tail (the money frame keeps it).
+SEG_SNAP_FLASH = (0.0, 0.22, 0.045, 1.0, 0.4, 0.52, 1.0, 0.0)
+# WAVE-13 ring expansion: 90 % of the reach inside the first third, then a slow creep.
+SEG_SNAP_OUT = (0.0, 0.0, 0.05, 0.55, 0.28, 0.94, 1.0, 1.0)
+
+# ---------------------------------------------------------------------------
+# WAVE-13 C4 levers. Local by design: `fxlib.py` is A0 ground this wave, so the
+# helper pair below is the same idiom B6 landed in `ceremony_fx.py`, copied rather
+# than shared, so the two generators can never block each other.
+# ---------------------------------------------------------------------------
+#: Stacking-law HDR ceiling (FX_CENSUS_WAVE13 §8.4 / §2 "HDR ~1.45").
+HDR_CEILING = 1.45
+
+
+def hdr(r, g, b):
+    """Clamps an HDR triple to `HDR_CEILING`, keeping the channel ratio (= the hue)."""
+    peak = max(r, g, b)
+    if peak <= HDR_CEILING:
+        return (r, g, b)
+    k = HDR_CEILING / peak
+    return (round(r * k, 3), round(g * k, 3), round(b * k, 3))
+
+
+def varied(alpha_pts, rgb_pts, rgb_alt, alpha_alt=None):
+    """`random_gradient` — the authored ramp plus a sibling inside the same palette;
+    each particle rolls its own memoized lerp, so no two read identical."""
+    return random_gradient(alpha_pts, rgb_pts, alpha_alt or alpha_pts, rgb_alt)
+
+
+#: Birth tints (V2.1 stacking law): darker than every ramp's own fade target, so a
+#: cluster of additive quads born inside one half-block opens as a bruise.
+SAC_BIRTH = (0.13, 0.10, 0.21)
+GOLD_BIRTH = (0.20, 0.15, 0.07)
+BLOOD_BIRTH = (0.16, 0.05, 0.04)
+SLATE_BIRTH = (0.12, 0.12, 0.17)
+BILE_BIRTH = (0.09, 0.15, 0.11)
 
 # C1 beacon column width envelope over the 100t duration: dead until the t=10 punch
 # (ANTICIPATION), snap to full in 3t (IMPACT), ease to a hold through t=70 (the 3 s
@@ -117,7 +176,7 @@ BEACON_VOIDS = {
 
 
 def _beacon_column(fx: FxBuilder, name: str, x_off: float, width_peak: float,
-                   rgb, hdr) -> None:
+                   rgb, hdr_rgb) -> None:
     """One vertical hairline beam: width rides BEACON_WIDTH_SEGS, color fades to void."""
     (fx.beam_emitter(
             name, end=(0.0, BEACON_HEIGHT, 0.0),
@@ -128,8 +187,8 @@ def _beacon_column(fx: FxBuilder, name: str, x_off: float, width_peak: float,
                 [(0.0, 1.0, 1.0, 1.0), (0.13, rgb[0], rgb[1], rgb[2]),
                  (1.0, rgb[0], rgb[1], rgb[2])]))
        .at(x_off, 0.0, 0.0)
-       .with_material(texture_material(TEX_LASER, hdr=hdr, blend=BLEND_ADDITIVE,
-                                       cull=False))
+       .with_material(texture_material(TEX_LASER, hdr=hdr(*hdr_rgb),
+                                       blend=BLEND_ADDITIVE, cull=False))
        # The plan's "cull box sized accordingly": cover the WHOLE column so any
        # visible slice keeps the beam rendered from across the disc.
        .with_cull_box((-8.0, -2.0, -8.0), (8.0, BEACON_HEIGHT + 8.0, 8.0))
@@ -142,11 +201,15 @@ def build_summon_beacon(kind: int) -> FxBuilder:
     hold →70, fray →100), L2 slow orbit sparks during the hold (SACRED verb),
     L3 base flare ring at the punch. Kind 3 renders the column as a GLITCH split
     pair: white core + magenta/cyan fringes displaced along X (§1.3 law)."""
-    hot, body, deep, hdr = BEACON_PALETTES[kind]
+    hot, body, deep, boost = BEACON_PALETTES[kind]
     void = BEACON_VOIDS[kind]
     fx = FxBuilder(f"boss_summon_beacon_{kind}")
 
     # L0 — anticipation indraw: 14 motes pulled into the socket before the punch.
+    # UNITS: the shape seats them on r = 2.2 and the ramp accelerates inward, so the
+    # radial rate has to average |v| = 2.2 / (0.01 × 10t) = 22, not 0.5 (= 5 cm).
+    # W13: birth on the socket's own deep tone, hot only where they arrive; the alt
+    # ramp lets a third of the motes come in gold-cool so the ring is not 14 clones.
     (fx.particle_emitter(
             "indraw", duration=100, looping=False,
             start_lifetime=constant(10), start_speed=constant(0.0),
@@ -156,12 +219,15 @@ def build_summon_beacon(kind: int) -> FxBuilder:
        .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(14))])
        .with_shape(circle(radius=2.2, thickness=0.0, arc_mode="BurstSpread"))
        .with_curves(
-            velocity_over_lifetime=dict(radial=curve(-0.9, -0.1, [SEG_EASE_IN_OUT_DOWN],
+            velocity_over_lifetime=dict(radial=curve(-36.0, -8.0, [SEG_EASE_IN_OUT_DOWN],
                                                      "lifetime", "value")),
-            color_over_lifetime=gradient(
+            color_over_lifetime=varied(
                 [(0.0, 0.0), (0.3, 0.7), (1.0, 0.0)],
-                [(0.0, body[0], body[1], body[2]), (1.0, hot[0], hot[1], hot[2])]))
-       .with_material(texture_material(TEX_CIRCLE, hdr=(1.0, 1.0, 1.2)))
+                [(0.0,) + SAC_BIRTH, (0.45, body[0], body[1], body[2]),
+                 (1.0, hot[0], hot[1], hot[2])],
+                [(0.0,) + SAC_BIRTH, (0.5, deep[0], deep[1], deep[2]),
+                 (1.0, body[0], body[1], body[2])]))
+       .with_material(texture_material(TEX_CIRCLE, hdr=hdr(1.0, 1.0, 1.2)))
        .with_cull_box((-6.0, -1.0, -6.0), (6.0, 8.0, 6.0)))
 
     # L1 — the column. Kind 3 = GLITCH split pair (white core, magenta/cyan fringes
@@ -173,11 +239,14 @@ def build_summon_beacon(kind: int) -> FxBuilder:
         _beacon_column(fx, "fringe_cyan", -0.14, 0.16, (0.310, 0.910, 1.0),
                        (0.4, 1.1, 1.2))
     else:
-        _beacon_column(fx, "core", 0.0, 0.34, hot, hdr)
-        _beacon_column(fx, "sheath", 0.0, 0.9, body, (hdr[0] * 0.4, hdr[1] * 0.4,
-                                                      hdr[2] * 0.4))
+        _beacon_column(fx, "core", 0.0, 0.34, hot, boost)
+        _beacon_column(fx, "sheath", 0.0, 0.9, body, (boost[0] * 0.4, boost[1] * 0.4,
+                                                      boost[2] * 0.4))
 
-    # L2 — slow orbit sparks shed during the hold (0.6 rad/s Y orbit, +0.05 blk/t rise).
+    # L2 — slow orbit sparks shed during the hold. UNITS: `orbital` is already rad/s
+    # (0.6 = the authored lap rate) but the rise was written per TICK — 0.045 b/t is
+    # 0.9 b/s, so the sparks climbed 10 cm of the column instead of ~2 blocks.
+    # W13: born on the void tone, hot mid-life; the alt ramp keeps a cooler minority.
     (fx.particle_emitter(
             "orbit_sparks", duration=100, looping=False,
             start_lifetime=random_between(30, 44),
@@ -189,14 +258,16 @@ def build_summon_beacon(kind: int) -> FxBuilder:
        .with_shape(sphere(radius=1.2, thickness=0.15))
        .with_curves(
             velocity_over_lifetime=dict(
-                linear=nf3(constant(0), random_between(0.03, 0.06), constant(0)),
+                linear=nf3(constant(0), random_between(0.6, 1.2), constant(0)),
                 orbital=nf3(constant(0), constant(0.6), constant(0))),
-            color_over_lifetime=gradient(
+            color_over_lifetime=varied(
                 [(0.0, 0.0), (0.2, 0.9), (0.75, 0.5), (1.0, 0.0)],
-                [(0.0, hot[0], hot[1], hot[2]), (0.4, body[0], body[1], body[2]),
-                 (1.0, void[0], void[1], void[2])]))
-       .with_material(texture_material(TEX_CIRCLE, hdr=(hdr[0] * 0.7, hdr[1] * 0.7,
-                                                        hdr[2] * 0.7)))
+                [(0.0, void[0], void[1], void[2]), (0.22, hot[0], hot[1], hot[2]),
+                 (0.55, body[0], body[1], body[2]), (1.0, void[0], void[1], void[2])],
+                [(0.0, void[0], void[1], void[2]), (0.3, body[0], body[1], body[2]),
+                 (0.6, deep[0], deep[1], deep[2]), (1.0, void[0], void[1], void[2])]))
+       .with_material(texture_material(TEX_CIRCLE, hdr=hdr(boost[0] * 0.7, boost[1] * 0.7,
+                                                           boost[2] * 0.7)))
        .with_renderer(vertex_sorting="NONE")
        .with_lights(sky=15, block=15)
        .with_cull_box((-4.0, -1.0, -4.0), (4.0, 10.0, 4.0)))
@@ -208,10 +279,10 @@ def build_summon_beacon(kind: int) -> FxBuilder:
             start_size=nf3(1.0), simulation_space="World", max_particles=2)
        .with_emission(rate=constant(0.0), bursts=[burst(time=10, count=constant(1))])
        .with_shape(dot())
-       .with_material(texture_material(TEX_RING, hdr=hdr, blend=BLEND_ADDITIVE))
+       .with_material(texture_material(TEX_RING, hdr=hdr(*boost), blend=BLEND_ADDITIVE))
        .with_renderer(render_mode="Horizontal", vertex_sorting="NONE")
        .with_curves(
-            size_over_lifetime=nf3(*[curve(0.6, 7.0, [SEG_EASE_OUT], "lifetime", "size")
+            size_over_lifetime=nf3(*[curve(0.6, 7.0, [SEG_SNAP_OUT], "lifetime", "size")
                                      for _ in range(3)]),
             color_over_lifetime=gradient(
                 [(0.0, 0.9), (0.5, 0.4), (1.0, 0.0)],
@@ -245,7 +316,7 @@ def build_contract_omen_ripple() -> FxBuilder:
             start_size=nf3(1.2), simulation_space="World", max_particles=2)
        .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(1))])
        .with_shape(dot())
-       .with_material(texture_material(TEX_RING_SOFT, hdr=(0.8, 0.2, 0.15),
+       .with_material(texture_material(TEX_RING_SOFT, hdr=hdr(0.8, 0.2, 0.15),
                                        blend=BLEND_ADDITIVE))
        .with_renderer(render_mode="Horizontal", vertex_sorting="NONE")
        .with_curves(
@@ -264,11 +335,11 @@ def build_contract_omen_ripple() -> FxBuilder:
                 start_size=nf3(1.0), simulation_space="World", max_particles=2)
            .with_emission(rate=constant(0.0), bursts=[burst(time=t0, count=constant(1))])
            .with_shape(dot(), position=nf3(constant(0.0), constant(0.15), constant(0.0)))
-           .with_material(texture_material(TEX_RING, hdr=(1.3, 0.35, 0.3),
+           .with_material(texture_material(TEX_RING, hdr=hdr(1.3, 0.35, 0.3),
                                            blend=BLEND_ADDITIVE))
            .with_renderer(render_mode="Horizontal", vertex_sorting="NONE")
            .with_curves(
-                size_over_lifetime=nf3(*[curve(0.5, reach, [SEG_EASE_OUT],
+                size_over_lifetime=nf3(*[curve(0.5, reach, [SEG_SNAP_OUT],
                                                "lifetime", "size") for _ in range(3)]),
                 color_over_lifetime=gradient(
                     [(0.0, alpha), (0.12, alpha * 0.85), (1.0, 0.0)],
@@ -277,10 +348,15 @@ def build_contract_omen_ripple() -> FxBuilder:
                      (1.0, COR_INK[0], COR_INK[1], COR_INK[2])])))
 
     # L2 — drifting red cinders: 2 s of slow-rising embers left by the wave.
+    # UNITS: authored per tick, so 40 embers rose 11 cm over two full seconds and the
+    # "drift" simply was not there. 0.6-1.1 b/s × 0.05 × 30-44t = 0.9-2.4 blocks up.
+    # W13: the ramp opens on a near-black blood birth tint (40 additive quads inside a
+    # 5-block ring used to converge on the pale flash), and the alt ramp keeps a
+    # crimson-leaning minority so the ember field is not one colour.
     (fx.particle_emitter(
             "cinders", duration=50, looping=False,
             start_lifetime=random_between(30, 44),
-            start_speed=random_between(0.02, 0.05),
+            start_speed=random_between(0.4, 1.0),
             start_size=nf3(random_between(0.06, 0.12), random_between(0.06, 0.12),
                            random_between(0.06, 0.12)),
             simulation_space="World", max_particles=40)
@@ -290,14 +366,15 @@ def build_contract_omen_ripple() -> FxBuilder:
        .with_shape(circle(radius=5.0, thickness=0.6))
        .with_curves(
             velocity_over_lifetime=dict(
-                linear=nf3(constant(0), random_between(0.02, 0.05), constant(0))),
+                linear=nf3(constant(0), random_between(0.6, 1.1), constant(0))),
             noise=dict(frequency=0.6, position=nf3(0.04)),
-            color_over_lifetime=gradient(
+            color_over_lifetime=varied(
                 [(0.0, 0.0), (0.15, 0.85), (0.7, 0.4), (1.0, 0.0)],
-                [(0.0, BLOOD_HOT[0], BLOOD_HOT[1], BLOOD_HOT[2]),
-                 (0.35, BLOOD_DEEP[0], BLOOD_DEEP[1], BLOOD_DEEP[2]),
-                 (1.0, COR_INK[0], COR_INK[1], COR_INK[2])]))
-       .with_material(texture_material(TEX_CIRCLE, hdr=(1.2, 0.3, 0.25)))
+                [(0.0,) + BLOOD_BIRTH, (0.18,) + BLOOD_HOT,
+                 (0.45,) + BLOOD_DEEP, (1.0,) + COR_INK],
+                [(0.0,) + BLOOD_BIRTH, (0.22,) + BLOOD_BODY,
+                 (0.6,) + BLOOD_DEEP, (1.0,) + COR_INK]))
+       .with_material(texture_material(TEX_CIRCLE, hdr=hdr(1.2, 0.3, 0.25)))
        .with_lights(sky=13, block=13))
     return fx
 
@@ -309,6 +386,10 @@ def build_contract_omen_release() -> FxBuilder:
     fx = FxBuilder("contract_omen_release")
 
     # Reversed cinders: embers converging on the player column, dimming as they arrive.
+    # UNITS: they are seated on r = 3.5 and must ARRIVE inside their 14t life — that is
+    # an average |v| of 3.5 / (0.01 × 14) = 25, not 0.32 (= 4.5 cm, i.e. a static ring).
+    # W13: fade target unchanged, but the birth end starts dark and the alt ramp lets
+    # some embers gutter through the blood body instead of straight to gray.
     (fx.particle_emitter(
             "reverse_cinders", duration=30, looping=False,
             start_lifetime=constant(14), start_speed=constant(0.0),
@@ -318,19 +399,21 @@ def build_contract_omen_release() -> FxBuilder:
        .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(26))])
        .with_shape(circle(radius=3.5, thickness=0.3))
        .with_curves(
-            velocity_over_lifetime=dict(radial=curve(-0.5, -0.15, [SEG_EASE_IN_OUT_DOWN],
+            velocity_over_lifetime=dict(radial=curve(-40.0, -10.0, [SEG_EASE_IN_OUT_DOWN],
                                                      "lifetime", "value")),
-            color_over_lifetime=gradient(
+            color_over_lifetime=varied(
                 [(0.0, 0.7), (0.7, 0.45), (1.0, 0.0)],
-                [(0.0, BLOOD_DEEP[0], BLOOD_DEEP[1], BLOOD_DEEP[2]),
-                 (1.0, GRAY_EXHALE[0], GRAY_EXHALE[1], GRAY_EXHALE[2])]))
-       .with_material(texture_material(TEX_CIRCLE, hdr=(0.8, 0.25, 0.2))))
+                [(0.0,) + BLOOD_DEEP, (1.0,) + GRAY_EXHALE],
+                [(0.0,) + BLOOD_BODY, (0.55,) + BLOOD_DEEP, (1.0,) + GRAY_EXHALE]))
+       .with_material(texture_material(TEX_CIRCLE, hdr=hdr(0.8, 0.25, 0.2))))
 
     # The gray exhale: one soft alpha-blend breath drifting up and out, to slate.
+    # UNITS: 0.06 b/t is 1.2 b/s — the breath never left the socket. Now it covers
+    # ~1.2 blocks over its 14-20t life, which is what "drifting up and out" needs.
     (fx.particle_emitter(
             "gray_exhale", duration=30, looping=False,
             start_lifetime=random_between(14, 20),
-            start_speed=random_between(0.04, 0.08),
+            start_speed=random_between(0.8, 1.6),
             start_size=nf3(random_between(0.5, 0.9), random_between(0.5, 0.9),
                            random_between(0.5, 0.9)),
             simulation_space="World", max_particles=16)
@@ -341,10 +424,10 @@ def build_contract_omen_release() -> FxBuilder:
        .with_curves(
             size_over_lifetime=nf3(*[curve(0.7, 1.6, [SEG_EASE_IN_OUT_UP],
                                            "lifetime", "size") for _ in range(3)]),
-            color_over_lifetime=gradient(
+            color_over_lifetime=varied(
                 [(0.0, 0.0), (0.25, 0.5), (1.0, 0.0)],
-                [(0.0, GRAY_EXHALE[0], GRAY_EXHALE[1], GRAY_EXHALE[2]),
-                 (1.0, STM_SLATE[0], STM_SLATE[1], STM_SLATE[2])])))
+                [(0.0,) + SLATE_BIRTH, (0.3,) + GRAY_EXHALE, (1.0,) + STM_SLATE],
+                [(0.0,) + SLATE_BIRTH, (0.35,) + STM_SLATE, (1.0,) + STM_SLATE])))
     return fx
 
 
@@ -358,6 +441,7 @@ SAC_VIOLET = (0.725, 0.549, 1.0)
 SAC_DEEP = (0.482, 0.310, 0.816)
 SAC_GOLD = (1.0, 0.820, 0.4)
 SAC_VOID = (0.180, 0.137, 0.278)
+ERA_AMBER = (1.0, 0.698, 0.369)  # §1 token — the gold burst's cooling mid
 
 
 def build_minigame_gate_fanfare() -> FxBuilder:
@@ -374,11 +458,11 @@ def build_minigame_gate_fanfare() -> FxBuilder:
             start_size=nf3(0.8), simulation_space="World", max_particles=2)
        .with_emission(rate=constant(0.0), bursts=[burst(time=8, count=constant(1))])
        .with_shape(dot())
-       .with_material(texture_material(TEX_RING_SOFT, hdr=(1.4, 1.1, 1.8),
+       .with_material(texture_material(TEX_RING_SOFT, hdr=hdr(1.4, 1.1, 1.8),
                                        blend=BLEND_ADDITIVE))
        .with_renderer(vertex_sorting="NONE")
        .with_curves(
-            size_over_lifetime=nf3(*[curve(0.5, 3.4, [SEG_EASE_OUT], "lifetime", "size")
+            size_over_lifetime=nf3(*[curve(0.5, 3.4, [SEG_SNAP_OUT], "lifetime", "size")
                                      for _ in range(3)]),
             color_over_lifetime=gradient(
                 [(0.0, 0.9), (0.35, 0.5), (1.0, 0.0)],
@@ -400,19 +484,29 @@ def build_minigame_gate_fanfare() -> FxBuilder:
                                      "duration", "value"))
            .with_shape(function_shape(x=f"1.3*cos(t*4*PI{phase})",
                                       y=f"1.8*sin(t*4*PI{phase})", z="0"))
-           .with_material(texture_material(TEX_CIRCLE, hdr=(1.5, 1.2, 2.0)))
+           .with_material(texture_material(TEX_CIRCLE, hdr=hdr(1.5, 1.2, 2.0)))
            .with_renderer(vertex_sorting="NONE")
            .with_lights(sky=15, block=15)
-           .with_curves(color_over_lifetime=gradient(
+           # W13: the trail is 30 overlapping quads on one line — the alt ramp breaks
+           # the "painted stripe" read into a violet/deep flicker along the edge.
+           .with_curves(color_over_lifetime=varied(
                 [(0.0, 1.0), (0.5, 0.6), (1.0, 0.0)],
                 [(0.0, SAC_HOT[0], SAC_HOT[1], SAC_HOT[2]),
                  (0.5, SAC_VIOLET[0], SAC_VIOLET[1], SAC_VIOLET[2]),
-                 (1.0, SAC_DEEP[0], SAC_DEEP[1], SAC_DEEP[2])])))
+                 (1.0, SAC_DEEP[0], SAC_DEEP[1], SAC_DEEP[2])],
+                [(0.0, SAC_VIOLET[0], SAC_VIOLET[1], SAC_VIOLET[2]),
+                 (0.5, SAC_DEEP[0], SAC_DEEP[1], SAC_DEEP[2]),
+                 (1.0, SAC_VOID[0], SAC_VOID[1], SAC_VOID[2])])))
 
     # L2 — confetti sparks leaping off the frame. Two emitters keep the §1.1 gold
     # quota honest: a violet-white majority (32) and a gold minority (10 ≈ 24 %)
     # that only fires on the impact/early-settle beats.
-    for name, tint_a, tint_b, hdr, bursts_ in (
+    # UNITS: `startSpeed` was per tick, so the "leap" carried 28-99 cm off a 3x4 frame
+    # — the confetti effectively fell straight back down its own birth ring. At
+    # 2.0-4.5 b/s the pieces clear 1.5-3.4 blocks before gravity takes them.
+    # W13: `start_color` already randomizes the tint pair, so the lifetime ramp adds
+    # the SECOND axis of variety (how fast each piece darkens) instead of a second hue.
+    for name, tint_a, tint_b, boost, bursts_ in (
             ("confetti_violet", 0xFFF6EFFF, 0xFFB98CFF, (1.2, 1.0, 1.6),
              [burst(time=12, count=constant(14)), burst(time=24, count=constant(10)),
               burst(time=36, count=constant(8))]),
@@ -421,7 +515,7 @@ def build_minigame_gate_fanfare() -> FxBuilder:
         (fx.particle_emitter(
                 name, duration=60, looping=False,
                 start_lifetime=random_between(22, 36),
-                start_speed=random_between(0.25, 0.55),
+                start_speed=random_between(2.0, 4.5),
                 start_size=nf3(random_between(0.07, 0.14), random_between(0.07, 0.14),
                                random_between(0.07, 0.14)),
                 start_rotation=nf3(constant(0), constant(0), random_between(0.0, 360.0)),
@@ -432,12 +526,14 @@ def build_minigame_gate_fanfare() -> FxBuilder:
            .with_shape(circle(radius=1.55, thickness=0.1, arc_mode="BurstSpread"))
            .with_physics(collision=True, removed_when_collided=False, gravity=0.14,
                          bounce_chance=0.5, bounce_rate=0.35, collided_friction=0.7)
-           .with_material(texture_material(TEX_SQUARE, hdr=hdr))
+           .with_material(texture_material(TEX_SQUARE, hdr=hdr(*boost)))
            .with_curves(
                 rotation_over_lifetime=dict(roll=random_between(-6.0, 6.0)),
-                color_over_lifetime=gradient(
+                color_over_lifetime=varied(
                     [(0.0, 1.0), (0.7, 0.7), (1.0, 0.0)],
-                    [(0.0, 1.0, 1.0, 1.0), (1.0, SAC_VOID[0], SAC_VOID[1], SAC_VOID[2])]))
+                    [(0.0, 1.0, 1.0, 1.0), (1.0, SAC_VOID[0], SAC_VOID[1], SAC_VOID[2])],
+                    [(0.0, 1.0, 1.0, 1.0), (0.45, SAC_VOID[0], SAC_VOID[1], SAC_VOID[2]),
+                     (1.0, SAC_VOID[0], SAC_VOID[1], SAC_VOID[2])]))
            .with_lights(sky=15, block=15))
     return fx
 
@@ -458,12 +554,16 @@ def build_minigame_gate_collapse() -> FxBuilder:
        .with_emission(rate=constant(1.6))
        .with_shape(function_shape(x="1.3*(1-t)*cos(0-t*4*PI)",
                                   y="1.8*(1-t)*sin(0-t*4*PI)", z="0"))
-       .with_material(texture_material(TEX_CIRCLE, hdr=(1.3, 1.0, 1.8)))
+       .with_material(texture_material(TEX_CIRCLE, hdr=hdr(1.3, 1.0, 1.8)))
        .with_renderer(vertex_sorting="NONE")
-       .with_curves(color_over_lifetime=gradient(
+       # W13: the reeled-in trace is 36 quads on one shrinking spiral — the alt ramp
+       # makes the tail of the unwind read as light LEAVING, not as a solid stripe.
+       .with_curves(color_over_lifetime=varied(
             [(0.0, 0.9), (0.6, 0.5), (1.0, 0.0)],
             [(0.0, SAC_VIOLET[0], SAC_VIOLET[1], SAC_VIOLET[2]),
-             (1.0, SAC_DEEP[0], SAC_DEEP[1], SAC_DEEP[2])])))
+             (1.0, SAC_DEEP[0], SAC_DEEP[1], SAC_DEEP[2])],
+            [(0.0, SAC_DEEP[0], SAC_DEEP[1], SAC_DEEP[2]),
+             (1.0, SAC_VOID[0], SAC_VOID[1], SAC_VOID[2])])))
 
     # Implosion point: one HOT flash quad + a soft void afterimage, then done.
     (fx.particle_emitter(
@@ -472,7 +572,7 @@ def build_minigame_gate_collapse() -> FxBuilder:
             start_size=nf3(0.9), simulation_space="World", max_particles=2)
        .with_emission(rate=constant(0.0), bursts=[burst(time=28, count=constant(1))])
        .with_shape(dot())
-       .with_material(texture_material(TEX_CIRCLE, hdr=(2.0, 1.7, 2.4)))
+       .with_material(texture_material(TEX_CIRCLE, hdr=hdr(2.0, 1.7, 2.4)))
        .with_renderer(vertex_sorting="NONE")
        .with_curves(
             size_over_lifetime=nf3(*[curve(0.2, 1.4, [SEG_HOLD_SHRINK],
@@ -483,20 +583,24 @@ def build_minigame_gate_collapse() -> FxBuilder:
                  (0.6, SAC_VIOLET[0], SAC_VIOLET[1], SAC_VIOLET[2]),
                  (1.0, SAC_VOID[0], SAC_VOID[1], SAC_VOID[2])])))
 
-    # Settle: 8 dim sparks drifting off the implosion point.
+    # Settle: 8 dim sparks drifting off the implosion point. UNITS: per-tick authoring
+    # kept them inside their own 0.15-block birth sphere; 2-5 b/s spreads them 0.8-3.0
+    # blocks, which is the "the light went somewhere" read the collapse needs.
     (fx.particle_emitter(
             "settle_sparks", duration=40, looping=False,
             start_lifetime=random_between(8, 12),
-            start_speed=random_between(0.1, 0.25),
+            start_speed=random_between(2.0, 5.0),
             start_size=nf3(random_between(0.05, 0.09), random_between(0.05, 0.09),
                            random_between(0.05, 0.09)),
             simulation_space="World", max_particles=10)
        .with_emission(rate=constant(0.0), bursts=[burst(time=29, count=constant(8))])
        .with_shape(sphere(radius=0.15, thickness=0.0))
-       .with_material(texture_material(TEX_CIRCLE, hdr=(1.0, 0.8, 1.3)))
-       .with_curves(color_over_lifetime=gradient(
+       .with_material(texture_material(TEX_CIRCLE, hdr=hdr(1.0, 0.8, 1.3)))
+       .with_curves(color_over_lifetime=varied(
             [(0.0, 0.8), (1.0, 0.0)],
             [(0.0, SAC_VIOLET[0], SAC_VIOLET[1], SAC_VIOLET[2]),
+             (1.0, SAC_VOID[0], SAC_VOID[1], SAC_VOID[2])],
+            [(0.0, SAC_DEEP[0], SAC_DEEP[1], SAC_DEEP[2]),
              (1.0, SAC_VOID[0], SAC_VOID[1], SAC_VOID[2])])))
     return fx
 
@@ -516,10 +620,11 @@ def _finish_ribbon_base(fx: FxBuilder, ribbon_rgb_hi, ribbon_rgb_lo, flash_hdr) 
             start_size=nf3(1.0), simulation_space="World", max_particles=2)
        .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(1))])
        .with_shape(dot())
-       .with_material(texture_material(TEX_RING, hdr=flash_hdr, blend=BLEND_ADDITIVE))
+       .with_material(texture_material(TEX_RING, hdr=hdr(*flash_hdr),
+                                       blend=BLEND_ADDITIVE))
        .with_renderer(vertex_sorting="NONE")
        .with_curves(
-            size_over_lifetime=nf3(*[curve(5.0, 10.5, [SEG_EASE_OUT], "lifetime", "size")
+            size_over_lifetime=nf3(*[curve(5.0, 10.5, [SEG_SNAP_OUT], "lifetime", "size")
                                      for _ in range(3)]),
             color_over_lifetime=gradient(
                 [(0.0, 1.0), (0.25, 0.7), (1.0, 0.0)],
@@ -539,19 +644,26 @@ def _finish_ribbon_base(fx: FxBuilder, ribbon_rgb_hi, ribbon_rgb_lo, flash_hdr) 
                                             (0.75, 0.0, 0.85, 0.0, 0.95, 0.0, 1.0, 0.0)],
                                  "duration", "value"))
        .with_shape(function_shape(x="4.5*cos(t*6*PI)", z="4.5*sin(t*6*PI)", y="t*5.5"))
-       .with_material(texture_material(TEX_SQUARE, hdr=(1.1, 1.1, 1.3),
+       .with_material(texture_material(TEX_SQUARE, hdr=hdr(1.1, 1.1, 1.3),
                                        blend=BLEND_ALPHA))
        .with_renderer(vertex_sorting="DISTANCE")
+       # UNITS: the shed used to add 14 cm to a spiral the shape already lifts 5.5
+       # blocks; 1.2-2.4 b/s adds a real 1-3 blocks of loft on top of the spiral.
+       # W13: 44 checker quads on one path were pure clones — the alt ramp darkens a
+       # minority early so the ribbon reads as fabric rather than a decal.
        .with_curves(
             rotation_over_lifetime=dict(roll=random_between(-4.0, 4.0)),
             velocity_over_lifetime=dict(
-                linear=nf3(constant(0), random_between(0.06, 0.12), constant(0))),
+                linear=nf3(constant(0), random_between(1.2, 2.4), constant(0))),
             size_over_lifetime=nf3(*[curve(0.4, 1.0, [SEG_HOLD_SHRINK],
                                            "lifetime", "size") for _ in range(3)]),
-            color_over_lifetime=gradient(
+            color_over_lifetime=varied(
                 [(0.0, 0.95), (0.7, 0.7), (1.0, 0.0)],
                 [(0.0, ribbon_rgb_hi[0], ribbon_rgb_hi[1], ribbon_rgb_hi[2]),
-                 (1.0, ribbon_rgb_lo[0], ribbon_rgb_lo[1], ribbon_rgb_lo[2])]))
+                 (1.0, ribbon_rgb_lo[0], ribbon_rgb_lo[1], ribbon_rgb_lo[2])],
+                [(0.0, ribbon_rgb_hi[0], ribbon_rgb_hi[1], ribbon_rgb_hi[2]),
+                 (0.4, ribbon_rgb_lo[0], ribbon_rgb_lo[1], ribbon_rgb_lo[2]),
+                 (1.0, SAC_VOID[0], SAC_VOID[1], SAC_VOID[2])]))
        .with_lights(sky=15, block=15))
 
 
@@ -571,18 +683,23 @@ def build_race_finish_ribbon_gold() -> FxBuilder:
     (fx.particle_emitter(
             "gold_burst", duration=30, looping=False,
             start_lifetime=random_between(12, 20),
-            start_speed=random_between(0.35, 0.7),
+            start_speed=random_between(3.0, 6.0),
             start_size=nf3(random_between(0.06, 0.12), random_between(0.06, 0.12),
                            random_between(0.06, 0.12)),
             simulation_space="World", max_particles=26)
        .with_emission(rate=constant(0.0), bursts=[burst(time=1, count=constant(24))])
        .with_shape(cone(angle=30.0, radius=4.5, thickness=0.0))
        .with_physics(collision=False, gravity=0.08)
-       .with_material(texture_material(TEX_CIRCLE, hdr=(2.0, 1.6, 0.8)))
-       .with_curves(color_over_lifetime=gradient(
+       .with_material(texture_material(TEX_CIRCLE, hdr=hdr(2.0, 1.6, 0.8)))
+       # UNITS: 0.35-0.7 b/t threw the podium burst 21-70 cm off a 9-block cone; at
+       # 3-6 b/s the sparks clear 1.8-6.0 blocks, i.e. the ring's own radius.
+       .with_curves(color_over_lifetime=varied(
             [(0.0, 1.0), (0.6, 0.6), (1.0, 0.0)],
-            [(0.0, 1.0, 0.914, 0.659), (0.5, SAC_GOLD[0], SAC_GOLD[1], SAC_GOLD[2]),
-             (1.0, SAC_VOID[0], SAC_VOID[1], SAC_VOID[2])]))
+            [(0.0,) + GOLD_BIRTH, (0.15, 1.0, 0.914, 0.659),
+             (0.5, SAC_GOLD[0], SAC_GOLD[1], SAC_GOLD[2]),
+             (1.0, SAC_VOID[0], SAC_VOID[1], SAC_VOID[2])],
+            [(0.0,) + GOLD_BIRTH, (0.2, SAC_GOLD[0], SAC_GOLD[1], SAC_GOLD[2]),
+             (0.6,) + ERA_AMBER, (1.0, SAC_VOID[0], SAC_VOID[1], SAC_VOID[2])]))
        .with_lights(sky=15, block=15))
     return fx
 
@@ -605,7 +722,7 @@ def build_supply_herald() -> FxBuilder:
     (fx.particle_emitter(
             "shimmer", duration=60, looping=False,
             start_lifetime=random_between(14, 22),
-            start_speed=random_between(0.01, 0.03),
+            start_speed=random_between(0.2, 0.6),
             start_size=nf3(random_between(0.3, 0.55), random_between(0.3, 0.55),
                            random_between(0.3, 0.55)),
             simulation_space="World", max_particles=24)
@@ -613,12 +730,17 @@ def build_supply_herald() -> FxBuilder:
                                             (0.25, 0.0, 0.5, 0.0, 0.75, 0.0, 1.0, 0.0)],
                                  "duration", "value"))
        .with_shape(sphere(radius=1.6, thickness=0.5))
-       .with_material(texture_material(TEX_WISP, hdr=(0.9, 1.0, 1.2), blend=BLEND_ALPHA))
+       .with_material(texture_material(TEX_WISP, hdr=hdr(0.9, 1.0, 1.2),
+                                       blend=BLEND_ALPHA))
        .with_renderer(vertex_sorting="DISTANCE")
-       .with_curves(color_over_lifetime=gradient(
+       # UNITS: 0.02 b/t is 0.4 b/s — the patch is meant to be near-still, so this one
+       # keeps its restraint (0.14-0.66 blocks of crawl) rather than gaining speed.
+       # W13: born on slate, so 24 overlapping alpha wisps do not sum to an arc-pale
+       # blob before the tear even opens.
+       .with_curves(color_over_lifetime=varied(
             [(0.0, 0.0), (0.4, 0.4), (1.0, 0.0)],
-            [(0.0, STM_ARC[0], STM_ARC[1], STM_ARC[2]),
-             (1.0, STM_SLATE[0], STM_SLATE[1], STM_SLATE[2])])))
+            [(0.0,) + SLATE_BIRTH, (0.35,) + STM_ARC, (1.0,) + STM_SLATE],
+            [(0.0,) + SLATE_BIRTH, (0.45,) + STM_SLATE, (1.0,) + STM_SLATE])))
 
     # L2 — the slit: a vertical hairline of white torn open for a few frames.
     (fx.beam_emitter(
@@ -632,11 +754,13 @@ def build_supply_herald() -> FxBuilder:
                 [(0.0, 0.0), (0.2, 1.0), (0.4, 0.7), (0.5, 0.0)],
                 [(0.0, 1.0, 1.0, 1.0), (0.45, 0.965, 0.937, 1.0)]))
        .at(0.0, -2.5, 0.0)
-       .with_material(texture_material(TEX_LASER, hdr=(2.0, 2.0, 2.0), cull=False))
+       .with_material(texture_material(TEX_LASER, hdr=hdr(2.0, 2.0, 2.0), cull=False))
        .with_lights(sky=15, block=15))
 
-    # L3 — the ember streak: ONE stretched spark falling straight down the drop line
-    # (1.8 blk/t x 44t ≈ 79 blocks — past the surface point the leg re-anchored +70).
+    # L3 — the ember streak: ONE stretched spark falling straight down the drop line.
+    # UNITS: authored as "1.8 blk/t x 44t ~= 79 blocks", but Photon read it as 1.8 b/s
+    # and dropped the spark 3.96 blocks — the emitter's own cull box (-84 on Y) is the
+    # proof of intent. 79 / (0.05 x 44) = 36 b/s restores the full drop line.
     (fx.particle_emitter(
             "ember_streak", duration=60, looping=False,
             start_lifetime=constant(44), start_speed=constant(0.0),
@@ -644,13 +768,13 @@ def build_supply_herald() -> FxBuilder:
        .with_emission(rate=constant(0.0), bursts=[burst(time=14, count=constant(1))])
        .with_shape(dot())
        .with_curves(
-            velocity_over_lifetime=dict(linear=nf3(constant(0.0), constant(-1.8),
+            velocity_over_lifetime=dict(linear=nf3(constant(0.0), constant(-36.0),
                                                    constant(0.0))),
             color_over_lifetime=gradient(
                 [(0.0, 1.0), (0.8, 0.85), (1.0, 0.0)],
                 [(0.0, 1.0, 0.914, 0.659), (0.25, ERA_EMBER[0], ERA_EMBER[1], ERA_EMBER[2]),
                  (1.0, 0.69, 0.137, 0.188)]))
-       .with_material(texture_material(TEX_CIRCLE, hdr=(1.8, 1.0, 0.5)))
+       .with_material(texture_material(TEX_CIRCLE, hdr=hdr(1.8, 1.0, 0.5)))
        .with_renderer(render_mode="StretchedBillboard", velocity_scale=0.5,
                       length_scale=3.0, vertex_sorting="NONE")
        .with_lights(sky=15, block=15)
@@ -660,21 +784,24 @@ def build_supply_herald() -> FxBuilder:
     (fx.particle_emitter(
             "tear_wisps", duration=60, looping=False,
             start_lifetime=random_between(18, 28),
-            start_speed=random_between(0.04, 0.1),
+            start_speed=random_between(0.8, 2.0),
             start_size=nf3(random_between(0.2, 0.4), random_between(0.2, 0.4),
                            random_between(0.2, 0.4)),
             simulation_space="World", max_particles=14)
        .with_emission(rate=constant(0.0), bursts=[burst(time=15, count=constant(10))])
        .with_shape(sphere(radius=0.3, thickness=0.6))
-       .with_material(texture_material(TEX_WISP, hdr=(1.1, 1.1, 1.3), blend=BLEND_ALPHA))
+       .with_material(texture_material(TEX_WISP, hdr=hdr(1.1, 1.1, 1.3),
+                                       blend=BLEND_ALPHA))
        .with_renderer(vertex_sorting="DISTANCE")
+       # UNITS: the shreds drifted 8 cm off a tear that is 5 blocks tall. 0.8-2.0 b/s
+       # carries them 0.7-2.8 blocks, so the slit visibly sheds as it closes.
        .with_curves(
             velocity_over_lifetime=dict(
-                linear=nf3(constant(0), random_between(0.02, 0.06), constant(0))),
-            color_over_lifetime=gradient(
+                linear=nf3(constant(0), random_between(0.4, 1.2), constant(0))),
+            color_over_lifetime=varied(
                 [(0.0, 0.0), (0.3, 0.55), (1.0, 0.0)],
-                [(0.0, 0.965, 0.937, 1.0),
-                 (1.0, STM_SLATE[0], STM_SLATE[1], STM_SLATE[2])])))
+                [(0.0,) + SLATE_BIRTH, (0.25, 0.965, 0.937, 1.0), (1.0,) + STM_SLATE],
+                [(0.0,) + SLATE_BIRTH, (0.3,) + STM_ARC, (1.0,) + STM_SLATE])))
     return fx
 
 
@@ -696,7 +823,7 @@ def build_dungeon_maw_breath() -> FxBuilder:
     (fx.particle_emitter(
             "dust_bank", duration=50, looping=False,
             start_lifetime=random_between(30, 46),
-            start_speed=random_between(0.06, 0.12),
+            start_speed=random_between(1.2, 2.4),
             start_size=nf3(random_between(0.6, 1.1), random_between(0.6, 1.1),
                            random_between(0.6, 1.1)),
             simulation_space="World", max_particles=32)
@@ -710,10 +837,13 @@ def build_dungeon_maw_breath() -> FxBuilder:
             size_over_lifetime=nf3(*[curve(0.7, 1.8, [SEG_EASE_IN_OUT_UP],
                                            "lifetime", "size") for _ in range(3)]),
             noise=dict(frequency=0.5, position=nf3(0.03)),
-            color_over_lifetime=gradient(
+            # UNITS: 0.09 b/t is 1.8 b/s — the exhale now rolls 1.8-5.5 blocks out of
+            # the entrance instead of 28 cm. W13: born darker than the mid tone so a
+            # 24-body alpha bank does not brighten itself into fog.
+            color_over_lifetime=varied(
                 [(0.0, 0.0), (0.2, 0.55), (1.0, 0.0)],
-                [(0.0, 0.42, 0.44, 0.52),
-                 (1.0, ERA_SHADOW[0], ERA_SHADOW[1], ERA_SHADOW[2])])))
+                [(0.0,) + ERA_SHADOW, (0.3, 0.42, 0.44, 0.52), (1.0,) + ERA_SHADOW],
+                [(0.0,) + ERA_SHADOW, (0.4, 0.32, 0.35, 0.42), (1.0,) + ERA_SHADOW])))
 
     # L2 — the eyes: two dim bile-green glints, a blink apart, deep in the maw.
     for name, t0, x_off in (("eye_left", 16, -0.35), ("eye_right", 19, 0.35)):
@@ -723,7 +853,7 @@ def build_dungeon_maw_breath() -> FxBuilder:
                 start_size=nf3(0.09), simulation_space="World", max_particles=2)
            .with_emission(rate=constant(0.0), bursts=[burst(time=t0, count=constant(1))])
            .with_shape(dot(), position=nf3(constant(x_off), constant(0.4), constant(0.0)))
-           .with_material(texture_material(TEX_CIRCLE, hdr=(0.5, 0.9, 0.6)))
+           .with_material(texture_material(TEX_CIRCLE, hdr=hdr(0.5, 0.9, 0.6)))
            .with_renderer(vertex_sorting="NONE")
            .with_curves(color_over_lifetime=gradient(
                 [(0.0, 0.0), (0.25, 0.9), (0.5, 0.35), (0.7, 0.8), (1.0, 0.0)],
@@ -743,7 +873,7 @@ def build_dungeon_maw_idle() -> FxBuilder:
     (fx.particle_emitter(
             "breath_dust", duration=68, looping=True, prewarm=0,
             start_lifetime=random_between(28, 40),
-            start_speed=random_between(0.03, 0.05),
+            start_speed=random_between(0.6, 1.0),
             start_size=nf3(random_between(0.4, 0.8), random_between(0.4, 0.8),
                            random_between(0.4, 0.8)),
             simulation_space="World", max_particles=40)
@@ -753,10 +883,12 @@ def build_dungeon_maw_idle() -> FxBuilder:
        .with_renderer(vertex_sorting="DISTANCE", shade=True)
        .with_curves(
             noise=dict(frequency=0.4, position=nf3(0.02)),
-            color_over_lifetime=gradient(
+            # UNITS: the loop's own comment caps it at 0.05 blk/t = 1.0 b/s; it was
+            # written as 0.04 b/s, i.e. 4 cm per breath. The cap is now the real value.
+            color_over_lifetime=varied(
                 [(0.0, 0.0), (0.25, 0.4), (1.0, 0.0)],
-                [(0.0, 0.4, 0.42, 0.5),
-                 (1.0, ERA_SHADOW[0], ERA_SHADOW[1], ERA_SHADOW[2])]))
+                [(0.0,) + ERA_SHADOW, (0.3, 0.4, 0.42, 0.5), (1.0,) + ERA_SHADOW],
+                [(0.0,) + ERA_SHADOW, (0.35, 0.3, 0.33, 0.4), (1.0,) + ERA_SHADOW]))
        .with_cull_box((-4.0, -1.5, -4.0), (4.0, 4.0, 4.0)))
 
     # Heartbeat glow: one soft quad, double-thump per cycle, heartbeat-dim (α ≤ 0.3).
@@ -768,7 +900,7 @@ def build_dungeon_maw_idle() -> FxBuilder:
                       bursts=[burst(time=0, count=constant(1)),
                               burst(time=7, count=constant(1))])
        .with_shape(dot(), position=nf3(constant(0.0), constant(0.3), constant(0.0)))
-       .with_material(texture_material(TEX_RING_SOFT, hdr=(0.4, 0.7, 0.5),
+       .with_material(texture_material(TEX_RING_SOFT, hdr=hdr(0.4, 0.7, 0.5),
                                        blend=BLEND_ADDITIVE))
        .with_renderer(vertex_sorting="NONE")
        .with_curves(
@@ -858,11 +990,13 @@ def build_rim_recede() -> FxBuilder:
                 radial=constant(0.35)),
             size_over_lifetime=nf3(*[curve(0.7, 1.0, [SEG_DUST_SWELL], "lifetime", "size")
                                      for _ in range(3)]),
-            color_over_lifetime=gradient(
+            # W13: units/birth-tints/HDR here were already wave-13 correct (this beat
+            # shipped after the stacking-law finding); the one missing lever was
+            # variety, so only the ramps gain a sibling.
+            color_over_lifetime=varied(
                 [(0.0, 0.0), (0.18, 0.16), (0.7, 0.11), (1.0, 0.0)],
-                [(0.0, STM_SLATE[0], STM_SLATE[1], STM_SLATE[2]),
-                 (0.55, RIM_BRUISE[0], RIM_BRUISE[1], RIM_BRUISE[2]),
-                 (1.0, GLI_DEAD[0], GLI_DEAD[1], GLI_DEAD[2])])))
+                [(0.0,) + STM_SLATE, (0.55,) + RIM_BRUISE, (1.0,) + GLI_DEAD],
+                [(0.0,) + SLATE_BIRTH, (0.6,) + STM_SLATE, (1.0,) + GLI_DEAD])))
 
     # L1 — the curtain: three waves of broad slate bodies born 17 blocks up on the
     # rim ring, sinking 9–20 blocks and spreading as they fall. THE beat.
@@ -889,11 +1023,10 @@ def build_rim_recede() -> FxBuilder:
             size_over_lifetime=nf3(*[curve(0.55, 1.0, [SEG_DUST_SWELL], "lifetime", "size")
                                      for _ in range(3)]),
             noise=dict(frequency=0.35, position=nf3(0.05)),
-            color_over_lifetime=gradient(
+            color_over_lifetime=varied(
                 [(0.0, 0.0), (0.15, 0.34), (0.65, 0.22), (1.0, 0.0)],
-                [(0.0, STM_SLATE[0], STM_SLATE[1], STM_SLATE[2]),
-                 (0.5, RIM_BRUISE[0], RIM_BRUISE[1], RIM_BRUISE[2]),
-                 (1.0, GLI_DEAD[0], GLI_DEAD[1], GLI_DEAD[2])])))
+                [(0.0,) + STM_SLATE, (0.5,) + RIM_BRUISE, (1.0,) + GLI_DEAD],
+                [(0.0,) + SLATE_BIRTH, (0.45,) + STM_SLATE, (1.0,) + GLI_DEAD])))
 
     # L2 — ground bank: what the curtain leaves on the floor, rolling OUTWARD over
     # the abandoned rim line as the border glides away. Horizontal quads, α ≤ 0.26.
@@ -916,10 +1049,10 @@ def build_rim_recede() -> FxBuilder:
             velocity_over_lifetime=dict(radial=constant(1.2)),
             size_over_lifetime=nf3(*[curve(0.6, 1.0, [SEG_EASE_IN_OUT_UP],
                                            "lifetime", "size") for _ in range(3)]),
-            color_over_lifetime=gradient(
+            color_over_lifetime=varied(
                 [(0.0, 0.0), (0.2, 0.26), (0.7, 0.17), (1.0, 0.0)],
-                [(0.0, STM_SLATE[0], STM_SLATE[1], STM_SLATE[2]),
-                 (1.0, GLI_DEAD[0], GLI_DEAD[1], GLI_DEAD[2])])))
+                [(0.0,) + STM_SLATE, (1.0,) + GLI_DEAD],
+                [(0.0,) + SLATE_BIRTH, (0.5,) + RIM_BRUISE, (1.0,) + GLI_DEAD])))
 
     # L3 — rock motes: hard dark quads shed off the sinking monoliths, thrown a
     # little outward and dragged down by real gravity (physics = the weight read,
@@ -945,10 +1078,10 @@ def build_rim_recede() -> FxBuilder:
        .with_cull_box(*RIM_CULL)
        .with_curves(
             rotation_over_lifetime=dict(roll=random_between(-3.0, 3.0)),
-            color_over_lifetime=gradient(
+            color_over_lifetime=varied(
                 [(0.0, 0.85), (0.72, 0.6), (1.0, 0.0)],
-                [(0.0, RIM_BRUISE[0], RIM_BRUISE[1], RIM_BRUISE[2]),
-                 (1.0, GLI_DEAD[0], GLI_DEAD[1], GLI_DEAD[2])])))
+                [(0.0,) + RIM_BRUISE, (1.0,) + GLI_DEAD],
+                [(0.0,) + STM_SLATE, (0.6,) + RIM_BRUISE, (1.0,) + GLI_DEAD])))
 
     # L4 — edge glints: the ONLY bright elements. Seven small additive sparks at
     # HDR 1.45 max, the last daylight sliding off a rock face as it drops away.
@@ -963,7 +1096,7 @@ def build_rim_recede() -> FxBuilder:
                               burst(time=30, count=constant(3))])
        .with_shape(circle(radius=RIM_GLINT_R, thickness=0.5, arc_mode="BurstSpread"),
                    position=nf3(constant(0.0), constant(8.0), constant(0.0)))
-       .with_material(texture_material(TEX_CIRCLE, hdr=(1.25, 1.3, 1.45),
+       .with_material(texture_material(TEX_CIRCLE, hdr=hdr(1.25, 1.3, 1.45),
                                        blend=BLEND_ADDITIVE))
        .with_renderer(vertex_sorting="NONE")
        .with_cull_box(*RIM_CULL)
@@ -972,10 +1105,10 @@ def build_rim_recede() -> FxBuilder:
                 linear=nf3(constant(0.0), random_between(-2.2, -1.0), constant(0.0))),
             size_over_lifetime=nf3(*[curve(0.35, 1.0, [SEG_HOLD_SHRINK],
                                            "lifetime", "size") for _ in range(3)]),
-            color_over_lifetime=gradient(
+            color_over_lifetime=varied(
                 [(0.0, 0.0), (0.22, 0.5), (0.6, 0.28), (1.0, 0.0)],
-                [(0.0, RIM_GLINT[0], RIM_GLINT[1], RIM_GLINT[2]),
-                 (1.0, STM_SLATE[0], STM_SLATE[1], STM_SLATE[2])])))
+                [(0.0,) + RIM_GLINT, (1.0,) + STM_SLATE],
+                [(0.0,) + RIM_BRUISE, (0.35,) + RIM_GLINT, (1.0,) + STM_SLATE])))
     return fx
 
 

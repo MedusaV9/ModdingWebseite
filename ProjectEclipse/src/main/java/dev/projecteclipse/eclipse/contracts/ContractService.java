@@ -82,6 +82,13 @@ public final class ContractService {
     private static final int SHAKE_TICKS = 16;
     private static final int TICK_INTERVAL = 10;
     private static final double PROXIMITY_BONUS_RANGE_SQ = 400.0D * 400.0D;
+    /**
+     * FX-WAVE-13 N8 seal brand. Two-sided cue (the CreditsSequence precedent): this
+     * private constant and the client row in {@code veilfx/SmallCueFxRows} derive the
+     * SAME id, so no shared {@code FxCues.CUE_*} constant has to be added.
+     */
+    private static final net.minecraft.resources.ResourceLocation CUE_CONTRACT_SEAL_BRAND =
+            dev.projecteclipse.eclipse.network.fx.FxCues.cue("contract_seal_brand");
 
     private static final AtomicBoolean SIGNALS_REGISTERED = new AtomicBoolean();
     private static final AtomicBoolean RELOAD_HOOK_REGISTERED = new AtomicBoolean();
@@ -338,6 +345,26 @@ public final class ContractService {
             dev.projecteclipse.eclipse.network.fx.FxPayloads.sendFxEventTo(online,
                     dev.projecteclipse.eclipse.network.fx.FxCues.CUE_CONTRACT_OMEN,
                     online.position(), 0.0F, b);
+        }
+    }
+
+    /**
+     * FX-WAVE-13 N8 seal-brand sender. Same personal lane as {@link #sendOmenRipple}:
+     * one send per ONLINE player at that player's OWN feet, so the brand is everywhere
+     * and therefore triangulates nothing (the contract anonymity law). {@code a} = the
+     * receiving player's yaw, so the sigil is stamped in the direction they were facing
+     * instead of every brand in the world pointing north; {@code b} = 1 when the window
+     * ended in blood, which the client leg reads as a wider burn.
+     *
+     * <p>The cue id is re-derived on both sides ({@code FxCues.cue}, the CreditsSequence
+     * precedent) — the client row lives in {@code veilfx/SmallCueFxRows}.</p>
+     */
+    private static void sendSealBrand(MinecraftServer server, ContractState.Outcome outcome) {
+        float blood = outcome == ContractState.Outcome.SUCCESS
+                || outcome == ContractState.Outcome.TABLES_TURNED ? 1.0F : 0.0F;
+        for (ServerPlayer online : server.getPlayerList().getPlayers()) {
+            dev.projecteclipse.eclipse.network.fx.FxPayloads.sendFxEventTo(online,
+                    CUE_CONTRACT_SEAL_BRAND, online.position(), online.getYRot(), blood);
         }
     }
 
@@ -723,6 +750,9 @@ public final class ContractService {
         // resolution path (success/expired/voided/tables/prank) funnels through here,
         // so open and close stay a guaranteed pair (SEQUENCE twice per window max).
         sendOmenRipple(server, 1.0F);
+        // FX-WAVE-13 N8: beside the release ripple, the seal BRANDS itself into the
+        // ground and glimmers for 60 s — the mark this day left behind.
+        sendSealBrand(server, outcome);
         ContractPayloads.sendStateToAll(server, false, now, now);
         if (state.mode() == ContractState.Mode.REAL) {
             stopMusic(playerOf(server, state.hunter()));
