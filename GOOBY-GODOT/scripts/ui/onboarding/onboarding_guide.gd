@@ -22,8 +22,11 @@ const FEIER_S := 1.6
 ## Erfüllungs-Puls (Sicherheitsnetz neben den GameState-Signalen).
 const POLL_S := 1.0
 const MAX_WIDTH_PX := 420.0
+## Physisches Tippflächen-Minimum in pt (44 + Luft, wie whats_next_hint).
+const TOUCH_MIN_PT := 46.0
 
 var _gs: Object = null
+var _hud_ref: Control
 var _layer: CanvasLayer
 var _card: PanelContainer
 var _step_caption: Label
@@ -352,17 +355,47 @@ func _relayout_settled() -> void:
 
 
 ## Oben mittig unter der Statuszeile, Breite gedeckelt (Safe-Area-bewusst).
+## W14 (FB3-Audit): Tippflächen physisch ≥ 44 pt (GuideWeiter/GuideBeenden
+## lagen bei 14–33 pt) und die Karte bleibt in der freien HUD-Kopf-Zone
+## (hint_lane) — im Querformat lief sie sonst in die Cockpit-Spalte
+## (BtnProfil/BtnIgohbie). Muster: whats_next_hint._relayout.
 func _relayout() -> void:
 	if _card == null:
 		return
 	var f := UiScale.for_viewport(get_viewport())
 	var canvas := Vector2(get_viewport().get_visible_rect().size)
 	var insets := UiScale.safe_insets_canvas(get_viewport(), Rect2())
-	var width := minf(MAX_WIDTH_PX * f, canvas.x - 24.0)
+	var touch_floor := UiScale.touch_px_per_pt(get_viewport()) * TOUCH_MIN_PT
+	_close_btn.custom_minimum_size = Vector2.ONE * touch_floor
+	_close_btn.add_theme_constant_override("icon_max_width", int(maxf(16.0 * f, 14.0)))
+	_next_btn.custom_minimum_size = Vector2(touch_floor, touch_floor)
+	_skip_btn.custom_minimum_size = Vector2(touch_floor, touch_floor)
+	var lane := {"left": 12.0, "right": canvas.x - 12.0, "top": float(insets["top"]) + 76.0 * f}
+	var hud := _find_hud()
+	if hud is Hud and hud.is_visible_in_tree():
+		lane = (hud as Hud).hint_lane()
+	var lane_left := float(lane["left"])
+	var lane_right := float(lane["right"])
+	var width := minf(MAX_WIDTH_PX * f, lane_right - lane_left)
 	_card.custom_minimum_size = Vector2(width, 0.0)
 	_card.reset_size()
 	var size_now := _card.get_combined_minimum_size()
-	_card.position = Vector2((canvas.x - size_now.x) / 2.0, float(insets["top"]) + 76.0 * f)
+	var x := (lane_left + lane_right - size_now.x) / 2.0
+	_card.position = Vector2(maxf(x, lane_left), float(lane["top"]))
+
+
+func _find_hud() -> Control:
+	if _hud_ref != null and is_instance_valid(_hud_ref):
+		return _hud_ref
+	_hud_ref = null
+	var tree := get_tree()
+	if tree == null:
+		return null
+	for node: Node in tree.root.find_children("*", "Control", true, false):
+		if node is Hud:
+			_hud_ref = node
+			break
+	return _hud_ref
 
 
 ## Über Vollbild-Screens (Arcade/Album/...) hält die Karte den Mund; die
