@@ -54,6 +54,8 @@ const EXPECTED_DOMAINS := [
 	"umzug.",
 	"garage.",
 	"goobyman.",
+	# W14/NETSET (strings/de+en/netset.json, s. OWNERSHIP.md).
+	"netset.",
 ]
 ## Stadt-Dialoge: DE-Bäume + EN-Pendants (E6 P2-13; Wiring s. Handoff
 ## FIXG-text-requests.md — der Loader wählt bei locale=en das en/-Pendant).
