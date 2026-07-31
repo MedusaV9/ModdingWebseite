@@ -103,7 +103,7 @@ func _build_ui() -> void:
 	box.add_child(kopf)
 	var titel := Label.new()
 	titel.text = I18nService.t("build.preset.titel")
-	titel.theme_type_variation = "TitleMedium"
+	titel.theme_type_variation = "TitleLabel"
 	titel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	kopf.add_child(titel)
 	var zu := Button.new()
