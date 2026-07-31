@@ -41,6 +41,18 @@ const STOSS_PET_MAX_PRO_TAG := 20
 ## FEEL-AC: solange nach dem Start einer Absicht gilt ein Antippen als
 ## „ertappt“ (Gooby wird verlegen — er wollte das doch heimlich machen!).
 const ERTAPPT_FENSTER_MS := 8_000
+## W14/VOICE: Plauder-Takt (Selbstgespräche beim Idle-Wandern bzw. Wetter-
+## Kommentar mit Mini-FX). Startwert bewusst KONSTANT (kein rng-Verbrauch im
+## setup — deterministische Tests bleiben stabil); danach würfelt der Takt.
+## Die Frequenz läuft zusätzlich über die VORHANDENE Seelen-Bremse.
+const PLAUDER_START_S := 75.0
+const PLAUDER_MIN_S := 55.0
+const PLAUDER_MAX_S := 110.0
+## W14/VOICE: „Lange nicht gesehen“-Staffel — Zusatz-Zeile erst ab einem
+## vollen Tag Lücke (Stufe 2+; Stufe 1 wäre neben dem Gruß zu geschwätzig)
+## und mit Atempause NACH dem Gruß-Moment.
+const WIEDERSEHEN_MIN_MS := SoulTriggers.MS_PER_DAY
+const WIEDERSEHEN_PAUSE_S := 3.2
 
 ## Der GoobyReactions-Runner (bewusst untypisiert — kein Klassen-Zyklus).
 var runner: Node = null
@@ -65,6 +77,12 @@ var _feel_coins_seen := 0
 var _feel_items_seen := 0
 var _intent_bis_ms := 0
 
+## W14/VOICE: Mini-Dialoge (Antwort-Chips) + Plauder-Takt + Besuchslücke
+## (VOR dem touch_visit-Stempel gesichert — für die Wiedersehen-Staffel).
+var _gespraech: GoobyGespraech = null
+var _plauder_timer := PLAUDER_START_S
+var _besuchs_luecke_ms := 0
+
 
 ## Komponente erzeugen und an den Runner hängen (idempotent).
 static func attach_to(target_runner: Node) -> SeeleRunner:
@@ -80,6 +98,10 @@ static func attach_to(target_runner: Node) -> SeeleRunner:
 
 func setup(target_runner: Node) -> void:
 	runner = target_runner
+	# W14/VOICE: Lücke JETZT lesen — der Betreten-Moment stempelt gleich
+	# lastVisitAt neu (SoulState.touch_visit in _run_enter).
+	_besuchs_luecke_ms = _luecke_vor_besuch()
+	_gespraech = GoobyGespraech.attach_to(self)
 	_setup_ausdruck_und_stimme()
 	_feel_snapshots_init()
 	refresh_stimmung()
@@ -124,6 +146,7 @@ func tick(delta: float) -> void:
 		refresh_stimmung()
 		_feel_beobachte()
 	_feel_donner_tick(delta)
+	_plauder_tick(delta)
 
 
 func wert() -> float:
@@ -175,10 +198,13 @@ func _stoss_wert(delta: float) -> void:
 
 ## Wiedersehen bewegt die Laune — freudig hebt, Schmollen senkt. Die
 ## Gruß-Ids sind zugleich Gefühls-Ereignisse (Freude/Begeisterung/Trotz).
+## W14/VOICE (additiv): die Id JEDES Betreten-Moments läuft hier durch —
+## daran docken die Mini-Dialoge und die Wiedersehen-Staffel an.
 func stoss_gruss(moment_id: String) -> void:
 	if GRUSS_STOSS.has(moment_id):
 		_stoss_wert(float(GRUSS_STOSS[moment_id]))
 		melde_gefuehl(moment_id)
+	_nach_moment(moment_id)
 
 
 ## Streicheln hebt sanft — aber nur bis zum Tagesdeckel (kein Pumpen).
@@ -508,6 +534,91 @@ func _feel_merke_bestwert(best: int) -> void:
 			feelings["bestMax"] = best
 			s["feelings"] = feelings
 	)
+
+
+# ── W14/VOICE: Gespräche, Plauder-Takt, Wiedersehen-Staffel ──────────────────
+
+
+## Nach JEDEM Betreten-Moment (additiv an stoss_gruss): passendes Mini-
+## Gespräch eröffnen (Chips, datengetrieben) und bei langer Abwesenheit die
+## gestaffelte Zusatz-Zeile nachlegen.
+func _nach_moment(moment_id: String) -> void:
+	if _gespraech != null:
+		_gespraech.starte(moment_id)
+	if GRUSS_STOSS.has(moment_id):
+		_wiedersehen_staffel()
+
+
+## „Lange nicht gesehen“: ab einem vollen Tag Lücke legt Gooby nach dem
+## Gruß eine Staffel-Zeile nach (SoulLinien.wiedersehen_key, 5 Stufen).
+func _wiedersehen_staffel() -> void:
+	var key := SoulLinien.wiedersehen_key(_besuchs_luecke_ms)
+	if key.is_empty() or _besuchs_luecke_ms < WIEDERSEHEN_MIN_MS or not is_inside_tree():
+		return
+	var timer := get_tree().create_timer(WIEDERSEHEN_PAUSE_S)
+	timer.timeout.connect(_wiedersehen_sagen.bind(key))
+
+
+func _wiedersehen_sagen(key: String) -> void:
+	if _gespraech == null or runner == null or not is_instance_valid(runner):
+		return
+	var ctx: Dictionary = runner._ctx(0)
+	var slice := SoulState.slice_of(runner.gs)
+	_gespraech.zeige_linie(
+		I18nService.t(key, GoobyGespraech.text_args(slice, ctx)), "happy", "gooby"
+	)
+
+
+## Plauder-Takt: beim Idle-Wandern redet Gooby manchmal mit sich selbst,
+## bei besonderem Wetter kommentiert er es (mit Mini-FX). Frequenz läuft
+## über die VORHANDENE Seelen-Bremse (kommentar → _ambient_ok).
+func _plauder_tick(delta: float) -> void:
+	_plauder_timer -= delta
+	if _plauder_timer > 0.0 or runner == null:
+		return
+	_plauder_timer = runner.rng.randf_range(PLAUDER_MIN_S, PLAUDER_MAX_S)
+	if runner._busy():
+		return
+	var typ := str(runner._ctx(0)["wetter"].get("typ", ""))
+	kommentar(SoulLinien.plauder_kategorie(typ, runner.rng.randf()))
+
+
+## Öffentliche W14-Schnittstelle (auch für Feature-Besitzer: Ball, Nougat-
+## schleuse, GOB.TY, Minispiel-Ergebnisse, Sticker-/Erfolgs-Feiern, Füttern
+## über fuettern.*-Kategorien): eine FRISCHE Line der Kategorie sprechen.
+## Anti-Wiederholung (letzte 5 je Kategorie) läuft über den Soul-Slice,
+## die Frequenz über die vorhandene ambient-Bremse. Gibt den gesprochenen
+## Key zurück ("" = unterdrückt oder Kategorie unbekannt).
+func kommentar(kategorie: String) -> String:
+	if runner == null or not runner._ambient_ok():
+		return ""
+	var ctx: Dictionary = runner._ctx(0)
+	var slice := SoulState.slice_of(runner.gs)
+	var key := SoulLinien.waehle(kategorie, slice.get("linien", {}), runner.rng.randf())
+	if key.is_empty():
+		return ""
+	SoulState.mutate(
+		runner.gs,
+		func(s: Dictionary) -> void:
+			s["linien"] = SoulLinien.merke(s.get("linien", {}), kategorie, key)
+	)
+	runner._book_ambient(ctx)
+	if _gespraech != null:
+		if kategorie.begins_with("wetter."):
+			_gespraech.wetter_fx(kategorie.trim_prefix("wetter."))
+		var text := I18nService.t(key, GoobyGespraech.text_args(slice, ctx))
+		_gespraech.zeige_linie(text, ruhe_emotion_jetzt(), "gooby")
+	return key
+
+
+## Besuchslücke VOR dem touch_visit-Stempel (0 beim allerersten Besuch).
+func _luecke_vor_besuch() -> int:
+	if runner == null or runner.gs == null:
+		return 0
+	var last := int(SoulState.slice_of(runner.gs)["lastVisitAt"])
+	if last <= 0:
+		return 0
+	return maxi(0, int(runner._now_ms()) - last)
 
 
 # ── Save-Helfer ──────────────────────────────────────────────────────────────

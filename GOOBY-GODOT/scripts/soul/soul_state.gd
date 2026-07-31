@@ -48,6 +48,11 @@ static func default_slice() -> Dictionary:
 		"wunschErfuellt": {},
 		# FEEL-AC (additiv): Frequenzbremse + Gates der inszenierten Gefühle.
 		"feelings": SoulFeelings.default_feelings(),
+		# W14/VOICE (additiv): geführte Mini-Dialoge {gespraechId: {antwort,
+		# erinnerung, beiMs, anzahl}} + Anti-Wiederholungs-Gedächtnis der
+		# neuen Text-Lines {kategorie: [letzte Keys]} (SoulLinien).
+		"gespraeche": {},
+		"linien": {},
 	}
 
 
@@ -62,7 +67,7 @@ static func normalize_slice(raw: Variant) -> Dictionary:
 			out[key] = slice[key]
 	out["playerBirthday"] = _normalize_birthday(slice.get("playerBirthday"))
 	var map_keys := ["celebrated", "memoryShownAt", "surpriseAt", "knownItems", "foodGiven"]
-	map_keys.append_array(["wunsch", "wunschErfuellt"])
+	map_keys.append_array(["wunsch", "wunschErfuellt", "gespraeche", "linien"])
 	for key: String in map_keys:
 		if slice.get(key) is Dictionary:
 			out[key] = (slice[key] as Dictionary).duplicate(true)
