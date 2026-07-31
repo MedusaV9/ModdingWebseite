@@ -13,6 +13,9 @@ export function esc(value) {
 const NAV = [
   ['/panel/', 'Dashboard'],
   ['/panel/analytics', 'Analytics'],
+  ['/panel/pal', 'GoobyPal'],
+  ['/panel/spiele', 'Spiele & Besuche'],
+  ['/panel/ranch', 'Ranch'],
   ['/panel/codes', 'Codes'],
   ['/panel/events', 'Events'],
   ['/panel/friends', 'Freunde-Graph'],
@@ -110,4 +113,13 @@ export function fmtDur(ms) {
   const min = Math.floor(ms / 60_000);
   if (min < 60) return `${min} min`;
   return `${Math.floor(min / 60)} h ${min % 60} min`;
+}
+
+// Rennzeit-Format für Bestenlisten: "1:23,456" (Minuten:Sekunden,Millis).
+export function fmtZeit(ms) {
+  if (!Number.isFinite(ms)) return '—';
+  const min = Math.floor(ms / 60_000);
+  const sec = Math.floor((ms % 60_000) / 1000);
+  const rest = Math.floor(ms % 1000);
+  return `${min}:${String(sec).padStart(2, '0')},${String(rest).padStart(3, '0')}`;
 }

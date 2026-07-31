@@ -15,9 +15,14 @@ import {
   eventsPage,
   friendsPage,
   playersPage,
+  palPage,
+  spielePage,
+  ranchPage,
 } from './pages.js';
 import { createCode, deactivateCode } from '../src/codes.js';
 import { triggerEvent } from '../src/events.js';
+import { banPlayer, unbanPlayer } from '../src/bans.js';
+import { createMoveCode } from '../src/move.js';
 
 const SESSION_TTL_MS = 12 * 3600_000;
 const COOKIE = 'gooby_panel';
@@ -105,6 +110,9 @@ export function register(ctx) {
 
   app.get('/panel/', (req, res) => res.type('html').send(dashboardPage(ctx)));
   app.get('/panel/analytics', (req, res) => res.type('html').send(analyticsPage(ctx, req.query)));
+  app.get('/panel/pal', (req, res) => res.type('html').send(palPage(ctx, req.query)));
+  app.get('/panel/spiele', (req, res) => res.type('html').send(spielePage(ctx)));
+  app.get('/panel/ranch', (req, res) => res.type('html').send(ranchPage(ctx)));
   app.get('/panel/codes', (req, res) => res.type('html').send(codesPage(ctx)));
   app.get('/panel/events', (req, res) => res.type('html').send(eventsPage(ctx)));
   app.get('/panel/friends', (req, res) => res.type('html').send(friendsPage(ctx)));
@@ -165,6 +173,34 @@ export function register(ctx) {
       ? `<div class="notice">Event <code>${esc(result.id)}</code> gesendet — sofort zugestellt an ${result.pushed} Online-Client(s).</div>`
       : `<div class="err">Fehler: ${esc(result.code)}</div>`;
     res.status(result.ok ? 200 : 400).type('html').send(eventsPage(ctx, { flash }));
+  });
+
+  // Ban/Unban (W13-C): echtes Server-Gate, Begründung ist Pflicht (Audit).
+  app.post('/panel/api/ban', form, (req, res) => {
+    const result = banPlayer(ctx, String(req.body?.deviceId ?? ''), req.body?.reason);
+    const flash = result.ok
+      ? `<div class="notice">Spieler <strong>${esc(result.name)}</strong> (${esc(result.friendCode)}) gebannt — Verbindung getrennt, HELLO/REST gesperrt.</div>`
+      : `<div class="err">Ban fehlgeschlagen: ${esc(result.code)}${result.code === 'REASON_REQUIRED' ? ' (Begründung ist Pflicht)' : ''}</div>`;
+    res.status(result.ok ? 200 : 400).type('html').send(playersPage(ctx, { flash }));
+  });
+
+  app.post('/panel/api/unban', form, (req, res) => {
+    const result = unbanPlayer(ctx, String(req.body?.deviceId ?? ''), req.body?.reason);
+    const flash = result.ok
+      ? `<div class="notice">Ban für <strong>${esc(result.name)}</strong> (${esc(result.friendCode)}) aufgehoben.</div>`
+      : `<div class="err">Entbannen fehlgeschlagen: ${esc(result.code)}${result.code === 'REASON_REQUIRED' ? ' (Begründung ist Pflicht)' : ''}</div>`;
+    res.status(result.ok ? 200 : 400).type('html').send(playersPage(ctx, { flash }));
+  });
+
+  // Account-Umzugs-Code (Doc C §7): einmalig, 24 h gültig, pro Spieler zählt
+  // nur der jüngste Code.
+  app.post('/panel/api/movecode', form, (req, res) => {
+    const result = createMoveCode(ctx, String(req.body?.deviceId ?? ''));
+    const flash = result.ok
+      ? `<div class="notice">Umzugs-Code für ${esc(result.friendCode)}: <code>${esc(result.code)}</code>
+         — 24 h gültig, einmalig. Auf dem NEUEN Gerät unter Einstellungen → „Account umziehen“ eingeben.</div>`
+      : `<div class="err">Umzugs-Code fehlgeschlagen: ${esc(result.code)}</div>`;
+    res.status(result.ok ? 200 : 400).type('html').send(playersPage(ctx, { flash }));
   });
 
   // Unbekannte Panel-Pfade → Dashboard (kein Leak über 404-Unterschiede).
