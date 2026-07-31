@@ -22,7 +22,8 @@
 		"arcade": {
 			"title": "Arcade",
 			"back": "‹ Back",
-			"coming_soon": "Soon!"
+			"coming_soon": "Soon!",
+			"zaehler": "{n} games"
 		},
 		"pregame": {
 			"difficulty": "Difficulty",

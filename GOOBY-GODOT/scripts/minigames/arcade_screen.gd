@@ -105,20 +105,23 @@ static func grid_columns(avail_width: float, f: float) -> int:
 
 
 func _build_ui() -> void:
-	var bg := ColorRect.new()
-	bg.color = Color(0.98, 0.94, 0.87)
-	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	add_child(bg)
+	# W14: AC-Wallpaper mit Arcade-Stimmung (Web-V6-Themenblock) statt
+	# nacktem ColorRect — derselbe Drift-Hintergrund wie Profil/Album.
+	add_child(AcWallpaper.for_context("arcade"))
 	_rows = VBoxContainer.new()
 	_rows.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_rows.offset_left = 24.0
 	_rows.offset_right = -24.0
 	_rows.offset_top = 16.0
 	_rows.offset_bottom = -16.0
-	_rows.add_theme_constant_override("separation", 12)
+	# W14: 8er-Raster (12 war rasterfremd).
+	_rows.add_theme_constant_override("separation", 16)
 	add_child(_rows)
 
+	# W14: Kopfzeilen-Konsistenz — Zurück links (GhostButton), Titel mittig,
+	# rechts die Zähler-Kapsel (spielbare Spiele) wie die Album-Kopfzeile.
 	var header := HBoxContainer.new()
+	header.add_theme_constant_override("separation", 16)
 	_rows.add_child(header)
 	_back = Button.new()
 	_back.theme_type_variation = &"GhostButton"
@@ -132,9 +135,7 @@ func _build_ui() -> void:
 	_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	header.add_child(_title)
-	var spacer := Control.new()
-	spacer.custom_minimum_size = _back.get_combined_minimum_size()
-	header.add_child(spacer)
+	header.add_child(_build_count_capsule())
 
 	_scroll = ScrollContainer.new()
 	_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -160,6 +161,25 @@ func _build_ui() -> void:
 	UiMotion.stagger_in(tiles, 0.03)
 
 
+## W14: Zähler-Kapsel rechts in der Kopfzeile („n Spiele“) — StatusCapsule
+## wie im Album; hält der Kopfzeile zugleich die Mitte (Titel bleibt mittig).
+func _build_count_capsule() -> Control:
+	var capsule := PanelContainer.new()
+	capsule.name = "CountCapsule"
+	capsule.theme_type_variation = &"StatusCapsule"
+	capsule.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var label := Label.new()
+	label.name = "CountLabel"
+	label.theme_type_variation = &"SoftLabel"
+	var playable := 0
+	for game: Dictionary in MinigameRegistry.all_games():
+		if not bool(game.get("coming_soon", false)):
+			playable += 1
+	label.text = I18nService.t("mg.arcade.zaehler", {"n": playable})
+	capsule.add_child(label)
+	return capsule
+
+
 ## Responsive Metriken (FIX1): Safe-Area-Ränder, UiScale-Faktor,
 ## Spaltenzahl aus der Breite — läuft bei Resize/Rotation erneut.
 func _apply_metrics() -> void:
@@ -173,8 +193,8 @@ func _apply_metrics() -> void:
 	var insets := UiScale.safe_insets_canvas(vp)
 	_rows.offset_left = float(insets["left"]) + 16.0
 	_rows.offset_right = -float(insets["right"]) - 16.0
-	_rows.offset_top = float(insets["top"]) + 12.0
-	_rows.offset_bottom = -float(insets["bottom"]) - 12.0
+	_rows.offset_top = float(insets["top"]) + 16.0
+	_rows.offset_bottom = -float(insets["bottom"]) - 16.0
 	var gap := int(GRID_GAP * f)
 	_grid.add_theme_constant_override("h_separation", gap)
 	_grid.add_theme_constant_override("v_separation", gap)
@@ -210,10 +230,11 @@ func _build_tile(game: Dictionary) -> Control:
 		tile.pressed.connect(_on_tile_pressed.bind(id))
 	var content := VBoxContainer.new()
 	content.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	content.offset_left = 10.0
-	content.offset_right = -10.0
-	content.offset_top = 10.0
-	content.offset_bottom = -10.0
+	# W14: Kachel-Innenabstand aufs 4er-Subraster (vorher 10 — rasterfremd).
+	content.offset_left = 12.0
+	content.offset_right = -12.0
+	content.offset_top = 12.0
+	content.offset_bottom = -12.0
 	content.add_theme_constant_override("separation", 8)
 	content.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	tile.add_child(content)
