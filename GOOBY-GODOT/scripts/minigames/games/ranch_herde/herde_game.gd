@@ -6,6 +6,14 @@ extends MinigameBase
 ## nur Zustand → 3D und Zeigefinger → Reiter-Ziel (Tippen/Ziehen aufs Feld,
 ## alternativ Pfeiltasten). 10 Level aus data/herde_level.json, Auswahl über
 ## RanchLevelSelect, Fortschritt in `ranch.spiele.herde`.
+##
+## W15/GAMESQA2-Steuergefühl (Audit d=3, "wenig Juice"): der FLUCHT_RADIUS
+## ist jetzt als Boden-Ring am Pferd SICHTBAR (Schafe im Ring fliehen — das
+## Warum wird lesbar), jeder Tipp setzt eine Zielfahne mit Aufsetz-Puls,
+## Pfeiltasten steuern KONTINUIERLICH (Polling statt Key-Events) und
+## treib_ziel() vergibt Forgiveness: ein Tipp AUF ein Schaf springt auf den
+## Treibpunkt HINTER dem Schaf (vom Tor aus gesehen — die Bot-Politik als
+## Eingabehilfe). Dazu Galopp-Staub. Sim/Logic unverändert.
 
 const Stage3DScript := preload("res://scripts/minigames/games/_3da_stage/stage3d.gd")
 const GoobyActorScript := preload("res://scripts/minigames/games/_3da_stage/gooby_actor.gd")
@@ -25,6 +33,11 @@ const CREME := Color(0.95, 0.94, 0.87)
 const FAHNEN: Array[Color] = [
 	Color(0.91, 0.55, 0.63), Color(0.37, 0.66, 0.63), Color(0.95, 0.69, 0.3)
 ]
+
+## W15: Tipp-Nähe (m), ab der ein Tipp als „dieses Schaf treiben" gilt.
+const TREIB_RADIUS := 1.7
+## Treibpunkt-Abstand hinter dem Schaf (wie die Bot-Politik ±).
+const TREIB_ABSTAND := 2.4
 
 var tune: Dictionary = {}
 var level_liste: Array = []
@@ -56,6 +69,10 @@ var _drin_label: Label
 var _hint_label: Label
 var _ende_timer := 0.0
 var _zeiger_unten := false
+var _einfluss_ring: MeshInstance3D
+var _ziel_fahne: Node3D
+var _ziel_puls := 0.0
+var _staub: GPUParticles3D
 
 
 func setup(context: MinigameCtx) -> void:
@@ -99,8 +116,26 @@ func _process(delta: float) -> void:
 			if _ende_timer <= 0.0:
 				_zeige_select()
 		return
+	_poll_tasten()
 	_step_sim(delta)
 	_step_optik(delta)
+
+
+## W15: Pfeiltasten/WASD werden PRO FRAME gepollt (vorher nur Key-Events) —
+## gedrückt halten lenkt jetzt kontinuierlich, das Ziel klebt am Reiter.
+func _poll_tasten() -> void:
+	var richtung := Vector2.ZERO
+	if Input.is_physical_key_pressed(KEY_LEFT) or Input.is_physical_key_pressed(KEY_A):
+		richtung.x -= 1.0
+	if Input.is_physical_key_pressed(KEY_RIGHT) or Input.is_physical_key_pressed(KEY_D):
+		richtung.x += 1.0
+	if Input.is_physical_key_pressed(KEY_UP) or Input.is_physical_key_pressed(KEY_W):
+		richtung.y -= 1.0
+	if Input.is_physical_key_pressed(KEY_DOWN) or Input.is_physical_key_pressed(KEY_S):
+		richtung.y += 1.0
+	if richtung != Vector2.ZERO:
+		ziel = reiter + richtung.normalized() * 4.0
+		_zeige_ziel_fahne(false)
 
 
 ## ------------------------------------------------------------ Level-Wahl
@@ -179,6 +214,9 @@ func _teardown_level() -> void:
 	_pferd = null
 	_gooby = null
 	_schaf_nodes = []
+	_einfluss_ring = null
+	_ziel_fahne = null
+	_staub = null
 
 
 func _build_welt() -> void:
@@ -511,6 +549,106 @@ func _build_reiter() -> void:
 	_gooby.position = Vector3(0.0, 1.32, -0.1)
 	_pferd.add_child(_gooby)
 	_gooby.call("mount", 0.62, 0.0, "idle")
+	_build_einfluss_ring()
+	_build_staub()
+	_build_ziel_fahne()
+
+
+## W15: der Flucht-Radius als flacher Boden-Ring am Pferd — Schafe IM Ring
+## fliehen, das „Warum reagiert das Schaf nicht?" wird damit sichtbar.
+func _build_einfluss_ring() -> void:
+	_einfluss_ring = MeshInstance3D.new()
+	var torus := TorusMesh.new()
+	var radius := float(tune["FLUCHT_RADIUS"])
+	torus.inner_radius = radius - 0.14
+	torus.outer_radius = radius
+	torus.rings = 48
+	torus.ring_segments = 6
+	_einfluss_ring.mesh = torus
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.albedo_color = Color(1.0, 0.98, 0.9, 0.34)
+	_einfluss_ring.material_override = mat
+	_einfluss_ring.position = Vector3(0.0, 0.05, 0.0)
+	_einfluss_ring.scale = Vector3(1.0, 0.03, 1.0)
+	_einfluss_ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_pferd.add_child(_einfluss_ring)
+
+
+## W15: Galopp-Staub hinter den Hufen (aus, solange das Pferd steht).
+func _build_staub() -> void:
+	_staub = GPUParticles3D.new()
+	_staub.amount = 14
+	_staub.lifetime = 0.55
+	_staub.emitting = false
+	_staub.local_coords = false
+	var pm := ParticleProcessMaterial.new()
+	pm.direction = Vector3(0.0, 1.0, -1.0)
+	pm.spread = 24.0
+	pm.initial_velocity_min = 0.8
+	pm.initial_velocity_max = 1.6
+	pm.gravity = Vector3(0.0, -1.2, 0.0)
+	pm.scale_min = 0.5
+	pm.scale_max = 1.1
+	_staub.process_material = pm
+	var puff := SphereMesh.new()
+	puff.radius = 0.09
+	puff.height = 0.18
+	puff.radial_segments = 6
+	puff.rings = 3
+	_staub.draw_pass_1 = puff
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.albedo_color = Color(0.87, 0.8, 0.68, 0.5)
+	puff.material = mat
+	_staub.position = Vector3(0.0, 0.12, -0.7)
+	_pferd.add_child(_staub)
+
+
+## W15: Zielfahne — zeigt, WOHIN das Pferd gerade reitet (mit Aufsetz-Puls).
+func _build_ziel_fahne() -> void:
+	_ziel_fahne = Node3D.new()
+	_ziel_fahne.visible = false
+	_welt.add_child(_ziel_fahne)
+	var stab := MeshInstance3D.new()
+	var stab_mesh := CylinderMesh.new()
+	stab_mesh.top_radius = 0.035
+	stab_mesh.bottom_radius = 0.035
+	stab_mesh.height = 0.9
+	stab_mesh.radial_segments = 6
+	stab.mesh = stab_mesh
+	stab.material_override = RanchPferd.material(HOLZ_DUNKEL)
+	stab.position = Vector3(0.0, 0.45, 0.0)
+	stab.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_ziel_fahne.add_child(stab)
+	var tuch := MeshInstance3D.new()
+	var tuch_mesh := PrismMesh.new()
+	tuch_mesh.size = Vector3(0.42, 0.3, 0.03)
+	tuch.mesh = tuch_mesh
+	tuch.material_override = RanchPferd.material(TOR_FARBE)
+	tuch.position = Vector3(0.2, 0.78, 0.0)
+	tuch.rotation = Vector3(PI, 0.0, PI * 0.5)
+	tuch.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_ziel_fahne.add_child(tuch)
+	var puls := MeshInstance3D.new()
+	puls.name = "Puls"
+	var ring := TorusMesh.new()
+	ring.inner_radius = 0.32
+	ring.outer_radius = 0.45
+	ring.rings = 24
+	ring.ring_segments = 6
+	puls.mesh = ring
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.albedo_color = Color(1.0, 0.9, 0.55, 0.8)
+	puls.material_override = mat
+	puls.position = Vector3(0.0, 0.05, 0.0)
+	puls.scale = Vector3(1.0, 0.05, 1.0)
+	puls.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_ziel_fahne.add_child(puls)
 
 
 ## Billige Puschel-Schafe (7 Meshes, Kleinteile ohne Schatten) — bewusst
@@ -693,8 +831,38 @@ func _step_optik(delta: float) -> void:
 			else (RanchPferd.GANG_TRAB if bewegung > 0.3 else RanchPferd.GANG_IDLE)
 		)
 	)
+	if _staub != null:
+		_staub.emitting = bewegung > float(tune["REITER_TEMPO"]) * 0.5
+	if _einfluss_ring != null:
+		# Sanfter Atem-Puls: der Ring lebt, ohne zu blinken.
+		var puls := 1.0 + 0.025 * sin(t_abs * 2.4)
+		_einfluss_ring.scale = Vector3(puls, 0.03, puls)
+	_tick_ziel_fahne(delta)
 	if _gooby != null:
 		_gooby.call("tick", delta)
+
+
+## Zielfahne einblenden/pulsen lassen; erreicht das Pferd sie, sinkt sie weg.
+func _zeige_ziel_fahne(puls: bool) -> void:
+	if _ziel_fahne == null:
+		return
+	_ziel_fahne.visible = true
+	_ziel_fahne.position = Vector3(ziel.x, 0.0, ziel.y)
+	if puls:
+		_ziel_puls = 1.0
+
+
+func _tick_ziel_fahne(delta: float) -> void:
+	if _ziel_fahne == null or not _ziel_fahne.visible:
+		return
+	_ziel_puls = maxf(0.0, _ziel_puls - delta * 2.6)
+	var ring := _ziel_fahne.get_node_or_null("Puls") as MeshInstance3D
+	if ring != null:
+		var s := 1.0 + (1.0 - _ziel_puls) * 1.6
+		ring.scale = Vector3(s, 0.05, s)
+		ring.visible = _ziel_puls > 0.0
+	if reiter.distance_to(ziel) < 0.6:
+		_ziel_fahne.visible = false
 	for i in mini(schafe.size(), _schaf_nodes.size()):
 		var s: Dictionary = schafe[i]
 		var node := _schaf_nodes[i]
@@ -782,30 +950,45 @@ func _unhandled_input(event: InputEvent) -> void:
 		var touch := event as InputEventScreenTouch
 		_zeiger_unten = touch.pressed
 		if touch.pressed:
-			_setze_ziel(touch.position)
+			_setze_ziel(touch.position, true)
 	elif event is InputEventScreenDrag and _zeiger_unten:
-		_setze_ziel((event as InputEventScreenDrag).position)
+		_setze_ziel((event as InputEventScreenDrag).position, false)
 
 
-func _setze_ziel(screen: Vector2) -> void:
+func _setze_ziel(screen: Vector2, tipp: bool) -> void:
 	var punkt: Vector3 = _stage.call("plane_point", screen, 0.0)
-	ziel = Vector2(punkt.x, punkt.z)
+	# Forgiveness NUR beim Tippen: der Finger meint „dieses Schaf treiben",
+	# beim Ziehen lenkt er das Pferd frei.
+	ziel = (
+		treib_ziel(Vector2(punkt.x, punkt.z), schafe, level) if tipp else Vector2(punkt.x, punkt.z)
+	)
+	_zeige_ziel_fahne(tipp)
 
 
-func _unhandled_key_input(event: InputEvent) -> void:
-	if not is_active() or finished or not level_running:
-		return
-	var key := event as InputEventKey
-	if key == null or key.echo:
-		return
-	var richtung := Vector2.ZERO
-	if Input.is_physical_key_pressed(KEY_LEFT) or Input.is_physical_key_pressed(KEY_A):
-		richtung.x -= 1.0
-	if Input.is_physical_key_pressed(KEY_RIGHT) or Input.is_physical_key_pressed(KEY_D):
-		richtung.x += 1.0
-	if Input.is_physical_key_pressed(KEY_UP) or Input.is_physical_key_pressed(KEY_W):
-		richtung.y -= 1.0
-	if Input.is_physical_key_pressed(KEY_DOWN) or Input.is_physical_key_pressed(KEY_S):
-		richtung.y += 1.0
-	if richtung != Vector2.ZERO:
-		ziel = reiter + richtung.normalized() * 4.0
+## PURE Eingabehilfe (W15): landet ein Tipp nahe an einem freien Schaf,
+## springt das Reit-Ziel auf den Treibpunkt HINTER diesem Schaf (vom Tor aus
+## gesehen — dieselbe Politik wie Logic.bot_ziel, inkl. Tor-Korridor-Schutz:
+## im Korridor nie nördlich der Torlinie, sonst drückt der Reiter das Schaf
+## wieder heraus). Sonst kommt der Tipp-Punkt unverändert zurück.
+static func treib_ziel(tipp: Vector2, herde: Array, lvl: Dictionary) -> Vector2:
+	var schaf := Vector2.ZERO
+	var best := TREIB_RADIUS
+	var gefunden := false
+	for s: Variant in herde:
+		if bool((s as Dictionary)["drin"]):
+			continue
+		var pos := Vector2(float((s as Dictionary)["x"]), float((s as Dictionary)["z"]))
+		var d := tipp.distance_to(pos)
+		if d <= best:
+			best = d
+			schaf = pos
+			gefunden = true
+	if not gefunden:
+		return tipp
+	var tor := Logic.tor_pos(lvl)
+	var richtung := (schaf - tor).normalized() if schaf != tor else Vector2(0.0, 1.0)
+	var ziel_neu := schaf + richtung * TREIB_ABSTAND
+	var p := Logic.pferch_rect(lvl)
+	if absf(schaf.x - float(p["x"])) < float(p["tor"]) * 0.5 + 1.0:
+		ziel_neu.y = maxf(ziel_neu.y, float(p["z"]) + float(p["t"]) * 0.5 + 0.6)
+	return ziel_neu
