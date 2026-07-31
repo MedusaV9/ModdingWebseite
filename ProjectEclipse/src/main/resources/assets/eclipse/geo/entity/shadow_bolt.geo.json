@@ -6,7 +6,7 @@
 				"identifier": "geometry.shadow_bolt",
 				"texture_width": 32,
 				"texture_height": 32,
-				"visible_bounds_width": 1,
+				"visible_bounds_width": 1.5,
 				"visible_bounds_height": 1,
 				"visible_bounds_offset": [0, 0.25, 0]
 			},
@@ -16,8 +16,18 @@
 					"pivot": [0, 2.8, 0]
 				},
 				{
-					"name": "glow_core",
+					"name": "aim",
 					"parent": "root",
+					"pivot": [0, 2.8, 0]
+				},
+				{
+					"name": "spin",
+					"parent": "aim",
+					"pivot": [0, 2.8, 0]
+				},
+				{
+					"name": "glow_core",
+					"parent": "spin",
 					"pivot": [0, 2.8, 0],
 					"cubes": [
 						{"origin": [-1.5, 1.3, -1.5], "size": [3, 3, 3], "uv": [0, 0]}
@@ -25,12 +35,49 @@
 				},
 				{
 					"name": "spikes",
-					"parent": "root",
+					"parent": "spin",
 					"pivot": [0, 2.8, 0],
 					"cubes": [
 						{"origin": [-3, 2.3, -0.5], "size": [6, 1, 1], "uv": [0, 8]},
 						{"origin": [-0.5, -0.2, -0.5], "size": [1, 6, 1], "uv": [0, 12]},
 						{"origin": [-0.5, 2.3, -3], "size": [1, 1, 6], "uv": [14, 8]}
+					]
+				},
+				{
+					"name": "glow_lance",
+					"parent": "spin",
+					"pivot": [0, 2.8, -2],
+					"cubes": [
+						{"origin": [-1, 1.8, -4], "size": [2, 2, 2], "uv": [12, 0]}
+					]
+				},
+				{
+					"name": "glow_tip",
+					"parent": "spin",
+					"pivot": [0, 2.8, -3.5],
+					"cubes": [
+						{"origin": [-0.5, 2.3, -5.5], "size": [1, 1, 2], "uv": [22, 0]}
+					]
+				},
+				{
+					"name": "wake",
+					"parent": "aim",
+					"pivot": [0, 2.8, 3]
+				},
+				{
+					"name": "glow_wake_a",
+					"parent": "wake",
+					"pivot": [1.5, 2.8, 3],
+					"cubes": [
+						{"origin": [1, 2.3, 3], "size": [1, 1, 2], "uv": [0, 20]}
+					]
+				},
+				{
+					"name": "glow_wake_b",
+					"parent": "wake",
+					"pivot": [-1.5, 2.8, 3],
+					"cubes": [
+						{"origin": [-2, 2.3, 3], "size": [1, 1, 2], "uv": [8, 20]}
 					]
 				}
 			]

@@ -5,15 +5,50 @@
 			"loop": true,
 			"animation_length": 1.0,
 			"bones": {
-				"root": {
-					"rotation": [0, "query.anim_time * 360", 0]
+				"aim": {
+					"rotation": [
+						"query.body_x_rotation + math.clamp(query.vertical_speed * -4, -10, 10)",
+						"query.body_y_rotation + math.clamp(query.yaw_speed * 2.5, -20, 20)",
+						0
+					]
 				},
-				"spikes": {
-					"rotation": ["query.anim_time * 360", 0, "query.anim_time * -360"]
+				"spin": {
+					"rotation": [
+						"math.sin(query.anim_time * 360) * 6 + math.clamp(query.yaw_speed * 1.2, -7, 7)",
+						"math.sin(query.anim_time * 360 + 90) * 6",
+						"query.anim_time * 720"
+					]
 				},
 				"glow_core": {
-					"position": [0, "math.sin(query.anim_time * 720) * 0.3", 0],
-					"rotation": [0, "query.anim_time * -360", 0]
+					"rotation": [0, 0, "query.anim_time * -1080"],
+					"position": [0, "math.sin(query.anim_time * 1080) * 0.3", 0],
+					"scale": "1 + math.sin(query.anim_time * 720) * 0.07"
+				},
+				"spikes": {
+					"rotation": ["math.sin(query.anim_time * 720 + 40) * 5", 0, "query.anim_time * -360"]
+				},
+				"glow_lance": {
+					"position": [0, 0, "math.sin(query.anim_time * 720) * 0.3 - 0.3"],
+					"scale": [1, 1, "1 + math.abs(math.sin(query.anim_time * 360)) * 0.22"]
+				},
+				"glow_tip": {
+					"position": [0, 0, "math.sin(query.anim_time * 720 + 180) * 0.25 - 0.25"],
+					"scale": [1, 1, "1 + math.abs(math.sin(query.anim_time * 360 + 90)) * 0.28"]
+				},
+				"wake": {
+					"rotation": [
+						"math.clamp(query.vertical_speed * -7, -16, 16)",
+						"math.clamp(query.yaw_speed * -4, -28, 28)",
+						"math.clamp(query.yaw_speed * -3.5, -24, 24) + math.sin(query.anim_time * 360) * 6"
+					]
+				},
+				"glow_wake_a": {
+					"position": [0, 0, "math.sin(query.anim_time * 360) * 0.5 + 0.5"],
+					"scale": [1, 1, "0.5 + math.abs(math.sin(query.anim_time * 360)) * 1.0"]
+				},
+				"glow_wake_b": {
+					"position": [0, 0, "math.sin(query.anim_time * 360 + 180) * 0.5 + 0.5"],
+					"scale": [1, 1, "0.5 + math.abs(math.sin(query.anim_time * 360 + 90)) * 1.0"]
 				}
 			}
 		}

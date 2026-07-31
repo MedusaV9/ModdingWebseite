@@ -1,0 +1,12 @@
+{
+  "_note": "MB3 (Eclipse Cultist + Shadow Bolt) — no NEW keys. Both entities and the cultist's bestiary page already exist; MB3's model polish changed what the mob actually looks like, so the two lore lines below are REPLACEMENTS that bring the text back in sync with the silhouette: the cowl now carries a visible ember ring (glow_hood), the sleeves are bell cuffs that flare open on the cast, and the bolt flies nose-first with a lit spear and a trailing wake instead of tumbling as a bare orb. Integrator: overwrite the existing values for these two keys in en_us.json / de_de.json, add nothing else.",
+  "_replaces_existing_keys": true,
+  "en_us": {
+    "bestiary.eclipse.eclipse_cultist.lore": "They wore the hooded uniform before you did — by choice. Rune pages orbit the left hand, a knife waits in the right, and the coals ringing the inside of the cowl brighten every time the chant does. Watch the sleeves: when the bells swing open, a bolt is already leaving.",
+    "bestiary.eclipse.eclipse_cultist.behavior": "Hunting: holds an eight-to-fourteen-block band, rooting for a one-second chant before releasing a three-bolt shadow fan that curves back in late. Each bolt flies point-first and leans into its own turn, so a fan that missed once can still find you. Grounds: the vaults beneath the new land from day nine; the Rift Warden calls more of them mid-fight."
+  },
+  "de_de": {
+    "bestiary.eclipse.eclipse_cultist.lore": "Sie trugen die Kapuzenuniform vor dir — freiwillig. Runenseiten kreisen um die linke Hand, in der rechten wartet ein Messer, und die Glut im Rund der Kapuze zieht bei jedem Gesang an. Achte auf die Ärmel: wenn die Glocken aufwehen, ist das Geschoss schon unterwegs.",
+    "bestiary.eclipse.eclipse_cultist.behavior": "Jagdmuster: hält ein Band von acht bis vierzehn Blöcken, verwurzelt sich für einen sekundenlangen Gesang und entlässt dann einen Fächer aus drei Schattengeschossen, die sich spät wieder einkrümmen. Jedes Geschoss fliegt mit der Spitze voran und legt sich in die eigene Kurve — ein Fächer, der einmal daneben ging, findet dich trotzdem noch. Reviere: die Gewölbe unter dem neuen Land ab Tag neun; der Risswächter ruft mitten im Kampf weitere herbei."
+  }
+}

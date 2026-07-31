@@ -69,6 +69,7 @@ public class RangedShadowBoltGoal extends Goal {
     @Override
     public void stop() {
         this.windupTicks = -1;
+        this.cultist.setCasting(false); // Target lost mid-chant: drop the FX/anim flag too.
         this.cultist.getNavigation().stop();
     }
 
@@ -129,6 +130,7 @@ public class RangedShadowBoltGoal extends Goal {
     private void beginCast() {
         this.windupTicks = CAST_WINDUP_TICKS;
         this.cultist.getNavigation().stop();
+        this.cultist.setCasting(true);
         this.cultist.triggerAction(EclipseCultistEntity.ANIM_CAST);
         this.cultist.level().playSound(null, this.cultist.blockPosition(),
                 SoundEvents.EVOKER_PREPARE_ATTACK, SoundSource.HOSTILE, 1.0F, 1.3F);
@@ -147,6 +149,9 @@ public class RangedShadowBoltGoal extends Goal {
         }
         this.windupTicks = -1;
         this.castTimer = CAST_INTERVAL;
+        // Cleared before the early returns below: a dead target must not leave the cultist
+        // stuck "casting" for the rest of its life.
+        this.cultist.setCasting(false);
         if (!target.isAlive() || !(this.cultist.level() instanceof ServerLevel serverLevel)) {
             return;
         }

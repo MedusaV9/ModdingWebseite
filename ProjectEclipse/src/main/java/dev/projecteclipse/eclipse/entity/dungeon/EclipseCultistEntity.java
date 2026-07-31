@@ -52,6 +52,19 @@ public class EclipseCultistEntity extends EclipseGeoMonster {
     /** Scripted death window (sheet: 30t kneel forward, hood empties). */
     public static final int DEATH_ANIM_TICKS = 30;
 
+    /**
+     * True for the whole rooted cast windup — set when {@link RangedShadowBoltGoal} fires
+     * the {@link #ANIM_CAST} trigger, cleared the tick the fan leaves. SYNCED because the
+     * cast is a purely client-side read: the {@code glow_hood} ember ring blooms on the
+     * cast sheet, and the body-FX attach table (B2, {@code PhotonMobFx}) needs a rising
+     * edge to hang the hood-ember burst on — GeckoLib's own trigger channel is not
+     * queryable from a render-thread predicate. Transient (never saved): a cultist
+     * reloaded mid-chant re-runs its goal from {@code start()}.
+     */
+    private static final net.minecraft.network.syncher.EntityDataAccessor<Boolean> DATA_CASTING =
+            net.minecraft.network.syncher.SynchedEntityData.defineId(EclipseCultistEntity.class,
+                    net.minecraft.network.syncher.EntityDataSerializers.BOOLEAN);
+
     private static final float SIGIL_DROP_CHANCE = 0.10F;
 
     public EclipseCultistEntity(EntityType<? extends EclipseCultistEntity> entityType, Level level) {
@@ -81,6 +94,22 @@ public class EclipseCultistEntity extends EclipseGeoMonster {
         action.triggerableAnim(EclipseGeoAnimations.ANIM_ATTACK,
                 EclipseGeoAnimations.once(GEO_ID, EclipseGeoAnimations.ANIM_ATTACK));
         action.triggerableAnim(ANIM_CAST, EclipseGeoAnimations.once(GEO_ID, ANIM_CAST));
+    }
+
+    @Override
+    protected void defineSynchedData(
+            net.minecraft.network.syncher.SynchedEntityData.Builder builder) {
+        super.defineSynchedData(builder);
+        builder.define(DATA_CASTING, false);
+    }
+
+    /** True while the cultist is rooted in the {@value #ANIM_CAST} windup (see {@link #DATA_CASTING}). */
+    public boolean isCasting() {
+        return this.entityData.get(DATA_CASTING);
+    }
+
+    void setCasting(boolean casting) {
+        this.entityData.set(DATA_CASTING, casting);
     }
 
     // --- AI (caster kit; the ranged goal owns kiting, casting and the panic swipe) ---
@@ -115,6 +144,7 @@ public class EclipseCultistEntity extends EclipseGeoMonster {
     public void die(DamageSource damageSource) {
         super.die(damageSource);
         if (!this.level().isClientSide) {
+            setCasting(false); // Killed mid-chant: the flag must not outlive the caster.
             triggerAction(EclipseGeoAnimations.ANIM_DEATH);
         }
     }
