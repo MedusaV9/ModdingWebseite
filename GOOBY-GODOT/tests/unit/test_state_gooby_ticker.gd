@@ -166,6 +166,36 @@ func test_application_resumed_runs_catch_up() -> void:
 	gs.free()
 
 
+## ------------------------------------------ W13B (Doc E §3.3) Erholungs-Boost
+
+
+func test_live_tick_erholungs_boost_bremst_energie_drain() -> void:
+	var gs := _fresh_game_state(_fresh_path())
+	gs.set_value("vacation.erholtBis", NOW_MS + 48 * 60 * MIN_MS)
+	gs.set_value("gooby.lastTickAt", NOW_MS)
+	gs.clock.advance(10 * MIN_MS)
+	gs.run_live_tick()
+	# Energie-Drain ×0,8 (Vacation.energie_drain_faktor): 90 − 0.25·10·0.8
+	# = 88.0 statt 87.5; der Boost wirkt NUR auf energy.
+	assert_almost(gs.get_value("gooby.stats.energy"), 88.0, 1e-6, "energy-Drain x0.8")
+	assert_almost(gs.get_value("gooby.stats.hunger"), 76.5, 1e-6, "hunger unveraendert")
+	gs.free()
+
+
+func test_catch_up_erholungs_boost_nur_im_boost_fenster() -> void:
+	var gs := _fresh_game_state(_fresh_path())
+	# Boost endet 40 min nach der Basislinie — von 100 Offline-Minuten sind
+	# nur diese 40 gebremst (0.3x-Offline-Rate): 90 − 0.25·100·0.3
+	# + 0.25·0.2·40·0.3 = 83.1.
+	gs.set_value("vacation.erholtBis", NOW_MS + 40 * MIN_MS)
+	gs.set_value("gooby.lastTickAt", NOW_MS)
+	gs.clock.advance(100 * MIN_MS)
+	gs.notification(Node.NOTIFICATION_APPLICATION_RESUMED)
+	assert_almost(gs.get_value("gooby.stats.energy"), 83.1, 1e-6, "Teilfenster gebremst")
+	assert_almost(gs.get_value("gooby.stats.hunger"), 80.0 - 0.35 * 100 * 0.3, 1e-6, "hunger 0.3x")
+	gs.free()
+
+
 func test_flat_view_write_back_roundtrip_preserves_other_keys() -> void:
 	var state := {
 		"gooby":

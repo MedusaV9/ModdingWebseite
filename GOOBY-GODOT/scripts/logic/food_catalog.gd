@@ -76,6 +76,10 @@ const FOODS := {
 	"cinnamonRoll": {"hunger": 16, "fun": 8, "energy": 3, "hygiene": -2, "junk": true},
 	"cupcakePink": {"hunger": 10, "fun": 10, "energy": 2, "hygiene": -2, "junk": true},
 	"nutella": {"hunger": 18, "fun": 6, "energy": 2, "hygiene": -4, "junk": true},
+	# ── W13B/RAUMSTATION: Astro-Snack-Automat (raumstation.gd MOEHRE_ID)
+	# verkauft weltraumMoehre in inventory.food — analog carrot, nur
+	# festlicher (Anzeigename via rewards.food.weltraumMoehre). ──
+	"weltraumMoehre": {"hunger": 12, "fun": 6, "energy": 2, "favorit": true},
 }
 
 ## Fallback für unbekannte Inventar-Ids: generischer kleiner Snack.

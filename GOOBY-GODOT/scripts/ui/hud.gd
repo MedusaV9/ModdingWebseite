@@ -489,6 +489,8 @@ func _fill_status_sheet() -> void:
 	var gs := get_node_or_null("/root/GameState")
 	var now_ms := int(Time.get_unix_time_from_system() * 1000.0)
 	var boni := HudStatusSheet.stat_boni(gs, now_ms)
+	# W13B/RAUMSTATION: ☀ am Energie-Buff-Chip, solange „erholt“ läuft.
+	var sonne := HudStatusSheet.erholt_aktiv(gs, now_ms)
 	# FIX1: zentrale Skalierungs-Regel statt Hochkant-Heuristik — das Sheet
 	# skaliert jetzt in BEIDEN Orientierungen gleich. Die nutzbare
 	# Innenbreite geht mit, damit der Inhalt nie breiter baut als das Blatt
@@ -498,7 +500,7 @@ func _fill_status_sheet() -> void:
 	var avail := (
 		PanelSheetLayout.sheet_width(canvas, _safe_insets(), f) - _status_sheet.chrome_width()
 	)
-	_status_sheet.add_content(HudStatusSheet.build_content(_last_stats, boni, f, avail))
+	_status_sheet.add_content(HudStatusSheet.build_content(_last_stats, boni, f, avail, sonne))
 
 
 func _build_action_buttons() -> void:

@@ -154,6 +154,33 @@ func test_rehwei_ort_befuellt_laden_mit_buechern() -> void:
 	)
 
 
+## ---------------------------------------------- Erholungs-Sonne (RAUMSTATION)
+
+
+## HUD-Wunsch (Doc E §3.3): der Energie-Buff-Chip trägt ein ☀-Prefix,
+## solange der „erholt“-Urlaubs-Buff läuft (erholt_aktiv liest den
+## GoobyBuffs-Slice; abgelaufene Buffs zählen nicht).
+func test_energie_buff_chip_traegt_sonne_bei_erholt() -> void:
+	var gs := FakeGameState.new()
+	gs.state["buffs"] = {
+		"aktiv": [{"id": "erholt", "stat": "energy", "wert": 5.0, "until_ms": NOW + 1000}]
+	}
+	assert_true(HudStatusSheet.erholt_aktiv(gs, NOW), "erholt-Buff wird erkannt")
+	assert_false(HudStatusSheet.erholt_aktiv(gs, NOW + 2000), "abgelaufen = keine Sonne")
+	var stats := {"hunger": 80.0, "energie": 90.0, "hygiene": 85.0, "spass": 70.0}
+	var content := HudStatusSheet.build_content(stats, {"energie": 5.0}, 1.0, 0.0, true)
+	var chip: Control = content.find_child("BuffEnergie", true, false)
+	assert_true(chip != null, "Energie-Buff-Chip gebaut")
+	var label: Label = chip.find_child("BuffValue", true, false)
+	assert_true(label.text.begins_with("☀ "), "☀-Prefix am Chip (got %s)" % label.text)
+	var ohne := HudStatusSheet.build_content(stats, {"energie": 5.0})
+	var chip_ohne: Control = ohne.find_child("BuffEnergie", true, false)
+	var label_ohne: Label = chip_ohne.find_child("BuffValue", true, false)
+	assert_false(label_ohne.text.begins_with("☀"), "ohne erholt keine Sonne")
+	content.free()
+	ohne.free()
+
+
 ## ---------------------------------------------- Lambda-Tripwire (REISEPASS)
 
 

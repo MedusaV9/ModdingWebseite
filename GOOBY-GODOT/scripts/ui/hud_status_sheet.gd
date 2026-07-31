@@ -75,6 +75,21 @@ static func stat_boni(gs: Object, now_ms: int) -> Dictionary:
 	return boni
 
 
+## W13B/RAUMSTATION (Doc E §3.3): Läuft der „erholt“-Urlaubs-Buff gerade?
+## Dann trägt der Energie-Buff-Chip ein ☀-Prefix (KEIN HUD-Umbau — nur der
+## Chip-Text; der Buff selbst kommt über urlaubs_bonus.gd/GoobyBuffs).
+static func erholt_aktiv(gs: Object, now_ms: int) -> bool:
+	if gs == null or not gs.has_method("get_value"):
+		return false
+	var slice: Variant = gs.get_value("buffs", {})
+	if not (slice is Dictionary):
+		return false
+	for buff: Variant in GoobyBuffs.active(slice, now_ms):
+		if buff is Dictionary and str(buff.get("id", "")) == UrlaubsBonus.BUFF_ID:
+			return true
+	return false
+
+
 ## Node-Baum des Sheet-Inhalts. `stats` = HUD-Werte {hunger, energie,
 ## hygiene, spass: 0..100}, `boni` = Ergebnis von stat_boni(). `ui_scale`
 ## skaliert Größen/Fonts (zentrale Regel `UiScale.for_viewport`, 1.0 =
@@ -82,8 +97,9 @@ static func stat_boni(gs: Object, now_ms: int) -> Dictionary:
 ## (`PanelSheetLayout.sheet_width - PanelSheet.chrome_width`; 0 = egal) —
 ## FIX1: der Inhalt darf NIE breiter bauen, sonst schneidet das nur
 ## vertikal scrollende Sheet die Wert-Spalte ab (Hochkant-Befund).
+## `sonne` = Ergebnis von erholt_aktiv() (☀-Prefix am Energie-Buff-Chip).
 static func build_content(
-	stats: Dictionary, boni: Dictionary, ui_scale := 1.0, avail_width := 0.0
+	stats: Dictionary, boni: Dictionary, ui_scale := 1.0, avail_width := 0.0, sonne := false
 ) -> Control:
 	var rows := VBoxContainer.new()
 	rows.name = "StatRows"
@@ -93,12 +109,17 @@ static func build_content(
 		width = minf(width, avail_width)
 	rows.custom_minimum_size = Vector2(width, 0)
 	for info in STATS:
-		rows.add_child(_build_row(info, stats, boni, ui_scale, avail_width))
+		rows.add_child(_build_row(info, stats, boni, ui_scale, avail_width, sonne))
 	return rows
 
 
 static func _build_row(
-	info: Dictionary, stats: Dictionary, boni: Dictionary, ui_scale: float, avail_width := 0.0
+	info: Dictionary,
+	stats: Dictionary,
+	boni: Dictionary,
+	ui_scale: float,
+	avail_width := 0.0,
+	sonne := false
 ) -> Control:
 	var id := str(info["id"])
 	var value := clampf(float(stats.get(id, 0.0)), 0.0, 100.0)
@@ -127,7 +148,7 @@ static func _build_row(
 		name_box.name = "NameBox"
 		name_box.custom_minimum_size = Vector2(110 * ui_scale, 0)
 		name_box.add_child(label)
-		name_box.add_child(_build_buff_chip(id, float(boni[id]), ui_scale))
+		name_box.add_child(_build_buff_chip(id, float(boni[id]), ui_scale, sonne))
 		row.add_child(name_box)
 	else:
 		row.add_child(label)
@@ -151,11 +172,11 @@ static func _build_row(
 	_scale_font(value_label, 20, ui_scale)
 	row.add_child(value_label)
 	if not narrow and boni.has(id):
-		row.add_child(_build_buff_chip(id, float(boni[id]), ui_scale))
+		row.add_child(_build_buff_chip(id, float(boni[id]), ui_scale, sonne))
 	return row
 
 
-static func _build_buff_chip(id: String, bonus: float, ui_scale: float) -> Control:
+static func _build_buff_chip(id: String, bonus: float, ui_scale: float, sonne := false) -> Control:
 	var chip := PanelContainer.new()
 	chip.name = "Buff" + id.capitalize()
 	chip.theme_type_variation = "AcChip"
@@ -164,7 +185,12 @@ static func _build_buff_chip(id: String, bonus: float, ui_scale: float) -> Contr
 	label.name = "BuffValue"
 	label.theme_type_variation = "CaptionLabel"
 	var wert := "%+d" % int(roundf(bonus))
-	label.text = _text("hud.sheet_buff", "{wert} Buff").format({"wert": wert})
+	var text := _text("hud.sheet_buff", "{wert} Buff").format({"wert": wert})
+	# W13B/RAUMSTATION: ☀-Prefix am Energie-Chip, solange „erholt“ läuft
+	# (Glyph, kein Spielertext — DE/EN identisch).
+	if sonne and id == "energie":
+		text = "☀ " + text
+	label.text = text
 	label.add_theme_color_override("font_color", AcTokens.YELLOW_DARK)
 	_scale_font(label, 15, ui_scale)
 	chip.add_child(label)

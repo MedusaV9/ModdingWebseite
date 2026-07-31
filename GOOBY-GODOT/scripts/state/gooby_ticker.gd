@@ -91,6 +91,10 @@ static func catch_up(state: Dictionary, now_ms: int) -> Array:
 			events.append_array(
 				_advance_care(state, awake_min, Offline.AWAKE_RATE_MULT, now_ms, false)
 			)
+			# W13B (Doc E §3.3): Erholungs-Boost auch offline — der wache
+			# Anteil beginnt nach dem Aufwachen (sonst an der Basislinie).
+			var awake_start := clampf(wake_at, last, float(now_ms)) if was_sleeping else last
+			_erholungs_boost_offline(state, awake_start, awake_min, now_ms)
 	# FERTIG-1 (EVAL Rang 12): Modifier-Scheduler holt Offline-Zeit nach
 	# (ein verpasstes nextAt startet das Event JETZT — Web-§C-SYS4.1).
 	events.append_array(_tick_modifiers(state, now_ms))
@@ -139,6 +143,13 @@ static func _live_tick_core(state: Dictionary, now_ms: int) -> Array:
 		var stats: Dictionary = flat["stats"]
 		var extra := absf(float(Stats.RATES_AWAKE["fun"])) * (Health.QUEASY_FUN_DECAY_MULT - 1.0)
 		stats["fun"] = Stats.clamp_stat(_num(stats.get("fun")) - extra * dt_min)
+	# W13B (Doc E §3.3): Erholungs-Boost — Energie sinkt 48 h nach der
+	# Urlaubs-Abholung 20 % langsamer (Vacation.erholtBis, zeitinjiziert).
+	var drain_faktor := Vacation.energie_drain_faktor(_dict(state.get("vacation")), now_ms)
+	if drain_faktor < 1.0:
+		var boost_stats: Dictionary = flat["stats"]
+		var zurueck := absf(float(Stats.RATES_AWAKE["energy"])) * (1.0 - drain_faktor) * dt_min
+		boost_stats["energy"] = Stats.clamp_stat(_num(boost_stats.get("energy")) + zurueck)
 	flat["lastTickAt"] = now_ms
 	write_back(state, flat)
 	var events: Array = []
@@ -161,6 +172,29 @@ static func _tick_modifiers(state: Dictionary, now_ms: int) -> Array:
 		var cur := _dict(_dict(state.get("modifiers")).get("current"))
 		return ["modifierStarted:%s:%s" % [cur.get("gameId", ""), cur.get("type", "")]]
 	return []
+
+
+## W13B (Doc E §3.3): Erholungs-Boost im Offline-Fenster — gibt der Energie
+## den zu viel verfallenen Anteil zurueck. Zaehlt NUR den Ueberlapp von
+## Boost-Fenster [.., vacation.erholtBis] und wacher Offline-Zeit, gedeckelt
+## auf die tatsaechlich simulierten Minuten (§E4-Cap), mit derselben
+## ×0,3-Offline-Rate. Der golden-parity Port offline.gd bleibt bewusst
+## unangetastet — die Verdrahtung lebt wie beim Live-Tick HIER im Adapter.
+static func _erholungs_boost_offline(
+	state: Dictionary, awake_start: float, awake_min: float, now_ms: int
+) -> void:
+	var erholt_bis := _num(_dict(state.get("vacation")).get("erholtBis"))
+	var boost_min := minf((minf(float(now_ms), erholt_bis) - awake_start) / 60000.0, awake_min)
+	if boost_min <= 0.0:
+		return
+	var stats := _dict(_dict(state.get("gooby")).get("stats"))
+	var zurueck := (
+		absf(float(Stats.RATES_AWAKE["energy"]))
+		* (1.0 - Vacation.ERHOLUNGS_DRAIN_FAKTOR)
+		* Offline.AWAKE_RATE_MULT
+		* boost_min
+	)
+	stats["energy"] = Stats.clamp_stat(_num(stats.get("energy")) + zurueck)
 
 
 ## REST-3: Krankheit + Gewicht um dt_min vorruecken (mult = Offline-Faktor).
