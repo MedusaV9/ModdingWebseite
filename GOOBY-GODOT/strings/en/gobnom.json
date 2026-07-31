@@ -51,6 +51,29 @@
 			"next": "Next ›",
 			"retry": "Retry",
 			"select": "Level select"
+		},
+		"netz": {
+			"button": "Play with a friend",
+			"bereit": "Invite a friend — play the co-op levels together!",
+			"offline": "Offline — online co-op needs a connection.",
+			"keine_freunde": "No friend is online right now.",
+			"einladen": "Invite",
+			"eingeladen": "Invite sent to {name} — waiting for a reply…",
+			"laedt_ein": "{name} invites you to co-op!",
+			"annehmen": "Accept",
+			"ablehnen": "Decline",
+			"abgelehnt": "{name} declined.",
+			"fehler": "That didn't work ({code}).",
+			"verbunden": "Connected with {name} — pick a co-op level together!",
+			"trennen": "Disconnect",
+			"eigenes_level": "You: co-op {n}",
+			"partner_level": "{name}: co-op {n}",
+			"start_banner": "Here we go — with {name}!",
+			"warte_partner": "Waiting for partner…",
+			"partner_weg": "{name} has connection trouble…",
+			"partner_da": "{name} is back!",
+			"desync": "Oops — you fell out of sync. Round ended.",
+			"abbruch": "The co-op round was ended."
 		}
 	}
 }

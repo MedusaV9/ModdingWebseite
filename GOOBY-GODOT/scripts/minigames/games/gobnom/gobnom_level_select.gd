@@ -14,6 +14,9 @@ const COLS_PORTRAIT := 3
 
 ## Duck-Typing: /root/GameState ODER Test-Double (von gobnom_game gesetzt).
 var game_state: Object
+## W15 Netz-Coop: „Mit Freund spielen“-Panel (GobnomNetzPanel), von
+## gobnom_game VOR add_child gesetzt; null = ohne Netz (reiner Hot-Seat).
+var netz_panel: Control
 
 var _grids: Dictionary = {}
 var _stars_label: Label
@@ -56,6 +59,8 @@ func _ready() -> void:
 		header.add_theme_font_size_override("font_size", 18)
 		header.add_theme_color_override("font_color", GobnomArt.OUTLINE)
 		column.add_child(header)
+		if track == GobnomProgress.TRACK_COOP and netz_panel != null:
+			column.add_child(netz_panel)
 		var grid := GridContainer.new()
 		grid.columns = COLS_LANDSCAPE
 		grid.add_theme_constant_override("h_separation", 8)

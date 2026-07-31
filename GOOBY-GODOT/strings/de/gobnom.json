@@ -51,6 +51,29 @@
 			"next": "Weiter ›",
 			"retry": "Nochmal",
 			"select": "Level-Wahl"
+		},
+		"netz": {
+			"button": "Mit Freund spielen",
+			"bereit": "Lade einen Freund ein — ihr spielt die Coop-Level zu zweit!",
+			"offline": "Offline — Netz-Coop braucht eine Verbindung.",
+			"keine_freunde": "Gerade ist kein Freund online.",
+			"einladen": "Einladen",
+			"eingeladen": "Einladung an {name} geschickt — warte auf Antwort…",
+			"laedt_ein": "{name} lädt dich zum Coop ein!",
+			"annehmen": "Annehmen",
+			"ablehnen": "Ablehnen",
+			"abgelehnt": "{name} hat abgelehnt.",
+			"fehler": "Klappt gerade nicht ({code}).",
+			"verbunden": "Verbunden mit {name} — wählt zusammen ein Coop-Level!",
+			"trennen": "Trennen",
+			"eigenes_level": "Du: Coop {n}",
+			"partner_level": "{name}: Coop {n}",
+			"start_banner": "Los geht's — mit {name}!",
+			"warte_partner": "Warte auf Partner…",
+			"partner_weg": "{name} hat Verbindungsprobleme…",
+			"partner_da": "{name} ist wieder da!",
+			"desync": "Ups — ihr wart nicht mehr synchron. Runde beendet.",
+			"abbruch": "Die Coop-Runde wurde beendet."
 		}
 	}
 }
