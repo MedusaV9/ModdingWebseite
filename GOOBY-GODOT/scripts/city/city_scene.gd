@@ -355,6 +355,12 @@ func _pruefe_near_miss(delta: float) -> void:
 		if not CityAmbiente.ist_beinahe(abstand, auto.speed):
 			continue
 		_near_miss_sperre = CityAmbiente.NEAR_MISS_PAUSE_S
+		# W13B (Doc E §1.5): Funkengarbe am Berührungspunkt — Entscheidung
+		# (inkl. Reduced-Motion) + one-shot-Aufräumen stecken im Modul.
+		var settings := get_node_or_null("/root/AppSettings")
+		var reduced: bool = settings != null and settings.is_reduced_motion()
+		if NearMissFunken.soll_funken(abstand, auto.speed, reduced):
+			NearMissFunken.spawne(self, NearMissFunken.funkenpunkt(auto.position, node.position))
 		var gehupt := _spiele_ambient_sfx("hupe")
 		_zeige_toast(I18nService.t("city.fahren.beinahe_hupe" if gehupt else "city.fahren.beinahe"))
 		return
