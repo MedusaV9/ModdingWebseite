@@ -10,7 +10,7 @@
 
 ## NEUES FEEDBACK (hier eintragen!)
 
-_(leer — hier neue Punkte reinschreiben; zuletzt gezogen: 30.07. ~23:30 UTC — keine neuen Einträge, Polish-Wellen laufen weiter)_
+_(leer — hier neue Punkte reinschreiben; zuletzt gezogen: 30.07. ~23:35 UTC — keine neuen Einträge, Mob/Item-Wellen M-B/M-D laufen)_
 
 ## Aktuell in Arbeit
 
@@ -18,8 +18,8 @@ _(leer — hier neue Punkte reinschreiben; zuletzt gezogen: 30.07. ~23:30 UTC �
 |---|-------|--------|
 | F-095 | **Re-Verifikations-Audit** ✅: Audit-Team hat F-001…F-094 im Code gegengeprüft (`docs/plans_v3/session_0730/AUDIT_REVERIFY.md`), 5 Lücken gefunden und ALLE gefixt (rim_recede.fx gebaut, Woah-Items ins ItemLexicon, Scythe-Detach beim Storm-Step, AGENTS.md-Doku, Woah-Audio dokumentiert) | 🟢 |
 | F-096 | **Sturm-Masse-Upgrade**: Volumen-Shader auf 2 Dichte-Schalen + Höhenprofil v2 (Wallcloud-Basis, Konvektionstürme, Amboss-Fransen), Powder-Term + Dual-Lobe-Phase + radiale AO (B1/B5/B9/B2/B3/B7 fertig); Kampf-Uniforms (SiegeChurn/CoreFade) verdrahtet; Rest: B4 Wetter-Layer, B6 Nahfeld-Parallaxe, B8 Burst-Integration, B10 Perf-Pass | 🟡 |
-| F-097 | **Per-Effekt-Polish-Wellen**: Welle A (A0–A9, 10 Teams) UND Welle B (B1–B7) FERTIG: B1 Quasar→Photon-Hero-Legs (heart_burst/boss_slam/map_expand, in-game verifiziert mit Videos), B2 Mob-Paket (Bewegungsfeatures auf 6 Entity-Lanes, N12 Gaze-Tether inkl. 2 Shipping-Bug-Fixes, N6 Flüster-Hände als 31. Jumpscare), B4 Glitch-Familie (outline=echter Tiefen-Trace, void=3-Lagen-Parallaxe gemessen, scanlines=CRT-Phosphor, invert=fBm-Flecken), B5 Herzschlag-Dread (Lub-Dub-Doppelschlag <3 Herzen/Backrooms, unter der 3-Hz-Photosensitivitäts-Linie), B6 Zeremonien (Einheiten-Bug-Fund: alles fiel 20× zu langsam!) + N9 Seelenfaden 3 Stufen, B7 die 6 schwächsten Cutscene-Beats gefixt; Sturm F-096 KOMPLETT (B4 Warp v2, B6 Doppel-Blitz mit Adern, B8 Photon-Parallax-Sync); als Nächstes Welle C (GPU-Rollout, Woah-Feinschliff F-062, kleine Cues, Credits-Detail) | 🟡 |
-| F-098 | BlockDisplay-Effekte ✅ (B3: Masse-Gesetz auf EndShatter/IslandCrash/StructureFlight/FloatingDecor/ExpansionBorder) + Cutscenes ✅ (B7: alle 8 Sequenzen); Custom-Mobs + Custom-Items (Blockbench/GeckoLib-Modelle): Zensus-Planner läuft jetzt | 🟡 |
+| F-097 | **Per-Effekt-Polish-Wellen** KOMPLETT: Welle A (A0–A9) + Welle B (B1–B7) + Welle C fertig — C2 fxlib-Infrastruktur (UUID5-Determinismus: Generator-Läufe jetzt byte-identisch; Range-Codec a/b-Fix: Photon las min/max gar nicht; CullBox/Prewarm-Lint), C3 Woah-Feinschliff (=F-062 ✅), C4 kleine Cues + N8 Vertrags-Brandsiegel/N10 End-Static/N14 Sanctum-Gebet, C5 Credits/End-Feinschliff inkl. Reparatur der KOMPLETT TOTEN black_hole.fsh-Pipeline (glsl-processor-NPE) | 🟢 |
+| F-098 | BlockDisplay-Effekte ✅ (B3) + Cutscenes ✅ (B7); Custom-Mobs/Items: **Welle M-A ✅** (MA1 Tyrant, MA2 Warden, MA3 Herald→GeckoLib, MA4 Ferryman→GeckoLib, MA5 Finale-Props, MA6 Fog-Eliten) + **MD3 Items-B ✅**; **jetzt in Arbeit: Welle M-B** (MB1 Deckhand, MB2 Orin, MB3 Cultist+Bolt, MB4 Glitch-Trio, MB5 Wanderer, MB6 Sentinel+Revenant) **+ MD1 Eclipse Wand + MD2 Items-A**; danach Welle M-C (5 Konversionen: Gazer, Stalker, Sunmote+Lantern, TheOther/Ghosts, Glitch Emitter) + MD4 | 🟡 |
 | F-099 | **Eval-Runde** (Sol 5.6) über die gesamte Session-Arbeit, bei „zu simpel"-Befunden → Nach-Polish-Runden | 🔴 |
 | F-080 | Server/Welt-Verlassen hängt für immer im SAVING-State statt sauber zu stoppen — Fix implementiert (Stop-Sweep räumt FX-Schwärme VOR dem Save, kein Sync-Chunkload im Stop mehr, Arena-Pit-Chunks werden freigegeben); dedizierter Server-Stop in ~10 s verifiziert ✅ | 🟢 |
 | F-082 | Tod im Sturm-Bosskampf ⇒ Wipe-Reset (Boss heilt/despawnt, Statue re-armt nach 30 s, KEINE Blockschreibungen ⇒ Gräber sicher) — im Client-Test verifiziert (s. F-081..087 unten) ✅ | 🟢 |
@@ -39,7 +39,7 @@ _(leer — hier neue Punkte reinschreiben; zuletzt gezogen: 30.07. ~23:30 UTC �
 
 | # | Punkt | Status |
 |---|-------|--------|
-| F-062 | 5 „Woah“-Map-Features: Feinschliff/Iteration (Basis implementiert: Mansion-Glitch-Dome, Gravitationsbruch, Chrono-Stase, Resonanzfeld, Echo-Hain) | 🔴 |
+| F-062 | 5 „Woah“-Map-Features Feinschliff — von C3 abgeschlossen: Gravitationsbruch träge Orbit-Umkehr + Tumble-Boost-Bugfix, Mansion-Dome 3-Klassen-Shatter + Touch-Puls, Chrono-Stase echte Zeitlupe + Stotterblitz, Resonanzfeld-Wellen-Choreograph, Echo-Hain-Flut-Beat | 🟢 |
 
 ---
 
