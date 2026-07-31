@@ -1,11 +1,18 @@
 class_name RadioSheet
 extends VBoxContainer
-## Radio-Bedienoberfläche (REST-4, EVAL Rang 10) — Web-Vorbild
+## Radio-Bedienoberfläche (REST-4 + W13/RADIO, H §6.1) — Web-Vorbild
 ## GOOBY/src/ui/radioScreen.js, reduziert auf die Godot-Musik-API:
-## Senderwahl (mit Level-Schlössern), Jetzt-läuft-Anzeige, An/Aus,
+## Senderwahl (mit Level-Schlössern), „Was läuft?"-Ticker, An/Aus,
 ## Nächster Titel, Musik-Lautstärke (AppSettings `audio.music`),
 ## "Gefällt mir" (Lieblingssongs, additiv in `radio.likes`) und die
 ## Titelliste des Senders inkl. Level-Freischaltung.
+##
+## KAUF-GATE HART (W13, H §6.1): `radio.owned` wird NIE durchs Einschalten
+## gesetzt — nur der IKEA-Kauf (Radio-Möbel im Besitz/platziert, dann
+## Self-Heal in den Save) bzw. die Grandfathering-Migration schalten das
+## Vollradio frei. Ohne Besitz läuft der BORDMUSIK-MODUS: genau EIN
+## Loop-Track, Steuerung nur Play/Pause, Skip/Sender/Likes gesperrt,
+## dazu ein knuffiger IKEA-Kauf-Hinweis.
 ##
 ## Lebt als Inhalt eines PanelSheets (RadioGeraet dockt es an Möbel) und
 ## ist headless testbar: `gs` + `music` sind injizierbar; ohne Musik-Knoten
@@ -19,9 +26,10 @@ var gs: Object
 var music: Node
 
 var _station_id := "bordmusik"
-var _jetzt_label: Label
-var _sender_label: Label
+var _owned := false
+var _ticker: NowPlayingChip
 var _an_aus_btn: Button
+var _next_btn: Button
 var _like_btn: Button
 var _liste_box: VBoxContainer
 var _lieblinge_label: Label
@@ -34,6 +42,12 @@ func _ready() -> void:
 		music = MusicDirector.get_or_create(self)
 	if music != null and music.has_signal("track_changed"):
 		music.track_changed.connect(_on_track_changed)
+	_owned = RadioLogic.besitzt_radio(_state())
+	if _owned and gs != null and not bool(gs.get_value("radio.owned", false)):
+		# IKEA-Kauf = Möbel + Feature-Unlock in einem (H §6.1): einmal
+		# gekauft, bleibt das Vollradio im Save freigeschaltet — auch wenn
+		# das Möbel später verkauft wird (wie das Grandfathering).
+		_schreibe_radio({"owned": true})
 	_station_id = _gelesene_station()
 	_baue_ui()
 
@@ -48,10 +62,11 @@ func _baue_ui() -> void:
 
 	var jetzt_karte := CitySheetBausteine.karte(self)
 	CitySheetBausteine.label(jetzt_karte, I18nService.t("radio.jetzt"), "CaptionLabel")
-	_jetzt_label = CitySheetBausteine.label(jetzt_karte, "", "HeadlineLabel")
-	_jetzt_label.name = "JetztTitel"
-	_sender_label = CitySheetBausteine.label(jetzt_karte, "", "CaptionLabel")
-	_sender_label.name = "JetztSender"
+	_ticker = NowPlayingChip.new()
+	_ticker.name = "WasLaeuft"
+	_ticker.inline = true
+	_ticker.sicht_breite = CitySheetBausteine.TEXT_BREITE - 70.0
+	jetzt_karte.add_child(_ticker)
 
 	var transport := HBoxContainer.new()
 	transport.add_theme_constant_override("separation", 10)
@@ -64,14 +79,14 @@ func _baue_ui() -> void:
 	_an_aus_btn.focus_mode = Control.FOCUS_NONE
 	_an_aus_btn.pressed.connect(_on_an_aus)
 	transport.add_child(_an_aus_btn)
-	var next_btn := Button.new()
-	next_btn.name = "Naechster"
-	next_btn.theme_type_variation = "AccentButton"
-	next_btn.text = I18nService.t("radio.naechster")
-	next_btn.custom_minimum_size = Vector2(0.0, 48.0)
-	next_btn.focus_mode = Control.FOCUS_NONE
-	next_btn.pressed.connect(_on_naechster)
-	transport.add_child(next_btn)
+	_next_btn = Button.new()
+	_next_btn.name = "Naechster"
+	_next_btn.theme_type_variation = "AccentButton"
+	_next_btn.text = I18nService.t("radio.naechster")
+	_next_btn.custom_minimum_size = Vector2(0.0, 48.0)
+	_next_btn.focus_mode = Control.FOCUS_NONE
+	_next_btn.pressed.connect(_on_naechster)
+	transport.add_child(_next_btn)
 	_like_btn = Button.new()
 	_like_btn.name = "Like"
 	_like_btn.theme_type_variation = "AccentButton"
@@ -80,27 +95,28 @@ func _baue_ui() -> void:
 	_like_btn.focus_mode = Control.FOCUS_NONE
 	_like_btn.pressed.connect(_on_like_aktueller)
 	transport.add_child(_like_btn)
+	if not RadioLogic.aktion_erlaubt(_owned, "skip"):
+		_next_btn.disabled = true
+		_next_btn.tooltip_text = I18nService.t("radio.nur_mit_radio")
+	if not RadioLogic.aktion_erlaubt(_owned, "like"):
+		_like_btn.tooltip_text = I18nService.t("radio.nur_mit_radio")
 
-	CitySheetBausteine.label(self, I18nService.t("radio.sender"), "HeadlineLabel")
-	var chips := HFlowContainer.new()
-	chips.name = "SenderChips"
-	chips.add_theme_constant_override("h_separation", 8)
-	chips.add_theme_constant_override("v_separation", 8)
-	add_child(chips)
-	var level := _level()
-	for station: Dictionary in RadioLogic.sender(level):
-		chips.add_child(_sender_chip(station))
+	if _owned:
+		_baue_vollradio()
+	else:
+		_baue_kauf_hinweis()
 
 	_baue_lautstaerke()
 
-	_lieblinge_label = CitySheetBausteine.label(self, "", "CaptionLabel")
-	_lieblinge_label.name = "Lieblinge"
-	CitySheetBausteine.label(self, I18nService.t("radio.titel_liste"), "HeadlineLabel")
-	_frei_label = CitySheetBausteine.label(self, "", "CaptionLabel")
-	_frei_label.name = "FreiZaehler"
-	_liste_box = CitySheetBausteine.scroll_liste(self, CitySheetBausteine.LISTE_HOEHE_KURZ)
-	_liste_box.name = "TitelListe"
-	CitySheetBausteine.label(self, I18nService.t("radio.level_hinweis"), "CaptionLabel")
+	if _owned:
+		_lieblinge_label = CitySheetBausteine.label(self, "", "CaptionLabel")
+		_lieblinge_label.name = "Lieblinge"
+		CitySheetBausteine.label(self, I18nService.t("radio.titel_liste"), "HeadlineLabel")
+		_frei_label = CitySheetBausteine.label(self, "", "CaptionLabel")
+		_frei_label.name = "FreiZaehler"
+		_liste_box = CitySheetBausteine.scroll_liste(self, CitySheetBausteine.LISTE_HOEHE_KURZ)
+		_liste_box.name = "TitelListe"
+		CitySheetBausteine.label(self, I18nService.t("radio.level_hinweis"), "CaptionLabel")
 
 	var schliessen := Button.new()
 	schliessen.name = "Schliessen"
@@ -114,19 +130,53 @@ func _baue_ui() -> void:
 	_refresh()
 
 
-func _sender_chip(station: Dictionary) -> Button:
+## Vollradio (mit Besitz): Senderwahl als Cover-Karten (H §6.1).
+func _baue_vollradio() -> void:
+	CitySheetBausteine.label(self, I18nService.t("radio.sender"), "HeadlineLabel")
+	var chips := HFlowContainer.new()
+	chips.name = "SenderChips"
+	chips.add_theme_constant_override("h_separation", 8)
+	chips.add_theme_constant_override("v_separation", 8)
+	add_child(chips)
+	var level := _level()
+	for station: Dictionary in RadioLogic.sender(level):
+		chips.add_child(_sender_cover_karte(station))
+
+
+## Bordmusik-Modus (ohne Besitz): knuffiger IKEA-Kauf-Hinweis statt Sender.
+func _baue_kauf_hinweis() -> void:
+	var karte := CitySheetBausteine.karte(self)
+	karte.name = "KaufHinweis"
+	CitySheetBausteine.label(
+		karte, "♫ %s" % I18nService.t("radio.kauf_hinweis_titel"), "HeadlineLabel"
+	)
+	CitySheetBausteine.label(karte, I18nService.t("radio.kauf_hinweis"))
+	var bordmusik := MusicRegistry.entry(MusicDirector.BORDMUSIK_TRACK)
+	CitySheetBausteine.label(
+		karte,
+		I18nService.t(
+			"radio.bordmusik_hinweis",
+			{"titel": str(bordmusik.get("title", MusicDirector.BORDMUSIK_TRACK))}
+		),
+		"CaptionLabel"
+	)
+
+
+## Sender als farbige AC-Cover-Karte (Theme-Farben + Glyph, keine Assets).
+func _sender_cover_karte(station: Dictionary) -> Button:
 	var id := str(station.get("id", ""))
+	var cover := RadioLogic.cover(id)
 	var chip := Button.new()
 	chip.name = "Sender_%s" % id
 	chip.toggle_mode = true
 	chip.focus_mode = Control.FOCUS_NONE
-	chip.theme_type_variation = "AccentButton"
-	chip.custom_minimum_size = Vector2(0.0, 44.0)
+	chip.custom_minimum_size = Vector2(116.0, 64.0)
 	var locked := bool(station.get("locked", false))
 	if locked:
 		chip.text = (
-			"%s (%s)"
+			"%s\n%s (%s)"
 			% [
+				str(cover["glyph"]),
 				RadioLogic.sender_name(station),
 				I18nService.t(
 					"radio.gesperrt_sender", {"level": int(station.get("unlock_level", 1))}
@@ -135,10 +185,40 @@ func _sender_chip(station: Dictionary) -> Button:
 		)
 		chip.disabled = true
 	else:
-		chip.text = RadioLogic.sender_name(station)
+		chip.text = "%s\n%s" % [str(cover["glyph"]), RadioLogic.sender_name(station)]
 		chip.pressed.connect(_on_sender_gewaehlt.bind(id))
 	chip.button_pressed = id == _station_id
+	_style_cover_karte(chip, Color(cover["farbe"]), locked)
 	return chip
+
+
+func _style_cover_karte(chip: Button, farbe: Color, locked: bool) -> void:
+	var basis := _cover_stylebox(farbe, false)
+	chip.add_theme_stylebox_override("normal", basis)
+	chip.add_theme_stylebox_override("hover", basis)
+	chip.add_theme_stylebox_override("pressed", _cover_stylebox(farbe, true))
+	chip.add_theme_stylebox_override("hover_pressed", _cover_stylebox(farbe, true))
+	chip.add_theme_stylebox_override("disabled", _cover_stylebox(AcTokens.PAPER_SHADE, false))
+	var tinte := Color(AcTokens.INK, 0.45) if locked else AcTokens.INK
+	chip.add_theme_color_override("font_color", tinte)
+	chip.add_theme_color_override("font_hover_color", tinte)
+	chip.add_theme_color_override("font_pressed_color", tinte)
+	chip.add_theme_color_override("font_hover_pressed_color", tinte)
+	chip.add_theme_color_override("font_disabled_color", tinte)
+	chip.add_theme_color_override("font_focus_color", tinte)
+
+
+func _cover_stylebox(farbe: Color, gewaehlt: bool) -> StyleBoxFlat:
+	var stil := StyleBoxFlat.new()
+	stil.bg_color = farbe
+	stil.set_corner_radius_all(AcTokens.RADIUS_ROW)
+	stil.set_border_width_all(3 if gewaehlt else 0)
+	stil.border_color = AcTokens.INK
+	stil.content_margin_left = 14.0
+	stil.content_margin_right = 14.0
+	stil.content_margin_top = 8.0
+	stil.content_margin_bottom = 8.0
+	return stil
 
 
 func _baue_lautstaerke() -> void:
@@ -172,14 +252,20 @@ func _on_an_aus() -> void:
 	if playing:
 		if music != null and music.has_method("radio_stop"):
 			music.radio_stop()
-	else:
+	elif _owned:
 		if music != null and music.has_method("radio_play"):
 			music.radio_play(_station_id)
-	_schreibe_radio({"playing": not playing, "station": _station_id, "owned": true})
+	elif music != null and music.has_method("bordmusik_play"):
+		# Kauf-Gate (H §6.1): ohne Radio-Besitz nur die Bordmusik-Schleife.
+		music.bordmusik_play()
+	# KAUF-GATE HART: `owned` wird hier bewusst NICHT geschrieben.
+	_schreibe_radio({"playing": not playing, "station": _station_id})
 	_refresh()
 
 
 func _on_naechster() -> void:
+	if not RadioLogic.aktion_erlaubt(_owned, "skip"):
+		return
 	if not _spielt():
 		return
 	if music != null and music.has_method("radio_next"):
@@ -188,6 +274,8 @@ func _on_naechster() -> void:
 
 
 func _on_sender_gewaehlt(id: String) -> void:
+	if not RadioLogic.aktion_erlaubt(_owned, "sender"):
+		return
 	_station_id = id
 	if _spielt() and music != null and music.has_method("radio_play"):
 		music.radio_play(id)
@@ -196,6 +284,8 @@ func _on_sender_gewaehlt(id: String) -> void:
 
 
 func _on_like_aktueller() -> void:
+	if not RadioLogic.aktion_erlaubt(_owned, "like"):
+		return
 	var track_id := _aktueller_track()
 	if track_id.is_empty():
 		return
@@ -229,17 +319,15 @@ func _refresh() -> void:
 	if _an_aus_btn != null:
 		_an_aus_btn.text = I18nService.t("radio.aus" if playing else "radio.an")
 	var track_id := _aktueller_track()
-	if _jetzt_label != null:
+	if _ticker != null:
 		if playing and not track_id.is_empty():
 			var entry := MusicRegistry.entry(track_id)
-			_jetzt_label.text = str(entry.get("title", track_id))
+			_ticker.set_now(str(entry.get("title", track_id)), _sender_anzeige_name(_station_id))
 		else:
-			_jetzt_label.text = I18nService.t("radio.kein_titel")
-	if _sender_label != null:
-		_sender_label.text = _sender_anzeige_name(_station_id)
+			_ticker.set_leer(I18nService.t("radio.kein_titel"))
 	if _like_btn != null:
 		var likes := RadioLogic.likes_von(_state())
-		_like_btn.disabled = track_id.is_empty() or not playing
+		_like_btn.disabled = not _owned or track_id.is_empty() or not playing
 		_like_btn.text = I18nService.t("radio.gefaellt")
 		_like_btn.button_pressed = likes.has(track_id)
 	if _lieblinge_label != null:
@@ -334,6 +422,9 @@ func _aktueller_track() -> String:
 
 
 func _gelesene_station() -> String:
+	if not _owned:
+		# Bordmusik-Modus kennt keine Senderwahl.
+		return "bordmusik"
 	if gs == null:
 		return "bordmusik"
 	var id := str(gs.get_value("radio.station", "bordmusik"))

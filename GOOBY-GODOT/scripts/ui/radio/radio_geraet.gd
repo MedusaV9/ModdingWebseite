@@ -7,6 +7,10 @@ extends Node3D
 ##
 ## Läuft das Radio beim Öffnen bereits, freut sich Gooby sichtbar (kleiner
 ## Hop — Web: happyBounce).
+##
+## W13/RADIO: hängt zusätzlich den „Was läuft?"-Mini-Chip (NowPlayingChip)
+## in die Raum-UI-Ebene — der blendet kurz ein, wenn im Haus ein neuer
+## Radio-/Bordmusik-Track startet (bewusst hier statt im HUD, Ownership).
 
 var _host: InteractablesHost
 var _panel: PanelContainer
@@ -15,6 +19,8 @@ var _panel: PanelContainer
 func setup(host: InteractablesHost, furniture: Node3D) -> void:
 	_host = host
 	add_child(InteractablesHost.make_tap_area(furniture, _on_tapped))
+	if is_inside_tree():
+		NowPlayingChip.install_floating(_ui_layer(), MusicDirector.get_or_create(self))
 
 
 func _on_tapped() -> void:

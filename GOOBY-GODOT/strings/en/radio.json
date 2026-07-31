@@ -19,6 +19,13 @@
 		"liebling_kurz": "Favorite",
 		"freigeschaltet": "{n} of {gesamt} songs unlocked",
 		"titel_liste": "Tracks on this station",
-		"level_hinweis": "More songs unlock as your level grows."
+		"level_hinweis": "More songs unlock as your level grows.",
+		"was_laeuft": "Now spinning?",
+		"ticker": "{titel} · {sender}",
+		"bordmusik_titel": "On-board tunes",
+		"kauf_hinweis_titel": "No radio of your own yet",
+		"kauf_hinweis": "Grab a radio at IKEA and unlock every station!",
+		"bordmusik_hinweis": "Until then exactly one cozy loop hums along: {titel}.",
+		"nur_mit_radio": "Only with your own radio — off to IKEA!"
 	}
 }

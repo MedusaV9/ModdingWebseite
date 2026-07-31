@@ -3,6 +3,11 @@ extends TestCase
 ## Sperren nach Level, Freischalt-Zähler, Likes-Normalisierung) und die
 ## RadioSheet-UI headless (An/Aus persistiert, Senderwahl, Like des
 ## laufenden Titels, Schlösser an gesperrten Sendern).
+##
+## W13/RADIO (H §6.1, ABSICHTLICHE Verhaltensänderung): das Vollradio
+## (Sender/Skip/Like) gibt es nur noch MIT gekauftem Radio — die UI-Tests
+## setzen darum `radio.owned = true` (v5-Neusaves starten ohne Besitz).
+## Der Bordmusik-/Gate-Pfad ist in tests/unit/test_w13_radio_gates.gd.
 
 const SaveSchema := preload("res://scripts/state/save_schema.gd")
 
@@ -128,6 +133,8 @@ func test_likes_toggle_und_normalisierung() -> void:
 
 func test_radio_sheet_an_aus_und_like() -> void:
 	var gs := FakeGameState.new()
+	# W13: Vollradio nur mit Besitz — dieser Test prüft den Besitz-Pfad.
+	gs.set_value("radio.owned", true)
 	var music := FakeMusic.new()
 	tree.root.add_child(music)
 	var sheet := RadioSheet.new()
@@ -158,6 +165,8 @@ func test_radio_sheet_an_aus_und_like() -> void:
 
 func test_radio_sheet_senderwahl_und_schloesser() -> void:
 	var gs := FakeGameState.new()
+	# W13: Senderwahl gehört zum Vollradio (Kauf-Gate).
+	gs.set_value("radio.owned", true)
 	gs.set_value("progression.level", 1)
 	var music := FakeMusic.new()
 	tree.root.add_child(music)

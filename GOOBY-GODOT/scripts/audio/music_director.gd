@@ -33,6 +33,14 @@ const FADE_OUT_DB := -40.0
 const STINGER_BOOST_DB := 6.0
 const NODE_NAME := "MusicDirector"
 
+## W13/RADIO (H §6.1) — Bordmusik-Modus ohne Radio-Besitz. Pseudo-Sender-Id
+## (kein Registry-Sender; der Save persistiert weiterhin "bordmusik",
+## save_schema.STATION_IDS bleibt unberührt).
+const BORDMUSIK_STATION := "bordmusik-loop"
+## Der EINE Bordmusik-Loop-Track (Registry-Kategorie "Bordmusik",
+## unlock_level 1 — tests/unit/test_w13_radio_gates.gd wacht darüber).
+const BORDMUSIK_TRACK := "bordmusik-rabbit-town"
+
 ## SceneRouter-Ziel → Musik-Kontext. mg_host wird dynamisch aufgelöst
 ## (game_id der Szene); city/ort/* fällt auf "city" zurück.
 const ROUTE_CONTEXTS := {
@@ -168,6 +176,23 @@ func play_track(track_id: String, fade_s := CROSSFADE_S, loop := true) -> void:
 
 
 # ── Radio (Sender-Queue, ersetzt Kontext-Musik) ──────────────────────────────
+
+
+## Bordmusik-Modus (W13/RADIO): ersetzt wie das Radio die Kontext-Musik,
+## spielt aber GENAU EINEN Track im Loop. radio_next() bleibt wirkungslos
+## (Queue-Länge 1 → Crossfade auf denselben Track kehrt früh um);
+## radio_stop() blendet wie gewohnt in den Szenen-Kontext zurück.
+func bordmusik_play() -> void:
+	_radio_station = BORDMUSIK_STATION
+	_radio_queue.clear()
+	_radio_queue.append(BORDMUSIK_TRACK)
+	_radio_pos = 0
+	station_changed.emit(BORDMUSIK_STATION)
+	_crossfade_to(BORDMUSIK_TRACK, RADIO_FADE_S, true)
+
+
+func is_bordmusik_mode() -> bool:
+	return _radio_station == BORDMUSIK_STATION
 
 
 ## Sender abspielen: geshuffelte Queue, Level-Schranken respektiert.

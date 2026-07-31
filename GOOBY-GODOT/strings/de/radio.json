@@ -19,6 +19,13 @@
 		"liebling_kurz": "Liebling",
 		"freigeschaltet": "{n} von {gesamt} Songs freigeschaltet",
 		"titel_liste": "Titel auf diesem Sender",
-		"level_hinweis": "Mehr Songs schalten sich mit deinem Level frei."
+		"level_hinweis": "Mehr Songs schalten sich mit deinem Level frei.",
+		"was_laeuft": "Was läuft?",
+		"ticker": "{titel} · {sender}",
+		"bordmusik_titel": "Bordmusik",
+		"kauf_hinweis_titel": "Noch kein eigenes Radio",
+		"kauf_hinweis": "Hol dir ein Radio bei IKEA, dann gibt's alle Sender!",
+		"bordmusik_hinweis": "Bis dahin schnurrt an Bord genau ein Lieblings-Loop: {titel}.",
+		"nur_mit_radio": "Erst mit eigenem Radio — ab zu IKEA!"
 	}
 }
