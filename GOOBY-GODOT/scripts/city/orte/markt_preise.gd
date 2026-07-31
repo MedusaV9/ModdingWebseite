@@ -89,7 +89,9 @@ static func heute_verkauft(gs: Object, unix_s: int, id: String) -> int:
 
 
 ## Verkauf buchen: Ware aus inventory.food nehmen, Münzen gutschreiben,
-## Tages-Zähler hochzählen. Rückgabe {ok, menge, erloes}.
+## Tages-Zähler hochzählen. Zusätzlich (W15/MARKT) speist jede verkaufte
+## Einheit den `sells`-Zähler (achievements.counters) — die Bedingung des
+## marketDay-Stickers („Verkaufe 25 Ernten“). Rückgabe {ok, menge, erloes}.
 static func verkaufen(gs: Object, unix_s: int, id: String, menge: int) -> Dictionary:
 	var fehl := {"ok": false, "menge": 0, "erloes": 0}
 	if gs == null or menge <= 0 or sorte(id).is_empty():
@@ -110,9 +112,25 @@ static func verkaufen(gs: Object, unix_s: int, id: String, menge: int) -> Dictio
 			Economy.award(state["economy"], summe, "wochenmarkt")
 			var city: Dictionary = state.get(CityState.SLICE_ID, {})
 			city["markt"] = {"tag": str(slice["tag"]), "verkauft": verkauft}
+			_zaehle_sells(state, echte_menge)
 	)
 	gs.notify_slice_changed(CityState.SLICE_ID)
+	RewardHub.note_action(gs)
 	return {"ok": true, "menge": echte_menge, "erloes": summe}
+
+
+## sells-Zähler defensiv hochzählen (fehlende Zweige selbst anlegen — Muster
+## FoodCatalog/Health, damit auch schlanke Test-States nicht stolpern).
+static func _zaehle_sells(state: Dictionary, stueck: int) -> void:
+	if stueck <= 0:
+		return
+	if not (state.get("achievements") is Dictionary):
+		state["achievements"] = {}
+	var achievements: Dictionary = state["achievements"]
+	if not (achievements.get("counters") is Dictionary):
+		achievements["counters"] = {}
+	var counters: Dictionary = achievements["counters"]
+	counters["sells"] = int(counters.get("sells", 0)) + stueck
 
 
 ## Verkaufbare Ernte im Inventar: [{id, name_de, vorrat, preis}].
