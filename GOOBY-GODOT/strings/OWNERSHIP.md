@@ -117,3 +117,5 @@ Regeln:
 
 
 - `gobty.*` (NEUE Datei `strings/<locale>/gobty.json` — GOB.TY-Fernsehsender: Sender-UI (Aus-Knopf, Zapp-Hinweis), 5 Clip-Titel, 10 News-Schlagzeilen, Koch-/Sport-/Wetter-/Gute-Nacht-Banner inkl. `{symbole}`/`{datum}`-Wetter-Platzhalter; DE↔EN-paritätisch) → Owner **W13C GOBTY** (Welle W13-C). *(per >> angehängt — beim nächsten Doku-Pass in die Tabelle oben heben)*
+
+- `goobyman.*` (NEUE Datei `strings/<locale>/goobyman.json` — GOOBYMAN-Drogerie: Laden-Sheet (Abschnitte, Haltbarkeits-/Status-Zeilen, Kauf-Hinweise), Zahnputz-Blocker/Neue-Bürste-Sprüche, Erste-Male-Bruch-Info, Umhang-Gag; DE↔EN-paritätisch) + `city.ort.goobyman` (additiv in `strings/<locale>/city.json`) → Owner **W13C GOOBYMAN** (Welle W13-C). *(per >> angehängt — beim nächsten Doku-Pass in die Tabelle oben heben)*
