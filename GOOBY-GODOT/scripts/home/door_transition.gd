@@ -17,6 +17,8 @@ const DOOR_HEIGHT := 2.0
 const DOOR_THICKNESS := 0.07
 const PANEL_COLOR := Color(0.62, 0.42, 0.26)
 const FRAME_COLOR := Color(0.5, 0.33, 0.2)
+## Offen-Winkel des Türblatts (Grad) — Öffnen-Tween, Rattle und W15-Fahrt.
+const OFFEN_GRAD := -105.0
 
 ## Doc F §6/§7-Anbindung: nie 2× hintereinander stecken (prozessweit).
 static var last_was_stuck := false
@@ -95,6 +97,23 @@ func skip() -> void:
 
 func is_busy() -> bool:
 	return _busy
+
+
+## W15/DOORTRAVEL: Blatt sofort in Offen-Stellung (ohne Tween/Klang) — die
+## Ziel-Tür übernimmt nach der Fahrt nahtlos die bereits offene Quell-Tür.
+func set_offen_sofort() -> void:
+	if _hinge != null:
+		_hinge.rotation.y = deg_to_rad(OFFEN_GRAD)
+
+
+## W15/DOORTRAVEL: Blatt fällt nach der Fahrt sanft hinter Gooby zu. Der
+## Tween gehört der Tür selbst und überlebt so das Fahrt-Node-Aufräumen.
+func schliesse_sanft() -> void:
+	if _hinge == null:
+		return
+	var tween := create_tween()
+	tween.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
+	tween.tween_property(_hinge, "rotation:y", 0.0, 0.4)
 
 
 ## Zarge mit Bekleidung: Blender-GLB (weiche Kapsel-Bekleidung, Knauf im
@@ -344,7 +363,7 @@ func _open_panel() -> void:
 	AudioDirector.try_play(self, "ui_open")
 	_open_tween = create_tween()
 	_open_tween.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-	_open_tween.tween_property(_hinge, "rotation:y", deg_to_rad(-105.0), 0.35)
+	_open_tween.tween_property(_hinge, "rotation:y", deg_to_rad(OFFEN_GRAD), 0.35)
 	await _open_tween.finished
 	_open_tween = null
 
@@ -372,8 +391,8 @@ func _run_stuck_gag(gooby: Node3D, ui_layer: Node) -> void:
 
 func _rattle() -> void:
 	var tween := create_tween()
-	tween.tween_property(_hinge, "rotation:y", deg_to_rad(-100.0), 0.05)
-	tween.tween_property(_hinge, "rotation:y", deg_to_rad(-105.0), 0.05)
+	tween.tween_property(_hinge, "rotation:y", deg_to_rad(OFFEN_GRAD + 5.0), 0.05)
+	tween.tween_property(_hinge, "rotation:y", deg_to_rad(OFFEN_GRAD), 0.05)
 
 
 ## Durchploppen (POLISH-7): Sternchen-Burst + Squash auf Gooby UND Türblatt
