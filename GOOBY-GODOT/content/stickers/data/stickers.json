@@ -1592,6 +1592,34 @@
 			"image": "res://assets/stickers/gvz_zombiegooby.png"
 		},
 		{
+			"id": "gvz_zaunheld",
+			"name_de": "Zaunheld",
+			"flavor_de": "Fünf Gärten gehalten — der Zaun wackelt, der Held nicht.",
+			"hint_de": "Gewinne Level 5 der GvZ-Kampagne.",
+			"set": "gvz",
+			"page": "gvz",
+			"rarity": "selten",
+			"cond": {
+				"type": "event",
+				"key": "gvz_l5"
+			},
+			"image": "res://assets/stickers/gvz_zaunheld.png"
+		},
+		{
+			"id": "gvz_kommandant",
+			"name_de": "Nutella-Kommandant",
+			"flavor_de": "Vom Nutella-Glas aus sieht General Gooby einfach alles.",
+			"hint_de": "Gewinne Level 10 der GvZ-Kampagne.",
+			"set": "gvz",
+			"page": "gvz",
+			"rarity": "episch",
+			"cond": {
+				"type": "event",
+				"key": "gvz_l10"
+			},
+			"image": "res://assets/stickers/gvz_kommandant.png"
+		},
+		{
 			"id": "gvz_sieg",
 			"name_de": "Garten gerettet!",
 			"flavor_de": "Pokal für den flauschigsten Feldherrn.",

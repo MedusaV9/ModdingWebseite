@@ -249,10 +249,11 @@ func test_niederlage_bucht_counter_aber_keinen_hook() -> void:
 	game.free()
 
 
-func test_alle_sechs_gvz_sticker_conds_sind_erfuellbar() -> void:
+func test_alle_gvz_sticker_conds_sind_erfuellbar() -> void:
 	# Save-Zustand, den der verdrahtete Spielfluss real erzeugt (Counter über
-	# _book_sticker_progress, Hook über den L15-Sieg) — jede der 6 Conds aus
-	# stickers.json muss damit erfüllbar sein.
+	# _book_sticker_progress, Hooks über die L5/L10/L15-Siege) — jede der
+	# Conds aus stickers.json muss damit erfüllbar sein. W13B/STICKER: die
+	# Meilenstein-Hooks gvz_l5/gvz_l10 haben jetzt Katalog-Sticker → 8.
 	var state := {
 		"achievements":
 		{
@@ -265,7 +266,11 @@ func test_alle_sechs_gvz_sticker_conds_sind_erfuellbar() -> void:
 				"gvzZombiesGestoppt": 50,
 			}
 		},
-		"stickers": {"unlocked": {}, "hooks": {"gvz_kampagne": true}},
+		"stickers":
+		{
+			"unlocked": {},
+			"hooks": {"gvz_l5": true, "gvz_l10": true, "gvz_kampagne": true},
+		},
 	}
 	var parsed: Variant = JSON.parse_string(
 		FileAccess.get_file_as_string("res://content/stickers/data/stickers.json")
@@ -274,7 +279,7 @@ func test_alle_sechs_gvz_sticker_conds_sind_erfuellbar() -> void:
 	for def: Variant in (parsed as Dictionary).get("items", []):
 		if def is Dictionary and str((def as Dictionary).get("set", "")) == "gvz":
 			gvz_defs.append(def)
-	assert_eq(gvz_defs.size(), 6, "6 GvZ-Sticker im Katalog")
+	assert_eq(gvz_defs.size(), 8, "8 GvZ-Sticker im Katalog (6 + 2 Meilensteine)")
 	for def: Dictionary in gvz_defs:
 		assert_true(
 			StickerUnlocks.cond_met(def.get("cond", {}), state),

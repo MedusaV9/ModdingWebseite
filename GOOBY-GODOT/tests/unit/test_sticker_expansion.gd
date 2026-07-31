@@ -42,7 +42,7 @@ func _load_items(path: String) -> Array:
 func test_neue_sets_vollstaendig_und_valide() -> void:
 	var items := _load_items(STICKERS_JSON)
 	var pages := _load_items(PAGES_JSON)
-	assert_eq(items.size(), 141, "105 Bestand + 33 neue Sets + 3 Ereignis-Sticker")
+	assert_eq(items.size(), 143, "141 Bestand + 2 W13B-GvZ-Meilensteine")
 	var by_set := {}
 	for def: Dictionary in items:
 		var set_id := str(def.get("set", ""))

@@ -1,10 +1,10 @@
 {
 	"schema": 1,
 	"id": "stickers",
-	"version": "1.1.0",
+	"version": "1.2.0",
 	"priority": 500,
 	"min_native": "5.0.0",
 	"domains": ["stickers", "sticker_pages"],
 	"name_de": "Sticker",
-	"notes_de": "BACKLOG-REST: 141 Sticker (105 Bestand + 33 in 5 neuen Sets Ranch/Multiplayer/Stadt-Nacht/Küche/Jahreszeiten + 3 Ereignis-Sticker) + 23 Seiten."
+	"notes_de": "W13B: 143 Sticker (141 Bestand + 2 GvZ-Meilensteine Zaunheld/Nutella-Kommandant für die Hooks gvz_l5/gvz_l10) + 23 Seiten."
 }

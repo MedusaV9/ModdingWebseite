@@ -1,13 +1,14 @@
 extends TestCase
-## W3d — Sticker-Katalog: 141 Ids (85 Legacy + 18 W3d + 2 Basis + 36
-## BACKLOG-REST), Assets existieren, DE-Texte komplett, Seiten-Katalog
-## konsistent — plus die puren StickerCatalog-Helfer und die
-## album.*-String-Parität.
+## W3d — Sticker-Katalog: 143 Ids (85 Legacy + 18 W3d + 2 Basis + 36
+## BACKLOG-REST + 2 W13B-GvZ-Meilensteine), Assets existieren, DE-Texte
+## komplett, Seiten-Katalog konsistent — plus die puren
+## StickerCatalog-Helfer und die album.*-String-Parität.
 
 const STICKERS_JSON := "res://content/stickers/data/stickers.json"
 const PAGES_JSON := "res://content/stickers/data/sticker_pages.json"
 
-const NEW_SETS := {"garten": 6, "stadt": 6, "gvz": 6}
+## W13B/STICKER: gvz 6 → 8 (Meilenstein-Sticker Zaunheld/Nutella-Kommandant).
+const NEW_SETS := {"garten": 6, "stadt": 6, "gvz": 8}
 const ALBUM_KEYS := [
 	"album.titel",
 	"album.zurueck",
@@ -27,14 +28,14 @@ func _load_items(path: String) -> Array:
 func test_katalog_vollstaendig_und_valide() -> void:
 	var items := _load_items(STICKERS_JSON)
 	var pages := _load_items(PAGES_JSON)
-	assert_eq(items.size(), 141, "105 Bestand + 33 BACKLOG-REST-Sets + 3 Ereignis-Sticker")
+	assert_eq(items.size(), 143, "141 Bestand + 2 W13B-GvZ-Meilensteine")
 	var by_set := {}
 	for def: Dictionary in items:
 		var set_id := str(def.get("set", ""))
 		by_set[set_id] = int(by_set.get(set_id, 0)) + 1
 	assert_eq(by_set.get("legacy", 0), 85, "Legacy-Sektion komplett")
 	for set_id: String in NEW_SETS:
-		assert_eq(by_set.get(set_id, 0), NEW_SETS[set_id], "Set %s: 6 Sticker" % set_id)
+		assert_eq(by_set.get(set_id, 0), NEW_SETS[set_id], "Set %s vollzählig" % set_id)
 	var errors := StickerCatalog.validate(items, pages)
 	assert_eq(errors, [], "validate() ohne Befund")
 
@@ -84,7 +85,7 @@ func test_pure_helfer() -> void:
 	assert_eq((grouped.get("garten", []) as Array).size(), 6, "by_page: Garten-Seite")
 	var herz := StickerCatalog.by_id(items, "herzGooby")
 	assert_true(bool(herz.get("secret", false)), "herzGooby ist geheim")
-	assert_eq(StickerCatalog.regular_count(items), 140, "Geheim-Sticker zählt nicht im n/N")
+	assert_eq(StickerCatalog.regular_count(items), 142, "Geheim-Sticker zählt nicht im n/N")
 	assert_eq(StickerCatalog.by_id(items, "gibtEsNicht"), {}, "unbekannte Id → {}")
 
 
