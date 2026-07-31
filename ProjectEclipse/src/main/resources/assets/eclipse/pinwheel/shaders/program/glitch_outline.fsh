@@ -23,8 +23,20 @@
 //        camera — glitch_void owns radial shells around an origin.
 //
 // The crease (depth Laplacian), view-normal disagreement and Roberts luma terms survive as
-// secondary traces, reweighted so geometry wins; the fill wash drops from 0.30 to 0.16 so
-// the world actually goes black under the readout.
+// secondary traces, reweighted so geometry wins.
+//
+// F-102 GLITCH-FAMILY POLISH (two changes, zero new texture taps):
+//   [O6] TRUE BLACK CRUSH. The fill wash drops 0.16 -> 0.055 and runs through a 1.6 gamma,
+//        so a mid-grey scene (luma 0.4) keeps ~1.3% of its light instead of ~6% — the world
+//        is BLACK, only real highlights leave a breath of mass. This is the user's literal
+//        mandate ("alles schwarz und nur gruene Outlines"); the outlines alone must carry
+//        the read, which [O7] pays for.
+//   [O7] TWO-TIER EDGE GLOW from the silhouette raw value that was already in a register:
+//        a wide soft SKIRT (low smoothstep band, pure accent colour) under the existing
+//        binary trace, and a HOT CORE (high band) lifted toward white — the overdriven-
+//        phosphor read. Same data, two thresholds: the line gets a luminous falloff
+//        without a single extra tap. The white lift is capped at 35% so a commanded hue
+//        (outline_red, outline_cyan) still owns the core instead of clipping to white.
 //
 // HARDENING: every depth-derived term is gated by gzDepthValid and the reconstructed normals
 // go through gzNormalizeSafe. On a dead depth attachment (flat 0.0) the five reconstruction
@@ -72,9 +84,18 @@ const float TRACE_NEAR = 2.0;
 const float TRACE_FAR = 220.0;
 const float TRACE_PERIOD = 6.25;
 const float TRACE_PARK = 24.0;
-// How much of the scene's own luma survives as a fill wash under the readout. Low on
-// purpose: the mandate is a black world with outlines, the wash only keeps mass legible.
-const float FILL_GAIN = 0.16;
+// [O6] How much of the scene's own luma survives as a fill wash under the readout, and the
+// gamma that crushes it. 0.055 with gamma 1.6 keeps torches/sky-lit faces as a whisper and
+// sends everything mid-grey and darker to true black — the mandate look.
+const float FILL_GAIN = 0.055;
+const float FILL_GAMMA = 1.6;
+// [O7] Two-tier glow bands on the silhouette raw value: skirt (soft, wide) and hot core
+// (narrow, white-lifted). WHITE_LIFT is the cap on how far the core leaves the accent hue.
+const float SKIRT_GAIN = 0.40;
+const float CORE_GAIN = 0.80;
+// 0.35, not higher: at 0.45 the core's blue channel overtakes the green and the hottest
+// pixels read cyan-white instead of "green burning out to white" (iteration-1 finding).
+const float WHITE_LIFT = 0.35;
 
 void main() {
     float s = clamp(Strength, 0.0, 1.0);
@@ -121,7 +142,13 @@ void main() {
         float behindY = max(lU, lD) - lC;
         float behind = max(min(behindX, abs(lR + lL - 2.0 * lC)),
                 min(behindY, abs(lU + lD - 2.0 * lC)));
-        float silhouette = smoothstep(0.30, 1.20, behind / max(lC * 0.045, 0.22));
+        float rawSil = behind / max(lC * 0.045, 0.22);
+        float silhouette = smoothstep(0.30, 1.20, rawSil);
+        // [O7] Two glow tiers off the same raw value: no new taps, just two more thresholds.
+        // Skirt starts at 0.10, not lower — block-stair micro-steps sit right under that,
+        // and letting them glow would grey the crushed world back up (iteration-1 finding).
+        float silSkirt = smoothstep(0.10, 0.60, rawSil);
+        float silCore = smoothstep(0.95, 1.90, rawSil);
 
         // [O3] Crease: second derivative of linear depth. Convex/concave folds that share a
         // depth plane; ~0 on planar runs at any slant, so grazing floors do not false-edge.
@@ -193,8 +220,16 @@ void main() {
         vec3 grainAccent = mix(vec3(0.0, 1.0, 0.4), edgeAccent / max(gzLuma(edgeAccent), 0.001) * 0.65,
                 clamp(AccentAmount, 0.0, 1.0));
 
-        vec3 readout = fillAccent * gzLuma(scene) * FILL_GAIN * (1.0 - sky)
+        // [O7] The hot core leaves the accent toward white, capped so a commanded hue
+        // survives; skirt and core are silhouette-only (geometry glow), gated like the
+        // other depth terms so a dead depth buffer cannot paint them.
+        vec3 coreColor = mix(edgeAccent, vec3(1.05), WHITE_LIFT);
+        float geomGate = (1.0 - sky) * distanceFade * depthOk;
+
+        vec3 readout = fillAccent * pow(gzLuma(scene), FILL_GAMMA) * FILL_GAIN * (1.0 - sky)
                 + edgeAccent * edge * (0.80 * flicker + 0.35 * sweep + 0.95 * trace)
+                + edgeAccent * silSkirt * SKIRT_GAIN * geomGate
+                + coreColor * silCore * CORE_GAIN * geomGate * flicker
                 + edgeAccent * 0.02 * sweep
                 + edgeAccent * trace * 0.030 * (1.0 - sky)
                 + grainAccent * grain;
