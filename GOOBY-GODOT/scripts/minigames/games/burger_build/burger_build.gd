@@ -270,7 +270,12 @@ func _catch_item(item: Dictionary) -> void:
 	var pos := project(plate_x, PLATE_Y + _stack_top())
 	if correct:
 		placed += 1
-		AudioDirector.try_play(self, "mg_good", 1.0 + 0.03 * placed)
+		# W14 Quick-Win: steigende Combo-Tonleiter je Lage (+1 Halbton) statt
+		# flachem mg_good — der Stapel wird hörbar höher (Audit d=3, nur Ton).
+		if ctx.juice != null:
+			ctx.juice.combo_tone(placed)
+		else:
+			AudioDirector.try_play(self, "mg_good", 1.0 + 0.03 * placed)
 		_flash_text = "+%s" % _fmt(delta)
 		_flash_good = true
 		# Funkenwölkchen in der Farbe der gefangenen Lage — der Treffer
@@ -310,6 +315,7 @@ func _complete_order() -> void:
 	if ctx.juice != null:
 		ctx.juice.bloom_pulse(1.0)
 		ctx.juice.shake(0.14)
+		ctx.juice.confetti(45)  # W14 Quick-Win: fertiger Burger = kleiner Regen
 	order_number += 1
 	bite_left = float(tune["BITE_SEC"])
 	_items.clear()
