@@ -26,6 +26,14 @@ const RECONNECT_MAX_SEC := 30.0
 ## Fallback, wenn weder ContentRegistry noch config.json liefern (W2b-Doku).
 const DEFAULT_NET := {"host": "127.0.0.1", "port": 8765, "tls": false}
 const EMBEDDED_CONFIG_PATH := "res://content/config/data/config.json"
+## W14/NETSET: Nutzer-Override aus den Mehrspieler-Settings (eigene
+## user://-Config, unabhängig vom Update-System-Download in user://packs).
+## Vorrang-Kette: User-Settings > Pack-Config > Default — gelesen bei JEDEM
+## Connect (W2b-Contract bleibt: Config wirkt sofort beim nächsten Versuch).
+const USER_OVERRIDE_PATH := "user://net_user_override.json"
+## Schlüssel, die der User-Override tragen darf (secret = Join-Secret,
+## wandert ins HELLO; NIE in Logs — DevActions.redact filtert "secret").
+const USER_OVERRIDE_KEYS: Array[String] = ["host", "port", "tls", "secret"]
 ## Toast-Text fürs Heimnetz-Gate (strings/<locale>/net.json).
 const GATE_TOAST_KEY := "net.gate.ws_heimnetz"
 
@@ -37,6 +45,8 @@ var build_services := true
 var link_factory: Callable = Callable()
 ## Tests/Integration: Config-Override {host, port, tls} statt Registry.
 var config_override: Dictionary = {}
+## Nutzer-Override-Datei (Tests leiten auf ein Temp-user://-File um).
+var user_override_path := USER_OVERRIDE_PATH
 ## Identitäts-Datei (Tests leiten auf ein Temp-user://-File um).
 var identity_path := "user://net_identity.json"
 ## Outbox-Datei (Tests leiten auf ein Temp-user://-File um).
@@ -63,6 +73,9 @@ var _identity: Dictionary = {}
 var _reconnect_attempts := 0
 var _reconnect_at_ms := -1
 var _heartbeat_accum := 0.0
+## Join-Secret der AKTUELLEN Verbindung (bei connect_now aus der aufgelösten
+## Config gemerkt — das HELLO läuft asynchron erst nach STATE_OPEN).
+var _active_secret := ""
 ## Gate-Toast nur EINMAL pro geblocktem Host (Reconnects spammen sonst).
 var _gate_toasted_host := ""
 
@@ -122,6 +135,7 @@ func connect_now() -> void:
 	if _link != null:
 		return
 	var net_config := _resolve_net_config()
+	_active_secret = str(net_config.get("secret", ""))
 	var use_tls := bool(net_config.get("tls", false))
 	var host := str(net_config.get("host", ""))
 	# ws://-Heimnetz-Gate (Doc C §7 / AP-12): unverschlüsselt NUR zu privaten/
@@ -261,6 +275,10 @@ func _send_hello() -> void:
 		data["friendCode"] = friend_code
 	elif not str(_identity.get("friendCode", "")).is_empty():
 		data["friendCode"] = _identity["friendCode"]
+	# W14/NETSET: Join-Secret aus den Mehrspieler-Settings (Server prüft es
+	# nur, wenn er selbst eins konfiguriert hat — sonst ignoriert er es).
+	if not _active_secret.is_empty():
+		data["secret"] = _active_secret
 	send("HELLO", data)
 
 
@@ -367,23 +385,102 @@ func _set_status(next: int) -> void:
 
 ## W2b-Contract: ContentRegistry.get_net_config() > eingebaute config.json >
 ## DEFAULT_NET. config_override (Tests/Integration) schlägt alles.
+## W14/NETSET: der Nutzer-Override aus den Mehrspieler-Settings (eigene
+## user://-Config) liegt MIT VORRANG über der Pack-Config — Kette:
+## config_override (Tests) > User-Settings > Pack-Config > Default.
 func _resolve_net_config() -> Dictionary:
 	if not config_override.is_empty():
 		return config_override
+	var pack := DEFAULT_NET.duplicate(true)
 	var registry := get_node_or_null("/root/ContentRegistry")
 	if registry != null and registry.has_method("get_net_config"):
-		return registry.get_net_config()
-	if FileAccess.file_exists(EMBEDDED_CONFIG_PATH):
+		pack = registry.get_net_config()
+	elif FileAccess.file_exists(EMBEDDED_CONFIG_PATH):
 		var parser := JSON.new()
 		if parser.parse(FileAccess.get_file_as_string(EMBEDDED_CONFIG_PATH)) == OK:
 			if parser.data is Dictionary and (parser.data as Dictionary).get("net") is Dictionary:
 				var net: Dictionary = parser.data["net"]
-				return {
+				pack = {
 					"host": str(net.get("host", DEFAULT_NET["host"])),
 					"port": int(net.get("port", DEFAULT_NET["port"])),
 					"tls": bool(net.get("tls", DEFAULT_NET["tls"])),
 				}
-	return DEFAULT_NET
+	return merge_net_config(DEFAULT_NET, pack, load_user_override(user_override_path))
+
+
+## W14/NETSET, PURE Vorrang-Kette: user > pack > defaults. Leere Strings und
+## Ports <= 0 im höherrangigen Layer zählen als „nicht gesetzt“ (fallen also
+## auf den darunterliegenden Wert zurück); tls/secret gewinnen, sobald der
+## User-Layer den Schlüssel ÜBERHAUPT trägt.
+static func merge_net_config(
+	defaults: Dictionary, pack: Dictionary, user: Dictionary
+) -> Dictionary:
+	var merged := {
+		"host": str(defaults.get("host", "")),
+		"port": int(defaults.get("port", 0)),
+		"tls": bool(defaults.get("tls", false)),
+	}
+	if not str(defaults.get("secret", "")).is_empty():
+		merged["secret"] = str(defaults["secret"])
+	for layer: Dictionary in [pack, user]:
+		if not str(layer.get("host", "")).strip_edges().is_empty():
+			merged["host"] = str(layer["host"]).strip_edges()
+		if int(layer.get("port", 0)) > 0:
+			merged["port"] = int(layer["port"])
+		if layer.has("tls"):
+			merged["tls"] = bool(layer["tls"])
+		if layer.has("secret"):
+			merged["secret"] = str(layer["secret"])
+	if str(merged.get("secret", "")).is_empty():
+		merged.erase("secret")
+	return merged
+
+
+## W14/NETSET: Nutzer-Override lesen ({} = keiner/kaputt — Pack-Config gilt).
+static func load_user_override(path := USER_OVERRIDE_PATH) -> Dictionary:
+	if not FileAccess.file_exists(path):
+		return {}
+	var parser := JSON.new()
+	if parser.parse(FileAccess.get_file_as_string(path)) != OK:
+		return {}
+	if not (parser.data is Dictionary):
+		return {}
+	var out := {}
+	var raw: Dictionary = parser.data
+	for key in USER_OVERRIDE_KEYS:
+		if raw.has(key):
+			out[key] = raw[key]
+	return out
+
+
+## W14/NETSET: Nutzer-Override schreiben (nur bekannte Schlüssel; leere/
+## unbrauchbare Werte werden weggelassen). Leeres Ergebnis löscht die Datei.
+static func save_user_override(config: Dictionary, path := USER_OVERRIDE_PATH) -> bool:
+	var out := {}
+	if not str(config.get("host", "")).strip_edges().is_empty():
+		out["host"] = str(config["host"]).strip_edges()
+	if int(config.get("port", 0)) > 0:
+		out["port"] = int(config["port"])
+	if config.has("tls"):
+		out["tls"] = bool(config["tls"])
+	if not str(config.get("secret", "")).is_empty():
+		out["secret"] = str(config["secret"])
+	if out.is_empty():
+		return clear_user_override(path)
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	if file == null:
+		push_warning("[net] kann Nutzer-Override nicht speichern: %s" % path)
+		return false
+	file.store_string(JSON.stringify(out))
+	file.close()
+	return true
+
+
+## W14/NETSET: „Zurücksetzen auf Standard“ — Override-Datei entfernen.
+static func clear_user_override(path := USER_OVERRIDE_PATH) -> bool:
+	if not FileAccess.file_exists(path):
+		return true
+	return DirAccess.remove_absolute(ProjectSettings.globalize_path(path)) == OK
 
 
 func _load_or_create_identity() -> Dictionary:
