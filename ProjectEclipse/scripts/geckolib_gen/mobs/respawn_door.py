@@ -221,17 +221,21 @@ def main():
     painter.set_material("frame", wood(OAK))
     painter.set_cube_material("frame", 2, lintel_material)
     painter.set_cube_material("frame", 3, wood(OAK_DEEP))
-    # leaves: cube 0 panel, 1/2 silver bands, 3 ring handle.
+    # leaves: cube 0 panel, 1/2 silver bands. The ring handles moved into their own
+    # animatable handle_px/handle_nx child bones (MD4 locked_shudder rattle) — same
+    # cube, same UVs, so the canvas stays byte-identical.
     for leaf in ("leaf_px", "leaf_nx"):
         painter.set_material(leaf, leaf_material)
         painter.set_cube_material(leaf, 1, metal(SILVER_DARK))
         painter.set_cube_material(leaf, 2, metal(SILVER_DARK))
-        painter.set_cube_material(leaf, 3, handle_material)
+    painter.set_material("handle_*", handle_material)
     painter.set_material("glow_void", void_material)
     painter.set_material("glow_disc", disc_material)
     # glow_* bones auto-copy their (shadeless) albedo into the glowmask; the leaves get
-    # the custom seam/glyph blaze instead of an albedo copy.
+    # the custom seam/glyph blaze instead of an albedo copy. leaf_glow's handle branch
+    # keys off the HANDLE_FRONT_RECT canvas region, so it serves the handle bones as-is.
     painter.set_glow_painter("leaf_*", leaf_glow)
+    painter.set_glow_painter("handle_*", leaf_glow)
     painter.paint(OUT)
 
 

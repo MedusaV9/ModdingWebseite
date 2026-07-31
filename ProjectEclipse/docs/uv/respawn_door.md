@@ -2,7 +2,7 @@
 
 **Texture size:** 128×128 (both files — GeckoLib's `AutoGlowingTexture` enforces matching
 canvases). Model: `assets/eclipse/geo/block/respawn_door.geo.json` (GeckoLib **block**
-model, 6 bones / 14 cubes — P6-W3, rendered by
+model, 8 bones / 14 cubes — P6-W3 + MD4 handle bones, rendered by
 `client/entity/door/RespawnDoorRenderer` off the multiblock's controller BE). As with
 every GeckoLib asset here, the geo file **is** the UV source of truth — the painter
 (`scripts/geckolib_gen/paint_lib.py`) parses it and computes each face rect itself, so
@@ -22,7 +22,7 @@ the sterncastle pillars. Authored front-facing NORTH (Blockbench default);
 | glow_disc | eclipse disc | 14×10×0 | N=S (104,31) | floats 0.25 u proud of the header; ringed eclipse sigil — emissive |
 | leaf_px / leaf_nx | main slab | 19×61×4 | N (19,0) / (0,0) | hinge pivots at x=±19.5, z=+1.5; leaves meet at the center seam |
 | leaf_px / leaf_nx | silver band ×2 | 18×5×1 | N (0,122) | tarnished strap bands at y 12 and 45 |
-| leaf_px / leaf_nx | ring handle | 6×8×1.5 | N (104,41) | oversized ring pair flanking the seam at y 27..35 |
+| handle_px / handle_nx | ring handle | 6×8×1.5 | N (104,41) | oversized ring pair flanking the seam at y 27..35 — child bones of the leaves (pivot at the mount plate, y 33.5) so the `locked_shudder`/`open`/`close` anims can rattle them; same cube + UVs as before the split (MD4) |
 
 **Art brief (design sheet §2.5 "Respawn Door"):** the imposing double door in the ghost
 ship's sterncastle bulkhead — blackened-oak leaves (`#241B14` planks over `#1A130E`
