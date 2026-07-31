@@ -388,11 +388,17 @@ func _build_buy_row() -> Control:
 	var row := HFlowContainer.new()
 	row.add_theme_constant_override("h_separation", 10)
 	row.add_theme_constant_override("v_separation", 6)
+	# W14: Preis als goldene AC-Pille (Web-Preis-Badge) statt nackter Zahl.
+	var pille := PanelContainer.new()
+	pille.name = "PricePill"
+	pille.add_theme_stylebox_override("panel", _pillen_stylebox())
+	pille.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN | Control.SIZE_EXPAND
+	pille.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_price_label = Label.new()
 	_price_label.name = "PriceLabel"
 	_price_label.theme_type_variation = &"HeadlineLabel"
-	_price_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_child(_price_label)
+	pille.add_child(_price_label)
+	row.add_child(pille)
 	_buy_button = Button.new()
 	_buy_button.name = "BuyButton"
 	_buy_button.theme_type_variation = &"PrimaryButton"
@@ -472,27 +478,66 @@ func _refresh_list() -> void:
 	UiMotion.stagger_in(row_nodes, 0.015)
 
 
+## W14/UISCREENS-B: Regalzeile als AC-Karte — Name links (Ellipse statt
+## Layoutbruch: die längste Zeile darf die Spaltenbreite nicht diktieren),
+## Preis als goldene Pille rechts (Web-Preis-Badge). Kinder sind
+## MOUSE_FILTER_IGNORE, damit die ganze Karte tippbar bleibt.
 func _make_row(item: Dictionary) -> Button:
 	var id := str(item["id"])
 	var row := Button.new()
 	row.name = "Row_%s" % id
 	row.theme_type_variation = &"AcCardButton"
 	row.custom_minimum_size = Vector2(0, maxf(58.0 * _f, _floor))
-	row.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	# Der TEXT darf die Zeile nicht verbreitern: sonst diktiert die längste
-	# Zeile die Spaltenbreite und drückt die Detail-Spalte aus dem Canvas
-	# (Hochformat) — lieber Ellipse als Layoutbruch.
-	row.clip_text = true
-	row.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	row.text = (
-		"%s   ·   %s"
-		% [
-			FurnitureCatalog.display_name(item, I18nService.get_locale()),
-			I18nService.t("shop.ikea.preis", {"n": int(item["preis"])}),
-		]
-	)
 	row.pressed.connect(_on_row_pressed.bind(id))
+	var inner := HBoxContainer.new()
+	inner.name = "RowInner"
+	inner.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	inner.offset_left = 14.0
+	inner.offset_right = -12.0
+	inner.add_theme_constant_override("separation", 10)
+	inner.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(inner)
+	var name_label := Label.new()
+	name_label.name = "RowName"
+	name_label.text = FurnitureCatalog.display_name(item, I18nService.get_locale())
+	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	name_label.clip_text = true
+	name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	inner.add_child(name_label)
+	inner.add_child(_preis_pille(int(item["preis"])))
 	return row
+
+
+## Goldene Preis-Pille (RADIUS_PILL + Yellow-Rand) — EIN Look für Regal-
+## Zeilen und Kaufen-Zeile.
+func _preis_pille(betrag: int) -> PanelContainer:
+	var pille := PanelContainer.new()
+	pille.name = "PreisPille"
+	pille.add_theme_stylebox_override("panel", _pillen_stylebox())
+	pille.size_flags_horizontal = Control.SIZE_SHRINK_END
+	pille.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	pille.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var text := Label.new()
+	text.name = "PreisText"
+	text.theme_type_variation = &"CaptionLabel"
+	text.text = I18nService.t("shop.ikea.preis", {"n": betrag})
+	text.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	pille.add_child(text)
+	return pille
+
+
+static func _pillen_stylebox() -> StyleBoxFlat:
+	var box := StyleBoxFlat.new()
+	box.bg_color = AcTokens.PAPER.lerp(AcTokens.YELLOW, 0.35)
+	box.set_corner_radius_all(AcTokens.RADIUS_PILL)
+	box.set_border_width_all(1)
+	box.border_color = Color(AcTokens.YELLOW_DARK, 0.6)
+	box.content_margin_left = 12.0
+	box.content_margin_right = 12.0
+	box.content_margin_top = 4.0
+	box.content_margin_bottom = 4.0
+	return box
 
 
 func _refresh_details() -> void:
@@ -566,11 +611,18 @@ func _show_result(item: Dictionary, result: String) -> void:
 		ShopPurchase.RESULT_OK:
 			AudioDirector.try_play(self, "ui_confirm")
 			_toasts.show_toast(I18nService.t("shop.ikea.gekauft", {"name": name_text}))
+			# W14 Kauf-Feier (UIKERN-Vertrag): Doppelimpuls + Gold-Funken.
+			Haptics.success(self)
+			UiMotion.sparkle(_buy_button)
+			UiMotion.bounce(_coins_label)
 		ShopPurchase.RESULT_BROKE:
+			Haptics.warn(self)
 			_toasts.show_toast(I18nService.t("shop.ikea.zu_teuer"), true)
 		ShopPurchase.RESULT_FULL:
+			Haptics.warn(self)
 			_toasts.show_toast(I18nService.t("shop.ikea.lager_voll"), true)
 		_:
+			Haptics.warn(self)
 			_toasts.show_toast(I18nService.t("shop.ikea.fehler"), true)
 
 

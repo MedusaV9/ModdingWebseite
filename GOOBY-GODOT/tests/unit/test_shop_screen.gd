@@ -72,13 +72,27 @@ func _rows(screen: IkeaScreen) -> Array:
 	return out
 
 
+## W14/UISCREENS-B: Regalzeilen sind jetzt AC-Karten — Name als Label links,
+## Preis als goldene Pille rechts (statt allem im Button-`text`).
+func _row_name(row: Node) -> String:
+	var label := row.find_child("RowName", true, false) as Label
+	return label.text if label != null else str(row.get("text"))
+
+
+func _row_preis(row: Node) -> String:
+	var label := row.find_child("PreisText", true, false) as Label
+	return label.text if label != null else str(row.get("text"))
+
+
 func test_regal_ist_gefuellt_und_zeigt_preise() -> void:
 	var gs := _fresh_gs()
 	var screen := await _mount(gs)
 	var rows := _rows(screen)
 	assert_eq(rows.size(), ShopCatalog.filter("").size(), "jede Ladenware hat eine Zeile")
 	assert_true(rows.size() >= 145, "SEHR viele Möbel im Regal (%d)" % rows.size())
-	assert_true(str(rows[0].text).contains("Münzen"), "Zeile nennt den Preis: %s" % rows[0].text)
+	assert_true(
+		_row_preis(rows[0]).contains("Münzen"), "Zeile nennt den Preis: %s" % _row_preis(rows[0])
+	)
 	assert_ne(screen.selected_id(), "", "das erste Möbel steht schon in der Vitrine")
 	await _drop(screen, gs)
 
@@ -96,7 +110,7 @@ func test_kategorie_chips_und_suche_filtern() -> void:
 	await wait_frames(2)
 	var treffer := _rows(screen)
 	assert_true(treffer.size() >= 1, "Suche nach 'toast' findet etwas")
-	assert_true(str(treffer[0].text).to_lower().contains("toaster"), treffer[0].text)
+	assert_true(_row_name(treffer[0]).to_lower().contains("toaster"), _row_name(treffer[0]))
 	screen.set_search("zzzgibtesnicht")
 	await wait_frames(2)
 	assert_true(_rows(screen).is_empty(), "kein Treffer = keine Zeilen")
