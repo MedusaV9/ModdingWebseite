@@ -173,10 +173,12 @@ public final class ExpansionSequence implements SequenceReplayable {
     /**
      * Sky-rift altitude above the site's surface (STRUCTURE rifts open flat in the sky,
      * R11). RIFT-FX: raised 26 → 44 so the tear hangs properly HIGH over the build site
-     * (user: "rifts should spawn further up"); mirrored by
+     * (user: "rifts should spawn further up"); F-102 Rift-Masse: raised again 44 → 64
+     * (the same user note, re-raised — the tear must sit unmistakably in the SKY band
+     * and give the delivery pieces a real drop). Mirrored by
      * {@code StructureFlightFx.RIFT_MOUTH_HEIGHT} — keep the two in lockstep.
      */
-    private static final int SKY_RIFT_HEIGHT = 44;
+    private static final int SKY_RIFT_HEIGHT = 64;
     /** Rift width from the pending site's footprint (payload contract: diagonal · 1.2 ≈ · 1.7). */
     private static final float RIFT_WIDTH_PER_FOOTPRINT = 1.7F;
 

@@ -45,9 +45,11 @@ public final class FerrymanFinaleFxRows {
     @SubscribeEvent
     static void onClientSetup(FMLClientSetupEvent event) {
         // F-044 — the dawn day-rift maw over the center island: darker/lazier than the
-        // structure rift (slow violet pulse, sinking mote rain). Photon-only garnish is
-        // NOT enough here (the rift IS the announce), so the Quasar leg reuses the
-        // riss maw shimmer as the photon-less read.
+        // structure rift (slow violet pulse, sinking mote rain). F-102 v3 "Schlund":
+        // asset re-authored by tools/photon/rift_mass_fx.py (NOT ferryman2_fx.py any
+        // more) — 7-block mouth, three stacked throat shells, dark core, emissive rim.
+        // Photon-only garnish is NOT enough here (the rift IS the announce), so the
+        // Quasar leg reuses the riss maw shimmer as the photon-less read.
         PhotonFxRegistry.registerRow(new PhotonFxRegistry.Row(
                 FxCues.CUE_DAY_RIFT_MAW,
                 fx("day_rift_maw"),

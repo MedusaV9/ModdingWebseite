@@ -53,7 +53,8 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * <p><b>The beat</b>: at every event-day rollover ({@link EclipseSignals#onDayRollover},
  * POST phase) a NEW Photon rift opens in the sky over the island
  * ({@link FxCues#CUE_DAY_RIFT_MAW} — lazier/darker/violet-pulsing than the structure
- * rift, ~560t) and {@value #FIRST_DAY_COUNT}/+15–30 dark block-displays (obsidian,
+ * rift, ~560t) and {@value #FIRST_DAY_COUNT}/+{@value #DAILY_MIN}–{@value #DAILY_MAX}
+ * dark block-displays (obsidian,
  * sculk, deepslate, violet accents) fall out of it and swing into slow orbits around
  * the island (heights {@value #HEIGHT_MIN}–{@value #HEIGHT_MAX} over the island top,
  * radii {@value #RADIUS_MIN}–{@value #RADIUS_MAX}), accumulating day over day up to the
@@ -89,13 +90,19 @@ public final class DayRiftOrbits {
     /** Frozen command tag marking every day-rift orbit display (scans/cleanup). */
     public static final String TAG = "eclipse_finale_orbit";
 
-    /** Hard performance cap on the accumulated swarm (task spec ~350). */
-    public static final int CAP = 350;
-    /** Day-1 drop (task spec ~20). */
-    public static final int FIRST_DAY_COUNT = 20;
-    /** Daily drop band from day 2 on (task spec 15–30, deterministic per day). */
-    public static final int DAILY_MIN = 15;
-    public static final int DAILY_MAX = 30;
+    /**
+     * Hard performance cap on the accumulated swarm. F-102 "Rift-Masse": raised from
+     * the original task-spec ~350 — cost stays one always-loaded mount chunk and one
+     * interpolated pose push per display per {@value #UPDATE_CADENCE_TICKS}t (player
+     * gated), so it scales linearly and ~11 packets/tick averaged is still trivial.
+     */
+    public static final int CAP = 450;
+    /** Day-1 drop (F-102: was the task-spec ~20 — the opening beat must already read
+     *  as a swarm pouring out of the widened maw, not a sprinkle). */
+    public static final int FIRST_DAY_COUNT = 30;
+    /** Daily drop band from day 2 on (F-102 raised from the task-spec 15–30). */
+    public static final int DAILY_MIN = 22;
+    public static final int DAILY_MAX = 42;
 
     /** Orbit band over the island top (task spec 30–60). */
     public static final int HEIGHT_MIN = 30;
@@ -134,6 +141,13 @@ public final class DayRiftOrbits {
     private static final int DROP_BLEND_TICKS = 560;
     /** Per-piece drop stagger inside one beat (the maw "rains" for ~25 s). */
     private static final int DROP_STAGGER_TOTAL_TICKS = 500;
+    /**
+     * F-102: drop birth annulus across the v3 maw's widened mouth (matches the asset's
+     * 1.5–5.5-block drip ring), so the fallout visibly pours out of the WHOLE mouth
+     * instead of one center point. Deterministic per piece — no new state.
+     */
+    private static final double SPILL_R_MIN = 1.5D;
+    private static final double SPILL_R_MAX = 5.5D;
 
     /**
      * FX-12 rollover pressure: the {@code world_grade} violet lean the maw opens under
@@ -507,11 +521,19 @@ public final class DayRiftOrbits {
                 if (gameTime < birth) {
                     s = 0.0D;
                 }
-                // Componentwise lerp maw → orbit with a downward sag mid-flight: the
-                // piece FALLS out of the maw, dips under the orbit line, swings up in.
-                px = rift.x + (px - rift.x) * s;
+                // F-102 choreography: the piece is born somewhere on the widened mouth
+                // annulus (deterministic from its own params), FALLS first — the
+                // horizontal blend is eased quadratically, so early blend is almost
+                // pure vertical drop out of the maw — dips under the orbit line on the
+                // sag, then swings sideways up into its orbit slot.
+                double spillAngle = p.phase * 5.0D;
+                double spillFrac = clamp(
+                        (p.bobPeriod / BOB_BASE_PERIOD_TICKS - 1.0D) / 0.8D, 0.0D, 1.0D);
+                double spillR = SPILL_R_MIN + spillFrac * (SPILL_R_MAX - SPILL_R_MIN);
+                double sh = s * s;
+                px = rift.x + Math.cos(spillAngle) * spillR * (1.0D - s) + (px - rift.x) * sh;
                 py = rift.y + (py - rift.y) * s - Math.sin(s * Math.PI) * 10.0D;
-                pz = rift.z + (pz - rift.z) * s;
+                pz = rift.z + Math.sin(spillAngle) * spillR * (1.0D - s) + (pz - rift.z) * sh;
                 scale = (float) (0.1D + (p.scale - 0.1D) * Math.min(1.0D, s * 3.0D));
             }
         }

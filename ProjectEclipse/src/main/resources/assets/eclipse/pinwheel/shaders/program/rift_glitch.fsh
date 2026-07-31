@@ -27,6 +27,24 @@
 // vector), and it lives INSIDE the shard disc at sub-shard amplitude (≤ ~0.16 rad at
 // the very center) so the shards keep owning the read. Rides RiftAmount, which is 0
 // under reducedFx at the source.
+//
+// v4 (F-102 RIFT-MASSE): DEPTH FAKE — the tear stops being a flat screen decal and
+// reads as a HOLE with an edge. Three layers, all riding RiftAmount (0 under reducedFx):
+//   * INTERIOR PARALLAX SHELVES — the disc interior is sliced into discrete lensDist
+//     rings (the screen-space twin of day_rift_maw's stacked throat shells); every shelf
+//     re-samples the scene pushed radially OUTWARD by a per-shelf depth amount (concave
+//     minification: the interior visibly recedes like a pit) plus a slow per-shelf
+//     radial breath and an ALTERNATING tangential drift (counter-rotating strata). The
+//     shelf offsets differ in a single still frame — depth without any motion — and the
+//     drift is bounded sin(Time) oscillation, no unbounded smear, no swirl cliché.
+//   * SEAM REFRACTION — a narrow annulus just outside the shard disc bends the scene
+//     outward like the edge of a thick lens; the strength is raggedized by noise on the
+//     rim DIRECTION (continuous across the atan wrap) crawling slowly with Time, so the
+//     rim is a torn, slightly boiling edge instead of a compass circle.
+//   * CHROMATIC SEAM FRINGES — in that same annulus the RGB split re-aims RADIALLY and
+//     swells with the shared raggedness: the rim splits into prism fringes exactly
+//     where the fake lens bends hardest (the classic thick-glass depth cue).
+// Still one pass, no history buffer, no new uniforms — Time stays the Java-fed feed.
 #include eclipse:eclipse_common
 
 uniform sampler2D DiffuseSampler0;
@@ -98,6 +116,37 @@ void main() {
         uv += (wound - p) / vec2(aspect, 1.0) * 0.5;
     }
 
+    // v4 — INTERIOR PARALLAX SHELVES (see header): discrete depth rings, deeper = a
+    // bigger outward re-sample (concave pit read). Each shelf breathes radially at its
+    // own hashed rate and drifts tangentially with an alternating sign — bounded
+    // oscillation, so a still frame keeps the stepped depth read and a moving frame
+    // adds counter-rotating strata on top. Quantization (floor) is deliberate: the
+    // shelf SEAMS are the depth edges the eye reads, per the house glitch verbs.
+    float depthZone = (1.0 - smoothstep(0.08, 0.52, lensDist)) * rift;
+    if (depthZone > 0.003 && lensDist > 1.0e-4) {
+        float shelf = floor(lensDist * 9.0);
+        float shelfDepth = 1.0 - shelf * (1.0 / 9.0); // 1 at the center, 0 at the rim
+        float breath = 1.0 + 0.18 * sin(Time * (0.5 + 0.6 * efxHash(vec2(shelf, 7.7)))
+                + shelf * 2.4);
+        float spinDir = mod(shelf, 2.0) * 2.0 - 1.0;   // alternating shelves counter-drift
+        vec2 tangUv = vec2(-axisUv.y, axisUv.x);
+        uv += axisUv * (shelfDepth * shelfDepth * 0.020 * breath * depthZone)
+                + tangUv * (spinDir * 0.006 * shelfDepth
+                        * sin(Time * 0.7 + shelf * 1.9) * depthZone);
+    }
+
+    // v4 — SEAM REFRACTION: a narrow annulus outside the shard disc bends the scene
+    // outward like the edge of a thick lens. Raggedness is noise on the rim DIRECTION
+    // (unit vector — continuous across the atan wrap) crawling slowly with Time; it is
+    // shared with the chromatic fringes below so the bend and the color split ride the
+    // exact same torn edge.
+    float seamZone = (smoothstep(0.42, 0.60, lensDist) - smoothstep(0.62, 0.88, lensDist)) * rift;
+    float seamRag = 0.0;
+    if (seamZone > 0.003 && lensDist > 1.0e-4) {
+        seamRag = 0.25 + 0.75 * efxNoise(axis * 2.6 + vec2(Time * 0.25, -Time * 0.19));
+        uv += axisUv * (seamZone * seamRag * 0.014);
+    }
+
     // v2 — MIRROR-SHARD refraction near the rift center: the disc around RiftCenter splits
     // into 60° shards; gated shards resample the scene reflected across their bisector
     // (kaleidoscope-lite) — space around the tear looks reassembled from shattered copies.
@@ -118,7 +167,16 @@ void main() {
 
     // Chromatic tear along the displacement axis (~15 px at 1080p fully glitched); ambient
     // rift corruption feeds a smaller share so idle proximity stays a simmer (~4 px).
-    vec3 color = efxChroma(DiffuseSampler0, uv, vec2(1.0, 0.35), g * 0.008 + rift * 0.0035);
+    // v4 — CHROMATIC SEAM FRINGES: in the seam annulus the split re-aims RADIALLY (the
+    // prism edge of the fake lens) and swells with the refraction's own raggedness, so
+    // the fringes sit exactly on the torn rim rather than smearing the whole frame.
+    // Iteration 2: 0.006 → 0.008 — with the ambient cap (RiftAmount ≤ 0.6 at the
+    // source) the fringe peaked at ~4 px @1080p, too timid for a still frame on the
+    // llvmpipe VM; ~5–6 px reads without wrecking edge legibility.
+    vec2 chromaDir = mix(vec2(1.0, 0.35), axisUv, clamp(seamZone * 1.5, 0.0, 1.0));
+    float seamFringe = seamZone * seamRag * 0.008;
+    vec3 color = efxChroma(DiffuseSampler0, uv, chromaDir,
+            g * 0.008 + rift * 0.0035 + seamFringe);
 
     // v2 — TIME-JITTER ECHO: the faked previous-frame ghost (see header). The offset
     // re-rolls at ~8 Hz; max() keeps the ghost additive-bright, like an undecayed phosphor

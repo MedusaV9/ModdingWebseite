@@ -142,17 +142,22 @@ public final class StructureFlightFx {
      * RIFT-FX: raised 80 → 140 (user: "MORE block displays"). BD-STORM: raised again
      * 140 → 640 (user: "VIEL mehr Block Displays, viel viel mehr") — with real sampled
      * blocks every display lands on a real cell, so the density directly reads as the
-     * build materializing rather than as a sparse hail. See
+     * build materializing rather than as a sparse hail. F-102: 640 → 800 (user: "mehr
+     * Block Displays raus fallen passend dazu wie die Struktur spawnt" — more of the
+     * REAL structure now flies, since the sampled path fills the whole budget). See
      * {@link #HARD_MAX_DISPLAYS} for the ceiling this may never cross.
      */
-    private static final int DEFAULT_MAX_DISPLAYS = 640;
+    private static final int DEFAULT_MAX_DISPLAYS = 800;
     /**
      * Absolute per-delivery display ceiling, config included. Each display is one tracked
      * entity with a transformation packet every {@value #UPDATE_INTERVAL_TICKS} ticks, so
      * this is the number that bounds the delivery's bandwidth and entity-tracker cost —
-     * raise it only together with a measurement.
+     * raise it only together with a measurement. F-102: 800 → 1000 (+25 % over the
+     * BD-STORM ceiling; the launch clock still spawns at most {@value #BATCH_SIZE}
+     * entities per tick and the window grows only ~8 batch strides, well inside the
+     * {@value #WATCHDOG_TICKS}-tick watchdog).
      */
-    private static final int HARD_MAX_DISPLAYS = 800;
+    private static final int HARD_MAX_DISPLAYS = 1000;
     /** Transformation update cadence; interpolation duration matches (DisplayAnimator law). */
     private static final int UPDATE_INTERVAL_TICKS = 2;
     /**
@@ -266,9 +271,12 @@ public final class StructureFlightFx {
      * Rift-mouth altitude above the site surface. Mirrors the (private)
      * {@code ExpansionSequence.SKY_RIFT_HEIGHT} so the delivery surge re-opens the beat's
      * tear in place instead of tearing a second hole beside it. RIFT-FX: raised 26 → 44
-     * with the sequence's constant (user: "rifts should spawn further up").
+     * with the sequence's constant (user: "rifts should spawn further up"). F-102: raised
+     * again 44 → 64 (same user note re-raised in the Rift-Masse wave) — the tear hangs
+     * properly in the SKY band and the pieces' fall covers a real drop, which also
+     * steepens the Bezier arcs into a more ponderous, massive delivery read.
      */
-    private static final int RIFT_MOUTH_HEIGHT = 44;
+    private static final int RIFT_MOUTH_HEIGHT = 64;
     /** A delivery only plays when at least one player is this close to the site anchor. */
     private static final double VIEWER_RANGE = 224.0D;
     /** FX broadcast radius for shakes/sounds (matches ExpansionSequence.slamFx). */
@@ -971,7 +979,9 @@ public final class StructureFlightFx {
         int count = Math.min(budget, Math.max(10, (int) (site.footprint() * 3.75F)));
         boolean cavity = site.anchor().getY() < surfaceCenter.y - CAVITY_DEPTH;
         List<BlockState> palette = PALETTES.getOrDefault(site.structureId(), FALLBACK_PALETTE);
-        float mouthScatter = Math.min(48.0F, StructurePendingRegistry.revealRiftWidth(site.footprint())) * 0.25F;
+        // F-102: scatter cap follows RiftFx.MAX_WIDTH (72, raised from the stale 48 the
+        // old clamp mirrored) — pieces pour out of the WHOLE width of a big tear.
+        float mouthScatter = Math.min(72.0F, StructurePendingRegistry.revealRiftWidth(site.footprint())) * 0.25F;
         double halfFootprint = Math.max(2.0D, site.footprint() * 0.5D * 0.85D);
 
         List<Piece> pieces = new ArrayList<>(count);
@@ -1032,7 +1042,8 @@ public final class StructureFlightFx {
      */
     private static List<Piece> buildSampledPieces(ServerLevel level, PendingSite site, Vec3 mouth,
             RandomSource random, List<StructureBlockSampler.Sample> samples) {
-        float mouthScatter = Math.min(48.0F,
+        // F-102: cap mirrors RiftFx.MAX_WIDTH = 72 (see the palette path's note).
+        float mouthScatter = Math.min(72.0F,
                 StructurePendingRegistry.revealRiftWidth(site.footprint())) * 0.25F;
         List<Piece> pieces = new ArrayList<>(samples.size());
         double minY = Double.MAX_VALUE;
