@@ -59,12 +59,23 @@ static func buchen(vacation_slice: Dictionary, ziel_id: String, now_ms: int) -> 
 
 ## Abholung/Rückkehr: souvenirCoins gutschreiben (Aufrufer), Postkarten als
 ## Flag/Archiv-Zähler, Ziel im Sammelpass, trips+1 → phase none.
-## Rückgabe {ok, vacation, souvenir_coins, postkarten, ziel_id}.
+## W13B (Doc E §3.3): dazu stempelt JEDE Abholung den Erholungs-Boost
+## (`erholtBis` = now + 48 h) und latcht beim 9/9-Sammelpass den
+## Weltengooby-Titel (`weltengoobyAt`, einmalig — nie zurückgesetzt).
+## Rückgabe {ok, vacation, souvenir_coins, postkarten, ziel_id,
+## weltengooby_neu}.
 static func abholen(vacation_slice: Dictionary, now_ms: int) -> Dictionary:
 	var v := Vacation.slice_of({"vacation": vacation_slice})
 	var phase := Vacation.phase_at(v, now_ms)
 	if phase != Vacation.PHASE_RETURN_READY and phase != Vacation.PHASE_OVERDUE:
-		return {"ok": false, "vacation": v, "souvenir_coins": 0, "postkarten": 0, "ziel_id": ""}
+		return {
+			"ok": false,
+			"vacation": v,
+			"souvenir_coins": 0,
+			"postkarten": 0,
+			"ziel_id": "",
+			"weltengooby_neu": false,
+		}
 	var ziel_id := str(v["destId"])
 	var eintrag: Dictionary = Vacation.CATALOG.get(ziel_id, {})
 	var postkarten := Vacation.postcards_due(v, now_ms)
@@ -77,10 +88,16 @@ static func abholen(vacation_slice: Dictionary, now_ms: int) -> Dictionary:
 	v["pickupBy"] = 0
 	v["postcards"] = 0
 	v["trips"] = int(v["trips"]) + 1
+	v["erholtBis"] = now_ms + Vacation.ERHOLUNGS_BOOST_MS
+	var weltengooby_neu := false
+	if int(v["weltengoobyAt"]) == 0 and Vacation.alle_ziele_besucht(v):
+		v["weltengoobyAt"] = now_ms
+		weltengooby_neu = true
 	return {
 		"ok": true,
 		"vacation": v,
 		"souvenir_coins": int(eintrag.get("souvenirCoins", 0)),
 		"postkarten": postkarten,
 		"ziel_id": ziel_id,
+		"weltengooby_neu": weltengooby_neu,
 	}

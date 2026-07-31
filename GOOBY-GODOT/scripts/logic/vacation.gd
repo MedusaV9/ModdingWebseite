@@ -24,6 +24,14 @@ const TAXI_FEE := 60
 ## All four stats fill to this on the reunion.
 const PICKUP_STAT_FILL := 100.0
 
+## W13B/RAUMSTATION (Doc E §3.3): Erholungs-Boost — nach JEDER Abholung
+## sinkt die Energie 48 REAL-Stunden lang 20 % langsamer (×0,8). Die
+## Zahlen frieren HIER (Owning-Module, Doc E §3.3 „Zahlen im Owning-Module
+## frieren“); reise_logic.abholen stempelt `erholtBis`, der Ticker liest
+## `energie_drain_faktor()` (Verdrahtung: Request an den Ticker-Owner).
+const ERHOLUNGS_BOOST_MS := 48 * 3_600_000
+const ERHOLUNGS_DRAIN_FAKTOR := 0.8
+
 ## Catalog ids + prices (web data/vacations.js, frozen §E0.1-2 numbers).
 ## Prices are needed by migration_v4.gd (interrupted-trip refund).
 const CATALOG := {
@@ -52,6 +60,9 @@ static func default_slice() -> Dictionary:
 		"archive": [],
 		"lastPostcardDayProcessed": 0,
 		"visited": {},
+		"erholtBis": 0,
+		"weltengoobyAt": 0,
+		"weltengoobyGefeiert": false,
 	}
 
 
@@ -76,6 +87,12 @@ static func slice_of(state: Dictionary) -> Dictionary:
 		"archive": raw.get("archive").duplicate(true) if raw.get("archive") is Array else [],
 		"lastPostcardDayProcessed": maxi(0, int(floor(_num(raw.get("lastPostcardDayProcessed"))))),
 		"visited": _normalize_visited(raw.get("visited")),
+		# W13B: Urlaubs-Nutzen-Latches (additiv) — MÜSSEN hier durch die
+		# Normalisierung, sonst würde die nächste Abholung sie wegwerfen.
+		"erholtBis": maxi(0, int(_num(raw.get("erholtBis")))),
+		"weltengoobyAt": maxi(0, int(_num(raw.get("weltengoobyAt")))),
+		"weltengoobyGefeiert":
+		raw.get("weltengoobyGefeiert") is bool and raw.get("weltengoobyGefeiert"),
 	}
 
 
@@ -157,6 +174,31 @@ static func tick(state: Dictionary, now_ms: int) -> Dictionary:
 		v["phase"] = phase
 		changed = true
 	return {"changes": v if changed else null, "events": events}
+
+
+## ------------------------------------------------- W13B Urlaubs-Nutzen
+
+
+## Läuft der Erholungs-Boost (48 h nach Abholung) zum Zeitpunkt now_ms?
+## Nimmt einen (normalisierten oder rohen) vacation-Slice.
+static func erholungs_boost_aktiv(v: Dictionary, now_ms: int) -> bool:
+	return _num(v.get("erholtBis")) > float(now_ms)
+
+
+## Energie-Drain-Faktor fürs Stats-System: ×0,8 solange der Boost läuft,
+## sonst 1,0 (Muster: gooberando_state.energie_drain_faktor). Zeit injiziert.
+static func energie_drain_faktor(v: Dictionary, now_ms: int) -> float:
+	return ERHOLUNGS_DRAIN_FAKTOR if erholungs_boost_aktiv(v, now_ms) else 1.0
+
+
+## Hat der Spieler ALLE Katalog-Ziele besucht? (9/9 → Weltengooby-Titel.)
+static func alle_ziele_besucht(v: Dictionary) -> bool:
+	return _normalize_visited(v.get("visited")).size() >= CATALOG.size()
+
+
+## Trägt der Spieler den Weltengooby-Titel? (Latch aus reise_logic.abholen.)
+static func weltengooby(v: Dictionary) -> bool:
+	return _num(v.get("weltengoobyAt")) > 0.0
 
 
 ## Whitelist-normalize a raw `visited` map: known catalog ids with a value of
