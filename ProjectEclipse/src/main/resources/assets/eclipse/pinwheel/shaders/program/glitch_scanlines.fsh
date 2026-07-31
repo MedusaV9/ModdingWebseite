@@ -26,6 +26,21 @@
 // growing toward the frame edges, horizontal CHROMA BLEED (colour smears while luma stays
 // sharp — the tape look), tape static, warm-phosphor grade and corner vignette.
 //
+// F-102 GLITCH-FAMILY POLISH — the pass had the tape but not the TUBE. Two additions:
+//   [S6] BARREL CURVATURE, pure UV trick: sample coordinates bow outward with K*r^2 (the
+//        classic CRT face), scaled by Strength so the zone edge is flat and deep inside the
+//        zone the picture visibly bulges. Where the curved lookup leaves the frame the tube
+//        ends — a soft BLACK BEZEL with rounded corners takes over. Every layer downstream
+//        (hold jitter, sync, bar, scanline mask) lives in the curved space, so the raster
+//        lines follow the glass like they do on a real tube. This is the one addition that
+//        makes a STILL frame read "CRT" from across the room.
+//   [S7] RGB TRIAD SHADOW MASK: the neutral aperture grille becomes a 3-phase subpixel
+//        mask (r/g/b columns offset by a third of a cell) — one cos() per channel, and up
+//        close the picture decomposes into phosphor triads.
+// Iteration note: the triad replaces the old 0.05 luma grille (running both doubles the
+// vertical striping and moires at small windows); the afterglow gain rises 0.11 -> 0.15 so
+// the bar's wake survives the triad's mean darkening.
+//
 // Fed by client.GlitchZoneFx: Strength (0..1 ramp — no-op at 0), Time (wall-clock seconds),
 // Detail (0 under reduced FX: hold jitter, rolling bar, sync roll, afterglow and static
 // freeze; the scanline/phosphor/aberration/bleed grade survives), AccentColor/AccentAmount
@@ -71,6 +86,16 @@ const float SYNC_PERIOD = 5.0;
 const float SYNC_TIGHT = 14.0;
 const float SYNC_HUNT = 30.0;
 const float SYNC_SKEW = 0.020;
+// [S6] Tube face curvature (UV bow per squared radius) and the bezel edge feather. K 0.18
+// bows the frame edge midpoints by ~2% and pulls the corners ~9% inward — a mid-90s
+// consumer tube, not a fishbowl.
+const float CURVE_K = 0.18;
+const float BEZEL_FEATHER = 0.012;
+// [S7] Triad mask depth: how far the three phosphor columns modulate their own channel.
+// 0.18, not deeper: the line mask already costs ~14% mean brightness, and at 0.22 the two
+// together pushed night scenes past the point where the tape content stays readable
+// (iteration-1 finding; mean cost of the triad is depth/2).
+const float TRIAD_DEPTH = 0.18;
 
 void main() {
     float s = clamp(Strength, 0.0, 1.0);
@@ -78,7 +103,16 @@ void main() {
 
     if (s > 0.0005) { // else: idle — the scene passes through bit-identical
         float detail = clamp(Detail, 0.0, 1.0);
-        vec2 uv = texCoord;
+
+        // --- [S6] barrel curvature -----------------------------------------------------
+        // The tube face: UVs bow outward by K*r^2, ramped by Strength (flat at the zone
+        // edge). Where the curved lookup falls outside the frame, the picture ends and the
+        // bezel begins; the mask is applied at the very end so every layer in between can
+        // simply keep sampling the clamped coordinate.
+        vec2 qc = texCoord - 0.5;
+        vec2 uv = 0.5 + qc * (1.0 + CURVE_K * dot(qc, qc) * s);
+        vec2 outside = max(abs(uv - 0.5) - 0.5, 0.0);
+        float bezel = smoothstep(0.0, BEZEL_FEATHER, max(outside.x, outside.y));
 
         // --- vertical hold jitter ------------------------------------------------------
         // The frame slips vertically in irregular gated jumps (~3 rolls/s window), like a CRT
@@ -143,16 +177,25 @@ void main() {
         // The strike is hot at the top of each line and decays down it — glowing after,
         // instead of a symmetric sine that reads as a static grid.
         float strike = exp(-fract(uv.y * lineCount) * PHOSPHOR_DECAY);
-        float grille = 0.5 + 0.5 * sin(uv.x * grilleCount * 2.0 * PI);
-        color *= 1.0 - (LINE_DEPTH * (1.0 - strike) + 0.05 * grille) * s;
+        color *= 1.0 - LINE_DEPTH * (1.0 - strike) * s;
+        // [S7] RGB triad shadow mask, replacing the old neutral grille (running both would
+        // double the vertical striping and moire at small windows): three phosphor columns
+        // per grille cell, each channel dimmed by its own phase — up close the picture
+        // decomposes into triads, at distance the mean is an even (1 - depth/2) on all
+        // three channels, so the mask is luma- and hue-neutral from afar.
+        float phase = uv.x * grilleCount;
+        vec3 triad = 1.0 - TRIAD_DEPTH
+                * (0.5 + 0.5 * cos((vec3(phase) - vec3(0.0, 0.3333, 0.6667)) * 2.0 * PI));
+        color *= mix(vec3(1.0), triad, s);
 
         // --- static, bar highlight + afterglow ---------------------------------------------
         float static_ = (efxHash(uv * vec2(911.0, 631.0) + fract(Time * 11.0)) - 0.5) * 0.12 * s * detail;
         color += vec3(static_);
         color += vec3(0.9, 0.95, 1.0) * tint * bar * 0.10 * s * (0.5 + 0.5 * efxNoise(vec2(uv.x * 40.0, Time * 12.0)));
         // The afterglow is the tube's own emission, so it wears the commanded phosphor and
-        // rides the same line raster it decays inside.
-        color += vec3(0.62, 0.78, 0.68) * tint * afterglow * strike * 0.11 * s;
+        // rides the same line raster it decays inside. Gain 0.15 (was 0.11): the triad mask
+        // costs the picture ~11% mean brightness and the wake has to stay readable over it.
+        color += vec3(0.62, 0.78, 0.68) * tint * afterglow * strike * 0.15 * s;
 
         // --- phosphor grade + vignette ------------------------------------------------------
         // Slight warm-green cast, mild desaturation, dark corners: the tube itself. The cast
@@ -161,6 +204,11 @@ void main() {
         color *= 1.0 - 0.30 * smoothstep(0.40, 0.95, length(fromCenter) * 1.6) * s;
 
         color += vec3(efxDither(gl_FragCoord.xy, fract(Time * 3.0)) * s);
+
+        // [S6] Tube bezel — the final word: where the curved face left the frame the tube
+        // is dark glass with a whisper of the phosphor tint. Multiplied by s so a weak zone
+        // shows soft corner shading rather than hard black corners popping in.
+        color = mix(color, vec3(0.004, 0.010, 0.007) * tint, bezel * s);
     }
 
     fragColor = vec4(color, 1.0);
