@@ -54,15 +54,40 @@ static func presence_icon(row: Dictionary) -> TextureRect:
 	return icon
 
 
-## Presence-Text: Server-Label, sonst Fallback aus den Strings.
+## Presence-Text (P6 H12): bekannte `activity.kind`s werden CLIENT-seitig
+## übersetzt (net.presence.<kind> in strings/de|en/net.json — der EN-Client
+## zeigte sonst die deutschen Server-Labels). Unbekannte Kinds fallen aufs
+## Server-Label zurück (abwärtskompatibel, Server bleibt unverändert).
 static func presence_text(row: Dictionary) -> String:
 	var online: bool = row.get("online", false) == true
 	if not online:
 		return I18nService.t("net.friends.offline")
-	var label := ""
+	var activity: Dictionary = {}
 	if row.get("activity") is Dictionary:
-		label = str((row["activity"] as Dictionary).get("label", ""))
+		activity = row["activity"]
+	var translated := presence_text_for_kind(
+		str(activity.get("kind", "")), str(row.get("goobyName", ""))
+	)
+	if not translated.is_empty():
+		return translated
+	var label := str(activity.get("label", ""))
 	return label if not label.is_empty() else I18nService.t("net.friends.online")
+
+
+## Übersetzung rein aus `kind` + Gooby-Namen ("" == kein i18n-Key vorhanden
+## → Aufrufer nimmt das Server-Label). `minigame:<id>` reist mit der rohen
+## Spiel-Id — exakt wie das Server-Template (presence.js).
+static func presence_text_for_kind(kind: String, gooby_name: String) -> String:
+	if kind.is_empty():
+		return ""
+	var args := {"gooby": gooby_name if not gooby_name.is_empty() else "Gooby"}
+	if kind.begins_with("minigame:"):
+		args["name"] = kind.substr("minigame:".length())
+		return I18nService.t("net.presence.minigame", args)
+	var key := "net.presence.%s" % kind
+	if not I18nService.has_key(key):
+		return ""
+	return I18nService.t(key, args)
 
 
 ## Status-Chip (nicht klickbarer Button): ChipLeaf online, grauer AcChip
