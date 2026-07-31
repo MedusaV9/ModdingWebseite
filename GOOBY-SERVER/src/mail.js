@@ -18,10 +18,12 @@
 // - Geschenk-Claim (MAIL_CLAIM) ist einmalig — der Client bucht die
 //   Inventar-Gutschrift erst nach ok (Doppel-Gutschrift ausgeschlossen).
 
+import fs from 'node:fs';
+import path from 'node:path';
 import crypto from 'node:crypto';
 import express from 'express';
 import { dayKey } from './config.js';
-import { areFriends } from './friends.js';
+import { areFriends, friendCodesOf } from './friends.js';
 import { restAuth, FRIEND_CODE_RE } from './auth.js';
 
 export const TEXT_MAX = 500;
@@ -29,6 +31,13 @@ export const DAILY_LIMIT = 20; // Briefe/Tag pro Sender
 export const MAILBOX_CAP = 50; // Briefe pro Postfach
 export const PRUNE_READ_AFTER_MS = 30 * 24 * 3600_000;
 export const GIFT_QTY_MAX = 99;
+
+// InstantGooby (W13C, Doc C §3.9): Foto-Feed ÜBERM Mail-Backend. Posts sind
+// kind:"instant" (Briefe kind:"mail"), teilen sich die Tages-Quota des
+// Senders (1 Post = 1 Brief), landen aber NICHT im Postfach-Cap, sondern in
+// einem eigenen Feed-Ringpuffer pro Empfänger (eigene Store-Collection).
+export const CAPTION_MAX = 120; // kurze Caption — kein Brief-Ersatz
+export const FEED_CAP = 30; // Posts pro Empfänger-Feed (ältester fliegt)
 
 const ITEM_TYPES = new Set(['food', 'items']);
 const ITEM_ID_RE = /^[a-zA-Z0-9._-]{1,40}$/;
@@ -59,9 +68,11 @@ function unreadCount(box) {
 }
 
 // Client-Sicht eines Briefs (interne Blob-Refs bleiben serverseitig).
+// kind ist additiv (W13C): Briefe "mail" — Bestandsclients ignorieren es.
 function clientView(entry) {
   return {
     id: entry.id,
+    kind: entry.kind || 'mail',
     from: entry.from,
     fromName: entry.fromName,
     fromGooby: entry.fromGooby,
@@ -156,6 +167,7 @@ function deliverMail(ctx, sender, { to, text, item, clientId }, photo) {
 
   const entry = {
     id: `mail-${crypto.randomBytes(8).toString('hex')}`,
+    kind: 'mail',
     from: sender.code,
     fromName: sender.name,
     fromGooby: sender.gooby,
@@ -210,9 +222,272 @@ function isImage(buf) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// InstantGooby (W13C): Feed-Ringpuffer pro Empfänger über eigener Collection.
+// posts: EIN Objekt pro Post (Foto-Blob + Likes + refs), feeds referenzieren
+// nur die Ids — die Verdrängung dekrementiert refs, bei 0 fliegt der Post
+// samt Blob (kein Blob-Waisenhaus, kein Mehrfach-Speichern beim Fan-out).
+// ---------------------------------------------------------------------------
+
+export function instantData(ctx) {
+  // posts: id -> Post; feeds: friendCode -> {ids:[postId…], seenAt}
+  return ctx.store.collection('instant', { posts: {}, feeds: {} });
+}
+
+function feedOf(data, code) {
+  if (!data.feeds[code]) data.feeds[code] = { ids: [], seenAt: 0 };
+  const feed = data.feeds[code];
+  if (!Array.isArray(feed.ids)) feed.ids = [];
+  return feed;
+}
+
+// Eigene Posts zählen nie als „ungesehen“ (das Badge meint Freundes-Posts).
+function unseenCount(data, code) {
+  const feed = feedOf(data, code);
+  return feed.ids.filter((id) => {
+    const post = data.posts[id];
+    return post && post.from !== code && post.at > feed.seenAt;
+  }).length;
+}
+
+// Client-Sicht eines Posts — liked/mine sind Betrachter-abhängig.
+function postView(post, viewer) {
+  return {
+    id: post.id,
+    kind: 'instant',
+    from: post.from,
+    fromName: post.fromName,
+    fromGooby: post.fromGooby,
+    at: post.at,
+    caption: post.caption,
+    photoId: post.photoId || '',
+    likes: post.likes.length,
+    liked: post.likes.includes(viewer),
+    mine: post.from === viewer,
+  };
+}
+
+// Eine Feed-Referenz lösen; der letzte Verweis nimmt Post + Blob mit.
+function dropPostRef(ctx, data, id) {
+  const post = data.posts[id];
+  if (!post) return;
+  post.refs -= 1;
+  if (post.refs <= 0) {
+    if (post.photo) ctx.store.deleteBlob(post.photo);
+    delete data.posts[id];
+  }
+}
+
+// Kern: Foto-Pflicht, Caption-Limit, GEMEINSAME Tages-Quota mit den Briefen
+// (1 Post = 1 Brief, egal wie viele Freunde ihn bekommen), Fan-out an alle
+// Freunde + den Autor selbst (er sieht den eigenen Post im Feed), Ringpuffer
+// pro Empfänger, Push INSTANT_NEW an Online-Freunde.
+function deliverInstant(ctx, sender, { caption, clientId }, photo) {
+  const mails = mailData(ctx);
+  const now = ctx.clock.now();
+  const today = dayKey(now, ctx.cfg.tz);
+  const quota = senderOf(mails, sender.code);
+  if (quota.dayKey !== today) {
+    quota.dayKey = today;
+    quota.sent = 0;
+  }
+  const base = { sentToday: quota.sent, dailyLimit: DAILY_LIMIT };
+  const fail = (code) => ({ ok: false, code, ...base });
+
+  if (!photo) return fail('NO_PHOTO');
+  const cleanCaption = typeof caption === 'string' ? caption : '';
+  if (cleanCaption.length > CAPTION_MAX) return fail('CAPTION_TOO_LONG');
+  const friends = friendCodesOf(ctx, sender.code);
+  if (friends.length === 0) return fail('NO_FRIENDS');
+
+  const cleanClientId =
+    typeof clientId === 'string' && CLIENT_ID_RE.test(clientId) ? clientId : '';
+  if (cleanClientId && quota.recent.includes(cleanClientId)) {
+    // Outbox-Retry nach Timeout: schon gepostet → still ok, kein Doppel-Post.
+    return { ok: true, id: '', dupe: true, recipients: friends.length, ...base };
+  }
+  if (quota.sent >= DAILY_LIMIT) return fail('DAILY_LIMIT');
+
+  const data = instantData(ctx);
+  const post = {
+    id: `inst-${crypto.randomBytes(8).toString('hex')}`,
+    from: sender.code,
+    fromName: sender.name,
+    fromGooby: sender.gooby,
+    at: now,
+    caption: cleanCaption,
+    photo: null,
+    photoId: `instp-${crypto.randomBytes(8).toString('hex')}`,
+    likes: [],
+    refs: 0,
+  };
+  // Base64-TEXT-Blob wie bei den Briefen (putBlob schreibt utf8).
+  post.photo = ctx.store.putBlob(
+    'instant',
+    post.photoId,
+    photo.buf.toString('base64'),
+    Math.ceil((ctx.cfg.maxPhotoKb * 1024 * 4) / 3) + 8
+  );
+  data.posts[post.id] = post;
+
+  // Fan-out: Freunde + Autor (eigener Feed). Ringpuffer Cap 30 pro Feed.
+  const recipients = [...friends, sender.code];
+  for (const code of recipients) {
+    const feed = feedOf(data, code);
+    feed.ids.push(post.id);
+    post.refs += 1;
+    while (feed.ids.length > FEED_CAP) dropPostRef(ctx, data, feed.ids.shift());
+  }
+  quota.sent += 1; // 1× gegen die Tages-Quota — egal wie viele Empfänger
+  if (cleanClientId) {
+    quota.recent.push(cleanClientId);
+    while (quota.recent.length > CLIENT_ID_CAP) quota.recent.shift();
+  }
+  ctx.store.flushNow('instant');
+  ctx.store.flushNow('mail'); // Quota/Dedupe wohnen in der Mail-Collection
+
+  for (const code of friends) {
+    const device = ctx.byCode.get(code);
+    if (!device) continue;
+    ctx.hub.sendToDevice(device, 'INSTANT_NEW', {
+      post: postView(post, code),
+      unseen: unseenCount(data, code),
+    });
+  }
+  return {
+    ok: true,
+    id: post.id,
+    recipients: friends.length,
+    sentToday: quota.sent,
+    dailyLimit: DAILY_LIMIT,
+  };
+}
+
+function registerInstant(ctx) {
+  const { hub, cfg } = ctx;
+  instantData(ctx);
+  // Blob-Ordner selbst anlegen (storage.js kennt nur blobs/ und mail/).
+  fs.mkdirSync(path.join(ctx.store.dataDir, 'instant'), { recursive: true });
+
+  hub.addWelcomeProvider((conn) => ({
+    instantUnseen: unseenCount(instantData(ctx), conn.friendCode),
+  }));
+
+  // Feed-Pull: jüngste zuerst; Pagination bis FEED_CAP.
+  hub.on('FEED_LIST', (conn, msg) => {
+    const data = instantData(ctx);
+    const feed = feedOf(data, conn.friendCode);
+    const posts = feed.ids
+      .map((id) => data.posts[id])
+      .filter(Boolean)
+      .sort((a, b) => b.at - a.at);
+    const offset = Number.isInteger(msg.d.offset) && msg.d.offset > 0 ? msg.d.offset : 0;
+    const limitRaw = Number.isInteger(msg.d.limit) ? msg.d.limit : FEED_CAP;
+    const limit = Math.min(Math.max(limitRaw, 1), FEED_CAP);
+    hub.send(
+      conn,
+      'FEED_STATE',
+      {
+        posts: posts.slice(offset, offset + limit).map((p) => postView(p, conn.friendCode)),
+        total: posts.length,
+        cap: FEED_CAP,
+        unseen: unseenCount(data, conn.friendCode),
+        offset,
+      },
+      { re: msg.seq }
+    );
+  });
+
+  // Alles gesehen (Badge aus) — idempotent, seenAt wandert nur nach vorn.
+  hub.on('FEED_ACK', (conn, msg) => {
+    const data = instantData(ctx);
+    const feed = feedOf(data, conn.friendCode);
+    const now = ctx.clock.now();
+    if (now > feed.seenAt) {
+      feed.seenAt = now;
+      ctx.store.markDirty('instant');
+    }
+    hub.send(conn, 'OK', { unseen: unseenCount(data, conn.friendCode) }, { re: msg.seq });
+  });
+
+  // „Möhre da lassen“ 🥕 — genau 1 Like pro Freund pro Post, idempotent
+  // (already:true beim zweiten Mal, KEIN zweiter Push an den Autor).
+  hub.on('INSTANT_LIKE', (conn, msg) => {
+    const data = instantData(ctx);
+    const id = typeof msg.d.id === 'string' ? msg.d.id : '';
+    const feed = feedOf(data, conn.friendCode);
+    const post = feed.ids.includes(id) ? data.posts[id] : null;
+    if (!post) return hub.sendError(conn, 'NOT_FOUND', { re: msg.seq });
+    if (post.from === conn.friendCode) return hub.sendError(conn, 'SELF', { re: msg.seq });
+    if (post.likes.includes(conn.friendCode)) {
+      return hub.send(conn, 'OK', { likes: post.likes.length, already: true }, { re: msg.seq });
+    }
+    post.likes.push(conn.friendCode);
+    ctx.store.markDirty('instant');
+    const author = ctx.byCode.get(post.from);
+    if (author) {
+      ctx.hub.sendToDevice(author, 'INSTANT_LIKE', {
+        id: post.id,
+        by: conn.friendCode,
+        byName: conn.name,
+        likes: post.likes.length,
+      });
+    }
+    hub.send(conn, 'OK', { likes: post.likes.length }, { re: msg.seq });
+  });
+
+  // ---- REST: Posten (Foto PFLICHT → immer der Base64-JSON-Weg) ----
+  const bodyLimit = Math.ceil((cfg.maxPhotoKb * 1024 * 4) / 3) + CAPTION_MAX * 4 + 4096;
+  ctx.app.post('/api/instant', express.json({ limit: bodyLimit }), (req, res) => {
+    const auth = restAuth(ctx, req);
+    if (!auth) return res.status(401).json({ ok: false, code: 'AUTH_FAIL' });
+    const body = typeof req.body === 'object' && req.body !== null ? req.body : {};
+    let photo = null;
+    if (typeof body.photoB64 === 'string' && body.photoB64 !== '') {
+      let buf;
+      try {
+        buf = Buffer.from(body.photoB64, 'base64');
+      } catch {
+        return res.status(400).json({ ok: false, code: 'BAD_PHOTO' });
+      }
+      if (buf.length === 0 || !isImage(buf)) {
+        return res.status(400).json({ ok: false, code: 'BAD_PHOTO' });
+      }
+      if (buf.length > cfg.maxPhotoKb * 1024) {
+        return res.status(413).json({ ok: false, code: 'PHOTO_TOO_LARGE' });
+      }
+      photo = { buf };
+    }
+    const sender = {
+      code: auth.player.friendCode,
+      name: auth.player.name,
+      gooby: auth.player.goobyName,
+    };
+    const result = deliverInstant(ctx, sender, body, photo);
+    if (result.ok) return res.json(result);
+    const status = { DAILY_LIMIT: 429, PHOTO_TOO_LARGE: 413 }[result.code] || 400;
+    res.status(status).json(result);
+  });
+
+  // Foto-Auslieferung: jeder, in dessen Feed der Post liegt (Autor inklusive).
+  ctx.app.get('/api/instant/blob/:id', (req, res) => {
+    const auth = restAuth(ctx, req);
+    if (!auth) return res.status(401).json({ ok: false, code: 'AUTH_FAIL' });
+    const data = instantData(ctx);
+    const id = String(req.params.id || '');
+    const feed = feedOf(data, auth.player.friendCode);
+    const post = feed.ids.map((pid) => data.posts[pid]).find((p) => p && p.photoId === id);
+    if (!post || !post.photo) return res.status(404).json({ ok: false, code: 'NOT_FOUND' });
+    const blob = ctx.store.readBlob(post.photo);
+    if (!blob) return res.status(404).json({ ok: false, code: 'NOT_FOUND' });
+    res.json({ ok: true, photoB64: blob.toString('utf8') });
+  });
+}
+
 export function register(ctx) {
   const { hub, cfg } = ctx;
   mailData(ctx);
+  registerInstant(ctx); // InstantGooby-Feed (W13C) — teilt Quota + Foto-Weg
 
   const wsSender = (conn) => ({ code: conn.friendCode, name: conn.name, gooby: conn.goobyName });
 
