@@ -11,6 +11,13 @@ extends RefCounted
 ##   nach <path>.corrupt gesichert und .bak1..3 werden der Reihe nach
 ##   probiert; wenn alles scheitert → frischer Default-State (recovered=true,
 ##   wie web load() — bootet IMMER).
+## - FEHLT die Hauptdatei (Crash/App-Kill im save_now()-Fenster zwischen
+##   Backup-Rotation und Rename): erst .tmp probieren (voll geflusht = der
+##   NEUESTE Stand), dann .bak1..3; erst wenn alles fehlt/kaputt ist, gilt
+##   der Boot als echter Erststart (fresh=true).
+##   Existiert die Hauptdatei dagegen, wird ein liegengebliebenes .tmp
+##   bewusst ignoriert (nicht unterscheidbar von einem Teil-Schreibrest;
+##   der nächste save_now() überschreibt es ohnehin per Truncate).
 ## - Debounce: mark_dirty() + autosave_tick(state, ticks_ms) — der Aufrufer
 ##   (GameState._process) pumpt monotone Ticks; Zeitlogik bleibt headless
 ##   testbar ohne Frames.
@@ -31,18 +38,52 @@ var _dirty_at_ticks := -1
 ## Returns {"state", "fresh": bool, "recovered": bool, "source": String}.
 func load_state(now_ms: int) -> Dictionary:
 	if not FileAccess.file_exists(save_path):
-		return {
-			"state": SaveSchema.default_state(now_ms),
-			"fresh": true,
-			"recovered": false,
-			"source": "fresh",
-		}
+		return _recover_missing(now_ms)
 	var raw := FileAccess.get_file_as_string(save_path)
 	var parsed := _parse_and_normalize(raw, now_ms)
 	if parsed["ok"]:
 		return {"state": parsed["state"], "fresh": false, "recovered": false, "source": "save"}
 	push_warning("[save_manager] corrupt save (%s) — trying backups" % parsed["error"])
 	_backup_corrupt(raw)
+	var from_backup := _recover_from_backups(now_ms)
+	if not from_backup.is_empty():
+		return from_backup
+	return {
+		"state": SaveSchema.default_state(now_ms),
+		"fresh": false,
+		"recovered": true,
+		"source": "fresh",
+	}
+
+
+## Hauptdatei fehlt = Crash-Fenster von save_now(): die Rotation hat den
+## alten Save schon nach .bak1 geschoben, der Rename .tmp → save kam nicht
+## mehr. .tmp ist dann der NEUESTE voll geflushte Stand — zuerst probieren,
+## danach .bak1..N. Erst wenn ALLES fehlt/kaputt ist: echter Erststart.
+func _recover_missing(now_ms: int) -> Dictionary:
+	var tmp := save_path + ".tmp"
+	if FileAccess.file_exists(tmp):
+		var tmp_parsed := _parse_and_normalize(FileAccess.get_file_as_string(tmp), now_ms)
+		if tmp_parsed["ok"]:
+			push_warning("[save_manager] save fehlt — aus .tmp wiederhergestellt")
+			return {
+				"state": tmp_parsed["state"], "fresh": false, "recovered": true, "source": "tmp"
+			}
+	var from_backup := _recover_from_backups(now_ms)
+	if not from_backup.is_empty():
+		push_warning("[save_manager] save fehlt — aus %s wiederhergestellt" % from_backup["source"])
+		return from_backup
+	return {
+		"state": SaveSchema.default_state(now_ms),
+		"fresh": true,
+		"recovered": false,
+		"source": "fresh",
+	}
+
+
+## Probiert .bak1..N der Reihe nach (parse+normalize wie der Korrupt-Pfad).
+## Leeres Dict, wenn keine Generation brauchbar ist.
+func _recover_from_backups(now_ms: int) -> Dictionary:
 	for gen in range(1, BACKUP_GENERATIONS + 1):
 		var bak := _backup_path(gen)
 		if not FileAccess.file_exists(bak):
@@ -55,12 +96,7 @@ func load_state(now_ms: int) -> Dictionary:
 				"recovered": true,
 				"source": "bak%d" % gen,
 			}
-	return {
-		"state": SaveSchema.default_state(now_ms),
-		"fresh": false,
-		"recovered": true,
-		"source": "fresh",
-	}
+	return {}
 
 
 ## Persist immediately: atomic tmp+rename with backup rotation.

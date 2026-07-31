@@ -92,6 +92,77 @@ func test_wrong_typed_slice_is_corrupt_not_crash() -> void:
 	assert_eq(loaded["source"], "fresh")
 
 
+func test_missing_file_recovers_from_bak1() -> void:
+	var manager := _fresh_manager()
+	var state: Dictionary = manager.load_state(NOW_MS)["state"]
+	state["economy"]["coins"] = 111
+	manager.save_now(state)
+	state["economy"]["coins"] = 222
+	manager.save_now(state)
+	# Crash-Fenster von save_now(): Rotation lief (alter Save → bak1), der
+	# Rename .tmp → save kam nicht mehr → Hauptdatei fehlt, bak1 = 111.
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(manager.save_path))
+	var loaded := manager.load_state(NOW_MS)
+	assert_false(loaded["fresh"], "kein Frisch-Start trotz fehlender Hauptdatei")
+	assert_true(loaded["recovered"])
+	assert_eq(loaded["source"], "bak1")
+	assert_eq(int(loaded["state"]["economy"]["coins"]), 111)
+
+
+func test_missing_file_skips_broken_bak1_uses_bak2() -> void:
+	var manager := _fresh_manager()
+	var state: Dictionary = manager.load_state(NOW_MS)["state"]
+	for coins in [1, 2, 3]:
+		state["economy"]["coins"] = coins
+		manager.save_now(state)
+	# Hauptdatei weg, liegengebliebenes .tmp UND bak1 kaputt → bak2 (= 1).
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(manager.save_path))
+	for broken in [manager.save_path + ".tmp", manager.save_path + ".bak1"]:
+		var f := FileAccess.open(broken, FileAccess.WRITE)
+		f.store_string("{{{ kaputt %#!")
+		f = null
+	var loaded := manager.load_state(NOW_MS)
+	assert_true(loaded["recovered"])
+	assert_eq(loaded["source"], "bak2")
+	assert_eq(int(loaded["state"]["economy"]["coins"]), 1)
+
+
+func test_missing_file_prefers_complete_tmp_over_bak() -> void:
+	var manager := _fresh_manager()
+	var state: Dictionary = manager.load_state(NOW_MS)["state"]
+	state["economy"]["coins"] = 111
+	manager.save_now(state)
+	# Crash exakt zwischen Rotation und Rename: .tmp = neuester voll
+	# geflushter Stand (333), bak1 = 111, Hauptdatei fehlt.
+	state["economy"]["coins"] = 333
+	var f := FileAccess.open(manager.save_path + ".tmp", FileAccess.WRITE)
+	f.store_string(JSON.stringify(state))
+	f = null
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(manager.save_path))
+	var loaded := manager.load_state(NOW_MS)
+	assert_true(loaded["recovered"])
+	assert_eq(loaded["source"], "tmp")
+	assert_eq(int(loaded["state"]["economy"]["coins"]), 333)
+
+
+func test_missing_file_and_all_backups_falls_back_to_fresh() -> void:
+	var manager := _fresh_manager()
+	var state: Dictionary = manager.load_state(NOW_MS)["state"]
+	for coins in [1, 2, 3, 4]:
+		state["economy"]["coins"] = coins
+		manager.save_now(state)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(manager.save_path))
+	for gen in [1, 2, 3]:
+		DirAccess.remove_absolute(
+			ProjectSettings.globalize_path("%s.bak%d" % [manager.save_path, gen])
+		)
+	var loaded := manager.load_state(NOW_MS)
+	assert_true(loaded["fresh"], "alles fehlt → fresh wie bisher")
+	assert_false(loaded["recovered"])
+	assert_eq(loaded["source"], "fresh")
+	assert_eq(int(loaded["state"]["economy"]["coins"]), 100, "frischer Default-State")
+
+
 func test_v4_file_is_migrated_on_load() -> void:
 	var manager := _fresh_manager()
 	var raw := FileAccess.get_file_as_string("res://tests/fixtures/v4_fresh.json")
