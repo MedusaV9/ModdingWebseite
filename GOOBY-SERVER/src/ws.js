@@ -11,6 +11,7 @@ import {
   validDeviceId,
   validSecret,
   newFriendCode,
+  checkJoinSecret,
 } from './auth.js';
 
 const HELLO_TIMEOUT_MS = 5000;
@@ -162,6 +163,15 @@ export class Hub {
     if (!ctx.buckets.take(`hello:${conn.ip}`, LIMITS.hello)) {
       this.sendError(conn, 'RATE_LIMIT', { re: msg.seq });
       conn.ws.close(4003, 'RATE_LIMIT');
+      return;
+    }
+    // W14/NETSET: optionales Join-Secret — VOR der TOFU-Anlage prüfen, damit
+    // abgelehnte HELLOs keine Spieler-Einträge hinterlassen. Ohne
+    // cfg.joinSecret ist der Check ein No-op (Kompatibilität).
+    const secretErr = checkJoinSecret(ctx.cfg, d.secret);
+    if (secretErr) {
+      this.sendError(conn, secretErr, { re: msg.seq });
+      conn.ws.close(4008, secretErr);
       return;
     }
     const deviceId = d.deviceId;

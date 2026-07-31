@@ -27,6 +27,20 @@ export function secretMatches(secret, storedHash) {
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
+// W14/NETSET: optionales Join-Secret (cfg.joinSecret, ENV GOOBY_JOIN_SECRET).
+// Rückgabe: null = passieren lassen, sonst der höfliche Ablehnungs-Code.
+// Vergleich über SHA-256-Hashes + timingSafeEqual (konstante Zeit, kein
+// Längen-Orakel). Ohne konfiguriertes Secret ist JEDES HELLO kompatibel —
+// auch eines, das (z. B. von einem vorkonfigurierten Client) trotzdem ein
+// secret-Feld mitschickt.
+export function checkJoinSecret(cfg, given) {
+  if (!cfg.joinSecret) return null;
+  if (typeof given !== 'string' || given.length === 0) return 'SECRET_REQUIRED';
+  const a = Buffer.from(hashSecret(String(cfg.joinSecret)));
+  const b = Buffer.from(hashSecret(given));
+  return crypto.timingSafeEqual(a, b) ? null : 'SECRET_WRONG';
+}
+
 // "GOOBY-4K7Q" — kollisionsfrei gegen die players-Collection gewürfelt.
 export function newFriendCode(players) {
   const taken = new Set(Object.values(players).map((p) => p.friendCode));

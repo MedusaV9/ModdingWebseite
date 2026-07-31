@@ -11,6 +11,10 @@ export function loadConfig(env = process.env) {
     port: int(env.PORT, 8080),
     // Pflicht fürs Panel. Fehlt sie, ist /panel hart deaktiviert (503, fail-closed).
     adminPassword: env.GOOBY_ADMIN_PASSWORD || null,
+    // W14/NETSET: optionales Join-Secret (panel-los, nur ENV). Wenn gesetzt,
+    // muss HELLO ein passendes `secret`-Feld mitschicken (SECRET_REQUIRED/
+    // SECRET_WRONG bei fehlend/falsch). Ohne ENV bleibt ALLES wie bisher.
+    joinSecret: env.GOOBY_JOIN_SECRET || null,
     dataDir: env.DATA_DIR || env.GOOBY_DATA_DIR || './data',
     tz: env.GOOBY_TZ || 'Europe/Berlin',
     palDailyLimit: int(env.GOOBY_PAL_DAILY_LIMIT, 250),
