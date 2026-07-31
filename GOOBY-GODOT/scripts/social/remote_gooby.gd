@@ -58,7 +58,10 @@ func play_emote(emote_id: String) -> void:
 	if rig == null or not BoardEmotes.is_valid(emote_id):
 		return
 	rig.set_emotion(BoardEmotes.emotion_for(emote_id))
-	rig.play_clip(BoardEmotes.clip_for(emote_id))
+	# W13C (Request CLIPS): dance ist ein Loop-State und käme über play_clip
+	# nie zurück — play_clip_for beendet Loops nach 2.4 s (= 2 Durchläufe)
+	# selbst nach „move“; für One-Shots verhaltensgleich zu play_clip.
+	rig.play_clip_for(BoardEmotes.clip_for(emote_id), 2.4)
 
 
 ## W13B COUCH-COOP (§C32): Besucher-Gooby pennt — sleep-Loop-Pose der

@@ -5,11 +5,11 @@ extends Node
 ## Vector3.ZERO) und eskaliert über die pure ShakeLogic in 3 Stufen:
 ##   1  Haus wackelt — Kamera-Mikro-Wackeln, Staub-Partikel von der Decke,
 ##      Möbel-Klirr-SFX, Gooby guckt erschrocken („?!“-Bubble).
-##   2  Stärker — Gooby duckt sich und hält sich am Boden fest
-##      (Bäuchlings-Pose, Muster event_runner._setup_wurm_freund).
-##   3  Fake-Ragdoll-Flug (Tween-Wirbel durchs Zimmer wie der Fake-Tumble
-##      in event_runner._setup_kleber_stuhl — Muster kopiert, Datei
-##      unangetastet) + witziger Schrei, danach Beschwerde-Bubble und nach
+##   2  Stärker — Gooby duckt sich und krallt sich am Boden fest
+##      (grip_floor-Rig-Clip, seit W13C statt Kipp-Transform-Hack).
+##   3  Fake-Ragdoll-Flug (Positions-Tween durchs Zimmer + panischer
+##      ragdoll_flail-Rig-Clip, seit W13C statt rotation:x-Spin) + witziger
+##      Schrei, danach Beschwerde-Bubble und nach
 ##      5 s wieder happy. Reduced Motion: Stufe 3 ohne Flug, nur Bubble.
 ## Counter `shakes` (Stufe 1 je Episode) und `shakeStage3` laufen über den
 ## bestehenden achievements.counters-Mechanismus (Sticker-Request s.
@@ -17,8 +17,6 @@ extends Node
 ## `ingest(accel, dt, now_ms)`, das Tests direkt mit synthetischen
 ## Sequenzen füttern. Einbau: home_entry._on_travel_finished → attach_to.
 
-const GRIP_TILT_DEG := -80.0
-const GRIP_RIG_LIFT := 0.45
 const COMPLAIN_S := 5.0
 const FLIGHT_HOP_S := 0.45
 
@@ -131,11 +129,11 @@ func _fx_stufe2() -> void:
 	if gooby != null:
 		gooby.cancel_walk()
 		gooby.set_wander_enabled(false)
+		# W13C (Request CLIPS): echter grip_floor-Loop (geduckt, Pfoten
+		# krallen, Ohren flach) statt des manuellen Kipp-Transform-Hacks.
 		if gooby.get("rig") != null:
-			var rig: Node3D = gooby.rig
-			rig.rotation.x = deg_to_rad(GRIP_TILT_DEG)
-			rig.position.y = GRIP_RIG_LIFT
-			rig.set_emotion("scared")
+			gooby.rig.set_emotion("scared")
+			gooby.rig.play_clip("grip_floor")
 		_grip_active = true
 	_say(I18nService.t("shake.stufe2"))
 
@@ -172,9 +170,10 @@ func _fx_stufe3() -> void:
 func _flight(gooby: Node3D) -> void:
 	var start: Vector3 = gooby.global_position
 	var rig: Node3D = gooby.get("rig")
+	# W13C (Request CLIPS): panisches ragdoll_flail-Rudern statt des
+	# rotation:x-Spin-Tweens; _finish_stage3 holt via „idle" zurück.
 	if rig != null:
-		var spin := create_tween()
-		spin.tween_property(rig, "rotation:x", -TAU * 2.0, FLIGHT_HOP_S * 3.0)
+		rig.play_clip("ragdoll_flail")
 	var tw := create_tween()
 	tw.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	for hop in 2:
@@ -183,8 +182,6 @@ func _flight(gooby: Node3D) -> void:
 		tw.tween_callback(func() -> void: AudioDirector.try_play(self, "gvz_pop"))
 	tw.tween_property(gooby, "global_position", start, FLIGHT_HOP_S)
 	await tw.finished
-	if rig != null:
-		rig.rotation.x = 0.0
 
 
 func _flight_offset() -> Vector3:
@@ -221,10 +218,10 @@ func _release_grip(gooby: Node) -> void:
 	if not _grip_active:
 		return
 	_grip_active = false
+	# Zurück in den move-State — die Pose kam aus dem grip_floor-Clip,
+	# nicht aus Transforms (W13C, Request CLIPS).
 	if gooby != null and gooby.get("rig") != null:
-		var rig: Node3D = gooby.rig
-		rig.rotation.x = 0.0
-		rig.position.y = 0.0
+		gooby.rig.play_clip("idle")
 
 
 # ── FX-Bausteine ─────────────────────────────────────────────────────────────

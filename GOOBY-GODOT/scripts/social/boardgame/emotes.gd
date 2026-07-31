@@ -2,22 +2,22 @@ class_name BoardEmotes
 extends RefCounted
 ## Emote-Rad + Tomaten-Regel fürs Brettspiel (W3c VISIT) — PURE.
 ##
-## 4 Emotes (Auftrag: tanzen/wütend/lachen/schlafen). Die W1b-M1-Clipliste
-## hat kein dance/angry/laugh — Mapping auf vorhandene Clips + Emotionen
-## (P1-Clips dance & Co. = Backlog M2, F §1.4; dann nur DIESE Tabelle
-## anpassen). Der Tomaten-Tracker spiegelt die Server-Regel aus
+## 4 Emotes (Auftrag: tanzen/wütend/lachen/schlafen). dance nutzt seit W13C
+## den ECHTEN dance-Clip (P1, F §1.4); angry/laugh bleiben auf vorhandene
+## Clips + Emotionen gemappt — kommen weitere P-Clips, nur DIESE Tabelle
+## anpassen. Der Tomaten-Tracker spiegelt die Server-Regel aus
 ## boardgames.js: max 1 Wurf pro Spieler pro Runde (Runde = abgeschlossene
 ## SHOT/SHOT_RESULT-Paare beider Spieler, exchanges/2).
 
 const EMOTES: Array[Dictionary] = [
-	{"id": "dance", "clip": "celebrate", "emotion": "ecstatic", "label_key": "board.emote.dance"},
+	{"id": "dance", "clip": "dance", "emotion": "ecstatic", "label_key": "board.emote.dance"},
 	{"id": "angry", "clip": "hop", "emotion": "angry", "label_key": "board.emote.angry"},
 	{"id": "laugh", "clip": "wave", "emotion": "happy", "label_key": "board.emote.laugh"},
 	{"id": "sleep", "clip": "sleep", "emotion": "sleepy", "label_key": "board.emote.sleep"},
 ]
 
-## Tomaten-Wurf: `tomato_throw`-Clip existiert in M1 nicht → wave-Fallback
-## (Backlog-Vermerk im Handoff, Plan §2.3 W3c).
+## Tomaten-Wurf: `tomato_throw` liegt seit W13C im GLB und wird von
+## throw_clip() automatisch gewählt; wave bleibt Fallback für Alt-Rigs.
 const TOMATO_THROW_CLIP := "tomato_throw"
 const TOMATO_FALLBACK_CLIP := "wave"
 

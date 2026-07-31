@@ -131,14 +131,28 @@ func test_bewegungs_beat_bewegt_den_koerper() -> void:
 	var paar := await _rig_mit_gefuehlen()
 	var rig: GoobyRig = paar[0]
 	var layer: GoobyFeelings = paar[1]
-	layer.zeige("begeisterung")
+	# W13C: begeisterung tanzt jetzt den echten Rig-Clip (eigener Test unten)
+	# — der Transform-Beat wird über „ueberraschung" (aufrichten) geprüft.
+	layer.zeige("ueberraschung")
 	var bewegt := await wait_until(
-		func() -> bool: return rig.position.y > 0.05 or absf(rig.scale.y - 1.0) > 0.03, 4000
+		func() -> bool: return rig.position.y > 0.03 or absf(rig.scale.y - 1.0) > 0.03, 4000
 	)
-	assert_true(bewegt, "Hüpf-Beat bewegt den Körper sichtbar")
+	assert_true(bewegt, "Aufricht-Beat bewegt den Körper sichtbar")
 	layer.beende()
 	var zurueck := await wait_until(
 		func() -> bool: return absf(rig.position.y) < 0.01 and absf(rig.scale.y - 1.0) < 0.01, 4000
 	)
 	assert_true(zurueck, "Basis-Transform kommt exakt zurück")
+	rig.free()
+
+
+func test_begeisterung_tanzt_den_echten_dance_clip() -> void:
+	var paar := await _rig_mit_gefuehlen()
+	var rig: GoobyRig = paar[0]
+	var layer: GoobyFeelings = paar[1]
+	layer.zeige("begeisterung")
+	var tanzt := await wait_until(func() -> bool: return rig.current_state() == "dance", 4000)
+	assert_true(tanzt, "begeisterung spielt den echten dance-Clip (W13C)")
+	assert_almost(rig.position.y, 0.0, 0.001, "kein Transform-Tween mehr im Spiel")
+	layer.beende()
 	rig.free()

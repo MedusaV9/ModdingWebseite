@@ -17,9 +17,13 @@ class FakeRig:
 	extends Node3D
 
 	var emotions: Array[String] = []
+	var clips: Array[String] = []
 
 	func set_emotion(id: String) -> void:
 		emotions.append(id)
+
+	func play_clip(clip: String) -> void:
+		clips.append(clip)
 
 
 ## Minimal-Gooby mit der GoobyHome-API, die das Secret nutzt.
@@ -201,12 +205,15 @@ func test_stufe2_gooby_haelt_sich_am_boden_fest() -> void:
 	stage = _drive(secret, 9.0, 1.3, NOW_MS)
 	assert_eq(stage, 2, "dann Stufe 2")
 	assert_false(gooby.wander, "Wandern aus — er hält sich fest")
-	assert_true(absf(gooby.rig.rotation.x) > 0.5, "Bäuchlings-Pose (Rig gekippt)")
+	# W13C (Request CLIPS): die Bäuchlings-Pose kommt jetzt aus dem
+	# grip_floor-Rig-Clip statt aus einem Kipp-Transform.
+	assert_true(gooby.rig.clips.has("grip_floor"), "grip_floor-Clip läuft (Stufe 2)")
+	assert_almost(gooby.rig.rotation.x, 0.0, 0.001, "kein Transform-Hack mehr am Rig")
 	# Ruhe: Episode klingt ab, Pose und Wandern kommen zurück. Stufe-2-Energie
 	# liegt bei bis zu ~15 → mit Decay 2.5/s dauert das Abklingen bis ~6.5 s.
 	for _i in int(round(7.0 / DT)):
 		secret.ingest(GRAVITY, DT, NOW_MS)
-	assert_almost(gooby.rig.rotation.x, 0.0, 0.001, "Pose wiederhergestellt")
+	assert_eq(gooby.rig.clips[gooby.rig.clips.size() - 1], "idle", "zurück in den move-State")
 	assert_true(gooby.wander, "Wandern wieder an")
 	assert_true(gooby.rig.emotions.has("happy"), "wieder happy")
 	assert_eq(int(gs.get_value("achievements.counters.shakeStage3", 0)), 0, "keine Stufe 3")

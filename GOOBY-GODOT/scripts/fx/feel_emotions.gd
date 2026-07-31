@@ -73,7 +73,8 @@ const DEFS := {
 		"gesicht": {"ecstatic": 1.0},
 		"extra": {"mouth_open": 0.35},
 		"pose": {"ear_l": -0.12, "ear_r": -0.12, "head": -0.05, "arms": 0.0},
-		"bewegung": "huepfen",
+		# W13C (Request CLIPS): echtes Tanzen (P1-Clip dance) statt Hüpf-Tween.
+		"bewegung": "tanzen",
 		"symbol": "funkeln",
 		"sfx": "ui_levelup",
 		"dauer_s": 3.2,

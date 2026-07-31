@@ -331,6 +331,9 @@ func spidergooby_gag(hold_s := 2.2) -> void:
 		global_position.y = CEILING_Y
 		rig.rotation.z = PI
 		rig.set_emotion("ecstatic")
+		# W13C (Request CLIPS): oben echt festkrallen statt hop-Nachlauf —
+		# der Clip ist „hängend" gebaut, der Z-Flip dreht ihn an die Decke.
+		rig.play_clip(GoobyRig.CLIP_CEILING_CLING)
 		await get_tree().create_timer(minf(hold_s, 0.8)).timeout
 		global_position.y = floor_pos.y
 		rig.rotation.z = 0.0
@@ -341,6 +344,8 @@ func spidergooby_gag(hold_s := 2.2) -> void:
 		up.parallel().tween_property(rig, "rotation:z", PI, 0.45)
 		await up.finished
 		rig.set_emotion("ecstatic")
+		# W13C (Request CLIPS): ceiling_cling-Loop während des Decken-Holds.
+		rig.play_clip(GoobyRig.CLIP_CEILING_CLING)
 		await get_tree().create_timer(hold_s).timeout
 		var down := create_tween()
 		down.set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)

@@ -208,6 +208,13 @@ func _starte_bewegung(art: String, dauer_s: float) -> void:
 	_stoppe_bewegung()
 	if art.is_empty():
 		return
+	# W13C (Request CLIPS): „tanzen" ist ein ECHTER Rig-Clip (P1 dance,
+	# 1,2 s = 2 Beats), kein Transform-Tween — play_clip_for kehrt nach
+	# dauer_s selbst nach „move" zurück; VOR create_tween(), weil ein
+	# Tweener-loser Tween sonst Laufzeit-Fehler wirft.
+	if art == "tanzen":
+		rig.play_clip_for(GoobyRig.CLIP_DANCE, dauer_s)
+		return
 	_beweg_tween = create_tween()
 	var t := _beweg_tween
 	match art:

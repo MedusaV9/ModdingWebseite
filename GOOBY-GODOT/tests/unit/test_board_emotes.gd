@@ -3,8 +3,9 @@ extends TestCase
 ## auf existierende W1b-Clips/-Emotionen, Rad-Geometrie und der Client-
 ## Spiegel des Server-Tomaten-Limits (1×/Spieler/Runde).
 
-## W1b-M1-Clipliste (Handoff W1b-rig-api.md) — Emotes dürfen NUR auf diese
-## Clips zeigen, sonst spielt das Rig nichts ab.
+## W1b-M1-Clipliste (Handoff W1b-rig-api.md) + die 8 W13C-P1-Clips —
+## Emotes dürfen NUR auf diese Clips zeigen, sonst spielt das Rig nichts
+## ab (test_w13c_clips pinnt die echte GLB-Liste auf exakt diese 19).
 const RIG_CLIPS: Array[String] = [
 	"idle",
 	"idle_lookaround",
@@ -17,6 +18,14 @@ const RIG_CLIPS: Array[String] = [
 	"brush_teeth",
 	"build_hammer",
 	"celebrate",
+	"dance",
+	"refuse",
+	"ragdoll_flail",
+	"grip_floor",
+	"tomato_throw",
+	"ceiling_cling",
+	"idle_ear_flick",
+	"idle_stretch",
 ]
 const RIG_EMOTIONS: Array[String] = [
 	"neutral", "happy", "sad", "sleepy", "ecstatic", "angry", "scared", "dizzy"
@@ -49,12 +58,16 @@ func test_vier_emotes_mit_gueltigen_clips() -> void:
 func test_tomaten_wurf_clip_fallback() -> void:
 	assert_eq(
 		BoardEmotes.throw_clip(RIG_CLIPS),
-		BoardEmotes.TOMATO_FALLBACK_CLIP,
-		"M1-Rig hat keinen tomato_throw → wave-Fallback (Backlog-Vermerk)"
+		"tomato_throw",
+		"tomato_throw liegt seit W13C im Rig und gewinnt"
 	)
-	var future := RIG_CLIPS.duplicate()
-	future.append("tomato_throw")
-	assert_eq(BoardEmotes.throw_clip(future), "tomato_throw")
+	var alt_rig := RIG_CLIPS.duplicate()
+	alt_rig.erase("tomato_throw")
+	assert_eq(
+		BoardEmotes.throw_clip(alt_rig),
+		BoardEmotes.TOMATO_FALLBACK_CLIP,
+		"Alt-Rig ohne tomato_throw → wave-Fallback"
+	)
 
 
 func test_splat_dauer_im_auftrag_fenster() -> void:
