@@ -181,7 +181,9 @@ public final class WandPowers {
         }
         castFlourish(player, spell, mainHand, power);
         stack.set(WandItems.WAND_CHARGE.get(), charge - cost);
-        EclipseWandItem.triggerWandAnim(player, stack, EclipseWandItem.ANIM_USE);
+        // F-098 MD1: the cast one-shot carries the path's handling character (whip /
+        // yank / upward thrust) — `path` was validated non-NONE further up this ladder.
+        EclipseWandItem.triggerWandAnim(player, stack, EclipseWandItem.useAnimFor(path));
         WandConfig.Xp xp = WandConfig.get().xp();
         awardXp(player, stack, cost * xp.perCostPoint());
         SkillsApi.addXp(player, "wand", cost * xp.skillXpPerCostPoint());

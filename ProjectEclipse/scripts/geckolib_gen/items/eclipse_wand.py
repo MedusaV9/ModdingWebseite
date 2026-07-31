@@ -11,12 +11,16 @@ AutoGlowingGeoLayer lights each variant's `_glowmask`:
     eclipse_wand_stern.png  Sternenfall — midnight blue, constellation disc + star points
 
 Every variant paints ALL bones (ornaments of foreign paths are hidden by the renderer,
-never unpainted). Also emits the flat 16x16 `wizard_catalyst.png` (Sun-Core Catalyst —
-item REGISTERED by the W4-WIZARD sibling; the texture/model asset lives with the wand
-recipe that consumes it).
+never unpainted).
+
+F-098 MD1 GUARD: the historical `paint_catalyst()` (flat 16x16 `wizard_catalyst.png`,
+Sun-Core Catalyst) is now OPT-IN via `--catalyst`. The committed texture has been
+replaced with newer final art (168/256 px differ from this generator's output) and the
+AGENTS.md law says pixel icons are FINAL art — a plain wand repaint must never clobber
+it again.
 
 Run from the ProjectEclipse root (deterministic — reruns are byte-identical):
-    python3 scripts/geckolib_gen/items/eclipse_wand.py
+    python3 scripts/geckolib_gen/items/eclipse_wand.py [--catalyst]
 """
 
 import sys
@@ -119,6 +123,26 @@ def ring_rim(glow_color, salt):
     return fn
 
 
+def ceremony_ring(inner, rim, salt):
+    """Annulus for the flat ceremony-ring plates (F-098 MD1): bright outer rim, fainter
+    inner band, TRANSPARENT centre — so the levelup/awaken crown reads as rings, not as
+    solid glowing squares. Painted on up+down (the plates flip during the orbit)."""
+
+    def fn(px):
+        if px.face not in ("up", "down"):
+            return None
+        cx, cy = (px.fw - 1) / 2.0, (px.fh - 1) / 2.0
+        half = max(px.fw, px.fh) / 2.0
+        d = max(abs(px.fx - cx), abs(px.fy - cy)) / half
+        if d < 0.45:
+            return None
+        if d >= 0.75:
+            return mix(rim, WHITE, 0.25 + 0.3 * px.noise(salt))
+        return mix(inner, rim, 0.5 + 0.3 * px.noise(salt + 1))
+
+    return fn
+
+
 def paint_variant(key):
     branch, core, halo, seam_glow = PALETTES[key]
     painter = GeoPainter(GEO, seed=SEED)
@@ -150,6 +174,16 @@ def paint_variant(key):
     painter.set_material("glow_stern_*", flame(mix(PALETTES["stern"][1], WHITE, 0.3), PALETTES["stern"][2], salt=37))
     painter.set_material("stern_disc", plate(mix(branch, PALETTES["stern"][2], 0.3), salt=39))
     painter.set_glow_painter("stern_disc", disc_constellation(PALETTES["stern"][3], salt=41))
+
+    # Ceremony crown (F-098 MD1): rest-hidden bones (the idle anim pins `cere_anchor`
+    # at scale 0, MD3 pattern) that only unfold during levelup/awaken — two annulus
+    # rings, a white-hot core and four orbit fragments, tinted toward the ACTIVE
+    # variant's palette so the ceremony wears the path's colors. These must always
+    # carry material: an unpainted cube would print "no material" and break the
+    # painter-determinism contract.
+    painter.set_material("glow_cere_ring_*", ceremony_ring(mix(core, WHITE, 0.3), mix(halo, WHITE, 0.2), salt=43))
+    painter.set_material("glow_cere_core", flame(mix(core, WHITE, 0.55), mix(halo, WHITE, 0.25), salt=45))
+    painter.set_material("glow_cere_frag_*", flame(mix(core, WHITE, 0.4), halo, salt=47))
 
     suffix = "" if key == "none" else f"_{key}"
     painter.paint(OUT_DIR / f"eclipse_wand{suffix}.png")
@@ -198,7 +232,10 @@ def paint_catalyst():
 def main():
     for key in ("none", "riss", "glut", "stern"):
         paint_variant(key)
-    paint_catalyst()
+    # See module docstring: the committed catalyst is replaced final art; repainting it
+    # is destructive and must be requested explicitly.
+    if "--catalyst" in sys.argv[1:]:
+        paint_catalyst()
 
 
 if __name__ == "__main__":

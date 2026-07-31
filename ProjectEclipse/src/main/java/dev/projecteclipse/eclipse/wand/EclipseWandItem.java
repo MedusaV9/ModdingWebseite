@@ -31,10 +31,11 @@ import software.bernie.geckolib.util.GeckoLibUtil;
  * Der Zauberstab — the mod's first GeckoLib <b>item</b> (IDEA-19 §1.1). Mirrors the frozen
  * P6 entity controller convention adapted for items: a {@code base} controller loops
  * {@code animation.eclipse_wand.idle}, an {@code action} controller holds the triggerable
- * one-shots ({@value #ANIM_USE}, {@value #ANIM_LEVELUP}, {@value #ANIM_AWAKEN},
- * {@value #ANIM_STALL}) fired server-side via {@link #triggerWandAnim} — GeckoLib syncs
- * those on its own channel because the constructor registers the item as a synced
- * animatable.
+ * one-shots ({@value #ANIM_USE} plus the per-path cast variants {@value #ANIM_USE_RISS} /
+ * {@value #ANIM_USE_GLUT} / {@value #ANIM_USE_STERN} — see {@link #useAnimFor},
+ * {@value #ANIM_LEVELUP}, {@value #ANIM_AWAKEN}, {@value #ANIM_STALL}) fired server-side
+ * via {@link #triggerWandAnim} — GeckoLib syncs those on its own channel because the
+ * constructor registers the item as a synced animatable.
  *
  * <p>Rendering registers through NeoForge's {@code IClientItemExtensions}
  * ({@code client/wand/WandClientExtensions}) returning a {@code GeoItemRenderer}; the item
@@ -56,6 +57,12 @@ public final class EclipseWandItem extends Item implements GeoItem {
     public static final String GEO_ID = "eclipse_wand";
 
     public static final String ANIM_USE = "use";
+    /** F-098 MD1: per-path cast one-shot — Riss-Zug (yank toward the caster, shard crown contracts then snaps). */
+    public static final String ANIM_USE_RISS = "use_riss";
+    /** F-098 MD1: per-path cast one-shot — Peitschhieb (whip strike, the flick travels segment by segment). */
+    public static final String ANIM_USE_GLUT = "use_glut";
+    /** F-098 MD1: per-path cast one-shot — Stich nach oben (upward thrust, disc spin-up, star points trail). */
+    public static final String ANIM_USE_STERN = "use_stern";
     public static final String ANIM_LEVELUP = "levelup";
     public static final String ANIM_AWAKEN = "awaken";
     public static final String ANIM_STALL = "stall";
@@ -82,10 +89,28 @@ public final class EclipseWandItem extends Item implements GeoItem {
         AnimationController<EclipseWandItem> action = new AnimationController<>(this,
                 EclipseGeoAnimations.CONTROLLER_ACTION, 0, state -> PlayState.STOP);
         action.triggerableAnim(ANIM_USE, EclipseGeoAnimations.once(GEO_ID, ANIM_USE));
+        action.triggerableAnim(ANIM_USE_RISS, EclipseGeoAnimations.once(GEO_ID, ANIM_USE_RISS));
+        action.triggerableAnim(ANIM_USE_GLUT, EclipseGeoAnimations.once(GEO_ID, ANIM_USE_GLUT));
+        action.triggerableAnim(ANIM_USE_STERN, EclipseGeoAnimations.once(GEO_ID, ANIM_USE_STERN));
         action.triggerableAnim(ANIM_LEVELUP, EclipseGeoAnimations.once(GEO_ID, ANIM_LEVELUP));
         action.triggerableAnim(ANIM_AWAKEN, EclipseGeoAnimations.once(GEO_ID, ANIM_AWAKEN));
         action.triggerableAnim(ANIM_STALL, EclipseGeoAnimations.once(GEO_ID, ANIM_STALL));
         controllers.add(action);
+    }
+
+    /**
+     * The cast one-shot for a path (F-098 MD1): each Pfad handles differently — GLUT
+     * whips, RISS yanks, STERN thrusts upward. {@link WandPath#NONE} keeps the legacy
+     * neutral {@value #ANIM_USE} flick as a safety net (a pathless wand cannot pass
+     * {@code WandPowers.handleCast} validation, so it only shows up via dev edits).
+     */
+    public static String useAnimFor(WandPath path) {
+        return switch (path) {
+            case RISS -> ANIM_USE_RISS;
+            case GLUT -> ANIM_USE_GLUT;
+            case STERN -> ANIM_USE_STERN;
+            case NONE -> ANIM_USE;
+        };
     }
 
     /** Server-side one-shot on the {@code action} controller, synced to tracking clients. */

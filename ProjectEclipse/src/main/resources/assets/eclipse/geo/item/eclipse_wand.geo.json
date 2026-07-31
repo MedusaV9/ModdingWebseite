@@ -6,9 +6,9 @@
         "identifier": "geometry.eclipse_wand",
         "texture_width": 64,
         "texture_height": 64,
-        "visible_bounds_width": 2.5,
-        "visible_bounds_height": 2.5,
-        "visible_bounds_offset": [0, 0.75, 0]
+        "visible_bounds_width": 3.5,
+        "visible_bounds_height": 3.0,
+        "visible_bounds_offset": [0, 1.0, 0]
       },
       "bones": [
         {
@@ -283,6 +283,85 @@
           "pivot": [0, 17, 0],
           "cubes": [
             {"origin": [1.5, 19, 1.5], "size": [1, 1, 1], "uv": [44, 36]}
+          ]
+        },
+
+        {
+          "name": "cere_anchor",
+          "parent": "tip",
+          "pivot": [0, 15.5, 0]
+        },
+        {
+          "name": "glow_cere_core",
+          "parent": "cere_anchor",
+          "pivot": [0, 15.5, 0],
+          "cubes": [
+            {"origin": [-1, 14.5, -1], "size": [2, 2, 2], "inflate": 0.45, "uv": [0, 52]}
+          ]
+        },
+        {
+          "name": "cere_ring_a",
+          "parent": "cere_anchor",
+          "pivot": [0, 16.5, 0],
+          "rotation": [14, 0, 0]
+        },
+        {
+          "name": "glow_cere_ring_a",
+          "parent": "cere_ring_a",
+          "pivot": [0, 16.5, 0],
+          "cubes": [
+            {"origin": [-3, 16.5, -3], "size": [6, 0, 6], "uv": [0, 44]}
+          ]
+        },
+        {
+          "name": "cere_ring_b",
+          "parent": "cere_anchor",
+          "pivot": [0, 18, 0],
+          "rotation": [-10, 0, 18]
+        },
+        {
+          "name": "glow_cere_ring_b",
+          "parent": "cere_ring_b",
+          "pivot": [0, 18, 0],
+          "cubes": [
+            {"origin": [-4, 18, -4], "size": [8, 0, 8], "uv": [24, 44]}
+          ]
+        },
+        {
+          "name": "cere_orbit",
+          "parent": "cere_anchor",
+          "pivot": [0, 16, 0]
+        },
+        {
+          "name": "glow_cere_frag_a",
+          "parent": "cere_orbit",
+          "pivot": [0, 16, 0],
+          "cubes": [
+            {"origin": [3, 15.5, -0.5], "size": [1, 1, 1], "uv": [8, 52]}
+          ]
+        },
+        {
+          "name": "glow_cere_frag_b",
+          "parent": "cere_orbit",
+          "pivot": [0, 17, 0],
+          "cubes": [
+            {"origin": [-4, 16.5, -0.5], "size": [1, 1, 1], "uv": [12, 52]}
+          ]
+        },
+        {
+          "name": "glow_cere_frag_c",
+          "parent": "cere_orbit",
+          "pivot": [0, 18, 0],
+          "cubes": [
+            {"origin": [-0.5, 17.5, 3], "size": [1, 1, 1], "uv": [16, 52]}
+          ]
+        },
+        {
+          "name": "glow_cere_frag_d",
+          "parent": "cere_orbit",
+          "pivot": [0, 19, 0],
+          "cubes": [
+            {"origin": [-0.5, 18.5, -4], "size": [1, 1, 1], "uv": [20, 52]}
           ]
         }
       ]
