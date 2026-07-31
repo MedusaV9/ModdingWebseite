@@ -9,6 +9,14 @@ extends Node3D
 ## Alle Anker kommen als CANVAS-PIXEL aus der View und werden 1:1 in
 ## Weltkoordinaten umgerechnet — Timing/Punkte bleiben komplett in
 ## dance_party.gd/DancePartyLogic.
+##
+## W15/GAMESQA2-Bühnenmitte (Audit: "Bühne mittig lange leer"): ein
+## PUBLIKUM aus acht Mini-Goobys hüpft phasenversetzt im Takt vor der
+## Bühne, eine Wimpel-Lichterkette in den Bahnfarben spannt sich durch die
+## leere Mitte und schwingt zum Beat, die Scheinwerferkegel PUMPEN im Takt
+## mit. Noten-Lesbarkeit: jede Note bekommt eine dunkle Rückscheibe und
+## einen dickeren Halo — sie hebt sich damit auch von hellen Kegeln ab.
+## Timing/Sim unverändert (zertifiziert).
 
 const Stage3D := preload("res://scripts/minigames/games/_3dc_stage/stage3d.gd")
 const Actor := preload("res://scripts/minigames/games/_3da_stage/gooby_actor.gd")
@@ -54,6 +62,15 @@ var _spot: OmniLight3D
 var _hit_ring_r := 0.5
 var _beat_idx := -1
 var _swing_side := 1.0
+## W15: Publikum (Körper/Köpfe/Ohren als je EIN MultiMesh) + Basisplätze.
+var _crowd_bodies: MultiMeshInstance3D
+var _crowd_heads: MultiMeshInstance3D
+var _crowd_ears: MultiMeshInstance3D
+var _crowd_spots: Array[Vector3] = []
+## W15: Wimpel-Lichterkette durch die Bühnenmitte (Anker aus layout()).
+var _bunting: MultiMeshInstance3D
+var _bunting_y := 2.0
+var _bunting_half_w := 3.0
 
 
 func setup_stage() -> void:
@@ -334,6 +351,134 @@ func _build_gooby() -> void:
 	gooby.base_emotion = "happy"
 
 
+## W15: Mini-Gooby-Publikum als drei MultiMeshes (Körper, Köpfe, Ohren) —
+## 8 Fans in zwei Grüppchen links/rechts vor der Bühne, Plätze aus layout().
+func _build_crowd() -> void:
+	_crowd_bodies = MultiMeshInstance3D.new()
+	var body := SphereMesh.new()
+	body.radius = 0.24
+	body.height = 0.44
+	body.radial_segments = 10
+	body.rings = 5
+	var body_mat := Fx.flat(Color(0.2, 0.14, 0.32))
+	body_mat.vertex_color_use_as_albedo = true
+	body.material = body_mat
+	var bodies := MultiMesh.new()
+	bodies.transform_format = MultiMesh.TRANSFORM_3D
+	bodies.use_colors = true
+	bodies.mesh = body
+	bodies.instance_count = _crowd_spots.size()
+	_crowd_bodies.multimesh = bodies
+	_crowd_bodies.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(_crowd_bodies)
+	_crowd_heads = MultiMeshInstance3D.new()
+	var head := SphereMesh.new()
+	head.radius = 0.15
+	head.height = 0.3
+	head.radial_segments = 10
+	head.rings = 5
+	head.material = body.material
+	var heads := MultiMesh.new()
+	heads.transform_format = MultiMesh.TRANSFORM_3D
+	heads.use_colors = true
+	heads.mesh = head
+	heads.instance_count = _crowd_spots.size()
+	_crowd_heads.multimesh = heads
+	_crowd_heads.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(_crowd_heads)
+	_crowd_ears = MultiMeshInstance3D.new()
+	var ear := SphereMesh.new()
+	ear.radius = 0.05
+	ear.height = 0.26
+	ear.radial_segments = 6
+	ear.rings = 3
+	ear.material = body.material
+	var ears := MultiMesh.new()
+	ears.transform_format = MultiMesh.TRANSFORM_3D
+	ears.use_colors = true
+	ears.mesh = ear
+	ears.instance_count = _crowd_spots.size() * 2
+	_crowd_ears.multimesh = ears
+	_crowd_ears.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(_crowd_ears)
+	for i in _crowd_spots.size():
+		var tint := Color(0.24, 0.16, 0.38).lerp(LANE_COLORS[i % 3], 0.28)
+		bodies.set_instance_color(i, tint)
+		heads.set_instance_color(i, tint.lightened(0.1))
+		ears.set_instance_color(i * 2, tint.lightened(0.1))
+		ears.set_instance_color(i * 2 + 1, tint.lightened(0.1))
+	_pose_crowd(0.0)
+
+
+## Publikum posen: phasenversetzter Takt-Hüpfer je Fan (auch Grundstellung).
+func _pose_crowd(pulse: float) -> void:
+	if _crowd_bodies == null:
+		return
+	var bodies := _crowd_bodies.multimesh
+	var heads := _crowd_heads.multimesh
+	var ears := _crowd_ears.multimesh
+	for i in _crowd_spots.size():
+		var base := _crowd_spots[i]
+		var hop := maxf(0.0, sin(pulse * 6.2 + float(i) * 1.7)) * 0.14
+		var sway := sin(pulse * 3.1 + float(i)) * 0.06
+		var at := base + Vector3(sway * 0.4, hop, 0.0)
+		bodies.set_instance_transform(i, Transform3D(Basis.IDENTITY, at + Vector3(0.0, 0.2, 0.0)))
+		heads.set_instance_transform(
+			i, Transform3D(Basis(Vector3.BACK, sway), at + Vector3(0.0, 0.5, 0.0))
+		)
+		for side in 2:
+			var ear_x := (-0.07 if side == 0 else 0.07) + sway * 0.5
+			ears.set_instance_transform(
+				i * 2 + side,
+				Transform3D(
+					Basis(Vector3.BACK, sway * 2.0), at + Vector3(ear_x, 0.68 + hop * 0.3, 0.0)
+				)
+			)
+
+
+## W15: Wimpel-Lichterkette in den Bahnfarben durch die leere Bühnenmitte.
+func _build_bunting() -> void:
+	_bunting = MultiMeshInstance3D.new()
+	var prisma := PrismMesh.new()
+	prisma.size = Vector3(0.26, 0.3, 0.03)
+	# Unbeleuchtet + Instanzfarbe: mit weißer Glow-Emission wuschen die
+	# Wimpel zu hellen Dreiecken aus — so bleiben sie satt bahnfarbig.
+	var mat := Fx.flat(Color(1.0, 1.0, 1.0))
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.vertex_color_use_as_albedo = true
+	prisma.material = mat
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.use_colors = true
+	mm.mesh = prisma
+	mm.instance_count = 13
+	for i in 13:
+		mm.set_instance_color(i, LANE_COLORS[i % 3])
+	_bunting.multimesh = mm
+	_bunting.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(_bunting)
+	_pose_bunting(0.0)
+
+
+## Wimpel posen: Kette hängt durch und schwingt sanft zum Beat.
+func _pose_bunting(pulse: float) -> void:
+	if _bunting == null:
+		return
+	var mm := _bunting.multimesh
+	var flip := Basis(Vector3.RIGHT, PI)
+	for i in mm.instance_count:
+		var f := (float(i) + 0.5) / float(mm.instance_count)
+		var x := lerpf(-_bunting_half_w, _bunting_half_w, f)
+		var sag := -sin(f * PI) * 0.5
+		var sway := sin(pulse * 3.1 + f * 4.0) * 0.06
+		mm.set_instance_transform(
+			i,
+			Transform3D(
+				flip.rotated(Vector3.BACK, sway * 2.0), Vector3(x + sway, _bunting_y + sag, -2.4)
+			)
+		)
+
+
 ## Kamera frontal auf die Notenebene; Anker (Canvas-Pixel) → Welt.
 func frame(vp: Vector2) -> void:
 	_vp = vp
@@ -391,6 +536,29 @@ func layout(lane_xs: Array[float], top_px: float, hit_px: float, span_px: float)
 	_speakers[1].position = Vector3(speaker_x, floor_y, -0.9)
 	_eq.position = Vector3(_wx(lane_xs[1]), floor_y + 0.2, -4.6)
 	_layout_eq(0.0, 0)
+	# W15: Publikums-Plätze in zwei Grüppchen neben dem Star + Wimpel-Anker
+	# durch die leere Mitte (knapp unter der Spiegelkugel gespannt).
+	_crowd_spots.clear()
+	for i in 8:
+		var group := -1.0 if i < 4 else 1.0
+		var slot := float(i % 4)
+		_crowd_spots.append(
+			Vector3(
+				group * (1.35 + slot * 0.52 + fmod(slot * 0.37, 0.3)),
+				floor_y + (0.12 if int(slot) % 2 == 0 else 0.0),
+				1.7 - fmod(slot, 2.0) * 0.55
+			)
+		)
+	if _crowd_bodies == null:
+		_build_crowd()
+	else:
+		_pose_crowd(0.0)
+	_bunting_y = _wy(_vp.y * 0.16)
+	_bunting_half_w = absf(_wx(lane_xs[2]) - _wx(lane_xs[1])) * 2.1
+	if _bunting == null:
+		_build_bunting()
+	else:
+		_pose_bunting(0.0)
 
 
 ## EQ-Balken neu posen (Grundstellung oder Takt-Tanz).
@@ -449,8 +617,13 @@ func sync(
 	for i in _cones.size():
 		var phase := pulse * 0.7 + float(i) * TAU / 3.0
 		_cones[i].rotation.z = sin(phase) * 0.42
+		# W15: die Kegel PUMPEN im Takt — die Lichtshow atmet mit der Musik.
+		var breathe := 1.0 + 0.22 * beat01
+		_cones[i].scale = Vector3(breathe, 1.0, breathe)
 	_dance(tier, beat, pulse, delta)
 	_pulse_stage(tier, beat01, pulse, encore)
+	_pose_crowd(pulse)
+	_pose_bunting(pulse)
 
 
 ## Gooby tanzt WIRKLICH: Grund-Bob jeden Frame, auf jeden Beat ein Hüpfer
@@ -542,8 +715,26 @@ func _spawn_note(lane: int) -> Node3D:
 	core.mesh = core_mesh
 	core.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	root.add_child(core)
-	# Bahnfarben-Halo, kamerazugewandt: Noten rasten sichtbar auf die Ringe.
-	var halo := Fx.ring(0.62, 0.045, LANE_COLORS[lane])
+	# W15 Lesbarkeit: dunkle Rückscheibe hinter der Note — sie hebt sich
+	# damit auch von hellen Scheinwerferkegeln und der Wimpelkette ab.
+	var backing := MeshInstance3D.new()
+	var disc := CylinderMesh.new()
+	disc.top_radius = 0.58
+	disc.bottom_radius = 0.58
+	disc.height = 0.02
+	disc.radial_segments = 20
+	var back_mat := Fx.flat(Color(0.05, 0.04, 0.12, 0.42))
+	back_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	back_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	disc.material = back_mat
+	backing.mesh = disc
+	backing.rotation_degrees.x = 90.0
+	backing.position.z = -0.12
+	backing.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.add_child(backing)
+	# Bahnfarben-Halo, kamerazugewandt: Noten rasten sichtbar auf die Ringe
+	# (W15: dicker — 0,045 war auf dem Handy fast unsichtbar).
+	var halo := Fx.ring(0.62, 0.07, LANE_COLORS[lane])
 	halo.rotation_degrees.x = 90.0
 	root.add_child(halo)
 	return root
