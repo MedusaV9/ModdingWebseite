@@ -46,7 +46,8 @@ func test_flow_finden_laden_registry() -> void:
 			},
 			{
 				"id": "config",
-				"version": "1.0.1",
+				# Muss NEUER sein als der eingebaute config-Pack (seit W16: 1.1.0).
+				"version": "1.1.1",
 				"type": "json",
 				"url": "file://" + ProjectSettings.globalize_path(config_path),
 				"sha256": UpdateService.sha256_of_file(config_path),
@@ -89,7 +90,7 @@ func test_flow_finden_laden_registry() -> void:
 	var outcome: Dictionary = await service.check_for_updates()
 	assert_eq(outcome["result"], UpdateService.Result.UPDATED, "Ergebnis: UPDATED")
 	assert_eq(
-		events, ["started", "dl:cosmetics@1.1.0", "dl:config@1.0.1"], "Signale in Prioritätsfolge"
+		events, ["started", "dl:cosmetics@1.1.0", "dl:config@1.1.1"], "Signale in Prioritätsfolge"
 	)
 	assert_true(
 		FileAccess.file_exists(BASE_E2E + "/packs/cosmetics-v%s.pck" % PACK_VERSION),

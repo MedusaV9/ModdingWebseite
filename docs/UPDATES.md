@@ -11,9 +11,10 @@ Offline-first: ohne Netz läuft das Spiel immer normal weiter.
 
 ## 1. Überblick & Architektur
 
-**Host der Updates ist DIESES private Repo** (`MedusaV9/CustomServerPrivate`;
-User-Entscheidung W15 — das früher geplante separate public Content-Repo
-`gooby-updates` entfällt endgültig). Weil das Repo privat ist, liefern
+**Host der Updates ist DIESES private Repo** (`MedusaV9/MinecraftBubbleShieldMod`;
+User-Entscheidung W15, seit dem W16-Umzug aus `MedusaV9/CustomServerPrivate` —
+das früher geplante separate public Content-Repo `gooby-updates` entfällt
+endgültig). Weil das Repo privat ist, liefern
 tokenlose browser-download-URLs (`releases/download/…`) 404 — der Client lädt
 deshalb über die **GitHub-Release-API** mit einem Zugangsschlüssel
 (fine-grained PAT, → §6a).
@@ -106,7 +107,7 @@ Eine feste URL liefert den kompletten Update-Stand (Release-Asset am Tag
 dieses Repos:
 
 ```
-https://api.github.com/repos/MedusaV9/CustomServerPrivate/releases/tags/updates
+https://api.github.com/repos/MedusaV9/MinecraftBubbleShieldMod/releases/tags/updates
 ```
 
 Der Client holt darüber die Assets-Liste des Releases, lädt daraus das
@@ -452,7 +453,7 @@ Server-Betreiber:
 1. **PAT erzeugen:** GitHub → Settings → Developer settings →
    Personal access tokens → **Fine-grained tokens** → „Generate new token“.
    - *Repository access:* **Only select repositories** →
-     `MedusaV9/CustomServerPrivate` (NUR dieses Repo!).
+     `MedusaV9/MinecraftBubbleShieldMod` (NUR dieses Repo!).
    - *Permissions:* **Contents: Read-only** — sonst NICHTS. (Der Token kann
      damit Releases/Code dieses Repos lesen, mehr nicht.)
    - Ablaufdatum nach Geschmack (GitHub erzwingt eines; rechtzeitig neu
@@ -470,6 +471,57 @@ Server-Betreiber:
    (revoke), neuen erzeugen, neu verteilen. Clients ohne gültigen Token
    sehen im Panel „Updates brauchen einen Zugangsschlüssel — Einstellungen →
    Updates“; das Spiel läuft normal weiter (offline-first).
+
+> **Repo-Umzug (W16): Neuer Zugangsschlüssel nötig!**
+>
+> GOOBY ist in ein neues Repo umgezogen (`MedusaV9/MinecraftBubbleShieldMod`).
+> Der alte Zugangsschlüssel war NUR für das alte Repo freigeschaltet — für Updates
+> aus dem neuen Repo funktioniert er nicht. Das musst du als Betreiber einmal tun:
+>
+> 1. **Neuen Schlüssel erzeugen:** GitHub → Settings → Developer settings →
+>    Personal access tokens → Fine-grained tokens → „Generate new token“.
+>    Bei *Repository access* **Only select repositories** →
+>    `MedusaV9/MinecraftBubbleShieldMod` auswählen (NUR dieses Repo!), bei
+>    *Permissions* **Contents: Read-only** — sonst nichts.
+> 2. **An alle Freunde verschicken** (per DM o. Ä., Form `github_pat_…`). Jeder
+>    trägt den neuen Schlüssel in der App unter **Einstellungen → Updates →
+>    „GitHub-Token (für App-Updates)“** ein — einfach den alten überschreiben.
+> 3. **Alten Schlüssel widerrufen:** GitHub → Fine-grained tokens → alten Token
+>    „Revoke“. (Erst NACHDEM alle den neuen eingetragen haben.)
+>
+> Solange jemand noch den alten Schlüssel drin hat, sieht er beim Suchen nur den
+> Hinweis „Zugangsschlüssel abgelehnt“ — das Spiel läuft ganz normal weiter, es
+> kommen nur keine Updates an, bis der neue Schlüssel eingetragen ist.
+
+**Betreiber-Hinweis für Bestandsclients (wichtig, weil der Umzug KEIN
+GitHub-Rename war — alte URLs leiten NICHT um):** Bereits verteilte IPAs haben
+die ALTE `manifest_url` eingebaut (und ggf. als `user://packs/config.json`
+installiert). Zwei Wege:
+
+- **Weg A (einfach, empfohlen bei wenigen Freunden):** neue IPA bauen/verteilen
+  (enthält das neue `config.json`) + neuen Token eintragen lassen. Fertig.
+- **Weg B (ohne neue IPA, „Brücken-Release“):** solange das alte Repo noch
+  existiert, dort EINMAL ein letztes config-Pack-Update veröffentlichen, dessen
+  `config.json` die NEUE `manifest_url` trägt (config-Pack-Version bumpen!).
+  Reihenfolge pro Spieler: erst mit dem ALTEN Token „Nach Updates suchen“ (holt
+  die Brücken-Config, wirkt sofort), DANN den NEUEN Token eintragen. Achtung:
+  das optionale `github_token`-Feld im config-Pack hilft hier NICHT automatisch,
+  weil User-Settings in der Token-Kette immer gewinnen (`update_service.gd`,
+  Token-Kette §5.1).
+- Wird das alte Repo einfach gelöscht/archiviert, sehen Alt-Clients nur den
+  harmlosen Fehler-Toast („Gerade nicht erreichbar“) — Spiel bleibt voll
+  spielbar; Migration dann nur noch über Weg A.
+
+Betreiber-Schritte für den Umzug in Kurzform:
+
+1. Neuen fine-grained PAT fürs neue Repo erzeugen und an alle verteilen (s. o.).
+2. Im neuen Repo den ersten Pack-Release fahren (`packs-v*`-Tag pushen oder
+   Actions → gooby-packs → Run workflow mit `publish=true`), damit der rollende
+   `updates`-Release samt Manifest dort existiert — vorher meldet jede
+   Update-Suche „Gerade nicht erreichbar“ (offline-first, nicht blockierend).
+3. Bestandsclients per Weg A (neue IPA) oder Weg B (Brücken-Release im alten
+   Repo, solange es existiert) migrieren.
+4. Alten PAT erst NACH der Migration widerrufen.
 
 Ohne Token funktioniert weiterhin alles außer der Update-Suche — die App
 bleibt voll spielbar (eingebauter Content-Stand).
