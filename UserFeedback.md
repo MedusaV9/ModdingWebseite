@@ -27,12 +27,25 @@ Diese Datei bleibt dein direkter Draht: einfach unten reinschreiben.)_
 
 _(Runden W14 UND W15 sind FERTIG — Details unten in „Erledigt". Aktueller Stand:)_
 
-- [~] **W16 läuft (1. August):** Umzug hierher abgeschlossen; große Analyse-Welle
-      (Ladebildschirme der alten Web-Version als Vorlage, UI-Rework-Bestandsaufnahme
-      über alle Screens, Update-Kanal aufs neue Repo umstellen) + danach die
-      Umsetzungs-Wellen: **UI-Rework** (Hintergrund darf ins Vollbild, Knöpfe/Inhalte
-      mehr zur Mitte, angenehm erreichbar), **Ladebildschirme im Stil der alten
-      Version**, Update-Repoint, und weiter Polish/Bugfixes in Dauerschleife.
+- [~] **W16 läuft (1. August):** Umzug hierher abgeschlossen. Die große
+      Analyse-Welle G1 ist FERTIG — 28 Scout-Berichte (alle UI-Bereiche, alte
+      Ladebildschirme als Nachbau-Spez, Update-Umstellung, Minispiele, Server,
+      Sound, Texte, Bootzeit, Quickwins, DLC, Trailer). Jetzt läuft die
+      Umsetzungs-Welle G2 mit 11 Agents:
+      **(a) Update-Kanal aufs neue Repo — FERTIG** (Client-Config + Pack 1.1.0 +
+      Doku samt Zugangsschlüssel-Migration; 19/19 Tests grün),
+      **(b) UI-Rework Fundament** — neue „Inhaltsspalte": Hintergrund bleibt
+      vollflächig, Knöpfe/Inhalte rücken gedeckelt in die Mitte; 7 Menü-Screens
+      + Einstellungen werden umgestellt, mit neuer automatischer Zentrier-Prüfung,
+      **(c) Ladebildschirm im Alt-Look** — die Szenenwechsel-Karte wird 1:1 nach
+      der alten Web-Version nachgebaut (Cover-Zone, hüpfender Gooby-Sticker,
+      Teal-Balken mit „Lädt… NN%", rotierende Tipps, Blätter-Vorhang),
+      **(d) Arcade-Schönheitsfehler** — 5 Ranch-Wettbewerbe erscheinen als
+      „?"-Platzhalter-Kacheln im Arcade-Grid (Fix läuft),
+      **(e) 4 Minispiel-Polituren** — starHopper, trampoline, hideSeek, cityDrive
+      nach Scout-Befund aufs Niveau der besten Spiele.
+      Danach: Welle G3 (Grid-Screens, Blüten-Wipe, carrotGuard + Ranch-Arena,
+      Sound-Fixpakete, Text-Fixes) — Loop läuft weiter.
 
 - [~] **DLC-Umsetzung „Goo und Bye" + „McGooby"** — Design-Docs komplett, DLC-Hub zeigt
       beide als „BALD"; nächster Schritt ist Welle A des Goo-und-Bye-Fundaments
