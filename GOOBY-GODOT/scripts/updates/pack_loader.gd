@@ -115,6 +115,20 @@ func mark_boot_successful() -> void:
 	UpdatesManifest.write_installed(installed_path(), installed)
 
 
+## W13C Soft-Restart (Doc B §2.4 / docs/UPDATES.md §5.5): user://-Packs neu
+## mounten + Erfolgs-Watch neu armieren. Läuft BEWUSST durch den normalen
+## Boot-Pfad inklusive Guard (attempts += 1): crasht die App mitten im
+## Soft-Restart, greift beim nächsten Start dieselbe 2-Crash-Regel wie bei
+## einem echten Boot — kein Sonderweg am Guard vorbei. Die erste danach
+## abgeschlossene Router-Reise (bzw. der Fallback-Timer) nullt den Zähler
+## wieder über mark_boot_successful().
+func remount_for_soft_restart() -> Dictionary:
+	var report := load_packs_at_boot()
+	if is_inside_tree():
+		_arm_boot_success_watch()
+	return report
+
+
 ## „Erneut versuchen“-Banner nach Safe-Mode: alles wieder aktivieren + Guard nullen.
 func reenable_all_packs() -> void:
 	var installed := UpdatesManifest.read_installed(installed_path())

@@ -272,6 +272,37 @@ Assets gilt ehrlich: Godots Ressourcen-Cache tauscht bereits geladene Ressourcen
 nicht aus — nur ein echter App-Neustart ist 100 % garantiert. Das Panel sagt
 deshalb „Update geladen — Neustart lädt Inhalte“. Kein `get_tree().quit()`-Zwang.
 
+**„Jetzt neu laden“ (W13C, B §2.4):** Nach einem installierten `.pck`-Update
+bietet die Updates-Sektion der Einstellungen zusätzlich den Knopf
+**„Jetzt neu laden“** an (`scripts/updates/settings_update_glue.gd`; nur bei
+echten PCK-Updates — ein reines `config`-Update wirkt sofort und braucht ihn
+nicht). Bestätigungs-Dialog („Dauert nur einen Hoppler!“), dann fährt
+`scripts/updates/soft_restart.gd` die feste Reihenfolge:
+
+1. **Gate:** Besuch, Brettspiel-Partie, Minigame oder laufende Router-Reise
+   aktiv → verweigert (Toast), nichts wird angefasst.
+2. Save flushen (`GameState.save_now`), Netz sauber trennen
+   (`Net.disconnect_now`), Musik ausblenden (`Music.stop_music` + Fade
+   abwarten).
+3. `PackLoader.remount_for_soft_restart()` — mountet die `user://`-Packs neu
+   und zählt BEWUSST als Boot-Versuch: die 2-Crash-Regel (§5.3) bleibt auch
+   für Soft-Restarts scharf, der Erfolgs-Watch (erste Router-Reise /
+   Fallback-Timer) nullt den Zähler wieder.
+4. `ContentRegistry.reload()` → `SceneRouter.clear_history()` →
+   `get_tree().reload_current_scene()` — die Boot-Szene (`main.tscn`)
+   instanziert `HomeEntry` frisch, Routen/Mount-Point/HUD entstehen neu.
+   Ein nacktes `reload_current_scene()` OHNE die Schritte 3–4 davor reicht
+   ausdrücklich NICHT (die Pack-Mounts würden nicht neu greifen).
+
+**Entschieden gegen einen echten Prozess-Neustart als Fallback:**
+`OS.set_restart_on_exit()` ist Desktop-only (auf iOS nicht implementiert),
+und ein programmatisches `quit()` gilt auf iOS als Crash (Apple-HIG).
+Dazu die Boot-Guard-Falle: ein `quit()` NACH dem Remount (attempts wurde
+gerade auf ≥ 1 gezählt, §5.3) ließe den nächsten echten Start als „Versuch 2“
+erscheinen — der Guard würde das frisch installierte Pack fälschlich
+deaktivieren. Ersetzte Assets bleiben daher ehrlich „wirksam ab echtem
+Neustart“ (User beendet die App selbst), genau wie oben beschrieben.
+
 ## 6. Native-Gate, IPA-Releases & CI
 
 ### IPA vs. Pack — Entscheidungsbaum
