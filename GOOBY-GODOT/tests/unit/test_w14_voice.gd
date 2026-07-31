@@ -363,6 +363,18 @@ func _fresh_gs() -> Node:
 	return gs
 
 
+## Seit AcBubble kompiliert, geht zeige_linie den ECHTEN Anzeige-Pfad
+## (AcBubble.show_bubble am ui_layer) statt über den runner._say-Fallback
+## (RoomStub.lines). Die Tests prüfen deshalb die neueste AcBubble am
+## Layer (Muster test_w13_gooby_suche._bubble_von).
+func _neuste_bubble(room: RoomStub) -> AcBubble:
+	var letzte: AcBubble = null
+	for kind: Node in room.layer.get_children():
+		if kind is AcBubble:
+			letzte = kind
+	return letzte
+
+
 func test_gespraech_chips_ende_zu_ende() -> void:
 	var gs := _fresh_gs()
 	var room := RoomStub.new()
@@ -386,11 +398,21 @@ func test_gespraech_chips_ende_zu_ende() -> void:
 	var chip: Button = row.get_child(0)
 	assert_eq(chip.text, I18nService.t("gespraech.eingeschnappt.entschuldigen.label"), "Chip-Label")
 	var wert0 := seele.wert()
-	var lines0 := room.lines.size()
 	chip.pressed.emit()
 	await wait_frames(2)
 	assert_true(seele.wert() > wert0, "Antwort stupst die Laune (+3 entschuldigen)")
-	assert_true(room.lines.size() > lines0, "Follow-up-Line wird gesprochen")
+	var bubble := _neuste_bubble(room)
+	assert_true(bubble != null, "Follow-up-Line wird gesprochen (AcBubble am Layer)")
+	assert_true(
+		(
+			[
+				I18nService.t("gespraech.eingeschnappt.entschuldigen.f1"),
+				I18nService.t("gespraech.eingeschnappt.entschuldigen.f2"),
+			]
+			. has(bubble.current_line())
+		),
+		"Follow-up ist eine der zwei entschuldigen-Varianten (%s)" % bubble.current_line()
+	)
 	var eintrag: Dictionary = SoulState.slice_of(gs)["gespraeche"].get("eingeschnappt", {})
 	assert_eq(str(eintrag.get("antwort", "")), "entschuldigen", "Antwort landet im Soul-Slice")
 	assert_eq(int(eintrag.get("anzahl", 0)), 1, "Zähler startet bei 1")
@@ -414,10 +436,11 @@ func test_kommentar_api_spricht_und_merkt_sich_lines() -> void:
 	var seele: SeeleRunner = runner.get_node("SeeleRunner")
 	# 91 s nach dem Betreten-Moment ist die Seelen-Bremse wieder frei.
 	runner.now_ms_override = NOW_MS + 91_000
-	var lines0 := room.lines.size()
 	var key := seele.kommentar("w13.ball")
 	assert_true(key.begins_with("soul.linie.w13.ball."), "Ball-Kommentar kommt (%s)" % key)
-	assert_true(room.lines.size() > lines0, "Line wird gesprochen")
+	var bubble := _neuste_bubble(room)
+	assert_true(bubble != null, "Line wird gesprochen (AcBubble am Layer)")
+	assert_eq(bubble.current_line(), I18nService.t(key), "Bubble zeigt genau die gewählte Line")
 	var gedaechtnis: Dictionary = SoulState.slice_of(gs)["linien"]
 	assert_eq(gedaechtnis.get("w13.ball", []) as Array, [key], "Anti-Wiederholung gebucht")
 	# Direkt danach hält die 90-s-Bremse (kein Zutexten).
