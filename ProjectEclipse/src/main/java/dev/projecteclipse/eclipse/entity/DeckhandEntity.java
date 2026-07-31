@@ -116,7 +116,13 @@ public class DeckhandEntity extends EclipseGeoMob {
 
     private static final String ANIM_ROW = "row";
     private static final String ANIM_IDLE_SAG = "idle_sag";
-    private static final String ANIM_RISE = "rise";
+    /**
+     * Bench → standing one-shot. Public because the renderer has to know when it is on
+     * air: {@link #riseHostile} flips {@code HOSTILE} on the same tick it triggers this,
+     * and the renderer's "a risen deckhand carries no oar" rule would otherwise cut the
+     * clip's own oar dissolve away before its first frame.
+     */
+    public static final String ANIM_RISE = "rise";
     private static final String ANIM_TILT = "tilt";
 
     /** True while the crew has risen against the living (Ferryman P2). Synced for anims. */
@@ -179,6 +185,22 @@ public class DeckhandEntity extends EclipseGeoMob {
             return state.setAndContinue(ROW_ANIM);
         }
         return state.setAndContinue(state.isMoving() ? walkAnim() : idleAnim());
+    }
+
+    /**
+     * How long an un-animated bone takes to ease back to its rest pose (GeckoLib default
+     * 1 t = a one-frame snap). The {@code action} controller is built with
+     * {@code transitionLength = 0} in the frozen {@link EclipseGeoMob} base, so a
+     * one-shot cannot blend in — MB1 works with that instead of against it: {@code rise}
+     * deliberately animates only the oar's SCALE and lets the oar's rotation/position
+     * fall out of the {@code row} sweep through THIS ramp, which turns a ~24° one-frame
+     * flick of a full-size oar into a 3 t ease while the oar is already shrinking away.
+     * Every other bone is keyframed in both the outgoing and the incoming clip, so this
+     * ramp never applies to them.
+     */
+    @Override
+    public double getBoneResetTime() {
+        return 3.0D;
     }
 
     /** The sheet names the hostile stand-around loop {@code idle_sag}, not {@code idle}. */
@@ -403,16 +425,24 @@ public class DeckhandEntity extends EclipseGeoMob {
 
     /**
      * LIMBOFIX2 (user bug "die Wesen sind verbuggt"): the render-culling box must cover
-     * the OAR, which is part of this entity's own GeckoLib skeleton and reaches ~2.5
-     * blocks outboard of the 0.7-wide collision box ({@code oar_blade} pivot sits at
-     * {@code z = -40} model units = 2.5 blocks; {@code DeckhandRenderer.TIP_OUT_BLOCKS}
-     * = 2.53). With the vanilla box, panning the camera near a rower culled the WHOLE
-     * entity while its oar should still be on screen — rower + oar popped in and out at
-     * the view edge. Y is padded too for the cutscene tilt (oars shipped skyward).
+     * the OAR, which is part of this entity's own GeckoLib skeleton and reaches far
+     * outboard of the 0.7-wide collision box. With the vanilla box, panning the camera
+     * near a rower culled the WHOLE entity while its oar should still be on screen —
+     * rower + oar popped in and out at the view edge.
+     *
+     * <p>F-098/MB1 re-measured the SWEPT skeleton (every bone corner of every clip)
+     * instead of eyeballing a pivot: the old {@code 2.7} came from {@code oar_blade}'s
+     * PIVOT ({@code z = -40} = 2.5 blocks), but the blade CUBE runs out to
+     * {@code z = -52} and {@code row} feathers it further still, so the outermost swept
+     * corner sits 2.85 blocks off the collision box — 0.15 blocks OUTSIDE the old
+     * padding, i.e. the very tip kept popping even after LIMBOFIX2. Vertically the sweep
+     * needs 1.21 down (the {@code row} catch, blade under the hull) and 0.89 up (cutscene
+     * {@code tilt}, oars shipped skyward); the padding keeps headroom over both. Keep
+     * these numbers AHEAD of the animation, not behind it.</p>
      */
     @Override
     public AABB getBoundingBoxForCulling() {
-        return this.getBoundingBox().inflate(2.7D, 1.6D, 2.7D);
+        return this.getBoundingBox().inflate(3.0D, 1.8D, 3.0D);
     }
 
     @Override

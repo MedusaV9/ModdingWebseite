@@ -1,5 +1,7 @@
 package dev.projecteclipse.eclipse.client.entity;
 
+import javax.annotation.Nullable;
+
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 
@@ -21,6 +23,7 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 import software.bernie.geckolib.animation.AnimationController;
+import software.bernie.geckolib.animation.AnimationProcessor.QueuedAnimation;
 import software.bernie.geckolib.cache.object.BakedGeoModel;
 import software.bernie.geckolib.cache.object.GeoBone;
 
@@ -33,6 +36,11 @@ import software.bernie.geckolib.cache.object.GeoBone;
  * <ul>
  *   <li><b>Oar drop:</b> the {@code oar} bone chain is hidden while the deckhand is
  *       hostile (a risen fighter leaves its oar at the bench — v1 model behavior).</li>
+ *   <li><b>Face identity (MB1):</b> the cowl carries nine stacked emissive cards
+ *       ({@code glow_face_0..7} + {@code glow_face_wrath}); exactly ONE bench card is
+ *       shown per rower, picked from the synced bench index, so the eight crew members
+ *       are individually recognisable instead of eight identical shadows. The wrath
+ *       card lights on top of it while the crew is risen.</li>
  *   <li><b>Row-phase sync (LIMBOFIX2):</b> the {@code row} loop is authored at exactly
  *       {@code 3.0 s = 60 t}. The {@code base} controller is force-reset ONCE per rowing
  *       session, on the first {@code gameTime % 60 == 0} boundary after the rower enters
@@ -64,13 +72,45 @@ public class DeckhandRenderer extends EclipseGeoRenderer<DeckhandEntity> {
      * matched the ANIMATION phase but not the 4 t-lagged level-clock phase).
      */
     private static final float SPLASH_PHASE_TICKS = 1.0F;
-    /** Blade-tip offset at the plunge, model-space blocks: outboard (-Z) and along (+X). */
-    private static final double TIP_OUT_BLOCKS = 2.53D;
-    private static final double TIP_ALONG_BLOCKS = 0.41D;
+    /**
+     * Blade-tip offset at the plunge, in blocks, measured off the POSED skeleton at the
+     * exact splash frame (anim 2.85 s = tick 57, the frame {@link #SPLASH_PHASE_TICKS}
+     * selects): the outboard face centre of the {@code oar_blade} cube sits at model
+     * {@code (-9.07, -8.78, -46.20)} px = {@code 2.89} blocks outboard (model {@code -Z})
+     * and {@code -0.57} blocks along the hull (model {@code -X}) for a starboard rower;
+     * port mirrors both the sweep and this offset, hence the negation below. The older
+     * 2.53/0.41 pair described the blade PIVOT in its REST pose, not the tip at the
+     * catch, so the splash landed ~0.35 blocks inboard of where the blade actually
+     * entered — and it carried the along-hull term with the WRONG SIGN, putting it a
+     * further 1.1 blocks up-hull, i.e. under the next rower's bench.
+     */
+    private static final double TIP_OUT_BLOCKS = 2.89D;
+    private static final double TIP_ALONG_BLOCKS = -0.57D;
+
+    /** How many per-rower face cards the geo carries ({@code glow_face_0..7}). */
+    private static final int FACE_VARIANTS = 8;
+    /** Bone names, resolved once — {@code preRender} runs per rower per frame. */
+    private static final String[] FACE_BONES = new String[FACE_VARIANTS];
+    private static final String WRATH_BONE = "glow_face_wrath";
+
+    static {
+        for (int i = 0; i < FACE_VARIANTS; i++) {
+            FACE_BONES[i] = "glow_face_" + i;
+        }
+    }
+
+    /**
+     * Whether the rower currently being drawn still carries its oar — decided once in
+     * {@link #preRender} and read back in {@link #renderRecursively}, which runs for the
+     * same entity immediately afterwards (one renderer instance draws one entity at a
+     * time; this is the same contract the shared bone-visibility flags rely on).
+     */
+    private boolean oarShown;
 
     public DeckhandRenderer(EntityRendererProvider.Context context) {
         super(context, "deckhand", true);
         withUprightDeath(); // Scripted 30t crumple; no vanilla tip-over.
+        withGlowmask();     // The face cards are the mob's only emissive geometry.
         this.shadowRadius = 0.4F;
     }
 
@@ -84,12 +124,21 @@ public class DeckhandRenderer extends EclipseGeoRenderer<DeckhandEntity> {
             return;
         }
         // A risen deckhand drops its oar at the bench; it pops back when the crew calms.
-        boolean rowing = !entity.isHostile();
+        // MB1: the hostile flag flips on the SAME tick the rise one-shot is triggered
+        // (DeckhandEntity.riseHostile), so hiding on isHostile() alone cut the oar away
+        // on frame 1 of the rise and the whole hand-off read as a pop. The rise clip
+        // dissolves the oar itself (scale 1 -> 0.01 over 0.14–0.50 s), so the bone stays
+        // visible for as long as that one-shot runs and the hide only takes over once it
+        // is done — by then the oar is already scaled to nothing.
+        this.oarShown = !entity.isHostile() || isPlaying(entity, EclipseGeoAnimations.CONTROLLER_ACTION,
+                EclipseGeoAnimations.animId("deckhand", DeckhandEntity.ANIM_RISE));
+        final boolean showOar = this.oarShown;
         getGeoModel().getBone("oar").ifPresent(oar -> {
-            oar.setHidden(!rowing);
-            oar.setChildrenHidden(!rowing);
+            oar.setHidden(!showOar);
+            oar.setChildrenHidden(!showOar);
         });
-        if (!rowing || !entity.isAlive() || entity.isTilt()) {
+        applyFace(entity);
+        if (entity.isHostile() || !entity.isAlive() || entity.isTilt()) {
             // The row loop is not the active base animation (hostile walk/sag, death or
             // the cutscene tilt): drop the sync mark so the NEXT rowing session aligns
             // itself once at the following 60t boundary.
@@ -111,9 +160,7 @@ public class DeckhandRenderer extends EclipseGeoRenderer<DeckhandEntity> {
         if (entity.clientRowResetAt == Long.MIN_VALUE
                 && gameTime % DeckhandEntity.ROW_SYNC_PERIOD_TICKS == 0) {
             entity.clientRowResetAt = gameTime;
-            AnimationController<?> base = entity.getAnimatableInstanceCache()
-                    .getManagerForId(getInstanceId(entity)).getAnimationControllers()
-                    .get(EclipseGeoAnimations.CONTROLLER_BASE);
+            AnimationController<?> base = controller(entity, EclipseGeoAnimations.CONTROLLER_BASE);
             if (base != null) {
                 base.forceAnimationReset();
             }
@@ -122,6 +169,62 @@ public class DeckhandRenderer extends EclipseGeoRenderer<DeckhandEntity> {
         if (entity.clientRowResetAt != Long.MIN_VALUE) {
             spawnCatchSplash(entity, gameTime, partialTick);
         }
+    }
+
+    /** This rower's own controller instance ({@code null} before the first tick). */
+    @Nullable
+    private AnimationController<?> controller(DeckhandEntity entity, String name) {
+        return entity.getAnimatableInstanceCache().getManagerForId(getInstanceId(entity))
+                .getAnimationControllers().get(name);
+    }
+
+    /**
+     * Whether {@code animId} is the clip currently on {@code controllerName} and has not
+     * run out yet. {@code hasAnimationFinished()} only reports the STOPPED state, which a
+     * play-once clip reaches exactly on its last frame — so this stays true for the whole
+     * one-shot and goes false the frame after it ends.
+     */
+    private boolean isPlaying(DeckhandEntity entity, String controllerName, String animId) {
+        AnimationController<?> controller = controller(entity, controllerName);
+        if (controller == null || controller.hasAnimationFinished()) {
+            return false;
+        }
+        QueuedAnimation current = controller.getCurrentAnimation();
+        return current != null && animId.equals(current.animation().name());
+    }
+
+    /**
+     * Shows this rower's own soul-light and hides the other seven (MB1). The nine cards
+     * are stacked on one spot in the cowl, so exactly one bench card may be visible at a
+     * time; the wrath brand layers 0.2 px in front of it while the crew is risen.
+     *
+     * <p>The baked model — and therefore the bone visibility flags — is SHARED by all
+     * eight rowers, which is why this runs per entity per frame right before its draw
+     * (same contract as the oar toggle above and as {@code FerrymanGeoRenderer}). The
+     * flags survive into the {@code AutoGlowingGeoLayer} re-render pass, so the emissive
+     * copy shows the same single card.</p>
+     */
+    private void applyFace(DeckhandEntity entity) {
+        int variant = faceVariant(entity);
+        for (int i = 0; i < FACE_VARIANTS; i++) {
+            final boolean hidden = i != variant;
+            getGeoModel().getBone(FACE_BONES[i]).ifPresent(bone -> bone.setHidden(hidden));
+        }
+        getGeoModel().getBone(WRATH_BONE).ifPresent(bone -> bone.setHidden(!entity.isHostile()));
+    }
+
+    /**
+     * Which of the eight face cards this rower burns. Driven by the synced bench index so
+     * a given seat always shows the same face (it survives reloads — the index is NBT —
+     * and both sides agree). Pre-P6 benchless strays fall back to a stable UUID hash
+     * rather than to a shared default, so two strays still differ.
+     */
+    private static int faceVariant(DeckhandEntity entity) {
+        int bench = entity.benchIndex();
+        if (bench >= 0) {
+            return bench % FACE_VARIANTS;
+        }
+        return Math.floorMod(entity.getUUID().hashCode(), FACE_VARIANTS);
     }
 
     /** Client-only splash burst at the water surface under the blade tip, once per stroke. */
@@ -165,8 +268,11 @@ public class DeckhandRenderer extends EclipseGeoRenderer<DeckhandEntity> {
         // RESTORED after the draw — GeckoLib's GeoModel.handleAnimations early-returns
         // without re-ticking bones whenever the frame time hasn't advanced (paused game,
         // reRender layer passes), so an unrestored in-place negation flip-flopped the
-        // oar between mirrored/unmirrored poses on those frames.
-        if (!animatable.isHostile() && isPortSide(animatable)) {
+        // oar between mirrored/unmirrored poses on those frames. MB1: the gate is the
+        // "is the oar on screen" flag, not isHostile() — the rise one-shot keeps the oar
+        // for half a second after the flag flips, and dropping the mirror for those
+        // frames would snap a port oar across the hull right before it dissolves.
+        if (this.oarShown && isPortSide(animatable)) {
             if ("oar".equals(bone.getName())) {
                 float rotY = bone.getRotY();
                 bone.setRotY(-rotY);
