@@ -617,6 +617,19 @@ Reihenfolge B4 → B6 → B8, nach jedem Baustein `./gradlew compileJava`.
 > `shred_racers`; GLSL-Syntax via glslangValidator (Includes aufgelöst,
 > VeilCamera-UBO synthetisiert) OK.
 
+> ✅ **B6-NACHTRAG (F-101/T4, In-Game-Abnahme 31.07.):** Der S6-Blocker (7-Tick-Flash
+> vs. Sekunden-Frametimes) ist mit `/eclipsefx storm flashhold on [amount]` gelöst —
+> beide B6-Zellen auf Dauer-Hüllkurve, Adern-Seed zykliert alle 2 s. **Sichtbeleg
+> eingefahren:** Kugel-Sturm r=48, Kamera ~105 b: violette Emissions-Glimmzelle(n)
+> IN der Wandmasse mit klarer Filament-/Adern-Struktur (kein glatter Bulb), Muster
+> wechselt zwischen Frames (Seed-Zyklus), `flashhold off` ⇒ Dauerglimmen restlos weg
+> (Idle-Regel auch visuell bestätigt). **V6-Perf-Probe** (`/eclipsefx storm perfprobe
+> 60`, fester Kamerapunkt, dichtes Band im Bild, llvmpipe): Tier 2 avg 155,1 ms
+> (6,4 fps) / Tier 1 avg 95,2 ms (10,5 fps) / Tier 0 avg 72,0 ms (13,9 fps) —
+> erwartete Ordnung avg(T0)<avg(T1)<avg(T2) bestätigt, Tier-Gates (B9) skalieren die
+> Kosten real; Config-Hot-Reload greift ohne Neustart (Probe loggt den aktiven Tier).
+> Absolute V6-Schwellen bleiben ein Echte-GPU-Thema (kein Baseline-Build auf der VM).
+
 ---
 
 ## 7. Explizit verworfen (mit Begründung)
