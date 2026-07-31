@@ -20,11 +20,13 @@ func _baue_innenraum() -> void:
 
 ## W13B (Doc F §3.2): REHWEI führt neben den Lebensmitteln auch die
 ## Geschichten-Bücher — gleiche HaendlerSheet-UI, plus Bücher-Abschnitt
-## (gekaufte Bücher stehen ausgegraut „im Regal“).
+## (gekaufte Bücher stehen ausgegraut „im Regal“). W15/CROPS: dazu der
+## Saatgut-Abschnitt für die vier neuen Garten-Crops (Muster Bücher).
 func oeffne_laden() -> void:
 	var inhalt := HaendlerSheet.new()
 	inhalt.gs = game_state()
 	inhalt.waren = CitySortiment.laden(_sortiment_pfad())
+	inhalt.saatgut = CitySortiment.saatgut(_sortiment_pfad())
 	inhalt.buecher = CitySortiment.buecher(_sortiment_pfad())
 	zeige_sheet(I18nService.t("city.laden.titel"), inhalt)
 

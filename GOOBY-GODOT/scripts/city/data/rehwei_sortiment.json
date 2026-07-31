@@ -1,5 +1,5 @@
 {
-  "kommentar": "REHWEI-Lebensmittel-Sortiment (Doc E §2.3). IDs + Preise + Stat-Deltas 1:1 aus der Web-Referenz FOOD_TABLE (GOOBY/src/data/constants.js + foods.js V4-Bakery-Override für croissant; W13/FOOD: +cupcakePink/cinnamonRoll/ice-cream/sundae/pumpkin/cake/nutella). glb zeigt auf assets/city/essen/. gooberando=true markiert die Gerichte der GOOBERANDO-App (Doc E §5). Hinweis: energy-Deltas führt nur scripts/logic/food_catalog.gd (dieses Format kennt kein energie-Feld).",
+  "kommentar": "REHWEI-Lebensmittel-Sortiment (Doc E §2.3). IDs + Preise + Stat-Deltas 1:1 aus der Web-Referenz FOOD_TABLE (GOOBY/src/data/constants.js + foods.js V4-Bakery-Override für croissant; W13/FOOD: +cupcakePink/cinnamonRoll/ice-cream/sundae/pumpkin/cake/nutella). glb zeigt auf assets/city/essen/. gooberando=true markiert die Gerichte der GOOBERANDO-App (Doc E §5). Hinweis: energy-Deltas führt nur scripts/logic/food_catalog.gd (dieses Format kennt kein energie-Feld). W15/CROPS: Saatgut steht in der EIGENEN Liste `saatgut` weiter unten (s. kommentar_saatgut) — bewusst nicht in `waren`.",
   "waren": [
     {"id": "carrot", "name_de": "Möhre", "preis": 5, "glb": "carrot.glb", "hunger": 10, "spass": 2, "favorit": true},
     {"id": "apple", "name_de": "Apfel", "preis": 6, "glb": "apple.glb", "hunger": 10, "spass": 1},
@@ -32,6 +32,13 @@
     {"id": "pizza", "name_de": "Pizza", "preis": 30, "glb": "pizza.glb", "hunger": 45, "spass": 8, "hygiene": -2, "junk": true, "gooberando": true},
     {"id": "cake", "name_de": "Torte", "preis": 40, "glb": "cake.glb", "hunger": 30, "spass": 20, "junk": true},
     {"id": "nutella", "name_de": "Nutella-Glas", "preis": 45, "glb": "nutella.glb", "hunger": 18, "spass": 6, "hygiene": -4, "junk": true}
+  ],
+  "kommentar_saatgut": "W15/CROPS: Saatgut für die vier neuen Garten-Crops (radish/corn/eggplant/pumpkin — schließt das veggies-Album-Set). Preise = Web-Referenz CROP_TABLE.seedPrice VERBATIM (GOOBY/src/data/constants.js). Eigene Liste statt waren-Zeilen, weil der waren-Datenvertrag Lebensmittel verlangt (FoodCatalog-Deckung + glb + Preis-Sortierung, test_ef1_fuettern/test_w13_food_nougat). inventar=samen_* → HaendlerSheet.kaufe legt den Kauf in inventory.items, GardenState.pflanzen verbraucht ihn. Einbindung ins REHWEI-Sheet: Saatgut-Abschnitt in haendler_sheet.gd (Muster Bücher, W13B).",
+  "saatgut": [
+    {"id": "samen_radish", "name_de": "Radieschen-Samen", "preis": 5, "inventar": "samen_radish", "kategorie": "saatgut"},
+    {"id": "samen_corn", "name_de": "Mais-Samen", "preis": 20, "inventar": "samen_corn", "kategorie": "saatgut"},
+    {"id": "samen_eggplant", "name_de": "Auberginen-Samen", "preis": 25, "inventar": "samen_eggplant", "kategorie": "saatgut"},
+    {"id": "samen_pumpkin", "name_de": "Kürbis-Samen", "preis": 35, "inventar": "samen_pumpkin", "kategorie": "saatgut"}
   ],
   "kommentar_buecher": "W13B/GESCHICHTEN (Doc F §3.2): Bücher-Kategorie für die Geschichten-Stunde — Ids/Preise 1:1 aus content/books/data/books.json (Wache: tests/unit/test_w13b_geschichten.gd). inventar=BuchId → HaendlerSheet.kaufe legt den Kauf in inventory.items ab, StoryBooks.owned_book_ids liest ihn. Das Startbuch (buch_moehrenmond) ist gratis und steht bewusst NICHT im Laden. Einbindung ins REHWEI-Sheet: Request [GESCHICHTEN] in /tmp/gooby-godot/handoffs/W13-requests.md (CitySortiment.buecher + OrtRehwei.oeffne_laden).",
   "buecher": [

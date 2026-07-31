@@ -17,6 +17,10 @@ var waren: Array = []
 ## Buch-Id, Kauf landet via kaufe() in inventory.items; schon gekaufte
 ## Bücher stehen ausgegraut „im Regal“ (Bücher kauft man nur einmal).
 var buecher: Array = []
+## W15/CROPS: optionale Saatgut-Kategorie (REHWEI) — `inventar` = samen_*-Id,
+## Kauf landet via kaufe() in inventory.items (stapelbar, beliebig oft);
+## GardenState.pflanzen verbraucht die Samen im Garten.
+var saatgut: Array = []
 
 var _liste: VBoxContainer
 var _coins_label: Label
@@ -50,6 +54,14 @@ func aktualisiere() -> void:
 	_coins_label.text = I18nService.t("city.laden.coins").format({"coins": _coins()})
 	for ware: Dictionary in waren:
 		_liste.add_child(_zeile(ware))
+	if not saatgut.is_empty():
+		var saat_titel := Label.new()
+		saat_titel.name = "SaatgutTitel"
+		saat_titel.theme_type_variation = "HeadlineLabel"
+		saat_titel.text = I18nService.t("city.laden.saatgut_titel")
+		_liste.add_child(saat_titel)
+		for samen: Dictionary in saatgut:
+			_liste.add_child(_zeile(samen))
 	if buecher.is_empty():
 		return
 	var titel := Label.new()

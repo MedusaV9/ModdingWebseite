@@ -19,6 +19,12 @@ static func buecher(pfad: String) -> Array:
 	return _liste(pfad, "buecher")
 
 
+## W15/CROPS: Saatgut-Kategorie laden (REHWEI — `inventar` = samen_*-Id,
+## Kauf landet in inventory.items; GardenState.pflanzen verbraucht sie).
+static func saatgut(pfad: String) -> Array:
+	return _liste(pfad, "saatgut")
+
+
 static func _liste(pfad: String, feld: String) -> Array:
 	var raw := FileAccess.get_file_as_string(pfad)
 	var json := JSON.new()
