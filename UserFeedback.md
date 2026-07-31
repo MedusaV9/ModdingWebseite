@@ -54,7 +54,23 @@ _(gerade nichts offen — alle bisherigen Punkte stehen unten unter „Erledigt"
 
 ## 2. In Arbeit
 
-_(nichts offen — alles aus Abschnitt 1 wird in der laufenden Runde bearbeitet)_
+Runde W13 (30. Juli) — der Agent arbeitet gerade an:
+
+- [~] **Frische unsignierte .ipa per GitHub Actions** — Lauf startet mit diesem Push;
+      danach baut jeder weitere Push automatisch eine neue (Artefakt `GOOBY-godot-unsigned-ipa`)
+- [~] **Tote Drähte reparieren:** GvZ-Sticker + Goldi-Code einlösbar machen,
+      „Wo ist mein Gooby?"-Knopf, Interaktions-Anzeige (Auge-Button)
+- [~] **Ball werfen** mit Gooby (alter Web-Klassiker) zurückbringen
+- [~] **Sammlungssets** (Fische/Gemüse/Landmarks/Leckereien) wieder sichtbar im Album
+- [~] **Sichtbarer Regen & Schnee** in Haus, Garten und Stadt (bisher nur auf der Ranch)
+- [~] **Radio-Regeln:** Bordmusik nur pausierbar, Skip erst nach IKEA-Kauf
+- [~] **Ranch ab Level 15** (statt 20) kaufbar + Ranch-Random-Events
+- [~] **6 fehlende Speisen** in den Katalog (Eis, Kuchen, Kürbis, Sundae, Zimtschnecke,
+      Cupcake) + Nutella & Nougatschleuse
+- [~] Danach: Post/Mail-Multiplayer + InstantGooby, GOOBERANDO-Vollausbau, Reisepass 2.0
+      mit Passfoto, Raumstation GOOB-1, Sticker-Glitzer, Geschichten-Stunde-Ausbau,
+      Schüttel-Secret, City Drive als Arcade-Runde u. v. m.
+- [~] Zum Schluss: STATUS.md/Doku auf den ehrlichen Ist-Stand bringen, Eval-Welle + Polish
 
 ---
 
