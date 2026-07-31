@@ -11,13 +11,42 @@ export function housesData(ctx) {
   return ctx.store.collection('houses', { houses: {} }); // friendCode -> {blob, rev, sizeBytes, uploadedAt}
 }
 
+// Besuchs-Log (W13-C, fürs Panel): wer war bei wem, wie lange. endedAt=null
+// heißt "läuft gerade". Gedeckelt, neueste am Ende.
+const VISIT_LOG_CAP = 200;
+
+export function visitsLogData(ctx) {
+  return ctx.store.collection('visits', { log: [] }); // [{host, guest, startedAt, endedAt}]
+}
+
 export function register(ctx) {
   const { hub, cfg } = ctx;
   housesData(ctx);
+  visitsLogData(ctx);
   // Aktive Besuchs-Freigaben: roomId -> Set<friendCode> (Host + akzeptierte Gäste).
   const allowed = new Map();
   // Offene Besuchsanfragen: "<guestCode>-><hostCode>" -> at
   const pendingReqs = new Map();
+  // roomId -> Referenz auf den offenen Log-Eintrag (dasselbe Objekt wie im Store).
+  const openVisits = new Map();
+
+  function logVisitStart(roomId, host, guest) {
+    logVisitEnd(roomId); // Room-Wiederverwendung: alten offenen Eintrag schließen.
+    const data = visitsLogData(ctx);
+    const entry = { host, guest, startedAt: ctx.clock.now(), endedAt: null };
+    data.log.push(entry);
+    if (data.log.length > VISIT_LOG_CAP) data.log.splice(0, data.log.length - VISIT_LOG_CAP);
+    openVisits.set(roomId, entry);
+    ctx.store.markDirty('visits');
+  }
+
+  function logVisitEnd(roomId) {
+    const entry = openVisits.get(roomId);
+    if (!entry) return;
+    openVisits.delete(roomId);
+    entry.endedAt = ctx.clock.now();
+    ctx.store.markDirty('visits');
+  }
 
   // Nur wer freigeschaltet ist, darf in einen visit:-Room.
   ctx.rooms.registerJoinGuard('visit', (conn, roomId) => {
@@ -53,6 +82,7 @@ export function register(ctx) {
     pendingReqs.delete(key);
     const roomId = `visit:${conn.friendCode}`;
     allowed.set(roomId, new Set([conn.friendCode, guest]));
+    logVisitStart(roomId, conn.friendCode, guest);
     const rev = housesData(ctx).houses[conn.friendCode]?.rev ?? 0;
     const ready = { room: roomId, host: conn.friendCode, guest, rev };
     hub.send(conn, 'VISIT_READY', ready, { re: msg.seq });
@@ -82,12 +112,16 @@ export function register(ctx) {
       }
     }
     allowed.delete(roomId);
+    logVisitEnd(roomId);
   });
 
   // Host disconnectet → Besuch ist vorbei (Room räumt rooms.js via onDisconnect).
   hub.onDisconnect((conn) => {
     const roomId = `visit:${conn.friendCode}`;
-    if (allowed.has(roomId)) allowed.delete(roomId);
+    if (allowed.has(roomId)) {
+      allowed.delete(roomId);
+      logVisitEnd(roomId);
+    }
   });
 
   // ---- REST: Haus-Snapshot (Upload ≤ 256 KB, Abruf nur für Freunde/Host) ----

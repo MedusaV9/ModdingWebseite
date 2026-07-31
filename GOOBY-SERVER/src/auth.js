@@ -6,7 +6,8 @@ import crypto from 'node:crypto';
 const DEVICE_ID_RE = /^[A-Za-z0-9._-]{8,64}$/;
 const SECRET_RE = /^[0-9a-fA-F]{32,64}$/;
 // Base32 ohne I/O/0/1 (Doc C §3.1): 24 Buchstaben + 8 Ziffern = 32 Zeichen.
-const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+// Exportiert (W13-C): move.js würfelt Umzugs-Codes aus demselben Alphabet.
+export const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 export function hashSecret(secret) {
   return `sha256:${crypto.createHash('sha256').update(secret).digest('hex')}`;
