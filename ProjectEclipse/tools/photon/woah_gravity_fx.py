@@ -394,6 +394,32 @@ def build_invert_burst() -> FxBuilder:
                 [(0.0, 0.7), (0.7, 0.56), (1.0, 0.0)], [(0.0, 1.0, 1.0, 1.0)]))
        .with_lights(sky=15, block=15))
 
+    # (c2) t=12 — retro swirl (W13-C3 inversion beat): a mote ring orbiting BACKWARD
+    # around the heart while the BlockDisplay orbit grinds through its mass-inertia
+    # reversal — the particles tell the same direction-flip story on the same beat.
+    # Negative orbital velocity (rad-equivalent x0.01/t house rule), modest HDR 1.9.
+    (fx.particle_emitter("retro_swirl",
+            duration=48, looping=False, start_delay=constant(12),
+            start_lifetime=random_between(30, 44),
+            start_speed=constant(0),
+            start_size=nf3(random_between(0.10, 0.18)),
+            start_color=random_color(AMETHYST, JUNGLE_GLOW),
+            simulation_space="Local", max_particles=20)
+       .child_of(root)
+       .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(18))])
+       .with_shape(circle(radius=9.5, thickness=0.35))
+       .with_material(texture_material(CIRCLE, hdr=(1.9, 1.7, 2.0), blend=BLEND_ADDITIVE))
+       .with_renderer(render_mode="StretchedBillboard", velocity_scale=1.3,
+                      vertex_sorting="NONE", shade=False)
+       .with_cull_box((-12.0, -4.0, -12.0), (12.0, 8.0, 12.0))
+       .with_curves(
+            velocity_over_lifetime=dict(
+                orbital=nf3(constant(0), constant(-0.05), constant(0))),
+            color_over_lifetime=gradient(
+                [(0.0, 0.0), (0.2, 0.85), (0.8, 0.85), (1.0, 0.0)],
+                [(0.0, 1.0, 1.0, 1.0)]))
+       .with_lights(sky=15, block=14))
+
     # (d) t=20 — rising debris sheet: a wide mote curtain lifting off the bowl
     # floor while the inversion holds ("everything loose goes up").
     (fx.particle_emitter("debris_sheet",

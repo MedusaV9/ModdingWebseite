@@ -29,8 +29,13 @@ Executor contracts (must match ResonanceFieldFx / ResonancePhotonFxRows):
                           by distance (CUE_SUMMON_BEACON recipe). ≤10 particles.
   resonance_far_pulse     Loop, far-LOD. 8-s sky-dome pulse over the valley
                           (ring r 40, slow expansion + fade). ≤12 particles.
+  resonance_wave_ring     One-shot 90 t (W13-C3). The resonance-wave front: ground
+                          ring expanding r 0→36 over 80 t (0.45 blocks/t — EXACTLY
+                          the ResonanceWaveFx server front that makes the monoliths
+                          tremble) + glint fringe born ON the moving front
+                          (function shape, t-swept radius). HDR ≤ 1.45.
 
-Run:  python3 tools/photon/resonance_fx.py       # writes + validates all 8 assets
+Run:  python3 tools/photon/resonance_fx.py       # writes + validates all 9 assets
 (write() round-trip-validates; every .fx gets its .fxproj sibling — binary-diff law.)
 """
 import sys
@@ -524,6 +529,65 @@ def build_finale_column() -> FxBuilder:
     return fx
 
 
+def build_wave_ring() -> FxBuilder:
+    """W13-C3 resonance-wave front (90 t): one ground ring whose radius mirrors the
+    server tremor front EXACTLY (0.45 blocks/t → r 36 at t 80, the ResonanceWaveFx
+    contract) + a glint fringe born ON the moving front (function shape, t-swept
+    radius). Pure ambient garnish — HDR capped at 1.45 (stacking law)."""
+    fx = FxBuilder("resonance_wave_ring")
+    root = fx.empty("wave")
+
+    # (a) the front ring: diameter 2×(0→36) over the 80 t life — radius grows
+    # 0.45 blocks/t, in lockstep with the server front that triggers the tremors.
+    # NEAR-linear ease (LINT-LINEAR-CURVE): control points ride 0.035 off the chord —
+    # curve deviation from the exact server front stays ≤ 0.6 blocks of radius.
+    seg_front = (0.0, 0.0, 0.25, 0.30, 0.75, 0.70, 1.0, 1.0)
+    (fx.particle_emitter("front_ring",
+            duration=90, looping=False,
+            start_lifetime=constant(80),
+            start_speed=constant(0),
+            start_size=nf3(constant(2.0), constant(0.6), constant(2.0)),
+            start_color=color(DEEP_VIOLET),
+            simulation_space="Local", max_particles=2)
+       .child_of(root)
+       .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(1))])
+       .with_shape(dot(), position=(0.0, 0.3, 0.0))
+       .with_material(texture_material(RING_SOFT, hdr=(1.4, 1.3, 1.45), blend=BLEND_ADDITIVE))
+       .with_renderer(render_mode="Horizontal")
+       .with_cull_box((-38.0, -3.0, -38.0), (38.0, 4.0, 38.0))
+       .with_curves(
+            size_over_lifetime=curve(0.0, 36.0, [seg_front], "lifetime", "size"),
+            color_over_lifetime=gradient(
+                [(0.0, 0.55), (0.75, 0.40), (1.0, 0.0)], [(0.0, 1.0, 1.0, 1.0)]))
+       .with_lights(sky=15, block=13))
+
+    # (b) glint fringe riding the front: motes born AT radius t·36 (the emitter-t
+    # sweep matches the ring's linear growth), winking out within ~15 t so the wake
+    # stays clean. ~7 alive at a time.
+    (fx.particle_emitter("front_glints",
+            duration=80, looping=False,
+            start_lifetime=random_between(10, 18),
+            start_speed=constant(0),
+            start_size=nf3(random_between(0.10, 0.18)),
+            start_color=random_color(VIOLET, CYAN),
+            simulation_space="Local", max_particles=16)
+       .child_of(root)
+       .with_emission(rate=constant(0.5))
+       .with_shape(function_shape(
+            x="cos(randomA*2*PI)*t*36",
+            y="0.2+randomB*0.8",
+            z="sin(randomA*2*PI)*t*36"))
+       .with_material(texture_material(STAR_2X2, hdr=(1.45, 1.35, 1.45), blend=BLEND_ADDITIVE))
+       .with_cull_box((-38.0, -2.0, -38.0), (38.0, 3.0, 38.0))
+       .with_curves(
+            uv_animation=TWINKLE_FRAMES,
+            size_over_lifetime=curve(0.0, 1.0, [SEG_SMOOTH_DOWN]),
+            color_over_lifetime=gradient(
+                [(0.0, 0.0), (0.25, 0.8), (1.0, 0.0)], [(0.0, 1.0, 1.0, 1.0)]))
+       .with_lights(sky=15, block=13))
+    return fx
+
+
 BUILDERS = {
     "resonance_crystal_aura.fx": build_crystal_aura,
     "resonance_bahn.fx": build_bahn,
@@ -533,6 +597,7 @@ BUILDERS = {
     "resonance_finale_column.fx": build_finale_column,
     "resonance_far_shaft.fx": build_far_shaft,
     "resonance_far_pulse.fx": build_far_pulse,
+    "resonance_wave_ring.fx": build_wave_ring,
 }
 
 

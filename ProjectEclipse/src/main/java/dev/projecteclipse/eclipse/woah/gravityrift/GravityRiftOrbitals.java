@@ -44,6 +44,11 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
  *   <li><b>90°-window law</b> — the fastest bob/wobble periods and the pulse/invert
  *       envelope segments are chosen so no 40 t interpolation window spans more than
  *       ~90° of any sine (the VFXPOLISH-3 flattening threshold).</li>
+ *   <li><b>Reversal-ledger law (W13-C3)</b> — during an inversion the orbit direction
+ *       flips to retrograde with MASS INERTIA (light gravel ~25 t, heavy decks ~120 t)
+ *       and back; the angle is {@code omega × Θ(t)} where Θ subtracts the integrated
+ *       reversal debt of the live window plus a constant per completed window
+ *       (persisted {@code invertCount} ledger) — stateless, restart-safe, snap-free.</li>
  *   <li><b>Persistence + reconcile law</b> — displays persist with their chunk and
  *       carry {@value #TAG} + an identity tag ({@code eclipse_gravity_orbital_<index>});
  *       reconciliation adopts one per piece, discards duplicates/strays and tops up
@@ -79,6 +84,32 @@ public final class GravityRiftOrbitals {
     private static final int INVERT_FALL_TICKS = 80;
     /** Extra chaotic tumble multiplier at full inversion (unwinds during the glide). */
     private static final double INVERT_TUMBLE_BOOST = 4.0D;
+    /**
+     * W13-C3 inversion beat — the orbit visibly reverses direction with MASS INERTIA:
+     * the direction multiplier ramps +1 → −1 over {@code flipTicks} (smoothstep), runs
+     * fully retrograde, and ramps back so it is exactly +1 at
+     * {@value GravityRiftZone#INVERT_TOTAL_TICKS} t. {@code flipTicks} =
+     * {@value #FLIP_MIN_TICKS} + mass01 × {@value #FLIP_EXTRA_TICKS} — the lightest
+     * gravel whips around in ~25 t, the heavy moss decks grind through ~120 t.
+     * |direction| ≤ 1 keeps the 90°-window law untouched. Every completed window
+     * leaves a constant orbit debt of 2 × (300 − flipTicks) ticks; the debt ledger
+     * (persisted {@code invertCount} + {@code lastInvertGameTime}) keeps the angle an
+     * absolute function of game time across restarts and window overwrites.
+     */
+    private static final double FLIP_MIN_TICKS = 25.0D;
+    private static final double FLIP_EXTRA_TICKS = 95.0D;
+    /** mass01 size normalization band (∛volume of the smallest/largest piece). */
+    private static final double MASS_SIZE_MIN = 0.25D;
+    private static final double MASS_SIZE_MAX = 3.2D;
+    /**
+     * Boosted-tumble rate ceiling (rad/t): caps the chaotic spin at ~170° per 40 t
+     * interpolation window so quaternion slerp never aliases the short way round.
+     */
+    private static final double MAX_TUMBLE_RATE = Math.toRadians(170.0D) / UPDATE_CADENCE_TICKS;
+    /** ∫ invertEnvelope over one full window: fall/2 + hold + glide/2 = 40+120+50 t. */
+    private static final double BOOST_INTEGRAL_FULL = INVERT_FALL_TICKS * 0.5D
+            + (GravityRiftZone.INVERT_ACTIVE_TICKS - INVERT_FALL_TICKS)
+            + (GravityRiftZone.INVERT_TOTAL_TICKS - GravityRiftZone.INVERT_ACTIVE_TICKS) * 0.5D;
 
     /** Heart core scale breath: 1.4 ↔ 1.8 over 90 t (plan §4.5). */
     private static final double HEART_BREATH_PERIOD_TICKS = 90.0D;
@@ -357,17 +388,17 @@ public final class GravityRiftOrbitals {
         double pulse = piece.layerLift() <= 0.0D ? 0.0D
                 : pulseLift(gameTime, anchor) * piece.layerLift() * PULSE_LIFT_BLOCKS;
         double invert = 0.0D;
-        double tumbleBoost = 0.0D;
         long invertUntil = state.invertUntilGameTime();
         if (invertUntil != 0L && piece.fallDepth() > 0.0D) {
             long invertStart = invertUntil - GravityRiftZone.INVERT_TOTAL_TICKS;
-            double envelope = invertEnvelope(gameTime - invertStart);
-            invert = envelope * piece.fallDepth();
-            tumbleBoost = envelope * INVERT_TUMBLE_BOOST;
+            invert = invertEnvelope(gameTime - invertStart) * piece.fallDepth();
         }
 
         // --- orbit + wobble + bob ----------------------------------------------------
-        double angle = piece.phase0() + piece.omega() * gameTime;
+        // W13-C3: omega multiplies the effective orbit time Θ(t) — the reversal windows
+        // subtract their integrated debt, so the direction flips with mass inertia and
+        // the angle stays an absolute (snap-free) function of game time.
+        double angle = piece.phase0() + piece.omega() * orbitTimeAt(gameTime, state, piece);
         double radius = piece.baseRadius()
                 + Math.sin(tau * gameTime / piece.wobPeriod() + piece.wobPhase()) * piece.wobAmp();
         double bob = Math.sin(tau * gameTime / piece.bobPeriod() + piece.bobPhase())
@@ -377,14 +408,14 @@ public final class GravityRiftOrbitals {
                 + piece.baseY() + bob + pulse - invert;
         double pz = mount.z + Math.sin(angle) * radius;
 
-        // --- tumble (shared per composite; boosted + unwound through the inversion) --
+        // --- tumble (shared per composite; chaos-boosted through the inversion) ------
         Vector3f axis = new Vector3f(piece.axX(), piece.axY(), piece.axZ());
         if (axis.lengthSquared() < 1.0E-6F) {
             axis.set(0.0F, 1.0F, 0.0F);
         }
         axis.normalize();
         float spinAngle = (float) (piece.phase0() * 5.0D
-                + piece.spinRate() * gameTime * (1.0D + tumbleBoost));
+                + piece.spinRate() * gameTime + tumbleBoostAngle(gameTime, state, piece));
         Quaternionf rotation = new Quaternionf().rotationAxis(spinAngle, axis);
 
         // --- composite member offset (rotates with the shared tumble) ----------------
@@ -464,6 +495,134 @@ public final class GravityRiftOrbitals {
         double glide = (tau - GravityRiftZone.INVERT_ACTIVE_TICKS)
                 / (double) (GravityRiftZone.INVERT_TOTAL_TICKS - GravityRiftZone.INVERT_ACTIVE_TICKS);
         return GravityRiftZone.smoothstep(1.0D - glide);
+    }
+
+    // ------------------------------------------------------------------ reversal ledger (W13-C3)
+
+    /**
+     * Effective orbit time Θ(t) = t − 2 × (accumulated reversal integral): the orbit
+     * direction is +1 outside reversal windows, ramps to −1 with the piece's mass
+     * inertia inside them. All COMPLETED windows contribute the constant debt
+     * {@code INVERT_TOTAL − flipTicks} each (reconstructed from the persisted
+     * {@code invertCount}); the LAST window (persisted start time — it survives the
+     * {@code invertUntil} clear at the window end) contributes its live integral.
+     * Continuous at every boundary: window start (integral 0), window end (integral
+     * saturates), next trigger (the ledger absorbs exactly the saturated value).
+     */
+    private static double orbitTimeAt(long gameTime, GravityRiftState state,
+            GravityRiftZone.Piece piece) {
+        long lastStart = state.lastInvertGameTime();
+        if (lastStart == 0L) {
+            return gameTime;
+        }
+        double flip = flipTicksFor(piece);
+        double completedBefore = Math.max(0L, state.invertCount() - 1L);
+        double debt = completedBefore * (GravityRiftZone.INVERT_TOTAL_TICKS - flip)
+                + reversalIntegral(gameTime - lastStart, flip);
+        return gameTime - 2.0D * debt;
+    }
+
+    /**
+     * ∫₀^τ reversal(s) ds for one window, where reversal = (1 − direction)/2 ∈ [0,1]:
+     * smoothstep ramp up over {@code flip} t, full reverse until
+     * {@code INVERT_TOTAL − flip}, smoothstep ramp down ending exactly at
+     * {@value GravityRiftZone#INVERT_TOTAL_TICKS} t. Saturates at
+     * {@code INVERT_TOTAL − flip} — the window's constant debt contribution.
+     */
+    private static double reversalIntegral(long tau, double flip) {
+        if (tau <= 0L) {
+            return 0.0D;
+        }
+        if (tau >= GravityRiftZone.INVERT_TOTAL_TICKS) {
+            return GravityRiftZone.INVERT_TOTAL_TICKS - flip;
+        }
+        if (tau < flip) {
+            return flip * smoothstepIntegral(tau / flip);
+        }
+        double returnStart = GravityRiftZone.INVERT_TOTAL_TICKS - flip;
+        if (tau < returnStart) {
+            return flip * 0.5D + (tau - flip);
+        }
+        double w = tau - returnStart;
+        return flip * 0.5D + (returnStart - flip) + (w - flip * smoothstepIntegral(w / flip));
+    }
+
+    /**
+     * Mass-inertia flip duration of a piece (shared across composite members — a
+     * composite flips as ONE rigid body, so members must never drift apart): layer 0
+     * singles derive mass01 from their true ∛volume (the W13-B3 "size first" law);
+     * composite layers derive it from the layer band + the slot-shared phase hash
+     * (the only per-slot scalar every member carries identically).
+     */
+    private static double flipTicksFor(GravityRiftZone.Piece piece) {
+        double mass01;
+        switch (piece.layer()) {
+            case 0 -> {
+                double effSize = Math.cbrt((double) piece.sx() * piece.sy() * piece.sz());
+                mass01 = Math.max(0.0D, Math.min(1.0D,
+                        (effSize - MASS_SIZE_MIN) / (MASS_SIZE_MAX - MASS_SIZE_MIN)));
+            }
+            case 1 -> mass01 = 0.25D + 0.25D * fract(piece.phase0() / (Math.PI * 2.0D));
+            case 2 -> mass01 = 0.70D + 0.30D * fract(piece.phase0() / (Math.PI * 2.0D));
+            default -> mass01 = 1.0D; // heart pieces: omega 0, the value never shows
+        }
+        return FLIP_MIN_TICKS + mass01 * FLIP_EXTRA_TICKS;
+    }
+
+    /**
+     * Bounded chaotic-tumble extra angle: {@code spinRate × boostFactor × ∫envelope}
+     * — game-time-INDEPENDENT (the previous {@code rate × gameTime × (1+boost)} form
+     * scaled the chaos with the world's absolute age and slid thousands of radians
+     * between two pushes on old saves). {@code boostFactor} caps the boosted rate at
+     * {@value #MAX_TUMBLE_RATE} rad/t so no 40 t window sweeps past ~170°. Uses the
+     * same completed-window ledger as the orbit (the integral saturates at
+     * {@value #BOOST_INTEGRAL_FULL} t per window).
+     */
+    private static double tumbleBoostAngle(long gameTime, GravityRiftState state,
+            GravityRiftZone.Piece piece) {
+        long lastStart = state.lastInvertGameTime();
+        double rate = Math.abs(piece.spinRate());
+        if (lastStart == 0L || rate < 1.0E-9D) {
+            return 0.0D;
+        }
+        double boostFactor = Math.min(INVERT_TUMBLE_BOOST, MAX_TUMBLE_RATE / rate - 1.0D);
+        if (boostFactor <= 0.0D) {
+            return 0.0D;
+        }
+        double completedBefore = Math.max(0L, state.invertCount() - 1L);
+        double boostTicks = completedBefore * BOOST_INTEGRAL_FULL
+                + boostIntegral(gameTime - lastStart);
+        return piece.spinRate() * boostFactor * boostTicks;
+    }
+
+    /** ∫₀^τ invertEnvelope(s) ds — saturates at {@value #BOOST_INTEGRAL_FULL} t. */
+    private static double boostIntegral(long tau) {
+        if (tau <= 0L) {
+            return 0.0D;
+        }
+        if (tau >= GravityRiftZone.INVERT_TOTAL_TICKS) {
+            return BOOST_INTEGRAL_FULL;
+        }
+        if (tau < INVERT_FALL_TICKS) {
+            return INVERT_FALL_TICKS * smoothstepIntegral(tau / (double) INVERT_FALL_TICKS);
+        }
+        if (tau < GravityRiftZone.INVERT_ACTIVE_TICKS) {
+            return INVERT_FALL_TICKS * 0.5D + (tau - INVERT_FALL_TICKS);
+        }
+        double glideSpan = GravityRiftZone.INVERT_TOTAL_TICKS - GravityRiftZone.INVERT_ACTIVE_TICKS;
+        double w = tau - GravityRiftZone.INVERT_ACTIVE_TICKS;
+        return INVERT_FALL_TICKS * 0.5D + (GravityRiftZone.INVERT_ACTIVE_TICKS - INVERT_FALL_TICKS)
+                + (w - glideSpan * smoothstepIntegral(w / glideSpan));
+    }
+
+    /** ∫₀^x smoothstep(u) du = x³ − x⁴/2 (clamped domain). */
+    private static double smoothstepIntegral(double x) {
+        x = Math.max(0.0D, Math.min(1.0D, x));
+        return x * x * x - x * x * x * x * 0.5D;
+    }
+
+    private static double fract(double x) {
+        return x - Math.floor(x);
     }
 
     // ------------------------------------------------------------------ dev hook

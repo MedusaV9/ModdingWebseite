@@ -20,9 +20,11 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
 /**
  * WOAH-05 memory-flood timer + timeline (plan §3.5) — the woah moment. Every
  * ~1800t (±200, jittered per roll; 1200t base after the finale) the whole hollow
- * flips into its past for 160t: overlay pool grows in 4 radius waves, echoes
- * brighten, the grade goes golden (client latch off {@code CUE_ECHO_FLOOD}), the
- * music-box motif plays, then everything shrinks back under falling ash.
+ * flips into its past for 160t: the overlay pool grows as ONE continuous radial
+ * wave from the tree (W13-C3 flood beat — per-display interpolation delays, ~0.83
+ * blocks/t front), echoes brighten, the grade goes golden (client latch off
+ * {@code CUE_ECHO_FLOOD}), the music-box motif plays, then everything retreats
+ * outside-in back INTO the tree under falling ash.
  *
  * <p>The countdown only runs while a player is within {@value #GATE_DIST} blocks
  * of the tree — paused otherwise, missed floods are never "caught up". A running
@@ -170,8 +172,12 @@ public final class MemoryFloodService {
         if (t == 2) {
             EchoOverlayBuilder.brightnessStep(true); // hidden inside the growth motion
         }
-        // Shrink pushes mirror the grow at the tail (t140–t143 on the 160t base).
-        int shrinkStart = floodHoldTicks - WAVE_WINDOW;
+        // Shrink pushes mirror the grow at the tail — pulled forward by the radial
+        // travel time (W13-C3 flood beat) so the innermost delay + window still land
+        // inside the hold (t104–t107 on the 160t base; clamped to ≥ hold/2 for short
+        // dev floods, where the tail then finishes client-side after the timeline).
+        int shrinkStart = Math.max(floodHoldTicks / 2,
+                floodHoldTicks - WAVE_WINDOW - EchoOverlayBuilder.FLOOD_TRAVEL_TICKS);
         if (t >= shrinkStart && t < shrinkStart + EchoOverlayBuilder.WAVES) {
             EchoOverlayBuilder.pushWave(t - shrinkStart, false, WAVE_WINDOW, finaleDone);
         }

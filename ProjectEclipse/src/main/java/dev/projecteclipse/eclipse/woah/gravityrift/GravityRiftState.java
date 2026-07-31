@@ -35,6 +35,13 @@ public final class GravityRiftState extends SavedData {
     private long invertUntilGameTime;
     /** Game time the last inversion STARTED (cooldown base). */
     private long lastInvertGameTime;
+    /**
+     * Total inversions ever STARTED (includes the one at {@link #lastInvertGameTime}).
+     * The orbital choreographer reconstructs the accumulated orbit/tumble debt of all
+     * completed reversal windows from this counter — the pose stays an absolute
+     * function of game time across restarts AND across window overwrites (W13-C3).
+     */
+    private long invertCount;
     private boolean lootChestPlaced;
 
     public GravityRiftState() {}
@@ -47,6 +54,7 @@ public final class GravityRiftState extends SavedData {
         }
         state.invertUntilGameTime = tag.getLong("invertUntil");
         state.lastInvertGameTime = tag.getLong("lastInvert");
+        state.invertCount = tag.getLong("invertCount");
         state.lootChestPlaced = tag.getBoolean("lootChestPlaced");
         return state;
     }
@@ -59,6 +67,7 @@ public final class GravityRiftState extends SavedData {
         }
         tag.putLong("invertUntil", this.invertUntilGameTime);
         tag.putLong("lastInvert", this.lastInvertGameTime);
+        tag.putLong("invertCount", this.invertCount);
         tag.putBoolean("lootChestPlaced", this.lootChestPlaced);
         return tag;
     }
@@ -115,6 +124,22 @@ public final class GravityRiftState extends SavedData {
             this.lastInvertGameTime = gameTime;
             setDirty();
         }
+    }
+
+    public long invertCount() {
+        return this.invertCount;
+    }
+
+    /**
+     * Counts a NEW inversion start (call BEFORE overwriting {@link #lastInvertGameTime}).
+     * Legacy fixup: a pre-counter save that already ran inversions carries a non-zero
+     * {@code lastInvert} with count 0 — that evidence is worth one completed window, so
+     * the first new start jumps to 2 (the old window's debt is not dropped mid-flight).
+     */
+    public void bumpInvertCount() {
+        this.invertCount = this.invertCount == 0 && this.lastInvertGameTime != 0L
+                ? 2L : this.invertCount + 1L;
+        setDirty();
     }
 
     public boolean lootChestPlaced() {

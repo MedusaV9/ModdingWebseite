@@ -11,6 +11,7 @@ import dev.projecteclipse.eclipse.worldgen.stage.DisplayBrightnessFx;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Display;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.level.block.Blocks;
@@ -24,7 +25,15 @@ import org.joml.Vector3f;
  * that the memory flood grows and shrinks. Never terrain: ~620 displays, spawned
  * ONCE per window in 50/tick batches (the CreditsFormationAct law), parked at
  * {@value #PARK_SCALE} (never exactly 0 — interpolation health), pushed to target
- * scale in 4 radius waves per flood and back. Idle cost: zero pushes.
+ * scale per flood and back. Idle cost: zero pushes.
+ *
+ * <p><b>W13-C3 flood beat:</b> the grow/shrink is ONE continuous radial wave — each
+ * display's single push carries an interpolation DELAY derived from its exact XZ
+ * distance to the memory tree ({@code dist/distMax ×} {@value #FLOOD_TRAVEL_TICKS} t
+ * growing inside-out, mirrored shrinking outside-in, so the flood visibly pulls back
+ * INTO the tree). The front travels ~0.83 blocks/t as a smooth wavefront instead of
+ * 4 discrete bands, and it costs ZERO extra packets — the delay rides the same
+ * transform push the 4-band version already sent.</p>
  *
  * <p>Specs are deterministic from the site seed (same hash family as
  * {@link EchoGroveTerraformer}), so a discarded pool rebuilds bit-identically.
@@ -43,12 +52,16 @@ public final class EchoOverlayBuilder {
     private static final int WINDOW_CLOSE_TICKS = 2400; // > 2 minutes far → discard
     private static final float VIEW_RANGE = 2.0F;
     public static final int WAVES = 4;
+    /** W13-C3 flood beat: radial travel time of the grow/shrink front (~0.83 B/t). */
+    public static final int FLOOD_TRAVEL_TICKS = 36;
 
-    /** One parked overlay display blueprint. */
+    /** One parked overlay display blueprint ({@code dist} = exact XZ tree distance). */
     record OverlaySpec(double x, double y, double z, BlockState state, float targetScale,
-            int wave, boolean warmLight, boolean afterglowCrown, float yawDeg) {}
+            int wave, boolean warmLight, boolean afterglowCrown, float yawDeg, double dist) {}
 
     private static List<OverlaySpec> specs = List.of();
+    /** Largest {@code OverlaySpec.dist} of the set (the flood front's outer edge). */
+    private static double distMax = 1.0D;
     private static final List<Display.BlockDisplay> POOL = new ArrayList<>();
     private static int spawnCursor;
     private static boolean windowOpen;
@@ -190,8 +203,15 @@ public final class EchoOverlayBuilder {
      * One flood wave push (plan §5.2): every display of {@code wave} gets ONE
      * interpolated transform to target ({@code grow=true}) or back to its park
      * scale over {@code windowTicks}.
+     *
+     * <p>W13-C3 flood beat: the push carries a per-display interpolation DELAY —
+     * {@code dist/distMax ×} {@value #FLOOD_TRAVEL_TICKS} t growing (inside-out),
+     * mirrored shrinking (outside-in, the flood retreats INTO the tree) — minus the
+     * wave's own dispatch tick, so the four band pushes fuse into one seam-free
+     * continuous front. Zero extra packets: the delay rides the same push.</p>
      */
     public static void pushWave(int wave, boolean grow, int windowTicks, boolean finaleDone) {
+        double outerEdge = Math.max(1.0D, distMax);
         for (int i = 0; i < POOL.size() && i < specs.size(); i++) {
             OverlaySpec spec = specs.get(i);
             if (spec.wave() != wave) {
@@ -201,7 +221,11 @@ public final class EchoOverlayBuilder {
             if (display.isRemoved()) {
                 continue;
             }
-            display.setTransformationInterpolationDelay(0);
+            double fraction = grow ? spec.dist() / outerEdge : 1.0D - spec.dist() / outerEdge;
+            int delay = Mth.clamp(
+                    (int) Math.round(fraction * FLOOD_TRAVEL_TICKS) - wave,
+                    0, FLOOD_TRAVEL_TICKS);
+            display.setTransformationInterpolationDelay(delay);
             display.setTransformationInterpolationDuration(windowTicks);
             display.setTransformation(pose(spec,
                     grow ? spec.targetScale() : parkScale(spec, finaleDone)));
@@ -318,6 +342,15 @@ public final class EchoOverlayBuilder {
         return 3;
     }
 
+    /** Spec factory: derives the exact XZ tree distance (the flood-front delay read). */
+    private static OverlaySpec spec(BlockPos tree, double x, double y, double z,
+            BlockState state, float targetScale, int wave, boolean warmLight,
+            boolean afterglowCrown, float yawDeg) {
+        double dist = Math.hypot(x - (tree.getX() + 0.5D), z - (tree.getZ() + 0.5D));
+        return new OverlaySpec(x, y, z, state, targetScale, wave, warmLight,
+                afterglowCrown, yawDeg, dist);
+    }
+
     /**
      * Deterministic overlay set (plan §5.2 table): bleached-tree crowns (~330),
      * memory-tree crown (60 + 8 light fruit), flower carpet (~160), warm lights
@@ -356,7 +389,7 @@ public final class EchoOverlayBuilder {
                 int roll = Math.floorMod(h >> 6, 100);
                 BlockState state = roll < 60 ? paleLeaves : (roll < 85 ? birch : azalea);
                 float target = 1.6F + ((h >> 24) & 31) / 31.0F * 0.8F;
-                list.add(new OverlaySpec(
+                list.add(spec(tree,
                         groveCenter.getX() + offset[0] + 0.5D + Math.cos(angle) * radius,
                         y,
                         groveCenter.getZ() + offset[1] + 0.5D + Math.sin(angle) * radius,
@@ -375,7 +408,7 @@ public final class EchoOverlayBuilder {
                     + ((h >> 18) & 63) / 63.0D * 5.0D;
             boolean fruit = i >= 60;
             float target = fruit ? 0.5F : 1.8F + ((h >> 24) & 31) / 31.0F * 0.8F;
-            list.add(new OverlaySpec(
+            list.add(spec(tree,
                     tree.getX() + 0.5D + Math.cos(angle) * radius, y,
                     tree.getZ() + 0.5D + Math.sin(angle) * radius,
                     fruit ? froglight : (((h & 4) == 0) ? azalea : paleLeaves),
@@ -394,7 +427,7 @@ public final class EchoOverlayBuilder {
             double dx = Math.cos(angle) * radius;
             double dz = Math.sin(angle) * radius;
             int floorY = groveCenter.getY() - EchoGroveTerraformer.bowlDepth(radius);
-            list.add(new OverlaySpec(
+            list.add(spec(tree,
                     groveCenter.getX() + 0.5D + dx, floorY + 1.02D, groveCenter.getZ() + 0.5D + dz,
                     carpet[Math.floorMod(h >> 20, carpet.length)],
                     0.9F + ((h >> 24) & 31) / 31.0F * 0.3F,
@@ -414,7 +447,7 @@ public final class EchoOverlayBuilder {
                 int floorY = groveCenter.getY() - EchoGroveTerraformer.bowlDepth(
                         Math.hypot(spot[0], spot[1]));
                 double y = floorY + 1.6D + ((h >> 12) & 63) / 63.0D * 2.2D;
-                list.add(new OverlaySpec(
+                list.add(spec(tree,
                         groveCenter.getX() + spot[0] + 0.5D + ox, y,
                         groveCenter.getZ() + spot[1] + 0.5D + oz,
                         froglight, 0.3F, waveOf(spot[0], spot[1]), true, false, 0.0F));
@@ -427,7 +460,7 @@ public final class EchoOverlayBuilder {
         for (int i = 0; i < 12; i++) {
             int h = EchoGroveTerraformer.hash(seed, i, 25, 25);
             int floorY = groveCenter.getY() - EchoGroveTerraformer.bowlDepth(Math.hypot(20, -6));
-            list.add(new OverlaySpec(
+            list.add(spec(tree,
                     groveCenter.getX() + 20 + 0.2D + (i % 4) * 0.35D, floorY + 2.1D,
                     groveCenter.getZ() - 6 + 0.2D + (i / 4) * 0.35D,
                     (h & 1) == 0 ? Blocks.PEONY.defaultBlockState()
@@ -437,7 +470,7 @@ public final class EchoOverlayBuilder {
         for (int i = 0; i < 20; i++) {
             int h = EchoGroveTerraformer.hash(seed, i, 26, 26);
             int floorY = groveCenter.getY() - EchoGroveTerraformer.bowlDepth(Math.hypot(18, -10));
-            list.add(new OverlaySpec(
+            list.add(spec(tree,
                     groveCenter.getX() + 17.0D + ((h & 63) / 63.0D) * 4.0D,
                     floorY + 1.2D + (((h >> 6) & 63) / 63.0D) * 2.6D,
                     groveCenter.getZ() - 11.0D + (((h >> 12) & 63) / 63.0D) * 3.0D,
@@ -446,12 +479,18 @@ public final class EchoOverlayBuilder {
         }
         for (int i = 0; i < 2; i++) {
             int floorY = groveCenter.getY() - EchoGroveTerraformer.bowlDepth(Math.hypot(10, 16));
-            list.add(new OverlaySpec(
+            list.add(spec(tree,
                     groveCenter.getX() + 9.3D + i * 1.2D, floorY + 1.55D,
                     groveCenter.getZ() + 16.5D,
                     Blocks.WHITE_WOOL.defaultBlockState(), 0.4F,
                     waveOf(10, 16), false, false, 0.0F));
         }
+        // W13-C3: the flood front's outer edge — every delay normalizes against it.
+        double max = 1.0D;
+        for (OverlaySpec overlaySpec : list) {
+            max = Math.max(max, overlaySpec.dist());
+        }
+        distMax = max;
         return List.copyOf(list);
     }
 }

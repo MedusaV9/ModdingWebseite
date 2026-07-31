@@ -711,10 +711,13 @@ public final class ResonanceFieldBuilder {
         // Box centred on its offset so the lean rotates the slab about itself.
         Vector3f half = new Vector3f(spec.size()).mul(0.5F).rotate(spec.rotation());
         Vector3f translation = new Vector3f(spec.offset()).sub(half);
-        display.setTransformation(new Transformation(translation, spec.rotation(),
-                new Vector3f(spec.size()), new Quaternionf()));
+        Transformation transformation = new Transformation(translation, spec.rotation(),
+                new Vector3f(spec.size()), new Quaternionf());
+        display.setTransformation(transformation);
         DisplayBrightnessFx.set(display, spec.blockLight(), spec.skyLight(), VIEW_RANGE);
         ResonanceFieldService.markSessionDisplay(display.getUUID());
+        // W13-C3 tremor ledger: the wave choreographer restores THIS exact pose.
+        ResonanceWaveFx.registerBase(display.getUUID(), transformation);
         level.addFreshEntity(display);
     }
 
@@ -785,6 +788,7 @@ public final class ResonanceFieldBuilder {
                         || entity.getTags().contains(HITBOX_TAG)
                         || entity.getTags().contains(ALTAR_TAG));
         pieces.forEach(Entity::discard);
+        ResonanceWaveFx.clearBases(); // W13-C3: the respawn re-registers every pose
     }
 
     /** Silent write; SitePrep.finish() handles the budgeted relight/resend. */

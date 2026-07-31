@@ -96,15 +96,28 @@ public final class ChronoZoneState {
     }
 
     /**
-     * White-kick envelope for the grade (plan §4.2): 1 right when the discharge cue
-     * lands (the bolt has just struck), decaying to 0 over ~14 ticks.
+     * White-kick envelope for the grade (plan §4.2, W13-C3 flicker beat): the stasis
+     * BREAKS in three receding stutters instead of one monotone decay — spikes
+     * 1.00 @ t0 (8 t decay), 0.55 @ t14 (7 t) and 0.30 @ t26 (8 t). Three flashes in
+     * 34 ticks ≈ 1.8 Hz, safely under the 3 Hz photosensitivity line; same single
+     * {@code Flash} uniform, the feeder contract is unchanged.
      */
     public static float dischargeFlash() {
         int elapsed = DISCHARGE_WINDOW_TICKS - dischargeTicks;
-        if (dischargeTicks <= 0 || elapsed > 14) {
+        if (dischargeTicks <= 0 || elapsed > 34) {
             return 0.0F;
         }
-        return 1.0F - elapsed / 14.0F;
+        float flash = flashSpike(elapsed, 0, 8, 1.00F);
+        flash = Math.max(flash, flashSpike(elapsed, 14, 7, 0.55F));
+        return Math.max(flash, flashSpike(elapsed, 26, 8, 0.30F));
+    }
+
+    /** One stutter of the break flicker: {@code peak} at {@code start}, linear decay. */
+    private static float flashSpike(int elapsed, int start, int decayTicks, float peak) {
+        int local = elapsed - start;
+        return local < 0 || local > decayTicks
+                ? 0.0F
+                : peak * (1.0F - (float) local / decayTicks);
     }
 
     /** Cue hook ({@code ChronoStasisFxRows}): a ≥ 0 = a real time-jolt. */

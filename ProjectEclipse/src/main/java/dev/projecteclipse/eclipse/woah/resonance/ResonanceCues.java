@@ -35,6 +35,14 @@ public final class ResonanceCues {
      * {@code CUE_DAWN_TOLL} "pacing staged INSIDE the asset" principle).
      */
     public static final ResourceLocation CUE_RESONANCE_FINALE = FxCues.cue("woah_resonance_finale");
+    /**
+     * W13-C3 resonance-wave beat; pos = dais surface (altar.above bottom-center),
+     * {@code a} = {@code b} = 0. Range 96. Photon-only ambient garnish (no Quasar
+     * fallback — pre-row baseline was nothing, and the wave is never a gameplay
+     * telegraph): the ground ring expands in sync with the server front
+     * ({@code ResonanceWaveFx.FRONT_SPEED} 0.45 blocks/t → ring radius 36 over 80 t).
+     */
+    public static final ResourceLocation CUE_RESONANCE_WAVE = FxCues.cue("woah_resonance_wave");
 
     /**
      * Frozen FX anchor id of the tuning-fork altar center ({@code veilfx.FxAnchors}

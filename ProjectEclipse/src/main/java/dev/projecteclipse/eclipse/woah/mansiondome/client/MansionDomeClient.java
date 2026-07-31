@@ -20,6 +20,8 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
+import net.minecraft.world.entity.projectile.Projectile;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.api.distmarker.OnlyIn;
@@ -67,6 +69,18 @@ public final class MansionDomeClient {
     /** Photon/hum window band around the device (hysteresis so the edge never flickers). */
     private static final double LOOP_MATERIALIZE_DIST = 48.0D;
     private static final double LOOP_RELEASE_DIST = 56.0D;
+    /**
+     * W13-C3 touch-intersection pulse (census §1 dome_shell row): a hull contact by
+     * the local player (edge-triggered) or any projectile lights a local Fresnel ring
+     * in the {@code dome_shell} pass — three uniforms, never a second pass. Contact =
+     * |distance to centre − shellRadius| below the band; detection only runs with the
+     * camera within {@value #TOUCH_SCAN_DIST} blocks of the hull (cost gate).
+     */
+    private static final double TOUCH_BAND_PLAYER = 2.0D;
+    private static final double TOUCH_BAND_PROJECTILE = 1.5D;
+    private static final int TOUCH_COOLDOWN_TICKS = 15;
+    private static final float TOUCH_MAX_AGE_SECONDS = 1.2F;
+    private static final double TOUCH_SCAN_DIST = 96.0D;
     /** Shell hard-off beat: the server shatter takes over at t30 (§5). */
     public static final int COLLAPSE_SHATTER_TICK = MansionDomeService.T_SHATTER;
     /** Beam top-down collapse runs t30 → t50 (§4.5). */
@@ -90,6 +104,15 @@ public final class MansionDomeClient {
     private static boolean loopsOpen;
     @Nullable
     private static DomeDroneSound drone;
+
+    // ------------------------------------------------------------------ touch pulse state
+    /** World-space hull point of the live touch pulse. */
+    private static Vec3 touchPos = Vec3.ZERO;
+    /** Tick-clock value the pulse started at ({@code MIN_VALUE} = none live). */
+    private static int touchStartTick = Integer.MIN_VALUE;
+    private static float touchStrength;
+    /** Edge detector: the local player was in the contact band last tick. */
+    private static boolean playerWasTouching;
 
     static {
         // Feature-owned registration (StormVolumeFx static-init seam).
@@ -199,6 +222,64 @@ public final class MansionDomeClient {
 
         tickLoopWindow(camera, present);
         tickDrone(minecraft, camera, present);
+        tickTouchPulse(minecraft, camera, present);
+    }
+
+    /**
+     * W13-C3 touch detection (client-only, no protocol): the local player crossing into
+     * the hull contact band fires an edge-triggered pulse; any projectile inside the
+     * band re-arms it too. One live pulse at a time, re-fire gated by
+     * {@value #TOUCH_COOLDOWN_TICKS} ticks — the shader ring reads clean because pulses
+     * never stack. Detection is skipped entirely with the pass dark (inside/reducedFx)
+     * or the camera beyond {@value #TOUCH_SCAN_DIST} blocks of the hull.
+     */
+    private static void tickTouchPulse(Minecraft minecraft, Vec3 camera, boolean present) {
+        if (!present || inside || visibility <= 0.05F || EclipseClientConfig.reducedFx()
+                || Math.abs(camera.distanceTo(centre) - shellRadius) > TOUCH_SCAN_DIST) {
+            playerWasTouching = false;
+            return;
+        }
+        boolean cooledDown = touchStartTick == Integer.MIN_VALUE
+                || ticks - touchStartTick >= TOUCH_COOLDOWN_TICKS;
+
+        // (1) Local player: edge trigger on entering the band (standing on the hull must
+        // not machine-gun pulses — only the crossing fires).
+        boolean playerTouching = false;
+        if (minecraft.player != null) {
+            Vec3 feet = minecraft.player.position();
+            playerTouching =
+                    Math.abs(feet.distanceTo(centre) - shellRadius) < TOUCH_BAND_PLAYER;
+            if (playerTouching && !playerWasTouching && cooledDown) {
+                firePulse(feet, 1.0F);
+                cooledDown = false;
+            }
+        }
+        playerWasTouching = playerTouching;
+
+        // (2) Projectiles near the camera (arrows/tridents/thrown): first one in the band
+        // wins this cooldown window. Camera-local AABB keeps the scan cheap.
+        if (cooledDown) {
+            AABB scan = AABB.ofSize(camera, TOUCH_SCAN_DIST, TOUCH_SCAN_DIST, TOUCH_SCAN_DIST);
+            for (Projectile projectile
+                    : minecraft.level.getEntitiesOfClass(Projectile.class, scan)) {
+                Vec3 pos = projectile.position();
+                if (Math.abs(pos.distanceTo(centre) - shellRadius) < TOUCH_BAND_PROJECTILE) {
+                    firePulse(pos, 0.75F);
+                    break;
+                }
+            }
+        }
+    }
+
+    /** Arms the pulse at the hull point nearest {@code contact} (radial projection). */
+    private static void firePulse(Vec3 contact, float strength) {
+        Vec3 toContact = contact.subtract(centre);
+        double dist = toContact.length();
+        touchPos = dist > 1.0E-3D
+                ? centre.add(toContact.scale(shellRadius / dist))
+                : centre.add(0.0D, shellRadius, 0.0D);
+        touchStartTick = ticks;
+        touchStrength = strength;
     }
 
     /** The 48-block Photon loop window at the device (SanctumLightfall hysteresis). */
@@ -288,6 +369,21 @@ public final class MansionDomeClient {
         pipeline.getUniform("DomeRadius").setFloat(shellRadius);
         pipeline.getUniform("Time").setFloat(timeSeconds(partialTick));
         pipeline.getUniform("Detail").setFloat(EclipseClientConfig.reducedFx() ? 0.0F : 1.0F);
+
+        // W13-C3 touch pulse: age in seconds since the last hull contact; -1 tells the
+        // shader no ring is live. TouchPos rides the same camera-relative law.
+        float touchAge = touchStartTick == Integer.MIN_VALUE
+                ? -1.0F
+                : (ticks + partialTick - touchStartTick) / 20.0F;
+        if (touchAge > TOUCH_MAX_AGE_SECONDS) {
+            touchAge = -1.0F;
+        }
+        pipeline.getUniform("TouchAge").setFloat(touchAge);
+        pipeline.getUniform("TouchStrength").setFloat(touchAge < 0.0F ? 0.0F : touchStrength);
+        pipeline.getUniform("TouchPos").setVector(
+                (float) (touchPos.x - camera.x),
+                (float) (touchPos.y - camera.y),
+                (float) (touchPos.z - camera.z));
     }
 
     // ------------------------------------------------------------------ housekeeping
@@ -318,6 +414,10 @@ public final class MansionDomeClient {
         prevVisibility = 0.0F;
         visibility = 0.0F;
         inside = false;
+        touchPos = Vec3.ZERO;
+        touchStartTick = Integer.MIN_VALUE;
+        touchStrength = 0.0F;
+        playerWasTouching = false;
         if (loopsOpen) {
             loopsOpen = false;
             PhotonFxRegistry.releaseLoop(DomeCues.CUE_DOME_DEVICE_IDLE, false);

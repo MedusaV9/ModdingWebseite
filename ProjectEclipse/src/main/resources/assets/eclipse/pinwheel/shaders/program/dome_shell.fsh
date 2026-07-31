@@ -11,7 +11,10 @@
 // DomeCenter (CAMERA-RELATIVE — the VolCenter law, subtraction in doubles Java-side),
 // DomeRadius (blocks), Strength (0..1: distance ramp 450→600 × visibility × collapse
 // pulse; 0 inside the bubble and under reducedFx — the pass never runs there), Time
-// (tick-clock seconds), Detail (0 freezes the motion layers; grade survives).
+// (tick-clock seconds), Detail (0 freezes the motion layers; grade survives),
+// TouchPos/TouchAge/TouchStrength (W13-C3 touch-intersection pulse: the last
+// player/projectile hull contact, camera-relative point + seconds since + envelope;
+// TouchAge < 0 = no pulse live).
 #include eclipse:eclipse_common
 #include eclipse:eclipse_glitch
 #include veil:space_helper
@@ -23,6 +26,9 @@ uniform float DomeRadius;
 uniform float Strength;
 uniform float Time;
 uniform float Detail;
+uniform vec3 TouchPos;
+uniform float TouchAge;
+uniform float TouchStrength;
 
 in vec2 texCoord;
 
@@ -96,11 +102,26 @@ void main() {
     float lines = 0.5 + 0.5 * sin((lat * 90.0 - t * 1.6) * 6.2831853);
     float flicker = mix(1.0, 0.85 + 0.15 * efxHash(vec2(floor(t * 9.0), lat * 5.0)), detail);
 
+    // (e) Touch-intersection pulse (W13-C3): an expanding Fresnel ring racing away
+    // from the last contact point ON the hull — chord distance from the hit point,
+    // front at 7 blocks/s, wake widening 1.4 → ~3.6 blocks, 1.1 s fade. Pure uniform
+    // pulse fed from Java (census §1 dome_shell row) — never a second pass.
+    float touch = 0.0;
+    if (TouchAge >= 0.0 && TouchStrength > 0.001) {
+        float chord = distance(rd * tHit, TouchPos);
+        float front = 1.5 + TouchAge * 7.0;
+        float band = 1.4 + TouchAge * 2.0;
+        float ring = 1.0 - smoothstep(0.0, band, abs(chord - front));
+        float fade = 1.0 - smoothstep(0.0, 1.1, TouchAge);
+        touch = ring * fade * TouchStrength * (0.35 + 0.65 * rim);
+    }
+
     // Composite: additive green energy over the opaque hull, rim-weighted.
     float energy = (0.10 + 0.55 * rim) * (0.6 + 0.4 * lines) * flicker
             + 0.30 * hex * (0.3 + 0.7 * rim);
     vec3 color = mix(scene, shell, clamp(s * hitVis * (0.35 + 0.65 * rim), 0.0, 1.0));
     color += DOME_GREEN * energy * s * hitVis * 0.5;
+    color += DOME_GREEN * touch * s * hitVis * 0.85;
     color += vec3(efxDither(gl_FragCoord.xy, fract(Time * 3.0)) * s * hitVis);
 
     fragColor = vec4(color, 1.0);

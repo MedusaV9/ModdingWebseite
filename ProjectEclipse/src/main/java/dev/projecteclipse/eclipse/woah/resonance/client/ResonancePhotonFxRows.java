@@ -76,6 +76,17 @@ public final class ResonancePhotonFxRows {
                 PhotonFxRegistry.Mode.LAYER,
                 false,
                 ResonancePhotonFxRows::finaleLeg));
+        // W13-C3 resonance-wave ring at the dais: the ground front the server tremor
+        // rides (0.45 blocks/t — the asset's size curve mirrors it). Photon-only
+        // ambient garnish: null Quasar fallback (legal for NEW cues — pre-row baseline
+        // was nothing) and the default leg (30-s raster never needs allowMulti).
+        PhotonFxRegistry.registerRow(new PhotonFxRegistry.Row(
+                ResonanceCues.CUE_RESONANCE_WAVE,
+                fx("resonance_wave_ring"),
+                null,
+                FxBudget.Channel.BURST,
+                PhotonFxRegistry.Mode.LAYER,
+                false));
     }
 
     private static boolean strikeLeg(ResourceLocation photonFx, Vec3 pos,

@@ -17,7 +17,9 @@ Assets:
                          grid (~960 total, GPU-instanced). prewarm: the field stands
                          full the moment the window opens.
   chrono_dust_shimmer    Loop, WINDOWED. "Time dust": a sparse dot-sphere of tiny
-                         winking motes around the camera. 60 max.
+                         winking motes around the camera. 60 max, plus 16 slow-DRIFT
+                         motes (W13-C3) creeping at 0.05-0.09 blocks/s — the one layer
+                         that moves, selling "frozen, not paused".
   chrono_sphere_idle     Loop, WINDOWED. Chronosphere corona: orbiting emission points
                          (circle shape, arc Loop + arcSpeed) painting a slow halo. 48 max.
   chrono_bolt_glow       Loop, WINDOWED. A 40-block glimmer column hugging the frozen
@@ -131,6 +133,32 @@ def build_dust_shimmer() -> FxBuilder:
                 "lifetime", "size"),
             color_over_lifetime=gradient(
                 [(0.0, 0.0), (0.15, 0.9), (0.85, 0.9), (1.0, 0.0)],
+                [(0.0, 1.0, 1.0, 1.0)]))
+       .with_lights(sky=15, block=15))
+
+    # W13-C3 slow-motion drift: a handful of motes that CREEP through the stasis at
+    # 0.05-0.09 blocks/SECOND (0.0025-0.0045 B/t — visible only on fixation). The
+    # stands-vs-crawls contrast against the frozen layers reads "time still runs, just
+    # impossibly slow". Long lives (8-13 s) keep the churn near zero; GPU-instanced,
+    # no physics (LINT-GPU-PHYSICS).
+    (fx.particle_emitter("drift_motes",
+            duration=200, looping=True, prewarm=200,
+            start_lifetime=random_between(160, 260),
+            start_speed=random_between(0.05, 0.09),
+            start_size=nf3(random_between(0.03, 0.06)),
+            start_color=random_color(PALE_CYAN, DUSK_VIOLET),
+            simulation_space="World", max_particles=16)
+       .child_of(root)
+       # 0.07/t × ~210 t avg life ≈ 14.7 sustained — headroom under the 16 cap so the
+       # emitter never saturates (a saturated cap drops spawns in visible hiccups).
+       .with_emission(rate=constant(0.07))
+       .with_shape(sphere(radius=8.0, thickness=0.6))
+       .with_material(texture_material(CIRCLE, hdr=(1.2, 1.35, 1.5), blend=BLEND_ADDITIVE))
+       .with_renderer(use_gpu_instance=True)
+       .with_cull_box((-10.0, -10.0, -10.0), (10.0, 10.0, 10.0))
+       .with_curves(
+            color_over_lifetime=gradient(
+                [(0.0, 0.0), (0.1, 0.75), (0.9, 0.75), (1.0, 0.0)],
                 [(0.0, 1.0, 1.0, 1.0)]))
        .with_lights(sky=15, block=15))
     return fx

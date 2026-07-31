@@ -436,6 +436,7 @@ public final class GravityRiftService {
                     EclipseSounds.EVENT_BORDER_GLITCH.get(), SoundSource.AMBIENT, 0.6F, 1.4F);
             return;
         }
+        state.bumpInvertCount(); // BEFORE the lastInvert overwrite (debt-ledger law)
         state.setLastInvertGameTime(gameTime);
         state.setInvertUntilGameTime(gameTime + GravityRiftZone.INVERT_TOTAL_TICKS);
         resolvedInvertEnd = Long.MIN_VALUE;

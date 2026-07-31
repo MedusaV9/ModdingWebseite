@@ -155,6 +155,7 @@ public final class ResonanceFieldService {
         nextActiveCheck = Long.MIN_VALUE;
         hintCrystal = -1;
         ResonanceMelodyMachine.clearSession();
+        ResonanceWaveFx.clearSession();
     }
 
     /**
@@ -208,6 +209,7 @@ public final class ResonanceFieldService {
             return;
         }
         ResonanceMelodyMachine.tick(overworld, data, gameTime);
+        ResonanceWaveFx.tick(overworld, data, gameTime);
         drainCascade(overworld, data, gameTime);
         drainPulseRestores(overworld, data, gameTime);
         if (gameTime % SELF_HEAL_TICKS == 0L) {

@@ -38,7 +38,8 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
  * opaque hull "breaks" into ~{@value #SHARD_CAP} {@link Display.BlockDisplay} glass
  * plates seeded on a Fibonacci grid over the upper hemisphere (plus an equator ring),
  * each flying outward-and-up on a cubic ease-out, tumbling, and scaling to zero over an
- * individual 80–120 t life.
+ * individual mass-derived 80–140 t life (W13-C3 3-class shatter — see the mass-law
+ * constant block).
  *
  * <p>All {@code StormDebrisFx}/{@code CreditsShatterAct} doctrine applies verbatim:
  * every shard is mounted at ONE fixed entity position (the shell centre — the always
@@ -68,9 +69,6 @@ public final class DomeShatterFx {
     private static final int SPAWN_PER_TICK = 60;
     /** Transform push cadence == interpolation duration (DisplayAnimator law). */
     private static final int UPDATE_INTERVAL_TICKS = 10;
-    /** Individual shard flight life band (scale hits 0 at the end). */
-    private static final int LIFE_MIN_TICKS = 80;
-    private static final int LIFE_MAX_TICKS = 120;
     /** Force-clear after this long (wedged run / lost hand-off). */
     private static final int WATCHDOG_TICKS = 400;
     /** Nobody within this range of the centre at begin → the show is skipped entirely. */
@@ -78,22 +76,52 @@ public final class DomeShatterFx {
     /** view_range override (× 64 blocks ≈ 256) — shards mount at the shell centre. */
     private static final float VIEW_RANGE = 4.0F;
 
-    /** Plate proportions (blocks): a thin pane shard of the hull. */
+    /**
+     * W13-C3 3-class shatter — the {@code EndShatterSequence} W13-B3 mass law: plate
+     * SIZE is rolled first ({@value #PLATE_MIN_SIZE}–{@value #PLATE_MAX_SIZE} blocks,
+     * pow-{@value #SIZE_BIAS_POW} bias toward shards), then
+     * {@code mass01 = (size − min)/(max − min)} derives EVERYTHING else: heavy plates
+     * fly SHORT ({@value #FLIGHT_HEAVY_FACTOR} R vs {@value #FLIGHT_LIGHT_FACTOR} R),
+     * stay FLAT (up-bias {@value #UP_BIAS_HEAVY} vs {@value #UP_BIAS_LIGHT}), sag DEEP
+     * ({@value #SAG_HEAVY} vs {@value #SAG_LIGHT} blocks), live LONG (= drift slow;
+     * {@value #LIFE_HEAVY_TICKS} vs {@value #LIFE_LIGHT_TICKS} t) and tumble LAZY
+     * ({@value #TUMBLE_HEAVY_TURNS} vs {@value #TUMBLE_LIGHT_TURNS} turns). The three
+     * classes emerge from the continuous derivation — no hard branches.
+     */
+    private static final float PLATE_MIN_SIZE = 1.7F;
+    private static final float PLATE_MAX_SIZE = 3.5F;
+    private static final double SIZE_BIAS_POW = 1.6D;
+    /** Legacy reference size — only the thickness RATIO derives from it. */
     private static final float PLATE_SIZE = 2.6F;
     private static final float PLATE_THICKNESS = 0.25F;
-    private static final float PLATE_SIZE_VARIANCE = 0.35F;
-    /** Outward flight distance band as a fraction of the shell radius. */
-    private static final double FLIGHT_MIN_FACTOR = 0.35D;
-    private static final double FLIGHT_MAX_FACTOR = 0.85D;
-    /** Up-bias band (plan §5: 0.4–1.0 of the flight distance goes skyward). */
-    private static final double UP_BIAS_MIN = 0.4D;
-    private static final double UP_BIAS_MAX = 1.0D;
-    /** End-of-life gravity sag (blocks, quadratic in q — the arc's falling tail). */
-    private static final double SAG_MIN = 5.0D;
-    private static final double SAG_MAX = 14.0D;
+    /** Outward flight distance (× shell radius): the lightest shard whips, heavy grinds. */
+    private static final double FLIGHT_LIGHT_FACTOR = 0.85D;
+    private static final double FLIGHT_HEAVY_FACTOR = 0.40D;
+    private static final double FLIGHT_JITTER = 0.06D;
+    /** Up-bias (× flight distance): light shards go skyward, heavy plates stay flat. */
+    private static final double UP_BIAS_LIGHT = 1.0D;
+    private static final double UP_BIAS_HEAVY = 0.30D;
+    /** End-of-life gravity sag (blocks, quadratic in q): heavy plates fall DEEP. */
+    private static final double SAG_LIGHT = 4.0D;
+    private static final double SAG_HEAVY = 16.0D;
+    /** Flight life (ticks): longer life over a shorter arc = visibly slower mass. */
+    private static final int LIFE_LIGHT_TICKS = 80;
+    private static final int LIFE_HEAVY_TICKS = 130;
+    private static final int LIFE_JITTER_TICKS = 10;
     /** Tumble: total revolutions over a shard's life (decays with the ease-out). */
-    private static final float TUMBLE_MIN_TURNS = 0.75F;
-    private static final float TUMBLE_MAX_TURNS = 2.5F;
+    private static final float TUMBLE_LIGHT_TURNS = 2.5F;
+    private static final float TUMBLE_HEAVY_TURNS = 0.6F;
+    /**
+     * Every ~{@value #KEYSTONE_EVERY}th shard is a KEYSTONE plate
+     * (deterministic index raster): ×{@value #KEYSTONE_SCALE} size, always tinted
+     * glass, deepest sag, {@value #KEYSTONE_LIFE_TICKS} t life, ~0.2 turns — the
+     * anchor rocks the eye reads the whole shatter's mass off (W12 accent law).
+     */
+    private static final int KEYSTONE_EVERY = 12;
+    private static final float KEYSTONE_SCALE = 2.4F;
+    private static final double KEYSTONE_SAG = 18.0D;
+    private static final int KEYSTONE_LIFE_TICKS = 140;
+    private static final float KEYSTONE_TURNS = 0.2F;
 
     /** Hull palette (plan §3.7): 60% green glass, 30% tinted glass, 10% emerald glints. */
     private static final BlockState GLASS_GREEN = Blocks.GREEN_STAINED_GLASS.defaultBlockState();
@@ -271,8 +299,20 @@ public final class DomeShatterFx {
         }
 
         private Shard buildShard(RandomSource random, Vector3f normal) {
+            int index = this.pending.size() + this.flying.size();
+            // W13-B3 mass law: SIZE first (pow-1.6 bias toward small shards, every
+            // ~12th index promoted to a ×2.4 keystone plate), all flight parameters
+            // DERIVED from mass01 with small jitters so the correlation never stairs.
+            boolean keystone = index % KEYSTONE_EVERY == 5;
+            float size = keystone ? PLATE_SIZE * KEYSTONE_SCALE
+                    : PLATE_MIN_SIZE + (PLATE_MAX_SIZE - PLATE_MIN_SIZE)
+                            * (float) Math.pow(random.nextDouble(), SIZE_BIAS_POW);
+            double mass = keystone ? 1.0D : Mth.clamp(
+                    (size - PLATE_MIN_SIZE) / (double) (PLATE_MAX_SIZE - PLATE_MIN_SIZE),
+                    0.0D, 1.0D);
             float roll = random.nextFloat();
-            BlockState state = roll < 0.6F ? GLASS_GREEN : roll < 0.9F ? GLASS_TINTED : GLINT;
+            BlockState state = keystone ? GLASS_TINTED
+                    : roll < 0.6F ? GLASS_GREEN : roll < 0.9F ? GLASS_TINTED : GLINT;
             // Plate tangent to the sphere: local +Z (the thin axis) rotated onto the
             // normal, plus a random spin AROUND the normal so the grid does not read.
             Quaternionf facing = new Quaternionf()
@@ -285,19 +325,19 @@ public final class DomeShatterFx {
                 tumbleAxis.set(0.0F, 1.0F, 0.0F);
             }
             tumbleAxis.normalize();
-            return new Shard(state, normal, facing,
-                    PLATE_SIZE * (1.0F - PLATE_SIZE_VARIANCE
-                            + random.nextFloat() * PLATE_SIZE_VARIANCE * 2.0F),
-                    LIFE_MIN_TICKS + random.nextInt(LIFE_MAX_TICKS - LIFE_MIN_TICKS + 1),
-                    this.radius * (FLIGHT_MIN_FACTOR
-                            + random.nextDouble() * (FLIGHT_MAX_FACTOR - FLIGHT_MIN_FACTOR)),
-                    UP_BIAS_MIN + random.nextDouble() * (UP_BIAS_MAX - UP_BIAS_MIN),
-                    SAG_MIN + random.nextDouble() * (SAG_MAX - SAG_MIN),
-                    tumbleAxis,
-                    Mth.TWO_PI * (TUMBLE_MIN_TURNS
-                            + random.nextFloat() * (TUMBLE_MAX_TURNS - TUMBLE_MIN_TURNS))
-                            * (random.nextBoolean() ? 1.0F : -1.0F),
-                    (this.pending.size() + this.flying.size()) % UPDATE_INTERVAL_TICKS);
+            int life = keystone ? KEYSTONE_LIFE_TICKS
+                    : (int) Math.round(Mth.lerp(mass, LIFE_LIGHT_TICKS, LIFE_HEAVY_TICKS))
+                            + random.nextInt(LIFE_JITTER_TICKS + 1);
+            double flightFactor = Mth.lerp(mass, FLIGHT_LIGHT_FACTOR, FLIGHT_HEAVY_FACTOR)
+                    + (keystone ? 0.0D : (random.nextDouble() - 0.5D) * 2.0D * FLIGHT_JITTER);
+            double upBias = Mth.lerp(mass, UP_BIAS_LIGHT, UP_BIAS_HEAVY);
+            double sag = keystone ? KEYSTONE_SAG : Mth.lerp(mass, SAG_LIGHT, SAG_HEAVY);
+            float turns = keystone ? KEYSTONE_TURNS
+                    : (float) Mth.lerp(mass, TUMBLE_LIGHT_TURNS, TUMBLE_HEAVY_TURNS);
+            return new Shard(state, normal, facing, size, life,
+                    this.radius * flightFactor, upBias, sag, tumbleAxis,
+                    Mth.TWO_PI * turns * (random.nextBoolean() ? 1.0F : -1.0F),
+                    index % UPDATE_INTERVAL_TICKS);
         }
 
         void tick() {
