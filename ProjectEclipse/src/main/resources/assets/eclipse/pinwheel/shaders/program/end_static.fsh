@@ -23,6 +23,22 @@
 //       and they open up further with distance — near-field mass stays solid, the far dark
 //       dissolves into void.
 //
+// F-102 GLITCH-FAMILY POLISH "WEISSRAUSCH-HORROR" — the pass crackled but never FAILED. Two
+// escalations turn interference into signal death:
+//   [4] STATIC VEIL. Coarse-cell white noise (2-physical-pixel cells, not per-texel powder)
+//       MIXES over the image; the share rises with StaticStrength squared and rides the
+//       crackle envelope, so far from the rift it is a faint film and close in every crackle
+//       burst visibly washes the world in snow.
+//   [5] SIGNAL-LOSS BEATS. A second, much slower slot train (4 s slots, ~1 in 3.5 fires,
+//       25 slots per 100 s wrap — exact) drives a collapse envelope with a fast attack and
+//       a ~1.5 s decay: the picture drops toward dark desaturated mush, the veil jumps
+//       toward full snow, the frame slips vertically and rows tear sideways — one long
+//       "the feed just died" moment, then it recovers. Under reduced FX ([law] above) the
+//       beat train is HARD ZERO (a photosensitivity rule, the BackroomsFlickerOverlay law)
+//       and the veil parks time-invariant at its floor.
+//   [6] INTERFERENCE BANDS. Slow horizontal luma waves (7 bands, one crawl per ~2.9 s,
+//       35 whole periods per wrap) between beats — the broadcast is never quite healthy.
+//
 // LAWS:
 //   * At StaticStrength 0 the input sample is returned untouched (bit-identical frame) and
 //     the feeder drops the pass from the manager entirely.
@@ -106,6 +122,22 @@ const float FAR_DENSITY = 0.52;
 const float MID_DENSITY = 0.30;
 /** Peak luminance static. The carrier of the "Knistern"; deliberately under a ±3 LSB nudge. */
 const float GRAIN_MAX = 0.026;
+/** [5] Signal-loss beats: slot rate (4 s slots; 100 s x 0.25 = 25 slots per wrap, exact),
+    share of slots that fire, and the slot wrap for the per-slot hash re-rolls. */
+const float BEAT_RATE = 0.25;
+const float BEAT_DUTY = 0.28;
+const float BEAT_WRAP = 25.0;
+/** [4] Static veil: white-noise cell size in physical pixels, the mix floor that rides the
+    crackle envelope, and the extra mix a signal-loss beat adds on top. */
+const float VEIL_CELL = 2.0;
+const float VEIL_BASE = 0.16;
+const float VEIL_BEAT = 0.55;
+/** [5] Collapse depths at beat peak: vertical frame slip (UV), row tear (UV), luma crush. */
+const float SLIP_MAX = 0.05;
+const float TEAR_MAX = 0.09;
+/** [6] Interference bands: count down the frame and crawl rate (35 periods per wrap). */
+const float BAND_COUNT = 7.0;
+const float BAND_CRAWL = 0.35;
 
 /**
  * The crackle envelope in [0,1] — see construction note [1].
@@ -125,6 +157,19 @@ float endCrackle(float time, float detail) {
     return mix(CRACKLE_STEADY, CRACKLE_FLOOR + (1.0 - CRACKLE_FLOOR) * burst, detail);
 }
 
+/**
+ * [5] The signal-loss collapse envelope in [0,1]: fast attack over ~0.3 s, dead-signal hold,
+ * ~1.1 s recovery — a collapse, not a strobe. HARD ZERO under reduced FX (detail 0): a
+ * full-frame luma drop is exactly the kind of flash the photosensitivity law forbids.
+ */
+float endBeat(float time, float detail) {
+    float slot = floor(time * BEAT_RATE);
+    float fire = step(1.0 - BEAT_DUTY, efxHash(vec2(mod(slot, BEAT_WRAP), 3.17)));
+    float within = fract(time * BEAT_RATE);
+    float env = smoothstep(0.0, 0.08, within) * (1.0 - smoothstep(0.14, 0.42, within));
+    return fire * env * detail;
+}
+
 void main() {
     vec3 scene = texture(DiffuseSampler0, texCoord).rgb;
     vec3 color = scene;
@@ -133,9 +178,23 @@ void main() {
     if (s > 0.0005) { // else: idle — the scene passes through bit-identical
         float detail = clamp(Detail, 0.0, 1.0);
         float env = endCrackle(Time, detail);
+        float beat = endBeat(Time, detail);
         // Slot index for the per-slot re-rolls, frozen under reducedFx and wrapped small
         // enough to keep every hash argument fp32-well-conditioned.
         float slot = mod(floor(Time * CRACKLE_RATE) * detail, BAND_SLOT_WRAP);
+
+        // --- [5] beat displacement ---------------------------------------------------------
+        // While the signal is down the whole frame slips vertically (wrapping via fract)
+        // and coarse rows tear sideways on a fast re-roll. Exactly texCoord when beat = 0,
+        // so between beats (and under reduced FX) this is a branchless identity.
+        float beatSlot = mod(floor(Time * BEAT_RATE), BEAT_WRAP);
+        vec2 suv = texCoord;
+        suv.y = fract(suv.y
+                + beat * (efxHash(vec2(beatSlot, 11.3)) - 0.5) * 2.0 * SLIP_MAX);
+        float row = floor(suv.y * 96.0);
+        suv.x += beat * (efxHash(vec2(row * 0.31, mod(floor(Time * 24.0), 200.0))) - 0.5)
+                * TEAR_MAX;
+        suv = clamp(suv, vec2(0.001), vec2(0.999));
 
         // --- [2] chromatic aberration ----------------------------------------------------
         vec2 q = texCoord * 2.0 - 1.0;
@@ -146,7 +205,15 @@ void main() {
         float edge = clamp(radial * 0.5, 0.0, 1.0); // 0 centre, 1 at the corners
         float band = efxNoise(vec2(texCoord.y * BAND_FREQ, slot * 0.37));
         float amount = ABERRATION_MAX * s * env * (0.25 + 0.75 * edge) * (0.45 + 0.90 * band);
-        color = efxChroma(DiffuseSampler0, texCoord, dir, amount);
+        color = efxChroma(DiffuseSampler0, suv, dir, amount);
+
+        // --- [6] interference bands ----------------------------------------------------------
+        // Slow luma waves crawling down the frame, riding the crackle envelope so a healthy
+        // moment is nearly flat. Fixed phase under reduced FX (the crawl freezes, the faint
+        // banding stays). 35 whole periods per 100 s wrap — no jump.
+        float wave = sin((texCoord.y * BAND_COUNT - mix(0.0, Time * BAND_CRAWL, detail))
+                * 6.2831853);
+        color *= 1.0 + wave * 0.045 * s * env;
 
         // --- [3] starfield bleed ---------------------------------------------------------
         float depthSample = texture(DiffuseDepthSampler, texCoord).r;
@@ -167,6 +234,23 @@ void main() {
         float starMid = gzVoidStars((anchor + ray * MID_DIST) / MID_CELL, MID_DENSITY, Time, detail);
         float stars = starFar * 0.55 + starMid;
         color += END_STAR * (stars * STAR_GAIN * openness * s * (0.55 + 0.45 * env));
+
+        // --- [5] signal collapse + [4] static veil -------------------------------------------
+        // During a beat the picture dies FIRST (dark, desaturated mush — colour is the first
+        // thing a failing composite feed loses) …
+        color = mix(color, vec3(gzLuma(color)) * 0.35, beat * 0.75);
+        // … and the snow washes over what is left. Coarse cells (VEIL_CELL physical pixels
+        // — per-texel powder reads as sensor noise, 2-px cells read as TV snow); the mix
+        // share rises with s SQUARED so the veil stays a film at range and becomes a wash
+        // at the rift lip. The temporal re-roll is detail-gated: reduced FX gets a STILL
+        // film of snow, never a boil.
+        float snow = efxHash(floor(gl_FragCoord.xy / VEIL_CELL) * 0.173
+                + fract(Time * 13.0) * detail * vec2(19.0, 47.0));
+        float veil = (VEIL_BASE * env + VEIL_BEAT * beat) * s * s;
+        // The snow leans faintly violet (the dimension's cast, END_STAR heritage), and the
+        // mix is capped at 0.78: a residual silhouette must survive the deepest beat —
+        // horror needs something left to read, full white-out is just a loading screen.
+        color = mix(color, vec3(snow) * vec3(0.99, 0.95, 1.06), clamp(veil, 0.0, 0.78));
 
         // --- [1] the carrier -------------------------------------------------------------
         // Fine luminance static over the whole frame. The temporal jitter is detail-gated,
