@@ -391,3 +391,39 @@ func test_markt_waren_katalog_konsistent() -> void:
 			"food":
 				if str(eintrag["kategorie"]) == "ernte":
 					assert_false(MarktPreise.sorte(id).is_empty(), "%s: Ernte-Sorte" % id)
+
+
+## ------------------------- Windrad-Rotor (MARKT→HOME-Request, W15/INTEGRATE)
+
+
+func test_windrad_rotor_dreht_die_blades_node() -> void:
+	var moebel := Node3D.new()
+	tree.root.add_child(moebel)
+	var rotor_node := Node3D.new()
+	rotor_node.name = "blades"
+	moebel.add_child(rotor_node)
+	var rotor := WindradRotor.new()
+	tree.root.add_child(rotor)
+	rotor.setup(null, moebel)
+	assert_true(rotor.is_processing(), "Rotor-Node gefunden: Prozess-Takt an")
+	var vorher := rotor_node.rotation.z
+	rotor._process(0.5)
+	assert_almost(
+		rotor_node.rotation.z,
+		vorher + 0.5 * WindradRotor.DREH_RAD_S,
+		1e-6,
+		"dreht mit Ranch-Geschwindigkeit (0.9 rad/s)"
+	)
+	rotor.free()
+	moebel.free()
+
+
+func test_windrad_rotor_ohne_blades_node_bleibt_still() -> void:
+	var moebel := Node3D.new()
+	tree.root.add_child(moebel)
+	var rotor := WindradRotor.new()
+	tree.root.add_child(rotor)
+	rotor.setup(null, moebel)
+	assert_false(rotor.is_processing(), "kein Rotor im GLB: kein Prozess-Takt")
+	rotor.free()
+	moebel.free()

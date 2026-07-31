@@ -77,6 +77,9 @@ func rescan() -> void:
 		elif Fernseher.TV_IDS.has(item_id):
 			# W13C/GOBTY: TV-Möbel empfangen den GOB.TY-Sender (Doc H §6.2).
 			_dock(Fernseher.new(), node)
+		elif item_id == "windrad_deko":
+			# W15/MARKT-Request: das Garten-Windrad dreht seinen Rotor.
+			_dock(WindradRotor.new(), node)
 
 
 ## Tap-Zone über einem Möbel (Area3D + Box um die Möbel-AABB) — geteilter
