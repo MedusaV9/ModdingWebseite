@@ -1,0 +1,11 @@
+{
+	"id": "cityDrive",
+	"title_key": "mg.cityDrive.title",
+	"scene": "res://scripts/minigames/games/city_drive/city_drive.tscn",
+	"coin_table": {"divisor": 10, "min": 5, "max": 35},
+	"target": 280,
+	"orientation": "portrait",
+	"supports_endless": true,
+	"energy_cost": 6,
+	"difficulty_opt_in": true
+}
