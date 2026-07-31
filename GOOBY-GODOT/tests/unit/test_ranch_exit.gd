@@ -1,7 +1,7 @@
 extends TestCase
 ## RANCH-1 — Stadtausfahrt (scripts/city/ranch_exit.gd): Zonen-Erkennung,
-## Level-20-Gate (unter 20 nur Hinweis-Toast, ab 20 der Losfahren-Prompt)
-## und die Reise auf die Landstraße über den Fake-Router.
+## Level-15-Gate (W13: 20→15; unter 15 nur Hinweis-Toast, ab 15 der
+## Losfahren-Prompt) und die Reise auf die Landstraße über den Fake-Router.
 
 const GameStateScript := preload("res://scripts/state/game_state.gd")
 const SaveSchema := preload("res://scripts/state/save_schema.gd")
@@ -58,7 +58,7 @@ func _cleanup(exit: RanchExit, gs: Node) -> void:
 
 
 func test_zone_erkennung() -> void:
-	var gs := _fresh_gs(20)
+	var gs := _fresh_gs(15)
 	var exit := await _mount(gs)
 	assert_false(exit.in_zone(), "weit weg = draussen")
 	exit.auto.position = exit.ausfahrt_pos() + Vector3(2.0, 0.0, 1.0)
@@ -66,28 +66,28 @@ func test_zone_erkennung() -> void:
 	await _cleanup(exit, gs)
 
 
-func test_unter_level_20_nur_hinweis() -> void:
-	var gs := _fresh_gs(19)
+func test_unter_level_15_nur_hinweis() -> void:
+	var gs := _fresh_gs(14)
 	var router := FakeRouter.new()
 	RanchRouten.router_override = router
 	var exit := await _mount(gs)
 	exit.auto.position = exit.ausfahrt_pos()
 	await wait_frames(3)
-	assert_false(exit.prompt_sichtbar(), "Level 19: kein Losfahren-Prompt")
+	assert_false(exit.prompt_sichtbar(), "Level 14: kein Losfahren-Prompt")
 	# Auch ein direkter Losfahren-Versuch bleibt am Gate haengen.
 	exit._on_losfahren()
-	assert_eq(router.reisen, [], "Level 19: keine Reise")
+	assert_eq(router.reisen, [], "Level 14: keine Reise")
 	await _cleanup(exit, gs)
 
 
-func test_ab_level_20_prompt_und_reise() -> void:
-	var gs := _fresh_gs(20)
+func test_ab_level_15_prompt_und_reise() -> void:
+	var gs := _fresh_gs(15)
 	var router := FakeRouter.new()
 	RanchRouten.router_override = router
 	var exit := await _mount(gs)
 	exit.auto.position = exit.ausfahrt_pos()
 	await wait_frames(3)
-	assert_true(exit.prompt_sichtbar(), "Level 20: Prompt offen")
+	assert_true(exit.prompt_sichtbar(), "Level 15: Prompt offen")
 	exit._on_losfahren()
 	assert_eq(router.reisen.size(), 1, "Losfahren reist")
 	assert_eq(router.reisen[0]["ziel"], RanchRouten.ROUTE_FAHRT, "Ziel = Landstrasse")

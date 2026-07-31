@@ -1,7 +1,7 @@
 class_name RanchOffer
 extends RefCounted
 ## Das Ranch-Kauf-Angebot (RANCH-1) — EXAKT der User-Wunsch: direkt nach
-## dem Rückblick erscheint ab Level 20 „Du kannst jetzt zur Ranch fahren
+## dem Rückblick erscheint ab Level 15 „Du kannst jetzt zur Ranch fahren
 ## und sie kaufen.“ mit Preis in ᴳ und den Knöpfen „Jetzt losfahren“ /
 ## „Später kaufen“. „Später“ merkt sich den Stand (ranch.angebotVerschoben);
 ## das Angebot bleibt über die Stadtausfahrt und `RanchOffer.zeige()`

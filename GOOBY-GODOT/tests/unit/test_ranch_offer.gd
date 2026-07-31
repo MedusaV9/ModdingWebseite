@@ -1,6 +1,6 @@
 extends TestCase
 ## RANCH-1 — RanchOffer: das Angebot direkt nach dem Rückblick. Gate
-## (Level 20), Einmaligkeit (angebotGesehen), „Jetzt losfahren“ vs.
+## (Level 15, W13: 20→15), Einmaligkeit (angebotGesehen), „Jetzt losfahren“ vs.
 ## „Später kaufen“ (merkt den Stand, bleibt über zeige() erreichbar),
 ## nach dem Kauf kein Angebot mehr.
 
@@ -44,17 +44,17 @@ func _teardown_gs(gs: Node) -> void:
 	RanchRouten.router_override = null
 
 
-func test_unter_level_20_kein_angebot() -> void:
-	var gs := _fresh_gs(19)
-	assert_false(RanchOffer.sollte_zeigen(gs), "Level 19: kein Angebot")
+func test_unter_level_15_kein_angebot() -> void:
+	var gs := _fresh_gs(14)
+	assert_false(RanchOffer.sollte_zeigen(gs), "Level 14: kein Angebot")
 	var sheet := RanchOffer.maybe_show(tree.root, gs)
 	assert_eq(sheet, null, "maybe_show liefert null")
 	_teardown_gs(gs)
 
 
-func test_ab_level_20_erscheint_das_angebot() -> void:
-	var gs := _fresh_gs(20)
-	assert_true(RanchOffer.sollte_zeigen(gs), "Level 20: Angebot faellig")
+func test_ab_level_15_erscheint_das_angebot() -> void:
+	var gs := _fresh_gs(15)
+	assert_true(RanchOffer.sollte_zeigen(gs), "Level 15: Angebot faellig")
 	var sheet := RanchOffer.maybe_show(tree.root, gs)
 	assert_ne(sheet, null, "Sheet gebaut")
 	await wait_frames(2)
@@ -67,7 +67,7 @@ func test_ab_level_20_erscheint_das_angebot() -> void:
 
 
 func test_spaeter_kaufen_merkt_den_stand() -> void:
-	var gs := _fresh_gs(20)
+	var gs := _fresh_gs(15)
 	var sheet := RanchOffer.maybe_show(tree.root, gs)
 	assert_ne(sheet, null)
 	await wait_frames(1)
@@ -85,7 +85,7 @@ func test_spaeter_kaufen_merkt_den_stand() -> void:
 
 
 func test_jetzt_losfahren_markiert_gesehen_und_reist() -> void:
-	var gs := _fresh_gs(20)
+	var gs := _fresh_gs(15)
 	var router := FakeRouter.new()
 	RanchRouten.router_override = router
 	var sheet := RanchOffer.maybe_show(tree.root, gs)
@@ -104,7 +104,7 @@ func test_jetzt_losfahren_markiert_gesehen_und_reist() -> void:
 
 
 func test_nach_kauf_kein_angebot_mehr() -> void:
-	var gs := _fresh_gs(20)
+	var gs := _fresh_gs(15)
 	gs.set_value("economy.coins", RanchKatalog.preis())
 	assert_eq(RanchKauf.kaufe(gs), RanchKauf.RESULT_OK)
 	assert_false(RanchOffer.sollte_zeigen(gs), "gekauft = kein Angebot")

@@ -1,5 +1,5 @@
 extends TestCase
-## RANCH-1 — RanchKauf: Level-20-Gate, atomare Preis-Abbuchung, „zu wenig
+## RANCH-1 — RanchKauf: Level-15-Gate (W13: 20→15), atomare Preis-Abbuchung, „zu wenig
 ## Münzen“ ändert NICHTS, Doppelkauf blockiert, Start-Tiere aus dem Pack
 ## (start=false-Tiere bleiben draußen).
 
@@ -42,9 +42,9 @@ func _teardown_gs(gs: Node) -> void:
 	RanchKatalog.reset_cache()
 
 
-func test_gate_blockt_unter_level_20() -> void:
-	var gs := _fresh_gs(19, 99999)
-	assert_eq(RanchKauf.check(gs), RanchKauf.RESULT_LOCKED, "Level 19 gesperrt")
+func test_gate_blockt_unter_level_15() -> void:
+	var gs := _fresh_gs(14, 99999)
+	assert_eq(RanchKauf.check(gs), RanchKauf.RESULT_LOCKED, "Level 14 gesperrt")
 	assert_eq(RanchKauf.kaufe(gs), RanchKauf.RESULT_LOCKED)
 	assert_eq(gs.get_value("economy.coins"), 99999, "keine Abbuchung im Gesperrt-Fall")
 	assert_eq(gs.get_value("ranch.gekauft"), false)
@@ -52,7 +52,7 @@ func test_gate_blockt_unter_level_20() -> void:
 
 
 func test_kauf_bucht_exakt_den_preis_ab() -> void:
-	var gs := _fresh_gs(20, RanchKatalog.preis() + 111)
+	var gs := _fresh_gs(15, RanchKatalog.preis() + 111)
 	var vorher_spent := int(gs.get_value("economy.coinsSpent", 0))
 	assert_eq(RanchKauf.check(gs), RanchKauf.RESULT_OK)
 	assert_eq(RanchKauf.kaufe(gs), RanchKauf.RESULT_OK)
@@ -68,7 +68,7 @@ func test_kauf_bucht_exakt_den_preis_ab() -> void:
 
 
 func test_zu_wenig_muenzen_aendert_nichts() -> void:
-	var gs := _fresh_gs(20, RanchKatalog.preis() - 1)
+	var gs := _fresh_gs(15, RanchKatalog.preis() - 1)
 	assert_eq(RanchKauf.check(gs), RanchKauf.RESULT_BROKE)
 	assert_eq(RanchKauf.kaufe(gs), RanchKauf.RESULT_BROKE)
 	assert_eq(gs.get_value("economy.coins"), RanchKatalog.preis() - 1, "Muenzen unangetastet")
@@ -79,7 +79,7 @@ func test_zu_wenig_muenzen_aendert_nichts() -> void:
 
 
 func test_doppelkauf_blockiert() -> void:
-	var gs := _fresh_gs(20, RanchKatalog.preis() * 2)
+	var gs := _fresh_gs(15, RanchKatalog.preis() * 2)
 	assert_eq(RanchKauf.kaufe(gs), RanchKauf.RESULT_OK)
 	assert_eq(RanchKauf.kaufe(gs), RanchKauf.RESULT_OWNED, "zweiter Kauf blockiert")
 	assert_eq(gs.get_value("economy.coins"), RanchKatalog.preis(), "nur EINMAL abgebucht")
@@ -102,10 +102,10 @@ func test_start_tiere_kommen_aus_dem_pack() -> void:
 		{"id": "tier_c", "typ": "tier", "art": "kuh", "start": true, "farbe": "#333333"},
 		{"id": "welt", "typ": "welt"},
 	]
-	registry.balance = {"ranch.preis": 500, "ranch.freischalt_level": 20}
+	registry.balance = {"ranch.preis": 500, "ranch.freischalt_level": 15}
 	RanchKatalog.registry_override = registry
 	RanchKatalog.reset_cache()
-	var gs := _fresh_gs(20, 500)
+	var gs := _fresh_gs(15, 500)
 	assert_eq(RanchKatalog.preis(), 500, "Preis kommt aus dem Pack")
 	assert_eq(RanchKauf.kaufe(gs), RanchKauf.RESULT_OK)
 	var hoftiere: Array = gs.get_value("ranch.hoftiere")
@@ -123,7 +123,7 @@ func test_start_tiere_kommen_aus_dem_pack() -> void:
 
 
 func test_kauf_loescht_verschoben_flag() -> void:
-	var gs := _fresh_gs(20, RanchKatalog.preis())
+	var gs := _fresh_gs(15, RanchKatalog.preis())
 	RanchState.angebot_verschieben(gs)
 	assert_eq(RanchKauf.kaufe(gs), RanchKauf.RESULT_OK)
 	assert_eq(gs.get_value("ranch.angebotVerschoben"), false, "Kauf beendet das Verschieben")

@@ -80,7 +80,7 @@ static func ist_gekauft(gs: Object) -> bool:
 
 
 ## Level-Gate: ab diesem Level ist die Ranch freigeschaltet (Pack-Daten,
-## Default 20 — RanchKatalog.freischalt_level).
+## Default 15 — RanchKatalog.freischalt_level).
 static func ist_freigeschaltet(gs: Object) -> bool:
 	if gs == null:
 		return false

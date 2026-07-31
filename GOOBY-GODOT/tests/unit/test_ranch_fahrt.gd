@@ -25,7 +25,7 @@ class FakeRouter:
 		reisen.append({"ziel": ziel, "params": params})
 
 
-func _fresh_gs(level := 20, coins := 99999) -> Node:
+func _fresh_gs(level := 15, coins := 99999) -> Node:
 	RanchState.register_slice()
 	_seq += 1
 	var dir := "user://ranch_tests/fahrt_%d_%d" % [Time.get_ticks_usec(), _seq]

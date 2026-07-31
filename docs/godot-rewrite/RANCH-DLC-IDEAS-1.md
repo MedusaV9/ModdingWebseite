@@ -19,7 +19,7 @@ kein Prototyp — fast alles Folgende ist ERWEITERUNG bestehender Dateien:
 | Bestand (Datei) | Was es heute kann | DLC-Verhältnis |
 |---|---|---|
 | `ranch_state.gd` + `data/ranch_play_slices.gd` | Save-Slice `ranch` (Kauf, Ausbau, Pferde, Wirtschaft, Spiele), additiv ohne Version-Bump | **AUSBAUEN** — neue Unterschlüssel (`quests`, `npcs`, `wetter`, `zucht`) im selben Muster andocken |
-| `ranch_offer.gd` / `ranch_kauf.gd` | Kauf-Angebot ab Level 20 (2500 ᴳ), atomarer Kauf inkl. Start-Tieren | **FERTIG** — DLC-Einstieg existiert, nur Preis/Level per Balance-Pack pflegen |
+| `ranch_offer.gd` / `ranch_kauf.gd` | Kauf-Angebot ab Level 15 (2500 ᴳ; W13: 20→15 per User-Wunsch), atomarer Kauf inkl. Start-Tieren | **FERTIG** — DLC-Einstieg existiert, nur Preis/Level per Balance-Pack pflegen |
 | `ranch_welt.gd` / `ranch_bau.gd` | Deterministische Welt-Pläne (480×380 m), MultiMesh-Kulisse ≤ 400 Draw-Calls, Tag/Nacht via CityAmbiente | **AUSBAUEN** — neue Zonen als zusätzliche Plan-Abschnitte, NICHT neu erfinden |
 | `ranch_fahrt_scene.gd` | Echte Überlandfahrt Stadt→Ranch mit Tor + Kauf-Sheet | **FERTIG**, später Rückweg-Varianten/Wetter drauflegen |
 | `ranch_pferd.gd` / `gameplay/horse_stub.gd` | Prozedurales GOOBY-Pferd, Gangarten Idle/Trab/Galopp, Farb-/Gear-Vertrag | **AUSBAUEN** — Fohlen-Skalierung, neue Fellmuster, Trick-Animationen auf denselben Vertrag |

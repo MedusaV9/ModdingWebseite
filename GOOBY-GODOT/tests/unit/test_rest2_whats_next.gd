@@ -27,7 +27,7 @@ func _row(
 
 
 func _ctx(claimable := 0, all_claimed := false) -> Dictionary:
-	return {"ranch_level": 20, "claimable": claimable, "all_claimed": all_claimed}
+	return {"ranch_level": 15, "claimable": claimable, "all_claimed": all_claimed}
 
 
 func test_abholbereite_belohnung_gewinnt() -> void:
@@ -51,9 +51,9 @@ func test_pflege_hinweis_bei_niedrigem_stat() -> void:
 	assert_eq(str(s2["id"]), "pflege_hygiene", "der schlechteste Stat gewinnt")
 
 
-func test_ranch_ab_level_20() -> void:
-	var s := WhatsNextAdvisor.suggest(_state(20), [], _ctx())
-	assert_eq(str(s["id"]), "ranch", "Ranch-Ausblick ab Freischalt-Level")
+func test_ranch_ab_level_15() -> void:
+	var s := WhatsNextAdvisor.suggest(_state(15), [], _ctx())
+	assert_eq(str(s["id"]), "ranch", "Ranch-Ausblick ab Freischalt-Level (W13: 15)")
 
 
 func test_level_ziel_wenn_alles_geschafft() -> void:

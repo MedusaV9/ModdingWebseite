@@ -1,6 +1,7 @@
 extends TestCase
 ## RANCH-1 — RanchState: additiver `ranch`-Slice (register_slice, KEIN
-## Version-Bump), Self-Heal, Level-20-Gate und das „Später kaufen“-Merken.
+## Version-Bump), Self-Heal, Level-15-Gate (W13: 20→15) und das
+## „Später kaufen“-Merken.
 
 const GameStateScript := preload("res://scripts/state/game_state.gd")
 const SaveSchema := preload("res://scripts/state/save_schema.gd")
@@ -57,13 +58,13 @@ func test_normalize_heilt_kaputte_daten() -> void:
 	assert_eq(kaputt["gekauft"], false, "Nicht-Dictionary → kompletter Default")
 
 
-func test_level_20_gate() -> void:
+func test_level_15_gate() -> void:
 	var gs := _fresh_gs()
 	assert_false(RanchState.ist_freigeschaltet(gs), "Level 1 gesperrt")
-	gs.set_value("progression.level", 19)
-	assert_false(RanchState.ist_freigeschaltet(gs), "Level 19 gesperrt")
-	gs.set_value("progression.level", 20)
-	assert_true(RanchState.ist_freigeschaltet(gs), "Level 20 offen")
+	gs.set_value("progression.level", 14)
+	assert_false(RanchState.ist_freigeschaltet(gs), "Level 14 gesperrt")
+	gs.set_value("progression.level", 15)
+	assert_true(RanchState.ist_freigeschaltet(gs), "Level 15 offen")
 	gs.set_value("progression.level", 33)
 	assert_true(RanchState.ist_freigeschaltet(gs), "darueber bleibt offen")
 	_teardown_gs(gs)

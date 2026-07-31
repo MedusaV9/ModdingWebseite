@@ -16,7 +16,7 @@ extends RefCounted
 
 const PACK_DOMAIN := "ranch"
 const DEFAULT_PREIS := 2500
-const DEFAULT_FREISCHALT_LEVEL := 20
+const DEFAULT_FREISCHALT_LEVEL := 15
 
 ## Tests injizieren hier eine Registry-Attrappe (null = Autoload benutzen).
 static var registry_override: Object = null
@@ -30,7 +30,7 @@ static func preis() -> int:
 	return maxi(0, int(_balance("ranch.preis", DEFAULT_PREIS)))
 
 
-## Freischalt-Level (Balance-Domain, Default 20 — User-Wunsch).
+## Freischalt-Level (Balance-Domain, Default 15 — User-Wunsch W13).
 static func freischalt_level() -> int:
 	return maxi(1, int(_balance("ranch.freischalt_level", DEFAULT_FREISCHALT_LEVEL)))
 

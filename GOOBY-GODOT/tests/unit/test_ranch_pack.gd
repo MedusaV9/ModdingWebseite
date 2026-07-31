@@ -82,7 +82,7 @@ func test_registry_merged_ranch_domain() -> void:
 	assert_true(ids.has("tier_pferd_karamell"), "Pferd gemergt")
 	assert_true(ids.has("ausbau_stall_2"), "Ausbau gemergt")
 	assert_eq(int(registry.get_balance("ranch.preis", -1)), 2500, "Preis via deep-merge")
-	assert_eq(int(registry.get_balance("ranch.freischalt_level", -1)), 20, "Gate via deep-merge")
+	assert_eq(int(registry.get_balance("ranch.freischalt_level", -1)), 15, "Gate via deep-merge")
 	registry.free()
 
 
@@ -91,7 +91,7 @@ func test_katalog_liest_nur_aus_der_registry() -> void:
 	RanchKatalog.registry_override = registry
 	RanchKatalog.reset_cache()
 	assert_eq(RanchKatalog.preis(), 2500, "Preis aus dem eingebauten Pack")
-	assert_eq(RanchKatalog.freischalt_level(), 20, "Level-Gate aus dem Pack")
+	assert_eq(RanchKatalog.freischalt_level(), 15, "Level-Gate aus dem Pack")
 	assert_true(RanchKatalog.tiere().size() >= 6, "Tier-Katalog gefuellt")
 	assert_eq(
 		str(RanchKatalog.tier("tier_pferd_wolke").get("art", "")), "pferd", "Tier-Lookup per id"
