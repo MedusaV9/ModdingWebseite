@@ -10,6 +10,8 @@ signal room_selected(room_id: String)
 signal build_toggled(active: bool)
 signal build_item_selected(item_id: String)
 signal remove_mode_toggled(active: bool)
+## W13C FOTOWERK (C §3.9): „Snap A Gooby!“-Selfie-Knopf gedrückt.
+signal selfie_pressed
 
 const MAX_BUILD_ITEMS := 6
 
@@ -59,6 +61,19 @@ func _ready() -> void:
 	end_button.grow_horizontal = Control.GROW_DIRECTION_BEGIN
 	end_button.pressed.connect(func() -> void: end_pressed.emit())
 	root.add_child(end_button)
+
+	# W13C FOTOWERK (C §3.9): „Snap A Gooby!“ — Besuchs-Selfie aus der
+	# Emote-Leiste. Selbstverdrahtet (Parent = VisitScene, duck-typed),
+	# damit visit_scene.gd unangetastet bleibt; das Signal feuert zusätzlich.
+	var selfie_button := Button.new()
+	selfie_button.name = "SelfieButton"
+	selfie_button.theme_type_variation = &"BtnTeal"
+	selfie_button.text = I18nService.t("social.selfie.emote")
+	selfie_button.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	selfie_button.position = Vector2(16.0, -160.0)
+	selfie_button.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	selfie_button.pressed.connect(_on_selfie_pressed)
+	root.add_child(selfie_button)
 
 	var bottom := VBoxContainer.new()
 	bottom.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
@@ -177,3 +192,12 @@ func _on_item_toggled(active: bool, item_id: String) -> void:
 func _room_label(room_id: String) -> String:
 	var key := "home.raum.%s" % room_id
 	return I18nService.t(key) if I18nService.has_key(key) else room_id.capitalize()
+
+
+## W13C: Selfie starten — läuft nur einmal gleichzeitig (Overlay-Name-Guard).
+func _on_selfie_pressed() -> void:
+	selfie_pressed.emit()
+	var szene := get_parent()
+	if szene == null or szene.get_node_or_null("SnapAGooby") != null:
+		return
+	SnapAGooby.starte(szene, get_node_or_null("/root/GameState"))
