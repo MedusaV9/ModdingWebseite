@@ -2,6 +2,7 @@ package dev.projecteclipse.eclipse.artifact;
 
 import java.util.List;
 
+import dev.projecteclipse.eclipse.entity.geo.EclipseActionController;
 import dev.projecteclipse.eclipse.entity.geo.EclipseGeoAnimations;
 import dev.projecteclipse.eclipse.network.EclipsePayloads;
 import net.minecraft.network.chat.Component;
@@ -108,8 +109,15 @@ public class ArmArtifactItem extends Item implements GeoItem {
             }
             return state.setAndContinue(EclipseGeoAnimations.loop(GEO_ID, EclipseGeoAnimations.ANIM_IDLE));
         }));
-        AnimationController<ArmArtifactItem> action = new AnimationController<>(this,
-                EclipseGeoAnimations.CONTROLLER_ACTION, 0, state -> PlayState.STOP);
+        // POLISH2 (contract v2): `open` blends 2 t (worst single-frame snap 26.0° on
+        // glow_page_a.roty out of idle_unread -> 13°/frame; the screen-open on the same
+        // tick is unaffected). `equip` MUST stay hard: its sheet starts `ledger.roty`
+        // at -360° (a full authored spin) which is pose-identical to idle's 0° on a cut,
+        // but an unwrapped 2 t transition would whip the ledger a whole revolution.
+        AnimationController<ArmArtifactItem> action = new EclipseActionController<>(this,
+                EclipseGeoAnimations.CONTROLLER_ACTION,
+                animName -> ANIM_OPEN.equals(animName) ? 2 : 0,
+                state -> PlayState.STOP);
         action.triggerableAnim(ANIM_OPEN, EclipseGeoAnimations.once(GEO_ID, ANIM_OPEN));
         action.triggerableAnim(ANIM_EQUIP, EclipseGeoAnimations.once(GEO_ID, ANIM_EQUIP));
         controllers.add(action);

@@ -217,6 +217,27 @@ public class DeckhandEntity extends EclipseGeoMob {
                 EclipseGeoAnimations.once(geoId(), EclipseGeoAnimations.ANIM_ATTACK));
     }
 
+    /**
+     * POLISH2 (contract v2): the attack one-shot enters on {@code arm_* = 55°} while
+     * {@code idle_sag} averages 10.3° — the 45°-in-one-frame snap MB1 §9.3 measured;
+     * 3 blend ticks cut the worst single-frame delta from 49.4° to 16.5°
+     * ({@code arm_right.rotx}). {@code rise} leaves the row loop at an arbitrary phase
+     * (worst 18.5° on {@code lantern.rotx} → 9.3°/frame with 2 t); its oar hand-off is
+     * safe because {@code DeckhandRenderer.oarShown} keys on the anim IDENTITY, which
+     * GeckoLib sets at transition start. Damage precedes the attack trigger
+     * ({@code doHurtTarget}) and nothing timer-beats into either clip, so the 2–3 t
+     * clip delay is purely cosmetic. {@code death} stays hard: the 30 t
+     * {@link #tickDeath} window equals the clip length exactly.
+     */
+    @Override
+    protected int actionTransitionTicks(String animName) {
+        return switch (animName) {
+            case EclipseGeoAnimations.ANIM_ATTACK -> 3;
+            case ANIM_RISE -> 2;
+            default -> 0;
+        };
+    }
+
     // --- AI (unchanged from v1: hostile-gated combat, occasional ghost-watching) ---
 
     @Override

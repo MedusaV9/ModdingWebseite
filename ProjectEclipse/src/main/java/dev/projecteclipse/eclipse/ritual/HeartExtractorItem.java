@@ -3,6 +3,7 @@ package dev.projecteclipse.eclipse.ritual;
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.lang.ServerLang;
 import dev.projecteclipse.eclipse.core.state.LivesApi;
+import dev.projecteclipse.eclipse.entity.geo.EclipseActionController;
 import dev.projecteclipse.eclipse.entity.geo.EclipseGeoAnimations;
 import dev.projecteclipse.eclipse.network.S2CHeartBurstPayload;
 import dev.projecteclipse.eclipse.registry.EclipseItems;
@@ -100,8 +101,15 @@ public class HeartExtractorItem extends Item implements GeoItem {
             }
             return state.setAndContinue(EclipseGeoAnimations.loop(GEO_ID, EclipseGeoAnimations.ANIM_IDLE));
         }));
-        AnimationController<HeartExtractorItem> action = new AnimationController<>(this,
-                EclipseGeoAnimations.CONTROLLER_ACTION, 0, state -> PlayState.STOP);
+        // POLISH2 (contract v2): `extract` blends 2 t out of the channel plateau (worst
+        // single-frame snap 25.0° on chamber_lid.rotx -> 12.5°/frame); the heart/fragment
+        // exchange lands on the trigger tick either way, the visible recoil follows 2 t
+        // later. `refuse` stays hard (deliberate rejection jolt; entry snap only 3.5°),
+        // `equip` stays hard (masked by the vanilla item-raise slide).
+        AnimationController<HeartExtractorItem> action = new EclipseActionController<>(this,
+                EclipseGeoAnimations.CONTROLLER_ACTION,
+                animName -> ANIM_EXTRACT.equals(animName) ? 2 : 0,
+                state -> PlayState.STOP);
         action.triggerableAnim(ANIM_EXTRACT, EclipseGeoAnimations.once(GEO_ID, ANIM_EXTRACT));
         action.triggerableAnim(ANIM_REFUSE, EclipseGeoAnimations.once(GEO_ID, ANIM_REFUSE));
         action.triggerableAnim(ANIM_EQUIP, EclipseGeoAnimations.once(GEO_ID, ANIM_EQUIP));

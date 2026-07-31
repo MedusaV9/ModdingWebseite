@@ -106,6 +106,22 @@ public class FogColossusEntity extends EclipseGeoMonster {
         action.triggerableAnim(ANIM_ROAR, EclipseGeoAnimations.once(GEO_ID, ANIM_ROAR));
     }
 
+    /**
+     * POLISH2 (contract v2): only the melee backhand blends — it usually fires out of
+     * {@code walk} (worst single-frame snap 36.0° on {@code arm_right.rotx} → 12°/frame
+     * with 3 t) and the damage precedes the trigger ({@code doHurtTarget}), so the 3 t
+     * clip delay is cosmetic. {@code slam} MUST stay hard:
+     * {@code GroundSlamGoal.IMPACT_TICK} (27 t) is frame-exact against the clip's drop
+     * at 1.35 s, and a blend delays the whole clip (GeckoLib restarts the animation
+     * clock after the transition). {@code roar} is a notice-style aggro cue with its
+     * sound on the trigger tick; {@code death} feeds the scripted 50 t
+     * {@link #tickDeath} collapse whose ground-shake beat assumes clip start = trigger.
+     */
+    @Override
+    protected int actionTransitionTicks(String animName) {
+        return EclipseGeoAnimations.ANIM_ATTACK.equals(animName) ? 3 : 0;
+    }
+
     // --- AI ---
 
     @Override

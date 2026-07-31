@@ -151,6 +151,22 @@ public class StormHoundEntity extends EclipseGeoMonster {
         action.triggerableAnim(ANIM_HOWL, EclipseGeoAnimations.once(GEO_ID, ANIM_HOWL));
     }
 
+    /**
+     * POLISH2 (contract v2): only the bite blends — it fires out of {@code sprint}
+     * (worst single-frame snap 52.0° on {@code leg_fl.rotx} → 17.3°/frame with 3 t)
+     * after the damage already landed ({@code doHurtTarget} / lunge strike), so the 3 t
+     * clip delay is cosmetic follow-through. Everything else MUST stay hard:
+     * {@code charge_windup} is frame-exact against {@code ChargedLungeGoal}'s 20 t
+     * windup AND the 20 t Photon collapsing-spiral cue ({@code CUE_HOUND_WINDUP});
+     * {@code lunge} is motion-locked (dash velocity starts on the trigger tick);
+     * {@code howl} is a notice-style cue with its sound on the trigger tick;
+     * {@code death} feeds the scripted 30 t {@link #tickDeath} window.
+     */
+    @Override
+    protected int actionTransitionTicks(String animName) {
+        return EclipseGeoAnimations.ANIM_ATTACK.equals(animName) ? 3 : 0;
+    }
+
     /** Howl one-shot on the FIRST target acquisition (Fog Colossus roar pattern). */
     @Override
     public void setTarget(@Nullable LivingEntity target) {

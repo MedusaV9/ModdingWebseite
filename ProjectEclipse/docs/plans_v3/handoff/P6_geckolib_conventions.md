@@ -61,11 +61,13 @@ alpha-blends over it.
 Server/common (`dev.projecteclipse.eclipse.entity.geo`):
 
 ```
-EclipseGeoAnimations   — CONTROLLER_BASE="base", CONTROLLER_ACTION="action",
-                         ANIM_IDLE/WALK/ATTACK/DEATH, animId(path,name),
-                         loop(path,name) / once(path,name) / hold(path,name)
-EclipseGeoMob          — extends PathfinderMob implements GeoEntity (passive/ambient line)
-EclipseGeoMonster      — extends Monster implements GeoEntity (hostile/boss line)
+EclipseGeoAnimations     — CONTROLLER_BASE="base", CONTROLLER_ACTION="action",
+                           ANIM_IDLE/WALK/ATTACK/DEATH, animId(path,name),
+                           loop(path,name) / once(path,name) / hold(path,name)
+EclipseGeoMob            — extends PathfinderMob implements GeoEntity (passive/ambient line)
+EclipseGeoMonster        — extends Monster implements GeoEntity (hostile/boss line)
+EclipseActionController  — contract-v2 action controller: per-trigger blend-in ticks
+                           (default 0 = v1 hard snap); used by both bases + the geo items
 ```
 
 Both bases are identical in shape (Java single inheritance forces the mirror; P6-W1 keeps
@@ -83,14 +85,48 @@ public class FogRevenantEntity extends EclipseGeoMonster {
     // state.isMoving() else idle; override for hover-drift mobs (Drift Lantern reads its
     // own per-tick position delta because slow tick-driven motion never trips isMoving()).
     // optional: baseTransitionTicks() — blend ticks, default 4.
+    // optional (contract v2): actionTransitionTicks(String) — per-one-shot blend-in
+    // ticks on the action controller, default 0 (= v1 hard snap). See the rules below.
 }
 // server-side, anywhere in fight/AI code:
 this.triggerAction("cast_blind");   // syncs to clients on GeckoLib's own channel
 ```
 
 `registerControllers` is **final** in the bases: every mob gets exactly two controllers,
-`base` (looping idle/walk) + `action` (transition 0, triggerables only). Do not add a
+`base` (looping idle/walk) + `action` (triggerables only). Do not add a
 third controller without talking to the integrator — the names are frozen in plan §6.
+
+**Action-controller transitions — contract v2 (POLISH2 "Action-Blend"):** the `action`
+controller is an `EclipseActionController` that resolves its transition length **per
+triggered one-shot** via the overridable `actionTransitionTicks(String animName)` hook
+(items use the same class with an inline policy). The default is **0 for every
+trigger** — bit-identical to the v1 hard snap; existing mobs/items need no change.
+Before opting a one-shot into a 2–4 t blend, know the verified 4.9.2 semantics: an
+N-tick transition lerps the bone snapshots **linearly and unwrapped** to the clip's
+t=0 pose and only then starts the animation clock (`AnimationController.process` sets
+`shouldResetTick` again on the TRANSITIONING→RUNNING flip), so the WHOLE clip plays N
+ticks late relative to the trigger tick. All anim-synced FX in this repo are Java tick
+timers counted from the trigger (no GeckoLib sound/particle keyframe handlers exist),
+which yields these rules:
+
+* **MUST stay 0 (hard):** one-shots a server timer beats into mid-clip (Fog Colossus
+  `slam` — impact at 27 t == the anim drop at 1.35 s; Storm Hound `charge_windup` —
+  20 t windup == the 20 t Photon spiral cue — and `lunge` — dash velocity starts on the
+  trigger tick); deliberate horror/glitch snaps (glitch trio `glitch_blink`/`attack`,
+  Wanderer `notice` head-snap — MB5, intentional); `death` everywhere (scripted
+  `tickDeath` windows equal the clip lengths); and any one-shot whose sheet pins a bone
+  the base loop spins via Molang (Cultist `runes` 0→360, Arm-Artifact `ledger` −360→0)
+  — an unwrapped transition whips those bones through up to a full revolution, worse
+  than the wrap-around cut it replaces.
+* **MAY blend 2–4 t:** cosmetic follow-through one-shots — melee swings fired AFTER the
+  damage (`doHurtTarget` pattern: Deckhand/Colossus/Hound `attack` = 3 t), rise/open/
+  extract flourishes (Deckhand `rise` = 2 t, Arm-Artifact `open` = 2 t, Heart-Extractor
+  `extract` = 2 t). Wand one-shots measured ≤ 2° entry snap (MD1 authored matched entry
+  poses) and stay at 0 — a blend would only add FX lag.
+
+Per-consumer snap measurements (MB1 §9.3 method, wrapped deltas, spin-hazard flags) and
+the full decision table live in
+`docs/plans_v3/session_0730/POLISH2_ACTIONBLEND_REPORT.md`.
 
 Client (`dev.projecteclipse.eclipse.client.entity.geo`):
 

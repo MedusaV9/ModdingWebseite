@@ -23,9 +23,11 @@ import software.bernie.geckolib.util.GeckoLibUtil;
  * {@code GeckoLibUtil.createInstanceCache}, a {@code base} controller running
  * {@link #handleBaseState} (default walk/idle switch) and an {@code action} controller
  * holding the triggerable one-shots from {@link #registerActionTriggers} (default:
- * {@code death}, played-and-held). Fight/AI code fires one-shots server-side via
- * {@link #triggerAction(String)} — e.g. {@code this.triggerAction("cast_blind")} — which
- * GeckoLib syncs to clients on its own channel.</p>
+ * {@code death}, played-and-held; contract v2: per-trigger blend-in via
+ * {@link #actionTransitionTicks(String)}, default 0 = v1 hard snap). Fight/AI code
+ * fires one-shots server-side via {@link #triggerAction(String)} — e.g.
+ * {@code this.triggerAction("cast_blind")} — which GeckoLib syncs to clients on its own
+ * channel.</p>
  */
 public abstract class EclipseGeoMonster extends Monster implements GeoEntity {
     private final AnimatableInstanceCache geoCache = GeckoLibUtil.createInstanceCache(this);
@@ -50,15 +52,18 @@ public abstract class EclipseGeoMonster extends Monster implements GeoEntity {
     /**
      * Registers the frozen two-controller layout ({@code base} + {@code action}). Do NOT
      * override this — customize via {@link #handleBaseState} /
-     * {@link #registerActionTriggers} so every P6 mob keeps identical controller names
-     * (fight code and sibling workers rely on them).
+     * {@link #registerActionTriggers} / {@link #actionTransitionTicks(String)} so every
+     * P6 mob keeps identical controller names (fight code and sibling workers rely on
+     * them). Since contract v2 the {@code action} controller is an
+     * {@link EclipseActionController} (per-trigger blend-in, default 0 = v1 behavior).
      */
     @Override
     public final void registerControllers(AnimatableManager.ControllerRegistrar controllers) {
         controllers.add(new AnimationController<>(this, EclipseGeoAnimations.CONTROLLER_BASE,
                 baseTransitionTicks(), this::handleBaseState));
-        AnimationController<EclipseGeoMonster> action = new AnimationController<>(this,
-                EclipseGeoAnimations.CONTROLLER_ACTION, 0, state -> PlayState.STOP);
+        AnimationController<EclipseGeoMonster> action = new EclipseActionController<>(this,
+                EclipseGeoAnimations.CONTROLLER_ACTION, this::actionTransitionTicks,
+                state -> PlayState.STOP);
         registerActionTriggers(action);
         controllers.add(action);
     }
@@ -66,6 +71,22 @@ public abstract class EclipseGeoMonster extends Monster implements GeoEntity {
     /** Transition blend ticks of the {@code base} controller (plan default: 4). */
     protected int baseTransitionTicks() {
         return 4;
+    }
+
+    /**
+     * Contract v2 (POLISH2 "Action-Blend"): blend-in ticks of ONE {@code action}
+     * one-shot, resolved per trigger name at trigger time. Default {@code 0} = the v1
+     * hard snap, which stays MANDATORY for frame-exact/timer-beaten actions
+     * (impact/windup specials, {@code death}), deliberate horror/glitch snaps, and
+     * one-shots that pin bones the base loop spins via Molang — see
+     * {@link EclipseActionController} for the full rule set and
+     * {@code docs/plans_v3/session_0730/POLISH2_ACTIONBLEND_REPORT.md} for the
+     * per-consumer measurements. Opt cosmetic follow-throughs (melee swings fired
+     * after damage, rise-style flourishes) into 2–4 ticks; a blend delays the whole
+     * clip by that many ticks relative to trigger-tick FX.
+     */
+    protected int actionTransitionTicks(String animName) {
+        return 0;
     }
 
     /** {@code base} controller state machine — default: walk while moving, else idle. */
