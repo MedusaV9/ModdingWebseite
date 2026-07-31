@@ -95,6 +95,15 @@ void fragment() {
 ## Generische Choice-Karte (Nutella/Wurm/Karton): Buttons unten mittig,
 ## `options` = [{key, variation, …}]; on_pick bekommt die gewählte Option.
 static func show_choice(layer: CanvasLayer, options: Array, on_pick: Callable) -> void:
+	# W14 (FB3-Audit): die Options-Knöpfe (Herbert/Nutella/Karton) hatten
+	# 14–33 pt Tippfläche und ragten hochkant aus der Safe-Area — physischer
+	# 44-pt-Touch-Floor (Muster whats_next_hint) + Bottom-Inset-Abstand.
+	var touch_floor := float(AcTokens.TOUCH_FLOOR)
+	var bottom_inset := 0.0
+	var vp := layer.get_viewport()
+	if vp != null:
+		touch_floor = maxf(touch_floor, UiScale.touch_px_per_pt(vp) * 46.0)
+		bottom_inset = float(UiScale.safe_insets_canvas(vp)["bottom"])
 	var choice := PanelContainer.new()
 	choice.name = "EventChoice"
 	# Theme explizit setzen: Window-Theme propagiert NICHT durch CanvasLayer.
@@ -103,7 +112,7 @@ static func show_choice(layer: CanvasLayer, options: Array, on_pick: Callable) -
 	choice.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
 	choice.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	choice.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	choice.position.y -= 40.0
+	choice.position.y -= 40.0 + bottom_inset
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 10)
 	choice.add_child(box)
@@ -111,6 +120,7 @@ static func show_choice(layer: CanvasLayer, options: Array, on_pick: Callable) -
 		var btn := SquishButton.new()
 		btn.theme_type_variation = option.get("variation", &"BtnTeal")
 		btn.text = I18nService.t(str(option.get("key", "")))
+		btn.custom_minimum_size = Vector2(touch_floor, touch_floor)
 		btn.pressed.connect(
 			func() -> void:
 				choice.queue_free()
