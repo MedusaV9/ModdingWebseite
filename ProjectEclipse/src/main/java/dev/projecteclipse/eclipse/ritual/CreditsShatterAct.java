@@ -25,11 +25,16 @@ import net.minecraft.world.phys.Vec3;
  *
  * <p><b>Sampling</b> ({@link #prepare}): the REAL top-surface blocks of the sanctum
  * island are read column by column across the {@link FloatingSanctumBuilder} ellipse
- * (r 16×14, ~700 columns; the altar/dais columns fall inside it), plus a hashed ~65%
- * second-layer pick — {@value #SAMPLE_CAP}-capped, typically ~1100 fragments, inside the
- * requested 800–1500 band. The world is NEVER modified (Kulisse law): each sample spawns
- * one {@code BLOCK_DISPLAY} exactly over its source block (identity transform — the
- * overlay is pixel-perfect until the first drift push).</p>
+ * (r 16×14, ~700 columns; the altar/dais columns fall inside it). F-102
+ * "Credits-Tausende": the counts ride the {@link CreditsDisplayBudget} ladder — the
+ * surface pick plus up to FOUR hashed deeper strata layers per column (the island's
+ * real guts, probability derived from the tier's sample cap) fill toward
+ * {@link #sampleCap}: ~220 fragments on VERIFY, ~1.9k on STANDARD, ~3.2k on EPIC
+ * ("die Insel zerspringt in tausende Teile"). On VERIFY the non-core columns are
+ * hash-subsampled instead (the altar core always keeps its heart for the
+ * {@value #CORE_BREAK_TICK} flash beat). The world is NEVER modified (Kulisse law):
+ * each sample spawns one {@code BLOCK_DISPLAY} exactly over its source block (identity
+ * transform — the overlay is pixel-perfect until the first drift push).</p>
  *
  * <p><b>Choreography (F-068 shatter polish)</b>: a pure function of the act clock
  * (stateless-push law, the {@code debrisPose} recipe) — every fragment gets a hashed
@@ -43,27 +48,28 @@ import net.minecraft.world.phys.Vec3;
  * (the island coughs twice more; {@code CreditsSequence} pairs them with shake +
  * thunder, the Photon veil bakes matching rings). On top of the samples a
  * {@link #splinterCount} SPLINTER SHOWER spawns — small shards growing out of hashed
- * source columns and ejecting fast and far. The ALTAR CORE (the |dx|,|dz| ≤ 2 columns at
- * dais height) launches LAST at {@value #CORE_BREAK_TICK}t — {@code CreditsSequence}
- * fires the light flash on that exact beat and the Photon veil bakes the matching core
- * flash.</p>
+ * source columns and ejecting fast and far ({@code min(splinterCap, samples/2)} on the
+ * F-102 ladder). The ALTAR CORE (the |dx|,|dz| ≤ 2 columns at dais height) launches
+ * LAST at {@value #CORE_BREAK_TICK}t — {@code CreditsSequence} fires the light flash on
+ * that exact beat and the Photon veil bakes the matching core flash.</p>
  *
- * <p>Pushes ride {@value #PUSH_STRIDE}t interpolation windows (~1850/{@value
- * #PUSH_STRIDE} ≈ 185 entity updates/t worst case, inside the FIN-6 display budget);
- * spawns are budgeted by the caller. Discard is guaranteed: {@link CreditsSequence}
- * discards on the act-end beat, on skip, on {@code /dev end_event} and belt-and-braces
- * at run teardown, and every display carries {@link #TAG} for the crash-stray join
- * sweep.</p>
+ * <p>Pushes ride {@value #PUSH_STRIDE}t interpolation windows and are PHASE-SLICED
+ * (F-102): {@link #animate} runs every tick and pushes 1/{@value #PUSH_STRIDE} of the
+ * field, so the EPIC worst case (~4.6k live fragments incl. splinters) costs ≈ 460
+ * transform writes per tick steady — never a whole-field burst.
+ * Spawns are budgeted per tick by {@link #spawnPerTick}. Discard is guaranteed:
+ * {@link CreditsSequence} STAGGERS the act-end discard through its removal queue
+ * (never a thousands-strong single-tick despawn), discards immediately on skip /
+ * {@code /dev end_event} / run teardown, and every display carries {@link #TAG} for
+ * the crash-stray join sweep.</p>
  */
 final class CreditsShatterAct {
     /** Crash-stray sweep tag ({@code CreditsSequence.onEntityJoin}). */
     static final String TAG = "eclipse_credits_shatter";
-    /** Hard sample cap (the F-058 spec band is 800–1500). */
-    static final int SAMPLE_CAP = 1400;
-    /** Extra splinter-shower displays on top of the samples (F-068). */
-    static final int SPLINTER_CAP = 420;
-    /** Budgeted spawn rate (fragments per tick) while samples remain. */
-    static final int SPAWN_PER_TICK = 60;
+    /** Ellipse column estimate (π·16·14) the tier layer probabilities derive from. */
+    private static final double ESTIMATED_COLUMNS = 700.0D;
+    /** Deepest extra strata layer sampled below a column's surface block (F-102). */
+    private static final int MAX_EXTRA_LAYERS = 4;
     /** Transform-push cadence == interpolation window length. */
     static final int PUSH_STRIDE = 10;
     /** Act length (local ticks) the drift progress is normalized over. */
@@ -94,24 +100,36 @@ final class CreditsShatterAct {
     private BlockPos altar;
     private int islandTop;
     private int spawnCursor;
-    /** Splinter-shower size, fixed at prepare time (~30% of the sample count). */
+    /** Splinter-shower size, fixed at prepare time (tier-capped, ~50% of the samples). */
     private int splinterCount;
+    // F-102 budget-ladder rungs, resolved once in prepare (CreditsDisplayBudget).
+    private int sampleCap = 1;
+    private int splinterCap;
+    private int spawnPerTick = 1;
 
     /**
-     * Reads the island's surface into the sample list. Returns {@code false} (act
-     * invalid, {@link CreditsSequence} skips the whole shatter window) when the sanctum
-     * was never built.
+     * Reads the island's surface (plus the tiered strata layers) into the sample list.
+     * Returns {@code false} (act invalid, {@link CreditsSequence} skips the whole
+     * shatter window) when the sanctum was never built.
      */
-    boolean prepare(ServerLevel overworld, @javax.annotation.Nullable BlockPos altarPos) {
+    boolean prepare(ServerLevel overworld, @javax.annotation.Nullable BlockPos altarPos,
+            CreditsDisplayBudget.Snapshot budget) {
         if (altarPos == null) {
             return false;
         }
+        this.sampleCap = Math.max(1, budget.shatterSampleCap());
+        this.splinterCap = budget.shatterSplinterCap();
+        this.spawnPerTick = Math.max(1, budget.shatterSpawnPerTick());
         this.altar = altarPos;
         this.islandTop = FloatingSanctumBuilder.islandTopY(altarPos);
+        // F-102 tier density: how many EXTRA strata layers per column the cap asks for
+        // (0 on VERIFY — there the surface columns are hash-subsampled instead).
+        double density = this.sampleCap / ESTIMATED_COLUMNS - 1.0D;
+        double surfaceKeep = Math.min(1.0D, this.sampleCap / ESTIMATED_COLUMNS);
         int rx = FloatingSanctumBuilder.SURFACE_RADIUS_X;
         int rz = FloatingSanctumBuilder.SURFACE_RADIUS_Z;
-        for (int dx = -rx; dx <= rx && this.samples.size() < SAMPLE_CAP; dx++) {
-            for (int dz = -rz; dz <= rz && this.samples.size() < SAMPLE_CAP; dz++) {
+        for (int dx = -rx; dx <= rx && this.samples.size() < this.sampleCap; dx++) {
+            for (int dz = -rz; dz <= rz && this.samples.size() < this.sampleCap; dz++) {
                 double ellipse = dx * dx / (double) (rx * rx) + dz * dz / (double) (rz * rz);
                 if (ellipse > 1.0D) {
                     continue;
@@ -121,33 +139,52 @@ final class CreditsShatterAct {
                 overworld.getChunk(x >> 4, z >> 4); // force-load (GhostShipBuilder pattern)
                 // Top-down scan catches the altar (top+4), dais steps and pillar stumps.
                 int surfaceY = Integer.MIN_VALUE;
+                boolean core = false;
+                Sample surface = null;
                 for (int y = this.islandTop + 6; y >= this.islandTop - 2; y--) {
                     BlockPos pos = new BlockPos(x, y, z);
                     BlockState state = overworld.getBlockState(pos);
                     if (!state.isAir() && state.getRenderShape() != net.minecraft.world.level.block.RenderShape.INVISIBLE) {
                         // F-068: the altar/dais core breaks LAST (the CORE_BREAK_TICK flash).
-                        boolean core = Math.abs(dx) <= 2 && Math.abs(dz) <= 2
+                        core = Math.abs(dx) <= 2 && Math.abs(dz) <= 2
                                 && y >= this.islandTop + 1;
-                        this.samples.add(new Sample(pos, state, core));
+                        surface = new Sample(pos, state, core);
                         surfaceY = y;
                         break;
                     }
                 }
-                // Hashed second-layer pick fills the count toward the 800–1500 band.
-                if (surfaceY != Integer.MIN_VALUE && this.samples.size() < SAMPLE_CAP
-                        && CreditsSequence.hash01(dx * 61 + dz, 61) < 0.65D) {
-                    BlockPos below = new BlockPos(x, surfaceY - 1, z);
+                if (surface == null) {
+                    continue;
+                }
+                // VERIFY subsample: non-core columns thin out toward the tier cap — the
+                // core always keeps its heart (the CORE_BREAK_TICK flash needs a body).
+                if (!core && surfaceKeep < 1.0D
+                        && CreditsSequence.hash01(dx * 61 + dz, 62) >= surfaceKeep) {
+                    continue;
+                }
+                this.samples.add(surface);
+                // F-102 strata layers: the island's real guts fill toward the tier cap
+                // (layer d keeps with probability clamp(density − (d−1), 0..1)).
+                for (int d = 1; d <= MAX_EXTRA_LAYERS
+                        && this.samples.size() < this.sampleCap; d++) {
+                    double keep = Math.min(1.0D, density - (d - 1));
+                    if (keep <= 0.0D
+                            || CreditsSequence.hash01(dx * 61 + dz, 56 + d) >= keep) {
+                        continue;
+                    }
+                    BlockPos below = new BlockPos(x, surfaceY - d, z);
                     BlockState state = overworld.getBlockState(below);
-                    if (!state.isAir()) {
+                    if (!state.isAir() && state.getRenderShape()
+                            != net.minecraft.world.level.block.RenderShape.INVISIBLE) {
                         this.samples.add(new Sample(below, state, false));
                     }
                 }
             }
         }
-        this.splinterCount = Math.min(SPLINTER_CAP, this.samples.size() * 3 / 10);
+        this.splinterCount = Math.min(this.splinterCap, this.samples.size() / 2);
         EclipseMod.LOGGER.info("CreditsShatterAct: sampled {} island fragment(s) around {} "
-                + "(+{} splinter(s) planned)", this.samples.size(), altarPos.toShortString(),
-                this.splinterCount);
+                + "(+{} splinter(s) planned, tier {})", this.samples.size(),
+                altarPos.toShortString(), this.splinterCount, budget.tier());
         return !this.samples.isEmpty();
     }
 
@@ -174,9 +211,9 @@ final class CreditsShatterAct {
         return this.spawnCursor < totalCount();
     }
 
-    /** Budgeted spawn wave (≤ {@value #SPAWN_PER_TICK}/t, hard-cap guarded). */
+    /** Budgeted spawn wave (≤ {@link #spawnPerTick}/t on the tier ladder, hard-cap guarded). */
     void spawnBatch(ServerLevel overworld, int actTick) {
-        int budget = SPAWN_PER_TICK;
+        int budget = this.spawnPerTick;
         while (budget-- > 0 && this.spawnCursor < totalCount()) {
             if (CreditsSequence.actCapReached()) {
                 // Over cap: keep what flies, stop trying (the flyer-wave contract).
@@ -217,9 +254,17 @@ final class CreditsShatterAct {
         return (int) (CreditsSequence.hash01(index - this.samples.size(), 66) * this.samples.size());
     }
 
-    /** One lookahead interpolation window per fragment (FloatingDecor transport pattern). */
+    /**
+     * One lookahead interpolation window per fragment (FloatingDecor transport
+     * pattern). F-102: called EVERY act tick and pushes only the {@code i % PUSH_STRIDE
+     * == actTick % PUSH_STRIDE} phase slice — each fragment still gets its window every
+     * {@value #PUSH_STRIDE}t, but the NBT batch is 1/{@value #PUSH_STRIDE} of the field
+     * per tick (EPIC ≈ 460/t steady instead of a 4.6k spike every 10t; the client-side
+     * path is identical, the segments are merely phase-offset per fragment).
+     */
     void animate(int actTick) {
-        for (int i = 0; i < this.fragments.size(); i++) {
+        int phase = Math.floorMod(actTick, PUSH_STRIDE);
+        for (int i = phase; i < this.fragments.size(); i += PUSH_STRIDE) {
             Display.BlockDisplay fragment = this.fragments.get(i);
             if (fragment.isRemoved()) {
                 continue;
@@ -351,6 +396,19 @@ final class CreditsShatterAct {
         for (Display.BlockDisplay fragment : this.fragments) {
             CreditsSequence.untrackDisplay(fragment);
             fragment.discard();
+        }
+        this.fragments.clear();
+    }
+
+    /**
+     * F-102 staggered teardown: hands every fragment to {@code CreditsSequence}'s
+     * removal queue (drained at a fixed per-tick rate behind the act-end black) instead
+     * of a thousands-strong single-tick discard. The act forgets its displays here —
+     * the queue owns them (untrack happens at their actual discard tick).
+     */
+    void discardInto(java.util.function.Consumer<Display.BlockDisplay> sink) {
+        for (Display.BlockDisplay fragment : this.fragments) {
+            sink.accept(fragment);
         }
         this.fragments.clear();
     }

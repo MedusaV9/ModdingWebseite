@@ -45,14 +45,15 @@ import net.minecraft.world.phys.Vec3;
  *   <li><b>Sampling/spawn behind the black</b> (ripTick −320…0): budgeted column reads
  *       (≤ {@value #SAMPLE_PER_TICK}/t) + budgeted identity-pose spawn
  *       (≤ {@value #SPAWN_PER_TICK}/t) — the reveal opens on the finished intact map.
- *       LOD: near half of the camera-facing ~200° sector samples every
- *       {@value #STEP_NEAR} map blocks, the far half every {@value #STEP_FAR}
- *       ("far plates = fewer, bigger displays"); steps widen budget-first until the
- *       cell count fits {@value #CELL_CAP}.</li>
+ *       LOD: near half of the camera-facing ~200° sector samples on the fine grid, the
+ *       far half on the coarse one ("far plates = fewer, bigger displays"); the base
+ *       steps come off the F-102 {@link CreditsDisplayBudget} ladder (10/16 VERIFY,
+ *       6/10 STANDARD, 5/9 EPIC) and widen budget-first until the cell count fits the
+ *       tier's {@link #cellCap} (420 / 1300 / 1700).</li>
  *   <li><b>Crack fronts</b> ({@link #CRACK_FRONT_AT}): three fronts race along plate
  *       borders (hashed waypoints snapped onto Voronoi edges) in {@value #CRACK_STEPS}
- *       × {@value #CRACK_STEP_TICKS}t propagation steps; a pool of
- *       {@value #SEAM_POOL} glowing violet seam slats lights up along the polylines
+ *       × {@value #CRACK_STEP_TICKS}t propagation steps; a tier-sized pool of
+ *       {@link #seamPool} glowing violet seam slats lights up along the polylines
  *       ({@link #crackStep} hands each step's midpoint to {@code CreditsSequence} for
  *       the {@code credits4_crackfront} cue + shake + crack SFX).</li>
  *   <li><b>Tectonic plates</b>: the sector is carved into {@value #PLATE_COUNT}
@@ -72,13 +73,14 @@ import net.minecraft.world.phys.Vec3;
  *       lifting a plate reveals that the map has a body. At offset
  *       {@value #DEEP_RIP_AT} the deep layer itself rips in one accelerating
  *       hole-outward cascade, flowing into the act wind-down.</li>
- *   <li><b>Underside reveal</b>: a recycled pool of {@value #UNDERSIDE_POOL} bedrock
- *       slabs + hanging stalactites rides each lifted plate's transform (pure offset
- *       in the plate frame) and drains with it; the pool re-arms wave over wave.</li>
+ *   <li><b>Underside reveal</b>: a recycled tier-sized pool of {@link #undersidePool}
+ *       bedrock slabs + hanging stalactites rides each lifted plate's transform (pure
+ *       offset in the plate frame) and drains with it; the pool re-arms wave over
+ *       wave.</li>
  *   <li><b>Gravity waves</b> ({@link #GRAVITY_WAVE_AT}): ring shockwaves cross the
  *       effigy at {@value #WAVE_SPEED} anchor-blocks/t — un-lifted cells bob in a
  *       traveling eased sine (±{@value #WAVE_BOB_AMP}) and ~8% of touched cells strip
- *       a shard from the {@value #SHARD_POOL} pool (hop up, fast flat spiral in).</li>
+ *       a shard from the {@link #shardPool} pool (hop up, fast flat spiral in).</li>
  *   <li><b>Jet shreds</b>: {@link #plateCrossing} publishes the deterministic
  *       horizon-crossing schedule ({@code devourPulse} takes the max with the gulp
  *       floor); from offset ~{@value #JET_FROM} a hashed ~30% of crossings SHRED
@@ -89,25 +91,25 @@ import net.minecraft.world.phys.Vec3;
  *       strobe).</li>
  * </ul>
  *
- * <p><b>Budget</b>: crust ≤ {@value #CELL_CAP} (expected ≈ 1250) + underside
- * {@value #UNDERSIDE_POOL} + seams {@value #SEAM_POOL} + shards {@value #SHARD_POOL}
- * = ≈ 2190 displays, + the (reduced) 700-display accretion field ≈ 2890 finale peak —
- * under the audited &lt;3000 target and the 3600 hard cap (every spawn checks
+ * <p><b>Budget (F-102 ladder)</b>: crust + seams + shards + underside per tier —
+ * VERIFY ≈ 700, STANDARD ≈ 2240 (the pre-F-102 audit), EPIC ≈ 2980 displays; with the
+ * tier's accretion field + sky-drain streams the finale peaks at ≈ 0.94k / 3.4k / 5.1k,
+ * each under its own tier hard cap (every spawn checks
  * {@link CreditsSequence#actCapReached}). Pushes ride {@value #PUSH_STRIDE}t windows
- * (≈ 219 transform updates/t); block-state/brightness NBT writes are edge-triggered
- * through per-display look caches only. Discard is guaranteed on the hold beat, on
- * {@code /dev end_event} and at run teardown; every display carries {@link #TAG} for
- * the crash-stray join sweep.</p>
+ * (EPIC ≈ 300 transform updates/t); block-state/brightness NBT writes are edge-triggered
+ * through per-display look caches only. Discard is guaranteed (staggered) on the hold
+ * beat, immediately on {@code /dev end_event} and at run teardown; every display
+ * carries {@link #TAG} for the crash-stray join sweep.</p>
  */
 final class CreditsMapRipAct {
     static final String TAG = "eclipse_credits_maprip";
 
-    // --- budgets / pools ---
+    // --- budgets / pools (F-102: resolved off the CreditsDisplayBudget ladder) ---
     /** Hard crust-cell cap; the LOD steps widen until the grid fits it. */
-    static final int CELL_CAP = 1300;
-    static final int SEAM_POOL = 160;
-    static final int SHARD_POOL = 280;
-    static final int UNDERSIDE_POOL = 500;
+    private int cellCap = 1;
+    private int seamPool;
+    private int shardPool;
+    private int undersidePool;
     static final int SAMPLE_PER_TICK = 60;
     static final int SPAWN_PER_TICK = 30;
     static final int UNDERSIDE_SPAWN_PER_TICK = 40;
@@ -355,11 +357,12 @@ final class CreditsMapRipAct {
 
     // Crack-front geometry (anchor frame) + the seam-slat pool schedule.
     private final Vector3f[][] crackWaypoints = new Vector3f[CRACK_FRONT_AT.length][CRACK_STEPS + 1];
-    private final Vector3f[] seamPos = new Vector3f[SEAM_POOL];
-    private final float[] seamYaw = new float[SEAM_POOL];
-    private final float[] seamLen = new float[SEAM_POOL];
-    private final int[] seamAppear = new int[SEAM_POOL];
-    private final int[] seamFade = new int[SEAM_POOL];
+    // Seam-slat pool arrays (allocated in prepare — the pool size is tier-resolved).
+    private Vector3f[] seamPos = new Vector3f[0];
+    private float[] seamYaw = new float[0];
+    private float[] seamLen = new float[0];
+    private int[] seamAppear = new int[0];
+    private int[] seamFade = new int[0];
 
     private final List<UndersideJob> undersideJobs = new ArrayList<>();
     private int[][] undersideSlotJobs;
@@ -407,11 +410,23 @@ final class CreditsMapRipAct {
      * ({@link #sampleBatch}). Never fails: the finale act must always have staged
      * SOMETHING (an empty grid only logs and skips the whole rip).
      */
-    void prepare(ServerLevel overworld, CreditsBlackHoleAct blackHole, int nonce) {
+    void prepare(ServerLevel overworld, CreditsBlackHoleAct blackHole, int nonce,
+            CreditsDisplayBudget.Snapshot budget) {
         if (!blackHole.prepared()) {
             EclipseMod.LOGGER.warn("CreditsMapRipAct: black-hole act not staged — map rip skipped");
             return;
         }
+        // F-102 ladder rungs: crust cap + pools + LOD base steps (finer steps = more,
+        // smaller cells — the widen loop below still self-adapts budget-first).
+        this.cellCap = Math.max(1, budget.ripCellCap());
+        this.seamPool = Math.max(CRACK_FRONT_AT.length, budget.ripSeamPool());
+        this.shardPool = Math.max(0, budget.ripShardPool());
+        this.undersidePool = Math.max(0, budget.ripUndersidePool());
+        this.seamPos = new Vector3f[this.seamPool];
+        this.seamYaw = new float[this.seamPool];
+        this.seamLen = new float[this.seamPool];
+        this.seamAppear = new int[this.seamPool];
+        this.seamFade = new int[this.seamPool];
         this.nonce = nonce;
         this.vantage = blackHole.vantage();
         this.fxAnchor = blackHole.fxAnchor();
@@ -432,11 +447,12 @@ final class CreditsMapRipAct {
         int stage = WorldStageService.stage(overworld.getServer(), DiscProfile.OVERWORLD);
         this.sampleRadius = Math.min(RADIUS_CLAMP, DiscGeometry.mainDiscRadius(stage));
 
-        // Budget-first LOD: widen the steps until the sector grid fits the cell cap.
+        // Budget-first LOD: widen the steps until the sector grid fits the cell cap
+        // (the tier's base steps set the fineness ceiling — EPIC starts finer).
         for (int widen = 0; widen <= 12; widen++) {
-            this.stepNear = STEP_NEAR + widen;
-            this.stepFar = STEP_FAR + 2 * widen;
-            if (collectCells(null) <= CELL_CAP || widen == 12) {
+            this.stepNear = budget.ripStepNear() + widen;
+            this.stepFar = budget.ripStepFar() + 2 * widen;
+            if (collectCells(null) <= this.cellCap || widen == 12) {
                 collectCells(this.cells);
                 break;
             }
@@ -731,10 +747,11 @@ final class CreditsMapRipAct {
         EclipseMod.LOGGER.info("CreditsMapRipAct: sampled — {} cell(s) / {} plate(s) / {} sub-plate(s), "
                 + "{} seam slat(s), {} underside job(s) (pool {}), {} shard job(s) (pool {}), "
                 + "peak ≈ {} display(s)", this.cells.size(), livePlateCount(), this.subs.size(),
-                SEAM_POOL, this.undersideJobs.size(), Math.min(UNDERSIDE_POOL, this.undersideJobs.size()),
-                this.shardJobs.size(), Math.min(SHARD_POOL, this.shardJobs.size()),
-                this.cells.size() + SEAM_POOL + Math.min(SHARD_POOL, this.shardJobs.size())
-                        + Math.min(UNDERSIDE_POOL, this.undersideJobs.size()));
+                this.seamPool, this.undersideJobs.size(),
+                Math.min(this.undersidePool, this.undersideJobs.size()),
+                this.shardJobs.size(), Math.min(this.shardPool, this.shardJobs.size()),
+                this.cells.size() + this.seamPool + Math.min(this.shardPool, this.shardJobs.size())
+                        + Math.min(this.undersidePool, this.undersideJobs.size()));
     }
 
     private int livePlateCount() {
@@ -889,7 +906,7 @@ final class CreditsMapRipAct {
      * fanned ±50° around the vantage direction, waypoints wobbled laterally and then
      * SNAPPED onto the nearest Voronoi-border cell — the glowing seams follow the
      * plate borders the later tear opens along (cause and effect read as one system).
-     * The {@value #SEAM_POOL} slat pool is laid along the polylines, each slat timed
+     * The {@link #seamPool} slat pool is laid along the polylines, each slat timed
      * to its propagation step and fading when its border's plate lifts.
      */
     private void buildCrackFronts() {
@@ -925,9 +942,9 @@ final class CreditsMapRipAct {
                         : new Vector3f(snap.bx, snap.by, snap.bz);
             }
         }
-        // The slat pool along the polylines (per front ≈ SEAM_POOL / 3, ≈ 9 per segment).
-        int perFront = SEAM_POOL / CRACK_FRONT_AT.length;
-        for (int slat = 0; slat < SEAM_POOL; slat++) {
+        // The slat pool along the polylines (per front ≈ seamPool / 3, tier-sized).
+        int perFront = this.seamPool / CRACK_FRONT_AT.length;
+        for (int slat = 0; slat < this.seamPool; slat++) {
             int f = Math.min(CRACK_FRONT_AT.length - 1, slat / perFront);
             int within = slat - f * perFront;
             int perSeg = Math.max(1, perFront / CRACK_STEPS);
@@ -975,7 +992,7 @@ final class CreditsMapRipAct {
     /**
      * Underside jobs: ~1 dark slab per 2.5 members + ~1 hanging stalactite per 6,
      * per plate, active from just before the plate's lift until its sub-plate drains.
-     * Jobs sort by start and round-robin over the {@value #UNDERSIDE_POOL} pool —
+     * Jobs sort by start and round-robin over the {@link #undersidePool} pool —
      * earlier waves' pieces re-arm for later waves (never despawned mid-act).
      */
     private void buildUndersideJobs() {
@@ -998,7 +1015,7 @@ final class CreditsMapRipAct {
                     plate.liftStart + 2, end));
         }
         this.undersideJobs.sort((a, b) -> Integer.compare(a.start(), b.start()));
-        int slots = Math.min(UNDERSIDE_POOL, this.undersideJobs.size());
+        int slots = Math.min(this.undersidePool, this.undersideJobs.size());
         this.undersideSlotJobs = new int[slots][];
         if (slots == 0) {
             this.undersideJobCache = new int[0];
@@ -1021,7 +1038,7 @@ final class CreditsMapRipAct {
     /**
      * Gravity-wave shard jobs: as each ring crest passes a still-resting cell, a
      * hashed ~8% strip a small shard off the surface (hop up, then a fast flat spiral
-     * into the hole). Jobs round-robin over the {@value #SHARD_POOL} pool.
+     * into the hole). Jobs round-robin over the {@link #shardPool} pool.
      */
     private void buildShardJobs() {
         for (int w = 0; w < GRAVITY_WAVE_AT.length; w++) {
@@ -1038,7 +1055,7 @@ final class CreditsMapRipAct {
             }
         }
         this.shardJobs.sort((a, b) -> Integer.compare(a.start(), b.start()));
-        int slots = Math.min(SHARD_POOL, this.shardJobs.size());
+        int slots = Math.min(this.shardPool, this.shardJobs.size());
         this.shardSlotJobs = new int[slots][];
         if (slots == 0) {
             this.shardJobCache = new int[0];
@@ -1061,7 +1078,7 @@ final class CreditsMapRipAct {
     // ------------------------------------------------------------------ spawning
 
     private int mainSpawnTotal() {
-        return this.cells.size() + SEAM_POOL
+        return this.cells.size() + this.seamPool
                 + (this.shardSlotJobs == null ? 0 : this.shardSlotJobs.length);
     }
 
@@ -1098,7 +1115,7 @@ final class CreditsMapRipAct {
                 // Dim space brightness — the intact map lies under a starlit sky.
                 CreditsSequence.applyBrightnessOverride(piece, 5, 2);
                 this.crustDisplays.add(piece);
-            } else if (i < this.cells.size() + SEAM_POOL) {
+            } else if (i < this.cells.size() + this.seamPool) {
                 int slat = i - this.cells.size();
                 piece.setBlockState(SEAM_PALETTE[
                         CreditsSequence.hash01(slat, 218) < 0.72D ? 0 : 1]);
@@ -1106,7 +1123,7 @@ final class CreditsMapRipAct {
                 CreditsSequence.applyBrightnessOverride(piece, 15, 15);
                 this.seamDisplays.add(piece);
             } else {
-                int slot = i - this.cells.size() - SEAM_POOL;
+                int slot = i - this.cells.size() - this.seamPool;
                 this.shardJobCache[slot] = this.shardSlotJobs[slot].length == 0
                         ? Integer.MIN_VALUE : this.shardSlotJobs[slot][0];
                 piece.setBlockState(this.shardJobCache[slot] == Integer.MIN_VALUE
@@ -1350,6 +1367,20 @@ final class CreditsMapRipAct {
         discardList(this.seamDisplays);
         discardList(this.shardDisplays);
         discardList(this.undersideDisplays);
+    }
+
+    /**
+     * F-102 staggered teardown (all four pools): ownership moves to
+     * {@code CreditsSequence}'s removal queue — see {@code CreditsShatterAct#discardInto}.
+     */
+    void discardInto(java.util.function.Consumer<Display.BlockDisplay> sink) {
+        for (List<Display.BlockDisplay> pool : List.of(this.crustDisplays, this.seamDisplays,
+                this.shardDisplays, this.undersideDisplays)) {
+            for (Display.BlockDisplay piece : pool) {
+                sink.accept(piece);
+            }
+            pool.clear();
+        }
     }
 
     private static void discardList(List<Display.BlockDisplay> displays) {

@@ -204,6 +204,20 @@ final class CreditsFormationAct {
         this.displays.clear();
     }
 
+    /**
+     * F-102 staggered teardown (the scripted end-of-act path): hands the ~{@value
+     * #TOTAL}-strong backdrop to {@code CreditsSequence}'s removal queue instead of a
+     * single-tick mass discard (the shrink-out already took every element to the scale
+     * floor, so the staggered removal is invisible). The act forgets its displays here
+     * — the queue owns them; {@link #discard} stays the immediate abort path.
+     */
+    void discardInto(java.util.function.Consumer<Display.BlockDisplay> sink) {
+        for (Display.BlockDisplay piece : this.displays) {
+            sink.accept(piece);
+        }
+        this.displays.clear();
+    }
+
     // ------------------------------------------------------------------ poses
 
     /**

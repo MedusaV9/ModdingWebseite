@@ -1,0 +1,12 @@
+{
+  "en_us": {
+    "dev.eclipse.doc.credits.tier": "Shows or overrides the credits display-budget tier (verify = low counts for headless/llvmpipe acceptance runs, standard = the default live show, epic = thousands of block displays for real GPUs). The override lasts until the next server restart and applies to the NEXT credits start; the persistent choice lives in eclipse-credits-budget.toml.",
+    "dev.eclipse.credits.tier_current": "Credits display tier: %s (config eclipse-credits-budget.toml; /dev credits tier <verify|standard|epic> overrides until restart)",
+    "dev.eclipse.credits.tier_set": "Credits display tier override: %s — applies to the NEXT credits start (a running sequence keeps its snapshot)"
+  },
+  "de_de": {
+    "dev.eclipse.doc.credits.tier": "Zeigt oder überschreibt die Display-Budget-Stufe der Credits (verify = niedrige Counts für Headless-/llvmpipe-Abnahmen, standard = die normale Live-Show, epic = tausende Block-Displays für echte GPUs). Die Überschreibung gilt bis zum nächsten Server-Neustart und greift beim NÄCHSTEN Credits-Start; die dauerhafte Wahl liegt in eclipse-credits-budget.toml.",
+    "dev.eclipse.credits.tier_current": "Credits-Display-Stufe: %s (Config eclipse-credits-budget.toml; /dev credits tier <verify|standard|epic> überschreibt bis zum Neustart)",
+    "dev.eclipse.credits.tier_set": "Credits-Display-Stufe überschrieben: %s — gilt ab dem NÄCHSTEN Credits-Start (eine laufende Sequenz behält ihren Snapshot)"
+  }
+}

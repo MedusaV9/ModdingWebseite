@@ -136,7 +136,7 @@ import net.neoforged.neoforge.network.PacketDistributor;
  *       starts, the sky flips to SPACE (dense stars, no sun/moon;
  *       {@code S2CCreditsSkyPayload}). t={@value #T_FINALE_REVEAL} — the black releases:
  *       a giant black hole ({@code black_hole_maw} Photon + the {@code eclipse:black_hole}
- *       Veil post distortion/desaturation + {@value CreditsBlackHoleAct#COUNT} RECYCLED
+ *       Veil post distortion/desaturation + the tier-budgeted RECYCLED accretion
  *       displays of real sampled terrain in tear-off clusters, {@code CreditsBlackHoleAct})
  *       slowly eats the map while the frame drains gray — F-068: the sky/post intensity
  *       ladder RAMPS the lensing, deterministic "Schluck" pulses
@@ -158,7 +158,17 @@ import net.neoforged.neoforge.network.PacketDistributor;
  *       shreds strobing the shader ({@code credits4_jetburst} +
  *       {@code S2CCreditsJetPayload}), a deep bedrock layer that itself rips at the
  *       end, gulps now SYNCED to plate horizon-crossings and a pitch-cycled fake
- *       shepard riser under it all ({@link #mapRipBeats}).
+ *       shepard riser under it all ({@link #mapRipBeats}). F-102
+ *       "Himmel-Kontraktion + Eclipse-Verschwinden": from tele+
+ *       {@value CreditsBlackHoleAct#SKYDRAIN_FROM} the sky itself contracts —
+ *       tier-budgeted debris STREAMS ({@code CreditsBlackHoleAct}'s sky-drain
+ *       population + the {@code credits5_skydrain} veil on a
+ *       {@value #SKYDRAIN_CUE_PERIOD}t cadence) pour out of the high dome into the
+ *       hole — and across {@link #ECLIPSE_FADE_AT} the SPACE-sky/post intensity walks
+ *       BACK DOWN ({@link #ECLIPSE_FADE_INTENSITY}) while the maw's re-fire cadence
+ *       stops at reveal+{@value #MAW_REFIRE_UNTIL}: the eclipse visibly dims and
+ *       shrinks away as its own readable beat, sealed by one last dim flare
+ *       ({@code credits5_lastlight} at reveal+{@value #ECLIPSE_LASTLIGHT_AT}).
  *       t={@value #T_FINALE_DARK} — everything melts to black;
  *       t={@value #T_FINALE_TITLE} — "Minecraft Eclipse" MATERIALIZES letter by letter
  *       out of particle dust (V3 finale card) and holds until the victory theme
@@ -170,10 +180,14 @@ import net.neoforged.neoforge.network.PacketDistributor;
  *       ends the run. No client close, no server halt.</li>
  * </ol>
  *
- * <p><b>Display budget</b>: hard cap {@value #DISPLAY_HARD_CAP} live displays of all kinds
- * (spawns beyond it are dropped, logged); every wave spawns budgeted; transform pushes ride
- * 4–14t interpolation windows; every act discards behind a fade and belt-and-braces in
- * {@link #endEvent}.</p>
+ * <p><b>Display budget (F-102 ladder)</b>: every big population reads its counts from the
+ * {@link CreditsDisplayBudget} snapshot taken at {@link #begin} (tiers
+ * {@code verify/standard/epic} — config {@code displayTier} or {@code /dev credits tier});
+ * the tier's hard cap bounds live displays of all kinds (spawns beyond it are dropped,
+ * logged); every wave spawns budgeted; transform pushes ride 4–14t interpolation windows;
+ * every act discards behind a fade — big teardowns STAGGERED through
+ * {@link #queueDiscard} ({@value #DISCARD_PER_TICK}/t) — and belt-and-braces immediately
+ * in {@link #endEvent}.</p>
  *
  * <p><b>Failure-safety</b> (IDEAS §B5): the machine is purely time-driven (no beat can
  * wedge it); {@link CreditsData} persists started/completed/phase — a restart mid-sequence
@@ -228,6 +242,14 @@ public final class CreditsSequence implements SequenceReplayable {
     private static final ResourceLocation CUE_CREDITS4_CRACKFRONT = FxCues.cue("credits4_crackfront");
     private static final ResourceLocation CUE_CREDITS4_PLATEBREAK = FxCues.cue("credits4_platebreak");
     private static final ResourceLocation CUE_CREDITS4_JETBURST = FxCues.cue("credits4_jetburst");
+
+    /**
+     * F-102 "Himmel-Kontraktion + Eclipse-Verschwinden" cue ids, same {@link FxCues#cue}
+     * derivation (client rows in {@code veilfx.CreditsFinaleFxRows}; assets by
+     * {@code tools/photon/credits5_fx.py}).
+     */
+    private static final ResourceLocation CUE_CREDITS5_SKYDRAIN = FxCues.cue("credits5_skydrain");
+    private static final ResourceLocation CUE_CREDITS5_LASTLIGHT = FxCues.cue("credits5_lastlight");
 
     /** The one-shot epilogue dimension (pre-dawn beach; datapack JSONs). */
     public static final ResourceKey<Level> EPILOGUE = ResourceKey.create(Registries.DIMENSION,
@@ -379,6 +401,33 @@ public final class CreditsSequence implements SequenceReplayable {
      */
     private static final int FINALE_TREMOR_PERIOD = 80;
     /**
+     * F-102 "Eclipse-Verschwinden": after the gray ladder peaks (last climb step at
+     * reveal+1100), the SPACE-sky/post intensity walks BACK DOWN across these reveal
+     * offsets — the hole/eclipse visibly dims and shrinks away as its own readable beat
+     * before the {@value #T_FINALE_DARK} black melt (long client ramps overlap into one
+     * continuous decay, the mirror of the six-step climb).
+     */
+    private static final int[] ECLIPSE_FADE_AT = {1140, 1220, 1290};
+    private static final float[] ECLIPSE_FADE_INTENSITY = {0.8F, 0.45F, 0.12F};
+    private static final int[] ECLIPSE_FADE_RAMP = {100, 90, 120};
+    /**
+     * F-102: last Photon-maw/nebula re-fire (reveal offset, was every
+     * {@value CreditsBlackHoleAct#MAW_CADENCE}t until the dark beat) — the ~340t
+     * one-shot dies out right as the eclipse fade takes the sky down.
+     */
+    private static final int MAW_REFIRE_UNTIL = 1050;
+    /**
+     * F-102 sky-contraction veil ({@code credits5_skydrain}) cadence, reveal offsets —
+     * the particle half of the contraction; the display streams live in
+     * {@code CreditsBlackHoleAct} (its {@value CreditsBlackHoleAct#SKYDRAIN_FROM} act
+     * tick lands on the same beat through the tele→reveal offset).
+     */
+    private static final int SKYDRAIN_CUE_FROM = 560;
+    private static final int SKYDRAIN_CUE_PERIOD = 150;
+    private static final int SKYDRAIN_CUE_UNTIL = 1220;
+    /** F-102: the eclipse's LAST LIGHT — one dim flare as it winks out (reveal offset). */
+    private static final int ECLIPSE_LASTLIGHT_AT = 1270;
+    /**
      * F-090/F-093 map rip: the effigy grid's budgeted WORLD sampling starts here —
      * ≤ {@value CreditsMapRipAct#SAMPLE_PER_TICK} forced column reads/t spread across
      * the post-card black (~1300 chunk touches never land in one tick), done long
@@ -431,18 +480,12 @@ public final class CreditsSequence implements SequenceReplayable {
     private static final int FLYER_CYCLE_MIN = 260;
     private static final int FLYER_CYCLE_VAR = 140;
     /**
-     * Hard cap on live credits displays of ALL kinds (flyers + eclipse + burst debris +
-     * shatter fragments + formations + black-hole accretion): spawns beyond it are
-     * dropped and logged — a lag spiral can never out-spawn the budget. F-057 raised it
-     * for the thousands-strong backdrop; F-068 re-audited the worst concurrent sets:
-     * beach act ≈ flyers 288 + shadows ~45 + formations 1800 + eclipse 136 + burst 300
-     * ≈ 2570; shatter act ≈ 1400 samples + 420 splinters ≈ 1820. F-090/F-093 re-audit:
-     * the black-hole finale is now the sequence peak — map-rip crust ≤ 1300 (expected
-     * ≈ 1250) + underside pool 500 + seam pool 160 + shard pool 280 + the (reduced)
-     * 700-display accretion field ≈ 2890, all recycled. Every set stays under the
-     * &lt;3000-simultaneous performance target.
+     * F-102 staggered despawn: the big act teardowns (shatter end, finale hold) move
+     * their displays into {@link #DISCARD_QUEUE} and the tick machine discards at most
+     * this many per tick — a thousands-strong set never despawns in one tick. Abort
+     * paths ({@code endEvent}/{@code forceClearNow}/{@code skip}) flush immediately.
      */
-    private static final int DISPLAY_HARD_CAP = 3600;
+    private static final int DISCARD_PER_TICK = 150;
     private static final String FLYER_TAG = "eclipse_credits_flyer";
     private static final String WHEEL_TAG = "eclipse_credits_wheel";
     /** Golden angle (radians) — tumble/placement phases: neighbors maximally de-phased. */
@@ -548,6 +591,14 @@ public final class CreditsSequence implements SequenceReplayable {
      * crash strays ({@code StructureFlightFx.onEntityJoin} doctrine, POL-S-05).
      */
     private static final Set<UUID> LIVE_DISPLAYS = Collections.synchronizedSet(new HashSet<>());
+    /**
+     * F-102 staggered-despawn queue (server thread only): displays whose act already
+     * forgot them ({@code discardInto}) but whose actual {@code discard()} is drained
+     * at {@value #DISCARD_PER_TICK}/t by {@link #drainDiscardQueue} — they stay in
+     * {@link #LIVE_DISPLAYS} (and under the hard cap) until really gone.
+     */
+    private static final java.util.ArrayDeque<Display.BlockDisplay> DISCARD_QUEUE =
+            new java.util.ArrayDeque<>();
 
     private CreditsSequence() {}
 
@@ -580,6 +631,7 @@ public final class CreditsSequence implements SequenceReplayable {
         // In-memory only: orphaned displays that made it to disk are swept by the
         // join-time stray check on next boot (the StructureFlightFx pattern).
         LIVE_DISPLAYS.clear();
+        DISCARD_QUEUE.clear();
     }
 
     /** StructureFlightFx sweep doctrine: a tagged display we did not spawn is a crash stray. */
@@ -605,6 +657,8 @@ public final class CreditsSequence implements SequenceReplayable {
     private static final class Run {
         final MinecraftServer server;
         final int nonce;
+        /** F-102: the display-budget ladder rung, snapshotted once at begin(). */
+        final CreditsDisplayBudget.Snapshot budget;
         int ticks;
         /** The player posed at the wheel for the helm shot. */
         @Nullable
@@ -637,9 +691,10 @@ public final class CreditsSequence implements SequenceReplayable {
         /** F-090/F-093 "Map-Zerreißen V3" map-effigy stage manager. */
         final CreditsMapRipAct mapRip = new CreditsMapRipAct();
 
-        Run(MinecraftServer server, int nonce) {
+        Run(MinecraftServer server, int nonce, CreditsDisplayBudget.Snapshot budget) {
             this.server = server;
             this.nonce = nonce;
+            this.budget = budget;
         }
 
         void enter(Phase phase) {
@@ -676,23 +731,29 @@ public final class CreditsSequence implements SequenceReplayable {
             EclipseMod.LOGGER.warn("CreditsSequence: this world already rolled credits — running again (dev re-fire)");
         }
         int nonce = ThreadLocalRandom.current().nextInt(1, Integer.MAX_VALUE);
-        run = new Run(server, nonce);
+        // F-102: resolve the display-budget ladder ONCE per run — deterministic pose
+        // functions must never see counts change under them (tier switches mid-run
+        // only affect the next start).
+        CreditsDisplayBudget.Snapshot budget = CreditsDisplayBudget.snapshot();
+        run = new Run(server, nonce, budget);
         data.setStarted(true);
         data.setCompleted(false);
         data.setNonce(nonce);
         run.enter(Phase.SHATTER);
+        EclipseMod.LOGGER.info("CreditsSequence: display-budget tier {} (hard cap {})",
+                budget.tier(), budget.displayHardCap());
 
         // F-058: sample the sanctum island NOW (behind the opening fade) — the shatter
         // prologue never modifies the world, it only reads the real surface blocks.
         BlockPos altar = EclipseWorldState.get(server).getSanctumAltarPos();
-        if (!run.shatter.prepare(server.overworld(), altar)) {
+        if (!run.shatter.prepare(server.overworld(), altar, budget)) {
             EclipseMod.LOGGER.warn("CreditsSequence: no sanctum island to shatter — the F-058 prologue is skipped");
         }
         // F-056: the black-hole finale always has a stage (altar column or spawn fallback).
-        run.blackHole.prepare(server.overworld(), altar);
+        run.blackHole.prepare(server.overworld(), altar, budget);
         // F-090/F-093: the map effigy stages its GEOMETRY off the same vantage ray (no
         // world reads yet — the budgeted disc sampling runs behind the post-card black).
-        run.mapRip.prepare(server.overworld(), run.blackHole, nonce);
+        run.mapRip.prepare(server.overworld(), run.blackHole, nonce, budget);
 
         // t=0: fade to black (held through the shatter vantage hop at T_SHATTER_VANTAGE),
         // music out, everyone hidden (F-057: invisibility without particles + the
@@ -733,6 +794,7 @@ public final class CreditsSequence implements SequenceReplayable {
             discardEclipse(current);
             current.shatter.discard();
             current.formations.discard();
+            flushDiscardQueue();
             // The white fade-out beat expects the sky override gone (the shatter may
             // still own it when skipping early).
             PacketDistributor.sendToAllPlayers(new CreditsPayloads.S2CCreditsSkyPayload(
@@ -766,6 +828,7 @@ public final class CreditsSequence implements SequenceReplayable {
         current.formations.discard();
         current.blackHole.discard();
         current.mapRip.discard();
+        flushDiscardQueue();
         run = null;
         ServerLevel overworld = server.overworld();
         BlockPos spawn = overworld.getSharedSpawnPos();
@@ -816,6 +879,7 @@ public final class CreditsSequence implements SequenceReplayable {
         current.formations.discard();
         current.blackHole.discard();
         current.mapRip.discard();
+        flushDiscardQueue();
         run = null;
         TASKS.clear();
         return before - LIVE_DISPLAYS.size();
@@ -826,6 +890,9 @@ public final class CreditsSequence implements SequenceReplayable {
     @SubscribeEvent
     static void onServerTick(ServerTickEvent.Post event) {
         tickScheduler(event.getServer());
+        // F-102 staggered despawn: drained before the beats, independent of the run
+        // (the queue keeps emptying behind the hold black at DISCARD_PER_TICK/t).
+        drainDiscardQueue();
         Run current = run;
         if (current == null) {
             return;
@@ -867,9 +934,10 @@ public final class CreditsSequence implements SequenceReplayable {
             if (current.shatter.spawnRemaining()) {
                 current.shatter.spawnBatch(overworld, t - T_SHATTER_BREAK);
             }
-            if ((t - T_SHATTER_BREAK) % CreditsShatterAct.PUSH_STRIDE == 0) {
-                current.shatter.animate(t - T_SHATTER_BREAK);
-            }
+            // F-102: called every tick — the act pushes one PUSH_STRIDE phase slice
+            // per call (each fragment still rides a full-stride window; the per-tick
+            // NBT batch stays small at every tier).
+            current.shatter.animate(t - T_SHATTER_BREAK);
             if ((t - T_SHATTER_BREAK) % RUMBLE_PERIOD == 0) {
                 shatterRumble(current, t);
             }
@@ -902,12 +970,17 @@ public final class CreditsSequence implements SequenceReplayable {
             beatLightningStrike(current, index);
         }
         // FIN-6 display budget: every wave below spawns ≤ its per-tick budget, never past
-        // DISPLAY_HARD_CAP; every animation rides interpolation windows on a fixed stride.
+        // the tiered hard cap; every animation rides interpolation windows on a fixed stride.
         // F-057 formation backdrop (spawn → drift → shrink-out with the flyers).
+        // F-102: the spawn CALLS are gated by the tier's formationCap — each batch adds
+        // ≤ SPAWN_PER_TICK, so stopping after ceil(cap/rate) batches caps the backdrop
+        // (VERIFY: 300 of the 1800) without touching the act's own choreography.
         if (t >= T_FORMATION && t < T_FLYERS_END) {
             ServerLevel epilogue = current.server.getLevel(EPILOGUE);
             if (epilogue != null) {
-                if (current.formations.spawnRemaining()) {
+                if (current.formations.spawnRemaining()
+                        && (t - T_FORMATION) * CreditsFormationAct.SPAWN_PER_TICK
+                                < current.budget.formationCap()) {
                     current.formations.spawnBatch(epilogue, t - T_FORMATION);
                 }
                 if ((t - T_FORMATION) % CreditsFormationAct.PUSH_STRIDE == 0) {
@@ -927,7 +1000,9 @@ public final class CreditsSequence implements SequenceReplayable {
         }
         if (t == T_FLYERS_END + FLYER_SHRINK_TICKS) {
             discardFlyers(current);
-            current.formations.discard();
+            // F-102: the ~1800-strong backdrop (already shrunk to the scale floor)
+            // drains through the removal queue — never a single-tick mass discard.
+            current.formations.discardInto(CreditsSequence::queueDiscard);
         }
         if (t >= T_ECLIPSE_RISE && t < T_BURST
                 && current.eclipseShell.size() + current.eclipseCorona.size()
@@ -976,19 +1051,51 @@ public final class CreditsSequence implements SequenceReplayable {
         // F-056 black-hole finale: accretion spawn/pushes, maw cue cadence, sky ladder.
         if (t > T_FINALE_TELE && t < T_FINALE_HOLD) {
             ServerLevel overworld = current.server.overworld();
-            if (current.blackHole.spawnRemaining()) {
+            if (current.blackHole.spawnRemaining(t - T_FINALE_TELE)) {
                 current.blackHole.spawnBatch(overworld, t - T_FINALE_TELE);
             }
-            if ((t - T_FINALE_TELE) % CreditsBlackHoleAct.PUSH_STRIDE == 0) {
+            // F-102: half-stride offset — the reveal sits a stride multiple after the
+            // tele beat, so without it the accretion AND map-rip fields would push
+            // their transform waves on the SAME ticks (EPIC ≈ 5.1k NBT writes in one
+            // tick); de-phased, each wave stays at/below the pre-F-102 audited spike.
+            if ((t - T_FINALE_TELE) % CreditsBlackHoleAct.PUSH_STRIDE
+                    == CreditsBlackHoleAct.PUSH_STRIDE / 2) {
                 current.blackHole.animate(t - T_FINALE_TELE);
             }
-            if (t >= T_FINALE_REVEAL && t < T_FINALE_DARK
+            // F-102: the maw's re-fire cadence STOPS at reveal+MAW_REFIRE_UNTIL — the
+            // ~340t one-shot dies out right as the eclipse-fade beat takes the sky down.
+            if (t >= T_FINALE_REVEAL && t < T_FINALE_REVEAL + MAW_REFIRE_UNTIL
                     && (t - T_FINALE_REVEAL) % CreditsBlackHoleAct.MAW_CADENCE == 0) {
                 fireBlackHoleMaw(current, t);
             }
             for (int step = 0; step < FINALE_SKY_STEP_AT.length; step++) {
                 if (t == T_FINALE_REVEAL + FINALE_SKY_STEP_AT[step]) {
                     sendFinaleSky(current, FINALE_SKY_STEP_INTENSITY[step], 260);
+                }
+            }
+            // F-102 "Eclipse-Verschwinden": the mirror of the climb — the SPACE-sky/post
+            // intensity walks back down; the hole/eclipse visibly dims and shrinks away
+            // as its own readable beat before the dark melt.
+            for (int step = 0; step < ECLIPSE_FADE_AT.length; step++) {
+                if (t == T_FINALE_REVEAL + ECLIPSE_FADE_AT[step]) {
+                    sendFinaleSky(current, ECLIPSE_FADE_INTENSITY[step], ECLIPSE_FADE_RAMP[step]);
+                }
+            }
+            // F-102 "Himmel-Kontraktion": the sky-drain veil rides its cue cadence over
+            // the display streams (CreditsBlackHoleAct.SKYDRAIN_FROM lands on the same
+            // window through the tele→reveal offset).
+            if (t >= T_FINALE_REVEAL + SKYDRAIN_CUE_FROM && t <= T_FINALE_REVEAL + SKYDRAIN_CUE_UNTIL
+                    && (t - T_FINALE_REVEAL - SKYDRAIN_CUE_FROM) % SKYDRAIN_CUE_PERIOD == 0) {
+                FxPayloads.sendFxEvent(overworld, CUE_CREDITS5_SKYDRAIN,
+                        current.blackHole.fxAnchor(), 0.0F, 0.0F, -1.0D);
+            }
+            // F-102: the eclipse's LAST LIGHT — one dim flare seals the vanish beat.
+            if (t == T_FINALE_REVEAL + ECLIPSE_LASTLIGHT_AT) {
+                FxPayloads.sendFxEvent(overworld, CUE_CREDITS5_LASTLIGHT,
+                        current.blackHole.fxAnchor(), 0.0F, 0.0F, -1.0D);
+                for (ServerPlayer player : overworld.players()) {
+                    player.playNotifySound(SoundEvents.END_PORTAL_SPAWN, SoundSource.MASTER,
+                            0.35F, 1.3F);
                 }
             }
             // F-068 "Schluck-Momente": the act's deterministic gulp schedule — answered
@@ -1245,11 +1352,13 @@ public final class CreditsSequence implements SequenceReplayable {
     }
 
     /**
-     * t={@value #T_SHATTER_END} — behind the black: every fragment is discarded and the
+     * t={@value #T_SHATTER_END} — behind the black: every fragment moves into the
+     * staggered removal queue (F-102 — a thousands-strong EPIC field never despawns in
+     * one tick; the queue is long empty before the beach populations start) and the
      * sky override eases off (the beach act needs the vanilla dome for its sunrise).
      */
     private static void beatShatterEnd(Run current) {
-        current.shatter.discard();
+        current.shatter.discardInto(CreditsSequence::queueDiscard);
         for (ServerPlayer player : current.server.getPlayerList().getPlayers()) {
             CreditsPayloads.sendSky(player, new CreditsPayloads.S2CCreditsSkyPayload(
                     CreditsPayloads.S2CCreditsSkyPayload.MODE_OFF, 0.0F, 100, 0.0D, 0.0D, 0.0D));
@@ -1497,8 +1606,11 @@ public final class CreditsSequence implements SequenceReplayable {
         current.enter(Phase.HOLD);
         CreditsData data = CreditsData.get(current.server);
         data.setCompleted(true);
-        current.blackHole.discard();
-        current.mapRip.discard();
+        // F-102 staggered teardown: the finale's full field (accretion + sky-drain +
+        // map-rip pools — EPIC ≈ 5.1k) drains at DISCARD_PER_TICK behind the held
+        // black; /dev end_event flushes whatever is still queued.
+        current.blackHole.discardInto(CreditsSequence::queueDiscard);
+        current.mapRip.discardInto(CreditsSequence::queueDiscard);
         ServerLevel overworld = current.server.overworld();
         BlockPos spawn = overworld.getSharedSpawnPos();
         int returned = 0;
@@ -1997,7 +2109,8 @@ public final class CreditsSequence implements SequenceReplayable {
     /**
      * FIN-6 debris sky, budgeted: up to {@value #FLYER_SPAWN_PER_TICK} new fragments per
      * tick until {@value #FLYER_COUNT} are aloft — never a single-tick entity dump, never
-     * past {@link #DISPLAY_HARD_CAP}. Every fragment is dimmed via a display brightness
+     * past the tier's hard cap ({@link #capReached}). Every fragment is dimmed via a
+     * display brightness
      * override (sky 7 / block 4 — backlit silhouettes against the sunrise instead of
      * fullbright floating blocks); ~15% of the LOW arcs drag a flattened tinted-glass
      * "shadow puck" along the sand underneath, clamped to the sand strip so no shadow
@@ -2228,18 +2341,61 @@ public final class CreditsSequence implements SequenceReplayable {
         displays.clear();
     }
 
+    // ------------------------------------------------------------------ F-102 staggered despawn
+
     /**
-     * FIN-6 hard cap: refuses new displays once {@value #DISPLAY_HARD_CAP} of ANY kind
-     * are live (logged once per run) — a lag spiral can never out-spawn the budget.
+     * Takes ownership of one display for the staggered teardown (the act already forgot
+     * it — {@code discardInto} sink). It stays live (and counted against the hard cap)
+     * until {@link #drainDiscardQueue} reaches it.
+     */
+    private static void queueDiscard(Display.BlockDisplay display) {
+        DISCARD_QUEUE.add(display);
+    }
+
+    /**
+     * Discards at most {@value #DISCARD_PER_TICK} queued displays per tick — the
+     * thousands-strong act teardowns (shatter end, finale hold) never despawn in one
+     * tick (the spawn-side batching rule, mirrored). Runs at the top of every server
+     * tick, run or no run (the queue may outlive the run object on the hold beat).
+     */
+    private static void drainDiscardQueue() {
+        int budget = DISCARD_PER_TICK;
+        Display.BlockDisplay display;
+        while (budget-- > 0 && (display = DISCARD_QUEUE.poll()) != null) {
+            LIVE_DISPLAYS.remove(display.getUUID());
+            display.discard();
+        }
+    }
+
+    /**
+     * Abort-path teardown ({@code skip}/{@code endEvent}/{@code forceClearNow}): the
+     * queue empties NOW — the staggered choreography is a luxury of the scripted path,
+     * an abort must leave zero displays behind.
+     */
+    private static void flushDiscardQueue() {
+        Display.BlockDisplay display;
+        while ((display = DISCARD_QUEUE.poll()) != null) {
+            LIVE_DISPLAYS.remove(display.getUUID());
+            display.discard();
+        }
+    }
+
+    /**
+     * FIN-6 hard cap, F-102 tiered: refuses new displays once the run's budgeted cap
+     * ({@code Run.budget.displayHardCap()} — the {@link CreditsDisplayBudget} ladder)
+     * of ANY kind are live (logged once per run) — a lag spiral can never out-spawn
+     * the budget. Queued-but-not-yet-discarded displays still count (they are still
+     * real entities until {@link #drainDiscardQueue} reaches them).
      */
     private static boolean capReached(Run current) {
-        if (LIVE_DISPLAYS.size() < DISPLAY_HARD_CAP) {
+        int cap = current.budget.displayHardCap();
+        if (LIVE_DISPLAYS.size() < cap) {
             return false;
         }
         if (!current.capWarned) {
             current.capWarned = true;
-            EclipseMod.LOGGER.warn("CreditsSequence: display hard cap {} reached — further spawns dropped",
-                    DISPLAY_HARD_CAP);
+            EclipseMod.LOGGER.warn("CreditsSequence: display hard cap {} (tier {}) reached — further "
+                    + "spawns dropped", cap, current.budget.tier());
         }
         return true;
     }
@@ -2873,6 +3029,41 @@ public final class CreditsSequence implements SequenceReplayable {
                         }
                     }
                 });
+                // F-102 replay parity, compressed: one sky-drain sample, the eclipse-
+                // fade intensity walk-down, then the last-light seal — the vanish beat
+                // in miniature before the 600t handback.
+                schedule(server, 360, () -> {
+                    for (ServerPlayer player : watchers) {
+                        if (!player.hasDisconnected()) {
+                            Vec3 ahead = player.position().add(player.getLookAngle().scale(60.0D));
+                            PacketDistributor.sendToPlayer(player, new dev.projecteclipse.eclipse
+                                    .network.fx.S2CFxEventPayload(CUE_CREDITS5_SKYDRAIN,
+                                            ahead, 0.0F, 0.0F));
+                        }
+                    }
+                });
+                schedule(server, 440, () -> {
+                    for (ServerPlayer player : watchers) {
+                        if (!player.hasDisconnected()) {
+                            Vec3 ahead = player.position().add(player.getLookAngle().scale(60.0D));
+                            CreditsPayloads.sendSky(player, new CreditsPayloads.S2CCreditsSkyPayload(
+                                    CreditsPayloads.S2CCreditsSkyPayload.MODE_SPACE, 0.3F, 120,
+                                    ahead.x, ahead.y, ahead.z));
+                        }
+                    }
+                });
+                schedule(server, 520, () -> {
+                    for (ServerPlayer player : watchers) {
+                        if (!player.hasDisconnected()) {
+                            Vec3 ahead = player.position().add(player.getLookAngle().scale(60.0D));
+                            PacketDistributor.sendToPlayer(player, new dev.projecteclipse.eclipse
+                                    .network.fx.S2CFxEventPayload(CUE_CREDITS5_LASTLIGHT,
+                                            ahead, 0.0F, 0.0F));
+                            player.playNotifySound(SoundEvents.END_PORTAL_SPAWN,
+                                    SoundSource.MASTER, 0.35F, 1.3F);
+                        }
+                    }
+                });
                 schedule(server, 600, () -> {
                     for (ServerPlayer player : watchers) {
                         if (!player.hasDisconnected()) {
@@ -3103,8 +3294,9 @@ public final class CreditsSequence implements SequenceReplayable {
 
     /**
      * Cap check for the stage-manager acts (shatter/formation/black hole): {@code true}
-     * refuses the spawn — either no run is live or the {@link #DISPLAY_HARD_CAP} budget
-     * is exhausted (logged once through {@link #capReached}).
+     * refuses the spawn — either no run is live or the run's tiered hard-cap budget
+     * ({@code Run.budget.displayHardCap()}) is exhausted (logged once through
+     * {@link #capReached}).
      */
     static boolean actCapReached() {
         Run current = run;
