@@ -119,12 +119,15 @@ func _kaufe(eintrag: Dictionary) -> void:
 	if not AutoKatalog.kann_kaufen(gs, id, farbe):
 		return
 	var preis := int(eintrag.get("preis", 0))
-	var bezahlt := false
+	# GDScript-Lambdas capturen lokale Werte PER KOPIE — ein bool käme nie
+	# zurück (Auto würde nie eingetragen, Geld trotzdem weg). Dictionary
+	# teilt die Referenz.
+	var zahlung := {"ok": false}
 	gs.update(
 		func(state: Dictionary) -> void:
-			bezahlt = Economy.spend(state["economy"], preis, "autohaus")
+			zahlung["ok"] = Economy.spend(state["economy"], preis, "autohaus")
 	)
-	if not bezahlt:
+	if not bool(zahlung["ok"]):
 		return
 	AutoKatalog.eintragen(gs, id, farbe)
 	gekauft.emit(id)

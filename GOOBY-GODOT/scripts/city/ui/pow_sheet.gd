@@ -84,15 +84,17 @@ func _baue_angebote() -> void:
 func _kaufe(inventar_key: String, preis: int, ware_id: String) -> void:
 	if gs == null or _coins() < preis:
 		return
-	var bezahlt := false
+	# GDScript-Lambdas capturen lokale Werte PER KOPIE — ein bool käme nie
+	# zurück (Kamera-Flag/Signal liefen nie). Dictionary teilt die Referenz.
+	var zahlung := {"ok": false}
 	gs.update(
 		func(state: Dictionary) -> void:
-			bezahlt = Economy.spend(state["economy"], preis, "pow")
-			if bezahlt:
+			zahlung["ok"] = Economy.spend(state["economy"], preis, "pow")
+			if bool(zahlung["ok"]):
 				var items: Dictionary = state["inventory"]["items"]
 				items[inventar_key] = int(items.get(inventar_key, 0)) + 1
 	)
-	if not bezahlt:
+	if not bool(zahlung["ok"]):
 		return
 	if inventar_key == PowAngebote.KAMERA_ITEM:
 		CityState.set_flag(gs, "kamera_gekauft", true)

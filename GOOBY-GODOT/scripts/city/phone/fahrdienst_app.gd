@@ -172,11 +172,14 @@ func _on_rufen() -> void:
 	var res := TaxiLogic.rufen(CityState.taxi_slice(gs), now_ms(), _warte_s(), ZIEL)
 	if not bool(res["ok"]):
 		return
-	var bezahlt := false
+	# GDScript-Lambdas capturen lokale Werte PER KOPIE — ein bool käme nie
+	# zurück (Taxi bliebe idle, Geld trotzdem weg). Dictionary teilt die Referenz.
+	var zahlung := {"ok": false}
 	gs.update(
-		func(state: Dictionary) -> void: bezahlt = Economy.spend(state["economy"], preis, dienst)
+		func(state: Dictionary) -> void:
+			zahlung["ok"] = Economy.spend(state["economy"], preis, dienst)
 	)
-	if not bezahlt:
+	if not bool(zahlung["ok"]):
 		return
 	CityState.save_taxi_slice(gs, res["slice"])
 	Fahrdienst.merke_dienst(gs, dienst)

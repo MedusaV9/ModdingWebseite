@@ -65,15 +65,17 @@ func _kaufe(eintrag: Dictionary) -> void:
 	var preis := int(eintrag.get("preis", 0))
 	var key := str(eintrag.get("inventar", eintrag.get("id", "")))
 	var menge := maxi(1, int(eintrag.get("menge", 1)))
-	var bezahlt := false
+	# GDScript-Lambdas capturen lokale Werte PER KOPIE — ein bool käme nie
+	# zurück (Signal/Refresh liefen nie). Dictionary teilt die Referenz.
+	var zahlung := {"ok": false}
 	gs.update(
 		func(state: Dictionary) -> void:
-			bezahlt = Economy.spend(state["economy"], preis, "baumarkt")
-			if bezahlt:
+			zahlung["ok"] = Economy.spend(state["economy"], preis, "baumarkt")
+			if bool(zahlung["ok"]):
 				var items: Dictionary = state["inventory"]["items"]
 				items[key] = int(items.get(key, 0)) + menge
 	)
-	if not bezahlt:
+	if not bool(zahlung["ok"]):
 		return
 	gekauft.emit(str(eintrag.get("id", "")))
 	aktualisiere()

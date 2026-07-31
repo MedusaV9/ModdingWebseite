@@ -378,12 +378,14 @@ func _on_bestellen() -> void:
 	)
 	if not bool(res["ok"]):
 		return
-	var bezahlt := false
+	# GDScript-Lambdas capturen lokale Werte PER KOPIE — ein bool käme nie
+	# zurück (Bestellung würde nie gespeichert). Dictionary teilt die Referenz.
+	var zahlung := {"ok": false}
 	gs.update(
 		func(state: Dictionary) -> void:
-			bezahlt = Economy.spend(state["economy"], int(res["kosten"]), "gooberando")
+			zahlung["ok"] = Economy.spend(state["economy"], int(res["kosten"]), "gooberando")
 	)
-	if not bezahlt:
+	if not bool(zahlung["ok"]):
 		return
 	CityState.save_gooberando_slice(gs, res["slice"])
 	for notif: Dictionary in res["notifications"]:
