@@ -15,7 +15,7 @@ const TEMPLATES = {
   garden: 'ist mit {gooby} im Garten',
   visit: 'ist mit {gooby} zu Besuch bei einem Freund',
   board: 'spielt eine Runde Schiffe versenken',
-  drive: 'fährt mit {gooby} eine Runde',
+  drive: 'fährt mit {gooby} durch die Stadt',
   vacation: 'ist mit {gooby} im Urlaub',
   sleep: 'schläft — pssst, {gooby} auch',
   // Ranch-MP (RW-6): neue Presence-Kinds für Besuch/Ausritt/Minispiele.
