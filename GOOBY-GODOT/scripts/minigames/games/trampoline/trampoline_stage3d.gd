@@ -186,7 +186,7 @@ func _build_flags() -> void:
 	for i in 11:
 		var t := (float(i) + 0.5) / 11.0
 		var x := -8.0 + t * 16.0
-		var y := 4.75 - sin(t * PI) * 0.5
+		var y := 5.15 - sin(t * PI) * 0.5  # W14 Quick-Win: Platz fürs höhere Banner
 		flag_mm.set_instance_transform(i, Transform3D(Basis(Vector3.BACK, PI), Vector3(x, y, -5.3)))
 		flag_mm.set_instance_color(i, tints[i % tints.size()])
 	flags.multimesh = flag_mm
@@ -200,14 +200,16 @@ func _build_banner() -> void:
 	banner_mesh.size = Vector3(4.5, 0.95, 0.1)
 	banner_mesh.material = Fx.flat(Color(0.91, 0.45, 0.58))
 	banner.mesh = banner_mesh
-	banner.position = Vector3(0.0, 3.2, -5.4)
+	# W14 Quick-Win: 3,2 m lag genau in Goobys Apex-Zone — der Star verdeckte
+	# den Schriftzug in fast jedem Frame (Audit c=3). 4,1 m hängt frei darüber.
+	banner.position = Vector3(0.0, 4.1, -5.4)
 	add_child(banner)
 	var trim := MeshInstance3D.new()
 	var trim_mesh := BoxMesh.new()
 	trim_mesh.size = Vector3(4.66, 1.11, 0.06)
 	trim_mesh.material = Fx.flat(Color(0.99, 0.95, 0.9))
 	trim.mesh = trim_mesh
-	trim.position = Vector3(0.0, 3.2, -5.44)
+	trim.position = Vector3(0.0, 4.1, -5.44)
 	add_child(trim)
 	var text := Label3D.new()
 	text.text = "GOOBY GYM"
@@ -216,7 +218,7 @@ func _build_banner() -> void:
 	text.modulate = Color(1.0, 0.98, 0.94, 0.98)
 	text.outline_size = 26
 	text.outline_modulate = Color(INK.r, INK.g, INK.b, 0.85)
-	text.position = Vector3(0.0, 3.2, -5.33)
+	text.position = Vector3(0.0, 4.1, -5.33)
 	add_child(text)
 
 
