@@ -103,7 +103,9 @@ import software.bernie.geckolib.animation.RawAnimation;
  *       {@code eclipse:storm_hound}, tagged {@value #ADD_TAG}); every
  *       {@value #STEP_INTERVAL_TICKS}t a <b>storm-step</b> — a short teleport to the
  *       target's flank wrapped in fog bursts, with a gathering fog column at the
- *       destination during the {@value #STEP_OUT_TICKS}t vanish (fairness cue).</li>
+ *       destination during the {@value #STEP_OUT_TICKS}t vanish (fairness cue) — whose
+ *       last {@value #STEP_VANISH_HIDE_TICKS}t render the body invisible so the lance
+ *       edges cannot hang in the fold (see {@link #STEP_VANISH_HIDE_TICKS}).</li>
  *   <li><b>P2 "Storm crown"</b> (≤60%): adds <b>crown lightning</b> every
  *       {@value #LIGHTNING_INTERVAL_TICKS}t — up to {@value #LIGHTNING_MARKS} player
  *       positions are marked with {@value #LIGHTNING_TELEGRAPH_TICKS}t (1.5 s) spark
@@ -199,6 +201,25 @@ public class FogTyrantEntity extends EclipseGeoMonster {
     private static final int STEP_INTERVAL_TICKS = 220;
     private static final int STEP_INTERVAL_P3_TICKS = 120;
     private static final int STEP_OUT_TICKS = 10;
+    /**
+     * Audit G-4 (F-081..087 "the scythe can read as detached during the storm-step
+     * vanish"): the last ticks of the vanish are rendered INVISIBLE. Root cause is the
+     * {@code storm_step_out} animation — it folds {@code root} down to scale
+     * 0.35/0.7/0.35 at y −10 and holds there, while {@code arm_left}/{@code arm_right}
+     * swing OUT to ±40°, so the long emissive lance edges (the "scythe" — see
+     * {@code FogTyrantRenderer}'s glowmask brief) keep projecting out of a body that has
+     * already shrunk into the fog. Hiding the whole model for the tail of the window
+     * cuts the projection off inside the fold instead of leaving it hanging in the mist.
+     *
+     * <p>Value 2 puts the cut exactly on the {@code boss/tyrant_step_out} fold-snap frame
+     * (t=8 of the 14t asset — {@code fold_snap}/{@code snap_flash} bursts in
+     * {@code tools/photon/tyrant_step_fx.py}), which is the "it is gone NOW" beat, so the
+     * body disappears behind the snap rather than blinking out in clear air. Visibility
+     * is restored in {@link #executeStormStep} on the very tick that fires
+     * {@code ANIM_STEP_IN} + {@code CUE_TYRANT_STEP_IN}, and unconditionally in
+     * {@link #clearTelegraphs} so no interrupt can strand an invisible boss.</p>
+     */
+    private static final int STEP_VANISH_HIDE_TICKS = 2;
     private static final double STEP_FLANK_BLOCKS = 6.0D;
     // Crown lightning (P2+).
     private static final int LIGHTNING_INTERVAL_TICKS = 160;
@@ -994,6 +1015,12 @@ public class FogTyrantEntity extends EclipseGeoMonster {
             level.sendParticles(ParticleTypes.CAMPFIRE_SIGNAL_SMOKE,
                     dest.x, dest.y + 0.4D, dest.z, 3, 0.5D, 0.2D, 0.5D, 0.01D);
         }
+        // G-4: on the fold-snap frame the body (and with it the projecting lance edges)
+        // goes out inside the fold — no scythe left hanging in the mist. Idempotent:
+        // this window is a single rooted state, and step-in flips it straight back.
+        if (this.stepOutTimer <= STEP_VANISH_HIDE_TICKS && !this.isInvisible()) {
+            this.setInvisible(true);
+        }
         if (--this.stepOutTimer >= 0) {
             return;
         }
@@ -1005,6 +1032,11 @@ public class FogTyrantEntity extends EclipseGeoMonster {
         Vec3 dest = this.stepDest;
         this.stepDest = null;
         this.stepTimer = scaledCooldown(getPhase() >= 3 ? STEP_INTERVAL_P3_TICKS : STEP_INTERVAL_TICKS);
+        // G-4 re-attach: the body comes back on the SAME tick as the step-in anim and the
+        // CUE_TYRANT_STEP_IN shockwave, so the scythe reappears with the burst, never
+        // before it and never a frame late at the old anchor. Ahead of the dest guard —
+        // a step that ends without a destination still has to give the body back.
+        this.setInvisible(false);
         if (dest == null) {
             return;
         }
@@ -1452,6 +1484,7 @@ public class FogTyrantEntity extends EclipseGeoMonster {
         this.stepOutTimer = -1;
         this.stepDest = null;
         this.stepTargetId = null;
+        this.setInvisible(false); // G-4: an interrupted vanish must never strand the body.
     }
 
     @Override

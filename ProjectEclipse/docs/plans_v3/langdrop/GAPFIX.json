@@ -1,0 +1,15 @@
+{
+  "_comment": "AUDIT_REVERIFY gap G-3c — the three WOAH side-arc items were registered (woah/echogrove/EchoGroveItems, woah/chronostasis/ChronoStasisItems) and named/lore'd via the woah_echo/woah_chrono langdrops, but never entered the collections/ItemLexicon allowlist, so the handbook could never register them as discovered. This drop adds ONLY the missing 'collection.eclipse.item.<path>' functional-explanation lines that ItemLexicon.descriptionKey resolves (item.eclipse.* names + .lore already ship). No shipped key is overwritten. Merge with python3 tools/langmerge/merge_langdrops.py (lang JSONs are locked during parallel work).",
+
+  "en_us": {
+    "collection.eclipse.item.memory_mote": "One of the five lost memories of the Echo Grove. Pick it up at a whisper site and carry it back to a tree orb to give the grove its moment back.",
+    "collection.eclipse.item.echo_blossom": "The Echo Grove finale's trophy. Anywhere in your inventory it pulses a gentle Regeneration every 30 s — inside the grove, or anywhere at night — until you are back at six hearts.",
+    "collection.eclipse.item.chrono_core": "The Stillness Core, handed out once at the Chronosphere's first discharge. Unstackable on purpose: the one frozen instant stays the one. Nothing consumes it — yet."
+  },
+
+  "de_de": {
+    "collection.eclipse.item.memory_mote": "Eine der fünf verlorenen Erinnerungen des Echo-Hains. Hebe sie an einer Flüsterstelle auf und trage sie zu einer Baumkugel zurück, um dem Hain seinen Augenblick zurückzugeben.",
+    "collection.eclipse.item.echo_blossom": "Die Trophäe des Echo-Hain-Finales. Irgendwo im Inventar pulst sie alle 30 s eine sanfte Regeneration — im Hain oder nachts überall — bis du wieder bei sechs Herzen bist.",
+    "collection.eclipse.item.chrono_core": "Der Stillstands-Kern, einmalig bei der ersten Entladung der Chronosphäre vergeben. Bewusst nicht stapelbar: Der eine eingefrorene Augenblick bleibt der eine. Noch verzehrt ihn nichts — noch."
+  }
+}

@@ -127,6 +127,109 @@ Kinder in anderen `.fx`-Binaries), `boss_summon_beacon_` (dynamischer `_0.._3`-S
 alle 4 Assets vorhanden), `my_moment`(_quasar) (Javadoc-Beispiel in `PhotonFxRegistry`),
 `fx/cue/template_*` (Wire-Ids; `template_burst.fx`/`template_loop.fx` existieren).
 
+### Stand nach dem Gap-Fix-Lauf (Session 30.07.)
+
+| Lfd-Nr | Stand | Beleg |
+|---|---|---|
+| G-1 | **geschlossen** — `rim_recede` authored im zuständigen Registrar-Generator `tools/photon/worldevents_fx.py` (`build_rim_recede`, 5 Layer, 119 Partikel, 130 t), Asset + `.fxproj` unter `assets/eclipse/fx/`. `fxlib.py validate` OK, `validate --lint` meldet für die Datei **null** Findings (auch kein Advisory). | `tools/photon/worldevents_fx.py`, `src/main/resources/assets/eclipse/fx/rim_recede.fx(+.fxproj)` |
+| G-2 | **weiterhin offen, aber ready-to-generate** — siehe Abschnitt unten (Specs geprüft, Prompts fixiert). Generierung braucht den `TREBLO_API_KEY` und liegt beim Integrator. | `docs/plans_v3/wiring/woah_{gravity,resonance,echo}_sounds.json` |
+| G-3 | **(c) geschlossen** — `echo_blossom` **und** die beiden übrigen Woah-Items (`memory_mote`, `chrono_core`) sind in der `ItemLexicon`-Allowlist (jetzt 22 Einträge); die drei fehlenden `collection.eclipse.item.*`-Paare liegen als Langdrop bereit. (a)/(b) bleiben kosmetisch offen. | `collections/ItemLexicon.java`, `docs/plans_v3/langdrop/GAPFIX.json` |
+| G-4 | **geschlossen** — der Body (und damit die herausstehenden Lanzen-/Sensenkanten) wird die letzten `STEP_VANISH_HIDE_TICKS` = 2 t des Vanish unsichtbar geschaltet (exakt auf dem Fold-Snap-Frame von `boss/tyrant_step_out`) und in `executeStormStep` synchron mit `ANIM_STEP_IN` + `CUE_TYRANT_STEP_IN` zurückgeholt; `clearTelegraphs` räumt den Zustand bedingungslos auf. | `entity/boss/fog/FogTyrantEntity.java` |
+| G-5 | **(a)+(b) geschlossen** in `AGENTS.md` (Glitch-Liste = `GlitchZoneEffects.IDS` inkl. `dome`; „68 `.fx`" → **228** — 227 zum Audit-Zeitpunkt + `rim_recede`). (c) `UserFeedback.md` bleibt unangetastet (gehört nicht zu diesem Auftrag). | `AGENTS.md` |
+
+**Root-Cause-Notiz zu G-4** (für spätere Wellen): Es gibt gar kein eigenes „Scythe-Display"-
+Entity — weder `ItemDisplay` noch `BlockDisplay` hängen am Tyrannen. Der Effekt entsteht rein
+im Modell: `animation.fog_tyrant.storm_step_out` faltet `root` auf Scale 0.35/0.7/0.35 bei
+y −10 (`hold_on_last_frame`), während `arm_left`/`arm_right` gleichzeitig auf ±40° nach außen
+schwingen. Die langen, per Glowmask **emissiven** `lance_*`-Kanten ragen dadurch aus einem
+Körper heraus, der optisch schon im Nebel verschwunden ist — das liest sich als abgelöste
+Sense. Deshalb ist der Fix ein Sichtbarkeits-Cut im Fold, keine Display-Umhängung.
+
+---
+
+## G-2 — Ready-to-generate (Woah-Audio-Beds)
+
+**Spec-Prüfung.** Alle drei Specs unter `docs/plans_v3/wiring/woah_*_sounds.json` sind
+inhaltlich vollständig: sie nennen je die exakte `sounds.json`-Row (als fertiges
+JSON-Fragment), die Registry-Zeile, den konsumierenden Resolver und die Subtitle-Politik.
+Zwei Einschränkungen, die vor der Generierung bekannt sein müssen:
+
+1. **Nur die Echo-Spec enthält einen wörtlichen TREBLO-Prompt.** Gravity und Resonance
+   beschreiben das Bett (Klangcharakter, Länge, Stimmung/Referenztonhöhe), formulieren aber
+   keinen Prompt-String. Die beiden Prompts unten sind daher **aus der Spec-Beschreibung
+   abgeleitet** und hier als verbindliche Fassung fixiert; der Echo-Prompt ist wörtlich.
+2. **„Code-Änderung: keine" gilt nur für Gravity und Resonance.** Deren Resolver
+   (`GravityRiftAmbience.resolveHum()`, `ResonanceChoir.resolveVoice()`) schlagen die Id zur
+   Laufzeit in der Registry nach und schalten von allein um. `music.echo_music_box` braucht
+   dagegen laut eigener Spec zwei Diffs: `MemoryFloodService.NOTE_FALLBACK` (heute `true`,
+   Zeile 57) auf `false` und eine Registrierung in `music/EclipseMusicSounds`.
+
+**Nachzuziehende Lang-Keys** (Parität geprüft): `subtitles.eclipse.ambient.crystal_voice`
+ist bereits gemerged (en „Crystal sings" / de „Kristall singt").
+`subtitles.eclipse.ambient.gravity_hum` (en „Gravity hums" / de „Die Schwerkraft summt", Text
+steht in der Gravity-Spec) und ggf. `subtitles.eclipse.music.echo_music_box` fehlen noch und
+gehören als Langdrop zur Audio-Lieferung.
+
+**Prompts** (Katalog-Einträge für `tools/music/treblo_generate.py` — `length_range` in
+30-s-Vielfachen, wie der `TRACKS`-Katalog verlangt; das kurze Loop-Fenster wird beim
+Post-Processing herausgeschnitten, nicht bei der API bestellt):
+
+```python
+{
+    "id": "ambient_gravity_hum",   # -> assets/eclipse/sounds/ambient/gravity_hum.ogg
+    "prompt": (
+        "A low weightless gravity drone bed. Sub-bass sine foundation under a slow "
+        "breathing swell, faint metallic overtones drifting in and out of tune like a "
+        "magnetic field settling. No rhythm, no melody, no transients and no build — "
+        "perfectly even from start to end so it loops seamlessly and still sounds clean "
+        "when re-pitched up by a third."
+    ),
+    "tags": ["drone", "dark ambient", "atmospheric"],
+    "length_range": [30, 30],
+    "style_scale": 5.5,
+    "instrumental": True,
+}
+{
+    "id": "ambient_crystal_voice",  # -> assets/eclipse/sounds/ambient/crystal_voice.ogg
+    "prompt": (
+        "A soft glass-bow drone tone singing a single steady note at A4. Bowed crystal "
+        "glass timbre with a gentle shimmering overtone halo and a very slow tremolo, "
+        "warm rather than shrill. One sustained pitch only — no melody, no vibrato "
+        "sweep, no percussion — so it can be transposed across a pentatonic table and "
+        "still read as the same voice. Seamless loop."
+    ),
+    "tags": ["drone", "ambient", "atmospheric"],
+    "length_range": [30, 30],
+    "style_scale": 5.5,
+    "instrumental": True,
+}
+{
+    "id": "music_echo_music_box",   # -> assets/eclipse/sounds/music/echo_music_box.ogg
+    # Spec-Wortlaut: "lonely music box, minor waltz, tape-warm, ~8 s loopable"
+    "prompt": (
+        "A lonely music box playing a minor waltz. Single tine-plucked melody in 3/4, "
+        "tape-warm with gentle wow and flutter, heard from another room through fog. "
+        "No drums, no bass, no strings — just the box and its decay. Sparse, "
+        "melancholic, loopable."
+    ),
+    "tags": ["music box", "ambient", "melancholic"],
+    "length_range": [30, 30],
+    "style_scale": 6.0,
+    "instrumental": True,
+}
+```
+
+Optional (in der Echo-Spec als NICHT implementiert geführt — nur bestellen, wenn die
+zugehörigen Rungs/Loops auch gebaut werden): `music.echo_grove` („sparse ambient, distant
+slowed music box, soft strings"), `ambient.echo_wind` (kein Prompt in der Spec).
+
+**Ablauf beim Integrator** (AGENTS-Regeln, streng sequenziell — parallele Submits → 403,
+je Generierung 100 Credits): `TREBLO_API_KEY=… python3 tools/music/treblo_generate.py
+--only <id>` → das automatische `postprocess()` abwarten (Zwei-Pass-Loudnorm −16 LUFS,
+48 kHz Stereo **Vorbis**, ≤ 2,5 MB) → **nur** `<id>.ogg` installieren, nie `<id>_raw.ogg`
+→ Loop-Fenster schneiden → `sounds.json`-Row + `EclipseSounds`/`EclipseMusicSounds`-Zeile
+aus der jeweiligen Spec übernehmen → `python3 tools/music/validate_oggs.py`.
+
 ---
 
 ## F-062 Feinschliff-Plan

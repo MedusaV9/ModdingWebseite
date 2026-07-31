@@ -17,6 +17,9 @@ Generates the thirteen effects of PLAN-NEWFX §2 C1–C5 (rows registered by
     eclipse:supply_herald             C4 — sky shimmer, white slit tear, falling ember
     eclipse:dungeon_maw_breath        C5 one-shot — cold dust exhale + two eye glints
     eclipse:dungeon_maw_idle          C5 WINDOWED loop — periodic breath + heartbeat glow
+    eclipse:rim_recede                F-092 — the rim wall receding: slate dust curtain
+                                         sinking, heavy rock motes sagging outward/down,
+                                         a few pale edge glints
 
 fxlib-generated (this script IS the committed source — the binary-diff law's `.fxproj`
 requirement applies to editor exports only). Regenerate + validate:
@@ -780,6 +783,203 @@ def build_dungeon_maw_idle() -> FxBuilder:
 
 
 # ---------------------------------------------------------------------------
+# F-092 — eclipse:rim_recede (the rim wall letting go)
+# ---------------------------------------------------------------------------
+# Call contract (veilfx/WorldEventPhotonFxRows, row CUE_RIM_RECEDE — the DEFAULT
+# position leg, so the asset gets NO scale/rotation/entity and cannot read the
+# payload floats): `ExpansionBorderFx.Gate.release` fires one cue per player at
+# `pos` = that player's nearest point of the OLD rim, y = `profile.surfaceBaseY()`
+# (ground), `a` = the old ring radius (informational only), `b` = 0. The beat runs
+# against the BOULDER_SINK_TICKS = 16t monolith sink and the
+# ExpansionTiming.BORDER_RELEASE_LERP_MS = 10 s SoftBorder glide, so the asset is
+# authored at RIM_DURATION ticks — long enough to outlive the sink and carry the
+# first half of the glide, short enough that the curtain is gone before the new
+# silhouette ring settles.
+#
+# Because the leg passes no yaw, every layer is authored RADIALLY SYMMETRIC about
+# the anchor (rings, `BurstSpread` arcs): the curtain reads as a wall from any
+# viewing angle, which is exactly what a per-player rim point needs. Sizes are
+# rim-scale — the monoliths it garnishes are 6–14 blocks tall
+# (ExpansionBorderFx.HEIGHT_MIN/MAX) and watchers read this from 100+ blocks away.
+#
+# Stacking law (the tyrant_step V2.1 finding): ALPHA sprites born inside one
+# another converge to their own tint, so birth tints start DARK (slate, never the
+# pale dust white), alpha peaks stay ≤ 0.34, birth shells are metres apart
+# (BurstSpread rings), counts are trimmed to ~119 spawned particles total, and
+# HDR lives only on the seven tiny glints at ≤ 1.45. Heavy elements (rock motes,
+# ground bank) sit LOW and move SLOW; only the light haze travels.
+RIM_DURATION = 130
+# Ring radii (blocks) of the curtain layers around the anchor.
+RIM_VEIL_R = 24.0
+RIM_CURTAIN_R = 22.0
+RIM_BANK_R = 20.0
+RIM_MOTE_R = 16.0
+RIM_GLINT_R = 18.0
+RIM_CULL = ((-34.0, -26.0, -34.0), (34.0, 30.0, 34.0))
+# Slate dust family: STM_SLATE body -> a bruised mid -> GLI_DEAD fade target
+# (§1.5 storm slate + §1.3 dead indigo — never fade to black).
+RIM_BRUISE = (0.278, 0.259, 0.337)
+GLI_DEAD = (0.141, 0.110, 0.220)
+# Pale edge light catching a receding rock face (STM_ARC dimmed, not white).
+RIM_GLINT = (0.816, 0.855, 0.949)
+# Sink envelope: nothing, then a soft swell, then a long thinning settle.
+SEG_DUST_SWELL = (0.0, 0.0, 0.12, 0.55, 0.35, 0.9, 1.0, 1.0)
+
+
+def build_rim_recede() -> FxBuilder:
+    """eclipse:rim_recede — F-092 release beat, ~130t, SEQUENCE. The giant rim rocks
+    pull back and the frontier's held dust falls out of the air. L0 a huge, very
+    faint back-wall haze marking where the wall STOOD (8 bodies, sinking slowest),
+    L1 the slate dust curtain sinking off a 22-block ring (48 bodies in three
+    waves), L2 the ground bank rolling outward over the old rim line (34 bodies,
+    floor-hugging), L3 heavy rock motes sagging outward and down under gravity
+    (22 hard quads, the mass read), L4 seven pale edge glints as the last light
+    slides off the receding faces. No impact frame — a release, not a hit."""
+    fx = FxBuilder("rim_recede")
+
+    # L0 — back-wall haze: a handful of enormous soft bodies on the outermost ring,
+    # barely-there (α ≤ 0.16) and sinking at ~1.6 blk/s. This is the silhouette the
+    # far camera actually reads; 8 bodies 19 blocks apart never stack.
+    (fx.particle_emitter(
+            "wall_haze", duration=RIM_DURATION, looping=False,
+            start_lifetime=random_between(64, 90), start_speed=constant(0.0),
+            start_size=nf3(random_between(9.0, 14.0), random_between(9.0, 14.0),
+                           random_between(9.0, 14.0)),
+            simulation_space="World", max_particles=12)
+       .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(8))])
+       .with_shape(circle(radius=RIM_VEIL_R, thickness=0.2, arc_mode="BurstSpread"),
+                   position=nf3(constant(0.0), constant(12.0), constant(0.0)))
+       .with_material(texture_material(TEX_SMOKE, blend=BLEND_ALPHA))
+       .with_renderer(vertex_sorting="DISTANCE", shade=True)
+       .with_cull_box(*RIM_CULL)
+       .with_curves(
+            velocity_over_lifetime=dict(
+                linear=nf3(constant(0.0), random_between(-2.0, -1.2), constant(0.0)),
+                radial=constant(0.35)),
+            size_over_lifetime=nf3(*[curve(0.7, 1.0, [SEG_DUST_SWELL], "lifetime", "size")
+                                     for _ in range(3)]),
+            color_over_lifetime=gradient(
+                [(0.0, 0.0), (0.18, 0.16), (0.7, 0.11), (1.0, 0.0)],
+                [(0.0, STM_SLATE[0], STM_SLATE[1], STM_SLATE[2]),
+                 (0.55, RIM_BRUISE[0], RIM_BRUISE[1], RIM_BRUISE[2]),
+                 (1.0, GLI_DEAD[0], GLI_DEAD[1], GLI_DEAD[2])])))
+
+    # L1 — the curtain: three waves of broad slate bodies born 17 blocks up on the
+    # rim ring, sinking 9–20 blocks and spreading as they fall. THE beat.
+    (fx.particle_emitter(
+            "dust_curtain", duration=RIM_DURATION, looping=False,
+            start_lifetime=random_between(46, 70), start_speed=constant(0.0),
+            start_size=nf3(random_between(3.4, 5.6), random_between(3.4, 5.6),
+                           random_between(3.4, 5.6)),
+            simulation_space="World", max_particles=56)
+       .with_emission(rate=constant(0.0),
+                      bursts=[burst(time=0, count=constant(20)),
+                              burst(time=10, count=constant(16)),
+                              burst(time=22, count=constant(12))])
+       .with_shape(circle(radius=RIM_CURTAIN_R, thickness=0.35,
+                          arc_mode="BurstSpread", arc_spread=0.02),
+                   position=nf3(constant(0.0), constant(17.0), constant(0.0)))
+       .with_material(texture_material(TEX_SMOKE, blend=BLEND_ALPHA))
+       .with_renderer(vertex_sorting="DISTANCE", shade=True)
+       .with_cull_box(*RIM_CULL)
+       .with_curves(
+            velocity_over_lifetime=dict(
+                linear=nf3(constant(0.0), random_between(-5.0, -3.0), constant(0.0)),
+                radial=constant(0.8)),
+            size_over_lifetime=nf3(*[curve(0.55, 1.0, [SEG_DUST_SWELL], "lifetime", "size")
+                                     for _ in range(3)]),
+            noise=dict(frequency=0.35, position=nf3(0.05)),
+            color_over_lifetime=gradient(
+                [(0.0, 0.0), (0.15, 0.34), (0.65, 0.22), (1.0, 0.0)],
+                [(0.0, STM_SLATE[0], STM_SLATE[1], STM_SLATE[2]),
+                 (0.5, RIM_BRUISE[0], RIM_BRUISE[1], RIM_BRUISE[2]),
+                 (1.0, GLI_DEAD[0], GLI_DEAD[1], GLI_DEAD[2])])))
+
+    # L2 — ground bank: what the curtain leaves on the floor, rolling OUTWARD over
+    # the abandoned rim line as the border glides away. Horizontal quads, α ≤ 0.26.
+    (fx.particle_emitter(
+            "ground_bank", duration=RIM_DURATION, looping=False,
+            start_lifetime=random_between(50, 72), start_speed=constant(0.0),
+            start_size=nf3(random_between(2.6, 4.2), random_between(2.6, 4.2),
+                           random_between(2.6, 4.2)),
+            simulation_space="World", max_particles=40)
+       .with_emission(rate=constant(0.0),
+                      bursts=[burst(time=26, count=constant(14)),
+                              burst(time=40, count=constant(12)),
+                              burst(time=56, count=constant(8))])
+       .with_shape(circle(radius=RIM_BANK_R, thickness=0.5, arc_mode="BurstSpread"),
+                   position=nf3(constant(0.0), constant(0.6), constant(0.0)))
+       .with_material(texture_material(TEX_SMOKE, blend=BLEND_ALPHA))
+       .with_renderer(render_mode="Horizontal", vertex_sorting="DISTANCE", shade=True)
+       .with_cull_box(*RIM_CULL)
+       .with_curves(
+            velocity_over_lifetime=dict(radial=constant(1.2)),
+            size_over_lifetime=nf3(*[curve(0.6, 1.0, [SEG_EASE_IN_OUT_UP],
+                                           "lifetime", "size") for _ in range(3)]),
+            color_over_lifetime=gradient(
+                [(0.0, 0.0), (0.2, 0.26), (0.7, 0.17), (1.0, 0.0)],
+                [(0.0, STM_SLATE[0], STM_SLATE[1], STM_SLATE[2]),
+                 (1.0, GLI_DEAD[0], GLI_DEAD[1], GLI_DEAD[2])])))
+
+    # L3 — rock motes: hard dark quads shed off the sinking monoliths, thrown a
+    # little outward and dragged down by real gravity (physics = the weight read,
+    # FX_FORMAT §3.1 collision law keeps parallelUpdate off). Born LOW (+6) and
+    # slow — heavy things stay near the ground (stacking law's mass clause).
+    (fx.particle_emitter(
+            "rock_motes", duration=RIM_DURATION, looping=False,
+            start_lifetime=random_between(30, 48),
+            start_speed=random_between(1.5, 3.5),
+            start_size=nf3(random_between(0.5, 1.1), random_between(0.5, 1.1),
+                           random_between(0.5, 1.1)),
+            start_rotation=nf3(constant(0), constant(0), random_between(0.0, 360.0)),
+            simulation_space="World", max_particles=26, parallel_update=False)
+       .with_emission(rate=constant(0.0),
+                      bursts=[burst(time=4, count=constant(12)),
+                              burst(time=16, count=constant(10))])
+       .with_shape(circle(radius=RIM_MOTE_R, thickness=0.6, arc_mode="BurstSpread"),
+                   position=nf3(constant(0.0), constant(6.0), constant(0.0)))
+       .with_physics(collision=True, removed_when_collided=False, gravity=0.55,
+                     bounce_chance=0.25, bounce_rate=0.2, collided_friction=0.55)
+       .with_material(texture_material(TEX_SQUARE, blend=BLEND_ALPHA))
+       .with_renderer(vertex_sorting="DISTANCE", shade=True)
+       .with_cull_box(*RIM_CULL)
+       .with_curves(
+            rotation_over_lifetime=dict(roll=random_between(-3.0, 3.0)),
+            color_over_lifetime=gradient(
+                [(0.0, 0.85), (0.72, 0.6), (1.0, 0.0)],
+                [(0.0, RIM_BRUISE[0], RIM_BRUISE[1], RIM_BRUISE[2]),
+                 (1.0, GLI_DEAD[0], GLI_DEAD[1], GLI_DEAD[2])])))
+
+    # L4 — edge glints: the ONLY bright elements. Seven small additive sparks at
+    # HDR 1.45 max, the last daylight sliding off a rock face as it drops away.
+    (fx.particle_emitter(
+            "edge_glints", duration=RIM_DURATION, looping=False,
+            start_lifetime=random_between(12, 20), start_speed=constant(0.0),
+            start_size=nf3(random_between(0.28, 0.5), random_between(0.28, 0.5),
+                           random_between(0.28, 0.5)),
+            simulation_space="World", max_particles=10)
+       .with_emission(rate=constant(0.0),
+                      bursts=[burst(time=8, count=constant(4)),
+                              burst(time=30, count=constant(3))])
+       .with_shape(circle(radius=RIM_GLINT_R, thickness=0.5, arc_mode="BurstSpread"),
+                   position=nf3(constant(0.0), constant(8.0), constant(0.0)))
+       .with_material(texture_material(TEX_CIRCLE, hdr=(1.25, 1.3, 1.45),
+                                       blend=BLEND_ADDITIVE))
+       .with_renderer(vertex_sorting="NONE")
+       .with_cull_box(*RIM_CULL)
+       .with_curves(
+            velocity_over_lifetime=dict(
+                linear=nf3(constant(0.0), random_between(-2.2, -1.0), constant(0.0))),
+            size_over_lifetime=nf3(*[curve(0.35, 1.0, [SEG_HOLD_SHRINK],
+                                           "lifetime", "size") for _ in range(3)]),
+            color_over_lifetime=gradient(
+                [(0.0, 0.0), (0.22, 0.5), (0.6, 0.28), (1.0, 0.0)],
+                [(0.0, RIM_GLINT[0], RIM_GLINT[1], RIM_GLINT[2]),
+                 (1.0, STM_SLATE[0], STM_SLATE[1], STM_SLATE[2])])))
+    return fx
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 BUILDERS = {
@@ -796,6 +996,7 @@ BUILDERS = {
     "supply_herald.fx": build_supply_herald,
     "dungeon_maw_breath.fx": build_dungeon_maw_breath,
     "dungeon_maw_idle.fx": build_dungeon_maw_idle,
+    "rim_recede.fx": build_rim_recede,
 }
 
 
@@ -803,7 +1004,9 @@ def main() -> int:
     rc = 0
     for name, builder_fn in BUILDERS.items():
         path = FX_ASSETS_DIR / name
-        raw_len, gz_len = builder_fn().write(path)  # write() round-trip-validates
+        builder = builder_fn()
+        raw_len, gz_len = builder.write(path)  # write() round-trip-validates
+        builder.write_fxproj(path.with_suffix(".fxproj"))  # binary-diff law sibling
         errors = validate_file(path)
         if errors:
             print(f"FAIL {path}: " + "; ".join(errors))

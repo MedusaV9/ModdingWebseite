@@ -12,11 +12,14 @@ import java.util.Set;
  * (undiscovered rows stay glitch-anonymized "???", the timeline pattern).
  *
  * <p>Deliberately NOT config-driven like {@code collections.json}: the roster mirrors the
- * registry ({@code EclipseItems} / {@code WandItems} / {@code WizardEntities}), and each
- * entry's payload is a LANG line — the functional explanation under
- * {@link #descriptionKey}, beside the poetic {@code item.eclipse.<id>.lore} the items
- * already bake. Admin/op-only items (grave, altar, display_wand) are excluded on purpose;
- * renamed-vanilla props (almond water, wallpaper) have no registry id to track.</p>
+ * registry ({@code EclipseItems} / {@code WandItems} / {@code WizardEntities} plus the
+ * WOAH features' own deferred registers {@code woah.chronostasis.ChronoStasisItems} /
+ * {@code woah.echogrove.EchoGroveItems}), and each entry's payload is a LANG line — the
+ * functional explanation under {@link #descriptionKey}, beside the poetic
+ * {@code item.eclipse.<id>.lore} the items already bake. Admin/op-only items (grave,
+ * altar, display_wand) and world-built multiblock items (respawn_door) are excluded on
+ * purpose; renamed-vanilla props (almond water, wallpaper) have no registry id to
+ * track.</p>
  */
 public final class ItemLexicon {
     /** Roster in display order — roughly the order players meet the items across the arc. */
@@ -39,7 +42,13 @@ public final class ItemLexicon {
             "eclipse:storm_heart",
             "eclipse:fog_core",
             "eclipse:fog_cloak_trim",
-            "eclipse:ferryman_toll");
+            "eclipse:ferryman_toll",
+            // WOAH side-arc ware (F-062 / audit G-3c): the optional world events run
+            // beside the boss chain, so their three player-obtainable items close the
+            // roster rather than interleaving into the main progression order.
+            "eclipse:memory_mote",
+            "eclipse:echo_blossom",
+            "eclipse:chrono_core");
 
     private static final Set<String> IDS = Set.copyOf(ORDER);
 
