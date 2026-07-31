@@ -10,9 +10,17 @@ extends Control
 var _f := 1.0
 ## Font-Faktor (= _f x Textgroesse-Regler).
 var _tf := 1.0
+## W14 (FB3-Regel): PHYSISCHER Touch-Floor in Canvas-px (44 pt echt) — die
+## reine 48×_f-Höhe blieb auf Retina unter der Apple-HIG-Tippfläche.
+var _floor_px := float(AcTokens.TOUCH_FLOOR)
 var _scroll_dragging := false
 ## Ziel-VBox für die Sektions-Karten (weist der Screen in _ready zu).
 var _sections: VBoxContainer
+
+
+## Row-Kontrollhöhe: Design-Floor × Faktor, nie unter dem physischen Floor.
+func _row_floor() -> float:
+	return maxf(AcTokens.TOUCH_FLOOR * _f, _floor_px)
 
 
 ## W14: `show_title = false` für Hüllen-Karten, deren Titel bereits der
@@ -79,7 +87,7 @@ func _add_pick_row(
 	var picker := OptionButton.new()
 	picker.name = "Value"
 	picker.focus_mode = Control.FOCUS_NONE
-	picker.custom_minimum_size = Vector2(210.0 * _f, AcTokens.TOUCH_FLOOR * _f)
+	picker.custom_minimum_size = Vector2(210.0 * _f, _row_floor())
 	picker.add_theme_font_size_override("font_size", int(AcTokens.FONT_SIZE_BODY * _tf))
 	for i in options.size():
 		picker.add_item(str(options[i][1]), i)
@@ -98,7 +106,7 @@ func _add_switch_row(
 	var toggle := CheckButton.new()
 	toggle.name = "Value"
 	toggle.focus_mode = Control.FOCUS_NONE
-	toggle.custom_minimum_size = Vector2(0, AcTokens.TOUCH_FLOOR * _f)
+	toggle.custom_minimum_size = Vector2(0, _row_floor())
 	toggle.button_pressed = initial
 	toggle.toggled.connect(func(on: bool) -> void: handler.call(on))
 	row.add_child(toggle)
@@ -127,7 +135,7 @@ func _add_range_row(
 	slider.max_value = max_value
 	slider.step = step
 	slider.value = clampf(initial, min_value, max_value)
-	slider.custom_minimum_size = Vector2(240.0 * _f, AcTokens.TOUCH_FLOOR * _f)
+	slider.custom_minimum_size = Vector2(240.0 * _f, _row_floor())
 	slider.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	slider.value_changed.connect(func(value: float) -> void: handler.call(value))
 	if rebuild_on_release:

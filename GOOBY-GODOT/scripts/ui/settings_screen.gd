@@ -265,8 +265,13 @@ func _apply_scale() -> void:
 	_margin.add_theme_constant_override("margin_top", int(16.0 + float(insets["top"])))
 	_margin.add_theme_constant_override("margin_right", int(24.0 + float(insets["right"])))
 	_margin.add_theme_constant_override("margin_bottom", int(16.0 + float(insets["bottom"])))
-	var floor_px := HudLayoutLogic.touch_floor_canvas(canvas)
-	_back.custom_minimum_size = Vector2(0.0, maxf(48.0 * _f, floor_px))
+	# W14 (FB3-Audit): voller PHYSISCHER Touch-Floor (Retina-Faktor) für alle
+	# Row-Kontrollen — 48×_f allein blieb im Hochformat unter 44 pt.
+	_floor_px = maxf(
+		HudLayoutLogic.touch_floor_canvas(canvas),
+		float(AcTokens.TOUCH_FLOOR) * UiScale.touch_px_per_pt(get_viewport())
+	)
+	_back.custom_minimum_size = Vector2(0.0, maxf(48.0 * _f, _floor_px))
 	_back.add_theme_font_size_override("font_size", int(AcTokens.FONT_SIZE_BODY * _tf))
 	# W14: Kopfzeilen-Konsistenz — Titelgröße wie auf allen anderen Screens.
 	_title.add_theme_font_size_override("font_size", int(AcTokens.FONT_SIZE_TITLE * _tf))
@@ -360,7 +365,7 @@ func _build_language_row(rows: VBoxContainer) -> void:
 		btn.theme_type_variation = "BtnTeal" if id == active else "GhostButton"
 		btn.text = str(opt[1])
 		btn.focus_mode = Control.FOCUS_NONE
-		btn.custom_minimum_size = Vector2(120.0 * _f, AcTokens.TOUCH_FLOOR * _f)
+		btn.custom_minimum_size = Vector2(120.0 * _f, _row_floor())
 		btn.add_theme_font_size_override("font_size", int(AcTokens.FONT_SIZE_BODY * _tf))
 		btn.pressed.connect(_on_language_pressed.bind(id))
 		seg.add_child(btn)
