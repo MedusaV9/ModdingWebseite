@@ -14,6 +14,8 @@ import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
 import dev.projecteclipse.eclipse.entity.EclipseEntities;
 import dev.projecteclipse.eclipse.entity.UmbralStalkerEntity;
+import dev.projecteclipse.eclipse.entity.geo.EclipseGeoAnimations;
+import dev.projecteclipse.eclipse.entity.geo.EclipseGeoMonster;
 import dev.projecteclipse.eclipse.network.S2CBossbarStylePayload;
 import dev.projecteclipse.eclipse.network.S2CQuasarPayload;
 import dev.projecteclipse.eclipse.network.S2CShakePayload;
@@ -50,7 +52,6 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.MoverType;
 import net.minecraft.world.entity.ai.attributes.Attributes;
-import net.minecraft.world.entity.monster.Monster;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Level;
@@ -59,6 +60,9 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.network.PacketDistributor;
+import software.bernie.geckolib.animation.AnimationController;
+import software.bernie.geckolib.animation.AnimationState;
+import software.bernie.geckolib.animation.PlayState;
 
 /**
  * The Herald of the Eclipse — day-7 boss ({@code docs/ideas/04_content.md} §2.1): a broken
@@ -101,8 +105,26 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * {@link EclipseWorldState#setHeraldDefeated} and fires the boss-styled announce. Death
  * plays a {@value #DEATH_DURATION_TICKS}t scripted collapse ({@link #tickDeath}) before
  * the body is removed.</p>
+ *
+ * <p><b>Presentation</b> (MA3 GeckoLib conversion): geo/anims/textures live under
+ * {@code geo/entity/herald.geo.json}, {@code animations/entity/herald.animation.json}
+ * and {@code textures/entity/herald(.png|_glowmask.png)}, rendered by
+ * {@code HeraldGeoRenderer}. The {@code base} controller floats between {@code idle}
+ * and {@code walk} off the horizontal drift (plus a forced {@code walk} in P3 — the old
+ * client clock ran x2 there and the collapse should stay frantic); the fight script
+ * fires {@code action} one-shots: {@code attack} on the gaze discharge,
+ * {@code shard_volley} on the volley telegraph, {@code roar} on upward phase breaks,
+ * {@code summon_rise} right after the arrival spawn and {@code death} (held) under the
+ * scripted collapse.</p>
  */
-public class HeraldEntity extends Monster {
+public class HeraldEntity extends EclipseGeoMonster {
+    /** Keys geo/anim/texture lookups + the {@code animation.herald.<name>} ids. */
+    public static final String GEO_ID = "herald";
+    /** Sheet one-shots beyond the frozen attack/death set (see herald.animation.json). */
+    public static final String ANIM_SHARD_VOLLEY = "shard_volley";
+    public static final String ANIM_ROAR = "roar";
+    public static final String ANIM_SUMMON_RISE = "summon_rise";
+
     public static final int CORONA_SHARDS = 8;
     public static final float BASE_MAX_HEALTH = 300.0F;
     public static final double ARENA_RADIUS = 15.0D;
@@ -151,7 +173,7 @@ public class HeraldEntity extends Monster {
     private static final double IMPULSE_SCALE = 0.25D;
     private static final double IMPULSE_Y = 0.3D;
 
-    /** Current phase 1..3 (synced; drives model animation speed + shard tilt). */
+    /** Current phase 1..3 (synced; P3 forces the frantic {@code walk} loop client-side). */
     private static final EntityDataAccessor<Integer> DATA_PHASE =
             SynchedEntityData.defineId(HeraldEntity.class, EntityDataSerializers.INT);
     /** True while a volley is winding up (shards glow emissive). */
@@ -208,29 +230,11 @@ public class HeraldEntity extends Monster {
     private int deathPayoutInterval = 15;
     private int deathPayoutIndex;
 
-    // Client-side smooth animation clock: advances at the phase speed (x2 in P3) with an
-    // eased ramp so the ring spin / bobs never snap on a phase change.
-    private float animAge;
-    private float animAgePrev;
-    private float animSpeed = 1.0F;
-    private float shardTilt;
-    private float shardTiltPrev;
-    /** Phase-break roar length (client pose clock: core rear-up + crown flare). */
-    private static final int ROAR_TICKS = 26;
-    /** Eased 0..1 weight of the volley-telegraph summon gesture (client only). */
-    private float telegraphLerp;
-    private float telegraphLerpPrev;
-    /** Volley release recoil impulse, 1 → 0 decay (client only). */
-    private float volleyKick;
-    private float volleyKickPrev;
-    private boolean wasTelegraphingClient;
-    /** Accumulated extra ring spin (telegraph spin-up + recoil snap), radians. */
-    private float ringSpinExtra;
-    private float ringSpinExtraPrev;
-    /** Ticks into the phase-break roar, −1 while idle (client only). */
-    private int roarTicks = -1;
-    /** Last phase seen client-side (0 until the first tick, so join/reload never roars). */
-    private int lastClientPhase;
+    // Transient summon_rise countdown: GeckoLib anim triggers only reach players already
+    // TRACKING the entity, and addFreshEntity's add packet flushes a tick later — so
+    // summon() arms a tiny delay instead of firing on the spot. Not persisted: a reload
+    // mid-fight must not replay the arrival unfurl.
+    private int summonRiseDelay;
 
     public HeraldEntity(EntityType<? extends HeraldEntity> entityType, Level level) {
         super(entityType, level);
@@ -238,6 +242,37 @@ public class HeraldEntity extends Monster {
         this.noCulling = true;
         this.setPersistenceRequired();
         this.xpReward = 50;
+    }
+
+    // --- GeckoLib (frozen two-controller layout from EclipseGeoMonster) ---
+
+    @Override
+    public String geoId() {
+        return GEO_ID;
+    }
+
+    @Override
+    protected void registerActionTriggers(AnimationController<?> action) {
+        super.registerActionTriggers(action); // death (played-and-held)
+        action.triggerableAnim(EclipseGeoAnimations.ANIM_ATTACK,
+                EclipseGeoAnimations.once(GEO_ID, EclipseGeoAnimations.ANIM_ATTACK));
+        action.triggerableAnim(ANIM_SHARD_VOLLEY, EclipseGeoAnimations.once(GEO_ID, ANIM_SHARD_VOLLEY));
+        action.triggerableAnim(ANIM_ROAR, EclipseGeoAnimations.once(GEO_ID, ANIM_ROAR));
+        action.triggerableAnim(ANIM_SUMMON_RISE, EclipseGeoAnimations.once(GEO_ID, ANIM_SUMMON_RISE));
+    }
+
+    /**
+     * {@code state.isMoving()} keys off limb swing, which a gravity-free hover script
+     * never produces — use the horizontal position delta instead (DriftLantern pattern).
+     * P3 forces {@code walk} even while parked over the dais center: the old client
+     * clock ran x2 through the collapse phase, and the faster loop keeps that franticness.
+     */
+    @Override
+    protected PlayState handleBaseState(AnimationState<?> state) {
+        double dx = this.getX() - this.xOld;
+        double dz = this.getZ() - this.zOld;
+        boolean drifting = dx * dx + dz * dz > 1.0E-4D;
+        return state.setAndContinue(drifting || getPhase() >= 3 ? walkAnim() : idleAnim());
     }
 
     // --- summoning ---
@@ -266,6 +301,9 @@ public class HeraldEntity extends Monster {
         double z = altarPos.getZ() + 0.5D;
         herald.moveTo(x, altarPos.getY() + SUMMON_HEIGHT, z, level.getRandom().nextFloat() * 360.0F, 0.0F);
         herald.initFight(level, new Vec3(x, groundY, z), groundY);
+        // Arrival unfurl (2.0s summon_rise) once clients track the fresh entity; timed so
+        // it finishes with the HeraldSummonSequence beam fade (spawn t=150, end t=190).
+        herald.summonRiseDelay = 3;
         level.addFreshEntity(herald);
         // Arrival: altar beam + end-portal boom + a soul-flame burst around the spawn point.
         PacketDistributor.sendToPlayersNear(level, null, x, altarPos.getY(), z, 96.0D,
@@ -343,9 +381,11 @@ public class HeraldEntity extends Monster {
     @Override
     public void tick() {
         super.tick();
-        if (this.level().isClientSide) {
-            tickClientAnim();
-        } else if (this.isAlive() && this.level() instanceof ServerLevel serverLevel) {
+        if (!this.level().isClientSide && this.isAlive()
+                && this.level() instanceof ServerLevel serverLevel) {
+            if (this.summonRiseDelay > 0 && --this.summonRiseDelay == 0) {
+                triggerAction(ANIM_SUMMON_RISE);
+            }
             ensureFightInitialized(serverLevel);
             tickFight(serverLevel);
         }
@@ -388,12 +428,16 @@ public class HeraldEntity extends Monster {
         if (target == this.lastPhase) {
             return false;
         }
-        int phase = this.lastPhase + (target > this.lastPhase ? 1 : -1);
+        boolean upward = target > this.lastPhase;
+        int phase = this.lastPhase + (upward ? 1 : -1);
         EclipseMod.LOGGER.info("Herald phase {} -> {} at {}/{} HP", this.lastPhase, phase,
                 String.format(java.util.Locale.ROOT, "%.1f", this.getHealth()),
                 String.format(java.util.Locale.ROOT, "%.1f", this.getMaxHealth()));
         this.lastPhase = phase;
         setPhase(phase);
+        if (upward) {
+            triggerAction(ANIM_ROAR); // Rear-up + tentacle splay under the break audio/FX.
+        }
         setTelegraphing(false);
         this.telegraphTimer = -1;
         this.gazeChargeTimer = -1;
@@ -556,6 +600,9 @@ public class HeraldEntity extends Monster {
             this.telegraphTimer = Math.max(TELEGRAPH_FLOOR_TICKS,
                     TELEGRAPH_BASE_TICKS - 2 * (this.scaledPlayers - 1));
             setTelegraphing(true);
+            // 1.5s gather->flare->release gesture: its release beat (~1.0s in) lines up
+            // with the shot for the base 20t telegraph and stays an honest tell at 12t.
+            triggerAction(ANIM_SHARD_VOLLEY);
             level.playSound(null, this.blockPosition(), SoundEvents.BEACON_POWER_SELECT,
                     SoundSource.HOSTILE, 1.2F, 1.3F);
             level.playSound(null, this.blockPosition(), EclipseSounds.BOSS_HERALD_TELEGRAPH.get(),
@@ -622,6 +669,7 @@ public class HeraldEntity extends Monster {
             }
         }
         if (spawned > 0) {
+            triggerAction(ANIM_ROAR); // Rear-up "calling the pack" gesture under the growl.
             level.playSound(null, this.blockPosition(), SoundEvents.WOLF_GROWL, SoundSource.HOSTILE, 1.0F, 0.5F);
             EclipseMod.LOGGER.info("Herald summoned {} umbral stalker(s) (cap {}, {} already up)",
                     spawned, cap, existing.size());
@@ -679,6 +727,7 @@ public class HeraldEntity extends Monster {
             return;
         }
         // Fire moment: LOS decides — a pillar between eye and player is mechanical cover.
+        triggerAction(EclipseGeoAnimations.ANIM_ATTACK); // Head-snap discharge (hit or covered).
         boolean losBroken = isLineOfSightBroken(level, target);
         if (losBroken) {
             level.playSound(null, target.blockPosition(), SoundEvents.SCULK_CLICKING,
@@ -996,6 +1045,8 @@ public class HeraldEntity extends Monster {
             setTelegraphing(false); // No stuck glow pass on the wreck.
             this.lastPhase = 3;
             setPhase(3); // Collapse pose: a lethal burst from P1/P2 HP must not keep the old anim set.
+            // 3.5s staggered collapse, held on the wreck frame until the 70t removal.
+            triggerAction(EclipseGeoAnimations.ANIM_DEATH);
             this.bossEvent.removeAllPlayers(); // No bar lingering at 0% through the collapse.
             EclipseWorldState state = EclipseWorldState.get(serverLevel.getServer());
             if (!state.isHeraldDefeated()) {
@@ -1042,13 +1093,13 @@ public class HeraldEntity extends Monster {
 
     /**
      * Scripted ~{@value #DEATH_DURATION_TICKS}t collapse replacing the vanilla 20t
-     * sideways tip-over ({@code HeraldRenderer} suppresses the death flip and
-     * {@code HeraldModel} poses the wreck off {@code deathTime}): the remaining corona
-     * shards tear loose one by one and crash down through the existing {@link ShardCrash}
-     * path while the core sinks toward the dais, then shatters — BOSS_SLAM burst, amethyst
-     * break chord, camera shake — and the vanilla removal path runs. Loot, XP and the
-     * announce all fired from {@link #die} at the kill, so the collapse delays ONLY the
-     * body removal.
+     * sideways tip-over ({@code HeraldGeoRenderer} suppresses the death flip via
+     * {@code withUprightDeath()} and the held {@code death} anim poses the wreck): the
+     * remaining corona shards tear loose one by one and crash down through the existing
+     * {@link ShardCrash} path while the core sinks toward the dais, then shatters —
+     * BOSS_SLAM burst, amethyst break chord, camera shake — and the vanilla removal path
+     * runs. Loot, XP and the announce all fired from {@link #die} at the kill, so the
+     * collapse delays ONLY the body removal.
      */
     @Override
     protected void tickDeath() {
@@ -1152,14 +1203,6 @@ public class HeraldEntity extends Monster {
                 + "(crown verdict coda fired)", this.deathTime);
     }
 
-    /** Client pose hook: 0..1 through the scripted death collapse ({@code 0} while alive). */
-    public float deathProgress(float partialTick) {
-        if (this.deathTime <= 0) {
-            return 0.0F;
-        }
-        return Mth.clamp((this.deathTime + partialTick - 1.0F) / (DEATH_DURATION_TICKS - 1.0F), 0.0F, 1.0F);
-    }
-
     // --- bossbar (wither pattern + W8 skin payload for every viewer incl. late joiners) ---
 
     @Override
@@ -1182,88 +1225,6 @@ public class HeraldEntity extends Monster {
         if (name != null) {
             this.bossEvent.setName(name);
         }
-    }
-
-    // --- client animation hooks ---
-
-    /** Advances the smooth animation clock and the P3 shard tilt-out lerp (client only). */
-    private void tickClientAnim() {
-        // W4 IDEA-16 #3 death slow-mo: while the scripted collapse runs, the anim clock
-        // eases toward ~0.2x — a client-only illusion (server ticks are untouched).
-        float targetSpeed = this.deathTime > 0 ? 0.2F : getPhase() >= 3 ? 2.0F : 1.0F;
-        this.animSpeed += (targetSpeed - this.animSpeed) * (this.deathTime > 0 ? 0.15F : 0.05F);
-        this.animAgePrev = this.animAge;
-        this.animAge += this.animSpeed;
-        this.shardTiltPrev = this.shardTilt;
-        float targetTilt = getPhase() >= 3 ? 0.6F : 0.0F;
-        this.shardTilt += (targetTilt - this.shardTilt) * 0.05F;
-        // Volley summon gesture: eased weight of the synced telegraph flag (tentacle
-        // claw + halo gather), with a 1→0 recoil impulse fired on the release edge.
-        this.telegraphLerpPrev = this.telegraphLerp;
-        boolean telegraphing = isTelegraphing();
-        this.telegraphLerp += ((telegraphing ? 1.0F : 0.0F) - this.telegraphLerp) * 0.14F;
-        this.volleyKickPrev = this.volleyKick;
-        this.volleyKick *= 0.82F;
-        if (this.wasTelegraphingClient && !telegraphing && this.deathTime == 0) {
-            this.volleyKick = 1.0F;
-        }
-        this.wasTelegraphingClient = telegraphing;
-        // The gesture spins the corona up and the recoil snaps it — accumulated so the
-        // ring never rewinds, it just runs hot for a moment.
-        this.ringSpinExtraPrev = this.ringSpinExtra;
-        this.ringSpinExtra += 0.10F * this.telegraphLerp + 0.30F * this.volleyKick;
-        // Phase-break ROAR: client-detected off the synced phase (upward breaks only;
-        // lastClientPhase starts 0 so a join/reload mid-fight never plays a stale roar).
-        if (this.roarTicks >= 0 && ++this.roarTicks >= ROAR_TICKS) {
-            this.roarTicks = -1;
-        }
-        int phase = getPhase();
-        if (this.lastClientPhase != 0 && phase > this.lastClientPhase && this.deathTime == 0) {
-            this.roarTicks = 0;
-        }
-        this.lastClientPhase = phase;
-    }
-
-    /** Smooth model animation age (spec anims run off this; advances x2 in P3). */
-    public float animAge(float partialTick) {
-        return Mth.lerp(partialTick, this.animAgePrev, this.animAge);
-    }
-
-    /** P3 corona tilt-out amount, lerped toward {@code zRot 0.6} per spec. */
-    public float shardTilt(float partialTick) {
-        return Mth.lerp(partialTick, this.shardTiltPrev, this.shardTilt);
-    }
-
-    /** 0..1 eased weight of the volley-telegraph summon gesture. */
-    public float telegraphAmount(float partialTick) {
-        return Mth.lerp(partialTick, this.telegraphLerpPrev, this.telegraphLerp);
-    }
-
-    /** Volley release recoil impulse (1 at the shot, decaying to 0). */
-    public float volleyKick(float partialTick) {
-        return Mth.lerp(partialTick, this.volleyKickPrev, this.volleyKick);
-    }
-
-    /** Accumulated extra corona spin from telegraph spin-ups and recoil snaps (radians). */
-    public float ringSpinExtra(float partialTick) {
-        return Mth.lerp(partialTick, this.ringSpinExtraPrev, this.ringSpinExtra);
-    }
-
-    /**
-     * 0..1 envelope of the phase-break roar: sharp attack over the first quarter, eased
-     * smoothstep release over the rest ({@code 0} while idle). Drives the core rear-up,
-     * the tentacle splay and the crown flare (which also joins the emissive pass).
-     */
-    public float roarAmount(float partialTick) {
-        if (this.roarTicks < 0) {
-            return 0.0F;
-        }
-        float p = Math.min(1.0F, (this.roarTicks + partialTick) / ROAR_TICKS);
-        if (p < 0.25F) {
-            return p / 0.25F;
-        }
-        float r = (p - 0.25F) / 0.75F;
-        return 1.0F - r * r * (3.0F - 2.0F * r);
     }
 
     // --- floating-boss chassis ---

@@ -19,11 +19,16 @@ import net.neoforged.api.distmarker.Dist;
 import net.neoforged.api.distmarker.OnlyIn;
 
 /**
- * Herald renderer: the 26-cube godhead plus an emissive pass ({@code RenderType.eyes},
- * fullbright — Gazer skipDraw pattern) that keeps the inner eye burning out of the black
- * glass at any light level, and pulls the 8 corona shards into the same glow pass while a
- * volley telegraph is winding up (the server syncs {@code isTelegraphing()}).
+ * Old vanilla-model Herald renderer.
+ *
+ * @deprecated MA3 GeckoLib conversion: superseded by {@code HeraldGeoRenderer}
+ *             (registered by {@code HeraldRenderers} at LOWEST priority, so it wins the
+ *             registration race against the legacy {@code EclipseEntityRenderers} line
+ *             until the integrator removes that line — see MA3_HERALD_REPORT.md). Kept
+ *             compiling only for that shared registration; the roar-driven crown flare
+ *             was dropped with the entity's client clock hooks.
  */
+@Deprecated
 @OnlyIn(Dist.CLIENT)
 public class HeraldRenderer extends MobRenderer<HeraldEntity, HeraldModel> {
     public static final ResourceLocation TEXTURE =
@@ -73,7 +78,7 @@ public class HeraldRenderer extends MobRenderer<HeraldEntity, HeraldModel> {
             VertexConsumer buffer = bufferSource.getBuffer(EYES);
             this.getParentModel().renderEmissive(poseStack, buffer,
                     LightTexture.FULL_BRIGHT, OverlayTexture.NO_OVERLAY,
-                    entity.isTelegraphing(), entity.roarAmount(partialTick) > 0.35F);
+                    entity.isTelegraphing(), false /* roar clock hook removed (GeckoLib) */);
         }
     }
 }

@@ -1,44 +1,59 @@
-# UV map — The Herald of the Eclipse (`assets/eclipse/textures/entity/herald.png`)
+# UV map — The Herald of the Eclipse (`assets/eclipse/textures/entity/herald.png` + `_glowmask.png`)
 
-**UV space:** 128×128 (frozen — the LayerDefinition size). **Sheet:** 256×256, painted at
-2× (vanilla normalizes UVs by the LayerDefinition size, so every texel gets a 2×2 pixel
-budget with zero Java-side UV change). Model: `client/entity/HeraldModel` (33 cubes,
-box-UV). All face rects are `(x0,y0)-(x1,y1)` TEXEL bounds (exclusive right/bottom edge;
-multiply by 2 for sheet pixels).
+**Texture size:** 128×128 (both files — GeckoLib's `AutoGlowingTexture` enforces matching
+canvases; 128 canvas per the §2.1 boss rule; the pre-conversion sheet was a 256×256
+vanilla 2× repaint — byte-layout is NOT compatible). Model:
+`assets/eclipse/geo/entity/herald.geo.json` (GeckoLib, **31 bones / 35 cubes** — floating
+godhead, hitbox 2.2×3.2, core center 2.5 up). The geo file **is** the UV source of truth —
+the painter (`scripts/geckolib_gen/paint_lib.py`) parses it and computes every face rect
+itself, so only the layout is frozen here:
 
-| Cube | UV origin | Box W×H×D | Pivot / pose |
-|---|---|---|---|
-| core | (0,0) | 12×12×12 | offset (0,−40) under root (0,24) — floats at spec pivot (0,40,0); bobs `sin(age*0.06)*1.2px`, yaw/pitch-tracks the target |
-| inner_eye | (48,0) | 6×6×6 | child of core @ ZERO, box z −7..−1 (front face protrudes 1px); **emissive** — re-rendered fullbright by `HeraldRenderer.EmissiveLayer` (`RenderType.eyes`) |
-| crown0..3 | (72+i·4,0) | 1×5×1 | crown spikes on the core's top corners (±4, −6, ±4), base lean 0.28 outward + slow shimmer; the phase-break ROAR flares them out/up and pulls them into the **emissive pass** (`HeraldEntity.roarAmount`) |
-| halo (bone) + halo0..2 | (72+i·4,8) | 1×3×1 | 3 small floating shards on a counter-rotating inner ring bone at r=9px every 120°; the volley telegraph GATHERS them inward (summon gesture) and the recoil flings them back out; **glow emissive during telegraphs** |
-| shard0..7 | (i·8,32) | 2×6×2 | children of the `ring` bone (no cube, pivot (0,−40)); each at `(cos(i·45°)*14, 0, sin(i·45°)*14)` with `yRot = −i·45°` (local +X radial); ring spins `yRot = age*0.05` + the accumulated telegraph spin-up / recoil snap (`ringSpinExtra`), shard bobs with a breathing amplitude; P3 tilt-out `zRot → 0.6`; **glow emissive during volley telegraphs**; detached shards hidden |
-| tentacle{t}_seg{k} | ((t·4+k)·8,44) | 2×6×2 | 4 chains × 4 chained segments off the core's underside corners (±3.5, 6, ±3.5), each child @ (0,6,0); whip-lag `xRot = sin(age*0.09 + k·0.6 + t·1.57)*0.25` (per-chain phase) + cross-sway; telegraph curls them into the claw, the roar splays them; the death staggers their limp chain-by-chain |
+| Bone | Cube | Box W×H×D | UV | Notes |
+|---|---|---|---|---|
+| head | godhead core | 12×12×12 | box-UV (0,0) | head-tracked; faceted black glass + wandering gold fissures |
+| head | brow sill | 8×2×2 | box-UV (48,0) | proud ledge over the eye, gold-warmed bottom row |
+| head | crown spike L/R | 1×5×1 | box-UV (68,0) / (72,0) | rear crown, cube-rotated outward; burning gold tips |
+| glow_eye | inner eye | 6×6×6 | box-UV (48,6) | protrudes 1px from the core's front; gold furnace, 2×2 void pupil at north (fx 2-3, fy 2-3); whole bone auto-glows |
+| glow_veins | front plate | 10×10×1 | box-UV (76,0) | quasi-transparent plate 0.75px proud of the core — ONLY the wandering gold vein pixels are opaque (auto-glow) |
+| glow_veins | side column L/R | 1×10×1 | box-UV (98,0) / (102,0) | dashed gold seams up the core's flanks |
+| horn_left | base + tip | 2×6×2, 1×5×1 | box-UV (106,0) / (114,0) | obsidian, cube-rotated out/up; tip rows burn gold |
+| horn_right | base + tip | 2×6×2, 1×5×1 | box-UV (106,8) / (114,8) | mirror |
+| shield_left | plate + crest fin | 2×10×7, 1×7×3 | box-UV (0,24) / (18,24) | floating shoulder shield, faceted dark glass; fin's top row + up face burn |
+| shield_right | plate + crest fin | 2×10×7, 1×7×3 | box-UV (26,24) / (44,24) | mirror |
+| shard1..8 | corona wedge | 2×6×2 | box-UV (i−1)·8,44 | children of the cube-less `ring` bone at r=14px every 45°, yRot pre-rotated radial; pale-violet glass, hot tips (dim glow at rest — the renderer's telegraph layer surges them); P3/death detach hides `shardN` via `HeraldGeoRenderer` |
+| halo | 3 floating shards | 1×3×1 | box-UV (64,44) / (68,44) / (72,44) | the volley "ammo" ring at r≈8.7px; fully emissive (strength 1.0) |
+| tentacle_{fl,fr,bl,br}_1 | upper segment | 2×10×2 | box-UV (0,52)..(24,52) | 4 chains off the core's underside corners |
+| tentacle_{fl,fr,bl,br}_2 | lower segment | 1×9×1 | box-UV (32,52)..(44,52) | chained child; ragged kelp hem |
 
-All spec anims run off the entity's smooth animation clock (`HeraldEntity.animAge`),
-which advances ×2 in P3 with an eased ramp so nothing snaps at the phase break.
+Cube-less FX/logic bones (no UV): `root` → `body` (locomotion/hover root) →
+`ring` (corona spin), `glyph_ring` → **`glyph_orbit_1..3`** (A4's FX anchors, pivots at
+r=10px / 120° around the core, staggered heights 42/40/38), and the per-shard bones.
+`root` stays clean for the scripted 70t death collapse (`tickDeath`).
 
-Per-face pixel rects (top, bottom, east/right, north/front, west/left, south/back):
+**Art brief (spec §2.1, MA3 refinement):** a broken godhead of near-black violet glass
+`#181224` re-ground into diagonal facet cells with glassy catch-lights `#3D3158`, laced
+with wandering GOLD crack veins `#E8A83A` → `#FFD86A` (~9-texel spacing with breaks); a
+blazing gold inner eye with a 2×2 void pupil `#100A18`; three quasi-transparent floating
+vein plates whose only opaque pixels are the gold paths; obsidian horns `#201830` with
+burning gold tips; dark-glass shoulder shields with a gold crest fin; 8 pale-violet
+corona shards `#C88AFF` fading to `#4A2E66` at the base with hot `#E9DCFF` tips; a
+hot-lavender halo; and dark umbral tentacle chains `#241C36` with ragged kelp hems.
 
-| Cube | top | bottom | east | north | west | south |
-|---|---|---|---|---|---|---|
-| core | (12,0)-(24,12) | (24,0)-(36,12) | (0,12)-(12,24) | (12,12)-(24,24) | (24,12)-(36,24) | (36,12)-(48,24) |
-| inner_eye | (54,0)-(60,6) | (60,0)-(66,6) | (48,6)-(54,12) | (54,6)-(60,12) | (60,6)-(66,12) | (66,6)-(72,12) |
-| crown i (u = 72+i·4) | (u+1,0)-(u+2,1) | (u+2,0)-(u+3,1) | (u,1)-(u+1,6) | (u+1,1)-(u+2,6) | (u+2,1)-(u+3,6) | (u+3,1)-(u+4,6) |
-| halo i (u = 72+i·4) | (u+1,8)-(u+2,9) | (u+2,8)-(u+3,9) | (u,9)-(u+1,12) | (u+1,9)-(u+2,12) | (u+2,9)-(u+3,12) | (u+3,9)-(u+4,12) |
-| shard i (u = i·8) | (u+2,32)-(u+4,34) | (u+4,32)-(u+6,34) | (u,34)-(u+2,40) | (u+2,34)-(u+4,40) | (u+4,34)-(u+6,40) | (u+6,34)-(u+8,40) |
-| tentacle seg s = t·4+k (u = s·8) | (u+2,44)-(u+4,46) | (u+4,44)-(u+6,46) | (u,46)-(u+2,52) | (u+2,46)-(u+4,52) | (u+4,46)-(u+6,52) | (u+6,46)-(u+8,52) |
+**Emissive (glowmask — the Herald's FIRST):** `glow_eye` + `glow_veins` auto via the
+`glow_` prefix; custom glow painters add the core's gold fissures (same-salt albedo twin,
+so mask and albedo can never drift), the crown-spike + horn tips, the shield crests, the
+shard TIPS (dimmed ~alpha 170-180 at rest) and the full halo (`set_glow("halo", 1.0)`).
+`HeraldGeoRenderer.TelegraphGlowLayer` replaces the plain `withGlowmask()` layer: the
+whole mask throbs while a volley telegraph winds up and gutters out across the death
+collapse.
 
-**Art brief:** a broken godhead — near-black violet glass core (`#181224`, faceted) laced
-with gold crack veins (`#E8A83A` loud on the north face, dim hairlines spilling onto
-east/west/up), a blazing gold inner eye (`#FFD86A`, 2×2 void pupil `#100A18` at (56,8))
-that the emissive pass keeps burning at any light, pale-violet corona shards (`#C88AFF`)
-that flare during telegraphs, gold-tipped obsidian crown spikes that flare through the
-roar, hot-lavender halo shards, and dark umbral tentacle chains (`#241C36` with joint
-banding + sucker dots). Contrast lives in the albedo; the eye, the telegraphing corona +
-halo shards, and the roaring crown additionally get the fullbright eyes pass.
+**Generator (deterministic, byte-identical reruns):**
 
-**Generator:** `python3 scripts/skin_gen/herald_v2.py` (deterministic 2× repaint; shared
-painter `scripts/skin_gen/boss_paint.py` — keep its cube list in sync with
-`HeraldModel.createBodyLayer`). The original 128×128 placeholder came from
-`java scripts/placeholder_gen/EntitySkinPlaceholder.java`.
+```
+python3 scripts/geckolib_gen/mobs/herald.py
+```
+
+Writes albedo + glowmask in one run. The old vanilla-model generator
+(`scripts/skin_gen/herald_v2.py`, 256×256) was deleted with the conversion — rerunning
+it would have clobbered this canvas at the wrong size and hard-failed the glowmask pair.
+Final AI art may replace the albedo PNG byte-for-byte at the same path/canvas size.
