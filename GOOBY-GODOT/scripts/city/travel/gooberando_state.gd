@@ -42,6 +42,8 @@ static func default_slice() -> Dictionary:
 		"bestelltAt": 0,
 		"fertigAt": 0,
 		"gerichtId": "",
+		"gerichte": [],
+		"restaurantId": "",
 		"lieferungen": 0,
 		"trinkgelder": 0,
 		"ohneTrinkgeldFolge": 0,
@@ -60,6 +62,8 @@ static func normalize_slice(raw: Variant) -> Dictionary:
 		"bestelltAt": maxi(0, int(raw.get("bestelltAt", 0))),
 		"fertigAt": maxi(0, int(raw.get("fertigAt", 0))),
 		"gerichtId": str(raw.get("gerichtId", "")),
+		"gerichte": _gericht_ids(raw),
+		"restaurantId": str(raw.get("restaurantId", "")),
 		"lieferungen": maxi(0, int(raw.get("lieferungen", 0))),
 		"trinkgelder": maxi(0, int(raw.get("trinkgelder", 0))),
 		"ohneTrinkgeldFolge": maxi(0, int(raw.get("ohneTrinkgeldFolge", 0))),
@@ -68,24 +72,52 @@ static func normalize_slice(raw: Variant) -> Dictionary:
 	}
 
 
+## Warenkorb-Ids aus rohen Save-Daten (W13B): Alt-Saves kennen nur
+## `gerichtId` — dann wird daraus ein Ein-Gericht-Korb.
+static func _gericht_ids(raw: Dictionary) -> Array:
+	var ids: Array = []
+	var roh: Variant = raw.get("gerichte", [])
+	if roh is Array:
+		for id: Variant in roh:
+			if not str(id).is_empty():
+				ids.append(str(id))
+	if ids.is_empty() and not str(raw.get("gerichtId", "")).is_empty():
+		ids.append(str(raw.get("gerichtId", "")))
+	return ids
+
+
 static func kann_bestellen(slice: Dictionary) -> bool:
 	return str(slice.get("state", STATE_IDLE)) == STATE_IDLE
 
 
-## Bestellen: prep_s vom Aufrufer (rand 120–300 s bzw. Debug-Key
-## `debug.gooberando_prep_s`). kosten = Gericht-Preis + Liefergebühr 3.
+## Bestellen (Einzelgericht, W3a-Signatur): delegiert an den Warenkorb.
 static func bestellen(
-	slice: Dictionary, now_ms: int, prep_s: int, gericht: Dictionary
+	slice: Dictionary, now_ms: int, prep_s: int, gericht: Dictionary, restaurant_id := ""
 ) -> Dictionary:
-	if not kann_bestellen(slice):
+	return bestellen_korb(slice, now_ms, prep_s, [gericht], restaurant_id)
+
+
+## Warenkorb bestellen (W13B, Doc E §5.1): gerichte = [{id, preis}, …],
+## kosten = Summe der Preise + Liefergebühr 3. prep_s vom Aufrufer
+## (Restaurant-Wartezeit + Fahrzeit bzw. Debug-Key `debug.gooberando_prep_s`).
+static func bestellen_korb(
+	slice: Dictionary, now_ms: int, prep_s: int, gerichte: Array, restaurant_id := ""
+) -> Dictionary:
+	if not kann_bestellen(slice) or gerichte.is_empty():
 		return {"ok": false, "slice": slice, "kosten": 0, "notifications": []}
 	var s := normalize_slice(slice)
 	var fertig := now_ms + maxi(1, prep_s) * 1000
+	var ids: Array = []
+	var kosten := LIEFERGEBUEHR
+	for gericht: Dictionary in gerichte:
+		ids.append(str(gericht.get("id", "")))
+		kosten += int(gericht.get("preis", 0))
 	s["state"] = STATE_BESTELLT
 	s["bestelltAt"] = now_ms
 	s["fertigAt"] = fertig
-	s["gerichtId"] = str(gericht.get("id", ""))
-	var kosten := int(gericht.get("preis", 0)) + LIEFERGEBUEHR
+	s["gerichtId"] = str(ids[0])
+	s["gerichte"] = ids
+	s["restaurantId"] = restaurant_id
 	var notifications := [
 		{"id": NOTIF_DA, "text_key": "travel.gooberando.notif_da", "at_ms": fertig}
 	]
@@ -104,19 +136,25 @@ static func tick(slice: Dictionary, now_ms: int) -> Dictionary:
 		events.append({"typ": "vor_der_tuer"})
 	if str(s["state"]) == STATE_VOR_DER_TUER and now_ms > fertig + GEDULD_S * 1000:
 		var gericht_id := str(s["gerichtId"])
+		var ids: Array = (s["gerichte"] as Array).duplicate()
 		s = _nach_lieferung(s, 0)
-		events.append({"typ": "abgestellt", "gerichtId": gericht_id})
+		events.append({"typ": "abgestellt", "gerichtId": gericht_id, "gerichte": ids})
 	return {"slice": s, "events": events}
 
 
-## Tür geöffnet → Übergabe: Essen ins Inventar (gerichtId in der Rückgabe),
-## danach wartet der TRINKGELD-Prompt.
+## Tür geöffnet → Übergabe: Essen ins Inventar (gerichtId/gerichte in der
+## Rückgabe), danach wartet der TRINKGELD-Prompt.
 static func uebergabe(slice: Dictionary, now_ms: int) -> Dictionary:
 	var s: Dictionary = tick(slice, now_ms)["slice"]
 	if str(s["state"]) != STATE_VOR_DER_TUER:
-		return {"ok": false, "slice": s, "gerichtId": ""}
+		return {"ok": false, "slice": s, "gerichtId": "", "gerichte": []}
 	s["state"] = STATE_TRINKGELD
-	return {"ok": true, "slice": s, "gerichtId": str(s["gerichtId"])}
+	return {
+		"ok": true,
+		"slice": s,
+		"gerichtId": str(s["gerichtId"]),
+		"gerichte": (s["gerichte"] as Array).duplicate(),
+	}
 
 
 ## Trinkgeld-Entscheidung (roll 0..1 injizierbar für Tests). Rückgabe:
@@ -170,4 +208,6 @@ static func _nach_lieferung(s: Dictionary, folge_delta: int) -> Dictionary:
 	s["bestelltAt"] = 0
 	s["fertigAt"] = 0
 	s["gerichtId"] = ""
+	s["gerichte"] = []
+	s["restaurantId"] = ""
 	return s

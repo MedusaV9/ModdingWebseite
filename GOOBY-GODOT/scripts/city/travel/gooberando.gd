@@ -1,11 +1,14 @@
 class_name GooberandoApp
 extends VBoxContainer
-## GOOBERANDO-App (W3a CITY, Doc E §5, M1-Kern): „Erstmal Goobyn.“ —
-## App-Sheet mit Logo + 3 Gerichten aus dem REHWEI-Sortiment, Bestellung →
-## realer 2–5-min-Timer (Dev-Key `debug.gooberando_prep_s`) → Türklingel +
-## oranger Liefer-Gooby (W1b-Rig, #FF7A00) + Übergabe + Trinkgeld-Option
-## (5 Münzen, 30 % Chance auf 2-h-Energie-Buff; „Trinkgeld schadet nie ;)“
-## nach 3× keins). Essen landet im Inventar (GameState).
+## GOOBERANDO-App (W3a CITY + W13B-Vollausbau, Doc E §5): „Erstmal Goobyn.“ —
+## App-Sheet mit Logo, Restaurant-Wahl (3 Lieferküchen aus
+## `data/gooberando_restaurants.json`), Menü mit kleinem Warenkorb,
+## Bestellung → deterministische Fahrer-Sim auf dem road_graph
+## (delivery/fahrer_sim.gd) mit Live-Karte (Minimap-Baustein + Fahrer-Punkt)
+## → Türklingel + oranger Liefer-Gooby (W1b-Rig, #FF7A00) + Übergabe +
+## Trinkgeld-Option (5 Münzen, 30 % Chance auf 2-h-Energie-Buff; „Trinkgeld
+## schadet nie ;)“ nach 3× keins). Essen landet als FoodCatalog-Ids im
+## Inventar (GameState).
 ##
 ## HUD-Anbindung (Orchestrator): `hud.action_pressed` mit &"igohbie" →
 ## `GooberandoApp.oeffne(szene, game_state)`.
@@ -18,12 +21,20 @@ const PanelSheetScene := preload("res://scripts/ui/panel_sheet.tscn")
 const LOGO := "res://assets/brand/gooberando.png"
 const KLINGEL := "res://assets/city/audio/bong_001.ogg"
 const ORANGE := Color("#FF7A00")
+## Kleiner Warenkorb (Doc E §5.1): mehr trägt der Liefer-Gooby nicht.
+const MAX_KORB := 5
 
 var gs: Object
 var sheet: PanelSheet
 
 var _box: VBoxContainer
 var _tick_akku := 0.0
+var _restaurant := ""
+var _warenkorb: Array = []
+var _karte: CityMap
+var _graph: CityRoadGraph
+var _route := PackedVector3Array()
+var _route_fuer := "?"
 
 
 ## GOOBERANDO-Sheet öffnen (Host = beliebige Szene; eigener CanvasLayer).
@@ -77,14 +88,21 @@ func now_ms() -> int:
 	return int(Time.get_unix_time_from_system() * 1000.0)
 
 
-## Dev-Harness: Lieferzeit via `debug.gooberando_prep_s` verkürzbar.
-func prep_s() -> int:
+## Gesamt-Lieferzeit (s) einer Bestellung: Küchen-Wartezeit des Restaurants
+## + Fahrzeit der road_graph-Route. Dev-Harness: `debug.gooberando_prep_s`
+## überschreibt die Gesamtzeit.
+func prep_s(restaurant_id: String) -> int:
 	var settings := get_node_or_null("/root/AppSettings")
 	if settings != null:
 		var debug := int(settings.get_setting("debug.gooberando_prep_s", 0))
 		if debug > 0:
 			return debug
-	return randi_range(GooberandoLogic.PREP_MIN_S, GooberandoLogic.PREP_MAX_S)
+	var restaurant := GooberandoRestaurants.restaurant(restaurant_id)
+	var kueche := randi_range(
+		int(restaurant.get("prep_min_s", GooberandoLogic.PREP_MIN_S)),
+		int(restaurant.get("prep_max_s", GooberandoLogic.PREP_MAX_S))
+	)
+	return kueche + int(ceilf(GooberandoFahrerSim.fahrzeit_s(_route_zu(restaurant_id))))
 
 
 func _tick() -> void:
@@ -103,7 +121,8 @@ func _tick() -> void:
 				_klingel()
 				_render()
 			"abgestellt":
-				_gib_essen(str(ereignis["gerichtId"]))
+				for id: Variant in ereignis.get("gerichte", [ereignis["gerichtId"]]):
+					_gib_essen(str(id))
 				_zeige_toast(I18nService.t("travel.gooberando.abgestellt"))
 				_render()
 
@@ -126,7 +145,10 @@ func _render() -> void:
 		GooberandoLogic.STATE_TRINKGELD:
 			_render_trinkgeld()
 		_:
-			_render_menue()
+			if _restaurant.is_empty():
+				_render_restaurants()
+			else:
+				_render_menue()
 
 
 func _logo() -> void:
@@ -145,31 +167,124 @@ func _logo() -> void:
 	_box.add_child(slogan)
 
 
+## Restaurant-Wahl (W13B, Doc E §5.1): Name, Bewertungs-Gag, Wartezeit.
+func _render_restaurants() -> void:
+	_label(I18nService.t("phone.gooberando.restaurants_titel"))
+	for restaurant: Dictionary in GooberandoRestaurants.alle():
+		var btn := Button.new()
+		btn.theme_type_variation = "AccentButton"
+		btn.text = str(restaurant.get("name_de", "?"))
+		btn.pressed.connect(_on_restaurant.bind(str(restaurant.get("id", ""))))
+		_box.add_child(btn)
+		_caption(
+			(
+				I18nService
+				. t("phone.gooberando.bewertung")
+				. format(
+					{
+						"sterne": str(restaurant.get("sterne", "5,0")),
+						"gag": I18nService.t(str(restaurant.get("gag_key", ""))),
+					}
+				)
+			)
+		)
+		_caption(
+			(
+				I18nService
+				. t("phone.gooberando.wartezeit")
+				. format(
+					{
+						"min": int(restaurant.get("prep_min_s", 120)) / 60,
+						"max": int(ceilf(float(restaurant.get("prep_max_s", 300)) / 60.0)),
+					}
+				)
+			)
+		)
+
+
+## Menü + kleiner Warenkorb des gewählten Restaurants.
 func _render_menue() -> void:
-	var coins := int(gs.get_value("economy.coins", 0))
-	_label(
+	var restaurant := GooberandoRestaurants.restaurant(_restaurant)
+	_label(str(restaurant.get("name_de", "?")))
+	_caption(
 		I18nService.t("travel.gooberando.gebuehr").format(
 			{"gebuehr": GooberandoLogic.LIEFERGEBUEHR}
 		)
 	)
-	for gericht: Dictionary in CitySortiment.gooberando_gerichte():
-		var preis := int(gericht.get("preis", 0)) + GooberandoLogic.LIEFERGEBUEHR
+	for gericht: Dictionary in restaurant.get("gerichte", []):
 		var btn := Button.new()
 		btn.theme_type_variation = "AccentButton"
-		btn.text = "%s — %d ᴳ" % [str(gericht.get("name_de", "?")), preis]
-		btn.disabled = coins < preis
-		btn.pressed.connect(_on_bestellen.bind(gericht))
+		btn.text = "%s — %d ᴳ" % [str(gericht.get("name_de", "?")), int(gericht.get("preis", 0))]
+		btn.disabled = _warenkorb.size() >= MAX_KORB
+		btn.pressed.connect(_on_in_den_korb.bind(gericht))
 		_box.add_child(btn)
+	var summe := _korb_summe()
+	if _warenkorb.is_empty():
+		_caption(I18nService.t("phone.gooberando.warenkorb_leer"))
+	else:
+		_label(
+			(
+				I18nService
+				. t("phone.gooberando.warenkorb")
+				. format(
+					{
+						"n": _warenkorb.size(),
+						"summe": summe,
+						"gebuehr": GooberandoLogic.LIEFERGEBUEHR,
+					}
+				)
+			)
+		)
+	var coins := int(gs.get_value("economy.coins", 0))
+	var kaufen := Button.new()
+	kaufen.theme_type_variation = "PrimaryButton"
+	kaufen.text = I18nService.t("phone.gooberando.bestellen").format({"summe": summe})
+	kaufen.disabled = _warenkorb.is_empty() or coins < summe
+	kaufen.pressed.connect(_on_bestellen)
+	_box.add_child(kaufen)
+	if not _warenkorb.is_empty():
+		var leeren := Button.new()
+		leeren.theme_type_variation = "GhostButton"
+		leeren.text = I18nService.t("phone.gooberando.warenkorb_leeren")
+		leeren.pressed.connect(_on_korb_leeren)
+		_box.add_child(leeren)
+	var zurueck := Button.new()
+	zurueck.theme_type_variation = "GhostButton"
+	zurueck.text = I18nService.t("phone.gooberando.menue_zurueck")
+	zurueck.pressed.connect(_on_zurueck_zu_restaurants)
+	_box.add_child(zurueck)
 
 
+## Countdown + Live-Karte (W13B, Doc E §5.2): der orange Fahrer-Punkt
+## wandert deterministisch die road_graph-Route entlang.
 func _render_countdown(slice: Dictionary) -> void:
 	var rest := GooberandoLogic.liefer_rest_s(slice, now_ms())
-	_label(I18nService.t("travel.gooberando.unterwegs"))
+	var route := _route_zu(str(slice["restaurantId"]))
+	var stat := GooberandoFahrerSim.status(
+		route, int(slice["bestelltAt"]), int(slice["fertigAt"]), now_ms()
+	)
+	if str(stat["phase"]) == GooberandoFahrerSim.PHASE_KUECHE:
+		_label(I18nService.t("phone.gooberando.fahrer_kueche"))
+	else:
+		_label(I18nService.t("phone.gooberando.fahrer_unterwegs"))
 	_label(
 		I18nService.t("travel.gooberando.countdown").format(
 			{"min": rest / 60, "s": "%02d" % (rest % 60)}
 		)
 	)
+	if not route.is_empty():
+		var center := CenterContainer.new()
+		_box.add_child(center)
+		var mini := CityMinimap.new()
+		mini.karte = _stadt_karte()
+		center.add_child(mini)
+		var overlay := FahrerKarteOverlay.new()
+		overlay.mini = mini
+		overlay.route = route
+		overlay.fahrer = stat["punkt"]
+		overlay.farbe = ORANGE
+		center.add_child(overlay)
+		_caption(I18nService.t("phone.gooberando.karte_hinweis"))
 
 
 func _render_vor_der_tuer() -> void:
@@ -233,9 +348,33 @@ func _liefer_gooby() -> void:
 ## --------------------------------------------------------------- Actions
 
 
-func _on_bestellen(gericht: Dictionary) -> void:
-	var res := GooberandoLogic.bestellen(
-		CityState.gooberando_slice(gs), now_ms(), prep_s(), gericht
+func _on_restaurant(restaurant_id: String) -> void:
+	_restaurant = restaurant_id
+	_warenkorb = []
+	_render()
+
+
+func _on_zurueck_zu_restaurants() -> void:
+	_restaurant = ""
+	_warenkorb = []
+	_render()
+
+
+func _on_in_den_korb(gericht: Dictionary) -> void:
+	if _warenkorb.size() >= MAX_KORB:
+		return
+	_warenkorb.append(gericht)
+	_render()
+
+
+func _on_korb_leeren() -> void:
+	_warenkorb = []
+	_render()
+
+
+func _on_bestellen() -> void:
+	var res := GooberandoLogic.bestellen_korb(
+		CityState.gooberando_slice(gs), now_ms(), prep_s(_restaurant), _warenkorb, _restaurant
 	)
 	if not bool(res["ok"]):
 		return
@@ -251,7 +390,8 @@ func _on_bestellen(gericht: Dictionary) -> void:
 		ReiseApp.notifs.plane(
 			str(notif["id"]), I18nService.t(str(notif["text_key"])), int(notif["at_ms"])
 		)
-	bestellt.emit(str(gericht.get("id", "")))
+	bestellt.emit(str(res["slice"]["gerichtId"]))
+	_warenkorb = []
 	_zeige_toast(I18nService.t("travel.gooberando.bestellt"))
 	_render()
 
@@ -262,7 +402,8 @@ func _on_uebergabe() -> void:
 		_render()
 		return
 	CityState.save_gooberando_slice(gs, res["slice"])
-	_gib_essen(str(res["gerichtId"]))
+	for id: Variant in res["gerichte"]:
+		_gib_essen(str(id))
 	geliefert.emit(str(res["gerichtId"]))
 	_render()
 
@@ -282,6 +423,9 @@ func _on_trinkgeld(geben: bool) -> void:
 	_render()
 
 
+## ---------------------------------------------------------------- Helfer
+
+
 func _gib_essen(gericht_id: String) -> void:
 	if gericht_id.is_empty():
 		return
@@ -290,6 +434,41 @@ func _gib_essen(gericht_id: String) -> void:
 			var food: Dictionary = state["inventory"]["food"]
 			food[gericht_id] = int(food.get(gericht_id, 0)) + 1
 	)
+
+
+func _korb_summe() -> int:
+	var summe := GooberandoLogic.LIEFERGEBUEHR
+	for gericht: Dictionary in _warenkorb:
+		summe += int(gericht.get("preis", 0))
+	return summe
+
+
+func _stadt_karte() -> CityMap:
+	if _karte == null:
+		_karte = CityMap.laden()
+	return _karte
+
+
+func _stadt_graph() -> CityRoadGraph:
+	if _graph == null:
+		_graph = CityRoadGraph.aus_karte(_stadt_karte())
+	return _graph
+
+
+## Route Restaurant → Haus (gecacht pro Restaurant). Unbekanntes Restaurant
+## (Alt-Bestellung) startet an der GOOBERANDO-Küche der Karte.
+func _route_zu(restaurant_id: String) -> PackedVector3Array:
+	if _route_fuer == restaurant_id:
+		return _route
+	var karte := _stadt_karte()
+	var start := GooberandoRestaurants.strasse_tile(restaurant_id)
+	if start.x < 0:
+		var kueche: Dictionary = karte.daten.get("gooberando_kueche", {})
+		var roh: Variant = kueche.get("strasse", [5, 6])
+		start = Vector2i(int(roh[0]), int(roh[1]))
+	_route = GooberandoFahrerSim.route_welt(karte, _stadt_graph(), start, karte.zuhause_tile())
+	_route_fuer = restaurant_id
+	return _route
 
 
 func _klingel() -> void:
@@ -314,7 +493,44 @@ func _label(text: String) -> void:
 	_box.add_child(label)
 
 
+func _caption(text: String) -> void:
+	var label := Label.new()
+	label.text = text
+	label.theme_type_variation = "CaptionLabel"
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	label.custom_minimum_size = Vector2(380.0, 0.0)
+	label.size = Vector2(380.0, 0.0)
+	_box.add_child(label)
+
+
 func _zeige_toast(text: String) -> void:
 	var toasts := get_tree().root.find_children("*", "ToastLayer", true, false)
 	if not toasts.is_empty():
 		toasts[0].show_toast(text)
+
+
+## Fahrer-Overlay über der Minimap: Route (blass) + oranger Fahrer-Punkt.
+## Eigenes Control statt `draw`-Signal, damit es sicher ÜBER der Karte liegt.
+class FahrerKarteOverlay:
+	extends Control
+
+	var mini: CityMinimap
+	var route := PackedVector3Array()
+	var fahrer := Vector3.ZERO
+	var farbe := Color("#FF7A00")
+
+	func _ready() -> void:
+		custom_minimum_size = Vector2(CityMinimap.GROESSE, CityMinimap.GROESSE)
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	func _draw() -> void:
+		if mini == null:
+			return
+		if route.size() >= 2:
+			var px := PackedVector2Array()
+			for punkt in route:
+				px.append(mini.welt_zu_pixel(punkt))
+			draw_polyline(px, Color(farbe, 0.45), 2.0)
+		var mitte := mini.welt_zu_pixel(fahrer)
+		draw_circle(mitte, 6.5, AcTokens.PAPER)
+		draw_circle(mitte, 5.0, farbe)
