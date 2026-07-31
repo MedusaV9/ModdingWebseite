@@ -49,7 +49,9 @@ import net.neoforged.neoforge.client.event.ClientTickEvent;
  * {@code VolYScale} (spawn/dissipate vertical squash — {@link StormWallRenderer#heightScale}),
  * {@code Visibility}, {@code Strength} (distance ramp × explosion dissolve),
  * {@code StepCount} (config tier × screen coverage, fullscreen-capped — see
- * {@link #stepCount}), {@code Time}
+ * {@link #stepCount}), {@code DetailTier} (the effective quality tier 0/1/2 — the
+ * shader's gate for tier-priced density terms; tier 0 keeps the baseline look),
+ * {@code Time}
  * (tick-clock seconds, pause-safe), {@code SunDir} ({@link SunTracker}), {@code Interior}
  * ({@link StormInteriorFx#interiorAmount()} — the grade hand-over), {@code FlashPos} +
  * {@code FlashAmount} (the W-B intra-wall flash injected as emissive light inside the
@@ -225,6 +227,10 @@ public final class StormVolumeFx {
         // under siege (the shader rescales tap spacing so reach/optical depth hold).
         pipeline.getUniform("ShadowTaps").setFloat(
                 effectiveTier(storm) >= 2 ? 3.0F : 2.0F);
+        // STORM-MASS B9 foundation: the effective tier reaches the shader directly, so
+        // tier-priced density terms (B2/B3/B4) gate in-shader instead of abusing the
+        // ShadowTaps proxy. Tier 0 (the default floor) keeps every gate closed.
+        pipeline.getUniform("DetailTier").setFloat(effectiveTier(storm));
         // Tick clock, not wall clock: pause-safe and continuous (the shader integrates
         // rotation angles from it — a wall-clock wrap would snap the churn).
         pipeline.getUniform("Time").setFloat((StormFxClient.ticks() + partialTick) / 20.0F);

@@ -135,6 +135,15 @@ g_fwd 0.60 / g_bwd −0.22 / Lobe-Mix 0.32.
 **Fallen:** F8 beachtet — Kontrast kommt ausschließlich aus dem Licht. Tuning-Risiko:
 Powder-k zu hoch ⇒ Ränder „glühen"; mit L264-Silver-Lining gegenprüfen (Screenshot S3).
 
+> ✅ **umgesetzt** (Session 0730, Paket B1/B5/B9-Basis) — `storm_volume.fsh`:
+> Dual-Lobe-Phase L332–338, Powder L233–236, dichteabhängige Albedo L237–241,
+> Combine (albedo × [sun·powder + ms] + ambient, Flash bleibt Emission danach)
+> L241–248; `volumeLight`-Signatur erweitert um `rl`/`dens` (L201).
+> Abweichung: Powder/Albedo nutzen die PREMULTIPLIZIERTE Sample-Dichte (`dens`
+> enthält in der Marschschleife bereits `densMul`) — für Powder ist das exakt die
+> Plan-Formel `raw · densMul`; die Albedo greift dadurch bei fadenden Stürmen
+> (Strength < 1) etwas später ins Dunkle, was dem Fade-Verhalten zugutekommt.
+
 ### B2 — Zweite Dichteschale + Anti-Phase-Body („da ist noch was dahinter")
 **Ziel:** Löcher der äußeren Schale geben den Blick auf eine innere, ANDERS rotierende,
 dunklere Schicht frei — der Kern des „viele Layer"-Wunsches. Kosten: **+1 N** camera-only
@@ -225,6 +234,14 @@ float lightT = exp(-sh * ...) * macroShadow;
 sich mit den Taps — Gesamtabdunklung gegen die „nicht zum Silhouetten-Klumpen
 crushen"-Regel (L187–191) per Screenshot S3/S4 ausbalancieren.
 
+> ✅ **umgesetzt** (Session 0730, Paket B1/B5/B9-Basis) — `storm_volume.fsh`:
+> macroShadow (analytische Sonnen-Großraumtiefe, multipliziert `lightT`) L211–217,
+> radialAo (multipliziert `ambient`) L221–226. Abweichung: `rl` steht in
+> `volumeLight` nicht nativ zur Verfügung — statt die Silhouettenterme dort neu zu
+> rechnen (+2 N) exportiert `stormDensity` die bereits bezahlte Profilkoordinate
+> als `out`-Parameter (L113–119, L147–148); die Schatten-Taps rufen unverändert
+> einen 2-Arg-Wrapper (L185–189). Kosten damit wie geplant 0 N.
+
 ### B6 — Blitz v2: zweiter Flash-Slot + Emissions-Adern
 **Ziel:** Interne Blitze als räumliche Dichte-Emission: zwei gleichzeitige Zellen,
 aderiges Aufglimmen statt radialem Glow. Kosten: **+1 N** nur bei aktivem Flash.
@@ -306,6 +323,18 @@ zwei Raten (1× Rim, 2× obere Strata), nicht mehr; der Rest der Kohärenz kommt
 - Markiertes Experiment (RISIKO, F1): `OCC_VOLUMETRIC_CORE 0.30 → 0.25` für +5 %
   Marschchord. Nur zusammen mit B2 (innere Schale deckt den Kern), Sichtprüfung S5
   Pflicht: Never-see-inside darf nicht aufweichen. Bei Zweifel: 0.30 behalten.
+
+> ✅ **B9-Basis umgesetzt** (Session 0730, Paket B1/B5/B9-Basis):
+> `DetailTier`-Uniform deklariert (`storm_volume.fsh` L44–47) und aus
+> `effectiveTier(storm)` gefüttert (`StormVolumeFx.java` L230–233, Javadoc-Vertrag
+> L52–53); Y-Slab-Clip ny ∈ [−0.25, 1.45] im gestauchten Raum für ALLE Tiers
+> (Konstanten `SLAB_NY_MIN/MAX` fsh L76–83, Plane-Schnitte L281–299). Der Slab
+> deckt den heutigen Dichte-Cut (−0.20/1.22) UND die geplante B3-Decke (1.42) ab —
+> B3 braucht hier keine Bounds-Änderung mehr. `BOUNDS_MARGIN` blieb beidseitig
+> 1.55 (kein neuer Silhouettenterm; Bilanz nachgerechnet: max rEff 1.3994 × 1.05 =
+> 1.469 < 1.55, Luft 0.081). Noch offen aus B9: die Tier-Gates selbst (kommen mit
+> B2/B3/B4 — bis dahin gated der Shader nichts über `DetailTier`; Tier 0 = Ist-Look
+> per Konstruktion) und das markierte OCC-Experiment (nicht angefasst, 0.30 bleibt).
 
 ### B10 (optional) — Upsample-Politur: Transmittanz-Kantenschärfung
 **Ziel:** Halbres-Kanten an Turm-Silhouetten (B3 macht die Silhouette komplexer).

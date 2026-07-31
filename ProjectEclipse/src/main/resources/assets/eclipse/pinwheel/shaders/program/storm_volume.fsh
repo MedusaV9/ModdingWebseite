@@ -3,8 +3,11 @@
 // scene-depth-clamped Beer–Lambert march through a domain-warped fBm density field with
 // differential rotation, log-spiral rainbands, an anvil/skirt height profile and a
 // cauliflower tower term on the silhouette; lit by cheap single scattering (2/3-tap sun
-// self-shadow + Henyey–Greenstein forward lobe + height-graded ambient) and the W-B
-// intra-wall flash injected as emissive light INSIDE the mass. The opaque occluder dome
+// self-shadow + dual-lobe Henyey–Greenstein phase + height-graded ambient; STORM-MASS
+// B1/B5 add Beer-powder edges, density-graded albedo, radial ambient occlusion and an
+// analytic sun-hemisphere macro shadow — all pure math on samples the march already
+// pays for) and the W-B intra-wall flash injected as emissive light INSIDE the mass.
+// The opaque occluder dome
 // keeps writing depth, so outside cameras march the entry→occluder band (the wall reads
 // meters thick) and silhouette rays march the full chord (the rim reads as a lumpy ball
 // of weather, not a shell).
@@ -21,7 +24,7 @@
 // stormfx.StormVolumeFx through the VeilPostController row (never under an Iris
 // shaderpack; StormWallRenderer's shell stack is the fallback there): VolCenter
 // (camera-relative), VolRadius, VolYScale, Visibility, Strength, StepCount, ShadowTaps,
-// Time, SunDir, Interior, FlashPos, FlashAmount.
+// DetailTier, Time, SunDir, Interior, FlashPos, FlashAmount.
 #include eclipse:eclipse_volume
 #include veil:space_helper
 
@@ -38,6 +41,10 @@ uniform vec3 SunDir;
 uniform float Interior;
 uniform vec3 FlashPos;
 uniform float FlashAmount;
+// STORM-MASS B9 foundation: effective quality tier (0/1/2, StormVolumeFx.effectiveTier)
+// — the in-shader gate for tier-priced density terms (B2/B3/B4 key off it; nothing in
+// this file gates on it yet). Contract: tier 0 must always mean "baseline look".
+uniform float DetailTier;
 
 in vec2 texCoord;
 
@@ -66,6 +73,14 @@ const float SHADOW_STEP_N = 0.12;
 // prints back the perfectly round edge the lumps exist to break. Empty-space skipping
 // pays for the extra slack.
 const float BOUNDS_MARGIN = 1.55;
+// STORM-MASS B9: the density field only lives inside this normalized-height slab while
+// the bounds SPHERE spans ±BOUNDS_MARGIN vertically — clipping the march segment
+// against the two horizontal planes up front reclaims 15–30% of the chord for
+// elevated/top-down viewpoints at ~6 ALU. The top sits above the current 1.22 profile
+// cut on purpose: it already covers the planned B3 convection-tower ceiling (ny 1.42),
+// so raising the height profile later needs no bounds change here.
+const float SLAB_NY_MIN = -0.25;
+const float SLAB_NY_MAX = 1.45;
 // Spiral rainband arm count and log-spiral winding factor.
 const float ARMS = 3.0;
 const float SPIRAL_WIND = 2.4;
@@ -95,9 +110,13 @@ float stratumSpeed(float ny) {
 // detail 1.0 = camera ray (5-octave fBm + curl warp), 0.0 = shadow ray (AUDITFIX-4 diet:
 // 2-octave, UNWARPED — shadows need the coarse mass, not billow detail; skipping the
 // warp saves its three evNoise3 evaluations per tap).
-float stormDensity(vec3 u, float detail) {
+// rlOut reports the radial profile coordinate rl = |u| / rEff of the sample — the
+// lighting model reuses it for the B5 radial ambient occlusion instead of re-deriving
+// the silhouette terms (they are already paid for here; the export is free).
+float stormDensity(vec3 u, float detail, out float rlOut) {
     float ny = u.y;
     float lenH = length(u);
+    rlOut = lenH;
     if (lenH > BOUNDS_MARGIN || ny > 1.22 || ny < -0.20) {
         return 0.0;
     }
@@ -126,6 +145,7 @@ float stormDensity(vec3 u, float detail) {
             + 0.30 * (bulge - 0.42) * lumpGate
             + 0.17 * (tower - 0.38) * smoothstep(0.62, 0.98, lenH);
     float rl = lenH / max(rEff, 0.5);
+    rlOut = rl;
 
     // Radial shell profile: a THICK density band peaking mid-wall, a hollow-ish eye at
     // the core (thin haze floor keeps it breathing) and a soft falloff past the rim.
@@ -162,13 +182,23 @@ float stormDensity(vec3 u, float detail) {
     return max(prof * armMul * (body * 1.5 - 0.35), 0.0) * DENSITY_GAIN;
 }
 
+// Shadow-tap variant: the sun taps only need the density, not the profile coordinate.
+float stormDensity(vec3 u, float detail) {
+    float rl;
+    return stormDensity(u, detail, rl);
+}
+
 // Single scattering at one sample: 2/3 cheap self-shadow taps toward the sun (F-030f:
 // ShadowTaps drops 3 → 2 on low quality tiers; the spacing widens by 3/taps so the
 // ~0.36·R reach AND the optical depth of the 3-tap ladder are both preserved — the
-// transmittance term multiplies the tap sum by the spacing), forward-scatter phase
-// (fed in), height-graded ambient (dark violet base → sick green top — the C8 sphere
-// palette), and the intra-wall flash as emissive light inside the mass.
-vec3 volumeLight(vec3 pos, vec3 u, float phase, float densMul) {
+// transmittance term multiplies the tap sum by the spacing), dual-lobe phase (fed in),
+// height-graded ambient (dark violet base → sick green top — the C8 sphere palette),
+// and the intra-wall flash as emissive light inside the mass. STORM-MASS B1/B5 depth
+// terms (all pure math, 0 extra noise): Beer-powder edge, density-graded albedo,
+// radial ambient occlusion on rl and an analytic sun-hemisphere macro shadow.
+// dens is the PREMULTIPLIED camera-sample density (raw × densMul), rl its radial
+// profile coordinate — both already paid for by the march.
+vec3 volumeLight(vec3 pos, vec3 u, float rl, float dens, float phase, float densMul) {
     float taps = clamp(ShadowTaps, 2.0, 3.0);
     float spacing = SHADOW_STEP_N * (3.0 / taps);
     vec3 sdir = normalize(SunDir + vec3(0.0, 1.0e-4, 0.0));
@@ -178,20 +208,39 @@ vec3 volumeLight(vec3 pos, vec3 u, float phase, float densMul) {
     if (taps > 2.5) {
         sh += stormDensity(u + us * 3.0, 0.0);
     }
-    float lightT = exp(-sh * densMul * spacing * VolRadius * ABSORB);
+    // B5 analytic large-scale sun depth: project the sample onto the sun axis — the
+    // sun-facing hemisphere stays lit, the far side falls off smoothly. The local taps
+    // only reach ~0.36·R, so without this term both halves of the ball read equally
+    // bright from outside; with it the whole mass carries one big lit/shaded gradient.
+    float sunSide = clamp(dot(u, sdir) * 0.5 + 0.5, 0.0, 1.0);
+    float macroShadow = mix(0.45, 1.0, sunSide);
+    float lightT = exp(-sh * densMul * spacing * VolRadius * ABSORB) * macroShadow;
     // Bone-white day sun → moon-silver night (the renderer's rim-scatter palette).
     float dayness = clamp(SunDir.y * 2.6, 0.0, 1.0);
     vec3 sunCol = mix(vec3(0.72, 0.76, 0.90) * 0.25, vec3(0.85, 0.82, 0.74), dayness);
+    // B5 radial ambient occlusion: a sample near the core sits behind metres of mass in
+    // EVERY direction, so sky light cannot reach it — ambient falls from the rim toward
+    // the eye. This is what makes holes in the outer band read as "mass behind", not fog.
+    float radialAo = mix(0.30, 1.0, smoothstep(0.15, 0.85, rl));
     vec3 ambient = mix(vec3(0.052, 0.060, 0.082), vec3(0.088, 0.152, 0.120),
-            clamp(u.y, 0.0, 1.0)) * (1.15 + 1.35 * dayness);
+            clamp(u.y, 0.0, 1.0)) * (1.15 + 1.35 * dayness) * radialAo;
     // Multiple-scattering approximation: deep cloud is not black, light diffuses into it.
     // sqrt(lightT) with an isotropic lobe lifts the shadowed mass into readable grey so
     // the layering is visible from outside instead of crushing to a silhouette.
     // Keep the multi-scatter lift modest: too much and the whole ball flattens into a
     // uniform pale smudge with no lit/shaded read at all.
     float ms = lightT * sqrt(clamp(lightT, 0.0, 1.0));
-    vec3 col = sunCol * (lightT * phase * 4.6 + ms * 0.20) + ambient;
+    // B1 Beer-powder (Horizon/Nubis): freshly lit thin edges scatter bright, thick
+    // pockets absorb their own in-scatter before it exits — dark bellies + sugar-bright
+    // rims, the classic "this is a mass, not haze" cumulus read.
+    float powder = 1.0 - exp(-dens * 14.0);
+    // B1 density-graded albedo: optically thick pockets tip into the dark slate-green
+    // of the C8 palette, so a dense slab and a thin veil no longer share one colour per
+    // transmittance slice. Dark point reached at dens ≥ ~0.45.
+    vec3 albedo = mix(vec3(1.0), vec3(0.62, 0.68, 0.66), clamp(dens * 2.2, 0.0, 1.0));
+    vec3 col = albedo * (sunCol * (lightT * phase * 4.6 * powder + ms * 0.20) + ambient);
     if (FlashAmount > 0.004) {
+        // Emission, not scattering — the flash is added AFTER the albedo grade.
         float fd = length(pos - FlashPos);
         col += vec3(0.70, 0.58, 1.00)
                 * (FlashAmount * 2.5 * exp(-fd / (0.30 * VolRadius)));
@@ -229,6 +278,26 @@ void main() {
     float t0 = max((-bq - sq) / aq, 0.0);
     float t1 = (-bq + sq) / aq;
 
+    // B9 Y-slab clip: the density profile cuts hard outside ny ∈ [SLAB_NY_MIN,
+    // SLAB_NY_MAX] but the bounds sphere spans ±BOUNDS_MARGIN vertically — intersect
+    // the ray with the two horizontal planes (squashed space, so the slab tracks
+    // VolYScale) and shrink the march segment to the part that can hold density. The
+    // reclaimed chord goes straight into finer dt at the same step budget.
+    if (abs(dS.y) > 1.0e-5) {
+        float invDy = 1.0 / dS.y;
+        float ta = (SLAB_NY_MIN * VolRadius - oS.y) * invDy;
+        float tb = (SLAB_NY_MAX * VolRadius - oS.y) * invDy;
+        t0 = max(t0, min(ta, tb));
+        t1 = min(t1, max(ta, tb));
+    } else if (oS.y < SLAB_NY_MIN * VolRadius || oS.y > SLAB_NY_MAX * VolRadius) {
+        fragColor = vec4(0.0, 0.0, 0.0, 1.0); // level ray entirely outside the slab
+        return;
+    }
+    if (t1 <= t0) {
+        fragColor = vec4(0.0, 0.0, 0.0, 1.0); // slab and sphere don't overlap this ray
+        return;
+    }
+
     // Scene depth clamp: terrain (and the opaque occluder dome) correctly hides the
     // volume behind it. Depth ≥ ~1 is sky — no clamp (and no unstable reconstruction).
     // The full-res depth buffer is sampled at this half-res pixel's center; the
@@ -261,7 +330,12 @@ void main() {
     // eases off so the two systems hand over instead of stacking to black.
     float densMul = strength * (1.0 - 0.35 * clamp(Interior, 0.0, 1.0));
     float mu = dot(rd, normalize(SunDir + vec3(0.0, 1.0e-4, 0.0)));
-    float phase = mix(0.0795775, evHgPhase(mu, 0.45), 0.72); // silver-lining lobe
+    // B1 dual-lobe phase: a strong forward lobe (g 0.60 — the silver lining when the
+    // sun sits behind the mass) plus a weak backscatter lobe (g −0.22 — retroreflective
+    // fill when the sun is behind the camera), over an isotropic floor so no viewing
+    // angle ever goes fully dark.
+    float phase = mix(evHgPhase(mu, 0.60), evHgPhase(mu, -0.22), 0.32);
+    phase = mix(0.0795775, phase, 0.78);
     float invR = 1.0 / VolRadius;
     float invY = 1.0 / max(VolYScale, 0.05);
 
@@ -278,7 +352,8 @@ void main() {
         vec3 lp = pos - VolCenter;
         lp.y *= invY;
         vec3 u = lp * invR;
-        float dens = stormDensity(u, 1.0) * densMul;
+        float rl; // radial profile coordinate, exported free for the B5 ambient AO
+        float dens = stormDensity(u, 1.0, rl) * densMul;
         if (dens < 0.004) {
             // Empty-space acceleration through the eye / between towers: each miss
             // widens the stride up to SKIP_MAX × the base 1.6.
@@ -296,7 +371,7 @@ void main() {
         }
         skipMul = 1.0;
         float newTrans = trans * exp(-dens * dt * ABSORB);
-        acc += volumeLight(pos, u, phase, densMul) * (trans - newTrans);
+        acc += volumeLight(pos, u, rl, dens, phase, densMul) * (trans - newTrans);
         trans = newTrans;
         t += dt;
     }
