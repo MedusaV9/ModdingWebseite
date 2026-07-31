@@ -24,14 +24,17 @@
 // stormfx.StormVolumeFx through the VeilPostController row (never under an Iris
 // shaderpack; StormWallRenderer's shell stack is the fallback there): VolCenter
 // (camera-relative), VolRadius, VolYScale, Visibility, Strength, StepCount, ShadowTaps,
-// DetailTier, Time, SunDir, Interior, FlashPos, FlashAmount, SiegeChurn, ChurnTime,
-// CoreFade.
+// DetailTier, Time, SunDir, Interior, FlashPos, FlashAmount, Flash2Pos, Flash2Amount,
+// FlashSeed, SiegeChurn, ChurnTime, CoreFade.
 //
 // STORM-MASS (B2/B3): the density field is now TWO shells — the outer band carved by
 // the fBm body, plus an inner counter-clocked shell (rl 0.16–0.50) built from the
 // ANTI-PHASE body, so holes in the outer wall reveal a darker layer turning behind
 // them — under a height profile v2 (wallcloud base ring, convection towers that raise
-// the ceiling locally, a body-frayed anvil top).
+// the ceiling locally, a body-frayed anvil top). STORM-MASS (B4/B6): on tier 2 the
+// curl warp gains a time-rotor + a second warp plane (billows FOLD instead of
+// scrolling), and the intra-wall flash is now two independent cells lighting veiny
+// filaments of the mass (all tiers, paid only while a flash is live).
 #include eclipse:eclipse_volume
 #include veil:space_helper
 
@@ -48,6 +51,13 @@ uniform vec3 SunDir;
 uniform float Interior;
 uniform vec3 FlashPos;
 uniform float FlashAmount;
+// STORM-MASS B6 flash v2: a SECOND independent intra-wall flash cell (own scheduler
+// slot in StormWeatherFx — volume-only: no point light, no serial, no Photon vein),
+// plus the vein seed shared by both cells. F3: no shader clock flickers the veins —
+// the pattern re-rolls from Java (innerFlashSerial % 64) with every fresh flash.
+uniform vec3 Flash2Pos;
+uniform float Flash2Amount;
+uniform float FlashSeed;
 // STORM-MASS B9 foundation: effective quality tier (0/1/2, StormVolumeFx.effectiveTier)
 // — the in-shader gate for tier-priced density terms. Live gates: B3 convection cells
 // (tier ≥ 1), B2 inner-shell cells (tier ≥ 2). Contract: tier 0 = cheapest look.
@@ -224,7 +234,24 @@ float stormDensity(vec3 u, float detail, out float rlOut) {
             + vec3(0.0, -(Time + 2.0 * ChurnTime) * UPDRAFT * NOISE_FREQ, 0.0);
     float body;
     if (detail > 0.5) {
-        body = evFbm5(np + evCurlWarp(np * 0.5, Time) * (1.0 + 0.18 * SiegeChurn));
+        vec3 w1 = evCurlWarp(np * 0.5, Time);
+        float wm = 1.0 + 0.18 * SiegeChurn;
+        if (DetailTier > 1.5) {
+            // B4 warp v2 (tier 2 only): a slow time-rotor turns the warp VECTOR about
+            // Y, so the billows FOLD into each other instead of scrolling along the
+            // lattice, and a second higher-frequency warp plane modulates the warp
+            // amplitude ±17.5% — pockets of calm next to violently kneaded ones.
+            float wa = Time * 0.04;
+            float wc = cos(wa);
+            float ws = sin(wa);
+            w1.xz = vec2(wc * w1.x - ws * w1.z, ws * w1.x + wc * w1.z);
+            float w2 = evNoise3(np * 1.7 + vec3(Time * 0.05)); // +1 N (tier 2)
+            // Tear cap: evCurlWarp peaks at 1.6, and the B7 churn (×1.18) and B4 w2
+            // (×1.175) factors MULTIPLY — clamp the combined multiplier at 1.1875 so
+            // the effective amplitude never exceeds 1.6 · 1.1875 = 1.9.
+            wm = min(wm * (1.0 + 0.35 * (w2 - 0.5)), 1.1875);
+        }
+        body = evFbm5(np + w1 * wm);
     } else {
         body = evFbm2(np);
     }
@@ -319,11 +346,23 @@ vec3 volumeLight(vec3 pos, vec3 u, float rl, float dens, float phase, float dens
     // transmittance slice. Dark point reached at dens ≥ ~0.45.
     vec3 albedo = mix(vec3(1.0), vec3(0.62, 0.68, 0.66), clamp(dens * 2.2, 0.0, 1.0));
     vec3 col = albedo * (sunCol * (lightT * phase * 4.6 * powder + ms * 0.20) + ambient);
-    if (FlashAmount > 0.004) {
-        // Emission, not scattering — the flash is added AFTER the albedo grade.
-        float fd = length(pos - FlashPos);
-        col += vec3(0.70, 0.58, 1.00)
-                * (FlashAmount * 2.5 * exp(-fd / (0.30 * VolRadius)));
+    // STORM-MASS B6 flash v2: up to two simultaneous cells, each an emissive glow
+    // (added AFTER the albedo grade — emission, not scattering) modulated by a vein
+    // field on the UNROTATED storm frame: filaments of the mass glim up instead of
+    // one radial bulb. The vein noise is hoisted so a double flash still costs one
+    // evNoise3 (+1 N, only while a flash is live); mean vein = 1.0 keeps the W-B
+    // glow energy unchanged.
+    if (FlashAmount > 0.004 || Flash2Amount > 0.004) {
+        float vein = 0.55 + 0.90 * evNoise3(u * 9.0 + vec3(FlashSeed * 17.0)); // +1 N
+        vec3 flashCol = vec3(0.70, 0.58, 1.00);
+        if (FlashAmount > 0.004) {
+            float fd = length(pos - FlashPos);
+            col += flashCol * (FlashAmount * 2.5 * vein * exp(-fd / (0.30 * VolRadius)));
+        }
+        if (Flash2Amount > 0.004) {
+            float fd2 = length(pos - Flash2Pos);
+            col += flashCol * (Flash2Amount * 2.5 * vein * exp(-fd2 / (0.30 * VolRadius)));
+        }
     }
     return col;
 }

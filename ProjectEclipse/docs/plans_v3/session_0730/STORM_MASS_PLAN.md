@@ -245,6 +245,17 @@ body = evFbm5(np + w1 * (1.0 + 0.35 * (w2 - 0.5)));
 Gate: `if (DetailTier > 1.5)` — sonst bestehender Pfad. **Falle:** Warp-Amplitude >1.9
 lässt Billows „reißen" (Lattice sichtbar); 1.6·1.35-Deckel einhalten.
 
+> ✅ **umgesetzt** (Session 0730, Paket B4/B6/B8, F-096) — `storm_volume.fsh` L239–253:
+> Zeit-Rotor `wa = Time·0.04` dreht `w1.xz` (inline 2×2 statt `mat2`-Konstruktor,
+> gleiche Mathematik), zweite Warp-Ebene `w2 = evNoise3(np·1.7 + Time·0.05)` (+1 N,
+> nur Tier 2 — Budget §4 Tier-2-Dichte 13 N ✓). **Deckel-Korrektur gegen die
+> Plan-Skizze:** B7 hatte den Churn-Faktor (1+0.18·SiegeChurn) bereits auf dieselbe
+> Amplitude gelegt; beide Faktoren MULTIPLIZIEREN sich (worst case 1.6·1.18·1.175 =
+> 2.22 > 1.9). Gelöst als kombinierter Multiplikator
+> `wm = min((1+0.18·SiegeChurn)·(1+0.35·(w2−0.5)), 1.1875)` ⇒ 1.6·1.1875 = 1.9 exakt
+> am Deckel (L238, L252). Tier 0/1: `wm` bleibt der reine B7-Term, `w2`/Rotor werden
+> nie ausgewertet — Pfad unverändert. Idle (SiegeChurn=0, Tier<2) bit-identisch zu B7.
+
 ### B5 — Radiale Ambient-Occlusion + analytische Sonnen-Tiefe (statt teurem 2nd march)
 **Ziel:** Von außen nach innen wird es glaubwürdig dunkler; die sonnenabgewandte
 Hemisphäre fällt großräumig ab — Tiefenwirkung OHNE zusätzliche Dichte-Samples.
@@ -292,6 +303,23 @@ Java (`StormWeatherFx`): Flash-Scheduler (L105–128: `innerFlashAmount/Bearing/
 eigener Bearing); `StormVolumeFx.feedVolume` füttert `Flash2Pos/Flash2Amount` nach dem
 Muster L237–255 und `FlashSeed = innerFlashSerial() % 64`. **Falle:** F3 — keine
 Shader-Zeit für den Vein-Flicker, der Seed wechselt pro Flash aus Java.
+
+> ✅ **umgesetzt** (Session 0730, Paket B4/B6/B8, F-096) — Uniforms
+> `Flash2Pos`/`Flash2Amount`/`FlashSeed` (fsh L58–60), Emission in `volumeLight`
+> L355–365: der Vein-Term wird EINMAL gehoisted, wenn IRGENDEIN Slot > 0.004 ist
+> (`vein = 0.55 + 0.90·evNoise3(u·9 + FlashSeed·17)`) — Doppel-Flash kostet +1 N
+> statt +2 N, alle Tiers (Budget §4: „+1 N nur bei aktivem Flash" hält auch für zwei
+> Zellen). Beide Slots additiv `amt·2.5·vein·exp(−fd/(0.30·R))`, gemeinsame Farbe
+> `vec3(0.70,0.58,1.00)`. Java: zweiter unabhängiger Scheduler-Slot in
+> `StormWeatherFx` (Arrays L108–111, State-Machine L281–295, Kadenz 130–340 t
+> L71–72/L330–334 — bewusst gegen 90–260 versetzt: Überlappung kommt vor, ist aber
+> nicht Dauerzustand; `envelope` → `envelopeAt(start)` refaktoriert L338–356).
+> **Slot 2 ist volume-only:** bumpt NICHT `flashSerial`, claimt KEIN Punktlicht und
+> KEINEN Interior-Beat — W-C-Photon-Vein + Licht bleiben Slot-1-exklusiv, sonst
+> feuerte der Vein auf die falsche Zelle. Accessors `innerFlash2Amount/Bearing/Lat`
+> (L157–176); `StormVolumeFx.feedVolume` füttert Flash2* nach dem FlashPos-Muster
+> und `FlashSeed = innerFlashSerial() % 64` (L305–322). Idle-Regel geprüft: alle
+> drei neuen Uniforms 0 ⇒ das Vein-Gate öffnet nie ⇒ Frame bit-identisch.
 
 ### B7 — Kampf-Uniforms: `SiegeChurn` + `CoreFade` (der Sturm „kämpft mit")
 **Ziel:** Sichtbare Kampfeskalation im Volumen: schnellere Rotation, stärkerer Updraft,
@@ -355,6 +383,35 @@ Parallaxe-Sandwich: Photon-Bänder orbiten MIT der Volumenrotation. Kosten: 0 GP
 **Falle:** Photon kennt keine Differentialrotation — ein Band = eine Winkelrate. Deshalb
 zwei Raten (1× Rim, 2× obere Strata), nicht mehr; der Rest der Kohärenz kommt vom Auge.
 
+> ✅ **umgesetzt** (Session 0730, Paket B4/B6/B8, F-096) — dritte ExprVar
+> `eclStormSpin` in `StormPhotonFx.ExprVars`; Pusher-Signatur
+> `pushExprVars(radius, height, spin)`, beide Aufrufer angepasst
+> (`StormPhotonFx.onClientTick` L184, `StormNearfieldFx.onClientTick` L143–145).
+> **Formel-Abweichung (dokumentiert):**
+> `spin = (ticks/20 + 1.6·churnTimeSeconds())·0.07` statt der reinen Plan-Formel —
+> B7 hat die Volumenrotation churn-abhängig gemacht (`spinT = Time + 1.6·ChurnTime`),
+> also muss die Photon-Uhr dieselbe integrierte Winkeluhr lesen, sonst laufen die
+> Bänder unter Siege aus dem Sync. Neuer package-private Accessor
+> `StormVolumeFx.churnTimeSeconds()` (L162). **Vorzeichen-Gesetz (Plan-`+` war
+> falsch):** der Shader rotiert das SAMPLING um +spin ⇒ Weltfeatures wandern mit
+> −spin (θ=atan2(z,x)); Photon `orbital` ist rad/s (jar-verifiziert:
+> `AngularVelocity` wendet orbital·0.05 rad/Tick an) und dreht θ ebenfalls Richtung
+> −. Also: Bearing-Terme `−eclStormSpin` bei POSITIVEM orbital. Generatoren:
+> `ring_shape`-Bearing beider Dateien (`build_storm_fx.py` L129,
+> `storm_nearfield_fx.py` L136) und `COLUMN_BEARING` (Updraft-Säulen präzedieren
+> mit) bekommen `−eclStormSpin`. NEU: `rain_curtain` in `storm_nearfield_wisps`
+> (0.92r, 4 quantisierte Vorhang-Zellen ±0.55 Jitter, Fall −8…−11 blk/s linear,
+> orbital +0.07, Rate 0.30/t; L243–275) und `shred_racers` in `storm_cloud_belt`
+> (1.02r, 3 Zellen, Spawn `−2·eclStormSpin`, orbital +0.14 = obere Strata,
+> Rate 0.5/t, prewarm; L333–360). Beide in den TUNED-Tabellen (Java
+> `TUNED_EMITTERS`/`TUNED_BASE_RATES` + Python `BASE_RATES`) — Zero-Emission-Attach
+> der Handover-Rampe bleibt intakt. Expr-Engine jar-verifiziert: statisches
+> `Parser.parse` erlaubt beliebige Variablen (kein allow-List), `min`/`max` sind
+> eingebaute 2-Arg-Funktionen, `PI` wird von Photons `Function`-Shape registriert —
+> die Höhenkappungen `min(H·0.62, 34)` u. ä. parsen sicher. Idle: Spin-Push ist ein
+> reiner Variablenwert; ohne aktive Photon-Rows keine Wirkung, .fx-Regeneration
+> deterministisch (fxlib „valid", Lint 0 NEU gegen Baseline 50).
+
 ### B9 — Budget-Rebalance + In-Shader-Tier-Gate (`DetailTier`)
 **Ziel:** Alle neuen Terme sauber tier-gegated, Worst-Case llvmpipe-fest. Kosten: neg.
 - Neues Uniform `DetailTier` (0/1/2) aus `effectiveTier(storm)` (L304–307) — bisher
@@ -391,6 +448,15 @@ Edge-Detektor). Kosten: 0 zusätzliche Textur-Taps. **Verworfen dagegen:** tempo
 Reprojektion/Blending über das persistente `volume_half` (`clear:false`) — ohne
 Prev-Frame-Matrizen ghostet es beim Kameraschwenk; llvmpipe-Frametimes machen
 Temporal-Artefakte zudem unbeurteilbar (§7).
+
+> ⏸ **dokumentiert weggelassen** (Paket B4/B6/B8, F-096) — Entscheidung nach
+> §6.5-Kriterium: B4 moduliert nur den Body INNERHALB der bestehenden Bounds
+> (kein neuer Silhouettenterm — die Warp-Amplitude bleibt unter dem etablierten
+> 1.9-Deckel, `BOUNDS_MARGIN` 1.70 unberührt), B6 ist reine Emission entlang
+> bestehender Dichte, B8 ist komplett Photon-seitig. Erwartbar keine NEUEN
+> Halbres-Kanten gegenüber dem B3-Stand; `storm_volume_upsample.fsh` bleibt
+> unangetastet. Falls In-Game-Screenshots (Verifikationsplan §6, S3/S4) doch
+> Turm-Kanten zeigen, ist die L70-Formel oben der vorbereitete nächste Schritt.
 
 ---
 
@@ -475,6 +541,66 @@ keine Überschneidung.
 - Regression: `/eclipsefx storm add 48 96 sphere` unter aktivem Iris-Shaderpack
   (Jars temporär in `run/mods`) — CPU-Shell-Fallback bit-identisch zum Ist (F9),
   danach Jars wieder entfernen (Server-Crash-Falle, AGENTS.md Mods-Layout).
+
+---
+
+## 6.5 Umsetzungsplan Paket B4/B6/B8 (F-096, VOR Implementierung notiert)
+
+Reihenfolge B4 → B6 → B8, nach jedem Baustein `./gradlew compileJava`.
+
+- **B4** (nur fsh, Tier 2, +1 N Camera): im `detail > 0.5`-Zweig von `stormDensity`
+  Warp-Rotor `wa = Time·0.04` auf `w1.xz` + zweite Warp-Ebene
+  `w2 = evNoise3(np·1.7 + Time·0.05)`. **Deckel-Korrektur gegen den Plan:** der
+  B7-Churn-Faktor (1+0.18·SiegeChurn) und der B4-Faktor (1+0.35·(w2−0.5))
+  MULTIPLIZIEREN sich — worst case 1.6·1.18·1.175 = 2.22 > 1.9 (Riss-Falle). Deshalb
+  kombinierter Multiplikator `wm = min((1+0.18·SiegeChurn)·(1+0.35·(w2−0.5)), 1.1875)`
+  ⇒ 1.6·1.1875 = 1.9 exakt am Deckel. Budget §4: Tier-2-Dichte 13 N ✓.
+- **B6** (fsh + `StormWeatherFx` + Feed in `StormVolumeFx`): neue Uniforms
+  `Flash2Pos` (vec3) / `Flash2Amount` / `FlashSeed` (float). Vein-Term wird EINMAL
+  gehoisted (`vein = 0.55 + 0.90·evNoise3(u·9 + FlashSeed·17)`) wenn IRGENDEIN Slot
+  aktiv ist — +1 N statt +2 N bei Doppel-Flash; beide Slots additiv
+  `amt·2.5·vein·exp(−fd/(0.30·R))`, alle Tiers. Java: zweiter unabhängiger
+  Scheduler-Slot in `StormWeatherFx` (eigene Arrays, eigene Hash-Salts, Kadenz
+  130–340 t — bewusst versetzt zu 90–260, damit Überlappung vorkommt aber nicht
+  Dauerzustand ist); Slot 2 bumpt NICHT `flashSerial` und claimt KEIN Licht/keinen
+  Interior-Beat (W-C-Vein + Punktlicht bleiben Slot-1-exklusiv — sonst feuerte der
+  Photon-Vein auf die falsche Zelle). Accessors `innerFlash2Amount/Bearing/Lat`;
+  `feedVolume` füttert Flash2* nach dem FlashPos-Muster, `FlashSeed =
+  innerFlashSerial() % 64`. Idle-Regel: alle 3 neuen Uniforms = 0 ⇒ bit-identisch
+  (vein multipliziert nur INNERHALB der Amount-Gates).
+- **B8** (`StormPhotonFx`/`StormNearfieldFx` + beide Generatoren): dritte ExprVar
+  `eclStormSpin`, Pusher-Signatur `pushExprVars(radius, height, spin)`;
+  `spin = (ticks/20 + 1.6·churnTime)·0.07` — B7-konsistent über einen neuen
+  package-private Accessor `StormVolumeFx.churnTimeSeconds()` (Winkel bleibt auch
+  unter Siege synchron/stetig; Abweichung von der reinen Plan-Formel, dokumentiert).
+  **Vorzeichen-Gesetz (Plan-Skizze korrigiert):** der Shader rotiert das SAMPLING um
+  +spin ⇒ Weltfeatures drehen mit −spin (θ = atan2(z,x)); JOML `rotateY(+a)` dreht
+  ebenfalls θ → θ−a (jar-verifiziert: AngularVelocity wendet `orbital·0.05` rad/Tick
+  an ⇒ orbital ist **rad/s**). Sync also: Bearing-Term `− eclStormSpin` (bzw.
+  `− 2·eclStormSpin`) bei POSITIVEM orbital 0.07 bzw. 0.14 rad/s — das Plan-`+`
+  hätte die Bänder mit 2ω GEGEN das Volumen laufen lassen. Generator-Änderungen:
+  `ring_shape`-Bearings beider Generatoren + `COLUMN_BEARING` (Updraft-Säulen
+  präzedieren sichtbar mit) bekommen `−eclStormSpin`; NEU `rain_curtain` in
+  `storm_nearfield_wisps` (0.92r, 4 quantisierte Vorhang-Zellen, Fall −8…−11 blk/s
+  [linear = Blöcke/s], orbital 0.07, Rate 0.30/t) und `shred_racers` in
+  `storm_cloud_belt` (1.02r, 3 Zellen, orbital 0.14, Spawn `−2·eclStormSpin`,
+  Rate 0.5/t). Beide in die TUNED-Tabellen (Java + BASE_RATES) — sonst bräche die
+  Zero-Emission-Attach-Regel der Handover-Rampe. Neue Emitter: alpha + DISTANCE-
+  Sorting (kein neues LINT-ALPHA-NOSORT; Baseline `storm_cloud_belt` band_* bleibt
+  name-keyed stabil).
+- **B10**: Entscheidung nach B4/B6/B8 — B4 moduliert nur den Body innerhalb der
+  bestehenden Bounds, B6 ist reine Emission, B8 ist Photon-seitig: kein neuer
+  Silhouettenterm ⇒ erwartbar keine neuen Halbres-Kanten; dann dokumentiert weglassen.
+
+> ✅ **Paket GELANDET** (F-096) — B4/B6/B8 wie oben geplant umgesetzt (Details in den
+> §B4/§B6/§B8-Status-Vermerken), B10 dokumentiert weggelassen (§B10-Vermerk).
+> Verifikation: `compileJava` grün (stormfx-Paket gegen HEAD-Snapshot isoliert
+> kompiliert — parallel-Team-Dateien `ExpansionBorderFx` u. a. waren zeitweise in
+> nicht-kompilierendem Zwischenstand, NICHT unsere Änderungen); Photon-Regeneration
+> deterministisch, alle 9 storm_*-Assets „valid"; `fxlib.py validate --lint`:
+> 0 NEUE error/warn gegen die 50er-Baseline, keine Findings auf `rain_curtain`/
+> `shred_racers`; GLSL-Syntax via glslangValidator (Includes aufgelöst,
+> VeilCamera-UBO synthetisiert) OK.
 
 ---
 

@@ -25,7 +25,13 @@ import net.neoforged.neoforge.client.event.ClientTickEvent;
  *   <li>{@link #innerFlashAmount(int)} / {@link #innerFlashBearing(int)} /
  *       {@link #innerFlashLat(int)} — read by W-A for the lit-from-within shell pulse;</li>
  *   <li>{@link #innerFlashSerial()} + {@link #innerFlashMax()} — polled by W-C to fire the
- *       HDR Photon intra-bolt vein and by W-D for the {@code InnerFlash} post uniform.</li>
+ *       HDR Photon intra-bolt vein and by W-D for the {@code InnerFlash} post uniform;</li>
+ *   <li>{@link #innerFlash2Amount(int)} / {@link #innerFlash2Bearing(int)} /
+ *       {@link #innerFlash2Lat(int)} — STORM-MASS B6: a SECOND independent flash cell
+ *       per storm (own 130–340 t cadence, own bearing/lat), read ONLY by
+ *       {@code StormVolumeFx} for the volumetric double-cell glow. It never bumps the
+ *       serial, claims no light and fires no interior beat — the W-A/W-C/W-D
+ *       contracts stay primary-cell-exclusive.</li>
  * </ul>
  *
  * <p><b>Scheduler (B1):</b> per sphere storm, the next flash lands in
@@ -57,6 +63,13 @@ final class StormWeatherFx {
     /** Flash cadence window (ticks) — hashed per storm + schedule window, B1. */
     private static final int FLASH_MIN_INTERVAL = 90;
     private static final int FLASH_MAX_INTERVAL = 260;
+    /**
+     * STORM-MASS B6: cadence window of the SECOND flash cell — deliberately offset
+     * from the primary window so the two cells overlap occasionally (the "two
+     * simultaneous cells" read) without strobing in lockstep.
+     */
+    private static final int FLASH2_MIN_INTERVAL = 130;
+    private static final int FLASH2_MAX_INTERVAL = 340;
     /** Flash envelope length (ticks): smoothstep up, longer smoothstep release. */
     private static final int FLASH_TICKS = 7;
     /** Flash cell picks: bearing = camAngle ± this (rad); latFrac inside [MIN, MAX]. */
@@ -85,6 +98,17 @@ final class StormWeatherFx {
     private static final int[] SLOT_FLASH_START = new int[MAX_TRACKED];
     private static final double[] SLOT_BEARING = new double[MAX_TRACKED];
     private static final float[] SLOT_LAT = new float[MAX_TRACKED];
+    /**
+     * STORM-MASS B6: the SECOND independent flash cell per storm — own decay clock,
+     * own bearing/lat, own cadence. Volume-only by design: it never bumps
+     * {@link #flashSerial} (the W-C Photon vein would fire at the PRIMARY cell's
+     * stale bearing), never claims a light and never beats the interior fog — its
+     * whole job is the second glim cell inside the volumetric mass.
+     */
+    private static final int[] SLOT_FLASH2_START = new int[MAX_TRACKED];
+    private static final int[] SLOT_NEXT_FLASH2 = new int[MAX_TRACKED];
+    private static final double[] SLOT_BEARING2 = new double[MAX_TRACKED];
+    private static final float[] SLOT_LAT2 = new float[MAX_TRACKED];
     @SuppressWarnings("unchecked")
     private static final LightRenderHandle<PointLightData>[] SLOT_LIGHT =
             new LightRenderHandle[MAX_TRACKED];
@@ -94,6 +118,8 @@ final class StormWeatherFx {
 
     /** Bumps once per FRESH flash, any storm (§3 contract; W-C's one-shot trigger). */
     private static int flashSerial;
+    /** B6: private roll counter for second-cell picks — NOT the §3 serial contract. */
+    private static int flash2Roll;
     /** Accumulated gust phase-time (ticks·gust) — bounded drift for stateless motion. */
     private static float gustSkew;
 
@@ -122,6 +148,27 @@ final class StormWeatherFx {
     /** Bumps once per FRESH flash (any storm) — the W-C Photon vein trigger. */
     static int innerFlashSerial() {
         return flashSerial;
+    }
+
+    /**
+     * 0..1 envelope of the live SECOND flash cell of {@code stormId} (STORM-MASS B6 —
+     * volume-only, never bumps the serial; read by {@code StormVolumeFx.feedVolume}).
+     */
+    static float innerFlash2Amount(int stormId) {
+        int slot = slotOf(stormId);
+        return slot < 0 ? 0.0F : envelope2(slot);
+    }
+
+    /** World bearing (rad) of the live SECOND flash cell (B6; 0 if none tracked). */
+    static double innerFlash2Bearing(int stormId) {
+        int slot = slotOf(stormId);
+        return slot < 0 ? 0.0D : SLOT_BEARING2[slot];
+    }
+
+    /** latFrac 0..1 of the live SECOND flash cell (B6; 0 if none tracked). */
+    static float innerFlash2Lat(int stormId) {
+        int slot = slotOf(stormId);
+        return slot < 0 ? 0.0F : SLOT_LAT2[slot];
     }
 
     /** Max flash envelope over all storms — the W-D {@code InnerFlash} uniform feed. */
@@ -212,6 +259,7 @@ final class StormWeatherFx {
             }
         }
         SLOT_SEEN[slot] = true;
+        double camAngle = Math.atan2(dz, dx);
 
         int flashStart = SLOT_FLASH_START[slot];
         if (flashStart != Integer.MIN_VALUE) {
@@ -224,10 +272,25 @@ final class StormWeatherFx {
             } else {
                 tickLight(slot, envelope(slot));
             }
-            return;
+        } else if (now >= SLOT_NEXT_FLASH[slot]) {
+            startFlash(slot, storm, camera, now, camAngle);
         }
-        if (now >= SLOT_NEXT_FLASH[slot]) {
-            startFlash(slot, storm, camera, now, Math.atan2(dz, dx));
+
+        // B6 second cell: same envelope law on its own clock — a bare state machine
+        // (cell pick + decay), no light/serial/interior side effects (see field doc).
+        int flash2Start = SLOT_FLASH2_START[slot];
+        if (flash2Start != Integer.MIN_VALUE) {
+            if (now - flash2Start >= FLASH_TICKS) {
+                SLOT_FLASH2_START[slot] = Integer.MIN_VALUE;
+                SLOT_NEXT_FLASH2[slot] = now + next2Interval(storm.id, now);
+            }
+        } else if (now >= SLOT_NEXT_FLASH2[slot]) {
+            int roll = ++flash2Roll;
+            SLOT_FLASH2_START[slot] = now;
+            SLOT_BEARING2[slot] = camAngle
+                    + (hash3(storm.id, roll, 41) - 0.5F) * 2.0F * FLASH_BEARING_SPREAD;
+            SLOT_LAT2[slot] = FLASH_LAT_MIN
+                    + hash3(storm.id, roll, 53) * (FLASH_LAT_MAX - FLASH_LAT_MIN);
         }
     }
 
@@ -262,9 +325,25 @@ final class StormWeatherFx {
                 + (int) (h * (FLASH_MAX_INTERVAL - FLASH_MIN_INTERVAL));
     }
 
+    /** B6: next SECOND-cell flash in 130–340 ticks — own window size + salt, so the
+     *  two schedulers decorrelate instead of phase-locking. */
+    private static int next2Interval(int stormId, int now) {
+        float h = hash3(stormId, now / FLASH2_MAX_INTERVAL, 0x2F);
+        return FLASH2_MIN_INTERVAL
+                + (int) (h * (FLASH2_MAX_INTERVAL - FLASH2_MIN_INTERVAL));
+    }
+
     /** Smoothstep flash envelope 0..1: fast attack over 40%, slower release over 60%. */
     private static float envelope(int slot) {
-        int start = SLOT_FLASH_START[slot];
+        return envelopeAt(SLOT_FLASH_START[slot]);
+    }
+
+    /** B6: the second cell shares the exact envelope law on its own start tick. */
+    private static float envelope2(int slot) {
+        return envelopeAt(SLOT_FLASH2_START[slot]);
+    }
+
+    private static float envelopeAt(int start) {
         if (start == Integer.MIN_VALUE) {
             return 0.0F;
         }
@@ -349,6 +428,10 @@ final class StormWeatherFx {
                 SLOT_BEARING[slot] = 0.0D;
                 SLOT_LAT[slot] = 0.0F;
                 SLOT_NEXT_FLASH[slot] = now + nextInterval(stormId, now);
+                SLOT_FLASH2_START[slot] = Integer.MIN_VALUE;
+                SLOT_BEARING2[slot] = 0.0D;
+                SLOT_LAT2[slot] = 0.0F;
+                SLOT_NEXT_FLASH2[slot] = now + next2Interval(stormId, now);
                 return slot;
             }
         }
@@ -359,6 +442,7 @@ final class StormWeatherFx {
         releaseLight(slot);
         SLOT_USED[slot] = false;
         SLOT_FLASH_START[slot] = Integer.MIN_VALUE;
+        SLOT_FLASH2_START[slot] = Integer.MIN_VALUE;
     }
 
     private static boolean anySlotUsed() {

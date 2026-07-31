@@ -83,11 +83,11 @@ final class StormNearfieldFx {
      * BASE_RATES}: tuned emitter names and their authored per-tick emission rates.
      */
     private static final String[][] TUNED_EMITTERS = {
-            {"wisp_racers", "wisp_veils"},
+            {"wisp_racers", "wisp_veils", "rain_curtain"},
             {"scud_shreds", "scud_grit"},
             {"updraft_motes", "updraft_glints"}};
     private static final float[][] TUNED_BASE_RATES = {
-            {0.07F, 0.10F},
+            {0.07F, 0.10F, 0.30F},
             {0.35F, 0.9F},
             {0.65F, 0.2F}};
 
@@ -140,7 +140,9 @@ final class StormNearfieldFx {
         }
 
         // Channel B: shared pusher (single last-value cache) — fresh BEFORE any ensure.
-        StormPhotonFx.pushExprVars(storm.radius, storm.height);
+        // B8: eclStormSpin rides along (the parallax clock — see stormSpinAngle()).
+        StormPhotonFx.pushExprVars(storm.radius, storm.height,
+                StormPhotonFx.stormSpinAngle());
 
         ensureLoops(center, now);
         tuneLoops(storm, minecraft);

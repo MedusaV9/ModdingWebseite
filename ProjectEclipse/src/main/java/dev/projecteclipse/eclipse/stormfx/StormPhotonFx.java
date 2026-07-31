@@ -38,10 +38,12 @@ import net.neoforged.neoforge.client.event.ClientTickEvent;
  *
  * <p><b>Radius adaptation</b> (PHOTON-ADVANCED-2 §1 Channel B): {@code spawnLoop} exposes
  * no {@code SpawnOptions}, so the ring shapes are authored as {@code function} shapes over
- * the global expression variables {@code eclStormR}/{@code eclStormH}; this manager writes
- * both via {@code expr.Variable.make(name).setValue(...)} before every spawn and refreshes
- * them per tick (resize payloads re-shape the belts live, no respawn). Fail-soft: if the
- * {@code expr} reflection breaks, loops still run at the authored dev-fallback ring.</p>
+ * the global expression variables {@code eclStormR}/{@code eclStormH}/{@code eclStormSpin}
+ * (the last one is the STORM-MASS B8 parallax clock, {@link #stormSpinAngle()}); this
+ * manager writes all three via {@code expr.Variable.make(name).setValue(...)} before every
+ * spawn and refreshes them per tick (resize payloads re-shape the belts live, no respawn).
+ * Fail-soft: if the {@code expr} reflection breaks, loops still run at the authored
+ * dev-fallback ring (and {@code eclStormSpin} rests at 0 — bands simply stop orbiting).</p>
  *
  * <p><b>Live intensity tuning</b> (PHOTON-ADVANCED-2 §1 Channel A): emission rates scale
  * every tick with storm visibility x camera-distance falloff x gust swell by writing
@@ -85,11 +87,11 @@ final class StormPhotonFx {
      */
     private static final String[][] TUNED_EMITTERS = {
             {"belt_low", "belt_mid", "belt_high"},
-            {"band_low", "band_mid", "band_high"},
+            {"band_low", "band_mid", "band_high", "shred_racers"},
             {"skirt_motes", "skirt_haze"}};
     private static final float[][] TUNED_BASE_RATES = {
             {0.04F, 0.04F, 0.04F},
-            {2.0F, 2.0F, 2.0F},
+            {2.0F, 2.0F, 2.0F, 0.5F},
             {0.7F, 0.06F}};
 
     // ------------------------------------------------------------------ window state
@@ -114,12 +116,31 @@ final class StormPhotonFx {
 
     /**
      * Channel-B pusher shared with {@link StormNearfieldFx} (F-034): ONE last-value
-     * cache for the global {@code eclStormR}/{@code eclStormH} expression variables, so
-     * the two managers never fight over redundant writes. Both windows resolve the same
-     * nearest sphere storm, so the values agree whenever both are open.
+     * cache for the global {@code eclStormR}/{@code eclStormH}/{@code eclStormSpin}
+     * expression variables, so the two managers never fight over redundant writes.
+     * Both windows resolve the same nearest sphere storm, so the values agree whenever
+     * both are open.
      */
-    static void pushExprVars(float radius, float height) {
-        ExprVars.push(radius, height);
+    static void pushExprVars(float radius, float height, float spin) {
+        ExprVars.push(radius, height, spin);
+    }
+
+    /**
+     * STORM-MASS B8: the shared parallax clock — a continuous orbit angle (radians)
+     * on the volume's mid-strata RIM rate: {@code ROT_SPEED 0.10 × stratum 1.0 ×
+     * (1.4 − 0.7·1.0) = 0.07 rad/s} (storm_volume.fsh), on the same pause-safe tick
+     * clock as the {@code Time} uniform, PLUS the B7 churn clock ×1.6 exactly like the
+     * shader's {@code spinT} — bands stay synced through a siege escalation and every
+     * angle stays continuous. Sign law (jar-verified): the shader rotates its SAMPLING
+     * by +spin, so world features turn by −spin in atan2(z,x); Photon's AngularVelocity
+     * ({@code rotateY(orbital·0.05)/tick} ⇒ orbital is rad/s) also turns θ by −orbital.
+     * The generated assets therefore use {@code bearing − eclStormSpin} spawn terms
+     * with POSITIVE orbital rates 0.07 (rim) / 0.14 (upper strata) — the only two
+     * rates (Photon has no differential rotation; one band = one angular rate).
+     */
+    static float stormSpinAngle() {
+        return (StormFxClient.ticks() / 20.0F
+                + 1.6F * StormVolumeFx.churnTimeSeconds()) * 0.07F;
     }
 
     // ------------------------------------------------------------------ tick
@@ -159,7 +180,8 @@ final class StormPhotonFx {
 
         // Channel B: keep the belt geometry variables fresh BEFORE any spawn this tick
         // (a resize payload re-shapes newly emitted particles live, no respawn needed).
-        ExprVars.push(storm.radius, storm.height);
+        // B8: eclStormSpin rides along — new spawns land in the volume's rotating frame.
+        ExprVars.push(storm.radius, storm.height, stormSpinAngle());
 
         ensureLoops(center, now);
         tuneLoops(storm, minecraft);
@@ -331,13 +353,19 @@ final class StormPhotonFx {
         private static Method setValue;
         private static Object varRadius;
         private static Object varHeight;
+        private static Object varSpin;
         private static float lastRadius = Float.NaN;
         private static float lastHeight = Float.NaN;
+        private static float lastSpin = Float.NaN;
 
         private ExprVars() {}
 
-        static void push(float radius, float height) {
-            if (state == DISABLED || (radius == lastRadius && height == lastHeight)) {
+        static void push(float radius, float height, float spin) {
+            // The spin clock advances every unpaused tick, so this effectively writes
+            // per tick (three reflective setValue calls — negligible); the last-value
+            // cache still de-duplicates the paused/idle case.
+            if (state == DISABLED
+                    || (radius == lastRadius && height == lastHeight && spin == lastSpin)) {
                 return;
             }
             try {
@@ -347,12 +375,15 @@ final class StormPhotonFx {
                     setValue = variable.getMethod("setValue", double.class);
                     varRadius = make.invoke(null, "eclStormR");
                     varHeight = make.invoke(null, "eclStormH");
+                    varSpin = make.invoke(null, "eclStormSpin");
                     state = READY;
                 }
                 setValue.invoke(varRadius, (double) radius);
                 setValue.invoke(varHeight, (double) height);
+                setValue.invoke(varSpin, (double) spin);
                 lastRadius = radius;
                 lastHeight = height;
+                lastSpin = spin;
             } catch (Throwable t) {
                 state = DISABLED;
                 EclipseMod.LOGGER.debug(

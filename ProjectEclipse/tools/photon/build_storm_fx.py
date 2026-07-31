@@ -30,6 +30,8 @@ authored as `function` shapes over the GLOBAL expression variables `eclStormR` /
 letters only — no underscores). StormPhotonFx writes both variables reflectively
 BEFORE every spawn and keeps them fresh per tick; without Java (e.g. a bare
 `/photon fx` preview) the `max(var, floor)` fallbacks give an 8-block dev ring.
+STORM-MASS B8 adds a third variable `eclStormSpin` (the volume-rim parallax clock —
+see storm_nearfield_fx.py header note for the sign law and the two sync rates).
 
 LIVE EMISSION TUNING (PHOTON-ADVANCED-2 §1 Channel A): the BASE_RATES table below is
 the frozen contract with `StormPhotonFx.TUNED_*` — the manager multiplies these
@@ -65,11 +67,18 @@ FOG_GREEN = (0.455, 0.714, 0.580)   # interior-fog green family
 # fallbacks: an un-driven preview reads r=8/h=12 instead of collapsing to a point.
 R_EXPR = "max(eclStormR,8)"
 H_EXPR = "max(eclStormH,12)"
+# STORM-MASS B8 parallax clock (see storm_nearfield_fx.py header note for the full
+# sign law): continuous volume-rim orbit angle in radians, pushed per tick by
+# StormPhotonFx.stormSpinAngle(); un-driven previews read 0. Bearings SUBTRACT it;
+# synced emitters carry POSITIVE orbital rates (rad/s) — 2× rim = upper strata.
+SPIN_EXPR = "eclStormSpin"
+SPIN_UPPER = 0.14
 
 # Frozen Channel-A contract with StormPhotonFx.TUNED_* (see module docstring).
 BASE_RATES = {
     "storm_debris_belt": {"belt_low": 0.04, "belt_mid": 0.04, "belt_high": 0.04},
-    "storm_cloud_belt": {"band_low": 2.0, "band_mid": 2.0, "band_high": 2.0},
+    "storm_cloud_belt": {"band_low": 2.0, "band_mid": 2.0, "band_high": 2.0,
+                         "shred_racers": 0.5},
     "storm_skirt_dust": {"skirt_motes": 0.7, "skirt_haze": 0.06},
 }
 
@@ -113,10 +122,13 @@ def ring_shape(radius_factor, y_expr, radial_jitter):
     randomA = bearing, randomB = radial jitter, randomC is left to y_expr. Velocity
     comes from velocityOverLifetime (orbital), never the shape speed fields — the six
     expressions each re-roll randomA..E, so correlated speeds are unsafe (§1 Channel B).
+    B8: the bearing subtracts eclStormSpin (structurally neutral for uniform-random
+    bearings, but every bearing term stays on the one shared parallax clock).
     """
     r = f"({R_EXPR}*{radius_factor}+(randomB-0.5)*{radial_jitter})"
-    return function_shape(x=f"cos(randomA*2*PI)*{r}",
-                          z=f"sin(randomA*2*PI)*{r}",
+    b = f"(randomA*2*PI-{SPIN_EXPR})"
+    return function_shape(x=f"cos({b})*{r}",
+                          z=f"sin({b})*{r}",
                           y=y_expr)
 
 
@@ -279,7 +291,11 @@ def build_storm_cloud_belt() -> FxBuilder:
     the belt never sits between alpha shells, shade 0b, LDR only (no HDR on fog),
     lights module ENABLED at dim sky-light so puffs never render fullbright.
     Flipbook: SingleRow row = puff variant (memoized per particle), frameOverTime
-    plays the 4-frame boil loop, startFrame desyncs the phase."""
+    plays the 4-frame boil loop, startFrame desyncs the phase.
+
+    STORM-MASS B8 adds `shred_racers`: three bearing-quantized shred packs at 1.02r
+    orbiting at 2x the volume rim rate (spawn -2*eclStormSpin + orbital SPIN_UPPER) —
+    the fast upper-strata layer of the parallax sandwich."""
     fx = FxBuilder("storm_cloud_belt")
     root = fx.empty("cloud_root")
 
@@ -313,6 +329,50 @@ def build_storm_cloud_belt() -> FxBuilder:
             .with_lights(sky=8, block=2)
             .with_renderer(use_gpu_instance=True, shade=False, vertex_sorting="NONE")
             .with_cull_box((-60.0, -6.0, -60.0), (60.0, 42.0, 60.0)))
+
+    # STORM-MASS B8 `shred_racers`: ragged cloud scraps racing the UPPER strata just
+    # outside the wall (1.02r) at 2× the rim rate — the second (and last) sanctioned
+    # sync rate. Three bearing-quantized shred packs; spawn subtracts 2·eclStormSpin
+    # and the +SPIN_UPPER orbital (rad/s) continues the same rate, so the packs track
+    # the volume's fast upper strata while the slower bands drift beneath them — the
+    # depth-parallax read of the B8 sandwich. Spawn heights min-capped into the box.
+    shred_b = f"((floor(randomA*3)+0.5+(randomD-0.5)*0.60)/3*2*PI-2*{SPIN_EXPR})"
+    shred_r = f"({R_EXPR}*1.02+(randomB-0.5)*2.0)"
+    (fx.particle_emitter(
+            "shred_racers",
+            duration=100, looping=True, prewarm=30,
+            start_lifetime=random_between(32, 52), start_speed=constant(0),
+            start_size=nf3(random_between(1.1, 2.0), random_between(1.1, 2.0),
+                           random_between(1.1, 2.0)),
+            start_color=color(0xFF9AA0C0),  # pale slate carrier
+            simulation_space="World", max_particles=30)
+        .child_of(root)
+        .with_emission(rate=constant(BASE_RATES["storm_cloud_belt"]["shred_racers"]))
+        .with_shape(function_shape(
+            x=f"cos({shred_b})*{shred_r}",
+            z=f"sin({shred_b})*{shred_r}",
+            y=f"min({H_EXPR}*0.62,36)*(0.52+randomC*0.48)"))
+        .with_curves(
+            velocity_over_lifetime=dict(
+                orbital_mode="AngularVelocity",
+                orbital=nf3(constant(0), constant(SPIN_UPPER), constant(0))),
+            noise=dict(frequency=0.4, quality="Noise2D",
+                       position=nf3(constant(0.06), constant(0.03), constant(0.06))),
+            uv_animation=dict(tiles=(4, 4), animation="SingleRow",
+                              frame_over_time=eased([(0.0, 0.0), (1.0, 1.0)]),
+                              start_frame=random_between(0, 4), cycle=4.0),
+            color_over_lifetime=gradient(  # alpha ceiling 0.30 (fill-rate law)
+                [(0.0, 0.0), (0.14, 0.30), (0.78, 0.24), (1.0, 0.0)],
+                [(0.0, 0.35, 0.36, 0.47), (1.0, 0.25, 0.26, 0.38)]),
+            size_over_lifetime=eased([(0.0, 0.7), (0.4, 1.05), (1.0, 1.2)], "out"))
+        .with_material(texture_material(PUFF_ATLAS, discard=0.02,
+                                        blend=BLEND_ALPHA, depth_mask=False))
+        .with_lights(sky=8, block=2)
+        # LINT-ALPHA-NOSORT: unlike the GPU-instanced bands (grandfathered NONE by
+        # design), the shreds are 30 CPU quads — DISTANCE sorting is free and keeps
+        # the dark alpha scraps ordered against the bands behind them.
+        .with_renderer(vertex_sorting="DISTANCE", shade=True)
+        .with_cull_box((-60.0, -6.0, -60.0), (60.0, 42.0, 60.0)))
     return fx
 
 

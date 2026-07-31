@@ -55,9 +55,12 @@ import net.neoforged.neoforge.client.event.ClientTickEvent;
  * (tick-clock seconds, pause-safe), {@code SunDir} ({@link SunTracker}), {@code Interior}
  * ({@link StormInteriorFx#interiorAmount()} — the grade hand-over), {@code FlashPos} +
  * {@code FlashAmount} (the W-B intra-wall flash injected as emissive light inside the
- * mass; anchor mirrors {@code StormWeatherFx.claimLight}), {@code SiegeChurn} +
- * {@code ChurnTime} + {@code CoreFade} (STORM-MASS B7 — the F-031/F-032 combat state
- * mirrored into the volume: turbulence, continuous rate escalation, core tear-open).</p>
+ * mass; anchor mirrors {@code StormWeatherFx.claimLight}), {@code Flash2Pos} +
+ * {@code Flash2Amount} + {@code FlashSeed} (STORM-MASS B6 — the second, volume-only
+ * flash cell and the per-flash vein seed {@code innerFlashSerial() % 64}),
+ * {@code SiegeChurn} + {@code ChurnTime} + {@code CoreFade} (STORM-MASS B7 — the
+ * F-031/F-032 combat state mirrored into the volume: turbulence, continuous rate
+ * escalation, core tear-open).</p>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID, value = Dist.CLIENT)
 public final class StormVolumeFx {
@@ -148,6 +151,16 @@ public final class StormVolumeFx {
     static boolean isVolumeStorm(int stormId) {
         StormFxClient.ClientStorm storm = targetStorm;
         return pipelineLive && storm != null && storm.id == stormId;
+    }
+
+    /**
+     * STORM-MASS B8: the B7 churn clock in seconds — {@code StormPhotonFx} folds it
+     * into the {@code eclStormSpin} expression variable exactly like the shader folds
+     * {@code ChurnTime} into its spin clock, so the Photon parallax bands keep tracking
+     * the volume rotation through a siege escalation instead of visibly falling behind.
+     */
+    static float churnTimeSeconds() {
+        return churnTime;
     }
 
     // ------------------------------------------------------------------ tick
@@ -280,6 +293,31 @@ public final class StormVolumeFx {
                     (float) (storm.center.z + Math.sin(bearing) * horiz - camera.z));
         } else {
             pipeline.getUniform("FlashPos").setVector(
+                    (float) (storm.center.x - camera.x),
+                    (float) (storm.center.y - camera.y),
+                    (float) (storm.center.z - camera.z));
+        }
+
+        // STORM-MASS B6 flash v2: the SECOND independent cell (volume-only — no light,
+        // no serial, no Photon vein; see StormWeatherFx) plus the shared vein seed.
+        // The seed is fed unconditionally: it only modulates INSIDE the Amount gates,
+        // so an idle frame stays bit-identical whatever value it holds.
+        pipeline.getUniform("FlashSeed").setFloat(StormWeatherFx.innerFlashSerial() % 64);
+        float flash2 = storm.state == S2CStormStatePayload.STATE_ACTIVE
+                ? StormWeatherFx.innerFlash2Amount(storm.id)
+                : 0.0F;
+        pipeline.getUniform("Flash2Amount").setFloat(flash2);
+        if (flash2 > 0.01F) {
+            double bearing2 = StormWeatherFx.innerFlash2Bearing(storm.id);
+            float latFrac2 = StormWeatherFx.innerFlash2Lat(storm.id);
+            double horiz2 = storm.radius * FLASH_RADIUS_FRAC
+                    * Math.cos(latFrac2 * (Math.PI / 2.0D));
+            pipeline.getUniform("Flash2Pos").setVector(
+                    (float) (storm.center.x + Math.cos(bearing2) * horiz2 - camera.x),
+                    (float) (storm.center.y + latFrac2 * storm.height - camera.y),
+                    (float) (storm.center.z + Math.sin(bearing2) * horiz2 - camera.z));
+        } else {
+            pipeline.getUniform("Flash2Pos").setVector(
                     (float) (storm.center.x - camera.x),
                     (float) (storm.center.y - camera.y),
                     (float) (storm.center.z - camera.z));

@@ -30,6 +30,12 @@ fresh (StormNearfieldFx shares the same pusher — single last-value cache, no f
 Without Java (bare `/photon fx` preview) the `max(var, floor)` fallbacks give an
 8-block dev ring.
 
+PARALLAX SYNC (STORM-MASS B8): a third variable `eclStormSpin` carries the volume
+raymarcher's rim rotation angle (0.07 rad/s + B7 churn escalation). Every bearing
+term SUBTRACTS it (sign law in StormPhotonFx.stormSpinAngle) so spawns land in the
+volume's rotating frame; the bearing-QUANTIZED emitters (updraft columns, the new
+`rain_curtain` sheets) visibly orbit with the mass, uniform rings are unaffected.
+
 LIVE DISTANCE BLENDING (PHOTON-ADVANCED-2 §1 Channel A): BASE_RATES below is the
 frozen contract with `StormNearfieldFx.TUNED_BASE_RATES` — the manager multiplies
 these authored per-emitter rates by the 250→150 handover ease x storm visibility and
@@ -59,6 +65,18 @@ FOG_GREEN = (0.455, 0.714, 0.580)   # interior-fog green family
 # Channel-B expression variables (letters only) with dev fallbacks (8-block ring).
 R_EXPR = "max(eclStormR,8)"
 H_EXPR = "max(eclStormH,12)"
+# STORM-MASS B8 parallax clock: continuous orbit angle (radians) at the volume's
+# mid-strata RIM rate 0.07 rad/s (+ B7 churn escalation), pushed per tick by
+# StormPhotonFx.stormSpinAngle(); un-driven previews read 0 (bands simply stand).
+# SIGN LAW (jar-verified, see StormPhotonFx.stormSpinAngle): the raymarcher's world
+# features turn by −spin in atan2(z,x) and Photon's AngularVelocity also turns θ by
+# −orbital·0.05/tick (orbital is rad/SECOND) — so spawn bearings SUBTRACT the spin
+# and the synced emitters carry POSITIVE orbital rates.
+SPIN_EXPR = "eclStormSpin"
+# The two sanctioned sync rates (Photon knows no differential rotation — one band =
+# one angular rate): 1× rim for the rain curtain, 2× for upper-strata shreds.
+SPIN_RIM = 0.07
+SPIN_UPPER = 0.14
 
 # The one-shot's authored reference radius — StormRegistry.DEFAULT_RADIUS.
 REF_RADIUS = 24.0
@@ -73,7 +91,8 @@ SHOCK_CULL_TOP = 40.0
 # racers 0.07x90=6.3/8, veils 0.10x115=11.5/14, shreds 0.35x60=21/26,
 # grit 0.9x27=24/30, motes 0.65x75=49/60, glints 0.2x50=10/12).
 BASE_RATES = {
-    "storm_nearfield_wisps": {"wisp_racers": 0.07, "wisp_veils": 0.10},
+    "storm_nearfield_wisps": {"wisp_racers": 0.07, "wisp_veils": 0.10,
+                              "rain_curtain": 0.30},
     "storm_ground_scud": {"scud_shreds": 0.35, "scud_grit": 0.9},
     "storm_updraft_motes": {"updraft_motes": 0.65, "updraft_glints": 0.2},
 }
@@ -108,10 +127,15 @@ def ribbon_renderer(material_entry):
 
 
 def ring_shape(radius_factor, y_expr, radial_jitter):
-    """Function shape: spawn points on the eclStormR-scaled ring at y_expr."""
+    """Function shape: spawn points on the eclStormR-scaled ring at y_expr.
+
+    B8: the bearing subtracts eclStormSpin so every spawn lands in the volume's
+    rotating frame (structurally neutral for uniform-random bearings, but it keeps
+    ALL bearing terms on the one shared clock)."""
     r = f"({R_EXPR}*{radius_factor}+(randomB-0.5)*{radial_jitter})"
-    return function_shape(x=f"cos(randomA*2*PI)*{r}",
-                          z=f"sin(randomA*2*PI)*{r}",
+    b = f"(randomA*2*PI-{SPIN_EXPR})"
+    return function_shape(x=f"cos({b})*{r}",
+                          z=f"sin({b})*{r}",
                           y=y_expr)
 
 
@@ -132,7 +156,9 @@ def build_storm_nearfield_wisps() -> FxBuilder:
     `wisp_racers`: 8 fast carriers on 1.04r (counter-rotating against belt_low, -0.095
     rad/t — at r=24 that is ~2.3 blocks/t, they visibly RACE) each dragging a thin
     1.4 s slate→fog-green ara ribbon. `wisp_veils`: slow soft smoke billboards on the
-    same band for body, alpha ceiling 0.22 (fill-rate law)."""
+    same band for body, alpha ceiling 0.22 (fill-rate law). `rain_curtain` (STORM-MASS
+    B8): four falling streak-sheet cells at 0.92r locked to the volume rotation via
+    eclStormSpin — the parallax-sandwich hero of this row."""
     fx = FxBuilder("storm_nearfield_wisps")
     root = fx.empty("nearfield_root")
 
@@ -213,6 +239,49 @@ def build_storm_nearfield_wisps() -> FxBuilder:
         # DISTANCE sorting keeps the layered fog read (dark veils cannot go additive).
         .with_renderer(vertex_sorting="DISTANCE", shade=True)
         .with_cull_box((-60.0, -4.0, -60.0), (60.0, 40.0, 60.0)))
+
+    # STORM-MASS B8 `rain_curtain`: falling streak sheets just INSIDE the wall (0.92r).
+    # Four bearing-quantized curtain cells (~50 deg sheets with gaps — quantization is
+    # what makes the rotation READABLE; a uniform ring + spin is statistically
+    # invisible) locked to the volume's rotating frame: spawn bearing subtracts
+    # eclStormSpin, orbital +SPIN_RIM (rad/s) continues the same rate after spawn.
+    # Fall speed is linear velocity in BLOCKS/SECOND (the jar multiplies by 0.05/t);
+    # −8..−11 b/s over a 40–60 t life drops a sheet 16–33 blocks — spawn heights are
+    # min-capped so big site storms stay inside the shared cull box.
+    curtain_b = f"((floor(randomA*4)+0.5+(randomD-0.5)*0.55)/4*2*PI-{SPIN_EXPR})"
+    curtain_r = f"({R_EXPR}*0.92+(randomB-0.5)*2.5)"
+    (fx.particle_emitter(
+            "rain_curtain",
+            duration=110, looping=True,
+            start_lifetime=random_between(40, 60), start_speed=constant(0),
+            start_size=nf3(random_between(0.10, 0.18), random_between(0.10, 0.18),
+                           random_between(0.10, 0.18)),
+            start_color=color(0xFF8CA0D6),  # rain-lit slate blue (STM_DEEP family)
+            simulation_space="World", max_particles=24)
+        .child_of(root)
+        .with_emission(rate=constant(BASE_RATES["storm_nearfield_wisps"]["rain_curtain"]))
+        .with_shape(function_shape(
+            x=f"cos({curtain_b})*{curtain_r}",
+            z=f"sin({curtain_b})*{curtain_r}",
+            y=f"min({H_EXPR}*0.62,34)*(0.35+randomC*0.65)"))
+        .with_curves(
+            velocity_over_lifetime=dict(
+                linear=nf3(constant(0), random_between(-11.0, -8.0), constant(0)),
+                orbital_mode="AngularVelocity",
+                orbital=nf3(constant(0), constant(SPIN_RIM), constant(0))),
+            noise=dict(frequency=0.5, quality="Noise2D",
+                       position=nf3(constant(0.03), constant(0.0), constant(0.03))),
+            color_over_lifetime=gradient(  # alpha ceiling 0.30 — sheets, not walls
+                [(0.0, 0.0), (0.12, 0.30), (0.80, 0.26), (1.0, 0.0)],
+                [(0.0, 0.48, 0.58, 0.83), (1.0, 0.28, 0.30, 0.45)]),
+            size_over_lifetime=eased([(0.0, 0.7), (0.25, 1.0), (1.0, 0.85)], "out"))
+        .with_material(texture_material(CIRCLE, blend=BLEND_ALPHA))
+        .with_lights(sky=8, block=2)
+        # LINT-ALPHA-NOSORT: alpha streaks sort like the sibling veils; stretched
+        # along the fall velocity so each quad reads as a rain streak, not a dot.
+        .with_renderer(render_mode="StretchedBillboard", velocity_scale=2.0,
+                       length_scale=1.8, vertex_sorting="DISTANCE", shade=True)
+        .with_cull_box((-60.0, -4.0, -60.0), (60.0, 40.0, 60.0)))
     return fx
 
 
@@ -288,9 +357,13 @@ def build_storm_ground_scud() -> FxBuilder:
 # 3. storm_updraft_motes — standing interior updraft columns (F-034)
 # ---------------------------------------------------------------------------
 # Bearing-quantized function shape: floor(randomA*3)/3 pins every spawn onto one of
-# THREE fixed bearings, so the columns STAND (they don't smear into a ring) while the
-# orbital swirl twists each column around its own vertical.
-COLUMN_BEARING = "(floor(randomA*3)/3*2*PI)"
+# THREE fixed bearings, so the columns read as columns (they don't smear into a ring)
+# while the orbital swirl twists each column around its own vertical. B8: the cells
+# subtract eclStormSpin — the three columns now PRECESS with the volume rotation
+# (rim rate, full lap ~90 s) instead of standing while the mass turns behind them;
+# their existing 0.05 rad/s orbital is close enough to the 0.07 rim rate that spawn
+# and drift stay coherent over a mote lifetime.
+COLUMN_BEARING = f"(floor(randomA*3)/3*2*PI-{SPIN_EXPR})"
 
 
 def build_storm_updraft_motes() -> FxBuilder:
