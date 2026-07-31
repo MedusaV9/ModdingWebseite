@@ -211,6 +211,16 @@ public final class CreditsSequence implements SequenceReplayable {
     private static final ResourceLocation CUE_CREDITS3_NEBULA = FxCues.cue("credits3_nebula");
 
     /**
+     * FX-WAVE-13 B7 cue id (census §5 — the whiteout dropped onto a dead-still beach),
+     * same {@link FxCues#cue} derivation (client row in {@code veilfx.CutsceneBeatFxRows};
+     * asset by {@code tools/photon/wave13_cutscene_fx.py}): the 200t afterglow bridge —
+     * white ash motes trickling into the beach stillness, crossfade baked into the asset.
+     */
+    private static final ResourceLocation CUE_BEAT_AFTERGLOW = FxCues.cue("beat_credits_afterglow");
+    /** Afterglow anchor height over the sand — the ash field sinks from here. */
+    private static final double AFTERGLOW_ANCHOR_UP = 9.0D;
+
+    /**
      * F-090/F-093 "Map-Zerreißen V3" cue ids, same {@link FxCues#cue} derivation (client
      * rows in {@code veilfx.CreditsFinale4FxRows}; assets by
      * {@code tools/photon/credits4_fx.py}).
@@ -1634,6 +1644,16 @@ public final class CreditsSequence implements SequenceReplayable {
      */
     private static void beatBeach(Run current) {
         current.enter(Phase.BEACH);
+        // B7 afterglow bridge: the whiteout's last light trickles down as white ash for
+        // the 10 s of stillness before the formations start. One send — the 200t asset
+        // covers the whole bridge and fades itself out (crossfade baked in). Photon-only
+        // LAYER garnish; photon-less clients keep the clean stillness.
+        ServerLevel epilogueLevel = current.server.getLevel(EPILOGUE);
+        if (epilogueLevel != null) {
+            FxPayloads.sendFxEvent(epilogueLevel, CUE_BEAT_AFTERGLOW,
+                    new Vec3(SURF_X + 0.5D, BEACH_Y + AFTERGLOW_ANCHOR_UP, 0.0D),
+                    0.0F, 0.0F, -1.0D);
+        }
         // The formation anchor: just past the audience row, eye-height over the surf.
         current.formations.setAnchor(new Vec3(SURF_X + 2.5D, BEACH_Y + 4.0D, 0.0D));
         for (ServerPlayer player : current.server.getPlayerList().getPlayers()) {
@@ -2886,6 +2906,12 @@ public final class CreditsSequence implements SequenceReplayable {
                 for (ServerPlayer player : watchers) {
                     MusicCues.play(MUSIC_FINALE_CUE, player);
                     CreditsPayloads.sendRoll(player, 400);
+                    // B7 replay parity: the afterglow bridge falls around each watcher
+                    // (no beach anchor here — the replay plays wherever they stand).
+                    PacketDistributor.sendToPlayer(player, new dev.projecteclipse.eclipse.network.fx
+                            .S2CFxEventPayload(CUE_BEAT_AFTERGLOW,
+                                    player.position().add(0.0D, AFTERGLOW_ANCHOR_UP, 0.0D),
+                                    0.0F, 0.0F));
                 }
                 return true;
             }

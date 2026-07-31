@@ -185,6 +185,22 @@ public final class IntroSequence implements SequenceReplayable {
     private static final int VIEW_DISTANCE_CHUNKS = 32;
     /** W4-CEREMONY / IDEA-01 #1: re-whisper cadence while APPROACH stalls (~1 min). */
     private static final int APPROACH_RENUDGE_TICKS = 1200;
+
+    // --- FX-WAVE-13 B7: FLIGHT/APPROACH wind-shear sustain (census §5 "long glide" gap) ---
+    /** First wind-shear send: 40t after the vortex stands opaque (abs t=340). */
+    private static final int WINDSHEAR_START_TICK = VORTEX_SPAWN_TICK + 40;
+    /**
+     * Wind-shear re-fire cadence. 220 divides the asset's 660t runtime, so mid-run sends
+     * are absorbed by Photon's same-anchor dedup and the hand-off at runtime end is
+     * seamless; late joiners catch the next send at worst 11 s out.
+     */
+    private static final int WINDSHEAR_REFIRE_TICKS = 220;
+    /**
+     * B7 cutscene-beat cue (client row: {@code veilfx.CutsceneBeatFxRows}). Both sides
+     * derive the same {@code FxCues.cue("beat_intro_windshear")} id — the CreditsSequence
+     * naming-contract precedent, so {@code FxCues.java} stays untouched.
+     */
+    private static final ResourceLocation CUE_BEAT_WINDSHEAR = FxCues.cue("beat_intro_windshear");
     /** W4-CEREMONY / IDEA-01 #3: Logbook handoff hint delay after {@link #finish} (~15 s). */
     private static final int LOGBOOK_HINT_DELAY_TICKS = 300;
 
@@ -518,8 +534,10 @@ public final class IntroSequence implements SequenceReplayable {
                 } else if (current.ticks == ALTAR_ANCHOR_TICK) {
                     syncAltarAnchor(current);
                 }
+                maybeFireWindshear(current);
             }
             case APPROACH -> {
+                maybeFireWindshear(current);
                 if (current.ticks % 20 == 0) {
                     rescueVoidFallers(current);
                 }
@@ -553,6 +571,22 @@ public final class IntroSequence implements SequenceReplayable {
         // camera flies over, and are restored to their exact disc spots when the shot ends.
         CutsceneService.play(PATH_FLIGHT, watchers, current.center,
                 () -> beginApproach(current), CutsceneService.PlayOptions.global(VIEW_DISTANCE_CHUNKS));
+    }
+
+    /**
+     * FX-WAVE-13 B7 — the wind the vortex is drinking: Photon-only shear streamers born
+     * on a 30–58-block ring around the column, condensing inward through the long glide
+     * and the (untimed) walk-up. Cadence sends from abs t=340; the LAYER row leaves every
+     * pre-existing baseline (storm shells, debris, sounds) untouched on photon-less
+     * clients. Anchor = vortex base ({@code current.center}), matching the asset's
+     * authored 2–34-block column band.
+     */
+    private static void maybeFireWindshear(Run current) {
+        if (current.ticks >= WINDSHEAR_START_TICK
+                && (current.ticks - WINDSHEAR_START_TICK) % WINDSHEAR_REFIRE_TICKS == 0) {
+            FxPayloads.sendFxEvent(current.overworld, CUE_BEAT_WINDSHEAR, current.center,
+                    0.0F, 0.0F, -1.0D);
+        }
     }
 
     private static void spawnVortex(Run current) {
@@ -1050,6 +1084,16 @@ public final class IntroSequence implements SequenceReplayable {
                     sendReplayStorm(watchers, center, S2CStormStatePayload.STATE_SPAWN,
                             StormRegistry.RAMP_TICKS);
                     replayDebrisBegin(server, center);
+                });
+                // B7 windshear beat rides the replay too (abs t=340 = +240 here); one send
+                // is enough — the 660t asset covers the remaining flight to its end.
+                schedule(server, WINDSHEAR_START_TICK - ECLIPSE_ON_TICKS, () -> {
+                    for (ServerPlayer player : watchers) {
+                        if (!player.hasDisconnected()) {
+                            PacketDistributor.sendToPlayer(player,
+                                    new S2CFxEventPayload(CUE_BEAT_WINDSHEAR, center, 0.0F, 0.0F));
+                        }
+                    }
                 });
                 schedule(server, FLIGHT_DURATION_TICKS, () -> {
                     sendReplayStorm(watchers, center, S2CStormStatePayload.STATE_DISSIPATE,

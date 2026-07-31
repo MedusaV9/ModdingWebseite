@@ -24,6 +24,7 @@ import dev.projecteclipse.eclipse.network.fx.S2CScreenFadePayload;
 import dev.projecteclipse.eclipse.registry.EclipseSounds;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.ParticleTypes;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -99,6 +100,23 @@ public final class FinaleSequence {
     /** Deep-violet drown-out色 (ARGB). */
     private static final int FADE_ARGB = 0xFF5A00A8;
     private static final double NEAR_RANGE = 128.0D;
+
+    // --- FX-WAVE-13 B7: UNLOCK key-photon (census §5 — the unlock read was sound-only) ---
+    /**
+     * Server tumbler-click stings, tick-matched to the asset's three baked glyph ring
+     * snaps (asset t=8/22/36 after the UNLOCK entry; {@link #BREACH_AT_TICK} stays free).
+     */
+    private static final int[] KEYGLYPH_CLICKS_AT = {8, 22, 36};
+    /** Rising click pitch — the lock walking its three tumblers home. */
+    private static final float[] KEYGLYPH_CLICK_PITCH = {0.6F, 0.75F, 0.9F};
+    /** Glyph-ring anchor sits this far under the keyhole (mid-door, ring radius 3.1). */
+    private static final double KEYGLYPH_ANCHOR_BELOW = 1.5D;
+    /**
+     * B7 cutscene-beat cue (client row: {@code veilfx.CutsceneBeatFxRows}); both sides
+     * derive the same {@code FxCues.cue("beat_finale_keyglyphs")} id — the CreditsSequence
+     * naming-contract precedent, so {@code FxCues.java} stays untouched.
+     */
+    private static final ResourceLocation CUE_BEAT_KEYGLYPHS = FxCues.cue("beat_finale_keyglyphs");
 
     private enum Stage { IDLE, FLIGHT, UNLOCK, FADE }
 
@@ -287,6 +305,12 @@ public final class FinaleSequence {
         PacketDistributor.sendToPlayersNear(overworld, null, keyhole.x, keyhole.y, keyhole.z,
                 192.0D, new S2CCaptionPayload("eclipse.caption.finale.unlock", 80,
                         S2CCaptionPayload.STYLE_SUBTITLE));
+        // B7 key-photon: the 60t glyph/indraw asset starts WITH the unlock hold — its
+        // three baked ring snaps land on the click stings below, its veil indraw ends
+        // right before the t=50 breach. a = gate yaw (the house yaw leg stands the
+        // rings up in the gate plane); Photon-only LAYER garnish over this baseline.
+        FxPayloads.sendFxEvent(overworld, CUE_BEAT_KEYGLYPHS,
+                keyhole.add(0.0D, -KEYGLYPH_ANCHOR_BELOW, 0.0D), gateYaw, 0.0F, NEAR_RANGE);
         stage = Stage.UNLOCK;
         ticks = 0;
         EclipseMod.LOGGER.info("Finale key seated: gate unlocking ({}t hold, breach at {}t)",
@@ -295,6 +319,15 @@ public final class FinaleSequence {
 
     private static void tickUnlock(MinecraftServer server, ServerLevel overworld) {
         ticks++;
+        // B7: the three tumbler clicks under the glyph ring snaps (photon-less clients
+        // still hear the lock walking home).
+        for (int i = 0; i < KEYGLYPH_CLICKS_AT.length; i++) {
+            if (ticks == KEYGLYPH_CLICKS_AT[i]) {
+                overworld.playSound(null, BlockPos.containing(keyhole),
+                        SoundEvents.LODESTONE_COMPASS_LOCK, SoundSource.AMBIENT,
+                        1.6F, KEYGLYPH_CLICK_PITCH[i]);
+            }
+        }
         if (ticks == BREACH_AT_TICK) {
             breach(server, overworld);
         }

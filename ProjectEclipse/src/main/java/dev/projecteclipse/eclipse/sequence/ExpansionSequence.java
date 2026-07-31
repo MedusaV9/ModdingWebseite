@@ -193,6 +193,32 @@ public final class ExpansionSequence implements SequenceReplayable {
     private static final int GROUND_TEAR_HANDOFF_TICKS = 6;
     /** unlock_ring flight fraction of the god-ray backlight moment (mirrors the bloom-fade t). */
     private static final double RING_HERO_T = 0.58D;
+
+    // --- FX-WAVE-13 B7: FLYOVER beats (census §5 — the flyover had no rim life) ---
+    /**
+     * B7 cutscene-beat cues (client rows: {@code veilfx.CutsceneBeatFxRows}). Both sides
+     * derive the same {@code FxCues.cue("beat_…")} ids — the CreditsSequence
+     * naming-contract precedent, so {@code FxCues.java} stays untouched.
+     */
+    private static final ResourceLocation CUE_BEAT_MONOLITH_PULSE = FxCues.cue("beat_monolith_pulse");
+    private static final ResourceLocation CUE_BEAT_FLYOVER_SHADOW = FxCues.cue("beat_flyover_shadow");
+    /** Shot-relative ticks of the four distant monolith flares along the flight. */
+    private static final int[] MONOLITH_PULSES_AT = {40, 90, 140, 190};
+    /**
+     * Flank angles (rad, alternating sides, widening) of the pulses around the front
+     * angle — {@code ExpansionBorderFx} raises its player-nearest rim slots around the
+     * same gather point, so the flares land where frontier monoliths actually stand.
+     */
+    private static final double[] MONOLITH_PULSE_ANGLES = {0.10D, -0.18D, 0.24D, -0.30D};
+    /** Shadow-run launch: this many ticks before the camera's lowest point (skim deck). */
+    private static final int SHADOW_SKIM_LEAD_TICKS = 30;
+    /** Second shadow band behind the first (the front keeps running past the skim). */
+    private static final int SHADOW_REFIRE_TICKS = 70;
+    /**
+     * The refire launches this much further out — the front has moved on by then, and a
+     * fresh anchor also sidesteps Photon's same-anchor dedup while band one still runs.
+     */
+    private static final int SHADOW_REFIRE_ADVANCE_BLOCKS = 22;
     /** FX-only replay: representative delivery-flight length between the trigger and the slam. */
     private static final int REPLAY_FLIGHT_TICKS = 45;
     /** FX-only replay: landing micro-shake offsets after the trigger moment (live: per piece). */
@@ -492,6 +518,12 @@ public final class ExpansionSequence implements SequenceReplayable {
             // The matching return leg therefore stays fade-free too.
             CutsceneService.play(PATH_FLYOVER, watchers, null, () -> beginGrowth(run),
                     CutsceneService.PlayOptions.globalNoFade(FLYOVER_VIEW_DISTANCE_CHUNKS));
+            // B7 flyover beats: distant monolith flares on the rim flanks + the growth
+            // front's shadow band racing outward under the skim camera. Dimension
+            // broadcast (every watcher is in this level during the gather).
+            scheduleFlyoverBeats(server, run.level, run.profile, run.fromStage,
+                    run.frontAngle, resolveGrowthFront(server, watchers),
+                    flyover.durationTicks(), () -> run.ended);
             return;
         }
 
@@ -527,6 +559,54 @@ public final class ExpansionSequence implements SequenceReplayable {
                     PATH_FLYOVER, PATH_FALLBACK, watchers.size());
         }
         schedule(server, fallbackTicks, () -> beginGrowth(run));
+    }
+
+    /**
+     * FX-WAVE-13 B7 — the two FLYOVER beats, scheduled shot-relative. Distant monolith
+     * flares ({@code beat_monolith_pulse}) fire on the rim flanks at the frontier radius
+     * (where {@link ExpansionBorderFx#armFrontier} raises the real monoliths), and the
+     * growth front's shadow band ({@code beat_flyover_shadow}, launched just before the
+     * camera's lowest point, plus one advanced refire) races ~44 blocks radially OUTWARD
+     * from the front anchor — {@code a} carries the outward yaw for the client row's yaw
+     * leg. Photon-only LAYER garnish: photon-less clients keep the existing baseline.
+     */
+    private static void scheduleFlyoverBeats(MinecraftServer server, ServerLevel level,
+            DiscProfile profile, int fromStage, double frontAngle, Vec3 frontAnchor,
+            int shotTicks, java.util.function.BooleanSupplier cancelled) {
+        int rimRadius = StageRadii.radius(profile, fromStage);
+        for (int i = 0; i < MONOLITH_PULSES_AT.length; i++) {
+            int at = MONOLITH_PULSES_AT[i];
+            if (at >= shotTicks) {
+                continue; // short shot: keep only the pulses the camera can still see
+            }
+            double angle = frontAngle + MONOLITH_PULSE_ANGLES[i];
+            schedule(server, at, () -> {
+                if (!cancelled.getAsBoolean()) {
+                    Vec3 monolith = edgeAnchorFor(level, angleToPos(angle), rimRadius);
+                    FxPayloads.sendFxEvent(level, CUE_BEAT_MONOLITH_PULSE, monolith,
+                            0.0F, 0.0F, -1.0D);
+                }
+            });
+        }
+        // Outward-facing yaw at the front angle (the gatherNetherPlayers derivation).
+        float outwardYaw = (float) Math.toDegrees(
+                Math.atan2(-Math.cos(frontAngle), Math.sin(frontAngle)));
+        int skimTick = Math.max(10, (int) (shotTicks * FLYOVER_SKIM_T) - SHADOW_SKIM_LEAD_TICKS);
+        int frontRadius = (int) Math.round(Math.hypot(frontAnchor.x, frontAnchor.z));
+        for (int i = 0; i < 2; i++) {
+            int shadowTick = skimTick + i * SHADOW_REFIRE_TICKS;
+            int launchRadius = frontRadius + i * SHADOW_REFIRE_ADVANCE_BLOCKS;
+            if (shadowTick >= shotTicks) {
+                continue;
+            }
+            schedule(server, shadowTick, () -> {
+                if (!cancelled.getAsBoolean()) {
+                    Vec3 anchor = edgeAnchorFor(level, angleToPos(frontAngle), launchRadius);
+                    FxPayloads.sendFxEvent(level, CUE_BEAT_FLYOVER_SHADOW, anchor,
+                            outwardYaw, 0.0F, -1.0D);
+                }
+            });
+        }
     }
 
     /** GROWTH: control returns; the sweep animates on; dust wall rides the wave client-side. */
@@ -1324,6 +1404,19 @@ public final class ExpansionSequence implements SequenceReplayable {
                 // LOCAL play (replay may never teleport) — the camera still flies the front.
                 CutsceneService.play(PATH_FLYOVER, watchers, resolveGrowthFront(server, watchers),
                         null, CutsceneService.PlayOptions.LOCAL);
+                // B7 replay parity: the same monolith-/shadow-beats around the same front
+                // anchor (resolveGrowthFront falls back to stage + watcher angle when no
+                // run is live — the same values the beat scheduler needs).
+                Run liveRun = RUNS.get(DiscProfile.OVERWORLD);
+                DiscProfile profile = liveRun != null ? liveRun.profile : DiscProfile.OVERWORLD;
+                ServerLevel level = liveRun != null ? liveRun.level : server.overworld();
+                int fromStage = liveRun != null ? liveRun.fromStage
+                        : WorldStageService.stage(server, profile);
+                double frontAngle = liveRun != null ? liveRun.frontAngle : averageAngle(watchers);
+                CutscenePath flyover = CutscenePaths.get(PATH_FLYOVER);
+                scheduleFlyoverBeats(server, level, profile, fromStage, frontAngle,
+                        resolveGrowthFront(server, watchers),
+                        flyover != null ? flyover.durationTicks() : 220, () -> false);
                 return true;
             }
             case "GROWTH" -> {

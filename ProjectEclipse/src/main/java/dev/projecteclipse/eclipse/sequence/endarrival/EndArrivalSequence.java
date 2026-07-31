@@ -11,6 +11,7 @@ import dev.projecteclipse.eclipse.cutscene.CutscenePath;
 import dev.projecteclipse.eclipse.cutscene.CutscenePaths;
 import dev.projecteclipse.eclipse.cutscene.CutsceneService;
 import dev.projecteclipse.eclipse.network.S2CShakePayload;
+import dev.projecteclipse.eclipse.network.fx.FxCues;
 import dev.projecteclipse.eclipse.network.fx.FxPayloads;
 import dev.projecteclipse.eclipse.network.fx.S2CCaptionPayload;
 import dev.projecteclipse.eclipse.registry.EclipseSounds;
@@ -18,6 +19,7 @@ import dev.projecteclipse.eclipse.worldgen.end.EndConfig;
 import dev.projecteclipse.eclipse.worldgen.end.EndDiscService;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.ParticleTypes;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -112,6 +114,33 @@ public final class EndArrivalSequence {
     /** Charge sub-beats: rings at the boundary, then the pillar, then the maw tears open. */
     private static final int PILLAR_AT = 200;
     private static final int MAW_AT = 240;
+
+    // --- FX-WAVE-13 B7: CHARGE sky-crack countdown (census §5 — the charge had no clock) ---
+    /**
+     * Countdown ladder: intervals 40→34→28→22→12 accelerate toward the SPILL. The first
+     * rung sits behind {@link #MAW_AT} so the maw tear keeps its hero moment, the last
+     * one lands 4 ticks before {@link #CHARGE_END}.
+     */
+    private static final int[] CRACK_LADDER_AT = {260, 300, 334, 362, 384, 396};
+    /** Golden angle (rad) — the crack spiral never stacks two rungs on one bearing. */
+    private static final double CRACK_GOLDEN_ANGLE = 2.399963229728653D;
+    /** The spiral condenses from the first radius to the last (closing on the rift). */
+    private static final double CRACK_RADIUS_FIRST = 46.0D;
+    private static final double CRACK_RADIUS_LAST = 16.0D;
+    /** Crack anchors hang this far under the rift point, jittered ±{@link #CRACK_Y_JITTER}. */
+    private static final double CRACK_Y_BELOW_RIFT = 8.0D;
+    private static final double CRACK_Y_JITTER = 6.0D;
+    /** Crack sting pitch ramp — the audible half of the countdown. */
+    private static final float CRACK_PITCH_FIRST = 0.6F;
+    private static final float CRACK_PITCH_LAST = 1.1F;
+    /**
+     * B7 cutscene-beat cue (client row: {@code veilfx.CutsceneBeatFxRows}, which re-cues
+     * the existing {@code eclipse:end_crack_bleed} asset with a multi-instance leg —
+     * deliberately NOT {@code FxCues.CUE_END_CRACK}, whose row suppresses the structure
+     * glow via {@code RiftFx}). Both sides derive the same {@code FxCues.cue} id — the
+     * CreditsSequence naming-contract precedent, so {@code FxCues.java} stays untouched.
+     */
+    private static final ResourceLocation CUE_BEAT_SKY_CRACK = FxCues.cue("beat_endarrival_crack");
     /** Finale sub-beats. */
     private static final int ROAR_AT = SPILL_END + 50;
     private static final int CAPTION_AT = SPILL_END + 70;
@@ -304,6 +333,8 @@ public final class EndArrivalSequence {
         private long armDeadline = Long.MAX_VALUE;
         @Nullable
         private Phase announced;
+        /** B7 sky-crack spiral bearing of rung 0 — rolled on the first rung (NaN until). */
+        private double crackSpiralPhase = Double.NaN;
 
         private enum Phase { OMEN, CHARGE, SPILL, FINALE }
 
@@ -554,6 +585,13 @@ public final class EndArrivalSequence {
                 caption("eclipse.caption.end_arrival.rift", 90,
                         S2CCaptionPayload.STYLE_SUBTITLE);
             }
+            // B7: the sky-crack countdown — bleed shafts igniting on the accelerating
+            // ladder, spiralling in on the rift point.
+            for (int i = 0; i < CRACK_LADDER_AT.length; i++) {
+                if (this.tick == CRACK_LADDER_AT[i]) {
+                    fireSkyCrack(i);
+                }
+            }
             if (this.tick % BASELINE_PARTICLE_INTERVAL == 0) {
                 // END_ROD sparks racing UP the (future/live) pillar column.
                 if (this.tick >= PILLAR_AT) {
@@ -712,6 +750,29 @@ public final class EndArrivalSequence {
         }
 
         // --- send helpers ---
+
+        /**
+         * FX-WAVE-13 B7 — one rung of the CHARGE sky-crack countdown: an
+         * {@code end_crack_bleed} instance on a golden-angle spiral that condenses from
+         * {@value #CRACK_RADIUS_FIRST} to {@value #CRACK_RADIUS_LAST} blocks around the
+         * rift point, plus the shatter-crack sting on a rising pitch. Photon-only LAYER
+         * garnish — photon-less clients still get the accelerating sting ladder.
+         */
+        private void fireSkyCrack(int rung) {
+            if (Double.isNaN(this.crackSpiralPhase)) {
+                this.crackSpiralPhase = this.random.nextDouble() * Math.PI * 2.0D;
+            }
+            float t = rung / (float) (CRACK_LADDER_AT.length - 1);
+            double angle = this.crackSpiralPhase + rung * CRACK_GOLDEN_ANGLE;
+            double radius = Mth.lerp(t, CRACK_RADIUS_FIRST, CRACK_RADIUS_LAST);
+            double y = this.rift.y - CRACK_Y_BELOW_RIFT
+                    + (this.random.nextDouble() * 2.0D - 1.0D) * CRACK_Y_JITTER;
+            Vec3 at = new Vec3(this.rift.x + Math.cos(angle) * radius, y,
+                    this.rift.z + Math.sin(angle) * radius);
+            cue(CUE_BEAT_SKY_CRACK, at, 0.0F);
+            sound(at, EclipseSounds.EVENT_END_SHATTER_CRACK.get(), SoundSource.HOSTILE,
+                    2.4F, Mth.lerp(t, CRACK_PITCH_FIRST, CRACK_PITCH_LAST));
+        }
 
         private void cue(net.minecraft.resources.ResourceLocation id, Vec3 pos, float a) {
             FxPayloads.sendFxEvent(this.overworld, id, pos, a, 0.0F, CUE_RANGE_ALL);

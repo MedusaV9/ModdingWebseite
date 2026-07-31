@@ -3,6 +3,7 @@ package dev.projecteclipse.eclipse.sequence;
 import javax.annotation.Nullable;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.network.fx.FxCues;
 import dev.projecteclipse.eclipse.network.fx.FxPayloads;
 import dev.projecteclipse.eclipse.network.nether.NetherOpenPayloads;
 import dev.projecteclipse.eclipse.network.nether.S2CNetherOpenPayload;
@@ -12,6 +13,7 @@ import dev.projecteclipse.eclipse.worldgen.BreachGeometry;
 import dev.projecteclipse.eclipse.worldgen.nether.BreachBuilder;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.ParticleTypes;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvent;
@@ -19,6 +21,7 @@ import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
+import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -97,6 +100,18 @@ public final class NetherOpeningSequence {
     private static final int QUARRY_PROBE_INTERVAL = 8;
     /** Period of the quarry swell (ticks) — sounds arrive in waves, not evenly. */
     private static final double QUARRY_SWELL_PERIOD = 70.0D;
+
+    // --- FX-WAVE-13 B7: AFTERMATH "first ember tear" (census §5 — the hand-over was mute) ---
+    /**
+     * B7 cutscene-beat cue (client row: {@code veilfx.CutsceneBeatFxRows}); both sides
+     * derive the same {@code FxCues.cue("beat_nether_ember_tear")} id — the CreditsSequence
+     * naming-contract precedent, so {@code FxCues.java} stays untouched.
+     */
+    private static final ResourceLocation CUE_BEAT_EMBER_TEAR = FxCues.cue("beat_nether_ember_tear");
+    /** Aftershock companion beat: asset-t 30 after the AFTERMATH entry (abs t=910). */
+    private static final int EMBER_AFTERSHOCK_DELAY_TICKS = 30;
+    /** Aftershock shake strength — a clear echo, well under the rupture tail's peak. */
+    private static final float EMBER_AFTERSHOCK_SHAKE = 0.45F;
 
     /** The one live sequence (one server, one opening), or {@code null}. Server thread only. */
     @Nullable
@@ -289,6 +304,7 @@ public final class NetherOpeningSequence {
                     NetherUpheavalFx.release();
                     sound(this.center, SoundEvents.RESPAWN_ANCHOR_DEPLETE.value(),
                             SoundSource.AMBIENT, 1.4F, 0.4F);
+                    fireEmberTear();
                 }
             }
         }
@@ -385,6 +401,13 @@ public final class NetherOpeningSequence {
         }
 
         private void tickAftermath() {
+            if (this.tick == RUPTURE_END + EMBER_AFTERSHOCK_DELAY_TICKS) {
+                // B7: the server half of the ember tear's baked t=30 aftershock ring — one
+                // echo shake + the anchor-deplete sting, photon-less clients included.
+                broadcast(Phase.RUMBLE, EMBER_AFTERSHOCK_SHAKE);
+                sound(this.center, SoundEvents.RESPAWN_ANCHOR_DEPLETE.value(),
+                        SoundSource.AMBIENT, 1.2F, 0.34F);
+            }
             if (this.tick % 20 != 0) {
                 return;
             }
@@ -397,6 +420,26 @@ public final class NetherOpeningSequence {
                         this.center.getZ() + 0.5D + Math.sin(angle) * dist,
                         2, 0.8D, 0.5D, 0.8D, 0.03D);
             }
+        }
+
+        /**
+         * FX-WAVE-13 B7 — the "first ember tear": ONE lava crack creeping away from the
+         * crater rim (Photon-only LAYER garnish over the smoulder baseline; fired on the
+         * AFTERMATH entry, abs t={@value #RUPTURE_END}). The crawl direction is rolled
+         * here and carried as the payload's {@code a} yaw; the asset crawls its local −Z,
+         * so the client row's yaw leg (180° − a) points it away from the crater. Runs in
+         * live shows AND FX replays — both share this phase machine.
+         */
+        private void fireEmberTear() {
+            double angle = this.random.nextDouble() * Math.PI * 2.0D;
+            double rimX = this.center.getX() + 0.5D + Math.cos(angle) * this.radius;
+            double rimZ = this.center.getZ() + 0.5D + Math.sin(angle) * this.radius;
+            int surfaceY = this.overworld.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
+                    (int) Math.round(rimX), (int) Math.round(rimZ));
+            float outwardYaw = (float) Math.toDegrees(
+                    Math.atan2(-Math.cos(angle), Math.sin(angle)));
+            FxPayloads.sendFxEvent(this.overworld, CUE_BEAT_EMBER_TEAR,
+                    new Vec3(rimX, surfaceY, rimZ), outwardYaw, 0.0F, -1.0D);
         }
 
         /** Shake amplitude for this tick before the client's own distance falloff. */
