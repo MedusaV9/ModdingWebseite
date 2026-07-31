@@ -1,11 +1,17 @@
 #!/usr/bin/env python3
-"""Soul Wisp texture driver (FERRYMAN2 F-045b/F-046b).
+"""Soul Wisp texture driver (FERRYMAN2 F-045b/F-046b, MA5 shell pass).
 
 Design sheet: the violet gate ghost — a small vex-like shade that pours out of the
 opened portal and answers the Ferryman's summon. Hooded shroud in translucent violet
 (alpha ~150, renderer runs entityTranslucent), a ragged tail fading to near-nothing,
-thin shroud arms, and the emissive set: the inner soul core and the eye slit. Palette:
-shroud #4A2E73 / #2E1C4A (deep), rim #9C7BE0, core #E8DAFF, eyes #D0B3FF.
+thin shroud arms, and the MA5 addition: two SHELL fragments (`shell_l`/`shell_r`) that
+hug the shroud in life and tumble apart in the 3-bone death decay — painted as torn
+cloth edges so the break reads. Emissive set: the inner soul core and the eye slit.
+Palette: shroud #4A2E73 / #2E1C4A (deep), rim #9C7BE0, core #E8DAFF, eyes #D0B3FF.
+
+Canvas note (MA5): 32² → 64². The census' 32² sheet could no longer pack the shell
+fragments; 64² is the house standard and the painter writes albedo + glowmask in ONE
+run, so `AutoGlowingTexture`'s canvas-match rule can never drift.
 
 Run from the ProjectEclipse root (deterministic — reruns are byte-identical):
     python3 scripts/geckolib_gen/mobs/soul_wisp.py
@@ -42,6 +48,19 @@ def shroud(px):
     return with_alpha(base, 150)
 
 
+def shell(px):
+    """Shroud shell fragment: the same cloth, but with a lit break edge along the
+    outer seam and a frayed hem — it has to read as a PIECE once it drifts off."""
+    base = mix(SHROUD, SHROUD_DEEP, px.noise(15) * 0.6)
+    if px.fy >= px.fh - 2 and px.noise(17) > 0.55:
+        return None  # frayed hem holes
+    if px.fx in (0, px.fw - 1) or px.fy == 0:
+        return with_alpha(mix(base, RIM, 0.7), 190)  # lit break edge
+    if px.noise(19) > 0.9:
+        return with_alpha(RIM, 165)
+    return with_alpha(base, 160)
+
+
 def tail(px):
     """Ragged tail: alpha bleeds out toward the tip (fy grows downward)."""
     fade = 1.0 - (px.fy / max(1, px.fh - 1)) * 0.8
@@ -68,13 +87,26 @@ def eyes(px):
     return with_alpha(EYES, 255)
 
 
+def shell_glow(px):
+    """Only the shoulder break seam (top rows) and a few weave flecks shine — the 1px
+    shell faces are ALL edge pixels, so an edge rule here would light the whole
+    fragment fullbright and kill the translucent read."""
+    if px.fy <= 1:
+        return with_alpha(RIM, 110)
+    if px.noise(21) > 0.93:
+        return with_alpha(RIM, 80)  # core light through the torn weave
+    return None
+
+
 def main():
     p = GeoPainter(GEO, seed=SEED)
     p.set_material("body", shroud)
+    p.set_material("shell_*", shell)
     p.set_material("tail", tail)
     p.set_material("arm_*", arm)
     p.set_material("glow_core", core)
     p.set_material("glow_eyes", eyes)
+    p.set_glow_painter("shell_*", shell_glow)
     p.paint(OUT)
 
 

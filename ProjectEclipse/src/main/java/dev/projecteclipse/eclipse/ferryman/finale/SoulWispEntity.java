@@ -35,6 +35,13 @@ import software.bernie.geckolib.animation.AnimationController;
  *       through deck/rails), bites for {@value #CONTACT_DAMAGE} on contact with a
  *       {@value #BITE_COOLDOWN_TICKS}t per-wisp cooldown; without a target it swirls
  *       around its spawn anchor.</li>
+ *   <li><b>Panic scatter</b> (MA5): a fighter BRUSHING through the swarm at speed
+ *       ({@value #PANIC_RADIUS} blocks, &gt; {@value #PANIC_PLAYER_SPEED} b/t) makes
+ *       each touched wisp burst sideways and play {@code panic_scatter} — the swarm
+ *       parts around a running player instead of ignoring him. Per-wisp cooldown
+ *       {@value #PANIC_COOLDOWN_TICKS}t, steering suspended for
+ *       {@value #PANIC_SCATTER_TICKS}t so the burst reads; the bite loop is untouched.
+ *       Other systems can fire the same beat via {@link #panicScatter(Vec3)}.</li>
  * </ul>
  */
 public class SoulWispEntity extends EclipseGeoMonster {
@@ -47,10 +54,25 @@ public class SoulWispEntity extends EclipseGeoMonster {
     private static final int BITE_COOLDOWN_TICKS = 30;
     private static final double BITE_RANGE = 1.4D;
 
+    /** MA5 panic gate: a player must be this close AND actually moving through. */
+    private static final double PANIC_RADIUS = 1.7D;
+    private static final double PANIC_PLAYER_SPEED = 0.12D;
+    private static final int PANIC_COOLDOWN_TICKS = 40;
+    /** Steering-free window after a scatter (the 0.9 s sheet's readable part). */
+    private static final int PANIC_SCATTER_TICKS = 12;
+    private static final double PANIC_PUSH = 0.42D;
+    /** Scripted 3-bone decay length (sheet 1.2 s; vanilla would cut it at 20t). */
+    public static final int DEATH_DURATION_TICKS = 24;
+
+    /** Sheet one-shots beyond the frozen attack/death set (see soul_wisp.animation.json). */
+    public static final String ANIM_PANIC_SCATTER = "panic_scatter";
+
     private static final String TAG_LIFESPAN = "WispLifespan";
 
     private int lifespan = DEFAULT_LIFESPAN_TICKS;
     private int biteCooldown;
+    private int panicCooldown;
+    private int scatterTicks;
     @Nullable
     private Vec3 anchor;
 
@@ -71,6 +93,8 @@ public class SoulWispEntity extends EclipseGeoMonster {
         super.registerActionTriggers(action);
         action.triggerableAnim(EclipseGeoAnimations.ANIM_ATTACK,
                 EclipseGeoAnimations.once(geoId(), EclipseGeoAnimations.ANIM_ATTACK));
+        action.triggerableAnim(ANIM_PANIC_SCATTER,
+                EclipseGeoAnimations.once(geoId(), ANIM_PANIC_SCATTER));
     }
 
     /** Caps the wisp's remaining life (clamped ≥ 1; spawners tune breach vs. summon). */
@@ -104,6 +128,20 @@ public class SoulWispEntity extends EclipseGeoMonster {
         }
         if (this.biteCooldown > 0) {
             this.biteCooldown--;
+        }
+        if (this.panicCooldown > 0) {
+            this.panicCooldown--;
+        }
+        if (this.scatterTicks > 0) {
+            this.scatterTicks--;
+            return; // the burst owns the velocity while it reads
+        }
+        if (this.panicCooldown <= 0) {
+            ServerPlayer runner = brushingRunner(serverLevel);
+            if (runner != null) {
+                panicScatter(runner.position());
+                return;
+            }
         }
         ServerPlayer target = nearestFighter(serverLevel);
         if (target != null) {
@@ -139,6 +177,61 @@ public class SoulWispEntity extends EclipseGeoMonster {
                 net.minecraft.sounds.SoundSource.HOSTILE, 0.7F, 0.6F);
         level.sendParticles(ParticleTypes.SCULK_SOUL, target.getX(),
                 target.getY() + 1.0D, target.getZ(), 5, 0.2D, 0.3D, 0.2D, 0.02D);
+    }
+
+    /**
+     * The MA5 scatter beat: the wisp bursts away from {@code from} (sideways + up, so
+     * the swarm PARTS instead of being punted straight back) and plays
+     * {@code panic_scatter}. Server-side; safe to call from any system that wants the
+     * swarm to react (breach gush, cutscene beats, a boss stomp).
+     */
+    public void panicScatter(Vec3 from) {
+        if (this.level().isClientSide || !this.isAlive()) {
+            return;
+        }
+        Vec3 away = this.position().subtract(from);
+        away = away.lengthSqr() < 1.0E-4D
+                ? new Vec3(this.random.nextDouble() - 0.5D, 0.0D, this.random.nextDouble() - 0.5D)
+                : new Vec3(away.x, 0.0D, away.z);
+        if (away.lengthSqr() < 1.0E-4D) {
+            away = new Vec3(1.0D, 0.0D, 0.0D);
+        }
+        // Sideways bias keyed off the id: neighbours fan out instead of stacking.
+        Vec3 side = new Vec3(-away.z, 0.0D, away.x).normalize()
+                .scale((this.getId() % 2 == 0 ? 1.0D : -1.0D) * 0.6D);
+        this.setDeltaMovement(away.normalize().add(side).normalize().scale(PANIC_PUSH)
+                .add(0.0D, 0.16D + this.random.nextDouble() * 0.12D, 0.0D));
+        this.hurtMarked = true;
+        this.panicCooldown = PANIC_COOLDOWN_TICKS;
+        this.scatterTicks = PANIC_SCATTER_TICKS;
+        triggerAction(ANIM_PANIC_SCATTER);
+        if (this.level() instanceof ServerLevel serverLevel) {
+            serverLevel.playSound(null, this.blockPosition(), SoundEvents.SOUL_ESCAPE.value(),
+                    net.minecraft.sounds.SoundSource.HOSTILE, 0.5F, 1.4F);
+            serverLevel.sendParticles(ParticleTypes.SOUL, this.getX(), this.getY() + 0.4D,
+                    this.getZ(), 3, 0.15D, 0.2D, 0.15D, 0.02D);
+        }
+    }
+
+    /** A living fighter moving THROUGH this wisp's hover volume (the scatter trigger). */
+    @Nullable
+    private ServerPlayer brushingRunner(ServerLevel level) {
+        for (ServerPlayer player : level.players()) {
+            if (!player.isAlive() || player.isSpectator() || BanService.isBanned(player)) {
+                continue;
+            }
+            if (player.distanceToSqr(this) > PANIC_RADIUS * PANIC_RADIUS) {
+                continue;
+            }
+            // getKnownMovement, NOT position()-xo: the move-packet handler calls
+            // absMoveTo, which rewrites a player's xo/yo/zo to the new position, so the
+            // usual previous-tick delta is always zero for a ServerPlayer.
+            Vec3 step = player.getKnownMovement();
+            if (step.horizontalDistanceSqr() > PANIC_PLAYER_SPEED * PANIC_PLAYER_SPEED) {
+                return player;
+            }
+        }
+        return null;
     }
 
     @Nullable
@@ -243,6 +336,23 @@ public class SoulWispEntity extends EclipseGeoMonster {
         if (this.level() instanceof ServerLevel serverLevel) {
             serverLevel.sendParticles(ParticleTypes.SOUL, this.getX(), this.getY() + 0.5D,
                     this.getZ(), 10, 0.2D, 0.3D, 0.2D, 0.03D);
+        }
+    }
+
+    /**
+     * Holds the body for the full {@value #DEATH_DURATION_TICKS}t of the MA5 3-bone
+     * decay sheet (core flare + both shroud shells drifting apart) — vanilla's 20t cut
+     * removed the wisp while the fragments were still travelling — then the standard
+     * POOF + KILLED removal (P6 death convention; the renderer runs
+     * {@code withUprightDeath()}).
+     */
+    @Override
+    protected void tickDeath() {
+        this.deathTime++;
+        if (this.deathTime >= DEATH_DURATION_TICKS && !this.level().isClientSide()
+                && !this.isRemoved()) {
+            this.level().broadcastEntityEvent(this, (byte) 60);
+            this.remove(Entity.RemovalReason.KILLED);
         }
     }
 
