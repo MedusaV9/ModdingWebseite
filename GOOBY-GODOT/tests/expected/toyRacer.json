@@ -1,0 +1,2012 @@
+{
+  "modes": {
+    "easy": [
+      {
+        "seed": 1,
+        "score": 170,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 442.8041403825746,
+        "time": 152.0666666666606
+      },
+      {
+        "seed": 2,
+        "score": 170,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 444.1177799339045,
+        "time": 149.7333333333274
+      },
+      {
+        "seed": 3,
+        "score": 158,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 323.14181137771567,
+        "time": 146.79999999999424
+      },
+      {
+        "seed": 4,
+        "score": 170,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 444.0751313102827,
+        "time": 149.4999999999941
+      },
+      {
+        "seed": 5,
+        "score": 158,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 323.1438892652374,
+        "time": 144.8333333333277
+      },
+      {
+        "seed": 6,
+        "score": 158,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 323.2552621836743,
+        "time": 145.266666666661
+      },
+      {
+        "seed": 7,
+        "score": 158,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 323.2350887093923,
+        "time": 145.266666666661
+      },
+      {
+        "seed": 8,
+        "score": 170,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 443.0273857712429,
+        "time": 149.89999999999407
+      },
+      {
+        "seed": 9,
+        "score": 158,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 322.19670692953093,
+        "time": 146.59999999999425
+      },
+      {
+        "seed": 10,
+        "score": 158,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 323.16830616229754,
+        "time": 144.99999999999434
+      },
+      {
+        "seed": 11,
+        "score": 158,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 321.8158155811791,
+        "time": 144.86666666666102
+      },
+      {
+        "seed": 12,
+        "score": 158,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 321.7860044171137,
+        "time": 148.96666666666079
+      },
+      {
+        "seed": 13,
+        "score": 170,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 444.1259396422961,
+        "time": 149.4999999999941
+      },
+      {
+        "seed": 14,
+        "score": 158,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 322.49528707700273,
+        "time": 143.8999999999944
+      },
+      {
+        "seed": 15,
+        "score": 170,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 443.063785577331,
+        "time": 149.8333333333274
+      },
+      {
+        "seed": 16,
+        "score": 158,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 322.19503159315025,
+        "time": 144.66666666666103
+      },
+      {
+        "seed": 17,
+        "score": 170,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 443.98227393022484,
+        "time": 148.99999999999412
+      },
+      {
+        "seed": 18,
+        "score": 158,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 322.18219566827423,
+        "time": 145.73333333332764
+      },
+      {
+        "seed": 19,
+        "score": 158,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 322.6394023791085,
+        "time": 144.1999999999944
+      },
+      {
+        "seed": 20,
+        "score": 158,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 323.14145718742935,
+        "time": 143.9999999999944
+      },
+      {
+        "seed": 21,
+        "score": 170,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 443.9653818428479,
+        "time": 149.16666666666077
+      },
+      {
+        "seed": 22,
+        "score": 158,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 322.2983132773314,
+        "time": 145.8999999999943
+      },
+      {
+        "seed": 23,
+        "score": 158,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 322.3078408433426,
+        "time": 144.99999999999434
+      },
+      {
+        "seed": 24,
+        "score": 158,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 323.19879720390594,
+        "time": 144.1999999999944
+      },
+      {
+        "seed": 25,
+        "score": 162,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 5,
+        "driftMeters": 321.2798029271229,
+        "time": 148.43333333332748
+      },
+      {
+        "seed": 26,
+        "score": 170,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 444.12358211830923,
+        "time": 148.5666666666608
+      },
+      {
+        "seed": 27,
+        "score": 170,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 444.0592348435406,
+        "time": 149.46666666666076
+      },
+      {
+        "seed": 28,
+        "score": 170,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 444.23537217678495,
+        "time": 149.99999999999406
+      },
+      {
+        "seed": 29,
+        "score": 158,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 323.1703983260775,
+        "time": 145.19999999999433
+      },
+      {
+        "seed": 30,
+        "score": 158,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 321.55484244985666,
+        "time": 145.13333333332767
+      },
+      {
+        "seed": 31,
+        "score": 170,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 442.16893649756355,
+        "time": 151.099999999994
+      },
+      {
+        "seed": 32,
+        "score": 170,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 443.1930892222918,
+        "time": 150.5666666666607
+      },
+      {
+        "seed": 33,
+        "score": 158,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 322.37569464610254,
+        "time": 146.1333333333276
+      },
+      {
+        "seed": 34,
+        "score": 170,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 443.9821818151018,
+        "time": 149.16666666666077
+      },
+      {
+        "seed": 35,
+        "score": 170,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 442.01516773756174,
+        "time": 151.23333333332732
+      },
+      {
+        "seed": 36,
+        "score": 170,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 443.0541262762576,
+        "time": 150.59999999999403
+      },
+      {
+        "seed": 37,
+        "score": 170,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 443.9685728808563,
+        "time": 149.0999999999941
+      },
+      {
+        "seed": 38,
+        "score": 158,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 323.2114938197828,
+        "time": 145.23333333332766
+      },
+      {
+        "seed": 39,
+        "score": 158,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 323.0995146302728,
+        "time": 145.53333333332765
+      },
+      {
+        "seed": 40,
+        "score": 158,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 322.4996035751023,
+        "time": 143.9999999999944
+      },
+      {
+        "seed": 41,
+        "score": 158,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 321.8814412310889,
+        "time": 144.93333333332768
+      },
+      {
+        "seed": 42,
+        "score": 170,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 444.0508903872722,
+        "time": 148.99999999999412
+      },
+      {
+        "seed": 43,
+        "score": 158,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 323.12140942525275,
+        "time": 144.6333333333277
+      },
+      {
+        "seed": 44,
+        "score": 158,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 323.21525578857177,
+        "time": 143.4666666666611
+      },
+      {
+        "seed": 45,
+        "score": 158,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 322.4920750311037,
+        "time": 146.03333333332762
+      },
+      {
+        "seed": 46,
+        "score": 158,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 322.545365438845,
+        "time": 144.79999999999436
+      },
+      {
+        "seed": 47,
+        "score": 158,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 322.5529888937558,
+        "time": 144.79999999999436
+      },
+      {
+        "seed": 48,
+        "score": 160,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 4,
+        "driftMeters": 321.274190091257,
+        "time": 147.09999999999422
+      },
+      {
+        "seed": 49,
+        "score": 158,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 323.20633515181936,
+        "time": 145.86666666666096
+      },
+      {
+        "seed": 50,
+        "score": 170,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 444.0145612413651,
+        "time": 148.43333333332748
+      }
+    ],
+    "normal": [
+      {
+        "seed": 1,
+        "score": 170,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 444.10189903971286,
+        "time": 126.86666666666203
+      },
+      {
+        "seed": 2,
+        "score": 170,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 441.6355636181539,
+        "time": 128.99999999999525
+      },
+      {
+        "seed": 3,
+        "score": 158,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 323.145896287939,
+        "time": 122.29999999999562
+      },
+      {
+        "seed": 4,
+        "score": 170,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 444.04413907560553,
+        "time": 126.49999999999538
+      },
+      {
+        "seed": 5,
+        "score": 158,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 323.0057297694796,
+        "time": 122.63333333332893
+      },
+      {
+        "seed": 6,
+        "score": 158,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 323.25343603177384,
+        "time": 122.96666666666225
+      },
+      {
+        "seed": 7,
+        "score": 158,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 322.99915753901513,
+        "time": 122.89999999999559
+      },
+      {
+        "seed": 8,
+        "score": 170,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 442.5237291125243,
+        "time": 127.66666666666198
+      },
+      {
+        "seed": 9,
+        "score": 158,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 322.28310351543445,
+        "time": 123.43333333332889
+      },
+      {
+        "seed": 10,
+        "score": 158,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 323.322795485704,
+        "time": 123.29999999999556
+      },
+      {
+        "seed": 11,
+        "score": 160,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 4,
+        "driftMeters": 322.4713340222188,
+        "time": 124.16666666666218
+      },
+      {
+        "seed": 12,
+        "score": 158,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 321.3903498620156,
+        "time": 126.79999999999536
+      },
+      {
+        "seed": 13,
+        "score": 170,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 443.9356610270185,
+        "time": 126.53333333332871
+      },
+      {
+        "seed": 14,
+        "score": 158,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 322.47181692125906,
+        "time": 121.86666666666231
+      },
+      {
+        "seed": 15,
+        "score": 170,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 444.15610588766015,
+        "time": 126.1999999999954
+      },
+      {
+        "seed": 16,
+        "score": 158,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 323.08519588366573,
+        "time": 124.86666666666214
+      },
+      {
+        "seed": 17,
+        "score": 170,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 443.93117668001327,
+        "time": 126.43333333332872
+      },
+      {
+        "seed": 18,
+        "score": 158,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 323.0431237888529,
+        "time": 122.56666666666227
+      },
+      {
+        "seed": 19,
+        "score": 158,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 321.8385206154926,
+        "time": 123.93333333332886
+      },
+      {
+        "seed": 20,
+        "score": 158,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 323.11450630661204,
+        "time": 122.89999999999559
+      },
+      {
+        "seed": 21,
+        "score": 170,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 440.8773969725449,
+        "time": 128.49999999999528
+      },
+      {
+        "seed": 22,
+        "score": 158,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 323.1481129443466,
+        "time": 123.83333333332887
+      },
+      {
+        "seed": 23,
+        "score": 158,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 323.174441961671,
+        "time": 123.3333333333289
+      },
+      {
+        "seed": 24,
+        "score": 158,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 321.95107391658564,
+        "time": 123.43333333332889
+      },
+      {
+        "seed": 25,
+        "score": 158,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 321.38978506315163,
+        "time": 125.49999999999544
+      },
+      {
+        "seed": 26,
+        "score": 170,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 443.97754037416973,
+        "time": 126.46666666666205
+      },
+      {
+        "seed": 27,
+        "score": 170,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 444.0588986606076,
+        "time": 126.79999999999536
+      },
+      {
+        "seed": 28,
+        "score": 170,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 444.05357380339444,
+        "time": 126.86666666666203
+      },
+      {
+        "seed": 29,
+        "score": 158,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 323.0059375588992,
+        "time": 122.0666666666623
+      },
+      {
+        "seed": 30,
+        "score": 158,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 321.20223195705734,
+        "time": 123.59999999999555
+      },
+      {
+        "seed": 31,
+        "score": 170,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 442.88755030596286,
+        "time": 127.13333333332868
+      },
+      {
+        "seed": 32,
+        "score": 170,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 444.0260293940459,
+        "time": 126.53333333332871
+      },
+      {
+        "seed": 33,
+        "score": 158,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 323.04606335362723,
+        "time": 123.19999999999557
+      },
+      {
+        "seed": 34,
+        "score": 170,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 444.1678848052191,
+        "time": 127.16666666666201
+      },
+      {
+        "seed": 35,
+        "score": 170,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 444.0184112544559,
+        "time": 126.43333333332872
+      },
+      {
+        "seed": 36,
+        "score": 170,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 444.107107292026,
+        "time": 127.16666666666201
+      },
+      {
+        "seed": 37,
+        "score": 170,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 444.124353750515,
+        "time": 126.69999999999537
+      },
+      {
+        "seed": 38,
+        "score": 158,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 323.0112648156601,
+        "time": 122.93333333332892
+      },
+      {
+        "seed": 39,
+        "score": 158,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 323.16250546081426,
+        "time": 123.69999999999554
+      },
+      {
+        "seed": 40,
+        "score": 158,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 320.0071631666563,
+        "time": 125.0333333333288
+      },
+      {
+        "seed": 41,
+        "score": 158,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 322.43654387789115,
+        "time": 122.83333333332892
+      },
+      {
+        "seed": 42,
+        "score": 170,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 444.1200184780328,
+        "time": 126.03333333332874
+      },
+      {
+        "seed": 43,
+        "score": 158,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 323.1066732396211,
+        "time": 122.83333333332892
+      },
+      {
+        "seed": 44,
+        "score": 158,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 323.13452699443775,
+        "time": 123.03333333332891
+      },
+      {
+        "seed": 45,
+        "score": 158,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 322.4554014662141,
+        "time": 123.1333333333289
+      },
+      {
+        "seed": 46,
+        "score": 158,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 322.61586622471356,
+        "time": 122.23333333332896
+      },
+      {
+        "seed": 47,
+        "score": 158,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 322.54785721937566,
+        "time": 122.73333333332893
+      },
+      {
+        "seed": 48,
+        "score": 158,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 323.0066566301289,
+        "time": 122.13333333332896
+      },
+      {
+        "seed": 49,
+        "score": 158,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 323.15452410145235,
+        "time": 123.1333333333289
+      },
+      {
+        "seed": 50,
+        "score": 170,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 444.1776535427255,
+        "time": 126.29999999999539
+      }
+    ],
+    "hard": [
+      {
+        "seed": 1,
+        "score": 167,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 412.3832981848748,
+        "time": 105.99999999999655
+      },
+      {
+        "seed": 2,
+        "score": 166,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 401.2202713412695,
+        "time": 106.76666666666317
+      },
+      {
+        "seed": 3,
+        "score": 154,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 285.767746848604,
+        "time": 103.96666666666333
+      },
+      {
+        "seed": 4,
+        "score": 166,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 408.9201957599289,
+        "time": 105.86666666666322
+      },
+      {
+        "seed": 5,
+        "score": 155,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 292.4696743292096,
+        "time": 103.03333333333005
+      },
+      {
+        "seed": 6,
+        "score": 155,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 295.47076661893993,
+        "time": 101.69999999999679
+      },
+      {
+        "seed": 7,
+        "score": 157,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 4,
+        "driftMeters": 299.4475263789567,
+        "time": 103.49999999999669
+      },
+      {
+        "seed": 8,
+        "score": 166,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 401.61074534469253,
+        "time": 107.19999999999648
+      },
+      {
+        "seed": 9,
+        "score": 157,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 4,
+        "driftMeters": 297.8083605054441,
+        "time": 104.76666666666328
+      },
+      {
+        "seed": 10,
+        "score": 155,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 297.7202077509159,
+        "time": 103.43333333333003
+      },
+      {
+        "seed": 11,
+        "score": 155,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 290.03984556487046,
+        "time": 103.83333333333
+      },
+      {
+        "seed": 12,
+        "score": 155,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 296.46264297114504,
+        "time": 104.96666666666327
+      },
+      {
+        "seed": 13,
+        "score": 166,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 409.9687538882599,
+        "time": 106.2666666666632
+      },
+      {
+        "seed": 14,
+        "score": 156,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 304.9454356659185,
+        "time": 103.3999999999967
+      },
+      {
+        "seed": 15,
+        "score": 166,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 405.54518775352864,
+        "time": 105.7333333333299
+      },
+      {
+        "seed": 16,
+        "score": 158,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 4,
+        "driftMeters": 301.6881138103772,
+        "time": 103.63333333333001
+      },
+      {
+        "seed": 17,
+        "score": 171,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 5,
+        "driftMeters": 415.8015135515159,
+        "time": 106.76666666666317
+      },
+      {
+        "seed": 18,
+        "score": 155,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 293.6662410205803,
+        "time": 102.33333333333009
+      },
+      {
+        "seed": 19,
+        "score": 155,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 292.50392796338616,
+        "time": 101.76666666666345
+      },
+      {
+        "seed": 20,
+        "score": 158,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 4,
+        "driftMeters": 301.392344499851,
+        "time": 103.3999999999967
+      },
+      {
+        "seed": 21,
+        "score": 165,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 399.43538799064754,
+        "time": 106.49999999999652
+      },
+      {
+        "seed": 22,
+        "score": 154,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 283.1653156347347,
+        "time": 104.3666666666633
+      },
+      {
+        "seed": 23,
+        "score": 154,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 289.1578159091048,
+        "time": 104.06666666666332
+      },
+      {
+        "seed": 24,
+        "score": 155,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 296.3550868409483,
+        "time": 103.3999999999967
+      },
+      {
+        "seed": 25,
+        "score": 156,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 4,
+        "driftMeters": 283.8054989160512,
+        "time": 104.16666666666332
+      },
+      {
+        "seed": 26,
+        "score": 166,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 407.409473890279,
+        "time": 106.46666666666319
+      },
+      {
+        "seed": 27,
+        "score": 167,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 411.1779853518124,
+        "time": 106.1666666666632
+      },
+      {
+        "seed": 28,
+        "score": 167,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 414.35545918541914,
+        "time": 106.73333333332984
+      },
+      {
+        "seed": 29,
+        "score": 155,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 297.73862310719596,
+        "time": 103.79999999999667
+      },
+      {
+        "seed": 30,
+        "score": 157,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 4,
+        "driftMeters": 293.4405792814439,
+        "time": 102.79999999999673
+      },
+      {
+        "seed": 31,
+        "score": 168,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 4,
+        "driftMeters": 405.06548392976356,
+        "time": 107.23333333332981
+      },
+      {
+        "seed": 32,
+        "score": 169,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 4,
+        "driftMeters": 412.214277052261,
+        "time": 106.13333333332987
+      },
+      {
+        "seed": 33,
+        "score": 155,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 299.1995974752081,
+        "time": 102.6666666666634
+      },
+      {
+        "seed": 34,
+        "score": 166,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 401.0611949445316,
+        "time": 106.33333333332986
+      },
+      {
+        "seed": 35,
+        "score": 166,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 405.82704124868394,
+        "time": 106.99999999999649
+      },
+      {
+        "seed": 36,
+        "score": 165,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 396.92049822520016,
+        "time": 106.8999999999965
+      },
+      {
+        "seed": 37,
+        "score": 165,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 396.2341955071964,
+        "time": 105.7333333333299
+      },
+      {
+        "seed": 38,
+        "score": 155,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 293.4084657932184,
+        "time": 103.53333333333002
+      },
+      {
+        "seed": 39,
+        "score": 155,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 294.69707831716636,
+        "time": 103.26666666666337
+      },
+      {
+        "seed": 40,
+        "score": 155,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 294.26801680828913,
+        "time": 103.33333333333003
+      },
+      {
+        "seed": 41,
+        "score": 154,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 287.07957049672103,
+        "time": 102.69999999999673
+      },
+      {
+        "seed": 42,
+        "score": 165,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 391.6994463781748,
+        "time": 105.49999999999658
+      },
+      {
+        "seed": 43,
+        "score": 156,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 300.45920334996464,
+        "time": 103.69999999999668
+      },
+      {
+        "seed": 44,
+        "score": 155,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 298.1098239518277,
+        "time": 102.19999999999676
+      },
+      {
+        "seed": 45,
+        "score": 155,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 290.69172820594787,
+        "time": 102.96666666666339
+      },
+      {
+        "seed": 46,
+        "score": 155,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 298.0455945327227,
+        "time": 103.13333333333004
+      },
+      {
+        "seed": 47,
+        "score": 157,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 4,
+        "driftMeters": 297.15856916535097,
+        "time": 102.89999999999672
+      },
+      {
+        "seed": 48,
+        "score": 157,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 4,
+        "driftMeters": 291.8508220671527,
+        "time": 102.86666666666339
+      },
+      {
+        "seed": 49,
+        "score": 155,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 298.27549490272673,
+        "time": 103.63333333333001
+      },
+      {
+        "seed": 50,
+        "score": 166,
+        "rank": 1,
+        "races": 1,
+        "wins": 1,
+        "overtakes": 3,
+        "driftMeters": 406.007284214012,
+        "time": 106.63333333332984
+      }
+    ],
+    "endless": [
+      {
+        "seed": 1,
+        "score": 970,
+        "rank": 3,
+        "races": 6,
+        "wins": 5,
+        "overtakes": 16,
+        "driftMeters": 412.91349658285395,
+        "time": 642.2000000000733
+      },
+      {
+        "seed": 2,
+        "score": 1220,
+        "rank": 3,
+        "races": 8,
+        "wins": 5,
+        "overtakes": 4,
+        "driftMeters": 407.55157342245985,
+        "time": 857.0333333332112
+      },
+      {
+        "seed": 3,
+        "score": 826,
+        "rank": 3,
+        "races": 6,
+        "wins": 4,
+        "overtakes": 5,
+        "driftMeters": 286.53412229364545,
+        "time": 628.0333333334195
+      },
+      {
+        "seed": 4,
+        "score": 890,
+        "rank": 4,
+        "races": 6,
+        "wins": 4,
+        "overtakes": 8,
+        "driftMeters": 397.70111168745547,
+        "time": 643.4000000000722
+      },
+      {
+        "seed": 5,
+        "score": 1089,
+        "rank": 3,
+        "races": 8,
+        "wins": 4,
+        "overtakes": 3,
+        "driftMeters": 284.9346145989459,
+        "time": 843.1999999998905
+      },
+      {
+        "seed": 6,
+        "score": 1118,
+        "rank": 3,
+        "races": 8,
+        "wins": 5,
+        "overtakes": 3,
+        "driftMeters": 290.6435578393184,
+        "time": 841.166666666559
+      },
+      {
+        "seed": 7,
+        "score": 833,
+        "rank": 3,
+        "races": 6,
+        "wins": 4,
+        "overtakes": 7,
+        "driftMeters": 286.57016653071787,
+        "time": 627.5000000000866
+      },
+      {
+        "seed": 8,
+        "score": 1237,
+        "rank": 3,
+        "races": 8,
+        "wins": 5,
+        "overtakes": 10,
+        "driftMeters": 391.69251203420544,
+        "time": 859.4999999998756
+      },
+      {
+        "seed": 9,
+        "score": 1085,
+        "rank": 4,
+        "races": 8,
+        "wins": 5,
+        "overtakes": 1,
+        "driftMeters": 298.1206589728207,
+        "time": 833.5999999998992
+      },
+      {
+        "seed": 10,
+        "score": 1225,
+        "rank": 4,
+        "races": 9,
+        "wins": 5,
+        "overtakes": 4,
+        "driftMeters": 293.19422735387474,
+        "time": 947.8999999997952
+      },
+      {
+        "seed": 11,
+        "score": 949,
+        "rank": 3,
+        "races": 7,
+        "wins": 4,
+        "overtakes": 7,
+        "driftMeters": 277.8178358777369,
+        "time": 735.0999999999888
+      },
+      {
+        "seed": 12,
+        "score": 998,
+        "rank": 3,
+        "races": 7,
+        "wins": 5,
+        "overtakes": 7,
+        "driftMeters": 284.46026792776354,
+        "time": 732.2333333333247
+      },
+      {
+        "seed": 13,
+        "score": 906,
+        "rank": 3,
+        "races": 6,
+        "wins": 4,
+        "overtakes": 6,
+        "driftMeters": 401.31698957825887,
+        "time": 640.1333333334085
+      },
+      {
+        "seed": 14,
+        "score": 992,
+        "rank": 3,
+        "races": 7,
+        "wins": 5,
+        "overtakes": 7,
+        "driftMeters": 293.1739369386155,
+        "time": 728.3666666666616
+      },
+      {
+        "seed": 15,
+        "score": 942,
+        "rank": 3,
+        "races": 6,
+        "wins": 5,
+        "overtakes": 2,
+        "driftMeters": 406.56786795094,
+        "time": 642.7666666667394
+      },
+      {
+        "seed": 16,
+        "score": 1275,
+        "rank": 3,
+        "races": 9,
+        "wins": 6,
+        "overtakes": 7,
+        "driftMeters": 296.58746419919567,
+        "time": 943.799999999799
+      },
+      {
+        "seed": 17,
+        "score": 930,
+        "rank": 3,
+        "races": 6,
+        "wins": 4,
+        "overtakes": 6,
+        "driftMeters": 401.56197291649437,
+        "time": 647.233333333402
+      },
+      {
+        "seed": 18,
+        "score": 970,
+        "rank": 4,
+        "races": 7,
+        "wins": 5,
+        "overtakes": 7,
+        "driftMeters": 288.0467288050466,
+        "time": 734.8333333333223
+      },
+      {
+        "seed": 19,
+        "score": 1122,
+        "rank": 3,
+        "races": 8,
+        "wins": 5,
+        "overtakes": 12,
+        "driftMeters": 296.2849429593552,
+        "time": 832.7666666665666
+      },
+      {
+        "seed": 20,
+        "score": 1128,
+        "rank": 3,
+        "races": 8,
+        "wins": 5,
+        "overtakes": 7,
+        "driftMeters": 293.529174133508,
+        "time": 837.4666666665623
+      },
+      {
+        "seed": 21,
+        "score": 1175,
+        "rank": 4,
+        "races": 8,
+        "wins": 5,
+        "overtakes": 2,
+        "driftMeters": 403.7038825033877,
+        "time": 856.9999999998779
+      },
+      {
+        "seed": 22,
+        "score": 1171,
+        "rank": 3,
+        "races": 8,
+        "wins": 6,
+        "overtakes": 9,
+        "driftMeters": 292.501661211966,
+        "time": 839.0666666665609
+      },
+      {
+        "seed": 23,
+        "score": 1043,
+        "rank": 3,
+        "races": 7,
+        "wins": 6,
+        "overtakes": 6,
+        "driftMeters": 295.41316291847124,
+        "time": 731.6333333333253
+      },
+      {
+        "seed": 24,
+        "score": 1206,
+        "rank": 4,
+        "races": 9,
+        "wins": 5,
+        "overtakes": 0,
+        "driftMeters": 287.4955989364888,
+        "time": 948.2999999997949
+      },
+      {
+        "seed": 25,
+        "score": 1050,
+        "rank": 4,
+        "races": 8,
+        "wins": 4,
+        "overtakes": 0,
+        "driftMeters": 283.1156213360773,
+        "time": 840.9333333332258
+      },
+      {
+        "seed": 26,
+        "score": 1073,
+        "rank": 3,
+        "races": 7,
+        "wins": 5,
+        "overtakes": 3,
+        "driftMeters": 397.3719879440553,
+        "time": 752.6999999999728
+      },
+      {
+        "seed": 27,
+        "score": 1139,
+        "rank": 4,
+        "races": 8,
+        "wins": 4,
+        "overtakes": 0,
+        "driftMeters": 408.7214415572787,
+        "time": 856.4333333332117
+      },
+      {
+        "seed": 28,
+        "score": 1073,
+        "rank": 3,
+        "races": 7,
+        "wins": 5,
+        "overtakes": 4,
+        "driftMeters": 396.573010172128,
+        "time": 752.6999999999728
+      },
+      {
+        "seed": 29,
+        "score": 1308,
+        "rank": 4,
+        "races": 10,
+        "wins": 5,
+        "overtakes": 0,
+        "driftMeters": 288.6109384986774,
+        "time": 1053.0999999996995
+      },
+      {
+        "seed": 30,
+        "score": 959,
+        "rank": 3,
+        "races": 7,
+        "wins": 4,
+        "overtakes": 6,
+        "driftMeters": 282.57791455820154,
+        "time": 732.8333333333242
+      },
+      {
+        "seed": 31,
+        "score": 1040,
+        "rank": 3,
+        "races": 7,
+        "wins": 4,
+        "overtakes": 6,
+        "driftMeters": 403.8671545037128,
+        "time": 756.0333333333031
+      },
+      {
+        "seed": 32,
+        "score": 923,
+        "rank": 3,
+        "races": 6,
+        "wins": 4,
+        "overtakes": 7,
+        "driftMeters": 416.339899581769,
+        "time": 644.5333333334045
+      },
+      {
+        "seed": 33,
+        "score": 864,
+        "rank": 3,
+        "races": 6,
+        "wins": 5,
+        "overtakes": 3,
+        "driftMeters": 285.27211371208574,
+        "time": 630.0333333334177
+      },
+      {
+        "seed": 34,
+        "score": 929,
+        "rank": 3,
+        "races": 6,
+        "wins": 5,
+        "overtakes": 4,
+        "driftMeters": 398.12813545499915,
+        "time": 640.0333333334086
+      },
+      {
+        "seed": 35,
+        "score": 927,
+        "rank": 4,
+        "races": 6,
+        "wins": 5,
+        "overtakes": 9,
+        "driftMeters": 405.7075764498533,
+        "time": 642.4000000000731
+      },
+      {
+        "seed": 36,
+        "score": 1188,
+        "rank": 4,
+        "races": 8,
+        "wins": 5,
+        "overtakes": 4,
+        "driftMeters": 402.76057260984703,
+        "time": 857.1999999998777
+      },
+      {
+        "seed": 37,
+        "score": 1213,
+        "rank": 3,
+        "races": 8,
+        "wins": 5,
+        "overtakes": 1,
+        "driftMeters": 384.16886791463355,
+        "time": 855.1666666665462
+      },
+      {
+        "seed": 38,
+        "score": 1415,
+        "rank": 4,
+        "races": 10,
+        "wins": 7,
+        "overtakes": 3,
+        "driftMeters": 293.37943441872295,
+        "time": 1047.4999999997046
+      },
+      {
+        "seed": 39,
+        "score": 1073,
+        "rank": 3,
+        "races": 8,
+        "wins": 4,
+        "overtakes": 2,
+        "driftMeters": 292.0821708712807,
+        "time": 839.0999999998942
+      },
+      {
+        "seed": 40,
+        "score": 961,
+        "rank": 4,
+        "races": 7,
+        "wins": 5,
+        "overtakes": 5,
+        "driftMeters": 288.12388336277365,
+        "time": 735.3666666666552
+      },
+      {
+        "seed": 41,
+        "score": 852,
+        "rank": 4,
+        "races": 6,
+        "wins": 5,
+        "overtakes": 7,
+        "driftMeters": 294.28407573234773,
+        "time": 629.8333333334178
+      },
+      {
+        "seed": 42,
+        "score": 961,
+        "rank": 3,
+        "races": 6,
+        "wins": 5,
+        "overtakes": 8,
+        "driftMeters": 400.46686530407885,
+        "time": 639.7000000000755
+      },
+      {
+        "seed": 43,
+        "score": 1122,
+        "rank": 3,
+        "races": 8,
+        "wins": 5,
+        "overtakes": 5,
+        "driftMeters": 291.33393450491417,
+        "time": 843.7999999998899
+      },
+      {
+        "seed": 44,
+        "score": 672,
+        "rank": 3,
+        "races": 5,
+        "wins": 3,
+        "overtakes": 4,
+        "driftMeters": 286.15368585397476,
+        "time": 531.6000000001738
+      },
+      {
+        "seed": 45,
+        "score": 1071,
+        "rank": 3,
+        "races": 8,
+        "wins": 4,
+        "overtakes": 6,
+        "driftMeters": 292.33518880562673,
+        "time": 837.0333333332294
+      },
+      {
+        "seed": 46,
+        "score": 1203,
+        "rank": 4,
+        "races": 9,
+        "wins": 5,
+        "overtakes": 6,
+        "driftMeters": 285.1261727289002,
+        "time": 936.1999999998059
+      },
+      {
+        "seed": 47,
+        "score": 1181,
+        "rank": 3,
+        "races": 9,
+        "wins": 4,
+        "overtakes": 3,
+        "driftMeters": 286.4568163806753,
+        "time": 948.2333333331283
+      },
+      {
+        "seed": 48,
+        "score": 1081,
+        "rank": 3,
+        "races": 8,
+        "wins": 4,
+        "overtakes": 4,
+        "driftMeters": 293.2343160379247,
+        "time": 847.4666666665532
+      },
+      {
+        "seed": 49,
+        "score": 989,
+        "rank": 4,
+        "races": 7,
+        "wins": 5,
+        "overtakes": 8,
+        "driftMeters": 286.40674939964254,
+        "time": 734.6333333333225
+      },
+      {
+        "seed": 50,
+        "score": 921,
+        "rank": 3,
+        "races": 6,
+        "wins": 4,
+        "overtakes": 7,
+        "driftMeters": 403.2034705455117,
+        "time": 645.5666666667369
+      }
+    ]
+  }
+}

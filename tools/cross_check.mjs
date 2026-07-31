@@ -134,6 +134,159 @@ const GAMES = [
     fields: ['score', 'elapsed', 'missStreak', 'baskets'],
     godot: 'BasketBounceLogic.simulate_autoplay(mode, seed)',
   },
+  // ── W15/CROSSCHECK2: die 17 restlichen direkt machbaren Ports ─────────────
+  // Felder mit '.' sind Dot-Pfade in Unter-Dictionaries (z. B. danceParty
+  // tally.perfect) — pick() steigt ab, Godot-Seite macht dasselbe.
+  {
+    id: 'carrotGuard',
+    fn: 'simulateGuardAutoplay',
+    order: 'modeFirst',
+    fields: ['score', 'elapsed', 'stolen'],
+    godot: 'CarrotGuardLogic.simulate_autoplay(seed, mode)',
+  },
+  {
+    id: 'danceParty',
+    fn: 'simulateDanceAutoplay',
+    order: 'seedFirst',
+    fields: [
+      'score',
+      'tally.perfect',
+      'tally.good',
+      'tally.miss',
+      'tally.combo',
+      'tally.maxCombo',
+      'tally.bonus',
+    ],
+    godot: 'DancePartyLogic.simulate_autoplay(seed, mode)',
+  },
+  {
+    id: 'deliveryRush',
+    fn: 'simulateDeliveryAutoplay',
+    order: 'seedFirst',
+    fields: ['score', 'elapsed', 'crashes', 'coinPoints'],
+    godot: 'DeliveryRushLogic.simulate_autoplay(seed, mode)',
+  },
+  {
+    id: 'fishingPond',
+    fn: 'simulateFishingAutoplay',
+    order: 'seedFirst',
+    fields: ['score', 'failures'],
+    godot: 'FishingPondLogic.simulate_autoplay(seed, mode)',
+  },
+  {
+    id: 'ghostHunt',
+    fn: 'simulateHuntAutoplay',
+    order: 'modeFirst',
+    fields: ['score', 'caught', 'missed', 'escapedWaves', 'booBonuses', 'time'],
+    godot: 'GhostHuntLogic.simulate_autoplay(mode, seed)',
+  },
+  {
+    id: 'goalieGooby',
+    fn: 'simulateAutoplay',
+    order: 'seedFirst',
+    fields: ['score', 'saves', 'goals', 'elapsed'],
+    godot: 'GoalieGoobyLogic.simulate_autoplay(seed, mode)',
+  },
+  {
+    id: 'harborHopper',
+    fn: 'simulateHarborAutoplay',
+    order: 'modeFirst',
+    fields: ['score', 'crates', 'rings', 'bumps', 'steals', 'boosts', 'distanceM', 'elapsed'],
+    godot: 'HarborHopperLogic.simulate_autoplay(mode, seed)',
+  },
+  {
+    id: 'hideSeek',
+    fn: 'simulateSeekAutoplay',
+    order: 'modeFirst',
+    fields: ['score', 'waves', 'found', 'expired', 'elapsed'],
+    godot: 'HideSeekLogic.simulate_autoplay(mode, seed)',
+  },
+  {
+    id: 'lanternFloat',
+    fn: 'simulateLanternAutoplay',
+    order: 'modeFirst',
+    fields: ['score', 'rings', 'hits', 'golds', 'fireflies', 'bumps', 'elapsed'],
+    godot: 'LanternFloatLogic.simulate_autoplay(mode, seed)',
+  },
+  {
+    id: 'miniGolf',
+    fn: 'simulateGolfAutoplay',
+    order: 'seedFirst',
+    fields: ['score', 'overPar'],
+    godot: 'MiniGolfLogic.simulate_autoplay(seed, mode)',
+  },
+  {
+    id: 'pipeFlow',
+    fn: 'simulatePipeAutoplay',
+    order: 'seedFirst',
+    fields: ['score', 'solved', 'failures'],
+    godot: 'PipeFlowLogic.simulate_autoplay(seed, mode)',
+  },
+  {
+    id: 'rocketRescue',
+    fn: 'simulateRocketAutoplay',
+    order: 'modeFirst',
+    fields: ['score', 'rescued', 'softLandings', 'hardLandings', 'fuelLeft', 'elapsed', 'endReason'],
+    godot: 'RocketRescueBot.simulate_autoplay(mode, seed)',
+  },
+  {
+    id: 'runner',
+    fn: 'simulateRunnerAutoplay',
+    order: 'modeFirst',
+    fields: ['score', 'elapsed', 'meters', 'hits'],
+    godot: 'RunnerLogic.simulate_autoplay(mode, seed)',
+  },
+  {
+    id: 'shoppingSurf',
+    fn: 'simulateSurfAutoplay',
+    order: 'modeFirst',
+    fields: ['score', 'distanceM', 'coins', 'crashes', 'elapsed', 'ended'],
+    godot: 'ShoppingSurfRun.simulate_autoplay(mode, seed)',
+  },
+  {
+    id: 'starHopper',
+    fn: 'simulateHopperAutoplay',
+    order: 'seedFirst',
+    fields: ['score', 'distance', 'pickups'],
+    godot: 'StarHopperLogic.simulate_autoplay(seed, mode)',
+  },
+  {
+    id: 'toyRacer',
+    fn: 'simulateRacerAutoplay',
+    order: 'modeFirst',
+    fields: ['score', 'rank', 'races', 'wins', 'overtakes', 'driftMeters', 'time'],
+    godot: 'ToyRacerLogic.simulate_autoplay(mode, seed)',
+  },
+  {
+    id: 'trampoline',
+    fn: 'simulateTrampolineAutoplay',
+    order: 'seedFirst',
+    fields: ['score', 'failures'],
+    godot: 'TrampolineLogic.simulate_autoplay(seed, mode)',
+  },
+  // purblePlace hat KEIN Modus-Autoplay, sondern simulateRound(seed, opts)
+  // (frame-getriebener Linien-Bot). order 'seedOpts' ruft
+  // simulateRound(seed, { difficulty: mode }) — Godot-Pendant ist
+  // PurblePlaceLogic.simulate_round(seed, mode).
+  {
+    id: 'purblePlace',
+    fn: 'simulateRound',
+    order: 'seedOpts',
+    fields: [
+      'score',
+      'cakesServed',
+      'perfectCakes',
+      'rejected',
+      'expired',
+      'serves',
+      'perfectBakes',
+      'splats',
+      'trashed',
+      'tSec',
+      'over',
+    ],
+    godot: 'PurblePlaceLogic.simulate_round(seed, mode)',
+  },
 ];
 
 // ── 1) GoobyRng-Goldwerte ───────────────────────────────────────────────────
@@ -156,6 +309,19 @@ for (const seed of [1, 2, 3, 42, 123456789]) {
 writeFileSync(join(OUT_DIR, 'rng.json'), JSON.stringify(rngGolden, null, 2));
 
 // ── 2) Bot-Zertifizierung: Seeds 1..50 × 4 Modi je Tabellen-Eintrag ─────────
+// Dot-Pfad-Zugriff (W15: danceParty tally.*) — im Fixture-Record bleibt der
+// Pfad als flacher Key erhalten, die Godot-Seite steigt identisch ab.
+function pick(result, path) {
+  let value = result;
+  for (const part of path.split('.')) {
+    if (value == null || typeof value !== 'object' || !(part in value)) {
+      throw new Error(`Feld ${path} fehlt im Web-Ergebnis`);
+    }
+    value = value[part];
+  }
+  return value;
+}
+
 for (const game of GAMES) {
   const mod = await import(join(ROOT, 'GOOBY', 'src', 'minigames', 'games', `${game.id}.logic.js`));
   const simulate = mod[game.fn];
@@ -165,11 +331,15 @@ for (const game of GAMES) {
   const fixture = { modes: {} };
   for (const mode of MODES) {
     fixture.modes[mode] = SEEDS.map((seed) => {
-      const r = game.order === 'modeFirst' ? simulate(mode, seed) : simulate(seed, mode);
+      const r =
+        game.order === 'modeFirst'
+          ? simulate(mode, seed)
+          : game.order === 'seedOpts'
+            ? simulate(seed, { difficulty: mode })
+            : simulate(seed, mode);
       const rec = { seed };
       for (const field of game.fields) {
-        if (!(field in r)) throw new Error(`${game.id}: Feld ${field} fehlt im Web-Ergebnis`);
-        rec[field] = r[field];
+        rec[field] = pick(r, field);
       }
       return rec;
     });

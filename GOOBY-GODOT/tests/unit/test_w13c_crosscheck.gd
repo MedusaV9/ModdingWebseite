@@ -1,4 +1,4 @@
-extends TestCase
+extends TestCase  # gdlint: ignore=max-public-methods
 ## W13C CROSSCHECK — Difficulty-Zertifizierung der Minigame-Ports gegen die
 ## Original-Web-Logik. tools/cross_check.mjs fährt die Web-Bots (Seeds 1..50 ×
 ## easy/normal/hard/endless) und schreibt tests/expected/<spiel>.json; hier
@@ -83,6 +83,158 @@ const GAMES: Array[Dictionary] = [
 		"ints": ["score", "missStreak", "baskets"],
 		"floats": ["elapsed"],
 	},
+	{
+		"fixture": "carrotGuard",
+		"logic": preload("res://scripts/minigames/games/carrot_guard/carrot_guard_logic.gd"),
+		"seed_first": true,
+		"ints": ["score", "stolen"],
+		"floats": ["elapsed"],
+	},
+	{
+		"fixture": "danceParty",
+		"logic": preload("res://scripts/minigames/games/dance_party/dance_party_logic.gd"),
+		"seed_first": true,
+		"ints":
+		[
+			"score",
+			"tally.perfect",
+			"tally.good",
+			"tally.miss",
+			"tally.combo",
+			"tally.maxCombo",
+			"tally.bonus",
+		],
+		"floats": [],
+	},
+	{
+		"fixture": "deliveryRush",
+		"logic": preload("res://scripts/minigames/games/delivery_rush/delivery_rush_logic.gd"),
+		"seed_first": true,
+		"ints": ["score", "crashes", "coinPoints"],
+		"floats": ["elapsed"],
+	},
+	{
+		"fixture": "fishingPond",
+		"logic": preload("res://scripts/minigames/games/fishing_pond/fishing_pond_logic.gd"),
+		"seed_first": true,
+		"ints": ["score", "failures"],
+		"floats": [],
+	},
+	{
+		"fixture": "ghostHunt",
+		"logic": preload("res://scripts/minigames/games/ghost_hunt/ghost_hunt_logic.gd"),
+		"seed_first": false,
+		"ints": ["score", "caught", "missed", "escapedWaves", "booBonuses"],
+		"floats": ["time"],
+	},
+	{
+		"fixture": "goalieGooby",
+		"logic": preload("res://scripts/minigames/games/goalie_gooby/goalie_gooby_logic.gd"),
+		"seed_first": true,
+		"ints": ["score", "saves", "goals"],
+		"floats": ["elapsed"],
+	},
+	{
+		"fixture": "harborHopper",
+		"logic": preload("res://scripts/minigames/games/harbor_hopper/harbor_hopper_logic.gd"),
+		"seed_first": false,
+		"ints": ["score", "crates", "rings", "bumps", "steals", "boosts", "distanceM"],
+		"floats": ["elapsed"],
+	},
+	{
+		"fixture": "hideSeek",
+		"logic": preload("res://scripts/minigames/games/hide_seek/hide_seek_logic.gd"),
+		"seed_first": false,
+		"ints": ["score", "waves", "found", "expired"],
+		"floats": ["elapsed"],
+	},
+	{
+		"fixture": "lanternFloat",
+		"logic": preload("res://scripts/minigames/games/lantern_float/lantern_float_logic.gd"),
+		"seed_first": false,
+		"ints": ["score", "rings", "hits", "golds", "fireflies", "bumps"],
+		"floats": ["elapsed"],
+	},
+	{
+		"fixture": "miniGolf",
+		"logic": preload("res://scripts/minigames/games/mini_golf/mini_golf_logic.gd"),
+		"seed_first": true,
+		"ints": ["score", "overPar"],
+		"floats": [],
+	},
+	{
+		"fixture": "pipeFlow",
+		"logic": preload("res://scripts/minigames/games/pipe_flow/pipe_flow_logic.gd"),
+		"seed_first": true,
+		"ints": ["score", "solved", "failures"],
+		"floats": [],
+	},
+	{
+		"fixture": "rocketRescue",
+		"logic": preload("res://scripts/minigames/games/rocket_rescue/rocket_rescue_bot.gd"),
+		"seed_first": false,
+		"ints": ["score", "rescued", "softLandings", "hardLandings"],
+		"floats": ["fuelLeft", "elapsed"],
+		"strings": ["endReason"],
+	},
+	{
+		"fixture": "runner",
+		"logic": preload("res://scripts/minigames/games/runner/runner_logic.gd"),
+		"seed_first": false,
+		"ints": ["score", "hits"],
+		"floats": ["elapsed", "meters"],
+	},
+	{
+		"fixture": "shoppingSurf",
+		"logic": preload("res://scripts/minigames/games/shopping_surf/shopping_surf_run.gd"),
+		"seed_first": false,
+		"ints": ["score", "coins", "crashes", "ended"],
+		"floats": ["distanceM", "elapsed"],
+	},
+	{
+		"fixture": "starHopper",
+		"logic": preload("res://scripts/minigames/games/star_hopper/star_hopper_logic.gd"),
+		"seed_first": true,
+		"ints": ["score", "pickups"],
+		"floats": ["distance"],
+	},
+	{
+		"fixture": "toyRacer",
+		"logic": preload("res://scripts/minigames/games/toy_racer/toy_racer_logic.gd"),
+		"seed_first": false,
+		"ints": ["score", "rank", "races", "wins", "overtakes"],
+		"floats": ["driftMeters", "time"],
+	},
+	{
+		"fixture": "trampoline",
+		"logic": preload("res://scripts/minigames/games/trampoline/trampoline_logic.gd"),
+		"seed_first": true,
+		"ints": ["score", "failures"],
+		"floats": [],
+	},
+	{
+		# Eigener Fixture-Typ (W15): kein Modus-Autoplay, sondern der
+		# frame-getriebene Linien-Bot — Web simulateRound(seed, {difficulty}),
+		# Godot simulate_round(seed, mode). "round" schaltet den Aufruf um.
+		"fixture": "purblePlace",
+		"logic": preload("res://scripts/minigames/games/purble_place/purble_place_logic.gd"),
+		"seed_first": true,
+		"round": true,
+		"ints":
+		[
+			"score",
+			"cakesServed",
+			"perfectCakes",
+			"rejected",
+			"expired",
+			"serves",
+			"perfectBakes",
+			"splats",
+			"trashed",
+			"over",
+		],
+		"floats": ["tSec"],
+	},
 ]
 
 ## Fixtures, die NICHT von diesem Test abgedeckt werden (Bestands-Muster W2d).
@@ -143,6 +295,87 @@ func test_basket_bounce_matches_web() -> void:
 	_certify(GAMES[9])
 
 
+func test_carrot_guard_matches_web() -> void:
+	_certify(GAMES[10])
+
+
+func test_dance_party_matches_web() -> void:
+	_certify(GAMES[11])
+
+
+func test_delivery_rush_matches_web() -> void:
+	_certify(GAMES[12])
+
+
+func test_fishing_pond_matches_web() -> void:
+	_certify(GAMES[13])
+
+
+func test_ghost_hunt_matches_web() -> void:
+	_certify(GAMES[14])
+
+
+func test_goalie_gooby_matches_web() -> void:
+	_certify(GAMES[15])
+
+
+func test_harbor_hopper_matches_web() -> void:
+	_certify(GAMES[16])
+
+
+func test_hide_seek_matches_web() -> void:
+	_certify(GAMES[17])
+
+
+func test_lantern_float_matches_web() -> void:
+	_certify(GAMES[18])
+
+
+func test_mini_golf_matches_web() -> void:
+	_certify(GAMES[19])
+
+
+func test_pipe_flow_matches_web() -> void:
+	_certify(GAMES[20])
+
+
+func test_rocket_rescue_matches_web() -> void:
+	_certify(GAMES[21])
+
+
+func test_runner_matches_web() -> void:
+	_certify(GAMES[22])
+
+
+func test_shopping_surf_matches_web() -> void:
+	_certify(GAMES[23])
+
+
+func test_star_hopper_matches_web() -> void:
+	_certify(GAMES[24])
+
+
+func test_toy_racer_matches_web() -> void:
+	_certify(GAMES[25])
+
+
+func test_trampoline_matches_web() -> void:
+	_certify(GAMES[26])
+
+
+func test_purble_place_matches_web() -> void:
+	_certify(GAMES[27])
+
+
+## Dot-Pfad-Zugriff für Felder in Unter-Dictionaries (W15: danceParty tally.*).
+## Im Fixture-Record ist der Pfad ein flacher Key, hier wird er abgestiegen.
+static func _dig(result: Dictionary, path: String) -> Variant:
+	var value: Variant = result
+	for part in path.split("."):
+		value = value[part]
+	return value
+
+
 ## Kern: 4 Modi × 50 Seeds aus dem Fixture nachfahren und Feld für Feld
 ## gegen den Godot-Bot halten. Bricht pro Modus nach dem ersten Fehl-Seed ab,
 ## damit die Fehlerliste lesbar bleibt (ein Drift betrifft fast immer alle).
@@ -158,6 +391,7 @@ func _certify(entry: Dictionary) -> void:
 	var seed_first: bool = entry["seed_first"]
 	var int_fields: Array = entry["ints"]
 	var float_fields: Array = entry["floats"]
+	var string_fields: Array = entry.get("strings", [])
 	var modes: Dictionary = fixture["modes"]
 	var runs := 0
 	for mode: String in modes:
@@ -167,23 +401,37 @@ func _certify(entry: Dictionary) -> void:
 				break
 			var seed_value := int(run["seed"])
 			var got: Dictionary
-			if seed_first:
+			if bool(entry.get("round", false)):
+				got = logic.simulate_round(seed_value, mode)
+			elif seed_first:
 				got = logic.simulate_autoplay(seed_value, mode)
 			else:
 				got = logic.simulate_autoplay(mode, seed_value)
 			var tag := "%s %s seed=%d" % [fixture_name, mode, seed_value]
 			for field: String in int_fields:
-				if int(got[field]) != int(run[field]):
+				if int(_dig(got, field)) != int(run[field]):
 					fail_test(
-						"%s %s: got=%d want=%d" % [tag, field, int(got[field]), int(run[field])]
+						(
+							"%s %s: got=%d want=%d"
+							% [tag, field, int(_dig(got, field)), int(run[field])]
+						)
 					)
 					mode_ok = false
 			for field: String in float_fields:
-				if absf(float(got[field]) - float(run[field])) > 1e-9:
+				if absf(float(_dig(got, field)) - float(run[field])) > 1e-9:
 					fail_test(
 						(
 							"%s %s: got=%.17f want=%.17f"
-							% [tag, field, float(got[field]), float(run[field])]
+							% [tag, field, float(_dig(got, field)), float(run[field])]
+						)
+					)
+					mode_ok = false
+			for field: String in string_fields:
+				if String(_dig(got, field)) != String(run[field]):
+					fail_test(
+						(
+							"%s %s: got=%s want=%s"
+							% [tag, field, String(_dig(got, field)), String(run[field])]
 						)
 					)
 					mode_ok = false
