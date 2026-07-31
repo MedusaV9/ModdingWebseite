@@ -9,6 +9,15 @@ extends Node3D
 ## die 2D-Tap-Rechtecke gelegt — Eingabe und Trefferflächen bleiben
 ## zahlengleich. Die MECHANIK bleibt komplett in garden_rush.gd/
 ## GardenRushLogic; der Füllring beim Halten bleibt als 2D-Overlay.
+##
+## W15/GAMESQA2-Kulisse (Audit: "Feld = braune Kastenreihen, wenig
+## Identität"): die Hochkant-Kamera sieht fast NUR das Beet — die schöne
+## Kulisse dahinter liegt außerhalb des Ausschnitts. Deshalb zieht die
+## Deko jetzt MIT ins Bild: Blumen-Bordüren in den Beeträndern (echte
+## Kenney-Assets, in layout() an die Beetmaße gehängt), Schmetterlinge
+## ÜBER dem Topffeld und ein Beet-Schild vorn. Treffer-Feedback: der
+## gegossene/gejätete Topf federt sichtbar (Pop-Skala in sync()).
+## Sim/2D-Trefferflächen unverändert (zertifiziert).
 
 const Stage3D := preload("res://scripts/minigames/games/_3dc_stage/stage3d.gd")
 const Actor := preload("res://scripts/minigames/games/_3da_stage/gooby_actor.gd")
@@ -49,6 +58,14 @@ var _bloom_burst: GPUParticles3D
 var _stream: GPUParticles3D
 var _pulses: Array = []
 var _gooby_yaw := -0.3
+## W15: Beet-Deko (Blumen-Bordüren, Schild, Beet-Schmetterlinge) — wird in
+## layout() an die tatsächlichen Beetmaße gehängt und dort neu aufgebaut.
+var _bed_deco: Node3D
+var _bed_butterflies: MultiMeshInstance3D
+## W15: Pop-Skala pro Topf (Treffer-Feedback), zerfällt in sync().
+var _pot_pops: Dictionary = {}
+## W15: letzter Viewport (frame()) — Deko-Raycasts bleiben damit IM Bild.
+var _vp := Vector2(390.0, 844.0)
 
 
 func setup_stage() -> void:
@@ -393,6 +410,8 @@ func _build_fx() -> void:
 ## Kamera: schräg von oben aufs Beet — flach genug, dass hinter dem Topffeld
 ## Wiese, Zaun und Bäume als Kulisse ins Bild kommen (wie carrot_guard).
 func frame(vp: Vector2) -> void:
+	if vp.x > 1.0 and vp.y > 1.0:
+		_vp = vp
 	stage.apply_size(vp)
 	stage.camera.position = Vector3(0.0, 10.5, 8.0)
 	stage.camera.rotation_degrees = Vector3(-40.0, 0.0, 0.0)
@@ -471,6 +490,68 @@ func layout(pot_rects: Array[Rect2], sprinkler_rect: Rect2) -> void:
 	gooby.scale = Vector3.ONE * clampf(back_r * 1.15, 0.7, 2.2)
 	_gooby_yaw = 0.5
 	gooby.rotation.y = _gooby_yaw
+	_layout_bed_deco(pot_rects)
+
+
+## W15: Garten-Deko IM Kamerausschnitt. WICHTIG: das Beet ist in Weltmaßen
+## viel breiter als der vordere Kamera-Ausschnitt — Deko an den Welt-
+## Beeträndern fällt unten aus dem Bild. Die Blumen-Bordüren werden deshalb
+## wie die Töpfe über BILDSCHIRM-Raycasts (ground_point) neben die
+## Topfspalten gelegt; Beet-Schmetterlinge und Schild hängen ebenso am Bild.
+func _layout_bed_deco(pot_rects: Array[Rect2]) -> void:
+	if _bed_deco != null:
+		_bed_deco.queue_free()
+	_bed_deco = Node3D.new()
+	add_child(_bed_deco)
+	var top := INF
+	var bottom := -INF
+	var left := INF
+	var right := -INF
+	var cell_w := 60.0
+	for rect in pot_rects:
+		top = minf(top, rect.position.y)
+		bottom = maxf(bottom, rect.end.y)
+		left = minf(left, rect.position.x)
+		right = maxf(right, rect.end.x)
+		cell_w = rect.size.x
+	var reds: Array = []
+	var yellows: Array = []
+	var n := 7
+	for i in n:
+		var f := (float(i) + 0.5) / float(n)
+		var sy := lerpf(top + cell_w * 0.2, bottom, f)
+		for side: float in [-1.0, 1.0]:
+			# In den sichtbaren Rand geklemmt: die Topfspalten reichen in
+			# Hochkant fast bis an die Bildkante, dort bleibt nur ein
+			# schmaler Streifen fürs Blumenbeet.
+			var sx := (
+				maxf(_vp.x * 0.035, left - cell_w * 0.62)
+				if side < 0.0
+				else minf(_vp.x * 0.965, right + cell_w * 0.62)
+			)
+			var at: Vector3 = stage.ground_point(Vector2(sx, sy))
+			var pose := Transform3D(Basis(Vector3.UP, f * 5.0 + side), at + Vector3(0.0, 0.14, 0.0))
+			if (i + (1 if side > 0.0 else 0)) % 2 == 0:
+				reds.append(pose)
+			else:
+				yellows.append(pose)
+	var flower_scale := clampf(_pot_r[_pot_r.size() - 1] * 0.9, 0.35, 0.8)
+	_bed_deco.add_child(Models.swarm(Models.parts(DIR + "flower_redA.glb", flower_scale), reds))
+	_bed_deco.add_child(
+		Models.swarm(Models.parts(DIR + "flower_yellowA.glb", flower_scale), yellows)
+	)
+	var sign_at: Vector3 = stage.ground_point(
+		Vector2(maxf(_vp.x * 0.05, left - cell_w * 0.6), minf(_vp.y * 0.97, bottom + cell_w * 0.3))
+	)
+	var sign := Kit.prop("mushroom_red.glb", flower_scale * 1.2)
+	sign.position = sign_at
+	_bed_deco.add_child(sign)
+	var b1: Vector3 = stage.ground_point(Vector2(lerpf(left, right, 0.42), lerpf(top, bottom, 0.3)))
+	var b2: Vector3 = stage.ground_point(Vector2(lerpf(left, right, 0.6), lerpf(top, bottom, 0.72)))
+	_bed_butterflies = Kit.butterflies(
+		[b1 + Vector3(0.0, 1.1, 0.0), b2 + Vector3(0.0, 0.9, 0.0)], Color(0.95, 0.78, 0.5), 0.2
+	)
+	_bed_deco.add_child(_bed_butterflies)
 
 
 ## Jeden Frame: Topf-Zustände spiegeln (Spross wächst, Unkraut wuchert,
@@ -482,7 +563,10 @@ func sync(
 	stage.tick(delta)
 	gooby.tick(delta)
 	Kit.animate_butterflies(_butterflies, pulse)
+	if _bed_butterflies != null:
+		Kit.animate_butterflies(_bed_butterflies, pulse * 1.15)
 	Kit.tick_pulses(_pulses, delta)
+	_tick_pot_pops(delta)
 	gooby.rotation.z = sin(pulse * 2.2) * 0.03
 	# Gooby wendet sich dem gehaltenen Topf zu — Vorfreude aufs Gießen.
 	var want_yaw := _gooby_yaw
@@ -534,6 +618,28 @@ func _tick_stream(hold_index: int) -> void:
 		_stream.position = (_pot_pos[hold_index] + Vector3(0.0, _pot_r[hold_index] * 1.4, 0.0))
 
 
+## W15 Treffer-Feedback: getroffene Töpfe federn kurz auf (Pop-Skala).
+func _tick_pot_pops(delta: float) -> void:
+	for key: int in _pot_pops.keys():
+		var pop := float(_pot_pops[key]) - delta * 4.5
+		if pop <= 0.0 or key >= _pots.size():
+			if key < _pots.size() and key < _pot_r.size():
+				_pots[key].scale = Vector3.ONE * _pot_r[key]
+			_pot_pops.erase(key)
+			continue
+		_pot_pops[key] = pop
+		if key < _pot_r.size():
+			# Federkurve: schnell auf +16 %, weich zurück.
+			var bounce := sin(pop * PI) * 0.16
+			_pots[key].scale = Vector3.ONE * _pot_r[key] * (1.0 + bounce)
+
+
+## Pop an Topf `index` zünden (Gießen, Jäten, Verwelken).
+func _pop_pot(index: int) -> void:
+	if index >= 0 and index < _pots.size():
+		_pot_pops[index] = 1.0
+
+
 ## Belohnungs-Blüten nach dem Perfekt-Guss wieder einziehen.
 func _tick_blooms(delta: float) -> void:
 	for key: int in _blooms.keys():
@@ -566,6 +672,7 @@ func water_fx(index: int, perfect: bool) -> void:
 		return
 	var at := _pot_pos[index] + Vector3(0.0, _pot_r[index] * 0.8, 0.0)
 	Fx.burst(_splash_burst, at)
+	_pop_pot(index)
 	gooby.swing(0.4, 30.0, Vector3.BACK)
 	if perfect:
 		# Perfekt-Guss: Blüte öffnet sich im Topf + Blütenkonfetti + Ring.
@@ -587,6 +694,7 @@ func weed_fx(index: int) -> void:
 	if index < 0 or index >= _pot_pos.size():
 		return
 	Fx.burst(_leaf_burst, _pot_pos[index] + Vector3(0.0, _pot_r[index] * 0.7, 0.0))
+	_pop_pot(index)
 	gooby.emote("dizzy", 1.1)
 
 
