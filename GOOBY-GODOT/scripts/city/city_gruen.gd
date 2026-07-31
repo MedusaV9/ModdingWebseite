@@ -33,6 +33,27 @@ const PARK_STREU_POOL: Array[Dictionary] = [
 	{"glb": "natur/grass_large.glb", "anzahl": 44, "skala": 3.2},
 ]
 
+## W14-Vorplatz-Streu (Gewerbe/Zentrum-Blöcke): NUR Sorten, die das Grün
+## ohnehin nutzt — teilt sich die MultiMesh-Gruppen, kostet also keine
+## neuen Draw-Call-Sorten (test_world_budget: ≤ 3 neue Gruppen).
+const VORPLATZ_STREU_POOL: Array[Dictionary] = [
+	{"glb": "natur/grass_large.glb", "je_qm": 0.018, "skala": 3.2},
+	{"glb": "natur/flower_redA.glb", "je_qm": 0.009, "skala": 2.6},
+	{"glb": "natur/flower_purpleA.glb", "je_qm": 0.009, "skala": 2.6},
+	{"glb": "natur/plant_bush.glb", "je_qm": 0.007, "skala": 3.6},
+]
+## Saum-Sorten für die Distrikt-Übergänge (gleiche Wiederverwendungs-Regel).
+const SAUM_STREU_POOL: Array[Dictionary] = [
+	{"glb": "natur/plant_bush.glb", "je_m": 0.30, "skala": 4.0},
+	{"glb": "natur/grass_large.glb", "je_m": 0.36, "skala": 3.4},
+	{"glb": "natur/flower_yellowA.glb", "je_m": 0.14, "skala": 2.6},
+]
+## Vorplatz-Streu hält so viel Abstand zur Tile-Mitte (dort stehen die
+## Kulissen-Gebäude, Skala ~9 ⇒ Halbkante ~4,5 m) …
+const VORPLATZ_KERN_FREI_M := 6.0
+## … und der Saum streut in diesem Band um die Distrikt-Pad-Kante.
+const SAUM_BREITE_M := 4.0
+
 
 ## Kompletter Grün-Plan der Karte (deterministisch über `seed_wert`).
 static func plaene(karte: CityMap, seed_wert: int) -> Array[Dictionary]:
@@ -47,6 +68,8 @@ static func plaene(karte: CityMap, seed_wert: int) -> Array[Dictionary]:
 	_plane_efeu(karte, out)
 	_plane_blumenampeln(karte, out)
 	_plane_park_streu(karte, seed_wert, out)
+	out.append_array(vorplatz_plaene(karte, seed_wert + 4700))
+	out.append_array(saum_plaene(karte, seed_wert + 5900))
 	return out
 
 
@@ -258,6 +281,151 @@ static func _plane_blumenampeln(karte: CityMap, out: Array[Dictionary]) -> void:
 				}
 			)
 		)
+
+
+## ---------------------------------------------------- Vorplätze + Säume
+
+
+## W14-Feinschliff (Sicht-Diagnose „kahle Blöcke"): Gras/Blumen/Büsche in
+## die Gewerbe- und Zentrums-Blöcke streuen — die Pads dort waren große
+## leere Flächen. Straßen, Gebäude-Kerne (Abstand zur Tile-Mitte) und die
+## Orts-Eingänge bleiben frei. Deterministisch, WeltStreu-Regeln.
+static func vorplatz_plaene(karte: CityMap, seed_wert: int) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	if karte == null or not karte.ist_geladen():
+		return out
+	var eingaenge := _eingangs_segmente(karte)
+	var frei := func(p: Vector2) -> bool: return _vorplatz_frei(karte, p)
+	var distrikte: Dictionary = karte.daten.get("distrikte", {})
+	for distrikt: String in ["gewerbe", "zentrum"]:
+		var zonen: Array = distrikte.get(distrikt, {}).get("zonen", [])
+		for z in zonen.size():
+			var rect := _zonen_rect(karte, zonen[z])
+			for s in VORPLATZ_STREU_POOL.size():
+				var sorte: Dictionary = VORPLATZ_STREU_POOL[s]
+				var regeln := {
+					"rect": rect,
+					"anzahl": int(rect.get_area() * float(sorte["je_qm"])),
+					"min_abstand": 2.4,
+					"skala_min": float(sorte["skala"]) * 0.85,
+					"skala_max": float(sorte["skala"]) * 1.15,
+					"meide_segmente": eingaenge,
+					"frei_fn": frei,
+				}
+				var salz := seed_wert + 210 + z * 37 + s * 11
+				_streue(str(sorte["glb"]), regeln, salz, out)
+	return out
+
+
+## W14-Feinschliff (Sicht-Diagnose „harte Distrikt-Kanten"): ein Streu-Saum
+## aus Büschen/Gras/Blumen im Band um jede Distrikt-Pad-Kante bricht die
+## harten Farbwechsel Pad↔Wiese/Pad↔Pad. Straßen + Eingänge bleiben frei.
+static func saum_plaene(karte: CityMap, seed_wert: int) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	if karte == null or not karte.ist_geladen():
+		return out
+	var eingaenge := _eingangs_segmente(karte)
+	var frei := func(p: Vector2) -> bool:
+		return not karte.ist_strasse(karte.welt_zu_tile(Vector3(p.x, 0.0, p.y)))
+	var distrikte: Dictionary = karte.daten.get("distrikte", {})
+	var zaehler := 0
+	for distrikt: String in ["gewerbe", "zentrum", "wohnen", "park"]:
+		var zonen: Array = distrikte.get(distrikt, {}).get("zonen", [])
+		for z in zonen.size():
+			var rect := _zonen_rect(karte, zonen[z])
+			var band := rect.grow(SAUM_BREITE_M * 0.5)
+			var kern := rect.grow(-SAUM_BREITE_M * 0.5)
+			var umfang := (rect.size.x + rect.size.y) * 2.0
+			for s in SAUM_STREU_POOL.size():
+				var sorte: Dictionary = SAUM_STREU_POOL[s]
+				var regeln := {
+					"rect": band,
+					"anzahl": int(umfang * float(sorte["je_m"])),
+					"min_abstand": 2.0,
+					"skala_min": float(sorte["skala"]) * 0.85,
+					"skala_max": float(sorte["skala"]) * 1.15,
+					"meide_rects": [kern] as Array[Rect2],
+					"meide_segmente": eingaenge,
+					"frei_fn": frei,
+				}
+				var salz := seed_wert + 530 + zaehler * 41 + s * 13
+				_streue(str(sorte["glb"]), regeln, salz, out)
+			zaehler += 1
+	return out
+
+
+## WeltStreu-Ergebnis als Grün-Plan-Einträge anhängen (CityKulisse-Schema).
+static func _streue(glb: String, regeln: Dictionary, salz: int, out: Array[Dictionary]) -> void:
+	for t: Transform3D in WeltStreu.verteile(regeln, salz):
+		(
+			out
+			. append(
+				{
+					"glb": glb,
+					"pos": t.origin + Vector3(0.0, 0.05, 0.0),
+					"rot_grad": rad_to_deg(t.basis.get_euler().y),
+					"scale": t.basis.get_scale().x,
+					"kategorie": "gruen",
+					"klein": true,
+				}
+			)
+		)
+
+
+## Welt-Rect einer Distrikt-Zone ([r0, c0, r1, c1] inkl. Tile-Halbkanten).
+static func _zonen_rect(karte: CityMap, zone: Array) -> Rect2:
+	var von := karte.welt_von(float(zone[0]), float(zone[1]))
+	var bis := karte.welt_von(float(zone[2]), float(zone[3]))
+	var halb := karte.tile_m / 2.0
+	return Rect2(
+		Vector2(minf(von.x, bis.x) - halb, minf(von.z, bis.z) - halb),
+		Vector2(absf(bis.x - von.x) + halb * 2.0, absf(bis.z - von.z) + halb * 2.0)
+	)
+
+
+## Frei für Vorplatz-Streu? Keine Straße und nicht im Gebäude-Kern des
+## Tiles (dort stehen Kulissen-/Orts-Fassaden auf der Tile-Mitte).
+static func _vorplatz_frei(karte: CityMap, p: Vector2) -> bool:
+	var tile := karte.welt_zu_tile(Vector3(p.x, 0.0, p.y))
+	if karte.ist_strasse(tile):
+		return false
+	var mitte := karte.tile_zu_welt(tile)
+	return Vector2(mitte.x, mitte.z).distance_to(p) >= VORPLATZ_KERN_FREI_M
+
+
+## Freihalte-Bänder: Orts-Eingänge (Tile-Mitte → Straße) + Hausausfahrt.
+static func _eingangs_segmente(karte: CityMap) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for eintrag: Dictionary in karte.orte():
+		var tiles: Array = eintrag.get("tiles", [])
+		if tiles.is_empty():
+			continue
+		var mitte := karte.tile_zu_welt(CityMap._tile_von(tiles[0]))
+		var strasse := karte.tile_zu_welt(CityMap._tile_von(eintrag.get("strasse", [0, 0])))
+		(
+			out
+			. append(
+				{
+					"a": Vector2(mitte.x, mitte.z),
+					"b": Vector2(strasse.x, strasse.z),
+					"abstand": 3.5,
+				}
+			)
+		)
+	var einfahrt := karte.zuhause_einfahrt()
+	var haus := karte.tile_zu_welt(karte.zuhause_tile())
+	var strassen_pos: Vector3 = einfahrt["strasse_pos"]
+	(
+		out
+		. append(
+			{
+				"a": Vector2(strassen_pos.x, strassen_pos.z),
+				"b": Vector2(haus.x, haus.z),
+				"abstand": 4.0,
+			}
+		)
+	)
+	return out
 
 
 ## ------------------------------------------------------------------ Park

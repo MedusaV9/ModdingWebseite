@@ -24,6 +24,12 @@ const DISTRIKT_FARBEN := {
 	"flughafen": Color(0.68, 0.68, 0.71),
 }
 
+## W14-Fassaden-Varianz (Sicht-Diagnose „weisse Haeuserzeilen"): Kulissen-
+## Gebaeude OHNE Tint bekommen deterministisch eine Pastell-Toenung —
+## bewusst kurze Liste (jede glb|tint-Sorte ist eine MultiMesh-Gruppe,
+## Draw-Call-Budget!), Farben aus den bestehenden Kulissen-Paletten.
+const FASSADEN_NACHTINTS: Array[String] = ["#F2C14E", "#8FD0E8", "#FF9E7D", "#B5E48C"]
+
 ## Bau-Ergebnisse, die CityScene fuers Gameplay braucht: Auto-Kollisions-
 ## AABBs, Ampel-Birnen (Instanzfarben) + Achsen/Kreuzungs-Lookup.
 var colliders: Array[Dictionary] = []
@@ -55,6 +61,18 @@ func _init(szene: Node3D, karte: CityMap, licht_profil: Dictionary, stunde := 12
 	_karte = karte
 	_profil = licht_profil
 	_stunde = stunde
+
+
+## W14-Fassaden-Varianz, pure Funktion (test_w14_camcity.gd): tintlose
+## Kulissen-Gebäude/-Häuser bekommen deterministisch je glb-Sorte EINEN
+## Pastellton aus FASSADEN_NACHTINTS — gleicher Gruppen-Schlüssel für alle
+## Exemplare der Sorte, also KEINE neue MultiMesh-Gruppe (Draw-Call-neutral).
+static func fassaden_tint(glb: String, tint: String, kategorie: String) -> String:
+	if not tint.is_empty():
+		return tint
+	if kategorie != "gebaeude" and kategorie != "haus":
+		return tint
+	return FASSADEN_NACHTINTS[posmod(hash(glb), FASSADEN_NACHTINTS.size())]
 
 
 ## Sanfte Dauer-Animationen der Kulisse (Markisen wehen, Voegel kreisen).
@@ -231,6 +249,7 @@ func baue_laternen() -> void:
 	birnen.multimesh = mm
 	birnen.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	wurzel.add_child(birnen)
+	CityAmbiente.laternen_schein(wurzel, posten, kopf_hoehe)
 
 
 func baue_orte() -> void:
@@ -255,7 +274,8 @@ func baue_orte() -> void:
 			# Distrikt-Pad (y=0,05) — nicht auf Straßenhöhe (schwebt sonst).
 			gebaeude.position.y = 0.05
 			gebaeude.rotation.y = _rot_zu(erste, strasse)
-			_tinte(gebaeude, str(fassade.get("tint", "")))
+			# W14: tintlose Orte-Fassaden bekommen den Pastell-Nachtint.
+			_tinte(gebaeude, fassaden_tint(glb, str(fassade.get("tint", "")), "gebaeude"))
 			wurzel.add_child(gebaeude)
 			(
 				_fenster_gebaeude
@@ -461,6 +481,61 @@ func _baue_ort_props(wurzel: Node3D, ort_id: String, mitte: Vector3, zur_strasse
 			props.append(
 				{"glb": "natur/pot_large.glb", "off": richtung * 5.0 + quer * 5.0, "scale": 3.5}
 			)
+			# W14 (Sicht-Diagnose „leerer Marktplatz/schwebende Markisen"):
+			# Waren-Tische + Kisten UNTER die vier Markisen-Stände stellen
+			# (dann lesen sie sich als Marktstände statt fliegender Dächer)
+			# und die freie Platzmitte mit Bänken/Kübeln möblieren.
+			for stand: Vector3 in [
+				richtung * 4.0 + quer * -5.0,
+				richtung * 4.0 + quer * 6.0,
+				richtung * -18.0 + quer * -5.0,
+				richtung * -18.0 + quer * 6.0,
+			]:
+				props.append({"glb": "innen/table_round_A.gltf", "off": stand, "scale": 0.9})
+			(
+				props
+				. append(
+					{
+						"glb": "innen/crate_carrots.gltf",
+						"off": richtung * 1.2 + quer * -6.4,
+						"rot": 35.0,
+						"scale": 3.4,
+					}
+				)
+			)
+			(
+				props
+				. append(
+					{
+						"glb": "innen/crate_cheese.gltf",
+						"off": richtung * -15.0 + quer * 7.4,
+						"rot": 205.0,
+						"scale": 3.4,
+					}
+				)
+			)
+			for seite: float in [-1.0, 1.0]:
+				(
+					props
+					. append(
+						{
+							"glb": "deko/bench.gltf",
+							"off": richtung * -7.0 + quer * (1.6 * seite),
+							"rot": 90.0 * seite,
+							"scale": 5.0,
+						}
+					)
+				)
+				(
+					props
+					. append(
+						{
+							"glb": "vorstadt/planter.glb",
+							"off": richtung * 8.6 + quer * (4.2 * seite),
+							"scale": 4.0,
+						}
+					)
+				)
 		_:
 			pass
 	for prop in props:
@@ -500,9 +575,12 @@ func baue_deko() -> void:
 		node.position = _karte.welt_von(float(tile[0]), float(tile[1]))
 		node.position.y = 0.05
 		node.rotation_degrees.y = float(eintrag.get("rot", 0))
-		_tinte(node, str(eintrag.get("tint", "")))
-		wurzel.add_child(node)
 		var glb_name := str(eintrag.get("glb", ""))
+		# W14: tintlose Deko-Gebäude (haus_a…f, Türme) pastellig nachtönen —
+		# Markisen/Kisten (kein gebaeude/-Pfad) bleiben unangetastet.
+		var kategorie := "gebaeude" if glb_name.begins_with("gebaeude/") else ""
+		_tinte(node, fassaden_tint(glb_name, str(eintrag.get("tint", "")), kategorie))
+		wurzel.add_child(node)
 		if glb_name.begins_with("gebaeude/"):
 			var halb := float(eintrag.get("scale", 10.0)) * 0.5
 			_collider_bei(node.position, halb)
@@ -546,6 +624,13 @@ func baue_kulisse() -> void:
 	# in DENSELBEN Plan mischen — gleiche glb|tint-Sorten teilen sich das
 	# MultiMesh, das Grün kostet also kaum zusätzliche Draw-Calls.
 	plaene.append_array(CityGruen.plaene(_karte, _karte.deko_seed() + 917))
+	# W14-Fassaden-Varianz: tintlose Gebäude nachtönen (Gruppen-neutral).
+	for eintrag: Dictionary in plaene:
+		eintrag["tint"] = fassaden_tint(
+			str(eintrag.get("glb", "")),
+			str(eintrag.get("tint", "")),
+			str(eintrag.get("kategorie", ""))
+		)
 	var gruppen := CityKulisse.gruppen(plaene)
 	var schluessel: Array = gruppen.keys()
 	schluessel.sort()

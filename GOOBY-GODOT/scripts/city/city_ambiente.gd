@@ -21,8 +21,17 @@ const NEAR_MISS_TEMPO := 4.0
 ## Sperrzeit nach einer Hupe (s) — sonst hupt der ganze Block im Chor.
 const NEAR_MISS_PAUSE_S := 4.0
 
+## Laternen-Lichtkegel (W14, Sicht-Diagnose „Nacht-Beleuchtungsluecken"):
+## Kegel-Radius am Boden + Durchmesser des warmen Lichtflecks (Meter).
+const KEGEL_RADIUS_M := 2.6
+const KEGEL_SPITZE_M := 0.35
+const FLECK_M := 5.2
+
 ## Geteilter Glow-Verlauf aller Ladenschilder (s. glow_textur()).
 static var _glow_tex: GradientTexture2D = null
+
+## Geteilter Vertikal-Verlauf der Laternen-Lichtkegel (s. kegel_textur()).
+static var _kegel_tex: GradientTexture2D = null
 
 
 ## Tageslicht 0..1 über die Uhrzeit (weiche Rampen morgens/abends).
@@ -154,3 +163,73 @@ static func schild_glow_material(farbe: Color) -> StandardMaterial3D:
 	mat.billboard_keep_scale = true
 	mat.render_priority = -1
 	return mat
+
+
+## Vertikaler Alpha-Verlauf der Lichtkegel (oben an der Birne voll, unten
+## am Boden aus) — EINMAL gebaut, von allen Kegeln geteilt.
+static func kegel_textur() -> GradientTexture2D:
+	if _kegel_tex == null:
+		var verlauf := Gradient.new()
+		verlauf.set_offset(0, 0.0)
+		verlauf.set_color(0, Color(1, 1, 1, 1))
+		verlauf.set_offset(1, 1.0)
+		verlauf.set_color(1, Color(1, 1, 1, 0))
+		var tex := GradientTexture2D.new()
+		tex.gradient = verlauf
+		tex.width = 8
+		tex.height = 64
+		tex.fill = GradientTexture2D.FILL_LINEAR
+		tex.fill_from = Vector2(0.5, 0.0)
+		tex.fill_to = Vector2(0.5, 1.0)
+		_kegel_tex = tex
+	return _kegel_tex
+
+
+## W14 (Sicht-Diagnose „Nacht-Beleuchtungslücken"): unter jeder brennenden
+## Laterne ein warmer Lichtkegel (Birne→Boden) + ein weicher Lichtfleck auf
+## dem Asphalt — 2 MultiMeshes = 2 Draw-Calls für ALLE Laternen, unshaded,
+## weiterhin ohne echte OmniLights (Mobile-Budget A §7).
+static func laternen_schein(wurzel: Node3D, posten: Array[Transform3D], kopf_hoehe: float) -> void:
+	if posten.is_empty():
+		return
+	var warm := Color(1.0, 0.85, 0.55)
+	var kegel_mesh := CylinderMesh.new()
+	kegel_mesh.top_radius = KEGEL_SPITZE_M
+	kegel_mesh.bottom_radius = KEGEL_RADIUS_M
+	kegel_mesh.height = kopf_hoehe
+	kegel_mesh.radial_segments = 10
+	kegel_mesh.rings = 1
+	# Ohne Deckel: sonst zeichnen Boden-/Deckkreis harte Ring-Silhouetten.
+	kegel_mesh.cap_top = false
+	kegel_mesh.cap_bottom = false
+	var kegel_mat := StandardMaterial3D.new()
+	kegel_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	kegel_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	# Vertikaler Verlauf (Birne hell → Boden aus), damit der Kegel weich
+	# ausläuft statt an der Unterkante hart abzuschneiden.
+	kegel_mat.albedo_texture = kegel_textur()
+	kegel_mat.albedo_color = Color(warm.r, warm.g, warm.b, 0.22)
+	kegel_mesh.material = kegel_mat
+	var fleck_mesh := PlaneMesh.new()
+	fleck_mesh.size = Vector2(FLECK_M, FLECK_M)
+	var fleck_mat := StandardMaterial3D.new()
+	fleck_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	fleck_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	fleck_mat.albedo_texture = glow_textur()
+	fleck_mat.albedo_color = Color(warm.r, warm.g, warm.b, 0.55)
+	fleck_mesh.material = fleck_mat
+	for paar: Array in [
+		[kegel_mesh, Vector3(0.0, kopf_hoehe * 0.5, 0.0), "Lichtkegel"],
+		[fleck_mesh, Vector3(0.0, 0.07, 0.0), "Lichtflecken"],
+	]:
+		var mm := MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		mm.mesh = paar[0]
+		mm.instance_count = posten.size()
+		for i in posten.size():
+			mm.set_instance_transform(i, Transform3D(Basis.IDENTITY, posten[i].origin + paar[1]))
+		var instanz := MultiMeshInstance3D.new()
+		instanz.name = str(paar[2])
+		instanz.multimesh = mm
+		instanz.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		wurzel.add_child(instanz)
