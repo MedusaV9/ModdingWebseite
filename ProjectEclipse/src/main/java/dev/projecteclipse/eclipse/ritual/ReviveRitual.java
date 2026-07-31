@@ -18,7 +18,9 @@ import dev.projecteclipse.eclipse.progression.goals.QuestApi;
 import dev.projecteclipse.eclipse.registry.EclipseAttachments;
 import dev.projecteclipse.eclipse.registry.EclipseItems;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.GlobalPos;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerBossEvent;
 import net.minecraft.server.level.ServerLevel;
@@ -44,6 +46,9 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
  *       progress = remaining/total;</li>
  *   <li>every {@value #BEAM_INTERVAL_TICKS} ticks {@link BeamEmitter} sends the
  *       end-rod + purple-dust beam column to all players within 512 blocks;</li>
+ *   <li>every {@value #SOUL_THREAD_INTERVAL_TICKS} ticks the FX-WAVE-13 N9 soul thread
+ *       ({@link #CUE_SOUL_THREAD}) is re-sent at the stage matching the progress, so the
+ *       Ara thread from the sigil to the target's grave pulls visibly taut;</li>
  *   <li>if the confirming player dies, disconnects, changes dimension or moves
  *       more than {@value #MAX_CONFIRMER_DISTANCE} blocks from the altar, the ritual
  *       FAILS without consuming the sigil.</li>
@@ -71,6 +76,33 @@ public final class ReviveRitual {
     private static final int WITNESS_BONUS_TICKS_PER_BATCH = 40;
     private static final int WITNESS_MAX_BONUS_TICKS = DURATION_TICKS / 2;
 
+    /**
+     * FX-WAVE-13 N9 — Seelenfaden der Wiederbelebung. Cue ids per tautness stage
+     * (1 slack → 3 locked); index = {@code stage - 1}. Declared here rather than in
+     * {@code network.fx.FxCues} (frozen wire table) via its public {@code cue(...)}
+     * helper, and here rather than in the client registrar so the SERVER side never
+     * touches a {@code Dist.CLIENT} class. Payload contract: {@code pos} = the sigil
+     * (altar crown), {@code a}/{@code b} = the X/Y Euler pair that rotates the asset's
+     * local +Z onto the sigil→grave vector (the {@code CUE_HEART_THEFT} aim convention);
+     * the client leg spawns {@code eclipse:revive_soul_thread_<stage>} there.
+     */
+    public static final ResourceLocation[] CUE_SOUL_THREAD = {
+            FxCues.cue("revive_soul_thread_1"),
+            FxCues.cue("revive_soul_thread_2"),
+            FxCues.cue("revive_soul_thread_3")};
+    /**
+     * N9 re-send cadence. The assets run 44 t, so a 40 t re-send leaves a 4 t crossfade
+     * and the thread never blinks — it is one continuous strand for the whole ritual
+     * that swaps stage files as the progress crosses the thirds.
+     */
+    private static final int SOUL_THREAD_INTERVAL_TICKS = 40;
+    /** N9 send range: the thread is a ~1-block-thick line, pointless past this. */
+    private static final double SOUL_THREAD_RANGE = 64.0D;
+    /** N9 anchor: the altar crown (same +0.65 the thunderbloom uses). */
+    private static final double SOUL_THREAD_SIGIL_Y = 0.65D;
+    /** N9 aim target inside the grave block (its middle, not the corner). */
+    private static final double SOUL_THREAD_GRAVE_Y = 0.5D;
+
     private static final List<ReviveRitual> ACTIVE = new ArrayList<>();
 
     private final ServerLevel level;
@@ -82,6 +114,13 @@ public final class ReviveRitual {
     private int ticksElapsed;
     /** W4-CEREMONY / IDEA-10 #1: total ticks already shaved off by witnesses (cap bookkeeping). */
     private int witnessBonusTicks;
+    /**
+     * FX-WAVE-13 N9: countdown to the next soul-thread send. A countdown rather than a
+     * {@code ticksElapsed % N} test on purpose — the witness circle adds whole seconds to
+     * {@code ticksElapsed} in one step, which would skip a modulo boundary and tear the
+     * thread exactly when the crowd shows up.
+     */
+    private int soulThreadTimer;
 
     private ReviveRitual(ServerLevel level, BlockPos altarPos, UUID confirmerId, UUID targetId, String targetName) {
         this.level = level;
@@ -164,6 +203,10 @@ public final class ReviveRitual {
             }
             BeamEmitter.emit(this.level, this.altarPos, witnesses);
         }
+        if (--this.soulThreadTimer <= 0) {
+            this.soulThreadTimer = SOUL_THREAD_INTERVAL_TICKS;
+            sendSoulThread();
+        }
         this.bossEvent.setProgress(
                 (float) Math.max(0, DURATION_TICKS - this.ticksElapsed) / DURATION_TICKS);
         if (this.ticksElapsed % VIGIL_INTERVAL_TICKS == 0) {
@@ -197,6 +240,56 @@ public final class ReviveRitual {
             }
         }
         return witnesses;
+    }
+
+    /**
+     * FX-WAVE-13 N9: re-sends the soul-thread cue for the current tautness stage. The
+     * thread spans the SIGIL→GRAVE line, so it needs a tracked grave of the target — when
+     * the target died before W13's grave tracking, looted their grave already, or is
+     * buried in another dimension, there is simply nothing to span and the ritual runs
+     * exactly as it did before (no cue, no fallback, no log spam).
+     */
+    private void sendSoulThread() {
+        GlobalPos grave = nearestGrave();
+        if (grave == null) {
+            return;
+        }
+        Vec3 sigil = Vec3.atCenterOf(this.altarPos).add(0.0D, SOUL_THREAD_SIGIL_Y, 0.0D);
+        Vec3 aim = Vec3.atCenterOf(grave.pos()).add(0.0D, SOUL_THREAD_GRAVE_Y, 0.0D).subtract(sigil);
+        double distance = aim.length();
+        if (distance < 1.0E-3D) {
+            return; // grave inside the altar block: no direction to aim, skip this send
+        }
+        // Same solve as PlayerFxPhotonRows.heartTheftArc: PhotonBridge feeds the rotation
+        // through JOML rotationXYZ (Rx·Ry·Rz), which maps local +Z to
+        // (sin ay, −sin ax·cos ay, cos ax·cos ay).
+        Vec3 dir = aim.scale(1.0D / distance);
+        float xDeg = (float) Math.toDegrees(Math.atan2(-dir.y, dir.z));
+        float yDeg = (float) Math.toDegrees(Math.atan2(dir.x, Math.sqrt(dir.y * dir.y + dir.z * dir.z)));
+        // Thirds of the ritual → stage 1/2/3. The witness circle shortens the ritual by
+        // inflating ticksElapsed, so a fast ritual simply reaches "locked" sooner —
+        // which is the correct read: the crowd is pulling the thread taut.
+        int stage = Math.min(3, this.ticksElapsed * 3 / DURATION_TICKS + 1);
+        FxPayloads.sendFxEvent(this.level, CUE_SOUL_THREAD[stage - 1], sigil,
+                xDeg, yDeg, SOUL_THREAD_RANGE);
+    }
+
+    /** The target's tracked grave closest to the altar, in THIS dimension, or {@code null}. */
+    private GlobalPos nearestGrave() {
+        GlobalPos nearest = null;
+        double nearestSq = Double.MAX_VALUE;
+        for (GlobalPos grave : EclipseWorldState.get(this.level.getServer())
+                .getGravePositions(this.targetId)) {
+            if (!grave.dimension().equals(this.level.dimension())) {
+                continue;
+            }
+            double distanceSq = grave.pos().distSqr(this.altarPos);
+            if (distanceSq < nearestSq) {
+                nearestSq = distanceSq;
+                nearest = grave;
+            }
+        }
+        return nearest;
     }
 
     /** Vigil sync to the online ghost target (no-op while the target is offline). */

@@ -132,6 +132,52 @@ def ribbon_renderer(material_entry, cull_box=None):
             "cull": cull, "orderInLayer": I(0), "vertexSortingMode": "NONE"}
 
 
+# --------------------------------------------------------------------------- wave-13 B6
+# The three wave-13 movement/variance levers, ported from the A1 wandfx2 package so the
+# non-komet half of this file speaks the same dialect as the komet chain above.
+# ---------------------------------------------------------------------------
+def color_by_speed(cool_rgb, hot_rgb, lo_bps, hi_bps):
+    """`colorBySpeed` module body — ColorBySpeedSetting{color, speedRange}.
+
+    Input is blocks/SECOND (`|realVelocity| × 20`), output MULTIPLIES the lifetime color,
+    so the ramp reads as "fast = the hot tint, slow = the cool tint". `speedRange` is an
+    LDLib2 `Range`, whose codec fields are `a`/`b` — fxlib's `_min_max` writes `min`/`max`
+    and would deserialise to the 0..1 default, hence the hand-rolled compound.
+    """
+    return {"color": gradient([(0.0, 1.0), (1.0, 1.0)],
+                              [(0.0, *cool_rgb), (1.0, *hot_rgb)]),
+            "speedRange": {"a": F(float(lo_bps)), "b": F(float(hi_bps))}}
+
+
+def varied(alpha_pts, rgb_pts, rgb_alt, alpha_alt=None):
+    """`random_gradient` — the authored ramp plus a sibling ramp inside the same path
+    identity; each particle rolls its own memoized lerp between the two, which is what
+    breaks the clone look on a 24-particle burst without adding a single particle."""
+    return random_gradient(alpha_pts, rgb_pts, alpha_alt or alpha_pts, rgb_alt)
+
+
+def inherit_velocity(multiply, mode="CURRENT"):
+    """`inheritVelocity` module body — InheritVelocitySetting{mode, multiply}.
+
+    CURRENT re-reads the emitter velocity every tick (INITIAL freezes it at birth). On a
+    LOCAL-space, entity-attached emitter the particle is already welded to the transform,
+    so a NEGATIVE multiply is the drag knob: the aura lags this share of the player's
+    travel and smears backwards while sprinting, then snaps back onto the hand on a stop.
+    Only legal because `WandAuraClient` spawns the idle loops through
+    `PhotonBridge.ensureAttachedFx` — a world-anchored executor has no velocity to inherit.
+    """
+    return {"mode": mode, "multiply": constant(float(multiply))}
+
+
+#: Local-space drag multiply for the hand auras (the A1 `wand_overcharge` value — deep
+#: enough to read at sprint speed, shallow enough that the aura never leaves the hand).
+IDLE_DRAG = -0.4
+#: Blocks of player travel per extra particle on the idle loops (`emission.distanceRate`).
+#: Standing still costs nothing; walking thickens the aura — the loops stop looking like
+#: a static decal welded to the hand.
+IDLE_PER_BLOCK = 0.6
+
+
 # ---------------------------------------------------------------------------
 # Concept 1 — eclipse:wand_soulbind_flash (one-shot, ~50t tree, <= 33 live particles)
 # ---------------------------------------------------------------------------
@@ -146,7 +192,7 @@ def build_wand_soulbind_flash() -> FxBuilder:
        .child_of(root)
        .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(1))])
        .with_shape(dot())
-       .with_material(texture_material(CIRCLE, hdr=(2.5, 2.2, 3.5), blend=BLEND_ADDITIVE))
+       .with_material(texture_material(CIRCLE, hdr=hdr(2.5, 2.2, 3.5), blend=BLEND_ADDITIVE))
        .with_curves(size_over_lifetime=curve(  # 0.2 -> 1.0 pop-in by ~2t, decay to 0 by 12t
             0.0, 1.0, [(0.0, 0.2, 0.08, 1.0, 0.72, 0.55, 1.0, 0.0)], "lifetime", "size"))
        .with_lights(sky=15, block=15))
@@ -158,27 +204,43 @@ def build_wand_soulbind_flash() -> FxBuilder:
        .child_of(root)
        .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(1))])
        .with_shape(dot())
-       .with_material(texture_material(CIRCLE, hdr=(1.2, 1.0, 1.8), blend=BLEND_ADDITIVE))
+       .with_material(texture_material(CIRCLE, hdr=hdr(1.2, 1.0, 1.8), blend=BLEND_ADDITIVE))
        .with_renderer(render_mode="VerticalBillboard")
        .with_curves(
             size_over_lifetime=curve(  # 0.4 -> 3.2 ease-out expansion
                 1.0, 8.0, [(0.0, 0.0, 0.18, 0.85, 0.55, 1.0, 1.0, 1.0)], "lifetime", "size"),
             color_over_lifetime=gradient([(0.0, 0.9), (1.0, 0.0)], [(0.0, 1.0, 1.0, 1.0)])))
 
+    # Wave-13 B6: the sparks were authored as blocks/TICK (0.3–0.7), which Photon reads as
+    # blocks/SECOND — 24 sparks crawling 0.3–1.0 blocks over their whole 20–30 t life, i.e.
+    # a static clump. Re-solved for the ~2.5 block spray the ceremony wants, and the birth
+    # shell widened 0.3 -> 0.75 so 24 additive quads no longer stack inside one half-block
+    # (the V2.1 stacking law: overlapping ALPHA sprites converge to their own colour, so a
+    # tight white-born burst bleaches to a single blob).
     (fx.particle_emitter("sparks",
             duration=50, looping=False, start_delay=constant(1),
-            start_lifetime=random_between(20, 30), start_speed=random_between(0.3, 0.7),
+            start_lifetime=random_between(20, 30), start_speed=random_between(2.5, 5.0),
             start_size=nf3(random_between(0.05, 0.1), random_between(0.05, 0.1),
                            random_between(0.05, 0.1)),
             simulation_space="World", max_particles=32)
        .child_of(root)
        .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(24))])
-       .with_shape(sphere(radius=0.3, thickness=0.0))
-       .with_material(texture_material(CIRCLE, hdr=(1.1, 1.0, 1.4), blend=BLEND_ADDITIVE))
+       .with_shape(sphere(radius=0.75, thickness=0.0))
+       .with_material(texture_material(CIRCLE, hdr=hdr(1.1, 1.0, 1.4), blend=BLEND_ADDITIVE))
        .with_physics(collision=False, gravity=0.15, bounce_chance=0.0)
-       .with_curves(color_over_lifetime=gradient(  # white -> path-agnostic violet -> 0
-            [(0.0, 1.0), (0.55, 0.8), (1.0, 0.0)],
-            [(0.0, 1.0, 1.0, 1.0), (0.5, 0.75, 0.55, 1.0), (1.0, 0.45, 0.25, 0.8)]))
+       # The spray decelerates hard, so speed IS the phase of the ceremony: the shot-out
+       # sparks are white-hot, the ones already settling have gone violet.
+       .with_module("colorBySpeed", color_by_speed((0.55, 0.35, 0.9), (1.0, 1.0, 1.0),
+                                                   1.0, 6.0))
+       .with_curves(
+            velocity_over_lifetime=dict(
+                speed_modifier=curve(0.1, 1.0, [SEG_DECAY_TAIL], "lifetime", "value")),
+            color_over_lifetime=varied(  # born dark -> white flash -> violet -> 0
+                [(0.0, 0.0), (0.1, 1.0), (0.55, 0.8), (1.0, 0.0)],
+                [(0.0, 0.16, 0.1, 0.28), (0.18, 1.0, 1.0, 1.0),
+                 (0.6, 0.75, 0.55, 1.0), (1.0, 0.45, 0.25, 0.8)],
+                [(0.0, 0.12, 0.08, 0.22), (0.22, 0.92, 0.88, 1.0),
+                 (0.62, 0.55, 0.4, 0.95), (1.0, 0.3, 0.16, 0.6)]))
        .with_lights(sky=15, block=15))
 
     # Soft afterglow covers the bloom falloff so the pop doesn't "cut".
@@ -764,14 +826,26 @@ def build_riss_schlag_maw() -> FxBuilder:
        .child_of(root)
        .with_emission(rate=constant(3.0))
        .with_shape(sphere(radius=3.5, thickness=0.0))
-       .with_material(texture_material(CIRCLE, hdr=(0.9, 1.3, 1.5), blend=BLEND_ADDITIVE))
+       .with_material(texture_material(CIRCLE, hdr=hdr(0.9, 1.3, 1.5), blend=BLEND_ADDITIVE))
        .with_renderer(render_mode="StretchedBillboard", velocity_scale=0.6, length_scale=2.0)
        .with_cull_box((-6.0, -6.0, -6.0), (6.0, 6.0, 6.0))
        .main(start_color=random_color(0xFF37E6E6, 0xFFE23AE2))  # glitch cyan <-> magenta
        .with_curves(
-            velocity_over_lifetime=dict(radial=constant(-0.9)),  # the implosion
-            color_over_lifetime=gradient([(0.0, 0.0), (0.25, 1.0), (1.0, 0.6)],
-                                         [(0.0, 1.0, 1.0, 1.0)]))
+            # THE fix in this file. `radial` is scaled by 0.01/tick, so the authored −0.9
+            # moved each streak 0.05 blocks over its 5–8 t life: the maw did not implode,
+            # it sat on its own 3.5-block shell. −34 -> −74 (accelerating, SEG_SMOOTH_UP)
+            # covers ~3.5 blocks in 6.5 t — the streaks actually reach the throat, and the
+            # acceleration is what sells it as suction rather than a collapse.
+            velocity_over_lifetime=dict(
+                radial=curve(-34.0, -74.0, [SEG_SMOOTH_UP], "lifetime", "value")),
+            # Speed is the whole story of an implosion, so let it write the colour: the
+            # streaks whiten as the maw takes them.
+            color_over_lifetime=varied(
+                [(0.0, 0.0), (0.25, 1.0), (1.0, 0.6)],
+                [(0.0, 0.2, 0.35, 0.4), (0.3, 1.0, 1.0, 1.0), (1.0, 1.0, 1.0, 1.0)],
+                [(0.0, 0.28, 0.16, 0.3), (0.35, 0.9, 1.0, 1.0), (1.0, 0.85, 0.95, 1.0)]))
+       .with_module("colorBySpeed", color_by_speed((0.45, 0.5, 0.6), (1.0, 1.0, 1.0),
+                                                   4.0, 15.0))
        .with_sub_emitters(sub_emitter("eclipse:riss_glitch_pop", event="Death",
                                       probability=0.35, inherit=("Color",)))
        .with_lights(sky=15, block=15))
@@ -783,7 +857,7 @@ def build_riss_schlag_maw() -> FxBuilder:
        .child_of(root)
        .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(1))])
        .with_shape(dot())
-       .with_material(texture_material(CIRCLE, hdr=(0.8, 1.4, 1.6), blend=BLEND_ADDITIVE))
+       .with_material(texture_material(CIRCLE, hdr=hdr(0.8, 1.4, 1.6), blend=BLEND_ADDITIVE))
        .with_cull_box((-6.0, -6.0, -6.0), (6.0, 6.0, 6.0))
        .with_curves(
             rotation_over_lifetime=dict(roll=constant(4.0)),
@@ -801,15 +875,18 @@ def build_riss_glitch_pop() -> FxBuilder:
     uvAnimation tile-picker, plus an eased pop-shrink size envelope so the pop doesn't
     blink out linearly."""
     fx = FxBuilder("riss_glitch_pop")
+    # Wave-13 B6: 0.02–0.1 b/s over 4 t is 0.02 blocks of travel — the "burst" never
+    # burst. 1.2–3.2 b/s scatters the three bits ~0.25–0.65 blocks, which is a pop at the
+    # scale of a 0.15-block birth sphere.
     (fx.particle_emitter("static",
             duration=6, looping=False, start_lifetime=constant(4),
-            start_speed=random_between(0.02, 0.1),
+            start_speed=random_between(1.2, 3.2),
             start_size=nf3(random_between(0.08, 0.16), random_between(0.08, 0.16),
                            random_between(0.08, 0.16)),
             simulation_space="World", max_particles=8)
        .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(3))])
        .with_shape(sphere(radius=0.15, thickness=1.0))
-       .with_material(texture_material(SQUARE_4X4, hdr=(1.0, 1.4, 1.5), blend=BLEND_ADDITIVE,
+       .with_material(texture_material(SQUARE_4X4, hdr=hdr(1.0, 1.4, 1.5), blend=BLEND_ADDITIVE,
                                        pixel_art=True, pixel_art_bits=4))
        .main(start_color=random_color(0xFF66FFFF, 0xFFFFFFFF))
        .with_curves(
@@ -831,22 +908,31 @@ def build_glut_sprung_crater() -> FxBuilder:
     fx = FxBuilder("glut_sprung_crater")
     root = fx.empty("eruption")
 
+    # Wave-13 B6: 0.5–1.1 b/s against gravity 0.5 (×0.04 = 0.02 b/t²) is a chunk that
+    # leaves the ground by ~4 cm and immediately falls back — an eruption that never
+    # erupts. 5–9 b/s apexes at 1.5–5 blocks after 12–22 t, which is what the collision
+    # physics, the bounce chance and the Collision sub-emitter were all authored for.
     (fx.particle_emitter("magma_chunks",
             duration=50, looping=False, start_lifetime=random_between(30, 45),
-            start_speed=random_between(0.5, 1.1),
+            start_speed=random_between(5.0, 9.0),
             start_size=nf3(random_between(0.12, 0.28), random_between(0.12, 0.28),
                            random_between(0.12, 0.28)),
             simulation_space="World", max_particles=16)
        .child_of(root)
        .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(14))])
        .with_shape(cone(angle=40.0, radius=0.4))
-       .with_material(texture_material(CIRCLE, hdr=(1.6, 0.8, 0.25), blend=BLEND_ADDITIVE))
+       .with_material(texture_material(CIRCLE, hdr=hdr(1.6, 0.8, 0.25), blend=BLEND_ADDITIVE))
        .main(start_color=random_color(0xFFFFC873, 0xFFFF7B3C))
        .with_physics(collision=True, friction=0.99, collided_friction=0.6, gravity=0.5,
                      bounce_chance=0.8, bounce_rate=0.45, bounce_spread=0.15)
-       .with_curves(color_over_lifetime=gradient(
+       # Molten rock cools as it slows: the launch is white-hot, the apex hang and the
+       # post-bounce crawl are deep red. The ramp does the work a second emitter would.
+       .with_module("colorBySpeed", color_by_speed((0.5, 0.16, 0.06), (1.0, 1.0, 0.95),
+                                                   1.0, 9.0))
+       .with_curves(color_over_lifetime=varied(
             [(0.0, 1.0), (0.75, 0.85), (1.0, 0.0)],
-            [(0.0, 1.0, 0.95, 0.8), (0.4, 1.0, 0.55, 0.2), (1.0, 0.45, 0.12, 0.04)]))
+            [(0.0, 1.0, 0.95, 0.8), (0.4, 1.0, 0.55, 0.2), (1.0, 0.45, 0.12, 0.04)],
+            [(0.0, 1.0, 0.8, 0.5), (0.45, 0.95, 0.36, 0.1), (1.0, 0.3, 0.07, 0.02)]))
        .with_sub_emitters(
             sub_emitter("eclipse:glut_splash", event="Collision", probability=0.5),
             sub_emitter("eclipse:glut_ember_die", event="Death", probability=0.3))
@@ -858,7 +944,7 @@ def build_glut_sprung_crater() -> FxBuilder:
        .child_of(root)
        .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(1))])
        .with_shape(dot())
-       .with_material(texture_material(CIRCLE, hdr=(2.0, 1.1, 0.3), blend=BLEND_ADDITIVE))
+       .with_material(texture_material(CIRCLE, hdr=hdr(2.0, 1.1, 0.3), blend=BLEND_ADDITIVE))
        .with_curves(size_over_lifetime=curve(
             0.0, 1.0, [(0.0, 0.35, 0.08, 1.0, 0.7, 0.5, 1.0, 0.0)], "lifetime", "size"))
        .with_lights(sky=15, block=15))
@@ -869,16 +955,21 @@ def build_glut_sprung_crater() -> FxBuilder:
        .child_of(root)
        .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(1))])
        .with_shape(dot())
-       .with_material(texture_material(CIRCLE, hdr=(1.4, 0.7, 0.2), blend=BLEND_ADDITIVE))
+       .with_material(texture_material(CIRCLE, hdr=hdr(1.4, 0.7, 0.2), blend=BLEND_ADDITIVE))
        .with_renderer(render_mode="Horizontal")
        .with_curves(
             size_over_lifetime=curve(
                 0.5, 7.0, [(0.0, 0.0, 0.2, 0.85, 0.55, 1.0, 1.0, 1.0)], "lifetime", "size"),
             color_over_lifetime=gradient([(0.0, 0.8), (1.0, 0.0)], [(0.0, 1.0, 0.8, 0.5)])))
 
+    # Wave-13 B6: 0.03–0.08 b/s lifted the plume 0.16 blocks in 40 t — the eruption had no
+    # column. 0.5–1.1 b/s carries it 1–2.2 blocks. The size ramp swaps SEG_LINEAR_UP for a
+    # crest ease (the three LINT-LINEAR-CURVE grandfathers on this emitter are retired
+    # with it): smoke billows fast and then only creeps, it does not grow at a constant
+    # rate for two seconds.
     (fx.particle_emitter("smoke",
             duration=50, looping=False, start_lifetime=constant(40),
-            start_speed=random_between(0.03, 0.08),
+            start_speed=random_between(0.5, 1.1),
             start_size=nf3(random_between(0.4, 0.7), random_between(0.4, 0.7),
                            random_between(0.4, 0.7)),
             simulation_space="World", max_particles=12)
@@ -888,28 +979,35 @@ def build_glut_sprung_crater() -> FxBuilder:
        .with_material(texture_material(SMOKE, blend=BLEND_ALPHA))
        .with_renderer(vertex_sorting="DISTANCE")
        .with_curves(
-            size_over_lifetime=curve(1.0, 2.0, [SEG_LINEAR_UP], "lifetime", "size"),
-            color_over_lifetime=gradient(
+            size_over_lifetime=curve(1.0, 2.0, [SEG_EASE_OUT_CREST], "lifetime", "size"),
+            velocity_over_lifetime=dict(
+                speed_modifier=curve(0.2, 1.0, [SEG_DECAY_TAIL], "lifetime", "value")),
+            color_over_lifetime=varied(
                 [(0.0, 0.0), (0.2, 0.45), (1.0, 0.0)],
-                [(0.0, 0.35, 0.28, 0.25), (1.0, 0.15, 0.12, 0.1)])))
+                [(0.0, 0.35, 0.28, 0.25), (1.0, 0.15, 0.12, 0.1)],
+                [(0.0, 0.24, 0.18, 0.16), (1.0, 0.1, 0.08, 0.07)])))
     return fx
 
 
 def build_glut_splash() -> FxBuilder:
     """5 tiny embers per terrain bounce (Collision sub-emitter target)."""
     fx = FxBuilder("glut_splash")
+    # Wave-13 B6: 0.15–0.35 b/s = 0.06–0.14 blocks over the 8 t life. A splash has to
+    # LEAVE the bounce point; 1.5–3.5 b/s throws the embers 0.5–1.2 blocks.
     (fx.particle_emitter("splash",
             duration=10, looping=False, start_lifetime=constant(8),
-            start_speed=random_between(0.15, 0.35),
+            start_speed=random_between(1.5, 3.5),
             start_size=nf3(random_between(0.04, 0.08), random_between(0.04, 0.08),
                            random_between(0.04, 0.08)),
             simulation_space="World", max_particles=12)
        .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(5))])
        .with_shape(cone(angle=55.0, radius=0.1))
-       .with_material(texture_material(CIRCLE, hdr=(1.4, 0.7, 0.2), blend=BLEND_ADDITIVE))
+       .with_material(texture_material(CIRCLE, hdr=hdr(1.4, 0.7, 0.2), blend=BLEND_ADDITIVE))
        .with_physics(collision=False, gravity=0.3, bounce_chance=0.0)
-       .with_curves(color_over_lifetime=gradient(
-            [(0.0, 1.0), (1.0, 0.0)], [(0.0, 1.0, 0.7, 0.3), (1.0, 0.6, 0.2, 0.05)]))
+       .with_curves(color_over_lifetime=varied(
+            [(0.0, 1.0), (1.0, 0.0)],
+            [(0.0, 1.0, 0.7, 0.3), (1.0, 0.6, 0.2, 0.05)],
+            [(0.0, 1.0, 0.5, 0.15), (1.0, 0.4, 0.1, 0.02)]))
        .with_lights(sky=15, block=15))
     return fx
 
@@ -917,17 +1015,21 @@ def build_glut_splash() -> FxBuilder:
 def build_glut_ember_die() -> FxBuilder:
     """2-particle fizzle when a magma chunk expires (Death sub-emitter target)."""
     fx = FxBuilder("glut_ember_die")
+    # Wave-13 B6: a fizzle should still DRIFT (0.4–1.2 b/s = 0.12–0.36 blocks over 6 t);
+    # the authored 0.01–0.05 b/s pinned it in place and read as a texture pop.
     (fx.particle_emitter("fizzle",
             duration=8, looping=False, start_lifetime=constant(6),
-            start_speed=random_between(0.01, 0.05),
+            start_speed=random_between(0.4, 1.2),
             start_size=nf3(random_between(0.05, 0.09), random_between(0.05, 0.09),
                            random_between(0.05, 0.09)),
             simulation_space="World", max_particles=6)
        .with_emission(rate=constant(0.0), bursts=[burst(time=0, count=constant(2))])
        .with_shape(sphere(radius=0.08, thickness=1.0))
-       .with_material(texture_material(CIRCLE, hdr=(1.1, 0.5, 0.15), blend=BLEND_ADDITIVE))
-       .with_curves(color_over_lifetime=gradient(
-            [(0.0, 0.9), (1.0, 0.0)], [(0.0, 1.0, 0.55, 0.2), (1.0, 0.4, 0.12, 0.03)])))
+       .with_material(texture_material(CIRCLE, hdr=hdr(1.1, 0.5, 0.15), blend=BLEND_ADDITIVE))
+       .with_curves(color_over_lifetime=varied(
+            [(0.0, 0.9), (1.0, 0.0)],
+            [(0.0, 1.0, 0.55, 0.2), (1.0, 0.4, 0.12, 0.03)],
+            [(0.0, 1.0, 0.36, 0.1), (1.0, 0.28, 0.07, 0.02)])))
     return fx
 
 
@@ -949,9 +1051,14 @@ def build_wand_idle_riss() -> FxBuilder:
        .with_shape(circle(radius=0.25, thickness=0.0, arc_mode="Loop", arc_speed=1.0))
        .with_material(texture_material(CIRCLE, blend=BLEND_ADDITIVE))
        .with_cull_box((-2.0, -2.0, -2.0), (2.0, 2.0, 2.0))
+       # Wave-13 B6: `orbital` is rad/SECOND (AngularVelocity applies n×0.05 rad/tick,
+       # jar-verified). 0.3 swept 0.6 rad = 34 deg over the 40 t loop, so the "scanline
+       # circle" this emitter's docstring promises was a short arc that never closed and
+       # never repeated. pi rad/s = exactly one full turn per 40 t loop cycle, so the
+       # ribbon closes on its own head and the orbit reads as a ring.
        .with_curves(velocity_over_lifetime=dict(
             orbital_mode="AngularVelocity",
-            orbital=nf3(constant(0), constant(0.3), constant(0))))
+            orbital=nf3(constant(0), constant(math.pi), constant(0))))
        .with_module("trails", {
             "ratio": F(1.0), "lifetime": constant(1.0),
             "dieWithParticles": B(1), "sizeAffectsWidth": B(0), "sizeAffectsLifetime": B(0),
@@ -974,14 +1081,24 @@ def build_wand_idle_riss() -> FxBuilder:
                     texture_material(CIRCLE, hdr=(0.9, 1.2, 1.2), blend=BLEND_ADDITIVE),
                     cull_box=((-2.0, -2.0, -2.0), (2.0, 2.0, 2.0)))}}))
 
+    # Wave-13 B6 movement pass. The loop is entity-attached (`WandAuraClient` →
+    # `ensureAttachedFx`), which is the precondition for BOTH levers below:
+    #   * `distanceRate` tops the bit count up with travel — the glitch gets noisier the
+    #     faster the caster moves, and costs nothing while they stand still,
+    #   * `inheritVelocity` at a negative multiply drags the bits backwards out of the
+    #     hand while sprinting (A1's `wand_overcharge` pattern) instead of leaving them
+    #     welded to it like a decal.
+    # Speed 0.01–0.04 b/s was another blocks/tick slip (0.03 blocks of drift over a whole
+    # life); 0.2–0.6 b/s gives the bits a visible sputter away from the hand.
     (fx.particle_emitter("squares",
             duration=40, looping=True, prewarm=10, start_lifetime=random_between(8, 14),
-            start_speed=random_between(0.01, 0.04),
+            start_speed=random_between(0.2, 0.6),
             start_size=nf3(random_between(0.03, 0.05), random_between(0.03, 0.05),
                            random_between(0.03, 0.05)),
             start_color=random_color(0xFF37E6E6, 0xFFE23AE2),
             simulation_space="Local", max_particles=24)
-       .with_emission(rate=constant(0.3))
+       .with_emission(rate=constant(0.3), distance_rate=constant(1.0 / IDLE_PER_BLOCK))
+       .with_module("inheritVelocity", inherit_velocity(IDLE_DRAG))
        .with_shape(sphere(radius=0.3, thickness=1.0))
        # HARD squares (square_4x4.png was authored for exactly this read — QUALITY §2
        # row 8); the 4x4 uvAnimation samples one square per particle (frames identical,
@@ -1007,15 +1124,22 @@ def build_wand_idle_glut() -> FxBuilder:
             start_size=nf3(random_between(0.04, 0.09), random_between(0.04, 0.09),
                            random_between(0.04, 0.09)),
             simulation_space="Local", max_particles=48)
-       .with_emission(rate=constant(0.8))
+       # Wave-13 B6: distanceRate + inheritVelocity drag (entity-attached loop — see
+       # wand_idle_riss for the derivation); the ring thickens and smears when the caster
+       # runs, and re-forms into a clean ring the moment they stop.
+       .with_emission(rate=constant(0.8), distance_rate=constant(1.0 / IDLE_PER_BLOCK))
+       .with_module("inheritVelocity", inherit_velocity(IDLE_DRAG))
        .with_shape(cylinder(radius=0.35, thickness=0.1, arc_mode="Loop", arc_speed=0.6))
-       .with_material(texture_material(CIRCLE, hdr=(1.3, 0.5, 0.15), blend=BLEND_ADDITIVE))
+       .with_material(texture_material(CIRCLE, hdr=hdr(1.3, 0.5, 0.15), blend=BLEND_ADDITIVE))
        .with_cull_box((-2.0, -2.0, -2.0), (2.0, 2.0, 2.0))
        .with_curves(
-            velocity_over_lifetime=dict(linear=nf3(constant(0), constant(0.02), constant(0))),
-            color_over_lifetime=gradient(  # white-hot -> deep red -> 0
+            # 0.02 b/s lifted an ember 0.03 blocks over 25 t — the ring was flat. 0.35 b/s
+            # carries it ~0.4 blocks, so the embers visibly peel UP off the ring.
+            velocity_over_lifetime=dict(linear=nf3(constant(0), constant(0.35), constant(0))),
+            color_over_lifetime=varied(  # white-hot -> deep red -> 0
                 [(0.0, 0.0), (0.15, 1.0), (0.8, 0.7), (1.0, 0.0)],
-                [(0.0, 1.0, 0.92, 0.75), (0.4, 1.0, 0.45, 0.12), (1.0, 0.35, 0.05, 0.02)]))
+                [(0.0, 1.0, 0.92, 0.75), (0.4, 1.0, 0.45, 0.12), (1.0, 0.35, 0.05, 0.02)],
+                [(0.0, 1.0, 0.72, 0.4), (0.45, 0.95, 0.3, 0.06), (1.0, 0.22, 0.03, 0.01)]))
        .with_lights(sky=15, block=15))
     return fx
 
@@ -1026,15 +1150,25 @@ def build_wand_idle_stern() -> FxBuilder:
     PHOTON-QUALITY §2 row 2): actual 4-point-star sprites off star_2x2.png with the 2x2
     uvAnimation flipbook AS the twinkle — the hairlines now connect stars, not dots."""
     fx = FxBuilder("wand_idle_stern")
+    # Wave-13 B6: this asset's headline feature — the constellation hairlines — could not
+    # draw. The TRAIL config wants 0.02 blocks between vertices, and 0.01–0.03 b/s is
+    # 0.0005–0.0015 blocks per tick: one vertex every 13–40 ticks, i.e. no line. 0.25–0.6
+    # b/s (still a drift, ~0.4–0.7 blocks over the whole life) puts a vertex down roughly
+    # every tick and the halo finally draws lines between its stars. `inheritVelocity`
+    # drag then turns those lines into motion streaks while the caster runs. (The trail's
+    # own `time` is left alone: `TrailsSetting.setup` always installs a lifetimeSupplier
+    # of `trails.lifetime × particleLifetime / 20` s, so the hairline already spans the
+    # star's whole path — the missing ingredient was only ever the vertices.)
     (fx.particle_emitter("star_halo",
             duration=60, looping=True, prewarm=10, start_lifetime=random_between(30, 45),
-            start_speed=random_between(0.01, 0.03),
+            start_speed=random_between(0.2, 0.5),
             start_size=nf3(random_between(0.05, 0.08), random_between(0.05, 0.08),
                            random_between(0.05, 0.08)),
             simulation_space="Local", max_particles=32)
-       .with_emission(rate=constant(0.4))
+       .with_emission(rate=constant(0.4), distance_rate=constant(1.0 / IDLE_PER_BLOCK))
+       .with_module("inheritVelocity", inherit_velocity(IDLE_DRAG))
        .with_shape(circle(radius=0.4, thickness=0.3), rotation=nf3(20.0, 0.0, 0.0))
-       .with_material(texture_material(STAR_2X2, hdr=(1.0, 1.0, 1.6), blend=BLEND_ADDITIVE))
+       .with_material(texture_material(STAR_2X2, hdr=hdr(1.0, 1.0, 1.6), blend=BLEND_ADDITIVE))
        .with_cull_box((-2.0, -2.0, -2.0), (2.0, 2.0, 2.0))
        .with_curves(
             # Flipbook twinkle: steppy off-chord tracks re-pick the 4 star frames on a
@@ -1054,9 +1188,10 @@ def build_wand_idle_stern() -> FxBuilder:
             size_over_lifetime=curve(  # double-hump twinkle
                 0.3, 1.0, [(0.0, 0.4, 0.2, 1.0, 0.3, 0.2, 0.5, 0.9),
                            (0.5, 0.9, 0.7, 0.1, 0.9, 1.0, 1.0, 0.2)], "lifetime", "size"),
-            color_over_lifetime=gradient(
+            color_over_lifetime=varied(
                 [(0.0, 0.0), (0.2, 1.0), (0.8, 0.8), (1.0, 0.0)],
-                [(0.0, 0.95, 0.95, 1.0), (1.0, 0.75, 0.85, 1.0)]))
+                [(0.0, 0.95, 0.95, 1.0), (1.0, 0.75, 0.85, 1.0)],
+                [(0.0, 0.8, 0.86, 1.0), (1.0, 0.95, 0.8, 0.7)]))
        .with_module("trails", {
             "ratio": F(0.3), "lifetime": constant(1.0),
             "dieWithParticles": B(1), "sizeAffectsWidth": B(0), "sizeAffectsLifetime": B(0),
