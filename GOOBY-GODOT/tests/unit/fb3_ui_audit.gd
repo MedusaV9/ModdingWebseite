@@ -118,7 +118,11 @@ func _audit_size(size_info: Array) -> void:
 	for screen_info: Array in [
 		["arcade", &"arcade"],
 		["album", &"album"],
-		["profil", &"social"],
+		# W14/UISCREENS-A: „profil“ zeigte den SOCIAL-Screen (Stand vor der
+		# REST-1-Fehlrouten-Korrektur) — jetzt den echten Profil-Screen
+		# auditieren; Social bleibt als eigener Eintrag abgedeckt.
+		["profil", &"profil"],
+		["social", &"social"],
 		["friends", &"friends"],
 		["wardrobe", &"wardrobe"],
 		["ikea", &"ikea"],
@@ -237,6 +241,7 @@ func _check_pause_compact(modal: MinigamePauseModal) -> void:
 func _register_all_routes() -> void:
 	ArcadeScreen.register_routes()
 	AlbumScreen.register_routes()
+	ProfilScreen.register_routes()
 	SocialScreen.register_routes()
 	FriendsScreen.register_routes()
 	WardrobeScreen.register_routes()
