@@ -12,8 +12,13 @@ extends Node3D
 ## in die Raum-UI-Ebene — der blendet kurz ein, wenn im Haus ein neuer
 ## Radio-/Bordmusik-Track startet (bewusst hier statt im HUD, Ownership).
 
+## W14/UISCREENS-B Sheet-Einheitslook: das Radio öffnet im ZENTRALEN
+## PanelSheet (Veil-Backdrop, Griff-Leiste, Radius 36, PanelStack-Back-
+## Geste) statt in einer Eigenbau-Karte mit fester 560-px-Breite.
+const SHEET_SCENE := preload("res://scripts/ui/panel_sheet.tscn")
+
 var _host: InteractablesHost
-var _panel: PanelContainer
+var _panel: PanelSheet
 
 
 func setup(host: InteractablesHost, furniture: Node3D) -> void:
@@ -39,33 +44,30 @@ func _on_tapped() -> void:
 
 func _open_panel(gs: Object) -> void:
 	_close_panel()
-	_panel = PanelContainer.new()
+	_panel = SHEET_SCENE.instantiate() as PanelSheet
 	_panel.name = "RadioPanel"
+	# Theme explizit setzen: Window-Theme propagiert NICHT durch CanvasLayer.
 	_panel.theme = ThemeService.theme()
-	_panel.theme_type_variation = "AcCard"
-	_panel.set_anchors_preset(Control.PRESET_CENTER)
-	_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	_panel.grow_vertical = Control.GROW_DIRECTION_BOTH
-	# Höhen-Deckel + Scroll: das Sheet ist inhaltsreich und darf auf kleinen
-	# Screens nicht über den Rand wachsen (Kuehlschrank-Muster).
-	var scroll := ScrollContainer.new()
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	scroll.scroll_deadzone = 24
-	var hoehe := 640.0
-	if is_inside_tree() and get_viewport() != null:
-		hoehe = minf(hoehe, get_viewport().get_visible_rect().size.y - 80.0)
-	scroll.custom_minimum_size = Vector2(560.0, maxf(320.0, hoehe))
-	_panel.add_child(scroll)
+	_panel.closed.connect(_close_panel)
+	_ui_layer().add_child(_panel)
+	# RadioSheet bringt seine eigene Kopfzeile mit — die Sheet-Titelzeile
+	# bleibt aus, Griff-Leiste + Scroll + Backdrop kommen vom PanelSheet.
+	_panel.set_title("")
 	var sheet := RadioSheet.new()
 	sheet.gs = gs
 	sheet.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	sheet.geschlossen.connect(
-		func() -> void:
-			AudioDirector.try_play(self, "ui_close")
-			_close_panel()
-	)
-	scroll.add_child(sheet)
-	_ui_layer().add_child(_panel)
+	sheet.geschlossen.connect(func() -> void: _schliesse_sheet())
+	_panel.add_content(sheet)
+	_panel.open()
+
+
+## Schließen-Knopf im RadioSheet: übers PanelSheet zumachen (spielt selbst
+## ui_close und räumt den PanelStack auf), dann freigeben.
+func _schliesse_sheet() -> void:
+	if _panel != null and is_instance_valid(_panel) and _panel.is_open():
+		_panel.close()
+	else:
+		_close_panel()
 
 
 func _close_panel() -> void:

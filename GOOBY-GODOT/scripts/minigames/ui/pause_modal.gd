@@ -22,6 +22,10 @@ const DIM_COLOR := Color(0.24, 0.16, 0.12, 0.5)
 ## mg.<id>.hint — leer/unbekannt → Hilfe zeigt den freundlichen Fallback.
 var hint_key := ""
 
+## W14/UISCREENS-B: der Hilfe-Text „erzählt“ — Buchstaben-Typewriter im
+## Gebrabbel-Tempo (Reduced Motion / „Schnelle Dialoge“ = sofort).
+var _typewriter := DialogTypewriter.new()
+
 var _dim: ColorRect
 var _card: PanelContainer
 var _title: Label
@@ -81,6 +85,7 @@ func _ready() -> void:
 	_quit = _button(rows, &"GhostButton", "mg.host.quit", _on_quit_pressed)
 	_quit.name = "QuitButton"
 	get_viewport().size_changed.connect(_relayout)
+	set_process(false)
 
 
 func _exit_tree() -> void:
@@ -211,9 +216,34 @@ func _on_help_pressed() -> void:
 		_hint_label.text = text
 		_hint_label.show()
 		UiMotion.pop_in(_hint_label)
+		# W14: Hilfe „erzählt“ — Zeichen ticken im Gebrabbel-Tempo herein.
+		_typewriter.start(text, _sofort_modus())
+		_zeige_hint_zeichen()
+		set_process(_typewriter.laeuft())
 	else:
 		_hint_label.hide()
+		set_process(false)
 	_relayout()
+
+
+func _process(delta: float) -> void:
+	if not _typewriter.laeuft():
+		set_process(false)
+		return
+	_typewriter.tick(delta)
+	_zeige_hint_zeichen()
+
+
+func _zeige_hint_zeichen() -> void:
+	_hint_label.visible_characters = -1 if _typewriter.ist_fertig() else _typewriter.sichtbar
+
+
+## Sofort-Modus wie dialog_view: Reduced Motion ODER „Schnelle Dialoge“.
+func _sofort_modus() -> bool:
+	if ThemeService.is_reduced_motion(self):
+		return true
+	var settings := get_node_or_null("/root/AppSettings")
+	return settings != null and bool(settings.call("get_setting", "game.schnelle_dialoge", false))
 
 
 func _refresh_sound_label() -> void:

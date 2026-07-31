@@ -277,6 +277,8 @@ func _feiere(code: Dictionary) -> void:
 	_feedback.text = "  ".join(zeilen)
 	_feedback.remove_theme_color_override("font_color")
 	_toasts.show_toast(I18nService.t("codes.erfolg.titel"))
+	# W14 (UIKERN-Vertrag): Code eingelöst = Belohnung → Doppelimpuls.
+	Haptics.success(self)
 	_konfetti()
 	if is_inside_tree():
 		MusicDirector.get_or_create(self).play_stinger("stinger-levelup")
@@ -302,6 +304,8 @@ func _zeige_fehler(text: String) -> void:
 	_feedback.text = text
 	_feedback.add_theme_color_override("font_color", Color("#C0392B"))
 	AudioDirector.try_play(self, "ui_error")
+	# W14 (UIKERN-Vertrag): ungültiger/gesperrter Code → Warn-Impuls.
+	Haptics.warn(self)
 
 
 ## Sperr-Countdown live anzeigen (Prozess läuft nur während der Sperre).
