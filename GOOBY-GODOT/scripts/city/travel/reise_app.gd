@@ -6,6 +6,13 @@ extends VBoxContainer
 ## TaxiLogic-Timestamps, Notifications) → Einsteigen im 60-s-Fenster →
 ## Reise-Cutscene. Rückkehr: Abholen → souvenirCoins + Postkarten-Flag.
 ##
+## W13B (Doc H §2.4, reine Optik über der unveränderten reise_logic):
+## über der Ziel-Liste klappert eine Split-Flap-ABFLUGTAFEL (`flap_board.gd`,
+## Zeilen „Ziel | Abflug | Status“), und nach dem Einsteigen schiebt sich
+## ein BOARDING-PASS (`boarding_pass.gd`, Gate 3¾, Sitz 1A, Barcode-Gag)
+## dazwischen — erst der „Gute Reise!“-Knopf startet die BESTEHENDE
+## Abflug-Cutscene (identischer Aufruf wie zuvor).
+##
 ## Geld-Story: Reisepreis + Taxi (10) werden beim BUCHEN abgebucht;
 ## verpasstes Taxi erstattet Preis + 5, Storno erstattet Preis + 8.
 
@@ -19,6 +26,8 @@ static var notifs := CityNotificationService.new()
 
 var gs: Object
 var sheet: PanelSheet
+## Tests: ersetzt BoardingPass.oeffne — Callable(ziel_id, on_gute_reise).
+var boarding_oeffner := Callable()
 
 var _box: VBoxContainer
 var _tick_akku := 0.0
@@ -136,8 +145,14 @@ func _render() -> void:
 
 
 func _render_ziele() -> void:
-	_label(I18nService.t("travel.ziel_waehlen"), "HeadlineLabel")
 	var coins := int(gs.get_value("economy.coins", 0))
+	# W13B: Split-Flap-Abflugtafel ÜBER der Liste — klappert beim Öffnen/
+	# Neurendern durch (Reduced Motion springt sofort, s. flap_board.gd).
+	var tafel := FlapBoard.new()
+	tafel.name = "Abflugtafel"
+	_box.add_child(tafel)
+	tafel.set_zeilen(_tafel_zeilen(coins))
+	_label(I18nService.t("travel.ziel_waehlen"), "HeadlineLabel")
 	for ziel_id in ReiseLogic.ZIELE:
 		var info := ReiseLogic.bestaetigung(ziel_id, coins)
 		var btn := Button.new()
@@ -146,6 +161,29 @@ func _render_ziele() -> void:
 		btn.disabled = not bool(info["kann_zahlen"])
 		btn.pressed.connect(_render_confirm.bind(ziel_id))
 		_box.add_child(btn)
+
+
+## Board-Zeilen „Ziel | Abflug | Status“ aus dem unveränderten Katalog.
+func _tafel_zeilen(coins: int) -> Array:
+	var zeilen: Array = []
+	for ziel_id in ReiseLogic.ZIELE:
+		var info := ReiseLogic.bestaetigung(ziel_id, coins)
+		(
+			zeilen
+			. append(
+				{
+					"ziel": I18nService.t(str(info["name_key"])),
+					"abflug":
+					I18nService.t(
+						"reisepass.tafel.abflug_wert",
+						{"tage": int(info["tage"]), "preis": int(info["preis"])}
+					),
+					"status":
+					I18nService.t(FlapBoard.status_key(ziel_id, bool(info["kann_zahlen"]))),
+				}
+			)
+		)
+	return zeilen
 
 
 func _render_confirm(ziel_id: String) -> void:
@@ -228,11 +266,14 @@ func _on_buchen(ziel_id: String) -> void:
 	if not bool(res["ok"]):
 		return
 	var gesamt := int(info["preis"]) + int(res["kosten"])
-	var bezahlt := false
+	# GDScript-Lambdas capturen lokale Werte PER KOPIE — ein bool käme nie
+	# zurück (Taxi würde nie gespeichert). Dictionary teilt die Referenz.
+	var zahlung := {"ok": false}
 	gs.update(
-		func(state: Dictionary) -> void: bezahlt = Economy.spend(state["economy"], gesamt, "reise")
+		func(state: Dictionary) -> void:
+			zahlung["ok"] = Economy.spend(state["economy"], gesamt, "reise")
 	)
-	if not bezahlt:
+	if not bool(zahlung["ok"]):
 		return
 	CityState.save_taxi_slice(gs, res["slice"])
 	for notif: Dictionary in res["notifications"]:
@@ -267,6 +308,16 @@ func _on_einsteigen() -> void:
 	notifs.storniere_gruppe("taxi.")
 	CityState.save_taxi_slice(gs, res["slice"])
 	var ziel_id := str(res["slice"]["zielId"])
+	# W13B: Boarding-Pass dazwischenschieben — das Sheet bleibt offen
+	# (hält diese Instanz am Leben), erst „Gute Reise!“ schließt es und
+	# startet die BESTEHENDE Cutscene (identische Sequenz wie zuvor).
+	if boarding_oeffner.is_valid():
+		boarding_oeffner.call(ziel_id, _on_gute_reise.bind(ziel_id))
+		return
+	BoardingPass.oeffne(get_tree().root, ziel_id, now_ms(), _on_gute_reise.bind(ziel_id))
+
+
+func _on_gute_reise(ziel_id: String) -> void:
 	sheet.close()
 	_spiele_cutscene(ziel_id)
 

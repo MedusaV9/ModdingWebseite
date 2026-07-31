@@ -3,9 +3,12 @@ extends Control
 ## Profil-/Pass-Screen (REST-1, EVAL-VOLLSTAENDIGKEIT Rang 1 + P1-Fehlroute):
 ## der HUD-Profil-Knopf landet jetzt HIER (vorher fälschlich „Freunde &
 ## Besuche“). Aufbau als GOOBY-PASS im AC-Look, eine Scroll-Spalte:
-##   1. Pass-Karte — ECHTES 3D-Porträt (GoobyPreview mit den Save-Morphs,
-##      drehbar), Name, Level + XP-Balken, „Dabei seit“, Spielzeit und die
-##      Tagesbonus-Serie (REST-1 Rang 8: „Anzeige im Profil“).
+##   1. Pass-Karte — seit W13B der REISEPASS 2.0 (`passport_card.gd`,
+##      Doc H §2.2): interaktive Flip-Karte mit Passfoto-Slot (Standard =
+##      echtes 3D-Porträt, GoobyPreview mit den Save-Morphs), Galerie-
+##      Picker („Foto ändern“), Stempelseite + MRZ-Gag hinten; Level +
+##      XP-Balken, „Ausgestellt seit“, Spielzeit und Tagesbonus-Serie
+##      wohnen auf der Vorderseite (REST-1 Rang 8 bleibt erfüllt).
 ##   2. Statistik — Lebenszeit-Zähler (Web §C12.1-Reihenfolge + Orte/Reisen/
 ##      Park), alle aus vorhandenen Slices (achievements.counters, profile,
 ##      economy, vacation, park, quests).
@@ -19,8 +22,6 @@ extends Control
 ## Geometrie: ScreenShell (UiScale + Safe-Area + Touch-Floor), 0-Befund-Regel.
 
 signal ready_for_reveal
-
-const Leveling := preload("res://scripts/logic/leveling.gd")
 
 const ROUTE := &"profil"
 const ROUTES := {ROUTE: "res://scripts/ui/profil/profil_screen.tscn"}
@@ -134,99 +135,16 @@ func _build_header() -> Control:
 	return header
 
 
-## Pass-Karte: Porträt (ECHTES 3D, drehbar) links, Pass-Felder rechts.
+## Pass-Karte: seit W13B der Reisepass 2.0 (Doc H §2.2) — Flip-Karte mit
+## Passfoto-Slot (Standard = echtes 3D-Porträt), Stempelseite und MRZ-Gag.
+## Aufbau/Felder wohnen komplett in `passport_card.gd`; der Screen liefert
+## nur GameState + Metrics-Hook (foto_slot wird wie das alte Porträt skaliert).
 func _build_pass_card() -> Control:
-	var card := PanelContainer.new()
+	var card := PassportCard.new()
 	card.name = "PassCard"
-	card.theme_type_variation = &"AcCardLg"
-	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 10)
-	card.add_child(box)
-
-	var word := Label.new()
-	word.name = "PassWort"
-	word.theme_type_variation = &"SoftLabel"
-	word.text = I18nService.t("profil.pass_wort")
-	word.uppercase = true
-	word.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	box.add_child(word)
-
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 16)
-	box.add_child(row)
-
-	_portrait = _build_portrait()
-	row.add_child(_portrait)
-
-	var fields := VBoxContainer.new()
-	fields.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	fields.alignment = BoxContainer.ALIGNMENT_CENTER
-	fields.add_theme_constant_override("separation", 6)
-	row.add_child(fields)
-
-	var name_label := Label.new()
-	name_label.name = "GoobyName"
-	name_label.theme_type_variation = &"TitleLabel"
-	name_label.text = str(_value("meta.goobyNickname", "Gooby"))
-	fields.add_child(name_label)
-
-	var since := Label.new()
-	since.name = "DabeiSeit"
-	since.theme_type_variation = &"SoftLabel"
-	since.text = I18nService.t("profil.dabei_seit", {"date": _joined_date()})
-	fields.add_child(since)
-
-	fields.add_child(_build_level_row())
-	fields.add_child(_field_row("Spielzeit", I18nService.t("profil.spielzeit"), _playtime_text()))
-	fields.add_child(
-		_field_row(
-			"Serie",
-			I18nService.t("profil.serie"),
-			I18nService.t("profil.serie_wert", {"n": int(_value("daily.streak", 0))})
-		)
-	)
+	card.gs = _gs
+	_portrait = card.foto_slot
 	return card
-
-
-## Echte 3D-Vorschau mit den Save-Morphs (kein Platzhalter) — GoobyPreview
-## dreht per Drag und zoomt per Rad, wie im Char-Editor.
-func _build_portrait() -> Control:
-	var preview := GoobyPreview.new()
-	preview.name = "PassPortrait"
-	var morphs: Variant = _value("meta.charMorphs", {})
-	if morphs is Dictionary and not (morphs as Dictionary).is_empty():
-		preview.set_morphs(morphs)
-	return preview
-
-
-func _build_level_row() -> Control:
-	var row := HBoxContainer.new()
-	row.name = "LevelRow"
-	row.add_theme_constant_override("separation", 8)
-	var label := Label.new()
-	label.theme_type_variation = &"HeadlineLabel"
-	# FERTIG-1 („Rundes Ende“): die Level-Obergrenze steht SICHTBAR im Pass.
-	label.text = I18nService.t("profil.level_von", {"level": _level(), "max": Leveling.MAX_LEVEL})
-	row.add_child(label)
-	if _level() >= Leveling.MAX_LEVEL:
-		var voll := Label.new()
-		voll.name = "LevelMax"
-		voll.theme_type_variation = &"SoftLabel"
-		voll.text = I18nService.t("profil.level_max")
-		voll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		row.add_child(voll)
-		return row
-	var bar := ProgressBar.new()
-	bar.name = "XpBar"
-	bar.min_value = 0.0
-	bar.max_value = 1.0
-	bar.value = _xp_ratio()
-	bar.show_percentage = false
-	bar.custom_minimum_size = Vector2(0.0, 12.0)
-	bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	row.add_child(bar)
-	return row
 
 
 ## Abschluss-Karte (FERTIG-1, „Rundes Ende“): Gesamt-Prozent + die vier
@@ -538,12 +456,6 @@ func _level() -> int:
 	return int(_value("progression.level", 1))
 
 
-func _xp_ratio() -> float:
-	if _gs != null and _gs.has_method("xp_ratio"):
-		return clampf(float(_gs.xp_ratio()), 0.0, 1.0)
-	return 0.0
-
-
 func _int_text(path: String) -> String:
 	return str(int(_value(path, 0)))
 
@@ -556,23 +468,6 @@ func _distance_text() -> String:
 func _visited_places() -> int:
 	var visited: Variant = _value("vacation.visited", {})
 	return (visited as Dictionary).size() if visited is Dictionary else 0
-
-
-func _playtime_text() -> String:
-	var minutes := int(_value("profile.playtimeMin", 0))
-	return I18nService.t(
-		"profil.spielzeit_wert", {"h": minutes / 60, "mm": "%02d" % (minutes % 60)}
-	)
-
-
-func _joined_date() -> String:
-	var created_ms := int(_value("meta.createdAt", 0))
-	if created_ms <= 0:
-		created_ms = int(Time.get_unix_time_from_system() * 1000.0)
-	var d := Time.get_datetime_dict_from_unix_time(created_ms / 1000)
-	if I18nService.get_locale() == "de":
-		return "%02d.%02d.%04d" % [d.day, d.month, d.year]
-	return "%04d-%02d-%02d" % [d.year, d.month, d.day]
 
 
 ## ---- Layout / Navigation ---------------------------------------------------
