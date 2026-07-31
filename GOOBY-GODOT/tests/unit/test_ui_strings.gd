@@ -54,6 +54,8 @@ const EXPECTED_DOMAINS := [
 	"umzug.",
 	"garage.",
 	"goobyman.",
+	# W14/FRIDGE (strings/de+en/fuettern.json, s. OWNERSHIP.md).
+	"fuettern.",
 	# W14/NETSET (strings/de+en/netset.json, s. OWNERSHIP.md).
 	"netset.",
 ]
