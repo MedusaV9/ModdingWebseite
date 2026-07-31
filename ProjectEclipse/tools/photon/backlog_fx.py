@@ -24,9 +24,6 @@ Implements the never-shipped IDEAS-*.md concepts (into
                                   P3 seam re-fires every 100t — the spec's 160t cadence
                                   with a 200t asset would gap 120t under the absorb-only
                                   CACHE dedup; 100t divides 200t = seamless).
-    eclipse:revenant_fog_ribbons  IDEAS-mobs #4 robe wisps: hem cylinder wisps tearing
-                                  off as short TRAIL streamers. PhotonMobFx attach row
-                                  (no wire).
     eclipse:glitch_drip           IDEAS-mobs #5 corruption drip loop on all
                                   GlitchedMonster kinds. PhotonMobFx attach row.
     eclipse:deckhand_soul_flame   IDEAS-mobs below-the-cut: hood soul-candle loop
@@ -525,59 +522,12 @@ def build_tyrant_fog_arms() -> FxBuilder:
 
 
 # ---------------------------------------------------------------------------
-# 5. eclipse:revenant_fog_ribbons — robe hem wisps + tear-off streamers (loop, 60t)
-# ---------------------------------------------------------------------------
-def build_revenant_fog_ribbons() -> FxBuilder:
-    """IDEAS-mobs #4: the Fog Revenant's CAMPFIRE hem smoke upgraded to lagging robe
-    ribbons — a low cylinder-shell wisp emitter whose particles drag short TRAIL-type
-    streamers as the noise wobble tears them off the hem. Local space (the aura follows
-    the drift); attached by PhotonMobFx at eye −0.9 (hem, not eyes), nearest-4 cap."""
-    fx = FxBuilder("revenant_fog_ribbons")
-
-    wisps = (fx.particle_emitter(
-            "hem_wisps",
-            duration=60, looping=True, prewarm=20,
-            start_lifetime=random_between(30, 40),
-            start_speed=constant(0.0),
-            start_size=nf3(random_between(0.14, 0.26), random_between(0.14, 0.26),
-                           random_between(0.14, 0.26)),
-            simulation_space="Local", max_particles=64)
-        .with_emission(rate=constant(0.6))
-        .with_shape(cylinder(radius=0.5, thickness=0.3), scale=(1.0, 0.3, 1.0))
-        .with_material(texture_material(TEX_SMOKE, blend=BLEND_ALPHA))
-        .with_renderer(vertex_sorting="DISTANCE", shade=True)
-        .with_curves(
-            velocity_over_lifetime=dict(
-                linear=nf3(constant(0.0), constant(0.028), constant(0.0)),
-                speed_modifier=eased([(0.0, 0.5), (0.6, 1.0), (1.0, 1.2)])),
-            noise=dict(frequency=0.5, quality="Noise2D",
-                       position=nf3(constant(0.06), constant(0.02), constant(0.06))),
-            size_over_lifetime=eased([(0.0, 0.7), (0.45, 1.0), (1.0, 0.5)]),
-            color_over_lifetime=gradient(
-                [(0.0, 0.0), (0.25, 0.4), (0.75, 0.28), (1.0, 0.0)],
-                [(0.0, *FOG_TEAL), (0.75, *STM_SLATE), (1.0, *GLI_DEAD)]))
-        .with_cull_box((-3.0, -1.5, -3.0), (3.0, 3.5, 3.0)))
-    # The streamers: short plain-TRAIL strips torn off rising wisps (the "robe ribbon"
-    # read — cheap segments, no ara physics on a per-mob loop).
-    wisps.with_module("trails", {
-        "ratio": F(0.5),
-        "lifetime": constant(0.4),
-        "inheritParticleColor": B(1),
-        "trailType": "TRAIL",
-        "config": {
-            "time": I(10), "minVertexDistance": F(0.04),
-            "widthOverTrail": eased([(0.0, 0.12), (1.0, 0.0)]),
-            "colorOverTrail": gradient(
-                [(0.0, 0.35), (1.0, 0.0)],
-                [(0.0, *STM_SLATE), (1.0, *GLI_DEAD)]),
-            "renderer": ribbon_renderer(
-                texture_material(TEX_SMOKE, blend=BLEND_ALPHA), sorting="DISTANCE",
-                cull_box=((-3.0, -1.5, -3.0), (3.0, 3.5, 3.0)))}})
-    return fx
-
-
-# ---------------------------------------------------------------------------
 # 6. eclipse:glitch_drip — corruption drip loop on glitched mobs (loop, 40t)
+#
+# (5. eclipse:revenant_fog_ribbons moved to tools/photon/mobs_fx.py in FX wave 13 —
+#  `fx/revenant_*` belongs to the B2 mob package, and conflict law 1 wants an asset and
+#  its generator in the same ownership unit. See docs/plans_v3/session_0730/
+#  B2_MOB_REPORT.md §0.4.)
 # ---------------------------------------------------------------------------
 def build_glitch_drip() -> FxBuilder:
     """IDEAS-mobs #5: sparse corruption dripping off the seams — chunky pixel-art
@@ -1055,7 +1005,6 @@ BUILDERS = {
     "shadow_bolt_impact.fx": build_shadow_bolt_impact,
     "intro_sunrise_rays.fx": build_intro_sunrise_rays,
     "boss/tyrant_fog_arms.fx": build_tyrant_fog_arms,
-    "revenant_fog_ribbons.fx": build_revenant_fog_ribbons,
     "glitch_drip.fx": build_glitch_drip,
     "deckhand_soul_flame.fx": build_deckhand_soul_flame,
     "deckhand_soul_flare.fx": build_deckhand_soul_flare,

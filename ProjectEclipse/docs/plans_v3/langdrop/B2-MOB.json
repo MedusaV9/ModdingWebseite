@@ -1,0 +1,10 @@
+{
+  "en_us": {
+    "dev.eclipse.scare.desc.whisper_hands": "Dread only: fog hands push out of the wall, reach for you, and rot. No bang.",
+    "message.eclipse.scare.text.reach": "they are almost through"
+  },
+  "de_de": {
+    "dev.eclipse.scare.desc.whisper_hands": "Nur Grauen: Nebelhände drücken sich aus der Wand, greifen nach dir und zerfallen. Kein Knall.",
+    "message.eclipse.scare.text.reach": "sie sind fast durch"
+  }
+}

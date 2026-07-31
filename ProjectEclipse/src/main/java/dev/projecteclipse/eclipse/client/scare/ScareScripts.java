@@ -39,6 +39,15 @@ public final class ScareScripts {
     /** New Photon assets built by {@code tools/photon/scare_fx.py}. */
     private static final ResourceLocation FX_SWARM = fx("scare_swarm");
     private static final ResourceLocation FX_WRAITH = fx("scare_wraith");
+    private static final ResourceLocation FX_HANDS = fx("whisper_hands");
+
+    /**
+     * Ticks from a {@code whisper_hands} Photon beat to that instance's reach peak — the
+     * frame its fingertips are closest before they rot. Mirrors {@code HAND_REACH_TICK}
+     * in {@code tools/photon/scare_fx.py}; the sounds below are placed on
+     * {@code photon tick + HAND_REACH}, so moving one means moving both.
+     */
+    private static final int HAND_REACH = 34;
 
     // Text palette (ARGB rgb parts; alpha rides the beat envelope).
     private static final int BONE = 0xE8E2D0;
@@ -506,6 +515,35 @@ public final class ScareScripts {
                 .flash(205, 5, 0xFFFFFF, 0.7F)
                 .shake(205, 1.4F, 24, 1.8F)
                 .blackout(208, 240, 4, 20, 1.0F)
+                .build());
+
+        // 31 whisper_hands (FX-Wave-13 N6) — fog hands push out of the wall in front of
+        // you, reach, and rot before they arrive. Dread-only archetype (like eye_pair):
+        // NO bang, no flash, no face — the horror is that they ALMOST touched you, and a
+        // bang would resolve exactly the tension the beat is made of. Both Photon
+        // instances anchor ahead along the view at slightly below eye height, so each
+        // hand ring rises past the camera's lower edge; the second is offset to the right
+        // so the second wave comes from somewhere else in the room. Grey-violet
+        // throughout — the whisper_hands palette IS the glitch-zone palette.
+        SCRIPTS.put("whisper_hands", script("whisper_hands", 170)
+                .ramp(0, 120, EclipseSounds.AMBIENT_GAZER_WHISPER, 0.0F, 0.8F, 0.85F, true)
+                .pulse(0, 150, "void", 0.5F, "purple", 30, 30)
+                .ghost(20, 140)
+                .photon(18, FX_HANDS, 2.2D, -0.35D, 0.0D, 1.0F)
+                .sound(14, EclipseSounds.AMBIENT_BORDER_STATIC, 0.7F, 0.7F)
+                .text(34, 110, "message.eclipse.scare.text.reach", 0.72F, BONE, 0.4F, 1.2F)
+                // The first reach peaks here (18 + HAND_REACH): a soul rasp and the
+                // barest shudder — a brush, not a grab.
+                .sound(18 + HAND_REACH, SoundEvents.SOUL_ESCAPE::value, 0.9F, 0.6F)
+                .shake(18 + HAND_REACH, 0.35F, 22, 0.8F)
+                .photon(46, FX_HANDS, 2.6D, -0.4D, 1.3D, 0.85F)
+                // Deliberately peaks ABOVE the void wash: the director forwards only the
+                // strongest pulse, so this is what makes the grade CHANGE under the
+                // second wave instead of the datamosh beat being dead weight.
+                .pulse(46, 120, "datamosh", 0.55F, "purple", 12, 25)
+                .sound(46 + HAND_REACH, SoundEvents.SOUL_ESCAPE::value, 0.75F, 0.55F)
+                // They give up. The whisper is already gone; the grade just drains.
+                .sound(120, EclipseSounds.UI_GHOST_BURST, 0.5F, 0.55F)
                 .build());
     }
 }

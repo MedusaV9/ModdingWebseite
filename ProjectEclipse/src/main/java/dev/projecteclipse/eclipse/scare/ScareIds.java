@@ -25,7 +25,7 @@ public final class ScareIds {
     public static final String BACKROOMS_ARRIVE = "backrooms_arrive";
 
     /**
-     * The 30 {@code /dev jumpscare <version>} scripts, in suggestion order. Every entry is
+     * The 31 {@code /dev jumpscare <version>} scripts, in suggestion order. Every entry is
      * deliberately DISTINCT (overlay set, FX combination, sound design, timing archetype,
      * accent palette) — see the builder table in {@code client.scare.ScareScripts}.
      */
@@ -59,7 +59,8 @@ public final class ScareIds {
             "grin_flash",       // 27 three spaced escalating face flashes + final bang
             "cold_call",        // 28 bell tolls, "it heard you", dragon growl bang
             "swarm",            // 29 photon mote swarm rushes the camera + vex chitter
-            "totality");        // 30 the big one: drone, FOV crush, giant face, blackout
+            "totality",         // 30 the big one: drone, FOV crush, giant face, blackout
+            "whisper_hands");   // 31 dread-only: fog hands reach out of the wall, then rot
 
     private ScareIds() {}
 
