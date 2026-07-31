@@ -24,6 +24,28 @@
 		"gooby": {
 			"watch": "Oooh, is it gonna be pretty?"
 		},
+		"suche": {
+			"hier": "I'm right here! I was just waiting for you!",
+			"unterwegs": "I'm on a stroll! This way, then that way!",
+			"schlaeft": "Shhh… I'm dreaming of a giant carrot…",
+			"baumodus": "I'm here! I'm watching you redecorate!",
+			"akt": {
+				"idle_aufraeumen": "I tidied up a little — almost all of it voluntarily!",
+				"idle_fernsehen": "I was watching TV! The carrot show is on soon!",
+				"idle_doesen": "I only closed my eyes for a teeny moment. Honest!",
+				"idle_fenster": "I was looking out the window — so much going on out there!",
+				"idle_tanzen": "I was dancing! Look: my wiggly-ears move!",
+				"idle_lieblingsplatz": "I was at my favorite spot. It's the snuggliest!",
+				"absicht_hunger": "My tummy is growling like a bear! Looking for a snack…",
+				"absicht_langeweile": "I was sooo bored — looking for something to play with!",
+				"absicht_muede": "I'm sooo sleepy… where's my bed?",
+				"absicht_dreckig": "I'm a bit sticky… off to the bathroom with me!",
+				"absicht_regen": "It's raining! I'm watching the drops race each other!"
+			}
+		},
+		"auge": {
+			"hinweis": "Everything that sparkles can be tapped!"
+		},
 		"umzug": "Moving day! Everything is still in boxes…",
 		"aktion_bald": "Coming soon!"
 	},

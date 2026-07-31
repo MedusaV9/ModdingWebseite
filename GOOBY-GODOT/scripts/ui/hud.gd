@@ -433,6 +433,19 @@ func is_eye_active() -> bool:
 	return _eye_button.button_pressed
 
 
+## W13/HUD-WIRES: Auge von außen lautlos setzen/zurücksetzen (Raumwechsel/
+## Screen-Öffnen schaltet die Interaktions-Anzeige ab — der Knopf muss
+## folgen, OHNE eye_toggled erneut zu feuern).
+func set_eye_active(active: bool) -> void:
+	if _eye_button.button_pressed == active:
+		return
+	_eye_button.set_pressed_no_signal(active)
+	if active:
+		_eye_timer.start(EYE_AUTO_OFF_SEC)
+	else:
+		_eye_timer.stop()
+
+
 ## UIFINAL — freier Streifen für Sprechblasen/Overlays am unteren Rand:
 ## `top` = Canvas-y der Oberkante der HUD-Bodenmöblierung (Hochkant: das
 ## Dock; Querformat: Auge/Gooby-Chip-Zeile), `width` = maximale Breite

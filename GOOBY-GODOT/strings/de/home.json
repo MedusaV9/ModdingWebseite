@@ -24,6 +24,28 @@
 		"gooby": {
 			"watch": "Ohh, wird das schön?"
 		},
+		"suche": {
+			"hier": "Hier bin ich doch! Ich hab nur auf dich gewartet!",
+			"unterwegs": "Ich bin auf Streifzug! Erst hier lang, dann da lang!",
+			"schlaeft": "Psst… ich träum grad von einer Riesenmöhre…",
+			"baumodus": "Ich bin hier! Ich guck dir beim Umbauen zu!",
+			"akt": {
+				"idle_aufraeumen": "Ich hab ein bisschen aufgeräumt — fast alles freiwillig!",
+				"idle_fernsehen": "Ich hab ferngesehen! Gleich kommt die Möhren-Show!",
+				"idle_doesen": "Ich hab nur kuuurz die Augen zugemacht. Ehrlich!",
+				"idle_fenster": "Ich hab aus dem Fenster geschaut — draußen ist so viel los!",
+				"idle_tanzen": "Ich hab getanzt! Schau mal: mein Wackelohren-Move!",
+				"idle_lieblingsplatz": "Ich war an meinem Lieblingsplatz. Da ist es am kuscheligsten!",
+				"absicht_hunger": "Mein Bauch knurrt wie ein Bär! Ich such was Leckeres…",
+				"absicht_langeweile": "Mir war laaangweilig — ich such was zum Spielen!",
+				"absicht_muede": "Ich bin soooo müde… wo ist mein Bettchen?",
+				"absicht_dreckig": "Ich kleb ein bisschen… ab ins Bad mit mir!",
+				"absicht_regen": "Es regnet! Ich schau den Tropfen beim Wettrennen zu!"
+			}
+		},
+		"auge": {
+			"hinweis": "Alles, was funkelt, kannst du antippen!"
+		},
 		"umzug": "Umzugstag! Alles ist noch in Kartons…",
 		"aktion_bald": "Kommt bald!"
 	},

@@ -37,6 +37,17 @@ const PATH_RETRY_S := 0.5
 const KOERPER_RADIUS := 0.2
 ## Abtastschritt der Sichtlinien-Prüfung (deutlich unter CELL_SIZE 0.5).
 const LOS_SCHRITT := 0.1
+## W13/HUD-WIRES „Wo ist mein Gooby?": so lange gilt ein Idle-Akt / eine
+## Absicht noch als frische „Tat" für die Bubble — danach erzählt Gooby
+## nur noch den Fallback (nichts Erfundenes behaupten).
+const TAT_FRISCH_MS := 120_000
+## Wie weit Gooby nach der Suche auf den Spieler (die Kamera) zukommt.
+const KOMM_HER_DISTANZ := 1.2
+## Näher als das steht er schon beim Spieler — kein Extra-Lauf nötig.
+const KOMM_HER_MIN := 1.5
+
+## Schlaf-Logik (pure) für die Tat-Bubble („Psst… er schläft").
+const Sleep := preload("res://scripts/logic/sleep.gd")
 
 var rig: GoobyRig
 var grid: GridData
@@ -106,6 +117,150 @@ func set_wander_enabled(enabled: bool) -> void:
 	_wander_enabled = enabled
 	if not enabled:
 		_stop_walking()
+
+
+## Läuft Gooby gerade (Wandern ODER Skript-Lauf)? Für die Tat-Bubble des
+## „Wo ist mein Gooby?"-Chips (W13/HUD-WIRES).
+func is_walking() -> bool:
+	return _walking
+
+
+# ── „Wo ist mein Gooby?" (W13/HUD-WIRES, Doc F §4.2) ─────────────────────────
+
+
+## PURE: jüngster Eintrag eines Cooldown-Buchs (id → now_ms + cooldown_ms,
+## wie GoobyReactions._idle_cooldowns / SeeleRunner._intent_cooldowns).
+## Liefert {"id": String, "alter_ms": int} — oder {} bei leerem Buch.
+static func juengster_akt(cooldowns: Dictionary, cooldown_ms: int, now_ms: int) -> Dictionary:
+	var best_id := ""
+	var best_ablauf := 0
+	for akt_id: Variant in cooldowns:
+		var ablauf := int(cooldowns[akt_id])
+		if best_id.is_empty() or ablauf > best_ablauf:
+			best_ablauf = ablauf
+			best_id = str(akt_id)
+	if best_id.is_empty():
+		return {}
+	return {"id": best_id, "alter_ms": now_ms - (best_ablauf - cooldown_ms)}
+
+
+## PURE: Text-Key der Tat-Bubble. `zustand` = {"schlaeft": bool,
+## "unterwegs": bool, "akt": {id, alter_ms}|{}, "absicht": {id, alter_ms}|{}}.
+## Priorität: Schlaf > frischeste Tat (Idle-Akt/Absicht innerhalb
+## TAT_FRISCH_MS) > Laufweg > Fallback „hier".
+static func tat_key(zustand: Dictionary) -> String:
+	if bool(zustand.get("schlaeft", false)):
+		return "home.suche.schlaeft"
+	var frisch := _frischste_tat(zustand.get("akt", {}), zustand.get("absicht", {}))
+	if not frisch.is_empty():
+		return "home.suche.akt.%s" % str(frisch["id"])
+	if bool(zustand.get("unterwegs", false)):
+		return "home.suche.unterwegs"
+	return "home.suche.hier"
+
+
+## PURE: die frischere von zwei Taten — sofern sie ins Frischefenster passt.
+static func _frischste_tat(akt: Dictionary, absicht: Dictionary) -> Dictionary:
+	var best := {}
+	for kandidat: Dictionary in [akt, absicht]:
+		if kandidat.is_empty() or int(kandidat.get("alter_ms", TAT_FRISCH_MS + 1)) > TAT_FRISCH_MS:
+			continue
+		if int(kandidat.get("alter_ms", 0)) < 0:
+			continue
+		if best.is_empty() or int(kandidat["alter_ms"]) < int(best["alter_ms"]):
+			best = kandidat
+	return best
+
+
+## PURE: Was tut der Such-Chip? "fokus" = Kamera zurückholen + Tat-Bubble,
+## "bau" = nur Bubble (die Baukamera zeigt ohnehin den ganzen Raum),
+## "still" = nichts (kein Gooby im Raum — prüft der Aufrufer, home_entry).
+static func suche_reaktion(hat_gooby: bool, build_aktiv: bool) -> String:
+	if not hat_gooby:
+		return "still"
+	return "bau" if build_aktiv else "fokus"
+
+
+## Consumer des HUD-Chips `where_is_gooby_pressed` (vorher totes Signal):
+## Kamera zurück zu Gooby (die öffentliche Rig-API `set_build_mode(false)`
+## bricht einen freien Schwenk ab — follow_target IST Gooby, der Schwenk
+## gleitet also direkt zu ihm), dazu eine knuffige Tat-Bubble; danach kommt
+## Gooby ein Stück zum Spieler und lebt normal weiter. Der Raum (Parent,
+## RoomBase) wird duck-typed angesprochen — kein harter Typ-Zyklus.
+func wo_ist_gooby() -> void:
+	var room := get_parent()
+	if room == null or not room.has_method("say"):
+		return
+	var build_aktiv: bool = room.has_method("is_build_mode_active") and room.is_build_mode_active()
+	match suche_reaktion(true, build_aktiv):
+		"bau":
+			room.say(I18nService.t("home.suche.baumodus"))
+		"fokus":
+			if room.has_method("camera_rig") and room.camera_rig() != null:
+				room.camera_rig().set_build_mode(false)
+			room.say(I18nService.t(_tat_text_key(room)))
+			come_to_camera()
+		_:
+			pass
+
+
+## Text-Key der Tat-Bubble: Kern-Entscheidung ist PURE (tat_key), hier wird
+## nur der Ist-Zustand eingesammelt. Unbekannte Akt-Keys (z. B. neue
+## Soul-Pack-Akte ohne Suchtext) fallen weich auf „hier" zurück.
+func _tat_text_key(room: Node) -> String:
+	var now_ms := int(Time.get_unix_time_from_system() * 1000.0)
+	var key := tat_key(_tat_zustand(room, now_ms))
+	return key if I18nService.has_key(key) else "home.suche.hier"
+
+
+## Ist-Zustand für die Tat-Bubble: Schlaf aus dem GameState, Laufweg von
+## Gooby selbst, jüngster Idle-Akt/Absicht aus den Cooldown-Büchern des
+## Seelen-Runners (duck-typed gelesen — fehlt der Runner, greift der
+## Fallback).
+func _tat_zustand(room: Node, now_ms: int) -> Dictionary:
+	var zustand := {
+		"schlaeft": false,
+		"unterwegs": is_walking(),
+		"akt": {},
+		"absicht": {},
+	}
+	var gs: Object = room.game_state() if room.has_method("game_state") else null
+	if gs != null and gs.has_method("get_value"):
+		zustand["schlaeft"] = Sleep.is_sleeping(_dict_of(gs.get_value("gooby", {})))
+	var runner := room.get_node_or_null("GoobyReactions")
+	if runner == null:
+		return zustand
+	var idle: Variant = runner.get("_idle_cooldowns")
+	if idle is Dictionary:
+		zustand["akt"] = juengster_akt(idle, GoobyReactions.IDLE_ACT_COOLDOWN_MS, now_ms)
+	var seele := runner.get_node_or_null("SeeleRunner")
+	if seele != null:
+		var intents: Variant = seele.get("_intent_cooldowns")
+		if intents is Dictionary:
+			zustand["absicht"] = juengster_akt(intents, SoulIntent.COOLDOWN_MS, now_ms)
+	return zustand
+
+
+static func _dict_of(value: Variant) -> Dictionary:
+	return value if value is Dictionary else {}
+
+
+## Nach der Gooby-Suche: ein Stück auf den Spieler (die Kamera) zukommen und
+## danach normal weiterleben (Wandern wieder an). Spiegel der Gruß-
+## Annäherung des Seelen-Runners — bewusst OHNE Laune-Gate: wer aktiv nach
+## ihm sucht, zu dem kommt Gooby immer.
+func come_to_camera(distanz := KOMM_HER_DISTANZ) -> void:
+	set_wander_enabled(true)
+	if not is_inside_tree():
+		return
+	var camera := get_viewport().get_camera_3d()
+	if camera == null:
+		return
+	var richtung := camera.global_position - global_position
+	richtung.y = 0.0
+	if richtung.length() < KOMM_HER_MIN:
+		return
+	walk_to(global_position + richtung.normalized() * distanz, 4.0)
 
 
 ## Clip-Proxy auf den W1b-Rig (DoorTransition ruft Clips per Duck-Typing).

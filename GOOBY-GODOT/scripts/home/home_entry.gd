@@ -89,9 +89,12 @@ func _roll_random_event() -> void:
 
 ## Beim Reiseantritt sofort ausblenden (der Veil deckt derweil ab) — sonst
 ## überlappen HUD-Buttons/Status-Kapseln beim Aufdecken kurz den Zielscreen.
+## W13: Raumwechsel/Screen-Öffnen schaltet auch das Interaktions-Auge ab
+## (der Spotlight im alten Raum stirbt mit der Szene, der HUD-Knopf nicht).
 func _on_travel_started(_target: StringName = &"", _travel_type: int = 0) -> void:
 	if _hud != null:
 		_hud.visible = false
+	_spotlight_aus()
 
 
 func _on_travel_finished(target: Variant = null) -> void:
@@ -129,6 +132,12 @@ func _build_hud() -> void:
 	# E12 P1: das HUD-Zahnrad öffnet den Settings-Screen (inkl. Update-Glue).
 	if _hud.has_signal("settings_pressed"):
 		_hud.settings_pressed.connect(_open_settings)
+	# W13/HUD-WIRES: „Wo ist mein Gooby?"-Chip + Interaktions-Auge verdrahten
+	# (beide Signale hatten repo-weit keinen Consumer — P5-Befund F2/F11).
+	if _hud.has_signal("where_is_gooby_pressed"):
+		_hud.where_is_gooby_pressed.connect(_on_where_is_gooby_pressed)
+	if _hud.has_signal("eye_toggled"):
+		_hud.eye_toggled.connect(_on_eye_toggled)
 	if _gs == null:
 		return
 	_gs.coins_changed.connect(func(coins: int) -> void: _hud.set_coins(coins))
@@ -199,6 +208,53 @@ func _current_room() -> RoomBase:
 	if _router == null:
 		return null
 	return _router.get_current_scene() as RoomBase
+
+
+## --- W13/HUD-WIRES: „Wo ist mein Gooby?" + Interaktions-Auge ---
+
+
+## Der HUD-Chip holt die Kamera zurück zu Gooby und zeigt die Tat-Bubble
+## (Flow + pure Entscheidung leben in GoobyHome.wo_ist_gooby — ohne Gooby
+## im Raum bleibt der Chip still, s. GoobyHome.suche_reaktion).
+func _on_where_is_gooby_pressed() -> void:
+	var room := _current_room()
+	if room == null:
+		return
+	var gooby := room.gooby()
+	if gooby != null:
+		gooby.wo_ist_gooby()
+
+
+## Das HUD-Auge schaltet die Interaktions-Anzeige des aktuellen Raums an/aus.
+## Schaltet der Spotlight sich selbst ab (Baumodus), folgt der HUD-Knopf
+## über das `deaktiviert`-Signal.
+func _on_eye_toggled(active: bool) -> void:
+	var room := _current_room()
+	if room == null:
+		if active and _hud != null:
+			_hud.set_eye_active(false)
+		return
+	var spot := InteractionSpotlight.attach_to(room)
+	if not spot.deaktiviert.is_connected(_on_spotlight_deaktiviert):
+		spot.deaktiviert.connect(_on_spotlight_deaktiviert)
+	spot.set_aktiv(active)
+
+
+func _on_spotlight_deaktiviert() -> void:
+	if _hud != null:
+		_hud.set_eye_active(false)
+
+
+## Interaktions-Anzeige + HUD-Auge hart ausschalten (Raumwechsel/Settings).
+func _spotlight_aus() -> void:
+	if _hud != null:
+		_hud.set_eye_active(false)
+	var room := _current_room()
+	if room == null:
+		return
+	var spot := room.get_node_or_null("InteractionSpotlight")
+	if spot is InteractionSpotlight:
+		(spot as InteractionSpotlight).set_aktiv(false)
 
 
 ## Sucht den Alt-Spielstand der Web-App (NSUserDefaults-Spiegelung, gleiche
@@ -307,6 +363,8 @@ func _report_presence(target: Variant) -> void:
 func _open_settings() -> void:
 	if _settings != null and is_instance_valid(_settings):
 		return
+	# W13: Vollbild-Screen über dem Raum → Interaktions-Auge aus.
+	_spotlight_aus()
 	_settings = (load("res://scripts/ui/settings_screen.tscn") as PackedScene).instantiate()
 	_settings.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var glue := SettingsUpdateGlue.new()
