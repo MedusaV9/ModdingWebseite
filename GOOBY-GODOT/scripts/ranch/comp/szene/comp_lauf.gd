@@ -23,9 +23,25 @@ const Feel := preload("res://scripts/ranch/gameplay/ride_feel.gd")
 const Ghost := preload("res://scripts/ranch/comp/ghost/comp_ghost.gd")
 
 const HOLZ := Color(0.79, 0.55, 0.35)
-const CREME := Color(0.95, 0.94, 0.87)
+## W16: Creme im Gleichschritt mit RcompArena.CREME abgesenkt (§6: die
+## 0.95er-Latten zogen sich als Weiss-Doppelband durchs ganze Bild).
+const CREME := Color(0.9, 0.87, 0.78)
 const ROT := Color(0.91, 0.4, 0.42)
 const MARKER_FARBE := Color(1.0, 0.82, 0.3)
+## Richter-Events, bei denen das Tribünen-Publikum jubelt (M2-Hook).
+const JUBEL_EVENTS: Array[String] = [
+	"perfekt",
+	"hindernis_ok",
+	"tor_ok",
+	"aufgabe_ok",
+	"tonne_ok",
+	"runde",
+	"windschatten",
+	"figur_ok",
+	"gangart_ok",
+	"treffer",
+	"ziel",
+]
 ## Schau-Kommando → RanchPferd-Aktion (GLB-Clips).
 const SCHAU_AKTION := {
 	"verbeugen": "fressen",
@@ -58,6 +74,9 @@ var _marker: MeshInstance3D
 var _tonnen_nodes: Array = []
 var _hindernis_nodes: Array = []
 var _fertig_gemeldet := false
+var _publikum: Node3D
+var _publikum_zeit := 0.0
+var _jubel := 0.0
 
 
 func baue(cfg: Dictionary) -> void:
@@ -161,13 +180,17 @@ func zeremonie(stand: Array) -> void:
 	if stage != null:
 		stage.call("aim", Vector3(0.0, 4.6, 10.5), Vector3(0.0, 1.6, -2.0))
 		stage.call("set_fov", 44.0)
-		stage.call("pulse_glow", 0.8)
+		# W16 §6: 0.8 pumpte zusaetzlichen Glow auf die helle Sandflaeche.
+		stage.call("pulse_glow", 0.4)
+	# Siegerehrung = Dauer-Jubel auf der Tribuene.
+	_jubel = 6.0
 
 
 func _process(delta: float) -> void:
 	if stage != null:
 		stage.call("tick", delta)
 	_marker_animieren(delta)
+	_publikum_animieren(delta)
 	if not laeuft or pausiert or richter == null:
 		return
 	zeit += delta
@@ -216,21 +239,34 @@ func _baue_stage(_cfg: Dictionary) -> void:
 				# Muster (exposure runter statt Albedo-Radikalkur), dazu
 				# gedrosseltes waermeres Umgebungslicht + Glow nur noch fuer
 				# echte Highlights.
-				"exposure": 0.66,
+				# W16 Eich-Runde 2 (§6): 0.66 landete erst bei Boden-Luma
+				# ~209, Zielband der "gut"-Referenz hide_seek ist ~150–170.
+				# Exposure allein reichte nicht (0.56 -> immer noch ~210):
+				# der eigentliche Treiber ist der TONEMAPPER (s. unten);
+				# dazu Sonne/Ambient einen Tick runter. Gemessen (Filmic,
+				# Boden-Luma springen): exposure 0.6/Sonne 1.15 -> 199,
+				# 0.52/1.0 -> 184, 0.48/1.0 + Sand/Gras-Feintuning -> ~165.
+				"exposure": 0.48,
 				"glow": 0.22,
 				"glow_threshold": 1.08,
-				"ambient": 0.42,
+				"ambient": 0.38,
 				"ambient_color": Color(0.85, 0.84, 0.78),
 				"sky_ambient": 0.3,
-				"sun_energy": 1.15,
+				"sun_energy": 1.0,
 				"sun_color": Color(1.0, 0.92, 0.78),
 				"fill_energy": 0.28,
 			}
 		)
 	)
-	# Zeichnung zurueckholen: die Filmic-Kurve staucht oben (hide_seek-Eichung).
+	# W16 Eich-Runde 2: das _3da-Kit mappt hart mit ACES — dessen Schulter
+	# klemmt die helle Sandflaeche nahe Weiss fest (232 -> 212 trotz
+	# exposure 0.66 -> 0.56 + Albedo-Senkung). Die "gut"-Referenz hide_seek
+	# (_3dc-Kit) nutzt FILMIC: weichere Schulter, der Boden landet im
+	# Zielband. Umstellung hier per Environment-Handle (Kit bleibt tabu).
 	var env: Environment = stage.get("environment")
 	if env != null:
+		env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+		# Zeichnung zurueckholen: auch Filmic staucht oben (hide_seek-Eichung).
 		env.adjustment_enabled = true
 		env.adjustment_contrast = 1.05
 		env.adjustment_saturation = 1.1
@@ -241,7 +277,8 @@ func _baue_stage(_cfg: Dictionary) -> void:
 func _baue_arena(cfg: Dictionary) -> void:
 	Arena.baue_boden(welt)
 	Arena.baue_zaun(welt, Arena.ARENA_RECT)
-	Arena.baue_tribuene(welt, int(_num(cfg.get("zuschauer"), 10.0)))
+	var tribuene := Arena.baue_tribuene(welt, int(_num(cfg.get("zuschauer"), 10.0)))
+	_publikum = tribuene.get_meta("publikum") if tribuene.has_meta("publikum") else null
 	Arena.baue_fahnen(welt, Arena.ARENA_RECT)
 	Arena.baue_baeume(welt, seed_wert)
 
@@ -649,9 +686,22 @@ func _marker_animieren(delta: float) -> void:
 	_marker.rotate_y(delta * 2.2)
 
 
+## Tribünen-Publikum: Takt-Sway immer, Jubel-Hüpfer nach guten Events /
+## in der Zeremonie (M2). Reduced Motion lässt nur den Grund-Sway stehen.
+func _publikum_animieren(delta: float) -> void:
+	if _publikum == null:
+		return
+	_publikum_zeit += delta
+	_jubel = maxf(0.0, _jubel - delta)
+	var reduced := stage != null and bool(stage.call("reduced_motion"))
+	Arena.publikum_tick(_publikum, _publikum_zeit, 0.0 if reduced else minf(1.0, _jubel))
+
+
 ## Sichtbare Reaktionen auf Richter-Events (Kippen/Fallen) — Callouts,
 ## Sounds und Juice übernimmt RcompHud.
 func _auf_event(event: Dictionary) -> void:
+	if str(event.get("typ", "")) in JUBEL_EVENTS:
+		_jubel = maxf(_jubel, 2.2)
 	match str(event.get("typ", "")):
 		"tonne_um":
 			var i := int(_num(event.get("index"), 0.0))

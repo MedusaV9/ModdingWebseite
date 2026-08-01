@@ -9,11 +9,15 @@ extends RefCounted
 ## W14: Sand/Gras einen Tick tiefer/waermer — die 0.87er/0.78er-Albedos
 ## brannten unter dem Arena-Licht weiss aus (GAMESQA-Audit c=1,
 ## s. comp_lauf._baue_stage; Gras-Referenz: hide_seek 0.5/0.74/0.42).
-const SAND := Color(0.8, 0.68, 0.48)
-const GRAS := Color(0.49, 0.71, 0.39)
+## W16 Eich-Runde 2: W14 landete erst bei Boden-Luma ~209 — das Zielband
+## der "gut"-Referenz hide_seek ist ~150–170. SAND/GRAS/CREME runter
+## (Scout-Vorschlag §6), der Rest kommt ueber Tonemapper+Exposure in
+## comp_lauf (gemessen: zusammen ~165 im Band).
+const SAND := Color(0.67, 0.56, 0.39)
+const GRAS := Color(0.46, 0.66, 0.36)
 const HOLZ := Color(0.79, 0.55, 0.35)
 const HOLZ_DUNKEL := Color(0.55, 0.38, 0.24)
-const CREME := Color(0.95, 0.94, 0.87)
+const CREME := Color(0.9, 0.87, 0.78)
 const FAHNEN_FARBEN: Array[Color] = [
 	Color(0.91, 0.55, 0.63), Color(0.37, 0.66, 0.63), Color(0.95, 0.69, 0.3)
 ]
@@ -23,7 +27,8 @@ const ARENA_RECT := Rect2(-30.0, -18.0, 60.0, 36.0)
 const FELD_RECT := Rect2(-95.0, -70.0, 190.0, 140.0)
 
 
-## Boden: Wiese + Sandplatz + Einritt-Streifen.
+## Boden: Wiese + Sandplatz + Sand-Zeichnung (W16 §6: der schattenfreie
+## Sand fuellte die halbe Bildflaeche strukturlos).
 static func baue_boden(welt: Node3D) -> void:
 	_quader(welt, Vector3(0.0, -0.15, 0.0), Vector3(220.0, 0.3, 170.0), GRAS)
 	var sand := _quader(
@@ -33,6 +38,43 @@ static func baue_boden(welt: Node3D) -> void:
 		SAND
 	)
 	sand.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_baue_sand_zeichnung(welt)
+
+
+## Sand-Zeichnung: dunklere Bande innen am Zaunrand + Hufspur-Streifen auf
+## den Reitlinien — EIN MultiMesh (1 Draw-Call), deterministisch geseedet.
+static func _baue_sand_zeichnung(welt: Node3D) -> void:
+	var mesh := BoxMesh.new()
+	mesh.size = Vector3(1.0, 0.016, 1.0)
+	var zeichnung := _multi(welt, mesh, SAND.darkened(0.09), 14)
+	zeichnung.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var idx := 0
+	for seite: float in [-1.0, 1.0]:
+		zeichnung.multimesh.set_instance_transform(
+			idx,
+			Transform3D(
+				Basis.IDENTITY.scaled(Vector3(ARENA_RECT.size.x - 1.0, 1.0, 1.3)),
+				Vector3(0.0, 0.052, seite * (ARENA_RECT.end.y - 0.75))
+			)
+		)
+		zeichnung.multimesh.set_instance_transform(
+			idx + 1,
+			Transform3D(
+				Basis.IDENTITY.scaled(Vector3(1.3, 1.0, ARENA_RECT.size.y - 4.0)),
+				Vector3(seite * (ARENA_RECT.end.x - 0.75), 0.052, 0.0)
+			)
+		)
+		idx += 2
+	var rng := GoobyRng.new(2412)
+	for i in 10:
+		var laenge := 5.0 + rng.next() * 7.0
+		zeichnung.multimesh.set_instance_transform(
+			idx + i,
+			Transform3D(
+				Basis.IDENTITY.scaled(Vector3(laenge, 1.0, 0.5 + rng.next() * 0.4)),
+				Vector3(rng.next() * 42.0 - 21.0, 0.062, rng.next() * 24.0 - 12.0)
+			)
+		)
 
 
 ## Zaunring um ein Rect (Pfosten + zwei Latten als MultiMeshes);
@@ -73,8 +115,10 @@ static func baue_zaun(welt: Node3D, rect: Rect2) -> void:
 			idx += 1
 
 
-## Tribüne an der Nordseite: Stufen + Dach + Publikum (Kugel-MultiMesh).
-## `zuschauer` skaliert mit RW-4s Tribünen-Ausbau (Basis 10).
+## Tribüne an der Nordseite: Stufen + Dach + Mini-Gooby-Publikum (W16 §6:
+## danceParty-Muster M2 statt hautfarbener Kugeln). `zuschauer` skaliert
+## mit RW-4s Tribünen-Ausbau (Basis 10). Das Publikum hängt als Meta
+## "publikum" an der Wurzel — `publikum_tick()` animiert Sway/Jubel.
 static func baue_tribuene(welt: Node3D, zuschauer: int) -> Node3D:
 	var wurzel := Node3D.new()
 	wurzel.position = Vector3(0.0, 0.0, ARENA_RECT.position.y - 4.5)
@@ -88,30 +132,79 @@ static func baue_tribuene(welt: Node3D, zuschauer: int) -> Node3D:
 		)
 	var dach := _quader(wurzel, Vector3(0.0, 3.1, -1.2), Vector3(27.0, 0.18, 4.6), FAHNEN_FARBEN[0])
 	dach.rotation.x = 0.12
-	var kugel := SphereMesh.new()
-	kugel.radius = 0.34
-	kugel.height = 0.68
-	kugel.radial_segments = 8
-	kugel.rings = 4
 	var menge := clampi(zuschauer, 0, 24)
 	if menge > 0:
-		var publikum := _multi(wurzel, kugel, Color(0.98, 0.83, 0.55), menge)
 		var rng := GoobyRng.new(4711)
+		var plaetze: Array[Vector3] = []
 		for i in menge:
 			var reihe := i % 3
 			var platz := -11.0 + (float(i) / 3.0) * (22.0 / maxf(1.0, ceilf(menge / 3.0)))
-			publikum.multimesh.set_instance_transform(
-				i,
-				Transform3D(
-					Basis.IDENTITY,
-					Vector3(
-						platz + rng.next() * 1.4,
-						1.0 + reihe * 0.55,
-						-float(reihe) * 1.15 + rng.next() * 0.3
-					)
+			plaetze.append(
+				Vector3(
+					platz + rng.next() * 1.4,
+					0.58 + reihe * 0.55,
+					-float(reihe) * 1.15 + rng.next() * 0.3
 				)
 			)
+		wurzel.set_meta("publikum", baue_publikum(wurzel, plaetze))
 	return wurzel
+
+
+## Mini-Gooby-Publikum (M2, danceParty-`_build_crowd`-Muster): drei
+## MultiMeshes (Körper/Köpfe/Ohren) mit Instanzfarben. Eigenes Material —
+## NICHT der geteilte RanchPferd-Cache, `vertex_color_use_as_albedo` würde
+## sonst auf alle Nutzer der Farbe durchschlagen. Auch der Parcours
+## (parcours_deko) konsumiert diesen Helfer.
+static func baue_publikum(parent: Node3D, plaetze: Array[Vector3]) -> Node3D:
+	var publikum := Node3D.new()
+	parent.add_child(publikum)
+	var mat := StandardMaterial3D.new()
+	mat.roughness = 0.9
+	mat.vertex_color_use_as_albedo = true
+	var koerper := _publikum_multi(publikum, 0.3, 0.56, plaetze.size(), mat)
+	var koepfe := _publikum_multi(publikum, 0.18, 0.36, plaetze.size(), mat)
+	var ohren := _publikum_multi(publikum, 0.055, 0.3, plaetze.size() * 2, mat)
+	for i in plaetze.size():
+		var tint := Color(0.24, 0.16, 0.38).lerp(FAHNEN_FARBEN[i % FAHNEN_FARBEN.size()], 0.3)
+		koerper.multimesh.set_instance_color(i, tint)
+		koepfe.multimesh.set_instance_color(i, tint.lightened(0.12))
+		ohren.multimesh.set_instance_color(i * 2, tint.lightened(0.12))
+		ohren.multimesh.set_instance_color(i * 2 + 1, tint.lightened(0.12))
+	publikum.set_meta("plaetze", plaetze)
+	publikum.set_meta("koerper", koerper.multimesh)
+	publikum.set_meta("koepfe", koepfe.multimesh)
+	publikum.set_meta("ohren", ohren.multimesh)
+	publikum_tick(publikum, 0.0, 0.0)
+	return publikum
+
+
+## Publikum posen: sanfter Takt-Sway; `jubel` (0..1) hebt den Hüpfer
+## (Sterne/Zieleinlauf/Zeremonie). Aufrufer ticken pro Frame und dämpfen
+## jubel selbst; Reduced Motion gaten sie ebenfalls selbst.
+static func publikum_tick(publikum: Node3D, zeit: float, jubel: float) -> void:
+	if publikum == null or not publikum.has_meta("plaetze"):
+		return
+	var plaetze: Array = publikum.get_meta("plaetze")
+	var koerper: MultiMesh = publikum.get_meta("koerper")
+	var koepfe: MultiMesh = publikum.get_meta("koepfe")
+	var ohren: MultiMesh = publikum.get_meta("ohren")
+	var staerke := clampf(jubel, 0.0, 1.0)
+	for i in plaetze.size():
+		var hop := maxf(0.0, sin(zeit * 5.6 + float(i) * 1.7)) * (0.04 + 0.26 * staerke)
+		var sway := sin(zeit * 2.3 + float(i) * 0.9) * 0.05
+		var at: Vector3 = plaetze[i] + Vector3(sway * 0.4, hop, 0.0)
+		koerper.set_instance_transform(i, Transform3D(Basis.IDENTITY, at + Vector3(0.0, 0.3, 0.0)))
+		koepfe.set_instance_transform(
+			i, Transform3D(Basis(Vector3.BACK, sway), at + Vector3(0.0, 0.66, 0.0))
+		)
+		for seite in 2:
+			var ohr_x := (-0.09 if seite == 0 else 0.09) + sway * 0.5
+			ohren.set_instance_transform(
+				i * 2 + seite,
+				Transform3D(
+					Basis(Vector3.BACK, sway * 2.0), at + Vector3(ohr_x, 0.9 + hop * 0.3, 0.0)
+				)
+			)
 
 
 ## Fahnenmasten mit Wimpeln an den vier Ecken.
@@ -145,24 +238,45 @@ static func baue_fahnen(welt: Node3D, rect: Rect2) -> void:
 		)
 
 
-## Deko-Bäume rund ums Feld (ein MultiMesh).
+## Deko-Bäume rund ums Feld: Kronen + Stämme (je EIN MultiMesh, identische
+## Plätze). W16 §6: vorher schwebten die Kronen stammlos auf fixem y=2.0 —
+## kleine Exemplare hingen sichtbar in der Luft. Jetzt skaliert die Höhe
+## mit, die Krone sitzt bodenbündig auf ihrem Stamm.
 static func baue_baeume(welt: Node3D, seed_wert: int) -> void:
+	var rng := GoobyRng.new(seed_wert)
+	var plaetze: Array[Vector3] = []
+	var groessen: Array[float] = []
+	for i in 18:
+		var winkel := TAU * i / 18.0 + rng.next() * 0.3
+		var radius := 62.0 + rng.next() * 28.0
+		plaetze.append(Vector3(cos(winkel) * radius, 0.0, sin(winkel) * radius * 0.75))
+		groessen.append(0.8 + rng.next() * 0.6)
 	var kugel := SphereMesh.new()
 	kugel.radius = 1.8
 	kugel.height = 3.6
 	kugel.radial_segments = 10
 	kugel.rings = 5
-	var baeume := _multi(welt, kugel, Color(0.4, 0.66, 0.4), 18)
-	baeume.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	var rng := GoobyRng.new(seed_wert)
-	for i in 18:
-		var winkel := TAU * i / 18.0 + rng.next() * 0.3
-		var radius := 62.0 + rng.next() * 28.0
-		baeume.multimesh.set_instance_transform(
+	var kronen := _multi(welt, kugel, Color(0.4, 0.66, 0.4), plaetze.size())
+	kronen.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var stamm := CylinderMesh.new()
+	stamm.top_radius = 0.16
+	stamm.bottom_radius = 0.22
+	stamm.height = 2.2
+	stamm.radial_segments = 6
+	var staemme := _multi(welt, stamm, HOLZ_DUNKEL, plaetze.size())
+	staemme.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	for i in plaetze.size():
+		var s := groessen[i]
+		kronen.multimesh.set_instance_transform(
 			i,
 			Transform3D(
-				Basis.IDENTITY.scaled(Vector3.ONE * (0.8 + rng.next() * 0.6)),
-				Vector3(cos(winkel) * radius, 2.0, sin(winkel) * radius * 0.75)
+				Basis.IDENTITY.scaled(Vector3.ONE * s), plaetze[i] + Vector3(0.0, 2.75 * s, 0.0)
+			)
+		)
+		staemme.multimesh.set_instance_transform(
+			i,
+			Transform3D(
+				Basis.IDENTITY.scaled(Vector3.ONE * s), plaetze[i] + Vector3(0.0, 1.1 * s, 0.0)
 			)
 		)
 
@@ -205,6 +319,29 @@ static func _quader(parent: Node3D, pos: Vector3, groesse: Vector3, farbe: Color
 	mi.position = pos
 	parent.add_child(mi)
 	return mi
+
+
+## Publikum-Teilmesh (Kugel) mit Instanzfarben; `mat` liegt am Mesh, damit
+## `use_colors` greift (material_override würde die Instanzfarben schlucken).
+static func _publikum_multi(
+	parent: Node3D, radius: float, hoehe: float, anzahl: int, mat: StandardMaterial3D
+) -> MultiMeshInstance3D:
+	var kugel := SphereMesh.new()
+	kugel.radius = radius
+	kugel.height = hoehe
+	kugel.radial_segments = 8
+	kugel.rings = 4
+	kugel.material = mat
+	var mmi := MultiMeshInstance3D.new()
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.use_colors = true
+	mm.mesh = kugel
+	mm.instance_count = maxi(0, anzahl)
+	mmi.multimesh = mm
+	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	parent.add_child(mmi)
+	return mmi
 
 
 static func _multi(parent: Node3D, mesh: Mesh, farbe: Color, anzahl: int) -> MultiMeshInstance3D:

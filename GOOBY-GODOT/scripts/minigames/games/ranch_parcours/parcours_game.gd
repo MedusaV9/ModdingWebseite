@@ -51,6 +51,12 @@ var _pferd: RanchPferd
 var _reiter: Node3D
 var _gooby: Node3D
 var _staub: GPUParticles3D
+## Mini-Gooby-Publikum auf der Tribüne (RcompArena-Helfer via Deko.build);
+## _jubel hebt den Hüpfer nach Perfekt-Sprüngen und im Ziel. Eigene Uhr,
+## weil `elapsed` im Ziel-Fenster (Ende-Timer) stehen bleibt.
+var _publikum: Node3D
+var _publikum_zeit := 0.0
+var _jubel := 0.0
 ## Absprung-Marker: Glüh-Ring auf der Ideallinie am rechnerisch besten
 ## Absprungpunkt (Bogenmitte über Hindernis) — pulst gold im Sprungfenster.
 var _sprung_marker: Node3D
@@ -101,6 +107,8 @@ func _process(delta: float) -> void:
 		_stage.call("tick", delta)
 	if not level_running:
 		if _ende_timer > 0.0:
+			# Ziel-Fenster: das Publikum jubelt weiter, bis das Select kommt.
+			_publikum_animieren(delta)
 			_ende_timer -= delta
 			if _ende_timer <= 0.0:
 				_zeige_select()
@@ -189,6 +197,8 @@ func _teardown_lauf() -> void:
 	_reiter = null
 	_gooby = null
 	_staub = null
+	_publikum = null
+	_jubel = 0.0
 	_sprung_marker = null
 	_marker_mat = null
 	hindernisse = []
@@ -204,10 +214,16 @@ func _build_welt() -> void:
 			{
 				# Belichtung GEZÄHMT (bekannte Falle: Stage-Defaults 1.2/0.6
 				# überstrahlen die Wiese um ~40 Luma-Stufen ins Weiße).
+				# W16 §6: der W14-Arena-Fix fehlte hier komplett — Default-
+				# Exposure 1.0 + Softlight-Glow ab Schwelle 0.9 bloomten die
+				# ganze sonnige Wiese (Boden-Luma ~224). Exposure/Glow-
+				# Schwelle/Adjustment jetzt identisch zur Arena
+				# (comp_lauf._baue_stage, Zielband ~150–170).
 				"sky_top": Color(0.45, 0.68, 0.93),
 				"sky_horizon": Color(0.86, 0.93, 0.97),
 				"ground_horizon": Color(0.58, 0.75, 0.46),
 				"ground_bottom": Color(0.4, 0.56, 0.33),
+				"exposure": 0.48,
 				"sun_energy": 0.85,
 				"ambient": 0.4,
 				"fill_energy": 0.26,
@@ -216,10 +232,20 @@ func _build_welt() -> void:
 				"fog_to": 90.0,
 				"far": 160.0,
 				"shadow_distance": 34.0,
-				"glow": 0.32,
+				"glow": 0.22,
+				"glow_threshold": 1.08,
 			}
 		)
 	)
+	# Wie die Arena: Filmic statt ACES (die ACES-Schulter klemmt helle
+	# Böden bei Weiß fest — hide_seek-Referenz nutzt Filmic) + Zeichnung
+	# über Kontrast/Sättigung zurückholen.
+	var env: Environment = _stage.get("environment")
+	if env != null:
+		env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+		env.adjustment_enabled = true
+		env.adjustment_contrast = 1.05
+		env.adjustment_saturation = 1.1
 	_stage.call("apply_size", view_size)
 	_welt = Node3D.new()
 	_stage.add_child(_welt)
@@ -232,8 +258,9 @@ func _build_welt() -> void:
 
 ## Boden + komplette Ranch-Kulisse (Bahn, Zaun, Tribüne, Ziel, Wiese) —
 ## ausgelagert nach parcours_deko.gd (Datei-Budget), Farbkanon lebt dort.
+## build() gibt das Tribünen-Publikum zurück (Jubel-Hook, M2).
 func _build_boden() -> void:
-	Deko.build(_welt, float(kurs.get("laenge_m", 200.0)), ctx)
+	_publikum = Deko.build(_welt, float(kurs.get("laenge_m", 200.0)), ctx)
 
 
 func _build_hindernisse() -> void:
@@ -474,7 +501,9 @@ func _sprung_geschafft(h: Dictionary, qualitaet: String) -> void:
 		self, "mg_combo" if qualitaet == "perfekt" else "mg_good", 1.0 + 0.02 * mini(kombo, 8)
 	)
 	if _stage != null and qualitaet == "perfekt":
-		_stage.call("pulse_glow", 0.5)
+		# W16 §6: ≤0.4 — mehr pumpte Glow auf die helle Wiese.
+		_stage.call("pulse_glow", 0.4)
+	_jubel = maxf(_jubel, 2.2)
 	if _gooby != null:
 		_gooby.call("emote", "ecstatic" if qualitaet == "perfekt" else "happy", 0.9)
 	if ctx.juice != null:
@@ -527,7 +556,9 @@ func _lauf_geschafft() -> void:
 	ctx.report_coin_chunk(int(round(score * _coin_mult(gs))))
 	AudioDirector.try_play(self, "mg_win")
 	if _stage != null:
-		_stage.call("pulse_glow", 0.8)
+		# W16 §6: ≤0.4 — der 0.8er-Puls überstrahlte den Ziel-Moment.
+		_stage.call("pulse_glow", 0.4)
+	_jubel = 6.0
 	if _gooby != null:
 		_gooby.call("emote", "ecstatic", 2.0)
 		_gooby.call("play_for", "celebrate", 1.6)
@@ -569,9 +600,21 @@ func _step_optik(delta: float) -> void:
 		_pferd.rotation.x = 0.0
 	_staub.amount_ratio = maxf(0.05, Feel.staub_anteil(gangart))
 	_staub.emitting = not in_luft
+	_publikum_animieren(delta)
 	_update_sprung_marker()
 	_spiele_hufschlaege(delta, gangart)
 	_folge_kamera(delta)
+
+
+## Tribünen-Publikum: Takt-Sway immer, Jubel nach Perfekt/Ziel (M2);
+## Reduced Motion lässt nur den Grund-Sway stehen.
+func _publikum_animieren(delta: float) -> void:
+	if _publikum == null or not is_instance_valid(_publikum):
+		return
+	_publikum_zeit += delta
+	_jubel = maxf(0.0, _jubel - delta)
+	var reduced := _stage != null and bool(_stage.call("reduced_motion"))
+	RcompArena.publikum_tick(_publikum, _publikum_zeit, 0.0 if reduced else minf(1.0, _jubel))
 
 
 ## Marker nachführen: nächstes offenes Hindernis, Ideal-Absprung aus dem

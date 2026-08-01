@@ -7,18 +7,22 @@ extends RefCounted
 
 ## Ranch-Farbkanon (Werte wie RcompArena) — die Minispiele teilen die Optik
 ## des Turnierplatzes: Sandbahn, Holzzaun, Creme-Latten, Wimpel-Farben.
+## W16 §6: SAND/CREME im Gleichschritt mit der Arena abgesenkt (Eich-Runde
+## 2 aufs Boden-Luma-Zielband ~150–170; Creme-Latten waren ein Weissband).
 const GRAS_GRUEN := Color(0.45, 0.66, 0.35)
 const GRAS_DUNKEL := Color(0.4, 0.6, 0.31)
-const SAND := Color(0.85, 0.73, 0.53)
+const SAND := Color(0.67, 0.56, 0.39)
 const HOLZ := Color(0.79, 0.55, 0.35)
 const HOLZ_DUNKEL := Color(0.55, 0.38, 0.24)
-const CREME := Color(0.95, 0.94, 0.87)
+const CREME := Color(0.9, 0.87, 0.78)
 const FAHNEN: Array[Color] = [
 	Color(0.91, 0.55, 0.63), Color(0.37, 0.66, 0.63), Color(0.95, 0.69, 0.3)
 ]
 
 
-static func build(welt: Node3D, laenge: float, ctx: MinigameCtx) -> void:
+## Baut die komplette Kulisse; Rückgabe = Tribünen-Publikum (Node3D mit
+## RcompArena-Publikum-Meta) für den Jubel-Tick in parcours_game.
+static func build(welt: Node3D, laenge: float, ctx: MinigameCtx) -> Node3D:
 	# Weide: ein langes, breites Band + Sandbahn in der Mitte.
 	var gras := MeshInstance3D.new()
 	var gras_mesh := BoxMesh.new()
@@ -46,9 +50,10 @@ static func build(welt: Node3D, laenge: float, ctx: MinigameCtx) -> void:
 	linie.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	welt.add_child(linie)
 	_streckenzaun(welt, laenge)
-	_tribuene(welt, laenge, ctx)
+	var publikum := _tribuene(welt, laenge, ctx)
 	_ziel(welt, laenge)
 	_wiese_deko(welt, laenge, ctx)
+	return publikum
 
 
 ## Ranch-Zaun beidseits der Bahn: Pfosten als EIN MultiMesh + vier lange
@@ -86,8 +91,9 @@ static func _streckenzaun(welt: Node3D, laenge: float) -> void:
 
 ## Tribüne mit Publikum nahe dem Start (bei ~12 % der Strecke sieht man sie
 ## schon in den ersten Sekunden UND beim ersten Sprung) + eine Wimpelkette
-## am Start — Turnier-Stimmung wie auf dem Ranch-Turnierplatz.
-static func _tribuene(welt: Node3D, laenge: float, ctx: MinigameCtx) -> void:
+## am Start — Turnier-Stimmung wie auf dem Ranch-Turnierplatz. Rückgabe =
+## Mini-Gooby-Publikum (W16 §6: RcompArena-Helfer statt Hautkugeln).
+static func _tribuene(welt: Node3D, laenge: float, ctx: MinigameCtx) -> Node3D:
 	var wurzel := Node3D.new()
 	wurzel.position = Vector3(laenge * 0.12, 0.0, -8.2)
 	welt.add_child(wurzel)
@@ -108,34 +114,18 @@ static func _tribuene(welt: Node3D, laenge: float, ctx: MinigameCtx) -> void:
 	dach.rotation.x = 0.1
 	dach.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	wurzel.add_child(dach)
-	var kugel := SphereMesh.new()
-	kugel.radius = 0.32
-	kugel.height = 0.64
-	kugel.radial_segments = 8
-	kugel.rings = 4
-	var publikum := MultiMeshInstance3D.new()
-	var pmm := MultiMesh.new()
-	pmm.transform_format = MultiMesh.TRANSFORM_3D
-	pmm.mesh = kugel
-	pmm.instance_count = 12
 	var rng := ctx.rng(431)
+	var plaetze: Array[Vector3] = []
 	for i in 12:
 		var reihe := i % 3
-		pmm.set_instance_transform(
-			i,
-			Transform3D(
-				Basis.IDENTITY,
-				Vector3(
-					-3.8 + float(i / 3) * 2.4 + rng.next() * 1.2,
-					0.95 + float(reihe) * 0.55,
-					-float(reihe) * 1.15 + rng.next() * 0.3
-				)
+		plaetze.append(
+			Vector3(
+				-3.8 + float(i / 3) * 2.4 + rng.next() * 1.2,
+				0.58 + float(reihe) * 0.55,
+				-float(reihe) * 1.15 + rng.next() * 0.3
 			)
 		)
-	publikum.multimesh = pmm
-	publikum.material_override = RanchPferd.material(Color(0.98, 0.83, 0.55))
-	publikum.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	wurzel.add_child(publikum)
+	var publikum := RcompArena.baue_publikum(wurzel, plaetze)
 	# Start-Bogen: zwei Creme-Masten + Wimpelkette über der Bahn bei x = 0.
 	for seite: float in [-1.0, 1.0]:
 		var mast := MeshInstance3D.new()
@@ -149,6 +139,7 @@ static func _tribuene(welt: Node3D, laenge: float, ctx: MinigameCtx) -> void:
 		mast.position = Vector3(0.0, 1.65, seite * 4.6)
 		welt.add_child(mast)
 	wimpel_kette(welt, Vector3(0.0, 3.1, -4.6), Vector3(0.0, 3.1, 4.6))
+	return publikum
 
 
 ## Ziel: Torbogen mit Querlatte und Wimpelkette am Kursende.
