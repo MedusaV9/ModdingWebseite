@@ -629,6 +629,9 @@ public final class PhotonBridge {
                 missing(fxId);
                 return START_FAILED;
             }
+            // F-103 R2 respawn hygiene: every spawn copies from this SHARED template —
+            // scrub any live scene-graph residue off it first (see TemplateHygiene).
+            TemplateHygiene.scrub(fxId, fxObject);
             Object executor;
             Method start;
             if (entity != null) {
@@ -821,6 +824,204 @@ public final class PhotonBridge {
             case DISABLED -> "DISABLED";
             default -> "UNRESOLVED";
         };
+    }
+
+    /** Dirty {@link TemplateHygiene} scrubs this session (healthy sessions: 0). */
+    public static long hygieneDirtyScrubs() {
+        return TemplateHygiene.dirtyScrubs;
+    }
+
+    /** Total live template links removed by {@link TemplateHygiene} (healthy: 0). */
+    public static long hygieneLinksRemoved() {
+        return TemplateHygiene.linksRemoved;
+    }
+
+    // ------------------------------------------------------------------ template hygiene
+
+    /**
+     * F-103 R2 — pre-spawn hygiene sweep over the SHARED {@code FXHelper.getFX(loc)}
+     * template (the FX every {@code createRuntime()} spawn shallow-copies from).
+     *
+     * <p><b>Why (javap-verified against photon 2.1.5 / ldlib2 2.2.29):</b> a pristine
+     * asset fresh from disk has NO live scene-graph state — every template
+     * {@code Transform} has {@code parent() == null}, an empty live {@code children()}
+     * list and no {@code getScene()}. If ANY code path ever awakens the cached templates
+     * (historically {@code FX.createInternalRuntime()} in the old stormfx tuners; also
+     * possible via Photon's own in-game editor), the poison self-perpetuates through the
+     * NORMAL spawn path: {@code FXObject.copy(false)} runs
+     * {@code Transform.copyTransformFrom(template, true, true)} which copies the LIVE
+     * {@code parent(other.parent())}, and {@code Transform.addChildInternal} has no
+     * duplicate check on the live {@code children} list — so every spawn grafts one stale
+     * copy per object into the template hierarchy (silent leak), and any later
+     * {@code setScene} cascade over that hierarchy floods one
+     * {@code "Duplicate fx runtime object id … is replaced"} WARN per accumulated copy
+     * ({@code FXRuntime.addSceneObjectInternal}). The round-1 tuner fix stopped the
+     * poisoning; this sweep closes the remaining vector by GUARANTEEING the template is
+     * pristine before every spawn — a poisoned session heals on the next spawn instead of
+     * leaking forever.</p>
+     *
+     * <p><b>What it does</b> (only when dirty — the pristine probe is a handful of
+     * reflective reads per spawn): strips every live child off each template transform
+     * ({@code Transform.destroy()} detaches with the parent's live list; a belt-and-braces
+     * {@code children().clear()} covers detach-refusing edge states), detaches templates
+     * from any live parent ({@code destroy()} keeps their own persisted {@code _parentId}
+     * and resets the {@code isValid} awake-latch — the exact fresh-from-disk state), pulls
+     * them out of any stale scene map ({@code removeSceneObjectInternal} +
+     * {@code setSceneInternal(null)}), and restores the persisted {@code _childrenId}
+     * order list eroded by {@code removeChildInternal}. Shared {@code ParticleConfig}s
+     * (the Channel-A tuner surface) are deliberately untouched.</p>
+     *
+     * <p><b>Probe:</b> every scrub logs
+     * {@code "Photon template hygiene probe: <fx> liveParents=<p> liveChildren=<c>
+     * liveScenes=<s>"} at DEBUG — the population measure for QA: all-zero on every line
+     * means no accumulation; a dirty scrub additionally WARNs once per fx id. Fail-soft:
+     * the first reflective surprise disables the sweep for the session (spawns proceed
+     * exactly as before this class existed).</p>
+     */
+    private static final class TemplateHygiene {
+        private static final int UNRESOLVED = 0;
+        private static final int READY = 1;
+        private static final int DISABLED = 2;
+        private static int state = UNRESOLVED;
+        private static Method getFxData;            // FX.getFxData()
+        private static Method fxDataObjects;        // FXData.objects()
+        private static Method objTransform;         // ISceneObject.transform()
+        private static Method objGetScene;          // ISceneObject.getScene()
+        private static Method objSetSceneInternal;  // ISceneObject.setSceneInternal(IScene)
+        private static Method sceneRemoveInternal;  // IScene.removeSceneObjectInternal(ISceneObject)
+        private static Method trParent;             // Transform.parent()
+        private static Method trChildren;           // Transform.children() — the LIVE list
+        private static Method trDestroy;            // Transform.destroy()
+        private static Method trGetChildIds;        // Transform._getInternalChildID()
+        private static Method trSetChildIds;        // Transform._setInternalChildID(List)
+
+        /** Scrubs that actually had to clean something (healthy sessions: stays 0). */
+        private static long dirtyScrubs;
+        /** Total live links (parents + children + scenes) removed across all scrubs. */
+        private static long linksRemoved;
+        /** Fx ids already WARN-reported as dirty (one WARN per id per session). */
+        private static final Set<ResourceLocation> WARNED_DIRTY = new HashSet<>();
+
+        private TemplateHygiene() {}
+
+        private static boolean resolve() {
+            if (state != UNRESOLVED) {
+                return state == READY;
+            }
+            try {
+                Class<?> fxClass = Class.forName("com.lowdragmc.photon.client.fx.FX");
+                Class<?> sceneObject = Class.forName(
+                        "com.lowdragmc.lowdraglib2.editor.ui.sceneeditor.sceneobject.ISceneObject");
+                Class<?> scene = Class.forName(
+                        "com.lowdragmc.lowdraglib2.editor.ui.sceneeditor.sceneobject.IScene");
+                Class<?> transform = Class.forName("com.lowdragmc.lowdraglib2.math.Transform");
+                getFxData = fxClass.getMethod("getFxData");
+                fxDataObjects = getFxData.getReturnType().getMethod("objects");
+                objTransform = sceneObject.getMethod("transform");
+                objGetScene = sceneObject.getMethod("getScene");
+                objSetSceneInternal = sceneObject.getMethod("setSceneInternal", scene);
+                sceneRemoveInternal = scene.getMethod("removeSceneObjectInternal", sceneObject);
+                trParent = transform.getMethod("parent");
+                trChildren = transform.getMethod("children");
+                trDestroy = transform.getMethod("destroy");
+                trGetChildIds = transform.getMethod("_getInternalChildID");
+                trSetChildIds = transform.getMethod("_setInternalChildID", List.class);
+                state = READY;
+                return true;
+            } catch (Throwable t) {
+                disable(t);
+                return false;
+            }
+        }
+
+        /** Probes {@code fx}'s templates and scrubs any live scene-graph residue. */
+        static void scrub(ResourceLocation fxId, Object fx) {
+            if (state == DISABLED || !resolve()) {
+                return;
+            }
+            try {
+                List<?> objects = (List<?>) fxDataObjects.invoke(getFxData.invoke(fx));
+                int liveParents = 0;
+                int liveChildren = 0;
+                int liveScenes = 0;
+                for (Object object : objects) {
+                    Object transform = objTransform.invoke(object);
+                    if (trParent.invoke(transform) != null) {
+                        liveParents++;
+                    }
+                    liveChildren += ((List<?>) trChildren.invoke(transform)).size();
+                    if (objGetScene.invoke(object) != null) {
+                        liveScenes++;
+                    }
+                }
+                EclipseMod.LOGGER.debug(
+                        "Photon template hygiene probe: {} liveParents={} liveChildren={} liveScenes={}",
+                        fxId, liveParents, liveChildren, liveScenes);
+                if (liveParents == 0 && liveChildren == 0 && liveScenes == 0) {
+                    return; // pristine — the only state this probe should ever see
+                }
+                // Snapshot the persisted child-order ids FIRST: every detach below runs
+                // removeChildInternal, which erodes the parent's _childrenId list.
+                Object[] childIdSnapshots = new Object[objects.size()];
+                for (int i = 0; i < objects.size(); i++) {
+                    childIdSnapshots[i] =
+                            trGetChildIds.invoke(objTransform.invoke(objects.get(i)));
+                }
+                // Pass A: strip every live child (grafted spawn copies AND awakened
+                // template-to-template links — both only exist on a poisoned template).
+                for (Object object : objects) {
+                    Object transform = objTransform.invoke(object);
+                    List<?> kids = (List<?>) trChildren.invoke(transform);
+                    for (Object kid : new ArrayList<>(kids)) {
+                        trDestroy.invoke(kid); // detach + reset the kid's awake-latch
+                    }
+                    kids.clear(); // belt-and-braces: destroy() skips !isValid parents
+                }
+                // Pass B: detach templates from any surviving live parent (e.g. a stale
+                // internal-runtime root). destroy() keeps the template's own persisted
+                // _parentId and resets isValid — the pristine fresh-from-disk state.
+                for (Object object : objects) {
+                    Object transform = objTransform.invoke(object);
+                    if (trParent.invoke(transform) != null) {
+                        trDestroy.invoke(transform);
+                    }
+                }
+                // Pass C: pull templates out of any stale scene's object map.
+                for (Object object : objects) {
+                    Object scene = objGetScene.invoke(object);
+                    if (scene != null) {
+                        sceneRemoveInternal.invoke(scene, object);
+                        objSetSceneInternal.invoke(object, (Object) null);
+                    }
+                }
+                // Pass D: restore the persisted child-order ids eroded by the detaches.
+                for (int i = 0; i < objects.size(); i++) {
+                    trSetChildIds.invoke(objTransform.invoke(objects.get(i)),
+                            childIdSnapshots[i]);
+                }
+                dirtyScrubs++;
+                linksRemoved += liveParents + liveChildren + liveScenes;
+                if (WARNED_DIRTY.add(fxId)) {
+                    EclipseMod.LOGGER.warn(
+                            "Photon template hygiene: {} had live scene-graph state on the shared "
+                                    + "FX cache (parents={}, children={}, scenes={}) — scrubbed "
+                                    + "before spawn. Some code path awakened the cached templates "
+                                    + "(FX.createInternalRuntime on the shared cache is forbidden, "
+                                    + "see FX_RESPAWN_HYGIENE_REPORT.md).",
+                            fxId, liveParents, liveChildren, liveScenes);
+                }
+            } catch (Throwable t) {
+                disable(t);
+            }
+        }
+
+        private static void disable(Throwable t) {
+            if (state != DISABLED) {
+                state = DISABLED;
+                EclipseMod.LOGGER.debug(
+                        "Photon template hygiene sweep disabled for the session", t);
+            }
+        }
     }
 
     // ------------------------------------------------------------------ reflection

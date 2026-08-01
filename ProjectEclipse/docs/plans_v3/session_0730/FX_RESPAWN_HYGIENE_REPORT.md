@@ -235,3 +235,179 @@ Struktur-Spawn UND Altar-Teleport; keine `Photon nearfield live-tuner disabled`-
 - **Nicht angefasst:** `PhotonBridge`-Grace/Sweep, `PhotonFxRegistry`-Loop-Lane,
   alle FxRows — Verhalten unverändert; das Duplicate-Law im PhotonBridge-Header
   (Zeile ~331) bleibt korrekt und gilt weiter für echte Respawn-Antipatterns.
+
+---
+
+## Runde 2 (F-103 A′) — die "neue" Evidenz widerlegt den Fix NICHT, aber der §6-Restvektor ist jetzt an der Quelle zu
+
+**Verdikt:** Die Live-Runtime-Evidenz der Nacht stammt aus einer Client-JVM, die den
+Runde-1-Fix **nie geladen hat** — die beobachteten Bursts sind exakt der Runde-1-
+Mechanismus (alte Klassen), nicht ein neuer Pfad. Der reale Rest-Vektor ist die in §6
+dokumentierte **Session-Altlast**: ein einmal vergifteter `FXHelper`-Cache akkumuliert
+im **normalen `createRuntime()`-Spawn-Pfad** für den Rest der JVM-Session weiter, und
+kein bisheriger Code konnte das heilen. Runde 2 schließt genau das mit einem
+**Template-Hygiene-Sweep** am einzigen Spawn-Chokepoint (`PhotonBridge.startExecutor`).
+
+### R2.1 Beweis: die JVM lief die ganze Nacht auf Pre-Fix-Bytecode
+
+- `run/logs/debug.log` enthält **genau einen** `ModLauncher running`-Eintrag:
+  `[31Jul2026 23:11:51.273]` (`rg -c "ModLauncher running" debug.log` → 1). Die Datei
+  läuft ununterbrochen bis in den Morgen — **02:48 und 04:31 waren Welt-Re-Joins**
+  (voicechat-Reconnects), keine JVM-Starts.
+- Der Fix wurde **00:30 kompiliert / 00:32 committed** (e44c785;
+  `build/classes/.../StormNearfieldFx$Tuner.class` mtime 00:30). Die JVM hatte die
+  ALTEN Tuner-Klassen da längst geladen: erste Duplicate-Warns **23:43:26** — 10 Stück,
+  darunter die drei `*_root`-UUIDs (`092d8199…` u. a.) = die "erster vergifteter
+  Spawn"-Signatur aus §1.3. Geladene Klassen werden in einer laufenden JVM nie
+  ausgetauscht → `createInternalRuntime` feuerte bei jedem Tuner-attach weiter.
+- Die Bursts liefen nach dem angeblichen "0 weitere Warns"-Zeitpunkt (04:44:25)
+  weiter: **05:07:16 (7966 = 7×1138)** und **05:09:17/18 (Σ 8029 = 7×1147)** —
+  debug.log-Burstserie: 10 @23:43:26, dann 7×1025 / 7×1026 / 7×1027 (04:44:05/15/25),
+  7×1029 (04:56:20), 7×1138, 7×1147.
+- **Die "Wisp-Anomalie" existiert nicht.** Über alle Bursts sind die 7 Emitter-UUIDs
+  exakt uniform verteilt (`rg … | rg -o "id [0-9a-f]{8}" | sort | uniq -c` → 7 × 3078
+  in latest.log). Die 1027/700/1-These der Missions-Beschreibung war ein Zählfehler.
+
+### R2.2 Die vollständige Mechanik (jedes Glied javap-verifiziert, photon 2.1.5 + ldlib2 2.2.29)
+
+Die Runde-1-Kette stimmt und ist jetzt bis in die Silent-Phase präzisiert:
+
+1. **Vergiftung (einmalig, 23:43:26):** alter `Tuner.attach` →
+   `FX.createInternalRuntime()` auf dem geteilten Cache → `FXRuntime.initRuntime`
+   Schritt 2 ruft `setScene(runtime)` + `awake()` auf jedem TEMPLATE-Objekt;
+   `Transform.awake()` löst `_parentId` über `IScene.getSceneObject` auf und baut live
+   Parent/Child-Links (`getSceneObject` hat `getOrDefault(uuid, root)` — nie null).
+2. **Silent-Akkumulation (+1 Graft pro Objekt pro Spawn, KEINE Warns):** jeder normale
+   Spawn (`BlockEffectExecutor.start` → `FX.createRuntime()` → `FXData.copy(false)` →
+   `FXObject.copy(false)`) ruft `copy.copyTransformFrom(template)` →
+   `Transform.copyTransformFrom(other, true, true)` → **`parent(other.parent())`** —
+   der live Template-Parent wird kopiert. `Transform.addChildInternal` macht
+   `children.add(child)` **ohne Duplikat-Check** (nur `_childrenId` wird
+   contains-geprüft) → der Template-Root sammelt pro Spawn eine Kopie pro Emitter.
+   Warum ohne Warn: `addChildInternal` ruft zwar `copy.setScene(templateScene)` und
+   `objects.put` ersetzt kurz — aber `initRuntime` Schritt 2 zieht die Kopie sofort in
+   ihre eigene Runtime um, und `ISceneObject.setScene` macht dabei
+   `removeSceneObjectInternal` auf der alten Szene → **der Map-Slot der internen Szene
+   wird geleert**, der nächste Spawn-put trifft einen leeren Slot. Der Transform-Graft
+   bleibt (Schritt 3 von `initRuntime` re-parentet nur parent-lose Objekte; der
+   `setScene`-Umzug korrigiert nur die Map, nie den Transform-Baum).
+3. **Flush (der Burst, N Warns pro Emitter):** nächster `Tuner.attach` nach einem
+   Fenster-Re-Open (der `EMISSIONS[slot] != null`-Guard verhindert attaches innerhalb
+   eines offenen Fensters — deshalb bursten nur TP-Zyklen) → neues
+   `createInternalRuntime()` → `setScene`-Kaskade (`children().forEach(c ->
+   c.setScene(scene))`) über den Template-Root → alle N akkumulierten Kopien werden
+   sequenziell unter derselben Asset-UUID geputtet: Kopie 1 ersetzt das
+   Template-Objekt, Kopie k ersetzt Kopie k−1 → **exakt N Warns pro Emitter**
+   (7×1025 = 7175 ✓).
+4. **Churn-These korrigiert:** `Emitter.isAlive()` ist `!removed || particleAmount>0
+   || FXObject.isAlive()` — ein laufender Loop meldet auch auf llvmpipe alive (`dev
+   photon status` 04:52: "10/24 live (9 loops)"). Der ~6s-Respawn-Churn (Population
+   +109 zwischen 04:56 und 05:07) ist der §1.4-Nebenschaden des ALTEN Codes: der
+   attach-Flush + die Graft-Fehlanker reißen live Loops kaputt, das Keepalive respawnt
+   nach Ablauf der 100t-Grace (~5–6s). Mit sauberem Cache gibt es weder Flush noch
+   Fehlanker → kein Churn; ein zusätzlicher Respawn-Backoff wäre reine
+   Symptomdämpfung und wurde bewusst NICHT eingebaut.
+
+### R2.3 Fix: Template-Hygiene-Sweep am Spawn-Chokepoint
+
+`PhotonBridge.startExecutor` (der einzige Pfad, über den JEDER Bridge-Spawn läuft —
+One-Shots, Loops, Entity-Attaches, alle Teams) prüft jetzt VOR jedem Spawn das
+gecachte FX-Template (`TemplateHygiene.scrub`):
+
+- **Probe (immer, ~12 reflektive Reads):** zählt `liveParents` / `liveChildren` /
+  `liveScenes` über alle Template-Objekte und loggt sie als DEBUG-Zeile
+  (`Photon template hygiene probe: <fx> liveParents=0 liveChildren=0 liveScenes=0`) —
+  auf sauberem Cache immer 0/0/0, dann No-Op.
+- **Scrub (nur bei Dirt):** (A) alle live Children jedes Templates strippen
+  (`Transform.destroy()` pro Kind + `children().clear()` als Belt-and-Braces für
+  detach-verweigernde Edge-States), (B) Templates von live Parents lösen
+  (`destroy()` erhält das eigene persistierte `_parentId` und resettet den
+  `isValid`-Awake-Latch = exakt der Frisch-von-Platte-Zustand), (C) Templates aus
+  stale Szenen-Maps ziehen (`removeSceneObjectInternal` + `setSceneInternal(null)`),
+  (D) die von `removeChildInternal` erodierten persistierten `_childrenId`-Listen aus
+  einem Vorher-Snapshot restaurieren. Geteilte `ParticleConfig`s (Channel-A-Fläche
+  der Tuner) werden bewusst NICHT angefasst; ebenso KEINE Cache-Eviction (die würde
+  die Tuner-`EMISSIONS`-Referenzen von künftigen Spawns entkoppeln).
+- **Fail-soft:** erste reflektive Überraschung → Sweep session-disabled (DEBUG-Zeile
+  `Photon template hygiene sweep disabled`), Spawns laufen exakt wie vorher.
+- **Tripwire:** ein dirty Scrub loggt einmal pro fx-Id eine WARN
+  (`Photon template hygiene: <fx> had live scene-graph state …`) — in gesunden
+  Sessions existiert diese Zeile nie. Zähler: `PhotonBridge.hygieneDirtyScrubs()` /
+  `hygieneLinksRemoved()` (public, für eine künftige `/dev photon status`-Zeile —
+  FxDevClient liegt außerhalb der R2-Zone und wurde nicht angefasst).
+
+Damit gilt für Produktion (echte GPU) UND llvmpipe: beliebig häufige
+Fenster-Re-Opens/Respawns erzeugen ausschließlich selbst-konsistente Runtimes
+(`initRuntime`-`awake()` löst `_parentId` innerhalb der eigenen Runtime-Map auf), und
+selbst wenn ein künftiger Pfad (Photon-Editor, Fremdcode) die Templates erneut
+vergiftet, heilt der nächste Spawn den Cache statt eine Session lang zu leaken →
+**0 Duplicate-Warns garantiert**.
+
+### R2.4 Geänderte Dateien
+
+- `src/main/java/dev/projecteclipse/eclipse/veilfx/PhotonBridge.java`
+  (`TemplateHygiene`-Sweep + Probe + Zähler-Accessors; Scrub-Aufruf in
+  `startExecutor`). Sonst nichts — beide Tuner bleiben auf dem Runde-1-Stand,
+  `PhotonFxRegistry` unverändert.
+
+### R2.5 Gate-Ergebnisse
+
+- `flock /tmp/gradle.lock ./gradlew compileJava --offline --console=plain` →
+  **BUILD SUCCESSFUL** (2 actionable tasks). Keine Server-/Client-Starts, kein RCON.
+
+### R2.6 Verifikationsskript für den Main-Agent (Runde 2)
+
+**Schritt 0 ist zwingend und war der blinde Fleck der Nacht-Session:**
+
+```bash
+# 0) CLIENT-JVM NEU STARTEN (die laufende JVM führt Pre-Fix-Bytecode aus!):
+#    Client-Prozess beenden, `flock /tmp/gradle.lock ./gradlew compileJava --offline`
+#    (bereits grün), Client frisch starten. Kontrolle: run/logs/debug.log beginnt neu
+#    mit einer frischen "ModLauncher running"-Zeile NACH dem Kompilat-Zeitstempel.
+
+# 1) Baseline nach Join:
+rg -c "Duplicate fx runtime" run/logs/latest.log   # merken (frisches Log: 0)
+
+# 2) Churn-Repro exakt wie in der Nacht (RCON):
+#      eclipsefx storm add 24 60 sphere            # Sturm bei ~(40,112,12)
+#      tp @p 0.5 108 12.5                          # Nearfield-Fenster öffnet
+#      35 s stehen lassen; dann 3 TP-Zyklen:
+#      tp @p 10000 108 10000  → 5 s →  tp @p 0.5 108 12.5   (3× wiederholen)
+#      optional: dev structure spawn <site> dazwischen (Burst-1-Repro aus Runde 1)
+
+# 3) Akzeptanz Warns:
+rg -c "Duplicate fx runtime" run/logs/latest.log   # UNVERÄNDERT (0 neue)
+
+# 4) Populations-Sonde (misst die Template-Kindliste bei JEDEM Spawn):
+rg "template hygiene probe" run/logs/debug.log | tail -20
+#    → JEDE Zeile "liveParents=0 liveChildren=0 liveScenes=0", auch nach N Zyklen
+#      (eine wachsende liveChildren-Zahl wäre der Leak — darf nie auftreten).
+rg -c "Photon template hygiene:" run/logs/debug.log
+#    → 0 (die Dirty-WARN ist der Tripwire; >0 heißt: irgendwas vergiftet wieder,
+#      der Sweep hat es geheilt — dann bitte die Zeile mit fx-Id an Team A′ melden).
+rg -c "template hygiene sweep disabled" run/logs/debug.log
+#    → 0 (Reflection-Pfad intakt).
+
+# 5) Tuner/Loop-Gesundheit (wie Runde 1):
+#      dev photon status  → stabile "executors: X/24 live"-Zahlen, keine Respawn-Serie;
+#      Dichte-Modulation beim Rein-/Rauslaufen am 150–250-Band sichtbar (Channel A lebt).
+```
+
+**Log-Erwartung:** 0 neue `Duplicate fx runtime`-Warns über beliebig viele
+TP-Zyklen; Hygiene-Probe konstant 0/0/0; keine `hygiene`-WARN, keine
+`live-tuner disabled`-Zeile.
+
+### R2.7 Restrisiken (Runde 2)
+
+- **Alt-Session:** die noch laufende Nacht-JVM warnt weiter, bis sie neu gestartet
+  wird — kein Code kann geladene Klassen ersetzen. Nach dem Neustart ist auch die
+  §6-Altlast obsolet: ein künftig vergifteter Cache heilt am nächsten Spawn.
+- **Reflection-Oberfläche:** der Sweep hängt zusätzlich an `ISceneObject.transform/
+  getScene/setSceneInternal`, `IScene.removeSceneObjectInternal`,
+  `Transform.parent()/children()/destroy()/_getInternalChildID/_setInternalChildID`
+  (alle public, javap-verifiziert). Ein Photon/ldlib-Umbau degradiert fail-soft auf
+  das Runde-1-Verhalten (Sweep aus, eine DEBUG-Zeile).
+- **Poisoned-Session-Optik:** trifft der Scrub eine BEREITS vergiftete Session (nur
+  via Editor/Fremdcode möglich), verlieren die live gerafteten Alt-Kopien ihren
+  (ohnehin falschen) Template-Anker — deren Partikel können einen Frame springen.
+  Auf sauberen Sessions ist der Sweep beweisbar ein No-Op (Probe-Fast-Path).
