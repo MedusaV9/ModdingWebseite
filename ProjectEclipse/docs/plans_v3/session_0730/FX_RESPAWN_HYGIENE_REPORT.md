@@ -411,3 +411,32 @@ TP-Zyklen; Hygiene-Probe konstant 0/0/0; keine `hygiene`-WARN, keine
   via Editor/Fremdcode möglich), verlieren die live gerafteten Alt-Kopien ihren
   (ohnehin falschen) Template-Anker — deren Partikel können einen Frame springen.
   Auf sauberen Sessions ist der Sweep beweisbar ein No-Op (Probe-Fast-Path).
+
+## Runde 2 — Live-Abnahme (01.08. 06:11–06:13 UTC, frischer Client) ✅
+
+Durchgeführt exakt nach R2.6 (`/tmp/f103_a_verify.sh`), Client-JVM frisch gebootet
+(Boot 06:04, Join 06:10 — Schritt 0 war zwingend: die Vor-Nacht-JVM lud nachweislich
+Pre-R2-Bytecode, 0 Hygiene-Proben trotz 7 Wave3-Spawns, weil `build/classes` erst
+NACH ihrem Boot auf R2 kompiliert wurde; FML liest die Modklassen beim Boot-Scan).
+
+| Messpunkt | Erwartung | Ergebnis |
+| --- | --- | --- |
+| Baseline `Duplicate fx runtime` | 0 | **0** |
+| Storm r=24 gesetzt, Fensterplatz, 35 s Dwell | Loop-FX attach + Tuner aktiv | ✅ (`storm_vein_bolt`-Proben im Takt) |
+| 3× Teleport-Churn (10 000 Blöcke hin/zurück, je 5 s) | erzwingt Voll-Despawn/Respawn | ✅ |
+| 60 s Catch-up, dann `Duplicate fx runtime` gesamt | 0 | **0** (alt: 3 Bursts à ~7 180) |
+| Hygiene-Probe (jede Spawn-Passage) | konstant `0/0/0` | **konstant `liveParents=0 liveChildren=0 liveScenes=0`** |
+| `Photon template hygiene:` Dirty-WARN (Tripwire) | 0 | **0** (R1-Fix hält: nichts vergiftet mehr, Sweep bleibt No-Op) |
+| `template hygiene sweep disabled` / `live-tuner disabled` | 0 / 0 | **0 / 0** (Reflection-Pfad läuft in Photon 2.1.5 live) |
+
+Damit sind beide Vektoren geschlossen und live bewiesen: R1 (Cache-Vergiftung durch
+`createInternalRuntime` in den Tunern) + R2 (Session-Altlast-Flush am Re-Attach).
+
+**Beifang der Abnahme (nicht Team A):** Auf der Alt-JVM lief seit der ersten
+Licht-Aktivierung (05:45:49, `veil:light/point`-Sampler-Validierungswarnung auf
+llvmpipe) ein `Finished uploading vanilla shaders`-INFO-Flood mit ~25 Zeilen/s —
+Veils `DynamicBufferManager.update()` loggt die Zeile jeden Frame, solange ein
+Shader in `swapShaders` nie `isRecompileReady` wird. Framework-Quirk (Bytecode
+dekompiliert und verifiziert), kein Eclipse-Code beteiligt, funktional harmlos
+(alle 78 Vanilla-Shader kompilierten in 544 ms), aber er bläht Logs auf: bei
+Log-basierten Abnahmen auf llvmpipe einplanen. Frische R2-Session: 2 Vorkommen.
