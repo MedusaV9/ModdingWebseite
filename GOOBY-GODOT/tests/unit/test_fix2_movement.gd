@@ -104,6 +104,11 @@ func test_idle_wandern_bewegt_sich_wirklich() -> void:
 	var gooby := room.gooby()
 	# Wander-Timer sofort feuern lassen statt 1–3 s zu warten.
 	gooby._wander_timer = 0.0
+	# Deterministischer Würfel: der Idle-Akt wird pro Feuerung gerollt (90 %
+	# wandern, 10 % Clip an Ort und Stelle) — der Test darf im Voll-Runner
+	# nicht am RNG hängen (W16: zweimal flaky mit netto 0.00). Fester Seed
+	# = feste Roll-Folge = der Streifzug kommt sicher.
+	gooby._rng.seed = 7
 	var start := gooby.global_position
 	var max_step := 0.0
 	var prev := start
@@ -114,9 +119,23 @@ func test_idle_wandern_bewegt_sich_wirklich() -> void:
 		max_step = maxf(max_step, GoobyHome._xz(pos - prev).length())
 		netto = maxf(netto, GoobyHome._xz(pos - start).length())
 		prev = pos
+	var freie: int = gooby.grid.free_cells().size() if gooby.grid != null else -1
 	assert_true(
 		netto >= 0.5,
-		"Gooby bewegt sich beim Idle-Wandern wirklich vom Fleck (netto %.2f m)" % netto
+		(
+			(
+				"Gooby bewegt sich beim Idle-Wandern wirklich vom Fleck (netto %.2f m; "
+				+ "Diagnose: enabled=%s scripted=%s walking=%s freie_zellen=%d timer=%.2f)"
+			)
+			% [
+				netto,
+				gooby._wander_enabled,
+				gooby._scripted,
+				gooby._walking,
+				freie,
+				gooby._wander_timer,
+			]
+		)
 	)
 	assert_true(max_step <= MAX_STEP_PRO_FRAME, "kein Sprung > SPEED/Tick (max %.4f)" % max_step)
 	# Nach dem Lauf steht er sauber (kein Dauerzittern am Ziel).
