@@ -1,0 +1,38 @@
+{
+	"dlc_mcgooby": {
+		"titel": "McGooby",
+		"zurueck": "‹ Zurück",
+		"knopf": {
+			"schicht": "Probeschicht starten!"
+		},
+		"intro": {
+			"titel": "Die große Eröffnung",
+			"zeile1": "Die Stadt hat REHWEI, Wochenmarkt, GOOBYTHEKE — aber keinen Ort, an dem man um 18 Uhr mit den Pfoten isst.",
+			"zeile2": "Ein leerstehendes Eckgrundstück, ein Bauschild, ein Traum: zwei goldene Bögen, die bei genauem Hinsehen aussehen wie Löffel mit Ohren.",
+			"zeile3": "Heute ist Probeschicht! Der Grill ist heiß, die Bestellglocke blitzblank — und die ersten Kunden haben Hunger.",
+			"knopf": "Schürze umbinden!"
+		},
+		"schicht": {
+			"bestellung": "Bestellung {nr}/{gesamt}",
+			"patty": "Patty {nr}/{gesamt}",
+			"roh": "Brutzel … noch roh!",
+			"goldbraun": "JETZT wenden!",
+			"kohle": "Uups — Kohle-Style!",
+			"perfekt": "Perfekt!",
+			"roestaroma": "Röstaroma-Spezial!",
+			"punkte": "Punkte: {punkte}",
+			"pause": "Pause",
+			"hilfe": "Tippe den Patty, sobald er goldbraun leuchtet — im goldenen Fenster gibt es ein „Perfekt!“. Zu spät ist nie verloren: dann wird es eben ein Röstaroma-Spezial mit halben Punkten."
+		},
+		"ende": {
+			"titel": "Feierabend!",
+			"untertitel": "Gooby dreht das Schild auf GESCHLOSSEN — die Löffel-Bögen leuchten.",
+			"punkte": "Punkte",
+			"perfekt": "Perfekt-Wendungen",
+			"trinkgeld": "Trinkgeld",
+			"muenzen": "Münzen",
+			"nochmal": "Noch eine Schicht",
+			"feierabend": "Feierabend machen"
+		}
+	}
+}

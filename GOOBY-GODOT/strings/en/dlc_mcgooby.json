@@ -1,0 +1,38 @@
+{
+	"dlc_mcgooby": {
+		"titel": "McGooby",
+		"zurueck": "‹ Back",
+		"knopf": {
+			"schicht": "Start the trial shift!"
+		},
+		"intro": {
+			"titel": "The Grand Opening",
+			"zeile1": "The city has REHWEI, the weekly market, the GOOBYTHEKE — but no place to eat with your paws at 6 pm.",
+			"zeile2": "An empty corner lot, a construction sign, a dream: two golden arches that, on closer inspection, look like spoons with ears.",
+			"zeile3": "Today is the trial shift! The grill is hot, the order bell is polished — and the first customers are hungry.",
+			"knopf": "Tie on the apron!"
+		},
+		"schicht": {
+			"bestellung": "Order {nr}/{gesamt}",
+			"patty": "Patty {nr}/{gesamt}",
+			"roh": "Sizzle … still raw!",
+			"goldbraun": "Flip it NOW!",
+			"kohle": "Oops — charcoal style!",
+			"perfekt": "Perfect!",
+			"roestaroma": "Roast Aroma Special!",
+			"punkte": "Points: {punkte}",
+			"pause": "Pause",
+			"hilfe": "Tap the patty as soon as it glows golden brown — inside the golden window you get a “Perfect!”. Too late is never a loss: it simply becomes a Roast Aroma Special worth half the points."
+		},
+		"ende": {
+			"titel": "Closing time!",
+			"untertitel": "Gooby flips the sign to CLOSED — the spoon arches light up.",
+			"punkte": "Points",
+			"perfekt": "Perfect flips",
+			"trinkgeld": "Tips",
+			"muenzen": "Coins",
+			"nochmal": "One more shift",
+			"feierabend": "Call it a day"
+		}
+	}
+}
