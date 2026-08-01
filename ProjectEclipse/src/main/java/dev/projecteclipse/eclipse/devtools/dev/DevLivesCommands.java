@@ -1,6 +1,7 @@
 package dev.projecteclipse.eclipse.devtools.dev;
 
 import java.util.List;
+import java.util.Locale;
 
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
@@ -12,6 +13,9 @@ import dev.projecteclipse.eclipse.core.state.LivesApi;
 import dev.projecteclipse.eclipse.hearts.HeartsService;
 import dev.projecteclipse.eclipse.lang.ServerLang;
 import dev.projecteclipse.eclipse.lives.BanService;
+import dev.projecteclipse.eclipse.network.S2CHeartBurstPayload;
+import dev.projecteclipse.eclipse.network.S2CQuasarPayload;
+import dev.projecteclipse.eclipse.network.hearts.HeartsPayloads;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.arguments.EntityArgument;
@@ -20,6 +24,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
+import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
  * {@code /dev lives} ops tree (D13, W-SHARDS): SINGLE-player Leben mutation through
@@ -48,7 +53,10 @@ public final class DevLivesCommands {
                         "dev.eclipse.doc.lives.give", Danger.CAUTION, ClickAction.SUGGEST, 2),
                 new DevCommandDoc("lives.status", DevCategory.PLAYERS,
                         "/dev lives status [player]",
-                        "dev.eclipse.doc.lives.status", Danger.SAFE, ClickAction.RUN, 2));
+                        "dev.eclipse.doc.lives.status", Danger.SAFE, ClickAction.RUN, 2),
+                new DevCommandDoc("lives.burst", DevCategory.PLAYERS,
+                        "/dev lives burst <player> <slot> <loss|gain|witness>",
+                        "dev.eclipse.doc.lives.burst", Danger.SAFE, ClickAction.SUGGEST, 2));
     }
 
     private DevLivesCommands() {}
@@ -70,7 +78,17 @@ public final class DevLivesCommands {
                                 .executes(context -> status(context, null))
                                 .then(Commands.argument("player", EntityArgument.player())
                                         .executes(context -> status(context,
-                                                EntityArgument.getPlayer(context, "player")))))));
+                                                EntityArgument.getPlayer(context, "player")))))
+                        .then(Commands.literal("burst")
+                                .then(Commands.argument("player", EntityArgument.player())
+                                        .then(Commands.argument("slot",
+                                                        IntegerArgumentType.integer(0, HeartsService.MAX_HEARTS - 1))
+                                                .then(Commands.literal("loss")
+                                                        .executes(context -> burst(context, BurstKind.LOSS)))
+                                                .then(Commands.literal("gain")
+                                                        .executes(context -> burst(context, BurstKind.GAIN)))
+                                                .then(Commands.literal("witness")
+                                                        .executes(context -> burst(context, BurstKind.WITNESS))))))));
     }
 
     private static int give(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
@@ -97,6 +115,36 @@ public final class DevLivesCommands {
                     player.getScoreboardName()), false);
         }
         return applied;
+    }
+
+    /** The three W4-HEARTS burst lanes reachable through {@code /dev lives burst}. */
+    private enum BurstKind { LOSS, GAIN, WITNESS }
+
+    /**
+     * W4-HEARTS acceptance trigger: replays one heart-burst FX lane on ONE player
+     * without touching their Leben — {@code loss} is the hotbar shatter (the R8 hush
+     * variant engages automatically when that player sits at exactly 1 Leben),
+     * {@code gain} the R5 kill-transfer reverse burst, {@code witness} the world-space
+     * R9 anchor quasar sent to the player themselves (the exact payload bystanders
+     * receive) so single-client acceptance can SEE it. Pure client FX, zero state.
+     */
+    private static int burst(CommandContext<CommandSourceStack> context, BurstKind kind)
+            throws CommandSyntaxException {
+        CommandSourceStack source = context.getSource();
+        ServerPlayer player = EntityArgument.getPlayer(context, "player");
+        int slot = IntegerArgumentType.getInteger(context, "slot");
+        switch (kind) {
+            case LOSS -> PacketDistributor.sendToPlayer(player, new S2CHeartBurstPayload(slot));
+            case GAIN -> HeartsPayloads.sendHeartBurstFx(player, slot, true);
+            case WITNESS -> PacketDistributor.sendToPlayer(player, new S2CQuasarPayload(
+                    S2CQuasarPayload.HEART_BURST, player.position().add(0.0D, 1.0D, 0.0D)));
+        }
+        String kindName = kind.name().toLowerCase(Locale.ROOT);
+        audit(source, Component.translatable("dev.eclipse.lives.burst.ok",
+                        kindName, player.getScoreboardName(), slot),
+                "sent " + kindName + " heart burst to " + player.getScoreboardName()
+                        + " (slot " + slot + ")");
+        return 1;
     }
 
     /** The {@code EclipseCommands.banIfOutOfLives} rule: 0 Leben always means the ghost flow. */

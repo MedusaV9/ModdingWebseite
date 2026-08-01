@@ -13,7 +13,9 @@ import net.minecraft.Util;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.sounds.SoundEvents;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.effect.MobEffects;
@@ -22,6 +24,7 @@ import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.RegisterGuiLayersEvent;
 import net.neoforged.neoforge.client.event.RenderGuiLayerEvent;
 import net.neoforged.neoforge.client.gui.VanillaGuiLayers;
@@ -63,6 +66,13 @@ import net.neoforged.neoforge.client.gui.VanillaGuiLayers;
  * key (the {@code UiSounds.uiSoundVolume} precedent — see the W4-HEARTS wiring doc).
  * Off = the vanilla layer renders untouched, zero risk.</p>
  *
+ * <p><b>Revive re-light (W4-HEARTS R3):</b> when {@link GhostHeartsLayer}'s five-ghost
+ * revive burst hands the health slot back ({@link #beginRelight}), the returning hearts
+ * do not snap in — they fill left→right {@value #RELIGHT_STAGGER_TICKS} ticks apart,
+ * each with a {@value #RELIGHT_FLASH_TICKS}-tick white flash (the blink sprite family)
+ * and a quiet rising chime. Pure client state driven by the tick handler; no protocol
+ * change, and the choreography simply expires if the row is not being rendered.</p>
+ *
  * <p>Self-registered ({@code @EventBusSubscriber}, the {@code GhostHeartsLayer}
  * convention); allocation-free per frame.</p>
  */
@@ -93,6 +103,29 @@ public final class PurpleHeartsLayer {
 
     /** W3-shared config key, bound reflectively with default ON (UiSounds precedent). */
     private static final MethodHandle PURPLE_HEARTS_TOGGLE = findPurpleHeartsToggle();
+
+    // --- R3 revive re-light choreography ---
+    /** Hearts return one by one, this many ticks apart (half the ghost-burst stagger). */
+    private static final int RELIGHT_STAGGER_TICKS = 4;
+    /** Each returning heart lands as a white flash (blink sprites) this many ticks. */
+    private static final int RELIGHT_FLASH_TICKS = 3;
+    /** The quiet per-heart chime: low volume, pitch rising along the row. */
+    private static final float RELIGHT_CHIME_VOLUME = 0.3F;
+    private static final float RELIGHT_CHIME_BASE_PITCH = 1.05F;
+    private static final float RELIGHT_CHIME_PITCH_STEP = 0.08F;
+
+    /** Per-slot relight draw states resolved in the render loop. */
+    private static final int RELIGHT_NORMAL = 0;
+    private static final int RELIGHT_HIDDEN = 1;
+    private static final int RELIGHT_FLASH = 2;
+
+    private static boolean relightActive;
+    /** Ticks since {@link #beginRelight}; slot {@code i} reveals at {@code i * stagger}. */
+    private static int relightTicks;
+    /** Heart slots participating in the running relight (1 today — a revive restores 1 Leben). */
+    private static int relightSlots;
+    /** Next slot whose reveal chime has not fired yet. */
+    private static int relightChimed;
 
     // --- faithful mirror of the private Gui blink state machine ---
     private static int lastHealth;
@@ -135,6 +168,23 @@ public final class PurpleHeartsLayer {
     /** Whether burst debris should be tinted to match the purple row this frame. */
     static boolean tintsBurst() {
         return owningFrame;
+    }
+
+    /**
+     * R3 revive re-light entry, called by {@link GhostHeartsLayer} the tick its revive
+     * burst exits the health slot: the {@code heartsRestored} returning hearts fill
+     * left→right {@value #RELIGHT_STAGGER_TICKS} ticks apart, each with a short white
+     * flash and a quiet rising chime, instead of snapping in. No-op while the purple
+     * row is switched off (the vanilla row has no choreography to hand off to).
+     */
+    public static void beginRelight(int heartsRestored) {
+        if (!enabled()) {
+            return;
+        }
+        relightSlots = Math.max(1, heartsRestored);
+        relightTicks = 0;
+        relightChimed = 0;
+        relightActive = true;
     }
 
     // ------------------------------------------------------------------ registration
@@ -180,6 +230,58 @@ public final class PurpleHeartsLayer {
         int rows = HeartRowGeometry.rows(rowMax, Mth.ceil(player.getAbsorptionAmount()));
         minecraft.gui.leftHeight += HeartRowGeometry.leftHeightIncrement(rows);
         owningFrame = true;
+    }
+
+    // ------------------------------------------------------------------ relight driver
+
+    /**
+     * Tick driver for the R3 re-light (the {@code HeartBurstOverlay.onClientTick}
+     * conventions: reset without a level, freeze while paused). Fires each heart's
+     * reveal chime the tick it lights and expires the choreography after the last flash.
+     */
+    @SubscribeEvent
+    static void onClientTick(ClientTickEvent.Post event) {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.level == null || minecraft.player == null) {
+            relightActive = false;
+            return;
+        }
+        if (!relightActive || minecraft.isPaused()) {
+            return;
+        }
+        relightTicks++;
+        while (relightChimed < relightSlots
+                && relightTicks >= relightChimed * RELIGHT_STAGGER_TICKS) {
+            playRelightChime(relightChimed);
+            relightChimed++;
+        }
+        if (relightTicks >= (relightSlots - 1) * RELIGHT_STAGGER_TICKS + RELIGHT_FLASH_TICKS) {
+            relightActive = false;
+        }
+    }
+
+    /** Quiet glass chime, pitch rising along the row (the UiSounds chime family). */
+    private static void playRelightChime(int slot) {
+        Minecraft.getInstance().getSoundManager().play(SimpleSoundInstance.forUI(
+                SoundEvents.AMETHYST_BLOCK_CHIME,
+                RELIGHT_CHIME_BASE_PITCH + RELIGHT_CHIME_PITCH_STEP * slot,
+                RELIGHT_CHIME_VOLUME));
+    }
+
+    /**
+     * Relight draw state of one health slot this frame: hidden until the slot's reveal
+     * tick, a white flash for the {@value #RELIGHT_FLASH_TICKS} ticks after it, normal
+     * otherwise (and always normal while no relight runs).
+     */
+    private static int relightState(int slot) {
+        if (!relightActive) {
+            return RELIGHT_NORMAL;
+        }
+        int reveal = slot * RELIGHT_STAGGER_TICKS;
+        if (relightTicks < reveal) {
+            return RELIGHT_HIDDEN;
+        }
+        return relightTicks - reveal < RELIGHT_FLASH_TICKS ? RELIGHT_FLASH : RELIGHT_NORMAL;
     }
 
     // ------------------------------------------------------------------ blink mirror
@@ -274,12 +376,23 @@ public final class PurpleHeartsLayer {
                     }
                 }
             }
+            // R3 relight: returning hearts stay dark sockets until their reveal tick,
+            // then land as a short white flash before settling into the purple fill.
+            int relight = slot < healthSlots ? relightState(slot) : RELIGHT_NORMAL;
+            if (relight == RELIGHT_HIDDEN) {
+                continue;
+            }
             if (highlight && hp < shownHealth) {
                 drawSprite(guiGraphics, hp + 1 == shownHealth ? HALF_BLINKING : FULL_BLINKING,
                         x, y, tint);
             }
             if (hp < health) {
-                drawSprite(guiGraphics, hp + 1 == health ? HALF : FULL, x, y, tint);
+                if (relight == RELIGHT_FLASH) {
+                    drawSprite(guiGraphics, hp + 1 == health ? HALF_BLINKING : FULL_BLINKING,
+                            x, y, TINT_NONE);
+                } else {
+                    drawSprite(guiGraphics, hp + 1 == health ? HALF : FULL, x, y, tint);
+                }
             }
         }
         RenderSystem.disableBlend();

@@ -1,0 +1,16 @@
+{
+  "en_us": {
+    "subtitles.eclipse.ui.goal_stamp": "A goal is stamped",
+    "subtitles.eclipse.ui.skill_unlock": "New skills open up",
+    "subtitles.eclipse.ui.toggle_settle": "Toggle settles",
+    "dev.eclipse.doc.lives.burst": "Replay one heart-burst FX lane on ONE player without touching Lives (loss = hotbar shatter incl. the automatic 1-Life hush, gain = kill-transfer reverse burst, witness = the world-space anchor quasar sent to that player).",
+    "dev.eclipse.lives.burst.ok": "Sent %1$s heart burst to %2$s (slot %3$s)."
+  },
+  "de_de": {
+    "subtitles.eclipse.ui.goal_stamp": "Ein Ziel wird abgestempelt",
+    "subtitles.eclipse.ui.skill_unlock": "Neue Fähigkeiten öffnen sich",
+    "subtitles.eclipse.ui.toggle_settle": "Schalter rastet ein",
+    "dev.eclipse.doc.lives.burst": "Spielt eine Herz-Burst-FX-Spur auf EINEM Spieler ab, ohne Leben anzufassen (loss = Hotbar-Shatter inkl. automatischer 1-Leben-Hush-Variante, gain = Kill-Transfer-Reverse-Burst, witness = der Welt-Anker-Quasar, an diesen Spieler gesendet).",
+    "dev.eclipse.lives.burst.ok": "%1$s-Herz-Burst an %2$s gesendet (Slot %3$s)."
+  }
+}

@@ -7,11 +7,15 @@ import dev.projecteclipse.eclipse.client.ClientStateCache;
 import dev.projecteclipse.eclipse.client.handbook.EclipseUiTheme;
 import dev.projecteclipse.eclipse.client.handbook.UiSounds;
 import dev.projecteclipse.eclipse.client.lang.EclipseLang;
+import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
 import dev.projecteclipse.eclipse.hearts.client.HeartRowGeometry;
+import dev.projecteclipse.eclipse.hearts.client.PurpleHeartsLayer;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.sounds.SoundEvents;
 import net.minecraft.util.Mth;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -28,7 +32,12 @@ import net.neoforged.neoforge.client.gui.VanillaGuiLayers;
  * ghost hearts render in its place over the hotbar, with a DIM "GEIST" tag. On revive
  * ({@code S2CRevivedPayload} → {@link #beginReviveBurst}) the ghost hearts burst upward
  * one by one — {@value #BURST_STAGGER_TICKS} ticks apart, each with
- * {@link UiSounds#ghostBurst()} — before the real heart row returns.
+ * {@link UiSounds#ghostBurst()} — before the real heart row returns; the burst exit
+ * hands the returning hearts to {@link PurpleHeartsLayer#beginRelight} (W4-HEARTS R3),
+ * so they re-light left→right instead of snapping in. While the ghost row idles, one
+ * heart of the cracked row throbs every {@value #PHANTOM_PERIOD_TICKS} ticks with a
+ * single muffled warden beat (R10 phantom pulse, gated by {@code heartbeatSound} +
+ * {@code reducedFx}) — the ghost reads as <i>almost</i> dead, never silent.
  *
  * <p>Self-registered: both the GUI layer ({@code RegisterGuiLayersEvent}, mod bus) and the
  * health-cancel hook ({@code RenderGuiLayerEvent.Pre}, game bus) live here — the shared
@@ -91,12 +100,24 @@ public final class GhostHeartsLayer {
     /** Waiting-for-revive-payload grace after lives flips 0 → positive. */
     private static final int PENDING_REVIVE_GRACE_TICKS = 40;
 
+    // --- R10 ghost phantom pulse: the sparse "almost dead" signature ---
+    /** One heart of the cracked row throbs every this many ghost ticks. */
+    private static final int PHANTOM_PERIOD_TICKS = 300;
+    /** Throb length: alpha 0.62 → 0.78 → 0.62 over these ticks. */
+    private static final int PHANTOM_THROB_TICKS = 12;
+    /** Alpha lift at the top of the throb (0.62 + 0.16 = 0.78). */
+    private static final float PHANTOM_ALPHA_BOOST = 0.16F;
+    /** One muffled warden beat per pulse — much quieter than the 1–2-lives dread loop. */
+    private static final float PHANTOM_BEAT_VOLUME = 0.25F;
+
     private enum Mode { IDLE, GHOST, PENDING_REVIVE, BURST }
 
     private static Mode mode = Mode.IDLE;
     private static int modeTicks;
     /** Index of the next heart whose burst sound has not fired yet (BURST mode). */
     private static int nextBurstSound;
+    /** Hearts the running revive burst hands to the R3 relight when it exits. */
+    private static int pendingRelightHearts = 1;
 
     /** Ritual-vigil progress last synced by {@code S2CRitualVigilPayload} (0..1). */
     private static float vigilTarget;
@@ -141,6 +162,8 @@ public final class GhostHeartsLayer {
             mode = Mode.BURST;
             modeTicks = 0;
             nextBurstSound = 0;
+            // R3: remembered for the relight hand-off when the burst exits the slot.
+            pendingRelightHearts = Math.max(1, heartsRestored);
         }
     }
 
@@ -224,6 +247,11 @@ public final class GhostHeartsLayer {
                     // Revive sync order: lives=1 lands just before S2CRevivedPayload — hold.
                     mode = Mode.PENDING_REVIVE;
                     modeTicks = 0;
+                } else if (phantomPulseEnabled() && modeTicks % PHANTOM_PERIOD_TICKS == 0) {
+                    // R10: one muffled warden beat per phantom pulse — the ghost's sparse
+                    // signature (deliberately far below the 1–2-lives dread loop).
+                    minecraft.getSoundManager().play(SimpleSoundInstance.forUI(
+                            SoundEvents.WARDEN_HEARTBEAT, 0.5F, PHANTOM_BEAT_VOLUME));
                 }
             }
             case PENDING_REVIVE -> {
@@ -244,12 +272,31 @@ public final class GhostHeartsLayer {
                     nextBurstSound++;
                 }
                 if (modeTicks >= BURST_TOTAL_TICKS) {
-                    mode = ghostLives ? Mode.GHOST : Mode.IDLE;
+                    boolean revived = !ghostLives;
+                    mode = revived ? Mode.IDLE : Mode.GHOST;
                     modeTicks = 0;
+                    if (revived) {
+                        // R3 hand-off: the real hearts do not snap back — the purple row
+                        // re-lights them one by one the tick it takes the slot over.
+                        PurpleHeartsLayer.beginRelight(pendingRelightHearts);
+                    }
                 }
             }
             default -> { }
         }
+    }
+
+    /**
+     * R10 gate: the phantom pulse (throb + beat) honors both the {@code heartbeatSound}
+     * settings toggle (it IS a heartbeat, the faintest one) and {@code reducedFx}.
+     */
+    private static boolean phantomPulseEnabled() {
+        return EclipseClientConfig.heartbeatSound() && !EclipseClientConfig.reducedFx();
+    }
+
+    /** The cracked-row heart carrying the current phantom pulse (deterministic walk). */
+    private static int phantomHeartIndex() {
+        return (modeTicks / PHANTOM_PERIOD_TICKS) % GHOST_HEART_COUNT;
     }
 
     /** Eases the on-screen vigil fill toward the last synced ritual progress. */
@@ -299,7 +346,16 @@ public final class GhostHeartsLayer {
             // R4 ritual vigil: the fill knits left-to-right across the row; each heart's
             // crack hairlines fade out exactly as its own fill completes.
             float heartFill = Mth.clamp(vigilShown * GHOST_HEART_COUNT - i, 0.0F, 1.0F);
-            drawGhostHeart(guiGraphics, x, rowY, HEART_SIZE, rowAlpha, 1.0F - heartFill);
+            float heartAlpha = rowAlpha;
+            if (mode == Mode.GHOST && i == phantomHeartIndex() && phantomPulseEnabled()) {
+                // R10 phantom pulse: this pulse's heart throbs 0.62 → 0.78 → 0.62.
+                float phase = (modeTicks % PHANTOM_PERIOD_TICKS)
+                        + deltaTracker.getGameTimeDeltaPartialTick(false);
+                if (modeTicks >= PHANTOM_PERIOD_TICKS && phase < PHANTOM_THROB_TICKS) {
+                    heartAlpha += PHANTOM_ALPHA_BOOST * Mth.sin(Mth.PI * phase / PHANTOM_THROB_TICKS);
+                }
+            }
+            drawGhostHeart(guiGraphics, x, rowY, HEART_SIZE, heartAlpha, 1.0F - heartFill);
             if (heartFill > 0.02F) {
                 drawVigilFill(guiGraphics, x, rowY, heartFill, rowAlpha);
             }

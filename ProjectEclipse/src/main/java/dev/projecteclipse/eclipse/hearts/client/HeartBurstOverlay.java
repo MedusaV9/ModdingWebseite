@@ -42,6 +42,23 @@ import net.neoforged.neoforge.client.event.ClientTickEvent;
  * replay shatter one by one instead of overwriting each other. Row math moved to the
  * shared {@link HeartRowGeometry}; while the purple layer owns the row the frames/shards
  * are tinted toward the UI accent so debris matches the heart color.</p>
+ *
+ * <p>v4 (W4-HEARTS R5 + R8): two per-entry variants of the same timeline.</p>
+ *
+ * <ul>
+ *   <li><b>R5 reverse burst</b> ({@link #triggerGained}, fed by the kill-transfer
+ *       {@code S2CHeartBurstFxPayload}): the whole timeline plays BACKWARDS — sparks
+ *       fold in, shards converge onto the slot, the cracks knit shut and the heart
+ *       settles with a whole-heart flash. No red vignette (nothing was lost); the cue is
+ *       the unlock-sting materialize chime instead of the glass crack.</li>
+ *   <li><b>R8 last-heart hush</b> (automatic when a loss burst leaves the player at
+ *       exactly 1 life at {@link #trigger} time): no spark pops, the shards drop almost
+ *       straight down under raised gravity+drag, the burst-start vignette holds
+ *       {@value #HUSH_VIGNETTE_TICKS} ticks (~3×) and the crack cue lands at
+ *       {@value #HUSH_CUE_PITCH} pitch. The very next tick the existing 1–2-lives
+ *       heartbeat + pulse take over — the hush hands off into the dread loop.
+ *       {@code reducedFx} stays un-consulted here (it never gated the burst itself).</li>
+ * </ul>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID, value = Dist.CLIENT)
 public final class HeartBurstOverlay {
@@ -64,6 +81,20 @@ public final class HeartBurstOverlay {
     private static final int STAGGER_TICKS = 8;
     /** One slot per possible heart plus one — a full-row replay can never overflow. */
     private static final int QUEUE_CAPACITY = HeartsService.MAX_HEARTS + 1;
+
+    /** R8 hush: the burst-start vignette holds ~3× the normal 2-tick fade. */
+    private static final float HUSH_VIGNETTE_TICKS = 6.0F;
+    /** R8 hush: the glass-crack cue drops to this pitch (ordered constant). */
+    private static final float HUSH_CUE_PITCH = 0.7F;
+    /** R8 hush shard physics: nearly vertical — sideways throw collapses ... */
+    private static final float HUSH_VX_SCALE = 0.18F;
+    /** ... the upward pop shrinks ... */
+    private static final float HUSH_VY_SCALE = 0.30F;
+    /** ... gravity more than doubles ... */
+    private static final float HUSH_GRAVITY = 0.24F;
+    /** ... and drag bites harder with a deeper floor, so shards just let go and fall. */
+    private static final float HUSH_DRAG_PER_TICK = 0.055F;
+    private static final float HUSH_DRAG_FLOOR = 0.35F;
 
     /** Accent tint for burst debris over the purple row ({@code EclipseUiTheme.ACCENT} #B98CFF). */
     private static final float ACCENT_RED = 0xB9 / 255.0F;
@@ -115,6 +146,10 @@ public final class HeartBurstOverlay {
     private static final int[] QUEUE_HEART = new int[QUEUE_CAPACITY];
     private static final long[] QUEUE_START = new long[QUEUE_CAPACITY];
     private static final boolean[] QUEUE_CUE_PLAYED = new boolean[QUEUE_CAPACITY];
+    /** R5: entry plays the reversed materialize timeline instead of the loss shatter. */
+    private static final boolean[] QUEUE_GAINED = new boolean[QUEUE_CAPACITY];
+    /** R8: entry plays the last-heart hush variant (decided at trigger time). */
+    private static final boolean[] QUEUE_HUSH = new boolean[QUEUE_CAPACITY];
     private static int queueHead;
     private static int queueSize;
     /** Monotonic in-world tick clock driving every queued timeline. */
@@ -125,31 +160,55 @@ public final class HeartBurstOverlay {
     private HeartBurstOverlay() {}
 
     /**
-     * Queues a burst over the given heart slot. Bursts play in trigger order,
+     * Queues a loss burst over the given heart slot. Bursts play in trigger order,
      * {@value #STAGGER_TICKS} ticks apart; each plays its own glass-crack cue the tick
-     * it starts. A full queue (impossible from real senders — capacity covers a whole
-     * row) drops the trigger rather than corrupting running animations.
+     * it starts. A burst that leaves the player at exactly 1 life plays the R8 hush
+     * variant instead. A full queue (impossible from real senders — capacity covers a
+     * whole row) drops the trigger rather than corrupting running animations.
      */
     public static void trigger(int firstMissingHeart) {
+        enqueue(firstMissingHeart, false, ClientStateCache.lives == 1);
+    }
+
+    /**
+     * Queues the R5 kill-transfer reverse burst over the killer's newly filled slot:
+     * the shatter timeline runs backwards (shards converge, cracks knit, the heart
+     * materializes and settles), cued by the materialize chime instead of the crack.
+     */
+    public static void triggerGained(int filledHeart) {
+        enqueue(filledHeart, true, false);
+    }
+
+    private static void enqueue(int heartIndex, boolean gained, boolean hush) {
         if (queueSize >= QUEUE_CAPACITY) {
             return;
         }
         long start = Math.max(clock, nextStart);
         int tail = (queueHead + queueSize) % QUEUE_CAPACITY;
-        QUEUE_HEART[tail] = Math.max(0, firstMissingHeart);
+        QUEUE_HEART[tail] = Math.max(0, heartIndex);
         QUEUE_START[tail] = start;
         QUEUE_CUE_PLAYED[tail] = false;
+        QUEUE_GAINED[tail] = gained;
+        QUEUE_HUSH[tail] = hush;
         queueSize++;
         nextStart = start + STAGGER_TICKS;
         if (start <= clock) {
             QUEUE_CUE_PLAYED[tail] = true;
-            playCrackCue();
+            playStartCue(tail);
         }
     }
 
-    private static void playCrackCue() {
-        Minecraft.getInstance().getSoundManager().play(
-                SimpleSoundInstance.forUI(EclipseSounds.UI_HEART_SHATTER.get(), 0.92F, 0.85F));
+    /** Per-variant start cue: materialize chime (gain), deep crack (hush) or the normal crack. */
+    private static void playStartCue(int slot) {
+        if (QUEUE_GAINED[slot]) {
+            // The ghost-burst family (unlock sting at 0.7): a heart coming INTO being.
+            Minecraft.getInstance().getSoundManager().play(
+                    SimpleSoundInstance.forUI(EclipseSounds.UI_UNLOCK_STING.get(), 0.7F, 0.85F));
+        } else {
+            Minecraft.getInstance().getSoundManager().play(SimpleSoundInstance.forUI(
+                    EclipseSounds.UI_HEART_SHATTER.get(),
+                    QUEUE_HUSH[slot] ? HUSH_CUE_PITCH : 0.92F, 0.85F));
+        }
     }
 
     @SubscribeEvent
@@ -178,7 +237,7 @@ public final class HeartBurstOverlay {
             int slot = (queueHead + i) % QUEUE_CAPACITY;
             if (!QUEUE_CUE_PLAYED[slot] && QUEUE_START[slot] <= clock) {
                 QUEUE_CUE_PLAYED[slot] = true;
-                playCrackCue();
+                playStartCue(slot);
             }
         }
 
@@ -224,26 +283,43 @@ public final class HeartBurstOverlay {
             float time = (clock - QUEUE_START[slot]) + partialTick;
             long position = HeartRowGeometry.heartPosition(guiGraphics, minecraft,
                     QUEUE_HEART[slot], displayHealth, suppressJitter);
-            renderBurst(guiGraphics, HeartRowGeometry.x(position), HeartRowGeometry.y(position), time);
+            renderBurst(guiGraphics, HeartRowGeometry.x(position), HeartRowGeometry.y(position),
+                    time, QUEUE_GAINED[slot], QUEUE_HUSH[slot]);
         }
     }
 
-    /** One burst timeline (flash → cracks → shatter) at an already-resolved position. */
-    private static void renderBurst(GuiGraphics guiGraphics, int x, int y, float time) {
-        if (time < 2.0F) {
+    /**
+     * One burst timeline (flash → cracks → shatter) at an already-resolved position.
+     * R5 {@code gained} plays the identical timeline mirrored in time (debris converges,
+     * the heart settles last) with no red vignette; R8 {@code hush} drops the sparks,
+     * lets the shards fall nearly straight and holds the vignette ~3× longer.
+     */
+    private static void renderBurst(GuiGraphics guiGraphics, int x, int y, float time,
+            boolean gained, boolean hush) {
+        if (!gained) {
+            // Burst-start vignette: 2-tick fade normally, held ~3× under the R8 hush.
+            float vignetteTicks = hush ? HUSH_VIGNETTE_TICKS : 2.0F;
+            if (time < vignetteTicks) {
+                drawRedVignette(guiGraphics, 0.30F * (1.0F - time / vignetteTicks));
+            }
+        }
+        // The reverse burst is the same pure-function timeline evaluated backwards.
+        float t = gained ? ANIMATION_TICKS - time : time;
+        if (t < 2.0F) {
             drawFrame(guiGraphics, x, y, 0, 1.0F);
-            drawRedVignette(guiGraphics, 0.30F * (1.0F - time / 2.0F));
-        } else if (time < SHATTER_START_TICKS) {
-            int crackFrame = 1 + Math.min(2, Mth.floor(time - 2.0F));
+        } else if (t < SHATTER_START_TICKS) {
+            int crackFrame = 1 + Math.min(2, Mth.floor(t - 2.0F));
             drawFrame(guiGraphics, x, y, crackFrame, 1.0F);
         } else {
-            float shatterTime = time - SHATTER_START_TICKS;
+            float shatterTime = t - SHATTER_START_TICKS;
             float burstAlpha = Mth.clamp(1.0F - shatterTime / SHARD_FLIGHT_TICKS, 0.0F, 1.0F);
             drawFrame(guiGraphics, x, y, shatterTime < 2.0F ? 4 : 5, burstAlpha * 0.55F);
             float centerX = x + 4.5F;
             float centerY = y + 4.5F;
-            drawShards(guiGraphics, centerX, centerY, shatterTime, burstAlpha);
-            drawSparks(guiGraphics, centerX, centerY, shatterTime);
+            drawShards(guiGraphics, centerX, centerY, shatterTime, burstAlpha, hush);
+            if (!hush) {
+                drawSparks(guiGraphics, centerX, centerY, shatterTime);
+            }
         }
     }
 
@@ -268,18 +344,25 @@ public final class HeartBurstOverlay {
     /**
      * Population 1: rotating glass shards on gravity+drag arcs. Position, spin and fade are
      * pure functions of {@code time}, so the flight is deterministic and allocation-free.
-     * Sprites come from the sheet's existing 3×2 fragment grid at (180,12).
+     * Sprites come from the sheet's existing 3×2 fragment grid at (180,12). R8 hush: the
+     * sideways throw and upward pop collapse and gravity+drag rise — the shards just let
+     * go and drop almost straight down.
      */
     private static void drawShards(GuiGraphics guiGraphics, float centerX, float centerY,
-            float time, float alpha) {
+            float time, float alpha, boolean hush) {
         RenderSystem.enableBlend();
         setDebrisColor(guiGraphics, alpha);
         PoseStack pose = guiGraphics.pose();
-        float drag = Math.max(SHARD_DRAG_FLOOR, 1.0F - SHARD_DRAG_PER_TICK * time);
+        float drag = hush
+                ? Math.max(HUSH_DRAG_FLOOR, 1.0F - HUSH_DRAG_PER_TICK * time)
+                : Math.max(SHARD_DRAG_FLOOR, 1.0F - SHARD_DRAG_PER_TICK * time);
+        float vxScale = hush ? HUSH_VX_SCALE : 1.0F;
+        float vyScale = hush ? HUSH_VY_SCALE : 1.0F;
+        float gravity = hush ? HUSH_GRAVITY : SHARD_GRAVITY;
         for (int i = 0; i < SHARD_COUNT; i++) {
             float[] shard = SHARDS[i];
-            float shardX = centerX + shard[0] * time * drag;
-            float shardY = centerY + shard[1] * time * drag + SHARD_GRAVITY * time * time;
+            float shardX = centerX + shard[0] * vxScale * time * drag;
+            float shardY = centerY + shard[1] * vyScale * time * drag + gravity * time * time;
             float angle = shard[3] + shard[2] * time;
             int size = (int) shard[4];
             int half = size / 2;

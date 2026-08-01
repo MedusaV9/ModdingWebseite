@@ -14,6 +14,7 @@ import dev.projecteclipse.eclipse.ferryman.ArenaFight;
 import dev.projecteclipse.eclipse.limbo.GhostShipBuilder;
 import dev.projecteclipse.eclipse.limbo.LimboDimension;
 import dev.projecteclipse.eclipse.limbo.door.RespawnDoorApi;
+import dev.projecteclipse.eclipse.network.S2CQuasarPayload;
 import dev.projecteclipse.eclipse.network.death.DeathFlowPayloads;
 import dev.projecteclipse.eclipse.network.death.DeathFlowPayloads.S2CDeathStatePayload;
 import dev.projecteclipse.eclipse.network.death.DeathFlowPayloads.S2CRevivedPayload;
@@ -31,6 +32,7 @@ import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
+import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
  * WB-DEATH server hooks (P3 §3.7): the ship-respawn/door flow layered ON TOP of the
@@ -155,6 +157,15 @@ public final class DeathFlowHooks {
         flow.causeKey = event.getSource().getMsgId();
         FLOWS.put(victim.getUUID(), flow);
 
+        if (flow.ghost) {
+            // W4-HEARTS R6: pre-warm the ghost grade behind the death screen —
+            // EclipseFxState eases it in over ~30 t while HOLD_TICKS_GHOST gates the
+            // button, so "Als Geist erwachen" lands inside an already-graded world.
+            // Safe: BanService.ban already ran (NORMAL before LOW); the respawn-time
+            // send below stays as the idempotent refresh.
+            FxPayloads.sendGhostState(victim, true);
+        }
+
         DeathFlowPayloads.sendDeathState(victim, new S2CDeathStatePayload(
                 DeathFlowPayloads.PHASE_DEATH, flow.heartsRemaining, flow.ghost,
                 flow.lostHeartIndex, flow.causeKey,
@@ -265,6 +276,16 @@ public final class DeathFlowHooks {
                 }
             }
             case REVIVE_BURST -> {
+                // W4-HEARTS R7: five world-space heart-burst echoes rise off the revived
+                // player in sync with the five staggered HUD ghost-heart bursts (8 t
+                // apart) — the revived player AND any ghost still aboard see them.
+                if (flow.stageTicks % 8 == 0 && flow.stageTicks <= 40) {
+                    S2CQuasarPayload echo = new S2CQuasarPayload(S2CQuasarPayload.HEART_BURST,
+                            player.position().add(0.0D, 1.2D, 0.0D));
+                    for (ServerPlayer aboard : limbo.players()) {
+                        PacketDistributor.sendToPlayer(aboard, echo);
+                    }
+                }
                 if (flow.stageTicks >= REVIVE_BURST_TICKS) {
                     openDoorFor(player, flow);
                 }

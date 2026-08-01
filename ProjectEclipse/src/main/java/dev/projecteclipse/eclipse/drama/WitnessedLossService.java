@@ -6,6 +6,7 @@ import java.util.UUID;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.core.state.LivesApi;
+import dev.projecteclipse.eclipse.network.S2CQuasarPayload;
 import dev.projecteclipse.eclipse.network.S2CShakePayload;
 import dev.projecteclipse.eclipse.registry.EclipseSounds;
 import net.minecraft.server.level.ServerPlayer;
@@ -82,15 +83,21 @@ public final class WitnessedLossService {
     /**
      * Public seam: ripples one permanent heart loss of {@code owner} to every OTHER player
      * within {@value #WITNESS_RADIUS} blocks in the same dimension. The owner keeps their
-     * own existing cues (HUD shatter burst); witnesses get the short marked vignette pulse
-     * plus the muffled shatter. Safe to call from any server-side heart-loss site.
+     * own existing cues (HUD shatter burst); witnesses get the short marked vignette pulse,
+     * the muffled shatter, and (W4-HEARTS R9) one world-space heart-burst anchor at the
+     * victim — bystanders see WHERE the heart broke. The victim deliberately gets no
+     * quasar here: theirs replays over the hotbar on respawn. Safe to call from any
+     * server-side heart-loss site.
      */
     public static void onHeartLost(ServerPlayer owner) {
+        S2CQuasarPayload anchor = new S2CQuasarPayload(S2CQuasarPayload.HEART_BURST,
+                owner.position().add(0.0D, 1.0D, 0.0D));
         for (ServerPlayer witness : owner.serverLevel().players()) {
             if (witness == owner || witness.distanceToSqr(owner) > WITNESS_RADIUS_SQ) {
                 continue;
             }
             PacketDistributor.sendToPlayer(witness, S2CShakePayload.mark(PULSE_TICKS));
+            PacketDistributor.sendToPlayer(witness, anchor);
             witness.playNotifySound(EclipseSounds.UI_HEART_SHATTER.get(), SoundSource.PLAYERS,
                     SHATTER_VOLUME, SHATTER_PITCH);
         }

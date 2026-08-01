@@ -15,6 +15,7 @@ import dev.projecteclipse.eclipse.network.S2CHeartBurstPayload;
 import dev.projecteclipse.eclipse.network.S2CQuasarPayload;
 import dev.projecteclipse.eclipse.network.fx.FxCues;
 import dev.projecteclipse.eclipse.network.fx.FxPayloads;
+import dev.projecteclipse.eclipse.network.hearts.HeartsPayloads;
 import dev.projecteclipse.eclipse.registry.EclipseAttachments;
 import dev.projecteclipse.eclipse.registry.EclipseBlocks;
 import dev.projecteclipse.eclipse.registry.EclipseItems;
@@ -116,11 +117,17 @@ public final class LifecycleEvents {
             // Contract-pair kills never reach here — they pay through the contract economy.
             if (LivesApi.get(killer) < HeartsService.MAX_HEARTS) {
                 LivesApi.add(killer, +1);
+                // W4-HEARTS R5: the gained heart materializes over the killer's newly
+                // filled slot — the shatter timeline reversed (HeartsPayloads lane).
+                HeartsPayloads.sendHeartBurstFx(killer, LivesApi.get(killer) - 1, true);
+                EclipseMod.LOGGER.info("Kill transfer reverse burst sent to {} (slot {})",
+                        killer.getScoreboardName(), LivesApi.get(killer) - 1);
             }
             // W13 umbral blade: one EXTRA heart of lifesteal on a blade kill, same cap.
             if (killer.getMainHandItem().is(EclipseItems.UMBRAL_BLADE.get())
                     && LivesApi.get(killer) < HeartsService.MAX_HEARTS) {
                 LivesApi.add(killer, +1);
+                HeartsPayloads.sendHeartBurstFx(killer, LivesApi.get(killer) - 1, true);
                 EclipseMod.LOGGER.info("{}'s umbral blade drank a heart from {} ({} hearts now)",
                         killer.getScoreboardName(), victim.getScoreboardName(), LivesApi.get(killer));
             }
