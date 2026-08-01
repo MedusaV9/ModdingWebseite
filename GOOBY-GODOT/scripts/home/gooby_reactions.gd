@@ -580,54 +580,32 @@ func _maybe_ask_birthday(ctx: Dictionary) -> void:
 	_open_birthday_panel()
 
 
+## G4/P23 — Geburtstags-Abfrage als AcCard-Overlay (SoulBirthdayPanel:
+## Veil + PanelStack, Back/Escape/Backdrop = Abbrechen, −/+‑Stepper statt
+## der auf Touch unbrauchbaren SpinBox-Pfeile, Touch-Floor über ScreenShell).
+## Hier bleiben nur Öffnen, Persistenz, Dank-Line und die Schließ-Sounds —
+## Konfetti/Ritual-Momente sind unangetastet.
 func _open_birthday_panel() -> void:
 	if not room.has_method("ui_layer"):
 		return
-	var panel := PanelContainer.new()
-	panel.name = "SoulBirthdayPanel"
-	panel.set_anchors_preset(Control.PRESET_CENTER)
-	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 10)
-	panel.add_child(box)
-	var title := Label.new()
-	title.text = I18nService.t("soul.geburtstag_panel.titel")
-	box.add_child(title)
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 8)
-	box.add_child(row)
-	var month := SpinBox.new()
-	month.min_value = 1
-	month.max_value = 12
-	month.prefix = I18nService.t("soul.geburtstag_panel.monat")
-	row.add_child(month)
-	var day := SpinBox.new()
-	day.min_value = 1
-	day.max_value = 31
-	day.prefix = I18nService.t("soul.geburtstag_panel.tag")
-	row.add_child(day)
-	var buttons := HBoxContainer.new()
-	buttons.add_theme_constant_override("separation", 8)
-	box.add_child(buttons)
-	var save := Button.new()
-	save.text = I18nService.t("soul.geburtstag_panel.speichern")
-	save.custom_minimum_size = Vector2(0, 44)
-	buttons.add_child(save)
-	var cancel := Button.new()
-	cancel.text = I18nService.t("soul.geburtstag_panel.abbrechen")
-	cancel.custom_minimum_size = Vector2(0, 44)
-	buttons.add_child(cancel)
+	AudioDirector.try_play(self, "ui_open")
+	var panel := SoulBirthdayPanel.new()
+	panel.gespeichert.connect(_on_birthday_saved.bind(panel))
+	panel.abgebrochen.connect(_on_birthday_dismissed.bind(panel))
 	room.ui_layer().add_child(panel)
-	save.pressed.connect(_on_birthday_saved.bind(month, day, panel))
-	cancel.pressed.connect(func() -> void: panel.queue_free())
 
 
-func _on_birthday_saved(month: SpinBox, day: SpinBox, panel: Control) -> void:
-	var m := int(month.value)
-	var d := int(day.value)
+func _on_birthday_saved(m: int, d: int, panel: Control) -> void:
 	SoulState.mutate(gs, func(s: Dictionary) -> void: s["playerBirthday"] = {"month": m, "day": d})
 	panel.queue_free()
 	_say(I18nService.t("soul.geburtstag_panel.danke", {"tag": d, "monat": m}))
 	AudioDirector.try_play(self, "ui_confirm")
+
+
+## Abbrechen/Backdrop/Back — das Panel ist bewusst wegklickbar (nie nerven).
+func _on_birthday_dismissed(panel: Control) -> void:
+	AudioDirector.try_play(self, "ui_close")
+	panel.queue_free()
 
 
 # ── Anzeige / Visuals ─────────────────────────────────────────────────────────

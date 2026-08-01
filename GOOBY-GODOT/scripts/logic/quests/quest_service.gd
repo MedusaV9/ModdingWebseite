@@ -343,6 +343,9 @@ func _on_panel_claim(id: String) -> void:
 		_refresh_panel()
 		return
 	AudioDirector.try_play(self, "ui_sticker")
+	# G4/P23 (G2-Fixliste A5): Quest-Claim ist ein Belohnungsmoment —
+	# Doppelimpuls-Haptik zum BESTEHENDEN Sticker-Sound (kein Doppel-Klang).
+	Haptics.success(self)
 	_toasts.show_toast(
 		I18nService.t(
 			"quests.claim_toast", {"muenzen": int(result["muenzen"]), "xp": int(result["xp"])}
@@ -361,7 +364,10 @@ func _on_panel_claim(id: String) -> void:
 
 
 func _on_panel_reroll() -> void:
-	reroll()
+	# G4/P23 (G2-Fixliste A5): der Reroll war der einzige stumme Quest-Knopf
+	# — Auswahl-Wechsel klingt als ui_chip, aber nur wenn wirklich getauscht.
+	if reroll():
+		AudioDirector.try_play(self, "ui_chip")
 	_refresh_panel()
 
 

@@ -24,7 +24,7 @@ const RITUAL_PUTZ_S := 2.4
 
 var _host: InteractablesHost
 var _furniture: Node3D
-var _panel: PanelContainer
+var _panel: Control
 var _story: StoryTime
 var _rng := RandomNumberGenerator.new()
 var _busy := false
@@ -58,21 +58,26 @@ func _on_tapped() -> void:
 # ── Nachtkarten-Panel ─────────────────────────────────────────────────────────
 
 
+## G4/P23 — Nachtkarte als PanelStack-Overlay (Muster daily_bonus_popup)
+## statt frei schwebendem Eigenbau: Veil dunkelt den Raum ab (Taps daneben
+## gehen nicht mehr ins 3D durch), Android-Back/Escape (SceneRouter →
+## PanelStack.close_top) und Backdrop-Tap schließen, Karte + Knöpfe laufen
+## über ScreenShell-Metriken (Safe-Area, Touch-Floor, Rotation).
 func _open_panel() -> void:
 	_close_panel()
 	AudioDirector.try_play(self, "ui_open")
 	var gs := _host.game_state()
 	var flat := Sleep.flat_of(gs.state())
-	_panel = PanelContainer.new()
-	_panel.name = "BettPanel"
-	_panel.theme = ThemeService.theme()
-	_panel.theme_type_variation = "AcCard"
-	_panel.set_anchors_preset(Control.PRESET_CENTER)
-	_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	_panel.grow_vertical = Control.GROW_DIRECTION_BOTH
+	var overlay := BettOverlay.new()
+	overlay.weg_gewuenscht.connect(_on_panel_dismissed)
+	var karte := PanelContainer.new()
+	karte.name = "BettKarte"
+	karte.theme_type_variation = "AcCard"
+	overlay.add_child(karte)
+	overlay.karte = karte
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 10)
-	_panel.add_child(box)
+	karte.add_child(box)
 	var titel := Label.new()
 	titel.theme_type_variation = &"TitleLabel"
 	titel.text = I18nService.t("sleep.bett.titel")
@@ -82,18 +87,17 @@ func _open_panel() -> void:
 		_build_wake_entry(box, gs)
 	else:
 		_build_night_entries(box, flat)
-	var schliessen := Button.new()
-	schliessen.theme_type_variation = "GhostButton"
-	schliessen.text = I18nService.t("sleep.bett.zu")
-	schliessen.custom_minimum_size = Vector2(0, 44)
-	schliessen.focus_mode = Control.FOCUS_NONE
-	schliessen.pressed.connect(
-		func() -> void:
-			AudioDirector.try_play(self, "ui_close")
-			_close_panel()
-	)
+	var schliessen := _menu_button(I18nService.t("sleep.bett.zu"), "GhostButton")
+	schliessen.pressed.connect(_on_panel_dismissed)
 	box.add_child(schliessen)
-	_ui_layer().add_child(_panel)
+	_panel = overlay
+	_ui_layer().add_child(overlay)
+
+
+## Schließen über Knopf, Backdrop-Tap oder Back-Geste — EIN Pfad.
+func _on_panel_dismissed() -> void:
+	AudioDirector.try_play(self, "ui_close")
+	_close_panel()
 
 
 func _build_night_entries(box: VBoxContainer, flat: Dictionary) -> void:
@@ -106,7 +110,6 @@ func _build_night_entries(box: VBoxContainer, flat: Dictionary) -> void:
 		hinweis.theme_type_variation = &"CaptionLabel"
 		hinweis.text = I18nService.t("sleep.bett.wach")
 		hinweis.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		hinweis.custom_minimum_size = Vector2(260, 0)
 		hinweis.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		box.add_child(hinweis)
 	box.add_child(schlafen)
@@ -146,7 +149,9 @@ func _build_wake_entry(box: VBoxContainer, gs: Object) -> void:
 
 
 func _menu_button(text: String, variation: String) -> Button:
-	var btn := Button.new()
+	# G4/P23: SquishButton statt nacktem Button (Audio-Grammatik — Squish +
+	# Tap-Haptik zentral); der physische Touch-Floor kommt vom Overlay.
+	var btn := SquishButton.new()
 	btn.theme_type_variation = variation
 	btn.text = text
 	btn.custom_minimum_size = Vector2(0, 52)
@@ -342,3 +347,83 @@ func _ui_layer() -> CanvasLayer:
 	layer.layer = 6
 	_host.add_child(layer)
 	return layer
+
+
+class BettOverlay:
+	extends Control
+	## G4/P23 — Vollbild-Schleier + zentrierte Nachtkarte nach dem
+	## daily_bonus_popup-Muster: PanelStack-Anmeldung (Back/Escape schließt
+	## über close()), Backdrop-Tap nur als oberstes Panel, ScreenShell-
+	## Metriken (Kartenbreite, Touch-Floor, Schrift-Skalierung) und
+	## Relayout bei Rotation. Das Bett baut den KARTEN-Inhalt, das Overlay
+	## besitzt nur Geometrie + Dismiss-Pfade.
+
+	signal weg_gewuenscht
+
+	const CARD_BASE_WIDTH := 420.0
+
+	var karte: PanelContainer
+
+	func _init() -> void:
+		name = "BettPanel"
+		theme = ThemeService.theme()
+		set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		mouse_filter = Control.MOUSE_FILTER_STOP
+		var veil := ColorRect.new()
+		veil.name = "Veil"
+		veil.color = AcTokens.VEIL
+		veil.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		veil.gui_input.connect(_on_veil_input)
+		add_child(veil)
+
+	func _ready() -> void:
+		PanelStack.push(self)
+		_relayout()
+		get_viewport().size_changed.connect(_relayout)
+
+	func _exit_tree() -> void:
+		PanelStack.remove(self)
+
+	## Escape/Back-Pfad (SceneRouter → PanelStack.close_top).
+	func close() -> void:
+		weg_gewuenscht.emit()
+
+	func _relayout() -> void:
+		if karte == null or not is_inside_tree():
+			return
+		var m := ScreenShell.metrics(get_viewport())
+		var f: float = m["f"]
+		ScreenShell.scale_fonts(self, f)
+		for btn: Node in find_children("*", "Button", true, false):
+			ScreenShell.touch_target(btn as Control, m)
+		var width := ScreenShell.card_width(m, CARD_BASE_WIDTH)
+		karte.custom_minimum_size = Vector2(width, 0.0)
+		var wanted := karte.get_combined_minimum_size()
+		var height := minf(wanted.y, ScreenShell.card_max_height(m))
+		var insets: Dictionary = m["insets"]
+		var canvas: Vector2 = m["canvas"]
+		var safe := Rect2(
+			Vector2(float(insets["left"]), float(insets["top"])),
+			Vector2(
+				canvas.x - float(insets["left"]) - float(insets["right"]),
+				canvas.y - float(insets["top"]) - float(insets["bottom"])
+			)
+		)
+		var pos := safe.position + (safe.size - Vector2(width, height)) / 2.0
+		karte.set_anchors_preset(Control.PRESET_TOP_LEFT)
+		karte.offset_left = pos.x
+		karte.offset_top = pos.y
+		karte.offset_right = pos.x + width
+		karte.offset_bottom = pos.y + height
+
+	## Backdrop-Dismiss-Policy (Web): Tap auf den Schleier schließt, aber
+	## nur als oberstes Panel.
+	func _on_veil_input(event: InputEvent) -> void:
+		if not (event is InputEventMouseButton or event is InputEventScreenTouch):
+			return
+		if event is InputEventMouseButton and not (event as InputEventMouseButton).pressed:
+			return
+		if event is InputEventScreenTouch and not (event as InputEventScreenTouch).pressed:
+			return
+		if PanelStack.is_top(self):
+			weg_gewuenscht.emit()

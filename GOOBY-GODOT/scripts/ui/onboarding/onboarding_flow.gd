@@ -20,6 +20,12 @@ signal completed(profile: Dictionary)
 signal step_changed(step: OnboardingLogic.Step)
 
 const SLIDE_IN_PX := 56.0
+## G4/P23 — Design-Basen des Karten-Layouts (skalieren über ScreenShell).
+const CARD_BASE_WIDTH := 540.0
+const EDITOR_CARD_BASE_WIDTH := 680.0
+const TEXT_BASE_WIDTH := 470.0
+const SLIDER_BASE_WIDTH := 280.0
+const SLIDER_BASE_HEIGHT := 32.0
 
 var logic := OnboardingLogic.new()
 
@@ -55,6 +61,8 @@ func _ready() -> void:
 	%EditorSkip.pressed.connect(_on_editor_skip)
 	%EditorNext.pressed.connect(_on_editor_next)
 	%DoneButton.pressed.connect(_on_done_pressed)
+	_relayout()
+	get_viewport().size_changed.connect(_relayout)
 	_show_step(OnboardingLogic.Step.WELCOME)
 
 
@@ -116,6 +124,51 @@ func _slider_string_key(editor_key: String) -> String:
 			return "ohrenlaenge"
 		_:
 			return "pausbacken"
+
+
+## G4/P23 — EIN Layout-Pass nach ScreenShell-Muster (daily_bonus_popup):
+## Kartenbreiten über card_width statt Fest-px, physischer Touch-Floor auf
+## Buttons/Eingaben/Slider-Griffen, Editor-Spalten stapeln im Hochformat.
+## Läuft bei _ready + size_changed — NIE in _show_step (Sichtbarkeit der
+## Steps muss SYNCHRON schalten, Vertrag test_ui_onboarding).
+func _relayout() -> void:
+	if not is_inside_tree():
+		return
+	var m := ScreenShell.metrics(get_viewport())
+	var f: float = m["f"]
+	var canvas: Vector2 = m["canvas"]
+	ScreenShell.scale_fonts(self, f)
+	var card_w := ScreenShell.card_width(m, CARD_BASE_WIDTH)
+	var editor_w := ScreenShell.card_width(m, EDITOR_CARD_BASE_WIDTH)
+	for card: Control in [%StepWelcome, %StepNickname, %StepDone]:
+		card.custom_minimum_size = Vector2(card_w, 0.0)
+	(%StepEditor as Control).custom_minimum_size = Vector2(editor_w, 0.0)
+	# Autowrap-Textbreiten mit der Karte deckeln, sonst zwingt das 470er-
+	# Minimum die Karte über schmale Hochformat-Lanes hinaus.
+	var text_w := maxf(minf(TEXT_BASE_WIDTH * f, card_w - _card_pad_x(%StepWelcome)), 0.0)
+	for text: Control in [%WelcomeText, %NameHint, %NicknameText, %DoneText]:
+		text.custom_minimum_size.x = text_w
+	for ziel: Control in [%WelcomeNext, %NicknameNext, %EditorSkip, %EditorNext, %DoneButton]:
+		ScreenShell.touch_target(ziel, m)
+	ScreenShell.touch_target(_name_edit, m)
+	ScreenShell.touch_target(_nickname_edit, m)
+	# Hochformat: Preview ÜBER die Slider stapeln (HBox → vertikal).
+	(%EditorBox as BoxContainer).vertical = canvas.x < canvas.y
+	var floor_px: float = m["floor_px"]
+	for child in (%SliderRows as Control).get_children():
+		if child is HSlider:
+			(child as HSlider).custom_minimum_size = Vector2(
+				SLIDER_BASE_WIDTH * f, maxf(SLIDER_BASE_HEIGHT * f, floor_px)
+			)
+
+
+## Horizontale Innenränder der Karten-StyleBox (AcCardLg) — get_margin
+## liefert den EFFEKTIVEN Rand (Roh-Property kann -1 = Default sein).
+func _card_pad_x(card: Control) -> float:
+	var sb := card.get_theme_stylebox("panel")
+	if sb == null:
+		return 0.0
+	return sb.get_margin(SIDE_LEFT) + sb.get_margin(SIDE_RIGHT)
 
 
 func _show_step(step: OnboardingLogic.Step) -> void:

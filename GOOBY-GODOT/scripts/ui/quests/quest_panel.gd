@@ -29,6 +29,13 @@ var _reroll_btn: Button
 var _f := 1.0
 
 
+## G4/P23 — das Panel wird erst NACH rebuild() ins Sheet gehängt (Service-
+## Reihenfolge open_panel): den physischen Touch-Floor mit echten
+## Viewport-Metriken nachziehen, sobald der Baum steht.
+func _enter_tree() -> void:
+	_apply_touch_floor()
+
+
 func rebuild(board: Array, bonus: Dictionary, reroll_available: bool, f: float) -> void:
 	_f = maxf(f, 0.5)
 	_rows.clear()
@@ -169,6 +176,7 @@ func _build_row_right(id: String, def: Dictionary, row: Dictionary, card: Contro
 	claim.disabled = not bool(row.get("complete", false)) or bool(row.get("claimed", false))
 	claim.visible = not bool(row.get("claimed", false))
 	claim.pressed.connect(func() -> void: claim_pressed.emit(id))
+	_lift_to_touch_floor(claim)
 	right.add_child(claim)
 	var check := TextureRect.new()
 	check.name = "Check" + id.to_pascal_case()
@@ -225,6 +233,7 @@ func _build_reroll(available: bool) -> Control:
 	_reroll_btn.focus_mode = Control.FOCUS_NONE
 	_reroll_btn.disabled = not available
 	_reroll_btn.pressed.connect(func() -> void: reroll_pressed.emit())
+	_lift_to_touch_floor(_reroll_btn)
 	box.add_child(_reroll_btn)
 	var hint := Label.new()
 	hint.theme_type_variation = "CaptionLabel"
@@ -234,3 +243,27 @@ func _build_reroll(available: bool) -> Control:
 	hint.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	box.add_child(hint)
 	return box
+
+
+## G4/P23 — Tippflächen der Abholen-/Reroll-Knöpfe auf den PHYSISCHEN
+## 44-pt-Floor heben (vorher nur Theme-Default). Außerhalb des Baums
+## (rebuild läuft vor add_content) fällt der Floor auf die f-Heuristik
+## zurück; _enter_tree zieht mit echten Metriken nach.
+func _touch_floor_px() -> float:
+	if is_inside_tree():
+		return float(ScreenShell.metrics(get_viewport())["floor_px"])
+	return float(AcTokens.TOUCH_FLOOR) * maxf(_f, 1.0)
+
+
+func _lift_to_touch_floor(btn: Control) -> void:
+	var floor_px := _touch_floor_px()
+	btn.custom_minimum_size = btn.custom_minimum_size.max(Vector2(floor_px, floor_px))
+
+
+func _apply_touch_floor() -> void:
+	for row: Dictionary in _rows.values():
+		var claim: Variant = row.get("claim")
+		if is_instance_valid(claim):
+			_lift_to_touch_floor(claim as Control)
+	if _reroll_btn != null and is_instance_valid(_reroll_btn):
+		_lift_to_touch_floor(_reroll_btn)

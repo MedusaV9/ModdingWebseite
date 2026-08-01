@@ -21,6 +21,8 @@ signal dismissed
 
 const CARD_BASE_WIDTH := 520.0
 const CHIP_BASE := 44.0
+## G4/P23: Lücke zwischen den Kalender-Chips (Canvas-px, fix wie beim Bau).
+const CHIP_GAP := 8.0
 
 ## Tests/Screenshots: Notch-Simulation (Rect2() = aus).
 var safe_area_override := Rect2()
@@ -160,7 +162,7 @@ func _build_calendar() -> Control:
 	var row := HBoxContainer.new()
 	row.name = "CalendarRow"
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	row.add_theme_constant_override("separation", 8)
+	row.add_theme_constant_override("separation", int(CHIP_GAP))
 	_chips.clear()
 	var today := mini(int(_next["streak"]), DailyBonus.REWARD_TABLE.size())
 	for i in DailyBonus.REWARD_TABLE.size():
@@ -201,10 +203,17 @@ func _relayout() -> void:
 	ScreenShell.scale_fonts(self, f)
 	ScreenShell.touch_target(_claim_btn, m)
 	ScreenShell.touch_target(_later_btn, m)
-	var chip_side := maxf(CHIP_BASE * f, float(m["floor_px"]) * 0.72)
+	var width := ScreenShell.card_width(m, CARD_BASE_WIDTH)
+	# G4/P23: Chip-Seite DECKELN — alle 7 Chips + Lücken müssen in die
+	# Karten-Innenbreite passen, sonst zwingt die Kalender-Zeile die Karte
+	# auf schmalen Hochformat-Lanes über die Safe-Area hinaus (Chips sind
+	# reine Anzeige, kein Touch-Ziel — dürfen unter den Floor schrumpfen).
+	var chips_platz := width - _card_pad_x() - float(_chips.size() - 1) * CHIP_GAP
+	var chip_deckel := chips_platz / maxf(float(_chips.size()), 1.0)
+	var chip_side := minf(maxf(CHIP_BASE * f, float(m["floor_px"]) * 0.72), chip_deckel)
+	chip_side = maxf(chip_side, 0.0)
 	for chip in _chips:
 		chip.custom_minimum_size = Vector2(chip_side, chip_side)
-	var width := ScreenShell.card_width(m, CARD_BASE_WIDTH)
 	_card.custom_minimum_size = Vector2(width, 0.0)
 	var wanted := _card.get_combined_minimum_size()
 	var height := minf(wanted.y, ScreenShell.card_max_height(m))
@@ -223,6 +232,16 @@ func _relayout() -> void:
 	_card.offset_top = pos.y
 	_card.offset_right = pos.x + width
 	_card.offset_bottom = pos.y + height
+
+
+## Horizontale Innenränder der Karten-StyleBox (AcCardLg) — für den
+## Chip-Deckel: so viel Breite frisst die Karte selbst. get_margin liefert
+## den EFFEKTIVEN Rand (Roh-Property kann -1 = Default sein).
+func _card_pad_x() -> float:
+	var sb := _card.get_theme_stylebox("panel")
+	if sb == null:
+		return 0.0
+	return sb.get_margin(SIDE_LEFT) + sb.get_margin(SIDE_RIGHT)
 
 
 func _on_claim() -> void:

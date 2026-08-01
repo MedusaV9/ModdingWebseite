@@ -24,6 +24,10 @@ const MAX_EBENEN := 2
 const CHIP_TIMEOUT_S := 12.0
 ## Kleine Atempause zwischen Follow-up-Line und den Ebene-2-Chips.
 const EBENE2_PAUSE_S := 2.4
+## G4/P23 (HUD-Report H1): Luft zwischen Chip-Zeile und Safe-Area-Unterkante
+## bzw. Chip-Abstand — Design-px, skalieren mit f.
+const CHIP_RAND_GAP := 16.0
+const CHIP_SEPARATION := 10.0
 
 ## Der SeeleRunner (bewusst untypisiert — kein Klassen-Zyklus).
 var seele: Node = null
@@ -216,6 +220,11 @@ func _ui_layer() -> CanvasLayer:
 	return room.ui_layer()
 
 
+## G4/P23 (HUD-Report H1/H3) — Chips auf den UIKERN-Vertrag: SquishButton in
+## AcChip-Optik (Squish + Tap-Haptik zentral), physischer 44-pt-Floor über
+## ScreenShell, Position aus Safe-Area + UiAnchors-Bottom-Zone (über Goobys
+## Bubble rutschen, eigenes Rect reservieren) statt der fixen −132/−72-
+## Offsets. Pop-In ist reduced-motion-gated (UiMotion springt dann sofort).
 func _zeige_chips(ebene: Dictionary) -> void:
 	var layer := _ui_layer()
 	if layer == null:
@@ -223,25 +232,62 @@ func _zeige_chips(ebene: Dictionary) -> void:
 	_chips_weg()
 	var panel := PanelContainer.new()
 	panel.name = "GoobyGespraechChips"
-	panel.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	panel.offset_top = -132.0
-	panel.offset_bottom = -72.0
+	panel.theme = ThemeService.theme()
+	# Die AC-Optik tragen die Chips selbst — das Panel ist reine Geometrie.
+	panel.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
 	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 10)
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	panel.add_child(row)
 	for antwort: Variant in antworten(ebene):
 		if not (antwort is Dictionary):
 			continue
-		var chip := Button.new()
+		var chip := SquishButton.new()
+		chip.theme_type_variation = &"AcChip"
 		chip.text = I18nService.t(str((antwort as Dictionary).get("label_key", "")))
-		chip.custom_minimum_size = Vector2(0, 44)
+		chip.focus_mode = Control.FOCUS_NONE
 		chip.pressed.connect(_on_antwort.bind(antwort as Dictionary))
 		row.add_child(chip)
 	layer.add_child(panel)
 	_panel = panel
+	_chips_positionieren()
+	var vp := panel.get_viewport()
+	if vp != null and not vp.size_changed.is_connected(_chips_positionieren):
+		vp.size_changed.connect(_chips_positionieren)
+	UiMotion.pop_in(panel)
 	# Nicht antworten ist okay — die Chips gehen von allein wieder.
 	_timeout = get_tree().create_timer(CHIP_TIMEOUT_S)
 	_timeout.timeout.connect(_on_chip_timeout)
+
+
+## Geometrie-Pass der Chip-Zeile (initial + bei Rotation): Schriften und
+## Separation × f, Touch-Floor je Chip, dann unten mittig IN der Safe-Area
+## andocken und per UiAnchors über belegte Bottom-Rects (Sprechblase)
+## rutschen — anschließend die eigene Fläche reservieren, damit Bubbles/
+## Toasts ihrerseits ausweichen.
+func _chips_positionieren() -> void:
+	if _panel == null or not is_instance_valid(_panel) or not _panel.is_inside_tree():
+		return
+	var m := ScreenShell.metrics(_panel.get_viewport())
+	var f: float = m["f"]
+	ScreenShell.scale_fonts(_panel, f)
+	var row := _panel.get_child(0) as HBoxContainer
+	row.add_theme_constant_override("separation", int(CHIP_SEPARATION * f))
+	for chip in row.get_children():
+		if chip is Control:
+			ScreenShell.touch_target(chip as Control, m)
+	var groesse := _panel.get_combined_minimum_size()
+	var canvas: Vector2 = m["canvas"]
+	var insets: Dictionary = m["insets"]
+	var unten := canvas.y - float(insets["bottom"]) - CHIP_RAND_GAP * f
+	var ziel := Vector2((canvas.x - groesse.x) / 2.0, unten - groesse.y)
+	var rect := Rect2(ziel, groesse)
+	rect = UiAnchors.dodge(
+		rect, UiAnchors.occupied_rects(UiAnchors.ZONE_BOTTOM, _panel), UiAnchors.ZONE_BOTTOM
+	)
+	rect.position.x = maxf(rect.position.x, float(insets["left"]) + CHIP_RAND_GAP * f)
+	_panel.size = groesse
+	_panel.position = rect.position
+	UiAnchors.reserve(UiAnchors.ZONE_BOTTOM, _panel)
 
 
 func _on_chip_timeout() -> void:
@@ -252,6 +298,9 @@ func _on_chip_timeout() -> void:
 
 func _chips_weg() -> void:
 	if _panel != null and is_instance_valid(_panel):
+		# H1: Bottom-Zone wieder freigeben, sonst weichen Bubbles einem
+		# toten Rect aus, bis der Prune greift.
+		UiAnchors.release(UiAnchors.ZONE_BOTTOM, _panel)
 		_panel.queue_free()
 	_panel = null
 
