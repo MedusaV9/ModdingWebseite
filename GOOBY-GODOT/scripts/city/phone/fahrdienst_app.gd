@@ -25,7 +25,8 @@ var _tick_akku := 0.0
 
 
 func _ready() -> void:
-	CitySheetBausteine.richte_box_ein(self)
+	# W16/G4 P18: Breite ans reale Gerät koppeln (statt 420er-Bausteine).
+	PhoneShell.richte_app_box_ein(self)
 	aktualisiere()
 
 
@@ -62,76 +63,102 @@ func aktualisiere() -> void:
 	var fremd := Fahrdienst.blockiert_durch(gs, dienst)
 	if not fremd.is_empty():
 		_baue_belegt(fremd)
-		return
-	var slice := CityState.taxi_slice(gs)
-	match str(slice["state"]):
-		TaxiLogic.STATE_GERUFEN:
-			_baue_unterwegs(slice)
-		TaxiLogic.STATE_WARTET:
-			_baue_wartet(slice)
-		_:
-			_baue_bestellen()
+	else:
+		var slice := CityState.taxi_slice(gs)
+		match str(slice["state"]):
+			TaxiLogic.STATE_GERUFEN:
+				_baue_unterwegs(slice)
+			TaxiLogic.STATE_WARTET:
+				_baue_wartet(slice)
+			_:
+				_baue_bestellen()
+	PhoneShell.app_fonts_skalieren(self)
 
 
 ## ---------------------------------------------------------------- Views
 
 
 func _baue_bestellen() -> void:
-	var karte := CitySheetBausteine.karte(self)
-	CitySheetBausteine.label(karte, I18nService.t("phone.%s.slogan" % dienst), "HeadlineLabel")
-	CitySheetBausteine.label(karte, I18nService.t("phone.%s.pitch" % dienst), "CaptionLabel")
+	var karte := PhoneShell.app_karte(self)
+	PhoneShell.app_label(karte, I18nService.t("phone.%s.slogan" % dienst), "HeadlineLabel")
+	PhoneShell.app_label(karte, I18nService.t("phone.%s.pitch" % dienst), "CaptionLabel")
 	if Fahrdienst.ist_rettungsweg(gs):
-		CitySheetBausteine.label(karte, I18nService.t("phone.fahrdienst.rettung"), "CaptionLabel")
+		PhoneShell.app_label(karte, I18nService.t("phone.fahrdienst.rettung"), "CaptionLabel")
 	# Surge-Gag (W13B, Doc E §4): zu Stoßzeiten entschuldigt sich Guber
 	# vornehm — und verlangt 45 statt 30 Münzen.
 	if dienst == Fahrdienst.GUBER and Fahrdienst.ist_stosszeit(stunde_lokal()):
-		CitySheetBausteine.label(karte, I18nService.t("phone.guber.surge"), "CaptionLabel")
-	CitySheetBausteine.coins_zeile(self, _coins())
+		PhoneShell.app_label(karte, I18nService.t("phone.guber.surge"), "CaptionLabel")
+	PhoneShell.app_label(
+		self, I18nService.t("city.laden.coins").format({"coins": _coins()}), "CaptionLabel"
+	)
 	var preis := Fahrdienst.kosten_zur_stunde(dienst, stunde_lokal())
-	var btn := Button.new()
+	var btn := SquishButton.new()
+	btn.name = "RufenButton"
 	btn.theme_type_variation = "PrimaryButton"
 	btn.text = I18nService.t("phone.fahrdienst.rufen").format({"preis": preis})
 	btn.disabled = _coins() < preis
-	btn.pressed.connect(_on_rufen)
+	# W16 F13: Rufen = Münz-AUSGABE; Press-Sound ist legitim, weil der
+	# Knopf bei zu wenig Münzen disabled ist.
+	btn.pressed.connect(
+		func() -> void:
+			AudioDirector.try_play(btn, "ui_buy")
+			_on_rufen()
+	)
+	ScreenShell.touch_target(btn, ScreenShell.metrics(get_viewport()))
 	add_child(btn)
 
 
 func _baue_unterwegs(slice: Dictionary) -> void:
 	var rest := TaxiLogic.warte_rest_s(slice, now_ms())
-	CitySheetBausteine.label(self, I18nService.t("phone.%s.unterwegs" % dienst), "HeadlineLabel")
-	CitySheetBausteine.label(
+	PhoneShell.app_label(self, I18nService.t("phone.%s.unterwegs" % dienst), "HeadlineLabel")
+	PhoneShell.app_label(
 		self,
 		I18nService.t("phone.fahrdienst.countdown").format(
 			{"min": rest / 60, "s": "%02d" % (rest % 60)}
 		)
 	)
-	var storno := Button.new()
+	var storno := SquishButton.new()
+	storno.name = "StornoButton"
 	storno.theme_type_variation = "GhostButton"
 	storno.text = I18nService.t("phone.fahrdienst.storno").format(
 		{"zurueck": Fahrdienst.erstattung_fuer(Fahrdienst.bezahlter_preis(gs, dienst), false)}
 	)
-	storno.pressed.connect(_on_storno)
+	# W16 F13: Storno = Zurückzieher; die Erstattung klingt im
+	# Erfolgszweig von _on_storno als ui_coins.
+	storno.pressed.connect(
+		func() -> void:
+			AudioDirector.try_play(storno, "ui_back")
+			_on_storno()
+	)
+	ScreenShell.touch_target(storno, ScreenShell.metrics(get_viewport()))
 	add_child(storno)
 
 
 func _baue_wartet(slice: Dictionary) -> void:
-	CitySheetBausteine.label(self, I18nService.t("phone.%s.da" % dienst), "HeadlineLabel")
-	CitySheetBausteine.label(
+	PhoneShell.app_label(self, I18nService.t("phone.%s.da" % dienst), "HeadlineLabel")
+	PhoneShell.app_label(
 		self,
 		I18nService.t("phone.fahrdienst.fenster").format(
 			{"s": TaxiLogic.fenster_rest_s(slice, now_ms())}
 		)
 	)
-	var btn := Button.new()
+	var btn := SquishButton.new()
+	btn.name = "EinsteigenButton"
 	btn.theme_type_variation = "PrimaryButton"
 	btn.text = I18nService.t("phone.fahrdienst.einsteigen")
-	btn.pressed.connect(_on_einsteigen)
+	# W16 F13: Einsteigen = Bestätigen/Start.
+	btn.pressed.connect(
+		func() -> void:
+			AudioDirector.try_play(btn, "ui_confirm")
+			_on_einsteigen()
+	)
+	ScreenShell.touch_target(btn, ScreenShell.metrics(get_viewport()))
 	add_child(btn)
 
 
 func _baue_belegt(fremd: String) -> void:
-	CitySheetBausteine.label(self, I18nService.t("phone.fahrdienst.belegt_titel"), "HeadlineLabel")
-	CitySheetBausteine.label(
+	PhoneShell.app_label(self, I18nService.t("phone.fahrdienst.belegt_titel"), "HeadlineLabel")
+	PhoneShell.app_label(
 		self,
 		I18nService.t("phone.fahrdienst.belegt").format(
 			{"dienst": I18nService.t("phone.app.%s" % fremd)}
@@ -202,6 +229,8 @@ func _on_storno() -> void:
 	gs.update(
 		func(state: Dictionary) -> void: Economy.award(state["economy"], zurueck, "erstattung")
 	)
+	# W16 F13: Geld zurück = Münz-EINNAHME.
+	AudioDirector.try_play(self, "ui_coins")
 	CityState.save_taxi_slice(gs, res["slice"])
 	Fahrdienst.merke_dienst(gs, "")
 	_zeige_toast(I18nService.t("phone.fahrdienst.storniert"))

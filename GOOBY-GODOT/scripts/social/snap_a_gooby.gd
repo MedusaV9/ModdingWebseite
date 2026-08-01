@@ -256,6 +256,9 @@ func _blitze() -> void:
 	tween.tween_property(_blitz, "color", Color(1.0, 1.0, 1.0, 0.0), 0.35)
 
 
+## W16/G4 P18: Countdown-Font skaliert ×f, der Hinweis hängt UNTER der
+## Notch (Safe-Area) statt fix bei 64 px — bei Canvas-Änderung zieht
+## `_wende_layout_an` nach (G1 ui-post §7).
 func _baue_ui() -> void:
 	var wurzel := Control.new()
 	wurzel.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -268,7 +271,6 @@ func _baue_ui() -> void:
 	_zahl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_zahl.add_theme_font_size_override("font_size", 120)
 	_zahl.add_theme_color_override("font_outline_color", Color(0.25, 0.18, 0.12))
-	_zahl.add_theme_constant_override("outline_size", 14)
 	_zahl.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
 	wurzel.add_child(_zahl)
 	_hinweis = Label.new()
@@ -277,13 +279,29 @@ func _baue_ui() -> void:
 	_hinweis.theme_type_variation = "CaptionLabel"
 	_hinweis.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_hinweis.add_theme_color_override("font_outline_color", Color(0.25, 0.18, 0.12))
-	_hinweis.add_theme_constant_override("outline_size", 6)
-	_hinweis.set_anchors_and_offsets_preset(
-		Control.PRESET_CENTER_TOP, Control.PRESET_MODE_MINSIZE, 64
-	)
+	_hinweis.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	_hinweis.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_hinweis.grow_vertical = Control.GROW_DIRECTION_END
 	wurzel.add_child(_hinweis)
 	_blitz = ColorRect.new()
 	_blitz.color = Color(1.0, 1.0, 1.0, 0.0)
 	_blitz.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_blitz.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	wurzel.add_child(_blitz)
+	_wende_layout_an()
+	get_viewport().size_changed.connect(_wende_layout_an)
+
+
+## Safe-Area-Ränder, Countdown-Font und Outlines auf den aktuellen
+## Canvas-Faktor heben (einmal beim Bau, dann bei jeder Größenänderung).
+func _wende_layout_an() -> void:
+	if _zahl == null or not is_instance_valid(_zahl) or not is_inside_tree():
+		return
+	var m := ScreenShell.metrics(get_viewport())
+	var f: float = m["f"]
+	var insets: Dictionary = m["insets"]
+	_zahl.add_theme_font_size_override("font_size", int(120.0 * f))
+	_zahl.add_theme_constant_override("outline_size", int(14.0 * f))
+	_hinweis.add_theme_constant_override("outline_size", int(6.0 * f))
+	_hinweis.offset_top = float(insets["top"]) + 16.0 * f
+	ScreenShell.scale_fonts(_hinweis, f)

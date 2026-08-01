@@ -45,6 +45,9 @@ var _rahmen_overlay: FotoRahmen.Overlay
 var _werkzeug_box: VBoxContainer
 var _werkzeug_chips: Dictionary = {}
 var _selfie_button: Button
+var _ausloeser: Button
+## Zuletzt angewandte ScreenShell-Metriken (f, canvas, insets, floor_px).
+var _m: Dictionary = {}
 var _rig_cache: Object = null
 var _pose_angefasst := false
 var _emotion_angefasst := false
@@ -156,6 +159,8 @@ func knipsen() -> String:
 	var pfad := FotoModus.foto_pfad(_jetzt_unix())
 	if bild == null or bild.save_png(pfad) != OK:
 		_hinweis.text = I18nService.t("phone.foto.fehler")
+		# W16 F12 (Outcome schlägt Press): der Fehl-Ausgang klingt.
+		AudioDirector.try_play(self, "ui_error")
 		return ""
 	var extra := werkzeuge.als_meta()
 	if _selfie_aktiv:
@@ -165,6 +170,9 @@ func knipsen() -> String:
 		{"n": FotoModus.fotos(gs).size()}
 	)
 	_blitze()
+	# W16 F12: Foto im Album = Sammelmoment (ui_sticker + Erfolgs-Haptik).
+	AudioDirector.try_play(self, "ui_sticker")
+	Haptics.success(self)
 	geknipst.emit(pfad)
 	return pfad
 
@@ -313,7 +321,8 @@ func _aktive_id(art: String) -> String:
 
 
 func _style_chips(art: String) -> void:
-	var chips: HBoxContainer = _werkzeug_chips.get(art)
+	# Hochformat hält die Chips in HBox-Reihen, Querformat in VBox-Spalten.
+	var chips: BoxContainer = _werkzeug_chips.get(art)
 	if chips == null:
 		return
 	var aktiv := _aktive_id(art)
@@ -424,144 +433,298 @@ func _selfie_material(farbe: Color) -> StandardMaterial3D:
 ## ---------------------------------------------------------------- Aufbau
 
 
+## W16/G4 P18: Der Sucher baut sich aus `ScreenShell.metrics()` — Safe-Area
+## für alle Randelemente, Touch-Floor ×f für Auslöser/Chips, und bei
+## Canvas-Änderung (Rotation) wird der Inhalt mit frischen Metriken neu
+## gebaut: hochkant liegen die Werkzeuge als Reihen überm Auslöser, quer
+## als rechte SPALTE (statt überlappender Leisten, G1 ui-post §6).
 func _baue_ui() -> void:
 	_ui = Control.new()
 	_ui.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_ui.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_ui.theme = ThemeService.theme()
 	add_child(_ui)
-	_baue_sucher()
+	_baue_inhalt()
+	get_viewport().size_changed.connect(_on_canvas_geaendert)
+
+
+func _on_canvas_geaendert() -> void:
+	if _ui == null or not is_instance_valid(_ui) or not is_inside_tree():
+		return
+	_baue_inhalt()
+
+
+## Kompletten Sucher-Inhalt (neu) bauen — einmal beim Start und bei jeder
+## Canvas-Änderung. Der Werkzeug-Zustand lebt in `werkzeuge` und übersteht
+## den Neubau (Chips stylen sich aus den aktiven Ids).
+func _baue_inhalt() -> void:
+	for kind in _ui.get_children():
+		_ui.remove_child(kind)
+		kind.queue_free()
+	_werkzeug_chips.clear()
+	_selfie_button = null
+	_m = ScreenShell.metrics(_ui.get_viewport())
+	var f: float = _m["f"]
+	var insets: Dictionary = _m["insets"]
+	_baue_sucher(f, insets)
+	_baue_top_leiste(f, insets)
 	_hinweis = Label.new()
 	_hinweis.text = I18nService.t("phone.foto.hinweis")
 	_hinweis.theme_type_variation = "CaptionLabel"
 	_hinweis.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_hinweis.set_anchors_and_offsets_preset(
-		Control.PRESET_CENTER_TOP, Control.PRESET_MODE_MINSIZE, 28
-	)
+	_hinweis.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	_hinweis.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_hinweis.grow_vertical = Control.GROW_DIRECTION_END
+	# Unter der Top-Leiste (die selbst unter der Notch beginnt).
+	_hinweis.offset_top = float(insets["top"]) + 12.0 * f + _m["floor_px"] + 10.0 * f
 	_ui.add_child(_hinweis)
-	var ausloeser := Button.new()
-	ausloeser.name = "Ausloeser"
-	ausloeser.theme_type_variation = "PrimaryButton"
-	ausloeser.text = I18nService.t("phone.foto.knipsen")
-	ausloeser.custom_minimum_size = Vector2(180.0, 64.0)
-	ausloeser.set_anchors_and_offsets_preset(
-		Control.PRESET_CENTER_BOTTOM, Control.PRESET_MODE_MINSIZE, 36
-	)
-	ausloeser.pressed.connect(func() -> void: knipsen())
-	_ui.add_child(ausloeser)
-	var zurueck := Button.new()
-	zurueck.theme_type_variation = "GhostButton"
-	zurueck.text = I18nService.t("phone.foto.fertig")
-	zurueck.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT, Control.PRESET_MODE_MINSIZE, 20)
-	zurueck.pressed.connect(schliessen)
-	_ui.add_child(zurueck)
-	_baue_werkzeuge()
+	_baue_ausloeser(f, insets)
+	_baue_werkzeuge(f, insets)
 	_blitz = ColorRect.new()
 	_blitz.color = Color(1.0, 1.0, 1.0, 0.0)
 	_blitz.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_blitz.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_ui.add_child(_blitz)
+	ScreenShell.scale_fonts(_ui, f)
 
 
-## W13C: Werkzeug-Reihen über dem Auslöser. Pose/Emotion nur mit Gooby im
-## Bild (Haus/Ranch/Orte), Rahmen immer; dazu der Selfie-Umschalter.
-func _baue_werkzeuge() -> void:
+## Zurück + Selfie wandern aus den Notch-Ecken in EINE zentrierte
+## Top-Leiste — „mehr zur Mitte statt äußerste Ecken“ (G1 ui-post §6.4).
+func _baue_top_leiste(f: float, insets: Dictionary) -> void:
+	var leiste := HBoxContainer.new()
+	leiste.name = "TopLeiste"
+	leiste.add_theme_constant_override("separation", int(12.0 * f))
+	leiste.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	leiste.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	leiste.grow_vertical = Control.GROW_DIRECTION_END
+	leiste.offset_top = float(insets["top"]) + 12.0 * f
+	_ui.add_child(leiste)
+	var zurueck := SquishButton.new()
+	zurueck.name = "FertigButton"
+	zurueck.theme_type_variation = "GhostButton"
+	zurueck.text = I18nService.t("phone.foto.fertig")
+	zurueck.focus_mode = Control.FOCUS_NONE
+	# W16 F12: Fertig = Zurück-Semantik.
+	zurueck.pressed.connect(
+		func() -> void:
+			AudioDirector.try_play(zurueck, "ui_back")
+			schliessen()
+	)
+	ScreenShell.touch_target(zurueck, _m)
+	leiste.add_child(zurueck)
+	if _finde_rig() == null:
+		return
+	_selfie_button = SquishButton.new()
+	_selfie_button.name = "SelfieButton"
+	_selfie_button.theme_type_variation = "GhostButton"
+	_selfie_button.toggle_mode = true
+	_selfie_button.focus_mode = Control.FOCUS_NONE
+	_selfie_button.text = I18nService.t("foto.selfie.aus" if _selfie_aktiv else "foto.selfie.an")
+	_selfie_button.set_pressed_no_signal(_selfie_aktiv)
+	# W16 F12: Selfie ist ein An-Aus-Schalter.
+	_selfie_button.toggled.connect(
+		func(an: bool) -> void:
+			AudioDirector.try_play(_selfie_button, "ui_toggle")
+			_schalte_selfie(an)
+	)
+	ScreenShell.touch_target(_selfie_button, _m)
+	leiste.add_child(_selfie_button)
+
+
+func _baue_ausloeser(f: float, insets: Dictionary) -> void:
+	_ausloeser = SquishButton.new()
+	_ausloeser.name = "Ausloeser"
+	_ausloeser.theme_type_variation = "PrimaryButton"
+	_ausloeser.text = I18nService.t("phone.foto.knipsen")
+	_ausloeser.custom_minimum_size = Vector2(180.0, 64.0) * f
+	ScreenShell.touch_target(_ausloeser, _m)
+	_ausloeser.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	_ausloeser.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_ausloeser.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	_ausloeser.offset_bottom = -(float(insets["bottom"]) + 24.0 * f)
+	# W16 F12: Druck klingt (ui_click); der AUSGANG klingt in knipsen()
+	# als ui_sticker/ui_error (Outcome schlägt Press).
+	_ausloeser.pressed.connect(
+		func() -> void:
+			AudioDirector.try_play(_ausloeser, "ui_click")
+			knipsen()
+	)
+	_ui.add_child(_ausloeser)
+
+
+## Chip-Mindesthöhe: 44 Design-px ×f, nie unter dem physischen Touch-Floor.
+func _chip_hoehe() -> float:
+	return maxf(44.0 * float(_m["f"]), float(_m["floor_px"]))
+
+
+## W13C: Werkzeuge (Pose/Emotion/Rahmen). Pose/Emotion nur mit Gooby im
+## Bild (Haus/Ranch/Orte), Rahmen immer. Hochkant = Reihen überm Auslöser,
+## quer = rechte Spalte mit vertikalen Chip-Scrollern.
+func _baue_werkzeuge(f: float, insets: Dictionary) -> void:
 	_werkzeug_box = VBoxContainer.new()
 	_werkzeug_box.name = "Werkzeuge"
-	_werkzeug_box.add_theme_constant_override("separation", 6)
-	_werkzeug_box.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-	_werkzeug_box.offset_left = 16.0
-	_werkzeug_box.offset_right = -16.0
-	_werkzeug_box.offset_top = -320.0
-	_werkzeug_box.offset_bottom = -116.0
-	_werkzeug_box.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	_werkzeug_box.alignment = BoxContainer.ALIGNMENT_END
+	_werkzeug_box.add_theme_constant_override("separation", int(6.0 * f))
 	_ui.add_child(_werkzeug_box)
-	var hat_gooby := _finde_rig() != null
-	if hat_gooby:
+	var gruppen := _werkzeug_gruppen()
+	var canvas: Vector2 = _m["canvas"]
+	if canvas.x > canvas.y:
+		_lege_spalte_an(gruppen, f, insets)
+	else:
+		_lege_reihen_an(gruppen, f, insets)
+
+
+## Gruppen-Katalog: [[art, titel, [[id, text], …]], …].
+func _werkzeug_gruppen() -> Array:
+	var gruppen: Array = []
+	if _finde_rig() != null:
 		var posen: Array = []
 		for id in FotoWerkzeuge.pose_ids():
 			posen.append([id, I18nService.t(FotoWerkzeuge.pose_label_key(id))])
-		_baue_werkzeug_reihe("pose", I18nService.t("foto.werkzeug.pose"), posen)
+		gruppen.append(["pose", I18nService.t("foto.werkzeug.pose"), posen])
 		var emotionen: Array = []
 		for id in FotoWerkzeuge.emotion_ids():
 			emotionen.append([id, I18nService.t(FotoWerkzeuge.emotion_label_key(id))])
-		_baue_werkzeug_reihe("emotion", I18nService.t("foto.werkzeug.emotion"), emotionen)
+		gruppen.append(["emotion", I18nService.t("foto.werkzeug.emotion"), emotionen])
 	var rahmen: Array = []
 	for id in FotoRahmen.ids():
 		rahmen.append([id, I18nService.t(FotoRahmen.label_key(id))])
-	_baue_werkzeug_reihe("rahmen", I18nService.t("foto.werkzeug.rahmen"), rahmen)
-	if hat_gooby:
-		_selfie_button = Button.new()
-		_selfie_button.name = "SelfieButton"
-		_selfie_button.theme_type_variation = "GhostButton"
-		_selfie_button.toggle_mode = true
-		_selfie_button.text = I18nService.t("foto.selfie.an")
-		_selfie_button.set_anchors_and_offsets_preset(
-			Control.PRESET_TOP_RIGHT, Control.PRESET_MODE_MINSIZE, 20
-		)
-		_selfie_button.toggled.connect(_schalte_selfie)
-		_ui.add_child(_selfie_button)
+	gruppen.append(["rahmen", I18nService.t("foto.werkzeug.rahmen"), rahmen])
+	return gruppen
 
 
-## Eine Werkzeug-Reihe: Titel links, Auswahl-Chips in einem H-Scroller.
-## `eintraege` = [[id, text], …].
-func _baue_werkzeug_reihe(art: String, titel: String, eintraege: Array) -> void:
-	var reihe := HBoxContainer.new()
-	reihe.name = "Reihe" + art.to_pascal_case()
-	reihe.add_theme_constant_override("separation", 8)
-	_werkzeug_box.add_child(reihe)
-	var label := Label.new()
-	label.theme_type_variation = "CaptionLabel"
-	label.text = titel
-	label.custom_minimum_size = Vector2(86.0, 0.0)
-	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	reihe.add_child(label)
-	var scroller := ScrollContainer.new()
-	scroller.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
-	scroller.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	scroller.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroller.custom_minimum_size = Vector2(0.0, 54.0)
-	reihe.add_child(scroller)
-	var chips := HBoxContainer.new()
-	chips.name = "Chips"
-	chips.add_theme_constant_override("separation", 6)
-	scroller.add_child(chips)
+## Hochformat: Reihen (Titel links, H-Chip-Scroller) überm Auslöser,
+## eingerückt in die Safe-Area.
+func _lege_reihen_an(gruppen: Array, f: float, insets: Dictionary) -> void:
+	var reihe_h := _chip_hoehe() + 12.0 * f
+	var hoehe := gruppen.size() * (reihe_h + 6.0 * f)
+	var unten := float(insets["bottom"]) + 24.0 * f + _ausloeser_hoehe() + 12.0 * f
+	_werkzeug_box.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	_werkzeug_box.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	_werkzeug_box.alignment = BoxContainer.ALIGNMENT_END
+	_werkzeug_box.offset_left = float(insets["left"]) + 16.0 * f
+	_werkzeug_box.offset_right = -(float(insets["right"]) + 16.0 * f)
+	_werkzeug_box.offset_bottom = -unten
+	_werkzeug_box.offset_top = -(unten + hoehe)
+	for gruppe: Array in gruppen:
+		var reihe := HBoxContainer.new()
+		reihe.name = "Reihe" + str(gruppe[0]).to_pascal_case()
+		reihe.add_theme_constant_override("separation", int(8.0 * f))
+		_werkzeug_box.add_child(reihe)
+		var label := Label.new()
+		label.theme_type_variation = "CaptionLabel"
+		label.text = str(gruppe[1])
+		label.custom_minimum_size = Vector2(86.0 * f, 0.0)
+		label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		reihe.add_child(label)
+		var scroller := ScrollContainer.new()
+		scroller.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+		scroller.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		scroller.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		scroller.custom_minimum_size = Vector2(0.0, reihe_h)
+		reihe.add_child(scroller)
+		var chips := HBoxContainer.new()
+		chips.name = "Chips"
+		chips.add_theme_constant_override("separation", int(6.0 * f))
+		scroller.add_child(chips)
+		_fuelle_chips(chips, str(gruppe[0]), gruppe[2] as Array, 0.0)
+
+
+## Querformat: EINE rechte Werkzeug-Spalte (vertikale Chip-Scroller) —
+## lässt den Sucher frei und bringt die Chips an den Daumen.
+func _lege_spalte_an(gruppen: Array, f: float, insets: Dictionary) -> void:
+	var canvas: Vector2 = _m["canvas"]
+	var breite := minf(200.0 * f, canvas.x * 0.28)
+	var safe_h := canvas.y - float(insets["top"]) - float(insets["bottom"]) - 24.0 * f
+	var label_h := 26.0 * f
+	var sep := 6.0 * f
+	var scroller_h := maxf(
+		(safe_h - gruppen.size() * (label_h + 2.0 * sep)) / gruppen.size(), _chip_hoehe()
+	)
+	_werkzeug_box.set_anchors_preset(Control.PRESET_CENTER_RIGHT)
+	_werkzeug_box.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	_werkzeug_box.grow_vertical = Control.GROW_DIRECTION_BOTH
+	_werkzeug_box.offset_right = -(float(insets["right"]) + 16.0 * f)
+	_werkzeug_box.offset_left = _werkzeug_box.offset_right - breite
+	# Vertikal EXPLIZIT in die Mitte des SAFE-Bands legen: set_anchors_preset
+	# erhält das (leere) Alt-Rect über die Offsets — ohne eigene top/bottom-
+	# Offsets wüchse die Spalte um y=0 statt um die Bildmitte.
+	var spalte_h := gruppen.size() * (label_h + scroller_h + 2.0 * sep)
+	var versatz := (float(insets["top"]) + canvas.y - float(insets["bottom"])) / 2.0
+	versatz -= canvas.y * 0.5
+	_werkzeug_box.offset_top = versatz - spalte_h / 2.0
+	_werkzeug_box.offset_bottom = versatz + spalte_h / 2.0
+	for gruppe: Array in gruppen:
+		var label := Label.new()
+		label.theme_type_variation = "CaptionLabel"
+		label.text = str(gruppe[1])
+		_werkzeug_box.add_child(label)
+		var scroller := ScrollContainer.new()
+		scroller.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		scroller.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+		scroller.custom_minimum_size = Vector2(breite, scroller_h)
+		_werkzeug_box.add_child(scroller)
+		var chips := VBoxContainer.new()
+		chips.name = "Chips"
+		chips.add_theme_constant_override("separation", int(6.0 * f))
+		chips.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		scroller.add_child(chips)
+		_fuelle_chips(chips, str(gruppe[0]), gruppe[2] as Array, breite - 14.0 * f)
+
+
+## Auswahl-Chips einer Gruppe (`eintraege` = [[id, text], …]) — Touch-Floor
+## in der Höhe, optional feste Breite (Spalten-Layout).
+func _fuelle_chips(chips: BoxContainer, art: String, eintraege: Array, breite: float) -> void:
 	var aktiv := _aktive_id(art)
 	for eintrag: Array in eintraege:
 		var id := str(eintrag[0])
-		var chip := Button.new()
+		var chip := SquishButton.new()
 		chip.name = "Chip" + id.to_pascal_case()
 		chip.theme_type_variation = "BtnTeal" if id == aktiv else "GhostButton"
 		chip.text = str(eintrag[1])
 		chip.focus_mode = Control.FOCUS_NONE
-		chip.custom_minimum_size = Vector2(0.0, 44.0)
+		chip.custom_minimum_size = Vector2(breite, _chip_hoehe())
 		chip.set_meta("werkzeug_id", id)
-		chip.pressed.connect(_on_chip.bind(art, id))
+		# W16 F12: Werkzeug-Wahl klingt als Chip.
+		chip.pressed.connect(
+			func() -> void:
+				AudioDirector.try_play(chip, "ui_chip")
+				_on_chip(art, id)
+		)
 		chips.add_child(chip)
 	_werkzeug_chips[art] = chips
 
 
-## Vier Ecken-Winkel als Sucher (billige ColorRects statt Shader).
-func _baue_sucher() -> void:
+func _ausloeser_hoehe() -> float:
+	if _ausloeser == null:
+		return maxf(64.0 * float(_m["f"]), float(_m["floor_px"]))
+	return _ausloeser.custom_minimum_size.y
+
+
+## Vier Ecken-Winkel als Sucher (billige ColorRects statt Shader) — Rand
+## und Strichstärke skalieren ×f, sonst wirkt der Sucher auf dem iPhone
+## wie ein Briefmarken-Rahmen (G1 ui-post §6.5).
+func _baue_sucher(f: float, insets: Dictionary) -> void:
 	var farbe := AcTokens.WHITE
 	for ecke: Vector2 in [Vector2(0, 0), Vector2(1, 0), Vector2(0, 1), Vector2(1, 1)]:
 		for waagerecht: bool in [true, false]:
 			var strich := ColorRect.new()
 			strich.color = Color(farbe.r, farbe.g, farbe.b, 0.85)
 			strich.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			strich.size = Vector2(72.0, 6.0) if waagerecht else Vector2(6.0, 72.0)
+			# Größe als LOKALE Variable: strich.size nach einem Offset-Set
+			# zu lesen liefert das schon mutierte Zwischen-Rect.
+			var groesse := (Vector2(72.0, 6.0) if waagerecht else Vector2(6.0, 72.0)) * f
 			strich.anchor_left = ecke.x
 			strich.anchor_right = ecke.x
 			strich.anchor_top = ecke.y
 			strich.anchor_bottom = ecke.y
-			var rand := 64.0
-			var dx := rand if ecke.x < 0.5 else -rand - strich.size.x
-			var dy := rand if ecke.y < 0.5 else -rand - strich.size.y
+			var rand_x := 64.0 * f + float(insets["left" if ecke.x < 0.5 else "right"])
+			var rand_y := 64.0 * f + float(insets["top" if ecke.y < 0.5 else "bottom"])
+			var dx := rand_x if ecke.x < 0.5 else -rand_x - groesse.x
+			var dy := rand_y if ecke.y < 0.5 else -rand_y - groesse.y
 			strich.offset_left = dx
 			strich.offset_top = dy
-			strich.offset_right = dx + strich.size.x
-			strich.offset_bottom = dy + strich.size.y
+			strich.offset_right = dx + groesse.x
+			strich.offset_bottom = dy + groesse.y
 			_ui.add_child(strich)
 
 

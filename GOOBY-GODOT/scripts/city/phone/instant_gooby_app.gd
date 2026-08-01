@@ -100,7 +100,9 @@ static func unread_badge(app_id: String) -> Control:
 
 
 func _ready() -> void:
-	CitySheetBausteine.richte_box_ein(self)
+	# W16/G4 P18: Breite ans REALE Gerät koppeln statt an die 420er-City-
+	# Bausteine (Breiten-Kollision, G1 ui-post §4).
+	PhoneShell.richte_app_box_ein(self)
 	_service = _hole_service()
 	_feed_box = VBoxContainer.new()
 	_feed_box.add_theme_constant_override("separation", 10)
@@ -122,28 +124,41 @@ func _hole_service() -> NetMail:
 
 
 func _baue_feed() -> void:
+	var m := ScreenShell.metrics(get_viewport())
 	var kopf := HBoxContainer.new()
 	kopf.add_theme_constant_override("separation", 8)
 	_feed_box.add_child(kopf)
-	var posten := Button.new()
+	var posten := SquishButton.new()
 	posten.name = "PostenButton"
 	posten.theme_type_variation = "PrimaryButton"
 	posten.text = I18nService.t("instant.posten")
-	posten.pressed.connect(_zeige_compose)
+	# W16 F13: Posten öffnet den Compose-Flow.
+	posten.pressed.connect(
+		func() -> void:
+			AudioDirector.try_play(posten, "ui_confirm")
+			_zeige_compose()
+	)
+	ScreenShell.touch_target(posten, m)
 	kopf.add_child(posten)
-	var neu_laden := Button.new()
+	var neu_laden := SquishButton.new()
 	neu_laden.name = "NeuLadenButton"
 	neu_laden.theme_type_variation = "GhostButton"
 	neu_laden.text = I18nService.t("instant.aktualisieren")
-	neu_laden.pressed.connect(func() -> void: _lade_feed())
+	neu_laden.pressed.connect(
+		func() -> void:
+			AudioDirector.try_play(neu_laden, "ui_click")
+			_lade_feed()
+	)
+	ScreenShell.touch_target(neu_laden, m)
 	kopf.add_child(neu_laden)
 	_status = Label.new()
 	_status.theme_type_variation = "CaptionLabel"
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_status.custom_minimum_size = Vector2(CitySheetBausteine.TEXT_BREITE, 0.0)
-	_status.size = Vector2(CitySheetBausteine.TEXT_BREITE, 0.0)
+	var breite := PhoneShell.inhalt_breite()
+	_status.custom_minimum_size = Vector2(breite, 0.0)
+	_status.size = Vector2(breite, 0.0)
 	_feed_box.add_child(_status)
-	_liste = CitySheetBausteine.scroll_liste(_feed_box, LISTE_HOEHE)
+	_liste = PhoneShell.app_scroll_liste(_feed_box, LISTE_HOEHE)
 
 
 func _zeige_feed() -> void:
@@ -175,28 +190,32 @@ func _render_feed(posts: Array, total: int, cap: int) -> void:
 	for kind in _liste.get_children():
 		kind.queue_free()
 	if posts.is_empty():
-		var leer := CitySheetBausteine.karte(_liste)
+		var leer := PhoneShell.app_karte(_liste)
 		var key := "instant.feed_leer"
 		if _service == null or not _service.is_online():
 			key = "instant.offline"
-		CitySheetBausteine.label(leer, I18nService.t(key), "CaptionLabel")
+		PhoneShell.app_label(leer, I18nService.t(key), "CaptionLabel")
+		PhoneShell.app_fonts_skalieren(self)
 		return
 	for post: Variant in posts:
 		if post is Dictionary:
 			_baue_post_karte(post)
 	var hinweis := cap_hinweis(total, cap)
 	if not hinweis.is_empty():
-		CitySheetBausteine.label(_liste, hinweis, "CaptionLabel")
+		PhoneShell.app_label(_liste, hinweis, "CaptionLabel")
+	PhoneShell.app_fonts_skalieren(self)
 
 
 func _baue_post_karte(post: Dictionary) -> void:
-	var karte := CitySheetBausteine.karte(_liste)
+	var m := ScreenShell.metrics(get_viewport())
+	var karte := PhoneShell.app_karte(_liste)
 	var kopf := HBoxContainer.new()
 	kopf.add_theme_constant_override("separation", 6)
 	karte.add_child(kopf)
 	var autor := Label.new()
 	autor.theme_type_variation = "HeadlineLabel"
 	autor.text = _autor_text(post)
+	autor.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	autor.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	kopf.add_child(autor)
 	var zeit := Label.new()
@@ -207,7 +226,7 @@ func _baue_post_karte(post: Dictionary) -> void:
 	var photo_id := str(post.get("photoId", ""))
 	if not photo_id.is_empty():
 		var rect := TextureRect.new()
-		rect.custom_minimum_size = Vector2(0.0, FOTO_HOEHE)
+		rect.custom_minimum_size = Vector2(0.0, FOTO_HOEHE * float(m["f"]))
 		rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		karte.add_child(rect)
@@ -215,9 +234,9 @@ func _baue_post_karte(post: Dictionary) -> void:
 
 	var caption := str(post.get("caption", ""))
 	if not caption.is_empty():
-		CitySheetBausteine.label(karte, caption)
+		PhoneShell.app_label(karte, caption)
 
-	var moehre := Button.new()
+	var moehre := SquishButton.new()
 	moehre.name = "MoehrenKnopf"
 	moehre.theme_type_variation = "GhostButton"
 	moehre.text = moehren_text(int(post.get("likes", 0)))
@@ -227,7 +246,13 @@ func _baue_post_karte(post: Dictionary) -> void:
 	moehre.focus_mode = Control.FOCUS_NONE
 	moehre.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	moehre.disabled = not like_erlaubt(post)
-	moehre.pressed.connect(_on_moehre.bind(str(post.get("id", "")), moehre))
+	ScreenShell.touch_target(moehre, m)
+	# W16 F13: Möhren-Like = Mikro-Schritt mit Akzent-Pitch.
+	moehre.pressed.connect(
+		func() -> void:
+			AudioDirector.try_play(moehre, "ui_tick", 1.2)
+			_on_moehre(str(post.get("id", "")), moehre)
+	)
 	karte.add_child(moehre)
 
 
@@ -306,16 +331,27 @@ func _baue_compose() -> void:
 	var aktionen := HBoxContainer.new()
 	aktionen.add_theme_constant_override("separation", 8)
 	_compose_box.add_child(aktionen)
-	var zurueck := Button.new()
+	var m := ScreenShell.metrics(get_viewport())
+	var zurueck := SquishButton.new()
+	zurueck.name = "ZurueckButton"
 	zurueck.theme_type_variation = "GhostButton"
 	zurueck.text = I18nService.t("instant.compose.zurueck")
-	zurueck.pressed.connect(_zeige_feed)
+	# W16 F13: Zurück in den Feed.
+	zurueck.pressed.connect(
+		func() -> void:
+			AudioDirector.try_play(zurueck, "ui_back")
+			_zeige_feed()
+	)
+	ScreenShell.touch_target(zurueck, m)
 	aktionen.add_child(zurueck)
-	_senden_btn = Button.new()
+	_senden_btn = SquishButton.new()
 	_senden_btn.name = "SendenButton"
 	_senden_btn.theme_type_variation = "PrimaryButton"
 	_senden_btn.text = I18nService.t("instant.compose.senden")
+	# W16 F13 (Outcome schlägt Press): der Druck bleibt stumm, der
+	# Netz-AUSGANG klingt in _on_posten (ui_confirm/ui_error).
 	_senden_btn.pressed.connect(_on_posten)
+	ScreenShell.touch_target(_senden_btn, m)
 	aktionen.add_child(_senden_btn)
 
 
@@ -366,10 +402,12 @@ func _on_caption_changed() -> void:
 ## (NetMail flusht beim nächsten Online-Gehen — clientId dedupet).
 func _on_posten() -> void:
 	if _service == null:
+		AudioDirector.try_play(self, "ui_error")
 		_zeige_toast(I18nService.t("instant.err.offline"))
 		return
 	var foto := _gewaehltes_foto()
 	if foto.is_empty():
+		AudioDirector.try_play(self, "ui_error")
 		_zeige_toast(I18nService.t("instant.err.no_photo"))
 		return
 	_senden_btn.disabled = true
@@ -377,11 +415,16 @@ func _on_posten() -> void:
 	if not is_instance_valid(self):
 		return
 	_senden_btn.disabled = false
+	# W16 F13: der Ausgang klingt — Erfolg/Outbox bestätigt, Fehler warnt.
 	if bool(res.get("ok", false)):
+		AudioDirector.try_play(self, "ui_confirm")
+		Haptics.success(self)
 		_zeige_toast(I18nService.t("instant.toast.gepostet", {"n": int(res.get("recipients", 0))}))
 	elif bool(res.get("queued", false)):
+		AudioDirector.try_play(self, "ui_confirm")
 		_zeige_toast(I18nService.t("instant.toast.queued"))
 	else:
+		AudioDirector.try_play(self, "ui_error")
 		_zeige_toast(I18nService.t(str(res.get("message_key", "instant.err.generic"))))
 		return
 	_caption_edit.text = ""

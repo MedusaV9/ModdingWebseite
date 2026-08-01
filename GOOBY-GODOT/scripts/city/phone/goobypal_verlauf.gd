@@ -19,9 +19,11 @@ const SEC_PRO_TAG := 86400
 
 ## Fertige Verlaufs-Sektion: Überschrift + Scroll-Liste (neueste zuerst)
 ## ODER der knuffige Leerzustand. `namen`: friendCode → Anzeigename.
+## W16/G4 P18: Listenhöhe/Icons skalieren ×f (Gerät wächst mit dem Canvas).
 static func build_liste(
 	entries: Array, namen: Dictionary, now_unix: int, utc_offset_min: int
 ) -> Control:
+	var f := _faktor()
 	var box := VBoxContainer.new()
 	box.name = "PalVerlauf"
 	box.add_theme_constant_override("separation", 6)
@@ -38,7 +40,7 @@ static func build_liste(
 		return box
 	var scroll := ScrollContainer.new()
 	scroll.name = "VerlaufScroll"
-	scroll.custom_minimum_size = Vector2(0.0, LISTEN_HOEHE)
+	scroll.custom_minimum_size = Vector2(0.0, LISTEN_HOEHE * f)
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	box.add_child(scroll)
@@ -50,8 +52,16 @@ static func build_liste(
 	# Neueste zuerst — der Server hängt chronologisch hinten an.
 	for i in range(entries.size() - 1, -1, -1):
 		if entries[i] is Dictionary:
-			rows.add_child(_zeile(zeile_modell(entries[i], namen, now_unix, utc_offset_min)))
+			rows.add_child(_zeile(zeile_modell(entries[i], namen, now_unix, utc_offset_min), f))
 	return box
+
+
+## Aktueller UiScale-Faktor des Haupt-Viewports (1,0 ohne Baum).
+static func _faktor() -> float:
+	var loop := Engine.get_main_loop()
+	if not (loop is SceneTree):
+		return 1.0
+	return UiScale.for_viewport((loop as SceneTree).root)
 
 
 ## Einen PAL_HISTORY-Eintrag in Anzeige-Felder übersetzen (PURE).
@@ -134,13 +144,13 @@ static func _gleicher_tag(a: Dictionary, b: Dictionary) -> bool:
 	return a["year"] == b["year"] and a["month"] == b["month"] and a["day"] == b["day"]
 
 
-static func _zeile(modell: Dictionary) -> Control:
+static func _zeile(modell: Dictionary, f := 1.0) -> Control:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 8)
 	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var icon := TextureRect.new()
 	icon.texture = load("%s/%s.svg" % [ICON_DIR, str(modell["icon"])])
-	icon.custom_minimum_size = Vector2(18, 18)
+	icon.custom_minimum_size = Vector2(18, 18) * f
 	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
