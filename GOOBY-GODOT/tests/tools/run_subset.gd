@@ -39,7 +39,15 @@ func _run() -> void:
 				hit = true
 		if not hit:
 			continue
-		var case: TestCase = (load(TESTS_DIR + "/" + file) as GDScript).new()
+		var inst: Variant = (load(TESTS_DIR + "/" + file) as GDScript).new()
+		if not (inst is TestCase):
+			# W1c-Suiten (extends W1cTestCase/RefCounted) laufen über
+			# run_w1c_tests.gd. Früher riss der harte typed-Cast hier einen
+			# SCRIPT ERROR und die Coroutine starb VOR quit() — der Prozess
+			# hing dann dauerhaft (W16-Befund). Deshalb: sauber überspringen.
+			print("-- %s (übersprungen: W1c-Suite — run_w1c_tests.gd nutzen)" % file)
+			continue
+		var case: TestCase = inst
 		case.tree = self
 		print("-- %s" % file)
 		for method: Dictionary in case.get_method_list():

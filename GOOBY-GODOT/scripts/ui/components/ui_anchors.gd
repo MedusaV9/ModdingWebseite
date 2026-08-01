@@ -92,6 +92,10 @@ static func reset_for_tests() -> void:
 
 static func _prune(liste: Array) -> void:
 	for i in range(liste.size() - 1, -1, -1):
-		var eintrag: Variant = liste[i]
-		if not (eintrag is Object) or not is_instance_valid(eintrag):
+		# is_instance_valid ZUERST: `x is Object` wirft in Godot 4.4 auf
+		# hart gefreiten Instanzen einen SCRIPT ERROR und brach _prune ab —
+		# occupants() stolperte dann am as-Cast erneut (416 Log-Zeilen je
+		# Voll-Lauf). is_instance_valid ist für genau diesen Fall gebaut:
+		# false für freed UND für Nicht-Objekte, ohne Fehler-Log.
+		if not is_instance_valid(liste[i]):
 			liste.remove_at(i)
