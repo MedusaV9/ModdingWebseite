@@ -9,8 +9,9 @@ extends RefCounted
 ##
 ## Status-Modell: das JSON kennt nur die REDAKTIONELLEN Stufen `verfuegbar` /
 ## `kommt_bald`; der ANZEIGE-Status pro Spielstand kommt aus status_fuer()
-## (installiert/verfuegbar/gesperrt/kommt_bald — Ranch-Kaufstand via
-## RanchState, Level-Gate via RanchKatalog).
+## (installiert/verfuegbar/gesperrt/kommt_bald — Kaufstand via RanchState/
+## GoobyeState, Level-Gate via RanchKatalog/GoobyeKatalog; G5/P24 hat
+## „Goo und Bye“ nach exakt dem Ranch-Muster spielbar geschaltet).
 
 const PACK_DOMAIN := "dlcs"
 const PACK_DATEI := "res://content/dlc/data/dlcs.json"
@@ -54,16 +55,27 @@ static func eintrag(id: String) -> Dictionary:
 	return {}
 
 
-## Anzeige-Status eines Eintrags für DIESEN Spielstand. Nur die Ranch hat
-## heute echten Kauf-/Level-Stand; weitere kaufbare DLCs docken hier an.
+## Anzeige-Status eines Eintrags für DIESEN Spielstand. Ranch und
+## Goo und Bye (G5/P24) haben echten Kauf-/Level-Stand; weitere kaufbare
+## DLCs docken hier an.
 static func status_fuer(dlc: Dictionary, gs: Object) -> String:
 	if str(dlc.get("status", "")) != STATUS_VERFUEGBAR:
 		return STATUS_KOMMT_BALD
-	if str(dlc.get("id", "")) == "ranch":
-		if RanchState.ist_gekauft(gs):
+	match str(dlc.get("id", "")):
+		"ranch":
+			if RanchState.ist_gekauft(gs):
+				return STATUS_INSTALLIERT
+			if not RanchState.ist_freigeschaltet(gs):
+				return STATUS_GESPERRT
+		"goo_und_bye":
+			if GoobyeState.ist_gekauft(gs):
+				return STATUS_INSTALLIERT
+			if not GoobyeState.ist_freigeschaltet(gs):
+				return STATUS_GESPERRT
+		"mcgooby":
+			# Welle A (G5/P25): Probeschicht frei spielbar — Kauf-Gate kommt
+			# mit Welle B (dann Muster GoobyeState nachziehen).
 			return STATUS_INSTALLIERT
-		if not RanchState.ist_freigeschaltet(gs):
-			return STATUS_GESPERRT
 	return STATUS_VERFUEGBAR
 
 
@@ -99,15 +111,21 @@ static func features_von(dlc: Dictionary) -> Array:
 	return fallback if fallback is Array else []
 
 
-## Unlock-Zeile fürs Detail-Sheet. Die Ranch-Vorlage trägt {level}/{preis}
-## und wird aus dem Balance-Pack gefüllt (EINE Wahrheit: RanchKatalog) —
-## ein Preis-Update per Pack ändert die Anzeige ohne Textpflege.
+## Unlock-Zeile fürs Detail-Sheet. Die Vorlagen tragen {level}/{preis}
+## und werden aus dem Balance-Pack gefüllt (EINE Wahrheit: Ranch-/
+## GoobyeKatalog) — ein Preis-Update per Pack ändert die Anzeige ohne
+## Textpflege.
 static func unlock_text(dlc: Dictionary) -> String:
 	var vorlage := text_von(dlc, "unlock")
-	if str(dlc.get("id", "")) == "ranch":
-		return vorlage.format(
-			{"level": RanchKatalog.freischalt_level(), "preis": RanchKatalog.preis()}
-		)
+	match str(dlc.get("id", "")):
+		"ranch":
+			return vorlage.format(
+				{"level": RanchKatalog.freischalt_level(), "preis": RanchKatalog.preis()}
+			)
+		"goo_und_bye":
+			return vorlage.format(
+				{"level": GoobyeKatalog.freischalt_level(), "preis": GoobyeKatalog.preis()}
+			)
 	return vorlage
 
 

@@ -2,7 +2,11 @@ extends TestCase
 ## W14/DLCHUB — DLC-Hub in den Settings: dlcs.json schema-valide + Cover
 ## vorhanden, Status-Ableitung (Ranch gekauft / nicht gekauft / Level < 15),
 ## Routen-/Aktions-Mapping, DE↔EN-Parität der Pack-Texte und Screen-Smoke
-## (3 Cover-Karten + Detail-Sheets).
+## (3 Cover-Karten + Detail-Sheets). G5/P24+P25: alle drei Einträge sind
+## spielbar (goo_und_bye → Angebot, mcgooby → Probeschicht ohne Kauf-Gate) —
+## der Kommt-bald-Pfad wird über einen synthetischen Eintrag bzw. eine
+## Registry-Attrappe abgedeckt; Status-/Kauf-Ableitung der DLCs selbst
+## testen test_dlc_goobye.gd / test_dlc_mcgooby.gd.
 
 const PACK_DATEI := "res://content/dlc/data/dlcs.json"
 const ERWARTETE_IDS: Array[String] = ["ranch", "goo_und_bye", "mcgooby"]
@@ -71,8 +75,12 @@ func test_dlcs_json_schema_valide() -> void:
 		assert_true(dlc.get("route") is String, "%s: route ist String" % dlc.get("id"))
 	assert_eq(str((items[0] as Dictionary)["status"]), "verfuegbar", "Ranch ist verfügbar")
 	assert_ne(str((items[0] as Dictionary)["route"]), "", "Ranch-Route gesetzt")
-	for i in [1, 2]:
-		assert_eq(str((items[i] as Dictionary)["status"]), "kommt_bald")
+	# G5/P24: „Goo und Bye“ ist per Pack-Update-Mechanismus verfügbar.
+	assert_eq(str((items[1] as Dictionary)["status"]), "verfuegbar", "Goo und Bye verfügbar")
+	assert_eq(str((items[1] as Dictionary)["route"]), "goobye_angebot", "Goobye-Route gesetzt")
+	# G5/P25: McGooby Welle A — Probeschicht direkt spielbar.
+	assert_eq(str((items[2] as Dictionary)["status"]), "verfuegbar", "mcgooby verfügbar")
+	assert_eq(str((items[2] as Dictionary)["route"]), "mcgooby_schicht", "McGooby-Route gesetzt")
 	# pack.json deklariert die Domain (Pack-updatebar, Ranch-Blaupause).
 	var meta: Variant = JSON.parse_string(
 		FileAccess.get_file_as_string("res://content/dlc/pack.json")
@@ -134,11 +142,19 @@ func test_status_ableitung_ranch() -> void:
 		DlcKatalog.STATUS_GESPERRT,
 		"Level < 15 → gesperrt"
 	)
-	var bald := DlcKatalog.eintrag("goo_und_bye")
+	# Kommt-bald-Zweig über synthetischen Eintrag (im Pack gibt es seit
+	# G5/P25 keinen mehr — der Mechanismus bleibt für künftige DLCs).
+	var bald := {"id": "zukunft", "status": "kommt_bald"}
 	assert_eq(
 		DlcKatalog.status_fuer(bald, _gs(99, true)),
 		DlcKatalog.STATUS_KOMMT_BALD,
 		"kommt_bald bleibt kommt_bald — egal welcher Spielstand"
+	)
+	# G5/P25: McGooby Welle A ist ohne Kauf-Gate installiert.
+	assert_eq(
+		DlcKatalog.status_fuer(DlcKatalog.eintrag("mcgooby"), _gs(1, false)),
+		DlcKatalog.STATUS_INSTALLIERT,
+		"mcgooby: Probeschicht frei — installiert ab Level 1"
 	)
 
 
@@ -149,10 +165,18 @@ func test_aktions_und_routen_mapping() -> void:
 	assert_eq(DlcKatalog.aktion_fuer(ranch, _gs(20, true)), DlcKatalog.AKTION_HOF)
 	assert_eq(DlcKatalog.aktion_fuer(ranch, _gs(15, false)), DlcKatalog.AKTION_ANGEBOT)
 	assert_eq(DlcKatalog.aktion_fuer(ranch, _gs(10, false)), DlcKatalog.AKTION_GESPERRT)
-	for id: String in ["goo_und_bye", "mcgooby"]:
-		var dlc := DlcKatalog.eintrag(id)
-		assert_eq(str(dlc.get("route", "")), "", "%s: noch keine Route" % id)
-		assert_eq(DlcKatalog.aktion_fuer(dlc, _gs(99, false)), DlcKatalog.AKTION_BALD)
+	# G5/P24: „Goo und Bye“ hängt am Ranch-Muster (Angebot ab Level 12).
+	var goobye := DlcKatalog.eintrag("goo_und_bye")
+	assert_eq(str(goobye.get("route", "")), "goobye_angebot", "Goobye-Angebots-Route")
+	assert_eq(DlcKatalog.aktion_fuer(goobye, _gs(12, false)), DlcKatalog.AKTION_ANGEBOT)
+	assert_eq(DlcKatalog.aktion_fuer(goobye, _gs(11, false)), DlcKatalog.AKTION_GESPERRT)
+	# G5/P25: McGooby installiert → Hof-Aktion (Schicht) mit eigener Route.
+	var mcgooby := DlcKatalog.eintrag("mcgooby")
+	assert_eq(str(mcgooby.get("route", "")), "mcgooby_schicht", "mcgooby: Schicht-Route")
+	assert_eq(DlcKatalog.aktion_fuer(mcgooby, _gs(1, false)), DlcKatalog.AKTION_HOF)
+	# Kommt-bald-Aktions-Zweig über synthetischen Eintrag.
+	var zukunft := {"id": "zukunft", "status": "kommt_bald"}
+	assert_eq(DlcKatalog.aktion_fuer(zukunft, _gs(99, false)), DlcKatalog.AKTION_BALD)
 
 
 func test_unlock_text_ranch_aus_balance_pack() -> void:
@@ -188,14 +212,60 @@ func test_screen_smoke_drei_karten_und_details() -> void:
 	assert_true(knopf != null and not knopf.disabled, "Aktions-Knopf aktiv")
 	assert_eq(knopf.text, I18nService.t("dlc.knopf.zur_ranch"))
 	detail.queue_free()
-	# kommt_bald → knuffiger Hammer-Hinweis statt Knopf.
-	var bald := screen.oeffne_detail("mcgooby")
+	# G5/P25: McGooby installiert → „Schürze umbinden“-Knopf statt Hinweis.
+	var schicht := screen.oeffne_detail("mcgooby")
+	var schicht_knopf: Button = schicht.get_meta(DlcScreen.META_AKTION, null)
+	assert_true(schicht_knopf != null and not schicht_knopf.disabled, "Schicht-Knopf aktiv")
+	assert_eq(schicht_knopf.text, I18nService.t("dlc_mcgooby.knopf.schicht"))
+	schicht.queue_free()
+	screen.queue_free()
+	await wait_frames(1)
+
+
+## Kommt-bald-Sheet (Hammer-Gag statt Knopf) über eine Registry-Attrappe —
+## seit G5/P25 trägt kein echter Pack-Eintrag mehr diesen Status.
+class FakeRegistry:
+	extends RefCounted
+	var items: Array = []
+
+	func get_items(_domain: String) -> Array:
+		return items
+
+
+func test_screen_kommt_bald_zeigt_hammer_hinweis() -> void:
+	var registry := FakeRegistry.new()
+	registry.items = [
+		{
+			"id": "zukunft",
+			"name": "Zukunft",
+			"status": "kommt_bald",
+			"cover": "res://assets/dlc/mcgooby.png",
+			"teaser_de": "Bald.",
+			"teaser_en": "Soon.",
+			"unlock_de": "In Arbeit",
+			"unlock_en": "In the works",
+			"features_de": ["Eins", "Zwei", "Drei"],
+			"features_en": ["One", "Two", "Three"],
+			"route": ""
+		}
+	]
+	DlcKatalog.registry_override = registry
+	DlcKatalog.reset_cache()
+	var screen := DlcScreen.new()
+	screen.gs_override = _gs(20, false)
+	screen.auto_navigate = false
+	tree.root.add_child(screen)
+	await wait_frames(2)
+	var bald := screen.oeffne_detail("zukunft")
 	var hinweis: Label = bald.get_meta(DlcScreen.META_BALD, null)
 	assert_true(hinweis != null, "Kommt-bald-Hinweis sitzt")
-	assert_true(hinweis.text.contains("🔨"), "Hammer-Gag im Hinweis")
+	if hinweis != null:
+		assert_true(hinweis.text.contains("🔨"), "Hammer-Gag im Hinweis")
 	assert_false(bald.has_meta(DlcScreen.META_AKTION), "kein Aktions-Knopf bei kommt_bald")
 	bald.queue_free()
 	screen.queue_free()
+	DlcKatalog.registry_override = null
+	DlcKatalog.reset_cache()
 	await wait_frames(1)
 
 
@@ -214,8 +284,11 @@ func test_settings_sektion_baut_karte_und_knopf() -> void:
 	assert_eq(knopf.text, I18nService.t("dlc.settings_knopf"))
 	var info: Label = card.find_child("DlcInfo", true, false)
 	assert_true(info != null, "Info-Zeile existiert")
-	assert_true(
-		info.text.contains("1") and info.text.contains("2"), "Zähler: 1 spielbar · 2 in Arbeit"
+	# G5/P24+P25: alle drei Einträge spielbar, nichts mehr in Arbeit.
+	assert_eq(
+		info.text,
+		I18nService.t("dlc.settings_info", {"spielbar": 3, "bald": 0}),
+		"Zähler: 3 spielbar · 0 in Arbeit"
 	)
 	host.queue_free()
 	await wait_frames(1)

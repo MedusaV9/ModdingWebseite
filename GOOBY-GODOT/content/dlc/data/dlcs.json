@@ -27,12 +27,12 @@
 		{
 			"id": "goo_und_bye",
 			"name": "Goo und Bye",
-			"status": "kommt_bald",
+			"status": "verfuegbar",
 			"cover": "res://assets/dlc/goo_und_bye.png",
 			"teaser_de": "Onkel Alwin hängt seine Schürze an den Nagel — und drückt Gooby einen Schlüssel in die Pfote, der größer ist als sein Kopf. Was aus dem leeren Eckladen mit dem lustigen Namen wird, entscheidest du: Regal für Regal, Möhre für Möhre, Piep für Piep.",
 			"teaser_en": "Uncle Alwin is hanging up his apron — and presses a key into Gooby's paw that's bigger than his head. What becomes of the empty corner store with the funny name is up to you: shelf by shelf, carrot by carrot, beep by beep.",
-			"unlock_de": "In Arbeit — erscheint mit einem späteren Update",
-			"unlock_en": "In the works — arriving with a future update",
+			"unlock_de": "Ab Level {level} · {preis} Münzen",
+			"unlock_en": "From level {level} · {preis} coins",
 			"features_de": [
 				"Dein eigener Supermarkt: Regale stellen, Sortiment listen, Preise machen — das Layout ist das Spielbrett",
 				"Ware wirklich transportieren: mit dem eigenen Auto zum Großmarkt, mit dem Garten als Bio-Quelle",
@@ -45,17 +45,17 @@
 				"Four adorable staff members with lives of their own — from the dozing cashier to the can-tower architect",
 				"Friends REALLY shop at your store, and the register beeps your very own babble tune"
 			],
-			"route": ""
+			"route": "goobye_angebot"
 		},
 		{
 			"id": "mcgooby",
 			"name": "McGooby",
-			"status": "kommt_bald",
+			"status": "verfuegbar",
 			"cover": "res://assets/dlc/mcgooby.png",
 			"teaser_de": "In der Stadt duftet es neuerdings verdächtig nach Pommes — und über einem leeren Eckgrundstück hängen zwei goldene Bögen, die bei genauem Hinsehen aussehen wie Löffel mit Ohren. Gooby bindet sich die Schürze um: Bald hat hier jemand seinen eigenen Laden.",
 			"teaser_en": "Lately the city smells suspiciously of fries — and above an empty corner lot hang two golden arches that, on closer inspection, look like spoons with ears. Gooby is tying on his apron: soon somebody around here will have a place of their own.",
-			"unlock_de": "In Arbeit — erscheint mit einem späteren Update",
-			"unlock_en": "In the works — arriving with a future update",
+			"unlock_de": "Probeschicht frei — einfach Schürze umbinden!",
+			"unlock_en": "Trial shift unlocked — just tie on the apron!",
 			"features_de": [
 				"Dein eigener Fast-Food-Laden: Menü festlegen, Preise machen, Gastraum frei einrichten",
 				"Der Bestell-Rush als echtes Geschicklichkeits-Spiel: wenden, belegen, frittieren, mixen",
@@ -68,7 +68,7 @@
 				"A drive-thru for your own car — and GOOBERANDO delivers your burgers",
 				"Co-op shifts with friends and adorable regulars, from the mayor to the monocle critic"
 			],
-			"route": ""
+			"route": "mcgooby_schicht"
 		}
 	]
 }

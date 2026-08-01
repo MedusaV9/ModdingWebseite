@@ -9,7 +9,8 @@ extends Control
 ## Features-Stichpunkte, Unlock-Info) mit Aktions-Knopf: Ranch verfügbar →
 ## bestehendes Angebots-Sheet (RanchOffer.zeige), Ranch gekauft →
 ## „Losreiten!“ (RanchRouten.fahre_zum_hof), kommt_bald → knuffiger
-## „Gooby arbeitet dran…“-Hinweis mit Hammer-Gag. Daten: DlcKatalog
+## „Gooby arbeitet dran…“-Hinweis mit Hammer-Gag. G5/P24: „Goo und Bye“
+## hängt nach demselben Muster dran (GoobyeOffer/GoobyeRouten). Daten: DlcKatalog
 ## (Pack `content/dlc/`, updatebar). Sanfte Parallax-Neigung der Cover
 ## beim Scroll — bei Reduced-Motion komplett aus.
 ## Erreichbar über Route `dlc` (Settings → Sektion „DLC“, DlcSektion).
@@ -286,18 +287,21 @@ func _detail_inhalt(sheet: PanelSheet, dlc: Dictionary) -> Control:
 
 
 ## Aktionsbereich unterm Detail: je Anzeige-Status Knopf oder Hinweis.
+## G5/P24: die Knöpfe kennen jetzt die DLC-Id — die Ranch behält ihre
+## Texte/Flows, „Goo und Bye“ hängt sich nach demselben Muster daneben.
 func _baue_detail_aktion(sheet: PanelSheet, dlc: Dictionary, box: VBoxContainer) -> void:
+	var id := str(dlc.get("id", ""))
 	match DlcKatalog.aktion_fuer(dlc, _gs):
 		DlcKatalog.AKTION_HOF:
-			var los := _aktion_knopf(box, &"BtnLeaf", I18nService.t("dlc.knopf.losreiten"))
-			los.pressed.connect(func() -> void: _losreiten(sheet))
+			var los := _aktion_knopf(box, &"BtnLeaf", _spielen_text(id))
+			los.pressed.connect(_starte_dlc.bind(sheet, id))
 			sheet.set_meta(META_AKTION, los)
 		DlcKatalog.AKTION_ANGEBOT:
-			var hin := _aktion_knopf(box, &"BtnTeal", I18nService.t("dlc.knopf.zur_ranch"))
-			hin.pressed.connect(func() -> void: _zum_angebot(sheet))
+			var hin := _aktion_knopf(box, &"BtnTeal", _angebot_text(id))
+			hin.pressed.connect(_zum_angebot.bind(sheet, id))
 			sheet.set_meta(META_AKTION, hin)
 		DlcKatalog.AKTION_GESPERRT:
-			var zu := _aktion_knopf(box, &"BtnTeal", I18nService.t("dlc.knopf.zur_ranch"))
+			var zu := _aktion_knopf(box, &"BtnTeal", _angebot_text(id))
 			zu.disabled = true
 			sheet.set_meta(META_AKTION, zu)
 			var gate := Label.new()
@@ -330,20 +334,47 @@ func _aktion_knopf(box: VBoxContainer, variation: StringName, text: String) -> S
 	return knopf
 
 
-## „Losreiten!“: direkt auf den Hof (Route registriert RanchRouten selbst).
-func _losreiten(sheet: PanelSheet) -> void:
+## Spielen-Knopf-Text je DLC („Losreiten!“ / „Laden aufschließen!“).
+func _spielen_text(id: String) -> String:
+	if id == "mcgooby":
+		return I18nService.t("dlc_mcgooby.knopf.schicht")
+	if id == "goo_und_bye":
+		return I18nService.t("dlc_goobye.knopf.zum_laden")
+	return I18nService.t("dlc.knopf.losreiten")
+
+
+## Angebots-Knopf-Text je DLC („Zur Ranch“ / „Schlüssel ansehen“).
+func _angebot_text(id: String) -> String:
+	if id == "goo_und_bye":
+		return I18nService.t("dlc_goobye.knopf.angebot")
+	return I18nService.t("dlc.knopf.zur_ranch")
+
+
+## Installiert → direkt ins DLC (Routen registrieren die DLCs selbst).
+func _starte_dlc(sheet: PanelSheet, id: String) -> void:
 	sheet.close()
 	sheet.queue_free()
-	if auto_navigate:
+	if not auto_navigate:
+		return
+	if id == "mcgooby":
+		McGoobyRouten.fahre_zur_schicht(get_tree())
+		return
+	if id == "goo_und_bye":
+		GoobyeRouten.fahre_zum_laden(get_tree())
+	else:
 		RanchRouten.fahre_zum_hof(get_tree())
 
 
-## „Zur Ranch“: der BESTEHENDE Angebots-Flow (Preis + Jetzt/Später) —
-## RanchOffer prüft Level/Kaufstand selbst noch einmal (fail-closed).
-func _zum_angebot(sheet: PanelSheet) -> void:
+## Verfügbar → der jeweilige Angebots-Flow (Preis + Jetzt/Später) —
+## Ranch-/GoobyeOffer prüfen Level/Kaufstand selbst noch einmal
+## (fail-closed).
+func _zum_angebot(sheet: PanelSheet, id: String) -> void:
 	sheet.close()
 	sheet.queue_free()
-	RanchOffer.zeige(self, _gs)
+	if id == "goo_und_bye":
+		GoobyeOffer.zeige(self, _gs)
+	else:
+		RanchOffer.zeige(self, _gs)
 
 
 ## ---------------------------------------------------------------- Anzeige
