@@ -9,6 +9,10 @@ extends CanvasLayer
 ## - Vollbild-Artwork (assets/boot/boot_cover.png, 16:9): Querformat füllt,
 ##   Hochkant croppt sanft mit Fokus auf Gooby (BootPhasen.cover_layout);
 ##   greift der Zoom-Deckel, füllt die Randfarbe AUS dem Bild (nie schwarz).
+##   W16/BOOTPERF (E2): das 2,7-MB-Artwork lädt THREADED statt synchron im
+##   ersten Frame — bis es da ist, deckt die gebackene Randfarbe
+##   (BootPhasen.RANDFARBE_FALLBACK, aus demselben Bild gemittelt) den
+##   Bildschirm; die Laufzeit-Messung per get_image() entfällt komplett.
 ## - Unten: Möhren-Ladebalken (BootLadebalken) mit ECHTEM Phasen-Fortschritt
 ##   (main.gd meldet BootPhasen-Prozente) + rotierende knuffige Lade-Sprüche
 ##   (loading.boot.sprueche, deterministische Rotation je Seed).
@@ -158,9 +162,10 @@ func _build() -> void:
 	_artwork.stretch_mode = TextureRect.STRETCH_SCALE
 	_artwork.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_artwork.material = _wipe_material
-	if ResourceLoader.exists(COVER_PFAD):
-		_artwork.texture = load(COVER_PFAD)
-	_hintergrund.color = _randfarbe_aus_textur()
+	# Randfarbe SOFORT (gebackener Mittelwert der Randpixel desselben Bildes,
+	# s. BootPhasen.RANDFARBE_FALLBACK) — kein get_image()-CPU-Roundtrip mehr.
+	_hintergrund.color = BootPhasen.RANDFARBE_FALLBACK
+	_artwork_laden()
 	_root.add_child(_artwork)
 	_build_unten()
 	_root.resized.connect(_layout_anwenden)
@@ -220,24 +225,49 @@ func _viewport_groesse() -> Vector2:
 	return vp.get_visible_rect().size if vp != null else Vector2(1280, 720)
 
 
+## W16/BOOTPERF (E8): Sprüche über den Domain-Teillade-Pfad holen — der
+## erste Frame parst so NUR strings/<locale>/loading.json statt aller
+## 77 Locale-Dateien (Ergebnis identisch, s. I18nService.items_aus_domain).
 func _naechster_spruch() -> void:
-	var sprueche := I18nService.items(SPRUECHE_KEY)
+	var sprueche := I18nService.items_aus_domain("loading", SPRUECHE_KEY)
 	var index := BootPhasen.spruch_index(_spruch_schritt, sprueche.size(), spruch_seed)
 	_spruch_schritt += 1
 	if index >= 0 and _spruch_label != null:
 		_spruch_label.text = str(sprueche[index])
 
 
-## Randfarbe aus dem geladenen Artwork messen; nicht lesbare Textur
-## (VRAM-komprimiert) → gebackener Fallback (ebenfalls aus dem Bild gemittelt).
-func _randfarbe_aus_textur() -> Color:
-	if _artwork == null or _artwork.texture == null:
-		return BootPhasen.RANDFARBE_FALLBACK
-	var img := _artwork.texture.get_image()
-	if img != null and img.is_compressed():
-		if img.decompress() != OK:
-			return BootPhasen.RANDFARBE_FALLBACK
-	return BootPhasen.randfarbe(img)
+## W16/BOOTPERF (E2a): Artwork threaded anfordern statt synchron dekodieren —
+## der größte Einzelblocker des ersten Frames (2,7-MB-PNG lossless) wandert
+## damit vom Main-Thread in den ResourceLoader-Pool. Cache-Hit (Soft-Restart,
+## Tests) → sofort setzen; Request-Fehler → heutiges Synchron-Verhalten.
+func _artwork_laden() -> void:
+	if not ResourceLoader.exists(COVER_PFAD):
+		return
+	if ResourceLoader.has_cached(COVER_PFAD):
+		_artwork.texture = load(COVER_PFAD)
+		return
+	if ResourceLoader.load_threaded_request(COVER_PFAD) != OK:
+		_artwork.texture = load(COVER_PFAD)
+		return
+	_artwork_abwarten()
+
+
+## Poll-Schleife des threaded Artwork-Loads: setzt die Textur, sobald sie da
+## ist (1–3 Frames nach dem ersten Pixel, unauffällig hinter der identischen
+## Randfarbe). _layout() rechnet ohne Textur mit den echten Bildmaßen
+## (1920×1080) — es gibt also keinen Layout-Sprung beim Eintreffen.
+func _artwork_abwarten() -> void:
+	while is_inside_tree():
+		var status := ResourceLoader.load_threaded_get_status(COVER_PFAD)
+		if status == ResourceLoader.THREAD_LOAD_IN_PROGRESS:
+			await get_tree().process_frame
+			continue
+		if status == ResourceLoader.THREAD_LOAD_LOADED:
+			var tex := ResourceLoader.load_threaded_get(COVER_PFAD)
+			if tex is Texture2D and _artwork != null:
+				_artwork.texture = tex
+				_layout_anwenden()
+		return
 
 
 ## Kleiner Konfetti-Puff auf Gooby zentriert (nur im animierten Pfad —

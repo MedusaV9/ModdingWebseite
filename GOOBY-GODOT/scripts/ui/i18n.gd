@@ -19,6 +19,9 @@ const STRINGS_DIR := "res://strings"
 static var _instance: I18nService
 static var _locale: String = DEFAULT_LOCALE
 static var _tables: Dictionary = {}
+## W16/BOOTPERF: Teiltabellen einzelner Domain-Dateien ("<locale>/<domain>"),
+## damit der erste Frame nicht die komplette Locale (77 Dateien) parsen muss.
+static var _domain_tables: Dictionary = {}
 
 
 func _ready() -> void:
@@ -51,6 +54,26 @@ static func has_key(key: String) -> bool:
 	return _lookup(key) != null
 
 
+## W16/BOOTPERF (B3/E8): Array-Wert aus GENAU EINER Domain-Datei
+## (`strings/<locale>/<domain>.json`) — für den allerersten Frame des
+## Boot-Covers, der nur die Sprüche aus loading.json braucht. Verhält sich
+## wie items(): dieselbe Datei, dieselbe Flatten-Logik, gleiche
+## DE-Fallback-Kette; ist die volle Tabelle schon im Cache oder fehlt der
+## Key in der Domain-Datei, übernimmt der normale items()-Pfad (inklusive
+## seiner Fehlermeldungen). Der spätere Voll-Load bleibt unverändert.
+static func items_aus_domain(domain: String, key: String) -> Array:
+	if _tables.has(_locale):
+		return items(key)
+	var locales: Array[String] = [_locale]
+	if _locale != DEFAULT_LOCALE:
+		locales.append(DEFAULT_LOCALE)
+	for locale in locales:
+		var value: Variant = _domain_table(locale, domain).get(key)
+		if value is Array:
+			return value
+	return items(key)
+
+
 static func get_locale() -> String:
 	return _locale
 
@@ -76,6 +99,7 @@ static func table(locale: String) -> Dictionary:
 ## Cache leeren (Tests / Hot-Reload nach Pack-Update).
 static func reset_cache() -> void:
 	_tables.clear()
+	_domain_tables.clear()
 
 
 static func _lookup(key: String) -> Variant:
@@ -87,6 +111,15 @@ static func _lookup(key: String) -> Variant:
 		if fallback.has(key):
 			return fallback[key]
 	return null
+
+
+static func _domain_table(locale: String, domain: String) -> Dictionary:
+	var cache_key := "%s/%s" % [locale, domain]
+	if not _domain_tables.has(cache_key):
+		var flat: Dictionary = {}
+		_merge_file(flat, "%s/%s/%s.json" % [STRINGS_DIR, locale, domain])
+		_domain_tables[cache_key] = flat
+	return _domain_tables[cache_key]
 
 
 static func _load_locale(locale: String) -> Dictionary:

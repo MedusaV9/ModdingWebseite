@@ -7,8 +7,10 @@ extends Node
 ## 1. "packs"  — PackLoader hat die Content-Packs gemountet (Autoload, VOR dem
 ##               ersten Frame; hier wird nur das Ergebnis geprüft + gemeldet).
 ## 2. "save"   — GameState hat den Spielstand geladen (ebenfalls Autoload).
-## 3. "welt"   — threaded Load des Zuhause-Einstiegs (ECHTER
-##               ResourceLoader-Sub-Fortschritt, kein Fake).
+## 3. "welt"   — threaded Load des Zuhause-Einstiegs PLUS Warmup-Liste
+##               (W16/BOOTPERF: Wohnzimmer, HUD, Gooby-Rig, Home-Musik) —
+##               ECHTER, gewichteter ResourceLoader-Sub-Fortschritt, kein
+##               Fake; die späteren Synchron-Loads werden Cache-Hits.
 ## 4. "einrichten" — HomeEntry instanzieren (Routen, HUD, Onboarding-Check).
 ## 5. "zuhause" — die erste Router-Reise ins Wohnzimmer (Sub-Fortschritt aus
 ##               den Router-State-Meilensteinen); frische Saves brechen hier
@@ -22,9 +24,30 @@ const ENTRY_SCENE_PATH := "res://scenes/home/home_entry.tscn"
 ## Force-Reveal-Deckel der letzten Phase (Web-Veil: HARD_TIMEOUT_MS 8 s +
 ## Puffer für langsame Erst-Importe auf Altgeräten).
 const ZUHAUSE_TIMEOUT_MS := 15_000
+## W16/BOOTPERF (E3): Warmup-Ziele der "welt"-Phase neben dem Einstieg —
+## genau die Pfade, die später sonst SYNCHRON auf dem Main-Thread laden
+## (Befund B6): hud.tscn (home_entry._build_hud), Wohnzimmer-Szene (erste
+## Router-Reise; "living" spiegelt HomeEntry.START_ROOM — KEIN direkter
+## HomeEntry-Verweis, sonst zöge main.gd dessen Klassengraph in den Compile),
+## gooby.glb (gooby_rig.gd) und der Home-Musik-Track (music_director.gd,
+## fällt sonst exakt in den Reveal-Moment). Gewichte = grobe Kostenanteile
+## für den Balken-Sub-Fortschritt (Summe 1.0; Einstieg dominiert, weil sein
+## Skript-Klassengraph die reale Last der Phase ist).
+const WARMUP_ENTRY_GEWICHT := 0.55
+const WARMUP_START_ROOM := "living"
+const WARMUP_EXTRAS: Array[Dictionary] = [
+	{"pfad": "res://scripts/ui/hud.tscn", "gewicht": 0.07},
+	{"pfad": "res://assets/character/gooby.glb", "gewicht": 0.10},
+]
+const WARMUP_RAUM_GEWICHT := 0.13
+const WARMUP_MUSIK_GEWICHT := 0.15
 
 var _cover: BootCoverScreen
 var _zuhause_aktiv := false
+## Referenzen auf fertig geladene Warmup-Ressourcen — hält sie im
+## ResourceLoader-Cache, bis die echten Verbraucher (HUD/Raum/Rig/Musik)
+## eigene Referenzen besitzen; wird nach der Cover-Öffnung geleert.
+var _warmup_refs: Dictionary = {}
 
 @onready var world: Node3D = $World
 
@@ -56,12 +79,28 @@ func _boot() -> void:
 	await get_tree().process_frame
 	if not is_inside_tree():
 		return
+	# W16/BOOTPERF (E1/B10): Die erste Router-Reise läuft KOMPLETT unsichtbar
+	# hinterm Boot-Cover (Layer 120 > Veil 100) — die 600-ms-Anti-Flacker-
+	# Mindestanzeige des Veils wäre hier reine Wartezeit auf schnellen
+	# Geräten. Nur für die Boot-Reise nullen (das Cover übernimmt die
+	# Anti-Flacker-Rolle selbst) und danach zurücksetzen; der Default 600
+	# für normale, sichtbare Reisen bleibt unverändert (test_loading_regeln).
+	var boot_router := get_node_or_null("/root/SceneRouter")
+	var min_shown_normal := -1
+	if boot_router != null and "min_shown_ms" in boot_router:
+		min_shown_normal = boot_router.min_shown_ms
+		boot_router.min_shown_ms = 0
 	add_child(packed.instantiate())
 	_cover.set_progress(BootPhasen.prozent("einrichten", 1.0))
 	await _warte_auf_zuhause()
+	if boot_router != null and min_shown_normal >= 0:
+		boot_router.min_shown_ms = min_shown_normal
 	if not is_inside_tree():
 		return
 	await _cover_oeffnen()
+	# Die Verbraucher halten jetzt eigene Referenzen (bzw. beim Onboarding-
+	# Abbruch verhält sich der nächste Load wie heute) — Cache-Anker lösen.
+	_warmup_refs.clear()
 
 
 ## Phase 1+2 liefen als Autoloads vor dem ersten Frame: nur die Ergebnisse
@@ -73,28 +112,90 @@ func _melde_autoload_phasen() -> void:
 	_cover.set_progress(BootPhasen.prozent("save", 1.0 if gs != null else 0.0))
 
 
-## Zuhause-Einstieg threaded laden; der ECHTE Lade-Fortschritt des
-## ResourceLoaders speist die "welt"-Phase des Balkens.
+## W16/BOOTPERF (E3): die Warmup-Liste der "welt"-Phase — Einstieg zuerst,
+## danach nur Extras, die wirklich existieren (fehlende Dateien fallen still
+## aus der Liste = heutiges Verhalten ohne Warmup). Statisch für den Test.
+static func warmup_ziele() -> Array[Dictionary]:
+	var ziele: Array[Dictionary] = [{"pfad": ENTRY_SCENE_PATH, "gewicht": WARMUP_ENTRY_GEWICHT}]
+	var extras: Array[Dictionary] = []
+	for extra in WARMUP_EXTRAS:
+		extras.append(extra.duplicate())
+	var raum := str(RoomDefs.route_table().get(RoomDefs.route_target(WARMUP_START_ROOM), ""))
+	extras.append({"pfad": raum, "gewicht": WARMUP_RAUM_GEWICHT})
+	var musik := MusicRegistry.path(MusicRegistry.track_for("home"))
+	extras.append({"pfad": musik, "gewicht": WARMUP_MUSIK_GEWICHT})
+	for extra in extras:
+		var pfad := str(extra["pfad"])
+		if pfad != "" and ResourceLoader.exists(pfad):
+			ziele.append(extra)
+	return ziele
+
+
+## Zuhause-Einstieg + Warmup-Liste threaded laden (W16/BOOTPERF E3); der
+## ECHTE, gewichtete Lade-Fortschritt ALLER Ziele speist die "welt"-Phase —
+## feine Granularität statt des load_steps=2-Sprungs, und die späteren
+## Synchron-Loads der Verbraucher werden Cache-Hits.
 func _lade_welt() -> PackedScene:
 	if ResourceLoader.load_threaded_request(ENTRY_SCENE_PATH) != OK:
 		var direkt := load(ENTRY_SCENE_PATH)
 		return direkt if direkt is PackedScene else null
+	var ziele := warmup_ziele()
+	var fertig: Dictionary = {}
+	for ziel in ziele:
+		var pfad := str(ziel["pfad"])
+		if pfad == ENTRY_SCENE_PATH:
+			continue
+		if ResourceLoader.has_cached(pfad):
+			_warmup_refs[pfad] = load(pfad)  # Cache-Hit, sofort fertig.
+			fertig[pfad] = true
+		elif ResourceLoader.load_threaded_request(pfad) != OK:
+			fertig[pfad] = true  # Kein Request möglich → wie heute ohne Warmup.
+	var sub_gemeldet := 0.0
 	while true:
 		if not is_inside_tree():
 			return null
+		var sub := _warmup_fortschritt(ziele, fertig)
+		# Nur vorwärts melden — die gewichtete Summe ist monoton, der Guard
+		# hält die Regel auch bei Rundungs-Rauschen ein.
+		if sub > sub_gemeldet:
+			sub_gemeldet = sub
+			_cover.set_progress(BootPhasen.prozent("welt", sub))
+		if fertig.has(ENTRY_SCENE_PATH):
+			if _warmup_refs.get(ENTRY_SCENE_PATH) == null:
+				return null  # Einstieg fehlgeschlagen → Fallback wie bisher.
+			if fertig.size() == ziele.size():
+				break
+		await get_tree().process_frame
+	_cover.set_progress(BootPhasen.prozent("welt", 1.0))
+	var res: Variant = _warmup_refs.get(ENTRY_SCENE_PATH)
+	return res if res is PackedScene else null
+
+
+## Gewichteter Gesamt-Fortschritt (0..1) aller Warmup-Ziele. Fertige Ziele
+## werden abgeholt (load_threaded_get) und in _warmup_refs verankert, damit
+## die späteren load()-Aufrufe der Verbraucher garantierte Cache-Hits sind;
+## fehlgeschlagene Ziele zählen als fertig (Fallback = heutiges Verhalten).
+func _warmup_fortschritt(ziele: Array[Dictionary], fertig: Dictionary) -> float:
+	var summe := 0.0
+	var gewicht_summe := 0.0
+	for ziel in ziele:
+		var pfad := str(ziel["pfad"])
+		var gewicht := float(ziel["gewicht"])
+		gewicht_summe += gewicht
+		if fertig.has(pfad):
+			summe += gewicht
+			continue
 		var fortschritt: Array = []
-		var status := ResourceLoader.load_threaded_get_status(ENTRY_SCENE_PATH, fortschritt)
+		var status := ResourceLoader.load_threaded_get_status(pfad, fortschritt)
 		if status == ResourceLoader.THREAD_LOAD_IN_PROGRESS:
 			if not fortschritt.is_empty():
-				_cover.set_progress(BootPhasen.prozent("welt", float(fortschritt[0])))
-			await get_tree().process_frame
+				summe += gewicht * clampf(float(fortschritt[0]), 0.0, 1.0)
 			continue
 		if status == ResourceLoader.THREAD_LOAD_LOADED:
-			_cover.set_progress(BootPhasen.prozent("welt", 1.0))
-			var res := ResourceLoader.load_threaded_get(ENTRY_SCENE_PATH)
-			return res if res is PackedScene else null
-		break
-	return null
+			_warmup_refs[pfad] = ResourceLoader.load_threaded_get(pfad)
+		fertig[pfad] = true
+		summe += gewicht
+	return summe / maxf(gewicht_summe, 0.0001)
 
 
 ## Letzte Phase: auf die erste abgeschlossene Router-Reise warten (Sub-
