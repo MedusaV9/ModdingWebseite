@@ -111,3 +111,37 @@ W16/G3-Politur P10 MG-CARROT; alle übrigen `mg.carrotGuard.*`-Keys bleiben beim
 MG-1-Owner in `mg_batch1.json`) | G3 P10 MG-CARROT | W16
 
 >> NEUE `mail.compose.verwerfen_frage`/`mail.compose.weiterschreiben`-Keys (Datei `strings/<locale>/g3_post.json` — Nachfrage-Karte des MailSheet-Compose-Guards; `mail.*` bleibt W13B-MAIL-Domain, Loader merged flach) | G3 P07 UI-POST | W16
+
+>> NEUE `mg.teaParty.intro`/`streak_banner`/`ende_zeit`/`ende_spills`-Keys (Datei
+`strings/<locale>/mg_tea.json` — Intro-/Serien-/Spill-/Ergebnis-Banner der W17/G4-Generalkur
+G4-TEA; die W2d-`mg.teaParty.*`-Bestandskeys bleiben in `mg.json`, Loader merged flach) | G4 G4-TEA | W17
+
+>> `mg.carrotCatch.intro` (Datei `strings/<locale>/mg_catch.json` — Intro-Banner der
+W17/G4-Politur G4-CATCH; alle übrigen `mg.carrotCatch.*`-Keys bleiben in `mg.json`
+beim Rahmen-Owner, Loader merged flach) | G4 CATCH | W17
+
+>> `g4travel.*` (Datei `strings/<locale>/g4_travel.json` — Reise-Strecke der G4-Politur:
+9/9-Fortschritts-Kapsel der Reise-App + Weltengooby-Feier-Karte; `travel.*`/`reisepass.*`/
+`raumstation.*` bleiben bei ihren Ownern, werden nur konsumiert) | G4 P16 UI-TRAVELAPP | W16
+
+>> NEUE `mg.danceParty.intro`/`perfect`/`good`-Keys (Datei `strings/<locale>/mg_dance.json`
+— Ziel-Banner + Hit-Quality-Popups der W17/G4-Politur G4-DANCE; die übrigen
+`mg.danceParty.*`-Bestandskeys bleiben beim MG-2-Owner in `mg_batch2.json`, Loader
+merged flach) | G4 DANCE | W17
+
+>> `mg.fishingPond.intro` (Datei `strings/<locale>/mg_pond.json` — Intro-Banner der
+W17/G4-Politur G4-POND; alle übrigen `mg.fishingPond.*`-Keys bleiben in `mg_batch2.json`
+beim MG-2-Owner, Loader merged flach) | G4 POND | W17
+
+>> NEUE `mg.bubblePop.intro`/`mg.bunnyHop.intro`-Keys (Datei `strings/<locale>/mg_himmel.json`
+— Intro-Banner der W17/G4-Politur G4-HIMMEL; alle übrigen `mg.bubblePop.*`/`mg.bunnyHop.*`-Keys
+bleiben beim MG-1-Owner in `mg_batch1.json`, Loader merged flach) | G4 HIMMEL | W17
+
+>> NEUE `mg.goalieGooby.intro`/`intro_lob`/`intro_roller`-Keys (Datei
+`strings/<locale>/mg_goalie.json` — Intro-Banner + Telegraph-Farb-Legende der W17/G4-Politur
+G4-GOALIE; alle übrigen `mg.goalieGooby.*`-Keys bleiben beim MG-2-Owner in `mg_batch2.json`,
+Loader merged flach) | G4 G4-GOALIE | W17
+
+>> `mg.rocketRescue.intro` (Datei `strings/<locale>/mg_rocket.json` — Intro-Banner der
+W17/G4-Politur G4-ROCKET; alle übrigen `mg.rocketRescue.*`-Keys bleiben beim MG-2-Owner
+in `mg_batch2.json`, Loader merged flach) | G4 G4-ROCKET | W17
