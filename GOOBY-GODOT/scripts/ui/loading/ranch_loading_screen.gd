@@ -8,15 +8,22 @@ extends Control
 ## Aufbau (komplett in Code, kein tscn — vermeidet Kollisionen mit der
 ## FROZEN Veil-Szene): Artwork als Cover-Hintergrund mit sanftem Ken-Burns-
 ## Drift, GOOBY-RANCH-Logo oben, unten Tipp + Ladebalken mit ECHTEM
-## threaded-Fortschritt (kein Fake — der Router speist set_progress) und ein
-## kleiner hoppelnder Gooby neben dem Balken. Reduced Motion friert Drift
-## und Gooby ein; der Fortschritt laeuft immer.
+## threaded-Fortschritt (kein Fake — der Router speist set_progress).
+## W16/G4: die Anzeigen konsumieren die G2-Karten-Bausteine des Alt-Web-
+## Looks — der Balken ist der Teal-Verlaufsbalken (LoadingVeilBalken), die
+## Laedt-Zeile zeigt „Laedt… NN%“ (Prozent nur bei echtem Fortschritt,
+## Web-Regel), und unten rechts huepft der runde Motiv-Sticker
+## (LoadingVeilSticker, winkender Gooby) statt des alten Vektor-Goobys.
+## Reduced Motion friert Drift und Sticker ein; der Fortschritt laeuft immer.
 
 const KEN_BURNS_SCALE := 1.06
 const KEN_BURNS_S := 9.0
 const SCRIM_ALPHA := 0.62
 const TEXT_HELL := Color(1.0, 0.985, 0.95)
 const TEXT_OUTLINE := Color(0.18, 0.12, 0.1, 0.9)
+## Sticker-Motiv (Web motif_gooby_wave, §2.5) — fehlt das Bild, bleibt der
+## Sticker-Kreis leer (Web-onerror-Verhalten der Veil-Karte).
+const MOTIV_PFAD := "res://assets/acui/motif_gooby_wave.png"
 
 var _artwork_id := ""
 var _animated := false
@@ -25,8 +32,9 @@ var _scrim: TextureRect
 var _logo: TextureRect
 var _tip_label: Label
 var _laedt_label: Label
-var _progress: ProgressBar
-var _gooby: LoadingVeilGooby
+var _laedt_basis := ""
+var _progress: LoadingVeilBalken
+var _gooby: LoadingVeilSticker
 var _ken_burns: Tween
 
 
@@ -66,17 +74,31 @@ func tip_text() -> String:
 
 
 ## ECHTER Fortschritt (0..1) vom threaded Preload des Routers — der Balken
-## zeigt nie mehr an, als wirklich geladen ist.
+## zeigt nie mehr an, als wirklich geladen ist. Die Laedt-Zeile haengt wie
+## im Web „ NN%“ an, solange echter Fortschritt laeuft (0<p<1).
 func set_progress(ratio: float) -> void:
 	_progress.value = clampf(ratio, 0.0, 1.0)
 	_progress.visible = ratio > 0.0 and ratio < 1.0
+	_update_laedt_zeile()
 
 
 func progress_wert() -> float:
 	return _progress.value
 
 
-## Gooby-Hopser + Ken-Burns an/aus (Reduced Motion: aus, Standbild).
+## „Laedt…“-Zeile wie im Web (loadingVeil.js progress()): Prozent NUR bei
+## echtem Fortschritt (0<p<1), sonst bleibt das nackte Label stehen.
+func _update_laedt_zeile() -> void:
+	if _laedt_label == null or _laedt_basis.is_empty():
+		return
+	var p := _progress.value
+	if p > 0.0 and p < 1.0:
+		_laedt_label.text = "%s %d%%" % [_laedt_basis, roundi(p * 100.0)]
+	else:
+		_laedt_label.text = _laedt_basis
+
+
+## Sticker-Hopser + Ken-Burns an/aus (Reduced Motion: aus, Standbild).
 func set_animated(an: bool) -> void:
 	_animated = an
 	_gooby.set_animated(an)
@@ -141,9 +163,10 @@ func _build_vordergrund() -> void:
 	add_child(unten)
 	_tip_label = _label("Tip", &"TitleLabel")
 	unten.add_child(_tip_label)
-	_progress = ProgressBar.new()
+	# G2-Baustein: Teal-Verlaufsbalken der Veil-Karte (LoadingVeilBalken
+	# stylt sich in _ready selbst — Pill-Track + 90-Grad-Verlauf, Web §2.3).
+	_progress = LoadingVeilBalken.new()
 	_progress.name = "Progress"
-	_progress.theme_type_variation = &"StatFun"
 	_progress.custom_minimum_size = Vector2(420.0, 14.0)
 	_progress.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	_progress.max_value = 1.0
@@ -152,15 +175,21 @@ func _build_vordergrund() -> void:
 	_progress.visible = false
 	unten.add_child(_progress)
 	_laedt_label = _label("Laedt", &"SoftLabel")
-	_laedt_label.text = I18nService.t("loading.laedt")
+	_laedt_basis = I18nService.t("loading.laedt")
+	_laedt_label.text = _laedt_basis
 	unten.add_child(_laedt_label)
-	_gooby = LoadingVeilGooby.new()
+	# G2-Baustein: runder Motiv-Sticker (weiss beringter Kreis + Bounce)
+	# ersetzt den alten Vektor-Gooby — gleiche set_animated-API.
+	_gooby = LoadingVeilSticker.new()
 	_gooby.name = "Gooby"
 	_gooby.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
-	_gooby.offset_left = -164.0
-	_gooby.offset_top = -150.0
+	_gooby.offset_left = -152.0
+	_gooby.offset_top = -140.0
 	_gooby.offset_right = -36.0
 	_gooby.offset_bottom = -24.0
+	if ResourceLoader.exists(MOTIV_PFAD):
+		_gooby.set_motiv(load(MOTIV_PFAD))
+	_gooby.set_animated(_animated)
 	add_child(_gooby)
 
 

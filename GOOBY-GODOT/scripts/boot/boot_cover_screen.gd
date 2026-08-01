@@ -13,9 +13,14 @@ extends CanvasLayer
 ##   ersten Frame — bis es da ist, deckt die gebackene Randfarbe
 ##   (BootPhasen.RANDFARBE_FALLBACK, aus demselben Bild gemittelt) den
 ##   Bildschirm; die Laufzeit-Messung per get_image() entfällt komplett.
-## - Unten: Möhren-Ladebalken (BootLadebalken) mit ECHTEM Phasen-Fortschritt
-##   (main.gd meldet BootPhasen-Prozente) + rotierende knuffige Lade-Sprüche
-##   (loading.boot.sprueche, deterministische Rotation je Seed).
+## - Unten (W16/G4, Alt-Web-Optik): eine Papier-Ladekarte im Stil der alten
+##   Web-Loading-Card (styles.css `.mg-loading-card`: Papier #FFFAF2,
+##   Radius 28, Hairline-Ring, Pop-Schatten) mit rotierendem Lade-Spruch
+##   (loading.boot.sprueche, deterministische Rotation je Seed, 200-ms-
+##   Crossfade wie die Web-Tipp-Zeile), dem Möhren-Ladebalken
+##   (BootLadebalken, ECHTER Phasen-Fortschritt aus main.gd) und der
+##   „Lädt… NN%“-Zeile (Prozent NUR bei echtem Fortschritt, Web-Regel).
+##   Reduced Motion friert Crossfade UND Balken-Gleiten ein (P22-Entscheid).
 ## - oeffne(): Übergangs-Animation ins Spiel — weiches Aufzoomen + Kreis-Wipe
 ##   auf Gooby zentriert + Konfetti-Puff; Reduced Motion: schlichter Fade.
 
@@ -24,25 +29,41 @@ signal geoeffnet
 const COVER_PFAD := "res://assets/boot/boot_cover.png"
 const SPRUCH_ROTATE_SEC := 2.6
 const SPRUECHE_KEY := "loading.boot.sprueche"
+const LAEDT_KEY := "loading.laedt"
+## Web .mg-loading-tip transition: 200-ms-Crossfade beim Spruch-Wechsel.
+const SPRUCH_FADE_S := 0.2
 const ZOOM_ZIEL := 1.07
 const WIPE_S := 0.55
 const FADE_S := 0.18
 const WIPE_KANTE := 0.09
 const KONFETTI_MENGE := 36
+## Web-Karten-Maße in Design-px (styles.css): Radius --card-radius-lg,
+## Spruch ≈ Titel-Typo (700), Lädt-Zeile 13/700 wie .mg-loading-hint.
+const KARTE_RADIUS := 28.0
+const SPRUCH_PX := 15
+const LAEDT_PX := 13
 
 ## Deterministische Spruch-Rotation: Tests/Screenshots pinnen den Seed;
 ## -1 = beim _ready aus der Uhr würfeln (jeder Boot fühlt sich frisch an).
 var spruch_seed := -1
+## Tests: Reduced-Motion-Override der View-Schicht (-1 = AppSettings fragen,
+## 0/1 = fest aus/an) — Muster wie LoadingVeil.stunde_override.
+var reduced_motion_override := -1
 
 var _root: Control
 var _hintergrund: ColorRect
 var _artwork: TextureRect
 var _unten: VBoxContainer
+var _karte: PanelContainer
 var _spruch_label: Label
+var _laedt_label: Label
+var _laedt_basis := ""
 var _balken: BootLadebalken
 var _spruch_timer: Timer
+var _spruch_tween: Tween
 var _wipe_material: ShaderMaterial
 var _spruch_schritt := 0
+var _reduced := false
 var _oeffnet := false
 
 
@@ -55,7 +76,7 @@ func _ready() -> void:
 	_naechster_spruch()
 	_spruch_timer = Timer.new()
 	_spruch_timer.wait_time = SPRUCH_ROTATE_SEC
-	_spruch_timer.timeout.connect(_naechster_spruch)
+	_spruch_timer.timeout.connect(_rotiere_spruch)
 	add_child(_spruch_timer)
 	_spruch_timer.start()
 
@@ -64,6 +85,7 @@ func _ready() -> void:
 func set_progress(ratio: float) -> void:
 	if _balken != null:
 		_balken.set_progress(ratio)
+	_update_laedt_zeile()
 
 
 func get_progress() -> float:
@@ -88,6 +110,7 @@ func oeffne(reduced_motion := false) -> void:
 	_oeffnet = true
 	if _spruch_timer != null:
 		_spruch_timer.stop()
+	_stoppe_spruch_fade()
 	AudioDirector.try_play(self, "travel_whoosh_auf")
 	if reduced_motion or BootPhasen.wipe_variante(reduced_motion) == "fade":
 		var fade := create_tween()
@@ -171,30 +194,53 @@ func _build() -> void:
 	_root.resized.connect(_layout_anwenden)
 
 
+## Die Papier-Ladekarte unten (W16/G4): Web-Loading-Card-Sprache — Papier,
+## Radius 28, Hairline-Ring, Pop-Schatten (wie loading_veil_karte.gd), darin
+## Spruch (Ink, 700), Möhren-Balken und die „Lädt… NN%“-Zeile (Ink-Soft).
 func _build_unten() -> void:
+	_reduced = _ist_reduced_motion()
+	var f := _skala()
 	_unten = VBoxContainer.new()
 	_unten.name = "Unten"
 	_unten.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
-	_unten.offset_top = -132.0
-	_unten.offset_bottom = -26.0
+	_unten.offset_left = 16.0
+	_unten.offset_right = -16.0
+	_unten.offset_top = -320.0 * f
+	_unten.offset_bottom = -24.0 * f
 	_unten.alignment = BoxContainer.ALIGNMENT_END
-	_unten.add_theme_constant_override("separation", 10)
 	_unten.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_root.add_child(_unten)
+	_karte = PanelContainer.new()
+	_karte.name = "Karte"
+	_karte.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_karte.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_karte.add_theme_stylebox_override("panel", _karten_stil(f))
+	_unten.add_child(_karte)
+	var box := VBoxContainer.new()
+	box.name = "KartenBox"
+	box.add_theme_constant_override("separation", int(round(8.0 * f)))
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_karte.add_child(box)
 	_spruch_label = Label.new()
 	_spruch_label.name = "Spruch"
-	_spruch_label.theme_type_variation = &"TitleLabel"
 	_spruch_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_spruch_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_spruch_label.add_theme_color_override("font_color", Color(1.0, 0.985, 0.95))
-	_spruch_label.add_theme_color_override("font_outline_color", Color(0.29, 0.23, 0.21, 0.9))
-	_spruch_label.add_theme_constant_override("outline_size", 7)
-	_unten.add_child(_spruch_label)
+	_label_stil(_spruch_label, SPRUCH_PX, 700, AcTokens.INK)
+	box.add_child(_spruch_label)
 	_balken = BootLadebalken.new()
 	_balken.name = "Balken"
-	_balken.custom_minimum_size = Vector2(420.0, 26.0)
+	_balken.custom_minimum_size = Vector2(420.0, 24.0 * f)
 	_balken.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	_unten.add_child(_balken)
+	# RM-Entscheid (P22): Reduced Motion friert auch das Balken-Gleiten ein
+	# (Anzeige springt aufs echte Ziel) — vorher wurde set_animated nie
+	# produktiv aufgerufen, nur die Cover-Öffnung fadete.
+	_balken.set_animated(not _reduced)
+	box.add_child(_balken)
+	_laedt_label = Label.new()
+	_laedt_label.name = "Laedt"
+	_laedt_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_label_stil(_laedt_label, LAEDT_PX, 700, AcTokens.INK_SOFT)
+	box.add_child(_laedt_label)
 
 
 ## Artwork nach der Crop-Mathe platzieren (auch bei Rotation/Resize).
@@ -207,8 +253,9 @@ func _layout_anwenden() -> void:
 	_artwork.size = rect.size
 	_artwork.scale = Vector2.ONE
 	if _balken != null:
-		var breite := clampf(_viewport_groesse().x * 0.56, 260.0, 520.0)
-		_balken.custom_minimum_size = Vector2(breite, 26.0)
+		var f := _skala()
+		var breite := clampf(_viewport_groesse().x * 0.56, 280.0, 560.0 * f)
+		_balken.custom_minimum_size = Vector2(breite, 24.0 * f)
 
 
 func _layout() -> Dictionary:
@@ -234,6 +281,90 @@ func _naechster_spruch() -> void:
 	_spruch_schritt += 1
 	if index >= 0 and _spruch_label != null:
 		_spruch_label.text = str(sprueche[index])
+
+
+## Spruch-Wechsel per 200-ms-Crossfade (Web .mg-loading-tip transition) —
+## Reduced Motion wechselt hart (Muster wie loading_veil._wechsle_tip_weich).
+func _rotiere_spruch() -> void:
+	if _reduced or _spruch_label == null or not is_inside_tree():
+		_naechster_spruch()
+		return
+	_stoppe_spruch_fade()
+	_spruch_tween = create_tween()
+	_spruch_tween.tween_property(_spruch_label, "modulate:a", 0.0, SPRUCH_FADE_S)
+	_spruch_tween.tween_callback(_naechster_spruch)
+	_spruch_tween.tween_property(_spruch_label, "modulate:a", 1.0, SPRUCH_FADE_S)
+
+
+func _stoppe_spruch_fade() -> void:
+	if _spruch_tween != null and _spruch_tween.is_valid():
+		_spruch_tween.kill()
+	_spruch_tween = null
+	if _spruch_label != null:
+		_spruch_label.modulate.a = 1.0
+
+
+## „Lädt… NN%“ wie im Web (loadingVeil.js progress()): Prozent NUR bei
+## echtem Fortschritt (0<p<1), sonst die nackte Zeile. Die Basis kommt LAZY
+## mit der ersten Fortschritts-Meldung (nach dem ersten Frame) —
+## I18nService.t() lädt die volle Locale-Tabelle und darf nicht in den
+## ersten Pixel (bootperf B3/E8; die Sprüche gehen den Domain-Teilpfad).
+func _update_laedt_zeile() -> void:
+	if _laedt_label == null:
+		return
+	if _laedt_basis.is_empty():
+		_laedt_basis = I18nService.t(LAEDT_KEY)
+	var p := get_progress()
+	if p > 0.0 and p < 1.0:
+		_laedt_label.text = "%s %d%%" % [_laedt_basis, roundi(p * 100.0)]
+	else:
+		_laedt_label.text = _laedt_basis
+
+
+## Reduced-Motion-Flag der View-Schicht (Balken-Gleiten + Spruch-Crossfade);
+## defensiv wie main.gd/scene_router.gd — die Öffnung bekommt ihr Flag
+## weiterhin von main über oeffne(reduced_motion).
+func _ist_reduced_motion() -> bool:
+	if reduced_motion_override >= 0:
+		return reduced_motion_override > 0
+	var settings := get_node_or_null("/root/AppSettings")
+	if settings != null and settings.has_method("is_reduced_motion"):
+		return settings.is_reduced_motion()
+	return false
+
+
+func _skala() -> float:
+	return UiScale.for_viewport(get_viewport())
+
+
+static func _karten_stil(f: float) -> StyleBoxFlat:
+	var stil := StyleBoxFlat.new()
+	stil.bg_color = AcTokens.PAPER
+	stil.set_corner_radius_all(int(round(KARTE_RADIUS * f)))
+	stil.set_border_width_all(maxi(1, int(round(f))))
+	stil.border_color = AcTokens.OUTLINE_SOFT
+	stil.shadow_color = AcTokens.SHADOW_COLOR
+	stil.shadow_size = int(round(15.0 * f))
+	stil.shadow_offset = Vector2(0.0, 10.0 * f)
+	stil.content_margin_left = 20.0 * f
+	stil.content_margin_right = 20.0 * f
+	stil.content_margin_top = 12.0 * f
+	stil.content_margin_bottom = 12.0 * f
+	return stil
+
+
+func _label_stil(label: Label, groesse: int, gewicht: int, farbe: Color) -> void:
+	var fs := UiScale.font_scale(get_viewport())
+	label.add_theme_font_override("font", _font(gewicht))
+	label.add_theme_font_size_override("font_size", int(round(groesse * fs)))
+	label.add_theme_color_override("font_color", farbe)
+
+
+static func _font(gewicht: int) -> FontVariation:
+	var variante := FontVariation.new()
+	variante.base_font = load(AcTokens.FONT_PATH)
+	variante.variation_opentype = {"wght": gewicht}
+	return variante
 
 
 ## W16/BOOTPERF (E2a): Artwork threaded anfordern statt synchron dekodieren —

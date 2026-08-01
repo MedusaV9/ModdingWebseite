@@ -22,11 +22,17 @@ extends RefCounted
 ## ECHTE Boot-Phasen in Reihenfolge, je mit End-Prozent (0..1).
 ## "packs"/"save" laufen als Autoloads VOR dem ersten Frame — main.gd prüft
 ## nur ihre Ergebnisse und meldet sie als abgeschlossen (ehrlich: sie SIND es).
+## W16/G4 (bootperf §4.3): Weil diese beiden Phasen nie live beobachtbar
+## sind, sprang der Balken früher sofort auf 22 % — die Gewichte sind jetzt
+## klein (je 4 %), damit die Balkenstrecke der real beobachtbaren Arbeit
+## gehört: "welt" (gewichteter threaded Warmup-Fortschritt, E3) und
+## "zuhause" (Router-Meilensteine). Nur die `bis`-Werte wurden umverteilt;
+## IDs, Reihenfolge, Monotonie und Ende 1.0 sind unverändert (Test-Contract).
 const PHASEN: Array[Dictionary] = [
-	{"id": "packs", "bis": 0.10},
-	{"id": "save", "bis": 0.22},
-	{"id": "welt", "bis": 0.62},
-	{"id": "einrichten", "bis": 0.74},
+	{"id": "packs", "bis": 0.04},
+	{"id": "save", "bis": 0.08},
+	{"id": "welt", "bis": 0.60},
+	{"id": "einrichten", "bis": 0.68},
 	{"id": "zuhause", "bis": 1.0},
 ]
 
