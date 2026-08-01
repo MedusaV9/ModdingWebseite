@@ -17,6 +17,15 @@ extends Node3D
 ## mit. Noten-Lesbarkeit: jede Note bekommt eine dunkle Rückscheibe und
 ## einen dickeren Halo — sie hebt sich damit auch von hellen Kegeln ab.
 ## Timing/Sim unverändert (zertifiziert).
+##
+## W17/G4-DANCE (M2/M5, NUR Präsentation): CLUB-SEITENWÄNDE mit
+## Neon-Lichtsäulen und zwei zusätzliche Wand-Scheinwerfer ziehen die Bühne
+## bis an die SICHTKANTE der aktuellen Orientierung — das Querformat zeigte
+## vorher links/rechts der Bahnen nur schwarze Flächen. layout() misst die
+## Kante aus Viewport + Wandtiefe ein; sync() nimmt einen optionalen
+## reduced-Schalter (Call-Site-Gate) und friert dann NUR die neue
+## Seiten-Lichtshow ein. intro_spot() fährt den Spot im musikalischen
+## Vorlauf hoch („Licht an“, M1) — Timing/Sim bleiben unberührt.
 
 const Stage3D := preload("res://scripts/minigames/games/_3dc_stage/stage3d.gd")
 const Actor := preload("res://scripts/minigames/games/_3da_stage/gooby_actor.gd")
@@ -24,6 +33,10 @@ const Fx := preload("res://scripts/minigames/games/_3db_stage/fx3d.gd")
 
 const CAM_DIST := 10.0
 const HALF_H := 4.2
+## W17/G4: Tiefe der Club-Seitenwände — HINTER den schwenkenden
+## Scheinwerferkegeln (z −3), vor der EQ-Wand (z −4,6): die Kegel streichen
+## sichtbar über die Wände statt hinter ihnen zu verschwinden.
+const WALL_Z := -4.0
 const LANE_COLORS: Array[Color] = [
 	Color(1.0, 0.48, 0.66),
 	Color(0.35, 0.79, 0.73),
@@ -71,6 +84,16 @@ var _crowd_spots: Array[Vector3] = []
 var _bunting: MultiMeshInstance3D
 var _bunting_y := 2.0
 var _bunting_half_w := 3.0
+## W17/G4 (M2/M5): Club-Seitenwände + Neon-Lichtsäulen + Wand-Scheinwerfer
+## für die (quer sonst schwarzen) Seitenflächen; Anker aus layout().
+var _walls: Array[MeshInstance3D] = []
+var _wall_strips: MultiMeshInstance3D
+var _side_cones: Array[MeshInstance3D] = []
+## Fußpunkte/Höhen der 6 Neon-Säulen (je Wand 3), von layout() eingemessen.
+var _strip_feet: Array[Vector3] = []
+var _strip_heights: Array[float] = []
+## Grund-Neigung der Wand-Scheinwerfer (zeigen zur Bühnenmitte).
+var _side_cone_tilt: Array[float] = [0.35, -0.35]
 
 
 func setup_stage() -> void:
@@ -243,6 +266,55 @@ func _build_club() -> void:
 	_spot.light_energy = 1.2
 	_spot.omni_range = 6.0
 	add_child(_spot)
+	_build_side_show()
+
+
+## W17/G4 (M2/M5): Club-Seitenwände, Neon-Lichtsäulen und zwei
+## Wand-Scheinwerfer — sie füllen die im Querformat schwarzen Seitenflächen.
+## Maße/Anker kommen aus layout(); bis dahin bleibt alles unsichtbar.
+func _build_side_show() -> void:
+	for _side in 2:
+		var wall := MeshInstance3D.new()
+		var wall_quad := QuadMesh.new()
+		wall_quad.size = Vector2.ONE
+		wall_quad.material = Fx.flat(Color(0.14, 0.09, 0.25))
+		wall.mesh = wall_quad
+		wall.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		wall.visible = false
+		add_child(wall)
+		_walls.append(wall)
+	_wall_strips = MultiMeshInstance3D.new()
+	var strip := BoxMesh.new()
+	strip.size = Vector3(0.11, 1.0, 0.07)
+	var strip_mat := Fx.glow(Color(1.0, 1.0, 1.0), 0.85)
+	strip_mat.vertex_color_use_as_albedo = true
+	strip.material = strip_mat
+	var strips := MultiMesh.new()
+	strips.transform_format = MultiMesh.TRANSFORM_3D
+	strips.use_colors = true
+	strips.mesh = strip
+	strips.instance_count = 6
+	for i in 6:
+		strips.set_instance_color(i, LANE_COLORS[i % 3])
+	_wall_strips.multimesh = strips
+	_wall_strips.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_wall_strips.visible = false
+	add_child(_wall_strips)
+	for side in 2:
+		var cone := MeshInstance3D.new()
+		var cone_mesh := CylinderMesh.new()
+		cone_mesh.top_radius = 0.09
+		cone_mesh.bottom_radius = 1.25
+		cone_mesh.height = 8.5
+		cone_mesh.radial_segments = 12
+		var mat := Fx.glass(Color(LANE_COLORS[side * 2], 0.05), true)
+		mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		cone_mesh.material = mat
+		cone.mesh = cone_mesh
+		cone.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		cone.visible = false
+		add_child(cone)
+		_side_cones.append(cone)
 
 
 ## Spiegelkugel: metallische Kugel + Aufhängung + Glitzer-Nieten.
@@ -559,6 +631,62 @@ func layout(lane_xs: Array[float], top_px: float, hit_px: float, span_px: float)
 		_build_bunting()
 	else:
 		_pose_bunting(0.0)
+	_layout_side_show(lane_xs, span_px, floor_y)
+
+
+## W17/G4 (M2/M5): Seitenwände/Neon-Säulen/Wand-Scheinwerfer an die
+## SICHTKANTE der aktuellen Orientierung legen — im Quer füllen sie die
+## vormals schwarzen Seitenflächen, hochkant schmiegen sie sich an den Rand.
+func _layout_side_show(lane_xs: Array[float], span_px: float, floor_y: float) -> void:
+	# Sichtbare Halbbreite an der Wandtiefe: die z=0-Kante wächst mit der
+	# Perspektive um (CAM_DIST − WALL_Z)/CAM_DIST.
+	var depth := (CAM_DIST - WALL_Z) / CAM_DIST
+	var edge: float = float(stage.half_width()) * depth + 0.4
+	var lane_w := span_px * 0.92 / _ppu()
+	var inner := absf(_wx(lane_xs[2])) + lane_w
+	var wall_w := maxf(0.8, edge - inner)
+	var wall_top := HALF_H * depth + 0.8
+	_strip_feet.clear()
+	_strip_heights.clear()
+	for side in 2:
+		var dir := -1.0 if side == 0 else 1.0
+		var wall := _walls[side]
+		(wall.mesh as QuadMesh).size = Vector2(wall_w, wall_top - floor_y)
+		wall.position = Vector3(dir * (inner + wall_w * 0.5), (wall_top + floor_y) * 0.5, WALL_Z)
+		wall.visible = true
+		for k in 3:
+			var f := (float(k) + 0.5) / 3.0
+			var x := dir * lerpf(inner + 0.25, inner + wall_w - 0.25, f)
+			_strip_feet.append(Vector3(x, floor_y + 0.1, WALL_Z + 0.12))
+			_strip_heights.append((wall_top - floor_y) * (0.42 + 0.14 * float(k % 2)))
+		var cone := _side_cones[side]
+		cone.position = Vector3(dir * (inner + wall_w * 0.45), _wy(_vp.y * 0.02), -2.2)
+		cone.visible = true
+	_wall_strips.visible = true
+	_pose_side_show(0.0, 0.0)
+
+
+## Seiten-Lichtshow posen: Neon-Säulen atmen im Takt, Wand-Scheinwerfer
+## schwenken zur Bühne. pulse/beat01 = 0 ⇒ Grundstellung (Reduced Motion).
+func _pose_side_show(pulse: float, beat01: float) -> void:
+	if _strip_feet.is_empty():
+		return
+	var strips := _wall_strips.multimesh
+	for i in _strip_feet.size():
+		var foot := _strip_feet[i]
+		var h := _strip_heights[i] * (1.0 + 0.18 * maxf(0.0, sin(pulse * 6.2 + float(i) * 1.9)))
+		strips.set_instance_transform(
+			i,
+			Transform3D(
+				Basis.IDENTITY.scaled(Vector3(1.0, h, 1.0)), foot + Vector3(0.0, h * 0.5, 0.0)
+			)
+		)
+	for side in _side_cones.size():
+		var cone := _side_cones[side]
+		var sway := sin(pulse * 0.55 + float(side) * PI) * 0.24
+		cone.rotation.z = _side_cone_tilt[side] + sway
+		var breathe := 1.0 + 0.2 * beat01
+		cone.scale = Vector3(breathe, 1.0, breathe)
 
 
 ## EQ-Balken neu posen (Grundstellung oder Takt-Tanz).
@@ -574,6 +702,8 @@ func _layout_eq(pulse: float, tier: int) -> void:
 
 
 ## Jeden Frame: sichtbare Noten (lane, y_px) aus dem Pool stellen, Takt tanzen.
+## reduced (W17/G4, Call-Site-Gate der Szene) friert NUR die neue
+## Seiten-Lichtshow ein — die zertifizierte Bestandsbühne bleibt unberührt.
 func sync(
 	visible_notes: Array[Dictionary],
 	flash: Array[float],
@@ -583,7 +713,8 @@ func sync(
 	ball_pop: float,
 	encore: bool,
 	pulse: float,
-	delta: float
+	delta: float,
+	reduced := false
 ) -> void:
 	stage.tick(delta)
 	gooby.tick(delta)
@@ -624,6 +755,10 @@ func sync(
 	_pulse_stage(tier, beat01, pulse, encore)
 	_pose_crowd(pulse)
 	_pose_bunting(pulse)
+	if reduced:
+		_pose_side_show(0.0, 0.0)
+	else:
+		_pose_side_show(pulse, beat01)
 
 
 ## Gooby tanzt WIRKLICH: Grund-Bob jeden Frame, auf jeden Beat ein Hüpfer
@@ -666,6 +801,22 @@ func _pulse_stage(tier: int, beat01: float, pulse: float, encore: bool) -> void:
 	_spot.light_color = glow
 	_spot.light_energy = 1.0 + 0.9 * beat01 + 0.5 * float(tier)
 	_encore_light.light_energy = (1.2 + 0.5 * sin(pulse * 10.0)) if encore else 0.0
+
+
+## W17/G4 (M1): „Licht an“ im musikalischen Vorlauf — NACH sync() aufrufen,
+## damit der Ramp die Takt-Werte des Frames übersteuert. f läuft 0 → 1;
+## bei 1 stehen Kegel-Skala/Reichweite auf den Spielwerten und der Spot
+## mitten im Puls-Band (1,0…1,9) — kein sichtbarer Ruck beim Übergang.
+func intro_spot(f: float) -> void:
+	var ramp := clampf(f, 0.0, 1.0)
+	ramp *= ramp
+	_spot.light_energy = lerpf(0.15, 1.6, ramp)
+	_spot.omni_range = lerpf(3.2, 6.0, ramp)
+	var cone_mix := lerpf(0.3, 1.0, ramp)
+	for cone in _cones:
+		cone.scale *= Vector3(cone_mix, 1.0, cone_mix)
+	for cone in _side_cones:
+		cone.scale *= Vector3(cone_mix, 1.0, cone_mix)
 
 
 func hit_fx(lane_x_px: float, perfect: bool) -> void:

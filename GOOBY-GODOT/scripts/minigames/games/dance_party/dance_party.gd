@@ -15,6 +15,15 @@ extends MinigameBase
 ## Bildschirm-Anker (lane_x/note_y) bleiben die 2D-Rechnung — die Bühne
 ## rechnet sie nur in Weltkoordinaten um. Nur die Zugabe-Einblendung bleibt
 ## als 2D-Overlay.
+##
+## W17/G4-Politur (NUR Präsentation, Sim/Timing zertifiziert unangetastet):
+## Hit-Quality-Popup „Perfekt!/Gut!“ am getroffenen Ring (M3/M7, farblich
+## gestuft), _ui-Skalierung des HUD samt Konturen, dunklen Plates und
+## Hint-Fade (M9/M7/M6), Zugabe-Banner auf Plate mit Kontur (M7) und ein
+## Intro, das am BESTEHENDEN musikalischen Vorlauf (song_time −2,4…0)
+## andockt: Ziel-Banner + „Spot an“ — KEIN zusätzliches Sim-Gate, der Lauf
+## bleibt zahlengleich. Eigene FX sind an der Call-Site Reduced-Motion-
+## gegatet. Die Club-Seitenwände (Quer-Füllung, M2/M5) leben in der Bühne.
 
 const Logic := preload("res://scripts/minigames/games/dance_party/dance_party_logic.gd")
 const Stage := preload("res://scripts/minigames/games/dance_party/dance_party_stage3d.gd")
@@ -24,6 +33,16 @@ const Timing := preload("res://scripts/minigames/games/dance_party/dance_timing.
 const HIT_LINE_FRAC := 0.74
 ## Höhe der Anflugstrecke als Anteil der Viewport-Höhe.
 const TRAVEL_FRAC := 0.66
+## W17 M9: Entwurfs-Kurzkante — alle HUD-Pixelmaße skalieren damit.
+const DESIGN_SHORT := 390.0
+## Dunkle Tinten-Kontur (M7): hebt die helle Club-Schrift von Kegeln/Glow ab.
+const OUTLINE_INK := Color(0.12, 0.07, 0.2, 0.92)
+## Lebensdauer eines Hit-Quality-Popups (s) — kurz, die nächste Note kommt.
+const HIT_POP_SEC := 0.75
+## Farbstufen der Trefferwertung (M3/M7): Gold = perfekt, Eisblau = gut
+## (dieselben Töne wie die Ring-Bursts — eine Farbsprache).
+const POP_PERFECT := Color(1.0, 0.85, 0.4)
+const POP_GOOD := Color(0.6, 0.85, 1.0)
 
 const FLOOR_DARK := Color(0.1, 0.07, 0.2)
 const FLOOR_LIGHT := Color(0.24, 0.14, 0.36)
@@ -60,6 +79,14 @@ var _score_label: Label
 var _combo_label: Label
 var _hint_label: Label
 var _stage: Node3D
+## W17 M9: HUD-Skalenfaktor (Kurzkante/390, geklemmt 0,75…3,0).
+var _ui := 1.0
+## W17 M3/M7: lebende Hit-Quality-Popups ({text, color, perfect, x, t, rise}).
+var _hit_pops: Array[Dictionary] = []
+var _hud_plate := StyleBoxFlat.new()
+var _hint_plate := StyleBoxFlat.new()
+var _banner_plate := StyleBoxFlat.new()
+var _encore_plate := StyleBoxFlat.new()
 
 
 func setup(context: MinigameCtx) -> void:
@@ -89,10 +116,12 @@ func end() -> void:
 
 
 ## Pflicht-Layouthook: beide Orientierungen laufen über DIESE Funktion.
+## W17 M9: der _ui-Faktor skaliert alle HUD-Maße mit der Kurzkante.
 func apply_view(size: Vector2) -> void:
 	if size.x > 1.0 and size.y > 1.0:
 		view_size = size
 	landscape = view_size.x > view_size.y
+	_ui = ui_scale_for(view_size)
 	position = Vector2.ZERO
 	if _stage != null:
 		_stage.frame(view_size)
@@ -107,16 +136,62 @@ func apply_view(size: Vector2) -> void:
 	queue_redraw()
 
 
+## W17 M9: HUD-Skalenfaktor aus der Kurzkante (Referenz 390 px, 0,75…3,0).
+static func ui_scale_for(size: Vector2) -> float:
+	return clampf(minf(size.x, size.y) / DESIGN_SHORT, 0.75, 3.0)
+
+
+## Farbstufe der Trefferwertung (M3): Gold für perfekt, Eisblau für gut.
+static func hit_pop_color(kind: String) -> Color:
+	return POP_PERFECT if kind == "perfect" else POP_GOOD
+
+
+## Hinweis-Fade (M6): voll bis Songsekunde 4, weich aus bis 5,5 — die erste
+## Note fällt erst bei 7,2 s, das Feld gehört dann ganz dem Geschehen.
+static func hint_alpha_for(song_t: float) -> float:
+	return clampf(1.0 - (song_t - 4.0) / 1.5, 0.0, 1.0)
+
+
+## Intro-Fortschritt 0…1 über den BESTEHENDEN musikalischen Vorlauf
+## (song_time −LEAD_IN…0) — kein eigenes Gate, nur eine Leselinse darauf.
+static func intro_progress(song_t: float, lead_in: float) -> float:
+	return clampf(1.0 + song_t / maxf(lead_in, 0.001), 0.0, 1.0)
+
+
+## Alpha des Ziel-Banners (M1): blendet mit dem Vorlauf ein und bis 0,9 s
+## nach Songstart weich aus (die erste Note ist erst bei 7,2 s unterwegs).
+static func intro_banner_alpha(song_t: float, lead_in: float) -> float:
+	var fade_in := (song_t + lead_in) / 0.3
+	var fade_out := (0.9 - song_t) / 0.5
+	return clampf(minf(fade_in, fade_out), 0.0, 1.0)
+
+
 ## HUD IMMER aus dem Viewport-Rect stellen: unter canvas_items-Stretch sind
 ## Canvas-Einheiten ≠ Fensterpixel, apply_view-Größen können abweichen.
+## W17 M9: skalierte Maße statt Fix-Pixeln (Krümel-HUD auf Tablets), dazu
+## Konturen (M7) — die Basisgrößen 34/15/20 sind der Theme-Look bei Faktor 1.
 func _layout_hud() -> void:
 	if _score_label == null:
 		return
 	var vp := get_viewport_rect().size
-	_score_label.position = Vector2(16.0, 10.0)
-	_combo_label.position = Vector2(16.0, 48.0)
-	_hint_label.position = Vector2(vp.x * 0.5 - 160.0, vp.y - 44.0)
-	_hint_label.size = Vector2(320.0, 36.0)
+	_score_label.position = Vector2(16.0, 10.0) * _ui
+	_score_label.add_theme_font_size_override("font_size", int(34.0 * _ui))
+	_score_label.add_theme_constant_override("outline_size", int(6.0 * _ui))
+	_combo_label.position = Vector2(16.0, 48.0) * _ui
+	_combo_label.add_theme_font_size_override("font_size", int(15.0 * _ui))
+	_combo_label.add_theme_constant_override("outline_size", int(5.0 * _ui))
+	var hint_w := minf(vp.x - 32.0 * _ui, 380.0 * _ui)
+	_hint_label.add_theme_font_size_override("font_size", int(20.0 * _ui))
+	_hint_label.add_theme_constant_override("outline_size", int(5.0 * _ui))
+	# ERST die Breite setzen: Autowrap rechnet die Mindesthöhe an der AKTUELLEN
+	# Breite — frisch instanziiert ist die ~1 px, jede Silbe bricht um und die
+	# Höhen-Klemme bleibt riesig hängen (Hinweis ragte unter die Sichtkante).
+	_hint_label.size = Vector2(hint_w, 0.0)
+	var hint_h := maxf(40.0 * _ui, _hint_label.get_minimum_size().y + 12.0 * _ui)
+	_hint_label.position = Vector2((vp.x - hint_w) * 0.5, vp.y - hint_h - 12.0 * _ui)
+	_hint_label.size = Vector2(hint_w, hint_h)
+	_hud_plate.set_corner_radius_all(int(10.0 * _ui))
+	_hint_plate.set_corner_radius_all(int(10.0 * _ui))
 
 
 func _process(delta: float) -> void:
@@ -133,6 +208,7 @@ func _process(delta: float) -> void:
 	)
 	_ball_pop = maxf(0.0, _ball_pop - delta)
 	_age_bursts(delta)
+	_age_pops(delta)
 	if bool(tune["ENDLESS"]):
 		_tick_endless()
 		if finished:
@@ -144,6 +220,12 @@ func _process(delta: float) -> void:
 	score = Logic.dance_score(tally)
 	ctx.report_score(score, 0)
 	_sync_stage(delta)
+	# W17 M1: „Spot an“ im musikalischen Vorlauf (NACH sync, damit der Ramp
+	# die Takt-Werte des Frames übersteuert). Reduced Motion: Licht steht
+	# sofort — die Lichtfahrt ist eigener FX (Call-Site-Gate).
+	var intro_f := intro_progress(song_time, float(tune["LEAD_IN_SEC"]))
+	if intro_f < 1.0 and not _reduced_motion():
+		_stage.intro_spot(intro_f)
 	_update_labels()
 	queue_redraw()
 
@@ -176,7 +258,8 @@ func _sync_stage(delta: float) -> void:
 		pop,
 		Logic.encore_active(fever, song_time),
 		_bob,
-		delta
+		delta,
+		_reduced_motion()
 	)
 
 
@@ -241,11 +324,20 @@ func _build_hud() -> void:
 	_hint_label.theme_type_variation = &"SoftLabel"
 	_hint_label.text = I18nService.t("mg.danceParty.hint")
 	_hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_hint_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	add_child(_hint_label)
 	# Der Discoboden ist dunkel — die Theme-Schriftfarben sind es auch.
 	_score_label.add_theme_color_override("font_color", Color(1.0, 0.96, 0.9))
 	_combo_label.add_theme_color_override("font_color", Color(1.0, 0.82, 0.5))
 	_hint_label.add_theme_color_override("font_color", Color(0.88, 0.84, 0.96))
+	# W17 M7: dunkle Tinten-Konturen — lesbar auch ÜBER hellen Lichtkegeln.
+	_score_label.add_theme_color_override("font_outline_color", OUTLINE_INK)
+	_combo_label.add_theme_color_override("font_outline_color", OUTLINE_INK)
+	_hint_label.add_theme_color_override("font_outline_color", Color(OUTLINE_INK, 0.7))
+	_hud_plate.bg_color = Color(0.09, 0.05, 0.16, 0.62)
+	_banner_plate.set_border_width_all(2)
+	_encore_plate.set_border_width_all(2)
 	_update_labels()
 
 
@@ -327,6 +419,7 @@ func _judge(kind: String, at_x: float) -> void:
 			ctx.juice.show_combo(0)
 		return
 	_stage.hit_fx(at_x, kind == "perfect")
+	_spawn_hit_pop(kind, at_x)
 	_ball_pop = float(Logic.DANCE_JUICE["BALL_POP_SEC"])
 	var combo := int(tally["combo"])
 	if bool(chain["started"]):
@@ -365,6 +458,43 @@ func _age_bursts(delta: float) -> void:
 		_lane_flash[i] = maxf(0.0, _lane_flash[i] - delta)
 
 
+## W17 M3/M7: Hit-Quality-Popup am getroffenen Ring — NUR Anzeige der schon
+## gebuchten Bewertung. Unter Reduced Motion steht das Popup (kein Aufstieg);
+## der Text bleibt als Information sichtbar (Call-Site-Gate).
+func _spawn_hit_pop(kind: String, at_x: float) -> void:
+	var key := "mg.danceParty.perfect" if kind == "perfect" else "mg.danceParty.good"
+	(
+		_hit_pops
+		. append(
+			{
+				"text": I18nService.t(key),
+				"color": hit_pop_color(kind),
+				"perfect": kind == "perfect",
+				"x": at_x,
+				"t": HIT_POP_SEC,
+				"rise": not _reduced_motion(),
+			}
+		)
+	)
+
+
+func _age_pops(delta: float) -> void:
+	for pop in _hit_pops:
+		pop["t"] = float(pop["t"]) - delta
+	while not _hit_pops.is_empty() and float(_hit_pops[0]["t"]) <= 0.0:
+		_hit_pops.pop_front()
+
+
+## Reduced-Motion-Abfrage (Duck-Typing wie im JuiceKit — ohne Autoload = aus).
+func _reduced_motion() -> bool:
+	if not is_inside_tree():
+		return true
+	var settings := get_node_or_null(^"/root/AppSettings")
+	if settings != null and settings.has_method("is_reduced_motion"):
+		return settings.is_reduced_motion()
+	return false
+
+
 func _finish() -> void:
 	if finished:
 		return
@@ -396,25 +526,135 @@ func _update_labels() -> void:
 		_combo_label.text = I18nService.t("mg.game.streak", {"n": int(tally["combo"])})
 	else:
 		_combo_label.text = ""
+	# W17 M6: der Hinweis blendet aus, bevor die erste Note fällt.
+	_hint_label.modulate.a = hint_alpha_for(song_time)
 
 
-## Nur noch HUD-Overlay: die Zugabe-Einblendung ist eine ANSAGE, keine
-## Kulisse, und muss in jeder Kameralage sofort lesbar sein.
+## HUD-Overlay: dunkle Plates (M6), Hit-Quality-Popups (M3/M7), die
+## Zugabe-ANSAGE auf Plate mit Kontur (M7) und das Ziel-Banner im
+## musikalischen Vorlauf (M1) — in jeder Kameralage sofort lesbar.
 func _draw() -> void:
+	if tune.is_empty():
+		return
+	_draw_hud_plates()
+	_draw_hit_pops()
 	if Logic.encore_active(fever, song_time):
 		_draw_encore()
+	_draw_intro_banner()
 
 
+## Dunkles Milchglas hinter Zeit/Serie und dem Hinweis (M6): helle Kegel
+## und Noten zogen sonst direkt durch die Ziffern.
+func _draw_hud_plates() -> void:
+	if _score_label == null:
+		return
+	var pad := Vector2(12.0, 6.0) * _ui
+	var wide := maxf(_score_label.size.x, _combo_label.size.x)
+	var top_left := _score_label.position - pad
+	var bottom_right := _combo_label.position + Vector2(wide, _combo_label.size.y) + pad
+	draw_style_box(_hud_plate, Rect2(top_left, bottom_right - top_left))
+	var hint_a := hint_alpha_for(song_time)
+	if hint_a > 0.0:
+		_hint_plate.bg_color = Color(0.09, 0.05, 0.16, 0.6 * hint_a)
+		draw_style_box(
+			_hint_plate, Rect2(_hint_label.position - Vector2(0.0, 2.0), _hint_label.size)
+		)
+
+
+## Trefferwertung am Ring (M3/M7): farblich gestuft (Gold/Eisblau), mit
+## Tinten-Kontur, steigt auf und blendet aus (Reduced Motion: steht).
+func _draw_hit_pops() -> void:
+	if _hit_pops.is_empty():
+		return
+	var font := ThemeService.font(800)
+	var hit_y := view_size.y * HIT_LINE_FRAC
+	for pop in _hit_pops:
+		var left := float(pop["t"]) / HIT_POP_SEC
+		var alpha := clampf(left / 0.45, 0.0, 1.0)
+		var rise := 46.0 * _ui * (1.0 - left) if bool(pop["rise"]) else 0.0
+		var font_size := int((22.0 if bool(pop["perfect"]) else 19.0) * _ui)
+		var w := 240.0 * _ui
+		var at := Vector2(float(pop["x"]) - w * 0.5, hit_y - 64.0 * _ui - rise)
+		var tint: Color = pop["color"]
+		draw_string_outline(
+			font,
+			at,
+			str(pop["text"]),
+			HORIZONTAL_ALIGNMENT_CENTER,
+			w,
+			font_size,
+			int(5.0 * _ui),
+			Color(OUTLINE_INK, OUTLINE_INK.a * alpha)
+		)
+		draw_string(
+			font,
+			at,
+			str(pop["text"]),
+			HORIZONTAL_ALIGNMENT_CENTER,
+			w,
+			font_size,
+			Color(tint, alpha)
+		)
+
+
+## Zugabe-Einblendung (M7): Goldpuls wie gehabt, die Ansage aber auf einer
+## dunklen Plate mit Goldrand, Kontur und Umbruch.
 func _draw_encore() -> void:
 	var vp := get_viewport_rect().size
 	var alpha := 0.25 + 0.15 * sin(_bob * 12.0)
 	draw_rect(Rect2(Vector2.ZERO, vp), Color(1.0, 0.8, 0.45, alpha * 0.35))
-	draw_string(
-		ThemeService.font(800),
-		Vector2(0.0, vp.y * 0.2),
-		I18nService.t("mg.danceParty.encore"),
+	var font := ThemeService.font(800)
+	var font_size := int(30.0 * _ui)
+	var w := minf(vp.x * 0.9, 420.0 * _ui)
+	var text := I18nService.t("mg.danceParty.encore")
+	var text_size := font.get_multiline_string_size(text, HORIZONTAL_ALIGNMENT_CENTER, w, font_size)
+	var top := vp.y * 0.16
+	var pad := Vector2(20.0, 10.0) * _ui
+	_encore_plate.set_corner_radius_all(int(14.0 * _ui))
+	_encore_plate.bg_color = Color(0.16, 0.09, 0.24, 0.72)
+	_encore_plate.border_color = Color(1.0, 0.85, 0.5, 0.9)
+	var plate_pos := Vector2((vp.x - text_size.x) * 0.5, top) - pad
+	draw_style_box(_encore_plate, Rect2(plate_pos, text_size + pad * 2.0))
+	var at := Vector2((vp.x - w) * 0.5, top + font.get_ascent(font_size))
+	draw_multiline_string_outline(
+		font,
+		at,
+		text,
 		HORIZONTAL_ALIGNMENT_CENTER,
-		vp.x,
-		30,
-		Color(1.0, 0.9, 0.6, 0.9)
+		w,
+		font_size,
+		-1,
+		int(6.0 * _ui),
+		Color(0.25, 0.12, 0.05, 0.9)
 	)
+	draw_multiline_string(
+		font, at, text, HORIZONTAL_ALIGNMENT_CENTER, w, font_size, -1, Color(1.0, 0.9, 0.6)
+	)
+
+
+## Ziel-Banner (M1/M7): dockt am musikalischen Vorlauf an (song_time < 0),
+## Milchglas-Plate mit Kontur und Umbruch — KEIN zusätzliches Sim-Gate.
+func _draw_intro_banner() -> void:
+	var alpha := intro_banner_alpha(song_time, float(tune["LEAD_IN_SEC"]))
+	if alpha <= 0.0:
+		return
+	var vp := get_viewport_rect().size
+	var font := ThemeService.font(800)
+	var font_size := int(26.0 * _ui)
+	var w := minf(vp.x * 0.92, 460.0 * _ui)
+	var text := I18nService.t("mg.danceParty.intro")
+	var text_size := font.get_multiline_string_size(text, HORIZONTAL_ALIGNMENT_CENTER, w, font_size)
+	var top := vp.y * 0.24
+	var pad := Vector2(18.0, 10.0) * _ui
+	_banner_plate.set_corner_radius_all(int(12.0 * _ui))
+	_banner_plate.bg_color = Color(0.12, 0.07, 0.2, 0.78 * alpha)
+	_banner_plate.border_color = Color(0.35, 0.79, 0.73, 0.8 * alpha)
+	var plate_pos := Vector2((vp.x - text_size.x) * 0.5, top) - pad
+	draw_style_box(_banner_plate, Rect2(plate_pos, text_size + pad * 2.0))
+	var ink := Color(1.0, 0.96, 0.9, alpha)
+	var rim := Color(OUTLINE_INK, 0.9 * alpha)
+	var at := Vector2((vp.x - w) * 0.5, top + font.get_ascent(font_size))
+	draw_multiline_string_outline(
+		font, at, text, HORIZONTAL_ALIGNMENT_CENTER, w, font_size, -1, int(5.0 * _ui), rim
+	)
+	draw_multiline_string(font, at, text, HORIZONTAL_ALIGNMENT_CENTER, w, font_size, -1, ink)
