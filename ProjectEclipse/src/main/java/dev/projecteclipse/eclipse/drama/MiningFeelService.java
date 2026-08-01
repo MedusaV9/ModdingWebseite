@@ -111,6 +111,11 @@ public final class MiningFeelService {
             // This break clears the vein: bright note over the proc chime = two-note payoff.
             player.playNotifySound(SoundEvents.AMETHYST_BLOCK_CHIME, SoundSource.PLAYERS, 0.6F, 1.4F);
             SkillPerks.sendProcFeedback(player, "vein_clear", scan.total());
+            // WAVE3 (F-103 C): jackpot Photon pop at the closing block — the client row
+            // in veilfx/Wave3FxRows re-derives this cue id (a = vein size, b = ore RGB).
+            FxPayloads.sendFxEvent(level, dev.projecteclipse.eclipse.network.fx.FxCues
+                    .cue("wave3_vein_jackpot"), Vec3.atCenterOf(pos), scan.total(),
+                    oreColor(state), SPARKLE_RANGE);
         }
     }
 

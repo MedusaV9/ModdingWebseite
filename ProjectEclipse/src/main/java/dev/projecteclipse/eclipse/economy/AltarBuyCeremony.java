@@ -286,6 +286,10 @@ public final class AltarBuyCeremony {
             quasar(S2CQuasarPayload.ALTAR_BEAM, this.crown);
             sound(SoundEvents.AMETHYST_BLOCK_CHIME, 1.0F, 1.1F);
             dev.projecteclipse.eclipse.ritual.AltarModelTriggers.gift(this.level);
+            // WAVE3 (F-103 C): category-tinted Photon bloom over the crown — the client
+            // row in veilfx/Wave3FxRows re-derives this cue id (a = Category ordinal).
+            FxPayloads.sendFxEvent(this.level, dev.projecteclipse.eclipse.network.fx.FxCues
+                    .cue("wave3_altar_buy"), this.crown, this.category.ordinal(), 0.0F, FX_RANGE);
         }
 
         // ------------------------------------------------------------ TEAM

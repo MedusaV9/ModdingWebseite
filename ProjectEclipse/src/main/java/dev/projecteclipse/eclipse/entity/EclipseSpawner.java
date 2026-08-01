@@ -188,6 +188,13 @@ public final class EclipseSpawner {
                 "announce.eclipse.night." + event + ".title",
                 "announce.eclipse.night." + event + ".sub",
                 S2CAnnouncePayload.STYLE_UNLOCK);
+        // WAVE3 (F-103 C): personal night-omen Photon cue at each player's own feet
+        // (sendFxEventTo personal lane, a = 1 umbral / 0 pale) — row in veilfx/Wave3FxRows.
+        for (ServerPlayer p : server.getPlayerList().getPlayers()) {
+            dev.projecteclipse.eclipse.network.fx.FxPayloads.sendFxEventTo(p,
+                    dev.projecteclipse.eclipse.network.fx.FxCues.cue("wave3_night_omen"),
+                    p.position(), EclipseWorldState.NIGHT_EVENT_UMBRAL.equals(event) ? 1.0F : 0.0F, 0.0F);
+        }
     }
 
     // --- gazer ---
