@@ -58,9 +58,19 @@ static func coins_zeile(box: Control, coins: int) -> Label:
 	return label(box, I18nService.t("city.laden.coins").format({"coins": coins}), "CaptionLabel")
 
 
-## Waren-Zeile: Name (+ Zusatz) links, Kauf-Knopf rechts.
+## Waren-Zeile: Name (+ Zusatz) links, Kauf-Knopf rechts. Der Knopf ist ein
+## SquishButton (Haptik + Squish zentral, W16 F1) und spielt beim Druck
+## `sound_id` (Default `ui_buy` — legitim, weil Kauf-Aufrufer bei „nicht
+## kaufbar“ disablen). Nicht-Kauf-Zeilen übergeben eine andere Id;
+## `sound_id = ""` lässt den Druck stumm (Outcome-Sound liegt beim Aufrufer).
 static func kauf_zeile(
-	box: Control, titel: String, zusatz: String, knopf_text: String, aktiv: bool, bei_kauf: Callable
+	box: Control,
+	titel: String,
+	zusatz: String,
+	knopf_text: String,
+	aktiv: bool,
+	bei_kauf: Callable,
+	sound_id := "ui_buy"
 ) -> HBoxContainer:
 	var zeile := HBoxContainer.new()
 	zeile.add_theme_constant_override("separation", 12)
@@ -83,11 +93,16 @@ static func kauf_zeile(
 		caption.custom_minimum_size = Vector2(240.0, 0.0)
 		caption.size = Vector2(240.0, 0.0)
 		texte.add_child(caption)
-	var btn := Button.new()
+	var btn := SquishButton.new()
 	btn.theme_type_variation = "AccentButton"
 	btn.text = knopf_text
 	btn.disabled = not aktiv
-	btn.pressed.connect(bei_kauf)
+	btn.pressed.connect(
+		func() -> void:
+			if not sound_id.is_empty():
+				AudioDirector.try_play(btn, sound_id)
+			bei_kauf.call()
+	)
 	zeile.add_child(btn)
 	return zeile
 
@@ -110,9 +125,11 @@ static func preis_text(preis: int) -> String:
 	return I18nService.t("city.laden.kaufen").format({"preis": preis})
 
 
-## Kleiner farbiger Farb-Wähl-Knopf (Autohaus-Lackierung).
+## Kleiner farbiger Farb-Wähl-Knopf (Autohaus-Lackierung). SquishButton +
+## `ui_toggle` beim Druck (W16 F2) — deckungsgleich mit dem IKEA-Farb-Swatch.
+## Die StyleBox-Overrides bleiben; der Squish ist scale-basiert.
 static func farb_knopf(farbe: Color, gewaehlt: bool, bei_wahl: Callable) -> Button:
-	var btn := Button.new()
+	var btn := SquishButton.new()
 	btn.custom_minimum_size = Vector2(44.0, 44.0)
 	btn.tooltip_text = ""
 	btn.focus_mode = Control.FOCUS_NONE
@@ -124,5 +141,9 @@ static func farb_knopf(farbe: Color, gewaehlt: bool, bei_wahl: Callable) -> Butt
 	btn.add_theme_stylebox_override("normal", stil)
 	btn.add_theme_stylebox_override("hover", stil)
 	btn.add_theme_stylebox_override("pressed", stil)
-	btn.pressed.connect(bei_wahl)
+	btn.pressed.connect(
+		func() -> void:
+			AudioDirector.try_play(btn, "ui_toggle")
+			bei_wahl.call()
+	)
 	return btn

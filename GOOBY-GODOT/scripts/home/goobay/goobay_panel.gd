@@ -77,7 +77,7 @@ func refresh_liste() -> void:
 		_liste.add_child(leer)
 		return
 	for eintrag: Dictionary in angebote:
-		var btn := Button.new()
+		var btn := SquishButton.new()
 		btn.theme_type_variation = "AcChip"
 		btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		btn.text = "%s ×%d — %d ᴳ" % [eintrag["name"], eintrag["count"], eintrag["wert"]]
@@ -136,7 +136,10 @@ func annehmen(versand := false) -> void:
 		),
 		false
 	)
-	AudioDirector.try_play(self, "ui_confirm")
+	# Verkaufs-Erfolg = abgeschlossene Geld-Transaktion + Belohnungsmoment
+	# (W16 F4, Muster ikea_screen: ui_buy + Haptics.success).
+	AudioDirector.try_play(self, "ui_buy")
+	Haptics.success(self)
 	if _room != null and _room.has_method("say"):
 		_room.say(I18nService.t("goobay.verkauft", {"preis": erloes}))
 	verkauft.emit(str(_session["item"]), erloes)
@@ -194,7 +197,7 @@ func _build_header() -> Control:
 	titel.theme_type_variation = "TitleLabel"
 	titel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header.add_child(titel)
-	var zu := Button.new()
+	var zu := SquishButton.new()
 	zu.text = I18nService.t("craft.schliessen")
 	zu.theme_type_variation = "GhostButton"
 	zu.pressed.connect(close)
@@ -295,7 +298,7 @@ func _update_buttons() -> void:
 		_add_button("goobay.hoeher", "AccentButton", hoeher)
 	_add_button("goobay.deal", "PrimaryButton", annehmen.bind(false))
 	var bonus := GoobayLogic.post_bonus(int(_session["angebot"]))
-	var versand := Button.new()
+	var versand := SquishButton.new()
 	versand.text = I18nService.t("goobay.versand", {"bonus": bonus})
 	versand.theme_type_variation = "ChipLeaf"
 	versand.pressed.connect(annehmen.bind(true))
@@ -304,7 +307,7 @@ func _update_buttons() -> void:
 
 
 func _add_button(key: String, variation: String, handler: Callable) -> void:
-	var btn := Button.new()
+	var btn := SquishButton.new()
 	btn.text = I18nService.t(key)
 	btn.theme_type_variation = variation
 	btn.pressed.connect(handler)

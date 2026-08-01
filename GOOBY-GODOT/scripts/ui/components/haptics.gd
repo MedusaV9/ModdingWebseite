@@ -14,6 +14,10 @@ extends RefCounted
 ## abgeschaltet hat, bleibt still). Ersetzt scripts/platform/haptics.gd —
 ## die Alt-Aufrufe `Haptics.tap(node)` / `Haptics.heavy(node)` laufen weiter.
 ##
+## STÄRKE (W16 F11): die RW-7-Stufen „dezent“/„normal“/„stark“ skalieren die
+## Impulsdauern (Faktor 0.6 / 1.0 / 1.6, LEVEL_FACTORS) — vorher wirkte nur
+## „aus“. Unbekannte Stufen zählen als „normal“.
+##
 ## EHRLICH (RW-7 Doc §3.5): `Input.vibrate_handheld()` wirkt auf Android
 ## sofort, auf iOS erst im signierten Build; Desktop/Headless = No-op.
 
@@ -23,6 +27,8 @@ const TAP_MS := 10
 const SUCCESS_MS := 8
 const SUCCESS_PAUSE_S := 0.08
 const WARN_MS := 40
+## Dauer-Multiplikator je Stärke-Stufe (`controls.haptics`, app_settings.gd).
+const LEVEL_FACTORS := {"dezent": 0.6, "normal": 1.0, "stark": 1.6}
 
 ## Tests injizieren hier ein Settings-Double (statt /root/AppSettings).
 static var settings_override: Object = null
@@ -48,15 +54,16 @@ static func heavy(from_node: Node = null) -> void:
 	_fire("warn", from_node)
 
 
-## PURE: Impulsplan in Millisekunden je Art (headless testbar).
-static func plan(art: String) -> Array[int]:
+## PURE: Impulsplan in Millisekunden je Art × Stärke-Stufe (headless testbar).
+static func plan(art: String, stufe := "normal") -> Array[int]:
+	var faktor: float = LEVEL_FACTORS.get(stufe, 1.0)
 	match art:
 		"success":
-			return [SUCCESS_MS, SUCCESS_MS]
+			return [_skaliert(SUCCESS_MS, faktor), _skaliert(SUCCESS_MS, faktor)]
 		"warn":
-			return [WARN_MS]
+			return [_skaliert(WARN_MS, faktor)]
 		_:
-			return [TAP_MS]
+			return [_skaliert(TAP_MS, faktor)]
 
 
 ## Gate — PURE bei injizierten Settings: `game.haptik` (Default AN) muss an
@@ -73,9 +80,18 @@ static func is_enabled(settings: Object = null) -> bool:
 
 
 static func _fire(art: String, from_node: Node) -> void:
-	if not is_enabled(_settings(from_node)):
+	var source := _settings(from_node)
+	if not is_enabled(source):
 		return
-	_vibrate_plan(plan(art), from_node)
+	# Stärke-Stufe aus denselben Settings wie das Gate lesen (W16 F11).
+	var stufe := "normal"
+	if source != null and source.has_method("value_of"):
+		stufe = String(source.value_of(ALT_LEVEL_KEY))
+	_vibrate_plan(plan(art, stufe), from_node)
+
+
+static func _skaliert(ms: int, faktor: float) -> int:
+	return maxi(1, roundi(ms * faktor))
 
 
 ## Plan abspielen — bei Mehrfach-Impulsen mit kurzer Pause dazwischen.

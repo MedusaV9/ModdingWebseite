@@ -24,6 +24,13 @@ func test_haptik_plaene_pur() -> void:
 	assert_eq(Haptics.plan("success"), [8, 8] as Array[int], "success = Doppelimpuls 8+8 ms")
 	assert_eq(Haptics.plan("warn"), [40] as Array[int], "warn = 40 ms")
 	assert_eq(Haptics.plan("unbekannt"), [10] as Array[int], "Fallback = tap")
+	# W16 F11: Stärke-Stufen dezent/stark skalieren die Impulsdauern.
+	assert_eq(Haptics.plan("tap", "dezent"), [6] as Array[int], "dezent = Faktor 0.6")
+	assert_eq(Haptics.plan("warn", "stark"), [64] as Array[int], "stark = Faktor 1.6")
+	assert_eq(Haptics.plan("success", "stark"), [13, 13] as Array[int], "stark = beide Impulse")
+	assert_eq(Haptics.plan("success", "dezent"), [5, 5] as Array[int], "dezent = beide Impulse")
+	assert_eq(Haptics.plan("tap", "normal"), [10] as Array[int], "normal = Faktor 1.0")
+	assert_eq(Haptics.plan("tap", "mondphase"), [10] as Array[int], "unbekannte Stufe = 1.0")
 
 
 func test_haptik_gate_pur() -> void:

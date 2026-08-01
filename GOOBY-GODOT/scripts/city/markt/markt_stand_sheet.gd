@@ -181,13 +181,16 @@ func _baue_slot_zeile(slot: Dictionary) -> void:
 func _baue_lager_zeile(liste: Control, eintrag: Dictionary) -> void:
 	var id := str(eintrag["id"])
 	var vorrat := int(eintrag["vorrat"])
+	# Bestücken ist KEIN Kauf: Druck stumm (""), der Ausgang klingt in
+	# _bestuecke (ui_chip/ui_error) — Outcome schlägt Press (W16 F1).
 	var zeile := CitySheetBausteine.kauf_zeile(
 		liste,
 		"%s — %d ᴳ" % [str(eintrag["name"]), int(eintrag["basis"])],
 		I18nService.t("markt.lager.vorrat", {"n": vorrat}),
 		I18nService.t("markt.lager.plus_eins"),
 		vorrat > 0,
-		func() -> void: _bestuecke(id, 1)
+		func() -> void: _bestuecke(id, 1),
+		""
 	)
 	if vorrat <= 1:
 		return

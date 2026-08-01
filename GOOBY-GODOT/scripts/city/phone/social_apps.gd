@@ -37,13 +37,15 @@ static func goobypal(gs: Object, bei_wahl: Callable) -> Control:
 		return box
 	var liste := CitySheetBausteine.scroll_liste(box, 260.0)
 	for freund: Dictionary in freunde_liste:
+		# Senden-Zeile, kein Kauf → ui_click statt des ui_buy-Defaults (W16 F1).
 		CitySheetBausteine.kauf_zeile(
 			liste,
 			"%s · %s" % [str(freund.get("name", "?")), str(freund.get("goobyName", "Gooby"))],
 			"",
 			I18nService.t("phone.goobypal.senden"),
 			true,
-			func() -> void: bei_wahl.call(freund)
+			func() -> void: bei_wahl.call(freund),
+			"ui_click"
 		)
 	return box
 
