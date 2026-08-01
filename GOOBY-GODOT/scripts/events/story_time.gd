@@ -20,10 +20,14 @@ const GAP_PLACEHOLDER := "____"
 
 var _host: InteractablesHost
 var _sheet: PanelSheet
+## Zuletzt eingehängter Sheet-Inhalt — wird beim Neubau SOFORT freigegeben.
+var _inhalt: Control
 var _story: Dictionary = {}
 var _fills: Array = []
 var _sentence_labels: Array = []
 var _rng := RandomNumberGenerator.new()
+## Offene Ansicht ("bibliothek"/"buch") — fürs Neu-Bauen bei Rotation.
+var _ansicht := ""
 ## W13B-Session (leer = Legacy-Einzelgeschichte ohne Buch/Abnutzung).
 var _session_book: Dictionary = {}
 var _session_pages: Array = []
@@ -146,8 +150,9 @@ func open_library() -> void:
 	if books.is_empty():
 		return
 	_open_sheet()
+	_ansicht = "bibliothek"
 	_sheet.set_title(I18nService.t("sleep.story.bibliothek_titel"))
-	_sheet.add_content(_build_library(books))
+	_setze_inhalt(_build_library(books))
 	_sheet.open()
 
 
@@ -165,6 +170,7 @@ func open_book(story: Dictionary) -> void:
 func _build_library(books: Array) -> Control:
 	var state := _game_state_dict()
 	var owned := StoryBooks.owned_book_ids(books, state)
+	var m := ScreenShell.metrics(get_viewport())
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 10)
 	var hint := Label.new()
@@ -172,24 +178,26 @@ func _build_library(books: Array) -> Control:
 	hint.text = I18nService.t("sleep.story.waehlen")
 	box.add_child(hint)
 	for book: Dictionary in books:
-		box.add_child(_library_row(book, owned.has(str(book.get("id", ""))), state))
+		box.add_child(_library_row(book, owned.has(str(book.get("id", ""))), state, m))
 	var nachschub := Label.new()
 	nachschub.theme_type_variation = &"CaptionLabel"
 	nachschub.text = I18nService.t("sleep.story.nachschub")
 	nachschub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	nachschub.custom_minimum_size = Vector2(280.0, 0.0)
+	nachschub.custom_minimum_size = Vector2(minf(280.0 * float(m["f"]), _innen_breite(m)), 0.0)
 	box.add_child(nachschub)
+	ScreenShell.scale_fonts(box, UiScale.font_scale(get_viewport()))
 	return box
 
 
-func _library_row(book: Dictionary, owned: bool, state: Dictionary) -> Control:
+func _library_row(book: Dictionary, owned: bool, state: Dictionary, m: Dictionary) -> Control:
 	var row := VBoxContainer.new()
 	row.add_theme_constant_override("separation", 2)
 	var btn := SquishButton.new()
 	btn.name = "Buch_%s" % str(book.get("id", ""))
 	btn.theme_type_variation = &"AccentButton"
 	btn.text = str(book.get("titel_de", ""))
-	btn.custom_minimum_size = Vector2(0, 48)
+	# Touch-Floor statt fixer 48 px (physisch ≈ 26 pt) — G4/P17.
+	btn.custom_minimum_size = Vector2(0.0, float(m["floor_px"]))
 	btn.focus_mode = Control.FOCUS_NONE
 	var caption := Label.new()
 	caption.theme_type_variation = &"CaptionLabel"
@@ -244,8 +252,9 @@ func _open_page(story: Dictionary) -> void:
 	_story = story
 	_fills = empty_fills(story)
 	_open_sheet()
+	_ansicht = "buch"
 	_sheet.set_title(str(story.get("titel_de", "")))
-	_sheet.add_content(_build_book())
+	_setze_inhalt(_build_book())
 	_sheet.open()
 
 
@@ -256,17 +265,58 @@ func _open_sheet() -> void:
 	# Theme explizit setzen: Window-Theme propagiert NICHT durch CanvasLayer.
 	_sheet.theme = ThemeService.theme()
 	_ui_layer().add_child(_sheet)
+	var vp := get_viewport()
+	if vp != null and not vp.size_changed.is_connected(_on_viewport_resized):
+		vp.size_changed.connect(_on_viewport_resized)
+
+
+## Rotation/Resize: offene Ansicht mit frischen Metriken neu bauen (Muster
+## News50Panel) — gesetzte Wörter bleiben erhalten (_fills-Abgleich).
+func _on_viewport_resized() -> void:
+	if _sheet == null or not is_instance_valid(_sheet) or not _sheet.is_open():
+		return
+	if _ansicht == "buch" and not _story.is_empty():
+		_setze_inhalt(_build_book())
+	elif _ansicht == "bibliothek":
+		var books := StoryBooks.books_from_registry()
+		if not books.is_empty():
+			_setze_inhalt(_build_library(books))
+
+
+## Alten Inhalt SOFORT freigeben statt queue_free-pendent zu lassen: das
+## Sheet misst pendente Kinder beim Relayout mit und schrumpft nach so
+## einer Min-Size-Blähung nicht von selbst zurück (Befund News-Panel G4).
+func _setze_inhalt(neu: Control) -> void:
+	if _inhalt != null and is_instance_valid(_inhalt):
+		var eltern := _inhalt.get_parent()
+		if eltern != null:
+			eltern.remove_child(_inhalt)
+		_inhalt.free()
+	_inhalt = neu
+	_sheet.add_content(neu)
 
 
 func _build_book() -> Control:
-	var book := HBoxContainer.new()
-	book.add_theme_constant_override("separation", 18)
+	# G4/P17: Hochformat stapelt (Sätze oben, Chips darunter) statt links/
+	# rechts zu quetschen; Querformat behält die Buch-Doppelseite. Maße aus
+	# ScreenShell-Metriken statt fixer 260-px-Spalte.
+	var m := ScreenShell.metrics(get_viewport())
+	var f: float = m["f"]
+	var floor_px: float = m["floor_px"]
+	var canvas: Vector2 = m["canvas"]
+	var hochformat := canvas.y > canvas.x
+	var innen := _innen_breite(m)
+	var book: BoxContainer = VBoxContainer.new() if hochformat else HBoxContainer.new()
+	book.name = "BuchLayout"
+	book.add_theme_constant_override("separation", int((14.0 if hochformat else 18.0) * f))
 	var left := VBoxContainer.new()
 	left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	left.size_flags_stretch_ratio = 1.4
-	left.add_theme_constant_override("separation", 10)
+	if not hochformat:
+		left.size_flags_stretch_ratio = 1.4
+	left.add_theme_constant_override("separation", int(10.0 * f))
 	book.add_child(left)
 	_sentence_labels = []
+	var satz_breite := innen if hochformat else maxf(220.0, innen * 0.5)
 	for sentence: String in rendered_sentences(_story, _fills):
 		var label := Label.new()
 		label.text = sentence
@@ -274,31 +324,48 @@ func _build_book() -> Control:
 		# Min-Breite MUSS gesetzt sein: ohne sie meldet ein Autowrap-Label im
 		# ersten Layout-Pass (Breite 0) eine riesige Min-Höhe — das Sheet
 		# wächst dann einmalig auf Tausende px und friert so ein.
-		label.custom_minimum_size = Vector2(260.0, 0.0)
+		label.custom_minimum_size = Vector2(satz_breite, 0.0)
+		label.size = Vector2(satz_breite, 0.0)
 		left.add_child(label)
 		_sentence_labels.append(label)
 	var right := VBoxContainer.new()
 	right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	right.add_theme_constant_override("separation", 8)
+	right.add_theme_constant_override("separation", int(8.0 * f))
 	book.add_child(right)
 	var hint := Label.new()
 	hint.theme_type_variation = &"CaptionLabel"
 	hint.text = I18nService.t("events.story.hinweis")
 	right.add_child(hint)
 	var chip_grid := GridContainer.new()
-	chip_grid.columns = 2
-	chip_grid.add_theme_constant_override("h_separation", 8)
-	chip_grid.add_theme_constant_override("v_separation", 8)
+	chip_grid.name = "WortGrid"
+	chip_grid.columns = 3 if hochformat else 2
+	chip_grid.add_theme_constant_override("h_separation", int(8.0 * f))
+	chip_grid.add_theme_constant_override("v_separation", int(8.0 * f))
 	right.add_child(chip_grid)
 	for word: Dictionary in _story.get("woerter_de", []):
+		var word_id := str(word.get("id", ""))
 		var chip := SquishButton.new()
-		chip.name = "Wort_%s" % str(word.get("id", ""))
+		chip.name = "Wort_%s" % word_id
 		chip.theme_type_variation = &"ChipSky"
 		chip.text = str(word.get("text", ""))
 		chip.focus_mode = Control.FOCUS_NONE
-		chip.pressed.connect(_on_word_tapped.bind(str(word.get("id", "")), chip))
+		# Wort-Chips sind DIE Interaktionsfläche des Features → Touch-Floor.
+		chip.custom_minimum_size = Vector2(floor_px * 1.4, floor_px)
+		# Nach Rotation-Rebuild bleiben gesetzte Wörter verbraucht.
+		chip.disabled = _fills.has(word_id)
+		chip.pressed.connect(_on_word_tapped.bind(word_id, chip))
 		chip_grid.add_child(chip)
+	ScreenShell.scale_fonts(book, UiScale.font_scale(get_viewport()))
 	return book
+
+
+## Innenbreite des Sheets (Blattbreite minus Karten-Chrome) — Basis für
+## Satz-Spalte/Deckel statt fixer Pixelwerte.
+func _innen_breite(m: Dictionary) -> float:
+	var breite := PanelSheetLayout.sheet_width(m["canvas"], m["insets"], m["f"])
+	if _sheet != null and is_instance_valid(_sheet):
+		breite -= _sheet.chrome_width()
+	return maxf(breite, 220.0)
 
 
 func _on_word_tapped(word_id: String, chip: Button) -> void:

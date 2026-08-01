@@ -13,23 +13,50 @@ signal news_seen
 
 const ICON_DIR := "res://assets/ui/icons/"
 
+## Zuletzt eingehängter Inhalt — wird beim Neubau SOFORT freigegeben.
+var _inhalt: Control
+
 
 func _ready() -> void:
 	super()
 	set_title(I18nService.t("news.titel"))
-	add_content(_build_content())
+	_setze_inhalt(_build_content())
 
 
 ## FIX1: bei jedem Öffnen frisch bauen — so stimmt die Schrift-Skalierung
 ## auch nach Rotation/Resize (Faktor wird in _build_content gelesen).
 func open() -> void:
 	if not is_open():
-		add_content(_build_content())
+		_setze_inhalt(_build_content())
 	super()
+
+
+## G4/P17: Rotation bei OFFENEM Panel baut den Inhalt neu — Lesebreite/f
+## sind in die Zeilen eingebrannt, nach der Drehung ragten sie sonst übers
+## Blatt hinaus. Überschreibt den PanelSheet-Resize-Hook (super() = relayout).
+func _on_viewport_resized() -> void:
+	if is_open():
+		_setze_inhalt(_build_content())
+	super()
+
+
+## Alten Inhalt SOFORT freigeben statt queue_free-pendent zu lassen:
+## _relayout misst pendente Kinder mit, und ein PanelContainer schrumpft
+## nach so einer Min-Size-Blähung nicht von selbst auf seine Offsets
+## zurück (Screenshot-Befund G4 — Sheet ragte rechts aus dem Bild).
+func _setze_inhalt(neu: Control) -> void:
+	if _inhalt != null and is_instance_valid(_inhalt):
+		var eltern := _inhalt.get_parent()
+		if eltern != null:
+			eltern.remove_child(_inhalt)
+		_inhalt.free()
+	_inhalt = neu
+	add_content(neu)
 
 
 func _build_content() -> Control:
 	var f := UiScale.for_viewport(get_viewport())
+	var lese_breite := _lese_breite(f)
 	var vbox := VBoxContainer.new()
 	vbox.name = "NewsList"
 	vbox.add_theme_constant_override("separation", int(12.0 * f))
@@ -52,7 +79,7 @@ func _build_content() -> Control:
 	vbox.add_child(version)
 	var entries := I18nService.items("news.items")
 	for i in entries.size():
-		vbox.add_child(_build_item_row(i, entries[i], f))
+		vbox.add_child(_build_item_row(i, entries[i], f, lese_breite))
 	var ok := SquishButton.new()
 	ok.name = "NewsOkButton"
 	ok.theme_type_variation = "BtnLeaf"
@@ -66,10 +93,23 @@ func _build_content() -> Control:
 	return vbox
 
 
-func _build_item_row(index: int, entry: Dictionary, f: float) -> Control:
+## G4/P17 (Inhaltsspalten-Gedanke W16): Lesebreite der Item-Zeilen deckeln —
+## im Querformat läuft das Sheet bis 720*f, Fließtext bleibt bei ~560*f und
+## mittig statt randlos breit (Icon „hing“ sonst weit weg vom Text).
+func _lese_breite(f: float) -> float:
+	var vp := get_viewport()
+	var canvas := Vector2(vp.get_visible_rect().size)
+	var insets := UiScale.safe_insets_canvas(vp, safe_area_override)
+	var innen := PanelSheetLayout.sheet_width(canvas, insets, f) - chrome_width()
+	return minf(560.0 * f, maxf(innen, 220.0))
+
+
+func _build_item_row(index: int, entry: Dictionary, f: float, lese_breite: float) -> Control:
 	var row := PanelContainer.new()
 	row.name = "Item%d" % index
 	row.theme_type_variation = "AcWell"
+	row.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	row.custom_minimum_size = Vector2(lese_breite, 0.0)
 	var box := HBoxContainer.new()
 	box.add_theme_constant_override("separation", int(12.0 * f))
 	var icon := TextureRect.new()
@@ -92,6 +132,9 @@ func _build_item_row(index: int, entry: Dictionary, f: float) -> Control:
 	body.theme_type_variation = "CaptionLabel"
 	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	body.add_theme_font_size_override("font_size", int(AcTokens.FONT_SIZE_CAPTION * f))
+	# Wrap-Breite stabilisieren (W3a-GOTCHA: Autowrap ohne Min-Breite misst
+	# im ersten Pass bei Breite 0): Lesebreite minus Icon/Abstände/Well-Rand.
+	body.custom_minimum_size = Vector2(maxf(lese_breite - 80.0 * f, 160.0), 0.0)
 	body.text = str(entry.get("text", ""))
 	text_box.add_child(body)
 	box.add_child(text_box)

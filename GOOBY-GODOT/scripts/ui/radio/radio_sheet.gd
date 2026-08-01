@@ -49,7 +49,16 @@ func _ready() -> void:
 		# das Möbel später verkauft wird (wie das Grandfathering).
 		_schreibe_radio({"owned": true})
 	_station_id = _gelesene_station()
+	# G4/P17: Rotation/Resize baut mit frischen Metriken neu (Muster
+	# News50Panel.open) — Touch-Floor/Fonts stimmen dann in beiden Formaten.
+	if not get_viewport().size_changed.is_connected(_on_viewport_resized):
+		get_viewport().size_changed.connect(_on_viewport_resized)
 	_baue_ui()
+
+
+func _on_viewport_resized() -> void:
+	if is_inside_tree():
+		_baue_ui()
 
 
 ## ---------------------------------------------------------------- Aufbau
@@ -58,6 +67,10 @@ func _ready() -> void:
 func _baue_ui() -> void:
 	for kind in get_children():
 		kind.queue_free()
+	# G4/P17 (Leitidee FB3): EINMAL Metriken ziehen — Touch-Floor +
+	# UiScale statt fester 44/48-px-Werte (physisch sonst nur ~24–26 pt).
+	var m := ScreenShell.metrics(get_viewport())
+	var floor_px: float = m["floor_px"]
 	CitySheetBausteine.label(self, I18nService.t("radio.titel"), "HeadlineLabel")
 
 	var jetzt_karte := CitySheetBausteine.karte(self)
@@ -71,27 +84,27 @@ func _baue_ui() -> void:
 	var transport := HBoxContainer.new()
 	transport.add_theme_constant_override("separation", 10)
 	add_child(transport)
-	_an_aus_btn = Button.new()
+	_an_aus_btn = SquishButton.new()
 	_an_aus_btn.name = "AnAus"
 	_an_aus_btn.theme_type_variation = "PrimaryButton"
-	_an_aus_btn.custom_minimum_size = Vector2(0.0, 48.0)
+	_an_aus_btn.custom_minimum_size = Vector2(0.0, floor_px)
 	_an_aus_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_an_aus_btn.focus_mode = Control.FOCUS_NONE
 	_an_aus_btn.pressed.connect(_on_an_aus)
 	transport.add_child(_an_aus_btn)
-	_next_btn = Button.new()
+	_next_btn = SquishButton.new()
 	_next_btn.name = "Naechster"
 	_next_btn.theme_type_variation = "AccentButton"
 	_next_btn.text = I18nService.t("radio.naechster")
-	_next_btn.custom_minimum_size = Vector2(0.0, 48.0)
+	_next_btn.custom_minimum_size = Vector2(0.0, floor_px)
 	_next_btn.focus_mode = Control.FOCUS_NONE
 	_next_btn.pressed.connect(_on_naechster)
 	transport.add_child(_next_btn)
-	_like_btn = Button.new()
+	_like_btn = SquishButton.new()
 	_like_btn.name = "Like"
 	_like_btn.theme_type_variation = "AccentButton"
 	_like_btn.text = I18nService.t("radio.gefaellt")
-	_like_btn.custom_minimum_size = Vector2(0.0, 48.0)
+	_like_btn.custom_minimum_size = Vector2(0.0, floor_px)
 	_like_btn.focus_mode = Control.FOCUS_NONE
 	_like_btn.pressed.connect(_on_like_aktueller)
 	transport.add_child(_like_btn)
@@ -102,11 +115,11 @@ func _baue_ui() -> void:
 		_like_btn.tooltip_text = I18nService.t("radio.nur_mit_radio")
 
 	if _owned:
-		_baue_vollradio()
+		_baue_vollradio(m)
 	else:
 		_baue_kauf_hinweis()
 
-	_baue_lautstaerke()
+	_baue_lautstaerke(m)
 
 	if _owned:
 		_lieblinge_label = CitySheetBausteine.label(self, "", "CaptionLabel")
@@ -118,20 +131,23 @@ func _baue_ui() -> void:
 		_liste_box.name = "TitelListe"
 		CitySheetBausteine.label(self, I18nService.t("radio.level_hinweis"), "CaptionLabel")
 
-	var schliessen := Button.new()
+	# G2-Fixliste F15: Schliessen bleibt bewusst OHNE eigenen Sound —
+	# `geschlossen` → RadioGeraet → PanelSheet.close() spielt schon ui_close.
+	var schliessen := SquishButton.new()
 	schliessen.name = "Schliessen"
 	schliessen.theme_type_variation = "GhostButton"
 	schliessen.text = I18nService.t("radio.schliessen")
-	schliessen.custom_minimum_size = Vector2(0.0, 44.0)
+	schliessen.custom_minimum_size = Vector2(0.0, floor_px)
 	schliessen.focus_mode = Control.FOCUS_NONE
 	schliessen.pressed.connect(func() -> void: geschlossen.emit())
 	add_child(schliessen)
 
+	ScreenShell.scale_fonts(self, UiScale.font_scale(get_viewport()))
 	_refresh()
 
 
 ## Vollradio (mit Besitz): Senderwahl als Cover-Karten (H §6.1).
-func _baue_vollradio() -> void:
+func _baue_vollradio(m: Dictionary) -> void:
 	CitySheetBausteine.label(self, I18nService.t("radio.sender"), "HeadlineLabel")
 	var chips := HFlowContainer.new()
 	chips.name = "SenderChips"
@@ -140,7 +156,7 @@ func _baue_vollradio() -> void:
 	add_child(chips)
 	var level := _level()
 	for station: Dictionary in RadioLogic.sender(level):
-		chips.add_child(_sender_cover_karte(station))
+		chips.add_child(_sender_cover_karte(station, m))
 
 
 ## Bordmusik-Modus (ohne Besitz): knuffiger IKEA-Kauf-Hinweis statt Sender.
@@ -163,14 +179,15 @@ func _baue_kauf_hinweis() -> void:
 
 
 ## Sender als farbige AC-Cover-Karte (Theme-Farben + Glyph, keine Assets).
-func _sender_cover_karte(station: Dictionary) -> Button:
+func _sender_cover_karte(station: Dictionary, m: Dictionary) -> Button:
 	var id := str(station.get("id", ""))
 	var cover := RadioLogic.cover(id)
-	var chip := Button.new()
+	var chip := SquishButton.new()
 	chip.name = "Sender_%s" % id
 	chip.toggle_mode = true
 	chip.focus_mode = Control.FOCUS_NONE
-	chip.custom_minimum_size = Vector2(116.0, 64.0)
+	var f: float = m["f"]
+	chip.custom_minimum_size = Vector2(116.0 * f, maxf(64.0 * f, float(m["floor_px"])))
 	var locked := bool(station.get("locked", false))
 	if locked:
 		chip.text = (
@@ -221,7 +238,7 @@ func _cover_stylebox(farbe: Color, gewaehlt: bool) -> StyleBoxFlat:
 	return stil
 
 
-func _baue_lautstaerke() -> void:
+func _baue_lautstaerke(m: Dictionary) -> void:
 	var zeile := HBoxContainer.new()
 	zeile.add_theme_constant_override("separation", 10)
 	add_child(zeile)
@@ -233,7 +250,8 @@ func _baue_lautstaerke() -> void:
 	slider.min_value = 0.0
 	slider.max_value = 1.0
 	slider.step = 0.05
-	slider.custom_minimum_size = Vector2(180.0, 32.0)
+	# Grabber-Trefferfläche auf den Touch-Floor heben (Zeile wächst mit).
+	slider.custom_minimum_size = Vector2(180.0 * float(m["f"]), float(m["floor_px"]))
 	slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var app := get_node_or_null("/root/AppSettings")
 	if app != null and app.has_method("audio_level"):
@@ -248,6 +266,8 @@ func _baue_lautstaerke() -> void:
 
 
 func _on_an_aus() -> void:
+	# F15: An/Aus ist ein Schalter → ui_toggle (Grammatik §3).
+	AudioDirector.try_play(self, "ui_toggle")
 	var playing := _spielt()
 	if playing:
 		if music != null and music.has_method("radio_stop"):
@@ -268,6 +288,8 @@ func _on_naechster() -> void:
 		return
 	if not _spielt():
 		return
+	# F15: Klang erst NACH den Gates — ein wirkungsloser Druck bleibt stumm.
+	AudioDirector.try_play(self, "ui_click")
 	if music != null and music.has_method("radio_next"):
 		music.radio_next()
 	_refresh()
@@ -276,6 +298,7 @@ func _on_naechster() -> void:
 func _on_sender_gewaehlt(id: String) -> void:
 	if not RadioLogic.aktion_erlaubt(_owned, "sender"):
 		return
+	AudioDirector.try_play(self, "ui_chip")
 	_station_id = id
 	if _spielt() and music != null and music.has_method("radio_play"):
 		music.radio_play(id)
@@ -285,10 +308,13 @@ func _on_sender_gewaehlt(id: String) -> void:
 
 func _on_like_aktueller() -> void:
 	if not RadioLogic.aktion_erlaubt(_owned, "like"):
+		# F15: „nur mit Radio“-Ablehnung klingt als Fehler.
+		AudioDirector.try_play(self, "ui_error")
 		return
 	var track_id := _aktueller_track()
 	if track_id.is_empty():
 		return
+	AudioDirector.try_play(self, "ui_confirm")
 	_toggle_like(track_id)
 
 
@@ -350,14 +376,19 @@ func _refresh_titel_liste() -> void:
 		_frei_label.text = I18nService.t(
 			"radio.freigeschaltet", {"n": int(zaehler["frei"]), "gesamt": int(zaehler["gesamt"])}
 		)
+	var m := ScreenShell.metrics(get_viewport())
 	for row: Dictionary in RadioLogic.titel(_station_id, level, likes):
-		_liste_box.add_child(_titel_zeile(row))
+		_liste_box.add_child(_titel_zeile(row, m))
+	ScreenShell.scale_fonts(_liste_box, UiScale.font_scale(get_viewport()))
 
 
-func _titel_zeile(row: Dictionary) -> Control:
+func _titel_zeile(row: Dictionary, m: Dictionary) -> Control:
+	var floor_px: float = m["floor_px"]
 	var zeile := HBoxContainer.new()
 	zeile.name = "Titel_%s" % str(row["id"])
 	zeile.add_theme_constant_override("separation", 10)
+	# Zeilenhöhe ≥ Touch-Floor — die Like-Knöpfe sind sonst physisch winzig.
+	zeile.custom_minimum_size = Vector2(0.0, floor_px)
 	var label := Label.new()
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	label.clip_text = true
@@ -374,7 +405,7 @@ func _titel_zeile(row: Dictionary) -> Control:
 		label.text = "%s  %s" % [str(row["title"]), RadioLogic.zeit(float(row["duration_sec"]))]
 	zeile.add_child(label)
 	if not bool(row["locked"]):
-		var like := Button.new()
+		var like := SquishButton.new()
 		like.name = "Like_%s" % str(row["id"])
 		like.theme_type_variation = "GhostButton"
 		like.text = (
@@ -382,10 +413,17 @@ func _titel_zeile(row: Dictionary) -> Control:
 			if bool(row["liked"])
 			else I18nService.t("radio.merken_kurz")
 		)
+		like.custom_minimum_size = Vector2(floor_px, floor_px)
 		like.focus_mode = Control.FOCUS_NONE
-		like.pressed.connect(_toggle_like.bind(str(row["id"])))
+		like.pressed.connect(_on_titel_like.bind(str(row["id"])))
 		zeile.add_child(like)
 	return zeile
+
+
+## F15: Listen-Likes sind Mikro-Schritte → ui_tick (Grammatik §3).
+func _on_titel_like(track_id: String) -> void:
+	AudioDirector.try_play(self, "ui_tick")
+	_toggle_like(track_id)
 
 
 func _on_track_changed(_track_id: String) -> void:
@@ -456,8 +494,4 @@ func _schreibe_radio(patch: Dictionary) -> void:
 
 
 func _zeige_toast(text: String) -> void:
-	if not is_inside_tree():
-		return
-	var toasts := get_tree().root.find_children("*", "ToastLayer", true, false)
-	if not toasts.is_empty():
-		toasts[0].show_toast(text)
+	ToastLayer.zeige(self, text)

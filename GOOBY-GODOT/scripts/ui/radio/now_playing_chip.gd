@@ -82,12 +82,36 @@ func _ready() -> void:
 		visible = false
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
 		tooltip_text = I18nService.t("radio.was_laeuft")
-		set_anchors_preset(Control.PRESET_CENTER_TOP)
-		grow_horizontal = Control.GROW_DIRECTION_BOTH
-		grow_vertical = Control.GROW_DIRECTION_END
-		offset_top = 14.0
+		_lege_floating_aus()
+		get_viewport().size_changed.connect(_lege_floating_aus)
 		if music != null and music.has_signal("track_changed"):
 			music.track_changed.connect(_on_track_changed)
+
+
+## G4/P17: Floating-Chip UNTER die Safe-Area-Oberkante legen (fix 14 px
+## landete im Hochformat unter Notch/Dynamic Island) und die Ticker-
+## Sichtbreite aus der Canvas ableiten statt fixer 300 px. Läuft bei
+## jedem Viewport-Resize erneut (Rotation).
+func _lege_floating_aus() -> void:
+	if inline or not is_inside_tree():
+		return
+	var vp := get_viewport()
+	var f := UiScale.for_viewport(vp)
+	var insets := UiScale.safe_insets_canvas(vp)
+	set_anchors_preset(Control.PRESET_CENTER_TOP)
+	grow_horizontal = Control.GROW_DIRECTION_BOTH
+	grow_vertical = Control.GROW_DIRECTION_END
+	# Offsets EXPLIZIT nullen: set_anchors_preset(keep_offsets=false)
+	# kompensiert sonst die Offsets so, dass das Rect an Ort und Stelle
+	# (links oben) kleben bleibt — grow zentriert dann um die linke Kante.
+	offset_left = 0.0
+	offset_right = 0.0
+	offset_top = float(insets["top"]) + 14.0 * f
+	offset_bottom = offset_top
+	if _clip != null:
+		var canvas := Vector2(vp.get_visible_rect().size)
+		sicht_breite = clampf(canvas.x * 0.38, 220.0, 420.0 * f)
+		_clip.custom_minimum_size.x = sicht_breite
 
 
 func _process(delta: float) -> void:

@@ -57,6 +57,8 @@ var _station_label: Label
 var _stat_labels: Array[Label] = []
 var _pops: Array = []
 var _end_card: Control
+var _headline: Label
+var _weiter_button: Button
 var _confetti: CPUParticles2D
 var _skip_button: Button
 var _hidden_layers: Array = []
@@ -219,6 +221,9 @@ func _show_end_card() -> void:
 	_station_label.visible = false
 	for label in _stat_labels:
 		label.visible = false
+	# Ab der Endkarte übernimmt der Weiter-Knopf — Skip wäre nur noch tot.
+	if _skip_button != null:
+		_skip_button.visible = false
 	_end_card.visible = true
 	if _confetti != null:
 		_confetti.emitting = true
@@ -249,7 +254,15 @@ func _on_gui_input(event: InputEvent) -> void:
 		skip()
 
 
+## F14b: Skip-KNOPF klingt als Zurück/Verlassen (Grammatik §3); der
+## Vollflächen-Tap (gui_input) bleibt bewusst stumm.
+func _on_skip_pressed() -> void:
+	AudioDirector.try_play(self, "ui_back")
+	skip()
+
+
 func _on_weiter() -> void:
+	AudioDirector.try_play(self, "ui_confirm")
 	_advance = true
 
 
@@ -342,7 +355,6 @@ func _build_ui() -> void:
 	_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_title.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_title.add_theme_font_size_override("font_size", 44)
 	_title.add_theme_color_override("font_color", Color(0.32, 0.24, 0.16))
 	_title.visible = false
 	_title.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -350,9 +362,6 @@ func _build_ui() -> void:
 	_station_label = Label.new()
 	_station_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_station_label.set_anchors_preset(Control.PRESET_TOP_WIDE)
-	_station_label.offset_top = 24.0
-	_station_label.offset_bottom = 72.0
-	_station_label.add_theme_font_size_override("font_size", 30)
 	_station_label.add_theme_color_override("font_color", Color(0.32, 0.24, 0.16))
 	_station_label.visible = false
 	_station_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -361,24 +370,65 @@ func _build_ui() -> void:
 		var stat := Label.new()
 		stat.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		stat.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-		stat.offset_top = -170.0 + float(i) * 58.0
-		stat.offset_bottom = -120.0 + float(i) * 58.0
-		stat.add_theme_font_size_override("font_size", 26)
 		stat.add_theme_color_override("font_color", Color(0.25, 0.18, 0.1))
 		stat.visible = false
 		stat.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		add_child(stat)
 		_stat_labels.append(stat)
 	_build_end_card()
-	_skip_button = Button.new()
+	_skip_button = SquishButton.new()
 	_skip_button.text = I18nService.t("recap.ueberspringen")
 	_skip_button.set_anchors_preset(Control.PRESET_TOP_RIGHT)
 	_skip_button.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-	_skip_button.offset_top = 16.0
-	_skip_button.offset_right = -16.0
+	_skip_button.grow_vertical = Control.GROW_DIRECTION_END
+	_skip_button.focus_mode = Control.FOCUS_NONE
 	_skip_button.visible = false
-	_skip_button.pressed.connect(skip)
+	_skip_button.pressed.connect(_on_skip_pressed)
 	add_child(_skip_button)
+	_wende_layout_an()
+	get_viewport().size_changed.connect(_wende_layout_an)
+
+
+## G4/P17 (Leitidee FB3): alle Fonts/Offsets aus UiScale + Safe-Area statt
+## fixer 1280×720-Pixel — im Kino-Querformat sitzt die Notch LINKS/RECHTS,
+## deshalb klemmen Skip (oben rechts) und Weiter (unten Mitte) an den
+## Insets. Läuft bei jedem Viewport-Resize erneut.
+func _wende_layout_an() -> void:
+	if _skip_button == null or not is_inside_tree():
+		return
+	var m := ScreenShell.metrics(get_viewport())
+	var f: float = m["f"]
+	var tf := UiScale.font_scale(get_viewport())
+	var insets: Dictionary = m["insets"]
+	var floor_px: float = m["floor_px"]
+	var canvas: Vector2 = m["canvas"]
+	_title.add_theme_font_size_override("font_size", int(44.0 * tf))
+	_station_label.offset_top = float(insets["top"]) + 24.0 * f
+	_station_label.offset_bottom = _station_label.offset_top + 48.0 * tf
+	_station_label.add_theme_font_size_override("font_size", int(30.0 * tf))
+	for i in _stat_labels.size():
+		var stat := _stat_labels[i]
+		stat.offset_top = -(float(insets["bottom"]) + 170.0 * f) + float(i) * 58.0 * f
+		stat.offset_bottom = stat.offset_top + 50.0 * f
+		stat.add_theme_font_size_override("font_size", int(26.0 * tf))
+	_skip_button.custom_minimum_size = Vector2(floor_px * 1.6, floor_px)
+	_skip_button.offset_top = float(insets["top"]) + 16.0 * f
+	_skip_button.offset_bottom = _skip_button.offset_top + floor_px
+	_skip_button.offset_right = -(float(insets["right"]) + 16.0 * f)
+	_skip_button.offset_left = _skip_button.offset_right - floor_px * 1.6
+	if _headline != null:
+		_headline.add_theme_font_size_override("font_size", int(52.0 * tf))
+	if _weiter_button != null:
+		var breite := maxf(180.0 * f, floor_px * 2.2)
+		var hoehe := maxf(50.0 * f, floor_px)
+		_weiter_button.custom_minimum_size = Vector2(breite, hoehe)
+		_weiter_button.offset_bottom = -(float(insets["bottom"]) + 24.0 * f)
+		_weiter_button.offset_top = _weiter_button.offset_bottom - hoehe
+		_weiter_button.offset_left = -breite / 2.0
+		_weiter_button.offset_right = breite / 2.0
+	if _confetti != null:
+		# Aus der Canvas abgeleitet — fix (640,120) stimmte nur auf 1280×720.
+		_confetti.position = Vector2(canvas.x * 0.5, canvas.y * 0.17)
 
 
 func _build_end_card() -> void:
@@ -387,32 +437,30 @@ func _build_end_card() -> void:
 	_end_card.visible = false
 	_end_card.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_end_card)
-	var headline := Label.new()
-	headline.text = I18nService.t("recap.level_headline", {"level": int(_timeline.get("level", 5))})
-	headline.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	headline.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	headline.set_anchors_preset(Control.PRESET_FULL_RECT)
-	# Oberes Drittel — mittig würde die Headline Gooby verdecken.
-	headline.offset_bottom = -440.0
-	headline.add_theme_font_size_override("font_size", 52)
-	headline.add_theme_color_override("font_color", Color(0.85, 0.5, 0.15))
-	_end_card.add_child(headline)
-	var weiter := Button.new()
-	weiter.text = I18nService.t("recap.weiter")
-	weiter.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	weiter.offset_top = -110.0
-	weiter.offset_bottom = -60.0
-	weiter.offset_left = -90.0
-	weiter.offset_right = 90.0
-	weiter.pressed.connect(_on_weiter)
-	_end_card.add_child(weiter)
+	_headline = Label.new()
+	_headline.text = I18nService.t(
+		"recap.level_headline", {"level": int(_timeline.get("level", 5))}
+	)
+	_headline.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_headline.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	# Oberes Drittel per ANKER (statt offset_bottom −440, das nur auf
+	# 720 px Höhe passte) — mittig würde die Headline Gooby verdecken.
+	_headline.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_headline.anchor_bottom = 0.34
+	_headline.add_theme_color_override("font_color", Color(0.85, 0.5, 0.15))
+	_end_card.add_child(_headline)
+	_weiter_button = SquishButton.new()
+	_weiter_button.text = I18nService.t("recap.weiter")
+	_weiter_button.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	_weiter_button.focus_mode = Control.FOCUS_NONE
+	_weiter_button.pressed.connect(_on_weiter)
+	_end_card.add_child(_weiter_button)
 	_confetti = CPUParticles2D.new()
 	_confetti.emitting = false
 	_confetti.one_shot = true
 	_confetti.amount = 90
 	_confetti.lifetime = 2.2
 	_confetti.explosiveness = 0.9
-	_confetti.position = Vector2(640.0, 120.0)
 	_confetti.direction = Vector2(0.0, 1.0)
 	_confetti.spread = 70.0
 	_confetti.initial_velocity_min = 180.0
@@ -461,7 +509,7 @@ func _animate_camera() -> void:
 
 
 func _animate_pops() -> void:
-	if _skip_button != null and not _skip_button.visible:
+	if _skip_button != null and not _skip_button.visible and not _ending:
 		if _t >= float(_timeline.get("skip_after_sec", 10.0)):
 			_skip_button.visible = true
 	var keep: Array = []

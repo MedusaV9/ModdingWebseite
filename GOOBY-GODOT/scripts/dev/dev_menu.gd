@@ -30,6 +30,7 @@ const NET_LOG_ZEILEN := 20
 
 var _f := 1.0
 var _tf := 1.0
+var _floor_px := 48.0
 var _layout: VBoxContainer
 var _tabs: TabContainer
 var _toast: ToastLayer
@@ -69,6 +70,7 @@ func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_f = UiScale.for_viewport(get_viewport())
 	_tf = UiScale.font_scale(get_viewport())
+	_floor_px = float(ScreenShell.metrics(get_viewport())["floor_px"])
 	_build_chrome()
 	_build_tabs()
 	_refresh_live()
@@ -106,7 +108,10 @@ func _build_chrome() -> void:
 	_tabs = TabContainer.new()
 	_tabs.name = "DevTabs"
 	_tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_tabs.clip_tabs = false
+	# G4/P17: Tab-Titel skalieren mit (zentrale Navigation, Theme-Default war
+	# < 44 pt); clip_tabs=true hält die Leiste in der Karte (Hochformat).
+	_tabs.clip_tabs = true
+	_tabs.add_theme_font_size_override("font_size", int(AcTokens.FONT_SIZE_BODY * _tf))
 	_layout.add_child(_tabs)
 	_toast = ToastLayer.new()
 	_toast.name = "Toast"
@@ -227,7 +232,8 @@ func _build_stats(parent: VBoxContainer) -> void:
 		slider.max_value = 100.0
 		slider.step = 1.0
 		slider.focus_mode = Control.FOCUS_NONE
-		slider.custom_minimum_size = Vector2(200.0 * _f, 36.0 * _f)
+		# Grabber-Trefferfläche ≥ Touch-Floor (36*f war knapp drunter).
+		slider.custom_minimum_size = Vector2(200.0 * _f, maxf(36.0 * _f, _floor_px))
 		slider.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		if gs != null:
 			slider.value = float(gs.get_value("gooby.stats." + stat, 50.0))
@@ -313,7 +319,7 @@ func _build_zeit_wetter(parent: VBoxContainer) -> void:
 	_zeit_slider.step = 0.5
 	_zeit_slider.value = 12.0
 	_zeit_slider.focus_mode = Control.FOCUS_NONE
-	_zeit_slider.custom_minimum_size = Vector2(200.0 * _f, 36.0 * _f)
+	_zeit_slider.custom_minimum_size = Vector2(200.0 * _f, maxf(36.0 * _f, _floor_px))
 	_zeit_slider.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	zeit_row.add_child(_zeit_slider)
 	var buttons := HBoxContainer.new()
@@ -332,7 +338,7 @@ func _build_uhr(parent: VBoxContainer) -> void:
 	_uhr_slider.max_value = 168.0
 	_uhr_slider.step = 1.0
 	_uhr_slider.focus_mode = Control.FOCUS_NONE
-	_uhr_slider.custom_minimum_size = Vector2(200.0 * _f, 36.0 * _f)
+	_uhr_slider.custom_minimum_size = Vector2(200.0 * _f, maxf(36.0 * _f, _floor_px))
 	_uhr_slider.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	var dev := _dev()
 	if dev != null and dev.has_method("clock_offset_ms"):

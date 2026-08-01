@@ -148,6 +148,9 @@ func _ausschalten() -> void:
 	if _aus_knopf != null:
 		_aus_knopf.queue_free()
 		_aus_knopf = null
+	var vp := get_viewport()
+	if vp != null and vp.size_changed.is_connected(_layout_aus_knopf):
+		vp.size_changed.disconnect(_layout_aus_knopf)
 	_player = null
 	_lass_gooby_los()
 	_say_key("gobty.aus")
@@ -200,22 +203,40 @@ func _bildschirm_masse() -> Dictionary:
 
 
 ## Aus-Knopf in der Raum-UI-Ebene (W3dUiLayer-Muster wie Spiegel/Radio):
-## Möbel-Taps zappen, DIESER Knopf schaltet ab.
+## Möbel-Taps zappen, DIESER Knopf schaltet ab. G4/P17: Safe-Area +
+## Touch-Floor statt fixer 154×44-px-Offsets (physisch ≈ 24 pt, unterm
+## Home-Indicator); bei Rotation zieht das Layout nach.
 func _zeige_aus_knopf() -> void:
-	_aus_knopf = Button.new()
+	_aus_knopf = SquishButton.new()
 	_aus_knopf.name = "GobtyAusKnopf"
 	_aus_knopf.theme = ThemeService.theme()
 	_aus_knopf.theme_type_variation = "GhostButton"
 	_aus_knopf.text = I18nService.t("gobty.aus_knopf")
 	_aus_knopf.focus_mode = Control.FOCUS_NONE
-	_aus_knopf.custom_minimum_size = Vector2(0, 44)
-	_aus_knopf.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-	_aus_knopf.offset_left = -170.0
-	_aus_knopf.offset_right = -16.0
-	_aus_knopf.offset_top = -150.0
-	_aus_knopf.offset_bottom = -106.0
+	# Klingt NICHT selbst: _ausschalten spielt bereits ui_close.
 	_aus_knopf.pressed.connect(_ausschalten)
 	_ui_layer().add_child(_aus_knopf)
+	_layout_aus_knopf()
+	var vp := get_viewport()
+	if vp != null and not vp.size_changed.is_connected(_layout_aus_knopf):
+		vp.size_changed.connect(_layout_aus_knopf)
+
+
+func _layout_aus_knopf() -> void:
+	if _aus_knopf == null or not is_instance_valid(_aus_knopf) or not is_inside_tree():
+		return
+	var m := ScreenShell.metrics(get_viewport())
+	var f: float = m["f"]
+	var insets: Dictionary = m["insets"]
+	var breite := maxf(154.0 * f, float(m["floor_px"]) * 2.0)
+	var hoehe := maxf(44.0 * f, float(m["floor_px"]))
+	_aus_knopf.custom_minimum_size = Vector2(breite, hoehe)
+	_aus_knopf.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	# 106*f Grundabstand hält den Knopf über der HUD-Daumen-Zeile.
+	_aus_knopf.offset_right = -(float(insets["right"]) + 16.0 * f)
+	_aus_knopf.offset_left = _aus_knopf.offset_right - breite
+	_aus_knopf.offset_bottom = -(float(insets["bottom"]) + 106.0 * f)
+	_aus_knopf.offset_top = _aus_knopf.offset_bottom - hoehe
 
 
 # ── Schritte inszenieren ──────────────────────────────────────────────────────
