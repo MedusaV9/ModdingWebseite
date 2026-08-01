@@ -50,6 +50,11 @@ var _steam: GPUParticles3D
 var _pop: GPUParticles3D
 var _lamps: Array[MeshInstance3D] = []
 var _emotion := "happy"
+var _guests: Array[GoobyRig] = []
+var _guest_bases: Array[Vector3] = []
+var _guest_t := 0.0
+var _guest_cheer := 0.0
+var _reduced := false
 
 
 func setup_stage(columns: Array) -> void:
@@ -90,6 +95,7 @@ func setup_stage(columns: Array) -> void:
 	_build_shelf()
 	_build_lamps(columns)
 	_build_gooby()
+	_build_guests()
 	_build_plate()
 	_rain = Node3D.new()
 	add_child(_rain)
@@ -103,8 +109,21 @@ func frame(half_h: float) -> void:
 	camera.rotation = Vector3.ZERO
 
 
+## G5 M1: Intro-Anflug — die Kamera schwebt aus einer erhöhten Küchen-Totale
+## in die frontale Spielpose; k=1 == exakte Rahmung von frame()
+## (carrot_catch-Muster, dieselbe Ease-Kurve).
+func establish(k: float) -> void:
+	var e := 1.0 - ease(clampf(k, 0.0, 1.0), 0.4)
+	camera.position = Vector3(0.0, 0.0, CAM_DIST) + Vector3(0.0, 2.2, 4.6) * e
+	camera.rotation_degrees = Vector3(-7.0 * e, 0.0, 0.0)
+
+
 ## Regen + Teller + Stapel je Frame aus dem Spielzustand nachziehen.
-func sync(items: Array, plate_x: float, ticket: Array, placed: int, needed: String) -> void:
+## `reduced` friert das Gäste-Schunkeln ein (Reduced Motion, Q2).
+func sync(
+	items: Array, plate_x: float, ticket: Array, placed: int, needed: String, reduced := false
+) -> void:
+	_reduced = reduced
 	for entry: Dictionary in _busy:
 		var node: Node3D = entry["node"]
 		node.visible = false
@@ -138,6 +157,32 @@ func feel(emotion: String) -> void:
 func cheer(clip: String) -> void:
 	if gooby != null:
 		gooby.play_clip(clip)
+
+
+## G5 M2: fertiger Burger — die Gäste jubeln mit. Der Clip läuft auch unter
+## Reduced Motion (normale Charakter-Animation), nur der Schunkel-Schub wird
+## gegated (Q2, tea_party-Muster).
+func guests_cheer(reduced := false) -> void:
+	for guest in _guests:
+		guest.play_clip_for("celebrate", 1.2)
+	if reduced:
+		return
+	_guest_cheer = 1.2
+
+
+## Glow-Zerfall der Basis + Gäste-Schunkeln (steht unter Reduced Motion).
+func tick(delta: float) -> void:
+	super.tick(delta)
+	_guest_cheer = maxf(0.0, _guest_cheer - delta)
+	if _reduced:
+		for i in _guests.size():
+			_guests[i].position = _guest_bases[i]
+		return
+	_guest_t += delta
+	var amp := 0.05 + 0.14 * _guest_cheer
+	for i in _guests.size():
+		var lift := absf(sin(_guest_t * 2.4 + float(i) * 1.7)) * amp
+		_guests[i].position = _guest_bases[i] + Vector3(0.0, lift, 0.0)
 
 
 ## Mehl-/Funkenwolke über dem Teller.
@@ -675,6 +720,27 @@ func _build_gooby() -> void:
 	add_child(step)
 	gooby.set_emotion(_emotion)
 	_build_hat()
+
+
+## G5 M2 (Audit A §2.4 „Diner ohne Gäste"): drei Gast-Goobys als reines
+## Publikum — zwei sitzen auf den Barhockern (füllen das Querformat), einer
+## wartet rechts an der Theke (im Hochkant-Ausschnitt sichtbar; hinter der
+## Theke schaut wie beim Koch nur der Oberkörper über die Platte).
+func _build_guests() -> void:
+	var seats: Array = [
+		[Vector3(-4.6, FLOOR_Y + 2.0, 2.6), 24.0, 2.4],
+		[Vector3(4.6, FLOOR_Y + 2.0, 2.6), -24.0, 2.4],
+		[Vector3(3.05, FLOOR_Y + 0.05, -2.4), -12.0, 3.4],
+	]
+	for seat: Array in seats:
+		var guest := GoobyRig.new()
+		guest.scale = Vector3.ONE * float(seat[2])
+		guest.position = seat[0]
+		guest.rotation_degrees = Vector3(0.0, float(seat[1]), 0.0)
+		add_child(guest)
+		guest.set_emotion("happy")
+		_guests.append(guest)
+		_guest_bases.append(guest.position)
 
 
 func _build_hat() -> void:

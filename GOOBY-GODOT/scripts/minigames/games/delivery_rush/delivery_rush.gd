@@ -17,6 +17,7 @@ extends MinigameBase
 
 const Logic := preload("res://scripts/minigames/games/delivery_rush/delivery_rush_logic.gd")
 const World := preload("res://scripts/minigames/games/delivery_rush/delivery_rush_world.gd")
+const Feel := preload("res://scripts/minigames/games/delivery_rush/delivery_rush_feel.gd")
 const Models := preload("res://scripts/minigames/games/_3db_stage/model_bank.gd")
 const Stage3D := preload("res://scripts/minigames/games/_3db_stage/stage3d.gd")
 const SpeedLines := preload("res://scripts/minigames/games/_3db_stage/speed_lines.gd")
@@ -60,6 +61,11 @@ const HFOV_KICK := 7.0
 const STREAK_RATE: Array = [[7.0, 0.0], [10.0, 5.0], [13.0, 11.0]]
 ## Nach so vielen Sekunden blendet der Hinweis aus.
 const HINT_FADE_SEC := 7.0
+## G5 M1: Intro-Beat (s) — Stadt-Totale + Ziel-Banner, Sim/Eingabe warten.
+const INTRO_S := 1.5
+## Kamera-Hub/-Rückzug der Intro-Totale (m) — Blick über die Abendstadt.
+const INTRO_LIFT := 16.0
+const INTRO_BACK := 10.0
 ## Autopilot (nur Screenshots/Zertifizierung): so scharf zielt er.
 const BOT_STEER_GAIN := 1.6
 ## Höhe des Gooby-Rigs auf dem Wagendach (m).
@@ -131,6 +137,8 @@ var _pop: GPUParticles3D
 var _cam_pos := Vector3.ZERO
 var _cam_look := Vector3.ZERO
 var _cam_ready := false
+var _intro_left := 0.0
+var _feel: Node
 
 
 func setup(context: MinigameCtx) -> void:
@@ -152,6 +160,12 @@ func setup(context: MinigameCtx) -> void:
 	_spawn_traffic()
 	_build_stage()
 	_build_hud()
+	# G5 M1: Intro-Beat — Ziel-Banner + Stadt-Totale; Sim-Uhr, Verkehr und
+	# Eingabe warten, der Lauf bleibt danach zahlengleich (Crosscheck-Vertrag).
+	# VOR _sync_world gesetzt, damit die Kamera direkt in der Totale startet.
+	_intro_left = INTRO_S
+	_set_banner(I18nService.t("mg.deliveryRush.intro"))
+	_banner_t = INTRO_S + 0.7
 	_sync_world(0.0)
 	_fit_viewport()
 	if is_inside_tree():
@@ -161,6 +175,8 @@ func setup(context: MinigameCtx) -> void:
 func end() -> void:
 	super.end()
 	finished = true
+	if _feel != null:
+		_feel.stop_motor()
 
 
 ## Pflicht-Layouthook: beide Orientierungen laufen über DIESE Funktion.
@@ -192,7 +208,26 @@ func _layout_hud() -> void:
 
 
 func _process(delta: float) -> void:
+	# Motor-Loop VOR dem Aktiv-Guard syncen (rocket-Muster): nur so pausiert
+	# der Loop auch, wenn die Runde vorbei ist oder das Spiel nicht aktiv ist.
+	if _feel != null:
+		_feel.tick(delta)
+		var driving := is_active() and not finished and _intro_left <= 0.0 and not _reduced_motion()
+		_feel.sync_motor(delta, driving, van_speed / VAN_TOP_SPEED)
 	if not is_active() or finished:
+		return
+	# G5 M1: im Intro-Beat schwebt die Kamera aus der Stadt-Totale in die
+	# Verfolger-Pose; Sim-Uhr, Verkehr und Eingabe warten (zahlengleich).
+	if _intro_left > 0.0:
+		_intro_left = maxf(0.0, _intro_left - delta)
+		_banner_t = maxf(0.0, _banner_t - delta)
+		_route_t -= delta
+		if _route_t <= 0.0:
+			_route_t = 0.25
+			_recompute_route()
+		_update_labels()
+		_sync_world(delta)
+		queue_redraw()
 		return
 	elapsed += delta
 	leg_elapsed += delta
@@ -217,7 +252,8 @@ func _process(delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if not is_active() or finished:
+	# G5 M1: im Intro-Beat wartet auch die Eingabe (kein Frühstart-Lenken).
+	if not is_active() or finished or _intro_left > 0.0:
 		return
 	if event is InputEventScreenTouch:
 		steer = _steer_from(event.position) if event.pressed else 0.0
@@ -428,6 +464,10 @@ func _build_stage() -> void:
 		)
 	)
 	_stage.add_child(_pop)
+	# G5: Fahrgefühl-Schicht (Motor-Loop, Bump-Drossel, Banner-/Kompass-Draw).
+	_feel = Feel.new()
+	add_child(_feel)
+	_feel.build_motor()
 
 
 ## Lieferwagen + Gooby + Paketstapel. Gooby thront SICHTBAR vorn auf dem
@@ -496,7 +536,9 @@ func _build_route() -> void:
 	# Web: `MeshBasicMaterial(PRIMARY_PINK, opacity 0.55)` — also UNBELEUCHTET.
 	# Als beleuchtetes Material lag das Band im Schlagschatten der Häuser und
 	# verschwand genau dort, wo man es zum Abbiegen braucht.
-	tape.material = Fx.glass(Color(0.95, 0.36, 0.62, 0.55), true)
+	# G5 (Audit A §2.7): 0,44 statt 0,55 Deckkraft — das grelle Vollband
+	# dominierte das Bild (Beleg deliveryRush_hoch.png), lesbar bleibt es.
+	tape.material = Fx.glass(Color(0.95, 0.36, 0.62, 0.44), true)
 	var lift := Transform3D(Basis.IDENTITY, Vector3(0.0, 0.09, 0.0))
 	_route_prop = MultiProp.new()
 	_stage.add_child(_route_prop)
@@ -562,7 +604,9 @@ func _step_van(delta: float) -> void:
 	var next_pos := van_pos + dir * van_speed * delta
 	if _blocked(next_pos):
 		van_speed *= 0.3
-		AudioDirector.try_play(self, "mg_junk", 0.9)
+		# G5 (Audit A §2.7): gedrosselter Bump statt mg_junk-Spam jeden Frame —
+		# Ton-Cooldown, Karosserie-Ruck und Kontakt-Staub macht die Feel-Schicht.
+		_feel.bump(self, _reduced_motion(), _dust, Vector3(next_pos.x, 0.5, next_pos.y))
 	else:
 		van_pos = next_pos
 	var limit := Logic.TILE_M * (Logic.GRID * 0.5)
@@ -634,6 +678,8 @@ func _crash() -> void:
 	delivery_streak = 0
 	AudioDirector.try_play(self, "mg_spill", 0.85)
 	_gooby.call("emote", "dizzy", 1.5)
+	# G5: auch der Verkehrs-Crash ruckt die Karosserie (KEIN Screenshake).
+	_feel.kick()
 	if not _reduced_motion():
 		Fx.burst(_dust, _van.global_position + Vector3(0.0, 0.6, 0.0))
 	# KEIN Screenshake: Dauerfahrt, Motion-Comfort-Regel.
@@ -672,11 +718,16 @@ func _check_drop(before: Vector2) -> void:
 	AudioDirector.try_play(self, "mg_perfect", FeelSfx.combo_pitch(delivery_streak))
 	_stage.call("pulse_glow", 1.0)
 	_gooby.call("emote", "ecstatic", 1.4)
-	Fx.burst(_pop, Vector3(center.x, 1.2, center.y))
+	# Q2: Gold-Pop am Ring nur ohne Reduced Motion (eigene Fx.burst-Call-Site).
+	if not _reduced_motion():
+		Fx.burst(_pop, Vector3(center.x, 1.2, center.y))
 	if ctx.juice != null:
 		ctx.juice.float_text(_project(center), "+%d" % (score - prev), Color(1.0, 0.82, 0.35))
 		ctx.juice.overlay_ring(_project(center), Color(1.0, 0.85, 0.35), 76.0)
 		ctx.juice.hit_freeze(50)
+		# G5: JEDE Zustellung feiert kurz — kleiner Konfetti-Gruß am Ziel
+		# (den großen Regen behält der Zeitbonus-Sieg; RM gatet der JuiceKit).
+		ctx.juice.confetti(30)
 		if delivery_streak >= 2:
 			ctx.juice.show_combo(delivery_streak)
 	_set_banner(
@@ -807,6 +858,7 @@ func _sync_route() -> void:
 	var back := Vector2(sin(van_heading), -cos(van_heading)) * ROUTE_TRAIL_M
 	var chain: Array[Vector2] = [van_pos - back, van_pos]
 	chain.append_array(_route)
+	var goal := current_drop()
 	for i in range(1, chain.size()):
 		var step := chain[i] - chain[i - 1]
 		if step.length() < 0.5:
@@ -817,10 +869,13 @@ func _sync_route() -> void:
 		# Dritte Spalte = lokale z-Achse: mit der Teilstücklänge gestreckt liegt
 		# das Band lückenlos, egal wie lang der Abschnitt ist.
 		var piece := step.length() / 3.0
-		var basis := Basis(right, Vector3.UP, fwd * piece)
 		for k in 3:
 			var t := (float(k) + 0.5) / 3.0
 			var p := chain[i - 1].lerp(chain[i], t)
+			# G5 (Audit A §2.7): in Hausnähe wird das Band schmaler — auf den
+			# letzten Metern dominierte der volle Läufer das Zielbild.
+			var slim := Feel.route_slim(p.distance_to(goal))
+			var basis := Basis(right * slim, Vector3.UP, fwd * piece)
 			_route_prop.call("push", Transform3D(basis, Vector3(p.x, 0.0, p.y)))
 	_route_prop.call("flush")
 
@@ -831,6 +886,10 @@ func _sync_van() -> void:
 	var right := Vector3.UP.cross(fwd).normalized()
 	var lean := clampf(steer * van_speed / VAN_TOP_SPEED, -1.0, 1.0)
 	var basis := Basis(right, Vector3.UP, fwd) * Basis(Vector3.BACK, -lean * 0.06)
+	# G5: Karosserie-Ruck nach Bump/Crash — kurzer Nicker um die Querachse,
+	# der über die Feel-Schicht abklingt (KEIN Screenshake, Motion-Comfort).
+	if _feel.body_kick > 0.0:
+		basis = basis * Basis(Vector3.RIGHT, _feel.body_kick * 0.06)
 	_van.transform = Transform3D(basis, Vector3(van_pos.x, 0.0, van_pos.y))
 	var left := maxi(0, int(tune["PARCELS"]) - drops)
 	for i in _parcels.size():
@@ -881,6 +940,11 @@ func _sync_camera(delta: float) -> void:
 	var ahead := CAM_LOOK_AHEAD - (0.0 if landscape else CAM_PORTRAIT_AHEAD)
 	var aim_y := 1.6 - (0.0 if landscape else CAM_PORTRAIT_AIM_DOWN)
 	var look := here + fwd * ahead + Vector3(0.0, aim_y, 0.0)
+	# G5 M1: im Intro hebt sich die Kamera zur Stadt-Totale und schwebt dann
+	# in die Verfolger-Pose (Reduced Motion überspringt den Flug).
+	if _intro_left > 0.0 and not _reduced_motion():
+		var e := 1.0 - ease(clampf(1.0 - _intro_left / INTRO_S, 0.0, 1.0), 0.4)
+		wanted += Vector3(0.0, INTRO_LIFT, 0.0) * e - fwd * (INTRO_BACK * e)
 	if not _cam_ready:
 		_cam_pos = wanted
 		_cam_look = look
@@ -914,63 +978,10 @@ func _project(world: Vector2) -> Vector2:
 # ── 2D-Overlay (Kompass + Banner über der 3D-Szene) ──────────────────────
 
 
+## G5 M7 (Audit A §2.7): Kompass-Meter mit Kontur und Banner auf Milchglas-
+## Plate — beide Maler leben in der Feel-Schicht (delivery_rush_feel.gd).
+## Der Kompass ist in der Verfolgerkamera PFLICHT (Ring oft hinter Häusern).
 func _draw() -> void:
-	_draw_compass()
-	_draw_banner()
-
-
-## Kompass-Pfeil zum aktuellen Abwurfring. In der Verfolgerkamera ist er
-## PFLICHT — der Ring steht oft hinter Häusern. Der Pfeil zeigt in
-## FAHRZEUG-Koordinaten (oben = geradeaus).
-func _draw_compass() -> void:
-	if parcel >= _drop_points.size():
-		return
-	var to := current_drop() - van_pos
-	if to.length() < 1.0:
-		return
-	var fwd := Vector2(sin(van_heading), -cos(van_heading))
-	var side := Vector2(-fwd.y, fwd.x)
-	var local := Vector2(to.dot(side), -to.dot(fwd)).normalized()
-	var center := Vector2(view_size.x * 0.5, view_size.y * 0.5)
-	var radius := minf(view_size.x, view_size.y) * 0.3
-	var tip := center + local * radius
-	var perp := Vector2(-local.y, local.x)
-	var a := 16.0 * _ui
-	draw_colored_polygon(
-		PackedVector2Array(
-			[
-				tip + local * a,
-				tip - local * a * 0.5 + perp * a * 0.62,
-				tip - local * a * 0.5 - perp * a * 0.62,
-			]
-		),
-		Color(1.0, 0.8, 0.3, 0.92)
-	)
-	var font := ThemeService.font(700)
-	var w := 110.0 * _ui
-	draw_string(
-		font,
-		tip + local * a * 1.5 - Vector2(w * 0.5, 0.0),
-		"%d m" % int(to.length()),
-		HORIZONTAL_ALIGNMENT_CENTER,
-		w,
-		maxi(13, int(18.0 * _ui)),
-		Color(1.0, 0.98, 0.92)
-	)
-
-
-func _draw_banner() -> void:
-	if _banner_t <= 0.0 or _banner.is_empty():
-		return
-	var font := ThemeService.font(800)
-	var alpha := clampf(_banner_t * 1.2, 0.0, 1.0)
-	var w := minf(view_size.x - 24.0, 420.0 * _ui)
-	draw_string(
-		font,
-		Vector2((view_size.x - w) * 0.5, view_size.y * 0.22),
-		_banner,
-		HORIZONTAL_ALIGNMENT_CENTER,
-		w,
-		maxi(18, int(28.0 * _ui)),
-		Color(1.0, 0.99, 0.94, alpha)
-	)
+	if parcel < _drop_points.size():
+		_feel.draw_compass(self, van_pos, van_heading, current_drop(), view_size, _ui)
+	_feel.draw_banner(self, _banner, _banner_t, view_size, _ui)

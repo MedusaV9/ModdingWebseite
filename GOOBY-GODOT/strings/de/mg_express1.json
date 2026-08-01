@@ -1,0 +1,10 @@
+{
+	"mg": {
+		"burgerBuild": {
+			"intro": "Stapel die Zutaten nach Bestellzettel!"
+		},
+		"deliveryRush": {
+			"intro": "Bring die Pakete in die Abwurfringe!"
+		}
+	}
+}

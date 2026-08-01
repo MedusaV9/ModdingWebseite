@@ -20,6 +20,12 @@ const HALF_H := 5.2
 const PLATE_Y := -3.4
 ## Entwurfs-Kurzkante — Pixelmaße der Bedienleiste skalieren damit.
 const DESIGN_SHORT := 390.0
+## G5 M1: Intro-Beat (s) — Küchen-Totale + Ziel-Banner, Sim/Eingabe warten.
+const INTRO_S := 1.5
+## G5 M6: nach so vielen Sekunden SIM-Zeit blendet der Hinweis aus.
+const HINT_FADE_SEC := 6.0
+## G5 M4: unter dieser Bestell-Restzeit pulsiert der Zettel rot und tickt.
+const URGENT_UNDER_S := 5.0
 
 const LAYER_COLORS := {
 	"bun": Color(0.91, 0.68, 0.36),
@@ -59,6 +65,9 @@ var _ui := 1.0
 var _time_label: Label
 var _order_label: Label
 var _hint_label: Label
+var _intro_left := 0.0
+var _flash_plate := StyleBoxFlat.new()
+var _last_tick_sec := -1
 
 
 func setup(context: MinigameCtx) -> void:
@@ -69,6 +78,12 @@ func setup(context: MinigameCtx) -> void:
 	_build_hud()
 	_new_order()
 	_fit_viewport()
+	# G5 M1: Intro-Beat — Ziel-Banner + Küchen-Totale; Sim-Uhr, Spawns und
+	# Eingabe warten, der Lauf bleibt danach zahlengleich (Crosscheck-Vertrag).
+	_intro_left = INTRO_S
+	_flash_text = I18nService.t("mg.burgerBuild.intro")
+	_flash_good = true
+	_flash = INTRO_S + 0.7
 	if is_inside_tree():
 		get_viewport().size_changed.connect(_fit_viewport)
 
@@ -120,6 +135,16 @@ func _layout_hud() -> void:
 func _process(delta: float) -> void:
 	if not is_active() or finished:
 		return
+	# G5 M1: im Intro-Beat schwebt die Kamera aus der Küchen-Totale in die
+	# Spielpose (Reduced Motion springt direkt); Sim-Uhr/Spawns warten.
+	if _intro_left > 0.0:
+		_intro_left = maxf(0.0, _intro_left - delta)
+		_flash = maxf(0.0, _flash - delta)
+		_stage.establish(1.0 if _reduced_motion() else 1.0 - _intro_left / INTRO_S)
+		_sync_stage(delta)
+		_update_labels()
+		queue_redraw()
+		return
 	elapsed += delta
 	_flash = maxf(0.0, _flash - delta)
 	if not bool(tune["ENDLESS"]) and elapsed >= float(tune["DURATION_SEC"]):
@@ -144,15 +169,31 @@ func _process(delta: float) -> void:
 		_spawn_item()
 		spawn_left = float(tune["SPAWN_SEC"])
 	_step_items(delta)
+	_tick_urgency()
 	_sync_stage(delta)
 	_update_labels()
 	queue_redraw()
 
 
+## G5 M4 (Audit A §2.4): unter 5 s Bestell-Restzeit tickt einmal je
+## Restsekunde ein ui_tick mit steigendem Pitch (carrot_guard-Muster, kein
+## neues Audio-Asset) — die rote Puls-Kante dazu malt _draw_ticket.
+func _tick_urgency() -> void:
+	if order_left > URGENT_UNDER_S or order_left <= 0.0:
+		_last_tick_sec = -1
+		return
+	var sec := int(ceil(order_left))
+	if sec != _last_tick_sec:
+		_last_tick_sec = sec
+		AudioDirector.try_play(self, "ui_tick", 0.9 + 0.5 * (1.0 - order_left / URGENT_UNDER_S))
+
+
 ## Die 3D-Bühne bekommt EINEN Zustandsschnappschuss — sie rechnet nur Optik.
 func _sync_stage(delta: float) -> void:
 	_stage.tick(delta)
-	_stage.sync(_items, plate_x, ticket, placed, Logic.next_needed(ticket, placed))
+	_stage.sync(
+		_items, plate_x, ticket, placed, Logic.next_needed(ticket, placed), _reduced_motion()
+	)
 	_stage.feel(_mood())
 
 
@@ -170,7 +211,8 @@ func _mood() -> String:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if not is_active() or finished:
+	# G5 M1: im Intro-Beat wartet auch die Eingabe (kein Frühstart-Teller).
+	if not is_active() or finished or _intro_left > 0.0:
 		return
 	if event is InputEventScreenTouch and event.pressed:
 		plate_x = _to_world_x(event.position.x)
@@ -280,7 +322,9 @@ func _catch_item(item: Dictionary) -> void:
 		_flash_good = true
 		# Funkenwölkchen in der Farbe der gefangenen Lage — der Treffer
 		# passiert AM Teller, also antwortet auch der Teller.
-		_stage.poof(LAYER_COLORS.get(str(item["id"]), Color(1.0, 0.9, 0.6)))
+		# (Q2: Partikel-Burst nur ohne Reduced Motion; Ton/Float-Text bleiben.)
+		if not _reduced_motion():
+			_stage.poof(LAYER_COLORS.get(str(item["id"]), Color(1.0, 0.9, 0.6)))
 		if ctx.juice != null:
 			ctx.juice.float_text(pos, _flash_text, Color(0.2, 0.6, 0.34))
 			ctx.juice.hit_freeze(35)
@@ -288,7 +332,8 @@ func _catch_item(item: Dictionary) -> void:
 		AudioDirector.try_play(self, "mg_spill")
 		_flash_text = I18nService.t("mg.burgerBuild.wrong")
 		_flash_good = false
-		_stage.poof(Color(0.55, 0.5, 0.48))
+		if not _reduced_motion():
+			_stage.poof(Color(0.55, 0.5, 0.48))
 		if ctx.juice != null:
 			ctx.juice.float_text(pos, "%s" % _fmt(delta), Color(0.82, 0.32, 0.3))
 			ctx.juice.shake(0.2)
@@ -308,9 +353,11 @@ func _complete_order() -> void:
 	_flash_good = true
 	_flash = 1.2
 	# Belohnungsmoment: der Koch jubelt, über dem fertigen Burger goldene
-	# Funken, die Bühne blitzt warm auf.
+	# Funken, die Bühne blitzt warm auf — und die Gäste feiern mit (G5 M2).
 	_stage.cheer("celebrate")
-	_stage.poof(Color(1.0, 0.85, 0.4))
+	_stage.guests_cheer(_reduced_motion())
+	if not _reduced_motion():
+		_stage.poof(Color(1.0, 0.85, 0.4))
 	_stage.pulse_glow(0.9)
 	if ctx.juice != null:
 		ctx.juice.bloom_pulse(1.0)
@@ -361,6 +408,19 @@ func _update_labels() -> void:
 	var key := "mg.burgerBuild.order_rush" if rush else "mg.burgerBuild.order"
 	var left_sec := int(ceil(maxf(0.0, order_left)))
 	_order_label.text = I18nService.t(key, {"n": order_number, "sec": left_sec})
+	# G5 M6: der Hinweis blendet nach 6 s SIM-Zeit aus (im Intro steht die
+	# Uhr, der Hinweis bleibt dort also voll lesbar — rocket-Muster).
+	_hint_label.modulate.a = clampf((HINT_FADE_SEC - elapsed) / 1.2, 0.0, 1.0)
+
+
+## Reduced-Motion-Abfrage (Duck-Typing wie im JuiceKit — ohne Autoload = aus).
+func _reduced_motion() -> bool:
+	if not is_inside_tree():
+		return true
+	var settings := get_node_or_null(^"/root/AppSettings")
+	if settings != null and settings.has_method("is_reduced_motion"):
+		return bool(settings.call("is_reduced_motion"))
+	return false
 
 
 ## Die WELT lebt in der 3D-Bühne — 2D bleibt nur der Bestellzettel (UI) und
@@ -384,9 +444,15 @@ func _draw_ticket() -> void:
 		Vector2(w + pad * 2.0, h * ticket.size() + pad * 2.0 + head)
 	)
 	var frame := Color(0.9, 0.5, 0.35) if rush else Color(0.7, 0.6, 0.52)
+	# G5 M4 (Audit A §2.4): unter 5 s Restzeit pulsiert die Zettel-Kante rot
+	# (Reduced Motion: statisch rot) — die HUD-Dringlichkeit zur Gooby-Mimik.
+	var urgent := bite_left <= 0.0 and order_left > 0.0 and order_left <= URGENT_UNDER_S
+	if urgent:
+		var pulse := 1.0 if _reduced_motion() else 0.55 + 0.45 * sin(elapsed * 9.0)
+		frame = frame.lerp(Color(0.88, 0.2, 0.16), pulse)
 	draw_rect(bg.grow(3.0 * _ui), Color(0.0, 0.0, 0.0, 0.1))
 	draw_rect(bg, Color(1.0, 1.0, 1.0, 0.95))
-	draw_rect(bg, frame, false, maxf(2.0, 3.0 * _ui))
+	draw_rect(bg, frame, false, maxf(2.0, (4.0 if urgent else 3.0) * _ui))
 	draw_rect(
 		Rect2(bg.position.x, bg.position.y, bg.size.x, head * 0.8), frame.lerp(Color.WHITE, 0.72)
 	)
@@ -429,19 +495,29 @@ func _draw_ticket() -> void:
 		draw_rect(mark, Color(0.95, 0.45, 0.66))
 
 
+## G5 M7 (Audit A §2.4): Meldung auf Milchglas-Plate mit Kontur und Umbruch
+## (rocket-Muster) — vorher kollidierte die nackte Schrift bei y·0,3 optisch
+## mit den Deckenlampen; jetzt sitzt sie UNTER den Lampen auf einer Plate.
 func _draw_flash() -> void:
 	if _flash <= 0.0 or _flash_text.is_empty():
 		return
 	var font := ThemeService.font(800)
-	var alpha := clampf(_flash * 1.5, 0.0, 1.0)
-	var col := Color(0.2, 0.6, 0.34, alpha) if _flash_good else Color(0.85, 0.35, 0.3, alpha)
-	var w := minf(view_size.x - 24.0, 360.0 * _ui)
-	draw_string(
-		font,
-		Vector2((view_size.x - w) * 0.5, view_size.y * 0.3),
-		_flash_text,
-		HORIZONTAL_ALIGNMENT_CENTER,
-		w,
-		maxi(18, int(30.0 * _ui)),
-		col
+	var alpha := clampf(_flash * 1.4, 0.0, 1.0)
+	var font_size := maxi(18, int(26.0 * _ui))
+	var w := minf(view_size.x - 24.0, 400.0 * _ui)
+	var text_size := font.get_multiline_string_size(
+		_flash_text, HORIZONTAL_ALIGNMENT_CENTER, w, font_size
 	)
+	var top := view_size.y * 0.4
+	var pad := Vector2(18.0, 10.0) * _ui
+	_flash_plate.set_corner_radius_all(int(12.0 * _ui))
+	_flash_plate.bg_color = Color(1.0, 0.99, 0.94, 0.78 * alpha)
+	var plate_pos := Vector2((view_size.x - text_size.x) * 0.5, top) - pad
+	draw_style_box(_flash_plate, Rect2(plate_pos, text_size + pad * 2.0))
+	var ink := Color(0.16, 0.45, 0.26, alpha) if _flash_good else Color(0.72, 0.2, 0.16, alpha)
+	var rim := Color(1.0, 1.0, 1.0, 0.75 * alpha)
+	var at := Vector2((view_size.x - w) * 0.5, top + font.get_ascent(font_size))
+	draw_multiline_string_outline(
+		font, at, _flash_text, HORIZONTAL_ALIGNMENT_CENTER, w, font_size, -1, int(5.0 * _ui), rim
+	)
+	draw_multiline_string(font, at, _flash_text, HORIZONTAL_ALIGNMENT_CENTER, w, font_size, -1, ink)
