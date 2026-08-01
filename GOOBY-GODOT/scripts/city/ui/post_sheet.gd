@@ -5,10 +5,14 @@ extends VBoxContainer
 ## (Multiplayer ohne Netzcode) ist GESTRICHEN — stattdessen liegt hier pro
 ## Lokaltag ein echtes Tagespaket (PostLogic, 15–40 Münzen, seeded) bereit.
 ## Ein künftiger Netz-Versand bekommt wieder einen eigenen Schalter.
+## G3/P07: Schalter-Knöpfe sind SquishButtons auf dem Touch-Floor
+## (ScreenShell.touch_target); Paket-Abholung klingt am OUTCOME (ui_coins).
 
 signal schalter_gewaehlt(schalter: String)
 
 var gs: Object
+
+var _metrics: Dictionary = {}
 
 
 func _ready() -> void:
@@ -19,6 +23,7 @@ func _ready() -> void:
 func aktualisiere() -> void:
 	for kind in get_children():
 		kind.queue_free()
+	_metrics = ScreenShell.metrics(get_viewport()) if is_inside_tree() else {}
 	CitySheetBausteine.label(self, I18nService.t("city.post.titel"), "HeadlineLabel")
 	_baue_paket_schalter()
 	_baue_archiv()
@@ -30,7 +35,7 @@ func _baue_paket_schalter() -> void:
 	var karte := CitySheetBausteine.karte(self)
 	CitySheetBausteine.label(karte, I18nService.t("city.post.paket"), "HeadlineLabel")
 	CitySheetBausteine.label(karte, I18nService.t("city.post.paket_text"), "CaptionLabel")
-	var btn := Button.new()
+	var btn := SquishButton.new()
 	btn.name = "PaketHolen"
 	btn.theme_type_variation = "AccentButton"
 	var offen := gs != null and PostLogic.verfuegbar(gs.state(), _local_day())
@@ -40,6 +45,7 @@ func _baue_paket_schalter() -> void:
 	else:
 		btn.text = I18nService.t("city.post.paket_geholt")
 		btn.disabled = true
+	_hebe_auf_floor(btn)
 	karte.add_child(btn)
 
 
@@ -57,15 +63,23 @@ func _baue_archiv() -> void:
 	)
 	# REST-4 (P1 „Bald“-Fix, EVAL Rang 15): der Archiv-Klick landet jetzt im
 	# echten Postkarten-Archiv statt in einem Platzhalter.
-	var btn := Button.new()
+	var btn := SquishButton.new()
 	btn.name = "ArchivAnsehen"
 	btn.theme_type_variation = "AccentButton"
 	btn.text = I18nService.t("postkarten.ansehen")
 	btn.pressed.connect(_on_archiv_ansehen)
+	_hebe_auf_floor(btn)
 	karte.add_child(btn)
 
 
+## Tippfläche auf den physischen Touch-Floor heben (G3/P07).
+func _hebe_auf_floor(btn: Control) -> void:
+	if not _metrics.is_empty():
+		ScreenShell.touch_target(btn, _metrics)
+
+
 func _on_archiv_ansehen() -> void:
+	AudioDirector.try_play(self, "ui_click")
 	PostkartenScreen.register_routes()
 	var router := get_node_or_null("/root/SceneRouter")
 	if router != null and router.has_method("goto"):
@@ -84,6 +98,9 @@ func _on_paket_holen() -> void:
 		return
 	gs.notify_slice_changed("city")
 	schalter_gewaehlt.emit("paket")
+	# Outcome schlägt Press: Münz-EINNAHME klingt als ui_coins (§3-Grammatik).
+	AudioDirector.try_play(self, "ui_coins")
+	Haptics.success(self)
 	_zeige_toast(I18nService.t("city.post.paket_toast", {"n": int(res.get("coins", 0))}))
 	aktualisiere()
 

@@ -10,6 +10,11 @@ extends Control
 ## über gs.update() VOR dem Senden entnommen und bei einem endgültigen
 ## Sende-Fehlschlag zurückgebucht (Web-Ökonomie ist client-autoritativ).
 ## Netz: NetMail (scripts/net/net_mail.gd) über /root/Net; Texte: mail.json.
+##
+## G3/P07 UI-POST: Karte skaliert über ScreenShell (card_width/×f/Touch-
+## Floor + scale_fonts), expliziter Schließen-Knopf, Compose-Guard gegen
+## Dim-Tap-Datenverlust (Nachfrage-Karte statt Sofort-queue_free) und
+## Sounds nach Sound-Fixliste F7 (Outcome schlägt Press).
 
 signal toast_requested(text: String)
 signal closed
@@ -22,6 +27,11 @@ const Economy := preload("res://scripts/logic/economy.gd")
 const PORTO := 5
 const GESCHENK_MENGE := 1
 const THUMB_SIZE := Vector2(96, 96)
+## G3/P07: Design-Basis der zentrierten Karte (Breite/Höhe) — zur Laufzeit
+## über ScreenShell.card_width/card_max_height ×f skaliert + Safe-geklemmt.
+const CARD_BASIS := Vector2(520.0, 520.0)
+const LISTE_BASIS_HOEHE := 320.0
+const TEXT_BASIS_HOEHE := 140.0
 
 var mail_service: NetMail
 var gs: Object
@@ -37,6 +47,12 @@ var _zeichen_label: Label
 var _foto_wahl: OptionButton
 var _geschenk_wahl: OptionButton
 var _send_button: Button
+var _card: PanelContainer
+var _scroll: ScrollContainer
+var _verwerfen_dialog: PanelContainer
+## Zuletzt eingesammelte ScreenShell-Metriken (für Spät-Bauten wie
+## Brief-Zeilen/Nachfrage-Karte, ohne pro Node neu zu messen).
+var _metrics: Dictionary = {}
 
 
 func setup(net: Node, game_state: Object) -> void:
@@ -53,22 +69,34 @@ func _ready() -> void:
 	dim.gui_input.connect(_on_dim_input)
 	add_child(dim)
 
-	var card := PanelContainer.new()
-	card.theme_type_variation = &"AcCard"
-	card.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
-	card.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	card.grow_vertical = Control.GROW_DIRECTION_BOTH
-	card.custom_minimum_size = Vector2(460, 520)
-	add_child(card)
+	_card = PanelContainer.new()
+	_card.name = "MailKarte"
+	_card.theme_type_variation = &"AcCard"
+	_card.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	_card.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_card.grow_vertical = Control.GROW_DIRECTION_BOTH
+	add_child(_card)
 	var rows := VBoxContainer.new()
 	rows.add_theme_constant_override("separation", 10)
-	card.add_child(rows)
+	_card.add_child(rows)
 
+	var kopf_zeile := HBoxContainer.new()
+	kopf_zeile.add_theme_constant_override("separation", 8)
+	rows.add_child(kopf_zeile)
 	var title := Label.new()
 	title.theme_type_variation = &"TitleLabel"
 	title.text = I18nService.t("mail.titel")
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	rows.add_child(title)
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	kopf_zeile.add_child(title)
+	# G3/P07: expliziter Schließen-Knopf — Dim-Tap ist nicht mehr der
+	# einzige (und im Compose-Fall datenvernichtende) Ausgang.
+	var schliessen := SquishButton.new()
+	schliessen.name = "SchliessenButton"
+	schliessen.theme_type_variation = &"GhostButton"
+	schliessen.text = "✕"
+	schliessen.pressed.connect(_schliesse_angefragt)
+	kopf_zeile.add_child(schliessen)
 	_status_label = Label.new()
 	_status_label.theme_type_variation = &"CaptionLabel"
 	_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -84,11 +112,45 @@ func _ready() -> void:
 	rows.add_child(_compose_box)
 	_baue_inbox()
 	_baue_compose()
+	get_viewport().size_changed.connect(_relayout)
+	_relayout()
 
 	if mail_service != null:
 		mail_service.mail_new.connect(_on_mail_new)
 		mail_service.unread_changed.connect(func(n: int) -> void: unread_changed.emit(n))
 	_zeige_inbox()
+	# Eigenbau-Overlay (kein PanelSheet) → Öffnen klingt selbst (§3-Grammatik);
+	# der „Briefkasten öffnen“-Knopf im Ort bleibt deshalb stumm.
+	AudioDirector.try_play(self, "ui_open")
+
+
+## G3/P07: Karte/Liste/Textfeld auf ×f-Skalierung + Safe-Klemmung heben,
+## alle Tippflächen auf den Touch-Floor, Theme-Schriften ×f — wird bei
+## size_changed und nach jedem Listen-/Compose-Rebuild erneut angewendet.
+func _relayout() -> void:
+	if not is_inside_tree() or _card == null:
+		return
+	_metrics = ScreenShell.metrics(get_viewport())
+	var f: float = _metrics["f"]
+	var max_hoehe := ScreenShell.card_max_height(_metrics)
+	_card.custom_minimum_size = Vector2(
+		ScreenShell.card_width(_metrics, CARD_BASIS.x), minf(CARD_BASIS.y * f, max_hoehe)
+	)
+	if _scroll != null:
+		_scroll.custom_minimum_size = Vector2(0.0, minf(LISTE_BASIS_HOEHE * f, max_hoehe * 0.6))
+	if _text_edit != null:
+		var canvas: Vector2 = _metrics["canvas"]
+		# Deckel gegen die iOS-Tastatur im Querformat: nie höher als ¼ Canvas.
+		_text_edit.custom_minimum_size = Vector2(0.0, minf(TEXT_BASIS_HOEHE * f, canvas.y * 0.25))
+		# ScreenShell.scale_fonts kennt nur Label/Button/LineEdit — den
+		# Brieftext (TextEdit) von Hand von der Design-Basis aus skalieren.
+		if not _text_edit.has_meta("g3_font_basis"):
+			_text_edit.set_meta("g3_font_basis", _text_edit.get_theme_font_size("font_size"))
+		var basis := int(_text_edit.get_meta("g3_font_basis"))
+		_text_edit.add_theme_font_size_override("font_size", int(maxf(roundf(basis * f), 10.0)))
+	for btn: Node in find_children("*", "Button", true, false):
+		ScreenShell.touch_target(btn, _metrics)
+	ScreenShell.scale_fonts(self, f)
 
 
 # ---- Transaktions-Logik (pure statics — direkt testbar) ----
@@ -167,26 +229,36 @@ func _baue_inbox() -> void:
 	var kopf := HBoxContainer.new()
 	kopf.add_theme_constant_override("separation", 8)
 	_inbox_box.add_child(kopf)
-	var schreiben := Button.new()
+	var schreiben := SquishButton.new()
 	schreiben.name = "SchreibenButton"
 	schreiben.theme_type_variation = &"PrimaryButton"
 	schreiben.text = I18nService.t("mail.schreiben")
-	schreiben.pressed.connect(_zeige_compose)
+	schreiben.pressed.connect(_on_schreiben)
 	kopf.add_child(schreiben)
-	var neu_laden := Button.new()
+	var neu_laden := SquishButton.new()
 	neu_laden.theme_type_variation = &"GhostButton"
 	neu_laden.text = I18nService.t("mail.aktualisieren")
-	neu_laden.pressed.connect(func() -> void: _lade_inbox())
+	neu_laden.pressed.connect(_on_aktualisieren)
 	kopf.add_child(neu_laden)
 
-	var scroll := ScrollContainer.new()
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroll.custom_minimum_size = Vector2(0, 320)
-	_inbox_box.add_child(scroll)
+	_scroll = ScrollContainer.new()
+	_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_inbox_box.add_child(_scroll)
 	_liste_slot = VBoxContainer.new()
 	_liste_slot.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_liste_slot.add_theme_constant_override("separation", 8)
-	scroll.add_child(_liste_slot)
+	_scroll.add_child(_liste_slot)
+
+
+## F7: Ansichtswechsel Inbox → Compose klingt als Chip.
+func _on_schreiben() -> void:
+	AudioDirector.try_play(self, "ui_chip")
+	_zeige_compose()
+
+
+func _on_aktualisieren() -> void:
+	AudioDirector.try_play(self, "ui_click")
+	_lade_inbox()
 
 
 func _zeige_inbox() -> void:
@@ -225,6 +297,8 @@ func _render_liste(mails: Array) -> void:
 	for mail: Variant in mails:
 		if mail is Dictionary:
 			_liste_slot.add_child(_baue_brief_zeile(mail))
+	# Frisch gebaute Zeilen-Knöpfe auf Floor/×f heben.
+	_relayout()
 
 
 func _baue_brief_zeile(mail: Dictionary) -> Control:
@@ -272,12 +346,12 @@ func _baue_brief_zeile(mail: Dictionary) -> Control:
 	aktionen.add_theme_constant_override("separation", 6)
 	box.add_child(aktionen)
 	if not bool(mail.get("read", false)):
-		var gelesen := Button.new()
+		var gelesen := SquishButton.new()
 		gelesen.theme_type_variation = &"GhostButton"
 		gelesen.text = I18nService.t("mail.gelesen_knopf")
 		gelesen.pressed.connect(_on_gelesen.bind(str(mail.get("id", "")), gelesen))
 		aktionen.add_child(gelesen)
-	var loeschen := Button.new()
+	var loeschen := SquishButton.new()
 	loeschen.theme_type_variation = &"GhostButton"
 	loeschen.text = I18nService.t("mail.loeschen")
 	loeschen.pressed.connect(_on_loeschen.bind(str(mail.get("id", ""))))
@@ -287,7 +361,7 @@ func _baue_brief_zeile(mail: Dictionary) -> Control:
 
 func _baue_foto_thumbnail(photo_id: String) -> Control:
 	var rect := TextureRect.new()
-	rect.custom_minimum_size = THUMB_SIZE
+	rect.custom_minimum_size = THUMB_SIZE * float(_metrics.get("f", 1.0))
 	rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	rect.tooltip_text = I18nService.t("mail.foto_laedt")
@@ -323,7 +397,7 @@ func _baue_geschenk_chip(mail: Dictionary, item: Dictionary) -> Control:
 		{"name": item_name(item), "n": maxi(1, int(item.get("menge", GESCHENK_MENGE)))}
 	)
 	chip.add_child(label)
-	var knopf := Button.new()
+	var knopf := SquishButton.new()
 	knopf.name = "AnnehmenButton"
 	knopf.theme_type_variation = &"AccentButton"
 	if bool(mail.get("claimed", false)):
@@ -337,7 +411,8 @@ func _baue_geschenk_chip(mail: Dictionary, item: Dictionary) -> Control:
 
 
 ## Geschenk annehmen: erst der einmalige Server-Claim, DANN die lokale
-## Inventar-Gutschrift (Doppel-Gutschrift ausgeschlossen).
+## Inventar-Gutschrift (Doppel-Gutschrift ausgeschlossen). F7: Druck bleibt
+## stumm (Netz-Ausgang), der AUSGANG klingt — Belohnung als ui_sticker.
 func _on_annehmen(mail_id: String, item: Dictionary, knopf: Button) -> void:
 	if mail_service == null or gs == null:
 		return
@@ -346,12 +421,15 @@ func _on_annehmen(mail_id: String, item: Dictionary, knopf: Button) -> void:
 	if not is_instance_valid(self):
 		return
 	if not bool(res.get("ok", false)):
+		AudioDirector.try_play(self, "ui_error")
 		toast_requested.emit(I18nService.t(str(res.get("message_key", "mail.err.generic"))))
 		knopf.disabled = str(res.get("code", "")) == "ALREADY_CLAIMED"
 		return
 	var geschenk: Dictionary = res.get("item", item)
 	gs.update(func(state: Dictionary) -> void: MailSheet.schreibe_gut(state, geschenk))
 	knopf.text = I18nService.t("mail.angenommen")
+	AudioDirector.try_play(self, "ui_sticker")
+	Haptics.success(self)
 	toast_requested.emit(
 		I18nService.t(
 			"mail.toast.geschenk_da",
@@ -361,6 +439,7 @@ func _on_annehmen(mail_id: String, item: Dictionary, knopf: Button) -> void:
 
 
 func _on_gelesen(mail_id: String, knopf: Button) -> void:
+	AudioDirector.try_play(self, "ui_click")
 	if mail_service == null:
 		return
 	knopf.disabled = true
@@ -374,6 +453,7 @@ func _on_gelesen(mail_id: String, knopf: Button) -> void:
 
 
 func _on_loeschen(mail_id: String) -> void:
+	AudioDirector.try_play(self, "ui_click")
 	if mail_service == null:
 		return
 	var res: Dictionary = await mail_service.delete_mail(mail_id)
@@ -445,17 +525,23 @@ func _baue_compose() -> void:
 	var aktionen := HBoxContainer.new()
 	aktionen.add_theme_constant_override("separation", 8)
 	_compose_box.add_child(aktionen)
-	var zurueck := Button.new()
+	var zurueck := SquishButton.new()
 	zurueck.theme_type_variation = &"GhostButton"
 	zurueck.text = I18nService.t("mail.zurueck")
-	zurueck.pressed.connect(_zeige_inbox)
+	zurueck.pressed.connect(_on_compose_zurueck)
 	aktionen.add_child(zurueck)
-	_send_button = Button.new()
+	# F7: der Senden-Druck bleibt stumm — der AUSGANG klingt (_on_senden).
+	_send_button = SquishButton.new()
 	_send_button.name = "SendenButton"
 	_send_button.theme_type_variation = &"PrimaryButton"
 	_send_button.text = I18nService.t("mail.compose.senden", {"porto": PORTO})
 	_send_button.pressed.connect(_on_senden)
 	aktionen.add_child(_send_button)
+
+
+func _on_compose_zurueck() -> void:
+	AudioDirector.try_play(self, "ui_back")
+	_zeige_inbox()
 
 
 func _zeige_compose() -> void:
@@ -466,6 +552,7 @@ func _zeige_compose() -> void:
 	_fuelle_geschenke()
 	_on_text_changed()
 	_aktualisiere_status()
+	_relayout()
 
 
 func _fuelle_freunde() -> void:
@@ -545,18 +632,20 @@ func _on_text_changed() -> void:
 ## Senden — transaktional: Porto + Geschenk werden VOR dem Request entnommen;
 ## bei endgültigem Fehlschlag wird beides zurückgebucht. QUEUED (offline)
 ## zählt als „unterwegs“ — die Outbox stellt zu, sobald Netz da ist.
+## F7 (Outcome schlägt Press): Erfolg/Queued → ui_confirm + Haptics.success,
+## jeder Fehlerausgang → ui_error + Haptics.warn; der Druck selbst ist stumm.
 func _on_senden() -> void:
 	if mail_service == null or gs == null:
 		return
 	var code := _gewaehlter_freund_code()
 	if code.is_empty():
-		toast_requested.emit(I18nService.t("mail.compose.kein_freund"))
+		_melde_sende_fehler(I18nService.t("mail.compose.kein_freund"))
 		return
 	var text := _text_edit.text.substr(0, NetMail.TEXT_MAX)
 	var foto := _gewaehltes_foto()
 	var item := _gewaehltes_geschenk()
 	if text.strip_edges().is_empty() and foto.is_empty() and item.is_empty():
-		toast_requested.emit(I18nService.t("mail.err.bad_mail"))
+		_melde_sende_fehler(I18nService.t("mail.err.bad_mail"))
 		return
 
 	var box := {"ok": false}
@@ -565,7 +654,7 @@ func _on_senden() -> void:
 			box["ok"] = MailSheet.nimm_geschenk_und_porto(state, item, PORTO)
 	)
 	if not bool(box["ok"]):
-		toast_requested.emit(_entnahme_fehler_text(item))
+		_melde_sende_fehler(_entnahme_fehler_text(item))
 		return
 
 	_send_button.disabled = true
@@ -574,19 +663,31 @@ func _on_senden() -> void:
 		return
 	_send_button.disabled = false
 	if bool(res.get("ok", false)):
+		AudioDirector.try_play(self, "ui_confirm")
+		Haptics.success(self)
 		toast_requested.emit(
 			I18nService.t("mail.toast.gesendet", {"name": _gewaehlter_freund_name()})
 		)
 	elif bool(res.get("queued", false)):
+		# Offline-first: der Brief IST angenommen (Outbox) — Erfolgsmoment.
+		AudioDirector.try_play(self, "ui_confirm")
+		Haptics.success(self)
 		toast_requested.emit(I18nService.t("mail.toast.queued"))
 	else:
 		# Endgültiger Fehlschlag → Porto + Geschenk zurück (Transaktion).
 		gs.update(func(state: Dictionary) -> void: MailSheet.gib_zurueck(state, item, PORTO))
-		toast_requested.emit(I18nService.t(str(res.get("message_key", "mail.err.generic"))))
+		_melde_sende_fehler(I18nService.t(str(res.get("message_key", "mail.err.generic"))))
 		return
 	_text_edit.text = ""
 	_on_text_changed()
 	_zeige_inbox()
+
+
+## Fehler-Ausgang des Sende-Flows: EIN Klang + Warn-Haptik + Toast.
+func _melde_sende_fehler(text: String) -> void:
+	AudioDirector.try_play(self, "ui_error")
+	Haptics.warn(self)
+	toast_requested.emit(text)
 
 
 func _entnahme_fehler_text(item: Dictionary) -> String:
@@ -659,5 +760,80 @@ func _aktualisiere_status() -> void:
 
 func _on_dim_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed:
-		closed.emit()
-		queue_free()
+		_schliesse_angefragt()
+
+
+## G3/P07 Compose-Guard: ein angefangener Brief geht beim Daneben-Tippen
+## nicht mehr verloren — im Compose-Zustand mit Text erscheint erst eine
+## Nachfrage-Karte (Muster: LoeschDialog der Galerie).
+func _schliesse_angefragt() -> void:
+	var entwurf := (
+		_compose_box != null
+		and _compose_box.visible
+		and _text_edit != null
+		and not _text_edit.text.strip_edges().is_empty()
+	)
+	if entwurf:
+		_zeige_verwerfen_dialog()
+		return
+	_schliesse()
+
+
+func _schliesse() -> void:
+	# Eigenbau-Overlay → Schließen klingt selbst (§3-Grammatik).
+	AudioDirector.try_play(self, "ui_close")
+	closed.emit()
+	queue_free()
+
+
+func _zeige_verwerfen_dialog() -> void:
+	if _verwerfen_dialog != null and is_instance_valid(_verwerfen_dialog):
+		return
+	var f := float(_metrics.get("f", 1.0))
+	_verwerfen_dialog = PanelContainer.new()
+	_verwerfen_dialog.name = "VerwerfenDialog"
+	_verwerfen_dialog.theme_type_variation = &"AcCard"
+	_verwerfen_dialog.set_anchors_preset(Control.PRESET_CENTER)
+	_verwerfen_dialog.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_verwerfen_dialog.grow_vertical = Control.GROW_DIRECTION_BOTH
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 10)
+	_verwerfen_dialog.add_child(box)
+	var frage := Label.new()
+	frage.text = I18nService.t("mail.compose.verwerfen_frage")
+	frage.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	frage.custom_minimum_size = Vector2(320.0 * f, 0.0)
+	box.add_child(frage)
+	var zeile := HBoxContainer.new()
+	zeile.add_theme_constant_override("separation", 10)
+	box.add_child(zeile)
+	var weiter := SquishButton.new()
+	weiter.name = "WeiterschreibenButton"
+	weiter.theme_type_variation = &"PrimaryButton"
+	weiter.text = I18nService.t("mail.compose.weiterschreiben")
+	weiter.pressed.connect(_on_weiterschreiben)
+	zeile.add_child(weiter)
+	var verwerfen := SquishButton.new()
+	verwerfen.name = "VerwerfenButton"
+	verwerfen.theme_type_variation = &"GhostButton"
+	verwerfen.text = I18nService.t("mail.loeschen")
+	verwerfen.pressed.connect(_on_entwurf_verwerfen)
+	zeile.add_child(verwerfen)
+	add_child(_verwerfen_dialog)
+	if not _metrics.is_empty():
+		ScreenShell.touch_target(weiter, _metrics)
+		ScreenShell.touch_target(verwerfen, _metrics)
+		ScreenShell.scale_fonts(_verwerfen_dialog, f)
+
+
+func _on_weiterschreiben() -> void:
+	AudioDirector.try_play(self, "ui_back")
+	if _verwerfen_dialog != null and is_instance_valid(_verwerfen_dialog):
+		_verwerfen_dialog.queue_free()
+	_verwerfen_dialog = null
+
+
+## Bewusstes Wegwerfen des Entwurfs — destruktive Aktion → Warn-Haptik (§3).
+func _on_entwurf_verwerfen() -> void:
+	Haptics.warn(self)
+	_schliesse()

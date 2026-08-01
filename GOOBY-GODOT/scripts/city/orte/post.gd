@@ -7,9 +7,13 @@ extends OrtScene
 ## MailSheet) — Briefe + Fotos + Item-Geschenke an Freunde, offline-first
 ## über die NetMail-Outbox. Das Tagespaket (PostSheet/PostLogic) bleibt
 ## unverändert.
+## G3/P07: Ungelesen-Zähler als StatusCapsule-Badge in der Kopfzeile
+## (statt Knopftext-Anhang), Schalter-Knopf auf SquishButton + Touch-Floor.
 
 const INNEN := "res://assets/city/innen"
 const MOEBEL := "res://assets/furniture"
+
+var _ungelesen_badge: PanelContainer
 
 
 func _baue_innenraum() -> void:
@@ -50,36 +54,67 @@ func _on_schalter(_schalter: String) -> void:
 		rig.play_clip("wave")
 
 
-## Brief-Schalter-Karte: Knopf zum Briefkasten (mit Ungelesen-Badge) plus
-## Offline-/Outbox-Hinweis. Ohne /root/Net (z. B. Tests) bleibt der Knopf
-## stehen und meldet ehrlich den Offline-Zustand.
+## Brief-Schalter-Karte: Kopfzeile mit StatusCapsule-Ungelesen-Badge,
+## Knopf zum Briefkasten plus Offline-/Outbox-Hinweis. Ohne /root/Net
+## (z. B. Tests) bleibt der Knopf stehen und meldet ehrlich Offline.
 func _baue_briefe_schalter() -> Control:
 	var wrapper := VBoxContainer.new()
 	wrapper.name = "BriefeSchalter"
 	var karte := CitySheetBausteine.karte(wrapper)
-	CitySheetBausteine.label(karte, I18nService.t("mail.schalter.titel"), "HeadlineLabel")
+	var kopf := HBoxContainer.new()
+	kopf.add_theme_constant_override("separation", 8)
+	karte.add_child(kopf)
+	var titel := Label.new()
+	titel.text = I18nService.t("mail.schalter.titel")
+	titel.theme_type_variation = "HeadlineLabel"
+	titel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	kopf.add_child(titel)
+	_ungelesen_badge = baue_ungelesen_badge(_briefe_ungelesen())
+	kopf.add_child(_ungelesen_badge)
 	CitySheetBausteine.label(karte, I18nService.t("mail.schalter.text"), "CaptionLabel")
 	var status := _briefe_status_text()
 	if not status.is_empty():
 		CitySheetBausteine.label(karte, status, "CaptionLabel")
-	var knopf := Button.new()
+	# Öffnet das MailSheet-Overlay — das klingt selbst (ui_open), der Knopf
+	# bleibt deshalb stumm (§3-Grammatik: kein Doppel-Klang).
+	var knopf := SquishButton.new()
 	knopf.name = "BriefeOeffnen"
 	knopf.theme_type_variation = "AccentButton"
-	knopf.text = _briefe_knopf_text()
+	knopf.text = I18nService.t("mail.schalter.offen")
 	knopf.pressed.connect(_on_briefe_oeffnen)
+	if is_inside_tree():
+		ScreenShell.touch_target(knopf, ScreenShell.metrics(get_viewport()))
 	karte.add_child(knopf)
 	return wrapper
 
 
-func _briefe_knopf_text() -> String:
-	var text := I18nService.t("mail.schalter.offen")
+## G3/P07: Ungelesen-Badge als StatusCapsule — pur baubar, direkt testbar.
+static func baue_ungelesen_badge(n: int) -> PanelContainer:
+	var badge := PanelContainer.new()
+	badge.name = "UngelesenBadge"
+	badge.theme_type_variation = &"StatusCapsule"
+	var label := Label.new()
+	label.name = "Zahl"
+	label.theme_type_variation = &"CaptionLabel"
+	badge.add_child(label)
+	setze_ungelesen_badge(badge, n)
+	return badge
+
+
+## Badge-Stand nachziehen (0 = unsichtbar statt „0 neu“).
+static func setze_ungelesen_badge(badge: PanelContainer, n: int) -> void:
+	badge.visible = n > 0
+	var label := badge.get_node_or_null("Zahl") as Label
+	if label != null:
+		label.text = I18nService.t("mail.schalter.neu", {"n": n})
+
+
+func _briefe_ungelesen() -> int:
 	var net := get_node_or_null("/root/Net")
 	if net == null:
-		return text
+		return 0
 	var service := NetMail.attach(net)
-	if service != null and service.unread > 0:
-		text += " · " + I18nService.t("mail.schalter.neu", {"n": service.unread})
-	return text
+	return service.unread if service != null else 0
 
 
 ## Offline-Chip + Outbox-Hinweis („wird zugestellt, sobald du online bist“).
@@ -102,4 +137,12 @@ func _on_briefe_oeffnen() -> void:
 	var sheet := MailSheet.new()
 	sheet.setup(get_node_or_null("/root/Net"), game_state())
 	sheet.toast_requested.connect(zeige_toast)
+	sheet.unread_changed.connect(_on_unread_changed)
 	_ui.add_child(sheet)
+
+
+## Das Badge lebt hinter dem offenen Briefkasten weiter — Stand mitziehen,
+## damit es nach dem Schließen nicht veraltet dasteht (G3/P07).
+func _on_unread_changed(unread: int) -> void:
+	if _ungelesen_badge != null and is_instance_valid(_ungelesen_badge):
+		OrtPost.setze_ungelesen_badge(_ungelesen_badge, unread)
