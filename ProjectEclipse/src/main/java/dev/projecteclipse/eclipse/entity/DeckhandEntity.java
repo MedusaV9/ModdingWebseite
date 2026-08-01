@@ -151,14 +151,24 @@ public class DeckhandEntity extends EclipseGeoMob {
     private int hostileOrphanTicks;
 
     /**
-     * Renderer bookkeeping: game time the current rowing session's {@code row} loop was
-     * clock-synced, or {@link Long#MIN_VALUE} while unsynced (LIMBOFIX2: one sync per
-     * rowing session — the renderer clears this whenever the row loop is not the active
-     * base animation).
+     * Renderer bookkeeping: the 60 t grid boundary the current rowing session's
+     * {@code row} loop was clock-synced to, or {@link Long#MIN_VALUE} while unsynced
+     * (LIMBOFIX2: one sync per rowing session — the renderer clears this whenever the
+     * row loop is not the active base animation; C2-R2 stores the crossed boundary, not
+     * the sample time, which at normal framerates is the same tick).
      */
     public long clientRowResetAt = Long.MIN_VALUE;
     /** Renderer bookkeeping: last row cycle that spawned the blade-dip splash. */
     public long clientSplashCycle = Long.MIN_VALUE;
+    /**
+     * Renderer bookkeeping: game time of the previous render sample taken while the row
+     * loop was the active base animation, or {@link Long#MIN_VALUE} before the session's
+     * first sample. C2-R2: lets the renderer detect a 60 t boundary that fell BETWEEN
+     * two rendered frames — on low-FPS clients the boundary tick itself is almost never
+     * sampled. Cleared together with {@link #clientRowResetAt} so a stale pre-hostile
+     * sample cannot fake a crossing into the next rowing session.
+     */
+    public long clientRowSampledAt = Long.MIN_VALUE;
 
     public DeckhandEntity(EntityType<? extends DeckhandEntity> entityType, Level level) {
         super(entityType, level);

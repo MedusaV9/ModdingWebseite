@@ -44,13 +44,15 @@ import software.bernie.geckolib.cache.object.GeoBone;
  *       card lights on top of it while the crew is risen.</li>
  *   <li><b>Row-phase sync (LIMBOFIX2):</b> the {@code row} loop is authored at exactly
  *       {@code 3.0 s = 60 t}. The {@code base} controller is force-reset ONCE per rowing
- *       session, on the first {@code gameTime % 60 == 0} boundary after the rower enters
- *       the row state — every rower anchors to the same boundary grid, so all 8 stroke
- *       in unison regardless of when each entity spawned or started rendering. The old
- *       every-60t reset was NOT a no-op at the seam: GeckoLib re-anchors the controller
- *       clock after its 4 t transition, so the loop sat permanently 4 t off the grid and
- *       every reset cut the 2.8–3.0 s catch beat into a linear blend — the whole crew
- *       hitched every 3 s.</li>
+ *       session, on the first {@code gameTime % 60 == 0} boundary the renderer SEES after
+ *       the rower enters the row state — sampled exactly on the boundary tick at normal
+ *       framerates, or detected as a boundary CROSSING between two frames on low-FPS
+ *       clients (C2-R2; see the anchor block) — every rower anchors to the same boundary
+ *       grid, so all 8 stroke in unison regardless of when each entity spawned or started
+ *       rendering. The old every-60t reset was NOT a no-op at the seam: GeckoLib
+ *       re-anchors the controller clock after its 4 t transition, so the loop sat
+ *       permanently 4 t off the grid and every reset cut the 2.8–3.0 s catch beat into a
+ *       linear blend — the whole crew hitched every 3 s.</li>
  *   <li><b>Port-side mirror:</b> one animation cannot serve both gunwales — the fore-aft
  *       sweep (oar bone yaw) and the blade feather (blade roll) would run bow-ward on one
  *       side and stern-ward on the other in world space. Port rowers (facing {@code -Z})
@@ -141,9 +143,13 @@ public class DeckhandRenderer extends EclipseGeoRenderer<DeckhandEntity> {
         applyFace(entity);
         if (entity.isHostile() || !entity.isAlive() || entity.isTilt()) {
             // The row loop is not the active base animation (hostile walk/sag, death or
-            // the cutscene tilt): drop the sync mark so the NEXT rowing session aligns
-            // itself once at the following 60t boundary.
+            // the cutscene tilt): drop the sync marks so the NEXT rowing session aligns
+            // itself once at the following 60t boundary. C2-R2: the sample mark drops
+            // too — a stale pre-hostile sample would otherwise read as a boundary
+            // crossing on the next session's FIRST frame and anchor mid-cycle even on
+            // normal-framerate clients.
             entity.clientRowResetAt = Long.MIN_VALUE;
+            entity.clientRowSampledAt = Long.MIN_VALUE;
             return;
         }
         long gameTime = entity.level().getGameTime();
@@ -158,12 +164,40 @@ public class DeckhandRenderer extends EclipseGeoRenderer<DeckhandEntity> {
         // one-time reset costs a single 4t blend when a rower first (re)enters the row
         // state; every rower anchors to the same boundary grid, so the crew still strokes
         // in unison regardless of spawn/first-render time.
-        if (entity.clientRowResetAt == Long.MIN_VALUE
-                && gameTime % DeckhandEntity.ROW_SYNC_PERIOD_TICKS == 0) {
-            entity.clientRowResetAt = gameTime;
-            AnimationController<?> base = controller(entity, EclipseGeoAnimations.CONTROLLER_BASE);
-            if (base != null) {
-                base.forceAnimationReset();
+        // C2-R2 (F-104 acceptance: the wake NEVER fired on the GPU-less VM): the anchor
+        // used to arm only when a frame sampled gameTime % 60 == 0 EXACTLY. preRender
+        // runs per FRAME, not per tick — at llvmpipe's seconds-per-frame rate 40–100+
+        // ticks pass between samples, so the boundary tick is essentially never sampled,
+        // the anchor stayed MIN_VALUE forever and the splash gate below never opened:
+        // C2 was completely dead on low-FPS clients. The anchor therefore also arms
+        // when a boundary fell BETWEEN the previous and the current sample (the
+        // clientRowSampledAt bookkeeping). Deliberate trade-off: forceAnimationReset()
+        // has no seek — the RUNNING clock re-anchors at the CURRENT frame (GeckoLib's
+        // AnimationController.adjustTick sets its protected tickOffset to the frame's
+        // seek time, which runs on entity.tickCount, a clock that time-sync snaps
+        // decouple from gameTime on exactly the lagging clients this serves) — so a
+        // crossing anchor leaves the loop up to one frame gap past the grid. That error
+        // is bounded by the frame interval, i.e. by what the viewer can temporally
+        // resolve at all: at >=1 sample/tick the boundary tick itself is always sampled
+        // (crossing and %60==0 coincide — behavior identical to LIMBOFIX2), at 5–10 FPS
+        // it is 1–3 t (inside the 4 t transition blend), and at seconds-per-frame no
+        // stroke phase is perceivable in the first place. Every rower still anchors at
+        // most one frame gap after a boundary of the SAME grid, so the crew's relative
+        // spread also stays under one frame interval — the unison law holds, and it is
+        // still strictly ONE reset per rowing session.
+        long lastSample = entity.clientRowSampledAt;
+        entity.clientRowSampledAt = gameTime;
+        if (entity.clientRowResetAt == Long.MIN_VALUE) {
+            long phaseTicks = gameTime % DeckhandEntity.ROW_SYNC_PERIOD_TICKS;
+            long boundary = gameTime - phaseTicks;
+            if (phaseTicks == 0 || (lastSample != Long.MIN_VALUE && lastSample < boundary)) {
+                entity.clientRowResetAt = boundary;
+                AnimationController<?> base = controller(entity, EclipseGeoAnimations.CONTROLLER_BASE);
+                if (base != null) {
+                    base.forceAnimationReset();
+                }
+                EclipseMod.LOGGER.debug("[c2-splash] rower {} row clock anchored: gameTime {} boundary {} ({}t late)",
+                        entity.getId(), gameTime, boundary, phaseTicks);
             }
         }
         // Splash only once the loop is clock-aligned — phase is meaningless before that.
@@ -236,6 +270,10 @@ public class DeckhandRenderer extends EclipseGeoRenderer<DeckhandEntity> {
      * next ~1.5 blocks so the eight synchronized blades paint eight short drift lines.
      * Rides the existing call-site guards (tilt drops the sync mark, a hostile rower
      * never rows), zero new assets; {@code reducedFx} halves the fleck count.
+     *
+     * <p>One DEBUG probe line per fired splash ({@code [c2-splash]}, the
+     * {@code [w4a-whiff]} pattern): llvmpipe acceptance greps {@code run/logs/debug.log}
+     * instead of pixel-hunting seconds-per-frame footage.</p>
      */
     private void spawnCatchSplash(DeckhandEntity entity, long gameTime, float partialTick) {
         float phase = (gameTime % DeckhandEntity.ROW_SYNC_PERIOD_TICKS) + partialTick;
@@ -263,6 +301,8 @@ public class DeckhandRenderer extends EclipseGeoRenderer<DeckhandEntity> {
                             0.0D, 0.06D, 0.0D);
                 }
                 spawnGhostWake(entity, x, surfaceY, z);
+                EclipseMod.LOGGER.debug("[c2-splash] rower {} fired: gameTime {} cycle {} phase {}",
+                        entity.getId(), gameTime, cycle, phase);
                 return;
             }
             probe.move(0, -1, 0);

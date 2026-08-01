@@ -203,3 +203,153 @@ Konstanten; `halfWidthAt`/`HALF_WIDTH` sind public API), `LimboHorizonShips.java
 `FxCues`/`stormfx/*`/`ritual/*`, Lang-JSONs (Langdrop stattdessen), `UserFeedback.md`.
 `sounds.json`/`EclipseSounds.java` blieben unverändert — alle Sounds sind Bestand
 (Noteblock/Step-Sounds + registrierte `boss.ferryman_bell`), keine Audio-Generierung.
+
+## C2 Nachtrag — Low-FPS-Anker-Fix (R2)
+
+**Symptom (Live-Abnahme llvmpipe)**: Splash + Ghost-Wake über Dutzende Versuche NIE
+beobachtet, obwohl Geometrie (Blatt-Tip über Wasser) und Renderer-Lauf (Rower im Frustum)
+verifiziert waren.
+
+### Root-Cause (bestätigt)
+
+Der LIMBOFIX2-Anker in `DeckhandRenderer.preRender` armte nur bei einem Frame-Sample
+EXAKT auf dem Boundary-Tick:
+
+```java
+if (entity.clientRowResetAt == Long.MIN_VALUE
+        && gameTime % DeckhandEntity.ROW_SYNC_PERIOD_TICKS == 0) {   // == 0 EXAKT
+    entity.clientRowResetAt = gameTime;
+    ...forceAnimationReset();
+}
+if (entity.clientRowResetAt != Long.MIN_VALUE) {
+    spawnCatchSplash(entity, gameTime, partialTick);
+}
+```
+
+`preRender` sampelt die Level-Uhr pro FRAME, nicht pro Tick. Auf llvmpipe liegen
+40–100+ Ticks zwischen zwei Frames — die Chance, je einen `% 60 == 0`-Tick zu treffen,
+ist ~1–2 % pro Frame und der Treffer wird nie nachgeholt: der Anker blieb für immer
+`Long.MIN_VALUE`, das Gate vor `spawnCatchSplash` öffnete nie, C2 war auf
+Low-FPS-Clients komplett tot. Bei ≥ 1 Sample/Tick wird JEDER Tick gesampelt, der Anker
+greift binnen ≤ 60 t — darum war es im Design und auf normalen Clients unsichtbar.
+
+**Zweitloch-Prüfung `spawnCatchSplash`**: kein zweites Loch. Das per-cycle-Dedupe
+(`clientSplashCycle == cycle`) latcht nicht — ein Frame bei Phase < 1.0 returnt OHNE den
+cycle zu setzen; komplett übersprungene Zyklen feuern schlicht nie (in ihnen wurde nichts
+gerendert, die Partikel wären ohnehin tot), der nächste gerenderte Zyklus feuert normal;
+`cycle` ist monoton (gameTime geht nie rückwärts), also auch kein Doppel-Splash.
+
+### Gewählter Fix: Boundary-Crossing-Detection (mit dokumentiertem Trade-off)
+
+Neues Client-Bookkeeping-Feld `DeckhandEntity.clientRowSampledAt` (Namenskonvention der
+Bestandsfelder) merkt die gameTime des vorigen Row-Samples. Der Anker armt jetzt, wenn
+`gameTime % 60 == 0` exakt getroffen wird (unverändert, Normalpfad) ODER ein 60-t-Boundary
+strikt ZWISCHEN letztem und aktuellem Sample lag (`lastSample < gameTime − gameTime % 60`).
+Gesetzt wird `clientRowResetAt` auf den ÜBERSCHRITTENEN Boundary (auf dem Normalpfad
+identisch zur Sample-Zeit); `forceAnimationReset()` läuft weiterhin strikt EINMAL pro
+Rudersession (Guard unverändert). Der Nicht-Ruder-Zweig (hostile/tot/tilt) cleart BEIDE
+Marken — sonst würde ein staler Vor-Hostile-Sample auf dem ERSTEN Frame der nächsten
+Session als Crossing lesen und auch auf Normal-FPS-Clients mid-cycle ankern.
+
+**Trade-off (im Code-Kommentar dokumentiert)**: `forceAnimationReset()` kann nicht
+seeken — die GeckoLib-RUNNING-Uhr ankert am AKTUELLEN Frame. Ein Crossing-Anker lässt
+die Animation also bis zu (Frame-Gap − 1) Ticks neben dem Grid liegen. Dieser Fehler ist
+durch das Frame-Intervall beschränkt, d. h. durch genau das, was der Betrachter zeitlich
+überhaupt auflösen kann: bei ≥ 1 Sample/Tick 0 t (Boundary-Tick wird selbst gesampelt),
+bei 5–10 FPS 1–3 t (innerhalb des 4-t-Transition-Blends), bei Sekunden-pro-Frame bis zu
+~59 t — dort ist Stroke-Phase aber prinzipiell unsichtbar. Jeder Rower ankert höchstens
+ein Frame-Gap nach einem Boundary DESSELBEN Grids, die Crew-interne Streuung bleibt also
+ebenfalls unter einem Frame-Intervall — das Unison-Gesetz hält. Einziger hörbarer Rest
+auf Mittel-FPS: der Dirge/Creak-Beat (`LimboRowChant`, läuft auf der Level-Uhr) kann der
+Animation um diese 1–3 t vorauslaufen — unterhalb des Blends, akzeptiert.
+
+### Verworfene Alternativen
+
+1. **Mathematisches Seeking der Controller-Uhr** (wäre „perfekte Phase auf jeder
+   Framerate"): per `javap` gegen GeckoLib 4.9.2 verifiziert — die einzige public
+   Reset-API ist `forceAnimationReset()` (setzt nur `needsAnimationReload`); der
+   Uhr-Anker `tickOffset` ist `protected` und wird in `adjustTick` beim
+   TRANSITIONING→RUNNING-Flip auf die AKTUELLE Seek-Zeit gesetzt. Zugriff hieße (a) ein
+   House-Subclass, der aber durch `EclipseGeoMob`/`EclipseGeoMonster.registerControllers`
+   (final, COMMON-Code, von JEDEM Geo-Mob geteilt) verdrahtet werden müsste — kein
+   Client-only-Fix mehr, Auftrag §4 — oder (b) Reflection/Mixin in GeckoLib-Interna
+   (fragil, laut Auftrag nur „bei Not"). Entscheidend: die Garantie wäre ohnehin
+   unsauber. `GeoModel.handleAnimations` (javap) treibt die Seek-Uhr mit
+   `entity.tickCount + partialTick`-Deltas, Grid und Splash laufen aber auf `gameTime` —
+   und genau auf laggy Clients cappt der Client-Tick-Loop das Aufholen (~10 t/Frame),
+   während das periodische `ClientboundSetTimePacket` `gameTime` nach vorn snappt,
+   `tickCount` aber nicht. Das Offset beider Uhren ist dort NICHT stabil: ein einmaliger
+   Seek driftet wieder vom Grid, und Nachkorrigieren wäre der
+   LIMBOFIX2-Jeden-Boundary-Reset durch die Hintertür. (Derselbe Snap-Drift trifft auch
+   den Boundary-Anker — Grid-Alignment ist auf Low-FPS-Clients prinzipiell best-effort;
+   der Splash selbst hängt direkt an `gameTime` und ist immun.)
+2. **Crossing öffnet nur das Splash-Gate, Reset wartet weiter auf den exakten Boundary**:
+   verworfen — auf Low-FPS käme der Reset dann nie, jeder Rower bliebe auf seiner
+   Spawn-Phase (Unison-Bruch, sobald die Framerate sich erholt) und der Gate-Kommentar
+   („Phase erst nach Alignment aussagekräftig") wäre gelogen.
+
+### Normal-FPS-Beweisführung (kein Verhalten kippt)
+
+- **≥ 1 Sample/Tick** ⇒ der Boundary-Tick wird selbst gesampelt ⇒ `phaseTicks == 0`
+  feuert auf exakt demselben Tick wie bisher; `clientRowResetAt` erhält denselben Wert
+  (Boundary == Sample-Zeit). Mehrere Frames im selben Tick: nur der erste ankert
+  (`clientRowResetAt != MIN_VALUE`-Guard, unverändert) — kein Doppel-Reset.
+- **Session-Neustart** (hostile→calm, Tilt): beide Marken gecleart; erster Frame der
+  neuen Session recorded nur den Sample, der Anker kommt am nächsten Boundary — exakt
+  das LIMBOFIX2-Verhalten.
+- **Splash-Pfad unangetastet**: `clientSplashCycle`-Dedupe, Partikeltypen/-counts/
+  -positionen, reducedFx-Halbierung, Drift-Richtung — alles unverändert; Additionen sind
+  reine Bookkeeping-Writes + zwei DEBUG-Zeilen. Das Gate vor `spawnCatchSplash` bleibt
+  (der Fix garantiert Alignment nicht mathematisch, s. o. — es öffnet jetzt nur auf
+  jeder Framerate binnen ≤ 2 gerenderter Frames + Restzyklus).
+- Niemand liest `clientRowResetAt` außer als `== Long.MIN_VALUE`-Gate (rg-verifiziert:
+  nur `DeckhandRenderer`), die Wertsemantik-Präzisierung (Boundary statt Sample-Zeit)
+  ist also folgenlos.
+
+### DEBUG-Sonde `[c2-splash]` (permanent, im Normalbetrieb still)
+
+Zwei Zeilen im `[w4a-whiff]`-Muster (`EclipseMod.LOGGER.debug`):
+
+- `[c2-splash] rower <id> row clock anchored: gameTime <t> boundary <b> (<n>t late)` —
+  einmal pro Rudersession/Rower; `0t late` beweist den (unveränderten) Normalpfad,
+  `>0t late` beweist den Crossing-Pfad.
+- `[c2-splash] rower <id> fired: gameTime <t> cycle <c> phase <p>` — pro gefeuertem
+  Splash (nur wenn die Wasser-Probe Fluid fand), max. 1/Zyklus/Rower.
+
+**Log-Pfad**: `ProjectEclipse/run/logs/debug.log` — der Dev-Client läuft mit
+`--gameDir .` (Prozess-CWD `ProjectEclipse/run`, via `/proc/<pid>/cwd` verifiziert;
+`build/moddev/clientRunProgramArgs.txt`), Server- und Client-JVM teilen sich die Datei.
+Das NeoForge-Dev-log4j routet DEBUG dorthin (live gegengeprüft: FML-DEBUG-Zeilen der
+laufenden JVMs stehen drin); die Konsole/`latest.log` bleibt INFO-still.
+
+### Abnahme-Drehbuch (Hauptagent, nach Frisch-Client-Neustart — F-103-Schritt-0-Regel)
+
+RCON-Präfix: `python3 tools/rcon/rcon.py "…"`; Greps aus `ProjectEclipse/`.
+
+1. Sichtkontakt: `eclipse tp_limbo Dev` (Spawn-Plattform), Kamera so, dass Rower im
+   Frustum sind (bewährte Spots per `n Dev <x y z yaw pitch>`, §4) — die Sonde feuert
+   nur für GERENDERTE Rower.
+2. 60–90 s Echtzeit warten (llvmpipe: praktisch jeder Frame landet in einem neuen
+   Zyklus ⇒ ~1 fired-Zeile pro Frame und sichtbarem Rower).
+3. `rg -c "\[c2-splash\]" run/logs/debug.log` → > 0 und wachsend;
+   `rg "\[c2-splash\]" run/logs/debug.log | tail -20` fürs Detail. Erwartung: pro
+   sichtbarem Rower genau EINE anchored-Zeile mit `late > 0` (Crossing-Pfad = der Fix),
+   danach fired-Zeilen mit strikt steigenden cycles, nie zweimal derselbe cycle pro
+   Rower-Id (Dedupe-Beleg).
+4. Normalpfad-Gegenprobe AUF der VM: Session neu anstoßen (`eclipse boss ferryman
+   summon` → `eclipse boss ferryman phase 2` → 10 s → `eclipse boss ferryman kill`,
+   §4-Präzedenz; im Hostile-Fenster erscheinen KEINE neuen `[c2-splash]`-Zeilen — der
+   Nicht-Ruder-Zweig cleart und returnt), dann `tick rate 2`: 1 Tick = 0,5 s ⇒ selbst
+   llvmpipe sampelt jetzt jeden Tick ⇒ die neue anchored-Zeile zeigt `0t late`
+   (Beweis: Exakt-Boundary-Pfad unverändert), fired-Zeilen kommen im 30-s-Raster.
+   Danach `tick rate 20`.
+5. Optional Sichtprobe unter `tick rate 2` wie in §4 Screenshot C (jetzt erreichbar,
+   weil der Anker armt).
+
+**Gate-Beleg**: `flock /tmp/gradle.lock ./gradlew compileJava --offline --console=plain`
+→ BUILD SUCCESSFUL (3 s, inkrementell).
+
+**Geänderte Dateien**: `client/entity/DeckhandRenderer.java` (Anker-Block + Sonden,
+Klassen-Javadoc-Bullet), `entity/DeckhandEntity.java` (neues Feld `clientRowSampledAt`,
+Javadoc-Präzisierung `clientRowResetAt`), dieser Report. Sonst nichts — insbesondere
+keine Partikel-/Sound-/Photon-Pfade, kein `UserFeedback.md`.
