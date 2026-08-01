@@ -66,23 +66,44 @@ _(Runden W14 UND W15 sind FERTIG — Details unten in „Erledigt". Aktueller St
       König-Banner, Timer-Urgenz, Intro-Beat),
       **(g) Server-CI + ehrliche Doku**, **(h) Trailer-Vorarbeiten**
       (Storyboard v4, 4 neue Aufnahme-Treiber, Zahlen-Fixes).
-- [~] **W16 / Welle G4 läuft:** Das große UI-Rework geht in die Fläche:
-      Baumodus, Reise-App, Radio/Kino, IGohbie-Telefon, Ranch-Bedienflächen,
-      Level-Auswahlen + Brettspiele, Boot-Ladebild im Alt-Web-Look,
-      Onboarding/Quests/Feier-Flächen — dazu 7 Minispiel-Polituren
-      (teaParty, carrotCatch, bubblePop+bunnyHop, danceParty, fishingPond,
-      goalieGooby, rocketRescue; die sichtbarsten/schwächsten zuerst laut
-      Audit aller 28 Rest-Spiele). Loop läuft weiter.
+- [x] **W17 / Welle G4 FERTIG (1. August):** 18 Pakete gelandet, voller Testlauf
+      grün (**3235 Tests / 0 rot**, UI-Audit **21 Screens × 4 Formate = 0 Befunde**).
+      Das UI-Rework ist damit in der Fläche angekommen:
+      **(a) Baumodus** — alle Werkzeuge in EINEM Dock unten-mittig (Daumenzone),
+      **(b) IGohbie-Telefon** skaliert endlich mit (kein 420er-Überstand mehr),
+      Fotomodus-Sucher in der Safe-Area,
+      **(c) Reise-Strecke** — Abflugtafel/Reise-App/Bordkarte auf realer Breite,
+      Weltengooby-Fortschritt „n/9 bereist" + Stempel,
+      **(d) Radio/Kino/GOB.TY/Geschichten** — alle Knöpfe endlich fingergroß,
+      **(e) Ranch-Mehrspieler hat jetzt einen sichtbaren Einstieg im Spiel**
+      (Hof-Knopf → Raum anlegen/beitreten/Code teilen),
+      **(f) Level-Auswahlen + Brettspiele** mittig mit gepinntem Fertig-Knopf,
+      **(g) Boot-Ladebalken als Möhren-Pill im Alt-Web-Look** samt Papier-Ladekarte
+      und „Lädt… NN%", **(h) Onboarding/Quests/Geburtstags-Feier** poliert,
+      **(i) 7 Minispiel-Polituren** (teaParty, carrotCatch, bubblePop+bunnyHop,
+      danceParty, fishingPond, goalieGooby, rocketRescue — Intro-Beats, lesbare
+      HUDs, Jubel-Momente), **(j)** zentraler Fix: Punkte-Texte/Ringe treffen
+      jetzt in ALLEN Spielen den gemeinten Punkt statt im Creme-Rand zu kleben,
+      **(k)** Test-Runner gehärtet (ein Tippfehler in einer Testdatei kann den
+      Lauf nicht mehr dauerhaft aufhängen).
+- [~] **W17 / Welle G5 läuft:** die großen Brocken aus deiner Liste:
+      **DLC „Goo und Bye" Welle A** (Waren + Markttag + begehbarer Erstladen),
+      **DLC „McGooby" Welle A** (Rezepte + erste Schicht), **GvZ-PvP übers Netz**
+      (nach der GOB-NOM-Lockstep-Vorlage), **Trailer-Neuaufnahme** mit dem neuen
+      UI (Storyboard v4), dazu der Minispiel-Batch-B-Rest (goobySays, memoryMatch,
+      lanternFloat, miniGolf, pancakeTower, pipeFlow, ghostHunt, burgerBuild,
+      deliveryRush, shoppingSurf, toyRacer) und die UI-Wache für die neuen
+      G4-Flächen. Loop läuft weiter.
 
-- [~] **DLC-Umsetzung „Goo und Bye" + „McGooby"** — Design-Docs komplett, DLC-Hub zeigt
-      beide als „BALD"; nächster Schritt ist Welle A des Goo-und-Bye-Fundaments
-- [~] **Minispiel-Qualität, Gruppe 3** — Kandidaten notiert (starHopper-Bühne,
+- [~] **DLC-Umsetzung „Goo und Bye" + „McGooby"** — Design-Docs komplett; Welle A
+      beider Fundamente ist Teil von G5 (s. o.)
+- [x] **Minispiel-Qualität, Gruppe 3** — die notierten Kandidaten (starHopper-Bühne,
       trampoline-Gym, carrotGuard-HUD, hideSeek-Wiese, cityDrive-Feedback,
-      Ranch-Arena-Überstrahlung)
-- [~] **GvZ-PvP übers Netz** — das GOB-NOM-Lockstep-Protokoll (W15) ist die fertige
-      Vorlage dafür
-- [~] **Trailer-Refresh** — der 57,6-s-Trailer zeigt noch das Vor-W14-UI; Neuaufnahme
-      der Clips mit dem neuen Look steht an
+      Ranch-Arena-Überstrahlung) sind seit Welle G2/G3 alle umgesetzt; der Rest-
+      Batch läuft in G5
+- [~] **GvZ-PvP übers Netz** — in G5 in Arbeit (GOB-NOM-Lockstep als Vorlage)
+- [~] **Trailer-Refresh** — Neuaufnahme läuft in G5 (das UI-Rework ist durch,
+      Storyboard v4 + Aufnahme-Treiber lagen seit G3 bereit)
 - [-] **Dynamic Island / Live Activities + iOS-Homescreen-Widget** — braucht native
       Extensions in einer SIGNIERTEN App (Sideload-.ipa kann das nicht registrieren).
       Ehrlich zurückgestellt; Godot-Andockpunkte existieren.
@@ -123,22 +144,20 @@ _(gerade nichts offen — alle bisherigen Punkte stehen unten unter „Erledigt"
 
 ## 2. In Arbeit
 
-Runde W13 (30./31. Juli) — Welle A + B sind FERTIG (Details unten in „Erledigt"),
-der Agent arbeitet gerade an Welle C:
+Runde W17 (1./2. August) — Wellen G1–G4 sind FERTIG (Details oben + unten in
+„Erledigt"), der Agent arbeitet gerade an **Welle G5**:
 
-- [~] **InstantGooby + Snap A Gooby** (Foto-Feed + First-Person-Selfies, aufbauend
-      auf dem neuen Post/Mail-System)
-- [~] **GOB.TY** — der Wohnzimmer-Fernseher zeigt witzige Gooby-Clips
-- [~] **Goobyman-Laden** (Zahnbürsten-Haltbarkeit + Nachschub)
-- [~] **Garage mit Rolltor** + Layout-Presets („Raum speichern")
-- [~] **Fotomodus-Werkzeuge** (Pose/Emotion/Rahmen) + Gyro-Parallax
-- [~] **Neue Gooby-Animationen** (Tanzen, Tomatenwurf, Decken-Kletterer, Ragdoll
-      u. a. über die Blender-Pipeline)
-- [~] **E2E-„erste Stunde"-Test** + Difficulty-Zertifizierung weiterer Minispiele
-- [~] **ipa-Release-Automatik** (GitHub-Release + latest_native-Bump) + Soft-Restart
-- [~] **Webpanel-Ausbau** (GoobyPal-Ledger, Brettspiele, Ranch-Bestenlisten, Ban)
-      + Account-Umzugs-Code
-- [~] Zum Schluss: Mega-Eval-Welle (15 Prüf-Agents) + Fix-Wellen + Polish
+- [~] **DLC „Goo und Bye", Welle A** — Waren-Katalog, deterministischer Markttag,
+      DLC-Hub-Kachel wird begehbar (erster Laden mit Regal, Kasse, Kunde)
+- [~] **DLC „McGooby", Welle A** — Rezept-/Stationen-Fundament + erste Mini-Schicht
+- [~] **GvZ-PvP übers Netz** (GOB-NOM-Lockstep-Vorlage) + GvZ-HUD-Entflechtung
+- [~] **Trailer-Neuaufnahme** mit dem W16/W17-Look (Storyboard v4, 104 Beats)
+- [~] **Minispiel-Batch-B-Rest** — goobySays+memoryMatch, lanternFloat+miniGolf,
+      pancakeTower+pipeFlow, ghostHunt (mit Datei-Entflechtung), burgerBuild+
+      deliveryRush, shoppingSurf+toyRacer
+- [~] **UI-Wache auf die G4-Flächen ausdehnen** (Baumodus-Dock, Telefon, Radio,
+      Ranch-MP, Level-Auswahlen, Onboarding) + Kino-Untertitel/Skip-Fläche und
+      Freunde-App im Telefon-Layout
 
 ---
 
