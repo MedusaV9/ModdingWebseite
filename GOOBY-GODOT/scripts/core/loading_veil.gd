@@ -17,9 +17,16 @@ extends CanvasLayer
 ##   kleinen Ausflug…“ + Trip-Tipps.
 ## - home: alles andere (Rückkehr/Default) — „Trautes Heim“ /
 ##   „Auf dem Heimweg…“ + Home-Tipps.
-## Der Petal-Wipe der Web-Version kommt bewusst in einer SPÄTEREN Welle —
-## Ein/Aus bleibt diese Runde die Modulate-Blende + Karten-Pop-in
-## (220 ms ease-out, scale 0.96→1 + translateY, Web polishd-loading-in).
+## Ein/Aus ist seit W16/G2b der Signature-Übergang der Web-Version
+## (loadingVeil.js V6/F2, Spez §2.2): der PETAL-SWEEP-WIPE. Backdrop +
+## Karte wischen GEMEINSAM links→rechts herein (ease-out) und hinaus
+## (ease-in), die Oberkante eilt 15 % voraus, entlang der Kante reiten
+## 26 prozedurale Blüten-/Blatt-Stempel (loading_veil_wipe.gd, sitzt als
+## Wisch-Maske auf dem FROZEN Root). Varianten-Weiche wie im Web:
+## Reduced Motion → "fade" (hier instantan, bestehender Vertrag),
+## technischer Fallback "iris" (Kreis-Wipe), Standard "petal". Der
+## Karten-Pop-in (220 ms ease-out, scale 0.96→1 + translateY, Web
+## polishd-loading-in) läuft parallel zum Wipe weiter.
 ##
 ## Weiter unverändert:
 ## - LANGE Reise (RW-8; LoadingScreenRules): Vollbild-Ladebildschirm
@@ -41,8 +48,14 @@ extends CanvasLayer
 signal covered
 signal revealed
 
-const COVER_DURATION := 0.25
-const REVEAL_DURATION := 0.3
+## Ein-/Aus-Blende = Dauer des Petal-Sweep-Wipes. Web PETAL.WIPE_MS wäre
+## 450 ms — bewusst auf 0.4 s gedeckelt, weil der Ehrlichkeits-Wächter
+## (test_loading_regeln) die Veil-Blenden auf ≤ 0.4 s pinnt.
+const COVER_DURATION := 0.4
+const REVEAL_DURATION := 0.4
+## Wisch-Maske + Stempel des Petal-Wipes (kein class_name — bewusst, damit
+## kein --import/Class-Cache-Lauf nötig ist; Zugriff via preload).
+const VeilWipe := preload("res://scripts/core/loading_veil_wipe.gd")
 ## Karten-Pop-in (Web polishd-loading-in): 220 ms ease-out,
 ## scale 0.96→1 + translateY 0.5rem→0.
 const KARTE_POP_S := 0.22
@@ -91,6 +104,8 @@ var _door_aktiv := false
 var _door_wipe: Control
 
 @onready var _root: Control = $Root
+## Dasselbe Root-Control, getypt als Wipe (das Skript sitzt im tscn drauf).
+@onready var _wipe: VeilWipe = $Root
 @onready var _backdrop: AcWallpaper = $Root/Backdrop
 @onready var _card: LoadingVeilKarte = %Card
 @onready var _cover_rect: TextureRect = %Cover
@@ -117,6 +132,12 @@ func _ready() -> void:
 	_tip_timer.wait_time = TIP_ROTATE_SEC
 	_tip_timer.timeout.connect(_on_tip_timer)
 	add_child(_tip_timer)
+	# Godot rendert clip_children-in-clip_children nicht (Backbuffer im
+	# Backbuffer): der runde Karten-Clip pausiert daher für die Wipe-Dauer,
+	# sonst verschwände der Karteninhalt während des Wisches.
+	var karten_clip := _card.get_node_or_null("Clip") as CanvasItem
+	if karten_clip != null:
+		_wipe.setze_clip_pausen([karten_clip])
 	var parent := get_parent()
 	if parent != null and parent.has_signal("travel_started"):
 		parent.travel_started.connect(_on_travel_started)
@@ -191,30 +212,36 @@ func cover(reduced_motion := false) -> void:
 		_ranch_screen.set_animated(not reduced_motion and _ranch_aktiv)
 	if _tip_label.visible or _ranch_aktiv:
 		_tip_timer.start()
-	if reduced_motion:
+	if VeilWipe.wipe_variante(reduced_motion) == "fade":
+		# Reduced Motion: instantan wie bisher (W1a-Contract) — der
+		# Web-160-ms-Fade ist hier bewusst das sofortige Setzen.
+		_wipe.sofort_fertig()
 		_root.modulate.a = 1.0
 	else:
 		# Web polishd-loading-in: 220 ms ease-out, scale 0.96→1 +
-		# translateY 0.5rem→0 (kein TRANS_BACK-Overshoot mehr).
+		# translateY 0.5rem→0 — läuft parallel zum Wipe weiter.
 		_card.pivot_offset = _card.size / 2.0
 		_card.scale = Vector2.ONE * KARTE_POP_SCALE
 		var basis_y := _card.position.y
 		_card.position.y = basis_y + KARTE_POP_SHIFT * _card.design_faktor()
-		var tween := create_tween().set_parallel()
-		tween.tween_property(_root, "modulate:a", 1.0, COVER_DURATION)
+		var pop := create_tween().set_parallel()
 		(
-			tween
+			pop
 			. tween_property(_card, "scale", Vector2.ONE, KARTE_POP_S)
 			. set_trans(Tween.TRANS_CUBIC)
 			. set_ease(Tween.EASE_OUT)
 		)
 		(
-			tween
+			pop
 			. tween_property(_card, "position:y", basis_y, KARTE_POP_S)
 			. set_trans(Tween.TRANS_CUBIC)
 			. set_ease(Tween.EASE_OUT)
 		)
-		await tween.finished
+		# Petal-Sweep deckt ab: Deckkraft steht sofort auf dem FROZEN
+		# Endwert (modulate 1.0), animiert wird NUR die Wisch-Maske
+		# (Web: opacity 1, clip-path wandert).
+		_root.modulate.a = 1.0
+		await _wipe.wische_rein(VeilWipe.wipe_variante(false), COVER_DURATION)
 	covered.emit()
 
 
@@ -227,12 +254,14 @@ func reveal(reduced_motion := false) -> void:
 	AudioDirector.try_play(self, "travel_whoosh_auf")
 	_tip_timer.stop()
 	_stoppe_tip_fade()
-	if reduced_motion:
+	if VeilWipe.wipe_variante(reduced_motion) == "fade":
+		_wipe.sofort_fertig()
 		_root.modulate.a = 0.0
 	else:
-		var tween := create_tween()
-		tween.tween_property(_root, "modulate:a", 0.0, REVEAL_DURATION)
-		await tween.finished
+		# Wisch raus (Web sweep-out, ease-in): die Maske gibt links den
+		# neuen Raum frei; danach die FROZEN Endwerte setzen.
+		await _wipe.wische_raus(VeilWipe.wipe_variante(false), REVEAL_DURATION)
+		_root.modulate.a = 0.0
 	visible = false
 	_gooby.set_animated(false)
 	_sweep.set_animated(false)

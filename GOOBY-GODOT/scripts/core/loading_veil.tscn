@@ -1,4 +1,4 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=8 format=3]
 
 [ext_resource type="Script" path="res://scripts/core/loading_veil.gd" id="1_veil"]
 [ext_resource type="Script" path="res://scripts/ui/wallpaper.gd" id="2_wall"]
@@ -6,6 +6,7 @@
 [ext_resource type="Script" path="res://scripts/core/loading_veil_sticker.gd" id="4_sticker"]
 [ext_resource type="Script" path="res://scripts/core/loading_veil_sweep.gd" id="5_sweep"]
 [ext_resource type="Script" path="res://scripts/core/loading_veil_balken.gd" id="6_balken"]
+[ext_resource type="Script" path="res://scripts/core/loading_veil_wipe.gd" id="7_wipe"]
 
 [node name="LoadingVeil" type="CanvasLayer"]
 layer = 100
@@ -19,6 +20,7 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 0
+script = ExtResource("7_wipe")
 
 [node name="Backdrop" type="ColorRect" parent="Root"]
 layout_mode = 1

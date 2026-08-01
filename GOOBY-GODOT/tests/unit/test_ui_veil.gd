@@ -14,6 +14,8 @@ extends W1cTestCase
 
 const VEIL_SCENE := preload("res://scripts/core/loading_veil.tscn")
 const MODI: Array[String] = ["home", "trip", "game"]
+## W16/G2b: Petal-Sweep-Wipe (Maske+Stempel auf/über dem FROZEN Root).
+const VeilWipe := preload("res://scripts/core/loading_veil_wipe.gd")
 
 
 func test_node_pfade_und_spinner_versteckt() -> void:
@@ -199,6 +201,108 @@ func test_arcade_cover_preload_und_gobnom() -> void:
 			ArcadeScreen.cover_texture(id), ArcadeScreen.COVERS[id], "cover_texture == preload"
 		)
 	check(ArcadeScreen.cover_texture("gibtsnicht") == null, "unbekanntes Spiel → null")
+
+
+## W16/G2b: Varianten-Weiche wie Web veilWipeVariant + Ehrlichkeits-Deckel
+## (test_loading_regeln pinnt Blenden ≤ 0.4 s → Web-450-ms bewusst 400 ms).
+func test_wipe_varianten_weiche_und_ehrlichkeits_deckel() -> void:
+	check_eq(VeilWipe.wipe_variante(true), "fade", "Reduced Motion → fade")
+	check_eq(
+		VeilWipe.wipe_variante(true, false), "fade", "Reduced Motion schlägt den Iris-Fallback"
+	)
+	check_eq(VeilWipe.wipe_variante(false, false), "iris", "ohne Stempel-Zeichner → Kreis-Wipe")
+	check_eq(VeilWipe.wipe_variante(false), "petal", "Standard → Petal-Sweep")
+	check(VeilWipe.PETAL_S <= 0.4, "Petal-Wipe hält den ≤-0.4-s-Deckel (Web: 450 ms)")
+	check(VeilWipe.IRIS_REIN_S <= 0.4 and VeilWipe.IRIS_RAUS_S <= 0.4, "Iris bleibt ≤ 0.4 s")
+	check_approx(LoadingVeil.COVER_DURATION, VeilWipe.PETAL_S, "Einblende = Petal-Dauer")
+	check_approx(LoadingVeil.REVEAL_DURATION, VeilWipe.PETAL_S, "Ausblende = Petal-Dauer")
+
+
+func test_wipe_petal_feld_deterministisch_mit_web_parametern() -> void:
+	var feld := VeilWipe.petal_feld()
+	check_eq(feld.size(), 26, "26 Stempel je Wipe (Web PETAL.COUNT)")
+	check_eq(str(feld), str(VeilWipe.petal_feld()), "LCG-Feld (Seed 7) ist deterministisch")
+	var rosa := 0
+	for blatt: Dictionary in feld:
+		if int(blatt["sprite"]) == 0:
+			rosa += 1
+		var groesse := float(blatt["size"])
+		check(groesse >= 0.035 and groesse <= 0.06, "Größe 3,5–6 %% der kurzen Seite: %s" % groesse)
+		var lane := float(blatt["lane"])
+		check(lane >= 0.0 and lane <= 1.0, "Lane bleibt im Viewport: %s" % lane)
+	check(rosa > feld.size() - rosa, "überwiegend rosa Blüten (~72 %)")
+	check(rosa < feld.size(), "…aber auch grüne Blätter im Feld")
+
+
+func test_wipe_stempel_pose_und_clip_keyframes() -> void:
+	var blatt: Dictionary = VeilWipe.petal_feld()[0]
+	check_approx(float(VeilWipe.stempel_pose(blatt, 0.0)["alpha"]), 0.0, "Alpha blendet am Anfang")
+	check_approx(float(VeilWipe.stempel_pose(blatt, 1.0)["alpha"]), 0.0, "…und am Wipe-Ende")
+	check_approx(float(VeilWipe.stempel_pose(blatt, 0.5)["alpha"]), 1.0, "voll sichtbar mittig")
+	check(
+		(
+			float(VeilWipe.stempel_pose(blatt, 0.8)["x"])
+			> float(VeilWipe.stempel_pose(blatt, 0.2)["x"])
+		),
+		"Wischkante läuft links→rechts"
+	)
+	var oben := {"lane": 0.0, "ahead": 0.0, "phase": 0.0, "sway": 0.0, "spin": 0.0}
+	var unten := {"lane": 1.0, "ahead": 0.0, "phase": 0.0, "sway": 0.0, "spin": 0.0}
+	check_approx(
+		(
+			float(VeilWipe.stempel_pose(oben, 0.5)["x"])
+			- float(VeilWipe.stempel_pose(unten, 0.5)["x"])
+		),
+		VeilWipe.SLANT,
+		"Oberkante eilt 15 % voraus (Slant)"
+	)
+	var g := Vector2(1000.0, 500.0)
+	var halb := VeilWipe.clip_punkte_rein(0.5, g)
+	check_approx(halb[1].x, 575.0, "Cover-Kante oben bei u·115 % (Web-Keyframe)")
+	check_approx(halb[2].x, 425.0, "Unterkante 15 % dahinter")
+	var voll := VeilWipe.clip_punkte_rein(1.0, g)
+	check_approx(voll[1].x, 1150.0, "Web-Endpolygon: 115 % oben")
+	check_approx(voll[2].x, 1000.0, "Web-Endpolygon: 100 % unten")
+	var raus := VeilWipe.clip_punkte_raus(0.5, g)
+	check_approx(raus[0].x, 575.0, "Reveal-Frontier: identische Kanten-Mathe")
+	check_approx(raus[3].x, 425.0, "…mit vorauseilender Oberkante")
+
+
+## Der Wipe animiert NUR die Maske — die FROZEN Endwerte des W1a-Contracts
+## (modulate 1.0/0.0, visible) müssen nach cover/reveal exakt stimmen und
+## der Clip darf im Ruhezustand nicht aktiv bleiben.
+func test_wipe_endzustaende_und_reduced_motion() -> void:
+	var veil := _fresh_veil()
+	var root := veil.get_node("Root") as Control
+	await veil.cover(false)
+	check_approx(root.modulate.a, 1.0, "cover endet voll deckend (W1a-Endwert)")
+	check_eq(root.clip_children, CanvasItem.CLIP_CHILDREN_DISABLED, "Clip-Maske nach cover aus")
+	check_eq(
+		(veil.get_node("%Card/Clip") as CanvasItem).clip_children,
+		CanvasItem.CLIP_CHILDREN_AND_DRAW,
+		"runder Karten-Clip nach dem Wipe exakt restauriert (pausiert nur währenddessen)"
+	)
+	var stempel := veil.get_node_or_null("WipeStempel") as Control
+	check(stempel != null, "Petal-Stempel-Overlay wurde erzeugt")
+	check(stempel != null and not stempel.visible, "…und ruht nach dem Wipe")
+	await veil.reveal(false)
+	check_approx(root.modulate.a, 0.0, "reveal endet transparent (W1a-Endwert)")
+	check_eq(root.clip_children, CanvasItem.CLIP_CHILDREN_DISABLED, "Clip-Maske nach reveal aus")
+	check(not veil.visible, "Veil unsichtbar nach reveal")
+	_cleanup(veil)
+	var ruhig := _fresh_veil()
+	var ruhig_root := ruhig.get_node("Root") as Control
+	await ruhig.cover(true)
+	check(ruhig.get_node_or_null("WipeStempel") == null, "Reduced Motion: keine Stempel")
+	check_eq(
+		ruhig_root.clip_children,
+		CanvasItem.CLIP_CHILDREN_DISABLED,
+		"Reduced Motion: keine Clip-Maske"
+	)
+	check_approx(ruhig_root.modulate.a, 1.0, "Reduced Motion: instantan deckend")
+	await ruhig.reveal(true)
+	check_approx(ruhig_root.modulate.a, 0.0, "Reduced Motion: instantan transparent")
+	_cleanup(ruhig)
 
 
 func _fresh_veil() -> LoadingVeil:
