@@ -7,7 +7,9 @@ extends Control
 ## W15/GAMESQA2 Level-Menü-Charme: Kacheln als AC-Sticker-Karten (Schatten,
 ## Hover-Lift, Druck-Senkung), goldene Sterne-Stempel als eigenes Label,
 ## Locked = flach + "· · ·", gestaffelte Seiten-Blätter-Animation beim
-## refresh() (Reduced Motion respektiert), Haptics.tap auf jeder Kachel.
+## refresh() (Reduced Motion respektiert). W16/G4: Kacheln/Knöpfe sind
+## SquishButtons (zentrale Haptik), Touch-Floor + Fonts/Margins skalieren
+## über ScreenShell.metrics (Menü lebt im SubViewport!), Footer mittig.
 
 signal level_chosen(level_id: int)
 signal done_pressed
@@ -22,6 +24,8 @@ const PAGE_TURN_DEBOUNCE_MS := 600
 ## Duck-Typing: /root/GameState ODER Test-Double (von gvz_game gesetzt).
 var game_state: Object
 
+var _margin: MarginContainer
+var _done: Button
 var _grid: GridContainer
 var _stars_label: Label
 var _buttons: Dictionary = {}
@@ -41,14 +45,12 @@ func _ready() -> void:
 	_fit_viewport()
 	get_viewport().size_changed.connect(_fit_viewport)
 	_load_new_elements()
-	var margin := MarginContainer.new()
-	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	for side in ["left", "right", "top", "bottom"]:
-		margin.add_theme_constant_override("margin_%s" % side, 14)
-	add_child(margin)
+	_margin = MarginContainer.new()
+	_margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child(_margin)
 	var column := VBoxContainer.new()
 	column.add_theme_constant_override("separation", 8)
-	margin.add_child(column)
+	_margin.add_child(column)
 	var title := Label.new()
 	title.theme_type_variation = &"HeadlineLabel"
 	title.text = I18nService.t("gvz.select.title")
@@ -63,34 +65,34 @@ func _ready() -> void:
 	_grid.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	column.add_child(_grid)
 	column.add_child(_build_progress_bar())
+	# Footer mittig (Daumenzone statt „rechts außen“, ui-ranch §2.2).
 	var footer := HBoxContainer.new()
 	footer.add_theme_constant_override("separation", 12)
+	footer.alignment = BoxContainer.ALIGNMENT_CENTER
 	column.add_child(footer)
 	_stars_label = Label.new()
 	_stars_label.theme_type_variation = &"CaptionLabel"
-	_stars_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_stars_label.add_theme_font_size_override("font_size", 18)
 	_stars_label.add_theme_color_override("font_color", GvzArt.OUTLINE)
 	footer.add_child(_stars_label)
-	var done := Button.new()
-	done.text = I18nService.t("gvz.select.done")
-	done.custom_minimum_size = Vector2(140, 48)
-	done.pressed.connect(
+	_done = SquishButton.new()
+	_done.text = I18nService.t("gvz.select.done")
+	_done.pressed.connect(
 		func() -> void:
-			Haptics.tap(self)
 			AudioDirector.try_play(self, "ui_back")
 			done_pressed.emit()
 	)
-	footer.add_child(done)
+	footer.add_child(_done)
 	_build_tiles()
 	refresh()
+	_apply_metrics()
 	resized.connect(_on_resized)
 	_on_resized()
 
 
 func _build_tiles() -> void:
 	for id in range(1, GvzProgress.LEVEL_COUNT + 1):
-		var tile := Button.new()
+		var tile := SquishButton.new()
 		tile.custom_minimum_size = Vector2(96, 64)
 		tile.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		tile.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -297,7 +299,7 @@ func _play_page_turn() -> void:
 
 
 func _on_tile(id: int) -> void:
-	Haptics.tap(self)
+	# Haptik kommt zentral aus dem SquishButton (Audio-Grammatik).
 	AudioDirector.try_play(self, "ui_confirm")
 	level_chosen.emit(id)
 
@@ -314,3 +316,22 @@ func _fit_viewport() -> void:
 	set_anchors_preset(Control.PRESET_TOP_LEFT)
 	position = Vector2.ZERO
 	size = get_viewport_rect().size
+	_apply_metrics()
+
+
+## Touch-Floor + ×f (ui-arcade §6): das Menü lebt im SubViewport — Kachel-/
+## Knopf-Minima auf metrics.floor_px heben, Fonts/Margins mit f skalieren.
+func _apply_metrics() -> void:
+	if _margin == null:
+		return
+	var m := ScreenShell.metrics(get_viewport())
+	var f: float = m["f"]
+	for side in ["left", "right", "top", "bottom"]:
+		_margin.add_theme_constant_override("margin_%s" % side, int(14.0 * f))
+	for id: int in _buttons:
+		var tile: Button = _buttons[id]
+		tile.custom_minimum_size = Vector2(96.0 * f, 64.0 * f)
+		ScreenShell.touch_target(tile, m)
+	_done.custom_minimum_size = Vector2(140.0 * f, 48.0 * f)
+	ScreenShell.touch_target(_done, m)
+	ScreenShell.scale_fonts(_margin, f)

@@ -213,20 +213,34 @@ func row_scale(lane: int) -> float:
 ## ── FX (Anker in Canvas-Pixeln) ──────────────────────────────────────────
 
 
+## Reduced-Motion-Gate (MG-Audit Q2): Partikel-Bursts sind reine Deko und
+## bleiben bei reduzierter Bewegung aus — IMMER an der Call-Site gaten,
+## nie im geteilten Fx-Kit. Spiel-Feedback (Emotes, Farben) bleibt.
+func _rm() -> bool:
+	return ThemeService.is_reduced_motion(self)
+
+
 func place_fx(px: Vector2) -> void:
+	if _rm():
+		return
 	Fx.burst(_place_burst, stage.ground_point(px) + Vector3(0.0, 0.3, 0.0))
 
 
 func die_fx(px: Vector2) -> void:
+	if _rm():
+		return
 	Fx.burst(_die_burst, stage.ground_point(px) + Vector3(0.0, 0.5, 0.0))
 
 
 func pop_fx(px: Vector2) -> void:
+	if _rm():
+		return
 	Fx.burst(_pop_burst, stage.ground_point(px) + Vector3(0.0, 1.0, 0.0))
 
 
 func blast_fx(px: Vector2) -> void:
-	Fx.burst(_blast_burst, stage.ground_point(px) + Vector3(0.0, 0.4, 0.0))
+	if not _rm():
+		Fx.burst(_blast_burst, stage.ground_point(px) + Vector3(0.0, 0.4, 0.0))
 	stage.pulse_glow(0.5)
 
 
@@ -469,7 +483,9 @@ func _sync_zombies(list: Array, tick: int, delta: float) -> void:
 		var hp := int(entry.get("hp", 0))
 		var flash := maxf(0.0, float(_zombie_flash.get(id, 0.0)) - delta)
 		if _zombie_hp.has(id) and hp < int(_zombie_hp[id]) and not bool(entry.get("dig", false)):
-			if flash <= 0.05:
+			# Weißer Trefferblitz (Instanzfarbe) bleibt auch bei Reduced
+			# Motion — nur die Funken-Partikel sind gegated (Q2).
+			if flash <= 0.05 and not _rm():
 				Fx.burst(
 					_hit_burst,
 					(

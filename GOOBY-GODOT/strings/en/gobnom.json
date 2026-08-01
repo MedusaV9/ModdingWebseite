@@ -74,6 +74,13 @@
 			"partner_da": "{name} is back!",
 			"desync": "Oops — you fell out of sync. Round ended.",
 			"abbruch": "The co-op round was ended."
+		},
+		"editor": {
+			"loesbar": "SOLVABLE ✔",
+			"nicht_loesbar": "NOT SOLVABLE ✘",
+			"nichts_gewaehlt": "Nothing selected — click an element in the field.",
+			"hint_f6": "GOB-NOM level editor: run the scene with F6 (see README.md).",
+			"snap_raster": "Snap grid (px)"
 		}
 	}
 }

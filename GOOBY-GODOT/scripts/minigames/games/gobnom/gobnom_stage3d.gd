@@ -381,23 +381,40 @@ func _sync_mood(state: Dictionary) -> void:
 			gooby.emote("happy", 0.8)
 
 
+## Reduced-Motion-Gate (MG-Audit Q2): Partikel-Bursts sind reine Deko und
+## bleiben bei reduzierter Bewegung aus — IMMER an der Call-Site gaten,
+## nie im geteilten Fx-Kit. Gooby-Emotes/Glow bleiben als Feedback.
+func _rm() -> bool:
+	return ThemeService.is_reduced_motion(self)
+
+
 func cut_fx(world_px: Vector2) -> void:
+	if _rm():
+		return
 	Fx.burst(_cut_burst, _wall(world_px) + Vector3(0.0, 0.0, 0.2))
 
 
 func jar_fx(world_px: Vector2) -> void:
+	if _rm():
+		return
 	Fx.burst(_gold_burst, _wall(world_px) + Vector3(0.0, 0.0, 0.2))
 
 
 func pop_fx(world_px: Vector2) -> void:
+	if _rm():
+		return
 	Fx.burst(_pop_burst, _wall(world_px) + Vector3(0.0, 0.0, 0.2))
 
 
 func confetti_fx(world_px: Vector2) -> void:
+	if _rm():
+		return
 	Fx.burst(_confetti_burst, _wall(world_px) + Vector3(0.0, 0.0, 0.3))
 
 
 func puff_fx(world_px: Vector2) -> void:
+	if _rm():
+		return
 	Fx.burst(_puff_burst, _wall(world_px) + Vector3(0.0, 0.0, 0.2))
 
 

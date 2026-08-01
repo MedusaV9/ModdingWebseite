@@ -5,15 +5,13 @@ extends MinigameBase
 ## Hochkant skaliert das Grid. Steuerung: Karte antippen ODER ziehen
 ## (Drag-Ghost), Klecks antippen = einsammeln, Schaufel entfernt Türme.
 ## Punkte laufen NUR über ctx.report_score/report_end (Award macht der Host).
-## Feedback (W4-P1): JuiceKit an Gefechts-Momenten (Shake/Freeze/Bloom bei
-## Welle/Boss/Mäher/Boom, Slowmo beim Boss-Auftritt) + AudioDirector-SFX.
+## Feedback (W4-P1): JuiceKit an Gefechts-Momenten + AudioDirector-SFX.
 ##
 ## FB-4: das Gefecht spielt auf einer ECHTEN 3D-Bühne (gvz_stage3d.gd) —
-## Rasen, Türme, Zombies, Boss, Projektile, Drops, Mäher und Nebelwand sind
-## Meshes, per ground_point-Raycast EXAKT unter dem 2D-Grid verankert. Die
-## 2D-Schicht rendert nur noch HUD (Karten, Zähler, Balken, Banner, Ghost).
-## Das löst auch das E4-P1-Backlog (~850 immediate-mode Draw-Calls): die
-## GvzArt-Figuren zeichnen jetzt nur noch die Karten-Icons.
+## Figuren sind Meshes, per ground_point-Raycast unterm 2D-Grid verankert;
+## die 2D-Schicht rendert nur HUD (Karten, Zähler, Balken, Banner, Ghost).
+## W16/G4: Kartenleiste + Zähler hängen an der UNTERKANTE (Daumenzone),
+## Karten stehen auf dem Touch-Floor (>=48 pt), Boss-Bar oben mittig.
 
 const Stage := preload("res://scripts/minigames/games/gvz/gvz_stage3d.gd")
 
@@ -25,14 +23,10 @@ const MOWER_GUTTER := 72.0  # W14: 44 px schnitten die Mäher-Goobys links ab.
 const BANNER_SEC := 2.2
 const INTRO_S := 1.5  # W14 Intro-Beat: Establishing + Ziel-Banner, dann Sim.
 
-## W13/GVZ (P5-Report G18): Meilenstein-Siege feuern Event-Hooks über den
-## bestehenden Sticker-Mechanismus (Doc G §4.4 „1× Sticker bei L5/10/15“).
-## L15 = gvz_kampagne → Sticker „Garten gerettet!“ (stickers.json); auf
-## gvz_l5/gvz_l10 hängen seit W13B „Zaunheld“ + „Nutella-Kommandant“
-## (b7de0efc, Katalog 143 Einträge).
+## W13/GVZ (P5-Report G18, Doc G §4.4): Meilenstein-Siege feuern Sticker-
+## Hooks — L15 „Garten gerettet!“, L5/L10 „Zaunheld“/„Nutella-Kommandant“.
 const MILESTONE_HOOKS := {5: "gvz_l5", 10: "gvz_l10", 15: "gvz_kampagne"}
-## Run-Stats der puren Sim (GvzLogic state.stats) → achievements.counters
-## (exakt die Counter-Keys der 6 GvZ-Sticker-Conds in stickers.json).
+## Run-Stats (GvzLogic state.stats) → Counter-Keys der GvZ-Sticker-Conds.
 const STAT_COUNTERS := {
 	"drops_collected": "gvzNutella",
 	"eis_placed": "gvzEisEinsaetze",
@@ -157,17 +151,11 @@ func finish_session() -> void:
 	if ended or ctx == null:
 		return
 	ended = true
-	(
-		ctx
-		. report_end(
-			{
-				"score": session_score,
-				"stars": GvzProgress.total_stars(_game_state()),
-				# E11-P1-5: max_unlocked()-1 meldete nach dem Vollabschluss
-				# 14 statt 15 — jetzt zählen die WIRKLICH abgeschlossenen.
-				"levels": GvzProgress.cleared_count(_game_state()),
-			}
-		)
+	# E11-P1-5: "levels" zählt die WIRKLICH abgeschlossenen Level.
+	var gs := _game_state()
+	var stars := GvzProgress.total_stars(gs)
+	ctx.report_end(
+		{"score": session_score, "stars": stars, "levels": GvzProgress.cleared_count(gs)}
 	)
 
 
@@ -280,8 +268,7 @@ func _on_run_over() -> void:
 		AudioDirector.try_play(self, "mg_win")
 		if ctx != null:
 			ctx.report_score(session_score, total - _last_run_score)
-			# E10-P1-3: jeder Levelsieg ist eine eigene Coin-Einheit — der
-			# Host wendet die Coin-Row pro Chunk an statt pro Session.
+			# E10-P1-3: jeder Levelsieg ist eine eigene Coin-Einheit.
 			ctx.report_coin_chunk(total)
 			if ctx.juice != null:
 				ctx.juice.bloom_pulse(0.9)
@@ -432,21 +419,31 @@ func _card_list() -> Array:
 	return out
 
 
+## G4 (ui-ranch §2.3): Karten-Pitch (w, h) — nie unter dem Touch-Floor
+## (>=48 pt, ScreenShell.metrics kennt die SubViewport-Kette).
+func _card_dims() -> Vector2:
+	var floor_px: float = ScreenShell.metrics(get_viewport())["floor_px"]
+	return Vector2(maxf(CARD_W, floor_px + 4.0), maxf(CARD_H, floor_px))
+
+
 func _card_rows() -> int:
-	var vp := _view_size()
 	var cards := _card_list().size()
-	var per_row := int((vp.x - 96.0) / CARD_W)
+	var per_row := int((_view_size().x - 96.0) / _card_dims().x)
 	return 1 if cards <= per_row else 2
 
 
+## Oberkante der Kartenleiste — sie hängt jetzt an der UNTERKANTE (Daumen).
+func _card_top() -> float:
+	return _view_size().y - TOP_PAD - _card_dims().y * (0.82 * (_card_rows() - 1) + 1.0)
+
+
 func _card_rect(index: int) -> Rect2:
-	var vp := _view_size()
-	var per_row := maxi(1, int((vp.x - 96.0) / CARD_W))
-	var row := index / per_row
-	var col := index % per_row
-	return Rect2(
-		Vector2(90.0 + col * CARD_W, TOP_PAD + row * (CARD_H * 0.82)), Vector2(CARD_W - 4.0, CARD_H)
+	var dims := _card_dims()
+	var per_row := maxi(1, int((_view_size().x - 96.0) / dims.x))
+	var at := Vector2(
+		90.0 + (index % per_row) * dims.x, _card_top() + (index / per_row) * (dims.y * 0.82)
 	)
+	return Rect2(at, Vector2(dims.x - 4.0, dims.y))
 
 
 func _card_at(at: Vector2) -> String:
@@ -459,12 +456,11 @@ func _card_at(at: Vector2) -> String:
 
 func _field_rect() -> Rect2:
 	var vp := _view_size()
-	var top := TOP_PAD + CARD_H * (0.82 * (_card_rows() - 1) + 1.0) + 8.0
 	# Horizont-Band (MP-G): über der Feld-Oberkante bleibt bewusst Luft für
-	# die Nachbarschafts-Kulisse (Haus, Zaun, Gehweg, Bäume). Ohne das Band
-	# ragt alles Hohe hinter dem Zaun abgeschnitten aus dem Bildrand.
-	top += vp.y * 0.16
-	return Rect2(MOWER_GUTTER, top, vp.x - MOWER_GUTTER - 6.0, vp.y - top - 8.0)
+	# die Nachbarschafts-Kulisse (Haus, Zaun, Gehweg, Bäume); das Feld endet
+	# über der Kartenleiste an der Unterkante (G4).
+	var top := TOP_PAD + 20.0 + vp.y * 0.16
+	return Rect2(MOWER_GUTTER, top, vp.x - MOWER_GUTTER - 6.0, _card_top() - 8.0 - top)
 
 
 func _cell_size() -> Vector2:
@@ -517,16 +513,8 @@ func _sync_stage(delta: float) -> void:
 	var towers: Array = []
 	for key: Variant in state["towers"]:
 		var tower: Dictionary = state["towers"][key]
-		(
-			towers
-			. append(
-				{
-					"key": key,
-					"type": tower["type"],
-					"lane": tower["lane"],
-					"col": tower["col"],
-				}
-			)
+		towers.append(
+			{"key": key, "type": tower["type"], "lane": tower["lane"], "col": tower["col"]}
 		)
 	var zombies: Array = []
 	for zombie: Dictionary in state["zombies"]:
@@ -707,16 +695,21 @@ func _draw_hud() -> void:
 			_nutella_pop = Time.get_ticks_msec() / 1000.0
 		_nutella_seen = nutella
 	var pop := maxf(0.0, 1.0 - (Time.get_ticks_msec() / 1000.0 - _nutella_pop) / 0.3)
-	var counter := Rect2(6, TOP_PAD, 78, CARD_H)
+	# Zähler-Chip links NEBEN der Kartenleiste an der Unterkante (G4).
+	var dims := _card_dims()
+	var counter := Rect2(6, _view_size().y - TOP_PAD - dims.y, 78, dims.y)
 	_rounded(
 		counter, AcTokens.PAPER if pop <= 0.0 else AcTokens.PAPER.lerp(GvzArt.STAR_GOLD, pop * 0.35)
 	)
 	GvzArt.draw_nutella_drop(
-		self, counter.position + Vector2(22, 44), 34 * (1.0 + 0.25 * pop), int(state["tick"])
+		self,
+		counter.position + Vector2(22, dims.y * 0.71),
+		34 * (1.0 + 0.25 * pop),
+		int(state["tick"])
 	)
 	draw_string(
 		_font_bold,
-		counter.position + Vector2(38, 38),
+		counter.position + Vector2(38, dims.y * 0.61),
 		str(nutella),
 		HORIZONTAL_ALIGNMENT_LEFT,
 		-1,
@@ -780,7 +773,8 @@ func _draw_conveyor_strip(queue: Array) -> void:
 	var vp := _view_size()
 	var w := 34.0
 	var x := vp.x - 8.0 - w * maxf(1.0, float(queue.size()))
-	var strip := Rect2(x, TOP_PAD + CARD_H + 2.0, w * maxf(1.0, float(queue.size())), 30.0)
+	# Band-Vorschau ÜBER der Kartenleiste (Karten hängen unten, G4).
+	var strip := Rect2(x, _card_top() - 34.0, w * maxf(1.0, float(queue.size())), 30.0)
 	_rounded(strip, Color("#D8CBB4"))
 	for i in queue.size():
 		var center := strip.position + Vector2(w * (i + 0.5), 22.0)
@@ -799,7 +793,8 @@ func _draw_boss_bar() -> void:
 	if boss.is_empty() or int(boss["hp"]) <= 0:
 		return
 	var vp := _view_size()
-	var rect := Rect2(vp.x * 0.3, vp.y - 18.0, vp.x * 0.4, 10.0)
+	# Oben mittig — unten wohnt jetzt die Kartenleiste (G4).
+	var rect := Rect2(vp.x * 0.3, 8.0, vp.x * 0.4, 10.0)
 	_rounded(rect, AcTokens.PAPER)
 	var frac := float(boss["hp"]) / float(maxi(1, int(boss["max_hp"])))
 	draw_rect(
@@ -901,57 +896,62 @@ func _build_select_screen() -> void:
 	_select_screen.level_chosen.connect(open_level)
 	_select_screen.done_pressed.connect(finish_session)
 	add_child(_select_screen)
-	# B11-Fix (W13/GVZ): KEIN FULL_RECT-Preset mehr — unter dem Node2D-Parent
-	# (MinigameBase) ist das Anchor-Rect 0×0, und Anker+size-Setzung auf
-	# demselben Node warf „Nodes with non-equal opposite anchors …“. Der
-	# Select-Screen bindet sich selbst an den Viewport (_fit_viewport in
-	# _ready + size_changed, GOB-NOM-Muster) — Anker bleiben gleichseitig.
+	# B11 (W13/GVZ): KEIN FULL_RECT — der Select bindet sich an den Viewport.
 
 
+## MG-Audit B §2: Arcade-Stil statt nacktem 340×170-VBox — Dim + AcCardLg-
+## Plate mittig (results.gd-Muster), Fonts ×f, Knöpfe halten den Touch-Floor.
 func _build_end_overlay(won: bool, stars: int, total: int, first_clear: bool) -> void:
 	_clear_overlay()
-	_overlay = VBoxContainer.new()
-	_overlay.add_theme_constant_override("separation", 10)
+	_overlay = Control.new()
 	add_child(_overlay)
+	var dim := ColorRect.new()
+	dim.color = Color(0.24, 0.16, 0.12, 0.55)
+	_overlay.add_child(dim)
+	var panel := PanelContainer.new()
+	panel.theme_type_variation = &"AcCardLg"
+	_overlay.add_child(panel)
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 10)
+	panel.add_child(box)
 	var title := Label.new()
 	title.theme_type_variation = &"HeadlineLabel"
 	title.text = I18nService.t("gvz.end.win" if won else "gvz.end.lose")
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_overlay.add_child(title)
+	box.add_child(title)
 	var info := Label.new()
 	info.theme_type_variation = &"CaptionLabel"
 	info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	if won:
-		info.text = (
-			"%s\n%s"
-			% [
-				"★".repeat(stars) + "☆".repeat(3 - stars),
-				I18nService.t("gvz.end.score", {"n": total}),
-			]
-		)
+		var star_row := "★".repeat(stars) + "☆".repeat(3 - stars)
+		info.text = star_row + "\n" + I18nService.t("gvz.end.score", {"n": total})
 		if first_clear:
 			info.text += "\n" + I18nService.t("gvz.end.first_clear")
 	else:
 		info.text = I18nService.t("gvz.end.lose_hint")
-	_overlay.add_child(info)
+	box.add_child(info)
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 10)
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	_overlay.add_child(row)
+	box.add_child(row)
 	if won and level_id < GvzProgress.LEVEL_COUNT:
 		row.add_child(_overlay_button("gvz.end.next", func() -> void: open_level(level_id + 1)))
 	if not won:
 		row.add_child(_overlay_button("gvz.end.retry", func() -> void: open_level(level_id)))
 	row.add_child(_overlay_button("gvz.end.select", back_to_select))
+	ScreenShell.scale_fonts(panel, ScreenShell.metrics(get_viewport())["f"])
 	var vp := _view_size()
-	_overlay.position = Vector2(vp.x * 0.5 - 170.0, vp.y * 0.3)
-	_overlay.size = Vector2(340.0, 170.0)
+	_overlay.size = vp
+	dim.size = vp
+	panel.size = panel.get_combined_minimum_size()
+	panel.position = ((vp - panel.size) * 0.5).floor()
 
 
 func _overlay_button(key: String, action: Callable) -> Button:
-	var button := Button.new()
+	var button := SquishButton.new()
 	button.text = I18nService.t(key)
 	button.custom_minimum_size = Vector2(104, 48)
+	ScreenShell.touch_target(button, ScreenShell.metrics(get_viewport()))
 	button.pressed.connect(func() -> void: AudioDirector.try_play(button, "ui_click"))
 	button.pressed.connect(action)
 	return button

@@ -11,6 +11,10 @@ extends Control
 ## Umwandlung fragt per Picker (Dame/Turm/Läufer/Springer). Das Brett dreht
 ## sich für Schwarz. Ergebnis-Overlay mit JuiceKit-Konfetti beim Sieg;
 ## ein Sieg feuert den Sticker-Hook "chess_win" (Album-Set Mehrspieler).
+## W16/G4 (ui-ranch §3.1): Feldgröße dynamisch aus dem Viewport, hochkant
+## rückt das Seitenpanel UNTER das Brett (BoxContainer.vertical), Header
+## liegt in der Safe-Area und trägt den NetStatusIndicator, Fonts ×f,
+## Aktions-Knöpfe sind SquishButtons (zentrale Haptik).
 
 const ROUTE := &"social/chess"
 const ROUTES := {ROUTE: "res://scripts/social/boardgame/chess_scene.tscn"}
@@ -48,6 +52,10 @@ var _last_to := -1
 var _thinking := false
 var _pending_promo: Array[int] = []
 var _squares: Dictionary = {}
+var _header: HBoxContainer
+var _main: BoxContainer
+var _side_panel: VBoxContainer
+var _square_px := SQUARE_PX
 var _turn_label: Label
 var _opp_label: Label
 var _moves_label: RichTextLabel
@@ -83,6 +91,8 @@ func _ready() -> void:
 		_services = SocialServices.get_or_create(self)
 	_session = _services.chess if _services != null else null
 	_build_ui()
+	_apply_metrics()
+	get_viewport().size_changed.connect(_apply_metrics)
 	_wire_session()
 	if _session != null and _session.is_active():
 		_enter_multiplayer()
@@ -115,27 +125,36 @@ func _build_ui() -> void:
 	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(bg)
 
-	var header := HBoxContainer.new()
-	header.set_anchors_preset(Control.PRESET_TOP_WIDE)
-	header.offset_left = 16.0
-	header.offset_top = 12.0
-	header.offset_right = -16.0
-	add_child(header)
-	_leave_button = Button.new()
+	_header = HBoxContainer.new()
+	_header.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	_header.offset_left = 16.0
+	_header.offset_top = 12.0
+	_header.offset_right = -16.0
+	add_child(_header)
+	_leave_button = SquishButton.new()
 	_leave_button.theme_type_variation = &"GhostButton"
 	_leave_button.text = I18nService.t("chess.leave")
 	_leave_button.pressed.connect(_on_leave_pressed)
-	header.add_child(_leave_button)
+	_header.add_child(_leave_button)
+	var header_gap := Control.new()
+	header_gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header_gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_header.add_child(header_gap)
+	# ui-ranch §3.1: Verbindungsstatus auch im Schach sichtbar (Muster
+	# Battleship) — der Chip verdrahtet sich selbst mit /root/Net.
+	_header.add_child(NetStatusIndicator.new())
 
-	var main := HBoxContainer.new()
-	main.add_theme_constant_override("separation", 28)
-	main.set_anchors_preset(Control.PRESET_CENTER)
-	main.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	main.grow_vertical = Control.GROW_DIRECTION_BOTH
-	add_child(main)
+	# BoxContainer statt HBox: hochkant kippt _apply_metrics auf vertical
+	# (Seitenpanel rutscht UNTER das Brett), quer bleibt es daneben.
+	_main = BoxContainer.new()
+	_main.add_theme_constant_override("separation", 28)
+	_main.set_anchors_preset(Control.PRESET_CENTER)
+	_main.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_main.grow_vertical = Control.GROW_DIRECTION_BOTH
+	add_child(_main)
 
-	main.add_child(_build_board())
-	main.add_child(_build_side_panel())
+	_main.add_child(_build_board())
+	_main.add_child(_build_side_panel())
 
 	_pick_panel = _build_pick_panel()
 	add_child(_pick_panel)
@@ -206,50 +225,50 @@ func _coord_label(text: String) -> Label:
 
 
 func _build_side_panel() -> Control:
-	var panel := VBoxContainer.new()
-	panel.add_theme_constant_override("separation", 10)
-	panel.custom_minimum_size = Vector2(240.0, 0.0)
+	_side_panel = VBoxContainer.new()
+	_side_panel.add_theme_constant_override("separation", 10)
+	_side_panel.custom_minimum_size = Vector2(240.0, 0.0)
 	var title := Label.new()
 	title.theme_type_variation = &"TitleLabel"
 	title.text = I18nService.t("chess.title")
-	panel.add_child(title)
+	_side_panel.add_child(title)
 	_opp_label = Label.new()
 	_opp_label.theme_type_variation = &"HeadlineLabel"
-	panel.add_child(_opp_label)
+	_side_panel.add_child(_opp_label)
 	_turn_label = Label.new()
 	_turn_label.theme_type_variation = &"HeadlineLabel"
-	panel.add_child(_turn_label)
+	_side_panel.add_child(_turn_label)
 	var moves_title := Label.new()
 	moves_title.theme_type_variation = &"CaptionLabel"
 	moves_title.text = I18nService.t("chess.moves")
-	panel.add_child(moves_title)
+	_side_panel.add_child(moves_title)
 	_moves_label = RichTextLabel.new()
 	_moves_label.scroll_following = true
 	_moves_label.custom_minimum_size = Vector2(220.0, 220.0)
 	_moves_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	panel.add_child(_moves_label)
+	_side_panel.add_child(_moves_label)
 
 	_action_box = VBoxContainer.new()
 	_action_box.add_theme_constant_override("separation", 8)
-	panel.add_child(_action_box)
-	_emote_button = Button.new()
+	_side_panel.add_child(_action_box)
+	_emote_button = SquishButton.new()
 	_emote_button.theme_type_variation = &"BtnTeal"
 	_emote_button.text = I18nService.t("chess.emote_button")
 	_emote_button.pressed.connect(func() -> void: _wheel.toggle())
 	_action_box.add_child(_emote_button)
-	_rematch_button = Button.new()
+	_rematch_button = SquishButton.new()
 	_rematch_button.theme_type_variation = &"PrimaryButton"
 	_rematch_button.text = I18nService.t("chess.rematch.button")
 	_rematch_button.visible = false
 	_rematch_button.pressed.connect(_on_rematch_pressed)
 	_action_box.add_child(_rematch_button)
-	_new_game_button = Button.new()
+	_new_game_button = SquishButton.new()
 	_new_game_button.theme_type_variation = &"PrimaryButton"
 	_new_game_button.text = I18nService.t("chess.new_game")
 	_new_game_button.visible = false
 	_new_game_button.pressed.connect(_show_pick)
 	_action_box.add_child(_new_game_button)
-	return panel
+	return _side_panel
 
 
 func _build_pick_panel() -> PanelContainer:
@@ -274,7 +293,7 @@ func _build_pick_panel() -> PanelContainer:
 	strengths.add_theme_constant_override("separation", 8)
 	box.add_child(strengths)
 	for strength in 3:
-		var btn := Button.new()
+		var btn := SquishButton.new()
 		btn.theme_type_variation = &"BtnTeal"
 		btn.text = I18nService.t("chess.solo.strength%d" % (strength + 1))
 		btn.pressed.connect(_on_strength_picked.bind(strength + 1, strengths))
@@ -282,12 +301,12 @@ func _build_pick_panel() -> PanelContainer:
 	var colors := HBoxContainer.new()
 	colors.add_theme_constant_override("separation", 8)
 	box.add_child(colors)
-	var white_btn := Button.new()
+	var white_btn := SquishButton.new()
 	white_btn.theme_type_variation = &"PrimaryButton"
 	white_btn.text = I18nService.t("chess.solo.white")
 	white_btn.pressed.connect(_on_solo_start.bind(ChessLogic.WHITE))
 	colors.add_child(white_btn)
-	var black_btn := Button.new()
+	var black_btn := SquishButton.new()
 	black_btn.theme_type_variation = &"GhostButton"
 	black_btn.text = I18nService.t("chess.solo.black")
 	black_btn.pressed.connect(_on_solo_start.bind(ChessLogic.BLACK))
@@ -319,7 +338,7 @@ func _build_promo_panel() -> PanelContainer:
 		["knight", ChessLogic.KNIGHT],
 	]
 	for option in options:
-		var btn := Button.new()
+		var btn := SquishButton.new()
 		btn.theme_type_variation = &"BtnTeal"
 		btn.text = I18nService.t("chess.promo." + str(option[0]))
 		btn.pressed.connect(_on_promo_picked.bind(int(option[1])))
@@ -439,6 +458,58 @@ func _reset_view() -> void:
 # ── Brett-Anzeige ────────────────────────────────────────────────────────────
 
 
+## G4 (ui-ranch §3.1): Feldgröße dynamisch aus dem freien Platz, hochkant
+## kippt die Hauptachse (Panel unters Brett), Header in die Safe-Area,
+## Fonts ×f. Läuft bei _ready UND bei jedem Viewport-Resize.
+func _apply_metrics() -> void:
+	if _main == null:
+		return
+	var m := ScreenShell.metrics(get_viewport())
+	var f: float = m["f"]
+	var canvas: Vector2 = m["canvas"]
+	var insets: Dictionary = m["insets"]
+	var portrait := canvas.y > canvas.x
+	_main.vertical = portrait
+	_header.offset_left = float(insets["left"]) + 16.0 * f
+	_header.offset_right = -float(insets["right"]) - 16.0 * f
+	_header.offset_top = float(insets["top"]) + 12.0 * f
+	ScreenShell.touch_target(_leave_button, m)
+	# Block leicht UNTER die Mitte: board_square_px reserviert 60×f für den
+	# Header — halb verschoben liegt die Karte frei unter „Verlassen“.
+	var anchor_y := 0.5 + 30.0 * f / maxf(canvas.y, 1.0)
+	_main.anchor_top = anchor_y
+	_main.anchor_bottom = anchor_y
+	_square_px = board_square_px(canvas, insets, f, m["floor_px"], portrait)
+	for pos: Vector2i in _squares:
+		(_squares[pos] as Button).custom_minimum_size = Vector2(_square_px, _square_px)
+	var grid: GridContainer = _squares[Vector2i(0, 0)].get_parent()
+	for child in grid.get_children():
+		if child is Label:
+			(child as Label).custom_minimum_size = Vector2(22.0, 22.0) * f
+	_side_panel.custom_minimum_size = Vector2(240.0 * f, 0.0)
+	# Hochkant frisst die Zugliste sonst die Brettfläche — Deckel runter.
+	_moves_label.custom_minimum_size = Vector2(220.0 * f, (110.0 if portrait else 220.0) * f)
+	ScreenShell.scale_fonts(self, f)
+	_render()
+
+
+## PURE: Feldgröße in Canvas-px — Brett + Koordinaten + Card-Ränder müssen in
+## die Safe-Area passen; quer sitzt das Seitenpanel daneben, hochkant darunter.
+## Nie unter den Touch-Floor, nie über 96×f (Optik-Deckel).
+static func board_square_px(
+	canvas: Vector2, insets: Dictionary, f: float, floor_px: float, portrait: bool
+) -> float:
+	var frame := (22.0 + 24.0 + 32.0) * f
+	var panel := (240.0 + 28.0) * f
+	var avail_x := canvas.x - float(insets["left"]) - float(insets["right"]) - frame
+	var avail_y := canvas.y - float(insets["top"]) - float(insets["bottom"]) - frame - 60.0 * f
+	if portrait:
+		avail_y -= panel
+	else:
+		avail_x -= panel
+	return clampf(minf(avail_x, avail_y) / 8.0, floor_px, 96.0 * f)
+
+
 ## Anzeige-Koordinate → 0x88-Feld (Brett dreht sich für Schwarz).
 func _display_to_square(row: int, col: int) -> int:
 	var file := col if _my_color == ChessLogic.WHITE else 7 - col
@@ -483,17 +554,19 @@ func _style_square(btn: Button, color: Color) -> void:
 		btn.add_theme_stylebox_override(state, style)
 
 
-## Runder Figuren-Chip mit deutschem Buchstaben (K/D/T/L/S/B).
+## Runder Figuren-Chip mit deutschem Buchstaben (K/D/T/L/S/B) — skaliert
+## mit der dynamischen Feldgröße (k = _square_px / Design-64).
 func _piece_chip(piece: int) -> Control:
+	var k := _square_px / SQUARE_PX
 	var chip := PanelContainer.new()
 	chip.set_anchors_preset(Control.PRESET_CENTER)
 	chip.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	chip.grow_vertical = Control.GROW_DIRECTION_BOTH
-	chip.custom_minimum_size = Vector2(46.0, 46.0)
+	chip.custom_minimum_size = Vector2(46.0, 46.0) * k
 	chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var style := StyleBoxFlat.new()
 	style.bg_color = COLOR_CHIP_WHITE if piece > 0 else COLOR_CHIP_BLACK
-	style.set_corner_radius_all(23)
+	style.set_corner_radius_all(int(23.0 * k))
 	style.border_color = COLOR_TEXT_WHITE if piece > 0 else Color(0.15, 0.08, 0.04)
 	style.set_border_width_all(2)
 	chip.add_theme_stylebox_override("panel", style)
@@ -501,7 +574,10 @@ func _piece_chip(piece: int) -> Control:
 	label.text = I18nService.t("chess.pieces." + PIECE_KEYS[absi(piece)])
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	label.add_theme_font_size_override("font_size", 26)
+	label.add_theme_font_size_override("font_size", int(maxf(26.0 * k, 12.0)))
+	# Chips entstehen bei jedem _render neu und sind schon ×k — nicht
+	# nochmal von scale_fonts anfassen lassen.
+	label.set_meta(ScreenShell.META_FONT_SKIP, true)
 	label.add_theme_color_override(
 		"font_color", COLOR_TEXT_WHITE if piece > 0 else COLOR_TEXT_BLACK
 	)
@@ -512,6 +588,7 @@ func _piece_chip(piece: int) -> Control:
 
 ## Zielmarker: Punkt auf leeren Feldern, Ring um schlagbare Figuren.
 func _target_dot(is_capture: bool) -> Control:
+	var k := _square_px / SQUARE_PX
 	var dot := PanelContainer.new()
 	dot.set_anchors_preset(Control.PRESET_CENTER)
 	dot.grow_horizontal = Control.GROW_DIRECTION_BOTH
@@ -519,15 +596,15 @@ func _target_dot(is_capture: bool) -> Control:
 	dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var style := StyleBoxFlat.new()
 	if is_capture:
-		dot.custom_minimum_size = Vector2(56.0, 56.0)
+		dot.custom_minimum_size = Vector2(56.0, 56.0) * k
 		style.bg_color = Color(0, 0, 0, 0)
 		style.border_color = COLOR_SELECTED
-		style.set_border_width_all(4)
-		style.set_corner_radius_all(28)
+		style.set_border_width_all(int(maxf(4.0 * k, 2.0)))
+		style.set_corner_radius_all(int(28.0 * k))
 	else:
-		dot.custom_minimum_size = Vector2(18.0, 18.0)
+		dot.custom_minimum_size = Vector2(18.0, 18.0) * k
 		style.bg_color = COLOR_SELECTED
-		style.set_corner_radius_all(9)
+		style.set_corner_radius_all(int(9.0 * k))
 	dot.add_theme_stylebox_override("panel", style)
 	return dot
 

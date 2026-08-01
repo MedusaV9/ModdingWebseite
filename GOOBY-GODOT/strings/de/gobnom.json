@@ -74,6 +74,13 @@
 			"partner_da": "{name} ist wieder da!",
 			"desync": "Ups — ihr wart nicht mehr synchron. Runde beendet.",
 			"abbruch": "Die Coop-Runde wurde beendet."
+		},
+		"editor": {
+			"loesbar": "LÖSBAR ✔",
+			"nicht_loesbar": "NICHT LÖSBAR ✘",
+			"nichts_gewaehlt": "Nichts gewählt — Element im Feld anklicken.",
+			"hint_f6": "GOB-NOM-Level-Editor: Szene mit F6 starten (siehe README.md).",
+			"snap_raster": "Snap-Raster (px)"
 		}
 	}
 }

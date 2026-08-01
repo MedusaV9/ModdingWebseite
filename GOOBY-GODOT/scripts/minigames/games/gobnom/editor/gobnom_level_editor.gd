@@ -127,7 +127,10 @@ func _validate() -> void:
 		return
 	var result := GobnomEditorLogic.validate(_level, _balance)
 	var ok := bool(result["ok"])
-	_result_label.text = "LÖSBAR ✔" if ok else "NICHT LÖSBAR ✘"
+	# QW #21: UI-Strings über i18n (I18nService.t ist static — @tool-tauglich).
+	_result_label.text = I18nService.t(
+		"gobnom.editor.loesbar" if ok else "gobnom.editor.nicht_loesbar"
+	)
 	_result_label.add_theme_color_override("font_color", OK_COLOR if ok else BAD_COLOR)
 	var lines: Array[String] = []
 	for error: String in result["errors"] as PackedStringArray:
@@ -167,7 +170,7 @@ func _rebuild_props() -> void:
 		child.queue_free()
 	if _level.is_empty() or _canvas.selected_kind.is_empty():
 		var hint := Label.new()
-		hint.text = "Nichts gewählt — Element im Feld anklicken."
+		hint.text = I18nService.t("gobnom.editor.nichts_gewaehlt")
 		hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		_props_box.add_child(hint)
 		return
@@ -301,7 +304,7 @@ func _build_editor_hint() -> void:
 	hint.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hint.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	hint.text = "GOB-NOM-Level-Editor: Szene mit F6 starten (siehe README.md)."
+	hint.text = I18nService.t("gobnom.editor.hint_f6")
 	add_child(hint)
 
 
@@ -355,7 +358,7 @@ func _build_level_section(panel: VBoxContainer) -> void:
 	panel.add_child(_button("Neues Level", _new_level))
 	var grid_row := HBoxContainer.new()
 	var grid_label := Label.new()
-	grid_label.text = "Snap-Raster (px)"
+	grid_label.text = I18nService.t("gobnom.editor.snap_raster")
 	grid_row.add_child(grid_label)
 	_grid_spin = SpinBox.new()
 	_grid_spin.min_value = 0.0

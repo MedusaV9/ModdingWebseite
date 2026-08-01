@@ -9,7 +9,9 @@ extends Control
 ## Karten mit Schatten/Hover-Lift/Druck-Senkung, goldene Sterne-Stempel als
 ## eigenes Label, Locked = flach + "· · ·", Gold-Glanz bei 3 Sternen +
 ## Gold-Rahmen am nächsten Level (Frontier), gestaffelte Seiten-Blätter-
-## Animation beim refresh(), Haptics.tap auf jeder Kachel.
+## Animation beim refresh(). W16/G4: Footer ist AUS der Scroll-Spalte
+## gepinnt (immer sichtbar), Kacheln/Knöpfe sind SquishButtons (zentrale
+## Haptik), Touch-Floor + Fonts/Margins skalieren über ScreenShell.metrics.
 
 signal level_chosen(track: String, level_id: int)
 signal done_pressed
@@ -27,6 +29,8 @@ var game_state: Object
 ## gobnom_game VOR add_child gesetzt; null = ohne Netz (reiner Hot-Seat).
 var netz_panel: Control
 
+var _margin: MarginContainer
+var _done: Button
 var _grids: Dictionary = {}
 var _stars_label: Label
 var _buttons: Dictionary = {}
@@ -45,14 +49,18 @@ func _ready() -> void:
 	_fit_viewport()
 	get_viewport().size_changed.connect(_fit_viewport)
 	_load_new_elements()
-	var margin := MarginContainer.new()
-	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	for side in ["left", "right", "top", "bottom"]:
-		margin.add_theme_constant_override("margin_%s" % side, 14)
-	add_child(margin)
+	_margin = MarginContainer.new()
+	_margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child(_margin)
+	# G4: Footer lebt AUSSERHALB der Scroll-Spalte (unten gepinnt, bleibt
+	# sichtbar, wenn Kampagne+Coop überlaufen) — nur die Kacheln scrollen.
+	var outer := VBoxContainer.new()
+	outer.add_theme_constant_override("separation", 8)
+	_margin.add_child(outer)
 	var scroll := ScrollContainer.new()
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	margin.add_child(scroll)
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	outer.add_child(scroll)
 	var column := VBoxContainer.new()
 	column.add_theme_constant_override("separation", 8)
 	column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -81,33 +89,33 @@ func _ready() -> void:
 		column.add_child(grid)
 		_grids[track] = grid
 		_build_tiles(track, grid)
+	# Footer mittig in der Daumenzone (ui-ranch §2.2) statt „rechts außen“.
 	var footer := HBoxContainer.new()
 	footer.add_theme_constant_override("separation", 12)
-	column.add_child(footer)
+	footer.alignment = BoxContainer.ALIGNMENT_CENTER
+	outer.add_child(footer)
 	_stars_label = Label.new()
 	_stars_label.theme_type_variation = &"CaptionLabel"
-	_stars_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_stars_label.add_theme_font_size_override("font_size", 18)
 	_stars_label.add_theme_color_override("font_color", GobnomArt.OUTLINE)
 	footer.add_child(_stars_label)
-	var done := Button.new()
-	done.text = I18nService.t("gobnom.select.done")
-	done.custom_minimum_size = Vector2(140, 48)
-	done.pressed.connect(
+	_done = SquishButton.new()
+	_done.text = I18nService.t("gobnom.select.done")
+	_done.pressed.connect(
 		func() -> void:
-			Haptics.tap(self)
 			AudioDirector.try_play(self, "ui_back")
 			done_pressed.emit()
 	)
-	footer.add_child(done)
+	footer.add_child(_done)
 	refresh()
+	_apply_metrics()
 	resized.connect(_on_resized)
 	_on_resized()
 
 
 func _build_tiles(track: String, grid: GridContainer) -> void:
 	for id in range(1, GobnomProgress.level_count(track) + 1):
-		var tile := Button.new()
+		var tile := SquishButton.new()
 		tile.custom_minimum_size = Vector2(96, 64)
 		tile.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		tile.add_theme_font_size_override("font_size", 18)
@@ -289,17 +297,38 @@ func _play_page_turn() -> void:
 
 
 func _on_tile(track: String, id: int) -> void:
-	Haptics.tap(self)
+	# Haptik kommt zentral aus dem SquishButton (Audio-Grammatik).
 	AudioDirector.try_play(self, "ui_confirm")
 	level_chosen.emit(track, id)
 
 
 func _fit_viewport() -> void:
+	# B11 (Muster GvZ): Anker gleichseitig halten — size-verwaltete Nodes.
+	set_anchors_preset(Control.PRESET_TOP_LEFT)
 	position = Vector2.ZERO
 	size = get_viewport_rect().size
+	_apply_metrics()
 
 
 func _on_resized() -> void:
 	var cols := COLS_LANDSCAPE if size.x >= size.y else COLS_PORTRAIT
 	for track: String in _grids:
 		(_grids[track] as GridContainer).columns = cols
+
+
+## Touch-Floor + ×f (ui-arcade §6): das Menü lebt im SubViewport — Kachel-/
+## Knopf-Minima auf metrics.floor_px heben, Fonts/Margins mit f skalieren.
+func _apply_metrics() -> void:
+	if _margin == null:
+		return
+	var m := ScreenShell.metrics(get_viewport())
+	var f: float = m["f"]
+	for side in ["left", "right", "top", "bottom"]:
+		_margin.add_theme_constant_override("margin_%s" % side, int(14.0 * f))
+	for key: String in _buttons:
+		var tile: Button = _buttons[key]
+		tile.custom_minimum_size = Vector2(96.0 * f, 64.0 * f)
+		ScreenShell.touch_target(tile, m)
+	_done.custom_minimum_size = Vector2(140.0 * f, 48.0 * f)
+	ScreenShell.touch_target(_done, m)
+	ScreenShell.scale_fonts(_margin, f)

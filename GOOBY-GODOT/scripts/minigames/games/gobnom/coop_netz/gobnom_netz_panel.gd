@@ -5,6 +5,8 @@ extends PanelContainer
 ## bestehenden Freunde-Flow (GobnomNetSession, Muster Battleship), danach
 ## Level-Handshake-Status (beide bestätigen dasselbe Coop-Level). Ohne
 ## Session/offline bleibt der lokale Hot-Seat-Coop unberührt.
+## W16/G4: alle Knöpfe sind SquishButtons (zentrale Haptik) und stehen
+## auf dem Touch-Floor (AcTokens.TOUCH_FLOOR statt 40/44 px).
 
 var session: GobnomNetSession
 
@@ -51,8 +53,8 @@ func _ready() -> void:
 	_status.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	row.add_child(_status)
-	_action = Button.new()
-	_action.custom_minimum_size = Vector2(170, 44)
+	_action = SquishButton.new()
+	_action.custom_minimum_size = Vector2(170, AcTokens.TOUCH_FLOOR)
 	_action.pressed.connect(_on_action_pressed)
 	row.add_child(_action)
 	_votes = Label.new()
@@ -136,9 +138,9 @@ func _rebuild_friend_rows() -> void:
 			"%s · %s" % [str(row.get("name", "?")), str(row.get("goobyName", "Gooby"))]
 		)
 		line.add_child(name_label)
-		var invite_btn := Button.new()
+		var invite_btn := SquishButton.new()
 		invite_btn.text = I18nService.t("gobnom.netz.einladen")
-		invite_btn.custom_minimum_size = Vector2(120, 40)
+		invite_btn.custom_minimum_size = Vector2(120, AcTokens.TOUCH_FLOOR)
 		invite_btn.pressed.connect(_on_invite_pressed.bind(row))
 		line.add_child(invite_btn)
 		_friends_box.add_child(line)
@@ -173,14 +175,14 @@ func _on_invite_incoming(data: Dictionary) -> void:
 		"gobnom.netz.laedt_ein", {"name": str(data.get("goobyName", "Gooby"))}
 	)
 	line.add_child(label)
-	var accept_btn := Button.new()
+	var accept_btn := SquishButton.new()
 	accept_btn.text = I18nService.t("gobnom.netz.annehmen")
-	accept_btn.custom_minimum_size = Vector2(120, 40)
+	accept_btn.custom_minimum_size = Vector2(120, AcTokens.TOUCH_FLOOR)
 	accept_btn.pressed.connect(_on_accept_pressed.bind(from, line))
 	line.add_child(accept_btn)
-	var decline_btn := Button.new()
+	var decline_btn := SquishButton.new()
 	decline_btn.text = I18nService.t("gobnom.netz.ablehnen")
-	decline_btn.custom_minimum_size = Vector2(110, 40)
+	decline_btn.custom_minimum_size = Vector2(110, AcTokens.TOUCH_FLOOR)
 	decline_btn.pressed.connect(_on_decline_pressed.bind(from, line))
 	line.add_child(decline_btn)
 	_invites_box.add_child(line)

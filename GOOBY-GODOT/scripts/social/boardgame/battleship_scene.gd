@@ -8,6 +8,11 @@ extends Node3D
 ## alle ~10 s. Emote-Rad (4 Emotes) + Tomate (1×/Runde, Server erzwingt):
 ## Wurf-Bogen von Gooby zu Gooby, Splat auf der „Kamera“ des Getroffenen
 ## (TomatoOverlay, rutscht ~4 s ab). Turn-Relay macht BoardSession.
+## W16/G4 + F10 (Parität zum Schach): alle HUD-Knöpfe sind SquishButtons
+## mit Sounds (ui_back/ui_confirm/ui_click/ui_chip), Spielmomente klingen
+## (mg_perfect/gvz_pop/mg_combo/mg_win/mg_lose); „Verlassen“ hängt an
+## Anker+Insets statt fixer Position, Emote/Tomate als Mitte-rechts-Cluster
+## unten statt in der Ecke (ui-ranch §3.2), Touch-Floor via ScreenShell.
 
 const ROUTE := &"social/battleship"
 const ROUTES := {ROUTE: "res://scripts/social/boardgame/battleship_scene.tscn"}
@@ -33,6 +38,8 @@ var _reroll_count := 0
 var _locked := false
 var _turn_label: Label
 var _setup_box: HBoxContainer
+var _actions: HBoxContainer
+var _net_status: NetStatusIndicator
 var _tomato_button: Button
 ## FIX-6: Aufgeben/Verlassen-Knopf (Text wechselt mit der Phase), Revanche-
 ## Knopf (nur nach GAME_OVER) und Aufgeben-Bestätigung.
@@ -184,23 +191,26 @@ func _build_hud() -> void:
 	_turn_label.offset_top = 12.0
 	root.add_child(_turn_label)
 
-	_leave_button = Button.new()
+	# G4 (ui-ranch §3.2): verankert statt fixer position — die Insets legt
+	# _apply_hud_metrics drauf (Notch/Eckradius).
+	_leave_button = SquishButton.new()
 	_leave_button.theme_type_variation = &"GhostButton"
 	_leave_button.text = I18nService.t("board.leave")
+	_leave_button.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	_leave_button.position = Vector2(16.0, 12.0)
 	_leave_button.pressed.connect(_on_leave_pressed)
 	root.add_child(_leave_button)
 
 	# FIX-6: Verbindungsanzeige (Online/Verbinde…/Offline) oben rechts.
-	var status := NetStatusIndicator.new()
-	status.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	status.offset_right = -16.0
-	status.offset_top = 16.0
-	status.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-	root.add_child(status)
+	_net_status = NetStatusIndicator.new()
+	_net_status.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	_net_status.offset_right = -16.0
+	_net_status.offset_top = 16.0
+	_net_status.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	root.add_child(_net_status)
 
 	# FIX-6: Revanche-Knopf — erscheint erst nach GAME_OVER.
-	_rematch_button = Button.new()
+	_rematch_button = SquishButton.new()
 	_rematch_button.theme_type_variation = &"PrimaryButton"
 	_rematch_button.text = I18nService.t("board.rematch.button")
 	_rematch_button.visible = false
@@ -224,35 +234,38 @@ func _build_hud() -> void:
 	_setup_box.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_setup_box.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	root.add_child(_setup_box)
-	var reroll := Button.new()
+	var reroll := SquishButton.new()
 	reroll.theme_type_variation = &"GhostButton"
 	reroll.text = I18nService.t("board.setup.reroll")
 	reroll.pressed.connect(_on_reroll_pressed)
 	_setup_box.add_child(reroll)
-	var ready_btn := Button.new()
+	var ready_btn := SquishButton.new()
 	ready_btn.theme_type_variation = &"PrimaryButton"
 	ready_btn.text = I18nService.t("board.setup.ready")
 	ready_btn.pressed.connect(_on_ready_pressed)
 	_setup_box.add_child(ready_btn)
 
-	var actions := VBoxContainer.new()
-	actions.add_theme_constant_override("separation", 8)
-	actions.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-	actions.offset_right = -16.0
-	actions.offset_bottom = -18.0
-	actions.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-	actions.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	root.add_child(actions)
-	var emote_btn := Button.new()
+	# G4 (ui-ranch §3.2): Emote/Tomate als Mitte-rechts-Cluster in der
+	# Daumenzone (Anker 75 % Breite) statt in der Ecken-Rundung.
+	_actions = HBoxContainer.new()
+	_actions.add_theme_constant_override("separation", 8)
+	_actions.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	_actions.anchor_left = 0.75
+	_actions.anchor_right = 0.75
+	_actions.offset_bottom = -18.0
+	_actions.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_actions.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	root.add_child(_actions)
+	var emote_btn := SquishButton.new()
 	emote_btn.theme_type_variation = &"BtnTeal"
 	emote_btn.text = I18nService.t("board.emote.button")
-	emote_btn.pressed.connect(func() -> void: wheel.toggle())
-	actions.add_child(emote_btn)
-	_tomato_button = Button.new()
+	emote_btn.pressed.connect(_on_emote_button_pressed)
+	_actions.add_child(emote_btn)
+	_tomato_button = SquishButton.new()
 	_tomato_button.theme_type_variation = &"AccentButton"
 	_tomato_button.text = I18nService.t("board.tomato.button")
 	_tomato_button.pressed.connect(_on_tomato_pressed)
-	actions.add_child(_tomato_button)
+	_actions.add_child(_tomato_button)
 
 	wheel = EmoteWheel.new()
 	wheel.set_anchors_preset(Control.PRESET_CENTER)
@@ -268,6 +281,37 @@ func _build_hud() -> void:
 	# ToastLayer setzt in _ready nur die Anker — kommt er in einen bereits
 	# gelayouteten Parent, bleibt sein Rect leer → hier explizit aufziehen.
 	toast.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_apply_hud_metrics()
+	get_viewport().size_changed.connect(_apply_hud_metrics)
+
+
+## G4: Safe-Area-Insets + Touch-Floor aufs HUD legen (bei _ready und bei
+## jedem Viewport-Resize) — Randknöpfe rutschen aus Notch/Eckradius raus.
+func _apply_hud_metrics() -> void:
+	if _leave_button == null:
+		return
+	var m := ScreenShell.metrics(get_viewport())
+	var f: float = m["f"]
+	var insets: Dictionary = m["insets"]
+	_leave_button.position = Vector2(
+		float(insets["left"]) + 16.0 * f, float(insets["top"]) + 12.0 * f
+	)
+	_turn_label.offset_top = float(insets["top"]) + 12.0 * f
+	_net_status.offset_right = -float(insets["right"]) - 16.0 * f
+	_net_status.offset_top = float(insets["top"]) + 16.0 * f
+	_setup_box.offset_bottom = -float(insets["bottom"]) - 18.0 * f
+	_actions.offset_bottom = -float(insets["bottom"]) - 18.0 * f
+	ScreenShell.touch_target(_leave_button, m)
+	ScreenShell.touch_target(_rematch_button, m)
+	for box: HBoxContainer in [_setup_box, _actions]:
+		for child in box.get_children():
+			if child is Button:
+				ScreenShell.touch_target(child, m)
+
+
+func _on_emote_button_pressed() -> void:
+	_sfx("ui_chip")
+	wheel.toggle()
 
 
 func _wire_session() -> void:
@@ -310,6 +354,8 @@ func _on_reroll_pressed() -> void:
 	if _phase != "setup" or _locked:
 		return
 	_reroll_count += 1
+	# F10: Steigerungs-Pitch — jedes Neu-Würfeln klingt einen Tick höher.
+	_sfx("ui_click", 1.0 + 0.05 * (_reroll_count % 4))
 	var seed_base := _session.seed_value if _session != null else 20260725
 	var code := _session.my_code() if _session != null else "solo"
 	_fleet = BattleshipLogic.auto_fleet(
@@ -339,6 +385,7 @@ func _on_my_board_tapped(cell: Vector2i) -> void:
 func _on_ready_pressed() -> void:
 	if _phase != "setup":
 		return
+	_sfx("ui_confirm")
 	if _session != null:
 		_session.set_fleet(_fleet)
 	_enter_play()
@@ -366,12 +413,16 @@ func _on_opp_board_tapped(cell: Vector2i) -> void:
 
 func _on_shot_result(_n: int, cell: Vector2i, hit: bool, sunk: bool) -> void:
 	opp_board_view.set_marker(cell, "sunk" if sunk else ("hit" if hit else "miss"))
+	# F10-Spielmomente: versenkt > Treffer > daneben — genau EIN Klang.
 	if sunk:
 		toast.show_toast(I18nService.t("board.sunk"))
+		_sfx("mg_combo")
 	elif hit:
 		toast.show_toast(I18nService.t("board.hit"))
+		_sfx("mg_perfect")
 	else:
 		toast.show_toast(I18nService.t("board.miss"))
+		_sfx("gvz_pop")
 	if hit:
 		my_gooby.rig.set_emotion("ecstatic")
 		my_gooby.rig.play_clip("celebrate")
@@ -444,6 +495,7 @@ func _on_opponent_emote(emote_id: String) -> void:
 
 
 func _on_tomato_pressed() -> void:
+	_sfx("ui_click")
 	if _session == null or not _session.throw_tomato():
 		toast.show_toast(I18nService.t("board.tomato.limit"))
 		return
@@ -506,6 +558,7 @@ func _on_game_over(_winner: String, i_won: bool) -> void:
 	_phase = "over"
 	toast.show_toast(I18nService.t("board.win" if i_won else "board.lose"))
 	_turn_label.text = I18nService.t("board.win" if i_won else "board.lose")
+	_sfx("mg_win" if i_won else "mg_lose")
 	# FIX-6: Nach dem Spiel → Revanche anbieten, „Aufgeben“ wird „Verlassen“.
 	_leave_button.text = I18nService.t("board.exit")
 	_rematch_button.visible = true
@@ -532,6 +585,7 @@ func _on_opponent_forfeit(_data: Dictionary) -> void:
 func _on_rematch_pressed() -> void:
 	if _session == null:
 		return
+	_sfx("ui_confirm")
 	_rematch_button.disabled = true
 	var res: Dictionary = await _session.request_rematch()
 	if not res["ok"]:
@@ -584,6 +638,7 @@ func _on_peer_connection_changed(down: bool, _wait_ms: int) -> void:
 ## Läuft das Spiel noch, fragt der Knopf erst „Wirklich aufgeben?“ —
 ## nach GAME_OVER (oder im Setup) geht er direkt raus.
 func _on_leave_pressed() -> void:
+	_sfx("ui_back")
 	if _phase == "play" and _session != null and _session.is_active():
 		_surrender_dialog.popup_centered()
 		return
@@ -606,6 +661,12 @@ func _leave_and_go_home() -> void:
 	var routes: Variant = router.get("_routes")
 	if routes is Dictionary and (routes as Dictionary).has(&"home"):
 		router.goto(&"home", {})
+
+
+## F10 (a): derselbe kleine Wrapper wie im Schach — plus Pitch fürs
+## Neu-Würfeln (Steigerungs-Trick, AUDIO-GRAMMATIK §Steigerung).
+func _sfx(id: String, pitch := 1.0) -> void:
+	AudioDirector.try_play(self, id, pitch)
 
 
 func _my_gooby_name() -> String:

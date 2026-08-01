@@ -58,6 +58,8 @@ var _banner_until := 0.0
 ## Glas-Zähler im HUD-Chip: letzter Stand + Pop-Startzeit (Sammel-Feier).
 var _jars_seen := 0
 var _jar_pop := -10.0
+## Schnitt-Serie fürs Audio (MG-Audit B §2): Pitch-Treppe, rein Präsentation.
+var _cut_streak := 0
 ## Aktive Zeiger: index → {mode: swipe|anchor|none, player, last, points, rope}.
 var _pointers: Dictionary = {}
 var _select_screen: GobnomLevelSelect
@@ -142,6 +144,7 @@ func _enter_play(level: Dictionary) -> void:
 	phase = "play"
 	_accum = 0.0
 	_run_score = 0
+	_cut_streak = 0
 	_pointers = {}
 	_stage.visible = true
 	_stage.frame(get_viewport_rect().size)
@@ -252,11 +255,13 @@ func _consume_events(events: Array) -> void:
 		match str(event["kind"]):
 			"cut":
 				_stage.cut_fx(Vector2(event["at"]))
-				AudioDirector.try_play(self, "mg_combo", 1.05)
+				_cut_streak += 1
+				AudioDirector.try_play(self, "mg_combo", FeelSfx.combo_pitch(_cut_streak))
 			"jar":
 				var at := Vector2(event["at"])
 				_stage.jar_fx(at)
-				AudioDirector.try_play(self, "gvz_collect")
+				var jars := maxi(1, int(state.get("jars_taken", 1)))
+				AudioDirector.try_play(self, "gvz_collect", FeelSfx.combo_pitch(jars))
 				if ctx != null and ctx.juice != null:
 					ctx.juice.float_text(
 						_to_screen(at), I18nService.t("gobnom.hud.jar"), GobnomArt.STAR_GOLD
@@ -618,15 +623,15 @@ func _draw_hud() -> void:
 
 
 ## Netz-Coop-Schicht: Partner-Cursor (frisch < 1,5 s, auf der Partner-Seite)
-## und der „Warte auf Partner“-Hinweis unterm HUD-Chip.
+## und der „Warte auf Partner“-Hinweis — mittig (G4), nicht am HUD-Chip.
 func _draw_netz_overlay() -> void:
 	if phase == "play" and _netz_waiting:
 		draw_string(
 			_font,
-			Vector2(18, 84),
+			Vector2(0, 84),
 			I18nService.t("gobnom.netz.warte_partner"),
-			HORIZONTAL_ALIGNMENT_LEFT,
-			-1,
+			HORIZONTAL_ALIGNMENT_CENTER,
+			int(get_viewport_rect().size.x),
 			14,
 			Color(0.29, 0.23, 0.21, 0.8)
 		)
