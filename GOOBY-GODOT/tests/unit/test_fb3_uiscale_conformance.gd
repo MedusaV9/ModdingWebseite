@@ -20,6 +20,21 @@ const MUST_USE_SCALE: Array[String] = [
 	"res://scripts/minigames/results.gd",
 	"res://scripts/minigames/minigame_host.gd",
 	"res://scripts/minigames/ui/pause_modal.gd",
+	# W17/G5 P33: G4-Domänen (Baumodus/Telefon/Radio/Ranch-MP/Level-
+	# Selects/Onboarding/Reise) — seit G4 auf den UIKERN-Verträgen, der
+	# FB3-Audit misst die Geometrie live (Stationen 10–22).
+	"res://scripts/home/build_mode/build_ui_dock.gd",
+	"res://scripts/city/phone/phone_shell.gd",
+	"res://scripts/ui/radio/radio_sheet.gd",
+	"res://scripts/ranch/mp/rmp_menu_panel.gd",
+	"res://scripts/ranch/mp/rmp_lobby_panel.gd",
+	"res://scripts/ranch/mp/rmp_leaderboard_panel.gd",
+	"res://scripts/ranch/mp/rmp_besuch_panel.gd",
+	"res://scripts/minigames/games/gvz/gvz_level_select.gd",
+	"res://scripts/minigames/games/gobnom/gobnom_level_select.gd",
+	"res://scripts/ranch/comp/szene/comp_level_select.gd",
+	"res://scripts/ui/onboarding/onboarding_flow.gd",
+	"res://scripts/city/travel/reise_app.gd",
 ]
 const SCALE_MARKERS: Array[String] = ["UiScale.", "ScreenShell.", "touch_floor_canvas"]
 ## Safe-Area-Pflicht für VOLLBILD-Screens/Overlays (Sheet-INHALTE wie
@@ -37,6 +52,15 @@ const MUST_USE_SAFE_AREA: Array[String] = [
 	"res://scripts/minigames/results.gd",
 	"res://scripts/minigames/minigame_host.gd",
 	"res://scripts/minigames/ui/pause_modal.gd",
+	# W17/G5 P33: Vollbild-Flächen der G4-Domänen. Sheet-INHALTE
+	# (radio_sheet, rmp_*_panel, reise_app) erben die Safe-Area weiter
+	# vom PanelSheet und stehen bewusst NICHT hier.
+	"res://scripts/home/build_mode/build_ui_dock.gd",
+	"res://scripts/city/phone/phone_shell.gd",
+	"res://scripts/minigames/games/gvz/gvz_level_select.gd",
+	"res://scripts/minigames/games/gobnom/gobnom_level_select.gd",
+	"res://scripts/ranch/comp/szene/comp_level_select.gd",
+	"res://scripts/ui/onboarding/onboarding_flow.gd",
 ]
 const SAFE_MARKERS: Array[String] = ["safe_insets_canvas", "ScreenShell.metrics", "_safe_insets"]
 ## Inhaltsspalte W16: umgestellte Screens MÜSSEN zentriert bauen — direkt
@@ -61,6 +85,10 @@ const MUST_USE_CONTENT_COLUMN: Array[String] = [
 	"res://scripts/cosmetics/wardrobe_screen.gd",
 	"res://scripts/home/customize/customize_screen.gd",
 	"res://scripts/ui/album/album_screen.gd",
+	# W17/G5 P33: Die G4-Domänen nutzen das card_width-Karten-Muster,
+	# NICHT die Inhaltsspalte (kein content_frame/Meta im Code) — daher
+	# hier bewusst keine Einträge; die Deckel-Messung übernimmt der
+	# FB3-Audit über COLUMN_BASE_BY_SCREEN (Audit-seitige Markierung).
 ]
 const CONTENT_COLUMN_MARKERS: Array[String] = [
 	"ScreenShell.content_frame(",

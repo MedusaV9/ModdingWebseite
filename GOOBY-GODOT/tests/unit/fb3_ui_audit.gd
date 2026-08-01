@@ -3,7 +3,10 @@ extends SceneTree
 ## (home_entry inkl. Autoloads/Router/HUD), öffnet JEDEN Haupt-Screen/
 ## Panel/Overlay in 4 Geräteformaten (iPhone quer ×2, iPhone hoch, iPad
 ## quer) MIT simulierter Notch/Home-Indicator (UiScale.insets_override)
-## und prüft automatisiert:
+## — seit W17/G5 P33 auch die G4-Domänen ohne Router-Route (Baumodus-
+## Dock, IGohbie-Telefon, Radio-Sheet, Ranch-MP-Hub, Reise-App,
+## Onboarding, Level-Selects; 34 Zustände je Format) — und prüft
+## automatisiert:
 ##   - safe_area: ragt ein Bedienelement aus dem sicheren Bereich?
 ##   - tap: Tippfläche ≥ 44 pt (physisch, über screen_scale_override)?
 ##   - overlap: überlappen sich Bedienelemente?
@@ -45,7 +48,24 @@ const COLUMN_BASE_BY_SCREEN := {
 	"05_wardrobe": WardrobeScreen.SPALTE_BASIS,
 	"05_ikea": IkeaScreen.GRID_BASE,
 	"05_gestalten": CustomizeScreen.SPALTE_BASIS,
+	# W17/G5 P33: G4-Domänen OHNE content_frame — die zentrierten Haupt-
+	# Karten/-Docks (card_width-Muster) tragen das Spalten-Meta selbst
+	# nicht; der Audit markiert sie beim Öffnen (_markiere_spalte) und
+	# misst mit der Screen-eigenen Design-Basis (Konstante, kein Drift).
+	"10_bau_dock": BuildUiDock.DOCK_BASIS,
+	"11_phone_grid": PhoneShell.GERAET_GROESSE.x,
+	"12_phone_taxi": PhoneShell.GERAET_GROESSE.x,
+	"13_phone_gooberando": PhoneShell.GERAET_GROESSE.x,
+	"18_onboarding_welcome": OnboardingFlow.CARD_BASE_WIDTH,
+	"19_onboarding_editor": OnboardingFlow.EDITOR_CARD_BASE_WIDTH,
 }
+
+## W17/G5 P33 Rauschfilter: bewusste RAND-Elemente NEBEN der markierten
+## Spalte — die Kamera-Chips des Baumodus sitzen per Design rechts mittig
+## am Rand (G4/P15 FIX-3: „weit weg von Dock und Action-Bar", Daumenzone)
+## und gehören NICHT ins Dock. Safe-Area-/Tap-/Overlap-/Offscreen-Checks
+## gelten für sie unverändert; nur die Spalten-Zugehörigkeit entfällt.
+const SPALTEN_RAND_ELTERN: Array[String] = ["KameraLeiste"]
 
 var _out_dir := DEFAULT_OUT
 var _router: Node
@@ -156,6 +176,16 @@ func _audit_size(size_info: Array) -> void:
 		await _audit_route(String(screen_info[0]), screen_info[1])
 	await _audit_minigame_flow()
 	await _goto_home()
+	# W17/G5 P33: Stationen der G4-Domänen — Overlays/Kontext-Flächen, die
+	# NICHT über den Router laufen (Mount-Weg siehe Funktions-Doku).
+	await _audit_bau_dock()
+	await _audit_phone()
+	await _audit_radio_sheet()
+	await _audit_rmp_hub()
+	await _audit_reise_app()
+	await _audit_onboarding()
+	await _audit_level_selects()
+	await _goto_home()
 	UiScale.insets_override = Rect2()
 
 
@@ -261,6 +291,204 @@ func _check_pause_compact(modal: MinigamePauseModal) -> void:
 			"PauseCard",
 			"Karte nicht mittig: Zentrum %s vs. Safe-Zentrum %s" % [center, safe_center]
 		)
+
+
+## ---- G4-Domänen (W17/G5 P33) ---------------------------------------------
+## Kein Router-Ziel: Die folgenden Flächen mounten wie im echten Spiel
+## (HUD-Aktion, Möbel-Tap, Hof-Knopf, Erststart) — der Audit ruft dieselben
+## Einstiege auf und misst mit der UNVERÄNDERTEN Check-Logik.
+
+
+## Baumodus (G4/P15): läuft IM Raum — Mount wie der HUD-Bau-Knopf
+## (home_entry._on_hud_action → room.open_build_mode()). Der Bett-Quest-
+## Ghost würde close() blockieren (Bauquest Doc D §3.1), darum markiert
+## der Audit das Bett vorab als gebaut (reiner Audit-Save, kein Screen-
+## Eingriff). HUD bleibt AN — im echten Baumodus ist es sichtbar.
+func _audit_bau_dock() -> void:
+	var room: Variant = _router.get_current_scene()
+	if room == null or not (room as Node).has_method("open_build_mode"):
+		_add_finding("10_bau_dock", "flow", "-", "Raum nicht erreicht")
+		return
+	HomeState.set_flag(root.get_node("/root/GameState"), HomeState.FLAG_BED_PLACED, true)
+	room.open_build_mode()
+	await _settle()
+	_markiere_spalte("BauDock")
+	await _snap_and_check("10_bau_dock")
+	var bau: Variant = (room as Node).get_node_or_null("BuildMode")
+	if bau is BuildMode:
+		(bau as BuildMode).close()
+	await _settle()
+
+
+## IGohbie-Telefon (G4/P18): Vollbild-Overlay ÜBER dem Raum (eigener
+## CanvasLayer). Im Spiel bleibt das HUD zwar visible, aber der Voll-
+## flächen-Scrim (MOUSE_FILTER_STOP) macht es unbedienbar — Button-Paare
+## über die Modal-Ebene hinweg sind KEIN Bedien-Konflikt. Der Audit
+## blendet das HUD daher für die Messung aus (HUD-Geometrie: Station 01).
+## Grid + 2 Apps: Taxi (Fahrdienst-Formular) und GOOBERANDO (dichtestes
+## App-UI, bis P34 noch auf 420er-City-Bausteinen).
+func _audit_phone() -> void:
+	_hud.visible = false
+	var shell := PhoneShell.oeffne(_entry, root.get_node("/root/GameState"))
+	await _settle()
+	_markiere_spalte("Geraet")
+	await _snap_and_check("11_phone_grid")
+	shell.oeffne_app("taxi")
+	await _settle()
+	await _snap_and_check("12_phone_taxi")
+	shell.oeffne_app("gooberando")
+	await _settle()
+	await _snap_and_check("13_phone_gooberando")
+	shell.schliesse()
+	await _settle()
+	_hud.visible = true
+
+
+## Radio (G4/P17): PanelSheet-Inhalt — Mount wie RadioGeraet._open_panel
+## (Sheet ohne Titelzeile, RadioSheet bringt die eigene Kopfzeile mit).
+## Das PanelSheet ist modal (Backdrop fängt Eingaben) — HUD unterm
+## Backdrop ist unbedienbar, darum wie beim Telefon fürs Messen aus.
+## Spalten-Kategorie entfällt (PanelSheet).
+func _audit_radio_sheet() -> void:
+	_hud.visible = false
+	var layer := CanvasLayer.new()
+	layer.name = "AuditRadioLayer"
+	layer.layer = 30
+	root.add_child(layer)
+	var panel: PanelSheet = (load("res://scripts/ui/panel_sheet.tscn") as PackedScene).instantiate()
+	panel.theme = ThemeService.theme()
+	layer.add_child(panel)
+	panel.set_title("")
+	var sheet := RadioSheet.new()
+	sheet.gs = root.get_node("/root/GameState")
+	sheet.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.add_content(sheet)
+	panel.open()
+	await _settle()
+	await _snap_and_check("14_radio_sheet")
+	panel.close()
+	await _settle()
+	layer.queue_free()
+	await _settle()
+	_hud.visible = true
+
+
+## Ranch-MP (G4/P19): Hub-Sheets Menü → Lobby — Mount wie der Hof-Knopf
+## (RmpHub.attach_to + oeffne; ohne Session zeigt oeffne das Menü, die
+## Lobby läuft leer/offline — RW-6-Vertrag). Im echten Hof-Kontext ist
+## das Home-HUD aus (Hof ist kein RoomBase) — der Audit stellt das nach.
+func _audit_rmp_hub() -> void:
+	_hud.visible = false
+	var hub := RmpHub.attach_to(_entry)
+	await _settle()
+	hub.oeffne()
+	await _settle()
+	await _snap_and_check("15_rmp_menu")
+	hub.call("_zeige_lobby")
+	await _settle()
+	await _snap_and_check("16_rmp_lobby")
+	hub.call("_schliesse_sheets")
+	await _settle()
+	_hud.visible = true
+
+
+## Reise-App (G4/P16): PanelSheet über der Trägerszene — Mount wie
+## ReiseApp.oeffne. Echter Kontext ist die Stadt (kein RoomBase, Home-HUD
+## aus) — der Audit stellt das nach; Spalten-Kategorie entfällt (Sheet).
+func _audit_reise_app() -> void:
+	_hud.visible = false
+	var app := ReiseApp.oeffne(_entry, root.get_node("/root/GameState"))
+	await _settle()
+	await _snap_and_check("17_reise_app")
+	app.sheet.close()
+	await _settle()
+	_hud.visible = true
+
+
+## Onboarding (G4/P23): läuft beim Erststart VOR dem HUD
+## (home_entry._show_onboarding, HUD disabled) — der Audit stellt das
+## nach. Steps schalten SYNCHRON (Sichtbarkeits-Vertrag
+## test_ui_onboarding) — der Audit fährt den ECHTEN Flow über die
+## Weiter-Handler (Name → Spitzname → Editor) statt _show_step zu forcen.
+func _audit_onboarding() -> void:
+	_hud.visible = false
+	var flow: OnboardingFlow = (
+		(load("res://scripts/ui/onboarding/onboarding_flow.tscn") as PackedScene).instantiate()
+	)
+	_entry.get_node("UiLayer").add_child(flow)
+	await _settle()
+	_markiere_spalte("StepWelcome")
+	await _snap_and_check("18_onboarding_welcome")
+	(flow.get_node("%NameEdit") as LineEdit).text = "Audit-Gooby"
+	flow.call("_on_welcome_next")
+	flow.call("_on_nickname_next")
+	await _settle()
+	_markiere_spalte("StepEditor")
+	await _snap_and_check("19_onboarding_editor")
+	flow.queue_free()
+	await _settle()
+	_hud.visible = true
+
+
+## Level-Selects (G4/P20): leben im Spiel im Arcade-SubViewport — der
+## Audit misst aber nur den HAUPT-Viewport (SubViewports haben eigene
+## Koordinatenräume, s. _interactive_controls). Eigener Mount-Weg:
+## Vollbild direkt am Root (die Selects binden sich selbst an den
+## Viewport, B11-Muster). Echter Kontext = Minigame-Route → Home-HUD
+## aus, und der Host letterboxt den SubViewport INNERHALB der Safe-Area
+## (_layout_stage) — Notch-Insets existieren für die Selects in-game
+## NICHT. Der Root-Mount misst darum ohne Insets (Safe = Canvas);
+## Tap-/Overlap-/Offscreen-Checks bleiben unverändert scharf. Vor der
+## Messung muss die Blätter-Animation fertig sein (Kacheln skalieren
+## von 0 — Zwischenzustände wären Overlap-/Tap-Rauschen).
+func _audit_level_selects() -> void:
+	_hud.visible = false
+	var safe_vorher := Rect2(_safe_rect)
+	_safe_rect = Rect2(Vector2.ZERO, _canvas)
+	UiScale.insets_override = Rect2(_safe_rect)
+	var gs := root.get_node("/root/GameState")
+	for eintrag: Array in [
+		["20_select_gvz", GvzLevelSelect.new()],
+		["21_select_gobnom", GobnomLevelSelect.new()],
+		["22_select_comp", RcompLevelSelect.new()],
+	]:
+		var select: Control = eintrag[1]
+		select.set("game_state", gs)
+		root.add_child(select)
+		await _settle()
+		await _warte_bis_buttons_ruhig(select)
+		await _snap_and_check(String(eintrag[0]))
+		select.queue_free()
+		await _settle()
+	_safe_rect = safe_vorher
+	UiScale.insets_override = Rect2(_safe_rect)
+	_hud.visible = true
+
+
+## W17/G5 P33: Deckel-Messung OHNE Screen-Eingriff — G4-Karten/Docks
+## zentrieren über ScreenShell.card_width, tragen aber (kein
+## content_frame-Screen) kein Spalten-Meta. Der Audit markiert den
+## sichtbaren Haupt-Container selbst, damit _check_content_column die
+## BESTEHENDE Messung (Safe-Zentrierung ±2 px + Breiten-Deckel aus
+## COLUMN_BASE_BY_SCREEN) anwenden kann.
+func _markiere_spalte(node_name: String) -> void:
+	for node: Control in root.find_children(node_name, "Control", true, false):
+		if node.is_visible_in_tree():
+			node.set_meta(ScreenShell.META_CONTENT_COLUMN, true)
+
+
+## Blätter-/Einfeder-Animationen abwarten: alle sichtbaren Buttons des
+## Teilbaums wieder auf Scale 1 (Level-Selects klappen Kacheln von 0 auf).
+func _warte_bis_buttons_ruhig(wurzel: Node) -> void:
+	await _wait_for(
+		func() -> bool:
+			for node: Control in wurzel.find_children("*", "Button", true, false):
+				if not node.scale.is_equal_approx(Vector2.ONE):
+					return false
+			return true,
+		6000
+	)
+	await _settle()
 
 
 func _register_all_routes() -> void:
@@ -382,7 +610,7 @@ func _check_content_column(screen: String, controls: Array[Control]) -> void:
 				"Spalte zu breit: %.0f px (Deckel %.0f px)" % [rect.size.x, max_w]
 			)
 	for ctl in controls:
-		if not (ctl is Button) or _in_overlay_layer(ctl):
+		if not (ctl is Button) or _in_overlay_layer(ctl) or _in_spalten_rand(ctl):
 			continue
 		var rect := _effective_rect(ctl)
 		if rect.size.x <= 0.0 or rect.size.y <= 0.0:
@@ -413,6 +641,17 @@ func _content_columns() -> Array[Control]:
 		if ctl.is_visible_in_tree() and ctl.has_meta(ScreenShell.META_CONTENT_COLUMN):
 			out.append(ctl)
 	return out
+
+
+## W17/G5 P33: Rand-Elemente aus SPALTEN_RAND_ELTERN (bewusst NEBEN der
+## markierten Spalte platziert) von der Spalten-Zugehörigkeit ausnehmen.
+func _in_spalten_rand(ctl: Control) -> bool:
+	var node: Node = ctl
+	while node != null:
+		if String(node.name) in SPALTEN_RAND_ELTERN:
+			return true
+		node = node.get_parent()
+	return false
 
 
 ## Overlay-Ebenen, deren Knöpfe NICHT in die Spalte gehören (HUD-Daumen-
@@ -562,6 +801,13 @@ func _snap(file: String) -> void:
 	# Befunde je nach Würfelglück). Ausblenden wie den SafeModeBanner; die
 	# Checks laufen NACH dem Snap und sehen nur Sichtbares.
 	for node: Control in root.find_children("GoobyGespraechChips", "Control", true, false):
+		node.visible = false
+	# W17/G5 P33: gleiche Rauschquelle Nr. 2 — die Choice-Karte der
+	# Zufalls-Events (EventRunner/EventProps.show_choice, z. B. Herbert
+	# der Wurm) spawnt per RNG beim Start und bleibt offen, bis jemand
+	# wählt; ihre 2 Knöpfe wanderten sonst als Overlap-/Spalten-Befunde
+	# durch ALLE folgenden Stationen des Laufs.
+	for node: Control in root.find_children("EventChoice", "Control", true, false):
 		node.visible = false
 	await process_frame
 	var image := root.get_texture().get_image()
