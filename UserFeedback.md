@@ -47,12 +47,32 @@ _(Runden W14 UND W15 sind FERTIG — Details unten in „Erledigt". Aktueller St
       **(g) 11 Prozess-/Robustheits-Fixe** (stapelnde Klick-Animationen,
       Zeitzonen-Fehler im Schnupfen-Wetter, schlafende Hintergrund-Prozesse,
       Speicher-Rettung aus Backups).
-- [~] **W16 / Welle G3 läuft:** 5 neue Scout-Berichte liegen vor (Plan mit
-      Paket-Schnitt, Audit ALLER 32 restlichen Minispiele in 3 Batches,
-      Inventur der restlichen ~40 Screens für die Inhaltsspalte). Jetzt
-      starten die Umsetzer: restliche Screens auf die Inhaltsspalte,
-      Minispiel-Polituren nach Audit, Sound-/Text-Fixpakete, carrotGuard.
-      Loop läuft weiter.
+- [x] **W16 / Welle G3 FERTIG (1. August):** 12 Umsetzungs-Pakete gelandet,
+      voller Testlauf grün (3078 Tests, alle Störfeuer beseitigt — u. a. 416
+      wiederkehrende Fehlerzeilen im Testlauf auf 0 gebracht). Im Einzelnen:
+      **(a) Inhaltsspalte ausgerollt** auf Arcade, IKEA-Katalog, Garderobe +
+      Gestalten (mit Hochformat-Stapel) und das Album (Rail wird hochkant zur
+      Chip-Leiste) — Hintergrund bleibt vollflächig, Knöpfe/Inhalte mittig,
+      **(b) 12 Stadt-Orte** bekommen eine zentrierte Knopfleiste in der
+      Daumenzone statt Ecken-Knöpfen; „geschlossen" (GOOBY-FREE) sieht man
+      jetzt am Ort statt nur als Toast,
+      **(c) Sozial + Post fühlbar** — alle Knöpfe drücken sich (Squish + Sound
+      + Haptik nach fester Grammatik), Brief-Schreibfeld verwirft nichts mehr
+      ohne Nachfrage, Ungelesen-Zähler als hübsche Kapsel,
+      **(d) 137 Text-Feinschliffe** (Apostrophe, Gedankenstriche, ein Ding =
+      ein Name, wärmerer Tonfall) über 50+ Dateien,
+      **(e) Haptik-Stärke** (dezent/normal/stark) wirkt jetzt wirklich,
+      **(f) carrotGuard poliert** (Möhren-Reihe fliegt sichtbar, Kombo-Pips,
+      König-Banner, Timer-Urgenz, Intro-Beat),
+      **(g) Server-CI + ehrliche Doku**, **(h) Trailer-Vorarbeiten**
+      (Storyboard v4, 4 neue Aufnahme-Treiber, Zahlen-Fixes).
+- [~] **W16 / Welle G4 läuft:** Das große UI-Rework geht in die Fläche:
+      Baumodus, Reise-App, Radio/Kino, IGohbie-Telefon, Ranch-Bedienflächen,
+      Level-Auswahlen + Brettspiele, Boot-Ladebild im Alt-Web-Look,
+      Onboarding/Quests/Feier-Flächen — dazu 7 Minispiel-Polituren
+      (teaParty, carrotCatch, bubblePop+bunnyHop, danceParty, fishingPond,
+      goalieGooby, rocketRescue; die sichtbarsten/schwächsten zuerst laut
+      Audit aller 28 Rest-Spiele). Loop läuft weiter.
 
 - [~] **DLC-Umsetzung „Goo und Bye" + „McGooby"** — Design-Docs komplett, DLC-Hub zeigt
       beide als „BALD"; nächster Schritt ist Welle A des Goo-und-Bye-Fundaments
