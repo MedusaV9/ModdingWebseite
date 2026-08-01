@@ -21,6 +21,14 @@ const LETTERBOX_RATIO := 0.11
 const FAST_STEP_S := 0.03
 ## Overlay-Ebene; Spiel-UI (HUD-CanvasLayer darunter) wird fürs Kino versteckt.
 const OVERLAY_LAYER := 90
+## G5/P34 (Muster RecapScene G4/P17): Untertitel-/Skip-Geometrie in Design-px
+## (×f skaliert, an die Safe-Area geklemmt statt fixer 1280×720-Offsets).
+const CAPTION_RAND_X := 24.0
+const CAPTION_ABSTAND_Y := 40.0
+const CAPTION_HOEHE := 56.0
+const CAPTION_FONT := 26
+const CAPTION_OUTLINE := 8
+const SKIP_RAND := 16.0
 
 ## Test-Hebel: 1.0 = Echtzeit; Tests setzen z. B. 20.0.
 var time_scale := 1.0
@@ -354,24 +362,56 @@ func _build_overlay() -> void:
 	_overlay.add_child(_bar_bottom)
 	_caption = Label.new()
 	_caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_caption.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_caption.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-	_caption.offset_top = -96.0
-	_caption.offset_bottom = -40.0
-	_caption.add_theme_font_size_override("font_size", 26)
 	_caption.add_theme_color_override("font_color", Color.WHITE)
 	_caption.add_theme_color_override("font_outline_color", Color(0.1, 0.08, 0.06, 0.9))
-	_caption.add_theme_constant_override("outline_size", 8)
 	_caption.visible = false
 	_caption.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_overlay.add_child(_caption)
-	_skip_button = Button.new()
+	# G5/P34: Skip als SquishButton (W16-Grammatik) — Verlassen klingt ui_back.
+	_skip_button = SquishButton.new()
 	_skip_button.text = I18nService.t("cutscene.ueberspringen")
 	_skip_button.set_anchors_preset(Control.PRESET_TOP_RIGHT)
 	_skip_button.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-	_skip_button.offset_top = 16.0
-	_skip_button.offset_right = -16.0
-	_skip_button.pressed.connect(ueberspringen)
+	_skip_button.grow_vertical = Control.GROW_DIRECTION_END
+	_skip_button.focus_mode = Control.FOCUS_NONE
+	_skip_button.pressed.connect(_on_skip_pressed)
 	_overlay.add_child(_skip_button)
+	_wende_layout_an()
+	get_viewport().size_changed.connect(_wende_layout_an)
+
+
+## G5/P34 (Leitidee FB3, Muster RecapScene G4/P17): Untertitel und Skip aus
+## UiScale + Safe-Area statt fixer Design-Offsets — der Untertitel hängt ÜBER
+## dem Home-Indicator (Bottom-Inset), der Skip-Knopf sitzt IN der Safe-Area
+## (Top-/Rechts-Inset, Kino-Querformat: Notch seitlich) und erfüllt den
+## physischen 44-pt-Touch-Floor. Läuft bei jedem Viewport-Resize erneut.
+func _wende_layout_an() -> void:
+	if _skip_button == null or _overlay == null or not is_inside_tree():
+		return
+	var m := ScreenShell.metrics(get_viewport())
+	var f: float = m["f"]
+	var tf := UiScale.font_scale(get_viewport())
+	var insets: Dictionary = m["insets"]
+	var floor_px: float = m["floor_px"]
+	_caption.offset_left = float(insets["left"]) + CAPTION_RAND_X * f
+	_caption.offset_right = -(float(insets["right"]) + CAPTION_RAND_X * f)
+	_caption.offset_bottom = -(float(insets["bottom"]) + CAPTION_ABSTAND_Y * f)
+	_caption.offset_top = _caption.offset_bottom - CAPTION_HOEHE * f
+	_caption.add_theme_font_size_override("font_size", int(CAPTION_FONT * tf))
+	_caption.add_theme_constant_override("outline_size", int(CAPTION_OUTLINE * tf))
+	_skip_button.custom_minimum_size = Vector2(floor_px * 1.6, floor_px)
+	_skip_button.offset_top = float(insets["top"]) + SKIP_RAND * f
+	_skip_button.offset_bottom = _skip_button.offset_top + floor_px
+	_skip_button.offset_right = -(float(insets["right"]) + SKIP_RAND * f)
+	_skip_button.offset_left = _skip_button.offset_right - floor_px * 1.6
+	ScreenShell.scale_fonts(_skip_button, tf)
+
+
+func _on_skip_pressed() -> void:
+	AudioDirector.try_play(self, "ui_back")
+	ueberspringen()
 
 
 func _letterbox_bar() -> ColorRect:

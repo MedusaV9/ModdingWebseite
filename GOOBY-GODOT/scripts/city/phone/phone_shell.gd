@@ -433,7 +433,9 @@ func _baue_app(app_id: String) -> Control:
 			kamera.fotomodus_gewuenscht.connect(starte_fotomodus)
 			return kamera
 		"freunde":
-			return PhoneSocialApps.freunde(host)
+			# G5/P34 (P18-Request): echtes Telefon-Layout statt eingebettetem
+			# Vollbild-Screen — der Router-Weg (FriendsScreen) bleibt bestehen.
+			return PhoneFriendsApp.new()
 		"goobypal":
 			return PhoneSocialApps.goobypal(gs, _on_pal_freund)
 		InstantGoobyApp.APP_ID:

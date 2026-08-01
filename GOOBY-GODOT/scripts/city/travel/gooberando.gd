@@ -10,13 +10,18 @@ extends VBoxContainer
 ## schadet nie ;)“ nach 3× keins). Essen landet als FoodCatalog-Ids im
 ## Inventar (GameState).
 ##
-## G4/P16 (ui-reisen MITTEL 6/7): Inhalt baut auf der REALEN Sheet-Breite
-## (`inhalt_breite()`), Restaurants sind EINE tappbare Karte (AcCardButton
-## mit Name/Sterne-Gag/Wartezeit) statt Button+losen Captions, die
-## Live-Karte skaliert dynamisch (`kante = clamp(breite·0,7, 220, 420)`)
+## G4/P16 (ui-reisen MITTEL 6/7): Restaurants sind EINE tappbare Karte
+## (AcCardButton mit Name/Sterne-Gag/Wartezeit) statt Button+losen Captions,
+## die Live-Karte skaliert dynamisch (`kante = clamp(breite·0,7, 220, 420)`)
 ## und alle Aktions-Knöpfe sind SquishButtons ≥ 52·f mit Touch-Floor.
 ## Sounds nach Audio-Grammatik (Outcome schlägt Press: ui_buy erst NACH
 ## gelungener Zahlung).
+##
+## G5/P34 (P18→P16-Request): Die App läuft IM Telefon — die App-Ansicht baut
+## auf den PhoneShell-Helfern (`richte_app_box_ein`/`app_label`, Breite =
+## reale Geräte-Innenbreite via `PhoneShell.inhalt_breite()`) statt auf dem
+## 420er-Sheet-Fallback, der breiter als das 380er-Gerät war (gleiche
+## Breiten-Kollision wie InstantGooby vor G4/P18, G1 ui-post §4).
 ##
 ## HUD-Anbindung (Orchestrator): `hud.action_pressed` mit &"igohbie" →
 ## `GooberandoApp.oeffne(szene, game_state)`.
@@ -34,8 +39,7 @@ const MAX_KORB := 5
 ## Mindesthöhe der Aktions-Knöpfe / Restaurant-Karten in Design-px.
 const KNOPF_HOEHE := 52.0
 const KARTE_HOEHE := 64.0
-## Fallback-Inhaltsbreite in Design-px (Tests bauen die App ohne Sheet).
-const BASIS_BREITE := 420.0
+## Untergrenze der Inhaltsbreite (Design-px, Robustheit auf Mini-Canvases).
 const MIN_BREITE := 220.0
 ## Live-Karten-Kante: Anteil der Inhaltsbreite + harte Klemmen (Design-px).
 const KARTE_ANTEIL := 0.7
@@ -86,8 +90,8 @@ static func handle_hud_action(action: StringName, host: Node, game_state: Object
 
 func _ready() -> void:
 	# Root = VBoxContainer (min-Höhe propagiert zum PanelSheet); _box = self.
-	custom_minimum_size = Vector2(inhalt_breite(), 0.0)
-	add_theme_constant_override("separation", 10)
+	# G5/P34: Breite kommt von den PhoneShell-Helfern (keine Fixbreite mehr).
+	PhoneShell.richte_app_box_ein(self)
 	_box = self
 	var vp := get_viewport()
 	if vp != null:
@@ -109,20 +113,11 @@ func now_ms() -> int:
 	return int(Time.get_unix_time_from_system() * 1000.0)
 
 
-## G4/P16: reale Inhaltsbreite — Sheet-Breite minus Sheet-Chrome
-## (FIX1-Regel „Breite abfragen statt erzwingen“). Ohne Sheet (Tests,
-## Direkteinbau) fällt sie auf die skalierte Basisbreite zurück.
+## G5/P34: reale Inhaltsbreite = Geräte-Innenbreite der PhoneShell (die App
+## läuft IM Telefon; P18 hat die Helfer genau dafür gebaut). Der alte
+## 420er-Sheet-Fallback kollidierte mit dem 380er-Gerät (G1 ui-post §4).
 func inhalt_breite() -> float:
-	var vp := get_viewport()
-	if vp == null:
-		return BASIS_BREITE
-	var f := UiScale.for_viewport(vp)
-	var canvas := Vector2(vp.get_visible_rect().size)
-	if sheet == null or not is_instance_valid(sheet) or not sheet.is_inside_tree():
-		return clampf(canvas.x - 48.0, MIN_BREITE, BASIS_BREITE * f)
-	var insets := UiScale.safe_insets_canvas(vp)
-	var breite := PanelSheetLayout.sheet_width(canvas, insets, f) - sheet.chrome_width()
-	return maxf(breite, MIN_BREITE)
+	return maxf(PhoneShell.inhalt_breite(), MIN_BREITE)
 
 
 ## Gesamt-Lieferzeit (s) einer Bestellung: Küchen-Wartezeit des Restaurants
@@ -167,9 +162,13 @@ func _tick() -> void:
 ## ---------------------------------------------------------------- Views
 
 
-## Rotation/Resize: Breite nachziehen und die aktuelle Ansicht neu bauen.
+## Rotation/Resize: die aktuelle Ansicht mit frischen Metriken neu bauen
+## (die Breite kommt je Baustein aus den PhoneShell-Helfern). Guard: die
+## PhoneShell hängt die ALTE Instanz beim Rebuild aus, bevor queue_free
+## greift — ohne Tree gibt es keinen Viewport zum Vermessen.
 func _on_viewport_resized() -> void:
-	custom_minimum_size = Vector2(inhalt_breite(), 0.0)
+	if not is_inside_tree():
+		return
 	_render()
 
 
@@ -622,37 +621,19 @@ func _knopf(text: String, variation: String) -> SquishButton:
 	return btn
 
 
+## G5/P34: Fließtexte über den PhoneShell-Baustein — der setzt die
+## Autowrap-Startbreite (Geräte-Textbreite) VOR add_child (W3a-GOTCHA).
 func _label(text: String) -> void:
-	var label := Label.new()
-	label.text = text
-	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	# Start-Breite VOR add_child setzen: Autowrap rechnet die Min-Höhe an der
-	# AKTUELLEN Breite — bei 0 explodiert sie (1 Zeichen/Zeile) und das Sheet
-	# wächst per grow_vertical schirmhoch und schrumpft nie zurück.
-	# G4/P16: Breite = reale Inhaltsbreite statt Festwert 380.
-	var breite := inhalt_breite()
-	label.custom_minimum_size = Vector2(breite, 0.0)
-	label.size = Vector2(breite, 0.0)
-	_box.add_child(label)
+	PhoneShell.app_label(_box, text)
 
 
 func _caption(text: String) -> void:
-	var label := Label.new()
-	label.text = text
-	label.theme_type_variation = "CaptionLabel"
-	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	var breite := inhalt_breite()
-	label.custom_minimum_size = Vector2(breite, 0.0)
-	label.size = Vector2(breite, 0.0)
-	_box.add_child(label)
+	PhoneShell.app_label(_box, text, "CaptionLabel")
 
 
-## Theme-Schriften des frischen Inhalts mit UiScale skalieren (FlapBoard-
-## Muster; Tafel-eigene Schriften tragen META_FONT_SKIP).
+## Theme-Schriften des frischen Inhalts ×f heben (PhoneShell-Baustein).
 func _skaliere_schriften() -> void:
-	var vp := get_viewport()
-	if vp != null:
-		ScreenShell.scale_fonts(self, UiScale.for_viewport(vp))
+	PhoneShell.app_fonts_skalieren(self)
 
 
 func _zeige_toast(text: String) -> void:
