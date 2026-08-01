@@ -65,7 +65,7 @@
 			"new_best": "New record!",
 			"coins": "+{coins} coins",
 			"daily_bonus": "Daily bonus ×2!",
-			"day_cap": "Daily cap reached",
+			"day_cap": "Daily bonus used up — the coins jingle again tomorrow!",
 			"xp": "+{xp} XP",
 			"level_up": "Level up! +{coins} coins",
 			"beat_target": "Target beaten!",

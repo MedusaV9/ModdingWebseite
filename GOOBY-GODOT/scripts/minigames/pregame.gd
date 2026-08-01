@@ -132,7 +132,8 @@ func _build_ui() -> void:
 	for mode in DIFF_ORDER:
 		if mode == "endless" and not _endless_available():
 			continue
-		var btn := Button.new()
+		# QW #3: SquishButton statt nacktem Button (Squish + Haptik zentral).
+		var btn: Button = SquishButton.new()
 		btn.toggle_mode = true
 		btn.theme_type_variation = &"AcChip"
 		btn.text = I18nService.t("mg.diff.%s" % mode)
@@ -148,7 +149,7 @@ func _build_ui() -> void:
 	orient_row.add_theme_constant_override("separation", 8)
 	rows.add_child(orient_row)
 	for orient in ORIENT_ORDER:
-		var btn := Button.new()
+		var btn: Button = SquishButton.new()
 		btn.toggle_mode = true
 		btn.theme_type_variation = &"AcChip"
 		btn.text = I18nService.t("mg.orient.%s" % orient)
@@ -168,13 +169,13 @@ func _build_ui() -> void:
 	buttons.alignment = BoxContainer.ALIGNMENT_CENTER
 	buttons.add_theme_constant_override("separation", 14)
 	rows.add_child(buttons)
-	var back := Button.new()
+	var back: Button = SquishButton.new()
 	back.theme_type_variation = &"GhostButton"
 	back.text = I18nService.t("mg.pregame.back")
 	back.pressed.connect(_go_back)
 	buttons.add_child(back)
 	_touch_buttons.append(back)
-	var play := Button.new()
+	var play: Button = SquishButton.new()
 	play.theme_type_variation = &"PrimaryButton"
 	play.text = I18nService.t("mg.pregame.play")
 	play.pressed.connect(_on_play_pressed)
@@ -184,7 +185,8 @@ func _build_ui() -> void:
 	_hint_label = Label.new()
 	_hint_label.theme_type_variation = &"CaptionLabel"
 	_hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_hint_label.add_theme_color_override("font_color", Color(0.85, 0.4, 0.35))
+	# Token statt Freihand-Rot (Farbkanon, vgl. QW #20).
+	_hint_label.add_theme_color_override("font_color", AcTokens.DANGER)
 	_hint_label.hide()
 	rows.add_child(_hint_label)
 
@@ -220,6 +222,17 @@ func _apply_touch_floor() -> void:
 		cover_h = maxf(cover_h - over, 0.0)
 		_cover.custom_minimum_size = Vector2(0.0, cover_h)
 		_cover.visible = cover_h >= 56.0
+	# Quer-Überlauf (G3): reicht der Cover-Schrumpf nicht (Endlos-Chip +
+	# CarLine + ModifierBanner + Dance-Sektion zusammen), schrumpfen die
+	# Schriften proportional zurück — Fit-Pass wie results.gd, nie unter
+	# die Design-Basis; Chips/Knöpfe behalten ihren Touch-Floor.
+	var f_fit: float = m["f"]
+	for _pass in 4:
+		var need := _card.get_combined_minimum_size().y
+		if f_fit <= 1.0 or need <= safe_h * 0.94:
+			break
+		f_fit = maxf(f_fit * safe_h * 0.94 / need, 1.0)
+		ScreenShell.scale_fonts(_card, f_fit)
 
 
 ## FERTIG-1 (EVAL Rang 12): Bonus-Event-Banner — die sichtbare Anzeige VOR

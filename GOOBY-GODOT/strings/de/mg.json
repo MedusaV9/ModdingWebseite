@@ -65,7 +65,7 @@
 			"new_best": "Neuer Rekord!",
 			"coins": "+{coins} Münzen",
 			"daily_bonus": "Tagesbonus ×2!",
-			"day_cap": "Tageslimit erreicht",
+			"day_cap": "Tagesbonus aufgebraucht — morgen klimpert es wieder!",
 			"xp": "+{xp} XP",
 			"level_up": "Level-Up! +{coins} Münzen",
 			"beat_target": "Ziel geschafft!",

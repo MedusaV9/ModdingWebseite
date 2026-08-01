@@ -43,6 +43,10 @@ const TILE_HEIGHT := 240.0
 const GRID_GAP := 16.0
 const MIN_COLUMNS := 2
 const MAX_COLUMNS := 5
+## Inhaltsspalte W16: eigene Grid-Basis (breiter als die 660er Standard-
+## Spalte, damit das Cover-Raster nicht ausdünnt) — auf iPad/Quer rücken
+## die Kacheln damit zur Mitte, der Wallpaper bleibt vollflächig.
+const CONTENT_BASE_WIDTH := 880.0
 
 ## Tests: Navigation abschaltbar.
 var auto_navigate := true
@@ -123,7 +127,9 @@ func _build_ui() -> void:
 	var header := HBoxContainer.new()
 	header.add_theme_constant_override("separation", 16)
 	_rows.add_child(header)
-	_back = Button.new()
+	# QW #3: SquishButton statt nacktem Button — Press-Squish + Haptik
+	# laufen zentral, Theme-Variation/Signale bleiben identisch.
+	_back = SquishButton.new()
 	_back.theme_type_variation = &"GhostButton"
 	_back.text = I18nService.t("mg.arcade.back")
 	_back.focus_mode = Control.FOCUS_NONE
@@ -182,31 +188,26 @@ func _build_count_capsule() -> Control:
 
 ## Responsive Metriken (FIX1): Safe-Area-Ränder, UiScale-Faktor,
 ## Spaltenzahl aus der Breite — läuft bei Resize/Rotation erneut.
+## W16-Inhaltsspalte (Galerie-Muster): _rows liegt als zentrierte,
+## breiten-gedeckelte Spalte (eigene Basis CONTENT_BASE_WIDTH) im
+## Safe-Rechteck; die Spaltenzahl rechnet mit der SPALTEN-Breite statt
+## der vollen Canvas-Breite. Der Wallpaper bleibt vollflächig.
 func _apply_metrics() -> void:
 	if _rows == null or _grid == null:
 		return
 	var vp := get_viewport()
 	if vp == null:
 		return
-	var canvas := Vector2(vp.get_visible_rect().size)
-	var f := UiScale.for_viewport(vp)
-	var insets := UiScale.safe_insets_canvas(vp)
-	_rows.offset_left = float(insets["left"]) + 16.0
-	_rows.offset_right = -float(insets["right"]) - 16.0
-	_rows.offset_top = float(insets["top"]) + 16.0
-	_rows.offset_bottom = -float(insets["bottom"]) - 16.0
+	var m := ScreenShell.metrics(vp)
+	var f: float = m["f"]
+	ScreenShell.content_frame(_rows, m, CONTENT_BASE_WIDTH)
 	var gap := int(GRID_GAP * f)
 	_grid.add_theme_constant_override("h_separation", gap)
 	_grid.add_theme_constant_override("v_separation", gap)
-	var avail := canvas.x - _rows.offset_left + _rows.offset_right
-	_grid.columns = grid_columns(avail, f)
+	_grid.columns = grid_columns(ScreenShell.content_width(m, CONTENT_BASE_WIDTH), f)
 	# FB3: Touch-Floor auf BEIDEN Achsen + Schriften über die zentrale
 	# Regel (vorher skalierte nur der Titel, Kachel-Labels blieben klein).
-	var floor_px := maxf(
-		HudLayoutLogic.touch_floor_canvas(canvas),
-		float(AcTokens.TOUCH_FLOOR) * UiScale.touch_px_per_pt(get_viewport())
-	)
-	_back.custom_minimum_size = _back.custom_minimum_size.max(Vector2(floor_px, floor_px))
+	ScreenShell.touch_target(_back, m)
 	ScreenShell.scale_fonts(self, f)
 	for tile in _grid.get_children():
 		(tile as Control).custom_minimum_size = Vector2(0.0, TILE_HEIGHT * f)
@@ -215,7 +216,8 @@ func _apply_metrics() -> void:
 func _build_tile(game: Dictionary) -> Control:
 	var id: String = game["id"]
 	var coming_soon: bool = game.get("coming_soon", false)
-	var tile := Button.new()
+	# QW #3: Kacheln squishen + vibrieren wie alle AC-Buttons.
+	var tile: Button = SquishButton.new()
 	tile.name = "Tile_%s" % id
 	# E7-P0-3: FIX-As Button-taugliche Karten-Variation. `AcCard` ist eine
 	# PanelContainer-Variation — auf einem Button fiel sie still auf die

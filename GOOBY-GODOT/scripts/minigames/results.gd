@@ -123,8 +123,9 @@ func show_results(breakdown: Dictionary, meta: Dictionary, juice: JuiceKit = nul
 		_add_line(I18nService.t("mg.results.day_cap"), Color(0.72, 0.5, 0.42))
 	# FERTIG-1 (EVAL Rang 12): Modifier-Wirkung sichtbar im Ergebnis.
 	_add_modifier_lines(breakdown)
+	# QW #20: Erfolgs-Grün aus der Token-Palette statt Freihand-Farbe.
 	_add_line(
-		I18nService.t("mg.results.xp", {"xp": int(breakdown.get("xp", 0))}), Color(0.42, 0.6, 0.36)
+		I18nService.t("mg.results.xp", {"xp": int(breakdown.get("xp", 0))}), AcTokens.LEAF_DARK
 	)
 	if int(breakdown.get("levelsGained", 0)) > 0:
 		_add_line(
@@ -137,12 +138,13 @@ func show_results(breakdown: Dictionary, meta: Dictionary, juice: JuiceKit = nul
 		# Count-Up) — vorher war es nur eine unscheinbare Textzeile.
 		_feier_level_up(breakdown)
 	if breakdown.get("beatTarget", false):
-		_add_line(I18nService.t("mg.results.beat_target"), Color(0.42, 0.6, 0.36))
+		_add_line(I18nService.t("mg.results.beat_target"), AcTokens.LEAF_DARK)
 	var buttons := HBoxContainer.new()
 	buttons.alignment = BoxContainer.ALIGNMENT_CENTER
 	buttons.add_theme_constant_override("separation", 14)
 	_rows.add_child(buttons)
-	_again = Button.new()
+	# QW #3: SquishButton statt nacktem Button (Squish + Haptik zentral).
+	_again = SquishButton.new()
 	_again.theme_type_variation = &"PrimaryButton"
 	_again.text = I18nService.t("mg.results.again")
 	_again.focus_mode = Control.FOCUS_NONE
@@ -152,7 +154,7 @@ func show_results(breakdown: Dictionary, meta: Dictionary, juice: JuiceKit = nul
 			again_pressed.emit()
 	)
 	buttons.add_child(_again)
-	_back = Button.new()
+	_back = SquishButton.new()
 	_back.theme_type_variation = &"GhostButton"
 	_back.text = I18nService.t("mg.results.back")
 	_back.focus_mode = Control.FOCUS_NONE
@@ -283,6 +285,11 @@ func _add_line(text: String, color: Color) -> Label:
 	var label := Label.new()
 	label.text = text
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	# Breiten-Sicherheit (G3): lange Übersetzungen (Modifier-/Bonus-Zeilen)
+	# brechen um, statt die Karte über card_width hinaus zu verbreitern —
+	# der PanelContainer wächst sonst mit dem längsten Kind.
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	label.size_flags_horizontal = Control.SIZE_FILL
 	label.add_theme_color_override("font_color", color)
 	_rows.add_child(label)
 	return label

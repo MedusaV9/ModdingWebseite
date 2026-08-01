@@ -36,6 +36,8 @@ var _help: Button
 var _quit: Button
 var _hint_label: Label
 var _open := false
+## QW #6: laufender Ausblend-Tween (wird bei erneutem open() gekillt).
+var _hide_tween: Tween
 
 
 func _ready() -> void:
@@ -98,6 +100,10 @@ func open() -> void:
 	if _open:
 		return
 	_open = true
+	# QW #6: einen noch laufenden Ausblend-Tween abbrechen und die
+	# Ruhelage wiederherstellen (schnelles Pause-Tippen während des Fade).
+	_kill_hide_tween()
+	_reset_visuals()
 	visible = true
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	_help.button_pressed = false
@@ -120,14 +126,45 @@ func close() -> void:
 	resume_requested.emit()
 
 
-## Nur ausblenden (Host steuert, was danach passiert).
+## Nur ausblenden (Host steuert, was danach passiert). QW #6: das Öffnen
+## federt — das Schließen blendet jetzt ebenso weich aus (Karte schrumpft
+## auf 0.9 + Fade, Dim verblasst). LOGISCH ist das Modal sofort zu
+## (_open/PanelStack/mouse_filter oben), nur die Optik klingt nach;
+## Reduced Motion schaltet weiterhin hart.
 func hide_modal() -> void:
 	if not _open:
 		return
 	_open = false
-	visible = false
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	PanelStack.remove(self)
+	if ThemeService.is_reduced_motion(self) or not is_inside_tree():
+		visible = false
+		return
+	_kill_hide_tween()
+	_card.pivot_offset = _card.size / 2.0
+	_hide_tween = create_tween().set_parallel()
+	_hide_tween.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	_hide_tween.tween_property(_card, "scale", Vector2.ONE * 0.9, AcTokens.DUR_POP)
+	_hide_tween.tween_property(_card, "modulate:a", 0.0, AcTokens.DUR_POP)
+	_hide_tween.tween_property(_dim, "modulate:a", 0.0, AcTokens.DUR_POP)
+	_hide_tween.chain().tween_callback(_nach_ausblenden)
+
+
+## Ende des Ausblend-Tweens: unsichtbar schalten + Ruhelage herstellen.
+func _nach_ausblenden() -> void:
+	visible = false
+	_reset_visuals()
+
+
+func _reset_visuals() -> void:
+	_card.scale = Vector2.ONE
+	_card.modulate.a = 1.0
+	_dim.modulate.a = 1.0
+
+
+func _kill_hide_tween() -> void:
+	if _hide_tween != null and _hide_tween.is_valid():
+		_hide_tween.kill()
 
 
 func is_open() -> bool:
@@ -162,7 +199,8 @@ func _relayout() -> void:
 
 
 func _button(parent: Container, variation: StringName, key: String, handler: Callable) -> Button:
-	var btn := Button.new()
+	# QW #3: SquishButton statt nacktem Button (Squish + Haptik zentral).
+	var btn: Button = SquishButton.new()
 	btn.theme_type_variation = variation
 	btn.text = I18nService.t(key)
 	btn.focus_mode = Control.FOCUS_NONE
@@ -172,7 +210,12 @@ func _button(parent: Container, variation: StringName, key: String, handler: Cal
 
 
 func _on_backdrop_input(event: InputEvent) -> void:
-	if event is InputEventMouseButton and event.pressed and PanelStack.is_top(self):
+	# QW #22: nur die LINKE Taste schließt (Touch emuliert links) —
+	# Rechts-/Mittelklick und Wheel-Click fallen bewusst durch.
+	if not (event is InputEventMouseButton):
+		return
+	var mb := event as InputEventMouseButton
+	if mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT and PanelStack.is_top(self):
 		close()
 
 
