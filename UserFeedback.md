@@ -168,19 +168,38 @@ _(gerade nichts offen — alle bisherigen Punkte stehen unten unter „Erledigt"
 ## 2. In Arbeit
 
 Runde W17 (1./2. August) — Wellen G1–G5 sind FERTIG (Details oben + unten in
-„Erledigt"), der Agent startet gerade **Welle G6**:
+„Erledigt"), **Welle G6 LÄUFT** (13 Pakete, 10 Subagents parallel gestartet,
+3 rücken nach sobald Slots frei sind):
 
-- [~] **Baumodus-HUD-Fix** — der dickste Audit-Fang aus G5: das Home-HUD bleibt
-      im Baumodus sichtbar und liegt über Kamera-Chips/Werkzeug-Dock/Lager
-      (97 Befunde, EIN Wurzel-Problem) → HUD blendet beim Bauen aus
-- [~] **GvZ-PvP-Server** — das fehlende Server-Modul (gvzmp.js nach dem
-      gobnom-Muster), damit die Netz-Duelle wirklich laufen
-- [~] **DLC Welle B** — Goo und Bye: Großmarkt-Fahrt + Preis-Schieber;
-      McGooby: Stationen 2–4 (Belegen/Fritteuse/Shake) + Kauf-Gate
-- [~] **Audit-Restbefunde** — die übrigen 17 Befunde der neuen UI-Wache
-      (Telefon-Apps, Level-Selects, Onboarding-Feinschliff)
-- [~] **Weitere Polituren** aus den G5-Berichten (McGooby-Grillbühne beleben,
-      Alwin als fester NPC mit Dialog, gobnom/gvz-Restpunkte)
+- [~] **P37 Baumodus-HUD-Fix** — der dickste Audit-Fang aus G5: das Home-HUD
+      bleibt im Baumodus sichtbar und liegt über Kamera-Chips/Werkzeug-Dock/
+      Lager (97 Befunde, EIN Wurzel-Problem) → HUD blendet beim Bauen aus,
+      neue Wache + Audit-Nachmessung
+- [~] **P38 GvZ-PvP-Server** — das fehlende Server-Modul (gvzmp.js nach dem
+      gobnom-Muster) inkl. Node-Tests, damit die Netz-Duelle wirklich laufen
+- [~] **P39 DLC „Goo und Bye" Welle B** — Großmarkt-Fahrt mit dem eigenen
+      Auto (REHWEI-Rampe, Kofferraum-Beladung) + Preis-Schieber ±30 % mit
+      Kunden-Wirkung und sichtbarer Marge im Kassensturz
+- [~] **P40 DLC „McGooby" Welle B** — Stationen 2–4 (Belegen/Fritteuse/
+      Shake-Bar mit Kreis-Geste), Stationen-Tab-Leiste, Rezept-Ketten +
+      Kauf-Gate (Probeschicht bleibt frei)
+- [~] **P41 Audit-Restbefunde** — die übrigen 17 Befunde der UI-Wache
+      (RMP-Tippflächen, Onboarding-Editor-Knöpfe offscreen, Telefon-Zurück-
+      Balken, Radio-Like)
+- [~] **P44 Warnungs-Sweep** — letzter Engine-Befund B11 (GvZ-Anchor-
+      Warnung) + ehrlicher Walkthrough-Warnungs-Sweep
+- [~] **P45 Ball-Wurf** — die letzte große offene Home-Interaktion aus der
+      Vollständigkeits-Matrix: werfen, Gooby apportiert, Fun/Gewicht/Zähler
+- [~] **P46 Doku-Refresh** — EVAL-VOLLSTAENDIGKEIT + STATUS ehrlich auf den
+      G5-Stand bringen
+- [~] **P47 Ladebildschirme** — der große Artwork-Ladebildschirm-Look (wie
+      beim alten Gooby) kommt auf die neuen langen Reisen (DLC-Läden)
+- [~] **P49 UI-Mitte-Sweep** — dein Wunsch: Hintergründe dürfen an den Rand,
+      Bedien-Inhalte rücken auf breiten Formaten angenehm in die Mitte
+- [ ] **P48 Audio-Feel-Reste** (rückt nach) — game_hit-End-Klick + Sweep
+      über alle Sound-Enden, offene Dopamin-Eval-Kleinpunkte
+- [ ] **P42 McGooby-Grillbühne beleben** (rückt nach P40)
+- [ ] **P43 Onkel Alwin als fester NPC mit Dialog** (rückt nach P39)
 
 ---
 
