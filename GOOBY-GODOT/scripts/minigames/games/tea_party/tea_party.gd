@@ -11,8 +11,31 @@ extends MinigameBase
 ## Glastasse und das Zielband liegt als Glasring UM die Tasse. Die 3D-Welt
 ## hängt unter der Node2D-Wurzel (Godot rendert 3D hinter den CanvasItems),
 ## der MinigameBase-Vertrag bleibt unberührt.
+##
+## W17/G4-Generalkur (NUR Präsentation, Audit g4 §3.1): Intro-Beat 1,5 s
+## gatet die Sim (M1), 2D-Füllmeter neben der Tasse zeigt Level/Band der
+## Logik (M4/M6), Banner mit Plate+Kontur für Serie/Spill/Ergebnis (M7),
+## Gieß-Loop mit Füllstands-Pitch + Endton mg_win/mg_lose (M3/M8/M10),
+## _ui-skaliertes HUD + Hint-Fade (M9/M6). TeaPartyLogic bleibt unangetastet.
 
 const Stage := preload("res://scripts/minigames/games/tea_party/tea_party_stage3d.gd")
+
+## M9: Entwurfs-Kurzkante — alle HUD-Pixelmaße skalieren mit Kurzkante/390.
+const DESIGN_SHORT := 390.0
+## M1: Intro-Beat (s) — Kamera-Totale + Ziel-Banner, die Sim wartet (W14-Kanon).
+const INTRO_S := 1.5
+## M6: nach so vielen Sim-Sekunden blendet der Hinweis aus (Fade ~1,5 s).
+const HINT_FADE_AT_S := 5.0
+## M3/M10: Gieß-Loop aus VORHANDENEM Wasser-Foley (kein neues Audio-File);
+## eigener Player statt AudioDirector-Loop, weil nur so der Pitch live dem
+## Füllstand folgen kann (cityDrive-Wind-Muster d9dc66a9).
+const POUR_SFX_ID := "care_wasser"
+## Füllmeter-Farben: Tee-Säule, Good-Band, Perfect-Kern, Überlauf-Deckel.
+const METER_TEA := Color(0.72, 0.45, 0.18, 0.95)
+const METER_BAND := Color(0.36, 0.74, 0.42, 0.78)
+const METER_PERFECT := Color(1.0, 0.68, 0.16, 0.92)
+const METER_RIM := Color(0.85, 0.32, 0.25, 0.9)
+const METER_EMPTY := Color(1.0, 0.99, 0.94, 0.30)
 
 var tune: Dictionary = {}
 var rng: GoobyRng
@@ -28,11 +51,22 @@ var serving := true
 var serve_left := 0.6
 var cup_slide := 1.0
 var finished := false
+var view_size := Vector2(390.0, 844.0)
 
 var _time_label: Label
 var _streak_label: Label
 var _hint_label: Label
 var _stage: Node3D
+var _ui := 1.0
+var _intro_left := 0.0
+var _banner := ""
+var _banner_t := 0.0
+var _banner_gold := false
+var _banner_plate := StyleBoxFlat.new()
+var _hud_plate := StyleBoxFlat.new()
+var _hint_plate := StyleBoxFlat.new()
+var _meter_plate := StyleBoxFlat.new()
+var _pour: AudioStreamPlayer
 
 
 func setup(context: MinigameCtx) -> void:
@@ -47,7 +81,12 @@ func setup(context: MinigameCtx) -> void:
 	if ctx.juice != null:
 		ctx.juice.world_environment = _stage.stage.world_env
 	_build_labels()
+	_build_pour()
 	_fit_viewport()
+	# M1: Intro-Beat — Kamera-Totale der Stube + Ziel-Banner; die Sim
+	# (elapsed/Servier-Uhr/Eingabe) wartet, der Lauf bleibt zahlengleich.
+	_intro_left = INTRO_S
+	_set_banner(I18nService.t("mg.teaParty.intro"), false, INTRO_S + 0.7)
 	if is_inside_tree():
 		get_viewport().size_changed.connect(_fit_viewport)
 
@@ -61,31 +100,82 @@ func start() -> void:
 func end() -> void:
 	super.end()
 	finished = true
+	if _pour != null:
+		_pour.stop()
 
 
 func _build_labels() -> void:
 	_time_label = Label.new()
 	_time_label.theme_type_variation = &"HeadlineLabel"
-	_time_label.position = Vector2(16, 10)
 	add_child(_time_label)
 	_streak_label = Label.new()
 	_streak_label.theme_type_variation = &"CaptionLabel"
-	_streak_label.position = Vector2(16, 48)
 	add_child(_streak_label)
 	_hint_label = Label.new()
 	_hint_label.theme_type_variation = &"SoftLabel"
 	_hint_label.text = I18nService.t("mg.teaParty.hint")
 	_hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	add_child(_hint_label)
+	# Milchglas-Plates (M6) — die Stube zog sonst direkt durch die Ziffern.
+	_hud_plate.bg_color = Color(1.0, 0.99, 0.94, 0.72)
+	_hud_plate.set_corner_radius_all(16)
+	_hint_plate.set_corner_radius_all(12)
+	_meter_plate.bg_color = Color(0.32, 0.24, 0.2, 0.35)
+	_meter_plate.set_corner_radius_all(8)
+	_banner_plate.set_corner_radius_all(12)
 	_update_labels()
+
+
+## M3/M10: Gieß-Loop-Player — leise Wasser-Foley aus der SfxMap, Bus „Sfx"
+## (Nutzer-Regler + Limiter gelten). play() startet erst beim ersten Gießen;
+## danach schaltet stream_paused (wirkt in Godot nur auf LAUFENDE Playbacks)
+## und _sync_pour hebt Pitch/Volume mit dem Füllstand.
+func _build_pour() -> void:
+	var path := SfxMap.path(POUR_SFX_ID)
+	if not ResourceLoader.exists(path):
+		return
+	var stream: AudioStream = (load(path) as AudioStream).duplicate()
+	if stream is AudioStreamOggVorbis:
+		(stream as AudioStreamOggVorbis).loop = true
+	elif stream is AudioStreamWAV:
+		(stream as AudioStreamWAV).loop_mode = AudioStreamWAV.LOOP_FORWARD
+	_pour = AudioStreamPlayer.new()
+	_pour.bus = &"Sfx"
+	_pour.stream = stream
+	_pour.volume_db = -26.0
+	add_child(_pour)
 
 
 ## Pflicht-Layouthook: beide Orientierungen laufen über DIESE Funktion.
+## M9: der _ui-Faktor (Kurzkante/390, 0,75–3,0) skaliert alle HUD-Pixelmaße.
 func apply_view(size: Vector2) -> void:
+	if size.x > 1.0 and size.y > 1.0:
+		view_size = size
+	_ui = clampf(minf(view_size.x, view_size.y) / DESIGN_SHORT, 0.75, 3.0)
 	position = Vector2.ZERO
 	if _stage != null:
-		_stage.apply_size(size)
+		_stage.apply_size(view_size)
+	_layout_hud()
 	_update_labels()
+	queue_redraw()
+
+
+## Bedienleiste in Entwurfspixeln, mit _ui skaliert (harbor_hopper-Muster) —
+## vorher standen die Labels auf festen 16/10/48-px-Offsets und der Hinweis
+## war auf 280×40 px bei y−60 festgenagelt.
+func _layout_hud() -> void:
+	if _time_label == null:
+		return
+	var pad := 16.0 * _ui
+	_time_label.position = Vector2(pad, 10.0 * _ui)
+	_time_label.add_theme_font_size_override("font_size", int(26.0 * _ui))
+	_streak_label.position = Vector2(pad, 48.0 * _ui)
+	_streak_label.add_theme_font_size_override("font_size", int(15.0 * _ui))
+	var hint_w := minf(view_size.x - pad * 2.0, 360.0 * _ui)
+	_hint_label.add_theme_font_size_override("font_size", int(15.0 * _ui))
+	_hint_label.position = Vector2((view_size.x - hint_w) * 0.5, view_size.y - 48.0 * _ui)
+	_hint_label.size = Vector2(hint_w, 42.0 * _ui)
 
 
 func _fit_viewport() -> void:
@@ -93,9 +183,22 @@ func _fit_viewport() -> void:
 
 
 func _process(delta: float) -> void:
+	_sync_pour()
 	if not is_active() or finished:
 		return
+	# M1: Intro-Beat — die Kamera schwebt aus der Stuben-Totale in die
+	# Spielpose, das Ziel steht als Banner; elapsed/Servier-Uhr warten so
+	# lange (der Lauf bleibt zahlengleich, test_mg_tea_logic unberührt).
+	if _intro_left > 0.0:
+		_intro_left = maxf(0.0, _intro_left - delta)
+		_banner_t = maxf(0.0, _banner_t - delta)
+		_stage.establish(1.0 if _reduced_motion() else 1.0 - _intro_left / INTRO_S)
+		_stage.sync(level, band, false, cup_slide, delta, _reduced_motion())
+		_update_labels()
+		queue_redraw()
+		return
 	elapsed += delta
+	_banner_t = maxf(0.0, _banner_t - delta)
 	if not bool(tune["ENDLESS"]) and elapsed >= float(tune["DURATION_SEC"]):
 		_finish()
 		return
@@ -109,12 +212,13 @@ func _process(delta: float) -> void:
 		level = TeaPartyLogic.fill_after(level, delta, tune)
 		if level >= float(tune["OVERFLOW_LEVEL"]):
 			_release()
-	_stage.sync(level, band, holding, cup_slide, delta)
+	_stage.sync(level, band, holding, cup_slide, delta, _reduced_motion())
 	_update_labels()
+	queue_redraw()
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if not is_active() or finished or serving:
+	if not is_active() or finished or serving or _intro_left > 0.0:
 		return
 	if event is InputEventScreenTouch:
 		if event.pressed:
@@ -133,22 +237,20 @@ func _release() -> void:
 		streak += 1
 		var bonus := TeaPartyLogic.streak_bonus_at(streak, tune)
 		score = TeaPartyLogic.apply_score(score, bonus)
-		_stage.celebrate()
+		_stage.celebrate(_reduced_motion())
 		# Steigende Tonhöhe belohnt die Serie hörbar (ab 8er-Kette gedeckelt).
 		AudioDirector.try_play(self, "mg_perfect", 1.0 + 0.06 * minf(streak - 1, 7.0))
 		if ctx.juice != null:
-			var text := "+%d" % (points + bonus)
-			ctx.juice.float_text(cup_pos, text, Color(1.0, 0.72, 0.2))
+			ctx.juice.float_text(cup_pos, "+%d" % (points + bonus), Color(1.0, 0.72, 0.2))
 			ctx.juice.hit_freeze(45)
 			ctx.juice.bloom_pulse(0.6)
-			if bonus > 0:
-				AudioDirector.try_play(self, "mg_combo")
+		if bonus > 0:
+			# M7/M8: die volle Serie feiert GROSS — Gold-Banner mit Kontur
+			# statt Mini-float_text, dazu der Combo-Ton.
+			AudioDirector.try_play(self, "mg_combo")
+			_set_banner(I18nService.t("mg.teaParty.streak_banner", {"n": streak}), true)
+			if ctx.juice != null:
 				ctx.juice.bloom_pulse(0.9)
-				ctx.juice.float_text(
-					cup_pos - Vector2(0, 40),
-					I18nService.t("mg.teaParty.streak_bonus"),
-					Color(0.95, 0.45, 0.66)
-				)
 	elif res["result"] == "good":
 		streak = 0
 		_stage.cheer()
@@ -158,10 +260,12 @@ func _release() -> void:
 	else:
 		streak = 0
 		spills += 1
-		_stage.groan()
+		_stage.groan(_reduced_motion())
 		AudioDirector.try_play(self, "mg_spill")
+		# M7: Spill als zentriertes Banner mit Plate+Kontur — der kleine
+		# float_text ging vor der Stube unter.
+		_set_banner(I18nService.t("mg.teaParty.spill"), false)
 		if ctx.juice != null:
-			ctx.juice.float_text(cup_pos, I18nService.t("mg.teaParty.spill"), Color(0.8, 0.3, 0.25))
 			ctx.juice.shake(0.35)
 			ctx.juice.hit_freeze(70)
 	ctx.report_score(score, points)
@@ -184,11 +288,28 @@ func _finish() -> void:
 		return
 	finished = true
 	running = false
+	if _pour != null:
+		_pour.stop()
+	# M8: die Runde endete vorher STUMM (nur report_end) — jetzt Endton +
+	# Ergebnis-Banner als hörbarer/sichtbarer Schlusspunkt.
+	AudioDirector.try_play(self, end_sfx_for(score))
+	if bool(tune["ENDLESS"]):
+		_set_banner(I18nService.t("mg.teaParty.ende_spills"), false, 2.2)
+	else:
+		_set_banner(I18nService.t("mg.teaParty.ende_zeit", {"cups": cups}), score > 0, 2.2)
+	queue_redraw()
 	ctx.report_end({"score": score, "cups": cups, "spills": spills})
 
 
+## Endton-Wahl (PUR für Tests, M8): eine gepunktete Runde klingt nach
+## mg_win, eine Null-Runde nach mg_lose.
+static func end_sfx_for(score_now: int) -> String:
+	return "mg_win" if score_now > 0 else "mg_lose"
+
+
 func _update_labels() -> void:
-	var vp := get_viewport_rect().size
+	if _time_label == null:
+		return
 	if bool(tune["ENDLESS"]):
 		_time_label.text = I18nService.t(
 			"mg.teaParty.spills", {"spills": spills, "max": int(tune["ENDLESS_MAX_SPILLS"])}
@@ -200,5 +321,158 @@ func _update_labels() -> void:
 		_streak_label.text = I18nService.t("mg.game.streak", {"n": streak})
 	else:
 		_streak_label.text = ""
-	_hint_label.position = Vector2(vp.x * 0.5 - 140, vp.y - 60)
-	_hint_label.size = Vector2(280, 40)
+	_hint_label.modulate.a = _hint_alpha()
+
+
+## M6: der Hinweis blendet nach ein paar Sim-Sekunden aus — die Stube gehört
+## dann ganz der Kanne (elapsed wartet im Intro, der Fade startet also fair).
+func _hint_alpha() -> float:
+	return clampf(1.0 - (elapsed - HINT_FADE_AT_S) / 1.5, 0.0, 1.0)
+
+
+func _set_banner(text: String, gold := false, sec := 1.4) -> void:
+	_banner = text
+	_banner_gold = gold
+	_banner_t = sec
+
+
+## Reduced-Motion-Abfrage (Duck-Typing wie im JuiceKit — ohne Autoload = aus).
+func _reduced_motion() -> bool:
+	if not is_inside_tree():
+		return true
+	var settings := get_node_or_null(^"/root/AppSettings")
+	if settings != null and settings.has_method("is_reduced_motion"):
+		return settings.is_reduced_motion()
+	return false
+
+
+## M3/M10: Gieß-Loop folgt dem Füllstand — voller = höher + etwas lauter.
+## stream_paused statt stop hält die Loop-Position; Pause/Host-Ende gaten
+## über is_active()/finished (cityDrive-Wind-Muster).
+func _sync_pour() -> void:
+	if _pour == null:
+		return
+	var pouring := is_active() and not finished and _intro_left <= 0.0 and holding and not serving
+	_pour.stream_paused = not pouring
+	if not pouring:
+		return
+	if not _pour.playing:
+		_pour.play()
+	var band01 := clampf(level / float(tune["OVERFLOW_LEVEL"]), 0.0, 1.0)
+	_pour.pitch_scale = 0.9 + 0.5 * band01
+	_pour.volume_db = lerpf(-26.0, -16.0, band01)
+
+
+## 2D-Overlay über der Stube: Milchglas hinter Zeit/Serie und Hinweis (M6),
+## Füllmeter neben der Tasse (M4) und die Banner-Ebene (M7).
+func _draw() -> void:
+	if _time_label == null:
+		return
+	_draw_hud_plate()
+	var hint_a := _hint_alpha()
+	if hint_a > 0.0:
+		_hint_plate.bg_color = Color(1.0, 0.99, 0.94, 0.72 * hint_a)
+		draw_style_box(
+			_hint_plate, Rect2(_hint_label.position - Vector2(0.0, 2.0), _hint_label.size)
+		)
+	_draw_meter()
+	_draw_banner()
+
+
+## Milchglas-Plate hinter Zeit + Serienzeile (M6, carrot_guard-Muster).
+func _draw_hud_plate() -> void:
+	var pad := Vector2(12.0, 6.0) * _ui
+	var wide := maxf(_time_label.size.x, _streak_label.size.x)
+	var tall := _time_label.size.y
+	if not _streak_label.text.is_empty():
+		tall = _streak_label.position.y + _streak_label.size.y - _time_label.position.y
+	draw_style_box(_hud_plate, Rect2(_time_label.position - pad, Vector2(wide, tall) + pad * 2.0))
+
+
+## M4/M6: 2D-Füllmeter NEBEN der Tasse — reine ANZEIGE der Logik-Werte
+## (level/band aus TeaPartyLogic): Good-Band grün, Perfect-Kern gold,
+## Überlauf-Deckel rot; der Marker färbt sich mit der Zone. Die Höhe kommt
+## aus den 3D-Ankern der Tasse (Meter sitzt AM Geschehen), Breite/Ränder
+## skalieren mit _ui (M9).
+func _draw_meter() -> void:
+	if _stage == null or band.is_empty():
+		return
+	var anchors: Dictionary = _stage.fill_screen_anchors()
+	var top: Vector2 = anchors["top"]
+	var bottom: Vector2 = anchors["bottom"]
+	if not top.is_finite() or not bottom.is_finite() or bottom.y - top.y < 12.0:
+		return
+	var w := 14.0 * _ui
+	var rect := Rect2(Vector2(maxf(top.x, bottom.x), top.y), Vector2(w, bottom.y - top.y))
+	draw_style_box(_meter_plate, rect.grow(3.0 * _ui))
+	draw_rect(rect, METER_EMPTY)
+	var center := float(band.get("center", 0.7))
+	var half := float(band.get("half", 0.075))
+	var perfect_half := float(band.get("perfectHalf", 0.028))
+	draw_rect(meter_band_rect(rect, center, half), METER_BAND)
+	draw_rect(meter_band_rect(rect, center, perfect_half), METER_PERFECT)
+	draw_rect(Rect2(rect.position - Vector2(0.0, 3.0 * _ui), Vector2(w, 3.0 * _ui)), METER_RIM)
+	var fill_y := meter_level_y(level, rect)
+	if level > 0.001:
+		draw_rect(
+			Rect2(Vector2(rect.position.x, fill_y), Vector2(w, rect.end.y - fill_y)), METER_TEA
+		)
+	var marker := Color(1.0, 0.99, 0.94, 0.95)
+	if absf(level - center) <= perfect_half:
+		marker = METER_PERFECT
+	elif absf(level - center) <= half:
+		marker = Color(0.55, 0.95, 0.58)
+	draw_rect(
+		Rect2(
+			Vector2(rect.position.x - 3.0 * _ui, fill_y - 1.5 * _ui),
+			Vector2(w + 6.0 * _ui, 3.0 * _ui)
+		),
+		marker
+	)
+
+
+## Y-Pixel eines Füllstands im Meter-Rechteck (PUR für Tests): Level 0 =
+## Unterkante, Level 1 (= OVERFLOW_LEVEL) = Oberkante, darüber geklemmt.
+static func meter_level_y(level_now: float, rect: Rect2) -> float:
+	return rect.end.y - clampf(level_now, 0.0, 1.0) * rect.size.y
+
+
+## Zonen-Rechteck [center−half … center+half] im Meter-Rechteck (PUR für
+## Tests) — Grundlage für Good-Band und Perfect-Kern.
+static func meter_band_rect(rect: Rect2, center: float, half: float) -> Rect2:
+	var top_y := meter_level_y(center + half, rect)
+	return Rect2(
+		Vector2(rect.position.x, top_y),
+		Vector2(rect.size.x, meter_level_y(center - half, rect) - top_y)
+	)
+
+
+## Banner mittig mit Milchglas-Plate und Kontur (M7, carrot_guard-Muster) —
+## Intro-Ziel, Serien-Feier, Spill und Ergebnis; lange Texte brechen um.
+func _draw_banner() -> void:
+	if _banner_t <= 0.0 or _banner.is_empty():
+		return
+	var font := ThemeService.font(800)
+	var alpha := clampf(_banner_t * 1.4, 0.0, 1.0)
+	var font_size := int(26.0 * _ui)
+	var w := minf(view_size.x * 0.92, 460.0 * _ui)
+	var text_size := font.get_multiline_string_size(
+		_banner, HORIZONTAL_ALIGNMENT_CENTER, w, font_size
+	)
+	var top := view_size.y * 0.26
+	var pad := Vector2(18.0 * _ui, 10.0 * _ui)
+	_banner_plate.set_corner_radius_all(int(12.0 * _ui))
+	_banner_plate.bg_color = (
+		Color(1.0, 0.93, 0.62, 0.82 * alpha)
+		if _banner_gold
+		else Color(1.0, 0.99, 0.94, 0.74 * alpha)
+	)
+	var plate_pos := Vector2((view_size.x - text_size.x) * 0.5, top) - pad
+	draw_style_box(_banner_plate, Rect2(plate_pos, text_size + pad * 2.0))
+	var ink := Color(0.62, 0.4, 0.1, alpha) if _banner_gold else Color(0.32, 0.24, 0.28, alpha)
+	var rim := Color(1.0, 1.0, 1.0, 0.75 * alpha)
+	var at := Vector2((view_size.x - w) * 0.5, top + font.get_ascent(font_size))
+	draw_multiline_string_outline(
+		font, at, _banner, HORIZONTAL_ALIGNMENT_CENTER, w, font_size, -1, int(5.0 * _ui), rim
+	)
+	draw_multiline_string(font, at, _banner, HORIZONTAL_ALIGNMENT_CENTER, w, font_size, -1, ink)

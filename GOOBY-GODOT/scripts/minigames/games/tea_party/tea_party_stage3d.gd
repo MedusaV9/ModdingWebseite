@@ -8,6 +8,11 @@ extends Node3D
 ## Kulisse: Stube mit Rückwand, Fenster, Bordüre, Wimpeln, Pendelleuchte,
 ## Küchenzeile (Kenney furniture-kit) und Törtchen (Tiny Treats). Die MECHANIK
 ## bleibt komplett in tea_party.gd/TeaPartyLogic — diese Bühne ist Darstellung.
+##
+## W17/G4-Politur: Intro-Totale (establish, M1), Bildschirm-Anker für das
+## 2D-Füllmeter (fill_screen_anchors), Tropfen-Partikel im Gieß-Strahl (M3)
+## und Reduced-Motion-Gates für die eigenen Fx.burst-Aufrufe (Q2 — das
+## geteilte Fx-Kit bleibt unberührt).
 
 const Stage3D := preload("res://scripts/minigames/games/_3dc_stage/stage3d.gd")
 const Actor := preload("res://scripts/minigames/games/_3da_stage/gooby_actor.gd")
@@ -73,6 +78,7 @@ var _perfect_mat: StandardMaterial3D
 var _kettle: Node3D
 var _stream: MeshInstance3D
 var _splash: GPUParticles3D
+var _drops: GPUParticles3D
 var _steam: GPUParticles3D
 var _confetti: GPUParticles3D
 var _spill_burst: GPUParticles3D
@@ -84,6 +90,9 @@ var _ghost_tea: MeshInstance3D
 var _ghost_age := 99.0
 var _kettle_tilt := 0.0
 var _pulse := 0.0
+## Spielpose der Kamera (apply_size merkt sie sich; establish blendet hinein).
+var _play_cam_pos := Vector3(0.0, 1.38, 2.5)
+var _play_look := Vector3(0.0, 1.1, 0.0)
 
 
 func setup_stage() -> void:
@@ -535,6 +544,24 @@ func _build_fx() -> void:
 	)
 	_splash.emitting = false
 	add_child(_splash)
+	# W17/G4 M3: Tropfen IM Strahl — der Gieß-Moment glitzert, statt dass
+	# nur ein statischer Zylinder steht (Gate: sync-Flag `reduced`).
+	_drops = (
+		Fx
+		. particles(
+			{
+				"color": Color(0.88, 0.62, 0.28, 0.85),
+				"amount": 16,
+				"lifetime": 0.35,
+				"speed": Vector2(0.2, 0.5),
+				"spread": 9.0,
+				"gravity": Vector3(0.0, -4.5, 0.0),
+				"size": Vector2(0.012, 0.03),
+				"additive": true,
+			}
+		)
+	)
+	add_child(_drops)
 	_steam = (
 		Fx
 		. particles(
@@ -601,8 +628,12 @@ func _build_fx() -> void:
 	add_child(_puddle)
 
 
-## Jeden Frame aus tea_party._process: Zustand → Posen.
-func sync(level: float, band: Dictionary, holding: bool, cup_slide: float, delta: float) -> void:
+## Jeden Frame aus tea_party._process: Zustand → Posen. `reduced` gatet die
+## dekorativen Gieß-Partikel (Q2); Default false hält die Alt-Aufrufe
+## (test_mpa_stages) unverändert.
+func sync(
+	level: float, band: Dictionary, holding: bool, cup_slide: float, delta: float, reduced := false
+) -> void:
 	stage.tick(delta)
 	gooby.tick(delta)
 	_pulse += delta
@@ -616,7 +647,7 @@ func sync(level: float, band: Dictionary, holding: bool, cup_slide: float, delta
 	_tea_top.position.y = 0.02 + fill + 0.008
 	_tea_top.visible = _tea.visible
 	_sync_band(level, band)
-	_sync_kettle(level, holding, cup_slide, fill, delta)
+	_sync_kettle(level, holding, cup_slide, fill, delta, reduced)
 	_sync_ghost(delta)
 	_sync_puddle(delta)
 	# Gooby fiebert mit: beim Gießen leicht vorgebeugt zur Tasse.
@@ -646,7 +677,9 @@ func _sync_band(level: float, band: Dictionary) -> void:
 	_perfect_mat.emission_energy_multiplier = 2.2 if in_band else 1.1
 
 
-func _sync_kettle(level: float, holding: bool, cup_slide: float, fill: float, delta: float) -> void:
+func _sync_kettle(
+	level: float, holding: bool, cup_slide: float, fill: float, delta: float, reduced := false
+) -> void:
 	# Kanne folgt der Tasse, kippt beim Gießen und schaukelt sanft im Leerlauf.
 	_kettle_tilt = lerpf(_kettle_tilt, 0.55 if holding else 0.0, minf(1.0, delta * 9.0))
 	_kettle.position.x = _cup_root.position.x
@@ -654,7 +687,10 @@ func _sync_kettle(level: float, holding: bool, cup_slide: float, fill: float, de
 	_kettle.rotation.z = -_kettle_tilt
 	var pouring := holding and cup_slide <= 0.01
 	_stream.visible = pouring
-	_splash.emitting = pouring
+	# Q2: dekorative Gieß-Partikel unter Reduced Motion aus (Gate hier an der
+	# eigenen Call-Site — der Strahl selbst bleibt als Anzeige sichtbar).
+	_splash.emitting = pouring and not reduced
+	_drops.emitting = pouring and not reduced
 	_steam.emitting = level > 0.55
 	if pouring:
 		var spout := _kettle.global_position + Vector3(-0.24, -0.08, 0.0)
@@ -663,6 +699,7 @@ func _sync_kettle(level: float, holding: bool, cup_slide: float, fill: float, de
 		_stream.scale = Vector3(1.0, length, 1.0)
 		_stream.global_position = Vector3(brim.x, brim.y + length * 0.5, brim.z)
 		_splash.global_position = brim
+		_drops.global_position = Vector3(brim.x, brim.y + length * 0.55, brim.z)
 	_steam.global_position = _cup_root.global_position + Vector3(0.0, CUP_H + 0.1, 0.0)
 
 
@@ -698,9 +735,32 @@ func apply_size(size: Vector2) -> void:
 	stage.apply_size(size)
 	var portrait := size.y > size.x
 	# Hochkant: näher heran und höher zielen, damit Tisch + Kanne + Kulisse das
-	# Bild füllen statt leerem Boden in der unteren Bildhälfte.
-	stage.camera.position = Vector3(0.0, 1.34, 2.3) if portrait else Vector3(0.0, 1.32, 2.9)
-	stage.camera.look_at(Vector3(0.0, 1.16 if portrait else 1.0, 0.0), Vector3.UP)
+	# Bild füllen statt leerem Boden in der unteren Bildhälfte. Die Pose wird
+	# gemerkt, damit establish() auch nach Resizes exakt hier landet.
+	_play_cam_pos = Vector3(0.0, 1.34, 2.3) if portrait else Vector3(0.0, 1.32, 2.9)
+	_play_look = Vector3(0.0, 1.16 if portrait else 1.0, 0.0)
+	stage.camera.position = _play_cam_pos
+	stage.camera.look_at(_play_look, Vector3.UP)
+
+
+## W17/G4 M1: Intro-Totale — die Kamera schwebt aus einer weiter gefassten
+## Stuben-Totale (Fenster, Bord, Küchenzeile im Bild) in die Spielpose;
+## establish(1) == exakte Spielpose (Muster carrot_guard/star_hopper).
+func establish(k: float) -> void:
+	var e := 1.0 - ease(clampf(k, 0.0, 1.0), 0.4)
+	stage.camera.position = _play_cam_pos + Vector3(-0.6, 0.55, 1.05) * e
+	stage.camera.look_at(_play_look + Vector3(0.0, 0.3, 0.0) * e, Vector3.UP)
+
+
+## W17/G4 M4: Bildschirm-Anker des Füllwegs (Level 0 und 1) RECHTS neben der
+## Tassen-RUHEPOSITION (slide = 0, daher konstant statt mitrutschend) —
+## Grundlage für das 2D-Füllmeter im HUD von tea_party.gd.
+func fill_screen_anchors() -> Dictionary:
+	var base := Vector3(CUP_R + 0.14, TABLE_H + 0.032 + 0.02, 0.35)
+	return {
+		"bottom": stage.to_screen(base),
+		"top": stage.to_screen(base + Vector3(0.0, CUP_H, 0.0)),
+	}
 
 
 ## Servierte Tasse mit Füllstand `level` sichtbar nach links rausrutschen.
@@ -713,11 +773,15 @@ func serve_ghost(level: float) -> void:
 	_ghost_age = 0.0
 
 
-func celebrate() -> void:
+## Perfect-Feier; `reduced` lässt Emote/Glühen, gatet aber Hüpfer + Konfetti
+## (Q2 — Reduced-Motion-Gate an der eigenen Fx.burst-Call-Site).
+func celebrate(reduced := false) -> void:
 	gooby.play_for("celebrate", 1.2)
 	gooby.emote("ecstatic", 1.2)
-	gooby.hop(0.4, 0.25)
 	stage.pulse_glow(0.7)
+	if reduced:
+		return
+	gooby.hop(0.4, 0.25)
 	Fx.burst(_confetti, _cup_root.global_position + Vector3(0.0, CUP_H + 0.25, 0.0))
 
 
@@ -726,12 +790,16 @@ func cheer() -> void:
 	gooby.emote("happy", 0.9)
 
 
-func groan() -> void:
+## Spill-Reaktion; die Pfütze bleibt als STATISCHES Feedback auch unter
+## Reduced Motion, nur der Partikel-Burst wird gegated (Q2).
+func groan(reduced := false) -> void:
 	gooby.emote("dizzy", 1.2)
 	gooby.play_for("idle", 0.2)
-	Fx.burst(_spill_burst, _cup_root.global_position + Vector3(0.0, CUP_H, 0.0))
 	_puddle.position = _cup_root.global_position + Vector3(0.28, 0.045, 0.12)
 	_puddle_age = 0.0
+	if reduced:
+		return
+	Fx.burst(_spill_burst, _cup_root.global_position + Vector3(0.0, CUP_H, 0.0))
 
 
 ## Schattenwurf eines geladenen Modells rekursiv abschalten (Deko-Kleinkram).
