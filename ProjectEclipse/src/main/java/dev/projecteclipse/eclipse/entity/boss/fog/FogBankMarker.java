@@ -56,6 +56,13 @@ public final class FogBankMarker {
     private static final double AMBIENT_RANGE = 64.0D;
     private static final int CHECK_CADENCE_TICKS = 40;
     private static final int BANK_PILLARS = 8;
+    /**
+     * WAVE5 (F-105 B) B5 (IDEA-15 §9): sinusoidal per-pillar smoke-density weight toward
+     * the nearest observer's bearing — the bank visibly "leans" at whoever approaches.
+     */
+    private static final double LEAN_WEIGHT = 0.35D;
+    /** Base smoke particles per pillar per stamp (the pre-B5 fixed count; the ±lean average). */
+    private static final int PILLAR_SMOKE_BASE = 2;
 
     private static final Map<ResourceKey<Level>, List<BlockPos>> LAIRS = new ConcurrentHashMap<>();
 
@@ -153,18 +160,24 @@ public final class FogBankMarker {
      */
     private static void tickLair(ServerLevel level, BlockPos lair) {
         Vec3 center = Vec3.atCenterOf(lair);
-        boolean anyoneWatching = false;
+        // WAVE5 (F-105 B) B5: track the NEAREST watcher (not just any) — the pillar ring
+        // leans its smoke density toward that player's bearing (stampBankPillars).
+        ServerPlayer nearestWatcher = null;
+        double nearestDist = AMBIENT_RANGE;
         for (ServerPlayer player : level.players()) {
-            if (!player.isSpectator() && player.isAlive()
-                    && player.position().distanceTo(center) <= AMBIENT_RANGE) {
-                anyoneWatching = true;
-                break;
+            if (player.isSpectator() || !player.isAlive()) {
+                continue;
+            }
+            double dist = player.position().distanceTo(center);
+            if (dist <= nearestDist) {
+                nearestWatcher = player;
+                nearestDist = dist;
             }
         }
-        if (!anyoneWatching) {
+        if (nearestWatcher == null) {
             return;
         }
-        stampBankPillars(level, center);
+        stampBankPillars(level, center, nearestWatcher);
         boolean tyrantAlready = !level.getEntitiesOfClass(FogTyrantEntity.class,
                 new AABB(lair).inflate(LIVE_TYRANT_RANGE), FogTyrantEntity::isAlive).isEmpty();
         if (tyrantAlready) {
@@ -174,15 +187,33 @@ public final class FogBankMarker {
         }
     }
 
-    /** Ambient dressing: slow smoke pillars + spark motes on the bank ring (cheap). */
-    private static void stampBankPillars(ServerLevel level, Vec3 center) {
+    /**
+     * Ambient dressing: slow smoke pillars + spark motes on the bank ring (cheap).
+     *
+     * <p>WAVE5 (F-105 B) B5 (IDEA-15 §9): the per-pillar smoke count carries the plan's
+     * {@code ±}{@value #LEAN_WEIGHT} sinusoidal observer weight, phase-aligned so the
+     * density PEAKS at the nearest watcher's bearing (§9's stated intent — the bank
+     * "leans at whoever approaches"; a literal {@code sin(bearing−angle)} would peak 90°
+     * off-bearing). Probabilistic rounding keeps the fractional counts from quantizing to
+     * a hard on/off ring step; the ring average stays the pre-B5 fixed count of
+     * {@value #PILLAR_SMOKE_BASE}, so the ambient budget is unchanged.</p>
+     */
+    private static void stampBankPillars(ServerLevel level, Vec3 center, ServerPlayer observer) {
+        double bearing = Math.atan2(observer.getZ() - center.z, observer.getX() - center.x);
         for (int i = 0; i < BANK_PILLARS; i++) {
             double angle = (Math.PI * 2.0D / BANK_PILLARS) * i
                     + (level.getGameTime() % 360) * 0.003D;
             double x = center.x + Math.cos(angle) * BANK_RING_RADIUS;
             double z = center.z + Math.sin(angle) * BANK_RING_RADIUS;
-            level.sendParticles(ParticleTypes.CAMPFIRE_SIGNAL_SMOKE, x, center.y + 0.3D, z,
-                    2, 0.25D, 0.1D, 0.25D, 0.004D);
+            double lean = PILLAR_SMOKE_BASE * (1.0D + LEAN_WEIGHT * Math.cos(bearing - angle));
+            int count = (int) lean;
+            if (level.getRandom().nextDouble() < lean - count) {
+                count++;
+            }
+            if (count > 0) {
+                level.sendParticles(ParticleTypes.CAMPFIRE_SIGNAL_SMOKE, x, center.y + 0.3D, z,
+                        count, 0.25D, 0.1D, 0.25D, 0.004D);
+            }
             if (level.getRandom().nextInt(4) == 0) {
                 level.sendParticles(ParticleTypes.ELECTRIC_SPARK, x, center.y + 1.2D, z,
                         1, 0.2D, 0.6D, 0.2D, 0.01D);

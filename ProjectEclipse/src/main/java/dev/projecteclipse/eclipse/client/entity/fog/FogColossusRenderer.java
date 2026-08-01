@@ -18,7 +18,9 @@ import net.neoforged.api.distmarker.OnlyIn;
 public class FogColossusRenderer extends EclipseGeoRenderer<FogColossusEntity> {
     public FogColossusRenderer(EntityRendererProvider.Context context) {
         super(context, FogColossusEntity.GEO_ID, true);
-        withGlowmask();      // Glowing fissures + eye embers.
+        // WAVE5 (F-105 B) B4: fissures + embers breathe with the storm interior
+        // (FogGlowBreathLayer is the stock withGlowmask() layer ×(0.6 + 0.8·interior)).
+        addRenderLayer(new FogGlowBreathLayer<>(this));
         withUprightDeath();  // Scripted forward collapse; no vanilla tip-over.
         this.shadowRadius = 1.3F;
     }

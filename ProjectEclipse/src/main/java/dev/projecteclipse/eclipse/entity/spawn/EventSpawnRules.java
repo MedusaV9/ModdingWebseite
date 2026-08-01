@@ -245,6 +245,50 @@ public final class EventSpawnRules {
         return null;
     }
 
+    /**
+     * WAVE5 (F-105 B) B6 (IDEA-15 §10) — the chest-open revenant sting, the ONE public
+     * spawn hook of this class ({@code worldgen.fog.FogChestSting} calls it; the gate/cap
+     * logic lives here and is never duplicated): tries to materialize a single
+     * {@code fog_revenant} {@code minDist}–{@code maxDist} blocks out from {@code around}
+     * under the exact fog-storm pass rules — {@code SpawnGates.FOG_STORM} placement, the
+     * global revenant cap ({@value #REVENANT_CAP_BASE} + online/{@value #REVENANT_CAP_PER})
+     * and the {@value #REVENANT_SITE_CAP}-per-site cap. Deliberately NOT day/night-gated:
+     * the sting is an event answer to the player's own hand in the chest, not ambient
+     * pressure — but peaceful difficulty and caps always win.
+     *
+     * @return the spawn position, or {@code null} when gated/capped/no valid surface.
+     */
+    @Nullable
+    public static BlockPos trySpawnChestRevenant(ServerLevel level, FogStormSites.Site site,
+            Vec3 around, double minDist, double maxDist) {
+        if (level.getDifficulty() == Difficulty.PEACEFUL) {
+            return null;
+        }
+        int revenantCap = REVENANT_CAP_BASE + onlineNonSpectator(level) / REVENANT_CAP_PER;
+        if (count(level, ID_FOG_REVENANT) >= revenantCap
+                || countIn(level, ID_FOG_REVENANT, siteArea(level, site)) >= REVENANT_SITE_CAP) {
+            EclipseMod.LOGGER.debug(
+                    "EventSpawnRules: chest-sting revenant capped at storm {} (global cap {})",
+                    site.id(), revenantCap);
+            return null;
+        }
+        RandomSource random = level.getRandom();
+        for (int attempt = 0; attempt < PLACEMENT_ATTEMPTS; attempt++) {
+            double angle = random.nextDouble() * Math.PI * 2.0D;
+            double distance = minDist + random.nextDouble() * (maxDist - minDist);
+            int x = Mth.floor(around.x + Math.cos(angle) * distance);
+            int z = Mth.floor(around.z + Math.sin(angle) * distance);
+            BlockPos pos = surfaceAt(level, x, z);
+            if (pos != null && SpawnGates.FOG_STORM.test(level, pos)
+                    && trySpawn(level, ID_FOG_REVENANT, pos)) {
+                EclipseMod.LOGGER.info("EventSpawnRules: chest-sting fog_revenant at {} (storm {})",
+                        pos, site.id());
+                return pos;
+            }
+        }
+        return null;
+    }
+
     /** Colossus placement: storm center ±8, ≥ {@value #STORM_NEAR_MIN} from every player. */
     @Nullable
     private static BlockPos findColossusSpawn(ServerLevel level, FogStormSites.Site site) {

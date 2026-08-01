@@ -212,6 +212,27 @@ public final class StormInteriorFx {
     private static final float GULP_FOG_FAR = 14.0F;
     private static final int GULP_TICKS = 6;
 
+    // --- WAVE5 (F-105 B) B1 first-breach swallow (IDEA-15 §7) ---
+    /** Rising breach edge: the latch arms at ≥ this smoothed interior (mid-wall-crossing). */
+    private static final float BREACH_ENTER = 0.5F;
+    /**
+     * Falling exhale edge: the latch only releases below this — the 0.5/0.3 hysteresis pair
+     * guarantees exactly ONE enter probe per crossing even while wading along the band.
+     */
+    private static final float BREACH_EXIT = 0.3F;
+    /** Fog near-plane pinch 6→2 and back over this many ticks after a breach (the "gulp"). */
+    private static final int BREACH_PINCH_TICKS = 10;
+    private static final float BREACH_FOG_NEAR = 2.0F;
+    /** The swallow boom: {@code event.storm_burst} deep and close (volume/pitch per plan §4). */
+    private static final float BREACH_BURST_VOLUME = 1.2F;
+    private static final float BREACH_BURST_PITCH = 0.5F;
+    /** The one glitch blink of the crossing ({@code TransitionFx.glitchPulse(0.15, 10)}). */
+    private static final float BREACH_GLITCH_AMPLITUDE = 0.15F;
+    private static final int BREACH_GLITCH_TICKS = 10;
+    /** Quiet exhale on leaving — the same burst asset, soft and pitched UP (released breath). */
+    private static final float BREACH_EXHALE_VOLUME = 0.3F;
+    private static final float BREACH_EXHALE_PITCH = 1.35F;
+
     /** Smoothed interior amount 0..1 (the render-facing value; raw target jumps at walls). */
     private static float smoothedInterior;
     /** Smoothed outside-approach amount 0..1 (1 at ≤20 blocks from a visible shell). */
@@ -282,6 +303,12 @@ public final class StormInteriorFx {
     private static float wallBandTarget;
     /** D5: remaining pre-release gulp ticks (armed by {@link #explodeWhiteout}, pause-safe). */
     private static int gulpTicks;
+
+    // --- WAVE5 (F-105 B) B1 state ---
+    /** B1: breach latch — true while "inside" per the 0.5-enter / 0.3-exit hysteresis pair. */
+    private static boolean breachLatched;
+    /** B1: remaining near-plane pinch ticks of the swallow ({@value #BREACH_PINCH_TICKS} → 0). */
+    private static int breachTicks;
 
     static {
         // Feature-owned registration replaces nothing (new id) — GRADE priority per §3.3.
@@ -415,6 +442,30 @@ public final class StormInteriorFx {
         if (smoothedApproach < 0.002F) {
             smoothedApproach = 0.0F;
         }
+        // WAVE5 (F-105 B) B1: first-breach swallow — edge detection on smoothedInterior with
+        // the 0.5/0.3 hysteresis latch (exactly one enter per crossing, no re-fires while
+        // hovering on the band). An M5 teleport snap re-seats the latch SILENTLY: warping
+        // into/out of a storm is not a wall crossing and must not gulp.
+        if (snap) {
+            breachLatched = smoothedInterior >= BREACH_ENTER;
+        } else if (!breachLatched && smoothedInterior >= BREACH_ENTER) {
+            breachLatched = true;
+            breachTicks = BREACH_PINCH_TICKS;
+            level.playLocalSound(camera.x, camera.y, camera.z,
+                    EclipseSounds.EVENT_STORM_BURST.get(), SoundSource.WEATHER,
+                    BREACH_BURST_VOLUME, BREACH_BURST_PITCH, false);
+            StormFxClient.glitchPulseSafe(BREACH_GLITCH_AMPLITUDE, BREACH_GLITCH_TICKS);
+            EclipseMod.LOGGER.debug("[w5b-breach] enter smoothed={}", smoothedInterior);
+        } else if (breachLatched && smoothedInterior < BREACH_EXIT) {
+            breachLatched = false;
+            level.playLocalSound(camera.x, camera.y, camera.z,
+                    EclipseSounds.EVENT_STORM_BURST.get(), SoundSource.WEATHER,
+                    BREACH_EXHALE_VOLUME, BREACH_EXHALE_PITCH, false);
+            EclipseMod.LOGGER.debug("[w5b-breach] exit smoothed={}", smoothedInterior);
+        }
+        if (breachTicks > 0) {
+            breachTicks--; // B1: pause-safe like flashTicks/gulpTicks
+        }
         if (flashTicks > 0) {
             flashTicks--; // pause-safe: same guard as smoothedInterior (IDEA-15 §2)
         }
@@ -438,8 +489,15 @@ public final class StormInteriorFx {
         // Rain rides the interior amount (R14) — but NOT in sphere interiors (C8: motes
         // and ground ribbons own that space; the grade's rain uniform stays 0 there).
         // FX-STORM: gusts burst the grade's streak layer on top of the base amount.
-        EclipseFxState.setStormInterior(smoothedInterior, interiorSphere ? 0.0F
-                : Math.min(1.0F, smoothedInterior * (1.0F + GUST_RAIN_BOOST * gustAmount)));
+        // WAVE5 (F-105 B) B2: a swallow's rain surge multiplies the ambient rain for its
+        // 15 ticks; in sphere interiors (ambient 0 by the C8 rule) the surge EXCESS is fed
+        // instead — interior × (surge − 1) ≈ 0.6 streaks at the full 1.6 slam — so the fog
+        // visibly weeps the death there too and the release tail eases both paths to base.
+        float rainSurge = EclipseFxState.stormRainSurge();
+        float ambientRain = interiorSphere
+                ? smoothedInterior * (rainSurge - 1.0F)
+                : Math.min(1.0F, smoothedInterior * (1.0F + GUST_RAIN_BOOST * gustAmount)) * rainSurge;
+        EclipseFxState.setStormInterior(smoothedInterior, Math.min(1.0F, ambientRain));
         tickRainSheets(level, camera);
         tickSphereAmbience(minecraft, level, camera);
         tickGodFingers(camera);
@@ -883,8 +941,16 @@ public final class StormInteriorFx {
             float inhale = Mth.sin((float) Math.PI * (1.0F - gulpTicks / (float) GULP_TICKS));
             farTarget = Mth.lerp(inhale, farTarget, GULP_FOG_FAR);
         }
+        // WAVE5 (F-105 B) B1: the first-breach swallow pinches the NEAR plane 6→2→6 over
+        // 10 ticks (same sin half-wave shape as the D5 far-plane gulp — zero at both ends,
+        // so there is no pop against the frozen 6-block pinch either way).
+        float nearTarget = INTERIOR_FOG_NEAR;
+        if (breachTicks > 0) {
+            float swallow = Mth.sin((float) Math.PI * (1.0F - breachTicks / (float) BREACH_PINCH_TICKS));
+            nearTarget = Mth.lerp(swallow, INTERIOR_FOG_NEAR, BREACH_FOG_NEAR);
+        }
         event.setFarPlaneDistance(Math.min(far, Mth.lerp(interior, far, farTarget)));
-        event.setNearPlaneDistance(Math.min(near, Mth.lerp(interior, near, INTERIOR_FOG_NEAR)));
+        event.setNearPlaneDistance(Math.min(near, Mth.lerp(interior, near, nearTarget)));
         event.setCanceled(true);
     }
 
@@ -1078,6 +1144,9 @@ public final class StormInteriorFx {
         smoothedWallBand = 0.0F;
         wallBandTarget = 0.0F;
         gulpTicks = 0;
+        // WAVE5 (F-105 B) B1: respawn/warp never replays a breach (M5 rule).
+        breachLatched = false;
+        breachTicks = 0;
         clearGodFingers();
         SphereDroneSound drone = droneSound;
         droneSound = null;

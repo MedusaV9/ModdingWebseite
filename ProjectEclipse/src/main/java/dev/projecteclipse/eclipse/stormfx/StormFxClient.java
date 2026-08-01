@@ -126,6 +126,14 @@ public final class StormFxClient {
     /** Second thump of the ≤20-block double heartbeat, this many ticks after the first. */
     private static final int HEARTBEAT_ECHO_TICKS = 6;
 
+    // WAVE5 (F-105 B) B5 lair dread (IDEA-15 §9): the deepest storm core has a pulse.
+    /** Lair core radius around the storm CENTER (lair == site center — protocol-free). */
+    private static final float LAIR_CORE_RADIUS = 30.0F;
+    /** Fixed double-thump cadence inside the lair core (plan §4: 16t). */
+    private static final int LAIR_HEARTBEAT_TICKS = 16;
+    /** Interior gate: the core beat is a deep-fog read, never part of the wall crossing. */
+    private static final float LAIR_INTERIOR_GATE = 0.6F;
+
     /** Live storms of the current client level (tiny list; index-iterated, no iterators in render). */
     private static final List<ClientStorm> STORMS = new ArrayList<>(4);
     /** Live lightning bolts (sky→impact ribbons). */
@@ -360,6 +368,7 @@ public final class StormFxClient {
         tickCrownHalo(storm, shellDist, visibility);
         tickLoopSound(minecraft, storm, shellDist, visibility);
         tickApproachDread(level, storm, camera, centerDist, shellDist, visibility);
+        tickLairDread(level, storm, camera, centerDist); // WAVE5 (F-105 B) B5
         return true;
     }
 
@@ -657,6 +666,40 @@ public final class StormFxClient {
         }
     }
 
+    /**
+     * WAVE5 (F-105 B) B5 — lair dread (IDEA-15 §9): the §1 approach ladder stands down at the
+     * wall (its {@code interiorAmount() >= 0.1} gate), but the deepest core keeps a pulse.
+     * Within {@value #LAIR_CORE_RADIUS} blocks of the storm CENTER (lairs sit exactly there —
+     * {@code FogStormSites.reconcileTyrantLair} marks the site center — so this stays
+     * protocol-free) while {@code interiorAmount() > }{@value #LAIR_INTERIOR_GATE}, the
+     * heartbeat continues INSIDE as a double-thump on a fixed
+     * {@value #LAIR_HEARTBEAT_TICKS}-tick cadence, pitched deeper than the approach beat:
+     * players learn "double heartbeat = boss" for free. Own per-storm cadence fields — the
+     * two ladders are interior-gate-exclusive, but §1's bail branch clears ITS echo every
+     * tick while inside, so sharing fields would strangle the second thump.
+     */
+    private static void tickLairDread(ClientLevel level, ClientStorm storm, Vec3 camera,
+            double centerDist) {
+        if (centerDist > LAIR_CORE_RADIUS
+                || StormInteriorFx.interiorAmount() <= LAIR_INTERIOR_GATE
+                || storm.state == S2CStormStatePayload.STATE_DISSIPATE
+                || storm.state == S2CStormStatePayload.STATE_EXPLODE) {
+            storm.lairEchoTick = -1;
+            return;
+        }
+        if (storm.lairEchoTick >= 0 && clientTicks >= storm.lairEchoTick) {
+            storm.lairEchoTick = -1;
+            playHeartbeat(level, camera, 0.26F, 0.62F);
+        }
+        if (clientTicks >= storm.nextLairThumpTick) {
+            storm.nextLairThumpTick = clientTicks + LAIR_HEARTBEAT_TICKS;
+            storm.lairEchoTick = clientTicks + HEARTBEAT_ECHO_TICKS;
+            playHeartbeat(level, camera, 0.30F, 0.70F);
+            EclipseMod.LOGGER.debug("[w5b-lairdread] cadence={} centerDist={}",
+                    LAIR_HEARTBEAT_TICKS, (int) centerDist);
+        }
+    }
+
     /** Faint warden-heartbeat thump at the camera (sits under the churn loop at 56). */
     private static void playHeartbeat(ClientLevel level, Vec3 camera, float volume, float pitch) {
         level.playLocalSound(camera.x, camera.y, camera.z, SoundEvents.WARDEN_HEARTBEAT,
@@ -812,8 +855,12 @@ public final class StormFxClient {
         list.add(entry);
     }
 
-    /** W8's TransitionFx is an in-flight sibling; a broken pulse must never kill storm ticking. */
-    private static void glitchPulseSafe(float amplitude, int decayTicks) {
+    /**
+     * W8's TransitionFx is an in-flight sibling; a broken pulse must never kill storm ticking.
+     * WAVE5 (F-105 B) B1: package-visible — {@link StormInteriorFx} rides the same guard for
+     * the first-breach glitch blink.
+     */
+    static void glitchPulseSafe(float amplitude, int decayTicks) {
         try {
             TransitionFx.glitchPulse(amplitude, decayTicks);
         } catch (Throwable t) {
@@ -880,6 +927,9 @@ public final class StormFxClient {
         int nextHeartbeatTick;
         /** Scheduled second thump of the ≤20-block double heartbeat (-1 = none pending). */
         int heartbeatEchoTick = -1;
+        /** WAVE5 (F-105 B) B5: lair-core double-thump cadence + pending echo (-1 = none). */
+        int nextLairThumpTick;
+        int lairEchoTick = -1;
         /** Spiraling vortex wisp emitters (looping; positions driven per tick). */
         final ParticleEmitter[] wisps = new ParticleEmitter[MAX_WISPS];
         final float[] wispHeights = new float[MAX_WISPS];

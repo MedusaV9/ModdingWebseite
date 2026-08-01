@@ -57,7 +57,11 @@ public class StormHoundRenderer extends EclipseGeoRenderer<StormHoundEntity> {
 
     public StormHoundRenderer(EntityRendererProvider.Context context) {
         super(context, StormHoundEntity.GEO_ID, true);
-        withGlowmask().withUprightDeath();
+        // WAVE5 (F-105 B) B4: the glowmask breathes with the storm interior — a 1:1
+        // replacement of the stock withGlowmask() layer. EMISSIVE PASS ONLY: the W4 A6
+        // stagger tell (preRender/tickStaggerTell below) is untouched.
+        addRenderLayer(new FogGlowBreathLayer<>(this));
+        withUprightDeath();
         this.shadowRadius = 0.5F;
     }
 

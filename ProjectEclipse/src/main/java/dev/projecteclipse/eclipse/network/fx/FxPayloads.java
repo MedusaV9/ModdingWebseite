@@ -31,7 +31,8 @@ import net.neoforged.neoforge.network.registration.PayloadRegistrar;
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID, bus = EventBusSubscriber.Bus.MOD)
 public final class FxPayloads {
-    private static final String VERSION = "fx1";
+    // WAVE5 (F-105 B) B2: version group bumped fx1 → fx2 (new FX_STORM_SURGE id below).
+    private static final String VERSION = "fx2";
 
     // Frozen S2CFxEventPayload ids (P2 §3.2).
     /** pos = impact, a = intensity 0..1, b = 0 normal / 1 giant. */
@@ -56,6 +57,13 @@ public final class FxPayloads {
      * VEIL-REPASS-2: widens the ceremony burst. 0 from pre-crowd servers = base look).
      */
     public static final ResourceLocation FX_ALTAR_LEVELUP = fx("altar_levelup");
+    /**
+     * WAVE5 (F-105 B) B2: storm-death rain surge (IDEA-15 §4) — pos = the swallowed corpse,
+     * a = temporary {@code RainAmount} multiplier (1.6), b = surge length in ticks (15).
+     * Sent per-player to everyone INSIDE the swallowing storm ({@code stormfx.StormDeathFx});
+     * the client rides it through {@link EclipseFxState#startStormRainSurge}.
+     */
+    public static final ResourceLocation FX_STORM_SURGE = fx("storm_surge");
 
     /** How far the glide event position may be from a player to attach the trail to them. */
     private static final double GLIDE_MATCH_RANGE_SQ = 8.0D * 8.0D;
@@ -203,6 +211,10 @@ public final class FxPayloads {
             // VEIL-REPASS-2: b = crowd size at the altar — widens the burst).
             dev.projecteclipse.eclipse.client.drama.AltarCeremonyFx.start(
                     payload.pos(), (int) payload.a(), (int) payload.b());
+        } else if (FX_STORM_SURGE.equals(id)) {
+            // WAVE5 (F-105 B) B2: the storm swallowed a player — a = rain multiplier,
+            // b = surge ticks. Pure blackboard write; StormInteriorFx's feed consumes it.
+            EclipseFxState.startStormRainSurge(payload.a(), Math.max(1, (int) payload.b()));
         } else if (dev.projecteclipse.eclipse.drama.GestureGlyphService.FX_GLYPH.equals(id)) {
             // W4-CEREMONY IDEA-10 #2: pos = gesturing player, a = glyph 0 greet/1 danger/2 follow.
             dev.projecteclipse.eclipse.client.drama.GestureGlyphFx.show(payload.pos(), (int) payload.a());

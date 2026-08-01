@@ -367,6 +367,22 @@ public final class StormWallRenderer {
     /** Bolt ribbons widen up to this factor at noon so strikes stay readable at range. */
     private static final float DAY_BOLT_WIDEN = 0.35F;
     /**
+     * WAVE5 (F-105 B) B3 (IDEA-15 §5): churn floor drop at full daylight (0.45 → 0.30) —
+     * the churn band widens, so column-to-column density variation survives a noon sky.
+     * At night the frozen 0.45..1.0 range is bit-identical.
+     */
+    private static final float DAY_CHURN_WIDEN = 0.15F;
+    /**
+     * WAVE5 (F-105 B) B3: daylight silhouette rim — the OUTER additive EXO shell
+     * ({@code s == 0}) brightens ×(1 + {@value}·daylight) in its upper third, giving the
+     * dome the crisp top edge EVAL-4 obs#3 asked for. Smoothstepped in over latFrac
+     * [{@value #DAY_RIM_LAT} − 0.08, {@value #DAY_RIM_LAT} + 0.10] so the collar has no
+     * hard lower seam. Sphere-only: the cylinder's single additive band already fades to
+     * zero alpha at its top, so an upper-third multiplier would be a no-op there.
+     */
+    private static final float DAY_RIM_BOOST = 0.5F;
+    private static final float DAY_RIM_LAT = 0.66F;
+    /**
      * Daylight factor of the current frame (0 night → 1 midday), written once per
      * {@link #onRenderLevelStage} before any build call — render-thread only, never stale.
      */
@@ -872,6 +888,9 @@ public final class StormWallRenderer {
         // color variation survives a bright sky; at night the frozen R14 range is untouched.
         float grayFloor = 0.72F - DAY_GRAY_SPREAD * daylight;
         float graySpan = 1.0F - grayFloor;
+        // WAVE5 (F-105 B) B3: the churn band itself also widens by day (floor 0.45 → 0.30).
+        float churnFloor = 0.45F - DAY_CHURN_WIDEN * daylight;
+        float churnSpan = 1.0F - churnFloor;
         for (int i = 0; i < columns; i++) {
             // Window start stays camera-centered (EVAL-POL-F #1): rot lives ONLY in the noise
             // index, so the dressed slice never drifts off the camera bearing while the churn
@@ -879,8 +898,8 @@ public final class StormWallRenderer {
             double a0 = camAngle - halfArc + i * step;
             double a1 = a0 + step;
             int noiseSeg = Mth.floor((float) ((a0 + rot) / step)); // pattern moves with rot
-            float churn = 0.45F + 0.55F * hash3(shellIndex, noiseSeg, noiseT);
-            float churnHi = 0.45F + 0.55F * hash3(shellIndex, noiseSeg, noiseT + 7331);
+            float churn = churnFloor + churnSpan * hash3(shellIndex, noiseSeg, noiseT);
+            float churnHi = churnFloor + churnSpan * hash3(shellIndex, noiseSeg, noiseT + 7331);
             float gray0 = (grayFloor + graySpan * hash3(shellIndex + 8, noiseSeg, noiseT)) * grayMul;
             float gray1 = (grayFloor + graySpan * hash3(shellIndex + 8, noiseSeg, noiseT + 977)) * grayMul;
 
@@ -1120,6 +1139,10 @@ public final class StormWallRenderer {
         float grayFloor = 0.72F - DAY_GRAY_SPREAD * daylight;
         float graySpan = 1.0F - grayFloor;
         float dayBoost = 1.0F + DAY_ADDITIVE_BOOST * daylight;
+        // WAVE5 (F-105 B) B3: wider churn band by day + the outer-glow upper-third rim.
+        float churnFloor = 0.45F - DAY_CHURN_WIDEN * daylight;
+        float churnSpan = 1.0F - churnFloor;
+        boolean dayRim = additive && !endo && s == 0 && daylight > 0.01F;
         float shellPhase = seedC * 1.7F;
         float dispTime = time / 24.0F;
         // Occluder guarantee clamps (§1): EXO never below occluderR + 0.3; ENDO never above
@@ -1162,7 +1185,7 @@ public final class StormWallRenderer {
                 // The two outermost EXO shells billow in coarse 2-column cells; deeper
                 // sheets stay fine — widening the frequency spread between layers.
                 int cell = !endo && s <= 1 ? noiseSeg >> 1 : noiseSeg;
-                float churn = 0.45F + 0.55F * hash3(seedC, cell + ring * 131, noiseT);
+                float churn = churnFloor + churnSpan * hash3(seedC, cell + ring * 131, noiseT);
                 float gray0 = (grayFloor + graySpan * hash3(seedC + 8, cell + ring * 131, noiseT))
                         * grayMul;
                 float gray1 = (grayFloor + graySpan * hash3(seedC + 8, cell + ring * 131, noiseT + 977))
@@ -1190,6 +1213,15 @@ public final class StormWallRenderer {
                     float aBand = baseAlpha * churnEff * alphaMul * dayBoost * armGate;
                     aRow0 = aBand * (1.0F - 0.45F * latFrac0) * eye0;
                     aRow1 = aBand * (1.0F - 0.45F * latFrac1) * eye1;
+                    // WAVE5 (F-105 B) B3: daylight rim — the outer glow's upper third
+                    // reads as a crisp silhouette collar against the bright sky
+                    // (×(1 + 0.5·daylight), eased in so there is no hard lower seam).
+                    if (dayRim) {
+                        aRow0 *= 1.0F + DAY_RIM_BOOST * daylight
+                                * smoothstep(DAY_RIM_LAT - 0.08F, DAY_RIM_LAT + 0.10F, latFrac0);
+                        aRow1 *= 1.0F + DAY_RIM_BOOST * daylight
+                                * smoothstep(DAY_RIM_LAT - 0.08F, DAY_RIM_LAT + 0.10F, latFrac1);
+                    }
                     // A4: the eyewall rim ring — a steep bright collar around the eye.
                     if (ew0 > 0.0F || ew1 > 0.0F) {
                         float ew = EYEWALL_RIM_ALPHA * churn * alphaMul * dayBoost;

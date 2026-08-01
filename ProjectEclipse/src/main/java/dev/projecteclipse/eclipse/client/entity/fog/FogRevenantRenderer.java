@@ -19,7 +19,10 @@ import net.neoforged.api.distmarker.OnlyIn;
 public class FogRevenantRenderer extends EclipseGeoRenderer<FogRevenantEntity> {
     public FogRevenantRenderer(EntityRendererProvider.Context context) {
         super(context, FogRevenantEntity.GEO_ID, true);
-        withGlowmask().withUprightDeath();
+        // WAVE5 (F-105 B) B4: eye slits + wisps breathe with the storm interior
+        // (FogGlowBreathLayer is the stock withGlowmask() layer ×(0.6 + 0.8·interior)).
+        addRenderLayer(new FogGlowBreathLayer<>(this));
+        withUprightDeath();
         this.shadowRadius = 0.4F;
     }
 }

@@ -62,6 +62,12 @@ public final class EclipseFxState {
     private static float stormInterior;
     private static float stormRain;
 
+    // --- WAVE5 (F-105 B) B2 storm-death rain surge (additive — the frozen API is untouched) ---
+    /** Release tail of the swallow rain surge: the last ticks ease back so nothing hard-pops. */
+    private static final int RAIN_SURGE_RELEASE_TICKS = 5;
+    private static float rainSurgeMul = 1.0F;
+    private static int rainSurgeEndTick = Integer.MIN_VALUE;
+
     // --- ghost grade ---
     private static boolean ghostActive;
     private static float ghostFrom;
@@ -249,6 +255,34 @@ public final class EclipseFxState {
         return stormRain;
     }
 
+    /**
+     * WAVE5 (F-105 B) B2: storm-death rain surge ({@code fx/storm_surge}, IDEA-15 §4) — for
+     * {@code durationTicks} the {@code StormInteriorFx} rain FEED reads its ambient rain
+     * ×{@code mul} (the ordered 1.6 slams a mid-strength wall interior to full). The
+     * multiplier is consumed by the feeder, not here, so {@link #setStormInterior} /
+     * {@link #stormRain()} keep their frozen contract (rain stays clamped to 1.0, the
+     * {@code storm_interior} RainAmount ceiling).
+     */
+    public static void startStormRainSurge(float mul, int durationTicks) {
+        rainSurgeMul = Math.max(1.0F, mul);
+        rainSurgeEndTick = clientTicks + Math.max(1, durationTicks);
+    }
+
+    /**
+     * Live surge multiplier for the storm-rain feed: exactly 1.0 while idle, {@code mul} at
+     * full slam (instant attack — a death IS a slam), easing back to 1.0 over the last
+     * {@value #RAIN_SURGE_RELEASE_TICKS} ticks so C8 sphere interiors (ambient rain 0)
+     * never pop when the surge ends.
+     */
+    public static float stormRainSurge() {
+        int remaining = rainSurgeEndTick - clientTicks;
+        if (remaining <= 0) {
+            return 1.0F;
+        }
+        float envelope = Math.min(1.0F, remaining / (float) RAIN_SURGE_RELEASE_TICKS);
+        return 1.0F + (rainSurgeMul - 1.0F) * envelope;
+    }
+
     // ------------------------------------------------------------------ new-land glow (IDEA-14 §3)
 
     /**
@@ -413,6 +447,8 @@ public final class EclipseFxState {
         altarAberration = 0.0F;
         stormInterior = 0.0F;
         stormRain = 0.0F;
+        rainSurgeMul = 1.0F; // WAVE5 (F-105 B) B2
+        rainSurgeEndTick = Integer.MIN_VALUE;
         ghostActive = false;
         ghostFrom = 0.0F;
         ghostStartTick = clientTicks - GHOST_RAMP_TICKS;
