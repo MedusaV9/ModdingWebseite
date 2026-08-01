@@ -1039,7 +1039,10 @@ public final class CreditsSequence implements SequenceReplayable {
             if (current.mapRip.undersideSpawnRemaining(ripTick)) {
                 current.mapRip.spawnUndersideBatch(overworld, ripTick);
             }
-            if (current.mapRip.staged() && ripTick % CreditsMapRipAct.PUSH_STRIDE == 0) {
+            // F-103: called every tick — the act pushes one PUSH_STRIDE phase slice
+            // per call (each display still rides a full-stride window; the effigy
+            // wave is ~1/10 of the field per tick instead of a whole-field burst).
+            if (current.mapRip.staged()) {
                 current.mapRip.animate(ripTick);
             }
             // Crack fronts / lift waves / sub-fractures / gravity waves / jet bursts /
@@ -1054,14 +1057,11 @@ public final class CreditsSequence implements SequenceReplayable {
             if (current.blackHole.spawnRemaining(t - T_FINALE_TELE)) {
                 current.blackHole.spawnBatch(overworld, t - T_FINALE_TELE);
             }
-            // F-102: half-stride offset — the reveal sits a stride multiple after the
-            // tele beat, so without it the accretion AND map-rip fields would push
-            // their transform waves on the SAME ticks (EPIC ≈ 5.1k NBT writes in one
-            // tick); de-phased, each wave stays at/below the pre-F-102 audited spike.
-            if ((t - T_FINALE_TELE) % CreditsBlackHoleAct.PUSH_STRIDE
-                    == CreditsBlackHoleAct.PUSH_STRIDE / 2) {
-                current.blackHole.animate(t - T_FINALE_TELE);
-            }
+            // F-103: called every tick — phase-sliced like the map rip (supersedes the
+            // F-102 half-stride de-phasing: with BOTH finale fields sliced, every tick
+            // carries ~1/10 of each population — EPIC ≈ 510 transform writes/t steady
+            // instead of alternating ~2.98k / ~2.1k stride bursts).
+            current.blackHole.animate(t - T_FINALE_TELE);
             // F-102: the maw's re-fire cadence STOPS at reveal+MAW_REFIRE_UNTIL — the
             // ~340t one-shot dies out right as the eclipse-fade beat takes the sky down.
             if (t >= T_FINALE_REVEAL && t < T_FINALE_REVEAL + MAW_REFIRE_UNTIL

@@ -55,7 +55,10 @@ import net.minecraft.world.phys.Vec3;
  * cycle ({@value #FALL_TICKS_MIN}–{@value #FALL_TICKS_MIN}+{@value #FALL_TICKS_VAR}t,
  * wrap seam hidden by the shell-edge grow-in) — the infall stream never dries up while
  * the live count stays flat at {@link #count}. Budgeted spawn ({@link #spawnPerTick}/t),
- * pushes on the {@value #PUSH_STRIDE}t stride, hard-cap checked, {@link #TAG} stray-sweep
+ * pushes ride {@value #PUSH_STRIDE}t windows and are PHASE-SLICED (F-103, the
+ * island-shatter pattern: {@link #animate} runs every tick and pushes
+ * 1/{@value #PUSH_STRIDE} of both populations — never a whole-field stride burst),
+ * hard-cap checked, {@link #TAG} stray-sweep
  * covered, discarded (staggered) behind the final black. {@link #swallowPulse} publishes
  * the deterministic "gulp" schedule (a cluster group crossing the horizon) that
  * {@code CreditsSequence} answers with a shockwave ring + brightness blink.</p>
@@ -149,7 +152,7 @@ final class CreditsBlackHoleAct {
     /** Doppler brightness band (display brightness override, sky channel). */
     private static final int DOPPLER_SKY_MIN = 3;
     private static final int DOPPLER_SKY_MAX = 13;
-    /** Brightness refresh: 1/{@value} of the field per {@link #animate} push wave. */
+    /** Brightness refresh floor: 1/{@value} of the field per full push stride. */
     private static final int DOPPLER_STRIDE = 4;
 
     /** Terrain sampling: spiral of surface columns out to this map radius. */
@@ -200,8 +203,6 @@ final class CreditsBlackHoleAct {
     private int spawnCursor;
     /** F-102: budgeted spawn cursor of the sky-drain stream population. */
     private int drainCursor;
-    /** Push-wave counter driving the strided Doppler refresh. */
-    private int pushWave;
     private boolean prepared;
 
     /**
@@ -421,8 +422,21 @@ final class CreditsBlackHoleAct {
 
     /**
      * One lookahead interpolation window per {@value #PUSH_STRIDE}t, plus the strided
-     * Doppler brightness wave (1/{@value #DOPPLER_STRIDE} of the field per push; values
-     * are quantized and cached so unchanged fragments never pay the NBT round trip).
+     * Doppler brightness wave (values are quantized and cached so unchanged fragments
+     * never pay the NBT round trip).
+     *
+     * <p>F-103: called EVERY act tick and PHASE-SLICED like the F-102 island shatter —
+     * each call pushes only the {@code index % PUSH_STRIDE == floorMod(actTick,
+     * PUSH_STRIDE)} slice of both populations, so each display still rides a full
+     * {@value #PUSH_STRIDE}t window while the per-tick NBT batch is
+     * 1/{@value #PUSH_STRIDE} of the field (EPIC ≈ 212/t steady for accretion+drains
+     * instead of a ~2.1k spike every stride tick). The caches stay slice-stable: both
+     * {@link #dopplerCache} and {@link #hotCache} are keyed by display index, and each
+     * index is visited on exactly ONE phase every {@value #PUSH_STRIDE}t — the same
+     * edge-trigger cadence as the whole-field push had. The Doppler refresh picks
+     * 1/{@code dopplerStride} of each slice via the full-stride wave counter
+     * {@code actTick / PUSH_STRIDE}, so every fragment still refreshes once per
+     * {@code dopplerStride} strides (~20 checks/t EPIC, budget unchanged).</p>
      *
      * <p>V3 heat glow rides the same loop: crossing {@value #HEAT_START} of the fall the
      * fragment's state swaps to {@link #heatState} at full-bright (tidal friction turned
@@ -430,8 +444,9 @@ final class CreditsBlackHoleAct {
      * Doppler value — both are crossing-edge-only NBT writes, never per-push.</p>
      */
     void animate(int actTick) {
-        this.pushWave++;
-        for (int i = 0; i < this.displays.size(); i++) {
+        int phase = Math.floorMod(actTick, PUSH_STRIDE);
+        int wave = Math.floorMod(actTick / PUSH_STRIDE, this.dopplerStride);
+        for (int i = phase; i < this.displays.size(); i += PUSH_STRIDE) {
             Display.BlockDisplay piece = this.displays.get(i);
             if (piece.isRemoved()) {
                 continue;
@@ -455,7 +470,7 @@ final class CreditsBlackHoleAct {
                     CreditsSequence.applyBrightnessOverride(piece, sky, Math.max(0, sky - 3));
                 }
             }
-            if (!hot && i % this.dopplerStride == this.pushWave % this.dopplerStride) {
+            if (!hot && (i / PUSH_STRIDE) % this.dopplerStride == wave) {
                 int sky = dopplerSky(i, actTick);
                 if (sky != this.dopplerCache[i]) {
                     this.dopplerCache[i] = sky;
@@ -465,7 +480,7 @@ final class CreditsBlackHoleAct {
         }
         // F-102 sky-drain streams: transform pushes only — no Doppler/heat NBT churn
         // (they read as dim silhouettes pouring out of the dark sky by design).
-        for (int j = 0; j < this.drainDisplays.size(); j++) {
+        for (int j = phase; j < this.drainDisplays.size(); j += PUSH_STRIDE) {
             Display.BlockDisplay piece = this.drainDisplays.get(j);
             if (piece.isRemoved()) {
                 continue;

@@ -96,10 +96,14 @@ import net.minecraft.world.phys.Vec3;
  * tier's accretion field + sky-drain streams the finale peaks at ≈ 0.94k / 3.4k / 5.1k,
  * each under its own tier hard cap (every spawn checks
  * {@link CreditsSequence#actCapReached}). Pushes ride {@value #PUSH_STRIDE}t windows
- * (EPIC ≈ 300 transform updates/t); block-state/brightness NBT writes are edge-triggered
- * through per-display look caches only. Discard is guaranteed (staggered) on the hold
- * beat, immediately on {@code /dev end_event} and at run teardown; every display
- * carries {@link #TAG} for the crash-stray join sweep.</p>
+ * and are PHASE-SLICED (F-103, the island-shatter pattern): {@link #animate} runs
+ * every tick and pushes 1/{@value #PUSH_STRIDE} of every pool, so the effigy wave is
+ * a steady ≈ 70 / 224 / 298 transform writes per tick across the tiers — never a
+ * whole-field stride burst; block-state/brightness NBT writes are edge-triggered
+ * through per-display look caches only (slice-stable — see {@link #animate}). Discard
+ * is guaranteed (staggered) on the hold beat, immediately on {@code /dev end_event}
+ * and at run teardown; every display carries {@link #TAG} for the crash-stray join
+ * sweep.</p>
  */
 final class CreditsMapRipAct {
     static final String TAG = "eclipse_credits_maprip";
@@ -1201,9 +1205,27 @@ final class CreditsMapRipAct {
      * One lookahead interpolation window per {@value #PUSH_STRIDE}t for every pool,
      * plus the edge-triggered look swaps (terrain → strata flank → heat → deep layer;
      * pool pieces re-skin only when their active job changes — never per-push).
+     *
+     * <p>F-103: called EVERY act tick and PHASE-SLICED like the F-102 island shatter —
+     * each call pushes only the {@code index % PUSH_STRIDE == floorMod(ripTick,
+     * PUSH_STRIDE)} slice of every pool, so each display still rides a full
+     * {@value #PUSH_STRIDE}t interpolation window while the per-tick NBT batch is
+     * 1/{@value #PUSH_STRIDE} of the field (EPIC ≈ 298/t steady instead of a ~2.98k
+     * spike every stride tick; the client-side paths are identical, the segments are
+     * merely phase-offset per display — the F-093 choreography is untouched).</p>
+     *
+     * <p><b>Slice-stability of the cross-list caches</b> (the §9-risk-2 reason this
+     * was deferred in F-102): the four pools keep INDEPENDENT index spaces, and every
+     * cache ({@link #crustLookCache}, {@link #shardJobCache},
+     * {@link #undersideJobCache}) is keyed by (pool, index) — never by the shared
+     * push tick. Because the slice membership {@code index % PUSH_STRIDE} is a pure
+     * function of the index, each cache entry is read and written on exactly ONE
+     * phase, every {@value #PUSH_STRIDE}t — the same edge-trigger cadence (and the
+     * same ≤1-stride quantization of look swaps) as the whole-field push had.</p>
      */
     void animate(int ripTick) {
-        for (int i = 0; i < this.crustDisplays.size(); i++) {
+        int phase = Math.floorMod(ripTick, PUSH_STRIDE);
+        for (int i = phase; i < this.crustDisplays.size(); i += PUSH_STRIDE) {
             Display.BlockDisplay piece = this.crustDisplays.get(i);
             if (piece.isRemoved()) {
                 continue;
@@ -1235,7 +1257,7 @@ final class CreditsMapRipAct {
                 }
             }
         }
-        for (int slat = 0; slat < this.seamDisplays.size(); slat++) {
+        for (int slat = phase; slat < this.seamDisplays.size(); slat += PUSH_STRIDE) {
             Display.BlockDisplay piece = this.seamDisplays.get(slat);
             if (piece.isRemoved()) {
                 continue;
@@ -1244,7 +1266,7 @@ final class CreditsMapRipAct {
             piece.setTransformationInterpolationDuration(PUSH_STRIDE);
             piece.setTransformation(seamPose(slat, ripTick + PUSH_STRIDE));
         }
-        for (int slot = 0; slot < this.shardDisplays.size(); slot++) {
+        for (int slot = phase; slot < this.shardDisplays.size(); slot += PUSH_STRIDE) {
             Display.BlockDisplay piece = this.shardDisplays.get(slot);
             if (piece.isRemoved()) {
                 continue;
@@ -1258,7 +1280,7 @@ final class CreditsMapRipAct {
                 piece.setBlockState(this.cells.get(this.shardJobs.get(job).cell()).top);
             }
         }
-        for (int slot = 0; slot < this.undersideDisplays.size(); slot++) {
+        for (int slot = phase; slot < this.undersideDisplays.size(); slot += PUSH_STRIDE) {
             Display.BlockDisplay piece = this.undersideDisplays.get(slot);
             if (piece.isRemoved()) {
                 continue;

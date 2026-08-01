@@ -38,6 +38,10 @@ House laws applied (the wave-13 C5 audit is baked in from the start):
   4. V2.1 stacking law: dark birth tints on all stacking layers, broad shells, HDR
      clamped to the 1.45 ceiling with the hue ratio preserved.
   5. arc_mode stays the fxlib default "Random" everywhere ("Uniform" = client crash).
+  6. F-103 camera lune: both skydrain spawn shells cut a +-48 deg azimuth lune around
+     world +Z (the run-invariant camera side of the anchor) via the native sphere
+     `arc` wedge + shape-rotation yaw, so no haze/streak quad is ever BORN near the
+     crushed-FOV view axis in the near foreground (CAMERA_LUNE_* derivation below).
 
 Usage:  python3 tools/photon/credits5_fx.py            # write + validate both
 Round-trip validation is fxlib's default; the CLI `validate` pass re-checks on disk.
@@ -98,6 +102,38 @@ def radial_for(blocks, lifetime_ticks):
 
 
 # ---------------------------------------------------------------------------
+# F-103 camera lune (CREDITS_RISK_CLOSEOUT §risk-3): the skydrain dome vs. the camera.
+#
+# Geometry (all by CreditsBlackHoleAct construction, run-invariant): the vantage is
+# ALWAYS exactly VANTAGE_SOUTH south of the hole column (dir.x == 0), the fx anchor
+# sits ANCHOR_AHEAD=110 blocks along the view ray, and the cue spawns the emitter
+# UNROTATED (PhotonBridge.spawn without SpawnOptions) — so in the emitter's local
+# frame the anchor->camera axis is ALWAYS world +Z (azimuth 90 deg), pitched up by
+# the shot pitch (~10-26 deg, islandTop-dependent). The full 57-88 spawn sphere puts
+# its camera-side pole ~22 blocks in front of the camera DEAD CENTER of the crushed
+# ~17deg-FOV frame — a 7-12-block whisper-haze quad there fills the whole screen.
+#
+# Fix: cut a VERTICAL LUNE (all elevations) of +-CAMERA_LUNE_HALF deg azimuth around
+# +Z out of both spawn shells via the native sphere `arc` wedge + a shape-rotation
+# yaw. Jar-read semantics (photon 2.1.5 Sphere.nextPosVel + ShapeSetting +
+# Vector3fHelper.rotateYXY, JOML rotateY shifts azimuth by MINUS the angle):
+# sampled azimuth [0, arc) -> world azimuth [-yaw, arc-yaw); with arc = 360-2*48 =
+# 264 and yaw = arc/2 + 90 = 222 the kept band is [138deg, 42deg] and the gap is
+# (42deg, 138deg) — centered on +Z, verified numerically against the shipped JOML.
+# Because the lune spans ALL elevations, the fix is PITCH-INDEPENDENT (the islandTop
+# uncertainty vanishes). Every spawn is then >= ~40deg off the true camera axis: the
+# nearest haze-quad edge stays >= ~18deg outside the <=17deg crushed-FOV half-frame
+# for its whole alpha-carrying life (the haze has NO orbital — its azimuth never
+# changes), and streaks that curl (<=0.6 rad) toward the axis only enter the frame
+# >= ~80 blocks out as the authored thin center-converging threads. Choreo-neutral:
+# radii/timing/velocities/colors untouched; the removed 96/360 of spawn directions
+# were off-screen at birth by construction (only ever visible as foreground smears).
+CAMERA_LUNE_HALF = 48.0
+CAMERA_LUNE_ARC = 360.0 - 2.0 * CAMERA_LUNE_HALF   # 264
+CAMERA_LUNE_YAW = CAMERA_LUNE_ARC / 2.0 + 90.0     # 222 (gap center -> +Z)
+
+
+# ---------------------------------------------------------------------------
 # 1. eclipse:credits5_skydrain — F-102 (the sky pours itself into the hole)
 # ---------------------------------------------------------------------------
 def build_credits5_skydrain() -> FxBuilder:
@@ -118,7 +154,9 @@ def build_credits5_skydrain() -> FxBuilder:
             simulation_space="Local", max_particles=80)
         .child_of(root)
         .with_emission(rate=constant(1.0))
-        .with_shape(sphere(radius=88.0, thickness=0.35))
+        # F-103 camera lune: +-48deg azimuth around +Z (the camera side) never spawns.
+        .with_shape(sphere(radius=88.0, thickness=0.35, arc=CAMERA_LUNE_ARC),
+                    rotation=(0.0, CAMERA_LUNE_YAW, 0.0))
         .with_curves(
             velocity_over_lifetime=dict(
                 # 0.35-0.6 rad (20-34 deg) of curl on the way in — the streams bend
@@ -148,7 +186,10 @@ def build_credits5_skydrain() -> FxBuilder:
             simulation_space="Local", max_particles=36)
         .child_of(root)
         .with_emission(rate=constant(0.24))
-        .with_shape(sphere(radius=84.0, thickness=0.3))
+        # F-103 camera lune: the haze is the §risk-3 offender (7-12-block BLEND_ALPHA
+        # quads) — same +-48deg +Z cutout; with no orbital its azimuth is life-constant.
+        .with_shape(sphere(radius=84.0, thickness=0.3, arc=CAMERA_LUNE_ARC),
+                    rotation=(0.0, CAMERA_LUNE_YAW, 0.0))
         .with_curves(
             velocity_over_lifetime=dict(
                 # Creeps 8-12 blocks inward over the 90-140t life (radial x0.01/tick).
