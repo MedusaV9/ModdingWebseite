@@ -341,6 +341,16 @@ func frame(vp: Vector2) -> void:
 	stage.set_half_height(HALF_H, CAM_DIST)
 
 
+## W17 M1: Intro-Tauchfahrt — die Kamera startet unten am Riff (Korallen,
+## Seetang, Tontopf) mit Blick nach oben und steigt zur frontalen Spielpose,
+## deren Bildoberkante das Ziel-Abzeichen trägt; k=1 == exakte Rahmung von
+## frame(), damit der Übergang in die Runde ohne Ruck sitzt.
+func establish(k: float) -> void:
+	var e := 1.0 - ease(clampf(k, 0.0, 1.0), 0.4)
+	stage.camera.position = Vector3(0.0, 0.0, CAM_DIST) + Vector3(0.0, -HALF_H * 0.62, -2.6) * e
+	stage.camera.rotation_degrees = Vector3(10.0 * e, 0.0, 0.0)
+
+
 ## Jeden Frame: Blasen aus dem Pool stellen, Zielsorte markieren, Tang wiegen,
 ## Fische ziehen lassen, Abzeichen nachführen.
 func sync(bubbles: Array[Dictionary], target: String, pulse: float, delta: float) -> void:

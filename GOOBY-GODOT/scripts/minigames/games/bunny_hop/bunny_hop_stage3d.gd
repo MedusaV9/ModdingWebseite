@@ -6,6 +6,11 @@ extends Node3D
 ## Die Kamera rahmt die Spielebene EXAKT wie die 2D-Rechnung (set_half_height
 ## auf z=0) — Spawn-/Kollisionszahlen bleiben unangetastet. Die MECHANIK
 ## bleibt komplett in bunny_hop.gd/BunnyHopLogic.
+##
+## W17/G4-Politur (NUR Optik): Intro-Totale (establish, M1), Böen-Telegraf
+## als wehende Partikel quer durchs Bild (set_wind, M4 — ersetzt die
+## 2D-Linien) und der Trudel-Sturz nach dem Crash (begin_crash_fall/
+## crash_fall, M3).
 
 const Stage3D := preload("res://scripts/minigames/games/_3dc_stage/stage3d.gd")
 const Actor := preload("res://scripts/minigames/games/_3da_stage/gooby_actor.gd")
@@ -45,6 +50,10 @@ var _hop_puff: GPUParticles3D
 var _gate_ring: MeshInstance3D
 var _gate_ring_mat: StandardMaterial3D
 var _stretch := 0.0
+var _wind: GPUParticles3D
+var _wind_state := ""
+var _crashing := false
+var _crash_vy := 0.0
 
 
 func setup_stage(floor_y: float) -> void:
@@ -86,6 +95,7 @@ func setup_stage(floor_y: float) -> void:
 	_build_backdrop()
 	_build_pools()
 	_build_gooby()
+	_build_wind()
 
 
 func _build_backdrop() -> void:
@@ -381,6 +391,56 @@ func apply_size(size: Vector2) -> void:
 	stage.set_half_height(HALF_H, CAM_DIST)
 
 
+## W17 M1: Intro-Totale — die Kamera schwebt leicht erhöht und seitlich über
+## der Wiese (Gooby-Schwebe als Aufhänger) und gleitet in die frontale
+## Spielpose; k=1 == exakte Rahmung von apply_size(), kein Ruck zum Start.
+func establish(k: float) -> void:
+	var e := 1.0 - ease(clampf(k, 0.0, 1.0), 0.4)
+	stage.camera.position = Vector3(0.0, 0.4, CAM_DIST) + Vector3(1.7, 1.9, 3.2) * e
+	stage.camera.rotation_degrees = Vector3(-8.0 * e, 7.0 * e, 0.0)
+
+
+## W17 M4: Böen-Telegraf — wehende Luft-Partikel quer durchs Bild statt der
+## alten 2D-Linien. Farbsprache wie vorher: Telegraf warm-gelb und sanft,
+## Böe teal und kräftig; `direction` kippt die Bahn wie den Schubs.
+func _build_wind() -> void:
+	_wind = (
+		Fx
+		. particles(
+			{
+				"color": Color(1.0, 0.9, 0.5, 0.38),
+				"amount": 30,
+				"lifetime": 1.3,
+				"radius": 4.6,
+				"direction": Vector3(1.0, 0.0, 0.0),
+				"spread": 9.0,
+				"speed": Vector2(2.6, 4.6),
+				"gravity": Vector3.ZERO,
+				"size": Vector2(0.05, 0.13),
+			}
+		)
+	)
+	_wind.position = Vector3(0.0, 0.6, 0.7)
+	_wind.emitting = false
+	add_child(_wind)
+
+
+func set_wind(phase: String, direction: int) -> void:
+	var state := "%s_%d" % [phase, direction]
+	if state == _wind_state:
+		return
+	_wind_state = state
+	if phase != "telegraph" and phase != "gust":
+		_wind.emitting = false
+		return
+	var telegraph := phase == "telegraph"
+	var proc := _wind.process_material as ParticleProcessMaterial
+	proc.direction = Vector3(1.0, 0.35 * float(direction), 0.0)
+	proc.color = Color(1.0, 0.9, 0.5, 0.38) if telegraph else Color(0.5, 0.92, 0.86, 0.6)
+	_wind.speed_scale = 0.8 if telegraph else 1.5
+	_wind.emitting = true
+
+
 ## Linke Bildkante in Welt-x (Spiel rechnet x ab linkem Rand).
 func _origin_x() -> float:
 	return -stage.half_width()
@@ -519,3 +579,29 @@ func crash_fx() -> void:
 	gooby.emote("dizzy", 1.5)
 	Fx.burst(_burst, gooby.global_position + Vector3(0.0, 0.5, 0.0))
 	Fx.burst(_hop_puff, gooby.global_position + Vector3(0.0, 0.2, 0.2))
+
+
+## W17 M3: Trudel-Sturz einleiten — die eigentliche Fall-Animation treibt
+## crash_fall() aus dem Spiel-Takt (die Sim steht, Wertung längst fix).
+func begin_crash_fall() -> void:
+	_crashing = true
+	_crash_vy = 2.2
+	gooby.emote("dizzy", 2.0)
+
+
+## Gooby trudelt sichtbar zu Boden: Schwerkraft + Drehung, bei der Landung
+## kippt er auf die Seite und ein Staubpuff quittiert den Aufschlag.
+func crash_fall(delta: float, floor_y: float) -> void:
+	if not _crashing:
+		return
+	var ground := floor_y + 0.4
+	var airborne := gooby.position.y > ground + 0.01
+	_crash_vy -= 16.0 * delta
+	gooby.position.y = maxf(ground, gooby.position.y + _crash_vy * delta)
+	if airborne:
+		gooby.rotation.z += delta * 6.5
+		if gooby.position.y <= ground + 0.01:
+			gooby.rotation.z = PI * 0.5
+			Fx.burst(_hop_puff, gooby.global_position + Vector3(0.0, -0.1, 0.2))
+	_shadow.position.x = gooby.position.x
+	_shadow.scale = Vector3.ONE * clampf(1.0 - (gooby.position.y - 0.4 - _floor_y) / 6.0, 0.3, 1.0)
