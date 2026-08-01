@@ -69,6 +69,9 @@ var _vorn: VBoxContainer
 var _hinten: VBoxContainer
 var _flipping := false
 var _picker: CanvasLayer
+## G3: der "Foto ändern"-Knopf — hält den physischen Touch-Floor selbst
+## (der Profil-Screen skaliert nur sein eigenes Chrome).
+var _foto_btn: Button
 ## W14: Schmal-Modus (Hochformat-Telefone) — Feldzeilen stapeln Schlüssel
 ## über Wert wie die Web-Referenz (.b3-pass-field); breit bleibt einzeilig.
 var _schmal := false
@@ -91,6 +94,8 @@ func _ready() -> void:
 	_hinten = _baue_rueckseite()
 	_hinten.visible = false
 	add_child(_hinten)
+	_wende_floors_an()
+	get_viewport().size_changed.connect(_on_viewport_groesse)
 
 
 func _exit_tree() -> void:
@@ -388,9 +393,12 @@ func _baue_vorderseite() -> VBoxContainer:
 	foto_btn.theme_type_variation = &"BtnTeal"
 	foto_btn.text = I18nService.t("reisepass.foto_aendern")
 	foto_btn.focus_mode = Control.FOCUS_NONE
+	# G3: Grundmaß bleibt 48 Design-px — den physischen Touch-Floor legt
+	# _wende_floors_an nach dem Einhängen obendrauf (fix 48 px ≈ 15 pt hoch).
 	foto_btn.custom_minimum_size = Vector2(0.0, 48.0)
 	foto_btn.pressed.connect(_on_foto_aendern)
 	fuss.add_child(foto_btn)
+	_foto_btn = foto_btn
 	var hinweis := Label.new()
 	hinweis.name = "FlipHinweis"
 	hinweis.theme_type_variation = &"CaptionLabel"
@@ -589,11 +597,28 @@ func _baue_mrz() -> Control:
 ## ---------------------------------------------------------------- Picker
 
 
+## G3 (HOCH-Fix ui-profil §2): physischer Touch-Floor auf den Foto-Knopf —
+## beim Einhängen und nach Rotation/Resize (touch_target wächst monoton).
+func _wende_floors_an() -> void:
+	if not is_inside_tree() or _foto_btn == null or not is_instance_valid(_foto_btn):
+		return
+	ScreenShell.touch_target(_foto_btn, ScreenShell.metrics(get_viewport()))
+
+
+func _on_viewport_groesse() -> void:
+	if is_inside_tree():
+		_wende_floors_an()
+
+
 ## Galerie-Picker: Fotos aus dem FotoModus-Index (GalerieLogic-API, nur
 ## LESEND) als Kachel-Raster; Tap klebt das Foto in den Pass.
+## G3: Karte/Raster/Knöpfe skalieren jetzt mit den ScreenShell-Metrics
+## (vorher feste Design-px — auf Retina eine Briefmarke in Bildmitte).
 func _on_foto_aendern() -> void:
 	if _picker != null and is_instance_valid(_picker):
 		return
+	var m := ScreenShell.metrics(get_viewport())
+	var f: float = m["f"]
 	_picker = CanvasLayer.new()
 	_picker.name = "PassFotoPicker"
 	get_tree().root.add_child(_picker)
@@ -628,10 +653,10 @@ func _on_foto_aendern() -> void:
 		leer.theme_type_variation = &"SoftLabel"
 		leer.text = I18nService.t("reisepass.picker_leer")
 		leer.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		leer.custom_minimum_size = Vector2(320.0, 0.0)
+		leer.custom_minimum_size = Vector2(320.0 * f, 0.0)
 		box.add_child(leer)
 	else:
-		box.add_child(_baue_picker_raster(fotos))
+		box.add_child(_baue_picker_raster(fotos, m))
 	var leiste := HBoxContainer.new()
 	leiste.add_theme_constant_override("separation", 10)
 	box.add_child(leiste)
@@ -640,43 +665,55 @@ func _on_foto_aendern() -> void:
 		standard.name = "PickerStandard"
 		standard.theme_type_variation = &"BtnYellow"
 		standard.text = I18nService.t("reisepass.picker_standard")
-		standard.custom_minimum_size = Vector2(0.0, 48.0)
+		standard.custom_minimum_size = Vector2(0.0, 48.0 * f)
 		standard.focus_mode = Control.FOCUS_NONE
 		standard.pressed.connect(_on_picker_standard)
+		ScreenShell.touch_target(standard, m)
 		leiste.add_child(standard)
 	var abbrechen := SquishButton.new()
 	abbrechen.name = "PickerAbbrechen"
 	abbrechen.theme_type_variation = &"BtnGhost"
 	abbrechen.text = I18nService.t("reisepass.picker_abbrechen")
-	abbrechen.custom_minimum_size = Vector2(0.0, 48.0)
+	abbrechen.custom_minimum_size = Vector2(0.0, 48.0 * f)
 	abbrechen.focus_mode = Control.FOCUS_NONE
 	abbrechen.pressed.connect(_schliesse_picker)
+	ScreenShell.touch_target(abbrechen, m)
 	leiste.add_child(abbrechen)
+	# Picker hängt am CanvasLayer — die Font-Skalierung des Profil-Screens
+	# erreicht ihn nicht, also hier selbst skalieren.
+	ScreenShell.scale_fonts(wurzel, f)
 	UiMotion.pop_in(karte)
 
 
-func _baue_picker_raster(fotos: Array) -> Control:
+## G3: Raster-Breite an ScreenShell.card_width gekoppelt (statt fixer
+## 420×260), Spaltenzahl aus der Breite (2–4 statt fix 3), Kacheln ×f.
+func _baue_picker_raster(fotos: Array, m: Dictionary) -> Control:
+	var f: float = m["f"]
 	var scroll := ScrollContainer.new()
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	scroll.scroll_deadzone = 24
-	scroll.custom_minimum_size = Vector2(420.0, 260.0)
+	var breite := minf(420.0 * f, ScreenShell.card_width(m, 520.0) - 40.0 * f)
+	var hoehe := minf(
+		260.0 * f, maxf(ScreenShell.card_max_height(m) - 3.2 * float(m["floor_px"]), 160.0)
+	)
+	scroll.custom_minimum_size = Vector2(breite, hoehe)
 	var raster := GridContainer.new()
 	raster.name = "PickerRaster"
-	raster.columns = 3
+	raster.columns = clampi(int(breite / (140.0 * f)), 2, 4)
 	raster.add_theme_constant_override("h_separation", 10)
 	raster.add_theme_constant_override("v_separation", 10)
 	raster.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(raster)
 	for foto: Dictionary in fotos:
-		raster.add_child(_picker_kachel(str(foto["pfad"])))
+		raster.add_child(_picker_kachel(str(foto["pfad"]), f))
 	return scroll
 
 
-func _picker_kachel(pfad: String) -> Control:
+func _picker_kachel(pfad: String, f: float) -> Control:
 	var karte := Button.new()
 	karte.name = "FotoWahl_%s" % pfad.get_file().get_basename()
 	karte.theme_type_variation = &"AcCard"
-	karte.custom_minimum_size = Vector2(128.0, 96.0)
+	karte.custom_minimum_size = Vector2(128.0, 96.0) * f
 	karte.focus_mode = Control.FOCUS_NONE
 	karte.clip_contents = true
 	karte.pressed.connect(_on_foto_gewaehlt.bind(pfad))

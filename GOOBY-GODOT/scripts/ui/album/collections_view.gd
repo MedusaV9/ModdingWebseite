@@ -23,11 +23,16 @@ const SET_ICONS := {
 }
 const CHECK_ICON := "res://assets/ui/icons/check.svg"
 const COIN_ICON := "res://assets/ui/icons/coin.svg"
+## Web-Referenzwert — nur noch Fallback, solange keine Panelbreite bekannt
+## ist (W16/G3: Spaltenzahl kommt sonst responsiv aus `_slot_columns()`).
 const SLOT_COLUMNS := 5
 
 var _gs: Object = null
 var _cards_box: VBoxContainer
 var _f := 1.0
+## W16/G3: nutzbare Panelbreite + physischer Touch-Floor (vom Album).
+var _avail_w := 0.0
+var _floor_px := 0.0
 
 
 ## Web tintOf-Port: deterministische Pastellfarbe je Eintrag (hsl → hsv;
@@ -62,18 +67,40 @@ func refresh() -> void:
 		_cards_box.add_child(_build_set_card(str(def["id"]), c))
 
 
-## FIX1-Anschluss: UI-Faktor vom Album übernehmen (Retina-Skalierung).
-func apply_ui_factor(f: float) -> void:
-	if is_equal_approx(_f, f):
+## FIX1/W16-Anschluss: Layout-Kenngrößen vom Album übernehmen — Retina-
+## Faktor, nutzbare Panelbreite (responsive Slot-Spaltenzahl) und der
+## physische Touch-Floor für den Claim-Knopf.
+func apply_layout(f: float, avail_w: float, floor_px: float) -> void:
+	var unveraendert := (
+		is_equal_approx(_f, f)
+		and is_equal_approx(_avail_w, avail_w)
+		and is_equal_approx(_floor_px, floor_px)
+	)
+	if unveraendert:
 		return
 	_f = f
+	_avail_w = avail_w
+	_floor_px = floor_px
 	refresh()
+
+
+## W16/G3 (HOCH-Fix ui-profil §4): Spaltenzahl aus der REALEN Panelbreite
+## statt fix 5 — bei f=3 sprengten 5 Slot-Spalten (~900 px Mindestbreite)
+## das ~806-px-Panel im Hochformat (horizontal-Scroll ist DISABLED, das
+## Raster lief also rechts aus dem Bild).
+func _slot_columns() -> int:
+	if _avail_w <= 0.0:
+		return SLOT_COLUMNS
+	return clampi(int(_avail_w / (68.0 * maxf(_f, 1.0))), 3, 6)
 
 
 func _build_ui() -> void:
 	var scroll := ScrollContainer.new()
 	scroll.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	# W16/G3: Balken versteckt wie beim Sticker-Grid (G2-Scrollbalken-
+	# Regel) — der sichtbare Balken überlagerte sonst die Claim-Zeile.
+	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
 	scroll.scroll_deadzone = 24
 	add_child(scroll)
 	_cards_box = VBoxContainer.new()
@@ -138,7 +165,7 @@ func _build_hint(set_id: String) -> Control:
 func _build_entry_grid(set_id: String, c: Dictionary) -> Control:
 	var grid := GridContainer.new()
 	grid.name = "EntryGrid"
-	grid.columns = SLOT_COLUMNS
+	grid.columns = _slot_columns()
 	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	grid.add_theme_constant_override("h_separation", 10)
 	grid.add_theme_constant_override("v_separation", 10)
@@ -241,7 +268,9 @@ func _build_claim_row(set_id: String, c: Dictionary, progress: Dictionary) -> Co
 	var button := SquishButton.new()
 	button.name = "ClaimButton"
 	button.focus_mode = Control.FOCUS_NONE
-	button.custom_minimum_size = Vector2(0.0, 44.0 * maxf(_f, 1.0))
+	# W16/G3: physischer Touch-Floor — 44·f allein blieb im Hochformat
+	# (Floor ≈ 143 px bei f=3) knapp darunter.
+	button.custom_minimum_size = Vector2(0.0, maxf(44.0 * maxf(_f, 1.0), _floor_px))
 	# Web-Knopf trägt ein KLEINES Icon (13 px) — ohne Deckel füllt das
 	# Coin-SVG sonst die ganze Knopfhöhe.
 	button.add_theme_constant_override("icon_max_width", int(20 * maxf(_f, 1.0)))

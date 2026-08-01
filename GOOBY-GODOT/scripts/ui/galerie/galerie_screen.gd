@@ -25,6 +25,7 @@ var _gs: Object = null
 var _rows: VBoxContainer
 var _grid: GridContainer
 var _speicher_label: Label
+var _back_btn: Button
 var _filter_btn: Button
 var _leer_label: Label
 var _toasts: ToastLayer
@@ -34,6 +35,10 @@ var _voll_zoom := 0
 var _voll_rect: TextureRect
 var _voll_scroll: ScrollContainer
 var _voll_fav_btn: Button
+## G3: Vollansichts-Spalte + Knopfleiste — für die Safe-Area-Rahmung und
+## die Touch-Floors auch nach Rotation/Resize (Metrics-Hook).
+var _voll_spalte: VBoxContainer
+var _voll_leiste: Container
 var _bestaetigung: PanelContainer
 var _m: Dictionary = {}
 var _thumb_cache: Dictionary = {}
@@ -100,6 +105,7 @@ func _build_ui() -> void:
 	back.focus_mode = Control.FOCUS_NONE
 	back.pressed.connect(_on_back_pressed)
 	header.add_child(back)
+	_back_btn = back
 	var title := Label.new()
 	title.theme_type_variation = &"TitleLabel"
 	title.text = I18nService.t("galerie.titel")
@@ -158,6 +164,11 @@ func _apply_metrics() -> void:
 	# sonst überliefe das Foto-Raster die zentrierte Spalte.
 	var spalte := ScreenShell.content_width(_m)
 	_grid.columns = clampi(int(spalte / (240.0 * float(_m["f"]))), 2, 5)
+	# G3 (HOCH-Fix ui-profil §5): Tippflächen auf den physischen Floor —
+	# vorher hatte der Screen keinen einzigen touch_target-Aufruf.
+	ScreenShell.touch_target(_back_btn, _m)
+	ScreenShell.touch_target(_filter_btn, _m)
+	_rahme_vollansicht()
 
 
 ## ---------------------------------------------------------------- Raster
@@ -239,14 +250,13 @@ func _zeige_vollansicht(pfad: String) -> void:
 	abdunkler.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_voll.add_child(abdunkler)
 
+	# G3 (HOCH-Fix ui-profil §5): Safe-Area-Rahmung statt fixer ±16/±12-
+	# Offsets — sonst lag die Knopfleiste unter dem Home-Indicator und das
+	# Bild ragte in die Notch-Zone (Rahmung macht _rahme_vollansicht).
 	var spalte := VBoxContainer.new()
-	spalte.set_anchors_preset(Control.PRESET_FULL_RECT)
-	spalte.offset_left = 16.0
-	spalte.offset_right = -16.0
-	spalte.offset_top = 12.0
-	spalte.offset_bottom = -12.0
 	spalte.add_theme_constant_override("separation", 10)
 	_voll.add_child(spalte)
+	_voll_spalte = spalte
 
 	_voll_scroll = ScrollContainer.new()
 	_voll_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -284,6 +294,7 @@ func _zeige_vollansicht(pfad: String) -> void:
 	var leiste := HFlowContainer.new()
 	leiste.add_theme_constant_override("h_separation", 10)
 	spalte.add_child(leiste)
+	_voll_leiste = leiste
 	_voll_fav_btn = _voll_knopf(leiste, "FavBtn", "", _on_voll_favorit)
 	_refresh_fav_knopf()
 	_voll_knopf(leiste, "ZoomRein", I18nService.t("galerie.zoom_rein"), _zoom_rein)
@@ -295,14 +306,31 @@ func _zeige_vollansicht(pfad: String) -> void:
 	)
 	loeschen.theme_type_variation = &"BtnGhost"
 	_voll_knopf(leiste, "VollZurueck", I18nService.t("galerie.zurueck"), _schliesse_vollansicht)
+	_rahme_vollansicht()
+
+
+## G3: Vollansicht in die Safe-Area rahmen + Knopfleiste auf den Floor —
+## läuft beim Öffnen UND aus _apply_metrics (Rotation/Resize/extra_inset).
+func _rahme_vollansicht() -> void:
+	if _voll == null or not is_instance_valid(_voll) or _m.is_empty():
+		return
+	if _voll_spalte != null and is_instance_valid(_voll_spalte):
+		ScreenShell.frame(_voll_spalte, _m, 16.0, 12.0)
+	if _voll_leiste == null or not is_instance_valid(_voll_leiste):
+		return
+	for knopf in _voll_leiste.get_children():
+		if knopf is Control:
+			ScreenShell.touch_target(knopf as Control, _m)
 
 
 func _voll_knopf(parent: Control, node_name: String, text: String, aktion: Callable) -> Button:
 	var btn := SquishButton.new()
 	btn.name = node_name
 	btn.theme_type_variation = &"BtnTeal"
+	# G3: 48 Design-px × f statt fixer 48 px (≈15 pt auf Retina); den
+	# physischen Floor legt _rahme_vollansicht per touch_target obendrauf.
+	btn.custom_minimum_size = Vector2(0.0, 48.0 * float(_m.get("f", 1.0)))
 	btn.text = text
-	btn.custom_minimum_size = Vector2(0.0, 48.0)
 	btn.focus_mode = Control.FOCUS_NONE
 	btn.pressed.connect(aktion)
 	parent.add_child(btn)
@@ -313,6 +341,8 @@ func _schliesse_vollansicht() -> void:
 	if _voll != null and is_instance_valid(_voll):
 		_voll.queue_free()
 	_voll = null
+	_voll_spalte = null
+	_voll_leiste = null
 	_voll_pfad = ""
 
 
@@ -407,17 +437,17 @@ func _on_loeschen_gefragt() -> void:
 	ja.name = "LoeschenJa"
 	ja.theme_type_variation = &"BtnYellow"
 	ja.text = I18nService.t("galerie.loeschen_ja")
-	ja.custom_minimum_size = Vector2(0.0, 48.0)
 	ja.focus_mode = Control.FOCUS_NONE
 	ja.pressed.connect(_on_loeschen_bestaetigt)
+	ScreenShell.touch_target(ja, _m)
 	zeile.add_child(ja)
 	var nein := SquishButton.new()
 	nein.name = "LoeschenNein"
 	nein.theme_type_variation = &"BtnGhost"
 	nein.text = I18nService.t("galerie.abbrechen")
-	nein.custom_minimum_size = Vector2(0.0, 48.0)
 	nein.focus_mode = Control.FOCUS_NONE
 	nein.pressed.connect(func() -> void: _bestaetigung.queue_free())
+	ScreenShell.touch_target(nein, _m)
 	zeile.add_child(nein)
 	var ziel: Control = _voll if _voll != null and is_instance_valid(_voll) else self
 	ziel.add_child(_bestaetigung)

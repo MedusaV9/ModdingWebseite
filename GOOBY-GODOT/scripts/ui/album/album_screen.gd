@@ -14,6 +14,12 @@ extends Control
 ## Kacheln skalieren über die zentrale Regel `UiScale.for_viewport()` und
 ## respektieren die Safe-Area — vorher waren alle Größen feste Design-px
 ## (Rail 240, Kacheln 190×200) und auf Retina-Geräten winzig.
+##
+## W16/G3 (Inhaltsspalte, Album-Sonderfall — Entscheid): das Rail+Seiten-
+## Layout bekommt eine EIGENE Spalten-Basis 880 (`content_frame`), weil die
+## 660er-Listen-Spalte für Rail + Grid zu schmal wäre; im HOCHFORMAT wird
+## die Rail zur horizontalen Top-Chip-Leiste ÜBER dem Grid (vorher fraß die
+## linke Rail 32 % der Breite und ließ nur 2 Mini-Spalten übrig).
 
 signal ready_for_reveal
 
@@ -34,6 +40,9 @@ const RARITY_BORDER := {
 ## Set-komplett-Belohnung (BACKLOG-REST §4): Münzen je vervollständigter
 ## Seite, einmalig — Claim persistiert in stickers.setRewards[page_id].
 const SET_REWARD_COINS := 120
+## W16/G3: eigene Spalten-Basis des Albums (Rail+Grid brauchen mehr Luft
+## als die 660er-Listen-Spalte — Entwurf ui-architektur §6.4 Welle 3).
+const SPALTE_BASIS := 880.0
 
 ## Tests: Navigation abschaltbar.
 var auto_navigate := true
@@ -53,7 +62,7 @@ var _page_title: Label
 var _page_icon: TextureRect
 var _page_progress: Label
 var _count_label: Label
-var _rail_box: VBoxContainer
+var _rail_box: BoxContainer
 var _toasts: ToastLayer
 var _sheet: PanelSheet
 var _unlocks: StickerUnlocks
@@ -61,6 +70,8 @@ var _unlocks: StickerUnlocks
 var _f := 1.0
 var _tile := Vector2(190, 200)
 var _rows_box: VBoxContainer
+## W16/G3: Rail/Panel-Teiler — quer nebeneinander, hochkant gestapelt.
+var _split: BoxContainer
 var _rail_scroll: ScrollContainer
 var _back_btn: Button
 var _title_label: Label
@@ -116,22 +127,21 @@ func _on_viewport_resized() -> void:
 	_show_page(_current_page)
 
 
+## W16/G3 (pur, testbar): Hochformat = kurze Kante ist die Breite.
+static func ist_hochformat(canvas: Vector2) -> bool:
+	return canvas.y > canvas.x
+
+
 ## FIX1: zentrale Skalierung + Safe-Area auf Chrome/Rail/Kacheln anwenden
 ## (bei Rotation/Resize erneut — Kacheln baut _show_page danach neu).
+## W16/G3: `_rows_box` liegt jetzt in der zentrierten Inhaltsspalte
+## (eigene Basis 880, Meta-Flag fürs FB3-Audit); die Rail wechselt je
+## Orientierung zwischen linker Spalte (quer) und Top-Chip-Leiste (hoch).
 func _apply_metrics() -> void:
-	_f = UiScale.for_viewport(get_viewport())
-	var canvas := Vector2(get_viewport().get_visible_rect().size)
-	var insets := UiScale.safe_insets_canvas(get_viewport())
-	_rows_box.offset_left = 24.0 + float(insets["left"])
-	_rows_box.offset_right = -24.0 - float(insets["right"])
-	_rows_box.offset_top = 16.0 + float(insets["top"])
-	_rows_box.offset_bottom = -16.0 - float(insets["bottom"])
-	# FB3: voller PHYSISCHER Touch-Floor (Retina-Faktor) — die alte
-	# Canvas-Heuristik ×0.85 ließ die Seiten-Chips auf 40 pt schrumpfen.
-	var floor_px := maxf(
-		HudLayoutLogic.touch_floor_canvas(canvas),
-		float(AcTokens.TOUCH_FLOOR) * UiScale.touch_px_per_pt(get_viewport())
-	)
+	var m := ScreenShell.metrics(get_viewport())
+	_f = m["f"]
+	var floor_px: float = m["floor_px"]
+	ScreenShell.content_frame(_rows_box, m, SPALTE_BASIS)
 	_back_btn.custom_minimum_size = Vector2(0.0, maxf(44.0 * _f, floor_px))
 	_scale_font(_back_btn, 17)
 	_scale_font(_title_label, AcTokens.FONT_SIZE_TITLE)
@@ -139,29 +149,61 @@ func _apply_metrics() -> void:
 	_scale_font(_page_title, 24)
 	if _page_icon != null:
 		_page_icon.custom_minimum_size = Vector2.ONE * roundf(24.0 * maxf(_f, 1.0))
-	# Rail wächst mit, bleibt aber unter ~1/3 der Breite (Hochkant).
-	_rail_scroll.custom_minimum_size = Vector2(minf(240.0 * _f, canvas.x * 0.32), 0.0)
-	for chip in _rail_box.get_children():
-		if chip is Control:
-			(chip as Control).custom_minimum_size = Vector2(0.0, maxf(40.0 * _f, floor_px))
-			_scale_font(chip as Control, AcTokens.FONT_SIZE_CAPTION)
+	var hoch := ist_hochformat(m["canvas"])
+	var spalte := ScreenShell.content_width(m, SPALTE_BASIS)
+	_layout_rail(hoch, spalte, floor_px)
 	# Kacheln: Restbreite auf 2..4 Spalten aufteilen (Seitenverhältnis wie
 	# die alte 190×200-Kachel). W14: Lücken aufs 8er-Raster (16 statt 14) —
 	# MUSS zur split-/Grid-Separation in _build_ui/_build_page_panel passen.
-	var avail := (
-		canvas.x
-		- (24.0 + float(insets["left"]))
-		- (24.0 + float(insets["right"]))
-		- _rail_scroll.custom_minimum_size.x
-		- 16.0
-	)
+	var avail := spalte
+	if not hoch:
+		avail -= _rail_scroll.custom_minimum_size.x + 16.0
 	var cols := clampi(int(floorf((avail + 16.0) / (190.0 * _f + 16.0))), 2, 4)
 	_grid.columns = cols
 	var tile_w := (avail - 16.0 * float(cols - 1)) / float(cols)
 	_tile = Vector2(tile_w, tile_w * 200.0 / 190.0)
-	# W13/SAMMLUNG: UI-Faktor an die Sammlungs-View weiterreichen (FIX1).
+	# W13/SAMMLUNG: Layout-Kenngrößen an die Sammlungs-View weiterreichen
+	# (FIX1 + W16: reale Panelbreite für die responsive Slot-Spaltenzahl).
 	if _collections_view != null:
-		_collections_view.apply_ui_factor(_f)
+		_collections_view.apply_layout(_f, avail, floor_px)
+
+
+## W16/G3: Rail-Ausrichtung je Orientierung. Hochformat: horizontale
+## Chip-Leiste über dem Grid (Chips in natürlicher Breite, Leiste scrollt
+## seitwärts, Balken versteckt — Zentrier-Diebstahl-Regel aus G2/SPALTE);
+## Querformat: vertikale Spalte, Chips füllen die Rail-Breite und ellipsen
+## (W14-P0-Regel gegen die Mindestbreiten-Blähung).
+func _layout_rail(hoch: bool, spalte: float, floor_px: float) -> void:
+	_split.vertical = hoch
+	_rail_box.vertical = not hoch
+	if hoch:
+		_rail_scroll.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+		_rail_scroll.custom_minimum_size = Vector2.ZERO
+		_rail_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
+		_rail_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	else:
+		_rail_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		# Rail wächst mit, bleibt aber unter ~1/3 der Spaltenbreite.
+		_rail_scroll.custom_minimum_size = Vector2(minf(240.0 * _f, spalte * 0.32), 0.0)
+		_rail_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		_rail_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	for chip in _rail_box.get_children():
+		if chip is Button:
+			_layout_chip(chip as Button, hoch, floor_px)
+
+
+## FB3: voller PHYSISCHER Touch-Floor je Chip (Retina-Faktor) — die alte
+## Canvas-Heuristik ×0.85 ließ die Seiten-Chips auf 40 pt schrumpfen.
+func _layout_chip(chip: Button, hoch: bool, floor_px: float) -> void:
+	chip.custom_minimum_size = Vector2(0.0, maxf(40.0 * _f, floor_px))
+	_scale_font(chip, AcTokens.FONT_SIZE_CAPTION)
+	if hoch:
+		chip.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+		chip.clip_text = false
+		chip.text_overrun_behavior = TextServer.OVERRUN_NO_TRIMMING
+	else:
+		chip.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		_clamp_chip_text(chip)
 
 
 ## Font nur bei echtem Faktor überschreiben — bei 1.0 bleibt das Theme.
@@ -199,10 +241,13 @@ func _build_ui() -> void:
 	_rows_box = rows
 	rows.add_child(_build_header())
 
-	var split := HBoxContainer.new()
+	# W16/G3: BoxContainer statt HBox — _layout_rail kippt ihn im
+	# Hochformat auf vertikal (Rail-Leiste oben, Seiten-Panel darunter).
+	var split := BoxContainer.new()
 	split.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	split.add_theme_constant_override("separation", 16)
 	rows.add_child(split)
+	_split = split
 	split.add_child(_build_rail())
 	split.add_child(_build_page_panel())
 
@@ -251,7 +296,9 @@ func _build_rail() -> Control:
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	scroll.scroll_deadzone = 24
 	_rail_scroll = scroll
-	_rail_box = VBoxContainer.new()
+	# W16/G3: BoxContainer — _layout_rail kippt die Chip-Achse je Format.
+	_rail_box = BoxContainer.new()
+	_rail_box.vertical = true
 	_rail_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_rail_box.add_theme_constant_override("separation", 8)
 	scroll.add_child(_rail_box)
@@ -389,6 +436,11 @@ func _build_page_panel() -> Control:
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	# W16/G3 (G2-Scrollbalken-Regel): der sichtbare V-Balken addiert seine
+	# Breite auf die Grid-Mindestbreite und drückte die Inhaltsspalte um
+	# ~7 px aus dem Safe-Zentrum (FB3 content_mitte). Touch-Drag/Mausrad
+	# funktionieren unverändert.
+	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
 	scroll.scroll_deadzone = 24
 	panel.add_child(scroll)
 	_grid_scroll = scroll
