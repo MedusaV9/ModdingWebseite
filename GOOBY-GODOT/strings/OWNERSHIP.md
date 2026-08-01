@@ -105,3 +105,9 @@ Regeln:
 *(Doku-Pass W15/INTEGRATE: alle zuvor per >> angehängten Domains — zuletzt
 `urlaub.*` — sind in die Tabelle oben gehoben; neue Nachträge bitte wieder
 ans Dateiende per >> anhängen, der nächste Doku-Pass hebt sie.)*
+
+>> `mg.carrotGuard.intro` (Datei `strings/<locale>/mg_carrot.json` — Intro-Banner der
+W16/G3-Politur P10 MG-CARROT; alle übrigen `mg.carrotGuard.*`-Keys bleiben beim
+MG-1-Owner in `mg_batch1.json`) | G3 P10 MG-CARROT | W16
+
+>> NEUE `mail.compose.verwerfen_frage`/`mail.compose.weiterschreiben`-Keys (Datei `strings/<locale>/g3_post.json` — Nachfrage-Karte des MailSheet-Compose-Guards; `mail.*` bleibt W13B-MAIL-Domain, Loader merged flach) | G3 P07 UI-POST | W16

@@ -11,9 +11,32 @@ extends MinigameBase
 ## (echtes Rig) hält Wache. Die Hügel liegen per ground_point-Raycast EXAKT
 ## unter den 2D-Tap-Rechtecken (_holes) — Eingabe und Trefferflächen bleiben
 ## zahlengleich, die MECHANIK unangetastet.
+##
+## W16/G3-Politur (NUR Präsentation): Möhren-Icon-Reihe statt „n/max“-Text
+## (Klau fliegt sichtbar aus dem Slot), Kombo-Pips zur 5er-Bonus-Kombo,
+## König-Banner mittig mit Kontur (M7), _ui-Skalierung des HUD (M9),
+## Timer-Urgenz unter 5 s und ein Intro-Beat (M1), der die Sim gatet.
 
 const Stage := preload("res://scripts/minigames/games/carrot_guard/carrot_guard_stage3d.gd")
 const Kit := preload("res://scripts/minigames/games/carrot_catch/mpb_garden_kit.gd")
+
+## W16 M9: Entwurfs-Kurzkante — HUD-Pixelmaße skalieren damit (hide_seek-Muster).
+const DESIGN_SHORT := 390.0
+## W16 M1: Intro-Beat (s) — Kamera-Totale + Ziel-Banner, die Sim wartet.
+const INTRO_S := 1.5
+## Timer-Urgenz: unter so vielen Restsekunden pulsiert die Zeit rot + tickt.
+const URGENT_UNDER_S := 5.0
+## Flugdauer (s) der HUD-Möhre, wenn ein Klau ihren Slot leert.
+const ICON_FLY_S := 0.6
+## Möhren-Icon-Farben (Körper, Blattschopf) und der geleerte Slot.
+const ICON_BODY := Color(0.91, 0.47, 0.16)
+const ICON_LEAF := Color(0.38, 0.63, 0.32)
+const ICON_EMPTY := Color(0.45, 0.38, 0.3, 0.22)
+## Kombo-Pips: gefüllt, Gold-Blitz beim Bonus, leerer Ring, Riss-Blitz.
+const PIP_FILL := Color(0.42, 0.66, 0.34)
+const PIP_GOLD := Color(1.0, 0.78, 0.25)
+const PIP_RING := Color(0.55, 0.48, 0.4, 0.55)
+const PIP_BREAK := Color(0.9, 0.35, 0.3, 0.9)
 
 var tune: Dictionary = {}
 var rng: GoobyRng
@@ -32,13 +55,25 @@ var view_size := Vector2(390.0, 844.0)
 var landscape := false
 
 var _time_label: Label
-var _carrot_label: Label
 var _hint_label: Label
 var _holes: Array[Rect2] = []
 var _stage: Node3D
 var _pulse := 0.0
 var _hud_plate := Kit.hud_plate()
 var _hint_plate := Kit.hud_plate()
+var _ui := 1.0
+var _intro_left := 0.0
+var _banner := ""
+var _banner_t := 0.0
+var _banner_gold := false
+var _banner_plate := StyleBoxFlat.new()
+var _vignette := 0.0
+var _vignette_box := StyleBoxFlat.new()
+## Klau-Flüge im HUD: {"slot": geleerter Icon-Index, "t": Flugzeit}.
+var _fly_icons: Array[Dictionary] = []
+var _pip_flash := 0.0
+var _pip_break := 0.0
+var _last_tick_sec := -1
 
 
 func setup(context: MinigameCtx) -> void:
@@ -55,6 +90,10 @@ func setup(context: MinigameCtx) -> void:
 		ctx.juice.world_environment = _stage.stage.world_env
 	_build_hud()
 	_fit_viewport()
+	# W16 M1: Intro-Beat — Kamera-Totale des Gartens + Ziel-Banner; die Sim
+	# (elapsed/Spawn-Uhr) wartet, der Lauf bleibt danach zahlengleich.
+	_intro_left = INTRO_S
+	_set_banner(I18nService.t("mg.carrotGuard.intro"), false, INTRO_S + 0.7)
 	if is_inside_tree():
 		get_viewport().size_changed.connect(_fit_viewport)
 
@@ -69,6 +108,7 @@ func apply_view(size: Vector2) -> void:
 	if size.x > 1.0 and size.y > 1.0:
 		view_size = size
 	landscape = view_size.x > view_size.y
+	_ui = clampf(minf(view_size.x, view_size.y) / DESIGN_SHORT, 0.75, 3.0)
 	position = Vector2.ZERO
 	var grid := int(tune.get("GRID", 3))
 	# Quer braucht das Feld MEHR Kopfraum: die oberste Reihe raycastet sonst
@@ -103,32 +143,31 @@ func apply_view(size: Vector2) -> void:
 
 ## HUD IMMER aus dem Viewport-Rect stellen: unter canvas_items-Stretch sind
 ## Canvas-Einheiten ≠ Fensterpixel, apply_view-Größen können abweichen.
+## W16 M9: alle Pixelmaße skalieren mit dem _ui-Faktor (Kurzkante/390).
 func _layout_hud() -> void:
 	if _time_label == null:
 		return
 	var vp := get_viewport_rect().size
-	_time_label.position = Vector2(16.0, 10.0)
-	_carrot_label.position = Vector2(16.0, 48.0)
-	_hint_label.position = Vector2(vp.x * 0.5 - 170.0, vp.y - 42.0)
-	_hint_label.size = Vector2(340.0, 34.0)
+	_time_label.position = Vector2(16.0, 8.0) * _ui
+	_time_label.add_theme_font_size_override("font_size", int(26.0 * _ui))
+	var hint_w := minf(vp.x - 32.0 * _ui, 360.0 * _ui)
+	_hint_label.add_theme_font_size_override("font_size", int(15.0 * _ui))
+	_hint_label.position = Vector2((vp.x - hint_w) * 0.5, vp.y - 48.0 * _ui)
+	_hint_label.size = Vector2(hint_w, 42.0 * _ui)
 
 
 func _build_hud() -> void:
 	_time_label = Label.new()
 	_time_label.theme_type_variation = &"HeadlineLabel"
 	add_child(_time_label)
-	_carrot_label = Label.new()
-	_carrot_label.theme_type_variation = &"CaptionLabel"
-	# W14 Quick-Win: der Karotten-Zähler ist DIE Verlust-Anzeige des Spiels,
-	# war aber als Mini-Caption im Schild kaum lesbar (Audit: HUD gequetscht).
-	_carrot_label.add_theme_font_size_override("font_size", 22)
-	_carrot_label.add_theme_color_override("font_color", Color(0.82, 0.42, 0.16))
-	add_child(_carrot_label)
 	_hint_label = Label.new()
 	_hint_label.theme_type_variation = &"SoftLabel"
 	_hint_label.text = I18nService.t("mg.carrotGuard.hint")
 	_hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	add_child(_hint_label)
+	_banner_plate.set_corner_radius_all(12)
+	_vignette_box.draw_center = false
 	_update_labels()
 
 
@@ -139,8 +178,21 @@ func _fit_viewport() -> void:
 func _process(delta: float) -> void:
 	if not is_active() or finished:
 		return
+	# W16 Intro-Beat (M1): Kamera schwebt aus der Garten-Totale in die
+	# Spielpose, das Ziel steht als Banner — elapsed und Spawn-Uhr warten,
+	# der Lauf bleibt zahlengleich (Crosscheck-Vertrag unberührt).
+	if _intro_left > 0.0:
+		_intro_left = maxf(0.0, _intro_left - delta)
+		_pulse += delta
+		_stage.establish(1.0 if _reduced_motion() else 1.0 - _intro_left / INTRO_S)
+		_banner_t = maxf(0.0, _banner_t - delta)
+		_stage.sync(moles, king, carrots, _pulse, delta)
+		_update_labels()
+		queue_redraw()
+		return
 	elapsed += delta
 	_pulse += delta
+	_tick_hud_fx(delta)
 	_spawn_tick(delta)
 	_mole_tick(delta)
 	if CarrotGuardLogic.is_round_over(
@@ -194,13 +246,12 @@ func _spawn_king() -> void:
 		"up": 0.0,
 	}
 	AudioDirector.try_play(self, "gvz_boss")
+	# W16 M7: zentriertes Banner mit Kontur statt float_text mit magischem
+	# −110-px-Offset; dazu ein kurzer Gold-Vignette-Puls am Bildrand.
+	_set_banner(I18nService.t("mg.carrotGuard.king"), true)
+	_vignette = 0.55
 	if ctx.juice != null:
 		ctx.juice.bloom_pulse(0.8)
-		ctx.juice.float_text(
-			Vector2(view_size.x * 0.5 - 110.0, view_size.y * 0.24),
-			I18nService.t("mg.carrotGuard.king"),
-			AcTokens.GOLD
-		)
 
 
 func _mole_tick(delta: float) -> void:
@@ -215,9 +266,16 @@ func _mole_tick(delta: float) -> void:
 			kept.append(mole)
 			continue
 		# Entwischt: eine Karotte weg, Kombo futsch.
+		var had_combo := combo > 0
 		var escaped := CarrotGuardLogic.apply_escape({"carrots": carrots, "combo": combo})
 		carrots = int(escaped["carrots"])
 		combo = int(escaped["combo"])
+		# HUD-Echo des Klaus: die Möhre fliegt sichtbar aus ihrem Slot
+		# (Index = neuer Bestand); Reduced Motion graut nur aus.
+		if not _reduced_motion():
+			_fly_icons.append({"slot": carrots, "t": 0.0})
+		if had_combo:
+			_pip_break = 0.45
 		AudioDirector.try_play(self, "mg_spill")
 		_stage.steal_fx(int(mole["hole"]))
 		if ctx.juice != null:
@@ -246,7 +304,7 @@ func _free_holes() -> Array[int]:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if not is_active() or finished:
+	if not is_active() or finished or _intro_left > 0.0:
 		return
 	var pressed := event is InputEventScreenTouch and (event as InputEventScreenTouch).pressed
 	if not pressed:
@@ -269,6 +327,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		_bonk(i)
 		return
 	# Danebengehauen: kein Punktverlust, aber die Kombo ist weg.
+	if combo > 0:
+		_pip_break = 0.45
 	combo = int(CarrotGuardLogic.apply_whiff({"combo": combo})["combo"])
 	AudioDirector.try_play(self, "mg_junk", 0.9)
 	_stage.whiff_fx(hole)
@@ -287,6 +347,9 @@ func _bonk(index: int) -> void:
 	var pos := _holes[hole].get_center()
 	_stage.bonk_fx(hole)
 	AudioDirector.try_play(self, "gvz_pop", 1.0 + 0.02 * minf(combo, 10.0))
+	# Volle Fünferserie: die Kombo-Pips blitzen gold auf (persistente Anzeige).
+	if int(result["bonus"]) > 0:
+		_pip_flash = 0.6
 	if ctx.juice != null:
 		ctx.juice.float_text(pos, "+%d" % delta, AcTokens.LEAF_DARK)
 		ctx.juice.hit_freeze(45)
@@ -350,32 +413,209 @@ func _update_labels() -> void:
 			{"n": int(tune["CARROTS"]) - carrots, "max": int(tune["ENDLESS_STOLEN"])}
 		)
 	else:
-		var left := maxi(0, int(ceil(float(tune["DURATION_SEC"]) - elapsed)))
-		_time_label.text = I18nService.t("mg.game.time", {"sec": left})
-	_carrot_label.text = I18nService.t(
-		"mg.carrotGuard.carrots", {"n": carrots, "max": int(tune["CARROTS"])}
-	)
+		var left := maxf(0.0, float(tune["DURATION_SEC"]) - elapsed)
+		_time_label.text = I18nService.t("mg.game.time", {"sec": int(ceil(left))})
+		_sync_urgency(left)
 	_hint_label.modulate.a = _hint_alpha()
 
 
-## Milchglas hinter Zeit/Karotten und dem Hinweis: die Wiese zog sonst direkt
-## durch die Ziffern (Lesbarkeit auf dem Handy).
+## Timer-Urgenz (W16 Befund 5): unter 5 s Restzeit pulsiert die Zeit rot
+## (Reduced Motion: statisch rot) und tickt einmal je Restsekunde mit
+## steigendem Pitch — vorhandenes ui_tick, kein neues Audio-Asset.
+func _sync_urgency(left: float) -> void:
+	if left > URGENT_UNDER_S or left <= 0.0:
+		_time_label.remove_theme_color_override("font_color")
+		return
+	var pulse := 1.0 if _reduced_motion() else 0.62 + 0.38 * sin(elapsed * 9.0)
+	_time_label.add_theme_color_override(
+		"font_color", Color(1.0, 0.85, 0.8).lerp(AcTokens.DANGER, pulse)
+	)
+	var sec := int(ceil(left))
+	if sec != _last_tick_sec:
+		_last_tick_sec = sec
+		AudioDirector.try_play(self, "ui_tick", 0.9 + 0.5 * (1.0 - left / URGENT_UNDER_S))
+
+
+## Zerfall der reinen HUD-Effekte (Banner, Vignette, Pip-Blitze, Klau-Flüge).
+func _tick_hud_fx(delta: float) -> void:
+	_banner_t = maxf(0.0, _banner_t - delta)
+	_vignette = maxf(0.0, _vignette - delta)
+	_pip_flash = maxf(0.0, _pip_flash - delta)
+	_pip_break = maxf(0.0, _pip_break - delta)
+	var kept: Array[Dictionary] = []
+	for entry: Dictionary in _fly_icons:
+		entry["t"] = float(entry["t"]) + delta
+		if float(entry["t"]) < ICON_FLY_S:
+			kept.append(entry)
+	_fly_icons = kept
+
+
+func _set_banner(text: String, gold := false, sec := 1.4) -> void:
+	_banner = text
+	_banner_gold = gold
+	_banner_t = sec
+
+
+## Reduced-Motion-Abfrage (Duck-Typing wie im JuiceKit — ohne Autoload = aus).
+func _reduced_motion() -> bool:
+	if not is_inside_tree():
+		return true
+	var settings := get_node_or_null(^"/root/AppSettings")
+	if settings != null and settings.has_method("is_reduced_motion"):
+		return settings.is_reduced_motion()
+	return false
+
+
+## Milchglas hinter Zeit/Möhrenreihe/Pips und dem Hinweis: die Wiese zog
+## sonst direkt durch die Ziffern (Lesbarkeit auf dem Handy).
 func _draw() -> void:
 	if _time_label == null:
 		return
-	var top_left := _time_label.position - Vector2(12.0, 6.0)
-	var bottom_right := (
-		_carrot_label.position
-		+ Vector2(maxf(_time_label.size.x, _carrot_label.size.x), _carrot_label.size.y)
-		+ Vector2(12.0, 6.0)
-	)
-	draw_style_box(_hud_plate, Rect2(top_left, bottom_right - top_left))
+	_draw_hud_block()
+	_draw_fly_icons()
 	var hint_a := _hint_alpha()
 	if hint_a > 0.0:
 		_hint_plate.bg_color = Color(1.0, 0.99, 0.94, 0.72 * hint_a)
 		draw_style_box(
 			_hint_plate, Rect2(_hint_label.position - Vector2(0.0, 2.0), _hint_label.size)
 		)
+	_draw_banner()
+	_draw_vignette()
+
+
+## Plate + Möhren-Icon-Reihe (10 Slots) + Kombo-Pips: die Verlust-Anzeige ist
+## ablesbar statt „n/max“-Text (W16 Befund 1/3); der Klau graut den Slot aus.
+func _draw_hud_block() -> void:
+	var total := maxi(1, int(tune.get("CARROTS", 10)))
+	var icons_end := _icon_rect(total - 1).end
+	var pip_y := icons_end.y + 12.0 * _ui
+	var pip_r := 5.0 * _ui
+	var pad := Vector2(12.0, 6.0) * _ui
+	var content_br := Vector2(
+		maxf(_time_label.position.x + _time_label.size.x, icons_end.x), pip_y + pip_r
+	)
+	draw_style_box(
+		_hud_plate, Rect2(_time_label.position - pad, content_br - _time_label.position + pad * 2.0)
+	)
+	for i in total:
+		if i < carrots:
+			_draw_carrot_icon(_icon_rect(i), ICON_BODY, ICON_LEAF)
+		else:
+			_draw_carrot_icon(_icon_rect(i), ICON_EMPTY, ICON_EMPTY)
+	_draw_combo_pips(pip_y, pip_r)
+
+
+## Slot-Rechteck einer HUD-Möhre (0-basiert) — auch der Klau-Flug startet hier.
+func _icon_rect(i: int) -> Rect2:
+	var s := 20.0 * _ui
+	var origin := _time_label.position + Vector2(0.0, 36.0 * _ui)
+	return Rect2(origin + Vector2(float(i) * (s + 4.0 * _ui), 0.0), Vector2(s, s))
+
+
+## Stilisierte Mini-Möhre: Körper-Dreieck + zwei Blattschopf-Dreiecke.
+func _draw_carrot_icon(rect: Rect2, body: Color, leaf: Color) -> void:
+	var w := rect.size.x
+	var p := rect.position
+	var tri := PackedVector2Array(
+		[p + Vector2(w * 0.16, w * 0.3), p + Vector2(w * 0.84, w * 0.3), p + Vector2(w * 0.5, w)]
+	)
+	draw_colored_polygon(tri, body)
+	var left_leaf := PackedVector2Array(
+		[
+			p + Vector2(w * 0.5, w * 0.34),
+			p + Vector2(w * 0.2, w * 0.02),
+			p + Vector2(w * 0.42, w * 0.3),
+		]
+	)
+	draw_colored_polygon(left_leaf, leaf)
+	var right_leaf := PackedVector2Array(
+		[
+			p + Vector2(w * 0.5, w * 0.34),
+			p + Vector2(w * 0.8, w * 0.02),
+			p + Vector2(w * 0.58, w * 0.3),
+		]
+	)
+	draw_colored_polygon(right_leaf, leaf)
+
+
+## Der Klau fliegt SICHTBAR aus dem HUD: die Möhre des geleerten Slots segelt
+## rotierend nach oben-rechts raus und verblasst (W16 Befund 1).
+func _draw_fly_icons() -> void:
+	for entry: Dictionary in _fly_icons:
+		var f := clampf(float(entry["t"]) / ICON_FLY_S, 0.0, 1.0)
+		var rect := _icon_rect(int(entry["slot"]))
+		var center := rect.get_center() + Vector2(34.0, -50.0) * _ui * f
+		var alpha := clampf(1.0 - f * 1.15, 0.0, 1.0)
+		draw_set_transform(center, f * 2.4, Vector2.ONE)
+		var local := Rect2(-rect.size * 0.5, rect.size)
+		_draw_carrot_icon(local, Color(ICON_BODY, alpha), Color(ICON_LEAF, alpha))
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+## Kombo-Pips (W16 Befund 3): der Fortschritt zur 5er-Bonus-Kombo ist
+## PERSISTENT ablesbar — Gold-Blitz beim Bonus, roter Riss-Blitz bei
+## Whiff/Klau (unter Reduced Motion ohne Grössen-Puls).
+func _draw_combo_pips(y: float, r: float) -> void:
+	var filled := pip_fill_for(combo)
+	var grow := 1.25 if _pip_flash > 0.0 and not _reduced_motion() else 1.0
+	for i in 5:
+		var at := Vector2(_time_label.position.x + r + float(i) * 16.0 * _ui, y)
+		if i < filled:
+			draw_circle(at, r * grow, PIP_GOLD if _pip_flash > 0.0 else PIP_FILL)
+		else:
+			var rim := PIP_BREAK if _pip_break > 0.0 else PIP_RING
+			draw_arc(at, r - 1.0 * _ui, 0.0, TAU, 20, rim, 2.0 * _ui)
+
+
+## Gefüllte Kombo-Pips (0..5) zum Stand `combo_now` — PUR für Tests: der
+## Bonus zahlt bei JEDEM Vielfachen von 5, das fünfte Pip leuchtet also dort.
+static func pip_fill_for(combo_now: int) -> int:
+	if combo_now <= 0:
+		return 0
+	var m := combo_now % 5
+	return 5 if m == 0 else m
+
+
+## Banner mittig mit Milchglas-Plate und Kontur (M7, hide_seek-Muster) —
+## König-Ankündigung und Intro-Ziel; lange Texte brechen um.
+func _draw_banner() -> void:
+	if _banner_t <= 0.0 or _banner.is_empty():
+		return
+	var font := ThemeService.font(800)
+	var alpha := clampf(_banner_t * 1.4, 0.0, 1.0)
+	var font_size := int(26.0 * _ui)
+	var w := minf(view_size.x * 0.92, 460.0 * _ui)
+	var text_size := font.get_multiline_string_size(
+		_banner, HORIZONTAL_ALIGNMENT_CENTER, w, font_size
+	)
+	var top := view_size.y * 0.26
+	var pad := Vector2(18.0 * _ui, 10.0 * _ui)
+	_banner_plate.set_corner_radius_all(int(12.0 * _ui))
+	_banner_plate.bg_color = (
+		Color(1.0, 0.93, 0.62, 0.82 * alpha)
+		if _banner_gold
+		else Color(1.0, 0.99, 0.94, 0.74 * alpha)
+	)
+	var plate_pos := Vector2((view_size.x - text_size.x) * 0.5, top) - pad
+	draw_style_box(_banner_plate, Rect2(plate_pos, text_size + pad * 2.0))
+	var ink := Color(0.62, 0.4, 0.1, alpha) if _banner_gold else Color(0.32, 0.24, 0.28, alpha)
+	var rim := Color(1.0, 1.0, 1.0, 0.75 * alpha)
+	var at := Vector2((view_size.x - w) * 0.5, top + font.get_ascent(font_size))
+	draw_multiline_string_outline(
+		font, at, _banner, HORIZONTAL_ALIGNMENT_CENTER, w, font_size, -1, int(5.0 * _ui), rim
+	)
+	draw_multiline_string(font, at, _banner, HORIZONTAL_ALIGNMENT_CENTER, w, font_size, -1, ink)
+
+
+## Kurzer Gold-Puls am Bildrand zur König-Ankündigung (M7-Zusatz).
+func _draw_vignette() -> void:
+	if _vignette <= 0.0:
+		return
+	var a := clampf(_vignette * 1.8, 0.0, 1.0)
+	_vignette_box.set_border_width_all(int(10.0 * _ui))
+	_vignette_box.set_corner_radius_all(int(18.0 * _ui))
+	_vignette_box.border_color = Color(1.0, 0.8, 0.3, 0.5 * a)
+	draw_style_box(_vignette_box, Rect2(Vector2.ZERO, view_size))
 
 
 ## Der Hinweis blendet nach ein paar Sekunden aus — das Beet gehört dann ganz

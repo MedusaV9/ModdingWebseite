@@ -23,6 +23,14 @@ const MOLE_FUR := Color(0.48, 0.39, 0.33)
 const KING_FUR := Color(0.42, 0.31, 0.48)
 ## Flugdauer der geklauten Möhre (Beet → Loch).
 const STEAL_SEC := 0.5
+## Spielpose der Kamera — frame() stellt sie exakt so, establish() schwebt
+## aus der Garten-Totale hinein, layout() raycastet IMMER aus dieser Pose.
+const CAM_POS := Vector3(0.0, 10.5, 8.0)
+const CAM_PITCH := -40.0
+## W16 Intro-Beat: Hub/Rückzug der Totale plus flacherer Blick Richtung
+## Kulisse — bei k=1 steht die Kamera wieder EXAKT auf CAM_POS/CAM_PITCH.
+const INTRO_LIFT := Vector3(0.0, 2.4, 5.2)
+const INTRO_PITCH := 9.0
 
 var stage: Node3D
 var gooby: Node3D
@@ -326,14 +334,28 @@ func _build_fx() -> void:
 ## obersten Hügelreihe Beet, Zaun und Bäume als Kulisse ins Bild kommen.
 func frame(vp: Vector2) -> void:
 	stage.apply_size(vp)
-	stage.camera.position = Vector3(0.0, 10.5, 8.0)
-	stage.camera.rotation_degrees = Vector3(-40.0, 0.0, 0.0)
+	stage.camera.position = CAM_POS
+	stage.camera.rotation_degrees = Vector3(CAM_PITCH, 0.0, 0.0)
 	stage.set_half_height(4.9, 10.0)
+
+
+## W16 Intro-Beat: Kamera schwebt aus einer erhöhten Garten-Totale (k=0) in
+## die Spielpose (k=1) — dieselbe Ease-Kurve wie hide_seek/star_hopper.
+func establish(k: float) -> void:
+	var e := 1.0 - ease(clampf(k, 0.0, 1.0), 0.4)
+	stage.camera.position = CAM_POS + INTRO_LIFT * e
+	stage.camera.rotation_degrees = Vector3(CAM_PITCH + INTRO_PITCH * e, 0.0, 0.0)
 
 
 ## Hügel per Raycast EXAKT unter die 2D-Tap-Rechtecke legen; Beet und Gooby
 ## richten sich am Feldrand aus. Nach jedem apply_view neu aufrufen.
 func layout(holes: Array[Rect2]) -> void:
+	# Raycast IMMER aus der Spielpose rechnen: während des Intro-Beats steht
+	# die Kamera in der Totale — ein Resize dürfte sonst verschobene Hügel/
+	# Trefferflächen einbacken (hide_seek-Muster: Pose-Snapshot + Restore).
+	var pose: Transform3D = stage.camera.transform
+	stage.camera.position = CAM_POS
+	stage.camera.rotation_degrees = Vector3(CAM_PITCH, 0.0, 0.0)
 	while _mounds.size() < holes.size():
 		var mound := _spawn_mound()
 		add_child(mound)
@@ -379,6 +401,7 @@ func layout(holes: Array[Rect2]) -> void:
 			]
 		)
 	)
+	stage.camera.transform = pose
 
 
 ## Jeden Frame: Maulwürfe aus dem Pool in ihre Löcher stellen (mit
