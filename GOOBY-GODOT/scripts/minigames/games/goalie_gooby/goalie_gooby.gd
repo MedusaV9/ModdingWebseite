@@ -17,6 +17,12 @@ extends MinigameBase
 ## Die Steuerung ist unverändert: wischen = hechten, tippen = Mitte. Die Bahn
 ## 0…4 liegt weiterhin links → rechts im Bild, weil die Kamera achsparallel
 ## auf −z blickt.
+##
+## W17/G4-Politur (NUR Präsentation): Intro-Beat 1,2 s mit Kameraflug
+## Vereinsheim→Tor + Telegraph-Legende (M1/M4, Sim-Uhr wartet), das tote
+## Jubel-Feature _crowd_pulse ist bei Parade UND Gegentor angeschlossen
+## (M2/M8), _ui-Skalierung des HUD samt Hint-Fade (M9/M6) und Cheer-Band
+## mit Kontur (M7). Park-Kranz lebt jetzt in goalie_gooby_scenery.gd.
 
 const Logic := preload("res://scripts/minigames/games/goalie_gooby/goalie_gooby_logic.gd")
 const Scenery := preload("res://scripts/minigames/games/goalie_gooby/goalie_gooby_scenery.gd")
@@ -39,6 +45,10 @@ const BALL_R := 0.16
 const BALL_FX_SEC := 0.7
 ## Anlaufweg des Schützen-Blobs hinter dem Elfmeterpunkt (Meter).
 const STRIKER_RUN := 1.9
+## W17 M9: Entwurfs-Kurzkante — alle HUD-Pixelmaße skalieren damit.
+const DESIGN_SHORT := 390.0
+## W17 M1: Intro-Beat (s) — Kameraflug Vereinsheim→Tor, die Sim-Uhr wartet.
+const INTRO_S := 1.2
 
 const GRASS := Color(0.35, 0.61, 0.33)
 const POST := Color(0.99, 0.99, 0.97)
@@ -94,6 +104,15 @@ var _crowd_pulse := 0.0
 var _net_ripple := 0.0
 ## Tritt-Animation des Schützen-Blobs (Restzeit).
 var _strike_t := 0.0
+## W17 M9: HUD-Skalierungsfaktor (Kurzkante/390, 0.75..3.0).
+var _ui := 1.0
+## W17 M1: Restzeit des Intro-Beats (gatet Sim + Eingabe) und des Banners.
+var _intro_left := 0.0
+var _intro_banner_t := 0.0
+## Spielpose aus fit() — Ziel des Intro-Kameraflugs.
+var _play_cam := Transform3D.IDENTITY
+## Legende des Intro-Banners: [[Telegraph-Farbe, Erklärtext], …] (M4).
+var _intro_legend: Array = []
 
 
 func setup(context: MinigameCtx) -> void:
@@ -103,6 +122,14 @@ func setup(context: MinigameCtx) -> void:
 	_stream = func() -> float: return rng.next()
 	_build_world()
 	_build_hud()
+	# W17 M1: Intro-Beat — die Sim-Uhr wartet, das Banner erklärt Bahn-Glühen
+	# und Telegraph-Farben (Heber blau, Roller rosa). RNG bleibt unberührt.
+	_intro_left = INTRO_S
+	_intro_banner_t = INTRO_S + 0.8
+	_intro_legend = [
+		[Scenery.LOB_TINT, I18nService.t("mg.goalieGooby.intro_lob")],
+		[Scenery.ROLLER_TINT, I18nService.t("mg.goalieGooby.intro_roller")],
+	]
 	_fit_viewport()
 	if is_inside_tree():
 		get_viewport().size_changed.connect(_fit_viewport)
@@ -120,22 +147,43 @@ func apply_view(size: Vector2) -> void:
 	if size.x > 1.0 and size.y > 1.0:
 		view_size = size
 	landscape = view_size.x > view_size.y
+	# W17 M9: Kurzkante/390 skaliert alle HUD-Maße (harbor_hopper-Muster).
+	_ui = clampf(minf(view_size.x, view_size.y) / DESIGN_SHORT, 0.75, 3.0)
 	position = Vector2.ZERO
 	if _stage != null:
 		_stage.apply_size(view_size)
 		_stage.set_fov(40.0 if landscape else 36.0)
 		_build_goal()
 		_frame_goal()
-	if _time_label != null:
-		_time_label.position = Vector2(16.0, 10.0)
-		_saves_label.position = Vector2(16.0, 48.0)
-		_hint_label.position = Vector2(view_size.x * 0.5 - 150.0, view_size.y - 48.0)
-		_hint_label.size = Vector2(300.0, 40.0)
+	_layout_hud()
 	queue_redraw()
+
+
+## HUD in Entwurfspixeln, mit _ui skaliert (M9) — Fontgrößen 34/15/20 · _ui
+## entsprechen dem Theme-Look bei Faktor 1; die Hinweis-Breite hängt an der
+## Viewport-Breite statt an Fix-300-px (Krümel-HUD auf Tablets).
+func _layout_hud() -> void:
+	if _time_label == null:
+		return
+	_time_label.position = Vector2(16.0, 10.0) * _ui
+	_time_label.add_theme_font_size_override("font_size", int(34.0 * _ui))
+	_time_label.add_theme_constant_override("outline_size", int(6.0 * _ui))
+	_saves_label.position = Vector2(16.0, 48.0) * _ui
+	_saves_label.add_theme_font_size_override("font_size", int(15.0 * _ui))
+	_saves_label.add_theme_constant_override("outline_size", int(5.0 * _ui))
+	var hint_w := minf(view_size.x - 32.0 * _ui, 460.0 * _ui)
+	_hint_label.add_theme_font_size_override("font_size", int(20.0 * _ui))
+	_hint_label.add_theme_constant_override("outline_size", int(5.0 * _ui))
+	_hint_label.position = Vector2((view_size.x - hint_w) * 0.5, view_size.y - 64.0 * _ui)
+	_hint_label.size = Vector2(hint_w, 56.0 * _ui)
 
 
 func _process(delta: float) -> void:
 	if not is_active() or finished:
+		return
+	_intro_banner_t = maxf(0.0, _intro_banner_t - delta)
+	if _intro_left > 0.0:
+		_tick_intro(delta)
 		return
 	elapsed += delta
 	_ring = maxf(0.0, _ring - delta)
@@ -164,8 +212,32 @@ func _process(delta: float) -> void:
 	queue_redraw()
 
 
+## W17 M1: Intro-Beat — Kameraflug vom Vereinsheim in die Spielpose. elapsed
+## (und damit Spawn-Uhr und RNG-Reihenfolge) wartet: der Lauf bleibt nach dem
+## Beat zahlengleich (Crosscheck-Vertrag unberührt).
+func _tick_intro(delta: float) -> void:
+	_intro_left = maxf(0.0, _intro_left - delta)
+	_stage.tick(delta)
+	_gooby.tick(delta)
+	if _intro_left <= 0.0:
+		_frame_goal()
+	else:
+		_aim_intro()
+	_update_labels()
+	queue_redraw()
+
+
+## Intro-Flugbahn ansteuern. Reduced Motion überspringt den Flug (eigener
+## Bewegungs-FX, Call-Site-Gate) — die Kamera steht dann sofort im Spiel.
+func _aim_intro() -> void:
+	if _intro_left <= 0.0 or _stage.reduced_motion():
+		return
+	var pose: Dictionary = Scenery.intro_cam(1.0 - _intro_left / INTRO_S, _play_cam)
+	_stage.aim(pose["from"], pose["look"])
+
+
 func _unhandled_input(event: InputEvent) -> void:
-	if not is_active() or finished:
+	if not is_active() or finished or _intro_left > 0.0:
 		return
 	if event is InputEventScreenTouch:
 		if event.pressed:
@@ -231,8 +303,10 @@ func _build_world() -> void:
 		)
 	)
 	_stage.add_child(Props3D.ground(Vector2(220.0, 220.0), Props3D.flat(GRASS), -0.01))
-	_build_stripes()
-	_build_park()
+	# Rasenbahnen, Park-Kranz und Vereinsgelände leben in der Scenery; die
+	# Zuschauer kommen zurück (Paraden-Hüpfer). Der Schütze bleibt hier.
+	_crowd = Scenery.build(_stage, SPOT_Z, GRASS)
+	_build_striker()
 
 	_goal = Node3D.new()
 	_stage.add_child(_goal)
@@ -316,70 +390,6 @@ func _build_striker() -> void:
 ## Bildrand ab und der Anlauf wäre unsichtbar.
 func _striker_home() -> Vector3:
 	return Vector3(STRIKER_RUN, 0.0, SPOT_Z + 0.9)
-
-
-## Gemähte Rasenbahnen quer zum Schuss — sie geben der leeren Wiese Tiefe.
-func _build_stripes() -> void:
-	# Flache PLATTEN, keine Quader: die 2 cm hohen Seitenflächen eines Quaders
-	# lesen sich aus flachem Blickwinkel als dunkle Scanlines über die Wiese.
-	var mesh := PlaneMesh.new()
-	mesh.size = Vector2(64.0, 3.2)
-	mesh.material = Props3D.flat(GRASS.darkened(0.13))
-	var poses: Array = []
-	for i in 10:
-		poses.append(Props3D.pose(Vector3(0.0, 0.004, 6.4 - float(i) * 6.4)))
-	_stage.add_child(Props3D.swarm_mesh(mesh, poses, 40.0))
-
-
-## Bolzplatz im Park: Hecke hinter dem Tor, Bäume dahinter, Büsche und
-## Blumen an den Seiten. Hinter der Kamera bleibt alles leer.
-func _build_park() -> void:
-	var behind := func(at: Vector3) -> bool: return at.z > SPOT_Z + 1.0
-
-	var mesh := BoxMesh.new()
-	mesh.size = Vector3(2.4, 1.0, 1.0)
-	mesh.material = Props3D.flat(Color(0.29, 0.53, 0.31))
-	var poses: Array = []
-	for i in 26:
-		var a := TAU * float(i) / 26.0
-		var at := Vector3(sin(a) * 15.0, 0.45, cos(a) * 15.0)
-		if at.z > SPOT_Z + 1.0:
-			continue
-		poses.append(Props3D.pose(at, -a, 1.0 + 0.08 * sin(float(i) * 2.1)))
-	_stage.add_child(Props3D.swarm_mesh(mesh, poses, 34.0))
-
-	_stage.add_child(
-		Props3D.scatter(ASSETS + "tree_oak.glb", 4.1, 10, 17.0, Vector3.ZERO, 1.6, 1.0, behind)
-	)
-	_stage.add_child(
-		Props3D.scatter(ASSETS + "tree_fat.glb", 3.5, 8, 18.4, Vector3.ZERO, 1.7, 1.9, behind)
-	)
-	_stage.add_child(
-		Props3D.scatter(
-			ASSETS + "tree_pineRoundA.glb", 4.6, 7, 19.6, Vector3.ZERO, 1.8, 2.6, behind
-		)
-	)
-	_stage.add_child(
-		Props3D.scatter(
-			ASSETS + "plant_bushLarge.glb", 0.85, 12, 13.2, Vector3.ZERO, 1.0, 0.5, behind
-		)
-	)
-	_stage.add_child(
-		Props3D.scatter(ASSETS + "grass_large.glb", 0.36, 20, 11.4, Vector3.ZERO, 1.8, 3.1, behind)
-	)
-	_stage.add_child(
-		Props3D.scatter(
-			ASSETS + "flower_yellowA.glb", 0.3, 12, 12.4, Vector3.ZERO, 1.2, 2.2, behind
-		)
-	)
-	_stage.add_child(
-		Props3D.scatter(ASSETS + "flower_redA.glb", 0.32, 12, 13.9, Vector3.ZERO, 1.1, 3.8, behind)
-	)
-	# Tiefenpolitur (MP-E): Vereinsgelände statt leerer Wiese — Vereinsheim,
-	# Flutlicht, rot-weiße Bande, Zuschauer, Eckfahnen, Hütchen. Die alte
-	# einsame Bank weicht der Bande; Zuschauer wippen bei Paraden mit.
-	_crowd = Scenery.build(_stage)
-	_build_striker()
 
 
 ## Tor mit Pfosten, Latte, Netz und Strafraumlinien. Wird bei jedem
@@ -502,26 +512,27 @@ func _build_lane_strips(half: float) -> void:
 	_goal.add_child(Props3D.swarm_mesh(mesh, poses, 24.0))
 
 
+## Konturgrößen setzt _layout_hud (M9: sie skalieren mit dem _ui-Faktor).
 func _build_hud() -> void:
 	_time_label = Label.new()
 	_time_label.theme_type_variation = &"HeadlineLabel"
 	_time_label.add_theme_color_override("font_color", Color(1.0, 0.99, 0.95))
 	_time_label.add_theme_color_override("font_outline_color", Color(0.16, 0.24, 0.15, 0.85))
-	_time_label.add_theme_constant_override("outline_size", 6)
 	add_child(_time_label)
 	_saves_label = Label.new()
 	_saves_label.theme_type_variation = &"CaptionLabel"
 	_saves_label.add_theme_color_override("font_color", Color(1.0, 0.94, 0.8))
 	_saves_label.add_theme_color_override("font_outline_color", Color(0.16, 0.24, 0.15, 0.85))
-	_saves_label.add_theme_constant_override("outline_size", 5)
 	add_child(_saves_label)
 	_hint_label = Label.new()
 	_hint_label.theme_type_variation = &"SoftLabel"
 	_hint_label.text = I18nService.t("mg.goalieGooby.hint")
 	_hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	# M9: hochkant bricht der lange Hinweis sauber um, statt überzulaufen.
+	_hint_label.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
+	_hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_hint_label.add_theme_color_override("font_color", Color(1.0, 0.99, 0.95, 0.95))
 	_hint_label.add_theme_color_override("font_outline_color", Color(0.16, 0.24, 0.15, 0.75))
-	_hint_label.add_theme_constant_override("outline_size", 5)
 	add_child(_hint_label)
 	_update_labels()
 
@@ -556,6 +567,10 @@ func _frame_goal() -> void:
 	# Hochkant steiler und enger: sonst steht das Tor als schmaler Streifen in
 	# der Bildmitte, oben nur Himmel, unten nur Rasen.
 	_stage.fit(points, center, 8.0 if landscape else 16.0, 0.0, 0.94 if landscape else 0.96)
+	# Spielpose für den Intro-Flug festhalten (fit() ist die Wahrheit) und im
+	# Beat sofort wieder auf die Flugbahn einschwenken (Resize-Fall).
+	_play_cam = _stage.camera.transform
+	_aim_intro()
 
 
 # ------------------------------------------------------------------- Szene
@@ -723,11 +738,12 @@ func _tick_telegraph() -> void:
 	var mat := _lane_glow.get_active_material(0)
 	if mat is StandardMaterial3D:
 		var pulse := 0.18 + 0.24 * absf(sin((elapsed - kick_start) * 16.0))
+		# Heber/Roller leuchten in den Farben, die das Intro-Banner erklärt.
 		var tint := Color(1.0, 0.85, 0.35, pulse)
 		if str(kick["kind"]) == "lob":
-			tint = Color(0.55, 0.85, 1.0, pulse)
+			tint = Color(Scenery.LOB_TINT, pulse)
 		elif str(kick["kind"]) == "roller":
-			tint = Color(1.0, 0.6, 0.85, pulse)
+			tint = Color(Scenery.ROLLER_TINT, pulse)
 		(mat as StandardMaterial3D).albedo_color = tint
 
 
@@ -821,6 +837,10 @@ func _on_save() -> void:
 	_save_ring.position = world
 	_flash_text = I18nService.t("mg.goalieGooby.super") if super_save else "+%d" % points
 	_flash = 0.8
+	# G4: totes Jubel-Feature eingelöst — die Tribüne hüpft bei jeder Parade
+	# (Superparade höher). Eigener Bewegungs-FX, darum Call-Site-RM-Gate.
+	if not _stage.reduced_motion():
+		_crowd_pulse = 1.25 if super_save else 1.0
 	# Parade-Serie klingt pro Halten einen Halbton höher.
 	AudioDirector.try_play(
 		self, "mg_perfect" if super_save else "mg_good", FeelSfx.combo_pitch(save_streak)
@@ -846,6 +866,9 @@ func _on_save() -> void:
 		_cheer = 1.4
 		_gooby.hop(0.6, 0.4)
 		AudioDirector.try_play(self, "mg_golden")
+		# Beim Zehner-Jubel springt die ganze Tribüne am höchsten.
+		if not _stage.reduced_motion():
+			_crowd_pulse = 1.6
 		if ctx.juice != null:
 			ctx.juice.bloom_pulse(1.0)
 	ctx.report_score(score, points)
@@ -857,6 +880,10 @@ func _on_goal() -> void:
 	_pip_pop = 0.4
 	_flash_text = I18nService.t("mg.goalieGooby.goal")
 	_flash = 1.0
+	# G4: auch das Gegentor erreicht die Tribüne — kurzes flaches Zucken,
+	# bewusst schwächer als der Paraden-Hüpfer (reine Präsentation).
+	if not _stage.reduced_motion():
+		_crowd_pulse = 0.45
 	AudioDirector.try_play(self, "mg_spill")
 	_gooby.play("idle")
 	_gooby.emote("sad", 1.3)
@@ -888,38 +915,66 @@ func _update_labels() -> void:
 		var left := maxi(0, int(ceil(float(tune["DURATION_SEC"]) - elapsed)))
 		_time_label.text = I18nService.t("mg.game.time", {"sec": left})
 	_saves_label.text = I18nService.t("mg.goalieGooby.saves", {"n": saves})
+	# M6: der Hinweis blendet nach 5 s Spielzeit aus (das Intro zählt nicht).
+	_hint_label.modulate.a = clampf(1.0 - (elapsed - 5.0) / 1.5, 0.0, 1.0)
 
 
 # ---------------------------------------------------------------- HUD 2D
 
 
-## Gegentor-Punkte, Jubelband und Trefferbanner — die Szene selbst ist 3D.
+## Gegentor-Punkte, Jubelband, Trefferbanner und Intro-Banner — die Szene
+## selbst ist 3D. Alle Maße skalieren mit dem _ui-Faktor (M9).
 func _draw() -> void:
 	_draw_pips()
 	if _cheer > 0.0:
 		_draw_cheer()
 	_draw_flash()
+	if _intro_banner_t > 0.0:
+		var alpha := clampf(_intro_banner_t * 1.4, 0.0, 1.0)
+		Scenery.draw_intro_banner(
+			self, view_size, _ui, alpha, I18nService.t("mg.goalieGooby.intro"), _intro_legend
+		)
 
 
 func _draw_pips() -> void:
 	var maxg := int(tune["ENDLESS_GOALS"] if bool(tune["ENDLESS"]) else tune["MAX_GOALS"])
 	for i in maxg:
-		var pos := Vector2(view_size.x - 34.0 - i * 30.0, 26.0)
-		var rad := 10.0
+		var pos := Vector2(view_size.x - (34.0 + i * 30.0) * _ui, 26.0 * _ui)
+		var rad := 10.0 * _ui
 		if i == goals - 1 and _pip_pop > 0.0:
 			rad *= 1.0 + (float(Logic.GOALIE_JUICE["PIP_POP_SCALE"]) - 1.0) * (_pip_pop / 0.4)
 		draw_circle(pos, rad, Color(0.9, 0.35, 0.35) if i < goals else Color(1, 1, 1, 0.35))
 
 
+## M7: Jubelband mit dunklem Band + Kontur wie das Trefferbanner — vorher
+## stand das Gold nackt auf Himmel und Flutlicht.
 func _draw_cheer() -> void:
-	draw_string(
-		ThemeService.font(800),
-		Vector2(0.0, view_size.y * 0.1),
-		I18nService.t("mg.goalieGooby.cheer"),
+	var alpha := clampf(_cheer, 0.0, 1.0)
+	var y := view_size.y * 0.1
+	var font := ThemeService.font(800)
+	var text := I18nService.t("mg.goalieGooby.cheer")
+	var px := int(26.0 * _ui)
+	draw_rect(
+		Rect2(0.0, y - 28.0 * _ui, view_size.x, 40.0 * _ui), Color(0.12, 0.2, 0.13, 0.5 * alpha)
+	)
+	draw_string_outline(
+		font,
+		Vector2(0.0, y),
+		text,
 		HORIZONTAL_ALIGNMENT_CENTER,
 		view_size.x,
-		26,
-		Color(1.0, 0.85, 0.4, clampf(_cheer, 0.0, 1.0))
+		px,
+		int(5.0 * _ui),
+		Color(0.08, 0.16, 0.1, 0.9 * alpha)
+	)
+	draw_string(
+		font,
+		Vector2(0.0, y),
+		text,
+		HORIZONTAL_ALIGNMENT_CENTER,
+		view_size.x,
+		px,
+		Color(1.0, 0.85, 0.4, alpha)
 	)
 
 
@@ -929,13 +984,15 @@ func _draw_flash() -> void:
 	var alpha := clampf(_flash * 1.5, 0.0, 1.0)
 	# Ohne dunkles Band verschwindet Pink auf dem Rasen.
 	var y := view_size.y * 0.78
-	draw_rect(Rect2(0.0, y - 34.0, view_size.x, 48.0), Color(0.12, 0.2, 0.13, 0.5 * alpha))
+	draw_rect(
+		Rect2(0.0, y - 34.0 * _ui, view_size.x, 48.0 * _ui), Color(0.12, 0.2, 0.13, 0.5 * alpha)
+	)
 	draw_string(
 		ThemeService.font(800),
 		Vector2(0.0, y),
 		_flash_text,
 		HORIZONTAL_ALIGNMENT_CENTER,
 		view_size.x,
-		32,
+		int(32.0 * _ui),
 		Color(1.0, 0.86, 0.5, alpha)
 	)
