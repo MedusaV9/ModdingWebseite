@@ -27,6 +27,10 @@ const KRAEHE_FARBE := Color("#2E3138")
 const SCHMIED_FARBE := Color("#7A5C43")
 const KAROTTE_FARBE := Color("#F28C28")
 const TAP_UNSICHTBAR := Color(1, 1, 1, 0.02)
+## G4 (G1 §1.2 [hoch]): physischer Fangradius je Requisite in Punkten —
+## Screen-Space-Pick, weil die 3D-Boxen (Krähe 0,35 m, Karotte 0,16 m) aus
+## der Establishing-Distanz des Hofs (~100 m) weit unter 44 pt projizieren.
+const TAP_RADIUS_PT := 44.0
 
 ## Tests/Screenshots injizieren VOR add_child (Muster Hof-Szene).
 var game_state_override: Object = null
@@ -39,6 +43,9 @@ var _gs: Object = null
 var _defs: Array = []
 var _def: Dictionary = {}
 var _props: Array = []
+## Antippbare Requisite → {"tap": Callable, "frei": bool} (Fangradius-Pick).
+var _tap_handler: Dictionary = {}
+var _tap_frame := -1
 var _remaining := 0
 var _karotten := 0
 var _running := false
@@ -256,9 +263,16 @@ func _melde(text: String) -> void:
 
 
 func _prop(color: Color, box_size: Vector3, on_tap: Callable, free_on_tap := true) -> Node3D:
-	return EventProps.make_prop(
-		color, box_size, on_tap, free_on_tap, func(prop: Node3D) -> void: _props.erase(prop)
+	var prop := EventProps.make_prop(
+		color, box_size, on_tap, free_on_tap, func(p: Node3D) -> void: _prop_vergessen(p)
 	)
+	_tap_handler[prop] = {"tap": on_tap, "frei": free_on_tap}
+	return prop
+
+
+func _prop_vergessen(prop: Node3D) -> void:
+	_props.erase(prop)
+	_tap_handler.erase(prop)
 
 
 func _clear_props() -> void:
@@ -266,6 +280,75 @@ func _clear_props() -> void:
 		if is_instance_valid(prop):
 			prop.queue_free()
 	_props = []
+	_tap_handler = {}
+
+
+# ── Tap-Forgiveness (G4): 44-pt-Fangradius in Screen-Koordinaten ─────────────
+
+
+## Läuft nur für UNBEHANDELTE Events (HUD-Knöpfe behalten Vorrang) und VOR
+## dem Physics-Picking: trifft der Fangradius, wird das Event konsumiert —
+## Direkt-Treffer auf die 3D-Boxen bleiben als Fallback erhalten.
+func _unhandled_input(event: InputEvent) -> void:
+	if not _running or _tap_handler.is_empty():
+		return
+	var pos := _tap_position(event)
+	if pos.x < 0.0:
+		return
+	# Maus-Emulation (emulate_touch_from_mouse) liefert Klick UND Touch —
+	# pro Frame höchstens EIN Fang, sonst fliegen zwei Krähen je Tipp.
+	var frame := Engine.get_process_frames()
+	if frame == _tap_frame:
+		return
+	var prop := _prop_im_radius(pos)
+	if prop == null:
+		return
+	_tap_frame = frame
+	get_viewport().set_input_as_handled()
+	_tap_ausloesen(prop)
+
+
+func _tap_position(event: InputEvent) -> Vector2:
+	var touch := event as InputEventScreenTouch
+	if touch != null and touch.pressed:
+		return touch.position
+	var maus := event as InputEventMouseButton
+	if maus != null and maus.pressed and maus.button_index == MOUSE_BUTTON_LEFT:
+		return maus.position
+	return Vector2(-1.0, -1.0)
+
+
+## Nächste antippbare Requisite im 44-pt-Umkreis des Tipps (Screen-Space,
+## Kamera-projiziert) — null, wenn keine im Radius liegt.
+func _prop_im_radius(screen_pos: Vector2) -> Node3D:
+	var vp := get_viewport()
+	var cam := vp.get_camera_3d() if vp != null else null
+	if cam == null:
+		return null
+	var radius := TAP_RADIUS_PT * UiScale.touch_px_per_pt(vp)
+	var bester: Node3D = null
+	var beste_dist := radius
+	for prop: Node3D in _tap_handler:
+		if not is_instance_valid(prop) or not prop.is_inside_tree():
+			continue
+		if cam.is_position_behind(prop.global_position):
+			continue
+		var dist := cam.unproject_position(prop.global_position).distance_to(screen_pos)
+		if dist <= beste_dist:
+			beste_dist = dist
+			bester = prop
+	return bester
+
+
+## Tap auslösen — spiegelt EventProps.make_prop (erst aufräumen, dann
+## Handler), damit beide Trefferwege identisch wirken.
+func _tap_ausloesen(prop: Node3D) -> void:
+	var info: Dictionary = _tap_handler[prop]
+	var handler: Callable = info["tap"]
+	if bool(info["frei"]):
+		_prop_vergessen(prop)
+		prop.queue_free()
+	handler.call()
 
 
 func _now_ms() -> int:

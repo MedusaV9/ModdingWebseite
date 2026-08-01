@@ -1,8 +1,10 @@
 class_name RcompHud
 extends Control
-## Lauf-HUD der Wettbewerbe (RW-5): Zeit + Richter-Info oben links,
-## Event-Callouts mittig, RW-2s Reit-Touch-HUD (Stick/Wische/Sprung) für
-## die Reit-Disziplinen und der große "Jetzt!"-Knopf für die Schau-Kür.
+## Lauf-HUD der Wettbewerbe (RW-5): Zeit + Richter-Info MITTIG OBEN
+## (W16-Leitidee „Inhalte zur Mitte“, G1 §1.3), Event-Callouts mittig,
+## RW-2s Reit-Touch-HUD (Stick/Wische/Sprung) für die Reit-Disziplinen und
+## der große "Jetzt!"-Knopf für die Schau-Kür. Schriften/Offsets skalieren
+## zentral über UiScale (_wende_skalierung_an) statt fixer Pixel.
 ## Einbau: hud.lauf = <RcompLauf> setzen, add_child (nach lauf.baue()).
 
 const INK := Color("#3B3630")
@@ -36,6 +38,7 @@ const EVENT_TEXTE := {
 
 var lauf: RcompLauf
 
+var _kopf_panel: PanelContainer
 var _zeit_label: Label
 var _info_label: Label
 var _callout: Label
@@ -58,6 +61,8 @@ func _ready() -> void:
 		_baue_schau()
 	if lauf != null:
 		lauf.ereignis.connect(_auf_event)
+	_wende_skalierung_an()
+	get_viewport().size_changed.connect(_wende_skalierung_an)
 
 
 func _process(delta: float) -> void:
@@ -127,34 +132,29 @@ func _auf_event(event: Dictionary) -> void:
 
 
 func _baue_kopf() -> void:
-	var panel := PanelContainer.new()
-	panel.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
-	panel.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-	panel.position = Vector2(-16.0, 12.0)
-	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(panel)
+	_kopf_panel = PanelContainer.new()
+	_kopf_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_kopf_panel)
 	var box := VBoxContainer.new()
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	panel.add_child(box)
+	_kopf_panel.add_child(box)
 	_zeit_label = Label.new()
 	_zeit_label.theme_type_variation = &"HeadlineLabel"
-	_zeit_label.add_theme_font_size_override("font_size", 22)
+	_zeit_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(_zeit_label)
 	_info_label = Label.new()
 	_info_label.theme_type_variation = &"CaptionLabel"
-	_info_label.add_theme_font_size_override("font_size", 15)
+	_info_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(_info_label)
 
 
 func _baue_callout() -> void:
 	_callout = Label.new()
-	_callout.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
 	_callout.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_callout.grow_vertical = Control.GROW_DIRECTION_BOTH
 	_callout.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_callout.add_theme_font_size_override("font_size", 40)
 	_callout.add_theme_color_override("font_outline_color", INK)
 	_callout.add_theme_constant_override("outline_size", 8)
-	_callout.position.y -= 110.0
 	_callout.modulate.a = 0.0
 	_callout.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_callout)
@@ -162,11 +162,8 @@ func _baue_callout() -> void:
 
 func _baue_schau() -> void:
 	_schau_label = Label.new()
-	_schau_label.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
 	_schau_label.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_schau_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_schau_label.position.y += 90.0
-	_schau_label.add_theme_font_size_override("font_size", 46)
 	_schau_label.add_theme_color_override("font_color", CREME)
 	_schau_label.add_theme_color_override("font_outline_color", INK)
 	_schau_label.add_theme_constant_override("outline_size", 10)
@@ -174,16 +171,40 @@ func _baue_schau() -> void:
 	_schau_label.visible = false
 	_schau_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_schau_label)
-	_schau_btn = Button.new()
+	# SquishButton (AUDIO-GRAMMATIK): Haptik/Squish zentral; der Puls
+	# (_schau_puls) schreibt scale pro Frame und behält das letzte Wort.
+	_schau_btn = SquishButton.new()
 	_schau_btn.text = I18nService.t("rcomp.lauf.jetzt")
-	_schau_btn.custom_minimum_size = Vector2(190, 84)
-	_schau_btn.add_theme_font_size_override("font_size", 26)
-	_schau_btn.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
 	_schau_btn.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	_schau_btn.position.y -= 130.0
-	_schau_btn.pivot_offset = Vector2(95.0, 42.0)
+	# Wächst das Theme-Minimum über die Wunschgröße, wächst der Knopf nach
+	# OBEN — die Unterkante bleibt auf der Daumenlinie (CENTER_BOTTOM).
+	_schau_btn.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	_schau_btn.pressed.connect(_schau_tipp)
 	add_child(_schau_btn)
+
+
+## Zentrale UiScale-Anwendung (G1 §1.3 [hoch]): alle Schriften/Offsets ×f
+## statt fixer Pixel; Kopf-Panel mittig oben (statt Ecke oben rechts).
+## Läuft nach dem Aufbau und bei jeder Viewport-Größenänderung erneut.
+func _wende_skalierung_an() -> void:
+	var f := UiScale.for_viewport(get_viewport())
+	_zeit_label.add_theme_font_size_override("font_size", int(22.0 * f))
+	_info_label.add_theme_font_size_override("font_size", int(15.0 * f))
+	_kopf_panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
+	_kopf_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_kopf_panel.position.y = 12.0 * f
+	_callout.add_theme_font_size_override("font_size", int(40.0 * f))
+	_callout.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	_callout.position.y -= 110.0 * f
+	if _schau_label != null:
+		_schau_label.add_theme_font_size_override("font_size", int(46.0 * f))
+		_schau_label.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
+		_schau_label.position.y += 90.0 * f
+	if _schau_btn != null:
+		_schau_btn.custom_minimum_size = Vector2(190.0, 84.0) * f
+		_schau_btn.add_theme_font_size_override("font_size", int(26.0 * f))
+		_schau_btn.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
+		_schau_btn.position.y -= 130.0 * f
 
 
 func _zeige_kommando(id: String) -> void:
@@ -196,8 +217,11 @@ func _zeige_kommando(id: String) -> void:
 func _schau_tipp() -> void:
 	if lauf == null:
 		return
+	# Outcome schlägt Press (AUDIO-GRAMMATIK): Treffer/daneben klingen über
+	# die Lauf-Events — nur der Zu-früh-Ausgang meldet sich hier.
 	var wertung := lauf.tippe()
 	if str(wertung.get("typ", "")) == "zu_frueh":
+		AudioDirector.try_play(self, "ui_error")
 		zeige_callout(I18nService.t("rcomp.lauf.zu_frueh"), TEAL)
 
 

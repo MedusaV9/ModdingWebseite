@@ -24,7 +24,9 @@ var _countdown_aktiv := false
 
 
 func _ready() -> void:
-	custom_minimum_size = Vector2(420, 0)
+	# G4: Wunschbreite ×f mit Safe-Area-Klemmung statt fixer 420 px.
+	var m := ScreenShell.metrics(get_viewport())
+	custom_minimum_size = Vector2(ScreenShell.card_width(m, 420.0), 0.0)
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 10)
 	add_child(box)

@@ -21,7 +21,10 @@ var _friends: Node = null
 
 
 func _ready() -> void:
-	custom_minimum_size = Vector2(440, 0)
+	# G4 (G1 §1.7): Wunschbreite ×f, aber nie breiter als die Safe-Area —
+	# statt fixer 440 px (Panel läuft jetzt im PanelSheet, s. RmpHub).
+	var m := ScreenShell.metrics(get_viewport())
+	custom_minimum_size = Vector2(ScreenShell.card_width(m, 440.0), 0.0)
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 10)
 	add_child(box)

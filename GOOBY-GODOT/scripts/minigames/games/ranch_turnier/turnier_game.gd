@@ -43,6 +43,8 @@ var _pferd_id := ""
 var _pferd: Dictionary = {}
 var _menu: Control
 var _panel: Control
+var _mitte_scroll: ScrollContainer
+var _mitte_spalte: VBoxContainer
 var _intro_left := 0.0
 
 
@@ -89,6 +91,7 @@ func apply_view(size: Vector2) -> void:
 		if control != null and is_instance_valid(control):
 			control.position = Vector2.ZERO
 			control.size = view_size
+	_deckle_mitte_panel()
 
 
 func _fit_viewport() -> void:
@@ -325,11 +328,13 @@ func _menu_disziplinen(spalte: VBoxContainer, comp: Dictionary) -> void:
 		grid.add_child(knopf)
 
 
+## G4 (G1 §1.4): „Fertig“ mittig statt rechts außen — konsistent mit dem
+## Ergebnis-Panel und der W16-Leitidee (Daumenzone statt Randkleber).
 func _menu_fuss(spalte: VBoxContainer) -> void:
-	var fertig := Button.new()
+	var fertig := SquishButton.new()
 	fertig.text = I18nService.t("rcomp.menu.fertig")
 	fertig.custom_minimum_size = Vector2(160.0, 48.0)
-	fertig.size_flags_horizontal = Control.SIZE_SHRINK_END
+	fertig.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	fertig.pressed.connect(_finish_session)
 	spalte.add_child(fertig)
 
@@ -486,6 +491,8 @@ func _teardown_panel() -> void:
 	if _panel != null and is_instance_valid(_panel):
 		_panel.queue_free()
 	_panel = null
+	_mitte_scroll = null
+	_mitte_spalte = null
 
 
 ## --------------------------------------------------------------- Ergebnis
@@ -656,7 +663,9 @@ func _zeige_zeremonie() -> void:
 	var spalte := VBoxContainer.new()
 	spalte.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
 	spalte.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	spalte.position.y += 14.0
+	# G4 (G1 §1.4 [niedrig]): relativ statt fixer px — Titel löst sich von
+	# der Oberkante, „Weiter“ rückt in die Daumenzone.
+	spalte.position.y += view_size.y * 0.08
 	spalte.add_theme_constant_override("separation", 2)
 	_panel.add_child(spalte)
 	var titel := Label.new()
@@ -679,12 +688,12 @@ func _zeige_zeremonie() -> void:
 			"rcomp.zeremonie.platz%d" % (i + 1), {"name": _starter_name(_stand[i])}
 		)
 		spalte.add_child(zeile)
-	var weiter := Button.new()
+	var weiter := SquishButton.new()
 	weiter.text = I18nService.t("rcomp.zeremonie.weiter")
 	weiter.custom_minimum_size = Vector2(200.0, 48.0)
 	weiter.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
 	weiter.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	weiter.position.y -= 64.0
+	weiter.position.y -= maxf(view_size.y * 0.12, 64.0)
 	weiter.pressed.connect(
 		func() -> void:
 			AudioDirector.try_play(self, "ui_back")
@@ -708,7 +717,9 @@ func _vollbild_control() -> Control:
 	return control
 
 
-## Zentriertes Panel mit VBox — gemeinsame Schale für Einweisung/Ergebnis.
+## Zentriertes Panel mit Scroll+VBox — gemeinsame Schale für Einweisung/
+## Ergebnis. G4 (G1 §1.4): Höhen-Deckel 80 % der Sicht, Überschuss scrollt
+## (Einweisung mit 5 Startern + Regeln lief hochkant sonst über).
 func _mitte_panel(wurzel: Control) -> VBoxContainer:
 	var panel := PanelContainer.new()
 	panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
@@ -719,10 +730,27 @@ func _mitte_panel(wurzel: Control) -> VBoxContainer:
 	for seite in ["left", "right", "top", "bottom"]:
 		margin.add_theme_constant_override("margin_%s" % seite, 16)
 	panel.add_child(margin)
-	var spalte := VBoxContainer.new()
-	spalte.add_theme_constant_override("separation", 6)
-	margin.add_child(spalte)
-	return spalte
+	_mitte_scroll = ScrollContainer.new()
+	_mitte_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	margin.add_child(_mitte_scroll)
+	_mitte_spalte = VBoxContainer.new()
+	_mitte_spalte.add_theme_constant_override("separation", 6)
+	_mitte_spalte.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_mitte_scroll.add_child(_mitte_spalte)
+	# Deckel NACH dem Befüllen anwenden (Aufrufer hängen synchron an).
+	_deckle_mitte_panel.call_deferred()
+	return _mitte_spalte
+
+
+## Höhen-Deckel des Mitte-Panels anwenden (Bau + jede Größenänderung).
+func _deckle_mitte_panel() -> void:
+	if _mitte_scroll == null or not is_instance_valid(_mitte_scroll):
+		return
+	if _mitte_spalte == null or not is_instance_valid(_mitte_spalte):
+		return
+	var deckel := view_size.y * 0.8 - 32.0
+	var inhalt := _mitte_spalte.get_combined_minimum_size()
+	_mitte_scroll.custom_minimum_size = Vector2(0.0, minf(inhalt.y, maxf(deckel, 0.0)))
 
 
 static func _num(value: Variant, fallback: float) -> float:

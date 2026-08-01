@@ -15,7 +15,8 @@
 			"invite_von": "{name} invites you: {spiel}",
 			"annehmen": "Join in",
 			"ablehnen": "Not now",
-			"abgelehnt": "{name} has no time right now."
+			"abgelehnt": "{name} has no time right now.",
+			"hof_knopf": "Multiplayer"
 		},
 		"lobby": {
 			"titel": "{spiel} — Lobby",
@@ -25,7 +26,8 @@
 			"bereit_knopf": "Ready!",
 			"countdown": "Starting in {s}…",
 			"verlassen": "Leave",
-			"leer": "Waiting for players…"
+			"leer": "Waiting for players…",
+			"beendet": "The round is over."
 		},
 		"lauf": {
 			"checkpoint": "Gate {n}/{max}",
@@ -80,6 +82,7 @@
 			"ghost": "has ghost",
 			"du": "(you)",
 			"geist_laden": "Load ghost",
+			"geist_ok": "Ghost loaded!",
 			"kurs_grasbahn": "Grass Track Race",
 			"kurs_hof_parcours": "Yard Course",
 			"kurs_rw5_springen": "Show Jumping",

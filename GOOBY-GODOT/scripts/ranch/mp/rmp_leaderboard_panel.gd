@@ -17,7 +17,12 @@ var _kurse: Array[String] = []
 
 
 func _ready() -> void:
-	custom_minimum_size = Vector2(460, 320)
+	# G4: Wunschmaß ×f mit Safe-Area-/Höhen-Klemmung statt fixer 460×320 px.
+	var m := ScreenShell.metrics(get_viewport())
+	var f: float = m["f"]
+	custom_minimum_size = Vector2(
+		ScreenShell.card_width(m, 460.0), minf(320.0 * f, ScreenShell.card_max_height(m))
+	)
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 10)
 	add_child(box)
@@ -38,7 +43,7 @@ func _ready() -> void:
 	box.add_child(_hinweis)
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroll.custom_minimum_size = Vector2(0, 220)
+	scroll.custom_minimum_size = Vector2(0.0, 220.0 * f)
 	box.add_child(scroll)
 	_liste = VBoxContainer.new()
 	_liste.size_flags_horizontal = Control.SIZE_EXPAND_FILL

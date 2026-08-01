@@ -15,7 +15,8 @@
 			"invite_von": "{name} lädt dich ein: {spiel}",
 			"annehmen": "Mitmachen",
 			"ablehnen": "Jetzt nicht",
-			"abgelehnt": "{name} hat gerade keine Zeit."
+			"abgelehnt": "{name} hat gerade keine Zeit.",
+			"hof_knopf": "Mehrspieler"
 		},
 		"lobby": {
 			"titel": "{spiel} — Lobby",
@@ -25,7 +26,8 @@
 			"bereit_knopf": "Bereit!",
 			"countdown": "Los geht’s in {s}…",
 			"verlassen": "Verlassen",
-			"leer": "Warte auf Mitspieler…"
+			"leer": "Warte auf Mitspieler…",
+			"beendet": "Die Runde ist vorbei."
 		},
 		"lauf": {
 			"checkpoint": "Tor {n}/{max}",
@@ -80,6 +82,7 @@
 			"ghost": "mit Geist",
 			"du": "(du)",
 			"geist_laden": "Geist laden",
+			"geist_ok": "Geist geladen!",
 			"kurs_grasbahn": "Grasbahn-Rennen",
 			"kurs_hof_parcours": "Hof-Parcours",
 			"kurs_rw5_springen": "Springen",

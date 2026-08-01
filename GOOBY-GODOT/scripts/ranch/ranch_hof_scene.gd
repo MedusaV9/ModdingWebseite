@@ -31,6 +31,14 @@ var _galopp_an := false
 var _trab_winkel := 0.0
 var _cam_zeit := 0.0
 
+var _hud: Control
+var _kopf_box: VBoxContainer
+var _fuss_box: HBoxContainer
+var _stadt_knopf: Button
+var _ausritt_knopf: Button
+var _galopp_knopf: Button
+var _mp_knopf: Button
+
 
 func _ready() -> void:
 	plan = RanchWelt.hof_plan()
@@ -293,55 +301,109 @@ func _baue_kamera() -> void:
 	add_child(cam)
 
 
+## W16 (G1 §1.6, Leitidee „Knöpfe zur Mitte, angenehm erreichbar“): statt
+## drei Ecken-Knöpfen eine mittige Kopfzeile (Titel + „Zur Stadt“-Chip) und
+## ein Daumen-Cluster unten MITTE (Ausreiten · Galopp · Mehrspieler) — alles
+## über ScreenShell (Safe-Area-Insets, Touch-Floor, Schrift ×f), da diese
+## Szene NICHT im Minigame-Host läuft und Notch/Home-Indicator selbst
+## behandeln muss.
 func _baue_hud() -> void:
 	var layer := CanvasLayer.new()
 	layer.name = "HudLayer"
 	add_child(layer)
-	var hud := Control.new()
-	hud.name = "HofHud"
-	hud.theme = ThemeService.theme()
-	hud.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	hud.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	layer.add_child(hud)
+	_hud = Control.new()
+	_hud.name = "HofHud"
+	_hud.theme = ThemeService.theme()
+	_hud.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_hud.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(_hud)
+	_kopf_box = VBoxContainer.new()
+	_kopf_box.name = "KopfBox"
+	_hud.add_child(_kopf_box)
 	var titel := Label.new()
 	titel.theme_type_variation = "TitleLabel"
 	titel.text = I18nService.t("ranch.hof.titel")
-	titel.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP, Control.PRESET_MODE_MINSIZE, 18)
-	hud.add_child(titel)
-	var stadt := Button.new()
-	stadt.theme_type_variation = "GhostButton"
-	stadt.text = I18nService.t("ranch.fahrt.zur_stadt")
-	stadt.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT, Control.PRESET_MODE_MINSIZE, 16)
-	stadt.pressed.connect(_on_zur_stadt)
-	hud.add_child(stadt)
-	var galopp := Button.new()
-	galopp.theme_type_variation = "PrimaryButton"
-	galopp.toggle_mode = true
-	galopp.text = I18nService.t("ranch.hof.pferde_galopp")
-	galopp.set_anchors_and_offsets_preset(
-		Control.PRESET_BOTTOM_RIGHT, Control.PRESET_MODE_MINSIZE, 24
-	)
-	galopp.toggled.connect(_on_galopp_toggled)
-	hud.add_child(galopp)
+	titel.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_kopf_box.add_child(titel)
+	# Reise-Knöpfe bleiben stumm: den Szenenwechsel vertont der LoadingVeil
+	# (travel_whoosh_*, AUDIO-GRAMMATIK „Reisen/Szenenwechsel“).
+	_stadt_knopf = SquishButton.new()
+	_stadt_knopf.theme_type_variation = "GhostButton"
+	_stadt_knopf.text = I18nService.t("ranch.fahrt.zur_stadt")
+	_stadt_knopf.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_stadt_knopf.pressed.connect(_on_zur_stadt)
+	_kopf_box.add_child(_stadt_knopf)
+	_fuss_box = HBoxContainer.new()
+	_fuss_box.name = "FussBox"
+	_fuss_box.alignment = BoxContainer.ALIGNMENT_CENTER
+	_hud.add_child(_fuss_box)
 	# RW-1: Ausritt in die offene Ranch-Region (Zonen, Wetter, Wildtiere).
-	var ausritt := Button.new()
-	ausritt.theme_type_variation = "PrimaryButton"
-	ausritt.text = I18nService.t("rwelt.hud.ausreiten")
-	ausritt.set_anchors_and_offsets_preset(
-		Control.PRESET_BOTTOM_LEFT, Control.PRESET_MODE_MINSIZE, 24
-	)
-	ausritt.pressed.connect(_on_ausreiten)
-	hud.add_child(ausritt)
+	_ausritt_knopf = SquishButton.new()
+	_ausritt_knopf.theme_type_variation = "PrimaryButton"
+	_ausritt_knopf.text = I18nService.t("rwelt.hud.ausreiten")
+	_ausritt_knopf.pressed.connect(_on_ausreiten)
+	_fuss_box.add_child(_ausritt_knopf)
+	_galopp_knopf = SquishButton.new()
+	_galopp_knopf.theme_type_variation = "PrimaryButton"
+	_galopp_knopf.toggle_mode = true
+	_galopp_knopf.text = I18nService.t("ranch.hof.pferde_galopp")
+	_galopp_knopf.toggled.connect(_on_galopp_toggled)
+	_fuss_box.add_child(_galopp_knopf)
+	# RW-6/G4: DER Spiel-Einstieg in den Ranch-Mehrspieler (G1-Hauptbefund
+	# „UI existiert, aber kein Einstieg“) — öffnet den Hub als PanelSheet.
+	_mp_knopf = SquishButton.new()
+	_mp_knopf.theme_type_variation = "GhostButton"
+	_mp_knopf.text = I18nService.t("ranch_mp.menu.hof_knopf")
+	_mp_knopf.pressed.connect(_on_mehrspieler)
+	_fuss_box.add_child(_mp_knopf)
 	_toast = load("res://scripts/ui/toast.gd").new()
 	_toast.theme = ThemeService.theme()
 	layer.add_child(_toast)
 	_toast.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_wende_hud_metriken_an()
+	get_viewport().size_changed.connect(_wende_hud_metriken_an)
+
+
+## Safe-Area + Skalierung zentral anwenden (Aufbau + jede Fenster-Drehung).
+## Offsets werden EXPLIZIT genullt: set_anchors_preset behält sonst das
+## alte Rechteck (rechnet die Offsets um) — die Boxen klebten dann links.
+## Null-Höhe an der Ankerlinie + Grow-Richtung lässt die Container aus der
+## Linie wachsen (Kopf nach unten, Fuß nach oben), mittig dank GROW_BOTH.
+func _wende_hud_metriken_an() -> void:
+	if _hud == null or not _hud.is_inside_tree():
+		return
+	var m := ScreenShell.metrics(_hud.get_viewport())
+	var f: float = m["f"]
+	var insets: Dictionary = m["insets"]
+	var oben := float(insets["top"]) + ScreenShell.EDGE_Y * f
+	_kopf_box.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	_kopf_box.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_kopf_box.grow_vertical = Control.GROW_DIRECTION_END
+	_kopf_box.offset_left = 0.0
+	_kopf_box.offset_right = 0.0
+	_kopf_box.offset_top = oben
+	_kopf_box.offset_bottom = oben
+	_kopf_box.add_theme_constant_override("separation", int(6.0 * f))
+	var unten := -(float(insets["bottom"]) + 16.0 * f)
+	_fuss_box.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	_fuss_box.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_fuss_box.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	_fuss_box.offset_left = 0.0
+	_fuss_box.offset_right = 0.0
+	_fuss_box.offset_top = unten
+	_fuss_box.offset_bottom = unten
+	_fuss_box.add_theme_constant_override("separation", int(12.0 * f))
+	for knopf: Control in [_stadt_knopf, _ausritt_knopf, _galopp_knopf, _mp_knopf]:
+		knopf.custom_minimum_size = Vector2.ZERO
+		ScreenShell.touch_target(knopf, m)
+	ScreenShell.scale_fonts(_hud, f)
 
 
 ## ------------------------------------------------------------- Bewegung
 
 
 func _on_galopp_toggled(an: bool) -> void:
+	AudioDirector.try_play(self, "ui_toggle")
 	_galopp_an = an
 	setze_gangart(RanchPferd.GANG_GALOPP if an else RanchPferd.GANG_IDLE)
 	if not an and pferde.size() > 1:
@@ -389,6 +451,12 @@ func _on_zur_stadt() -> void:
 func _on_ausreiten() -> void:
 	if not RanchWeltRouten.reite_los(get_tree(), {"spawn_zone": "hof"}):
 		_zeige_toast("(Route ranch/welt — Router fehlt)")
+
+
+## Ranch-Mehrspieler-Hub öffnen (RW-6/G4) — das Sheet klingt selbst
+## (PanelSheet.open → ui_open), der Knopf bleibt darum stumm.
+func _on_mehrspieler() -> void:
+	RmpHub.attach_to(self).oeffne()
 
 
 func _zeige_toast(text: String) -> void:
