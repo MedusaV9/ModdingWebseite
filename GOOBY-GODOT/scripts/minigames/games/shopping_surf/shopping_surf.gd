@@ -48,6 +48,10 @@ const DRAW_NEAR_Z := 1.4
 const DESIGN_SHORT := 390.0
 ## Nach so vielen Sekunden blendet der Wisch-Hinweis aus.
 const HINT_FADE_SEC := 5.0
+## W17 M1 (Audit C §4): Intro-Beat (s) — Totale + Ziel-Banner, Sim wartet.
+const INTRO_S := 1.5
+## Kamera-Rückzug (m) der Intro-Totale, klingt über INTRO_S auf 0 ab.
+const INTRO_CAM_BACK := 6.5
 ## Farbe je Power-up (Würfelfarbe + Glow-Puls).
 const POWER_TINT := {
 	"magnet": Color(0.55, 0.85, 1.0),
@@ -77,11 +81,17 @@ var _ui := 1.0
 var _cam_back_extra := 0.0
 ## Fahrtwind-Takt (s bis zum nächsten Whoosh) ab hohem Tempoband.
 var _wind_t := 0.0
+## W17 M1: Rest-Sekunden des Intro-Beats — solange > 0 wartet die Sim.
+var _intro_left := 0.0
+## Leben-Pips: der frischste Crash pulst kurz auf (1 → 0).
+var _pip_pulse := 0.0
 var _swipe_from := Vector2.ZERO
 var _swipe_live := false
 var _held: Dictionary = {}
 var _banner := ""
 var _banner_t := 0.0
+var _banner_plate := StyleBoxFlat.new()
+var _chip_plate := StyleBoxFlat.new()
 var _flash_t := 0.0
 var _score_label: Label
 var _stat_label: Label
@@ -103,6 +113,11 @@ func setup(context: MinigameCtx) -> void:
 	run = Run.create_run(ctx.rng(), "arcade", tune)
 	_build_stage()
 	_build_hud()
+	# W17 M1: Intro-Beat — Ziel-Banner + Straßen-Totale; Sim und Eingabe
+	# warten, der Lauf bleibt zahlengleich (w13c-Crosscheck-Vertrag).
+	_intro_left = INTRO_S
+	_set_banner(I18nService.t("mg.shoppingSurf.intro"))
+	_banner_t = INTRO_S + 0.7
 	_fit_viewport()
 	if is_inside_tree():
 		get_viewport().size_changed.connect(_fit_viewport)
@@ -122,7 +137,7 @@ func apply_view(size: Vector2) -> void:
 	position = Vector2.ZERO
 	if _stage != null:
 		_stage.call("apply_size", view_size)
-		_place_camera(0.0)
+		_place_camera(_intro_cam_back())
 	_layout_labels()
 	queue_redraw()
 
@@ -133,6 +148,18 @@ func _process(delta: float) -> void:
 	var dt := minf(delta, 0.1)
 	_banner_t = maxf(0.0, _banner_t - dt)
 	_flash_t = maxf(0.0, _flash_t - dt)
+	_pip_pulse = maxf(0.0, _pip_pulse - dt * 2.4)
+	# W17 M1: im Intro schwebt die Kamera aus der Totale in die Verfolger-
+	# Pose; Run.step_run wartet — der Lauf bleibt zahlengleich (runner-Muster).
+	if _intro_left > 0.0:
+		_intro_left = maxf(0.0, _intro_left - dt)
+		_stage.call("tick", dt)
+		_gooby.call("tick", dt)
+		_gooby.call("run", 0.3)
+		_sync_props()
+		_place_camera(_intro_cam_back())
+		queue_redraw()
+		return
 	var input := _take_input()
 	_handle_events(Run.step_run(run, dt, input))
 	_publish_score()
@@ -146,8 +173,9 @@ func _process(delta: float) -> void:
 
 ## Wischen (Touch) und Pfeiltasten (Desktop/Tests) — beide erzeugen die
 ## flankengetriggerten Eingabe-Flags, die stepRun erwartet.
+## W17 M1: im Intro-Beat wartet auch die Eingabe (kein Frühstart-Wisch).
 func _unhandled_input(event: InputEvent) -> void:
-	if not is_active() or finished:
+	if not is_active() or finished or _intro_left > 0.0:
 		return
 	if event is InputEventScreenTouch:
 		if event.pressed:
@@ -443,7 +471,9 @@ func _on_shield_pop() -> void:
 	AudioDirector.try_play(self, "mg_junk")
 	_set_banner(I18nService.t("mg.shoppingSurf.shield_pop"))
 	_flash_t = 0.35
-	Fx.burst(_sparkle, Vector3(Run.player_x(run), 0.9, 0.0))
+	# Q2: eigener Partikel-Burst nur ohne Reduced Motion (Kit gated nicht).
+	if not _reduced_motion():
+		Fx.burst(_sparkle, Vector3(Run.player_x(run), 0.9, 0.0))
 	_stage.call("pulse_glow", 0.7)
 
 
@@ -451,8 +481,11 @@ func _on_crash(crashes: int) -> void:
 	coin_run = 0
 	AudioDirector.try_play(self, "mg_spill")
 	_flash_t = 0.45
+	_pip_pulse = 1.0
 	var left := maxi(0, int(tune["ARCADE_MAX_CRASHES"]) - crashes)
-	Fx.burst(_dust, Vector3(Run.player_x(run), 0.25, -0.5))
+	# Q2: Staub-Burst nur ohne Reduced Motion (Kit gated nicht).
+	if not _reduced_motion():
+		Fx.burst(_dust, Vector3(Run.player_x(run), 0.25, -0.5))
 	if left > 0:
 		_set_banner(I18nService.t("mg.shoppingSurf.crash", {"left": left}))
 		_gooby.call("emote", "sad", 1.2)
@@ -624,6 +657,15 @@ func _place_camera(back_extra: float) -> void:
 	cam.rotation = Vector3(deg_to_rad(-pitch), 0.0, 0.0)
 
 
+## Kamera-Rückzug der Intro-Totale (0 nach dem Beat). Reduced Motion
+## überspringt den Flug und zeigt sofort die Spielpose — das Banner steht
+## trotzdem die volle Lesezeit.
+func _intro_cam_back() -> float:
+	if _intro_left <= 0.0 or _reduced_motion():
+		return 0.0
+	return INTRO_CAM_BACK * ease(_intro_left / INTRO_S, 1.6)
+
+
 func _reduced_motion() -> bool:
 	var settings := get_node_or_null(^"/root/AppSettings")
 	if settings != null and settings.has_method("is_reduced_motion"):
@@ -636,52 +678,108 @@ func _reduced_motion() -> bool:
 
 func _draw() -> void:
 	_draw_powerup_bar()
+	_draw_crash_pips()
 	_draw_banner()
 	_draw_flash()
 
 
+## Aktive Power-ups als Chips auf Creme-Plates (M7/M9, Audit C §4) —
+## vorher stand der Restzeit-Text nackt auf dem rosa Himmel.
 func _draw_powerup_bar() -> void:
 	var pu: Dictionary = run["pu"]
-	var font := ThemeService.font(700)
-	var size := maxi(12, int(17.0 * _ui))
-	var w := 168.0 * _ui
-	var x := view_size.x - w - 14.0 * _ui
-	var y := 12.0 * _ui
 	var rows: Array[Array] = []
 	if float(pu["x2T"]) > 0.0:
-		rows.append(["mg.shoppingSurf.x2_short", float(pu["x2T"]), Color(1.0, 0.86, 0.4)])
+		rows.append(["mg.shoppingSurf.x2_short", float(pu["x2T"]), POWER_TINT["x2"]])
 	if float(pu["magnetT"]) > 0.0:
-		rows.append(["mg.shoppingSurf.magnet_short", float(pu["magnetT"]), Color(0.6, 0.88, 1.0)])
+		rows.append(["mg.shoppingSurf.magnet_short", float(pu["magnetT"]), POWER_TINT["magnet"]])
 	if float(pu["turboT"]) > 0.0:
-		rows.append(["mg.shoppingSurf.turbo_short", float(pu["turboT"]), Color(1.0, 0.66, 0.34)])
+		rows.append(["mg.shoppingSurf.turbo_short", float(pu["turboT"]), POWER_TINT["turbo"]])
+	if rows.is_empty():
+		return
+	var font := ThemeService.font(700)
+	var size := maxi(12, int(15.0 * _ui))
+	var h := 26.0 * _ui
+	var y := 12.0 * _ui
+	var ink := Color(0.42, 0.3, 0.24)
+	_chip_plate.set_corner_radius_all(int(h * 0.5))
+	_chip_plate.bg_color = Color(1.0, 0.99, 0.94, 0.78)
 	for row in rows:
+		var text := "%s %.1fs" % [I18nService.t(str(row[0])), float(row[1])]
+		var dot_r := 5.0 * _ui
+		var text_w := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, size).x
+		var w := text_w + dot_r * 2.0 + 26.0 * _ui
+		var x := view_size.x - w - 12.0 * _ui
+		draw_style_box(_chip_plate, Rect2(Vector2(x, y), Vector2(w, h)))
+		var dot := Vector2(x + 9.0 * _ui + dot_r, y + h * 0.5)
+		draw_circle(dot, dot_r + 1.5 * _ui, Color(0.42, 0.3, 0.24, 0.45))
+		draw_circle(dot, dot_r, row[2])
 		draw_string(
 			font,
-			Vector2(x, y + size),
-			"%s %.1fs" % [I18nService.t(str(row[0])), float(row[1])],
-			HORIZONTAL_ALIGNMENT_RIGHT,
-			w,
+			Vector2(dot.x + dot_r + 8.0 * _ui, y + h * 0.5 + size * 0.36),
+			text,
+			HORIZONTAL_ALIGNMENT_LEFT,
+			-1.0,
 			size,
-			row[2]
+			ink
 		)
-		y += size * 1.4
+		y += h + 6.0 * _ui
 
 
+## Persistente Leben-Pips (Audit C §4 Prio 3, cityDrive-Muster): DIE
+## Zustandsinfo des Laufs — gefüllt = Crash, der frischste pulst kurz auf
+## (Reduced Motion: statisch).
+func _draw_crash_pips() -> void:
+	if tune.is_empty() or run.is_empty():
+		return
+	var used := int(run["crashes"])
+	var radius := 6.5 * _ui
+	var gap := 22.0 * _ui
+	var base := Vector2(20.0 * _ui, 74.0 * _ui)
+	var ink := Color(0.28, 0.14, 0.2, 0.55)
+	var cream := Color(1.0, 0.99, 0.94, 0.9)
+	var dark := Color(0.36, 0.12, 0.08, 0.9)
+	for i in int(tune["ARCADE_MAX_CRASHES"]):
+		var center := base + Vector2(gap * float(i), 0.0)
+		var r := radius
+		if i == used - 1 and _pip_pulse > 0.0 and not _reduced_motion():
+			r = radius * (1.0 + 0.45 * _pip_pulse)
+		draw_circle(center, r + 2.0 * _ui, ink)
+		if i < used:
+			draw_circle(center, r, Color(0.95, 0.42, 0.3))
+			var a := r * 0.42
+			draw_line(center + Vector2(-a, -a), center + Vector2(a, a), dark, 2.0 * _ui)
+			draw_line(center + Vector2(-a, a), center + Vector2(a, -a), dark, 2.0 * _ui)
+		else:
+			draw_circle(center, r, Color(1.0, 0.99, 0.94, 0.22))
+			draw_arc(center, r - 1.0 * _ui, 0.0, TAU, 24, cream, 1.6 * _ui)
+
+
+## M7 (Audit C §4): Banner auf Creme-Plate mit Kontur und Umbruch
+## (G4-Muster tea_party) statt Creme-Text direkt auf dem rosa Himmel —
+## das war der schwächste Banner-Kontrast des Batches.
 func _draw_banner() -> void:
 	if _banner_t <= 0.0 or _banner.is_empty():
 		return
 	var font := ThemeService.font(800)
 	var alpha := clampf(_banner_t * 1.5, 0.0, 1.0)
+	var font_size := maxi(16, int(23.0 * _ui))
 	var w := minf(view_size.x - 24.0, 440.0 * _ui)
-	draw_string(
-		font,
-		Vector2((view_size.x - w) * 0.5, view_size.y * 0.2),
-		_banner,
-		HORIZONTAL_ALIGNMENT_CENTER,
-		w,
-		maxi(16, int(23.0 * _ui)),
-		Color(1.0, 0.97, 0.86, alpha)
+	var text_size := font.get_multiline_string_size(
+		_banner, HORIZONTAL_ALIGNMENT_CENTER, w, font_size
 	)
+	var top := view_size.y * 0.2
+	var pad := Vector2(18.0, 10.0) * _ui
+	_banner_plate.set_corner_radius_all(int(12.0 * _ui))
+	_banner_plate.bg_color = Color(1.0, 0.99, 0.94, 0.74 * alpha)
+	var plate_pos := Vector2((view_size.x - text_size.x) * 0.5, top) - pad
+	draw_style_box(_banner_plate, Rect2(plate_pos, text_size + pad * 2.0))
+	var ink := Color(0.42, 0.24, 0.28, alpha)
+	var rim := Color(1.0, 1.0, 1.0, 0.75 * alpha)
+	var at := Vector2((view_size.x - w) * 0.5, top + font.get_ascent(font_size))
+	draw_multiline_string_outline(
+		font, at, _banner, HORIZONTAL_ALIGNMENT_CENTER, w, font_size, -1, int(5.0 * _ui), rim
+	)
+	draw_multiline_string(font, at, _banner, HORIZONTAL_ALIGNMENT_CENTER, w, font_size, -1, ink)
 
 
 ## Roter Randblitz bei Crash/Schildtreffer — Feedback ohne Vollbild-Overlay.

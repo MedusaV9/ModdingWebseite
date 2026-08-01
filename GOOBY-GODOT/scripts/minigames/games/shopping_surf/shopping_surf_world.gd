@@ -225,6 +225,7 @@ func _build_band() -> void:
 	_build_dots()
 	_build_crosswalks()
 	_build_manholes()
+	_build_ground_confetti()
 	_build_shops()
 	_build_skyline()
 	_build_street_furniture()
@@ -267,6 +268,44 @@ func _build_manholes() -> void:
 	for i in 6:
 		var sx := fmod(float(i) * 2.17, 4.4) - 2.2
 		items.append({"x": sx, "y": 0.012, "z": -float(i) * (LOOP_LEN / 6.0) - 7.0})
+	band.call("add_group", prop, items)
+
+
+## Konfetti-Sticker/Blütenblätter auf Fahrbahn und Gehweg (W17, Audit C §4):
+## deterministische Farbtupfer fürs NAHFELD — hochkant lag unter Gooby sonst
+## nacktes Rosa-Pflaster über die halbe Bildhöhe. Streuung über den goldenen
+## Schnitt statt RNG (kein Zufallsstrom, bit-gleiche Läufe bleiben es).
+func _build_ground_confetti() -> void:
+	var mesh := BoxMesh.new()
+	mesh.size = Vector3(0.2, 0.014, 0.28)
+	var mat := Fx.flat(Color.WHITE)
+	mat.vertex_color_use_as_albedo = true
+	mesh.material = mat
+	var count := 30
+	var prop := _prop([{"mesh": mesh, "xform": Transform3D.IDENTITY}], count + 4, true)
+	prop.call("set_shadows", false)
+	var items: Array = []
+	for i in count:
+		var frac := fmod(float(i) * 0.61803, 1.0)
+		# Zwei von drei Tupfern liegen auf der Fahrbahn, jeder dritte auf dem
+		# Gehweg — dort spielen zwar keine Requisiten, aber das Auge schon.
+		# Der Gehweg-Versatz streut SYMMETRISCH um die Gehwegmitte (±0,6 m),
+		# sonst rutschte die linke Reihe auf die Fahrbahn statt aufs Pflaster.
+		var x := lerpf(-2.9, 2.9, frac)
+		if i % 3 == 2:
+			x = (WALK_X - 0.7 + (frac - 0.5) * 1.2) * (1.0 if i % 2 == 0 else -1.0)
+		(
+			items
+			. append(
+				{
+					"x": x,
+					"y": 0.032,
+					"z": -fmod(float(i) * (LOOP_LEN / float(count)) + frac * 3.0, LOOP_LEN),
+					"yaw": frac * TAU,
+					"color": CANOPY_TINTS[i % CANOPY_TINTS.size()],
+				}
+			)
+		)
 	band.call("add_group", prop, items)
 
 

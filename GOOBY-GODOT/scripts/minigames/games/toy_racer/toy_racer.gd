@@ -20,6 +20,7 @@ extends MinigameBase
 
 const Logic := preload("res://scripts/minigames/games/toy_racer/toy_racer_logic.gd")
 const Contact := preload("res://scripts/minigames/games/toy_racer/toy_racer_contact.gd")
+const Feel := preload("res://scripts/minigames/games/toy_racer/toy_racer_feel.gd")
 const World := preload("res://scripts/minigames/games/toy_racer/toy_racer_world.gd")
 const Models := preload("res://scripts/minigames/games/_3db_stage/model_bank.gd")
 const Stage3D := preload("res://scripts/minigames/games/_3db_stage/stage3d.gd")
@@ -78,6 +79,12 @@ const FLAT_TANGENT_MIN := 0.45
 const DESIGN_SHORT := 390.0
 ## Nach so vielen Sekunden blendet der Hinweis aus.
 const HINT_FADE_SEC := 7.0
+## W17 M1 (Audit C §7): Intro-Beat (s) — Kurs-Totale + Ziel-Banner, Sim wartet.
+const INTRO_S := 1.5
+## Kranfahrt der Intro-Totale: Hub/Rückzug/Seitenschwenk (m), klingen auf 0 ab.
+const INTRO_LIFT := 9.0
+const INTRO_BACK := 7.0
+const INTRO_SIDE := 5.0
 
 ## Autohaus-Haken: später vom Host befüllbar.
 var kart_skin := ""
@@ -96,6 +103,10 @@ var view_size := Vector2(844.0, 390.0)
 var landscape := true
 
 var _paid_drift := 0
+## W17 M1: Rest-Sekunden des Intro-Beats — solange > 0 wartet die Sim.
+var _intro_left := 0.0
+## Motor-Loop + Banner-/Chip-Zeichnung (toy_racer_feel.gd, View-only).
+var _feel: Node
 ## Laufende Kart-Berührungen (Paar-Schlüssel) — gehört der Rempel-Auflösung.
 var _contacts: Dictionary = {}
 var _steer: Variant = null
@@ -138,6 +149,15 @@ func setup(context: MinigameCtx) -> void:
 	_scale = float(tune["WORLD_SCALE"])
 	_build_stage()
 	_build_hud()
+	_feel = Feel.new()
+	add_child(_feel)
+	_feel.call("build_motor")
+	# W17 M1: Intro-Beat — Ziel-Banner + Kurs-Totale; Sim und Eingabe warten,
+	# der Lauf bleibt zahlengleich (w13c-Crosscheck-Vertrag). VOR _snap_camera
+	# gesetzt, damit die Kamera direkt in der Totale startet.
+	_intro_left = INTRO_S
+	_set_banner(I18nService.t("mg.toyRacer.intro"))
+	_banner_t = INTRO_S + 0.7
 	_snap_camera()
 	_fit_viewport()
 	if is_inside_tree():
@@ -147,6 +167,8 @@ func setup(context: MinigameCtx) -> void:
 func end() -> void:
 	super.end()
 	finished = true
+	if _feel != null:
+		_feel.call("stop_motor")
 
 
 ## Pflicht-Layouthook: beide Orientierungen laufen über DIESE Funktion.
@@ -177,13 +199,24 @@ func _layout_hud() -> void:
 
 
 func _process(delta: float) -> void:
+	# Motor-Loop VOR allen Guards syncen (rocket-Muster): nur so pausiert der
+	# Loop auch bei Pause, Zieleinlauf und Rundenende zuverlässig.
+	if _feel != null:
+		var driving := (
+			is_active()
+			and not finished
+			and not _ending
+			and _intro_left <= 0.0
+			and not _reduced_motion()
+		)
+		_feel.call("sync_motor", delta, driving, _speed_band01())
 	if finished:
 		return
 	var dt := minf(delta, 0.1)
-	_elapsed += dt
 	_banner_t = maxf(0.0, _banner_t - dt)
 	if _ending:
 		_end_t += dt
+		_elapsed += dt
 		_sync_world(dt)
 		if _end_t >= 1.2:
 			_finish()
@@ -191,6 +224,15 @@ func _process(delta: float) -> void:
 		return
 	if not is_active():
 		return
+	# W17 M1: im Intro schwebt die Kamera aus der Kurs-Totale in die
+	# Verfolger-Pose; Logic.step_race wartet — der Lauf bleibt zahlengleich.
+	if _intro_left > 0.0:
+		_intro_left = maxf(0.0, _intro_left - dt)
+		_sync_world(dt)
+		_update_labels()
+		queue_redraw()
+		return
+	_elapsed += dt
 
 	Logic.step_race(race, dt, _take_input())
 	_play_bumps(Contact.resolve(race, dt, _contacts))
@@ -217,8 +259,9 @@ func _take_input() -> Dictionary:
 	return out
 
 
+## W17 M1: im Intro-Beat wartet auch die Eingabe (kein Frühstart-Drift).
 func _unhandled_input(event: InputEvent) -> void:
-	if not is_active() or finished or _ending:
+	if not is_active() or finished or _ending or _intro_left > 0.0:
 		return
 	if event is InputEventScreenTouch:
 		if event.pressed:
@@ -537,6 +580,14 @@ func _sync_camera(dt: float) -> void:
 			# an den Bildrand schieben — jetzt zählt nur noch, dass man ES sieht.
 			look = player.position + Vector3(0.0, 0.4, 0.0)
 			wanted = dodged
+	# W17 M1: im Intro kranfährt die Kamera aus einer hohen Kurs-Totale
+	# (Looping + Bauklotz-Skyline im Bild) seitlich schwenkend in die
+	# Verfolger-Pose. Reduced Motion überspringt den Flug (sofort Spielpose).
+	if _intro_left > 0.0 and not _reduced_motion():
+		var e := 1.0 - ease(clampf(1.0 - _intro_left / INTRO_S, 0.0, 1.0), 0.4)
+		var perp := Vector3(-_cam_fwd.z, 0.0, _cam_fwd.x)
+		wanted += Vector3(0.0, INTRO_LIFT * e, 0.0) - _cam_fwd * (INTRO_BACK * e)
+		wanted += perp * (INTRO_SIDE * e)
 	if not _cam_ready:
 		_cam_pos = wanted
 		_cam_look = look
@@ -643,6 +694,15 @@ func _reduced_motion() -> bool:
 	return false
 
 
+## Tempoband 0..1 fürs Motor-Ohr: Kart-Tempo relativ zum Turbo-Deckel
+## (baseSpeed × TURBO_MULT) — nur LESEND auf der zertifizierten Sim.
+func _speed_band01() -> float:
+	if race.is_empty() or tune.is_empty():
+		return 0.0
+	var top := float(race["baseSpeed"]) * float(tune["TURBO_MULT"])
+	return clampf(float(race["karts"][0]["speed"]) / maxf(0.001, top), 0.0, 1.0)
+
+
 func _snap_camera() -> void:
 	_cam_ready = false
 	_sync_karts()
@@ -657,10 +717,18 @@ func _snap_camera() -> void:
 func _play_bumps(bumps: Array[Dictionary]) -> void:
 	for bump: Dictionary in bumps:
 		var other := int(bump["b"]) if int(bump["a"]) == 0 else int(bump["a"])
-		Fx.burst(
-			_sparks,
-			(_karts[int(bump["a"])].global_position + _karts[int(bump["b"])].global_position) * 0.5
-		)
+		# Q2: eigener Partikel-Burst nur ohne Reduced Motion (Kit gated nicht).
+		if not _reduced_motion():
+			Fx.burst(
+				_sparks,
+				(
+					(
+						_karts[int(bump["a"])].global_position
+						+ _karts[int(bump["b"])].global_position
+					)
+					* 0.5
+				)
+			)
 		if int(bump["a"]) != 0 and int(bump["b"]) != 0:
 			continue
 		AudioDirector.try_play(self, "mg_spill", 0.85)
@@ -694,7 +762,8 @@ func _handle_event(ev: Dictionary) -> void:
 			_set_banner(I18nService.t("mg.toyRacer.boost"))
 			_stage.call("pulse_glow", 0.9)
 			_gooby.call("emote", "ecstatic", 1.0)
-			Fx.burst(_sparks, _karts[0].global_position)
+			if not _reduced_motion():
+				Fx.burst(_sparks, _karts[0].global_position)
 			if ctx.juice != null:
 				ctx.juice.overlay_ring(_player_px(), Color(0.55, 0.85, 1.0), 70.0)
 				ctx.juice.sfx("game_whoosh", 1.1)
@@ -767,7 +836,8 @@ func _handle_event(ev: Dictionary) -> void:
 				_add_score(banked - score)
 			_paid_drift = 0
 			_stage.call("pulse_glow", 1.4)
-			Fx.burst(_confetti, _karts[0].global_position + Vector3(0.0, 1.2, 0.0))
+			if not _reduced_motion():
+				Fx.burst(_confetti, _karts[0].global_position + Vector3(0.0, 1.2, 0.0))
 		"finish":
 			var rank := int(ev["rank"])
 			_set_banner(
@@ -779,7 +849,8 @@ func _handle_event(ev: Dictionary) -> void:
 			)
 			_gooby.call("emote", "ecstatic" if rank <= 2 else "happy", 3.0)
 			_stage.call("pulse_glow", 1.5)
-			Fx.burst(_confetti, _karts[0].global_position + Vector3(0.0, 1.2, 0.0))
+			if not _reduced_motion():
+				Fx.burst(_confetti, _karts[0].global_position + Vector3(0.0, 1.2, 0.0))
 			if rank == 1 and ctx.juice != null:
 				# Platz 1: Zeitlupe + Goldblitz + Konfetti-Regen.
 				AudioDirector.try_play(self, "mg_win")
@@ -845,22 +916,9 @@ func _update_labels() -> void:
 		_lap_label.text = I18nService.t(
 			"mg.toyRacer.lap_pill", {"n": Logic.player_lap(race), "total": int(tune["LAPS"])}
 		)
-	var item := str(race["karts"][0]["item"])
-	_pos_label.text = (
-		I18nService
-		. t(
-			"mg.toyRacer.stats",
-			{
-				"p": rank,
-				"item":
-				(
-					I18nService.t("mg.toyRacer.item_none")
-					if item.is_empty()
-					else I18nService.t("mg.toyRacer.item_%s_short" % item)
-				),
-			}
-		)
-	)
+	# Audit C §7 P4: das Item wandert aus der Textzeile in den lesbaren
+	# Chip auf der Plate (_draw) — die Zeile zeigt nur noch den Platz.
+	_pos_label.text = I18nService.t("mg.toyRacer.pos_pill", {"p": rank})
 
 
 # ── 2D-Overlay (HUD-Platte, Driftmeter, Banner über der 3D-Szene) ─────────
@@ -869,7 +927,12 @@ func _update_labels() -> void:
 func _draw() -> void:
 	_draw_hud_panel()
 	_draw_drift_meter()
-	_draw_banner()
+	# Audit C §7 P4: Item-Chip unter dem Driftmeter auf derselben Plate.
+	_feel.call(
+		"draw_item_chip", self, Vector2(20.0 * _ui, 98.0 * _ui), str(race["karts"][0]["item"]), _ui
+	)
+	# M7: Banner auf Creme-Plate mit Kontur (toy_racer_feel, tea_party-Muster).
+	_feel.call("draw_banner", self, _banner, _banner_t, view_size, _ui)
 
 
 ## Weiche Unterlage für die HUD-Labels (die Labels sind Control-Kinder und
@@ -877,7 +940,7 @@ func _draw() -> void:
 func _draw_hud_panel() -> void:
 	var pad := 10.0 * _ui
 	var w := minf(224.0 * _ui, view_size.x * 0.4)
-	var rect := Rect2(pad, pad * 0.6, w, 106.0 * _ui)
+	var rect := Rect2(pad, pad * 0.6, w, 130.0 * _ui)
 	_draw_soft_panel(rect, Color(1.0, 0.98, 0.94, 0.86), 16.0 * _ui)
 
 
@@ -915,21 +978,4 @@ func _draw_drift_meter() -> void:
 		Vector2(gate, origin.y + h + 2.0 * _ui),
 		Color(0.45, 0.38, 0.34, 0.85),
 		maxf(1.5, 2.0 * _ui)
-	)
-
-
-func _draw_banner() -> void:
-	if _banner_t <= 0.0 or _banner.is_empty():
-		return
-	var font := ThemeService.font(800)
-	var alpha := clampf(_banner_t * 1.4, 0.0, 1.0)
-	var w := minf(view_size.x - 24.0, 440.0 * _ui)
-	draw_string(
-		font,
-		Vector2((view_size.x - w) * 0.5, view_size.y * 0.17),
-		_banner,
-		HORIZONTAL_ALIGNMENT_CENTER,
-		w,
-		maxi(18, int(26.0 * _ui)),
-		Color(1.0, 0.99, 0.94, alpha)
 	)
