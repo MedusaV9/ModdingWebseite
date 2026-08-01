@@ -223,3 +223,31 @@ Terrain); Dissipate-Zweig läuft weiter ungegated. Einmal-pro-Session-Sonde:
 `Storm sphere revealed...`; dann Spieler zur Site (`/tp -173 ~ -173`) → binnen ~5 s
 (FOG_SITE_POLL_TICKS) feuert der Reveal mit plausiblem Surface-Center — verifizieren über
 frischen `[w5b-chest]`-Anker mit Wall-Y ≈ 60..90 nach Öffnen einer ungestungenen Chest.
+
+## Boot-Register-Fix — Live-Abnahme (Hauptagent, 01.08., Commit 1c56087, frische Server-JVM)
+
+- **Boot-Gate:** `/tmp/server_f105g.log` 15:47:12 — `[stormpoll] deferring fog site
+  eclipse:fog_storm_1/2 — center chunk not loaded yet`, je Site GENAU EINE Zeile; nach
+  \>70 s (≈35 Polls à 40 t) weiterhin exakt 2 Zeilen gesamt → Once-per-Session-Dedup hält.
+  0× `Storm sphere revealed` beim Boot.
+- **Nach Spieler-Annäherung** (`/tp Dev -173 100 -173`): Reveal 15:51:22 (`fog_storm_1`)
+  bzw. 15:51:24 (`fog_storm_2`) — Registrierung erst nach Chunk-Load, wie designed.
+- **Surface-Y bestätigt:** Chest-Öffnung an `-177, 61, -170` →
+  `[w5b-chest] site=eclipse:fog_storm_1 pos=-177, 61, -170 revenant=false
+  wall=(-193.9, 78.6, -156.5)` — Wall-Anker-Y **78.6** im 60..90-Band (vorher −158.4).
+  One-Shot-Latch: Session-frisch nach Restart, GUI öffnete mit Storm-Cache-Loot.
+- **Interior lebt jetzt:** Innerhalb der Wand rendert die dunkle Interior-Grade samt Motes
+  (vorher blieb `interiorAmount` bei 0, weil der Sturm 230 Blöcke unter Terrain stand).
+  B4-Foto Hound-Glowmask-Rim im Interior + B3-Fotos Dom bei Noon/Umbral-Night von
+  (−125, 112, −125) aus liegen als Artefakte vor.
+- **Korrektur zum Retire-Nachtrag:** Der dort notierte „permanente Framebuffer-Blit-Fehler
+  bei jedem Registry-Sturm in Renderweite" reproduzierte HEUTE NICHT — Dom, Wand und
+  Interior rendern auf llvmpipe sauber, seit Stürme auf Surface-Y registrieren. Der
+  GL_INVALID_OPERATION-Befund war an die Y=−176-Fehlregistrierung bzw. den
+  Death-Screen-Übergang gekoppelt, nicht an Registry-Stürme per se. `retire` bleibt als
+  Werkzeug nützlich, ist für Foto-Abnahmen aber nicht mehr zwingend.
+- **B6-Rezept-Hinweis:** Auf diesem Save waren die Chest-Indizes für Site 1/2 bereits durch
+  die frühere `rematerialize`-Runde persistiert (`/dev fogsite list`: 3 Chests je Site,
+  Y=61 bzw. 73) — Legacy-Saves ohne Index brauchen weiterhin einmalig `rematerialize`.
+- **Team-B-Gesamtstatus:** B1/B2/B5 Log-Abnahmen aus der Vorsession, B3/B4 Foto-Abnahmen
+  und B6 Live-Sonde hiermit PASS — Welle-5-Team-B vollständig abgenommen.
