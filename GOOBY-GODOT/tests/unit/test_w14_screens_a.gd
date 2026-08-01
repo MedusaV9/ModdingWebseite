@@ -125,6 +125,14 @@ func test_arcade_kopfzeile_traegt_zaehler_kapsel() -> void:
 
 
 func test_album_rail_chips_kuerzen_statt_aufzublaehen() -> void:
+	# Fenster VOR dem Mount quer pinnen (Muster test_g3_wardrobe): der Album-
+	# Screen kürzt Chips nur im Querformat (Hochformat wickelt die Rail um) —
+	# Vorgänger-Tests dürfen kein Hochkant-Fenster hinterlassen (W17-Befund:
+	# genau so kippte der Volllauf, isoliert war alles grün).
+	var prev := tree.root.size
+	tree.root.size = Vector2i(1280, 720)
+	tree.root.size_changed.emit()
+	await wait_frames(2)
 	var screen := _mount(ALBUM_SCENE)
 	await wait_frames(2)
 	var geprueft := 0
@@ -138,3 +146,6 @@ func test_album_rail_chips_kuerzen_statt_aufzublaehen() -> void:
 		geprueft += 1
 	assert_true(geprueft > 0, "mindestens ein Rail-Chip geprüft (war %d)" % geprueft)
 	_unmount(screen)
+	tree.root.size = prev
+	tree.root.size_changed.emit()
+	await wait_frames(1)

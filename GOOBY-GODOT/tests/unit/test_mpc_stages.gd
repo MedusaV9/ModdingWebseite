@@ -13,7 +13,20 @@ const Kitchen := preload("res://scripts/minigames/games/veggie_chop/veggie_chop_
 const VIEW := Vector2(720.0, 1160.0)
 
 
+## Fenster VOR dem Stage-Aufbau aufs Projekt-Design (1280×720) pinnen
+## (W17-Konvention): die Screen-Pos-Wächter unprojizieren über die ECHTE
+## Root-Kamera, und ihre Soll-Bereiche sind auf das Default-Fenster
+## kalibriert — hinterlässt ein Vorgänger-Test ein Hochkant-Fenster,
+## wandert Gooby sonst aus dem Soll-Bild (Volllauf-Befund W17: x=-343,
+## isoliert grün).
+func _pin_view() -> void:
+	tree.root.size = Vector2i(1280, 720)
+	tree.root.size_changed.emit()
+	await wait_frames(2)
+
+
 func test_bunny_hop_stage_builds_and_fx_run() -> void:
+	await _pin_view()
 	var stage: Node3D = BunnyStage.new()
 	tree.root.add_child(stage)
 	stage.setup_stage(-3.1)
@@ -36,6 +49,7 @@ func test_bunny_hop_stage_builds_and_fx_run() -> void:
 
 
 func test_trampoline_stage_builds_and_fx_run() -> void:
+	await _pin_view()
 	var stage: Node3D = TrampStage.new()
 	tree.root.add_child(stage)
 	stage.setup_stage()

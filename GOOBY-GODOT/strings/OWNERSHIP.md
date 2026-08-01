@@ -145,3 +145,54 @@ Loader merged flach) | G4 G4-GOALIE | W17
 >> `mg.rocketRescue.intro` (Datei `strings/<locale>/mg_rocket.json` — Intro-Banner der
 W17/G4-Politur G4-ROCKET; alle übrigen `mg.rocketRescue.*`-Keys bleiben beim MG-2-Owner
 in `mg_batch2.json`, Loader merged flach) | G4 G4-ROCKET | W17
+
+>> NEUE `mg.goobySays.intro` + `mg.memoryMatch.intro`/`oops`-Keys (Datei
+`strings/<locale>/mg_says_memory.json` — Intro-Banner beider Spiele + lesbarer
+Fehlgriff-Text der W17/G5-Duo-Politur P28 MG-SAYS-MEMORY; alle übrigen
+`mg.goobySays.*`/`mg.memoryMatch.*`-Keys bleiben beim MG-1-Owner in
+`mg_batch1.json`, Loader merged flach) | G5 P28 MG-SAYS-MEMORY | W17
+
+>> NEUE `mg.lanternFloat.intro`/`win`- und `mg.miniGolf.intro`-Keys (Datei
+`strings/<locale>/mg_lantern_golf.json` — Intro-/Sieg-Banner der W17/G5-Politur P29
+MG-LANTERN-GOLF; alle übrigen `mg.lanternFloat.*`-Keys bleiben beim MG-3-Owner in
+`mg_batch3.json`, alle übrigen `mg.miniGolf.*`-Keys beim MG-2-Owner in `mg_batch2.json`,
+Loader merged flach) | G5 P29 MG-LANTERN-GOLF | W17
+
+>> NEUE `mg.pancakeTower.intro`/`mg.pipeFlow.intro`-Keys (Datei
+`strings/<locale>/mg_pancake_pipe.json` — Intro-Banner der W17/G5-Politur P30
+MG-PANCAKE-PIPE; alle übrigen `mg.pancakeTower.*`-Keys bleiben beim MG-2-Owner in
+`mg_batch2.json`, die `mg.pipeFlow.*`-Keys beim MG-1-Owner in `mg_batch1.json`,
+Loader merged flach) | G5 P30 MG-PANCAKE-PIPE | W17
+
+>> NEUE `mg.burgerBuild.intro`/`mg.deliveryRush.intro`-Keys (Datei
+`strings/<locale>/mg_express1.json` — Intro-Banner der G5-Politur P32 MG-EXPRESS-1;
+alle übrigen `mg.burgerBuild.*`/`mg.deliveryRush.*`-Keys bleiben beim MG-3-Owner in
+`mg_batch3.json`, Loader merged flach) | G5 P32 MG-EXPRESS-1 | W17
+
+>> `dlc_mcgooby.*` (Datei `strings/<locale>/dlc_mcgooby.json` — McGooby-DLC Welle A:
+Eröffnungs-Hook-Karte, Grill-Mini-Schicht, Schicht-Ende-Karte; die Parodie-Rezeptnamen
+liegen BEIDSPRACHIG im Content-Pack `content/dlc/data/mcgooby_menu.json`, Muster
+`dlcs.json`) | G5 P25 DLC-MCGOOBY-A | G5
+
+>> `dlc_goobye.*` (Datei `strings/<locale>/dlc_goobye.json` — „Goo und Bye“-DLC Welle A:
+Hub-Knöpfe/Angebots-Sheet, Schlüsselübergabe-Karte (Story-Beat §1.3), Laden-Szene
+(Regal/Kasse/Nachschub/Kassensturz) sowie Warengruppen- und Parodie-Eigenmarken-Namen
+des Sortiment-Packs `content/dlc/data/goobye_sortiment.json`; die DLC-Teaser-Texte
+selbst liegen BEIDSPRACHIG in `dlcs.json`) | G5 P24 DLC-GOOBYE-A | G5
+
+>> NEUE `gvz.netz.*`- + `gvz.end.netz_*`- + `gvz.hud.reason_matsch`-Keys (additiv in
+`strings/<locale>/gvz.json` — Netz-PvP der G5-Politur P26 GVZ-NETZ: „PvP übers
+Netz“-Panel im Level-Select, Match-Banner/Warte-Hinweis, PvP-End-Overlay; alle
+übrigen `gvz.*`-Keys bleiben beim W3b-Owner, Datei bleibt EINE Domain-Datei) |
+G5 P26 GVZ-NETZ | W17
+
+>> NEUE `mg.shoppingSurf.intro`/`mg.toyRacer.intro`/`mg.toyRacer.pos_pill`-Keys
+(Datei `strings/<locale>/mg_express2.json` — Intro-Banner + Platz-Zeile der
+G5-Politur P35 MG-EXPRESS-2; alle übrigen `mg.shoppingSurf.*`/`mg.toyRacer.*`-Keys
+bleiben beim MG-3-Owner in `mg_batch3.json`, Loader merged flach) |
+G5 P35 MG-EXPRESS-2 | W17
+
+>> NEUER `mg.ghostHunt.intro`-Key (Datei `strings/<locale>/mg_ghost.json` —
+Intro-Ziel-Banner der G5-Politur P31 MG-GHOST-SPLIT; alle übrigen
+`mg.ghostHunt.*`-Keys bleiben beim MG-2-Owner in `mg_batch2.json`, Loader
+merged flach) | G5 P31 MG-GHOST-SPLIT | W17
