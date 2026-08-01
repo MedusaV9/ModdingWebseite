@@ -17,6 +17,15 @@ extends MinigameBase
 ## Die Steuerung ist unverändert: ziehen und loslassen. Nur die Richtung
 ## kommt jetzt aus dem Kamerastrahl auf die Bahnebene (Screen-to-World)
 ## statt aus einer fest verdrahteten Bildschirmachse.
+##
+## W17/G5-Politur (NUR Präsentation, Paket P29): Intro-Beat 1,5 s mit
+## Bahn-Totale (Kamera-Anflug, Sim + Eingabe gegated, Kurs/RNG unangetastet)
+## + Ziel-Banner auf Milchglas-Plate, HUD `_ui`-skaliert statt Fixpixel
+## (M9), Hint-Fade nach ~6 s (M6), Treffer-Flash auf dunklem Band (M7,
+## goalie-Muster), Putt-Pitch wächst hörbar mit der Schlagkraft und das
+## Rundenende bekommt Endton + Sieg-Moment (M8, RM-gegated im JuiceKit).
+## Putt-Pitch, Endton-Wahl und die draw-Helfer der Politur leben in
+## mini_golf_feel.gd (delivery_rush_feel-Muster, max-file-lines).
 
 const Logic := preload("res://scripts/minigames/games/mini_golf/mini_golf_logic.gd")
 const Course := preload("res://scripts/minigames/games/mini_golf/mini_golf_course.gd")
@@ -25,6 +34,7 @@ const Stage3D := preload("res://scripts/minigames/games/_3da_stage/stage3d.gd")
 const Props3D := preload("res://scripts/minigames/games/_3da_stage/props3d.gd")
 const GoobyActor := preload("res://scripts/minigames/games/_3da_stage/gooby_actor.gd")
 const Spark3D := preload("res://scripts/minigames/games/_3da_stage/spark3d.gd")
+const Feel := preload("res://scripts/minigames/games/mini_golf/mini_golf_feel.gd")
 
 const ASSETS := "res://assets/minigames/mini_golf/"
 
@@ -45,6 +55,10 @@ const RAIL_W := 0.12
 const COURSE_MID_Z := 2.0
 ## Innenradius des Deko-Kranzes — davor bleibt der Rasen frei für die Bahn.
 const SCENERY_MIN_R := 4.6
+## W17/G5 M9: Entwurfs-Kurzkante — alle HUD-Pixelmaße skalieren mit `_ui`.
+const DESIGN_SHORT := 390.0
+## W17/G5 M1: Intro-Beat (s) — Bahn-Totale, die Sim wartet (W14-Kanon).
+const INTRO_S := 1.5
 
 ## Kunstrasen der Bahn: deutlich heller und minziger als die Wiese, sonst
 ## verschwindet die Bahn im Rasen (der Filz ist nur 14 cm dick).
@@ -80,6 +94,15 @@ var _flash_text := ""
 var _hole_label: Label
 var _stroke_label: Label
 var _hint_label: Label
+## W17/G5: HUD-Skalierungsfaktor (M9), Intro-Restzeit (M1), Schau-Uhr für
+## den Hint-Fade (M6 — das Spiel hat keine Sim-Uhr), das Intro-Banner und
+## die Präsentations-Schicht (Putt-Pitch, Endton, Flash-Band, Banner-Plate).
+var _ui := 1.0
+var _intro_left := 0.0
+var _show_time := 0.0
+var _banner := ""
+var _banner_t := 0.0
+var _feel := Feel.new()
 
 var _stage: Stage3D
 var _gooby: GoobyActor
@@ -112,6 +135,11 @@ func setup(context: MinigameCtx) -> void:
 	_fit_viewport()
 	if is_inside_tree():
 		get_viewport().size_changed.connect(_fit_viewport)
+	# W17/G5 M1: Intro-Beat — Windmühlen-Uhr und Eingabe warten, der Kurs
+	# ist längst gewürfelt (RNG-Strom unangetastet, Crosscheck-Vertrag).
+	_intro_left = INTRO_S
+	_banner = I18nService.t("mg.miniGolf.intro")
+	_banner_t = INTRO_S + 0.7
 
 
 func end() -> void:
@@ -124,21 +152,52 @@ func apply_view(size: Vector2) -> void:
 	if size.x > 1.0 and size.y > 1.0:
 		view_size = size
 	landscape = view_size.x > view_size.y
+	# W17/G5 M9: der _ui-Faktor (Kurzkante/390, 0.75..3.0) skaliert alle
+	# HUD-Maße — vorher klebte die Bedienleiste in Fixpixeln (Krümel-HUD).
+	_ui = clampf(minf(view_size.x, view_size.y) / DESIGN_SHORT, 0.75, 3.0)
 	position = Vector2.ZERO
 	if _stage != null:
 		_stage.apply_size(view_size)
 		_stage.set_fov(46.0 if landscape else 42.0)
 		_frame_hole()
-	if _hole_label != null:
-		_hole_label.position = Vector2(16.0, 10.0)
-		_stroke_label.position = Vector2(16.0, 48.0)
-		_hint_label.position = Vector2(view_size.x * 0.5 - 150.0, view_size.y - 52.0)
-		_hint_label.size = Vector2(300.0, 40.0)
+	_layout_hud()
 	queue_redraw()
+
+
+## W17/G5 M9: Bedienleiste in Entwurfspixeln, mit `_ui` skaliert; der
+## Hinweis hängt an der Bildbreite statt an fixen 300 px.
+func _layout_hud() -> void:
+	if _hole_label == null:
+		return
+	var pad := 14.0 * _ui
+	_hole_label.position = Vector2(pad, 10.0 * _ui)
+	_hole_label.add_theme_font_size_override("font_size", int(26.0 * _ui))
+	_stroke_label.position = Vector2(pad, 46.0 * _ui)
+	_stroke_label.add_theme_font_size_override("font_size", int(17.0 * _ui))
+	var hint_w := minf(view_size.x - pad * 2.0, 420.0 * _ui)
+	_hint_label.add_theme_font_size_override("font_size", int(15.0 * _ui))
+	_hint_label.position = Vector2((view_size.x - hint_w) * 0.5, view_size.y - 48.0 * _ui)
+	_hint_label.size = Vector2(hint_w, 40.0 * _ui)
+	for label: Label in [_hole_label, _stroke_label, _hint_label]:
+		label.add_theme_constant_override("outline_size", int(5.0 * _ui))
 
 
 func _process(delta: float) -> void:
 	if not is_active() or finished:
+		return
+	_show_time += delta
+	_banner_t = maxf(0.0, _banner_t - delta)
+	# W17/G5 M1: Intro-Beat — die Kamera schwebt aus der Bahn-Totale in die
+	# Spielpose; Windmühlen-Uhr, Nougat und Eingabe warten (nur Verzögerung,
+	# alle Zahlen bleiben zahlengleich zum Web-Crosscheck).
+	if _intro_left > 0.0:
+		_intro_left = maxf(0.0, _intro_left - delta)
+		_stage.tick(delta)
+		_gooby.tick(delta)
+		_intro_camera()
+		_place_ball()
+		_update_labels()
+		queue_redraw()
 		return
 	_flash = maxf(0.0, _flash - delta)
 	_stage.tick(delta)
@@ -165,7 +224,7 @@ func _process(delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if not is_active() or finished or phase != "aim":
+	if not is_active() or finished or phase != "aim" or _intro_left > 0.0:
 		return
 	if event is InputEventScreenTouch:
 		if event.pressed:
@@ -564,6 +623,22 @@ func _frame_hole() -> void:
 	_stage.fit(points, center, 20.0 if landscape else 30.0, 180.0, 0.72)
 
 
+## W17/G5 M1: Bahn-Totale — die Kamera startet hoch über der Anlage (die
+## ganze Bahn samt Nachbarbahnen im Blick) und schwebt in die fit()-Pose;
+## e=0 == exakte Spielpose, kein Ruck. `_stage.tick()` stellt jede Frame
+## die Basis zurück, der Offset hier ist also nie kumulativ (Pond-Muster).
+## Reduced Motion überspringt den Flug (Banner + Warte-Gate bleiben).
+func _intro_camera() -> void:
+	if _stage.reduced_motion():
+		return
+	var e := 1.0 - ease(1.0 - _intro_left / INTRO_S, 0.4)
+	if e <= 0.0:
+		return
+	var cam: Camera3D = _stage.camera
+	cam.position += Vector3(0.0, 6.0, 2.6) * e
+	cam.look_at(Vector3(0.0, 0.0, COURSE_MID_Z), Vector3.UP)
+
+
 func _reset_ball() -> void:
 	var start: Dictionary = current_hole()["start"]
 	ball = {"x": float(start["x"]), "z": float(start["z"]), "vx": 0.0, "vz": 0.0, "done": false}
@@ -701,7 +776,9 @@ func _putt() -> void:
 	ball["vz"] = dir.y * power
 	strokes += 1
 	phase = "roll"
-	AudioDirector.try_play(self, "mg_good", 1.0 + 0.05 * (power / 6.5))
+	# W17/G5: die Schlagkraft ist jetzt HÖRBAR — vorher variierte der Pitch
+	# nur um ±3 %, ein Ass-Putt klang wie ein Zärtel-Putt.
+	AudioDirector.try_play(self, "mg_good", Feel.putt_pitch(power))
 	_gooby.play_for("build_hammer", 0.7)
 	# Der Durchschwung wächst mit der Schlagkraft — ein Ass-Putt sieht anders
 	# aus als ein Zärtel-Putt.
@@ -828,6 +905,15 @@ func _finish() -> void:
 		return
 	finished = true
 	running = false
+	# W17/G5 M8: die Runde endete vorher STUMM (nur report_end) — jetzt
+	# Endton + Sieg-Moment (Zeitlupe/Goldblitz/Konfetti gatet das JuiceKit
+	# intern über Reduced Motion).
+	AudioDirector.try_play(self, Feel.end_sfx_for(bool(tune["ENDLESS"]), score))
+	if ctx.juice != null:
+		if bool(tune["ENDLESS"]) or score <= 0:
+			ctx.juice.lose_moment()
+		else:
+			ctx.juice.win_moment()
 	ctx.report_end({"score": score, "holes": hole_index + 1})
 
 
@@ -842,16 +928,25 @@ func _update_labels() -> void:
 			"mg.miniGolf.hole", {"n": mini(hole_index + 1, course.size()), "max": course.size()}
 		)
 	_stroke_label.text = I18nService.t("mg.miniGolf.strokes", {"n": strokes, "par": current_par()})
+	_hint_label.modulate.a = _hint_alpha()
+
+
+## W17/G5 M6: der Hinweis blendet ~5 s nach dem Intro-Beat aus — die Bahn
+## gehört dann ganz dem Grün (Schau-Uhr, das Spiel hat keine Sim-Uhr).
+func _hint_alpha() -> float:
+	return clampf(1.0 - (_show_time - INTRO_S - 5.0) / 1.5, 0.0, 1.0)
 
 
 # ------------------------------------------------------------- Zielhilfe 2D
 
 
-## Nur noch Zielhilfe und Trefferbanner werden gezeichnet — die Welt selbst
-## ist 3D und liegt dahinter.
+## Nur noch Zielhilfe, Trefferbanner und Intro-Banner werden gezeichnet —
+## die Welt selbst ist 3D und liegt dahinter (Flash-Band und Banner-Plate
+## malt die Präsentations-Schicht mini_golf_feel.gd, M7).
 func _draw() -> void:
 	_draw_aim()
-	_draw_flash()
+	_feel.draw_flash(self, _flash_text, _flash, view_size, _ui)
+	_feel.draw_banner(self, _banner, _banner_t, view_size, _ui)
 
 
 func _draw_aim() -> void:
@@ -870,35 +965,20 @@ func _draw_aim() -> void:
 		float(ball["z"])
 	)
 	var pos := _stage.to_screen(ball_world)
-	draw_line(pos, pos - (_drag_from - _drag_to) * 0.55, Color(0.95, 0.45, 0.66, 0.5), 4.0)
+	draw_line(pos, pos - (_drag_from - _drag_to) * 0.55, Color(0.95, 0.45, 0.66, 0.5), 4.0 * _ui)
 	for i in PREVIEW_DOTS:
 		var f := float(i + 1) / PREVIEW_DOTS
 		var world := ball_world + Vector3(dir.x, 0.0, dir.y) * reach * f
 		world.y = Course.height_at(hole, world.x, world.z) + 0.05
 		var dot := _stage.to_screen(world)
-		draw_circle(dot, 4.5 - 2.0 * f, Color(1.0, 0.98, 0.9, 0.85 - 0.5 * f))
+		draw_circle(dot, (4.5 - 2.0 * f) * _ui, Color(1.0, 0.98, 0.9, 0.85 - 0.5 * f))
 	var frac := power / float(Logic.GOLF["MAX_POWER"])
 	draw_arc(
 		pos,
-		32.0,
+		32.0 * _ui,
 		-PI * 0.5,
 		-PI * 0.5 + TAU * frac,
 		24,
 		Color(1.0, 0.78, 0.3).lerp(Color(0.95, 0.35, 0.4), frac),
-		5.0
-	)
-
-
-func _draw_flash() -> void:
-	if _flash <= 0.0 or _flash_text.is_empty():
-		return
-	var alpha := clampf(_flash * 1.4, 0.0, 1.0)
-	draw_string(
-		ThemeService.font(800),
-		Vector2(0.0, view_size.y * 0.2),
-		_flash_text,
-		HORIZONTAL_ALIGNMENT_CENTER,
-		view_size.x,
-		32,
-		Color(0.99, 0.86, 0.45, alpha)
+		5.0 * _ui
 	)

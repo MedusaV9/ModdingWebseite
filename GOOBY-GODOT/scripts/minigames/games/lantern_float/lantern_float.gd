@@ -10,6 +10,13 @@ extends MinigameBase
 ## glüht hinten. Die Kamera rahmt die Flugebene EXAKT wie die 2D-Projektion
 ## (set_half_height) — jede Weltmeter-Zahl bleibt erhalten. Nur der
 ## Böen-Telegraf und das Banner bleiben als 2D-Overlay obenauf.
+##
+## W17/G5-Politur (NUR Präsentation, Paket P29): Intro-Beat 1,5 s mit
+## See-Totale (establish, Sim + Eingabe gegated, RNG-Strom unangetastet),
+## Böen-WINDLAYER aus einem vorhandenen Ambience-SFX (leise beim Telegraph,
+## stark beim Blasen — cityDrive-Muster), Sieg-Feier mit Banner + Konfetti
+## (RM-gegated), Hint-Fade nach ~6 s, Banner/Böentext auf Plate bzw. mit
+## Kontur und `_ui`-skaliert (M9-Rest), Q2-Gate am Stage-Burst.
 
 const Logic := preload("res://scripts/minigames/games/lantern_float/lantern_float_logic.gd")
 const Stage := preload("res://scripts/minigames/games/lantern_float/lantern_float_stage3d.gd")
@@ -25,6 +32,14 @@ const DESIGN_SHORT := 390.0
 ## Bedienleiste auf Nachthimmel: helle Schrift statt dunkler Tinte.
 const HUD_INK := Color(0.96, 0.96, 1.0, 0.96)
 const HUD_INK_SOFT := Color(0.84, 0.86, 0.98, 0.9)
+## W17/G5 M1: Intro-Beat (s) — See-Totale via establish, die Sim wartet.
+const INTRO_S := 1.5
+## Böen-Windlayer: vorhandenes Ambience-SFX (kein neues File) — leise beim
+## Telegraph, stark beim Blasen. Nur Ton, Reduced Motion bleibt unberührt.
+const WIND_SFX_ID := "ranch_ambience_wind"
+## Banner-Tinte/-Kontur auf der Milchglas-Plate (M7).
+const INK := Color(0.32, 0.24, 0.28)
+const RIM := Color(1.0, 0.99, 0.94, 0.85)
 
 var tune: Dictionary = {}
 var rng: GoobyRng
@@ -56,6 +71,15 @@ var _stat_label: Label
 var _hint_label: Label
 var _banner := ""
 var _banner_t := 0.0
+## W17/G5: Intro-Restzeit (M1) und Schau-Uhr — die Bühne atmet auch im
+## Beat weiter, die Sim-Uhr `elapsed` nicht.
+var _intro_left := 0.0
+var _show_time := 0.0
+## Böen-Windlayer (eigener Player: AudioDirector-Loops können keinen
+## Live-Pitch) + weicher Mix-Verlauf 0..1.
+var _wind: AudioStreamPlayer
+var _wind_mix := 0.0
+var _banner_plate := StyleBoxFlat.new()
 
 
 func setup(context: MinigameCtx) -> void:
@@ -74,15 +98,23 @@ func setup(context: MinigameCtx) -> void:
 	if ctx.juice != null:
 		ctx.juice.world_environment = _stage.stage.world_env
 	_build_hud()
+	_build_wind()
 	_fill_rings()
 	_fit_viewport()
 	if is_inside_tree():
 		get_viewport().size_changed.connect(_fit_viewport)
+	# W17/G5 M1: Intro-Beat — Sim-Uhr und Eingabe warten, der RNG-Strom
+	# bleibt unangetastet (die Ringe sind längst gewürfelt, _fill_rings
+	# zieht erst NACH dem Beat weiter, wenn travel wieder steigt).
+	_intro_left = INTRO_S
+	_set_banner(I18nService.t("mg.lanternFloat.intro"), INTRO_S + 0.7)
 
 
 func end() -> void:
 	super.end()
 	finished = true
+	if _wind != null:
+		_wind.stop()
 
 
 ## Pflicht-Layouthook: beide Orientierungen laufen über DIESE Funktion.
@@ -119,9 +151,21 @@ func _layout_hud() -> void:
 func _process(delta: float) -> void:
 	if not is_active() or finished:
 		return
-	elapsed += delta
+	_show_time += delta
 	_banner_t = maxf(0.0, _banner_t - delta)
+	# W17/G5 M1: Intro-Beat — die Kamera hebt aus der See-Totale in die
+	# Spielpose, die Bühne atmet auf der Schau-Uhr; elapsed/travel warten,
+	# der Lauf bleibt zahlengleich (Crosscheck-Vertrag unberührt).
+	if _intro_left > 0.0:
+		_intro_left = maxf(0.0, _intro_left - delta)
+		_stage.establish(1.0 if _reduced_motion() else 1.0 - _intro_left / INTRO_S)
+		_stage.sync(_rings, travel, lantern_x, invuln, _show_time, delta)
+		_update_labels()
+		queue_redraw()
+		return
+	elapsed += delta
 	invuln = maxf(0.0, invuln - delta)
+	_sync_wind(delta)
 	if not bool(tune["ENDLESS"]) and elapsed >= float(tune["DURATION_SEC"]):
 		_finish()
 		return
@@ -129,13 +173,13 @@ func _process(delta: float) -> void:
 	_steer(delta)
 	_fill_rings()
 	_check_pass()
-	_stage.sync(_rings, travel, lantern_x, invuln, elapsed, delta)
+	_stage.sync(_rings, travel, lantern_x, invuln, _show_time, delta)
 	_update_labels()
 	queue_redraw()
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if not is_active() or finished:
+	if not is_active() or finished or _intro_left > 0.0:
 		return
 	if event is InputEventScreenTouch and event.pressed:
 		steer_target = Logic.steer_target_from(_normalized_x(event.position.x), tune)
@@ -150,6 +194,46 @@ func _world_scale() -> float:
 
 func _normalized_x(px: float) -> float:
 	return clampf((px - view_size.x * 0.5) / (view_size.x * 0.5), -1.0, 1.0)
+
+
+## Böen-Windlayer aus einem VORHANDENEN Ambience-SFX (cityDrive-Muster,
+## kein neues File): eigener Player, weil AudioDirector-Loops keinen
+## Live-Pitch können — Lautstärke/Pitch folgen in _sync_wind der Böenphase.
+## Bus "Sfx" ⇒ Nutzer-Regler und Limiter gelten; headless bleibt er still.
+func _build_wind() -> void:
+	var path := SfxMap.path(WIND_SFX_ID)
+	if not ResourceLoader.exists(path):
+		return
+	var stream: AudioStream = (load(path) as AudioStream).duplicate()
+	if stream is AudioStreamOggVorbis:
+		(stream as AudioStreamOggVorbis).loop = true
+	elif stream is AudioStreamWAV:
+		(stream as AudioStreamWAV).loop_mode = AudioStreamWAV.LOOP_FORWARD
+	_wind = AudioStreamPlayer.new()
+	_wind.bus = &"Sfx"
+	_wind.stream = stream
+	_wind.volume_db = -60.0
+	add_child(_wind)
+
+
+## Der Wind ist jetzt HÖRBAR angekündigt (Audit §6: Telegraph war stumm):
+## leise beim Telegraph, kräftig beim Blasen, danach klingt er weich aus.
+## Reiner Ton — Reduced Motion bleibt unberührt (nur Bewegung ist gegated).
+func _sync_wind(delta: float) -> void:
+	if _wind == null:
+		return
+	_wind.stream_paused = not is_active() or finished
+	if not _wind.playing and not _wind.stream_paused:
+		_wind.play()
+	var target := 0.0
+	match str(Logic.gust_phase_at(elapsed, tune)["phase"]):
+		"telegraph":
+			target = 0.45
+		"push":
+			target = 1.0
+	_wind_mix = lerpf(_wind_mix, target, minf(1.0, 6.0 * delta))
+	_wind.volume_db = lerpf(-44.0, -10.0, _wind_mix)
+	_wind.pitch_scale = 0.9 + 0.35 * _wind_mix
 
 
 func _build_hud() -> void:
@@ -245,7 +329,7 @@ func _award(points: int, wx: float, wy: float, gold: bool) -> void:
 	AudioDirector.try_play(
 		self, "mg_golden" if gold else "mg_good", FeelSfx.combo_pitch(ring_streak)
 	)
-	_stage.award_fx(wx, wy - travel, gold)
+	_stage.award_fx(wx, wy - travel, gold, _reduced_motion())
 	if ctx.juice != null:
 		var pos: Vector2 = _stage.to_screen(wx, wy - travel)
 		var color := Color(1.0, 0.82, 0.35) if gold else Color(0.72, 0.92, 1.0)
@@ -292,6 +376,17 @@ func _finish() -> void:
 		return
 	finished = true
 	running = false
+	if _wind != null:
+		_wind.stop()
+	# W17/G5 M8: die durchgestandene Fahrt endete vorher STUMM (Audit §6
+	# „Sieg ohne Feier“) — jetzt Endton, Sieg-Band und Feier am Körbchen.
+	AudioDirector.try_play(self, end_sfx_for(bool(tune["ENDLESS"]), score))
+	if not bool(tune["ENDLESS"]) and score > 0:
+		_set_banner(I18nService.t("mg.lanternFloat.win", {"hits": hits}), 2.2)
+		_stage.celebrate(_reduced_motion())
+		if ctx.juice != null:
+			ctx.juice.win_moment()
+	queue_redraw()
 	(
 		ctx
 		. report_end(
@@ -307,9 +402,15 @@ func _finish() -> void:
 	)
 
 
-func _set_banner(text: String) -> void:
+## Endton-Wahl (PUR für Tests, M8): die Endlos-Fahrt endet immer über den
+## dritten Rempler (mg_lose), die Zeitfahrt feiert jeden gepunkteten Lauf.
+static func end_sfx_for(endless: bool, score_now: int) -> String:
+	return "mg_lose" if endless or score_now <= 0 else "mg_win"
+
+
+func _set_banner(text: String, seconds := 1.3) -> void:
 	_banner = text
-	_banner_t = 1.3
+	_banner_t = seconds
 
 
 func _update_labels() -> void:
@@ -321,6 +422,23 @@ func _update_labels() -> void:
 		var left := maxi(0, int(ceil(float(tune["DURATION_SEC"]) - elapsed)))
 		_time_label.text = I18nService.t("mg.game.time", {"sec": left})
 	_stat_label.text = I18nService.t("mg.lanternFloat.stats", {"hits": hits, "gold": golds})
+	_hint_label.modulate.a = _hint_alpha()
+
+
+## W17/G5 M6: der Hinweis blendet ~5 s nach dem Beat aus — die Nacht gehört
+## dann ganz der Bühne (`elapsed` startet erst NACH dem Intro).
+func _hint_alpha() -> float:
+	return clampf(1.0 - (elapsed - 5.0) / 1.5, 0.0, 1.0)
+
+
+## Reduced-Motion-Abfrage (Duck-Typing wie im JuiceKit — ohne Autoload = aus).
+func _reduced_motion() -> bool:
+	if not is_inside_tree():
+		return true
+	var settings := get_node_or_null(^"/root/AppSettings")
+	if settings != null and settings.has_method("is_reduced_motion"):
+		return settings.is_reduced_motion()
+	return false
 
 
 ## Nur noch HUD-Overlay: der Böen-Telegraf ist eine WARNUNG, keine Kulisse,
@@ -330,6 +448,8 @@ func _draw() -> void:
 	_draw_banner()
 
 
+## W17/G5 M9: Böentext skaliert mit `_ui` und bekommt eine dunkle Kontur —
+## hell auf hellem Mondhimmel war die Warnung sonst flau.
 func _draw_gust() -> void:
 	var info := Logic.gust_phase_at(elapsed, tune)
 	var phase := str(info["phase"])
@@ -343,32 +463,56 @@ func _draw_gust() -> void:
 		var y := vp.y * (0.12 + 0.11 * i)
 		var x0 := vp.x * (0.1 if dir > 0 else 0.9)
 		var x1 := x0 + dir * vp.x * 0.22 * (0.6 + 0.4 * sin(elapsed * 6.0 + i))
-		draw_line(Vector2(x0, y), Vector2(x1, y), Color(0.8, 0.92, 1.0, alpha * 0.5), 3.0)
+		draw_line(Vector2(x0, y), Vector2(x1, y), Color(0.8, 0.92, 1.0, alpha * 0.5), 3.0 * _ui)
 	if phase == "telegraph":
 		var font := ThemeService.font(800)
-		draw_string(
+		var w := 320.0 * _ui
+		var fs := int(26.0 * _ui)
+		var at := Vector2((vp.x - w) * 0.5, vp.y * 0.2)
+		var text := I18nService.t("mg.lanternFloat.gust")
+		draw_string_outline(
 			font,
-			Vector2(vp.x * 0.5 - 160.0, vp.y * 0.2),
-			I18nService.t("mg.lanternFloat.gust"),
+			at,
+			text,
 			HORIZONTAL_ALIGNMENT_CENTER,
-			320.0,
-			26,
-			Color(0.85, 0.95, 1.0, 0.9)
+			w,
+			fs,
+			int(5.0 * _ui),
+			Color(0.07, 0.08, 0.2, 0.85)
 		)
+		draw_string(font, at, text, HORIZONTAL_ALIGNMENT_CENTER, w, fs, Color(0.85, 0.95, 1.0))
 
 
+## W17/G5 M7/M9: Banner mittig auf Milchglas-Plate mit Kontur statt nacktem
+## Schriftzug — lange Übersetzungen brechen um (carrot_catch-Muster).
 func _draw_banner() -> void:
 	if _banner_t <= 0.0 or _banner.is_empty():
 		return
 	var vp := get_viewport_rect().size
 	var font := ThemeService.font(800)
 	var alpha := clampf(_banner_t * 1.4, 0.0, 1.0)
-	draw_string(
+	var fs := int(26.0 * _ui)
+	var w := minf(vp.x * 0.92, 460.0 * _ui)
+	var text := font.get_multiline_string_size(_banner, HORIZONTAL_ALIGNMENT_CENTER, w, fs)
+	var top := vp.y * 0.34
+	var pad := Vector2(18.0, 10.0) * _ui
+	_banner_plate.set_corner_radius_all(int(12.0 * _ui))
+	_banner_plate.bg_color = Color(1.0, 0.99, 0.94, 0.74 * alpha)
+	draw_style_box(
+		_banner_plate, Rect2(Vector2((vp.x - text.x) * 0.5, top) - pad, text + pad * 2.0)
+	)
+	var at := Vector2((vp.x - w) * 0.5, top + font.get_ascent(fs))
+	draw_multiline_string_outline(
 		font,
-		Vector2(vp.x * 0.5 - 180.0, vp.y * 0.38),
+		at,
 		_banner,
 		HORIZONTAL_ALIGNMENT_CENTER,
-		360.0,
-		30,
-		Color(1.0, 0.86, 0.7, alpha)
+		w,
+		fs,
+		-1,
+		int(5.0 * _ui),
+		Color(RIM, RIM.a * alpha)
+	)
+	draw_multiline_string(
+		font, at, _banner, HORIZONTAL_ALIGNMENT_CENTER, w, fs, -1, Color(INK, alpha)
 	)

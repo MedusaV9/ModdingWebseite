@@ -50,6 +50,8 @@ var _star_mat: StandardMaterial3D
 var _star_t := -4.0
 var _star_from := Vector3.ZERO
 var _star_dir := Vector3.ZERO
+## Spielpose der Kamera aus frame() — Basis für den Intro-Anflug (W17/G5).
+var _cam_base := Vector3(0.0, 0.0, CAM_DIST)
 
 
 func setup_stage(ring_radius: float, cloud_half_w: float) -> void:
@@ -512,9 +514,34 @@ func frame(vp: Vector2, world_scale: float, landscape: bool) -> void:
 	var half_h := vp.y * 0.5 / maxf(1.0, world_scale)
 	_anchor_y = (0.72 if not landscape else 0.68) * vp.y
 	var cam_y := (_anchor_y - vp.y * 0.5) / maxf(1.0, world_scale)
-	stage.camera.position = Vector3(0.0, cam_y, CAM_DIST)
+	_cam_base = Vector3(0.0, cam_y, CAM_DIST)
+	stage.camera.position = _cam_base
 	stage.camera.rotation = Vector3.ZERO
 	stage.set_half_height(half_h, CAM_DIST)
+
+
+## W17/G5 M1: Intro-Totale — die Kamera startet gesenkt Richtung Dorf und
+## See (dort startet die Laterne ihre Fahrt) und hebt in die Spielpose.
+## k läuft 0 → 1; bei k=1 steht EXAKT die frame()-Pose (kein Ruck beim
+## Übergang in die Runde). Reduced Motion ruft mit k=1 auf (kein Flug).
+func establish(k: float) -> void:
+	var e := 1.0 - ease(clampf(k, 0.0, 1.0), 0.4)
+	stage.camera.position = _cam_base + Vector3(0.0, -2.6, -1.6) * e
+	stage.camera.rotation_degrees = Vector3(-7.0 * e, 0.0, 0.0)
+
+
+## Sieg-Feier am Rundenende (W17/G5, NUR Präsentation): Gooby jubelt im
+## Körbchen, die Laterne strahlt. Hüpfer + Funkenstoß entfallen unter
+## Reduced Motion (Q2-Regel: Gate an der Call-Site, das Fx-Kit bleibt tabu).
+func celebrate(reduced := false) -> void:
+	gooby.play_for("celebrate", 1.2)
+	gooby.emote("ecstatic", 1.6)
+	_light_boost = 1.0
+	stage.pulse_glow(0.9)
+	if reduced:
+		return
+	gooby.hop(0.4, 0.24)
+	Fx.burst(_burst, _lantern.position + Vector3(0.0, 0.4, 0.25))
 
 
 ## Jeden Frame: Laterne, Ringe/Glühwürmchen/Wolken und Sterne stellen.
@@ -635,8 +662,12 @@ func to_screen(wx: float, wy_minus_travel: float) -> Vector2:
 	return stage.to_screen(Vector3(wx, wy_minus_travel, 0.0))
 
 
-func award_fx(wx: float, wy_minus_travel: float, gold: bool) -> void:
-	Fx.burst(_burst, Vector3(wx, wy_minus_travel, 0.2))
+## `reduced` (W17/G5, Q2): der Partikel-Burst und der Hüpfer entfallen unter
+## Reduced Motion — Gate an DIESER Call-Site, das Fx-Kit selbst bleibt tabu.
+## Belohnungsring, Emote und Licht-Puls bleiben als statisches Feedback.
+func award_fx(wx: float, wy_minus_travel: float, gold: bool, reduced := false) -> void:
+	if not reduced:
+		Fx.burst(_burst, Vector3(wx, wy_minus_travel, 0.2))
 	# Auffächernder Ring am Treffer-Punkt: Gold warm, Blau kühl.
 	var tint := GOLD if gold else BLUE
 	_award_ring_mat.emission = tint
@@ -646,12 +677,14 @@ func award_fx(wx: float, wy_minus_travel: float, gold: bool) -> void:
 	if gold:
 		gooby.emote("ecstatic", 1.0)
 		gooby.play_for("celebrate", 0.9)
-		gooby.hop(0.4, 0.22)
+		if not reduced:
+			gooby.hop(0.4, 0.22)
 		_light_boost = 1.0
 		stage.pulse_glow(0.9)
 	else:
 		gooby.emote("happy", 0.6)
-		gooby.hop(0.3, 0.12)
+		if not reduced:
+			gooby.hop(0.3, 0.12)
 		_light_boost = maxf(_light_boost, 0.45)
 		stage.pulse_glow(0.35)
 
