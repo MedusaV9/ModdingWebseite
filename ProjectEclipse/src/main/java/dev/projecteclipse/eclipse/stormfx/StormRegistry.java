@@ -3,6 +3,7 @@ package dev.projecteclipse.eclipse.stormfx;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -11,6 +12,7 @@ import javax.annotation.Nullable;
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.network.fx.S2CStormStatePayload;
 import dev.projecteclipse.eclipse.worldgen.fog.FogStormSites;
+import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -129,6 +131,8 @@ public final class StormRegistry {
     private static final Map<Integer, ServerStorm> STORMS = new ConcurrentHashMap<>();
     /** Stable storm ids per P1 fog-site id, so repeat announcements never duplicate storms. */
     private static final Map<String, Integer> SITE_IDS = new ConcurrentHashMap<>();
+    /** Sites whose unloaded-chunk defer probe already fired (once per site per session). */
+    private static final Set<String> DEFER_LOGGED = ConcurrentHashMap.newKeySet();
     private static final AtomicInteger NEXT_ID = new AtomicInteger(1);
 
     private StormRegistry() {}
@@ -254,6 +258,10 @@ public final class StormRegistry {
      * flipped back inactive dissipates. No hub wiring needed; the poll is idempotent because
      * a revealed/standing site keeps its {@link #SITE_IDS} entry alive in {@link #STORMS}.
      * Overworld only: P1 fog sites are overworld stage-3 features.
+     *
+     * <p>Loaded-chunk gate: a site whose center chunk is unloaded is skipped this poll —
+     * {@code getHeight} there returns the dimension floor (min_y -176), which used to register
+     * boot-time storms underground. Deferred sites reveal once a player loads the terrain (§6.1).</p>
      */
     private static void pollFogSites(MinecraftServer server) {
         List<FogStormSites.Site> sites = FogStormSites.sites();
@@ -266,6 +274,14 @@ public final class StormRegistry {
             Integer known = SITE_IDS.get(site.id());
             boolean standing = known != null && STORMS.containsKey(known);
             if (site.active() && !standing) {
+                if (!level.isLoaded(new BlockPos(site.x(), level.getSeaLevel(), site.z()))) {
+                    if (DEFER_LOGGED.add(site.id())) {
+                        EclipseMod.LOGGER.info(
+                                "[stormpoll] deferring fog site {} — center chunk not loaded yet",
+                                site.id());
+                    }
+                    continue; // retried every poll; a player approaching loads the chunk
+                }
                 float radius = (site.radius() > 0 ? site.radius() : DEFAULT_RADIUS) + SITE_WALL_MARGIN;
                 int y = level.getHeight(Heightmap.Types.WORLD_SURFACE, site.x(), site.z());
                 Vec3 center = new Vec3(site.x() + 0.5D, y, site.z() + 0.5D);
@@ -427,6 +443,7 @@ public final class StormRegistry {
     static void onServerStopped(ServerStoppedEvent event) {
         STORMS.clear();
         SITE_IDS.clear();
+        DEFER_LOGGED.clear();
         NEXT_ID.set(1);
     }
 }

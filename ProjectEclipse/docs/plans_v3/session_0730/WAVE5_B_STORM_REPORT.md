@@ -206,3 +206,20 @@ in Renderweite einen permanenten Framebuffer-Blit-Fehler erzeugt (GL_INVALID_OPE
 depth attachment format mismatch → Screen dauerhaft schwarz). Damit lassen sich die
 Legacy-Stürme für Foto-Abnahmen anderer Features kontrolliert abbauen und später per
 `rematerialize` frisch wieder aufbauen.
+
+## Boot-Register-Bug pollFogSites (Fix, Nachtrag 2)
+
+Root Cause: `StormRegistry.pollFogSites` rief `level.getHeight(WORLD_SURFACE, x, z)` auf
+ungeladenen Chunks — das liefert den Dimensions-Boden (`min_y: -176`), Site-Stürme
+registrierten beim Server-Boot also mit `center.y = -176` statt Oberfläche ~62. Live-Beweis
+(F-105, `/tmp/server_f105e.log`): `[w5b-chest] site=eclipse:fog_storm_1 pos=-177, 61, -170
+revenant=false wall=(-193.9, -158.4, -156.5)` — Wall-Anker ~230 Blöcke unter Terrain
+(-176 + h·0.55 = -158.4). Fix (nur `StormRegistry.pollFogSites`): Loaded-Chunk-Gate — ist
+der Site-Center-Chunk nicht geladen (`level.isLoaded(...)`), wird die Registrierung auf den
+nächsten Poll verschoben (§6.1-Vertrag von `StormReveal`: Reveal erst NACH geladenem
+Terrain); Dissipate-Zweig läuft weiter ungegated. Einmal-pro-Session-Sonde:
+`[stormpoll] deferring fog site {} — center chunk not loaded yet` (Set cleared in
+`onServerStopped`). Abnahme: Server neu starten → Boot-Log zeigt die Defer-Sonde statt
+`Storm sphere revealed...`; dann Spieler zur Site (`/tp -173 ~ -173`) → binnen ~5 s
+(FOG_SITE_POLL_TICKS) feuert der Reveal mit plausiblem Surface-Center — verifizieren über
+frischen `[w5b-chest]`-Anker mit Wall-Y ≈ 60..90 nach Öffnen einer ungestungenen Chest.
