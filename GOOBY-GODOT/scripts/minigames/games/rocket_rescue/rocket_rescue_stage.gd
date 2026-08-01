@@ -28,6 +28,8 @@ const ROCK_COUNT := 26
 var gooby: GoobyRig
 
 var _tune: Dictionary = {}
+## W17 M1: Kamerahöhe der Spielpose — establish() endet EXAKT hier.
+var _play_cam_y := 0.0
 var _craft: Node3D
 var _craft_tilt: Node3D
 var _flame: GPUParticles3D
@@ -68,7 +70,8 @@ func setup_stage(tune: Dictionary, layout: Dictionary) -> void:
 	)
 	var half_h := 0.5 * (float(_tune["CEILING_Y"]) + 1.4) / WORLD_H_FRAC
 	set_half_height(half_h, CAM_DIST)
-	camera.position = Vector3(0.0, (GROUND_FRAC - 0.5) * 2.0 * half_h, CAM_DIST)
+	_play_cam_y = (GROUND_FRAC - 0.5) * 2.0 * half_h
+	camera.position = Vector3(0.0, _play_cam_y, CAM_DIST)
 	camera.rotation = Vector3.ZERO
 	_build_sky_props()
 	_build_ground()
@@ -85,13 +88,25 @@ func track(cam_x: float) -> void:
 	camera.position.x = cam_x
 
 
+## W17 M1: Intro-Totale (t 0→1). Die Kamera startet erhöht und zurückgezogen
+## mit leichtem Blick nach oben — so stehen Mondebene, Plattform-Band UND der
+## Ringplanet zusammen im Bild — und schwebt weich in die Spielpose. t = 1
+## ist EXAKT die setup_stage-Rahmung (kein Ruck beim Sim-Start); Reduced
+## Motion ruft direkt establish(1.0) und überspringt den Flug.
+func establish(t: float) -> void:
+	var k := 1.0 - pow(1.0 - clampf(t, 0.0, 1.0), 3.0)
+	camera.position.y = _play_cam_y + 5.0 * (1.0 - k)
+	camera.position.z = CAM_DIST + 10.0 * (1.0 - k)
+	camera.rotation_degrees = Vector3(7.0 * (1.0 - k), 0.0, 0.0)
+
+
 ## Ganze Bühne aus einem Zustandsschnappschuss nachziehen.
-func sync(s: Dictionary, layout: Dictionary, elapsed: float) -> void:
+func sync(s: Dictionary, layout: Dictionary, elapsed: float, reduced := false) -> void:
 	_sync_craft(s, elapsed)
 	_sync_platforms(layout["platforms"])
 	_sync_cans(layout["fuelPickups"], elapsed)
 	_sync_pad(s, elapsed)
-	_sync_wind(s)
+	_sync_wind(s, reduced)
 
 
 ## Gooby-Emotion setzen (nur bei Wechsel, sonst flackert der Blend).
@@ -655,11 +670,13 @@ func _sync_pad(s: Dictionary, elapsed: float) -> void:
 		light.scale = Vector3.ONE * pop
 
 
-func _sync_wind(s: Dictionary) -> void:
+## W17/Q2: die Böen-Sternchen sind reine Deko-Partikel — unter Reduced
+## Motion bleiben sie aus (Telegraph-Ton + Schiffsdrift tragen die Info).
+func _sync_wind(s: Dictionary, reduced: bool) -> void:
 	var wind: Dictionary = s["wind"]
 	var phase := str(wind["phase"])
 	var dir := float(wind["dir"])
-	_wind.emitting = phase != "idle"
+	_wind.emitting = phase != "idle" and not reduced
 	if not _wind.emitting:
 		return
 	_wind.position.x = -11.0 * dir

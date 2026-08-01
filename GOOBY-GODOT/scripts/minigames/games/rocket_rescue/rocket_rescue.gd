@@ -22,6 +22,15 @@ extends MinigameBase
 ## GEGLÄTTET mit Blickvorsprung in Flugrichtung (cam_target, pure) statt
 ## hart zu klemmen, und die Rettung feiert mit einem großen Herz-Funken-
 ## Burst der Bühne. Engine/Sim unverändert (zertifiziert).
+##
+## W17/G4-Politur (NUR Präsentation, Sim/Verträge unangetastet): das HUD ist
+## entflochten — der Tankbalken liegt jetzt UNTER den Labels statt mit dem
+## „Gerettet"-Label zu kollidieren (Audit-Defekt) — und skaliert komplett
+## über den _ui-Faktor (M9, inkl. Zonen-Leiste/Flash/Hint). Dazu: Intro-Beat
+## 1,5 s mit Kamera-Totale Richtung Planet (Sim/Eingabe warten, M1),
+## Hint-Fade nach 5 s + Konturen (M6/M7), Flash auf Milchglas-Plate mit
+## Umbruch (M7), Schub-Loop mit Spool-Pitch (M3/M10) und Endton für die
+## bislang stummen Zeit-/Sprit-Enden (M8).
 
 const Logic := preload("res://scripts/minigames/games/rocket_rescue/rocket_rescue_logic.gd")
 const Lander := preload("res://scripts/minigames/games/rocket_rescue/rocket_rescue_engine.gd")
@@ -37,6 +46,18 @@ const FUEL_COLOR := Color(0.45, 0.86, 0.6)
 ## W15: Kameraglättung (1/s) + Blickvorsprung (s Flugzeit) fürs Hochkant-Follow.
 const CAM_SMOOTH := 6.0
 const CAM_LOOKAHEAD_S := 0.4
+
+## W17 M9: Entwurfs-Kurzkante — das ganze HUD skaliert über den _ui-Faktor.
+const DESIGN_SHORT := 390.0
+## W17 M1: Intro-Beat (s) — Kamera-Totale Richtung Planet, Sim/Eingabe warten.
+const INTRO_S := 1.5
+## W17 M6: nach so vielen Sekunden SIM-Zeit blendet der Hinweis aus.
+const HINT_FADE_SEC := 5.0
+## W17 M3/M10: Schub-Loop aus einem VORHANDENEN Ambience-SFX (kein neues File).
+const THRUST_SFX_ID := "ranch_ambience_wind"
+## Dunkler Nachthimmel-Saum der HUD-Schrift (M7) — heller Text braucht ihn,
+## sobald der blasse Ringplanet hinter die Labels wandert.
+const OUTLINE_INK := Color(0.12, 0.1, 0.2, 0.72)
 
 var tune: Dictionary = {}
 var engine: RocketRescueEngine
@@ -60,6 +81,12 @@ var _low_pulse := 0.0
 var _fuel_label: Label
 var _rescue_label: Label
 var _hint_label: Label
+var _ui := 1.0
+var _intro_left := 0.0
+var _flash_plate := StyleBoxFlat.new()
+var _thrust_sfx: AudioStreamPlayer
+var _thrust_heat := 0.0
+var _lose_played := false
 
 
 func setup(context: MinigameCtx) -> void:
@@ -69,7 +96,14 @@ func setup(context: MinigameCtx) -> void:
 	engine = Lander.new(func() -> float: return rng.next(), tune)
 	_build_stage()
 	_build_hud()
+	_build_thrust_loop()
 	_fit_viewport()
+	_flash_plate.set_corner_radius_all(12)
+	# W17 M1: Intro-Beat — Ziel-Banner + Kamera-Totale; die Sim-Uhr, Spawns
+	# und die Eingabe warten, der Lauf bleibt danach zahlengleich.
+	_intro_left = INTRO_S
+	_flash_text = I18nService.t("mg.rocketRescue.intro")
+	_flash = INTRO_S + 0.7
 	if is_inside_tree():
 		get_viewport().size_changed.connect(_fit_viewport)
 
@@ -77,6 +111,8 @@ func setup(context: MinigameCtx) -> void:
 func end() -> void:
 	super.end()
 	finished = true
+	if _thrust_sfx != null:
+		_thrust_sfx.stop()
 
 
 ## 3D-Bühne unter die Node2D-Wurzel hängen (Godot rendert 3D hinter 2D).
@@ -90,25 +126,55 @@ func _build_stage() -> void:
 
 
 ## Pflicht-Layouthook: beide Orientierungen laufen über DIESE Funktion.
+## W17 M9: der _ui-Faktor (Kurzkante/390, 0.75..3.0) skaliert das ganze HUD.
 func apply_view(size: Vector2) -> void:
 	if size.x > 1.0 and size.y > 1.0:
 		view_size = size
 	landscape = view_size.x > view_size.y
+	_ui = clampf(minf(view_size.x, view_size.y) / DESIGN_SHORT, 0.75, 3.0)
 	position = Vector2.ZERO
 	_world_scale = (view_size.y * WORLD_H_FRAC) / (float(tune["CEILING_Y"]) + 1.4)
 	if _stage != null:
 		_stage.apply_size(view_size)
-	if _fuel_label != null:
-		_fuel_label.position = Vector2(16.0, 10.0)
-		_rescue_label.position = Vector2(16.0, 48.0)
-		# W15: der Hinweis rückt ÜBER die neue Zonen-Leiste am unteren Rand.
-		_hint_label.position = Vector2(view_size.x * 0.5 - 160.0, view_size.y - 112.0)
-		_hint_label.size = Vector2(320.0, 40.0)
+	_layout_hud()
 	queue_redraw()
 
 
+## Bedienleiste in Entwurfspixeln, mit _ui skaliert (sonst Krümel-HUD auf
+## Tablets) — Konturen auf allen Labels (M7, runner-Muster).
+func _layout_hud() -> void:
+	if _fuel_label == null:
+		return
+	_fuel_label.position = Vector2(16.0, 10.0) * _ui
+	_fuel_label.add_theme_font_size_override("font_size", int(34.0 * _ui))
+	_fuel_label.add_theme_constant_override("outline_size", int(6.0 * _ui))
+	_rescue_label.position = Vector2(16.0, 52.0) * _ui
+	_rescue_label.add_theme_font_size_override("font_size", int(15.0 * _ui))
+	_rescue_label.add_theme_constant_override("outline_size", int(5.0 * _ui))
+	# W15: der Hinweis rückt ÜBER die Zonen-Leiste am unteren Rand —
+	# W17: seine Breite folgt dem Viewport statt an Fix-320-px zu clippen.
+	var hint_w := minf(view_size.x - 24.0 * _ui, 360.0 * _ui)
+	_hint_label.add_theme_font_size_override("font_size", int(15.0 * _ui))
+	_hint_label.add_theme_constant_override("outline_size", int(5.0 * _ui))
+	_hint_label.position = Vector2((view_size.x - hint_w) * 0.5, view_size.y - 116.0 * _ui)
+	_hint_label.size = Vector2(hint_w, 40.0 * _ui)
+
+
 func _process(delta: float) -> void:
+	_sync_thrust_loop(delta)
 	if not is_active() or finished:
+		return
+	# W17 M1: Intro-Beat — die Kamera schwebt aus der Planeten-Totale in die
+	# Spielpose, das Ziel steht als Banner; Sim-Uhr/Spawns/Eingabe warten
+	# (der Lauf bleibt zahlengleich, Crosscheck-Vertrag unberührt).
+	if _intro_left > 0.0:
+		_intro_left = maxf(0.0, _intro_left - delta)
+		_flash = maxf(0.0, _flash - delta)
+		_low_pulse += delta
+		_sync_stage()
+		_stage.establish(1.0 if _reduced_motion() else 1.0 - _intro_left / INTRO_S)
+		_update_labels()
+		queue_redraw()
 		return
 	_squash = maxf(0.0, _squash - delta)
 	_beacon = maxf(0.0, _beacon - delta)
@@ -131,7 +197,7 @@ func _sync_stage() -> void:
 	var snapshot := engine.state.duplicate()
 	snapshot["thrust"] = _thrust
 	snapshot["squash01"] = _squash / float(Logic.ROCKET_JUICE["TOUCH_SQUASH_SEC"])
-	_stage.sync(snapshot, engine.layout, _low_pulse)
+	_stage.sync(snapshot, engine.layout, _low_pulse, _reduced_motion())
 	_stage.feel(_mood())
 
 
@@ -151,7 +217,8 @@ func _mood() -> String:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if not is_active() or finished:
+	# W17 M1: im Intro-Beat wartet auch die Eingabe (kein Frühstart-Schub).
+	if not is_active() or finished or _intro_left > 0.0:
 		return
 	if event is InputEventScreenTouch:
 		_touching = event.pressed
@@ -196,12 +263,58 @@ func _build_hud() -> void:
 	_hint_label.theme_type_variation = &"SoftLabel"
 	_hint_label.text = I18nService.t("mg.rocketRescue.hint")
 	_hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	add_child(_hint_label)
-	# Nachthimmel — die Theme-Schriftfarben sind für Helles gedacht.
+	# Nachthimmel — die Theme-Schriftfarben sind für Helles gedacht;
+	# W17 M7: dunkler Saum, damit die Schrift auch vor dem Planeten steht.
 	_fuel_label.add_theme_color_override("font_color", Color(1.0, 0.97, 0.92))
 	_rescue_label.add_theme_color_override("font_color", Color(0.72, 0.95, 0.85))
 	_hint_label.add_theme_color_override("font_color", Color(0.82, 0.84, 0.98))
+	for label: Label in [_fuel_label, _rescue_label, _hint_label]:
+		label.add_theme_color_override("font_outline_color", OUTLINE_INK)
 	_update_labels()
+
+
+## W17 M3/M10: Schub-Loop aus einem VORHANDENEN Ambience-SFX — eigener
+## Player, weil AudioDirector-One-Shots keinen Live-Pitch können. Bus "Sfx"
+## ⇒ Nutzer-Regler/Limiter gelten weiter; headless spielt der Dummy still.
+func _build_thrust_loop() -> void:
+	var path := SfxMap.path(THRUST_SFX_ID)
+	if not ResourceLoader.exists(path):
+		return
+	var stream: AudioStream = (load(path) as AudioStream).duplicate()
+	if stream is AudioStreamOggVorbis:
+		(stream as AudioStreamOggVorbis).loop = true
+	elif stream is AudioStreamWAV:
+		(stream as AudioStreamWAV).loop_mode = AudioStreamWAV.LOOP_FORWARD
+	_thrust_sfx = AudioStreamPlayer.new()
+	_thrust_sfx.bus = &"Sfx"
+	_thrust_sfx.stream = stream
+	_thrust_sfx.volume_db = -30.0
+	add_child(_thrust_sfx)
+
+
+## Godot-Gotcha: stream_paused wirkt nur auf LAUFENDE Playbacks — darum
+## startet play() erst beim ERSTEN Schub (Gate) und pausiert/weckt danach.
+## Pitch/Volumen folgen dem Schub über einen Spool-Wert (hoch beim Brennen,
+## klingt nach dem Loslassen ab) — Triebwerk statt An/Aus-Schalter.
+func _sync_thrust_loop(delta: float) -> void:
+	if _thrust_sfx == null:
+		return
+	var burning := (
+		is_active()
+		and not finished
+		and _intro_left <= 0.0
+		and _thrust
+		and float(engine.state["fuel"]) > 0.0
+		and not bool(engine.state["towing"])
+	)
+	_thrust_heat = clampf(_thrust_heat + (6.0 if burning else -4.0) * delta, 0.0, 1.0)
+	if burning and not _thrust_sfx.playing:
+		_thrust_sfx.play()
+	_thrust_sfx.stream_paused = not burning
+	_thrust_sfx.pitch_scale = 0.75 + 0.5 * _thrust_heat
+	_thrust_sfx.volume_db = lerpf(-24.0, -10.0, _thrust_heat)
 
 
 func _fit_viewport() -> void:
@@ -251,6 +364,7 @@ func _handle_event(event: Dictionary) -> void:
 			_banner("mg.rocketRescue.low_fuel", Color(1.0, 0.6, 0.4))
 			AudioDirector.try_play(self, "mg_junk", 0.9)
 		"outOfFuel":
+			_lose_played = true
 			_banner("mg.rocketRescue.towed", Color(0.8, 0.8, 0.95))
 			AudioDirector.try_play(self, "mg_lose")
 		"windTelegraph":
@@ -314,8 +428,13 @@ func _finish(reason: String) -> void:
 		return
 	finished = true
 	running = false
-	if reason == "complete":
-		AudioDirector.try_play(self, "mg_win")
+	if _thrust_sfx != null:
+		_thrust_sfx.stop()
+	# W17 M8: JEDES Ende bekommt einen Schlusspunkt — vorher endeten die
+	# Zeit-/Sprit-Runden stumm (Audit-Befund).
+	var tone := end_tone_for(reason, _lose_played)
+	if not tone.is_empty():
+		AudioDirector.try_play(self, tone)
 	(
 		ctx
 		. report_end(
@@ -328,6 +447,15 @@ func _finish(reason: String) -> void:
 	)
 
 
+## PURE Endton-Wahl (W17 M8, testbar): Komplett-Rettung feiert (mg_win),
+## Zeit-/Sprit-Enden quittieren mit mg_lose — außer der Abschlepp-Moment
+## („outOfFuel") hat den Lose-Ton schon gespielt (kein Doppel-Ton).
+static func end_tone_for(reason: String, lose_played: bool) -> String:
+	if reason == "complete":
+		return "mg_win"
+	return "" if lose_played else "mg_lose"
+
+
 func _update_labels() -> void:
 	_fuel_label.text = I18nService.t(
 		"mg.rocketRescue.fuel", {"n": int(round(float(engine.state["fuel"])))}
@@ -336,6 +464,21 @@ func _update_labels() -> void:
 		"mg.rocketRescue.rescued",
 		{"n": int(engine.state["rescued"]), "max": int(tune["PLATFORM_COUNT"])}
 	)
+	# W17 M6: der Hinweis blendet nach 5 s SIM-Zeit aus (runner-Muster) —
+	# im Intro-Beat steht die Uhr, der Hinweis bleibt dort also voll lesbar.
+	_hint_label.modulate.a = clampf(
+		(HINT_FADE_SEC - float(engine.state["elapsed"])) / 1.2, 0.0, 1.0
+	)
+
+
+## Reduced-Motion-Abfrage (Duck-Typing wie im JuiceKit — ohne Autoload = aus).
+func _reduced_motion() -> bool:
+	if not is_inside_tree():
+		return true
+	var settings := get_node_or_null(^"/root/AppSettings")
+	if settings != null and settings.has_method("is_reduced_motion"):
+		return settings.is_reduced_motion()
+	return false
 
 
 func _craft_pos() -> Vector2:
@@ -357,19 +500,20 @@ func _draw() -> void:
 ## W15: die drei unsichtbaren Touch-Drittel als lesbare Zonen-Leiste
 ## ◀ ▲ ▶ — die Zone unter dem Finger leuchtet auf, solange er das Glas
 ## berührt (Halten = Schub, Seite = Neigung; Mapping bleibt zahlengleich).
+## W17 M9: alle Maße skalieren mit _ui statt in Fix-Pixeln zu kleben.
 func _draw_zone_guide() -> void:
-	var y := view_size.y - 74.0
-	var h := 58.0
+	var h := 58.0 * _ui
+	var y := view_size.y - h - 16.0 * _ui
 	var third := view_size.x / 3.0
 	var font := ThemeService.font(800)
 	var labels := ["◀", "▲", "▶"]
 	for i in 3:
 		var zone := i - 1
 		var active := _touching and _tilt_dir == zone
-		var rect := Rect2(third * i + 6.0, y, third - 12.0, h)
+		var rect := Rect2(third * i + 6.0 * _ui, y, third - 12.0 * _ui, h)
 		var bg := Color(0.5, 0.6, 1.0, 0.3) if active else Color(0.2, 0.2, 0.4, 0.16)
 		draw_rect(rect, bg)
-		draw_rect(rect, Color(0.8, 0.85, 1.0, 0.5 if active else 0.2), false, 2.0)
+		draw_rect(rect, Color(0.8, 0.85, 1.0, 0.5 if active else 0.2), false, 2.0 * _ui)
 		var col := Color(1.0, 0.95, 0.75, 0.95) if active else Color(0.8, 0.84, 1.0, 0.5)
 		draw_string(
 			font,
@@ -377,33 +521,57 @@ func _draw_zone_guide() -> void:
 			labels[i],
 			HORIZONTAL_ALIGNMENT_CENTER,
 			rect.size.x,
-			24,
+			int(24.0 * _ui),
 			col
 		)
 
 
+## PURE Tankbalken-Geometrie (W17 M9, testbar): der Balken liegt jetzt
+## UNTER den beiden Labels im linken HUD-Block statt bei fixem
+## view_size.y*0.055 mitten durch das „Gerettet"-Label zu laufen
+## (der sichtbare Audit-Defekt) — alle Maße _ui-skaliert.
+func fuel_bar_rect() -> Rect2:
+	var w := minf(view_size.x - 32.0 * _ui, 320.0 * _ui)
+	return Rect2(16.0 * _ui, 80.0 * _ui, w, 14.0 * _ui)
+
+
 func _draw_fuel_bar() -> void:
-	var w := minf(view_size.x - 32.0, 320.0)
-	var x := view_size.x * 0.5 - w * 0.5
-	var y := view_size.y * 0.055
+	var rect := fuel_bar_rect()
 	var pct := clampf(fuel_pct(), 0.0, 1.0)
 	var color := FUEL_COLOR
 	if pct <= 0.2:
 		color = Color(1.0, 0.5, 0.4).lerp(Color(1.0, 0.85, 0.5), 0.5 + 0.5 * sin(_low_pulse * 9.0))
-	draw_rect(Rect2(x, y, w, 14.0), Color(0.16, 0.14, 0.24, 0.85))
-	draw_rect(Rect2(x + 2.0, y + 2.0, (w - 4.0) * pct, 10.0), color)
-	draw_rect(Rect2(x, y, w, 14.0), Color(1.0, 1.0, 1.0, 0.25), false, 2.0)
+	var b := 2.0 * _ui
+	var fill := Rect2(
+		rect.position + Vector2(b, b), Vector2((rect.size.x - 2.0 * b) * pct, rect.size.y - 2.0 * b)
+	)
+	draw_rect(rect, Color(0.16, 0.14, 0.24, 0.85))
+	draw_rect(fill, color)
+	draw_rect(rect, Color(1.0, 1.0, 1.0, 0.25), false, b)
 
 
+## W17 M7: Flash auf Milchglas-Plate mit Kontur und Umbruch (carrot_guard-
+## Muster) — vorher schwebte die nackte Goldschrift über dem Sternenfeld.
 func _draw_flash() -> void:
 	if _flash <= 0.0 or _flash_text.is_empty():
 		return
-	draw_string(
-		ThemeService.font(800),
-		Vector2(0.0, view_size.y * 0.3),
-		_flash_text,
-		HORIZONTAL_ALIGNMENT_CENTER,
-		view_size.x,
-		28,
-		Color(1.0, 0.88, 0.55, clampf(_flash, 0.0, 1.0))
+	var font := ThemeService.font(800)
+	var alpha := clampf(_flash * 1.4, 0.0, 1.0)
+	var font_size := int(26.0 * _ui)
+	var w := minf(view_size.x * 0.92, 460.0 * _ui)
+	var text_size := font.get_multiline_string_size(
+		_flash_text, HORIZONTAL_ALIGNMENT_CENTER, w, font_size
 	)
+	var top := view_size.y * 0.28
+	var pad := Vector2(18.0, 10.0) * _ui
+	_flash_plate.set_corner_radius_all(int(12.0 * _ui))
+	_flash_plate.bg_color = Color(1.0, 0.99, 0.94, 0.74 * alpha)
+	var plate_pos := Vector2((view_size.x - text_size.x) * 0.5, top) - pad
+	draw_style_box(_flash_plate, Rect2(plate_pos, text_size + pad * 2.0))
+	var ink := Color(0.32, 0.24, 0.28, alpha)
+	var rim := Color(1.0, 1.0, 1.0, 0.75 * alpha)
+	var at := Vector2((view_size.x - w) * 0.5, top + font.get_ascent(font_size))
+	draw_multiline_string_outline(
+		font, at, _flash_text, HORIZONTAL_ALIGNMENT_CENTER, w, font_size, -1, int(5.0 * _ui), rim
+	)
+	draw_multiline_string(font, at, _flash_text, HORIZONTAL_ALIGNMENT_CENTER, w, font_size, -1, ink)
