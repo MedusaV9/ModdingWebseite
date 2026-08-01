@@ -10,8 +10,24 @@ extends MinigameBase
 ## Food-Modellen auf einer Picknickdecke, Gooby (echtes Rig) schaut zu. Die
 ## Karten liegen per ground_point-Raycast EXAKT unter den 2D-Tap-Rechtecken —
 ## Eingabe und Trefferflächen bleiben zahlengleich, die MECHANIK unangetastet.
+##
+## W17/G5-Politur (NUR Präsentation, Audit mg-audit-b §7): Intro-Beat 1,5 s
+## mit Wiesen-Totale + Ziel-Banner (Sim-Uhr und Merk-Fenster warten, M1),
+## sichtbarer Countdown-Balken über dem Brett für Merk-/Spick-Fenster,
+## lesbarer Fehlgriff-Text, „Brett geschafft!" als Gold-Banner (M7),
+## _ui-skaliertes HUD samt Spick-Knopf (M9), Hint-Fade (M6) und Reduced-
+## Motion-Gates an den Stage-Bursts (Q2). MemoryMatchLogic/RNG unangetastet.
 
 const Stage := preload("res://scripts/minigames/games/memory_match/memory_match_stage3d.gd")
+
+## W17/G5 M9: Entwurfs-Kurzkante — alle HUD-Pixelmaße skalieren mit Kurzkante/390.
+const DESIGN_SHORT := 390.0
+## W17/G5 M1: Intro-Beat (s) — Wiesen-Totale + Ziel-Banner; die Sim wartet.
+const INTRO_S := 1.5
+## W17/G5 M6: nach so vielen Sim-Sekunden blendet der Hinweis aus (harbor_hopper-Muster).
+const HINT_FADE_SEC := 6.0
+## Unter diesem Rest-Anteil pulsiert der Merk-/Spick-Countdown warnend.
+const COUNTDOWN_WARN_FROM := 0.4
 
 var tune: Dictionary = {}
 var rng: GoobyRng
@@ -41,6 +57,13 @@ var _card_size := Vector2(64.0, 78.0)
 var _card_gap := Vector2(8.0, 10.0)
 var _stage: Node3D
 var _pulse := 0.0
+var _ui := 1.0
+var _intro_left := 0.0
+var _banner := ""
+var _banner_gold := false
+var _banner_t := 0.0
+var _banner_plate := StyleBoxFlat.new()
+var _bar_plate := StyleBoxFlat.new()
 
 
 func setup(context: MinigameCtx) -> void:
@@ -58,6 +81,13 @@ func setup(context: MinigameCtx) -> void:
 		ctx.juice.world_environment = _stage.stage.world_env
 	_build_hud()
 	_fit_viewport()
+	_banner_plate.set_corner_radius_all(12)
+	_bar_plate.bg_color = Color(0.32, 0.24, 0.2, 0.4)
+	_bar_plate.set_corner_radius_all(6)
+	# W17/G5 M1: Intro-Beat — Wiesen-Totale + Ziel-Banner; Sim-Uhr, Merk-
+	# Fenster und Eingabe warten, Seeds/RNG-Reihenfolge bleiben unangetastet.
+	_intro_left = INTRO_S
+	_set_banner(I18nService.t("mg.memoryMatch.intro"), false, INTRO_S + 0.7)
 	if is_inside_tree():
 		get_viewport().size_changed.connect(_fit_viewport)
 
@@ -68,16 +98,19 @@ func end() -> void:
 
 
 ## Pflicht-Layouthook: beide Orientierungen laufen über DIESE Funktion.
+## W17/G5 M9: der _ui-Faktor (Kurzkante/390, 0,75–3,0) skaliert alle HUD-Maße.
 func apply_view(size: Vector2) -> void:
 	if size.x > 1.0 and size.y > 1.0:
 		view_size = size
 	landscape = view_size.x > view_size.y
+	_ui = clampf(minf(view_size.x, view_size.y) / DESIGN_SHORT, 0.75, 3.0)
 	position = Vector2.ZERO
 	var cols := int(layout.get("cols", 4))
 	var rows := int(layout.get("rows", 4))
-	# Das Brett bekommt den Platz zwischen HUD-Zeile und Hinweis/Spick-Knopf.
-	var top := 96.0 if not landscape else 62.0
-	var bottom := 118.0 if not landscape else 76.0
+	# Das Brett bekommt den Platz zwischen HUD-Zeile und Hinweis/Spick-Knopf —
+	# die Ränder wachsen mit dem HUD mit (M9), sonst kollidieren die Zeilen.
+	var top := (96.0 if not landscape else 62.0) * _ui
+	var bottom := (118.0 if not landscape else 76.0) * _ui
 	var avail := Vector2(view_size.x - 32.0, maxf(80.0, view_size.y - top - bottom))
 	var card_w := (avail.x - _card_gap.x * (cols - 1)) / float(cols)
 	var card_h := (avail.y - _card_gap.y * (rows - 1)) / float(rows)
@@ -106,18 +139,33 @@ func apply_view(size: Vector2) -> void:
 
 ## HUD IMMER aus dem Viewport-Rect stellen: unter canvas_items-Stretch sind
 ## Canvas-Einheiten ≠ Fensterpixel, apply_view-Größen können abweichen.
+## W17/G5 M9: alle Pixelmaße skalieren mit dem _ui-Faktor statt in Fix-Pixeln
+## zu kleben (Krümel-HUD auf Tablets), der Spick-Knopf wächst mit.
 func _layout_hud() -> void:
 	if _time_label == null:
 		return
 	var vp := get_viewport_rect().size
 	var rows := int(layout.get("rows", 4))
 	var board_h := _card_size.y * rows + _card_gap.y * (rows - 1)
-	_time_label.position = Vector2(16.0, 10.0)
-	_miss_label.position = Vector2(16.0, 48.0)
-	_hint_label.position = Vector2(vp.x * 0.5 - 170.0, vp.y - 44.0)
-	_hint_label.size = Vector2(340.0, 36.0)
-	_peek_button.position = Vector2(vp.x * 0.5 - 70.0, _grid_origin.y + board_h + 12.0)
-	_peek_button.size = Vector2(140.0, 48.0)
+	_time_label.position = Vector2(16.0, 10.0) * _ui
+	_time_label.add_theme_font_size_override("font_size", int(34.0 * _ui))
+	_time_label.add_theme_constant_override("outline_size", int(7.0 * _ui))
+	_miss_label.position = Vector2(16.0, 48.0) * _ui
+	_miss_label.add_theme_font_size_override("font_size", int(15.0 * _ui))
+	_miss_label.add_theme_constant_override("outline_size", int(5.0 * _ui))
+	var hint_w := minf(vp.x - 32.0 * _ui, 360.0 * _ui)
+	_hint_label.add_theme_font_size_override("font_size", int(20.0 * _ui))
+	_hint_label.add_theme_constant_override("outline_size", int(5.0 * _ui))
+	_hint_label.position = Vector2((vp.x - hint_w) * 0.5, vp.y - 52.0 * _ui)
+	_hint_label.size = Vector2(hint_w, 40.0 * _ui)
+	_peek_button.add_theme_font_size_override("font_size", int(20.0 * _ui))
+	# Touch-Floor 48 px bleibt auch unterm 0,75er-Boden erhalten; über
+	# custom_minimum_size, weil size an der Content-Minimalgröße clampt.
+	_peek_button.custom_minimum_size = Vector2(140.0 * _ui, maxf(48.0, 48.0 * _ui))
+	_peek_button.size = _peek_button.custom_minimum_size
+	_peek_button.position = Vector2(
+		vp.x * 0.5 - _peek_button.size.x * 0.5, _grid_origin.y + board_h + 12.0 * _ui
+	)
 
 
 func _gooby_level() -> int:
@@ -154,11 +202,12 @@ func _build_hud() -> void:
 	_peek_button.visible = false
 	_peek_button.pressed.connect(_use_peek)
 	add_child(_peek_button)
+	_hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	# Heller Text + dunkler Saum: lesbar auf Wiese, Bäumen UND Decke.
 	for label: Label in [_time_label, _miss_label, _hint_label]:
 		label.add_theme_color_override("font_color", Color(1.0, 0.98, 0.94))
 		label.add_theme_color_override("font_outline_color", Color(0.2, 0.3, 0.16, 0.9))
-		label.add_theme_constant_override("outline_size", 7)
+	_layout_hud()
 	_update_labels()
 
 
@@ -169,8 +218,20 @@ func _fit_viewport() -> void:
 func _process(delta: float) -> void:
 	if not is_active() or finished:
 		return
-	elapsed += delta
 	_pulse += delta
+	# W17/G5 M1: Intro-Beat — die Kamera schwebt aus der Wiesen-Totale an
+	# den Tisch; Sim-Uhr (elapsed) UND Merk-Fenster (reveal_left) warten so
+	# lange, der Lauf bleibt zahlengleich (w13c-Crosscheck).
+	if _intro_left > 0.0:
+		_intro_left = maxf(0.0, _intro_left - delta)
+		_banner_t = maxf(0.0, _banner_t - delta)
+		_stage.establish(1.0 if _reduced_motion() else 1.0 - _intro_left / INTRO_S)
+		_sync_stage(delta)
+		_update_labels()
+		queue_redraw()
+		return
+	elapsed += delta
+	_banner_t = maxf(0.0, _banner_t - delta)
 	if reveal_left > 0.0:
 		reveal_left = maxf(0.0, reveal_left - delta)
 	if peek_left > 0.0:
@@ -179,16 +240,22 @@ func _process(delta: float) -> void:
 		resolve_left = maxf(0.0, resolve_left - delta)
 		if resolve_left <= 0.0:
 			_resolve_pick()
-	var shows: Array[bool] = []
-	for card in cards:
-		shows.append(_face_visible(card))
-	_stage.sync(cards, shows, _pulse, delta)
+	_sync_stage(delta)
 	_update_labels()
 	queue_redraw()
 
 
+func _sync_stage(delta: float) -> void:
+	var shows: Array[bool] = []
+	for card in cards:
+		shows.append(_face_visible(card))
+	_stage.sync(cards, shows, _pulse, delta)
+
+
 func _unhandled_input(event: InputEvent) -> void:
 	if not is_active() or finished or reveal_left > 0.0 or peek_left > 0.0:
+		return
+	if _intro_left > 0.0:
 		return
 	var pressed := event is InputEventScreenTouch and (event as InputEventScreenTouch).pressed
 	if not pressed:
@@ -224,7 +291,8 @@ func _resolve_pick() -> void:
 		b["state"] = "matched"
 		matched_pairs += 1
 		match_streak += 1
-		_stage.match_fx(picked[1])
+		# Q2: Reduced-Motion-Gate an der eigenen Burst-Call-Site (Kit tabu).
+		_stage.match_fx(picked[1], _reduced_motion())
 		# Paar-Serie klettert hörbar (Halbton pro Treffer in Folge).
 		AudioDirector.try_play(self, "mg_perfect", FeelSfx.combo_pitch(match_streak))
 		if ctx.juice != null:
@@ -240,12 +308,19 @@ func _resolve_pick() -> void:
 		b["state"] = "down"
 		misses += 1
 		match_streak = 0
-		_stage.miss_fx(picked[1])
+		_stage.miss_fx(picked[1], _reduced_motion())
 		AudioDirector.try_play(self, "mg_junk", 0.95)
 		if ctx.juice != null:
 			ctx.juice.shake(0.2)
 			ctx.juice.sfx("game_miss")
 			ctx.juice.show_combo(0)
+			# W17/G5: lesbarer Fehlgriff — helle Creme MIT der dunklen
+			# float_text-Outline über der zweiten Karte (Oops-Klasse).
+			ctx.juice.float_text(
+				pos - Vector2(0.0, 26.0 * _ui),
+				I18nService.t("mg.memoryMatch.oops"),
+				AcTokens.BG_CREAM
+			)
 	picked = []
 	peek = MemoryMatchLogic.advance_peek_progress(peek, hit)
 	if MemoryMatchLogic.can_use_peek(peek) and not _peek_button.visible:
@@ -272,11 +347,10 @@ func _board_cleared() -> void:
 	if ctx.juice != null:
 		ctx.juice.bloom_pulse(1.0)
 		ctx.juice.win_moment()
-		ctx.juice.float_text(
-			Vector2(view_size.x * 0.5 - 90.0, view_size.y * 0.42),
-			I18nService.t("mg.memoryMatch.cleared"),
-			AcTokens.LEAF_DARK
-		)
+	# W17/G5 M7: „Brett geschafft!" als Gold-Banner mit Plate + Kontur —
+	# der dunkelgrüne float_text ging vor der Wiese unter (Oops-Klasse).
+	_set_banner(I18nService.t("mg.memoryMatch.cleared"), true, 2.2)
+	queue_redraw()
 	if not bool(tune["ENDLESS"]):
 		_finish()
 		return
@@ -333,14 +407,110 @@ func _update_labels() -> void:
 	_miss_label.text = I18nService.t(
 		"mg.memoryMatch.pairs", {"n": matched_pairs, "max": int(layout["pairs"])}
 	)
+	_hint_label.modulate.a = _hint_alpha()
 
 
+## M6: der Hinweis blendet nach ein paar Sim-Sekunden aus (harbor_hopper-
+## Muster) — elapsed wartet im Intro, der Fade startet also fair.
+func _hint_alpha() -> float:
+	return clampf((HINT_FADE_SEC - elapsed) / 1.2, 0.0, 1.0)
+
+
+func _set_banner(text: String, gold := false, sec := 1.4) -> void:
+	_banner = text
+	_banner_gold = gold
+	_banner_t = sec
+
+
+## Rest-Anteil [0..1] des sichtbaren Zeitfensters: Merk-Fenster nach dem
+## Geben bzw. Spick-Blick; 0 = kein Fenster aktiv (PUR für Tests). Vorher
+## liefen reveal_left/peek_left unsichtbar ab — der W17/G5-Countdown-Balken
+## macht das Zudecken vorhersehbar.
+func countdown_frac() -> float:
+	if reveal_left > 0.0:
+		return clampf(reveal_left / maxf(0.001, float(tune["REVEAL_SEC"])), 0.0, 1.0)
+	if peek_left > 0.0:
+		return clampf(peek_left / maxf(0.001, float(tune["PEEK_SEC"])), 0.0, 1.0)
+	return 0.0
+
+
+## 2D-Overlay überm Tisch: Countdown-Balken für Merk-/Spick-Fenster + die
+## Banner-Ebene (Intro-Ziel, Brett-geschafft-Gold).
+func _draw() -> void:
+	if _time_label == null:
+		return
+	_draw_countdown()
+	_draw_banner()
+
+
+func _draw_countdown() -> void:
+	var frac := countdown_frac()
+	if frac <= 0.0:
+		return
+	var cols := int(layout.get("cols", 4))
+	var board_w := _card_size.x * cols + _card_gap.x * (cols - 1)
+	var bar := Rect2(
+		Vector2(_grid_origin.x, _grid_origin.y - 18.0 * _ui), Vector2(board_w, 8.0 * _ui)
+	)
+	draw_style_box(_bar_plate, bar.grow(2.0 * _ui))
+	var color := Color(AcTokens.TEAL, 0.92)
+	if frac <= COUNTDOWN_WARN_FROM:
+		# Letzte 40 %: Amber + Puls — „gleich decken sich die Karten!"
+		# (Reduced Motion: konstant statt pulsierend).
+		var beat := 0.9 if _reduced_motion() else 0.65 + 0.35 * sin(_pulse * 10.0)
+		color = Color(AcTokens.YELLOW_DARK, beat)
+	draw_rect(Rect2(bar.position, Vector2(bar.size.x * frac, bar.size.y)), color)
+
+
+## Banner mittig mit Milchglas-Plate und Kontur (M7, carrot_catch-Muster) —
+## Intro-Ziel und Brett-geschafft-Gold; lange Texte brechen um.
+func _draw_banner() -> void:
+	if _banner_t <= 0.0 or _banner.is_empty():
+		return
+	var vp := get_viewport_rect().size
+	var font := ThemeService.font(800)
+	var alpha := clampf(_banner_t * 1.4, 0.0, 1.0)
+	var font_size := int(26.0 * _ui)
+	var w := minf(vp.x * 0.92, 460.0 * _ui)
+	var text_size := font.get_multiline_string_size(
+		_banner, HORIZONTAL_ALIGNMENT_CENTER, w, font_size
+	)
+	var top := vp.y * 0.26
+	var pad := Vector2(18.0 * _ui, 10.0 * _ui)
+	_banner_plate.set_corner_radius_all(int(12.0 * _ui))
+	_banner_plate.bg_color = (
+		Color(1.0, 0.93, 0.62, 0.82 * alpha)
+		if _banner_gold
+		else Color(1.0, 0.99, 0.94, 0.74 * alpha)
+	)
+	var plate_pos := Vector2((vp.x - text_size.x) * 0.5, top) - pad
+	draw_style_box(_banner_plate, Rect2(plate_pos, text_size + pad * 2.0))
+	var ink := Color(0.62, 0.4, 0.1, alpha) if _banner_gold else Color(0.32, 0.24, 0.28, alpha)
+	var rim := Color(1.0, 1.0, 1.0, 0.75 * alpha)
+	var at := Vector2((vp.x - w) * 0.5, top + font.get_ascent(font_size))
+	draw_multiline_string_outline(
+		font, at, _banner, HORIZONTAL_ALIGNMENT_CENTER, w, font_size, -1, int(5.0 * _ui), rim
+	)
+	draw_multiline_string(font, at, _banner, HORIZONTAL_ALIGNMENT_CENTER, w, font_size, -1, ink)
+
+
+## Reduced-Motion-Abfrage (Duck-Typing wie im JuiceKit — ohne Autoload = aus).
+func _reduced_motion() -> bool:
+	if not is_inside_tree():
+		return true
+	var settings := get_node_or_null(^"/root/AppSettings")
+	if settings != null and settings.has_method("is_reduced_motion"):
+		return settings.is_reduced_motion()
+	return false
+
+
+## W17/G5: tote Ternary bereinigt — `return -1 if cols > 0 else -1` lieferte
+## in beiden Zweigen −1, der Treffer kommt ohnehin aus der Schleife.
 func _card_at(screen: Vector2) -> int:
-	var cols := int(layout["cols"])
 	for i in cards.size():
 		if Rect2(_card_pos(i), _card_size).has_point(screen):
 			return i
-	return -1 if cols > 0 else -1
+	return -1
 
 
 func _card_pos(index: int) -> Vector2:
@@ -365,5 +535,5 @@ func _face_visible(card: Dictionary) -> bool:
 		or str(card["state"]) == "matched"
 	)
 
-# Kein _draw mehr: Karten, Decke, Kulisse und Gooby rendert die 3D-Bühne
-# (MemoryMatchStage3D); nur HUD-Labels und der Spick-Knopf bleiben 2D.
+# Karten, Decke, Kulisse und Gooby rendert die 3D-Bühne (MemoryMatchStage3D);
+# 2D bleiben HUD-Labels, Spick-Knopf sowie Countdown-Balken + Banner (_draw).

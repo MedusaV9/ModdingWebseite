@@ -4,6 +4,11 @@ extends Node3D
 ## bekommt beim Vorspielen einen Leuchtring in der Pad-Farbe. Eingaben laufen
 ## als Raycast auf die Bodenebene (pad_at). Die MECHANIK bleibt komplett in
 ## gooby_says.gd/GoobySaysLogic — diese Bühne ist reine Darstellung.
+##
+## W17/G5-Politur: Intro-Totale (establish — Spots glimmen hoch, der Vorhang
+## ruckelt kurz), pulsierender Pad-Rand als sichtbare Timeout-Warnung (sync),
+## Bildschirm-Anker über den Pads (pads_screen) und Reduced-Motion-Gate an
+## der eigenen Konfetti-Call-Site (celebrate, Q2 — das Fx-Kit bleibt tabu).
 
 const Stage3D := preload("res://scripts/minigames/games/_3dc_stage/stage3d.gd")
 const Actor := preload("res://scripts/minigames/games/_3da_stage/gooby_actor.gd")
@@ -22,12 +27,23 @@ var gooby: Node3D
 
 var _pads: Array[Node3D] = []
 var _pad_mats: Array[StandardMaterial3D] = []
+## Glüh-Rähmchen unter den Pads: pulsieren in den letzten 40 % des
+## Eingabe-Fensters (sichtbare Timeout-Warnung, W17/G5).
+var _pad_rims: Array[MeshInstance3D] = []
+var _rim_mat: StandardMaterial3D
 var _halo: MeshInstance3D
 var _halo_mat: StandardMaterial3D
 var _confetti: GPUParticles3D
 var _landscape := false
 ## Rest-Sekunden des roten Fehler-Blitzes auf allen Pads.
 var _fail_left := 0.0
+## Intro-Requisiten (establish): Vorhangfalten + Lampen-/Kegel-Materialien.
+var _folds: MultiMeshInstance3D
+var _lamp_mats: Array[StandardMaterial3D] = []
+var _beam_mats: Array[StandardMaterial3D] = []
+## Spielpose der Kamera (apply_size merkt sie sich; establish blendet hinein).
+var _play_cam_pos := Vector3(0.0, 4.6, 4.9)
+var _play_look := Vector3(0.0, 0.35, -0.3)
 
 
 func setup_stage() -> void:
@@ -93,7 +109,8 @@ func _build_stage_floor() -> void:
 		disc.position.y = float(entry[1])
 		add_child(disc)
 	# Vorhang-Rückwand mit Wellenfalten (Zylinderreihe).
-	var folds := MultiMeshInstance3D.new()
+	_folds = MultiMeshInstance3D.new()
+	var folds := _folds
 	var fold_mesh := CylinderMesh.new()
 	fold_mesh.top_radius = 0.34
 	fold_mesh.bottom_radius = 0.4
@@ -118,7 +135,9 @@ func _build_stage_floor() -> void:
 		var lamp := SphereMesh.new()
 		lamp.radius = 0.16
 		lamp.height = 0.32
-		lamp.material = Fx.glow(Color(1.0, 0.9, 0.6), 2.2)
+		var lamp_mat := Fx.glow(Color(1.0, 0.9, 0.6), 2.2)
+		lamp.material = lamp_mat
+		_lamp_mats.append(lamp_mat)
 		spot.mesh = lamp
 		spot.position = Vector3(x, 3.4, -1.4)
 		spot.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -129,7 +148,9 @@ func _build_stage_floor() -> void:
 		cone.bottom_radius = 0.75
 		cone.height = 3.1
 		cone.radial_segments = 14
-		cone.material = Fx.glass(Color(1.0, 0.92, 0.66, 0.1), true)
+		var beam_mat := Fx.glass(Color(1.0, 0.92, 0.66, 0.1), true)
+		cone.material = beam_mat
+		_beam_mats.append(beam_mat)
 		beam.mesh = cone
 		beam.position = (spot.position + Vector3(x * -0.4, 0.3, -2.1)) * 0.5
 		beam.position.y = 1.85
@@ -201,6 +222,8 @@ func _build_curtain_deco() -> void:
 
 
 func _build_pads() -> void:
+	# Warnrahmen unter den Pads: geteiltes Glüh-Material, Energie setzt sync().
+	_rim_mat = Fx.glow(Color(1.0, 0.56, 0.32), 0.0)
 	for i in 4:
 		var pad := Node3D.new()
 		add_child(pad)
@@ -225,6 +248,18 @@ func _build_pads() -> void:
 		glyph.rotation_degrees = Vector3(-90.0, 0.0, 0.0)
 		glyph.position.y = PAD_H + 0.012
 		pad.add_child(glyph)
+		# Rahmen NACH dem Glyph anhängen: sync() greift body/glyph über die
+		# Kind-Indizes 0/1 — die bleiben so unverändert.
+		var rim := MeshInstance3D.new()
+		var rim_mesh := BoxMesh.new()
+		rim_mesh.size = Vector3(PAD_W * 1.2, 0.05, PAD_W * 1.2)
+		rim_mesh.material = _rim_mat
+		rim.mesh = rim_mesh
+		rim.position.y = 0.026
+		rim.visible = false
+		rim.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		pad.add_child(rim)
+		_pad_rims.append(rim)
 		_pads.append(pad)
 		_pad_mats.append(mat)
 
@@ -260,21 +295,41 @@ func _build_gooby() -> void:
 
 
 ## Pads je Orientierung stellen: Hochkant 2×2-Block vor Gooby, quer eine Reihe.
+## Die Spielpose wird gemerkt, damit establish() auch nach Resizes hier landet.
 func apply_size(size: Vector2) -> void:
 	stage.apply_size(size)
 	_landscape = size.x > size.y
 	if _landscape:
 		for i in 4:
 			_pads[i].position = Vector3(-2.1 + float(i) * 1.4, 0.12, 0.9)
-		stage.camera.position = Vector3(0.0, 4.1, 4.4)
-		stage.camera.look_at(Vector3(0.0, 0.3, -0.5), Vector3.UP)
+		_play_cam_pos = Vector3(0.0, 4.1, 4.4)
+		_play_look = Vector3(0.0, 0.3, -0.5)
 		stage.set_hfov(52.0, 46.0)
 	else:
 		for i in 4:
 			_pads[i].position = Vector3(-0.75 + float(i % 2) * 1.5, 0.12, 0.25 + float(i / 2) * 1.5)
-		stage.camera.position = Vector3(0.0, 4.6, 4.9)
-		stage.camera.look_at(Vector3(0.0, 0.35, -0.3), Vector3.UP)
+		_play_cam_pos = Vector3(0.0, 4.6, 4.9)
+		_play_look = Vector3(0.0, 0.35, -0.3)
 		stage.set_hfov(40.0, 62.0)
+	stage.camera.position = _play_cam_pos
+	stage.camera.look_at(_play_look, Vector3.UP)
+
+
+## W17/G5 M1: Intro-Beat — die Kamera schwebt aus einer weiter gefassten
+## Bühnen-Totale in die Spielpose, die Scheinwerfer glimmen hoch („Spot an")
+## und der Vorhang ruckelt kurz; establish(1) == exakte Spielpose von
+## apply_size (Muster carrot_catch/tea_party).
+func establish(k: float) -> void:
+	var e := 1.0 - ease(clampf(k, 0.0, 1.0), 0.4)
+	stage.camera.position = _play_cam_pos + Vector3(0.0, 2.4, 3.2) * e
+	stage.camera.look_at(_play_look + Vector3(0.0, 0.5, -0.9) * e, Vector3.UP)
+	var lit := clampf(k * 1.6, 0.0, 1.0)
+	for mat in _lamp_mats:
+		mat.emission_energy_multiplier = lerpf(0.25, 2.2, lit)
+	for mat in _beam_mats:
+		mat.albedo_color.a = 0.1 * lit
+	if _folds != null:
+		_folds.position.y = sin(k * TAU * 1.5) * 0.07 * e
 
 
 ## Bildschirmpunkt → Pad-Index (Raycast auf die Pad-Deckelhöhe), −1 = daneben.
@@ -289,7 +344,17 @@ func pad_at(screen: Vector2) -> int:
 
 
 ## Jeden Frame: Pad-Leuchten (+Pop), Fehler-Blitz, Gooby-Halo + Puls.
-func sync(lit_pad: int, lit_left: float, phase: String, pulse: float, delta: float) -> void:
+## `urgency` [0..1] = Warnanteil des Eingabe-Fensters (W17/G5): ab > 0
+## pulsiert der Pad-Rand; `reduced` glimmt konstant statt zu pulsieren.
+func sync(
+	lit_pad: int,
+	lit_left: float,
+	phase: String,
+	pulse: float,
+	delta: float,
+	urgency := 0.0,
+	reduced := false
+) -> void:
 	stage.tick(delta)
 	gooby.tick(delta)
 	_fail_left = maxf(0.0, _fail_left - delta)
@@ -299,14 +364,19 @@ func sync(lit_pad: int, lit_left: float, phase: String, pulse: float, delta: flo
 		# Fehler: alle Pads blitzen rot — unübersehbare Fehlerrückmeldung.
 		_pad_mats[i].emission = Color(0.95, 0.2, 0.16) if failing else PAD_COLORS[i]
 		var target := 1.5 if failing else (0.95 if lit else 0.0)
+		# Lerp-Gewichte auf ≤ 1 klemmen (W17/G5): bei großen Frame-Deltas
+		# (Software-Renderer ~7 fps) extrapolierte der ungeklemmte Lerp und
+		# Pads/Emission oszillierten sichtbar statt zu federn.
 		_pad_mats[i].emission_energy_multiplier = (lerpf(
-			_pad_mats[i].emission_energy_multiplier, target, delta * 14.0
+			_pad_mats[i].emission_energy_multiplier, target, minf(1.0, delta * 14.0)
 		))
 		var body := _pads[i].get_child(0) as MeshInstance3D
 		body.position.y = PAD_H * 0.5 + (0.06 if lit else 0.0)
 		# Skalier-Pop beim Aufleuchten: sofort spürbare Trefferrückmeldung.
 		var pop := 1.09 if lit else 1.0
-		body.scale = body.scale.lerp(Vector3(pop, 1.0 + (pop - 1.0) * 2.0, pop), delta * 16.0)
+		body.scale = (body.scale.lerp(
+			Vector3(pop, 1.0 + (pop - 1.0) * 2.0, pop), minf(1.0, delta * 16.0)
+		))
 		# Symbol reitet auf der Pad-Oberkante mit (sonst schluckt der Pop es).
 		var glyph := _pads[i].get_child(1) as Node3D
 		glyph.position.y = body.position.y + PAD_H * 0.5 * body.scale.y + 0.012
@@ -318,11 +388,29 @@ func sync(lit_pad: int, lit_left: float, phase: String, pulse: float, delta: flo
 		_halo.rotation.y = pulse * 1.6
 	# Beim Vorspielen wippt der Dirigent im Takt.
 	gooby.rotation.z = sin(pulse * 5.0) * (0.06 if phase == "watch" else 0.02)
+	# W17/G5: sichtbarer Timeout — in den letzten 40 % des Eingabe-Fensters
+	# pulsiert der Rand aller Pads (Reduced Motion: konstantes Glimmen).
+	var warn := urgency > 0.0 and phase == "input" and not failing
+	for rim in _pad_rims:
+		rim.visible = warn
+	if warn:
+		var beat := 0.85 if reduced else 0.55 + 0.45 * sin(pulse * 10.0)
+		_rim_mat.emission_energy_multiplier = (0.5 + 1.3 * urgency) * beat
 
 
 ## Bildschirmanker über Gooby (float_text).
 func gooby_screen() -> Vector2:
 	return stage.to_screen(gooby.global_position + Vector3(0.0, 1.6, 0.0))
+
+
+## Bildschirmanker ÜBER dem Pad-Feld (W17/G5): der Fehler-Text landet damit
+## vor dem hellen Bühnenholz statt dunkelrot vor dem roten Vorhang.
+func pads_screen() -> Vector2:
+	var center := Vector3.ZERO
+	for pad in _pads:
+		center += pad.position
+	center /= float(maxi(1, _pads.size()))
+	return stage.to_screen(center + Vector3(0.0, 1.0, 0.0))
 
 
 func flash_playback(pad: int) -> void:
@@ -331,10 +419,14 @@ func flash_playback(pad: int) -> void:
 		gooby.face(0.25 - 0.16 * float(pad))
 
 
-func celebrate() -> void:
+## Runden-Feier; `reduced` lässt Emote/Glühen, gatet aber das Konfetti
+## (Q2 — Reduced-Motion-Gate an der eigenen Fx.burst-Call-Site).
+func celebrate(reduced := false) -> void:
 	gooby.play_for("celebrate", 1.1)
 	gooby.emote("ecstatic", 1.1)
 	stage.pulse_glow(0.8)
+	if reduced:
+		return
 	Fx.burst(_confetti, gooby.global_position + Vector3(0.0, 1.4, 0.0))
 
 

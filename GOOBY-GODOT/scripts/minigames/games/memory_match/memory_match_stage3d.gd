@@ -5,6 +5,10 @@ extends Node3D
 ## hinter der Decke und schaut zu. Die Karten werden per ground_point-Raycast
 ## EXAKT unter die 2D-Tap-Rechtecke gelegt — Eingabe bleibt zahlengleich, die
 ## MECHANIK komplett in memory_match.gd/MemoryMatchLogic.
+##
+## W17/G5-Politur: Intro-Totale (establish — die Kamera schwebt aus der
+## Wiesen-Totale an den Tisch) und Reduced-Motion-Gates an den eigenen
+## Fx.burst-Call-Sites (match_fx/miss_fx, Q2 — das Fx-Kit bleibt tabu).
 
 const Stage3D := preload("res://scripts/minigames/games/_3dc_stage/stage3d.gd")
 const Actor := preload("res://scripts/minigames/games/_3da_stage/gooby_actor.gd")
@@ -14,6 +18,9 @@ const DIR := "res://assets/minigames/carrot_catch/"
 
 const CARD_RATIO := 1.0 / 0.82
 const FLIP_SPEED := 9.0
+## Spielpose der Kamera (frame); establish() schwebt aus der Totale hierher.
+const PLAY_CAM_POS := Vector3(0.0, 10.5, 8.0)
+const PLAY_CAM_TILT := -42.0
 
 ## Kartenmotiv-Key → GLB im Food-Ordner (Reihenfolge = FACE_KEYS der Logic).
 const FACE_MODELS := {
@@ -210,9 +217,18 @@ func _build_fx() -> void:
 ## Kamera: schräg von oben auf die Decke — flach genug für Kulisse am Horizont.
 func frame(vp: Vector2) -> void:
 	stage.apply_size(vp)
-	stage.camera.position = Vector3(0.0, 10.5, 8.0)
-	stage.camera.rotation_degrees = Vector3(-42.0, 0.0, 0.0)
+	stage.camera.position = PLAY_CAM_POS
+	stage.camera.rotation_degrees = Vector3(PLAY_CAM_TILT, 0.0, 0.0)
 	stage.set_half_height(4.9, 10.0)
+
+
+## W17/G5 M1: Intro-Totale — die Kamera schwebt aus einer höheren Wiesen-
+## Totale (Bäume + Zaun im Bild) an den Picknicktisch; establish(1) ==
+## exakte Spielpose von frame() (Muster carrot_catch/tea_party).
+func establish(k: float) -> void:
+	var e := 1.0 - ease(clampf(k, 0.0, 1.0), 0.4)
+	stage.camera.position = PLAY_CAM_POS + Vector3(0.0, 3.6, 5.0) * e
+	stage.camera.rotation_degrees = Vector3(PLAY_CAM_TILT - 7.0 * e, 0.0, 0.0)
 
 
 ## Karten per Raycast EXAKT unter die 2D-Rechtecke legen; Decke, Korb und
@@ -290,19 +306,26 @@ func sync(cards: Array[Dictionary], shows: Array[bool], pulse: float, delta: flo
 		node.get_node("Flipper/Ruecken").visible = not face_up
 
 
-func match_fx(index: int) -> void:
+## Paar-Feier; `reduced` lässt das Emote, gatet aber Star-Burst + Hüpfer
+## (Q2 — Reduced-Motion-Gate an der eigenen Fx.burst-Call-Site).
+func match_fx(index: int, reduced := false) -> void:
 	if index < 0 or index >= _card_pos.size():
 		return
-	Fx.burst(_star_burst, _card_pos[index] + Vector3(0.0, _card_w[index] * 0.7, 0.0))
 	gooby.emote("ecstatic", 0.9)
+	if reduced:
+		return
+	Fx.burst(_star_burst, _card_pos[index] + Vector3(0.0, _card_w[index] * 0.7, 0.0))
 	gooby.hop(0.3, 0.2)
 
 
-func miss_fx(index: int) -> void:
+## Fehlgriff; `reduced` lässt das Emote, gatet aber den Staub-Poof (Q2).
+func miss_fx(index: int, reduced := false) -> void:
 	if index < 0 or index >= _card_pos.size():
 		return
-	Fx.burst(_poof_burst, _card_pos[index] + Vector3(0.0, _card_w[index] * 0.5, 0.0))
 	gooby.emote("dizzy", 0.9)
+	if reduced:
+		return
+	Fx.burst(_poof_burst, _card_pos[index] + Vector3(0.0, _card_w[index] * 0.5, 0.0))
 
 
 func peek_fx() -> void:
