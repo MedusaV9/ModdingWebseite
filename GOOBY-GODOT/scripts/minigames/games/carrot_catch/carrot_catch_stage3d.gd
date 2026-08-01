@@ -7,6 +7,11 @@ extends Node3D
 ## Die Kamera steht frontal auf die Fallebene z=0 und rahmt EXAKT die
 ## 2D-Rechnung des Spiels (Weltbreite = 2·WORLD_HALF_W) — Spawn-/Fang-Zahlen
 ## unangetastet. Die MECHANIK bleibt in carrot_catch.gd/CarrotCatchLogic.
+##
+## W17/G4-Politur (NUR Präsentation): Vogelzug + zwei Drachen füllen das
+## obere Bilddrittel (M2, hochkant war der halbe Bildschirm leerer Himmel),
+## ein Staubpuff quittiert durchgefallene Ware (M3) und establish() fliegt
+## die Kamera im Intro-Beat in die Spielpose (M1).
 
 const Stage3D := preload("res://scripts/minigames/games/_3dc_stage/stage3d.gd")
 const Actor := preload("res://scripts/minigames/games/_3da_stage/gooby_actor.gd")
@@ -33,6 +38,11 @@ const ITEM_SIZE := {
 }
 ## Korb-Squash nach einem Fang (Sekunden).
 const BASKET_POP_SEC := 0.22
+## W17 M2: Himmels-Schmuck — Zugvögel in V-Formation + Drachen (Tiefe/Anzahl).
+const SKY_Z := -14.0
+const BIRDS := 7
+## Referenz-Halbhöhe (Hochkant-Phone): der Himmels-Maßstab ist darauf geeicht.
+const SKY_REF_HALF_H := 7.0
 
 var stage: Node3D
 var gooby: Node3D
@@ -44,6 +54,7 @@ var _used: Dictionary = {}
 var _halo: MeshInstance3D
 var _catch_burst: GPUParticles3D
 var _junk_burst: GPUParticles3D
+var _miss_burst: GPUParticles3D
 var _stars: Node3D
 var _butterflies: MultiMeshInstance3D
 var _look_proxy: Node3D
@@ -51,6 +62,9 @@ var _pulses: Array = []
 var _basket_pop := 0.0
 var _world_half_h := 5.2
 var _last_basket_x := 0.0
+var _sky: Node3D
+var _birds: MultiMeshInstance3D
+var _kites: Array = []
 
 
 func setup_stage(basket_half_w: float) -> void:
@@ -85,6 +99,7 @@ func setup_stage(basket_half_w: float) -> void:
 	)
 	_build_garden()
 	_build_props()
+	_build_sky()
 	_build_basket()
 	_build_gooby()
 	_build_fx()
@@ -243,6 +258,108 @@ func _build_props() -> void:
 	add_child(_butterflies)
 
 
+## W17 M2: Vogelzug + Drachen füllen das obere Bilddrittel (hochkant stand
+## dort nur leerer Himmel). Alles deterministisch aus Index-Trigonometrie
+## (kein RNG); unter Reduced Motion friert _animate_sky per pulse=0 ein —
+## die Silhouetten bleiben als statische Füllung stehen.
+func _build_sky() -> void:
+	_sky = Node3D.new()
+	_sky.position = Vector3(0.0, _world_half_h * 2.45, SKY_Z)
+	add_child(_sky)
+	var quad := QuadMesh.new()
+	quad.size = Vector2(0.34, 0.2)
+	var mat := Fx.flat(Color(0.25, 0.3, 0.36))
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	quad.material = mat
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.mesh = quad
+	mm.instance_count = BIRDS * 2
+	_birds = MultiMeshInstance3D.new()
+	_birds.multimesh = mm
+	_birds.extra_cull_margin = 60.0
+	_birds.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_sky.add_child(_birds)
+	for i in 2:
+		var kite := _build_kite(Color(0.94, 0.42, 0.36) if i == 0 else Color(0.42, 0.62, 0.9))
+		kite.position = Vector3(-2.7 + 5.4 * float(i), -1.2 - 0.5 * float(i), 0.6)
+		kite.set_meta("base_y", kite.position.y)
+		_sky.add_child(kite)
+		_kites.append(kite)
+	_animate_sky(0.0)
+
+
+## Papierdrachen: Rauten-Quad (45° gedreht, dann senkrecht gestreckt) plus
+## Schweif aus drei Schleifchen — alles unshaded, ohne Schattenwurf.
+func _build_kite(color: Color) -> Node3D:
+	var root := Node3D.new()
+	var body := Node3D.new()
+	body.scale = Vector3(0.78, 1.3, 1.0)
+	root.add_child(body)
+	var mat := Fx.flat(color)
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	var diamond := MeshInstance3D.new()
+	var quad := QuadMesh.new()
+	quad.size = Vector2(0.62, 0.62)
+	quad.material = mat
+	diamond.mesh = quad
+	diamond.rotation.z = PI * 0.25
+	diamond.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	body.add_child(diamond)
+	var tail_mat := Fx.flat(Color(1.0, 0.97, 0.88))
+	tail_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	tail_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	for k in 3:
+		var bow := MeshInstance3D.new()
+		var bow_quad := QuadMesh.new()
+		bow_quad.size = Vector2(0.16, 0.1)
+		bow_quad.material = tail_mat
+		bow.mesh = bow_quad
+		bow.position = Vector3(0.04 * float(k % 2), -0.68 - 0.28 * float(k), 0.0)
+		bow.rotation.z = 0.5 if k % 2 == 0 else -0.5
+		bow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		root.add_child(bow)
+	return root
+
+
+## Vogelzug in V-Formation zieht langsam übers Bild (wrappt an den Rändern),
+## die Drachen pendeln an ihrer Schnur. Rein deterministisch aus dem Puls —
+## Reduced Motion ruft mit pulse=0 auf und alles steht still.
+func _animate_sky(pulse: float) -> void:
+	if _birds == null:
+		return
+	var mm := _birds.multimesh
+	var drift := wrapf(pulse * 0.45, -7.0, 7.0)
+	for i in BIRDS:
+		@warning_ignore("integer_division")
+		var rank := (i + 1) / 2
+		var side := -1.0 if i % 2 == 1 else 1.0
+		var bob := sin(pulse * 0.9 + float(i)) * 0.08
+		var pos := Vector3(drift + side * 0.62 * float(rank), -0.3 * float(rank) + bob, 0.0)
+		var flap := sin(pulse * 6.0 + float(i) * 0.7) * 0.55
+		for wing in 2:
+			var sign_f := 1.0 if wing == 0 else -1.0
+			var roll := Basis(Vector3(0.0, 0.0, 1.0), flap * sign_f)
+			var wing_pos := pos + roll * Vector3(sign_f * 0.16, 0.0, 0.0)
+			mm.set_instance_transform(i * 2 + wing, Transform3D(roll, wing_pos))
+	for k in _kites.size():
+		var kite := _kites[k] as Node3D
+		var phase := float(k) * 2.1
+		kite.rotation.z = sin(pulse * 0.8 + phase) * 0.16
+		kite.position.y = float(kite.get_meta("base_y", -1.2)) + sin(pulse * 1.3 + phase) * 0.18
+
+
+## Der Himmels-Schmuck hängt IMMER im oberen Bilddrittel: Anker und Maßstab
+## folgen der sichtbaren Halbhöhe (hochkant hoch oben, quer schmaler Streifen).
+func _frame_sky() -> void:
+	if _sky == null:
+		return
+	_sky.position = Vector3(0.0, _world_half_h * 2.45, SKY_Z)
+	_sky.scale = Vector3.ONE * maxf(0.32, _world_half_h / SKY_REF_HALF_H)
+
+
 func _build_basket() -> void:
 	_basket = Models.node(DIR + "picnic_basket_round.gltf", _basket_half_w * 2.0)
 	add_child(_basket)
@@ -297,6 +414,23 @@ func _build_fx() -> void:
 		)
 	)
 	add_child(_junk_burst)
+	# W17 M3: Staubpuff am Boden, wenn im Zeitmodus gute Ware durchfällt.
+	_miss_burst = (
+		Fx
+		. particles(
+			{
+				"color": Color(0.72, 0.62, 0.48, 0.85),
+				"amount": 10,
+				"lifetime": 0.5,
+				"one_shot": true,
+				"explosiveness": 1.0,
+				"speed": Vector2(0.8, 1.6),
+				"spread": 75.0,
+				"size": Vector2(0.05, 0.14),
+			}
+		)
+	)
+	add_child(_miss_burst)
 	# Goldene Möhre: Leuchtring, der um das Item kreist.
 	_halo = Fx.ring(0.5, 0.06, Color(1.0, 0.82, 0.25))
 	_halo.visible = false
@@ -327,6 +461,20 @@ func frame(vp: Vector2, ppu: float) -> void:
 	stage.camera.position = Vector3(0.0, _world_half_h, CAM_DIST)
 	stage.camera.rotation = Vector3.ZERO
 	stage.set_half_height(_world_half_h, CAM_DIST)
+	_frame_sky()
+
+
+## W17 M1: Intro-Anflug — die Kamera schwebt aus einer leicht erhöhten
+## Garten-Totale in die frontale Spielpose; k=1 == exakte Rahmung von frame().
+func establish(k: float) -> void:
+	var e := 1.0 - ease(clampf(k, 0.0, 1.0), 0.4)
+	stage.camera.position = Vector3(0.0, _world_half_h, CAM_DIST) + Vector3(0.0, 2.4, 3.2) * e
+	stage.camera.rotation_degrees = Vector3(-9.0 * e, 0.0, 0.0)
+
+
+## W17 M3: Staubpuff am Boden, wo gute Ware durchgefallen ist (Zeitmodus).
+func miss_fx(x: float) -> void:
+	Fx.burst(_miss_burst, Vector3(x, 0.12, 0.25))
 
 
 ## Bildschirm-y (Canvas-Pixel) → Welt-y: Boden liegt am unteren Bildrand.
@@ -335,6 +483,7 @@ func world_y(y_px: float, vp: Vector2, ppu: float) -> float:
 
 
 ## Jeden Frame: Items stellen, Korb + Gooby bewegen, Blick aufs tiefste Stück.
+## `reduced` friert den Himmels-Schmuck ein (Reduced Motion, W17 M2).
 func sync(
 	items: Array[Dictionary],
 	basket_x: float,
@@ -342,12 +491,14 @@ func sync(
 	vp: Vector2,
 	ppu: float,
 	pulse: float,
-	delta: float
+	delta: float,
+	reduced := false
 ) -> void:
 	stage.tick(delta)
 	gooby.tick(delta)
 	Kit.animate_butterflies(_butterflies, pulse)
 	Kit.tick_pulses(_pulses, delta)
+	_animate_sky(0.0 if reduced else pulse)
 	_basket.position.x = basket_x
 	# Fang-Squash: der Korb hüpft kurz, wenn etwas hineinfällt.
 	if _basket_pop > 0.0:
