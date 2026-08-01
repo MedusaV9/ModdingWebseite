@@ -23,24 +23,40 @@ GOOBY_ADMIN_PASSWORD=geheim node server.js
 # → ws://localhost:8080/ws         Spiel-Protokoll (HELLO/WELCOME, siehe Protokoll-Doku)
 ```
 
+**Port-Stolperfalle beim Testen mit dem Godot-Client:** die im Client gepackte
+Config ([`GOOBY-GODOT/content/config/data/config.json`](../GOOBY-GODOT/content/config/data/config.json))
+erwartet den Server auf **`127.0.0.1:8765`** — der Server-Default ist aber **`8080`**.
+Für Client-gegen-lokalen-Server-Tests also entweder den Server passend starten
+(`PORT=8765 node server.js`) oder im Spiel unter *Einstellungen → Mehrspieler*
+Host/Port überschreiben.
+
 Tests (kein Netzwerk nötig, echte Server auf Port 0):
 
 ```bash
-node --test
+npm install                     # einmalig; Tests brauchen keine dev-Dependencies
+node --test                     # oder: npm test
 ```
+
+Die CI führt dieselben Tests bei jedem Push mit Änderungen unter `GOOBY-SERVER/**`
+aus: [`.github/workflows/gooby-server.yml`](../.github/workflows/gooby-server.yml)
+(Node 22, `npm ci` + `node --test`).
 
 ## ENV-Referenz
 
 | Variable | Default | Bedeutung |
 |---|---|---|
-| `PORT` | `8080` | Der EINE Port für HTTP + WebSocket |
+| `PORT` | `8080` | Der EINE Port für HTTP + WebSocket (Achtung: der Godot-Client erwartet per gepackter Config `8765`, s. Schnellstart) |
 | `GOOBY_ADMIN_PASSWORD` | *(leer)* | **Pflicht fürs Panel.** Fehlt sie, ist `/panel` komplett deaktiviert (503, fail-closed) — Spiel-Features laufen trotzdem |
+| `GOOBY_JOIN_SECRET` | *(leer)* | Optionaler Beitritts-Code für den Server. Wenn gesetzt, muss das HELLO ein passendes `secret`-Feld mitschicken (im Spiel unter *Einstellungen → Mehrspieler* eintragbar); bei fehlendem/falschem Wert antwortet der Server mit `SECRET_REQUIRED`/`SECRET_WRONG` und schließt die Verbindung (Code 4008). Ohne die Variable ist der Check aus |
 | `DATA_DIR` | `./data` | Persistenz-Verzeichnis (JSON-Collections, JSONL-Logs, Blobs). Alias: `GOOBY_DATA_DIR` |
 | `GOOBY_TZ` | `Europe/Berlin` | Zeitzone für Tagesgrenzen (GoobyPal-Limit, Analytics-Tage) |
 | `GOOBY_PAL_DAILY_LIMIT` | `250` | GoobyPal: maximale Münzen pro Tag pro **Absender** |
 | `GOOBY_MAX_PHOTO_KB` | `512` | Größenlimit für Foto-Blobs (Post/Mail, M2) |
 | `GOOBY_HEARTBEAT_SEC` | `20` | PING-Intervall, das der Server den Clients ansagt |
 | `GOOBY_BOARD_REJOIN_MS` | `120000` | Brettspiel: Rejoin-Fenster nach Verbindungsabriss |
+| `GOOBY_RMP_REJOIN_MS` | `120000` | Ranch-MP: Rejoin-Fenster nach Verbindungsabriss (analog Brettspiel) |
+| `GOOBY_RMP_FANGEN_MS` | `90000` | Ranch-MP: Rundendauer des Fangen-Minispiels |
+| `GOOBY_RMP_COUNTDOWN_MS` | `4000` | Ranch-MP: Countdown zwischen „alle bereit“ (`MG_READY` komplett) und Startschuss |
 
 ## Deployment auf AMP (CubeCoders) — „Node.js App Runner“
 

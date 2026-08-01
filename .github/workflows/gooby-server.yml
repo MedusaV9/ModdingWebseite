@@ -1,0 +1,44 @@
+# GOOBY-SERVER CI (G3/P11 SERVER-BASIS; Quell-AP: g1/server.md AP-S1).
+#
+# Führt die Node-Server-Tests aus, die bisher nur lokal liefen (22 Testdateien
+# unter GOOBY-SERVER/test/, Runner ist der Node-eingebaute `node --test` —
+# kein Framework, kein Build-Schritt, keine nativen Module).
+#
+# Triggert AUSSCHLIESSLICH auf GOOBY-SERVER/** + sich selbst. Die bestehenden
+# Workflows gooby-godot.yml (Godot-Spiel), gooby-ios.yml (Web-Altversion) und
+# gooby-packs.yml bleiben unberührt.
+#
+# Die Tests brauchen kein Netzwerk und keine Services: test/helpers.js startet
+# echte Server-Instanzen auf Port 0 (127.0.0.1) mit Temp-DATA_DIR.
+name: GOOBY Server
+
+on:
+  push:
+    paths:
+      - "GOOBY-SERVER/**"
+      - ".github/workflows/gooby-server.yml"
+  workflow_dispatch:
+
+jobs:
+  server-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: GOOBY-SERVER
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: GOOBY-SERVER/package-lock.json
+
+      # Nur express + ws (pure JS) — npm ci nutzt die eingecheckte
+      # package-lock.json und ist damit reproduzierbar.
+      - name: Dependencies installieren
+        run: npm ci
+
+      - name: Server-Tests (node --test)
+        run: node --test
