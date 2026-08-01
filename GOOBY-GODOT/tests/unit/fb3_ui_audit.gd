@@ -33,12 +33,27 @@ const SIZES: Array = [
 	["ipad_2360x1640", Vector2i(2360, 1640), 2.0, [0.0, 24.0, 0.0, 20.0]],
 ]
 
+## Screens mit EIGENER Spalten-Basisbreite (Grid-/Zweispalten-Layouts der
+## W16-Welle 2): der content_mitte-Breiten-Deckel muss deren base statt
+## AcTokens.CONTENT_MAX_WIDTH ansetzen. Die Werte kommen DIREKT aus den
+## Screen-Konstanten (kein Drift). content_width klemmt ohnehin härter
+## (Safe − 2×PanelSheetLayout.MARGIN×f, 24 > CONTENT_EDGE_X 16) — bleibt
+## ein Breiten-Befund, ist es ein ECHTER Inhalts-Überlauf der Spalte.
+const COLUMN_BASE_BY_SCREEN := {
+	"05_arcade": ArcadeScreen.CONTENT_BASE_WIDTH,
+	"05_album": AlbumScreen.SPALTE_BASIS,
+	"05_wardrobe": WardrobeScreen.SPALTE_BASIS,
+	"05_ikea": IkeaScreen.GRID_BASE,
+	"05_gestalten": CustomizeScreen.SPALTE_BASIS,
+}
+
 var _out_dir := DEFAULT_OUT
 var _router: Node
 var _entry: Node
 var _hud: Control
 var _findings: Array[Dictionary] = []
 var _screens_checked := 0
+var _formats_run := 0
 ## Aktueller Format-Kontext.
 var _label := ""
 var _canvas := Vector2.ZERO
@@ -85,6 +100,7 @@ func _run() -> void:
 
 
 func _audit_size(size_info: Array) -> void:
+	_formats_run += 1
 	_label = String(size_info[0])
 	var win_size: Vector2i = size_info[1]
 	var scale: float = size_info[2]
@@ -127,6 +143,15 @@ func _audit_size(size_info: Array) -> void:
 		["wardrobe", &"wardrobe"],
 		["ikea", &"ikea"],
 		["gestalten", &"gestalten"],
+		# W16/G4: Routen-Lücke des Spalten-Rollouts (G2-Bericht §4.5) — die
+		# in G2 umgestellten Screens erfolge/galerie/postkarten/codes/dlc
+		# lagen bisher NICHT in den Audit-Routen und waren nur durch den
+		# Quelltext-Scan gesichert; content_mitte prüft sie jetzt live.
+		["erfolge", &"erfolge"],
+		["galerie", &"galerie"],
+		["postkarten", &"postkarten"],
+		["codes", &"codes"],
+		["dlc", &"dlc"],
 	]:
 		await _audit_route(String(screen_info[0]), screen_info[1])
 	await _audit_minigame_flow()
@@ -247,6 +272,11 @@ func _register_all_routes() -> void:
 	WardrobeScreen.register_routes()
 	IkeaScreen.register_routes()
 	CustomizeScreen.register_routes()
+	AchievementsScreen.register_routes()
+	GalerieScreen.register_routes()
+	PostkartenScreen.register_routes()
+	CodesScreen.register_routes()
+	DlcScreen.register_routes()
 
 
 func _goto_home() -> void:
@@ -332,9 +362,8 @@ func _check_content_column(screen: String, controls: Array[Control]) -> void:
 	if columns.is_empty():
 		return
 	var f := UiScale.for_viewport(root)
-	var max_w := minf(
-		AcTokens.CONTENT_MAX_WIDTH * f, _safe_rect.size.x - 2.0 * AcTokens.CONTENT_EDGE_X * f
-	)
+	var base := float(COLUMN_BASE_BY_SCREEN.get(screen, AcTokens.CONTENT_MAX_WIDTH))
+	var max_w := minf(base * f, _safe_rect.size.x - 2.0 * AcTokens.CONTENT_EDGE_X * f)
 	for col in columns:
 		var rect := col.get_global_rect()
 		var delta := absf(rect.get_center().x - _safe_rect.get_center().x)
@@ -465,8 +494,13 @@ func _write_report() -> void:
 	var md := FileAccess.open("%s/befunde.md" % _out_dir, FileAccess.WRITE)
 	md.store_line("# FB3-UI-Audit — Befunde")
 	md.store_line("")
+	# Durch die ECHTE Formatzahl teilen — FB3_FORMATS-Subset-Läufe (schnelle
+	# Nach-Fix-Verifikation) bekämen sonst eine falsche Screens-Zahl.
 	md.store_line(
-		"Screens geprüft: %d × 4 Formate — Befunde: %d" % [_screens_checked / 4, _findings.size()]
+		(
+			"Screens geprüft: %d × %d Formate — Befunde: %d"
+			% [_screens_checked / maxi(_formats_run, 1), _formats_run, _findings.size()]
+		)
 	)
 	md.store_line("")
 	md.store_line("| Format | Screen | Check | Element | Detail |")
@@ -521,6 +555,13 @@ func _settle() -> void:
 
 func _snap(file: String) -> void:
 	for node: Control in root.find_children("SafeModeBanner", "Control", true, false):
+		node.visible = false
+	# Spontane Gooby-Gesprächs-Chips (SeeleRunner würfelt Betreten-Momente,
+	# gooby_gespraech.gd) sind transiente Dialog-Overlays, keine Screen-UI —
+	# sichtbar machten sie Läufe nichtdeterministisch rot (Overlap-/Spalten-
+	# Befunde je nach Würfelglück). Ausblenden wie den SafeModeBanner; die
+	# Checks laufen NACH dem Snap und sehen nur Sichtbares.
+	for node: Control in root.find_children("GoobyGespraechChips", "Control", true, false):
 		node.visible = false
 	await process_frame
 	var image := root.get_texture().get_image()

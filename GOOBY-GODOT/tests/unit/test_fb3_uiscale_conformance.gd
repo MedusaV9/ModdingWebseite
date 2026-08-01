@@ -54,6 +54,13 @@ const MUST_USE_CONTENT_COLUMN: Array[String] = [
 	"res://scripts/ui/dlc/dlc_screen.gd",
 	"res://scripts/ui/galerie/galerie_screen.gd",
 	"res://scripts/ui/settings_screen.gd",
+	# W16/G3 „Welle 2": Grid-Screens mit eigener Spalten-Basisbreite
+	# (content_frame + content_width, siehe G3-Bericht §2 / G4-P14).
+	"res://scripts/minigames/arcade_screen.gd",
+	"res://scripts/shop/ikea_screen.gd",
+	"res://scripts/cosmetics/wardrobe_screen.gd",
+	"res://scripts/home/customize/customize_screen.gd",
+	"res://scripts/ui/album/album_screen.gd",
 ]
 const CONTENT_COLUMN_MARKERS: Array[String] = [
 	"ScreenShell.content_frame(",
