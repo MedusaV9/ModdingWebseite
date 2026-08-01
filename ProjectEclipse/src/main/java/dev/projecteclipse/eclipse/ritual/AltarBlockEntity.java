@@ -96,6 +96,16 @@ public class AltarBlockEntity extends BlockEntity implements GeoBlockEntity {
     /** Offerings are confirmed by a second sneak-right-click within this window (5 s). */
     public static final long OFFERING_CONFIRM_WINDOW_TICKS = 100L;
     /**
+     * WAVE5 (F-105 C) — C2 armed-offering tension column (IDEA-12 #6): a bounded one-shot
+     * Quasar emitter whose 100 t emitter lifetime mirrors
+     * {@value #OFFERING_CONFIRM_WINDOW_TICKS} exactly — dark {@code #5B1E99} motes held in
+     * a tight column over the stone while the altar "holds its breath" for the confirm
+     * click. No cleanup bookkeeping: the emitter runs out on its own, so a lapsed window
+     * fades without residue and a confirm visually hands over to the accept beam.
+     */
+    private static final ResourceLocation OFFERING_ARMED =
+            ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "offering_armed");
+    /**
      * VEIL-REPASS-2 crowd-awareness: players within this range of the altar count as the
      * gathered CROWD when a milestone completes — the count rides the level-up payload's
      * previously-unused {@code b} param and widens the client ceremony's burst radius.
@@ -233,7 +243,15 @@ public class AltarBlockEntity extends BlockEntity implements GeoBlockEntity {
                 EclipseSignals.AltarDepositPurpose.MILESTONE);
 
         actionBar(player, Component.translatable("ritual.eclipse.altar.progress", updated, match.count(), itemName));
-        serverLevel.playSound(null, this.worldPosition, SoundEvents.AMETHYST_BLOCK_CHIME, SoundSource.BLOCKS, 1.0F, 0.8F);
+        // WAVE5 (F-105 C) — C4 milestone chime ladder (IDEA-12 #5): the receipt chime
+        // climbs with cost-entry progress (0.7 at the first item -> 1.2 at the last)
+        // instead of the fixed 0.8, so grinding a milestone is audibly "getting
+        // somewhere". `updated <= count` by construction (consumed is clamped above);
+        // completeMilestone keeps its own end-portal sting as the top of the ladder.
+        float chimePitch = 0.7F + 0.5F * (updated / (float) match.count());
+        serverLevel.playSound(null, this.worldPosition, SoundEvents.AMETHYST_BLOCK_CHIME, SoundSource.BLOCKS, 1.0F, chimePitch);
+        EclipseMod.LOGGER.debug("[w5c-chime] pitch={} progress={}/{} item={}",
+                chimePitch, updated, match.count(), match.item());
 
         // W10: a sacrifice never goes unobserved — one gazer materializes at the treeline.
         GazerEntity.watchSacrifice(serverLevel, this.worldPosition);
@@ -349,6 +367,14 @@ public class AltarBlockEntity extends BlockEntity implements GeoBlockEntity {
             pendingOfferings.put(playerId, new PendingOffering(now, itemId));
             actionBar(player, Component.translatable("ritual.eclipse.offering.confirm", stack.getHoverName()));
             player.playNotifySound(SoundEvents.AMETHYST_BLOCK_RESONATE, SoundSource.BLOCKS, 0.8F, 0.7F);
+            // WAVE5 (F-105 C) — C2: the armed window gets a physical tell — one bounded
+            // 100 t "held breath" column for everyone near the altar (same 64-block lane
+            // as the accept beam below). One-shot, outcome-blind, values stay secret.
+            PacketDistributor.sendToPlayersNear(serverLevel, null,
+                    this.worldPosition.getX() + 0.5D, this.worldPosition.getY() + 1.0D,
+                    this.worldPosition.getZ() + 0.5D, 64.0D,
+                    new S2CQuasarPayload(OFFERING_ARMED,
+                            Vec3.atCenterOf(this.worldPosition).add(0.0D, 0.7D, 0.0D)));
             return;
         }
 

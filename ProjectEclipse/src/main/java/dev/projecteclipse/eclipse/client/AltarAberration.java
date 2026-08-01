@@ -65,8 +65,26 @@ public final class AltarAberration {
     /** Glyph-flash envelope length (v2 [a1]): pops on, eases out over ~0.8 s. */
     private static final int FLASH_TICKS = 16;
 
+    // --- WAVE5 (F-105 C) — C5 reflex pulse + level breath (IDEA-12 #4 + #9) -------------
+
+    /** C5 reflex pulse: strength added per {@link #pulse} notify (the altar "twitches"). */
+    private static final float PULSE_ADD = 0.20F;
+    /** Linear pulse decay length (~15 ticks). */
+    private static final int PULSE_DECAY_TICKS = 15;
+    private static final float PULSE_DECAY_PER_TICK = PULSE_ADD / PULSE_DECAY_TICKS;
+    /** C5 breath: +0.03 Hz per altar level on top of {@link #BREATH_HZ} (0.01 Hz snapped). */
+    private static final float BREATH_HZ_PER_LEVEL = 0.03F;
+    /** C5 breath: base ±10% grows +0.8%/level, capped at ±14% (the plan ceiling). */
+    private static final float BREATH_AMP_BASE = 0.10F;
+    private static final float BREATH_AMP_PER_LEVEL = 0.008F;
+    private static final float BREATH_AMP_MAX = 0.14F;
+
     /** Client-side eased zone strength; the fed uniform adds the 0.3 Hz breathing on top. */
     private static float eased;
+    /** WAVE5 (F-105 C) — C5 reflex-pulse level (decays linearly, published on top of {@link #eased}). */
+    private static float pulse;
+    /** Last {@code [w5c-breath]}-probed snapped frequency ({@code -1} = unlogged). */
+    private static float lastLoggedBreathHz = -1.0F;
     /** Remaining glyph-flash ticks (0 = idle); set on skill level-up, drained per tick. */
     private static int flashTicks;
     /** Last skill level seen ({@code -1} = unseeded — the login sync must never flash). */
@@ -102,8 +120,38 @@ public final class AltarAberration {
         } else if (eased > target) {
             eased = Math.max(target, eased - SLEW_PER_TICK);
         }
-        EclipseFxState.setAltarAberration(eased);
+        // WAVE5 (F-105 C) — C5: the reflex pulse rides ON TOP of the zone strength, clamped
+        // to MAX_STRENGTH so the frozen single-uniform contract never sees a new ceiling.
+        // Published only while INSIDE the zone (eased > 0) — a far-away ALTAR_BEAM payload
+        // (512-block view range, world-visible L5 sends) must not flash screens without
+        // zone context. Leaving the world zeroes it (the target==0 slew plus this decay).
+        if (pulse > 0.0F) {
+            pulse = Math.max(0.0F, pulse - PULSE_DECAY_PER_TICK);
+        }
+        float published = eased > 0.001F ? Math.min(MAX_STRENGTH, eased + pulse) : eased;
+        EclipseFxState.setAltarAberration(published);
         tickGlyphFlash(level != null && player != null);
+    }
+
+    /**
+     * WAVE5 (F-105 C) — C5 (IDEA-12 #4): one client-local reflex notify — the aberration
+     * zone "twitches" by {@code amount} (linear ~15 t decay, hard-clamped to
+     * {@value #MAX_STRENGTH} at publish). Called from
+     * {@code veilfx.QuasarSpawner#spawnOrFallback} whenever an {@code ALTAR_BEAM} payload
+     * arrives (deposits, banking, level-ups, verdict blooms — every time the altar is fed
+     * or answers). Sheds entirely under {@code reducedFx} (the breath stays flattened, its
+     * own bestand rule). The probe logs the RISING edge only, so ritual beam salvos cannot
+     * flood the debug log.
+     */
+    public static void pulse(float amount) {
+        if (EclipseClientConfig.reducedFx() || amount <= 0.0F) {
+            return;
+        }
+        boolean freshPulse = pulse <= 0.0F;
+        pulse = Math.min(MAX_STRENGTH, pulse + amount);
+        if (freshPulse) {
+            EclipseMod.LOGGER.debug("[w5c-abpulse] pulse={} eased={}", pulse, eased);
+        }
     }
 
     /**
@@ -185,12 +233,26 @@ public final class AltarAberration {
      * same average zone strength, no pulse. v2 additionally feeds the shared wrap clock,
      * the glyph-flash envelope and the reducedFx detail gate (same commit as the shader
      * uniforms — the additive-uniform rule).
+     *
+     * <p>WAVE5 (F-105 C) — C5 level breath (IDEA-12 #9): the breathing frequency rises
+     * with the synced altar level ({@code 0.3 + 0.03·level} Hz) and the amplitude deepens
+     * toward ±{@value #BREATH_AMP_MAX} — a levelled altar breathes faster AND deeper. The
+     * frequency is snapped to 0.01 Hz so every value completes a whole number of cycles
+     * per 100 s clock wrap (the seam stays invisible, the bestand proof holds).
+     * {@code ClientStateCache.altarLevel} is READ-only here.</p>
      */
     private static void feedPost(PostPipeline pipeline) {
         float seconds = (System.currentTimeMillis() % 100_000L) / 1000.0F;
+        int altarLevel = Math.max(0, ClientStateCache.altarLevel);
+        float breathHz = Math.round((BREATH_HZ + BREATH_HZ_PER_LEVEL * altarLevel) * 100.0F) / 100.0F;
+        float breathAmp = Math.min(BREATH_AMP_MAX, BREATH_AMP_BASE + BREATH_AMP_PER_LEVEL * altarLevel);
+        if (breathHz != lastLoggedBreathHz) {
+            lastLoggedBreathHz = breathHz;
+            EclipseMod.LOGGER.debug("[w5c-breath] hz={} amp={} level={}", breathHz, breathAmp, altarLevel);
+        }
         float breath = EclipseClientConfig.reducedFx()
                 ? 0.9F
-                : 0.9F + 0.1F * Mth.sin(seconds * (float) (Math.PI * 2.0D) * BREATH_HZ);
+                : 0.9F + breathAmp * Mth.sin(seconds * (float) (Math.PI * 2.0D) * breathHz);
         pipeline.getUniform("Aberration").setFloat(EclipseFxState.altarAberration() * breath);
         pipeline.getUniform("Time").setFloat(seconds);
         pipeline.getUniform("GlyphFlash").setFloat(glyphFlash());

@@ -14,6 +14,7 @@ import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
 import dev.projecteclipse.eclipse.cutscene.client.CameraDirector;
 import dev.projecteclipse.eclipse.network.S2CBossbarStylePayload;
 import net.minecraft.Util;
+import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.LerpingBossEvent;
@@ -140,6 +141,26 @@ public final class BossbarSkin {
     /** Height reserved for the overflow counter row in the top stack. */
     private static final int OVERFLOW_ROW_HEIGHT = 10;
 
+    // --- WAVE5 (F-105 C) — C6 phase-break shatter (IDEA-16 #6) --------------------------
+    // Purely client-detected off the lerped progress the bar already carries: when a
+    // boss-themed bar's progress crosses a MAJOR fraction downward, the frame spikes
+    // white-hot on the existing glowAlpha parameter and 6–8 pixel fragments fall from the
+    // notch position. Zero network, covers all four bosses in this one file. Rises (heals,
+    // entrance wipes) can never trigger it — detection lives inside the damage-drop branch.
+    // Unlike the rest of the skin's wall-clock juice, the shatter envelope runs on GAME
+    // TIME (+ partialTick), so `/tick rate 2` stretches it 10× for photo points.
+
+    /** Downward crossings of these fractions count as a phase break (2/3, 1/2, 1/3). */
+    private static final float[] SHATTER_NOTCHES = { 2.0F / 3.0F, 0.5F, 1.0F / 3.0F };
+    /** White-hot glow spike length in game ticks (500 ms at 20 tps). */
+    private static final float SHATTER_GLOW_TICKS = 10.0F;
+    /** Fragment flight time in game ticks (slightly outlives the glow — debris reads last). */
+    private static final float SHATTER_FRAGMENT_TICKS = 12.0F;
+    /** Fragment gravity in logical px/s² (ballistics run on seconds-equivalent = ticks/20). */
+    private static final float SHATTER_GRAVITY = 90.0F;
+    /** Fragment square size in logical px. */
+    private static final int SHATTER_FRAGMENT_PX = 2;
+
     // --- Themes -------------------------------------------------------------------------
     // day/goal/boss arrive over the wire (S2CBossbarStylePayload); the three below are
     // CLIENT-LOCAL refinements picked by AnnouncementOverlay off the announcement's title
@@ -211,6 +232,11 @@ public final class BossbarSkin {
         /** Cached geometry/telegraphs for the event-less exit-ghost redraw. */
         boolean lastDrawn;
         int lastY;
+        // WAVE5 (F-105 C) — C6 phase-break shatter state
+        /** Game-time tick the running shatter started on ({@link Long#MIN_VALUE} = idle). */
+        long shatterStartGameTime = Long.MIN_VALUE;
+        /** Fraction of the notch the break crossed (fragment origin + probe payload). */
+        float shatterNotch;
         @Nullable
         BossEvent.BossBarColor lastColor;
         @Nullable
@@ -327,6 +353,21 @@ public final class BossbarSkin {
                 // Damage: white flash + shake; the ghost keeps the pre-drop level visible.
                 state.damageStartMillis = now;
                 state.ghostProgress = Math.max(state.ghostProgress, state.displayedProgress);
+                // WAVE5 (F-105 C) — C6: a boss bar crossing a major fraction DOWNWARD is a
+                // phase break — glow spike + falling fragments. Only inside this damage
+                // branch, so heals/upward progress can never shatter; only the boss theme,
+                // so counting-down goal/ritual bars never strobe through their fractions.
+                if (S2CBossbarStylePayload.THEME_BOSS.equals(state.theme)
+                        && !EclipseClientConfig.reducedFx()
+                        && Minecraft.getInstance().level != null) {
+                    float notch = crossedPhaseNotch(state.lastActualProgress, actual);
+                    if (notch > 0.0F) {
+                        state.shatterStartGameTime = Minecraft.getInstance().level.getGameTime();
+                        state.shatterNotch = notch;
+                        EclipseMod.LOGGER.debug("[w5c-barshatter] theme={} notch={}",
+                                state.theme, notch);
+                    }
+                }
             } else if (delta > 0.001F) {
                 // Rise: v2's soft leading-edge glow flash.
                 state.flashStartMillis = now;
@@ -396,9 +437,74 @@ public final class BossbarSkin {
         // increment stays correct and stacked bars keep their spacing.
         float flash = state.flashStartMillis == 0L ? 0.0F
                 : Mth.clamp(1.0F - (now - state.flashStartMillis) / (float) FLASH_MILLIS, 0.0F, 1.0F);
+        // WAVE5 (F-105 C) — C6: the phase-break shatter spikes the EXISTING glowAlpha
+        // parameter white-hot (1.0) and eases out over 10 game ticks; the regular rise
+        // flash keeps its own smaller envelope and simply loses the max() while it runs.
+        float shatterTicks = shatterElapsedTicks(state, event.getPartialTick());
+        float shatterGlow = shatterTicks < 0.0F || EclipseClientConfig.reducedFx() ? 0.0F
+                : Mth.clamp(1.0F - shatterTicks / SHATTER_GLOW_TICKS, 0.0F, 1.0F);
         drawLiveBar(guiGraphics, event.getY(), state, bar.getName(),
-                0.35F + 0.65F * flash, 1.0F, bar.getColor(), bar.getOverlay(), now);
+                Math.max(0.35F + 0.65F * flash, shatterGlow), 1.0F, bar.getColor(), bar.getOverlay(), now);
+        if (shatterTicks >= 0.0F && shatterTicks < SHATTER_FRAGMENT_TICKS
+                && !EclipseClientConfig.reducedFx()) {
+            drawShatterFragments(guiGraphics, event.getY(), state, shatterTicks);
+        }
         observedBarsBottom = Math.max(observedBarsBottom, event.getY() + event.getIncrement());
+    }
+
+    /** WAVE5 (F-105 C) — C6: highest major fraction crossed downward, or {@code -1}. */
+    private static float crossedPhaseNotch(float previous, float current) {
+        for (float notch : SHATTER_NOTCHES) {
+            if (previous > notch && current <= notch) {
+                return notch;
+            }
+        }
+        return -1.0F;
+    }
+
+    /**
+     * WAVE5 (F-105 C) — C6: game-time ticks (+ partial) since the shatter began, or
+     * {@code -1} while idle. Game time (not wall clock) so the envelope stretches with
+     * {@code /tick rate} — at rate 2 the 10t glow reads over 5 real seconds.
+     */
+    private static float shatterElapsedTicks(BarState state, DeltaTracker deltaTracker) {
+        if (state.shatterStartGameTime == Long.MIN_VALUE || Minecraft.getInstance().level == null) {
+            return -1.0F;
+        }
+        return (Minecraft.getInstance().level.getGameTime() - state.shatterStartGameTime)
+                + deltaTracker.getGameTimeDeltaPartialTick(false);
+    }
+
+    /**
+     * WAVE5 (F-105 C) — C6: 6–8 falling {@value #SHATTER_FRAGMENT_PX}×{@value
+     * #SHATTER_FRAGMENT_PX} px fragments bursting from the notch position — deterministic
+     * per-shatter pseudo-randomness (hashed off {@code shatterStartGameTime}), game-tick
+     * ballistics, zero retained state beyond the two {@link BarState} fields.
+     */
+    private static void drawShatterFragments(GuiGraphics guiGraphics, int y, BarState state,
+            float elapsedTicks) {
+        float life = Mth.clamp(1.0F - elapsedTicks / SHATTER_FRAGMENT_TICKS, 0.0F, 1.0F);
+        if (life <= 0.0F) {
+            return;
+        }
+        float t = elapsedTicks / 20.0F; // seconds-equivalent: the px/s constants read true at 20 tps
+        int barX = guiGraphics.guiWidth() / 2 - BAR_WIDTH / 2;
+        float originX = barX + BAR_WIDTH * state.shatterNotch;
+        float originY = y + BAR_HEIGHT / 2.0F;
+        int accent = palette(state.theme, state.lastColor).accent();
+        long seed = state.shatterStartGameTime;
+        int fragments = 6 + (int) (Math.floorMod(seed, 3L)); // 6–8
+        for (int i = 0; i < fragments; i++) {
+            long h = (seed + i * 7919L) * 0x9E3779B97F4A7C15L;
+            float rx = ((h >>> 16 & 0xFF) / 255.0F - 0.5F);            // -0.5 .. 0.5
+            float ry = ((h >>> 24 & 0xFF) / 255.0F);                   //  0.0 .. 1.0
+            float vx = rx * 46.0F;                                     // px/s sideways burst
+            float vy = -(8.0F + ry * 18.0F);                           // px/s up, then gravity
+            int fragX = Math.round(originX + vx * t);
+            int fragY = Math.round(originY + vy * t + 0.5F * SHATTER_GRAVITY * t * t);
+            int color = argb((h & 1L) == 0L ? 0xFFFFFF : accent, life);
+            guiGraphics.fill(fragX, fragY, fragX + SHATTER_FRAGMENT_PX, fragY + SHATTER_FRAGMENT_PX, color);
+        }
     }
 
     /** Live (event-driven) bar body: entrance pose, damage shake, then the shared renderer. */

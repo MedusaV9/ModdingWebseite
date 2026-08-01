@@ -166,6 +166,36 @@ public final class ShardEconomy {
     /** Transient per-player browse cursor; present only while sneaking at the altar. */
     private static final Map<UUID, Integer> BROWSE_INDEX = new HashMap<>();
 
+    // --- WAVE5 (F-105 C) — C7 shard-bank arpeggio (IDEA-12 #8) --------------------------
+    // The flat deposit chime becomes a rising ladder: bigger deposits climb further
+    // (1 + amount/8 notes, capped at {@value #ARPEGGIO_MAX_NOTES}, one note every
+    // {@value #ARPEGGIO_STEP_TICKS} t, pitch 1.2 → 1.8). A 1–7 shard deposit keeps
+    // exactly one 1.2-pitch note — behaviourally the old receipt chime.
+
+    /** Ticks between two arpeggio notes. */
+    private static final int ARPEGGIO_STEP_TICKS = 3;
+    /** Note-count cap ({@code >= 41} shards saturate the ladder). */
+    private static final int ARPEGGIO_MAX_NOTES = 6;
+    /** Pitch ladder endpoints. */
+    private static final float ARPEGGIO_PITCH_LOW = 1.2F;
+    private static final float ARPEGGIO_PITCH_HIGH = 1.8F;
+
+    /** One running per-player arpeggio (mutable — driven from {@link #onServerTick}). */
+    private static final class Arpeggio {
+        final int totalNotes;
+        int notesLeft;
+        int countdown;
+
+        Arpeggio(int totalNotes) {
+            this.totalNotes = totalNotes;
+            this.notesLeft = totalNotes;
+            this.countdown = 1; // first note on the next server tick (same-second receipt)
+        }
+    }
+
+    /** Pending deposit arpeggios by player id; cleared in {@code onServerStopped}. */
+    private static final Map<UUID, Arpeggio> ARPEGGIO = new HashMap<>();
+
     /**
      * B14 §4 playtest diagnostic: while on, every personal-balance mutation, team-pool bank
      * and physical shard delivery/pickup is logged with its calling source (toggled by
@@ -398,7 +428,14 @@ public final class ShardEconomy {
         shardStack.shrink(amount);
         int pool = EclipseWorldState.get(player.server).addShardPool(amount);
         player.displayClientMessage(ServerLang.tr(player, "shop.eclipse.deposited_pool", amount, pool), true);
-        player.playNotifySound(SoundEvents.AMETHYST_BLOCK_CHIME, SoundSource.BLOCKS, 1.0F, 1.2F);
+        // WAVE5 (F-105 C) — C7: the fixed 1.2-pitch receipt chime becomes a rising
+        // arpeggio scaled by the deposit (queue drained in onServerTick, 1 note / 3 t).
+        // The first note plays at pitch 1.2 on the very next tick, so small deposits
+        // sound exactly like the old single chime.
+        int notes = Math.min(1 + amount / 8, ARPEGGIO_MAX_NOTES);
+        ARPEGGIO.put(player.getUUID(), new Arpeggio(notes));
+        EclipseMod.LOGGER.debug("[w5c-arpeggio] player={} amount={} notes={}",
+                player.getScoreboardName(), amount, notes);
         // B14 §3: resync the depositor's sidebar in the same second as the receipt line.
         SidebarSyncService.markDirty(player);
         trace(player, "banked %d physical shard(s) into the TEAM pool (pool %d)", amount, pool);
@@ -411,6 +448,11 @@ public final class ShardEconomy {
     @SubscribeEvent
     static void onServerTick(ServerTickEvent.Post event) {
         MinecraftServer server = event.getServer();
+        // WAVE5 (F-105 C) — C7: the arpeggio needs the per-tick lane (3 t cadence) and
+        // therefore runs BEFORE the 20 t browse/favor gate below. Idle = one isEmpty().
+        if (!ARPEGGIO.isEmpty()) {
+            tickArpeggio(server);
+        }
         if (server.getTickCount() % CYCLE_INTERVAL_TICKS != 0) {
             return;
         }
@@ -429,6 +471,38 @@ public final class ShardEconomy {
                 showOffer(player, available.get(index % available.size()));
             } else {
                 BROWSE_INDEX.remove(player.getUUID());
+            }
+        }
+    }
+
+    /**
+     * WAVE5 (F-105 C) — C7: plays due arpeggio notes. Pitch climbs linearly from
+     * {@value #ARPEGGIO_PITCH_LOW} to {@value #ARPEGGIO_PITCH_HIGH} across the queued
+     * notes (a single-note queue stays at 1.2 — the legacy receipt). Offline depositors
+     * simply drop their queue.
+     */
+    private static void tickArpeggio(MinecraftServer server) {
+        var iterator = ARPEGGIO.entrySet().iterator();
+        while (iterator.hasNext()) {
+            Map.Entry<UUID, Arpeggio> entry = iterator.next();
+            Arpeggio arpeggio = entry.getValue();
+            if (--arpeggio.countdown > 0) {
+                continue;
+            }
+            ServerPlayer player = server.getPlayerList().getPlayer(entry.getKey());
+            if (player == null) {
+                iterator.remove();
+                continue;
+            }
+            int noteIndex = arpeggio.totalNotes - arpeggio.notesLeft;
+            float pitch = arpeggio.totalNotes <= 1 ? ARPEGGIO_PITCH_LOW
+                    : ARPEGGIO_PITCH_LOW + (ARPEGGIO_PITCH_HIGH - ARPEGGIO_PITCH_LOW)
+                            * (noteIndex / (float) (arpeggio.totalNotes - 1));
+            player.playNotifySound(SoundEvents.AMETHYST_BLOCK_CHIME, SoundSource.BLOCKS, 1.0F, pitch);
+            arpeggio.notesLeft--;
+            arpeggio.countdown = ARPEGGIO_STEP_TICKS;
+            if (arpeggio.notesLeft <= 0) {
+                iterator.remove();
             }
         }
     }
@@ -625,6 +699,7 @@ public final class ShardEconomy {
     @SubscribeEvent
     static void onServerStopped(ServerStoppedEvent event) {
         BROWSE_INDEX.clear();
+        ARPEGGIO.clear(); // WAVE5 (F-105 C) — C7
         favorExpiryDayTime = 0L;
         favorExpiryGameTime = 0L;
         traceEnabled = false;

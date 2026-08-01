@@ -11,9 +11,15 @@ import dev.projecteclipse.eclipse.core.config.ReloadHooks;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
 import dev.projecteclipse.eclipse.core.time.EclipseClock;
 import dev.projecteclipse.eclipse.network.S2CDayClockPayload;
+import dev.projecteclipse.eclipse.network.fx.S2CCaptionPayload;
+import dev.projecteclipse.eclipse.offering.OfferingService;
 import dev.projecteclipse.eclipse.progression.DayScheduler;
+import dev.projecteclipse.eclipse.ritual.BeamEmitter;
+import net.minecraft.core.BlockPos;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
@@ -89,6 +95,33 @@ public final class RealtimeDayService {
     /** Last client re-sync broadcast (epoch millis). */
     // statics reset on ServerStopped
     private static long lastClientSyncMillis = 0L;
+
+    // --- WAVE5 (F-105 C) — C1 "Last Call" bookkeeping -----------------------------------
+    // Offerings lapse wordlessly at the boundary today; the two whisper stages below give
+    // every player WITHOUT a recorded offering a private nudge. Strictly anonymous: the
+    // caption + muted bell ride per-player lanes (playNotifySound / sendToPlayer), no
+    // global text, no names. T-90 s (not T-60 s) deliberately dodges the client-side
+    // LastMinuteHush window, whose audio duck would swallow the bell.
+
+    /** First whisper stage: T-10 min before the boundary. */
+    private static final long LAST_CALL_10M_MILLIS = 600_000L;
+    /** Second whisper stage: T-90 s (outside the 60 s LastMinuteHush duck window). */
+    private static final long LAST_CALL_90S_MILLIS = 90_000L;
+    /**
+     * Last-minute altar agitation: one short {@link BeamEmitter} emit as each of these
+     * remaining-ms marks elapses (4 flickers, spread over the final minute, world-visible).
+     */
+    private static final long[] LAST_CALL_FLICKER_MILLIS = { 55_000L, 40_000L, 25_000L, 10_000L };
+
+    /** T-10m stage fired for the current day (reset in {@link #onDayApplied}). */
+    // statics reset on ServerStopped
+    private static boolean lastCall10mFired;
+    /** T-90s stage fired for the current day (reset in {@link #onDayApplied}). */
+    // statics reset on ServerStopped
+    private static boolean lastCall90sFired;
+    /** Next unconsumed index into {@link #LAST_CALL_FLICKER_MILLIS} (reset with the stages). */
+    // statics reset on ServerStopped
+    private static int lastCallFlickerIndex;
 
     private RealtimeDayService() {}
 
@@ -406,6 +439,10 @@ public final class RealtimeDayService {
         RealtimeState state = RealtimeState.get(server);
         RealtimeConfig.Config cfg = RealtimeConfig.get();
         long now = EclipseClock.epochMillis();
+        // WAVE5 (F-105 C) — C1: every applied day re-arms the Last-Call stages fresh.
+        lastCall10mFired = false;
+        lastCall90sFired = false;
+        lastCallFlickerIndex = 0;
         if (rollingOver) {
             long firedBoundary = state.getBoundaryEpochMillis();
             boolean oneShotOnly = state.isManualOverride() && state.isArmedByScheduleOnly();
@@ -482,6 +519,7 @@ public final class RealtimeDayService {
         if (state.isArmed() && now - lastClientSyncMillis >= cfg.clientSyncSeconds() * 1000L) {
             broadcastClock(server);
         }
+        tickLastCall(server, state, now); // WAVE5 (F-105 C) — C1, on the 1 s clock poll
         if (server.getTickCount() % FIRE_CHECK_TICKS != 0) {
             // W4-CEREMONY / IDEA-09 #2: near-boundary precision — one extra long compare per
             // second in the final 15 s. The epoch-day guard keeps extra checks idempotent;
@@ -531,6 +569,69 @@ public final class RealtimeDayService {
         EclipseMod.LOGGER.info("RealtimeDayService: boundary {} reached — advancing day {} -> {}",
                 formatInstant(boundary, cfg.zone()), day, day + 1);
         rollover(server, false, nextBoundaryFor(cfg, now));
+    }
+
+    // --- WAVE5 (F-105 C) — C1 Last Call at the altar (IDEA-09 #4) -----------------------
+
+    /**
+     * One Last-Call poll (1 s cadence from {@link #onServerTick}). Each whisper stage fires
+     * at most once per day (flags reset in {@link #onDayApplied}); the whisper goes ONLY to
+     * online players without a recorded offering for the current day
+     * ({@link OfferingService#hasOfferedToday}). Inside the final minute the sanctum altar
+     * additionally flickers its beam ({@value #LAST_CALL_FLICKER_MILLIS} marks, one emit per
+     * poll so stacked marks read as a stutter, not a salvo). Quiet while disarmed/paused.
+     */
+    private static void tickLastCall(MinecraftServer server, RealtimeState state, long now) {
+        if (!state.isArmed() || state.isPaused() || state.getBoundaryEpochMillis() == 0L) {
+            return;
+        }
+        long remaining = state.getBoundaryEpochMillis() - now;
+        if (remaining <= 0L) {
+            return;
+        }
+        if (!lastCall10mFired && remaining <= LAST_CALL_10M_MILLIS && remaining > LAST_CALL_90S_MILLIS) {
+            lastCall10mFired = true;
+            whisperLastCall(server, "10m", "eclipse.caption.lastcall.tminus10m");
+        }
+        if (!lastCall90sFired && remaining <= LAST_CALL_90S_MILLIS) {
+            // A boundary armed/set inside T-10m skips straight to the 90 s stage — the 10 m
+            // flag latches too so a later backwards shift can never replay the early stage.
+            lastCall10mFired = true;
+            lastCall90sFired = true;
+            whisperLastCall(server, "90s", "eclipse.caption.lastcall.tminus90s");
+        }
+        if (lastCallFlickerIndex < LAST_CALL_FLICKER_MILLIS.length
+                && remaining <= LAST_CALL_FLICKER_MILLIS[lastCallFlickerIndex]) {
+            lastCallFlickerIndex++;
+            emitLastCallFlicker(server);
+        }
+    }
+
+    /**
+     * One private whisper wave: caption ({@code STYLE_WHISPER}) + muted bell to every online
+     * player who has NOT offered today. Nothing global, no names anywhere but the DEBUG probe.
+     */
+    private static void whisperLastCall(MinecraftServer server, String stage, String captionKey) {
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            if (OfferingService.hasOfferedToday(player)) {
+                continue;
+            }
+            PacketDistributor.sendToPlayer(player,
+                    new S2CCaptionPayload(captionKey, 70, S2CCaptionPayload.STYLE_WHISPER));
+            player.playNotifySound(SoundEvents.BELL_BLOCK, SoundSource.BLOCKS, 0.4F, 0.6F);
+            EclipseMod.LOGGER.debug("[w5c-lastcall] stage={} player={}", stage, player.getScoreboardName());
+        }
+    }
+
+    /** One short world-visible beam emit at the sanctum altar (null-safe for pre-intro worlds). */
+    private static void emitLastCallFlicker(MinecraftServer server) {
+        BlockPos altar = EclipseWorldState.get(server).getSanctumAltarPos();
+        if (altar == null) {
+            return;
+        }
+        BeamEmitter.emit(server.overworld(), altar);
+        EclipseMod.LOGGER.debug("[w5c-lastcall] flicker {}/{} at {}",
+                lastCallFlickerIndex, LAST_CALL_FLICKER_MILLIS.length, altar.toShortString());
     }
 
     /**
@@ -700,5 +801,9 @@ public final class RealtimeDayService {
         pendingBoundaryEpochMillis = 0L;
         lastPollNowMillis = 0L;
         lastClientSyncMillis = 0L;
+        // WAVE5 (F-105 C) — C1 Last-Call statics
+        lastCall10mFired = false;
+        lastCall90sFired = false;
+        lastCallFlickerIndex = 0;
     }
 }

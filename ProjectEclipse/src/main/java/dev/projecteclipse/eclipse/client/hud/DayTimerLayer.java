@@ -178,10 +178,17 @@ public final class DayTimerLayer {
         }
 
         // Final 10 s: pulse-scale once per second (never while a spool's rolls need scissors).
+        // WAVE5 (F-105 C) — C8 (IDEA-05 #4): the single pop becomes a heartbeat LUB-dub —
+        // the full-amplitude pop on the second boundary (f=1, decayed by f=0.55) plus a
+        // 55%-amplitude echo pop at f=0.55 (decayed by f=0). Same amplitude ceiling, same
+        // reducedFx/pause/spool gates; max() keeps the envelopes from ever stacking.
         float pulse = 1.0F;
         if (!reduced && !paused && !zeroHold && remaining <= PULSE_WINDOW_MILLIS
                 && !DayTimerCache.spooling()) {
-            pulse = 1.0F + PULSE_AMPLITUDE * easeOutCubic((remaining % 1_000L) / 1_000.0F);
+            float f = (remaining % 1_000L) / 1_000.0F;
+            float lub = easeOutCubic(Mth.clamp((f - 0.55F) / 0.45F, 0.0F, 1.0F));
+            float dub = f < 0.55F ? 0.55F * easeOutCubic(f / 0.55F) : 0.0F;
+            pulse = 1.0F + PULSE_AMPLITUDE * Math.max(lub, dub);
         }
 
         Font font = minecraft.font;

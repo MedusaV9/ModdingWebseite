@@ -5,6 +5,7 @@ import com.mojang.serialization.MapCodec;
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.core.signal.EclipseSignals;
 import dev.projecteclipse.eclipse.economy.ShardEconomy;
+import dev.projecteclipse.eclipse.network.S2CQuasarPayload;
 import dev.projecteclipse.eclipse.network.altar.AltarPayloads;
 import dev.projecteclipse.eclipse.registry.EclipseItems;
 import net.minecraft.core.BlockPos;
@@ -20,10 +21,12 @@ import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
+import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
  * The ritual altar. Admin-placed only (no recipe, no loot table).
@@ -124,6 +127,15 @@ public class AltarBlock extends BaseEntityBlock {
                         amount, EclipseSignals.AltarDepositPurpose.SHARD_BANK);
                 // F-076: banking is a payment too — the model acknowledges with a pulse.
                 altar.triggerAnim(AltarBlockEntity.CONTROLLER_STATE, AltarBlockEntity.ANIM_HEARTBEAT);
+                // WAVE5 (F-105 C) — C5: banking fires the beam for the near crowd too —
+                // same 64-block lane and +0.7 crown anchor as the offering-accept beam.
+                // Client-side this doubles as the aberration-pulse trigger (QuasarSpawner
+                // notifies AltarAberration on every arriving ALTAR_BEAM cue).
+                PacketDistributor.sendToPlayersNear(player.serverLevel(), null,
+                        event.getPos().getX() + 0.5D, event.getPos().getY() + 1.0D,
+                        event.getPos().getZ() + 0.5D, 64.0D,
+                        new S2CQuasarPayload(S2CQuasarPayload.ALTAR_BEAM,
+                                Vec3.atCenterOf(event.getPos()).add(0.0D, 0.7D, 0.0D)));
             }
             return;
         }

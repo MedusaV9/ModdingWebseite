@@ -15,19 +15,25 @@ import dev.projecteclipse.eclipse.awards.AwardService;
 import dev.projecteclipse.eclipse.awards.AwardsState;
 import dev.projecteclipse.eclipse.core.config.ReloadHooks;
 import dev.projecteclipse.eclipse.core.signal.EclipseSignals;
+import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
 import dev.projecteclipse.eclipse.network.S2CAnnouncePayload;
 import dev.projecteclipse.eclipse.progression.DayScheduler;
+import dev.projecteclipse.eclipse.registry.EclipseSounds;
+import dev.projecteclipse.eclipse.ritual.BeamEmitter;
 import dev.projecteclipse.eclipse.timeline.AnnouncementService;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
 import net.neoforged.neoforge.event.server.ServerStoppedEvent;
+import net.neoforged.neoforge.event.tick.ServerTickEvent;
 
 /** Daily offering acceptance, exact-value accounting and rollover resolution. */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
@@ -36,6 +42,27 @@ public final class OfferingService {
     private static final AtomicBoolean SIGNALS_REGISTERED = new AtomicBoolean();
     /** ReloadHooks lives for the JVM, so this guard intentionally survives save changes. */
     private static final AtomicBoolean RELOAD_HOOK_REGISTERED = new AtomicBoolean();
+
+    // --- WAVE5 (F-105 C) — C3 dawn-verdict bloom (IDEA-12 #10) --------------------------
+    // A winner day gets a physical answer at the sanctum altar: 3 BeamEmitter salvos
+    // spread over ~40 t. Duplicate-cancelled days (winners == 0) deliberately stay DARK —
+    // the rule teaches itself without a single line of text. The pending emits are plain
+    // statics driven by onServerTick; no scheduler infrastructure needed.
+
+    /** Beam salvos per winner verdict. */
+    private static final int BLOOM_EMITS = 3;
+    /** Ticks between two bloom salvos (3 emits => ~40 t total). */
+    private static final int BLOOM_STEP_TICKS = 20;
+
+    /** Remaining bloom salvos ({@code 0} = idle). */
+    // statics reset on ServerStopped
+    private static int bloomEmitsLeft;
+    /** Ticks until the next salvo. */
+    // statics reset on ServerStopped
+    private static int bloomCountdownTicks;
+    /** Sanctum altar position the running bloom is anchored on. */
+    // statics reset on ServerStopped
+    private static BlockPos bloomPos;
 
     private OfferingService() {}
 
@@ -64,6 +91,24 @@ public final class OfferingService {
     static void onServerStopped(ServerStoppedEvent event) {
         SIGNALS_REGISTERED.set(false);
         OfferingConfig.invalidate();
+        // WAVE5 (F-105 C) — C3 bloom statics
+        bloomEmitsLeft = 0;
+        bloomCountdownTicks = 0;
+        bloomPos = null;
+    }
+
+    /** WAVE5 (F-105 C) — C3: drives the pending verdict-bloom salvos (idle = one int compare). */
+    @SubscribeEvent
+    static void onServerTick(ServerTickEvent.Post event) {
+        if (bloomEmitsLeft <= 0 || bloomPos == null) {
+            return;
+        }
+        if (--bloomCountdownTicks > 0) {
+            return;
+        }
+        BeamEmitter.emit(event.getServer().overworld(), bloomPos);
+        bloomEmitsLeft--;
+        bloomCountdownTicks = BLOOM_STEP_TICKS;
     }
 
     public static boolean hasOffered(MinecraftServer server, int day, UUID player) {
@@ -152,14 +197,47 @@ public final class OfferingService {
         OfferingState.DayResult result = new OfferingState.DayResult(day, resolution.offerings(),
                 resolution.winners(), resolution.bestValue(), resolution.winningItemId(),
                 config.winnerReward());
-        if (!state.putResolved(result)) {
+        boolean fresh = state.putResolved(result);
+        if (!fresh) {
             result = state.resolved(day).orElse(result);
         }
 
         queueWinnerRewards(server, result);
+        if (fresh) {
+            // WAVE5 (F-105 C) — C3: only the FIRST resolution of a day blooms; the
+            // idempotent re-entry/repair paths above must never replay the ceremony.
+            fireVerdictBloom(server, result);
+        }
         EclipseMod.LOGGER.info("Resolved {} altar offering(s) for day {}: {} winner(s), best value {}",
                 result.offerings().size(), day, result.winners().size(), result.bestValue());
         return result;
+    }
+
+    /**
+     * WAVE5 (F-105 C) — C3 dawn-verdict bloom: arms the 3-salvo beam bloom at the sanctum
+     * altar (null-guarded for pre-intro worlds) and plays the private
+     * {@code OFFERING_ACCEPT} at pitch 1.3 to every online winner. Winner identity leaks
+     * nothing: the sound is {@code playNotifySound} (offerer-private, the split-chime law)
+     * and the bloom itself is outcome-blind beyond "someone won today". Days without
+     * winners (no offerings, or the duplicate cancellation zeroed everyone) stay dark.
+     */
+    private static void fireVerdictBloom(MinecraftServer server, OfferingState.DayResult result) {
+        EclipseMod.LOGGER.debug("[w5c-verdict] winners={} day={}", result.winners().size(), result.day());
+        if (result.winners().isEmpty()) {
+            return;
+        }
+        BlockPos altar = EclipseWorldState.get(server).getSanctumAltarPos();
+        if (altar != null) {
+            bloomPos = altar;
+            bloomEmitsLeft = BLOOM_EMITS;
+            bloomCountdownTicks = 1; // first salvo on the next server tick, then every 20 t
+        }
+        for (UUID winner : result.winners()) {
+            ServerPlayer online = server.getPlayerList().getPlayer(winner);
+            if (online != null) {
+                online.playNotifySound(EclipseSounds.OFFERING_ACCEPT.get(), SoundSource.BLOCKS, 1.0F, 1.3F);
+            }
+        }
     }
 
     /**

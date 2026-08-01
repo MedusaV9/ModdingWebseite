@@ -9,7 +9,9 @@ import java.util.Set;
 import javax.annotation.Nullable;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.client.AltarAberration;
 import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
+import dev.projecteclipse.eclipse.network.S2CQuasarPayload;
 import foundry.veil.api.client.render.VeilRenderSystem;
 import foundry.veil.api.quasar.particle.ParticleEmitter;
 import foundry.veil.api.quasar.particle.ParticleSystemManager;
@@ -135,6 +137,13 @@ public final class QuasarSpawner {
      * IS a silent drop: over-budget cues must disappear, not turn into vanilla particle floods.
      */
     public static void spawnOrFallback(ResourceLocation emitterId, Vec3 pos, FxBudget.Channel channel) {
+        // WAVE5 (F-105 C) — C5: every arriving ALTAR_BEAM cue is the altar being fed or
+        // answering — the screen-space aberration zone twitches in reflex. Client-local
+        // notify BEFORE the budget/garnish gates (a budget-dropped beam still happened);
+        // reducedFx and out-of-zone gating live inside AltarAberration.
+        if (S2CQuasarPayload.ALTAR_BEAM.equals(emitterId)) {
+            AltarAberration.pulse(0.20F);
+        }
         if (EclipseClientConfig.reducedFx() && REDUCED_FX_GARNISH.contains(emitterId)) {
             return; // reduced-FX garnish shed — deliberate, silent (never the vanilla fallback)
         }

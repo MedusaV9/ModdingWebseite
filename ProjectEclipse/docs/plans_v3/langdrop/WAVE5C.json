@@ -1,0 +1,10 @@
+{
+  "en_us": {
+    "eclipse.caption.lastcall.tminus10m": "The altar still waits for your offering…",
+    "eclipse.caption.lastcall.tminus90s": "Last call. The stone is growing cold…"
+  },
+  "de_de": {
+    "eclipse.caption.lastcall.tminus10m": "Der Altar wartet noch auf deine Gabe…",
+    "eclipse.caption.lastcall.tminus90s": "Letzter Ruf. Der Stein wird kalt…"
+  }
+}
