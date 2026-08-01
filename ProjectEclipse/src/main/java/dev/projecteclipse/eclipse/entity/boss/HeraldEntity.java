@@ -1300,7 +1300,12 @@ public class HeraldEntity extends EclipseGeoMonster {
      * all Team-A files — share it; Herald hosts it as the first monument in the arc):
      * dedup scan over the candidate ring first (a standing monument anywhere on the
      * ring wins — re-kills keep exactly one), then the first air cell whose
-     * {@code canSurvive} holds takes the block.
+     * {@code canSurvive} holds takes the block. The dedup checks a short vertical band
+     * (y-2..y+2) per ring candidate, not just center-Y: re-kill centers drift
+     * vertically (live-acceptance find — the Tyrant re-summoned standing ON its own
+     * rod, floor-snap yielded y+1 and a second rod stacked at 110,81,100 over
+     * 110,80,100; y-1/-2 covers ground/dais variance). Placement itself stays on
+     * center-Y — only the ring candidates ever receive a monument.
      * @return the cell the monument stands in (fresh or pre-existing), or {@code null}
      */
     @Nullable
@@ -1308,11 +1313,13 @@ public class HeraldEntity extends EclipseGeoMonster {
             BlockState monument, String boss) {
         int[][] ring = {{0, 0}, {2, 0}, {-2, 0}, {0, 2}, {0, -2}};
         for (int[] offset : ring) {
-            BlockPos pos = center.offset(offset[0], 0, offset[1]);
-            if (level.getBlockState(pos).is(monument.getBlock())) {
-                EclipseMod.LOGGER.info("[w5a-trophy] {}: monument already stands at {} — re-kill keeps exactly one",
-                        boss, pos.toShortString());
-                return pos;
+            for (int dy = -2; dy <= 2; dy++) {
+                BlockPos pos = center.offset(offset[0], dy, offset[1]);
+                if (level.getBlockState(pos).is(monument.getBlock())) {
+                    EclipseMod.LOGGER.info("[w5a-trophy] {}: monument already stands at {} — re-kill keeps exactly one",
+                            boss, pos.toShortString());
+                    return pos;
+                }
             }
         }
         for (int[] offset : ring) {

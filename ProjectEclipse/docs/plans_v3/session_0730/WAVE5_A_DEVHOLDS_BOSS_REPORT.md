@@ -248,3 +248,20 @@ execute if block <x y z> minecraft:soul_lantern       # Ferryman (Heck) => pass
 
 **A7 holds**: `execute as Dev run eclipsefx holds` → vier Zeilen
 flashhold/streakhold/wakehold/flickerhold mit aktuellem Zustand; nach Relog alles off.
+
+## A6 Re-Kill-Dedup — Live-Abnahme-Fund + Fix
+
+**Fund (Live-Abnahme, dedicated):** Tyrant-Re-Kill stapelte einen ZWEITEN Lightning Rod —
+`if block` pass bei (110,80,100) UND (110,81,100), kein "already stands"-Log. Der re-summonte
+Tyrant stand AUF dem alten Rod, sein snapToFloor-Center lag dadurch bei y=81 statt y=80.
+
+**Root Cause:** Der Dedup-Scan in `HeraldEntity.placeMonumentBlock` prüfte je Ring-Kandidat
+NUR die exakte center-Y-Ebene; ein Alt-Monument ±1..2 Blöcke darüber/darunter war unsichtbar.
+
+**Fix (F-105):** Der Dedup-Scan prüft je Ring-Kandidat jetzt ein vertikales Band y-2..y+2
+(y+1/+2 deckt Boss-steht-auf-Monument, y-1/-2 Boden-/Dais-Varianz). Log-Zeile und
+Rückgabevertrag (BlockPos stehend/frisch, null ohne Kandidat) unverändert.
+
+**Placement-Phase unverändert:** Frische Monumente entstehen weiterhin nur auf center-Y der
+Ring-Kandidaten — das Band weitet nur die Sichtbarkeit des Dedup, nicht die Platzierungsorte;
+der Warden-End-Rod-Cap (separater Block über dem Obsidian) bleibt vom Dedup unberührt.
