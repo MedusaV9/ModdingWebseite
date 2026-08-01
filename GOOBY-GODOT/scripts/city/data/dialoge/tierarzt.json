@@ -46,7 +46,7 @@
       "sprecher": "moehrchen",
       "text": [
         "Diagnose: ein klassischer Fall von Zuviel-oder-Zuwenig. Vermutlich beides.",
-        "Behandlungsplan liegt vor. Was darf's sein?"
+        "Behandlungsplan liegt vor. Was darf’s sein?"
       ],
       "optionen": [
         {"text": "Behandlung, bitte. (120 Münzen)", "next": "behandlung"},

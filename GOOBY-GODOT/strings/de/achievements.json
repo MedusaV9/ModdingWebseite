@@ -7,7 +7,7 @@
 		"geheim": "???",
 		"fortschritt": "{current}/{target}",
 		"belohnung": "+{coins} Münzen",
-		"unlock_toast": "Erfolg: {name} – +{coins} Münzen!",
+		"unlock_toast": "Erfolg: {name} — +{coins} Münzen!",
 		"kategorie": {
 			"alle": "Alle",
 			"pflege": "Pflege",
@@ -51,17 +51,17 @@
 			"delivery10": { "name": "Paket-Profi", "desc": "Liefere 10 Pakete aus" },
 			"holeInOne": { "name": "Ass!", "desc": "Versenke ein Hole-in-one im Minigolf" },
 			"shutterbug": { "name": "Knipser", "desc": "Mach 10 Fotos von Gooby" },
-			"stickerBook10": { "name": "Sticker-Fan", "desc": "Schalte 10 Sticker im Stickerbuch frei." },
-			"stickerBook20": { "name": "Sticker-Sammler", "desc": "Schalte 20 Sticker im Stickerbuch frei." },
-			"stickerBookFull": { "name": "Volles Stickerbuch", "desc": "Schalte alle 28 Sticker im Stickerbuch frei." },
-			"nougatmeister": { "name": "Nougatmeister", "desc": "Genieße 25 Kleckse aus der Nougatschleuse." },
-			"parkDay": { "name": "Parktag", "desc": "Geh zum ersten Mal durch das Funkelpark-Tor." },
-			"coasterFan": { "name": "Achterbahn-Fan", "desc": "Fahre 5-mal mit der Achterbahn." },
-			"wheelRide": { "name": "Hoch hinaus", "desc": "Dreh eine ganze Runde im Riesenrad." },
-			"funkelnacht": { "name": "Funkelnacht", "desc": "Besuche den Funkelpark bei Nacht." },
-			"postmaster": { "name": "Postmeister", "desc": "Bewahre 10 Postkarten von Goobys Reisen auf." },
-			"stickerBook84": { "name": "Volles Album", "desc": "Schalte alle 84 Sticker im Album frei." },
-			"weltenbummler": { "name": "Weltenbummler", "desc": "Beende einen Urlaub an allen 9 Reisezielen." }
+			"stickerBook10": { "name": "Sticker-Fan", "desc": "Schalte 10 Sticker im Stickerbuch frei" },
+			"stickerBook20": { "name": "Sticker-Sammler", "desc": "Schalte 20 Sticker im Stickerbuch frei" },
+			"stickerBookFull": { "name": "Volles Stickerbuch", "desc": "Schalte alle 28 Sticker im Stickerbuch frei" },
+			"nougatmeister": { "name": "Nougatmeister", "desc": "Genieße 25 Kleckse aus der Nougatschleuse" },
+			"parkDay": { "name": "Parktag", "desc": "Geh zum ersten Mal durch das Funkelpark-Tor" },
+			"coasterFan": { "name": "Achterbahn-Fan", "desc": "Fahre 5-mal mit der Achterbahn" },
+			"wheelRide": { "name": "Hoch hinaus", "desc": "Dreh eine ganze Runde im Riesenrad" },
+			"funkelnacht": { "name": "Funkelnacht", "desc": "Besuche den Funkelpark bei Nacht" },
+			"postmaster": { "name": "Postmeister", "desc": "Bewahre 10 Postkarten von Goobys Reisen auf" },
+			"stickerBook84": { "name": "Volles Album", "desc": "Schalte alle 84 Sticker im Album frei" },
+			"weltenbummler": { "name": "Weltenbummler", "desc": "Beende einen Urlaub an allen 9 Reisezielen" }
 		}
 	}
 }

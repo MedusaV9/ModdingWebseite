@@ -12,7 +12,7 @@
 		},
 		"host": {
 			"strike_title": "Abgeschleppt!",
-			"strike_teleport": "Dreimal gerumst — Gooby wird sanft nach Hause teleportiert …",
+			"strike_teleport": "Dreimal gerumst — Gooby wird sanft nach Hause teleportiert…",
 			"strike_count": "Strike {n}/{max}"
 		},
 		"pregame": {

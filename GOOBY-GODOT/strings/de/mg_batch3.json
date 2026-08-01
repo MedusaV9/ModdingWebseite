@@ -22,11 +22,11 @@
       "expired_count": "Verfallen: {n}/{max}",
       "spot": {
         "shop": "Laden",
-        "vetClinic": "Tierarzt",
-        "fountain": "Brunnenplatz",
-        "skyTower": "Wolkenturm",
+        "vetClinic": "Tierarztpraxis",
+        "fountain": "Springbrunnen",
+        "skyTower": "Himmelsturm",
         "parkGazebo": "Parkpavillon",
-        "windmillCafe": "Mühlencafé"
+        "windmillCafe": "Windmühlen-Café"
       }
     },
     "harborHopper": {
@@ -47,11 +47,11 @@
       "hint": "Tippe das Versteck an, aus dem es guckt!",
       "intro": "Finde die Tierchen!",
       "found": "Gefunden!",
-      "empty": "Leer …",
+      "empty": "Leer…",
       "wave": "Welle {n} · noch {left}",
       "wave_new": "Neue Welle: {n} verstecken sich!",
       "wave_clear": "Alle gefunden! +{n}",
-      "expired": "Weg sind sie … neu verstecken!",
+      "expired": "Weg sind sie… neu verstecken!",
       "expired_count": "Verpasst: {n}/{max}"
     },
     "lanternFloat": {
@@ -64,7 +64,7 @@
     },
     "purblePlace": {
       "title": "Tortenwerkstatt",
-      "hint": "◀ ▶ treibt das Band — halte die Form STILL unter der Düse, sie fällt 0,45 s!",
+      "hint": "◀ ▶ treibt das Band — halte die Form STILL unter der Düse, sie fällt einen Wimpernschlag lang!",
       "board": "Bestellungen",
       "perfect": "Perfekte Torte! +{n}",
       "served": "Fast richtig! +{n}",
@@ -73,7 +73,7 @@
       "baked": "Goldbraun! +5",
       "singed": "Angebrannt! −3",
       "fails": "Patzer: {n}/{max}",
-      "intro": "Willkommen in der Tortenwerkstatt! Schau aufs Bestell-Board …",
+      "intro": "Willkommen in der Tortenwerkstatt! Schau aufs Bestell-Board…",
       "result": "Schicht vorbei! {cakes} Torten · {score} Punkte",
       "btn": {
         "spawn": "Aufs Band!",
@@ -99,7 +99,7 @@
       "intro": "Weich allem aus — sammle Münzen!",
       "distance": "{m} m",
       "stats": "{coins} Münzen · {left} Leben",
-      "combo": "Combo ×{mult}!",
+      "combo": "Kombo ×{mult}!",
       "stumble": "Autsch! Vorsicht! (noch {left})",
       "milestone": "{m} m!",
       "magnet": "Magnet — 4 Sekunden!",
@@ -135,8 +135,8 @@
       "start_at_post": "Starte am Briefkasten!",
       "miss_door": "Zum leuchtenden Haus!",
       "delivered": "Zugestellt — schön trocken!",
-      "delivered_wet": "Zugestellt … aber klitschnass.",
-      "splash": "Platsch! Ab ins Schneckenhaus …",
+      "delivered_wet": "Zugestellt… aber klitschnass.",
+      "splash": "Platsch! Ab ins Schneckenhaus…",
       "splash_count": "Platsch {n}/{max}",
       "stats": "Post {n} · Blumen {flowers}"
     },

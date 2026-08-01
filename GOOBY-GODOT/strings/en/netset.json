@@ -19,7 +19,7 @@
 			"fehler": {
 				"secret_required": "The server requires a server secret — please enter one.",
 				"secret_wrong": "The server secret does not match.",
-				"auth_fail": "Sign-in rejected (device identity invalid).",
+				"auth_fail": "Sign-in rejected — the server does not know this device (device identity invalid).",
 				"banned": "This device is banned on the server.",
 				"rate_limit": "Too many attempts — wait a moment and retry.",
 				"timeout": "Timed out — the server did not answer.",

@@ -40,7 +40,7 @@
       "fahrt": "Eingestiegen! Ab nach Hause."
     },
     "guber": {
-      "slogan": "GUBER — Premium Mobilität",
+      "slogan": "GUBER — Premium-Mobilität",
       "pitch": "Dreißig Münzen. Dafür ist der Wagen in unter zwei Minuten da und der Fahrer sagt „sehr wohl“.",
       "surge": "Bedauerlicherweise herrscht gerade rege Nachfrage, Sir Gooby.",
       "unterwegs": "Ihr Guber nähert sich",
@@ -56,11 +56,11 @@
       "gag_pasta_hoppel": "ein Stern Abzug, Fahrer hat gewunken, Kunde war schüchtern",
       "gag_burger_bau": "ein Stern Abzug, der Gurken-Turm wackelte beim Abbiegen",
       "menue_zurueck": "‹ Andere Restaurants",
-      "warenkorb": "Im Korb: {n} Leckerei(en) · zusammen {summe} ᴳ (mit {gebuehr} ᴳ Lieferung)",
+      "warenkorb": "Im Korb: {n}× lecker · zusammen {summe} ᴳ (mit {gebuehr} ᴳ Lieferung)",
       "warenkorb_leer": "Der Korb ist noch leer. Gooby knurrt vorwurfsvoll.",
       "warenkorb_leeren": "Korb leeren",
       "bestellen": "Bestellen ({summe} ᴳ)",
-      "fahrer_kueche": "Die Küche goobyt. Der Fahrer wärmt schon den Sattel vor …",
+      "fahrer_kueche": "Die Küche goobyt. Der Fahrer wärmt schon den Sattel vor…",
       "fahrer_unterwegs": "Der Fahrer ist unterwegs — da fährt dein Essen!",
       "karte_hinweis": "Der orange Punkt bringt dein Essen. Winken bringt nichts, hilft aber."
     },

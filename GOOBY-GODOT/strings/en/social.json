@@ -30,8 +30,8 @@
 		"selfie": {
 			"emote": "Snap A Gooby!",
 			"hinweis": "Selfie time! Get in position…",
-			"gesendet": "Selfie saved – a copy is on its way to {name}!",
-			"nur_lokal": "Selfie saved – sending did not work.",
+			"gesendet": "Selfie saved — a copy is on its way to {name}!",
+			"nur_lokal": "Selfie saved — sending did not work.",
 			"fehler": "The selfie did not work out.",
 			"mail_text": "Snap A Gooby! Our visit selfie."
 		},

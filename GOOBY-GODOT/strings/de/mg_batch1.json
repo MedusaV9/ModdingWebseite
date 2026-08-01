@@ -44,14 +44,14 @@
 			"failures": "Patzer: {n}/{max}"
 		},
 		"carrotGuard": {
-			"title": "Karottenwache",
+			"title": "Möhrenwache",
 			"hint": "Tippe die Maulwürfe, bevor sie abtauchen!",
 			"combo": "Kombo! +3",
-			"steal": "Eine Karotte geklaut!",
+			"steal": "Eine Möhre geklaut!",
 			"king": "Maulwurfkönig! 3 Treffer!",
 			"king_defeated": "König besiegt! +8 + 2 Münzen",
-			"empty": "Alle Karotten weg!",
-			"carrots": "Karotten: {n}/{max}",
+			"empty": "Alle Möhren weg!",
+			"carrots": "Möhren: {n}/{max}",
 			"stolen": "Geklaut: {n}/{max}"
 		},
 		"bunnyHop": {
@@ -61,14 +61,14 @@
 			"gust": "Windstoß! Tore zählen ×2",
 			"gust_warn": "Achtung, Wind!",
 			"gates": "Tore: {n}",
-			"narrow": "Enger wird's!"
+			"narrow": "Enger wird’s!"
 		},
 		"trampoline": {
 			"title": "Trampolin-Tricks",
 			"hint": "Kurz vor der Matte tippen — in der Luft wischen für Tricks!",
 			"intro": "Tipp im grünen Fenster!",
 			"boost": "Boost!",
-			"butt": "Autsch – Po-Landung!",
+			"butt": "Autsch — Po-Landung!",
 			"flip": "Salto!",
 			"spin": "Drehung!",
 			"twist": "Schraube!",

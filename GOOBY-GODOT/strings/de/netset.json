@@ -19,7 +19,7 @@
 			"fehler": {
 				"secret_required": "Der Server verlangt ein Server-Secret — bitte eintragen.",
 				"secret_wrong": "Das Server-Secret stimmt nicht.",
-				"auth_fail": "Anmeldung abgelehnt (Geräte-Identität ungültig).",
+				"auth_fail": "Anmeldung abgelehnt — dieses Gerät kennt der Server nicht (Geräte-Identität ungültig).",
 				"banned": "Dieses Gerät ist auf dem Server gesperrt.",
 				"rate_limit": "Zu viele Versuche — kurz warten und nochmal.",
 				"timeout": "Zeitüberschreitung — der Server hat nicht geantwortet.",

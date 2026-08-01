@@ -4,7 +4,7 @@
 			"titel": "What should Gooby eat?",
 			"leer": "The fridge is empty…",
 			"tipp": "Fresh treats grow in the garden or wait at REHWEI in the city.",
-			"eintrag": "{essen} ×{anzahl}  (+{hunger} hunger)",
+			"eintrag": "{essen} ×{anzahl} (+{hunger} hunger)",
 			"schliessen": "Close"
 		},
 		"fuettern": {

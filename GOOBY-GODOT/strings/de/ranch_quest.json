@@ -56,7 +56,7 @@
 			"status_gesperrt": "Gesperrt"
 		},
 		"ziel": {
-			"gehe_zu": "Gehe zu: {ort}",
+			"gehe_zu": "Geh zu: {ort}",
 			"sprich_mit": "Sprich mit {npc}",
 			"sammle": "Sammle {item} ({ist}/{soll})",
 			"pflege": "{aktion} ({ist}/{soll})",
@@ -69,7 +69,7 @@
 			"minuten": "{m} Min",
 			"stunden": "{h} Std {m} Min",
 			"notify_fertig": "{quest} ist fertig — schau vorbei!",
-			"activity_laeuft": "Auf der Ranch tut sich was …",
+			"activity_laeuft": "Auf der Ranch tut sich was…",
 			"alternative_titel": "Solange du wartest:",
 			"alternative_1": "Die Pferde freuen sich über eine Striegel-Runde.",
 			"alternative_2": "Timmi sucht bestimmt gerade ein Hufeisen. Oder zwölf.",
@@ -278,7 +278,7 @@
 			},
 			"tages_aepfel": {
 				"titel": "Apfelrunde",
-				"text": "Zwei Äpfel für die Praxis. Ein Apfel am Tag … du kennst den Spruch. Dr. Dr. Möhrchen hat ihn patentieren lassen."
+				"text": "Zwei Äpfel für die Praxis. Ein Apfel am Tag… du kennst den Spruch. Dr. Dr. Möhrchen hat ihn patentieren lassen."
 			},
 			"tages_seerunde": {
 				"titel": "Die Seerunde",

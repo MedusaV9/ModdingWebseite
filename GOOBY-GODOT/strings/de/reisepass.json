@@ -10,7 +10,7 @@
 		"merkmale_liste": [
 			"extrem flauschig",
 			"wackelt beim Hoppeln",
-			"riecht nach Karotte",
+			"riecht nach Möhre",
 			"Profi-Nickerchenmacher",
 			"schnurrt beim Mampfen",
 			"Weltmeister im Kuscheln",
@@ -40,7 +40,7 @@
 			"status": "STATUS",
 			"abflug_wert": "{tage} TAGE · {preis} ᴳ",
 			"status_boarding": "BOARDING",
-			"status_puenktlich": "PUENKTLICH",
+			"status_puenktlich": "PÜNKTLICH",
 			"status_mampft": "MAMPFPAUSE",
 			"status_flauscht": "FLAUSCHT NOCH",
 			"status_zu_teuer": "ZU TEUER"

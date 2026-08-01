@@ -2,7 +2,7 @@
 	"vet": {
 		"ort_name": "Tierarztpraxis Dr. Dr. Möhrchen",
 		"untersuchung": {
-			"horchen": "Dr. Dr. Möhrchen horcht mit einer Möhre ab …",
+			"horchen": "Dr. Dr. Möhrchen horcht mit einer Möhre ab…",
 			"temperatur": "Temperatur: kuschelwarm. Sehr gut.",
 			"ohren": "Ohrenwackel-Test: vorschriftsmäßig bestanden."
 		},

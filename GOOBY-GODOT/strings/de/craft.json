@@ -15,7 +15,7 @@
 		"werkstatt_kaufen": "Werkstatt bauen ({preis} ᴳ)",
 		"werkstatt_gebaut": "Die Werkstatt steht! Jetzt kann gewerkelt werden.",
 		"werkstatt_zu_teuer": "Dafür fehlen noch Münzen.",
-		"lager_voll": "Dein Lager ist voll — bau ein Shed im Garten!",
+		"lager_voll": "Dein Lager ist voll — bau einen Schuppen im Garten!",
 		"bauplan_fehlt": "Bauplan im Baumarkt!",
 		"material_fehlt": "Da fehlt noch Material.",
 		"kosten_baumarkt": "Fehlt noch für {preis} ᴳ aus dem Baumarkt.",
@@ -90,7 +90,7 @@
 			"gewaechshaus": "Gewächshaus",
 			"sprinkler": "Bewässerungsanlage",
 			"baum": "Baum",
-			"shed": "Shed"
+			"shed": "Schuppen"
 		},
 		"gesammelt": "{name} eingesammelt!",
 		"baum_reif": "Der Baum gibt {menge} Holz!",
@@ -110,13 +110,13 @@
 		}
 	},
 	"shed": {
-		"titel": "Shed",
+		"titel": "Schuppen",
 		"stufe": "Stufe {stufe}",
 		"lager": "Lager {kapazitaet} Punkte",
 		"upgrade": "Ausbauen ({preis} ᴳ)",
 		"max": "Voll ausgebaut!",
 		"zu_teuer": "Dafür fehlen noch Münzen.",
-		"fertig": "Das Shed ist größer geworden!"
+		"fertig": "Der Schuppen ist größer geworden!"
 	},
 	"lieferung": {
 		"titel": "Lieferung",

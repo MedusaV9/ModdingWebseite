@@ -8,7 +8,7 @@
 		"kulanz": "Ein Tag verpasst — kein Problem, deine Serie läuft weiter!",
 		"abholen": "Abholen!",
 		"spaeter": "Später",
-		"claimed_toast": "+{coins} Münzen – bis morgen!",
-		"claimed_snack_toast": "+{coins} Münzen und {snack} – bis morgen!"
+		"claimed_toast": "+{coins} Münzen — bis morgen!",
+		"claimed_snack_toast": "+{coins} Münzen und {snack} — bis morgen!"
 	}
 }

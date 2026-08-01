@@ -23,7 +23,7 @@
 			"bereit": "Bereit",
 			"warten": "wartet…",
 			"bereit_knopf": "Bereit!",
-			"countdown": "Los geht's in {s}…",
+			"countdown": "Los geht’s in {s}…",
 			"verlassen": "Verlassen",
 			"leer": "Warte auf Mitspieler…"
 		},
@@ -74,7 +74,7 @@
 		},
 		"besten": {
 			"titel": "Freundes-Bestenliste",
-			"leer": "Noch keine Einträge — sei die/der Erste!",
+			"leer": "Noch keine Einträge — schnapp dir den ersten Platz!",
 			"zeile_zeit": "{platz}. {name} — {s} s",
 			"zeile_punkte": "{platz}. {name} — {punkte} P.",
 			"ghost": "mit Geist",
@@ -88,7 +88,7 @@
 			"kurs_rw5_rennen": "Turnier-Rennen",
 			"kurs_rw5_trail": "Trail",
 			"kurs_rw5_schau": "Schau",
-			"kurs_rw5_tonnen": "Tonnen-Rennen",
+			"kurs_rw5_tonnen": "Tonnenrennen",
 			"kurs_rw5_zeit": "Zeitrennen"
 		},
 		"fehler": {

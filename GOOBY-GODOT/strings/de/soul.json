@@ -106,7 +106,7 @@
 			"sofa_fund": "GUCK MAL! Unterm Sofa! Münzen! Die gehören jetzt uns!",
 			"traum": {
 				"a": "Zzz… nein… DU bist der Keks…",
-				"b": "Zzz… noch fünf Minuten, Herr Karotte…"
+				"b": "Zzz… noch fünf Minuten, Herr Möhre…"
 			},
 			"turm": "Ich hab einen TURM gebaut! Ich nenne ihn… Turmi.",
 			"winken": "Hallo! Ja, DU da! Ich seh dich! *wink*"
@@ -118,7 +118,7 @@
 			},
 			"geschenk": {
 				"a": "Mmmh! Danke!! Du weißt einfach, was ich mag!",
-				"b": "Für MICH? Du bist der/die Beste!"
+				"b": "Für MICH? Du bist einfach die Wucht!"
 			},
 			"lieblingsessen": "{essen}!! Mein absolutes LIEBLINGSESSEN! Woher wusstest du das?",
 			"traurig": {
@@ -132,13 +132,13 @@
 				"b": "Hehe, das kribbelt!"
 			},
 			"kitzlig": "Hihihi!! Aufhören — nein, WEITERMACHEN — nein, hihi!!",
-			"schwindelig": "Uff… mir ist ganz schwindelig… aber lustig war's."
+			"schwindelig": "Uff… mir ist ganz schwindelig… aber lustig war’s."
 		},
 		"frage": {
 			"geburtstag": "Du… wann hast du eigentlich Geburtstag? Ich will es mir merken!"
 		},
 		"essen": {
-			"carrot": "Karotte",
+			"carrot": "Möhre",
 			"apple": "Apfel",
 			"cupcake": "Törtchen"
 		},

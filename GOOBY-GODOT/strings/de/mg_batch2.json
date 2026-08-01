@@ -4,7 +4,7 @@
 			"title": "Korbwurf",
 			"hint": "Schnipp den Ball nach oben in den Korb!",
 			"miss": "Daneben!",
-			"on_fire": "Er brennt!",
+			"on_fire": "Der läuft heiß!",
 			"misses": "Fehlwürfe: {n}/{max}"
 		},
 		"pancakeTower": {
@@ -72,7 +72,7 @@
 			"breaks": "Serienbrüche: {n}/{max}",
 			"kalib_knopf": "Timing anpassen ({ms} ms)",
 			"kalib_titel": "Timing anpassen",
-			"kalib_text": "Tippe im Takt der 8 Metronom-Schläge — dein Median-Offset wird gespeichert.",
+			"kalib_text": "Tippe im Takt der 8 Metronom-Schläge — dein Timing merken wir uns.",
 			"kalib_offset": "Offset: {ms} ms",
 			"kalib_beat": "Schlag {n}/{max}",
 			"kalib_ergebnis": "Dein Offset: {ms} ms — gespeichert!",

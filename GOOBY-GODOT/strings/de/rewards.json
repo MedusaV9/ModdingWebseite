@@ -4,7 +4,7 @@
 			"titel": "Was soll Gooby essen?",
 			"leer": "Der Kühlschrank ist leer…",
 			"tipp": "Frische Sachen wachsen im Garten oder warten im REHWEI in der Stadt.",
-			"eintrag": "{essen} ×{anzahl}  (+{hunger} Hunger)",
+			"eintrag": "{essen} ×{anzahl} (+{hunger} Hunger)",
 			"schliessen": "Zumachen"
 		},
 		"fuettern": {

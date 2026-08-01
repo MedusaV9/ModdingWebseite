@@ -17,7 +17,7 @@
 				},
 				"abend": {
 					"1": "Abend{namek}! Ich hab die Kissen schon vorgewärmt. Mit meinem Po.",
-					"2": "Der Himmel wird orange! Meine zweitliebste Farbe nach Karotte.",
+					"2": "Der Himmel wird orange! Meine zweitliebste Farbe nach Möhre.",
 					"3": "Abendprogramm: du, ich, gemütlich sein. Ich bin Profi darin."
 				},
 				"nacht": {
@@ -101,7 +101,7 @@
 					"2": "Die Krähen haben heute wieder Unsinn geplant. Ich hab mitgemacht.",
 					"3": "Ranch-Leben: früh aufstehen, viel staunen, überall Matsch. Zehn Punkte.",
 					"4": "Ich hab einem Pferd Hallo gesagt. Es hat geschnaubt. Wir sind jetzt Freunde.",
-					"5": "Auf der Ranch bin ich Cowboy-Gooby. Yeehaw! …Sagt man das so?",
+					"5": "Auf der Ranch bin ich Cowgooby. Yeehaw! …Sagt man das so?",
 					"6": "Das Lagerfeuer knistert schöner als jeder Fernseher.",
 					"7": "Ich hab beim Ranch-Wettbewerb geholfen! Mit Anfeuern. Sehr wichtig.",
 					"8": "Heu-Fakt: Man kann reinhüpfen. Man kommt nur schwer wieder raus."
@@ -130,9 +130,9 @@
 			"selbstgespraech": {
 				"1": "Wo wollte ich nochmal hin? … Egal, der Weg ist knuffig.",
 				"2": "Links, rechts, links… meine Füße kennen den Plan.",
-				"3": "Wenn Teppiche sprechen könnten… der hier würde 'aua' sagen. Hihi.",
+				"3": "Wenn Teppiche sprechen könnten… der hier würde ‚aua‘ sagen. Hihi.",
 				"4": "Ich patrouilliere. Alles flauschig im Sektor Wohnzimmer.",
-				"5": "La la laaa… das Lied hab ich grad erfunden. Es heißt 'Lied'.",
+				"5": "La la laaa… das Lied hab ich grad erfunden. Es heißt ‚Lied‘.",
 				"6": "Staubkorn! Ich seh dich. Wir treffen uns beim Aufräumen.",
 				"7": "Einmal ums Sofa ist wie einmal um die Welt. Nur gemütlicher.",
 				"8": "Ich zähle meine Schritte. Eins, zwei, viele.",
@@ -188,7 +188,7 @@
 				"f2": "Verstehe. Betrieb läuft heute auf Flausch-Sparflamme. Genehmigt."
 			},
 			"energie": {
-				"label": "Auf geht's, Gooby!",
+				"label": "Auf geht’s, Gooby!",
 				"f1": "JAWOLL! Erst hüpfen, dann frühstücken, dann… nochmal hüpfen!",
 				"f2": "Deine Morgen-Energie! Darf ich mir eine Scheibe abschneiden?"
 			}
@@ -248,7 +248,7 @@
 				"f2": "Angenommen! Ich kann dir sowieso nie lange böse sein."
 			},
 			"guenstig": {
-				"label": "Dafür gibt's Extra-Kraulen!",
+				"label": "Dafür gibt’s Extra-Kraulen!",
 				"f1": "Bestechung! …Funktioniert. Genau hier hinterm Ohr, bitte.",
 				"f2": "Hmpf. Na gut. Aber nur, weil Kraulen die beste Währung ist."
 			}
@@ -336,7 +336,7 @@
 				"f2": "Der beste Satz des Tages! Gleich nochmal sagen, bitte."
 			},
 			"geschenk": {
-				"label": "Ich mach's wieder gut!",
+				"label": "Ich mach’s wieder gut!",
 				"f1": "Oooh! Ich nehme Kraulen, Spielen und ein Krümelchen Zeit.",
 				"f2": "Du bist doch selbst das Wiedergutmach-Geschenk. Aber Snacks gehen immer."
 			}

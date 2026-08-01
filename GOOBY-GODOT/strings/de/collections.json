@@ -39,7 +39,7 @@
 			},
 			"veggies": {
 				"radish": "Radieschen",
-				"carrot": "Karotte",
+				"carrot": "Möhre",
 				"salad": "Salat",
 				"tomato": "Tomate",
 				"corn": "Mais",
@@ -57,9 +57,9 @@
 			},
 			"treats": {
 				"donut-sprinkles": "Streusel-Donut",
-				"cupcake": "Cupcake",
-				"ice-cream": "Eis",
-				"cake": "Kuchen",
+				"cupcake": "Törtchen",
+				"ice-cream": "Eistüte",
+				"cake": "Torte",
 				"cookie": "Keks",
 				"candy-bar": "Schokoriegel",
 				"lollypop": "Lutscher",

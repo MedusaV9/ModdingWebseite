@@ -6,7 +6,7 @@
 			"intro": "Bring your Gooby over from the old app — coins, stickers, furniture and more move with you.",
 			"auto": {
 				"found": "Found an old save on this device!",
-				"source_ios": "Source: data left by the old app (same bundle id — don’t delete the old app, install right over it!)",
+				"source_ios": "Source: data left by the old app (don’t delete the old app — just install the new one right over it!)",
 				"preview": "Show preview"
 			},
 			"paste": {

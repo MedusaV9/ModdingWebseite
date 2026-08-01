@@ -6,7 +6,7 @@
 			"intro": "Hol deinen Gooby aus der alten App hierher — Münzen, Sticker, Möbel und mehr ziehen mit um.",
 			"auto": {
 				"found": "Alter Spielstand auf diesem Gerät gefunden!",
-				"source_ios": "Quelle: Altdaten der alten App (gleiche Bundle-Id — alte App nicht löschen, einfach drüber installieren!)",
+				"source_ios": "Quelle: Altdaten der alten App (alte App nicht löschen — einfach die neue drüberinstallieren!)",
 				"preview": "Vorschau anzeigen"
 			},
 			"paste": {

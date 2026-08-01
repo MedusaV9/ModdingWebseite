@@ -51,17 +51,17 @@
 			"delivery10": { "name": "Parcel Pro", "desc": "Deliver 10 parcels" },
 			"holeInOne": { "name": "Hole in One!", "desc": "Sink a hole-in-one in Mini Golf" },
 			"shutterbug": { "name": "Shutterbug", "desc": "Take 10 photos of Gooby" },
-			"stickerBook10": { "name": "Sticker Fan", "desc": "Unlock 10 stickers in the sticker book." },
-			"stickerBook20": { "name": "Sticker Collector", "desc": "Unlock 20 stickers in the sticker book." },
-			"stickerBookFull": { "name": "Sticker Book Complete", "desc": "Unlock all 28 stickers in the sticker book." },
-			"nougatmeister": { "name": "Nougat Master", "desc": "Enjoy 25 globs from the Nougat Sluice." },
-			"parkDay": { "name": "Park Day", "desc": "Step through the Funkelpark gates for the first time." },
-			"coasterFan": { "name": "Coaster Fan", "desc": "Ride the roller coaster 5 times." },
-			"wheelRide": { "name": "Sky High", "desc": "Take one full turn on the big wheel." },
-			"funkelnacht": { "name": "Sparkle Night", "desc": "Visit Funkelpark after dark." },
-			"postmaster": { "name": "Postmaster", "desc": "Keep 10 postcards from Gooby's travels." },
-			"stickerBook84": { "name": "Full Album", "desc": "Unlock all 84 stickers in the book." },
-			"weltenbummler": { "name": "Globetrotter", "desc": "Complete a vacation at all 9 destinations." }
+			"stickerBook10": { "name": "Sticker Fan", "desc": "Unlock 10 stickers in the sticker book" },
+			"stickerBook20": { "name": "Sticker Collector", "desc": "Unlock 20 stickers in the sticker book" },
+			"stickerBookFull": { "name": "Sticker Book Complete", "desc": "Unlock all 28 stickers in the sticker book" },
+			"nougatmeister": { "name": "Nougat Master", "desc": "Enjoy 25 globs from the Nougat Sluice" },
+			"parkDay": { "name": "Park Day", "desc": "Step through the Funkelpark gates for the first time" },
+			"coasterFan": { "name": "Coaster Fan", "desc": "Ride the roller coaster 5 times" },
+			"wheelRide": { "name": "Sky High", "desc": "Take one full turn on the big wheel" },
+			"funkelnacht": { "name": "Sparkle Night", "desc": "Visit Funkelpark after dark" },
+			"postmaster": { "name": "Postmaster", "desc": "Keep 10 postcards from Gooby's travels" },
+			"stickerBook84": { "name": "Full Album", "desc": "Unlock all 84 stickers in the book" },
+			"weltenbummler": { "name": "Globetrotter", "desc": "Complete a vacation at all 9 destinations" }
 		}
 	}
 }

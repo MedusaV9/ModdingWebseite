@@ -4,7 +4,7 @@
   "nodes": {
     "hallo": {
       "sprecher": "goobyman",
-      "text": "Willkommen beim GOOBYMAN! Wenn's kaputtgeht, hab ich's neu.",
+      "text": "Willkommen beim GOOBYMAN! Wenn’s kaputtgeht, hab ich’s neu.",
       "optionen": [
         {"text": "Einkaufen!", "next": "laden"},
         {"text": "Wer ist eigentlich Goobyman?", "next": "held"}

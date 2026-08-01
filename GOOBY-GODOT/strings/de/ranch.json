@@ -1,8 +1,8 @@
 {
 	"ranch": {
-		"name": "Die Gooby Ranch",
+		"name": "Die Gooby-Ranch",
 		"angebot": {
-			"titel": "Die Gooby Ranch",
+			"titel": "Die Gooby-Ranch",
 			"text": "Du kannst jetzt zur Ranch fahren und sie kaufen.",
 			"preis": "{preis} ᴳ",
 			"frage": "Willst du jetzt los oder erst später kaufen?",
@@ -12,11 +12,11 @@
 			"zu_wenig": "Dir fehlen noch {fehlt} ᴳ für die Ranch."
 		},
 		"exit": {
-			"schild_zeile1": "Zur Gooby Ranch",
+			"schild_zeile1": "Zur Gooby-Ranch",
 			"schild_zeile2": "{km} km",
-			"prompt": "Zur Gooby Ranch rausfahren?",
+			"prompt": "Zur Gooby-Ranch rausfahren?",
 			"losfahren": "Losfahren",
-			"gesperrt": "Ab Level {level} kannst du zur Gooby Ranch rausfahren."
+			"gesperrt": "Ab Level {level} kannst du zur Gooby-Ranch rausfahren."
 		},
 		"fahrt": {
 			"zur_stadt": "Zur Stadt",
@@ -26,7 +26,7 @@
 		},
 		"tor": {
 			"titel": "Das Ranch-Tor",
-			"text": "Die Gooby Ranch wartet auf dich. Riesenfeld, Koppeln und drei Pferde inklusive.",
+			"text": "Die Gooby-Ranch wartet auf dich. Riesenfeld, Koppeln und drei Pferde inklusive.",
 			"kaufen": "Kaufen ({preis} ᴳ)",
 			"spaeter": "Später kaufen",
 			"gekauft": "Die Ranch gehört jetzt dir! Willkommen daheim, Cowgooby.",
@@ -34,7 +34,7 @@
 			"offen": "Rein mit dir!"
 		},
 		"hof": {
-			"titel": "Die Gooby Ranch",
+			"titel": "Die Gooby-Ranch",
 			"scheune": "Scheune",
 			"stall": "Stall",
 			"haus": "Ranch-Haus",

@@ -64,7 +64,7 @@
     },
     "purblePlace": {
       "title": "Cake Shop",
-      "hint": "◀ ▶ drives the belt — hold the pan STILL under the nozzle, drops take 0.45 s!",
+      "hint": "◀ ▶ drives the belt — hold the pan STILL under the nozzle, drops fall in a blink!",
       "board": "Orders",
       "perfect": "Perfect cake! +{n}",
       "served": "Almost right! +{n}",

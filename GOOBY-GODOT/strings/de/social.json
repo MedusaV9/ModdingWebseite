@@ -29,9 +29,9 @@
 		},
 		"selfie": {
 			"emote": "Snap A Gooby!",
-			"hinweis": "Selfie-Zeit! In Position …",
-			"gesendet": "Selfie gespeichert – Kopie ist unterwegs zu {name}!",
-			"nur_lokal": "Selfie gespeichert – Versand klappte nicht.",
+			"hinweis": "Selfie-Zeit! In Position…",
+			"gesendet": "Selfie gespeichert — Kopie ist unterwegs zu {name}!",
+			"nur_lokal": "Selfie gespeichert — Versand klappte nicht.",
 			"fehler": "Das Selfie hat nicht geklappt.",
 			"mail_text": "Snap A Gooby! Unser Besuchs-Selfie."
 		},
