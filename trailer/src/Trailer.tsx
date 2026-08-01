@@ -25,12 +25,12 @@ loadBaloo();
  *  11.4–13.2 s  Gestalten-Modus (Fassaden-/Dach-/Türfarben live)
  *  13.2–15.0 s  NEU: Das eigene Haus steht im Garten (HAUS-SICHT)
  *  15.0–16.2 s  GOUHBUS-Möbelausstellung in 3D
- *  16.2–18.0 s  Garderobe (92 Kosmetik-Teile am lebenden Gooby)
+ *  16.2–18.0 s  Garderobe (93 Kosmetik-Teile am lebenden Gooby)
  *  18.0–19.2 s  Stadt-Panorama
  *  19.2–21.0 s  Autofahrt am Tag (lesbare Billboard-Ortsschilder)
  *  21.0–22.2 s  Stadt bei Nacht
  *  22.2–25.2 s  NEU: Funkelpark — Tor-Totale, dann Achterbahn-POV
- *  25.2–32.4 s  Minispiel-Montage „36 Minispiele“ (6 Slots à 1,2 s,
+ *  25.2–32.4 s  Minispiel-Montage „38 Minispiele“ (6 Slots à 1,2 s,
  *               inkl. Hochkant-Triptychon)
  *  32.4–33.6 s  Multiplayer-Besuch (zwei Goobys im Wohnzimmer)
  *  33.6–35.4 s  ★ Kapitel-Karte GOOBY RANCH (Key-Artwork + Logo)
@@ -224,7 +224,7 @@ export const Trailer: React.FC = () => {
           src="clips/wardrobe.mp4"
           startFrom={70}
           durationInFrames={3 * BEAT}
-          label="92 Kosmetik-Teile für deinen Gooby"
+          label="93 Kosmetik-Teile für deinen Gooby"
           accent={COLORS.pink}
           zoomTo={1.04}
         />
@@ -569,7 +569,7 @@ export const Trailer: React.FC = () => {
       ))}
       {/* Montage-Dachzeile über allen Slots */}
       <Sequence from={MONTAGE_START} durationInFrames={6 * SLOT}>
-        <MontageHeadline text="36 Minispiele — alle frisch poliert!" />
+        <MontageHeadline text="38 Minispiele — alle frisch poliert!" />
       </Sequence>
       {/* Dachzeile der Neue-Zonen-Montage */}
       <Sequence from={ZONEN_START} durationInFrames={6 * ZONEN_SLOT}>
