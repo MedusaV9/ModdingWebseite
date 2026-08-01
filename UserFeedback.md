@@ -25,6 +25,21 @@ _(NEU seit W16: Das Projekt ist umgezogen — es lebt jetzt im Repo
 mit komplettem Verlauf. Alle Updates/Builds laufen ab jetzt über dieses Repo.
 Diese Datei bleibt dein direkter Draht: einfach unten reinschreiben.)_
 
+- [~] **Dein Feedback vom 1. August (mit 7 Screenshots, iPhone quer):** UI-Full-
+      Rework, dynamisches UI mit Animationen (z. B. Baumenü → andere Knöpfe
+      verschwinden), ALLE Bugs fixen, Subagents sollen das Spiel richtig SPIELEN
+      (10 parallel, jeder eigene Instanz), iPhone 17 Pro Max + Querformat als
+      Leitformat, Modal-Menüs + Swipen/Wischen fixen, Läden sind zu leer (echte
+      Orte mit animierten Chars!), alles fühlt sich wie eine Dev-Demo bzw. wie
+      einzelne Spiele statt EIN Gooby-Spiel an. → **Welle G7 „SPIELGEFÜHL" läuft**
+      (Zuschnitt unten in „In Arbeit"); danach Playtest-Welle (10 Spieler-Agents)
+      und die 30-Ideen-Planner-Welle. Deine Screenshots sind als Befunde erfasst:
+      HUD-Kacheln schneiden Wörter ab („IGohbi/Garder/Gestalt"), Sprechblasen
+      brechen mitten im Wort („Ohh, wird das sch"), Tagesquests-Blatt liegt ÜBER
+      den Status-Leisten, IGohbie-Telefon hat ein kaputtes Dunkel-Icon, Gestalten-
+      Liste schneidet „Briefkasten" ab, Baumodus = Knopf-Salat (der bekannte
+      97-Befunde-Wurzelfix, jetzt MIT Weggleit-Animation).
+
 _(Runden W14 UND W15 sind FERTIG — Details unten in „Erledigt". Aktueller Stand:)_
 
 - [x] **W16 / Welle G2 FERTIG (1. August):** 13 Umsetzungs-Pakete gelandet,
@@ -167,39 +182,56 @@ _(gerade nichts offen — alle bisherigen Punkte stehen unten unter „Erledigt"
 
 ## 2. In Arbeit
 
-Runde W17 (1./2. August) — Wellen G1–G5 sind FERTIG (Details oben + unten in
-„Erledigt"), **Welle G6 LÄUFT** (13 Pakete, 10 Subagents parallel gestartet,
-3 rücken nach sobald Slots frei sind):
+Runde W17 — Wellen G1–G5 sind FERTIG (Details oben + unten in „Erledigt").
+_Hinweis zur Transparenz: die am 31.7. gestartete Welle G6 ist einem VM-Neustart
+zum Opfer gefallen, bevor sie integriert/committet war — kein Stand verloren
+gegangen außer der unfertigen Subagent-Arbeit; die G6-Pakete sind neu einsortiert._
 
-- [~] **P37 Baumodus-HUD-Fix** — der dickste Audit-Fang aus G5: das Home-HUD
-      bleibt im Baumodus sichtbar und liegt über Kamera-Chips/Werkzeug-Dock/
-      Lager (97 Befunde, EIN Wurzel-Problem) → HUD blendet beim Bauen aus,
-      neue Wache + Audit-Nachmessung
-- [~] **P38 GvZ-PvP-Server** — das fehlende Server-Modul (gvzmp.js nach dem
-      gobnom-Muster) inkl. Node-Tests, damit die Netz-Duelle wirklich laufen
-- [~] **P39 DLC „Goo und Bye" Welle B** — Großmarkt-Fahrt mit dem eigenen
-      Auto (REHWEI-Rampe, Kofferraum-Beladung) + Preis-Schieber ±30 % mit
-      Kunden-Wirkung und sichtbarer Marge im Kassensturz
-- [~] **P40 DLC „McGooby" Welle B** — Stationen 2–4 (Belegen/Fritteuse/
-      Shake-Bar mit Kreis-Geste), Stationen-Tab-Leiste, Rezept-Ketten +
-      Kauf-Gate (Probeschicht bleibt frei)
-- [~] **P41 Audit-Restbefunde** — die übrigen 17 Befunde der UI-Wache
-      (RMP-Tippflächen, Onboarding-Editor-Knöpfe offscreen, Telefon-Zurück-
-      Balken, Radio-Like)
-- [~] **P44 Warnungs-Sweep** — letzter Engine-Befund B11 (GvZ-Anchor-
-      Warnung) + ehrlicher Walkthrough-Warnungs-Sweep
-- [~] **P45 Ball-Wurf** — die letzte große offene Home-Interaktion aus der
-      Vollständigkeits-Matrix: werfen, Gooby apportiert, Fun/Gewicht/Zähler
-- [~] **P46 Doku-Refresh** — EVAL-VOLLSTAENDIGKEIT + STATUS ehrlich auf den
-      G5-Stand bringen
-- [~] **P47 Ladebildschirme** — der große Artwork-Ladebildschirm-Look (wie
-      beim alten Gooby) kommt auf die neuen langen Reisen (DLC-Läden)
-- [~] **P49 UI-Mitte-Sweep** — dein Wunsch: Hintergründe dürfen an den Rand,
-      Bedien-Inhalte rücken auf breiten Formaten angenehm in die Mitte
-- [ ] **P48 Audio-Feel-Reste** (rückt nach) — game_hit-End-Klick + Sweep
-      über alle Sound-Enden, offene Dopamin-Eval-Kleinpunkte
-- [ ] **P42 McGooby-Grillbühne beleben** (rückt nach P40)
-- [ ] **P43 Onkel Alwin als fester NPC mit Dialog** (rückt nach P39)
+**Welle G7 „SPIELGEFÜHL" LÄUFT** (dein Feedback vom 1.8. hat Vorrang; 10
+Subagents parallel — das ist das harte Plattform-Limit, die Pipeline bleibt voll):
+
+- [~] **P50 HUD-Dynamik** — dein Wunsch wörtlich: beim Baumenü GLEITEN die
+      HUD-Knöpfe animiert weg (und kommen animiert zurück); bei offenen
+      Blättern/Modals (z. B. Tagesquests) weicht/dimmt das HUD statt
+      durchzuscheinen; HUD-Kachel-Labels werden nie mehr abgeschnitten
+      („IGohbi/Garder/Gestalt" → passende Beschriftung), „Wo ist mein
+      Gooby?"-Chip inklusive
+- [~] **P51 Sprechblasen + Text-Fit** — „Ohh, wird das sch" ade: Blasen
+      wachsen/wickeln sauber, nie mehr mitten im Wort enden; Text-Fit-Sweep
+- [~] **P52 IGohbie-Telefon-Rework** — kaputtes Dunkel-Icon, unklare Symbole,
+      App-Labels, Öffnen-Animation, Wisch-zum-Schließen
+- [~] **P53 Modal/Sheet-System + Swipe** — EIN einheitliches Blatt-Verhalten
+      überall: Slide-in/out, Hintergrund-Dim, runterwischen = schließen
+      (inkl. Radio-Like-Offscreen-Fix)
+- [~] **P54 Garderobe + Gestalten poliert** — abgeschnittene Kategorien
+      („Briefkasten"), Scroll-Hinweise, Karten-Layout, Kauf-Feedback
+- [~] **P55 Läden lebendig, Teil 1** — REHWEI + IKEA werden ECHTE Orte:
+      animierte Kunden-Goobys, Kassen-NPC, Ambiente-Sound, Deko
+- [~] **P56 Ein-Spiel-Gefühl** — einheitlicher Minispiel-Rahmen (Intro/
+      Outro/Pause im Gooby-Look überall) + einheitliche Szenen-Übergänge,
+      damit sich nichts mehr wie ein Fremd-Spiel anfühlt
+- [~] **P57 iPhone-17-Pro-Max-Leitformat (2868×1320 quer)** — UI-Wache +
+      Konformitätstests aufs neue Leitformat, plus die 17 bekannten
+      Audit-Restbefunde (RMP-Tippflächen, Onboarding-Knöpfe offscreen)
+- [~] **P38R GvZ-PvP-Server** — Relaunch des verlorenen Pakets (gvzmp.js
+      nach gobnom-Muster inkl. Node-Tests)
+- [~] **P58 Playtest-Harness + Pionier-Spieler** — baut das „Subagent
+      spielt das Spiel"-Werkzeug (eigene Instanz, echte Eingaben,
+      Screenshot-Serie, Hänger-/Fehler-Detektor) und spielt den ersten
+      kompletten Durchlauf im Leitformat → Bug-Report Nr. 1
+
+**Danach sofort (Warteschlange):**
+- [ ] **Welle H: PLAYTEST ×10** — 10 Spieler-Agents, jeder spielt seinen
+      Bereich mit eigener Instanz (Home/Bau, Stadt/Läden, Minispiele ×3,
+      DLCs, Telefon/Radio, Garderobe/Gestalten, Quests/Progression,
+      Onboarding) → gesammelte Bug-Liste
+- [ ] **Welle I: 30+ Ideen-Planner** — 10 Planner parallel, jeder liefert
+      10+ priorisierte Ideen für seinen Bereich (≈100+ Ideen), konsolidiert
+      zur Roadmap
+- [ ] **Wellen J+: Umsetzung** — Playtest-Bugs + beste Planner-Ideen +
+      die neu einsortierten G6-Pakete (DLC Welle B beider Läden, Ball-Wurf,
+      DLC-Ladebildschirme, Audio-Feel, B11/Warn-Sweep, Doku-Refresh,
+      McGooby-Bühne, Alwin-NPC)
 
 ---
 
