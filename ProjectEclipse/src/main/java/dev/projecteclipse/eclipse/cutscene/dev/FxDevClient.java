@@ -54,6 +54,15 @@ public final class FxDevClient {
     /** Forced uniform floats by pipeline → (uniform → value). Applied pre-post-processing. */
     private static final Map<ResourceLocation, Map<String, Float>> UNIFORM_OVERRIDES = new ConcurrentHashMap<>();
     private static volatile boolean sunDebugHud;
+    /**
+     * WAVE5 (F-105 A) A7: mirror of the F-104 streak-hold state. {@code
+     * LimboSpecialEffects} exposes only the setter (its flag is private by design),
+     * and this class is that setter's single caller — the mirror therefore stays in
+     * lockstep and the {@code /eclipsefx holds} inventory can report it read-only
+     * without widening the frozen sky-pass surface. Cleared on logout together with
+     * the hold itself.
+     */
+    private static volatile boolean limboStreakHoldOn;
 
     private FxDevClient() {}
 
@@ -72,6 +81,10 @@ public final class FxDevClient {
             case FxDevPayloads.ACTION_STORM_FLASHHOLD -> stormFlashHold("on".equals(payload.arg()), payload.value());
             case FxDevPayloads.ACTION_STORM_PERFPROBE -> FrameTimeProbe.start(payload.value());
             case FxDevPayloads.ACTION_LIMBO_STREAKHOLD -> limboStreakHold("on".equals(payload.arg()));
+            // WAVE5 (F-105 A): A1 wakehold, A2 flickerhold, A7 hold inventory.
+            case FxDevPayloads.ACTION_LIMBO_WAKEHOLD -> limboWakeHold("on".equals(payload.arg()));
+            case FxDevPayloads.ACTION_TYRANT_FLICKERHOLD -> tyrantFlickerHold(payload.arg());
+            case FxDevPayloads.ACTION_HOLDS_STATUS -> holdsStatus();
             default -> EclipseMod.LOGGER.warn("FxDevClient: unknown dev action {}", payload.action());
         }
     }
@@ -176,6 +189,11 @@ public final class FxDevClient {
                 + " live (" + dev.projecteclipse.eclipse.veilfx.PhotonBridge.liveLoops() + " loops), "
                 + dev.projecteclipse.eclipse.veilfx.PhotonBridge.refusedCount() + " budget refusals",
                 ChatFormatting.GRAY);
+        // WAVE5 (F-105 A) A3 / W4A Q2 closeout: template-hygiene counters (healthy: 0/0).
+        long scrubs = dev.projecteclipse.eclipse.veilfx.PhotonBridge.hygieneDirtyScrubs();
+        long links = dev.projecteclipse.eclipse.veilfx.PhotonBridge.hygieneLinksRemoved();
+        feedback("  hygiene: scrubs=" + scrubs + " links=" + links,
+                scrubs == 0 && links == 0 ? ChatFormatting.GRAY : ChatFormatting.YELLOW);
         var missing = dev.projecteclipse.eclipse.veilfx.PhotonBridge.missingFxIds();
         if (!missing.isEmpty()) {
             feedback("  missing/broken fx this session: " + missing, ChatFormatting.YELLOW);
@@ -251,12 +269,98 @@ public final class FxDevClient {
      */
     private static void limboStreakHold(boolean on) {
         dev.projecteclipse.eclipse.client.sky.LimboSpecialEffects.setStreakHold(on);
+        limboStreakHoldOn = on; // WAVE5 (F-105 A) A7: keep the holds-inventory mirror in step.
         feedback(on
                 ? "limbo streakhold ON — one green streak held mid-flight at a fixed dome spot"
                         + " (look ~17\u00b0 starboard of the bow heading, ~55\u00b0 up);"
                         + " the sky clock is second-based, so tick rate tweaks cannot stretch it"
                 : "limbo streakhold OFF — deterministic streak schedule restored (no residue)",
                 on ? ChatFormatting.GREEN : ChatFormatting.YELLOW);
+    }
+
+    // --- limbo blade-wake hold (WAVE5 F-105 A, A1) ---
+
+    /**
+     * {@code /eclipsefx limbo wakehold} — flips the client-visual blade-wake HOLD
+     * ({@code DeckhandRenderer.setLimboWakeHold}): every visible rowing deckhand then
+     * re-fires its C2 catch splash + F-104 ghost wake throttled (min. every 10t level
+     * time per rower), independent of the 60t row anchor — the only way to photograph
+     * the sub-2s wake on a software-rendered rig. Draws as an explicit operator
+     * override even under {@code reducedFx} (streakhold precedent). OFF is the
+     * bit-identical shipped C2/C2-R2 path (the hold branch is the flag's only
+     * consumer).
+     */
+    private static void limboWakeHold(boolean on) {
+        dev.projecteclipse.eclipse.client.entity.DeckhandRenderer.setLimboWakeHold(on);
+        feedback(on
+                ? "limbo wakehold ON — every visible rower re-fires splash+ghost-wake every ~10t"
+                        + " (anchor-independent, full fleck count even under reducedFx);"
+                        + " grep \"[w5a-wakehold]\" in the debug log for fire counts"
+                : "limbo wakehold OFF — live 60t catch-splash path restored (bit-identical,"
+                        + " [c2-splash] keeps running)",
+                on ? ChatFormatting.GREEN : ChatFormatting.YELLOW);
+    }
+
+    // --- tyrant desperation-flicker hold (WAVE5 F-105 A, A2) ---
+
+    /**
+     * {@code /eclipsefx tyrant flickerhold} — overrides the Fog Tyrant's desperation
+     * blackout ({@code FogTyrantRenderer.setTyrantFlickerHold}): {@code blackout} pins
+     * the emissive dropout permanently, {@code on} stretches the 1–2t stutter to a
+     * 20t-on/20t-off cadence, {@code off} restores the live phase-3-gated SplitMix64
+     * hash schedule bit-identically. Phase-independent — the hold is the photo aid,
+     * the live path stays phase-3-gated.
+     */
+    private static void tyrantFlickerHold(String mode) {
+        int hold = switch (mode) {
+            case "blackout" -> dev.projecteclipse.eclipse.client.entity.fogboss.FogTyrantRenderer.FLICKER_HOLD_BLACKOUT;
+            case "on" -> dev.projecteclipse.eclipse.client.entity.fogboss.FogTyrantRenderer.FLICKER_HOLD_CADENCE;
+            default -> dev.projecteclipse.eclipse.client.entity.fogboss.FogTyrantRenderer.FLICKER_HOLD_OFF;
+        };
+        dev.projecteclipse.eclipse.client.entity.fogboss.FogTyrantRenderer.setTyrantFlickerHold(hold);
+        feedback(switch (hold) {
+            case dev.projecteclipse.eclipse.client.entity.fogboss.FogTyrantRenderer.FLICKER_HOLD_BLACKOUT ->
+                    "tyrant flickerhold BLACKOUT — emissive pass held dark (crown/eye slit/storm-core off)";
+            case dev.projecteclipse.eclipse.client.entity.fogboss.FogTyrantRenderer.FLICKER_HOLD_CADENCE ->
+                    "tyrant flickerhold ON — stretched 20t-dark/20t-lit blackout cadence";
+            default -> "tyrant flickerhold OFF — live phase-3 hash schedule restored (bit-identical)";
+        }, hold == dev.projecteclipse.eclipse.client.entity.fogboss.FogTyrantRenderer.FLICKER_HOLD_OFF
+                ? ChatFormatting.YELLOW : ChatFormatting.GREEN);
+    }
+
+    // --- dev-hold inventory (WAVE5 F-105 A, A7) ---
+
+    /**
+     * {@code /eclipsefx holds} — read-only status of the four client-side dev holds,
+     * so a stale hold cannot silently poison later acceptance photos. flashhold reads
+     * the existing {@code StormFlashDevHold.active()} getter (Team-B file, read-only);
+     * streakhold reads this class's own mirror (see {@link #limboStreakHoldOn}).
+     */
+    private static void holdsStatus() {
+        boolean flash = dev.projecteclipse.eclipse.stormfx.StormFlashDevHold.active();
+        boolean streak = limboStreakHoldOn;
+        boolean wake = dev.projecteclipse.eclipse.client.entity.DeckhandRenderer.limboWakeHold();
+        int flicker = dev.projecteclipse.eclipse.client.entity.fogboss.FogTyrantRenderer.tyrantFlickerHold();
+        String flickerName = switch (flicker) {
+            case dev.projecteclipse.eclipse.client.entity.fogboss.FogTyrantRenderer.FLICKER_HOLD_BLACKOUT -> "BLACKOUT";
+            case dev.projecteclipse.eclipse.client.entity.fogboss.FogTyrantRenderer.FLICKER_HOLD_CADENCE -> "ON (20t cadence)";
+            default -> "off";
+        };
+        boolean anyHeld = flash || streak || wake
+                || flicker != dev.projecteclipse.eclipse.client.entity.fogboss.FogTyrantRenderer.FLICKER_HOLD_OFF;
+        feedback("Eclipse dev holds (client-side, all clear on logout):", ChatFormatting.GOLD);
+        feedback("  storm flashhold  — " + (flash ? "HELD" : "off"),
+                flash ? ChatFormatting.GREEN : ChatFormatting.GRAY);
+        feedback("  limbo streakhold — " + (streak ? "HELD" : "off"),
+                streak ? ChatFormatting.GREEN : ChatFormatting.GRAY);
+        feedback("  limbo wakehold   — " + (wake ? "HELD" : "off"),
+                wake ? ChatFormatting.GREEN : ChatFormatting.GRAY);
+        feedback("  tyrant flickerhold — " + flickerName,
+                flicker != dev.projecteclipse.eclipse.client.entity.fogboss.FogTyrantRenderer.FLICKER_HOLD_OFF
+                        ? ChatFormatting.GREEN : ChatFormatting.GRAY);
+        if (anyHeld) {
+            feedback("  ⚠ switch every hold off before non-hold acceptance photos", ChatFormatting.YELLOW);
+        }
     }
 
     // --- sun debug HUD ---
@@ -311,6 +415,11 @@ public final class FxDevClient {
         UNIFORM_OVERRIDES.clear();
         // F-104 dev-session hygiene: no streak hold survives a disconnect.
         dev.projecteclipse.eclipse.client.sky.LimboSpecialEffects.setStreakHold(false);
+        limboStreakHoldOn = false;
+        // WAVE5 (F-105 A) hygiene: wakehold + flickerhold clear with the session too.
+        dev.projecteclipse.eclipse.client.entity.DeckhandRenderer.setLimboWakeHold(false);
+        dev.projecteclipse.eclipse.client.entity.fogboss.FogTyrantRenderer.setTyrantFlickerHold(
+                dev.projecteclipse.eclipse.client.entity.fogboss.FogTyrantRenderer.FLICKER_HOLD_OFF);
         // VeilPostController clears its own overrides on logout.
     }
 

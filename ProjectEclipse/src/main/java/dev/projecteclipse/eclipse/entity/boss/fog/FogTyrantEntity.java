@@ -13,6 +13,7 @@ import javax.annotation.Nullable;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.enchant.ReplantEnchant;
+import dev.projecteclipse.eclipse.entity.boss.HeraldEntity;
 import dev.projecteclipse.eclipse.entity.geo.EclipseGeoAnimations;
 import dev.projecteclipse.eclipse.entity.geo.EclipseGeoMonster;
 import dev.projecteclipse.eclipse.network.S2CBossbarStylePayload;
@@ -21,6 +22,7 @@ import dev.projecteclipse.eclipse.network.S2CShakePayload;
 import dev.projecteclipse.eclipse.network.fx.FxCues;
 import dev.projecteclipse.eclipse.network.fx.FxPayloads;
 import dev.projecteclipse.eclipse.network.fx.S2CScreenFadePayload;
+import dev.projecteclipse.eclipse.veilfx.FxAnchors;
 import dev.projecteclipse.eclipse.registry.EclipseItems;
 import dev.projecteclipse.eclipse.registry.EclipseSounds;
 import dev.projecteclipse.eclipse.sequence.endarrival.EndArrivalFxCues;
@@ -39,6 +41,7 @@ import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtUtils;
 import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.protocol.game.ClientboundSoundPacket;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
@@ -363,6 +366,8 @@ public class FogTyrantEntity extends EclipseGeoMonster {
     // CUE_TYRANT_FOG_ARMS re-send (transient; a restart mid-P3 re-arms on the next tick).
     private int fogArmsRefireTimer;
     private int lastDeflectCueTick = -DEFLECT_CUE_INTERVAL_TICKS;
+    /** WAVE5 (F-105 A) A5: last crescendo-pulse tick (transient; cadence ≤30t). */
+    private int lastCrescendoTick = -1000;
     private boolean colossusCalled;
     private boolean warnedHoundUnbound;
     private boolean warnedColossusUnbound;
@@ -553,6 +558,7 @@ public class FogTyrantEntity extends EclipseGeoMonster {
         if (tickReset(level)) {
             return;
         }
+        tickHeartbeatCrescendo(level); // WAVE5 (F-105 A) A5: sub-10% kill-window pulse.
         tickArenaLock(level);
         if (this.meleeCooldown > 0) {
             this.meleeCooldown--;
@@ -805,12 +811,48 @@ public class FogTyrantEntity extends EclipseGeoMonster {
         if (this.arena == null) {
             return;
         }
+        // WAVE5 (F-105 A) A5: sub-10% window doubles the wall cadence (8t -> 4t) so the
+        // fog wall itself tightens with the crescendo (visual-only, same particle budget/call).
+        int wallInterval = crescendoCadenceTicks() > 0 ? 4 : 8;
         for (ServerPlayer player : livingParticipants(level)) {
             this.arena.impulseInward(player, this.tickCount);
-            if (this.tickCount % 8 == 0) {
+            if (this.tickCount % wallInterval == 0) {
                 this.arena.particleWall(level, player, getPhase());
             }
         }
+    }
+
+    /**
+     * WAVE5 (F-105 A) A5 — sub-10%-HP heartbeat crescendo (IDEA-16 #10): under 10% HP
+     * every living participant hears the WARDEN_HEARTBEAT on a cadence that falls with
+     * the boss (30t → 20t → 12t, HP-staggered), so the kill window reads through the fog.
+     * Throttled by a last-fire tick mark ({@code DEFLECT_CUE_INTERVAL_TICKS} pattern).
+     * One DEBUG probe per pulse: {@code [w5a-crescendo] tyrant hp=<f> cadence=<t>}.
+     */
+    private void tickHeartbeatCrescendo(ServerLevel level) {
+        int cadence = crescendoCadenceTicks();
+        if (cadence < 0 || this.tickCount - this.lastCrescendoTick < cadence) {
+            return;
+        }
+        this.lastCrescendoTick = this.tickCount;
+        for (ServerPlayer player : livingParticipants(level)) {
+            player.connection.send(new ClientboundSoundPacket(
+                    BuiltInRegistries.SOUND_EVENT.wrapAsHolder(SoundEvents.WARDEN_HEARTBEAT),
+                    SoundSource.HOSTILE, player.getX(), player.getY(), player.getZ(),
+                    1.2F, 0.8F, this.random.nextLong()));
+        }
+        EclipseMod.LOGGER.debug("[w5a-crescendo] tyrant hp={} cadence={}",
+                String.format(java.util.Locale.ROOT, "%.3f", this.getHealth() / this.getMaxHealth()),
+                cadence);
+    }
+
+    /** WAVE5 (F-105 A) A5: ≤10% HP → 30t, ≤6.6% → 20t, ≤3.3% → 12t; −1 = inactive. */
+    private int crescendoCadenceTicks() {
+        float fraction = this.getHealth() / this.getMaxHealth();
+        if (fraction > 0.10F) {
+            return -1;
+        }
+        return fraction > 0.0666F ? 30 : fraction > 0.0333F ? 20 : 12;
     }
 
     // --- movement + cleaver melee ---
@@ -1611,8 +1653,37 @@ public class FogTyrantEntity extends EclipseGeoMonster {
             EclipseMod.LOGGER.info("Fog Tyrant death thunderclap at t={}", this.deathTime);
         }
         if (this.deathTime >= DEATH_DURATION_TICKS && !this.isRemoved()) {
+            placeTrophyMonument(serverLevel); // WAVE5 (F-105 A) A6: the lair keeps a trophy.
             serverLevel.broadcastEntityEvent(this, EntityEvent.POOF);
             this.remove(RemovalReason.KILLED);
+        }
+    }
+
+    /**
+     * WAVE5 (F-105 A) A6 — boss trophy monument (IDEA-16 #5): the storm-burst leaves
+     * exactly ONE lightning rod at the tracked arena center (the crown's rod, grounded
+     * — the storm is over). The Tyrant has no {@code EclipseWorldState} defeat flag
+     * (storm sieges are per-site), so the dedup is purely spatial: the shared
+     * candidate-ring walk ({@link HeraldEntity#placeMonumentBlock}) skips when a rod
+     * already stands — re-summons at the same lair never stack a second monument. The
+     * center is floor-snapped ({@link #snapToFloor}: the lair terrain is natural, not a
+     * stamped dais). Runs at the removal keyframe, AFTER the reward chest walked its
+     * own offset ring, and only once ({@code isRemoved()} guard upstream). Publishes
+     * the {@code wave5_trophy_tyrant} {@link FxAnchors} anchor for the client wisp
+     * loop ({@code veilfx/Wave5BossFxRows}; {@code reducedFx} skips).
+     * Probe: {@code [w5a-trophy] tyrant …} (INFO, one line per kill).
+     */
+    private void placeTrophyMonument(ServerLevel level) {
+        if (this.arena == null) {
+            return;
+        }
+        Vec3 center = this.arena.center();
+        BlockPos snapped = BlockPos.containing(snapToFloor(level,
+                new Vec3(center.x, this.arena.groundY() + 1.0D, center.z)));
+        BlockPos placed = HeraldEntity.placeMonumentBlock(level, snapped,
+                Blocks.LIGHTNING_ROD.defaultBlockState(), "tyrant");
+        if (placed != null) {
+            FxAnchors.set(FxCues.cue("wave5_trophy_tyrant"), level, Vec3.atCenterOf(placed));
         }
     }
 

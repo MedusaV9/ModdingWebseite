@@ -169,6 +169,15 @@ public class DeckhandEntity extends EclipseGeoMob {
      * sample cannot fake a crossing into the next rowing session.
      */
     public long clientRowSampledAt = Long.MIN_VALUE;
+    /**
+     * WAVE5 (F-105 A) A1 wakehold bookkeeping (renderer-owned, client only): game time
+     * of the last dev-hold wake re-fire for this rower, or {@link Long#MIN_VALUE}
+     * before the first one. Only the {@code DeckhandRenderer} hold branch reads or
+     * writes it — the live C2/C2-R2 splash path never touches it.
+     */
+    public long clientWakeHoldFiredAt = Long.MIN_VALUE;
+    /** WAVE5 (F-105 A) A1: dev-hold wake re-fires so far for this rower (probe count). */
+    public int clientWakeHoldCount;
 
     public DeckhandEntity(EntityType<? extends DeckhandEntity> entityType, Level level) {
         super(entityType, level);

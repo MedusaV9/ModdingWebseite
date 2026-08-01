@@ -58,6 +58,11 @@ import software.bernie.geckolib.cache.object.GeoBone;
  *       side and stern-ward on the other in world space. Port rowers (facing {@code -Z})
  *       render with those two channels negated so every blade drives toward the stern
  *       together.</li>
+ *   <li><b>Blade-wake dev hold (WAVE5 F-105 A):</b> {@code /eclipsefx limbo wakehold}
+ *       re-fires the catch splash + ghost wake on every visible blade, throttled to
+ *       {@value #WAKE_HOLD_INTERVAL_TICKS}t per rower and independent of the 60t
+ *       anchor, so the sub-2s wake becomes photographable on software-rendered rigs
+ *       (see {@link #spawnHeldWake}).</li>
  *   <li><b>Blade splash:</b> 2–3 client-only {@code SPLASH} particles at the water
  *       surface under the blade tip on the catch beat (authored at anim 2.8–3.0 s, which
  *       plays at level-clock phase 0–4 t — see {@link #SPLASH_PHASE_TICKS}), once per
@@ -89,6 +94,24 @@ public class DeckhandRenderer extends EclipseGeoRenderer<DeckhandEntity> {
      */
     private static final double TIP_OUT_BLOCKS = 2.89D;
     private static final double TIP_ALONG_BLOCKS = -0.57D;
+
+    /**
+     * WAVE5 (F-105 A) A1: minimum level-time gap between two dev-hold wake re-fires
+     * per rower. preRender runs per FRAME — on a normal client that would be a
+     * firehose, so the hold throttles to at most one re-fire per rower per 10t of
+     * level time; on llvmpipe (40–100+ ticks between frames) effectively every
+     * rendered frame carries a fresh wake.
+     */
+    private static final int WAKE_HOLD_INTERVAL_TICKS = 10;
+
+    /**
+     * WAVE5 (F-105 A) A1: the dev-only blade-wake HOLD, flipped exclusively by
+     * {@code /eclipsefx limbo wakehold} via {@code FxDevClient} (which also clears it
+     * on logout — the StormFlashDevHold hygiene pattern). Idle rule: defaults to
+     * {@code false}, and {@link #preRender}'s hold branch is the flag's ONLY
+     * consumer — with the hold OFF the live C2/C2-R2 splash path runs bit-identically.
+     */
+    private static volatile boolean limboWakeHold;
 
     /** How many per-rower face cards the geo carries ({@code glow_face_0..7}). */
     private static final int FACE_VARIANTS = 8;
@@ -204,6 +227,24 @@ public class DeckhandRenderer extends EclipseGeoRenderer<DeckhandEntity> {
         if (entity.clientRowResetAt != Long.MIN_VALUE) {
             spawnCatchSplash(entity, gameTime, partialTick);
         }
+        // WAVE5 (F-105 A) A1 wakehold: dev-only re-fire lane, ADDITIVE to (never
+        // instead of) the live path above — it fires anchor-independent so llvmpipe
+        // frames always show a fresh wake, and it keeps its own bookkeeping
+        // (clientWakeHoldFiredAt/-Count), so switching it off leaves the live
+        // clientSplashCycle state untouched. This branch is the flag's only consumer.
+        if (limboWakeHold) {
+            spawnHeldWake(entity, gameTime);
+        }
+    }
+
+    /** WAVE5 (F-105 A) A1: entry point for {@code FxDevClient} ({@code /eclipsefx limbo wakehold}). */
+    public static void setLimboWakeHold(boolean on) {
+        limboWakeHold = on;
+    }
+
+    /** WAVE5 (F-105 A) A7: read-only hold state for the {@code /eclipsefx holds} inventory. */
+    public static boolean limboWakeHold() {
+        return limboWakeHold;
     }
 
     /** This rower's own controller instance ({@code null} before the first tick). */
@@ -318,7 +359,17 @@ public class DeckhandRenderer extends EclipseGeoRenderer<DeckhandEntity> {
      * randomly, so it gets zero velocity and merely twinkles where the blade bit).
      */
     private static void spawnGhostWake(DeckhandEntity entity, double x, double surfaceY, double z) {
-        boolean reduced = EclipseClientConfig.reducedFx();
+        spawnGhostWake(entity, x, surfaceY, z, EclipseClientConfig.reducedFx());
+    }
+
+    /**
+     * WAVE5 (F-105 A): the wake body with the {@code reducedFx} decision hoisted to the
+     * caller — the live path above keeps passing the config value (bit-identical), the
+     * A1 wakehold passes {@code false} because an operator hold draws at full strength
+     * even under {@code reducedFx} (the streakhold override precedent).
+     */
+    private static void spawnGhostWake(DeckhandEntity entity, double x, double surfaceY, double z,
+            boolean reduced) {
         int flecks = reduced ? 2 : 4 + entity.getRandom().nextInt(3);
         for (int p = 0; p < flecks; p++) {
             // Spread astern over ~1.5 blocks so the line reads as a drift trail, not a puff.
@@ -332,6 +383,53 @@ public class DeckhandRenderer extends EclipseGeoRenderer<DeckhandEntity> {
             entity.level().addParticle(ParticleTypes.SOUL,
                     x - drift, surfaceY + 0.05D, z + jitter,
                     -0.05D, 0.0D, 0.0D);
+        }
+    }
+
+    /**
+     * WAVE5 (F-105 A) A1 — the held wake: re-fires the C2 catch splash + F-104 ghost
+     * wake at this rower's blade tip, throttled to one burst per
+     * {@value #WAKE_HOLD_INTERVAL_TICKS}t of level time, INDEPENDENT of the 60t row
+     * anchor and of the authored catch phase. Self-contained on purpose: it reuses the
+     * measured tip constants and {@link #spawnGhostWake} but keeps its own bookkeeping
+     * ({@code clientWakeHoldFiredAt}/{@code clientWakeHoldCount}) so the live path's
+     * {@code clientSplashCycle} dedup state is never touched — {@code off} therefore
+     * restores the shipped behavior with zero residue. Full fleck count even under
+     * {@code reducedFx} (explicit operator override, streakhold precedent).
+     *
+     * <p>One DEBUG probe line per re-fire ({@code [w5a-wakehold]}, the
+     * {@code [c2-splash]} pattern) carrying the per-rower fire count.</p>
+     */
+    private static void spawnHeldWake(DeckhandEntity entity, long gameTime) {
+        if (entity.clientWakeHoldFiredAt != Long.MIN_VALUE
+                && gameTime - entity.clientWakeHoldFiredAt < WAKE_HOLD_INTERVAL_TICKS) {
+            return;
+        }
+        float yawRad = entity.yBodyRot * Mth.DEG_TO_RAD;
+        // Same tip math as spawnCatchSplash: model -Z (outboard) + along-hull offset.
+        double fwdX = -Mth.sin(yawRad);
+        double fwdZ = Mth.cos(yawRad);
+        double along = isPortSide(entity) ? -TIP_ALONG_BLOCKS : TIP_ALONG_BLOCKS;
+        double x = entity.getX() + fwdX * TIP_OUT_BLOCKS + fwdZ * along;
+        double z = entity.getZ() + fwdZ * TIP_OUT_BLOCKS - fwdX * along;
+        BlockPos.MutableBlockPos probe = BlockPos.containing(x, entity.getY() + 0.5D, z).mutable();
+        for (int i = 0; i < 7; i++) {
+            if (!entity.level().getFluidState(probe).isEmpty()) {
+                double surfaceY = probe.getY() + 0.9D;
+                for (int p = 0; p < 3; p++) {
+                    entity.level().addParticle(ParticleTypes.SPLASH,
+                            x + (entity.getRandom().nextDouble() - 0.5D) * 0.4D, surfaceY,
+                            z + (entity.getRandom().nextDouble() - 0.5D) * 0.4D,
+                            0.0D, 0.06D, 0.0D);
+                }
+                spawnGhostWake(entity, x, surfaceY, z, false);
+                entity.clientWakeHoldFiredAt = gameTime;
+                entity.clientWakeHoldCount++;
+                EclipseMod.LOGGER.debug("[w5a-wakehold] rower {} re-fired: gameTime {} count {}",
+                        entity.getId(), gameTime, entity.clientWakeHoldCount);
+                return;
+            }
+            probe.move(0, -1, 0);
         }
     }
 

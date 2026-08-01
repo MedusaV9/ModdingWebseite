@@ -63,7 +63,10 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * FX-only replays), {@code storm add|remove|bolt|flashhold|perfprobe} (the last two are
  * client-visual dev overrides: B6 flash HOLD + the V6 frametime probe),
  * {@code limbo streakhold on|off} (F-104: client-visual shooting-streak HOLD for the
- * limbo sky pass — the flashhold pattern), {@code rift <x y z> <width> / rift close},
+ * limbo sky pass — the flashhold pattern), {@code limbo wakehold on|off} +
+ * {@code tyrant flickerhold on|off|blackout} + {@code holds} (WAVE5 F-105 A: blade-wake
+ * re-fire HOLD, desperation-blackout HOLD, and the read-only hold inventory),
+ * {@code rift <x y z> <width> / rift close},
  * {@code supplybeam test} (toggle), {@code sun debug} (HUD cross), {@code viewdist <n|reset>},
  * {@code caption <style> <key> [ticks]}. Client-only actions travel via
  * {@link FxDevPayloads}.</p>
@@ -209,7 +212,24 @@ public final class FxDevCommands {
                                 .then(Commands.literal("on")
                                         .executes(ctx -> limboStreakHold(ctx, true)))
                                 .then(Commands.literal("off")
-                                        .executes(ctx -> limboStreakHold(ctx, false)))))
+                                        .executes(ctx -> limboStreakHold(ctx, false))))
+                        // WAVE5 (F-105 A): A1 blade-wake hold (flashhold pattern).
+                        .then(Commands.literal("wakehold")
+                                .then(Commands.literal("on")
+                                        .executes(ctx -> limboWakeHold(ctx, true)))
+                                .then(Commands.literal("off")
+                                        .executes(ctx -> limboWakeHold(ctx, false)))))
+                // WAVE5 (F-105 A): A2 tyrant desperation-flicker hold.
+                .then(Commands.literal("tyrant")
+                        .then(Commands.literal("flickerhold")
+                                .then(Commands.literal("on")
+                                        .executes(ctx -> tyrantFlickerHold(ctx, "on")))
+                                .then(Commands.literal("off")
+                                        .executes(ctx -> tyrantFlickerHold(ctx, "off")))
+                                .then(Commands.literal("blackout")
+                                        .executes(ctx -> tyrantFlickerHold(ctx, "blackout")))))
+                // WAVE5 (F-105 A): A7 read-only dev-hold inventory.
+                .then(Commands.literal("holds").executes(FxDevCommands::holdsStatus))
                 .then(Commands.literal("rift")
                         .then(Commands.literal("close").executes(FxDevCommands::riftClose))
                         .then(Commands.argument("pos", Vec3Argument.vec3())
@@ -444,6 +464,65 @@ public final class FxDevCommands {
     }
 
     /**
+     * WAVE5 (F-105 A) A1: {@code limbo wakehold on|off} — flips the CLIENT-side
+     * blade-wake HOLD ({@code DeckhandRenderer.setLimboWakeHold}) on the executing
+     * player, via the same dev lane as {@code limbo streakhold}. While ON, every
+     * VISIBLE rowing deckhand re-fires its C2 catch-splash + F-104 ghost wake
+     * throttled (min. every 10t level time, per rower) INDEPENDENT of the 60t row
+     * anchor — on a software-rendered client (seconds per frame) each present
+     * interval then carries fresh wake particles instead of a long-dead sub-2s
+     * burst. OFF restores the live C2/C2-R2 path bit-identically (the hold branch
+     * is the flag's only consumer).
+     */
+    private static int limboWakeHold(CommandContext<CommandSourceStack> ctx, boolean on)
+            throws CommandSyntaxException {
+        ServerPlayer player = ctx.getSource().getPlayerOrException();
+        FxDevPayloads.sendAction(player, FxDevPayloads.ACTION_LIMBO_WAKEHOLD,
+                on ? "on" : "off", Vec3.ZERO, 0.0F);
+        reply(ctx, on
+                ? "limbo wakehold ON → your client: every visible rower re-fires splash+ghost-wake"
+                        + " (throttled ~10t) — '/eclipsefx limbo wakehold off' restores the live 60t path"
+                : "limbo wakehold OFF → your client (live per-cycle catch splash resumes,"
+                        + " no residue)");
+        return 1;
+    }
+
+    /**
+     * WAVE5 (F-105 A) A2: {@code tyrant flickerhold on|off|blackout} — overrides the
+     * CLIENT-side Fog Tyrant desperation blackout ({@code FogTyrantRenderer
+     * .setTyrantFlickerHold}). {@code blackout} pins the emissive dropout permanently
+     * (photographs the blackout state), {@code on} stretches the 1–2t stutter to a
+     * 20t-on/20t-off cadence, {@code off} restores the live phase-3-gated SplitMix64
+     * hash schedule bit-identically. Phase-independent by design — it is a photo aid,
+     * not a mechanic.
+     */
+    private static int tyrantFlickerHold(CommandContext<CommandSourceStack> ctx, String mode)
+            throws CommandSyntaxException {
+        ServerPlayer player = ctx.getSource().getPlayerOrException();
+        FxDevPayloads.sendAction(player, FxDevPayloads.ACTION_TYRANT_FLICKERHOLD,
+                mode, Vec3.ZERO, 0.0F);
+        reply(ctx, switch (mode) {
+            case "blackout" -> "tyrant flickerhold BLACKOUT → your client: emissive pass held dark"
+                    + " (crown/eye/core off) — '/eclipsefx tyrant flickerhold off' restores";
+            case "on" -> "tyrant flickerhold ON → your client: stretched 20t-on/20t-off blackout"
+                    + " cadence — '/eclipsefx tyrant flickerhold off' restores";
+            default -> "tyrant flickerhold OFF → your client (live phase-3 hash schedule resumes)";
+        });
+        return 1;
+    }
+
+    /**
+     * WAVE5 (F-105 A) A7: {@code holds} — read-only status overview of the four
+     * client-side dev holds (flashhold / streakhold / wakehold / flickerhold) in the
+     * operator's chat, so stale holds cannot silently poison later acceptance photos.
+     */
+    private static int holdsStatus(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
+        ServerPlayer player = ctx.getSource().getPlayerOrException();
+        FxDevPayloads.sendAction(player, FxDevPayloads.ACTION_HOLDS_STATUS, "", Vec3.ZERO, 0.0F);
+        return 1;
+    }
+
+    /**
      * POLISH4 / STORM-MASS V6: {@code storm perfprobe [seconds]} — starts the
      * client-side frametime probe ({@code FrameTimeProbe}) on the executing player;
      * the report (min/avg/p95/max + tier context) lands in their chat and client log.
@@ -564,6 +643,13 @@ public final class FxDevCommands {
                         Danger.SAFE, ClickAction.SUGGEST),
                 doc("fx.limbo.streakhold", "/eclipsefx limbo streakhold", "dev.eclipse.doc.fx.limbo.streakhold",
                         Danger.SAFE, ClickAction.SUGGEST),
+                // WAVE5 (F-105 A): A1/A2 holds + A7 hold inventory.
+                doc("fx.limbo.wakehold", "/eclipsefx limbo wakehold", "dev.eclipse.doc.fx.limbo.wakehold",
+                        Danger.SAFE, ClickAction.SUGGEST),
+                doc("fx.tyrant.flickerhold", "/eclipsefx tyrant flickerhold", "dev.eclipse.doc.fx.tyrant.flickerhold",
+                        Danger.SAFE, ClickAction.SUGGEST),
+                doc("fx.holds", "/eclipsefx holds", "dev.eclipse.doc.fx.holds",
+                        Danger.SAFE, ClickAction.RUN),
                 doc("fx.rift", "/eclipsefx rift", "dev.eclipse.doc.fx.rift", Danger.SAFE, ClickAction.SUGGEST),
                 doc("fx.supplybeam", "/eclipsefx supplybeam test", "dev.eclipse.doc.fx.supplybeam",
                         Danger.SAFE, ClickAction.RUN),

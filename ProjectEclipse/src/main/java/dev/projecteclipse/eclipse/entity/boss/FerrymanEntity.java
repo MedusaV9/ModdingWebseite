@@ -33,6 +33,7 @@ import dev.projecteclipse.eclipse.registry.EclipseItems;
 import dev.projecteclipse.eclipse.registry.EclipseSounds;
 import dev.projecteclipse.eclipse.ritual.FinaleRitual;
 import dev.projecteclipse.eclipse.timeline.AnnouncementService;
+import dev.projecteclipse.eclipse.veilfx.FxAnchors;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -244,6 +245,8 @@ public class FerrymanEntity extends EclipseGeoMonster {
     private UUID gazeTargetId;
     private int noFighterTicks;
     private int lastKneelCueTick = -KNEEL_CUE_INTERVAL_TICKS;
+    /** WAVE5 (F-105 A) A5: last crescendo-pulse tick (transient; cadence ≤30t). */
+    private int lastCrescendoTick = -1000;
     /** Players already shown the kneel actionbar hint this crew phase (first hit only). */
     private final Set<UUID> kneelHintShown = new HashSet<>();
     /** F-046b finale special-attack script (Seelenernte / Ruderschlag-Welle / Geisterbeschwörung). */
@@ -570,6 +573,7 @@ public class FerrymanEntity extends EclipseGeoMonster {
         if (tickReset(level, fighters)) {
             return;
         }
+        tickHeartbeatCrescendo(fighters); // WAVE5 (F-105 A) A5: sub-10% kill-window pulse.
         if (this.tickCount % DOT_INTERVAL_TICKS == 0) {
             tickWaterDot(level, fighters);
         }
@@ -1024,6 +1028,12 @@ public class FerrymanEntity extends EclipseGeoMonster {
                 clearGaze("marked player lost");
                 return;
             }
+            // WAVE5 (F-105 A) A4: marked-player spotlight — a thin END_ROD column over
+            // the hunted player every 20t, so teammates can read the mark and peel
+            // (the mark itself telegraphs only to the victim via vignette + bell).
+            if (this.gazeTicksLeft % 20 == 0) {
+                spawnMarkSpotlight(level, marked);
+            }
             if (--this.gazeTicksLeft <= 0) {
                 clearGaze("mark expired");
             }
@@ -1063,6 +1073,54 @@ public class FerrymanEntity extends EclipseGeoMonster {
         this.gazeTargetId = null;
         this.gazeTicksLeft = 0;
         setGazing(false);
+    }
+
+    /**
+     * WAVE5 (F-105 A) A4 — marked-player spotlight: a thin server-side END_ROD column
+     * (~2 blocks) at the hunted player, visible to EVERYONE aboard, fired on the
+     * caller's 20t cadence (statically photographable; max 1 probe line/s):
+     * {@code [w5a-spotlight] <victim> ferryman}.
+     */
+    private void spawnMarkSpotlight(ServerLevel level, ServerPlayer marked) {
+        for (int i = 0; i <= 8; i++) {
+            level.sendParticles(ParticleTypes.END_ROD,
+                    marked.getX(), marked.getY() + 0.2D + i * 0.225D, marked.getZ(),
+                    1, 0.03D, 0.02D, 0.03D, 0.0D);
+        }
+        EclipseMod.LOGGER.debug("[w5a-spotlight] {} ferryman", marked.getScoreboardName());
+    }
+
+    /**
+     * WAVE5 (F-105 A) A5 — sub-10%-HP heartbeat crescendo (IDEA-16 #10): under 10% HP
+     * every living fighter aboard hears the WARDEN_HEARTBEAT on a cadence that falls
+     * with the boss (30t → 20t → 12t, HP-staggered), so the kill window reads over the
+     * deck chaos. Throttled by a last-fire tick mark ({@code DEFLECT_CUE_INTERVAL_TICKS}
+     * pattern). One DEBUG probe per pulse: {@code [w5a-crescendo] ferryman hp=<f> cadence=<t>}.
+     */
+    private void tickHeartbeatCrescendo(List<ServerPlayer> fighters) {
+        int cadence = crescendoCadenceTicks();
+        if (cadence < 0 || this.tickCount - this.lastCrescendoTick < cadence) {
+            return;
+        }
+        this.lastCrescendoTick = this.tickCount;
+        for (ServerPlayer player : fighters) {
+            player.connection.send(new ClientboundSoundPacket(
+                    BuiltInRegistries.SOUND_EVENT.wrapAsHolder(SoundEvents.WARDEN_HEARTBEAT),
+                    SoundSource.HOSTILE, player.getX(), player.getY(), player.getZ(),
+                    1.2F, 0.8F, this.random.nextLong()));
+        }
+        EclipseMod.LOGGER.debug("[w5a-crescendo] ferryman hp={} cadence={}",
+                String.format(java.util.Locale.ROOT, "%.3f", this.getHealth() / this.getMaxHealth()),
+                cadence);
+    }
+
+    /** WAVE5 (F-105 A) A5: ≤10% HP → 30t, ≤6.6% → 20t, ≤3.3% → 12t; −1 = inactive. */
+    private int crescendoCadenceTicks() {
+        float fraction = this.getHealth() / this.getMaxHealth();
+        if (fraction > 0.10F) {
+            return -1;
+        }
+        return fraction > 0.0666F ? 30 : fraction > 0.0333F ? 20 : 12;
     }
 
     // --- participants / wipe / reset ---
@@ -1316,11 +1374,38 @@ public class FerrymanEntity extends EclipseGeoMonster {
             }
             EclipseMod.LOGGER.info("Ferryman death collapse: final bell tolled at deathTime {} "
                     + "(crown verdict coda + shockwave exhale fired)", this.deathTime);
+            placeTrophyMonument(serverLevel); // WAVE5 (F-105 A) A6: the toll leaves a lantern.
         }
         if (this.deathTime >= DEATH_DURATION_TICKS && !this.isRemoved()) {
             // Vanilla removal path (poof cloud + KILLED removal), just 50t later.
             serverLevel.broadcastEntityEvent(this, (byte) 60);
             this.remove(Entity.RemovalReason.KILLED);
+        }
+    }
+
+    /**
+     * WAVE5 (F-105 A) A6 — boss trophy monument (IDEA-16 #5): the final toll leaves
+     * exactly ONE soul lantern on the stern deck (the great-lantern's flame guttered
+     * with him; this small one stays lit as the crossing's memorial). The stern cell is
+     * ship-relative ({@code (STERN_X, deckY+1, 0)} — the kneel anchor's block), so it
+     * survives {@link #restoreShip}, which only sweeps water back into carved cells.
+     * Gated on {@link EclipseWorldState#isFerrymanDefeated} (set by {@link #die} before
+     * the collapse reaches this keyframe) plus the shared dedup/air-check walk
+     * ({@link HeraldEntity#placeMonumentBlock}), so re-summons never stack a second
+     * lantern. Publishes the {@code wave5_trophy_ferryman} {@link FxAnchors} anchor for
+     * the client wisp loop ({@code veilfx/Wave5BossFxRows}; {@code reducedFx} skips).
+     * Probe: {@code [w5a-trophy] ferryman …} (INFO, one line per kill).
+     */
+    private void placeTrophyMonument(ServerLevel level) {
+        if (!EclipseWorldState.get(level.getServer()).isFerrymanDefeated()) {
+            EclipseMod.LOGGER.info("[w5a-trophy] ferryman: defeat flag unset — no monument");
+            return;
+        }
+        BlockPos stern = new BlockPos(STERN_X, this.deckY + 1, 0);
+        BlockPos placed = HeraldEntity.placeMonumentBlock(level, stern,
+                Blocks.SOUL_LANTERN.defaultBlockState(), "ferryman");
+        if (placed != null) {
+            FxAnchors.set(FxCues.cue("wave5_trophy_ferryman"), level, Vec3.atCenterOf(placed));
         }
     }
 

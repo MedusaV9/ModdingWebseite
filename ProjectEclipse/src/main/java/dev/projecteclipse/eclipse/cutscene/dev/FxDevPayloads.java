@@ -51,6 +51,12 @@ public final class FxDevPayloads {
     public static final int ACTION_STORM_PERFPROBE = 10;
     /** F-104: limbo shooting-streak hold — {@code arg} = "on"/"off". */
     public static final int ACTION_LIMBO_STREAKHOLD = 11;
+    /** WAVE5 (F-105 A): limbo blade-wake hold — {@code arg} = "on"/"off". */
+    public static final int ACTION_LIMBO_WAKEHOLD = 12;
+    /** WAVE5 (F-105 A): tyrant desperation-flicker hold — {@code arg} = "on"/"off"/"blackout". */
+    public static final int ACTION_TYRANT_FLICKERHOLD = 13;
+    /** WAVE5 (F-105 A): read-only status overview of all four dev holds. */
+    public static final int ACTION_HOLDS_STATUS = 14;
 
     private FxDevPayloads() {}
 

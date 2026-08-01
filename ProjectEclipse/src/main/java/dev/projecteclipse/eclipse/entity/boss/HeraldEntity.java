@@ -23,6 +23,7 @@ import dev.projecteclipse.eclipse.network.fx.FxCues;
 import dev.projecteclipse.eclipse.network.fx.FxPayloads;
 import dev.projecteclipse.eclipse.registry.EclipseItems;
 import dev.projecteclipse.eclipse.registry.EclipseSounds;
+import dev.projecteclipse.eclipse.veilfx.FxAnchors;
 import dev.projecteclipse.eclipse.timeline.AnnouncementService;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.ParticleTypes;
@@ -55,6 +56,8 @@ import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.HitResult;
@@ -224,6 +227,8 @@ public class HeraldEntity extends EclipseGeoMonster {
     private int noPlayerTicks;
     private int lastPhase = 1;
     private int lastDeflectCueTick = -DEFLECT_CUE_INTERVAL_TICKS;
+    /** WAVE5 (F-105 A) A5: last crescendo-pulse tick (transient; cadence ≤30t). */
+    private int lastCrescendoTick = -1000;
     // W4 loot ceremony (transient — die() runs exactly once, so a restart mid-collapse
     // loses only the staggering, never the guaranteed corpse drops).
     private final ArrayDeque<UUID> deathPayoutQueue = new ArrayDeque<>();
@@ -400,6 +405,7 @@ public class HeraldEntity extends EclipseGeoMonster {
         }
         tickMovement();
         tickArenaLock(level);
+        tickHeartbeatCrescendo(level); // WAVE5 (F-105 A) A5: sub-10% kill-window pulse.
         int phase = getPhase();
         if (phase < 3) {
             tickVolley(level, phase);
@@ -708,6 +714,12 @@ public class HeraldEntity extends EclipseGeoMonster {
             abortGaze("target lost");
             return;
         }
+        // WAVE5 (F-105 A) A4: marked-player spotlight — a thin END_ROD column over the
+        // gaze victim every 20t so TEAMMATES can read who is locked and peel (the
+        // charge itself telegraphs only to the victim via vignette + heartbeat).
+        if (this.gazeChargeTimer % 20 == 0) {
+            spawnMarkSpotlight(level, target, "herald");
+        }
         // Only the locked player hears the heartbeat (spec: private cue).
         if (this.gazeChargeTimer % 10 == 0) {
             sendPrivateHeartbeat(target);
@@ -754,6 +766,23 @@ public class HeraldEntity extends EclipseGeoMonster {
         this.gazeChargeTimer = -1;
     }
 
+    /**
+     * WAVE5 (F-105 A) A4 — marked-player spotlight: a thin server-side END_ROD column
+     * (~2 blocks) at the marked player, visible to EVERYONE nearby, fired on the
+     * caller's 20t cadence. Statically photographable (the particles live ~1s and are
+     * re-fed every second), which is exactly what the llvmpipe acceptance needs. One
+     * DEBUG probe line per send window ({@code [w5a-spotlight] <victim> <boss>},
+     * throttled to the 20t cadence = max 1 line/s).
+     */
+    private void spawnMarkSpotlight(ServerLevel level, ServerPlayer target, String boss) {
+        for (int i = 0; i <= 8; i++) {
+            level.sendParticles(ParticleTypes.END_ROD,
+                    target.getX(), target.getY() + 0.2D + i * 0.225D, target.getZ(),
+                    1, 0.03D, 0.02D, 0.03D, 0.0D);
+        }
+        EclipseMod.LOGGER.debug("[w5a-spotlight] {} {}", target.getScoreboardName(), boss);
+    }
+
     /** WARDEN_HEARTBEAT audible ONLY to the locked player (sound packet straight to them). */
     private void sendPrivateHeartbeat(ServerPlayer target) {
         target.connection.send(new ClientboundSoundPacket(
@@ -761,6 +790,38 @@ public class HeraldEntity extends EclipseGeoMonster {
                         .wrapAsHolder(SoundEvents.WARDEN_HEARTBEAT),
                 SoundSource.HOSTILE, target.getX(), target.getY(), target.getZ(),
                 1.2F, 0.8F, this.random.nextLong()));
+    }
+
+    /**
+     * WAVE5 (F-105 A) A5 — sub-10%-HP heartbeat crescendo (IDEA-16 #10): once the bar
+     * drops under 10%, EVERY living participant hears the WARDEN_HEARTBEAT (the
+     * existing private-heartbeat plumbing, now fanned out) on a cadence that falls
+     * with the boss — 30t → 20t → 12t, HP-staggered — so the whole roster feels the
+     * kill window closing. Throttled by a last-fire tick mark (the
+     * {@code DEFLECT_CUE_INTERVAL_TICKS} pattern). One DEBUG probe line per pulse:
+     * {@code [w5a-crescendo] herald hp=<f> cadence=<t>}.
+     */
+    private void tickHeartbeatCrescendo(ServerLevel level) {
+        int cadence = crescendoCadenceTicks();
+        if (cadence < 0 || this.tickCount - this.lastCrescendoTick < cadence) {
+            return;
+        }
+        this.lastCrescendoTick = this.tickCount;
+        for (ServerPlayer player : livingParticipants(level)) {
+            sendPrivateHeartbeat(player);
+        }
+        EclipseMod.LOGGER.debug("[w5a-crescendo] herald hp={} cadence={}",
+                String.format(java.util.Locale.ROOT, "%.3f", this.getHealth() / this.getMaxHealth()),
+                cadence);
+    }
+
+    /** WAVE5 (F-105 A) A5: ≤10% HP → 30t, ≤6.6% → 20t, ≤3.3% → 12t; −1 = inactive. */
+    private int crescendoCadenceTicks() {
+        float fraction = this.getHealth() / this.getMaxHealth();
+        if (fraction > 0.10F) {
+            return -1;
+        }
+        return fraction > 0.0666F ? 30 : fraction > 0.0333F ? 20 : 12;
     }
 
     /** True when a block (sanctum pillar) interrupts the eye->player line at fire time. */
@@ -1199,8 +1260,73 @@ public class HeraldEntity extends EclipseGeoMonster {
                 SoundSource.HOSTILE, 1.5F, 0.6F);
         level.playSound(null, this.blockPosition(), SoundEvents.AMETHYST_CLUSTER_BREAK,
                 SoundSource.HOSTILE, 1.5F, 0.9F);
+        placeTrophyMonument(level); // WAVE5 (F-105 A) A6: the dais keeps a trophy.
         EclipseMod.LOGGER.info("Herald death collapse complete after {}t: core shattered on the dais "
                 + "(crown verdict coda fired)", this.deathTime);
+    }
+
+    /**
+     * WAVE5 (F-105 A) A6 — boss trophy monument (IDEA-16 #5): the shatter leaves exactly
+     * ONE amethyst cluster on the dais center — a permanent world mark that the day-7
+     * Herald fell here. Gated on the {@link EclipseWorldState#isHeraldDefeated} flag (set
+     * by {@link #die} before the collapse reaches this keyframe) plus a dedup scan +
+     * air-check over a tiny deterministic candidate ring (center first, then ±2 — the
+     * dais center is on the altar axis, which may be occupied), so re-summons/re-kills
+     * never stack a second monument. Also publishes the {@code wave5_trophy_herald}
+     * {@link FxAnchors} anchor: the client-side {@code veilfx/Wave5BossFxRows} windows a
+     * quiet WINDOWED {@code wave5_trophy_wisp} Photon loop over it ({@code reducedFx}
+     * skips; anchor is session-transient, the block is the persistent trophy).
+     * Probe: {@code [w5a-trophy] herald …} (INFO, one line per kill).
+     */
+    private void placeTrophyMonument(ServerLevel level) {
+        if (this.arenaCenter == null) {
+            return;
+        }
+        if (!EclipseWorldState.get(level.getServer()).isHeraldDefeated()) {
+            EclipseMod.LOGGER.info("[w5a-trophy] herald: defeat flag unset — no monument");
+            return;
+        }
+        BlockPos center = new BlockPos(Mth.floor(this.arenaCenter.x), this.groundY,
+                Mth.floor(this.arenaCenter.z));
+        BlockPos placed = placeMonumentBlock(level, center, Blocks.AMETHYST_CLUSTER.defaultBlockState(),
+                "herald");
+        if (placed != null) {
+            FxAnchors.set(FxCues.cue("wave5_trophy_herald"), level, Vec3.atCenterOf(placed));
+        }
+    }
+
+    /**
+     * WAVE5 (F-105 A) A6 shared placement walk (public: the four boss death scripts —
+     * all Team-A files — share it; Herald hosts it as the first monument in the arc):
+     * dedup scan over the candidate ring first (a standing monument anywhere on the
+     * ring wins — re-kills keep exactly one), then the first air cell whose
+     * {@code canSurvive} holds takes the block.
+     * @return the cell the monument stands in (fresh or pre-existing), or {@code null}
+     */
+    @Nullable
+    public static BlockPos placeMonumentBlock(ServerLevel level, BlockPos center,
+            BlockState monument, String boss) {
+        int[][] ring = {{0, 0}, {2, 0}, {-2, 0}, {0, 2}, {0, -2}};
+        for (int[] offset : ring) {
+            BlockPos pos = center.offset(offset[0], 0, offset[1]);
+            if (level.getBlockState(pos).is(monument.getBlock())) {
+                EclipseMod.LOGGER.info("[w5a-trophy] {}: monument already stands at {} — re-kill keeps exactly one",
+                        boss, pos.toShortString());
+                return pos;
+            }
+        }
+        for (int[] offset : ring) {
+            BlockPos pos = center.offset(offset[0], 0, offset[1]);
+            if (level.getBlockState(pos).isAir() && monument.canSurvive(level, pos)) {
+                level.setBlockAndUpdate(pos, monument);
+                EclipseMod.LOGGER.info("[w5a-trophy] {}: {} placed at {}", boss,
+                        monument.getBlock().getName().getString(), pos.toShortString());
+                return pos;
+            }
+        }
+        EclipseMod.LOGGER.info("[w5a-trophy] {}: no free candidate cell around {} — placement skipped (air-check)",
+                boss, center.toShortString());
+        return null;
     }
 
     // --- bossbar (wither pattern + W8 skin payload for every viewer incl. late joiners) ---

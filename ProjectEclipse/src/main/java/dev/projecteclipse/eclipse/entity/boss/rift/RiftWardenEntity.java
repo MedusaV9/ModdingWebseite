@@ -11,6 +11,7 @@ import java.util.UUID;
 import javax.annotation.Nullable;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.entity.boss.HeraldEntity;
 import dev.projecteclipse.eclipse.entity.dungeon.DungeonEntities;
 import dev.projecteclipse.eclipse.entity.dungeon.ShadowBoltProjectile;
 import dev.projecteclipse.eclipse.entity.geo.EclipseGeoAnimations;
@@ -21,6 +22,7 @@ import dev.projecteclipse.eclipse.network.S2CShakePayload;
 import dev.projecteclipse.eclipse.network.fx.FxCues;
 import dev.projecteclipse.eclipse.network.fx.FxPayloads;
 import dev.projecteclipse.eclipse.registry.EclipseItems;
+import dev.projecteclipse.eclipse.veilfx.FxAnchors;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.particles.ParticleTypes;
@@ -30,6 +32,7 @@ import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtUtils;
 import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.protocol.game.ClientboundSoundPacket;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
@@ -52,6 +55,7 @@ import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.monster.Monster;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.network.PacketDistributor;
@@ -175,6 +179,8 @@ public class RiftWardenEntity extends EclipseGeoMonster {
     private int noPlayerTicks;
     private int lastPhase = 1;
     private int lastDeflectCueTick = -DEFLECT_CUE_INTERVAL_TICKS;
+    /** WAVE5 (F-105 A) A5: last crescendo-pulse tick (transient; cadence ≤30t). */
+    private int lastCrescendoTick = -1000;
     private boolean addsSummoned;
     private boolean warnedBoltUnbound;
     // W4 loot ceremony (transient — die() runs exactly once, so a restart mid-implosion
@@ -366,6 +372,7 @@ public class RiftWardenEntity extends EclipseGeoMonster {
         if (tickReset(level)) {
             return;
         }
+        tickHeartbeatCrescendo(level); // WAVE5 (F-105 A) A5: sub-10% kill-window pulse.
         tickArenaLock(level);
         if (this.meleeCooldown > 0) {
             this.meleeCooldown--;
@@ -460,12 +467,48 @@ public class RiftWardenEntity extends EclipseGeoMonster {
         if (this.anchor == null) {
             return;
         }
+        // WAVE5 (F-105 A) A5: sub-10% window doubles the wall cadence (8t -> 4t) so the
+        // arena itself tightens with the crescendo (visual-only, same particle budget/call).
+        int wallInterval = crescendoCadenceTicks() > 0 ? 4 : 8;
         for (ServerPlayer player : livingParticipants(level)) {
             this.anchor.impulseInward(player, this.tickCount);
-            if (this.tickCount % 8 == 0) {
+            if (this.tickCount % wallInterval == 0) {
                 this.anchor.particleWall(level, player, getPhase());
             }
         }
+    }
+
+    /**
+     * WAVE5 (F-105 A) A5 — sub-10%-HP heartbeat crescendo (IDEA-16 #10): under 10% HP
+     * every living participant hears the WARDEN_HEARTBEAT on a cadence that falls with
+     * the boss (30t → 20t → 12t, HP-staggered). Throttled by a last-fire tick mark
+     * ({@code DEFLECT_CUE_INTERVAL_TICKS} pattern). One DEBUG probe per pulse:
+     * {@code [w5a-crescendo] warden hp=<f> cadence=<t>}.
+     */
+    private void tickHeartbeatCrescendo(ServerLevel level) {
+        int cadence = crescendoCadenceTicks();
+        if (cadence < 0 || this.tickCount - this.lastCrescendoTick < cadence) {
+            return;
+        }
+        this.lastCrescendoTick = this.tickCount;
+        for (ServerPlayer player : livingParticipants(level)) {
+            player.connection.send(new ClientboundSoundPacket(
+                    BuiltInRegistries.SOUND_EVENT.wrapAsHolder(SoundEvents.WARDEN_HEARTBEAT),
+                    SoundSource.HOSTILE, player.getX(), player.getY(), player.getZ(),
+                    1.2F, 0.8F, this.random.nextLong()));
+        }
+        EclipseMod.LOGGER.debug("[w5a-crescendo] warden hp={} cadence={}",
+                String.format(java.util.Locale.ROOT, "%.3f", this.getHealth() / this.getMaxHealth()),
+                cadence);
+    }
+
+    /** WAVE5 (F-105 A) A5: ≤10% HP → 30t, ≤6.6% → 20t, ≤3.3% → 12t; −1 = inactive. */
+    private int crescendoCadenceTicks() {
+        float fraction = this.getHealth() / this.getMaxHealth();
+        if (fraction > 0.10F) {
+            return -1;
+        }
+        return fraction > 0.0666F ? 30 : fraction > 0.0333F ? 20 : 12;
     }
 
     // --- P1/P2 movement + blade sweep ---
@@ -996,7 +1039,42 @@ public class RiftWardenEntity extends EclipseGeoMonster {
                 SoundSource.HOSTILE, 1.5F, 0.3F);
         level.playSound(null, this.blockPosition(), SoundEvents.WARDEN_SONIC_BOOM,
                 SoundSource.HOSTILE, 0.6F, 1.5F);
+        placeTrophyMonument(level); // WAVE5 (F-105 A) A6: the ring keeps a trophy.
         EclipseMod.LOGGER.info("Rift Warden death implosion complete after {}t", this.deathTime);
+    }
+
+    /**
+     * WAVE5 (F-105 A) A6 — boss trophy monument (IDEA-16 #5): the implosion leaves
+     * exactly ONE obsidian pedestal with an end rod on top at the tracked ring center
+     * (the rift sealed into stone, its last light pinned on it). The Warden has no
+     * {@code EclipseWorldState} defeat flag (vault fights are per-site), so the dedup
+     * is purely spatial: the shared candidate-ring walk
+     * ({@link HeraldEntity#placeMonumentBlock}) skips when a pedestal already stands
+     * — re-summons at the same vault never stack a second monument. The end-rod cap is
+     * best-effort (skipped with a log when its cell is blocked). Publishes the
+     * {@code wave5_trophy_warden} {@link FxAnchors} anchor for the client wisp loop
+     * ({@code veilfx/Wave5BossFxRows}; {@code reducedFx} skips).
+     * Probe: {@code [w5a-trophy] warden …} (INFO, one line per kill).
+     */
+    private void placeTrophyMonument(ServerLevel level) {
+        if (this.anchor == null) {
+            return;
+        }
+        BlockPos center = new BlockPos(Mth.floor(this.anchor.center().x), this.anchor.groundY(),
+                Mth.floor(this.anchor.center().z));
+        BlockPos placed = HeraldEntity.placeMonumentBlock(level, center,
+                Blocks.OBSIDIAN.defaultBlockState(), "warden");
+        if (placed == null) {
+            return;
+        }
+        BlockPos cap = placed.above();
+        if (level.getBlockState(cap).isAir()) {
+            level.setBlockAndUpdate(cap, Blocks.END_ROD.defaultBlockState());
+        } else if (!level.getBlockState(cap).is(Blocks.END_ROD)) {
+            EclipseMod.LOGGER.info("[w5a-trophy] warden: end-rod cap skipped — {} occupies {}",
+                    level.getBlockState(cap).getBlock().getName().getString(), cap.toShortString());
+        }
+        FxAnchors.set(FxCues.cue("wave5_trophy_warden"), level, Vec3.atCenterOf(cap));
     }
 
     /**

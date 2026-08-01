@@ -1,0 +1,12 @@
+{
+  "en_us": {
+    "dev.eclipse.doc.fx.limbo.wakehold": "Re-fire the C2 splash + ghost-wake on every visible rower blade on YOUR client (throttled ~10t, full fidelity even under reducedFx) so the sub-2-s wake becomes photographable; off restores the live 60t row-cycle path untouched.",
+    "dev.eclipse.doc.fx.tyrant.flickerhold": "Hold the Fog Tyrant's P3 desperation blackout on YOUR client: blackout pins the emissive pass dark, on stretches it to a 20t-on/20t-off cadence; off restores the live GameTime hash schedule bit-identically.",
+    "dev.eclipse.doc.fx.holds": "List the four client-side dev holds (storm flashhold / limbo streakhold / limbo wakehold / tyrant flickerhold) with their current state in chat — check before acceptance photos so no stale hold poisons a shot."
+  },
+  "de_de": {
+    "dev.eclipse.doc.fx.limbo.wakehold": "Feuert den C2-Splash + Ghost-Wake an jedem sichtbaren Ruderblatt auf DEINEM Client nach (gedrosselt ~10t, volle Qualität auch unter reducedFx), damit der Sub-2-s-Wake fotografierbar wird; off stellt den Live-60t-Ruderzyklus-Pfad unangetastet wieder her.",
+    "dev.eclipse.doc.fx.tyrant.flickerhold": "Hält den P3-Desperation-Blackout des Nebeltyrannen auf DEINEM Client: blackout klemmt den Emissive-Pass dauerhaft dunkel, on streckt ihn auf eine 20t-an/20t-aus-Kadenz; off stellt den Live-GameTime-Hash-Plan bit-identisch wieder her.",
+    "dev.eclipse.doc.fx.holds": "Listet die vier clientseitigen Dev-Holds (storm flashhold / limbo streakhold / limbo wakehold / tyrant flickerhold) mit aktuellem Zustand im Chat — vor Abnahmefotos prüfen, damit kein vergessener Hold ein Foto verfälscht."
+  }
+}

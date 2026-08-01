@@ -39,9 +39,45 @@ import software.bernie.geckolib.util.Color;
  * the whole emissive pass (crown, eye slit, storm-core) stutters out for 1–2 t at an
  * irregular deterministic cadence while the core still burns: the monarch's power is
  * failing with its body. See {@link EnrageGlowLayer#desperationBlackout}.</p>
+ *
+ * <p>WAVE5 (F-105 A) A2: {@code /eclipsefx tyrant flickerhold on|off|blackout} overrides
+ * that blackout for acceptance photos ({@code blackout} = held dark, {@code on} = 20t
+ * dark / 20t lit, {@code off} = the live hash schedule bit-identically restored).</p>
  */
 @OnlyIn(Dist.CLIENT)
 public class FogTyrantRenderer extends EclipseGeoRenderer<FogTyrantEntity> {
+    // WAVE5 (F-105 A) A2: the dev-only desperation-flicker HOLD, flipped exclusively
+    // by /eclipsefx tyrant flickerhold via FxDevClient (which also clears it on
+    // logout — the StormFlashDevHold hygiene pattern). Idle rule: defaults to OFF,
+    // and the hold branch at the top of EnrageGlowLayer.desperationBlackout is the
+    // flag's ONLY consumer — with the hold OFF the live phase-3-gated SplitMix64
+    // hash schedule runs bit-identically.
+    /** Live schedule (shipped W4 A1 behavior). */
+    public static final int FLICKER_HOLD_OFF = 0;
+    /** Stretched photo cadence: {@value #HOLD_CADENCE_DARK_TICKS}t dark / same lit. */
+    public static final int FLICKER_HOLD_CADENCE = 1;
+    /** Permanent blackout: the whole emissive pass stays dark. */
+    public static final int FLICKER_HOLD_BLACKOUT = 2;
+    /** A2 photo cadence half-period (20t dark / 20t lit instead of the live 1–2t). */
+    private static final int HOLD_CADENCE_DARK_TICKS = 20;
+
+    private static volatile int tyrantFlickerHold = FLICKER_HOLD_OFF;
+
+    /** WAVE5 (F-105 A) A2: entry point for {@code FxDevClient} ({@code /eclipsefx tyrant flickerhold}). */
+    public static void setTyrantFlickerHold(int mode) {
+        if (tyrantFlickerHold != mode) {
+            dev.projecteclipse.eclipse.EclipseMod.LOGGER.debug(
+                    "[w5a-flickerhold] hold {} -> {} (0=off 1=cadence 2=blackout)",
+                    tyrantFlickerHold, mode);
+        }
+        tyrantFlickerHold = mode;
+    }
+
+    /** WAVE5 (F-105 A) A7: read-only hold state for the {@code /eclipsefx holds} inventory. */
+    public static int tyrantFlickerHold() {
+        return tyrantFlickerHold;
+    }
+
     public FogTyrantRenderer(EntityRendererProvider.Context context) {
         super(context, FogTyrantEntity.GEO_ID, true);
         // Crown shards, eye slit, chest core, lance edges — plus the enrage overdrive pass.
@@ -109,6 +145,20 @@ public class FogTyrantRenderer extends EclipseGeoRenderer<FogTyrantEntity> {
          * ({@code setCoreLit(false)}), so {@code deathTime > 0} bails too.
          */
         private static boolean desperationBlackout(FogTyrantEntity tyrant) {
+            // WAVE5 (F-105 A) A2 flickerhold: dev-only override, phase-independent by
+            // design (it is the photo aid; the live path below stays phase-3-gated)
+            // and drawing even under reducedFx (explicit operator override — the
+            // streakhold precedent). OFF falls straight through to the unchanged
+            // shipped schedule — this branch is the flag's only consumer.
+            int hold = FogTyrantRenderer.tyrantFlickerHold();
+            if (hold != FogTyrantRenderer.FLICKER_HOLD_OFF) {
+                if (hold == FogTyrantRenderer.FLICKER_HOLD_BLACKOUT) {
+                    return true;
+                }
+                return Math.floorMod(tyrant.level().getGameTime(),
+                        2L * FogTyrantRenderer.HOLD_CADENCE_DARK_TICKS)
+                        < FogTyrantRenderer.HOLD_CADENCE_DARK_TICKS;
+            }
             if (tyrant.getPhase() < 3 || !tyrant.isCoreLit() || tyrant.deathTime > 0
                     || EclipseClientConfig.reducedFx()) {
                 return false;
