@@ -66,12 +66,15 @@
 		"trampoline": {
 			"title": "Trampolin-Tricks",
 			"hint": "Kurz vor der Matte tippen — in der Luft wischen für Tricks!",
+			"intro": "Tipp im grünen Fenster!",
 			"boost": "Boost!",
 			"butt": "Autsch – Po-Landung!",
 			"flip": "Salto!",
 			"spin": "Drehung!",
 			"twist": "Schraube!",
 			"combo": "Dreierpack! +12",
+			"mult": "Höhe ×{n}",
+			"tier": "Höhe ×{n}!",
 			"fails": "Bruchlandungen: {n}/{max}"
 		},
 		"veggieChop": {

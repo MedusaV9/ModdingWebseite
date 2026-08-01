@@ -11,11 +11,21 @@ extends Node3D
 const Stage3D := preload("res://scripts/minigames/games/_3dc_stage/stage3d.gd")
 const Actor := preload("res://scripts/minigames/games/_3da_stage/gooby_actor.gd")
 const Fx := preload("res://scripts/minigames/games/_3db_stage/fx3d.gd")
+const Puff := preload("res://scripts/minigames/games/_3dc_stage/puff3d.gd")
 
+## Geteilte weiche Punkt-Textur der Bühnen-Kits (Staub-Motes im Fensterlicht).
+const DOT_TEX := "res://assets/minigames/_3da_stage/vfx/circle_05.png"
 ## Oberkante des Sprungtuchs in Metern (Spielhöhe 0 = hier).
 const MAT_Y := 0.55
 const MAT_R := 1.15
 const INK := Color(0.24, 0.19, 0.17)
+## Pastelltöne der Wimpel — das Publikum trägt dieselbe Palette (W16).
+const CROWD_TINTS: Array[Color] = [
+	Color(0.95, 0.55, 0.66),
+	Color(1.0, 0.82, 0.4),
+	Color(0.38, 0.76, 0.7),
+	Color(0.58, 0.8, 0.42),
+]
 
 var stage: Node3D
 var gooby: Node3D
@@ -26,10 +36,16 @@ var _shock_ring: MeshInstance3D
 var _shock_mat: StandardMaterial3D
 var _tier_mats: Array[StandardMaterial3D] = []
 var _tier_chips: Array[Node3D] = []
+var _tier_flash: Array[float] = [0.0, 0.0]
 var _dust: GPUParticles3D
 var _trail: GPUParticles3D
 var _stars: Node3D
 var _squash := 0.0
+var _crowd_bodies: MultiMeshInstance3D
+var _crowd_heads: MultiMeshInstance3D
+var _crowd_ears: MultiMeshInstance3D
+var _crowd_spots: Array[Vector3] = []
+var _crowd_cheer := 0.0
 
 
 func setup_stage() -> void:
@@ -61,6 +77,8 @@ func setup_stage() -> void:
 	_build_trampoline()
 	_build_tiers()
 	_build_gooby()
+	_build_crowd()
+	_build_sunlight()
 	_build_fx()
 
 
@@ -295,21 +313,10 @@ func _build_side_props() -> void:
 		pad.position = Vector3(-4.1 + float(i) * 0.25, 0.17 + float(i) * 0.36, -3.3)
 		pad.rotation_degrees.y = 4.0 - float(i) * 7.0
 		add_child(pad)
-	var bench_seat := MeshInstance3D.new()
-	var seat_mesh := BoxMesh.new()
-	seat_mesh.size = Vector3(2.2, 0.12, 0.55)
-	seat_mesh.material = Fx.flat(Color(0.82, 0.64, 0.46))
-	bench_seat.mesh = seat_mesh
-	bench_seat.position = Vector3(4.1, 0.5, -3.6)
-	add_child(bench_seat)
-	for x: float in [3.25, 4.95]:
-		var leg := MeshInstance3D.new()
-		var leg_mesh := BoxMesh.new()
-		leg_mesh.size = Vector3(0.14, 0.5, 0.5)
-		leg_mesh.material = Fx.flat(Color(0.62, 0.47, 0.34))
-		leg.mesh = leg_mesh
-		leg.position = Vector3(x, 0.25, -3.6)
-		add_child(leg)
+	# Zwei Bänke fürs Publikum (Befund 2): rechts wie gehabt, die zweite
+	# hinten links vor der Rückwand — beide bekommen Mini-Gooby-Fans.
+	_add_bench(Vector3(4.1, 0.0, -3.6))
+	_add_bench(Vector3(-3.0, 0.0, -4.9))
 	var ball := MeshInstance3D.new()
 	var ball_mesh := SphereMesh.new()
 	ball_mesh.radius = 0.27
@@ -336,6 +343,25 @@ func _build_side_props() -> void:
 	leaves.mesh = leaves_mesh
 	leaves.position = Vector3(-4.5, 1.05, -4.8)
 	add_child(leaves)
+
+
+## Turnbank (Sitzbrett + zwei Beine) an `at` (Bodenhöhe y=0).
+func _add_bench(at: Vector3) -> void:
+	var seat := MeshInstance3D.new()
+	var seat_mesh := BoxMesh.new()
+	seat_mesh.size = Vector3(2.2, 0.12, 0.55)
+	seat_mesh.material = Fx.flat(Color(0.82, 0.64, 0.46))
+	seat.mesh = seat_mesh
+	seat.position = at + Vector3(0.0, 0.5, 0.0)
+	add_child(seat)
+	for dx: float in [-0.85, 0.85]:
+		var leg := MeshInstance3D.new()
+		var leg_mesh := BoxMesh.new()
+		leg_mesh.size = Vector3(0.14, 0.5, 0.5)
+		leg_mesh.material = Fx.flat(Color(0.62, 0.47, 0.34))
+		leg.mesh = leg_mesh
+		leg.position = at + Vector3(dx, 0.25, 0.0)
+		add_child(leg)
 
 
 func _build_trampoline() -> void:
@@ -475,6 +501,156 @@ func _build_gooby() -> void:
 	gooby.base_emotion = "happy"
 
 
+## W16 Befund 2 (M2-Muster danceParty): Mini-Gooby-Publikum als drei
+## MultiMeshes (Körper, Köpfe, Ohren). Fans sitzen auf beiden Bänken und
+## stehen an der Rückwand (dort sieht sie auch das Hochformat).
+func _build_crowd() -> void:
+	_crowd_spots = [
+		Vector3(3.5, 0.56, -3.6),
+		Vector3(4.1, 0.56, -3.62),
+		Vector3(4.7, 0.56, -3.58),
+		Vector3(-3.35, 0.56, -4.9),
+		Vector3(-2.65, 0.56, -4.92),
+		Vector3(-2.05, 0.0, -4.85),
+		Vector3(-1.6, 0.0, -5.0),
+		Vector3(1.6, 0.0, -4.95),
+		Vector3(2.05, 0.0, -4.8),
+	]
+	var body := SphereMesh.new()
+	body.radius = 0.2
+	body.height = 0.36
+	body.radial_segments = 10
+	body.rings = 5
+	var body_mat := Fx.flat(Color(0.93, 0.87, 0.78))
+	body_mat.vertex_color_use_as_albedo = true
+	body.material = body_mat
+	_crowd_bodies = _crowd_layer(body, _crowd_spots.size())
+	var head := SphereMesh.new()
+	head.radius = 0.13
+	head.height = 0.26
+	head.radial_segments = 10
+	head.rings = 5
+	head.material = body.material
+	_crowd_heads = _crowd_layer(head, _crowd_spots.size())
+	var ear := SphereMesh.new()
+	ear.radius = 0.045
+	ear.height = 0.22
+	ear.radial_segments = 6
+	ear.rings = 3
+	ear.material = body.material
+	_crowd_ears = _crowd_layer(ear, _crowd_spots.size() * 2)
+	for i in _crowd_spots.size():
+		var tint := Color(0.93, 0.87, 0.78).lerp(CROWD_TINTS[i % CROWD_TINTS.size()], 0.45)
+		_crowd_bodies.multimesh.set_instance_color(i, tint)
+		_crowd_heads.multimesh.set_instance_color(i, tint.lightened(0.12))
+		_crowd_ears.multimesh.set_instance_color(i * 2, tint.lightened(0.12))
+		_crowd_ears.multimesh.set_instance_color(i * 2 + 1, tint.lightened(0.12))
+	_pose_crowd(0.0)
+
+
+## Ein MultiMesh-Layer des Publikums (Körper/Köpfe/Ohren teilen das Muster).
+func _crowd_layer(mesh: Mesh, count: int) -> MultiMeshInstance3D:
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.use_colors = true
+	mm.mesh = mesh
+	mm.instance_count = count
+	var mmi := MultiMeshInstance3D.new()
+	mmi.multimesh = mm
+	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(mmi)
+	return mmi
+
+
+## Publikum posen: phasenversetztes Wippen; bei Jubel (_crowd_cheer) werden
+## die Hüpfer hoch und schnell — Muster danceParty `_pose_crowd`.
+func _pose_crowd(pulse: float) -> void:
+	if _crowd_bodies == null:
+		return
+	var bodies := _crowd_bodies.multimesh
+	var heads := _crowd_heads.multimesh
+	var ears := _crowd_ears.multimesh
+	var amp := 0.03 + _crowd_cheer * 0.18
+	var beat := 4.0 + _crowd_cheer * 3.5
+	for i in _crowd_spots.size():
+		var base := _crowd_spots[i]
+		var hop := maxf(0.0, sin(pulse * beat + float(i) * 1.7)) * amp
+		var sway := sin(pulse * 2.6 + float(i)) * 0.05
+		var at := base + Vector3(sway * 0.4, hop, 0.0)
+		bodies.set_instance_transform(i, Transform3D(Basis.IDENTITY, at + Vector3(0.0, 0.2, 0.0)))
+		heads.set_instance_transform(
+			i, Transform3D(Basis(Vector3.BACK, sway), at + Vector3(0.0, 0.42, 0.0))
+		)
+		for side in 2:
+			var ear_x := (-0.07 if side == 0 else 0.07) + sway * 0.5
+			ears.set_instance_transform(
+				i * 2 + side,
+				Transform3D(
+					Basis(Vector3.BACK, sway * 2.0), at + Vector3(ear_x, 0.56 + hop * 0.3, 0.0)
+				)
+			)
+
+
+## Befund 6: Fensterlicht LEBT — schräge Sonnenstrahl-Quads von den Scheiben
+## plus träge Staub-Motes in der Hallenluft (1 Draw-Call je Strahl + 1 für
+## die Motes; Pollen-Muster von hide_seek).
+func _build_sunlight() -> void:
+	for x: float in [-1.5, 1.5, 4.5]:
+		add_child(_light_beam(Vector3(x, 5.6, -5.3), Vector3(x - 1.3, 0.1, -2.4)))
+	var motes := (
+		Puff
+		. stream(
+			DOT_TEX,
+			{
+				"amount": 24,
+				"lifetime": 7.0,
+				"size": 0.08,
+				"dir": Vector3(-0.2, -0.1, 0.15),
+				"spread": 30.0,
+				"speed": Vector2(0.1, 0.35),
+				"gravity": Vector3(0.0, -0.02, 0.0),
+				"color": Color(1.0, 0.95, 0.72, 0.4),
+				"color_end": Color(1.0, 0.9, 0.6, 0.0),
+				"box": Vector3(4.5, 2.4, 1.6),
+				"local": false,
+			}
+		)
+	)
+	motes.position = Vector3(0.0, 3.2, -3.0)
+	add_child(motes)
+
+
+## Weicher additiver Lichtstrahl von `top` (Fenster) nach `bottom` (Boden);
+## der Alphaverlauf läuft am Boden auf null aus.
+func _light_beam(top: Vector3, bottom: Vector3) -> MeshInstance3D:
+	var quad := QuadMesh.new()
+	quad.size = Vector2(1.1, top.distance_to(bottom))
+	var gradient := Gradient.new()
+	gradient.set_color(0, Color(1.0, 1.0, 1.0, 0.55))
+	gradient.set_color(1, Color(1.0, 1.0, 1.0, 0.0))
+	var tex := GradientTexture2D.new()
+	tex.gradient = gradient
+	tex.fill_from = Vector2(0.5, 0.0)
+	tex.fill_to = Vector2(0.5, 1.0)
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	mat.disable_receive_shadows = true
+	mat.albedo_color = Color(1.0, 0.93, 0.66, 0.14)
+	mat.albedo_texture = tex
+	quad.material = mat
+	var beam := MeshInstance3D.new()
+	beam.mesh = quad
+	var up := (top - bottom).normalized()
+	var x_axis := up.cross(Vector3.BACK).normalized()
+	var z_axis := x_axis.cross(up).normalized()
+	beam.transform = Transform3D(Basis(x_axis, up, z_axis), (top + bottom) * 0.5)
+	beam.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return beam
+
+
 func _build_fx() -> void:
 	_dust = (
 		Fx
@@ -539,6 +715,27 @@ func apply_size(size: Vector2) -> void:
 		_tier_chips[i].position.x = 3.1 if landscape else 1.85
 
 
+## W16 Intro-Totale (M1): die Kamera schwebt aus der Hallen-Übersicht
+## (Banner + Fensterband im Bild) in die Spielpose; k=1 entspricht exakt
+## der apply_size-Pose — danach übernimmt wieder apply_size allein.
+func establish(k: float) -> void:
+	var e := 1.0 - ease(clampf(k, 0.0, 1.0), 0.4)
+	stage.camera.position = Vector3(-1.7 * e, 2.7 + 1.6 * e, 8.6 + 2.8 * e)
+	stage.camera.look_at(Vector3(0.0, 2.55 + 0.7 * e, 0.0), Vector3.UP)
+
+
+## Publikum jubeln lassen (Dreierpack, ×3-Durchbruch, Boost) — der Hüpfer
+## klingt über sync langsam wieder ab.
+func crowd_cheer(strength := 1.0) -> void:
+	_crowd_cheer = clampf(maxf(_crowd_cheer, strength), 0.0, 1.0)
+
+
+## Befund 5: Höhenband + Chip blitzen beim Stufen-Durchbruch (0 = ×2, 1 = ×3).
+func tier_flash(i: int) -> void:
+	if i >= 0 and i < _tier_flash.size():
+		_tier_flash[i] = 1.0
+
+
 ## Jeden Frame aus trampoline.gd: Höhe/Tricks/Schock in die Bühne spiegeln.
 func sync(
 	height: float,
@@ -576,15 +773,22 @@ func sync(
 	if _shock_ring.visible:
 		_shock_ring.scale = Vector3.ONE * (0.4 + ring_t * 2.6)
 		_shock_mat.albedo_color.a = shock * 0.7
-	# Höhenmarken leuchten und pulsieren, sobald der aktuelle Apex sie erreicht.
+	# Höhenmarken leuchten und pulsieren, sobald der aktuelle Apex sie
+	# erreicht; beim Stufen-Durchbruch blitzen Band + Chip (tier_flash).
 	var tiers: Array[float] = [
 		float(TrampolineLogic.TRAMP["TIER2_APEX"]), float(TrampolineLogic.TRAMP["TIER3_APEX"])
 	]
 	for i in _tier_mats.size():
 		var reached := apex >= tiers[i]
+		var flash := _tier_flash[i]
+		_tier_flash[i] = maxf(0.0, flash - delta * 1.4)
 		var glow := (1.0 + 0.35 * sin(pulse * 7.0)) if reached else 0.0
-		_tier_mats[i].emission_energy_multiplier = glow
-		_tier_mats[i].albedo_color.a = 0.85 if reached else 0.4
+		_tier_mats[i].emission_energy_multiplier = glow + flash * 2.2
+		_tier_mats[i].albedo_color.a = maxf(0.85 if reached else 0.4, flash)
+		_tier_chips[i].scale = Vector3.ONE * (1.0 + flash * 0.35)
+	# Publikum wippt mit; Jubel (Dreierpack/×3/Boost) klingt langsam ab.
+	_crowd_cheer = maxf(0.0, _crowd_cheer - delta * 0.55)
+	_pose_crowd(pulse)
 	# Flugspur nur bei ordentlich Tempo.
 	_trail.global_position = gooby.global_position + Vector3(0.0, 0.5, 0.0)
 	_trail.emitting = absf(vy) > 3.0 and stagger_left <= 0.0
@@ -627,6 +831,7 @@ func boost_fx() -> void:
 	gooby.emote("ecstatic", 0.8)
 	gooby.play_for("celebrate", 0.7)
 	stage.pulse_glow(0.7)
+	crowd_cheer(0.55)
 
 
 func butt_fx() -> void:

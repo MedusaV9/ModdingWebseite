@@ -66,12 +66,15 @@
 		"trampoline": {
 			"title": "Trampoline Tricks",
 			"hint": "Tap just before the mat — swipe mid-air for tricks!",
+			"intro": "Tap in the green window!",
 			"boost": "Boost!",
 			"butt": "Ouch — butt landing!",
 			"flip": "Flip!",
 			"spin": "Spin!",
 			"twist": "Twist!",
 			"combo": "All three! +12",
+			"mult": "Height ×{n}",
+			"tier": "Height ×{n}!",
 			"fails": "Crash landings: {n}/{max}"
 		},
 		"veggieChop": {
