@@ -130,6 +130,9 @@ func test_view_flow_swipe_cut_win_finish() -> void:
 	assert_eq(str(game.get("phase")), "select", "Start im Level-Select")
 	game.call("open_level", "campaign", 1)
 	assert_eq(str(game.get("phase")), "play", "Nach open_level im Spiel")
+	# G5 P36: Intro-Beat überspringen — das Gate sichert test_g5_gobnom_intro,
+	# hier zählt der Sim-/Eingabe-Flow NACH dem Beat.
+	game.set("_intro_left", 0.0)
 	var state: Dictionary = game.get("state")
 	assert_false(state.is_empty(), "Simulation initialisiert")
 	var tick_before := int(state["tick"])
@@ -186,6 +189,8 @@ func test_view_lost_shows_retry_and_records_nothing() -> void:
 	var gs := GameStateDouble.new()
 	var game := _make_game(gs, _make_ctx([], []))
 	game.call("open_level", "campaign", 1)
+	# G5 P36: Intro-Beat überspringen (das Gate sichert test_g5_gobnom_intro).
+	game.set("_intro_left", 0.0)
 	var state: Dictionary = game.get("state")
 	state["outcome"] = "lost"
 	game._process(1.0 / 30.0)

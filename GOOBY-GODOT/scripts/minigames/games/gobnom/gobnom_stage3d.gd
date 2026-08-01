@@ -38,6 +38,15 @@ const STAR_GOLD := Color("#FFD34D")
 const KITCHEN_WALL := Color("#EBD8B4")
 const COUNTER_WOOD := Color("#D2AC7C")
 
+## Spielpose der Kamera (frame()); auch End-Pose der Intro-Fahrt.
+const CAM_POS := Vector3(0.0, 0.0, 11.5)
+## Intro-Beat (G5 P36, mg-audit-b §2 P2): Start-Versatz der Fahrt — bei k=0
+## steht die Kamera links vorm Vorrats-Regal der Küchenwand (Establish),
+## bei k=1 EXAKT wieder auf CAM_POS (kein Ruck beim Übergang ins Spiel).
+const INTRO_POS_OFF := Vector3(-2.6, 1.2, -6.0)
+const INTRO_PITCH_DEG := 2.0
+const INTRO_YAW_DEG := 16.0
+
 var stage: Node3D
 var gooby: Node3D
 ## Welt(960×540) → Canvas-Pixel; die View hängt hier ihr _to_screen ein.
@@ -66,6 +75,8 @@ var _cushions: Array[Node3D] = []
 var _ground: MeshInstance3D
 var _backdrop: Node3D
 var _mood := "open"
+## Fahrt-Fortschritt der Intro-Kamera (1.0 = keine Fahrt, Spielpose).
+var _intro_k := 1.0
 var _mat_cushion_ready: StandardMaterial3D
 var _mat_cushion_wait: StandardMaterial3D
 var _mat_shooter: StandardMaterial3D
@@ -138,9 +149,23 @@ func setup_stage() -> void:
 ## Welt-Punkte deckungsgleich mit der 2D-Letterbox-Eingabe.
 func frame(vp: Vector2) -> void:
 	stage.apply_size(vp)
-	stage.camera.position = Vector3(0.0, 0.0, 11.5)
+	stage.camera.position = CAM_POS
 	stage.camera.rotation_degrees = Vector3.ZERO
 	stage.set_half_height(4.4, 11.5)
+
+
+## Intro-Fahrt Regal→Seil (G5 P36): k=0 rahmt das Vorrats-Regal, k=1 steht
+## EXAKT auf der frame()-Pose — gleiche Ease-Kurve wie gvz/carrot_catch.
+## Reduced Motion ruft direkt establish(1.0) (Fahrt übersprungen).
+func establish(k: float) -> void:
+	_intro_k = clampf(k, 0.0, 1.0)
+	_apply_intro_pose()
+
+
+func _apply_intro_pose() -> void:
+	var e := 1.0 - ease(_intro_k, 0.4)
+	stage.camera.position = CAM_POS + INTRO_POS_OFF * e
+	stage.camera.rotation_degrees = Vector3(INTRO_PITCH_DEG * e, INTRO_YAW_DEG * e, 0.0)
 
 
 ## Statische Level-Elemente aufbauen. state/balance kommen 1:1 aus der View;
@@ -219,7 +244,15 @@ func _layout_mouth(state: Dictionary) -> void:
 
 ## Jeden Frame: Bonbon, Seile, Blasen, Rotoren, Gläser und Swipe-Spur stellen.
 ## candy = Welt-Pixel des Bonbons, swipe_pts = Welt-Pixel aller Swipe-Zeiger.
+## Während der Intro-Fahrt raycasten alle _wall-Anker aus der NEUTRALEN
+## End-Pose (hide_seek-W16-Muster) — sonst klebten Bonbon/Seile an den
+## Screen-Pixeln der bewegten Kamera statt an der Welt; danach kommt die
+## Fahrt-Pose fürs Rendern wieder drauf.
 func sync_state(state: Dictionary, candy: Vector2, swipe_pts: Array, delta: float) -> void:
+	var intro_fahrt := _intro_k < 1.0
+	if intro_fahrt:
+		stage.camera.position = CAM_POS
+		stage.camera.rotation_degrees = Vector3.ZERO
 	stage.tick(delta)
 	gooby.tick(delta)
 	var tick := int(state["tick"])
@@ -273,6 +306,8 @@ func sync_state(state: Dictionary, candy: Vector2, swipe_pts: Array, delta: floa
 		i += 1
 		pad.material_override = _mat_cushion_ready if ready else _mat_cushion_wait
 	_sync_swipes(swipe_pts)
+	if intro_fahrt:
+		_apply_intro_pose()
 
 
 ## Seile als EIN MultiMesh gestreckter Zylinder (gleiche Durchhang-Kurve

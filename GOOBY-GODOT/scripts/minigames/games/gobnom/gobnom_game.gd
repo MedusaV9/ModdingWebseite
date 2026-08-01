@@ -26,6 +26,9 @@ const Stage := preload("res://scripts/minigames/games/gobnom/gobnom_stage3d.gd")
 
 const TICK_SEC := 1.0 / 60.0
 const BANNER_SEC := 2.2
+## G5 P36 Intro-Beat (mg-audit-b §2 P2): Kamerafahrt Regal→Seil, 1,5 s wie
+## der W14-Kanon (gvz/carrot_catch) — Sim UND Eingabe warten solange.
+const INTRO_S := 1.5
 const SWIPE_TRAIL_MAX := 14
 const TAP_RADIUS := 34.0
 
@@ -50,6 +53,8 @@ var session_score := 0
 var ended := false
 
 var _accum := 0.0
+## Rest des Intro-Beats (s): >0 ⇒ Kamerafahrt läuft, Sim/Eingabe gegated.
+var _intro_left := 0.0
 var _run_score := 0
 var _last_reported := 0
 var _banner_text := ""
@@ -140,7 +145,9 @@ func open_level(level_track: String, id: int) -> void:
 
 
 ## Gemeinsamer Spielstart-Rest (lokal UND Netz): Bühne, Banner, Select weg.
-func _enter_play(level: Dictionary) -> void:
+## with_intro=false überspringt den Establish-Beat (Netz-Rejoin mitten im
+## Lauf ist Aufholjagd, kein Rundenstart).
+func _enter_play(level: Dictionary, with_intro := true) -> void:
 	phase = "play"
 	_accum = 0.0
 	_run_score = 0
@@ -149,6 +156,10 @@ func _enter_play(level: Dictionary) -> void:
 	_stage.visible = true
 	_stage.frame(get_viewport_rect().size)
 	_stage.layout_level(state, balance)
+	# G5 P36 Intro-Beat: Kamera startet am Regal (Reduced Motion: sofort
+	# Spielpose) — _process zählt _intro_left herunter und gated die Sim.
+	_intro_left = INTRO_S if with_intro else 0.0
+	_stage.establish(0.0 if with_intro and not _rm() else 1.0)
 	var tag_key := "gobnom.hud.coop_level" if _is_coop() else "gobnom.hud.level"
 	var hint_key := "gobnom.intro.%s" % str(level.get("intro", ""))
 	_banner_hint = I18nService.t(hint_key) if I18nService.has_key(hint_key) else ""
@@ -198,16 +209,24 @@ func _process(delta: float) -> void:
 	if not is_active() or state.is_empty():
 		return
 	if phase == "play":
-		_accum += minf(delta, 0.25)
-		if _netz_active:
-			_netz_pump()
+		if _intro_left > 0.0:
+			# G5 P36 Intro-Beat: Kamera fährt vom Regal zum Seil, Sim und
+			# Lockstep-Pump warten — rein präsentational (Wandzeit), Tick-
+			# Zahlen/Seeds/Inputs bleiben unberührt; Partner-Frames puffern
+			# derweil über _on_netz_frame, der Start-Fence ging schon raus.
+			_intro_left = maxf(0.0, _intro_left - minf(delta, 0.25))
+			_stage.establish(1.0 if _rm() else 1.0 - _intro_left / INTRO_S)
 		else:
-			while _accum >= TICK_SEC and not GobnomLogic.is_over(state):
-				_accum -= TICK_SEC
-				_consume_events(GobnomLogic.step(state))
-		_report_live_score()
-		if GobnomLogic.is_over(state):
-			_on_run_over()
+			_accum += minf(delta, 0.25)
+			if _netz_active:
+				_netz_pump()
+			else:
+				while _accum >= TICK_SEC and not GobnomLogic.is_over(state):
+					_accum -= TICK_SEC
+					_consume_events(GobnomLogic.step(state))
+			_report_live_score()
+			if GobnomLogic.is_over(state):
+				_on_run_over()
 	_sync_stage(delta)
 	queue_redraw()
 
@@ -353,7 +372,9 @@ func _on_run_over() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if not is_active() or phase != "play" or state.is_empty():
+	# _intro_left: während des Establish-Beats nimmt das Spiel nichts an
+	# (hide_seek/pancake-Muster) — gilt lokal UND im Netz-Coop.
+	if not is_active() or phase != "play" or _intro_left > 0.0 or state.is_empty():
 		return
 	if event is InputEventScreenTouch:
 		if event.pressed:
@@ -833,7 +854,7 @@ func _on_netz_snapshot(data: Dictionary) -> void:
 	_netz.hash_ticks = netz_session.hash_every_ticks
 	state = _netz.state
 	_netz_active = true
-	_enter_play(level)
+	_enter_play(level, false)
 
 
 func _netz_abort(toast_key: String) -> void:
@@ -923,6 +944,11 @@ func _game_state() -> Object:
 
 func _is_coop() -> bool:
 	return not state.is_empty() and bool(state["coop"])
+
+
+## Reduced Motion — dieselbe Quelle wie gobnom_stage3d._rm() (UiTheme).
+func _rm() -> bool:
+	return ThemeService.is_reduced_motion(self)
 
 
 func _show_banner(text: String) -> void:
