@@ -15,10 +15,14 @@ import {COLORS} from '../theme';
  */
 const CARD_W = 442;
 const CARD_H = 932;
-/** Quellvideo (720×1280) und Spiel-Canvas darin (Host-Chrome außenrum). */
+/**
+ * Quellvideo (720×1280) und Spiel-Canvas darin (Host-Chrome außenrum).
+ * Nach dem G4-Letterbox-Umbau neu vermessen (Bewegungs-Differenz):
+ * Canvas = 472×1028 @ (124,60) — praktisch unverändert zu v3.
+ */
 const SRC_W = 720;
 const SRC_H = 1280;
-const RECT = {x: 124, y: 60, w: 470, h: 1027};
+const RECT = {x: 124, y: 60, w: 472, h: 1028};
 const S = Math.max(CARD_W / RECT.w, CARD_H / RECT.h);
 const TX = -(RECT.x * S - (CARD_W - RECT.w * S) / 2);
 const TY = -(RECT.y * S - (CARD_H - RECT.h * S) / 2);

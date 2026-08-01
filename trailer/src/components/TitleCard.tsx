@@ -20,13 +20,17 @@ const DOTS = [
   {x: 44, y: 8, s: 18, c: COLORS.gold, d: 14},
 ];
 
-/** Titelkarte: Icon federt ein, „GOOBY 5.0“, Pastel-Punkte treiben. */
+/**
+ * Titelkarte: Icon federt ein, „GOOBY 5.0“, Pastel-Punkte treiben.
+ * Storyboard v4: nur noch 2 Beats (72 Frames) — Titel/Sub federn früher
+ * ein als in v3 (26/48), damit beide vor dem Schnitt voll stehen.
+ */
 export const TitleCard: React.FC = () => {
   const frame = useCurrentFrame();
   const {fps} = useVideoConfig();
-  const pop = spring({frame: frame - 6, fps, config: {damping: 10, stiffness: 120, mass: 0.9}});
-  const titel = spring({frame: frame - 26, fps, config: {damping: 12, stiffness: 140}});
-  const sub = spring({frame: frame - 48, fps, config: {damping: 13, stiffness: 130}});
+  const pop = spring({frame: frame - 4, fps, config: {damping: 10, stiffness: 120, mass: 0.9}});
+  const titel = spring({frame: frame - 16, fps, config: {damping: 12, stiffness: 140}});
+  const sub = spring({frame: frame - 28, fps, config: {damping: 13, stiffness: 130}});
   const wobble = Math.sin(frame / 14) * 2.4;
 
   return (

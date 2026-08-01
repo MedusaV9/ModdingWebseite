@@ -13,9 +13,12 @@
   > http://creativecommons.org/licenses/by/4.0/
 
   Die Namensnennung ist zusätzlich im Trailer-Abspann (Outro) eingeblendet.
-- **Bearbeitung:** Für die Fassung v3 auf 57,6 s (96 Beats) gekürzt
-  (Start beim Downbeat bei 2,25 s, 2,2 s Fade-out ab 55,4 s), Loudness auf
-  ca. −14 LUFS normalisiert (ffmpeg `loudnorm`). Tempo: 100 BPM (per
+- **Bearbeitung:** Für die Fassung v4 (`GOOBY-5.1-Godot-Trailer.mp4`) auf
+  62,4 s (104 Beats) gekürzt — gleiches Rezept wie v3: Start beim Downbeat
+  bei 2,25 s, 2,2 s Fade-out ab 60,2 s, Loudness auf ca. −14 LUFS
+  normalisiert (ffmpeg `loudnorm`; gemessen −14,1 LUFS). Die v3-Fassung
+  (57,6 s, Fade ab 55,4 s) liegt weiter als
+  `public/audio/glitter_blast_cut576.m4a` daneben. Tempo: 100 BPM (per
   Spektralfluss-Analyse bestätigt: 100,01 BPM) → bei 60 fps liegt jeder
   Beat auf exakt 36 Frames; alle Schnitte des Trailers sitzen auf
   Beat-Vielfachen. Der Track wurde für die neue Fassung erneut bewusst
@@ -36,8 +39,8 @@
 - Alle Gameplay-Clips wurden mit den Skripten unter
   `GOOBY-GODOT/tools/capture/` direkt aus dem Godot-Projekt aufgenommen
   (Movie-Maker-Modus, feste 60-fps-Schrittweite, echte Spielszenen mit
-  skripteten Eingaben; für v3 komplett neu aufgenommen — inkl. der neuen
-  Clips `emotion`, `haus_garten` und `funkelpark`). Aufnahme-Einstellungen:
+  skripteten Eingaben; für v4 komplett neu aufgenommen — inkl. der neuen
+  Clips `boot_cover`, `fuettern`, `markt` und `urlaub`). Aufnahme-Einstellungen:
   native 1920×1080 (hochkant 720×1280), Godot-Grafikpreset „hoch“
   (inkl. Post-FX-Stufe „hoch“: Vignette, Tageszeit-Tönung, Bloom) + MSAA 4×
   erzwungen, PNG-Einzelbilder als verlustfreies Zwischenformat, H.264 CRF 14

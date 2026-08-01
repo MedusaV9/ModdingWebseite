@@ -12,7 +12,7 @@ import {COLORS, FONT_FAMILY} from '../theme';
 
 const FEATURES = [
   'Komplett neu in 3D',
-  '36 Minispiele',
+  '38 Minispiele',
   'NEU: Gooby Ranch',
   '12 große Gefühle',
   'Funkelpark',

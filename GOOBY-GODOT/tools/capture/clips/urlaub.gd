@@ -20,6 +20,8 @@ func _setup() -> void:
 	ort = packed.instantiate()
 	ort.receive_params({"dest_id": "beach"})
 	add_child(ort)
+	# G5/P27: „Raus“-Knopf ist Navigation, kein Motiv (Aufnahme-Regie).
+	schedule(0.2, func() -> void: ort._zurueck.visible = false)
 	schedule(0.3, _kamerafahrt)
 	schedule(1.6, func() -> void: ort._on_streicheln())
 	schedule(4.6, func() -> void: ort._on_mini())

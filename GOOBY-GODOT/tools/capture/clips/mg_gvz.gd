@@ -9,7 +9,7 @@ var _next_act := 0.0
 
 func _setup() -> void:
 	game_id = "gvz"
-	duration = 12.0
+	duration = 16.0
 	seed_value = 2024
 	super._setup()
 
@@ -22,10 +22,12 @@ func _on_play_start() -> void:
 	if state.is_empty():
 		return
 	state["nutella"] = 5000
+	# G5/P27: nur EIN Schütze pro Bahn (statt 2) — der Trailer-Crop
+	# (MG_RECT, cover) zeigt ~Canvas-x 147..1482, mit voller Abwehr
+	# starben alle Zombies unsichtbar am rechten Canvas-Rand.
 	var aufstellung: Array = [
 		["nutella_sammler", 0],
 		["moehrenschuetze", 1],
-		["moehrenschuetze", 2],
 		["dicker_bert", 3],
 	]
 	for lane: Variant in state["lanes"]:
@@ -33,13 +35,14 @@ func _on_play_start() -> void:
 			GvzLogic.place_tower(state, str(setup[0]), int(lane), int(setup[1]))
 			state["cooldowns"] = {}
 	state["nutella"] = 350
-	# Welle vorziehen (2 s statt 32 s) und verdichten (Zombie ~alle 2-3 s).
+	# Welle vorziehen (~1 s statt 32 s) und stark verdichten — mehrere
+	# Zombies gleichzeitig sichtbar im Feld (Clip dafür 16 s statt 12 s).
 	var plan: Array = state["spawn_plan"]
 	if not plan.is_empty():
 		var erster := int(plan[0]["tick"])
 		for entry: Dictionary in plan:
-			entry["tick"] = erster + int((int(entry["tick"]) - erster) * 0.35)
-		state["tick"] = maxi(int(state["tick"]), erster - 40)
+			entry["tick"] = erster + int((int(entry["tick"]) - erster) * 0.25)
+		state["tick"] = maxi(int(state["tick"]), erster - 20)
 
 
 func _drive(_delta: float) -> void:

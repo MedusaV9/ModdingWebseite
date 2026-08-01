@@ -23,9 +23,25 @@ func _setup() -> void:
 	add_child(ort)
 	# Kino-Shot: der Händler-Dialog bleibt aus — der Stand ist der Star.
 	schedule(0.2, func() -> void: ort.dialog.visible = false)
-	schedule(3.2, func() -> void: ort.oeffne_laden())
-	schedule(4.2, _eigenstand_tab)
-	schedule(5.0, _replay_starten)
+	schedule(0.2, _kino_kamera)
+	# G5/P27: Sheet später öffnen — die Ort-Kamera zeigte viel leeren Himmel,
+	# jetzt trägt eine Kino-Kamera (Eigenstand + Kunden) die ersten Sekunden.
+	schedule(5.2, func() -> void: ort.oeffne_laden())
+	schedule(6.2, _eigenstand_tab)
+	schedule(7.0, _replay_starten)
+
+
+## Kino-Kamera auf den Eigenstand (EIGENSTAND_POS): Ware auf dem Tisch,
+## Stand-Gooby mit Schürze dahinter, Kunden-Goobys davor — sanfter Push-in.
+## Der „Raus“-Knopf ist Navigation, kein Motiv (reine Aufnahme-Regie).
+func _kino_kamera() -> void:
+	if ort._zurueck != null:
+		ort._zurueck.visible = false
+	var stand: Vector3 = ort.EIGENSTAND_POS
+	# Von rechts-seitlich: Kunden links im Vordergrund, Stand-Gooby + Ware
+	# mittig (der Kunde bei z+1.4 stünde sonst frontal in der Sichtachse).
+	cine_camera(stand + Vector3(3.5, 1.65, 2.5), stand + Vector3(-0.4, 0.75, 0.1), 40.0)
+	move_camera(stand + Vector3(2.7, 1.35, 1.95), stand + Vector3(-0.4, 0.75, 0.1), 4.6)
 
 
 ## Lager füllen und den Stand für den LETZTEN Samstag bestücken — Status

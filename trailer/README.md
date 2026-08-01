@@ -1,15 +1,18 @@
-# GOOBY 5.0 — Godot-Update-Trailer
+# GOOBY 5.1 — Godot-Update-Trailer
 
-Offizieller Trailer zum Godot-Engine-Update: **1920×1080, 60 fps, ~57,6 s**,
+Offizieller Trailer zum Godot-Engine-Update: **1920×1080, 60 fps, 62,4 s**,
 gebaut mit [Remotion](https://remotion.dev). Finales Video:
-`GOOBY-5.0-Godot-Update-Trailer.mp4` (in diesem Ordner).
+`GOOBY-5.1-Godot-Trailer.mp4` (in diesem Ordner — Aufnahme NACH dem
+W16/G4-UI-Rework, Storyboard v4). Die Vorfassung
+`GOOBY-5.0-Godot-Update-Trailer.mp4` (57,6 s, Vor-W14-UI) bleibt als
+Referenz daneben liegen.
 
 ## Neu rendern
 
 ```bash
 cd trailer
 npm ci
-npx remotion render Trailer GOOBY-5.0-Godot-Update-Trailer.mp4
+npx remotion render Trailer GOOBY-5.1-Godot-Trailer.mp4   # = npm run render
 ```
 
 Codec/CRF stehen in `remotion.config.ts` (H.264, **CRF 16**, PNG-Frames —
@@ -19,7 +22,9 @@ kein verlustiges JPEG-Zwischenformat). Vorschau/Studio: `npm run dev`
 Alle Zutaten liegen in `public/`:
 
 - `public/clips/*.mp4` — die Gameplay-Aufnahmen (siehe unten)
-- `public/audio/glitter_blast_cut576.m4a` — Musik, fertig geschnitten (57,6 s)
+- `public/audio/glitter_blast_cut624.m4a` — Musik, fertig geschnitten
+  (62,4 s; die alte 57,6-s-Fassung `glitter_blast_cut576.m4a` bleibt
+  für den v3-Stand liegen)
 - `public/img/icon.png`, `public/img/key_artwork_gooby_ranch.webp`,
   `public/img/logo_gooby_ranch_frei.webp`,
   `public/fonts/baloo2-latin-var.woff2` — Branding/Key-Art (Ranch-Artwork
@@ -28,14 +33,17 @@ Alle Zutaten liegen in `public/`:
 ## Aufbau (Sekunden-Fahrplan)
 
 Der Schnitt liegt auf dem Beat („Glitter Blast“, 100 BPM → 1 Beat = 36
-Frames; 96 Beats = 57,6 s). Fahrplan siehe Kommentar in
+Frames; 104 Beats = 62,4 s). Fahrplan siehe Kommentar in
 `src/Trailer.tsx`:
+**Boot-Cover** (Möhren-Ladebalken + Kreis-Wipe ins Wohnzimmer) →
 Titelkarte → wiederhergestellter Original-Gooby (Showcase, Fell-Look) →
 **Emotions-Nahaufnahme** (Schreck + Verliebtheit mit Symbol, Regie-Zoom) →
-Zuhause mit echten Möbeln/Baumodus/**Gestalten-Modus** → **Haus im Garten**
-(HAUS-SICHT) → GOUHBUS/Garderobe (93 Teile) → Stadt (Panorama/Tag/Nacht) →
-**Funkelpark** (Tor-Totale + Achterbahn-POV) → Minispiel-Montage („38
-Minispiele“, Beat-Schnitte inkl. Hochkant-Triptychon) → Multiplayer-Besuch
+Zuhause mit echten Möbeln → **Kühlschrank 2.0** (Regal-Grid + Mampf) →
+Baumodus/**Gestalten-Modus** → **Haus im Garten** (HAUS-SICHT) →
+GOUHBUS/Garderobe (93 Teile) → Stadt (Panorama/Tag/Nacht) →
+**eigener Marktstand** → **Funkelpark** (Tor-Totale + Achterbahn-POV) →
+Minispiel-Montage („38 Minispiele“, Beat-Schnitte inkl.
+Hochkant-Triptychon) → Multiplayer-Besuch → **Urlaubs-Besuch am Strand**
 → **Kapitel-Karte GOOBY RANCH** (Key-Artwork + Logo) → Überlandfahrt →
 Hof mit Pferden → freies Reiten → **Bergmassiv mit Hängebrücke + Bergsee**
 → Neue-Zonen-Montage (Lavendelwiese, Nebelmoor, Turmruine, Muschelbucht,
@@ -43,13 +51,12 @@ Apfelgarten, Kornfeld) → 7 Wetterlagen & Tageszeiten → Dorf Hufingen
 (Quests & NPCs) → Turnier-Springen (Liga) → Multiplayer-Ausritt →
 Outro mit Feature-Chips und Musik-Credit.
 
-Zahlen-Stand W16: die Labels in `src/Trailer.tsx` sagen bereits **38
-Minispiele** (MinigameRegistry: 4 feste Einträge + 34 `game.json`-Manifeste)
-und **93 Kosmetik-Teile** (CosmeticsCatalog: 30 Hüte, 17 Brillen, 18 Hals,
-14 Rücken, 14 Felle) — das eingecheckte MP4 ist noch der W12-Render mit den
-alten Zahlen und wird erst mit Storyboard v4 neu gerendert.
+Zahlen-Stand W16: die Labels sagen **38 Minispiele** (MinigameRegistry:
+4 feste Einträge + 34 `game.json`-Manifeste) und **93 Kosmetik-Teile**
+(CosmeticsCatalog: 30 Hüte, 17 Brillen, 18 Hals, 14 Rücken, 14 Felle);
+seit G5 auch im Outro-Chip (vorher stand dort noch „36“).
 
-## Storyboard v4 (geplant — Aufnahme NACH dem W16-UI-Rework)
+## Storyboard v4 (umgesetzt in `GOOBY-5.1-Godot-Trailer.mp4`)
 
 **Vier neue Kapitel** (Treiber liegen bereit, s. u.): `boot_cover`
 (Boot-Cover-Ladebildschirm mit Möhren-Ladebalken — der „neuer Look ab
@@ -57,12 +64,13 @@ Sekunde 1“-Beweis), `fuettern` (Kühlschrank 2.0: Regal-Grid + Mampf-Sequenz
 mit Verliebtheit), `markt` (eigener Wochenmarkt-Stand mit Verkaufs-Replay)
 und `urlaub` (Urlaubs-Besuch am Strand: Tap-Spots, Statisten, Souvenir).
 
-**Länge:** 96 → **104 Beats = 62,4 s** (Raster 100 BPM bleibt). Musik neu
-schneiden: `music/Glitter_Blast.mp3` per `music/beatgrid.py` auf 62,4 s →
-`public/audio/glitter_blast_cut624.m4a`; danach `TRAILER_DURATION` auf
-`104 * BEAT` heben. Gegenfinanzierung der +8 Beats: Titelkarte 4→2 (das
-Boot-Cover trägt jetzt den Marken-Moment), Emotion-Herz-Slot 2→1,
-Baumodus 2 Slots→1 Slot à 3, Funkelpark-POV 3→2.
+**Länge:** 96 → **104 Beats = 62,4 s** (Raster 100 BPM bleibt). Musik
+(erledigt, G5): `public/audio/glitter_blast_cut624.m4a` — gleiches Rezept
+wie v3 (Start am Downbeat 2,25 s im Original, loudnorm −14 LUFS, 2,2 s
+Fade-out ab 60,2 s), `TRAILER_DURATION` steht auf `104 * BEAT`.
+Gegenfinanzierung der +8 Beats: Titelkarte 4→2 (das Boot-Cover trägt
+jetzt den Marken-Moment; TitleCard-Federn dafür vorgezogen),
+Emotion-Herz-Slot 2→1, Baumodus 2 Slots→1 Slot à 3, Funkelpark-POV 3→2.
 
 Beat-Plan (1 Beat = 0,6 s; NEU = neues Kapitel):
 
@@ -101,15 +109,21 @@ Beat-Plan (1 Beat = 0,6 s; NEU = neues Kapitel):
 | 95–98 | 57,0–58,8 | `ranch_mp` |
 | 98–104 | 58,8–62,4 | Outro (Feature-Chips + Logo + Credit) |
 
-**Reihenfolge der Umsetzung** (Quelle: G1-Scout-Bericht Trailer, §4/§5):
-T0 (erledigt): Zahlen-Fixes, dieses Storyboard, die 4 neuen Treiber,
-`finals.sh`-Liste. T1 (Gate W16-UI-Rework gelandet): `MG_RECT` +
-TrioScene-Crop per Einzelbild neu vermessen; Treiber-Selektoren prüfen
-(`ikea`, `wardrobe`, `home_style`). T2: `probe_all.sh` über alle 34 Clips,
-`startFrom`-Fenster justieren (v. a. `mg_runner`/`mg_gvz`/`ranch_comp`
-mit neuem 1,5-s-Intro-Beat). T3: `finals.sh` (34 Clips ≈ 3–4,5 h CPU,
-exklusiv fahren) → Musik-Neuschnitt → Remotion-Endrender → MP4 committen.
-`public/clips/` ist NICHT im Repo — für den v4-Render werden ALLE Clips
+**Umsetzung (G5/P27, alle Schritte erledigt):** T0 (G3/P12): Zahlen-Fixes,
+Storyboard, die 4 neuen Treiber, `finals.sh`-Liste. T1: `MG_RECT` und
+TrioScene-Crop nach dem G4-Letterbox-Umbau per Bewegungs-Differenz neu
+vermessen — Canvas quer 1632×756 @ (0,188), hochkant 472×1028 @ (124,60),
+praktisch unverändert zu v3; Treiber-Selektoren (`ikea`, `wardrobe`,
+`home_style`) liefen unverändert durch. T2: Probe-Pass über die neuen
+und die Risiko-Clips; Befunde → drei Treiber-Fixes (nur Aufnahme-Regie):
+`markt` bekam eine Kino-Kamera auf den Eigenstand (die Ort-Kamera zeigte
+viel leeren Himmel) + späteres Sheet-Öffnen, `markt`/`urlaub` blenden den
+„Raus“-Knopf aus, `mg_gvz` läuft 16 s statt 12 s mit nur EINEM Schützen
+pro Bahn und dichterem Spawn-Plan (mit voller Abwehr starben alle Zombies
+unsichtbar rechts außerhalb des MG_RECT-Cover-Crops; `startFrom` darum
+850). T3: `finals.sh` komplett (34 Clips, ≈3 h auf 4 Kernen, Log im
+G5-Report) → Musik-Neuschnitt → Remotion-Endrender.
+`public/clips/` ist NICHT im Repo — für den v4-Render wurden ALLE Clips
 neu aufgenommen, auch die unveränderten.
 
 ## Gameplay-Clips neu aufnehmen

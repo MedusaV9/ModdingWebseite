@@ -5,7 +5,7 @@
   "description": "Offizieller Trailer zum GOOBY 5.0 Godot-Engine-Update (Remotion, 1080p60)",
   "scripts": {
     "dev": "remotion studio",
-    "render": "remotion render Trailer GOOBY-5.0-Godot-Update-Trailer.mp4"
+    "render": "remotion render Trailer GOOBY-5.1-Godot-Trailer.mp4"
   },
   "dependencies": {
     "@remotion/cli": "4.0.242",
