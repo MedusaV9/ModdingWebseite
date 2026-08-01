@@ -76,6 +76,11 @@
 			"wand": "Wand",
 			"decke": "Decke"
 		},
+		"status": {
+			"ebene": "Bauen · Ebene: {ebene}",
+			"girlande_a": "Girlande: ersten Punkt wählen",
+			"girlande_b": "Girlande: zweiten Punkt wählen"
+		},
 		"girlande": {
 			"punkt_a": "Tipp den ersten Decken-Punkt an!",
 			"punkt_b": "Und jetzt den zweiten — dann hängt sie schön durch!",

@@ -25,13 +25,13 @@ signal furniture_changed
 ## Bau-Ebenen des Umschalters (Doc D §2.1) — BODEN deckt RUG/FLOOR/SURFACE.
 enum Ebene { BODEN, WAND, DECKE }
 
-const DRAWER_HEIGHT := 168.0
-## VIS-2: Innenabstand der Lager-Schublade zum Bildschirmrand. Die Chips
-## klebten links bündig an der Kante — abgeschnittene Möbelnamen („Fe…“
-## statt „Fernsehsessel“) bei Notch/abgerundeten Ecken oder wenn ein
-## Video-Schnitt (Trailer-Ken-Burns) minimal ins Bild zoomt.
-const DRAWER_RAND_X := 28.0
-const DRAWER_RAND_Y := 10.0
+## Layout-Konstanten leben in BuildUiDock (G4/UI-BAU) — hier re-exportiert,
+## weil Tests (test_vis2_lager_ui) den Rand über BuildMode referenzieren.
+const DRAWER_HEIGHT := BuildUiDock.DRAWER_HEIGHT
+const DRAWER_RAND_X := BuildUiDock.DRAWER_RAND_X
+const DRAWER_RAND_Y := BuildUiDock.DRAWER_RAND_Y
+## Reihenfolge MUSS zum Ebene-Enum passen (Chips + Status-Anzeige).
+const EBENEN_KEYS: Array[String] = ["build.ebene.boden", "build.ebene.wand", "build.ebene.decke"]
 ## Max. Bodenabstand (m) zur Wand, ab dem ein Tap als Wand-Item-Auswahl
 ## zählt (negativ = Projektion hinter der Wand, der Normalfall beim Tap
 ## direkt aufs hängende Item).
@@ -50,13 +50,15 @@ var _build_camera: BuildCamera
 var _gs: Object
 
 var _active := false
+## Layout/Metrik des Bau-UIs (G4/UI-BAU) — BuildMode verdrahtet nur noch
+## Verhalten auf den vom Dock exponierten Knöpfen.
+var _dock_ui: BuildUiDock
+## Spiegel-Referenzen (Tests + Update-Methoden greifen hierüber zu).
 var _ui: Control
 var _drawer_items: HBoxContainer
 var _capacity_label: Label
 var _drawer_sig := ""
-var _action_bar: HBoxContainer
-var _kamera_leiste: VBoxContainer
-var _ebenen_leiste: HBoxContainer
+var _action_bar: HFlowContainer
 var _ebene := Ebene.BODEN
 var _girlanden: GirlandenBau
 var _ghost: FurnitureNode
@@ -120,6 +122,7 @@ func open() -> void:
 		return
 	_active = true
 	_reset_gesten()
+	_apply_metrics()
 	_ui.visible = true
 	_overlay.visible = true
 	_camera_rig.set_build_mode(true)
@@ -135,8 +138,12 @@ func close() -> void:
 	if not _active:
 		return
 	if _bed_quest_active():
+		# Outcome schlägt Press (Audio-Grammatik): der Fertig-Druck selbst
+		# bleibt stumm, die Verweigerung klingt als Fehler.
+		AudioDirector.try_play(self, "ui_error")
 		_room.say(I18nService.t("build.bett_quest"))
 		return
+	AudioDirector.try_play(self, "ui_back")
 	_girlanden.abbrechen()
 	_cancel_ghost()
 	set_ebene(Ebene.BODEN)
@@ -177,6 +184,11 @@ static func ebene_fuer_def(def: Dictionary) -> int:
 
 
 func _on_ebene_gewaehlt(ebene_neu: int) -> void:
+	# Aktiver Chip ist NICHT disabled (ChipLeaf-Optik) — ein erneuter Tap
+	# darf aber keinen Ghost/Spann-Flow abräumen.
+	if ebene_neu == _ebene:
+		return
+	AudioDirector.try_play(self, "ui_chip")
 	_girlanden.abbrechen()
 	_overlay.clear_highlight()
 	_cancel_ghost()
@@ -529,6 +541,7 @@ func _ghost_check() -> Dictionary:
 func _rotate_ghost() -> void:
 	if _ghost_state.is_empty():
 		return
+	AudioDirector.try_play(self, "ui_click")
 	_ghost_state["rot"] = (int(_ghost_state["rot"]) + 1) % 4
 	_rebuild_ghost()
 
@@ -536,6 +549,9 @@ func _rotate_ghost() -> void:
 func _confirm_ghost() -> void:
 	if _ghost_state.is_empty() or not bool(_ghost_check()["ok"]):
 		return
+	# Der Platzieren-Knopf ist bei ungültiger Lage disabled — der Druck
+	# selbst darf klingen (Audio-Grammatik).
+	AudioDirector.try_play(self, "ui_confirm")
 	var def: Dictionary = _ghost_state["def"]
 	var is_new: bool = _ghost_state["mode"] == "new"
 	if is_new:
@@ -575,18 +591,25 @@ func _cancel_ghost() -> void:
 	_rebuild_ghost()
 
 
-## Einlagern des aufgenommenen Items (Doc D §2.3/§2.4).
+## Einlagern des aufgenommenen Items (Doc D §2.3/§2.4). Outcome schlägt
+## Press: Verweigerungen (Pflichtmöbel, Lager voll) klingen als Fehler,
+## erst das gelungene Einlagern klingt als Aktion.
 func _store_ghost() -> void:
 	if _ghost_state.get("mode", "") != "move":
 		return
 	var uid := str(_ghost_state["uid"])
 	var def: Dictionary = _ghost_state["def"]
 	if FurnitureCatalog.is_last_of_mandatory_slot(_grid.to_items_array(), uid):
+		AudioDirector.try_play(self, "ui_error")
+		Haptics.warn(self)
 		_room.say(I18nService.t("build.pflicht." + str(def["pflicht"])))
 		return
 	if _gs != null and not HomeState.store_item(_gs, def["id"]):
+		AudioDirector.try_play(self, "ui_error")
+		Haptics.warn(self)
 		_room.say(I18nService.t("build.lager_voll"))
 		return
+	AudioDirector.try_play(self, "ui_click")
 	_grid.remove_item(uid)
 	_ghost_state = {}
 	_rebuild_ghost()
@@ -665,158 +688,93 @@ func _warm_up() -> void:
 
 
 # ── UI ───────────────────────────────────────────────────────────────────────
+# G4/UI-BAU: Layout + Metrik-Pass (Safe-Area, ×f, Touch-Floor, scale_fonts)
+# leben in BuildUiDock — alle Werkzeuge in EINEM unten-mittigen Dock in der
+# Daumenzone. Hier wird nur noch VERHALTEN auf die Dock-Knöpfe verdrahtet.
 
 
 func _build_ui(ui_layer: Node) -> void:
-	_ui = Control.new()
-	_ui.name = "BuildModeUi"
-	_ui.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_ui.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_ui.visible = false
-	ui_layer.add_child(_ui)
-	_build_action_bar()
-	_build_kamera_leiste()
-	_build_ebenen_leiste()
-	_build_drawer()
-
-
-func _build_action_bar() -> void:
-	_action_bar = HBoxContainer.new()
-	_action_bar.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	_action_bar.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	_action_bar.position.y -= DRAWER_HEIGHT + 56.0
-	_action_bar.add_theme_constant_override("separation", 10)
-	_ui.add_child(_action_bar)
-	_add_action_button("build.rotieren", "GhostButton", _rotate_ghost)
-	_add_action_button("build.bestaetigen", "AccentButton", _confirm_ghost)
-	_add_action_button("build.einlagern", "GhostButton", _store_ghost)
-	_add_action_button("build.abbrechen", "GhostButton", _on_abbrechen)
-
-
-## Ebenen-Umschalter (W13B, Doc D §2.1): Boden/Wand/Decke als Chips oben
-## mittig — Auto-Umschalten beim Item-Aufnehmen setzt den aktiven Chip mit.
-func _build_ebenen_leiste() -> void:
-	_ebenen_leiste = HBoxContainer.new()
-	_ebenen_leiste.name = "EbenenLeiste"
-	_ebenen_leiste.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	_ebenen_leiste.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	_ebenen_leiste.position.y += DRAWER_RAND_Y + 8.0
-	_ebenen_leiste.add_theme_constant_override("separation", 8)
-	_ui.add_child(_ebenen_leiste)
-	for eintrag: Array in [
-		["build.ebene.boden", Ebene.BODEN],
-		["build.ebene.wand", Ebene.WAND],
-		["build.ebene.decke", Ebene.DECKE],
-	]:
-		var btn := Button.new()
-		btn.text = I18nService.t(str(eintrag[0]))
-		btn.theme_type_variation = "AcChip"
-		btn.focus_mode = Control.FOCUS_NONE
-		btn.pressed.connect(_on_ebene_gewaehlt.bind(int(eintrag[1])))
-		_ebenen_leiste.add_child(btn)
+	_dock_ui = BuildUiDock.new()
+	_dock_ui.build(ui_layer, EBENEN_KEYS)
+	_ui = _dock_ui.ui
+	_action_bar = _dock_ui.action_bar
+	_drawer_items = _dock_ui.drawer_items
+	_capacity_label = _dock_ui.capacity_label
+	_verdrahte_dock()
 	_update_ebenen_leiste()
 
 
-## Aktiver Ebenen-Chip ist deaktiviert (= gedrückt-Optik ohne Toggle-Logik).
+## pressed-Handler + Sounds auf die vom Dock exponierten Knöpfe. Reihenfolge
+## der Arrays MUSS zu BuildUiDock._build_action_bar/_build_kamera_leiste
+## passen (dort zentral definiert, hier nur Verhalten).
+func _verdrahte_dock() -> void:
+	var actions: Array[Callable] = [_rotate_ghost, _confirm_ghost, _store_ghost, _on_abbrechen]
+	for i in actions.size():
+		_dock_ui.action_buttons[i].pressed.connect(actions[i])
+	for i in EBENEN_KEYS.size():
+		_dock_ui.ebenen_chips[i].pressed.connect(_on_ebene_gewaehlt.bind(i))
+	# Ansichtswechsel klingt als Chip, die 90°-Drehung als Standard-Klick.
+	var kamera: Array = [
+		["ui_chip", func() -> void: _build_camera.set_draufsicht(true)],
+		["ui_chip", func() -> void: _build_camera.set_draufsicht(false)],
+		["ui_click", func() -> void: _build_camera.schnapp_90(-1)],
+		["ui_click", func() -> void: _build_camera.schnapp_90(1)],
+	]
+	for i in kamera.size():
+		var eintrag: Array = kamera[i]
+		_dock_ui.kamera_buttons[i].pressed.connect(
+			_on_kamera_knopf.bind(str(eintrag[0]), eintrag[1] as Callable)
+		)
+	# Presets/Goobay öffnen Overlays, die selbst ui_open spielen → Druck stumm.
+	_dock_ui.presets_button.pressed.connect(_open_presets)
+	_dock_ui.goobay_button.pressed.connect(_open_goobay)
+	_dock_ui.done_button.pressed.connect(close)
+
+
+func _apply_metrics() -> void:
+	if _dock_ui != null:
+		_dock_ui.apply_metrics()
+
+
+func _floors_und_schrift() -> void:
+	if _dock_ui != null:
+		_dock_ui.floors_und_schrift()
+
+
 func _update_ebenen_leiste() -> void:
-	if _ebenen_leiste == null:
+	if _dock_ui == null:
 		return
-	for i in _ebenen_leiste.get_child_count():
-		(_ebenen_leiste.get_child(i) as Button).disabled = i == _ebene
+	_dock_ui.set_aktive_ebene(_ebene)
+	_update_status()
+
+
+## Persistente, dezente Modus-Anzeige: welche Ebene aktiv ist bzw. welcher
+## Girlanden-Spann-Schritt gerade ansteht — immer sichtbar in der Dock-Zeile.
+func _update_status() -> void:
+	if _dock_ui == null:
+		return
+	var text: String
+	if _girlanden != null and _girlanden.aktiv():
+		var key := (
+			"build.status.girlande_b" if _girlanden.hat_punkt_a() else "build.status.girlande_a"
+		)
+		text = I18nService.t(key)
+	else:
+		text = I18nService.t("build.status.ebene", {"ebene": I18nService.t(EBENEN_KEYS[_ebene])})
+	_dock_ui.set_status(text)
 
 
 ## Abbrechen-Knopf: beendet auch einen laufenden Girlanden-Spann-Flow.
 func _on_abbrechen() -> void:
+	AudioDirector.try_play(self, "ui_back")
 	_girlanden.abbrechen()
 	_overlay.clear_highlight()
 	_cancel_ghost()
 
 
-## Kamera-Knöpfe (FIX-3): Draufsicht/Schrägsicht + 2×90°-Drehung, rechts am
-## Rand — weit weg von Drawer und Action-Bar.
-func _build_kamera_leiste() -> void:
-	_kamera_leiste = VBoxContainer.new()
-	_kamera_leiste.name = "KameraLeiste"
-	_kamera_leiste.set_anchors_preset(Control.PRESET_CENTER_RIGHT)
-	_kamera_leiste.grow_vertical = Control.GROW_DIRECTION_BOTH
-	_kamera_leiste.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-	# Gleicher Sicherheitsabstand wie die Lager-Schublade (VIS-2): bündig
-	# an der rechten Kante wurden „Draufsicht“/„Schrägsicht“ angeschnitten.
-	_kamera_leiste.position.x -= DRAWER_RAND_X
-	_kamera_leiste.add_theme_constant_override("separation", 8)
-	_ui.add_child(_kamera_leiste)
-	_add_kamera_button("build.kamera.oben", func() -> void: _build_camera.set_draufsicht(true))
-	_add_kamera_button("build.kamera.schraeg", func() -> void: _build_camera.set_draufsicht(false))
-	_add_kamera_button("build.kamera.links", func() -> void: _build_camera.schnapp_90(-1))
-	_add_kamera_button("build.kamera.rechts", func() -> void: _build_camera.schnapp_90(1))
-
-
-func _add_kamera_button(key: String, handler: Callable) -> void:
-	var btn := Button.new()
-	btn.text = I18nService.t(key)
-	btn.theme_type_variation = "AcChip"
-	btn.focus_mode = Control.FOCUS_NONE
-	btn.pressed.connect(handler)
-	_kamera_leiste.add_child(btn)
-
-
-func _add_action_button(key: String, variation: String, handler: Callable) -> void:
-	var btn := Button.new()
-	btn.text = I18nService.t(key)
-	btn.theme_type_variation = variation
-	btn.pressed.connect(handler)
-	_action_bar.add_child(btn)
-
-
-func _build_drawer() -> void:
-	var drawer := PanelContainer.new()
-	drawer.theme_type_variation = "AcCard"
-	drawer.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-	drawer.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	drawer.custom_minimum_size = Vector2(0, DRAWER_HEIGHT)
-	_ui.add_child(drawer)
-	# Innenabstand (VIS-2): kein Label darf bündig an der Bildschirmkante
-	# starten — sonst schneiden Notch/Ecken/Video-Crop den ersten Chip an.
-	var rand := MarginContainer.new()
-	rand.add_theme_constant_override("margin_left", int(DRAWER_RAND_X))
-	rand.add_theme_constant_override("margin_right", int(DRAWER_RAND_X))
-	rand.add_theme_constant_override("margin_top", int(DRAWER_RAND_Y))
-	rand.add_theme_constant_override("margin_bottom", int(DRAWER_RAND_Y))
-	drawer.add_child(rand)
-	var box := VBoxContainer.new()
-	rand.add_child(box)
-	var header := HBoxContainer.new()
-	box.add_child(header)
-	_capacity_label = Label.new()
-	_capacity_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	# Wenn der Platz doch mal knapp wird: Ellipse statt hartem Schnitt.
-	_capacity_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	header.add_child(_capacity_label)
-	# Layout-Presets (W13C, Doc D §10) an der Lager-Schublade: Tausch = Grid+Lager.
-	var presets := Button.new()
-	presets.text = I18nService.t("build.preset.knopf")
-	presets.theme_type_variation = "AcChip"
-	presets.pressed.connect(_open_presets)
-	header.add_child(presets)
-	# Goobay (Doc D §5.4): verkauft wird aus dem LAGER — deshalb sitzt der
-	# Einstieg direkt an der Lager-Schublade.
-	var goobay := Button.new()
-	goobay.text = I18nService.t("goobay.verkaufen")
-	goobay.theme_type_variation = "AcChip"
-	goobay.pressed.connect(_open_goobay)
-	header.add_child(goobay)
-	var done := Button.new()
-	done.text = I18nService.t("build.fertig")
-	done.theme_type_variation = "PrimaryButton"
-	done.pressed.connect(close)
-	header.add_child(done)
-	var scroll := ScrollContainer.new()
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
-	box.add_child(scroll)
-	_drawer_items = HBoxContainer.new()
-	_drawer_items.add_theme_constant_override("separation", 8)
-	scroll.add_child(_drawer_items)
+func _on_kamera_knopf(sound_id: String, handler: Callable) -> void:
+	AudioDirector.try_play(self, sound_id)
+	handler.call()
 
 
 func _refresh_drawer() -> void:
@@ -843,7 +801,7 @@ func _refresh_drawer() -> void:
 		var def := FurnitureCatalog.def(str(entry.get("item", "")))
 		if def.is_empty():
 			continue
-		var btn := Button.new()
+		var btn := SquishButton.new()
 		var fp: Vector2i = def["footprint"]
 		btn.text = (
 			"%s ×%d (%d×%d)"
@@ -858,8 +816,18 @@ func _refresh_drawer() -> void:
 		# BEWUSST kein text_overrun_behavior: mit Ellipse verloere der Chip
 		# seine text-basierte Mindestbreite und kollabiert in der HBox zum
 		# leeren Knopf — volle Namen sind hier ok, die Reihe scrollt (VIS-2).
-		btn.pressed.connect(_begin_new.bind(def))
+		btn.pressed.connect(_on_drawer_chip.bind(def))
 		_drawer_items.add_child(btn)
+	# Frisch gebaute Chips brauchen Floor + skalierte Schrift (Metrik-Pass
+	# lief schon — hier nur der leichte Nachzieher für neue Nodes).
+	_floors_und_schrift()
+
+
+## Drawer-Chip: Auswahl-Klang, dann Ghost/Spann-Flow starten. Der Umweg
+## hält _begin_new stumm für programmatische Aufrufe (Bett-Quest-Autostart).
+func _on_drawer_chip(def: Dictionary) -> void:
+	AudioDirector.try_play(self, "ui_chip")
+	_begin_new(def)
 
 
 ## Goobay-Handy öffnen (Verkaufsliste = Lager ohne Pflichtmöbel).
@@ -930,6 +898,9 @@ func _update_action_bar(ok := false) -> void:
 	var has_ghost := not _ghost_state.is_empty()
 	var girlande := _girlanden != null and _girlanden.aktiv()
 	_action_bar.visible = has_ghost or girlande
+	# Modus-Anzeige folgt jedem Flow-Wechsel (Girlande gestartet/gespannt/
+	# abgebrochen) — der Hook sitzt hier, weil ALLE Übergänge hier landen.
+	_update_status()
 	if not _action_bar.visible:
 		return
 	# Girlanden-Spann-Flow (W13B): kein Ghost — nur Abbrechen ist sinnvoll.

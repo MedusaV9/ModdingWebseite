@@ -76,6 +76,11 @@
 			"wand": "Wall",
 			"decke": "Ceiling"
 		},
+		"status": {
+			"ebene": "Building · Layer: {ebene}",
+			"girlande_a": "Garland: pick the first spot",
+			"girlande_b": "Garland: pick the second spot"
+		},
 		"girlande": {
 			"punkt_a": "Tap the first ceiling spot!",
 			"punkt_b": "Now the second one — watch it drape!",

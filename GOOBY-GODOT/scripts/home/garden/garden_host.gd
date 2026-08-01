@@ -14,15 +14,20 @@ const Economy := preload("res://scripts/logic/economy.gd")
 const ROOM_ID := "garden"
 ## Auswahl-Info wird nach jeder Aktion neu gerechnet.
 const ICON_PX := 20
+## G4/UI-BAU: Design-Basisbreite der unten-mittigen Garten-Karte
+## (Grid-Screen-Basis der Wellen G2–G4, via ScreenShell.card_width geklemmt).
+const KARTE_BASIS := 920.0
 
 var _room: Node
 var _gs: Object
 var _view: GardenView
 var _ui: Control
 var _info: Label
-var _aktionen: HBoxContainer
+var _aktionen: HFlowContainer
 var _auswahl := Vector2i(-1, -1)
 var _menue: VBoxContainer
+## Letzter Metrik-Pass (Floors/Schriften für frisch gebaute Chips).
+var _m: Dictionary = {}
 var _rng := RandomNumberGenerator.new()
 var _jetzt_override := -1.0
 ## Rolltor-Zustand ist RUNTIME-only (W13C, Doc D §7) — nicht im Save.
@@ -158,6 +163,8 @@ func sammeln() -> void:
 ## Baum ernten (Holz) — der Baum bleibt stehen und wächst nach.
 func baum_ernten() -> void:
 	var menge := GardenWorld.baum_ernten(_gs, _baum_zelle(), jetzt_s())
+	if menge > 0:
+		AudioDirector.try_play(self, "ui_confirm")
 	var text := (
 		I18nService.t("garten.baum_reif", {"menge": menge})
 		if menge > 0
@@ -175,6 +182,7 @@ func bauen(kind: String) -> bool:
 	if not bool(ergebnis["ok"]):
 		_nach_aktion(false, _bau_fehler(str(ergebnis["reason"])))
 		return false
+	_kauf_erfolg()
 	await _bau_animation(_auswahl)
 	_nach_aktion(true, I18nService.t("garten.struktur.%s" % kind))
 	return true
@@ -193,6 +201,7 @@ func shed_bauen() -> bool:
 	if HomeState.upgrade_shed(_gs) == vorher:
 		_nach_aktion(false, I18nService.t("shed.zu_teuer"))
 		return false
+	_kauf_erfolg()
 	if frisch:
 		var grid := GardenState.grid(_gs)
 		grid.place_structure("shed", _auswahl)
@@ -214,6 +223,7 @@ func garage_bauen() -> bool:
 		)
 		_nach_aktion(false, text)
 		return false
+	_kauf_erfolg()
 	await _bau_animation(_auswahl)
 	_nach_aktion(true, I18nService.t("garage.fertig"))
 	return true
@@ -226,6 +236,8 @@ func rolltor_toggle() -> void:
 	var prop := _garage_prop()
 	if prop == null:
 		return
+	# An-Aus-Schalter-Klang (Audio-Grammatik) — gilt für Chip UND 3D-Tap.
+	AudioDirector.try_play(self, "ui_toggle")
 	_rolltor_zustand = GarageLogic.rolltor_toggle(_rolltor_zustand)
 	var tween := prop.rolltor_fahren(GarageLogic.rolltor_ziel_anteil(_rolltor_zustand))
 	if tween != null:
@@ -252,6 +264,7 @@ func erweitern() -> bool:
 		func(state: Dictionary) -> void: Economy.spend(state["economy"], preis, "garten_ausbau")
 	)
 	GardenState.erweitern(_gs)
+	_kauf_erfolg()
 	_nach_aktion(true, I18nService.t("garten.erweitert"))
 	return true
 
@@ -310,12 +323,14 @@ func _ui_layer() -> Node:
 	return _room.ui_layer()
 
 
+## G4/UI-BAU: Garten-Karte unten-mittig in der Daumenzone (vorher TOP_WIDE
+## unter der Notch — doppelter Leitideen-Verstoß, G1 ui-bau §4). Der Garten
+## bleibt Vollbild sichtbar, die Karte wächst über ihre Kind-Minima nach OBEN.
 func _build_ui() -> void:
 	_ui = PanelContainer.new()
 	_ui.name = "GardenUi"
 	_ui.theme = ThemeService.theme()
 	_ui.theme_type_variation = "AcCard"
-	_ui.set_anchors_preset(Control.PRESET_TOP_WIDE)
 	_ui_layer().add_child(_ui)
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 6)
@@ -323,12 +338,60 @@ func _build_ui() -> void:
 	_info = Label.new()
 	_info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(_info)
-	_aktionen = HBoxContainer.new()
-	_aktionen.add_theme_constant_override("separation", 6)
+	# Aktions-Chips als Flow: 6+ Chips (Garage + Spot + Baum …) brechen in
+	# schmalen Formaten um statt rechts aus der Karte zu laufen.
+	_aktionen = HFlowContainer.new()
+	_aktionen.alignment = FlowContainer.ALIGNMENT_CENTER
+	_aktionen.add_theme_constant_override("h_separation", 6)
+	_aktionen.add_theme_constant_override("v_separation", 6)
 	box.add_child(_aktionen)
 	_menue = VBoxContainer.new()
 	_menue.add_theme_constant_override("separation", 4)
 	box.add_child(_menue)
+	if _ui.is_inside_tree():
+		_on_ui_im_baum()
+	else:
+		_ui.tree_entered.connect(_on_ui_im_baum, CONNECT_ONE_SHOT)
+
+
+func _on_ui_im_baum() -> void:
+	_ui.get_viewport().size_changed.connect(_apply_ui_metrics)
+	_apply_ui_metrics()
+
+
+## Metrik-Pass (ScreenShell): Kartenbreite via card_width, Bottom-Inset
+## (Home-Indicator), Touch-Floor + Schriften ×f. Läuft beim Aufbau und bei
+## jeder Viewport-Größenänderung.
+func _apply_ui_metrics() -> void:
+	if _ui == null or not _ui.is_inside_tree():
+		return
+	_m = ScreenShell.metrics(_ui.get_viewport())
+	var f: float = _m["f"]
+	var insets: Dictionary = _m["insets"]
+	var breite := ScreenShell.card_width(_m, KARTE_BASIS)
+	_ui.anchor_left = 0.5
+	_ui.anchor_right = 0.5
+	_ui.anchor_top = 1.0
+	_ui.anchor_bottom = 1.0
+	_ui.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_ui.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	_ui.offset_left = -breite * 0.5
+	_ui.offset_right = breite * 0.5
+	_ui.offset_bottom = -(float(insets["bottom"]) + ScreenShell.EDGE_Y * f)
+	# Höhe wächst über die Kind-Minima automatisch nach oben (grow BEGIN).
+	_ui.offset_top = _ui.offset_bottom
+	_floors_und_schrift()
+
+
+## Touch-Floor (44 pt physisch) auf alle Garten-Knöpfe + Schriften ×f —
+## Chips behalten ihre text-basierte Mindestbreite (combined minimum).
+func _floors_und_schrift() -> void:
+	if _m.is_empty() or _ui == null:
+		return
+	var floor_px: float = _m["floor_px"]
+	for node in _ui.find_children("*", "Button", true, false):
+		(node as Control).custom_minimum_size = Vector2(floor_px, floor_px)
+	ScreenShell.scale_fonts(_ui, float(_m["f"]))
 
 
 func _refresh() -> void:
@@ -345,6 +408,7 @@ func _leichte_aktualisierung() -> void:
 	_menue_leeren()
 	_info.text = _info_text()
 	_aktions_leiste()
+	_floors_und_schrift()
 
 
 func _info_text() -> String:
@@ -412,7 +476,7 @@ func _aktions_leiste() -> void:
 	var data := grid.cell(_auswahl) if _auswahl.x >= 0 else {}
 	var crop_id := str(data.get("crop", ""))
 	if _auswahl.x >= 0 and crop_id == "":
-		_knopf("garten.pflanzen", "PrimaryButton", _pflanzen_menue)
+		_knopf("garten.pflanzen", "PrimaryButton", _pflanzen_menue, "ui_chip")
 	if crop_id != "":
 		_knopf("garten.giessen", "ChipSky", giessen)
 		if GardenGrowth.ist_erntereif(data):
@@ -427,24 +491,30 @@ func _aktions_leiste() -> void:
 			if GarageLogic.rolltor_ziel_anteil(_rolltor_zustand) > 0.5
 			else "garage.tor_auf"
 		)
+		# rolltor_toggle() spielt ui_toggle selbst (auch beim 3D-Tap).
 		_knopf(tor_key, "ChipSky", rolltor_toggle)
 	if _auswahl.x >= 0:
-		_knopf("garten.bauen", "AccentButton", _bau_menue)
+		_knopf("garten.bauen", "AccentButton", _bau_menue, "ui_chip")
 	_knopf("craft.titel", "AcChip", werkstatt_oeffnen)
 	_knopf("goobay.titel", "AcChip", goobay_oeffnen)
 	var preis := GardenState.next_stufe_preis(_gs)
 	if preis > 0:
-		var btn := Button.new()
+		var btn := SquishButton.new()
 		btn.text = I18nService.t("garten.erweitern", {"preis": preis})
 		btn.theme_type_variation = "AcChip"
 		btn.pressed.connect(erweitern)
 		_aktionen.add_child(btn)
 
 
-func _knopf(key: String, variation: String, handler: Callable) -> void:
-	var btn := Button.new()
+## Aktions-Chip. `sound_id` nur für Presses mit SICHEREM Ausgang (Untermenü
+## öffnen) — Outcome-Handler (pflanzen/ernten/…) klingen selbst
+## (Audio-Grammatik: Outcome schlägt Press).
+func _knopf(key: String, variation: String, handler: Callable, sound_id := "") -> void:
+	var btn := SquishButton.new()
 	btn.text = I18nService.t(key)
 	btn.theme_type_variation = variation
+	if sound_id != "":
+		btn.pressed.connect(AudioDirector.try_play.bind(self, sound_id))
 	btn.pressed.connect(handler)
 	_aktionen.add_child(btn)
 
@@ -457,11 +527,9 @@ func _menue_leeren() -> void:
 func _pflanzen_menue() -> void:
 	_menue_leeren()
 	var im_gh := _view.garden_grid().greenhouse_cells().has(_auswahl)
-	var zeile := HBoxContainer.new()
-	zeile.add_theme_constant_override("separation", 6)
-	_menue.add_child(zeile)
+	var zeile := _menue_zeile()
 	for crop: Dictionary in GardenCrops.plantable(im_gh):
-		var btn := Button.new()
+		var btn := SquishButton.new()
 		btn.theme_type_variation = "AcChip"
 		btn.text = GardenCrops.display_name(str(crop["id"]), I18nService.get_locale())
 		# W15/CROPS: Saatgut-Crops zeigen den Samen-Vorrat und sperren bei 0
@@ -472,15 +540,14 @@ func _pflanzen_menue() -> void:
 			btn.disabled = samen <= 0
 		btn.pressed.connect(pflanzen.bind(str(crop["id"])))
 		zeile.add_child(btn)
+	_floors_und_schrift()
 
 
 func _bau_menue() -> void:
 	_menue_leeren()
-	var zeile := HBoxContainer.new()
-	zeile.add_theme_constant_override("separation", 6)
-	_menue.add_child(zeile)
+	var zeile := _menue_zeile()
 	for kind: String in GardenWorld.KAUFBAR:
-		var btn := Button.new()
+		var btn := SquishButton.new()
 		btn.theme_type_variation = "AcChip"
 		btn.text = (
 			"%s (%d ᴳ)"
@@ -491,7 +558,7 @@ func _bau_menue() -> void:
 		)
 		btn.pressed.connect(bauen.bind(kind))
 		zeile.add_child(btn)
-	var shed := Button.new()
+	var shed := SquishButton.new()
 	shed.theme_type_variation = "AcChip"
 	var shed_preis := ShedLogic.upgrade_preis(HomeState.shed_stufe(_gs))
 	shed.text = (
@@ -502,7 +569,7 @@ func _bau_menue() -> void:
 	shed.disabled = shed_preis <= 0
 	shed.pressed.connect(shed_bauen)
 	zeile.add_child(shed)
-	var garage := Button.new()
+	var garage := SquishButton.new()
 	garage.theme_type_variation = "AcChip"
 	garage.text = (
 		I18nService.t("garage.gebaut")
@@ -512,6 +579,17 @@ func _bau_menue() -> void:
 	garage.disabled = GarageLogic.gebaut(_gs)
 	garage.pressed.connect(garage_bauen)
 	zeile.add_child(garage)
+	_floors_und_schrift()
+
+
+## Untermenü-Zeile als Flow (Umbruch statt Überlauf in schmalen Formaten).
+func _menue_zeile() -> HFlowContainer:
+	var zeile := HFlowContainer.new()
+	zeile.alignment = FlowContainer.ALIGNMENT_CENTER
+	zeile.add_theme_constant_override("h_separation", 6)
+	zeile.add_theme_constant_override("v_separation", 6)
+	_menue.add_child(zeile)
+	return zeile
 
 
 # ── Helfer ───────────────────────────────────────────────────────────────────
@@ -520,9 +598,17 @@ func _bau_menue() -> void:
 func _nach_aktion(ok: bool, text: String) -> void:
 	if not ok:
 		AudioDirector.try_play(self, "ui_error")
+		Haptics.warn(self)
 	if text != "" and _room.has_method("say"):
 		_room.say(text)
 	_refresh()
+
+
+## Abgeschlossene Münz-AUSGABE (Bauwerk/Shed/Garage/Ausbau) — Audio-
+## Grammatik: ui_buy + Erfolgs-Haptik als Belohnungsmoment.
+func _kauf_erfolg() -> void:
+	AudioDirector.try_play(self, "ui_buy")
+	Haptics.success(self)
 
 
 func _bau_animation(cell: Vector2i) -> void:
