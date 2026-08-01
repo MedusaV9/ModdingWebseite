@@ -1,0 +1,71 @@
+{
+	"dlc_goobye": {
+		"titel": "Goo und Bye",
+		"knopf": {
+			"zum_laden": "Unlock the store!",
+			"angebot": "See the key"
+		},
+		"angebot": {
+			"titel": "Uncle Alwin's key",
+			"text": "Uncle Alwin is off on a grand carrot cruise — and instead of selling, he presses a giant key into Gooby's paw. With a note: “The store likes you. Water the till twice a week.”",
+			"preis": "{preis} coins",
+			"frage": "Will you take over the little corner store?",
+			"kaufen": "Take the key!",
+			"spaeter": "Later",
+			"zu_wenig": "Not enough coins yet — the key costs {preis}. It waits patiently."
+		},
+		"gruppe": {
+			"obst": "Fruit",
+			"gemuese": "Veggies",
+			"backwaren": "Bakery",
+			"suesses": "Sweets",
+			"kuehlware": "Chilled",
+			"eigenmarke": "Gooby's Good Goods"
+		},
+		"ware": {
+			"gb_hoppel_pops": "Hoppel Pops",
+			"gb_moehrenperlen": "Carrot Pearls",
+			"gb_goo_cola": "Goo Cola"
+		},
+		"intro": {
+			"titel": "The key handover",
+			"zeile1": "Uncle Alwin ran the little corner store for 40 years — today he hangs up his apron and leaves on a grand carrot cruise.",
+			"zeile2": "He presses a key into Gooby's paw that's bigger than his head. With a note: “The store likes you. Water the till twice a week.”",
+			"zeile3": "The door says “Goo!” on the way in and “Bye…” on the way out. From now on it's up to you: shelf by shelf, carrot by carrot, beep by beep.",
+			"knopf": "Take the key!"
+		},
+		"laden": {
+			"titel": "Goo und Bye",
+			"verlassen": "‹ Leave",
+			"umsatz": "Till: {betrag}",
+			"lager": "Storage: {stueck} items",
+			"oeffnen": "Open the store!",
+			"nachschub": "Restock",
+			"erst_einraeumen": "Stock a shelf first — customers need something to grab!",
+			"regal_voll": "That slot is already full to the top.",
+			"lager_leer": "The storage is empty — get restock!",
+			"offen_toast": "The door says “Goo!” — customers incoming!",
+			"kunde_hinweis": "{name} is browsing…",
+			"kunde_alwin": "Uncle Alwin",
+			"kunde_listen_gooby": "List Gooby",
+			"kunde_familie": "The Hoppel family",
+			"kunde_hamster_gooby": "Hamster Gooby"
+		},
+		"nachschub": {
+			"titel": "Order restock",
+			"hinweis": "The wholesale market delivers to the store door — you pay wholesale, you sell at the suggested price.",
+			"zeile": "{name} · {preis}",
+			"gekauft": "Put 1× {name} into storage.",
+			"zu_teuer": "Not quite enough coins for that."
+		},
+		"abschluss": {
+			"titel": "Till count!",
+			"untertitel": "Lights out, the door whispers “Bye…” — time to count.",
+			"umsatz": "Revenue",
+			"kunden": "Customers",
+			"artikel": "Items sold",
+			"verpasst": "{anzahl}× someone found an empty shelf — that sold out fast!",
+			"feierabend": "Close up!"
+		}
+	}
+}

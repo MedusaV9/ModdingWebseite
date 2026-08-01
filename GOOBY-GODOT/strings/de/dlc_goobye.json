@@ -1,0 +1,71 @@
+{
+	"dlc_goobye": {
+		"titel": "Goo und Bye",
+		"knopf": {
+			"zum_laden": "Laden aufschließen!",
+			"angebot": "Schlüssel ansehen"
+		},
+		"angebot": {
+			"titel": "Onkel Alwins Schlüssel",
+			"text": "Onkel Alwin geht auf große Möhren-Kreuzfahrt — und statt zu verkaufen, drückt er Gooby einen riesigen Schlüssel in die Pfote. Dazu einen Zettel: „Der Laden mag dich. Gieß die Kasse zweimal die Woche.“",
+			"preis": "{preis} Münzen",
+			"frage": "Übernimmst du den kleinen Eckladen?",
+			"kaufen": "Schlüssel übernehmen!",
+			"spaeter": "Später",
+			"zu_wenig": "Noch nicht genug Münzen — der Schlüssel kostet {preis}. Er wartet geduldig."
+		},
+		"gruppe": {
+			"obst": "Obst",
+			"gemuese": "Gemüse",
+			"backwaren": "Backwaren",
+			"suesses": "Süßes",
+			"kuehlware": "Kühlware",
+			"eigenmarke": "Goobys Gute Ware"
+		},
+		"ware": {
+			"gb_hoppel_pops": "Hoppel-Pops",
+			"gb_moehrenperlen": "Möhrenperlen",
+			"gb_goo_cola": "Goo-Cola"
+		},
+		"intro": {
+			"titel": "Die Schlüsselübergabe",
+			"zeile1": "Onkel Alwin hat den kleinen Eckladen 40 Jahre lang geführt — heute hängt er die Schürze an den Nagel und geht auf große Möhren-Kreuzfahrt.",
+			"zeile2": "Er drückt Gooby einen Schlüssel in die Pfote, der größer ist als sein Kopf. Dazu einen Zettel: „Der Laden mag dich. Gieß die Kasse zweimal die Woche.“",
+			"zeile3": "Die Tür sagt „Goo!“ beim Reinkommen und „Bye…“ beim Rausgehen. Ab jetzt entscheidest du: Regal für Regal, Möhre für Möhre, Piep für Piep.",
+			"knopf": "Schlüssel nehmen!"
+		},
+		"laden": {
+			"titel": "Goo und Bye",
+			"verlassen": "‹ Raus",
+			"umsatz": "Kasse: {betrag}",
+			"lager": "Lager: {stueck} Stück",
+			"oeffnen": "Laden öffnen!",
+			"nachschub": "Nachschub",
+			"erst_einraeumen": "Erst ein Regal einräumen — die Kundschaft braucht etwas zum Zugreifen!",
+			"regal_voll": "Der Slot ist schon voll bis oben.",
+			"lager_leer": "Das Lager ist leer — hol Nachschub!",
+			"offen_toast": "Die Tür sagt „Goo!“ — Kundschaft kommt!",
+			"kunde_hinweis": "{name} stöbert…",
+			"kunde_alwin": "Onkel Alwin",
+			"kunde_listen_gooby": "Listen-Gooby",
+			"kunde_familie": "Familie Hoppel",
+			"kunde_hamster_gooby": "Hamster-Gooby"
+		},
+		"nachschub": {
+			"titel": "Nachschub bestellen",
+			"hinweis": "Der Großmarkt liefert bis zur Ladentür — Einkaufspreis, verkauft wird zum Richtwert.",
+			"zeile": "{name} · {preis}",
+			"gekauft": "1× {name} ins Lager gelegt.",
+			"zu_teuer": "Dafür reichen die Münzen gerade nicht."
+		},
+		"abschluss": {
+			"titel": "Kassensturz!",
+			"untertitel": "Licht aus, die Tür flüstert „Bye…“ — Zeit zu zählen.",
+			"umsatz": "Umsatz",
+			"kunden": "Kundschaft",
+			"artikel": "Verkaufte Artikel",
+			"verpasst": "{anzahl}× stand jemand vor leerem Regal — das war schnell weg!",
+			"feierabend": "Feierabend!"
+		}
+	}
+}
