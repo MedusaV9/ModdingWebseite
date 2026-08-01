@@ -25,6 +25,11 @@ signal garderobe_geaendert(kategorie: String, id: String)
 const ROUTE_WARDROBE := &"wardrobe"
 const ROUTES := {ROUTE_WARDROBE: "res://scripts/cosmetics/wardrobe_screen.tscn"}
 const KARTE := Vector2(184.0, 214.0)
+## Inhaltsspalte W16: eigene Grid-Basis (Bühne + Regal brauchen mehr als die
+## 660er-Standardspalte — Entwurf ui-architektur §6.2 / Scout ui-spalte2 §2).
+const SPALTE_BASIS := 920.0
+## Gesperrte Karten bleiben sichtbar, aber ausgegraut.
+const GESPERRT_TOENUNG := Color(0.72, 0.7, 0.7, 1.0)
 const RARITY_FARBE := {
 	"haeufig": AcTokens.WHITE,
 	"selten": AcTokens.SKY_SOFT,
@@ -53,11 +58,16 @@ var _buehne: Node3D
 var _viewport: SubViewport
 var _dreht := false
 var _karten: Dictionary = {}  # id -> TextureRect der Vorschau
+## id -> {karte, rahmen, status} für gezielte In-place-Updates (kein Rebuild).
+var _karten_ui: Dictionary = {}
 ## FB3: Metrik-Pass (Safe-Area, Touch-Floor, UiScale) bei jedem Resize.
 var _rows: VBoxContainer
 var _back: Button
+var _split: BoxContainer
 var _saeule_links: VBoxContainer
+var _buehne_container: SubViewportContainer
 var _tab_scroll: ScrollContainer
+var _grid_scroll: ScrollContainer
 var _tile := KARTE
 
 
@@ -100,15 +110,18 @@ func _ready() -> void:
 	ready_for_reveal.emit()
 
 
-## FB3: Safe-Area + zentrale Skalierung + Touch-Floor (statt fester 24/16-px-
-## Ränder und 184er-Karten, die unter Notch/Home-Indicator liefen).
+## FB3/W16: Safe-Area + zentrale Skalierung + Touch-Floor + Inhaltsspalte
+## (zentriert + breiten-gedeckelt, Galerie-Muster) — hochkant stapelt der
+## Split (Bühne oben, Grid unten), quer bleibt es die Zwei-Spalten-Teilung.
 func _apply_metrics() -> void:
 	if _rows == null or not is_inside_tree():
 		return
 	var m := ScreenShell.metrics(get_viewport())
 	var f: float = m["f"]
 	var canvas: Vector2 = m["canvas"]
-	ScreenShell.frame(_rows, m, 24.0, 16.0)
+	# Inhaltsspalte W16: Hintergrund bleibt vollflächig, Inhalt rückt mittig.
+	ScreenShell.content_frame(_rows, m, SPALTE_BASIS)
+	var spalte := ScreenShell.content_width(m, SPALTE_BASIS)
 	if _back != null:
 		ScreenShell.touch_target(_back, m)
 	# Tabs: Floor auf BEIDEN Achsen (kurze Texte wie „Fell“ unterschreiten
@@ -118,19 +131,38 @@ func _apply_metrics() -> void:
 			(chip as Control).custom_minimum_size = Vector2(m["floor_px"], m["floor_px"])
 	if _tab_scroll != null:
 		_tab_scroll.custom_minimum_size = Vector2(0.0, m["floor_px"] + 4.0)
-	_saeule_links.custom_minimum_size = Vector2(minf(330.0 * f, canvas.x * 0.32), 0.0)
-	# Karten: Wunschgröße × f, Spaltenzahl aus der Restbreite.
-	_tile = KARTE * f
+	# Hochformat-Stapel (G3): Bühne oben mit festem Höhenbudget (~38 % der
+	# Safe-Höhe), Grid darunter in voller Spaltenbreite.
+	var hochkant := canvas.y > canvas.x
+	_split.vertical = hochkant
 	var insets: Dictionary = m["insets"]
-	var avail := (
-		canvas.x
-		- float(insets["left"])
-		- float(insets["right"])
-		- 48.0 * f
-		- _saeule_links.custom_minimum_size.x
-		- 16.0
-	)
-	_grid.columns = clampi(int(floorf((avail + 12.0) / (_tile.x + 12.0))), 1, 5)
+	var avail := spalte - 12.0
+	if hochkant:
+		var safe_h := canvas.y - float(insets["top"]) - float(insets["bottom"])
+		var buehne_h := clampf(safe_h * 0.38, 320.0, maxf(safe_h - 320.0, 320.0))
+		_saeule_links.custom_minimum_size = Vector2(0.0, buehne_h)
+		# Die feste Stapelhöhe regiert — das 300×380-Viewport-Minimum würde
+		# sie auf kleinen Hochkant-Canvases sprengen.
+		_buehne_container.custom_minimum_size = Vector2.ZERO
+	else:
+		_saeule_links.custom_minimum_size = Vector2(minf(330.0 * f, spalte * 0.32), 0.0)
+		# Bühnen-Minimum NUR in der Höhe: die Breite bekommt der Container
+		# von der Säule (VBox füllt, stretch=true skaliert den SubViewport
+		# mit). Ein fixes 300er-Breiten-Minimum drückte die Säule samt
+		# AcCard-Rändern sonst auf 336 px und sprengte die Inhaltsspalte —
+		# rows klemmt an der Kinder-Mindestbreite (936 statt 920, Mitte 648
+		# statt 640 auf 1280×720; W16-Befund der G3-Integration).
+		_buehne_container.custom_minimum_size = Vector2(0.0, 380.0)
+		avail = spalte - _saeule_links.custom_minimum_size.x - 16.0 - 12.0
+	# Karten: Wunschgröße × f, Spaltenzahl aus der SPALTEN-Restbreite (statt
+	# der vollen Canvas-Breite); hochkant mindestens 3 Spalten.
+	_tile = KARTE * f
+	var cols := clampi(int(floorf((avail + 12.0) / (_tile.x + 12.0))), 1, 5)
+	if hochkant and cols < 3:
+		cols = 3
+		var breite := (avail + 12.0) / 3.0 - 12.0
+		_tile = Vector2(breite, breite * KARTE.y / KARTE.x)
+	_grid.columns = cols
 	for karte in _grid.get_children():
 		if karte is Control:
 			(karte as Control).custom_minimum_size = _tile
@@ -160,6 +192,8 @@ func item_tippen(id: String) -> Dictionary:
 	var def := CosmeticsCatalog.by_id(id)
 	if def.is_empty() or _gs == null:
 		return {"ok": false, "grund": "unbekannt"}
+	var kategorie := str(def["kategorie"])
+	var vorher := CosmeticsState.equipped(_slice(), kategorie)
 	var ergebnis: Dictionary = CosmeticsState.apply_to_state(
 		_gs,
 		func(slice: Dictionary, econ: Dictionary) -> Variant:
@@ -171,9 +205,13 @@ func item_tippen(id: String) -> Dictionary:
 			return kauf
 	)
 	_muenzen_aktualisieren()
-	_grid_neu_bauen()
+	# Scroll-Sprung-Fix (G3): nur die betroffenen Karten in-place auffrischen
+	# — der komplette Grid-Rebuild warf die Scroll-Position auf den Anfang.
+	_karte_aktualisieren(id)
+	if not vorher.is_empty() and vorher != id:
+		_karte_aktualisieren(vorher)
 	_rig_aktualisieren()
-	garderobe_geaendert.emit(str(def["kategorie"]), id)
+	garderobe_geaendert.emit(kategorie, id)
 	return ergebnis
 
 
@@ -197,12 +235,14 @@ func _build_ui() -> void:
 	add_child(_rows)
 	_rows.add_child(_build_header())
 
-	var split := HBoxContainer.new()
-	split.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	split.add_theme_constant_override("separation", 16)
-	_rows.add_child(split)
-	split.add_child(_build_buehne())
-	split.add_child(_build_regal())
+	# BoxContainer statt fester HBox: `_apply_metrics` schaltet die Achse
+	# (quer = nebeneinander, hochkant = Bühne oben / Grid unten).
+	_split = BoxContainer.new()
+	_split.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_split.add_theme_constant_override("separation", 16)
+	_rows.add_child(_split)
+	_split.add_child(_build_buehne())
+	_split.add_child(_build_regal())
 
 
 func _build_header() -> Control:
@@ -247,6 +287,7 @@ func _build_buehne() -> Control:
 	container.custom_minimum_size = Vector2(300.0, 380.0)
 	container.gui_input.connect(_on_buehne_input)
 	rahmen.add_child(container)
+	_buehne_container = container
 	_viewport = SubViewport.new()
 	_viewport.transparent_bg = true
 	_viewport.own_world_3d = true
@@ -341,6 +382,7 @@ func _build_regal() -> Control:
 	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	saeule.add_child(scroll)
+	_grid_scroll = scroll
 	_grid = GridContainer.new()
 	_grid.columns = 4
 	_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -357,7 +399,7 @@ func _build_tab(kategorie: String) -> Control:
 	chip.toggle_mode = true
 	chip.text = I18nService.t("wardrobe.kat.%s" % kategorie)
 	chip.focus_mode = Control.FOCUS_NONE
-	chip.pressed.connect(tab_waehlen.bind(kategorie))
+	chip.pressed.connect(_on_tab_gedrueckt.bind(kategorie))
 	return chip
 
 
@@ -365,6 +407,7 @@ func _grid_neu_bauen() -> void:
 	if _grid == null:
 		return
 	_karten.clear()
+	_karten_ui.clear()
 	for child in _grid.get_children():
 		child.queue_free()
 		_grid.remove_child(child)
@@ -393,8 +436,9 @@ func _build_karte(def: Dictionary, slice: Dictionary, angelegt: String) -> Contr
 	karte.tooltip_text = CosmeticsCatalog.desc_of(def)
 	karte.disabled = gesperrt
 	# Gesperrt heißt SICHTBAR, aber grau — man soll sehen, worauf man spart.
-	karte.modulate = Color(0.72, 0.7, 0.7, 1.0) if gesperrt else Color.WHITE
+	karte.modulate = GESPERRT_TOENUNG if gesperrt else Color.WHITE
 	karte.pressed.connect(_on_karte_gedrueckt.bind(id))
+	_karten_ui[id] = {"karte": karte}
 
 	var inhalt := VBoxContainer.new()
 	inhalt.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -410,10 +454,8 @@ func _build_karte(def: Dictionary, slice: Dictionary, angelegt: String) -> Contr
 	return karte
 
 
-func _build_bild(def: Dictionary, angelegt: bool) -> Control:
-	var rahmen := PanelContainer.new()
-	rahmen.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	rahmen.mouse_filter = Control.MOUSE_FILTER_IGNORE
+## Rahmen-Stil des Vorschaubilds: Angelegt = Leaf-Border, sonst Rarity-Farbe.
+func _bild_stil(def: Dictionary, angelegt: bool) -> StyleBoxFlat:
 	var stil := StyleBoxFlat.new()
 	stil.bg_color = AcTokens.PAPER_SHADE
 	stil.set_corner_radius_all(AcTokens.RADIUS_ROW)
@@ -421,7 +463,14 @@ func _build_bild(def: Dictionary, angelegt: bool) -> Control:
 		AcTokens.LEAF if angelegt else RARITY_FARBE.get(str(def["rarity"]), AcTokens.WHITE)
 	)
 	stil.set_border_width_all(4 if angelegt else 3)
-	rahmen.add_theme_stylebox_override("panel", stil)
+	return stil
+
+
+func _build_bild(def: Dictionary, angelegt: bool) -> Control:
+	var rahmen := PanelContainer.new()
+	rahmen.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	rahmen.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	rahmen.add_theme_stylebox_override("panel", _bild_stil(def, angelegt))
 	var bild := TextureRect.new()
 	bild.name = "Vorschau"
 	bild.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
@@ -431,7 +480,19 @@ func _build_bild(def: Dictionary, angelegt: bool) -> Control:
 	bild.texture = _preview.hole(str(def["id"]))
 	rahmen.add_child(bild)
 	_karten[str(def["id"])] = bild
+	if _karten_ui.get(str(def["id"])) is Dictionary:
+		_karten_ui[str(def["id"])]["rahmen"] = rahmen
 	return rahmen
+
+
+func _status_text(def: Dictionary, besitzt: bool, angelegt: bool, gesperrt: bool) -> String:
+	if gesperrt:
+		return I18nService.t("wardrobe.level", {"n": int(def["min_level"])})
+	if angelegt:
+		return I18nService.t("wardrobe.angelegt")
+	if besitzt:
+		return I18nService.t("wardrobe.besessen")
+	return I18nService.t("wardrobe.preis", {"n": int(def["preis"])})
 
 
 func _build_band(def: Dictionary, besitzt: bool, angelegt: bool, gesperrt: bool) -> Control:
@@ -449,23 +510,56 @@ func _build_band(def: Dictionary, besitzt: bool, angelegt: bool, gesperrt: bool)
 	status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	status.clip_text = true
 	status.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	if gesperrt:
-		status.text = I18nService.t("wardrobe.level", {"n": int(def["min_level"])})
-	elif angelegt:
-		status.text = I18nService.t("wardrobe.angelegt")
-	elif besitzt:
-		status.text = I18nService.t("wardrobe.besessen")
-	else:
-		status.text = I18nService.t("wardrobe.preis", {"n": int(def["preis"])})
+	status.text = _status_text(def, besitzt, angelegt, gesperrt)
 	box.add_child(status)
+	if _karten_ui.get(str(def["id"])) is Dictionary:
+		_karten_ui[str(def["id"])]["status"] = status
 	return box
+
+
+## Eine Karte in-place auffrischen (Sperre/Border/Status) — der komplette
+## Grid-Rebuild beim Antippen warf die Scroll-Position auf den Anfang.
+func _karte_aktualisieren(id: String) -> void:
+	var eintrag: Variant = _karten_ui.get(id)
+	var def := CosmeticsCatalog.by_id(id)
+	if not (eintrag is Dictionary) or def.is_empty():
+		return
+	var slice := _slice()
+	var besitzt := CosmeticsState.is_owned(slice, id)
+	var angelegt := CosmeticsState.equipped(slice, str(def["kategorie"])) == id
+	var gesperrt := not besitzt and _level() < int(def["min_level"])
+	var karte: Variant = (eintrag as Dictionary).get("karte")
+	if karte is Button:
+		(karte as Button).disabled = gesperrt
+		(karte as Button).modulate = GESPERRT_TOENUNG if gesperrt else Color.WHITE
+	var rahmen: Variant = (eintrag as Dictionary).get("rahmen")
+	if rahmen is PanelContainer:
+		(rahmen as PanelContainer).add_theme_stylebox_override("panel", _bild_stil(def, angelegt))
+	var status: Variant = (eintrag as Dictionary).get("status")
+	if status is Label:
+		(status as Label).text = _status_text(def, besitzt, angelegt, gesperrt)
 
 
 # ── Reaktionen ───────────────────────────────────────────────────────────────
 
 
+## Audio-Grammatik: Outcome schlägt Press — ob Kauf, An-/Ablegen oder Fehler
+## steht erst nach der Prüfung fest, also klingt das ERGEBNIS (genau 1 Id).
 func _on_karte_gedrueckt(id: String) -> void:
-	item_tippen(id)
+	var ergebnis := item_tippen(id)
+	if bool(ergebnis.get("gekauft", false)):
+		AudioDirector.try_play(self, "ui_buy")
+		Haptics.success(self)
+	elif bool(ergebnis.get("ok", false)) or str(ergebnis.get("grund", "")) == "unveraendert":
+		AudioDirector.try_play(self, "ui_click")
+	else:
+		AudioDirector.try_play(self, "ui_error")
+		Haptics.warn(self)
+
+
+func _on_tab_gedrueckt(kategorie: String) -> void:
+	AudioDirector.try_play(self, "ui_chip")
+	tab_waehlen(kategorie)
 
 
 func _on_vorschau_fertig(id: String, textur: Texture2D) -> void:
@@ -523,6 +617,7 @@ func _level() -> int:
 
 
 func _on_back_pressed() -> void:
+	AudioDirector.try_play(self, "ui_back")
 	if not auto_navigate:
 		return
 	var router := _router()

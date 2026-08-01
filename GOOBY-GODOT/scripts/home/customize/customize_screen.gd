@@ -25,6 +25,9 @@ const LIST_WIDTH := 250
 const TILE_SIZE := Vector2(104, 132)
 const SWATCH_SIZE := 36
 const PREVIEW_MIN_HEIGHT := 180
+## Inhaltsspalte W16: eigene Grid-Basis — die 660er-Standardspalte würde das
+## Zwei-Spalten-Layout (Kategorien + Vorschau/Optionen) quetschen.
+const SPALTE_BASIS := 920.0
 
 ## Kategorien: id (auch String-Key customize.kategorie.<id>), Bereich
 ## (innen/haus/grund), kaufbare Options-Art, Farb-Quelle und Save-Keys.
@@ -146,9 +149,9 @@ func _on_viewport_resized() -> void:
 	_refresh_alles()
 
 
-## FB3: Safe-Area + zentrale Skalierung + Touch-Floor — vorher feste
-## 20/14-px-Ränder (liefen unter die Notch) und 48-Design-px-Zeilen/36er-
-## Swatches, die auf Retina-Geräten unter 44 pt fielen.
+## FB3/W16: Safe-Area + zentrale Skalierung + Touch-Floor + Inhaltsspalte —
+## der Inhalt sitzt zentriert + breiten-gedeckelt (Grid-Basis 920), der
+## AcWallpaper-Hintergrund läuft weiter vollflächig durch.
 func _apply_metrics() -> void:
 	if _rows_box == null or not is_inside_tree():
 		return
@@ -158,10 +161,13 @@ func _apply_metrics() -> void:
 	var canvas: Vector2 = m["canvas"]
 	# Kacheln in flachen Quer-Canvases deckeln (Höhe ist dort knapp).
 	_tile_f = minf(_f, maxf(1.0, canvas.y / 820.0))
-	ScreenShell.frame(_rows_box, m, 20.0, 14.0)
+	ScreenShell.content_frame(_rows_box, m, SPALTE_BASIS)
+	var spalte := ScreenShell.content_width(m, SPALTE_BASIS)
 	if _back_btn != null:
 		ScreenShell.touch_target(_back_btn, m)
-	_kat_spalte.custom_minimum_size = Vector2(minf(LIST_WIDTH * _f, canvas.x * 0.3), 0.0)
+	# Kategorie-Spalte bezieht ihr Budget aus der SPALTEN-Breite (vorher
+	# volle Canvas-Breite — die linke Liste wäre relativ zu breit geworden).
+	_kat_spalte.custom_minimum_size = Vector2(minf(LIST_WIDTH * _f, spalte * 0.3), 0.0)
 	_optionen_scroll.custom_minimum_size = Vector2(0.0, TILE_SIZE.y * _tile_f + 18.0)
 	_kauf_button.custom_minimum_size = Vector2(150.0 * _f, _floor)
 	ScreenShell.scale_fonts(self, _f)
@@ -410,7 +416,9 @@ func _build_ui() -> void:
 func _build_header() -> Control:
 	var header := HBoxContainer.new()
 	header.add_theme_constant_override("separation", 10)
-	_back_btn = Button.new()
+	# Audio-Grammatik: jeder interaktive Knopf ist ein SquishButton
+	# (Tap-Haptik + Press-Squish zentral, nie Button.new()).
+	_back_btn = SquishButton.new()
 	_back_btn.name = "BackButton"
 	_back_btn.theme_type_variation = &"GhostButton"
 	_back_btn.text = I18nService.t("customize.back")
@@ -525,7 +533,7 @@ func _build_zahl_row() -> Control:
 	_zahl_row = HBoxContainer.new()
 	_zahl_row.name = "ZahlRow"
 	_zahl_row.add_theme_constant_override("separation", 8)
-	var minus := Button.new()
+	var minus := SquishButton.new()
 	minus.name = "ZahlMinus"
 	minus.theme_type_variation = &"AcChip"
 	minus.text = "-"
@@ -536,7 +544,7 @@ func _build_zahl_row() -> Control:
 	_zahl_label.name = "ZahlLabel"
 	_zahl_label.theme_type_variation = &"HeadlineLabel"
 	_zahl_row.add_child(_zahl_label)
-	var plus := Button.new()
+	var plus := SquishButton.new()
 	plus.name = "ZahlPlus"
 	plus.theme_type_variation = &"AcChip"
 	plus.text = "+"
@@ -557,21 +565,21 @@ func _build_aktions_row() -> Control:
 	_status_label.theme_type_variation = &"HeadlineLabel"
 	_status_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(_status_label)
-	_kauf_button = Button.new()
+	_kauf_button = SquishButton.new()
 	_kauf_button.name = "KaufButton"
 	_kauf_button.theme_type_variation = &"PrimaryButton"
 	_kauf_button.text = I18nService.t("customize.kaufen")
 	_kauf_button.custom_minimum_size = Vector2(150, _floor)
 	_kauf_button.pressed.connect(_on_kauf_pressed)
 	row.add_child(_kauf_button)
-	var zufall_btn := Button.new()
+	var zufall_btn := SquishButton.new()
 	zufall_btn.name = "ZufallButton"
 	zufall_btn.theme_type_variation = &"AcChip"
 	zufall_btn.text = I18nService.t("customize.zufall")
 	zufall_btn.custom_minimum_size = Vector2(0, _floor)
 	zufall_btn.pressed.connect(_on_zufall_pressed)
 	row.add_child(zufall_btn)
-	var reset_btn := Button.new()
+	var reset_btn := SquishButton.new()
 	reset_btn.name = "ResetButton"
 	reset_btn.theme_type_variation = &"GhostButton"
 	reset_btn.text = I18nService.t("customize.reset")
@@ -616,7 +624,7 @@ func _refresh_kategorien() -> void:
 			kopf.theme_type_variation = &"CaptionLabel"
 			kopf.text = I18nService.t("customize.bereich.%s" % letzter_bereich)
 			_kategorie_liste.add_child(kopf)
-		var btn := Button.new()
+		var btn := SquishButton.new()
 		btn.name = "Kat_%s" % str(kat["id"])
 		var aktiv := str(kat["id"]) == str(_kategorie["id"])
 		btn.theme_type_variation = &"ChipLeaf" if aktiv else &"AcCardButton"
@@ -636,7 +644,7 @@ func _refresh_raum_chips() -> void:
 	for room_id: String in RoomDefs.ids():
 		if bool(RoomDefs.room(room_id).get("outdoor", false)):
 			continue
-		var chip := Button.new()
+		var chip := SquishButton.new()
 		chip.name = "Raum_%s" % room_id
 		chip.theme_type_variation = &"ChipLeaf" if room_id == _raum else &"AcChip"
 		chip.text = I18nService.t("home.raum.%s" % room_id)
@@ -677,7 +685,7 @@ func _make_kachel(
 	gs: Object, art: String, option: Dictionary, aktiv: bool, farb_id: String
 ) -> Button:
 	var id := str(option["id"])
-	var kachel := Button.new()
+	var kachel := SquishButton.new()
 	kachel.name = "Option_%s" % id
 	kachel.custom_minimum_size = TILE_SIZE * _tile_f
 	kachel.icon = CustomizeIcons.option_preview(art, id, farb_id)
@@ -732,7 +740,7 @@ func _erlaubte_farben() -> Array:
 
 
 func _make_swatch(farb_id: String, aktiv: bool) -> Button:
-	var swatch := Button.new()
+	var swatch := SquishButton.new()
 	swatch.name = "Farbe_%s" % farb_id
 	# FB3: Swatches halten den PHYSISCHEN Touch-Floor (waren 36 Design-px).
 	swatch.custom_minimum_size = Vector2.ONE * maxf(SWATCH_SIZE * _f, _floor)
@@ -792,13 +800,20 @@ func _zeige_ergebnis(art: String, id: String, result: String) -> void:
 	var name_text := CustomizeCatalog.display_name(def, I18nService.get_locale())
 	match result:
 		HouseStyleState.RESULT_OK:
-			AudioDirector.try_play(self, "ui_confirm")
+			# Audio-Grammatik: abgeschlossene Münz-AUSGABE = ui_buy (nicht
+			# ui_confirm) + Erfolgs-Haptik am Kauf-Moment.
+			AudioDirector.try_play(self, "ui_buy")
+			Haptics.success(self)
 			_toasts.show_toast(I18nService.t("customize.gekauft_toast", {"name": name_text}))
 		HouseStyleState.RESULT_BROKE:
+			AudioDirector.try_play(self, "ui_error")
+			Haptics.warn(self)
 			_toasts.show_toast(I18nService.t("customize.zu_teuer"), true)
 		HouseStyleState.RESULT_OWNED:
 			pass
 		_:
+			AudioDirector.try_play(self, "ui_error")
+			Haptics.warn(self)
 			_toasts.show_toast(I18nService.t("customize.fehler"), true)
 
 
@@ -828,7 +843,8 @@ func _on_option_pressed(id: String) -> void:
 
 
 func _on_farbe_pressed(farb_id: String) -> void:
-	AudioDirector.try_play(self, "ui_toggle")
+	# Audio-Grammatik: Palette = Auswahl-Chip (ui_chip), kein An-Aus-Schalter.
+	AudioDirector.try_play(self, "ui_chip")
 	select_farbe(farb_id)
 
 
@@ -847,7 +863,8 @@ func _on_reset_pressed() -> void:
 
 
 func _on_zahl_pressed(delta: int) -> void:
-	AudioDirector.try_play(self, "ui_toggle")
+	# Audio-Grammatik: Stepper-Mikro-Schritt = ui_tick.
+	AudioDirector.try_play(self, "ui_tick")
 	set_hausnummer_zahl(delta)
 
 
