@@ -27,25 +27,32 @@ Diese Datei bleibt dein direkter Draht: einfach unten reinschreiben.)_
 
 _(Runden W14 UND W15 sind FERTIG — Details unten in „Erledigt". Aktueller Stand:)_
 
-- [~] **W16 läuft (1. August):** Umzug hierher abgeschlossen. Die große
-      Analyse-Welle G1 ist FERTIG — 28 Scout-Berichte (alle UI-Bereiche, alte
-      Ladebildschirme als Nachbau-Spez, Update-Umstellung, Minispiele, Server,
-      Sound, Texte, Bootzeit, Quickwins, DLC, Trailer). Jetzt läuft die
-      Umsetzungs-Welle G2 mit 11 Agents:
-      **(a) Update-Kanal aufs neue Repo — FERTIG** (Client-Config + Pack 1.1.0 +
-      Doku samt Zugangsschlüssel-Migration; 19/19 Tests grün),
-      **(b) UI-Rework Fundament** — neue „Inhaltsspalte": Hintergrund bleibt
-      vollflächig, Knöpfe/Inhalte rücken gedeckelt in die Mitte; 7 Menü-Screens
-      + Einstellungen werden umgestellt, mit neuer automatischer Zentrier-Prüfung,
-      **(c) Ladebildschirm im Alt-Look** — die Szenenwechsel-Karte wird 1:1 nach
-      der alten Web-Version nachgebaut (Cover-Zone, hüpfender Gooby-Sticker,
-      Teal-Balken mit „Lädt… NN%", rotierende Tipps, Blätter-Vorhang),
-      **(d) Arcade-Schönheitsfehler** — 5 Ranch-Wettbewerbe erscheinen als
-      „?"-Platzhalter-Kacheln im Arcade-Grid (Fix läuft),
-      **(e) 4 Minispiel-Polituren** — starHopper, trampoline, hideSeek, cityDrive
-      nach Scout-Befund aufs Niveau der besten Spiele.
-      Danach: Welle G3 (Grid-Screens, Blüten-Wipe, carrotGuard + Ranch-Arena,
-      Sound-Fixpakete, Text-Fixes) — Loop läuft weiter.
+- [x] **W16 / Welle G2 FERTIG (1. August):** 13 Umsetzungs-Pakete gelandet,
+      voller Testlauf grün (3024 Tests / 0 rot). Im Einzelnen:
+      **(a) Update-Kanal aufs neue Repo** (Client-Config + Pack 1.1.0 + Doku
+      samt Zugangsschlüssel-Migration),
+      **(b) UI-Rework Fundament „Inhaltsspalte"** — Hintergrund vollflächig,
+      Knöpfe/Inhalte gedeckelt in der Mitte; 7 Menü-Screens + Einstellungen
+      umgestellt, automatische Zentrier-Prüfung wacht jetzt über alle Screens,
+      **(c) Ladebildschirm im Alt-Look** — Szenenwechsel-Karte 1:1 nach der
+      alten Web-Version (Cover-Zone, hüpfender Sticker, Teal-Balken, Tipps)
+      **plus der rosa Blütenblätter-Wipe** als Übergang (26 Blüten/Blätter
+      reiten der Wisch-Kante voraus, exakt die alten Web-Kurven),
+      **(d) Arcade-Fix** — die 5 Ranch-Wettbewerbe haben echte Cover statt
+      „?"-Platzhalter,
+      **(e) 5 Minispiel-Polituren** — starHopper, trampoline, hideSeek,
+      cityDrive und die Ranch-Arena (Überstrahlung raus, Publikum rein),
+      **(f) Boot schneller** — erster Pixel ~55 ms früher, Welt-Laden mit
+      echtem Fortschritt + vorgewärmter Musik (kein Ruckler in der Öffnung),
+      **(g) 11 Prozess-/Robustheits-Fixe** (stapelnde Klick-Animationen,
+      Zeitzonen-Fehler im Schnupfen-Wetter, schlafende Hintergrund-Prozesse,
+      Speicher-Rettung aus Backups).
+- [~] **W16 / Welle G3 läuft:** 5 neue Scout-Berichte liegen vor (Plan mit
+      Paket-Schnitt, Audit ALLER 32 restlichen Minispiele in 3 Batches,
+      Inventur der restlichen ~40 Screens für die Inhaltsspalte). Jetzt
+      starten die Umsetzer: restliche Screens auf die Inhaltsspalte,
+      Minispiel-Polituren nach Audit, Sound-/Text-Fixpakete, carrotGuard.
+      Loop läuft weiter.
 
 - [~] **DLC-Umsetzung „Goo und Bye" + „McGooby"** — Design-Docs komplett, DLC-Hub zeigt
       beide als „BALD"; nächster Schritt ist Welle A des Goo-und-Bye-Fundaments
