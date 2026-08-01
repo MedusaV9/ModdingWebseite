@@ -180,3 +180,29 @@ rg "chest-sting"       run/logs/debug.log   # EventSpawnRules Cap-/Spawn-Log
   fotobasiert.
 - `reducedFx`-Entscheidung B4 (Basis-Atem ungegated, Overdrive gegated) steht in §2 —
   falls die Abnahme den Basis-Atem auch gaten will: Ein-Zeilen-Änderung im Layer.
+
+## B6-Abnahme-Werkzeug /dev fogsite (Nachtrag)
+
+<!-- F-105 B6 acceptance aid -->
+
+Neu: `devtools/dev/DevFogSiteCommands.java` (rein additiv, perm ≥ 2). `/dev fogsite list`
+zeigt pro Site aus `FogStormSites.sites()` id/x/z/radius/stage/active PLUS die persistierte
+SavedData-Zeile (`placed/active/recovered` + Chest-Index mit Positionen); `/dev fogsite
+rematerialize <id>` ruft die bestehende public API `FogStormSites.materializeSite(...)` im
+Overworld auf (antwortet sofort „queued", Abschluss/Fehler kommen aus den Callbacks — plus
+INFO-Sonden `[devfogsite] rematerialized <id>` / `[devfogsite] FAILED <id>: <msg>`). Nötig,
+weil Sites normal NUR über den World-Stage-Listener materialisieren: auf einem Legacy-Save
+mit Stage > 3 kann ein neu in `fogstorms.json` eingetragener Eintrag nie mehr enqueued
+werden, und Alt-Sites älterer Codestände haben keinen persistierten Chest-Index
+(`FogSiteState#chests()` leer) — damit kann `FogChestSting` (B6) nie feuern. Abnahme-Rezept:
+Site-Eintrag in `run/world/eclipse/fogstorms.json` → `/eclipse-worldgen reload` →
+`/dev fogsite rematerialize eclipse:fog_storm_3` → `/dev fogsite list` zeigt 3 Chests →
+Chest öffnen → Sonde `[w5b-chest]` in `run/logs/debug.log`.
+
+Zusätzlich `/dev fogsite retire <id>`: persistentes Retirement über die bestehende
+`FogStormSites.stormEnded(...)`-API (Wand fällt, `active=false` überlebt Restart,
+Snow-Recovery-Sweep läuft) — nötig, weil auf der GPU-losen llvmpipe-VM jeder Registry-Sturm
+in Renderweite einen permanenten Framebuffer-Blit-Fehler erzeugt (GL_INVALID_OPERATION
+depth attachment format mismatch → Screen dauerhaft schwarz). Damit lassen sich die
+Legacy-Stürme für Foto-Abnahmen anderer Features kontrolliert abbauen und später per
+`rematerialize` frisch wieder aufbauen.
