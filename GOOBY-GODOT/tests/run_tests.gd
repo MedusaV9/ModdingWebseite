@@ -51,6 +51,14 @@ func _run_script(script_path: String) -> Dictionary:
 	if script == null:
 		print("  FAIL %s — Skript lädt nicht." % script_path)
 		return {"total": 1, "failed": 1}
+	if not script.can_instantiate():
+		# Parse-Fehler-Guard (W16/G4-Befund): load() liefert dann zwar ein
+		# GDScript-Objekt, aber .new() darauf crasht die Runner-Coroutine VOR
+		# quit() — der Prozess hängt dauerhaft (so geschehen, als eine
+		# build()-Signatur wechselte und eine Bestands-Call-Site veraltete).
+		# Deshalb: laut als FAIL zählen und weiterlaufen statt hängen.
+		print("  FAIL %s — Skript kompiliert nicht (Parse-Fehler)." % script_path)
+		return {"total": 1, "failed": 1}
 	var case: Variant = script.new()
 	if not (case is TestCase):
 		# Fremd-Runner-Suiten (z. B. W1c-UI-Tests mit eigener Basisklasse) werden

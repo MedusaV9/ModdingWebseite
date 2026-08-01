@@ -19,10 +19,20 @@ func _run() -> void:
 	files.sort()
 	for path in files:
 		var script := load(path) as GDScript
-		if script == null:
-			all_failures.append("Testdatei lädt nicht: %s" % path)
+		if script == null or not script.can_instantiate():
+			# can_instantiate-Guard (W16/G4): .new() auf einem Skript mit
+			# Parse-Fehler crasht die Coroutine vor quit() → Prozess hängt.
+			all_failures.append("Testdatei lädt/kompiliert nicht: %s" % path)
 			continue
-		var case: W1cTestCase = script.new()
+		var inst: Variant = script.new()
+		if not (inst is W1cTestCase):
+			# Falsche Basisklasse (gehört in run_tests.gd): laut melden statt
+			# am harten typed-Cast zu sterben.
+			all_failures.append("Keine W1cTestCase-Suite: %s" % path)
+			if inst is Object and not (inst is RefCounted):
+				inst.free()
+			continue
+		var case: W1cTestCase = inst
 		case.tree = self
 		for method in script.get_script_method_list():
 			var method_name: String = method["name"]

@@ -24,7 +24,14 @@ const COMBO_FONT_MAX := 84
 
 ## CanvasItem, das beim Shake versetzt wird (der Host nimmt den
 ## SubViewportContainer). position wird um die Basis herum moduliert.
-var shake_target: CanvasItem
+## W17/INTEGRATE (Q1-Nachbar): (Re-)Zuweisen lässt einen laufenden Shake die
+## Ruhelage NEU lernen — nach programmatischer Neu-Positionierung (Letterbox-
+## Relayout bei Resize/Rotation) einfach erneut zuweisen, sonst schreibt
+## _process jede Frame die alte Basis zurück und das Feld hängt schief.
+var shake_target: CanvasItem:
+	set(value):
+		shake_target = value
+		_shake_base_valid = false
 ## Optionales WorldEnvironment im Host-Viewport für bloom_pulse.
 var world_environment: WorldEnvironment
 ## Parent für float_text-Labels und Overlay-Effekte (Overlay des Hosts).

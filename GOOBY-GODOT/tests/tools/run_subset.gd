@@ -39,7 +39,15 @@ func _run() -> void:
 				hit = true
 		if not hit:
 			continue
-		var inst: Variant = (load(TESTS_DIR + "/" + file) as GDScript).new()
+		var script := load(TESTS_DIR + "/" + file) as GDScript
+		if script == null or not script.can_instantiate():
+			# can_instantiate-Guard (W16/G4): .new() auf einem Skript mit
+			# Parse-Fehler crasht die Coroutine vor quit() → Prozess hängt.
+			print("-- %s (FAIL: Skript lädt/kompiliert nicht)" % file)
+			total += 1
+			failed += 1
+			continue
+		var inst: Variant = script.new()
 		if not (inst is TestCase):
 			# W1c-Suiten (extends W1cTestCase/RefCounted) laufen über
 			# run_w1c_tests.gd. Früher riss der harte typed-Cast hier einen

@@ -59,6 +59,11 @@ var _stage: Control
 var _viewport_container: SubViewportContainer
 var _viewport: SubViewport
 var _overlay: Control
+## W17/INTEGRATE (Q1): eigene Juice-Ebene, die exakt dem letterboxten
+## Viewport-Container folgt — Spiele reichen Viewport-Pixel aus
+## _stage.to_screen() in float_text/overlay_burst/overlay_ring, und die
+## landeten vorher im Fenster-Raum (Texte/Ringe klebten im Creme-Rand).
+var _float_layer: Control
 var _top_bar: HBoxContainer
 var _score_label: Label
 var _countdown_label: Label
@@ -174,11 +179,19 @@ func _build_ui() -> void:
 	juice.shake_target = _viewport_container
 	add_child(juice)
 
+	# Q1: Juice-Ebene deckungsgleich zum Spielfeld (Sync in _layout_stage) —
+	# Float-Texte/Bursts treffen so den Punkt, den das Spiel meinte, und
+	# Flashes/Konfetti rahmen das Feld statt der Letterbox-Flächen.
+	_float_layer = Control.new()
+	_float_layer.name = "JuiceLayer"
+	_float_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_float_layer)
+	juice.float_text_parent = _float_layer
+
 	_overlay = Control.new()
 	_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_overlay)
-	juice.float_text_parent = _overlay
 
 	_top_bar = HBoxContainer.new()
 	_top_bar.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
@@ -302,6 +315,16 @@ func _layout_stage() -> void:
 		left + (avail.x - fitted.x) * 0.5, _stage_top + (avail.y - fitted.y) * 0.5
 	)
 	_viewport_container.size = fitted
+	if _float_layer != null:
+		# Q1: _stage ist FULL_RECT am Host-Ursprung, darum ist die Container-
+		# Position direkt Host-Raum — die Juice-Ebene spiegelt sie 1:1.
+		_float_layer.position = _viewport_container.position
+		_float_layer.size = fitted
+	if juice != null:
+		# Läuft gerade ein Shake, würde er die ALTE Container-Ruhelage
+		# zurückschreiben — Re-Zuweisung lässt ihn die Basis neu lernen
+		# (Setter-Vertrag am shake_target des JuiceKit).
+		juice.shake_target = _viewport_container
 
 
 ## Countdown mit Federung und steigender Tonhöhe (POLISH-A): jede Ziffer
