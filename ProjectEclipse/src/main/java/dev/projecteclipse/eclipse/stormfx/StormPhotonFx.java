@@ -403,6 +403,17 @@ final class StormPhotonFx {
      * false)} copy, then write {@code constant(base * scale)} live and the pristine object
      * back on release. Fail-soft: first reflective surprise disables tuning for the
      * session — loops keep their authored rates.
+     *
+     * <p><b>F-103 respawn hygiene — NIEMALS {@code FX.createInternalRuntime()} auf dem
+     * geteilten Cache:</b> emitters resolve straight off the flat
+     * {@code FX.getFxData().objects()} list (name match), NOT through a throwaway
+     * {@code FXRuntime}. An internal runtime {@code setScene()}s + re-parents the CACHED
+     * template objects, and because {@code FXObject.copy(false)} (the
+     * {@code createRuntime()} spawn path) copies the live transform parent, every later
+     * spawn copy then grafts itself into that stale internal scene — colliding the
+     * authored asset UUIDs there and flooding "Duplicate fx runtime object id … is
+     * replaced" on every subsequent attach (root cause of the F-102 duplicate storm,
+     * see docs/plans_v3/session_0730/FX_RESPAWN_HYGIENE_REPORT.md).</p>
      */
     private static final class Tuner {
         private static final int UNRESOLVED = 0;
@@ -411,8 +422,9 @@ final class StormPhotonFx {
         private static int state = UNRESOLVED;
         private static Method getFxCached;             // FXHelper.getFX(ResourceLocation)
         private static Method getFxIsolated;           // FXHelper.getFX(ResourceLocation, boolean)
-        private static Method createInternalRuntime;   // FX.createInternalRuntime()
-        private static Method findObject;              // FXRuntime.findObject(String)
+        private static Method getFxData;               // FX.getFxData()
+        private static Method fxDataObjects;           // FXData.objects()
+        private static Method getObjectName;           // IFXObject.getName()
         private static Class<?> particleEmitterClass;
         private static Field configField;              // ParticleEmitter.config
         private static Field emissionField;            // ParticleConfig.emission
@@ -433,15 +445,17 @@ final class StormPhotonFx {
             try {
                 Class<?> fxHelper = Class.forName("com.lowdragmc.photon.client.fx.FXHelper");
                 Class<?> fxClass = Class.forName("com.lowdragmc.photon.client.fx.FX");
-                Class<?> runtime = Class.forName("com.lowdragmc.photon.client.fx.FXRuntime");
+                Class<?> fxObject = Class.forName(
+                        "com.lowdragmc.photon.client.gameobject.IFXObject");
                 particleEmitterClass = Class.forName(
                         "com.lowdragmc.photon.client.gameobject.emitter.particle.ParticleEmitter");
                 Class<?> numberFunction = Class.forName(
                         "com.lowdragmc.photon.client.gameobject.emitter.data.number.NumberFunction");
                 getFxCached = fxHelper.getMethod("getFX", ResourceLocation.class);
                 getFxIsolated = fxHelper.getMethod("getFX", ResourceLocation.class, boolean.class);
-                createInternalRuntime = fxClass.getMethod("createInternalRuntime");
-                findObject = runtime.getMethod("findObject", String.class);
+                getFxData = fxClass.getMethod("getFxData");
+                fxDataObjects = getFxData.getReturnType().getMethod("objects");
+                getObjectName = fxObject.getMethod("getName");
                 configField = accessible(particleEmitterClass, "config");
                 emissionField = accessible(configField.getType(), "emission");
                 Class<?> emissionSetting = emissionField.getType();
@@ -473,17 +487,17 @@ final class StormPhotonFx {
             }
             try {
                 String[] names = TUNED_EMITTERS[slot];
-                Object cachedRt = createInternalRuntime.invoke(
-                        getFxCached.invoke(null, LOOP_IDS[slot]));
+                // Read-only resolution off the FX assets — no FXRuntime, no setScene, the
+                // cached templates stay scene-less/parent-less (respawn-hygiene law above).
+                Object cachedFx = getFxCached.invoke(null, LOOP_IDS[slot]);
                 // The doc-mandated isolation: pristine rates come from a FRESH uncached FX
                 // so restore() can never bake a previously tuned value back in.
-                Object pristineRt = createInternalRuntime.invoke(
-                        getFxIsolated.invoke(null, LOOP_IDS[slot], false));
+                Object pristineFx = getFxIsolated.invoke(null, LOOP_IDS[slot], false);
                 Object[] emissions = new Object[names.length];
                 Object[] pristine = new Object[names.length];
                 for (int i = 0; i < names.length; i++) {
-                    emissions[i] = emissionOf(cachedRt, names[i]);
-                    pristine[i] = getEmissionRate.invoke(emissionOf(pristineRt, names[i]));
+                    emissions[i] = emissionOf(cachedFx, names[i]);
+                    pristine[i] = getEmissionRate.invoke(emissionOf(pristineFx, names[i]));
                 }
                 EMISSIONS[slot] = emissions;
                 PRISTINE[slot] = pristine;
@@ -492,12 +506,15 @@ final class StormPhotonFx {
             }
         }
 
-        private static Object emissionOf(Object runtime, String name) throws Exception {
-            Object emitter = findObject.invoke(runtime, name);
-            if (emitter == null || !particleEmitterClass.isInstance(emitter)) {
-                throw new IllegalStateException("tuned emitter missing: " + name);
+        /** Finds the named ParticleEmitter on {@code fx}'s flat object list (no runtime). */
+        private static Object emissionOf(Object fx, String name) throws Exception {
+            for (Object candidate : (List<?>) fxDataObjects.invoke(getFxData.invoke(fx))) {
+                if (particleEmitterClass.isInstance(candidate)
+                        && name.equals(getObjectName.invoke(candidate))) {
+                    return emissionField.get(configField.get(candidate));
+                }
             }
-            return emissionField.get(configField.get(emitter));
+            throw new IllegalStateException("tuned emitter missing: " + name);
         }
 
         /** Writes {@code constant(base * scale)} into every tuned emitter of the loop. */
