@@ -1,12 +1,22 @@
 extends RefCounted
-## Angelteich-KULISSE (Agent MP-E, Tiefenpolitur): alles, was den Teich zu
-## einem Ort macht — Anglerhütte mit warm leuchtendem Fenster, Schilfgürtel,
-## Enten auf dem Wasser, eine Laterne am Steg und der Fang-Eimer neben Gooby.
+## Angelteich-KULISSE: alles, was den Teich zu einem Ort macht.
 ##
-## Nur Kulisse, keine Mechanik. Enten und Eimer gehen als Nodes zurück an die
-## Spielszene: die Enten paddeln in `_process`, der Eimer sammelt die Fänge.
+## Agent MP-E (Tiefenpolitur): Anglerhütte mit warm leuchtendem Fenster,
+## Schilfgürtel, Enten auf dem Wasser, Laterne am Steg, Fang-Eimer.
+##
+## W17/G4 (Paket G4-POND): zusätzlich (1) das komplette Dioramen-GELÄNDE —
+## Ufermassen, Erdschichten, Wasser, Beckengrund, Bewuchs, Seerosen, Steg —
+## 1:1 aus fishing_pond.gd hierher gezogen (die Hauptdatei kratzte am
+## 1000-Zeilen-Limit; Werte/Reihenfolge unverändert), und (2) der Ring-Pool
+## für Wasserkreise an der Einstichstelle der Schnur (M3).
+##
+## Nur Kulisse, keine Mechanik. Enten, Eimer und Ringe gehen als Nodes zurück
+## an die Spielszene: die Enten paddeln in `_process`, der Eimer sammelt die
+## Fänge, die Ringe pulsen NUR ohne Reduced Motion (Gate an der Call-Site).
 
 const Props3D := preload("res://scripts/minigames/games/_3da_stage/props3d.gd")
+
+const ASSETS := "res://assets/minigames/fishing_pond/"
 
 const HUT_WOOD := Color(0.42, 0.29, 0.22)
 const HUT_ROOF := Color(0.3, 0.22, 0.24)
@@ -15,6 +25,23 @@ const REED_TIP := Color(0.45, 0.3, 0.18)
 const DUCK_BODY := Color(0.93, 0.88, 0.78)
 const DUCK_HEAD := Color(0.35, 0.5, 0.32)
 const BUCKET_TIN := Color(0.55, 0.58, 0.64)
+const GRASS := Color(0.36, 0.53, 0.36)
+const SOIL := Color(0.42, 0.31, 0.26)
+const WOOD := Color(0.66, 0.47, 0.31)
+
+## Innenmaße des Beckens (Logik: POND_HALF_W 1.8, MAX_DEPTH 3.9).
+const POOL_HALF_W := 2.15
+const POOL_FRONT_Z := 1.15
+const POOL_BACK_Z := -1.8
+const POOL_FLOOR_Y := -4.4
+## Oberkante der Grasnarbe (die Wasserlinie ist y = 0).
+const BANK_Y := 0.26
+## Steghöhe über dem Wasser.
+const DECK_Y := 0.44
+
+## Lebenszeit eines Wasserrings (s) — danach ist er frei für den Pool.
+const RIPPLE_LIFE := 1.1
+const RIPPLE_POOL := 6
 
 ## Standplätze der Schilfbüschel: hinterm Becken und am linken Ufer — nie vor
 ## der Schnittkante (dort steht die Kamera) und nie überm Schwimmbereich.
@@ -43,6 +70,83 @@ static func build(stage: Node3D) -> Dictionary:
 	_reeds(stage)
 	_lantern(stage)
 	return {"ducks": _ducks(stage), "bucket": _bucket(stage)}
+
+
+## Dioramen-Gelände (W17/G4: 1:1 aus fishing_pond.gd): Ufer, Erdschichten,
+## Wasser samt Beckengrund, Uferbewuchs, Seerosen und Anglersteg — in exakt
+## der alten Aufbau-Reihenfolge. Gibt die Wasser-Spiegelfläche zurück (die
+## Spielszene lässt sie mit der Dünung atmen).
+static func build_terrain(stage: Node3D) -> MeshInstance3D:
+	_banks(stage)
+	var surface := _water(stage)
+	_shore(stage)
+	_deck(stage)
+	return surface
+
+
+## Milchglas-Platte hinter HUD-Labels/Bannern (M6 — Muster mpb_garden_kit).
+static func hud_plate() -> StyleBoxFlat:
+	var box := StyleBoxFlat.new()
+	box.bg_color = Color(1.0, 0.99, 0.94, 0.72)
+	box.set_corner_radius_all(16)
+	return box
+
+
+## W17/G4 M3: Ring-Pool für Wasserkreise an der Einstichstelle der Schnur.
+## Flache Tori knapp über der Wasserlinie; expandieren und verblassen. Die
+## Spielszene spawnt sie NUR ohne Reduced Motion (Q2: Gate an der Call-Site).
+static func build_ripples(stage: Node3D) -> Node3D:
+	var holder := Node3D.new()
+	holder.name = "Ripples"
+	for i in RIPPLE_POOL:
+		var mat := StandardMaterial3D.new()
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		mat.albedo_color = Color(0.93, 0.99, 1.0, 0.0)
+		var ring := Props3D.torus(1.0, 0.028, mat)
+		# Teilweise zur Kamera gekippt: flach auf dem Wasser wäre der Ring aus
+		# der fast waagerechten Dioramen-Kamera (~7° Pitch) unsichtbar; so
+		# liest er sich weiter als Wasserring UND bleibt deutlich zu sehen.
+		ring.rotation.x = PI * 0.3
+		ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		ring.visible = false
+		ring.set_meta("t", RIPPLE_LIFE)
+		ring.set_meta("power", 1.0)
+		ring.set_meta("mat", mat)
+		holder.add_child(ring)
+	stage.add_child(holder)
+	return holder
+
+
+## Einen freien Ring an `at` starten; sind alle aktiv, verfällt der Puls.
+static func spawn_ripple(holder: Node3D, at: Vector3, power := 1.0) -> void:
+	if holder == null:
+		return
+	for ring: MeshInstance3D in holder.get_children():
+		if float(ring.get_meta("t")) < RIPPLE_LIFE:
+			continue
+		ring.set_meta("t", 0.0)
+		ring.set_meta("power", power)
+		ring.position = at
+		return
+
+
+## Ringe expandieren lassen und ausblenden (jeden Frame aus der Spielszene).
+static func tick_ripples(holder: Node3D, delta: float) -> void:
+	if holder == null:
+		return
+	for ring: MeshInstance3D in holder.get_children():
+		var t := minf(RIPPLE_LIFE, float(ring.get_meta("t")) + delta)
+		ring.set_meta("t", t)
+		if t >= RIPPLE_LIFE:
+			ring.visible = false
+			continue
+		var k := t / RIPPLE_LIFE
+		var power := float(ring.get_meta("power"))
+		var radius := 0.08 + 0.62 * power * k
+		ring.visible = true
+		ring.scale = Vector3(radius, 1.0, radius)
+		(ring.get_meta("mat") as StandardMaterial3D).albedo_color.a = (0.55 * power * (1.0 - k))
 
 
 ## Enten paddeln: gemächliches Hin und Her um den Ruheplatz, Wippen mit der
@@ -93,6 +197,235 @@ static func _add_trophy(bucket: Node3D, color: Color) -> void:
 	fin.position = Vector3(cos(a) * 0.06, 0.24, sin(a) * 0.06)
 	fin.rotation.z = 0.35 * sin(a)
 	bucket.add_child(fin)
+
+
+# ------------------------------------------------- Gelände (aus fishing_pond)
+
+
+## Ufermasse: drei große Erdblöcke mit Grasnarbe, vorn aufgeschnitten. Das
+## Becken ist die Kerbe dazwischen — seine Innenflächen sind zugleich die
+## Beckenwände, die man durch das Wasser sieht.
+static func _banks(stage: Node3D) -> void:
+	var soil := Props3D.flat(SOIL)
+	var grass := Props3D.flat(GRASS)
+	# Tief genug, dass die Schnittkante den unteren Bildrand IMMER füllt —
+	# hochkant bleibt sonst ein schwarzer Streifen unter dem Becken stehen.
+	var depth := BANK_Y + 14.0
+	var mid := BANK_Y - depth * 0.5
+	# Vor der Schnittkante darf NICHTS stehen: die Kamera liegt fast auf
+	# Grasnarbenhöhe, jedes Stück Land davor würde das Becken verdecken.
+	var side_len := POOL_FRONT_Z + 26.0
+	var side_mid := POOL_FRONT_Z - side_len * 0.5
+	for sign_x: float in [-1.0, 1.0]:
+		var at := Vector3(sign_x * (POOL_HALF_W + 14.0), mid, side_mid)
+		stage.add_child(Props3D.box(Vector3(28.0, depth, side_len), soil, at))
+		stage.add_child(
+			Props3D.box(
+				Vector3(28.0, 0.16, side_len), grass, Vector3(at.x, BANK_Y - 0.07, side_mid)
+			)
+		)
+	_strata(stage)
+	var back_len := 88.0
+	var back_mid := POOL_BACK_Z - back_len * 0.5
+	stage.add_child(Props3D.box(Vector3(90.0, depth, back_len), soil, Vector3(0.0, mid, back_mid)))
+	stage.add_child(
+		Props3D.box(Vector3(90.0, 0.16, back_len), grass, Vector3(0.0, BANK_Y - 0.07, back_mid))
+	)
+	# Beckensohle aus hellem Sand — sie gibt der Tiefe einen Boden.
+	var floor_z := (POOL_FRONT_Z + POOL_BACK_Z) * 0.5
+	stage.add_child(
+		Props3D.box(
+			Vector3(POOL_HALF_W * 2.0, 0.4, POOL_FRONT_Z - POOL_BACK_Z),
+			Props3D.flat(Color(0.55, 0.47, 0.36)),
+			Vector3(0.0, POOL_FLOOR_Y - 0.2, floor_z)
+		)
+	)
+
+
+## Erdschichten auf der Schnittfläche. Eine nackte Wand ist im Querformat die
+## halbe Bildfläche; die Bänder machen daraus einen Bodenaufschluss mit
+## Humus, Lehm, Sand und Kiesel — und geben dem Ausschnitt Maßstab.
+static func _strata(stage: Node3D) -> void:
+	var bands := [
+		{"y": 0.02, "h": 0.36, "c": Color(0.34, 0.24, 0.2)},
+		{"y": -0.7, "h": 1.1, "c": Color(0.5, 0.35, 0.28)},
+		{"y": -2.1, "h": 1.7, "c": Color(0.44, 0.32, 0.3)},
+		{"y": -3.9, "h": 1.9, "c": Color(0.56, 0.44, 0.35)},
+		{"y": -7.0, "h": 4.4, "c": Color(0.35, 0.29, 0.32)},
+	]
+	for band: Dictionary in bands:
+		var mesh := BoxMesh.new()
+		mesh.size = Vector3(26.0, float(band["h"]), 0.06)
+		mesh.material = Props3D.flat(band["c"])
+		var poses: Array = []
+		for sign_x: float in [-1.0, 1.0]:
+			poses.append(
+				Props3D.pose(
+					Vector3(sign_x * (POOL_HALF_W + 13.0), float(band["y"]), POOL_FRONT_Z + 0.02)
+				)
+			)
+		stage.add_child(Props3D.swarm_mesh(mesh, poses, 8.0))
+
+
+## Wasser: Spiegelfläche oben + Schnittscheibe vorn. Beide sind durchsichtig,
+## die Scheibe färbt alles dahinter teichgrün ein — genau der Trick, mit dem
+## die Web-Fassung ihren Querschnitt baut, hier aber vor echter Geometrie.
+static func _water(stage: Node3D) -> MeshInstance3D:
+	var floor_z := (POOL_FRONT_Z + POOL_BACK_Z) * 0.5
+	var span := POOL_FRONT_Z - POOL_BACK_Z
+	var top := Props3D.glass(Color(0.44, 0.76, 0.82, 0.42))
+	top.emission_enabled = true
+	top.emission = Color(0.95, 0.62, 0.42)
+	top.emission_energy_multiplier = 0.35
+	var surface := Props3D.ground(Vector2(POOL_HALF_W * 2.0, span), top, 0.0)
+	surface.position.z = floor_z
+	stage.add_child(surface)
+	var pane := Props3D.box(
+		Vector3(POOL_HALF_W * 2.0, -POOL_FLOOR_Y, 0.02),
+		Props3D.glass(Color(0.2, 0.5, 0.58, 0.44)),
+		Vector3(0.0, POOL_FLOOR_Y * 0.5, POOL_FRONT_Z)
+	)
+	pane.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	stage.add_child(pane)
+	# Zweite Scheibe HINTER den Fischen: sie färbt nur die Beckenrückwand ein
+	# und erzeugt so das Tiefengefälle, das eine einzelne Scheibe nicht kann.
+	var murk := Props3D.box(
+		Vector3(POOL_HALF_W * 2.0, -POOL_FLOOR_Y, 0.02),
+		Props3D.glass(Color(0.1, 0.3, 0.4, 0.5)),
+		Vector3(0.0, POOL_FLOOR_Y * 0.5, POOL_BACK_Z + 0.5)
+	)
+	murk.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	stage.add_child(murk)
+	# Heller Saum auf der Wasserlinie — er trennt Luft und Wasser sichtbar.
+	stage.add_child(
+		Props3D.box(
+			Vector3(POOL_HALF_W * 2.0, 0.028, 0.05),
+			Props3D.glow(Color(1.0, 0.78, 0.55), 0.9),
+			Vector3(0.0, 0.0, POOL_FRONT_Z)
+		)
+	)
+	_underwater(stage)
+	return surface
+
+
+## Beckengrund: Steine und Wasserpflanzen als Massenware (ein Draw-Call je
+## Sorte) — sie geben der Tiefe Maßstab und verstecken die nackte Sohle.
+static func _underwater(stage: Node3D) -> void:
+	var rocks: Array = []
+	var weeds: Array = []
+	for i in 9:
+		var x := -POOL_HALF_W + 0.35 + 3.6 * float(i) / 8.0
+		var z := POOL_BACK_Z + 0.4 + 1.9 * absf(sin(float(i) * 2.3))
+		rocks.append(Props3D.pose(Vector3(x, POOL_FLOOR_Y, z), float(i) * 1.7, 0.9))
+		if i % 2 == 0:
+			weeds.append(Props3D.pose(Vector3(x + 0.2, POOL_FLOOR_Y, z - 0.3), float(i), 1.4))
+	stage.add_child(Props3D.swarm(Props3D.parts(ASSETS + "rock_smallA.glb", 0.3), rocks))
+	stage.add_child(
+		Props3D.swarm(
+			Props3D.parts(ASSETS + "grass_large.glb", 0.55, {"grass": Color(0.24, 0.5, 0.4)}), weeds
+		)
+	)
+
+
+## Uferbewuchs: Schilfgürtel, Baumreihe, Büsche, Steine, Pilze — und das
+## Ruderboot am linken Ufer. Alles hinter der Beckenkante.
+static func _shore(stage: Node3D) -> void:
+	# Zwei Sperrzonen: das Becken selbst (nichts wächst im Wasser) und ALLES
+	# vor der Beckenkante — dort steht die Kamera. Ohne die zweite Regel
+	# pflanzt der Kranz der großen Radien Bäume direkt vors Objektiv.
+	var bank := func(at: Vector3) -> bool:
+		if at.z > POOL_FRONT_Z + 1.4:
+			return true
+		return absf(at.x) < POOL_HALF_W + 0.5 and at.z > POOL_BACK_Z - 0.5
+	var behind := func(at: Vector3) -> bool: return at.z > POOL_BACK_Z - 0.6
+	var center := Vector3(0.0, BANK_Y, POOL_BACK_Z - 0.4)
+	stage.add_child(
+		Props3D.scatter(ASSETS + "grass_large.glb", 0.55, 26, 3.3, center, 0.7, 0.3, bank)
+	)
+	stage.add_child(
+		Props3D.scatter(ASSETS + "plant_bushLarge.glb", 0.8, 12, 5.2, center, 0.9, 1.4, bank)
+	)
+	stage.add_child(
+		Props3D.scatter(ASSETS + "tree_default.glb", 3.6, 9, 8.6, center, 1.4, 0.6, behind)
+	)
+	stage.add_child(
+		Props3D.scatter(ASSETS + "tree_pineRoundA.glb", 4.4, 8, 11.0, center, 1.8, 2.2, behind)
+	)
+	stage.add_child(
+		Props3D.scatter(ASSETS + "tree_fat.glb", 3.2, 7, 14.5, center, 2.1, 1.1, behind)
+	)
+	stage.add_child(
+		Props3D.scatter(ASSETS + "rock_largeA.glb", 0.62, 7, 4.4, center, 0.8, 2.8, bank)
+	)
+	stage.add_child(
+		Props3D.scatter(ASSETS + "mushroom_red.glb", 0.26, 8, 4.0, center, 0.7, 3.5, bank)
+	)
+	var boat := Props3D.model(ASSETS + "boat-row-small.glb", 0.46)
+	boat.position = Vector3(-4.1, BANK_Y - 0.05, POOL_FRONT_Z - 0.4)
+	boat.rotation.y = -0.5
+	Props3D.tint(boat, Color(0.78, 0.55, 0.36))
+	stage.add_child(boat)
+	_lilies(stage)
+	# Tief stehende Abendsonne hinter der Baumreihe (Web: sun disc + glow).
+	var sun := Props3D.halo(3.4, Color(1.0, 0.66, 0.36, 0.85))
+	sun.position = Vector3(-9.0, 3.4, POOL_BACK_Z - 24.0)
+	stage.add_child(sun)
+	var bridge := Props3D.model(ASSETS + "bridge_wood.glb", 0.5)
+	bridge.position = Vector3(-3.4, BANK_Y, POOL_BACK_Z - 1.2)
+	bridge.scale = Vector3(1.6, 1.0, 1.6)
+	Props3D.repaint(bridge, Props3D.NATURE)
+	stage.add_child(bridge)
+
+
+## Seerosen auf dem Wasser — sie geben der Spiegelfläche eine Oberfläche, an
+## der man sie überhaupt als Wasser erkennt (eine leere Glasplatte tut das
+## nicht). Sie liegen bewusst LINKS des Hakens und stören das Auswerfen nicht.
+static func _lilies(stage: Node3D) -> void:
+	var pad := CylinderMesh.new()
+	pad.top_radius = 0.19
+	pad.bottom_radius = 0.19
+	pad.height = 0.025
+	pad.radial_segments = 10
+	pad.rings = 1
+	pad.material = Props3D.flat(Color(0.33, 0.56, 0.35), 0.85)
+	var pads: Array = []
+	var spots := [
+		Vector3(-1.62, 0.012, 0.45),
+		Vector3(-1.15, 0.012, -0.35),
+		Vector3(-1.85, 0.012, -0.95),
+		Vector3(1.42, 0.012, -1.15),
+	]
+	for i in spots.size():
+		pads.append(Props3D.pose(spots[i], float(i) * 1.3, 0.8 + 0.35 * float(i % 2)))
+	stage.add_child(Props3D.swarm_mesh(pad, pads, 3.0))
+	var bloom := Props3D.sphere(0.075, Props3D.glow(Color(0.98, 0.7, 0.82), 0.5))
+	bloom.position = spots[0] + Vector3(0.05, 0.05, 0.0)
+	stage.add_child(bloom)
+
+
+## Anglersteg: Bohlen über der Wasserkante, zwei Pfähle ins Wasser.
+static func _deck(stage: Node3D) -> void:
+	var wood := Props3D.flat(WOOD, 0.85)
+	var plank := BoxMesh.new()
+	plank.size = Vector3(1.5, 0.07, 0.22)
+	plank.material = wood
+	var poses: Array = []
+	for i in 6:
+		poses.append(Props3D.pose(Vector3(1.72, DECK_Y, 0.62 - float(i) * 0.28)))
+	stage.add_child(Props3D.swarm_mesh(plank, poses, 4.0))
+	stage.add_child(
+		Props3D.box(
+			Vector3(1.58, 0.09, 1.78),
+			Props3D.flat(WOOD.darkened(0.28), 0.9),
+			Vector3(1.72, DECK_Y - 0.09, -0.09)
+		)
+	)
+	for z: float in [0.5, -0.66]:
+		stage.add_child(
+			Props3D.cylinder(
+				0.08, 1.5, Props3D.flat(WOOD.darkened(0.4), 0.95), Vector3(1.12, DECK_Y - 0.82, z)
+			)
+		)
 
 
 ## Anglerhütte am rechten Ufer hinter dem Steg: Bretterwände, Satteldach,

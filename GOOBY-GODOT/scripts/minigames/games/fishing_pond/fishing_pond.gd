@@ -18,6 +18,14 @@ extends MinigameBase
 ##
 ## Der MinigameBase-Vertrag bleibt: Wurzel ist Node2D, die 3D-Welt hängt
 ## darunter, HUD/Einholbalken/Fangtext sind CanvasItems obenauf.
+##
+## W17/G4-Politur (NUR Präsentation, Paket G4-POND): Intro-Beat 1,5 s mit
+## Kamera-Anflug übers Diorama (die Sim wartet, M1), `_ui`-Skalierung des HUD
+## samt Milchglas-Plates und Konturen (M9/M6/M7), gedeckelter Kurbelbalken
+## (M9 — quer lief er ~740 px über das ganze Bild), Wasserringe an der
+## Einstichstelle der Schnur (M3) und Endton mg_win/mg_lose (M8). Das
+## Dioramen-GELÄNDE ist dafür 1:1 nach fishing_pond_scenery.gd gezogen
+## (1000-Zeilen-Limit dieser Datei); Werte und Aufbau-Reihenfolge unverändert.
 
 const Logic := preload("res://scripts/minigames/games/fishing_pond/fishing_pond_logic.gd")
 const Scenery := preload("res://scripts/minigames/games/fishing_pond/fishing_pond_scenery.gd")
@@ -32,15 +40,6 @@ const ASSETS := "res://assets/minigames/fishing_pond/"
 const FLASH_SEC := 1.0
 ## Tiefenebene der Schwimmer und des Hakens (hinter der Wasserscheibe).
 const SWIM_Z := -0.35
-## Innenmaße des Beckens (Logik: POND_HALF_W 1.8, MAX_DEPTH 3.9).
-const POOL_HALF_W := 2.15
-const POOL_FRONT_Z := 1.15
-const POOL_BACK_Z := -1.8
-const POOL_FLOOR_Y := -4.4
-## Oberkante der Grasnarbe (die Wasserlinie ist y = 0).
-const BANK_Y := 0.26
-## Steghöhe über dem Wasser.
-const DECK_Y := 0.44
 ## Rutenspitze (Weltpunkt), von dort hängt die Schnur senkrecht zum Haken.
 const ROD_TIP := Vector3(0.46, 1.52, 0.04)
 ## Goobys Pfote am Rutengriff (Weltpunkt).
@@ -50,9 +49,14 @@ const FISH_RAW_LEN := 0.62
 const FISH_RAW_HEIGHT := 0.32
 
 const WATER := Color(0.16, 0.42, 0.52)
-const GRASS := Color(0.36, 0.53, 0.36)
-const SOIL := Color(0.42, 0.31, 0.26)
-const WOOD := Color(0.66, 0.47, 0.31)
+
+## W17 M9: Entwurfs-Kurzkante — alle HUD-Pixelmaße skalieren mit `_ui`.
+const DESIGN_SHORT := 390.0
+## W17 M1: Intro-Beat (s) — Kamera-Anflug übers Diorama, die Sim wartet.
+const INTRO_S := 1.5
+## Dunkle Tinte + warme Kontur der Plate-Texte (M7).
+const INK := Color(0.32, 0.24, 0.28)
+const RIM := Color(1.0, 0.99, 0.94, 0.85)
 
 var tune: Dictionary = {}
 var rng: GoobyRng
@@ -96,6 +100,20 @@ var _ducks: Node3D
 var _bucket: Node3D
 var _flights: Array[Dictionary] = []
 
+## W17: _ui = HUD-Skalierungsfaktor (M9); _show_time = reine Schau-Uhr für
+## Dünung/Enten (läuft auch im Intro, die Sim-Uhr `elapsed` nicht).
+var _ui := 1.0
+var _show_time := 0.0
+var _intro_left := 0.0
+var _banner := ""
+var _banner_t := 0.0
+var _ripples: Node3D
+var _ripple_timer := 0.0
+var _hud_plate := Scenery.hud_plate()
+var _hint_plate := Scenery.hud_plate()
+var _meter_plate := Scenery.hud_plate()
+var _banner_plate := Scenery.hud_plate()
+
 
 func setup(context: MinigameCtx) -> void:
 	super.setup(context)
@@ -110,6 +128,11 @@ func setup(context: MinigameCtx) -> void:
 	_fit_viewport()
 	if is_inside_tree():
 		get_viewport().size_changed.connect(_fit_viewport)
+	# W17 M1: Intro-Beat — die Sim-Uhr (elapsed/since_boot) und die Eingabe
+	# warten, die RNG-Reihenfolge bleibt unangetastet (Crosscheck-Vertrag).
+	_intro_left = INTRO_S
+	_banner = I18nService.t("mg.fishingPond.intro")
+	_banner_t = INTRO_S + 0.7
 
 
 func end() -> void:
@@ -124,21 +147,34 @@ func apply_view(size: Vector2) -> void:
 	if size.x > 1.0 and size.y > 1.0:
 		view_size = size
 	landscape = view_size.x > view_size.y
+	# W17 M9: der _ui-Faktor (Kurzkante/390, 0.75..3.0) skaliert alle HUD-Maße.
+	_ui = clampf(minf(view_size.x, view_size.y) / DESIGN_SHORT, 0.75, 3.0)
 	position = Vector2.ZERO
 	if _stage != null:
 		_stage.apply_size(view_size)
 		_stage.set_fov(40.0 if landscape else 36.0)
 		_frame_pond()
-	if _time_label != null:
-		_time_label.position = Vector2(16.0, 10.0)
-		_score_label.position = Vector2(16.0, 48.0)
-		_hint_label.position = Vector2(view_size.x * 0.5 - 150.0, view_size.y - 52.0)
-		_hint_label.size = Vector2(300.0, 40.0)
+	_layout_hud()
 	queue_redraw()
 
 
 func _process(delta: float) -> void:
 	if not is_active() or finished:
+		return
+	_show_time += delta
+	_banner_t = maxf(0.0, _banner_t - delta)
+	# W17 M1: Intro-Beat — die Kamera schwebt übers Diorama in die Spielpose;
+	# Schwimmer, Stiefel-Uhr und Haken warten, der Lauf bleibt zahlengleich.
+	if _intro_left > 0.0:
+		_intro_left = maxf(0.0, _intro_left - delta)
+		_stage.tick(delta)
+		_gooby.tick(delta)
+		_intro_camera()
+		_place_swimmers()
+		_place_tackle()
+		Scenery.tick_ducks(_ducks, _show_time)
+		_update_labels()
+		queue_redraw()
 		return
 	elapsed += delta
 	since_boot += delta
@@ -153,14 +189,15 @@ func _process(delta: float) -> void:
 		return
 	_place_swimmers()
 	_place_tackle()
-	Scenery.tick_ducks(_ducks, elapsed)
+	_step_ripples(delta)
+	Scenery.tick_ducks(_ducks, _show_time)
 	Scenery.tick_flights(_flights, _bucket, delta)
 	_update_labels()
 	queue_redraw()
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if not is_active() or finished:
+	if not is_active() or finished or _intro_left > 0.0:
 		return
 	if not (event is InputEventScreenTouch):
 		return
@@ -187,6 +224,12 @@ func pond_depth_span() -> float:
 ## Hängt gerade etwas an der Angel? (Screenshot-Treiber, Autoplay-Sonden.)
 func has_catch() -> bool:
 	return not hooked.is_empty()
+
+
+## W17 M9: Breite des Kurbelbalkens — 62 % der Bildbreite, gedeckelt bei
+## 420·ui (im Querformat lief der Balken sonst ~740 px über das ganze Bild).
+static func reel_meter_width(width: float, ui: float) -> float:
+	return minf(width * 0.62, 420.0 * ui)
 
 
 # ------------------------------------------------------------------ Aufbau
@@ -227,10 +270,9 @@ func _build_world() -> void:
 			}
 		)
 	)
-	_build_banks()
-	_build_water()
-	_build_shore()
-	_build_deck()
+	# Dioramen-Gelände (Ufer, Erdschichten, Wasser, Bewuchs, Steg) lebt in
+	# fishing_pond_scenery.gd (W17/G4: 1:1 umgezogen, Werte unverändert).
+	_surface = Scenery.build_terrain(_stage)
 	_build_tackle()
 	_swimmers = Node3D.new()
 	_stage.add_child(_swimmers)
@@ -240,231 +282,8 @@ func _build_world() -> void:
 	var deco := Scenery.build(_stage)
 	_ducks = deco["ducks"]
 	_bucket = deco["bucket"]
-
-
-## Ufermasse: drei große Erdblöcke mit Grasnarbe, vorn aufgeschnitten. Das
-## Becken ist die Kerbe dazwischen — seine Innenflächen sind zugleich die
-## Beckenwände, die man durch das Wasser sieht.
-func _build_banks() -> void:
-	var soil := Props3D.flat(SOIL)
-	var grass := Props3D.flat(GRASS)
-	# Tief genug, dass die Schnittkante den unteren Bildrand IMMER füllt —
-	# hochkant bleibt sonst ein schwarzer Streifen unter dem Becken stehen.
-	var depth := BANK_Y + 14.0
-	var mid := BANK_Y - depth * 0.5
-	# Vor der Schnittkante darf NICHTS stehen: die Kamera liegt fast auf
-	# Grasnarbenhöhe, jedes Stück Land davor würde das Becken verdecken.
-	var side_len := POOL_FRONT_Z + 26.0
-	var side_mid := POOL_FRONT_Z - side_len * 0.5
-	for sign_x: float in [-1.0, 1.0]:
-		var at := Vector3(sign_x * (POOL_HALF_W + 14.0), mid, side_mid)
-		_stage.add_child(Props3D.box(Vector3(28.0, depth, side_len), soil, at))
-		_stage.add_child(
-			Props3D.box(
-				Vector3(28.0, 0.16, side_len), grass, Vector3(at.x, BANK_Y - 0.07, side_mid)
-			)
-		)
-	_build_strata()
-	var back_len := 88.0
-	var back_mid := POOL_BACK_Z - back_len * 0.5
-	_stage.add_child(Props3D.box(Vector3(90.0, depth, back_len), soil, Vector3(0.0, mid, back_mid)))
-	_stage.add_child(
-		Props3D.box(Vector3(90.0, 0.16, back_len), grass, Vector3(0.0, BANK_Y - 0.07, back_mid))
-	)
-	# Beckensohle aus hellem Sand — sie gibt der Tiefe einen Boden.
-	var floor_z := (POOL_FRONT_Z + POOL_BACK_Z) * 0.5
-	_stage.add_child(
-		Props3D.box(
-			Vector3(POOL_HALF_W * 2.0, 0.4, POOL_FRONT_Z - POOL_BACK_Z),
-			Props3D.flat(Color(0.55, 0.47, 0.36)),
-			Vector3(0.0, POOL_FLOOR_Y - 0.2, floor_z)
-		)
-	)
-
-
-## Erdschichten auf der Schnittfläche. Eine nackte Wand ist im Querformat die
-## halbe Bildfläche; die Bänder machen daraus einen Bodenaufschluss mit
-## Humus, Lehm, Sand und Kiesel — und geben dem Ausschnitt Maßstab.
-func _build_strata() -> void:
-	var bands := [
-		{"y": 0.02, "h": 0.36, "c": Color(0.34, 0.24, 0.2)},
-		{"y": -0.7, "h": 1.1, "c": Color(0.5, 0.35, 0.28)},
-		{"y": -2.1, "h": 1.7, "c": Color(0.44, 0.32, 0.3)},
-		{"y": -3.9, "h": 1.9, "c": Color(0.56, 0.44, 0.35)},
-		{"y": -7.0, "h": 4.4, "c": Color(0.35, 0.29, 0.32)},
-	]
-	for band: Dictionary in bands:
-		var mesh := BoxMesh.new()
-		mesh.size = Vector3(26.0, float(band["h"]), 0.06)
-		mesh.material = Props3D.flat(band["c"])
-		var poses: Array = []
-		for sign_x: float in [-1.0, 1.0]:
-			poses.append(
-				Props3D.pose(
-					Vector3(sign_x * (POOL_HALF_W + 13.0), float(band["y"]), POOL_FRONT_Z + 0.02)
-				)
-			)
-		_stage.add_child(Props3D.swarm_mesh(mesh, poses, 8.0))
-
-
-## Wasser: Spiegelfläche oben + Schnittscheibe vorn. Beide sind durchsichtig,
-## die Scheibe färbt alles dahinter teichgrün ein — genau der Trick, mit dem
-## die Web-Fassung ihren Querschnitt baut, hier aber vor echter Geometrie.
-func _build_water() -> void:
-	var floor_z := (POOL_FRONT_Z + POOL_BACK_Z) * 0.5
-	var span := POOL_FRONT_Z - POOL_BACK_Z
-	var top := Props3D.glass(Color(0.44, 0.76, 0.82, 0.42))
-	top.emission_enabled = true
-	top.emission = Color(0.95, 0.62, 0.42)
-	top.emission_energy_multiplier = 0.35
-	_surface = Props3D.ground(Vector2(POOL_HALF_W * 2.0, span), top, 0.0)
-	_surface.position.z = floor_z
-	_stage.add_child(_surface)
-	var pane := Props3D.box(
-		Vector3(POOL_HALF_W * 2.0, -POOL_FLOOR_Y, 0.02),
-		Props3D.glass(Color(0.2, 0.5, 0.58, 0.44)),
-		Vector3(0.0, POOL_FLOOR_Y * 0.5, POOL_FRONT_Z)
-	)
-	pane.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	_stage.add_child(pane)
-	# Zweite Scheibe HINTER den Fischen: sie färbt nur die Beckenrückwand ein
-	# und erzeugt so das Tiefengefälle, das eine einzelne Scheibe nicht kann.
-	var murk := Props3D.box(
-		Vector3(POOL_HALF_W * 2.0, -POOL_FLOOR_Y, 0.02),
-		Props3D.glass(Color(0.1, 0.3, 0.4, 0.5)),
-		Vector3(0.0, POOL_FLOOR_Y * 0.5, POOL_BACK_Z + 0.5)
-	)
-	murk.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	_stage.add_child(murk)
-	# Heller Saum auf der Wasserlinie — er trennt Luft und Wasser sichtbar.
-	_stage.add_child(
-		Props3D.box(
-			Vector3(POOL_HALF_W * 2.0, 0.028, 0.05),
-			Props3D.glow(Color(1.0, 0.78, 0.55), 0.9),
-			Vector3(0.0, 0.0, POOL_FRONT_Z)
-		)
-	)
-	_build_underwater()
-
-
-## Beckengrund: Steine und Wasserpflanzen als Massenware (ein Draw-Call je
-## Sorte) — sie geben der Tiefe Maßstab und verstecken die nackte Sohle.
-func _build_underwater() -> void:
-	var rocks: Array = []
-	var weeds: Array = []
-	for i in 9:
-		var x := -POOL_HALF_W + 0.35 + 3.6 * float(i) / 8.0
-		var z := POOL_BACK_Z + 0.4 + 1.9 * absf(sin(float(i) * 2.3))
-		rocks.append(Props3D.pose(Vector3(x, POOL_FLOOR_Y, z), float(i) * 1.7, 0.9))
-		if i % 2 == 0:
-			weeds.append(Props3D.pose(Vector3(x + 0.2, POOL_FLOOR_Y, z - 0.3), float(i), 1.4))
-	_stage.add_child(Props3D.swarm(Props3D.parts(ASSETS + "rock_smallA.glb", 0.3), rocks))
-	_stage.add_child(
-		Props3D.swarm(
-			Props3D.parts(ASSETS + "grass_large.glb", 0.55, {"grass": Color(0.24, 0.5, 0.4)}), weeds
-		)
-	)
-
-
-## Uferbewuchs: Schilfgürtel, Baumreihe, Büsche, Steine, Pilze — und das
-## Ruderboot am linken Ufer. Alles hinter der Beckenkante.
-func _build_shore() -> void:
-	# Zwei Sperrzonen: das Becken selbst (nichts wächst im Wasser) und ALLES
-	# vor der Beckenkante — dort steht die Kamera. Ohne die zweite Regel
-	# pflanzt der Kranz der großen Radien Bäume direkt vors Objektiv.
-	var bank := func(at: Vector3) -> bool:
-		if at.z > POOL_FRONT_Z + 1.4:
-			return true
-		return absf(at.x) < POOL_HALF_W + 0.5 and at.z > POOL_BACK_Z - 0.5
-	var behind := func(at: Vector3) -> bool: return at.z > POOL_BACK_Z - 0.6
-	var center := Vector3(0.0, BANK_Y, POOL_BACK_Z - 0.4)
-	_stage.add_child(
-		Props3D.scatter(ASSETS + "grass_large.glb", 0.55, 26, 3.3, center, 0.7, 0.3, bank)
-	)
-	_stage.add_child(
-		Props3D.scatter(ASSETS + "plant_bushLarge.glb", 0.8, 12, 5.2, center, 0.9, 1.4, bank)
-	)
-	_stage.add_child(
-		Props3D.scatter(ASSETS + "tree_default.glb", 3.6, 9, 8.6, center, 1.4, 0.6, behind)
-	)
-	_stage.add_child(
-		Props3D.scatter(ASSETS + "tree_pineRoundA.glb", 4.4, 8, 11.0, center, 1.8, 2.2, behind)
-	)
-	_stage.add_child(
-		Props3D.scatter(ASSETS + "tree_fat.glb", 3.2, 7, 14.5, center, 2.1, 1.1, behind)
-	)
-	_stage.add_child(
-		Props3D.scatter(ASSETS + "rock_largeA.glb", 0.62, 7, 4.4, center, 0.8, 2.8, bank)
-	)
-	_stage.add_child(
-		Props3D.scatter(ASSETS + "mushroom_red.glb", 0.26, 8, 4.0, center, 0.7, 3.5, bank)
-	)
-	var boat := Props3D.model(ASSETS + "boat-row-small.glb", 0.46)
-	boat.position = Vector3(-4.1, BANK_Y - 0.05, POOL_FRONT_Z - 0.4)
-	boat.rotation.y = -0.5
-	Props3D.tint(boat, Color(0.78, 0.55, 0.36))
-	_stage.add_child(boat)
-	_build_lilies()
-	# Tief stehende Abendsonne hinter der Baumreihe (Web: sun disc + glow).
-	var sun := Props3D.halo(3.4, Color(1.0, 0.66, 0.36, 0.85))
-	sun.position = Vector3(-9.0, 3.4, POOL_BACK_Z - 24.0)
-	_stage.add_child(sun)
-	var bridge := Props3D.model(ASSETS + "bridge_wood.glb", 0.5)
-	bridge.position = Vector3(-3.4, BANK_Y, POOL_BACK_Z - 1.2)
-	bridge.scale = Vector3(1.6, 1.0, 1.6)
-	Props3D.repaint(bridge, Props3D.NATURE)
-	_stage.add_child(bridge)
-
-
-## Seerosen auf dem Wasser — sie geben der Spiegelfläche eine Oberfläche, an
-## der man sie überhaupt als Wasser erkennt (eine leere Glasplatte tut das
-## nicht). Sie liegen bewusst LINKS des Hakens und stören das Auswerfen nicht.
-func _build_lilies() -> void:
-	var pad := CylinderMesh.new()
-	pad.top_radius = 0.19
-	pad.bottom_radius = 0.19
-	pad.height = 0.025
-	pad.radial_segments = 10
-	pad.rings = 1
-	pad.material = Props3D.flat(Color(0.33, 0.56, 0.35), 0.85)
-	var pads: Array = []
-	var spots := [
-		Vector3(-1.62, 0.012, 0.45),
-		Vector3(-1.15, 0.012, -0.35),
-		Vector3(-1.85, 0.012, -0.95),
-		Vector3(1.42, 0.012, -1.15),
-	]
-	for i in spots.size():
-		pads.append(Props3D.pose(spots[i], float(i) * 1.3, 0.8 + 0.35 * float(i % 2)))
-	_stage.add_child(Props3D.swarm_mesh(pad, pads, 3.0))
-	var bloom := Props3D.sphere(0.075, Props3D.glow(Color(0.98, 0.7, 0.82), 0.5))
-	bloom.position = spots[0] + Vector3(0.05, 0.05, 0.0)
-	_stage.add_child(bloom)
-
-
-## Anglersteg: Bohlen über der Wasserkante, zwei Pfähle ins Wasser.
-func _build_deck() -> void:
-	var wood := Props3D.flat(WOOD, 0.85)
-	var plank := BoxMesh.new()
-	plank.size = Vector3(1.5, 0.07, 0.22)
-	plank.material = wood
-	var poses: Array = []
-	for i in 6:
-		poses.append(Props3D.pose(Vector3(1.72, DECK_Y, 0.62 - float(i) * 0.28)))
-	_stage.add_child(Props3D.swarm_mesh(plank, poses, 4.0))
-	_stage.add_child(
-		Props3D.box(
-			Vector3(1.58, 0.09, 1.78),
-			Props3D.flat(WOOD.darkened(0.28), 0.9),
-			Vector3(1.72, DECK_Y - 0.09, -0.09)
-		)
-	)
-	for z: float in [0.5, -0.66]:
-		_stage.add_child(
-			Props3D.cylinder(
-				0.08, 1.5, Props3D.flat(WOOD.darkened(0.4), 0.95), Vector3(1.12, DECK_Y - 0.82, z)
-			)
-		)
+	# W17 M3: Ring-Pool für Wasserkreise an der Schnur.
+	_ripples = Scenery.build_ripples(_stage)
 
 
 ## Schwimmer, Haken, Fangkreis und die zwei Schnurstücke (Rute → Schwimmer,
@@ -505,7 +324,7 @@ func _build_tackle() -> void:
 func _build_gooby() -> void:
 	_gooby = GoobyActor.new()
 	_stage.add_child(_gooby)
-	_gooby.position = Vector3(1.78, DECK_Y, -0.05)
+	_gooby.position = Vector3(1.78, Scenery.DECK_Y, -0.05)
 	# Dreiviertelprofil: er schaut zur Schnur (−x) und bleibt der Kamera
 	# trotzdem zugewandt — reines Profil würde das Gesicht verstecken.
 	_gooby.mount(1.05, -0.95, "sit")
@@ -566,17 +385,36 @@ func _build_hud() -> void:
 	_hint_label.theme_type_variation = &"SoftLabel"
 	_hint_label.text = I18nService.t("mg.fishingPond.hint")
 	_hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	add_child(_hint_label)
-	# Die Dämmerungskulisse ist dunkel — Theme-Schriftfarben wären es auch.
+	# W17 M6/M7: die Labels sitzen jetzt auf Milchglas-Plates — dunkle Tinte
+	# mit warmer Kontur statt Weiß (das stand vorher nackt auf der Kulisse).
 	for label: Label in [_time_label, _score_label, _hint_label]:
-		label.add_theme_color_override("font_color", Color(1.0, 0.96, 0.9))
-		label.add_theme_color_override("font_outline_color", Color(0.14, 0.1, 0.2, 0.85))
+		label.add_theme_color_override("font_color", INK)
+		label.add_theme_color_override("font_outline_color", RIM)
 		label.add_theme_constant_override("outline_size", 6)
 	_update_labels()
 
 
 func _fit_viewport() -> void:
 	apply_view(get_viewport_rect().size)
+
+
+## W17 M9: alle HUD-Maße skalieren mit dem `_ui`-Faktor statt in Fix-Pixeln
+## zu kleben (Krümel-HUD auf Tablets); der Hinweis hängt an der Bildbreite.
+func _layout_hud() -> void:
+	if _time_label == null:
+		return
+	_time_label.position = Vector2(16.0, 10.0) * _ui
+	_time_label.add_theme_font_size_override("font_size", int(34.0 * _ui))
+	_score_label.position = Vector2(16.0, 48.0) * _ui
+	_score_label.add_theme_font_size_override("font_size", int(15.0 * _ui))
+	var hint_w := minf(view_size.x - 32.0 * _ui, 360.0 * _ui)
+	_hint_label.add_theme_font_size_override("font_size", int(20.0 * _ui))
+	_hint_label.position = Vector2((view_size.x - hint_w) * 0.5, view_size.y - 52.0 * _ui)
+	_hint_label.size = Vector2(hint_w, 40.0 * _ui)
+	for label: Label in [_time_label, _score_label, _hint_label]:
+		label.add_theme_constant_override("outline_size", int(6.0 * _ui))
 
 
 ## Kamera fast waagerecht vor die Schnittkante — Becken, Wasserlinie, Steg
@@ -592,11 +430,25 @@ func _frame_pond() -> void:
 		Vector3(-half, 0.1, SWIM_Z),
 		Vector3(half, 0.1, SWIM_Z),
 		Vector3(0.0, -float(tune["MAX_DEPTH"]) - 0.35, SWIM_Z),
-		Vector3(_gooby.position.x + 0.5, DECK_Y + 1.15, 0.0),
-		Vector3(0.0, 2.5 if landscape else 4.4, POOL_BACK_Z - 7.0),
+		Vector3(_gooby.position.x + 0.5, Scenery.DECK_Y + 1.15, 0.0),
+		Vector3(0.0, 2.5 if landscape else 4.4, Scenery.POOL_BACK_Z - 7.0),
 	]
 	var center := Vector3(0.3, -0.9 if landscape else -0.5, SWIM_Z)
 	_stage.fit(points, center, 9.0 if landscape else 6.5, 0.0, 0.9)
+
+
+## W17 M1: Anflug übers Diorama — startet hoch über der Grasnarbe mit Blick
+## aufs Becken und endet exakt in der fit()-Spielpose (kein Ruck). Reduced
+## Motion überspringt den Flug (Banner + Warte-Gate bleiben).
+func _intro_camera() -> void:
+	if _stage.reduced_motion():
+		return
+	var e := 1.0 - ease(1.0 - _intro_left / INTRO_S, 0.4)
+	if e <= 0.0:
+		return
+	var cam := _stage.camera
+	cam.position += Vector3(-0.7, 2.4, 3.2) * e
+	cam.look_at(Vector3(0.2, -0.6, SWIM_Z), Vector3.UP)
 
 
 # ---------------------------------------------------------------- Schwimmer
@@ -742,14 +594,15 @@ func _step_hook(delta: float) -> void:
 				_resolve_reel(verdict)
 
 
-## Haken, Schwimmer, Schnur und Fangkreis nachziehen.
+## Haken, Schwimmer, Schnur und Fangkreis nachziehen. Die Wackel-Sinusse
+## laufen auf der Schau-Uhr `_show_time` (atmet auch im Intro-Beat weiter).
 func _place_tackle() -> void:
 	var hook_at := _hook_world()
-	var bob_at := Vector3(float(tune["HOOK_X"]), sin(elapsed * 2.4) * 0.03, SWIM_Z)
+	var bob_at := Vector3(float(tune["HOOK_X"]), sin(_show_time * 2.4) * 0.03, SWIM_Z)
 	if phase == "reel":
 		# Drill: der Fisch reißt den Schwimmer unter Wasser, er zittert.
-		bob_at.y = -0.1 + sin(elapsed * 26.0) * 0.03
-		bob_at.x += sin(elapsed * 31.0) * 0.02
+		bob_at.y = -0.1 + sin(_show_time * 26.0) * 0.03
+		bob_at.x += sin(_show_time * 31.0) * 0.02
 	_bobber.position = bob_at
 	_hook.position = hook_at
 	_catch_ring.position = hook_at
@@ -758,10 +611,10 @@ func _place_tackle() -> void:
 	_stretch(_line_deep, bob_at, hook_at + Vector3(0.0, 0.06, 0.0))
 	if _hooked_node != null:
 		_hooked_node.position = hook_at + Vector3(0.0, -0.16, 0.0)
-		_hooked_node.rotation = Vector3(0.0, 0.0, sin(elapsed * 18.0) * 0.35)
+		_hooked_node.rotation = Vector3(0.0, 0.0, sin(_show_time * 18.0) * 0.35)
 	if _surface != null:
 		# Der Steg-Gooby wippt mit der Dünung, das Wasser atmet leicht mit.
-		_surface.position.y = sin(elapsed * 1.7) * 0.012
+		_surface.position.y = sin(_show_time * 1.7) * 0.012
 
 
 ## Weltposition des Hakens (Logik-Tiefe → y).
@@ -788,9 +641,29 @@ func _stretch(node: MeshInstance3D, from: Vector3, to: Vector3) -> void:
 	node.basis = Basis(side, up, side.cross(up)) * Basis.from_scale(Vector3(1.0, length, 1.0))
 
 
+## W17 M3: Wasserringe an der Einstichstelle der Schnur — ein leiser Puls am
+## treibenden Schwimmer, ein dichter im Drill. Reduced Motion spawnt keine
+## Ringe (Q2: Gate an der Call-Site; der Pool lebt in der Scenery-Datei).
+func _step_ripples(delta: float) -> void:
+	Scenery.tick_ripples(_ripples, delta)
+	_ripple_timer -= delta
+	if _ripple_timer > 0.0:
+		return
+	_ripple_timer = 0.45 if phase == "reel" else 1.4
+	_ripple(0.9 if phase == "reel" else 0.5)
+
+
+## Einen Ring am Schwimmer starten (entfällt unter Reduced Motion).
+func _ripple(power: float) -> void:
+	if _stage.reduced_motion():
+		return
+	Scenery.spawn_ripple(_ripples, Vector3(float(tune["HOOK_X"]), 0.015, SWIM_Z), power)
+
+
 func _release() -> void:
 	phase = "raise"
 	_splash.burst(Vector3(float(tune["HOOK_X"]), 0.0, SWIM_Z))
+	_ripple(1.0)
 	_gooby.swing(0.35, 30.0, Vector3.RIGHT)
 	var index := Logic.nearest_catch(
 		fish, float(tune["HOOK_X"]), hook_depth, float(tune["CATCH_RADIUS"])
@@ -910,6 +783,9 @@ func _finish() -> void:
 		return
 	finished = true
 	running = false
+	# W17 M8: hörbarer Schlusspunkt — der Zeitmodus endet als geschaffte
+	# Runde (mg_win), Endlos endet immer über den dritten Fehlschlag (mg_lose).
+	AudioDirector.try_play(self, "mg_lose" if bool(tune["ENDLESS"]) else "mg_win")
 	# W13/SAMMLUNG: Fänge füllen das fish-Album-Set (Host bucht via
 	# CollectionsLogic.award_report — Web framework.js Rundenende).
 	(
@@ -934,36 +810,65 @@ func _update_labels() -> void:
 		var left := maxi(0, int(ceil(float(tune["DURATION_SEC"]) - elapsed)))
 		_time_label.text = I18nService.t("mg.game.time", {"sec": left})
 	_score_label.text = I18nService.t("mg.fishingPond.depth", {"m": "%.1f" % hook_depth})
+	_hint_label.modulate.a = _hint_alpha()
+
+
+## W17 M6: der Hinweis blendet 5 s nach dem Beat aus — das Bild gehört dann
+## ganz dem Teich (`elapsed` startet erst NACH dem Intro).
+func _hint_alpha() -> float:
+	return clampf(1.0 - (elapsed - 5.0) / 1.5, 0.0, 1.0)
 
 
 # ---------------------------------------------------------------- HUD 2D
 
 
-## Einholbalken und Fangtext — die Szene selbst ist 3D.
+## Einholbalken, Fangtext, HUD-Plates und Ziel-Banner — die Szene ist 3D.
 func _draw() -> void:
+	if _time_label != null:
+		_draw_hud_plates()
 	if phase == "reel":
 		_draw_reel_meter()
 	_draw_flash()
+	_draw_banner()
 
 
+## W17 M6: Milchglas hinter Zeit/Tiefe und dem Hinweis — Schilf, Baumreihe
+## und Dämmerhimmel zogen sonst direkt durch die Ziffern.
+func _draw_hud_plates() -> void:
+	var pad := Vector2(12.0, 6.0) * _ui
+	var wide := maxf(_time_label.size.x, _score_label.size.x)
+	var head := _time_label.position - pad
+	var foot := _score_label.position + Vector2(wide, _score_label.size.y) + pad
+	draw_style_box(_hud_plate, Rect2(head, foot - head))
+	var hint_a := _hint_alpha()
+	if hint_a > 0.0:
+		_hint_plate.bg_color = Color(1.0, 0.99, 0.94, 0.72 * hint_a)
+		var rect := Rect2(_hint_label.position, _hint_label.size)
+		draw_style_box(_hint_plate, rect.grow_individual(0.0, 2.0 * _ui, 0.0, 2.0 * _ui))
+
+
+## W17 M9/M6/M7: Kurbelbalken — 62 % der Breite, aber gedeckelt (quer stand
+## er ~740 px breit bei fixen 22 px Höhe); alle Maße skalieren mit `_ui`,
+## das „Kurbeln!“-Label sitzt mit Kontur auf einer kleinen Milchglas-Plate.
 func _draw_reel_meter() -> void:
-	var w := view_size.x * 0.62
-	var x := view_size.x * 0.19
+	var w := reel_meter_width(view_size.x, _ui)
+	var x := (view_size.x - w) * 0.5
 	var y := view_size.y * 0.16
+	var h := 22.0 * _ui
+	var pad := 14.0 * _ui
+	_meter_plate.set_corner_radius_all(int(16.0 * _ui))
+	draw_style_box(_meter_plate, Rect2(x - pad, y - 42.0 * _ui, w + pad * 2.0, h + 64.0 * _ui))
 	var need := float(tune["REEL_TAPS"])
-	draw_rect(Rect2(x, y, w, 22.0), Color(0.1, 0.15, 0.2, 0.55))
-	draw_rect(Rect2(x, y, w * clampf(reel_taps / need, 0.0, 1.0), 22.0), Color(0.4, 0.85, 0.5))
+	draw_rect(Rect2(x, y, w, h), Color(0.1, 0.15, 0.2, 0.55))
+	draw_rect(Rect2(x, y, w * clampf(reel_taps / need, 0.0, 1.0), h), Color(0.4, 0.85, 0.5))
 	var left := 1.0 - clampf(reel_elapsed / float(tune["REEL_WINDOW_SEC"]), 0.0, 1.0)
-	draw_rect(Rect2(x, y + 24.0, w * left, 6.0), Color(0.95, 0.6, 0.3))
-	draw_string(
-		ThemeService.font(800),
-		Vector2(x, y - 10.0),
-		I18nService.t("mg.fishingPond.reel"),
-		HORIZONTAL_ALIGNMENT_CENTER,
-		w,
-		24,
-		Color(1.0, 0.98, 0.9)
-	)
+	draw_rect(Rect2(x, y + h + 2.0 * _ui, w * left, 6.0 * _ui), Color(0.95, 0.6, 0.3))
+	var font := ThemeService.font(800)
+	var fs := int(24.0 * _ui)
+	var at := Vector2(x, y - 12.0 * _ui)
+	var text := I18nService.t("mg.fishingPond.reel")
+	draw_string_outline(font, at, text, HORIZONTAL_ALIGNMENT_CENTER, w, fs, int(5.0 * _ui), RIM)
+	draw_string(font, at, text, HORIZONTAL_ALIGNMENT_CENTER, w, fs, INK)
 
 
 func _draw_flash() -> void:
@@ -971,13 +876,49 @@ func _draw_flash() -> void:
 		return
 	var alpha := clampf(_flash * 1.5, 0.0, 1.0)
 	var y := view_size.y * 0.26
-	draw_rect(Rect2(0.0, y - 32.0, view_size.x, 46.0), Color(0.12, 0.09, 0.18, 0.45 * alpha))
+	draw_rect(
+		Rect2(0.0, y - 32.0 * _ui, view_size.x, 46.0 * _ui), Color(0.12, 0.09, 0.18, 0.45 * alpha)
+	)
 	draw_string(
 		ThemeService.font(800),
 		Vector2(0.0, y),
 		_flash_text,
 		HORIZONTAL_ALIGNMENT_CENTER,
 		view_size.x,
-		32,
+		int(32.0 * _ui),
 		Color(_flash_color, alpha)
+	)
+
+
+## W17 M1/M7: Ziel-Banner mittig auf Milchglas mit Kontur; lange
+## Übersetzungen brechen um (carrot_catch-Muster).
+func _draw_banner() -> void:
+	if _banner_t <= 0.0 or _banner.is_empty():
+		return
+	var font := ThemeService.font(800)
+	var alpha := clampf(_banner_t * 1.4, 0.0, 1.0)
+	var fs := int(26.0 * _ui)
+	var w := minf(view_size.x * 0.92, 460.0 * _ui)
+	var text := font.get_multiline_string_size(_banner, HORIZONTAL_ALIGNMENT_CENTER, w, fs)
+	var top := view_size.y * 0.3
+	var pad := Vector2(18.0, 10.0) * _ui
+	_banner_plate.set_corner_radius_all(int(12.0 * _ui))
+	_banner_plate.bg_color = Color(1.0, 0.99, 0.94, 0.74 * alpha)
+	draw_style_box(
+		_banner_plate, Rect2(Vector2((view_size.x - text.x) * 0.5, top) - pad, text + pad * 2.0)
+	)
+	var at := Vector2((view_size.x - w) * 0.5, top + font.get_ascent(fs))
+	draw_multiline_string_outline(
+		font,
+		at,
+		_banner,
+		HORIZONTAL_ALIGNMENT_CENTER,
+		w,
+		fs,
+		-1,
+		int(5.0 * _ui),
+		Color(RIM, RIM.a * alpha)
+	)
+	draw_multiline_string(
+		font, at, _banner, HORIZONTAL_ALIGNMENT_CENTER, w, fs, -1, Color(INK, alpha)
 	)
