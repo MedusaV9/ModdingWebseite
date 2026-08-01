@@ -9,9 +9,15 @@ extends MinigameBase
 ##
 ## FB-4: das Gefecht spielt auf einer ECHTEN 3D-Bühne (gvz_stage3d.gd) —
 ## Figuren sind Meshes, per ground_point-Raycast unterm 2D-Grid verankert;
-## die 2D-Schicht rendert nur HUD (Karten, Zähler, Balken, Banner, Ghost).
+## die 2D-Schicht rendert nur HUD — seit G5/P26 gezeichnet von gvz_hud.gd
+## (diese Datei behält Layout-Mathe + Eingabe, der HUD liest über die
+## HUD-API hud_resource()/_card_info()/netz_hud_info()).
 ## W16/G4: Kartenleiste + Zähler hängen an der UNTERKANTE (Daumenzone),
 ## Karten stehen auf dem Touch-Floor (>=48 pt), Boss-Bar oben mittig.
+##
+## G5/P26 NETZ-PVP (pvp_netz/**): 1-gegen-1 Goobys vs. Zombies übers Netz —
+## GvzNetSession (Protokoll) + GvzPvpLockstep (deterministische Sim) nach
+## dem GOB-NOM-Muster (W15). _netz == null ⇒ lokale Kampagne wie bisher.
 
 const Stage := preload("res://scripts/minigames/games/gvz/gvz_stage3d.gd")
 
@@ -20,7 +26,6 @@ const CARD_W := 56.0
 const CARD_H := 62.0
 const TOP_PAD := 6.0
 const MOWER_GUTTER := 72.0  # W14: 44 px schnitten die Mäher-Goobys links ab.
-const BANNER_SEC := 2.2
 const INTRO_S := 1.5  # W14 Intro-Beat: Establishing + Ziel-Banner, dann Sim.
 
 ## W13/GVZ (P5-Report G18, Doc G §4.4): Meilenstein-Siege feuern Sticker-
@@ -36,6 +41,8 @@ const STAT_COUNTERS := {
 
 ## Testschalter: GameState-Double VOR setup() setzen (Muster W2a RoomBase).
 var game_state_override: Object
+## Testschalter: NetClient-Double VOR setup() setzen (Muster gobnom/W15).
+var net_override: Object
 
 var balance: Dictionary = {}
 var levels: Array = []
@@ -48,25 +55,38 @@ var selected_card := ""
 var drag_pos := Vector2.ZERO
 var dragging := false
 var ended := false
+## Netz-PvP (P26): Session (Protokoll) — _netz-Interna stehen unten bei den
+## privaten Vars; netz_session == null ⇒ offline, nur lokale Kampagne.
+var netz_session: GvzNetSession
 
 var _accum := 0.0
-var _banner_text := ""
-var _banner_until := 0.0
-## Banner-Stil ("info" | "wave" | "huge" | "boss") + Startzeit für den Punch.
-var _banner_kind := "info"
-var _banner_start := 0.0
 ## Intro-Beat-Restzeit (Sekunden): > 0 = Bühne steht, Sim wartet.
 var _intro_left := 0.0
-## Nutella-Zähler: letzter Stand + Pop-Startzeit (Zähler feiert Änderungen).
-var _nutella_seen := -1
-var _nutella_pop := -10.0
 var _last_run_score := 0
 var _prev_zombie_pos: Dictionary = {}
 var _select_screen: GvzLevelSelect
 var _overlay: Control
-var _font: Font
-var _font_bold: Font
 var _stage: Node3D
+## HUD-Zeichner (G5/P26-Split): Karten, Zähler, Balken, Banner, Ghost.
+var _hud: GvzHud
+## End-Overlay-Bauer (P26-Split, Stufe 2: Sterne-Pop + Icon-Knöpfe).
+var _overlay_builder: GvzOverlay
+## Netz-PvP-Zustand: Lockstep-Sim, Panel, aktiv-Flag + „warte auf Partner“.
+var _netz: GvzPvpLockstep
+var _netz_panel: GvzNetzPanel
+var _netz_active := false
+var _netz_waiting := false
+## PvP-Regeln (data/gvz_pvp.json), einmal beim Netz-Setup geladen.
+var _pvp: Dictionary = {}
+
+
+func _init() -> void:
+	# HUD-/Overlay-Helfer schon im Konstruktor (nur self-Referenz, kein
+	# Tree-Zugriff): Bestands-Tests instanziieren die Szene roh und rufen
+	# _build_end_overlay ohne setup(ctx) — vor dem P26-Split war das Overlay
+	# inline gebaut und brauchte keine Vorbereitung.
+	_hud = GvzHud.new(self)
+	_overlay_builder = GvzOverlay.new(self)
 
 
 func setup(context: MinigameCtx) -> void:
@@ -74,8 +94,6 @@ func setup(context: MinigameCtx) -> void:
 	GvzProgress.register_slice()
 	balance = GvzData.load_balance(null)
 	levels = GvzData.load_levels()
-	_font = ThemeService.font(600)
-	_font_bold = ThemeService.font(800)
 	_stage = Stage.new()
 	_stage.name = "Vorgarten3D"
 	add_child(_stage)
@@ -83,6 +101,7 @@ func setup(context: MinigameCtx) -> void:
 	_stage.visible = false
 	if ctx != null and ctx.juice != null:
 		ctx.juice.world_environment = _stage.stage.world_env
+	_setup_netz()
 	_build_select_screen()
 	queue_redraw()
 
@@ -104,6 +123,8 @@ func start() -> void:
 func end() -> void:
 	super.end()
 	ended = true
+	if netz_session != null:
+		netz_session.leave()
 
 
 ## ── Phasen-Wechsel ───────────────────────────────────────────────────────
@@ -112,10 +133,18 @@ func end() -> void:
 func open_level(id: int) -> void:
 	level_id = id
 	attempt += 1
+	_netz_active = false
+	_netz = null
 	var level := GvzData.level_by_id(levels, id)
 	var seed_value := ctx.run_seed + id * 1009 + attempt * 131 if ctx != null else id
 	var opts := {"goldi": GvzProgress.goldi_unlocked(_game_state())}
 	state = GvzLogic.new_run(level, balance, _difficulty(), seed_value, opts)
+	_enter_battle()
+	_show_banner(I18nService.t("gvz.intro.ziel", {"n": id}), "intro")
+
+
+## Gemeinsamer Gefechts-Start (lokal UND Netz): Bühne an, Select weg.
+func _enter_battle() -> void:
 	phase = "battle"
 	selected_card = ""
 	dragging = false
@@ -123,7 +152,6 @@ func open_level(id: int) -> void:
 	_last_run_score = 0
 	_prev_zombie_pos = {}
 	_intro_left = INTRO_S
-	_show_banner(I18nService.t("gvz.intro.ziel", {"n": id}), "intro")
 	if _select_screen != null:
 		_select_screen.visible = false
 	if _stage != null:
@@ -138,6 +166,9 @@ func open_level(id: int) -> void:
 func back_to_select() -> void:
 	phase = "select"
 	state = {}
+	_netz_active = false
+	_netz = null
+	_netz_waiting = false
 	if _stage != null:
 		_stage.visible = false
 	_clear_overlay()
@@ -148,6 +179,8 @@ func back_to_select() -> void:
 
 
 func finish_session() -> void:
+	if netz_session != null:
+		netz_session.leave()
 	if ended or ctx == null:
 		return
 	ended = true
@@ -171,16 +204,47 @@ func _process(delta: float) -> void:
 		if _stage != null:
 			_stage.establish(1.0 - _intro_left / INTRO_S)
 	_accum += minf(delta, 0.25)
-	while _accum >= TICK_SEC and not GvzLogic.is_over(state):
-		_accum -= TICK_SEC
-		_remember_zombie_positions()
-		var events := GvzLogic.tick(state)
-		_consume_events(events)
-	_report_live_score()
-	if GvzLogic.is_over(state):
-		_on_run_over()
+	if _netz_active:
+		_netz_pump()
+	else:
+		while _accum >= TICK_SEC and not GvzLogic.is_over(state):
+			_accum -= TICK_SEC
+			_remember_zombie_positions()
+			_consume_events(GvzLogic.tick(state))
+		_report_live_score()
+		if GvzLogic.is_over(state):
+			_on_run_over()
 	_sync_stage(delta)
 	queue_redraw()
+
+
+## Netz-PvP-Takt (Muster gobnom/W15): Wandzeit-Ticks in den Lockstep pumpen
+## — die Sim rechnet nur, solange der Partner-Fence vorliegt; danach gehen
+## fällige Frames/Hashes raus. Das Match-Ende entscheidet der Lockstep
+## (Überlebens-Timer ODER Haus-Durchbruch), nicht GvzLogic.is_over.
+func _netz_pump() -> void:
+	var stalled := false
+	while _accum >= TICK_SEC and not _netz.is_match_over():
+		_accum -= TICK_SEC
+		_remember_zombie_positions()
+		var result := _netz.advance()
+		if bool(result["stepped"]):
+			_consume_events(result["events"])
+		else:
+			stalled = true
+	_netz_waiting = stalled and not _netz.is_match_over()
+	# Aufhol-Deckel: beim Warten läuft keine Zeitschuld auf.
+	_accum = minf(_accum, TICK_SEC * 8.0)
+	if _netz.desynced:
+		_on_netz_desync(_netz.desync_tick)
+		return
+	var frame := _netz.take_frame()
+	if not frame.is_empty():
+		netz_session.send_frame(frame)
+	for entry: Dictionary in _netz.take_hashes():
+		netz_session.send_hash(int(entry["t"]), str(entry["h"]))
+	if _netz.is_match_over():
+		_on_netz_over()
 
 
 func _consume_events(events: Array) -> void:
@@ -250,7 +314,7 @@ func _report_live_score() -> void:
 
 
 func _on_run_over() -> void:
-	if phase != "battle":
+	if phase != "battle" or _netz_active:
 		return
 	_book_sticker_progress(str(state["outcome"]) == "won")
 	if str(state["outcome"]) == "won":
@@ -283,6 +347,35 @@ func _on_run_over() -> void:
 			ctx.juice.shake(0.7)
 			ctx.juice.hit_freeze(120)
 		_build_end_overlay(false, 0, 0, false)
+	queue_redraw()
+
+
+## PvP-Matchende: der Sieger kommt aus dem Lockstep (Timer ODER Haus-
+## Durchbruch). BEWUSST kein Kampagnen-Fortschritt/Coin-Award und keine
+## Sticker-Counter (Fairness: beide Sims sind identisch, die Hälfte der
+## Aktionen stammt vom Partner) — das Ergebnis geht idempotent an den
+## Server (GVZ_RESULT), die Revanche läuft über das wieder freie Panel.
+func _on_netz_over() -> void:
+	if phase != "battle":
+		return
+	var won := _netz.winner == _netz.side
+	if netz_session != null:
+		netz_session.report_result(_netz.winner, int(state["tick"]))
+	if won:
+		phase = "won"
+		_stage.win_fx()
+		AudioDirector.try_play(self, "mg_win")
+		if ctx != null and ctx.juice != null:
+			ctx.juice.bloom_pulse(0.9)
+			ctx.juice.confetti(80)
+	else:
+		phase = "lost"
+		_stage.lose_fx()
+		AudioDirector.try_play(self, "mg_lose")
+		if ctx != null and ctx.juice != null:
+			ctx.juice.shake(0.7)
+			ctx.juice.hit_freeze(120)
+	_build_netz_end_overlay(won)
 	queue_redraw()
 
 
@@ -362,6 +455,9 @@ func _apply_card(at: Vector2) -> void:
 	var cell := _cell_at(at)
 	if cell.x < 0:
 		return
+	if _netz_active:
+		_apply_card_netz(cell, at)
+		return
 	if selected_card == "shovel":
 		if GvzLogic.remove_tower(state, cell.y, cell.x):
 			selected_card = ""
@@ -375,15 +471,54 @@ func _apply_card(at: Vector2) -> void:
 		AudioDirector.try_play(self, "gvz_place")
 		_stage.place_fx(_cell_center(cell.y, cell.x))
 	else:
-		AudioDirector.try_play(self, "ui_error")
-		if ctx != null and ctx.juice != null:
-			var key := "gvz.hud.reason_%s" % str(placed["reason"])
-			if I18nService.has_key(key):
-				ctx.juice.float_text(at - Vector2(0, 30), I18nService.t(key), GvzArt.BERRY_RED)
+		_reject_feedback(at, str(placed["reason"]))
 	queue_redraw()
 
 
+## Netz-PvP: Aktionen laufen NICHT sofort, sondern über den Lockstep
+## (deterministisch bei Tick t auf BEIDEN Geräten). Das Gate wird lokal
+## vorgeprüft (sofortiges Feedback); die Wirkung erscheint nach dem
+## Input-Delay — die Sim-Gates entscheiden endgültig bei der Ausführung.
+func _apply_card_netz(cell: Vector2i, at: Vector2) -> void:
+	if _netz_zombie():
+		var spawn_check := _netz.can_spawn(selected_card, cell.y)
+		if bool(spawn_check["ok"]):
+			_netz.schedule_spawn(selected_card, cell.y)
+			selected_card = ""
+			AudioDirector.try_play(self, "gvz_place")
+		else:
+			_reject_feedback(at, str(spawn_check["reason"]))
+		queue_redraw()
+		return
+	if selected_card == "shovel":
+		_netz.schedule_shovel(cell.y, cell.x)
+		selected_card = ""
+		AudioDirector.try_play(self, "gvz_shovel")
+		queue_redraw()
+		return
+	var place_check := GvzLogic.can_place(state, selected_card, cell.y, cell.x)
+	if bool(place_check["ok"]):
+		_netz.schedule_place(selected_card, cell.y, cell.x)
+		selected_card = ""
+		AudioDirector.try_play(self, "gvz_place")
+	else:
+		_reject_feedback(at, str(place_check["reason"]))
+	queue_redraw()
+
+
+## Abgelehnte Aktion: Fehl-Ton + schwebender Grund (nur bekannte Keys).
+func _reject_feedback(at: Vector2, reason: String) -> void:
+	AudioDirector.try_play(self, "ui_error")
+	if ctx != null and ctx.juice != null:
+		var key := "gvz.hud.reason_%s" % reason
+		if I18nService.has_key(key):
+			ctx.juice.float_text(at - Vector2(0, 30), I18nService.t(key), GvzArt.BERRY_RED)
+
+
 func _collect_drop_at(at: Vector2) -> bool:
+	# Zombie-Seite sammelt kein Nutella — ihre Ressource ist der Matsch-Tropf.
+	if _netz_zombie():
+		return false
 	var best_id := -1
 	var best_d := 40.0
 	for drop: Dictionary in state["drops"]:
@@ -394,7 +529,10 @@ func _collect_drop_at(at: Vector2) -> bool:
 			best_id = int(drop["id"])
 	if best_id < 0:
 		return false
-	GvzLogic.collect_drop(state, best_id)
+	if _netz_active:
+		_netz.schedule_collect(best_id)
+	else:
+		GvzLogic.collect_drop(state, best_id)
 	queue_redraw()
 	return true
 
@@ -409,6 +547,9 @@ func _view_size() -> Vector2:
 func _card_list() -> Array:
 	if state.is_empty():
 		return []
+	# Netz-PvP Zombie-Seite: Beschwör-Karten aus gvz_pvp.json (keine Schaufel).
+	if _netz_zombie():
+		return _netz.zombie_types()
 	var out: Array = []
 	if _conveyor_active() and not bool(state["mods"].get("conveyor_hybrid", false)):
 		for type: Variant in state["conveyor"]["queue"]:
@@ -502,127 +643,13 @@ func _relayout_stage() -> void:
 	_stage.layout(_field_rect(), bool(state["mods"].get("night", false)), fog_px)
 
 
-## Jeden Frame: den kompletten Sim-Zustand als Canvas-Pixel-Anker zur Bühne.
+## Jeden Frame: der komplette Sim-Zustand als Pixel-Anker zur Bühne —
+## das Mapping wohnt seit dem P26-Split in gvz_stage_feed.gd.
 func _sync_stage(delta: float) -> void:
-	if _stage == null or not _stage.visible or state.is_empty():
-		return
-	var field := _field_rect()
-	var cell := _cell_size()
-	var tick := int(state["tick"])
-	var fog_mm := _fog_start_mm() if _fog_cols() > 0 else GvzLogic.COLS * GvzLogic.CELL_MM * 2
-	var towers: Array = []
-	for key: Variant in state["towers"]:
-		var tower: Dictionary = state["towers"][key]
-		towers.append(
-			{"key": key, "type": tower["type"], "lane": tower["lane"], "col": tower["col"]}
-		)
-	var zombies: Array = []
-	for zombie: Dictionary in state["zombies"]:
-		if bool(zombie["dead"]):
-			continue
-		(
-			zombies
-			. append(
-				{
-					"id": zombie["id"],
-					"type": zombie["type"],
-					"lane": zombie["lane"],
-					"px": _lane_px(int(zombie["lane"]), int(zombie["x"]), field, cell),
-					"hidden": int(zombie["x"]) >= fog_mm,
-					"dig": str(zombie.get("state", "walk")) == "dig",
-					"flying": bool(zombie.get("flying", false)),
-					"armor": int(zombie.get("armor_hp", 0)) > 0,
-					"raged": bool(zombie.get("raged", false)),
-					"slow": int(zombie.get("slow_until", 0)) > tick,
-					# HP für den Trefferblitz der Bühne (Abfall = Treffer).
-					"hp": int(zombie["hp"]) + int(zombie.get("armor_hp", 0)),
-				}
-			)
-		)
-	var boss_data := {}
-	var boss: Dictionary = state["boss"]
-	if not boss.is_empty() and int(boss["hp"]) > 0 and int(boss["x"]) < fog_mm:
-		boss_data = {
-			"px": _lane_px(int(boss["lane"]), int(boss["x"]), field, cell),
-			"lane": boss["lane"],
-			"phase": boss.get("phase", 1),
-		}
-	var projectiles: Array = []
-	for proj: Dictionary in state["projectiles"]:
-		if int(proj["x"]) >= fog_mm:
-			continue
-		(
-			projectiles
-			. append(
-				{
-					"kind": proj["kind"],
-					"lane": proj["lane"],
-					"px": _lane_px(int(proj["lane"]), int(proj["x"]), field, cell),
-				}
-			)
-		)
-	var drops: Array = []
-	for drop: Dictionary in state["drops"]:
-		(
-			drops
-			. append(
-				{
-					"id": drop["id"],
-					"lane": drop["lane"],
-					"px": _cell_center(int(drop["lane"]), int(drop["col"])),
-				}
-			)
-		)
-	var mowers: Array = []
-	for lane: Variant in state["mowers"]:
-		var mower: Dictionary = state["mowers"][lane]
-		var px := Vector2(MOWER_GUTTER * 0.5, field.position.y + (int(lane) + 0.5) * cell.y)
-		if bool(mower["active"]):
-			px.x = _x_to_px(int(mower["x"]))
-		(
-			mowers
-			. append(
-				{
-					"lane": int(lane),
-					"active": mower["active"],
-					"used": mower["used"],
-					"px": px,
-				}
-			)
-		)
-	var ghost := {}
-	if dragging and selected_card != "" and selected_card != "shovel":
-		var at := _cell_at(drag_pos)
-		if at.x >= 0:
-			ghost = {
-				"lane": at.y,
-				"col": at.x,
-				"ok": bool(GvzLogic.can_place(state, selected_card, at.y, at.x)["ok"]),
-			}
-	(
-		_stage
-		. sync(
-			{
-				"tick": tick,
-				"towers": towers,
-				"zombies": zombies,
-				"boss": boss_data,
-				"projectiles": projectiles,
-				"drops": drops,
-				"mowers": mowers,
-				"ghost": ghost,
-			},
-			delta
-		)
-	)
+	GvzStageFeed.sync(self, delta)
 
 
-## Boden-Anker (Canvas-Pixel) eines Sim-x auf der Bahnmitte.
-func _lane_px(lane: int, x_mm: int, field: Rect2, cell: Vector2) -> Vector2:
-	return Vector2(_x_to_px(x_mm), field.position.y + (float(lane) + 0.5) * cell.y)
-
-
-## ── Zeichnen (nur noch HUD — das Feld rendert die 3D-Bühne) ─────────────
+## ── Zeichnen (delegiert an gvz_hud.gd — das Feld rendert die 3D-Bühne) ───
 
 
 func _draw() -> void:
@@ -632,10 +659,10 @@ func _draw() -> void:
 		return
 	if state.is_empty():
 		return
-	_draw_bars()
-	_draw_hud()
-	_draw_ghost()
-	_draw_banner()
+	_hud.draw_bars()
+	_hud.draw_hud()
+	_hud.draw_ghost()
+	_hud.draw_banner()
 	if phase != "battle":
 		draw_rect(Rect2(Vector2.ZERO, vp), Color(0.29, 0.23, 0.21, 0.35))
 
@@ -656,235 +683,44 @@ func _fog_start_mm() -> int:
 	return (GvzLogic.COLS - _fog_cols()) * GvzLogic.CELL_MM
 
 
-## HP-Balken als 2D-Overlay über den 3D-Figuren (gleiche Anker wie vor dem
-## Umbau; Zombies hinter der Nebelwand bleiben — wie ihre Figuren — verdeckt).
-func _draw_bars() -> void:
-	var cell := _cell_size()
-	var field := _field_rect()
-	for key: Variant in state["towers"]:
-		var tower: Dictionary = state["towers"][key]
-		var feet := _cell_center(int(tower["lane"]), int(tower["col"])) + Vector2(0, cell.y * 0.4)
-		var hp := float(tower["hp"]) / float(tower["max_hp"])
-		if hp < 0.99:
-			_draw_bar(
-				feet + Vector2(-cell.x * 0.3, -cell.y * 0.95), cell.x * 0.6, hp, GvzArt.MELON_GREEN
-			)
-	var fog_mm := _fog_start_mm() if _fog_cols() > 0 else GvzLogic.COLS * GvzLogic.CELL_MM * 2
-	for zombie: Dictionary in state["zombies"]:
-		if bool(zombie["dead"]) or int(zombie["x"]) >= fog_mm:
-			continue
-		var feet := Vector2(
-			_x_to_px(int(zombie["x"])), field.position.y + (int(zombie["lane"]) + 1) * cell.y - 3.0
-		)
-		var total := int(zombie["hp"]) + int(zombie["armor_hp"])
-		var max_total := int(zombie["max_hp"]) + int(zombie.get("armor_hp", 0))
-		if total < int(zombie["max_hp"]):
-			_draw_bar(
-				feet + Vector2(-cell.x * 0.25, -cell.y * 1.02),
-				cell.x * 0.5,
-				float(total) / float(maxi(1, max_total)),
-				GvzArt.BERRY_RED
-			)
+## ── HUD-API (gvz_hud.gd liest den Zustand NUR über diese Fenster) ────────
 
 
-func _draw_hud() -> void:
-	# Nutella-Zähler — poppt bei jeder Änderung (die Ressource FEIERT Zuwachs).
-	var nutella := int(state["nutella"])
-	if nutella != _nutella_seen:
-		if _nutella_seen >= 0:
-			_nutella_pop = Time.get_ticks_msec() / 1000.0
-		_nutella_seen = nutella
-	var pop := maxf(0.0, 1.0 - (Time.get_ticks_msec() / 1000.0 - _nutella_pop) / 0.3)
-	# Zähler-Chip links NEBEN der Kartenleiste an der Unterkante (G4).
-	var dims := _card_dims()
-	var counter := Rect2(6, _view_size().y - TOP_PAD - dims.y, 78, dims.y)
-	_rounded(
-		counter, AcTokens.PAPER if pop <= 0.0 else AcTokens.PAPER.lerp(GvzArt.STAR_GOLD, pop * 0.35)
-	)
-	GvzArt.draw_nutella_drop(
-		self,
-		counter.position + Vector2(22, dims.y * 0.71),
-		34 * (1.0 + 0.25 * pop),
-		int(state["tick"])
-	)
-	draw_string(
-		_font_bold,
-		counter.position + Vector2(38, dims.y * 0.61),
-		str(nutella),
-		HORIZONTAL_ALIGNMENT_LEFT,
-		-1,
-		int(17 * (1.0 + 0.2 * pop)),
-		AcTokens.INK
-	)
-	var cards := _card_list()
-	var queue: Array = state["conveyor"].get("queue", []) if _conveyor_active() else []
-	var conveyor_only := (
-		_conveyor_active() and not bool(state["mods"].get("conveyor_hybrid", false))
-	)
-	for i in cards.size():
-		_draw_card(str(cards[i]), _card_rect(i), conveyor_only or queue.has(str(cards[i])))
-	if _conveyor_active() and not conveyor_only:
-		_draw_conveyor_strip(queue)
-	_draw_boss_bar()
+## Ressource fürs Zähler-Chip: Nutella — bzw. Matsch auf der Zombie-Seite.
+func hud_resource() -> int:
+	if _netz_zombie():
+		return _netz.matsch
+	return int(state["nutella"])
 
 
-func _draw_card(type: String, rect: Rect2, from_belt: bool) -> void:
-	var cost := GvzLogic.tower_cost(state, type) if type != "shovel" else 0
-	var cooldown := GvzLogic.cooldown_left(state, type) if type != "shovel" else 0
-	var affordable := type == "shovel" or from_belt or int(state["nutella"]) >= cost
-	var fill := AcTokens.PAPER if affordable and cooldown == 0 else AcTokens.PAPER_SHADE
-	_rounded(rect, fill)
-	if selected_card == type:
-		draw_rect(rect, AcTokens.PINK, false, 3.0)
+## Karten-Metadaten für HUD + Ghost: Kosten, Cooldown, Zombie-Flag.
+func _card_info(type: String) -> Dictionary:
 	if type == "shovel":
-		_draw_shovel_icon(rect.get_center())
-	else:
-		GvzArt.draw_tower(
-			self, type, rect.get_center() + Vector2(0, rect.size.y * 0.28), rect.size.y * 0.6, 0
-		)
-		var label := "◦%d" % cost if not from_belt else I18nService.t("gvz.hud.free")
-		draw_string(
-			_font,
-			rect.position + Vector2(4, 14),
-			label,
-			HORIZONTAL_ALIGNMENT_LEFT,
-			int(rect.size.x) - 8,
-			11,
-			AcTokens.INK if affordable else GvzArt.BERRY_RED
-		)
-	if cooldown > 0 and not from_belt:
-		var total := int(balance["towers"].get(type, {}).get("cooldown_ticks", 1))
-		var left := float(cooldown) / float(maxi(1, total))
-		draw_rect(
-			Rect2(rect.position, Vector2(rect.size.x, rect.size.y * left)),
-			Color(0.29, 0.23, 0.21, 0.35)
-		)
+		return {"cost": 0, "cooldown_left": 0, "cooldown_total": 1, "zombie": false}
+	if _netz_zombie():
+		return {
+			"cost": _netz.zombie_cost(type),
+			"cooldown_left": _netz.zombie_cooldown_left(type),
+			"cooldown_total": _netz.zombie_cooldown_ticks(type),
+			"zombie": true,
+		}
+	return {
+		"cost": GvzLogic.tower_cost(state, type),
+		"cooldown_left": GvzLogic.cooldown_left(state, type),
+		"cooldown_total": int(balance["towers"].get(type, {}).get("cooldown_ticks", 1)),
+		"zombie": false,
+	}
 
 
-func _draw_shovel_icon(at: Vector2) -> void:
-	draw_line(at + Vector2(-8, -14), at + Vector2(8, 6), GvzArt.WOOD, 5.0)
-	var points := PackedVector2Array(
-		[at + Vector2(4, 2), at + Vector2(16, 10), at + Vector2(8, 18)]
-	)
-	draw_colored_polygon(points, GvzArt.METAL)
-
-
-func _draw_conveyor_strip(queue: Array) -> void:
-	var vp := _view_size()
-	var w := 34.0
-	var x := vp.x - 8.0 - w * maxf(1.0, float(queue.size()))
-	# Band-Vorschau ÜBER der Kartenleiste (Karten hängen unten, G4).
-	var strip := Rect2(x, _card_top() - 34.0, w * maxf(1.0, float(queue.size())), 30.0)
-	_rounded(strip, Color("#D8CBB4"))
-	for i in queue.size():
-		var center := strip.position + Vector2(w * (i + 0.5), 22.0)
-		GvzArt.draw_tower(self, str(queue[i]), center, 24.0, 0)
-		if i == 0:
-			draw_rect(
-				Rect2(strip.position + Vector2(w * i, 0), Vector2(w, 30.0)),
-				AcTokens.LEAF,
-				false,
-				2.0
-			)
-
-
-func _draw_boss_bar() -> void:
-	var boss: Dictionary = state["boss"]
-	if boss.is_empty() or int(boss["hp"]) <= 0:
-		return
-	var vp := _view_size()
-	# Oben mittig — unten wohnt jetzt die Kartenleiste (G4).
-	var rect := Rect2(vp.x * 0.3, 8.0, vp.x * 0.4, 10.0)
-	_rounded(rect, AcTokens.PAPER)
-	var frac := float(boss["hp"]) / float(maxi(1, int(boss["max_hp"])))
-	draw_rect(
-		Rect2(
-			rect.position + Vector2(1, 1), Vector2((rect.size.x - 2.0) * frac, rect.size.y - 2.0)
-		),
-		GvzArt.BERRY_RED
-	)
-
-
-## Drag-Feedback: das Karten-Icon folgt dem Finger (UI-Schicht); die grüne/
-## rote Zell-Markierung rendert die 3D-Bühne (_sync_stage → ghost).
-func _draw_ghost() -> void:
-	if not dragging or selected_card == "" or selected_card == "shovel":
-		return
-	GvzArt.draw_tower(self, selected_card, drag_pos + Vector2(0, 20), 44.0, 0)
-
-
-## Wellen-Banner mit WUCHT: schlägt groß ein (Punch-Skalierung), Farbe nach
-## Gefahr (Welle sand, Riesenwelle/Boss berry-rot), Mini-Zombies flankieren
-## den Text, am Ende blendet es weich aus.
-func _draw_banner() -> void:
-	var now := Time.get_ticks_msec() / 1000.0
-	if _banner_text == "" or now > _banner_until:
-		return
-	var vp := _view_size()
-	var t := now - _banner_start
-	var punch := maxf(0.0, 1.0 - t / 0.3)
-	var s := 1.0 + 0.5 * punch * punch
-	var fade := clampf((_banner_until - now) / 0.35, 0.0, 1.0)
-	var danger := _banner_kind == "huge" or _banner_kind == "boss"
-	var w := (440.0 if _banner_kind == "intro" else (340.0 if danger else 300.0)) * s
-	var h := (54.0 if danger or _banner_kind == "intro" else 44.0) * s
-	var rect := Rect2(vp.x * 0.5 - w * 0.5, vp.y * 0.32 - (h - 44.0) * 0.5, w, h)
-	var fill := Color(0.29, 0.23, 0.21, 0.8)
-	if _banner_kind == "huge":
-		fill = Color(0.62, 0.2, 0.16, 0.88)
-	elif _banner_kind == "boss":
-		fill = Color(0.42, 0.14, 0.3, 0.9)
-	elif _banner_kind == "intro":
-		fill = Color(0.24, 0.42, 0.2, 0.88)
-	fill.a *= fade
-	_rounded(rect, fill)
-	if danger:
-		draw_rect(rect.grow(-1.5), Color(1.0, 0.83, 0.3, 0.85 * fade), false, 2.5)
-	if _banner_kind == "intro":
-		# Ziel-Icon-Duell: links der Möhren-Wächter, rechts sein Zombie.
-		var icon := h * 0.5
-		var links := rect.position + Vector2(-icon - 8.0, h * 0.85)
-		var rechts := rect.position + Vector2(w + icon + 8.0, h * 0.8)
-		GvzArt.draw_tower(self, "moehre", links, icon * 1.3, 0)
-		GvzArt.draw_zombie(self, "schlurfi", rechts, icon, 0)
-	elif _banner_kind != "info":
-		var icon_s := h * 0.42
-		var horde := 3 if _banner_kind == "huge" else 1
-		for i in horde:
-			var offset := icon_s * (0.4 + 1.1 * float(i))
-			GvzArt.draw_zombie(
-				self,
-				"schlurfi",
-				rect.position + Vector2(-offset - 6.0, h * 0.72),
-				icon_s,
-				int(state["tick"]) + i * 3
-			)
-			GvzArt.draw_zombie(
-				self,
-				"schlurfi",
-				rect.position + Vector2(w + offset + 6.0, h * 0.72),
-				icon_s,
-				int(state["tick"]) + i * 5 + 2
-			)
-	draw_string(
-		_font_bold,
-		rect.position + Vector2(0, h * 0.5 + 8.0 * s),
-		_banner_text,
-		HORIZONTAL_ALIGNMENT_CENTER,
-		int(rect.size.x),
-		int((26 if danger else 22) * s),
-		Color(1.0, 1.0, 1.0, fade)
-	)
-
-
-func _draw_bar(at: Vector2, width: float, frac: float, color: Color) -> void:
-	draw_rect(Rect2(at, Vector2(width, 4.0)), Color(0.29, 0.23, 0.21, 0.4))
-	draw_rect(Rect2(at, Vector2(width * clampf(frac, 0.0, 1.0), 4.0)), color)
-
-
-func _rounded(rect: Rect2, color: Color) -> void:
-	draw_rect(rect, GvzArt.OUTLINE.lerp(color, 0.7))
-	draw_rect(rect.grow(-1.5), color)
+## Netz-Status fürs HUD: Überlebens-Timer + „Warte auf Partner“-Hinweis.
+func netz_hud_info() -> Dictionary:
+	if not _netz_active or _netz == null:
+		return {"active": false}
+	return {
+		"active": true,
+		"seconds_left": _netz.seconds_left(),
+		"waiting": _netz_waiting and phase == "battle",
+	}
 
 
 ## ── UI-Aufbau (Select + Overlays) ────────────────────────────────────────
@@ -893,74 +729,124 @@ func _rounded(rect: Rect2, color: Color) -> void:
 func _build_select_screen() -> void:
 	_select_screen = GvzLevelSelect.new()
 	_select_screen.game_state = _game_state()
+	_select_screen.netz_panel = _netz_panel
 	_select_screen.level_chosen.connect(open_level)
 	_select_screen.done_pressed.connect(finish_session)
 	add_child(_select_screen)
 	# B11 (W13/GVZ): KEIN FULL_RECT — der Select bindet sich an den Viewport.
 
 
-## MG-Audit B §2: Arcade-Stil statt nacktem 340×170-VBox — Dim + AcCardLg-
-## Plate mittig (results.gd-Muster), Fonts ×f, Knöpfe halten den Touch-Floor.
+## End-Overlays (Stufe 2: Sterne-Pop + Icon-Knöpfe) baut gvz_overlay.gd.
 func _build_end_overlay(won: bool, stars: int, total: int, first_clear: bool) -> void:
-	_clear_overlay()
-	_overlay = Control.new()
-	add_child(_overlay)
-	var dim := ColorRect.new()
-	dim.color = Color(0.24, 0.16, 0.12, 0.55)
-	_overlay.add_child(dim)
-	var panel := PanelContainer.new()
-	panel.theme_type_variation = &"AcCardLg"
-	_overlay.add_child(panel)
-	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 10)
-	panel.add_child(box)
-	var title := Label.new()
-	title.theme_type_variation = &"HeadlineLabel"
-	title.text = I18nService.t("gvz.end.win" if won else "gvz.end.lose")
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	box.add_child(title)
-	var info := Label.new()
-	info.theme_type_variation = &"CaptionLabel"
-	info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	if won:
-		var star_row := "★".repeat(stars) + "☆".repeat(3 - stars)
-		info.text = star_row + "\n" + I18nService.t("gvz.end.score", {"n": total})
-		if first_clear:
-			info.text += "\n" + I18nService.t("gvz.end.first_clear")
-	else:
-		info.text = I18nService.t("gvz.end.lose_hint")
-	box.add_child(info)
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 10)
-	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	box.add_child(row)
-	if won and level_id < GvzProgress.LEVEL_COUNT:
-		row.add_child(_overlay_button("gvz.end.next", func() -> void: open_level(level_id + 1)))
-	if not won:
-		row.add_child(_overlay_button("gvz.end.retry", func() -> void: open_level(level_id)))
-	row.add_child(_overlay_button("gvz.end.select", back_to_select))
-	ScreenShell.scale_fonts(panel, ScreenShell.metrics(get_viewport())["f"])
-	var vp := _view_size()
-	_overlay.size = vp
-	dim.size = vp
-	panel.size = panel.get_combined_minimum_size()
-	panel.position = ((vp - panel.size) * 0.5).floor()
+	_overlay_builder.build_end(won, stars, total, first_clear)
 
 
-func _overlay_button(key: String, action: Callable) -> Button:
-	var button := SquishButton.new()
-	button.text = I18nService.t(key)
-	button.custom_minimum_size = Vector2(104, 48)
-	ScreenShell.touch_target(button, ScreenShell.metrics(get_viewport()))
-	button.pressed.connect(func() -> void: AudioDirector.try_play(button, "ui_click"))
-	button.pressed.connect(action)
-	return button
+func _build_netz_end_overlay(won: bool) -> void:
+	_overlay_builder.build_netz_end(won)
 
 
 func _clear_overlay() -> void:
 	if _overlay != null and is_instance_valid(_overlay):
 		_overlay.queue_free()
 	_overlay = null
+
+
+## ── Netz-PvP-Verdrahtung (G5/P26, Muster gobnom/W15) ─────────────────────
+
+
+## Session + Panel nur bauen, wenn es einen NetClient gibt — ohne /root/Net
+## (bzw. net_override in Tests) bleibt der komplette Kampagnen-Pfad unberührt.
+func _setup_netz() -> void:
+	var net: Object = net_override if net_override != null else get_node_or_null("/root/Net")
+	if net == null:
+		return
+	_pvp = GvzPvpLockstep.load_pvp()
+	netz_session = GvzNetSession.new()
+	netz_session.name = "NetzPvp"
+	add_child(netz_session)
+	netz_session.setup(net)
+	netz_session.game_started.connect(_on_netz_start)
+	netz_session.frame_received.connect(_on_netz_frame)
+	netz_session.hash_received.connect(_on_netz_hash)
+	netz_session.desync_reported.connect(_on_netz_desync)
+	netz_session.result_confirmed.connect(_on_netz_result)
+	netz_session.session_aborted.connect(_on_netz_aborted)
+	netz_session.peer_connection_changed.connect(_on_netz_peer_changed)
+	_netz_panel = GvzNetzPanel.new()
+	_netz_panel.setup(netz_session)
+
+
+## GVZ_START: beide Geräte bauen die identische PvP-Sim aus dem Server-Seed.
+func _on_netz_start(_data: Dictionary) -> void:
+	attempt += 1
+	level_id = 0
+	_netz = GvzPvpLockstep.new()
+	_netz.start(
+		balance, _pvp, netz_session.seed_value, netz_session.my_side, netz_session.input_delay
+	)
+	_netz.hash_ticks = netz_session.hash_every_ticks
+	state = _netz.state
+	_netz_active = true
+	_netz_waiting = false
+	_enter_battle()
+	_show_banner(
+		I18nService.t("gvz.netz.start_banner", {"name": netz_session.partner_gooby_name}), "intro"
+	)
+	# Erster Fence sofort raus — der Partner darf die ersten Ticks rechnen.
+	netz_session.send_frame(_netz.take_frame(true))
+
+
+func _on_netz_frame(body: Dictionary) -> void:
+	if _netz != null:
+		_netz.receive_frame(body)
+
+
+func _on_netz_hash(tick: int, hash_text: String) -> void:
+	if _netz != null:
+		_netz.receive_hash(tick, hash_text)
+
+
+## Desync (lokal ODER vom Server gemeldet): höflicher Abbruch mit Toast
+## statt Weiterspielen auf divergenten Welten.
+func _on_netz_desync(_tick: int) -> void:
+	if not _netz_active:
+		return
+	if netz_session != null:
+		netz_session.leave()
+	_netz_abort("gvz.netz.desync")
+
+
+## Ergebnis bestätigt: die Session ist verbraucht — sauber gehen, sonst
+## blockiert die tote Paarung serverseitig JEDE neue Herausforderung.
+func _on_netz_result(_data: Dictionary) -> void:
+	if netz_session != null:
+		netz_session.leave()
+	if _netz_panel != null:
+		_netz_panel.refresh()
+
+
+func _on_netz_aborted(_reason: String, _by: String) -> void:
+	if _netz_active:
+		_netz_abort("gvz.netz.abbruch")
+	elif _netz_panel != null:
+		_netz_panel.refresh()
+
+
+func _on_netz_peer_changed(down: bool, _wait_ms: int) -> void:
+	if not _netz_active or netz_session == null:
+		return
+	var key := "gvz.netz.partner_weg" if down else "gvz.netz.partner_da"
+	_show_banner(I18nService.t(key, {"name": netz_session.partner_gooby_name}))
+	queue_redraw()
+
+
+func _netz_abort(toast_key: String) -> void:
+	_netz_active = false
+	_netz = null
+	AudioDirector.try_play(self, "ui_error")
+	if ctx != null and ctx.juice != null:
+		ctx.juice.float_text(_view_size() * 0.5, I18nService.t(toast_key), GvzArt.BERRY_RED)
+	back_to_select()
 
 
 ## ── Helfer ───────────────────────────────────────────────────────────────
@@ -982,11 +868,13 @@ func _conveyor_active() -> bool:
 	return not (state["conveyor"] as Dictionary).is_empty()
 
 
+## Spiele ich im Netz-Match die Zombie-Seite? (Karten/Matsch/kein Sammeln.)
+func _netz_zombie() -> bool:
+	return _netz_active and _netz != null and _netz.side == GvzPvpLockstep.SIDE_ZOMBIE
+
+
 func _show_banner(text: String, kind := "info") -> void:
-	_banner_text = text
-	_banner_kind = kind
-	_banner_start = Time.get_ticks_msec() / 1000.0
-	_banner_until = _banner_start + BANNER_SEC
+	_hud.show_banner(text, kind)
 
 
 ## Letzte Pixel-Anker der Zombies (die Sim entfernt Tote im selben Tick —

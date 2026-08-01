@@ -19,7 +19,8 @@
 			"reason_nutella": "Zu wenig Nutella!",
 			"reason_cooldown": "Noch nicht bereit!",
 			"reason_cell_occupied": "Da steht schon wer!",
-			"reason_locked": "Noch gesperrt!"
+			"reason_locked": "Noch gesperrt!",
+			"reason_matsch": "Zu wenig Matsch!"
 		},
 		"end": {
 			"win": "Rasen verteidigt!",
@@ -29,7 +30,35 @@
 			"lose_hint": "Tipp: Pflanz zuerst die Nutella-Sammler!",
 			"next": "Weiter ›",
 			"retry": "Nochmal",
-			"select": "Level-Wahl"
+			"select": "Level-Wahl",
+			"netz_win": "Du hast {name} besiegt!",
+			"netz_lose": "{name} hat gewonnen!",
+			"netz_hint": "Fordere {name} gleich nochmal heraus!"
+		},
+		"netz": {
+			"button": "PvP übers Netz",
+			"bereit": "Fordere einen Freund heraus — Goobys gegen Zombies!",
+			"offline": "Offline — PvP übers Netz braucht eine Verbindung.",
+			"keine_freunde": "Gerade ist kein Freund online.",
+			"einladen": "Herausfordern",
+			"eingeladen": "Herausforderung an {name} geschickt — warte auf Antwort…",
+			"laedt_ein": "{name} fordert dich zum PvP heraus!",
+			"annehmen": "Annehmen",
+			"ablehnen": "Ablehnen",
+			"abgelehnt": "{name} hat abgelehnt.",
+			"fehler": "Klappt gerade nicht ({code}).",
+			"verbunden": "Verbunden mit {name} — du spielst {seite}.",
+			"seite_gooby": "die Goobys",
+			"seite_zombie": "die Zombies",
+			"los": "Los geht's!",
+			"warte_start": "Warte auf {name}…",
+			"trennen": "Trennen",
+			"start_banner": "PvP gegen {name}!",
+			"warte_partner": "Warte auf Partner…",
+			"partner_weg": "{name} hat Verbindungsprobleme…",
+			"partner_da": "{name} ist wieder da!",
+			"desync": "Ups — ihr wart nicht mehr synchron. Match beendet.",
+			"abbruch": "Das PvP-Match wurde beendet."
 		}
 	}
 }

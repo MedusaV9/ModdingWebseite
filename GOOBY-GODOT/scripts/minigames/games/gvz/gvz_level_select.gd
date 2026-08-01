@@ -24,6 +24,10 @@ const PAGE_TURN_DEBOUNCE_MS := 600
 ## Duck-Typing: /root/GameState ODER Test-Double (von gvz_game gesetzt).
 var game_state: Object
 
+## G5/P26 Netz-PvP: „PvP übers Netz“-Panel (GvzNetzPanel), von gvz_game VOR
+## add_child gesetzt (Muster gobnom/W15); null = ohne Netz (reine Kampagne).
+var netz_panel: Control
+
 var _margin: MarginContainer
 var _done: Button
 var _grid: GridContainer
@@ -65,6 +69,9 @@ func _ready() -> void:
 	_grid.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	column.add_child(_grid)
 	column.add_child(_build_progress_bar())
+	# G5/P26: PvP-übers-Netz-Angebot zwischen Fortschritt und Footer.
+	if netz_panel != null:
+		column.add_child(netz_panel)
 	# Footer mittig (Daumenzone statt „rechts außen“, ui-ranch §2.2).
 	var footer := HBoxContainer.new()
 	footer.add_theme_constant_override("separation", 12)
