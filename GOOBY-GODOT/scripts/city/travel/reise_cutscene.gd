@@ -6,6 +6,10 @@ extends Node3D
 ## Silhouette hebt ab. Skip ab Sekunde 2; Reduced-Motion = Text-Karten.
 ## `modus = "rueckkehr"` spielt die gekürzte Abhol-Variante (~12 s).
 ## KEIN GameState-Zugriff — der Öffner (ReiseApp) hört auf `fertig`.
+##
+## G4/P16 (ui-reisen MITTEL 11): der Skip-Knopf sitzt bodenzentriert IN der
+## Safe-Area (Daumenzone statt Home-Indicator-Ecke), hält den physischen
+## Touch-Floor und zieht bei Rotation nach; SquishButton + ui_back.
 
 signal fertig
 
@@ -18,6 +22,7 @@ var _cam: Camera3D
 var _set: Node3D
 var _skip := false
 var _layer: CanvasLayer
+var _skip_btn: Button
 
 
 func _ready() -> void:
@@ -69,27 +74,51 @@ func _baue_buehne() -> void:
 	add_child(_cam)
 	_layer = CanvasLayer.new()
 	add_child(_layer)
-	var skip_btn := Button.new()
+	var skip_btn := SquishButton.new()
+	skip_btn.name = "Skip"
 	skip_btn.text = I18nService.t("travel.cutscene.skip")
 	# Theme explizit setzen: Window-Theme propagiert NICHT durch CanvasLayer.
 	skip_btn.theme = ThemeService.theme()
 	skip_btn.theme_type_variation = "GhostButton"
-	# anchors+offsets mit MINSIZE-Margin: position-Mathe landet am Rand
-	# abgeschnitten, weil der Rect beim _ready noch nicht gelegt ist.
-	skip_btn.set_anchors_and_offsets_preset(
-		Control.PRESET_BOTTOM_RIGHT, Control.PRESET_MODE_MINSIZE, 20
-	)
-	# Min-Größe wächst nach dem Theme-Font-Laden noch — nach links/oben
-	# ausdehnen, sonst ragt der Knopf über den rechten Rand hinaus.
-	skip_btn.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-	skip_btn.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	skip_btn.focus_mode = Control.FOCUS_NONE
 	skip_btn.visible = false
-	skip_btn.pressed.connect(skip)
+	skip_btn.pressed.connect(_on_skip_pressed)
 	_layer.add_child(skip_btn)
+	_skip_btn = skip_btn
+	_lege_skip_knopf()
+	get_viewport().size_changed.connect(_lege_skip_knopf)
 	# Skip ab Sekunde 2 (Doc E §3.2). Gebundenes Methoden-Callable statt
 	# Lambda (B2): endet die Cutscene vorher, löst Godot die Verbindung —
 	# ein Lambda-Capture würde "Lambda capture ... was freed" loggen.
 	get_tree().create_timer(2.0).timeout.connect(skip_btn.set_visible.bind(true))
+
+
+## G4/P16: Skip bodenzentriert in der Safe-Area (Daumenzone) + Touch-Floor;
+## Rotation ruft erneut (size_changed).
+func _lege_skip_knopf() -> void:
+	if _skip_btn == null:
+		return
+	var m := ScreenShell.metrics(get_viewport())
+	var f: float = m["f"]
+	var insets: Dictionary = m["insets"]
+	_skip_btn.custom_minimum_size = Vector2(0.0, roundf(44.0 * f))
+	ScreenShell.touch_target(_skip_btn, m)
+	# anchors+offsets mit MINSIZE-Margin: position-Mathe landet am Rand
+	# abgeschnitten, weil der Rect beim _ready noch nicht gelegt ist.
+	_skip_btn.set_anchors_and_offsets_preset(
+		Control.PRESET_CENTER_BOTTOM, Control.PRESET_MODE_MINSIZE, 0
+	)
+	_skip_btn.offset_bottom = -(float(insets["bottom"]) + 16.0 * f)
+	_skip_btn.offset_top = _skip_btn.offset_bottom - _skip_btn.custom_minimum_size.y
+	# Min-Größe wächst nach dem Theme-Font-Laden noch — zentriert bleiben.
+	_skip_btn.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_skip_btn.grow_vertical = Control.GROW_DIRECTION_BEGIN
+
+
+func _on_skip_pressed() -> void:
+	# Abbrechen/Überspringen klingt als Zurück (Grammatik: ui_back).
+	AudioDirector.try_play(self, "ui_back")
+	skip()
 
 
 func _neues_set() -> void:

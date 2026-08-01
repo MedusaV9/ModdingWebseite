@@ -8,6 +8,12 @@ extends PanelContainer
 ## (`zeichen_schritt`/`text_schritt`/`flap_sequenz`) und die Zeit wird über
 ## `advance(delta)` injiziert (Tests takten von Hand; `_process` füttert im
 ## Spiel). Reduced Motion = Zieltext sofort, kein Geklapper.
+##
+## G4/P16 (ui-reisen HOCH 5): Spaltenraster + Fontgröße kommen aus der
+## REALEN Sheet-Breite (`setze_verfuegbare_breite`) statt aus Fixwerten —
+## erst staucht die Schrift bis zum Boden, dann fliegt die Abflug-Spalte
+## raus (2-Spalten-Raster Ziel | Status). Ohne Breiten-Angabe bleibt das
+## klassische 47-Zeichen-Raster stehen (`zeile_text_von`, Test-Vertrag).
 
 signal alle_zeilen_fertig
 
@@ -24,6 +30,14 @@ const SPALTE_ABFLUG := 15
 const SPALTE_STATUS := 15
 ## Gag-Status-Pool (Keys unter reisepass.tafel.*) — deterministisch je Ziel.
 const STATUS_POOL := ["status_boarding", "status_puenktlich", "status_mampft", "status_flauscht"]
+## Tafel-Schrift in Design-px: klein (Titel/Kopf), groß (Zeilen), Boden.
+const FONT_KLEIN := 13
+const FONT_GROSS := 15
+const FONT_MIN := 11
+## Kleinstes Zeichenbudget des Schmal-Rasters (Ziel + Status bleiben lesbar).
+const BUDGET_MIN := 20
+## StyleBox-Innenränder links+rechts (s. _ready).
+const INNEN_RAND := 24.0
 
 static var _mono_cache: Font = null
 
@@ -31,9 +45,16 @@ static var _mono_cache: Font = null
 var reduziert_override: Variant = null
 
 var _zeilen_box: VBoxContainer
+var _titel_label: Label
+var _kopf_label: Label
 var _labels: Array[Label] = []
 var _frames: Array = []
+var _eintraege: Array = []
 var _akku := 0.0
+## Aktives Spaltenraster (Default = klassisches 47-Zeichen-Raster).
+var _spalten: Array = [SPALTE_ZIEL, SPALTE_ABFLUG, SPALTE_STATUS]
+var _font_klein := float(FONT_KLEIN)
+var _font_gross := float(FONT_GROSS)
 
 
 func _ready() -> void:
@@ -49,22 +70,16 @@ func _ready() -> void:
 	_zeilen_box = VBoxContainer.new()
 	_zeilen_box.add_theme_constant_override("separation", 2)
 	add_child(_zeilen_box)
-	var titel := Label.new()
-	titel.name = "TafelTitel"
-	titel.text = I18nService.t("reisepass.tafel.titel")
-	_stil(titel, AcTokens.YELLOW_DARK, 13)
-	_zeilen_box.add_child(titel)
-	var kopf := Label.new()
-	kopf.name = "TafelKopf"
-	kopf.text = zeile_text_von(
-		{
-			"ziel": I18nService.t("reisepass.tafel.ziel"),
-			"abflug": I18nService.t("reisepass.tafel.abflug"),
-			"status": I18nService.t("reisepass.tafel.status"),
-		}
-	)
-	_stil(kopf, AcTokens.YELLOW_DARK, 13)
-	_zeilen_box.add_child(kopf)
+	_titel_label = Label.new()
+	_titel_label.name = "TafelTitel"
+	_titel_label.text = I18nService.t("reisepass.tafel.titel")
+	_stil(_titel_label, AcTokens.YELLOW_DARK, int(_font_klein))
+	_zeilen_box.add_child(_titel_label)
+	_kopf_label = Label.new()
+	_kopf_label.name = "TafelKopf"
+	_kopf_label.text = gerasterte_zeile(_kopf_eintrag())
+	_stil(_kopf_label, AcTokens.YELLOW_DARK, int(_font_klein))
+	_zeilen_box.add_child(_kopf_label)
 
 
 func _process(delta: float) -> void:
@@ -133,16 +148,60 @@ static func status_key(ziel_id: String, kann_zahlen: bool) -> String:
 	return "reisepass.tafel.%s" % STATUS_POOL[_streu(ziel_id) % STATUS_POOL.size()]
 
 
+## PURE (G4): Spaltenraster für ein Zeichenbudget — volle Tafel ab 47
+## Zeichen, darunter fliegt die Abflug-Spalte raus (Ziel | Status).
+static func spalten_fuer_budget(budget: int) -> Array:
+	var voll := SPALTE_ZIEL + SPALTE_ABFLUG + SPALTE_STATUS
+	if budget >= voll:
+		return [SPALTE_ZIEL, SPALTE_ABFLUG, SPALTE_STATUS]
+	var eng := clampi(budget, BUDGET_MIN, voll)
+	var status := clampi(roundi(eng * 0.4), 8, SPALTE_STATUS)
+	return [eng - status, 0, status]
+
+
 ## ------------------------------------------------------ Board-Steuerung
+
+
+## G4/P16: verfügbare Content-Breite (px) + UiScale-Faktor hereinreichen —
+## VOR set_zeilen aufrufen. Staucht erst die Schrift (bis FONT_MIN·f),
+## dann das Spaltenraster; stylt Titel/Kopf/Zeilen sofort um.
+func setze_verfuegbare_breite(breite_px: float, f: float) -> void:
+	var innen := breite_px - INNEN_RAND
+	if innen <= 0.0:
+		return
+	_font_klein = maxf(roundf(FONT_KLEIN * f), float(FONT_MIN))
+	var boden := maxf(roundf(FONT_MIN * f), float(FONT_MIN))
+	var gross := maxf(roundf(FONT_GROSS * f), boden)
+	var voll := SPALTE_ZIEL + SPALTE_ABFLUG + SPALTE_STATUS
+	var zeichen := _zeichen_breite(gross)
+	while gross > boden and zeichen * voll > innen:
+		gross -= 1.0
+		zeichen = _zeichen_breite(gross)
+	_font_gross = gross
+	var budget := voll
+	if zeichen * voll > innen:
+		budget = clampi(int(innen / zeichen), BUDGET_MIN, voll)
+	_spalten = spalten_fuer_budget(budget)
+	_restyle()
+
+
+## Zieltext im AKTIVEN Raster (Default-Raster ≙ zeile_text_von).
+func gerasterte_zeile(eintrag: Dictionary) -> String:
+	var ziel := norm(str(eintrag.get("ziel", "")), int(_spalten[0]))
+	var status := norm(str(eintrag.get("status", "")), int(_spalten[2]))
+	if int(_spalten[1]) <= 0:
+		return ziel + status
+	return ziel + norm(str(eintrag.get("abflug", "")), int(_spalten[1])) + status
 
 
 ## Zeilen setzen (Dicts mit ziel/abflug/status). Vorhandene Zeilen flippen
 ## animiert auf die neuen Texte; Reduced Motion springt sofort.
 func set_zeilen(eintraege: Array) -> void:
+	_eintraege = eintraege.duplicate()
 	while _labels.size() < eintraege.size():
 		var label := Label.new()
 		label.name = "TafelZeile%d" % _labels.size()
-		_stil(label, AcTokens.YELLOW, 15)
+		_stil(label, AcTokens.YELLOW, int(_font_gross))
 		_zeilen_box.add_child(label)
 		_labels.append(label)
 		_frames.append([])
@@ -152,7 +211,7 @@ func set_zeilen(eintraege: Array) -> void:
 		if not sichtbar:
 			_frames[i] = []
 			continue
-		var ziel := zeile_text_von(eintraege[i])
+		var ziel := gerasterte_zeile(eintraege[i])
 		if _ist_reduziert():
 			_labels[i].text = ziel
 			_frames[i] = []
@@ -202,11 +261,44 @@ func _ist_reduziert() -> bool:
 	return ThemeService.is_reduced_motion(self)
 
 
+func _kopf_eintrag() -> Dictionary:
+	return {
+		"ziel": I18nService.t("reisepass.tafel.ziel"),
+		"abflug": I18nService.t("reisepass.tafel.abflug"),
+		"status": I18nService.t("reisepass.tafel.status"),
+	}
+
+
+## Fonts + Raster nach Breitenwechsel neu anwenden. Sichtbare Zeilen werden
+## SOFORT neu gerastert (reines Re-Layout, kein neues Geklapper).
+func _restyle() -> void:
+	if _titel_label != null:
+		_stil(_titel_label, AcTokens.YELLOW_DARK, int(_font_klein))
+	if _kopf_label != null:
+		_stil(_kopf_label, AcTokens.YELLOW_DARK, int(_font_klein))
+		_kopf_label.text = gerasterte_zeile(_kopf_eintrag())
+	for i in _labels.size():
+		_stil(_labels[i], AcTokens.YELLOW, int(_font_gross))
+		if i < _eintraege.size() and _labels[i].visible:
+			_labels[i].text = gerasterte_zeile(_eintraege[i])
+			_frames[i] = []
+
+
 func _stil(label: Label, farbe: Color, groesse: int) -> void:
 	label.add_theme_font_override("font", _mono_font())
 	label.add_theme_font_size_override("font_size", groesse)
 	label.add_theme_color_override("font_color", farbe)
 	label.clip_text = true
+	# Die Tafel skaliert ihre Schrift SELBST (setze_verfuegbare_breite) —
+	# ScreenShell.scale_fonts der Eltern-Screens soll nicht doppelt anfassen.
+	label.set_meta(ScreenShell.META_FONT_SKIP, true)
+
+
+## Breite EINES Monospace-Zeichens bei font_px (Fallback: 45 % der
+## Fonthöhe, falls die Messung headless nichts liefert).
+static func _zeichen_breite(font_px: float) -> float:
+	var w := _mono_font().get_string_size("0", HORIZONTAL_ALIGNMENT_LEFT, -1, int(font_px)).x
+	return maxf(w, font_px * 0.45)
 
 
 static func _mono_font() -> Font:

@@ -7,14 +7,22 @@ extends Control
 ##
 ## Farben kommen aus dem Theme (AcTokens); die Pin-Farbe eines Orts ist sein
 ## Fassaden-Tint aus `city_map.json`, damit Pin und Haus dieselbe Farbe haben.
+##
+## G4/P16 (ui-reisen MITTEL 7): Zeichnung + Projektion binden an die REALE
+## Kante statt an die Konstante — GOOBERANDO skaliert die Live-Karte damit
+## dynamisch (`kachel` setzen), das Fahr-HUD behält seine 148er-Kachel.
 
-## Kantenlänge der Karten-Kachel (px).
+## Kantenlänge der Karten-Kachel (px) — Default-/Fallback-Wert.
 const GROESSE := 148.0
 const RAND := 10.0
 const PIN_R := 5.0
 const SPIELER_R := 5.5
 ## Ein Pin blinkt nicht — er wächst, wenn man davorsteht.
 const PIN_AKTIV_R := 8.0
+
+## Wunsch-Kante in px (vor add_child setzen); _ready übernimmt sie als
+## Mindestgröße, alles Zeichnen skaliert relativ zu GROESSE mit.
+var kachel := GROESSE
 
 var karte: CityMap
 
@@ -25,10 +33,18 @@ var _pins: Array[Dictionary] = []
 
 
 func _ready() -> void:
-	custom_minimum_size = Vector2(GROESSE, GROESSE)
-	size = Vector2(GROESSE, GROESSE)
+	custom_minimum_size = Vector2(kachel, kachel)
+	size = size.max(Vector2(kachel, kachel))
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	resized.connect(queue_redraw)
 	_sammle_pins()
+
+
+## Reale Kantenlänge: kurze Seite des gelegten Rects, sonst der Wunschwert.
+## (Vertrag: ohne Layout — z. B. Tests ohne Tree — bleibt es die Kachel.)
+func kante() -> float:
+	var kurz := minf(size.x, size.y)
+	return kurz if kurz > 0.0 else kachel
 
 
 ## Karte NACH dem Setzen von `karte` neu aufbauen (Tests/Live-Reload).
@@ -56,32 +72,36 @@ func pins() -> Array[Dictionary]:
 	return _pins
 
 
-## Welt-XZ → Kachel-Pixel (PURE bis auf die Kachelgröße).
+## Welt-XZ → Kachel-Pixel (PURE bis auf die reale Kachelkante).
 func welt_zu_pixel(pos: Vector3) -> Vector2:
+	var k := kante()
 	if karte == null:
-		return Vector2(GROESSE, GROESSE) * 0.5
+		return Vector2(k, k) * 0.5
 	var halb := karte.welt_halb()
-	var innen := GROESSE - RAND * 2.0
+	var rand := RAND * (k / GROESSE)
+	var innen := k - rand * 2.0
 	var u := clampf((pos.x + halb.x) / (halb.x * 2.0), 0.0, 1.0)
 	var v := clampf((pos.z + halb.y) / (halb.y * 2.0), 0.0, 1.0)
-	return Vector2(RAND + u * innen, RAND + v * innen)
+	return Vector2(rand + u * innen, rand + v * innen)
 
 
 func _draw() -> void:
-	var flaeche := Rect2(Vector2.ZERO, Vector2(GROESSE, GROESSE))
+	var k := kante()
+	var faktor := k / GROESSE
+	var flaeche := Rect2(Vector2.ZERO, Vector2(k, k))
 	draw_rect(flaeche, AcTokens.FROST, true)
-	draw_rect(flaeche, AcTokens.OUTLINE_SOFT, false, 2.0)
-	_zeichne_strassen()
+	draw_rect(flaeche, AcTokens.OUTLINE_SOFT, false, 2.0 * faktor)
+	_zeichne_strassen(faktor)
 	for pin in _pins:
 		var mitte: Vector2 = welt_zu_pixel(pin["welt"])
-		var radius := PIN_AKTIV_R if str(pin["id"]) == _aktiv else PIN_R
-		draw_circle(mitte, radius + 1.5, AcTokens.PAPER)
+		var radius := (PIN_AKTIV_R if str(pin["id"]) == _aktiv else PIN_R) * faktor
+		draw_circle(mitte, radius + 1.5 * faktor, AcTokens.PAPER)
 		draw_circle(mitte, radius, pin["farbe"])
-	_zeichne_spieler()
+	_zeichne_spieler(faktor)
 
 
 ## Straßen-Lattice als dünne Linien — nur Reihen/Spalten, keine Tiles.
-func _zeichne_strassen() -> void:
+func _zeichne_strassen(faktor: float) -> void:
 	if karte == null:
 		return
 	var gezeichnet := {}
@@ -98,20 +118,21 @@ func _zeichne_strassen() -> void:
 				welt_zu_pixel(karte.tile_zu_welt(tile)),
 				welt_zu_pixel(karte.tile_zu_welt(nachbar)),
 				AcTokens.TRACK_SOFT,
-				3.0
+				3.0 * faktor
 			)
 
 
 ## Spieler als kleines Dreieck in Fahrtrichtung (+Z = Süden = Bild unten).
-func _zeichne_spieler() -> void:
+func _zeichne_spieler(faktor: float) -> void:
 	var mitte := welt_zu_pixel(_spieler)
+	var r := SPIELER_R * faktor
 	var vorn := Vector2(sin(_heading), cos(_heading))
 	var quer := Vector2(-vorn.y, vorn.x)
 	var punkte := PackedVector2Array(
 		[
-			mitte + vorn * SPIELER_R * 1.6,
-			mitte - vorn * SPIELER_R + quer * SPIELER_R * 0.8,
-			mitte - vorn * SPIELER_R - quer * SPIELER_R * 0.8,
+			mitte + vorn * r * 1.6,
+			mitte - vorn * r + quer * r * 0.8,
+			mitte - vorn * r - quer * r * 0.8,
 		]
 	)
 	draw_colored_polygon(punkte, AcTokens.PINK)

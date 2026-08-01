@@ -10,6 +10,14 @@ extends VBoxContainer
 ## schadet nie ;)“ nach 3× keins). Essen landet als FoodCatalog-Ids im
 ## Inventar (GameState).
 ##
+## G4/P16 (ui-reisen MITTEL 6/7): Inhalt baut auf der REALEN Sheet-Breite
+## (`inhalt_breite()`), Restaurants sind EINE tappbare Karte (AcCardButton
+## mit Name/Sterne-Gag/Wartezeit) statt Button+losen Captions, die
+## Live-Karte skaliert dynamisch (`kante = clamp(breite·0,7, 220, 420)`)
+## und alle Aktions-Knöpfe sind SquishButtons ≥ 52·f mit Touch-Floor.
+## Sounds nach Audio-Grammatik (Outcome schlägt Press: ui_buy erst NACH
+## gelungener Zahlung).
+##
 ## HUD-Anbindung (Orchestrator): `hud.action_pressed` mit &"igohbie" →
 ## `GooberandoApp.oeffne(szene, game_state)`.
 
@@ -23,6 +31,16 @@ const KLINGEL := "res://assets/city/audio/bong_001.ogg"
 const ORANGE := Color("#FF7A00")
 ## Kleiner Warenkorb (Doc E §5.1): mehr trägt der Liefer-Gooby nicht.
 const MAX_KORB := 5
+## Mindesthöhe der Aktions-Knöpfe / Restaurant-Karten in Design-px.
+const KNOPF_HOEHE := 52.0
+const KARTE_HOEHE := 64.0
+## Fallback-Inhaltsbreite in Design-px (Tests bauen die App ohne Sheet).
+const BASIS_BREITE := 420.0
+const MIN_BREITE := 220.0
+## Live-Karten-Kante: Anteil der Inhaltsbreite + harte Klemmen (Design-px).
+const KARTE_ANTEIL := 0.7
+const KARTE_MIN := 220.0
+const KARTE_MAX := 420.0
 
 var gs: Object
 var sheet: PanelSheet
@@ -68,9 +86,12 @@ static func handle_hud_action(action: StringName, host: Node, game_state: Object
 
 func _ready() -> void:
 	# Root = VBoxContainer (min-Höhe propagiert zum PanelSheet); _box = self.
-	custom_minimum_size = Vector2(420.0, 0.0)
+	custom_minimum_size = Vector2(inhalt_breite(), 0.0)
 	add_theme_constant_override("separation", 10)
 	_box = self
+	var vp := get_viewport()
+	if vp != null:
+		vp.size_changed.connect(_on_viewport_resized)
 	_render()
 
 
@@ -86,6 +107,22 @@ func now_ms() -> int:
 	if gs != null and "clock" in gs:
 		return int(gs.clock.now_ms())
 	return int(Time.get_unix_time_from_system() * 1000.0)
+
+
+## G4/P16: reale Inhaltsbreite — Sheet-Breite minus Sheet-Chrome
+## (FIX1-Regel „Breite abfragen statt erzwingen“). Ohne Sheet (Tests,
+## Direkteinbau) fällt sie auf die skalierte Basisbreite zurück.
+func inhalt_breite() -> float:
+	var vp := get_viewport()
+	if vp == null:
+		return BASIS_BREITE
+	var f := UiScale.for_viewport(vp)
+	var canvas := Vector2(vp.get_visible_rect().size)
+	if sheet == null or not is_instance_valid(sheet) or not sheet.is_inside_tree():
+		return clampf(canvas.x - 48.0, MIN_BREITE, BASIS_BREITE * f)
+	var insets := UiScale.safe_insets_canvas(vp)
+	var breite := PanelSheetLayout.sheet_width(canvas, insets, f) - sheet.chrome_width()
+	return maxf(breite, MIN_BREITE)
 
 
 ## Gesamt-Lieferzeit (s) einer Bestellung: Küchen-Wartezeit des Restaurants
@@ -130,6 +167,12 @@ func _tick() -> void:
 ## ---------------------------------------------------------------- Views
 
 
+## Rotation/Resize: Breite nachziehen und die aktuelle Ansicht neu bauen.
+func _on_viewport_resized() -> void:
+	custom_minimum_size = Vector2(inhalt_breite(), 0.0)
+	_render()
+
+
 func _render() -> void:
 	for kind in _box.get_children():
 		kind.queue_free()
@@ -149,16 +192,18 @@ func _render() -> void:
 				_render_restaurants()
 			else:
 				_render_menue()
+	_skaliere_schriften()
 
 
 func _logo() -> void:
 	if not ResourceLoader.exists(LOGO):
 		return
+	var f := UiScale.for_viewport(get_viewport())
 	var bild := TextureRect.new()
 	bild.texture = load(LOGO)
 	bild.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	bild.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	bild.custom_minimum_size = Vector2(0.0, 110.0)
+	bild.custom_minimum_size = Vector2(0.0, roundf(110.0 * f))
 	_box.add_child(bild)
 	var slogan := Label.new()
 	slogan.text = I18nService.t("travel.gooberando.slogan")
@@ -167,16 +212,64 @@ func _logo() -> void:
 	_box.add_child(slogan)
 
 
-## Restaurant-Wahl (W13B, Doc E §5.1): Name, Bewertungs-Gag, Wartezeit.
+## Restaurant-Wahl (W13B, Doc E §5.1): je Lieferküche EINE tappbare Karte
+## (Name, Bewertungs-Gag, Wartezeit) statt Button + loser Captions.
 func _render_restaurants() -> void:
 	_label(I18nService.t("phone.gooberando.restaurants_titel"))
 	for restaurant: Dictionary in GooberandoRestaurants.alle():
-		var btn := Button.new()
-		btn.theme_type_variation = "AccentButton"
-		btn.text = str(restaurant.get("name_de", "?"))
-		btn.pressed.connect(_on_restaurant.bind(str(restaurant.get("id", ""))))
-		_box.add_child(btn)
-		_caption(
+		var karte := _restaurant_karte(restaurant)
+		_box.add_child(karte)
+		_klemme_karten_hoehe(karte)
+
+
+## Kartenhöhe = Inhalt + Ränder, nie unter 64·f/Touch-Floor. ERST nach
+## add_child messen: Theme-Variationen (Headline/Caption) lösen nur im Tree
+## auf und die Schrift muss VOR der Messung auf f skaliert sein — sonst
+## klemmt die Höhe auf den unskalierten Fonts und die Captions clippen.
+## (scale_fonts ist idempotent — der Render-Abschluss skaliert erneut.)
+func _klemme_karten_hoehe(karte: Button) -> void:
+	var m := ScreenShell.metrics(get_viewport())
+	ScreenShell.scale_fonts(karte, float(m["f"]))
+	var inhalt: Control = karte.get_child(0)
+	var innen_h := inhalt.get_combined_minimum_size().y
+	karte.custom_minimum_size = Vector2(0.0, maxf(roundf(KARTE_HOEHE * float(m["f"])), innen_h))
+	ScreenShell.touch_target(karte, m)
+
+
+func _restaurant_karte(restaurant: Dictionary) -> Button:
+	var id := str(restaurant.get("id", ""))
+	var karte := SquishButton.new()
+	karte.name = "Restaurant_%s" % id
+	karte.theme_type_variation = "AcCardButton"
+	karte.focus_mode = Control.FOCUS_NONE
+	karte.pressed.connect(_on_restaurant.bind(id))
+	var inhalt := MarginContainer.new()
+	inhalt.set_anchors_preset(Control.PRESET_FULL_RECT)
+	inhalt.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	for seite: String in ["left", "right"]:
+		inhalt.add_theme_constant_override("margin_" + seite, 14)
+	for seite: String in ["top", "bottom"]:
+		inhalt.add_theme_constant_override("margin_" + seite, 10)
+	karte.add_child(inhalt)
+	var spalte := VBoxContainer.new()
+	spalte.add_theme_constant_override("separation", 2)
+	inhalt.add_child(spalte)
+	var titel := Label.new()
+	titel.name = "KartenName"
+	titel.theme_type_variation = "HeadlineLabel"
+	titel.text = str(restaurant.get("name_de", "?"))
+	spalte.add_child(titel)
+	var textbreite := inhalt_breite() - 28.0
+	var bewertung := Label.new()
+	bewertung.theme_type_variation = "CaptionLabel"
+	bewertung.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	bewertung.custom_minimum_size = Vector2(textbreite, 0.0)
+	# Autowrap misst die Min-Höhe an der AKTUELLEN Breite — Startbreite
+	# setzen, sonst rechnet die Höhen-Klemme mit 1 Zeichen/Zeile.
+	bewertung.size = Vector2(textbreite, 0.0)
+	(
+		bewertung
+		. set_text(
 			(
 				I18nService
 				. t("phone.gooberando.bewertung")
@@ -188,7 +281,13 @@ func _render_restaurants() -> void:
 				)
 			)
 		)
-		_caption(
+	)
+	spalte.add_child(bewertung)
+	var wartezeit := Label.new()
+	wartezeit.theme_type_variation = "CaptionLabel"
+	(
+		wartezeit
+		. set_text(
 			(
 				I18nService
 				. t("phone.gooberando.wartezeit")
@@ -200,6 +299,15 @@ func _render_restaurants() -> void:
 				)
 			)
 		)
+	)
+	spalte.add_child(wartezeit)
+	# Höhen-Klemme folgt NACH add_child (_klemme_karten_hoehe): die
+	# FULL_RECT-Innenbox propagiert ihre Min-Höhe nicht durch den Button
+	# und Theme-Fonts lösen erst im Tree auf.
+	var m := ScreenShell.metrics(get_viewport())
+	karte.custom_minimum_size = Vector2(0.0, roundf(KARTE_HOEHE * float(m["f"])))
+	ScreenShell.touch_target(karte, m)
+	return karte
 
 
 ## Menü + kleiner Warenkorb des gewählten Restaurants.
@@ -212,9 +320,10 @@ func _render_menue() -> void:
 		)
 	)
 	for gericht: Dictionary in restaurant.get("gerichte", []):
-		var btn := Button.new()
-		btn.theme_type_variation = "AccentButton"
-		btn.text = "%s — %d ᴳ" % [str(gericht.get("name_de", "?")), int(gericht.get("preis", 0))]
+		var btn := _knopf(
+			"%s — %d ᴳ" % [str(gericht.get("name_de", "?")), int(gericht.get("preis", 0))],
+			"AccentButton"
+		)
 		btn.disabled = _warenkorb.size() >= MAX_KORB
 		btn.pressed.connect(_on_in_den_korb.bind(gericht))
 		_box.add_child(btn)
@@ -236,27 +345,24 @@ func _render_menue() -> void:
 			)
 		)
 	var coins := int(gs.get_value("economy.coins", 0))
-	var kaufen := Button.new()
-	kaufen.theme_type_variation = "PrimaryButton"
-	kaufen.text = I18nService.t("phone.gooberando.bestellen").format({"summe": summe})
+	var kaufen := _knopf(
+		I18nService.t("phone.gooberando.bestellen").format({"summe": summe}), "PrimaryButton"
+	)
 	kaufen.disabled = _warenkorb.is_empty() or coins < summe
 	kaufen.pressed.connect(_on_bestellen)
 	_box.add_child(kaufen)
 	if not _warenkorb.is_empty():
-		var leeren := Button.new()
-		leeren.theme_type_variation = "GhostButton"
-		leeren.text = I18nService.t("phone.gooberando.warenkorb_leeren")
+		var leeren := _knopf(I18nService.t("phone.gooberando.warenkorb_leeren"), "GhostButton")
 		leeren.pressed.connect(_on_korb_leeren)
 		_box.add_child(leeren)
-	var zurueck := Button.new()
-	zurueck.theme_type_variation = "GhostButton"
-	zurueck.text = I18nService.t("phone.gooberando.menue_zurueck")
+	var zurueck := _knopf(I18nService.t("phone.gooberando.menue_zurueck"), "GhostButton")
 	zurueck.pressed.connect(_on_zurueck_zu_restaurants)
 	_box.add_child(zurueck)
 
 
 ## Countdown + Live-Karte (W13B, Doc E §5.2): der orange Fahrer-Punkt
-## wandert deterministisch die road_graph-Route entlang.
+## wandert deterministisch die road_graph-Route entlang. G4/P16: die Karte
+## skaliert mit der Inhaltsbreite statt Briefmarken-fix 148 px.
 func _render_countdown(slice: Dictionary) -> void:
 	var rest := GooberandoLogic.liefer_rest_s(slice, now_ms())
 	var route := _route_zu(str(slice["restaurantId"]))
@@ -273,12 +379,15 @@ func _render_countdown(slice: Dictionary) -> void:
 		)
 	)
 	if not route.is_empty():
+		var kante := karten_kante()
 		var center := CenterContainer.new()
 		_box.add_child(center)
 		var mini := CityMinimap.new()
+		mini.kachel = kante
 		mini.karte = _stadt_karte()
 		center.add_child(mini)
 		var overlay := FahrerKarteOverlay.new()
+		overlay.kachel = kante
 		overlay.mini = mini
 		overlay.route = route
 		overlay.fahrer = stat["punkt"]
@@ -287,12 +396,15 @@ func _render_countdown(slice: Dictionary) -> void:
 		_caption(I18nService.t("phone.gooberando.karte_hinweis"))
 
 
+## Kantenlänge der Live-Karte (ui-reisen MITTEL 7, pure Klemme).
+func karten_kante() -> float:
+	return clampf(inhalt_breite() * KARTE_ANTEIL, KARTE_MIN, KARTE_MAX)
+
+
 func _render_vor_der_tuer() -> void:
 	_liefer_gooby()
 	_label(I18nService.t("travel.gooberando.klingel"))
-	var btn := Button.new()
-	btn.theme_type_variation = "PrimaryButton"
-	btn.text = I18nService.t("travel.gooberando.annehmen")
+	var btn := _knopf(I18nService.t("travel.gooberando.annehmen"), "PrimaryButton")
 	btn.pressed.connect(_on_uebergabe)
 	_box.add_child(btn)
 
@@ -300,14 +412,10 @@ func _render_vor_der_tuer() -> void:
 func _render_trinkgeld() -> void:
 	_liefer_gooby()
 	_label(I18nService.t("travel.gooberando.uebergeben"))
-	var geben := Button.new()
-	geben.theme_type_variation = "PrimaryButton"
-	geben.text = I18nService.t("travel.gooberando.trinkgeld_geben")
+	var geben := _knopf(I18nService.t("travel.gooberando.trinkgeld_geben"), "PrimaryButton")
 	geben.pressed.connect(_on_trinkgeld.bind(true))
 	_box.add_child(geben)
-	var winken := Button.new()
-	winken.theme_type_variation = "GhostButton"
-	winken.text = I18nService.t("travel.gooberando.nur_winken")
+	var winken := _knopf(I18nService.t("travel.gooberando.nur_winken"), "GhostButton")
 	winken.pressed.connect(_on_trinkgeld.bind(false))
 	_box.add_child(winken)
 
@@ -316,7 +424,9 @@ func _render_trinkgeld() -> void:
 func _liefer_gooby() -> void:
 	var container := SubViewportContainer.new()
 	container.stretch = true
-	container.custom_minimum_size = Vector2(0.0, 220.0)
+	container.custom_minimum_size = Vector2(
+		0.0, roundf(220.0 * UiScale.for_viewport(get_viewport()))
+	)
 	# Container ZUERST in den Tree: GoobyRig lädt sein GLB erst in _ready —
 	# vorher findet der Tint-Loop keine MeshInstances.
 	_box.add_child(container)
@@ -349,12 +459,15 @@ func _liefer_gooby() -> void:
 
 
 func _on_restaurant(restaurant_id: String) -> void:
+	# Auswahl/Ansichtswechsel (Grammatik: ui_chip).
+	AudioDirector.try_play(self, "ui_chip")
 	_restaurant = restaurant_id
 	_warenkorb = []
 	_render()
 
 
 func _on_zurueck_zu_restaurants() -> void:
+	AudioDirector.try_play(self, "ui_back")
 	_restaurant = ""
 	_warenkorb = []
 	_render()
@@ -363,11 +476,14 @@ func _on_zurueck_zu_restaurants() -> void:
 func _on_in_den_korb(gericht: Dictionary) -> void:
 	if _warenkorb.size() >= MAX_KORB:
 		return
+	# Mikro-Schritt (Korb +1) — Knopf ist bei vollem Korb disabled.
+	AudioDirector.try_play(self, "ui_tick")
 	_warenkorb.append(gericht)
 	_render()
 
 
 func _on_korb_leeren() -> void:
+	AudioDirector.try_play(self, "ui_back")
 	_warenkorb = []
 	_render()
 
@@ -387,6 +503,9 @@ func _on_bestellen() -> void:
 	)
 	if not bool(zahlung["ok"]):
 		return
+	# Outcome schlägt Press: erst die GELUNGENE Münz-Ausgabe klingt.
+	AudioDirector.try_play(self, "ui_buy")
+	Haptics.success(self)
 	CityState.save_gooberando_slice(gs, res["slice"])
 	for notif: Dictionary in res["notifications"]:
 		ReiseApp.notifs.plane(
@@ -403,6 +522,8 @@ func _on_uebergabe() -> void:
 	if not bool(res["ok"]):
 		_render()
 		return
+	# Outcome: Übergabe hat geklappt (Bestätigungs-Klang).
+	AudioDirector.try_play(self, "ui_confirm")
 	CityState.save_gooberando_slice(gs, res["slice"])
 	for id: Variant in res["gerichte"]:
 		_gib_essen(str(id))
@@ -413,10 +534,15 @@ func _on_uebergabe() -> void:
 func _on_trinkgeld(geben: bool) -> void:
 	var res := GooberandoLogic.trinkgeld(CityState.gooberando_slice(gs), now_ms(), geben, randf())
 	if geben:
+		var zahlung := {"ok": false}
 		gs.update(
 			func(state: Dictionary) -> void:
-				Economy.spend(state["economy"], int(res["kosten"]), "trinkgeld")
+				zahlung["ok"] = Economy.spend(state["economy"], int(res["kosten"]), "trinkgeld")
 		)
+		if bool(zahlung["ok"]):
+			AudioDirector.try_play(self, "ui_buy")
+	else:
+		AudioDirector.try_play(self, "ui_click")
 	CityState.save_gooberando_slice(gs, res["slice"])
 	if bool(res["buff"]):
 		_zeige_toast(I18nService.t("travel.gooberando.buff"))
@@ -483,6 +609,19 @@ func _klingel() -> void:
 	player.play()
 
 
+## Aktions-Knopf im AC-Look: SquishButton (Squish + Tap-Haptik zentral),
+## Mindesthöhe 52·f und physischer Touch-Floor (ui-reisen MITTEL 6).
+func _knopf(text: String, variation: String) -> SquishButton:
+	var btn := SquishButton.new()
+	btn.theme_type_variation = variation
+	btn.text = text
+	btn.focus_mode = Control.FOCUS_NONE
+	var m := ScreenShell.metrics(get_viewport())
+	btn.custom_minimum_size = Vector2(0.0, roundf(KNOPF_HOEHE * float(m["f"])))
+	ScreenShell.touch_target(btn, m)
+	return btn
+
+
 func _label(text: String) -> void:
 	var label := Label.new()
 	label.text = text
@@ -490,8 +629,10 @@ func _label(text: String) -> void:
 	# Start-Breite VOR add_child setzen: Autowrap rechnet die Min-Höhe an der
 	# AKTUELLEN Breite — bei 0 explodiert sie (1 Zeichen/Zeile) und das Sheet
 	# wächst per grow_vertical schirmhoch und schrumpft nie zurück.
-	label.custom_minimum_size = Vector2(380.0, 0.0)
-	label.size = Vector2(380.0, 0.0)
+	# G4/P16: Breite = reale Inhaltsbreite statt Festwert 380.
+	var breite := inhalt_breite()
+	label.custom_minimum_size = Vector2(breite, 0.0)
+	label.size = Vector2(breite, 0.0)
 	_box.add_child(label)
 
 
@@ -500,19 +641,27 @@ func _caption(text: String) -> void:
 	label.text = text
 	label.theme_type_variation = "CaptionLabel"
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	label.custom_minimum_size = Vector2(380.0, 0.0)
-	label.size = Vector2(380.0, 0.0)
+	var breite := inhalt_breite()
+	label.custom_minimum_size = Vector2(breite, 0.0)
+	label.size = Vector2(breite, 0.0)
 	_box.add_child(label)
 
 
+## Theme-Schriften des frischen Inhalts mit UiScale skalieren (FlapBoard-
+## Muster; Tafel-eigene Schriften tragen META_FONT_SKIP).
+func _skaliere_schriften() -> void:
+	var vp := get_viewport()
+	if vp != null:
+		ScreenShell.scale_fonts(self, UiScale.for_viewport(vp))
+
+
 func _zeige_toast(text: String) -> void:
-	var toasts := get_tree().root.find_children("*", "ToastLayer", true, false)
-	if not toasts.is_empty():
-		toasts[0].show_toast(text)
+	ToastLayer.zeige(self, text)
 
 
 ## Fahrer-Overlay über der Minimap: Route (blass) + oranger Fahrer-Punkt.
 ## Eigenes Control statt `draw`-Signal, damit es sicher ÜBER der Karte liegt.
+## G4/P16: `kachel` skaliert Punkt/Linien proportional zur Kartenkante mit.
 class FahrerKarteOverlay:
 	extends Control
 
@@ -520,19 +669,22 @@ class FahrerKarteOverlay:
 	var route := PackedVector3Array()
 	var fahrer := Vector3.ZERO
 	var farbe := Color("#FF7A00")
+	## Kantenlänge in px (vor add_child setzen; Default = klassische Kachel).
+	var kachel := CityMinimap.GROESSE
 
 	func _ready() -> void:
-		custom_minimum_size = Vector2(CityMinimap.GROESSE, CityMinimap.GROESSE)
+		custom_minimum_size = Vector2(kachel, kachel)
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	func _draw() -> void:
 		if mini == null:
 			return
+		var faktor := kachel / CityMinimap.GROESSE
 		if route.size() >= 2:
 			var px := PackedVector2Array()
 			for punkt in route:
 				px.append(mini.welt_zu_pixel(punkt))
-			draw_polyline(px, Color(farbe, 0.45), 2.0)
+			draw_polyline(px, Color(farbe, 0.45), 2.0 * faktor)
 		var mitte := mini.welt_zu_pixel(fahrer)
-		draw_circle(mitte, 6.5, AcTokens.PAPER)
-		draw_circle(mitte, 5.0, farbe)
+		draw_circle(mitte, 6.5 * faktor, AcTokens.PAPER)
+		draw_circle(mitte, 5.0 * faktor, farbe)

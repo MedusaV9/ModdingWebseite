@@ -11,10 +11,13 @@ extends RefCounted
 ##    Drain-Bremse (×0,8) rechnet der Ticker über
 ##    `Vacation.energie_drain_faktor()` (Request an den Ticker-Owner).
 ## 2. WELTENGOOBY-TITEL: `abholen()` latcht `weltengoobyAt` bei 9/9
-##    besuchten Zielen. `sync()` feiert das GENAU EINMAL (Toast auf der
-##    globalen ToastLayer — dieselbe Schiene, auf der der RewardHub feiert;
-##    der 9/9-Erfolg „weltenbummler“ bringt parallel Konfetti über den
-##    RewardHub-Achievement-Pfad).
+##    besuchten Zielen. `sync()` feiert das GENAU EINMAL — G4/P16
+##    (ui-reisen MITTEL 10): statt eines flüchtigen Toasts erscheint eine
+##    ZENTRIERTE Feier-Karte (CanvasLayer + Veil + AcCardLg, Muster
+##    BoardingPass.oeffne) mit 🌍-Glyph, Titel und „Weiter“-Knopf ≥ 52·f.
+##    Reduced Motion: UiMotion.pop_in springt sofort, kein Konfetti-Sparkle.
+##    Der 9/9-Erfolg „weltenbummler“ bringt parallel Konfetti über den
+##    RewardHub-Achievement-Pfad.
 ##
 ## `sync()` ist idempotent und darf beliebig oft laufen (Ort-Betreten,
 ## vacation_changed-Signal) — Zeit wird IMMER injiziert (now_ms).
@@ -83,11 +86,95 @@ static func _latche_feier(gs: Object) -> void:
 		gs.notify_slice_changed("vacation")
 
 
-## Feier-Toast auf der globalen ToastLayer (RewardHub-Schiene) + Jingle.
+## G4/P16: Feier-KARTE statt Toast — der Titel-Moment (einmalig pro
+## Spielstand) bekommt eine zentrierte Karte über Abdunkelung; Jingle
+## (ui_sticker = Belohnung) + Erfolgs-Haptik bleiben auf derselben Schiene.
 static func _feiere(host: Node) -> void:
 	if host == null or not host.is_inside_tree():
 		return
-	var toasts := host.get_tree().root.find_children("*", "ToastLayer", true, false)
-	if not toasts.is_empty():
-		toasts[0].show_toast(I18nService.t("raumstation.weltengooby.toast"))
+	WeltengoobyKarte.oeffne(host.get_tree().root)
 	AudioDirector.try_play(host, "ui_sticker")
+	Haptics.success(host)
+
+
+## Zentrierte Weltengooby-Feier-Karte (Muster BoardingPass.oeffne):
+## eigener CanvasLayer + Veil + AcCardLg-Karte, „Weiter“-Knopf schließt.
+## Meldet sich am PanelStack an (Back-Geste schließt NUR die Karte).
+class WeltengoobyKarte:
+	extends PanelContainer
+
+	## Wunschbreite in Design-px (klemmt an die Safe-Area).
+	const BASIS_BREITE := 360.0
+
+	static func oeffne(host: Node) -> CanvasLayer:
+		var layer := CanvasLayer.new()
+		layer.name = "WeltengoobyLayer"
+		host.add_child(layer)
+		var wurzel := Control.new()
+		wurzel.set_anchors_preset(Control.PRESET_FULL_RECT)
+		# Theme explizit: Window-Theme propagiert NICHT durch CanvasLayer.
+		wurzel.theme = ThemeService.theme()
+		layer.add_child(wurzel)
+		var schleier := ColorRect.new()
+		schleier.color = AcTokens.VEIL
+		schleier.set_anchors_preset(Control.PRESET_FULL_RECT)
+		wurzel.add_child(schleier)
+		var karte := WeltengoobyKarte.new()
+		karte.set_anchors_preset(Control.PRESET_CENTER)
+		karte.grow_horizontal = Control.GROW_DIRECTION_BOTH
+		karte.grow_vertical = Control.GROW_DIRECTION_BOTH
+		wurzel.add_child(karte)
+		PanelStack.push(karte)
+		UiMotion.pop_in(karte)
+		UiMotion.sparkle(karte, AcTokens.GOLD)
+		return layer
+
+	func _ready() -> void:
+		name = "WeltengoobyKarte"
+		theme_type_variation = &"AcCardLg"
+		var m := ScreenShell.metrics(get_viewport())
+		var f: float = m["f"]
+		var box := VBoxContainer.new()
+		box.add_theme_constant_override("separation", 8)
+		box.custom_minimum_size = Vector2(ScreenShell.card_width(m, BASIS_BREITE), 0.0)
+		add_child(box)
+		var glyph := Label.new()
+		glyph.name = "FeierGlyph"
+		glyph.text = "🌍"
+		glyph.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		glyph.add_theme_font_size_override("font_size", int(roundf(56.0 * f)))
+		glyph.set_meta(ScreenShell.META_FONT_SKIP, true)
+		box.add_child(glyph)
+		var titel := Label.new()
+		titel.name = "FeierTitel"
+		titel.theme_type_variation = &"HeadlineLabel"
+		titel.text = I18nService.t("g4travel.feier.titel")
+		titel.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		box.add_child(titel)
+		var text := Label.new()
+		text.name = "FeierText"
+		text.text = I18nService.t("raumstation.weltengooby.toast")
+		text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		text.custom_minimum_size = Vector2(box.custom_minimum_size.x, 0.0)
+		box.add_child(text)
+		var weiter := SquishButton.new()
+		weiter.name = "FeierWeiter"
+		weiter.theme_type_variation = &"PrimaryButton"
+		weiter.text = I18nService.t("g4travel.feier.weiter")
+		weiter.focus_mode = Control.FOCUS_NONE
+		weiter.custom_minimum_size = Vector2(0.0, roundf(52.0 * f))
+		ScreenShell.touch_target(weiter, m)
+		weiter.pressed.connect(close)
+		box.add_child(weiter)
+		ScreenShell.scale_fonts(self, f)
+
+	## PanelStack-Vertrag: Back-Geste/„Weiter“ räumen die Feier weg.
+	func close() -> void:
+		PanelStack.remove(self)
+		AudioDirector.try_play(self, "ui_close")
+		var node: Node = self
+		while node != null and not (node is CanvasLayer):
+			node = node.get_parent()
+		if node != null:
+			node.queue_free()

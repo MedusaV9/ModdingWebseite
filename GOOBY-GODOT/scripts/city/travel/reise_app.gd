@@ -13,6 +13,14 @@ extends VBoxContainer
 ## dazwischen — erst der „Gute Reise!“-Knopf startet die BESTEHENDE
 ## Abflug-Cutscene (identischer Aufruf wie zuvor).
 ##
+## G4/P16 (ui-reisen HOCH 5 + MITTEL 6/10): Inhalt baut auf der REALEN
+## Sheet-Breite (`inhalt_breite()` = sheet_width − chrome_width) statt auf
+## Festbreiten 420/380; alle Aktions-Knöpfe sind SquishButtons ≥ 52·f und
+## halten den physischen Touch-Floor; die Ziel-Liste zeigt den
+## Weltengooby-Fortschritt (n/9-Kapsel + ✔-Stempel je bereistem Ziel).
+## Sounds nach Audio-Grammatik: Outcome schlägt Press (`ui_buy`/`ui_coins`
+## nach Erfolg); Einsteigen bleibt stumm (der Boarding-Pass spielt ui_open).
+##
 ## Geld-Story: Reisepreis + Taxi (10) werden beim BUCHEN abgebucht;
 ## verpasstes Taxi erstattet Preis + 5, Storno erstattet Preis + 8.
 
@@ -20,6 +28,14 @@ const Economy := preload("res://scripts/logic/economy.gd")
 const Vacation := preload("res://scripts/logic/vacation.gd")
 const PanelSheetScene := preload("res://scripts/ui/panel_sheet.tscn")
 const CutsceneScene := preload("res://scenes/city/reise_cutscene.tscn")
+
+## Mindesthöhe der Aktions-Knöpfe in Design-px (skaliert mit f, nie unter
+## dem physischen Touch-Floor — ui-reisen HOCH 5).
+const KNOPF_HOEHE := 52.0
+## Fallback-Inhaltsbreite in Design-px (Tests bauen die App ohne Sheet).
+const BASIS_BREITE := 420.0
+## Unterkante der Breitenklemme (nie schmaler bauen).
+const MIN_BREITE := 220.0
 
 ## Geteilter Notification-Planer (M1: In-App-Banner-Pfad, s. Service-Doku).
 static var notifs := CityNotificationService.new()
@@ -31,6 +47,8 @@ var boarding_oeffner := Callable()
 
 var _box: VBoxContainer
 var _tick_akku := 0.0
+## Aktive Bestätigungs-Ansicht ("" = keine) — überlebt ein Resize-Rerender.
+var _confirm_ziel := ""
 
 
 ## Reise-Sheet öffnen (Host = beliebige Szene; eigener CanvasLayer).
@@ -56,9 +74,12 @@ static func oeffne(host: Node, game_state: Object) -> ReiseApp:
 
 func _ready() -> void:
 	# Root = VBoxContainer (min-Höhe propagiert zum PanelSheet); _box = self.
-	custom_minimum_size = Vector2(420.0, 0.0)
+	custom_minimum_size = Vector2(inhalt_breite(), 0.0)
 	add_theme_constant_override("separation", 10)
 	_box = self
+	var vp := get_viewport()
+	if vp != null:
+		vp.size_changed.connect(_on_viewport_resized)
 	_render()
 
 
@@ -85,6 +106,22 @@ func warte_s() -> int:
 		if debug > 0:
 			return debug
 	return randi_range(TaxiLogic.WARTE_MIN_S, TaxiLogic.WARTE_MAX_S)
+
+
+## G4/P16: reale Inhaltsbreite — Sheet-Breite minus Sheet-Chrome
+## (FIX1-Regel „Breite abfragen statt erzwingen“). Ohne Sheet (Tests,
+## Direkteinbau) fällt sie auf die skalierte Basisbreite zurück.
+func inhalt_breite() -> float:
+	var vp := get_viewport()
+	if vp == null:
+		return BASIS_BREITE
+	var f := UiScale.for_viewport(vp)
+	var canvas := Vector2(vp.get_visible_rect().size)
+	if sheet == null or not is_instance_valid(sheet) or not sheet.is_inside_tree():
+		return clampf(canvas.x - 48.0, MIN_BREITE, BASIS_BREITE * f)
+	var insets := UiScale.safe_insets_canvas(vp)
+	var breite := PanelSheetLayout.sheet_width(canvas, insets, f) - sheet.chrome_width()
+	return maxf(breite, MIN_BREITE)
 
 
 ## ------------------------------------------------------------ Zeit-Tick
@@ -121,7 +158,18 @@ func _verpasst(ziel_id: String, taxi_erstattung: int) -> void:
 ## ---------------------------------------------------------------- Views
 
 
+## Rotation/Resize: Breite nachziehen und die AKTUELLE Ansicht neu bauen
+## (eine offene Bestätigung bleibt offen statt zur Liste zu springen).
+func _on_viewport_resized() -> void:
+	custom_minimum_size = Vector2(inhalt_breite(), 0.0)
+	if not _confirm_ziel.is_empty():
+		_render_confirm(_confirm_ziel)
+		return
+	_render()
+
+
 func _render() -> void:
+	_confirm_ziel = ""
 	for kind in _box.get_children():
 		kind.queue_free()
 	if gs == null:
@@ -130,37 +178,70 @@ func _render() -> void:
 	var phase := Vacation.phase_at(vac, now_ms())
 	if phase == Vacation.PHASE_AWAY:
 		_render_weg(vac)
-		return
-	if phase == Vacation.PHASE_RETURN_READY or phase == Vacation.PHASE_OVERDUE:
+	elif phase == Vacation.PHASE_RETURN_READY or phase == Vacation.PHASE_OVERDUE:
 		_render_abholen(phase == Vacation.PHASE_OVERDUE)
-		return
-	var taxi := CityState.taxi_slice(gs)
-	match str(taxi["state"]):
-		TaxiLogic.STATE_GERUFEN:
-			_render_taxi_wartet(taxi)
-		TaxiLogic.STATE_WARTET:
-			_render_taxi_da(taxi)
-		_:
-			_render_ziele()
+	else:
+		var taxi := CityState.taxi_slice(gs)
+		match str(taxi["state"]):
+			TaxiLogic.STATE_GERUFEN:
+				_render_taxi_wartet(taxi)
+			TaxiLogic.STATE_WARTET:
+				_render_taxi_da(taxi)
+			_:
+				_render_ziele()
+	_skaliere_schriften()
 
 
 func _render_ziele() -> void:
 	var coins := int(gs.get_value("economy.coins", 0))
+	# G4/P16 (ui-reisen MITTEL 10): kleine Fortschritts-Kapsel über der
+	# Tafel — die 9/9-Weltengooby-Jagd ist am Buchungsort sichtbar.
+	_fortschritts_kapsel()
 	# W13B: Split-Flap-Abflugtafel ÜBER der Liste — klappert beim Öffnen/
 	# Neurendern durch (Reduced Motion springt sofort, s. flap_board.gd).
 	var tafel := FlapBoard.new()
 	tafel.name = "Abflugtafel"
 	_box.add_child(tafel)
+	tafel.setze_verfuegbare_breite(inhalt_breite(), UiScale.for_viewport(get_viewport()))
 	tafel.set_zeilen(_tafel_zeilen(coins))
 	_label(I18nService.t("travel.ziel_waehlen"), "HeadlineLabel")
+	var besucht: Dictionary = Vacation.slice_of(gs.state()).get("visited", {})
 	for ziel_id in ReiseLogic.ZIELE:
 		var info := ReiseLogic.bestaetigung(ziel_id, coins)
-		var btn := Button.new()
-		btn.theme_type_variation = "AccentButton"
-		btn.text = "%s — %d ᴳ" % [I18nService.t(str(info["name_key"])), int(info["preis"])]
+		var stempel := "  ✔" if bool(besucht.get(ziel_id, false)) else ""
+		var btn := _knopf(
+			"%s — %d ᴳ%s" % [I18nService.t(str(info["name_key"])), int(info["preis"]), stempel],
+			"AccentButton"
+		)
 		btn.disabled = not bool(info["kann_zahlen"])
-		btn.pressed.connect(_render_confirm.bind(ziel_id))
+		btn.pressed.connect(_on_ziel_gewaehlt.bind(ziel_id))
 		_box.add_child(btn)
+
+
+## Weltengooby-Pass-Kapsel (KEIN Button — der 9-Knöpfe-Vertrag der
+## Ziel-Liste bleibt stehen): „🌍 n/9 Ziele bereist“.
+func _fortschritts_kapsel() -> void:
+	var besucht: Dictionary = Vacation.slice_of(gs.state()).get("visited", {})
+	var kapsel := PanelContainer.new()
+	kapsel.name = "FortschrittKapsel"
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = AcTokens.FROST
+	sb.set_corner_radius_all(AcTokens.RADIUS_PILL)
+	sb.content_margin_left = 14.0
+	sb.content_margin_right = 14.0
+	sb.content_margin_top = 5.0
+	sb.content_margin_bottom = 5.0
+	kapsel.add_theme_stylebox_override("panel", sb)
+	# Zentrierung im Sheet-Scroller: EXPAND|SHRINK_CENTER (FB3-Muster).
+	kapsel.size_flags_horizontal = Control.SIZE_EXPAND | Control.SIZE_SHRINK_CENTER
+	var text := Label.new()
+	text.name = "FortschrittText"
+	text.theme_type_variation = "CaptionLabel"
+	text.text = I18nService.t(
+		"g4travel.ziele.fortschritt", {"n": besucht.size(), "max": ReiseLogic.ZIELE.size()}
+	)
+	kapsel.add_child(text)
+	_box.add_child(kapsel)
 
 
 ## Board-Zeilen „Ziel | Abflug | Status“ aus dem unveränderten Katalog.
@@ -186,7 +267,15 @@ func _tafel_zeilen(coins: int) -> Array:
 	return zeilen
 
 
+func _on_ziel_gewaehlt(ziel_id: String) -> void:
+	# Ansichtswechsel zur Bestätigung (Auswahl-Klang; Knopf ist bei
+	# „zu teuer“ disabled, der Druck darf also klingen).
+	AudioDirector.try_play(self, "ui_chip")
+	_render_confirm(ziel_id)
+
+
 func _render_confirm(ziel_id: String) -> void:
+	_confirm_ziel = ziel_id
 	for kind in _box.get_children():
 		kind.queue_free()
 	var info := ReiseLogic.bestaetigung(ziel_id, int(gs.get_value("economy.coins", 0)))
@@ -199,16 +288,18 @@ func _render_confirm(ziel_id: String) -> void:
 	_label(I18nService.t("travel.confirm.warnung").format({"tage": int(info["tage"])}), "")
 	_label(I18nService.t("travel.confirm.nutzen"), "CaptionLabel")
 	_label(I18nService.t("travel.confirm.taxi_hinweis"), "CaptionLabel")
-	var buchen := Button.new()
-	buchen.theme_type_variation = "PrimaryButton"
-	buchen.text = I18nService.t("travel.confirm.buchen")
+	var buchen := _knopf(I18nService.t("travel.confirm.buchen"), "PrimaryButton")
 	buchen.pressed.connect(_on_buchen.bind(ziel_id))
 	_box.add_child(buchen)
-	var doch_nicht := Button.new()
-	doch_nicht.theme_type_variation = "GhostButton"
-	doch_nicht.text = I18nService.t("travel.confirm.doch_nicht")
-	doch_nicht.pressed.connect(func() -> void: _render())
+	var doch_nicht := _knopf(I18nService.t("travel.confirm.doch_nicht"), "GhostButton")
+	doch_nicht.pressed.connect(_on_doch_nicht)
 	_box.add_child(doch_nicht)
+	_skaliere_schriften()
+
+
+func _on_doch_nicht() -> void:
+	AudioDirector.try_play(self, "ui_back")
+	_render()
 
 
 func _render_taxi_wartet(taxi: Dictionary) -> void:
@@ -220,9 +311,7 @@ func _render_taxi_wartet(taxi: Dictionary) -> void:
 		),
 		""
 	)
-	var storno := Button.new()
-	storno.theme_type_variation = "GhostButton"
-	storno.text = I18nService.t("travel.taxi.storno")
+	var storno := _knopf(I18nService.t("travel.taxi.storno"), "GhostButton")
 	storno.pressed.connect(_on_storno)
 	_box.add_child(storno)
 
@@ -231,9 +320,7 @@ func _render_taxi_da(taxi: Dictionary) -> void:
 	_label(I18nService.t("travel.taxi.da"), "HeadlineLabel")
 	var rest := TaxiLogic.fenster_rest_s(taxi, now_ms())
 	_label(I18nService.t("travel.taxi.fenster").format({"s": rest}), "")
-	var einsteigen := Button.new()
-	einsteigen.theme_type_variation = "PrimaryButton"
-	einsteigen.text = I18nService.t("travel.taxi.einsteigen")
+	var einsteigen := _knopf(I18nService.t("travel.taxi.einsteigen"), "PrimaryButton")
 	einsteigen.pressed.connect(_on_einsteigen)
 	_box.add_child(einsteigen)
 
@@ -245,10 +332,8 @@ func _render_weg(vac: Dictionary) -> void:
 	# W15/URLAUB (additiv): solange Gooby VOR ORT ist, kann man ihn dort
 	# besuchen — reine Ansicht, keine Phasen-Änderung (UrlaubsBesuch).
 	if UrlaubsBesuch.verfuegbar(gs.state(), now_ms()):
-		var besuchen := Button.new()
+		var besuchen := _knopf(I18nService.t("urlaub.knopf.besuchen"), "PrimaryButton")
 		besuchen.name = "GoobyBesuchen"
-		besuchen.theme_type_variation = "PrimaryButton"
-		besuchen.text = I18nService.t("urlaub.knopf.besuchen")
 		besuchen.pressed.connect(_on_gooby_besuchen)
 		_box.add_child(besuchen)
 
@@ -257,9 +342,7 @@ func _render_abholen(overdue: bool) -> void:
 	_label(I18nService.t("travel.abholen.titel"), "HeadlineLabel")
 	if overdue:
 		_label(I18nService.t("travel.abholen.overdue"), "CaptionLabel")
-	var btn := Button.new()
-	btn.theme_type_variation = "PrimaryButton"
-	btn.text = I18nService.t("travel.abholen.knopf")
+	var btn := _knopf(I18nService.t("travel.abholen.knopf"), "PrimaryButton")
 	btn.pressed.connect(_on_abholen.bind(overdue))
 	_box.add_child(btn)
 
@@ -284,6 +367,9 @@ func _on_buchen(ziel_id: String) -> void:
 	)
 	if not bool(zahlung["ok"]):
 		return
+	# Outcome schlägt Press: erst die GELUNGENE Münz-Ausgabe klingt.
+	AudioDirector.try_play(self, "ui_buy")
+	Haptics.success(self)
 	CityState.save_taxi_slice(gs, res["slice"])
 	for notif: Dictionary in res["notifications"]:
 		notifs.plane(str(notif["id"]), I18nService.t(str(notif["text_key"])), int(notif["at_ms"]))
@@ -297,6 +383,7 @@ func _on_storno() -> void:
 	var res := TaxiLogic.storno(taxi)
 	if not bool(res["ok"]):
 		return
+	AudioDirector.try_play(self, "ui_back")
 	notifs.storniere_gruppe("taxi.")
 	var preis := int(Vacation.CATALOG.get(ziel_id, {}).get("price", 0))
 	gs.update(
@@ -320,6 +407,8 @@ func _on_einsteigen() -> void:
 	# W13B: Boarding-Pass dazwischenschieben — das Sheet bleibt offen
 	# (hält diese Instanz am Leben), erst „Gute Reise!“ schließt es und
 	# startet die BESTEHENDE Cutscene (identische Sequenz wie zuvor).
+	# Der Knopf bleibt STUMM: das Boarding-Pass-Overlay spielt ui_open
+	# (Grammatik: Öffnen klingt nur über das Panel, kein Doppel-Klang).
 	if boarding_oeffner.is_valid():
 		boarding_oeffner.call(ziel_id, _on_gute_reise.bind(ziel_id))
 		return
@@ -365,6 +454,9 @@ func _on_abholen(overdue: bool) -> void:
 	var res := ReiseLogic.abholen(Vacation.slice_of(gs.state()), now_ms())
 	if not bool(res["ok"]):
 		return
+	# Outcome: Souvenir-Münzen kommen REIN (ui_coins) + Belohnungs-Haptik.
+	AudioDirector.try_play(self, "ui_coins")
+	Haptics.success(self)
 	gs.update(
 		func(state: Dictionary) -> void:
 			if overdue:
@@ -381,6 +473,22 @@ func _on_abholen(overdue: bool) -> void:
 	_render()
 
 
+## ---------------------------------------------------------------- Helfer
+
+
+## Aktions-Knopf im AC-Look: SquishButton (Squish + Tap-Haptik zentral),
+## Mindesthöhe 52·f und physischer Touch-Floor (ui-reisen HOCH 5).
+func _knopf(text: String, variation: String) -> SquishButton:
+	var btn := SquishButton.new()
+	btn.theme_type_variation = variation
+	btn.text = text
+	btn.focus_mode = Control.FOCUS_NONE
+	var m := ScreenShell.metrics(get_viewport())
+	btn.custom_minimum_size = Vector2(0.0, roundf(KNOPF_HOEHE * float(m["f"])))
+	ScreenShell.touch_target(btn, m)
+	return btn
+
+
 func _label(text: String, variation: String) -> void:
 	var label := Label.new()
 	label.text = text
@@ -388,14 +496,22 @@ func _label(text: String, variation: String) -> void:
 	# Start-Breite VOR add_child setzen: Autowrap rechnet die Min-Höhe an der
 	# AKTUELLEN Breite — bei 0 explodiert sie (1 Zeichen/Zeile) und das Sheet
 	# wächst per grow_vertical schirmhoch und schrumpft nie zurück.
-	label.custom_minimum_size = Vector2(380.0, 0.0)
-	label.size = Vector2(380.0, 0.0)
+	# G4/P16: Breite = reale Inhaltsbreite statt Festwert 380.
+	var breite := inhalt_breite()
+	label.custom_minimum_size = Vector2(breite, 0.0)
+	label.size = Vector2(breite, 0.0)
 	if not variation.is_empty():
 		label.theme_type_variation = variation
 	_box.add_child(label)
 
 
+## Theme-Schriften des frischen Inhalts mit UiScale skalieren (FlapBoard-
+## Zeilen tragen META_FONT_SKIP und skalieren ihre Schrift selbst).
+func _skaliere_schriften() -> void:
+	var vp := get_viewport()
+	if vp != null:
+		ScreenShell.scale_fonts(self, UiScale.for_viewport(vp))
+
+
 func _zeige_toast(text: String) -> void:
-	var toasts := get_tree().root.find_children("*", "ToastLayer", true, false)
-	if not toasts.is_empty():
-		toasts[0].show_toast(text)
+	ToastLayer.zeige(self, text)
