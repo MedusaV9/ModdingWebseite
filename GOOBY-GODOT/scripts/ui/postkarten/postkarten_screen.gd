@@ -25,6 +25,14 @@ var auto_navigate := true
 
 var _gs: Object = null
 var _rows: VBoxContainer
+## G4-Nachfix: Polster-Kind im Scroll (vertikale Safe-Insets) + Kopfzeilen-
+## Teile für den bedarfsbasierten Umbruch (_layout_header).
+var _pad: MarginContainer
+var _header: HBoxContainer
+var _back: SquishButton
+var _titel: Label
+var _anzahl_chip: PanelContainer
+var _chip_zeile: HBoxContainer
 var _anzahl_label: Label
 var _archiv_flow: HFlowContainer
 var _archiv_leer: Label
@@ -93,34 +101,46 @@ func _build_ui() -> void:
 	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
 	scroll.scroll_deadzone = 24
 	add_child(scroll)
+	# G4-Nachfix: der Scroll bleibt bewusst vollflächig (volle Wischfläche),
+	# aber das Scroll-KIND polstert oben/unten Notch + Home-Indicator —
+	# vorher gab es KEINE vertikalen Ränder („Zurück“ bei y=0 unter der
+	# 59-pt-Notch, FB3 hoch/ipad). Die Margins setzt _apply_metrics.
+	_pad = MarginContainer.new()
+	_pad.name = "SafePolster"
+	scroll.add_child(_pad)
 	_rows = VBoxContainer.new()
-	_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_rows.add_theme_constant_override("separation", 12)
-	scroll.add_child(_rows)
+	_pad.add_child(_rows)
 
-	var header := HBoxContainer.new()
-	header.add_theme_constant_override("separation", 12)
-	_rows.add_child(header)
-	var back := SquishButton.new()
-	back.name = "Zurueck"
-	back.theme_type_variation = &"BtnGhost"
-	back.text = I18nService.t("postkarten.zurueck")
-	back.focus_mode = Control.FOCUS_NONE
-	back.pressed.connect(_on_back_pressed)
-	header.add_child(back)
-	var title := Label.new()
-	title.theme_type_variation = &"TitleLabel"
-	title.text = I18nService.t("postkarten.titel")
-	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	header.add_child(title)
-	var chip := PanelContainer.new()
-	chip.theme_type_variation = &"StatusCapsule"
+	_header = HBoxContainer.new()
+	_header.add_theme_constant_override("separation", 12)
+	_rows.add_child(_header)
+	_back = SquishButton.new()
+	_back.name = "Zurueck"
+	_back.theme_type_variation = &"BtnGhost"
+	_back.text = I18nService.t("postkarten.zurueck")
+	_back.focus_mode = Control.FOCUS_NONE
+	_back.pressed.connect(_on_back_pressed)
+	_header.add_child(_back)
+	_titel = Label.new()
+	_titel.theme_type_variation = &"TitleLabel"
+	_titel.text = I18nService.t("postkarten.titel")
+	_titel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_titel.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_header.add_child(_titel)
+	_anzahl_chip = PanelContainer.new()
+	_anzahl_chip.theme_type_variation = &"StatusCapsule"
 	_anzahl_label = Label.new()
 	_anzahl_label.name = "Anzahl"
 	_anzahl_label.theme_type_variation = &"SoftLabel"
-	chip.add_child(_anzahl_label)
-	header.add_child(chip)
+	_anzahl_chip.add_child(_anzahl_label)
+	_header.add_child(_anzahl_chip)
+	# G4-Nachfix: Ausweich-Zeile für den Zähler-Chip (Kopfzeilen-Umbruch,
+	# s. _layout_header) — leer und unsichtbar, solange die Kopfzeile passt.
+	_chip_zeile = HBoxContainer.new()
+	_chip_zeile.name = "KopfExtras"
+	_chip_zeile.visible = false
+	_rows.add_child(_chip_zeile)
 
 	_archiv_leer = Label.new()
 	_archiv_leer.name = "ArchivLeer"
@@ -185,15 +205,56 @@ func _apply_metrics() -> void:
 	if not is_inside_tree():
 		return
 	_m = ScreenShell.metrics(get_viewport())
+	var f := float(_m["f"])
+	var insets: Dictionary = _m["insets"]
 	# Inhaltsspalte W16, Scroll-Ergonomie-Variante: der GANZE Screen scrollt
 	# (Scroll = FULL_RECT-Wurzel, volle Wisch-Fläche bleibt) — daher kein
-	# content_frame, sondern die Content-VBox im Scroll zentrieren + deckeln.
+	# content_frame, sondern das Scroll-Kind zentrieren + deckeln.
 	# EXPAND-Bit nötig: erst damit gibt der ScrollContainer die volle Breite
 	# zum Zentrieren her (SHRINK_CENTER allein = linksbündig, engine-geprüft).
-	_rows.size_flags_horizontal = Control.SIZE_EXPAND | Control.SIZE_SHRINK_CENTER
+	_pad.size_flags_horizontal = Control.SIZE_EXPAND | Control.SIZE_SHRINK_CENTER
+	# G4-Nachfix: vertikale Ränder = Safe-Insets + EDGE_Y im Polster-Kind —
+	# der Inhalt startet unter der Notch und endet über dem Home-Indicator,
+	# gescrollt läuft er weiter unter beiden durch (iOS-Muster).
+	_pad.add_theme_constant_override(
+		"margin_top", roundi(float(insets["top"]) + ScreenShell.EDGE_Y * f)
+	)
+	_pad.add_theme_constant_override(
+		"margin_bottom", roundi(float(insets["bottom"]) + ScreenShell.EDGE_Y * f)
+	)
 	_rows.custom_minimum_size.x = ScreenShell.content_width(_m)
 	_rows.set_meta(ScreenShell.META_CONTENT_COLUMN, true)
-	ScreenShell.scale_fonts(self, float(_m["f"]))
+	# G4-Nachfix: „Zurück“ auf den physischen Touch-Floor (44-pt-Regel —
+	# hoch/f=3 war die Tippfläche nur 41,4 pt).
+	ScreenShell.touch_target(_back, _m)
+	ScreenShell.scale_fonts(self, f)
+	_layout_header()
+	# Font-Overrides aus scale_fonts propagieren DEFERRED (THEME_CHANGED) —
+	# bereits geshapte Labels melden im selben Frame noch ALTE Minbreiten.
+	# Ein nachgezogener Pass misst nach dem Flush die echten Werte.
+	call_deferred("_layout_header")
+
+
+## G4-Nachfix: Kopfzeilen-Umbruch. Der Zähler-Chip wandert in die eigene
+## Zeile darunter, sobald Zurück + Titel + Chip zusammen mehr Minbreite
+## verlangen, als die Spalte hergibt — die Min-Breiten-Falle (G2 §4.4)
+## drückte sonst die GANZE Spalte auf (hoch/f=3: 1591 px > 1136er-Klemme,
+## Spalten-Zentrum 155,5 px neben dem Safe-Zentrum).
+func _layout_header() -> void:
+	if _m.is_empty():
+		return
+	var sep := float(_header.get_theme_constant("separation"))
+	var noetig := (
+		_back.get_combined_minimum_size().x
+		+ _titel.get_combined_minimum_size().x
+		+ _anzahl_chip.get_combined_minimum_size().x
+		+ 2.0 * sep
+	)
+	var unten := noetig > ScreenShell.content_width(_m)
+	if unten != (_anzahl_chip.get_parent() == _chip_zeile):
+		_anzahl_chip.get_parent().remove_child(_anzahl_chip)
+		(_chip_zeile if unten else _header).add_child(_anzahl_chip)
+	_chip_zeile.visible = unten
 
 
 ## ---------------------------------------------------------------- Anzeige
@@ -213,6 +274,14 @@ func _refresh() -> void:
 		_archiv_flow.add_child(_postkarte(entry))
 	_refresh_souvenirs(state)
 	_refresh_set(state)
+	# G4-Nachfix: frisch gebaute Chips/Zeilen bekommen sofort die zentrale
+	# Schrift-Skala (Muster IkeaScreen._refresh_list) — und der Kopfzeilen-
+	# Umbruch rechnet mit der ECHTEN Breite des neuen Zähler-Texts (sofort +
+	# deferred, s. _apply_metrics zu den Font-Overrides).
+	if is_inside_tree() and not _m.is_empty():
+		ScreenShell.scale_fonts(self, float(_m["f"]))
+		_layout_header()
+		call_deferred("_layout_header")
 
 
 func _postkarte(entry: Dictionary) -> Control:
@@ -309,6 +378,10 @@ func _refresh_set(state: Dictionary) -> void:
 			"postkarten.set.stufe", {"n": int(stufe["n"]), "bonus": int(stufe["coins"])}
 		)
 		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		# G4-Nachfix: umbrechen statt Minbreite fordern — die Stufen-Zeile
+		# (Text + Abholen-Knopf) drückte sonst auf hoch/f=3 die GANZE
+		# Spalte über die Klemme (Min-Breiten-Falle G2 §4.4).
+		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		zeile.add_child(label)
 		if bool(stufe["abgeholt"]):
 			var fertig := Label.new()
@@ -323,6 +396,9 @@ func _refresh_set(state: Dictionary) -> void:
 			btn.custom_minimum_size = Vector2(0.0, 48.0)
 			btn.focus_mode = Control.FOCUS_NONE
 			btn.pressed.connect(_on_claim_pressed.bind(int(stufe["n"])))
+			# G4-Nachfix: auch der Abholen-Knopf hält den physischen Floor.
+			if not _m.is_empty():
+				ScreenShell.touch_target(btn, _m)
 			zeile.add_child(btn)
 		else:
 			var offen := Label.new()

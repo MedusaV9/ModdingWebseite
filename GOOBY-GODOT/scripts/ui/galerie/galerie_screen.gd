@@ -24,6 +24,13 @@ var nur_favoriten := false
 var _gs: Object = null
 var _rows: VBoxContainer
 var _grid: GridContainer
+## G4-Nachfix: Kopfzeilen-Teile für den bedarfsbasierten Umbruch
+## (_layout_header) — der Speicher-Chip wandert auf schmalen Spalten in
+## die eigene Zeile.
+var _header: HBoxContainer
+var _titel: Label
+var _speicher_chip: PanelContainer
+var _chip_zeile: HBoxContainer
 var _speicher_label: Label
 var _back_btn: Button
 var _filter_btn: Button
@@ -95,30 +102,36 @@ func _build_ui() -> void:
 	_rows.add_theme_constant_override("separation", 12)
 	add_child(_rows)
 
-	var header := HBoxContainer.new()
-	header.add_theme_constant_override("separation", 12)
-	_rows.add_child(header)
+	_header = HBoxContainer.new()
+	_header.add_theme_constant_override("separation", 12)
+	_rows.add_child(_header)
 	var back := SquishButton.new()
 	back.name = "Zurueck"
 	back.theme_type_variation = &"BtnGhost"
 	back.text = I18nService.t("galerie.zurueck")
 	back.focus_mode = Control.FOCUS_NONE
 	back.pressed.connect(_on_back_pressed)
-	header.add_child(back)
+	_header.add_child(back)
 	_back_btn = back
-	var title := Label.new()
-	title.theme_type_variation = &"TitleLabel"
-	title.text = I18nService.t("galerie.titel")
-	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	header.add_child(title)
-	var chip := PanelContainer.new()
-	chip.theme_type_variation = &"StatusCapsule"
+	_titel = Label.new()
+	_titel.theme_type_variation = &"TitleLabel"
+	_titel.text = I18nService.t("galerie.titel")
+	_titel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_titel.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_header.add_child(_titel)
+	_speicher_chip = PanelContainer.new()
+	_speicher_chip.theme_type_variation = &"StatusCapsule"
 	_speicher_label = Label.new()
 	_speicher_label.name = "Speicher"
 	_speicher_label.theme_type_variation = &"SoftLabel"
-	chip.add_child(_speicher_label)
-	header.add_child(chip)
+	_speicher_chip.add_child(_speicher_label)
+	_header.add_child(_speicher_chip)
+	# G4-Nachfix: Ausweich-Zeile für den Speicher-Chip (Kopfzeilen-Umbruch,
+	# s. _layout_header) — leer und unsichtbar, solange die Kopfzeile passt.
+	_chip_zeile = HBoxContainer.new()
+	_chip_zeile.name = "KopfExtras"
+	_chip_zeile.visible = false
+	_rows.add_child(_chip_zeile)
 
 	_filter_btn = SquishButton.new()
 	_filter_btn.name = "Filter"
@@ -164,11 +177,58 @@ func _apply_metrics() -> void:
 	# sonst überliefe das Foto-Raster die zentrierte Spalte.
 	var spalte := ScreenShell.content_width(_m)
 	_grid.columns = clampi(int(spalte / (240.0 * float(_m["f"]))), 2, 5)
+	# G4-Nachfix: Kachelgröße in die Spalte einpassen — 2 Kacheln à 200·f
+	# (+Separation) überschritten auf hoch/f=3 die Klemme (1212 px > 1136)
+	# und drückten die Spalte auf (Min-Breiten-Falle G2 §4.4).
+	var kachel := _kachel_groesse()
+	for kind in _grid.get_children():
+		if kind is Control:
+			(kind as Control).custom_minimum_size = kachel
 	# G3 (HOCH-Fix ui-profil §5): Tippflächen auf den physischen Floor —
 	# vorher hatte der Screen keinen einzigen touch_target-Aufruf.
 	ScreenShell.touch_target(_back_btn, _m)
 	ScreenShell.touch_target(_filter_btn, _m)
+	_layout_header()
+	# Font-Overrides aus scale_fonts propagieren DEFERRED (THEME_CHANGED) —
+	# bereits geshapte Labels melden im selben Frame noch ALTE Minbreiten.
+	# Ein nachgezogener Pass misst nach dem Flush die echten Werte.
+	call_deferred("_layout_header")
 	_rahme_vollansicht()
+
+
+## G4-Nachfix: Kopfzeilen-Umbruch. Der Speicher-Chip wandert in die eigene
+## Zeile darunter, sobald Zurück + Titel + Chip zusammen mehr Minbreite
+## verlangen, als die Spalte hergibt — die Min-Breiten-Falle drückte sonst
+## die GANZE Spalte auf (hoch/f=3: 1322 px > 1136er-Klemme, Zentrum −93 px).
+func _layout_header() -> void:
+	if _m.is_empty():
+		return
+	var sep := float(_header.get_theme_constant("separation"))
+	var noetig := (
+		_back_btn.get_combined_minimum_size().x
+		+ _titel.get_combined_minimum_size().x
+		+ _speicher_chip.get_combined_minimum_size().x
+		+ 2.0 * sep
+	)
+	var unten := noetig > ScreenShell.content_width(_m)
+	if unten != (_speicher_chip.get_parent() == _chip_zeile):
+		_speicher_chip.get_parent().remove_child(_speicher_chip)
+		(_chip_zeile if unten else _header).add_child(_speicher_chip)
+	_chip_zeile.visible = unten
+
+
+## G4-Nachfix: Kachelbreite = 200·f, aber nie breiter, als dass `columns`
+## Kacheln (+ Separation) in die Inhaltsspalte passen; Seitenverhältnis
+## 4:3 bleibt erhalten.
+func _kachel_groesse() -> Vector2:
+	if _m.is_empty():
+		return Vector2(200.0, 150.0)
+	var f := float(_m["f"])
+	var spalte := ScreenShell.content_width(_m)
+	var sep := float(_grid.get_theme_constant("h_separation"))
+	var cols := maxi(_grid.columns, 1)
+	var breite := minf(200.0 * f, (spalte - sep * float(cols - 1)) / float(cols))
+	return Vector2(breite, breite * 0.75)
 
 
 ## ---------------------------------------------------------------- Raster
@@ -190,6 +250,11 @@ func _refresh() -> void:
 	_leer_label.visible = fotos.is_empty()
 	for foto: Dictionary in fotos:
 		_grid.add_child(_thumb(foto))
+	# G4-Nachfix: der Kopf-Umbruch rechnet mit der ECHTEN Chip-Breite des
+	# frischen Speicher-Texts (n/max ändert die Label-Minbreite); der
+	# deferred Pass fängt die verzögerten Font-Overrides (s. _apply_metrics).
+	_layout_header()
+	call_deferred("_layout_header")
 
 
 func _thumb(foto: Dictionary) -> Control:
@@ -197,7 +262,8 @@ func _thumb(foto: Dictionary) -> Control:
 	var karte := Button.new()
 	karte.name = "Foto_%s" % pfad.get_file().get_basename()
 	karte.theme_type_variation = &"AcCard"
-	karte.custom_minimum_size = Vector2(200.0, 150.0) * float(_m.get("f", 1.0))
+	# G4-Nachfix: 200·f, aber in die Spalte geklemmt (s. _kachel_groesse).
+	karte.custom_minimum_size = _kachel_groesse()
 	karte.focus_mode = Control.FOCUS_NONE
 	karte.clip_contents = true
 	karte.pressed.connect(_zeige_vollansicht.bind(pfad))

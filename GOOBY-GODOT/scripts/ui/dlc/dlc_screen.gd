@@ -26,6 +26,13 @@ const PARALLAX_HUB := 16.0
 const PARALLAX_POLSTER := 24.0
 ## Maximale Neigung in Grad (sanft!).
 const PARALLAX_NEIGUNG := 1.2
+## Cover-Basis-Höhe (Design-px) und ihr Höhen-Deckel als Canvas-Anteil:
+## auf flachen Quer-Canvases (720 px hoch) fräße das volle 240·f-Cover
+## (~440 px) 61 % der Höhe — die Namenszeile mit „Ansehen“ lag dadurch
+## dauerhaft in der Home-Indicator-Zone (FB3-Befund quer ×2). Muster:
+## CustomizeScreen deckelt seine Kacheln in flachen Canvases genauso.
+const COVER_BASIS := 240.0
+const COVER_MAX_SHARE := 0.35
 
 ## Meta-Keys am Detail-Sheet (Tests greifen darüber zu).
 const META_AKTION := "dlc_aktion_button"
@@ -39,9 +46,17 @@ var auto_navigate := true
 var _gs: Object = null
 var _rows: VBoxContainer
 var _scroll: ScrollContainer
+## G4-Nachfix: Polster-Kind im Scroll (vertikale Safe-Insets) + Knopf-Refs
+## für die Touch-Floors nach jedem Resize.
+var _pad: MarginContainer
+var _back: Button
+var _ansehen_knoepfe: Array[Button] = []
 ## Pro Karte: {"rahmen": Control, "cover": TextureRect}.
 var _parallax_cover: Array[Dictionary] = []
 var _m: Dictionary = {}
+## Ruhelage-Pass (s. _ruhelage_sichern): läuft gerade? / nochmal anstoßen?
+var _ruhe_pass_aktiv := false
+var _ruhe_pass_erneut := false
 
 
 static func register_routes() -> void:
@@ -104,21 +119,28 @@ func _build_ui() -> void:
 	_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
 	_scroll.scroll_deadzone = 24
 	add_child(_scroll)
+	# G4-Nachfix: der Scroll bleibt bewusst vollflächig (volle Wischfläche),
+	# aber das Scroll-KIND polstert oben/unten Notch + Home-Indicator —
+	# vorher gab es KEINE vertikalen Ränder („Zurück“ bei y=0 unter der
+	# 59-pt-Notch; der letzte „Ansehen“-Knopf lag am Scroll-Ende dauerhaft
+	# in der Home-Indicator-Zone). Die Margins setzt _apply_metrics.
+	_pad = MarginContainer.new()
+	_pad.name = "SafePolster"
+	_scroll.add_child(_pad)
 	_rows = VBoxContainer.new()
-	_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_rows.add_theme_constant_override("separation", 16)
-	_scroll.add_child(_rows)
+	_pad.add_child(_rows)
 
 	var header := HBoxContainer.new()
 	header.add_theme_constant_override("separation", 12)
 	_rows.add_child(header)
-	var back := SquishButton.new()
-	back.name = "Zurueck"
-	back.theme_type_variation = &"BtnGhost"
-	back.text = I18nService.t("dlc.zurueck")
-	back.focus_mode = Control.FOCUS_NONE
-	back.pressed.connect(_on_back_pressed)
-	header.add_child(back)
+	_back = SquishButton.new()
+	_back.name = "Zurueck"
+	_back.theme_type_variation = &"BtnGhost"
+	_back.text = I18nService.t("dlc.zurueck")
+	_back.focus_mode = Control.FOCUS_NONE
+	_back.pressed.connect(_on_back_pressed)
+	header.add_child(_back)
 	var title := Label.new()
 	title.theme_type_variation = &"TitleLabel"
 	title.text = I18nService.t("dlc.titel")
@@ -157,7 +179,7 @@ func _baue_karte(dlc: Dictionary) -> void:
 	var rahmen := Control.new()
 	rahmen.name = "CoverRahmen"
 	rahmen.clip_contents = true
-	rahmen.custom_minimum_size = Vector2(0.0, 240.0)
+	rahmen.custom_minimum_size = Vector2(0.0, COVER_BASIS)
 	rahmen.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	inhalt.add_child(rahmen)
 	var cover := TextureRect.new()
@@ -208,6 +230,9 @@ func _baue_karte(dlc: Dictionary) -> void:
 	ansehen.custom_minimum_size = Vector2(0.0, AcTokens.TOUCH_FLOOR)
 	ansehen.pressed.connect(func() -> void: oeffne_detail(id))
 	name_zeile.add_child(ansehen)
+	# G4-Nachfix: Referenz für den Touch-Floor-Pass in _apply_metrics
+	# (44-pt-Regel — hoch/f=3 waren die Tippflächen nur 41,4 pt).
+	_ansehen_knoepfe.append(ansehen)
 
 	var teaser := Label.new()
 	teaser.name = "Teaser"
@@ -368,22 +393,102 @@ func _apply_metrics() -> void:
 		return
 	_m = ScreenShell.metrics(get_viewport())
 	var f := float(_m["f"])
+	var canvas: Vector2 = _m["canvas"]
+	var insets: Dictionary = _m["insets"]
 	# Inhaltsspalte W16, Scroll-Ergonomie-Variante: der GANZE Screen scrollt
 	# (Scroll = FULL_RECT-Wurzel, volle Wisch-Fläche bleibt) — daher kein
-	# content_frame, sondern die Content-VBox im Scroll zentrieren + deckeln.
+	# content_frame, sondern das Scroll-Kind zentrieren + deckeln.
 	# EXPAND-Bit nötig: erst damit gibt der ScrollContainer die volle Breite
 	# zum Zentrieren her (SHRINK_CENTER allein = linksbündig, engine-geprüft).
-	_rows.size_flags_horizontal = Control.SIZE_EXPAND | Control.SIZE_SHRINK_CENTER
+	_pad.size_flags_horizontal = Control.SIZE_EXPAND | Control.SIZE_SHRINK_CENTER
+	# G4-Nachfix: vertikale Ränder = Safe-Insets + EDGE_Y im Polster-Kind —
+	# oben Notch-Schutz, unten hebt das Content-Padding den letzten
+	# „Ansehen“-Knopf am Scroll-Ende über den Home-Indicator (Padding statt
+	# Scroll-Deckel: gescrollt läuft der Inhalt weiter vollflächig durch).
+	_pad.add_theme_constant_override(
+		"margin_top", roundi(float(insets["top"]) + ScreenShell.EDGE_Y * f)
+	)
+	_pad.add_theme_constant_override(
+		"margin_bottom", roundi(float(insets["bottom"]) + ScreenShell.EDGE_Y * f)
+	)
 	_rows.custom_minimum_size.x = ScreenShell.content_width(_m)
 	_rows.set_meta(ScreenShell.META_CONTENT_COLUMN, true)
+	# G4-Nachfix: Zurück + alle „Ansehen“ auf den physischen Touch-Floor.
+	ScreenShell.touch_target(_back, _m)
+	for knopf in _ansehen_knoepfe:
+		ScreenShell.touch_target(knopf, _m)
 	ScreenShell.scale_fonts(self, f)
+	# Cover-Höhe: 240·f, auf flachen Canvases per COVER_MAX_SHARE gedeckelt
+	# (s. Konstanten-Kommentar) — hoch/ipad bleiben unverändert.
+	var cover_h := minf(COVER_BASIS * f, canvas.y * COVER_MAX_SHARE)
 	for paar: Dictionary in _parallax_cover:
 		var rahmen: Control = paar["rahmen"]
 		var cover: TextureRect = paar["cover"]
-		rahmen.custom_minimum_size = Vector2(0.0, 240.0 * f)
+		rahmen.custom_minimum_size = Vector2(0.0, cover_h)
 		cover.offset_top = -PARALLAX_POLSTER * f
 		cover.offset_bottom = PARALLAX_POLSTER * f
 	_update_parallax(0.0)
+	# Ruhelage sichern, sobald das frische Layout steht (deferred, damit
+	# die Container-Sortierung und die Font-Overrides schon gelandet sind).
+	call_deferred("_ruhelage_sichern")
+
+
+## G4-Nachfix: Ruhelage-Sicherung. Bei Scroll-Position 0 darf KEINE
+## „Ansehen“-Zeile in der Home-Indicator-Zone liegen — die Karten-Höhen
+## sind aber inhaltsabhängig (Teaser-Längen), also wird nicht geraten,
+## sondern gemessen: liegt eine Zeile in Ruhe in der Zone, wächst das
+## Cover IHRER Karte, bis die Zeile unter der Falte liegt (gescrollte
+## Inhalte sind laut Audit-Klipp-Regel kein Safe-Area-Verstoß; die volle
+## Wischfläche und das Unter-dem-Indicator-Durchlaufen bleiben erhalten).
+func _ruhelage_sichern() -> void:
+	if _ruhe_pass_aktiv:
+		_ruhe_pass_erneut = true
+		return
+	_ruhe_pass_aktiv = true
+	# Über ein kleines Frame-Budget messen: die Font-Overrides aus
+	# scale_fonts propagieren DEFERRED (THEME_CHANGED) und schieben die
+	# Karten-Zeilen erst 1–2 Frames später auf ihre ECHTE Ruhelage — eine
+	# Einzelmessung im Bau-Frame sähe veraltete (zu hohe) Positionen.
+	# Fertig, wenn zwei Messungen in Folge sauber sind.
+	var sauber := 0
+	for _versuch in 8:
+		if not is_inside_tree():
+			break
+		await get_tree().process_frame
+		if not is_inside_tree():
+			break
+		if _hebe_ruhe_kollision():
+			sauber = 0
+		else:
+			sauber += 1
+			if sauber >= 2:
+				break
+	_ruhe_pass_aktiv = false
+	if _ruhe_pass_erneut:
+		_ruhe_pass_erneut = false
+		if is_inside_tree():
+			call_deferred("_ruhelage_sichern")
+
+
+## Eine Ruhelage-Kollision anheben (true = etwas geändert, nochmal messen).
+func _hebe_ruhe_kollision() -> bool:
+	if _m.is_empty() or _ansehen_knoepfe.size() > _parallax_cover.size():
+		return false
+	var canvas: Vector2 = _m["canvas"]
+	var insets: Dictionary = _m["insets"]
+	if float(insets["bottom"]) <= 0.0:
+		return false
+	var zone_ab := canvas.y - float(insets["bottom"]) - 2.0
+	var scroll_y := _scroll.get_global_rect().position.y
+	for i in _ansehen_knoepfe.size():
+		var rect := _ansehen_knoepfe[i].get_global_rect()
+		var ruhe_y := rect.position.y - scroll_y + float(_scroll.scroll_vertical)
+		if ruhe_y >= canvas.y or ruhe_y + rect.size.y <= zone_ab:
+			continue
+		var rahmen := _parallax_cover[i]["rahmen"] as Control
+		rahmen.custom_minimum_size.y += canvas.y - ruhe_y + 2.0
+		return true
+	return false
 
 
 func _spieler_level() -> int:

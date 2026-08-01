@@ -96,6 +96,11 @@ var _rng := RandomNumberGenerator.new()
 ## FB3: Metrik-Pass (Safe-Area/Touch-Floor/UiScale) bei jedem Resize.
 var _rows_box: VBoxContainer
 var _back_btn: Button
+## G4-Nachfix: Kopfzeilen-Teile für den bedarfsbasierten Umbruch — das
+## Münzen-Label wandert auf schmalen Spalten in die eigene Zeile.
+var _header_zeile: HBoxContainer
+var _wallet_zeile: HBoxContainer
+var _title_label: Label
 var _kat_spalte: VBoxContainer
 var _options_panel: PanelContainer
 var _f := 1.0
@@ -171,7 +176,39 @@ func _apply_metrics() -> void:
 	_optionen_scroll.custom_minimum_size = Vector2(0.0, TILE_SIZE.y * _tile_f + 18.0)
 	_kauf_button.custom_minimum_size = Vector2(150.0 * _f, _floor)
 	ScreenShell.scale_fonts(self, _f)
+	_layout_header(m)
+	# Font-Overrides aus scale_fonts propagieren DEFERRED (THEME_CHANGED) —
+	# bereits geshapte Labels melden im selben Frame noch ALTE Minbreiten.
+	# Ein nachgezogener Pass misst nach dem Flush die echten Werte.
+	call_deferred("_layout_header_nachziehen")
 	_fit_preview(m)
+
+
+## G4-Nachfix: FB3-Befund hoch (Zentrum −2,5 px) — Zurück + Titel + Münzen
+## verlangten minimal mehr Minbreite als die Spalten-Klemme, die Spalte
+## rutschte aus dem Safe-Zentrum. Das Münzen-Label wandert deshalb in die
+## eigene Zeile, sobald die Kopfzeile nicht mehr in die Spalte passt.
+func _layout_header(m: Dictionary) -> void:
+	if _header_zeile == null or _wallet_zeile == null:
+		return
+	var sep := float(_header_zeile.get_theme_constant("separation"))
+	var noetig := (
+		_back_btn.get_combined_minimum_size().x
+		+ _title_label.get_combined_minimum_size().x
+		+ _coins_label.get_combined_minimum_size().x
+		+ 2.0 * sep
+	)
+	var unten := noetig > ScreenShell.content_width(m, SPALTE_BASIS)
+	if unten != (_coins_label.get_parent() == _wallet_zeile):
+		_coins_label.get_parent().remove_child(_coins_label)
+		(_wallet_zeile if unten else _header_zeile).add_child(_coins_label)
+	_wallet_zeile.visible = unten
+
+
+## Deferred-Pass des Kopf-Umbruchs mit FRISCHEN Metriken (s. _apply_metrics).
+func _layout_header_nachziehen() -> void:
+	if is_inside_tree():
+		_layout_header(ScreenShell.metrics(get_viewport()))
 
 
 ## Vorschau-Höhe = Budget, das NACH Chips + Options-Panel übrig bleibt —
@@ -414,8 +451,15 @@ func _build_ui() -> void:
 
 
 func _build_header() -> Control:
-	var header := HBoxContainer.new()
-	header.add_theme_constant_override("separation", 10)
+	# G4-Nachfix: Kopf als 2-Zeilen-Gerüst — Zeile 1 wie gehabt, Zeile 2
+	# nimmt das Münzen-Label auf, wenn die Kopfzeile nicht in die Spalte
+	# passt (_layout_header; FB3-Befund hoch: Kopf-Minbreite drückte die
+	# Spalte 2,5 px aus dem Safe-Zentrum).
+	var kopf := VBoxContainer.new()
+	kopf.add_theme_constant_override("separation", 4)
+	_header_zeile = HBoxContainer.new()
+	_header_zeile.add_theme_constant_override("separation", 10)
+	kopf.add_child(_header_zeile)
 	# Audio-Grammatik: jeder interaktive Knopf ist ein SquishButton
 	# (Tap-Haptik + Press-Squish zentral, nie Button.new()).
 	_back_btn = SquishButton.new()
@@ -423,18 +467,23 @@ func _build_header() -> Control:
 	_back_btn.theme_type_variation = &"GhostButton"
 	_back_btn.text = I18nService.t("customize.back")
 	_back_btn.pressed.connect(_on_back_pressed)
-	header.add_child(_back_btn)
-	var title := Label.new()
-	title.theme_type_variation = &"TitleLabel"
-	title.text = I18nService.t("customize.title")
-	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	header.add_child(title)
+	_header_zeile.add_child(_back_btn)
+	_title_label = Label.new()
+	_title_label.theme_type_variation = &"TitleLabel"
+	_title_label.text = I18nService.t("customize.title")
+	_title_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_header_zeile.add_child(_title_label)
 	_coins_label = Label.new()
 	_coins_label.name = "CoinsLabel"
 	_coins_label.theme_type_variation = &"HeadlineLabel"
-	header.add_child(_coins_label)
-	return header
+	_header_zeile.add_child(_coins_label)
+	_wallet_zeile = HBoxContainer.new()
+	_wallet_zeile.name = "WalletZeile"
+	_wallet_zeile.alignment = BoxContainer.ALIGNMENT_END
+	_wallet_zeile.visible = false
+	kopf.add_child(_wallet_zeile)
+	return kopf
 
 
 func _build_kategorie_spalte() -> Control:
@@ -776,6 +825,11 @@ func _refresh_wallet() -> void:
 	var gs := _game_state()
 	var coins := int(gs.get_value("economy.coins", 0)) if gs != null else 0
 	_coins_label.text = I18nService.t("customize.muenzen", {"n": coins})
+	# G4-Nachfix: neuer Text = neue Minbreite — Kopf-Umbruch nachziehen
+	# (sofort + deferred, s. _apply_metrics zu den Font-Overrides).
+	if is_inside_tree():
+		_layout_header(ScreenShell.metrics(get_viewport()))
+		call_deferred("_layout_header_nachziehen")
 
 
 func _refresh_preview() -> void:

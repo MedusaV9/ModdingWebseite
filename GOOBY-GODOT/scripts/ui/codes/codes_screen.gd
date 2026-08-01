@@ -34,11 +34,14 @@ var attempts: Array = []
 var _gs: Object = null
 var _input: LineEdit
 var _redeem_btn: Button
+var _back: Button
 var _feedback: Label
 var _buff_label: Label
 var _verlauf_box: VBoxContainer
 var _toasts: ToastLayer
 var _rows: VBoxContainer
+## G4-Nachfix: Polster-Kind im Scroll (vertikale Safe-Insets).
+var _pad: MarginContainer
 var _m: Dictionary = {}
 var _lock_anzeige := false
 
@@ -94,21 +97,27 @@ func _build_ui() -> void:
 	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
 	scroll.scroll_deadzone = 24
 	add_child(scroll)
+	# G4-Nachfix: der Scroll bleibt bewusst vollflächig (volle Wischfläche),
+	# aber das Scroll-KIND polstert oben/unten Notch + Home-Indicator —
+	# vorher gab es KEINE vertikalen Ränder („Zurück“ bei y=0 unter der
+	# 59-pt-Notch, FB3 hoch/ipad). Die Margins setzt _apply_metrics.
+	_pad = MarginContainer.new()
+	_pad.name = "SafePolster"
+	scroll.add_child(_pad)
 	_rows = VBoxContainer.new()
-	_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_rows.add_theme_constant_override("separation", 12)
-	scroll.add_child(_rows)
+	_pad.add_child(_rows)
 
 	var header := HBoxContainer.new()
 	header.add_theme_constant_override("separation", 12)
 	_rows.add_child(header)
-	var back := SquishButton.new()
-	back.name = "Zurueck"
-	back.theme_type_variation = &"BtnGhost"
-	back.text = I18nService.t("codes.zurueck")
-	back.focus_mode = Control.FOCUS_NONE
-	back.pressed.connect(_on_back_pressed)
-	header.add_child(back)
+	_back = SquishButton.new()
+	_back.name = "Zurueck"
+	_back.theme_type_variation = &"BtnGhost"
+	_back.text = I18nService.t("codes.zurueck")
+	_back.focus_mode = Control.FOCUS_NONE
+	_back.pressed.connect(_on_back_pressed)
+	header.add_child(_back)
 	var title := Label.new()
 	title.theme_type_variation = &"TitleLabel"
 	title.text = I18nService.t("codes.titel")
@@ -185,15 +194,30 @@ func _apply_metrics() -> void:
 	if not is_inside_tree():
 		return
 	_m = ScreenShell.metrics(get_viewport())
+	var f := float(_m["f"])
+	var insets: Dictionary = _m["insets"]
 	# Inhaltsspalte W16, Scroll-Ergonomie-Variante: der GANZE Screen scrollt
 	# (Scroll = FULL_RECT-Wurzel, volle Wisch-Fläche bleibt) — daher kein
-	# content_frame, sondern die Content-VBox im Scroll zentrieren + deckeln.
+	# content_frame, sondern das Scroll-Kind zentrieren + deckeln.
 	# EXPAND-Bit nötig: erst damit gibt der ScrollContainer die volle Breite
 	# zum Zentrieren her (SHRINK_CENTER allein = linksbündig, engine-geprüft).
-	_rows.size_flags_horizontal = Control.SIZE_EXPAND | Control.SIZE_SHRINK_CENTER
+	_pad.size_flags_horizontal = Control.SIZE_EXPAND | Control.SIZE_SHRINK_CENTER
+	# G4-Nachfix: vertikale Ränder = Safe-Insets + EDGE_Y im Polster-Kind —
+	# der Inhalt startet unter der Notch und endet über dem Home-Indicator,
+	# gescrollt läuft er weiter unter beiden durch (iOS-Muster).
+	_pad.add_theme_constant_override(
+		"margin_top", roundi(float(insets["top"]) + ScreenShell.EDGE_Y * f)
+	)
+	_pad.add_theme_constant_override(
+		"margin_bottom", roundi(float(insets["bottom"]) + ScreenShell.EDGE_Y * f)
+	)
 	_rows.custom_minimum_size.x = ScreenShell.content_width(_m)
 	_rows.set_meta(ScreenShell.META_CONTENT_COLUMN, true)
-	ScreenShell.scale_fonts(self, float(_m["f"]))
+	# G4-Nachfix: „Zurück“ + „Einlösen“ auf den physischen Touch-Floor
+	# (44-pt-Regel — hoch/f=3 waren es nur 41,4 bzw. 40,2 pt).
+	ScreenShell.touch_target(_back, _m)
+	ScreenShell.touch_target(_redeem_btn, _m)
+	ScreenShell.scale_fonts(self, f)
 
 
 ## ---------------------------------------------------------------- Einlösen
