@@ -1,9 +1,11 @@
 class_name IkeaScreen
 extends Control
-## GOUHBUS-Möbelausstellung (CONTENT-B) — der „IKEA“-Screen aus dem
+## IKEA-Möbelausstellung (CONTENT-B) — der „IKEA“-Screen aus dem
 ## User-Wunsch D: „Möbel-AUSSTELLUNG in 3D (drehbare Modelle), Kategorien-
 ## Suche, Farbe/Muster/Stoff anpassen, Grid-Felder-Bedarf sichtbar; viele
 ## Deko-Artikel (Toaster etc.); SEHR viele Möbel am Ende.“
+## G3: Screen-Titel von „GOUHBUS Möbelausstellung“ auf den Karten-Namen
+## „IKEA“ umgestellt (Verwechslung mit Doktor GOOUHBUS, texte-Grenzfall 1).
 ##
 ## Aufbau: links Suche + Kategorie-Chips + Regalliste, rechts die Vitrine
 ## (`FurnitureShowcase`) mit Farbmustern, Zoom-Slider, Preis und Kaufen.
@@ -25,6 +27,11 @@ const CATEGORY_ALL := ""
 const LIST_WIDTH := 360
 const SWATCH_SIZE := 40
 const SHOWCASE_MIN_HEIGHT := 260
+## Inhaltsspalte W16: eigene Grid-Basis — die 2-Spalten-Auslage braucht mehr
+## Breite als die 660er-Menü-Spalte, bleibt auf iPad aber gedeckelt + mittig.
+const GRID_BASE := 880.0
+## Höhen-Anteil der Vitrinen-/Detail-Spalte im Hochformat-Stapel.
+const PORTRAIT_DETAIL_SHARE := 0.55
 
 ## Tests/Screenshots: Navigation und Drehteller abschaltbar.
 var auto_navigate := true
@@ -51,7 +58,9 @@ var _variant := FurnitureVariants.DEFAULT_ID
 ## FB3: Metrik-Pass (Safe-Area/Touch-Floor/UiScale) bei jedem Resize.
 var _rows_box: VBoxContainer
 var _back_btn: Button
+var _body: BoxContainer
 var _left_column: VBoxContainer
+var _detail_scroll: ScrollContainer
 var _detail_panel: PanelContainer
 var _f := 1.0
 var _floor := float(AcTokens.TOUCH_FLOOR)
@@ -108,6 +117,8 @@ func _on_viewport_resized() -> void:
 
 ## FB3: Safe-Area + zentrale Skalierung + Touch-Floor — vorher feste
 ## 20/14-px-Ränder (Notch), 58er-Zeilen und 40er-Swatches (< 44 pt).
+## Inhaltsspalte W16 (G3): der ganze Screen sitzt jetzt in der zentrierten,
+## breiten-gedeckelten Spalte (eigene Grid-Basis 880) statt voller Safe-Breite.
 func _apply_metrics() -> void:
 	if _rows_box == null or not is_inside_tree():
 		return
@@ -115,10 +126,13 @@ func _apply_metrics() -> void:
 	_f = m["f"]
 	_floor = m["floor_px"]
 	var canvas: Vector2 = m["canvas"]
-	ScreenShell.frame(_rows_box, m, 20.0, 14.0)
+	ScreenShell.content_frame(_rows_box, m, GRID_BASE)
 	if _back_btn != null:
 		ScreenShell.touch_target(_back_btn, m)
-	_left_column.custom_minimum_size = Vector2(minf(LIST_WIDTH * _f, canvas.x * 0.36), 0.0)
+	var portrait := (
+		OrientationService.classify(Vector2i(canvas)) == OrientationService.Orientation.PORTRAIT
+	)
+	_apply_body_layout(portrait, m)
 	_search.custom_minimum_size = Vector2(0.0, _floor)
 	_chip_scroll.custom_minimum_size = Vector2(0.0, _floor + 8.0)
 	_zoom_slider.custom_minimum_size = Vector2(120.0 * _f, _floor)
@@ -131,9 +145,36 @@ func _apply_metrics() -> void:
 	var body_h := (
 		canvas.y - float(insets["top"]) - float(insets["bottom"]) - 28.0 * _f - _floor - 10.0
 	)
+	if portrait:
+		# Im Hochformat-Stapel gehört der Vitrinen-Spalte nur ihr Anteil.
+		body_h *= PORTRAIT_DETAIL_SHARE
 	var detail_h := _detail_panel.get_combined_minimum_size().y
 	var show_min := clampf(body_h - detail_h - 44.0, 140.0, canvas.y * 0.4)
 	_showcase.custom_minimum_size = Vector2(0.0, show_min)
+
+
+## Portrait-Reflow (G3, Scout ui-shop §1): im Hochformat stapelt der Body
+## 1-spaltig — Vitrine + Details oben, Suche/Chips/Regalliste darunter;
+## im Querformat die gewohnten zwei Spalten (Liste links, Vitrine rechts).
+func _apply_body_layout(portrait: bool, m: Dictionary) -> void:
+	if _body == null or _detail_scroll == null:
+		return
+	_body.vertical = portrait
+	if portrait:
+		if _body.get_child(0) != _detail_scroll:
+			_body.move_child(_detail_scroll, 0)
+		_left_column.custom_minimum_size = Vector2.ZERO
+		_left_column.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		_left_column.size_flags_stretch_ratio = 1.0 - PORTRAIT_DETAIL_SHARE
+		_detail_scroll.size_flags_stretch_ratio = PORTRAIT_DETAIL_SHARE
+		return
+	if _body.get_child(0) != _left_column:
+		_body.move_child(_left_column, 0)
+	var spalte := ScreenShell.content_width(m, GRID_BASE)
+	_left_column.custom_minimum_size = Vector2(minf(LIST_WIDTH * _f, spalte * 0.42), 0.0)
+	_left_column.size_flags_vertical = Control.SIZE_FILL
+	_left_column.size_flags_stretch_ratio = 1.0
+	_detail_scroll.size_flags_stretch_ratio = 1.0
 
 
 ## Ein Möbel in die Vitrine stellen (auch von Tests/Screenshots gerufen).
@@ -214,12 +255,16 @@ func _build_ui() -> void:
 	_rows_box.add_theme_constant_override("separation", 10)
 	add_child(_rows_box)
 	_rows_box.add_child(_build_header())
-	var body := HBoxContainer.new()
-	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	body.add_theme_constant_override("separation", 14)
-	_rows_box.add_child(body)
-	body.add_child(_build_left_column())
-	body.add_child(_build_right_column())
+	# G3: BoxContainer mit vertical-Flag statt fester HBox — der Metrik-Pass
+	# schaltet den Body im Hochformat auf 1-spaltiges Stapeln um.
+	_body = BoxContainer.new()
+	_body.name = "Body"
+	_body.vertical = false
+	_body.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_body.add_theme_constant_override("separation", 14)
+	_rows_box.add_child(_body)
+	_body.add_child(_build_left_column())
+	_body.add_child(_build_right_column())
 	_toasts = ToastLayer.new()
 	add_child(_toasts)
 
@@ -291,6 +336,7 @@ func _build_right_column() -> Control:
 	# Canvas-Rand (Kaufen-Knopf/Swatches unerreichbar).
 	var scroll := ScrollContainer.new()
 	scroll.name = "DetailScroll"
+	_detail_scroll = scroll
 	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -609,7 +655,8 @@ func _show_result(item: Dictionary, result: String) -> void:
 	var name_text := FurnitureCatalog.display_name(item, I18nService.get_locale())
 	match result:
 		ShopPurchase.RESULT_OK:
-			AudioDirector.try_play(self, "ui_confirm")
+			# Sound-Fixliste F3: Kauf-Erfolg klingt wie Kauf (Audio-Grammatik).
+			AudioDirector.try_play(self, "ui_buy")
 			_toasts.show_toast(I18nService.t("shop.ikea.gekauft", {"name": name_text}))
 			# W14 Kauf-Feier (UIKERN-Vertrag): Doppelimpuls + Gold-Funken.
 			Haptics.success(self)

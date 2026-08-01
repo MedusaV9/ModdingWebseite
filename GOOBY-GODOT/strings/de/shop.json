@@ -1,9 +1,9 @@
 {
   "shop": {
     "ikea": {
-      "title": "GOUHBUS Möbelausstellung",
+      "title": "IKEA-Möbelausstellung",
       "back": "Zurück",
-      "search": "Möbel suchen …",
+      "search": "Möbel suchen…",
       "alle": "Alles",
       "leer": "Nichts gefunden — probier einen anderen Suchbegriff.",
       "buy": "Kaufen",
