@@ -353,3 +353,37 @@ RCON-Präfix: `python3 tools/rcon/rcon.py "…"`; Greps aus `ProjectEclipse/`.
 Klassen-Javadoc-Bullet), `entity/DeckhandEntity.java` (neues Feld `clientRowSampledAt`,
 Javadoc-Präzisierung `clientRowResetAt`), dieser Report. Sonst nichts — insbesondere
 keine Partikel-/Sound-/Photon-Pfade, kein `UserFeedback.md`.
+
+### C2-R2 Live-Abnahme (Hauptagent, 01.08., frische Client-JVM nach Commit 8521300)
+
+- **Crossing-Pfad (der Fix) PASS**: Nach `eclipse tp_limbo Dev` + Kamera auf die
+  Ruderbank ankerten alle 6 sichtbaren Rower im SELBEN Frame auf demselben Boundary —
+  `row clock anchored: gameTime 2000041 boundary 2000040 (1t late)` — und feuerten ab
+  dann pro gerendertem Zyklus genau einmal (741 Sondenzeilen kumuliert, strikt
+  steigende cycles, `sort | uniq -d` über (rower, cycle) leer = Dedupe-Beweis,
+  Crew-Unison am selben Grid).
+- **Exakt-Boundary-Pfad (Normal-FPS-Verhalten) PASS**: Frische Session per
+  Dimensions-Zyklus (Overworld → `tp_limbo`, Client legt neue Entity-Instanzen an),
+  dann `tick freeze` + `tick step` exakt auf ein 60t-Boundary (2004060): alle 6 neuen
+  Rower-Instanzen (Ids 892–898) ankerten mit
+  `boundary 2004060 (0t late)` — der LIMBOFIX2-Pfad greift unverändert, sobald der
+  Boundary-Tick gesampelt wird.
+- **Partikel-Renderpfad verifiziert**: RCON-Gegenprobe am errechneten Einstichpunkt
+  (−4.07, 49.9, 6.4; Wasser bei y=49 per `execute if block` z=5..11 bestätigt) —
+  langlebige Vanilla-Partikel (`campfire_signal_smoke`, `end_rod`) rendern dort
+  einwandfrei durch die Limbo-Post-Pipeline. Die fired-Sonde loggt NACH den
+  `addParticle`-Aufrufen innerhalb des Fluid-Treffer-Zweigs ⇒ Splash+Wake spawnen
+  nachweislich jede Runde am richtigen Ort.
+- **Sichtprobe der Splash-/Soul-Partikel selbst: auf DIESER VM nicht bildfähig**
+  (S6-Blitz-Präzedenz F-096/F-101): Partikel altern in ECHTZEIT weiter (empirisch
+  belegt — die ParticleEngine tickt bei `tick freeze`/`tick rate 2` mit 20/s
+  Wandzeit weiter, ein Glow-Testburst überlebte keine 12 s), Lebensdauer
+  SPLASH/SOUL/GLOW ≈ 0,5–2 s vs. llvmpipe-Present-Intervalle 3–20 s ⇒
+  Trefferchance pro Beat ~15 %. Über ~11 Beats (2 Salven, 265-s-ffmpeg-Watch,
+  Temporal-Diff-Scan) 1 schwacher Glint am Einstichpunkt (Watch-Video t≈27,5 s),
+  kein sauberes Foto. Vorschlag an Welle 5: `/eclipsefx limbo wakehold` analog zum
+  F-101-`storm flashhold` (Dev-Loop, der die Wake dauerhaft nachfeuert) — dann ist
+  die Optik auch auf GPU-losen VMs fotografierbar.
+- **Regression-Umfeld sauber**: 0 `Duplicate fx runtime object id` auf der frischen
+  JVM (F-103-Hygiene hält), keine neuen Compile-/Boot-Fehler; GL_INVALID_OPERATION-
+  Spam ist der bekannte llvmpipe-Blit-Quirk.
