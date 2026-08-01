@@ -17,7 +17,8 @@ func _ready() -> void:
 	var ids := BoardEmotes.ids()
 	for index in ids.size():
 		var emote_id := ids[index]
-		var btn := Button.new()
+		# G3 P06 (F8): SquishButton — Haptik/Squish auch im Emote-Rad.
+		var btn := SquishButton.new()
 		btn.theme_type_variation = &"BtnTeal"
 		btn.text = I18nService.t(str(BoardEmotes.def(emote_id).get("label_key", "")))
 		btn.custom_minimum_size = BUTTON_SIZE
@@ -34,6 +35,7 @@ func toggle() -> void:
 
 
 func _on_pick(emote_id: String) -> void:
+	AudioDirector.try_play(self, "ui_chip")
 	visible = false
 	emote_picked.emit(emote_id)
 

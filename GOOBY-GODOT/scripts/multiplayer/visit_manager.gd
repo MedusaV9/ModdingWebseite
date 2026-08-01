@@ -221,37 +221,82 @@ func starte_coop_fahrt() -> void:
 	await coop.starte_als_fahrer(_vs.room_id, radio_owned, von)
 
 
-# ── UI (eigener Layer — VisitHud gehört FIX-1, wir hängen uns nicht rein) ───
+# ── UI (G3 P06: Knöpfe reihen sich in die VisitHud-Aktionszeile ein) ────────
 
 
+## Wake-/Fahrt-Knöpfe als SquishButtons im AC-Theme (g1/ui-onboarding 2.7:
+## vorher Godot-Default-Look, feste Pixel, Ecken-Kleber ohne Safe-Area).
+## Bevorzugt landen sie in der zentrierten VisitHud-Bottom-Aktionszeile
+## (add_action_button — EINE Daumenzonen-Zeile statt eigener Ecke); ohne
+## HUD (Test-Fakes) fällt der Manager auf einen eigenen Layer mit
+## Safe-Area + Touch-Floor zurück.
 func _baue_ui() -> void:
-	_ui_layer = CanvasLayer.new()
-	_ui_layer.layer = 7
-	add_child(_ui_layer)
-	_wake_button = Button.new()
+	_wake_button = SquishButton.new()
+	_wake_button.theme_type_variation = &"AccentButton"
 	_wake_button.text = I18nService.t("social.nap.wake_button")
 	_wake_button.visible = false
-	_wake_button.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	_wake_button.offset_top = -120.0
-	_wake_button.offset_bottom = -72.0
-	_wake_button.offset_left = -110.0
-	_wake_button.offset_right = 110.0
-	_wake_button.pressed.connect(wecke_auf)
-	_ui_layer.add_child(_wake_button)
+	_wake_button.pressed.connect(_on_wake_gedrueckt)
 	if _rolle() == VisitService.ROLE_HOST:
-		_fahrt_button = Button.new()
+		_fahrt_button = SquishButton.new()
+		_fahrt_button.theme_type_variation = &"BtnLeaf"
 		_fahrt_button.text = I18nService.t("coop.fahrt.button")
-		_fahrt_button.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-		_fahrt_button.offset_top = -120.0
-		_fahrt_button.offset_bottom = -72.0
-		_fahrt_button.offset_left = -240.0
-		_fahrt_button.offset_right = -16.0
-		_fahrt_button.pressed.connect(starte_coop_fahrt)
-		_ui_layer.add_child(_fahrt_button)
+		_fahrt_button.pressed.connect(_on_fahrt_gedrueckt)
+	var hud: Node = _scene.get("hud") if _scene != null else null
+	if hud != null and hud.has_method("add_action_button"):
+		hud.call("add_action_button", _wake_button)
+		if _fahrt_button != null:
+			hud.call("add_action_button", _fahrt_button)
+	else:
+		_baue_eigenen_layer()
 	beifahrer_ui = BeifahrerUi.new()
 	beifahrer_ui.name = "BeifahrerUi"
 	beifahrer_ui.setup(coop)
 	add_child(beifahrer_ui)
+
+
+func _on_wake_gedrueckt() -> void:
+	AudioDirector.try_play(self, "ui_click")
+	wecke_auf()
+
+
+func _on_fahrt_gedrueckt() -> void:
+	# Start einer gemeinsamen Aktion → ui_confirm (Audio-Grammatik §3).
+	AudioDirector.try_play(self, "ui_confirm")
+	starte_coop_fahrt()
+
+
+## Fallback ohne VisitHud: eigener Layer, AC-Theme, zentrierte Bottom-Zeile
+## in der Safe-Area, Touch-Floor über ScreenShell-Metriken.
+func _baue_eigenen_layer() -> void:
+	_ui_layer = CanvasLayer.new()
+	_ui_layer.layer = 7
+	add_child(_ui_layer)
+	var wurzel := Control.new()
+	wurzel.set_anchors_preset(Control.PRESET_FULL_RECT)
+	wurzel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	wurzel.theme = ThemeService.theme()
+	_ui_layer.add_child(wurzel)
+	var reihe := HBoxContainer.new()
+	reihe.alignment = BoxContainer.ALIGNMENT_CENTER
+	reihe.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	reihe.add_theme_constant_override("separation", 8)
+	wurzel.add_child(reihe)
+	reihe.add_child(_wake_button)
+	if _fahrt_button != null:
+		reihe.add_child(_fahrt_button)
+	var vp := get_viewport()
+	if vp != null:
+		var m := ScreenShell.metrics(vp)
+		var insets: Dictionary = m["insets"]
+		var f: float = m["f"]
+		reihe.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+		reihe.offset_left = float(insets["left"]) + 12.0 * f
+		reihe.offset_right = -float(insets["right"]) - 12.0 * f
+		reihe.offset_bottom = -float(insets["bottom"]) - 12.0 * f
+		reihe.offset_top = reihe.offset_bottom - 72.0 * f
+		ScreenShell.touch_target(_wake_button, m)
+		if _fahrt_button != null:
+			ScreenShell.touch_target(_fahrt_button, m)
 
 
 # ── Intern ───────────────────────────────────────────────────────────────────

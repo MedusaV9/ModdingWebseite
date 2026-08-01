@@ -144,7 +144,8 @@ func _build_ui() -> void:
 
 	var header := HBoxContainer.new()
 	rows.add_child(header)
-	var back := Button.new()
+	# G3 P06 (F6): SquishButton statt Button — Haptik + Press-Squish zentral.
+	var back := SquishButton.new()
 	back.theme_type_variation = &"GhostButton"
 	back.text = I18nService.t("social.screen.back")
 	back.pressed.connect(_on_back_pressed)
@@ -170,7 +171,7 @@ func _build_ui() -> void:
 	var practice_box := HBoxContainer.new()
 	practice_box.alignment = BoxContainer.ALIGNMENT_CENTER
 	rows.add_child(practice_box)
-	_practice_btn = Button.new()
+	_practice_btn = SquishButton.new()
 	_practice_btn.theme_type_variation = &"GhostButton"
 	_practice_btn.text = I18nService.t("chess.practice")
 	# UIFINAL: kleines Spiel-Icon — der lose Knopf bekommt einen Anker.
@@ -278,28 +279,28 @@ func _build_friend_row(row: Dictionary) -> Control:
 		status_label.add_theme_color_override("font_color", FriendListUi.COLOR_OFFLINE)
 	names.add_child(status_label)
 	var can_act := online and _is_online()
-	var visit_btn := Button.new()
+	var visit_btn := SquishButton.new()
 	visit_btn.theme_type_variation = &"BtnTeal"
 	visit_btn.text = I18nService.t("social.visit.button")
 	visit_btn.disabled = not can_act
 	visit_btn.pressed.connect(_on_visit_pressed.bind(row))
 	_scale_action_button(visit_btn)
 	box.add_child(visit_btn)
-	var board_btn := Button.new()
+	var board_btn := SquishButton.new()
 	board_btn.theme_type_variation = &"BtnTeal"
 	board_btn.text = I18nService.t("board.button")
 	board_btn.disabled = not can_act
 	board_btn.pressed.connect(_on_board_pressed.bind(row))
 	_scale_action_button(board_btn)
 	box.add_child(board_btn)
-	var chess_btn := Button.new()
+	var chess_btn := SquishButton.new()
 	chess_btn.theme_type_variation = &"BtnTeal"
 	chess_btn.text = I18nService.t("chess.button")
 	chess_btn.disabled = not can_act
 	chess_btn.pressed.connect(_on_chess_pressed.bind(row))
 	_scale_action_button(chess_btn)
 	box.add_child(chess_btn)
-	var pal_btn := Button.new()
+	var pal_btn := SquishButton.new()
 	pal_btn.theme_type_variation = &"GhostButton"
 	pal_btn.text = I18nService.t("social.pal.button")
 	pal_btn.disabled = not _is_online()
@@ -323,6 +324,7 @@ func _scale_action_button(btn: Button) -> void:
 
 
 func _on_visit_pressed(row: Dictionary) -> void:
+	AudioDirector.try_play(self, "ui_confirm")
 	var vs := visit_service()
 	if vs == null or _busy:
 		return
@@ -393,6 +395,7 @@ func _on_visit_denied(data: Dictionary) -> void:
 
 
 func _on_board_pressed(row: Dictionary) -> void:
+	AudioDirector.try_play(self, "ui_confirm")
 	var session := board_session()
 	if session == null:
 		return
@@ -428,6 +431,7 @@ func _on_board_started(_data: Dictionary) -> void:
 
 
 func _on_chess_pressed(row: Dictionary) -> void:
+	AudioDirector.try_play(self, "ui_confirm")
 	var session := chess_session()
 	if session == null:
 		return
@@ -456,6 +460,7 @@ func _on_chess_started(_data: Dictionary) -> void:
 
 
 func _on_chess_practice_pressed() -> void:
+	AudioDirector.try_play(self, "ui_click")
 	_navigate(ChessScene.ROUTE, {"mode": "solo"})
 
 
@@ -463,6 +468,9 @@ func _on_chess_practice_pressed() -> void:
 
 
 func _on_pal_pressed(row: Dictionary) -> void:
+	# Eigenbau-Overlay: der ÖFFNER spielt ui_open, das Sheet spielt beim
+	# Schließen ui_close (Grammatik §3 — kein PanelSheet im Spiel).
+	AudioDirector.try_play(self, "ui_open")
 	var sheet := GoobyPalSheet.new()
 	sheet.setup(pal_service(), row)
 	sheet.toast_requested.connect(toast.show_toast)
@@ -492,21 +500,27 @@ func _add_incoming_card(
 	label.text = text
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	box.add_child(label)
-	var yes := Button.new()
+	# G3 P06 (F6): SquishButton + Touch-Floor — die Anfrage-Buttons hatten
+	# als einzige Aktions-Knöpfe keinen Floor (g1/ui-onboarding 2.9.1).
+	var yes := SquishButton.new()
 	yes.theme_type_variation = &"BtnTeal"
 	yes.text = yes_text
+	_scale_action_button(yes)
 	box.add_child(yes)
-	var no := Button.new()
+	var no := SquishButton.new()
 	no.theme_type_variation = &"GhostButton"
 	no.text = no_text
+	_scale_action_button(no)
 	box.add_child(no)
 	yes.pressed.connect(
 		func() -> void:
+			AudioDirector.try_play(self, "ui_confirm")
 			card.queue_free()
 			on_yes.call()
 	)
 	no.pressed.connect(
 		func() -> void:
+			AudioDirector.try_play(self, "ui_back")
 			card.queue_free()
 			on_no.call()
 	)
@@ -533,6 +547,7 @@ func _navigate(route: StringName, params: Dictionary) -> void:
 
 
 func _on_back_pressed() -> void:
+	AudioDirector.try_play(self, "ui_back")
 	back_requested.emit()
 	if not auto_navigate:
 		return

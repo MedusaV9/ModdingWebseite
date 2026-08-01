@@ -34,6 +34,10 @@ func _ready() -> void:
 	# and_offsets: nur-Anker-Presets behalten den leeren Ist-Rect, wenn der
 	# Parent beim Einhängen schon Größe hat (Sheet öffnet zur Laufzeit).
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	# G3 P06 (F8): Eigenbau-Overlay (kein PanelSheet) → PanelStack-Policy
+	# selbst nachbauen: ui_open spielt der ÖFFNER (SocialScreen), ui_close
+	# spielt close(); Back-Geste/Escape schließt über PanelStack.close_top.
+	PanelStack.push(self)
 	var dim := ColorRect.new()
 	dim.color = Color(0.0, 0.0, 0.0, 0.35)
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -70,28 +74,29 @@ func _ready() -> void:
 	quick.add_theme_constant_override("separation", 6)
 	rows.add_child(quick)
 	for value in QUICK_AMOUNTS:
-		var btn := Button.new()
+		# G3 P06 (F8): SquishButton + ui_tick — Betrags-Mikro-Schritte.
+		var btn := SquishButton.new()
 		btn.theme_type_variation = &"GhostButton"
 		btn.text = str(value)
-		btn.pressed.connect(_set_amount.bind(value))
+		btn.pressed.connect(_on_amount_step.bind(value))
 		quick.add_child(btn)
 
 	var stepper := HBoxContainer.new()
 	stepper.alignment = BoxContainer.ALIGNMENT_CENTER
 	stepper.add_theme_constant_override("separation", 12)
 	rows.add_child(stepper)
-	var minus := Button.new()
+	var minus := SquishButton.new()
 	minus.theme_type_variation = &"GhostButton"
 	minus.text = "−"
-	minus.pressed.connect(func() -> void: _set_amount(amount - STEP))
+	minus.pressed.connect(func() -> void: _on_amount_step(amount - STEP))
 	stepper.add_child(minus)
 	_amount_label = Label.new()
 	_amount_label.theme_type_variation = &"TitleLabel"
 	stepper.add_child(_amount_label)
-	var plus := Button.new()
+	var plus := SquishButton.new()
 	plus.theme_type_variation = &"GhostButton"
 	plus.text = "+"
-	plus.pressed.connect(func() -> void: _set_amount(amount + STEP))
+	plus.pressed.connect(func() -> void: _on_amount_step(amount + STEP))
 	stepper.add_child(plus)
 
 	_remaining_label = Label.new()
@@ -99,7 +104,9 @@ func _ready() -> void:
 	_remaining_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	rows.add_child(_remaining_label)
 
-	_send_button = Button.new()
+	# Senden: Druck bleibt STUMM — der Ausgang klingt (Outcome schlägt Press,
+	# Audio-Grammatik §3; Netz-Ergebnis steht erst nach dem await fest).
+	_send_button = SquishButton.new()
 	_send_button.name = "SendButton"
 	_send_button.theme_type_variation = &"PrimaryButton"
 	_send_button.text = I18nService.t("social.pal.send")
@@ -113,6 +120,12 @@ func _ready() -> void:
 
 	_set_amount(amount)
 	_refresh_remaining()
+
+
+## Schnellwahl/Stepper: ui_tick als Mikro-Schritt-Klang (F8), dann setzen.
+func _on_amount_step(value: int) -> void:
+	AudioDirector.try_play(self, "ui_tick")
+	_set_amount(value)
 
 
 func _set_amount(value: int) -> void:
@@ -166,6 +179,9 @@ func _on_send_pressed() -> void:
 		return
 	_send_button.disabled = not _pal.is_online()
 	if res["ok"]:
+		# Sende-ERFOLG klingt + Erfolgs-Haptik (Belohnungsmoment, F8).
+		AudioDirector.try_play(self, "ui_confirm")
+		Haptics.success(self)
 		toast_requested.emit(
 			I18nService.t(
 				"social.pal.sent", {"amount": amount, "name": str(_friend.get("goobyName", "?"))}
@@ -174,10 +190,21 @@ func _on_send_pressed() -> void:
 		# Zieht Limit UND Verlauf frisch — der neue Eintrag erscheint sofort.
 		await _refresh_remaining()
 	else:
+		AudioDirector.try_play(self, "ui_error")
 		toast_requested.emit(I18nService.t(str(res["message_key"])))
+
+
+## Sheet schließen (Dim-Tap, Back-Geste via PanelStack.close_top): spielt
+## ui_close — Gegenstück zum ui_open des Öffners (Audio-Grammatik §3).
+func close() -> void:
+	AudioDirector.try_play(self, "ui_close")
+	PanelStack.remove(self)
+	closed.emit()
+	queue_free()
 
 
 func _on_dim_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed:
-		closed.emit()
-		queue_free()
+		# Backdrop-Policy: nur das OBERSTE Panel schließt per Dim-Tap.
+		if PanelStack.is_top(self):
+			close()

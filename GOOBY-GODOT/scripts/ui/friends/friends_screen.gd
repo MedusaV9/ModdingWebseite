@@ -205,6 +205,12 @@ func _apply_metrics() -> void:
 	ScreenShell.content_frame(_rows, m)
 	for ctl: Control in [_back, _copy_button, _add_button, _status_chip, _add_input]:
 		ScreenShell.touch_target(ctl, m)
+	# G3 P06: auch die dynamischen Annehmen/Ablehnen-Knöpfe der Anfrage-
+	# Zeilen auf den Touch-Floor heben (g1/ui-onboarding 2.9.3 — vorher
+	# deckte die Liste nur die festen Header-/Code-/Add-Knöpfe ab);
+	# _on_requests_changed ruft _apply_metrics nach jedem Neuaufbau.
+	for btn: Node in _requests_box.find_children("*", "Button", true, false):
+		ScreenShell.touch_target(btn, m)
 	ScreenShell.scale_fonts(self, m["f"])
 
 
