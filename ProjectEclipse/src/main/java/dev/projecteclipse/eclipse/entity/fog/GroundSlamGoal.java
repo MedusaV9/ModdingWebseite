@@ -4,9 +4,11 @@ import java.util.EnumSet;
 import java.util.List;
 
 import dev.projecteclipse.eclipse.EclipseMod;
+import dev.projecteclipse.eclipse.entity.boss.fog.FogTyrantEntity;
 import dev.projecteclipse.eclipse.network.S2CShakePayload;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
@@ -146,6 +148,11 @@ public class GroundSlamGoal extends Goal {
             }
             boolean core = distance <= INNER_RADIUS;
             if (!core && !victim.onGround()) {
+                if (victim instanceof ServerPlayer player) {
+                    // W4 A5 whiff reward: airborne past the core = the jump beat the
+                    // wave. Same private wind-pass as the Tyrant dodges (shared helper).
+                    FogTyrantEntity.sendWhiffReward(serverLevel, player, "ground_slam");
+                }
                 continue; // The wave hugs the ground — a well-timed jump clears it.
             }
             // Linear falloff: 100% inside the core, down to 25% at the rim.

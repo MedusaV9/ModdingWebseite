@@ -5,6 +5,9 @@ import javax.annotation.Nullable;
 import dev.projecteclipse.eclipse.entity.geo.EclipseGeoAnimations;
 import dev.projecteclipse.eclipse.entity.geo.EclipseGeoMonster;
 import net.minecraft.core.particles.ParticleTypes;
+import net.minecraft.network.syncher.EntityDataAccessor;
+import net.minecraft.network.syncher.EntityDataSerializers;
+import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundEvents;
@@ -78,6 +81,13 @@ public class StormHoundEntity extends EclipseGeoMonster {
     public static final int DEATH_ANIM_TICKS = 30;
     /** Client-side gallop hold — see {@link #updateSprintGate()}. */
     private static final int SPRINT_HOLD_TICKS = 8;
+    /**
+     * W4 A6 stagger tell: true exactly while {@code ChargedLungeGoal} sits in its
+     * {@code Phase.STAGGER} window (the 40 t whiffed-lunge punish opening) — synced so
+     * {@code StormHoundRenderer} can attach/detach the client-side stagger FX on it.
+     */
+    private static final EntityDataAccessor<Boolean> DATA_LUNGE_STAGGERED =
+            SynchedEntityData.defineId(StormHoundEntity.class, EntityDataSerializers.BOOLEAN);
 
     private boolean howled;
     private RawAnimation cachedSprintAnim;
@@ -95,6 +105,24 @@ public class StormHoundEntity extends EclipseGeoMonster {
                 .add(Attributes.ATTACK_DAMAGE, 4.0D)
                 .add(Attributes.MOVEMENT_SPEED, 0.34D)
                 .add(Attributes.FOLLOW_RANGE, 40.0D);
+    }
+
+    // --- synced state (W4 A6 stagger tell) ---
+
+    @Override
+    protected void defineSynchedData(SynchedEntityData.Builder builder) {
+        super.defineSynchedData(builder);
+        builder.define(DATA_LUNGE_STAGGERED, false);
+    }
+
+    /** Whether the hound is in its whiffed-lunge stagger window (both sides). */
+    public boolean isLungeStaggered() {
+        return this.entityData.get(DATA_LUNGE_STAGGERED);
+    }
+
+    /** Only {@link ChargedLungeGoal} drives this (hence package-private). */
+    void setLungeStaggered(boolean staggered) {
+        this.entityData.set(DATA_LUNGE_STAGGERED, staggered);
     }
 
     // --- GeckoLib (frozen base-class hooks) ---

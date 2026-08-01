@@ -208,6 +208,12 @@ public class FogTyrantEntity extends EclipseGeoMonster {
     private static final double LANCE_RANGE = 24.0D;
     private static final double LANCE_HALF_WIDTH = 1.2D;
     private static final float LANCE_DAMAGE = 7.0F;
+    /**
+     * W4 A5 whiff reward: a lance "near miss" is an unstruck participant within this
+     * many blocks of a fired line beyond {@link #LANCE_HALF_WIDTH} — close enough that
+     * the dodge was a real play, far enough that hiding across the arena earns nothing.
+     */
+    private static final double WHIFF_NEAR_MISS_MARGIN = 1.8D;
     // Hound howl (P1+).
     private static final int HOWL_INTERVAL_TICKS = 500;
     private static final int HOUND_PACK = 2;
@@ -954,9 +960,37 @@ public class FogTyrantEntity extends EclipseGeoMonster {
         }
         level.playSound(null, this.blockPosition(), SoundEvents.TRIDENT_RIPTIDE_3.value(),
                 SoundSource.HOSTILE, 1.4F, 0.6F);
+        // W4 A5 whiff reward: every participant the volley aimed through but never
+        // clipped — and who is still standing NEAR a fired line — dodged on purpose.
+        for (ServerPlayer player : candidates) {
+            if (!struck.contains(player.getUUID()) && nearAnyLockedLance(player)) {
+                sendWhiffReward(level, player, "lance_volley");
+            }
+        }
         EclipseMod.LOGGER.info("Fog Tyrant lance volley released: {} lance(s), {} hit(s)",
                 this.lockedLances.size(), hits);
         this.lockedLances.clear();
+    }
+
+    /**
+     * Whether {@code player} stands inside the near-miss corridor of any locked lance
+     * (same along/off-line math as the hit test, widened by
+     * {@value #WHIFF_NEAR_MISS_MARGIN} blocks past {@value #LANCE_HALF_WIDTH}).
+     */
+    private boolean nearAnyLockedLance(ServerPlayer player) {
+        for (Lance lance : this.lockedLances) {
+            Vec3 toChest = new Vec3(player.getX(), player.getY(0.5D), player.getZ())
+                    .subtract(lance.origin());
+            double along = toChest.dot(lance.direction());
+            if (along < 0.0D || along > lance.distance()) {
+                continue;
+            }
+            double offLine = toChest.subtract(lance.direction().scale(along)).length();
+            if (offLine <= LANCE_HALF_WIDTH + WHIFF_NEAR_MISS_MARGIN) {
+                return true;
+            }
+        }
+        return false;
     }
 
     // --- storm-step (short flank teleport wrapped in fog bursts) ---
@@ -1207,6 +1241,8 @@ public class FogTyrantEntity extends EclipseGeoMonster {
         for (ServerPlayer player : livingParticipants(level)) {
             if (!this.hasLineOfSight(player)) {
                 covered++;
+                // W4 A5 whiff reward: breaking LOS on the audio cue was the play.
+                sendWhiffReward(level, player, "blind_squall");
                 continue; // Behind cover — the squall howls past them.
             }
             if (player.hurt(this.damageSources().mobAttack(this), SQUALL_DAMAGE)) {
@@ -1243,6 +1279,26 @@ public class FogTyrantEntity extends EclipseGeoMonster {
                 SQUALL_FX_RANGE, S2CShakePayload.shake(0.5F, 12));
         EclipseMod.LOGGER.info("Fog Tyrant blind squall released: {} blinded, {} safe behind cover",
                 blinded, covered);
+    }
+
+    /**
+     * W4-FEEL A5 dodge reward (IDEA-02 #7): a private wind-pass — a whoosh only this
+     * player hears ({@code playNotifySound}) plus a small gust only they see (the
+     * targeted {@code sendParticles} overload) — confirming their sidestep/jump/cover
+     * beat a telegraphed boss ability. Personal on purpose: broadcasting would tell
+     * everyone ELSE the player dodged, and stack N copies on grouped fights. Shared
+     * by the Tyrant (lances/squall) and {@code GroundSlamGoal} (Colossus slam).
+     *
+     * <p>One DEBUG probe line per send (the FX-hygiene populations-probe pattern):
+     * acceptance counts sends via {@code rg -c "\[w4a-whiff\]" logs/debug.log}.</p>
+     */
+    public static void sendWhiffReward(ServerLevel level, ServerPlayer player, String ability) {
+        player.playNotifySound(SoundEvents.BREEZE_WHIRL, SoundSource.HOSTILE, 0.7F, 1.35F);
+        Vec3 chest = player.position().add(0.0D, player.getBbHeight() * 0.6D, 0.0D);
+        level.sendParticles(player, ParticleTypes.SMALL_GUST, false,
+                chest.x, chest.y, chest.z, 5, 0.4D, 0.3D, 0.4D, 0.02D);
+        EclipseMod.LOGGER.debug("[w4a-whiff] {} dodged {} — wind-pass sent",
+                player.getScoreboardName(), ability);
     }
 
     // --- enrage stacking (P2+: slow, capped, cooldowns tighten + speed creeps up) ---

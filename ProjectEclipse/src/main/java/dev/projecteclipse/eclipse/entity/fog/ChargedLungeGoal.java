@@ -109,6 +109,8 @@ public class ChargedLungeGoal extends Goal {
     public void stop() {
         this.phase = Phase.IDLE;
         this.readyAtTick = this.hound.tickCount + COOLDOWN_TICKS;
+        // W4 A6: never leave the synced tell latched (death/preemption mid-stagger).
+        this.hound.setLungeStaggered(false);
     }
 
     @Override
@@ -208,6 +210,9 @@ public class ChargedLungeGoal extends Goal {
     private void beginStagger(ServerLevel serverLevel) {
         this.phase = Phase.STAGGER;
         this.phaseTicks = STAGGER_TICKS;
+        // W4 A6 stagger tell: the synced flag opens the renderer's FX window; the
+        // wave4_stagger_arc asset's 40t timeline matches STAGGER_TICKS exactly.
+        this.hound.setLungeStaggered(true);
         this.hound.setDeltaMovement(Vec3.ZERO);
         serverLevel.playSound(null, this.hound.blockPosition(), SoundEvents.WOLF_WHINE,
                 SoundSource.HOSTILE, 0.9F, 0.8F);
@@ -229,6 +234,7 @@ public class ChargedLungeGoal extends Goal {
         }
         if (--this.phaseTicks <= 0) {
             this.phase = Phase.IDLE;
+            this.hound.setLungeStaggered(false); // W4 A6: close the tell window.
         }
     }
 

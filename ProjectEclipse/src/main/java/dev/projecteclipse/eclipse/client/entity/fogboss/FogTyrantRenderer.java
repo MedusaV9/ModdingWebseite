@@ -34,6 +34,11 @@ import software.bernie.geckolib.util.Color;
  * enrage stacks, and faint additive speed lines rise around the monarch — the P2+ cooldown
  * creep is now readable at a glance. Purely visual; both degrade under
  * {@link EclipseClientConfig#reducedFx()} and stand down for the death collapse.</p>
+ *
+ * <p>W4 A1/F-104 desperation flicker (IDEA-02 #9): in phase 3 — the &le;25% HP break —
+ * the whole emissive pass (crown, eye slit, storm-core) stutters out for 1–2 t at an
+ * irregular deterministic cadence while the core still burns: the monarch's power is
+ * failing with its body. See {@link EnrageGlowLayer#desperationBlackout}.</p>
  */
 @OnlyIn(Dist.CLIENT)
 public class FogTyrantRenderer extends EclipseGeoRenderer<FogTyrantEntity> {
@@ -56,6 +61,8 @@ public class FogTyrantRenderer extends EclipseGeoRenderer<FogTyrantEntity> {
     static final class EnrageGlowLayer extends AutoGlowingGeoLayer<FogTyrantEntity> {
         /** Sky-15/block-0, the same packed light the stock glowmask pass re-renders with. */
         private static final int EMISSIVE_PACKED_LIGHT = 0xF00000;
+        /** A1 flicker schedule: at most one 1–2 t dropout per window; ~3 in 8 stay quiet. */
+        private static final int FLICKER_WINDOW_TICKS = 8;
 
         EnrageGlowLayer(GeoRenderer<FogTyrantEntity> renderer) {
             super(renderer);
@@ -65,6 +72,9 @@ public class FogTyrantRenderer extends EclipseGeoRenderer<FogTyrantEntity> {
         public void render(PoseStack poseStack, FogTyrantEntity animatable, BakedGeoModel bakedModel,
                 RenderType renderType, MultiBufferSource bufferSource, VertexConsumer buffer,
                 float partialTick, int packedLight, int packedOverlay) {
+            if (desperationBlackout(animatable)) {
+                return; // W4 A1: this tick the WHOLE emissive drops — a power stutter.
+            }
             super.render(poseStack, animatable, bakedModel, renderType, bufferSource, buffer,
                     partialTick, packedLight, packedOverlay);
             int stacks = animatable.getEnrageStacks();
@@ -84,6 +94,46 @@ public class FogTyrantRenderer extends EclipseGeoRenderer<FogTyrantEntity> {
             getRenderer().reRender(bakedModel, poseStack, bufferSource, animatable, emissive,
                     bufferSource.getBuffer(emissive), partialTick, EMISSIVE_PACKED_LIGHT,
                     packedOverlay, colour);
+        }
+
+        /**
+         * W4 A1 desperation core-flicker: in phase 3 (the &le;25% HP break, synced via
+         * {@code DATA_PHASE}) with the storm-core still lit ({@code DATA_CORE_LIT}),
+         * the emissive pass drops for 1–2 t on a deterministic (entity id, gameTime
+         * window) hash schedule — the {@code GlitchedGeoRenderer} cadence law: pure
+         * function of synced state, zero per-frame bookkeeping, identical across
+         * camera cuts. ~5 in 8 windows stutter once, so the read is an irregular
+         * guttering (~1–2 drops/s), never a strobe; {@code reducedFx} stands the
+         * flicker down entirely (a darkening, but still a flicker — same rule as the
+         * enrage pulse flattening). The death collapse owns its own gutter
+         * ({@code setCoreLit(false)}), so {@code deathTime > 0} bails too.
+         */
+        private static boolean desperationBlackout(FogTyrantEntity tyrant) {
+            if (tyrant.getPhase() < 3 || !tyrant.isCoreLit() || tyrant.deathTime > 0
+                    || EclipseClientConfig.reducedFx()) {
+                return false;
+            }
+            long gameTime = tyrant.level().getGameTime();
+            long window = Math.floorDiv(gameTime, (long) FLICKER_WINDOW_TICKS);
+            long hash = scramble(tyrant.getId() * 0x9E3779B97F4A7C15L
+                    ^ window * 0xD6E8FEB86659FD93L);
+            if ((hash & 7L) < 3L) {
+                return false; // Quiet window — the stutter must stay irregular.
+            }
+            long length = 1L + ((hash >>> 32) & 1L);
+            long offset = (hash >>> 8) % (FLICKER_WINDOW_TICKS - length);
+            long phase = Math.floorMod(gameTime, (long) FLICKER_WINDOW_TICKS);
+            return phase >= offset && phase < offset + length;
+        }
+
+        /** SplitMix64-style avalanche (GlitchedGeoRenderer's scramble, local copy). */
+        private static long scramble(long x) {
+            x ^= x >>> 33;
+            x *= 0xFF51AFD7ED558CCDL;
+            x ^= x >>> 33;
+            x *= 0xC4CEB9FE1A85EC53L;
+            x ^= x >>> 33;
+            return x;
         }
     }
 

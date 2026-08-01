@@ -65,6 +65,15 @@ public abstract class GlitchedMonster extends EclipseGeoMonster {
     /** Scripted death window in ticks — matches the kind's held {@code death} anim. */
     protected abstract int deathAnimTicks();
 
+    /**
+     * Render-side view of {@link #deathAnimTicks()} (W4 A2 dissolve): the client
+     * renderer needs the kind's window length to time the last-10t alpha de-rez —
+     * the knob itself stays a protected kind-class detail.
+     */
+    public final int deathDissolveWindow() {
+        return deathAnimTicks();
+    }
+
     // --- GeckoLib (frozen base-class hooks) ---
 
     @Override
