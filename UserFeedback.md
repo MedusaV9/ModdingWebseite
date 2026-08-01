@@ -86,24 +86,47 @@ _(Runden W14 UND W15 sind FERTIG — Details unten in „Erledigt". Aktueller St
       jetzt in ALLEN Spielen den gemeinten Punkt statt im Creme-Rand zu kleben,
       **(k)** Test-Runner gehärtet (ein Tippfehler in einer Testdatei kann den
       Lauf nicht mehr dauerhaft aufhängen).
-- [~] **W17 / Welle G5 läuft:** die großen Brocken aus deiner Liste:
-      **DLC „Goo und Bye" Welle A** (Waren + Markttag + begehbarer Erstladen),
-      **DLC „McGooby" Welle A** (Rezepte + erste Schicht), **GvZ-PvP übers Netz**
-      (nach der GOB-NOM-Lockstep-Vorlage), **Trailer-Neuaufnahme** mit dem neuen
-      UI (Storyboard v4), dazu der Minispiel-Batch-B-Rest (goobySays, memoryMatch,
-      lanternFloat, miniGolf, pancakeTower, pipeFlow, ghostHunt, burgerBuild,
-      deliveryRush, shoppingSurf, toyRacer) und die UI-Wache für die neuen
-      G4-Flächen. Loop läuft weiter.
+- [x] **W17 / Welle G5 FERTIG (1. August):** 13 Pakete gelandet, voller Testlauf
+      grün (**3387 Tests / 0 rot**, String-Parität 25 962 Checks / 0). Die großen
+      Brocken aus deiner Liste sind jetzt SPIELBAR:
+      **(a) DLC „Goo und Bye" Welle A** — im DLC-Hub freigeschaltet (ab Level 12,
+      2500 Münzen, Kauf direkt im Angebots-Sheet): erster begehbarer Laden mit
+      komplettem Tag-Loop Nachschub → Regal einräumen → Laden öffnen →
+      Kundenstrom → Kassensturz; Onkel Alwin kommt jeden Tag um 9 und kauft
+      GENAU eine Möhre, die Kasse piept sein Gebrabbel,
+      **(b) DLC „McGooby" Welle A** — Probeschicht frei (kein Kauf-Gate, Welle B
+      bringt das): Grill-Station mit taktilem Patty-Wenden (rosa → goldbraun →
+      Kohle, „JETZT wenden!"), 10 Parodie-Rezepte (GoobyMac, Gurken-Deluxe mit
+      7 Gurken …), Kassensturz mit Trinkgeld-Combo,
+      **(c) GvZ-PvP übers Netz** — Gooby verteidigt, ein Freund schickt die
+      Zombie-Wellen (Lockstep wie GOB-NOM, Matsch-Budget, Überlebens-Timer);
+      das Server-Modul kommt in G6, bis dahin zeigt das Panel freundlich
+      „Offline",
+      **(d) Trailer 5.1 neu aufgenommen** — 62 s im neuen Look, alle 34 Clips
+      frisch (Möhren-Ladebalken-Opening, Kühlschrank 2.0, Marktstand-Kamera,
+      GvZ mit sichtbaren Zombies, Outro „38 Minispiele"),
+      **(e) 11 Minispiele poliert** (goobySays, memoryMatch, lanternFloat,
+      miniGolf, pancakeTower, pipeFlow, ghostHunt inkl. Datei-Entflechtung,
+      burgerBuild, deliveryRush, shoppingSurf, toyRacer — Intro-Beats, lesbare
+      Banner, Motor-/Fluss-Momente, Reduced-Motion sauber),
+      **(f) Kino-Untertitel/Skip in der Safe-Area + Freunde-App im Telefon**
+      (echtes Telefon-Layout mit Code-Teilen, Anfragen, Online-Punkten),
+      **(g) UI-Wache ausgedehnt auf 34 Screens × 4 Formate** — die Alt-Screens
+      bleiben bei 0 Befunden; die neue Abdeckung hat einen dicken Alt-Fisch
+      gefangen: das Home-HUD bleibt im Baumodus sichtbar und liegt über dem
+      Bau-Dock (97 Befunde, EIN Wurzel-Problem) → wird in G6 gefixt.
 
-- [~] **DLC-Umsetzung „Goo und Bye" + „McGooby"** — Design-Docs komplett; Welle A
-      beider Fundamente ist Teil von G5 (s. o.)
+- [x] **DLC-Umsetzung „Goo und Bye" + „McGooby"** — Welle A beider Fundamente ist
+      mit G5 gelandet und spielbar (s. o.); Welle B (Großmarkt-Fahrt, Preis-Schieber,
+      weitere Stationen, Kauf-Gate McGooby) ist der nächste Ausbau-Schritt
 - [x] **Minispiel-Qualität, Gruppe 3** — die notierten Kandidaten (starHopper-Bühne,
       trampoline-Gym, carrotGuard-HUD, hideSeek-Wiese, cityDrive-Feedback,
       Ranch-Arena-Überstrahlung) sind seit Welle G2/G3 alle umgesetzt; der Rest-
       Batch läuft in G5
-- [~] **GvZ-PvP übers Netz** — in G5 in Arbeit (GOB-NOM-Lockstep als Vorlage)
-- [~] **Trailer-Refresh** — Neuaufnahme läuft in G5 (das UI-Rework ist durch,
-      Storyboard v4 + Aufnahme-Treiber lagen seit G3 bereit)
+- [x] **GvZ-PvP übers Netz** — Client komplett (Lockstep, Panel, End-Overlay);
+      nur das kleine Server-Modul (gvzmp.js nach gobnom-Muster) folgt in G6
+- [x] **Trailer-Refresh** — `trailer/GOOBY-5.1-Godot-Trailer.mp4` (62 s, 1080p60),
+      alle 34 Clips mit dem neuen UI neu aufgenommen, 12 Abnahme-Stills gesichtet
 - [-] **Dynamic Island / Live Activities + iOS-Homescreen-Widget** — braucht native
       Extensions in einer SIGNIERTEN App (Sideload-.ipa kann das nicht registrieren).
       Ehrlich zurückgestellt; Godot-Andockpunkte existieren.
@@ -144,20 +167,20 @@ _(gerade nichts offen — alle bisherigen Punkte stehen unten unter „Erledigt"
 
 ## 2. In Arbeit
 
-Runde W17 (1./2. August) — Wellen G1–G4 sind FERTIG (Details oben + unten in
-„Erledigt"), der Agent arbeitet gerade an **Welle G5**:
+Runde W17 (1./2. August) — Wellen G1–G5 sind FERTIG (Details oben + unten in
+„Erledigt"), der Agent startet gerade **Welle G6**:
 
-- [~] **DLC „Goo und Bye", Welle A** — Waren-Katalog, deterministischer Markttag,
-      DLC-Hub-Kachel wird begehbar (erster Laden mit Regal, Kasse, Kunde)
-- [~] **DLC „McGooby", Welle A** — Rezept-/Stationen-Fundament + erste Mini-Schicht
-- [~] **GvZ-PvP übers Netz** (GOB-NOM-Lockstep-Vorlage) + GvZ-HUD-Entflechtung
-- [~] **Trailer-Neuaufnahme** mit dem W16/W17-Look (Storyboard v4, 104 Beats)
-- [~] **Minispiel-Batch-B-Rest** — goobySays+memoryMatch, lanternFloat+miniGolf,
-      pancakeTower+pipeFlow, ghostHunt (mit Datei-Entflechtung), burgerBuild+
-      deliveryRush, shoppingSurf+toyRacer
-- [~] **UI-Wache auf die G4-Flächen ausdehnen** (Baumodus-Dock, Telefon, Radio,
-      Ranch-MP, Level-Auswahlen, Onboarding) + Kino-Untertitel/Skip-Fläche und
-      Freunde-App im Telefon-Layout
+- [~] **Baumodus-HUD-Fix** — der dickste Audit-Fang aus G5: das Home-HUD bleibt
+      im Baumodus sichtbar und liegt über Kamera-Chips/Werkzeug-Dock/Lager
+      (97 Befunde, EIN Wurzel-Problem) → HUD blendet beim Bauen aus
+- [~] **GvZ-PvP-Server** — das fehlende Server-Modul (gvzmp.js nach dem
+      gobnom-Muster), damit die Netz-Duelle wirklich laufen
+- [~] **DLC Welle B** — Goo und Bye: Großmarkt-Fahrt + Preis-Schieber;
+      McGooby: Stationen 2–4 (Belegen/Fritteuse/Shake) + Kauf-Gate
+- [~] **Audit-Restbefunde** — die übrigen 17 Befunde der neuen UI-Wache
+      (Telefon-Apps, Level-Selects, Onboarding-Feinschliff)
+- [~] **Weitere Polituren** aus den G5-Berichten (McGooby-Grillbühne beleben,
+      Alwin als fester NPC mit Dialog, gobnom/gvz-Restpunkte)
 
 ---
 
@@ -168,7 +191,7 @@ Runde W17 (1./2. August) — Wellen G1–G4 sind FERTIG (Details oben + unten in
 | **Testen** | GitHub → Actions → Lauf „GOOBY Godot" → Artefakt `GOOBY-godot-unsigned-ipa` herunterladen, mit AltStore/Sideloadly installieren. Anleitung: `docs/godot-rewrite/IOS-BUILD.md` |
 | **Spielstand von früher** | Einstellungen → Spielstand → „Alten Spielstand übertragen"; Anleitung: `docs/godot-rewrite/SAVE-TRANSFER.md` |
 | **Was noch offen ist** | `docs/godot-rewrite/EVAL-VOLLSTAENDIGKEIT.md` (ehrliche Feature-Matrix) |
-| **Trailer** | `trailer/GOOBY-5.0-Godot-Update-Trailer.mp4` |
+| **Trailer** | `trailer/GOOBY-5.1-Godot-Trailer.mp4` (neu, W17-Look) — Vorgänger 5.0 bleibt daneben liegen |
 
 ---
 
