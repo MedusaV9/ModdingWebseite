@@ -62,7 +62,8 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * flight path, no camera), {@code sequence <id> <phase>} ({@link SequenceReplayable}
  * FX-only replays), {@code storm add|remove|bolt|flashhold|perfprobe} (the last two are
  * client-visual dev overrides: B6 flash HOLD + the V6 frametime probe),
- * {@code rift <x y z> <width> / rift close},
+ * {@code limbo streakhold on|off} (F-104: client-visual shooting-streak HOLD for the
+ * limbo sky pass — the flashhold pattern), {@code rift <x y z> <width> / rift close},
  * {@code supplybeam test} (toggle), {@code sun debug} (HUD cross), {@code viewdist <n|reset>},
  * {@code caption <style> <key> [ticks]}. Client-only actions travel via
  * {@link FxDevPayloads}.</p>
@@ -203,6 +204,12 @@ public final class FxDevCommands {
                                 .then(Commands.argument("seconds", IntegerArgumentType.integer(2, 120))
                                         .executes(ctx -> stormPerfProbe(ctx,
                                                 IntegerArgumentType.getInteger(ctx, "seconds"))))))
+                .then(Commands.literal("limbo")
+                        .then(Commands.literal("streakhold")
+                                .then(Commands.literal("on")
+                                        .executes(ctx -> limboStreakHold(ctx, true)))
+                                .then(Commands.literal("off")
+                                        .executes(ctx -> limboStreakHold(ctx, false)))))
                 .then(Commands.literal("rift")
                         .then(Commands.literal("close").executes(FxDevCommands::riftClose))
                         .then(Commands.argument("pos", Vec3Argument.vec3())
@@ -416,6 +423,27 @@ public final class FxDevCommands {
     }
 
     /**
+     * F-104: {@code limbo streakhold on|off} — flips the CLIENT-side shooting-streak
+     * HOLD ({@code LimboSpecialEffects.setStreakHold}) on the executing player, via the
+     * same dev lane as {@code storm flashhold}: the streak is client-visual sky-pass
+     * geometry, so no server state changes and other players' clients are untouched.
+     * The streak schedule rides the SECOND-based sky clock ({@code tick rate 2} does
+     * not stretch it), which is why software-rendered acceptance needs the hold.
+     */
+    private static int limboStreakHold(CommandContext<CommandSourceStack> ctx, boolean on)
+            throws CommandSyntaxException {
+        ServerPlayer player = ctx.getSource().getPlayerOrException();
+        FxDevPayloads.sendAction(player, FxDevPayloads.ACTION_LIMBO_STREAKHOLD,
+                on ? "on" : "off", Vec3.ZERO, 0.0F);
+        reply(ctx, on
+                ? "limbo streakhold ON → your client: one green streak held mid-flight"
+                        + " — '/eclipsefx limbo streakhold off' restores the live schedule"
+                : "limbo streakhold OFF → your client (deterministic schedule resumes,"
+                        + " streak gone)");
+        return 1;
+    }
+
+    /**
      * POLISH4 / STORM-MASS V6: {@code storm perfprobe [seconds]} — starts the
      * client-side frametime probe ({@code FrameTimeProbe}) on the executing player;
      * the report (min/avg/p95/max + tier context) lands in their chat and client log.
@@ -533,6 +561,8 @@ public final class FxDevCommands {
                 doc("fx.storm.flashhold", "/eclipsefx storm flashhold", "dev.eclipse.doc.fx.storm.flashhold",
                         Danger.SAFE, ClickAction.SUGGEST),
                 doc("fx.storm.perfprobe", "/eclipsefx storm perfprobe", "dev.eclipse.doc.fx.storm.perfprobe",
+                        Danger.SAFE, ClickAction.SUGGEST),
+                doc("fx.limbo.streakhold", "/eclipsefx limbo streakhold", "dev.eclipse.doc.fx.limbo.streakhold",
                         Danger.SAFE, ClickAction.SUGGEST),
                 doc("fx.rift", "/eclipsefx rift", "dev.eclipse.doc.fx.rift", Danger.SAFE, ClickAction.SUGGEST),
                 doc("fx.supplybeam", "/eclipsefx supplybeam test", "dev.eclipse.doc.fx.supplybeam",

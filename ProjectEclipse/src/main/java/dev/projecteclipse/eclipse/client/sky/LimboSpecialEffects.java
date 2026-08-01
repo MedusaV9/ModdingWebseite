@@ -91,6 +91,17 @@ import net.neoforged.api.distmarker.OnlyIn;
  * framing it at altitude. Garnish tier (skipped under {@code reducedFx}, the wisp
  * ladder); pure function of the hourly clock, so every client sees the same sky.</p>
  *
+ * <p>v5 (F-104, IDEA-18 §9): <b>green shooting stars</b> ({@link #drawShootingStreaks})
+ * — a rare single green streak across the dome every 1–3 minutes, on the deterministic
+ * {@code ECLIPSE_SEED} slot-hash law (own salts). Drawn in the stars' no-fog window
+ * OUTSIDE the zenith rotation push (it streaks the dome, not the disc frame), purely
+ * geometric — zero new post uniforms ({@code limbo.fsh} stays frozen), zero per-frame
+ * allocations (§3.5). Garnish tier ({@code reducedFx} skips). The dev hold
+ * {@code /eclipsefx limbo streakhold} ({@link #setStreakHold}) freezes one streak at a
+ * fixed dome spot on a fixed envelope: the schedule rides the SECOND-based sky clock
+ * that {@code tick rate} tweaks cannot stretch, so software-rendered rigs need the hold
+ * to photograph a 0.9&nbsp;s event.</p>
+ *
  * <p><b>LIMBOFIX2 (the "giant purple thing still moves with every rotation" fix)</b>: the
  * disc/aura direction is now a COMPILE-TIME CONSTANT — azimuth {@code +X} (dead ahead of
  * the ship, the buoy-lane heading), elevation {@value #ECLIPSE_ELEVATION_DEG}° above the
@@ -240,6 +251,43 @@ public class LimboSpecialEffects extends DimensionSpecialEffects {
     private static final float DRIFT_CUE_SPEED = 0.22F;
 
     /**
+     * F-104 (IDEA-18 §9) shooting streaks: deterministic slot schedule on the hourly
+     * second clock — each {@value #STREAK_SLOT_SECONDS}-second slot hosts one streak
+     * (~50%, {@code ECLIPSE_SEED} hash with own salts → one streak every ~1.6 min on
+     * average), with slot-hashed start offset, azimuth, start elevation and sweep side.
+     * A streak lives {@value #STREAK_DURATION_SECONDS} s and sweeps ~35° of dome arc
+     * (azimuth sweep + elevation drop — a falling star sinks), alpha 0 → 0.5 → 0.
+     */
+    private static final float STREAK_SLOT_SECONDS = 47.0F;
+    private static final float STREAK_DURATION_SECONDS = 0.9F;
+    private static final float STREAK_PEAK_ALPHA = 0.5F;
+    /** Start elevation band (radians): ~35°–65° above the horizon. */
+    private static final float STREAK_EL_MIN = 0.61F;
+    private static final float STREAK_EL_RANGE = 0.52F;
+    /** Azimuth sweep (~29°) and elevation drop (~18°) over one streak life. */
+    private static final float STREAK_AZ_SWEEP = 0.50F;
+    private static final float STREAK_EL_DROP = 0.31F;
+    /** The tail lags the head by this fraction of the full path. */
+    private static final float STREAK_TAIL_FRAC = 0.38F;
+    /** Head half-width in celestial-plane units (~0.5° at {@value #SKY_DISTANCE}). */
+    private static final float STREAK_HEAD_HALF_WIDTH = 0.9F;
+    private static final float STREAK_TAIL_WIDTH_FRAC = 0.15F;
+
+    /**
+     * C7 dev-hold pose: a fixed dome spot (azimuth ~17° starboard of the bow heading
+     * {@code +X}, elevation ~55° — look up the buoy lane from the deck) with the
+     * envelope frozen mid-flight ({@code t01 = 0.55}, near peak alpha). Compile-time
+     * constants: while the hold is on, every frame draws the IDENTICAL streak, so
+     * seconds-per-frame rigs (llvmpipe) can photograph it at leisure.
+     */
+    private static final float STREAK_HOLD_AZIMUTH = 0.3F;
+    private static final float STREAK_HOLD_ELEVATION = 0.96F;
+    private static final float STREAK_HOLD_T01 = 0.55F;
+
+    /** C7: flipped only by {@code /eclipsefx limbo streakhold} (via {@code FxDevClient}). */
+    private static volatile boolean streakHold;
+
+    /**
      * LIMBOFIX2/F-088: the FIXED world-space unit direction the eclipse hangs at —
      * azimuth {@value #ECLIPSE_AZIMUTH_DEG}° to port ({@code −Z}) of the {@code +X}
      * buoy-lane heading (F-088; LIMBOFIX2 had it dead ahead of the bow), elevation
@@ -381,6 +429,16 @@ public class LimboSpecialEffects extends DimensionSpecialEffects {
         RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
         RenderSystem.disableCull();
         LimboHorizonShips.draw(poseStack.last().pose(), level, camera);
+        // F-104 (IDEA-18 §9): the shooting streak shares the ships' no-fog window and
+        // shader, but draws OUTSIDE the zenith rotation push below — it streaks the
+        // dome, not the disc frame. Additive like a light trail; blend restored before
+        // the window closes.
+        float seconds = (System.currentTimeMillis() % 3_600_000L) / 1000.0F;
+        RenderSystem.blendFuncSeparate(
+                GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE,
+                GlStateManager.SourceFactor.ONE, GlStateManager.DestFactor.ZERO);
+        drawShootingStreaks(poseStack.last().pose(), seconds);
+        RenderSystem.defaultBlendFunc();
         RenderSystem.enableCull();
 
         // --- eclipse disc + aura: a FIXED celestial direction (LIMBOFIX2) -------------------
@@ -396,9 +454,9 @@ public class LimboSpecialEffects extends DimensionSpecialEffects {
         poseStack.mulPose(CELESTIAL_ROT);
         Matrix4f zenithPose = poseStack.last().pose();
 
-        float seconds = (System.currentTimeMillis() % 3_600_000L) / 1000.0F;
         // Subtle dual-frequency aura pulse — primary 1.3 rad/s matches the post shader's
         // sea-breathing curve exactly (limbo.fsh), so the two can never desync.
+        // (seconds is captured once above, before the streak draw — same hourly clock.)
         float pulse = 0.85F + 0.11F * Mth.sin(seconds * 1.3F)
                 + 0.04F * Mth.sin(seconds * 0.37F + 1.7F);
         // v4 breathing corona: the glow fan swells ±5% on a slow independent cycle and
@@ -636,6 +694,137 @@ public class LimboSpecialEffects extends DimensionSpecialEffects {
                         dirZ * r2 + perpZ * (bow2 - w2))
                 .setColor(0.45F, 0.15F, 0.85F, 0.0F);
         BufferUploader.drawWithShader(builder.buildOrThrow());
+    }
+
+    /**
+     * F-104 (IDEA-18 §9) — the green shooting streak. Live path: deterministic slot
+     * schedule over the hourly second clock ({@link LimboHorizonShips#hash01}, own
+     * salts — every client sees the same streak at the same wall-clock second); at most
+     * one streak is ever on screen. Dev path ({@code streakHold}): one streak frozen at
+     * the fixed {@link #STREAK_HOLD_AZIMUTH}/{@link #STREAK_HOLD_ELEVATION} spot with
+     * the envelope pinned at {@value #STREAK_HOLD_T01} — bit-identical geometry every
+     * frame until {@code off} restores the live schedule with no residue. The live
+     * schedule is garnish tier ({@code reducedFx} skips — the wisp ladder); the hold is
+     * an explicit operator override and draws regardless, like a forced pipeline.
+     * Pure scalar math — no per-frame allocations (§3.5).
+     */
+    private static void drawShootingStreaks(Matrix4f pose, float seconds) {
+        if (streakHold) {
+            emitStreak(pose, STREAK_HOLD_AZIMUTH, STREAK_HOLD_ELEVATION, STREAK_AZ_SWEEP,
+                    STREAK_HOLD_T01);
+            return;
+        }
+        if (EclipseClientConfig.reducedFx()) {
+            return;
+        }
+        int slot = (int) (seconds / STREAK_SLOT_SECONDS);
+        if (LimboHorizonShips.hash01(slot * 37 + 3, 1553) >= 0.5D) {
+            return;
+        }
+        float start = (float) (LimboHorizonShips.hash01(slot * 37 + 4, 1553)
+                * (STREAK_SLOT_SECONDS - STREAK_DURATION_SECONDS - 1.0F));
+        float t01 = (seconds - slot * STREAK_SLOT_SECONDS - start) / STREAK_DURATION_SECONDS;
+        if (t01 <= 0.0F || t01 >= 1.0F) {
+            return;
+        }
+        float azimuth = (float) (LimboHorizonShips.hash01(slot * 37 + 5, 1553) * Math.PI * 2.0D);
+        float elevation = STREAK_EL_MIN
+                + (float) LimboHorizonShips.hash01(slot * 37 + 6, 1553) * STREAK_EL_RANGE;
+        float sweep = (LimboHorizonShips.hash01(slot * 37 + 7, 1553) < 0.5D ? -1.0F : 1.0F)
+                * STREAK_AZ_SWEEP;
+        emitStreak(pose, azimuth, elevation, sweep, t01);
+    }
+
+    /**
+     * One tapered additive quad from tail to head, both riding the dome sphere: the
+     * path runs from {@code (az0, el0)} to {@code (az0+azSweep, el0−STREAK_EL_DROP)},
+     * points are chord-lerped and renormalized to {@value #SKY_DISTANCE} (over ≤35° of
+     * arc the chord shortening is invisible). The head is the bright leading edge
+     * (alpha {@value #STREAK_PEAK_ALPHA}·sin-envelope, near-white green); the tail is
+     * fully transparent star-green, so the wedge reads as a fading trail. Width sits
+     * perpendicular to both the path and the view ray ({@code cross(path, radial)}).
+     */
+    private static void emitStreak(Matrix4f pose, float az0, float el0, float azSweep, float t01) {
+        float az1 = az0 + azSweep;
+        float el1 = el0 - STREAK_EL_DROP;
+        float x0 = Mth.cos(el0) * Mth.cos(az0);
+        float y0 = Mth.sin(el0);
+        float z0 = Mth.cos(el0) * Mth.sin(az0);
+        float x1 = Mth.cos(el1) * Mth.cos(az1);
+        float y1 = Mth.sin(el1);
+        float z1 = Mth.cos(el1) * Mth.sin(az1);
+
+        float tTail = Math.max(0.0F, t01 - STREAK_TAIL_FRAC);
+        float hx = Mth.lerp(t01, x0, x1);
+        float hy = Mth.lerp(t01, y0, y1);
+        float hz = Mth.lerp(t01, z0, z1);
+        float hInv = SKY_DISTANCE / (float) Math.sqrt(hx * hx + hy * hy + hz * hz);
+        hx *= hInv;
+        hy *= hInv;
+        hz *= hInv;
+        float tx = Mth.lerp(tTail, x0, x1);
+        float ty = Mth.lerp(tTail, y0, y1);
+        float tz = Mth.lerp(tTail, z0, z1);
+        float tInv = SKY_DISTANCE / (float) Math.sqrt(tx * tx + ty * ty + tz * tz);
+        tx *= tInv;
+        ty *= tInv;
+        tz *= tInv;
+
+        float px = hx - tx;
+        float py = hy - ty;
+        float pz = hz - tz;
+        float pLen = (float) Math.sqrt(px * px + py * py + pz * pz);
+        if (pLen < 1.0E-3F) {
+            return; // degenerate first instants — nothing worth a draw yet
+        }
+        px /= pLen;
+        py /= pLen;
+        pz /= pLen;
+        // Width axis: perpendicular to the path AND the view ray (radial ≈ head/|head|).
+        float rx = hx / SKY_DISTANCE;
+        float ry = hy / SKY_DISTANCE;
+        float rz = hz / SKY_DISTANCE;
+        float wx = py * rz - pz * ry;
+        float wy = pz * rx - px * rz;
+        float wz = px * ry - py * rx;
+        float wLen = (float) Math.sqrt(wx * wx + wy * wy + wz * wz);
+        if (wLen < 1.0E-4F) {
+            return;
+        }
+        wx /= wLen;
+        wy /= wLen;
+        wz /= wLen;
+
+        float alpha = STREAK_PEAK_ALPHA * Mth.sin(t01 * (float) Math.PI);
+        float headW = STREAK_HEAD_HALF_WIDTH;
+        float tailW = headW * STREAK_TAIL_WIDTH_FRAC;
+
+        BufferBuilder builder = Tesselator.getInstance().begin(
+                VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR);
+        // Tail edge: transparent star-green; head edge: bright near-white green.
+        builder.addVertex(pose, tx - wx * tailW, ty - wy * tailW, tz - wz * tailW)
+                .setColor(0.35F, 0.9F, 0.45F, 0.0F);
+        builder.addVertex(pose, tx + wx * tailW, ty + wy * tailW, tz + wz * tailW)
+                .setColor(0.35F, 0.9F, 0.45F, 0.0F);
+        builder.addVertex(pose, hx + wx * headW, hy + wy * headW, hz + wz * headW)
+                .setColor(0.72F, 1.0F, 0.82F, alpha);
+        builder.addVertex(pose, hx - wx * headW, hy - wy * headW, hz - wz * headW)
+                .setColor(0.72F, 1.0F, 0.82F, alpha);
+        BufferUploader.drawWithShader(builder.buildOrThrow());
+    }
+
+    /**
+     * C7 ({@code /eclipsefx limbo streakhold}, via {@code FxDevClient}): while on, the
+     * sky pass draws ONE shooting streak frozen mid-flight at a fixed dome spot instead
+     * of the live schedule. The schedule rides the SECOND-based hourly clock —
+     * {@code tick rate 2} stretches game ticks, not wall seconds, so a 0.9&nbsp;s streak
+     * stays unphotographable on software renderers without this hold. {@code off}
+     * restores the shipped path bit-identically (no residue: the hold branch is the
+     * only consumer of the flag). Logout clears it (the {@code FxDevClient} hygiene
+     * pattern).
+     */
+    public static void setStreakHold(boolean on) {
+        streakHold = on;
     }
 
     /**

@@ -71,6 +71,7 @@ public final class FxDevClient {
             case FxDevPayloads.ACTION_PHOTON_TEST -> photonTest(payload.arg(), payload.pos());
             case FxDevPayloads.ACTION_STORM_FLASHHOLD -> stormFlashHold("on".equals(payload.arg()), payload.value());
             case FxDevPayloads.ACTION_STORM_PERFPROBE -> FrameTimeProbe.start(payload.value());
+            case FxDevPayloads.ACTION_LIMBO_STREAKHOLD -> limboStreakHold("on".equals(payload.arg()));
             default -> EclipseMod.LOGGER.warn("FxDevClient: unknown dev action {}", payload.action());
         }
     }
@@ -238,6 +239,26 @@ public final class FxDevClient {
                 on ? ChatFormatting.GREEN : ChatFormatting.YELLOW);
     }
 
+    // --- limbo streak hold (F-104) ---
+
+    /**
+     * {@code /eclipsefx limbo streakhold} — flips the client-visual F-104 shooting-streak
+     * HOLD ({@code LimboSpecialEffects.setStreakHold}); the limbo sky pass then draws one
+     * green streak frozen mid-flight at a fixed dome spot every frame. The streak
+     * schedule rides the SECOND-based sky clock, which {@code tick rate 2} does NOT
+     * stretch — the hold is the only way to photograph the 0.9&nbsp;s event on a
+     * software-rendered rig. OFF is the bit-identical shipped schedule (no residue).
+     */
+    private static void limboStreakHold(boolean on) {
+        dev.projecteclipse.eclipse.client.sky.LimboSpecialEffects.setStreakHold(on);
+        feedback(on
+                ? "limbo streakhold ON — one green streak held mid-flight at a fixed dome spot"
+                        + " (look ~17\u00b0 starboard of the bow heading, ~55\u00b0 up);"
+                        + " the sky clock is second-based, so tick rate tweaks cannot stretch it"
+                : "limbo streakhold OFF — deterministic streak schedule restored (no residue)",
+                on ? ChatFormatting.GREEN : ChatFormatting.YELLOW);
+    }
+
     // --- sun debug HUD ---
 
     private static void toggleSunDebug() {
@@ -288,6 +309,8 @@ public final class FxDevClient {
     static void onLoggingOut(ClientPlayerNetworkEvent.LoggingOut event) {
         sunDebugHud = false;
         UNIFORM_OVERRIDES.clear();
+        // F-104 dev-session hygiene: no streak hold survives a disconnect.
+        dev.projecteclipse.eclipse.client.sky.LimboSpecialEffects.setStreakHold(false);
         // VeilPostController clears its own overrides on logout.
     }
 

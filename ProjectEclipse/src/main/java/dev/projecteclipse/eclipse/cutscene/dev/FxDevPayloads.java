@@ -49,6 +49,8 @@ public final class FxDevPayloads {
     public static final int ACTION_STORM_FLASHHOLD = 9;
     /** POLISH4/V6: frametime probe — {@code value} = sample window in seconds. */
     public static final int ACTION_STORM_PERFPROBE = 10;
+    /** F-104: limbo shooting-streak hold — {@code arg} = "on"/"off". */
+    public static final int ACTION_LIMBO_STREAKHOLD = 11;
 
     private FxDevPayloads() {}
 

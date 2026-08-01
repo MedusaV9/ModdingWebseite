@@ -1,0 +1,8 @@
+{
+  "en_us": {
+    "dev.eclipse.doc.fx.limbo.streakhold": "Hold one green limbo shooting streak mid-flight at a fixed dome spot on YOUR client (the streak schedule rides the second-based sky clock, which tick-rate tweaks cannot stretch); off restores the live deterministic schedule with no residue."
+  },
+  "de_de": {
+    "dev.eclipse.doc.fx.limbo.streakhold": "Hält eine grüne Limbo-Sternschnuppe auf DEINEM Client mitten im Flug an einem festen Himmelspunkt (der Streak-Fahrplan läuft auf der sekundenbasierten Himmelsuhr, die Tick-Rate-Tricks nicht strecken); off stellt den deterministischen Live-Fahrplan restlos wieder her."
+  }
+}

@@ -7,6 +7,7 @@ import com.mojang.blaze3d.vertex.VertexConsumer;
 
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.client.entity.geo.EclipseGeoRenderer;
+import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
 import dev.projecteclipse.eclipse.entity.DeckhandEntity;
 import dev.projecteclipse.eclipse.entity.EclipseEntities;
 import dev.projecteclipse.eclipse.entity.geo.EclipseGeoAnimations;
@@ -227,7 +228,15 @@ public class DeckhandRenderer extends EclipseGeoRenderer<DeckhandEntity> {
         return Math.floorMod(entity.getUUID().hashCode(), FACE_VARIANTS);
     }
 
-    /** Client-only splash burst at the water surface under the blade tip, once per stroke. */
+    /**
+     * Client-only splash burst at the water surface under the blade tip, once per stroke.
+     * F-104 (IDEA-18 §5): each catch additionally sheds a ghost wake — a few luminous
+     * {@code SOUL}/{@code GLOW} flecks at the surface sliding sternward (world {@code -X};
+     * bow is {@code +X}, the {@code GhostShipBuilder} v2 silhouette), spread over the
+     * next ~1.5 blocks so the eight synchronized blades paint eight short drift lines.
+     * Rides the existing call-site guards (tilt drops the sync mark, a hostile rower
+     * never rows), zero new assets; {@code reducedFx} halves the fleck count.
+     */
     private void spawnCatchSplash(DeckhandEntity entity, long gameTime, float partialTick) {
         float phase = (gameTime % DeckhandEntity.ROW_SYNC_PERIOD_TICKS) + partialTick;
         long cycle = gameTime / DeckhandEntity.ROW_SYNC_PERIOD_TICKS;
@@ -253,9 +262,36 @@ public class DeckhandRenderer extends EclipseGeoRenderer<DeckhandEntity> {
                             z + (entity.getRandom().nextDouble() - 0.5D) * 0.4D,
                             0.0D, 0.06D, 0.0D);
                 }
+                spawnGhostWake(entity, x, surfaceY, z);
                 return;
             }
             probe.move(0, -1, 0);
+        }
+    }
+
+    /**
+     * F-104 (IDEA-18 §5) — the ghost wake: 4–6 luminous flecks peeling off the catch
+     * point and drifting sternward. Mostly {@code SOUL} — its provider honors the passed
+     * velocity ({@code RisingParticle}: {@code xd = xd·0.01 + xSpeed}), so the flecks
+     * visibly slide {@code -X} — plus one stationary {@code GLOW} glint per catch
+     * (its {@code GlowSquidProvider} IGNORES nonzero x/z speeds and would scatter
+     * randomly, so it gets zero velocity and merely twinkles where the blade bit).
+     */
+    private static void spawnGhostWake(DeckhandEntity entity, double x, double surfaceY, double z) {
+        boolean reduced = EclipseClientConfig.reducedFx();
+        int flecks = reduced ? 2 : 4 + entity.getRandom().nextInt(3);
+        for (int p = 0; p < flecks; p++) {
+            // Spread astern over ~1.5 blocks so the line reads as a drift trail, not a puff.
+            double drift = entity.getRandom().nextDouble() * 1.5D;
+            double jitter = (entity.getRandom().nextDouble() - 0.5D) * 0.3D;
+            if (p == 0 && !reduced) {
+                entity.level().addParticle(ParticleTypes.GLOW,
+                        x - drift * 0.3D, surfaceY + 0.05D, z + jitter, 0.0D, 0.0D, 0.0D);
+                continue;
+            }
+            entity.level().addParticle(ParticleTypes.SOUL,
+                    x - drift, surfaceY + 0.05D, z + jitter,
+                    -0.05D, 0.0D, 0.0D);
         }
     }
 

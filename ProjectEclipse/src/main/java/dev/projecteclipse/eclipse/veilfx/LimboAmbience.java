@@ -1,7 +1,9 @@
 package dev.projecteclipse.eclipse.veilfx;
 
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.List;
 
 import javax.annotation.Nullable;
 
@@ -21,10 +23,14 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.resources.sounds.AbstractTickableSoundInstance;
 import net.minecraft.client.resources.sounds.SoundInstance;
+import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.CampfireBlock;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.api.distmarker.Dist;
@@ -106,6 +112,15 @@ import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
  * {@code ECLIPSE_SEED}-hashed slot law as the storm glow (distinct salts, so the two
  * schedules cannot correlate). Zero vector when idle or under {@code reducedFx}.</p>
  *
+ * <p><b>v5 (F-104, IDEA-18 §4/§6/§7/§8/§10)</b>: the inhabited ghost sea — a sixth
+ * rolling window ({@code eclipse:limbo_moths}, spawns biased onto cached soul-light
+ * positions instead of the camera ring), the fixed-position {@link SpireEmbers} handler
+ * (≤1 looping {@code eclipse:limbo_embers} emitter per frozen seascape spire, ≤160 blocks
+ * camera distance, garnish tier), and the {@link LimboRowChant} ticker (row dirge on the
+ * 60&nbsp;t row clock, rigging creaks on the recovery beat, drowned bell tolls from below
+ * the sea — all with tilt/hostile-crew guards). Everything rides the existing
+ * budget/ladder and the window-clear seam.</p>
+ *
  * <p><b>Sound</b>: one looping {@code ambient.limbo_loop} instance
  * ({@link SoundSource#AMBIENT}, peak volume {@code 0.6}) that fades in over
  * {@value LimboLoopSound#FADE_TICKS} ticks after entering limbo and fades out (then stops)
@@ -129,6 +144,12 @@ public final class LimboAmbience {
             ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "limbo_fogbank");
     private static final ResourceLocation LIMBO_MOTES_NEAR =
             ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "limbo_motes_near");
+    /** F-104 (IDEA-18 §6): tiny pale moths orbiting the soul lights. */
+    private static final ResourceLocation LIMBO_MOTHS =
+            ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "limbo_moths");
+    /** F-104 (IDEA-18 §8): soul-ember columns above the seascape spires. */
+    private static final ResourceLocation LIMBO_EMBERS =
+            ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "limbo_embers");
 
     /** Limbo grade fade-in length after entering the dimension (~2 s, kept from v1). */
     private static final long POST_FADE_MILLIS = 2000L;
@@ -173,6 +194,14 @@ public final class LimboAmbience {
         private final double swayAmplitude;
         /** v4: garnish window — skipped and cleared entirely under {@code reducedFx}. */
         private final boolean skipUnderReducedFx;
+        /**
+         * F-104 (IDEA-18 §6): bias spawns onto actual soul lights — instead of the
+         * camera-ring {@link #pickSpawnPos}, spawn 0.5 blocks off a cached
+         * soul-lantern/lit-soul-campfire position (see {@link #soulLightPositions});
+         * the camera ring stays the fallback over open water (the buoy lanterns line
+         * the lane anyway).
+         */
+        private final boolean biasToSoulLights;
 
         /** v4: live handle + its spawn anchor + a small per-emitter roll-phase offset. */
         private record Live(ParticleEmitter emitter, Vec3 base, float phase) {}
@@ -182,7 +211,7 @@ public final class LimboAmbience {
 
         Window(ResourceLocation emitterId, int maxLive, int minIntervalTicks, int maxIntervalTicks,
                 double minDistance, double maxDistance, double yBiasMin, double yBiasRange,
-                double swayAmplitude, boolean skipUnderReducedFx) {
+                double swayAmplitude, boolean skipUnderReducedFx, boolean biasToSoulLights) {
             this.emitterId = emitterId;
             this.maxLive = maxLive;
             this.minIntervalTicks = minIntervalTicks;
@@ -193,6 +222,7 @@ public final class LimboAmbience {
             this.yBiasRange = yBiasRange;
             this.swayAmplitude = swayAmplitude;
             this.skipUnderReducedFx = skipUnderReducedFx;
+            this.biasToSoulLights = biasToSoulLights;
         }
 
         void tick(Minecraft minecraft, ClientLevel level) {
@@ -212,7 +242,9 @@ public final class LimboAmbience {
             // reducedFx halves ambient density by doubling the cadence (BorderFxRenderer pattern).
             countdown = EclipseClientConfig.reducedFx() ? interval * 2 : interval;
 
-            Vec3 pos = pickSpawnPos(minecraft, level, random);
+            Vec3 pos = biasToSoulLights
+                    ? pickSoulLightPos(minecraft, level, random)
+                    : pickSpawnPos(minecraft, level, random);
             ParticleEmitter emitter = QuasarSpawner.spawnManaged(
                     emitterId, pos, FxBudget.Channel.AMBIENT);
             if (emitter == null) {
@@ -271,6 +303,24 @@ public final class LimboAmbience {
             return new Vec3(x, y, z);
         }
 
+        /**
+         * F-104 (IDEA-18 §6): a spot 0.5 blocks off one of the cached soul-light
+         * positions near the camera (ship fight lanterns, stern great-lantern cluster,
+         * buoy lane) — the moths gather where the lights are. Falls back to the camera
+         * ring when no light is cached (open water far from the lane).
+         */
+        private Vec3 pickSoulLightPos(Minecraft minecraft, ClientLevel level, RandomSource random) {
+            List<BlockPos> lights = soulLightPositions(minecraft, level);
+            if (lights.isEmpty()) {
+                return pickSpawnPos(minecraft, level, random);
+            }
+            BlockPos pick = lights.get(random.nextInt(lights.size()));
+            return new Vec3(
+                    pick.getX() + 0.5D + (random.nextDouble() - 0.5D),
+                    pick.getY() + 0.5D + random.nextDouble() * 0.5D,
+                    pick.getZ() + 0.5D + (random.nextDouble() - 0.5D));
+        }
+
         /** Drops handles Veil already removed (e.g. the particle manager cleared on level swap). */
         private void prune() {
             Iterator<Live> it = live.iterator();
@@ -301,13 +351,13 @@ public final class LimboAmbience {
 
     /** Small wisp clouds just above the water (v1 window; density now lives in the JSON). */
     private static final Window MOTES = new Window(
-            S2CQuasarPayload.LIMBO_MOTES, 4, 40, 60, 12.0D, 20.0D, 1.0D, 3.0D, 0.0D, false);
+            S2CQuasarPayload.LIMBO_MOTES, 4, 40, 60, 12.0D, 20.0D, 1.0D, 3.0D, 0.0D, false, false);
     /**
      * Tall soft god-ray shafts hanging higher up, drifting through the mid-air band.
      * v4: sways ±0.9 blocks on the shared roll phase — the shafts lean with the ship.
      */
     private static final Window GODRAYS = new Window(
-            LIMBO_GODRAY, 3, 90, 130, 10.0D, 24.0D, 8.0D, 7.0D, 0.9D, false);
+            LIMBO_GODRAY, 3, 90, 130, 10.0D, 24.0D, 8.0D, 7.0D, 0.9D, false, false);
     /**
      * Dim violet fog sheets hugging the water surface (alpha-blended, so keep them few).
      * F-088 polish: spawn window pushed out 8 → 14 blocks — the emitter's billboards
@@ -315,13 +365,13 @@ public final class LimboAmbience {
      * directly in front of the camera.
      */
     private static final Window FOG = new Window(
-            LIMBO_FOG, 2, 110, 160, 14.0D, 22.0D, 0.4D, 1.2D, 0.0D, false);
+            LIMBO_FOG, 2, 110, 160, 14.0D, 22.0D, 0.4D, 1.2D, 0.0D, false, false);
     /**
      * IDEA-18 §3: big slow middle-distance fog banks rolling +X past the ship (the
      * buoy-lane heading) — the emitter's raised wind sells that the sea moves.
      */
     private static final Window FOGBANKS = new Window(
-            LIMBO_FOGBANK, 2, 140, 200, 35.0D, 70.0D, 0.5D, 2.0D, 0.0D, false);
+            LIMBO_FOGBANK, 2, 140, 200, 35.0D, 70.0D, 0.5D, 2.0D, 0.0D, false, false);
     /**
      * v4 depth-layered dust, bokeh foreground: 1–2 LARGE very faint wisps 3–7 blocks out
      * (big + dim + soft sprite = out-of-focus read; the retuned {@code limbo_motes} JSON is
@@ -330,8 +380,155 @@ public final class LimboAmbience {
      * {@code reducedFx} instead of merely halving.
      */
     private static final Window NEAR_MOTES = new Window(
-            LIMBO_MOTES_NEAR, 2, 70, 100, 3.0D, 7.0D, 0.8D, 2.5D, 0.0D, true);
-    private static final Window[] WINDOWS = {MOTES, GODRAYS, FOG, FOGBANKS, NEAR_MOTES};
+            LIMBO_MOTES_NEAR, 2, 70, 100, 3.0D, 7.0D, 0.8D, 2.5D, 0.0D, true, false);
+    /**
+     * F-104 (IDEA-18 §6): pale spirit-moths orbiting the soul lights — spawns are biased
+     * onto cached soul-lantern/lit-soul-campfire positions ({@code biasToSoulLights});
+     * the ring parameters only serve the open-water fallback. Standard ambient tier:
+     * {@code reducedFx} doubles the cadence like the other windows.
+     */
+    private static final Window MOTHS = new Window(
+            LIMBO_MOTHS, 3, 60, 90, 4.0D, 18.0D, 1.5D, 2.5D, 0.0D, false, true);
+    private static final Window[] WINDOWS = {MOTES, GODRAYS, FOG, FOGBANKS, NEAR_MOTES, MOTHS};
+
+    // ------------------------------------------------------------------ soul-light cache (F-104)
+
+    /** Soul-light scan: cube half-extent around the camera (IDEA-18 §6's 16-block cube). */
+    private static final int SOUL_LIGHT_SCAN_RADIUS = 16;
+    /** Cache refresh: rescan at most every this many ticks (scans run at window cadence). */
+    private static final int SOUL_LIGHT_RESCAN_TICKS = 100;
+    /** Rescan early once the camera strays this far from the scanned center (blocks). */
+    private static final double SOUL_LIGHT_RESCAN_DIST = 8.0D;
+    /** Plenty for the ship cluster + the nearest buoys; keeps the scan early-outable. */
+    private static final int SOUL_LIGHT_CACHE_CAP = 12;
+
+    /** Cached soul-light positions near the camera (immutable {@link BlockPos} copies). */
+    private static final List<BlockPos> SOUL_LIGHT_CACHE = new ArrayList<>();
+    private static long soulLightScanGameTime = Long.MIN_VALUE;
+    private static Vec3 soulLightScanCenter = Vec3.ZERO;
+
+    /**
+     * The soul lights near the camera — soul lanterns plus LIT soul campfires (the ship's
+     * four fight lanterns, the stern great-lantern cluster, the buoy lane). NEVER scanned
+     * per tick: this runs only when a moth spawn fires (window cadence, every ~3–4 s) and
+     * even then reuses the cache for {@value #SOUL_LIGHT_RESCAN_TICKS} ticks unless the
+     * camera moved more than {@value #SOUL_LIGHT_RESCAN_DIST} blocks. The cache clears
+     * with the windows on dimension change, so no stale positions survive a leave.
+     */
+    private static List<BlockPos> soulLightPositions(Minecraft minecraft, ClientLevel level) {
+        long gameTime = level.getGameTime();
+        Vec3 camera = minecraft.gameRenderer.getMainCamera().getPosition();
+        if (soulLightScanGameTime != Long.MIN_VALUE
+                && gameTime - soulLightScanGameTime < SOUL_LIGHT_RESCAN_TICKS
+                && gameTime >= soulLightScanGameTime
+                && camera.distanceToSqr(soulLightScanCenter)
+                        < SOUL_LIGHT_RESCAN_DIST * SOUL_LIGHT_RESCAN_DIST) {
+            return SOUL_LIGHT_CACHE;
+        }
+        soulLightScanGameTime = gameTime;
+        soulLightScanCenter = camera;
+        SOUL_LIGHT_CACHE.clear();
+        BlockPos center = BlockPos.containing(camera.x, camera.y, camera.z);
+        for (BlockPos pos : BlockPos.betweenClosed(
+                center.offset(-SOUL_LIGHT_SCAN_RADIUS, -SOUL_LIGHT_SCAN_RADIUS, -SOUL_LIGHT_SCAN_RADIUS),
+                center.offset(SOUL_LIGHT_SCAN_RADIUS, SOUL_LIGHT_SCAN_RADIUS, SOUL_LIGHT_SCAN_RADIUS))) {
+            BlockState state = level.getBlockState(pos);
+            if (state.is(Blocks.SOUL_LANTERN)
+                    || (state.is(Blocks.SOUL_CAMPFIRE) && state.getValue(CampfireBlock.LIT))) {
+                SOUL_LIGHT_CACHE.add(pos.immutable());
+                if (SOUL_LIGHT_CACHE.size() >= SOUL_LIGHT_CACHE_CAP) {
+                    break;
+                }
+            }
+        }
+        return SOUL_LIGHT_CACHE;
+    }
+
+    // ------------------------------------------------------------------ spire embers (F-104)
+
+    /**
+     * F-104 (IDEA-18 §8) — soul-ember columns above the three frozen seascape spires.
+     * A fixed-position variant of the window pattern: at most ONE live looping
+     * {@code eclipse:limbo_embers} emitter per spire, spawned only while the camera is
+     * within {@value #ACTIVATION_DISTANCE} blocks of that spire's constant coords and
+     * removed the moment it strays farther (or the dimension is left — {@link #clear}
+     * rides the {@code clearWindows()} seam). The crest Y derives from the client
+     * waterline seam ({@code LimboSpecialEffects.clientWaterlineY}) + the frozen spire
+     * heights, so no server traffic is needed. Garnish tier: skipped AND cleared under
+     * {@code reducedFx} (the near-motes ladder — landmark accents drop first).
+     */
+    private static final class SpireEmbers {
+        /**
+         * The three {@code LimboSeascape.build} spire calls, frozen: {x, z, height}
+         * (soul fire burns at {@code waterline + height + 1}).
+         */
+        private static final int[][] SPIRES = {{205, 40, 13}, {-95, -215, 16}, {-230, -35, 10}};
+        private static final double ACTIVATION_DISTANCE = 160.0D;
+        /** Distance re-check cadence (ticks) — no per-tick math for three constants. */
+        private static final int CHECK_INTERVAL_TICKS = 20;
+
+        private final ParticleEmitter[] live = new ParticleEmitter[SPIRES.length];
+        private int countdown;
+
+        void tick(Minecraft minecraft, ClientLevel level) {
+            if (EclipseClientConfig.reducedFx()) {
+                clear();
+                return;
+            }
+            if (--countdown > 0) {
+                return;
+            }
+            countdown = CHECK_INTERVAL_TICKS;
+            Vec3 camera = minecraft.gameRenderer.getMainCamera().getPosition();
+            double waterline = LimboSpecialEffects.clientWaterlineY(level);
+            for (int i = 0; i < SPIRES.length; i++) {
+                ParticleEmitter emitter = live[i];
+                if (emitter != null) {
+                    try {
+                        if (emitter.isRemoved()) {
+                            live[i] = null;
+                            emitter = null;
+                        }
+                    } catch (Throwable t) {
+                        live[i] = null;
+                        emitter = null;
+                    }
+                }
+                double dx = SPIRES[i][0] + 0.5D - camera.x;
+                double dz = SPIRES[i][1] + 0.5D - camera.z;
+                boolean near = dx * dx + dz * dz
+                        < ACTIVATION_DISTANCE * ACTIVATION_DISTANCE;
+                if (!near) {
+                    if (emitter != null) {
+                        removeEmitter(emitter);
+                        live[i] = null;
+                    }
+                    continue;
+                }
+                if (emitter == null) {
+                    // Emitter center just above the crest soul fire (top+1) — the column
+                    // rises from the flame, marking the landmark from the ship.
+                    Vec3 pos = new Vec3(SPIRES[i][0] + 0.5D,
+                            waterline + SPIRES[i][2] + 1.5D, SPIRES[i][1] + 0.5D);
+                    live[i] = QuasarSpawner.spawnManaged(
+                            LIMBO_EMBERS, pos, FxBudget.Channel.AMBIENT);
+                }
+            }
+        }
+
+        /** Removes every live emitter — the leave-limbo/disconnect/reducedFx reset. */
+        void clear() {
+            for (int i = 0; i < live.length; i++) {
+                if (live[i] != null) {
+                    removeEmitter(live[i]);
+                    live[i] = null;
+                }
+            }
+            countdown = 0;
+        }
+    }
+
+    private static final SpireEmbers SPIRE_EMBERS = new SpireEmbers();
 
     /** The playing loop instance, or {@code null} while none is live. */
     @Nullable
@@ -400,6 +597,10 @@ public final class LimboAmbience {
         for (Window window : WINDOWS) {
             window.tick(minecraft, level);
         }
+        // F-104: fixed-position spire ember columns (IDEA-18 §8).
+        SPIRE_EMBERS.tick(minecraft, level);
+        // F-104: row dirge + rigging creaks + drowned bells (IDEA-18 §4/§10/§7).
+        LimboRowChant.tick(minecraft, level);
     }
 
     /** Disconnect reset hook (mirrors {@code QuasarSpawner.DisconnectReset}). */
@@ -638,6 +839,12 @@ public final class LimboAmbience {
         for (Window window : WINDOWS) {
             window.clear();
         }
+        // F-104: the spire emitters, the soul-light cache and the chant/bell state share
+        // the window-clear seam — leaving limbo (or disconnecting) drops everything.
+        SPIRE_EMBERS.clear();
+        SOUL_LIGHT_CACHE.clear();
+        soulLightScanGameTime = Long.MIN_VALUE;
+        LimboRowChant.reset();
     }
 
     /** Starts/fades the ambient loop to match {@code inLimbo}. */
