@@ -14,10 +14,26 @@ extends MinigameBase
 ## am Hahn Angeschlossene ist blass blau getintet (sichtbarer Fortschritt).
 ## Eingabe bleibt zahlengleich (Canvas-Rechtecke), 2D bleibt nur der
 ## Leck-Countdown-Ring. MECHANIK komplett in PipeFlowLogic.
+##
+## W17/G5-Politur (NUR Präsentation): Intro-Beat 1,5 s mit Puzzle-Totale
+## (die Sim wartet, M1), _ui-Skalierung des HUD samt Konturen auf Zeit-/
+## Rätsel-Label (M9/M7), Hint-Fade (Q3), „Verbunden!“ als Banner-Plate statt
+## rohem float_text (M7), Reduced-Motion-Gates an den eigenen Stage-Burst-
+## Call-Sites (Q2) und Fluss-Start-Moment: läuft das Wasser los, pulst eine
+## Kette durch die verbundenen Rohre (RM: statischer Fortschritts-Tint
+## bleibt) und ein Gluck-Foley (care_spuelung) untermalt die Füllwelle.
 
 const WATER := Color("4FD8F7")
 
 const Stage := preload("res://scripts/minigames/games/pipe_flow/pipe_flow_stage3d.gd")
+
+## W17 M9: Entwurfs-Kurzkante — HUD-Pixelmaße skalieren damit (G4-Muster).
+const DESIGN_SHORT := 390.0
+## W17 M1: Intro-Beat (s) — Puzzle-Totale vom Beet hoch, die Sim wartet.
+const INTRO_S := 1.5
+## Q3: der Hinweis blendet nach ~6 s Spielzeit über 1,5 s aus (G2-Muster).
+const HINT_FADE_AT := 6.0
+const HINT_FADE_SEC := 1.5
 
 var tune: Dictionary = {}
 var board: Dictionary = {}
@@ -50,6 +66,14 @@ var _grid_origin := Vector2.ZERO
 var _cell := 60.0
 var _pulse := 0.0
 var _stage: Node3D
+## W17 M9: HUD-Skalenfaktor (Kurzkante/390, geklemmt 0.75..3.0).
+var _ui := 1.0
+## W17 M1: Rest-Sekunden des Intro-Beats (0 = Spielbetrieb).
+var _intro_left := 0.0
+## Banner-Plate (M7): trägt Intro-Ziel und die „Verbunden!“-Meldung.
+var _banner_text := ""
+var _banner_t := 0.0
+var _banner_plate := StyleBoxFlat.new()
 
 
 func setup(context: MinigameCtx) -> void:
@@ -64,6 +88,12 @@ func setup(context: MinigameCtx) -> void:
 	_build_hud()
 	_next_puzzle()
 	_fit_viewport()
+	_banner_plate.set_corner_radius_all(12)
+	# W17 M1: Intro-Beat — die Kamera steigt vom Blumenbeet zur frontalen
+	# Puzzle-Totale; Rundenuhr, Leck-Uhr und Eingabe warten, der Lauf bleibt
+	# danach zahlengleich (Crosscheck-Vertrag unberührt).
+	_intro_left = INTRO_S
+	_set_banner(I18nService.t("mg.pipeFlow.intro"), INTRO_S + 0.7)
 	if is_inside_tree():
 		get_viewport().size_changed.connect(_fit_viewport)
 
@@ -74,10 +104,12 @@ func end() -> void:
 
 
 ## Pflicht-Layouthook: beide Orientierungen laufen über DIESE Funktion.
+## W17 M9: der _ui-Faktor (Kurzkante/390, 0.75..3.0) skaliert alle HUD-Maße.
 func apply_view(size: Vector2) -> void:
 	if size.x > 1.0 and size.y > 1.0:
 		view_size = size
 	landscape = view_size.x > view_size.y
+	_ui = clampf(minf(view_size.x, view_size.y) / DESIGN_SHORT, 0.75, 3.0)
 	position = Vector2.ZERO
 	var grid := int(PipeFlowLogic.PIPE["GRID"])
 	var top := 104.0 if not landscape else 60.0
@@ -110,14 +142,28 @@ func _layout_stage() -> void:
 
 ## HUD IMMER aus dem Viewport-Rect stellen: unter canvas_items-Stretch sind
 ## Canvas-Einheiten ≠ Fensterpixel, apply_view-Größen können abweichen.
+## W17 M9: alle Pixelmaße skalieren mit _ui; die Hinweis-Breite hängt an
+## vp.x statt an fixen 360 px (Tablet-Krümelschrift des Audits).
 func _layout_hud() -> void:
 	if _time_label == null:
 		return
 	var vp := get_viewport_rect().size
-	_time_label.position = Vector2(16.0, 10.0)
-	_puzzle_label.position = Vector2(16.0, 48.0)
-	_hint_label.position = Vector2(vp.x * 0.5 - 180.0, vp.y - 42.0)
-	_hint_label.size = Vector2(360.0, 34.0)
+	_time_label.position = Vector2(16.0, 10.0) * _ui
+	_time_label.add_theme_font_size_override("font_size", int(34.0 * _ui))
+	_puzzle_label.position = Vector2(16.0, 48.0) * _ui
+	_puzzle_label.add_theme_font_size_override("font_size", int(15.0 * _ui))
+	var hint_w := minf(vp.x - 32.0 * _ui, 360.0 * _ui)
+	var font_size := int(20.0 * _ui)
+	_hint_label.add_theme_font_size_override("font_size", font_size)
+	var font := _hint_label.get_theme_font("font")
+	var text_size := font.get_multiline_string_size(
+		_hint_label.text, HORIZONTAL_ALIGNMENT_CENTER, hint_w, font_size
+	)
+	var box := Vector2(hint_w, text_size.y + 6.0 * _ui)
+	_hint_label.position = Vector2((vp.x - box.x) * 0.5, vp.y - box.y - 8.0 * _ui)
+	_hint_label.size = box
+	for label: Label in [_time_label, _puzzle_label, _hint_label]:
+		label.add_theme_constant_override("outline_size", int(6.0 * _ui))
 
 
 func _build_hud() -> void:
@@ -131,11 +177,15 @@ func _build_hud() -> void:
 	_hint_label.theme_type_variation = &"SoftLabel"
 	_hint_label.text = I18nService.t("mg.pipeFlow.hint")
 	_hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	# Vor der grünen Wiese lesbar: heller Text mit dunkler Kontur.
-	_hint_label.add_theme_color_override("font_color", Color(1.0, 1.0, 0.97))
-	_hint_label.add_theme_color_override("font_outline_color", Color(0.16, 0.3, 0.24, 0.85))
-	_hint_label.add_theme_constant_override("outline_size", 6)
+	_hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	add_child(_hint_label)
+	# Vor Himmel UND Wiese lesbar: heller Text mit dunkler Kontur — jetzt
+	# auf ALLEN drei Labels (Zeit/Rätsel hatten vorher keine Overrides und
+	# soffen als Theme-Standard vor dem hellen Himmel ab, M7).
+	for label: Label in [_time_label, _puzzle_label, _hint_label]:
+		label.add_theme_color_override("font_color", Color(1.0, 1.0, 0.97))
+		label.add_theme_color_override("font_outline_color", Color(0.16, 0.3, 0.24, 0.85))
+		label.add_theme_constant_override("outline_size", 6)
 	_update_labels()
 
 
@@ -162,9 +212,19 @@ func _next_puzzle() -> void:
 func _process(delta: float) -> void:
 	if not is_active() or finished:
 		return
+	_banner_t = maxf(0.0, _banner_t - delta)
+	_pulse += delta
+	# W17 M1: Intro-Beat — die Kamera steigt vom Beet zur Puzzle-Totale, das
+	# Ziel steht als Banner; Runden-/Leck-Uhr warten, der Lauf bleibt
+	# zahlengleich. Reduced Motion überspringt die Fahrt (Call-Site-Gate)
+	# und hält nur den Banner-Beat.
+	if _intro_left > 0.0:
+		_intro_left = maxf(0.0, _intro_left - delta)
+		_stage.establish(1.0 if _reduced_motion() else 1.0 - _intro_left / INTRO_S)
+		_sync_and_labels(delta)
+		return
 	elapsed += delta
 	puzzle_elapsed += delta
-	_pulse += delta
 	if filling:
 		_fill_tick(delta)
 	elif leak_index >= 0 and PipeFlowLogic.leak_penalty_due(puzzle_elapsed, leak_applied, tune):
@@ -175,6 +235,11 @@ func _process(delta: float) -> void:
 	if PipeFlowLogic.endless_should_end(failures, tune):
 		_finish()
 		return
+	_sync_and_labels(delta)
+
+
+## Bühne + HUD eines Frames stellen (läuft im Intro UND im Spielbetrieb).
+func _sync_and_labels(delta: float) -> void:
 	var tiles: Array = board["tiles"]
 	var watered: Array[bool] = []
 	for i in tiles.size():
@@ -208,7 +273,8 @@ func _apply_leak() -> void:
 	leak_applied = true
 	failures += 1
 	solve_streak = 0
-	_stage.leak_fx(leak_index)
+	# Q2: Reduced-Motion-Gate an der eigenen Stage-Burst-Call-Site.
+	_stage.leak_fx(leak_index, _reduced_motion())
 	AudioDirector.try_play(self, "mg_spill")
 	if ctx.juice != null:
 		ctx.juice.shake(0.3)
@@ -222,7 +288,7 @@ func _apply_leak() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if not is_active() or finished or filling:
+	if not is_active() or finished or filling or _intro_left > 0.0:
 		return
 	var pressed := event is InputEventScreenTouch and (event as InputEventScreenTouch).pressed
 	if not pressed:
@@ -255,14 +321,23 @@ func _solve(result: Dictionary) -> void:
 	fill_depth = 0
 	fill_left = 0.0
 	var grid := int(board["size"])
-	_stage.solve_fx((grid - 1) * grid + int(board["goalCol"]))
+	var reduced := _reduced_motion()
+	# Q2: Reduced-Motion-Gate an der eigenen Stage-Burst-Call-Site.
+	_stage.solve_fx((grid - 1) * grid + int(board["goalCol"]), reduced)
+	# Fluss-Start-Moment: eine Puls-Kette läuft in Anschluss-Reihenfolge
+	# durch die gelegte Leitung (RM: der statische Fortschritts-Tint bleibt)
+	# und ein Gluck-Foley untermalt die loslaufende Füllwelle.
+	if not reduced:
+		_stage.flow_fx(depths)
+	AudioDirector.try_play(self, "care_spuelung")
 	# Lösungs-Serie ohne Leck: Sieges-Ton klettert pro Puzzle.
 	AudioDirector.try_play(self, "mg_win", FeelSfx.combo_pitch(solve_streak))
+	# M7: „Verbunden!“ als Banner-Plate statt rohem float_text — die Meldung
+	# ist eine SCREEN-Meldung, die Ring-/Funken-Feier bleibt am Auslauf.
+	_set_banner(I18nService.t("mg.pipeFlow.solved"), 1.4)
 	if ctx.juice != null:
-		var banner_pos := Vector2(view_size.x * 0.5 - 110.0, _grid_origin.y - 6.0)
 		ctx.juice.bloom_pulse(0.9)
 		ctx.juice.hit_freeze(70)
-		ctx.juice.float_text(banner_pos, I18nService.t("mg.pipeFlow.solved"), AcTokens.TEAL_DARK)
 		var size := int(board["size"])
 		var goal_center := _cell_center((size - 1) * size + int(board["goalCol"]))
 		ctx.juice.ring_burst(self, goal_center, AcTokens.TEAL_DARK, 90.0)
@@ -304,6 +379,28 @@ func _update_labels() -> void:
 			I18nService.t("mg.pipeFlow.taps", {"n": total_taps}),
 		]
 	)
+	_hint_label.modulate.a = _hint_alpha()
+
+
+## Q3: der Hinweis steht die ersten Sekunden und blendet dann aus — die
+## Gärtnerei gehört danach ganz dem Brett.
+func _hint_alpha() -> float:
+	return clampf(1.0 - (elapsed - HINT_FADE_AT) / HINT_FADE_SEC, 0.0, 1.0)
+
+
+func _set_banner(text: String, sec := 1.4) -> void:
+	_banner_text = text
+	_banner_t = sec
+
+
+## Reduced-Motion-Abfrage (Duck-Typing wie im JuiceKit — ohne Autoload = aus).
+func _reduced_motion() -> bool:
+	if not is_inside_tree():
+		return true
+	var settings := get_node_or_null(^"/root/AppSettings")
+	if settings != null and settings.has_method("is_reduced_motion"):
+		return settings.is_reduced_motion()
+	return false
 
 
 func _cell_at(screen: Vector2) -> int:
@@ -330,10 +427,41 @@ func _tile_watered(index: int) -> bool:
 
 
 # Kein 2D-Brett mehr: Panel, Rohre, Hahn, Sprenger, Beet und Gooby rendert
-# die 3D-Bühne (PipeFlowStage3D); 2D bleibt nur der Leck-Countdown-Ring.
+# die 3D-Bühne (PipeFlowStage3D); 2D bleiben Leck-Countdown-Ring + Banner.
 func _draw() -> void:
 	if leak_index >= 0 and not leak_applied and not filling:
 		_draw_leak()
+	_draw_banner()
+
+
+## Banner mittig mit Milchglas-Plate und Kontur (M7, bubble_pop-Muster);
+## lange Übersetzungen brechen um. Trägt Intro-Ziel UND „Verbunden!“.
+func _draw_banner() -> void:
+	if _banner_t <= 0.0 or _banner_text.is_empty():
+		return
+	var vp := get_viewport_rect().size
+	var font := ThemeService.font(800)
+	var alpha := clampf(_banner_t * 1.4, 0.0, 1.0)
+	var font_size := int(26.0 * _ui)
+	var w := minf(vp.x * 0.92, 460.0 * _ui)
+	var text_size := font.get_multiline_string_size(
+		_banner_text, HORIZONTAL_ALIGNMENT_CENTER, w, font_size
+	)
+	var top := vp.y * 0.22
+	var pad := Vector2(18.0 * _ui, 10.0 * _ui)
+	_banner_plate.set_corner_radius_all(int(12.0 * _ui))
+	_banner_plate.bg_color = Color(1.0, 0.99, 0.94, 0.74 * alpha)
+	var plate_pos := Vector2((vp.x - text_size.x) * 0.5, top) - pad
+	draw_style_box(_banner_plate, Rect2(plate_pos, text_size + pad * 2.0))
+	var ink := Color(0.32, 0.24, 0.28, alpha)
+	var rim := Color(1.0, 1.0, 1.0, 0.75 * alpha)
+	var at := Vector2((vp.x - w) * 0.5, top + font.get_ascent(font_size))
+	draw_multiline_string_outline(
+		font, at, _banner_text, HORIZONTAL_ALIGNMENT_CENTER, w, font_size, -1, int(5.0 * _ui), rim
+	)
+	draw_multiline_string(
+		font, at, _banner_text, HORIZONTAL_ALIGNMENT_CENTER, w, font_size, -1, ink
+	)
 
 
 ## Oberkante des Blumenbeets am unteren Bildrand.

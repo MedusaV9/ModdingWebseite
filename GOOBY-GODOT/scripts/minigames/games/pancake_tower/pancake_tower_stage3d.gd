@@ -414,6 +414,17 @@ func frame(vp: Vector2) -> void:
 	stage.set_half_height(_visible_units() * 0.5, CAM_DIST)
 
 
+## W17 M1: Intro-Pfannen-Totale — die Kamera schwebt erhöht und zurückgesetzt
+## überm Frühstückstresen (Teller, Requisiten und Wimpel im Bild) und senkt
+## sich in die frontale Spielpose; k=1 == exakte frame()/sync()-Rahmung
+## (Intro läuft VOR der ersten Lage, cam_bottom ist dann 0), kein Ruck.
+## NACH sync() aufrufen — sync() stellt die Kamerahöhe jeden Frame neu.
+func establish(k: float) -> void:
+	var e := 1.0 - ease(clampf(k, 0.0, 1.0), 0.4)
+	stage.camera.position = (Vector3(0.0, _cam_center(0.0), CAM_DIST) + Vector3(0.5, 2.4, 3.6) * e)
+	stage.camera.rotation_degrees = Vector3(-10.0 * e, 3.0 * e, 0.0)
+
+
 ## Jeden Frame: Lagen, Pendel-Pfannkuchen, Schwingung und Kamera stellen.
 func sync(
 	layers: Array[Dictionary],
@@ -498,11 +509,15 @@ func _sync_land_ring(delta: float) -> void:
 	_land_ring.scale = Vector3(s, 1.0, s)
 
 
-func perfect_fx(world_x: float, world_y: float) -> void:
-	Fx.burst(_star_burst, Vector3(world_x, world_y + _layer_h, 0.2))
+## Perfekt-Feier; `reduced` lässt Emote/Glühen, gatet aber Hüpfer, Landering
+## und Partikel (Q2 — Reduced-Motion-Gate an der eigenen Fx.burst-Call-Site).
+func perfect_fx(world_x: float, world_y: float, reduced := false) -> void:
 	gooby.emote("ecstatic", 0.9)
-	gooby.hop(0.25, 0.15)
 	stage.pulse_glow(0.6)
+	if reduced:
+		return
+	Fx.burst(_star_burst, Vector3(world_x, world_y + _layer_h, 0.2))
+	gooby.hop(0.25, 0.15)
 	# Ring zur Kamera drehen (Frontalkamera: flach läge er unsichtbar auf
 	# Kante) und VOR den Stapel legen (Pfannkuchen-Vorderkante ≈ z 0,75).
 	_land_ring.position = Vector3(world_x, world_y + _layer_h * 0.5, 0.85)
@@ -511,18 +526,26 @@ func perfect_fx(world_x: float, world_y: float) -> void:
 	_ring_age = 0.0
 
 
-func topping_fx(world_x: float, world_y: float) -> void:
-	Fx.burst(_star_burst, Vector3(world_x, world_y + _layer_h, 0.2))
+func topping_fx(world_x: float, world_y: float, reduced := false) -> void:
 	gooby.emote("happy", 0.8)
+	if reduced:
+		return
+	Fx.burst(_star_burst, Vector3(world_x, world_y + _layer_h, 0.2))
 
 
-func cut_fx(world_x: float, world_y: float) -> void:
+## Schnitt-Krümel; die fallenden Krümel-Zylinder bleiben als STATISCHES
+## Feedback auch unter Reduced Motion, nur der Partikel-Burst wird gegated.
+func cut_fx(world_x: float, world_y: float, reduced := false) -> void:
+	if reduced:
+		return
 	Fx.burst(_crumb_burst, Vector3(world_x, world_y + _layer_h * 0.5, 0.2))
 
 
-func topple_fx(world_x: float, world_y: float) -> void:
-	Fx.burst(_crumb_burst, Vector3(world_x, world_y, 0.3))
+func topple_fx(world_x: float, world_y: float, reduced := false) -> void:
 	gooby.emote("scared", 1.6)
+	if reduced:
+		return
+	Fx.burst(_crumb_burst, Vector3(world_x, world_y, 0.3))
 
 
 ## Sichtbare Welteinheiten senkrecht (aus der Web-ppu-Formel).

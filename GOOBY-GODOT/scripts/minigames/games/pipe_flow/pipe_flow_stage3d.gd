@@ -31,6 +31,11 @@ const BRASS := Color(0.95, 0.76, 0.31)
 ## Dreh-Tween + Pop je Tap (Zahlen aus PipeFlowLogic.PIPE_JUICE).
 const ROTATE_SEC := 0.16
 const POP_SCALE := 0.14
+## Fluss-Puls-Kette (G5): Versatz je Anschluss-Tiefe + Dauer/Stärke eines
+## Kachel-Pulses, wenn das Wasser losläuft.
+const FLOW_STEP_SEC := 0.07
+const FLOW_PULSE_SEC := 0.3
+const FLOW_PULSE_SCALE := 0.16
 
 var stage: Node3D
 var gooby: Node3D
@@ -40,6 +45,9 @@ var _grid := 5
 var _cell_w := 0.5
 var _tile_pos: Array[Vector3] = []
 var _spin: PackedFloat32Array = PackedFloat32Array()
+## Fluss-Puls-Kette: Uhr (−1 = aus) + Anschluss-Tiefen des gelösten Bretts.
+var _flow_t := -1.0
+var _flow_depths: Dictionary = {}
 var _mm_arms: MultiMesh
 var _mm_hubs: MultiMesh
 var _mm_arm_water: MultiMesh
@@ -448,12 +456,25 @@ func frame(vp: Vector2) -> void:
 	stage.set_half_height(HALF_H, CAM_DIST)
 
 
+## W17 M1: Intro-Puzzle-Totale — die Kamera startet unten am Blumenbeet
+## (Sprenger + Gooby im Bild) mit Blick hoch zum Blaupausen-Brett und steigt
+## in die frontale Spielpose; k=1 == exakte frame()-Rahmung, kein Ruck.
+func establish(k: float) -> void:
+	var e := 1.0 - ease(clampf(k, 0.0, 1.0), 0.4)
+	stage.camera.position = (Vector3(0.0, 0.0, CAM_DIST) + Vector3(0.0, -HALF_H * 0.55, 2.2) * e)
+	stage.camera.rotation_degrees = Vector3(8.0 * e, 0.0, 0.0)
+
+
 ## Brett, Raster, Rohre, Hahn, Sprenger, Beet, Bord und Gooby an die 2D-Anker.
 func layout(
 	origin: Vector2, cell: float, grid: int, src_col: int, goal_col: int, bed_y: float
 ) -> void:
 	_grid = grid
 	_cell_w = cell / _ppu()
+	# Neues Brett/Relayout: eine laufende Fluss-Puls-Kette gehört zum ALTEN
+	# Brett — abbrechen statt fremde Kacheln pulsen zu lassen.
+	_flow_t = -1.0
+	_flow_depths = {}
 	if _tile_pos.size() != grid * grid:
 		_tile_pos.resize(grid * grid)
 		_spin.resize(grid * grid)
@@ -557,6 +578,11 @@ func sync(
 	gooby.tick(delta)
 	Scenery.drift(delta)
 	gooby.rotation.z = sin(pulse * 2.3) * 0.03
+	if _flow_t >= 0.0:
+		_flow_t += delta
+		if _flow_t > _flow_end():
+			_flow_t = -1.0
+			_flow_depths = {}
 	_sync_tiles(tiles, watered, reached, delta)
 	_feed_water.visible = filling
 	_drain_water.visible = filling
@@ -598,6 +624,7 @@ func _sync_tiles(tiles: Array, watered: Array[bool], reached: Dictionary, delta:
 		var frac := _spin[i] / ROTATE_SEC
 		var ang := frac * PI * 0.5
 		var pop := 1.0 + POP_SCALE * sin((1.0 - frac) * PI) * (1.0 if frac > 0.0 else 0.0)
+		pop += _flow_pop(i)
 		var tile_basis := Basis(Vector3.BACK, ang).scaled(Vector3.ONE * (_cell_w * pop))
 		var tile_xf := Transform3D(tile_basis, _tile_pos[i])
 		var tile: Dictionary = tiles[i]
@@ -640,24 +667,59 @@ func tap_fx(index: int) -> void:
 	gooby.swing(0.3, 16.0, Vector3.RIGHT)
 
 
-func solve_fx(goal_index: int) -> void:
+## Fluss-Start-Moment (G5): eine Puls-Kette läuft in Anschluss-Reihenfolge
+## (water_reach-Tiefen) durch die gelegte Leitung — Aufrufer gatet Reduced
+## Motion an der Call-Site, der statische Fortschritts-Tint bleibt dort.
+func flow_fx(depths: Dictionary) -> void:
+	_flow_depths = depths.duplicate()
+	_flow_t = 0.0
+
+
+## Kachel-Pop der Fluss-Kette: jede angeschlossene Kachel pulst einmal kurz,
+## versetzt um ihre Anschluss-Tiefe (0 = am Hahn).
+func _flow_pop(index: int) -> float:
+	if _flow_t < 0.0 or not _flow_depths.has(index):
+		return 0.0
+	var local := _flow_t - float(int(_flow_depths[index])) * FLOW_STEP_SEC
+	if local < 0.0 or local > FLOW_PULSE_SEC:
+		return 0.0
+	return FLOW_PULSE_SCALE * sin(local / FLOW_PULSE_SEC * PI)
+
+
+## Ende der Puls-Kette: tiefste Kachel + eine Puls-Dauer.
+func _flow_end() -> float:
+	var max_depth := 0
+	for value: int in _flow_depths.values():
+		max_depth = maxi(max_depth, value)
+	return float(max_depth) * FLOW_STEP_SEC + FLOW_PULSE_SEC
+
+
+## Lösungs-Feier; `reduced` lässt Emote/Glühen/Regenbogen, gatet aber Hüpfer
+## und Partikel (Q2 — Reduced-Motion-Gate an der eigenen Fx.burst-Call-Site).
+func solve_fx(goal_index: int, reduced := false) -> void:
+	gooby.emote("ecstatic", 1.4)
+	gooby.play_for("celebrate", 1.0)
+	stage.pulse_glow(0.8)
+	_rainbow_t = 2.2
+	if reduced:
+		return
+	gooby.hop(0.45, 0.3)
 	if goal_index >= 0 and goal_index < _tile_pos.size():
 		var at := _tile_pos[goal_index] + Vector3(0.0, 0.0, 0.4)
 		Fx.burst(_win_burst, at)
 		# Goldfunken obendrauf: der Lösungsmoment liest sich als Belohnung.
 		Fx.burst(_gold_burst, at + Vector3(0.0, 0.15, 0.1))
-	gooby.emote("ecstatic", 1.4)
-	gooby.play_for("celebrate", 1.0)
-	gooby.hop(0.45, 0.3)
-	stage.pulse_glow(0.8)
-	_rainbow_t = 2.2
 
 
-func leak_fx(index: int) -> void:
-	if index >= 0 and index < _tile_pos.size():
-		Fx.burst(_win_burst, _tile_pos[index] + Vector3(0.0, -0.2, 0.3))
+## Leck-Reaktion; der Tropf-Emitter bleibt als Countdown-Feedback, nur der
+## Platsch-Burst wird gegated (Q2).
+func leak_fx(index: int, reduced := false) -> void:
 	gooby.emote("scared", 1.2)
 	gooby.play_for("idle_lookaround", 1.0)
+	if reduced:
+		return
+	if index >= 0 and index < _tile_pos.size():
+		Fx.burst(_win_burst, _tile_pos[index] + Vector3(0.0, -0.2, 0.3))
 
 
 ## Senkrechter Rohrlauf zwischen zwei Welt-y (layout skaliert/verschiebt ihn).
