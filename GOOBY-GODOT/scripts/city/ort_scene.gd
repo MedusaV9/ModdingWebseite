@@ -14,6 +14,11 @@ signal verlassen_angefordert
 
 const PanelSheetScene := preload("res://scripts/ui/panel_sheet.tscn")
 
+## Bottom-Leiste (G3/P05): Breiten-Deckel in Design-px + Abstand zur
+## Safe-Area-Unterkante (beides skaliert mit dem UiScale-Faktor).
+const LEISTE_BASIS_BREITE := 640.0
+const LEISTE_RAND_UNTEN := 16.0
+
 @export var ort_id := ""
 
 var game_state_override: Object
@@ -26,6 +31,9 @@ var ist_erstbesuch := false
 var _ui: Control
 var _sheet: PanelSheet
 var _toast: Node
+var _zurueck: Button
+## Bottom-Knopfleisten aus `_baue_knopfleiste()` — Re-Layout bei Rotation.
+var _leisten: Array[Control] = []
 
 
 func _ready() -> void:
@@ -188,13 +196,13 @@ func _baue_ui() -> void:
 	_ui.add_child(dialog)
 	dialog.effekt.connect(_on_dialog_effekt)
 	dialog.beendet.connect(_on_dialog_beendet)
-	var zurueck := Button.new()
-	zurueck.text = I18nService.t("city.ort.verlassen")
-	zurueck.theme_type_variation = "GhostButton"
-	zurueck.set_anchors_preset(Control.PRESET_TOP_LEFT)
-	zurueck.position = Vector2(16.0, 16.0)
-	zurueck.pressed.connect(_on_verlassen)
-	_ui.add_child(zurueck)
+	_zurueck = Button.new()
+	_zurueck.name = "Verlassen"
+	_zurueck.text = I18nService.t("city.ort.verlassen")
+	_zurueck.theme_type_variation = "GhostButton"
+	_zurueck.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	_zurueck.pressed.connect(_on_verlassen)
+	_ui.add_child(_zurueck)
 	_sheet = PanelSheetScene.instantiate()
 	_sheet.theme = ThemeService.theme()
 	layer.add_child(_sheet)
@@ -203,6 +211,85 @@ func _baue_ui() -> void:
 	layer.add_child(_toast)
 	# ToastLayer setzt in _ready nur Anker — nach add_child Full-Rect ziehen.
 	_toast.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	get_viewport().size_changed.connect(_relayout_ui)
+	_relayout_ui()
+
+
+## ------------------------------------------------ Knopfleiste (G3/P05)
+
+
+## Zentrierte, Safe-Area-bewusste Bottom-Knopfleiste (User-Leitidee
+## „Knöpfe weg von den Ecken, hin zur Mitte/Daumenzone“): HFlowContainer
+## bricht auf schmalen Formaten um statt über die Ränder zu laufen, jeder
+## Knopf bekommt den physischen Touch-Floor (≥ 44 pt). Erben rufen den
+## Helfer statt eigener HBox-Zeilen; Re-Layout läuft über `size_changed`.
+func _baue_knopfleiste(knoepfe: Array[Button], leisten_name := "OrtKnoepfe") -> HFlowContainer:
+	var leiste := HFlowContainer.new()
+	leiste.name = leisten_name
+	leiste.alignment = FlowContainer.ALIGNMENT_CENTER
+	leiste.add_theme_constant_override("h_separation", 10)
+	leiste.add_theme_constant_override("v_separation", 8)
+	for knopf in knoepfe:
+		leiste.add_child(knopf)
+	_ui.add_child(leiste)
+	_leisten.append(leiste)
+	_layout_knopfleiste(leiste, ScreenShell.metrics(get_viewport()))
+	return leiste
+
+
+## Alle Metrics-abhängigen UI-Teile nachziehen (Aufbau + Rotation).
+func _relayout_ui() -> void:
+	if _ui == null or not is_inside_tree():
+		return
+	var m := ScreenShell.metrics(get_viewport())
+	_layout_verlassen(m)
+	for leiste in _leisten:
+		if leiste != null and is_instance_valid(leiste):
+			_layout_knopfleiste(leiste, m)
+	_nach_ui_relayout(m)
+
+
+## Hook für Orte mit eigenen Metrics-abhängigen UI-Extras (Titel,
+## Tap-Spots, Hinweis-Zeilen) — läuft nach jedem `_relayout_ui()`.
+func _nach_ui_relayout(_m: Dictionary) -> void:
+	pass
+
+
+## „Verlassen“ aus der harten (16,16)-Ecke in die Safe-Area (Notch/Insel!)
+## + physischer Touch-Floor — wirkt auf ALLE Orte der Domäne.
+func _layout_verlassen(m: Dictionary) -> void:
+	if _zurueck == null or not is_instance_valid(_zurueck):
+		return
+	var insets: Dictionary = m["insets"]
+	var f: float = m["f"]
+	ScreenShell.touch_target(_zurueck, m)
+	ScreenShell.scale_fonts(_zurueck, f)
+	_zurueck.position = Vector2(float(insets["left"]) + 16.0 * f, float(insets["top"]) + 12.0 * f)
+
+
+## Leisten-Geometrie: Breite gedeckelt (Flow-Umbruch statt Überlauf),
+## horizontal in der MITTE des Safe-Rechtecks (asymmetrische Insets im
+## Querformat), Unterkante über Home-Indicator + Inset; wächst nach OBEN.
+func _layout_knopfleiste(leiste: Control, m: Dictionary) -> void:
+	var canvas: Vector2 = m["canvas"]
+	var insets: Dictionary = m["insets"]
+	var f: float = m["f"]
+	for kind in leiste.get_children():
+		if kind is Control:
+			ScreenShell.touch_target(kind, m)
+	ScreenShell.scale_fonts(leiste, f)
+	var breite := ScreenShell.card_width(m, LEISTE_BASIS_BREITE)
+	var mitte := (float(insets["left"]) + canvas.x - float(insets["right"])) / 2.0
+	leiste.anchor_left = 0.5
+	leiste.anchor_right = 0.5
+	leiste.anchor_top = 1.0
+	leiste.anchor_bottom = 1.0
+	leiste.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	leiste.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	leiste.offset_left = mitte - canvas.x / 2.0 - breite / 2.0
+	leiste.offset_right = mitte - canvas.x / 2.0 + breite / 2.0
+	leiste.offset_bottom = -(float(insets["bottom"]) + LEISTE_RAND_UNTEN * f)
+	leiste.offset_top = leiste.offset_bottom
 
 
 ## Sanfte Vignette über dem 3D-Bild (W4-P3-Ambiente, mobil-tauglich): EINE

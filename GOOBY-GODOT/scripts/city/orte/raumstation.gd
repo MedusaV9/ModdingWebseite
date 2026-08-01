@@ -167,21 +167,15 @@ func oeffne_laden() -> void:
 
 func _baue_ui() -> void:
 	super._baue_ui()
-	var reihe := HBoxContainer.new()
-	reihe.name = "StationsKnoepfe"
-	reihe.alignment = BoxContainer.ALIGNMENT_CENTER
-	reihe.add_theme_constant_override("separation", 10)
-	reihe.set_anchors_and_offsets_preset(
-		Control.PRESET_CENTER_BOTTOM, Control.PRESET_MODE_MINSIZE, 20
-	)
-	reihe.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	_ui.add_child(reihe)
-	reihe.add_child(
-		_knopf("TerminalRocket", I18nService.t("mg.rocketRescue.title"), "PrimaryButton")
-	)
-	reihe.add_child(_knopf("TerminalStar", I18nService.t("mg.starHopper.title"), "PrimaryButton"))
-	reihe.add_child(_knopf("Automat", I18nService.t("raumstation.automat.knopf"), "AccentButton"))
-	reihe.add_child(_knopf("Sternenfoto", I18nService.t("raumstation.foto.knopf"), "AccentButton"))
+	# G3/P05: gemeinsame Bottom-Leiste der Basisklasse (Safe-Area, Flow-
+	# Umbruch, Touch-Floor) statt eigener HBox — Knopf-Namen sind Vertrag.
+	var knoepfe: Array[Button] = [
+		_knopf("TerminalRocket", I18nService.t("mg.rocketRescue.title"), "PrimaryButton"),
+		_knopf("TerminalStar", I18nService.t("mg.starHopper.title"), "PrimaryButton"),
+		_knopf("Automat", I18nService.t("raumstation.automat.knopf"), "AccentButton"),
+		_knopf("Sternenfoto", I18nService.t("raumstation.foto.knopf"), "AccentButton"),
+	]
+	var reihe := _baue_knopfleiste(knoepfe, "StationsKnoepfe")
 	(reihe.get_node("TerminalRocket") as Button).pressed.connect(starte_spiel.bind(SPIEL_ROCKET))
 	(reihe.get_node("TerminalStar") as Button).pressed.connect(starte_spiel.bind(SPIEL_STAR))
 	(reihe.get_node("Automat") as Button).pressed.connect(oeffne_laden)

@@ -46,6 +46,9 @@ const KAUF_REASON := "gooby_free"
 
 var _gfree_liste: VBoxContainer
 var _gfree_coins: Label
+var _gfree_btn: Button
+var _gfree_hinweis: Label
+var _knopfleiste: Control
 
 
 ## Ist der GOOBY-FREE geöffnet? NUR vor einem gebuchten Abflug: Taxi ist
@@ -135,29 +138,19 @@ func _npc_konfig() -> Dictionary:
 
 func _baue_ui() -> void:
 	super._baue_ui()
-	var reihe := HBoxContainer.new()
-	reihe.name = "FlughafenKnoepfe"
-	reihe.alignment = BoxContainer.ALIGNMENT_CENTER
-	reihe.add_theme_constant_override("separation", 10)
-	reihe.set_anchors_and_offsets_preset(
-		Control.PRESET_CENTER_BOTTOM, Control.PRESET_MODE_MINSIZE, 24
-	)
-	reihe.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	_ui.add_child(reihe)
 	var reise_btn := Button.new()
 	reise_btn.name = "Reise"
 	reise_btn.text = I18nService.t("travel.schalter.knopf")
 	reise_btn.theme_type_variation = "PrimaryButton"
 	reise_btn.custom_minimum_size = Vector2(220.0, 56.0)
 	reise_btn.pressed.connect(_on_reise)
-	reihe.add_child(reise_btn)
-	var gfree_btn := Button.new()
-	gfree_btn.name = "GoobyFree"
-	gfree_btn.text = I18nService.t("gfree.knopf")
-	gfree_btn.theme_type_variation = "AccentButton"
-	gfree_btn.custom_minimum_size = Vector2(0.0, 56.0)
-	gfree_btn.pressed.connect(_on_gooby_free)
-	reihe.add_child(gfree_btn)
+	_gfree_btn = Button.new()
+	_gfree_btn.name = "GoobyFree"
+	_gfree_btn.text = I18nService.t("gfree.knopf")
+	_gfree_btn.theme_type_variation = "AccentButton"
+	_gfree_btn.custom_minimum_size = Vector2(0.0, 56.0)
+	_gfree_btn.pressed.connect(_on_gooby_free)
+	var knoepfe: Array[Button] = [reise_btn, _gfree_btn]
 	var gs := game_state()
 	if gs != null and OrtRaumstation.freigeschaltet(gs.state()):
 		var shuttle_btn := Button.new()
@@ -166,7 +159,78 @@ func _baue_ui() -> void:
 		shuttle_btn.theme_type_variation = "AccentButton"
 		shuttle_btn.custom_minimum_size = Vector2(0.0, 56.0)
 		shuttle_btn.pressed.connect(_on_shuttle)
-		reihe.add_child(shuttle_btn)
+		knoepfe.append(shuttle_btn)
+	_knopfleiste = _baue_knopfleiste(knoepfe, "FlughafenKnoepfe")
+	_baue_gfree_hinweis()
+	_gfree_status_aktualisieren()
+	if gs != null and gs.has_signal("slice_changed"):
+		gs.slice_changed.connect(_on_slice_changed)
+
+
+## GOOBY-FREE-Zustand SICHTBAR am Ort (statt Toast-Überraschung erst nach
+## dem Tippen): ohne Abflug-Buchung ist der Knopf ausgegraut und der Grund
+## steht als Zeile direkt über der Knopfleiste.
+func _baue_gfree_hinweis() -> void:
+	_gfree_hinweis = Label.new()
+	_gfree_hinweis.name = "GoobyFreeHinweis"
+	_gfree_hinweis.theme_type_variation = "CaptionLabel"
+	_gfree_hinweis.text = I18nService.t("gfree.zu")
+	_gfree_hinweis.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_gfree_hinweis.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_gfree_hinweis.anchor_left = 0.5
+	_gfree_hinweis.anchor_right = 0.5
+	_gfree_hinweis.anchor_top = 1.0
+	_gfree_hinweis.anchor_bottom = 1.0
+	_gfree_hinweis.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_gfree_hinweis.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	_ui.add_child(_gfree_hinweis)
+	# Die Flow-Leiste wächst erst im (deferred) Container-Sort auf ihre
+	# Minimum-Höhe — deshalb bei JEDER Leisten-Größenänderung nachziehen
+	# statt einmalig eine noch-0-Höhe abzulesen.
+	_knopfleiste.resized.connect(_positioniere_gfree_hinweis)
+	_positioniere_gfree_hinweis()
+
+
+func _gfree_status_aktualisieren() -> void:
+	if _gfree_btn == null or not is_instance_valid(_gfree_btn):
+		return
+	var gs := game_state()
+	var offen := gs != null and gooby_free_offen(gs.state())
+	_gfree_btn.disabled = not offen
+	_gfree_btn.tooltip_text = "" if offen else I18nService.t("gfree.zu")
+	if _gfree_hinweis != null and is_instance_valid(_gfree_hinweis):
+		_gfree_hinweis.visible = not offen
+
+
+## Hinweis-Zeile über der Leiste nachziehen (Höhe steht erst nach dem
+## Layout-Pass der Flow-Leiste — deshalb deferred).
+func _nach_ui_relayout(_m: Dictionary) -> void:
+	_positioniere_gfree_hinweis.call_deferred()
+
+
+func _positioniere_gfree_hinweis() -> void:
+	if _gfree_hinweis == null or not is_instance_valid(_gfree_hinweis):
+		return
+	if _knopfleiste == null or not is_instance_valid(_knopfleiste):
+		return
+	var m := ScreenShell.metrics(get_viewport())
+	var f: float = m["f"]
+	var canvas: Vector2 = m["canvas"]
+	var insets: Dictionary = m["insets"]
+	ScreenShell.scale_fonts(_gfree_hinweis, f)
+	var breite := ScreenShell.card_width(m, LEISTE_BASIS_BREITE)
+	var mitte := (float(insets["left"]) + canvas.x - float(insets["right"])) / 2.0
+	_gfree_hinweis.offset_left = mitte - canvas.x / 2.0 - breite / 2.0
+	_gfree_hinweis.offset_right = mitte - canvas.x / 2.0 + breite / 2.0
+	_gfree_hinweis.offset_bottom = _knopfleiste.offset_top - _knopfleiste.size.y - 6.0 * f
+	_gfree_hinweis.offset_top = _gfree_hinweis.offset_bottom
+
+
+## GOOBY-FREE-Gate hängt an Taxi-Buchung (city-Slice) UND Urlaubsphase —
+## bei beiden Änderungen den sichtbaren Zustand nachziehen.
+func _on_slice_changed(slice_id: String, _daten: Variant) -> void:
+	if slice_id == CityState.SLICE_ID or slice_id == "vacation":
+		_gfree_status_aktualisieren()
 
 
 func _on_reise() -> void:
@@ -318,6 +382,7 @@ func _on_shuttle() -> void:
 ## DIESEM Ort): Erholungs-Buff spiegeln + ggf. Weltengooby feiern.
 func _on_vacation_changed(_phase: String, _dest_id: String) -> void:
 	UrlaubsBonus.sync(game_state(), _now_ms(), self)
+	_gfree_status_aktualisieren()
 
 
 func _now_ms() -> int:

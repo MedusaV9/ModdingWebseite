@@ -80,6 +80,8 @@ var statisten: Array[GoobyRig] = []
 
 var _tap_ebene: Control
 var _kamera: Camera3D
+var _titel: Label
+var _besuchs_leiste: Control
 
 
 ## Erstes Katalog-Ziel eines Archetyps (Fallback ohne receive_params).
@@ -167,30 +169,46 @@ func _npc_konfig() -> Dictionary:
 func _baue_ui() -> void:
 	super._baue_ui()
 	var daten: Dictionary = ARCHETYP_DATEN[archetyp]
-	var titel := Label.new()
-	titel.name = "UrlaubsTitel"
-	titel.theme_type_variation = "HeadlineLabel"
-	titel.text = I18nService.t(str(daten["titel_key"]))
-	titel.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP, Control.PRESET_MODE_MINSIZE, 14)
-	titel.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	_ui.add_child(titel)
-	var reihe := HBoxContainer.new()
-	reihe.name = "BesuchsKnoepfe"
-	reihe.alignment = BoxContainer.ALIGNMENT_CENTER
-	reihe.add_theme_constant_override("separation", 10)
-	reihe.set_anchors_and_offsets_preset(
-		Control.PRESET_CENTER_BOTTOM, Control.PRESET_MODE_MINSIZE, 20
+	_titel = Label.new()
+	_titel.name = "UrlaubsTitel"
+	_titel.theme_type_variation = "HeadlineLabel"
+	_titel.text = I18nService.t(str(daten["titel_key"]))
+	_titel.set_anchors_and_offsets_preset(
+		Control.PRESET_CENTER_TOP, Control.PRESET_MODE_MINSIZE, 14
 	)
-	reihe.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	_ui.add_child(reihe)
-	reihe.add_child(_knopf("Streicheln", I18nService.t("urlaub.knopf.streicheln"), "PrimaryButton"))
-	reihe.add_child(_knopf("Foto", I18nService.t("urlaub.knopf.foto"), "AccentButton"))
-	reihe.add_child(_knopf("MiniAktivitaet", I18nService.t(str(daten["mini_key"])), "AccentButton"))
-	reihe.add_child(_knopf("Souvenir", I18nService.t("urlaub.knopf.souvenir"), "AccentButton"))
-	(reihe.get_node("Streicheln") as Button).pressed.connect(_on_streicheln)
-	(reihe.get_node("Foto") as Button).pressed.connect(_on_foto)
-	(reihe.get_node("MiniAktivitaet") as Button).pressed.connect(_on_mini)
-	(reihe.get_node("Souvenir") as Button).pressed.connect(_on_souvenir)
+	_titel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_ui.add_child(_titel)
+	# G3/P05: gemeinsame Bottom-Leiste der Basisklasse (Safe-Area, Flow-
+	# Umbruch statt Hochformat-Überlauf, Touch-Floor) — Namen sind Vertrag.
+	var knoepfe: Array[Button] = [
+		_knopf("Streicheln", I18nService.t("urlaub.knopf.streicheln"), "PrimaryButton"),
+		_knopf("Foto", I18nService.t("urlaub.knopf.foto"), "AccentButton"),
+		_knopf("MiniAktivitaet", I18nService.t(str(daten["mini_key"])), "AccentButton"),
+		_knopf("Souvenir", I18nService.t("urlaub.knopf.souvenir"), "AccentButton"),
+	]
+	_besuchs_leiste = _baue_knopfleiste(knoepfe, "BesuchsKnoepfe")
+	(_besuchs_leiste.get_node("Streicheln") as Button).pressed.connect(_on_streicheln)
+	(_besuchs_leiste.get_node("Foto") as Button).pressed.connect(_on_foto)
+	(_besuchs_leiste.get_node("MiniAktivitaet") as Button).pressed.connect(_on_mini)
+	(_besuchs_leiste.get_node("Souvenir") as Button).pressed.connect(_on_souvenir)
+	_nach_ui_relayout(ScreenShell.metrics(get_viewport()))
+
+
+## Titel unter die Safe-Area-Oberkante (Notch!) schieben und aktive
+## Tap-Spots bei Format-Wechsel neu über die 3D-Marker legen.
+func _nach_ui_relayout(m: Dictionary) -> void:
+	if _titel != null and is_instance_valid(_titel):
+		var insets: Dictionary = m["insets"]
+		var f: float = m["f"]
+		ScreenShell.scale_fonts(_titel, f)
+		_titel.set_anchors_and_offsets_preset(
+			Control.PRESET_CENTER_TOP,
+			Control.PRESET_MODE_MINSIZE,
+			int(float(insets["top"]) + 12.0 * f)
+		)
+		_titel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	if _tap_ebene != null and is_instance_valid(_tap_ebene):
+		_platziere_tap_knoepfe.call_deferred(_tap_positionen())
 
 
 ## ------------------------------------------------------------ Erlebnisse
@@ -276,7 +294,6 @@ func _baue_tap_ebene() -> void:
 		knopf.name = "TapSpot%d" % i
 		knopf.text = symbol
 		knopf.theme_type_variation = "AccentButton"
-		knopf.custom_minimum_size = Vector2(56.0, 56.0)
 		knopf.pressed.connect(_on_tap.bind(i))
 		_tap_ebene.add_child(knopf)
 		tap_knoepfe.append(knopf)
@@ -284,16 +301,41 @@ func _baue_tap_ebene() -> void:
 
 
 ## Knöpfe über den 3D-Markern platzieren (Kamera steht still — einmaliges
-## Unprojezieren reicht; ohne Kamera bleibt die Fallback-Reihe).
+## Unprojezieren reicht; ohne Kamera bleibt die Fallback-Reihe). G3/P05:
+## Spot-Größe hängt am physischen Touch-Floor (56 dp waren auf Retina
+## unter 44 pt) und die Schirmposition wird in die Safe-Area geklemmt —
+## Randspots rutschen sonst unter Notch/Knopfleiste aus dem Tippbereich.
 func _platziere_tap_knoepfe(positionen: Array) -> void:
+	var m := ScreenShell.metrics(get_viewport())
+	var seite := maxf(56.0 * float(m["f"]), float(m["floor_px"]))
+	var frei := _tap_safe_rect(m, seite)
 	for i in tap_knoepfe.size():
 		var knopf := tap_knoepfe[i]
 		if knopf == null or not is_instance_valid(knopf):
 			continue
+		knopf.custom_minimum_size = Vector2(seite, seite)
 		var schirm := Vector2(120.0 + 90.0 * i, 180.0)
 		if _kamera != null and _kamera.is_inside_tree():
 			schirm = _kamera.unproject_position(positionen[i] + Vector3(0.0, 0.35, 0.0))
-		knopf.position = schirm - knopf.size * 0.5
+		var ziel := schirm - Vector2(seite, seite) * 0.5
+		ziel.x = clampf(ziel.x, frei.position.x, maxf(frei.end.x - seite, frei.position.x))
+		ziel.y = clampf(ziel.y, frei.position.y, maxf(frei.end.y - seite, frei.position.y))
+		knopf.position = ziel
+
+
+## Tippbarer Bereich für Tap-Spots: Safe-Area minus Rand, unten zusätzlich
+## durch die Besuchs-Knopfleiste begrenzt (kein Spot hinter den Knöpfen).
+func _tap_safe_rect(m: Dictionary, seite: float) -> Rect2:
+	var canvas: Vector2 = m["canvas"]
+	var insets: Dictionary = m["insets"]
+	var rand := 8.0 * float(m["f"])
+	var links := float(insets["left"]) + rand
+	var oben := float(insets["top"]) + rand
+	var rechts := canvas.x - float(insets["right"]) - rand
+	var unten := canvas.y - float(insets["bottom"]) - rand
+	if _besuchs_leiste != null and is_instance_valid(_besuchs_leiste):
+		unten = minf(unten, _besuchs_leiste.get_rect().position.y - rand)
+	return Rect2(links, oben, maxf(rechts - links, seite), maxf(unten - oben, seite))
 
 
 func _on_tap(index: int) -> void:
