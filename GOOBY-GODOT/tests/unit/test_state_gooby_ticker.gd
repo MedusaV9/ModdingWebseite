@@ -31,6 +31,21 @@ func _fresh_game_state(path: String, now_ms := NOW_MS) -> Node:
 	return gs
 
 
+func test_chill_wetter_rechnet_mit_lokalem_tag() -> void:
+	# 23:30 UTC: östlich von UTC (DE-Abend, UTC+2) ist lokal schon der
+	# nächste Tag — der SoulWetter-Schlüssel muss dem LOKALEN Kalender
+	# folgen (Konvention RanchWetter.datum_heute(), Quickwin #7).
+	var spaet_ms := NOW_MS + int(11.5 * 60.0) * MIN_MS
+	var utc := GoobyTicker.local_datetime(spaet_ms, 0)
+	var lokal := GoobyTicker.local_datetime(spaet_ms, 120)
+	assert_eq(int(utc["hour"]), 23, "bias 0: 23 Uhr UTC")
+	assert_eq(int(lokal["hour"]), 1, "bias +120: 1 Uhr — über Mitternacht")
+	assert_eq(int(lokal["day"]), int(utc["day"]) + 1, "lokaler Tag ist schon der nächste")
+	assert_eq(
+		GoobyTicker.local_datetime(spaet_ms, -60)["day"], utc["day"], "westlich: gleicher Tag"
+	)
+
+
 func test_live_tick_decays_stats_awake() -> void:
 	var gs := _fresh_game_state(_fresh_path())
 	gs.set_value("gooby.lastTickAt", NOW_MS)

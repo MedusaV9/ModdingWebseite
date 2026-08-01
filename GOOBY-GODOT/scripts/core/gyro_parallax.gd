@@ -128,7 +128,16 @@ static func _klemm_offset(
 # ------------------------------------------------------------------ Runtime
 
 
+func _ready() -> void:
+	# Ohne registrierte Ziele schläft der Frame-Tick (die Runtime lebt
+	# dauerhaft unter /root — melde_an/melde_ab schalten ihn an/aus).
+	# Aus _ziele abgeleitet, weil melde_an schon VOR dem (deferred)
+	# Baum-Eintritt laufen kann.
+	set_process(not _ziele.is_empty())
+
+
 func melde_an(ziel: CanvasItem, staerke: float) -> void:
+	set_process(true)
 	for eintrag in _ziele:
 		if (eintrag["ref"] as WeakRef).get_ref() == ziel:
 			eintrag["staerke"] = staerke
@@ -140,6 +149,7 @@ func melde_ab(ziel: CanvasItem) -> void:
 	for i in range(_ziele.size() - 1, -1, -1):
 		if (_ziele[i]["ref"] as WeakRef).get_ref() == ziel:
 			_ziele.remove_at(i)
+	set_process(not _ziele.is_empty())
 
 
 func ziel_anzahl() -> int:
@@ -205,3 +215,6 @@ func _verteile(offset_px: Vector2) -> void:
 			if eintrag["basis"] == null:
 				eintrag["basis"] = ziel.position
 			ziel.position = (eintrag["basis"] as Vector2) + anteil
+	# Leichen ausgeräumt und nichts mehr übrig → Tick schlafen legen.
+	if _ziele.is_empty():
+		set_process(false)

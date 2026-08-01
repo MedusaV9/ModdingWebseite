@@ -52,6 +52,8 @@ func _ready() -> void:
 	_sprite.render_priority = 20
 	_sprite.pixel_size = SYMBOL_HOEHE_M / TEXTUR_PX
 	add_child(_sprite)
+	# _process macht nur das Schweben — unter Reduced Motion schläft der Tick.
+	set_process(not reduziert)
 	_pop_in()
 
 
@@ -69,6 +71,7 @@ func verschwinde() -> void:
 			queue_free()
 		return
 	_geht = true
+	set_process(false)
 	var tween := create_tween()
 	if reduziert:
 		tween.tween_property(_sprite, "modulate:a", 0.0, POP_OUT_S)

@@ -123,6 +123,11 @@ func float_text(pos: Vector2, text: String, color := Color.WHITE) -> void:
 	label.add_theme_font_size_override("font_size", 30)
 	parent.add_child(label)
 	if _reduced_motion():
+		# Kit nicht (mehr) im Baum (Late-Callback nach Szenenwechsel):
+		# get_tree() gibt es dann nicht — Label sofort aufräumen statt crashen.
+		if not is_inside_tree():
+			label.queue_free()
+			return
 		get_tree().create_timer(0.8).timeout.connect(label.queue_free)
 		return
 	var tween := create_tween()
@@ -209,7 +214,9 @@ func burst(parent: Node, pos: Vector2, color := Color(1.0, 0.85, 0.3), count := 
 	particles.color = color
 	particles.color_ramp = _fade_ramp(color)
 	parent.add_child(particles)
-	get_tree().create_timer(1.0).timeout.connect(particles.queue_free)
+	# one_shot ist gesetzt: finished feuert nach dem letzten Partikel —
+	# szenenwechsel-sicher (SceneTreeTimer feuerte auf freed Instanzen).
+	particles.finished.connect(particles.queue_free)
 
 
 ## Burst im Host-Overlay (für 3D-Spiele, die nur Viewport-Pixel haben —
@@ -330,7 +337,8 @@ func confetti(count := 90) -> void:
 	particles.hue_variation_max = 0.5
 	particles.color = Color(1.0, 0.75, 0.35)
 	parent.add_child(particles)
-	get_tree().create_timer(2.6).timeout.connect(particles.queue_free)
+	# Szenenwechsel-sicher aufräumen (one_shot gesetzt, s. burst()).
+	particles.finished.connect(particles.queue_free)
 
 
 ## Münz-Regen (Results/Coin-Chunks): goldene Münzen + Münz-Klimpern.
@@ -362,12 +370,14 @@ func coin_rain(count := 26) -> void:
 	particles.texture = _coin_tex()
 	particles.color = Color(1.0, 0.84, 0.25)
 	parent.add_child(particles)
-	get_tree().create_timer(2.4).timeout.connect(particles.queue_free)
-	# Klimpern in kleinen aufsteigenden Stufen hinterher.
+	# Szenenwechsel-sicher aufräumen (one_shot gesetzt, s. burst()).
+	particles.finished.connect(particles.queue_free)
+	# Klimpern in kleinen aufsteigenden Stufen hinterher. Gebundenes
+	# Methoden-Callable statt Lambda (REST5-B2): wird das Kit vor dem
+	# SceneTreeTimer freed, trennt Godot die Verbindung automatisch.
 	for i in 3:
-		get_tree().create_timer(0.14 * (i + 1)).timeout.connect(
-			sfx.bind("game_coin", 1.0 + 0.08 * (i + 1))
-		)
+		var pitch := 1.0 + 0.08 * (i + 1)
+		get_tree().create_timer(0.14 * (i + 1)).timeout.connect(sfx.bind("game_coin", pitch))
 
 
 ## Zahl hochzählen (Score/Coins im Results): tickt hörbar mit steigender

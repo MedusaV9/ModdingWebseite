@@ -98,6 +98,27 @@ func test_wetter_fx_reduced_motion_pfad() -> void:
 	await wait_frames(1)
 
 
+func test_process_gate_schlaeft_bei_klarwetter() -> void:
+	# Quickwin #9: _process (Kamera-Folge/Blitz/Loop-Fades) tickt nur, wenn
+	# es etwas zu tun gibt — Klarwetter ohne klingende Loops schläft.
+	var fx := WetterFx.new()
+	fx.reduced_motion_override = 0
+	fx.partikel_faktor_override = 1.0
+	tree.root.add_child(fx)
+	await wait_frames(1)
+	assert_false(fx.is_processing(), "ohne Wetterplan: kein Frame-Tick")
+	fx.wende_zustand_an({"typ": "regen", "regen": true, "schnee": false})
+	assert_true(fx.is_processing(), "Regen weckt den Tick")
+	fx.wende_zustand_an({"typ": "sonne", "regen": false, "schnee": false})
+	await wait_frames(2)
+	assert_false(fx.is_processing(), "Klarwetter (Loops still): Tick schläft wieder")
+	fx.folge_kamera = true
+	fx.wende_zustand_an({"typ": "sonne", "regen": false, "schnee": false})
+	assert_true(fx.is_processing(), "Kamera-Folge braucht den Tick weiter")
+	fx.queue_free()
+	await wait_frames(1)
+
+
 func test_stadt_liest_echten_plan_statt_hardcode() -> void:
 	# Gleiche API wie das Zuhause: identisch zu SoulWetter, kein Hardcode.
 	var datum := "2026-07-26"

@@ -391,6 +391,8 @@ func set_coins(coins: int) -> void:
 	# UiMotion-Bibliothek (reduced-motion-gated, W4/POLISH-4 → Web-Parität).
 	_coin_tween = UiMotion.count_to(_coin_label, from, coins)
 	if from != coins:
+		_coin_icon.rotation = 0.0
+		_coin_chip.scale = Vector2.ONE
 		UiMotion.wiggle(_coin_icon)
 		UiMotion.bounce(_coin_chip)
 

@@ -77,12 +77,27 @@ static func fade_out(ctl: Control, dur := 0.25) -> Tween:
 	return tween
 
 
+## Vorherigen Impuls-Tween desselben Helfers auf ctl killen (Anti-Stapeln:
+## Münz-Serien erzeugten sonst parallele Tweens auf scale/rotation → Zittern).
+static func _fresh_tween(ctl: Control, key: StringName) -> Tween:
+	# has_meta-Guard: get_meta(key, null) loggt bei fehlendem Key einen ERROR.
+	if ctl.has_meta(key):
+		var alt: Variant = ctl.get_meta(key)
+		if alt is Tween and (alt as Tween).is_valid():
+			(alt as Tween).kill()
+	var tween := ctl.create_tween()
+	ctl.set_meta(key, tween)
+	return tween
+
+
 ## Kurzer Hüpfer (Toast erscheint, Chip reagiert): 1 → 1.06 → 1, federnd.
 static func bounce(ctl: Control, peak := BOUNCE_SCALE) -> Tween:
 	if not ctl.is_inside_tree() or reduced(ctl):
+		ctl.scale = Vector2.ONE
 		return null
 	ctl.pivot_offset = ctl.size / 2.0
-	var tween := ctl.create_tween()
+	ctl.scale = Vector2.ONE
+	var tween := _fresh_tween(ctl, &"_uim_bounce")
 	tween.tween_property(ctl, "scale", Vector2.ONE * peak, AcTokens.DUR_POP / 2.0)
 	(
 		tween
@@ -99,7 +114,8 @@ static func wiggle(ctl: Control, max_deg := 6.0) -> Tween:
 		ctl.rotation = 0.0
 		return null
 	ctl.pivot_offset = ctl.size / 2.0
-	var tween := ctl.create_tween()
+	ctl.rotation = 0.0
+	var tween := _fresh_tween(ctl, &"_uim_wiggle")
 	tween.tween_property(ctl, "rotation", deg_to_rad(-max_deg), AcTokens.DUR_POP / 3.0)
 	tween.tween_property(ctl, "rotation", deg_to_rad(max_deg * 0.6), AcTokens.DUR_POP / 3.0)
 	(

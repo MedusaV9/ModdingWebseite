@@ -96,7 +96,7 @@ func _baue_optik() -> void:
 		kugel.height = BallLogic.RADIUS * 2.0
 		mesh.mesh = kugel
 		var mat := StandardMaterial3D.new()
-		mat.albedo_color = Color("#FF7BA9")
+		mat.albedo_color = AcTokens.PINK
 		mat.roughness = 0.55
 		mesh.material_override = mat
 		_mount.add_child(mesh)

@@ -81,12 +81,17 @@ func _ready() -> void:
 	# sind AppSettings/Quality über den Baum erreichbar).
 	if not _zustand.is_empty():
 		wende_zustand_an(_zustand)
+	set_process(_process_noetig())
 
 
 func _process(delta: float) -> void:
 	_folge_kamera_nach()
 	_tick_blitz(delta)
 	_tick_ton(delta)
+	# Nach dem Ausklingen (Loops verstummt) wieder schlafen — geweckt wird
+	# über wende_zustand_an → _wende_plan_an.
+	if not _process_noetig():
+		set_process(false)
 
 
 ## Zustand aus dem Tagesplan anwenden (SoulWetter- oder RanchWetter-Schema).
@@ -186,6 +191,28 @@ func _wende_plan_an() -> void:
 		_blitz_rest = 0.0
 		_setze_flash(0.0)
 	_wende_nebel_an()
+	set_process(_process_noetig())
+
+
+## _process macht nur Kamera-Folge, Blitz-Takt und Loop-Fades — bei
+## Klarwetter/indoor ohne klingende Loops darf der Frame-Tick schlafen
+## (Projekt-Muster: dialog_bubble gated den Typewriter genauso). Noch
+## spielende Loops halten den Tick wach, bis ihr Fade-out fertig ist.
+func _process_noetig() -> bool:
+	return (
+		bool(_plan.get("regen", false))
+		or bool(_plan.get("schnee", false))
+		or bool(_plan.get("blitz", false))
+		or _loop_spielt()
+		or (folge_kamera and not indoor_modus)
+	)
+
+
+func _loop_spielt() -> bool:
+	for id: String in _loops:
+		if (_loops[id] as AudioStreamPlayer).playing:
+			return true
+	return false
 
 
 func _wende_nebel_an() -> void:

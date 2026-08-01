@@ -132,6 +132,8 @@ func _process(delta: float) -> void:
 ## JEDEM Connect frisch (W2b-Contract: Remote-Config wirkt sofort).
 func connect_now() -> void:
 	_want_connected = true
+	# Poll-Tick wecken (disconnect_now legt ihn schlafen — Leerlauf-Schutz).
+	set_process(true)
 	if _link != null:
 		return
 	var net_config := _resolve_net_config()
@@ -163,6 +165,9 @@ func disconnect_now() -> void:
 		_link.close()
 		_link = null
 	_hello_sent = false
+	# Offline ohne Reconnect-Wunsch: nichts zu pollen — Tick schläft, bis
+	# connect_now()/_schedule_reconnect() ihn wieder wecken.
+	set_process(false)
 	_set_status(Status.OFFLINE)
 
 
@@ -342,6 +347,9 @@ func _schedule_reconnect() -> void:
 	_reconnect_attempts += 1
 	var jitter := randf() * 0.3 * backoff
 	_reconnect_at_ms = Time.get_ticks_msec() + int((backoff + jitter) * 1000.0)
+	# Alle Reconnect-Pfade (Abriss, connect-Fehler, Heimnetz-Gate) landen
+	# hier — der Tick MUSS wach sein, sonst schläft der Backoff ein.
+	set_process(true)
 
 
 func _maybe_reconnect() -> void:

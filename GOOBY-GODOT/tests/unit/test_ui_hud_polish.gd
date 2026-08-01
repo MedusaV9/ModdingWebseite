@@ -82,6 +82,20 @@ func test_coins_zaehl_animation_endet_exakt() -> void:
 	unmount(hud)
 
 
+func test_coins_impuls_startet_aus_ruhelage() -> void:
+	# Quickwin #11: ein abgebrochener Wiggle/Bounce darf Icon/Chip nicht
+	# schief/skaliert hinterlassen — set_coins setzt erst die Ruhelage.
+	var hud: Hud = HUD_SCENE.instantiate()
+	mount(hud)
+	await tree.process_frame
+	hud._coin_icon.rotation = 0.4
+	hud._coin_chip.scale = Vector2(1.3, 1.3)
+	hud.set_coins(25)
+	check_approx(hud._coin_icon.rotation, 0.0, "Icon startet aus der Ruhelage")
+	check(hud._coin_chip.scale.is_equal_approx(Vector2.ONE), "Chip startet aus der Ruhelage")
+	unmount(hud)
+
+
 func test_status_sheet_inhalt_4_stats_mit_buff() -> void:
 	var stats := {"hunger": 42.0, "energie": 90.0, "hygiene": 10.0, "spass": 55.0}
 	var content := HudStatusSheet.build_content(stats, {"spass": 5.0})

@@ -50,6 +50,7 @@ var _banner: Label
 var _streicheln_btn: Button
 var _sprung_btn: Button
 var _puls_zeit := 0.0
+var _stick_gezeichnet := false
 
 
 func _ready() -> void:
@@ -77,7 +78,13 @@ func _process(delta: float) -> void:
 	if zuegel_modus and _zuegel_halte_s >= 0.0:
 		_zuegel_halte_s += delta
 		_ziel_gangart(Touch.zuegel_gangart(_zuegel_halte_s))
-	queue_redraw()
+	# _draw() zeichnet NUR den Floating-Stick (Ausdauer/Puls/Callout laufen
+	# über eigene Child-Controls) — redraw nur solange der Stick liegt,
+	# plus 1 Frame zum Wegwischen nach dem Loslassen.
+	var stick_aktiv := _stick_finger >= 0
+	if stick_aktiv or _stick_gezeichnet:
+		queue_redraw()
+	_stick_gezeichnet = stick_aktiv
 
 
 func _gui_input(event: InputEvent) -> void:

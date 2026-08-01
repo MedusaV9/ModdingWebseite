@@ -139,6 +139,23 @@ func test_identitaet_ist_stabil_ueber_neustarts() -> void:
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(rig.identity_path))
 
 
+func test_poll_tick_schlaeft_offline_und_reconnect_bleibt_wach() -> void:
+	# Quickwin #15: offline ohne Verbindungswunsch pollt nichts — aber JEDER
+	# Reconnect-Pfad (Abriss → _schedule_reconnect) muss den Tick wecken.
+	var rig := NetTestRig.boot(tree)
+	rig.client.connect_now()
+	assert_true(rig.client.is_processing(), "Verbindungswunsch weckt den Poll-Tick")
+	rig.client.disconnect_now()
+	assert_false(rig.client.is_processing(), "offline ohne Wunsch: Tick schläft")
+	await rig.go_online(tree)
+	assert_true(rig.client.is_processing(), "online: Tick läuft")
+	rig.link().drop()
+	await wait_frames(3)
+	assert_eq(rig.client.status, NetClient.Status.OFFLINE)
+	assert_true(rig.client.is_processing(), "nach Abriss bleibt der Reconnect-Tick wach")
+	await rig.shutdown(tree)
+
+
 func test_uuid4_format() -> void:
 	for _i in 20:
 		var id := NetClient.uuid4()

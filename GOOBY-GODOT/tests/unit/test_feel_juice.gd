@@ -99,6 +99,41 @@ func test_burst_und_ring_raeumen_sich_auf() -> void:
 	await _teardown(env)
 
 
+func test_float_text_ohne_baum_crasht_nicht() -> void:
+	# Quickwin #8: Late-Callback nach Szenenwechsel — Kit hängt nicht (mehr)
+	# im Baum, der Reduced-Zweig hat dann keinen get_tree().
+	var kit := JuiceKit.new()
+	kit.float_text(Vector2.ZERO, "+10")
+	assert_eq(kit.get_child_count(), 1, "Label wurde angelegt")
+	assert_true(kit.get_child(0).is_queued_for_deletion(), "Label räumt sich sofort auf")
+	kit.free()
+
+
+func test_partikel_aufraeumen_haengt_am_finished_signal() -> void:
+	# Quickwin #16: Aufräumen über particles.finished statt SceneTreeTimer
+	# (der nach Szenenwechsel auf freed Instanzen feuern würde).
+	var env := _setup()
+	var overlay: Control = env["overlay"]
+	var kit: JuiceKit = env["kit"]
+	await wait_frames(1)
+	var before := overlay.get_child_count()
+	kit.burst(overlay, Vector2(60, 60), Color.YELLOW, 4)
+	kit.confetti(4)
+	kit.coin_rain(4)
+	assert_eq(overlay.get_child_count(), before + 3, "drei Partikel-Nodes im Overlay")
+	for i in 3:
+		var particles := overlay.get_child(before + i) as CPUParticles2D
+		if particles == null:
+			fail_test("Partikel-Node %d ist kein CPUParticles2D" % i)
+			continue
+		assert_true(particles.one_shot, "one_shot gesetzt → finished feuert (Node %d)" % i)
+		assert_true(
+			particles.finished.is_connected(particles.queue_free),
+			"Aufräumen hängt am finished-Signal (Node %d)" % i
+		)
+	await _teardown(env)
+
+
 func test_count_to_endet_exakt_und_tickt() -> void:
 	var env := _setup()
 	var kit: JuiceKit = env["kit"]

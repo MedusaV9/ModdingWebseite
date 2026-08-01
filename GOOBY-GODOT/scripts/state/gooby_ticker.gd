@@ -222,10 +222,20 @@ static func _advance_care(
 static func _chill_active(stats: Dictionary, now_ms: int) -> bool:
 	if _num(stats.get("hygiene")) >= CHILL_HYGIENE_BELOW:
 		return false
-	var date := Time.get_datetime_dict_from_unix_time(int(now_ms / 1000.0))
+	# LOKALER Kalendertag/Stunde wie RanchWetter.datum_heute() (Systemuhr) —
+	# UTC verschob den SoulWetter-Tag z. B. für DE (UTC+1/+2) jeden Abend.
+	var bias_min := int(Time.get_time_zone_from_system()["bias"])
+	var date := local_datetime(now_ms, bias_min)
 	var datum := "%04d-%02d-%02d" % [int(date["year"]), int(date["month"]), int(date["day"])]
 	var wetter := SoulWetter.zustand(datum, float(date["hour"]))
 	return bool(wetter.get("regen", false)) or bool(wetter.get("schnee", false))
+
+
+## Kalender-Dict zum Unix-Zeitstempel in LOKALER Zeit (bias = Zeitzonen-
+## Offset in Minuten wie Time.get_time_zone_from_system().bias) — pur,
+## damit Tests den Offset injizieren können (AGENTS-Regel: Zeit injizieren).
+static func local_datetime(now_ms: int, bias_min: int) -> Dictionary:
+	return Time.get_datetime_dict_from_unix_time(int(now_ms / 1000.0) + bias_min * 60)
 
 
 static func _dict(value: Variant) -> Dictionary:
