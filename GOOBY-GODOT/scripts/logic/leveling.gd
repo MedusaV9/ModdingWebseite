@@ -71,11 +71,14 @@ static func minigame_xp(coins_earned: float) -> int:
 	return MINIGAME_BASE + mini(MINIGAME_BONUS_CAP, bonus)
 
 
+## G4/P21 (QW #24): eine gespeicherte 0 ist ein GÜLTIGER Wert, kein „fehlt“ —
+## der alte `n != 0`-Fallback war eine versteckte Falle für Felder, bei denen
+## 0 legitim ist (XP, Zähler). Den Level-Fall (min 1) deckt der Clamp am
+## Aufrufer (apply_xp) ab.
 static func _int_or(value: Variant, fallback: int) -> int:
 	match typeof(value):
 		TYPE_INT, TYPE_FLOAT:
-			var n := int(floor(float(value)))
-			return n if n != 0 else fallback
+			return int(floor(float(value)))
 		_:
 			return fallback
 

@@ -31,7 +31,9 @@ func test_basket_scenery_returns_crowd() -> void:
 
 func test_goalie_scenery_returns_crowd() -> void:
 	var stage := Node3D.new()
-	var crowd := GoalieScenery.build(stage)
+	# W17/G4 (Paket G4-GOALIE): build() erwartet jetzt Elfmeterpunkt + Wiesen-
+	# farbe — Werte spiegeln die echte Call-Site (goalie_gooby.gd SPOT_Z/GRASS).
+	var crowd := GoalieScenery.build(stage, 7.4, Color(0.35, 0.61, 0.33))
 	assert_ne(crowd, null, "Zuschauer-Knoten kommt zurück (für den Paraden-Hüpfer)")
 	assert_true(stage.is_ancestor_of(crowd), "Zuschauer hängen in der Bühne")
 	assert_true(stage.get_child_count() >= 6, "Vereinsheim, Flutlicht, Bande, Fahnen, Hütchen")

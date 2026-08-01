@@ -26,6 +26,9 @@ const GAP_PX := 8.0
 const MAX_WIDTH_PX := 352.0
 ## Vertikale Ankerhöhe (Anteil der Canvas-Höhe, unter den Status-Pills).
 const TOP_SHARE := 0.12
+## G4/P21 (QW #17): Gruppen-Name für den zentralen `zeige()`-Helfer —
+## ersetzt die 8 kopierten Vollbaum-Scans (`find_children` über root).
+const GROUP := &"toast_layer"
 
 var queue := ToastQueue.new()
 
@@ -36,7 +39,20 @@ var _hold_timer: Timer
 var _in_tween: Tween
 
 
+## Zentraler Toast-Weg für Nicht-Screen-Code (Sheets, Services): findet den
+## nächsten ToastLayer über die Gruppe statt per O(Baum)-`find_children`.
+## Ohne Baum/Layer still no-op (headless/Tests: wie die alten Kopien).
+static func zeige(von: Node, text: String, error := false) -> void:
+	if von == null or not von.is_inside_tree():
+		return
+	for layer: Node in von.get_tree().get_nodes_in_group(GROUP):
+		if layer is ToastLayer and not layer.is_queued_for_deletion():
+			(layer as ToastLayer).show_toast(text, error)
+			return
+
+
 func _ready() -> void:
+	add_to_group(GROUP)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	_panel = PanelContainer.new()

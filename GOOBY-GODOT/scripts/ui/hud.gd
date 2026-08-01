@@ -157,6 +157,9 @@ var _dock_clearance := 0.0
 
 
 func _ready() -> void:
+	# G4/P21 (QW #18): HUD-Finder (DialogBubble/WhatsNextHint/Onboarding)
+	# suchen über diese Gruppe statt per Vollbaum-find_children.
+	add_to_group(&"hud")
 	_build_action_buttons()
 	_build_status_chips()
 	_setup_static_buttons()

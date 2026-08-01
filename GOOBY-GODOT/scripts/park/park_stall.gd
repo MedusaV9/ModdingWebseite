@@ -72,6 +72,4 @@ func _coins() -> int:
 
 
 func _zeige_toast(text: String) -> void:
-	var toasts := get_tree().root.find_children("*", "ToastLayer", true, false)
-	if not toasts.is_empty():
-		toasts[0].show_toast(text)
+	ToastLayer.zeige(self, text)

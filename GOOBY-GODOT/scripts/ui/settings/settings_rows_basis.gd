@@ -6,6 +6,13 @@ extends Control
 ## AppSettings-Lesehelfer — die Sektions-INHALTE wohnen in
 ## settings_screen.gd. Skalierungs-Faktoren setzt der erbende Screen.
 
+## G4/P21 Settings-Vertonung (Grammatik §3): Slider-Rasten klingen als
+## `ui_tick`, aber gedrosselt — beim Ziehen feuert value_changed pro
+## Raststufe, ohne Bremse würde das zum Dauerrattern.
+const TICK_DEBOUNCE_MS := 90
+## Meta-Key am Slider: frühester Zeitpunkt (ticks_msec) fürs nächste Tick.
+const TICK_META := &"_p21_tick_ab_ms"
+
 ## Aktueller UiScale-Faktor (FIX1) — setzt _rebuild, nutzen die Row-Builder.
 var _f := 1.0
 ## Font-Faktor (= _f x Textgroesse-Regler).
@@ -99,6 +106,8 @@ func _add_pick_row(
 
 
 ## CheckButton-Row (generisch): handler(on: bool).
+## G4/P21 Settings-Vertonung: Schalter klingen als `ui_toggle` (Grammatik §3;
+## der Umschlag greift sofort und kann nicht fehlschlagen → Press darf klingen).
 func _add_switch_row(
 	rows: VBoxContainer, key: String, label_text: String, initial: bool, handler: Callable
 ) -> CheckButton:
@@ -110,7 +119,11 @@ func _add_switch_row(
 	# CheckButtons ist seine BREITE (Toggle-Icon ~76 px = 23 pt).
 	toggle.custom_minimum_size = Vector2(_row_floor(), _row_floor())
 	toggle.button_pressed = initial
-	toggle.toggled.connect(func(on: bool) -> void: handler.call(on))
+	toggle.toggled.connect(
+		func(on: bool) -> void:
+			AudioDirector.try_play(toggle, "ui_toggle")
+			handler.call(on)
+	)
 	row.add_child(toggle)
 	return toggle
 
@@ -139,7 +152,14 @@ func _add_range_row(
 	slider.value = clampf(initial, min_value, max_value)
 	slider.custom_minimum_size = Vector2(240.0 * _f, _row_floor())
 	slider.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	slider.value_changed.connect(func(value: float) -> void: handler.call(value))
+	# G4/P21: Raststufen ticken hörbar (`ui_tick`, gedrosselt). Der Handler
+	# läuft ZUERST — bei den Lautstärke-Reglern klingt das Tick dann schon
+	# auf dem frisch gesetzten Pegel (direkte Vorhöre).
+	slider.value_changed.connect(
+		func(value: float) -> void:
+			handler.call(value)
+			_spiele_slider_tick(slider)
+	)
 	if rebuild_on_release:
 		slider.drag_ended.connect(
 			func(changed: bool) -> void:
@@ -148,6 +168,17 @@ func _add_range_row(
 		)
 	row.add_child(slider)
 	return slider
+
+
+## Gedrosseltes Raststufen-Tick (Grammatik §3: „ui_tick … ggf. drosseln“) —
+## pro Slider frühestens alle TICK_DEBOUNCE_MS. has_meta-Guard statt
+## get_meta(key, null) (Projekt-Lint-Regel).
+func _spiele_slider_tick(slider: HSlider) -> void:
+	var now := Time.get_ticks_msec()
+	if slider.has_meta(TICK_META) and now < int(slider.get_meta(TICK_META)):
+		return
+	slider.set_meta(TICK_META, now + TICK_DEBOUNCE_MS)
+	AudioDirector.try_play(slider, "ui_tick")
 
 
 func _make_row(rows: VBoxContainer, key: String, label_text: String) -> HBoxContainer:

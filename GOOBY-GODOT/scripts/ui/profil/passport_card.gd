@@ -878,8 +878,4 @@ func _wende_schmal_an(row: BoxContainer) -> void:
 
 
 func _zeige_toast(text: String) -> void:
-	if not is_inside_tree():
-		return
-	var toasts := get_tree().root.find_children("*", "ToastLayer", true, false)
-	if not toasts.is_empty():
-		toasts[0].show_toast(text)
+	ToastLayer.zeige(self, text)

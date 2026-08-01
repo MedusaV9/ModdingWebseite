@@ -101,7 +101,12 @@ func _ready() -> void:
 	# W14: konsistente Kopfzeile — Zurück ist überall die Ghost-Outline-Pill
 	# mit ‹-Text (wie Arcade/Album/Profil), nicht der Icon-Quadrat-Knopf.
 	_back.theme_type_variation = &"GhostButton"
-	_back.pressed.connect(func() -> void: back_pressed.emit())
+	# G4/P21 Settings-Vertonung: Zurück klingt als `ui_back` (Grammatik §3).
+	_back.pressed.connect(
+		func() -> void:
+			AudioDirector.try_play(_back, "ui_back")
+			back_pressed.emit()
+	)
 	_load_from_settings_autoload()
 	get_viewport().size_changed.connect(_on_viewport_resized)
 	var scroll := _scroll()
@@ -734,17 +739,20 @@ func _build_game_section() -> void:
 	)
 	_add_help(rows, "HaptikAnHelp", I18nService.t("settings.haptik_an_hilfe"))
 	_add_help(rows, "AutosaveHelp", I18nService.t("settings.autosave_hilfe"))
+	# G4/P21: Zeilen-Buttons klingen als `ui_click` (Standard-Aktion, §3).
 	var reset_btn := _section_button(rows, "TutorialResetButton", "settings.tutorial_reset")
-	reset_btn.pressed.connect(_on_tutorial_reset)
+	reset_btn.pressed.connect(_mit_click(_on_tutorial_reset, reset_btn))
 	# REST-4 (EVAL Rang 11): Aktionscodes-Screen (Route `codes`).
 	var codes_btn := _section_button(rows, "CodesButton", "codes.settings_eintrag")
-	codes_btn.pressed.connect(_on_codes_pressed)
+	codes_btn.pressed.connect(_mit_click(_on_codes_pressed, codes_btn))
 
 
 func _build_updates_section() -> void:
 	var rows := _add_section("Updates", I18nService.t("settings.updates"))
 	var btn := _section_button(rows, "UpdateCheckButton", "settings.update_suchen")
-	btn.pressed.connect(_on_update_check)
+	# Press = Prüfung STARTEN (ui_click); die Ausgänge melden die
+	# Update-Glue-Toasts (Outcome-Regel §3).
+	btn.pressed.connect(_mit_click(_on_update_check, btn))
 	# >> W15/UPDREPO Andock-Zeile (minimal): GitHub-Token-Zeile fuer App-Updates
 	# lebt in scripts/ui/settings/updates_sektion.gd.
 	rows.add_child(UpdatesSektion.new())
@@ -756,9 +764,11 @@ func _build_transfer_section() -> void:
 	# W14: Titel trägt der Gruppen-Header „Spielstand“ direkt darüber.
 	var rows := _add_section("Spielstand", "", false)
 	var btn := _section_button(rows, "TransferButton", "settings.spielstand_uebertragen")
-	btn.pressed.connect(_on_transfer_pressed)
+	btn.pressed.connect(_mit_click(_on_transfer_pressed, btn))
 	# W13-C (Doc C §7): Server-Identitäts-Umzug per Panel-Code — der lokale
 	# Spielstand bleibt auf dem Gerät, nur das Online-Konto zieht um.
+	# BEWUSST ohne Press-Sound: der Knopf öffnet ein Overlay — Öffnen klingt
+	# laut Grammatik nur über das Panel selbst (UmzugSheet; s. P21-Bericht).
 	var umzug_btn := _section_button(rows, "UmzugButton", "umzug.settings_eintrag")
 	umzug_btn.pressed.connect(_on_umzug_pressed)
 
@@ -802,6 +812,8 @@ func _build_about_section() -> void:
 	news_btn.add_theme_font_size_override("font_size", int(AcTokens.FONT_SIZE_BUTTON * _tf))
 	news_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	news_btn.focus_mode = Control.FOCUS_NONE
+	# BEWUSST ohne Press-Sound: öffnet ein PanelSheet — `open()` spielt
+	# selbst `ui_open` (Doppel-Klang-Regel, Grammatik §3).
 	news_btn.pressed.connect(_on_open_news)
 	rows.add_child(news_btn)
 	# CC-BY-Pflicht-Credits (RANCH-ASSETS.md §6) — MUESSEN hier erscheinen.
@@ -828,8 +840,11 @@ func _build_about_section() -> void:
 
 func _on_language_pressed(id: String) -> void:
 	if id == str(_values.get("language")):
+		# Dev-Trigger-Zählung bleibt bewusst stumm (versteckter Pfad).
 		_register_dev_tap(id)
 		return
+	# G4/P21: Sprachwechsel = Auswahl-Segment → `ui_chip` (Grammatik §3).
+	AudioDirector.try_play(self, "ui_chip")
 	_set_value("language", id)
 	I18nService.set_locale(id)
 	_rebuild()
@@ -866,6 +881,14 @@ func _on_dev_confirmed() -> void:
 
 
 ## ------------------------------------------------------------------ Helfer
+
+
+## G4/P21: pressed-Handler mit vorangestelltem `ui_click` (Zeilen-Buttons,
+## Grammatik §3 „Standard-Aktion“) — EIN Sound pro Handler, nie doppelt.
+func _mit_click(handler: Callable, von: Node) -> Callable:
+	return func() -> void:
+		AudioDirector.try_play(von, "ui_click")
+		handler.call()
 
 
 func _on_preset_selected(id: String) -> void:

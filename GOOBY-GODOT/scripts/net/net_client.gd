@@ -375,13 +375,7 @@ func _refuse_insecure(host: String) -> void:
 
 
 func _show_gate_toast() -> void:
-	var tree_ref := get_tree()
-	if tree_ref == null:
-		return
-	for layer in tree_ref.root.find_children("*", "ToastLayer", true, false):
-		if layer.has_method("show_toast"):
-			layer.show_toast(I18nService.t(GATE_TOAST_KEY), true)
-			return
+	ToastLayer.zeige(self, I18nService.t(GATE_TOAST_KEY), true)
 
 
 func _set_status(next: int) -> void:

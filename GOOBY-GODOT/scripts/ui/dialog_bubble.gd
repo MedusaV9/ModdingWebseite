@@ -128,7 +128,8 @@ func _find_hud() -> Control:
 	var tree := get_tree()
 	if tree == null:
 		return null
-	for node: Node in tree.root.find_children("*", "Control", true, false):
+	# G4/P21 (QW #18): Gruppen-Lookup statt Iteration über JEDEN Control.
+	for node: Node in tree.get_nodes_in_group(&"hud"):
 		if node is Hud:
 			_hud_ref = node
 			break
