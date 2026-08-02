@@ -28,6 +28,8 @@ var _lines: Array[String] = []
 var _index := -1
 var _hud_ref: Control
 var _typewriter := DialogTypewriter.new()
+## Szenen-Oberkante der Kapsel (tscn) — Basis für den Höhen-Pass pro Zeile.
+var _szenen_offset_top := 0.0
 
 @onready var _bubble: PanelContainer = %Bubble
 @onready var _text: Label = %BubbleText
@@ -37,6 +39,13 @@ var _typewriter := DialogTypewriter.new()
 func _ready() -> void:
 	visible = false
 	_hint.text = I18nService.t("dialog.weiter_hinweis")
+	# G7-P51: Höhen-Messung immer auf dem VOLLEN Text — Godots Default
+	# VC_CHARS_BEFORE_SHAPING shapt nur die getippten Zeichen, _fit_height
+	# sah damit 0–2 Zeichen und lange Zeilen verloren unten ganze Zeilen
+	# (Label zeichnet abgeschnittene Zeilen gar nicht). Das Zeichnen selbst
+	# folgt weiter visible_characters (Typewriter unverändert).
+	_text.visible_characters_behavior = TextServer.VC_GLYPHS_LTR
+	_szenen_offset_top = _bubble.offset_top
 	_bubble.gui_input.connect(_on_bubble_input)
 	get_viewport().size_changed.connect(_relayout)
 	set_process(false)
@@ -121,6 +130,27 @@ func _fit_height_settled() -> void:
 		_fit_height()
 
 
+## G7-P51: Höhen-Pass für die AKTUELLE Zeile. Mit HUD (Home) macht _relayout
+## den vollen Pass; ohne HUD (Stadt-Dialoge) wächst nur die Oberkante nach
+## oben, wenn der Text mehr Platz braucht — Breite/Unterkante der Szenen-
+## Geometrie bleiben unangetastet (deren Options-Stapel rechnet mit ihnen).
+func _zeilen_fit() -> void:
+	if _bubble == null or not is_inside_tree():
+		return
+	var hud := _find_hud()
+	if hud != null and hud.is_visible_in_tree():
+		_fit_height()
+		_fit_height_settled()
+		return
+	var needed := _bubble.get_combined_minimum_size().y
+	var canvas := Vector2(get_viewport().get_visible_rect().size)
+	var insets := UiScale.safe_insets_canvas(get_viewport())
+	var deckel := -(canvas.y - float(insets["top"]) - 8.0)
+	# Pro Zeile frisch von der Szenen-Höhe aus rechnen — nach einer langen
+	# Zeile schrumpft die Blase für kurze Folge-Zeilen wieder zurück.
+	_bubble.offset_top = maxf(minf(_szenen_offset_top, _bubble.offset_bottom - needed), deckel)
+
+
 func _find_hud() -> Control:
 	if _hud_ref != null and is_instance_valid(_hud_ref):
 		return _hud_ref
@@ -167,6 +197,9 @@ func _advance() -> void:
 	_zeige_zeichen()
 	set_process(_typewriter.laeuft())
 	_hint.visible = _index < _lines.size() - 1
+	# G7-P51: Höhe pro ZEILE nachziehen — _relayout lief nur bei show_lines/
+	# Resize und maß noch den ALTEN (bzw. leeren) Text.
+	_zeilen_fit()
 	advanced.emit(_index)
 	_pop()
 

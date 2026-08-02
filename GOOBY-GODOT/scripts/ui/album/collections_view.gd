@@ -137,6 +137,9 @@ func _build_card_header(set_id: String, progress: Dictionary) -> Control:
 	title.text = I18nService.t("collections.set.%s" % set_id)
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	title.clip_text = true
+	# G7-P51 Text-Fit: clip ohne Overrun schnitt lange Set-Namen MITTEN im
+	# Wort ab — Kopfzeile neben dem Fortschritts-Chip darf sauber kürzen.
+	title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	_scale_font(title, 22)
 	header.add_child(title)
 	var chip := PanelContainer.new()
@@ -221,6 +224,9 @@ func _build_entry_slot(set_id: String, entry_id: String, c: Dictionary) -> Contr
 	)
 	caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	caption.clip_text = true
+	# G7-P51 Text-Fit: Kachel-Unterschrift ist ein Listen-Chip — Ellipsis
+	# statt hartem Mitten-im-Wort-Schnitt.
+	caption.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	caption.add_theme_color_override(
 		"font_color", AcTokens.INK if owned else Color(AcTokens.INK, 0.45)
 	)
@@ -261,6 +267,8 @@ func _build_claim_row(set_id: String, c: Dictionary, progress: Dictionary) -> Co
 	)
 	status.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	status.clip_text = true
+	# G7-P51 Text-Fit: Status-Zeile neben dem Claim-Knopf kürzt sauber.
+	status.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	_scale_font(status, AcTokens.FONT_SIZE_CAPTION)
 	row.add_child(status)
 	var claimed := CollectionsLogic.is_claimed(c, set_id)

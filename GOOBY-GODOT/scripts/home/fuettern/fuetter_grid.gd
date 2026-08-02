@@ -226,6 +226,9 @@ func _baue_karte(food_id: String, anzahl: int) -> Control:
 	speise_name.text = FoodCatalog.display_name(food_id)
 	speise_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	speise_name.clip_text = true
+	# G7-P51 Text-Fit: Karten-Name ist ein Listen-Chip — Ellipsis statt
+	# hartem Mitten-im-Wort-Schnitt bei langen Speise-Namen.
+	speise_name.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	spalte.add_child(speise_name)
 	spalte.add_child(_baue_pillen(food_id))
 	_ignoriere_maus(inhalt)

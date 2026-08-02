@@ -201,6 +201,9 @@ func ersetze_text(text: String) -> bool:
 	_layout_messen()
 	_positionieren()
 	_pop_in()
+	# Wie _starten: Container-Sortierung einmal nachziehen (Sicherheitsnetz,
+	# falls Theme-Fonts die Wrap-Höhe minimal anders shapen).
+	_nachmessen.call_deferred()
 	return true
 
 
@@ -219,6 +222,14 @@ func _bauen() -> void:
 	_label.text = _voller_text
 	_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_label.autowrap_mode = TextServer.AUTOWRAP_OFF
+	# G7-P51 (User-Screenshots „Ohh, wird das sch“): Godots Default
+	# VC_CHARS_BEFORE_SHAPING shapt NUR die sichtbaren Typewriter-Zeichen —
+	# _layout_messen lief direkt nach _typewriter.start (0 Zeichen) und sah
+	# eine Mini-Blase: der MAX_WIDTH-Zweig griff nie (kein Wort-Umbruch,
+	# lange Sprüche liefen als EINE Zeile aus dem Bild) und die Kapsel
+	# ruckelte pro Buchstabe nach. VC_GLYPHS_LTR layoutet IMMER den vollen
+	# Text (Endgröße steht vorab fest), nur das Zeichnen folgt dem Tippen.
+	_label.visible_characters_behavior = TextServer.VC_GLYPHS_LTR
 	_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_label.add_theme_color_override("font_color", AcTokens.INK)
 	if ThemeService.font(700) != null:
@@ -389,17 +400,42 @@ func _layout_messen() -> void:
 	_label.autowrap_mode = TextServer.AUTOWRAP_OFF
 	_label.custom_minimum_size = Vector2.ZERO
 	var canvas := Vector2(get_viewport().get_visible_rect().size)
+	var insets := UiScale.safe_insets_canvas(get_viewport())
+	# G7-P51: Deckel gegen die SAFE-Fläche rechnen (nicht die volle Canvas),
+	# sonst klemmt die Blase auf Notch-Geräten am Rand statt zu wickeln.
+	var safe_w := canvas.x - float(insets["left"]) - float(insets["right"])
 	var natural := _kapsel.get_combined_minimum_size()
-	var max_w := minf(canvas.x * 0.86, MAX_WIDTH_PX * f)
+	var max_w := minf(safe_w - 2.0 * RAND_GAP * f, MAX_WIDTH_PX * f)
 	if natural.x > max_w:
 		var chrome := natural.x - _label.get_combined_minimum_size().x
+		var wrap_w := maxf(max_w - chrome, 60.0)
 		_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		_label.custom_minimum_size = Vector2(maxf(max_w - chrome, 60.0), 0.0)
-		natural = Vector2(max_w, _kapsel.get_combined_minimum_size().y)
+		# Wrap-Höhe SOFORT über die Schrift messen — das Label shapt erst im
+		# nächsten Frame, die Kapsel reserviert die Endgröße aber VORAB
+		# (kein Nachruckeln, Text-Rect immer in der Blase).
+		_label.custom_minimum_size = Vector2(wrap_w, _wrap_hoehe(wrap_w))
+		natural = _kapsel.get_combined_minimum_size()
 	_kapsel.size = natural
 	# Pivot unten Mitte: Pop/Atmen wachsen aus dem Sprech-Schwanz heraus.
 	_kapsel.pivot_offset = Vector2(natural.x / 2.0, natural.y)
 	_tail_layouten(natural.x / 2.0)
+
+
+## Höhe des an WORT-Grenzen gewickelten Textes bei `wrap_w` Breite (Spiegel
+## von AUTOWRAP_WORD_SMART: Wort-Umbruch, Adaptive nur für Überlänge-Wörter)
+## inkl. Label-Zeilenabstand — liefert die ENDhöhe ohne Frame-Wartezeit.
+func _wrap_hoehe(wrap_w: float) -> float:
+	var font := _label.get_theme_font("font")
+	var font_size := _label.get_theme_font_size("font_size")
+	if font == null or font_size <= 0:
+		return 0.0
+	var brk := TextServer.BREAK_MANDATORY | TextServer.BREAK_WORD_BOUND | TextServer.BREAK_ADAPTIVE
+	var gemessen := font.get_multiline_string_size(
+		_voller_text, HORIZONTAL_ALIGNMENT_CENTER, wrap_w, font_size, -1, brk
+	)
+	var zeilen := maxi(1, roundi(gemessen.y / maxf(font.get_height(font_size), 1.0)))
+	var abstand := _label.get_theme_constant("line_spacing")
+	return gemessen.y + float((zeilen - 1) * abstand)
 
 
 func _positionieren() -> void:
@@ -432,15 +468,17 @@ func _positionieren() -> void:
 	rect = UiAnchors.dodge(
 		rect, UiAnchors.occupied_rects(UiAnchors.ZONE_TOP, _kapsel), UiAnchors.ZONE_TOP
 	)
+	# G7-P51: Rand-Luft skaliert mit f (wie die Breiten-Rechnung in
+	# _layout_messen) — die Blase klemmt sonst auf Retina an der Notch.
 	rect.position.x = clampf(
 		rect.position.x,
-		float(insets["left"]) + RAND_GAP,
-		canvas.x - float(insets["right"]) - RAND_GAP - groesse.x
+		float(insets["left"]) + RAND_GAP * f,
+		canvas.x - float(insets["right"]) - RAND_GAP * f - groesse.x
 	)
 	rect.position.y = clampf(
 		rect.position.y,
-		float(insets["top"]) + RAND_GAP,
-		canvas.y - float(insets["bottom"]) - RAND_GAP - groesse.y
+		float(insets["top"]) + RAND_GAP * f,
+		canvas.y - float(insets["bottom"]) - RAND_GAP * f - groesse.y
 	)
 	_kapsel.position = rect.position
 	_tail_ausrichten(sprecher_punkt)

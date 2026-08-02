@@ -678,6 +678,9 @@ func _build_name_band(def: Dictionary, unlocked: bool) -> Control:
 	label.text = str(def.get("name_de", "")) if unlocked else I18nService.t("album.unbekannt")
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.clip_text = true
+	# G7-P51 Text-Fit: Namensband der Sticker-Kachel ist ein Chip —
+	# Ellipsis statt hartem Mitten-im-Wort-Schnitt (wie der Set-Chip oben).
+	label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_scale_font(label, AcTokens.FONT_SIZE_CAPTION)
 	band.add_child(label)
