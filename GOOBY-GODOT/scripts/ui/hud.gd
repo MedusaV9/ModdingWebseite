@@ -37,6 +37,12 @@ extends Control
 ## Keine eigene Spiel-Logik: Anzeigedaten kommen über `set_stats()`,
 ## `set_coins()`, `set_level()` (W1d-GameState verdrahtet das später,
 ## siehe handoffs/W1c-needs-from-state.md).
+##
+## G7-P50 HUD-DYNAMIK (iPhone-Feedback): das HUD WEICHT animiert, wenn der
+## Baumodus oder ein Blatt (PanelSheet) offen ist — Zustandsmaschine in
+## `hud_sichtbarkeit.gd` (findet BuildMode/PanelSheet selbst über den
+## SceneTree, keine fremden Hunks). Kachel-Labels schrumpfen per
+## Font-Autoshrink (`hud_label_fit.gd`) statt abgeschnitten zu erscheinen.
 
 ## Ein Haupt-Button wurde gedrückt (reise/arcade/bau/album/profil/igohbie).
 signal action_pressed(action: StringName)
@@ -132,6 +138,8 @@ var _coin_shown := 0
 var _status_sheet: PanelSheet
 var _eye_timer: Timer
 var _coachmark: Control
+## G7-P50: Verdeckungs-Zustandsmaschine (Baumodus/Blätter → HUD weicht).
+var _sichtbarkeit: HudSichtbarkeit
 ## Breite der Cockpit-Spalte (setzt apply_layout; refresh_safe_area liest).
 var _column_width := 88.0
 ## Oberkante der Cockpit-Spalte in Canvas-px (unter dem Zahnrad).
@@ -163,6 +171,7 @@ func _ready() -> void:
 	_build_action_buttons()
 	_build_status_chips()
 	_setup_static_buttons()
+	_baue_sichtbarkeit()
 	_eye_timer = Timer.new()
 	_eye_timer.one_shot = true
 	_eye_timer.timeout.connect(_on_eye_timeout)
@@ -181,6 +190,10 @@ func _ready() -> void:
 ## die getunte Bogen-Geometrie — mit dem Web-Paritäts-Dock entfällt sie,
 ## und damit auch die 26-pt-Tippflächen auf 3×-Retina-Geräten.
 func apply_layout(layout: HudLayoutLogic.Layout) -> void:
+	# G7-P50: laufende Weiche-Animation kappen + Ruhelage herstellen, damit
+	# der Pass nie mit halb verschobenen Teilen rechnet.
+	if _sichtbarkeit != null:
+		_sichtbarkeit.vor_layout()
 	current_layout = layout
 	var portrait := layout == HudLayoutLogic.Layout.PORTRAIT
 	var canvas := Vector2(get_viewport().get_visible_rect().size)
@@ -228,6 +241,10 @@ func apply_layout(layout: HudLayoutLogic.Layout) -> void:
 		_portrait_dock.add_theme_constant_override("v_separation", int(_dock_gap_px))
 	else:
 		btn_size = _fit_landscape_column(canvas, insets, btn_size, label_h, floor_px)
+		# G7-P50: der Messpass kann die Kacheln GESCHRUMPFT haben — Labels
+		# auf die endgültige Breite neu einpassen (sonst wieder „Garder…").
+		for id: StringName in order:
+			_apply_button_label(_buttons[id], id, false, f)
 	var chip_parent: Container = _status_row if portrait else _left_column
 	for chip in _chip_nodes:
 		if chip.get_parent() != chip_parent:
@@ -268,8 +285,16 @@ func apply_layout(layout: HudLayoutLogic.Layout) -> void:
 	_settings_button.custom_minimum_size = Vector2.ONE * maxf(56.0 * f, floor_px)
 	_eye_button.custom_minimum_size = Vector2.ONE * maxf(HudLayoutLogic.ACTION_BTN * f, floor_px)
 	_scale_icon_button(_eye_button, f)
-	_gooby_chip.custom_minimum_size = Vector2(0.0, floor_px)
+	# G7-P50: Mindestbreite aus der ECHTEN Textbreite (Font × f) plus
+	# Chip-Chrome — „Wo ist mein Gooby?" wurde sonst in engen Zuständen zu
+	# „Wo ist mein Goo…" gestaucht.
+	_gooby_chip.text_overrun_behavior = TextServer.OVERRUN_NO_TRIMMING
+	_gooby_chip.custom_minimum_size = Vector2(_gooby_chip_breite(f), floor_px)
 	refresh_safe_area()
+	# G7-P50: apply_layout blendet Dock/Spalte selbst ein — eine aktive
+	# Verdeckung (Baumodus/Blatt) muss danach erneut erzwungen werden.
+	if _sichtbarkeit != null:
+		_sichtbarkeit.nach_layout()
 
 
 ## FIX1-Messpass fürs Cockpit (Ursache „Spalte läuft über beide Ränder“):
@@ -611,6 +636,38 @@ func _make_chip(chip_name: String) -> PanelContainer:
 	return chip
 
 
+## G7-P50: Zugriff für Tests/Debug auf die Verdeckungs-Zustandsmaschine.
+func sichtbarkeit() -> HudSichtbarkeit:
+	return _sichtbarkeit
+
+
+## G7-P50: Weiche-Helfer aufbauen und mit Teilen/Richtungen verdrahten.
+## Richtungen = nächstgelegene Bildkante (Kacheln staffeln nach rechts bzw.
+## unten raus, Status-Spalte nach links, TopBar nach oben).
+func _baue_sichtbarkeit() -> void:
+	_sichtbarkeit = HudSichtbarkeit.new()
+	_sichtbarkeit.name = "Sichtbarkeit"
+	add_child(_sichtbarkeit)
+	var teile := {
+		_top_bar: Vector2.UP,
+		_left_column: Vector2.LEFT,
+		_bottom_left: Vector2.LEFT,
+		_portrait_dock: Vector2.DOWN,
+		_landscape_column: Vector2.RIGHT,
+		_eye_button: Vector2.DOWN,
+	}
+	var eingaben: Array[Control] = []
+	var kacheln: Array[Control] = []
+	for id: StringName in _buttons:
+		eingaben.append(_buttons[id])
+		kacheln.append(_buttons[id])
+	eingaben.append(_settings_button)
+	eingaben.append(_eye_button)
+	eingaben.append(_gooby_chip)
+	eingaben.append_array(_chip_nodes)
+	_sichtbarkeit.setup(self, teile, eingaben, kacheln)
+
+
 func _setup_static_buttons() -> void:
 	_settings_button.icon = load(ICON_DIR + "gear.svg")
 	_settings_button.tooltip_text = I18nService.t("hud.einstellungen")
@@ -659,6 +716,10 @@ func _scale_font(ctl: Control, base_px: int, f: float) -> void:
 ## FIX1 „Die Tasten rechts werden nichtmal erklärt“ + FB3-Web-Parität: der
 ## Name steht in BEIDEN Layouts unterm Icon (Web .g5-btn-label) — Hochkant
 ## kompakt (9 px Basis), Cockpit etwas größer (12 px Basis).
+## G7-P50: Labels erscheinen NIE stumm abgeschnitten — die Schrift schrumpft
+## per `HudLabelFit` auf die Kachelbreite (bestehende Begriffe bleiben);
+## Ellipsis nur als bewusster letzter Ausweg, wenn selbst das Minimum nicht
+## passt (iPhone-Befund „IGohbi“/„Garder“/„Gestalt“).
 func _apply_button_label(btn: Button, id: StringName, portrait: bool, f: float) -> void:
 	btn.text = I18nService.t("hud." + String(id))
 	btn.alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -666,7 +727,36 @@ func _apply_button_label(btn: Button, id: StringName, portrait: bool, f: float) 
 	btn.vertical_icon_alignment = VERTICAL_ALIGNMENT_TOP
 	btn.clip_text = true
 	var base := DOCK_LABEL_FONT if portrait else LABEL_FONT
-	btn.add_theme_font_size_override("font_size", int(maxf(float(base) * f, 10.0)))
+	var wunsch := int(maxf(float(base) * f, 10.0))
+	var fit := HudLabelFit.passende_groesse(
+		btn.get_theme_font("font"), btn.text, wunsch, _label_breite(btn)
+	)
+	btn.add_theme_font_size_override("font_size", int(fit["px"]))
+	btn.text_overrun_behavior = (
+		TextServer.OVERRUN_NO_TRIMMING if bool(fit["passt"]) else TextServer.OVERRUN_TRIM_ELLIPSIS
+	)
+
+
+## Für Text nutzbare Breite einer Kachel: Mindestbreite minus der
+## Innenränder der Theme-StyleBox (HudIconButton: 14 px je Seite).
+func _label_breite(btn: Button) -> float:
+	var avail := btn.custom_minimum_size.x
+	var style := btn.get_theme_stylebox("normal")
+	if style != null:
+		avail -= style.get_content_margin(SIDE_LEFT) + style.get_content_margin(SIDE_RIGHT)
+	return maxf(avail, 1.0)
+
+
+## Mindestbreite des „Wo ist mein Gooby?“-Chips: gemessene Textbreite bei
+## der von `_scale_font` gesetzten Größe plus StyleBox-Innenränder.
+func _gooby_chip_breite(f: float) -> float:
+	var breite := HudLabelFit.text_breite(
+		_gooby_chip.get_theme_font("font"), _gooby_chip.text, int(maxf(17.0 * f, 10.0))
+	)
+	var style := _gooby_chip.get_theme_stylebox("normal")
+	if style != null:
+		breite += style.get_content_margin(SIDE_LEFT) + style.get_content_margin(SIDE_RIGHT)
+	return ceilf(breite)
 
 
 ## Erststart-Coachmark „Deine Knöpfe“ (FIX1): erklärt die Cockpit-Spalte
