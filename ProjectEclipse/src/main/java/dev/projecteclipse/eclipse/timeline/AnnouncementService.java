@@ -76,6 +76,25 @@ public final class AnnouncementService {
     }
 
     /**
+     * F-107: the night-event variant of {@link #announce} — Pale/Umbral Night cards are
+     * OVERWORLD lore ("the packs run double tonight"), so they go only to players whose
+     * level IS the overworld. Limbo ghosts, End raiders and minigame arenas must not
+     * receive overworld night cards ("PALE NIGHT" rolled in on the Limbo ghost ship in
+     * the F-107 acceptance video). Every other announcement lane stays server-wide via
+     * {@link #announce}; only {@code EclipseSpawner.announceNightEvent} uses this.
+     */
+    public static void announceToOverworld(MinecraftServer server, String titleKey,
+            String subtitleKey, String style) {
+        List<ServerPlayer> players = server.overworld().players();
+        for (ServerPlayer player : players) {
+            PacketDistributor.sendToPlayer(player,
+                    new S2CAnnouncePayload(titleKey, subtitleKey, style));
+        }
+        EclipseMod.LOGGER.info("Announce payload sent to {} overworld players: title={} subtitle={} style={}",
+                players.size(), titleKey, subtitleKey, style);
+    }
+
+    /**
      * Day-advance hook, called by {@code DayScheduler.setDay} AFTER the new day is persisted
      * (only when the day actually changed). Announces the day, then any unlock keys the day
      * added, then rebroadcasts the anonymized timeline.

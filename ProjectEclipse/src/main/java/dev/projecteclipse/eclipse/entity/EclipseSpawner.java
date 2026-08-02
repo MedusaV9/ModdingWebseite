@@ -191,9 +191,11 @@ public final class EclipseSpawner {
             // WAVE6 (F-106 A) A6: morning release — the inverse of the wave3_night_omen:
             // a personal rising-mote ring (sendFxEventTo personal lane, a = 1 the ended
             // event was umbral / 0 pale; row in veilfx/Wave6NightFxRows) plus a quiet
-            // exhale for every player who survived the night.
+            // exhale for every player who survived the night. F-107: overworld players
+            // only — the dawn release answers a night only the overworld had (see
+            // announceNightEvent; the A1 dawn sync above stays server-wide).
             int players = 0;
-            for (ServerPlayer p : server.getPlayerList().getPlayers()) {
+            for (ServerPlayer p : server.overworld().players()) {
                 dev.projecteclipse.eclipse.network.fx.FxPayloads.sendFxEventTo(p,
                         dev.projecteclipse.eclipse.network.fx.FxCues.cue("wave6_dawn_release"),
                         p.position(), umbralWas ? 1.0F : 0.0F, 0.0F);
@@ -205,15 +207,25 @@ public final class EclipseSpawner {
         }
     }
 
-    /** W8 typewriter/sweep announcement; also used by {@code /eclipse event set}. */
+    /**
+     * W8 typewriter/sweep announcement; also used by {@code /eclipse event set}.
+     *
+     * <p>F-107: night events are an OVERWORLD arc, so the announcement card and the
+     * personal omen cue go only to players currently IN the overworld — a Limbo ghost
+     * got the "PALE NIGHT" card + omen FX on the ghost-ship deck in the acceptance
+     * video. The A1 state sync below intentionally stays server-wide: the client
+     * renderers are dimension-gated ({@code client.drama.NightDreadFx}) and players
+     * entering the overworld mid-night must already hold the state.</p>
+     */
     public static void announceNightEvent(MinecraftServer server, String event) {
-        AnnouncementService.announce(server,
+        AnnouncementService.announceToOverworld(server,
                 "announce.eclipse.night." + event + ".title",
                 "announce.eclipse.night." + event + ".sub",
                 S2CAnnouncePayload.STYLE_UNLOCK);
         // WAVE3 (F-103 C): personal night-omen Photon cue at each player's own feet
         // (sendFxEventTo personal lane, a = 1 umbral / 0 pale) — row in veilfx/Wave3FxRows.
-        for (ServerPlayer p : server.getPlayerList().getPlayers()) {
+        // F-107: overworld players only (the omen is the night card's FX twin).
+        for (ServerPlayer p : server.overworld().players()) {
             dev.projecteclipse.eclipse.network.fx.FxPayloads.sendFxEventTo(p,
                     dev.projecteclipse.eclipse.network.fx.FxCues.cue("wave3_night_omen"),
                     p.position(), EclipseWorldState.NIGHT_EVENT_UMBRAL.equals(event) ? 1.0F : 0.0F, 0.0F);

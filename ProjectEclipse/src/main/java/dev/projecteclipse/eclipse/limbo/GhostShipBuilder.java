@@ -40,8 +40,11 @@ import net.neoforged.neoforge.event.server.ServerStartedEvent;
  * sink volume ({@code deckY+1..+4} over the {@code halfWidthAt} footprint).</p>
  *
  * <p><b>v2 silhouette</b> (bow +X): 3-tone hull (dark-oak planks, log ribs every 4 x, a
- * stripped-log wale stripe at waterline+1, mud-brick/blackstone barnacle dither below the
- * waterline, stair fillets along the taper columns), a bone-stem figurehead with a
+ * stripped-log wale stripe at waterline+1 — since ship v3 the underwater shell is the
+ * same plank/rib wood with a one-block keel-floor inset instead of the old
+ * mud-brick/blackstone barnacle dither, which read as a flat stone platform through
+ * the violet water (F-107) — stair fillets along the taper columns), a bone-stem
+ * figurehead with a
  * skeleton skull under a rising 6-log bowsprit, a raised forecastle (+2, x 14..19), a
  * sterncastle (wing decks +3 at x −15..−13, a 5-tall bulkhead at x=−17 holding the
  * {@code eclipse:respawn_door} multiblock flanked by purple portholes, solid transom and
@@ -53,10 +56,13 @@ import net.neoforged.neoforge.event.server.ServerStartedEvent;
  *
  * <p><b>Versioned migration</b> ({@link ShipVersionData}, own SavedData — the shared
  * {@code EclipseWorldState} only keeps its legacy build-once flag): v1 ships are cleared
- * back to open sea over {@code x±21 / z±6 / keel..deck+12} and rebuilt as v2 in the same
- * server-thread pass (no fluid tick can run in between). The rebuild is skipped (and
+ * back to open sea over {@code x±21 / z±6 / keel..deck+12} and rebuilt in the same
+ * server-thread pass (no fluid tick can run in between). v2 ships migrate to v3 WITHOUT
+ * a clear: {@link #build} is deterministic, so re-running it only rewrites the
+ * underwater delta (stone barnacle cells → wood, tapered-away chine corners → water;
+ * every unchanged cell is a same-state no-op setBlock). The rebuild is skipped (and
  * retried next start) while a Ferryman is alive. Once stamped
- * {@link ShipVersionData#VERSION_V2}, boots make ZERO block changes.</p>
+ * {@link ShipVersionData#VERSION_V3}, boots make ZERO block changes.</p>
  */
 @EventBusSubscriber(modid = EclipseMod.MOD_ID)
 public final class GhostShipBuilder {
@@ -112,16 +118,18 @@ public final class GhostShipBuilder {
     private static final int WATER_SAMPLE_Z = 256;
 
     /**
-     * Version-gated build/migration entry (plans_v3 §2.5): fresh worlds build v2 directly;
-     * legacy v1 ships are cleared and rebuilt once; v2 worlds are a guaranteed no-op
-     * (restart idempotence — zero block changes). Skipped while a Ferryman is alive so a
-     * persisted mid-fight ship is never yanked out from under the boss (retried next start).
+     * Version-gated build/migration entry (plans_v3 §2.5): fresh worlds build v3 directly;
+     * legacy v1 ships are cleared and rebuilt once; v2 ships get the in-place v3
+     * underhull re-skin (no clear — {@link #build} only rewrites the underwater delta);
+     * v3 worlds are a guaranteed no-op (restart idempotence — zero block changes).
+     * Skipped while a Ferryman is alive so a persisted mid-fight ship is never yanked
+     * out from under the boss (retried next start).
      */
     public static void buildIfNeeded(ServerLevel limbo) {
         EclipseWorldState state = EclipseWorldState.get(limbo.getServer());
         ShipVersionData version = ShipVersionData.get(limbo);
-        if (version.version() >= ShipVersionData.VERSION_V2) {
-            EclipseMod.LOGGER.info("Ghost ship v2 present (version {}) — idempotent boot, zero block changes",
+        if (version.version() >= ShipVersionData.VERSION_V3) {
+            EclipseMod.LOGGER.info("Ghost ship v3 present (version {}) — idempotent boot, zero block changes",
                     version.version());
             return;
         }
@@ -131,24 +139,28 @@ public final class GhostShipBuilder {
             EclipseMod.LOGGER.info("Ghost ship version adopt: legacy un-versioned ship stamped v1 (rebuild pending)");
         }
         if (!limbo.getEntities(EclipseEntities.FERRYMAN.get(), FerrymanEntity::isAlive).isEmpty()) {
-            EclipseMod.LOGGER.info("Ghost ship v2 rebuild SKIPPED: a Ferryman is alive on the v1 ship — retrying next start");
+            EclipseMod.LOGGER.info("Ghost ship rebuild SKIPPED: a Ferryman is alive on the old ship — retrying next start");
             return;
         }
-        boolean migrating = state.isGhostShipBuilt();
-        if (migrating) {
+        // Only pre-v2 hulls need the full clear; the v2→v3 underhull re-skin is a pure
+        // in-place delta (the v2 envelope is a strict superset of every v3 cell).
+        boolean migratingV1 = state.isGhostShipBuilt()
+                && version.version() <= ShipVersionData.VERSION_V1;
+        boolean reskinningV2 = version.version() == ShipVersionData.VERSION_V2;
+        if (migratingV1) {
             clearLegacyVolume(limbo);
         }
         int waterline = build(limbo);
         state.setGhostShipBuilt(true);
-        version.setVersion(ShipVersionData.VERSION_V2);
-        if (migrating) {
+        version.setVersion(ShipVersionData.VERSION_V3);
+        if (migratingV1) {
             // P6-W2 wiring note: persisted living rowers keep their old coordinates
             // through a rebuild — one idempotent calmCrew snaps them onto their benches.
             DeckhandEntity.calmCrew(limbo);
         }
-        EclipseMod.LOGGER.info("Ghost ship v2 {} in {} at waterline y={} around x=0, z=0 (version stamped {})",
-                migrating ? "rebuilt from v1" : "built fresh", LimboDimension.LIMBO.location(), waterline,
-                ShipVersionData.VERSION_V2);
+        EclipseMod.LOGGER.info("Ghost ship v3 {} in {} at waterline y={} around x=0, z=0 (version stamped {})",
+                migratingV1 ? "rebuilt from v1" : reskinningV2 ? "migrated from v2 (wooden tapered underhull)" : "built fresh",
+                LimboDimension.LIMBO.location(), waterline, ShipVersionData.VERSION_V3);
     }
 
     /**
@@ -222,14 +234,23 @@ public final class GhostShipBuilder {
     // ------------------------------------------------------------------ hull
 
     /**
-     * Keel floor, tapering side walls, hollow bilge and solid deck — the exact v1 sealed
-     * envelope (the P3 sink/restore volume math depends on it) re-skinned: barnacle
-     * dither below the waterline, a stripped wale stripe at waterline+1, vertical log
-     * ribs every 4th column, and a stripped king plank down the main-deck centerline.
+     * Keel floor, tapering side walls, hollow bilge and solid deck — the v1 sealed
+     * envelope (the P3 sink/restore volume math depends on it): a stripped wale stripe
+     * at waterline+1, vertical log ribs every 4th column, and a stripped king plank
+     * down the main-deck centerline.
+     *
+     * <p>F-107 (part 4, ship v3): the underwater shell is ALL ship wood now — the old
+     * blackstone/mud-brick "barnacle" dither read as a flat stone platform through the
+     * semi-transparent violet water. The bilge walls below the waterline continue the
+     * plank-and-rib skin of the topsides, and the keel floor is inset one block per
+     * side (the chine corners stay sea water), so the underhull narrows toward the
+     * keel and reads as a hull, not a slab. The seal is untouched: every bilge air
+     * cell still has solid wood below (inset floor) and beside it (full-height walls).</p>
      */
     private static void hullShell(ServerLevel limbo, int waterline, int keelY, int deckY) {
         BlockState planks = Blocks.DARK_OAK_PLANKS.defaultBlockState();
         BlockState air = Blocks.AIR.defaultBlockState();
+        BlockState water = Blocks.WATER.defaultBlockState();
         BlockState wale = Blocks.STRIPPED_DARK_OAK_LOG.defaultBlockState()
                 .setValue(BlockStateProperties.AXIS, Direction.Axis.X);
         BlockState rib = Blocks.DARK_OAK_LOG.defaultBlockState();
@@ -238,8 +259,12 @@ public final class GhostShipBuilder {
             int hw = halfWidthAt(dx);
             boolean endCap = Math.abs(dx) == HALF_LENGTH;
             boolean ribColumn = Math.floorMod(dx, 4) == 0;
+            // v3 keel taper: floor one block narrower per side than the walls above.
+            int floorHw = Math.max(hw - 1, 0);
             for (int dz = -hw; dz <= hw; dz++) {
-                set(limbo, dx, keelY, dz, barnacle(dx, keelY, dz));
+                // Explicit WATER in the chine corners (not skip): the v2→v3 migration
+                // relies on build() overwriting the old stone corners in place.
+                set(limbo, dx, keelY, dz, Math.abs(dz) <= floorHw ? planks : water);
                 for (int y = keelY + 1; y < deckY; y++) {
                     boolean isWall = dz == -hw || dz == hw || endCap;
                     if (!isWall) {
@@ -248,12 +273,10 @@ public final class GhostShipBuilder {
                     }
                     boolean sideWall = dz == -hw || dz == hw;
                     BlockState state;
-                    if (y <= waterline) {
-                        state = barnacle(dx, y, dz);
-                    } else if (y == waterline + 1 && sideWall && !endCap) {
+                    if (y == waterline + 1 && sideWall && !endCap) {
                         state = wale;
                     } else if (ribColumn && sideWall) {
-                        state = rib;
+                        state = rib; // ribs run the full height, waterline to deck
                     } else {
                         state = planks;
                     }
@@ -266,18 +289,6 @@ public final class GhostShipBuilder {
         for (int dx = -12; dx <= 13; dx++) {
             set(limbo, dx, deckY, 0, wale);
         }
-    }
-
-    /** Below-waterline shell material: dark planks eaten by blackstone/mud-brick growth. */
-    private static BlockState barnacle(int x, int y, int z) {
-        double h = hash01(x, y, z);
-        if (h < 0.18D) {
-            return Blocks.MUD_BRICKS.defaultBlockState();
-        }
-        if (h < 0.46D) {
-            return Blocks.BLACKSTONE.defaultBlockState();
-        }
-        return Blocks.DARK_OAK_PLANKS.defaultBlockState();
     }
 
     /**

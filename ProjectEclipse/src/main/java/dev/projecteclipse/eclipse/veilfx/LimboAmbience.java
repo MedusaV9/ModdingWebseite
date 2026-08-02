@@ -47,14 +47,24 @@ import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
  * sound bed.
  * <ul>
  *   <li><b>Motes</b> ({@code eclipse:limbo_motes}, denser since v2 — the emitter JSON emits
- *       every 3 ticks instead of 5): small drifting wisps just above the water plane.</li>
- *   <li><b>God-ray shafts</b> ({@code eclipse:limbo_godray}): tall soft additive light
- *       shafts hanging in the air around the ship, slowly sinking and swaying — the
- *       world-space companion of the screen-space god rays (they also survive Iris, when
- *       the post pipeline is gated off).</li>
+ *       every 3 ticks instead of 5): small drifting wisps just above the water plane.
+ *       F-107 (part 4) hard-capped them to tiny far dust: alpha peak 0.28 → 0.05 in the
+ *       JSON (size ≤ 0.085 half-edge and wind 0.0006 + 0.96 drag were already in).</li>
  *   <li><b>Fog layers</b> ({@code eclipse:limbo_fog}): big dim alpha-blended violet sheets
  *       hugging the water surface.</li>
  * </ul>
+ *
+ * <p><b>F-107 (part 4, radical removal)</b>: the world-space Quasar god-ray shafts
+ * ({@code eclipse:limbo_godray}) and the near-focus bokeh motes
+ * ({@code eclipse:limbo_motes_near}) are GONE — window, emitter JSONs, dedicated textures
+ * and generator scripts. Three tuning rounds (parts 1–3) could not stop large additive
+ * quads from reading as hard-edged violet capsules/discs at the frame edge on low-end /
+ * software-GL clients (8-bit additive quantization + display gamma cut every falloff into
+ * an iso-alpha contour). The scene keeps its ambience from the soft fog/fogbank sheets,
+ * the tiny far motes, the water shader and the lanterns; the screen-space god rays of the
+ * {@code eclipse:limbo} post pipeline (the {@code GodrayDir} uniform fed below) are
+ * untouched — they never produced the artifact. NO replacement emitter may be added
+ * here without a fresh look review.</p>
  *
  * <p>Every window follows the proven mote pattern: the emitter JSONs are {@code loop: true}
  * and Veil never expires a looping position-based emitter, so the handles returned by
@@ -86,26 +96,14 @@ import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
  * {@code CurveAmount} horizon-curvature uniform is gone — the shader's UV warp produced
  * a visible seam line across the screen and was removed on both sides.</p>
  *
- * <p><b>v4 (FXTEAM-LIMBO)</b>: three additions, all inside the existing budget/ladder:</p>
- * <ul>
- *   <li><b>{@code LightningGlow} uniform</b> — deterministic far storm-glow pulses
- *       ({@link #feedStormGlow}): an {@code ECLIPSE_SEED}-hashed slot schedule (~every
- *       67&nbsp;s on average) picks a horizon azimuth and a ≤2&nbsp;s lead+echo flash
- *       envelope; every client sees the same flash at the same wall-clock second because
- *       the schedule derives from the same hourly {@code Time} base. Fed {@code (1,0,0)}
- *       (strength 0) under {@code reducedFx} — the reduced-FX ladder.</li>
- *   <li><b>God-ray sway</b> — the {@code GODRAYS} window carries a per-emitter base
- *       position and leans its live emitters on a shared ~12.5&nbsp;s roll phase
- *       ({@code Z} dominant, slight {@code X} lean — the ship rolls about its +X long
- *       axis), so the shaft colonnade sways with the hull. Pure
- *       {@link ParticleEmitter#setPosition} moves, zero extra particles.</li>
- *   <li><b>Near-focus motes</b> ({@code eclipse:limbo_motes_near}) — a fourth rolling
- *       window of few, LARGE, very faint wisps 3–7 blocks from the camera: the bokeh
- *       foreground of the depth-layered dust (the existing motes JSON was retuned smaller
- *       + crisper as the in-focus mid layer). Skipped AND cleared entirely under
- *       {@code reducedFx} (the drift-cue foam-glint ladder: garnish layers drop first —
- *       big near-camera billboards are the most expensive overdraw in the scene).</li>
- * </ul>
+ * <p><b>v4 (FXTEAM-LIMBO)</b>: the {@code LightningGlow} uniform — deterministic far
+ * storm-glow pulses ({@link #feedStormGlow}): an {@code ECLIPSE_SEED}-hashed slot schedule
+ * (~every 67&nbsp;s on average) picks a horizon azimuth and a ≤2&nbsp;s lead+echo flash
+ * envelope; every client sees the same flash at the same wall-clock second because the
+ * schedule derives from the same hourly {@code Time} base. Fed {@code (1,0,0)} (strength 0)
+ * under {@code reducedFx} — the reduced-FX ladder. (v4's other two additions — the god-ray
+ * roll sway and the near-focus bokeh motes — were removed with their windows in F-107
+ * part 4, see above.)</p>
  *
  * <p><b>v4.1 (VEIL-REPASS-2)</b>: the {@code SoulShoal} uniform ({@link #feedSoulShoal}) —
  * rare deterministic soul-shoal crossings under the water surface, on the same
@@ -136,14 +134,10 @@ import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 @EventBusSubscriber(modid = EclipseMod.MOD_ID, value = Dist.CLIENT)
 public final class LimboAmbience {
     /** Looping ambience emitters spawned by this class (client-only, never server-sent). */
-    private static final ResourceLocation LIMBO_GODRAY =
-            ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "limbo_godray");
     private static final ResourceLocation LIMBO_FOG =
             ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "limbo_fog");
     private static final ResourceLocation LIMBO_FOGBANK =
             ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "limbo_fogbank");
-    private static final ResourceLocation LIMBO_MOTES_NEAR =
-            ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "limbo_motes_near");
     /** F-104 (IDEA-18 §6): tiny pale moths orbiting the soul lights. */
     private static final ResourceLocation LIMBO_MOTHS =
             ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "limbo_moths");
@@ -154,11 +148,6 @@ public final class LimboAmbience {
     /** Limbo grade fade-in length after entering the dimension (~2 s, kept from v1). */
     private static final long POST_FADE_MILLIS = 2000L;
 
-    /**
-     * v4 god-ray sway: shared roll period (seconds). 12.5 s divides the 12000-tick sway
-     * clock exactly (600 s = 48 periods), so the {@code gameTime % 12000} wrap is seamless.
-     */
-    private static final double ROLL_PERIOD_SECONDS = 12.5D;
     /** v4 storm glow: schedule slot length (seconds). ~55% of slots flash → ~67 s average. */
     private static final float STORM_SLOT_SECONDS = 37.0F;
 
@@ -174,11 +163,8 @@ public final class LimboAmbience {
      * live cap and placement band are per-window; all spawns go through
      * {@link FxBudget.Channel#AMBIENT} and {@code reducedFx} doubles the cadence.
      *
-     * <p>v4: a window may additionally carry a <b>roll sway</b> ({@code swayAmplitude} > 0
-     * leans live emitters on the shared {@value #ROLL_PERIOD_SECONDS}-second roll phase —
-     * god-ray shafts sway with the ship) and/or be marked <b>garnish</b>
-     * ({@code skipUnderReducedFx}: the window is skipped AND cleared while
-     * {@code reducedFx} is on — the drift-cue foam-glint ladder).</p>
+     * <p>F-107 (part 4): the v4 roll-sway and garnish-tier ({@code skipUnderReducedFx})
+     * machinery left with the god-ray and near-mote windows — the only users.</p>
      */
     private static final class Window {
         private final ResourceLocation emitterId;
@@ -190,10 +176,6 @@ public final class LimboAmbience {
         /** Emitter center floats {@code yBiasMin}..{@code yBiasMin + yBiasRange} above the water plane. */
         private final double yBiasMin;
         private final double yBiasRange;
-        /** v4: lateral roll-sway amplitude in blocks ({@code 0} = static emitters). */
-        private final double swayAmplitude;
-        /** v4: garnish window — skipped and cleared entirely under {@code reducedFx}. */
-        private final boolean skipUnderReducedFx;
         /**
          * F-104 (IDEA-18 §6): bias spawns onto actual soul lights — instead of the
          * camera-ring {@link #pickSpawnPos}, spawn 0.5 blocks off a cached
@@ -203,15 +185,12 @@ public final class LimboAmbience {
          */
         private final boolean biasToSoulLights;
 
-        /** v4: live handle + its spawn anchor + a small per-emitter roll-phase offset. */
-        private record Live(ParticleEmitter emitter, Vec3 base, float phase) {}
-
-        private final ArrayDeque<Live> live = new ArrayDeque<>();
+        private final ArrayDeque<ParticleEmitter> live = new ArrayDeque<>();
         private int countdown;
 
         Window(ResourceLocation emitterId, int maxLive, int minIntervalTicks, int maxIntervalTicks,
                 double minDistance, double maxDistance, double yBiasMin, double yBiasRange,
-                double swayAmplitude, boolean skipUnderReducedFx, boolean biasToSoulLights) {
+                boolean biasToSoulLights) {
             this.emitterId = emitterId;
             this.maxLive = maxLive;
             this.minIntervalTicks = minIntervalTicks;
@@ -220,20 +199,11 @@ public final class LimboAmbience {
             this.maxDistance = maxDistance;
             this.yBiasMin = yBiasMin;
             this.yBiasRange = yBiasRange;
-            this.swayAmplitude = swayAmplitude;
-            this.skipUnderReducedFx = skipUnderReducedFx;
             this.biasToSoulLights = biasToSoulLights;
         }
 
         void tick(Minecraft minecraft, ClientLevel level) {
-            if (skipUnderReducedFx && EclipseClientConfig.reducedFx()) {
-                // Garnish tier: clear (not just skip) so a mid-session toggle cannot leave
-                // looping emitters behind forever.
-                clear();
-                return;
-            }
             prune();
-            sway(level);
             if (--countdown > 0) {
                 return;
             }
@@ -252,33 +222,9 @@ public final class LimboAmbience {
                 // window simply stays thinner until the next cadence.
                 return;
             }
-            live.addLast(new Live(emitter, pos, (random.nextFloat() - 0.5F) * 0.8F));
+            live.addLast(emitter);
             while (live.size() > maxLive) {
-                removeEmitter(live.pollFirst().emitter());
-            }
-        }
-
-        /**
-         * v4: leans every live emitter on the shared roll phase — Z sway dominant plus a
-         * slight, slower X lean (the ship rolls about its +X long axis, so the god-ray
-         * colonnade tips sideways). Only fresh particles spawn from the moved origin;
-         * with ~5 s particle lifetimes the whole shaft visibly lags into the lean, which
-         * is exactly the heavy, pendulous read a tall light shaft should have. Costs a
-         * handful of {@link ParticleEmitter#setPosition} calls per tick, zero particles.
-         */
-        private void sway(ClientLevel level) {
-            if (swayAmplitude <= 0.0D || live.isEmpty()) {
-                return;
-            }
-            // 12000-tick clock = 48 exact roll periods (and 24 exact lean periods) — no wrap pop.
-            double sec = (level.getGameTime() % 12000L) / 20.0D;
-            double omega = (Math.PI * 2.0D) / ROLL_PERIOD_SECONDS;
-            for (Live entry : live) {
-                double sway = Math.sin(sec * omega + entry.phase()) * swayAmplitude;
-                double lean = Math.sin(sec * omega * 0.5D + entry.phase() * 1.7D)
-                        * swayAmplitude * 0.45D;
-                Vec3 base = entry.base();
-                entry.emitter().setPosition(base.x + lean, base.y, base.z + sway);
+                removeEmitter(live.pollFirst());
             }
         }
 
@@ -323,10 +269,10 @@ public final class LimboAmbience {
 
         /** Drops handles Veil already removed (e.g. the particle manager cleared on level swap). */
         private void prune() {
-            Iterator<Live> it = live.iterator();
+            Iterator<ParticleEmitter> it = live.iterator();
             while (it.hasNext()) {
                 try {
-                    if (it.next().emitter().isRemoved()) {
+                    if (it.next().isRemoved()) {
                         it.remove();
                     }
                 } catch (Throwable t) {
@@ -341,33 +287,23 @@ public final class LimboAmbience {
                 countdown = 0;
                 return;
             }
-            for (Live entry : live) {
-                removeEmitter(entry.emitter());
+            for (ParticleEmitter emitter : live) {
+                removeEmitter(emitter);
             }
             live.clear();
             countdown = 0;
         }
     }
 
-    /** Small wisp clouds just above the water (v1 window; density now lives in the JSON). */
-    private static final Window MOTES = new Window(
-            S2CQuasarPayload.LIMBO_MOTES, 4, 40, 60, 12.0D, 20.0D, 1.0D, 3.0D, 0.0D, false, false);
     /**
-     * Tall soft god-ray shafts hanging higher up, drifting through the mid-air band.
-     * v4: sways ±0.9 blocks on the shared roll phase — the shafts lean with the ship.
-     * F-107: the emitter JSON was retuned — the old look (up to 10 additive quads of
-     * 6 ± 4 blocks, velocity-stretch factor 3.4 and rotated by face_velocity, on the
-     * 8×8 wisp sprite sampled nearest-neighbor) stacked into the reported pale
-     * stair-stepped wall at the screen edge. Now ≤4 small plain billboards per emitter
-     * on a dedicated pre-darkened 64×256 vertical-shaft texture
-     * (tools/art/gen_limbo_godray_shaft.py). Window side of the same fix: max 3 → 2
-     * live emitters (worst-case additive stack 30 → 8 quads with the JSON cap) and
-     * spawn ring 10–24 → 14–28 blocks, the F-088 FOG precedent — a shaft can no
-     * longer park directly in front of the camera. This window still owns placement,
-     * live cap and sway; the JSON owns the look.
+     * Small wisp clouds just above the water (v1 window; density now lives in the JSON).
+     * F-107 (part 4): hard-capped to a far-dust read in the JSON — alpha peak
+     * 0.28 → 0.05 (size 0.055 ± 0.03 and wind 0.0006 + {@code veil:drag} 0.96 already
+     * met the caps). Tiny distant dust points only; this is the last remaining
+     * mote layer after the near-bokeh window's removal.
      */
-    private static final Window GODRAYS = new Window(
-            LIMBO_GODRAY, 2, 90, 130, 14.0D, 28.0D, 8.0D, 7.0D, 0.9D, false, false);
+    private static final Window MOTES = new Window(
+            S2CQuasarPayload.LIMBO_MOTES, 4, 40, 60, 12.0D, 20.0D, 1.0D, 3.0D, false);
     /**
      * Dim violet fog sheets hugging the water surface (alpha-blended, so keep them few).
      * F-088 polish first pushed the spawn window out 8 → 14 blocks; F-107 (part 2)
@@ -383,7 +319,7 @@ public final class LimboAmbience {
      * particle life — 20 − 3.5 (shape) − 10 (half-edge) − ~1.1 (lifetime drift).
      */
     private static final Window FOG = new Window(
-            LIMBO_FOG, 2, 110, 160, 20.0D, 30.0D, 0.4D, 1.2D, 0.0D, false, false);
+            LIMBO_FOG, 2, 110, 160, 20.0D, 30.0D, 0.4D, 1.2D, false);
     /**
      * IDEA-18 §3: big slow middle-distance fog banks rolling +X past the ship (the
      * buoy-lane heading) — the emitter's wind sells that the sea moves. F-107 (part 2):
@@ -398,16 +334,7 @@ public final class LimboAmbience {
      * 50 − 8 (shape) − 28 (half-edge) − ~6.1 (lifetime drift).
      */
     private static final Window FOGBANKS = new Window(
-            LIMBO_FOGBANK, 2, 140, 200, 50.0D, 80.0D, 0.5D, 2.0D, 0.0D, false, false);
-    /**
-     * v4 depth-layered dust, bokeh foreground: 1–2 LARGE very faint wisps 3–7 blocks out
-     * (big + dim + soft sprite = out-of-focus read; the retuned {@code limbo_motes} JSON is
-     * the smaller, crisper in-focus layer behind them). Garnish tier — near-camera
-     * billboards are the scene's costliest overdraw, so the whole window drops under
-     * {@code reducedFx} instead of merely halving.
-     */
-    private static final Window NEAR_MOTES = new Window(
-            LIMBO_MOTES_NEAR, 2, 70, 100, 3.0D, 7.0D, 0.8D, 2.5D, 0.0D, true, false);
+            LIMBO_FOGBANK, 2, 140, 200, 50.0D, 80.0D, 0.5D, 2.0D, false);
     /**
      * F-104 (IDEA-18 §6): pale spirit-moths orbiting the soul lights — spawns are biased
      * onto cached soul-lantern/lit-soul-campfire positions ({@code biasToSoulLights});
@@ -415,8 +342,8 @@ public final class LimboAmbience {
      * {@code reducedFx} doubles the cadence like the other windows.
      */
     private static final Window MOTHS = new Window(
-            LIMBO_MOTHS, 3, 60, 90, 4.0D, 18.0D, 1.5D, 2.5D, 0.0D, false, true);
-    private static final Window[] WINDOWS = {MOTES, GODRAYS, FOG, FOGBANKS, NEAR_MOTES, MOTHS};
+            LIMBO_MOTHS, 3, 60, 90, 4.0D, 18.0D, 1.5D, 2.5D, true);
+    private static final Window[] WINDOWS = {MOTES, FOG, FOGBANKS, MOTHS};
 
     // ------------------------------------------------------------------ soul-light cache (F-104)
 

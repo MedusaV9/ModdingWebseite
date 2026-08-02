@@ -22,9 +22,16 @@ import net.minecraft.world.level.saveddata.SavedData;
  *       superstructure). Cleared and rebuilt on the next boot without a live
  *       Ferryman.</li>
  *   <li>{@link #VERSION_V2} — the §2.5 rebuild (curved hull, forecastle/sterncastle,
- *       tattered sails, Respawn Door). Terminal: once v2, boots make ZERO block changes
- *       (restart-idempotence contract of the build).</li>
+ *       tattered sails, Respawn Door). Migrated in place to v3 on the next boot
+ *       without a live Ferryman (underwater delta only, no clear).</li>
+ *   <li>{@link #VERSION_V3} — F-107: the all-wood tapered underhull (the v2
+ *       blackstone/mud-brick barnacle dither below the waterline read as a flat stone
+ *       platform through the violet water). Terminal: once v3, boots make ZERO block
+ *       changes (restart-idempotence contract of the build).</li>
  * </ul>
+ *
+ * <p>Consumers compare with {@code >=} ({@code ShipLanterns}, {@code RespawnDoorApi}
+ * gate on {@code >= VERSION_V2}), so higher stamps stay backward-compatible.</p>
  */
 public final class ShipVersionData extends SavedData {
     public static final String DATA_NAME = "eclipse_ship_version";
@@ -35,6 +42,8 @@ public final class ShipVersionData extends SavedData {
     public static final int VERSION_V1 = 1;
     /** v2 ghost ship (§2.5 rebuild + Respawn Door bulkhead). */
     public static final int VERSION_V2 = 2;
+    /** v3 ghost ship (F-107: all-wood tapered underhull instead of the stone barnacle dither). */
+    public static final int VERSION_V3 = 3;
 
     private static final String TAG_VERSION = "version";
 
