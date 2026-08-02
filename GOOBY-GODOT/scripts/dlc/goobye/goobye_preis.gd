@@ -63,3 +63,19 @@ static func griff_chance(faktor := 1.0) -> float:
 static func spontan_bonus(faktor := 1.0) -> float:
 	var f := faktor_begrenzen(faktor)
 	return clampf((1.0 - f) * SPONTAN_STEIGUNG, 0.0, SPONTAN_MAX)
+
+
+## Gruppen-Schieber → Waren-Faktoren fürs Markttag-Sortiment (Welle B,
+## §4.4): jede Katalog-Ware erbt den (geklemmten) Faktor ihrer Warengruppe.
+## Richtwert-Gruppen (1.0) bleiben weg — ohne Schieber-Eingriff ist der
+## Tagesplan damit byte-identisch zu Welle A (Golden-Verträge).
+static func ware_faktoren(gruppen_faktoren: Dictionary) -> Dictionary:
+	var out: Dictionary = {}
+	if gruppen_faktoren.is_empty():
+		return out
+	for ware: Dictionary in GoobyeKatalog.waren():
+		var roh: Variant = gruppen_faktoren.get(str(ware.get("gruppe", "")), 1.0)
+		var faktor := faktor_begrenzen(float(roh))
+		if not is_equal_approx(faktor, 1.0):
+			out[str(ware["id"])] = faktor
+	return out

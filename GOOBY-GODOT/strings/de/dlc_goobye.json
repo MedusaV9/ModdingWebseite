@@ -40,7 +40,10 @@
 			"umsatz": "Kasse: {betrag}",
 			"lager": "Lager: {stueck} Stück",
 			"oeffnen": "Laden öffnen!",
-			"nachschub": "Nachschub",
+			"grossmarkt": "Zum Großmarkt",
+			"preise": "Preise",
+			"backen": "Backen ({preis})",
+			"eingeraeumt": "{kisten} Kisten eingeräumt — das Lager ist frisch gefüllt!",
 			"erst_einraeumen": "Erst ein Regal einräumen — die Kundschaft braucht etwas zum Zugreifen!",
 			"regal_voll": "Der Slot ist schon voll bis oben.",
 			"lager_leer": "Das Lager ist leer — hol Nachschub!",
@@ -51,12 +54,56 @@
 			"kunde_familie": "Familie Hoppel",
 			"kunde_hamster_gooby": "Hamster-Gooby"
 		},
-		"nachschub": {
-			"titel": "Nachschub bestellen",
-			"hinweis": "Der Großmarkt liefert bis zur Ladentür — Einkaufspreis, verkauft wird zum Richtwert.",
+		"grossmarkt": {
+			"titel": "REHWEI-Großmarkt",
+			"verlassen": "‹ Zurück",
+			"gag": "„Das bleibt unter uns Händlern.“",
+			"hinfahrt": "Einmal quer durch die Stadt — zur Rampe hinter REHWEI.",
+			"rueckfahrt": "Kofferraum-Klappe zu — und ab nach Hause!",
+			"budget": "Kasse: {betrag}",
+			"kofferraum": "Kofferraum: {kisten}/{max} Kisten",
+			"angebot": "Rampen-Angebot: {gruppe} −{prozent} %",
+			"angebot_tag": "Heute im Rampen-Angebot!",
+			"staffel_hinweis": "Staffelpreis: ab {ab} Stück einer Ware −{prozent} % auf die Zeile.",
 			"zeile": "{name} · {preis}",
-			"gekauft": "1× {name} ins Lager gelegt.",
-			"zu_teuer": "Dafür reichen die Münzen gerade nicht."
+			"zeilen_preis": "Zeile: {betrag}",
+			"staffel_tag": "· Staffel!",
+			"summe": "Zusammen: {betrag}",
+			"kaufen": "Kaufen & losfahren!",
+			"einraeumen_titel": "Einräumen!",
+			"einraeumen_zeile": "{kisten} Kisten für {betrag} Münzen — alles liegt schon im Lager.",
+			"zurueck": "Zurück in den Laden",
+			"korb_leer": "Der Korb ist noch leer — such dir eine Palette aus!",
+			"kofferraum_voll": "Mehr passt nicht in den Kofferraum!",
+			"not_enough_coins": "Dafür reichen die Münzen gerade nicht."
+		},
+		"preise": {
+			"titel": "Preise am Regal",
+			"trend": "Heute lieben alle: {gruppe}!",
+			"trend_hinweis": "Beim Trend greifen Kunden heute besonders gern zu — ein guter Tag für mutige Preise.",
+			"richtwert": "Richtwert",
+			"beispiel": "{prozent} · z. B. {name}: {preis} Münzen (Marge {marge})",
+			"lust_hoch": "Kunden greifen ohne Zögern zu.",
+			"lust_mittel": "Kunden überlegen kurz — und nehmen meistens doch.",
+			"lust_niedrig": "Kunden lassen öfter liegen. Mutig!"
+		},
+		"backofen": {
+			"gebacken": "{menge}× frisches Brot aus dem Ofen — es duftet durch den ganzen Laden!",
+			"fertig": "Der Ofen hat für heute Feierabend — morgen backt er wieder.",
+			"zu_teuer": "Für eine Charge reichen die Münzen gerade nicht."
+		},
+		"alwin": {
+			"spruch_1": "Onkel Alwin klopft ans Regal: „Steht noch. Gute Schraube, 1987.“",
+			"spruch_2": "Onkel Alwin: „Die Möhre und ich, wir duzen uns.“",
+			"spruch_3": "Onkel Alwin poliert im Vorbeigehen ein Regalbrett. Kennerblick.",
+			"spruch_4": "Onkel Alwin: „Riecht wie früher. Nur die Preise sind jünger.“",
+			"spruch_5": "Onkel Alwin: „40 Jahre Laden, Gooby. Die Tür mag dich, ich hör's.“",
+			"spruch_6": "Onkel Alwin prüft eine Möhre gegen das Licht: „Jahrgangsware.“",
+			"spruch_7": "Onkel Alwin: „Auf der Kreuzfahrt gab's Möhren am Buffet. Nicht wie deine.“",
+			"spruch_8": "Onkel Alwin: „Ordentlich eingeräumt. Fast so gut wie bei mir. Fast.“",
+			"sonderwunsch": "Onkel Alwin: „Heute… ZWEI Möhren?! Man lebt nur einmal.“",
+			"leer": "Onkel Alwin findet keine Möhre. Er sagt nichts. Der Blick sagt alles.",
+			"belohnung": "Alwin-Streak {streak}! Er steckt dir {betrag} Münzen zu: „Für den Laden. Nicht für Süßkram.“"
 		},
 		"abschluss": {
 			"titel": "Kassensturz!",

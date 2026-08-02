@@ -40,7 +40,10 @@
 			"umsatz": "Till: {betrag}",
 			"lager": "Storage: {stueck} items",
 			"oeffnen": "Open the store!",
-			"nachschub": "Restock",
+			"grossmarkt": "To the wholesale market",
+			"preise": "Prices",
+			"backen": "Bake ({preis})",
+			"eingeraeumt": "{kisten} crates stocked — storage is freshly filled!",
 			"erst_einraeumen": "Stock a shelf first — customers need something to grab!",
 			"regal_voll": "That slot is already full to the top.",
 			"lager_leer": "The storage is empty — get restock!",
@@ -51,12 +54,56 @@
 			"kunde_familie": "The Hoppel family",
 			"kunde_hamster_gooby": "Hamster Gooby"
 		},
-		"nachschub": {
-			"titel": "Order restock",
-			"hinweis": "The wholesale market delivers to the store door — you pay wholesale, you sell at the suggested price.",
+		"grossmarkt": {
+			"titel": "REHWEI wholesale market",
+			"verlassen": "‹ Back",
+			"gag": "“Let's keep this between us merchants.”",
+			"hinfahrt": "Once across town — to the ramp behind REHWEI.",
+			"rueckfahrt": "Trunk lid shut — and off home!",
+			"budget": "Till: {betrag}",
+			"kofferraum": "Trunk: {kisten}/{max} crates",
+			"angebot": "Ramp deal: {gruppe} −{prozent} %",
+			"angebot_tag": "Today's ramp deal!",
+			"staffel_hinweis": "Bulk price: from {ab} of one item, −{prozent} % on that line.",
 			"zeile": "{name} · {preis}",
-			"gekauft": "Put 1× {name} into storage.",
-			"zu_teuer": "Not quite enough coins for that."
+			"zeilen_preis": "Line: {betrag}",
+			"staffel_tag": "· Bulk!",
+			"summe": "Total: {betrag}",
+			"kaufen": "Buy & drive off!",
+			"einraeumen_titel": "Stock up!",
+			"einraeumen_zeile": "{kisten} crates for {betrag} coins — everything is already in storage.",
+			"zurueck": "Back to the store",
+			"korb_leer": "The cart is still empty — pick a pallet!",
+			"kofferraum_voll": "Nothing more fits in the trunk!",
+			"not_enough_coins": "Not quite enough coins for that."
+		},
+		"preise": {
+			"titel": "Shelf prices",
+			"trend": "Everyone loves {gruppe} today!",
+			"trend_hinweis": "Customers grab trend items extra eagerly today — a good day for brave prices.",
+			"richtwert": "Suggested",
+			"beispiel": "{prozent} · e.g. {name}: {preis} coins (margin {marge})",
+			"lust_hoch": "Customers grab without hesitation.",
+			"lust_mittel": "Customers think briefly — and usually take it anyway.",
+			"lust_niedrig": "Customers leave it on the shelf more often. Bold!"
+		},
+		"backofen": {
+			"gebacken": "{menge}× fresh bread out of the oven — the scent fills the whole store!",
+			"fertig": "The oven is done for today — it bakes again tomorrow.",
+			"zu_teuer": "Not quite enough coins for a batch."
+		},
+		"alwin": {
+			"spruch_1": "Uncle Alwin knocks on the shelf: “Still standing. Good screw, 1987.”",
+			"spruch_2": "Uncle Alwin: “That carrot and I are on a first-name basis.”",
+			"spruch_3": "Uncle Alwin polishes a shelf board in passing. Connoisseur's glance.",
+			"spruch_4": "Uncle Alwin: “Smells like the old days. Only the prices are younger.”",
+			"spruch_5": "Uncle Alwin: “40 years of store, Gooby. The door likes you, I can hear it.”",
+			"spruch_6": "Uncle Alwin holds a carrot up to the light: “Vintage produce.”",
+			"spruch_7": "Uncle Alwin: “The cruise buffet had carrots. Not like yours.”",
+			"spruch_8": "Uncle Alwin: “Neatly stocked. Almost as good as mine. Almost.”",
+			"sonderwunsch": "Uncle Alwin: “Today… TWO carrots?! You only live once.”",
+			"leer": "Uncle Alwin finds no carrot. He says nothing. The look says everything.",
+			"belohnung": "Alwin streak {streak}! He slips you {betrag} coins: “For the store. Not for sweets.”"
 		},
 		"abschluss": {
 			"titel": "Till count!",

@@ -18,6 +18,12 @@ extends RefCounted
 ##   listen_gooby   — strikte Einkaufsliste (2–6 Artikel, distinct)
 ##   familie        — 1–4 Artikel + Quengelware aus dem Süß-Regal (§3.3)
 ##   hamster_gooby  — kauft von EINER Ware den (gedeckelten) Rest-Bestand
+##
+## Welle B (G6/GOOBYE-B): Tagestrend („Heute lieben alle …!“, §4.4), Duft
+## der Backecke (§7.1) und Alwins Sonderwunsch-Gag („heute ZWEI Möhren?!“)
+## kommen als OPTIONEN in tag_planen — sie verschieben nur VERGLEICHE
+## (Griff-Chance) bzw. eine feste Stückzahl, NIE die Los-Folge. Ohne
+## Optionen bleibt der Plan byte-identisch zu Welle A (Golden-Verträge).
 
 const ARCHETYP_ALWIN := "alwin"
 const ARCHETYP_LISTE := "listen_gooby"
@@ -43,14 +49,42 @@ const HAMSTER_MAX := 4
 ## Quengelware-Grundchance an der Kasse (§3.3 — 1 bleibt IMMER drin).
 const QUENGEL_CHANCE := 0.6
 
+## Welle-B-Boni auf die Griff-Chance (additiv, faktor-unabhängig — die
+## Monotonie „billiger ⇒ nie weniger Absatz“ bleibt beweisbar).
+const TREND_GRIFF_BONUS := 0.25
+const DUFT_GRIFF_BONUS := 0.15
+
+## Alwins Sonderwunsch-Takt: jeder n-te Tages-Seed ist ein
+## „heute ZWEI Möhren?!“-Tag (§6.3-Gag, deterministisch).
+const ALWIN_SONDERWUNSCH_JEDER := 5
+
 
 ## Stabiler Tages-Seed aus dem Tag-Key ("YYYY-MM-DD").
 static func tages_seed(tag_key: String) -> int:
 	return tag_key.hash()
 
 
+## Tagestrend („Heute lieben alle {Gruppe}!“, §4.4): deterministisch über
+## den Tages-Seed aus den Katalog-Gruppen gewählt — dieselbe Wahrheit für
+## Preis-Sheet, Kassensturz und Sim ("" nur ohne Katalog).
+static func tagestrend(seed_wert: int) -> String:
+	var gruppen := GoobyeKatalog.gruppen()
+	if gruppen.is_empty():
+		return ""
+	return str((gruppen[posmod(seed_wert, gruppen.size())] as Dictionary).get("id", ""))
+
+
+## Alwins Möhren-Menge des Tages: GENAU 1 — außer am Sonderwunsch-Tag,
+## dann GENAU 2 („Man lebt nur einmal.“). Pure Seed-Funktion, kein Los.
+static func alwin_menge(seed_wert: int) -> int:
+	return 2 if posmod(seed_wert, ALWIN_SONDERWUNSCH_JEDER) == 0 else 1
+
+
 ## Der ganze Markttag. `sortiment` = gelistete Regal-Zeilen
 ## [{id, bestand, faktor?}], Waren-Daten kommen aus dem GoobyeKatalog.
+## Optionen (Welle B, alle optional — Default = Welle-A-Verhalten):
+##   trend_gruppe ("Heute lieben alle …!"), duft_gruppe (Backecke-Duft),
+##   alwin_menge (Sonderwunsch-Tag: 2), kunden_min/kunden_max.
 ## Ergebnis: {kundenzahl, bons[], umsatz, verkauft{}, verpasst}.
 ## Bon = {kunde, archetyp, minute, positionen: [{ware, preis, quengel?}], summe}.
 static func tag_planen(seed_wert: int, sortiment: Array, optionen := {}) -> Dictionary:
@@ -62,12 +96,17 @@ static func tag_planen(seed_wert: int, sortiment: Array, optionen := {}) -> Dict
 	)
 	var lose := _lose_ziehen(rng, kundenzahl)
 	var bestand := _bestands_kopie(zeilen)
+	var boni := {
+		"trend": str(optionen.get("trend_gruppe", "")),
+		"duft": str(optionen.get("duft_gruppe", "")),
+		"alwin_menge": maxi(1, int(optionen.get("alwin_menge", 1))),
+	}
 	var bons: Array = []
 	var verkauft: Dictionary = {}
 	var verpasst := 0
 	var umsatz := 0
 	for i in kundenzahl:
-		var bon := _kunde_einkaufen(i, kundenzahl, lose[i], zeilen, bestand)
+		var bon := _kunde_einkaufen(i, kundenzahl, lose[i], zeilen, bestand, boni)
 		verpasst += int(bon["verpasst"])
 		bon.erase("verpasst")
 		for position: Dictionary in bon["positionen"]:
@@ -148,7 +187,7 @@ static func _bestands_kopie(zeilen: Array) -> Dictionary:
 ## Ein Kunde läuft seine Liste ab. Gibt den Bon inkl. `verpasst`-Zähler
 ## (leere Regal-Griffe — Nachfüll-Hinweis, keine Strafe) zurück.
 static func _kunde_einkaufen(
-	index: int, kundenzahl: int, lose: Dictionary, zeilen: Array, bestand: Dictionary
+	index: int, kundenzahl: int, lose: Dictionary, zeilen: Array, bestand: Dictionary, boni := {}
 ) -> Dictionary:
 	var archetyp := _archetyp_fuer(index, float(lose["archetyp"]))
 	var minute := _minute_fuer(index, kundenzahl, float(lose["jitter"]))
@@ -157,11 +196,12 @@ static func _kunde_einkaufen(
 	match archetyp:
 		ARCHETYP_ALWIN:
 			minute = ALWIN_MINUTE
-			verpasst += _greife(ALWIN_WARE, zeilen, bestand, 0.0, positionen)
+			for _n in maxi(1, int(boni.get("alwin_menge", 1))):
+				verpasst += _greife(ALWIN_WARE, zeilen, bestand, 0.0, positionen)
 		ARCHETYP_HAMSTER:
 			verpasst += _hamster_einkauf(lose, zeilen, bestand, positionen)
 		_:
-			verpasst += _listen_einkauf(archetyp, lose, zeilen, bestand, positionen)
+			verpasst += _listen_einkauf(archetyp, lose, zeilen, bestand, positionen, boni)
 	return {
 		"kunde": index,
 		"archetyp": archetyp,
@@ -190,7 +230,12 @@ static func _minute_fuer(index: int, kundenzahl: int, jitter: float) -> int:
 ## Listen-/Familien-Einkauf: distinct Wunschliste, Griff-Los je Position,
 ## Familie greift an der Kasse zusätzlich zur Quengelware (§3.3).
 static func _listen_einkauf(
-	archetyp: String, lose: Dictionary, zeilen: Array, bestand: Dictionary, positionen: Array
+	archetyp: String,
+	lose: Dictionary,
+	zeilen: Array,
+	bestand: Dictionary,
+	positionen: Array,
+	boni := {}
 ) -> int:
 	if zeilen.is_empty():
 		return 1
@@ -211,11 +256,28 @@ static func _listen_einkauf(
 		var zeile: Dictionary = zeilen[idx]
 		var chance := GoobyePreis.griff_chance(float(zeile["faktor"]))
 		chance += GoobyePreis.spontan_bonus(float(zeile["faktor"]))
+		chance += _gruppen_bonus(zeile, boni)
 		if float(paar[1]) < chance:
 			verpasst += _greife(str(zeile["id"]), zeilen, bestand, 0.0, positionen)
 	if archetyp == ARCHETYP_FAMILIE:
 		verpasst += _quengelware(lose, zeilen, bestand, positionen)
 	return verpasst
+
+
+## Welle-B-Boni (Trend §4.4, Backecken-Duft §7.1) auf die Griff-Chance der
+## Warengruppe — faktor-unabhängig, damit die Monotonie hält.
+static func _gruppen_bonus(zeile: Dictionary, boni: Dictionary) -> float:
+	if boni.is_empty():
+		return 0.0
+	var gruppe := str((zeile.get("ware", {}) as Dictionary).get("gruppe", ""))
+	if gruppe.is_empty():
+		return 0.0
+	var bonus := 0.0
+	if gruppe == str(boni.get("trend", "")):
+		bonus += TREND_GRIFF_BONUS
+	if gruppe == str(boni.get("duft", "")):
+		bonus += DUFT_GRIFF_BONUS
+	return bonus
 
 
 ## Hamster kauft von EINER Ware den Rest-Bestand (gedeckelt) leer (§6.3).

@@ -14,11 +14,20 @@ extends RefCounted
 ##   erstbesuchGesehen (Story-Beat §1.3 einmalig),
 ##   lager {wareId: menge}  (ohne Verfall, §4.3),
 ##   umsatz {tage, gestern, gesamt}  (Kassensturz-Zettel, §2.3)
+## Welle B (G6/GOOBYE-B) ADDITIV:
+##   preise {gruppeId: faktor}  (Preis-Schieber je Warengruppe, §2.2/§4.4),
+##   alwin {streak, best, bedientGesamt}  (Alwin-Streak + Belohnung, §6.3),
+##   backofen {tag, chargen}  (Backecke-Tagesdeckel + Duft, §7.1)
 
 const SaveSchema := preload("res://scripts/state/save_schema.gd")
 
 const SLICE_ID := "dlc"
 const KEY := "goobye"
+
+## Grobe Heil-Klemme für gespeicherte Preis-Faktoren (Obermenge der
+## Balance-Spanne — die Sim klemmt zur Laufzeit nochmal exakt).
+const FAKTOR_HEIL_MIN := 0.5
+const FAKTOR_HEIL_MAX := 1.5
 
 static var _registered := false
 
@@ -46,6 +55,9 @@ static func default_goobye() -> Dictionary:
 		"erstbesuchGesehen": false,
 		"lager": {},
 		"umsatz": {"tage": 0, "gestern": 0, "gesamt": 0},
+		"preise": {},
+		"alwin": {"streak": 0, "best": 0, "bedientGesamt": 0},
+		"backofen": {"tag": "", "chargen": 0},
 	}
 
 
@@ -76,7 +88,30 @@ static func normalize_goobye(raw: Variant) -> Dictionary:
 	for feld: String in ["tage", "gestern", "gesamt"]:
 		umsatz[feld] = maxi(0, int(umsatz.get(feld, 0)))
 	goobye["umsatz"] = umsatz
+	goobye["preise"] = _normalize_preise(goobye.get("preise"))
+	var alwin: Dictionary = goobye.get("alwin") if goobye.get("alwin") is Dictionary else {}
+	for feld: String in ["streak", "best", "bedientGesamt"]:
+		alwin[feld] = maxi(0, int(alwin.get(feld, 0)))
+	goobye["alwin"] = alwin
+	var backofen: Dictionary = (
+		goobye.get("backofen") if goobye.get("backofen") is Dictionary else {}
+	)
+	backofen["tag"] = str(backofen.get("tag", ""))
+	backofen["chargen"] = maxi(0, int(backofen.get("chargen", 0)))
+	goobye["backofen"] = backofen
 	return goobye
+
+
+## Preis-Schieber-Faktoren heilen: nur Gruppen-Ids mit plausiblem Faktor
+## überleben; 1.0 (Richtwert) wird gar nicht erst gespeichert.
+static func _normalize_preise(raw: Variant) -> Dictionary:
+	var preise: Dictionary = raw if raw is Dictionary else {}
+	var heil: Dictionary = {}
+	for gruppe_id: Variant in preise:
+		var faktor := clampf(float(preise[gruppe_id]), FAKTOR_HEIL_MIN, FAKTOR_HEIL_MAX)
+		if not is_equal_approx(faktor, 1.0):
+			heil[str(gruppe_id)] = faktor
+	return heil
 
 
 ## Laden gekauft?
@@ -171,6 +206,33 @@ static func umsatz_verbuchen(gs: Object, betrag: int) -> void:
 			umsatz["tage"] = int(umsatz.get("tage", 0)) + 1
 			umsatz["gestern"] = betrag
 			umsatz["gesamt"] = int(umsatz.get("gesamt", 0)) + betrag
+	)
+	gs.notify_slice_changed(SLICE_ID)
+
+
+## Preis-Schieber-Stellungen je Warengruppe (gruppeId → faktor; Kopie).
+## Fehlende Gruppen bedeuten Richtwert (1.0) — so bleibt der Save klein.
+static func preise_von(gs: Object) -> Dictionary:
+	if gs == null:
+		return {}
+	var raw: Variant = gs.get_value("dlc.goobye.preise", {})
+	return (raw as Dictionary).duplicate(true) if raw is Dictionary else {}
+
+
+## Eine Schieber-Stellung merken (Welle B, §2.2): 1.0 löscht den Eintrag
+## (Richtwert = Default), alles andere wird grob geklemmt gespeichert.
+static func preis_faktor_setzen(gs: Object, gruppe_id: String, faktor: float) -> void:
+	if gs == null or gruppe_id.is_empty():
+		return
+	var wert := clampf(faktor, FAKTOR_HEIL_MIN, FAKTOR_HEIL_MAX)
+	gs.update(
+		func(state: Dictionary) -> void:
+			var goobye := ensure_goobye(state)
+			var preise: Dictionary = goobye["preise"]
+			if is_equal_approx(wert, 1.0):
+				preise.erase(gruppe_id)
+			else:
+				preise[gruppe_id] = wert
 	)
 	gs.notify_slice_changed(SLICE_ID)
 

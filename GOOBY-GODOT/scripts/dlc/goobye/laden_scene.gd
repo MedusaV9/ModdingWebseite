@@ -13,8 +13,16 @@ extends Node3D
 ## einfache Dialog-Karte beim Erstbetreten — gemerkt in dlc.goobye.*.
 ##
 ## Router-Contract (W1a): `ready_for_reveal` nach Aufbau; `receive_params`
-## nimmt {"frisch_gekauft": true} entgegen. Tests: `game_state_override`
-## und `seed_override`/`tempo` VOR add_child setzen.
+## nimmt {"frisch_gekauft": true} und {"eingeraeumt": n} (Rückkehr vom
+## Großmarkt) entgegen. Tests: `game_state_override` und
+## `seed_override`/`tempo` VOR add_child setzen.
+##
+## Welle B (G6/GOOBYE-B): der Nachschub FÄHRT wirklich (flüchtige
+## Großmarkt-Route, grossmarkt_scene.gd), Preis-Schieber je Warengruppe
+## (GoobyePreisSheet → dlc.goobye.preise, fließt als ware_faktoren in den
+## Markttag), Tagestrend + Backecken-Duft + Alwins Sonderwunsch als
+## tag_planen-Optionen, Backstation am Ofen (GoobyeBackofen, Duft-Bonus)
+## und Alwin mit Sprüchen, Streak und Trinkgeld (GoobyeAlwin).
 
 signal ready_for_reveal
 
@@ -38,6 +46,9 @@ const REGAL_STOP := Vector3(-1.4, 0.0, 0.2)
 const KASSE_STOP := Vector3(1.9, 0.0, 0.1)
 const REGAL_POS := Vector3(-1.6, 0.0, -1.2)
 const KASSE_POS := Vector3(1.9, 0.0, -1.2)
+## Ofen nah genug an der Mitte, dass der Backen-Knopf auch im Hochformat
+## (schmaler Kamera-Ausschnitt) tippbar im Bild liegt.
+const BACKOFEN_POS := Vector3(-2.8, 0.0, -3.4)
 
 ## Regal-Brett: Slot-Anker gleichmäßig über die Brettbreite.
 const REGAL_BREITE := 2.6
@@ -79,12 +90,14 @@ var _tagesplan: Dictionary = {}
 var _bon_idx := 0
 var _kunde: GoobyRig = null
 var _frisch_gekauft := false
+var _eingeraeumt := 0
 var _gesichert := false
 var _m: Dictionary = {}
 
 var _cam: Camera3D
 var _slot_anker: Array[Node3D] = []
 var _slot_stapel: Array[Node3D] = []
+var _backofen_anker: Node3D
 
 var _ui: Control
 var _toast: Node
@@ -96,7 +109,9 @@ var _lager_label: Label
 var _slot_knoepfe: Array[Button] = []
 var _leiste: HFlowContainer
 var _oeffnen_knopf: Button
-var _nachschub_knopf: Button
+var _grossmarkt_knopf: Button
+var _preise_knopf: Button
+var _backen_knopf: Button
 var _intro_overlay: Control
 var _intro_knopf: Button
 var _abschluss_overlay: Control
@@ -117,11 +132,14 @@ func _ready() -> void:
 	get_viewport().size_changed.connect(_relayout_ui)
 	if GoobyeState.erstbesuch_merken(_gs):
 		_zeige_intro()
+	elif _eingeraeumt > 0:
+		_zeige_toast(I18nService.t("dlc_goobye.laden.eingeraeumt", {"kisten": _eingeraeumt}))
 	ready_for_reveal.emit()
 
 
 func receive_params(params: Dictionary) -> void:
 	_frisch_gekauft = bool(params.get("frisch_gekauft", false))
+	_eingeraeumt = maxi(0, int(params.get("eingeraeumt", 0)))
 
 
 func game_state() -> Object:
@@ -167,6 +185,8 @@ func slot_tippen(slot_idx: int) -> void:
 
 ## „Laden öffnen!“ — plant den deterministischen Markttag und startet die
 ## Kunden-Choreo (die Logik hat den Tag da schon KOMPLETT ausgerechnet).
+## Welle B fließt hier als OPTIONEN ein: Preis-Schieber (ware_faktoren),
+## Tagestrend, Backecken-Duft und Alwins Sonderwunsch-Menge.
 func laden_oeffnen() -> void:
 	if phase != PHASE_EINRAEUMEN:
 		return
@@ -177,10 +197,23 @@ func laden_oeffnen() -> void:
 	phase = PHASE_OFFEN
 	umsatz_heute = 0
 	_bon_idx = 0
-	_tagesplan = GoobyeMarkttag.tag_planen(
-		_seed(),
-		GoobyeRegal.sortiment_von(_regal),
-		{"kunden_min": KUNDEN_MIN, "kunden_max": KUNDEN_MAX}
+	var seed_wert := _seed()
+	var duft := GoobyeBackofen.duft_aktiv(_gs, _tag_key())
+	_tagesplan = (
+		GoobyeMarkttag
+		. tag_planen(
+			seed_wert,
+			GoobyeRegal.sortiment_von(
+				_regal, GoobyePreis.ware_faktoren(GoobyeState.preise_von(_gs))
+			),
+			{
+				"kunden_min": KUNDEN_MIN,
+				"kunden_max": KUNDEN_MAX,
+				"trend_gruppe": GoobyeMarkttag.tagestrend(seed_wert),
+				"duft_gruppe": GoobyeBackofen.DUFT_GRUPPE if duft else "",
+				"alwin_menge": GoobyeMarkttag.alwin_menge(seed_wert),
+			}
+		)
 	)
 	AudioDirector.try_play(self, "ui_confirm")
 	_zeige_toast(I18nService.t("dlc_goobye.laden.offen_toast"))
@@ -222,7 +255,7 @@ func _naechster_kunde() -> void:
 	_kunde.set_emotion("happy")
 	_tinte_rig(_kunde, KUNDEN_TINTE.get(str(bon.get("archetyp", "")), Color.WHITE))
 	_kunde.set_locomotion(1.0)
-	_zeige_toast(I18nService.t("dlc_goobye.laden.kunde_hinweis", {"name": _kunden_name(bon)}))
+	_zeige_toast(_auftritt_text(bon))
 	var tween := create_tween()
 	tween.tween_property(_kunde, "position", REGAL_STOP, LAUF_SEC * tempo)
 	tween.tween_callback(_kunde_stoebert)
@@ -238,9 +271,12 @@ func _kunde_stoebert() -> void:
 
 ## Kassen-Moment (§1.2): pro Bon-Position EIN Gebrabbel-Piep — die Tonhöhe
 ## kommt aus der Warengruppe (GoobyeKatalog.ton_fuer via Melodie-Helfer).
+## Alwins Bon verbucht dabei die Streak (GoobyeAlwin, einmal pro Markttag).
 func _kassiere(bon: Dictionary) -> void:
 	if _kunde != null:
 		_kunde.set_locomotion(0.0)
+	if str(bon.get("archetyp", "")) == GoobyeMarkttag.ARCHETYP_ALWIN:
+		_alwin_verbuchen(bon)
 	var tween := create_tween()
 	for position: Dictionary in bon.get("positionen", []):
 		tween.tween_callback(_piep_position.bind(position))
@@ -278,6 +314,36 @@ func _kunde_weg() -> void:
 	_naechster_kunde()
 
 
+## ------------------------------------------------------------ Alwin (§6.3)
+
+
+## Alwins Auftritts-Zeile: Sonderwunsch-Gag oder Kenner-Spruch des Tages
+## (GoobyeAlwin.auftritt_key); alle anderen Kunden stöbern nur.
+func _auftritt_text(bon: Dictionary) -> String:
+	if str(bon.get("archetyp", "")) != GoobyeMarkttag.ARCHETYP_ALWIN:
+		return I18nService.t("dlc_goobye.laden.kunde_hinweis", {"name": _kunden_name(bon)})
+	return I18nService.t(GoobyeAlwin.auftritt_key(_seed()))
+
+
+## Streak verbuchen: bekommt Alwin seine Möhre(n), zählt der Tag; steht er
+## vor leerem Regal, beginnt er von vorn. Trinkgeld-Tage feiern hörbar.
+func _alwin_verbuchen(bon: Dictionary) -> void:
+	var bedient := not (bon.get("positionen", []) as Array).is_empty()
+	var ergebnis := GoobyeAlwin.verbuchen(_gs, bedient)
+	if not bedient:
+		_zeige_toast(I18nService.t("dlc_goobye.alwin.leer"))
+		return
+	if int(ergebnis["belohnung"]) > 0:
+		AudioDirector.try_play(self, "ui_coins")
+		Haptics.success(self)
+		_zeige_toast(
+			I18nService.t(
+				"dlc_goobye.alwin.belohnung",
+				{"streak": ergebnis["streak"], "betrag": ergebnis["belohnung"]}
+			)
+		)
+
+
 ## ------------------------------------------------------------ Verbuchen
 
 
@@ -313,74 +379,51 @@ func _bestand_sichern() -> void:
 	GoobyeState.lager_setzen(_gs, _lager)
 
 
-## ------------------------------------------------------------ Nachschub
+## ---------------------------------------------- Nachschub & Stationen (B)
 
 
-## Nachschub-Sheet (§2.2 Großmarkt light): 1 Stück je Tap zum
-## Einkaufspreis (GoobyePreis) — Welle B fährt dafür wirklich mit dem Auto.
-func _zeige_nachschub() -> void:
+## Nachschub Welle B (§4.1/§4.2): es wird WIRKLICH gefahren — Bestand
+## sichern, dann zur flüchtigen Großmarkt-Route (Rückweg immer per goto).
+func _zum_grossmarkt() -> void:
+	if phase != PHASE_EINRAEUMEN:
+		return
+	AudioDirector.try_play(self, "ui_confirm")
+	if not auto_navigate:
+		return
+	_bestand_sichern()
+	GoobyeRouten.fahre_zum_grossmarkt(get_tree())
+
+
+## Preis-Schieber-Sheet (§2.2/§4.4): je Warengruppe ein Slider, oben der
+## Tagestrend — dieselbe deterministische Wahrheit wie im Markttag.
+func _zeige_preise() -> void:
 	if _sheet == null:
 		return
-	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 8)
-	var hinweis := Label.new()
-	hinweis.theme_type_variation = &"CaptionLabel"
-	hinweis.text = I18nService.t("dlc_goobye.nachschub.hinweis")
-	hinweis.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	box.add_child(hinweis)
-	for ware: Dictionary in GoobyeKatalog.waren():
-		var knopf := SquishButton.new()
-		knopf.name = "Nachschub_" + str(ware["id"])
-		knopf.theme_type_variation = &"BtnGhost"
-		knopf.text = (
-			I18nService
-			. t(
-				"dlc_goobye.nachschub.zeile",
-				{
-					"name": I18nService.t(str(ware.get("name_key", ""))),
-					"preis": GoobyePreis.einkaufspreis(ware),
-				}
-			)
-		)
-		knopf.focus_mode = Control.FOCUS_NONE
-		knopf.custom_minimum_size = Vector2(0.0, AcTokens.TOUCH_FLOOR)
-		knopf.pressed.connect(_nachschub_kaufen.bind(str(ware["id"])))
-		box.add_child(knopf)
-	_sheet.set_title(I18nService.t("dlc_goobye.nachschub.titel"))
-	_sheet.add_content(box)
+	_sheet.set_title(I18nService.t("dlc_goobye.preise.titel"))
+	_sheet.add_content(GoobyePreisSheet.neu(_gs, GoobyeMarkttag.tagestrend(_seed())))
 	_sheet.open()
 
 
-## Einkauf ATOMAR in EINEM update-Block: Münzen runter UND Lager rauf.
-func _nachschub_kaufen(ware_id: String) -> void:
-	var ware := GoobyeKatalog.ware(ware_id)
-	if ware.is_empty() or _gs == null:
+## Backstation (§7.1): eine Charge kostet Selbstkosten, legt Brot ins
+## Lager (Spiegel in die Szenen-Kopie!) und weckt den Duft-Bonus des Tages.
+func _backen() -> void:
+	if phase != PHASE_EINRAEUMEN:
 		return
-	var preis := GoobyePreis.einkaufspreis(ware)
-	# Einelementiges Array als Rückkanal (Lambda fängt per Wert).
-	var bezahlt := [false]
-	_gs.update(
-		func(state: Dictionary) -> void:
-			if not Economy.spend(state["economy"], preis, "gooundbye_einkauf"):
-				return
-			bezahlt[0] = true
-			var goobye := GoobyeState.ensure_goobye(state)
-			var lager: Dictionary = goobye["lager"]
-			lager[ware_id] = int(lager.get(ware_id, 0)) + 1
-	)
-	if not bool(bezahlt[0]):
+	var ergebnis := GoobyeBackofen.backen(_gs, _tag_key())
+	if not bool(ergebnis["ok"]):
 		AudioDirector.try_play(self, "ui_error")
-		_zeige_toast(I18nService.t("dlc_goobye.nachschub.zu_teuer"))
-		return
-	_gs.notify_slice_changed(GoobyeState.SLICE_ID)
-	_lager[ware_id] = int(_lager.get(ware_id, 0)) + 1
-	AudioDirector.try_play(self, "ui_buy")
-	_lager_label_aktualisieren()
-	_zeige_toast(
-		I18nService.t(
-			"dlc_goobye.nachschub.gekauft", {"name": I18nService.t(str(ware.get("name_key", "")))}
+		var voll := str(ergebnis["grund"]) == GoobyeBackofen.RESULT_AUSGEBACKEN
+		_zeige_toast(
+			I18nService.t("dlc_goobye.backofen.fertig" if voll else "dlc_goobye.backofen.zu_teuer")
 		)
-	)
+		return
+	_lager[GoobyeBackofen.WARE] = int(_lager.get(GoobyeBackofen.WARE, 0)) + int(ergebnis["menge"])
+	AudioDirector.try_play(self, "ui_chip", GoobyeKatalog.ton_fuer(GoobyeBackofen.WARE))
+	Haptics.success(self)
+	_lager_label_aktualisieren()
+	if _backen_knopf != null:
+		UiMotion.bounce(_backen_knopf)
+	_zeige_toast(I18nService.t("dlc_goobye.backofen.gebacken", {"menge": ergebnis["menge"]}))
 
 
 ## ---------------------------------------------------------------- 3D-Aufbau
@@ -424,7 +467,8 @@ func _baue_raum() -> void:
 	add_child(_cam)
 
 
-## KayKit-Requisiten wie im REHWEI-Vorbild: Kasse rechts, Kisten links.
+## KayKit-Requisiten wie im REHWEI-Vorbild: Kasse rechts, Kisten links,
+## Welle B: der Backofen (Backstation §7.1) bekommt einen Tipp-Anker.
 func _baue_requisiten() -> void:
 	_prop("%s/kitchencounter_straight.gltf" % INNEN, KASSE_POS, 90.0, 0.9)
 	_prop("%s/crate_carrots.gltf" % INNEN, Vector3(-3.8, 0.0, -1.8), 12.0, 0.65)
@@ -432,6 +476,11 @@ func _baue_requisiten() -> void:
 	_prop("%s/crate_cheese.gltf" % INNEN, Vector3(3.6, 0.0, 0.6), -14.0, 0.65)
 	_prop("%s/menu.gltf" % INNEN, Vector3(3.0, 0.0, -3.4), 0.0, 1.6)
 	_prop("%s/fridge_A.gltf" % INNEN, Vector3(-5.4, 0.0, -3.2), 0.0, 0.9)
+	_prop("%s/oven.gltf" % INNEN, BACKOFEN_POS, 8.0, 0.9)
+	_backofen_anker = Node3D.new()
+	_backofen_anker.name = "BackofenAnker"
+	_backofen_anker.position = BACKOFEN_POS + Vector3(0.0, 1.15, 0.2)
+	add_child(_backofen_anker)
 
 
 ## Regal-Reihe aus Grund-Meshes: Brett + Füße + je Slot ein Anker mit
@@ -611,18 +660,34 @@ func _baue_ui() -> void:
 	_oeffnen_knopf.text = I18nService.t("dlc_goobye.laden.oeffnen")
 	_oeffnen_knopf.focus_mode = Control.FOCUS_NONE
 	_oeffnen_knopf.pressed.connect(laden_oeffnen)
-	_nachschub_knopf = SquishButton.new()
-	_nachschub_knopf.name = "Nachschub"
-	_nachschub_knopf.theme_type_variation = &"BtnTeal"
-	_nachschub_knopf.text = I18nService.t("dlc_goobye.laden.nachschub")
-	_nachschub_knopf.focus_mode = Control.FOCUS_NONE
-	_nachschub_knopf.pressed.connect(_zeige_nachschub)
+	_grossmarkt_knopf = SquishButton.new()
+	_grossmarkt_knopf.name = "Grossmarkt"
+	_grossmarkt_knopf.theme_type_variation = &"BtnTeal"
+	_grossmarkt_knopf.text = I18nService.t("dlc_goobye.laden.grossmarkt")
+	_grossmarkt_knopf.focus_mode = Control.FOCUS_NONE
+	_grossmarkt_knopf.pressed.connect(_zum_grossmarkt)
+	_preise_knopf = SquishButton.new()
+	_preise_knopf.name = "Preise"
+	_preise_knopf.theme_type_variation = &"BtnGhost"
+	_preise_knopf.text = I18nService.t("dlc_goobye.laden.preise")
+	_preise_knopf.focus_mode = Control.FOCUS_NONE
+	_preise_knopf.pressed.connect(_zeige_preise)
+	_backen_knopf = SquishButton.new()
+	_backen_knopf.name = "Backen"
+	_backen_knopf.theme_type_variation = &"BtnGhost"
+	_backen_knopf.text = I18nService.t(
+		"dlc_goobye.laden.backen", {"preis": GoobyeBackofen.kosten()}
+	)
+	_backen_knopf.focus_mode = Control.FOCUS_NONE
+	_backen_knopf.pressed.connect(_backen)
+	_ui.add_child(_backen_knopf)
 	_leiste = HFlowContainer.new()
 	_leiste.name = "LadenKnoepfe"
 	_leiste.alignment = FlowContainer.ALIGNMENT_CENTER
 	_leiste.add_theme_constant_override("h_separation", 10)
 	_leiste.add_theme_constant_override("v_separation", 8)
-	_leiste.add_child(_nachschub_knopf)
+	_leiste.add_child(_grossmarkt_knopf)
+	_leiste.add_child(_preise_knopf)
 	_leiste.add_child(_oeffnen_knopf)
 	_ui.add_child(_leiste)
 	_sheet = PanelSheetScene.instantiate()
@@ -640,7 +705,7 @@ func _baue_ui() -> void:
 
 ## Story-Beat §1.3: Schlüsselübergabe-Karte beim Erstbetreten (einmalig).
 func _zeige_intro() -> void:
-	var teile := _karte_overlay("IntroOverlay")
+	var teile := GoobyeUi.karte_overlay(_ui, _metrics(), "IntroOverlay", KARTE_BASIS)
 	_intro_overlay = teile["overlay"]
 	var box: VBoxContainer = teile["box"]
 	var titel := Label.new()
@@ -678,7 +743,7 @@ func _intro_schliessen() -> void:
 func _zeige_abschluss() -> void:
 	phase = PHASE_ABSCHLUSS
 	_knoepfe_aktualisieren()
-	var teile := _karte_overlay("AbschlussOverlay")
+	var teile := GoobyeUi.karte_overlay(_ui, _metrics(), "AbschlussOverlay", KARTE_BASIS)
 	_abschluss_overlay = teile["overlay"]
 	var box: VBoxContainer = teile["box"]
 	var titel := Label.new()
@@ -740,34 +805,6 @@ func _abschluss_zeile(box: VBoxContainer, key: String, wert: String) -> void:
 	zeile.add_child(rechts)
 
 
-## Abgedunkeltes Overlay + zentrierte AcCard-Karte (Daumenzone-freundlich:
-## die Karte sitzt mittig, der Knopf ist ihr unterstes Element).
-func _karte_overlay(overlay_name: String) -> Dictionary:
-	var overlay := Control.new()
-	overlay.name = overlay_name
-	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
-	overlay.mouse_filter = Control.MOUSE_FILTER_STOP
-	_ui.add_child(overlay)
-	var dim := ColorRect.new()
-	dim.color = Color(AcTokens.INK.r, AcTokens.INK.g, AcTokens.INK.b, 0.45)
-	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
-	dim.mouse_filter = Control.MOUSE_FILTER_STOP
-	overlay.add_child(dim)
-	var karte := PanelContainer.new()
-	karte.name = "Karte"
-	karte.theme_type_variation = &"AcCard"
-	karte.set_anchors_preset(Control.PRESET_CENTER)
-	karte.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	karte.grow_vertical = Control.GROW_DIRECTION_BOTH
-	var breite := ScreenShell.card_width(_metrics(), KARTE_BASIS)
-	karte.custom_minimum_size = Vector2(breite, 0.0)
-	overlay.add_child(karte)
-	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 12)
-	karte.add_child(box)
-	return {"overlay": overlay, "karte": karte, "box": box}
-
-
 ## ---------------------------------------------------------------- Layout
 
 
@@ -803,6 +840,7 @@ func _relayout_ui() -> void:
 		float(insets["top"]) + 52.0 * f
 	)
 	_layout_slots()
+	_layout_backofen()
 	_layout_leiste(f, canvas, insets)
 
 
@@ -818,6 +856,17 @@ func _layout_slots() -> void:
 		ScreenShell.touch_target(knopf, _m)
 		var punkt := _cam.unproject_position(_slot_anker[i].global_position)
 		knopf.position = punkt - knopf.size / 2.0 - Vector2(0.0, knopf.size.y * 0.8)
+
+
+## Backen-Knopf über den Ofen legen (gleiches Unproject-Muster wie Slots).
+func _layout_backofen() -> void:
+	if _cam == null or not _cam.is_inside_tree() or _backen_knopf == null:
+		return
+	if _backofen_anker == null or not _backofen_anker.is_inside_tree():
+		return
+	ScreenShell.touch_target(_backen_knopf, _m)
+	var punkt := _cam.unproject_position(_backofen_anker.global_position)
+	_backen_knopf.position = punkt - _backen_knopf.size / 2.0
 
 
 ## Bottom-Leiste mittig in der Daumenzone (G3/P05-Geometrie).
@@ -871,10 +920,9 @@ func _slot_knoepfe_beschriften() -> void:
 
 func _knoepfe_aktualisieren() -> void:
 	var einraeumen := phase == PHASE_EINRAEUMEN
-	if _oeffnen_knopf != null:
-		_oeffnen_knopf.disabled = not einraeumen
-	if _nachschub_knopf != null:
-		_nachschub_knopf.disabled = not einraeumen
+	for knopf in [_oeffnen_knopf, _grossmarkt_knopf, _preise_knopf, _backen_knopf]:
+		if knopf != null:
+			(knopf as Button).disabled = not einraeumen
 	for knopf in _slot_knoepfe:
 		knopf.disabled = not einraeumen
 

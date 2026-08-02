@@ -336,7 +336,9 @@ func test_laden_szene_kompletter_markttag() -> void:
 	for menge: Variant in (gs.get_value("dlc.goobye.lager", {}) as Dictionary).values():
 		lager_danach += int(menge)
 	# Denselben Tag nachrechnen: Slot 0 = 6 Äpfel, Slot 1 = 8 Möhren
-	# (Katalog-Reihenfolge beim Einräumen) — gleicher Seed, gleiche Optionen.
+	# (Katalog-Reihenfolge beim Einräumen) — gleicher Seed, gleiche Optionen
+	# inkl. Welle B (Trend/Duft/Alwin-Sonderwunsch — 12345 ist ein
+	# „ZWEI Möhren?!“-Tag, ohne Schieber/Backen: Faktoren 1.0, kein Duft).
 	var verkauft := 0
 	var plan := (
 		GoobyeMarkttag
@@ -349,6 +351,9 @@ func test_laden_szene_kompletter_markttag() -> void:
 			{
 				"kunden_min": GoobyeLadenScene.KUNDEN_MIN,
 				"kunden_max": GoobyeLadenScene.KUNDEN_MAX,
+				"trend_gruppe": GoobyeMarkttag.tagestrend(12345),
+				"duft_gruppe": "",
+				"alwin_menge": GoobyeMarkttag.alwin_menge(12345),
 			}
 		)
 	)

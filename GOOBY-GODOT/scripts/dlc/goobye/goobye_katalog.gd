@@ -21,6 +21,14 @@ const DEFAULT_PREIS_SPANNE := 0.3
 const DEFAULT_EIGENMARKE_RABATT := 0.2
 const DEFAULT_BIO_AUFSCHLAG := 0.1
 
+## Welle-B-Defaults (Doc §4.1/§4.2/§7.1): Großmarkt-Staffel, Rampen-
+## Tagesangebot, Kofferraum-Volumen, Backecke-Selbstkosten.
+const DEFAULT_MENGENRABATT := 0.05
+const DEFAULT_MENGENRABATT_AB := 10
+const DEFAULT_TAGESRABATT := 0.15
+const DEFAULT_KOFFERRAUM_KISTEN := 24
+const DEFAULT_BACKEN_KOSTEN_FAKTOR := 0.5
+
 ## Tests injizieren hier eine Registry-Attrappe (null = Autoload benutzen).
 static var registry_override: Object = null
 
@@ -58,6 +66,39 @@ static func eigenmarke_rabatt() -> float:
 ## Bio-Aufschlag fürs Gooby-Beet-Regal (§2.2, Default +10 % — Welle B nutzt ihn).
 static func bio_aufschlag() -> float:
 	return clampf(float(_balance("gooundbye.bio_aufschlag", DEFAULT_BIO_AUFSCHLAG)), 0.0, 0.9)
+
+
+## Großmarkt-Staffelpreis (§4.1): ab so vielen Stück EINER Palette …
+static func mengenrabatt_ab() -> int:
+	return maxi(2, int(_balance("gooundbye.grossmarkt_mengenrabatt_ab", DEFAULT_MENGENRABATT_AB)))
+
+
+## … gibt es diesen Rabatt auf die Paletten-Zeile (Default −5 %).
+static func mengenrabatt() -> float:
+	return clampf(
+		float(_balance("gooundbye.grossmarkt_mengenrabatt", DEFAULT_MENGENRABATT)), 0.0, 0.5
+	)
+
+
+## Rampen-Tagesangebot (§4.4-Zwilling der Einkaufsseite): EK-Rabatt auf die
+## Tagesangebots-Warengruppe (Default −15 %).
+static func tagesrabatt() -> float:
+	return clampf(
+		float(_balance("gooundbye.grossmarkt_tagesrabatt", DEFAULT_TAGESRABATT)), 0.0, 0.5
+	)
+
+
+## Kofferraum-Volumen in Kisten (§4.2 — Welle B: der Laden-Kombi).
+static func kofferraum_kisten() -> int:
+	return maxi(1, int(_balance("gooundbye.kofferraum_kisten", DEFAULT_KOFFERRAUM_KISTEN)))
+
+
+## Backecke-Selbstkosten (§7.1): Anteil des Einkaufspreises fürs
+## Selberbacken (Default 50 % — Duft gibt's gratis dazu).
+static func backen_kosten_faktor() -> float:
+	return clampf(
+		float(_balance("gooundbye.backen_kosten_faktor", DEFAULT_BACKEN_KOSTEN_FAKTOR)), 0.05, 1.0
+	)
 
 
 ## Alle Warengruppen (typ "gruppe") in Pack-Reihenfolge (tiefe Kopien).
