@@ -20,10 +20,45 @@ schreibt dazu, WAS er gemacht hat.
 > **Hier reinschreiben.** Stichworte reichen, z. B. „HUD im Querformat zu weit links"
 > oder „Taxi-Sound zu laut". Der Agent hakt sie ab und schreibt dazu, was er gemacht hat.
 
+
+
 _(NEU seit W16: Das Projekt ist umgezogen — es lebt jetzt im Repo
 `MedusaV9/MinecraftBubbleShieldMod` auf dem Branch `cursor/gooby-godot-loop-2c10`,
 mit komplettem Verlauf. Alle Updates/Builds laufen ab jetzt über dieses Repo.
 Diese Datei bleibt dein direkter Draht: einfach unten reinschreiben.)_
+
+
+Du musst mal sicher stellen das alle Assets immer richtig rotiert und richtig rum alles steht
+
+und nutze / downloade dir endlich mal mehr Modelle
+aber nur wenn der Stil zu unserem Spiel passt!!
+https://blockbenchworkshop.com/browse?status=free&sort=downloads
+
+https://sketchfab.com/3d-models?date=week&features=downloadable&sort_by=-likeCount
+
+https://assetstore.unity.com/packages/3d/free-low-poly-pack-65375?srsltid=AfmBOopI2uLBGsg25yrGayQnnA8GDYPH9EbuyNHhDkPbKCKt8WpzPLtX
+
+https://assetstore.unity.com/listing#nf-ec_price_filter=0...0
+
+https://assetstore.unity.com/packages/3d/environments/landscapes/low-poly-atmospheric-locations-pack-278928
+
+https://assetstore.unity.com/packages/3d/environments/low-poly-environment-315184
+
+https://assetstore.unity.com/packages/3d/environments/simplepoly-city-low-poly-assets-58899
+
+https://assetstore.unity.com/packages/2d/textures-materials/sky/farland-skies-low-poly-64604
+
+
+https://assetstore.unity.com/packages/package/low-poly-environment-park-242702
+
+hier im Unity Stire Gibt es echt extrem viel was uns helfen kann was free ist plus low poly was ja unser Stil etwas ist 
+[
+](https://assetstore.unity.com/search#q=Low%20Poly&nf-ec_price_filter=0...0)
+
+wenn du irgendwo nen Account brauchst erstell dir einfach einen mit temp mail oder sowas
+
+
+
 
 - [~] **Dein Feedback vom 1. August (mit 7 Screenshots, iPhone quer):** UI-Full-
       Rework, dynamisches UI mit Animationen (z. B. Baumenü → andere Knöpfe
