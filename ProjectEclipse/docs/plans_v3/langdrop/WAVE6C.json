@@ -1,0 +1,22 @@
+{
+  "en_us": {
+    "gui.eclipse.decrees.header": "Today's Decrees — Day %s",
+    "gui.eclipse.decrees.personal": "Your personal draws",
+    "gui.eclipse.paper.header": "The Morning Paper — Day %s",
+    "gui.eclipse.paper.honors": "Yesterday's honours (day %s)",
+    "gui.eclipse.paper.decrees": "Today's decrees",
+    "announce.eclipse.digest.title": "Time passed in your absence",
+    "announce.eclipse.digest.sub": "Days %s–%s passed — %s seals opened",
+    "announce.eclipse.digest.chat": "While you were away (days %s–%s), new seals opened: %s"
+  },
+  "de_de": {
+    "gui.eclipse.decrees.header": "Heutige Dekrete — Tag %s",
+    "gui.eclipse.decrees.personal": "Deine persönlichen Lose",
+    "gui.eclipse.paper.header": "Das Morgenblatt — Tag %s",
+    "gui.eclipse.paper.honors": "Die Ehrungen von Tag %s",
+    "gui.eclipse.paper.decrees": "Heutige Dekrete",
+    "announce.eclipse.digest.title": "Die Zeit verging in eurer Abwesenheit",
+    "announce.eclipse.digest.sub": "Tage %s–%s vergangen — %s Siegel geöffnet",
+    "announce.eclipse.digest.chat": "Während eurer Abwesenheit (Tage %s–%s) öffneten sich neue Siegel: %s"
+  }
+}

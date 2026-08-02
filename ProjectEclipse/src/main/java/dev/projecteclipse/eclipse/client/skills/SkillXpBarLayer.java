@@ -71,6 +71,14 @@ public final class SkillXpBarLayer {
     /** Specular band half-widths (px) and alphas, stacked bright core over soft skirt. */
     private static final int[] BAND_HALF_WIDTHS = {7, 4, 2};
     private static final float[] BAND_ALPHAS = {0.30F, 0.55F, 0.95F};
+    /**
+     * WAVE6 (F-106 C) — C7: the "+n" gain chip lives this many GAME ticks (gameTime-based
+     * envelope: at {@code /tick rate 2} it stretches to ~6 real seconds — photographable —
+     * instead of blinking away on the 20 Hz client clock).
+     */
+    private static final int CHIP_TICKS = 12;
+    /** Total upward drift of the chip over its envelope (px). */
+    private static final int CHIP_RISE_PX = 8;
 
     // Client tick thread only.
     private static float displayed;
@@ -84,6 +92,9 @@ public final class SkillXpBarLayer {
     private static int sweepChainIndex;
     private static long lastTotalXp;
     private static int lastLevel = -1;
+    /** C7 chip state: summed gain while the envelope is live; 0 = no chip. */
+    private static long chipAmount;
+    private static long chipStartGameTime;
 
     private SkillXpBarLayer() {}
 
@@ -147,6 +158,8 @@ public final class SkillXpBarLayer {
             sweepChainIndex = 0;
             lastTotalXp = 0L;
             lastLevel = -1;
+            chipAmount = 0L;
+            chipStartGameTime = 0L;
             return;
         }
         if (minecraft.isPaused()) {
@@ -194,6 +207,15 @@ public final class SkillXpBarLayer {
         }
         if (totalXp > lastTotalXp && !reduced) {
             pulseTicks = PULSE_TICKS;
+            // WAVE6 (F-106 C) — C7: arm/refresh the "+n" chip. Gains landing while a chip
+            // is still live sum into it (one readable number, no chip stacks); reducedFx
+            // skips the chip entirely (same gate as the pulse).
+            long gained = totalXp - lastTotalXp;
+            long gameTime = minecraft.level.getGameTime();
+            boolean chipLive = chipAmount > 0 && gameTime - chipStartGameTime < CHIP_TICKS;
+            chipAmount = (chipLive ? chipAmount : 0L) + gained;
+            chipStartGameTime = gameTime;
+            EclipseMod.LOGGER.debug("[w6c-xpchip] delta={}", gained);
         }
         lastLevel = level;
         lastTotalXp = totalXp;
@@ -308,6 +330,21 @@ public final class SkillXpBarLayer {
             guiGraphics.drawString(minecraft.font, numeral, textX, textY + 1, 0xFF000000, false);
             guiGraphics.drawString(minecraft.font, numeral, textX, textY - 1, 0xFF000000, false);
             guiGraphics.drawString(minecraft.font, numeral, textX, textY, textColor, false);
+        }
+
+        // WAVE6 (F-106 C) — C7: the "+n" gain chip rises off the bar's right end and fades
+        // over a {@value #CHIP_TICKS}-GAME-tick envelope (gameTime + its partial, so slow
+        // tick rates stretch it in real time instead of snapping). reducedFx never arms it.
+        if (chipAmount > 0 && minecraft.level != null && !EclipseClientConfig.reducedFx()) {
+            float age = (minecraft.level.getGameTime() - chipStartGameTime) + partial;
+            if (age >= 0.0F && age < CHIP_TICKS) {
+                float t = age / CHIP_TICKS;
+                String chip = "+" + chipAmount;
+                int chipX = barX + BAR_WIDTH - minecraft.font.width(chip);
+                int chipY = barY - 10 - Math.round(t * CHIP_RISE_PX);
+                guiGraphics.drawString(minecraft.font, chip, chipX, chipY,
+                        EclipseUiTheme.withAlpha(EclipseUiTheme.GOOD, 1.0F - t), true);
+            }
         }
     }
 

@@ -133,6 +133,20 @@ public final class AnnouncementOverlay {
 
     private AnnouncementOverlay() {}
 
+    /**
+     * WAVE6 (F-106 C) — C2 collision gate: whether the announcement presentation is fully
+     * idle — nothing queued, no live typewriter line, no bossbar sweep, no numeral card
+     * (including a card whose day line is still pending at the shrink beat). This is the
+     * ONE new cross-overlay gate of wave 6: {@code client.awards.AwardsOverlay} (and the
+     * new {@code DecreesCard}) hold their center-stage openings behind it so the roulette
+     * veil / decree card never drops over a running day sweep. Poll-only — callers defer
+     * and retry, nothing is ever cancelled here.
+     */
+    public static boolean isIdle() {
+        return QUEUE.isEmpty() && typewriter == null && sweepTicks < 0 && cardTicks < 0
+                && pendingDayLine == null;
+    }
+
     /** {@link S2CAnnouncePayload} entry point (client main thread). */
     public static void handle(S2CAnnouncePayload payload) {
         if (isDuplicate(payload)) {

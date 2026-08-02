@@ -1,6 +1,8 @@
 package dev.projecteclipse.eclipse.timeline;
 
+import java.util.ArrayList;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -9,9 +11,11 @@ import dev.projecteclipse.eclipse.core.config.EclipseConfig;
 import dev.projecteclipse.eclipse.core.config.Localized;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldState;
 import dev.projecteclipse.eclipse.lang.LangService;
+import dev.projecteclipse.eclipse.lang.ServerLang;
 import dev.projecteclipse.eclipse.network.S2CAnnouncePayload;
 import dev.projecteclipse.eclipse.network.fx.S2CCaptionPayload;
 import dev.projecteclipse.eclipse.progression.UnlockState;
+import dev.projecteclipse.eclipse.progression.realtime.RealtimeDayService;
 import dev.projecteclipse.eclipse.worldgen.stage.WorldStageService;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
@@ -104,8 +108,67 @@ public final class AnnouncementService {
             EclipseMod.LOGGER.info("Quiet day {} rollover — whisper caption sent to {} players",
                     newDay, server.getPlayerList().getPlayerCount());
         }
-        announceNewUnlocks(server);
+        // WAVE6 (F-106 C) — C4: a multi-day catch-up burst (server was down) accumulates
+        // its quiet days' unlock keys in one diff at THIS final loud beat. ≥2 replayed
+        // days would flood the sweep queue with a per-key parade — digest instead: ONE
+        // sweep + the full key list once in chat. Single-day mornings stay untouched.
+        RealtimeDayService.CatchUpWindow window = RealtimeDayService.consumeCatchUpWindow();
+        if (window != null && window.days() >= 2) {
+            announceCatchUpDigest(server, window);
+        } else {
+            announceNewUnlocks(server);
+        }
         TimelineService.syncAll(server);
+    }
+
+    /**
+     * WAVE6 (F-106 C) — C4 catch-up digest: one {@code unlock}-themed sweep ("days X–Y
+     * passed … N seals opened") replacing the per-key parade, plus the full resolved key
+     * list ONCE in chat ({@code ServerLang}-baked per player; keys without a lang line
+     * humanize like the client renderer). Also advances the unlock baseline exactly like
+     * {@link #announceNewUnlocks}. Probe: {@code [w6c-digest] days=<x>..<y> unlocks=<n>}.
+     */
+    private static void announceCatchUpDigest(MinecraftServer server,
+            RealtimeDayService.CatchUpWindow window) {
+        Set<String> current = new LinkedHashSet<>(UnlockState.unlockedKeys(server));
+        List<String> newKeys = new ArrayList<>();
+        for (String key : current) {
+            if (!lastUnlockedKeys.contains(key)) {
+                newKeys.add(key);
+            }
+        }
+        lastUnlockedKeys = current;
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            PacketDistributor.sendToPlayer(player, new S2CAnnouncePayload(
+                    "announce.eclipse.digest.title",
+                    ServerLang.tr(player, "announce.eclipse.digest.sub",
+                            window.fromDay(), window.toDay(), newKeys.size()).getString(),
+                    S2CAnnouncePayload.STYLE_UNLOCK));
+            if (!newKeys.isEmpty()) {
+                List<String> names = new ArrayList<>(newKeys.size());
+                for (String key : newKeys) {
+                    names.add(resolvedUnlockName(player, key));
+                }
+                player.sendSystemMessage(ServerLang.tr(player, "announce.eclipse.digest.chat",
+                        window.fromDay(), window.toDay(), String.join(", ", names)));
+            }
+        }
+        EclipseMod.LOGGER.info("Catch-up digest sent to {} players: days {}..{}, {} new unlocks",
+                server.getPlayerList().getPlayerCount(), window.fromDay(), window.toDay(),
+                newKeys.size());
+        EclipseMod.LOGGER.debug("[w6c-digest] days={}..{} unlocks={}",
+                window.fromDay(), window.toDay(), newKeys.size());
+    }
+
+    /**
+     * The chat-facing name of one unlock key: its {@code announce.eclipse.unlock.key.<key>}
+     * lang line when merged, else the humanized key (underscores → spaces — matching the
+     * client overlay's literal-render fallback).
+     */
+    private static String resolvedUnlockName(ServerPlayer player, String key) {
+        String langKey = "announce.eclipse.unlock.key." + key;
+        String resolved = ServerLang.tr(player, langKey).getString();
+        return resolved.equals(langKey) ? key.replace('_', ' ') : resolved;
     }
 
     /**

@@ -19,6 +19,7 @@ import dev.projecteclipse.eclipse.core.config.ReloadHooks;
 import dev.projecteclipse.eclipse.core.signal.EclipseSignals;
 import dev.projecteclipse.eclipse.economy.ShardEconomy;
 import dev.projecteclipse.eclipse.network.S2CAwardRevealPayload;
+import dev.projecteclipse.eclipse.network.paper.MorningPaperPayloads;
 import dev.projecteclipse.eclipse.network.rewards.RewardPayloads;
 import dev.projecteclipse.eclipse.offering.OfferingService;
 import dev.projecteclipse.eclipse.offering.OfferingState;
@@ -81,11 +82,39 @@ public final class AwardService {
         AwardsState state = AwardsState.get(player.server);
         int latest = state.latestResolvedDay();
         if (latest > 0 && !state.hasSeenReveal(player.getUUID(), latest)) {
-            state.resolved(latest).ifPresent(day -> {
-                PacketDistributor.sendToPlayer(player, payload(day));
+            // WAVE6 (F-106 C) — C5 "Morning Paper": a login AFTER the rollover used to get
+            // the full reveal payload, which the client's late-join grace swallowed whole —
+            // late risers saw NOTHING. Send the compact recap payload instead (day + day
+            // title + anonymized winner rows; today's decrees ride the quest cache the
+            // login sync already filled); DecreesCard renders it as the morning paper.
+            state.resolved(latest).ifPresent(resolved -> {
+                MorningPaperPayloads.sendPaper(player, paperPayload(player, resolved));
                 state.markRevealSeen(player.getUUID(), latest);
+                EclipseMod.LOGGER.debug("[w6c-paper] player={} day={}",
+                        player.getGameProfile().getName(),
+                        dev.projecteclipse.eclipse.core.state.EclipseWorldState
+                                .get(player.server).getDay());
             });
         }
+    }
+
+    /** C5: bakes one receiver-localized morning-paper recap from a frozen resolved day. */
+    private static MorningPaperPayloads.S2CMorningPaperPayload paperPayload(ServerPlayer player,
+            AwardsState.ResolvedDay resolved) {
+        int currentDay = dev.projecteclipse.eclipse.core.state.EclipseWorldState
+                .get(player.server).getDay();
+        String dayTitle = dev.projecteclipse.eclipse.timeline.TimelineService
+                .dayTitleKey(currentDay, player);
+        List<MorningPaperPayloads.WinnerRow> rows = new ArrayList<>();
+        for (AwardsState.CategoryResult result : resolved.categories()) {
+            if (result.winners().isEmpty()) {
+                continue;
+            }
+            rows.add(new MorningPaperPayloads.WinnerRow(
+                    result.titleEn(), result.titleDe(), result.winners()));
+        }
+        return new MorningPaperPayloads.S2CMorningPaperPayload(
+                currentDay, resolved.day(), dayTitle, rows);
     }
 
     private static void onDayRollover(MinecraftServer server, int endedDay, int newDay,
@@ -236,6 +265,9 @@ public final class AwardService {
             PacketDistributor.sendToAllPlayers(payload(resolved));
             for (ServerPlayer player : server.getPlayerList().getPlayers()) {
                 state.markRevealSeen(player.getUUID(), day);
+                // WAVE6 (F-106 C) — C2: this server sting stays as the payload-arrival cue
+                // (players whose overlay is hidden/deferred still hear the morning); the
+                // client re-stings at its actual INTRO beat after the 40t pre-beat curtain.
                 player.playNotifySound(EclipseSounds.AWARD_STING.get(), SoundSource.MASTER, 0.8F, 1.0F);
                 // Held reveal-path rewards (award + best-offering winners) land now with
                 // the full live materialization; non-winners simply have nothing pending.

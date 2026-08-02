@@ -14,6 +14,7 @@ import dev.projecteclipse.eclipse.client.ClientStateCache;
 import dev.projecteclipse.eclipse.client.handbook.EclipseUiTheme;
 import dev.projecteclipse.eclipse.client.handbook.GlitchText;
 import dev.projecteclipse.eclipse.client.handbook.UiSounds;
+import dev.projecteclipse.eclipse.client.hud.AnnouncementOverlay;
 import dev.projecteclipse.eclipse.client.hud.CenterStageArbiter;
 import dev.projecteclipse.eclipse.client.lang.EclipseLang;
 import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
@@ -90,6 +91,17 @@ public final class AwardsOverlay {
     private static final String STAGE_ID = "awards_roulette";
 
     // --- timing (game ticks) ---
+    /**
+     * WAVE6 (F-106 C) — C2 pre-beat: the curtain. Before the card frame appears the veil
+     * dims in alone over this window while a slow {@code ui.roulette_tick} count-in marks
+     * the seconds — the roulette gets an audible "please rise" instead of popping fully
+     * formed over gameplay. The AWARD_STING plays client-side when the count-in completes
+     * (the INTRO beat); the server-side sting in {@code AwardService.sendRevealNow} stays
+     * as the arrival cue for players whose overlay is hidden/deferred.
+     */
+    private static final int PREBEAT_TICKS = 40;
+    /** Count-in cadence within the pre-beat (one slow tick every 10t → 4 marks). */
+    private static final int PREBEAT_TICK_SPACING = 10;
     private static final int INTRO_TICKS = 18;
     /** Spin length — inside the task's 4–6 s deceleration window. */
     private static final int SPIN_DURATION_TICKS = 80;
@@ -128,7 +140,7 @@ public final class AwardsOverlay {
     /** V7-SIGCOMP C2: podium GOLD RUSH scale — the reference (largest) reward context. */
     private static final double GOLD_RUSH_PODIUM_SCALE = 1.15D;
 
-    private enum Phase { IDLE, INTRO, SPIN, LAND, STAT, REWARD, HOLD, FADE, SUMMARY, DONE_FADE }
+    private enum Phase { IDLE, PREBEAT, INTRO, SPIN, LAND, STAT, REWARD, HOLD, FADE, SUMMARY, DONE_FADE }
 
     /** One parsed category reveal; server strings verbatim, title/stat split on the first newline. */
     private record Reveal(String title, String statLine, String rewardLine, List<UUID> winners,
@@ -154,6 +166,12 @@ public final class AwardsOverlay {
     private static boolean sneakWasDown;
     /** One cancelled pause opening per show — see {@link #onScreenOpening} (M-5). */
     private static boolean escSkipUsed;
+    /**
+     * WAVE6 (F-106 C) — C2: ticks a queued show has waited at {@link #maybeStart}'s gates
+     * (letterbox, {@code AnnouncementOverlay.isIdle()}, decrees card, center stage).
+     * Logged as {@code [w6c-curtain] waited=<t>t} the moment the pre-beat begins.
+     */
+    private static int curtainWaitTicks;
 
     private AwardsOverlay() {}
 
@@ -248,12 +266,25 @@ public final class AwardsOverlay {
     }
 
     private static void maybeStart(Minecraft minecraft) {
-        if (QUEUE.isEmpty() || LetterboxLayer.barPx(1000) > 0) {
+        if (QUEUE.isEmpty()) {
+            return;
+        }
+        if (LetterboxLayer.barPx(1000) > 0) {
+            curtainWaitTicks++;
             return; // hold behind an active cutscene letterbox
+        }
+        // WAVE6 (F-106 C) — C2 collision gate: never drop the veil while the announcement
+        // presentation (day-number card, day sweep, typewriter, queued lines) is still
+        // playing, and let the decrees card finish its reveal first — the morning reads
+        // day card → decrees → roulette instead of three overlays fighting for the frame.
+        if (!AnnouncementOverlay.isIdle() || DecreesCard.liveOrArmed()) {
+            curtainWaitTicks++;
+            return;
         }
         // FFIX-A / POLISH C-1: the roulette is a hero moment too — wait politely for the
         // center stage instead of dropping the veil over a running level-up/day card.
         if (!CenterStageArbiter.tryClaim(STAGE_ID, SHOW_HARD_CAP_TICKS)) {
+            curtainWaitTicks++;
             return;
         }
         PendingShow pending = QUEUE.poll();
@@ -269,7 +300,9 @@ public final class AwardsOverlay {
         showTicks = 0;
         sneakWasDown = true; // require a fresh sneak press before the first skip
         escSkipUsed = false;
-        setPhase(Phase.INTRO);
+        EclipseMod.LOGGER.debug("[w6c-curtain] waited={}t", curtainWaitTicks);
+        curtainWaitTicks = 0;
+        setPhase(Phase.PREBEAT);
     }
 
     private static List<Reveal> buildReveals(int day, List<S2CAwardRevealPayload.Category> categories,
@@ -320,6 +353,22 @@ public final class AwardsOverlay {
             landAge++;
         }
         switch (phase) {
+            case PREBEAT -> {
+                // WAVE6 (F-106 C) — C2: 40t curtain dim with a slow roulette-tick count-in
+                // (reducedFx keeps the calm dim, drops the count-in blips), then the
+                // AWARD_STING marks the INTRO beat client-side — exactly when the show
+                // actually opens, not when the payload happened to arrive.
+                if (!EclipseClientConfig.reducedFx() && phaseTicks > 0
+                        && phaseTicks % PREBEAT_TICK_SPACING == 0) {
+                    UiSounds.rouletteTick(0.62F + 0.06F * (phaseTicks / (float) PREBEAT_TICK_SPACING));
+                }
+                if (++phaseTicks >= PREBEAT_TICKS) {
+                    Minecraft.getInstance().getSoundManager().play(
+                            SimpleSoundInstance.forUI(EclipseSounds.AWARD_STING.get(), 0.9F, 1.0F));
+                    WorldStageArbiter.noteSting(); // §6.5: one sting per 40t window
+                    setPhase(Phase.INTRO);
+                }
+            }
             case INTRO -> {
                 if (++phaseTicks >= INTRO_TICKS) {
                     startCategory(0);
@@ -490,8 +539,10 @@ public final class AwardsOverlay {
         }
         float partialTick = minecraft.isPaused() ? 0.0F
                 : deltaTracker.getGameTimeDeltaPartialTick(true);
+        // WAVE6 (F-106 C) — C2: the veil now dims in over the PREBEAT curtain; INTRO keeps
+        // it fully dimmed while the card frame fades in (see renderCategory).
         float showAlpha = switch (phase) {
-            case INTRO -> Mth.clamp((phaseTicks + partialTick) / INTRO_TICKS, 0.0F, 1.0F);
+            case PREBEAT -> Mth.clamp((phaseTicks + partialTick) / PREBEAT_TICKS, 0.0F, 1.0F);
             case DONE_FADE -> Mth.clamp(1.0F - (phaseTicks + partialTick) / SUMMARY_FADE_TICKS,
                     0.0F, 1.0F);
             default -> 1.0F;
@@ -503,6 +554,9 @@ public final class AwardsOverlay {
         int guiHeight = guiGraphics.guiHeight();
         guiGraphics.fill(0, 0, guiWidth, guiHeight,
                 EclipseUiTheme.withAlpha(EclipseUiTheme.VEIL, 0.85F * showAlpha));
+        if (phase == Phase.PREBEAT) {
+            return; // curtain only — the card frame appears at the INTRO beat
+        }
         if (phase == Phase.SUMMARY || phase == Phase.DONE_FADE) {
             renderSummary(guiGraphics, minecraft.font, guiWidth, guiHeight, showAlpha);
         } else {

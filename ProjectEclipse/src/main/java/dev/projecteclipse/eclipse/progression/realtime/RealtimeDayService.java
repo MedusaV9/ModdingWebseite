@@ -86,6 +86,35 @@ public final class RealtimeDayService {
     /** True while THIS service drives a {@code DayScheduler.setDay} (rollover in flight). */
     // statics reset on ServerStopped
     private static boolean rollingOver = false;
+
+    /**
+     * WAVE6 (F-106 C) — C4: the day span a multi-day catch-up burst just replayed
+     * ({@code fromDay..toDay} arrived while the server was down). Static handoff in the
+     * {@code rollingOver} idiom: {@link #runCatchUpNow} writes it right after the burst's
+     * FINAL (loud) rollover returns; {@code AnnouncementService.onDayChanged} consumes it
+     * ~2 s later at the DawnCeremony T+40 announcement beat and emits ONE digest sweep
+     * instead of the per-key unlock parade. A plain field (not try/finally scoped) because
+     * the consumer runs asynchronously AFTER runCatchUpNow has long returned.
+     */
+    private static CatchUpWindow catchUpWindow;
+
+    /** WAVE6 (F-106 C) — C4: one replayed catch-up span; {@code days() == toDay-fromDay+1}. */
+    public record CatchUpWindow(int fromDay, int toDay) {
+        /** How many days arrived in the burst. */
+        public int days() {
+            return toDay - fromDay + 1;
+        }
+    }
+
+    /**
+     * WAVE6 (F-106 C) — C4: consumes (returns and clears) the pending catch-up window, or
+     * {@code null} when the last rollover was a normal single-day advance.
+     */
+    public static CatchUpWindow consumeCatchUpWindow() {
+        CatchUpWindow window = catchUpWindow;
+        catchUpWindow = null;
+        return window;
+    }
     /** Boundary to install after the in-flight rollover's day is applied. */
     // statics reset on ServerStopped
     private static long pendingBoundaryEpochMillis = 0L;
@@ -745,6 +774,7 @@ public final class RealtimeDayService {
             return DayScheduler.getDay(server) - before;
         }
         int advanced = 0;
+        int startDay = DayScheduler.getDay(server);
         while (state.isArmed() && !state.isPaused() && !state.isManualOverride()) {
             long boundary = state.getBoundaryEpochMillis();
             if (boundary == 0L || now < boundary) {
@@ -776,6 +806,11 @@ public final class RealtimeDayService {
             rollover(server, !lastStep, stepped);
             advanced++;
         }
+        if (advanced >= 2) {
+            // WAVE6 (F-106 C) — C4: hand the replayed span to the T+40 announcement beat.
+            // Only multi-day bursts digest; a single caught-up day keeps the normal morning.
+            catchUpWindow = new CatchUpWindow(startDay + 1, startDay + advanced);
+        }
         return advanced;
     }
 
@@ -805,5 +840,7 @@ public final class RealtimeDayService {
         lastCall10mFired = false;
         lastCall90sFired = false;
         lastCallFlickerIndex = 0;
+        // WAVE6 (F-106 C) — C4 catch-up digest handoff
+        catchUpWindow = null;
     }
 }

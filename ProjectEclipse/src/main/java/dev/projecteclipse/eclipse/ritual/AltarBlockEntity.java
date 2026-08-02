@@ -414,11 +414,25 @@ public class AltarBlockEntity extends BlockEntity implements GeoBlockEntity {
                 this.worldPosition.getX() + 0.5D, this.worldPosition.getY() + 1.0D,
                 this.worldPosition.getZ() + 0.5D, 64.0D,
                 new S2CQuasarPayload(S2CQuasarPayload.offeringSwallow(offeredItem), handPos));
-        PacketDistributor.sendToPlayersNear(serverLevel, null,
-                this.worldPosition.getX() + 0.5D, this.worldPosition.getY() + 1.0D,
-                this.worldPosition.getZ() + 0.5D, 64.0D,
-                new S2CQuasarPayload(S2CQuasarPayload.ALTAR_BEAM,
-                        Vec3.atCenterOf(this.worldPosition).add(0.0D, 0.7D, 0.0D)));
+        if (exactValue.getAsInt() == 0) {
+            // WAVE6 (F-106 C) — C6 junk sniff: a zero-value offering raises NO beam — the
+            // altar swallows the item (flight + portal + chimes above stay untouched) and
+            // exhales a smoke cough with a low fire-extinguish instead. This reveals ONLY
+            // the junk boundary (exactValue == 0), never a tier: the offeringTellPitch /
+            // swallow-tier paths above remain the sole (private, deniable) value tells.
+            serverLevel.sendParticles(ParticleTypes.SMOKE,
+                    this.worldPosition.getX() + 0.5D, this.worldPosition.getY() + 1.2D,
+                    this.worldPosition.getZ() + 0.5D, 24, 0.25D, 0.2D, 0.25D, 0.02D);
+            serverLevel.playSound(null, this.worldPosition, SoundEvents.FIRE_EXTINGUISH,
+                    SoundSource.BLOCKS, 0.7F, 0.6F);
+            EclipseMod.LOGGER.debug("[w6c-sniff] item={}", itemId);
+        } else {
+            PacketDistributor.sendToPlayersNear(serverLevel, null,
+                    this.worldPosition.getX() + 0.5D, this.worldPosition.getY() + 1.0D,
+                    this.worldPosition.getZ() + 0.5D, 64.0D,
+                    new S2CQuasarPayload(S2CQuasarPayload.ALTAR_BEAM,
+                            Vec3.atCenterOf(this.worldPosition).add(0.0D, 0.7D, 0.0D)));
+        }
         GazerEntity.watchSacrifice(serverLevel, this.worldPosition);
         // F-076: the swallow lands ON the model — one strong pulse as the item vanishes.
         triggerAnim(CONTROLLER_STATE, ANIM_HEARTBEAT);

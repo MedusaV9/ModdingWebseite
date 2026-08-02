@@ -252,10 +252,16 @@ public final class QuestEngine {
                 }
                 dayGoals.add(spec);
             }
+            // WAVE6 (F-106 C) — C1: a DAY-flip rebuild suppresses the assigned-actionbar —
+            // the client-side DecreesCard presents the new day's decrees off this rebuild's
+            // quest sync (markAllDirty below). Boot (current == null) and same-day
+            // config/unlock rebuilds keep the actionbar: no dayClockDay flip reaches the
+            // client there, so the card never fires and the actionbar IS the announcement.
+            boolean dayRollover = current != null && current.day != day;
             current = new ResolvedDay(day, generation, unlocked, dayGoals);
             resolved = current;
             for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-                ensurePlayer(server, player);
+                ensurePlayer(server, player, !dayRollover);
             }
             markAllDirty();
             EclipseMod.LOGGER.info("Quest engine resolved day {} (gen {}): {} mains, {} sides, "
@@ -271,6 +277,16 @@ public final class QuestEngine {
      * spec, and backfills already-fired team beats for {@code each_player}-scoped beat goals.
      */
     public static void ensurePlayer(MinecraftServer server, ServerPlayer player) {
+        ensurePlayer(server, player, true);
+    }
+
+    /**
+     * WAVE6 (F-106 C) — C1: {@code announceAssigned=false} on the day-rollover rebuild
+     * path degrades the {@code quest.eclipse.assigned} actionbar to a login/fallback cue —
+     * at rollover the client's {@code DecreesCard} owns the "new decrees" announcement.
+     */
+    private static void ensurePlayer(MinecraftServer server, ServerPlayer player,
+            boolean announceAssigned) {
         ResolvedDay day = resolved(server);
         QuestState state = QuestState.get(server);
         UUID uuid = player.getUUID();
@@ -280,7 +296,7 @@ public final class QuestEngine {
         if (personals == null && GoalConfig.personalPerDay() > 0) {
             personals = drawPersonals(server, state, day.day, uuid, state.rerollNonce(day.day, uuid));
             state.setPersonals(day.day, uuid, personals);
-            if (player.connection != null) {
+            if (announceAssigned && player.connection != null) {
                 player.displayClientMessage(ServerLang.tr(player, "quest.eclipse.assigned"), true);
             }
         }
