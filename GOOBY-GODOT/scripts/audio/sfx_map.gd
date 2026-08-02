@@ -32,6 +32,19 @@ extends RefCounted
 ##   travel_whoosh_auf/_zu (Reise-Veil statt ui_open/close, F9).
 ## gvz_collect klingt jetzt nach weichem 1,2-kHz-Pluck (S4), mg_win nach
 ## Dur-Dreiklang (S6) — beide aus der soft/-Synthese.
+##
+## G6-FEEL (AUDIO-FEEL-Paket, W17): zwei neue Familien aus
+## tools/audio/g6_gen_feel_sfx.py (numpy-Synthese, CC0, selbst erzeugt):
+## - `emo_*` (soft/): eigene Mini-Motive für die 12 FeelEmotions —
+##   vorher recycelte UI-Sounds (schreck=ui_error, traurigkeit=ui_close)
+##   bzw. Stille (muedigkeit/angst). Zentroid < 2,5 kHz (soft-Kontrakt).
+## - Welt/Stations-Momente (welt/): city_hupe/city_vogel (seit W4 in
+##   city_scene verdrahtet, Ids fehlten), laden_glocke (Ladentür statt
+##   gvz_wave@1.35), kasse_piep (statt ui_coins@1.15 — ui_coins ist laut
+##   Grammatik Münz-EINNAHME), foto_shutter (Auslöser statt ui_click),
+##   licht_schalter (Lampen-Umleg-Moment), tuer_auf/_zu/_ruettel/_plopp
+##   (Haus-Türen, EVAL-1 2.5 „Türen stumm"). Trims auf ~−22 dBFS eff.
+##   eingemessen (Skript druckt Vorschläge), Wache: test_g6_audio_feel.gd.
 
 const BASE_DIR := "res://assets/audio/sfx"
 const RANCH_DIR := "res://assets/ranch/audio/sfx"
@@ -108,6 +121,32 @@ const SOUNDS := {
 	# ── Reise-Whoosh (F9 — Veil-Reisen statt ui_open/ui_close) ──
 	"travel_whoosh_auf": {"file": "foley/travel_whoosh_auf.ogg", "volume_db": -3.0},
 	"travel_whoosh_zu": {"file": "foley/travel_whoosh_zu.ogg", "volume_db": -4.0},
+	# ── Emotions-Familie (G6-FEEL): 12 Mini-Motive für FeelEmotions ──
+	"emo_schreck": {"file": "soft/emo_schreck.ogg", "volume_db": -11.0, "pitch_jitter": 0.03},
+	"emo_freude": {"file": "soft/emo_freude.ogg", "volume_db": -6.5, "pitch_jitter": 0.03},
+	"emo_begeisterung":
+	{"file": "soft/emo_begeisterung.ogg", "volume_db": -7.5, "pitch_jitter": 0.03},
+	"emo_ueberraschung":
+	{"file": "soft/emo_ueberraschung.ogg", "volume_db": -9.5, "pitch_jitter": 0.03},
+	"emo_verlegen": {"file": "soft/emo_verlegen.ogg", "volume_db": -8.0, "pitch_jitter": 0.03},
+	"emo_trotz": {"file": "soft/emo_trotz.ogg", "volume_db": -5.0, "pitch_jitter": 0.03},
+	"emo_traurig": {"file": "soft/emo_traurig.ogg", "volume_db": -8.5, "pitch_jitter": 0.03},
+	"emo_muede": {"file": "soft/emo_muede.ogg", "volume_db": -10.5, "pitch_jitter": 0.03},
+	"emo_neugier": {"file": "soft/emo_neugier.ogg", "volume_db": -12.5, "pitch_jitter": 0.03},
+	"emo_stolz": {"file": "soft/emo_stolz.ogg", "volume_db": -7.5, "pitch_jitter": 0.03},
+	"emo_angst": {"file": "soft/emo_angst.ogg", "volume_db": -6.0, "pitch_jitter": 0.03},
+	"emo_verliebt": {"file": "soft/emo_verliebt.ogg", "volume_db": -7.5, "pitch_jitter": 0.03},
+	# ── Welt/Stations-Momente (G6-FEEL) ──
+	"city_hupe": {"file": "welt/city_hupe.ogg", "volume_db": -14.0, "pitch_jitter": 0.05},
+	"city_vogel": {"file": "welt/city_vogel.ogg", "volume_db": -11.5, "pitch_jitter": 0.06},
+	"laden_glocke": {"file": "welt/laden_glocke.ogg", "volume_db": -9.0, "pitch_jitter": 0.03},
+	"kasse_piep": {"file": "welt/kasse_piep.ogg", "volume_db": -10.0, "pitch_jitter": 0.02},
+	"foto_shutter": {"file": "welt/foto_shutter.ogg", "volume_db": 0.0, "pitch_jitter": 0.02},
+	"licht_schalter": {"file": "welt/licht_schalter.ogg", "volume_db": 0.0, "pitch_jitter": 0.04},
+	"tuer_auf": {"file": "welt/tuer_auf.ogg", "volume_db": -1.5, "pitch_jitter": 0.05},
+	"tuer_zu": {"file": "welt/tuer_zu.ogg", "volume_db": -2.0, "pitch_jitter": 0.05},
+	"tuer_ruettel": {"file": "welt/tuer_ruettel.ogg", "volume_db": -2.0, "pitch_jitter": 0.08},
+	"tuer_plopp": {"file": "welt/tuer_plopp.ogg", "volume_db": -6.0, "pitch_jitter": 0.06},
 	# ── Ranch-DLC (RW-8): Hufschlag je Untergrund (Einzelschritt + Loops) ──
 	"ranch_huf_gras":
 	{"file": RANCH_DIR + "/huf_gras.ogg", "volume_db": -6.0, "pitch_jitter": 0.06},
@@ -173,6 +212,33 @@ const RANCH_REQUIRED_IDS: Array[String] = [
 	"ranch_fanfare_sieg",
 	"ranch_menge_jubel",
 	"ranch_menge_gemurmel",
+]
+
+## Pflicht-Ids des G6-FEEL-Lückenschlusses (Kontrakt für
+## tests/unit/test_g6_audio_feel.gd — Existenz, Dateien, Pegel).
+const G6_FEEL_IDS: Array[String] = [
+	"emo_schreck",
+	"emo_freude",
+	"emo_begeisterung",
+	"emo_ueberraschung",
+	"emo_verlegen",
+	"emo_trotz",
+	"emo_traurig",
+	"emo_muede",
+	"emo_neugier",
+	"emo_stolz",
+	"emo_angst",
+	"emo_verliebt",
+	"city_hupe",
+	"city_vogel",
+	"laden_glocke",
+	"kasse_piep",
+	"foto_shutter",
+	"licht_schalter",
+	"tuer_auf",
+	"tuer_zu",
+	"tuer_ruettel",
+	"tuer_plopp",
 ]
 
 

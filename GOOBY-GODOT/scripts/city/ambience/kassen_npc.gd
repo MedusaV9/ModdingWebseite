@@ -11,9 +11,10 @@ extends Node
 ## Tipp-Puls (Kassen-Getippe) und Zuwink-Takt in Sekunden.
 const TIPP_ALLE_S := 2.4
 const WINK_ALLE_S := 11.0
-## Kassen-Piep = Bestands-Id ui_coins, leicht hochgestimmt.
-const PIEP_ID := "ui_coins"
-const PIEP_PITCH := 1.15
+## Kassen-Piep (G6-FEEL): eigener Scanner-Piep — ui_coins ist laut
+## Audio-Grammatik für Münz-EINNAHMEN des Spielers reserviert.
+const PIEP_ID := "kasse_piep"
+const PIEP_PITCH := 1.0
 
 ## Die Figur an der Kasse (der Haupt-NPC der Ort-Szene).
 var rig: GoobyRig

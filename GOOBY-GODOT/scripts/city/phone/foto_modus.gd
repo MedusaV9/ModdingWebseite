@@ -542,11 +542,12 @@ func _baue_ausloeser(f: float, insets: Dictionary) -> void:
 	_ausloeser.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_ausloeser.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	_ausloeser.offset_bottom = -(float(insets["bottom"]) + 24.0 * f)
-	# W16 F12: Druck klingt (ui_click); der AUSGANG klingt in knipsen()
-	# als ui_sticker/ui_error (Outcome schlägt Press).
+	# W16 F12 + G6-FEEL: der Druck klingt als echter Kamera-Auslöser
+	# (foto_shutter); der AUSGANG klingt in knipsen() als
+	# ui_sticker/ui_error (Outcome schlägt Press).
 	_ausloeser.pressed.connect(
 		func() -> void:
-			AudioDirector.try_play(_ausloeser, "ui_click")
+			AudioDirector.try_play(_ausloeser, "foto_shutter")
 			knipsen()
 	)
 	_ui.add_child(_ausloeser)

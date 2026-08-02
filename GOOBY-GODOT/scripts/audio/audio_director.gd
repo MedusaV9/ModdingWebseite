@@ -99,6 +99,17 @@ func _ready() -> void:
 	var settings := get_node_or_null("/root/AppSettings")
 	if settings != null and settings.has_signal("setting_changed"):
 		settings.setting_changed.connect(_on_setting_changed)
+	_ensure_raum_klang()
+
+
+## G6-FEEL: Orts-Raumgefühl (Reverb-Zonen auf dem Sfx-Bus) fährt als Kind
+## mit — so existiert sein Router-Lauscher ab Boot (s. raum_klang.gd).
+func _ensure_raum_klang() -> void:
+	if get_node_or_null(RaumKlang.NODE_NAME) != null:
+		return
+	var raum := RaumKlang.new()
+	raum.name = RaumKlang.NODE_NAME
+	add_child(raum)
 
 
 ## One-Shot-SFX nach SfxMap-Id; unbekannte Id warnt einmalig und ist no-op.

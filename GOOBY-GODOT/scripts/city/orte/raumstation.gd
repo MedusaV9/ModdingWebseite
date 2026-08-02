@@ -151,6 +151,11 @@ func _npc_konfig() -> Dictionary:
 	return {"tint": Color("#B8A7E8"), "emotion": "happy", "pos": Vector3(0.6, 0.0, -1.8)}
 
 
+## G6-FEEL: die Station klingt nach großer Metall-Halle (RaumKlang-Zone).
+func _raum_zone() -> String:
+	return "station_halle"
+
+
 ## Dialog-Effekt „laden“ öffnet hier den Astro-Snack-Automaten.
 func oeffne_laden() -> void:
 	var inhalt := HaendlerSheet.new()

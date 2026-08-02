@@ -87,6 +87,9 @@ func _walk_and_flip(target: bool) -> void:
 		gooby.play_clip("wave")
 	if _furniture != null and is_instance_valid(_furniture):
 		if _furniture.has_method("set_light_enabled"):
+			# G6-FEEL: das „Klick!“ der Sprechblase ist jetzt hörbar —
+			# der Umleg-MOMENT klingt, nicht der Sheet-Knopf.
+			AudioDirector.try_play(self, "licht_schalter")
 			_furniture.set_light_enabled(target)
 	var gs := _host.game_state()
 	if gs != null:

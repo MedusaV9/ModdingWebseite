@@ -13,6 +13,10 @@ const MORPHS: Array[Dictionary] = [
 	{"id": "chubby", "label": "bad.spiegel.pausbacken", "min": 0.0, "max": 1.0},
 ]
 const RIG_MAP := {"eyes_apart": "eye_width", "eye_scale": "eye_size", "ear_len": "ear_length"}
+## G6-FEEL: Morph-Slider ticken hörbar, aber gedrosselt (Muster
+## settings_rows_basis.gd — Grammatik §3: „ui_tick … ggf. drosseln“).
+const TICK_DEBOUNCE_MS := 90
+const TICK_META := &"_g6_tick_ab_ms"
 
 var _host: InteractablesHost
 var _sheet: PanelSheet
@@ -62,8 +66,19 @@ func _build_slider_row(morph: Dictionary) -> Control:
 	slider.step = 0.01
 	slider.value = _current_value(str(morph["id"]))
 	slider.value_changed.connect(_on_morph_changed.bind(str(morph["id"])))
+	slider.value_changed.connect(func(_wert: float) -> void: _spiele_slider_tick(slider))
 	row.add_child(slider)
 	return row
+
+
+## Gedrosseltes Raststufen-Tick — pro Slider frühestens alle
+## TICK_DEBOUNCE_MS (has_meta-Guard statt get_meta(key, null), Lint-Regel).
+func _spiele_slider_tick(slider: HSlider) -> void:
+	var now := Time.get_ticks_msec()
+	if slider.has_meta(TICK_META) and now < int(slider.get_meta(TICK_META)):
+		return
+	slider.set_meta(TICK_META, now + TICK_DEBOUNCE_MS)
+	AudioDirector.try_play(slider, "ui_tick")
 
 
 func _current_value(morph_id: String) -> float:

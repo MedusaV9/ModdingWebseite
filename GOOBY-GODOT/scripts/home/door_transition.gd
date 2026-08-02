@@ -111,6 +111,7 @@ func set_offen_sofort() -> void:
 func schliesse_sanft() -> void:
 	if _hinge == null:
 		return
+	AudioDirector.try_play(self, "tuer_zu")
 	var tween := create_tween()
 	tween.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
 	tween.tween_property(_hinge, "rotation:y", 0.0, 0.4)
@@ -360,7 +361,9 @@ func _doors_animated() -> bool:
 
 
 func _open_panel() -> void:
-	AudioDirector.try_play(self, "ui_open")
+	# G6-FEEL: echtes Tür-Foley statt Sheet-Sound (ui_open ist laut
+	# Grammatik für PanelSheets reserviert).
+	AudioDirector.try_play(self, "tuer_auf")
 	_open_tween = create_tween()
 	_open_tween.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 	_open_tween.tween_property(_hinge, "rotation:y", deg_to_rad(OFFEN_GRAD), 0.35)
@@ -390,14 +393,18 @@ func _run_stuck_gag(gooby: Node3D, ui_layer: Node) -> void:
 
 
 func _rattle() -> void:
+	# G6-FEEL: der Klemm-Gag rüttelt hörbar (Tap-Mash — der 45-ms-Debounce
+	# des AudioDirector fängt Doppel-Trigger, der Jitter variiert den Rest).
+	AudioDirector.try_play(self, "tuer_ruettel")
 	var tween := create_tween()
 	tween.tween_property(_hinge, "rotation:y", deg_to_rad(OFFEN_GRAD + 5.0), 0.05)
 	tween.tween_property(_hinge, "rotation:y", deg_to_rad(OFFEN_GRAD), 0.05)
 
 
 ## Durchploppen (POLISH-7): Sternchen-Burst + Squash auf Gooby UND Türblatt
-## — der letzte Tap soll spürbar „ploppen“.
+## — der letzte Tap soll spürbar „ploppen“ (G6-FEEL: jetzt auch hörbar).
 func _pop_through(gooby: Node3D) -> void:
+	AudioDirector.try_play(self, "tuer_plopp")
 	_sterne.restart()
 	_sterne.emitting = true
 	var tuer_squash := create_tween()

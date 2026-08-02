@@ -35,9 +35,10 @@ const SPRUCH_START_S := 6.0
 const SPRUCH_VERSATZ_S := 9.0
 const SPRUCH_ALLE_S := 24.0
 const SPRUCH_DAUER_S := 3.2
-## Tür-Glöckchen = helles Bestands-Bell-Sample, hochgestimmt.
-const GLOCKE_ID := "gvz_wave"
-const GLOCKE_PITCH := 1.35
+## Tür-Glöckchen (G6-FEEL): echtes Ladentür-Ding-Ding statt des
+## hochgestimmten GvZ-Wellen-Gongs (Sound-Familie bleibt sauber getrennt).
+const GLOCKE_ID := "laden_glocke"
+const GLOCKE_PITCH := 1.0
 ## Leises Marktgemurmel (Bestands-Loop aus der Ranch-Familie, −10 dB).
 const GEMURMEL_ID := "ranch_menge_gemurmel"
 ## Hut-Palette (AC-Pastell, bewusst ≠ Fellfarben).

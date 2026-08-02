@@ -53,6 +53,7 @@ func _ready() -> void:
 	_baue_ui()
 	_baue_leben()
 	_starte_dialog()
+	RaumKlang.betrete(self, _raum_zone())
 	ready_for_reveal.emit()
 
 
@@ -92,6 +93,12 @@ func _npc_konfig() -> Dictionary:
 ## keine Rückwand, Wiesenboden, heller Himmel, schwächere Vignette.
 func _ist_draussen() -> bool:
 	return false
+
+
+## Hook (G6-FEEL): RaumKlang-Zone des Orts — Läden klingen dezent nach
+## Innenraum, Freiluft-Orte bleiben trocken (s. raum_klang.gd).
+func _raum_zone() -> String:
+	return "ort_draussen" if _ist_draussen() else "laden_innen"
 
 
 ## Hook (G7-P55): Ambient-Leben-Konfig des Orts ({} = kein Leben).
