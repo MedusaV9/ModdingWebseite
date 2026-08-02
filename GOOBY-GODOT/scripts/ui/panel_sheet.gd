@@ -13,14 +13,44 @@ extends Control
 ## - Schrift/Ränder skalieren mit `UiScale.for_viewport()` (kurze Kante).
 ## - Escape/Back-Geste schließt das oberste Sheet (SceneRouter → PanelStack).
 ##
+## G7/P53 („Modal-Menüs und Swipen/Wischen muss gefixt werden“): die Basis
+## kann jetzt zusätzlich RUNTERWISCHEN-ZUM-SCHLIESSEN — alle Blatt-Nutzer
+## erben das automatisch:
+## - Geste am Griff-/Kopfbereich (GrabHandle + Sheet-Chrome) zieht das
+##   Blatt direkt mit dem Finger mit.
+## - Im Scroll-Inhalt zieht die Geste NUR, wenn der innere Scroller ganz
+##   oben steht UND die Bewegung nach unten geht — sonst gehört sie dem
+##   Scroller (Entscheidung über SWIPE_CLAIM-Schwelle, s. _on_scroll_input).
+## - Loslassen über der Schwelle (Weg ODER Schwung) schließt mit
+##   Restschwung; darunter schnappt das Blatt federnd zurück.
+## - Dim-Tap schließt weiterhin nur das oberste Blatt (Maus UND Touch).
+## Reduced Motion: der Finger-Zug bleibt (direkte Manipulation, keine
+## Animation), aber Zurückschnappen/Schließen springen sofort.
+##
 ## Nutzung: Szene `panel_sheet.tscn` instanzieren, `add_content(node)`,
 ## dann `open()`. `closed`-Signal abonnieren.
 
 signal opened
 signal closed
 
+## Woher eine aktive Wisch-Geste stammt (Griff-/Kopfbereich oder Scroller).
+enum ZugQuelle { KEINE, GRIFF, SCROLLER }
+
 ## Innenabstand des Sheet-Bodys (Design-px, skaliert mit UiScale).
 const BODY_MARGIN := 8.0
+## Bewegung (Design-px), ab der eine Scroll-Geste als Blatt-Zug zählt —
+## darunter bleibt sie mehrdeutig und der Scroller behält sie.
+const SWIPE_CLAIM := 12.0
+## Loslass-Schwelle: so viel Anteil der Blatthöhe gezogen = schließen.
+const SWIPE_CLOSE_ANTEIL := 0.25
+## Mindest-Schließdistanz (Design-px) für sehr kleine Blätter.
+const SWIPE_CLOSE_MIN := 48.0
+## Schwung-Schwelle (Design-px/s nach unten): Flick schließt auch früher.
+const SWIPE_FLICK_PXPS := 900.0
+## Wie stark der Dim beim Zug aufhellt (0.6 = bei voller Strecke 40 % Rest).
+const SWIPE_DIM_ANTEIL := 0.6
+## Ausfahrweg der Schließ-Animation unter die Ruhelage (Canvas-px).
+const CLOSE_SLIDE := 60.0
 
 ## Notch-Simulation für Tests (Rect2() = aus → DisplayServer fragen).
 var safe_area_override := Rect2()
@@ -34,6 +64,24 @@ var _motion_tween: Tween
 ## das Sheet ist logisch schon zu (_open=false), sichtbare Rest-Buttons
 ## dürfen im Fade-Fenster nichts mehr auslösen (Muster PauseModal QW #6).
 var _fade_blocker: Control
+## Ruhelage der Blatt-Oberkante aus dem letzten _relayout (Canvas-px) —
+## Zug/Snapback/Close rechnen IMMER von hier, nie von der Momentanposition.
+var _rest_y := 0.0
+## Zustand der Runterwisch-Geste (genau EINE Geste zur Zeit).
+var _zug_aktiv := false
+var _zug_quelle := ZugQuelle.KEINE
+var _zug_offset := 0.0
+var _zug_tempo := 0.0
+## Finger-Index der laufenden Geste (-1 = keiner) — zweite Finger stören
+## eine aktive Geste nicht (Multi-Touch-Schutz).
+var _zug_finger := -1
+## Entscheidungsphase einer Scroll-Geste: aufgelaufene Y-Bewegung seit dem
+## Auflegen; erst über ±SWIPE_CLAIM fällt die Entscheidung Blatt/Scroller.
+var _scroll_druck := false
+var _scroll_summe := 0.0
+var _scroll_abgelehnt := false
+## Fokus-Rückgabe: wer VOR dem Öffnen den Tastatur-Fokus hatte.
+var _fokus_vorher: WeakRef
 
 @onready var _backdrop: ColorRect = %Backdrop
 @onready var _sheet: PanelContainer = %Sheet
@@ -55,6 +103,16 @@ func _ready() -> void:
 	_fade_blocker.visible = false
 	add_child(_fade_blocker)
 	get_viewport().size_changed.connect(_on_viewport_resized)
+	# G7/P53 Runterwisch-Verdrahtung. Die drei Zonen sind DISJUNKT:
+	# Griff (STOP) schluckt seine Events, der Scroller steht explizit auf
+	# STOP (Container-Default wäre PASS — dann kämen Scroll-Drags per
+	# Bubbling AUCH beim Sheet-Chrome an und würden doppelt gezählt).
+	_grab_handle.mouse_filter = Control.MOUSE_FILTER_STOP
+	_sheet.mouse_filter = Control.MOUSE_FILTER_STOP
+	_scroll.mouse_filter = Control.MOUSE_FILTER_STOP
+	_grab_handle.gui_input.connect(_on_griff_input)
+	_sheet.gui_input.connect(_on_griff_input)
+	_scroll.gui_input.connect(_on_scroll_input)
 
 
 ## UICOZY: Grabber-Pill wie Web .panel::before (44×5 px, Radius 999,
@@ -94,9 +152,11 @@ func open() -> void:
 	_open = true
 	visible = true
 	PanelStack.push(self)
+	_merke_fokus()
 	# Läuft noch ein Close-Fade, wird er hier gekappt (QW #23) — danach
 	# setzt _relayout die Ruhelage frisch aus dem Layout (nie relativ).
 	_kill_motion_tween()
+	_zug_reset()
 	_fade_blocker.visible = false
 	_relayout()
 	opened.emit()
@@ -106,13 +166,12 @@ func open() -> void:
 		return
 	# UICOZY: Backdrop blendet weich ein (Web polishd-backdrop-in), das
 	# Blatt federt von unten herein (Web panel-up, --ease-spring).
-	var rest_y := _sheet.position.y
 	_backdrop.modulate.a = 0.0
-	_sheet.position.y = rest_y + 60.0
+	_sheet.position.y = _rest_y + CLOSE_SLIDE
 	_sheet.modulate.a = 0.0
 	var tween := _fresh_motion_tween().set_parallel()
 	tween.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	tween.tween_property(_sheet, "position:y", rest_y, AcTokens.DUR_SHEET)
+	tween.tween_property(_sheet, "position:y", _rest_y, AcTokens.DUR_SHEET)
 	tween.tween_property(_sheet, "modulate:a", 1.0, AcTokens.DUR_SHEET / 2.0)
 	tween.tween_property(_backdrop, "modulate:a", 1.0, AcTokens.DUR_SHEET / 2.0).set_trans(
 		Tween.TRANS_LINEAR
@@ -126,33 +185,37 @@ func open() -> void:
 ## (rmp_hub, radio_geraet, gooberando/reise_app) — ein spätes Emit würde
 ## deren Aufräum-/Unfreeze-Pfade verlieren. Nur das AUSBLENDEN ist animiert;
 ## wird das Sheet direkt nach close() freigegeben, entfällt der Fade schlicht.
+## G7/P53: der Ausfahr-Tween startet an der AKTUELLEN Blatt-Position — nach
+## einem Runterwisch fährt das Blatt mit Restschwung von dort weiter.
 func close() -> void:
 	if not _open:
 		return
 	AudioDirector.try_play(self, "ui_close")
 	_open = false
 	PanelStack.remove(self)
+	_zug_reset()
 	closed.emit()
+	_gib_fokus_zurueck()
 	if not is_inside_tree() or is_queued_for_deletion() or ThemeService.is_reduced_motion(self):
 		visible = false
 		return
 	_fade_blocker.visible = true
-	var rest_y := _sheet.position.y
+	var ziel_y := _sheet.position.y + CLOSE_SLIDE
 	var tween := _fresh_motion_tween().set_parallel()
 	tween.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-	tween.tween_property(_sheet, "position:y", rest_y + 60.0, AcTokens.DUR_SHEET / 2.0)
+	tween.tween_property(_sheet, "position:y", ziel_y, AcTokens.DUR_SHEET / 2.0)
 	tween.tween_property(_sheet, "modulate:a", 0.0, AcTokens.DUR_SHEET / 2.0)
 	tween.tween_property(_backdrop, "modulate:a", 0.0, AcTokens.DUR_SHEET / 2.0)
-	tween.chain().tween_callback(_finish_close.bind(rest_y))
+	tween.chain().tween_callback(_finish_close)
 
 
 ## Ende des Close-Fades: verstecken + Ruhelage/Deckkraft für den nächsten
 ## open() wiederherstellen (open() relayoutet ohnehin, aber so bleibt der
 ## versteckte Zustand identisch zum Vor-Animations-Verhalten).
-func _finish_close(rest_y: float) -> void:
+func _finish_close() -> void:
 	visible = false
 	_fade_blocker.visible = false
-	_sheet.position.y = rest_y
+	_sheet.position.y = _rest_y
 	_sheet.modulate.a = 1.0
 	_backdrop.modulate.a = 1.0
 
@@ -217,6 +280,10 @@ func _relayout() -> void:
 	_sheet.offset_top = rect.position.y
 	_sheet.offset_right = rect.position.x + rect.size.x
 	_sheet.offset_bottom = rect.position.y + rect.size.y
+	# G7/P53: Ruhelage merken — Zug/Snapback/Close rechnen von hier.
+	_rest_y = rect.position.y
+	if _zug_aktiv:
+		_sheet.position.y = _rest_y + _zug_offset
 
 
 ## Body-Wunschgröße wie MarginContainer.get_minimum_size(), aber OHNE
@@ -251,7 +318,192 @@ func _on_viewport_resized() -> void:
 		_relayout()
 
 
+## Dim-Tap schließt NUR das oberste Blatt — Maus UND Touch (G7/P53: auf
+## Geräten ohne Maus-Emulation kam vorher kein MouseButton-Event an).
 func _on_backdrop_input(event: InputEvent) -> void:
+	var tipp := false
 	if event is InputEventMouseButton and event.pressed:
-		if PanelStack.is_top(self):
-			close()
+		tipp = true
+	elif event is InputEventScreenTouch and event.pressed:
+		tipp = true
+	if tipp and _open and PanelStack.is_top(self):
+		close()
+
+
+## ------------------------------------------------ G7/P53 Runterwischen
+
+
+## Griff-/Kopfbereich (GrabHandle + Sheet-Chrome): jede aufgelegte
+## Touch-Geste zieht das Blatt sofort mit — hier gibt es keinen
+## Scroll-Konflikt. Maus läuft über die projektweite Touch-Emulation.
+func _on_griff_input(event: InputEvent) -> void:
+	if event is InputEventScreenTouch:
+		var touch := event as InputEventScreenTouch
+		if touch.pressed:
+			if _open and not _zug_aktiv and _zug_finger < 0:
+				_zug_finger = touch.index
+				_zug_start(ZugQuelle.GRIFF)
+		elif touch.index == _zug_finger:
+			_zug_ende()
+	elif event is InputEventScreenDrag:
+		var drag := event as InputEventScreenDrag
+		if _zug_aktiv and _zug_quelle == ZugQuelle.GRIFF and drag.index == _zug_finger:
+			_zug_bewege(drag.relative.y, drag.velocity.y)
+
+
+## Scroll-Bereich: die Geste gehört ERST dem Scroller. Läuft schon ein
+## Blatt-Zug, schluckt accept_event() die Drags, damit der Scroller nicht
+## gleichzeitig weiterscrollt (das Signal feuert VOR der eingebauten
+## ScrollContainer-Verarbeitung).
+func _on_scroll_input(event: InputEvent) -> void:
+	if event is InputEventScreenTouch:
+		_on_scroll_touch(event as InputEventScreenTouch)
+		return
+	if not (event is InputEventScreenDrag):
+		return
+	var drag := event as InputEventScreenDrag
+	if drag.index != _zug_finger:
+		return
+	if _zug_aktiv:
+		if _zug_quelle == ZugQuelle.SCROLLER:
+			_zug_bewege(drag.relative.y, drag.velocity.y)
+			_scroll.scroll_vertical = 0
+			_scroll.accept_event()
+		return
+	if _scroll_druck and not _scroll_abgelehnt:
+		_scroll_entscheide(drag)
+
+
+## Entscheidungsphase (DER knifflige Teil): gehört die Geste dem Blatt
+## oder dem Scroller? Blatt nur, wenn der innere Scroller GANZ OBEN steht
+## und die Bewegung klar nach unten geht (> SWIPE_CLAIM). Ein
+## Aufwärts-Start lehnt bis zum Loslassen ab — kein Umspringen mitten im
+## Scrollen, Scroll-Inhalte ziehen das Blatt nie fälschlich mit.
+func _scroll_entscheide(drag: InputEventScreenDrag) -> void:
+	if _scroll.scroll_vertical > 0:
+		_scroll_abgelehnt = true
+		return
+	_scroll_summe += drag.relative.y
+	var claim := SWIPE_CLAIM * UiScale.for_viewport(get_viewport())
+	if _scroll_summe <= -claim:
+		_scroll_abgelehnt = true
+	elif _scroll_summe >= claim:
+		_zug_start(ZugQuelle.SCROLLER)
+		_zug_bewege(_scroll_summe, drag.velocity.y)
+		_scroll.accept_event()
+
+
+## Auflegen/Loslassen im Scroll-Bereich (Entscheidungsphase starten/enden).
+func _on_scroll_touch(touch: InputEventScreenTouch) -> void:
+	if touch.pressed:
+		if _open and not _zug_aktiv and _zug_finger < 0:
+			_zug_finger = touch.index
+			_scroll_druck = true
+			_scroll_summe = 0.0
+			_scroll_abgelehnt = false
+	elif touch.index == _zug_finger:
+		_zug_ende()
+
+
+func _zug_start(quelle: ZugQuelle) -> void:
+	# Ein evtl. laufender Open-Tween wird gekappt — der Finger übernimmt.
+	_kill_motion_tween()
+	_sheet.modulate.a = 1.0
+	_zug_aktiv = true
+	_zug_quelle = quelle
+	_zug_offset = maxf(_sheet.position.y - _rest_y, 0.0)
+	_zug_tempo = 0.0
+
+
+## Blatt folgt dem Finger (nur nach unten; der Dim hellt mit dem Zug auf).
+## Bewusst OHNE Reduced-Motion-Gate: direkte Manipulation ist keine
+## Animation — RM greift beim Loslassen (sofort schließen/zurücksetzen).
+func _zug_bewege(dy: float, tempo_y: float) -> void:
+	_zug_offset = maxf(_zug_offset + dy, 0.0)
+	_zug_tempo = tempo_y
+	_sheet.position.y = _rest_y + _zug_offset
+	var anteil := clampf(_zug_offset / _schliess_distanz(), 0.0, 1.0)
+	_backdrop.modulate.a = 1.0 - SWIPE_DIM_ANTEIL * anteil
+
+
+## Loslassen: über der Weg- ODER Schwung-Schwelle schließen (close()
+## fährt mit Restschwung von der aktuellen Position weiter), sonst
+## federnd zurückschnappen. Haptik: leichter Tipp NUR beim Schließen.
+func _zug_ende() -> void:
+	var war_aktiv := _zug_aktiv
+	var offset := _zug_offset
+	var tempo := _zug_tempo
+	_zug_reset()
+	if not war_aktiv:
+		return
+	var f := UiScale.for_viewport(get_viewport())
+	if offset >= _schliess_distanz() or tempo >= SWIPE_FLICK_PXPS * f:
+		Haptics.tap(self)
+		close()
+		return
+	_snap_zurueck(offset)
+
+
+## Zurückschnappen in die Ruhelage (Kurz-Wisch) — RM: sofort, kein Slide.
+func _snap_zurueck(offset: float) -> void:
+	if offset <= 0.5 or ThemeService.is_reduced_motion(self):
+		_sheet.position.y = _rest_y
+		_backdrop.modulate.a = 1.0
+		return
+	var tween := _fresh_motion_tween().set_parallel()
+	tween.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tween.tween_property(_sheet, "position:y", _rest_y, AcTokens.DUR_POP)
+	tween.tween_property(_backdrop, "modulate:a", 1.0, AcTokens.DUR_POP).set_trans(
+		Tween.TRANS_LINEAR
+	)
+
+
+## Gesten-Zustand vollständig löschen (open/close/Loslassen).
+func _zug_reset() -> void:
+	_zug_aktiv = false
+	_zug_quelle = ZugQuelle.KEINE
+	_zug_offset = 0.0
+	_zug_tempo = 0.0
+	_zug_finger = -1
+	_scroll_druck = false
+	_scroll_summe = 0.0
+	_scroll_abgelehnt = false
+
+
+## Loslass-Schwelle in Canvas-px: Anteil der Blatthöhe, mindestens
+## SWIPE_CLOSE_MIN×f (sehr kleine Blätter schließen sonst beim Antippen).
+func _schliess_distanz() -> float:
+	var f := UiScale.for_viewport(get_viewport())
+	return maxf(SWIPE_CLOSE_ANTEIL * _sheet.size.y, SWIPE_CLOSE_MIN * f)
+
+
+## ------------------------------------------------ G7/P53 Fokus-Rückgabe
+
+
+## Beim Öffnen merken, wer den Tastatur-Fokus hatte (WeakRef — der
+## Eigner darf zwischenzeitlich sterben, ohne dass wir daran hängen).
+func _merke_fokus() -> void:
+	_fokus_vorher = null
+	var vp := get_viewport()
+	if vp == null:
+		return
+	var eigner := vp.gui_get_focus_owner()
+	if eigner != null:
+		_fokus_vorher = weakref(eigner)
+
+
+## Beim Schließen: Fokus, der im Blatt hängt, freigeben und dem
+## Vorher-Eigner zurückgeben (sofern er noch lebt und sichtbar ist).
+func _gib_fokus_zurueck() -> void:
+	var vp := get_viewport()
+	if vp != null:
+		var eigner := vp.gui_get_focus_owner()
+		if eigner != null and is_ancestor_of(eigner):
+			eigner.release_focus()
+	if _fokus_vorher == null:
+		return
+	var ziel := _fokus_vorher.get_ref() as Control
+	_fokus_vorher = null
+	if ziel != null and is_instance_valid(ziel) and ziel.is_inside_tree():
+		if ziel.is_visible_in_tree():
+			ziel.grab_focus()

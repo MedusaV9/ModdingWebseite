@@ -71,6 +71,11 @@ func _baue_ui() -> void:
 	# UiScale statt fester 44/48-px-Werte (physisch sonst nur ~24–26 pt).
 	var m := ScreenShell.metrics(get_viewport())
 	var floor_px: float = m["floor_px"]
+	# G7/P53 (FB3-Altbefund „Like läuft aus dem Canvas“): die Layout-Wurzel
+	# klemmt ihre Mindestbreite auf die ECHTE Sheet-Innenbreite statt auf
+	# die feste BREITE — das nur vertikal scrollende Wirt-Sheet schneidet
+	# überbreiten Inhalt sonst rechts ab (FIX1-Regel, s. chrome_width()).
+	custom_minimum_size = Vector2(minf(CitySheetBausteine.BREITE, _innen_breite()), 0.0)
 	CitySheetBausteine.label(self, I18nService.t("radio.titel"), "HeadlineLabel")
 
 	var jetzt_karte := CitySheetBausteine.karte(self)
@@ -81,8 +86,15 @@ func _baue_ui() -> void:
 	_ticker.sicht_breite = CitySheetBausteine.TEXT_BREITE - 70.0
 	jetzt_karte.add_child(_ticker)
 
-	var transport := HBoxContainer.new()
-	transport.add_theme_constant_override("separation", 10)
+	# G7/P53: Transportzeile als FLOW statt HBox — die Mindestbreite einer
+	# HBox ist die SUMME der drei skalierten Knöpfe und lag im Hochformat
+	# (1179×2556, f=3) über der Sheet-Innenbreite; der letzte Knopf („Like“,
+	# FB3: P=(961,1150.8) S=(352,156.3)) ragte aus dem Canvas. Der Flow
+	# bricht stattdessen um; alle drei Knöpfe füllen ihre Zeile.
+	var transport := HFlowContainer.new()
+	transport.name = "Transport"
+	transport.add_theme_constant_override("h_separation", 10)
+	transport.add_theme_constant_override("v_separation", 10)
 	add_child(transport)
 	_an_aus_btn = SquishButton.new()
 	_an_aus_btn.name = "AnAus"
@@ -97,6 +109,7 @@ func _baue_ui() -> void:
 	_next_btn.theme_type_variation = "AccentButton"
 	_next_btn.text = I18nService.t("radio.naechster")
 	_next_btn.custom_minimum_size = Vector2(0.0, floor_px)
+	_next_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_next_btn.focus_mode = Control.FOCUS_NONE
 	_next_btn.pressed.connect(_on_naechster)
 	transport.add_child(_next_btn)
@@ -105,6 +118,7 @@ func _baue_ui() -> void:
 	_like_btn.theme_type_variation = "AccentButton"
 	_like_btn.text = I18nService.t("radio.gefaellt")
 	_like_btn.custom_minimum_size = Vector2(0.0, floor_px)
+	_like_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_like_btn.focus_mode = Control.FOCUS_NONE
 	_like_btn.pressed.connect(_on_like_aktueller)
 	transport.add_child(_like_btn)
@@ -428,6 +442,38 @@ func _on_titel_like(track_id: String) -> void:
 
 func _on_track_changed(_track_id: String) -> void:
 	_refresh()
+
+
+## ---------------------------------------------------------------- Layout
+
+
+## Tatsächlich nutzbare Innenbreite des Wirt-Sheets in Canvas-px (FIX1-
+## Muster wie reise_app.gd: `PanelSheetLayout.sheet_width − chrome_width`).
+## Ohne Wirt-Sheet (Standalone/Tests) wird nur der Body-Rand geschätzt.
+func _innen_breite() -> float:
+	var vp := get_viewport()
+	if vp == null:
+		return CitySheetBausteine.BREITE
+	var canvas := Vector2(vp.get_visible_rect().size)
+	var f := UiScale.for_viewport(vp)
+	var insets := UiScale.safe_insets_canvas(vp)
+	var breite := PanelSheetLayout.sheet_width(canvas, insets, f)
+	var wirt := _wirt_sheet()
+	if wirt != null:
+		breite -= wirt.chrome_width()
+	else:
+		breite -= 2.0 * PanelSheet.BODY_MARGIN * f
+	return maxf(breite, 0.0)
+
+
+## Nächstes PanelSheet über uns (RadioGeraet hängt uns in dessen Body).
+func _wirt_sheet() -> PanelSheet:
+	var knoten := get_parent()
+	while knoten != null:
+		if knoten is PanelSheet:
+			return knoten as PanelSheet
+		knoten = knoten.get_parent()
+	return null
 
 
 ## ---------------------------------------------------------------- Zustand
