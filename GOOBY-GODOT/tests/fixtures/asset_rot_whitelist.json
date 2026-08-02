@@ -1,0 +1,11 @@
+{
+	"_doku": [
+		"ASSET-ROT-Whitelist: bewusste Orientierungs-Ausnahmen (UserFeedback",
+		"'alle Assets richtig rotiert'). Jeder Eintrag deckt ROT-Befunde der",
+		"Dauer-Wache (tests/unit/test_asset_orientation.gd) ab.",
+		"Felder: szene (res://-Pfad, leer = alle Szenen), pfad_regex (RegEx",
+		"auf den Node-Pfad), art (NEG_SCALE|KOPFUEBER|KIPP_90|* = alle),",
+		"grund (Pflicht: WARUM die Orientierung Absicht ist)."
+	],
+	"eintraege": []
+}
