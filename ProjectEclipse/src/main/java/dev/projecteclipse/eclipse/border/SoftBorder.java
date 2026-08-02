@@ -84,9 +84,13 @@ import net.neoforged.neoforge.network.PacketDistributor;
  *       alone.</li>
  *   <li><b>Pearls/chorus/{@code /tp}</b>: {@link EntityTeleportEvent.EnderPearl}/
  *       {@link EntityTeleportEvent.ChorusFruit}/{@link EntityTeleportEvent.TeleportCommand}
- *       targets are clamped into {@code R−2} via {@code setTargetX/Z} (never cancelled —
- *       cancelling eats pearls). Operators (permission 2+) bypass the command clamp for
- *       inspection.</li>
+ *       targets beyond {@code R−2} are clamped onto SOLID GROUND inside the ring via
+ *       {@code setTargetX/Y/Z} (never cancelled — cancelling eats pearls), using the same
+ *       inward ground search as the teleport fallback (F-109: the old raw {@code R−2}/
+ *       keep-Y clamp landed every clamped teleport in the guaranteed void column between
+ *       the outermost terrain and the ring — an unavoidable fall death). Creative and
+ *       spectator players are exempt from all three clamps; operators (permission 2+)
+ *       additionally bypass the command clamp for inspection.</li>
  *   <li>Repeat violators ({@literal >}{@value #PUSHBACK_LOG_THRESHOLD} pushbacks/min) are
  *       logged on the anti-cheat channel.</li>
  * </ul>
@@ -161,6 +165,15 @@ public final class SoftBorder {
     private static final Map<Integer, VehicleViolations> VEHICLE_LOG = new HashMap<>();
     /** Last glitch-sound game time per player (throttle). */
     private static final Map<UUID, Long> LAST_SOUND = new HashMap<>();
+    /**
+     * Last "exempt player beyond the ring" trace per player (F-109 log hygiene): the
+     * per-tick DEBUG line used to fire 20×/s per lingering creative admin and drowned
+     * the server log/console scrollback. Entries reset when the player comes back
+     * inside, so every fresh excursion still logs immediately.
+     */
+    private static final Map<UUID, Long> LAST_EXEMPT_TRACE = new HashMap<>();
+    /** Exempt-trace throttle: at most one line per player per 10 s while they stay outside. */
+    private static final int EXEMPT_TRACE_THROTTLE_TICKS = 200;
 
     /** {@code sweepCoupled}: stage-commit lerps snap early once the terrain sweep completes. */
     private record Lerp(double fromRadius, double toRadius, long startGameTime, int durationTicks,
@@ -495,6 +508,7 @@ public final class SoftBorder {
         UUID id = event.getEntity().getUUID();
         PUSHBACK_LOG.remove(id);
         LAST_SOUND.remove(id);
+        LAST_EXEMPT_TRACE.remove(id);
     }
 
     /**
@@ -518,6 +532,7 @@ public final class SoftBorder {
         PUSHBACK_LOG.clear();
         VEHICLE_LOG.clear();
         LAST_SOUND.clear();
+        LAST_EXEMPT_TRACE.clear();
     }
 
     // --- physics: players ---
@@ -545,6 +560,8 @@ public final class SoftBorder {
         double dz = player.getZ() - state.getBorderCenterZ();
         double distSq = dx * dx + dz * dz;
         if (distSq <= radius * radius) {
+            // Back inside: re-arm the exempt trace so the next excursion logs at once.
+            LAST_EXEMPT_TRACE.remove(player.getUUID());
             // Pre-band warning (B9): approaching the ring from inside cues the player
             // BEFORE any physics engage, so the pushback/kick never feels sudden.
             double warnR = radius - WARNING_BAND;
@@ -554,13 +571,19 @@ public final class SoftBorder {
             return;
         }
         double dist = Math.sqrt(distSq);
-        if (player.isCreative()) {
+        if (isBorderExempt(player)) {
             // Creative flight ignores impulses client-side, so physics would only ever
-            // drag admins into the teleport fallback — exempt them, but keep a trace.
-            EclipseMod.LOGGER.debug("SoftBorder: creative player {} is beyond the {} ring (d={}, R={}) — exempt",
-                    player.getScoreboardName(), profile.name(),
-                    String.format(java.util.Locale.ROOT, "%.1f", dist),
-                    String.format(java.util.Locale.ROOT, "%.1f", radius));
+            // drag admins into the teleport fallback — exempt them, but keep a trace
+            // (throttled, F-109: this used to spam one line per tick per player).
+            long now = level.getGameTime();
+            Long last = LAST_EXEMPT_TRACE.get(player.getUUID());
+            if (last == null || now - last >= EXEMPT_TRACE_THROTTLE_TICKS) {
+                LAST_EXEMPT_TRACE.put(player.getUUID(), now);
+                EclipseMod.LOGGER.debug("SoftBorder: creative player {} is beyond the {} ring (d={}, R={}) — exempt",
+                        player.getScoreboardName(), profile.name(),
+                        String.format(java.util.Locale.ROOT, "%.1f", dist),
+                        String.format(java.util.Locale.ROOT, "%.1f", radius));
+            }
             return;
         }
         if (dist > radius + TELEPORT_BAND) {
@@ -683,6 +706,32 @@ public final class SoftBorder {
     }
 
     /**
+     * Heightmap surface Y like {@link #groundSurfaceY}, but willing to synchronously
+     * load the chunk. ONLY for the one-shot teleport-clamp path (F-109): the clamped
+     * landing column is usually far from every player and thus unloaded, and a heightmap
+     * probe against an unloaded chunk reads as the dimension floor (the
+     * {@code FogStormSites.pollFogSites} min_y lesson) — which is exactly the void-drop
+     * this probe exists to prevent. Never call this from a per-tick path.
+     */
+    private static int groundSurfaceYLoading(ServerLevel level, double x, double z) {
+        int blockX = Mth.floor(x);
+        int blockZ = Mth.floor(z);
+        LevelChunk chunk = level.getChunk(blockX >> 4, blockZ >> 4);
+        return chunk.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, blockX & 15, blockZ & 15) + 1;
+    }
+
+    /**
+     * The one border-exemption rule (F-109): creative and spectator players are never
+     * policed, on ANY path — tick physics, vehicle eject, and the pearl/chorus/command
+     * teleport clamps. Creative flight ignores impulses client-side, so physics would
+     * only ever drag admins into the teleport fallback; and the F-109 incident showed
+     * the command clamp dropping a non-op creative admin into the rim void column.
+     */
+    private static boolean isBorderExempt(ServerPlayer player) {
+        return player.isCreative() || player.isSpectator();
+    }
+
+    /**
      * Pre-band warning cue (B9): action-bar hint + a softer glitch sound at the player,
      * riding the same {@link #LAST_SOUND} throttle as the pushback feedback so the two
      * cues never stack in the same window.
@@ -780,7 +829,7 @@ public final class SoftBorder {
             EclipseMod.LOGGER.debug("SoftBorder: vehicle {} re-violated {}x in {}t — ejecting players",
                     entity.getScoreboardName(), VEHICLE_VIOLATIONS_TO_EJECT, VEHICLE_VIOLATION_WINDOW_TICKS);
             for (Entity passenger : entity.getIndirectPassengers()) {
-                if (passenger instanceof ServerPlayer player && !player.isCreative()) {
+                if (passenger instanceof ServerPlayer player && !isBorderExempt(player)) {
                     player.stopRiding();
                     teleportInside(player, level, profile, dist, dx, dz);
                     logPushback(player, level, profile, dist, radius);
@@ -800,7 +849,7 @@ public final class SoftBorder {
     @Nullable
     private static ServerPlayer firstPlayerPassenger(Entity vehicle) {
         for (Entity passenger : vehicle.getIndirectPassengers()) {
-            if (passenger instanceof ServerPlayer player && !player.isCreative() && !player.isSpectator()) {
+            if (passenger instanceof ServerPlayer player && !isBorderExempt(player)) {
                 return player;
             }
         }
@@ -819,7 +868,13 @@ public final class SoftBorder {
         clampTeleport(event, event.getEntityLiving());
     }
 
-    /** Command teleports are clamped for regular players; operators bypass for inspection. */
+    /**
+     * Command teleports are clamped for regular survival players. Operators (permission
+     * 2+) bypass for inspection; creative/spectator TARGETS are exempt inside
+     * {@link #clampTeleport} (F-109: an RCON/console {@code /tp} carries the console's
+     * permission, not the target's — a non-op creative admin being moved by RCON used to
+     * be clamped into the rim void column and killed).
+     */
     @SubscribeEvent
     public static void onTeleportCommand(EntityTeleportEvent.TeleportCommand event) {
         Entity entity = event.getEntity();
@@ -830,12 +885,31 @@ public final class SoftBorder {
     }
 
     /**
-     * Clamps the teleport TARGET into {@code R−2} (never cancels — cancelling eats pearls).
-     * The Y is left untouched; the regular physics tick cleans up any residual mismatch.
+     * Clamps the teleport TARGET onto solid ground inside the ring (never cancels —
+     * cancelling eats pearls). Creative/spectator players are exempt here like on every
+     * other border path ({@link #isBorderExempt}).
+     *
+     * <p><b>F-109:</b> the old clamp set XZ to the raw {@code R−2} point and "left the Y
+     * untouched; the physics tick cleans up any residual mismatch". Both halves of that
+     * were wrong: {@code R = stageOuterRadius + borderOffset}, so {@code R−2} lies
+     * ~{@code borderOffset−2} blocks BEYOND the outermost terrain — a guaranteed void
+     * column — and because {@code d = R−2 < R} the landing point is INSIDE the ring, so
+     * the physics tick never engages. Every clamped teleport (RCON {@code /tp} of a
+     * non-op, a survival pearl thrown past the ring, …) became a silent fall →
+     * {@code outOfWorld} death; repeated rescue teleports re-clamped into the same
+     * column and produced the F-109 death loop. The clamp now resolves the landing the
+     * same way {@link #teleportInside} does — start inside the rim rewrite margin, walk
+     * inward until TWO consecutive columns carry terrain — and writes the surface Y into
+     * the event. Unlike the per-tick physics path this fires once per command/pearl, so
+     * the ground probe may synchronously load the (usually player-less) landing chunk
+     * ({@link #groundSurfaceYLoading}) instead of treating it as void.</p>
      */
     private static void clampTeleport(EntityTeleportEvent event, Entity entity) {
         if (entity == null || !(entity.level() instanceof ServerLevel level)) {
             return;
+        }
+        if (entity instanceof ServerPlayer player && isBorderExempt(player)) {
+            return; // F-109: creative/spectator are exempt on EVERY border path
         }
         DiscProfile profile = WorldStageService.profileOf(level.dimension());
         if (profile == null) {
@@ -855,12 +929,55 @@ public final class SoftBorder {
             return;
         }
         double dist = Math.sqrt(distSq);
-        double scale = maxR / dist;
-        event.setTargetX(state.getBorderCenterX() + dx * scale);
-        event.setTargetZ(state.getBorderCenterZ() + dz * scale);
-        EclipseMod.LOGGER.debug("SoftBorder: clamped a {} teleport of {} from d={} into R-2={}",
-                event.getClass().getSimpleName(), entity.getScoreboardName(),
-                String.format(java.util.Locale.ROOT, "%.1f", dist),
-                String.format(java.util.Locale.ROOT, "%.1f", maxR));
+        double dirX = dx / dist;
+        double dirZ = dz / dist;
+        double startR = maxR;
+        int stageOuter = stageOuterRadius(profile, state.getWorldStage(profile));
+        if (stageOuter > 0) {
+            // Stage-derived ring: start inside the rim rewrite margin, where the terrain
+            // function guarantees full-thickness interior columns (teleportInside rule).
+            startR = Math.min(startR,
+                    Math.max(0.0D, stageOuter - (double) DiscTerrainFunction.RIM_REWRITE_MARGIN));
+        }
+        for (int step = 0; step <= GROUND_SEARCH_STEPS; step++) {
+            double r = Math.max(0.0D, startR - (double) step * GROUND_SEARCH_STEP);
+            double tx = state.getBorderCenterX() + dirX * r;
+            double tz = state.getBorderCenterZ() + dirZ * r;
+            int surfaceY = groundSurfaceYLoading(level, tx, tz);
+            if (surfaceY <= level.getMinBuildHeight()) {
+                continue; // void column (rim taper / never-generated) — search further inward
+            }
+            // Solid-ground requirement: the next step inward must be terrain too, so a
+            // lone rim-crumble fragment can never become the landing column.
+            double innerR = Math.max(0.0D, r - GROUND_SEARCH_STEP);
+            int innerSurfaceY = groundSurfaceYLoading(level,
+                    state.getBorderCenterX() + dirX * innerR, state.getBorderCenterZ() + dirZ * innerR);
+            if (innerSurfaceY <= level.getMinBuildHeight()) {
+                continue;
+            }
+            event.setTargetX(tx);
+            event.setTargetY(surfaceY);
+            event.setTargetZ(tz);
+            EclipseMod.LOGGER.debug(
+                    "SoftBorder: clamped a {} teleport of {} from d={} onto ground at r={} ({}, {}, {})",
+                    event.getClass().getSimpleName(), entity.getScoreboardName(),
+                    String.format(java.util.Locale.ROOT, "%.1f", dist),
+                    String.format(java.util.Locale.ROOT, "%.1f", r),
+                    String.format(java.util.Locale.ROOT, "%.1f", tx), surfaceY,
+                    String.format(java.util.Locale.ROOT, "%.1f", tz));
+            return;
+        }
+        // No ground found along the ray (should not happen inside the disc) — spawn
+        // fallback onto the heightmap surface, mirroring teleportInside.
+        BlockPos spawn = level.getSharedSpawnPos();
+        int spawnSurfaceY = groundSurfaceYLoading(level, spawn.getX() + 0.5D, spawn.getZ() + 0.5D);
+        if (spawnSurfaceY <= level.getMinBuildHeight()) {
+            spawnSurfaceY = spawn.getY();
+        }
+        event.setTargetX(spawn.getX() + 0.5D);
+        event.setTargetY(spawnSurfaceY);
+        event.setTargetZ(spawn.getZ() + 0.5D);
+        EclipseMod.LOGGER.warn("SoftBorder: no ground found for the clamped {} teleport of {}; sent to spawn",
+                event.getClass().getSimpleName(), entity.getScoreboardName());
     }
 }
