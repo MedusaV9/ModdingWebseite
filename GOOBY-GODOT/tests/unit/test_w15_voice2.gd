@@ -341,8 +341,13 @@ func test_feiern_feuern_kommentare() -> void:
 	hub._celebrate({"id": "w15_test_sticker", "rarity": "haeufig", "page": ""})
 	assert_eq(_gebuchte(gs, "feier.sticker").size(), 1, "Sticker-Feier → Kommentar")
 	runner.now_ms_override += BREMSE_FREI_MS
+	# WARN-SWEEP: der synthetische Erfolg hat keine echten Strings — den
+	# Namens-Key in die gecachte DE-Tabelle legen, sonst schreit I18nService
+	# („Fehlender String-Key“) in jedem Testlauf; unten wieder aufgeräumt.
+	I18nService.table("de")["achievements.defs.w15_test_erfolg.name"] = "Test-Erfolg"
 	hub._celebrate_achievement({"id": "w15_test_erfolg", "coins": 5})
 	assert_eq(_gebuchte(gs, "feier.erfolg").size(), 1, "Erfolgs-Feier → Kommentar")
+	I18nService.reset_cache()
 	await _abbau(room, gs)
 
 

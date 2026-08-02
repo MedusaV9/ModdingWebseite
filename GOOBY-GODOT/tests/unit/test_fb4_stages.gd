@@ -84,7 +84,12 @@ func _mount(game_id: String) -> Node:
 	game.call("start")
 	if LEVEL_ENTRY.has(game_id):
 		var entry: Array = LEVEL_ENTRY[game_id]
-		game.callv(str(entry[0]), entry[1] as Array)
+		# WARN-SWEEP: duplicate() ist Pflicht — callv mit dem READ-ONLY-Array
+		# aus dem const-Dictionary kopiert in Godot 4.4 alle Argumente durch
+		# EINEN geteilten Puffer (alle Args werden zum letzten Element), der
+		# Aufruf scheiterte still („Cannot convert argument 1 from int to
+		# String“) und gobnom blieb im Level-Select statt im Battle-Pfad.
+		game.callv(str(entry[0]), (entry[1] as Array).duplicate())
 	await wait_frames(2)
 	return game
 

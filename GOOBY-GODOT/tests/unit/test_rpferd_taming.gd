@@ -106,5 +106,8 @@ func test_wildpferde_haben_oft_besondere_muster() -> void:
 			schecken += 1
 		if RanchRassen.allele(p["gene"], "glitzer", "g0").has("gx"):
 			traeger += 1
-	assert_true(schecken >= 200, "Schecken-Chance ~60 % (%d/400)" % schecken)
-	assert_true(traeger >= 60, "Glitzer-Traeger ~25 %+ (%d/400)" % traeger)
+	# WARN-SWEEP: literale Prozentzeichen als %% escapen — „% (“ / „%+“ sind
+	# ungültige Platzhalter und rissen bei JEDEM Lauf zwei Engine-Fehler
+	# („String formatting error“), weil die Meldung eager formatiert wird.
+	assert_true(schecken >= 200, "Schecken-Chance ~60 %% (%d/400)" % schecken)
+	assert_true(traeger >= 60, "Glitzer-Traeger ~25 %%+ (%d/400)" % traeger)

@@ -1,0 +1,17 @@
+{
+  "_hinweis": [
+    "Warn-Budget des Boot-Smokes (godot --headless --quit), Wache:",
+    "tests/unit/test_warn_budget.gd. Neue WARNING/ERROR/SCRIPT-ERROR-Zeilen",
+    "im Boot duerfen sich NICHT ansammeln: erst die Ursache fixen, nur in",
+    "begruendeten Ausnahmen das Budget hier anheben (mit Kommentar).",
+    "Stand W17/B11: genau 1 WARNING ist bekannt und akzeptiert -",
+    "'ObjectDB instances leaked at exit' entsteht, weil --quit nach Frame 1",
+    "die Boot-Koroutine (main.gd/_boot) mitten im await beendet; ein voller",
+    "Boot (--quit-after 600) endet beweisbar mit 0 Meldungen."
+  ],
+  "boot_smoke": {
+    "warnings_max": 1,
+    "errors_max": 0,
+    "script_errors_max": 0
+  }
+}

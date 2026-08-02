@@ -115,6 +115,11 @@ func test_warte_quest_ueber_zeitsprung_mit_notification() -> void:
 	]
 	RQuestKatalog.registry_override = fake
 	RQuestKatalog.reset_cache()
+	# WARN-SWEEP: die synthetische Quest hat keine echten Strings — den
+	# Titel-Key in die gecachte DE-Tabelle legen, sonst schreit I18nService
+	# bei warte_gestartet („Fehlender String-Key“) in jedem Testlauf.
+	# Aufgeräumt wird unten per I18nService.reset_cache().
+	I18nService.table("de")["rquest.q.fx_warte.titel"] = "Warte-Test"
 	assert_true(RQuestState.annehmen(gs, "fx_warte"))
 	assert_eq(RQuestState.status(gs, "fx_warte"), RQuestEngine.STATUS_WARTEND)
 	var ids: Array = []
@@ -131,6 +136,7 @@ func test_warte_quest_ueber_zeitsprung_mit_notification() -> void:
 	assert_true(RQuestState.abgeben(gs, "fx_warte"))
 	assert_eq(NotifyStub.pending().size(), 0, "Abgabe raeumt Notifications ab")
 	_teardown(gs)
+	I18nService.reset_cache()
 
 
 func test_verfuegbare_enthaelt_tagesaufgaben() -> void:
