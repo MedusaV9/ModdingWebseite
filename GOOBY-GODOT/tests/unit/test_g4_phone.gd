@@ -115,14 +115,14 @@ func test_geraet_skaliert_und_deckelt_mit_dem_canvas() -> void:
 	var shell := await _oeffne_shell(gs)
 	var geraet: PanelContainer = shell.find_child("Geraet", true, false)
 	assert_true(geraet != null, "Gerät existiert")
-	# f=1: Designbreite 380, Höhe am card_max_height-Deckel (720·0,78).
-	assert_almost(geraet.custom_minimum_size.x, 380.0, 0.5, "f=1: Designbreite")
+	# G7/P52: 1280×720 ist QUER → breite Geräte-Basis 640×480 statt der
+	# 380er-Hochkant-Karte, die am Höhen-Deckel zur Briefmarke wurde.
+	assert_almost(geraet.custom_minimum_size.x, 640.0, 0.5, "f=1 quer: breite Basis")
 	var m := ScreenShell.metrics(shell.get_viewport())
-	assert_almost(
-		geraet.custom_minimum_size.y,
-		ScreenShell.card_max_height(m),
-		0.5,
-		"f=1 quer: Höhen-Deckel greift (kein 640-Überstand auf 720er-Canvas)"
+	assert_almost(geraet.custom_minimum_size.y, 480.0, 0.5, "f=1 quer: 480 unterm Deckel")
+	assert_true(
+		geraet.custom_minimum_size.y <= ScreenShell.card_max_height(m) + 0.5,
+		"quer: Höhen-Deckel respektiert"
 	)
 	assert_almost(shell.geste_schwelle(), 90.0, 0.5, "Geste f=1 = 90 px")
 	# Hochkant-Fenster: das canvas_items-Stretch hält die Canvas-Breite bei
@@ -137,18 +137,12 @@ func test_geraet_skaliert_und_deckelt_mit_dem_canvas() -> void:
 	assert_true(640.0 * f <= ScreenShell.card_max_height(m), "640×f passt unter den Deckel")
 	assert_almost(geraet.custom_minimum_size.y, 640.0 * f, 0.5, "hoch: Höhe ×f unterm Deckel")
 	assert_almost(shell.geste_schwelle(), 90.0 * f, 0.5, "Geste skaliert ×f")
-	# Zurück aufs Referenz-Fenster: Gerät schrumpft wieder auf die Basis.
+	# Zurück aufs Referenz-Fenster: Gerät wechselt wieder auf die Quer-Basis.
 	tree.root.size = Vector2i(1280, 720)
 	tree.root.size_changed.emit()
 	await wait_frames(3)
-	assert_almost(geraet.custom_minimum_size.x, 380.0, 0.5, "zurück: Designbreite")
-	m = ScreenShell.metrics(shell.get_viewport())
-	assert_almost(
-		geraet.custom_minimum_size.y,
-		ScreenShell.card_max_height(m),
-		0.5,
-		"zurück: Höhen-Deckel greift wieder"
-	)
+	assert_almost(geraet.custom_minimum_size.x, 640.0, 0.5, "zurück: Quer-Basis")
+	assert_almost(geraet.custom_minimum_size.y, 480.0, 0.5, "zurück: Quer-Höhe")
 	await _schliesse_shell(shell)
 	await _unpin()
 
