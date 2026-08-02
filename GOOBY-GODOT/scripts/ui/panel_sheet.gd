@@ -136,11 +136,23 @@ func set_title(text: String) -> void:
 ## die Min-Size des Blatts (Container-Messung), und ein einmal aufgeblähter
 ## PanelContainer schrumpft von selbst nicht zurück (Sheet ragte rechts
 ## aus dem Bild, s. news_50_panel/story_time in G4/P17).
+## G8/B2 (PT-4 „Tagesquests-Blatt beim ZWEITEN Öffnen leer“): `node` darf
+## der BEREITS eingehängte (vom Aufrufer gecachte) Inhalt sein — vorher
+## hängte die Schleife auch IHN ab, queue_free-te ihn und hängte den
+## todgeweihten Knoten wieder ein; im Folgeframe verschwand der Inhalt.
+## Wiederverwendete Nodes überleben jetzt (schützt JEDEN Sheet-Nutzer, der
+## seinen Inhalt cached, z. B. quest_service); hängt `node` noch woanders,
+## wird er sauber umgehängt.
 func add_content(node: Control) -> void:
 	for child in _body.get_children():
+		if child == node:
+			continue
 		_body.remove_child(child)
 		child.queue_free()
-	_body.add_child(node)
+	if node.get_parent() != _body:
+		if node.get_parent() != null:
+			node.get_parent().remove_child(node)
+		_body.add_child(node)
 	if _open:
 		_relayout()
 

@@ -3,13 +3,13 @@ extends "res://tests/tools/playtest_flows/flow_pt4_basis.gd"
 ## Tagesquests-Blatt öffnen → weicht das HUD (User-Befund 1.8.: „Blatt
 ## liegt ÜBER den Status-Leisten")? → Backdrop-Dim sichtbar? →
 ## RUNTERWISCHEN am Griff schließt das ECHTE Blatt (P53-Geste) → HUD
-## kommt zurück → Wieder-Öffnen-Probe (G8-BEFUND: das zweite Öffnen bringt
-## ein leeres Titel-Blatt, weil PanelSheet.add_content das gecachte
-## DailyQuestPanel des QuestService queue_free-t — Schritt ist bewusst
-## pflicht=false und loggt den Blatt-Zustand als Beleg) → Dim-Tap räumt
-## das Rest-Blatt weg. Danach Baumodus: HUD-Knöpfe gleiten weg (P50),
-## Goobys Blase OHNE Wort-Abriss (P51), Bett-Bauquest ERFÜLLEN (Geist auf
-## freie Zellen, Platzieren — „Fertig" ist bis dahin gesperrt!) → Fertig.
+## kommt zurück → Wieder-Öffnen-WACHE (G8-Befund B2, GEFIXT:
+## PanelSheet.add_content zerstört wiederverwendete, gecachte Panels
+## nicht mehr — der Schritt ist jetzt PFLICHT und prüft zusätzlich, dass
+## das Blatt echten Quest-Inhalt zeigt) → Dim-Tap räumt das Blatt weg.
+## Danach Baumodus: HUD-Knöpfe gleiten weg (P50), Goobys Blase OHNE
+## Wort-Abriss (P51), Bett-Bauquest ERFÜLLEN (Geist auf freie Zellen,
+## Platzieren — „Fertig" ist bis dahin gesperrt!) → Fertig.
 ## Aufruf: tools/ci/run_playtest.sh flow_pt4_sheets
 
 
@@ -55,14 +55,24 @@ func schritte() -> Array[Dictionary]:
 					"bedingung": hud_da,
 					"timeout_s": 12.0,
 				},
-				# ── G8-Befund-Probe: zweites Öffnen (nach EINEM Schließen).
+				# ── G8-B2-Regressions-Wache: zweites Öffnen (nach EINEM
+				# Schließen) MUSS wieder ein gefülltes Blatt bringen.
 				{
 					"name": "wieder_oeffnen_regression",
 					"aktion": "tipp_name",
 					"node": "BtnQuests",
 					"erwarte": {"klasse": "DailyQuestPanel"},
 					"timeout_s": 20.0,
-					"pflicht": false,
+				},
+				# Kurz setzen lassen: der Alt-Bug fraß den Inhalt erst im
+				# FOLGEFRAME (queue_free-Zombie) — die Wache danach sieht
+				# also nur echten, überlebenden Inhalt.
+				{"name": "wieder_oeffnen_setzen", "aktion": "warte", "sekunden": 1.0},
+				{
+					"name": "wieder_oeffnen_inhalt_da",
+					"aktion": "tue",
+					"funktion": wieder_oeffnen_inhalt_da,
+					"erwartung": "Blatt zeigt beim zweiten Öffnen wieder Quests (B2-Fix)",
 				},
 				{"name": "blatt_zustand_loggen", "aktion": "tue", "funktion": blatt_zustand_loggen},
 				{
@@ -112,3 +122,29 @@ func schritte() -> Array[Dictionary]:
 	liste.append_array(bett_platzieren_schritte())
 	liste.append_array([{"name": "abschluss_wohnzimmer", "aktion": "warte", "sekunden": 2.0}])
 	return liste
+
+
+## G8-B2-Wache: das WIEDER geöffnete Blatt zeigt echten Quest-Inhalt — ein
+## sichtbares, LEBENDIGES DailyQuestPanel mit Kindern im offenen Blatt (der
+## Alt-Bug hängte einen queue_free-Zombie ein, der im Folgeframe starb).
+func wieder_oeffnen_inhalt_da() -> bool:
+	var sheet := blatt()
+	var panel := _suche_klasse(harness.root, "DailyQuestPanel")
+	if sheet == null or panel == null:
+		print(
+			(
+				"[PT4] B2-Wache: Blatt offen=%s, Panel sichtbar=%s"
+				% [str(sheet != null), str(panel != null)]
+			)
+		)
+		return false
+	var lebendig := not panel.is_queued_for_deletion()
+	var kinder := panel.get_child_count()
+	var im_blatt := sheet.is_ancestor_of(panel)
+	print(
+		(
+			"[PT4] B2-Wache: Panel lebendig=%s Kinder=%d im offenen Blatt=%s"
+			% [str(lebendig), kinder, str(im_blatt)]
+		)
+	)
+	return lebendig and kinder > 0 and im_blatt

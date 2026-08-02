@@ -30,6 +30,10 @@ signal app_geoeffnet(app_id: String)
 signal geschlossen
 
 const HUD_ACTION := &"igohbie"
+## Gruppe der OFFENEN Telefon-Shell — Overlay-Gates (z. B. die „Was nun?“-
+## Karte, G8 B6/B9) fragen hierüber ab, ob das Telefon den Schirm hat. Das
+## Telefon ist bewusst KEIN PanelSheet und taucht nicht im PanelStack auf.
+const GRUPPE := &"phone_shell"
 ## Wischweg (Design-px, ×f), ab dem die Zurück-Geste auslöst.
 const GESTE_PX := 90.0
 ## Startzone der Links-Wisch-Geste (Design-px ×f vom linken Geräterand).
@@ -235,6 +239,7 @@ static func app_fonts_skalieren(box: Control) -> void:
 
 
 func _ready() -> void:
+	add_to_group(GRUPPE)
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	if host == null:

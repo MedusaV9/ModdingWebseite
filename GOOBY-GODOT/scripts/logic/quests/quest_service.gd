@@ -306,6 +306,10 @@ func open_panel() -> void:
 		_layer.add_child(_sheet)
 		# Nach dem Zuklappen darf der „Was nun?“-Hinweis wieder übernehmen.
 		_sheet.closed.connect(refresh_hint)
+	# G8/B2: Panel-Cache selbstheilend — starb der gecachte Panel (z. B.
+	# mit einem alten Sheet oder durch fremdes add_content), wird er neu
+	# gebaut, statt einen toten Knoten erneut einzuhängen.
+	if _panel == null or not is_instance_valid(_panel):
 		_panel = DailyQuestPanel.new()
 		_panel.claim_pressed.connect(_on_panel_claim)
 		_panel.reroll_pressed.connect(_on_panel_reroll)

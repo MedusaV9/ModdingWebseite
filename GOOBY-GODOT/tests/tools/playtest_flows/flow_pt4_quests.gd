@@ -3,13 +3,14 @@ extends "res://tests/tools/playtest_flows/flow_pt4_basis.gd"
 ## „Einkaufsbummel" (einkauf1: 1 Münze ausgeben; im Fresh-Save-Kontext für
 ## Anfang August gerollt — der Flow loggt die echten Ids als Beleg) durch
 ## einen ECHTEN Garderoben-Kauf (Beanie, 100 Münzen) erfüllen → Tagesquest-
-## Blatt öffnen (ERSTES Öffnen! Wegen des G8-Befunds „Wieder-Öffnen bringt
-## leeres Blatt" — s. flow_pt4_sheets — wird das Blatt hier ERST NACH dem
-## Kauf geöffnet, damit „Abholen" im funktionierenden Erst-Öffnen liegt) →
-## Belohnung abholen („Quest geschafft! +… Münzen, +… XP", Häkchen
-## „Erledigt!") → der Erfolg „Macher" (erste Tagesquest, +10 Münzen)
-## PLOPPT als Toast → Münzstand steigt (Progressions-Beleg) → Blatt per
-## Runterwischen zu → Wieder-Öffnen-Probe (G8-Regression, pflicht=false).
+## Blatt öffnen (Blatt erst NACH dem Kauf — historisch die B2-Umgehung,
+## heute schlicht der natürliche Spielerweg) → Belohnung abholen („Quest
+## geschafft! +… Münzen, +… XP", Häkchen „Erledigt!") → der Erfolg
+## „Macher" (erste Tagesquest, +10 Münzen) PLOPPT als Toast → Münzstand
+## steigt (Progressions-Beleg) → Blatt per Runterwischen zu →
+## Wieder-Öffnen-WACHE (G8-Befund B2, GEFIXT: PanelSheet.add_content
+## zerstört wiederverwendete, gecachte Panels nicht mehr — Schritt jetzt
+## PFLICHT und mit echter Inhaltsprüfung).
 ## Tagesbonus (Onboarding-Kette) steckt in onboarding_schritte().
 ## Aufruf: tools/ci/run_playtest.sh flow_pt4_quests
 
@@ -103,14 +104,24 @@ func schritte() -> Array[Dictionary]:
 					"erwarte": {"weg_klasse": "DailyQuestPanel"},
 					"timeout_s": 20.0,
 				},
-				# ── G8-Regressions-Probe (s. flow_pt4_sheets): zweites Öffnen.
+				# ── G8-B2-Regressions-Wache (s. flow_pt4_sheets): zweites
+				# Öffnen MUSS wieder ein gefülltes Blatt bringen.
 				{
 					"name": "wieder_oeffnen_regression",
 					"aktion": "tipp_name",
 					"node": "BtnQuests",
 					"erwarte": {"klasse": "DailyQuestPanel"},
 					"timeout_s": 20.0,
-					"pflicht": false,
+				},
+				# Kurz setzen lassen: der Alt-Bug fraß den Inhalt erst im
+				# FOLGEFRAME (queue_free-Zombie) — die Wache danach sieht
+				# also nur echten, überlebenden Inhalt.
+				{"name": "wieder_oeffnen_setzen", "aktion": "warte", "sekunden": 1.0},
+				{
+					"name": "wieder_oeffnen_inhalt_da",
+					"aktion": "tue",
+					"funktion": wieder_oeffnen_inhalt_da,
+					"erwartung": "Blatt zeigt beim zweiten Öffnen wieder Quests (B2-Fix)",
 				},
 				{"name": "blatt_zustand_loggen", "aktion": "tue", "funktion": blatt_zustand_loggen},
 				{"name": "abschluss", "aktion": "warte", "sekunden": 2.0},
@@ -160,3 +171,30 @@ func muenzen_gestiegen() -> bool:
 	if muenzen_merker < 0:
 		return false
 	return muenzen() > muenzen_merker
+
+
+## G8-B2-Wache (Zwilling in flow_pt4_sheets): das WIEDER geöffnete Blatt
+## zeigt echten Quest-Inhalt — ein sichtbares, LEBENDIGES DailyQuestPanel
+## mit Kindern im offenen Blatt (der Alt-Bug hängte einen queue_free-
+## Zombie ein, der im Folgeframe starb).
+func wieder_oeffnen_inhalt_da() -> bool:
+	var sheet := blatt()
+	var panel := _suche_klasse(harness.root, "DailyQuestPanel")
+	if sheet == null or panel == null:
+		print(
+			(
+				"[PT4] B2-Wache: Blatt offen=%s, Panel sichtbar=%s"
+				% [str(sheet != null), str(panel != null)]
+			)
+		)
+		return false
+	var lebendig := not panel.is_queued_for_deletion()
+	var kinder := panel.get_child_count()
+	var im_blatt := sheet.is_ancestor_of(panel)
+	print(
+		(
+			"[PT4] B2-Wache: Panel lebendig=%s Kinder=%d im offenen Blatt=%s"
+			% [str(lebendig), kinder, str(im_blatt)]
+		)
+	)
+	return lebendig and kinder > 0 and im_blatt

@@ -15,6 +15,9 @@ extends Control
 ## - Die Karte DUCKT sich, solange ein Panel/Sheet offen ist (PanelStack)
 ##   oder das HUD versteckt wurde (Einstellungen/Patchnotes) — vorher
 ##   schwebte sie über fremden Screens (17 Audit-Befunde).
+## - G8 B6/B9: zusätzlich weicht sie, solange die P50-HUD-Weiche greift
+##   (Baumodus/Blätter, HudSichtbarkeit) oder das IGohbie-Telefon offen
+##   ist — die Karte hing sonst über Bau-UI und Telefon-Statuszeile.
 
 signal tapped(suggestion: Dictionary)
 signal dismissed(suggestion: Dictionary)
@@ -113,11 +116,34 @@ func _resolve_text(suggestion: Dictionary) -> String:
 ## Der Hinweis gehört zum Home-HUD: sobald ein Panel/Sheet offen ist oder
 ## das HUD ausgeblendet wurde (Einstellungen liegen als Overlay darüber),
 ## hat er im Bild nichts verloren.
+## G8 B6/B9: Telefon-Overlay und Baumodus fehlten im Gate — die Karte hing
+## über dem IGohbie-Telefon (PT-2 B9) und der Bau-UI (PT-4 B6). Jetzt hängt
+## sie an DERSELBEN P50-Weiche wie das HUD (HudSichtbarkeit: Baumodus RUTSCH
+## / Blätter BLENDE) und weicht zusätzlich dem Telefon-Vollbild-Overlay
+## (eigener CanvasLayer, absichtlich KEIN PanelSheet/PanelStack).
 func _should_suppress() -> bool:
 	if PanelStack.count() > 0:
 		return true
+	if _telefon_offen():
+		return true
 	var hud := _find_hud()
-	return hud != null and not hud.is_visible_in_tree()
+	if hud == null:
+		return false
+	if not hud.is_visible_in_tree():
+		return true
+	# P50-Weiche: weicht das HUD (Baumodus/Blätter), weicht die Karte mit.
+	var weiche := (hud as Hud).sichtbarkeit()
+	return weiche != null and weiche.verdeckt()
+
+
+## IGohbie-Telefon offen? Das Telefon ist ein Vollbild-Overlay auf einem
+## eigenen CanvasLayer UNTER dem Quest-Layer — ohne dieses Gate schwebte
+## die Karte über Uhr/Statuszeile des Geräts (PT-2 B9).
+func _telefon_offen() -> bool:
+	var tree := get_tree()
+	if tree == null:
+		return false
+	return tree.get_first_node_in_group(PhoneShell.GRUPPE) != null
 
 
 func _find_hud() -> Control:
