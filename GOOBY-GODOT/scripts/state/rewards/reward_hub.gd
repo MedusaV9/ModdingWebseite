@@ -43,6 +43,10 @@ var _draining := false
 var _daily_popup: Control = null
 ## Einmal pro Session beim ersten travel_finished anbieten (s. _wire_daily_bonus).
 var _daily_offer_done := false
+## G8/IDEA-SEELE: Morgen-Sequenz-Gate — solange die Bremse haelt_bonus()
+## meldet, warten die Auto-Angebote (Kette Ritual → Bonus → Guide statt
+## Overlay-Stapel, s. morgen_sequenz.gd). Löst sich mit dem Sequenz-Node.
+var _bonus_bremse: Object = null
 
 
 ## Hub erzeugen und an den Home-Entry hängen (idempotent, Gruppe reward_hub).
@@ -219,13 +223,29 @@ func _celebrate_achievement(def: Dictionary) -> void:
 ## REST-1: Tagesbonus-Popup anbieten, wenn heute noch nichts abgeholt wurde
 ## (should_offer prüft Onboarding + lastClaimDay). Idempotent — nie zwei
 ## Popups; „Später“ lässt den Bonus bis Mitternacht abholbar.
+## G8/IDEA-SEELE: alle AUTO-Pfade (erste Ankunft, Resume, Onboarding-Slice)
+## respektieren die Morgen-Sequenz-Bremse — die Kette ruft dann selbst
+## offer_daily_bonus_now(), wenn der Bonus-Schritt dran ist.
 func _maybe_offer_daily_bonus() -> void:
+	if _bremse_haelt():
+		return
+	offer_daily_bonus_now()
+
+
+## G8/IDEA-SEELE: Morgen-Sequenz meldet sich als Bonus-Bremse an.
+func bonus_bremse_setzen(bremse: Object) -> void:
+	_bonus_bremse = bremse
+
+
+## Bonus SOFORT anbieten (Sequenz-Schritt/Tests — ohne Bremsen-Check).
+## Gibt das Popup zurück (auch ein schon offenes); null = nichts anzubieten.
+func offer_daily_bonus_now() -> Control:
 	if _gs == null or _layer == null:
-		return
+		return null
 	if _daily_popup != null and is_instance_valid(_daily_popup):
-		return
+		return _daily_popup
 	if not DailyBonusPopup.should_offer(_gs, _local_day()):
-		return
+		return null
 	var popup := DailyBonusPopup.new()
 	popup.name = "DailyBonusPopup"
 	popup.theme = ThemeService.theme()
@@ -233,12 +253,31 @@ func _maybe_offer_daily_bonus() -> void:
 	popup.claimed.connect(_on_daily_bonus_claimed)
 	_layer.add_child(popup)
 	_daily_popup = popup
+	return popup
+
+
+func _bremse_haelt() -> bool:
+	return (
+		_bonus_bremse != null
+		and is_instance_valid(_bonus_bremse)
+		and _bonus_bremse.has_method("haelt_bonus")
+		and bool(_bonus_bremse.haelt_bonus())
+	)
 
 
 ## Onboarding fertig → der erste Tagesbonus darf sofort kommen (Web-Fluss).
+## Deferred (G8/IDEA-SEELE): das Signal feuert im completed-Callback VOR
+## _start_home — erst danach steht die Morgen-Sequenz-Bremse. Der Aufschub
+## um einen Frame lässt sie greifen (PT1-B6: Bonus lag über der Tour).
+## NUR bis zur ersten Ankunft scharf: DANACH stammen Onboarding-Slice-
+## Writes von der Guide-Tour selbst (jeder Schritt-Fortschritt läuft über
+## _write_slice → notify_slice_changed) — ein Re-Angebot würde den nach
+## „Später“ weggelegten Bonus GENAU über die frisch angehängte Tour legen
+## (der PT1-B6-Stapel, nur einen Schritt später). Nach „Später“ kommt der
+## Bonus über die natürlichen Trigger wieder (App-Resume/nächste Session).
 func _on_gs_slice_changed(slice_id: String, _data: Variant) -> void:
-	if slice_id == "onboarding":
-		_maybe_offer_daily_bonus()
+	if slice_id == "onboarding" and not _daily_offer_done:
+		_maybe_offer_daily_bonus.call_deferred()
 
 
 ## FERTIG-1 (EVAL Rang 12): Ticker-Event "modifierStarted:<gameId>:<typ>"

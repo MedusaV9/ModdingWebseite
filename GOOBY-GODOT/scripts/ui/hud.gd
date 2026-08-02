@@ -140,6 +140,8 @@ var _eye_timer: Timer
 var _coachmark: Control
 ## G7-P50: Verdeckungs-Zustandsmaschine (Baumodus/Blätter → HUD weicht).
 var _sichtbarkeit: HudSichtbarkeit
+## G8/IDEA-SEELE: Stimmungs-Herz am Gooby-Chip (Logik in stimmungs_herz.gd).
+var _herz: StimmungsHerz
 ## Breite der Cockpit-Spalte (setzt apply_layout; refresh_safe_area liest).
 var _column_width := 88.0
 ## Oberkante der Cockpit-Spalte in Canvas-px (unter dem Zahnrad).
@@ -289,7 +291,10 @@ func apply_layout(layout: HudLayoutLogic.Layout) -> void:
 	# Chip-Chrome — „Wo ist mein Gooby?" wurde sonst in engen Zuständen zu
 	# „Wo ist mein Goo…" gestaucht.
 	_gooby_chip.text_overrun_behavior = TextServer.OVERRUN_NO_TRIMMING
-	_gooby_chip.custom_minimum_size = Vector2(_gooby_chip_breite(f), floor_px)
+	_gooby_chip.custom_minimum_size = Vector2(
+		_gooby_chip_breite(f) + _herz.platz_breite(f), floor_px
+	)
+	_herz.skaliere(f)
 	refresh_safe_area()
 	# G7-P50: apply_layout blendet Dock/Spalte selbst ein — eine aktive
 	# Verdeckung (Baumodus/Blatt) muss danach erneut erzwungen werden.
@@ -664,6 +669,7 @@ func _baue_sichtbarkeit() -> void:
 	eingaben.append(_settings_button)
 	eingaben.append(_eye_button)
 	eingaben.append(_gooby_chip)
+	eingaben.append(_herz)
 	eingaben.append_array(_chip_nodes)
 	_sichtbarkeit.setup(self, teile, eingaben, kacheln)
 
@@ -677,6 +683,7 @@ func _setup_static_buttons() -> void:
 	_eye_button.toggled.connect(_on_eye_toggled)
 	_gooby_chip.text = I18nService.t("hud.wo_ist_gooby")
 	_gooby_chip.pressed.connect(_on_gooby_chip_pressed)
+	_herz = StimmungsHerz.anbringen(_gooby_chip, self)
 
 
 func _place_eye_button(portrait: bool, inset_right := 0.0, inset_bottom := 0.0) -> void:

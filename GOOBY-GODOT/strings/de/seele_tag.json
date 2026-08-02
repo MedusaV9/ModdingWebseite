@@ -1,0 +1,63 @@
+{
+  "seele_tag": {
+    "herz": {
+      "tooltip": "So geht’s deinem Gooby",
+      "titel": "So geht’s {gooby}"
+    },
+    "laune": {
+      "ecstatic": "{gooby} ist heute richtig aufgekratzt — besser geht’s kaum!",
+      "happy": "{gooby} ist gut drauf und summt vor sich hin.",
+      "neutral": "{gooby} ist ganz zufrieden — ein ruhiger Tag.",
+      "grumpy": "{gooby} ist heute etwas miesepetrig.",
+      "miserable": "{gooby} fühlt sich gerade richtig elend."
+    },
+    "grund": {
+      "krank": "Ihm geht es nicht gut — er ist krank.",
+      "flau": "Ihm ist ein bisschen flau im Magen.",
+      "hunger": "Sein Bauch knurrt ein bisschen.",
+      "hunger_stark": "Sein Bauch knurrt LAUT — er hat richtig Hunger.",
+      "muede": "Seine Äuglein werden schwer — er ist müde.",
+      "langeweile": "Ihm ist ein bisschen langweilig.",
+      "hygiene": "Sein Fell könnte mal wieder eine Wäsche vertragen.",
+      "frueh_geweckt": "Er wurde vorhin zu früh geweckt und brummelt noch.",
+      "alles_gut": "Bauch voll, Fell frisch, genug gespielt — ihm fehlt gerade nichts."
+    },
+    "wunsch": {
+      "funkelpark": "Er träumt gerade vom Funkelpark.",
+      "urlaub": "Er träumt gerade von einer kleinen Reise.",
+      "streak7": "Er wünscht sich, euch sieben Tage am Stück zu sehen.",
+      "kissenturm": "Er träumt von einem riesigen Kissenturm."
+    },
+    "tipp": {
+      "krank": "Ein Löffel Medizin (oder der Doktor) würde helfen.",
+      "hunger": "Eine Möhre würde jetzt helfen.",
+      "muede": "Ein Nickerchen im Bett würde guttun.",
+      "langeweile": "Ein Spielchen oder der Ball würden ihn freuen.",
+      "hygiene": "Ein warmes Bad würde guttun.",
+      "weiter_so": "Einfach weiter so — ein Streichler zwischendurch schadet nie."
+    },
+    "morgen": {
+      "gruss": "Guten Morgen{namek}! *streeeck*",
+      "wetter": {
+        "sonne": "Heute scheint die Sonne!",
+        "wolken": "Heute ziehen ein paar Wolken vorbei.",
+        "niesel": "Draußen nieselt es leise.",
+        "regen": "Heute trommelt der Regen — gemütlich!",
+        "gewitter": "Heute grummelt ein Gewitter — wir bleiben kuschelig drin.",
+        "nebel": "Draußen hängt Frühnebel überm Gras.",
+        "schnee": "Es schneit! Alles ist weiß!"
+      },
+      "markt": "Und heute ist Markttag!",
+      "quest": "Heute steht an: {quest}."
+    },
+    "abend": {
+      "titel": "Heute war schön:",
+      "streicheln": "{anzahl}× gestreichelt — das hat gutgetan.",
+      "quest_eine": "Eine Tagesquest geschafft!",
+      "quest_viele": "{anzahl} Tagesquests geschafft!",
+      "spiel": "Eine Runde {spiel} gespielt.",
+      "serie": "Tag {tage} eurer Serie zusammen.",
+      "ruhig": "Einfach zusammen sein — das war das Schönste."
+    }
+  }
+}

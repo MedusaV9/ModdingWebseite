@@ -83,6 +83,9 @@ func _open_panel() -> void:
 	titel.text = I18nService.t("sleep.bett.titel")
 	titel.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(titel)
+	# G8/IDEA-SEELE: Gute-Nacht-Mini-Bilanz (abends, vor dem Schlafen) —
+	# Inhalt/Gates komplett in abend_bilanz.gd (Zeilen-Budget).
+	AbendBilanz.anbauen(box, gs, _now_ms())
 	if Sleep.is_sleeping(flat):
 		_build_wake_entry(box, gs)
 	else:

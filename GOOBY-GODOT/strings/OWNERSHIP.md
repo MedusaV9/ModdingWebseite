@@ -196,3 +196,9 @@ G5 P35 MG-EXPRESS-2 | W17
 Intro-Ziel-Banner der G5-Politur P31 MG-GHOST-SPLIT; alle übrigen
 `mg.ghostHunt.*`-Keys bleiben beim MG-2-Owner in `mg_batch2.json`, Loader
 merged flach) | G5 P31 MG-GHOST-SPLIT | W17
+
+>> `seele_tag.*` (Datei `strings/<locale>/seele_tag.json` — Stimmungs-Herz-Sheet
+„So geht’s Gooby“ (Laune-Band-Sätze, Warum-Zeilen, Wunsch-/Tipp-Zeilen) +
+Morgen-Ritual-Gruß (Wetter/Markt/Quest-Ausblick) + Gute-Nacht-Mini-Bilanz der
+Bett-Nachtkarte; `soul.*`/`sleep.*` bleiben bei ihren Ownern, werden nur
+konsumiert) | G8 IDEA-SEELE | G8

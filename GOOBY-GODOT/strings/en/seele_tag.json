@@ -1,0 +1,63 @@
+{
+  "seele_tag": {
+    "herz": {
+      "tooltip": "How your Gooby is doing",
+      "titel": "How {gooby} is doing"
+    },
+    "laune": {
+      "ecstatic": "{gooby} is absolutely over the moon today!",
+      "happy": "{gooby} is in a good mood, humming away.",
+      "neutral": "{gooby} is doing okay — a calm day.",
+      "grumpy": "{gooby} is a bit grumpy today.",
+      "miserable": "{gooby} is feeling really miserable right now."
+    },
+    "grund": {
+      "krank": "He's not feeling well — he's sick.",
+      "flau": "His tummy feels a little queasy.",
+      "hunger": "His tummy is rumbling a little.",
+      "hunger_stark": "His tummy is growling LOUDLY — he's really hungry.",
+      "muede": "His little eyes are getting heavy — he's tired.",
+      "langeweile": "He's a little bored.",
+      "hygiene": "His fur could use a wash.",
+      "frueh_geweckt": "He was woken up too early and is still grumbling.",
+      "alles_gut": "Tummy full, fur fresh, plenty of play — he has all he needs right now."
+    },
+    "wunsch": {
+      "funkelpark": "He's dreaming of the Sparkle Park.",
+      "urlaub": "He's dreaming of a little trip.",
+      "streak7": "He wishes to see you seven days in a row.",
+      "kissenturm": "He's dreaming of a giant pillow tower."
+    },
+    "tipp": {
+      "krank": "A spoonful of medicine (or the vet) would help.",
+      "hunger": "A carrot would help right now.",
+      "muede": "A nap in bed would do him good.",
+      "langeweile": "A little game or the ball would cheer him up.",
+      "hygiene": "A warm bath would feel great.",
+      "weiter_so": "Keep it up — a little pat never hurts."
+    },
+    "morgen": {
+      "gruss": "Good morning{namek}! *streeetch*",
+      "wetter": {
+        "sonne": "The sun is out today!",
+        "wolken": "A few clouds are drifting by today.",
+        "niesel": "It's drizzling softly outside.",
+        "regen": "Rain is drumming today — cozy!",
+        "gewitter": "A thunderstorm is rumbling — we'll stay snug inside.",
+        "nebel": "Morning mist is hanging over the grass.",
+        "schnee": "It's snowing! Everything is white!"
+      },
+      "markt": "And today is market day!",
+      "quest": "On today's list: {quest}."
+    },
+    "abend": {
+      "titel": "Today was lovely:",
+      "streicheln": "Petted {anzahl} times — that felt good.",
+      "quest_eine": "Finished a daily quest!",
+      "quest_viele": "Finished {anzahl} daily quests!",
+      "spiel": "Played a round of {spiel}.",
+      "serie": "Day {tage} of your streak together.",
+      "ruhig": "Just being together — that was the best part."
+    }
+  }
+}
