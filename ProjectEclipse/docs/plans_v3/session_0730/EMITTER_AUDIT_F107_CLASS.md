@@ -630,3 +630,31 @@ reproduzierbar erwartet. Beobachten, nicht fixen.
   §10.2-Clearance (2 Konstanten + Release/Re-Engage-Zweig in `tickGodFingers`,
   Methoden-Javadoc ergänzt). Emitter-JSON unangetastet.
 - `./gradlew compileJava` → **exit 0 (grün)**. Nicht committet.
+
+### 10.6 Live-Abnahme 02.08. (frische JVM, echter Sphären-Sturm): PASS 6/6
+
+Choreographie auf sauberer Badlands-Fläche (250, 74, 250), `/eclipsefx storm add
+28 56 sphere`, Kamera per RCON-tp-facing geführt (Spectator-Hover; llvmpipe-Maus-
+Input ist für Präzisionspassagen unbrauchbar), Godfinger-Peilung per automatischer
+Spalten-Helligkeits-Analyse der Screenshots (Drift läuft in Bursts, weil der
+llvmpipe-Client-Tick stottert — Closed-Loop-Sichtung statt Vorhersage):
+
+1. Ruhe-Blick: Schacht als weiche blass-grüne Säule im Nebel lesbar — PASS
+2. Radial-Annäherung bis 4.3 Blöcke Kamera-Abstand: Release greift, Schacht
+   verschwindet sauber, **kein einziger Near-Plane-Balken im gesamten Video**
+   (Frame-für-Frame geprüft) — PASS
+3. Dead-Zone 6.8 Blöcke: bleibt weg (Hysterese, kein Naiv-Respawn) — PASS
+4. Gegenseite 10.8 Blöcke (> Re-Engage 9): zarter Schacht blendet wieder ein — PASS
+5. `/eclipsefx storm remove`: reiner Dissipate-Fade zu heller Mesa-Szene, keine
+   Explosion/Feuer/Kristalle/Pfeiler (bestätigt §10.3: das waren Requisiten der
+   alten Bühne) — PASS
+6. Keine sonstigen Anomalien (zerrissene Buffer, Riesen-Quads, Clipping) — PASS
+
+Video-Review-Verdict (Fable 5 Max Thinking): **PASS**. Video:
+`wave8_e5_godfinger_camera_clearance_acceptance_release_hysteresis_respawn_dissipate.mp4`.
+Test-Learning fürs Protokoll: Godfinger sind ein Zentrum-Feature — das EyeDim-Gate
+(> 0.3 ⇒ Kamera horizontal ≲ 6 Blöcke von der Sturmachse) lässt die Finger
+außerhalb der Eye-Zone global releasen; Abnahme-Kameras müssen in der Zone bleiben.
+Außerdem crusht der Interieur-Grade die additiven Schächte bei Dämmerung/Nacht
+unter die llvmpipe-Sichtbarkeit — Sichtungs-Tests bei Mittag fahren
+(`doDaylightCycle` währenddessen einfrieren).
