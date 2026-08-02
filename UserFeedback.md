@@ -248,14 +248,33 @@ Umzug komplett gelandet — die Marker oben waren nur veraltet.
       DOKU-REFRESH (23 Dokumente auf den neuen Repo-Stand; Update-Kanal im
       CODE aufs neue Repo umgestellt + Pack 1.2.0).
 
-**W18/R2 „FIX + POLISH" (läuft):**
-- [~] Playtest-Blocker + HOCH-Bugs fixen (Geschichten-Crash, Quest-Blatt,
-      DLC-Hub, Backen-Pill, Garten-Deko, Doppel-Tap, Arcade-Touch-Scroll)
-- [~] Top-Ideen umsetzen: Rekord-Puls, Arcade-Sternenbuch, Beute-Flug,
-      Icon-Bühne (der strukturelle Querformat-HUD-Fix), Ort-Leben-Rollout
-      auf alle Stadt-Orte, Stimmungs-Herz, Morgen-/Abend-Ritual u. m.
-- [ ] Danach: nächste Playtest-Verifikations-Welle + weitere Ideen-Umsetzung
-      im Dauerloop (ich schaue vor/nach jeder Runde hier rein)
+**W18/R2 „FIX + POLISH" FERTIG (10 Pakete, Preflight GRÜN, 3596 Tests / 0 rot):**
+- [x] **Alle 7 Playtest-Brocken gefixt** — Geschichten-Buch-Crash (BLOCKER,
+      free() während Signal-Emission), leeres Tagesquest-Blatt beim 2. Öffnen
+      (KRITISCH, systemisch für ALLE Blätter gefixt + 18 Aufrufer auditiert),
+      DLC-Hub aus Einstellungen unerreichbar (generisch: Overlay schließt bei
+      jedem Reiseantritt), Goobye-Backen-Pill verdeckte Regal-Slots (+ Tür
+      sichtbar + Laden komplett dekoriert + Alwin mit sichtbarer Sprechblase),
+      Garten-Deko verschwand (Mount-Ownership), Doppel-Tap-Race + Pan-löst-
+      Interactables (zentraler TapGeste-Arbiter, 8px-Schwelle, Gesten intakt),
+      Arcade-Grid per Touch nicht scrollbar (zentraler DragScroll-Helfer,
+      rollt auch auf Kleiderschrank/Bau-Lager/Füttern/Customize aus) + 3
+      Minigame-UI-Fixe (weiß-auf-weiß-Chip, Float-Text-Clipping, Countdown).
+- [x] **5 Top-Ideen live:** REKORD-PULS (Score-Pill schimmert ab 80 % Bestwert
+      golden, Überholen zündet sofort „NEUER REKORD!" — in allen 38 Spielen),
+      ARCADE-STERNENBUCH (Sterne-Pips + Bestwert auf jeder Kachel, Sammel-
+      Zähler „n/114 ★", Meilenstein-Belohnungen, füllt sich rückwirkend),
+      ORT-LEBEN überall (alle 9 leblosen Stadt-Orte leben jetzt: Post-Schlange,
+      Flughafen-Durchsage, Probehupe im Autohaus, Tierarzt-Wartezimmer …),
+      STIMMUNGS-HERZ (Goobys Laune sichtbar am Chip + warmes „So geht's
+      Gooby"-Blatt in Worten statt Zahlen), MORGEN-/ABEND-RITUAL (Aufwach-
+      Klammer mit Licht-Sweep + Tagesausblick, Gute-Nacht-Bilanz im Bett —
+      und der Overlay-Stau nach dem Onboarding ist damit entzerrt:
+      Ritual → Bonus → Tour, nacheinander statt gestapelt).
+- [~] **R3 läuft:** nächste Verifikations-Playtests + weitere Top-Ideen
+      (Beute-Flug, Icon-Bühne/Querformat-HUD, Hero-Morph, Wochen-Vorhaben,
+      Level-Reise, Brief-Duell …) im Dauerloop — ich schaue vor/nach jeder
+      Runde hier rein.
 
 ---
 
