@@ -21,8 +21,8 @@
     "particle_settings": {
       "particle_speed": 0.0,
       "random_speed": false,
-      "base_particle_size": 3.6,
-      "particle_size_variation": 0.8,
+      "base_particle_size": 1.0,
+      "particle_size_variation": 0.2,
       "particle_lifetime": 7,
       "particle_lifetime_variation": 2,
       "initial_direction": [
@@ -44,7 +44,7 @@
     "face_velocity": false,
     "velocity_stretch_factor": 0.0,
     "sprite_data": {
-      "sprite": "eclipse:textures/particle/purple_wisp.png",
+      "sprite": "eclipse:textures/particle/flash_soft.png",
       "frame_count": 1,
       "frame_time": 1,
       "stretch_to_lifetime": false
@@ -52,7 +52,7 @@
     "modules": [
       {
         "module": "veil:size",
-        "size": "1.2 + q.agePercent * 3.4"
+        "size": "1.0 + q.agePercent * 2.2"
       },
       {
         "module": "veil:color",
@@ -74,11 +74,11 @@
           "alpha_points": [
             {
               "percent": 0.0,
-              "alpha": 0.95
+              "alpha": 0.65
             },
             {
               "percent": 0.3,
-              "alpha": 0.6
+              "alpha": 0.45
             },
             {
               "percent": 1.0,

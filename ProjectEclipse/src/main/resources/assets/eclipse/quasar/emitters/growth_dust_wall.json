@@ -44,7 +44,7 @@
     "face_velocity": false,
     "velocity_stretch_factor": 0.0,
     "sprite_data": {
-      "sprite": "eclipse:textures/particle/purple_wisp.png",
+      "sprite": "eclipse:textures/particle/dust_wall_soft.png",
       "frame_count": 1,
       "frame_time": 1,
       "stretch_to_lifetime": false
