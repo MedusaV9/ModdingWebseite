@@ -253,26 +253,6 @@ public class FerrymanEntity extends EclipseGeoMonster {
     private final dev.projecteclipse.eclipse.ferryman.finale.FerrymanSpecialAttacks specials =
             new dev.projecteclipse.eclipse.ferryman.finale.FerrymanSpecialAttacks(this);
 
-    // Client-side smooth animation clock + pose blend weights (raise/kneel/plant).
-    private float animAge;
-    private float animAgePrev;
-    /** Eased clock speed (Herald pattern) — W4 death slow-mo drops it toward ~0.2x. */
-    private float animSpeed = 1.0F;
-    private float raiseLerp;
-    private float raiseLerpPrev;
-    private float kneelLerp;
-    private float kneelLerpPrev;
-    private float plantLerp;
-    private float plantLerpPrev;
-    /** One-shot sweep-contact swing length (client pose clock, model whip + recovery). */
-    private static final int SWEEP_SWING_TICKS = 14;
-    /** Ticks into the sweep-contact swing, −1 while idle (client only). */
-    private int swingTicks = -1;
-    private boolean wasTelegraphing;
-    /** Eased 0..1 deck-drift speed factor feeding the lantern/tatter sway amplitude. */
-    private float swayBoost;
-    private float swayBoostPrev;
-
     public FerrymanEntity(EntityType<? extends FerrymanEntity> entityType, Level level) {
         super(entityType, level);
         this.setNoGravity(true);
@@ -355,6 +335,27 @@ public class FerrymanEntity extends EclipseGeoMonster {
         action.triggerableAnim(ANIM_KNEEL, EclipseGeoAnimations.once(geoId(), ANIM_KNEEL));
         action.triggerableAnim(ANIM_OAR_SWEEP, EclipseGeoAnimations.once(geoId(), ANIM_OAR_SWEEP));
         action.triggerableAnim(ANIM_HARVEST, EclipseGeoAnimations.once(geoId(), ANIM_HARVEST));
+    }
+
+    /**
+     * POLISH2 contract-v2 blend-in (EVAL2-C H-1): {@code kneel} and {@code harvest}
+     * snap up to 64° on {@code arm_left.rotx} out of {@code idle_row} — worse than the
+     * Deckhand 49.4° pop that started the whole action-blend wave. {@code kneel} gets
+     * 3 t (the kneel corona is a 100 t sustain, a 3 t offset is invisible) and
+     * {@code harvest} 2 t (A3's ferry_harvest_ring contracts over 2.0 s — 2 t is
+     * irrelevant). {@code oar_sweep} MUST stay hard: its strike beat is frame-exact
+     * against the {@value #SWEEP_TELEGRAPH_TICKS} t contact tick (a blend delays the
+     * whole clip and would shift the pose against the damage beat — POLISH2 §1.1
+     * forbidden class). {@code death} stays hard (100 t {@code tickDeath} window ==
+     * clip length).
+     */
+    @Override
+    protected int actionTransitionTicks(String animName) {
+        return switch (animName) {
+            case ANIM_KNEEL -> 3;
+            case ANIM_HARVEST -> 2;
+            default -> 0;
+        };
     }
 
     // --- summoning ---
@@ -485,9 +486,7 @@ public class FerrymanEntity extends EclipseGeoMonster {
     @Override
     public void tick() {
         super.tick();
-        if (this.level().isClientSide) {
-            tickClientAnim();
-        } else if (this.isAlive() && this.level() instanceof ServerLevel serverLevel) {
+        if (this.isAlive() && this.level() instanceof ServerLevel serverLevel) {
             if (!serverLevel.dimension().equals(LimboDimension.LIMBO)
                     && !ArenaDimension.isArena(serverLevel.dimension())) {
                 // The Ferryman exists only on the ghost ship or in the C10 fight arena.
@@ -1275,7 +1274,7 @@ public class FerrymanEntity extends EclipseGeoMonster {
             PacketDistributor.sendToPlayersNear(serverLevel, null, this.getX(), this.getY(), this.getZ(),
                     96.0D, new S2CQuasarPayload(S2CQuasarPayload.BOSS_SLAM, this.position()));
             // W4 IDEA-16 #3: long soft slow-mo drift shake at the kill (pairs with the
-            // ~0.2x anim clock in tickClientAnim for the held-breath collapse read).
+            // slow held GeckoLib death sheet for the held-breath collapse read).
             PacketDistributor.sendToPlayersNear(serverLevel, null, this.getX(), this.getY(), this.getZ(),
                     96.0D, S2CShakePayload.shake(0.15F, 40));
             EclipseMod.LOGGER.info("Ferryman defeated (source: {}) — ferrymanDefeated set, mass-revive finale starting",
@@ -1324,8 +1323,8 @@ public class FerrymanEntity extends EclipseGeoMonster {
 
     /**
      * Scripted ~{@value #DEATH_DURATION_TICKS}t collapse replacing the vanilla 20t
-     * sideways tip-over ({@code FerrymanRenderer} suppresses the death flip and
-     * {@code FerrymanModel} poses the body off {@code deathTime}): the oar stays planted
+     * sideways tip-over ({@code FerrymanGeoRenderer.withUprightDeath()} suppresses the
+     * death flip; the held GeckoLib {@code death} sheet poses the body): the oar stays planted
      * (synced in {@link #die}), the lantern flame gutters out over the first
      * {@value #DEATH_FLAME_OUT_TICKS}t ({@link #isLanternFlameLit}), the body sinks
      * upright through the deck trailing soul wisps, and one final bell toll + ship shudder
@@ -1407,19 +1406,6 @@ public class FerrymanEntity extends EclipseGeoMonster {
         if (placed != null) {
             FxAnchors.set(FxCues.cue("wave5_trophy_ferryman"), level, Vec3.atCenterOf(placed));
         }
-    }
-
-    /**
-     * Client pose hook: 0..1 through the scripted death collapse ({@code 0} while alive).
-     * @deprecated MA4: only the legacy {@code FerrymanModel} reads this — the GeckoLib
-     *             {@code death} sheet owns the collapse now. Remove with the old model.
-     */
-    @Deprecated
-    public float deathProgress(float partialTick) {
-        if (this.deathTime <= 0) {
-            return 0.0F;
-        }
-        return Mth.clamp((this.deathTime + partialTick - 1.0F) / (DEATH_DURATION_TICKS - 1.0F), 0.0F, 1.0F);
     }
 
     /**
@@ -1537,112 +1523,6 @@ public class FerrymanEntity extends EclipseGeoMonster {
         if (name != null) {
             this.bossEvent.setName(name);
         }
-    }
-
-    // --- legacy client animation hooks (MA4: superseded by the GeckoLib sheet) ---
-    //
-    // The GeckoLib controllers above own every pose now; this block only keeps the
-    // @Deprecated FerrymanModel/FerrymanRenderer pair compiling (they are overwritten in
-    // the renderer map by FerrymanRenderers' LOW-priority registration and never draw).
-    // Delete the whole block together with those classes + the EclipseEntityRenderers
-    // lines (patch in docs/plans_v3/session_0730/MA4_FERRYMAN_REPORT.md).
-
-    /**
-     * Advances the smooth clock and eases the raise/kneel/plant pose weights (client only).
-     * @deprecated MA4: feeds only the legacy vanilla model — remove with it.
-     */
-    @Deprecated
-    private void tickClientAnim() {
-        // W4 IDEA-16 #3 death slow-mo: the final-bell collapse plays at ~0.2x clock speed
-        // (Herald tickClientAnim lerp pattern; client-only illusion, server untouched).
-        float targetSpeed = this.deathTime > 0 ? 0.2F : getPhase() >= 3 ? 1.4F : 1.0F;
-        this.animSpeed += (targetSpeed - this.animSpeed) * (this.deathTime > 0 ? 0.15F : 0.05F);
-        this.animAgePrev = this.animAge;
-        this.animAge += this.animSpeed;
-        this.raiseLerpPrev = this.raiseLerp;
-        this.raiseLerp += ((isTelegraphing() ? 1.0F : 0.0F) - this.raiseLerp) * 0.16F;
-        this.kneelLerpPrev = this.kneelLerp;
-        this.kneelLerp += ((isKneeling() ? 1.0F : 0.0F) - this.kneelLerp) * 0.08F;
-        this.plantLerpPrev = this.plantLerp;
-        this.plantLerp += ((isPlanted() ? 1.0F : 0.0F) - this.plantLerp) * 0.08F;
-        // Sweep CONTACT swing: the telegraph's falling edge (raise actually got up, not a
-        // phase-break/kneel/death cancel) fires the one-shot whip the model plays through
-        // sweepSwing() — same tick the server deals the sweep damage.
-        if (this.swingTicks >= 0 && ++this.swingTicks >= SWEEP_SWING_TICKS) {
-            this.swingTicks = -1;
-        }
-        boolean telegraphing = isTelegraphing();
-        if (this.wasTelegraphing && !telegraphing && this.deathTime == 0
-                && !isKneeling() && this.raiseLerp > 0.6F) {
-            this.swingTicks = 0;
-        }
-        this.wasTelegraphing = telegraphing;
-        // Deck-drift sway boost: the lantern chain and cloak tatters drag harder while he
-        // stalks (eased so a stop bleeds the swing out instead of snapping it). Derived
-        // from the position delta, not getDeltaMovement — remote entities lerp position
-        // while their synced velocity can sit stale.
-        this.swayBoostPrev = this.swayBoost;
-        double dx = this.getX() - this.xo;
-        double dz = this.getZ() - this.zo;
-        float drift = (float) Math.sqrt(dx * dx + dz * dz);
-        this.swayBoost += (Mth.clamp(drift * 4.0F, 0.0F, 1.0F) - this.swayBoost) * 0.1F;
-    }
-
-    /**
-     * Smooth model animation age (rowing idle, chain swing; advances ×1.4 in P3).
-     * @deprecated MA4: legacy vanilla-model hook — remove with {@code FerrymanModel}.
-     */
-    @Deprecated
-    public float animAge(float partialTick) {
-        return Mth.lerp(partialTick, this.animAgePrev, this.animAge);
-    }
-
-    /**
-     * 0..1 blend toward the raised-oar telegraph pose.
-     * @deprecated MA4: legacy vanilla-model hook — remove with {@code FerrymanModel}.
-     */
-    @Deprecated
-    public float raiseAmount(float partialTick) {
-        return Mth.lerp(partialTick, this.raiseLerpPrev, this.raiseLerp);
-    }
-
-    /**
-     * 0..1 blend toward the P2 kneel-at-the-stern pose.
-     * @deprecated MA4: legacy vanilla-model hook — remove with {@code FerrymanModel}.
-     */
-    @Deprecated
-    public float kneelAmount(float partialTick) {
-        return Mth.lerp(partialTick, this.kneelLerpPrev, this.kneelLerp);
-    }
-
-    /**
-     * 0..1 blend toward the P3 planted-oar pose.
-     * @deprecated MA4: legacy vanilla-model hook — remove with {@code FerrymanModel}.
-     */
-    @Deprecated
-    public float plantAmount(float partialTick) {
-        return Mth.lerp(partialTick, this.plantLerpPrev, this.plantLerp);
-    }
-
-    /**
-     * 0..1 progress through the one-shot sweep-contact swing, or −1 while idle.
-     * @deprecated MA4: legacy vanilla-model hook — remove with {@code FerrymanModel}.
-     */
-    @Deprecated
-    public float sweepSwing(float partialTick) {
-        if (this.swingTicks < 0) {
-            return -1.0F;
-        }
-        return Math.min(1.0F, (this.swingTicks + partialTick) / SWEEP_SWING_TICKS);
-    }
-
-    /**
-     * 0..1 eased deck-drift factor (lantern chain + tatter sway amplitude).
-     * @deprecated MA4: legacy vanilla-model hook — remove with {@code FerrymanModel}.
-     */
-    @Deprecated
-    public float swayBoost(float partialTick) {
-        return Mth.lerp(partialTick, this.swayBoostPrev, this.swayBoost);
     }
 
     // --- floating-boss chassis ---

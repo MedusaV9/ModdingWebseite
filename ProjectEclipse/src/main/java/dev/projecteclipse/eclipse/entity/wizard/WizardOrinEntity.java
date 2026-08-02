@@ -228,6 +228,27 @@ public class WizardOrinEntity extends EclipseGeoMob {
         action.triggerableAnim(ANIM_TRADE, EclipseGeoAnimations.once(GEO_ID, ANIM_TRADE));
     }
 
+    /**
+     * POLISH2 contract-v2 blend-in (EVAL2-C H-3): {@code greet}/{@code trade} snap 66°
+     * on {@code arm_left.rotx} out of {@code idle} — fired on EVERY player approach and
+     * every trade, right in front of the player's camera — so both get 3 t; {@code hurt}
+     * is a flinch whose damage precedes the trigger (follow-through class) → 2 t.
+     * MUST stay hard: {@code sun_flare} (nova beat at 0.8 s is frame-exact against the
+     * {@value #SUN_FLARE_TELEGRAPH_TICKS} t telegraph timer), {@code veil_step} (the
+     * riss-rematerialize snap IS the point — glitch class), {@code star_call} (the
+     * {@code glow_staff_crystal} bone is a Molang continuous rotation — spin hazard,
+     * cultist-runes precedent) and {@code death} (scripted
+     * {@value #DEATH_DURATION_TICKS} t sit-down-fade window == clip length).
+     */
+    @Override
+    protected int actionTransitionTicks(String animName) {
+        return switch (animName) {
+            case ANIM_GREET, ANIM_TRADE -> 3;
+            case ANIM_HURT -> 2;
+            default -> 0;
+        };
+    }
+
     // --- AI (gentle observatory life; combat is scripted in tick()) ---
 
     @Override

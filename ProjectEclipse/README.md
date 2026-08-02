@@ -607,7 +607,7 @@ UV layouts documented per mob in `docs/uv/<mob>.md`). Registered in
 | `gazer` | CREATURE | Never moves or attacks. Vanishes when stared at dead-center for 40t (wisp puff + private cave-mood sting); teleports every 200–400t into the nearest player's peripheral FOV. Unkillable — damage = vanish. 12-block whisper loop. | Overworld nights day 3+, 1 per ~4 players; 1 guaranteed near the altar during sacrifices (`GazerEntity.watchSacrifice`, hooked from `AltarBlockEntity`) | — |
 | `umbral_stalker` | MONSTER | Wolf-like pack hunter: leap + melee(1.3, persistent), retaliation alerts the pack, hunts players on sight. Flees at dawn and dissolves after ~5 s. | Packs of 3–4 at night day 5+ (cap 4; **8 on Umbral Nights**), 24–56 blocks out | 0–2 umbral shards, 20% heart fragment |
 | `deckhand` | CREATURE | Mute rowing crew of the Limbo ghost ship; look-at goal only, invulnerable, unpushable, discards outside Limbo. Rowing anim synced to the 30t oar cadence. | 8 seated once at the oar benches by `GhostShipBuilder` → `DeckhandEntity.ensureCrew` (UUIDs persist in `EclipseWorldState.getDeckhandEntities()`) | — |
-| `sunmote` | CREATURE | Fullbright 2-cube wisp orbiting the sanctum altar (radius `6+altarLevel`, position-driven in `tick()`); chimes every ~200t. | Daylight upkeep by the spawner: one per altar level; killed motes respawn next dawn | 1 glowstone dust |
+| `sunmote` | CREATURE | Fullbright GeckoLib wisp with a ray crown + glowmask (MC3 geo, 10 bones, `client/entity/sunmote/SunmoteGeoRenderer`) orbiting the sanctum altar (radius `6+altarLevel`, position-driven in `tick()`); chimes every ~200t. | Daylight upkeep by the spawner: one per altar level; killed motes respawn next dawn | 1 glowstone dust |
 
 **`entity.EclipseSpawner`** (game bus, `ServerTickEvent.Post`, one pass per 100t): applies
 the table above — overworld, surface, loaded chunks, per-pass caps (never spawn-loops).
@@ -622,10 +622,10 @@ hostile spawns near the altar — all of these mobs are exempt by namespace.
 
 ### Herald boss — `dev.projecteclipse.eclipse.entity.boss` (W11)
 
-The day-7 boss (`eclipse:herald`, spec `docs/ideas/04_content.md` §2.1): a 26-cube floating
-godhead (`client/entity/HeraldModel`, 128×128 skin, UV in `docs/uv/herald.md`; emissive
-inner eye + telegraph-glowing corona shards via the Gazer skipDraw pattern in
-`HeraldRenderer`). Never spawns naturally.
+The day-7 boss (`eclipse:herald`, spec `docs/ideas/04_content.md` §2.1): a floating
+godhead as a GeckoLib geo (MA3 conversion — 31 bones, 128×128 skin + glowmask, UV in
+`docs/uv/herald.md`; emissive eye/veins via the glowmask, telegraph pulse through the
+`TelegraphGlowLayer` in `client/entity/herald/HeraldGeoRenderer`). Never spawns naturally.
 
 - **Summon**: craft a **Herald's Lure** (`eclipse:heralds_lure`, 4 umbral shards around
   1 heart fragment, `data/eclipse/recipe/heralds_lure.json`) and **sneak-use it on the
@@ -658,11 +658,12 @@ inner eye + telegraph-glowing corona shards via the Gazer skipDraw pattern in
 
 ### Ferryman finale boss — `dev.projecteclipse.eclipse.entity.boss` (W12)
 
-The day-14 finale (`eclipse:ferryman`, spec §2.2): an 18-cube floating robed skeleton
-(`client/entity/FerrymanModel`, 128×128 skin, UV in `docs/uv/ferryman.md`; emissive eye
-slit + lantern flame, lantern housing joins the glow only while the Gaze mark is live).
-Arena = the limbo ghost ship; refuses to exist outside `eclipse:limbo`. Never spawns
-naturally.
+The day-14 finale (`eclipse:ferryman`, spec §2.2): a floating robed skeleton as a
+GeckoLib geo (MA4 conversion — 32 bones, 128×128 skin + glowmask, UV in
+`docs/uv/ferryman.md`; `client/entity/FerrymanGeoRenderer` ties the emissive lantern
+flame + robe glow to `isLanternFlameLit()` and shows the gaze shell only while the Gaze
+mark is live). Arena = the limbo ghost ship; refuses to exist outside `eclipse:limbo`.
+Never spawns naturally.
 
 - **Finale ritual** (`ritual/FinaleRitual`): sneak-use a **dragon egg** on the altar on
   day 14+ after dusk (vanilla item → `RightClickBlock` hook, egg never places). Consumes

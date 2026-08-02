@@ -1,0 +1,12 @@
+{
+  "en_us": {
+    "dev.eclipse.doc.fogsite.list": "Lists the configured fog-storm sites with their persisted state (placed/active/recovered) and chest index.",
+    "dev.eclipse.doc.fogsite.rematerialize": "Re-runs the materialize pipeline for one configured site: rebuilds the grove, persists the chest index and registers the storm. Chunks load asynchronously — completion is reported when the grove lands.",
+    "dev.eclipse.doc.fogsite.retire": "Persistently retires one standing fog storm: the wall drops, the site stays inactive across restarts and the snow recovery runs budgeted in the background."
+  },
+  "de_de": {
+    "dev.eclipse.doc.fogsite.list": "Listet die konfigurierten Nebelsturm-Stätten mit ihrem gespeicherten Zustand (platziert/aktiv/erholt) und dem Truhen-Index.",
+    "dev.eclipse.doc.fogsite.rematerialize": "Führt die Materialisierungs-Pipeline für eine konfigurierte Stätte erneut aus: baut den Hain neu, speichert den Truhen-Index und registriert den Sturm. Chunks laden asynchron — der Abschluss wird gemeldet, sobald der Hain steht.",
+    "dev.eclipse.doc.fogsite.retire": "Setzt einen stehenden Nebelsturm dauerhaft außer Dienst: Die Wand fällt, die Stätte bleibt über Neustarts hinweg inaktiv und die Schnee-Erholung läuft budgetiert im Hintergrund."
+  }
+}

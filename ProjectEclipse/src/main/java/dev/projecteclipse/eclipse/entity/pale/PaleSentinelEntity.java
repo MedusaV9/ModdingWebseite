@@ -184,6 +184,19 @@ public class PaleSentinelEntity extends EclipseGeoMonster {
         action.triggerableAnim(ANIM_BLOOM, EclipseGeoAnimations.once(GEO_ID, ANIM_BLOOM));
     }
 
+    /**
+     * POLISH2 contract-v2 blend-in (EVAL2-C P-1): {@code attack} snaps 58° on
+     * {@code arm_left.rotx} out of {@code walk} (melee almost always arrives from the
+     * approach march) → 3 t, damage precedes the trigger (follow-through class).
+     * {@code bloom} stays hard: its only trigger sits on the thaw moment out of
+     * {@code freeze} and measures exactly 0.0° entry snap — authored pop-free.
+     * {@code death} stays hard ({@value #DEATH_ANIM_TICKS} t crumble == clip length).
+     */
+    @Override
+    protected int actionTransitionTicks(String animName) {
+        return EclipseGeoAnimations.ANIM_ATTACK.equals(animName) ? 3 : 0;
+    }
+
     // --- AI (plain goal kit; the freeze gates ALL of it at once via isImmobile) ---
 
     @Override

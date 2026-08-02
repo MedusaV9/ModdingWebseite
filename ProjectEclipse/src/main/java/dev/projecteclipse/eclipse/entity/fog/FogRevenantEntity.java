@@ -90,6 +90,18 @@ public class FogRevenantEntity extends EclipseGeoMonster {
         action.triggerableAnim(ANIM_CAST_BLIND, EclipseGeoAnimations.once(GEO_ID, ANIM_CAST_BLIND));
     }
 
+    /**
+     * POLISH2 contract-v2 blend-in (EVAL2-C P-1): {@code attack} snaps 30° out of
+     * {@code walk} → 3 t (claw rake; damage precedes the trigger, follow-through
+     * class). {@code cast_blind} MUST stay hard — its {@code wisps} bone is a Molang
+     * continuous rotation (spin hazard, cultist-runes precedent). {@code death} stays
+     * hard ({@value #DEATH_ANIM_TICKS} t dispersal window == clip length).
+     */
+    @Override
+    protected int actionTransitionTicks(String animName) {
+        return EclipseGeoAnimations.ANIM_ATTACK.equals(animName) ? 3 : 0;
+    }
+
     // --- AI ---
 
     @Override

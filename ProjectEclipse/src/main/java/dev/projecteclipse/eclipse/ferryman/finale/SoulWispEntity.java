@@ -97,6 +97,20 @@ public class SoulWispEntity extends EclipseGeoMonster {
                 EclipseGeoAnimations.once(geoId(), ANIM_PANIC_SCATTER));
     }
 
+    /**
+     * POLISH2 contract-v2 blend-in (EVAL2-C P-1): {@code panic_scatter}/{@code attack}
+     * snap 34°/20° out of {@code walk} — the finale swarm shows many instances popping
+     * at once → 2 t each. {@code death} stays hard: the
+     * {@value #DEATH_DURATION_TICKS} t hold window equals the MA5 clip exactly.
+     */
+    @Override
+    protected int actionTransitionTicks(String animName) {
+        return switch (animName) {
+            case ANIM_PANIC_SCATTER, EclipseGeoAnimations.ANIM_ATTACK -> 2;
+            default -> 0;
+        };
+    }
+
     /** Caps the wisp's remaining life (clamped ≥ 1; spawners tune breach vs. summon). */
     public void setLifespan(int ticks) {
         this.lifespan = Math.max(1, ticks);

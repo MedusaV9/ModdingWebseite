@@ -130,6 +130,9 @@ public final class LifecycleEvents {
                 HeartsPayloads.sendHeartBurstFx(killer, LivesApi.get(killer) - 1, true);
                 EclipseMod.LOGGER.info("{}'s umbral blade drank a heart from {} ({} hearts now)",
                         killer.getScoreboardName(), victim.getScoreboardName(), LivesApi.get(killer));
+                // POLISH3 §6: the blade's feast one-shot plays exactly on the lifesteal
+                // moment (null-safe no-op without a blade in the main hand).
+                dev.projecteclipse.eclipse.economy.UmbralBladeItem.triggerFeast(killer);
             }
             HeartTheftService.recordSteal(killer, victim);
             HeartTheftService.celebrate(killer, victim);

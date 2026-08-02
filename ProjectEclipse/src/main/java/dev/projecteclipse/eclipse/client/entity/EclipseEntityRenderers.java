@@ -21,8 +21,6 @@ import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 @EventBusSubscriber(modid = EclipseMod.MOD_ID, value = Dist.CLIENT)
 public final class EclipseEntityRenderers {
     public static final ModelLayerLocation THE_OTHER_LAYER = layer("the_other");
-    public static final ModelLayerLocation HERALD_LAYER = layer("herald");
-    public static final ModelLayerLocation FERRYMAN_LAYER = layer("ferryman");
 
     private EclipseEntityRenderers() {}
 
@@ -38,8 +36,7 @@ public final class EclipseEntityRenderers {
         event.registerLayerDefinition(THE_OTHER_LAYER, TheOtherModel::createBodyLayer);
         // Gazer/Umbral Stalker/Sunmote: converted to GeckoLib (MC1/MC2/MC3) — their geo
         // renderers self-register in client/entity/{gazer,stalker,sunmote}/*Renderers.
-        event.registerLayerDefinition(HERALD_LAYER, HeraldModel::createBodyLayer);
-        event.registerLayerDefinition(FERRYMAN_LAYER, FerrymanModel::createBodyLayer);
+        // Herald/Ferryman: converted to GeckoLib too (MA3/MA4) — no layer bake needed.
     }
 
     @SubscribeEvent
@@ -47,8 +44,8 @@ public final class EclipseEntityRenderers {
         event.registerEntityRenderer(EclipseEntities.THE_OTHER.get(), TheOtherRenderer::new);
         // Deckhand: GeckoLib renderer self-registers in DeckhandRenderer.Registration (P6-W2).
         // Gazer/Umbral Stalker/Sunmote: GeckoLib registrars in their own subpackages (MC1/MC2/MC3).
-        event.registerEntityRenderer(EclipseEntities.HERALD.get(), HeraldRenderer::new);
-        event.registerEntityRenderer(EclipseEntities.FERRYMAN.get(), FerrymanRenderer::new);
+        // Herald: GeckoLib renderer self-registers in client.entity.herald.HeraldRenderers (MA3).
+        // Ferryman: GeckoLib renderer self-registers in client.entity.FerrymanRenderers (MA4).
         // The corona shard renders as the umbral-shard item sprite (ItemSupplier), scaled
         // up and fullbright so it reads as a glowing ember in the night fight.
         event.registerEntityRenderer(EclipseEntities.HERALD_SHARD.get(),

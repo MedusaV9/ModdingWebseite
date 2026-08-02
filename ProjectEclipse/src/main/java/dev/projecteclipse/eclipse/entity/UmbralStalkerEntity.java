@@ -244,6 +244,23 @@ public class UmbralStalkerEntity extends EclipseGeoMonster {
         action.triggerableAnim(ANIM_HURT, EclipseGeoAnimations.once(GEO_ID, ANIM_HURT));
     }
 
+    /**
+     * POLISH2 contract-v2 blend-in (EVAL2-C H-4): {@code attack} snaps 52° out of
+     * {@code sprint} (the hunt gait) and up to 97.5° out of {@code stalk_low} — the
+     * identical bite-out-of-sprint situation the Storm Hound got a 3 t blend for in
+     * POLISH2 §3, so 3 t here too; {@code hurt} is a flinch whose damage precedes the
+     * trigger (follow-through class) → 2 t. {@code death} stays hard: the scripted
+     * {@value #DEATH_ANIM_TICKS} t collapse window equals the clip length exactly.
+     */
+    @Override
+    protected int actionTransitionTicks(String animName) {
+        return switch (animName) {
+            case EclipseGeoAnimations.ANIM_ATTACK -> 3;
+            case ANIM_HURT -> 2;
+            default -> 0;
+        };
+    }
+
     /** True while the dawn flight is running (synced — the client gait reads it). */
     public boolean isFleeing() {
         return this.entityData.get(DATA_FLEEING);
