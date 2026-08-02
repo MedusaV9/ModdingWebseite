@@ -436,3 +436,89 @@ NICHT möglich, ohne die interioren Diagonal-Texel (α 26 bei d≈3.54 von 4.0) 
 verändern — die Vorgabe „Interieur visuell identisch" hat Vorrang. Die verbleibende
 Fringe-Stufe ≤ 42 ist bei typischen Emitter-Tint-Alphas (≤ 0.35) ≤ ~6 % Endkontrast
 und liegt nicht mehr auf der Quad-Kante.
+
+## 9. E5-Nachfix: storm_godfinger Orientierungs-Degenerierung
+
+**Befund (E5-Live-Abnahme, Sphären-Sturm-Interieur, Dev-Sturm r=20 h=40,
+Direkt-Cast `/eclipsefx emitter "eclipse:storm_godfinger"`):** Der Godfinger rendert
+als dünne, fast horizontale, hart wirkende grüne Klinge statt als vertikaler weicher
+Lichtschacht; über ~4 s wächst der Streifen diagonal
+(`/tmp/wave8/godfinger_direct_grid.png` vs. `godfinger_loop_grid.png`).
+
+**Root Cause (bestätigt, Bytecode-Beweis aus `veil-neoforge-1.21.1-4.3.0.jar`,
+Gradle-Cache, `javap -p -c`):** `face_velocity: true` +
+`velocity_stretch_factor: 2.2` bei der in §3.1 eingeführten kollabierend-abwärtigen
+Velocity. Drei Bausteine:
+
+1. `ParticleEmitter` registriert bei `faceVelocity()` ein `FaceVelocityModule`
+   (Update-Modul). Dessen `update()` überschreibt die Partikel-Rotation jeden Tick
+   aus der **normalisierten** Velocity:
+   `rotation.x = Mth.atan2(dir.y, sqrt(dir.x² + dir.z²))`,
+   `rotation.y = Mth.atan2(dir.x, dir.z)`, bei Billboard-Style zusätzlich
+   `rotation.y += 1.5707964f` (π/2) — `foundry.veil.api.quasar.emitters.module.
+   update.FaceVelocityModule.update`, Bytecode-Offsets 17–96.
+2. `RenderStyle$Billboard.render()` wendet diese Euler-Rotation auf die Quad-Vertices
+   an **BEVOR** die Kamera-Quaternion transformiert (`POS.rotateX/Y/Z(rot)` →
+   `cameraOrientation.transform(POS)`, Offsets 211–262). Für eine abwärts dominierte
+   Velocity `dir ≈ (0,−1,0)` ist `rotation.x = atan2(−1, 0) = −π/2`: das Quad wird
+   um 90° aus der Kameraebene gekippt und liegt edge-on im Blick — die „dünne
+   Klinge". Vorher (Offsets 164–210) wird bei `velocityStretchFactor() > 0` die
+   lokale X-Koordinate **konstant** mit `(1 + 2.2) = 3.2` multipliziert (der Faktor
+   skaliert NICHT mit der Geschwindigkeit) — die Klinge wird zusätzlich 3.2×
+   verlängert.
+3. Die §3.1-Wind-Kur liefert die Zeitdynamik: `veil:drag` 0.96 ist multiplikativ
+   (`ScaleForceModule.applyForce`: v ×= 1+(0.96−1)·1 pro Tick, via
+   `DragForceData.addModules`), also fällt speed 0.02 binnen ~2 s auf ~0.002–0.008,
+   während der Wind-Steady-State v_ss = a·d/(1−d) die Richtung über die
+   Drag-Zeitkonstante (~25 Ticks) von „senkrecht runter" auf die normierte
+   Wind-Diagonale (0.146, −0.972, 0.243) zieht → die per Frame gelerpte Rotation
+   (`RenderData.render`) lässt die Klinge diagonal wachsen. Exakt der Live-Befund.
+
+**Zwei Korrekturen am Audit-Verständnis:** (a) Die §3.1-Annahme „Abwärts-Bias hält
+die `face_velocity`-Quads vertikal" war invers falsch — abwärts gerichtete Velocity
+kippt Billboard-Quads edge-on (s. o.), nur horizontal dominierte Velocity hält sie
+näherungsweise kameraparallel. (b) Vor dem Audit war die Degenerierung nur maskiert:
+der alte ungedämpfte Horizontal-Wind (0.2, 0, 0.9)·0.006 machte die Velocity schnell
+horizontal-dominant (pitch ≈ 0). Präzedenzfall bestätigt: Commit `8b3c241` setzte bei
+`limbo_godray` aus demselben Grund `face_velocity` true→false und
+`velocity_stretch_factor` 3.4→0.0 (per `git show 8b3c241` verifiziert).
+
+**Fix (chirurgisch, nur `storm_godfinger.json`):** `face_velocity` → **false**,
+`velocity_stretch_factor` → **0.0**. Ohne `FaceVelocityModule` bleibt die Rotation
+auf dem Initialwert 0 (`random_initial_rotation` false) und das Quad permanent
+kameraparallel — die 64×256-Schacht-Textur trägt die Vertikal-Anmutung, die
+Wind-Kur/Drag aus §3.1 bleiben unverändert wirksam. Keine weiteren Parameter
+angefasst (der Muster-Check fand keine weiteren Degenerierungs-Kandidaten im
+Auftrags-Scope).
+
+**Muster-Check** (die 6 übrigen §3-Offender + `death_ash` + `limbo_motes` +
+`limbo_fog` + `limbo_fogbank`; Kriterium: `face_velocity` true bzw. Stretch > 0 UND
+kollabierende Velocity — speed niedrig ODER drag ≥ 0.9):
+
+| Emitter | face_velocity | stretch | speed / Antrieb | drag | Befund |
+|---|---|---|---|---|---|
+| `storm_rain_sheet` | **true** | **2.2** | 0.15 + `veil:initial_velocity` 10.0 abwärts + gravity 0.5 | — | Echter Fall-Effekt: hohe konstante Fallgeschwindigkeit, KEIN Drag → Orientierung stabil, Stretch = Regen-Streak-Identität (§3.2). **Bewusst gelassen.** |
+| `ferry_lantern_swarm` | false | 0.0 | 0.05 | 0.96 | nicht betroffen |
+| `growth_dust_wall` | false | 0.0 | 0.14 | 0.06 | nicht betroffen |
+| `impact_light` | false | 0.0 | 0.0 | — | nicht betroffen |
+| `wand_soulbind_flash` | false | 0.0 | 0.0 | — | nicht betroffen |
+| `sig_crown_verdict_halo` | false | 0.0 | 0.0 | — | nicht betroffen |
+| `death_ash` | false | 0.0 | 0.01 | 0.96 | nicht betroffen |
+| `limbo_motes` | false | 0.0 | 0.01 | 0.96 | nicht betroffen |
+| `limbo_fog` | false | 0.0 | 0.006 | — | nicht betroffen |
+| `limbo_fogbank` | false | 0.0 | 0.004 | 0.96 | nicht betroffen |
+
+Einziger Fix im Scope: `storm_godfinger` selbst. **Nebenbefund außerhalb des
+Auftrags-Scopes** (Gesamtbestand-Scan, nur dokumentiert, konservativ NICHT
+geändert): 4 weitere Emitter kombinieren `face_velocity: true` mit drag ≥ 0.9 —
+`boss_slam` (speed 0.7), `cutscene_veil` (0.8; absichtliche Streaks, §6/E1),
+`altar_reveal_burst` (1.1, drag 0.93), `roulette_flare` (0.45, drag 0.92). Alle sind
+kurze One-Shots mit hoher Initial-Speed und kleinen Quads (≤ 0.36), bei denen der
+Stretch während der sichtbaren Phase echte Bewegung abbildet; Degenerierung träfe
+erst die bereits ausgefadete Endphase. Beobachten, nicht anfassen.
+
+**Gates:** `python3`-`json.load` auf `storm_godfinger.json` OK;
+`./gradlew processResources --offline -q` → **exit 0 (grün)**, neue Werte in
+`build/resources/main/.../storm_godfinger.json` verifiziert (face_velocity false,
+stretch 0.0). Kein Client-Neustart, kein RCON — Live-Reload per F3+T durch den
+Hauptagenten. Nicht committet.

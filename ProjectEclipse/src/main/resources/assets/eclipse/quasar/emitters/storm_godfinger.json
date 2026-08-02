@@ -42,8 +42,8 @@
     "render_style": "veil:billboard",
     "additive": true,
     "should_collide": false,
-    "face_velocity": true,
-    "velocity_stretch_factor": 2.2,
+    "face_velocity": false,
+    "velocity_stretch_factor": 0.0,
     "sprite_data": {
       "sprite": "eclipse:textures/particle/storm_godfinger_shaft.png",
       "frame_count": 1,
