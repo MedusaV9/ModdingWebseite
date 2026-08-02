@@ -1,9 +1,9 @@
 {
   "max_lifetime": 20,
   "loop": true,
-  "rate": 10,
+  "rate": 30,
   "count": 1,
-  "max_particles": 10,
+  "max_particles": 4,
   "emitter_settings": {
     "shape": {
       "shape": "veil:cylinder",
@@ -22,8 +22,8 @@
     "particle_settings": {
       "particle_speed": 0.022,
       "random_speed": true,
-      "base_particle_size": 6.0,
-      "particle_size_variation": 4.0,
+      "base_particle_size": 3.5,
+      "particle_size_variation": 1.0,
       "particle_lifetime": 100,
       "particle_lifetime_variation": 20,
       "initial_direction": [
@@ -42,10 +42,10 @@
     "render_style": "veil:billboard",
     "additive": true,
     "should_collide": false,
-    "face_velocity": true,
-    "velocity_stretch_factor": 3.4,
+    "face_velocity": false,
+    "velocity_stretch_factor": 0.0,
     "sprite_data": {
-      "sprite": "eclipse:textures/particle/purple_wisp.png",
+      "sprite": "eclipse:textures/particle/limbo_godray_shaft.png",
       "frame_count": 1,
       "frame_time": 1,
       "stretch_to_lifetime": false
@@ -67,15 +67,15 @@
           "rgb_points": [
             {
               "percent": 0.0,
-              "color": "#C9A0FF"
+              "color": "#7A55B8"
             },
             {
               "percent": 0.6,
-              "color": "#A45CF2"
+              "color": "#5F3D9E"
             },
             {
               "percent": 1.0,
-              "color": "#8A3CE8"
+              "color": "#46297A"
             }
           ],
           "alpha_points": [
@@ -85,11 +85,11 @@
             },
             {
               "percent": 0.2,
-              "alpha": 0.1
+              "alpha": 0.06
             },
             {
               "percent": 0.7,
-              "alpha": 0.1
+              "alpha": 0.06
             },
             {
               "percent": 1.0,

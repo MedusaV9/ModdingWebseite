@@ -355,9 +355,19 @@ public final class LimboAmbience {
     /**
      * Tall soft god-ray shafts hanging higher up, drifting through the mid-air band.
      * v4: sways ±0.9 blocks on the shared roll phase — the shafts lean with the ship.
+     * F-107: the emitter JSON was retuned — the old look (up to 10 additive quads of
+     * 6 ± 4 blocks, velocity-stretch factor 3.4 and rotated by face_velocity, on the
+     * 8×8 wisp sprite sampled nearest-neighbor) stacked into the reported pale
+     * stair-stepped wall at the screen edge. Now ≤4 small plain billboards per emitter
+     * on a dedicated pre-darkened 64×256 vertical-shaft texture
+     * (tools/art/gen_limbo_godray_shaft.py). Window side of the same fix: max 3 → 2
+     * live emitters (worst-case additive stack 30 → 8 quads with the JSON cap) and
+     * spawn ring 10–24 → 14–28 blocks, the F-088 FOG precedent — a shaft can no
+     * longer park directly in front of the camera. This window still owns placement,
+     * live cap and sway; the JSON owns the look.
      */
     private static final Window GODRAYS = new Window(
-            LIMBO_GODRAY, 3, 90, 130, 10.0D, 24.0D, 8.0D, 7.0D, 0.9D, false, false);
+            LIMBO_GODRAY, 2, 90, 130, 14.0D, 28.0D, 8.0D, 7.0D, 0.9D, false, false);
     /**
      * Dim violet fog sheets hugging the water surface (alpha-blended, so keep them few).
      * F-088 polish: spawn window pushed out 8 → 14 blocks — the emitter's billboards
