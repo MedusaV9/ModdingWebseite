@@ -32,7 +32,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from fxlib import (  # noqa: E402
     BLEND_ADDITIVE, BLEND_ALPHA, FX_ASSETS_DIR, REPO_ROOT, SEG_EASE_OUT_CREST,
-    SEG_LINEAR_DOWN, SEG_LINEAR_UP,
+    SEG_LINEAR_DOWN, SEG_LINEAR_UP, SEG_SMOOTH_UP,
     FxBuilder, blend, box, circle, burst, color, constant, curve, dot, function_shape,
     gradient, nf3, random_between, random_curve, sphere, sub_emitter, texture_material,
     validate_file,
@@ -211,7 +211,10 @@ def build_tyrant_blind_burst() -> FxBuilder:
        .with_renderer(vertex_sorting="DISTANCE", shade=True)
        .with_cull_box(*cull)
        .with_curves(
-            size_over_lifetime=curve(1.0, 2.2, [SEG_LINEAR_UP], "lifetime", "size"),
+            # WAVE9-B P-3 baseline burndown: the shell growth was a chord-linear ramp
+            # (LINT-LINEAR-CURVE x3, one per axis). Same 1.0 -> 2.2 envelope, now
+            # smoothstep-eased so the shells neither pop at birth nor freeze at the end.
+            size_over_lifetime=curve(1.0, 2.2, [SEG_SMOOTH_UP], "lifetime", "size"),
             color_over_lifetime=gradient(
                 [(0.0, 0.0), (0.15, 0.38), (0.7, 0.38), (1.0, 0.0)],
                 [(0.0, 0.227, 0.227, 0.333), (1.0, 0.4, 0.44, 0.5)])))

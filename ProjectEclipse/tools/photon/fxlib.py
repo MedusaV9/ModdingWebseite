@@ -44,9 +44,21 @@ CLI:
                                                      # grandfathered via lint_baseline.txt;
                                                      # NEW error/warn findings fail)
     python3 tools/photon/fxlib.py validate --lint --update-baseline   # re-grandfather
+    python3 tools/photon/fxlib.py validate --lint --gen-diff   # + the generator
+                                                     # byte-diff gate (see gendiff)
+    python3 tools/photon/fxlib.py gendiff [<gen.py>…] # byte-diff gate: regenerate in a
+                                                     # /tmp sandbox and FAIL when any
+                                                     # committed asset would byte-change
+                                                     # (H-1 silent-revert class; no
+                                                     # generators = all of tools/photon)
     python3 tools/photon/fxlib.py write_fxproj [--missing | <f.fx>…]  # editor-openable
                                                      # .fxproj sibling(s) (binary-diff law)
     python3 tools/photon/fxlib.py dump <f.fx>        # pretty-print the NBT tree
+
+Note: `validate` (and thus `--lint`) also read-path-validates the crash-critical enum
+strings (arcMode / renderMode / facingMode / vertexSortingMode + NumberFunction type
+tags) of every parsed .fx — hand-edited files with a typo'd enum fail here instead of
+NPE-crashing the client (wizard_star_call precedent).
 """
 from __future__ import annotations
 
@@ -1458,6 +1470,40 @@ def _validate_renderer(config: dict, where: str) -> list:
     return []
 
 
+#: EVAL2-B P-4b — read-path enum whitelist. Photon deserializes these enum strings with
+#: valueOf-or-null: an unknown name leaves the field NULL and NPE-crashes the client the
+#: first time such a particle renders (the wizard_star_call arcMode precedent). The
+#: authoring builders already validate on WRITE; this pass re-validates every .fx we
+#: READ, so hand-edited/foreign files fail `validate`/`validate --lint` too.
+#: (NumberFunction {type, data} registry tags are covered by _validate_nf_wrappers.)
+_READ_PATH_ENUMS = {
+    "arcMode": _ARC_MODES,
+    "renderMode": _RendererMixin._RENDER_MODES,
+    "facingMode": _RendererMixin._FACING_MODES,
+    "vertexSortingMode": _RendererMixin._SORT_MODES,
+}
+
+
+def _enum_whitelist_errors(node, path="fx") -> list:
+    """Whole-tree walk: every occurrence of a _READ_PATH_ENUMS key must carry a
+    whitelisted string (the key names are renderer/shapeArc-specific, so a generic
+    walk is safe and also covers future emitter kinds)."""
+    errors = []
+    if isinstance(node, dict):
+        for key, value in node.items():
+            allowed = _READ_PATH_ENUMS.get(key)
+            if allowed is not None and (not isinstance(value, str) or value not in allowed):
+                errors.append(
+                    f"{path}.{key}: {value!r} is not a known Photon enum "
+                    f"({sorted(allowed)}) — deserializes to null and crashes the client "
+                    f"on first render")
+            errors.extend(_enum_whitelist_errors(value, f"{path}.{key}"))
+    elif isinstance(node, L):
+        for idx, item in enumerate(node.items):
+            errors.extend(_enum_whitelist_errors(item, f"{path}[{idx}]"))
+    return errors
+
+
 def _validate_beam_config(config: dict, where: str) -> list:
     """beam_emitter config (FX_FORMAT.md §4.1): end/width/emitRate/raycast shapes."""
     errors = _validate_renderer(config, where)
@@ -1766,6 +1812,7 @@ def validate_file(path) -> list:
     except Exception as exc:
         return [f"NBT parse failed: {exc}"]
     errors = validate_tree(tree)
+    errors.extend(_enum_whitelist_errors(tree))
     errors.extend(_shader_ref_errors(tree))
     if write_root(tree) != raw:
         errors.append("round-trip mismatch: re-serialized NBT differs from file bytes")
@@ -2265,6 +2312,79 @@ def all_fx_files() -> list:
     return sorted(FX_ASSETS_DIR.rglob("*.fx"))
 
 
+# ---------------------------------------------------------------------------
+# Generator byte-diff gate (EVAL2-B P-4a) — "a regenerate must not change the tree"
+# ---------------------------------------------------------------------------
+# H-1 precedent: sig_fx.py drifted against a hand-tuned committed asset, so the next
+# dutiful regenerate would have silently reverted a visual fix. This gate runs the
+# generators against a /tmp sandbox copy of the repo and fails when a regenerate WOULD
+# byte-change (or newly create) anything under the committed asset tree. The working
+# tree is never touched.
+
+#: Repo-relative directories copied into the gendiff sandbox — the generator scripts
+#: plus everything they read/write (.fx tree, quasar JSONs, textures, shaders, sounds).
+GENDIFF_SANDBOX_DIRS = ("tools/photon", "src/main/resources/assets/eclipse")
+#: The sandbox subtree that is hashed before/after the generator runs.
+GENDIFF_ASSET_ROOT = "src/main/resources/assets/eclipse"
+
+
+def generator_scripts() -> list:
+    """Every generator script under tools/photon (`*_fx.py` / `fx_*.py` / `gen_*.py`;
+    fxlib itself excluded). These are the committed authoring sources of the binary
+    .fx blobs, quasar emitter JSONs and procedural textures."""
+    tools_dir = Path(__file__).resolve().parent
+    self_path = Path(__file__).resolve()
+    return sorted(
+        p for p in tools_dir.glob("*.py")
+        if p != self_path
+        and (p.name.endswith("_fx.py") or p.name.startswith(("fx_", "gen_"))))
+
+
+def _hash_tree(root: Path) -> dict:
+    import hashlib
+    hashes = {}
+    for path in sorted(root.rglob("*")):
+        if path.is_file():
+            hashes[path.relative_to(root).as_posix()] = \
+                hashlib.sha256(path.read_bytes()).hexdigest()
+    return hashes
+
+
+def generator_drift(generators=None):
+    """Runs `generators` (default: all of generator_scripts()) inside a sandbox copy of
+    the repo and byte-compares the asset tree before/after.
+
+    Returns (changed, added, failed, n_files): `changed`/`added` are sorted
+    GENDIFF_ASSET_ROOT-relative paths a regenerate would byte-change / newly create,
+    `failed` is [(script_name, returncode, output_tail)] for generators that errored,
+    `n_files` the number of asset files hashed."""
+    import shutil
+    import subprocess
+    import tempfile
+    generators = [Path(g).resolve() for g in (generators or generator_scripts())]
+    with tempfile.TemporaryDirectory(prefix="fxlib_gendiff_") as tmp:
+        sandbox = Path(tmp)
+        for rel in GENDIFF_SANDBOX_DIRS:
+            destination = sandbox / rel
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copytree(REPO_ROOT / rel, destination)
+        asset_root = sandbox / GENDIFF_ASSET_ROOT
+        before = _hash_tree(asset_root)
+        failed = []
+        for generator in generators:
+            sandbox_script = sandbox / generator.relative_to(REPO_ROOT)
+            proc = subprocess.run(
+                [sys.executable, str(sandbox_script)], cwd=sandbox,
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+            if proc.returncode != 0:
+                tail = "\n".join(proc.stdout.strip().splitlines()[-5:])
+                failed.append((generator.name, proc.returncode, tail))
+        after = _hash_tree(asset_root)
+        changed = sorted(p for p in before if p in after and after[p] != before[p])
+        added = sorted(p for p in after if p not in before)
+        return changed, added, failed, len(after)
+
+
 def write_fxproj_sibling(fx_path) -> int:
     """Writes the editor-openable `.fxproj` sibling for an EXISTING on-disk `.fx`
     (uncompressed NBT `{meta, data.fx}` envelope, see FxBuilder.write_fxproj).
@@ -2443,7 +2563,31 @@ def _cmd_templates() -> int:
     return rc
 
 
-def _cmd_validate(paths, lint=False, update_baseline=False) -> int:
+def _cmd_gendiff(args) -> int:
+    """EVAL2-B P-4a byte-diff gate CLI: sandbox-regenerate and list every deviation."""
+    generators = [Path(a).resolve() for a in args] if args else generator_scripts()
+    label = ", ".join(g.name for g in generators) if len(generators) <= 6 \
+        else f"{len(generators)} generator scripts"
+    print(f"gendiff: sandbox-regenerating via {label} …")
+    changed, added, failed, n_files = generator_drift(generators)
+    for script, code, tail in failed:
+        print(f"gendiff FAIL {script}: exit {code}")
+        if tail:
+            print("  " + tail.replace("\n", "\n  "))
+    for p in changed:
+        print(f"gendiff DRIFT {p}: a regenerate would byte-change this committed asset")
+    for p in added:
+        print(f"gendiff UNCOMMITTED {p}: a regenerate writes a file the repo does not have")
+    print(f"gendiff: {len(generators)} generator(s), {n_files} asset file(s), "
+          f"{len(changed)} drift, {len(added)} uncommitted, {len(failed)} failed")
+    if changed or added or failed:
+        print("gendiff FAILED — sync the generator to the committed asset (the asset is "
+              "the truth for hand-tuned fixes, H-1 precedent) or commit the regenerate")
+        return 1
+    return 0
+
+
+def _cmd_validate(paths, lint=False, update_baseline=False, gen_diff=False) -> int:
     rc = 0
     if lint and not paths:
         paths = all_fx_files()
@@ -2495,6 +2639,8 @@ def _cmd_validate(paths, lint=False, update_baseline=False) -> int:
         print("lint FAILED (new violations — fix them or, for a sanctioned exception, "
               "add the key to lint_baseline.txt with a review note)")
         return 1
+    if gen_diff and _cmd_gendiff([]) != 0:
+        return 1
     return rc
 
 
@@ -2532,11 +2678,15 @@ def main(argv) -> int:
         rest = argv[1:]
         lint = "--lint" in rest
         update_baseline = "--update-baseline" in rest
-        rest = [a for a in rest if a not in ("--lint", "--update-baseline")]
-        if not lint and (update_baseline or not rest):
+        gen_diff = "--gen-diff" in rest
+        rest = [a for a in rest if a not in ("--lint", "--update-baseline", "--gen-diff")]
+        if not lint and (update_baseline or gen_diff or not rest):
             print("validate: pass .fx paths, or use --lint for the whole FX tree")
             return 2
-        return _cmd_validate(rest, lint=lint, update_baseline=update_baseline)
+        return _cmd_validate(rest, lint=lint, update_baseline=update_baseline,
+                             gen_diff=gen_diff)
+    if len(argv) >= 1 and argv[0] == "gendiff":
+        return _cmd_gendiff(argv[1:])
     if len(argv) >= 2 and argv[0] == "write_fxproj":
         return _cmd_write_fxproj(argv[1:])
     if len(argv) == 2 and argv[0] == "dump":

@@ -245,10 +245,14 @@ def main():
     en, de = load_lang()
     sounds = load_sounds()
     problems = []
-    ids = ["intro_v3_ship", "intro_v3_flight", "intro_v3_reveal", "expansion_skyward",
-           "expansion_flyover", "unlock_ring", "end_shatter", "finale_return", "credits_helm"]
-    for pid in ids:
-        doc = json.load(open(CUT / f"{pid}.json"))
+    # EVAL2-B P-1: derive the id list from the directory instead of a hardcoded list —
+    # every bundled cutscene JSON gets the gate (end_arrival used to slip through).
+    paths = sorted(CUT.glob("*.json"))
+    if not paths:
+        sys.exit(f"no cutscene JSONs found under {CUT}")
+    for path in paths:
+        pid = path.stem
+        doc = json.load(open(path))
         validate(pid, doc, en, de, sounds, problems)
         report(pid, doc)
     print("\n--- validation problems ---")
@@ -256,7 +260,7 @@ def main():
         for p in problems:
             print("  " + p)
         sys.exit(1)
-    print("  none — all 9 paths pass the parse/i18n/grammar rules")
+    print(f"  none — all {len(paths)} paths pass the parse/i18n/grammar rules")
 
 
 if __name__ == "__main__":

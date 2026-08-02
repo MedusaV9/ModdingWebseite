@@ -71,7 +71,17 @@ public final class WandTickService {
 
     /** Runs {@code action} after {@code delayTicks} server ticks (skipped if the level unloads). */
     public static void schedule(ServerLevel level, int delayTicks, Runnable action) {
-        TASKS.add(new Task(level, Math.max(0, delayTicks), action));
+        schedule(level, delayTicks, action, null);
+    }
+
+    /**
+     * Like {@link #schedule(ServerLevel, int, Runnable)}, but {@code onDrop} runs when the
+     * task is silently discarded because its level unloaded before it came due (EVAL2-B P-2:
+     * counter-bearing tasks must still settle their books — the scorch-decal cap otherwise
+     * starves until reboot).
+     */
+    public static void schedule(ServerLevel level, int delayTicks, Runnable action, Runnable onDrop) {
+        TASKS.add(new Task(level, Math.max(0, delayTicks), action, onDrop));
     }
 
     /**
@@ -103,10 +113,13 @@ public final class WandTickService {
                 new Quaternionf()));
         level.addFreshEntity(display);
         liveScorchDecals++;
+        // EVAL2-B P-2: the decrement also rides the drop path — if the dimension unloads
+        // before the discard task fires, the counter must not drift upward (the stranded
+        // display itself stays in the saved chunk and is caught by the boot sweep).
         schedule(level, Math.max(20, lifeTicks), () -> {
             display.discard();
             liveScorchDecals = Math.max(0, liveScorchDecals - 1);
-        });
+        }, () -> liveScorchDecals = Math.max(0, liveScorchDecals - 1));
     }
 
     /**
@@ -193,7 +206,16 @@ public final class WandTickService {
         if (due != null) {
             for (Task task : due) {
                 if (task.level.getServer().getLevel(task.level.dimension()) != task.level) {
-                    continue; // level unloaded since scheduling — drop the FX quietly
+                    // Level unloaded since scheduling — drop the FX quietly, but let
+                    // counter-bearing tasks settle their books (EVAL2-B P-2).
+                    if (task.onDrop != null) {
+                        try {
+                            task.onDrop.run();
+                        } catch (Exception e) {
+                            EclipseMod.LOGGER.error("Wand scheduled task onDrop failed", e);
+                        }
+                    }
+                    continue;
                 }
                 try {
                     task.action.run();
@@ -207,12 +229,15 @@ public final class WandTickService {
     private static final class Task {
         final ServerLevel level;
         final Runnable action;
+        /** Optional book-keeping hook, run INSTEAD of {@link #action} on the unload-drop path. */
+        final Runnable onDrop;
         int remaining;
 
-        Task(ServerLevel level, int delay, Runnable action) {
+        Task(ServerLevel level, int delay, Runnable action, Runnable onDrop) {
             this.level = level;
             this.remaining = delay;
             this.action = action;
+            this.onDrop = onDrop;
         }
     }
 

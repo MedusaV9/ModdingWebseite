@@ -29,7 +29,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from fxlib import (  # noqa: E402
-    B, F, I, L, BLEND_ADDITIVE, BLEND_ALPHA, FX_ASSETS_DIR, REPO_ROOT, FxBuilder,
+    B, F, I, L, BLEND_ADDITIVE, BLEND_ALPHA, FX_ASSETS_DIR, REPO_ROOT, SEG_SMOOTH_DOWN,
+    FxBuilder,
     block_atlas_material, burst, circle, constant, curve, cylinder, dot, function_shape,
     gradient, mesh, nf3, random_between, random_curve, rom, sphere, texture_material,
     validate_file,
@@ -163,9 +164,11 @@ def build_roar_shockwave() -> FxBuilder:
        .with_renderer(render_mode="VerticalBillboard", vertex_sorting="NONE")
        .with_cull_box((-4.0, -1.0, -4.0), (4.0, 11.0, 4.0))
        .with_curves(
+            # WAVE9-B P-3 baseline burndown: the X-shrink was a chord-linear 1 -> 0 ramp
+            # (LINT-LINEAR-CURVE). Same 1.0 -> 0.1 envelope, now smoothstep-eased so the
+            # column collapse has no hard start/stop pop; mid-life read is unchanged.
             size_over_lifetime=nf3(
-                curve(0.1, 1.0, [(0.0, 1.0, 0.33, 0.66, 0.66, 0.33, 1.0, 0.0)],
-                      "lifetime", "size"),
+                curve(0.1, 1.0, [SEG_SMOOTH_DOWN], "lifetime", "size"),
                 constant(1.0), constant(1.0)),
             color_over_lifetime=violet_white)
        .with_lights(sky=15, block=15))

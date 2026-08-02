@@ -5,10 +5,6 @@
 # review — never to sneak new violations in). Info-severity findings are advisory
 # and never listed.
 border_first_contact.fx|LINT-LINEAR-CURVE|hairline.width
-boss/roar_shockwave.fx|LINT-LINEAR-CURVE|roar_column.sizeOverLifetime.size[0]
-boss/tyrant_blind_burst.fx|LINT-LINEAR-CURVE|fog_shells.sizeOverLifetime.size[0]
-boss/tyrant_blind_burst.fx|LINT-LINEAR-CURVE|fog_shells.sizeOverLifetime.size[1]
-boss/tyrant_blind_burst.fx|LINT-LINEAR-CURVE|fog_shells.sizeOverLifetime.size[2]
 credits_strike_beam.fx|LINT-LINEAR-CURVE|main_beam.width
 growth_front_ribbon.fx|LINT-ALPHA-NOSORT|front_ribbon:material[0]
 intro_burst_ring.fx|LINT-LINEAR-CURVE|dome_wisp.sizeOverLifetime.size[0]

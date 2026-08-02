@@ -518,6 +518,8 @@ SIG_CROWN_VERDICT_BURST = _emitter(
     ])
 
 # C11 L4 crown halo: ONE soft gold ring overhead expanding via the size expression.
+# F-108 halo-alpha fix: mid-stop 0.45 -> 0.28 (hand-tuned darkening, EVAL2-B H-1) —
+# the committed asset is the truth; regenerating MUST NOT revert it.
 SIG_CROWN_VERDICT_HALO = _emitter(
     max_lifetime=2, loop=False, rate=1, count=1,
     shape="veil:sphere", dimensions=[0.05, 0.05, 0.05], from_surface=False,
@@ -527,7 +529,7 @@ SIG_CROWN_VERDICT_HALO = _emitter(
         {"module": "veil:size", "size": "1.4 + q.agePercent * 4.6"},
         _color_module(
             [(0.0, "#FFE9A8"), (0.4, "#FFD166"), (1.0, "#2E2347")],
-            [(0.0, 0.85), (0.55, 0.45), (1.0, 0.0)]),
+            [(0.0, 0.85), (0.55, 0.28), (1.0, 0.0)]),
     ])
 
 # C2 L1 glint gather: 8 gold sparks arcing inward (altar_indraw vortex+attractor
