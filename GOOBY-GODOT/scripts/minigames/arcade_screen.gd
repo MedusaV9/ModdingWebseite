@@ -100,6 +100,10 @@ func _ready() -> void:
 	_build_ui()
 	get_viewport().size_changed.connect(_apply_metrics)
 	_apply_metrics()
+	# A1 Sternenbuch: fällige Meilensteine rückwirkend claimen und feiern —
+	# idempotent (beim zweiten Öffnen passiert nichts mehr). Deferred, damit
+	# Layout/Toast-Layer der Ankunft schon stehen.
+	_claim_sternenbuch_meilensteine.call_deferred()
 
 
 ## Spaltenzahl aus verfügbarer Breite (pure, FIX1-Test): so viele Kacheln
@@ -154,6 +158,9 @@ func _build_ui() -> void:
 	# Touch-Deadzone, damit Wischen nicht sofort als Tile-Tap zählt.
 	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	_scroll.scroll_deadzone = 24
+	# B1 (G8-PT3): Kachel-Buttons fressen den Touch-Drag — der zentrale
+	# DragScroll-Helfer pannt ab der Schwelle selbst (Taps unverändert).
+	DragScroll.anbinden(_scroll)
 	_rows.add_child(_scroll)
 	_grid = GridContainer.new()
 	_grid.columns = 4
@@ -172,8 +179,10 @@ func _build_ui() -> void:
 	UiMotion.stagger_in(tiles, 0.03)
 
 
-## W14: Zähler-Kapsel rechts in der Kopfzeile („n Spiele“) — StatusCapsule
-## wie im Album; hält der Kopfzeile zugleich die Mitte (Titel bleibt mittig).
+## W14: Zähler-Kapsel rechts in der Kopfzeile — StatusCapsule wie im Album;
+## hält der Kopfzeile zugleich die Mitte (Titel bleibt mittig).
+## A1 Sternenbuch: die Kapsel ist jetzt der Sammel-Zähler — Spielezahl
+## bleibt (flow_pt3_rahmen prüft sie), dazu der Sterne-Stand „n/114 ★“.
 func _build_count_capsule() -> Control:
 	var capsule := PanelContainer.new()
 	capsule.name = "CountCapsule"
@@ -183,10 +192,21 @@ func _build_count_capsule() -> Control:
 	label.name = "CountLabel"
 	label.theme_type_variation = &"SoftLabel"
 	var playable := 0
-	for game: Dictionary in MinigameRegistry.all_games():
+	var games := MinigameRegistry.all_games()
+	for game: Dictionary in games:
 		if not bool(game.get("coming_soon", false)):
 			playable += 1
-	label.text = I18nService.t("mg.arcade.zaehler", {"n": playable})
+	label.text = (
+		I18nService
+		. t(
+			"mg.arcade.zaehler_sterne",
+			{
+				"n": playable,
+				"sterne": ArcadeSternenbuch.gesamt_sterne(_lese_state(), games),
+				"max": ArcadeSternenbuch.max_sterne(games),
+			}
+		)
+	)
 	capsule.add_child(label)
 	return capsule
 
@@ -257,7 +277,78 @@ func _build_tile(game: Dictionary) -> Control:
 	# FIX1: lange Titel werden mit „…“ gekürzt statt hart abgeschnitten.
 	label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	content.add_child(label)
+	# A1 Sternenbuch: Sterne-Pips + Bestwert-Zeile aus minigames.legacy —
+	# reines Lesen, füllt sich rückwirkend aus dem vorhandenen Save.
+	if not coming_soon:
+		content.add_child(_build_sternenzeile(id))
 	return tile
+
+
+## A1 Kachel-Zeile: Pips links (0..3 Sterne), Bestwert rechts — der
+## Bestwert erscheint erst, wenn es einen gibt (Endlos zählt nicht mit).
+func _build_sternenzeile(id: String) -> Control:
+	var state := _lese_state()
+	var zeile := HBoxContainer.new()
+	zeile.name = "Sternenzeile"
+	zeile.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var pips := ArcadeSternenbuch.SternPips.new()
+	pips.name = "SternPips"
+	pips.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	pips.setup(ArcadeSternenbuch.sterne_fuer(state, id))
+	zeile.add_child(pips)
+	var spacer := Control.new()
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	zeile.add_child(spacer)
+	var best := ArcadeSternenbuch.bestwert_fuer(state, id)
+	if best > 0:
+		var best_label := Label.new()
+		best_label.name = "BestwertLabel"
+		best_label.theme_type_variation = &"SoftLabel"
+		best_label.text = I18nService.t("mg.arcade.bestwert", {"best": best})
+		# BEWUSST ohne Ellipsis-Trim: der kollabiert die Mindestbreite auf 0
+		# und der EXPAND-Spacer links quetscht das Label unsichtbar (Befund
+		# flow_arcade/017). Bestwerte sind kurze Zahlen — natürliche Breite.
+		best_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		zeile.add_child(best_label)
+	return zeile
+
+
+## Save-Stand für die Sternenbuch-Anzeigen ({} ohne GameState — Tests).
+func _lese_state() -> Dictionary:
+	var gs := get_node_or_null("/root/GameState")
+	if gs != null and gs.has_method("state"):
+		return gs.state()
+	return {}
+
+
+## A1: fällige Meilensteine claimen (idempotent über
+## minigames.sternenbuch.claimed) und im Gooby-Look feiern — Toast über die
+## RewardHub-ToastLayer (Gruppe toast_layer), Konfetti + Levelup-Pluck.
+func _claim_sternenbuch_meilensteine() -> void:
+	var gs := get_node_or_null("/root/GameState")
+	if gs == null or not gs.has_method("update") or gs.get("clock") == null:
+		return
+	var games := MinigameRegistry.all_games()
+	var now := int(gs.clock.now_ms())
+	var holder: Array[Dictionary] = []
+	gs.update(
+		func(state: Dictionary) -> void:
+			holder.append(ArcadeSternenbuch.claim_meilensteine(state, games, now))
+	)
+	var folge: Dictionary = holder[0] if holder.size() > 0 else {}
+	var neu: Array = folge.get("neu", [])
+	if neu.is_empty():
+		return
+	ToastLayer.zeige(
+		self,
+		I18nService.t(
+			"mg.arcade.meilenstein_toast",
+			{"n": int(neu.back()), "coins": int(folge.get("coins", 0))}
+		)
+	)
+	AudioDirector.try_play(self, "ui_levelup")
+	RewardFx.konfetti_2d(self, 40, size.x)
 
 
 ## FERTIG-1 (EVAL Rang 12): Bonus-Badge auf der Ziel-Kachel des aktiven

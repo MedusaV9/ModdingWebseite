@@ -23,7 +23,10 @@
 			"title": "Arcade",
 			"back": "‹ Back",
 			"coming_soon": "Soon!",
-			"zaehler": "{n} games"
+			"zaehler": "{n} games",
+			"zaehler_sterne": "{n} games · {sterne}/{max} ★",
+			"bestwert": "Best: {best}",
+			"meilenstein_toast": "Star book: {n} ★ reached — +{coins} coins!"
 		},
 		"pregame": {
 			"difficulty": "Difficulty",
@@ -56,7 +59,9 @@
 			"sound_off": "Sound: Off",
 			"help": "Help",
 			"help_none": "Score points before the round ends — you got this!",
-			"go": "Go!"
+			"go": "Go!",
+			"ziel": "Target: {n}",
+			"rekord": "NEW RECORD!"
 		},
 		"results": {
 			"title": "Round over!",

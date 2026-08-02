@@ -70,8 +70,11 @@ func test_float_text_landet_am_gemeinten_punkt() -> void:
 	assert_eq(layer.get_child_count(), before + 1, "float_text hängt im JuiceLayer")
 	var label := layer.get_child(layer.get_child_count() - 1) as Label
 	var soll := container.global_position + container.size * 0.5
-	assert_almost(label.global_position.x, soll.x, 1.0, "Float-Text sitzt horizontal am Treffer")
-	assert_almost(label.global_position.y, soll.y, 1.0, "Float-Text sitzt vertikal am Treffer")
+	# Seit G8/FIX-7 (B3) ankert float_text ZENTRIERT am Ereignispunkt (und
+	# klemmt in die Elternfläche) — gemessen wird deshalb die Label-MITTE.
+	var mitte := label.global_position + label.size * 0.5
+	assert_almost(mitte.x, soll.x, 1.0, "Float-Text-Mitte sitzt horizontal am Treffer")
+	assert_almost(mitte.y, soll.y, 1.0, "Float-Text-Mitte sitzt vertikal am Treffer")
 	await _unmount(host)
 
 

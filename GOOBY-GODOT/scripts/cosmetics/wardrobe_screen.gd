@@ -387,6 +387,9 @@ func _build_regal() -> Control:
 		_tab_box.add_child(_build_tab(kategorie))
 	tab_scroll.add_child(_tab_box)
 	_tab_scroll = tab_scroll
+	# B1 (G8-PT3): Chip-Buttons fressen den Touch-Drag — der zentrale
+	# DragScroll-Helfer macht die Tab-Leiste wirklich swipebar.
+	DragScroll.anbinden(tab_scroll)
 
 	var kopf := HBoxContainer.new()
 	kopf.add_theme_constant_override("separation", 10)
@@ -410,6 +413,8 @@ func _build_regal() -> Control:
 	_grid_fade.name = "GridFade"
 	saeule.add_child(_grid_fade)
 	_grid_scroll = scroll
+	# B1 (G8-PT3): Karten-Buttons fressen den Touch-Drag — Helfer pannt.
+	DragScroll.anbinden(scroll)
 	# Boden-Polster: am Scroll-Ende steht die letzte Reihe frei über der
 	# Fade-Kante statt hart am Rand (Höhe zieht _apply_metrics nach).
 	_grid_polster = MarginContainer.new()

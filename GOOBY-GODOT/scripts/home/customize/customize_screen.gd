@@ -479,6 +479,7 @@ func _build_ui() -> void:
 	_rows_box.add_child(body)
 	body.add_child(_build_kategorie_spalte())
 	body.add_child(_build_rechte_spalte())
+	DragScroll.anbinden_alle(body)  # B1 (G8-PT3): Kachel-Drags pannen alle 3 Scroller.
 	_toasts = ToastLayer.new()
 	add_child(_toasts)
 

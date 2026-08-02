@@ -118,17 +118,27 @@ func bloom_pulse(strength := 1.0, ms := 350) -> void:
 
 
 ## Schwebender Punkte-/Info-Text (auch unter Reduced Motion, dann statisch).
+## B3 (G8-PT3): pos ist der EREIGNISPUNKT — das Label ankert ZENTRIERT
+## darauf (vorher begann der TEXT dort und ragte am rechten Feldrand raus)
+## und wird in die Fläche des float_text_parent geklemmt, damit Meldungen
+## wie „Eine Möhre geklaut!“ im Spielfeld bleiben (pt3_c1/041).
 func float_text(pos: Vector2, text: String, color := Color.WHITE) -> void:
 	var parent := float_text_parent if float_text_parent != null else self
 	var label := Label.new()
 	label.text = text
-	label.position = pos
 	label.z_index = 100
 	label.add_theme_color_override("font_color", color)
 	label.add_theme_color_override("font_outline_color", Color(0.2, 0.12, 0.1, 0.85))
 	label.add_theme_constant_override("outline_size", 6)
 	label.add_theme_font_size_override("font_size", 30)
 	parent.add_child(label)
+	# Erst NACH add_child messen: dann rechnet get_minimum_size mit dem
+	# echten Theme-Font statt der Default-Metrik.
+	label.position = float_text_position(
+		pos,
+		label.get_minimum_size(),
+		(parent as Control).size if parent is Control else Vector2.ZERO
+	)
 	if _reduced_motion():
 		# Kit nicht (mehr) im Baum (Late-Callback nach Szenenwechsel):
 		# get_tree() gibt es dann nicht — Label sofort aufräumen statt crashen.
@@ -139,9 +149,20 @@ func float_text(pos: Vector2, text: String, color := Color.WHITE) -> void:
 		return
 	var tween := create_tween()
 	tween.set_parallel(true)
-	tween.tween_property(label, "position:y", pos.y - 64.0, 0.8).set_ease(Tween.EASE_OUT)
+	tween.tween_property(label, "position:y", label.position.y - 64.0, 0.8).set_ease(Tween.EASE_OUT)
 	tween.tween_property(label, "modulate:a", 0.0, 0.8).set_ease(Tween.EASE_IN)
 	tween.chain().tween_callback(label.queue_free)
+
+
+## B3, pure (unit-getestet): Ereignispunkt → Label-Position, zentriert und
+## in die Eltern-Fläche geklemmt (grenzen <= 0 = unbekannt → nur zentrieren).
+static func float_text_position(pos: Vector2, text_size: Vector2, grenzen: Vector2) -> Vector2:
+	var ziel := pos - text_size * 0.5
+	if grenzen.x > 0.0:
+		ziel.x = clampf(ziel.x, 0.0, maxf(grenzen.x - text_size.x, 0.0))
+	if grenzen.y > 0.0:
+		ziel.y = clampf(ziel.y, 0.0, maxf(grenzen.y - text_size.y, 0.0))
+	return ziel
 
 
 ## Feel-Sound nach FeelSfx-Id (spielt auch unter Reduced Motion).

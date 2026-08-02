@@ -105,10 +105,16 @@ static func _button_set(theme: Theme, type: String, fill: Color, text: Color) ->
 	for state in ["font_color", "font_hover_color", "font_focus_color"]:
 		theme.set_color(state, type, text)
 	theme.set_color("font_pressed_color", type, text)
+	# B2 (G8-PT3): hover+pressed ZUGLEICH (der Finger/Cursor LIEGT beim
+	# Drücken auf dem Knopf — bei toggle-Chips dauerhaft) fiel ohne diesen
+	# Key aufs Default-Theme-WEISS zurück: weißes Label auf Papierweiß =
+	# scheinbar leerer Knopf (Pause-Modal „Hilfe“, pt3_d1/040).
+	theme.set_color("font_hover_pressed_color", type, text)
 	theme.set_color("font_disabled_color", type, Color(text, 0.6))
 	theme.set_color("icon_normal_color", type, text)
 	theme.set_color("icon_hover_color", type, text)
 	theme.set_color("icon_pressed_color", type, text)
+	theme.set_color("icon_hover_pressed_color", type, text)
 	theme.set_color("icon_disabled_color", type, Color(text, 0.6))
 	theme.set_constant("h_separation", type, 8)
 	theme.set_font_size("font_size", type, AcTokens.FONT_SIZE_BUTTON)
@@ -225,12 +231,26 @@ static func _build_card_button(theme: Theme) -> void:
 	theme.set_stylebox("pressed", "AcCardButton", pressed)
 	theme.set_stylebox("disabled", "AcCardButton", disabled)
 	theme.set_stylebox("focus", "AcCardButton", StyleBoxEmpty.new())
-	for state in ["font_color", "font_hover_color", "font_focus_color", "font_pressed_color"]:
+	# B2 (G8-PT3): font_hover_pressed_color mitsetzen — s. _button_set.
+	var karten_font_states := [
+		"font_color",
+		"font_hover_color",
+		"font_focus_color",
+		"font_pressed_color",
+		"font_hover_pressed_color",
+	]
+	for state: String in karten_font_states:
 		theme.set_color(state, "AcCardButton", AcTokens.INK)
 	theme.set_color("font_disabled_color", "AcCardButton", Color(AcTokens.INK, 0.6))
 	# Icons UNGETÖNT lassen (weiß = keine Modulation): Kacheln tragen bunte
 	# Cover-Art, kein monochromes Glyph wie die Pill-Buttons.
-	for state in ["icon_normal_color", "icon_hover_color", "icon_pressed_color"]:
+	var karten_icon_states := [
+		"icon_normal_color",
+		"icon_hover_color",
+		"icon_pressed_color",
+		"icon_hover_pressed_color",
+	]
+	for state: String in karten_icon_states:
 		theme.set_color(state, "AcCardButton", AcTokens.WHITE)
 	theme.set_color("icon_disabled_color", "AcCardButton", Color(AcTokens.WHITE, 0.6))
 	theme.set_font_size("font_size", "AcCardButton", AcTokens.FONT_SIZE_BUTTON)
@@ -402,6 +422,8 @@ static func _build_inputs(theme: Theme, base_font: Font) -> void:
 	theme.set_color("font_color", "CheckButton", AcTokens.INK)
 	theme.set_color("font_hover_color", "CheckButton", AcTokens.INK)
 	theme.set_color("font_pressed_color", "CheckButton", AcTokens.INK)
+	# B2 (G8-PT3): hover+pressed nicht aufs Default-WEISS fallen lassen.
+	theme.set_color("font_hover_pressed_color", "CheckButton", AcTokens.INK)
 	var flat := StyleBoxEmpty.new()
 	flat.set_content_margin_all(6.0)
 	for state in ["normal", "hover", "pressed", "disabled", "focus"]:

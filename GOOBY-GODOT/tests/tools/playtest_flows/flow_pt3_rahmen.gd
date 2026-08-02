@@ -3,10 +3,13 @@ extends "res://tests/tools/playtest_flows/flow_pt3_basis.gd"
 ## den HUD-Knopf → Kachel-Grid prüfen (38 Spiele, Zähler-Kapsel, Scrollen)
 ## → Pregame öffnen/ansehen (Chips, Energie-Zeile, Bestwert) → „‹ Zurück“
 ## zur Arcade → Teestube WIRKLICH starten (Pregame → Countdown → gießen)
-## → Pause-Modal (alle 5 Rahmen-Knöpfe) → „Beenden“ zur Arcade →
-## HISTORY-WACHE (G7-Blocker-Fix ec242ee3: mg_pregame/mg_host nie in der
-## Router-History) → Arcade-„Zurück“ führt nach HAUSE (nicht in eine
-## frische Runde — DIE Blocker-Regression dieser Welle).
+## → Pause-Modal (alle 5 Rahmen-Knöpfe) → „Weiter“ mit RESUME-COUNTDOWN-
+## Zentrier-Wache (B4-Fix: Ziffer sitzt auf der SPIELFELD-Mitte) → wieder
+## Pause → „Beenden“ zur Arcade → HISTORY-WACHE (G7-Blocker-Fix ec242ee3:
+## mg_pregame/mg_host nie in der Router-History) → Arcade-„Zurück“ führt
+## nach HAUSE (nicht in eine frische Runde — DIE Blocker-Regression).
+## FIX-7: die B1-Scroll-Diagnose ist jetzt ERFOLGS-Erwartung (hart) —
+## Kachel-Wisch UND echter Touch-Drag müssen das Grid rollen (DragScroll).
 ## Aufruf: tools/ci/run_playtest.sh flow_pt3_rahmen
 
 
@@ -53,12 +56,13 @@ func schritte() -> Array[Dictionary]:
 					"dauer_s": 0.6,
 				},
 				{"name": "grid_unten_ansehen", "aktion": "warte", "sekunden": 1.0},
+				# B1-FIX (FIX-7): früher geplanter Diagnose-Soft-Fail —
+				# jetzt HARTE Erwartung: der Wisch AUF den Kacheln pannt.
 				{
 					"name": "wisch_hat_gescrollt",
 					"aktion": "tue",
 					"funktion": scroll_bewegt,
 					"erwartung": "Touch-Wisch bewegt das Arcade-Grid (scroll_vertical > 0)",
-					"pflicht": false,
 				},
 				{
 					"name": "grid_ans_ende_wischen",
@@ -115,6 +119,15 @@ func schritte() -> Array[Dictionary]:
 					"pflicht": false,
 				},
 				{"name": "touch_drag_wirken_lassen", "aktion": "warte", "sekunden": 1.5},
+				# B1-FIX (FIX-7): auch der ECHTE Touch-Drag (ScreenTouch/
+				# ScreenDrag wie vom OS) MITTEN AUF einer Kachel pannt —
+				# Referenz ist der zettel["scroll"]-Stand nach dem Mausrad.
+				{
+					"name": "touch_drag_hat_gescrollt",
+					"aktion": "tue",
+					"funktion": touch_drag_hat_gescrollt,
+					"erwartung": "echter Touch-Drag auf Kachel rollt das Grid weiter",
+				},
 				{
 					"name": "touch_drag_stand",
 					"aktion": "tue",
@@ -203,6 +216,40 @@ func schritte() -> Array[Dictionary]:
 					"aktion": "tue",
 					"funktion": pause_modal_pruefen,
 					"erwartung": "Weiter/Neustart/Ton/Hilfe/Beenden alle da (G7-P56)",
+				},
+				# B4-FIX (FIX-7): „Weiter“ → die Resume-Countdown-Ziffer
+				# sitzt auf der SPIELFELD-Mitte (letterboxter Container),
+				# nicht auf der Fenster-Mitte (pt3_d2/046: „3“ ragte raus).
+				{
+					"name": "weiter_tippen",
+					"aktion": "tipp_text",
+					"text": "Weiter",
+					"timeout_s": 30.0,
+				},
+				{
+					"name": "resume_countdown_feldzentriert",
+					"aktion": "warte_bis",
+					"bedingung": countdown_feld_zentriert,
+					"timeout_s": 20.0,
+				},
+				{
+					"name": "resume_laeuft",
+					"aktion": "warte_bis",
+					"bedingung": spiel_aktiv,
+					"timeout_s": 60.0,
+				},
+				{
+					"name": "pause_knopf_wieder_aktiv",
+					"aktion": "warte_bis",
+					"bedingung": pause_knopf_aktiv,
+					"timeout_s": 30.0,
+				},
+				{
+					"name": "pause_wieder_oeffnen",
+					"aktion": "tipp_text",
+					"text": "Pause",
+					"erwarte": {"text": "Beenden"},
+					"timeout_s": 30.0,
 				},
 				{
 					"name": "spiel_beenden",
@@ -354,6 +401,47 @@ func scroll_bewegt() -> bool:
 		return false
 	print("[PT3] Scroll nach Wisch: scroll_vertical = %d" % scroller.scroll_vertical)
 	return scroller.scroll_vertical > 0
+
+
+## B1-Wache (FIX-7): der echte Touch-Drag auf einer Kachel muss das Grid
+## WEITERgerollt haben — Referenz ist zettel["scroll"] (Stand nach dem Rad,
+## geschrieben vom scroll_stand-Schritt davor).
+func touch_drag_hat_gescrollt() -> bool:
+	var scroller := _arcade_scroller()
+	if scroller == null:
+		return false
+	var vorher := int(zettel.get("scroll", -1))
+	print(
+		(
+			"[PT3] Touch-Drag-Wache: scroll_vertical %d (Referenz vorher %d)"
+			% [scroller.scroll_vertical, vorher]
+		)
+	)
+	return vorher >= 0 and scroller.scroll_vertical > vorher
+
+
+## B4-Wache (FIX-7): die sichtbare Countdown-Ziffer sitzt auf der Mitte des
+## LETTERBOXTEN Spielfelds (SubViewportContainer), nicht auf der Fenster-
+## Mitte — unter den xvfb-Phantom-Insets (B6) liegen die beiden auseinander.
+func countdown_feld_zentriert() -> bool:
+	if not countdown_sichtbar():
+		return false
+	var h := host()
+	var label := h.get("_countdown_label") as Label
+	var feld := h.get("_viewport_container") as Control
+	if label == null or feld == null:
+		return false
+	var label_mitte := label.get_global_rect().get_center()
+	var feld_mitte := feld.get_global_rect().get_center()
+	var delta := (label_mitte - feld_mitte).abs()
+	var zentriert := delta.x <= 3.0 and delta.y <= 3.0
+	print(
+		(
+			"[PT3] Countdown vs Feld-Mitte: Label %s, Feld %s, Δ(%.1f, %.1f) -> %s"
+			% [label_mitte, feld_mitte, delta.x, delta.y, "zentriert" if zentriert else "DANEBEN"]
+		)
+	)
+	return zentriert
 
 
 ## Canvas-Punkt in der LÜCKE zwischen Kachel-Spalte 1 und 2 (h_separation

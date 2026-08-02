@@ -169,6 +169,8 @@ func _baue_regal(box: VBoxContainer) -> void:
 	var hoehe := minf((KARTE_MIN.y + 10.0) * float(zeilen), REGAL_HOEHE_MAX)
 	scroll.custom_minimum_size = Vector2(REGAL_BREITE, hoehe)
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	# B1 (G8-PT3): Futter-Karten fressen den Touch-Drag — Helfer pannt.
+	DragScroll.anbinden(scroll)
 	brett.add_child(scroll)
 	_regal = GridContainer.new()
 	_regal.name = "Regal"

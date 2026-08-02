@@ -14,6 +14,9 @@ signal exit_requested(target: StringName, params: Dictionary)
 signal round_finished(breakdown: Dictionary)
 ## EF-3 F3: der Host hat den zentralen End-Moment gezündet ("win"/"lose").
 signal end_moment_fired(kind: String)
+## A2 Rekord-Puls: der Live-„NEUER REKORD!“-Moment hat gezündet (einmal pro
+## Runde — Tests und künftige Zuschauer-Kits, s. G8-IDEEN A12, hängen hier).
+signal rekord_moment_fired
 
 const RESULTS_SCENE := preload("res://scripts/minigames/results.tscn")
 const Stats := preload("res://scripts/logic/stats.gd")
@@ -64,6 +67,11 @@ var _overlay: Control
 ## _stage.to_screen() in float_text/overlay_burst/overlay_ring, und die
 ## landeten vorher im Fenster-Raum (Texte/Ringe klebten im Creme-Rand).
 var _float_layer: Control
+## B4 (G8-PT3): eigene, dem SPIELFELD deckungsgleiche Ebene für den
+## 3-2-1-Countdown — PRESET_CENTER am FULL-RECT-_overlay zentrierte auf die
+## FENSTER-Mitte, das Feld liegt (Safe-Area) daneben; die Resume-„3“ ragte
+## über den Feldrand (pt3_d2/046). Bewusst OHNE clip (GO-Pop nie kappen).
+var _countdown_layer: Control
 var _top_bar: HBoxContainer
 var _score_label: Label
 var _countdown_label: Label
@@ -89,6 +97,11 @@ var _modifier_params: Dictionary = {}
 var _strikes := 0
 var _strike_out := false
 var _strike_veil: Control
+## A2 Rekord-Puls (G8-IDEEN A2): pure Stufen-Logik + Anzeige (Pill-Gold,
+## Ziel-Anker, Banner) wohnen in rekord_puls.gd — der Host orchestriert.
+var _puls := RekordPuls.new()
+var _puls_anzeige: RekordPuls.Anzeige
+var _ziel_label: Label
 
 
 func receive_params(params: Dictionary) -> void:
@@ -122,6 +135,7 @@ func _ready() -> void:
 	_build_ui()
 	_lock_orientation()
 	_mount_game()
+	_reset_rekord_puls()
 	resized.connect(_on_host_resized)
 	_apply_metrics()
 	_layout_stage()
@@ -185,8 +199,17 @@ func _build_ui() -> void:
 	_float_layer = Control.new()
 	_float_layer.name = "JuiceLayer"
 	_float_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# B3 (G8-PT3): die Juice-Ebene IST das Spielfeld — clippen kappt
+	# Ausreißer (float_text am Feldrand, Konfetti-Spawn über der Kante)
+	# sauber an der Feldgrenze, wie es ein echter Geräteschirm täte.
+	_float_layer.clip_contents = true
 	add_child(_float_layer)
 	juice.float_text_parent = _float_layer
+
+	_countdown_layer = Control.new()
+	_countdown_layer.name = "CountdownLayer"
+	_countdown_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_countdown_layer)
 
 	_overlay = Control.new()
 	_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -205,6 +228,14 @@ func _build_ui() -> void:
 	_score_label.text = I18nService.t("mg.host.score", {"score": 0})
 	_score_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_top_bar.add_child(_score_label)
+	# A2: Ziel-Anker für Erstrunden ohne Bestwert („Ziel: 85“ aus meta.target)
+	# — _reset_rekord_puls() blendet ihn nur dann ein.
+	_ziel_label = Label.new()
+	_ziel_label.name = "ZielAnker"
+	_ziel_label.theme_type_variation = &"SoftLabel"
+	_ziel_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_ziel_label.visible = false
+	_top_bar.add_child(_ziel_label)
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -229,7 +260,9 @@ func _build_ui() -> void:
 	_countdown_label.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_countdown_label.grow_vertical = Control.GROW_DIRECTION_BOTH
 	_countdown_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_overlay.add_child(_countdown_label)
+	# B4: aufs SPIELFELD zentrieren statt auf den Canvas (Layer-Sync
+	# in _layout_stage) — PRESET_CENTER re-zentriert bei Textwechsel.
+	_countdown_layer.add_child(_countdown_label)
 
 	# FB3: kompaktes, mittiges Pause-Modal (scripts/minigames/ui) statt des
 	# alten Vollflächen-Overlays — echte Pause + 3-2-1 macht der Host.
@@ -248,6 +281,15 @@ func _build_ui() -> void:
 	# laufen über _exit_to und damit über DENSELBEN Router-Wipe.
 	_results.home_pressed.connect(_on_results_home)
 	add_child(_results)
+
+	# A2: der sichtbare Rekord-Puls-Anteil (rekord_puls.gd) als Host-Kind.
+	_puls_anzeige = RekordPuls.Anzeige.new()
+	_puls_anzeige.name = "RekordPulsAnzeige"
+	_puls_anzeige.score_label = _score_label
+	_puls_anzeige.ziel_label = _ziel_label
+	_puls_anzeige.overlay = _overlay
+	_puls_anzeige.juice = juice
+	add_child(_puls_anzeige)
 
 
 func _mount_game() -> void:
@@ -323,6 +365,10 @@ func _layout_stage() -> void:
 		# Position direkt Host-Raum — die Juice-Ebene spiegelt sie 1:1.
 		_float_layer.position = _viewport_container.position
 		_float_layer.size = fitted
+	if _countdown_layer != null:
+		# B4: Countdown-Ebene deckungsgleich zum letterboxten Spielfeld.
+		_countdown_layer.position = _viewport_container.position
+		_countdown_layer.size = fitted
 	if juice != null:
 		# Läuft gerade ein Shake, würde er die ALTE Container-Ruhelage
 		# zurückschreiben — Re-Zuweisung lässt ihn die Basis neu lernen
@@ -382,6 +428,46 @@ func _run_countdown(quick := false) -> void:
 func _on_game_score(total: int, _delta: int) -> void:
 	score = total
 	_score_label.text = I18nService.t("mg.host.score", {"score": total})
+	_werte_rekord_puls(total)
+
+
+## A2 Rekord-Puls: Bestwert des gewählten Modus + Ziel der frischen Runde
+## lesen und Logik + Anzeige zurücksetzen — läuft beim Start UND bei jedem
+## Neustart (die eben beendete Runde kann den Bestwert geändert haben).
+func _reset_rekord_puls() -> void:
+	var best := 0
+	var gs := _resolve_state()
+	if gs != null and gs.has_method("state"):
+		best = MinigameFrameworkLogic.best_for_mode(gs.state(), game_id, difficulty)
+	var ziel := 0
+	var ziel_raw: Variant = _meta.get("target")
+	if difficulty != "endless" and (ziel_raw is int or ziel_raw is float):
+		ziel = maxi(0, int(ziel_raw))
+	_puls.reset(best, ziel)
+	if _puls_anzeige != null:
+		_puls_anzeige.reset(_puls.zeigt_ziel(), I18nService.t("mg.host.ziel", {"n": ziel}))
+
+
+## A2: jeden Score-Tick durch die pure Stufen-Logik schicken und die
+## sichtbaren Folgen ziehen (Schimmer, Herzschlag, Ziel-Puls, Rekord-
+## Moment). Sounds zündet der Host, die Optik macht die Anzeige.
+func _werte_rekord_puls(total: int) -> void:
+	if _round_over or _puls_anzeige == null:
+		return
+	var folge := _puls.bewerte(total)
+	_puls_anzeige.setze_stufe(int(folge["stufe"]))
+	if bool(folge["annaeherung"]):
+		# Einmaliger Herzschlag kurz vor dem Rekord (Bremse: 1×/Runde).
+		FeelSfx.play(self, "game_pop", 0.72)
+	if bool(folge["ziel"]):
+		FeelSfx.play(self, "game_star")
+		_puls_anzeige.feiere_ziel()
+	if bool(folge["rekord"]):
+		# Der SOFORTIGE „NEUER REKORD!“-Moment — Sting + Feier-Element im
+		# Gooby-Look, nicht spielunterbrechend; kein Konfetti (Results).
+		FeelSfx.play(self, "game_record")
+		_puls_anzeige.feiere_rekord()
+		rekord_moment_fired.emit()
 
 
 func _on_game_end(result: Dictionary) -> void:
@@ -613,6 +699,8 @@ func _restart_round() -> void:
 		_game = null
 	_lock_orientation()
 	_mount_game()
+	# A2: Puls frisch aufsetzen — der Bestwert kann sich eben geändert haben.
+	_reset_rekord_puls()
 	_run_countdown(true)
 
 

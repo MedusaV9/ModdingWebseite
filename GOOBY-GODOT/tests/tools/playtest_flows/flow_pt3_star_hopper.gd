@@ -7,6 +7,15 @@ extends "res://tests/tools/playtest_flows/flow_pt3_basis.gd"
 ## prüfen (Runde vorbei!/Punkte/Sterne/Münzen/XP) → „Nochmal“ (Quick-GO,
 ## KEIN 3-2-1 — EF-3 F2) → Pause → „Neustart“ (frische Runde) → Pause →
 ## „Beenden“ → Arcade → „Zurück“ nach Hause (Blocker-Regression).
+## A2 REKORD-PULS-PROBE (G8-IDEEN A2): vor dem Start wird ein NIEDRIGER
+## Easy-Bestwert (1) gesät — der Lauf ist damit „ein Lauf mit niedrigem
+## Bestwert“: der Rekord fällt bei Score 2 = 20 m, DETERMINISTISCH vor der
+## ersten Meteor-Reihe (30 m, Hitbox ab ~25 m — ohne Ausweichen erreichbar;
+## Pickups spawnen erst mit den Reihen). Banner „NEUER REKORD!“ + goldene
+## Score-Pill (Stufe 2) werden im Lauf geprüft; nach „Nochmal“ muss der
+## Host den NEUEN Bestwert frisch lesen (Pill neutral).
+## A1 STERNENBUCH: nach der gebuchten Runde zeigt die Arcade-Kachel
+## rückwirkend ≥1 ★ + Bestwert-Zeile.
 ## Aufruf: tools/ci/run_playtest.sh flow_pt3_star_hopper
 
 ## So weit voraus (m) gilt ein Meteor auf der eigenen Bahn als Gefahr.
@@ -15,20 +24,52 @@ const GEFAHR_M := 30.0
 const ZIEL_FREI_M := 36.0
 ## Reaktions-Taps während der Runde (75 s / ~2 s je Schritt + Reserve).
 const DODGE_SCHRITTE := 42
+## A2-Probe: gesäter Easy-Bestwert. GENAU 1: der Rekord fällt bei Score 2
+## (= 20 m bei 10 m/Punkt) — VOR der ersten Meteor-Reihe (_next_row_m 30,
+## Hitbox-Reichweite ~4,6 m), also auch ohne Ausweich-Eingaben sicher.
+const REKORD_SAAT_BEST := 1
 
 
 func schritte() -> Array[Dictionary]:
 	var liste: Array[Dictionary] = []
 	liste.append_array(onboarding_schritte())
-	liste.append_array(arcade_pregame_schritte("starHopper", "Leicht"))
 	(
 		liste
 		. append(
 			{
-				"name": "intro_beat_ansehen",
-				"aktion": "warte",
-				"sekunden": 2.0,
+				"name": "rekord_bestwert_saeen",
+				"aktion": "tue",
+				"funktion": rekord_bestwert_saeen,
+				"erwartung":
+				"niedriger Easy-Bestwert (%d) für die Rekord-Puls-Probe" % REKORD_SAAT_BEST,
 			}
+		)
+	)
+	liste.append_array(arcade_pregame_schritte("starHopper", "Leicht"))
+	(
+		liste
+		. append_array(
+			[
+				{
+					"name": "intro_beat_ansehen",
+					"aktion": "warte",
+					"sekunden": 2.0,
+				},
+				# A2: der Score überholt den gesäten Bestwert nach wenigen
+				# Metern — das Banner ist der Screenshot-Beleg des Moments.
+				{
+					"name": "rekord_banner_zuendet",
+					"aktion": "warte_bis",
+					"bedingung": rekord_banner_da,
+					"timeout_s": 90.0,
+				},
+				{
+					"name": "rekord_pill_golden",
+					"aktion": "tue",
+					"funktion": rekord_pill_pruefen,
+					"erwartung": "Score-Pill Rekord-Gold (Stufe 2), Trigger einmalig",
+				},
+			]
 		)
 	)
 	for i in DODGE_SCHRITTE:
@@ -91,6 +132,17 @@ func schritte() -> Array[Dictionary]:
 					"aktion": "tue",
 					"funktion": score_loggen.bind("Runde 2 nach Nochmal"),
 				},
+				# A2: „Nochmal“ liest den Bestwert FRISCH (Runde 1 hat ihn
+				# gerade überschrieben) — Pill neutral, kein alter Rekord-
+				# Zustand. pflicht=false: sehr kurze Runde-1-Läufe (früher
+				# Meteor-Treffer) können die 80 %-Zone in Sekunden erreichen.
+				{
+					"name": "runde_2_pill_neutral",
+					"aktion": "tue",
+					"funktion": rekord_pill_neutral,
+					"erwartung": "frische Runde: Pill neutral + NEUER Bestwert geladen",
+					"pflicht": false,
+				},
 				{
 					"name": "runde_2_ausweichen_1",
 					"aktion": "tipp_pos",
@@ -141,6 +193,14 @@ func schritte() -> Array[Dictionary]:
 					"funktion": history_sauber,
 					"erwartung": "mg_host/mg_pregame NICHT in der History",
 				},
+				# A1 Sternenbuch: die gebuchte Runde füllt die Kachel
+				# rückwirkend — Pips ≥1 ★ + Bestwert-Zeile + Sterne-Kapsel.
+				{
+					"name": "sternenbuch_fuellt_sich",
+					"aktion": "tue",
+					"funktion": sternenbuch_nach_runde,
+					"erwartung": "starHopper-Kachel: ≥1 ★, Bestwert-Zeile, Kapsel zählt ★",
+				},
 				{
 					"name": "zurueck_nach_hause",
 					"aktion": "tipp_text",
@@ -189,6 +249,82 @@ func neustart_frisch() -> bool:
 	var score := int(h.get("score"))
 	print("[PT3] Score nach Neustart: %d" % score)
 	return score <= 5
+
+
+## A2-Saat: niedriger Easy-Bestwert — der Lauf wird zum „Lauf mit
+## niedrigem Bestwert“, Puls (80 %) und Rekord-Moment zünden sichtbar.
+func rekord_bestwert_saeen() -> bool:
+	var gs := game_state()
+	if gs == null or not gs.has_method("update"):
+		print("[PT3] Rekord-Saat: kein GameState")
+		return false
+	gs.update(
+		func(state: Dictionary) -> void:
+			var legacy: Dictionary = state["minigames"]["legacy"]
+			if not (legacy.get("bestByDiff") is Dictionary):
+				legacy["bestByDiff"] = {}
+			var by_diff: Dictionary = legacy["bestByDiff"]
+			if not (by_diff.get("starHopper") is Dictionary):
+				by_diff["starHopper"] = {}
+			by_diff["starHopper"]["easy"] = REKORD_SAAT_BEST
+	)
+	print("[PT3] Rekord-Saat: starHopper-Bestwert (Leicht) = %d" % REKORD_SAAT_BEST)
+	return true
+
+
+## A2: das „NEUER REKORD!“-Banner des Hosts ist gerade sichtbar.
+func rekord_banner_da() -> bool:
+	var banner := harness.root.find_child("RekordBanner", true, false)
+	return banner is Control and (banner as Control).is_visible_in_tree()
+
+
+## A2: nach dem Überholen bleibt die Pill Rekord-Gold (Stufe 2) und der
+## Trigger ist verbraucht (einmalig pro Lauf).
+func rekord_pill_pruefen() -> bool:
+	var h := host()
+	if h == null:
+		return false
+	var anzeige: Node = h.get("_puls_anzeige")
+	var stufe := int(anzeige.get("stufe")) if anzeige != null else -1
+	var puls: RefCounted = h.get("_puls")
+	var einmalig: bool = puls != null and bool(puls.get("rekord_gefeuert"))
+	print("[PT3] Rekord-Puls: Pill-Stufe %d, rekord_gefeuert=%s" % [stufe, einmalig])
+	return stufe == 2 and einmalig
+
+
+## A2: „Nochmal“ setzt den Puls frisch auf — Pill neutral und der Host hat
+## den NEUEN Bestwert (Runde-1-Score > Saat) geladen.
+func rekord_pill_neutral() -> bool:
+	var h := host()
+	if h == null:
+		return false
+	var anzeige: Node = h.get("_puls_anzeige")
+	var stufe := int(anzeige.get("stufe")) if anzeige != null else -1
+	var puls: RefCounted = h.get("_puls")
+	var best := int(puls.get("best")) if puls != null else -1
+	print("[PT3] Runde 2: Pill-Stufe %d, geladener Bestwert %d" % [stufe, best])
+	return stufe == 0 and best > REKORD_SAAT_BEST
+
+
+## A1: nach der gebuchten Runde trägt die starHopper-Kachel ≥1 ★, eine
+## Bestwert-Zeile und die Kopfzeilen-Kapsel zählt Sterne mit.
+func sternenbuch_nach_runde() -> bool:
+	var kachel := harness.root.find_child("Tile_starHopper", true, false)
+	if kachel == null:
+		print("[PT3] Sternenbuch: Tile_starHopper fehlt")
+		return false
+	var pips := kachel.find_child("SternPips", true, false)
+	var sterne := int(pips.get("earned")) if pips != null else -1
+	var best_label := kachel.find_child("BestwertLabel", true, false) as Label
+	var zaehler := harness.root.find_child("CountLabel", true, false) as Label
+	var kapsel := zaehler.text if zaehler != null else "?"
+	print(
+		(
+			"[PT3] Sternenbuch: starHopper %d ★, Bestwert-Zeile '%s', Kapsel '%s'"
+			% [sterne, best_label.text if best_label != null else "FEHLT", kapsel]
+		)
+	)
+	return sterne >= 1 and best_label != null and kapsel.contains("★")
 
 
 ## G7-P56-Results-Rahmen: Titel, Punkte-Zeile, Stern-Reihe, die EINE

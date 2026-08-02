@@ -116,11 +116,15 @@ func test_arcade_kopfzeile_traegt_zaehler_kapsel() -> void:
 		for game: Dictionary in MinigameRegistry.all_games():
 			if not bool(game.get("coming_soon", false)):
 				spielbar += 1
-		assert_eq(
-			label.text,
-			I18nService.t("mg.arcade.zaehler", {"n": spielbar}),
-			"Kapsel zählt die spielbaren Spiele"
+		# Seit G8/A1 (Arcade-Sternenbuch) hängt hinter dem Spiele-Zähler der
+		# Sammel-Zähler ("38 Spiele · 4/114 ★") — die Kapsel muss weiter mit dem
+		# Spiele-Zähler BEGINNEN und den Sternen-Teil tragen.
+		var basis := I18nService.t("mg.arcade.zaehler", {"n": spielbar})
+		assert_true(
+			label.text.begins_with(basis),
+			"Kapsel beginnt mit dem Spiele-Zähler (ist: %s)" % label.text
 		)
+		assert_true(label.text.contains("★"), "Kapsel trägt den Sternenbuch-Zähler")
 	_unmount(screen)
 
 
