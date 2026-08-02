@@ -16,6 +16,11 @@ extends OrtScene
 ## landen NIE im Save (nur rezept_tropfen persistiert, wie beim GOOUHBUS).
 ## Zu wenig Muenzen ist nie eine Strafe: freundlicher Toast, Dialog geht
 ## weiter, Gooby wird trotzdem liebgehabt.
+##
+## G8-P1 „Jeder Ort lebt“ (PT2-B4): volles Wartezimmer — zwei Gäste sitzen
+## am Boden (Muster Patient, einer drückt sein Kuscheltier), ein nervöses
+## Herrchen tigert auf und ab. Tier-Momente: tiefes Riesen-Niesen,
+## Aufruf-Glöckchen („der Nächste!“) und das Quietsche-Kuscheltier.
 
 const Sleep := preload("res://scripts/logic/sleep.gd")
 const Health := preload("res://scripts/logic/health.gd")
@@ -47,6 +52,67 @@ func _dialog_pfad() -> String:
 func _npc_konfig() -> Dictionary:
 	# Möhrchen-Orange wie die Ranch-Figur; steht im Sprechzimmer.
 	return {"tint": Color("#E8A24A"), "emotion": "happy", "pos": Vector3(1.6, 0.0, -2.2)}
+
+
+## G8-P1: Wartezimmer-Leben — zwei Boden-Sitzer (wie der Patient bei
+## (-1.2|-1.5); Kisten-Bänkchen sind mit 1,12 m Deckelhöhe zu hoch) neben
+## Lesetisch und Bänkchen, ein Herrchen tigert zwischen Tür und Aushang.
+## KEIN Gemurmel (Wartezimmer-Stille), KEIN KassenNpc (Dr. Dr. Möhrchen
+## soll die Untersuchungs-Choreo nicht mit Kassen-Winken unterbrechen).
+## Momente: Riesen-Niesen (pet_squish TIEF — irgendwas Großes wartet),
+## Aufruf-Glöckchen und das Quietsche-Kuscheltier (pet_squish HOCH).
+func _leben_konfig() -> Dictionary:
+	return {
+		"besucher": 2,
+		"punkte":
+		[
+			Vector3(-1.6, 0.0, 0.6),
+			Vector3(-3.6, 0.0, 1.4),
+			Vector3(0.6, 0.0, 1.6),
+			Vector3(-4.8, 0.0, 0.2),
+		],
+		"sprueche": "tierarzt",
+		"blick": Vector3(1.6, 0.0, -2.2),
+		"gemurmel": false,
+		"tuer_glocke": true,
+		"kasse": false,
+		"sitze":
+		[
+			{
+				"pos": Vector3(-4.5, 0.0, -0.7),
+				"requisit": "kuscheltier",
+				"blick": Vector3(1.6, 0.0, -2.2),
+			},
+			{"pos": Vector3(-2.0, 0.0, -0.4), "blick": Vector3(1.6, 0.0, -2.2)},
+		],
+		"momente":
+		[
+			{
+				"alle_s": 20.0,
+				"versatz_s": 6.0,
+				"sound": "pet_squish",
+				"pitch": 0.75,
+				"clip": "hop",
+				"sprueche": "tierarzt_tiere",
+			},
+			{
+				"alle_s": 29.0,
+				"versatz_s": 15.0,
+				"sound": "laden_glocke",
+				"pitch": 1.35,
+				"clip": "idle_lookaround",
+				"sprueche": "tierarzt_aufruf",
+			},
+			{
+				"alle_s": 37.0,
+				"versatz_s": 24.0,
+				"sound": "pet_squish",
+				"pitch": 1.8,
+				"clip": "celebrate",
+				"sprueche": "tierarzt_quietsch",
+			},
+		],
+	}
 
 
 ## Unser Gooby als Patient: sitzt im Wartezimmer, traegt sein ECHTES

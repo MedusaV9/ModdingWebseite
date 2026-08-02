@@ -9,6 +9,9 @@ extends OrtScene
 ## unverändert.
 ## G3/P07: Ungelesen-Zähler als StatusCapsule-Badge in der Kopfzeile
 ## (statt Knopftext-Anhang), Schalter-Knopf auf SquishButton + Touch-Floor.
+## G8-P1 „Jeder Ort lebt“ (PT2-B4): kleine Paket-Schlange vor dem Schalter
+## (Paket-Requisiten), Frau Zettel stempelt im Kassen-Takt, dazu die
+## Momente Stempel-KLACK und Paket-Abholung.
 
 const INNEN := "res://assets/city/innen"
 const MOEBEL := "res://assets/furniture"
@@ -34,6 +37,52 @@ func _dialog_pfad() -> String:
 
 func _npc_konfig() -> Dictionary:
 	return {"tint": Color("#FFD166"), "emotion": "happy", "pos": Vector3(-0.4, 0.0, -2.4)}
+
+
+## G8-P1: Schalterhallen-Leben — die Paket-Schlange rückt vor dem Schalter
+## vor (Trage-Requisit „paket“), dazu Abhol-Stopps am Paketberg. Frau
+## Zettel tippt/stempelt im Kassen-Takt (KassenNpc). Momente: Stempel-
+## KLACK (door_knock hochgestimmt = trockener Gummistempel) und die
+## Paket-Abholung mit Freuden-Hopser.
+func _leben_konfig() -> Dictionary:
+	return {
+		"besucher": 3,
+		# Schlangen-Punkte bleiben bei z ≤ 1,2 — tiefer würde die Schlange
+		# als Vordergrund-Riese vor der Ort-Kamera (z 4,2) hängen.
+		"punkte":
+		[
+			Vector3(-0.5, 0.0, 0.05),
+			Vector3(-0.35, 0.0, 0.65),
+			Vector3(0.0, 0.0, 1.2),
+			Vector3(2.7, 0.0, 0.1),
+			Vector3(-2.5, 0.0, 0.7),
+		],
+		"requisit": "paket",
+		"sprueche": "post",
+		"blick": Vector3(-0.4, 0.0, -2.4),
+		"gemurmel": true,
+		"tuer_glocke": true,
+		"kasse": true,
+		"momente":
+		[
+			{
+				"alle_s": 17.0,
+				"versatz_s": 5.0,
+				"sound": "door_knock",
+				"pitch": 1.45,
+				"clip": "idle_lookaround",
+				"sprueche": "post_stempel",
+			},
+			{
+				"alle_s": 26.0,
+				"versatz_s": 14.0,
+				"sound": "gvz_collect",
+				"pitch": 0.9,
+				"clip": "celebrate",
+				"sprueche": "post_paket",
+			},
+		],
+	}
 
 
 ## Post hat ein eigenes Schalter-UI: Tagespaket + Postkarten-Archiv (PostSheet,

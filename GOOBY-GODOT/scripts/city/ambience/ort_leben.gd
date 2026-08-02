@@ -14,6 +14,20 @@ extends Node3D
 ## Sprüche leben in strings/<locale>/city_leben.json unter
 ## `city_leben.sprueche.<domain>` (DE führend, EN paritätisch).
 ##
+## G8-P1 „Jeder Ort lebt“ — drei ZUSÄTZLICHE generische Bausteine für
+## ortstypische Würze (alle optional, alle deterministisch):
+## - "sitze": [{"pos": Vector3, "blick": Vector3, "requisit": "koffer"}]
+##   Wartebank-Sitzer: statische Besucher im sit-Clip (Muster Tierarzt-
+##   Patient), zählen als Besucher-Slots, überleben Reduced Motion.
+## - "requisit": "koffer"|"paket"|"kuscheltier"|"taschentuch" — prozedurale
+##   Mini-Props am Besucher-Node (Muster Hut, geteilte Materialien);
+##   Geher tragen sie mit REQUISIT_ANTEIL, Sitzer exakt laut Konfig.
+## - "momente": [{"alle_s", "versatz_s", "sound", "pitch", "clip",
+##   "sprueche"}] — Orts-Momente im festen Takt: Sound (SfxMap-Id) +
+##   Einmal-Clip eines stehenden Besuchers + Zeile aus der Moment-eigenen
+##   Spruch-Domain (Niesen in der GOOBYTHEKE, Stempel-Klack in der Post,
+##   Durchsage am Flughafen …). Läuft über advance_zeit → headless testbar.
+##
 ## Performance (iPhone-Budget, Muster CityScene-Fußgänger): Besucher sind
 ## das ROHE gooby.glb + AnimationPlayer (keine GoobyRig-Maschinerie),
 ## Tints und Hut-Materialien kommen aus GETEILTEN Caches, Bewegung ist
@@ -45,11 +59,28 @@ const GEMURMEL_ID := "ranch_menge_gemurmel"
 const HUT_FARBEN: Array[String] = ["#E8524A", "#4E79D6", "#3E8E5A", "#F2A03D"]
 ## Seitlicher Zufalls-Versatz je Wegpunkt (m) — Besucher stapeln sich nie.
 const PUNKT_JITTER_M := 0.35
+## G8-P1 Instanz-Kappen (Draw-Call-Wache, Ideen-Doc P1: iPhone-Budget) —
+## mehr Geher/Sitzer bewilligt das System nicht, egal was die Konfig will.
+const BESUCHER_MAX := 4
+const SITZE_MAX := 3
+## Anteil der Geher mit konfiguriertem Trage-Requisit (Sitzer: laut Konfig).
+const REQUISIT_ANTEIL := 0.6
+## Momente: Mindest-Takt (schützt vor Dauerfeuer-Konfigs) + Start-Versatz.
+const MOMENT_MIN_TAKT_S := 6.0
+const MOMENT_VERSATZ_DEFAULT_S := 8.0
+## Requisiten-Farben (dezent; ein geteiltes Material je Farbe).
+const REQUISIT_FARBEN := {
+	"koffer": Color("#C75B4E"),
+	"paket": Color("#C9A26B"),
+	"kuscheltier": Color("#F2B5D4"),
+	"taschentuch": Color("#F7F3EA"),
+}
 
 ## Geteilte Material-Caches (über alle Orte hinweg): Fell-Tints je
-## (Basismaterial, Farbe) und Hut-Materialien je Farbe.
+## (Basismaterial, Farbe), Hut- und Requisiten-Materialien je Farbe.
 static var _tint_cache: Dictionary = {}
 static var _hut_mat_cache: Dictionary = {}
+static var _req_mat_cache: Dictionary = {}
 ## Spruch-Rotation je Domain (Muster UrlaubsSprueche: nichts wiederholt
 ## sich, bevor alle Zeilen dran waren).
 static var _spruch_zaehler: Dictionary = {}
@@ -67,11 +98,15 @@ var auto_zeit := true
 ## beim Headless-Runner-Exit sonst nach → ObjectDB-Leak-Warnung). Die
 ## Verdrahtung selbst prüfen Tests über die Konfig-Flags.
 var stumm := false
+## Test-Hooks/Beobachtung (G8-P1): gefeuerte Orts-Momente.
+var momente_gefeuert := 0
+var letzter_moment: Dictionary = {}
 
 var _besucher: Array[Dictionary] = []
 var _zeit := 0.0
 var _statisch := false
 var _gemurmel_an := false
+var _moment_uhren: Array[float] = []
 
 
 func _ready() -> void:
@@ -81,8 +116,22 @@ func _ready() -> void:
 	var alle := plaene(konfig, basis_seed)
 	if _reduziert():
 		_statisch = true
-		alle = alle.slice(0, maxi(1, alle.size() / 2))
+		# G8-P1: nur die GEHER halbieren — Sitzer sind ohnehin statisch
+		# (kein _update pro Frame) und tragen den Charakter des Orts.
+		var geher: Array[Dictionary] = []
+		var sitzer: Array[Dictionary] = []
+		for plan in alle:
+			if bool(plan.get("sitzt", false)):
+				sitzer.append(plan)
+			else:
+				geher.append(plan)
+		alle = geher.slice(0, maxi(1, geher.size() / 2))
+		alle.append_array(sitzer)
 	_spawne_besucher(alle)
+	for moment: Dictionary in momente_liste():
+		var takt := maxf(MOMENT_MIN_TAKT_S, float(moment.get("alle_s", 20.0)))
+		var versatz := maxf(0.0, float(moment.get("versatz_s", MOMENT_VERSATZ_DEFAULT_S)))
+		_moment_uhren.append(takt - versatz)
 	if bool(konfig.get("tuer_glocke", false)) and not stumm:
 		AudioDirector.try_play(self, GLOCKE_ID, GLOCKE_PITCH)
 	if bool(konfig.get("gemurmel", false)) and not stumm:
@@ -103,14 +152,15 @@ func _process(delta: float) -> void:
 		advance_zeit(delta)
 
 
-## Zeit hereinreichen (vom _process ODER von Tests): Schlendern und
-## Spruch-Takt laufen über DIESEN Takt; statische Besucher (Reduced
+## Zeit hereinreichen (vom _process ODER von Tests): Schlendern, Spruch-
+## und Momente-Takt laufen über DIESEN Takt; statische Besucher (Reduced
 ## Motion) bleiben stehen, sprechen aber weiter.
 func advance_zeit(delta: float) -> void:
 	_zeit += delta
 	if not _statisch:
 		_update_besucher()
 	_update_sprueche(delta)
+	_update_momente(delta)
 
 
 ## ------------------------------------------------------------ Pure Planung
@@ -124,47 +174,93 @@ static func tages_seed(ort_id: String) -> int:
 	return int(hash("%s|%s" % [tag, ort_id])) & 0x7FFFFFFF
 
 
-## Besucher-Pläne würfeln (PURE, headless testbar). Je Besucher: eigene
+## Besucher-Pläne würfeln (PURE, headless testbar). Je Geher: eigene
 ## 3-Punkte-Schleife aus den Konfig-Wegpunkten (mit Jitter), Schlender-
-## Tempo, Schau-Pause, Startphase, Fellfarbe, Hut und Greif-Flag.
+## Tempo, Schau-Pause, Startphase, Fellfarbe, Hut, Greif-Flag und (G8-P1)
+## optionales Trage-Requisit. Danach die Sitzer aus "sitze" (Wartebank):
+## fester Platz, sit-Clip, Requisit exakt laut Konfig.
 static func plaene(plan_konfig: Dictionary, seed_wert: int) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	var punkte_raw: Variant = plan_konfig.get("punkte", [])
 	var punkte: Array = punkte_raw if punkte_raw is Array else []
-	var anzahl := int(plan_konfig.get("besucher", 0))
-	if punkte.size() < 2 or anzahl <= 0:
-		return out
+	var anzahl := mini(int(plan_konfig.get("besucher", 0)), BESUCHER_MAX)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_wert
-	for i in anzahl:
-		var eigene: Array[Vector3] = []
-		var idx := i % punkte.size()
-		for _schritt in mini(3, punkte.size()):
-			var jitter := Vector3(
-				rng.randf_range(-PUNKT_JITTER_M, PUNKT_JITTER_M),
-				0.0,
-				rng.randf_range(-PUNKT_JITTER_M, PUNKT_JITTER_M)
+	var felle := CityFussgaenger.FELLE
+	var blick_basis: Vector3 = plan_konfig.get("blick", Vector3(0.0, 0.0, -4.0))
+	var requisit := str(plan_konfig.get("requisit", ""))
+	if punkte.size() >= 2 and anzahl > 0:
+		for i in anzahl:
+			var eigene: Array[Vector3] = []
+			var idx := i % punkte.size()
+			for _schritt in mini(3, punkte.size()):
+				var jitter := Vector3(
+					rng.randf_range(-PUNKT_JITTER_M, PUNKT_JITTER_M),
+					0.0,
+					rng.randf_range(-PUNKT_JITTER_M, PUNKT_JITTER_M)
+				)
+				eigene.append(Vector3(punkte[idx]) + jitter)
+				idx = (idx + 1 + rng.randi_range(0, punkte.size() - 2)) % punkte.size()
+			# Requisit-Wurf NUR bei konfiguriertem Requisit — der RNG-Strom
+			# (und damit die Pläne) der Bestands-Orte bleibt unverändert.
+			var traegt := not requisit.is_empty() and rng.randf() < REQUISIT_ANTEIL
+			(
+				out
+				. append(
+					{
+						"punkte": eigene,
+						"tempo": rng.randf_range(TEMPO_MIN, TEMPO_MAX),
+						"pause_s": rng.randf_range(PAUSE_MIN_S, PAUSE_MAX_S),
+						"phase": rng.randf(),
+						"tint": Color(felle[rng.randi_range(0, felle.size() - 1)]),
+						"hut":
+						(
+							rng.randi_range(0, HUT_FARBEN.size() - 1)
+							if rng.randf() < HUT_ANTEIL
+							else -1
+						),
+						"greift": rng.randf() < GREIFER_ANTEIL,
+						"blick": blick_basis,
+						"requisit": requisit if traegt else "",
+					}
+				)
 			)
-			eigene.append(Vector3(punkte[idx]) + jitter)
-			idx = (idx + 1 + rng.randi_range(0, punkte.size() - 2)) % punkte.size()
-		var felle := CityFussgaenger.FELLE
+	var sitze_raw: Variant = plan_konfig.get("sitze", [])
+	var sitze: Array = sitze_raw if sitze_raw is Array else []
+	for s in mini(sitze.size(), SITZE_MAX):
+		var sitz: Dictionary = sitze[s] if sitze[s] is Dictionary else {}
 		(
 			out
 			. append(
 				{
-					"punkte": eigene,
-					"tempo": rng.randf_range(TEMPO_MIN, TEMPO_MAX),
-					"pause_s": rng.randf_range(PAUSE_MIN_S, PAUSE_MAX_S),
-					"phase": rng.randf(),
+					"punkte": [Vector3(sitz.get("pos", Vector3.ZERO))],
+					"tempo": 0.0,
+					"pause_s": 0.0,
+					"phase": 0.0,
 					"tint": Color(felle[rng.randi_range(0, felle.size() - 1)]),
 					"hut":
 					rng.randi_range(0, HUT_FARBEN.size() - 1) if rng.randf() < HUT_ANTEIL else -1,
-					"greift": rng.randf() < GREIFER_ANTEIL,
-					"blick": Vector3(plan_konfig.get("blick", Vector3(0.0, 0.0, -4.0))),
+					"greift": false,
+					"blick": Vector3(sitz.get("blick", blick_basis)),
+					"sitzt": true,
+					"requisit": str(sitz.get("requisit", "")),
 				}
 			)
 		)
 	return out
+
+
+## Besucher-Slots einer Konfig (Geher + Sitzer, nach Kappen) — pure Wache
+## für die „Jeder Ort lebt“-Tests (G8-P1).
+static func besucher_slots(plan_konfig: Dictionary) -> int:
+	var punkte_raw: Variant = plan_konfig.get("punkte", [])
+	var punkte: Array = punkte_raw if punkte_raw is Array else []
+	var geher := mini(int(plan_konfig.get("besucher", 0)), BESUCHER_MAX)
+	if punkte.size() < 2:
+		geher = 0
+	var sitze_raw: Variant = plan_konfig.get("sitze", [])
+	var sitze: Array = sitze_raw if sitze_raw is Array else []
+	return geher + mini(sitze.size(), SITZE_MAX)
 
 
 ## Zustand eines Besuchers nach `sekunden` (PURE): läuft die eigene
@@ -176,7 +272,14 @@ static func zustand(plan: Dictionary, sekunden: float) -> Dictionary:
 	if punkte.is_empty():
 		return {"pos": Vector3.ZERO, "heading": 0.0, "steht": true, "pause_frac": 0.0}
 	if punkte.size() < 2:
-		return {"pos": punkte[0], "heading": 0.0, "steht": true, "pause_frac": 0.0}
+		# Einzelplatz (G8-P1 Sitzer): sitzen bleiben, zum Blickpunkt drehen.
+		var sitz_blick := Vector3(plan.get("blick", Vector3(0.0, 0.0, -4.0))) - Vector3(punkte[0])
+		return {
+			"pos": punkte[0],
+			"heading": atan2(sitz_blick.x, sitz_blick.z),
+			"steht": true,
+			"pause_frac": 0.0,
+		}
 	var tempo := maxf(0.05, float(plan.get("tempo", TEMPO_MIN)))
 	var pause := maxf(0.0, float(plan.get("pause_s", PAUSE_MIN_S)))
 	var laengen: Array[float] = []
@@ -209,6 +312,12 @@ static func zustand(plan: Dictionary, sekunden: float) -> Dictionary:
 			}
 		t -= pause
 	return {"pos": punkte[0], "heading": 0.0, "steht": true, "pause_frac": 0.0}
+
+
+## Momente der Konfig (G8-P1) — [] wenn keine konfiguriert.
+func momente_liste() -> Array:
+	var raw: Variant = konfig.get("momente", [])
+	return raw if raw is Array else []
 
 
 ## Nächste Spruch-Zeile einer Domain (Rotation, Muster UrlaubsSprueche).
@@ -244,6 +353,24 @@ func ist_statisch() -> bool:
 	return _statisch
 
 
+## G8-P1: Anzahl gespawnter Wartebank-Sitzer.
+func sitzer_anzahl() -> int:
+	var n := 0
+	for eintrag in _besucher:
+		if bool((eintrag["plan"] as Dictionary).get("sitzt", false)):
+			n += 1
+	return n
+
+
+## G8-P1: Anzahl Besucher mit Trage-Requisit (Koffer/Paket/…).
+func requisit_anzahl() -> int:
+	var n := 0
+	for eintrag in _besucher:
+		if (eintrag["node"] as Node3D).find_child("Requisit", false, false) != null:
+			n += 1
+	return n
+
+
 ## ---------------------------------------------------------------- intern
 
 
@@ -270,6 +397,9 @@ func _spawne_besucher(alle: Array[Dictionary]) -> void:
 		var hut_index := int(plan.get("hut", -1))
 		if hut_index >= 0:
 			node.add_child(_baue_hut(Color(HUT_FARBEN[hut_index % HUT_FARBEN.size()])))
+		var requisit := str(plan.get("requisit", ""))
+		if not requisit.is_empty():
+			node.add_child(_baue_requisit(requisit))
 		(
 			_besucher
 			. append(
@@ -295,10 +425,14 @@ func _update_besucher() -> void:
 
 ## Clip-Wahl: gehen = walk-Loop; Pause = einmal umsehen (idle_lookaround),
 ## Greifer heben in der zweiten Pausenhälfte kurz den Arm (wave liest als
-## Regal-Griff), danach zurück in den idle-Loop.
+## Regal-Griff), danach zurück in den idle-Loop. Sitzer (G8-P1) laufen
+## über _spiele_sitz_clip (bleiben im sit-Loop).
 func _spiele_clip(eintrag: Dictionary, bei: Dictionary) -> void:
 	var player: AnimationPlayer = eintrag.get("player")
 	if player == null:
+		return
+	if bool((eintrag["plan"] as Dictionary).get("sitzt", false)):
+		_spiele_sitz_clip(eintrag, player)
 		return
 	if not bool(bei["steht"]):
 		_starte_anim(eintrag, player, ["walk", "idle"], "walk")
@@ -317,6 +451,14 @@ func _spiele_clip(eintrag: Dictionary, bei: Dictionary) -> void:
 	if not player.is_playing():
 		var fertig := "griff_fertig" if str(eintrag["anim"]) == "griff" else "schaut_fertig"
 		_starte_anim(eintrag, player, ["idle"], fertig)
+
+
+## Sitzer (G8-P1): im sit-Loop bleiben — nur ein laufender Moment-Clip
+## darf kurz unterbrechen, danach geht es zurück auf den Sitzplatz-Loop.
+func _spiele_sitz_clip(eintrag: Dictionary, player: AnimationPlayer) -> void:
+	if str(eintrag["anim"]) == "moment" and player.is_playing():
+		return
+	_starte_anim(eintrag, player, ["sit", "idle"], "sitzt")
 
 
 ## Erste vorhandene Animation aus `kandidaten` spielen (Importer strippt
@@ -350,6 +492,64 @@ func _update_sprueche(delta: float) -> void:
 			ui_layer, text, {"speaker_3d": eintrag["node"], "dauer_s": SPRUCH_DAUER_S}
 		)
 		return
+
+
+## ------------------------------------------------------ Momente (G8-P1)
+
+
+## Momente-Takt: jede Moment-Uhr läuft über advance_zeit; erster Schuss
+## nach versatz_s, danach alle alle_s Sekunden (deterministisch).
+func _update_momente(delta: float) -> void:
+	var liste := momente_liste()
+	for i in mini(liste.size(), _moment_uhren.size()):
+		var moment: Dictionary = liste[i]
+		var takt := maxf(MOMENT_MIN_TAKT_S, float(moment.get("alle_s", 20.0)))
+		_moment_uhren[i] += delta
+		if _moment_uhren[i] < takt:
+			continue
+		_moment_uhren[i] = 0.0
+		_feuere_moment(moment)
+
+
+## Ein Orts-Moment feuert: Sound (außer stumm), Einmal-Clip eines stehenden
+## Besuchers (außer Reduced Motion — die Besucher stehen dort ohnehin) und
+## optional eine Zeile aus der Moment-eigenen Spruch-Domain über ihm.
+func _feuere_moment(moment: Dictionary) -> void:
+	momente_gefeuert += 1
+	letzter_moment = moment
+	var sound := str(moment.get("sound", ""))
+	if not sound.is_empty() and not stumm:
+		AudioDirector.try_play(self, sound, float(moment.get("pitch", 1.0)))
+	var eintrag := _moment_besucher()
+	if eintrag.is_empty():
+		return
+	var clip := str(moment.get("clip", ""))
+	var player: AnimationPlayer = eintrag.get("player")
+	if not clip.is_empty() and not _statisch and player != null:
+		# Merker leeren, damit derselbe Moment-Clip erneut anlaufen darf.
+		eintrag["anim"] = ""
+		_starte_anim(eintrag, player, [clip, "idle"], "moment")
+	var domain := str(moment.get("sprueche", ""))
+	if domain.is_empty() or ui_layer == null or not is_instance_valid(ui_layer):
+		return
+	var text := naechster_spruch(domain)
+	if not text.is_empty():
+		AcBubble.show_bubble(
+			ui_layer, text, {"speaker_3d": eintrag["node"], "dauer_s": SPRUCH_DAUER_S}
+		)
+
+
+## Moment-Darsteller wählen: rotiert über den Feuer-Zähler, bevorzugt
+## einen Besucher, der gerade steht/sitzt (Einmal-Clips wirken im Stand).
+func _moment_besucher() -> Dictionary:
+	if _besucher.is_empty():
+		return {}
+	var start := (momente_gefeuert - 1) % _besucher.size()
+	for schritt in _besucher.size():
+		var eintrag: Dictionary = _besucher[(start + schritt) % _besucher.size()]
+		if bool(zustand(eintrag["plan"], _zeit).get("steht", false)):
+			return eintrag
+	return _besucher[start]
 
 
 ## Fell-Tint über den GETEILTEN Material-Cache: gleiche Farbe + gleiches
@@ -406,3 +606,78 @@ static func _hut_material(farbe: Color) -> StandardMaterial3D:
 		mat.roughness = 0.8
 		_hut_mat_cache[key] = mat
 	return _hut_mat_cache[key]
+
+
+## G8-P1: Trage-Requisit am Besucher-Node (Muster Hut) — prozedurale
+## Mini-Props (2–3 Meshes, geteilte Materialien, Schatten aus). Gooby ist
+## ~1,14 m hoch und ~0,67 m breit — Pfoten-Höhe ≈ 0,4 m, Seite ≈ 0,42 m.
+func _baue_requisit(art: String) -> Node3D:
+	var wurzel := Node3D.new()
+	wurzel.name = "Requisit"
+	var farbe: Color = REQUISIT_FARBEN.get(art, Color.WHITE)
+	match art:
+		"koffer":
+			# Rollkoffer neben der Pfote: Korpus + Teleskop-Griff.
+			wurzel.position = Vector3(0.42, 0.0, 0.06)
+			wurzel.add_child(_req_box(Vector3(0.13, 0.34, 0.24), farbe, Vector3(0.0, 0.2, 0.0)))
+			wurzel.add_child(
+				_req_box(Vector3(0.03, 0.3, 0.03), farbe.darkened(0.25), Vector3(0.0, 0.5, -0.08))
+			)
+			wurzel.add_child(
+				_req_box(Vector3(0.12, 0.03, 0.03), farbe.darkened(0.25), Vector3(0.0, 0.66, -0.08))
+			)
+		"paket":
+			# Paket vor dem Bauch, Klebeband-Streifen obenauf.
+			wurzel.position = Vector3(0.0, 0.4, 0.3)
+			wurzel.add_child(_req_box(Vector3(0.3, 0.2, 0.22), farbe, Vector3.ZERO))
+			wurzel.add_child(
+				_req_box(Vector3(0.31, 0.02, 0.07), Color("#F0E6D2"), Vector3(0.0, 0.1, 0.0))
+			)
+		"kuscheltier":
+			# Mini-Kuschelhase im Arm: Körper + zwei Ohren.
+			wurzel.position = Vector3(0.16, 0.42, 0.26)
+			wurzel.add_child(_req_kugel(0.09, farbe, Vector3.ZERO))
+			wurzel.add_child(_req_kugel(0.032, farbe, Vector3(-0.04, 0.11, 0.0)))
+			wurzel.add_child(_req_kugel(0.032, farbe, Vector3(0.04, 0.11, 0.0)))
+		"taschentuch":
+			# Taschentuch in der Pfote (Apotheken-Wartebank).
+			wurzel.position = Vector3(0.2, 0.42, 0.2)
+			wurzel.add_child(_req_box(Vector3(0.11, 0.015, 0.08), farbe, Vector3.ZERO))
+		_:
+			pass
+	return wurzel
+
+
+func _req_box(groesse: Vector3, farbe: Color, pos: Vector3) -> MeshInstance3D:
+	var mi := MeshInstance3D.new()
+	var mesh := BoxMesh.new()
+	mesh.size = groesse
+	mi.mesh = mesh
+	mi.material_override = _req_material(farbe)
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mi.position = pos
+	return mi
+
+
+func _req_kugel(radius: float, farbe: Color, pos: Vector3) -> MeshInstance3D:
+	var mi := MeshInstance3D.new()
+	var mesh := SphereMesh.new()
+	mesh.radius = radius
+	mesh.height = radius * 2.0
+	mesh.radial_segments = 12
+	mesh.rings = 6
+	mi.mesh = mesh
+	mi.material_override = _req_material(farbe)
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mi.position = pos
+	return mi
+
+
+static func _req_material(farbe: Color) -> StandardMaterial3D:
+	var key := farbe.to_html(false)
+	if not _req_mat_cache.has(key):
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = farbe
+		mat.roughness = 0.85
+		_req_mat_cache[key] = mat
+	return _req_mat_cache[key]

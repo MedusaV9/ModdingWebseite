@@ -6,6 +6,9 @@ extends OrtScene
 ## (Zahnbürsten in 3 Qualitäten, Pflaster, Schlafmaske) via GoobymanSheet.
 ## Kauft man 5+ Artikel auf einmal, wirft sich der Verkäufer den
 ## „GOOBYMAN“-Handtuch-Umhang um (prozedurales Mesh + Tween, Doc H §4.3).
+## G8-P1 „Jeder Ort lebt“ (PT2-B4): stöbernde Kundschaft zwischen den
+## Regalen, der Verkäufer tippt an der Kasse (KassenNpc) und die Momente
+## liefern Helden-Fans + Parfüm-Probe (die W17-Deko bleibt unangetastet).
 
 const INNEN := "res://assets/city/innen"
 ## ASSET-SOURCE (W17): neue CC0-Laden-Modelle — docs/godot-rewrite/ASSET-CREDITS.md.
@@ -69,8 +72,55 @@ func oeffne_laden() -> void:
 
 
 func _on_gekauft(_ware_id: String) -> void:
-	if rig != null and not _umhang_laeuft:
+	if _umhang_laeuft:
+		return
+	# G8-P1: Kassen-Piep + Winken übernimmt der KassenNpc (Muster rehwei).
+	if kassen_npc != null:
+		kassen_npc.kunde_zahlt()
+	elif rig != null:
 		rig.play_clip("wave")
+
+
+## G8-P1: Drogerie-Leben — drei Kunden stöbern Tiegel-Ecke, Gänge und
+## Nachschub-Zone ab (KEINE Deko-Umbauten, nur Wege zwischen der W17-
+## Einrichtung). Momente: Helden-Fan-Jubel („GOOBYMAN!“) und die
+## Parfüm-Probe (care_wasser hochgestimmt = Pssst-pssst-Zerstäuber).
+func _leben_konfig() -> Dictionary:
+	return {
+		"besucher": 3,
+		"punkte":
+		[
+			Vector3(-3.3, 0.0, -1.3),
+			Vector3(-1.7, 0.0, 0.9),
+			Vector3(2.3, 0.0, 1.3),
+			Vector3(-4.6, 0.0, -0.4),
+			Vector3(4.6, 0.0, -2.2),
+		],
+		"sprueche": "goobyman",
+		"blick": Vector3(0.0, 0.0, -3.6),
+		"gemurmel": true,
+		"tuer_glocke": true,
+		"kasse": true,
+		"momente":
+		[
+			{
+				"alle_s": 23.0,
+				"versatz_s": 7.0,
+				"sound": "emo_stolz",
+				"pitch": 1.05,
+				"clip": "celebrate",
+				"sprueche": "goobyman_fans",
+			},
+			{
+				"alle_s": 29.0,
+				"versatz_s": 17.0,
+				"sound": "care_wasser",
+				"pitch": 1.5,
+				"clip": "hop",
+				"sprueche": "goobyman_probe",
+			},
+		],
+	}
 
 
 ## Prozedurales Laden-Schild über der Theke (Doc H §6.4 „Logo“ ohne

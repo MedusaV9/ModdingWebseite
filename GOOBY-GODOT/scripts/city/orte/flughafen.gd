@@ -17,11 +17,21 @@ extends OrtScene
 ## 3. URLAUBS-BONUS-SYNC — die Abholung passiert HIER (ReiseApp-Sheet),
 ##    also spiegelt der Flughafen nach jeder vacation-Änderung sofort
 ##    Erholungs-Buff + Weltengooby-Feier (UrlaubsBonus.sync, idempotent).
+##
+## G8-P1 „Jeder Ort lebt“ (PT2-B4): Abflughalle! Rollkoffer-Goobys
+## schlendern zwischen Anzeigetafeln und Schalter, zwei Wartebank-Gäste
+## schauen aufs Board, dazu Durchsage-Bing, Abflug-Whoosh und der
+## Verspätungs-Seufzer (OrtLeben-Momente). GOOBY-FREE bleibt unberührt.
 
 const Vacation := preload("res://scripts/logic/vacation.gd")
 const Economy := preload("res://scripts/logic/economy.gd")
 
 const INNEN := "res://assets/city/innen"
+
+## G8-P1 Wartebank (Kisten-Muster GOOBYTHEKE): 2 m Basis × 0,55 = 1,1 m
+## breit, Deckel bei 0,8 × 0,55 = 0,44 m — Blick zur linken Anzeigetafel.
+const WARTEBANK_POS := Vector3(-3.8, 0.0, 0.0)
+const WARTEBANK_SITZ_Y := 0.44
 
 ## GOOBY-FREE-Sortiment: typ "moebel" → home.storage (StorageLogic),
 ## typ "snack" → inventory.food. Preise BEWUSST über Normalniveau
@@ -130,10 +140,75 @@ func _baue_innenraum() -> void:
 	_prop("%s/menu.gltf" % INNEN, Vector3(-2.6, 0.0, -3.4), 0.0, 2.0)
 	_prop("%s/menu.gltf" % INNEN, Vector3(2.6, 0.0, -3.4), 0.0, 2.0)
 	_baue_gfree_stand(Vector3(3.4, 0.0, -1.6), -30.0)
+	# G8-P1 Wartebank in der Halle — die OrtLeben-Sitzer nehmen darauf
+	# Platz (Sitzhöhe = Kistendeckel, s. Konstanten).
+	_prop("%s/crate.gltf" % INNEN, WARTEBANK_POS, -12.0, 0.55)
 
 
 func _npc_konfig() -> Dictionary:
 	return {"tint": Color("#9BB7E8"), "emotion": "happy", "pos": Vector3(0.0, 0.0, -2.2)}
+
+
+## G8-P1: Abflughallen-Leben — drei Reisende ziehen ihre Rollkoffer
+## zwischen Boards, Schalter und GOOBY-FREE-Ecke, zwei Wartebank-Gäste
+## (einer mit Koffer) schauen zur Anzeigetafel, der Schalter-NPC tippt
+## Check-ins (KassenNpc). Momente: Durchsage-Bing (alle schauen hoch),
+## Abflug-Whoosh (jemand winkt der Maschine) und der Verspätungs-Seufzer.
+func _leben_konfig() -> Dictionary:
+	return {
+		"besucher": 3,
+		# z ≤ 1,6 hält die Reisenden im Kamera-Mittelgrund (Ort-Kamera
+		# steht bei z 4,2 — tiefere Punkte werden Vordergrund-Riesen).
+		"punkte":
+		[
+			Vector3(-2.5, 0.0, 0.4),
+			Vector3(-1.2, 0.0, 1.5),
+			Vector3(1.5, 0.0, 1.6),
+			Vector3(2.5, 0.0, -0.2),
+		],
+		"requisit": "koffer",
+		"sprueche": "flughafen",
+		"blick": Vector3(-2.6, 0.0, -3.4),
+		"gemurmel": true,
+		"tuer_glocke": false,
+		"kasse": true,
+		"sitze":
+		[
+			{
+				"pos": Vector3(-3.95, WARTEBANK_SITZ_Y, 0.25),
+				"requisit": "koffer",
+				"blick": Vector3(-2.6, 0.0, -3.4),
+			},
+			{"pos": Vector3(-3.55, WARTEBANK_SITZ_Y, -0.2), "blick": Vector3(-2.6, 0.0, -3.4)},
+		],
+		"momente":
+		[
+			{
+				"alle_s": 21.0,
+				"versatz_s": 4.0,
+				"sound": "mg_go",
+				"pitch": 0.85,
+				"clip": "idle_lookaround",
+				"sprueche": "flughafen_durchsage",
+			},
+			{
+				"alle_s": 31.0,
+				"versatz_s": 15.0,
+				"sound": "travel_whoosh_auf",
+				"pitch": 0.9,
+				"clip": "wave",
+				"sprueche": "flughafen_abflug",
+			},
+			{
+				"alle_s": 43.0,
+				"versatz_s": 27.0,
+				"sound": "emo_muede",
+				"pitch": 1.1,
+				"clip": "refuse",
+				"sprueche": "flughafen_verspaetung",
+			},
+		],
+	}
 
 
 func _baue_ui() -> void:

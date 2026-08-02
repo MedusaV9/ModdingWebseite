@@ -1,10 +1,13 @@
 extends "res://tests/tools/playtest_flows/flow_pt2_basis.gd"
-## PT-2 Flow (a) „Stadt-Rundgang“ (Welle H): mit dem Auto in die Stadt,
-## Stadtleben prüfen (Verkehr + Fußgänger, FIX-5), dann vier Orte wie ein
-## Spieler betreten und verlassen (REHWEI, GOOBYTHEKE, Flughafen, Post) —
-## je Ort: Betreten-Prompt, Energie-Abzug (Zentrum −4, Flughafen −6),
-## Ambient-Leben (G7-P55) und der Rückweg in die Stadt. Am Ende kostenlos
-## „Nach Hause“. Aufruf: tools/ci/run_playtest.sh flow_pt2_stadtrundgang
+## PT-2 Flow (a) „Stadt-Rundgang“ (Welle H, G8-P1): mit dem Auto in die
+## Stadt, Stadtleben prüfen (Verkehr + Fußgänger, FIX-5), dann ALLE zehn
+## immer offenen Orte wie ein Spieler betreten und verlassen — je Ort:
+## Betreten-Prompt, Energie-Abzug (Zentrum −4, Gewerbe −5, Flughafen −6),
+## Ambient-Leben als PFLICHT-Sonde (G8-P1 „Jeder Ort lebt“, Fix PT2-B4)
+## und der Rückweg in die Stadt. Am Ende kostenlos „Nach Hause“.
+## Wochenmarkt (nur samstags 8–14 Uhr, eigener Flow flow_pt2_wochenmarkt)
+## und Funkelpark (eigenes Park-Besucher-System) bleiben bewusst außen vor.
+## Aufruf: tools/ci/run_playtest.sh flow_pt2_stadtrundgang
 
 ## Energie-Toleranz: zwischen merken und betreten tickt die Stat-Sim weiter.
 const ENERGIE_TOLERANZ := 1.5
@@ -31,6 +34,12 @@ func schritte() -> Array[Dictionary]:
 					"funktion": stadt_lebt,
 					"erwartung": "Verkehr UND Fußgänger unterwegs (FIX-5)",
 				},
+				{
+					"name": "proviant_fuer_den_rundgang",
+					"aktion": "tue",
+					"funktion": _energie_auffuellen,
+					"erwartung": "Energie voll (10 Orte kosten zusammen ~44)",
+				},
 			]
 		)
 	)
@@ -38,6 +47,25 @@ func schritte() -> Array[Dictionary]:
 	liste.append_array(_ort_besuch("goobytheke", "OrtGoobytheke", 4.0))
 	liste.append_array(_ort_besuch("flughafen", "OrtFlughafen", 6.0))
 	liste.append_array(_ort_besuch("post", "OrtPost", 4.0))
+	liste.append_array(_ort_besuch("baumarkt", "OrtBaumarkt", 5.0))
+	liste.append_array(_ort_besuch("autohaus", "OrtAutohaus", 5.0))
+	(
+		liste
+		. append_array(
+			[
+				{
+					"name": "proviant_nachschlag",
+					"aktion": "tue",
+					"funktion": _energie_auffuellen,
+					"erwartung": "Energie wieder voll (zweite Rundgangs-Hälfte)",
+				},
+			]
+		)
+	)
+	liste.append_array(_ort_besuch("goobyman", "OrtGoobyman", 4.0))
+	liste.append_array(_ort_besuch("pow", "OrtPow", 4.0))
+	liste.append_array(_ort_besuch("tierarzt", "OrtTierarzt", 4.0))
+	liste.append_array(_ort_besuch("gouhbus", "OrtGouhbus", 4.0))
 	(
 		liste
 		. append_array(
@@ -57,7 +85,8 @@ func schritte() -> Array[Dictionary]:
 
 
 ## Ein Orts-Besuch: vorfahren → Prompt → betreten (Energie prüfen) →
-## Ambient-Leben ansehen → verlassen (zurück in die Stadt am Bordstein).
+## Ambient-Leben ansehen (PFLICHT seit G8-P1) → verlassen (zurück in die
+## Stadt am Bordstein).
 func _ort_besuch(ort_id: String, klasse: String, energie_kosten: float) -> Array[Dictionary]:
 	return [
 		{
@@ -96,8 +125,7 @@ func _ort_besuch(ort_id: String, klasse: String, energie_kosten: float) -> Array
 			"name": "leben_%s" % ort_id,
 			"aktion": "tue",
 			"funktion": ort_lebt,
-			"erwartung": "OrtLeben-Besucher im Laden (G7-P55)",
-			"pflicht": false,
+			"erwartung": "OrtLeben-Besucher im Laden (G8-P1 „Jeder Ort lebt“)",
 		},
 		{
 			"name": "verlassen_%s" % ort_id,
@@ -108,6 +136,18 @@ func _ort_besuch(ort_id: String, klasse: String, energie_kosten: float) -> Array
 		},
 		{"name": "wieder_stadt_%s" % ort_id, "aktion": "warte", "sekunden": 2.0},
 	]
+
+
+## Rundgangs-Proviant: 10 Orte kosten zusammen ~44 Energie — ohne
+## Auffüllen würde die Betreten-Wache der Stadt (Energie < Kosten) den
+## Rundgang hinten heraus abweisen.
+func _energie_auffuellen() -> bool:
+	var gs := game_state()
+	if gs == null:
+		return false
+	gs.set_value("gooby.stats.energy", 100.0)
+	print("[PT2] Energie auf 100 aufgefüllt (Rundgangs-Proviant)")
+	return true
 
 
 func _energie_abzug_ok(ort_id: String, kosten: float) -> bool:

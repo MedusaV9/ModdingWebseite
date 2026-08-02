@@ -4,6 +4,9 @@ extends OrtScene
 ## echten Wagen aus dem CarDef-Katalog (AutoKatalog → assets/city/autos),
 ## Teppich, Topfpflanze. Kauf + Farbwahl laufen über das AutohausSheet;
 ## das aktive Auto ist der Contract für die Fahr-Minispiele.
+## G8-P1 „Jeder Ort lebt“ (PT2-B4): Kundschaft umkreist ehrfürchtig die
+## Stellplätze (Blick auf den Mittelwagen), dazu die Momente Probesitz-
+## Hupe (jemand hat den roten Knopf gefunden) und Traumwagen-Seufzer.
 
 const MOEBEL := "res://assets/furniture"
 ## Stellplätze im Raum (Reihenfolge = Katalog-Reihenfolge ab dem 2. Wagen).
@@ -82,3 +85,45 @@ func _on_gekauft(_auto_id: String) -> void:
 	if rig != null:
 		rig.play_clip("wave")
 	zeige_toast(I18nService.t("city.autohaus.gekauft_toast"))
+
+
+## G8-P1: Showroom-Leben — drei Interessenten schleichen um die drei
+## Stellplätze (Blick auf den Mittelwagen), andächtig OHNE Gemurmel.
+## Momente: die Probesitz-Hupe (city_hupe — alle hüpfen) und der
+## Traumwagen-Seufzer (emo_verliebt + Jubelpose). Kein KassenNpc —
+## Blechbert steht frei im Raum, kein Tresen (er winkt beim Kauf selbst).
+func _leben_konfig() -> Dictionary:
+	return {
+		"besucher": 3,
+		"punkte":
+		[
+			Vector3(-4.0, 0.0, 0.2),
+			Vector3(-1.8, 0.0, 1.6),
+			Vector3(0.2, 0.0, -0.7),
+			Vector3(3.8, 0.0, -0.5),
+		],
+		"sprueche": "autohaus",
+		"blick": Vector3(0.2, 0.0, -2.4),
+		"gemurmel": false,
+		"tuer_glocke": true,
+		"kasse": false,
+		"momente":
+		[
+			{
+				"alle_s": 22.0,
+				"versatz_s": 8.0,
+				"sound": "city_hupe",
+				"pitch": 1.1,
+				"clip": "hop",
+				"sprueche": "autohaus_hupe",
+			},
+			{
+				"alle_s": 33.0,
+				"versatz_s": 19.0,
+				"sound": "emo_verliebt",
+				"pitch": 1.0,
+				"clip": "celebrate",
+				"sprueche": "autohaus_traum",
+			},
+		],
+	}

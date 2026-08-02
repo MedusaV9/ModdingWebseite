@@ -3,6 +3,9 @@ extends OrtScene
 ## POW! — Action-Laden (Doc E §2.3): Verkäufer „Bäm“ zwischen Regalen voller
 ## Dinge, die blinken oder umfallen. Verkauft die KAMERA (Gate für den
 ## Fotomodus, USER §E61) und 3 Tagesangebote (PowAngebote, deterministisch).
+## G8-P1 „Jeder Ort lebt“ (PT2-B4): staunende Kundschaft vor den Regalen,
+## Bäm tippt an der Kasse (KassenNpc) und die Momente machen dem Laden-
+## Namen Ehre — Gadget-POW (Schreck-Hopser) und der klassische Umfaller.
 
 const INNEN := "res://assets/city/innen"
 const MOEBEL := "res://assets/furniture"
@@ -38,9 +41,53 @@ func oeffne_laden() -> void:
 
 
 func _on_gekauft(ware_id: String) -> void:
-	if rig != null:
+	# G8-P1: Kassen-Piep + Winken übernimmt der KassenNpc (Muster rehwei).
+	if kassen_npc != null:
+		kassen_npc.kunde_zahlt()
+	elif rig != null:
 		rig.play_clip("wave")
 	if ware_id == PowAngebote.KAMERA_ITEM:
 		zeige_toast(I18nService.t("city.pow.kamera_gekauft"))
 		return
 	zeige_toast(I18nService.t("city.ort.item_erhalten"))
+
+
+## G8-P1: Action-Laden-Leben — drei Staunende ziehen an Bären-Regal,
+## Radio-Bord und Kisten-Ecke vorbei (Blick zur Regalwand). Momente:
+## Gadget-POW (gvz_pop — irgendwas ist losgegangen, alle hüpfen) und der
+## Umfaller (mg_junk tiefgestimmt — „Ich war das nicht!“).
+func _leben_konfig() -> Dictionary:
+	return {
+		"besucher": 3,
+		"punkte":
+		[
+			Vector3(-4.2, 0.0, -1.6),
+			Vector3(-2.2, 0.0, -1.8),
+			Vector3(-0.6, 0.0, 0.9),
+			Vector3(2.6, 0.0, 1.7),
+		],
+		"sprueche": "pow",
+		"blick": Vector3(0.0, 0.0, -3.6),
+		"gemurmel": true,
+		"tuer_glocke": true,
+		"kasse": true,
+		"momente":
+		[
+			{
+				"alle_s": 18.0,
+				"versatz_s": 6.0,
+				"sound": "gvz_pop",
+				"pitch": 1.2,
+				"clip": "hop",
+				"sprueche": "pow_boom",
+			},
+			{
+				"alle_s": 27.0,
+				"versatz_s": 15.0,
+				"sound": "mg_junk",
+				"pitch": 0.9,
+				"clip": "idle_lookaround",
+				"sprueche": "pow_umfaller",
+			},
+		],
+	}

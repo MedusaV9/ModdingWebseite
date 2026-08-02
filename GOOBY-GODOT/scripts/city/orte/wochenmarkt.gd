@@ -11,6 +11,11 @@ extends OrtScene
 ## stolz mit Schürze dahinter (Schürze-Gag), bestückte Ware liegt sichtbar
 ## auf dem Tisch und Kunden-Goobys schauen vorbei — beim Zuschau-Replay
 ## hüpfen sie zu jedem Verkaufs-Pling mit.
+##
+## G8-P1 „Jeder Ort lebt“ (PT2-B4): die Eigenstand-Kunden kommen erst mit
+## bestücktem Stand — der Grund-Markt bekommt deshalb OrtLeben-Bummler
+## (Paket-Träger zwischen den Buden, ein Bank-Ausruher) plus Markt-Momente
+## (Marktschreier-Glocke, Melonen-Schnäppchen). W17-Deko bleibt unberührt.
 
 const INNEN := "res://assets/city/innen"
 const ESSEN := "res://assets/city/essen"
@@ -108,6 +113,57 @@ func _dialog_pfad() -> String:
 
 func _npc_konfig() -> Dictionary:
 	return {"tint": Color("#4FBF8B"), "emotion": "happy", "pos": Vector3(0.0, 0.0, -2.4)}
+
+
+## G8-P1: Markt-Bummel — drei Bummler ziehen durch die Budengasse (gut
+## 60 % mit Einkaufs-Paket), einer sitzt auf der hinteren Vorrats-Kiste
+## (Deckel 0,8 × Skala 0,7 = 0,56 m) und schaut übers Treiben — die
+## Gartenbank bei x 5,6 läge außerhalb des 75°-Kamerakegels. Unter freiem
+## Himmel: Gemurmel JA, Türglocke NEIN. Momente: die Marktschreier-Glocke
+## (laden_glocke TIEF als Handglocke) und das Melonen-Schnäppchen
+## (mg_good = plumpst in die Tasche). Eigenstand-Kunden bleiben unberührt.
+func _leben_konfig() -> Dictionary:
+	return {
+		"besucher": 3,
+		# z ≤ 1,6 hält die Bummler im Kamera-Mittelgrund (s. flughafen.gd).
+		"punkte":
+		[
+			Vector3(-4.6, 0.0, 0.6),
+			Vector3(0.2, 0.0, -0.4),
+			Vector3(2.6, 0.0, -1.0),
+			Vector3(4.6, 0.0, 0.4),
+			Vector3(2.0, 0.0, 1.6),
+		],
+		"requisit": "paket",
+		"sprueche": "markt",
+		"blick": Vector3(0.0, 0.0, -3.6),
+		"gemurmel": true,
+		"tuer_glocke": false,
+		"kasse": false,
+		"sitze":
+		[
+			{"pos": Vector3(4.2, 0.56, -1.75), "blick": Vector3(0.0, 0.0, 2.0)},
+		],
+		"momente":
+		[
+			{
+				"alle_s": 19.0,
+				"versatz_s": 5.0,
+				"sound": "laden_glocke",
+				"pitch": 0.75,
+				"clip": "wave",
+				"sprueche": "wochenmarkt_schreier",
+			},
+			{
+				"alle_s": 28.0,
+				"versatz_s": 16.0,
+				"sound": "mg_good",
+				"pitch": 1.1,
+				"clip": "hop",
+				"sprueche": "wochenmarkt_ernte",
+			},
+		],
+	}
 
 
 ## Wochenmarkt VERKAUFT nicht, er KAUFT — plus (W15) der EIGENE Stand.

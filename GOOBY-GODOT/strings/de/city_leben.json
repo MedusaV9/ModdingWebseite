@@ -26,6 +26,145 @@
         "Der Stand da drüben duftet herrlich.",
         "Samstag ist einfach der beste Tag.",
         "Eine Kostprobe geht immer."
+      ],
+      "goobytheke": [
+        "Hier riecht es nach Kräutern und Geheimnissen.",
+        "Ein Tütchen Gute-Laune-Tee, bitte!",
+        "Hilde weiß bestimmt, was hilft.",
+        "Nur gucken, nicht niesen. Nur gucken …",
+        "Welcher Tiegel ist der glitzerige?"
+      ],
+      "goobytheke_niesen": [
+        "HATSCHI! … Tschuldigung.",
+        "Gute Besserung!",
+        "Gesundheit! Das klang gewaltig."
+      ],
+      "goobytheke_tiegel": [
+        "Klirr, klirr — die Tiegel singen.",
+        "Vorsicht, das Regal wackelt gern."
+      ],
+      "post": [
+        "Paket abholen, Paket abgeben, Paket knuddeln.",
+        "Die Schlange ist heute kurz. Verdächtig kurz.",
+        "Ob mein Brief schon da ist?",
+        "Ich liebe den Geruch von Packpapier.",
+        "Frau Zettel stempelt wie ein Uhrwerk."
+      ],
+      "post_stempel": [
+        "KLACK! Abgestempelt.",
+        "Dieser Stempel bedeutet: FERTIG.",
+        "Ein Stempel am Tag hält die Post in Schwung."
+      ],
+      "post_paket": [
+        "Mein Paket! Endlich!",
+        "Da ist es ja! Ganz ohne Kratzer.",
+        "Was Schweres … bestimmt was Schönes."
+      ],
+      "flughafen": [
+        "Gate 1, Gate 1 … hier ist ÜBERALL Gate 1.",
+        "Rollkoffer sind die schnellsten Haustiere.",
+        "Einmal Urlaub bitte, Fensterplatz!",
+        "Ich bin viel zu früh. Perfekt.",
+        "Wo geht's zum Abflug? Ah, überall."
+      ],
+      "flughafen_durchsage": [
+        "Bing! Das galt bestimmt mir.",
+        "Letzter Aufruf? ICH KOMME!",
+        "Bitte nicht mein Gate, bitte nicht mein Gate …"
+      ],
+      "flughafen_abflug": [
+        "Da fliegt sie! Winke, winke!",
+        "Gute Reise, kleines Flugzeug."
+      ],
+      "flughafen_verspaetung": [
+        "Verspätung. Na toll. Mehr Snackzeit!",
+        "Seufz … das Board sagt WARTEN."
+      ],
+      "goobyman": [
+        "Zahnbürste in HELDEN-Qualität, bitte!",
+        "Riecht hier alles nach Abenteuer?",
+        "Pflaster mit Sternchen? Genau meins.",
+        "GOOBYMAN hat bestimmt Rabatt-Tage.",
+        "Dieses Regal glitzert verdächtig schön."
+      ],
+      "goobyman_fans": [
+        "GOOBYMAN! Er ist es WIRKLICH!",
+        "Ein Autogramm auf mein Pflaster, bitte!"
+      ],
+      "goobyman_probe": [
+        "Pssst-pssst. Jetzt dufte ich heldenhaft.",
+        "Hatschi! Zu viel Heldenduft."
+      ],
+      "pow": [
+        "Blinkt das? Das blinkt!",
+        "Ich brauche NICHTS davon. Ich will ALLES davon.",
+        "Bäm hat wieder neue Knallerangebote.",
+        "Nicht anfassen, nicht anfassen … kurz anfassen.",
+        "Die Kamera! Die stand hier doch eben noch."
+      ],
+      "pow_boom": [
+        "POW! Was war DAS?!",
+        "Ich hab NICHTS gedrückt!",
+        "Nochmal! Bitte nochmal!"
+      ],
+      "pow_umfaller": [
+        "Hoppla. Das stand da eben noch.",
+        "Ich war das nicht. Ehrlich."
+      ],
+      "autohaus": [
+        "Der rote sieht schnell aus. Dabei steht er still.",
+        "Einmal Probe sitzen. Nur einmal!",
+        "Glänzt wie frisch poliert. Ist er auch.",
+        "Ob der in meine Garage passt?",
+        "Blechbert poliert bestimmt jede Nacht."
+      ],
+      "autohaus_hupe": [
+        "TUUUT! … Der Knopf war so rot.",
+        "Wer hupt denn da?! Ach. Ich."
+      ],
+      "autohaus_traum": [
+        "DER ist es. Mein Traumwagen!",
+        "Seufz … eines Tages, mein Schöner."
+      ],
+      "tierarzt": [
+        "Ganz ruhig, gleich sind wir dran.",
+        "Mein Flauschi ist heute besonders tapfer.",
+        "Hoffentlich gibt's nachher ein Leckerli.",
+        "Dr. Dr. Möhrchen hat magische Pfoten."
+      ],
+      "tierarzt_tiere": [
+        "HATSCHI! … Das war nicht ich. Das war was GROSSES.",
+        "Was für ein Niesen! Gute Besserung, du Riese."
+      ],
+      "tierarzt_aufruf": [
+        "Kling! Der Nächste, bitte!",
+        "Wir sind dran! Sei tapfer, Flauschi."
+      ],
+      "tierarzt_quietsch": [
+        "Quiiietsch! Das Kuscheltier ist auch nervös.",
+        "Das Quietschen beruhigt. Mich jedenfalls."
+      ],
+      "gouhbus": [
+        "Der Doktor sucht bestimmt wieder seine Brille.",
+        "Drei Doktortitel. DREI.",
+        "Hier riecht es nach … 1987?",
+        "Gleich sagt er wieder GOOOUH."
+      ],
+      "gouhbus_brille": [
+        "Klick, klick. Die Brille war auf der Stirn.",
+        "Er hat drei Brillen. Und findet keine."
+      ],
+      "gouhbus_kaesebrot": [
+        "Das Käsebrot lebt noch. Respekt.",
+        "Mjam? Nein. NEIN."
+      ],
+      "wochenmarkt_schreier": [
+        "Kling-kling! Frische Möhren, ruft die Glocke!",
+        "Letzte Kiste Tomaten! Na gut, vorletzte."
+      ],
+      "wochenmarkt_ernte": [
+        "Plumps! Die Melone ist im Korb.",
+        "Das Schnäppchen des Tages ist MEINS."
       ]
     }
   }

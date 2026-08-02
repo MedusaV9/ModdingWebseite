@@ -26,6 +26,145 @@
         "That stall over there smells wonderful.",
         "Saturday is simply the best day.",
         "There's always room for a taste test."
+      ],
+      "goobytheke": [
+        "It smells like herbs and secrets in here.",
+        "One bag of good-mood tea, please!",
+        "Hilde will know what helps.",
+        "Just looking, not sneezing. Just looking...",
+        "Which jar is the sparkly one?"
+      ],
+      "goobytheke_niesen": [
+        "ACHOO! ...Excuse me.",
+        "Get well soon!",
+        "Bless you! That sounded mighty."
+      ],
+      "goobytheke_tiegel": [
+        "Clink, clink — the jars are singing.",
+        "Careful, that shelf likes to wobble."
+      ],
+      "post": [
+        "Pick up a parcel, drop off a parcel, hug a parcel.",
+        "The queue is short today. Suspiciously short.",
+        "I wonder if my letter is here yet?",
+        "I love the smell of wrapping paper.",
+        "Mrs. Zettel stamps like clockwork."
+      ],
+      "post_stempel": [
+        "CLACK! Stamped.",
+        "This stamp means: DONE.",
+        "A stamp a day keeps the mail on its way."
+      ],
+      "post_paket": [
+        "My parcel! Finally!",
+        "There it is! Not a single scratch.",
+        "Something heavy... surely something lovely."
+      ],
+      "flughafen": [
+        "Gate 1, Gate 1... EVERYTHING here is Gate 1.",
+        "Trolley cases are the fastest pets.",
+        "One vacation please, window seat!",
+        "I'm way too early. Perfect.",
+        "Where's the departure? Ah, everywhere."
+      ],
+      "flughafen_durchsage": [
+        "Bing! That was definitely for me.",
+        "Final call? I'M COMING!",
+        "Please not my gate, please not my gate..."
+      ],
+      "flughafen_abflug": [
+        "There it goes! Wave, wave!",
+        "Safe travels, little plane."
+      ],
+      "flughafen_verspaetung": [
+        "Delayed. Great. More snack time!",
+        "Sigh... the board says WAIT."
+      ],
+      "goobyman": [
+        "One HERO-grade toothbrush, please!",
+        "Does everything here smell like adventure?",
+        "Plasters with little stars? So me.",
+        "GOOBYMAN surely has discount days.",
+        "This shelf sparkles suspiciously nicely."
+      ],
+      "goobyman_fans": [
+        "GOOBYMAN! It's REALLY him!",
+        "An autograph on my plaster, please!"
+      ],
+      "goobyman_probe": [
+        "Psst-psst. Now I smell heroic.",
+        "Achoo! Too much hero scent."
+      ],
+      "pow": [
+        "Is that blinking? That's blinking!",
+        "I need NONE of this. I want ALL of it.",
+        "Bäm has new banger deals again.",
+        "Don't touch it, don't touch it... touch it a little.",
+        "The camera! It was right here a second ago."
+      ],
+      "pow_boom": [
+        "POW! What was THAT?!",
+        "I didn't press ANYTHING!",
+        "Again! Please, again!"
+      ],
+      "pow_umfaller": [
+        "Whoops. That was standing there a moment ago.",
+        "That wasn't me. Honestly."
+      ],
+      "autohaus": [
+        "The red one looks fast. While standing still.",
+        "Just one test sit. Just one!",
+        "Shiny like freshly polished. Because it is.",
+        "Would it fit in my garage?",
+        "Blechbert surely polishes every night."
+      ],
+      "autohaus_hupe": [
+        "HOOONK! ...The button was so red.",
+        "Who's honking?! Oh. Me."
+      ],
+      "autohaus_traum": [
+        "THAT's the one. My dream car!",
+        "Sigh... one day, my beauty."
+      ],
+      "tierarzt": [
+        "Easy now, we're almost up.",
+        "My Fluffy is extra brave today.",
+        "Hopefully there's a treat afterwards.",
+        "Dr. Dr. Möhrchen has magic paws."
+      ],
+      "tierarzt_tiere": [
+        "ACHOO! ...That wasn't me. That was something BIG.",
+        "What a sneeze! Get well soon, you giant."
+      ],
+      "tierarzt_aufruf": [
+        "Ding! Next, please!",
+        "It's our turn! Be brave, Fluffy."
+      ],
+      "tierarzt_quietsch": [
+        "Squeeeak! The plushie is nervous too.",
+        "The squeaking is calming. For me, anyway."
+      ],
+      "gouhbus": [
+        "The doctor is probably looking for his glasses again.",
+        "Three doctorates. THREE.",
+        "It smells like... 1987 in here?",
+        "Any second now he'll say GOOOUH again."
+      ],
+      "gouhbus_brille": [
+        "Click, click. The glasses were on his forehead.",
+        "He owns three pairs of glasses. And finds none."
+      ],
+      "gouhbus_kaesebrot": [
+        "The cheese sandwich is still alive. Respect.",
+        "Yum? No. NO."
+      ],
+      "wochenmarkt_schreier": [
+        "Ding-ding! Fresh carrots, says the bell!",
+        "Last crate of tomatoes! Fine, second to last."
+      ],
+      "wochenmarkt_ernte": [
+        "Plop! The melon is in the basket.",
+        "Today's bargain is MINE."
       ]
     }
   }
