@@ -522,3 +522,111 @@ erst die bereits ausgefadete Endphase. Beobachten, nicht anfassen.
 `build/resources/main/.../storm_godfinger.json` verifiziert (face_velocity false,
 stretch 0.0). Kein Client-Neustart, kein RCON — Live-Reload per F3+T durch den
 Hauptagenten. Nicht committet.
+
+## 10. E5-Nachfix 2: Godfinger-Kamera-Clearance + Sturm-Removal-Anomalien
+
+**Anlass:** Video-Review der E5-In-Context-Abnahme (`e5_review_copy.mp4`, Session
+0802 ~10:19–10:20 UTC) → FAIL wegen (1) scharfkantiger grüner Quad-Schnittkanten
+00:54–00:56, dazu Klärungsbedarf zu (2) Tageslicht-Blitz 00:57–00:58, (3)
+„Explosion" 01:06 und (4) „Cobblestone-Pfeiler" 01:09.
+
+### 10.1 Root Cause (1): Near-Plane-Clipping — fehlende Kamera-Clearance
+
+Mit dem §9-Fix (`face_velocity:false`) billboarden die 3.2–4.2-Block-Quads
+permanent zur Kamera. Der Review-Cast `/eclipsefx emitter storm_godfinger` setzt
+den Emitter AN die Spielerposition; der Spawn-Zylinder (r=1.4, h=9, zentriert)
+legt Partikel direkt in/vor die Near-Plane → harte horizontale Schnittkanten,
+exakt die „fehlende Kamera-Clearance"-Problemklasse aus §1/§3 (F-107/F-108).
+Der Direkt-Cast ist ein Dev-Werkzeug, aber derselbe Defekt war im
+**Produktionspfad** latent: `StormInteriorFx.tickGodFingers` führte die ≤ 2
+Finger-Loops rein geometrisch auf dem 0.35r-Ring (`finger.setPosition(...)` pro
+Tick) — ein Spieler unter/nahe einem Finger bekam dieselben Klingen.
+
+### 10.2 Fix (1): Release-Clearance mit Hysterese in `tickGodFingers`
+
+`StormInteriorFx.java`: zwei neue Konstanten
+`GODFINGER_CAMERA_CLEARANCE = 6.0` / `GODFINGER_CAMERA_REENGAGE = 9.0` (Blöcke,
+horizontal, gegen die Ring-Sollposition des Fingers). Verhalten pro Tick und
+Finger: lebender Finger näher als 6 → `removeEmitter` (Release); released Finger
+erst wieder spawnen, wenn Abstand ≥ 9 (Hysterese-Paar nach dem
+`BREACH_ENTER`/`BREACH_EXIT`-Muster — kein Flackern beim Entlangwaten an der
+Kante). Der Drift-Winkel (`GODFINGER_ANGLES`) läuft während des Release weiter,
+das Muster setzt beim Re-Engage nahtlos fort — kein sichtbares Ruckeln.
+
+Design-Entscheidung **Release statt Winkel-Push**, zwei Gründe: (a)
+Bytecode-Beweis (`veil-neoforge-1.21.1-4.3.0.jar`, `javap -c`):
+`ParticleEmitter.remove()` → `onRemoved()` ruft `QuasarParticle.onRemove()` auf
+**allen lebenden Partikeln** und leert die Liste — die bis zu 70±10 Ticks
+langlebigen Alt-Quads sterben sofort mit. Ein Winkel-Push verschöbe nur den
+Emitter; bereits gespawnte Quads (bis 4.2 Blöcke breit) blieben bis zu ~3.5 s
+an Ort und Stelle und ein schnell fliegender Spieler (Creative ~1 Block/Tick)
+flöge trotzdem hinein. (b) Beim Push würde die Sollposition kameraabhängig —
+Spiegelsprünge beim Queren des Rings wären als Ruckeln sichtbar. Schwellenwahl:
+worst case Quad-Reichweite ab Emitterachse = 1.4 (Zylinder) + 2.1 (halbe
+Quad-Größe) = 3.5 → 6 Blöcke lassen ≥ 2.5 Blöcke Marge (1 Tick Removal-Latenz
+im ParticleSystemManager inklusive); 9 Blöcke Re-Engage = 3 Blöcke Totband.
+Look bleibt erhalten: unter dem Auge (EyeDim-Gate, 0.35r-Ring) stehen die
+Schächte weiterhin „weit weg im Zentrum" — nur die eine Nahpassage setzt aus.
+Emitter-JSON unverändert (kein zwingender Grund; §9-Kuratur bleibt).
+
+### 10.3 Befund (3)+(4): Explosion + Cobblestone-Pfeiler — KEIN Bug, Testszenen-Reveal
+
+**Code-Evidenz — der Removal-Pfad kann weder explodieren noch Blöcke setzen:**
+
+- `/eclipsefx storm remove` sendet `STATE_DISSIPATE` (60 t)
+  (`FxDevCommands.stormRemove`, ~Z. 415–424) — reiner Client-Fade.
+- Die einzige „Explosions"-Optik im Bestand (C8-Burst: Weiß-Blitz,
+  Debris-Ring, violett-weiße Shards) hängt an `STATE_EXPLODE`
+  (`StormFxClient.tickStorm` ~Z. 356–363 → `tickExplosionDebris`;
+  `StormWallRenderer` EXPLODE_*). `StormRegistry.explode` hat genau EINEN
+  Aufrufer: den Fog-Tyrant-Tod (`FogTyrantEntity` ~Z. 1809). Kein
+  Remove-/Retire-Kommando erreicht ihn.
+- `/dev fogsite retire` → `FogStormSites.stormEnded` → `recoverColumn`
+  (~Z. 318–347) setzt ausschließlich `ICE`/`SNOW` in kalten Biomen (Chest-/
+  Campfire-Säulen ausgenommen) — nie Cobblestone. Im Video-Zeitfenster lief
+  ohnehin kein Retire (Server-Konsole 10:19–10:21: nur `tp`-Feedback; die
+  beiden Fog-Sites liegen bei (−173, 60, −173) und (0, 72, −250), die Szene bei
+  ~(100, 110, 96–140)).
+
+**Welt-Evidenz (Region `r.0.0.mca` nach `save-all flush`, NBT-Scan):** Die
+Testbühne steht auf einem Nether-Breach-vernarbten Gelände: 864× Netherrack,
+Magma, Crimson Nylium und **14 echte `minecraft:fire`-Blöcke** (y 73–77, u. a.
+(100, 75, 100), (101, 77, 95), (94, 76, 102)) — auf Netherrack brennt Feuer
+permanent, mit Vanilla-Flammen + Rauchpartikeln. Darüber eine handgebaute
+Quartz-Bühne (582× Quartz, y 79) mit `amethyst_cluster` (100, 80, 108), zwei
+Chests, Lightning-Rod und einem Statue-Mock (Polished Blackstone 3×3 y 74 +
+Obsidian-Säule y 75–79 + **Crying Obsidian** (120–121, 80, 120)). Die
+Kamera-Plattform ist Basalt (169 Blöcke, y 109) mit einem **1×1-Basalt-Mast
+(100, 110–116, 94)** — dem Emitter-Anker früherer A/B-Shots.
+
+**Auflösung der Review-Befunde:** Das Sturm-Interieur deckelt die Sicht auf ~24
+Blöcke Fog + Occluder-Dom. Beim DISSIPATE-Fade wird die Szene schlagartig
+wieder sichtbar: „Explosion (Feuer, Rauch)" = die dauerbrennenden
+Netherrack-Feuer der Breach-Narbe (Frames 01:06–01:08); „lila
+Kristall-Fragmente" = Amethyst-Cluster + Crying-Obsidian-Kopf des Statue-Mocks
+(zusätzlich hält der Spieler selbst einen Crying-Obsidian-Block in der Hand —
+rechts unten im Bild); „Cobblestone-Pfeiler" = der Basalt-Mast (Basalt-
+Seitentextur liest sich in Video-Bitrate als Cobblestone). **Entscheidung: kein
+Mod-Beat, kein Bug — vorbestehende Testszenen-/Worldgen-Requisiten, kein Fix.**
+Einziger echter Mod-Anteil im Reveal: die B13-Schnee-Recovery hätte hier gar
+nicht gefeuert (kein Site-Retire) — der weiße Boden in Frame 01:08 ist die
+Quartz-Bühne, kein Recovery-Schnee.
+
+### 10.4 Einschätzung (2): Tageslicht-Blitz 00:57–00:58 — llvmpipe-Artefakt
+
+Renderer-Artefakt, kein Code-Fix. Die Test-VM rendert GPU-los über llvmpipe und
+loggt durchgehend `GL_INVALID_OPERATION in glBlitFramebuffer (depth attachment
+format mismatch)`; genau diese Klasse ist im Bestand bereits als
+llvmpipe-Spezifikum dokumentiert (`DevFogSiteCommands.retire`-Javadoc:
+Registry-Sturm in Renderdistanz → permanenter Framebuffer-Blit-Fehler auf
+GPU-losen VMs). Der Ein-Frame-Blitz (externer Himmel + Ring + schwebender
+grüner Block im dunklen Interieur) passt zu einem korrupten Blit aus einem
+veralteten/fremden Framebuffer-Attachment; auf GPU-Hardware nicht
+reproduzierbar erwartet. Beobachten, nicht fixen.
+
+### 10.5 Gates + geänderte Dateien
+
+- `src/main/java/dev/projecteclipse/eclipse/stormfx/StormInteriorFx.java` —
+  §10.2-Clearance (2 Konstanten + Release/Re-Engage-Zweig in `tickGodFingers`,
+  Methoden-Javadoc ergänzt). Emitter-JSON unangetastet.
+- `./gradlew compileJava` → **exit 0 (grün)**. Nicht committet.

@@ -183,6 +183,23 @@ public final class StormInteriorFx {
     private static final double GODFINGER_MAX_CENTER_DIST = 48.0D;
     /** Fingers drift slowly around the eye (opposite directions per finger). */
     private static final float GODFINGER_DRIFT_RAD_PER_TICK = 0.003F;
+    /**
+     * E5-Nachfix 2: horizontal camera clearance of a finger's shaft axis (blocks). The
+     * shaft quads billboard ({@code face_velocity:false}) at up to 4.2 blocks size from
+     * a r=1.4 spawn cylinder, so a camera closer than this can catch near-plane cuts —
+     * the F-107/F-108 "missing camera clearance" problem class. Inside this range the
+     * finger RELEASES (removing a Quasar emitter kills its live particles immediately,
+     * {@code ParticleEmitter.onRemoved}), leaving ≥ ~2.5 blocks of margin past the
+     * worst-case quad reach (1.4 + 2.1).
+     */
+    private static final double GODFINGER_CAMERA_CLEARANCE = 6.0D;
+    /**
+     * Hysteresis pair of {@link #GODFINGER_CAMERA_CLEARANCE} (the BREACH_ENTER/EXIT
+     * pattern): a released finger only re-engages beyond this distance, so wading along
+     * the clearance edge never flickers the shaft. The drift angle keeps advancing while
+     * released — the pattern resumes exactly where it would have been.
+     */
+    private static final double GODFINGER_CAMERA_REENGAGE = 9.0D;
 
     /** Ash-devil mini-whirls near the ground (sphere interiors; reducedFx keeps one). */
     private static final int ASH_DEVILS_FULL = 2;
@@ -706,7 +723,12 @@ public final class StormInteriorFx {
      * {@value #MAX_GODFINGERS} managed {@code storm_godfinger} loop emitters drifting
      * slowly around the storm center at ~0.35r offset — pale sick-green shafts falling
      * from the apex. Quality ladder: tier 2 = 2 fingers, tier 1 = 1, tier 0 = none; the
-     * emitters release the moment the interior (or the storm) goes away.
+     * emitters release the moment the interior (or the storm) goes away. E5-Nachfix 2:
+     * a finger whose ring position comes horizontally closer than
+     * {@value #GODFINGER_CAMERA_CLEARANCE} blocks to the camera releases too (its live
+     * quads die with it) and re-engages past {@value #GODFINGER_CAMERA_REENGAGE} blocks
+     * — the shafts always read as falling AWAY in the storm's center, never as
+     * near-plane blades through the camera.
      */
     private static void tickGodFingers(Vec3 camera) {
         StormFxClient.ClientStorm storm = nearestStorm(camera);
@@ -737,12 +759,25 @@ public final class StormInteriorFx {
             double x = storm.center.x + Math.cos(a) * r;
             double y = storm.center.y + storm.radius * 0.45D;
             double z = storm.center.z + Math.sin(a) * r;
-            if (finger == null || finger.isRemoved()) {
+            // E5-Nachfix 2 camera clearance (method doc): release inside CLEARANCE, hold
+            // released until past REENGAGE. The angle above already advanced, so the
+            // drift pattern never jumps — the finger simply sits the close pass out.
+            double camDx = camera.x - x;
+            double camDz = camera.z - z;
+            double camDistSq = camDx * camDx + camDz * camDz;
+            if (finger != null && !finger.isRemoved()) {
+                if (camDistSq < GODFINGER_CAMERA_CLEARANCE * GODFINGER_CAMERA_CLEARANCE) {
+                    removeEmitter(finger);
+                    GODFINGERS[k] = null;
+                } else {
+                    finger.setPosition(x, y, z);
+                }
+                continue;
+            }
+            if (camDistSq >= GODFINGER_CAMERA_REENGAGE * GODFINGER_CAMERA_REENGAGE) {
                 // Budget-refused spawns retry next tick (same rule as the vortex wisps).
                 GODFINGERS[k] = QuasarSpawner.spawnManaged(GODFINGER_EMITTER,
                         new Vec3(x, y, z), FxBudget.Channel.STORM);
-            } else {
-                finger.setPosition(x, y, z);
             }
         }
     }
