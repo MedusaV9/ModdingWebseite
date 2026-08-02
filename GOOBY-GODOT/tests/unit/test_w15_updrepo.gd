@@ -84,7 +84,7 @@ func test_url_klassifikation() -> void:
 	# browser-URL-Zerlegung + API-Äquivalent.
 	var parts := UpdateService.parse_release_download_url(REPO_DL + "/cosmetics-v1.4.0.pck")
 	assert_eq(str(parts.get("owner")), "MedusaV9", "owner")
-	assert_eq(str(parts.get("repo")), "MinecraftBubbleShieldMod", "repo")
+	assert_eq(str(parts.get("repo")), "ModdingWebseite", "repo")
 	assert_eq(str(parts.get("tag")), "updates", "tag")
 	assert_eq(str(parts.get("file")), "cosmetics-v1.4.0.pck", "datei")
 	assert_eq(
