@@ -7,7 +7,7 @@ Eine P1-Durability-Lücke verletzt jedoch bestätigte Einmaligkeit/Idempotenz na
 Prozessabsturz. Zusätzlich ist die robuste Fehlersemantik nicht für alle defekten Nachrichten
 vertragstreu.
 
-Scope: `/workspace/GOOBY-SERVER/**`, Branch `cursor/gooby-godot-rewrite-d1d8`, Node `v22.14.0`.
+Scope: `/workspace/GOOBY-SERVER/**`, Branch `cursor/gooby-godot-rewrite-d1d8` (historisch; heute: `MedusaV9/ModdingWebseite` @ `cursor/bubble-shield-loop`), Node `v22.14.0`.
 Keine Repo-Änderungen; Clients/Harnesses liegen nur unter `/tmp/gooby-godot/eval/`.
 
 ## Findings

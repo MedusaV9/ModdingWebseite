@@ -1,6 +1,6 @@
 # E8 — GOOBY-Charakter (3D-Rig, Pipeline, Voice, Integration)
 
-**Agent:** EVAL-AGENT E8 · **Repo:** `/workspace` · **Branch:** `cursor/gooby-godot-rewrite-d1d8` @ `8cfc20e0`
+**Agent:** EVAL-AGENT E8 · **Repo:** `/workspace` · **Branch:** `cursor/gooby-godot-rewrite-d1d8` (historisch; heute: `MedusaV9/ModdingWebseite` @ `cursor/bubble-shield-loop`) @ `8cfc20e0`
 **Datum:** 2026-07-25 · **Werkzeuge:** Godot 4.4.1, Blender 4.0.2, xvfb, python (gltf/wave-Parser)
 **Repo-Änderungen:** KEINE (`git status` vor und nach dem Lauf sauber). Alle Builds/Kopien/Renders
 liefen in `/tmp/e8/` bzw. `/tmp/gooby-godot/eval/E8-shots/`.

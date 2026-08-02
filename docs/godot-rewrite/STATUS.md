@@ -1,30 +1,52 @@
 # STATUS — GOOBY-Godot-Rewrite (ehrlicher Ist-Stand)
 
-Stand: **nach W14 (31. Juli 2026)** — nach den Wellen W1–W5 (M1-Kern), Mega-Eval +
+Stand: **nach W17/Welle G7 (2. August 2026)** — nach den Wellen W1–W5 (M1-Kern), Mega-Eval +
 Fix-Wellen, W6–W12 (Games/IPA, Ranch-DLC, Feedback, Polish, Complete, Final/IPA, Visuals,
-Emotionen/Trailer), den REST-1…5-/FERTIG-1-Pässen sowie **W13 A/B/C (Backlog-Großputz,
-30 Pakete) und W14 (User-Feedback-Runde: UI-Full-Rework u. v. m., 12 Pakete — s. u.)**. Quellen: `GODOT-PLAN.md` (bindend),
-`EVAL-VOLLSTAENDIGKEIT.md` (Revision FERTIG-1 + W13), die statischen Code-Verifikationen
-der W13-Planungswelle, Test-Runner- und CI-Ausgaben. Dieses Dokument sagt ehrlich,
+Emotionen/Trailer), den REST-1…5-/FERTIG-1-Pässen, **W13 A/B/C (Backlog-Großputz, 30 Pakete),
+W14 (User-Feedback-Runde, 12 Pakete), W15 (Updates über dieses Repo + 9 weitere Pakete)
+sowie den Feedback-Wellen G1–G7 aus W16/W17** (G1 Analyse, G2–G5 Umsetzung, G6 durch
+VM-Neustart verloren und neu einsortiert, G7 „Spielgefühl“ P50–P58 + P38R — gelandet,
+Abnahme s. u.). **Zuhause seit dem W18-Umzug: Repo `MedusaV9/ModdingWebseite`, Branch
+`cursor/bubble-shield-loop`** (Umzugshistorie in `AGENTS.md`/`README.md`). Quellen:
+`GODOT-PLAN.md` (bindend), `EVAL-VOLLSTAENDIGKEIT.md` (Rev. FERTIG-1 + W13 + W18-Notiz),
+`UserFeedback.md` (Wellen-Abnahmen), git-Log der Wellen. Dieses Dokument sagt ehrlich,
 **was fertig ist** und **was Backlog ist** — die vollständige, nichts-verlierende
 Backlog-Liste steht in `GODOT-PLAN.md` §6 (dort seit W13 mit ✅-Annotationen für Erledigtes).
 
 ## Gesamtbild in Zahlen
 
-- **Vollständigkeit:** 70 von 79 prüfbaren Web-Features vollständig, 5 teilweise,
-  3 fehlend, 1 offiziell gestrichen (Gooby Welt) — rund 90 %
+- **Vollständigkeit (Web-Parität):** 70 von 79 prüfbaren Web-Features vollständig,
+  5 teilweise, 3 fehlend, 1 offiziell gestrichen (Gooby Welt) — rund 90 %
   (`EVAL-VOLLSTAENDIGKEIT.md`, Rev. FERTIG-1). Einordnung dort: „inhaltlich
   komplettes Spiel in der Feinschliff-Phase — kein Alpha-Zustand mehr“.
-- **Tests (nach W14):** 2.872 Haupt-Tests, 24.027 UI-Checks (W1c-Runner),
-  129 Server-Tests — 0 Failures. `gdlint`/`gdformat` sauber, alles headless
-  reproduzierbar.
+  Diese Zahlen sind inzwischen KONSERVATIV: die damals offenen Restpunkte
+  (Ball-Wurf, Sammlungssets, Wetter-FX, Speisen + Nougatschleuse,
+  Fotomodus-Werkzeuge, Gyro-Parallax, City Drive) sind mit W13 gelandet
+  (Revisionsnotiz W18 in der EVAL-Datei), und alles seit W14 (UI-Rework,
+  DLC-Fundamente, Marktstand, Urlaubs-Besuche, Läden-Ambient …) liegt
+  ZUSÄTZLICH über der alten Web-Parität.
+- **Tests (letzte integrierte Voll-Abnahme = Welle G5, 1. August):** 3.387
+  Haupt-Tests / 0 rot; String-Parität 25.962 Checks / 0; der W1c-UI-Runner lag
+  zuletzt dokumentiert bei 25.026 Checks / 0 (W16/G2-Lauf). Server: 151
+  Tests / 0 (Stand G7/P38R). `gdlint`/`gdformat` sauber, alles headless
+  reproduzierbar. **Ehrlich:** die G7-Pakete sind einzeln mit ihren Suiten
+  grün gelandet (u. a. Playtest `flow_arcade` 27/27 nach dem Router-Fix);
+  die integrierte Gesamt-Abnahme des Voll-Laufs NACH G7 steht noch aus.
 - **CI:** `gooby-godot.yml` grün **inklusive `ios-ipa`-Job** — jeder Push baut eine
   forensisch verifizierte, unsignierte .ipa (Artefakt `GOOBY-godot-unsigned-ipa`,
-  ~189 MB). Sideload-Runbook: `docs/godot-rewrite/IOS-BUILD.md`.
-- **Spiele:** 37 startbare Spiele — 30 portierte Web-Spiele + GvZ + GOB NOM +
-  5 Ranch-Spiele.
+  ~189 MB). Seit dem W18-Umzug laufen die Actions unverändert im neuen Repo
+  `MedusaV9/ModdingWebseite` (gleicher Workflow, gleiche paths-Trigger, gleicher
+  Artefaktname). Sideload-Runbook: `docs/godot-rewrite/IOS-BUILD.md`.
+  Server-CI `gooby-server.yml` seit W16/G3.
+- **Spiele:** 38 startbare Spiele — 30 portierte Web-Spiele + GvZ + GOB NOM +
+  City Drive (seit W13 echte Arcade-Runde) + 5 Ranch-Spiele (Zählung W16/G3:
+  4 Registry-Spiele + 34 Manifeste).
 
 ## Was ist fertig (W1–W12)
+
+_(Momentaufnahme nach W12 — die „Ehrliche Anmerkung“-Spalte beschreibt den
+DAMALIGEN Stand; vieles davon ist seit W13–W17 geliefert und unten in den
+Wellen-Absätzen dokumentiert.)_
 
 | Bereich | Geliefert | Ehrliche Anmerkung |
 |---|---|---|
@@ -43,40 +65,54 @@ Backlog-Liste steht in `GODOT-PLAN.md` §6 (dort seit W13 mit ✅-Annotationen f
 | Trailer (W12) | Finale MP4 **57,6 s, 1080p60** (h264+aac), Remotion-Projekt + reproduzierbare Capture-Pipeline (68 Clip-Skripte, Movie-Maker 60 fps); Musik „Glitter Blast“ (Kevin MacLeod, CC BY 4.0), Schnitt aufs 100-BPM-Beat-Grid | Track bewusst instrumental — dokumentierte Abwägung des Lyrics-Wunschs (s. GODOT-PLAN §6/Prozess-Notiz) |
 | Bug-Sweep (W10/REST5) | „533 warnings → 5“: Lambda-Captures (B2), Nav-Map-Sync (B3), GPU-Navmesh-Bake (B5), SubViewport-Resize (B8), `specular`-Warnungen (B9), Nav-Präzision (B10) **behoben** — Details + Belege in `EVAL-VOLLSTAENDIGKEIT.md` (Revision W13) | B4-Leaks nur teilweise (kein systematisches Leak-Gate); B11 (GvZ-Anchor-Warnung) offen — W13-Paket |
 
-## Bekannte Lücken (nicht verschweigen)
+## Bekannte Lücken (nicht verschweigen; Stand nach G7, 2. August)
 
-- **Feature-Restpunkte** laut EVAL (FERTIG-1): Ball-Wurf, Sammlungsset-UI im Album,
-  sichtbare Wetter-FX in Haus/Garten/Stadt (nur die Ranch hat sie), 12 fehlende
-  Speisen (6 davon mit vorhandenen Assets), Nougatschleuse, Fotomodus-Werkzeuge
-  (Pose/Emotion/Rahmen), Gyro-Parallax (Entscheid offen), City Drive als
-  Arcade-Runde, semantischer E2E-„erste Stunde“-Test. Mehrere davon sind
-  W13-Pakete (s. u.).
-- **Technik:** B11 (non-equal-opposite-anchors-Warnung in GvZ) offen — W13;
-  B4-Leaks teilweise behoben, ein systematisches Leak-Gate fehlt.
-- **`gooby-updates`-Release-Repo + `GH_CONTENT_TOKEN` fehlen** (User-Action) →
-  das Update-System ist nur gegen lokale/Fixture-Manifeste getestet.
-- **iOS:** CI liefert grüne unsignierte .ipas als Artefakt; Release-Asset +
-  `latest_native`-Bump fehlen (B §5.2). Store-/Dauer-Signing gibt es bewusst
-  nicht (Sideload-Modell, 7-Tage-Signatur mit freier Apple-ID); echtes
-  iPhone-Profiling steht aus (User-Action: .ipa sideloaden, Rückmeldung).
+- **G7-Abnahme:** Alle G7-Pakete (P50–P58, P38R) sind einzeln grün gelandet,
+  aber der integrierte Voll-Lauf + das UserFeedback-Abhaken der Welle stehen
+  noch aus.
+- **UI-Restbefunde aus P57 (iPhone-17-Audit):** 23 offene Befunde nach der
+  Nachmessung (114 → 23) — Guide-Karte über dem Bau-Dock, dock-interne
+  Lager-/Dreh-Chip-Überlappungen, 3× `mg_results`; explizit an die nächste
+  Welle übergeben.
+- **Playtest-Befunde aus P58 (Pionier-Lauf):** Der Arcade-Zurück-BLOCKER ist
+  gefixt (Router: flüchtige Ziele), offen bleiben: Overlay-Stau nach dem
+  Onboarding (unsichtbarer Tagesbonus-Schleier schluckt Taps),
+  Teestube-Streifen im Querformat, Bau-Ghost hinter der Knopfleiste,
+  Onboarding-Karten links der Mitte.
+- **Die verlorenen G6-Pakete** (VM-Neustart, transparent dokumentiert) sind neu
+  einsortiert und offen: DLC Welle B beider Läden, Ball-Wurf-Paket,
+  DLC-Ladebildschirme, Audio-Feel, B11 + Warn-Sweep-Nachfasser, McGooby-Bühne,
+  Alwin-NPC, UI-Mitte-Sweep. (Das G6-Paket „Doku-Refresh“ ist mit diesem
+  Dokumentstand erledigt.)
+- **Update-Kanal nach dem W18-Umzug:** Der EINGEBAUTE config-Pack zeigt noch
+  auf das alte Repo `MedusaV9/MinecraftBubbleShieldMod` — Code-Repoint inkl.
+  config-Pack-Bump 1.1.0 → 1.2.0 und PAT-Migration ausstehend
+  (`docs/UPDATES.md` §1/§6a). Außerdem wurde noch NIE ein echter
+  `updates`-Pack-Release gefahren (in keinem Repo) → das Update-System ist
+  weiterhin nur gegen lokale/Fixture-Manifeste getestet; der erste
+  Ende-zu-Ende-Release-Test steht aus.
+- **iOS:** Store-/Dauer-Signing gibt es bewusst nicht (Sideload-Modell,
+  7-Tage-Signatur mit freier Apple-ID); echtes iPhone-Profiling steht aus
+  (User-Action: .ipa sideloaden, Rückmeldung). Der `release`-Job (Tag
+  `ipa-v*`) inkl. `latest_native`-Bump ist seit W13C/W15 scharf.
 - **Natives Notification-Plugin fehlt** — bei geschlossener App kommt nichts an
-  (dokumentierter Andockpunkt `_os_schedule()`); ActivityKit-Live-Activity = M3
-  (braucht Signing).
+  (dokumentierter Andockpunkt `_os_schedule()`); ActivityKit-Live-Activity +
+  Homescreen-Widget bewusst zurückgestellt (brauchen eine SIGNIERTE App).
 - **Recovery-Hinweis-Toast beim Boot unverdrahtet:** String
   (`system.recovered_backup`) und Signal (`state_loaded`) existieren, aber kein
-  Konsument.
-- **Presence-Labels kommen DE-only vom Server**; der EN-Client zeigt deutsche
-  Aktivitätstexte.
-- **Tote UI-Drähte** (W13 in Arbeit): „Wo ist mein Gooby?“-Chip und Auge-Button
-  hatten keine Consumer; GvZ-Sticker-Counter und Goldi-Code waren unerreichbar.
+  Konsument — kein Fix-Beleg im Log bis einschließlich G7.
+- **GvZ-Coop existiert nicht** (gemeinsam verteidigen): seit G5+G7 gibt es
+  GvZ-**PvP** Ende-zu-Ende; Coop-Level/Session fehlen weiterhin.
+- **Difficulty-Zertifizierung:** 30 von 38 Spielen bit-genau gegen die
+  Web-Referenz zertifiziert (W15) — 8 fehlen.
 - **Garderobe-HUD-Knopf:** Das H-Doc wollte ihn entfernen (Spiegel + Shop), W6
   hat ihn bewusst zurückgebracht — offener User-Entscheid, aktuell existieren
   BEIDE Wege (Knopf + Spiegel). Dokumentiert in GODOT-PLAN §6/H-Notiz.
 
 ## Mehrspieler + Save-Transfer — ehrlicher Ist-Stand
 
-**Funktioniert JETZT** (Client + Server zusammen getestet; 99 Server-Tests grün,
-Godot-Hauptsuite 2.074+ Tests grün):
+**Funktioniert JETZT** (Client + Server zusammen getestet; 151 Server-Tests grün
+— Stand G7/P38R; Godot-Hauptsuite zuletzt 3.387 Tests grün — G5-Abnahme):
 
 - Verbindung: HELLO/WELCOME-Handshake (TOFU), PING/PONG, automatische
   Wiederverbindung mit Backoff; Offline-Outbox (Redeem/Events/Presence/Analytics);
@@ -85,7 +121,7 @@ Godot-Hauptsuite 2.074+ Tests grün):
 - Besuche: Haus-Snapshot beim Gastgeber, beide Goobys sichtbar (POS-Relay 5 Hz),
   Besuch beenden/Timeout.
 - GoobyPal: Münztransfer mit Tageslimit 250 (serverseitig), Pending-Zustellung
-  mit Ack. (Die Verlaufs-LISTE wird im Client noch nicht gerendert — Backlog C.)
+  mit Ack; die Verlaufs-Liste wird seit W13 im Client gerendert.
 - **Schiffe versenken KOMPLETT**: Vollpartie, Emotes + Tomate 1×/Runde, Aufgeben,
   Revanche mit Rollentausch, 120-s-Rejoin-Fenster mit History-Replay.
 - **Schach KOMPLETT** (seit den W6–W12-Wellen): Client-Legalität
@@ -99,21 +135,30 @@ Godot-Hauptsuite 2.074+ Tests grün):
   Minuten/Tag, Pro-Spieler-Tabelle, Stunden-Histogramm.
 - Save-Transfer: Umzugskoffer-Codec, bplist-Legacy-Import (GDScript, ohne
   Plugin), Auto-Import beim Erststart, Settings-Zeile — komplett (FIX-6).
+- **Post/Mail KOMPLETT (W13):** Briefe, Fotos, Item-Geschenke an Freunde,
+  Quota, Offline-Outbox — plus **InstantGooby-Feed**.
+- **GOB-NOM-Coop übers Netz (W15):** 2 Geräte, Lockstep mit Desync-Wächter +
+  Rejoin — zugleich die Kopiervorlage für GvZ-PvP.
+- **GvZ-PvP übers Netz KOMPLETT (Client G5 + Server-Modul `gvzmp.js` G7/P38R):**
+  Einladung über Freunde, deterministischer Start-Handshake (Server-Seed,
+  Seiten gooby/zombie), Lockstep mit `state_hash`-Fence, Peer-Down/Up mit
+  Warte-Frist, idempotentes Ergebnis mit Pending-Reward bis ACK.
+- Coop-Fahrt mit Radio-Sync, Besucher-schläft-auf-Couch, Snap A Gooby — alle
+  seit W13.
+- `ws://`-Heimnetz-Gate im Client (W13); Presence-Labels lokalisiert
+  (Presence-i18n, W13); Mehrspieler-Settings (Server/Port/Secret +
+  „Verbindung testen“) in den Einstellungen (W14); Account-Umzugs-Code (W13C).
+- Sichtbarer Ranch-MP-Einstieg im Spiel: RmpHub (Raum anlegen/beitreten/Code
+  teilen) seit G4 — vorher hatte das W15-Lockstep-Protokoll keinen Zugang.
 
 **Fehlt noch (ehrlich):**
 
-- Post/Mail (Briefe/Fotos/Item-Geschenke) + InstantGooby — der Post-Ort und das
-  Blob-Storage-Fundament existieren, das Mail-Modul fehlt (Backlog C, größtes
-  offenes Backend-Paket).
-- Coop-Fahrt mit Radio-Sync (Server-`drive:`-Room fertig, Client fehlt);
-  Besucher-schläft-auf-Couch-Regel; Snap A Gooby.
-- GvZ PvP/Coop und GOB-NOM-Netz-Coop: Simulationen sind netz-vorbereitet
-  (Lockstep/`state_hash`, `mg:`-Rooms laufen fürs Ranch-MP), die Netz-Sessions
-  fehlen; GvZ-Coop-Level existieren noch gar nicht.
-- `ws://`-Heimnetz-Gate im Client (die wss/TLS-Deploy-Doku existiert im
-  Server-README); TOFU statt CA-Pinning.
+- GvZ-**Coop** (gemeinsam verteidigen): nur PvP existiert; Coop-Level/Session
+  fehlen weiterhin.
+- TOFU statt CA-Pinning (bewusster Kompromiss, dokumentiert).
 - Kein öffentlicher Produktiv-Server: Betrieb weiterhin selbst hosten
-  (`GOOBY-SERVER/README.md`).
+  (`GOOBY-SERVER/README.md`; Port-Stolperfalle: Client-Default 8765,
+  Server-Default 8080).
 - Matchmaking/zufällige Gegner gibt es nicht (bewusst: nur Freunde).
 
 ## W13 + W14 — GELIEFERT (31. Juli, drei Wellen + Feedback-Runde)
@@ -145,36 +190,110 @@ Dev-Werkzeugkasten (6 Tabs), DLC-Hub + 2 komplette DLC-Design-Docs
 — u. a. unsichtbares Ranch-Wettkampf-HUD gefunden —, 7 Quick-Wins).
 
 Zahlen nach W14: **2.872 Haupt-Tests / 24.027 UI-Checks / 129 Server-Tests — 0 rot.**
-Offen aus dem Feedback: Urlaub-Begleiten (W15), Minigame-Gruppe 2,
-DLC-Umsetzung, natives Widget/ActivityKit (braucht Signing).
 
-## M2/M3 — Backlog (Kurzfassung; vollständig + bindend in GODOT-PLAN §6)
+## W15 — GELIEFERT (31. Juli/1. August, 10 Pakete)
 
-Real noch offen nach dem W13-Planungsabgleich (Erledigtes ist in §6 mit ✅
-annotiert; W13-Pakete oben nicht erneut gelistet):
+**Updates über DIESES Repo** (User-Entscheidung; Release-API + Spieler-Token,
+`latest_native`-Bump scharf im `release`-Job — das separate `gooby-updates`-Repo
+entfällt endgültig), Gooby im **Urlaub besuchen** (Strand/Berge/Stadt +
+Raumstation, 24 neue Urlaubs-Sprüche), Minispiel-Gruppe 2 poliert
+(purblePlace-Redesign, ranchHerde-Treiben, rocketRescue-Kamera,
+gardenRush-Kulisse, danceParty-Publikum, AC-Level-Menüs), 4 neue Garten-Crops →
+**alle 4 Sammlungen komplettierbar**, **GOB-NOM-Coop übers Netz** (Lockstep,
+Kopiervorlage für GvZ-PvP), Kamera fährt **durch die Tür** (additiver Zielraum,
+RM-Fallback), **Wochenmarkt-Eigenstand** (Preis-Slider, deterministische
+Verkaufs-Sim, Abrechnungs-Karte) + 3 Craft-Rezepte mit 3D-Vorschau,
+danceParty-Latenz-Kalibrierung, HDR-Glow-Auto-Downgrade, GOB-NOM-Level-Editor
+im Godot-Editor, neue Clips `phone_up`/`phone_tap` + Streichel-Übermut-Gag,
+**30/38 Spiele bit-genau zertifiziert** (vorher 12).
+Zahlen: 3.010 Haupt-Tests / 24.815 UI-Checks / 140 Server-Tests — 0 rot.
 
-- **A Engine:** DOOR_TRAVEL-Kamerafahrt (Polish), echtes iPhone-Profiling
-  (User-Action), LightmapGI-Option. M3: Shader-Warmup-Quad, Ragdoll-Experiment.
-- **B Updates:** `gooby-updates`-Repo (User-Action) + Ende-zu-Ende-Release-Test,
-  Release-Asset + `latest_native`-Bump, Soft-Restart-Flow. M3: RSA-Signierung,
-  Mirror #2 über den Node-Server.
-- **C Backend:** Post/Mail + InstantGooby, GoobyPal-Verlaufs-Liste,
-  `ws://`-Heimnetz-Gate, Besucher-Couch, Snap A Gooby, natives
-  Notification-Plugin. M3: Coop-Fahrt, Koop-Minigames-Relay, Taxi-Live-Activity,
-  Account-Umzugs-Code, Companion-App-Modus (W13 neu erfasst).
-- **D Haus:** CEILING-Layer, Wochenmarkt-Eigenstand. M3: Keller/Etage/Balkon,
-  Garage, Layout-Presets.
-- **E Stadt:** GOOBERANDO-Vollausbau (3 Restaurants + Fahrer-Sim), Raumstation
-  GOOB-1, Urlaubs-Boni (Weltengooby/Erholungs-Boost/GOOBY-FREE-Shop),
-  Stadt-Polish (Near-Miss-Funken, Guber-Surge, Ziel-GPS-Pfeil). M3:
+## W16 — Repo-Umzug #1 + Wellen G1–G3 (1. August)
+
+**Umzug:** von `MedusaV9/CustomServerPrivate` (Branch
+`cursor/gooby-godot-rewrite-d1d8`) nach `MedusaV9/MinecraftBubbleShieldMod`
+(Branch `cursor/gooby-godot-loop-2c10`), voller Verlauf; Update-Kanal-Repoint
+im Code (config-Pack 1.0.0 → 1.1.0) + PAT-Migrations-Doku.
+**G1 (Analyse):** 28 Scout-Berichte. **G2 (13 Pakete, 3.024 Tests):**
+UI-Fundament „Inhaltsspalte“, Szenenwechsel-Karte + Blütenblätter-Wipe im
+Alt-Web-Look, Arcade-Cover der 5 Ranch-Wettbewerbe, 5 Minispiel-Polituren
+(starHopper, trampoline, hideSeek, cityDrive, Ranch-Arena), Boot ~55 ms
+schneller mit echtem Fortschritt, 11 Prozess-/Robustheits-Fixe,
+Save-Backup-Datenverlust-Fenster geschlossen. **G3 (12 Pakete, 3.078 Tests):**
+Inhaltsspalte in die Fläche (Arcade, IKEA, Garderobe/Gestalten, Album),
+Knopfleisten für 12 Stadt-Orte, Sozial + Post fühlbar (Squish/Sound/Haptik),
+137 Text-Feinschliffe, Haptik-Stärken wirken echt, carrotGuard-Politur,
+**Server-CI `gooby-server.yml`**, Trailer-Vorarbeiten (Storyboard v4).
+
+## W17 — Wellen G4–G7 (1.–2. August)
+
+**G4 (18 Pakete, 3.235 Tests, UI-Audit 21 Screens × 4 Formate = 0 Befunde):**
+UI-Rework in der Fläche — Bau-Dock unten-mittig, IGohbie-Telefon skaliert,
+Reise-Strecke (FlapBoard/Reise-App/Bordkarte), Radio/Kino/GOB.TY/Geschichten
+fingergroß, **sichtbarer Ranch-MP-Einstieg (RmpHub)**, Level-Selects +
+Brettspiel-Overlays, Boot-Möhren-Pill + Papier-Ladekarte im Alt-Web-Look,
+Onboarding/Quests/Feiern, 7 Minispiel-Polituren, zentraler Punkte-Anker-Fix,
+Test-Runner-Härtung.
+**G5 (13 Pakete, 3.387 Tests, String-Parität 25.962 Checks):** **DLC „Goo und
+Bye“ Welle A SPIELBAR** (DLC-Hub ab Level 12, kompletter Tag-Loop), **DLC
+„McGooby“ Probeschicht**, GvZ-PvP-**Client** (Lockstep), **Trailer 5.1** (62 s,
+alle 34 Clips neu), 11 Minispiel-Polituren, Freunde-App im Telefon, UI-Wache
+auf 34 Screens ausgedehnt (Alt-Screens 0 Befunde; dickster Fang: Home-HUD über
+dem Bau-Dock, 97 Befunde → G7-P50-Wurzelfix).
+**G6: durch VM-Neustart VERLOREN,** bevor integriert/committet war —
+transparent dokumentiert, die 13 Pakete sind neu einsortiert (kein gelandeter
+Stand verloren).
+**G7 „Spielgefühl“ (P50–P58 + P38R) — GELANDET:** HUD-Dynamik (P50: HUD gleitet
+im Baumodus animiert weg, weicht bei offenen Blättern, Label-Fit),
+Sprechblasen-/Text-Fit-Wurzelfix (P51), IGohbie-Telefon-Rework (P52),
+einheitliches Sheet-System mit Runterwisch-Geste (P53), Garderobe + Gestalten
+(P54), **Läden lebendig Teil 1** (P55: `ort_leben`-Ambient — REHWEI, Baumarkt,
+IKEA-Schaufenster), **Ein-Spiel-Gefühl-Rahmen** für alle 38 Spiele (P56),
+**iPhone-17-Pro-Max-Leitformat 2868×1320 quer** + Audit-Altbefunde 114 → 23
+(P57), **Playtest-Harness „Subagents spielen das Spiel“** + Pionier-Lauf (P58,
+`tools/ci/run_playtest.sh`) — der Pionier fand einen ECHTEN Blocker
+(Arcade-Zurück startete eine frische Minispiel-Runde inkl. Belohnungs-Farm),
+Wurzelfix im Router gelandet (flüchtige Ziele; Playtest `flow_arcade` 27/27).
+**P38R:** `gvzmp.js`-Server-Modul — GvZ-PvP läuft Ende-zu-Ende (Server 151/0).
+**Ehrlich offen nach G7:** integrierte Voll-Lauf-Abnahme + die P57/P58-Reste
+(s. „Bekannte Lücken“).
+
+## W18 — Repo-Umzug #2 (2. August)
+
+Von `MedusaV9/MinecraftBubbleShieldMod` nach **`MedusaV9/ModdingWebseite`**
+(Branch `cursor/bubble-shield-loop`), voller Verlauf übernommen. CI/Actions
+laufen unverändert im neuen Repo (gleicher Workflow, gleiches Artefakt);
+`main` dort ist ein ANDERES Projekt (BAPBAP-Modding-Website) — nicht anfassen.
+Offen aus dem Umzug: Update-Kanal-Code-Repoint (config-Pack → 1.2.0) +
+PAT-Migration (`docs/UPDATES.md` §1/§6a).
+
+## Backlog (Kurzfassung; vollständig + bindend in GODOT-PLAN §6)
+
+Real noch offen nach dem G7-Log-Abgleich (2. August; Erledigtes ist in
+GODOT-PLAN §6 mit ✅ annotiert):
+
+- **Direkt vor der Tür (UserFeedback „In Arbeit“):** Welle H Playtest ×10
+  (das P58-Werkzeug steht bereit), Welle I 30+-Ideen-Planner, Wellen J+
+  Umsetzung — inkl. der neu einsortierten G6-Pakete (DLC Welle B beider
+  Läden, Ball-Wurf-Paket, DLC-Ladebildschirme, Audio-Feel, B11 + Warn-Sweep,
+  McGooby-Bühne, Alwin-NPC, UI-Mitte-Sweep).
+- **UI:** P57-Audit-Rest (23 Befunde), P58-Playtest-Befunde (Overlay-Stau nach
+  Onboarding, Teestube-Streifen, Bau-Ghost, Onboarding-Karten-Versatz).
+- **Updates:** W18-Code-Repoint + config-Pack 1.2.0, erster echter Pack-Release
+  im neuen Repo (Ende-zu-Ende-Release-Test steht seit je aus). M3:
+  Manifest-RSA-Signierung, Mirror #2 über den Node-Server.
+- **A Engine:** echtes iPhone-Profiling (User-Action), LightmapGI-Option,
+  DOOR_TRAVEL-CamPath-Polish. M3: Shader-Warmup-Quad, Ragdoll-Experiment.
+- **C Backend:** natives Notification-Plugin, GvZ-Coop (nur PvP existiert),
+  Recovery-Hinweis-Toast verdrahten. M3: Taxi-Live-Activity (Signing),
+  Companion-App-Modus.
+- **D Haus (M3):** Keller/Etage/Balkon.
+- **E Stadt:** Stadt-Polish-Reste (Near-Miss-Funken, Ziel-GPS-Pfeil). M3:
   Ambient-Audio-Distrikte, Traffic-Vollausbau.
-- **F Gooby:** Schüttel-Secret, P1-Clips, Geschichten-Stunde-Ausbau,
-  `klopapier_mumie`-Event, Fotomodus-Werkzeuge. M3: Laufband-Gag,
-  GOBBULL-Zocken, P2-Clips, PhysicalBone-Ragdoll.
-- **G Minigames:** City Drive + 3-Strikes-Cutscene, Auto-Stats in Fahr-Spielen,
-  Difficulty-Zertifizierung ausweiten (cross_check auf alle Ports),
-  GOB-NOM-@tool-Editor. M3: HDR-Glow-Telemetrie, danceParty-Latenz-Kalibrierung.
-- **H UI/Content:** Reisepass 2.0 (Passfoto — expliziter User-Wunsch),
-  Abflugtafel-Optik, Sticker-Rarity-FX, Galaxie-Fell, GOB.TY,
-  Girlanden/Spann-Deko, Goobyman-Laden, Presence-i18n.
-- **Qualität:** semantischer E2E-„erste Stunde“-Test, B4-Leak-Gate.
+- **F Gooby (M3):** Laufband-Gag, GOBBULL-Zocken, P2-Clips,
+  PhysicalBone-Ragdoll.
+- **G Minigames:** Difficulty-Zertifizierung 30/38 → die restlichen 8. M3:
+  HDR-Glow-Telemetrie.
+- **H UI/Content:** Garderobe-HUD-Knopf-Entscheid (User; beide Wege existieren).
+- **Signing-gebunden (bewusst zurückgestellt):** ActivityKit-Live-Activity,
+  iOS-Homescreen-Widget.

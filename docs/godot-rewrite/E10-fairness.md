@@ -1,6 +1,6 @@
 # E10 — Minigame-Fairness & Ökonomie (GOOBY-Godot-Rewrite)
 
-**Scope:** `/workspace` @ `cursor/gooby-godot-rewrite-d1d8` (`8cfc20e0`), Godot 4.4.1, node 22.
+**Scope:** `/workspace` @ `cursor/gooby-godot-rewrite-d1d8` (historisch; heute: `MedusaV9/ModdingWebseite` @ `cursor/bubble-shield-loop`) (`8cfc20e0`), Godot 4.4.1, node 22.
 **Regel eingehalten:** Repo **unverändert** (`git status` leer nach allen Läufen); sämtliche Treiber
 liegen unter `/tmp/gooby-godot/drv/`, sämtliche Rohdaten unter `/tmp/gooby-godot/eval/`.
 

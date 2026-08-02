@@ -1,6 +1,6 @@
 # E5 — Orientierung / Resize-Matrix (GOOBY-Godot-Mega-Eval)
 
-Branch `cursor/gooby-godot-rewrite-d1d8`, Godot 4 headless (xvfb, opengl3).
+Branch `cursor/gooby-godot-rewrite-d1d8` (historisch; heute: `MedusaV9/ModdingWebseite` @ `cursor/bubble-shield-loop`), Godot 4 headless (xvfb, opengl3).
 Shots: `/tmp/gooby-godot/eval/E5-shots/` — Treiber: `e5_driver.gd` (Einzelflächen, Theme auf Root),
 `e5_real.gd` (ECHTE `home_entry`-Komposition inkl. `UiLayer`-CanvasLayer + Router),
 `e5_theme_probe.gd` (Theme-Propagations-Beweis).

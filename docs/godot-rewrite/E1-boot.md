@@ -1,6 +1,6 @@
 # E1 — Frisch-Boot & Onboarding (GOOBY-GODOT Mega-Eval)
 
-Branch `cursor/gooby-godot-rewrite-d1d8`, Godot 4.4.1 headless + xvfb (gl_compatibility).
+Branch `cursor/gooby-godot-rewrite-d1d8` (historisch; heute: `MedusaV9/ModdingWebseite` @ `cursor/bubble-shield-loop`), Godot 4.4.1 headless + xvfb (gl_compatibility).
 Profil-Wipe zwischen Läufen: `rm -rf ~/.local/share/godot/app_userdata/GOOBY`.
 Treiber (NUR /tmp): `/tmp/e1_drive.gd` (Phasen fresh/second/abort/after_abort),
 `/tmp/e1_verify_placeholder.gd`, `/tmp/e1_theme_probe2.gd`. Screenshots: `/tmp/gooby-godot/eval/shots/`.

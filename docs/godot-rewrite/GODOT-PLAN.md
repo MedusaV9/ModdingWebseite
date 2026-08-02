@@ -3,7 +3,9 @@
 Chefarchitekt-Dokument. Quellen (bindend): `/tmp/gooby-godot/USER-WISHES.md` +
 `/tmp/gooby-godot/ideas/{A-engine,B-updates,C-backend,D-house,E-city,F-gooby,G-minigames,H-ui-content}.md`.
 Umgebung verifiziert: Godot **4.4.1.stable** (`godot`), Blender **4.0.2** (`blender`), Node **22.14**,
-Branch `cursor/gooby-godot-rewrite-d1d8`, Web-Referenz `/workspace/GOOBY` (bleibt unangetastet als Lesequelle),
+Branch `cursor/gooby-godot-rewrite-d1d8` (historisch — das Projekt ist seither zweimal umgezogen
+und lebt seit W18 in `MedusaV9/ModdingWebseite` auf `cursor/bubble-shield-loop`, s. AGENTS.md),
+Web-Referenz `/workspace/GOOBY` (bleibt unangetastet als Lesequelle),
 `/workspace/GOOBY-GODOT/project.godot` existiert als leerer Bootstrap, `/workspace/GOOBY-SERVER` wird neu angelegt.
 
 ---
@@ -546,7 +548,7 @@ Format: `[M2|M3] Wunsch — Doc-Verweis`. M2 = nächste Ausbaustufe, M3 = Kirsch
 - [M3] Shader-Warmup-Quad im Veil (R2), PhysicalBone-Ragdoll-Experiment (F) — A §Risiken
 
 ### B — Updates (Doc B)
-- [M2] Öffentliches Artefakt-Repo `MedusaV9/gooby-updates` anlegen + `GH_CONTENT_TOKEN` (User-Action!) + Ende-zu-Ende-Release-Test — B §3/§5 **→ Client + Pack-CI fertig vorbereitet** (`gooby-packs.yml` inkl. auskommentiertem Release-Ziel); es fehlt nur die User-Action (Repo + Token), danach der erste echte E2E-Release-Test
+- [M2] Öffentliches Artefakt-Repo `MedusaV9/gooby-updates` anlegen + `GH_CONTENT_TOKEN` (User-Action!) + Ende-zu-Ende-Release-Test — B §3/§5 **→ SEIT W15 ÜBERHOLT:** User-Entscheidung, die Updates laufen über das private Haupt-Repo selbst (GitHub-Release-API + Spieler-Token, `docs/UPDATES.md` §1/§6a) — das separate public Repo entfällt endgültig; real offen bleibt nur der erste echte E2E-Release-Test (`updates`-Release im aktuellen Repo `MedusaV9/ModdingWebseite`)
 - [M2] ipa-build.yml voll funktionsfähig (Godot-iOS-Export + xcodebuild unsigned + Release-Asset + latest_native-Bump) — B §5.2, W1a-Skeleton vorhanden **→ Build-Kern ✅ (W6 + W11):** `ios-ipa`-Job in `gooby-godot.yml` baut + verifiziert bei jedem Push grüne unsignierte .ipas (Artefakt `GOOBY-godot-unsigned-ipa`, `tools/ci/verify_ipa.py`); offen nur Release-Asset-Step + `latest_native`-Bump
 - [M2] Soft-Restart-Flow im Client + „wirksam ab Neustart“-UX-Feinschliff — B §2.4 **→ teilweise:** Toast „wirksam ab Neustart“ + `ContentRegistry.reload()` existieren; der „Jetzt neu laden“-Soft-Restart-Flow hat keinen Aufrufer
 - [M2] Server-IP/Port live aus config.json bei jedem Connect (NetClient-Anbindung) — B §1.1/USER §B19 **✅ erledigt (W2d):** `net_client.gd::_resolve_net_config()` liest bei JEDEM Verbindungsaufbau frisch aus der ContentRegistry; E2E-Test `test_updates_flow.gd`, Kontrakt `docs/UPDATES.md` §7

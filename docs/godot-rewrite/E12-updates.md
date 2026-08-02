@@ -17,7 +17,7 @@ Update-Ergebnisse werden nicht angezeigt und der Safe-Mode hat keinen Banner/
 Retry-Aufruf. Damit ist das robuste Backend vorhanden, aber der beschriebene
 Produktflow nicht benutzbar.
 
-Getestet auf Branch `cursor/gooby-godot-rewrite-d1d8`, Godot
+Getestet auf Branch `cursor/gooby-godot-rewrite-d1d8` (historisch; heute: `MedusaV9/ModdingWebseite` @ `cursor/bubble-shield-loop`), Godot
 `4.4.1.stable.official.49a5bc7b6`. Das Repository blieb unverändert
 (`git status --short` leer); alle Testartefakte liegen unter `/tmp` bzw. einem
 isolierten `user://`.

@@ -1,6 +1,6 @@
 # E4 — Performance-Budgets (GOOBY-Godot-Mega-Eval)
 
-Datum: 2026-07-25 · Branch `cursor/gooby-godot-rewrite-d1d8` · Godot 4.4.1.stable · Messung:
+Datum: 2026-07-25 · Branch `cursor/gooby-godot-rewrite-d1d8` (historisch; heute: `MedusaV9/ModdingWebseite` @ `cursor/bubble-shield-loop`) · Godot 4.4.1.stable · Messung:
 `xvfb-run godot --rendering-method gl_compatibility --rendering-driver opengl3` (llvmpipe),
 Wegwerf-Treiber `/tmp/gooby-godot/eval/e4_probe.gd` + `e4_leak_probe.gd` (Vorlage:
 `scripts/dev/perf_probe.gd`; Repo unverändert). Orakel = `RenderingServer.get_rendering_info`

@@ -1,6 +1,6 @@
 # E2 — Save-Migration v4→v5 (Eval, Blickwinkel Save-Migration)
 
-Branch `cursor/gooby-godot-rewrite-d1d8`, geprüft am 2026-07-25.
+Branch `cursor/gooby-godot-rewrite-d1d8` (historisch; heute: `MedusaV9/ModdingWebseite` @ `cursor/bubble-shield-loop`), geprüft am 2026-07-25.
 Treiber (Wegwerf, nicht im Repo): `/tmp/gooby-eval-e2/` — `make_extreme_fixtures.mjs`
 (erzeugt 3 Extrem-Fixtures mit dem ECHTEN Web-Code), `e2_driver.gd`,
 `e2_crash_driver.gd`, `e2_v1_downgrade_driver.gd` (headless via Stub-Projekt

@@ -1,6 +1,6 @@
 # E14 — Offline-first-Degradation
 
-**Branch:** `cursor/gooby-godot-rewrite-d1d8`  
+**Branch:** `cursor/gooby-godot-rewrite-d1d8` (historisch; heute: `MedusaV9/ModdingWebseite` @ `cursor/bubble-shield-loop`)  
 **Godot:** `4.4.1.stable.official.49a5bc7b6`  
 **Verdict:** **FAIL (P0)** — Netzwerk-Grundzustand degradiert ruhig, aber der echte Boot ist
 nicht spielbar. Zusätzlich verlieren Analytics Daten; Redeems/Events/Presence sind clientseitig

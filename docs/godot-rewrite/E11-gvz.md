@@ -1,6 +1,6 @@
 # E11 — GvZ-Kampagnen-Kurve
 
-**Stand:** Branch `cursor/gooby-godot-rewrite-d1d8`, Commit `8cfc20e0`, Godot
+**Stand:** Branch `cursor/gooby-godot-rewrite-d1d8` (historisch; heute: `MedusaV9/ModdingWebseite` @ `cursor/bubble-shield-loop`), Commit `8cfc20e0`, Godot
 `4.4.1.stable`, 2026-07-25. Das Repo wurde nicht verändert; alle Treiber und
 Ergebnisse liegen unter `/tmp/gooby-godot/eval/`.
 

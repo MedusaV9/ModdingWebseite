@@ -1,7 +1,7 @@
 # E9 — Baumodus-Edgecases (GOOBY-Godot-Mega-Eval)
 
 **Agent:** EVAL-AGENT E9 · **Blickwinkel:** Haus-Grid / Baumodus-Edgecases
-**Repo:** `/workspace` · **Branch:** `cursor/gooby-godot-rewrite-d1d8` · **Engine:** Godot 4.4.1.stable
+**Repo:** `/workspace` · **Branch:** `cursor/gooby-godot-rewrite-d1d8` (historisch; heute: `MedusaV9/ModdingWebseite` @ `cursor/bubble-shield-loop`) · **Engine:** Godot 4.4.1.stable
 **Repo unverändert** — alle Treiber liegen in `/tmp/e9/`, alle Artefakte in `/tmp/gooby-godot/eval/`.
 
 ---

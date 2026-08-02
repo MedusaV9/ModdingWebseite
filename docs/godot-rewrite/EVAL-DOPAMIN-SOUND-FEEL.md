@@ -1,6 +1,6 @@
 # EVAL-1 — Dopamin, Sounddesign, Spielgefühl (Prüfbericht)
 
-Stand: 2026-07-27, Branch `cursor/gooby-godot-rewrite-d1d8`, Godot 4.4.1 headless.
+Stand: 2026-07-27, Branch `cursor/gooby-godot-rewrite-d1d8` (historisch; heute: `MedusaV9/ModdingWebseite` @ `cursor/bubble-shield-loop`), Godot 4.4.1 headless.
 Auftrag: unabhängige Bewertung des GANZEN Spiels (nicht nur Minigames) auf
 Belohnungsdichte, Klangbild und Spielgefühl — hart, konkret, mit Zahlen.
 **Dieser Bericht ändert keinen Spielcode.** Alle Zahlen sind gemessen, nicht geschätzt.

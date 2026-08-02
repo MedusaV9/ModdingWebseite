@@ -1,6 +1,6 @@
 # E3 — Test-/CI-Integrität (GOOBY-Godot-Mega-Eval)
 
-Branch `cursor/gooby-godot-rewrite-d1d8` @ `8cfc20e0`. Godot 4.4.1.stable.official (identisch zu CI-Pin).
+Branch `cursor/gooby-godot-rewrite-d1d8` (historisch; heute: `MedusaV9/ModdingWebseite` @ `cursor/bubble-shield-loop`) @ `8cfc20e0`. Godot 4.4.1.stable.official (identisch zu CI-Pin).
 Alle Läufe in einer /tmp-Kopie (`/tmp/gooby-godot/proj`, `.godot` gelöscht = CI-frischer Checkout);
 Repo unangetastet (`git status` clean vor/nach). Logs: `/tmp/gooby-godot/eval/E3-*.log`.
 

@@ -42,14 +42,24 @@ Arbeitsregeln für Agents in diesem Repo (GOOBY Godot-Rewrite).
   `godot --headless --path GOOBY-GODOT --import`, sonst wirft der Test-Runner
   Parse-Errors (staler global_script_class_cache); erzeugte `.uid`/`.import`
   gehören MIT committet. Parallele `--import`-Läufe vermeiden (Cache-Race).
-- **Repo-Umzug (W16):** Das Projekt lebt jetzt im Repo
-  `MedusaV9/MinecraftBubbleShieldMod` auf dem Branch
-  `cursor/gooby-godot-loop-2c10` (voller Verlauf des alten Branches
-  `cursor/gooby-godot-rewrite-d1d8` aus `MedusaV9/CustomServerPrivate` wurde
-  übernommen). `main` dieses Repos enthält ein ANDERES Projekt (Minecraft-Mod
-  „Bubble Shield", Java/Gradle) — auf diesem Branch nicht anfassen. Der User
-  schreibt live in `UserFeedback.md` (auch per Web-Commit → vor dem Push
-  fetchen/rebasen) — Datei vor und nach jeder Runde lesen, Erledigtes abhaken.
+- **Repo-Umzug (W16, dann W18):** Das Projekt lebt jetzt im Repo
+  `MedusaV9/ModdingWebseite` auf dem Branch `cursor/bubble-shield-loop`
+  (W18-Umzug, voller Verlauf übernommen). Stationen davor: bis W16
+  `MedusaV9/CustomServerPrivate` (Branch `cursor/gooby-godot-rewrite-d1d8`),
+  dann bis W18 `MedusaV9/MinecraftBubbleShieldMod` (Branch
+  `cursor/gooby-godot-loop-2c10`). `main` dieses Repos enthält ein ANDERES
+  Projekt (die BAPBAP-Modding-Website, Vite/React/TS) — auf diesem Branch
+  nicht anfassen, nicht nach `main` mergen. Die UserFeedback.md-Konvention
+  bleibt unverändert: Der User schreibt live in `UserFeedback.md` (auch per
+  Web-Commit → vor dem Push fetchen/rebasen) — Datei vor und nach jeder Runde
+  lesen, Erledigtes abhaken.
+- **Umzugs-Lektion (W16/W18):** Die Update-Kanal-Koordinaten stehen auch im
+  CODE, nicht nur in der Doku — `GOOBY-GODOT/content/config/data/config.json`
+  + `config.example.json` (`manifest_url`) und
+  `tests/unit/test_w15_updrepo.gd` (`REPO`-Konstante). Bei jedem Repo-Umzug
+  MIT umziehen (config-Pack-Version MINOR bumpen, sonst laden Bestandsclients
+  die neue URL nie — Muster: W16-Commit `33e1d426`), plus PAT-Migration für
+  Spieler (`docs/UPDATES.md` §6a).
 - **CI:** Jeder Push auf `GOOBY-GODOT/**` baut die unsignierte .ipa (Artefakt
   `GOOBY-godot-unsigned-ipa`, Job `ios-ipa` auf macos-15, ~10-12 min).
   Versionierte GitHub-Releases: Tag `ipa-v<semver>` pushen (Job `release`).

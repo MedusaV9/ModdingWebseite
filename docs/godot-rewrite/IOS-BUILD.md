@@ -21,8 +21,16 @@ importierten Assets bestätigt.
 
 ## Artefakt aus GitHub Actions laden
 
-1. Auf GitHub **Actions → GOOBY Godot** öffnen.
-2. Den neuesten Lauf des gewünschten Commits wählen. Der Job `ios-ipa` muss grün
+Seit dem W18-Umzug lebt das Projekt im Repo **`MedusaV9/ModdingWebseite`**
+(Branch `cursor/bubble-shield-loop`) — die Builds laufen in den Actions
+DIESES Repos. Läufe von vor dem Umzug liegen noch in den Actions der alten
+Repos (`MedusaV9/MinecraftBubbleShieldMod`, davor `CustomServerPrivate`);
+für frische IPAs immer im neuen Repo schauen.
+
+1. Auf GitHub im Repo `MedusaV9/ModdingWebseite` **Actions → GOOBY Godot**
+   öffnen.
+2. Den neuesten Lauf des gewünschten Commits (Branch
+   `cursor/bubble-shield-loop`) wählen. Der Job `ios-ipa` muss grün
    sein.
 3. Unter **Artifacts** `GOOBY-godot-unsigned-ipa` laden.
 4. Das von GitHub geladene ZIP einmal entpacken. Darin liegt
@@ -125,7 +133,7 @@ Erwarteter Vertrag:
 | `ARCHS` | `arm64` |
 | `IPHONEOS_DEPLOYMENT_TARGET` | `14.0` |
 | App-Icon | GOOBY-Original, 1024 px plus alle generierten Gerätegrößen |
-| Orientierungen | Querformat zuerst; Hochformat ebenfalls erlaubt |
+| Orientierungen | Nur Querformat (`landscape_left`/`landscape_right`; `portrait=false` seit FIX1 — Hochkant-Minispiele laufen bewusst im Pillarbox, Begründung im Kommentar des iOS-Presets) |
 | Dateifreigabe | deaktiviert |
 | Nicht ausgenommene Verschlüsselung | `false` |
 

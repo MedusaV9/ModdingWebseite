@@ -1,6 +1,6 @@
 # E7 — Theme-Treue (AC-2.0-Design-System)
 
-**Eval-Agent E7** · Repo `/workspace` · Branch `cursor/gooby-godot-rewrite-d1d8` · Projekt `GOOBY-GODOT/`
+**Eval-Agent E7** · Repo `/workspace` · Branch `cursor/gooby-godot-rewrite-d1d8` (historisch; heute: `MedusaV9/ModdingWebseite` @ `cursor/bubble-shield-loop`) · Projekt `GOOBY-GODOT/`
 **Keine Repo-Änderung.** Alle Messungen laufen gegen eine Arbeitskopie unter
 `/tmp/gooby-godot/eval/proj` (Godot 4.4.1, `xvfb-run`, gl_compatibility).
 Shots + Montage: `/tmp/gooby-godot/eval/E7-shots/`.

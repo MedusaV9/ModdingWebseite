@@ -9,12 +9,15 @@ Zielplattform **iPhone** (Installation per Sideload-`.ipa`), komplett auf
 **Deutsch**.
 
 > [!IMPORTANT]
-> **Dieser Branch (`cursor/gooby-godot-loop-2c10`) ist eine eigenständige
-> Arbeitslinie** im Repo `MedusaV9/MinecraftBubbleShieldMod`. Der `main`-Branch
-> enthält ein **anderes Projekt** (eine Minecraft-Mod „Bubble Shield",
-> Java/Gradle) — nicht mischen, nicht nach `main` mergen. Das GOOBY-Projekt ist
-> in Runde W16 aus dem Repo `MedusaV9/CustomServerPrivate` hierher umgezogen;
-> der volle Verlauf (Runden W1–W15) wurde übernommen.
+> **Dieser Branch (`cursor/bubble-shield-loop`) ist eine eigenständige
+> Arbeitslinie** im Repo `MedusaV9/ModdingWebseite`. Der `main`-Branch enthält
+> ein **anderes Projekt** (die BAPBAP-Modding-Website, Vite/React/TypeScript) —
+> nicht mischen, nicht nach `main` mergen. Das GOOBY-Projekt ist schon zweimal
+> umgezogen, immer mit vollem Verlauf: in Runde W16 aus
+> `MedusaV9/CustomServerPrivate` (Branch `cursor/gooby-godot-rewrite-d1d8`)
+> nach `MedusaV9/MinecraftBubbleShieldMod` (Branch
+> `cursor/gooby-godot-loop-2c10`), und in Runde W18 von dort hierher.
+> CI/GitHub-Actions (inkl. iOS-Builds) laufen ab jetzt in DIESEM Repo.
 
 ## Was liegt wo
 
@@ -26,17 +29,19 @@ Zielplattform **iPhone** (Installation per Sideload-`.ipa`), komplett auf
 | [`MONKEYBAR/`](MONKEYBAR/README.md) | **Eigenständiges, von GOOBY unabhängiges Projekt**, das aus dem alten Repo mitgezogen ist: „MONKEYBAR" 1.0, ein Online-Multiplayer-Bluff-Partyspiel mit Affen (three.js-Client + autoritativer Node-`ws`-Server, 6 Spielmodi, 10 Maps) |
 | [`docs/`](docs/) | Design-Docs; das Godot-Rewrite lebt in [`docs/godot-rewrite/`](docs/godot-rewrite/) (Plan: `GODOT-PLAN.md`, Ist-Stand: `STATUS.md`) |
 | [`tools/`](tools/ci/README.md) | Werkzeuge: Preflight/CI-Skripte (`tools/ci/`), Blender-Pipelines, Pack- und Audio-Tools |
-| [`trailer/`](trailer/README.md) | Remotion-Projekt + fertiges Trailer-Video `GOOBY-5.0-Godot-Update-Trailer.mp4` |
+| [`trailer/`](trailer/README.md) | Remotion-Projekt + fertige Trailer-Videos (`GOOBY-5.1-Godot-Trailer.mp4` ist der aktuelle, der 5.0-Vorgänger liegt daneben) |
 
 Das frühere Root-README („# MonkeyBar") stammte noch vom MONKEYBAR-Projekt und
 passte nicht mehr zum Inhalt dieses Branches.
 
 ## Spielen / Testen (iPhone)
 
-1. Jeder Push, der `GOOBY-GODOT/**` berührt, baut in GitHub Actions
-   (Workflow `.github/workflows/gooby-godot.yml`, Job `ios-ipa`) eine
-   **unsignierte** `.ipa` und lädt sie als Artefakt **`GOOBY-godot-unsigned-ipa`**
-   hoch — dort herunterladen.
+1. Jeder Push, der `GOOBY-GODOT/**` berührt, baut in GitHub Actions **dieses
+   Repos** (`MedusaV9/ModdingWebseite` → Actions → Workflow „GOOBY Godot",
+   `.github/workflows/gooby-godot.yml`, Job `ios-ipa`) eine **unsignierte**
+   `.ipa` und lädt sie als Artefakt **`GOOBY-godot-unsigned-ipa`** hoch — dort
+   herunterladen. (Läufe von vor dem W18-Umzug liegen noch in den Actions der
+   alten Repos.)
 2. Mit **AltStore** oder **Sideloadly** auf das iPhone sideloaden (die Tools
    signieren beim Installieren mit der eigenen Apple-ID).
 3. Schritt-für-Schritt-Anleitung inkl. Troubleshooting:

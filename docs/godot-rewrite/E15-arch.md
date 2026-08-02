@@ -1,6 +1,6 @@
 # E15 — Architekturtreue zu den Design-Dokumenten
 
-**Branch:** `cursor/gooby-godot-rewrite-d1d8`  
+**Branch:** `cursor/gooby-godot-rewrite-d1d8` (historisch; heute: `MedusaV9/ModdingWebseite` @ `cursor/bubble-shield-loop`)  
 **Engine:** Godot `4.4.1.stable.official`  
 **Verdict:** **FAIL / nicht architekturtreu.** Kein P0, aber vier eingefrorene
 Verträge sind gebrochen. 438/438 Tests bestehen; sie prüfen die Integrations-

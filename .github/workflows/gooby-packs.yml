@@ -5,8 +5,8 @@
 # manifest.json und hängt alles an den rollenden Release-Tag `updates`.
 #
 # HOST = DIESES Repo (User-Entscheidung W15): Die GOOBY-Updates laufen über
-# MedusaV9/MinecraftBubbleShieldMod (seit dem W16-Umzug aus
-# MedusaV9/CustomServerPrivate); das früher geplante separate public
+# MedusaV9/ModdingWebseite (seit dem W18-Umzug; W16: MinecraftBubbleShieldMod,
+# davor MedusaV9/CustomServerPrivate); das früher geplante separate public
 # Content-Repo `gooby-updates` entfällt ENDGÜLTIG. Da dieses Repo PRIVAT
 # ist, liefern tokenlose browser-download-URLs (releases/download/…) 404 —
 # der Client lädt deshalb über die GitHub-Release-API (api.github.com,

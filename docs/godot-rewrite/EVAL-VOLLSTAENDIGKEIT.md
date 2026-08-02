@@ -23,6 +23,26 @@ Stand: 27. Juli 2026 · Godot 4.4.1 · Vergleichsquelle: aktueller Inhalt von
 > offenen Feature-Restpunkte (Ball, Sammlungssets, Wetter-FX, Speisen/Nougat,
 > Radio-Gate u. a.) sind Gegenstand der laufenden W13-Runde.
 
+> **Revisionsnotiz W18 (2. August 2026, Doku-Refresh — Log-Abgleich, KEINE
+> erneute zeilenweise Code-Prüfung):** Die in der W13-Revision noch offenen
+> Feature-Restpunkte sind laut Wellen-Abnahmen im git-Log **mit W13
+> gelandet**: Ball-Wurf, Sammlungssets im Album (inkl. Award-Verdrahtung),
+> Wetter-FX in Haus/Garten/Stadt, 9 neue Speisen + Nougatschleuse,
+> Radio-Gates, Fotomodus-Werkzeuge + Gyro-Parallax, City Drive als
+> Arcade-Runde, semantischer E2E-„erste Stunde“-Test **und das B4-Leak-Gate
+> (38 Spiele, 0 Orphans)**; B11 wurde im W13-GvZ-Paket verdrahtet (ein
+> Warn-Sweep-Nachfasser aus der verlorenen Welle G6 ist neu einsortiert).
+> Die Matrix-Zahlen dieser Datei (70/79) sind damit **konservativ veraltet**
+> — nach unten hin ehrlich, real dürfte die Web-Parität höher liegen. Alles
+> seit W14 (UI-Full-Rework, DLC-Fundamente „Goo und Bye“/„McGooby“,
+> Marktstand, Urlaubs-Besuche, GvZ-PvP übers Netz, Läden-Ambient,
+> Playtest-Harness …) liegt ZUSÄTZLICH über dem Web-Parität-Maßstab dieser
+> Matrix und wird in `STATUS.md` (Wellen-Absätze W15–W18) geführt. Eine
+> erneute unabhängige Vollprüfung nach dem Muster von EVAL-2/FERTIG-1 steht
+> aus und wäre der saubere nächste Schritt, wenn die Zahlen wieder belastbar
+> zitiert werden sollen. Das Projekt lebt seit W18 in
+> `MedusaV9/ModdingWebseite` (Branch `cursor/bubble-shield-loop`).
+
 ## Kurzurteil
 
 Die Aussage **„fast alles von davor fehlt“ ist nicht mehr haltbar** — und

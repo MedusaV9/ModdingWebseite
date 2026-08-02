@@ -11,7 +11,7 @@ extends TestCase
 const BASE_API := "user://w15_updrepo_api"
 const BASE_NOTOKEN := "user://w15_updrepo_notoken"
 const BASE_KETTE := "user://w15_updrepo_kette"
-const REPO := "MedusaV9/MinecraftBubbleShieldMod"
+const REPO := "MedusaV9/ModdingWebseite"
 const REPO_DL := "https://github.com/" + REPO + "/releases/download/updates"
 const REPO_API := "https://api.github.com/repos/" + REPO + "/releases/tags/updates"
 
@@ -29,14 +29,14 @@ const FIXTURE_RELEASE_JSON := """
 			"name": "manifest.json",
 			"size": 512,
 			"content_type": "application/json",
-			"url": "https://api.github.com/repos/MedusaV9/MinecraftBubbleShieldMod/releases/assets/9001"
+			"url": "https://api.github.com/repos/MedusaV9/ModdingWebseite/releases/assets/9001"
 		},
 		{
 			"id": 9002,
 			"name": "cosmetics-v1.4.0.pck",
 			"size": 1848320,
 			"content_type": "application/octet-stream",
-			"url": "https://api.github.com/repos/MedusaV9/MinecraftBubbleShieldMod/releases/assets/9002"
+			"url": "https://api.github.com/repos/MedusaV9/ModdingWebseite/releases/assets/9002"
 		}
 	]
 }
@@ -160,7 +160,7 @@ func test_asset_auswahl_aus_fixture() -> void:
 	assert_eq(int(manifest_asset.get("id", 0)), 9001, "manifest.json-Asset gefunden")
 	assert_eq(
 		str(manifest_asset.get("url")),
-		"https://api.github.com/repos/MedusaV9/MinecraftBubbleShieldMod/releases/assets/9001",
+		"https://api.github.com/repos/MedusaV9/ModdingWebseite/releases/assets/9001",
 		"Asset-API-URL (Download mit Accept: octet-stream)"
 	)
 	var pck := UpdateService.select_release_asset(release, "cosmetics-v1.4.0.pck")

@@ -22,58 +22,57 @@ schreibt dazu, WAS er gemacht hat.
 
 
 
-_(NEU seit W16: Das Projekt ist umgezogen — es lebt jetzt im Repo
-`MedusaV9/MinecraftBubbleShieldMod` auf dem Branch `cursor/gooby-godot-loop-2c10`,
-mit komplettem Verlauf. Alle Updates/Builds laufen ab jetzt über dieses Repo.
-Diese Datei bleibt dein direkter Draht: einfach unten reinschreiben.)_
+_(NEU seit W18 / 2. August: Das Projekt ist erneut umgezogen — es lebt jetzt im Repo
+`MedusaV9/ModdingWebseite` auf dem Branch `cursor/bubble-shield-loop` (voller
+Verlauf übernommen; W16-Station war `MinecraftBubbleShieldMod`). Alle
+Updates/Builds/Actions laufen ab jetzt über dieses Repo. Diese Datei bleibt dein
+direkter Draht: einfach unten reinschreiben — ich lese sie vor und nach jeder
+Runde.)_
+
+- [x] **Assets immer richtig rotiert / richtig rum** (2. August, Runde W18/R1)
+      Audit-Werkzeug gebaut, das den ECHTEN instanzierten Szenen-Baum prüft
+      (negative Scales, Kopfüber-Lage, ±90°-Kipp, Blickrichtung von
+      Richtungs-Assets vs. nächster Tisch/Weg) + 25 Szenen visuell fotografiert.
+      4 echte Dreher gefunden und gefixt (3 Küchen-Stühle + 1 Sessel drehten
+      dem Tisch/der Sofagruppe den Rücken zu — Daten-Fix in
+      `default_layouts.json`, Vorher/Nachher-Belege liegen bei). Dazu eine
+      DAUER-WACHE in der Test-Suite: jeder künftige nicht-gewhitelistete
+      Orientierungs-Verstoß macht die Suite rot. Nebenbefund (Garten-Deko
+      verschwindet — anderes Problem) wurde vom Playtest bestätigt und steht
+      als HOCH-Bug im Fix-Plan der nächsten Runde.
+- [x] **Mehr Modelle downloaden (nur stilpassend!)** (2. August, Runde W18/R1)
+      60 stilgeprüfte Low-Poly-Modelle beschafft — alle CC0 (lizenz-sauber,
+      account-frei): Kenney (Marktstände, Karren, Laternen, 5 neue Autos),
+      KayKit (Restaurant-Kisten, Kühlschränke, Tresen), Quaternius (Regale,
+      Läden-Deko, Ampeln, Straßenschilder, Windmühle/Silo/Brunnen für die
+      Ranch), Tiny Treats (Haus-/Spielplatz-Deko: Briefkasten, Zäune,
+      Karussell, Rutsche, Wippe). Qualitäts-Gate: Meter-Skala, Y-up,
+      Boden-Origin, Gooby-Palette-Tints. Erste Integration sichtbar in REHWEI
+      (Regalzone), GOOBYMAN (Drogerie-Regale) und Wochenmarkt (Budengasse mit
+      Markisen-Ständen — dabei gleich einen Alt-Bug gefixt: die Auslage
+      schwebte über den Tischen). Lizenz-Doku: `docs/godot-rewrite/ASSET-CREDITS.md`.
+      EHRLICHE NOTIZ zu deinen Links: Unity-Asset-Store-EULA bindet Assets an
+      Unity-Projekte (Nutzung in Godot = Lizenzverstoß — auch bei „free"),
+      Sketchfab braucht Accounts (Wegwerf-Mail verstößt gegen deren ToS),
+      blockbenchworkshop hat keinen CC0-Katalog. Für ALLE Kategorien gab es
+      vollwertige CC0-Pendants — die stecken jetzt im Spiel. Mehr Wellen folgen.
 
 
-Du musst mal sicher stellen das alle Assets immer richtig rotiert und richtig rum alles steht
-
-und nutze / downloade dir endlich mal mehr Modelle
-aber nur wenn der Stil zu unserem Spiel passt!!
-https://blockbenchworkshop.com/browse?status=free&sort=downloads
-
-https://sketchfab.com/3d-models?date=week&features=downloadable&sort_by=-likeCount
-
-https://assetstore.unity.com/packages/3d/free-low-poly-pack-65375?srsltid=AfmBOopI2uLBGsg25yrGayQnnA8GDYPH9EbuyNHhDkPbKCKt8WpzPLtX
-
-https://assetstore.unity.com/listing#nf-ec_price_filter=0...0
-
-https://assetstore.unity.com/packages/3d/environments/landscapes/low-poly-atmospheric-locations-pack-278928
-
-https://assetstore.unity.com/packages/3d/environments/low-poly-environment-315184
-
-https://assetstore.unity.com/packages/3d/environments/simplepoly-city-low-poly-assets-58899
-
-https://assetstore.unity.com/packages/2d/textures-materials/sky/farland-skies-low-poly-64604
 
 
-https://assetstore.unity.com/packages/package/low-poly-environment-park-242702
-
-hier im Unity Stire Gibt es echt extrem viel was uns helfen kann was free ist plus low poly was ja unser Stil etwas ist 
-[
-](https://assetstore.unity.com/search#q=Low%20Poly&nf-ec_price_filter=0...0)
-
-wenn du irgendwo nen Account brauchst erstell dir einfach einen mit temp mail oder sowas
-
-
-
-
-- [~] **Dein Feedback vom 1. August (mit 7 Screenshots, iPhone quer):** UI-Full-
-      Rework, dynamisches UI mit Animationen (z. B. Baumenü → andere Knöpfe
-      verschwinden), ALLE Bugs fixen, Subagents sollen das Spiel richtig SPIELEN
-      (10 parallel, jeder eigene Instanz), iPhone 17 Pro Max + Querformat als
-      Leitformat, Modal-Menüs + Swipen/Wischen fixen, Läden sind zu leer (echte
-      Orte mit animierten Chars!), alles fühlt sich wie eine Dev-Demo bzw. wie
-      einzelne Spiele statt EIN Gooby-Spiel an. → **Welle G7 „SPIELGEFÜHL" läuft**
-      (Zuschnitt unten in „In Arbeit"); danach Playtest-Welle (10 Spieler-Agents)
-      und die 30-Ideen-Planner-Welle. Deine Screenshots sind als Befunde erfasst:
-      HUD-Kacheln schneiden Wörter ab („IGohbi/Garder/Gestalt"), Sprechblasen
-      brechen mitten im Wort („Ohh, wird das sch"), Tagesquests-Blatt liegt ÜBER
-      den Status-Leisten, IGohbie-Telefon hat ein kaputtes Dunkel-Icon, Gestalten-
-      Liste schneidet „Briefkasten" ab, Baumodus = Knopf-Salat (der bekannte
-      97-Befunde-Wurzelfix, jetzt MIT Weggleit-Animation).
+- [x] **Dein Feedback vom 1. August (mit 7 Screenshots, iPhone quer)** —
+      **Welle G7 „SPIELGEFÜHL" ist KOMPLETT gelandet** (P50–P58 + P38R, siehe
+      Erledigt) und die Playtest-Welle hat deine 7 Screenshot-Befunde
+      NACHGEMESSEN (echte Spieler-Agents, eigene Instanz, Leitformat quer):
+      5 von 7 sind bestätigt weg (Sprechblasen brechen sauber, Blätter dimmen
+      das HUD, Telefon-Icons sauber, „Briefkasten" voll lesbar, Baumodus-Dock
+      mit Weggleit-Animation). 2 sind ehrlich NOCH offen und stehen im
+      Fix-Plan der laufenden Runde: (1) HUD-Kachel-Labels im QUERformat werden
+      weiter gekürzt („Albu/IGohb/Garde") — die Randspalten-Kacheln lassen
+      strukturell nur ~18 px Textbreite, der Fix ist ein Icon-Bühnen-Umbau
+      (Ideen-Doc J2); (2) nach dem Onboarding stapeln sich bis zu 3 Overlays
+      (Tagesbonus über Guide-Tour über Erklärkarte). Details:
+      `docs/playtest/G8-PT4-telefon-soziales.md` (Verifikations-Tabelle).
 
 _(Runden W14 UND W15 sind FERTIG — Details unten in „Erledigt". Aktueller Stand:)_
 
@@ -217,56 +216,46 @@ _(gerade nichts offen — alle bisherigen Punkte stehen unten unter „Erledigt"
 
 ## 2. In Arbeit
 
-Runde W17 — Wellen G1–G5 sind FERTIG (Details oben + unten in „Erledigt").
-_Hinweis zur Transparenz: die am 31.7. gestartete Welle G6 ist einem VM-Neustart
-zum Opfer gefallen, bevor sie integriert/committet war — kein Stand verloren
-gegangen außer der unfertigen Subagent-Arbeit; die G6-Pakete sind neu einsortiert._
+**Runde W18 (2. August, neues Zuhause `ModdingWebseite`) — R1 ist FERTIG,
+R2 „FIX + POLISH" startet sofort.** G7 (P50–P58 + P38R) war schon vor dem
+Umzug komplett gelandet — die Marker oben waren nur veraltet.
 
-**Welle G7 „SPIELGEFÜHL" LÄUFT** (dein Feedback vom 1.8. hat Vorrang; 10
-Subagents parallel — das ist das harte Plattform-Limit, die Pipeline bleibt voll):
+**W18/R1 FERTIG (18 Pakete, 3 Wellen auf einmal):**
+- [x] **Welle H: PLAYTEST ×4 Bereichs-Agents** — echte Spieler-Agents
+      (eigene Instanz, frisches user://, Leitformat 2868×1320) haben
+      Home/Bau, Stadt/Läden/DLCs, Minispiele und Telefon/Soziales/Onboarding
+      KOMPLETT durchgespielt (24 neue Flows, ~1000 verifizierte Schritte,
+      exakte Geld-/Waren-Nachrechnung). Ergebnis: 4 Reports unter
+      `docs/playtest/G8-PT*.md` mit 1 BLOCKER (Geschichten-Buch crasht),
+      2 KRITISCH/HOCH-Clustern (leeres Tagesquest-Blatt beim 2. Öffnen,
+      DLC-Hub aus Einstellungen unerreichbar, Goobye-Backen-Pill verdeckt
+      Regal-Slots, Garten-Deko verschwindet, Doppel-Tap-Race) und ~20
+      weiteren Befunden inkl. Fix-Verdacht je Datei. → R2 fixt sie.
+- [x] **Welle I: 6 Ideen-Planner** — 91 priorisierte Ideen mit Code-Ankern
+      in `docs/godot-rewrite/ideen/G8-IDEEN-*.md` (Home/Seele, Stadt/Läden/
+      DLC, Minispiele/Arcade, UI/Juice, Progression, Audio/Technik) —
+      je mit Top-3-Empfehlung; die besten fließen ab R2 in die Umsetzung.
+- [x] **G6-Nachholer komplett:** „Goo und Bye" WELLE B (Großmarkt-Fahrt mit
+      Lieferwagen + Paletten/Rabatte/Tagesangebot, Preis-Schieber je
+      Warengruppe mit Trend-Banner, Backstation mit Duft-Bonus, Alwin-Ausbau
+      mit Streak-Belohnung — 29/29 Tests), „McGooby" WELLE B (Kauf-Gate 1800
+      Münzen ab Level 6, Fritteuse mit Salz-Moment, Getränke-Station mit
+      Sprudel-Gag, Maskottchen-BÜHNE mit Kunden-Jubel — 39/39 Tests,
+      Suite 3498/0), DLC-LADEBILDSCHIRME (eigene Karten-Identität je DLC im
+      Alt-Web-Look, Möhren-Gag-Tipps), AUDIO-FEEL (22 neue eingemessene SFX:
+      12 Emotions-Motive + Türglocke/Kasse/Foto/Türen, Orts-Reverb-Zonen,
+      Mix-Wache), WARN-SWEEP (6 Fehlerquellen gefixt + Warn-Budget-Wache),
+      DOKU-REFRESH (23 Dokumente auf den neuen Repo-Stand; Update-Kanal im
+      CODE aufs neue Repo umgestellt + Pack 1.2.0).
 
-- [~] **P50 HUD-Dynamik** — dein Wunsch wörtlich: beim Baumenü GLEITEN die
-      HUD-Knöpfe animiert weg (und kommen animiert zurück); bei offenen
-      Blättern/Modals (z. B. Tagesquests) weicht/dimmt das HUD statt
-      durchzuscheinen; HUD-Kachel-Labels werden nie mehr abgeschnitten
-      („IGohbi/Garder/Gestalt" → passende Beschriftung), „Wo ist mein
-      Gooby?"-Chip inklusive
-- [~] **P51 Sprechblasen + Text-Fit** — „Ohh, wird das sch" ade: Blasen
-      wachsen/wickeln sauber, nie mehr mitten im Wort enden; Text-Fit-Sweep
-- [~] **P52 IGohbie-Telefon-Rework** — kaputtes Dunkel-Icon, unklare Symbole,
-      App-Labels, Öffnen-Animation, Wisch-zum-Schließen
-- [~] **P53 Modal/Sheet-System + Swipe** — EIN einheitliches Blatt-Verhalten
-      überall: Slide-in/out, Hintergrund-Dim, runterwischen = schließen
-      (inkl. Radio-Like-Offscreen-Fix)
-- [~] **P54 Garderobe + Gestalten poliert** — abgeschnittene Kategorien
-      („Briefkasten"), Scroll-Hinweise, Karten-Layout, Kauf-Feedback
-- [~] **P55 Läden lebendig, Teil 1** — REHWEI + IKEA werden ECHTE Orte:
-      animierte Kunden-Goobys, Kassen-NPC, Ambiente-Sound, Deko
-- [~] **P56 Ein-Spiel-Gefühl** — einheitlicher Minispiel-Rahmen (Intro/
-      Outro/Pause im Gooby-Look überall) + einheitliche Szenen-Übergänge,
-      damit sich nichts mehr wie ein Fremd-Spiel anfühlt
-- [~] **P57 iPhone-17-Pro-Max-Leitformat (2868×1320 quer)** — UI-Wache +
-      Konformitätstests aufs neue Leitformat, plus die 17 bekannten
-      Audit-Restbefunde (RMP-Tippflächen, Onboarding-Knöpfe offscreen)
-- [~] **P38R GvZ-PvP-Server** — Relaunch des verlorenen Pakets (gvzmp.js
-      nach gobnom-Muster inkl. Node-Tests)
-- [~] **P58 Playtest-Harness + Pionier-Spieler** — baut das „Subagent
-      spielt das Spiel"-Werkzeug (eigene Instanz, echte Eingaben,
-      Screenshot-Serie, Hänger-/Fehler-Detektor) und spielt den ersten
-      kompletten Durchlauf im Leitformat → Bug-Report Nr. 1
-
-**Danach sofort (Warteschlange):**
-- [ ] **Welle H: PLAYTEST ×10** — 10 Spieler-Agents, jeder spielt seinen
-      Bereich mit eigener Instanz (Home/Bau, Stadt/Läden, Minispiele ×3,
-      DLCs, Telefon/Radio, Garderobe/Gestalten, Quests/Progression,
-      Onboarding) → gesammelte Bug-Liste
-- [ ] **Welle I: 30+ Ideen-Planner** — 10 Planner parallel, jeder liefert
-      10+ priorisierte Ideen für seinen Bereich (≈100+ Ideen), konsolidiert
-      zur Roadmap
-- [ ] **Wellen J+: Umsetzung** — Playtest-Bugs + beste Planner-Ideen +
-      die neu einsortierten G6-Pakete (DLC Welle B beider Läden, Ball-Wurf,
-      DLC-Ladebildschirme, Audio-Feel, B11/Warn-Sweep, Doku-Refresh,
-      McGooby-Bühne, Alwin-NPC)
+**W18/R2 „FIX + POLISH" (läuft):**
+- [~] Playtest-Blocker + HOCH-Bugs fixen (Geschichten-Crash, Quest-Blatt,
+      DLC-Hub, Backen-Pill, Garten-Deko, Doppel-Tap, Arcade-Touch-Scroll)
+- [~] Top-Ideen umsetzen: Rekord-Puls, Arcade-Sternenbuch, Beute-Flug,
+      Icon-Bühne (der strukturelle Querformat-HUD-Fix), Ort-Leben-Rollout
+      auf alle Stadt-Orte, Stimmungs-Herz, Morgen-/Abend-Ritual u. m.
+- [ ] Danach: nächste Playtest-Verifikations-Welle + weitere Ideen-Umsetzung
+      im Dauerloop (ich schaue vor/nach jeder Runde hier rein)
 
 ---
 

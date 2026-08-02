@@ -1,6 +1,6 @@
 # E6 — Deutsch-Qualität & Ton (GOOBY-GODOT)
 
-Repo `/workspace`, Branch `cursor/gooby-godot-rewrite-d1d8`. **Keine Datei geändert** (read-only Audit).
+Repo `/workspace`, Branch `cursor/gooby-godot-rewrite-d1d8` (historisch; heute: `MedusaV9/ModdingWebseite` @ `cursor/bubble-shield-loop`). **Keine Datei geändert** (read-only Audit).
 
 ## Prüfumfang (vollständig gelesen)
 

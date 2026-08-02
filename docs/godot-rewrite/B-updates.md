@@ -203,8 +203,10 @@ robuste, primitive Lösung.
 ## 3) Privates Repo: Download-Quelle (Abwägung + Empfehlung)
 
 `MedusaV9/CustomServerPrivate` ist privat → `releases/download/…` liefert dort ohne Token
-404. (Historisch — seit dem W16-Umzug heißt das Repo `MedusaV9/MinecraftBubbleShieldMod`;
-die Abwägung gilt unverändert.) Optionen ehrlich abgewogen:
+404. (Historisch — nach dem W16-Umzug hieß das Repo `MedusaV9/MinecraftBubbleShieldMod`,
+seit dem W18-Umzug ist es `MedusaV9/ModdingWebseite`; die Abwägung gilt unverändert.
+Umsetzung: seit W15 hostet das jeweils aktuelle private Haupt-Repo die Updates selbst,
+s. `docs/UPDATES.md`.) Optionen ehrlich abgewogen:
 
 | Option | Bewertung |
 |---|---|

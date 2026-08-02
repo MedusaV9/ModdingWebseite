@@ -11,13 +11,25 @@ Offline-first: ohne Netz läuft das Spiel immer normal weiter.
 
 ## 1. Überblick & Architektur
 
-**Host der Updates ist DIESES private Repo** (`MedusaV9/MinecraftBubbleShieldMod`;
-User-Entscheidung W15, seit dem W16-Umzug aus `MedusaV9/CustomServerPrivate` —
-das früher geplante separate public Content-Repo `gooby-updates` entfällt
+**Host der Updates ist DIESES private Repo** (`MedusaV9/ModdingWebseite`;
+User-Entscheidung W15: Updates laufen über das Haupt-Repo, wo immer es gerade
+lebt — das war bis W16 `MedusaV9/CustomServerPrivate`, bis W18
+`MedusaV9/MinecraftBubbleShieldMod`, und ist seit dem W18-Umzug dieses Repo.
+Das früher geplante separate public Content-Repo `gooby-updates` entfällt
 endgültig). Weil das Repo privat ist, liefern
 tokenlose browser-download-URLs (`releases/download/…`) 404 — der Client lädt
 deshalb über die **GitHub-Release-API** mit einem Zugangsschlüssel
 (fine-grained PAT, → §6a).
+
+> **Ehrlicher Stand nach dem W18-Umzug (2. August 2026):** Diese Doku
+> beschreibt das ZIEL (dieses Repo als Update-Host). Der EINGEBAUTE
+> `config`-Pack im Code trägt aber noch die alte
+> `MinecraftBubbleShieldMod`-URL — betroffen sind
+> `GOOBY-GODOT/content/config/data/config.json`, `config.example.json` und
+> die `REPO`-Konstante in `tests/unit/test_w15_updrepo.gd`. Der Code-Repoint
+> (inkl. MINOR-Bump des config-Packs 1.1.0 → 1.2.0, W16-Muster: Commit
+> `33e1d426`) ist für die nächste Umsetzungs-Welle eingeplant; bis dahin
+> zeigen frisch gebaute IPAs bei der Update-Suche noch aufs alte Repo.
 
 ```
 ┌─────────────────────────┐     baut .pck + manifest.json
@@ -107,8 +119,11 @@ Eine feste URL liefert den kompletten Update-Stand (Release-Asset am Tag
 dieses Repos:
 
 ```
-https://api.github.com/repos/MedusaV9/MinecraftBubbleShieldMod/releases/tags/updates
+https://api.github.com/repos/MedusaV9/ModdingWebseite/releases/tags/updates
 ```
+
+(Bis der W18-Code-Repoint gelandet ist, steht im eingebauten `config`-Pack
+noch die alte `…/MedusaV9/MinecraftBubbleShieldMod/…`-URL — s. Kasten in §1.)
 
 Der Client holt darüber die Assets-Liste des Releases, lädt daraus das
 `manifest.json`-Asset (mit `Accept: application/octet-stream`) und schreibt
@@ -453,7 +468,7 @@ Server-Betreiber:
 1. **PAT erzeugen:** GitHub → Settings → Developer settings →
    Personal access tokens → **Fine-grained tokens** → „Generate new token“.
    - *Repository access:* **Only select repositories** →
-     `MedusaV9/MinecraftBubbleShieldMod` (NUR dieses Repo!).
+     `MedusaV9/ModdingWebseite` (NUR dieses Repo!).
    - *Permissions:* **Contents: Read-only** — sonst NICHTS. (Der Token kann
      damit Releases/Code dieses Repos lesen, mehr nicht.)
    - Ablaufdatum nach Geschmack (GitHub erzwingt eines; rechtzeitig neu
@@ -472,16 +487,20 @@ Server-Betreiber:
    sehen im Panel „Updates brauchen einen Zugangsschlüssel — Einstellungen →
    Updates“; das Spiel läuft normal weiter (offline-first).
 
-> **Repo-Umzug (W16): Neuer Zugangsschlüssel nötig!**
+> **Repo-Umzug (W18): Neuer Zugangsschlüssel nötig — schon wieder, sorry!**
 >
-> GOOBY ist in ein neues Repo umgezogen (`MedusaV9/MinecraftBubbleShieldMod`).
-> Der alte Zugangsschlüssel war NUR für das alte Repo freigeschaltet — für Updates
-> aus dem neuen Repo funktioniert er nicht. Das musst du als Betreiber einmal tun:
+> GOOBY ist erneut in ein neues Repo umgezogen (jetzt:
+> `MedusaV9/ModdingWebseite`; in W16 ging es schon einmal von
+> `CustomServerPrivate` nach `MinecraftBubbleShieldMod`). Ein
+> fine-grained-Zugangsschlüssel ist immer NUR für das Repo freigeschaltet,
+> für das er erzeugt wurde — für Updates aus dem neuen Repo funktioniert der
+> alte also nicht. Das musst du als Betreiber einmal tun (identisches
+> Prozedere wie beim W16-Umzug):
 >
 > 1. **Neuen Schlüssel erzeugen:** GitHub → Settings → Developer settings →
 >    Personal access tokens → Fine-grained tokens → „Generate new token“.
 >    Bei *Repository access* **Only select repositories** →
->    `MedusaV9/MinecraftBubbleShieldMod` auswählen (NUR dieses Repo!), bei
+>    `MedusaV9/ModdingWebseite` auswählen (NUR dieses Repo!), bei
 >    *Permissions* **Contents: Read-only** — sonst nichts.
 > 2. **An alle Freunde verschicken** (per DM o. Ä., Form `github_pat_…`). Jeder
 >    trägt den neuen Schlüssel in der App unter **Einstellungen → Updates →
@@ -493,16 +512,19 @@ Server-Betreiber:
 > Hinweis „Zugangsschlüssel abgelehnt“ — das Spiel läuft ganz normal weiter, es
 > kommen nur keine Updates an, bis der neue Schlüssel eingetragen ist.
 
-**Betreiber-Hinweis für Bestandsclients (wichtig, weil der Umzug KEIN
-GitHub-Rename war — alte URLs leiten NICHT um):** Bereits verteilte IPAs haben
-die ALTE `manifest_url` eingebaut (und ggf. als `user://packs/config.json`
-installiert). Zwei Wege:
+**Betreiber-Hinweis für Bestandsclients (wichtig, weil die Umzüge KEINE
+GitHub-Renames waren — alte URLs leiten NICHT um):** Bereits verteilte IPAs
+haben eine ALTE `manifest_url` eingebaut (je nach Bauzeitpunkt
+`MedusaV9/MinecraftBubbleShieldMod` oder — vor W16 — `CustomServerPrivate`;
+ggf. zusätzlich als installiertes `user://packs/config.json`). Zwei Wege:
 
 - **Weg A (einfach, empfohlen bei wenigen Freunden):** neue IPA bauen/verteilen
-  (enthält das neue `config.json`) + neuen Token eintragen lassen. Fertig.
-- **Weg B (ohne neue IPA, „Brücken-Release“):** solange das alte Repo noch
-  existiert, dort EINMAL ein letztes config-Pack-Update veröffentlichen, dessen
-  `config.json` die NEUE `manifest_url` trägt (config-Pack-Version bumpen!).
+  (enthält das neue `config.json` — setzt den W18-Code-Repoint voraus, §1) +
+  neuen Token eintragen lassen. Fertig.
+- **Weg B (ohne neue IPA, „Brücken-Release“):** solange das jeweils alte Repo
+  noch existiert, dort EINMAL ein letztes config-Pack-Update veröffentlichen,
+  dessen `config.json` die NEUE `manifest_url`
+  (`…/repos/MedusaV9/ModdingWebseite/…`) trägt (config-Pack-Version bumpen!).
   Reihenfolge pro Spieler: erst mit dem ALTEN Token „Nach Updates suchen“ (holt
   die Brücken-Config, wirkt sofort), DANN den NEUEN Token eintragen. Achtung:
   das optionale `github_token`-Feld im config-Pack hilft hier NICHT automatisch,
@@ -511,10 +533,15 @@ installiert). Zwei Wege:
 - Wird das alte Repo einfach gelöscht/archiviert, sehen Alt-Clients nur den
   harmlosen Fehler-Toast („Gerade nicht erreichbar“) — Spiel bleibt voll
   spielbar; Migration dann nur noch über Weg A.
+- **Ehrliche Einordnung:** Bisher wurde noch NIE ein `updates`-Release
+  veröffentlicht (in keinem der Repos — der erste Pack-Release steht weiterhin
+  aus). Es gibt also noch keine Clients, die je echte Updates bezogen haben;
+  praktisch relevant ist heute vor allem Weg A plus die Token-Migration.
 
 Betreiber-Schritte für den Umzug in Kurzform:
 
-1. Neuen fine-grained PAT fürs neue Repo erzeugen und an alle verteilen (s. o.).
+1. Neuen fine-grained PAT fürs neue Repo (`MedusaV9/ModdingWebseite`) erzeugen
+   und an alle verteilen (s. o.).
 2. Im neuen Repo den ersten Pack-Release fahren (`packs-v*`-Tag pushen oder
    Actions → gooby-packs → Run workflow mit `publish=true`), damit der rollende
    `updates`-Release samt Manifest dort existiert — vorher meldet jede
