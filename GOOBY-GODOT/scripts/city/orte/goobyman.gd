@@ -8,6 +8,8 @@ extends OrtScene
 ## „GOOBYMAN“-Handtuch-Umhang um (prozedurales Mesh + Tween, Doc H §4.3).
 
 const INNEN := "res://assets/city/innen"
+## ASSET-SOURCE (W17): neue CC0-Laden-Modelle — docs/godot-rewrite/ASSET-CREDITS.md.
+const INNEN2 := "res://assets/city/innen2"
 
 var _umhang_laeuft := false
 
@@ -25,6 +27,20 @@ func _baue_innenraum() -> void:
 	_prop("%s/crate.gltf" % INNEN, Vector3(3.7, 0.0, 0.2), -12.0, 0.65)
 	_prop("%s/menu.gltf" % INNEN, Vector3(-4.8, 0.0, -1.8), 30.0, 1.6)
 	_prop("%s/kitchencounter_sink.gltf" % INNEN, Vector3(3.4, 0.0, -3.2), 0.0, 0.9)
+	# ASSET-SOURCE (W17) Drogerie-Regalzone: weißes Hochregal neben den
+	# Tiegeln, Holzregal rechts, Handtuch-Wandbord überm Spülcounter,
+	# Mülltonne bei den Nachschub-Kartons, Monstera als Laden-Grün.
+	# Regalböden (aus GLB gemessen): hoch 0.40/0.78/1.15/1.53, offen
+	# 0.27/0.52/0.78/1.03 — kleine Tiegel als Regal-Ware obendrauf.
+	_prop("%s/regal_hoch.glb" % INNEN2, Vector3(-1.7, 0.0, -3.6), 0.0, 1.0)
+	_prop("%s/regal_offen.glb" % INNEN2, Vector3(5.2, 0.0, -3.4), -12.0, 1.0)
+	_prop("%s/shelf_papertowel_decorated.gltf" % INNEN2, Vector3(1.7, 1.6, -3.8), 0.0, 0.8)
+	_prop("%s/muelleimer_gruen.glb" % INNEN2, Vector3(2.7, 0.0, 1.8), 14.0, 0.9)
+	_prop("%s/pflanze_laden_klein.glb" % INNEN2, Vector3(-5.5, 0.0, -0.9), 0.0, 0.9)
+	_prop("%s/jar_A_large.gltf" % INNEN, Vector3(-1.7, 0.4, -3.6), 8.0, 0.3)
+	_prop("%s/jar_A_large.gltf" % INNEN, Vector3(-1.7, 1.15, -3.6), -12.0, 0.28)
+	_prop("%s/jar_A_large.gltf" % INNEN, Vector3(5.2, 0.52, -3.4), 30.0, 0.3)
+	_prop("%s/jar_A_large.gltf" % INNEN, Vector3(5.2, 1.03, -3.4), -25.0, 0.26)
 	_baue_schriftzug()
 
 

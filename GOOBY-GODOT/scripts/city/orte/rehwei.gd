@@ -7,6 +7,9 @@ extends OrtScene
 ## Marktgemurmel und dichter gefüllte Regale.
 
 const INNEN := "res://assets/city/innen"
+## ASSET-SOURCE (W17): neue CC0-Laden-Modelle (Quaternius-Regale in
+## Gooby-Palette, KayKit-Kühltheken/Kisten) — docs/godot-rewrite/ASSET-CREDITS.md.
+const INNEN2 := "res://assets/city/innen2"
 
 
 func _baue_innenraum() -> void:
@@ -26,6 +29,39 @@ func _baue_innenraum() -> void:
 	_prop("%s/fridge_A.gltf" % INNEN, Vector3(-5.2, 0.0, -0.9), 0.0, 0.9)
 	_prop("%s/jar_A_large.gltf" % INNEN, Vector3(-0.2, 0.85, -0.6), 15.0, 0.5)
 	_prop("%s/jar_A_large.gltf" % INNEN, Vector3(-0.15, 0.85, -1.8), -30.0, 0.5)
+	# ASSET-SOURCE (W17) Regal-Zone: echtes Marktregal (bestückt) + Bücher-
+	# regal (die Geschichten-Bücher!) an der Rückwand, weiße Kühlsäule als
+	# Akzent, neue Kisten-Sorten, Gruß-Pflanze am Eingang.
+	_prop("%s/regal_gross.glb" % INNEN2, Vector3(0.4, 0.0, -3.6), 0.0, 1.0)
+	_prop("%s/buecherregal.glb" % INNEN2, Vector3(4.6, 0.0, -3.6), 0.0, 1.0)
+	_prop("%s/kuehlschrank_hoch.glb" % INNEN2, Vector3(-3.6, 0.0, -3.55), 0.0, 1.0)
+	_prop("%s/crate_lettuce.gltf" % INNEN2, Vector3(-2.4, 0.0, -3.4), 10.0, 0.65)
+	_prop("%s/crate_potatoes.gltf" % INNEN2, Vector3(-1.5, 0.0, -3.5), -6.0, 0.65)
+	_prop("%s/crate_ham.gltf" % INNEN2, Vector3(3.0, 0.0, -3.5), -15.0, 0.65)
+	_prop("%s/crate_onions.gltf" % INNEN2, Vector3(-4.9, 0.0, 1.7), -24.0, 0.65)
+	# Pflanze an der rechten Wand — x≤5,5 bleibt im 75°-Kamerakegel
+	# (weiter außen schneidet der Bildrand sie ab).
+	_prop("%s/pflanze_laden_gross.glb" % INNEN2, Vector3(5.5, 0.0, -0.9), 0.0, 1.0)
+	_baue_regal_waren()
+
+
+## ASSET-SOURCE (W17): Waren AUF den neuen Regalböden (Brett-Oberkanten
+## regal_gross: 0.30/0.58/0.87/1.15/1.43 m; buecherregal: 0.29/0.55/0.82/
+## 1.09 m — gemessen aus den GLBs). Kenney-Food + Möbel-Bücher als Deko.
+func _baue_regal_waren() -> void:
+	const ESSEN := "res://assets/city/essen"
+	_prop("%s/nutella.glb" % ESSEN, Vector3(0.15, 0.3, -3.58), 10.0, 1.0)
+	_prop("%s/chocolate.glb" % ESSEN, Vector3(0.7, 0.3, -3.58), -14.0, 1.0)
+	_prop("%s/grapes.glb" % ESSEN, Vector3(0.1, 0.58, -3.58), 20.0, 1.0)
+	_prop("%s/cookie.glb" % ESSEN, Vector3(0.65, 0.58, -3.58), -8.0, 1.0)
+	_prop("%s/bread.glb" % ESSEN, Vector3(0.1, 0.87, -3.58), 12.0, 1.0)
+	_prop("%s/cheese.glb" % ESSEN, Vector3(0.7, 0.87, -3.58), -20.0, 1.0)
+	_prop("%s/apple.glb" % ESSEN, Vector3(0.2, 1.15, -3.58), 0.0, 1.0)
+	_prop("%s/banana.glb" % ESSEN, Vector3(0.6, 1.15, -3.58), -30.0, 1.0)
+	_prop("res://assets/furniture/books.glb", Vector3(4.45, 0.29, -3.6), 0.0, 1.2)
+	_prop("res://assets/furniture/books.glb", Vector3(4.75, 0.55, -3.6), 180.0, 1.2)
+	_prop("res://assets/furniture/books.glb", Vector3(4.5, 0.82, -3.6), 0.0, 1.2)
+	_prop("res://assets/furniture/books.glb", Vector3(4.72, 1.09, -3.6), 180.0, 1.2)
 
 
 ## W13B (Doc F §3.2): REHWEI führt neben den Lebensmitteln auch die

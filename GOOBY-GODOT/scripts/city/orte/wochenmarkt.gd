@@ -15,6 +15,8 @@ extends OrtScene
 const INNEN := "res://assets/city/innen"
 const ESSEN := "res://assets/city/essen"
 const MOEBEL := "res://assets/furniture"
+## ASSET-SOURCE (W17): Kenney-Marktstände (CC0) — docs/godot-rewrite/ASSET-CREDITS.md.
+const MARKT := "res://assets/city/marktstand"
 
 ## Marktmusik-Anbindung (W15/MARKT-Atmo): gespielt wird NUR, wenn die
 ## Registry wirklich einen Track mit diesem Kontext kennt — heute keiner,
@@ -66,15 +68,34 @@ func _ist_draussen() -> bool:
 
 
 func _baue_innenraum() -> void:
-	_prop("%s/table.glb" % MOEBEL, Vector3(-3.4, 0.0, -1.8), 0.0, 1.2)
-	_prop("%s/table.glb" % MOEBEL, Vector3(3.4, 0.0, -1.8), 0.0, 1.2)
-	_prop("%s/crate_carrots.gltf" % INNEN, Vector3(-4.2, 0.0, -0.4), 14.0, 0.7)
-	_prop("%s/crate_tomatoes.gltf" % INNEN, Vector3(-2.6, 0.0, -0.4), -10.0, 0.7)
-	_prop("%s/crate_buns.gltf" % INNEN, Vector3(2.6, 0.0, -0.4), 8.0, 0.7)
-	_prop("%s/crate.gltf" % INNEN, Vector3(4.2, 0.0, -0.4), -16.0, 0.7)
+	# ASSET-SOURCE (W17) Sichtbarkeits-Fix: table.glb ist NIEDRIG (0,39 m),
+	# die Kisten sind 0,65 m hoch — standen die Tische HINTER den Kisten,
+	# verdeckten diese sie komplett und die Auslage schien zu schweben.
+	# Deshalb: Tische vorn, Kisten dahinter.
+	_prop("%s/table.glb" % MOEBEL, Vector3(-3.4, 0.0, -0.4), 0.0, 1.2)
+	_prop("%s/table.glb" % MOEBEL, Vector3(3.4, 0.0, -0.4), 0.0, 1.2)
+	_prop("%s/crate_carrots.gltf" % INNEN, Vector3(-4.2, 0.0, -1.8), 14.0, 0.7)
+	_prop("%s/crate_tomatoes.gltf" % INNEN, Vector3(-2.6, 0.0, -1.8), -10.0, 0.7)
+	_prop("%s/crate_buns.gltf" % INNEN, Vector3(2.6, 0.0, -1.8), 8.0, 0.7)
+	_prop("%s/crate.gltf" % INNEN, Vector3(4.2, 0.0, -1.8), -16.0, 0.7)
 	_prop("%s/menu.gltf" % INNEN, Vector3(0.0, 0.0, -3.6), 0.0, 1.8)
 	_prop("%s/garten/bench.glb" % MOEBEL, Vector3(5.6, 0.0, 1.2), -100.0, 1.1)
 	_prop("%s/garten/tree_fat.glb" % MOEBEL, Vector3(-6.4, 0.0, -3.4), 0.0, 2.4)
+	# ASSET-SOURCE (W17): echte Marktstände mit Markisen hinter den
+	# Tischen, Handkarren bei den Kunden, Laterne und zweite Sitzbank —
+	# der Markt wirkt wie eine kleine Budengasse statt zweier Tische.
+	# (stall-red in der hinteren Budenreihe, frei vom tree_fat-Schatten
+	# und im 75°-Kamerakegel — weiter links läge er aus dem Bild.)
+	_prop("%s/stall-red.glb" % MARKT, Vector3(-2.9, 0.0, -3.8), 10.0, 1.0)
+	_prop("%s/stall-green.glb" % MARKT, Vector3(5.4, 0.0, -3.0), -18.0, 1.0)
+	# stall.glb ist ein kleiner Markttresen (Platte ~0,37) — mit Brot und
+	# Käse bestückt, damit die Bude nicht leer zwischen den Ständen steht.
+	_prop("%s/stall.glb" % MARKT, Vector3(2.6, 0.0, -4.0), 4.0, 1.0)
+	_prop("%s/bread.glb" % ESSEN, Vector3(2.45, 0.37, -4.1), 24.0, 0.9)
+	_prop("%s/cheese.glb" % ESSEN, Vector3(2.8, 0.37, -3.9), -12.0, 0.9)
+	_prop("%s/cart.glb" % MARKT, Vector3(0.8, 0.0, 1.7), -28.0, 0.9)
+	_prop("%s/lantern.glb" % MARKT, Vector3(6.2, 0.0, -0.8), 0.0, 1.1)
+	_prop("%s/stall-bench.glb" % MARKT, Vector3(4.3, 0.0, 1.7), 100.0, 1.0)
 	_baue_auslage()
 	_baue_eigenstand()
 	_aktualisiere_stand_deko()
@@ -111,14 +132,18 @@ func oeffne_laden() -> void:
 
 
 ## Gemüse auf den Tischen (reine Deko, ohne Bezug zum Inventar).
+## ASSET-SOURCE (W17) Bodenkontakt-Fix: table.glb ist ein NIEDRIGER Tisch
+## (Platte bei y≈0,39 bei Skala 1,2) — die alte Höhe 0,78 ließ die Ware
+## sichtbar schweben. 0,40 legt sie direkt auf die Platte (z folgt den
+## nach vorn getauschten Tischen aus _baue_innenraum()).
 func _baue_auslage() -> void:
 	var auslage := {
-		"carrot.glb": Vector3(-3.9, 0.78, -1.7),
-		"tomato.glb": Vector3(-3.2, 0.78, -1.9),
-		"salad.glb": Vector3(-2.7, 0.78, -1.6),
-		"corn.glb": Vector3(2.8, 0.78, -1.7),
-		"watermelon.glb": Vector3(3.5, 0.78, -1.9),
-		"broccoli.glb": Vector3(4.1, 0.78, -1.6),
+		"carrot.glb": Vector3(-3.55, 0.4, -0.35),
+		"tomato.glb": Vector3(-3.2, 0.4, -0.5),
+		"salad.glb": Vector3(-2.7, 0.4, -0.2),
+		"corn.glb": Vector3(2.8, 0.4, -0.3),
+		"watermelon.glb": Vector3(3.5, 0.4, -0.5),
+		"broccoli.glb": Vector3(4.1, 0.4, -0.2),
 	}
 	for datei: String in auslage:
 		_prop("%s/%s" % [ESSEN, datei], auslage[datei], randf() * 40.0 - 20.0, 1.1)
@@ -158,7 +183,9 @@ func _aktualisiere_stand_deko() -> void:
 	if _waren_deko != null:
 		_waren_deko.queue_free()
 	_waren_deko = Node3D.new()
-	_waren_deko.position = EIGENSTAND_POS + Vector3(0.0, 0.93, 0.0)
+	# ASSET-SOURCE (W17): Platte des niedrigen table.glb liegt bei ~0,39
+	# (nicht 0,93) — s. _baue_auslage(); sonst schwebt die Stand-Ware.
+	_waren_deko.position = EIGENSTAND_POS + Vector3(0.0, 0.4, 0.0)
 	add_child(_waren_deko)
 	var plaetze: Array[Vector3] = [
 		Vector3(-0.45, 0.0, -0.05),
