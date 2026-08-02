@@ -137,6 +137,21 @@ func is_walking() -> bool:
 	return _walking
 
 
+## Läuft gerade ein SKRIPT-Lauf (walk_to — Tür-Reise/Interactable-Anlauf)?
+## Freies Wandern zählt nicht. Der InteractablesHost sperrt Interactable-
+## Taps, solange Skript-Lauf UND Wander-Stopp zusammenkommen (PT1-B2-
+## Wiedereintritts-Sperre gegen Anlauf-Races — s. is_tap_blocked).
+func is_scripted_walk() -> bool:
+	return _scripted
+
+
+## Ist das freie Wandern gerade erlaubt? Interactable-Sequenzen schalten es
+## vor ihrem Anlauf ab — zusammen mit is_scripted_walk unterscheidet das
+## kommandierte Anläufe von ambienten Läufen (Seelen-Gruß, Komm-her).
+func is_wander_enabled() -> bool:
+	return _wander_enabled
+
+
 # ── „Wo ist mein Gooby?" (W13/HUD-WIRES, Doc F §4.2) ─────────────────────────
 
 

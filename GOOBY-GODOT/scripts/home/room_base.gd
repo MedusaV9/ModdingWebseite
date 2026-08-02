@@ -124,8 +124,8 @@ func camera_rig() -> HomeCameraRig:
 	return _camera_rig
 
 
-## Navmesh-Blocker-Mount (Garten-Bauten hängen sich hier ein, damit Gooby
-## nicht durch Shed und Gewächshaus läuft).
+## GETEILTER Navmesh-Blocker-Mount (B1, G8-PT1): Garten-Bauten UND blocks_movement-
+## Möbel parken hier — jede Partei gibt beim Rebuild NUR eigene Kinder frei.
 func blockers() -> Node3D:
 	return _blockers
 

@@ -138,6 +138,12 @@ func _build_dock(ebenen_keys: Array[String]) -> void:
 	dock.name = "BauDock"
 	dock.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	ui.add_child(dock)
+	# B3 (G8-PT1): Dock als Bottom-Zonen-Belegung anmelden (W14-Vertrag) —
+	# die kopf-folgende AcBubble (Bett-Quest!) dodgt dann ÜBER Action-Bar/
+	# Ebenen/Lager statt „Drehen“/„Platzieren“ zu überdecken. occupied_rects
+	# filtert unsichtbare Belegungen selbst (Baumodus zu = kein Dodge);
+	# UiAnchors._prune räumt den Eintrag beim Raum-Abbau ab.
+	UiAnchors.reserve(UiAnchors.ZONE_BOTTOM, dock)
 	_build_action_bar()
 	_build_ebenen_leiste(ebenen_keys)
 	_build_drawer()
@@ -259,6 +265,8 @@ func _build_drawer() -> void:
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	# B1 (G8-PT3): Lager-Kacheln fressen den Touch-Drag — Helfer pannt.
+	DragScroll.anbinden(scroll)
 	box.add_child(scroll)
 	drawer_items = HBoxContainer.new()
 	drawer_items.add_theme_constant_override("separation", 8)

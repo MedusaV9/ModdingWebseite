@@ -329,6 +329,10 @@ static func _verlauf(von: Color, nach: Color) -> GradientTexture1D:
 	return tex
 
 
+## Tap-Fläche über den zentralen Gesten-Arbiter (PT4-B3: der Eck-Wisch, der
+## AUF der Tür startete, öffnete sofort den Reise-Dialog — jetzt feuert der
+## Tap erst auf Release unter der Pan-Schwelle; PT1-B2: kein Doppel-Feuer
+## durch emulierte Maus/Touch-Zwillinge mehr).
 func _build_tap_area() -> void:
 	var area := Area3D.new()
 	area.name = "TapArea"
@@ -338,19 +342,8 @@ func _build_tap_area() -> void:
 	shape.shape = box
 	shape.position = Vector3(0.0, DOOR_HEIGHT * 0.5, 0.15)
 	area.add_child(shape)
-	area.input_event.connect(_on_area_input)
+	InteractablesHost.connect_tap_gesture(area, func() -> void: tapped.emit(door_id))
 	add_child(area)
-
-
-func _on_area_input(
-	_cam: Node, event: InputEvent, _pos: Vector3, _normal: Vector3, _idx: int
-) -> void:
-	var pressed: bool = (
-		(event is InputEventMouseButton and event.pressed)
-		or (event is InputEventScreenTouch and event.pressed)
-	)
-	if pressed:
-		tapped.emit(door_id)
 
 
 func _doors_animated() -> bool:

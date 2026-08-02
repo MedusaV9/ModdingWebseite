@@ -2,23 +2,26 @@ extends "res://tests/tools/playtest_flows/flow_pt1_helfer.gd"
 ## Flow PT1 (a) „Haus-Rundgang“: Boot → Onboarding → Wohnzimmer-Möbel prüfen
 ## + Fernseher an/aus → Küche (Möbelbestand) → zurück → Schlafzimmer
 ## (Umzugskartons) → Bad (Möbel + ECHTE Dusche im Bottich: rein, abspülen,
-## Hygiene +20) → zurück ins Wohnzimmer → GARTEN: ASSET-ROT-Verifikation
-## (spawnen treeDefault/treeFat/gardenBench/potLarge wirklich als Nodes?).
+## Hygiene +20) → zurück ins Wohnzimmer → GARTEN: Blocker-Ownership-Wache
+## (treeDefault/treeFat/gardenBench/potLarge müssen Rebuilds überleben).
 ## Jede Raum-Station protokolliert Grid-Items vs. echte Möbel-Nodes.
 ##
 ## Lektionen aus den Läufen pt1_rundgang_v1/v2 (Details im Report
 ## docs/playtest/G8-PT1-home-bau.md):
-## * Follow-Kamera + HUD-Spalten/“Was nun?“-Karte/Sprechblasen (AcBubble-
-##   Kapsel hat mouse_filter STOP!) schlucken einzelne 3D-Tipps → Türen
+## * Follow-Kamera + HUD-Spalten/“Was nun?“-Karte/Sprechblasen (die Kapsel
+##   schirmt 3D-Taps unter sich weiterhin ab — seit FIX-5 via
+##   _unhandled_input statt STOP-GUI) schlucken einzelne 3D-Tipps → Türen
 ##   laufen über den gehärteten Baustein _tuer_reise_schritte (Pan +
 ##   Präzisions-Tipp + Bildmitte-Nachfassen).
-## * Wannen-Tap feuert doppelt (emulate_touch_from_mouse + make_tap_area
-##   reagiert auf Maus UND Touch) → Dusche startet und „endet“ im selben
-##   Tap, Gooby bleibt unsichtbar hinter zugezogenem Vorhang stecken.
-##   Der Flow diagnostiziert das (pflicht:false) und rettet Gooby danach.
-## * Der „Fernseher aus“-Knopf liegt UNTER der HUD-Aktionsspalte (Quest-
-##   Knopf) — Tipp auf die Knopfmitte öffnet die Tagesquests! Der Flow
-##   misst die Überdeckung (pflicht:false) und tippt links auf den Knopf.
+## * B2-FIX VERBAUT (Welle H → R2): make_tap_area dedupliziert jetzt die
+##   emulierten Maus/Touch-Zwillinge, feuert erst auf Release unter der
+##   Pan-Schwelle und sperrt Taps während Goobys Anlauf (interactables_
+##   host.gd). Die Dusch-Sonde erwartet darum das SOLL-Verhalten HART
+##   (dusche_soll_zustand/dusche_aufraeumen ohne pflicht:false); die
+##   Rettungslogik bleibt als Diagnose-Netz stehen.
+## * B4-FIX (FIX-5): der „Fernseher aus“-Knopf dodgt jetzt die HUD-
+##   Cockpit-Spalte — die Überdeckungs-Messung ist PFLICHT und der Tipp
+##   geht wie beim echten Spieler auf die Knopfmitte.
 ## * Lauf v3: die zufällige Klopapier-Mumie parkte Gooby (wander aus) und
 ##   ihre Tap-Zone fraß die Tür-Taps; außerdem traf der (4,4)-No-Op-Wisch
 ##   die verdeckte Lampen-Tap-Area DURCH die Wand (Lichtschalter-Sheet über
@@ -112,12 +115,11 @@ func _wohnzimmer_schritte() -> Array[Dictionary]:
 					"aktion": "tue",
 					"funktion": _aus_knopf_frei,
 					"erwartung": "GobtyAusKnopf liegt NICHT unter der HUD-Aktionsspalte",
-					"pflicht": false,
 				},
 				{
-					"name": "fernseher_aus_links_tippen",
+					"name": "fernseher_aus_tippen",
 					"aktion": "tipp_pos",
-					"pos_funktion": _aus_knopf_links,
+					"pos_funktion": _aus_knopf_mitte,
 					"erwarte": {"bedingung": _tv_aus},
 					"timeout_s": 15.0,
 				},
@@ -127,10 +129,12 @@ func _wohnzimmer_schritte() -> Array[Dictionary]:
 	return liste
 
 
-## Bad: Möbelbestand + Dusche im Bottich. Erwartet wird das SOLL-Verhalten
-## (Tap 1 = Routine läuft, Tap 2 = abspülen + Hygiene) — die Diagnose- und
-## Rettungsschritte dokumentieren das Doppel-Feuer-Fehlverhalten, ohne den
-## restlichen Rundgang zu verlieren.
+## Bad: Möbelbestand + Dusche im Bottich. B2-SONDE (FIX-6, Pflicht): seit dem
+## make_tap_area-Wurzelfix ist das SOLL-Verhalten HARTE Erwartung — Tap 1
+## startet GENAU EINE Routine (Hygiene unverändert), Tap 2 spült ab (+20).
+## Timing beachten: die Wiedereintritts-Sperre schluckt Taps, solange Gooby
+## anläuft (walk_to-Kappe 5 s), und die Start-Blase schirmt 3D-Taps unter
+## sich ab — der EINE Abspül-Tap fällt darum erst nach Anlauf + Blase.
 func _bad_schritte() -> Array[Dictionary]:
 	var liste: Array[Dictionary] = [
 		{
@@ -167,9 +171,16 @@ func _bad_schritte() -> Array[Dictionary]:
 					"aktion": "tue",
 					"funktion": _dusche_diagnose,
 					"erwartung": "1. Tap: Routine aktiv UND Hygiene noch unverändert",
-					"pflicht": false,
 				},
-				{"name": "dusche_ansehen", "aktion": "warte", "sekunden": 3.0},
+				# Anlauf aussitzen: walk_to kappt bei 5 s — danach ist die
+				# Wiedereintritts-Sperre sicher offen für den Abspül-Tap.
+				{"name": "dusche_ansehen", "aktion": "warte", "sekunden": 6.0},
+				{
+					"name": "wanne_tap_frei",
+					"aktion": "warte_bis",
+					"bedingung": _wanne_tap_frei,
+					"timeout_s": 12.0,
+				},
 				{
 					"name": "wanne_abspuelen",
 					"aktion": "tipp_3d",
@@ -183,7 +194,6 @@ func _bad_schritte() -> Array[Dictionary]:
 					"aktion": "tue",
 					"funktion": _dusche_rettung,
 					"erwartung": "Gooby nach dem Abspülen sichtbar, keine Routine hängt",
-					"pflicht": false,
 				},
 				{"name": "bad_fertig", "aktion": "warte", "sekunden": 2.0},
 			]
@@ -192,13 +202,13 @@ func _bad_schritte() -> Array[Dictionary]:
 	return liste
 
 
-## Garten: DIE ASSET-ROT-Verifikation (Nebenbefund aus Welle H). Ergebnis
-## Lauf v4: Save + Grid kennen die 4 Defaults, die Nodes FEHLEN aber — und
-## zwar NICHT wegen GLB-Degradation (Headless-Gegenprobe
-## flow_pt1_diag_assets.gd lädt alle 4 GLBs sauber), sondern weil
-## GardenView.rebuild() ALLE Kinder des geteilten blockers()-Mounts löscht,
-## in den _spawn_furniture die blocks_movement-Möbel gehängt hat. Der
-## Diagnose-Schritt belegt das im Lauf (Blockers-Inventar + Live-create).
+## Garten: B1-REGRESSIONSWACHE (FIX-5). Lauf v4 bewies: Save + Grid kennen
+## die 4 Defaults, aber GardenView.rebuild() löschte ALLE Kinder des
+## geteilten blockers()-Mounts — samt der von _spawn_furniture geparkten
+## blocks_movement-Möbel (GLB-Degradation war es NICHT, Gegenprobe
+## flow_pt1_diag_assets.gd). Seit der Ownership-Trennung gibt rebuild()
+## nur noch GardenView-eigene Bauten frei: der Möbel-Check ist PFLICHT,
+## und ein Zellen-Tap-Rebuild obendrauf darf die Defaults nicht fressen.
 func _garten_schritte() -> Array[Dictionary]:
 	return [
 		{"name": "garten_ankommen_extra", "aktion": "warte", "sekunden": 2.0},
@@ -213,14 +223,22 @@ func _garten_schritte() -> Array[Dictionary]:
 			"aktion": "tue",
 			"funktion":
 			moebel_protokoll.bind(["treeDefault", "treeFat", "gardenBench", "potLarge"]),
-			"erwartung": "Garten-Defaults spawnen als Möbel-Nodes (BEFUND: tun sie nicht)",
-			"pflicht": false,
+			"erwartung": "Garten-Defaults stehen nach dem GardenView-Setup als Möbel-Nodes",
 		},
 		{
-			"name": "garten_blocker_diagnose",
+			"name": "garten_rebuild_anstossen",
 			"aktion": "tue",
-			"funktion": _garten_diagnose,
-			"erwartung": "Beleg: Blockers-Mount leergeräumt, Live-create funktioniert",
+			"funktion": _garten_rebuild_anstossen,
+			"erwartung": "Zellen-Auswahl stößt einen weiteren GardenView-Rebuild an",
+		},
+		# queue_free() der GardenView-Bauten sackt am Frame-Ende — kurz warten,
+		# damit die Wache lebende Nodes von Leichen unterscheiden kann.
+		{"name": "garten_rebuild_sacken", "aktion": "warte", "sekunden": 1.0},
+		{
+			"name": "garten_blocker_wache",
+			"aktion": "tue",
+			"funktion": _garten_blocker_wache,
+			"erwartung": "Defaults leben nach dem Rebuild weiter im Blockers-Mount",
 		},
 		{"name": "garten_panorama", "aktion": "warte", "sekunden": 2.0},
 	]
@@ -239,8 +257,9 @@ func _tv_aus() -> bool:
 	return not _tv_an()
 
 
-## BEFUND-MESSUNG: Liegt die Mitte des „Fernseher aus“-Knopfs unter einem
-## anderen klick-schluckenden Control (HUD-Aktionsspalte)? Loggt die Rects.
+## B4-WACHE (FIX-5, Pflicht): Liegt die Mitte des „Fernseher aus“-Knopfs
+## unter einem fremden klick-schluckenden Control (HUD-Aktionsspalte)?
+## Seit dem Cockpit-Spalten-Dodge in fernseher.gd darf das nie mehr sein.
 func _aus_knopf_frei() -> bool:
 	var knopf := _finde_sichtbares_control(harness.root, "GobtyAusKnopf")
 	if knopf == null:
@@ -255,14 +274,14 @@ func _aus_knopf_frei() -> bool:
 	return true
 
 
-## Workaround-Tipppunkt: linker Rand des Aus-Knopfs (die rechte Hälfte
-## liegt bei 1024×471 unter Quest/Profil der HUD-Aktionsspalte).
-func _aus_knopf_links() -> Vector2:
+## Tipppunkt „Fernseher aus“: die KNOPFMITTE, wie ein echter Spieler tippt.
+## Vor dem B4-Fix lag die rechte Hälfte bei 1024×471 unter Quest/Profil der
+## HUD-Aktionsspalte und der Flow musste auf den linken Rand ausweichen.
+func _aus_knopf_mitte() -> Vector2:
 	var knopf := _finde_sichtbares_control(harness.root, "GobtyAusKnopf")
 	if knopf == null:
 		return Vector2(4.0, 4.0)
-	var rect := knopf.get_global_rect()
-	return Vector2(rect.position.x + rect.size.x * 0.12, rect.get_center().y)
+	return knopf.get_global_rect().get_center()
 
 
 func _merke_hygiene() -> bool:
@@ -270,8 +289,12 @@ func _merke_hygiene() -> bool:
 	return merke("hygiene_vorher", stand) and stand >= 0.0
 
 
-## Wanne hat auf den Tap reagiert: Routine läuft (SOLL) ODER die
+## Wanne hat auf den Tap reagiert: Routine läuft (SOLL) ODER die alte
 ## Doppel-Feuer-Signatur (Hygiene sofort gebucht / Gooby unsichtbar).
+## Die Signatur-Zweige bleiben BEWUSST drin — sie sind nur das Warte-Netz;
+## das SOLL erzwingt der harte Folgeschritt dusche_soll_zustand. Käme das
+## Doppel-Feuer zurück, liefe dieser Schritt noch durch und die Diagnose
+## dahinter zeigte ROT mit dem präzisen Ist-Zustand statt Timeout-Raterei.
 func _dusche_reagiert() -> bool:
 	if _dusche_irgendwo_aktiv():
 		return true
@@ -288,10 +311,11 @@ func _dusche_irgendwo_aktiv() -> bool:
 	return false
 
 
-## SOLL nach Tap 1: mindestens eine Routine aktiv und Hygiene NOCH
-## unverändert (+20 kommt erst beim Abspülen). Loggt den Ist-Zustand jeder
-## Instanz — Beleg für den Doppel-Feuer-Befund (make_tap_area reagiert auf
-## Maus UND emulierten Touch).
+## B2-WACHE (FIX-6, Pflicht) — SOLL nach Tap 1: mindestens eine Routine
+## aktiv und Hygiene NOCH unverändert (+20 kommt erst beim Abspülen).
+## Genau diese Kombination riss das Doppel-Feuer (Maus + emulierter Touch
+## in make_tap_area): Fire 2 beendete sofort, Hygiene buchte beim 1. Tap.
+## Loggt den Ist-Zustand jeder Instanz als Beleg fürs Protokoll.
 func _dusche_diagnose() -> bool:
 	var instanzen := _alle_mit_klasse(aktuelle_szene(), "KloDusche")
 	if instanzen.is_empty():
@@ -317,19 +341,26 @@ func _dusche_diagnose() -> bool:
 	return aktive > 0 and jetzt < vorher + 5.0
 
 
-## Räumt nach dem Wannen-Test auf und DOKUMENTIERT den Stuck-Zustand:
-## hängende Routine → finish_shower(); Gooby unsichtbar ohne Routine
-## (Doppel-Feuer-Folge) → sichtbar machen + Wander an. false = es war
-## eine Rettung nötig (Beleg im Report, Schritt ist pflicht:false).
+## B2-WACHE (FIX-6, Pflicht): nach dem Abspülen darf NICHTS hängen —
+## hängende Dusch-Routine oder Gooby unsichtbar ohne Routine wären die
+## Doppel-Feuer-Folgen. Die Rettungslogik bleibt als Diagnose-Netz stehen
+## (sie räumt auf UND meldet false = ROT). Eine aktive KLO-Routine (der
+## 4-h-Bedürfnis-Timer, nicht die Dusche) versteckt Gooby legitim und
+## zählt darum nicht als Stuck-Beleg.
 func _dusche_rettung() -> bool:
 	var sauber := true
+	var klo_aktiv := false
 	for dusche: Node in _alle_mit_klasse(aktuelle_szene(), "KloDusche"):
-		if bool(dusche.call("is_routine_active")) and bool(dusche.get("_is_shower")):
+		if not bool(dusche.call("is_routine_active")):
+			continue
+		if bool(dusche.get("_is_shower")):
 			print("[PT1] Rettung: finish_shower() auf hängender Dusch-Routine")
 			dusche.call("finish_shower")
 			sauber = false
+		else:
+			klo_aktiv = true
 	var gooby := gooby_node()
-	if gooby != null and not gooby.visible:
+	if gooby != null and not gooby.visible and not klo_aktiv:
 		print("[PT1] BUG-BELEG: Gooby unsichtbar OHNE aktive Routine — mache sichtbar")
 		gooby.visible = true
 		if gooby.has_method("set_wander_enabled"):
@@ -346,11 +377,50 @@ func _hygiene_gestiegen() -> bool:
 	return zahl("gooby.stats.hygiene", -1.0) >= vorher + 5.0
 
 
-## Blockers-Ownership-Beleg: (1) Inventar von blockers() und grid_mount()
-## — die vier blocks_movement-Defaults fehlen im Blockers-Mount, weil
-## GardenView.rebuild() dessen Kinder löscht; (2) Live-create von
-## treeDefault beweist, dass GLB + FurnitureNode einwandfrei funktionieren.
-func _garten_diagnose() -> bool:
+## Ist der Abspül-Tipppunkt (Wanne +0,5 m) frei? Die Start-Blase
+## („bad.dusche.start") schirmt 3D-Taps unter sich weiterhin ab
+## (AcBubble._unhandled_input + set_input_as_handled) und läuft nach
+## ~4 s von selbst aus — der EINE Abspül-Tap wartet das ab, statt in
+## der Kapsel zu versanden (Muster _tipp_frei_schritte, nur für 3D).
+func _wanne_tap_frei() -> bool:
+	var wanne := finde_moebel("bathtub")
+	var kamera := harness.root.get_camera_3d()
+	if wanne == null or kamera == null:
+		return false
+	var punkt := kamera.unproject_position(wanne.global_position + Vector3(0.0, 0.5, 0.0))
+	var stop := _stop_control_bei(punkt)
+	if stop != null:
+		print("[PT1] wanne_tap_frei: Punkt %s von '%s' überdeckt" % [punkt, stop.name])
+		return false
+	for blase: Node in _alle_mit_klasse(harness.root, "AcBubble"):
+		if not (blase.has_method("is_active") and bool(blase.call("is_active"))):
+			continue
+		var kapsel: Variant = blase.get("_kapsel")
+		if kapsel is Control and (kapsel as Control).get_global_rect().has_point(punkt):
+			print("[PT1] wanne_tap_frei: Blasen-Kapsel über dem Tipppunkt %s" % punkt)
+			return false
+	return true
+
+
+## B1-Trigger: GardenHost.select_cell() läuft denselben Pfad wie ein
+## Spieler-Tap auf eine Garten-Zelle (highlight + _refresh → rebuild) —
+## VOR dem Ownership-Fix zerstörte genau dieser Rebuild die Default-Möbel
+## im geteilten blockers()-Mount.
+func _garten_rebuild_anstossen() -> bool:
+	var host := _finde_klasse(aktuelle_szene(), "GardenHost")
+	if host == null:
+		print("[PT1] rebuild_anstossen: kein GardenHost im Raum")
+		return false
+	host.call("select_cell", Vector2i(0, 0))
+	print("[PT1] rebuild_anstossen: select_cell(0,0) → GardenView.rebuild() lief")
+	return true
+
+
+## B1-WACHE (FIX-5, Pflicht): nach dem Rebuild müssen die vier
+## blocks_movement-Defaults als LEBENDE Kinder im geteilten blockers()-
+## Mount stehen — rebuild() gibt nur noch GardenView-eigene Bauten frei.
+## Loggt beide Mount-Inventare als Beleg fürs Protokoll.
+func _garten_blocker_wache() -> bool:
 	var szene := aktuelle_szene()
 	if szene == null:
 		return false
@@ -358,12 +428,21 @@ func _garten_diagnose() -> bool:
 	var mount: Node = szene.call("grid_mount") if szene.has_method("grid_mount") else null
 	print("[PT1] Blockers-Kinder: %s" % [_kinder_namen(blockers)])
 	print("[PT1] GridMount-Kinder: %s" % [_kinder_namen(mount)])
-	var def := FurnitureCatalog.def("treeDefault")
-	var node := FurnitureNode.create(def, Vector2i(0, 4), 0, "pt1diag")
-	var ok := node != null
-	print("[PT1] Live-create treeDefault im Garten: %s" % ("OK — Node entsteht" if ok else "NULL"))
-	if node != null:
-		node.free()
+	if blockers == null:
+		return false
+	var ok := true
+	for item_id: String in ["treeDefault", "treeFat", "gardenBench", "potLarge"]:
+		var node := finde_moebel(item_id)
+		var lebt := (
+			node != null and node.get_parent() == blockers and not node.is_queued_for_deletion()
+		)
+		print(
+			(
+				"[PT1] Blocker-Wache %s: %s"
+				% [item_id, "LEBT im Blockers-Mount" if lebt else "FEHLT/verwaist"]
+			)
+		)
+		ok = ok and lebt
 	return ok
 
 

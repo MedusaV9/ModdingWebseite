@@ -82,8 +82,100 @@ func rescan() -> void:
 			_dock(WindradRotor.new(), node)
 
 
+## Gesten-Arbiter einer Tap-Zone (Wurzelfix PT1-B2 + PT4-B3, Welle H):
+## - B2: `pointing/emulate_touch_from_mouse` liefert pro physischem Klick
+##   Maus- UND Touch-Event (der Zwilling trägt DEVICE_ID_EMULATION) —
+##   vorher feuerte `on_tap` doppelt und riss z. B. die Dusch-Routine in
+##   eine Race (klo_dusche.gd: Fire 2 beendete, während Fire 1 im
+##   `await walk_to` hing). Emulierte Events werden verworfen; zusätzlich
+##   feuert pro Physik-Frame höchstens EIN Tap (Netz zweiter Ordnung,
+##   Muster ranch_event_host._on_fang_input).
+## - B3: Tap feuerte schon auf PRESS — Kamera-Pans, die auf einem
+##   Interactable STARTEN, lösten es sofort aus. Jetzt feuert ein Tap erst
+##   auf RELEASE und nur, wenn die Bewegung die Pan-Schwelle
+##   (HomeCameraRig.PAN_DEADZONE_PX) nie erreicht hat — Tap und Boden-Pan
+##   schließen sich damit exakt aus.
+class TapGeste:
+	extends RefCounted
+
+	## Pseudo-Finger für Maus-Events (echte Touch-Indizes sind >= 0).
+	const MAUS_FINGER := -1001
+
+	var _armed := false
+	var _finger := MAUS_FINGER
+	var _press_pos := Vector2.ZERO
+	var _letzter_feuer_frame := -1
+
+	## true = Tap komplett (Press + Release unter der Schwelle) → feuern.
+	## `frame` wird injiziert (Wrapper: Engine.get_physics_frames();
+	## Tests zählen selbst — AGENTS-Regel „Zeit immer injizieren“).
+	func verarbeite(event: InputEvent, frame: int) -> bool:
+		if event.device == InputEvent.DEVICE_ID_EMULATION:
+			# Synthetischer Zwilling (emulate_touch_from_mouse bzw.
+			# emulate_mouse_from_touch) — die physische Familie genügt.
+			return false
+		if event is InputEventScreenTouch:
+			return _touch_schritt(event as InputEventScreenTouch, frame)
+		if event is InputEventMouseButton:
+			return _maus_schritt(event as InputEventMouseButton, frame)
+		if event is InputEventScreenDrag:
+			var drag := event as InputEventScreenDrag
+			_move(drag.index, drag.position)
+		elif event is InputEventMouseMotion:
+			_move(MAUS_FINGER, (event as InputEventMouseMotion).position)
+		return false
+
+	func _touch_schritt(touch: InputEventScreenTouch, frame: int) -> bool:
+		if touch.pressed:
+			_press(touch.index, touch.position)
+			return false
+		return _release(touch.index, touch.position, touch.canceled, frame)
+
+	func _maus_schritt(maus: InputEventMouseButton, frame: int) -> bool:
+		if maus.button_index != MOUSE_BUTTON_LEFT:
+			return false
+		if maus.pressed:
+			_press(MAUS_FINGER, maus.position)
+			return false
+		return _release(MAUS_FINGER, maus.position, maus.canceled, frame)
+
+	func _press(finger: int, pos: Vector2) -> void:
+		if _armed and finger != _finger:
+			# Zweiter Finger während einer laufenden Geste: der erste
+			# behält Vorrang (Kinder-Doppelgriff bleibt EIN Tap; und
+			# falls doch mal beide Ereignisfamilien echt ankommen,
+			# frisst der Frame-Deckel unten das zweite Feuer).
+			return
+		_armed = true
+		_finger = finger
+		_press_pos = pos
+
+	func _move(finger: int, pos: Vector2) -> void:
+		if _armed and finger == _finger and HomeCameraRig.pan_gesture_ready(_press_pos, pos):
+			# Bewegung auf/über der Pan-Schwelle: das ist ein Kamera-Pan.
+			_armed = false
+
+	func _release(finger: int, pos: Vector2, canceled: bool, frame: int) -> bool:
+		if not _armed or finger != _finger:
+			return false
+		_armed = false
+		if canceled:
+			return false
+		# Auch am Release messen: während eines aktiven Pans verschluckt
+		# der Kamera-Rig die Drag-Events (set_input_as_handled) — die Zone
+		# sieht dann nur Press+Release und muss den Weg selbst prüfen.
+		if HomeCameraRig.pan_gesture_ready(_press_pos, pos):
+			return false
+		if frame == _letzter_feuer_frame:
+			return false
+		_letzter_feuer_frame = frame
+		return true
+
+
 ## Tap-Zone über einem Möbel (Area3D + Box um die Möbel-AABB) — geteilter
-## Baustein aller W3d-Interactables.
+## Baustein aller W3d-Interactables. `on_tap` feuert pro physischem Tap
+## genau EINMAL, erst auf Release (s. TapGeste) und nie, während Gooby auf
+## einem Skript-Lauf unterwegs ist (is_tap_blocked — Wiedereintritts-Sperre).
 static func make_tap_area(furniture: Node3D, on_tap: Callable) -> Area3D:
 	var area := Area3D.new()
 	area.name = "TapArea"
@@ -97,18 +189,70 @@ static func make_tap_area(furniture: Node3D, on_tap: Callable) -> Area3D:
 	shape.shape = box
 	shape.position = Vector3(0.0, box.size.y * 0.5, 0.0)
 	area.add_child(shape)
+	connect_tap_gesture(area, on_tap)
+	return area
+
+
+## Gesten-Arbiter an eine BESTEHENDE Area3D hängen — für Tap-Flächen mit
+## eigener Geometrie (z. B. die Tür in door_transition.gd, PT4-B3-Beleg).
+static func connect_tap_gesture(area: Area3D, on_tap: Callable) -> void:
+	var geste := TapGeste.new()
 	area.input_event.connect(
 		func(
 			_cam: Node, event: InputEvent, _pos: Vector3, _normal: Vector3, _shape_idx: int
 		) -> void:
-			var pressed: bool = (
-				(event is InputEventMouseButton and event.pressed)
-				or (event is InputEventScreenTouch and event.pressed)
-			)
-			if pressed:
-				on_tap.call()
+			handle_tap_event(area, geste, event, int(Engine.get_physics_frames()), on_tap)
 	)
-	return area
+
+
+## Testbarer Kern des Area-Handlers: Geste auswerten, Busy-Sperre prüfen,
+## dann feuern. true = `on_tap` wurde gerufen.
+static func handle_tap_event(
+	area: Node, geste: TapGeste, event: InputEvent, frame: int, on_tap: Callable
+) -> bool:
+	if not geste.verarbeite(event, frame):
+		return false
+	if is_tap_blocked(area):
+		return false
+	on_tap.call()
+	return true
+
+
+## Wiedereintritts-Sperre (PT1-B2, zweite Verteidigungslinie — das
+## „busy“-Flag des Hosts): Solange Gooby im KOMMANDIERTEN Anlauf einer
+## Sequenz steckt, starten Taps keine neue Interactable-Sequenz und beenden
+## keine anlaufende. Genau in diesem Fenster öffnete die Dusch-Race: ein
+## echter Doppel-Tipp rief finish_shower(), während Fire 1 noch im
+## `await walk_to` hing — die fortgesetzte Coroutine versteckte Gooby
+## danach ohne Routine. Der Raum wird per Duck-Typing über den nächsten
+## `gooby()`-Vorfahren gefunden (funktioniert für Host-Zonen UND Türen).
+static func is_tap_blocked(area: Node) -> bool:
+	var knoten := area
+	while knoten != null:
+		if knoten.has_method("gooby"):
+			return _gooby_im_anlauf(knoten.call("gooby"))
+		knoten = knoten.get_parent()
+	return false
+
+
+## Kommandierter Anlauf = Skript-Lauf MIT abgeschaltetem Wandern — so
+## starten alle Interactable-Sequenzen (set_wander_enabled(false) +
+## `await walk_to`, z. B. klo_dusche/kuehlschrank/bett/fernseher). Ambiente
+## Skript-Läufe (Seelen-Gruß/-Absicht, Komm-her) lassen das Wandern an und
+## sperren NICHT — sonst würden Tür-/Interactable-Taps grundlos
+## verschluckt, während Gooby bloß zum Fenster schlendert.
+static func _gooby_im_anlauf(gooby: Variant) -> bool:
+	if not (gooby is Node):
+		return false
+	var node := gooby as Node
+	if not node.has_method("is_scripted_walk") or not node.has_method("is_wander_enabled"):
+		return false
+	return bool(node.call("is_scripted_walk")) and not bool(node.call("is_wander_enabled"))
+
+
+## Busy-Flag des Hosts von außen lesbar (Tests/Diagnose).
+func is_tap_busy() -> bool:
+	return is_tap_blocked(self)
 
 
 func room() -> Node:

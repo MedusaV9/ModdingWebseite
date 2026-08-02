@@ -20,6 +20,9 @@ const DIST_MAX := 18.0
 ## Nach freiem Schwenk so lange Gooby-Follow pausieren.
 const MANUAL_HOLD_S := 2.5
 ## Deadzone ab Finger-Down (NICHT pro Frame — sonst startet Pan auf Touch nie).
+## GETEILTE Schwelle (PT4-B3): InteractablesHost.TapGeste bricht Taps ab,
+## sobald die Bewegung diese Deadzone erreicht — Tap (< Schwelle) und
+## Boden-Pan (>= Schwelle) schließen sich exakt aus, EINE Stellschraube.
 const PAN_DEADZONE_PX := 8.0
 
 var camera: Camera3D

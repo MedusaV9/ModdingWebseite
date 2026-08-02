@@ -22,8 +22,13 @@ extends Control
 ##   Dauersprecher wie RoomBase.say stauen so keine Nodes auf)
 ##
 ## Anker-Deconflict: die Kapsel reserviert die UiAnchors-Zone "bottom";
-## belegte Bottom-Rects (zweite Blase) werden ÜBERsprungen (+8 px), die
-## top-Zone (Notify-Banner) wird nie überdeckt.
+## belegte Bottom-Rects (zweite Blase, Bau-Dock) werden ÜBERsprungen
+## (+8 px), die top-Zone (Notify-Banner) wird nie überdeckt.
+##
+## Tap-Vertrag (B3, G8-PT1): Die Kapsel schluckt KEINE GUI-Eingaben mehr
+## (mouse_filter IGNORE) — Knöpfe unter der Blase gewinnen. Skip/Schließen
+## läuft über _unhandled_input mit Kapsel-Treffertest; 3D-Picking unter
+## der Blase bleibt wie bisher abgeschirmt (set_input_as_handled).
 
 ## Umbenannt von `hidden` — kollidierte mit dem nativen CanvasItem-Signal
 ## (Parse-Fehler, s. >> VOICE→UIKERN).
@@ -214,8 +219,11 @@ func _bauen() -> void:
 	_kapsel = PanelContainer.new()
 	_kapsel.name = "Kapsel"
 	_kapsel.add_theme_stylebox_override("panel", _stylebox_fuer(stil))
-	_kapsel.mouse_filter = Control.MOUSE_FILTER_STOP
-	_kapsel.gui_input.connect(_on_kapsel_input)
+	# B3 (G8-PT1): IGNORE statt STOP — die kopf-folgende Kapsel darf
+	# Eingaben auf UI darunter (Baumodus-Action-Bar!) nie schlucken.
+	# Skip/Schließen auf der Blase übernimmt _unhandled_input NACH der
+	# GUI-Phase: Knöpfe unter der Kapsel gewinnen den Tap.
+	_kapsel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_kapsel)
 	_label = Label.new()
 	_label.name = "BubbleText"
@@ -379,10 +387,21 @@ func _sofort_modus() -> bool:
 	return settings != null and bool(settings.call("get_setting", "game.schnelle_dialoge", false))
 
 
-func _on_kapsel_input(event: InputEvent) -> void:
+## B3 (G8-PT1): Tap-Verhalten der Blase nach der GUI-Phase (P50/P53-
+## Leitlinie: Blasen blockieren nie interaktive Flächen). Erst wenn KEIN
+## Control den Tap wollte, prüft die Blase den Treffer auf der Kapsel:
+## Typewriter skippen bzw. schließen. set_input_as_handled hält den Tap
+## wie zuvor vom 3D-Picking (Gooby/Türen/Möbel) unter der Blase fern.
+func _unhandled_input(event: InputEvent) -> void:
+	if _kapsel == null or not is_active() or not is_visible_in_tree():
+		return
 	var tippbar := event is InputEventMouseButton or event is InputEventScreenTouch
 	if not tippbar or not event.is_pressed():
 		return
+	var lokal: Vector2 = _kapsel.make_canvas_position_local(event.position)
+	if not Rect2(Vector2.ZERO, _kapsel.size).has_point(lokal):
+		return
+	get_viewport().set_input_as_handled()
 	if not _typewriter.ist_fertig():
 		_typewriter.skip()
 		_zeige_zeichen()

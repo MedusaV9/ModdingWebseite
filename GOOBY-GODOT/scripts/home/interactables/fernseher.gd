@@ -219,7 +219,9 @@ func _zeige_aus_knopf() -> void:
 	_layout_aus_knopf()
 	var vp := get_viewport()
 	if vp != null and not vp.size_changed.is_connected(_layout_aus_knopf):
-		vp.size_changed.connect(_layout_aus_knopf)
+		# DEFERRED: das HUD layoutet auf demselben Signal — erst danach
+		# steht die Cockpit-Spalte, gegen die der Knopf dodgen muss (B4).
+		vp.size_changed.connect(_layout_aus_knopf, CONNECT_DEFERRED)
 
 
 func _layout_aus_knopf() -> void:
@@ -232,11 +234,44 @@ func _layout_aus_knopf() -> void:
 	var hoehe := maxf(44.0 * f, float(m["floor_px"]))
 	_aus_knopf.custom_minimum_size = Vector2(breite, hoehe)
 	_aus_knopf.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-	# 106*f Grundabstand hält den Knopf über der HUD-Daumen-Zeile.
-	_aus_knopf.offset_right = -(float(insets["right"]) + 16.0 * f)
+	# 106*f Grundabstand hält den Knopf über der HUD-Daumen-Zeile; im
+	# Querformat rückt er zusätzlich links an der Cockpit-Spalte vorbei
+	# (B4, G8-PT1: Quest/Profil lagen ÜBER der Pill und gewannen den Tap).
+	var canvas := Vector2(get_viewport().get_visible_rect().size)
+	_aus_knopf.offset_right = aus_knopf_rechts(
+		canvas.x, float(insets["right"]), f, _hud_spalte_links()
+	)
 	_aus_knopf.offset_left = _aus_knopf.offset_right - breite
 	_aus_knopf.offset_bottom = -(float(insets["bottom"]) + 106.0 * f)
 	_aus_knopf.offset_top = _aus_knopf.offset_bottom - hoehe
+
+
+## PURE (B4, G8-PT1): rechte Offset-Kante des Aus-Knopfs (Anker rechts
+## unten, Offsets negativ). Grundabstand Safe-Area + 16·f; ragt die rechte
+## HUD-Knopfspalte ins Feld (`spalte_links` < Canvas-Breite), wandert die
+## Kante zusätzlich mit 12·f Luft links neben die Spalte.
+static func aus_knopf_rechts(
+	canvas_breite: float, inset_rechts: float, f: float, spalte_links: float
+) -> float:
+	var kante := -(inset_rechts + 16.0 * f)
+	if spalte_links < canvas_breite:
+		kante = minf(kante, spalte_links - 12.0 * f - canvas_breite)
+	return kante
+
+
+## Linke Kante der SICHTBAREN HUD-Cockpit-Spalte in Canvas-px (Querformat,
+## hud.tscn %LandscapeColumn). INF = keine Spalte im Bild (Hochkant-Dock,
+## HUD versteckt) — dann bleibt der Grundanker unangetastet.
+func _hud_spalte_links() -> float:
+	if not is_inside_tree():
+		return INF
+	for hud: Node in get_tree().get_nodes_in_group(&"hud"):
+		if not (hud is Control) or not (hud as Control).is_visible_in_tree():
+			continue
+		var spalte := hud.find_child("LandscapeColumn", true, false)
+		if spalte is Control and (spalte as Control).is_visible_in_tree():
+			return (spalte as Control).get_global_rect().position.x
+	return INF
 
 
 # ── Schritte inszenieren ──────────────────────────────────────────────────────

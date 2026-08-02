@@ -19,6 +19,10 @@ var _gs: Object
 var _grid: GardenGrid
 var _auswahl: MeshInstance3D
 var _blocker_mount: Node3D
+## EIGENE Bauten im geteilten Blocker-Mount (B1, G8-PT1): der Mount gehört
+## dem Raum — RoomBase._spawn_furniture parkt dort auch blocks_movement-
+## Möbel. Nur was hier verzeichnet ist, darf rebuild() wieder freigeben.
+var _blocker_bauten: Array[Node3D] = []
 
 
 func setup(gs: Object, raum_meter: Vector2, blocker_mount: Node3D = null) -> void:
@@ -31,9 +35,16 @@ func setup(gs: Object, raum_meter: Vector2, blocker_mount: Node3D = null) -> voi
 func rebuild(raum_meter: Vector2) -> void:
 	for child in get_children():
 		child.queue_free()
-	if _blocker_mount != null:
-		for child in _blocker_mount.get_children():
-			child.queue_free()
+	# B1 (G8-PT1): NUR die eigenen Bauten aus dem geteilten Mount nehmen.
+	# Das pauschale Leeren zerstörte die vom Raum gespawnten Möbel-Nodes
+	# (treeDefault/treeFat/gardenBench/potLarge) — ihre Grid-Zellen blieben
+	# als unsichtbare Blocker zurück. Jedes Bauwerk bleibt dabei DIREKTES
+	# Mount-Kind (RoomNavmesh.bake macht aus jedem Kind EINE Obstruction —
+	# ein Unter-Mount würde alle Bauten zu einer Riesen-AABB verschmelzen).
+	for bau in _blocker_bauten:
+		if is_instance_valid(bau):
+			bau.queue_free()
+	_blocker_bauten = []
 	_grid = GardenState.grid(_gs)
 	origin = GardenState.world_origin(raum_meter, _grid.size)
 	_build_rasenkante()
@@ -138,6 +149,7 @@ func _build_strukturen() -> void:
 		node.rotation.y = PI * 0.5 * int(entry.get("rot", 0))
 		if _blocker_mount != null and kind != "sprinkler":
 			_blocker_mount.add_child(node)
+			_blocker_bauten.append(node)
 		else:
 			add_child(node)
 
