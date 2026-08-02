@@ -20,7 +20,7 @@ const GAP_PLACEHOLDER := "____"
 
 var _host: InteractablesHost
 var _sheet: PanelSheet
-## Zuletzt eingehängter Sheet-Inhalt — wird beim Neubau SOFORT freigegeben.
+## Zuletzt eingehängter Sheet-Inhalt — beim Neubau abgehängt + queue_free.
 var _inhalt: Control
 var _story: Dictionary = {}
 var _fills: Array = []
@@ -283,15 +283,20 @@ func _on_viewport_resized() -> void:
 			_setze_inhalt(_build_library(books))
 
 
-## Alten Inhalt SOFORT freigeben statt queue_free-pendent zu lassen: das
-## Sheet misst pendente Kinder beim Relayout mit und schrumpft nach so
-## einer Min-Size-Blähung nicht von selbst zurück (Befund News-Panel G4).
+## Alten Inhalt abhängen und DEFERRED freigeben (remove_child + queue_free,
+## Muster panel_sheet.add_content): _setze_inhalt läuft im pressed-Signal
+## der Buch-Knöpfe/Wort-Chips — ein hartes free() riss den noch
+## emittierenden Knopf mit („Object … was freed … while a signal is being
+## emitted“ → Signal-11-Crash, G8-PT4 B1). Die Min-Size-Blähung aus
+## G4/P17 droht trotz queue_free nicht mehr: das Sheet ignoriert pendente
+## Kinder beim Messen (panel_sheet._body_min_ohne_pendente, G4/P21), und
+## abgehängt ist der Alt-Inhalt hier sofort.
 func _setze_inhalt(neu: Control) -> void:
 	if _inhalt != null and is_instance_valid(_inhalt):
 		var eltern := _inhalt.get_parent()
 		if eltern != null:
 			eltern.remove_child(_inhalt)
-		_inhalt.free()
+		_inhalt.queue_free()
 	_inhalt = neu
 	_sheet.add_content(neu)
 

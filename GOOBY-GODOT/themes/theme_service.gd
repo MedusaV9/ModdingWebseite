@@ -78,8 +78,20 @@ static func font(weight: int = 600) -> Font:
 
 
 ## Duck-Typing-Helfer: Reduced-Motion-Zustand, egal ob Autoload existiert.
+## BAUM-SICHER (G8-PT4 B8 / PT2 B7): SquishButton._on_up läuft NACH dem
+## pressed-Handler — hat der die Ansicht samt Knopf schon abgebaut (z. B.
+## PhoneShell._leere_inhalt beim App-Öffnen), ist from_node draußen und
+## ein absoluter get_node-Pfad loggt „Can't use get_node() with absolute
+## paths from outside the active scene tree“. Dann über den MainLoop-Root
+## nachschlagen (Muster Haptics._settings/_tree).
 static func is_reduced_motion(from_node: Node) -> bool:
-	var svc := from_node.get_node_or_null("/root/UiTheme")
+	var svc: Node = null
+	if from_node != null and from_node.is_inside_tree():
+		svc = from_node.get_node_or_null("/root/UiTheme")
+	else:
+		var loop := Engine.get_main_loop()
+		if loop is SceneTree:
+			svc = (loop as SceneTree).root.get_node_or_null("UiTheme")
 	if svc != null and "reduced_motion" in svc:
 		return svc.reduced_motion
 	return false
