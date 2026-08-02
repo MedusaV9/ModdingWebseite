@@ -100,6 +100,34 @@ public final class StormFxClient {
     /** Wisp vertical drift per tick (wraps inside the storm height). */
     private static final float WISP_RISE_PER_TICK = 0.12F;
     /**
+     * EVAL2-A H3 — E5-Nachfix 2 pattern ({@code EMITTER_AUDIT_F107_CLASS.md} §10.2,
+     * {@code StormInteriorFx.tickGodFingers}): horizontal camera clearance of a wisp
+     * slot's ring target position (blocks). {@code vortex_wisp} quads billboard
+     * ({@code face_velocity:false}) at up to 4.2 blocks edge (base 1.5 + variation 0.6
+     * → half-edge 2.1) from a r=1.6 spawn sphere, so the worst-case quad reach from
+     * the ring anchor is ~3.7 blocks (spawn 1.6 + half-edge 2.1; in-life drift is
+     * negligible — vortex 0.6 with drag 0.05 retention holds terminal ~0.03 B/t).
+     * Entering a vortex storm IS a wall crossing through the shell+1 orbit ring, so a
+     * camera inside this range catches near-plane cuts of a 4-block violet quad — the
+     * F-107 blade class. Inside this range the slot RELEASES (removing a Quasar
+     * emitter kills its live particles immediately, {@code ParticleEmitter.onRemoved}
+     * — including the quasi-static trail the traveling emitter left along the ring).
+     * One block wider than the godfinger pair (6/9): unlike the near-static godfinger
+     * (~0.03 B/t drift), the wisp emitter itself sweeps the ring at up to ~0.65 B/t
+     * ({@link #SWIRL_RAD_PER_TICK} × (radius+1) at siege-scaled r≈36), so the
+     * closing-speed budget absorbs one extra tick of combined camera+emitter motion;
+     * the margin past worst-case quad reach stays ≥ ~2.6 blocks (godfinger: ~2.5).
+     */
+    private static final double WISP_CAMERA_CLEARANCE = 7.0D;
+    /**
+     * Hysteresis pair of {@link #WISP_CAMERA_CLEARANCE} (the §10.2 BREACH_ENTER/EXIT
+     * pattern): a released wisp slot only re-engages beyond this distance, so wading
+     * along the clearance edge never flickers the orbit. {@code wispAngle} keeps
+     * advancing while released — the swirl resumes exactly where it would have been
+     * (godfinger rule, no ruckeln).
+     */
+    private static final double WISP_CAMERA_REENGAGE = 10.0D;
+    /**
      * PH-WORLD (IDEAS-world #8): crown-halo release distance — attach inside
      * {@link #ARC_RANGE}, release only beyond +20 (hysteresis, no boundary thrash).
      */
@@ -364,7 +392,7 @@ public final class StormFxClient {
         }
 
         tickArcs(level, storm, camera, centerDist, shellDist, visibility);
-        tickWisps(storm, shellDist, visibility);
+        tickWisps(storm, camera, shellDist, visibility);
         tickCrownHalo(storm, shellDist, visibility);
         tickLoopSound(minecraft, storm, shellDist, visibility);
         tickApproachDread(level, storm, camera, centerDist, shellDist, visibility);
@@ -710,8 +738,14 @@ public final class StormFxClient {
      * Keeps ≤{@value #MAX_WISPS} spiraling {@code vortex_wisp} loop emitters alive per vortex
      * storm and swirls them 0.35 rad/s around the shell — moving the EMITTERS from Java keeps
      * the swirl radius correct for any storm size (a baked JSON vortex radius could not).
+     * EVAL2-A H3 (the E5-Nachfix-2 godfinger pattern, {@code EMITTER_AUDIT_F107_CLASS.md}
+     * §10.2): a wisp slot whose ring target position comes horizontally closer than
+     * {@value #WISP_CAMERA_CLEARANCE} blocks to the camera releases too (its live quads —
+     * including the quasi-static trail left along the ring — die with it) and re-engages
+     * past {@value #WISP_CAMERA_REENGAGE} blocks — the orbit always reads as a wall
+     * texture, never as near-plane blades through a camera crossing into the storm.
      */
-    private static void tickWisps(ClientStorm storm, double shellDist, float visibility) {
+    private static void tickWisps(ClientStorm storm, Vec3 camera, double shellDist, float visibility) {
         boolean wanted = storm.type == S2CStormStatePayload.TYPE_VORTEX
                 && storm.state != S2CStormStatePayload.STATE_DISSIPATE
                 && visibility > 0.2F && shellDist < ARC_RANGE
@@ -731,11 +765,27 @@ public final class StormFxClient {
                 }
                 continue;
             }
+            double angle = storm.wispAngle * (1.0D + k * 0.08D) + k * (Math.PI * 2.0D / MAX_WISPS);
+            double x = storm.center.x + Math.cos(angle) * wispRadius;
+            double z = storm.center.z + Math.sin(angle) * wispRadius;
+            // §10.2 camera clearance (constant doc): release inside CLEARANCE, hold
+            // released until past REENGAGE. The angle above already advanced, so the
+            // swirl pattern never jumps — the slot simply sits the close pass out.
+            double camDx = camera.x - x;
+            double camDz = camera.z - z;
+            double camDistSq = camDx * camDx + camDz * camDz;
             if (wisp == null || wisp.isRemoved()) {
                 storm.wisps[k] = null;
-                // Budget-refused spawns simply retry next tick (loop emitters are cheap to keep).
-                storm.wisps[k] = QuasarSpawner.spawnManaged(VORTEX_WISP_EMITTER,
-                        wispPos(storm, wispRadius, k), FxBudget.Channel.STORM);
+                if (camDistSq >= WISP_CAMERA_REENGAGE * WISP_CAMERA_REENGAGE) {
+                    // Budget-refused spawns simply retry next tick (loop emitters are cheap to keep).
+                    storm.wisps[k] = QuasarSpawner.spawnManaged(VORTEX_WISP_EMITTER,
+                            new Vec3(x, storm.center.y + storm.wispHeights[k], z),
+                            FxBudget.Channel.STORM);
+                }
+                continue;
+            }
+            if (camDistSq < WISP_CAMERA_CLEARANCE * WISP_CAMERA_CLEARANCE) {
+                storm.releaseWisp(k);
                 continue;
             }
             // FX-STORM: the updraft gusts with the roar-loop clock (interior gusts only).
@@ -744,18 +794,8 @@ public final class StormFxClient {
             if (storm.wispHeights[k] > storm.height * 0.9F) {
                 storm.wispHeights[k] = 2.0F;
             }
-            double angle = storm.wispAngle * (1.0D + k * 0.08D) + k * (Math.PI * 2.0D / MAX_WISPS);
-            wisp.setPosition(storm.center.x + Math.cos(angle) * wispRadius,
-                    storm.center.y + storm.wispHeights[k],
-                    storm.center.z + Math.sin(angle) * wispRadius);
+            wisp.setPosition(x, storm.center.y + storm.wispHeights[k], z);
         }
-    }
-
-    private static Vec3 wispPos(ClientStorm storm, double wispRadius, int k) {
-        double angle = storm.wispAngle * (1.0D + k * 0.08D) + k * (Math.PI * 2.0D / MAX_WISPS);
-        return new Vec3(storm.center.x + Math.cos(angle) * wispRadius,
-                storm.center.y + storm.wispHeights[k],
-                storm.center.z + Math.sin(angle) * wispRadius);
     }
 
     /**

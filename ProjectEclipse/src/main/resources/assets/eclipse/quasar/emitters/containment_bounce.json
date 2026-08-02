@@ -1,30 +1,30 @@
 {
-  "max_lifetime": 20,
-  "loop": true,
-  "rate": 4,
-  "count": 1,
+  "max_lifetime": 3,
+  "loop": false,
+  "rate": 2,
+  "count": 8,
   "emitter_settings": {
     "shape": {
-      "shape": "veil:sphere",
+      "shape": "veil:hemisphere",
       "dimensions": [
-        0.35,
         0.5,
-        0.35
+        0.4,
+        0.5
       ],
       "rotation": [
         0.0,
         0.0,
         0.0
       ],
-      "from_surface": false
+      "from_surface": true
     },
     "particle_settings": {
-      "particle_speed": 0.06,
+      "particle_speed": 0.5,
       "random_speed": true,
-      "base_particle_size": 0.09,
-      "particle_size_variation": 0.04,
-      "particle_lifetime": 24,
-      "particle_lifetime_variation": 6,
+      "base_particle_size": 0.12,
+      "particle_size_variation": 0.05,
+      "particle_lifetime": 14,
+      "particle_lifetime_variation": 4,
       "initial_direction": [
         0.0,
         1.0,
@@ -42,7 +42,7 @@
     "additive": true,
     "should_collide": false,
     "face_velocity": false,
-    "velocity_stretch_factor": 0.0,
+    "velocity_stretch_factor": 0.4,
     "sprite_data": {
       "sprite": "eclipse:textures/particle/purple_wisp.png",
       "frame_count": 1,
@@ -51,43 +51,8 @@
     },
     "modules": [
       {
-        "module": "veil:trail",
-        "settings": [
-          {
-            "trailFrequency": 1,
-            "trailLength": 10,
-            "trailColor": [
-              0.48,
-              0.31,
-              0.82,
-              0.55
-            ],
-            "trailWidthModifier": 0.05,
-            "billboard": true,
-            "parentRotation": false,
-            "trailPointModifier": 1.0
-          }
-        ]
-      },
-      {
-        "module": "veil:vortex",
-        "vortex_axis": [
-          0.0,
-          1.0,
-          0.0
-        ],
-        "vortex_center": [
-          0.0,
-          1.0,
-          0.0
-        ],
-        "local_position": true,
-        "range": 2.0,
-        "strength": 0.1
-      },
-      {
         "module": "veil:drag",
-        "strength": 0.45
+        "strength": 0.75
       },
       {
         "module": "veil:color",
@@ -95,6 +60,14 @@
           "rgb_points": [
             {
               "percent": 0.0,
+              "color": "#FFFFFF"
+            },
+            {
+              "percent": 0.2,
+              "color": "#E4CFFF"
+            },
+            {
+              "percent": 0.5,
               "color": "#B98CFF"
             },
             {
@@ -105,7 +78,15 @@
           "alpha_points": [
             {
               "percent": 0.0,
+              "alpha": 1.0
+            },
+            {
+              "percent": 0.3,
               "alpha": 0.85
+            },
+            {
+              "percent": 0.7,
+              "alpha": 0.4
             },
             {
               "percent": 1.0,
