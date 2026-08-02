@@ -26,6 +26,53 @@
 				"Tip: The first round of each game every day pays double coins!",
 				"Tip: Hard mode pays ×1.3 coins — Endless is pure bragging rights."
 			]
+		},
+		"dlc": {
+			"ranch": {
+				"titel": "Off to the ranch!",
+				"bereit": "The boots are already waiting…",
+				"titel_zurueck": "See you soon, ranch!",
+				"bereit_zurueck": "Heading home with hay in our hair…",
+				"tips": [
+					"Spreading fresh hay across the paddock…",
+					"Giving the ponies one last quick brush…",
+					"Stacking the hay bales into a little tower…",
+					"The paddock fence gets a pat and a fresh nail…",
+					"Placing a straw in the corner of the mouth, ranch-style…",
+					"Tip: Brushed horses gallop with extra bounce.",
+					"Tip: At night the pond behind the paddock sparkles — stop by sometime."
+				]
+			},
+			"goobye": {
+				"titel": "Welcome to Goo and Bye!",
+				"bereit": "The sliding door is practicing its swoosh…",
+				"titel_zurueck": "Thanks for shopping!",
+				"bereit_zurueck": "The receipt flutters along behind you…",
+				"tips": [
+					"Stacking the shelves carrot-straight…",
+					"The register is practicing its friendliest beep…",
+					"Oiling the shopping cart wheels for a smooth ride…",
+					"Checking the carrot pyramid for collapse hazards…",
+					"Straightening the “Deal of the day: carrots!” sign…",
+					"Tip: Uncle Alwin drops by at 9 every day — and buys exactly ONE carrot.",
+					"Tip: Full shelves make happy shoppers — restock first, then open up."
+				]
+			},
+			"mcgooby": {
+				"titel": "Shift time at McGooby!",
+				"bereit": "The fryer is humming itself warm…",
+				"titel_zurueck": "Clocking out at McGooby!",
+				"bereit_zurueck": "A whiff of fries is tagging along…",
+				"tips": [
+					"Polishing the golden floppy-ear arches…",
+					"Stacking the carrot fries extra crispy…",
+					"Layering a GoobyMac by strictly secret recipe…",
+					"Nudging the tip cup into a hopeful spot…",
+					"The milkshake machine is working today, for once…",
+					"Tip: Patty wisdom — pink means wait, golden means flip, charcoal means practice.",
+					"Tip: The Pickle Deluxe demands seven pickles. No more, no less."
+				]
+			}
 		}
 	}
 }

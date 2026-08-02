@@ -17,6 +17,17 @@ extends CanvasLayer
 ##   kleinen Ausflug…“ + Trip-Tipps.
 ## - home: alles andere (Rückkehr/Default) — „Trautes Heim“ /
 ##   „Auf dem Heimweg…“ + Home-Tipps.
+## G6/DLC-LOAD: DLC-Orte (Ranch, „Goo und Bye“, McGooby) bekommen beim
+## Betreten UND auf dem Rückweg ihre eigene Karten-Identität — dieselbe
+## Karte, nur Motiv/Farbstimmung/Tipps datengetrieben getauscht
+## (DlcLoadingKarten): DLC-Cover in der Cover-Zone, eigener Motiv-Sticker,
+## eigene Titel-/Bereit-Zeile und ein eigener Tipp-Pool (6+ je DLC).
+## Vorrang unverändert: Minigame-Hint > Tür-Wisch > Ranch-Vollbildschirm
+## (lange Reisen) > DLC-Karte > home/trip. Unbekannte Ziele fallen auf die
+## Standard-Karte zurück; fehlende DLC-Assets auf Verlauf/Winke-Gooby
+## (Web-onerror-Verhalten). Die Herkunft trackt das Veil selbst über die
+## travel_started-Ziele — kein Eingriff in Router oder DLC-Szenen.
+##
 ## Ein/Aus ist seit W16/G2b der Signature-Übergang der Web-Version
 ## (loadingVeil.js V6/F2, Spez §2.2): der PETAL-SWEEP-WIPE. Backdrop +
 ## Karte wischen GEMEINSAM links→rechts herein (ease-out) und hinaus
@@ -93,6 +104,12 @@ var _active_hint: Dictionary = {}
 ## Karten-Modus wie im Web: "home" | "trip" | "game".
 var _modus := "home"
 var _laedt_basis := ""
+## G6/DLC-LOAD: aktive DLC-Karte ("" = Standard-Karte) + Reiserichtung.
+var _dlc_karte := ""
+var _dlc_betreten := false
+## Zuletzt bereistes Ziel = Herkunft der NÄCHSTEN Reise (fürs „und zurück“
+## der DLC-Karten) — das Veil trackt das selbst, der Router bleibt frozen.
+var _herkunft := StringName()
 var _ranch_aktiv := false
 var _ranch_ziel := StringName()
 var _ranch_screen: RanchLoadingScreen
@@ -191,6 +208,16 @@ func prepare_for_travel(target: StringName, travel_type := 0) -> void:
 		and not _door_aktiv
 		and LoadingScreenRules.ist_lange_reise(target, travel_type)
 	)
+	# G6/DLC-LOAD: DLC-Karte datengetrieben wählen (Betreten schlägt
+	# Rückweg); der Minigame-Hint behält Vorrang. Danach wird das Ziel
+	# zur Herkunft der nächsten Reise.
+	if _active_hint.is_empty():
+		_dlc_karte = DlcLoadingKarten.karten_id_fuer(target, _herkunft)
+		_dlc_betreten = DlcLoadingKarten.ist_betreten(target)
+	else:
+		_dlc_karte = ""
+		_dlc_betreten = false
+	_herkunft = target
 	_apply_variant()
 
 
@@ -388,32 +415,61 @@ void fragment() {
 
 ## Karte auf den aktiven Modus stellen (Web buildCard): home/trip nutzen
 ## das Heim-Cover + Winke-Gooby-Sticker, game das Spiel-Cover aus dem
-## Travel-Hint + das Game-Motiv. Der Vorhang bleibt in ALLEN Modi das
-## statische Blätter-Pattern auf Papier (Web .acui-veil).
+## Travel-Hint + das Game-Motiv, DLC-Karten (G6/DLC-LOAD) ihr DLC-Cover +
+## DLC-Motiv + eigene Farbstimmung/Texte (rein datengetrieben, EIN System).
+## Der Vorhang bleibt in ALLEN Modi das statische Blätter-Pattern auf
+## Papier (Web .acui-veil).
 func _apply_variant() -> void:
 	if _root == null:
 		return
 	var minigame := not _active_hint.is_empty()
 	var ranch := _ranch_aktiv and not minigame
+	var dlc := "" if minigame else _dlc_karte
 	_modus = "game" if minigame else modus_fuer_ziel(_ranch_ziel)
-	var cover_tex: Texture2D = (
-		_active_hint.get("cover") if minigame else _lade_textur(COVER_HOME_PFAD)
-	)
+	var cover_tex: Texture2D
+	if minigame:
+		cover_tex = _active_hint.get("cover")
+	elif dlc != "":
+		cover_tex = _lade_textur(DlcLoadingKarten.cover_pfad(dlc))
+	else:
+		cover_tex = _lade_textur(COVER_HOME_PFAD)
 	_cover_rect.texture = cover_tex
 	_cover_rect.visible = cover_tex != null
-	var titel := (
-		str(_active_hint.get("title", "")) if minigame else I18nService.t("veil.%s.titel" % _modus)
-	)
+	# Farbstimmung des Cover-Fallback-Verlaufs: pro DLC-Karte, sonst Web-Standard.
+	_card.setze_fallback_farben(DlcLoadingKarten.fallback_farben(dlc))
+	var titel := ""
+	if minigame:
+		titel = str(_active_hint.get("title", ""))
+	elif dlc != "":
+		titel = I18nService.t(DlcLoadingKarten.titel_key(dlc, _dlc_betreten))
+	else:
+		titel = I18nService.t("veil.%s.titel" % _modus)
 	_title_label.text = titel
 	_title_label.visible = titel != ""
-	_ready_label.text = I18nService.t("veil.%s.bereit" % _modus)
-	_gooby.set_motiv(_lade_textur(MOTIV_GAME_PFAD if minigame else MOTIV_WAVE_PFAD))
+	if dlc != "":
+		_ready_label.text = I18nService.t(DlcLoadingKarten.bereit_key(dlc, _dlc_betreten))
+	else:
+		_ready_label.text = I18nService.t("veil.%s.bereit" % _modus)
+	_gooby.set_motiv(_motiv_textur(minigame, dlc))
 	_gooby.visible = true
 	_laedt_label.visible = true
 	_tip_label.visible = true
 	_card.visible = not ranch
 	_apply_ranch_variant(ranch)
 	_advance_tip()
+
+
+## Motiv-Sticker der Karte: Game-Motiv beim Minigame, DLC-Motiv auf
+## DLC-Karten — fehlt dessen Bild, bleibt der Winke-Gooby (Garantie der
+## Standard-Karte, Web-onerror-Verhalten).
+func _motiv_textur(minigame: bool, dlc: String) -> Texture2D:
+	if minigame:
+		return _lade_textur(MOTIV_GAME_PFAD)
+	if dlc != "":
+		var motiv := _lade_textur(DlcLoadingKarten.motiv_pfad(dlc))
+		if motiv != null:
+			return motiv
+	return _lade_textur(MOTIV_WAVE_PFAD)
 
 
 ## Vollbild-Schirm der langen Reisen ein-/ausblenden (RW-8).
@@ -488,8 +544,13 @@ func _on_tip_timer() -> void:
 		_wechsle_tip_weich()
 
 
-## Rotierende Tipps des AKTIVEN Karten-Modus (Web §2.4: 3 je Modus).
+## Rotierende Tipps des AKTIVEN Karten-Modus (Web §2.4: 3 je Modus) —
+## DLC-Karten bringen ihren eigenen Pool mit (G6/DLC-LOAD, 6+ je DLC).
 func _tips() -> Array:
+	if _dlc_karte != "" and _active_hint.is_empty():
+		var dlc_tips := I18nService.items(DlcLoadingKarten.tips_key(_dlc_karte))
+		if not dlc_tips.is_empty():
+			return dlc_tips
 	return I18nService.items(tips_key(_modus))
 
 

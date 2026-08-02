@@ -69,6 +69,16 @@ func design_faktor() -> float:
 	return _f
 
 
+## G6/DLC-LOAD: Farbstimmung des Cover-Fallback-Verlaufs datengetrieben
+## tauschen (DLC-Karten) — leer/zu kurz = zurück auf den Web-Standard.
+## Nur der Verlauf wechselt; Radius, Ring, Schatten, Maße bleiben FROZEN.
+func setze_fallback_farben(farben: Array[Color]) -> void:
+	if _fallback == null:
+		return
+	var stops := farben if farben.size() >= 3 else FALLBACK_FARBEN
+	_fallback.texture = _verlauf_textur(stops)
+
+
 ## Kartenkörper: Papier, Radius 28, Hairline-Ring (0 0 0 1px outline-soft)
 ## + Pop-Schatten (0 10px 30px rgba(74,59,54,.18)); der innere Clip-Panel
 ## schneidet Cover + Sticker an den runden Ecken ab (overflow: hidden).
@@ -155,8 +165,14 @@ static func _font(gewicht: int) -> FontVariation:
 ## Akzent-Verlauf unterm Cover-Bild (Fallback, wenn kein Bild lädt):
 ## linear-gradient(155deg, #fff6ec 0%, #ffe9c7 58%, #e8c896 100%).
 static func _fallback_textur() -> GradientTexture2D:
+	return _verlauf_textur(FALLBACK_FARBEN)
+
+
+## Der 155°-Web-Verlauf mit austauschbaren Stops (Farbstimmung der
+## DLC-Karten, G6/DLC-LOAD) — Winkel/Offsets bleiben die Web-Werte.
+static func _verlauf_textur(farben: Array[Color]) -> GradientTexture2D:
 	var verlauf := Gradient.new()
-	verlauf.colors = PackedColorArray(FALLBACK_FARBEN)
+	verlauf.colors = PackedColorArray(farben)
 	verlauf.offsets = PackedFloat32Array([0.0, 0.58, 1.0])
 	var textur := GradientTexture2D.new()
 	textur.gradient = verlauf

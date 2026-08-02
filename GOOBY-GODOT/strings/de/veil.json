@@ -26,6 +26,53 @@
 				"Tipp: Die erste Runde pro Spiel am Tag bringt doppelte Münzen!",
 				"Tipp: Schwer zahlt ×1,3 Münzen — Endlos ist für den Ruhm."
 			]
+		},
+		"dlc": {
+			"ranch": {
+				"titel": "Ab auf die Ranch!",
+				"bereit": "Die Stiefel stehen schon parat…",
+				"titel_zurueck": "Bis bald, Ranch!",
+				"bereit_zurueck": "Mit Heu in den Haaren heimwärts…",
+				"tips": [
+					"Frisches Heu wird auf der Koppel verteilt…",
+					"Die Ponys werden noch schnell gebürstet…",
+					"Die Heuballen werden zu einem kleinen Turm gestapelt…",
+					"Der Koppelzaun bekommt einen Klaps und einen neuen Nagel…",
+					"Ein Strohhalm wird stilecht in den Mundwinkel gesteckt…",
+					"Tipp: Gebürstete Pferde galoppieren mit extra Schwung.",
+					"Tipp: Nachts glitzert der Teich hinter der Koppel — schau mal vorbei."
+				]
+			},
+			"goobye": {
+				"titel": "Willkommen im Goo und Bye!",
+				"bereit": "Die Schiebetür übt ihr Swoosch…",
+				"titel_zurueck": "Danke für deinen Einkauf!",
+				"bereit_zurueck": "Der Kassenbon flattert hinterher…",
+				"tips": [
+					"Die Regale werden möhrengerade eingeräumt…",
+					"Die Kasse übt ihr freundlichstes Piep…",
+					"Die Einkaufswagen bekommen frisch geölte Rollen…",
+					"Die Möhrenpyramide wird auf Einsturzgefahr geprüft…",
+					"Das Schild „Angebot des Tages: Möhren!“ wird gerade gerückt…",
+					"Tipp: Onkel Alwin kommt jeden Tag um 9 — und kauft genau EINE Möhre.",
+					"Tipp: Volle Regale machen frohe Kundschaft — erst Nachschub, dann öffnen."
+				]
+			},
+			"mcgooby": {
+				"titel": "Schicht im McGooby!",
+				"bereit": "Die Fritteuse summt sich warm…",
+				"titel_zurueck": "Feierabend im McGooby!",
+				"bereit_zurueck": "Ein Hauch Frittenduft reist mit…",
+				"tips": [
+					"Die goldenen Löffelohren-Bögen werden blank poliert…",
+					"Die Möhren-Fritten werden extra knusprig gestapelt…",
+					"Ein GoobyMac wird nach streng geheimem Rezept geschichtet…",
+					"Der Trinkgeld-Becher wird hoffnungsvoll zurechtgerückt…",
+					"Die Milchshake-Maschine funktioniert heute ausnahmsweise…",
+					"Tipp: Patty-Weisheit — rosa heißt warten, goldbraun heißt wenden, Kohle heißt üben.",
+					"Tipp: Der Gurken-Deluxe verlangt sieben Gurken. Keine mehr, keine weniger."
+				]
+			}
 		}
 	}
 }
