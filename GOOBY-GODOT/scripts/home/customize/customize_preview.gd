@@ -20,6 +20,8 @@ const WAND_HOEHE := 2.5
 var _viewport: SubViewport
 var _pivot: Node3D
 var _camera: Camera3D
+## G7: laufende Weich-Blende (neuer Stil dippt kurz im Alpha statt hart).
+var _blende: Tween
 var _modus := ""
 var _room_id := ""
 var _style: Dictionary = {}
@@ -61,9 +63,33 @@ func show_exterior(style: Dictionary) -> void:
 
 
 ## Stil aktualisieren, Kamera bleibt stehen (Live-Anwendung beim Tippen).
+## G7: ein WIRKLICH neuer Stil blendet weich ein (kurzer Alpha-Dip statt
+## hartem Umspringen); unveränderte Refreshes (Resize) bleiben ruhig.
 func update_style(style: Dictionary) -> void:
+	var geaendert := style != _style
 	_style = style
 	_rebuild()
+	if geaendert:
+		_weich_blenden()
+
+
+## G7: „Zufällig“-Spaß — kurzer Wackler der ganzen Vorschau. Reduced
+## Motion: gar nichts (Gate sitzt zentral in UiMotion.wiggle).
+func wackeln() -> void:
+	UiMotion.wiggle(self, 2.5)
+
+
+## Weicher Übergang beim Stil-Wechsel; RM springt sofort auf voll sichtbar.
+func _weich_blenden() -> void:
+	if not is_inside_tree() or UiMotion.reduced(self):
+		modulate.a = 1.0
+		return
+	if _blende != null and _blende.is_valid():
+		_blende.kill()
+	modulate.a = 0.72
+	_blende = create_tween()
+	_blende.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	_blende.tween_property(self, "modulate:a", 1.0, AcTokens.DUR_POP * 1.5)
 
 
 func set_pose(yaw: float, tilt: float) -> void:

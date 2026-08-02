@@ -77,6 +77,10 @@ var game_state_override: Object = null
 
 var _preview: CustomizePreview
 var _kategorie_liste: VBoxContainer
+## G7: Fade-Affordance + Boden-Polster (Kategorie-Liste, rechte Spalte).
+var _kat_fade: ScrollFade
+var _kat_polster: MarginContainer
+var _rechts_fade: ScrollFade
 var _raum_chips: HFlowContainer
 var _optionen: HBoxContainer
 var _optionen_scroll: ScrollContainer
@@ -173,6 +177,12 @@ func _apply_metrics() -> void:
 	# Kategorie-Spalte bezieht ihr Budget aus der SPALTEN-Breite (vorher
 	# volle Canvas-Breite — die linke Liste wäre relativ zu breit geworden).
 	_kat_spalte.custom_minimum_size = Vector2(minf(LIST_WIDTH * _f, spalte * 0.3), 0.0)
+	# G7: Fade-Kanten + Boden-Polster der Kategorie-Liste skalieren mit f.
+	if _kat_fade != null:
+		_kat_fade.kanten_hoehe(ScrollFade.KANTE * _f)
+		_kat_polster.add_theme_constant_override("margin_bottom", roundi(ScrollFade.KANTE * _f))
+	if _rechts_fade != null:
+		_rechts_fade.kanten_hoehe(ScrollFade.KANTE * _f)
 	_optionen_scroll.custom_minimum_size = Vector2(0.0, TILE_SIZE.y * _tile_f + 18.0)
 	_kauf_button.custom_minimum_size = Vector2(150.0 * _f, _floor)
 	ScreenShell.scale_fonts(self, _f)
@@ -209,6 +219,14 @@ func _layout_header(m: Dictionary) -> void:
 func _layout_header_nachziehen() -> void:
 	if is_inside_tree():
 		_layout_header(ScreenShell.metrics(get_viewport()))
+
+
+## G7: Deferred-Pass des Vorschau-Budgets — im Bau-Frame melden HFlow-
+## Zeilen (Farb-Swatches!) noch ALTE Minima; die Vorschau bekam zu viel
+## Höhe und drückte die Aktionen unter den Canvas (Befund quer 2868×1320).
+func _fit_preview_nachziehen() -> void:
+	if is_inside_tree():
+		_fit_preview(ScreenShell.metrics(get_viewport()))
 
 
 ## Vorschau-Höhe = Budget, das NACH Chips + Options-Panel übrig bleibt —
@@ -266,6 +284,7 @@ func select_farbe(farb_id: String) -> void:
 	if _pending_id != "":
 		_pending_farbe = farb_id
 		_refresh_alles()
+		call_deferred("_swatch_pop", farb_id)
 		return
 	var gs := _game_state()
 	if _kategorie.has("farb_bereich") and not _kategorie.has("art"):
@@ -273,6 +292,17 @@ func select_farbe(farb_id: String) -> void:
 	else:
 		_wende_option_an(_aktuelle_id(), farb_id)
 	_refresh_alles()
+	call_deferred("_swatch_pop", farb_id)
+
+
+## G7: Mini-Pop auf dem frisch gewählten Swatch — deferred, weil der HFlow
+## erst nach dem Sort die Pivot-Größe kennt. RM-Gate sitzt in UiMotion.
+func _swatch_pop(farb_id: String) -> void:
+	if _farben == null:
+		return
+	var swatch := _farben.get_node_or_null("Farbe_%s" % farb_id)
+	if swatch is Control:
+		UiMotion.bounce(swatch as Control, 1.12)
 
 
 ## Vorgemerkte Option kaufen und anwenden. Liefert den Ergebniscode.
@@ -302,6 +332,9 @@ func zufall() -> void:
 			HouseStyleState.zufall_grundstueck(gs, _rng)
 	_pending_id = ""
 	_refresh_alles()
+	# G7: Würfel-Spaß — die Vorschau wackelt kurz mit (RM-Gate in UiMotion).
+	if _preview != null:
+		_preview.wackeln()
 
 
 ## „Zurücksetzen" auf die Katalog-Defaults (Besitz bleibt).
@@ -495,12 +528,22 @@ func _build_kategorie_spalte() -> Control:
 	scroll.name = "KategorieScroll"
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	column.add_child(scroll)
+	# G7-Affordance: der User-Screenshot zeigte „Briefkasten“ hart halbiert,
+	# ohne Hinweis dass die Liste scrollt — Fade-Kante + Boden-Polster (der
+	# letzte Eintrag steht am Scroll-Ende frei, _apply_metrics skaliert).
+	_kat_fade = ScrollFade.um(scroll)
+	_kat_fade.name = "KategorieFade"
+	column.add_child(_kat_fade)
+	_kat_polster = MarginContainer.new()
+	_kat_polster.name = "KategoriePolster"
+	_kat_polster.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_kat_polster.add_theme_constant_override("margin_bottom", int(ScrollFade.KANTE))
+	scroll.add_child(_kat_polster)
 	_kategorie_liste = VBoxContainer.new()
 	_kategorie_liste.name = "KategorieListe"
 	_kategorie_liste.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_kategorie_liste.add_theme_constant_override("separation", 6)
-	scroll.add_child(_kategorie_liste)
+	_kategorie_liste.add_theme_constant_override("separation", 8)
+	_kat_polster.add_child(_kategorie_liste)
 	return column
 
 
@@ -513,6 +556,10 @@ func _build_rechte_spalte() -> Control:
 	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	# G7: auch hier Fade-Affordance — läuft die Spalte über (Innen-
+	# Kategorien im flachen Quer), lädt die Kante zum Scrollen ein.
+	_rechts_fade = ScrollFade.um(scroll)
+	_rechts_fade.name = "RechteSpalteFade"
 	var column := VBoxContainer.new()
 	column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	column.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -534,7 +581,7 @@ func _build_rechte_spalte() -> Control:
 	_preview.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	card.add_child(_preview)
 	column.add_child(_build_options_panel())
-	return scroll
+	return _rechts_fade
 
 
 func _build_options_panel() -> Control:
@@ -542,7 +589,9 @@ func _build_options_panel() -> Control:
 	_options_panel = panel
 	panel.theme_type_variation = &"AcCard"
 	var rows := VBoxContainer.new()
-	rows.add_theme_constant_override("separation", 6)
+	# G7: mehr Luft zwischen Kachel-Zeile, Farbzeile und Aktionen — der
+	# User-Screenshot zeigte „Im Besitz“ + Zufällig/Zurücksetzen gequetscht.
+	rows.add_theme_constant_override("separation", 10)
 	panel.add_child(rows)
 	_optionen_scroll = ScrollContainer.new()
 	_optionen_scroll.name = "OptionenScroll"
@@ -607,12 +656,15 @@ func _build_aktions_row() -> Control:
 	# HFlow: Kaufen/Zufall/Zurücksetzen brechen im Hochformat um.
 	var row := HFlowContainer.new()
 	row.add_theme_constant_override("h_separation", 10)
-	row.add_theme_constant_override("v_separation", 6)
+	row.add_theme_constant_override("v_separation", 8)
 	row.add_child(_build_zahl_row())
 	_status_label = Label.new()
 	_status_label.name = "StatusLabel"
-	_status_label.theme_type_variation = &"HeadlineLabel"
+	# G7: Title statt Headline — die 34er-Headline blähte die Aktionszeile
+	# im flachen Querformat auf ~90 px und quetschte den Rest der Spalte.
+	_status_label.theme_type_variation = &"TitleLabel"
 	_status_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_status_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	row.add_child(_status_label)
 	_kauf_button = SquishButton.new()
 	_kauf_button.name = "KaufButton"
@@ -658,9 +710,11 @@ func _refresh_alles() -> void:
 	if _optionen != null and stagger_key != _stagger_key:
 		_stagger_key = stagger_key
 		UiMotion.stagger_in(_optionen.get_children(), 0.02)
-	# Panel-Inhalt hat sich geändert (Farben/Zahl-Zeile) → Vorschau-Budget neu.
+	# Panel-Inhalt hat sich geändert (Farben/Zahl-Zeile) → Vorschau-Budget
+	# neu — sofort UND deferred (s. _fit_preview_nachziehen).
 	if is_inside_tree():
 		_fit_preview(ScreenShell.metrics(get_viewport()))
+		call_deferred("_fit_preview_nachziehen")
 
 
 func _refresh_kategorien() -> void:
@@ -740,7 +794,10 @@ func _make_kachel(
 	kachel.icon = CustomizeIcons.option_preview(art, id, farb_id)
 	kachel.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	kachel.vertical_icon_alignment = VERTICAL_ALIGNMENT_TOP
-	kachel.expand_icon = false
+	# G7-Leitformat-Fix: expand_icon=true — das fixe 96-px-Icon sprengte
+	# sonst den _tile_f-Deckel (Options-Zeile fraß im flachen Querformat
+	# 221 statt ~150 px Höhe und drückte die Aktionen unter den Canvas).
+	kachel.expand_icon = true
 	# Das Theme tönt Button-Icons dunkelbraun (INK) — die Muster-Vorschau
 	# muss aber in Originalfarben erscheinen.
 	for zustand: String in ["icon_normal_color", "icon_hover_color", "icon_pressed_color"]:
@@ -752,7 +809,10 @@ func _make_kachel(
 		status = I18nService.t("customize.preis", {"n": int(option.get("preis", 0))})
 	var titel := CustomizeCatalog.display_name(option, I18nService.get_locale())
 	kachel.text = "%s\n%s" % [titel, status]
-	kachel.add_theme_font_size_override("font_size", 13)
+	# Kachel-Schrift folgt dem KACHEL-Deckel (_tile_f), nicht dem globalen
+	# f — sonst hebelt der Text den gedeckelten Platz wieder aus (s. o.).
+	kachel.set_meta(ScreenShell.META_FONT_SKIP, true)
+	kachel.add_theme_font_size_override("font_size", int(maxf(roundf(13.0 * _tile_f), 10.0)))
 	var box := StyleBoxFlat.new()
 	box.bg_color = Color.WHITE if gekauft else Color("#F3EDE3")
 	box.set_corner_radius_all(AcTokens.RADIUS_ROW)
@@ -797,8 +857,12 @@ func _make_swatch(farb_id: String, aktiv: bool) -> Button:
 	var box := StyleBoxFlat.new()
 	box.bg_color = CustomizeMaterials.farbe(farb_id)
 	box.set_corner_radius_all(AcTokens.RADIUS_ROW)
-	box.set_border_width_all(3 if aktiv else 1)
+	# G7: gewählter Swatch deutlich — dicker Rahmen + weicher Pink-Schein.
+	box.set_border_width_all(4 if aktiv else 1)
 	box.border_color = AcTokens.PINK if aktiv else AcTokens.OUTLINE_SOFT
+	if aktiv:
+		box.shadow_color = Color(AcTokens.PINK, 0.35)
+		box.shadow_size = 4
 	swatch.add_theme_stylebox_override("normal", box)
 	swatch.add_theme_stylebox_override("hover", box)
 	swatch.add_theme_stylebox_override("pressed", box)

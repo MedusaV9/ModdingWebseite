@@ -38,6 +38,8 @@ const RARITY_FARBE := {
 }
 ## Empfindlichkeit des Dreh-Ziehens (rad pro Pixel).
 const DREH_PRO_PIXEL := 0.011
+## G7: Scrollbar-Abstand zum Spalten-/Display-Rand (Design-px, × f).
+const GRID_RAND := 10.0
 
 ## Tests/Screenshots: eigener Spielstand statt /root/GameState.
 var game_state_override: Object = null
@@ -68,6 +70,10 @@ var _saeule_links: VBoxContainer
 var _buehne_container: SubViewportContainer
 var _tab_scroll: ScrollContainer
 var _grid_scroll: ScrollContainer
+## G7: Fade-Kanten-Affordance (Grid unten, Chips seitlich) + Boden-Polster.
+var _grid_fade: ScrollFade
+var _grid_polster: MarginContainer
+var _tab_fade: ScrollFade
 var _tile := KARTE
 
 
@@ -131,12 +137,19 @@ func _apply_metrics() -> void:
 			(chip as Control).custom_minimum_size = Vector2(m["floor_px"], m["floor_px"])
 	if _tab_scroll != null:
 		_tab_scroll.custom_minimum_size = Vector2(0.0, m["floor_px"] + 4.0)
+	# G7: Scrollbar-Abstand + Fade-Kanten skalieren; das Boden-Polster hält
+	# die letzte Reihe am Scroll-Ende frei über der Fade-Kante.
+	var rand := roundi(GRID_RAND * f)
+	if _grid_fade != null:
+		_grid_fade.rand_inset(rand)
+		_grid_fade.kanten_hoehe(ScrollFade.KANTE * f)
+		_grid_polster.add_theme_constant_override("margin_bottom", roundi(ScrollFade.KANTE * f))
 	# Hochformat-Stapel (G3): Bühne oben mit festem Höhenbudget (~38 % der
 	# Safe-Höhe), Grid darunter in voller Spaltenbreite.
 	var hochkant := canvas.y > canvas.x
 	_split.vertical = hochkant
 	var insets: Dictionary = m["insets"]
-	var avail := spalte - 12.0
+	var avail := spalte - 12.0 - float(rand)
 	if hochkant:
 		var safe_h := canvas.y - float(insets["top"]) - float(insets["bottom"])
 		var buehne_h := clampf(safe_h * 0.38, 320.0, maxf(safe_h - 320.0, 320.0))
@@ -153,7 +166,7 @@ func _apply_metrics() -> void:
 		# rows klemmt an der Kinder-Mindestbreite (936 statt 920, Mitte 648
 		# statt 640 auf 1280×720; W16-Befund der G3-Integration).
 		_buehne_container.custom_minimum_size = Vector2(0.0, 380.0)
-		avail = spalte - _saeule_links.custom_minimum_size.x - 16.0 - 12.0
+		avail = spalte - _saeule_links.custom_minimum_size.x - 16.0 - 12.0 - float(rand)
 	# Karten: Wunschgröße × f, Spaltenzahl aus der SPALTEN-Restbreite (statt
 	# der vollen Canvas-Breite); hochkant mindestens 3 Spalten.
 	_tile = KARTE * f
@@ -182,7 +195,13 @@ func tab_waehlen(kategorie: String) -> void:
 		)
 		_hinweis.visible = not _hinweis.text.is_empty()
 	for chip: Node in _tab_box.get_children():
-		(chip as Button).button_pressed = chip.name == StringName("Tab_%s" % kategorie)
+		var aktiv := chip.name == StringName("Tab_%s" % kategorie)
+		(chip as Button).button_pressed = aktiv
+		# G7: aktiver Chip DEUTLICH (Leaf-Füllung wie im Gestalten-Screen)
+		# und in den sichtbaren Bereich der swipebaren Leiste holen.
+		(chip as Button).theme_type_variation = &"ChipLeaf" if aktiv else &"AcChip"
+		if aktiv and _tab_scroll != null and is_inside_tree():
+			_tab_scroll.ensure_control_visible(chip as Control)
 	_grid_neu_bauen()
 
 
@@ -352,13 +371,16 @@ func _build_regal() -> Control:
 	saeule.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	saeule.add_theme_constant_override("separation", 8)
 
-	# FB3: Tab-Leiste scrollt horizontal — im Hochformat liefen die letzten
-	# Tabs sonst rechts aus dem Canvas.
+	# FB3: Tab-Leiste scrollt horizontal (Touch-Pan = swipebar) — im
+	# Hochformat liefen die letzten Tabs sonst rechts aus dem Canvas.
+	# G7: Seiten-Fades zeigen an, WENN die Chips überlaufen.
 	var tab_scroll := ScrollContainer.new()
 	tab_scroll.name = "TabScroll"
 	tab_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	tab_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
-	saeule.add_child(tab_scroll)
+	_tab_fade = ScrollFade.um(tab_scroll)
+	_tab_fade.name = "TabFade"
+	saeule.add_child(_tab_fade)
 	_tab_box = HBoxContainer.new()
 	_tab_box.add_theme_constant_override("separation", 8)
 	for kategorie in CosmeticsCatalog.KATEGORIEN:
@@ -381,14 +403,26 @@ func _build_regal() -> Control:
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	saeule.add_child(scroll)
+	# G7: Fade-Kante = Scroll-Einladung (die angeschnittene zweite Reihe
+	# wirkte im User-Screenshot wie ein Fehler); rand_inset löst zugleich
+	# die am Display-Rand klebende Scrollbar (_apply_metrics skaliert).
+	_grid_fade = ScrollFade.um(scroll)
+	_grid_fade.name = "GridFade"
+	saeule.add_child(_grid_fade)
 	_grid_scroll = scroll
+	# Boden-Polster: am Scroll-Ende steht die letzte Reihe frei über der
+	# Fade-Kante statt hart am Rand (Höhe zieht _apply_metrics nach).
+	_grid_polster = MarginContainer.new()
+	_grid_polster.name = "GridPolster"
+	_grid_polster.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_grid_polster.add_theme_constant_override("margin_bottom", int(ScrollFade.KANTE))
+	scroll.add_child(_grid_polster)
 	_grid = GridContainer.new()
 	_grid.columns = 4
 	_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_grid.add_theme_constant_override("h_separation", 12)
 	_grid.add_theme_constant_override("v_separation", 12)
-	scroll.add_child(_grid)
+	_grid_polster.add_child(_grid)
 	return saeule
 
 
@@ -545,16 +579,46 @@ func _karte_aktualisieren(id: String) -> void:
 
 ## Audio-Grammatik: Outcome schlägt Press — ob Kauf, An-/Ablegen oder Fehler
 ## steht erst nach der Prüfung fest, also klingt das ERGEBNIS (genau 1 Id).
+## G7-Feedback obendrauf: Kauf = Gold-Sparkle auf der Karte, Fehler
+## („zu teuer“) = sanftes Kopfschütteln — beides Reduced-Motion-gated.
 func _on_karte_gedrueckt(id: String) -> void:
 	var ergebnis := item_tippen(id)
+	var karte := _karte_von(id)
 	if bool(ergebnis.get("gekauft", false)):
 		AudioDirector.try_play(self, "ui_buy")
 		Haptics.success(self)
+		if karte != null:
+			UiMotion.sparkle(karte)
 	elif bool(ergebnis.get("ok", false)) or str(ergebnis.get("grund", "")) == "unveraendert":
 		AudioDirector.try_play(self, "ui_click")
 	else:
 		AudioDirector.try_play(self, "ui_error")
 		Haptics.warn(self)
+		_kopfschuetteln(karte)
+
+
+func _karte_von(id: String) -> Control:
+	var eintrag: Variant = _karten_ui.get(id)
+	if eintrag is Dictionary and (eintrag as Dictionary).get("karte") is Control:
+		return (eintrag as Dictionary)["karte"]
+	return null
+
+
+## Sanftes Nein-Schütteln der Karte (zu teuer). RM = ohne Bewegung; ein
+## laufendes Schütteln stapelt nicht (die Ruhelage bliebe sonst schief).
+func _kopfschuetteln(karte: Control) -> void:
+	if karte == null or not karte.is_inside_tree() or UiMotion.reduced(karte):
+		return
+	if karte.has_meta(&"g7_schuettel"):
+		var alt: Variant = karte.get_meta(&"g7_schuettel")
+		if alt is Tween and (alt as Tween).is_valid():
+			return
+	var rast := karte.position.x
+	var tween := karte.create_tween()
+	karte.set_meta(&"g7_schuettel", tween)
+	tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	for versatz: float in [-7.0, 6.0, -4.0, 0.0]:
+		tween.tween_property(karte, "position:x", rast + versatz, 0.055)
 
 
 func _on_tab_gedrueckt(kategorie: String) -> void:
