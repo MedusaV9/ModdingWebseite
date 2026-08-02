@@ -26,7 +26,10 @@ import net.neoforged.api.distmarker.OnlyIn;
 public class UmbralStalkerGeoRenderer extends EclipseGeoRenderer<UmbralStalkerEntity> {
     public UmbralStalkerGeoRenderer(EntityRendererProvider.Context context) {
         super(context, UmbralStalkerEntity.GEO_ID, true);
-        withGlowmask();
+        // WAVE6 (F-106 A) A7: UmbralNightGlowLayer replaces the stock withGlowmask()
+        // AutoGlowingGeoLayer 1:1 (FogGlowBreathLayer precedent) — identical base pass,
+        // plus an Umbral-Night emissive overdrive gated on NightDreadFx/reducedFx.
+        addRenderLayer(new UmbralNightGlowLayer<>(this));
         withUprightDeath();
         this.shadowRadius = 0.6F; // Parity with the old MobRenderer registration.
     }

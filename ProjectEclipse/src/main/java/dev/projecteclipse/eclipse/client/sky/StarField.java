@@ -1,5 +1,6 @@
 package dev.projecteclipse.eclipse.client.sky;
 
+import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.Tesselator;
@@ -10,6 +11,7 @@ import org.joml.Matrix4f;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
+import dev.projecteclipse.eclipse.client.drama.NightDreadFx;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.client.renderer.ShaderInstance;
 import net.minecraft.util.Mth;
@@ -26,6 +28,17 @@ import net.neoforged.api.distmarker.OnlyIn;
  */
 @OnlyIn(Dist.CLIENT)
 final class StarField {
+    // WAVE6 (F-106 A) A3 — Umbral-night star grade: overall brightness ×~0.55 with a
+    // warm red lean (per-channel r×0.70 / g×0.50 / b×0.45, alpha ×0.55 — "the sky holds
+    // its breath"), multiplied on TOP of whatever colour the caller set, so the eclipse/
+    // credits star boosts keep working underneath. Pale Nights are deliberately ±0 (the
+    // pale night belongs to the moon, plan §3 A3). NightDreadFx.isUmbral() is overworld-
+    // gated, so the Limbo sky (LimboSpecialEffects shares this mesh class) never dims.
+    private static final float UMBRAL_STAR_R = 0.70F;
+    private static final float UMBRAL_STAR_G = 0.50F;
+    private static final float UMBRAL_STAR_B = 0.45F;
+    private static final float UMBRAL_STAR_A = 0.55F;
+
     private final long seed;
     private final int count;
     private final float baseSize;
@@ -45,10 +58,30 @@ final class StarField {
             buffer.upload(build());
             VertexBuffer.unbind();
         }
+        // WAVE6 (F-106 A) A3: Umbral star dimming — constants-only math in the existing
+        // shader-colour path; the caller's colour is restored afterwards so the star pass
+        // stays a pure function of its inputs on every other night.
+        boolean umbral = NightDreadFx.isUmbral();
+        float callerR = 0.0F;
+        float callerG = 0.0F;
+        float callerB = 0.0F;
+        float callerA = 0.0F;
+        if (umbral) {
+            float[] shaderColor = RenderSystem.getShaderColor();
+            callerR = shaderColor[0];
+            callerG = shaderColor[1];
+            callerB = shaderColor[2];
+            callerA = shaderColor[3];
+            RenderSystem.setShaderColor(callerR * UMBRAL_STAR_R, callerG * UMBRAL_STAR_G,
+                    callerB * UMBRAL_STAR_B, callerA * UMBRAL_STAR_A);
+        }
         ShaderInstance shader = GameRenderer.getPositionShader();
         buffer.bind();
         buffer.drawWithShader(pose, projection, shader);
         VertexBuffer.unbind();
+        if (umbral) {
+            RenderSystem.setShaderColor(callerR, callerG, callerB, callerA);
+        }
     }
 
     private com.mojang.blaze3d.vertex.MeshData build() {

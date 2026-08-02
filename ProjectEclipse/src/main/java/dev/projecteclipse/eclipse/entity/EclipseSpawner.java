@@ -88,6 +88,10 @@ public final class EclipseSpawner {
     private static final double HOWL_RANGE = 64.0D;
     private static final float HOWL_VOLUME = 1.5F;
     private static final float HOWL_PITCH = 0.5F;
+    // WAVE6 (F-106 A) A6: the quiet dawn exhale under the wave6_dawn_release cue —
+    // AMBIENT_UNDERWATER_EXIT is the vanilla surfacing breath, pitched down to a sigh.
+    private static final float DAWN_EXHALE_VOLUME = 0.35F;
+    private static final float DAWN_EXHALE_PITCH = 0.75F;
 
     /** Nightfall/dawn edge detector; {@code null} until the first pass after boot. */
     @Nullable
@@ -177,8 +181,27 @@ public final class EclipseSpawner {
     private static void clearNightEvent(MinecraftServer server) {
         EclipseWorldState state = EclipseWorldState.get(server);
         if (!EclipseWorldState.NIGHT_EVENT_NONE.equals(state.getActiveNightEvent())) {
-            EclipseMod.LOGGER.info("Night event '{}' ends at dawn", state.getActiveNightEvent());
+            String ended = state.getActiveNightEvent();
+            boolean umbralWas = EclipseWorldState.NIGHT_EVENT_UMBRAL.equals(ended);
+            EclipseMod.LOGGER.info("Night event '{}' ends at dawn", ended);
             state.setActiveNightEvent(EclipseWorldState.NIGHT_EVENT_NONE, state.getNightEventDay());
+            // WAVE6 (F-106 A) A1: dawn client sync — the renderers drop the night grade.
+            dev.projecteclipse.eclipse.network.night.NightPayloads.broadcast(server,
+                    EclipseWorldState.NIGHT_EVENT_NONE, state.getNightEventDay(), "dawn");
+            // WAVE6 (F-106 A) A6: morning release — the inverse of the wave3_night_omen:
+            // a personal rising-mote ring (sendFxEventTo personal lane, a = 1 the ended
+            // event was umbral / 0 pale; row in veilfx/Wave6NightFxRows) plus a quiet
+            // exhale for every player who survived the night.
+            int players = 0;
+            for (ServerPlayer p : server.getPlayerList().getPlayers()) {
+                dev.projecteclipse.eclipse.network.fx.FxPayloads.sendFxEventTo(p,
+                        dev.projecteclipse.eclipse.network.fx.FxCues.cue("wave6_dawn_release"),
+                        p.position(), umbralWas ? 1.0F : 0.0F, 0.0F);
+                p.playNotifySound(SoundEvents.AMBIENT_UNDERWATER_EXIT, SoundSource.AMBIENT,
+                        DAWN_EXHALE_VOLUME, DAWN_EXHALE_PITCH);
+                players++;
+            }
+            EclipseMod.LOGGER.debug("[w6a-dawnrelease] players={} event={}", players, ended);
         }
     }
 
@@ -195,6 +218,12 @@ public final class EclipseSpawner {
                     dev.projecteclipse.eclipse.network.fx.FxCues.cue("wave3_night_omen"),
                     p.position(), EclipseWorldState.NIGHT_EVENT_UMBRAL.equals(event) ? 1.0F : 0.0F, 0.0F);
         }
+        // WAVE6 (F-106 A) A1: night-event client sync — the moon/star/stalker renderers
+        // need the state (WAVE6_PLAN §1.3: nothing client-side could know it before).
+        // The day stamp is already written by both callers (scheduleNightEvent and
+        // /eclipse event set) before they announce.
+        dev.projecteclipse.eclipse.network.night.NightPayloads.broadcast(server, event,
+                EclipseWorldState.get(server).getNightEventDay(), "nightfall");
     }
 
     // --- gazer ---
@@ -256,6 +285,15 @@ public final class EclipseSpawner {
         }
         if (spawned > 0) {
             howlAround(overworld, packCenter);
+            // WAVE6 (F-106 A) A4: the landed pack gets a stage — one wave6_pack_land cue
+            // (ground-fog ring + eye glints; row in veilfx/Wave6NightFxRows) on the
+            // shared cue lane, for the same audience that hears the howl. a = landed
+            // pack size (scales the ring), b = 1 on Umbral Nights / 0 otherwise.
+            dev.projecteclipse.eclipse.network.fx.FxPayloads.sendFxEvent(overworld,
+                    dev.projecteclipse.eclipse.network.fx.FxCues.cue("wave6_pack_land"),
+                    Vec3.atBottomCenterOf(packCenter), spawned, umbral ? 1.0F : 0.0F, HOWL_RANGE);
+            EclipseMod.LOGGER.debug("[w6a-packland] size={} umbral={} at={}",
+                    spawned, umbral, packCenter);
             EclipseMod.LOGGER.info("Umbral stalker pack of {} spawned near {} (cap {} for {} player(s), umbral: {})",
                     spawned, packCenter, cap, online, umbral);
         }

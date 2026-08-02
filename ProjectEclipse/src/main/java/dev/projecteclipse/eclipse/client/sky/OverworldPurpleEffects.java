@@ -12,7 +12,10 @@ import com.mojang.math.Axis;
 
 import org.joml.Matrix4f;
 
+import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.client.credits.CreditsSkyFx;
+import dev.projecteclipse.eclipse.client.drama.NightDreadFx;
+import dev.projecteclipse.eclipse.core.config.EclipseClientConfig;
 import dev.projecteclipse.eclipse.veilfx.EclipseFxState;
 import dev.projecteclipse.eclipse.veilfx.SunTracker;
 import net.minecraft.client.Camera;
@@ -104,6 +107,25 @@ public class OverworldPurpleEffects extends DimensionSpecialEffects {
 
     /** Vanilla star field (seed/count as in {@code LevelRenderer#drawStars}). */
     private static final StarField STARS = new StarField(10842L, 1500, 0.15F);
+
+    // WAVE6 (F-106 A) A2 — Umbral/Pale night moon grade (colour/alpha arithmetic only,
+    // multiplied AFTER every existing factor; the Iris gate and creditsDark fade are
+    // untouched). Umbral: deep-violet tint (#6A1FB0 family) + a ghost double-quad —
+    // the emergent F-105 "Doppelmond" made canon. Pale: bleach toward bone-white
+    // (multiplicative, so it can only DESATURATE the vanilla moon sprite, never add).
+    private static final float MOON_UMBRAL_R = 0.415F; // #6A1FB0
+    private static final float MOON_UMBRAL_G = 0.122F;
+    private static final float MOON_UMBRAL_B = 0.690F;
+    private static final float MOON_PALE_R = 1.00F;    // bone-white: pull the cool
+    private static final float MOON_PALE_G = 0.965F;   // channels down a touch so the
+    private static final float MOON_PALE_B = 0.870F;   // moon reads bleached, not blue
+    /** Ghost quad: ~0.25 alpha copy, slightly larger, offset in the moon plane. */
+    private static final float MOON_GHOST_ALPHA = 0.25F;
+    private static final float MOON_GHOST_SCALE = 1.08F;
+    private static final float MOON_GHOST_OFFSET_X = 5.0F;
+    private static final float MOON_GHOST_OFFSET_Z = -3.5F;
+    /** {@code [w6a-moon]} probe dedup — last logged mode ({@code umbral|pale|none}). */
+    private static String lastMoonMode = "none";
 
     public OverworldPurpleEffects() {
         // Overworld-like: hasGround, NORMAL sky, no forced-bright lightmap, no constant
@@ -294,7 +316,30 @@ public class OverworldPurpleEffects extends DimensionSpecialEffects {
                 (float) Math.toDegrees(SunTracker.sunAngleRadians(level, partialTick))));
         Matrix4f moonPose = poseStack.last().pose();
         RenderSystem.setShader(GameRenderer::getPositionTexShader);
-        RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, rainAlpha);
+        // WAVE6 (F-106 A) A2: Umbral/Pale night grade on the vanilla moon — pure
+        // colour/alpha arithmetic multiplied after ALL existing factors (rainAlpha
+        // already folds rain + creditsDark; the Iris gate returned long before this
+        // pass). "none" keeps the literal vanilla (1,1,1, rainAlpha) call. reducedFx
+        // keeps the free tint but drops the extra ghost quad below.
+        String nightMode = NightDreadFx.mode();
+        float moonR = 1.0F;
+        float moonG = 1.0F;
+        float moonB = 1.0F;
+        boolean umbralMoon = NightDreadFx.isUmbral();
+        if (umbralMoon) {
+            moonR = MOON_UMBRAL_R;
+            moonG = MOON_UMBRAL_G;
+            moonB = MOON_UMBRAL_B;
+        } else if (NightDreadFx.isPale()) {
+            moonR = MOON_PALE_R;
+            moonG = MOON_PALE_G;
+            moonB = MOON_PALE_B;
+        }
+        if (!nightMode.equals(lastMoonMode)) {
+            EclipseMod.LOGGER.debug("[w6a-moon] mode={}", nightMode);
+            lastMoonMode = nightMode;
+        }
+        RenderSystem.setShaderColor(moonR, moonG, moonB, rainAlpha);
         RenderSystem.setShaderTexture(0, MOON_LOCATION);
         int moonPhase = level.getMoonPhase();
         int px = moonPhase % 4;
@@ -310,6 +355,22 @@ public class OverworldPurpleEffects extends DimensionSpecialEffects {
         moon.addVertex(moonPose, moonSize, -100.0F, -moonSize).setUv(u0, v0);
         moon.addVertex(moonPose, -moonSize, -100.0F, -moonSize).setUv(u1, v0);
         BufferUploader.drawWithShader(moon.buildOrThrow());
+
+        // WAVE6 (F-106 A) A2: Umbral ghost double-quad — a slightly larger, offset,
+        // brighter-violet copy at ~0.25 alpha in the same additive celestial pass (one
+        // extra quad, no new render stage). reducedFx: the tint above stays, this goes.
+        if (umbralMoon && !EclipseClientConfig.reducedFx()) {
+            RenderSystem.setShaderColor(0.55F, 0.28F, 0.90F, MOON_GHOST_ALPHA * rainAlpha);
+            float ghostSize = moonSize * MOON_GHOST_SCALE;
+            float gx = MOON_GHOST_OFFSET_X;
+            float gz = MOON_GHOST_OFFSET_Z;
+            BufferBuilder ghost = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX);
+            ghost.addVertex(moonPose, gx - ghostSize, -100.0F, gz + ghostSize).setUv(u1, v1);
+            ghost.addVertex(moonPose, gx + ghostSize, -100.0F, gz + ghostSize).setUv(u0, v1);
+            ghost.addVertex(moonPose, gx + ghostSize, -100.0F, gz - ghostSize).setUv(u0, v0);
+            ghost.addVertex(moonPose, gx - ghostSize, -100.0F, gz - ghostSize).setUv(u1, v0);
+            BufferUploader.drawWithShader(ghost.buildOrThrow());
+        }
 
         // stars, faintly purple-tinted; a strong eclipse pulls them out even at noon —
         // SKYDAY: so do the last event days (fx-tier-scaled, cheap single draw).

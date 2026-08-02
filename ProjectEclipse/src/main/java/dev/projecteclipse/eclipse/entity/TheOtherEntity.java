@@ -4,10 +4,14 @@ import java.util.EnumSet;
 
 import javax.annotation.Nullable;
 
+import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.network.S2CQuasarPayload;
 import dev.projecteclipse.eclipse.registry.EclipseItems;
 import net.minecraft.core.particles.ParticleTypes;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.protocol.game.ClientboundSoundPacket;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
@@ -57,8 +61,29 @@ public class TheOtherEntity extends Monster {
     public static final float REVEAL_DETACH_TICKS = 8.0F;
     public static final float REVEAL_RETRACT_TICKS = 6.0F;
 
+    // WAVE6 (F-106 A) A5 — proximity-dread whisper: the NEAREST player within
+    // WHISPER_RANGE hears a private, muffled pair every 60–80 ticks (jittered) — the
+    // cave whisper placed AT the doppelganger (directional dread) and the heartbeat at
+    // the listener's own ears. ClientboundSoundPacket per player, the W5-A5 /
+    // howlAround private-sound idiom: nobody else ever hears it.
+    public static final double WHISPER_RANGE = 12.0D;
+    private static final int WHISPER_MIN_INTERVAL_TICKS = 60;
+    private static final int WHISPER_JITTER_TICKS = 20;
+    /** Re-scan cadence while nobody is inside the whisper band (cheap idle). */
+    private static final int WHISPER_RESCAN_TICKS = 10;
+    private static final float WHISPER_CAVE_VOLUME = 0.35F;
+    private static final float WHISPER_HEARTBEAT_VOLUME = 0.25F;
+    private static final float WHISPER_PITCH = 0.6F;
+
     /** Remaining ticks of the 180°-in-2t aggro head snap (server-side). */
     private int headSnapTicks;
+
+    /**
+     * WAVE6 (F-106 A) A5: earliest {@code tickCount} the next whisper may fire —
+     * deliberately transient (never written to NBT): dread throttling should reset
+     * with the entity instance, not persist across restarts.
+     */
+    private int nextWhisperTick;
 
     /**
      * Client-side only: {@code tickCount} at the moment the synced {@code isAggressive()}
@@ -150,6 +175,56 @@ public class TheOtherEntity extends Monster {
         if (this.isAlive() && this.level().isDay()) {
             despawnAtDawn();
         }
+        // WAVE6 (F-106 A) A5: proximity-dread whisper (skipped once dawn discarded us).
+        if (this.isAlive() && this.level() instanceof ServerLevel serverLevel) {
+            tickProximityWhisper(serverLevel);
+        }
+    }
+
+    /**
+     * WAVE6 (F-106 A) A5 — the doppelganger becomes physically uncanny up close: while
+     * the nearest player stands within {@value #WHISPER_RANGE} blocks, ONLY that player
+     * hears a muffled AMBIENT_CAVE whisper from the mob's position plus a faint
+     * WARDEN_HEARTBEAT at their own ears (both pitch {@value #WHISPER_PITCH}), every
+     * {@value #WHISPER_MIN_INTERVAL_TICKS}–{@value #WHISPER_MIN_INTERVAL_TICKS}+{@value
+     * #WHISPER_JITTER_TICKS} ticks. Probe {@code [w6a-otherdread] target=<name>
+     * dist=<f>} — the ≥3 s interval IS the 1-line-per-3-s throttle.
+     */
+    private void tickProximityWhisper(ServerLevel level) {
+        if (this.tickCount < this.nextWhisperTick) {
+            return;
+        }
+        ServerPlayer nearest = null;
+        double bestSq = WHISPER_RANGE * WHISPER_RANGE;
+        for (ServerPlayer player : level.players()) {
+            if (player.isSpectator() || !player.isAlive()) {
+                continue;
+            }
+            double distSq = player.distanceToSqr(this);
+            if (distSq <= bestSq) {
+                bestSq = distSq;
+                nearest = player;
+            }
+        }
+        if (nearest == null) {
+            this.nextWhisperTick = this.tickCount + WHISPER_RESCAN_TICKS;
+            return;
+        }
+        this.nextWhisperTick = this.tickCount + WHISPER_MIN_INTERVAL_TICKS
+                + this.random.nextInt(WHISPER_JITTER_TICKS + 1);
+        // Whisper FROM the mannequin (the bearing is the scare) …
+        nearest.connection.send(new ClientboundSoundPacket(
+                SoundEvents.AMBIENT_CAVE, SoundSource.HOSTILE,
+                this.getX(), this.getY() + 1.0D, this.getZ(),
+                WHISPER_CAVE_VOLUME, WHISPER_PITCH, this.random.nextLong()));
+        // … and the heartbeat AT the listener (it is YOUR pulse rising).
+        nearest.connection.send(new ClientboundSoundPacket(
+                BuiltInRegistries.SOUND_EVENT.wrapAsHolder(SoundEvents.WARDEN_HEARTBEAT),
+                SoundSource.HOSTILE, nearest.getX(), nearest.getY(), nearest.getZ(),
+                WHISPER_HEARTBEAT_VOLUME, WHISPER_PITCH, this.random.nextLong()));
+        EclipseMod.LOGGER.debug("[w6a-otherdread] target={} dist={}",
+                nearest.getGameProfile().getName(),
+                String.format(java.util.Locale.ROOT, "%.1f", Math.sqrt(bestSq)));
     }
 
     /**
