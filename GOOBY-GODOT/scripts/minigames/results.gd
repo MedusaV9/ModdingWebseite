@@ -12,9 +12,16 @@ extends Control
 
 signal again_pressed
 signal back_pressed
+## G7-P56: dritter Rahmen-Knopf — direkt nach Hause statt Umweg über Arcade.
+signal home_pressed
 
 ## Wunschbreite der Karte (Design-px — FB3: skaliert mit UiScale).
 const PANEL_BASE_WIDTH := 420.0
+## G7-P56: DERSELBE Mini-Gooby wie auf der Lade-Karte (LoadingVeil) — die
+## eine Figur begleitet den Spieler durch Wipe → Pregame → Results.
+const GOOBY_MOTIV_PFAD := "res://assets/acui/gooby_loading_motif.png"
+## Sticker-Durchmesser in Design-px (Web-Motiv-Maß, skaliert mit UiScale).
+const GOOBY_STICKER_PX := 72.0
 
 var _panel: PanelContainer
 var _center: CenterContainer
@@ -22,6 +29,8 @@ var _rows: VBoxContainer
 var _juice: JuiceKit
 var _again: Button
 var _back: Button
+var _home: Button
+var _gooby: LoadingVeilSticker
 
 
 func _ready() -> void:
@@ -29,7 +38,8 @@ func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	var dim := ColorRect.new()
-	dim.color = Color(0.24, 0.16, 0.12, 0.55)
+	# G7-P56: gleiche Abdunkelung wie das Pause-Modal — EIN Rahmen-Look.
+	dim.color = MinigamePauseModal.DIM_COLOR
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(dim)
 	_center = CenterContainer.new()
@@ -58,9 +68,12 @@ func _apply_metrics() -> void:
 	_center.offset_top = float(insets["top"])
 	_center.offset_bottom = -float(insets["bottom"])
 	_panel.custom_minimum_size = Vector2(ScreenShell.card_width(m, PANEL_BASE_WIDTH), 0)
-	for btn in [_again, _back]:
+	for btn in [_again, _back, _home]:
 		if btn != null:
 			ScreenShell.touch_target(btn, m)
+	if _gooby != null and is_instance_valid(_gooby):
+		var d := GOOBY_STICKER_PX * float(m["f"])
+		_gooby.custom_minimum_size = Vector2(d, d)
 	ScreenShell.scale_fonts(_panel, m["f"])
 	# Fit-Pass: die Karte darf NIE höher werden als die Safe-Area (Quer-
 	# Formate) — Schriften schrumpfen proportional zurück (nie unter die
@@ -86,6 +99,17 @@ func show_results(breakdown: Dictionary, meta: Dictionary, juice: JuiceKit = nul
 	FeelSfx.play(self, "game_win" if int(breakdown.get("score", 0)) > 0 else "game_lose")
 	for child in _rows.get_children():
 		child.queue_free()
+	# G7-P56: die immer gleiche Gooby-Präsenz des Rahmens — derselbe runde
+	# Motiv-Sticker wie auf der Lade-Karte. Sieg → er hüpft (jubelt),
+	# 0 Punkte oder Reduced Motion → eingefrorene Ruhepose (schnauft).
+	_gooby = LoadingVeilSticker.new()
+	_gooby.name = "GoobySticker"
+	_gooby.custom_minimum_size = Vector2(GOOBY_STICKER_PX, GOOBY_STICKER_PX)
+	_gooby.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	if ResourceLoader.exists(GOOBY_MOTIV_PFAD):
+		_gooby.set_motiv(load(GOOBY_MOTIV_PFAD))
+	_gooby.set_animated(int(breakdown.get("score", 0)) > 0 and not _reduced_motion())
+	_rows.add_child(_gooby)
 	var title := Label.new()
 	title.theme_type_variation = &"TitleLabel"
 	title.text = I18nService.t("mg.results.title")
@@ -139,11 +163,12 @@ func show_results(breakdown: Dictionary, meta: Dictionary, juice: JuiceKit = nul
 		_feier_level_up(breakdown)
 	if breakdown.get("beatTarget", false):
 		_add_line(I18nService.t("mg.results.beat_target"), AcTokens.LEAF_DARK)
+	# G7-P56: DIE eine Knopf-Reihenfolge des Rahmens — Nochmal/Arcade/Home,
+	# in jedem der 38 Spiele identisch (QW #3: SquishButtons).
 	var buttons := HBoxContainer.new()
 	buttons.alignment = BoxContainer.ALIGNMENT_CENTER
 	buttons.add_theme_constant_override("separation", 14)
 	_rows.add_child(buttons)
-	# QW #3: SquishButton statt nacktem Button (Squish + Haptik zentral).
 	_again = SquishButton.new()
 	_again.theme_type_variation = &"PrimaryButton"
 	_again.text = I18nService.t("mg.results.again")
@@ -164,6 +189,16 @@ func show_results(breakdown: Dictionary, meta: Dictionary, juice: JuiceKit = nul
 			back_pressed.emit()
 	)
 	buttons.add_child(_back)
+	_home = SquishButton.new()
+	_home.theme_type_variation = &"GhostButton"
+	_home.text = I18nService.t("mg.results.home")
+	_home.focus_mode = Control.FOCUS_NONE
+	_home.pressed.connect(
+		func() -> void:
+			AudioDirector.try_play(self, "ui_back")
+			home_pressed.emit()
+	)
+	buttons.add_child(_home)
 	_apply_metrics()
 	show()
 	if _juice != null:

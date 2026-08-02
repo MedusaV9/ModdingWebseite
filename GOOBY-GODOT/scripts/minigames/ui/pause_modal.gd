@@ -17,7 +17,10 @@ signal quit_requested
 
 ## Wunschbreite der Karte (Design-px; wird gedeckelt, nie Vollfläche).
 const CARD_BASE_WIDTH := 340.0
-const DIM_COLOR := Color(0.24, 0.16, 0.12, 0.5)
+## G7-P56: DIE eine Abdunkelung des Minigame-Rahmens — Pause UND Results
+## teilen exakt diesen Wert (results.gd referenziert die Konstante), damit
+## beide Overlays über jedem Spiel als DERSELBE Rahmen lesbar sind.
+const DIM_COLOR := Color(0.24, 0.16, 0.12, 0.55)
 
 ## mg.<id>.hint — leer/unbekannt → Hilfe zeigt den freundlichen Fallback.
 var hint_key := ""

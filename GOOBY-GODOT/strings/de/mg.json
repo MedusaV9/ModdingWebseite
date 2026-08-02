@@ -70,7 +70,8 @@
 			"level_up": "Level-Up! +{coins} Münzen",
 			"beat_target": "Ziel geschafft!",
 			"again": "Nochmal",
-			"back": "Zur Arcade"
+			"back": "Zur Arcade",
+			"home": "Nach Hause"
 		},
 		"game": {
 			"time": "{sec} s",

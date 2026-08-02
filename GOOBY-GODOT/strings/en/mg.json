@@ -70,7 +70,8 @@
 			"level_up": "Level up! +{coins} coins",
 			"beat_target": "Target beaten!",
 			"again": "Again",
-			"back": "To the arcade"
+			"back": "To the arcade",
+			"home": "Go home"
 		},
 		"game": {
 			"time": "{sec} s",

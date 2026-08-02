@@ -15,6 +15,11 @@ const Stats := preload("res://scripts/logic/stats.gd")
 
 ## Wunschbreite der Karte (Design-px — FB3: skaliert mit UiScale).
 const CARD_BASE_WIDTH := 520.0
+## G7-P56: DERSELBE Mini-Gooby wie auf der Lade-Karte (LoadingVeil) — die
+## eine Figur begleitet den Spieler durch Wipe → Pregame → Results.
+const GOOBY_MOTIV_PFAD := "res://assets/acui/gooby_loading_motif.png"
+## Sticker-Durchmesser in Design-px (Web-Motiv-Maß, skaliert mit UiScale).
+const GOOBY_STICKER_PX := 72.0
 
 ## Tests: Navigation abschaltbar; State-Override wie beim Host.
 var auto_navigate := true
@@ -28,6 +33,7 @@ var _meta: Dictionary = {}
 var _center: CenterContainer
 var _card: PanelContainer
 var _cover: TextureRect
+var _gooby: LoadingVeilSticker
 var _best_label: Label
 var _hint_label: Label
 var _diff_buttons: Dictionary = {}
@@ -69,10 +75,9 @@ func _load_selections() -> void:
 
 
 func _build_ui() -> void:
-	var bg := ColorRect.new()
-	bg.color = Color(0.98, 0.94, 0.87)
-	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	add_child(bg)
+	# G7-P56: derselbe Arcade-Wallpaper wie im Kachel-Grid — Arcade→Pregame
+	# fühlt sich wie EIN Raum an (vorher nackter Creme-ColorRect).
+	add_child(AcWallpaper.for_context("arcade"))
 	_center = CenterContainer.new()
 	_center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(_center)
@@ -92,6 +97,16 @@ func _build_ui() -> void:
 	if ResourceLoader.exists(cover_path):
 		_cover.texture = load(cover_path)
 	rows.add_child(_cover)
+	# G7-P56: Gooby-Vignette des Rahmens — der runde Motiv-Sticker der
+	# Lade-Karte überlappt die Cover-Unterkante (gleiche Optik wie im Veil).
+	# Als Cover-Kind weicht er mit dem Cover, wenn die Karte überläuft
+	# (bestehende Fit-Regel „Cover weicht ZUERST“ bleibt unangetastet).
+	_gooby = LoadingVeilSticker.new()
+	_gooby.name = "GoobySticker"
+	if ResourceLoader.exists(GOOBY_MOTIV_PFAD):
+		_gooby.set_motiv(load(GOOBY_MOTIV_PFAD))
+	_gooby.set_animated(not _reduced_motion())
+	_cover.add_child(_gooby)
 
 	var title := Label.new()
 	title.theme_type_variation = &"TitleLabel"
@@ -222,6 +237,15 @@ func _apply_touch_floor() -> void:
 		cover_h = maxf(cover_h - over, 0.0)
 		_cover.custom_minimum_size = Vector2(0.0, cover_h)
 		_cover.visible = cover_h >= 56.0
+	# G7-P56: Gooby-Sticker mittig auf der Cover-Unterkante (überlappt sie
+	# wie auf der Lade-Karte), Durchmesser skaliert mit dem UiScale-Faktor.
+	if _gooby != null:
+		var d := GOOBY_STICKER_PX * float(m["f"])
+		_gooby.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+		_gooby.offset_left = -d / 2.0
+		_gooby.offset_right = d / 2.0
+		_gooby.offset_top = -d * 0.62
+		_gooby.offset_bottom = d * 0.38
 	# Quer-Überlauf (G3): reicht der Cover-Schrumpf nicht (Endlos-Chip +
 	# CarLine + ModifierBanner + Dance-Sektion zusammen), schrumpfen die
 	# Schriften proportional zurück — Fit-Pass wie results.gd, nie unter
@@ -409,6 +433,14 @@ func _resolve_state() -> Node:
 	if gs != null and gs.has_method("state") and gs.has_method("update"):
 		return gs
 	return null
+
+
+## Reduced-Motion-Gate (Muster minigame_host.gd): friert den Gooby-Sticker.
+func _reduced_motion() -> bool:
+	var settings := get_node_or_null("/root/AppSettings")
+	if settings != null and settings.has_method("is_reduced_motion"):
+		return settings.is_reduced_motion()
+	return false
 
 
 ## §C1: Energie <= 15 → Minigames verweigern (Spiegel von stats.is_exhausted).

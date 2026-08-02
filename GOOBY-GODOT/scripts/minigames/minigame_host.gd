@@ -243,7 +243,10 @@ func _build_ui() -> void:
 	_results = RESULTS_SCENE.instantiate()
 	_results.hide()
 	_results.again_pressed.connect(_on_again_pressed)
-	_results.back_pressed.connect(func() -> void: _exit_to(&"arcade", {}))
+	_results.back_pressed.connect(_on_results_back)
+	# G7-P56: dritter Rahmen-Knopf (Nochmal/Arcade/Home) — beide Ausgänge
+	# laufen über _exit_to und damit über DENSELBEN Router-Wipe.
+	_results.home_pressed.connect(_on_results_home)
 	add_child(_results)
 
 
@@ -564,6 +567,17 @@ func _set_game_frozen(frozen: bool) -> void:
 
 func _on_again_pressed() -> void:
 	_restart_round()
+
+
+## Results „Zur Arcade“ — gebundene Methode statt Lambda (Rahmen-Ausgang).
+func _on_results_back() -> void:
+	_exit_to(&"arcade", {})
+
+
+## Results „Nach Hause“ (G7-P56): der Router löst &"home" auf den zuletzt
+## besuchten Raum auf (FIX1-Alias) — gleicher Aus-Wipe wie der Arcade-Weg.
+func _on_results_home() -> void:
+	_exit_to(&"home", {})
 
 
 ## Interner Neustart (gleiche Difficulty/Orientierung, frischer Seed) —
