@@ -10,8 +10,16 @@ extends RefCounted
 const PACK_DOMAIN := "mcgooby"
 const PACK_DATEI := "res://content/dlc/data/mcgooby_menu.json"
 
-## Bekannte Stations-Ids (Reihenfolge = Anzeige-Reihenfolge, Doc §2.2).
-const STATION_IDS: Array[String] = ["grill", "belegen", "fritteuse", "shake"]
+## Bekannte Stations-Ids (Reihenfolge = Anzeige-Reihenfolge, Doc §2.2;
+## Welle B ergänzt die Getränke-Station — Becher-Größen + Sprudel-Gag).
+const STATION_IDS: Array[String] = ["grill", "belegen", "fritteuse", "shake", "getraenke"]
+
+## Interaktiv spielbare Stationen der VOLLEN Schicht (Welle B) — die
+## Belegstation und die Shake-Bar folgen mit Welle C.
+const STATIONEN_INTERAKTIV: Array[String] = ["grill", "fritteuse", "getraenke"]
+
+## Becher-Größen der Getränke-Station (Zieh- und Anzeige-Reihenfolge).
+const BECHER_GROESSEN: Array[String] = ["klein", "mittel", "gross"]
 
 ## Tests injizieren hier eine Registry-Attrappe (null = Autoload benutzen).
 static var registry_override: Object = null
@@ -55,6 +63,23 @@ static func rezepte_fuer(station: String) -> Array:
 	return out
 
 
+## Rezepte mit mindestens einem Schritt an einer INTERAKTIVEN Station —
+## die Bestell-Quelle der vollen Schicht (Welle B, Pack-Reihenfolge =
+## Zieh-Reihenfolge der Goldwert-Tests).
+static func rezepte_interaktiv() -> Array:
+	var out: Array = []
+	for kandidat: Variant in rezepte():
+		if not (kandidat is Dictionary):
+			continue
+		for schritt: Variant in (kandidat as Dictionary).get("schritte", []):
+			if not (schritt is Dictionary):
+				continue
+			if STATIONEN_INTERAKTIV.has(str((schritt as Dictionary).get("station", ""))):
+				out.append(kandidat)
+				break
+	return out
+
+
 ## Balance-Zahlen (Doc §3.1 „Alle Zahlen leben im Pack“) mit Fail-Safe-Defaults.
 static func balance() -> Dictionary:
 	var raw: Variant = daten().get("balance", {})
@@ -73,6 +98,45 @@ static func timing(station: String, rezept_def: Dictionary = {}) -> Dictionary:
 		"fenster_sec": maxf(0.1, float(zeile.get("fenster_sec", 1.4)) * mult),
 		"nachlauf_sec": maxf(0.1, float(zeile.get("nachlauf_sec", 2.0))),
 	}
+
+
+## Becher-Skalierung der Getränke-Station (Welle B): größere Becher füllen
+## LÄNGER (gar_sec × Faktor), das goldene Fenster bleibt gleich breit —
+## Größe ändert Geduld, nicht Fairness.
+static func timing_mit_becher(basis: Dictionary, groesse: String) -> Dictionary:
+	var mult := becher_mult(groesse)
+	return {
+		"gar_sec": maxf(0.0, float(basis.get("gar_sec", 3.0)) * mult),
+		"fenster_sec": maxf(0.1, float(basis.get("fenster_sec", 1.1))),
+		"nachlauf_sec": maxf(0.1, float(basis.get("nachlauf_sec", 2.0))),
+	}
+
+
+## Füll-Faktor einer Becher-Größe aus dem Balance-Block (Default 1.0).
+static func becher_mult(groesse: String) -> float:
+	var raw: Variant = balance().get("becher", {})
+	var tabelle: Dictionary = raw if raw is Dictionary else {}
+	return clampf(float(tabelle.get(groesse, 1.0)), 0.25, 3.0)
+
+
+## Kauf-Gate (Doc §6.2, Welle B): ab diesem Level ist der Laden kaufbar.
+static func freischalt_level() -> int:
+	return maxi(1, int(balance().get("freischalt_level", 14)))
+
+
+## Kaufpreis des Ladens in Münzen (Doc §6.2, Balance-Pack).
+static func preis() -> int:
+	return maxi(0, int(balance().get("preis", 3000)))
+
+
+## Stations-Definition aus dem Pack (Name/Geste beidsprachig; {} = unbekannt).
+static func station(id: String) -> Dictionary:
+	var raw: Variant = daten().get("stationen", [])
+	if raw is Array:
+		for kandidat: Variant in raw:
+			if kandidat is Dictionary and str((kandidat as Dictionary).get("id", "")) == id:
+				return kandidat
+	return {}
 
 
 ## Lokalisierter Feldzugriff (`name`/`geste` → `<feld>_<locale>`, DE-Fallback).

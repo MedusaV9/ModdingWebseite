@@ -54,8 +54,8 @@
 			"cover": "res://assets/dlc/mcgooby.png",
 			"teaser_de": "In der Stadt duftet es neuerdings verdächtig nach Pommes — und über einem leeren Eckgrundstück hängen zwei goldene Bögen, die bei genauem Hinsehen aussehen wie Löffel mit Ohren. Gooby bindet sich die Schürze um: Bald hat hier jemand seinen eigenen Laden.",
 			"teaser_en": "Lately the city smells suspiciously of fries — and above an empty corner lot hang two golden arches that, on closer inspection, look like spoons with ears. Gooby is tying on his apron: soon somebody around here will have a place of their own.",
-			"unlock_de": "Probeschicht frei — einfach Schürze umbinden!",
-			"unlock_en": "Trial shift unlocked — just tie on the apron!",
+			"unlock_de": "Probeschicht frei — Laden kaufen ab Level {level} · {preis} Münzen",
+			"unlock_en": "Trial shift free — buy the joint from level {level} · {preis} coins",
 			"features_de": [
 				"Dein eigener Fast-Food-Laden: Menü festlegen, Preise machen, Gastraum frei einrichten",
 				"Der Bestell-Rush als echtes Geschicklichkeits-Spiel: wenden, belegen, frittieren, mixen",

@@ -3,10 +3,12 @@ extends TestCase
 ## vorhanden, Status-Ableitung (Ranch gekauft / nicht gekauft / Level < 15),
 ## Routen-/Aktions-Mapping, DE↔EN-Parität der Pack-Texte und Screen-Smoke
 ## (3 Cover-Karten + Detail-Sheets). G5/P24+P25: alle drei Einträge sind
-## spielbar (goo_und_bye → Angebot, mcgooby → Probeschicht ohne Kauf-Gate) —
+## spielbar (goo_und_bye → Angebot, mcgooby → freie Probeschicht; das
+## Kauf-Gate G6/MCGOOBY-B sitzt DAHINTER: Angebot nach der Demo-Schicht) —
 ## der Kommt-bald-Pfad wird über einen synthetischen Eintrag bzw. eine
 ## Registry-Attrappe abgedeckt; Status-/Kauf-Ableitung der DLCs selbst
-## testen test_dlc_goobye.gd / test_dlc_mcgooby.gd.
+## testen test_dlc_goobye.gd / test_dlc_mcgooby.gd /
+## test_dlc_mcgooby_welle_b.gd.
 
 const PACK_DATEI := "res://content/dlc/data/dlcs.json"
 const ERWARTETE_IDS: Array[String] = ["ranch", "goo_und_bye", "mcgooby"]
@@ -150,11 +152,19 @@ func test_status_ableitung_ranch() -> void:
 		DlcKatalog.STATUS_KOMMT_BALD,
 		"kommt_bald bleibt kommt_bald — egal welcher Spielstand"
 	)
-	# G5/P25: McGooby Welle A ist ohne Kauf-Gate installiert.
+	# G6/MCGOOBY-B: Kauf-Gate — ungekauft VERFÜGBAR (nie gesperrt, die
+	# Probeschicht ist ab Level 1 frei), gekauft INSTALLIERT.
 	assert_eq(
 		DlcKatalog.status_fuer(DlcKatalog.eintrag("mcgooby"), _gs(1, false)),
+		DlcKatalog.STATUS_VERFUEGBAR,
+		"mcgooby ungekauft: Probeschicht frei — verfügbar ab Level 1"
+	)
+	var mc_gekauft := _gs(1, false)
+	mc_gekauft.set_value("mcgooby.gekauft", true)
+	assert_eq(
+		DlcKatalog.status_fuer(DlcKatalog.eintrag("mcgooby"), mc_gekauft),
 		DlcKatalog.STATUS_INSTALLIERT,
-		"mcgooby: Probeschicht frei — installiert ab Level 1"
+		"mcgooby gekauft → installiert"
 	)
 
 
@@ -170,10 +180,14 @@ func test_aktions_und_routen_mapping() -> void:
 	assert_eq(str(goobye.get("route", "")), "goobye_angebot", "Goobye-Angebots-Route")
 	assert_eq(DlcKatalog.aktion_fuer(goobye, _gs(12, false)), DlcKatalog.AKTION_ANGEBOT)
 	assert_eq(DlcKatalog.aktion_fuer(goobye, _gs(11, false)), DlcKatalog.AKTION_GESPERRT)
-	# G5/P25: McGooby installiert → Hof-Aktion (Schicht) mit eigener Route.
+	# G6/MCGOOBY-B: ungekauft → Angebots-Aktion (führt in die FREIE
+	# Probeschicht, das Angebot kommt nach der Demo); gekauft → Hof/Schicht.
 	var mcgooby := DlcKatalog.eintrag("mcgooby")
 	assert_eq(str(mcgooby.get("route", "")), "mcgooby_schicht", "mcgooby: Schicht-Route")
-	assert_eq(DlcKatalog.aktion_fuer(mcgooby, _gs(1, false)), DlcKatalog.AKTION_HOF)
+	assert_eq(DlcKatalog.aktion_fuer(mcgooby, _gs(1, false)), DlcKatalog.AKTION_ANGEBOT)
+	var mc_gekauft := _gs(1, false)
+	mc_gekauft.set_value("mcgooby.gekauft", true)
+	assert_eq(DlcKatalog.aktion_fuer(mcgooby, mc_gekauft), DlcKatalog.AKTION_HOF)
 	# Kommt-bald-Aktions-Zweig über synthetischen Eintrag.
 	var zukunft := {"id": "zukunft", "status": "kommt_bald"}
 	assert_eq(DlcKatalog.aktion_fuer(zukunft, _gs(99, false)), DlcKatalog.AKTION_BALD)
@@ -185,6 +199,11 @@ func test_unlock_text_ranch_aus_balance_pack() -> void:
 	assert_true(text.contains(str(RanchKatalog.freischalt_level())), "Level eingesetzt")
 	assert_true(text.contains(str(RanchKatalog.preis())), "Preis eingesetzt")
 	assert_false(text.contains("{"), "keine offenen Platzhalter")
+	# G6/MCGOOBY-B: auch McGooby füllt {level}/{preis} aus dem Menü-Pack.
+	var mc_text := DlcKatalog.unlock_text(DlcKatalog.eintrag("mcgooby"))
+	assert_true(mc_text.contains(str(McGoobyKatalog.freischalt_level())), "McGooby-Level drin")
+	assert_true(mc_text.contains(str(McGoobyKatalog.preis())), "McGooby-Preis drin")
+	assert_false(mc_text.contains("{"), "keine offenen Platzhalter (mcgooby)")
 
 
 ## ------------------------------------------------------------ Screen-Smoke
@@ -212,7 +231,8 @@ func test_screen_smoke_drei_karten_und_details() -> void:
 	assert_true(knopf != null and not knopf.disabled, "Aktions-Knopf aktiv")
 	assert_eq(knopf.text, I18nService.t("dlc.knopf.zur_ranch"))
 	detail.queue_free()
-	# G5/P25: McGooby installiert → „Schürze umbinden“-Knopf statt Hinweis.
+	# G6/MCGOOBY-B: ungekauft → Angebots-Aktion, deren Knopf in die FREIE
+	# Probeschicht führt (das Kauf-Angebot kommt nach der Demo-Schicht).
 	var schicht := screen.oeffne_detail("mcgooby")
 	var schicht_knopf: Button = schicht.get_meta(DlcScreen.META_AKTION, null)
 	assert_true(schicht_knopf != null and not schicht_knopf.disabled, "Schicht-Knopf aktiv")

@@ -1,11 +1,16 @@
 {
 	"schema": 1,
-	"kommentar": "McGooby-DLC Welle A (P25) — Start-Menü + Balance. Quelle: docs/godot-rewrite/DLC-MCGOOBY.md §2/§3. Parodie-Namen liegen BEIDSPRACHIG hier (Muster dlcs.json); alle Zahlen sind Balance-Daten und per Update-Pack überschattbar (Ranch-Blaupause). Gelesen von McGoobyKatalog (scripts/dlc/mcgooby/mcgooby_katalog.gd).",
+	"kommentar": "McGooby-DLC Welle A+B (P25/G6) — Start-Menü + Balance. Quelle: docs/godot-rewrite/DLC-MCGOOBY.md §2/§3/§6.2. Parodie-Namen liegen BEIDSPRACHIG hier (Muster dlcs.json); alle Zahlen sind Balance-Daten und per Update-Pack überschattbar (Ranch-Blaupause). Gelesen von McGoobyKatalog (scripts/dlc/mcgooby/mcgooby_katalog.gd). Welle B ADDITIV: Kauf-Gate (freischalt_level/preis, Doc §6.2), volle Schicht (bestellungen_voll_*, positionen_max), Salz-Moment, Becher-Größen, Bühnen-Trinkgeld, Getränke-Station + 3 Getränke-Rezepte (Doc §6.1 zielt auf 15 Start-Rezepte).",
 	"balance": {
 		"bestellungen_min": 2,
 		"bestellungen_max": 4,
+		"bestellungen_voll_min": 3,
+		"bestellungen_voll_max": 5,
+		"positionen_max": 2,
 		"punkte_perfekt": 10,
 		"punkte_roestaroma": 5,
+		"punkte_salz": 4,
+		"salz_fenster_sec": 1.2,
 		"bestellung_fertig_bonus": 15,
 		"coin_divisor": 4,
 		"coin_min": 6,
@@ -14,19 +19,26 @@
 		"combo_start": 1.0,
 		"combo_schritt": 0.1,
 		"combo_max": 2.0,
-		"bot_skill": 0.9
+		"bot_skill": 0.9,
+		"bot_salz_skill": 0.8,
+		"becher": { "klein": 0.75, "mittel": 1.0, "gross": 1.3 },
+		"buehne_trinkgeld": 6,
+		"freischalt_level": 14,
+		"preis": 3000
 	},
 	"timing": {
 		"grill": { "gar_sec": 4.0, "fenster_sec": 1.4, "nachlauf_sec": 2.0 },
 		"fritteuse": { "gar_sec": 5.0, "fenster_sec": 1.2, "nachlauf_sec": 2.0 },
 		"shake": { "gar_sec": 3.5, "fenster_sec": 1.6, "nachlauf_sec": 2.4 },
+		"getraenke": { "gar_sec": 3.0, "fenster_sec": 1.1, "nachlauf_sec": 2.0 },
 		"belegen": { "gar_sec": 0.0, "fenster_sec": 0.0, "nachlauf_sec": 0.0 }
 	},
 	"stationen": [
 		{ "id": "grill", "name_de": "Grill", "name_en": "Grill", "geste_de": "Timing-Tap: im goldenen Fenster wenden", "geste_en": "Timing tap: flip inside the golden window" },
 		{ "id": "belegen", "name_de": "Belegstation", "name_en": "Assembly station", "geste_de": "Zutaten in Ticket-Reihenfolge aufs Brötchen wischen", "geste_en": "Swipe ingredients onto the bun in ticket order" },
-		{ "id": "fritteuse", "name_de": "Fritteuse", "name_en": "Fryer", "geste_de": "Korb halten, im goldenen Fenster loslassen", "geste_en": "Hold the basket, release inside the golden window" },
-		{ "id": "shake", "name_de": "Shake-Bar", "name_en": "Shake bar", "geste_de": "Im Takt kreisen, bis die Flausch-Krone steht", "geste_en": "Stir in circles until the floof crown stands" }
+		{ "id": "fritteuse", "name_de": "Fritteuse", "name_en": "Fryer", "geste_de": "Korb halten, im goldenen Fenster loslassen — danach flink salzen!", "geste_en": "Hold the basket, release inside the golden window — then salt it, quick!" },
+		{ "id": "shake", "name_de": "Shake-Bar", "name_en": "Shake bar", "geste_de": "Im Takt kreisen, bis die Flausch-Krone steht", "geste_en": "Stir in circles until the floof crown stands" },
+		{ "id": "getraenke", "name_de": "Zapfhahn", "name_en": "Drinks tap", "geste_de": "Hahn halten, im goldenen Fenster absetzen — große Becher brauchen Geduld", "geste_en": "Hold the tap, set the cup down inside the golden window — big cups take patience" }
 	],
 	"rezepte": [
 		{
@@ -128,6 +140,34 @@
 			"schritte": [
 				{ "station": "shake", "aktion": "mixen", "anzahl": 1 },
 				{ "station": "shake", "aktion": "raspel_regen", "anzahl": 1 }
+			]
+		},
+		{
+			"id": "gooby_brause",
+			"name_de": "Gooby-Brause Gold",
+			"name_en": "Gooby Fizz Gold",
+			"stationen": ["getraenke"],
+			"schritte": [
+				{ "station": "getraenke", "aktion": "zapfen", "anzahl": 1 }
+			]
+		},
+		{
+			"id": "sprudelwasser_deluxe",
+			"name_de": "Sprudelwasser Deluxe",
+			"name_en": "Sparkling Water Deluxe",
+			"stationen": ["getraenke"],
+			"fenster_mult": 0.85,
+			"schritte": [
+				{ "station": "getraenke", "aktion": "zapfen", "anzahl": 1 }
+			]
+		},
+		{
+			"id": "kirsch_karacho",
+			"name_de": "Kirsch-Karacho",
+			"name_en": "Cherry Kaboom",
+			"stationen": ["getraenke"],
+			"schritte": [
+				{ "station": "getraenke", "aktion": "zapfen", "anzahl": 1 }
 			]
 		}
 	]

@@ -16,8 +16,11 @@ static func combo_mult(fehlerfreie_in_folge: int, bal: Dictionary) -> float:
 
 ## Schicht-Kassensturz. ergebnisse = [{punkte: int, fehlerfrei: bool}] in
 ## Spielreihenfolge. Rückgabe: {punkte, muenzen_basis, trinkgeld, muenzen,
-## combo_max_mult, fehlerfreie}.
-static func abrechnung(ergebnisse: Array, bal: Dictionary) -> Dictionary:
+## combo_max_mult, fehlerfreie, buehne_trinkgeld}.
+## Welle B ADDITIV: extra_trinkgeld = Bühnen-Bonus („Kunden-Jubel = Trinkgeld-
+## Regen“, 1×/Schicht) — fließt NUR ins Trinkgeld, nie in die Punkte, damit
+## die Punkte-Goldens (Bot-Zertifizierung) unberührt bleiben.
+static func abrechnung(ergebnisse: Array, bal: Dictionary, extra_trinkgeld := 0) -> Dictionary:
 	var punkte := 0
 	var trinkgeld := 0
 	var streak := 0
@@ -37,6 +40,8 @@ static func abrechnung(ergebnisse: Array, bal: Dictionary) -> Dictionary:
 			trinkgeld += int(round(float(basis) * mult))
 		else:
 			streak = 0
+	var buehne := maxi(0, extra_trinkgeld)
+	trinkgeld += buehne
 	var muenzen_basis := muenzen_fuer(punkte, bal)
 	return {
 		"punkte": punkte,
@@ -45,6 +50,7 @@ static func abrechnung(ergebnisse: Array, bal: Dictionary) -> Dictionary:
 		"muenzen": muenzen_basis + trinkgeld,
 		"combo_max_mult": combo_spitze,
 		"fehlerfreie": fehlerfreie,
+		"buehne_trinkgeld": buehne,
 	}
 
 

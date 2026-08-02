@@ -337,7 +337,8 @@ func _aktion_knopf(box: VBoxContainer, variation: StringName, text: String) -> S
 ## Spielen-Knopf-Text je DLC („Losreiten!“ / „Laden aufschließen!“).
 func _spielen_text(id: String) -> String:
 	if id == "mcgooby":
-		return I18nService.t("dlc_mcgooby.knopf.schicht")
+		# G6/MCGOOBY-B: gekauft = volle Schicht (nicht mehr „Probe“).
+		return I18nService.t("dlc_mcgooby.knopf.volle_schicht")
 	if id == "goo_und_bye":
 		return I18nService.t("dlc_goobye.knopf.zum_laden")
 	return I18nService.t("dlc.knopf.losreiten")
@@ -345,6 +346,9 @@ func _spielen_text(id: String) -> String:
 
 ## Angebots-Knopf-Text je DLC („Zur Ranch“ / „Schlüssel ansehen“).
 func _angebot_text(id: String) -> String:
+	if id == "mcgooby":
+		# G6/MCGOOBY-B: der Weg zum Angebot IST die freie Probeschicht.
+		return I18nService.t("dlc_mcgooby.knopf.schicht")
 	if id == "goo_und_bye":
 		return I18nService.t("dlc_goobye.knopf.angebot")
 	return I18nService.t("dlc.knopf.zur_ranch")
@@ -367,10 +371,16 @@ func _starte_dlc(sheet: PanelSheet, id: String) -> void:
 
 ## Verfügbar → der jeweilige Angebots-Flow (Preis + Jetzt/Später) —
 ## Ranch-/GoobyeOffer prüfen Level/Kaufstand selbst noch einmal
-## (fail-closed).
+## (fail-closed). G6/MCGOOBY-B: McGooby führt stattdessen in die FREIE
+## Probeschicht — das Kauf-Angebot kommt dort nach der Schicht
+## („Schicht geschafft → Angebot“, Doc §6.2).
 func _zum_angebot(sheet: PanelSheet, id: String) -> void:
 	sheet.close()
 	sheet.queue_free()
+	if id == "mcgooby":
+		if auto_navigate:
+			McGoobyRouten.fahre_zur_schicht(get_tree())
+		return
 	if id == "goo_und_bye":
 		GoobyeOffer.zeige(self, _gs)
 	else:

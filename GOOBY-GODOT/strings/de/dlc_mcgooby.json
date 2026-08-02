@@ -3,7 +3,8 @@
 		"titel": "McGooby",
 		"zurueck": "‹ Zurück",
 		"knopf": {
-			"schicht": "Probeschicht starten!"
+			"schicht": "Probeschicht starten!",
+			"volle_schicht": "Schicht starten!"
 		},
 		"intro": {
 			"titel": "Die große Eröffnung",
@@ -12,25 +13,66 @@
 			"zeile3": "Heute ist Probeschicht! Der Grill ist heiß, die Bestellglocke blitzblank — und die ersten Kunden haben Hunger.",
 			"knopf": "Schürze umbinden!"
 		},
+		"angebot": {
+			"titel": "Dein eigener Laden!",
+			"text": "Das Bauschild ist ab, die Löffel-Bögen leuchten: Der Laden kann DIR gehören — mit Fritteuse, Zapfhahn und einer kleinen Bühne für ganz große Auftritte.",
+			"preis": "{preis} Münzen",
+			"frage": "Schürze für immer umbinden?",
+			"kaufen": "Laden kaufen!",
+			"spaeter": "Später",
+			"zu_wenig": "Noch nicht genug Münzen — zum Glück wirft jede Probeschicht welche ab! ({preis} gebraucht)",
+			"gate": "Kaufen geht ab Level {level} — du bist Level {aktuell}. Die Probeschicht bleibt natürlich offen!"
+		},
 		"schicht": {
 			"bestellung": "Bestellung {nr}/{gesamt}",
 			"patty": "Patty {nr}/{gesamt}",
+			"posten": "Posten {nr}/{gesamt}: {gericht}",
+			"aufgabe": "Schritt {nr}/{gesamt}",
 			"roh": "Brutzel … noch roh!",
 			"goldbraun": "JETZT wenden!",
 			"kohle": "Uups — Kohle-Style!",
 			"perfekt": "Perfekt!",
 			"roestaroma": "Röstaroma-Spezial!",
+			"halten_fritteuse": "Korb packen!",
+			"halten_getraenke": "Zapfhahn halten!",
+			"blass": "Brutzelt … noch blass!",
+			"blubbert": "Blubber … füllt sich!",
+			"loslassen": "JETZT loslassen!",
+			"schaum": "Schaum! SCHAUM!",
+			"zu_blass": "Noch zu blass — wieder rein!",
+			"zu_leer": "Noch fast leer — weiter zapfen!",
+			"sprudelt": "Es sprudelt!",
+			"uebergesprudelt": "Übergesprudelt — Schaumkrone gratis!",
+			"salz_jetzt": "JETZT salzen!",
+			"glitzersalz": "Glitzersalz!",
+			"salz_vorbei": "Salz-Moment vorbei — schmeckt trotzdem.",
+			"becher": {
+				"klein": "kleiner Becher",
+				"mittel": "mittlerer Becher",
+				"gross": "GROSSER Becher"
+			},
 			"punkte": "Punkte: {punkte}",
 			"pause": "Pause",
-			"hilfe": "Tippe den Patty, sobald er goldbraun leuchtet — im goldenen Fenster gibt es ein „Perfekt!“. Zu spät ist nie verloren: dann wird es eben ein Röstaroma-Spezial mit halben Punkten."
+			"hilfe": "Tippe den Patty, sobald er goldbraun leuchtet — im goldenen Fenster gibt es ein „Perfekt!“. Zu spät ist nie verloren: dann wird es eben ein Röstaroma-Spezial mit halben Punkten.",
+			"hilfe_voll": "Grill: im goldenen Fenster tippen. Fritteuse: Korb halten und im goldenen Fenster loslassen — danach flink salzen! Zapfhahn: halten und rechtzeitig absetzen, große Becher brauchen Geduld. Zu spät ist nie verloren — es wird eben ein Röstaroma-Spezial."
+		},
+		"buehne": {
+			"knopf": "Bühne!",
+			"auftritt": "McGooby betritt die Bühne!",
+			"jubel": "Die Kunden jubeln!",
+			"trinkgeld": "+{betrag} Trinkgeld-Regen!"
 		},
 		"ende": {
 			"titel": "Feierabend!",
 			"untertitel": "Gooby dreht das Schild auf GESCHLOSSEN — die Löffel-Bögen leuchten.",
 			"punkte": "Punkte",
 			"perfekt": "Perfekt-Wendungen",
+			"salz": "Glitzersalz-Treffer",
 			"trinkgeld": "Trinkgeld",
+			"buehne": "Bühnen-Trinkgeld",
 			"muenzen": "Münzen",
+			"angebot_hinweis": "Schicht geschafft! Der Laden könnte DIR gehören …",
+			"angebot": "Angebot ansehen",
 			"nochmal": "Noch eine Schicht",
 			"feierabend": "Feierabend machen"
 		}

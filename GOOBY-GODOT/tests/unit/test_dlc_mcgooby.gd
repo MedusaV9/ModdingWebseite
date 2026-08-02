@@ -1,6 +1,6 @@
 extends TestCase
 ## P25 DLC-MCGOOBY-A (Welle G5) — McGooby-Fundament: Menü-Pack schema-valide
-## (8–12 Start-Rezepte, Stationen-Balance), golden Bestell-Folge + Bot-
+## (8–15 Start-Rezepte, Stationen-Balance), golden Bestell-Folge + Bot-
 ## Abrechnung (Seed → exakte Werte), „Perfekt!“-Fenster-Bewertung (Doc §2.2),
 ## Save-Slice-Self-Heal, Schicht-Szene mountet headless fehlerfrei
 ## (Erststart-Intro → Schicht → Ende-Karte) und Geometrie-Grundcheck.
@@ -62,8 +62,9 @@ func _menu() -> Array:
 func test_menu_json_schema_valide() -> void:
 	assert_true(FileAccess.file_exists(MENU_DATEI), "mcgooby_menu.json existiert")
 	McGoobyKatalog.reset_cache()
+	# Welle B ergänzt die Getränke-Rezepte — Doc §6.1 zielt auf 15 Start-Rezepte.
 	var rezepte := McGoobyKatalog.rezepte()
-	assert_true(rezepte.size() >= 8 and rezepte.size() <= 12, "8–12 Start-Rezepte (Doc §3)")
+	assert_true(rezepte.size() >= 8 and rezepte.size() <= 15, "8–15 Start-Rezepte (Doc §3/§6.1)")
 	var pro_station: Dictionary = {}
 	for rezept: Variant in rezepte:
 		assert_true(rezept is Dictionary, "Rezept ist Dictionary")

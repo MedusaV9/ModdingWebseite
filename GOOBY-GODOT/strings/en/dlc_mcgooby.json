@@ -3,7 +3,8 @@
 		"titel": "McGooby",
 		"zurueck": "‹ Back",
 		"knopf": {
-			"schicht": "Start the trial shift!"
+			"schicht": "Start the trial shift!",
+			"volle_schicht": "Start a shift!"
 		},
 		"intro": {
 			"titel": "The Grand Opening",
@@ -12,25 +13,66 @@
 			"zeile3": "Today is the trial shift! The grill is hot, the order bell is polished — and the first customers are hungry.",
 			"knopf": "Tie on the apron!"
 		},
+		"angebot": {
+			"titel": "A place of your own!",
+			"text": "The construction sign is down, the spoon arches are glowing: this joint can be YOURS — with a fryer, a drinks tap and a little stage for really big performances.",
+			"preis": "{preis} coins",
+			"frage": "Tie on the apron for good?",
+			"kaufen": "Buy the joint!",
+			"spaeter": "Later",
+			"zu_wenig": "Not enough coins yet — luckily every trial shift pays out a few! ({preis} needed)",
+			"gate": "Buying unlocks at level {level} — you are level {aktuell}. The trial shift stays open, of course!"
+		},
 		"schicht": {
 			"bestellung": "Order {nr}/{gesamt}",
 			"patty": "Patty {nr}/{gesamt}",
+			"posten": "Item {nr}/{gesamt}: {gericht}",
+			"aufgabe": "Step {nr}/{gesamt}",
 			"roh": "Sizzle … still raw!",
 			"goldbraun": "Flip it NOW!",
 			"kohle": "Oops — charcoal style!",
 			"perfekt": "Perfect!",
 			"roestaroma": "Roast Aroma Special!",
+			"halten_fritteuse": "Grab the basket!",
+			"halten_getraenke": "Hold the tap!",
+			"blass": "Sizzling … still pale!",
+			"blubbert": "Blub blub … filling up!",
+			"loslassen": "Release NOW!",
+			"schaum": "Foam! FOAM!",
+			"zu_blass": "Still too pale — back in!",
+			"zu_leer": "Almost empty — keep pouring!",
+			"sprudelt": "It's fizzing!",
+			"uebergesprudelt": "Overfizzed — free foam crown!",
+			"salz_jetzt": "Salt it NOW!",
+			"glitzersalz": "Glitter salt!",
+			"salz_vorbei": "Salt moment gone — still tasty.",
+			"becher": {
+				"klein": "small cup",
+				"mittel": "medium cup",
+				"gross": "BIG cup"
+			},
 			"punkte": "Points: {punkte}",
 			"pause": "Pause",
-			"hilfe": "Tap the patty as soon as it glows golden brown — inside the golden window you get a “Perfect!”. Too late is never a loss: it simply becomes a Roast Aroma Special worth half the points."
+			"hilfe": "Tap the patty as soon as it glows golden brown — inside the golden window you get a “Perfect!”. Too late is never a loss: it simply becomes a Roast Aroma Special worth half the points.",
+			"hilfe_voll": "Grill: tap inside the golden window. Fryer: hold the basket and release inside the golden window — then salt it, quick! Drinks tap: hold and set the cup down in time, big cups take patience. Too late is never a loss — it simply becomes a Roast Aroma Special."
+		},
+		"buehne": {
+			"knopf": "Stage!",
+			"auftritt": "McGooby takes the stage!",
+			"jubel": "The customers cheer!",
+			"trinkgeld": "+{betrag} tip rain!"
 		},
 		"ende": {
 			"titel": "Closing time!",
 			"untertitel": "Gooby flips the sign to CLOSED — the spoon arches light up.",
 			"punkte": "Points",
 			"perfekt": "Perfect flips",
+			"salz": "Glitter-salt hits",
 			"trinkgeld": "Tips",
+			"buehne": "Stage tips",
 			"muenzen": "Coins",
+			"angebot_hinweis": "Shift done! This joint could be YOURS …",
+			"angebot": "View the offer",
 			"nochmal": "One more shift",
 			"feierabend": "Call it a day"
 		}
