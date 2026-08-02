@@ -46,6 +46,10 @@ func _ready() -> void:
 	_modus_wahl = OptionButton.new()
 	for mode in MODI:
 		_modus_wahl.add_item(I18nService.t("ranch_mp.menu.%s" % mode))
+	# G7/P57 (FB3-Altbefund „Bestenlisten 18,7–36,7 pt"): Theme-Knöpfe bauen
+	# in Design-px (~60 px) — auf Retina-Formaten sind das physisch unter
+	# 44 pt. Jede Tippfläche bekommt den physischen Touch-Floor.
+	ScreenShell.touch_target(_modus_wahl, m)
 	box.add_child(_modus_wahl)
 	_freunde_box = VBoxContainer.new()
 	_freunde_box.add_theme_constant_override("separation", 4)
@@ -57,6 +61,7 @@ func _ready() -> void:
 	besten.theme_type_variation = &"GhostButton"
 	besten.text = I18nService.t("ranch_mp.menu.bestenlisten")
 	besten.pressed.connect(func() -> void: leaderboard_pressed.emit())
+	ScreenShell.touch_target(besten, m)
 	box.add_child(besten)
 	_refresh()
 
@@ -101,6 +106,7 @@ func _refresh() -> void:
 		leer.text = I18nService.t("ranch_mp.menu.keine_freunde")
 		_freunde_box.add_child(leer)
 		return
+	var m := ScreenShell.metrics(get_viewport())
 	for freund: Dictionary in online_freunde:
 		var zeile := HBoxContainer.new()
 		zeile.add_theme_constant_override("separation", 8)
@@ -114,6 +120,8 @@ func _refresh() -> void:
 		btn.text = I18nService.t("ranch_mp.menu.einladen")
 		var code := str(freund.get("friendCode", ""))
 		btn.pressed.connect(func() -> void: _einladen(code, label.text))
+		# P57: Touch-Floor auch für dynamisch gebaute Zeilen-Knöpfe.
+		ScreenShell.touch_target(btn, m)
 		zeile.add_child(btn)
 		_freunde_box.add_child(zeile)
 
@@ -164,15 +172,18 @@ func _on_invited(data: Dictionary) -> void:
 	)
 	zeile.add_child(label)
 	var von := str(data.get("from", ""))
+	var m := ScreenShell.metrics(get_viewport())
 	var ja := Button.new()
 	ja.theme_type_variation = &"PrimaryButton"
 	ja.text = I18nService.t("ranch_mp.menu.annehmen")
 	ja.pressed.connect(func() -> void: _annehmen(von))
+	ScreenShell.touch_target(ja, m)
 	zeile.add_child(ja)
 	var nein := Button.new()
 	nein.theme_type_variation = &"GhostButton"
 	nein.text = I18nService.t("ranch_mp.menu.ablehnen")
 	nein.pressed.connect(func() -> void: _ablehnen(von))
+	ScreenShell.touch_target(nein, m)
 	zeile.add_child(nein)
 	_einladung_box.add_child(zeile)
 

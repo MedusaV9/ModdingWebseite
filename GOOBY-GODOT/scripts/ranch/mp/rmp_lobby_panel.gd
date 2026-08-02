@@ -70,6 +70,10 @@ func _ready() -> void:
 	_verlassen_btn.text = I18nService.t("ranch_mp.lobby.verlassen")
 	_verlassen_btn.pressed.connect(func() -> void: leave_pressed.emit())
 	knoepfe.add_child(_verlassen_btn)
+	# G7/P57 (FB3-Altbefund „Verlassen/Bereit! 18,7–36,7 pt"): physischer
+	# Touch-Floor — Theme-Höhen sind Design-px und auf Retina zu klein.
+	for btn: Button in [_bereit_btn, _revanche_btn, _verlassen_btn]:
+		ScreenShell.touch_target(btn, m)
 	_refresh()
 
 

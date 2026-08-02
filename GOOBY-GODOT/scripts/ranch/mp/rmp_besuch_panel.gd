@@ -53,6 +53,8 @@ func _ready() -> void:
 	ende.theme_type_variation = &"GhostButton"
 	ende.text = I18nService.t("ranch_mp.besuch.beenden")
 	ende.pressed.connect(func() -> void: ende_pressed.emit())
+	# G7/P57: physischer Touch-Floor (gleiche Befund-Klasse wie Menü/Lobby).
+	ScreenShell.touch_target(ende, m)
 	aktionen.add_child(ende)
 
 
@@ -188,6 +190,8 @@ func _baue_knopf(parent: Node, key: String, handler: Callable) -> void:
 	btn.theme_type_variation = &"PrimaryButton"
 	btn.text = I18nService.t(key)
 	btn.pressed.connect(handler)
+	# P57: Touch-Floor (Theme-Höhen sind Design-px, s. _ready).
+	ScreenShell.touch_target(btn, ScreenShell.metrics(get_viewport()))
 	parent.add_child(btn)
 
 

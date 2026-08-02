@@ -34,6 +34,9 @@ var _pending_final: Array[Callable] = []
 var _voice: GoobyVoice
 var _speaking_label: Label
 var _slide_tween: Tween
+## P57: Ruhelage des Steps-Containers (Safe-Area-Rahmen, s. _relayout) —
+## die Slide-Animation startet/endet relativ zu dieser Position.
+var _steps_rest := Vector2.ZERO
 
 @onready var _steps: Dictionary = {
 	OnboardingLogic.Step.WELCOME: %StepWelcome,
@@ -131,6 +134,10 @@ func _slider_string_key(editor_key: String) -> String:
 ## Buttons/Eingaben/Slider-Griffen, Editor-Spalten stapeln im Hochformat.
 ## Läuft bei _ready + size_changed — NIE in _show_step (Sichtbarkeit der
 ## Steps muss SYNCHRON schalten, Vertrag test_ui_onboarding).
+## P57 (FB3: „EditorNext/Überspringen laufen unten aus dem Canvas"): der
+## Steps-Container zentriert jetzt IM SAFE-Rechteck (frame) statt auf dem
+## vollen Canvas, und die Editor-Karte wird auf die Safe-Höhe gedeckelt —
+## Titel + Knopfleiste bleiben verankert, nur EditorBox scrollt bei Not.
 func _relayout() -> void:
 	if not is_inside_tree():
 		return
@@ -138,6 +145,13 @@ func _relayout() -> void:
 	var f: float = m["f"]
 	var canvas: Vector2 = m["canvas"]
 	ScreenShell.scale_fonts(self, f)
+	# Läuft noch ein Slide, wird er gekappt — frame() setzt gleich die
+	# frische Ruhelage, ein alter Tween zöge zum veralteten Ziel zurück.
+	if _slide_tween != null and _slide_tween.is_valid():
+		_slide_tween.kill()
+		_steps_box.modulate.a = 1.0
+	ScreenShell.frame(_steps_box, m)
+	_steps_rest = Vector2(_steps_box.offset_left, _steps_box.offset_top)
 	var card_w := ScreenShell.card_width(m, CARD_BASE_WIDTH)
 	var editor_w := ScreenShell.card_width(m, EDITOR_CARD_BASE_WIDTH)
 	for card: Control in [%StepWelcome, %StepNickname, %StepDone]:
@@ -160,6 +174,17 @@ func _relayout() -> void:
 			(child as HSlider).custom_minimum_size = Vector2(
 				SLIDER_BASE_WIDTH * f, maxf(SLIDER_BASE_HEIGHT * f, floor_px)
 			)
+	# P57 Höhen-Deckel: erst Chrome (Titel/Text/Knopfleiste/Karten-Ränder)
+	# OHNE Scroll-Inhalt messen, dann bekommt der Scroll GENAU den Rest der
+	# Safe-Höhe — passt der Inhalt, bleibt das Layout wie bisher.
+	var scroll: ScrollContainer = %EditorScroll
+	scroll.custom_minimum_size = Vector2.ZERO
+	var insets: Dictionary = m["insets"]
+	var safe_h := canvas.y - float(insets["top"]) - float(insets["bottom"])
+	var avail_h := safe_h - 2.0 * ScreenShell.EDGE_Y * f
+	var chrome_h := (%StepEditor as Control).get_combined_minimum_size().y
+	var inhalt_h := (%EditorBox as Control).get_combined_minimum_size().y
+	scroll.custom_minimum_size.y = clampf(avail_h - chrome_h, 0.0, inhalt_h)
 
 
 ## Horizontale Innenränder der Karten-StyleBox (AcCardLg) — get_margin
@@ -191,18 +216,19 @@ func _show_step(step: OnboardingLogic.Step) -> void:
 
 ## Neue Karte federt seitlich herein (Reduced Motion: harter Schnitt).
 ## Animiert wird der Steps-Container, nicht das Container-Kind — so
-## funkt kein Layout-Pass des CenterContainers dazwischen.
+## funkt kein Layout-Pass des CenterContainers dazwischen. P57: Start und
+## Ziel liegen relativ zur Safe-Area-Ruhelage (_steps_rest), nicht bei 0.
 func _animate_step_in() -> void:
 	if ThemeService.is_reduced_motion(self):
 		return
 	if _slide_tween != null and _slide_tween.is_valid():
 		_slide_tween.kill()
-	_steps_box.position = Vector2(SLIDE_IN_PX, 0.0)
+	_steps_box.position = _steps_rest + Vector2(SLIDE_IN_PX, 0.0)
 	_steps_box.modulate.a = 0.35
 	_slide_tween = create_tween().set_parallel()
 	(
 		_slide_tween
-		. tween_property(_steps_box, "position:x", 0.0, AcTokens.DUR_SHEET)
+		. tween_property(_steps_box, "position:x", _steps_rest.x, AcTokens.DUR_SHEET)
 		. set_trans(Tween.TRANS_BACK)
 		. set_ease(Tween.EASE_OUT)
 	)

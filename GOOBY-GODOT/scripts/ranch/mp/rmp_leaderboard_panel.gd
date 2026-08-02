@@ -35,6 +35,8 @@ func _ready() -> void:
 	for kurs_id in _kurse:
 		_wahl.add_item(I18nService.t("ranch_mp.besten.kurs_%s" % kurs_id))
 	_wahl.item_selected.connect(func(_idx: int) -> void: refresh())
+	# G7/P57: physischer Touch-Floor (Theme-Höhen sind Design-px).
+	ScreenShell.touch_target(_wahl, m)
 	box.add_child(_wahl)
 	_hinweis = Label.new()
 	_hinweis.theme_type_variation = &"CaptionLabel"
@@ -82,6 +84,7 @@ func zeige_eintraege(entries: Array, me: String) -> void:
 		return
 	var kurs_id := aktueller_kurs()
 	var zeit_kurs := RmpKurse.kleiner_gewinnt(kurs_id)
+	var m := ScreenShell.metrics(get_viewport())
 	var platz := 0
 	for eintrag: Variant in entries:
 		if not (eintrag is Dictionary):
@@ -116,6 +119,8 @@ func zeige_eintraege(entries: Array, me: String) -> void:
 			geist_btn.text = I18nService.t("ranch_mp.besten.geist_laden")
 			geist_btn.tooltip_text = I18nService.t("ranch_mp.besten.ghost")
 			geist_btn.pressed.connect(func() -> void: ghost_requested.emit(kurs_id, code))
+			# P57: Touch-Floor auch für dynamische Zeilen-Knöpfe.
+			ScreenShell.touch_target(geist_btn, m)
 			zeile.add_child(geist_btn)
 		_liste.add_child(zeile)
 

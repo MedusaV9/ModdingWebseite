@@ -1,8 +1,9 @@
 extends SceneTree
 ## FB3-UI-Audit (KEIN Test — kein test_-Präfix): bootet das ECHTE Spiel
 ## (home_entry inkl. Autoloads/Router/HUD), öffnet JEDEN Haupt-Screen/
-## Panel/Overlay in 4 Geräteformaten (iPhone quer ×2, iPhone hoch, iPad
-## quer) MIT simulierter Notch/Home-Indicator (UiScale.insets_override)
+## Panel/Overlay in 6 Geräteformaten (iPhone quer ×3, iPhone hoch ×2,
+## iPad quer — Leitformat: iPhone 17 Pro Max quer, G7/P57 User-Wunsch)
+## MIT simulierter Notch/Home-Indicator (UiScale.insets_override)
 ## — seit W17/G5 P33 auch die G4-Domänen ohne Router-Route (Baumodus-
 ## Dock, IGohbie-Telefon, Radio-Sheet, Ranch-MP-Hub, Reise-App,
 ## Onboarding, Level-Selects; 34 Zustände je Format) — und prüft
@@ -29,9 +30,15 @@ const MIN_TAP_PT := 44.0
 const TAP_TOLERANCE_PT := 0.5
 
 ## [label, Fenster-px, screen_scale, insets in PUNKTEN {l,t,r,b}]
+## G7/P57 Leitformat ZUERST (User-Wunsch „iPhone 17 Pro Max, Querformat"):
+## 2868×1320 physisch @3x = 956×440 pt (6,9", wie 16 Pro Max). Safe-Area
+## wie die Dynamic-Island-Klasse 2556×1179: quer 59 pt links/rechts +
+## 21 pt Home-Indicator, hoch 59 pt oben + 34 pt unten.
 const SIZES: Array = [
+	["quer_2868x1320", Vector2i(2868, 1320), 3.0, [59.0, 0.0, 59.0, 21.0]],
 	["quer_2556x1179", Vector2i(2556, 1179), 3.0, [59.0, 0.0, 59.0, 21.0]],
 	["quer_1792x828", Vector2i(1792, 828), 2.0, [48.0, 0.0, 48.0, 21.0]],
+	["hoch_1320x2868", Vector2i(1320, 2868), 3.0, [0.0, 59.0, 0.0, 34.0]],
 	["hoch_1179x2556", Vector2i(1179, 2556), 3.0, [0.0, 59.0, 0.0, 34.0]],
 	["ipad_2360x1640", Vector2i(2360, 1640), 2.0, [0.0, 24.0, 0.0, 20.0]],
 ]
@@ -52,13 +59,17 @@ const COLUMN_BASE_BY_SCREEN := {
 	# Karten/-Docks (card_width-Muster) tragen das Spalten-Meta selbst
 	# nicht; der Audit markiert sie beim Öffnen (_markiere_spalte) und
 	# misst mit der Screen-eigenen Design-Basis (Konstante, kein Drift).
+	# W18/G7 P57: die Telefon-Stationen (11–13) stehen NICHT mehr hier —
+	# ihre Basis folgt der Orientierung (G7/P52: quer die breite 640er-
+	# GERAET_QUER-Basis) und kommt live aus PhoneShell.basis_groesse
+	# (_spalten_basis), sonst meldet der Deckel das bewusst breite
+	# Quer-Gerät als „Spalte zu breit" (falsch positiv).
 	"10_bau_dock": BuildUiDock.DOCK_BASIS,
-	"11_phone_grid": PhoneShell.GERAET_GROESSE.x,
-	"12_phone_taxi": PhoneShell.GERAET_GROESSE.x,
-	"13_phone_gooberando": PhoneShell.GERAET_GROESSE.x,
 	"18_onboarding_welcome": OnboardingFlow.CARD_BASE_WIDTH,
 	"19_onboarding_editor": OnboardingFlow.EDITOR_CARD_BASE_WIDTH,
 }
+## Telefon-Stationen mit orientierungsbewusster Spalten-Basis (P57).
+const PHONE_SCREENS: Array[String] = ["11_phone_grid", "12_phone_taxi", "13_phone_gooberando"]
 
 ## W17/G5 P33 Rauschfilter: bewusste RAND-Elemente NEBEN der markierten
 ## Spalte — die Kamera-Chips des Baumodus sitzen per Design rechts mittig
@@ -590,7 +601,7 @@ func _check_content_column(screen: String, controls: Array[Control]) -> void:
 	if columns.is_empty():
 		return
 	var f := UiScale.for_viewport(root)
-	var base := float(COLUMN_BASE_BY_SCREEN.get(screen, AcTokens.CONTENT_MAX_WIDTH))
+	var base := _spalten_basis(screen)
 	var max_w := minf(base * f, _safe_rect.size.x - 2.0 * AcTokens.CONTENT_EDGE_X * f)
 	for col in columns:
 		var rect := col.get_global_rect()
@@ -624,6 +635,16 @@ func _check_content_column(screen: String, controls: Array[Control]) -> void:
 			_add_finding(
 				screen, "content_mitte", _describe(ctl), "Button außerhalb der Spalte: %s" % rect
 			)
+
+
+## W18/G7 P57: Spalten-Basis eines Screens. Die Telefon-Stationen folgen
+## der Geräte-Orientierung (PhoneShell.basis_groesse — quer seit G7/P52
+## die breite GERAET_QUER-Basis), alle anderen kommen aus
+## COLUMN_BASE_BY_SCREEN bzw. dem CONTENT_MAX_WIDTH-Default.
+func _spalten_basis(screen: String) -> float:
+	if screen in PHONE_SCREENS:
+		return PhoneShell.basis_groesse(ScreenShell.metrics(root)).x
+	return float(COLUMN_BASE_BY_SCREEN.get(screen, AcTokens.CONTENT_MAX_WIDTH))
 
 
 ## Sichtbare Container mit dem W16-Spalten-Meta-Flag (Hauptviewport).

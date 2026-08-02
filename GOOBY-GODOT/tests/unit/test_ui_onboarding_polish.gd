@@ -15,14 +15,17 @@ func test_slide_uebergang_zwischen_schritten() -> void:
 	(flow.get_node("%WelcomeNext") as Button).pressed.emit()
 	check(flow.get_node("%StepNickname").visible, "Sichtbarkeit bleibt SYNCHRON")
 	var steps := flow.get_node("Steps") as Control
-	check(steps.position.x > 0.0, "Karte startet seitlich versetzt (Slide-in)")
-	# TRANS_BACK-Overshoot kreuzt die Null früh — auf Position UND
+	# P57: Steps ruht am Safe-Area-Rahmen (_steps_rest), nicht mehr bei 0 —
+	# der Slide misst sich relativ zur Ruhelage.
+	var ruhe: Vector2 = flow._steps_rest
+	check(steps.position.x > ruhe.x + 0.5, "Karte startet seitlich versetzt (Slide-in)")
+	# TRANS_BACK-Overshoot kreuzt die Ruhelage früh — auf Position UND
 	# Alpha warten, sonst racet der Check gegen die halbe Blende.
 	var frames := 0
-	while (absf(steps.position.x) > 0.5 or steps.modulate.a < 0.999) and frames < 120:
+	while (absf(steps.position.x - ruhe.x) > 0.5 or steps.modulate.a < 0.999) and frames < 120:
 		await tree.process_frame
 		frames += 1
-	check(absf(steps.position.x) <= 0.5, "Slide endet wieder in Ruhelage")
+	check(absf(steps.position.x - ruhe.x) <= 0.5, "Slide endet wieder in Ruhelage")
 	check_approx(steps.modulate.a, 1.0, "Karte voll eingeblendet")
 	unmount(flow)
 
