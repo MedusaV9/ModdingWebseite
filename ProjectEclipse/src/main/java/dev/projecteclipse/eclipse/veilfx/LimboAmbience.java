@@ -370,18 +370,35 @@ public final class LimboAmbience {
             LIMBO_GODRAY, 2, 90, 130, 14.0D, 28.0D, 8.0D, 7.0D, 0.9D, false, false);
     /**
      * Dim violet fog sheets hugging the water surface (alpha-blended, so keep them few).
-     * F-088 polish: spawn window pushed out 8 → 14 blocks — the emitter's billboards
-     * reach ~8 ± 7 blocks around their center, so an 8-block spawn could park a sheet
-     * directly in front of the camera.
+     * F-088 polish first pushed the spawn window out 8 → 14 blocks; F-107 (part 2)
+     * hardened that into a real clearance guarantee. Veil's billboard half-edge equals
+     * the particle size, the sphere shape offsets a spawn up to dimensions/2 blocks
+     * toward the camera, and the wind module is an UNDAMPED per-tick acceleration
+     * (Veil 4.3.0 never applies the JSON wind strength to the force module), so the
+     * old ring still let a 15-block half-edge sheet drift ~44 blocks over its life and
+     * shove through the camera as a near-opaque dark wall during pans. The ring is now
+     * 14–22 → 20–30 blocks and the emitter was retuned (size 8 ± 2, shape 9 → 7, wind
+     * 0.012 → 0.0003, dedicated soft 128×128 sprite instead of the 8×8 wisp): worst
+     * case the closest sheet edge stays ≥ ~5.4 blocks off the camera for the whole
+     * particle life — 20 − 3.5 (shape) − 10 (half-edge) − ~1.1 (lifetime drift).
      */
     private static final Window FOG = new Window(
-            LIMBO_FOG, 2, 110, 160, 14.0D, 22.0D, 0.4D, 1.2D, 0.0D, false, false);
+            LIMBO_FOG, 2, 110, 160, 20.0D, 30.0D, 0.4D, 1.2D, 0.0D, false, false);
     /**
      * IDEA-18 §3: big slow middle-distance fog banks rolling +X past the ship (the
-     * buoy-lane heading) — the emitter's raised wind sells that the sea moves.
+     * buoy-lane heading) — the emitter's wind sells that the sea moves. F-107 (part 2):
+     * the roll is now SPEED-BOUNDED. The old wind (0.05, undamped — see the FOG note)
+     * accelerated every bank quadratically (~566 blocks of drift over a max life), so
+     * an upwind bank swept through the camera as a huge, almost covering dark sheet.
+     * The emitter now pairs a gentle wind (0.002) with a veil:drag velocity retention
+     * of 0.96/tick: banks ease into a steady ~1 block/s roll — the "rolling past the
+     * ship" read stays — and drift ≤ ~6.1 blocks per life. With the ring pushed
+     * 35–70 → 50–80 blocks and the retune (size 24 ± 4, shape 26 → 16, dedicated 2:1
+     * oval sprite) the closest bank edge stays ≥ ~7.9 blocks off the camera —
+     * 50 − 8 (shape) − 28 (half-edge) − ~6.1 (lifetime drift).
      */
     private static final Window FOGBANKS = new Window(
-            LIMBO_FOGBANK, 2, 140, 200, 35.0D, 70.0D, 0.5D, 2.0D, 0.0D, false, false);
+            LIMBO_FOGBANK, 2, 140, 200, 50.0D, 80.0D, 0.5D, 2.0D, 0.0D, false, false);
     /**
      * v4 depth-layered dust, bokeh foreground: 1–2 LARGE very faint wisps 3–7 blocks out
      * (big + dim + soft sprite = out-of-focus read; the retuned {@code limbo_motes} JSON is

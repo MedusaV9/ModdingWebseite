@@ -8,9 +8,9 @@
     "shape": {
       "shape": "veil:sphere",
       "dimensions": [
-        26.0,
+        16.0,
         1.8,
-        26.0
+        16.0
       ],
       "rotation": [
         0.0,
@@ -22,8 +22,8 @@
     "particle_settings": {
       "particle_speed": 0.004,
       "random_speed": true,
-      "base_particle_size": 26.0,
-      "particle_size_variation": 6.0,
+      "base_particle_size": 24.0,
+      "particle_size_variation": 4.0,
       "particle_lifetime": 110,
       "particle_lifetime_variation": 40,
       "initial_direction": [
@@ -45,7 +45,7 @@
     "face_velocity": false,
     "velocity_stretch_factor": 0.0,
     "sprite_data": {
-      "sprite": "eclipse:textures/particle/purple_wisp.png",
+      "sprite": "eclipse:textures/particle/limbo_fogbank_soft.png",
       "frame_count": 1,
       "frame_time": 1,
       "stretch_to_lifetime": false
@@ -58,8 +58,12 @@
           0.0,
           0.15
         ],
-        "wind_speed": 0.05,
+        "wind_speed": 0.002,
         "strength": 0.5
+      },
+      {
+        "module": "veil:drag",
+        "strength": 0.96
       },
       {
         "module": "veil:color",

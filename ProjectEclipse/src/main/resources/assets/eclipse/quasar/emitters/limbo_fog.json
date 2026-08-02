@@ -8,9 +8,9 @@
     "shape": {
       "shape": "veil:sphere",
       "dimensions": [
-        9.0,
+        7.0,
         1.2,
-        9.0
+        7.0
       ],
       "rotation": [
         0.0,
@@ -23,7 +23,7 @@
       "particle_speed": 0.006,
       "random_speed": true,
       "base_particle_size": 8.0,
-      "particle_size_variation": 7.0,
+      "particle_size_variation": 2.0,
       "particle_lifetime": 50,
       "particle_lifetime_variation": 35,
       "initial_direction": [
@@ -45,7 +45,7 @@
     "face_velocity": false,
     "velocity_stretch_factor": 0.0,
     "sprite_data": {
-      "sprite": "eclipse:textures/particle/purple_wisp.png",
+      "sprite": "eclipse:textures/particle/limbo_fog_soft.png",
       "frame_count": 1,
       "frame_time": 1,
       "stretch_to_lifetime": false
@@ -58,7 +58,7 @@
           0.02,
           0.3
         ],
-        "wind_speed": 0.012,
+        "wind_speed": 0.0003,
         "strength": 0.5
       },
       {
