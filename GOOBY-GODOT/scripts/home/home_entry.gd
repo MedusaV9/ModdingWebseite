@@ -93,7 +93,14 @@ func _roll_random_event() -> void:
 ## überlappen HUD-Buttons/Status-Kapseln beim Aufdecken kurz den Zielscreen.
 ## W13: Raumwechsel/Screen-Öffnen schaltet auch das Interaktions-Auge ab
 ## (der Spotlight im alten Raum stirbt mit der Szene, der HUD-Knopf nicht).
+## G8/FIX-3 (Befund B1): das Settings-Overlay lebt im PERSISTENTEN UiLayer
+## und überlebte jede Reise — wer AUS den Einstellungen heraus navigierte
+## (DLC-Hub, Aktionscodes, Übernahme), landete unter einem unsichtbaren,
+## Tap-fressenden Vollbild-Overlay. Generische Wurzel-Behandlung statt
+## Einzel-Fixes in den Sektionen: JEDER Reiseantritt schließt das Overlay
+## (der Veil deckt das Schließen ab; das Zurück-X schließt weiter direkt).
 func _on_travel_started(_target: StringName = &"", _travel_type: int = 0) -> void:
+	_close_settings()
 	if _hud != null:
 		_hud.visible = false
 	_spotlight_aus()
@@ -295,10 +302,12 @@ func _show_onboarding() -> void:
 func _start_home() -> void:
 	_hud_enabled = true
 	_hud.visible = true
-	# REST-2: handlungsgeführte erste Viertelstunde (nur frische Saves;
-	# Bestands-Saves werden im attach_to still als erledigt markiert).
+	# G8/IDEA-SEELE: Morgen-Kette statt Overlay-Stapel (PT4-B7/PT1-B6) —
+	# die Sequenz spielt (wenn fällig) die Aufwach-Klammer, bietet DANN den
+	# Tagesbonus an und hängt ZULETZT die REST-2-Guide-Tour selbst an
+	# (vorher: OnboardingGuide.attach_to direkt hier, parallel zum Bonus).
 	if _gs != null:
-		OnboardingGuide.attach_to(self, _gs)
+		MorgenSequenz.starten(self, _gs)
 	if _router != null:
 		_router.goto(RoomDefs.route_target(START_ROOM))
 

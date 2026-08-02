@@ -72,6 +72,21 @@
 					"Tip: Patty wisdom — pink means wait, golden means flip, charcoal means practice.",
 					"Tip: The Pickle Deluxe demands seven pickles. No more, no less."
 				]
+			},
+			"hub": {
+				"titel": "Off to the DLC shelf!",
+				"bereit": "The adventures are lining up…",
+				"titel_zurueck": "Off to the DLC shelf!",
+				"bereit_zurueck": "The adventures are lining up…",
+				"tips": [
+					"Polishing the covers to a fine shine…",
+					"The adventures are lining up by size…",
+					"Rolling out a red carpet in front of the shelves…",
+					"Smoothing the NEW ribbons one more time…",
+					"Gooby is putting on his browsing glasses…",
+					"Tip: Tap a cover to learn more — no spoilers, promise.",
+					"Tip: Some adventures want to see a few levels of training first."
+				]
 			}
 		}
 	}

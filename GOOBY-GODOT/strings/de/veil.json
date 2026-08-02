@@ -72,6 +72,21 @@
 					"Tipp: Patty-Weisheit — rosa heißt warten, goldbraun heißt wenden, Kohle heißt üben.",
 					"Tipp: Der Gurken-Deluxe verlangt sieben Gurken. Keine mehr, keine weniger."
 				]
+			},
+			"hub": {
+				"titel": "Ab ins DLC-Regal!",
+				"bereit": "Die Abenteuer stellen sich auf…",
+				"titel_zurueck": "Ab ins DLC-Regal!",
+				"bereit_zurueck": "Die Abenteuer stellen sich auf…",
+				"tips": [
+					"Die Cover werden auf Hochglanz poliert…",
+					"Die Abenteuer stellen sich der Größe nach auf…",
+					"Ein roter Teppich wird vor die Regale gerollt…",
+					"Die NEU-Schleifen werden noch einmal glatt gestrichen…",
+					"Gooby setzt seine Stöber-Brille auf…",
+					"Tipp: Tippe ein Cover an, um mehr zu erfahren — ganz ohne Spoiler.",
+					"Tipp: Manche Abenteuer wollen erst ein paar Level Training sehen."
+				]
 			}
 		}
 	}
