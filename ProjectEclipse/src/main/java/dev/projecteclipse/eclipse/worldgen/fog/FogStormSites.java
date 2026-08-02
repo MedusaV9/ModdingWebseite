@@ -286,36 +286,56 @@ public final class FogStormSites {
         int span = radius * 2 + 1;
         int total = span * span;
         int[] cursor = {0};
+        // WAVE6 (F-106 B) B6: honest skip counter — columns the loaded-chunk gate below
+        // refuses are COUNTED instead of silently mis-read at the dimension floor.
+        int[] skipped = {0};
         BudgetedBlockWriter.enqueue(level, budget -> {
             int end = Math.min(total, cursor[0] + budget);
             for (; cursor[0] < end; cursor[0]++) {
                 int dx = cursor[0] % span - radius;
                 int dz = cursor[0] / span - radius;
-                if (dx * dx + dz * dz <= radius * radius) {
-                    recoverColumn(level, site.x() + dx, site.z() + dz);
+                if (dx * dx + dz * dz <= radius * radius
+                        && !recoverColumn(level, site.x() + dx, site.z() + dz)) {
+                    skipped[0]++;
                 }
             }
             return cursor[0] >= total;
-        }, () -> EclipseMod.LOGGER.info("FogStormSites: snow recovery finished for {}", site.id()),
-                error -> EclipseMod.LOGGER.error("FogStormSites: snow recovery for {} failed",
+        }, () -> {
+            EclipseMod.LOGGER.info("FogStormSites: snow recovery finished for {}", site.id());
+            if (skipped[0] > 0) {
+                EclipseMod.LOGGER.info("[w6b-recover] site={} skipped={} columns",
+                        site.id(), skipped[0]);
+            }
+        }, error -> EclipseMod.LOGGER.error("FogStormSites: snow recovery for {} failed",
                         site.id(), error));
     }
 
-    /** One column of the recovery sweep; no-op outside cold-at-surface biomes. */
-    private static void recoverColumn(ServerLevel level, int x, int z) {
+    /**
+     * One column of the recovery sweep; no-op outside cold-at-surface biomes.
+     *
+     * @return {@code false} when the column was SKIPPED because its chunk is not loaded
+     */
+    private static boolean recoverColumn(ServerLevel level, int x, int z) {
+        // WAVE6 (F-106 B) B6 boot-order gate (pollFogSites fix class, commit 1c56087):
+        // getHeightmapPos on an UNLOADED chunk lands at the dimension floor, whose biome
+        // lookup is a cave biome — the column was then dropped SILENTLY while the sweep
+        // still reported "finished". Skip it honestly instead.
+        if (!level.isLoaded(new BlockPos(x, level.getSeaLevel(), z))) {
+            return false;
+        }
         BlockPos top = level.getHeightmapPos(Heightmap.Types.MOTION_BLOCKING, new BlockPos(x, 0, z));
         Biome biome = level.getBiome(top).value();
         if (!biome.coldEnoughToSnow(top)) {
-            return;
+            return true;
         }
         BlockPos below = top.below();
         BlockState ground = level.getBlockState(below);
         if (ground.is(Blocks.CHEST) || ground.is(Blocks.CAMPFIRE)) {
-            return;
+            return true;
         }
         if (biome.shouldFreeze(level, below, false)) {
             level.setBlock(below, Blocks.ICE.defaultBlockState(), 3);
-            return;
+            return true;
         }
         if (biome.shouldSnow(level, top)) {
             level.setBlock(top, Blocks.SNOW.defaultBlockState(), 3);
@@ -323,6 +343,7 @@ public final class FogStormSites {
                 level.setBlock(below, ground.setValue(SnowyDirtBlock.SNOWY, true), 2);
             }
         }
+        return true;
     }
 
     private static BlockPos surfaceCenter(ServerLevel level, int x, int z) {

@@ -27,6 +27,11 @@ final class MusicClientHooks {
         MusicManager.release(cue);
     }
 
+    /** WAVE6 (F-106 B) B7: {@code /dev music forget} — clears this server's music memory. */
+    static void forgetMemory() {
+        MusicMemory.forget();
+    }
+
     static void openCredits() {
         Minecraft minecraft = Minecraft.getInstance();
         minecraft.setScreen(new dev.projecteclipse.eclipse.client.menu.CreditsScreen(minecraft.screen));

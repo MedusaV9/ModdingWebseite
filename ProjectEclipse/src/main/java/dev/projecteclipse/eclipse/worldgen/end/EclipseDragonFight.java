@@ -1,19 +1,33 @@
 package dev.projecteclipse.eclipse.worldgen.end;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import javax.annotation.Nullable;
 
+import org.joml.Vector3f;
+
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.core.state.EclipseWorldgenState;
+import dev.projecteclipse.eclipse.network.S2CBossbarStylePayload;
 import dev.projecteclipse.eclipse.network.S2CShakePayload;
+import dev.projecteclipse.eclipse.network.boss.BossPayloads;
+import dev.projecteclipse.eclipse.network.fx.FxCues;
+import dev.projecteclipse.eclipse.network.fx.FxPayloads;
 import dev.projecteclipse.eclipse.progression.DayScheduler;
 import dev.projecteclipse.eclipse.progression.goals.QuestApi;
+import dev.projecteclipse.eclipse.veilfx.FxAnchors;
 import dev.projecteclipse.eclipse.worldgen.EndDiscGeometry;
 import dev.projecteclipse.eclipse.worldgen.stage.BudgetedBlockWriter;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.particles.DustParticleOptions;
+import net.minecraft.core.particles.ParticleTypes;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.protocol.game.ClientboundSoundPacket;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerBossEvent;
 import net.minecraft.server.level.ServerLevel;
@@ -69,6 +83,23 @@ public final class EclipseDragonFight {
 
     private static final CopyOnWriteArrayList<Listener> LISTENERS = new CopyOnWriteArrayList<>();
 
+    // WAVE6 (F-106 B) B1/B2/B4: dragon-stage constants. Card keys ship via the WAVE6B
+    // langdrop; the wisp cue id is re-derived on BOTH sides (FxCues frozen — the client
+    // row registrar in veilfx/Wave6DragonFxRows derives the same id as its loop-row
+    // logical id AND FxAnchors key, the SmallCueFxRows two-sided precedent).
+    private static final String DRAGON_CARD_KEY = "entity.eclipse.dragon.card";
+    private static final String DRAGON_CARD_SUB_KEY = "entity.eclipse.dragon.card.sub";
+    private static final ResourceLocation CUE_CRYSTAL_BURST = FxCues.cue("wave6_crystal_burst");
+    private static final ResourceLocation CUE_DRAGON_WISP = FxCues.cue("wave6_dragon_wisp");
+    /** B2: broadcast range of the crystal-burst cue payload (spires stand disc-wide). */
+    private static final double CRYSTAL_BEAT_RANGE = 160.0D;
+    /** B2: old-vs-new scan match distance — a crystal that "moved" this far is dead. */
+    private static final double CRYSTAL_MATCH_DIST_SQ = 4.0D * 4.0D;
+    /** B3: shake radius around the perch touch-down. */
+    private static final double PERCH_SHAKE_RANGE = 48.0D;
+    /** B4: tick stagger between the three victory light pillars. */
+    private static final int REQUIEM_PILLAR_STAGGER_TICKS = 20;
+
     @Nullable
     private static EnderDragon activeDragon;
     @Nullable
@@ -76,6 +107,21 @@ public final class EclipseDragonFight {
     private static int lastCrystalCount = -1;
     /** Log-once guard for the F-023 dragon-day gate (per JVM; carries no world state). */
     private static boolean WARNED_EARLY_DRAGON;
+    /**
+     * WAVE6 (F-106 B) B1: transient intro-card latch. The card fires only on a genuinely
+     * FRESH fight (no persisted dragon yet); a restart re-attach resets this latch but the
+     * persisted {@code dragonId} keeps {@code freshFight} false, so no second card can fire.
+     */
+    private static boolean introCardSent;
+    /** WAVE6 (F-106 B) B2: previous crystal-scan snapshot (positions of living crystals). */
+    private static List<Vec3> lastCrystalPositions = List.of();
+    /** WAVE6 (F-106 B) B3: perch flank latch — true while the dragon sits (1 beat per landing). */
+    private static boolean perchLatched;
+    /** WAVE6 (F-106 B) B4: last crescendo pulse game time (transient; cadence ≤30t). */
+    private static long lastCrescendoGameTime = Long.MIN_VALUE;
+    /** WAVE6 (F-106 B) B4: victory light pillars still owed (staggered over the tick loop). */
+    private static int requiemPillarsPending;
+    private static long requiemNextPillarGameTime;
 
     private EclipseDragonFight() {}
 
@@ -97,11 +143,17 @@ public final class EclipseDragonFight {
         if (state.dragonKilled()) {
             ensureVictoryBlocks(level);
             clearBossBar();
+            // WAVE6 (F-106 B) B4: FxAnchors are transient (in-memory) — re-publish the
+            // requiem wisp anchor over the egg on every start of an already-won save.
+            publishRequiemAnchor(level);
             return;
         }
         if (!dragonDayReached(server, state)) {
             return;
         }
+        // WAVE6 (F-106 B) B1: decided BEFORE any resolve/spawn writes state.dragonId —
+        // only a fight that never had a dragon (nor a death in flight) gets the card.
+        boolean freshFight = state.dragonId() == null && state.deathStartedGameTime() < 0L;
 
         loadCrystalChunks(level);
         if (EndConfig.current().crystalRespawn()) {
@@ -124,6 +176,18 @@ public final class EclipseDragonFight {
         }
         ensureBossBar();
         lastCrystalCount = state.crystalsRemaining();
+        // WAVE6 (F-106 B) B1: ONE intro card per fight (BossIntroOverlay/BossbarSkin are
+        // public API — byte-untouched). Restart re-attach: freshFight is false (persisted
+        // dragonId), so only the skip probe fires; the transient latch additionally
+        // guards repeated begin() calls inside one session.
+        if (freshFight && !introCardSent) {
+            introCardSent = true;
+            BossPayloads.sendIntro(level, Vec3.atCenterOf(center()),
+                    DRAGON_CARD_KEY, DRAGON_CARD_SUB_KEY);
+            EclipseMod.LOGGER.debug("[w6b-dragoncard] sent begin");
+        } else {
+            EclipseMod.LOGGER.debug("[w6b-dragoncard] sent skip-reattach");
+        }
         EclipseMod.LOGGER.info("Eclipse dragon fight active: dragon {}, {} crystal(s)",
                 dragon.getUUID(), state.crystalsRemaining());
     }
@@ -141,6 +205,9 @@ public final class EclipseDragonFight {
             clearBossBar();
             return;
         }
+        // WAVE6 (F-106 B) B4: the staggered requiem pillars fire AFTER dragonKilled flips,
+        // so their drain runs before the killed early-return below.
+        tickRequiemPillars(server.overworld());
         if (!state.materializationComplete() || state.dragonKilled()
                 || !dragonDayReached(server, state)) {
             return;
@@ -241,6 +308,13 @@ public final class EclipseDragonFight {
         activeDragon = null;
         lastCrystalCount = -1;
         clearBossBar();
+        // WAVE6 (F-106 B): transient stage state (FxAnchors clears itself on server stop).
+        introCardSent = false;
+        lastCrystalPositions = List.of();
+        perchLatched = false;
+        lastCrescendoGameTime = Long.MIN_VALUE;
+        requiemPillarsPending = 0;
+        requiemNextPillarGameTime = 0L;
     }
 
     private static void tickFight(ServerLevel level, EndFightState state) {
@@ -264,6 +338,11 @@ public final class EclipseDragonFight {
         long gameTime = level.getGameTime();
         dragon.setFightOrigin(center());
         syncBossBar(level, dragon);
+        // WAVE6 (F-106 B) B3: per-tick phase-flank sampling — the 40t watchdog cadence
+        // would alias short sitting windows, the flank latch keeps it at 1 beat/landing.
+        tickPerchBeat(level, dragon);
+        // WAVE6 (F-106 B) B4: sub-10% heartbeat ladder (W5-A5 idiom, HP-staggered cadence).
+        tickCrescendo(level, dragon, gameTime);
 
         if (gameTime % CRYSTAL_SCAN_TICKS == 0L) {
             List<EndCrystal> crystals = EndSpires.livingCrystals(level, state);
@@ -280,6 +359,15 @@ public final class EclipseDragonFight {
                         Component.translatable("announce.eclipse.end.crystals_destroyed"), false);
                 dragon.getPhaseManager().setPhase(EnderDragonPhase.LANDING_APPROACH);
             }
+            // WAVE6 (F-106 B) B2: the scan already diffs lastCrystalCount — on a drop,
+            // locate the fallen crystal(s) via the before/after position snapshot and fire
+            // the burst there. A restart starts from an EMPTY snapshot, so re-attach can
+            // never replay a beat for crystals that died while the server was down.
+            if (lastCrystalCount > 0 && crystals.size() < lastCrystalCount
+                    && !lastCrystalPositions.isEmpty()) {
+                fireCrystalBeats(level, crystals);
+            }
+            lastCrystalPositions = snapshotCrystalPositions(crystals);
             lastCrystalCount = crystals.size();
         }
 
@@ -328,6 +416,144 @@ public final class EclipseDragonFight {
                 && phase != EnderDragonPhase.STRAFE_PLAYER) {
             dragon.getPhaseManager().setPhase(EnderDragonPhase.HOLDING_PATTERN);
         }
+    }
+
+    // ------------------------------------------------------------ WAVE6 (F-106 B) beats
+
+    /** B2: transient position snapshot of the living crystals (scan-cadence sized). */
+    private static List<Vec3> snapshotCrystalPositions(List<EndCrystal> crystals) {
+        List<Vec3> positions = new ArrayList<>(crystals.size());
+        for (EndCrystal crystal : crystals) {
+            positions.add(crystal.position());
+        }
+        return List.copyOf(positions);
+    }
+
+    /**
+     * B2 crystal-destruction beat: every OLD snapshot position without a survivor nearby
+     * is where a crystal died this scan window — fire the {@code wave6_crystal_burst}
+     * one-shot there (Photon garnish; the vanilla crystal explosion is the photon-less
+     * baseline) plus a distant low-pitched glass sting to every bossbar viewer.
+     */
+    private static void fireCrystalBeats(ServerLevel level, List<EndCrystal> survivors) {
+        for (Vec3 old : lastCrystalPositions) {
+            boolean survived = false;
+            for (EndCrystal crystal : survivors) {
+                if (crystal.position().distanceToSqr(old) <= CRYSTAL_MATCH_DIST_SQ) {
+                    survived = true;
+                    break;
+                }
+            }
+            if (survived) {
+                continue;
+            }
+            FxPayloads.sendFxEvent(level, CUE_CRYSTAL_BURST, old, 0.0F, 0.0F, CRYSTAL_BEAT_RANGE);
+            if (bossBar != null) {
+                for (ServerPlayer viewer : List.copyOf(bossBar.getPlayers())) {
+                    viewer.playNotifySound(SoundEvents.GLASS_BREAK, SoundSource.HOSTILE,
+                            0.9F, 0.55F);
+                }
+            }
+            EclipseMod.LOGGER.debug("[w6b-crystal] remaining={} at={}",
+                    survivors.size(), BlockPos.containing(old).toShortString());
+        }
+    }
+
+    /**
+     * B3 perch/landing beat: flank into a sitting {@code EnderDragonPhase} (touch-down on
+     * the perch) fires ONE ground shock ring (END_ROD + violet dust, server-side
+     * particles) and a {@code S2CShakePayload} to players within
+     * {@value #PERCH_SHAKE_RANGE} blocks. The latch releases when the dragon lifts off.
+     */
+    private static void tickPerchBeat(ServerLevel level, EnderDragon dragon) {
+        boolean sitting = dragon.getPhaseManager().getCurrentPhase().isSitting();
+        if (!sitting) {
+            perchLatched = false;
+            return;
+        }
+        if (perchLatched) {
+            return;
+        }
+        perchLatched = true;
+        Vec3 base = dragon.position();
+        DustParticleOptions violet = new DustParticleOptions(new Vector3f(0.55F, 0.30F, 0.85F), 1.4F);
+        for (int i = 0; i < 20; i++) {
+            double angle = Math.PI * 2.0D * i / 20.0D;
+            double cos = Math.cos(angle);
+            double sin = Math.sin(angle);
+            level.sendParticles(ParticleTypes.END_ROD,
+                    base.x + cos * 4.0D, base.y + 0.3D, base.z + sin * 4.0D,
+                    2, 0.15D, 0.1D, 0.15D, 0.01D);
+            level.sendParticles(violet,
+                    base.x + cos * 2.5D, base.y + 0.4D, base.z + sin * 2.5D,
+                    2, 0.1D, 0.15D, 0.1D, 0.0D);
+        }
+        PacketDistributor.sendToPlayersNear(level, null, base.x, base.y, base.z,
+                PERCH_SHAKE_RANGE, S2CShakePayload.shake(0.8F, 20));
+        EclipseMod.LOGGER.debug("[w6b-perch] phase={}",
+                dragon.getPhaseManager().getCurrentPhase().getPhase());
+    }
+
+    /**
+     * B4 sub-10%-HP heartbeat crescendo (W5-A5 idiom, {@code HeraldEntity}
+     * {@code tickHeartbeatCrescendo} precedent): every living, non-spectator player within
+     * {@value #BOSS_BAR_RANGE} blocks of the fight center hears WARDEN_HEARTBEAT on a
+     * cadence that falls with the boss — 30t → 20t → 12t, HP-staggered.
+     */
+    private static void tickCrescendo(ServerLevel level, EnderDragon dragon, long gameTime) {
+        float fraction = dragon.getHealth() / dragon.getMaxHealth();
+        int cadence = fraction > 0.10F ? -1 : fraction > 0.0666F ? 30 : fraction > 0.0333F ? 20 : 12;
+        if (cadence < 0 || gameTime - lastCrescendoGameTime < cadence) {
+            return;
+        }
+        lastCrescendoGameTime = gameTime;
+        Vec3 center = Vec3.atCenterOf(center());
+        for (ServerPlayer player : level.players()) {
+            if (player.isAlive() && !player.isSpectator()
+                    && player.position().distanceToSqr(center) <= BOSS_BAR_RANGE * BOSS_BAR_RANGE) {
+                player.connection.send(new ClientboundSoundPacket(
+                        BuiltInRegistries.SOUND_EVENT.wrapAsHolder(SoundEvents.WARDEN_HEARTBEAT),
+                        SoundSource.HOSTILE, player.getX(), player.getY(), player.getZ(),
+                        1.2F, 0.8F, level.getRandom().nextLong()));
+            }
+        }
+        EclipseMod.LOGGER.debug("[w6b-crescendo] hp={} cadence={}",
+                String.format(Locale.ROOT, "%.3f", fraction), cadence);
+    }
+
+    /** B4: the requiem wisp anchor floats just above the dragon egg (surface + 5 block). */
+    private static void publishRequiemAnchor(ServerLevel level) {
+        BlockPos center = center();
+        int surface = EndDiscGeometry.surfaceYAt(center.getX(), center.getZ());
+        Vec3 anchor = new Vec3(center.getX() + 0.5D, surface + 6.5D, center.getZ() + 0.5D);
+        FxAnchors.set(CUE_DRAGON_WISP, level, anchor);
+        EclipseMod.LOGGER.debug("[w6b-requiem] anchored={}", BlockPos.containing(anchor).toShortString());
+    }
+
+    /**
+     * B4 victory requiem, pillar half: three staggered light pillars over the portal
+     * center ({@value #REQUIEM_PILLAR_STAGGER_TICKS}t apart, one small triangle around the
+     * egg). Server-side vanilla particles — the photon-less baseline of the requiem; the
+     * {@code wave6_dragon_wisp} WINDOWED loop is the client-side Photon garnish.
+     */
+    private static void tickRequiemPillars(ServerLevel level) {
+        if (requiemPillarsPending <= 0 || level.getGameTime() < requiemNextPillarGameTime) {
+            return;
+        }
+        int index = 3 - requiemPillarsPending;
+        requiemPillarsPending--;
+        requiemNextPillarGameTime = level.getGameTime() + REQUIEM_PILLAR_STAGGER_TICKS;
+        BlockPos center = center();
+        int surface = EndDiscGeometry.surfaceYAt(center.getX(), center.getZ());
+        double angle = Math.toRadians(90.0D + index * 120.0D);
+        double x = center.getX() + 0.5D + Math.cos(angle) * 2.5D;
+        double z = center.getZ() + 0.5D + Math.sin(angle) * 2.5D;
+        for (int dy = 1; dy <= 16; dy++) {
+            level.sendParticles(ParticleTypes.END_ROD, x, surface + dy, z,
+                    3, 0.12D, 0.2D, 0.12D, 0.005D);
+        }
+        level.playSound(null, BlockPos.containing(x, surface + 1, z),
+                SoundEvents.BEACON_ACTIVATE, SoundSource.HOSTILE, 1.2F, 0.75F + 0.1F * index);
     }
 
     private static void tickDeathSequence(
@@ -470,7 +696,15 @@ public final class EclipseDragonFight {
                     && !player.isSpectator()
                     && player.position().distanceToSqr(center) <= BOSS_BAR_RANGE * BOSS_BAR_RANGE;
             if (eligible) {
+                // WAVE6 (F-106 B) B1: THEME_BOSS skin payload for every NEWLY added bar
+                // viewer (the four house bosses' startSeenByPlayer idiom) — covers fight
+                // start, walk-ins, relogs and restart re-attach alike.
+                boolean fresh = !bossBar.getPlayers().contains(player);
                 bossBar.addPlayer(player);
+                if (fresh) {
+                    PacketDistributor.sendToPlayer(player, new S2CBossbarStylePayload(
+                            bossBar.getId(), S2CBossbarStylePayload.THEME_BOSS));
+                }
             } else {
                 bossBar.removePlayer(player);
             }
@@ -513,6 +747,12 @@ public final class EclipseDragonFight {
                 SoundSource.HOSTILE, 2.0F, 0.75F);
         PacketDistributor.sendToPlayersInDimension(
                 level, S2CShakePayload.shake(1.2F, 40));
+        // WAVE6 (F-106 B) B4 victory requiem: arm the three staggered light pillars and
+        // publish the wisp anchor (the WINDOWED loop window opens client-side only while
+        // a player stands close; reducedFx skips it there).
+        requiemPillarsPending = 3;
+        requiemNextPillarGameTime = level.getGameTime() + 10L;
+        publishRequiemAnchor(level);
 
         for (Listener listener : LISTENERS) {
             try {

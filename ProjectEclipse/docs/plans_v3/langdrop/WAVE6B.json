@@ -1,0 +1,15 @@
+{
+  "_comment": "WAVE6 (F-106 B) — Team B 'Drachen-Tag & Wettkampf-Bühne'. B1 dragon intro card (name + subtitle, the four-boss BossIntroOverlay card over the day-13 End disc) + B7 /dev music forget (MusicMemory client-ledger reset). B2–B6 are FX/audio/log-only. en+de parity; merged centrally by the main agent via tools/merge_langdrops.py — NEVER directly into the mod lang JSONs.",
+  "en_us": {
+    "entity.eclipse.dragon.card": "The Eclipse Dragon",
+    "entity.eclipse.dragon.card.sub": "The thirteenth day ends here.",
+    "dev.eclipse.doc.music.forget": "Clear your client's Eclipse music memory for this server — repeat-trimmed cues play at full volume again.",
+    "dev.eclipse.music.forgot": "Eclipse music memory cleared for this server."
+  },
+  "de_de": {
+    "entity.eclipse.dragon.card": "Der Finsternisdrache",
+    "entity.eclipse.dragon.card.sub": "Der dreizehnte Tag endet hier.",
+    "dev.eclipse.doc.music.forget": "Leert das Eclipse-Musik-Gedächtnis deines Clients für diesen Server — wiederholungsgedämpfte Titel spielen wieder in voller Lautstärke.",
+    "dev.eclipse.music.forgot": "Eclipse-Musik-Gedächtnis für diesen Server geleert."
+  }
+}

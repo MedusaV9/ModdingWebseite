@@ -38,6 +38,7 @@ import net.minecraft.world.item.component.Unbreakable;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.HorizontalDirectionalBlock;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.entity.living.LivingIncomingDamageEvent;
@@ -609,6 +610,12 @@ public final class ArenaGame {
                     }
                 }
                 place += tied.size();
+            }
+            // WAVE6 (F-106 B) B5: the round winner inherits the race podium beat — ONE
+            // gold firework beat at the platform center (anonymity: a place, not a name).
+            ServerLevel arenaLevel = server.getLevel(MinigameDimensions.ARENA);
+            if (arenaLevel != null) {
+                LegacyRace.victoryBeat(arenaLevel, Vec3.atCenterOf(SPAWN), 1);
             }
         }
         for (ServerPlayer player : inside) {

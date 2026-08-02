@@ -29,6 +29,12 @@ public final class MusicPayloads {
      * are lowercase identifiers, so neither prefix can ever collide with one.
      */
     private static final String FADE_PREFIX = "~";
+    /**
+     * WAVE6 (F-106 B) B7: the bare token {@code !} clears the client's MusicMemory ledger
+     * for the current server ({@code /dev music forget}). Same non-collision argument as
+     * the other prefixes.
+     */
+    private static final String FORGET_TOKEN = "!";
     /** Hard bound on a requested fade length (~30 s) — a bad packet can never wedge audio. */
     private static final int MAX_FADE_TICKS = 600;
 
@@ -75,6 +81,8 @@ public final class MusicPayloads {
         String cueId = payload.cueId();
         if (cueId.isEmpty()) {
             MusicCues.stop();
+        } else if (cueId.equals(FORGET_TOKEN)) {
+            MusicClientHooks.forgetMemory();
         } else if (cueId.startsWith(FADE_PREFIX)) {
             MusicCues.fadeOut(parseFadeTicks(cueId.substring(FADE_PREFIX.length())));
         } else if (cueId.startsWith(RELEASE_PREFIX)) {
@@ -121,6 +129,11 @@ public final class MusicPayloads {
     /** Releases a forced cue without muting the situation ladder (see {@link MusicCues#release}). */
     public static void sendRelease(ServerPlayer player, String cueId) {
         PacketDistributor.sendToPlayer(player, new S2CMusicCuePayload(RELEASE_PREFIX + cueId));
+    }
+
+    /** WAVE6 (F-106 B) B7: clears the player's client-side MusicMemory for this server. */
+    public static void sendForget(ServerPlayer player) {
+        PacketDistributor.sendToPlayer(player, new S2CMusicCuePayload(FORGET_TOKEN));
     }
 
     public static void sendOpenCredits(ServerPlayer player) {

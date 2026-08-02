@@ -51,8 +51,13 @@ public enum MusicCues {
 
     // --- Wave-4 tracks (W4-BOSSJUICE). Boss cues need no linger: MusicManager's
     // BOSS_SEEN_GRACE_MILLIS already bridges bossbar render gaps. ---
-    /** Situation rung: eclipse TOTAL phase drone (MusicManager, below boss priority). */
-    ECLIPSE_TOTALITY("eclipse_totality", EclipseMusicSounds.ECLIPSE_TOTALITY, true, 0, 100),
+    /**
+     * Situation rung: eclipse TOTAL phase drone (MusicManager, below boss priority).
+     * WAVE6 (F-106 B) B7 / IDEA-08 #10: repeat plays land at 0.7 gain — the drone should
+     * awe once and then color the phase, not restate itself at full weight every totality.
+     */
+    ECLIPSE_TOTALITY("eclipse_totality", EclipseMusicSounds.ECLIPSE_TOTALITY, true, 0, 100,
+            1.0F, 0.7F),
     /** Situation rung: inside a fog storm; hysteresis 0.55/0.15 on interiorAmount(). */
     FOG_STORM("fog_storm", EclipseMusicSounds.FOG_STORM, true, 0, 200),
     /** Bossbar-observed rung (entity.eclipse.rift_warden.bossbar). */
@@ -73,8 +78,12 @@ public enum MusicCues {
      * ceremony should color the moment, not own the next minute — ownership shortened
      * to 700t (~35 s; the crossfade tips it out mid-tail) and the sting rides a 0.55
      * gain so it swells in under the scene instead of stomping onto it.
+     * WAVE6 (F-106 B) B7 / IDEA-08 #10: a ceremony heard once never repeats audibly —
+     * repeat plays are fully muted (repeatVolume 0), the awakening is a once-per-player
+     * memory ({@code /dev music forget} resets the client ledger).
      */
-    WAND_AWAKENING("wand_awakening", EclipseMusicSounds.WAND_AWAKENING, false, 700, 0, 0.55F),
+    WAND_AWAKENING("wand_awakening", EclipseMusicSounds.WAND_AWAKENING, false, 700, 0, 0.55F,
+            0.0F),
     /** Situation rung: final-day dread bed (weakest in-world rung, MusicManager). */
     DAY_FINAL("day_final", EclipseMusicSounds.DAY_FINAL, true, 0, 200),
 
@@ -113,6 +122,7 @@ public enum MusicCues {
     private final int durationTicks;
     private final int lingerTicks;
     private final float gain;
+    private final float repeatVolume;
 
     MusicCues(String id, Supplier<SoundEvent> sound, boolean looping, int durationTicks) {
         this(id, sound, looping, durationTicks, 0);
@@ -125,12 +135,18 @@ public enum MusicCues {
 
     MusicCues(String id, Supplier<SoundEvent> sound, boolean looping, int durationTicks,
             int lingerTicks, float gain) {
+        this(id, sound, looping, durationTicks, lingerTicks, gain, 1.0F);
+    }
+
+    MusicCues(String id, Supplier<SoundEvent> sound, boolean looping, int durationTicks,
+            int lingerTicks, float gain, float repeatVolume) {
         this.id = id;
         this.sound = sound;
         this.looping = looping;
         this.durationTicks = durationTicks;
         this.lingerTicks = lingerTicks;
         this.gain = gain;
+        this.repeatVolume = repeatVolume;
     }
 
     public String id() {
@@ -166,6 +182,19 @@ public enum MusicCues {
      */
     public float gain() {
         return gain;
+    }
+
+    /**
+     * WAVE6 (F-106 B) B7 / IDEA-08 #10 MusicMemory: extra volume trim for REPEAT plays of
+     * this cue — 1.0 (default) means "no memory, always full", anything below marks the
+     * cue as memory-tracked: once the client's {@code MusicMemory} ledger
+     * ({@code config/eclipse-music-memory.json}, per-server key) has heard it to full
+     * level, later voices of the same cue start at {@code gain() * repeatVolume()}.
+     * Resolution happens ONCE in the {@code MusicFadeSound} constructor. No new tracks,
+     * no {@code _alt} variants (D-3 stays blocked) — damping only.
+     */
+    public float repeatVolume() {
+        return repeatVolume;
     }
 
     public static List<String> ids() {

@@ -31,6 +31,10 @@ public final class DevMusicCommands {
                 new DevCommandDoc("music.list", DevCategory.MUSIC,
                         "/dev music list", "dev.eclipse.doc.music.list",
                         Danger.SAFE, ClickAction.RUN, 2),
+                // WAVE6 (F-106 B) B7: MusicMemory reset (client ledger, current server).
+                new DevCommandDoc("music.forget", DevCategory.MUSIC,
+                        "/dev music forget", "dev.eclipse.doc.music.forget",
+                        Danger.SAFE, ClickAction.RUN, 2),
                 new DevCommandDoc("credits", DevCategory.MUSIC,
                         "/dev credits", "dev.eclipse.doc.credits",
                         Danger.SAFE, ClickAction.RUN, 2));
@@ -55,7 +59,11 @@ public final class DevMusicCommands {
                         .then(Commands.literal("stop")
                                 .executes(DevMusicCommands::stop))
                         .then(Commands.literal("list")
-                                .executes(DevMusicCommands::list)))
+                                .executes(DevMusicCommands::list))
+                        // WAVE6 (F-106 B) B7: forget = clear the caller's client-side
+                        // MusicMemory ledger for this server (repeat trims reset).
+                        .then(Commands.literal("forget")
+                                .executes(DevMusicCommands::forget)))
                 .then(Commands.literal("credits")
                         .executes(DevMusicCommands::credits)));
     }
@@ -84,6 +92,14 @@ public final class DevMusicCommands {
         String ids = String.join(", ", MusicCues.ids());
         context.getSource().sendSuccess(() -> Component.translatable("dev.eclipse.music.list", ids), false);
         return MusicCues.ids().size();
+    }
+
+    /** WAVE6 (F-106 B) B7: resets the caller's MusicMemory (client ledger, this server). */
+    private static int forget(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        CommandSourceStack source = context.getSource();
+        MusicPayloads.sendForget(source.getPlayerOrException());
+        source.sendSuccess(() -> Component.translatable("dev.eclipse.music.forgot"), false);
+        return 1;
     }
 
     private static int credits(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {

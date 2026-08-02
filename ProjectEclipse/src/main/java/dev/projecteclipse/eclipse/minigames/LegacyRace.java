@@ -10,6 +10,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
+import org.joml.Vector3f;
+
 import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.lang.ServerLang;
 import dev.projecteclipse.eclipse.network.fx.FxCues;
@@ -17,6 +19,8 @@ import dev.projecteclipse.eclipse.network.fx.FxPayloads;
 import dev.projecteclipse.eclipse.registry.EclipseSounds;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.particles.DustParticleOptions;
+import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.game.ClientboundSetSubtitleTextPacket;
 import net.minecraft.network.protocol.game.ClientboundSetTitleTextPacket;
@@ -83,6 +87,13 @@ public final class LegacyRace {
     private static final int RESCUE_SLOW_FALL_TICKS = 60;
     /** NEWFX-C3b finish-ribbon cue range around the start/finish gantry. */
     private static final double FINISH_CUE_RANGE = 128.0D;
+    /** WAVE6 (F-106 B) B5: millis between the staggered podium firework beats. */
+    private static final long PODIUM_BEAT_STAGGER_MILLIS = 700L;
+    /** WAVE6 (F-106 B) B5: podium dust palettes — gold / silver / bronze (place 1..3). */
+    private static final Vector3f[] PODIUM_COLORS = {
+            new Vector3f(1.0F, 0.78F, 0.15F),
+            new Vector3f(0.78F, 0.80F, 0.85F),
+            new Vector3f(0.80F, 0.50F, 0.22F)};
 
     /** Heat phase (transient: a crash restarts the heat, the event window survives). */
     private enum Phase { WAITING, COUNTDOWN, RUNNING, COOLDOWN }
@@ -95,6 +106,11 @@ public final class LegacyRace {
     private static int lastCountdownShown;
     /** Lamps currently powered; {@code -1} forces the next write through. */
     private static int litLamps = -1;
+
+    /** WAVE6 (F-106 B) B5: staggered podium ceremony state (COOLDOWN-driven, transient). */
+    private static int podiumBeatsTotal;
+    private static int podiumBeatsFired;
+    private static long nextPodiumBeatMillis;
 
     /** Last sampled position per racer — the anchor of the segment tested against a gate. */
     private static final Map<UUID, Vec3> LAST_POS = new HashMap<>();
@@ -140,6 +156,9 @@ public final class LegacyRace {
         heatStartMillis = 0L;
         firstFinishMillis = 0L;
         lastCountdownShown = 0;
+        podiumBeatsTotal = 0;
+        podiumBeatsFired = 0;
+        nextPodiumBeatMillis = 0L;
         LAST_POS.clear();
         RETIRED.clear();
         HEAT_ORDER.clear();
@@ -244,6 +263,9 @@ public final class LegacyRace {
             case COUNTDOWN -> tickCountdown(sky, state, track, racers, now);
             case RUNNING -> tickRunning(server, sky, state, track, racers, now);
             case COOLDOWN -> {
+                // WAVE6 (F-106 B) B5: drain the staggered podium ceremony (gold, then
+                // silver, then bronze — one beat per pending place, 0.7 s apart).
+                tickPodiumBeats(sky, track, now);
                 if (now >= phaseDeadline) {
                     formUpGrid(sky, state, track, racers);
                     armCountdown(now);
@@ -402,8 +424,21 @@ public final class LegacyRace {
                     racer.displayClientMessage(ServerLang.tr(racer,
                             "eclipse.minigame.race.checkpoint", target, gates - 1)
                             .withStyle(ChatFormatting.AQUA), true);
+                    // WAVE6 (F-106 B) B5: the flat 1.4F pickup becomes a PRIVATE chime
+                    // whose pitch climbs the checkpoint ladder 1→7 (0.7 → 1.6), plus a
+                    // glint burst at the arch (server-side, vanilla near-radius cull) —
+                    // no new assets, the CUE_RACE_FINISH lane stays untouched.
+                    float chimePitch = 0.7F + 0.15F * (target - 1);
                     racer.playNotifySound(SoundEvents.EXPERIENCE_ORB_PICKUP,
-                            SoundSource.PLAYERS, 0.8F, 1.4F);
+                            SoundSource.PLAYERS, 0.8F, chimePitch);
+                    racer.playNotifySound(SoundEvents.NOTE_BLOCK_BELL.value(),
+                            SoundSource.PLAYERS, 0.6F, chimePitch);
+                    sky.sendParticles(ParticleTypes.ELECTRIC_SPARK,
+                            gate.x, gate.y, gate.z, 14, 1.4D, 1.4D, 1.4D, 0.02D);
+                    sky.sendParticles(ParticleTypes.END_ROD,
+                            gate.x, gate.y, gate.z, 6, 1.0D, 1.0D, 1.0D, 0.01D);
+                    EclipseMod.LOGGER.debug("[w6b-checkpoint] racer={} cp={}/{}",
+                            racer.getScoreboardName(), target, gates - 1);
                 }
             }
         }
@@ -533,12 +568,46 @@ public final class LegacyRace {
     private static void finishHeat(MinecraftServer server, MinigameState state, long now) {
         phase = Phase.COOLDOWN;
         phaseDeadline = now + COOLDOWN_MILLIS;
+        // WAVE6 (F-106 B) B5: arm the podium ceremony — one beat per occupied podium
+        // place, drained by the COOLDOWN tick so the beats land audibly staggered.
+        podiumBeatsTotal = Math.min(3, HEAT_ORDER.size());
+        podiumBeatsFired = 0;
+        nextPodiumBeatMillis = now + 500L;
         long best = state.bestLapMillis();
         broadcast(server, Component.translatable("eclipse.minigame.race.heat_over",
                 HEAT_ORDER.size(), best > 0L ? lapTime(best) : "--")
                 .withStyle(ChatFormatting.GOLD));
         EclipseMod.LOGGER.info("Race heat over: {} finisher(s), best lap {}",
                 HEAT_ORDER.size(), lapTime(best));
+    }
+
+    /** WAVE6 (F-106 B) B5: fires the next pending podium beat once its stagger is due. */
+    private static void tickPodiumBeats(ServerLevel sky, RaceTrackBuilder.Track track, long now) {
+        if (podiumBeatsFired >= podiumBeatsTotal || now < nextPodiumBeatMillis) {
+            return;
+        }
+        podiumBeatsFired++;
+        nextPodiumBeatMillis = now + PODIUM_BEAT_STAGGER_MILLIS;
+        victoryBeat(sky, track.checkpoints().get(0).center(), podiumBeatsFired);
+    }
+
+    /**
+     * WAVE6 (F-106 B) B5: one podium firework/spark beat — gold (1), silver (2), bronze
+     * (3) — at {@code pos} (the race fires it on the start/finish gantry; the arena's
+     * round winner inherits it once at the platform center). Anonymity holds: the beat
+     * marks a PLACE at a landmark, never a player. Vanilla particles + sound only.
+     */
+    static void victoryBeat(ServerLevel level, Vec3 pos, int place) {
+        Vector3f color = PODIUM_COLORS[Mth.clamp(place, 1, 3) - 1];
+        level.sendParticles(ParticleTypes.FIREWORK,
+                pos.x, pos.y + 1.0D, pos.z, 40, 1.6D, 1.2D, 1.6D, 0.08D);
+        level.sendParticles(new DustParticleOptions(color, 1.6F),
+                pos.x, pos.y + 1.5D, pos.z, 60, 1.8D, 1.4D, 1.8D, 0.0D);
+        level.playSound(null, BlockPos.containing(pos.x, pos.y, pos.z),
+                SoundEvents.FIREWORK_ROCKET_LARGE_BLAST, SoundSource.PLAYERS,
+                1.2F, 1.15F - 0.15F * (Mth.clamp(place, 1, 3) - 1));
+        EclipseMod.LOGGER.debug("[w6b-podium] place={} at={}",
+                place, BlockPos.containing(pos.x, pos.y, pos.z).toShortString());
     }
 
     // ------------------------------------------------------------------ standings & rescue

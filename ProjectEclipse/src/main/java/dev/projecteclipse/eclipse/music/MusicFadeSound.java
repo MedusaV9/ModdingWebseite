@@ -28,6 +28,13 @@ import net.minecraft.util.Mth;
  */
 final class MusicFadeSound extends AbstractTickableSoundInstance {
     private final MusicCues cue;
+    /**
+     * WAVE6 (F-106 B) B7 MusicMemory: repeat trim resolved ONCE at construction — 1.0 for
+     * a first (or untracked) play, {@link MusicCues#repeatVolume()} once this cue was
+     * heard to full level on this server before. Constant per voice by design: the ledger
+     * marking a first play as heard must never dip THAT play mid-stream.
+     */
+    private final float repeatFactor;
     /** Envelope level in [0,1]; 0 = silent, 1 = the cue's full (config-scaled) volume. */
     private float level;
     /** Per-tick level delta: positive while fading in, negative while fading out. */
@@ -42,6 +49,7 @@ final class MusicFadeSound extends AbstractTickableSoundInstance {
     MusicFadeSound(MusicCues cue, int fadeInTicks) {
         super(cue.sound(), SoundSource.MUSIC, SoundInstance.createUnseededRandom());
         this.cue = cue;
+        this.repeatFactor = MusicMemory.resolveRepeatFactor(cue);
         this.looping = cue.looping();
         this.delay = 0;
         this.relative = true;
@@ -57,11 +65,17 @@ final class MusicFadeSound extends AbstractTickableSoundInstance {
     @Override
     public void tick() {
         this.level = Mth.clamp(this.level + this.step, 0.0F, 1.0F);
-        if (this.level >= 1.0F) {
+        if (this.level >= 1.0F && !this.reachedFullLevel) {
             this.reachedFullLevel = true;
+            // WAVE6 (F-106 B) B7: a full-level envelope is the manager's own definition
+            // of "a real, audible start happened" — the exact moment the memory ledger
+            // marks the cue heard (engine-refused starts never get here).
+            MusicMemory.markHeard(this.cue);
         }
-        // WANDFIX-6: cue.gain() trims quiet ceremonial stings under the config volume.
-        this.volume = MusicConfig.volumeMultiplier() * this.cue.gain() * this.level;
+        // WANDFIX-6: cue.gain() trims quiet ceremonial stings under the config volume;
+        // WAVE6 B7: repeatFactor additionally trims (or mutes) remembered repeats.
+        this.volume = MusicConfig.volumeMultiplier() * this.cue.gain()
+                * this.repeatFactor * this.level;
         if (this.fadingOut && this.level <= 0.0F) {
             stop();
         }
