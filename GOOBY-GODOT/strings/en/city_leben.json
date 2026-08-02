@@ -3,6 +3,30 @@
     "ziel_gesetzt": "GPS on: off to {ort}!",
     "ziel_weg": "GPS off. Just drifting for a bit.",
     "ziel_erreicht": "Destination reached — {ort} is waiting!",
-    "zuhause": "Home"
+    "zuhause": "Home",
+    "sprueche": {
+      "laden": [
+        "I wonder if the carrots are crunchy today?",
+        "Mmm, it smells like fresh buns in here!",
+        "I'll just take one... okay, two.",
+        "Where's the cheese again?",
+        "Shopping list? Left it at home. Classic.",
+        "Those tomatoes are smiling at me!"
+      ],
+      "baumarkt": [
+        "Three planks, one dream!",
+        "Which screw fits here, I wonder?",
+        "Measure first, then saw!",
+        "I'm building this shelf MYSELF.",
+        "Ahh, that wood smell!",
+        "For my next project I need... everything."
+      ],
+      "markt": [
+        "It really doesn't get any fresher!",
+        "That stall over there smells wonderful.",
+        "Saturday is simply the best day.",
+        "There's always room for a taste test."
+      ]
+    }
   }
 }

@@ -3,6 +3,30 @@
     "ziel_gesetzt": "GPS an: auf zu {ort}!",
     "ziel_weg": "GPS aus. Einfach mal treiben lassen.",
     "ziel_erreicht": "Ziel erreicht — {ort} wartet schon!",
-    "zuhause": "Zuhause"
+    "zuhause": "Zuhause",
+    "sprueche": {
+      "laden": [
+        "Ob die Karotten heute knackig sind?",
+        "Mmh, hier riecht es nach frischen Brötchen!",
+        "Ich nehme nur eins … na gut, zwei.",
+        "Wo steht nochmal der Käse?",
+        "Einkaufszettel? Liegt zu Hause. Klassiker.",
+        "Die Tomaten lachen mich an!"
+      ],
+      "baumarkt": [
+        "Drei Bretter, ein Traum!",
+        "Welche Schraube passt hier wohl?",
+        "Erst messen, dann sägen!",
+        "Dieses Regal baue ich SELBST auf.",
+        "Hach, dieser Holzgeruch!",
+        "Für mein nächstes Projekt brauche ich … alles."
+      ],
+      "markt": [
+        "Frischer geht es wirklich nicht!",
+        "Der Stand da drüben duftet herrlich.",
+        "Samstag ist einfach der beste Tag.",
+        "Eine Kostprobe geht immer."
+      ]
+    }
   }
 }

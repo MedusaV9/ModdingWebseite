@@ -38,6 +38,9 @@ var auto_navigate := true
 var game_state_override: Object = null
 
 var _showcase: FurnitureShowcase
+## G7-P55: lebendiger Vitrinen-Hintergrund (verschwommene Ausstellung mit
+## wandelnden Silhouetten) hinter dem transparenten Showcase-Viewport.
+var _schaufenster: IkeaSchaufenster
 var _list: VBoxContainer
 var _chips: HBoxContainer
 var _chip_scroll: ScrollContainer
@@ -400,6 +403,11 @@ func _build_right_column() -> Control:
 	card.theme_type_variation = &"AcCardLg"
 	card.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	column.add_child(card)
+	# G7-P55: Ausstellungs-Hintergrund ZUERST einhängen — der Showcase-
+	# Viewport ist transparent, die Silhouetten wandern dahinter vorbei.
+	_schaufenster = IkeaSchaufenster.new()
+	_schaufenster.name = "Schaufenster"
+	card.add_child(_schaufenster)
 	_showcase = FurnitureShowcase.new()
 	_showcase.name = "Showcase"
 	_showcase.custom_minimum_size = Vector2(0, SHOWCASE_MIN_HEIGHT)

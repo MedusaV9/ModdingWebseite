@@ -27,6 +27,15 @@ var voice: GoobyVoice
 var dialog: OrtDialogView
 ## true, wenn dieser Besuch der ERSTE in diesem Ort war (Erste-Male-Karten).
 var ist_erstbesuch := false
+## G7-P55 „Läden lebendig“: Ambient-Besucher (OrtLeben) + Kassen-Verhalten
+## des Haupt-NPCs (KassenNpc) — beide nur, wenn `_leben_konfig()` sie will.
+var leben: OrtLeben
+var kassen_npc: KassenNpc
+## Test-Hooks: fester Besucher-Seed / Reduced-Motion erzwingen (-1 = aus) /
+## Ambient-Audio stumm schalten (Headless-Runner, s. OrtLeben.stumm).
+var leben_seed_override := -1
+var leben_reduced_override := -1
+var leben_stumm_override := false
 
 var _ui: Control
 var _sheet: PanelSheet
@@ -42,6 +51,7 @@ func _ready() -> void:
 	_baue_innenraum()
 	_baue_npc()
 	_baue_ui()
+	_baue_leben()
 	_starte_dialog()
 	ready_for_reveal.emit()
 
@@ -82,6 +92,35 @@ func _npc_konfig() -> Dictionary:
 ## keine Rückwand, Wiesenboden, heller Himmel, schwächere Vignette.
 func _ist_draussen() -> bool:
 	return false
+
+
+## Hook (G7-P55): Ambient-Leben-Konfig des Orts ({} = kein Leben).
+## Schema s. OrtLeben-Docstring — neue Orte liefern hier ~15 Zeilen Konfig
+## und bekommen Besucher, Sprüche, Glöckchen, Gemurmel und Kassen-NPC.
+func _leben_konfig() -> Dictionary:
+	return {}
+
+
+## Ambient-Leben einhängen (nach `_baue_ui`, die Sprüche brauchen `_ui`).
+func _baue_leben() -> void:
+	var konfig := _leben_konfig()
+	if konfig.is_empty():
+		return
+	konfig["ort_id"] = ort_id
+	leben = OrtLeben.new()
+	leben.name = "OrtLeben"
+	leben.konfig = konfig
+	leben.ui_layer = _ui
+	leben.seed_override = leben_seed_override
+	leben.reduced_override = leben_reduced_override
+	leben.stumm = leben_stumm_override
+	add_child(leben)
+	if bool(konfig.get("kasse", false)) and rig != null:
+		kassen_npc = KassenNpc.new()
+		kassen_npc.name = "KassenNpc"
+		kassen_npc.rig = rig
+		kassen_npc.reduced_override = leben_reduced_override
+		add_child(kassen_npc)
 
 
 ## Laden-Sheet öffnen (auch via Dialog-Effekt "laden"). M2-Orte mit eigenem
