@@ -117,7 +117,13 @@ public final class EclipseDragonFight {
     private static List<Vec3> lastCrystalPositions = List.of();
     /** WAVE6 (F-106 B) B3: perch flank latch — true while the dragon sits (1 beat per landing). */
     private static boolean perchLatched;
-    /** WAVE6 (F-106 B) B4: last crescendo pulse game time (transient; cadence ≤30t). */
+    /**
+     * WAVE6 (F-106 B) B4: last crescendo pulse game time (transient; cadence ≤30t).
+     * {@link Long#MIN_VALUE} is the "never pulsed" sentinel and MUST be guarded before
+     * any {@code gameTime - lastCrescendoGameTime} subtraction — the difference
+     * overflows strongly negative for every realistic game time (the Herald precedent
+     * avoids this with a small int sentinel, {@code lastCrescendoTick = -1000}).
+     */
     private static long lastCrescendoGameTime = Long.MIN_VALUE;
     /** WAVE6 (F-106 B) B4: victory light pillars still owed (staggered over the tick loop). */
     private static int requiemPillarsPending;
@@ -374,10 +380,19 @@ public final class EclipseDragonFight {
         if (gameTime % WATCHDOG_TICKS == 0L) {
             watchdog(dragon, state.crystalsRemaining());
         }
-        if (state.crystalsRemaining() == 0
-                && gameTime % LANDING_RETRY_TICKS == 0L
-                && !dragon.getPhaseManager().getCurrentPhase().isSitting()) {
-            dragon.getPhaseManager().setPhase(EnderDragonPhase.LANDING_APPROACH);
+        if (state.crystalsRemaining() == 0 && gameTime % LANDING_RETRY_TICKS == 0L) {
+            // Landing retry: heals a dragon that drifted back into a flight phase
+            // (HOLDING_PATTERN/STRAFE/...) without ever perching. It must NOT touch an
+            // approach or landing already in progress — on the custom disc a landing
+            // legitimately takes longer than one retry window, and re-forcing
+            // LANDING_APPROACH restarts the descent (observed 2↔3 phase bouncing).
+            var currentPhase = dragon.getPhaseManager().getCurrentPhase();
+            var phase = currentPhase.getPhase();
+            if (!currentPhase.isSitting()
+                    && phase != EnderDragonPhase.LANDING_APPROACH
+                    && phase != EnderDragonPhase.LANDING) {
+                dragon.getPhaseManager().setPhase(EnderDragonPhase.LANDING_APPROACH);
+            }
         }
         if (gameTime % ENTITY_TICKET_TICKS == 0L) {
             loadCrystalChunks(level);
@@ -503,7 +518,14 @@ public final class EclipseDragonFight {
     private static void tickCrescendo(ServerLevel level, EnderDragon dragon, long gameTime) {
         float fraction = dragon.getHealth() / dragon.getMaxHealth();
         int cadence = fraction > 0.10F ? -1 : fraction > 0.0666F ? 30 : fraction > 0.0333F ? 20 : 12;
-        if (cadence < 0 || gameTime - lastCrescendoGameTime < cadence) {
+        if (cadence < 0) {
+            return;
+        }
+        // Sentinel-guard BEFORE the elapsed-tick subtraction: gameTime - Long.MIN_VALUE
+        // overflows strongly negative, which silently swallowed every pulse. With the
+        // guard, the first pulse fires immediately on entering the sub-10% zone.
+        if (lastCrescendoGameTime != Long.MIN_VALUE
+                && gameTime - lastCrescendoGameTime < cadence) {
             return;
         }
         lastCrescendoGameTime = gameTime;
