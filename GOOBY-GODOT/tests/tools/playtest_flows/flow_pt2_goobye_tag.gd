@@ -2,8 +2,11 @@ extends "res://tests/tools/playtest_flows/flow_pt2_basis.gd"
 ## PT-2 Flow (d) „Goo und Bye — kompletter Tag-Loop“ (Welle H): Level 12 +
 ## 3000 ᴳ, über Einstellungen → DLC-Hub die Karte ansehen, das Angebot
 ## öffnen und den Schlüssel für 2500 ᴳ übernehmen (Geld exakt nachrechnen).
-## Im Laden: Intro-Karte, drei Regal-Slots aus dem Startlager einräumen,
-## Preis-Sheet ansehen, Laden öffnen, den Kundenstrom (Alwin zuerst!) in
+## Im Laden: Intro-Karte, drei Regal-Slots per ECHTEN Taps aus dem
+## Startlager einräumen (B2-Fix-Beleg: vorher schluckte die Backen-Pill
+## die Slot-Taps), eine Ofen-Charge backen und NACH dem Backen Slot 3
+## tippen (Slot-Tap-nach-Backen-Probe), Preis-Sheet ansehen, Laden
+## öffnen, den Kundenstrom (Alwin zuerst — jetzt MIT Sprechblase!) in
 ## Echtzeit anschauen, Kassensturz prüfen (Feierabend bucht EXAKT den
 ## Tagesumsatz) und danach am Großmarkt Nachschub kaufen (Hin- und
 ## Rückfahrt). Aufruf: tools/ci/run_playtest.sh flow_pt2_goobye_tag
@@ -13,6 +16,8 @@ const BUDGET := 3000
 const DLC_PREIS := 2500
 ## Startlager: apple 6 + carrot 8 + bread 5 landen in Slot 0–2.
 const REGAL_SOLL := 19
+## … plus EINE Ofen-Charge (3 Brote) via Slot-3-Tap nach dem Backen.
+const REGAL_MIT_BROT := REGAL_SOLL + GoobyeBackofen.BROT_JE_CHARGE
 
 
 func schritte() -> Array[Dictionary]:
@@ -49,10 +54,13 @@ func schritte() -> Array[Dictionary]:
 				# und bekommt keine Taps. Settings-Zurück legt ihn frei.
 				# Erst den Reise-Veil ausrollen lassen (pt2_d2: Tipp bei
 				# 0,4 s ging in den Vorhang), dann MUSS Settings weg sein.
+				# tipp_falls_da statt tipp_name: falls ein B1-Fix das
+				# Overlay schon selbst schließt, bleibt der Schritt grün
+				# (BackButton existiert NUR im SettingsScreen).
 				{"name": "reise_ausrollen", "aktion": "warte", "sekunden": 3.0},
 				{
 					"name": "settings_overlay_schliessen",
-					"aktion": "tipp_name",
+					"aktion": "tipp_falls_da",
 					"node": "BackButton",
 					"erwarte": {"weg_klasse": "SettingsScreen"},
 					"timeout_s": 30.0,
@@ -133,32 +141,71 @@ func schritte() -> Array[Dictionary]:
 					"timeout_s": 20.0,
 				},
 				{"name": "laden_umsehen", "aktion": "warte", "sekunden": 3.0},
-				# BUG-Umgehung (Befund pt2_d4): im Quer-Leitformat liegt der
-				# große „Backen (9)“-Pill ÜBER den Slot-Knöpfen 0–2 (beide
-				# per unproject über Ofen bzw. Regal, Backen ist später im
-				# Baum) — Taps auf Slot0–2 treffen BACKEN (3×9 ᴳ weg, 3×3
-				# Brot gebacken statt eingeräumt!). Deshalb slot_tippen()
-				# direkt — dieselbe Methode, die der Knopf ruft.
+				# B2-FIX-BELEG (Befund pt2_d4, G8-PT2): die Slots werden
+				# jetzt WIRKLICH getippt — vorher lag die „Backen (9)“-Pill
+				# quer über Slot 0–2 und schluckte die Taps (Umgehung war
+				# slot_tippen() direkt). Die Knopf-Texte zählen als Beleg
+				# mit: ×6 Äpfel, ×8 Möhren, ×5 Brote (Katalog-Reihenfolge).
 				{
-					"name": "slot_0_fuellen",
-					"aktion": "tue",
-					"funktion": _slot_fuellen.bind(0),
+					"name": "slot_0_tippen",
+					"aktion": "tipp_name",
+					"node": "Slot0",
+					"erwarte": {"text": "×6"},
+					"timeout_s": 20.0,
 				},
 				{
-					"name": "slot_1_fuellen",
-					"aktion": "tue",
-					"funktion": _slot_fuellen.bind(1),
+					"name": "slot_1_tippen",
+					"aktion": "tipp_name",
+					"node": "Slot1",
+					"erwarte": {"text": "×8"},
+					"timeout_s": 20.0,
 				},
 				{
-					"name": "slot_2_fuellen",
-					"aktion": "tue",
-					"funktion": _slot_fuellen.bind(2),
+					"name": "slot_2_tippen",
+					"aktion": "tipp_name",
+					"node": "Slot2",
+					"erwarte": {"text": "×5"},
+					"timeout_s": 20.0,
 				},
 				{
 					"name": "regal_bestueckt",
 					"aktion": "tue",
-					"funktion": _regal_voll,
+					"funktion": _regal_stand.bind(REGAL_SOLL),
 					"erwartung": "Startlager (19 Stück) liegt im Regal",
+				},
+				# Slot-Tap-NACH-Backen-Probe (B2): Backen wohnt jetzt in
+				# der Bottom-Leiste — eine Charge backen (bucht GENAU die
+				# Selbstkosten ab, legt 3 Brote ins Lager), danach muss der
+				# Tap auf Slot 3 auf dem SLOT landen (Regal 19 → 22).
+				{
+					"name": "backen_coins_merken",
+					"aktion": "tue",
+					"funktion": merke_coins.bind("backofen"),
+				},
+				{
+					"name": "backen_tippen",
+					"aktion": "tipp_name",
+					"node": "Backen",
+					"timeout_s": 20.0,
+				},
+				{
+					"name": "backofen_bezahlt",
+					"aktion": "tue",
+					"funktion": _backofen_bezahlt,
+					"erwartung": "GENAU eine Charge Selbstkosten abgebucht",
+				},
+				{
+					"name": "slot_3_nach_backen",
+					"aktion": "tipp_name",
+					"node": "Slot3",
+					"erwarte": {"text": "×3"},
+					"timeout_s": 20.0,
+				},
+				{
+					"name": "regal_nach_backen",
+					"aktion": "tue",
+					"funktion": _regal_stand.bind(REGAL_MIT_BROT),
+					"erwartung": "Ofen-Charge (3 Brote) liegt in Slot 3",
 				},
 				{
 					"name": "preise_ansehen",
@@ -188,8 +235,10 @@ func schritte() -> Array[Dictionary]:
 					"node": "LadenOeffnen",
 					"timeout_s": 20.0,
 				},
-				# Kundenstrom in Echtzeit ansehen (Alwin ist immer Kunde 0) —
-				# zwei Zwischen-Screenshots fürs Laden-Gefühl.
+				# Kundenstrom in Echtzeit ansehen (Alwin ist immer Kunde 0).
+				# Screenshot bei +3 s: Alwins Sprechblase (G8-PT2-Polish) lebt
+				# ~4,8 s — hier ist sie gut gefüllt getippt UND Alwin im Bild.
+				{"name": "alwin_blase_schauen", "aktion": "warte", "sekunden": 3.0},
 				{"name": "kunden_schauen_1", "aktion": "warte", "sekunden": 5.0},
 				{"name": "kunden_schauen_2", "aktion": "warte", "sekunden": 5.0},
 				{
@@ -304,25 +353,20 @@ func _laden_szene() -> Node:
 	return szene if szene is GoobyeLadenScene else null
 
 
-## Slot direkt einräumen (Umgehung des Backen-über-Slots-Overlaps, s. o.).
-func _slot_fuellen(slot_idx: int) -> bool:
-	var szene := _laden_szene()
-	if szene == null:
-		print("[PT2] _slot_fuellen(%d): keine GoobyeLadenScene" % slot_idx)
-		return false
-	szene.call("slot_tippen", slot_idx)
-	var bestand := GoobyeRegal.gesamt_bestand(szene.get("_regal"))
-	print("[PT2] Slot %d eingeräumt — Regal-Bestand jetzt %d" % [slot_idx, bestand])
-	return true
-
-
-func _regal_voll() -> bool:
+## Regal-Bestand gegen ein Soll prüfen (Slot-Taps laufen seit dem B2-Fix
+## als ECHTE Taps über die Knöpfe — keine slot_tippen()-Umgehung mehr).
+func _regal_stand(soll: int) -> bool:
 	var szene := _laden_szene()
 	if szene == null:
 		return false
 	var bestand := GoobyeRegal.gesamt_bestand(szene.get("_regal"))
-	print("[PT2] Regal-Bestand: %d (soll %d)" % [bestand, REGAL_SOLL])
-	return bestand == REGAL_SOLL
+	print("[PT2] Regal-Bestand: %d (soll %d)" % [bestand, soll])
+	return bestand == soll
+
+
+## Backen-Tap aus der Leiste: GENAU eine Charge Selbstkosten abgebucht.
+func _backofen_bezahlt() -> bool:
+	return pruefe_coins_delta("backofen", -GoobyeBackofen.kosten())
 
 
 func _alwin_bedient() -> bool:

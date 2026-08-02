@@ -41,13 +41,15 @@ const KUNDEN_MIN := 2
 const KUNDEN_MAX := 3
 
 ## Diorama-Ankerpunkte (Meter): Tür rechts, Regal links, Kasse rechts.
-const TUER_POS := Vector3(5.4, 0.0, 1.4)
+## TUER_POS liegt AUSSERHALB der Wand (GoobyeLadenDeko.WAND_X): Kunden
+## laufen sichtbar DURCH den Tür-Ausschnitt ein (z ≈ 0,2 mittig; B12).
+const TUER_POS := Vector3(5.4, 0.0, 0.2)
 const REGAL_STOP := Vector3(-1.4, 0.0, 0.2)
 const KASSE_STOP := Vector3(1.9, 0.0, 0.1)
 const REGAL_POS := Vector3(-1.6, 0.0, -1.2)
 const KASSE_POS := Vector3(1.9, 0.0, -1.2)
-## Ofen nah genug an der Mitte, dass der Backen-Knopf auch im Hochformat
-## (schmaler Kamera-Ausschnitt) tippbar im Bild liegt.
+## Ofen an der Rückwand — reine Kulisse: sein Backen-Knopf wohnt seit B2
+## (G8-PT2) in der Bottom-Leiste, nicht mehr als Overlay überm Ofen.
 const BACKOFEN_POS := Vector3(-2.8, 0.0, -3.4)
 
 ## Regal-Brett: Slot-Anker gleichmäßig über die Brettbreite.
@@ -60,9 +62,14 @@ const STOEBER_SEC := 0.7
 const PIEP_SEC := 0.32
 
 ## Bottom-Leiste (G3/P05-Muster): Breiten-Deckel + Abstand Safe-Unterkante.
-const LEISTE_BASIS_BREITE := 560.0
+## 820 statt 560: seit B2 trägt sie VIER Knöpfe — im Leitformat EINE
+## Zeile, im Hochformat bricht der HFlow nach OBEN um (weg von den Slots).
+const LEISTE_BASIS_BREITE := 820.0
 const LEISTE_RAND_UNTEN := 16.0
 const KARTE_BASIS := 380.0
+
+## Alwins Sprechblasen-Standzeit (skaliert mit `tempo`, Abgang räumt auf).
+const ALWIN_BLASE_SEC := 5.0
 
 ## Kunden-Tinten je Archetyp (Form+Farbe-Sprache, nie nur Text).
 const KUNDEN_TINTE := {
@@ -97,7 +104,7 @@ var _m: Dictionary = {}
 var _cam: Camera3D
 var _slot_anker: Array[Node3D] = []
 var _slot_stapel: Array[Node3D] = []
-var _backofen_anker: Node3D
+var _alwin_blase: AcBubble = null
 
 var _ui: Control
 var _toast: Node
@@ -126,6 +133,7 @@ func _ready() -> void:
 	_regal = GoobyeRegal.neues_regal()
 	_baue_raum()
 	_baue_requisiten()
+	GoobyeLadenDeko.ausstatten(self)
 	_baue_regal()
 	_baue_ui()
 	_relayout_ui()
@@ -255,7 +263,11 @@ func _naechster_kunde() -> void:
 	_kunde.set_emotion("happy")
 	_tinte_rig(_kunde, KUNDEN_TINTE.get(str(bon.get("archetyp", "")), Color.WHITE))
 	_kunde.set_locomotion(1.0)
-	_zeige_toast(_auftritt_text(bon))
+	# §6.3/G8-PT2: Alwin spricht SICHTBAR (Blase am Rig), Rest per Toast.
+	if str(bon.get("archetyp", "")) == GoobyeMarkttag.ARCHETYP_ALWIN:
+		_alwin_blase_zeigen(_auftritt_text(bon))
+	else:
+		_zeige_toast(_auftritt_text(bon))
 	var tween := create_tween()
 	tween.tween_property(_kunde, "position", REGAL_STOP, LAUF_SEC * tempo)
 	tween.tween_callback(_kunde_stoebert)
@@ -307,6 +319,9 @@ func _kunde_fertig() -> void:
 
 
 func _kunde_weg() -> void:
+	if _alwin_blase != null and is_instance_valid(_alwin_blase):
+		_alwin_blase.dismiss()
+	_alwin_blase = null
 	if _kunde != null:
 		_kunde.queue_free()
 		_kunde = null
@@ -323,6 +338,16 @@ func _auftritt_text(bon: Dictionary) -> String:
 	if str(bon.get("archetyp", "")) != GoobyeMarkttag.ARCHETYP_ALWIN:
 		return I18nService.t("dlc_goobye.laden.kunde_hinweis", {"name": _kunden_name(bon)})
 	return I18nService.t(GoobyeAlwin.auftritt_key(_seed()))
+
+
+## Alwins 9-Uhr-Auftritt als ACNH-Sprechblase (AcBubble, Witz-Stil) am
+## Rig-Kopf — sein Abgang räumt sie auf (dismiss in _kunde_weg).
+func _alwin_blase_zeigen(text: String) -> void:
+	if _ui == null or _kunde == null or text.is_empty():
+		return
+	var opts := {"speaker_3d": _kunde, "stil": AcBubble.STIL_WITZ}
+	opts["dauer_s"] = maxf(1.0, ALWIN_BLASE_SEC * tempo)
+	_alwin_blase = AcBubble.show_bubble(_ui, text, opts)
 
 
 ## Streak verbuchen: bekommt Alwin seine Möhre(n), zählt der Tag; steht er
@@ -467,20 +492,17 @@ func _baue_raum() -> void:
 	add_child(_cam)
 
 
-## KayKit-Requisiten wie im REHWEI-Vorbild: Kasse rechts, Kisten links,
-## Welle B: der Backofen (Backstation §7.1) bekommt einen Tipp-Anker.
+## KayKit-Requisiten wie im REHWEI-Vorbild: Kasse rechts, Kisten links.
+## Käse-Kiste an die Theke gerückt — auf z ≈ 0,6 stand sie mitten im
+## neuen Kunden-Laufweg (TUER_POS z 0,2).
 func _baue_requisiten() -> void:
 	_prop("%s/kitchencounter_straight.gltf" % INNEN, KASSE_POS, 90.0, 0.9)
 	_prop("%s/crate_carrots.gltf" % INNEN, Vector3(-3.8, 0.0, -1.8), 12.0, 0.65)
 	_prop("%s/crate.gltf" % INNEN, Vector3(-4.0, 0.0, 0.0), -10.0, 0.65)
-	_prop("%s/crate_cheese.gltf" % INNEN, Vector3(3.6, 0.0, 0.6), -14.0, 0.65)
+	_prop("%s/crate_cheese.gltf" % INNEN, Vector3(3.5, 0.0, -2.2), -14.0, 0.65)
 	_prop("%s/menu.gltf" % INNEN, Vector3(3.0, 0.0, -3.4), 0.0, 1.6)
 	_prop("%s/fridge_A.gltf" % INNEN, Vector3(-5.4, 0.0, -3.2), 0.0, 0.9)
 	_prop("%s/oven.gltf" % INNEN, BACKOFEN_POS, 8.0, 0.9)
-	_backofen_anker = Node3D.new()
-	_backofen_anker.name = "BackofenAnker"
-	_backofen_anker.position = BACKOFEN_POS + Vector3(0.0, 1.15, 0.2)
-	add_child(_backofen_anker)
 
 
 ## Regal-Reihe aus Grund-Meshes: Brett + Füße + je Slot ein Anker mit
@@ -680,7 +702,8 @@ func _baue_ui() -> void:
 	)
 	_backen_knopf.focus_mode = Control.FOCUS_NONE
 	_backen_knopf.pressed.connect(_backen)
-	_ui.add_child(_backen_knopf)
+	# B2: Backen wohnt in der Leiste statt als Unproject-Overlay überm
+	# Ofen — dort schluckte die Pill die Taps auf Slot 0–2 (McGooby-Lektion).
 	_leiste = HFlowContainer.new()
 	_leiste.name = "LadenKnoepfe"
 	_leiste.alignment = FlowContainer.ALIGNMENT_CENTER
@@ -688,6 +711,7 @@ func _baue_ui() -> void:
 	_leiste.add_theme_constant_override("v_separation", 8)
 	_leiste.add_child(_grossmarkt_knopf)
 	_leiste.add_child(_preise_knopf)
+	_leiste.add_child(_backen_knopf)
 	_leiste.add_child(_oeffnen_knopf)
 	_ui.add_child(_leiste)
 	_sheet = PanelSheetScene.instantiate()
@@ -840,7 +864,6 @@ func _relayout_ui() -> void:
 		float(insets["top"]) + 52.0 * f
 	)
 	_layout_slots()
-	_layout_backofen()
 	_layout_leiste(f, canvas, insets)
 
 
@@ -856,17 +879,6 @@ func _layout_slots() -> void:
 		ScreenShell.touch_target(knopf, _m)
 		var punkt := _cam.unproject_position(_slot_anker[i].global_position)
 		knopf.position = punkt - knopf.size / 2.0 - Vector2(0.0, knopf.size.y * 0.8)
-
-
-## Backen-Knopf über den Ofen legen (gleiches Unproject-Muster wie Slots).
-func _layout_backofen() -> void:
-	if _cam == null or not _cam.is_inside_tree() or _backen_knopf == null:
-		return
-	if _backofen_anker == null or not _backofen_anker.is_inside_tree():
-		return
-	ScreenShell.touch_target(_backen_knopf, _m)
-	var punkt := _cam.unproject_position(_backofen_anker.global_position)
-	_backen_knopf.position = punkt - _backen_knopf.size / 2.0
 
 
 ## Bottom-Leiste mittig in der Daumenzone (G3/P05-Geometrie).
