@@ -344,3 +344,39 @@ Keine Java-Änderungen. Keine `limbo_*`-JSONs angefasst. Nichts committet.
   Sphären-Sturm betreten (`storm_godfinger` + Motes), `/eclipsefx emitter` für
   `impact_light`/`wand_soulbind_flash`/`growth_dust_wall`, Ferryman-Crew-Phase — je mit
   F3+T-Reload; Abnahme-Kriterium: keine harten Kanten/Kreuze/Kapseln, kein Drift-Marsch.
+
+## 7. Follow-up: Death-Screen-Ash entkoppelt (`death_ash.json`)
+
+Der in Teil 4 §1.3 dokumentierte und akzeptierte Nebeneffekt des `limbo_motes`-Alpha-Caps
+(0.28 → 0.05) ist in der Live-Abnahme als **Regression der Design-Absicht** real geworden:
+der `EclipseDeathScreen`-„slow ash"-Loop nutzte denselben Emitter und ist mit α 0.05
+praktisch unsichtbar (Live-Screenshot: keine Asche mehr erkennbar). Der Cap galt der
+Limbo-**Welt**-Ambience (llvmpipe-Wand-Klasse auf Distanz); auf dem Death-Screen war
+α 0.28 nie das Problem — winzige Quads (0.055 ± 0.03), screen-nah um den Leichnam,
+bewusste Melancholie-Asche.
+
+**Fix (minimal-invasiv): Nutzungs-Entkopplung statt Re-Tune.**
+
+- NEU `quasar/emitters/death_ash.json` — 1:1-Kopie von `limbo_motes.json` mit dem
+  PRE-CAP-Alpha zurückgesetzt (Stützpunkte 0.3/0.7: 0.05 → **0.28**, per
+  `git show 95a3d9b` verifiziert — das war der Cap-Commit). Die davon UNABHÄNGIGE
+  Teil-3-Wind-Kur bleibt absichtlich drin: `wind_speed` **0.0006** (pre-cap war 0.015
+  ungedämpft) + `veil:drag` **0.96**; Größe 0.055 ± 0.03, Sprite `purple_wisp` (8×8,
+  unter Pixelgröße — Teil-3-§3.4-Begründung), alles andere identisch.
+- `EclipseDeathScreen.ASH_EMITTER`: `eclipse:limbo_motes` → **`eclipse:death_ash`**
+  (+ Javadoc-Historie). Einzige Java-Änderung.
+- `LimboAmbience`s MOTES-Window bleibt bewusst auf dem gekappten `limbo_motes`
+  (Teil-4-Zustand unangetastet, kein `limbo_*`-JSON berührt).
+
+**Referenz-Audit der übrigen `limbo_motes`-Erwähnungen** (rg über `src/main/java`):
+`S2CQuasarPayload.LIMBO_MOTES` wird nur von `LimboAmbience:306` gespawnt (Welt-Ambience,
+korrekt gekappt); `HearthAuraService` und `HeraldFerrymanFxRows` erwähnen den Emitter nur
+in Javadoc-Historien (keine Spawns); `FxDevCommands` führt ihn in der generischen
+`/eclipsefx`-Vorschlagsliste (zählt per Teil-4-§1.1-Regel nicht als Referenz).
+**Kein weiteres System nutzt `limbo_motes` screen-nah** — der Death-Screen war der
+einzige Betroffene.
+
+**Gates:** `python3 -m json.tool death_ash.json` OK;
+`./gradlew compileJava processResources --offline -q` → exit 0 (grün); in
+`build/resources/main/.../death_ash.json` verifiziert: α 0.28/0.28, wind 0.0006,
+drag 0.96. Nicht committet.

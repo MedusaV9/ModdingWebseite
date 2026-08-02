@@ -34,9 +34,13 @@ import net.minecraft.util.Mth;
  * heart shatters big (4×), the translucent ghost-heart row fades in beneath it and the
  * button reads "Als Geist erwachen".</p>
  *
- * <p>Slow ash: one managed {@code eclipse:limbo_motes} loop emitter drifts around the
- * corpse while the screen is open (existing emitter, AMBIENT budget, removed with the
- * screen; skipped under {@code reducedFx}).</p>
+ * <p>Slow ash: one managed {@code eclipse:death_ash} loop emitter drifts around the
+ * corpse while the screen is open (AMBIENT budget, removed with the screen; skipped
+ * under {@code reducedFx}). Historically this reused {@code eclipse:limbo_motes}, but
+ * the F-107 emitter audit capped that emitter's alpha 0.28&rarr;0.05 for the Limbo
+ * WORLD ambience (llvmpipe wall-class), which made the screen ash invisible —
+ * {@code death_ash.json} is the decoupled copy keeping the pre-cap alpha 0.28 (small
+ * quads, screen-near, deliberate melancholy ash) plus the independent wind/drag cure.</p>
  *
  * <p><b>Never blocks a respawn:</b> the button force-enables {@value #HOLD_FAILSAFE_MILLIS}
  * ms after opening no matter what the server said; the respawn click goes through the
@@ -73,7 +77,7 @@ public final class EclipseDeathScreen extends Screen {
     private static final int GHOST_ROW_FADE_TICKS = 16;
 
     private static final ResourceLocation ASH_EMITTER =
-            ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "limbo_motes");
+            ResourceLocation.fromNamespaceAndPath(EclipseMod.MOD_ID, "death_ash");
 
     private final long openedAtMillis = System.currentTimeMillis();
     private int ticksOpen;
