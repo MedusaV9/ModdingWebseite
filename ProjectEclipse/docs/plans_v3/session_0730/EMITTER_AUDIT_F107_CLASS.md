@@ -334,6 +334,7 @@ Keine Java-Änderungen. Keine `limbo_*`-JSONs angefasst. Nichts committet.
   Quad-Radius ≳ 1 auf `purple_wisp`/`wisp_white` zeichnet die Quad-Kante mit. Eine
   Regeneration der beiden 8×8er mit Rand 0 wäre ein Ein-Zeilen-Fix pro Textur, berührt
   aber ~90 Emitter gleichzeitig → eigener Abnahme-Durchlauf, hier bewusst NICHT gemacht.
+  → **AUSGEFÜHRT im Follow-up, siehe §8.**
 - **E4 `sig_crown_verdict_halo`-Restrisiko:** glatter 256-px-Ring ohne Dither kann auf
   llvmpipe bei großem Radius konzentrisch banden (1.5-s-One-Shot, daher toleriert).
   Falls beanstandet: `ring_soft.png` mit deterministischem Dither regenerieren
@@ -380,3 +381,58 @@ einzige Betroffene.
 `./gradlew compileJava processResources --offline -q` → exit 0 (grün); in
 `build/resources/main/.../death_ash.json` verifiziert: α 0.28/0.28, wind 0.0006,
 drag 0.96. Nicht committet.
+
+## 8. E3 ausgeführt: Haus-Wisps Rand-Alpha 0
+
+Systemischer Fix der in §6/E3 dokumentierten Restschuld: die beiden 8×8-Haus-Wisps
+trugen auf dem äußersten Pixelring Alpha bis **26/255** (Kantenmitten; Ecken 0) —
+jedes gestreckte Quad zeichnete dadurch seine eigene Geometrie-Kante als feine
+Box-Kontur, und die 0-Ecken lasen als Plus-Clipping (F-107-Signatur).
+
+**Inventar (rg über `quasar/emitters/*.json`, Feld `sprite`):** genau zwei
+Haus-Wisp-Texturen, zusammen von **89 Emittern** referenziert —
+`purple_wisp.png` (**58** Emitter) und `wisp_white.png` (**31** Emitter). Beide 8×8,
+identische Alpha-Ebene (radiale Ringe 189/139/108/83/62/26/11), RGB als 7-stufiger
+radialer Ramp (Lavendel 231/190/255 → 200/128/255 bzw. Weiß 255 → 220), 1:1 an die
+Alpha-Stufen gekoppelt. Übrige Emitter-Sprites sind KEINE Haus-Wisps und blieben
+unangetastet: die dedizierten Soft-Texturen (`limbo_fog_soft`, `limbo_fogbank_soft`,
+`storm_godfinger_shaft`, `dust_wall_soft`, `flash_soft`, `ring_soft` — Rand bereits
+0–2), die bewusst harten Glitch-Texturen (`static_4x4`, `border_glitch` — voll
+deckender Rand ist dort Absicht) und `gui/heart_full` (§3.9-Empfehlung, separat).
+Nebennutzer der Wisps: Vanilla-Partikel `particles/purple_wisp.json` (Atlas) und die
+Photon-Generatoren in `tools/photon/` referenzieren nur den UV-normalisierten Pfad —
+beides ist auflösungsagnostisch, kein `.mcmeta` vorhanden.
+
+**Fix: NEU `tools/art/gen_house_wisps.py`** (deterministisch, Original-8×8-Pixeldaten
+als Konstanten eingebacken und vor dem Überschreiben byte-genau gegen die Shipped-PNGs
+verifiziert). Erzeugt beide Wisps als **16×16**:
+
+- **Interieur** (inneres 6×6 des Originals): exakte 2×2-Block-Replikation — gleiche
+  Farbtöne, gleiche Ringstufen, Peak-Alpha 189 exakt erhalten, Interieur-Delta 0.
+- **Äußerster 16er-Ring:** EXAKT Alpha 0 → die Quad-Kante zeichnet nie wieder.
+- **Fringe-Ring dazwischen** (Fußabdruck des alten 8×8-Randrings): radialer
+  Piecewise-Linear-Falloff aus dem Original-Profil, global so skaliert, dass die
+  Randzonen-Alpha-Masse erhalten bleibt (Faktor auf ≤ 1 gekappt; effektiv 1.0).
+  Werteverlauf 1→8→17→29→38→42 zur Kantenmitte — die Ecken faden jetzt zirkulär
+  statt als Plus zu clippen, und die Rest-Stufe (≤ 42, vor Tint-Multiplikation) liegt
+  einen 16tel-Texel INNERHALB der Quad-Kante bei halber alter Texel-Pitch.
+
+**Vorher/Nachher:**
+
+| Textur | vorher | Rand-α (min–max) | Peak | α-Masse | nachher | Rand-α | Peak | α-Masse (8×8-Einheiten) | Interieur-Max-Delta |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `purple_wisp.png` | 8×8 | 0–26 | 189 | 3860 | 16×16 | **0–0** | 189 | 3834 (−0.67 %) | **0** |
+| `wisp_white.png` | 8×8 | 0–26 | 189 | 3860 | 16×16 | **0–0** | 189 | 3834 (−0.67 %) | **0** |
+
+**Gates:** (a) Doppellauf byte-identisch (`md5sum -c` über beide PNGs nach zweitem
+Lauf: OK); (b) Randring überall 0, Interieur-Max-Kanal-Delta 0 ≤ 8 (Messung im
+Generator: 2×2-Mittel der 16×16-Subtexel gegen die eingebackenen Originalwerte, α und
+RGB); (c) `./gradlew processResources --offline -q` → exit 0 (grün), PNG-Hashes in
+`build/resources/main/.../particle/` identisch mit `src`. Keine Emitter-JSONs
+geändert, keine anderen Texturen berührt, nicht committet.
+
+**Restnotiz:** eine vollständige Zirkularisierung (Alpha-Träger als Inkreis) war
+NICHT möglich, ohne die interioren Diagonal-Texel (α 26 bei d≈3.54 von 4.0) zu
+verändern — die Vorgabe „Interieur visuell identisch" hat Vorrang. Die verbleibende
+Fringe-Stufe ≤ 42 ist bei typischen Emitter-Tint-Alphas (≤ 0.35) ≤ ~6 % Endkontrast
+und liegt nicht mehr auf der Quad-Kante.
