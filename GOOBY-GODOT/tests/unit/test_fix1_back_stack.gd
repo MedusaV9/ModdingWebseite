@@ -123,6 +123,41 @@ func test_back_request_bevorzugt_panels_vor_history() -> void:
 	await _cleanup(ctx)
 
 
+## G7-Playtest Befund 1 (Blocker): Arcade→Minigame→„Beenden“→Arcade, dann
+## „Zurück“ — vorher lag mg_host noch in der History und back() startete
+## eine FRISCHE Runde (inkl. farmbarer 0-Punkte-Belohnung). Flüchtige Ziele
+## (markiere_fluechtig) bleiben aus der History draußen → Zurück geht heim.
+func test_fluechtige_ziele_bleiben_aus_der_history() -> void:
+	var ctx := _make_router()
+	var router: Node = ctx["router"]
+	router.register_route(&"home/wohnzimmer", ROOM_A)
+	router.register_route(&"arcade", ROOM_B)
+	router.register_route(&"mg_pregame", ROOM_A)
+	router.register_route(&"mg_host", ROOM_B)
+	router.markiere_fluechtig([&"mg_pregame", &"mg_host"])
+	var finished: Array = []
+	router.travel_finished.connect(func(target: StringName) -> void: finished.append(target))
+	# Der echte Spieler-Weg: Wohnzimmer → Arcade → Pregame → Host →
+	# (Pause-„Beenden“) → Arcade.
+	for ziel: StringName in [&"home/wohnzimmer", &"arcade", &"mg_pregame", &"mg_host", &"arcade"]:
+		var vorher := finished.size()
+		router.goto(ziel)
+		await wait_until(func() -> bool: return finished.size() == vorher + 1)
+	assert_eq(
+		router.get_history(),
+		[&"home/wohnzimmer", &"arcade"] as Array[StringName],
+		"Pregame/Host sind flüchtig, Arcade kollabiert zu EINEM Eintrag"
+	)
+	assert_true(router.back(), "Zurück aus der Arcade ist möglich")
+	await wait_until(func() -> bool: return finished.size() == 6)
+	assert_eq(
+		router.get_current_target(),
+		&"home/wohnzimmer",
+		"Zurück führt nach Hause — NICHT in eine frische Minigame-Runde"
+	)
+	await _cleanup(ctx)
+
+
 func _make_router() -> Dictionary:
 	var router: Node = ROUTER_SCRIPT.new()
 	var veil: Node = FAKE_VEIL_SCRIPT.new()

@@ -82,6 +82,13 @@ var _busy := false
 var _requested_paths: Dictionary = {}
 ## Reise-History (älteste zuerst): [{"target": StringName, "params": {}}].
 var _history: Array[Dictionary] = []
+## Flüchtige Ziele (G7-Playtest Befund 1): Durchgangs-Stationen wie
+## mg_pregame/mg_host landen NIE in der History. Vorher lag der Host nach
+## seinem goto("arcade")-Ausgang noch oben im Stapel — der Arcade-Zurück-
+## Knopf (router.back()) startete dadurch eine FRISCHE Minispiel-Runde
+## (inkl. farmbarer 0-Punkte-Belohnung) statt nach Hause zu führen.
+## {StringName: true} — Besitzer melden ihre Ziele per markiere_fluechtig().
+var _fluechtige: Dictionary = {}
 
 
 func _ready() -> void:
@@ -133,6 +140,15 @@ func register_route(target: StringName, scene_path: String) -> void:
 func register_routes(routes: Dictionary) -> void:
 	for target in routes.keys():
 		register_route(target, routes[target])
+
+
+## Ziele als flüchtig markieren (idempotent): sie werden bereist, aber nie
+## in die History geschrieben — back() überspringt sie damit von selbst.
+## Für Durchgangs-Stationen, die ihren Ausgang IMMER explizit per goto()
+## setzen (Minigame-Pregame/-Host); s. Kommentar an _fluechtige.
+func markiere_fluechtig(targets: Array) -> void:
+	for target in targets:
+		_fluechtige[StringName(target)] = true
 
 
 ## Container, in den Szenen gemountet werden (setzt main.gd beim Boot).
@@ -234,6 +250,11 @@ func _resolve_target(target: StringName) -> StringName:
 
 
 func _record_history(target: StringName, params: Dictionary) -> void:
+	# Flüchtige Durchgangs-Stationen (s. _fluechtige) bleiben draußen —
+	# Arcade→Host→Arcade kollabiert so zu EINEM Arcade-Eintrag, und back()
+	# aus der Arcade führt nach Hause statt in eine frische Runde.
+	if _fluechtige.get(target, false):
+		return
 	if not _history.is_empty() and _history.back()["target"] == target:
 		_history.back()["params"] = params
 		return

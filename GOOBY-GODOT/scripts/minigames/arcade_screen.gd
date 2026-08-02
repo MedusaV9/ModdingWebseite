@@ -68,6 +68,11 @@ static func register_routes() -> void:
 	if router == null or not router.has_method("register_routes"):
 		return
 	router.register_routes(ROUTES)
+	# G7-Playtest Befund 1: Pregame/Host sind Durchgangs-Stationen und
+	# dürfen nie in der Router-History liegen — sonst startet der Arcade-
+	# Zurück-Knopf (back()) eine frische Runde statt nach Hause zu führen.
+	if router.has_method("markiere_fluechtig"):
+		router.markiere_fluechtig([ROUTE_PREGAME, ROUTE_HOST])
 
 
 ## EIN Verdrahtungspunkt für den HUD-Arcade-Button (W1c action_pressed):
