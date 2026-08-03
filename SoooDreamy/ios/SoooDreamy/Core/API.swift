@@ -228,6 +228,12 @@ struct API {
                           as: WordleDayResponse.self)
     }
 
+    /// Past duel days (per-member views, newest first, anti-spoiler applied per day).
+    func wordleHistory(limit: Int = 30, lang: String) async throws -> [WordleDayResponse] {
+        try await request("GET", "/api/wordle", query: ["limit": String(limit), "lang": lang],
+                          as: WordleHistoryResponse.self).days
+    }
+
     // MARK: Photos
 
     func photos() async throws -> [Photo] {

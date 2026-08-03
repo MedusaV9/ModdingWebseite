@@ -120,6 +120,10 @@ struct WordleDayResponse: Codable, Hashable {
     let partnerFinished: Bool
 }
 
+struct WordleHistoryResponse: Codable {
+    let days: [WordleDayResponse]
+}
+
 // MARK: - Love coupons
 
 struct Coupon: Codable, Identifiable, Hashable {
