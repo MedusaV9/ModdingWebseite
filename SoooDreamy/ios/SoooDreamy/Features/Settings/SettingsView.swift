@@ -1,4 +1,5 @@
 import SwiftUI
+import WidgetKit
 
 struct SettingsView: View {
     @Environment(AppState.self) private var appState
@@ -13,10 +14,18 @@ struct SettingsView: View {
     @State private var hapticsOn = Haptics.enabled
     @State private var reminderOn = ReminderManager.isEnabled
     @State private var appLockOn = AppLock.isEnabled
+    @State private var pulseOn = CouplePulseController.isEnabled
     @State private var reminderTime: Date = {
         let t = ReminderManager.time
         return Calendar.current.date(bySettingHour: t.hour, minute: t.minute, second: 0, of: Date()) ?? Date()
     }()
+
+    @State private var alertsOn = NotificationPrefs.enabled
+    @State private var alertSound = NotificationPrefs.globalSound
+    @State private var alertKinds: [CoupleAlertKind: Bool] = Dictionary(
+        uniqueKeysWithValues: CoupleAlertKind.allCases.map { ($0, NotificationPrefs.isEnabled($0)) })
+
+    @State private var widgetPrefs = SharedStore.readPrefs()
 
     @State private var coupleName = ""
     @State private var anniversary = Date()
@@ -32,6 +41,7 @@ struct SettingsView: View {
                         coupleCard
                         serverCard
                         appCard
+                        notificationsCard
                         dangerCard
                         aboutCard
                     }
@@ -217,6 +227,187 @@ struct SettingsView: View {
                 }
             }
 
+            // Couple Pulse Live Activity (lock screen + Dynamic Island)
+            VStack(alignment: .leading, spacing: 4) {
+                Toggle(isOn: $pulseOn) {
+                    Label(L10n.t("settings.pulse"), systemImage: "heart.text.square.fill")
+                        .font(.system(.subheadline, design: .rounded).weight(.semibold))
+                        .foregroundStyle(Theme.textPrimary)
+                }
+                .tint(Theme.pink)
+                .onChange(of: pulseOn) { _, on in
+                    CouplePulseController.isEnabled = on
+                    Haptics.shared.tap()
+                    if on {
+                        if CouplePulseController.start(from: appState) {
+                            appState.showToast(L10n.t("settings.pulseStarted"), style: .success)
+                        } else {
+                            pulseOn = false
+                            CouplePulseController.isEnabled = false
+                            appState.showToast(L10n.t("memories.events.liveFailed"), style: .error)
+                        }
+                    } else {
+                        CouplePulseController.stop()
+                    }
+                }
+                Text(L10n.t("settings.pulseHint"))
+                    .font(.system(.caption2, design: .rounded))
+                    .foregroundStyle(Theme.textTertiary)
+            }
+
+            VStack(alignment: .leading, spacing: LayoutMetrics.s(8)) {
+                Label(L10n.t("settings.widgets"), systemImage: "square.grid.2x2.fill")
+                    .font(.system(.subheadline, design: .rounded).weight(.semibold))
+                    .foregroundStyle(Theme.textPrimary)
+                Text(L10n.t("settings.widgetsHint"))
+                    .font(.system(.caption2, design: .rounded))
+                    .foregroundStyle(Theme.textTertiary)
+
+                Text(L10n.t("settings.widgetBackground"))
+                    .font(.system(.footnote, design: .rounded).weight(.semibold))
+                    .foregroundStyle(Theme.textSecondary)
+                    .padding(.top, LayoutMetrics.s(4))
+                widgetStyleRow
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Toggle(isOn: $widgetPrefs.usePhotoChrome) {
+                        Label(L10n.t("settings.widgetPhotoChrome"), systemImage: "photo.on.rectangle.angled")
+                            .font(.system(.subheadline, design: .rounded).weight(.semibold))
+                            .foregroundStyle(Theme.textPrimary)
+                    }
+                    .tint(Theme.pink)
+                    Text(L10n.t("settings.widgetPhotoChromeHint"))
+                        .font(.system(.caption2, design: .rounded))
+                        .foregroundStyle(Theme.textTertiary)
+                }
+            }
+            .onChange(of: widgetPrefs) { _, prefs in
+                SharedStore.writePrefs(prefs)
+                WidgetCenter.shared.reloadAllTimelines()
+            }
+        }
+        .glassCard(padding: 16)
+    }
+
+    // MARK: Widget background picker
+
+    /// Preview swatches for the widget background styles.
+    /// Keep the hexes in sync with `WTheme.backgroundColors(named:)`
+    /// in Widgets/WidgetTheme.swift (the widget target isn't linked here).
+    private static let widgetStyles: [(name: String, hexes: [String])] = [
+        ("night", ["17062A", "2B0F4A"]),
+        ("sunset", ["2B0B3A", "8A2E4F", "E8785A"]),
+        ("ocean", ["04203F", "0E4D64", "16697A"]),
+        ("blush", ["3B0F2A", "7C2949", "C95D7C"]),
+        ("mono", ["0D0D12", "232331"]),
+        ("photo", []),
+    ]
+
+    private var widgetStyleRow: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: LayoutMetrics.s(12)) {
+                ForEach(Self.widgetStyles, id: \.name) { style in
+                    widgetStyleSwatch(style.name, hexes: style.hexes)
+                }
+            }
+            .padding(.vertical, 2)
+        }
+    }
+
+    private func widgetStyleSwatch(_ name: String, hexes: [String]) -> some View {
+        let selected = widgetPrefs.background == name
+        return Button {
+            widgetPrefs.background = name
+            Haptics.shared.tap()
+        } label: {
+            VStack(spacing: 5) {
+                ZStack {
+                    if hexes.isEmpty {
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(LinearGradient(colors: [Theme.indigo.opacity(0.55), Theme.purple.opacity(0.55)],
+                                                 startPoint: .topLeading, endPoint: .bottomTrailing))
+                        Image(systemName: "photo.fill")
+                            .font(.scaled(14))
+                            .foregroundStyle(.white.opacity(0.85))
+                    } else {
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(LinearGradient(colors: hexes.map { Color(hex: $0) },
+                                                 startPoint: .topLeading, endPoint: .bottomTrailing))
+                    }
+                }
+                .frame(width: LayoutMetrics.s(46), height: LayoutMetrics.s(46))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .strokeBorder(selected ? Theme.pink : Color.white.opacity(0.15),
+                                      lineWidth: selected ? 2.5 : 1)
+                )
+                .shadow(color: selected ? Theme.pink.opacity(0.5) : .clear, radius: 6)
+                Text(L10n.t("settings.widgetBg.\(name)"))
+                    .font(.system(.caption2, design: .rounded).weight(selected ? .bold : .regular))
+                    .foregroundStyle(selected ? Theme.textPrimary : Theme.textSecondary)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var notificationsCard: some View {
+        VStack(alignment: .leading, spacing: LayoutMetrics.s(14)) {
+            SectionHeader(title: L10n.t("notif.section"))
+
+            // Master switch for couple alerts (local, WebSocket-driven)
+            VStack(alignment: .leading, spacing: 4) {
+                Toggle(isOn: $alertsOn) {
+                    Label(L10n.t("notif.master"), systemImage: "bell.and.waves.left.and.right")
+                        .font(.system(.subheadline, design: .rounded).weight(.semibold))
+                        .foregroundStyle(Theme.textPrimary)
+                }
+                .tint(Theme.pink)
+                .onChange(of: alertsOn) { _, on in
+                    NotificationPrefs.enabled = on
+                    if on {
+                        Task {
+                            let ok = await CoupleNotify.requestAuthorizationIfNeeded()
+                            if !ok {
+                                alertsOn = false
+                                NotificationPrefs.enabled = false
+                            }
+                        }
+                    }
+                }
+                Text(L10n.t("notif.masterHint"))
+                    .font(.system(.caption2, design: .rounded))
+                    .foregroundStyle(Theme.textTertiary)
+            }
+
+            if alertsOn {
+                // Sound picker (horizontal chips)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(L10n.t("notif.sound"))
+                        .font(.system(.footnote, design: .rounded).weight(.semibold))
+                        .foregroundStyle(Theme.textSecondary)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: LayoutMetrics.s(8)) {
+                            ForEach(NotificationSound.allCases) { sound in
+                                soundChip(sound)
+                            }
+                        }
+                    }
+                }
+
+                // Per-event toggles
+                ForEach(CoupleAlertKind.allCases) { kind in
+                    Toggle(isOn: alertBinding(kind)) {
+                        Label(L10n.t(kind.titleKey), systemImage: kind.icon)
+                            .font(.system(.subheadline, design: .rounded).weight(.semibold))
+                            .foregroundStyle(Theme.textPrimary)
+                    }
+                    .tint(Theme.pink)
+                }
+            }
+
+            Divider().overlay(Color.white.opacity(0.1))
+
+            // Daily reminder
             VStack(alignment: .leading, spacing: 4) {
                 Toggle(isOn: $reminderOn) {
                     Label(L10n.t("settings.reminder"), systemImage: "bell.badge.fill")
@@ -249,17 +440,42 @@ struct SettingsView: View {
                         }
                 }
             }
-
-            VStack(alignment: .leading, spacing: 4) {
-                Label(L10n.t("settings.widgets"), systemImage: "square.grid.2x2.fill")
-                    .font(.system(.subheadline, design: .rounded).weight(.semibold))
-                    .foregroundStyle(Theme.textPrimary)
-                Text(L10n.t("settings.widgetsHint"))
-                    .font(.system(.caption2, design: .rounded))
-                    .foregroundStyle(Theme.textTertiary)
-            }
         }
         .glassCard(padding: 16)
+    }
+
+    private func soundChip(_ sound: NotificationSound) -> some View {
+        let selected = alertSound == sound
+        return Button {
+            alertSound = sound
+            NotificationPrefs.globalSound = sound
+            Haptics.shared.tap()
+            sound.preview()
+            Task { await ReminderManager.rescheduleIfNeeded() }
+        } label: {
+            HStack(spacing: LayoutMetrics.s(5)) {
+                Text(sound.emoji)
+                    .font(.scaled(13))
+                Text(sound.displayName)
+                    .font(.system(.caption, design: .rounded).weight(.semibold))
+            }
+            .padding(.horizontal, LayoutMetrics.s(12))
+            .padding(.vertical, LayoutMetrics.s(8))
+            .background(Capsule().fill(selected ? Theme.pink.opacity(0.32) : Color.white.opacity(0.06)))
+            .overlay(Capsule().strokeBorder(selected ? Theme.pink : Color.white.opacity(0.12), lineWidth: 1))
+            .foregroundStyle(selected ? Theme.textPrimary : Theme.textSecondary)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func alertBinding(_ kind: CoupleAlertKind) -> Binding<Bool> {
+        Binding(
+            get: { alertKinds[kind] ?? true },
+            set: { on in
+                alertKinds[kind] = on
+                NotificationPrefs.setEnabled(on, for: kind)
+            }
+        )
     }
 
     private var dangerCard: some View {

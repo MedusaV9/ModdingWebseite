@@ -54,17 +54,18 @@ struct MoodWidgetView: View {
         Group {
             switch family {
             case .accessoryRectangular: rectangular
+            case .systemMedium: medium
             default: small
             }
         }
-        .containerBackground(for: .widget) { WTheme.bgGradient }
+        .widgetChrome()
         .widgetURL(URL(string: "sooodreamy://tab/home"))
     }
 
     private var small: some View {
         VStack(alignment: .leading, spacing: 3) {
             HStack(spacing: 6) {
-                avatarBubble
+                avatarBubble(size: 26)
                 Text(partnerName)
                     .font(.system(.caption, design: .rounded).weight(.semibold))
                     .foregroundStyle(WTheme.textSecondary)
@@ -94,12 +95,61 @@ struct MoodWidgetView: View {
         }
     }
 
-    private var avatarBubble: some View {
+    private var medium: some View {
+        HStack(spacing: 14) {
+            avatarBubble(size: 46)
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
+                    Text(partnerName)
+                        .font(.system(.headline, design: .rounded).weight(.bold))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                    if entry.snapshot?.partnerOnline == true {
+                        Text(WText.t("online", "online"))
+                            .font(.system(.caption2, design: .rounded).weight(.bold))
+                            .foregroundStyle(WTheme.mint)
+                    }
+                }
+                if mood != nil {
+                    if let moodNote {
+                        Text(moodNote)
+                            .font(.system(.subheadline, design: .rounded).weight(.semibold))
+                            .foregroundStyle(.white.opacity(0.9))
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.8)
+                    }
+                    if let updatedAt = entry.snapshot?.partnerMoodUpdatedAt {
+                        Text(updatedAt, style: .relative)
+                            .font(.system(.caption2, design: .rounded))
+                            .foregroundStyle(WTheme.textSecondary)
+                    }
+                } else {
+                    Text(WText.t("Noch keine Stimmung geteilt", "No mood shared yet"))
+                        .font(.system(.caption, design: .rounded).weight(.semibold))
+                        .foregroundStyle(WTheme.textSecondary)
+                }
+            }
+            Spacer(minLength: 8)
+            Text(mood ?? "💭")
+                .font(.system(size: 54))
+                .minimumScaleFactor(0.6)
+        }
+    }
+
+    private func avatarBubble(size: CGFloat) -> some View {
         Text(entry.snapshot?.partnerAvatar ?? "💜")
-            .font(.system(size: 13))
-            .frame(width: 26, height: 26)
+            .font(.system(size: size * 0.5))
+            .frame(width: size, height: size)
             .background(Circle().fill(partnerColor.opacity(0.3)))
             .overlay(Circle().strokeBorder(partnerColor.opacity(0.6), lineWidth: 1))
+            .overlay(alignment: .bottomTrailing) {
+                if size >= 40, entry.snapshot?.partnerOnline == true {
+                    Circle()
+                        .fill(WTheme.mint)
+                        .frame(width: size * 0.22, height: size * 0.22)
+                        .overlay(Circle().strokeBorder(.black.opacity(0.4), lineWidth: 1))
+                }
+            }
     }
 
     private var emptyState: some View {
@@ -155,6 +205,6 @@ struct MoodWidget: Widget {
         .configurationDisplayName(WText.t("Stimmung", "Mood"))
         .description(WText.t("Zeigt die aktuelle Stimmung deines Schatzes.",
                              "Shows your partner's current mood."))
-        .supportedFamilies([.systemSmall, .accessoryRectangular])
+        .supportedFamilies([.systemSmall, .systemMedium, .accessoryRectangular])
     }
 }

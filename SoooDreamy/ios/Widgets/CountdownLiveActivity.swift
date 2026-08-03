@@ -8,7 +8,7 @@ import ActivityKit
 struct CountdownLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: CountdownActivityAttributes.self) { context in
-            CountdownLockScreenView(attributes: context.attributes)
+            CountdownLockScreenView(attributes: context.attributes, state: context.state)
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
@@ -29,6 +29,9 @@ struct CountdownLiveActivity: Widget {
                 DynamicIslandExpandedRegion(.trailing) {
                     CountdownDaysView(targetDate: context.attributes.targetDate)
                 }
+                DynamicIslandExpandedRegion(.bottom) {
+                    CountdownPulseStrip(state: context.state)
+                }
             } compactLeading: {
                 Text(context.attributes.emoji)
             } compactTrailing: {
@@ -48,6 +51,7 @@ struct CountdownLiveActivity: Widget {
 
 struct CountdownLockScreenView: View {
     let attributes: CountdownActivityAttributes
+    let state: CountdownActivityAttributes.ContentState
 
     var body: some View {
         HStack(spacing: 14) {
@@ -66,6 +70,7 @@ struct CountdownLockScreenView: View {
                         .font(.system(.caption, design: .rounded))
                         .foregroundStyle(WTheme.textSecondary)
                 }
+                CountdownPulseStrip(state: state)
             }
             Spacer(minLength: 0)
             CountdownDaysView(targetDate: attributes.targetDate)
@@ -73,6 +78,49 @@ struct CountdownLockScreenView: View {
         .padding(16)
         .activityBackgroundTint(WTheme.bgTop.opacity(0.9))
         .activitySystemActionForegroundColor(WTheme.pink)
+    }
+}
+
+/// Compact live couple context under the countdown: online dot, mood,
+/// last touch and streak — only rendered when the app pushed any data.
+struct CountdownPulseStrip: View {
+    let state: CountdownActivityAttributes.ContentState
+
+    private var hasContent: Bool {
+        state.partnerOnline != nil || state.partnerMood != nil
+            || state.lastTouchEmoji != nil || (state.streak ?? 0) > 0
+    }
+
+    var body: some View {
+        if hasContent {
+            HStack(spacing: 8) {
+                if let online = state.partnerOnline {
+                    Circle()
+                        .fill(online ? WTheme.mint : Color.white.opacity(0.35))
+                        .frame(width: 7, height: 7)
+                }
+                if let mood = state.partnerMood, !mood.isEmpty {
+                    Text(mood)
+                        .font(.system(size: 12))
+                }
+                if let touch = state.lastTouchEmoji, !touch.isEmpty {
+                    Text(touch)
+                        .font(.system(size: 12))
+                }
+                if let streak = state.streak, streak > 0 {
+                    Text("🔥 \(streak)")
+                        .font(.system(.caption2, design: .rounded).weight(.bold))
+                        .foregroundStyle(WTheme.gold)
+                }
+                if let note = state.note, !note.isEmpty {
+                    Text("“\(note)”")
+                        .font(.system(.caption2, design: .rounded).italic())
+                        .foregroundStyle(WTheme.textSecondary)
+                        .lineLimit(1)
+                }
+            }
+            .padding(.top, 2)
+        }
     }
 }
 

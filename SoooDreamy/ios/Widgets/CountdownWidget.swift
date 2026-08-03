@@ -65,10 +65,11 @@ struct CountdownWidgetView: View {
             switch family {
             case .accessoryRectangular: rectangular
             case .systemMedium: medium
+            case .systemLarge: large
             default: small
             }
         }
-        .containerBackground(for: .widget) { WTheme.bgGradient }
+        .widgetChrome()
         .widgetURL(URL(string: "sooodreamy://tab/memories"))
     }
 
@@ -120,10 +121,53 @@ struct CountdownWidgetView: View {
         }
     }
 
-    private func emojiBadge(_ emoji: String) -> some View {
+    private var large: some View {
+        VStack(spacing: 6) {
+            if let event {
+                Spacer(minLength: 0)
+                emojiBadge(event.emoji, size: 96)
+                Text(event.title)
+                    .font(.system(.title2, design: .rounded).weight(.bold))
+                    .foregroundStyle(.white)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.8)
+                Text(event.date, format: .dateTime.weekday(.wide).day().month(.wide).year())
+                    .font(.system(.caption, design: .rounded))
+                    .foregroundStyle(WTheme.textSecondary)
+                Spacer(minLength: 0)
+                if event.days == 0 {
+                    Text("🎉")
+                        .font(.system(size: 44))
+                    Text(WText.t("HEUTE!", "TODAY!"))
+                        .font(.system(.title, design: .rounded).weight(.heavy))
+                        .foregroundStyle(WTheme.gold)
+                } else {
+                    Text("\(event.days)")
+                        .font(.system(size: 72, weight: .heavy, design: .rounded))
+                        .foregroundStyle(WTheme.countGradient)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                    Text(event.days == 1
+                         ? WText.t("Tag bis zu eurem Moment", "day until your moment")
+                         : WText.t("Tage bis zu eurem Moment", "days until your moment"))
+                        .font(.system(.caption, design: .rounded).weight(.semibold))
+                        .foregroundStyle(WTheme.pink)
+                }
+                Spacer(minLength: 0)
+            } else {
+                Spacer(minLength: 0)
+                emptyState
+                Spacer(minLength: 0)
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func emojiBadge(_ emoji: String, size: CGFloat = 62) -> some View {
         Text(emoji)
-            .font(.system(size: 36))
-            .frame(width: 62, height: 62)
+            .font(.system(size: size * 0.58))
+            .frame(width: size, height: size)
             .background(Circle().fill(Color.white.opacity(0.08)))
             .overlay(Circle().strokeBorder(WTheme.heroGradient, lineWidth: 1.5))
     }
@@ -200,6 +244,6 @@ struct CountdownWidget: Widget {
         .configurationDisplayName(WText.t("Countdown", "Countdown"))
         .description(WText.t("Zählt die Tage bis zu eurem nächsten Moment.",
                              "Counts down to your next moment together."))
-        .supportedFamilies([.systemSmall, .systemMedium, .accessoryRectangular])
+        .supportedFamilies([.systemSmall, .systemMedium, .systemLarge, .accessoryRectangular])
     }
 }

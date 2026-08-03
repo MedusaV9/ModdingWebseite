@@ -8,6 +8,13 @@ struct CountdownActivityAttributes: ActivityAttributes {
         /// Bumped when the user refreshes; the countdown itself is rendered
         /// with `Text(timerInterval:)`, so no periodic updates are needed.
         var refreshedAt: Date
+        /// Live couple context (updated from the WebSocket while the app is
+        /// open, no APNs). All optional — old activities render without them.
+        var partnerOnline: Bool?
+        var partnerMood: String?
+        var lastTouchEmoji: String?
+        var streak: Int?
+        var note: String?
     }
 
     var title: String

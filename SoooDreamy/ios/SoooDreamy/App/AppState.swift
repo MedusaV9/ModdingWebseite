@@ -29,6 +29,11 @@ final class AppState {
     /// Showcase photo for the photo widget (newest favorite, else newest).
     var widgetPhoto: Photo?
 
+    /// Stroke count last mirrored to the widgets (see refreshWidgetCanvas).
+    @ObservationIgnored private var widgetCanvasStrokeCount = 0
+    /// Photo id whose bytes are currently in the shared widget cache.
+    @ObservationIgnored private var cachedWidgetPhotoId: String?
+
     // UI state
     var activeTab: AppTab = .home
     var toast: Toast?
@@ -38,12 +43,22 @@ final class AppState {
     var celebrate = false
     var uiRefresh = 0
 
+    /// Last touch received from the partner — feeds widgets & live activities.
+    /// Seeded from the shared snapshot so it survives app relaunches.
+    var lastTouchType: String?
+    var lastTouchAt: Date?
+
     @ObservationIgnored private var toastTask: Task<Void, Never>?
     @ObservationIgnored private var touchTask: Task<Void, Never>?
     @ObservationIgnored private var typingTask: Task<Void, Never>?
     @ObservationIgnored private var eventObserver: NSObjectProtocol?
+    /// Rate limit for "partner is online" alerts (max once per 10 min).
+    @ObservationIgnored private var lastOnlineAlertAt: Date?
 
     init() {
+        let snapshot = SharedStore.readSnapshot()
+        lastTouchType = snapshot?.lastTouchType
+        lastTouchAt = snapshot?.lastTouchAt
         eventObserver = NotificationCenter.default.addObserver(
             forName: .serverEvent, object: nil, queue: .main
         ) { [weak self] note in
@@ -106,6 +121,7 @@ final class AppState {
         guard phase == .main else { return }
         await refreshAll()
         connectSocket()
+        CouplePulseController.startIfEnabled(from: self)
     }
 
     /// Switch to another saved server (its own pairing/session context).
@@ -124,6 +140,7 @@ final class AppState {
         if phase == .main {
             await refreshAll()
             connectSocket()
+            CouplePulseController.startIfEnabled(from: self)
         }
     }
 
@@ -135,7 +152,10 @@ final class AppState {
         couple = auth.couple
         connectSocket()
         celebrateNow()
-        Task { await refreshAll() }
+        Task {
+            await refreshAll()
+            CouplePulseController.startIfEnabled(from: self)
+        }
     }
 
     func connectSocket() {
@@ -155,7 +175,8 @@ final class AppState {
         async let d: Void = refreshDaily()
         async let s: Void = refreshStats()
         async let p: Void = refreshWidgetPhoto()
-        _ = await (e, d, s, p)
+        async let c: Void = refreshWidgetCanvas()
+        _ = await (e, d, s, p, c)
         updateWidgetSnapshot()
     }
 
@@ -163,7 +184,44 @@ final class AppState {
         guard let api else { return }
         if let photos = try? await api.photos() {
             widgetPhoto = photos.first { !($0.favorites ?? []).isEmpty } ?? photos.first
+            await cacheWidgetPhotoBytes()
         }
+    }
+
+    /// Downloads the showcase photo's thumb bytes into the shared app-group
+    /// cache so the widgets stay pretty when the server is unreachable.
+    private func cacheWidgetPhotoBytes() async {
+        guard let api, let photo = widgetPhoto else { return }
+        guard photo.id != cachedWidgetPhotoId else { return }
+        guard let url = api.mediaURL(photo.thumbUrl ?? photo.url) else { return }
+        guard let (data, response) = try? await URLSession.shared.data(from: url),
+              (response as? HTTPURLResponse).map({ (200..<300).contains($0.statusCode) }) ?? true,
+              !data.isEmpty else { return }
+        SharedStore.writeCachedPhotoJPEG(data)
+        cachedWidgetPhotoId = photo.id
+    }
+
+    /// Mirrors the shared canvas into the app group for the canvas widget:
+    /// last 400 strokes, each downsampled to ≤ 80 points.
+    func refreshWidgetCanvas() async {
+        guard let api else { return }
+        guard let strokes = try? await api.canvasStrokes() else { return }
+        let compact = strokes.suffix(400).map { stroke in
+            WidgetCanvasStroke(id: stroke.id,
+                               color: stroke.color,
+                               width: stroke.width,
+                               tool: stroke.tool,
+                               points: Self.downsample(stroke.points, maxCount: 80))
+        }
+        SharedStore.writeCanvasStrokes(compact)
+        widgetCanvasStrokeCount = compact.count
+    }
+
+    /// Evenly-spaced point subsample that always keeps the first & last point.
+    private static func downsample(_ points: [[Double]], maxCount: Int) -> [[Double]] {
+        guard points.count > maxCount, maxCount >= 2 else { return points }
+        let step = Double(points.count - 1) / Double(maxCount - 1)
+        return (0..<maxCount).map { points[Int((Double($0) * step).rounded())] }
     }
 
     func refreshCouple() async {
@@ -245,6 +303,8 @@ final class AppState {
         dailyEntry = nil
         stats = nil
         unreadChat = 0
+        CouplePulseController.stop()
+        CountdownActivityController.stopAll()
         updateWidgetSnapshot()
     }
 
@@ -265,26 +325,34 @@ final class AppState {
         case .welcome:
             if let payload = event.decode(WelcomePayload.self) {
                 setPartnerOnline(payload.partnerOnline, lastSeen: nil)
+                pushLiveActivityUpdates()
             }
         case .presence:
             if let p = event.decode(PresencePayload.self), p.memberId != memberId {
+                let wasOnline = partner?.online ?? false
                 setPartnerOnline(p.online, lastSeen: p.lastSeenAt)
+                if p.online && !wasOnline { notifyPartnerOnline() }
+                pushLiveActivityUpdates()
             }
         case .touch:
             if let payload = event.decode(TouchResponse.self) {
                 receiveTouch(payload.touch)
+                pushLiveActivityUpdates()
             }
         case .message:
             if let payload = event.decode(MessageResponse.self) {
                 if payload.message.senderId != memberId {
-                    if activeTab != .chat { unreadChat += 1 }
+                    if activeTab != .chat {
+                        unreadChat += 1
+                        notifyMessage(payload.message)
+                    }
                     SoundEngine.shared.play(.pop)
                 }
             }
         case .memberUpdated:
             if let payload = event.decode(MemberResponse.self) {
                 applyMemberUpdate(payload.member)
-                updateWidgetSnapshot()
+                pushLiveActivityUpdates()
             }
         case .coupleUpdated:
             if let payload = event.decode(CoupleOnlyResponse.self) {
@@ -304,24 +372,57 @@ final class AppState {
             showToast(L10n.t("misc.dissolvedTitle"), style: .info)
         case .dailyAnswer:
             if let entry = event.decode(DailyEntry.self), entry.dateKey == SharedDates.todayKey() {
+                let wasBothAnswered = dailyEntry?.bothAnswered ?? false
                 dailyEntry = entry
-                if entry.bothAnswered { SoundEngine.shared.play(.sparkle) }
-                updateWidgetSnapshot()
+                if entry.bothAnswered {
+                    SoundEngine.shared.play(.sparkle)
+                    if !wasBothAnswered {
+                        CoupleNotify.alert(.dailyReveal,
+                                           title: L10n.t("home.bothAnswered"),
+                                           body: L10n.t("notif.daily.body"),
+                                           link: "sooodreamy://daily")
+                    }
+                }
+                pushLiveActivityUpdates()
             }
         case .eventAdded, .eventUpdated, .eventDeleted:
             Task {
                 await refreshEvents()
+                if event.type == .eventDeleted {
+                    // A running countdown whose event vanished should end too.
+                    CountdownActivityController.stopIfEventMissing(events: events)
+                }
                 updateWidgetSnapshot()
             }
         case .photoAdded, .photoUpdated, .photoDeleted:
+            if event.type == .photoAdded,
+               let photo = event.decode(PhotoResponse.self)?.photo,
+               photo.uploaderId != memberId {
+                CoupleNotify.alert(.photo,
+                                   title: L10n.t("notif.photo.title"),
+                                   body: L10n.t("notif.photo.body", ["name": partnerName]),
+                                   link: "sooodreamy://tab/memories")
+            }
             Task {
                 await refreshWidgetPhoto()
+                updateWidgetSnapshot()
+            }
+        case .canvasStroke, .canvasStrokeDeleted, .canvasClear:
+            // CanvasView keeps its own live copy; this mirrors the strokes
+            // into the app group so the canvas widget stays current.
+            Task {
+                await refreshWidgetCanvas()
                 updateWidgetSnapshot()
             }
         case .couponAdded:
             if let coupon = event.decode(CouponResponse.self)?.coupon, coupon.forMember == memberId {
                 showToast(L10n.t("coupon.receivedToast"), style: .love)
                 SoundEngine.shared.play(.sparkle)
+                CoupleNotify.alert(.coupon,
+                                   title: L10n.t("notif.coupon.title"),
+                                   body: L10n.t("notif.coupon.body",
+                                                ["name": partnerName, "title": coupon.title]),
+                                   link: "sooodreamy://tab/memories")
             }
         case .couponRedeemed:
             if let coupon = event.decode(CouponResponse.self)?.coupon, coupon.createdBy == memberId {
@@ -367,11 +468,54 @@ final class AppState {
         incomingTouch = touch
         Haptics.shared.play(touch.type)
         SoundEngine.shared.play(for: touch.type)
+        if touch.senderId != memberId {
+            lastTouchType = touch.type.rawValue
+            lastTouchAt = touch.createdAt
+            CoupleNotify.alert(.touch,
+                               title: "\(touch.type.emoji) \(L10n.t(touch.type.titleKey))",
+                               body: L10n.t("touch.received.\(touch.type.rawValue)", ["name": partnerName]),
+                               sound: NotificationPrefs.soundOverride(for: .touch)
+                                   ?? .mapped(for: touch.type),
+                               link: "sooodreamy://tab/home")
+        }
         touchTask?.cancel()
         touchTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 4_200_000_000)
             if !Task.isCancelled { self?.incomingTouch = nil }
         }
+    }
+
+    // MARK: Couple notifications
+
+    private func notifyMessage(_ message: Message) {
+        let body: String
+        switch message.type {
+        case .text:
+            body = Self.preview(of: message.text ?? "")
+        case .letter:
+            body = L10n.t("notif.message.letter")
+        case .voice:
+            body = L10n.t("notif.message.voice")
+        }
+        guard !body.isEmpty else { return }
+        CoupleNotify.alert(.message,
+                           title: L10n.t("notif.message.title", ["name": partnerName]),
+                           body: body,
+                           link: "sooodreamy://tab/chat")
+    }
+
+    private func notifyPartnerOnline() {
+        if let last = lastOnlineAlertAt, Date().timeIntervalSince(last) < 600 { return }
+        lastOnlineAlertAt = Date()
+        CoupleNotify.alert(.partnerOnline,
+                           title: L10n.t("notif.online.title", ["name": partnerName]),
+                           body: L10n.t("notif.online.body"),
+                           link: "sooodreamy://tab/home")
+    }
+
+    private static func preview(of text: String, limit: Int = 120) -> String {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.count <= limit ? trimmed : String(trimmed.prefix(limit)) + "…"
     }
 
     private func celebrateNow() {
@@ -420,6 +564,17 @@ final class AppState {
         }
     }
 
+    // MARK: Live Activities
+
+    /// Pushes fresh couple context into widgets + all running live activities
+    /// (countdown & couple pulse) — called on relevant socket events. Updates
+    /// happen locally while the app is open; no APNs involved.
+    private func pushLiveActivityUpdates() {
+        updateWidgetSnapshot()
+        CountdownActivityController.updateFromSnapshot()
+        CouplePulseController.updateFrom(self)
+    }
+
     // MARK: Widgets
 
     func updateWidgetSnapshot() {
@@ -431,6 +586,9 @@ final class AppState {
         snapshot.partnerMood = partner?.mood
         snapshot.partnerMoodNote = partner?.moodNote
         snapshot.partnerMoodUpdatedAt = partner?.moodUpdatedAt
+        snapshot.partnerOnline = partner?.online
+        snapshot.lastTouchType = lastTouchType
+        snapshot.lastTouchAt = lastTouchAt
         snapshot.myName = me?.name
         snapshot.anniversary = couple?.anniversary
         snapshot.daysTogether = daysTogether
@@ -444,6 +602,7 @@ final class AppState {
         snapshot.dailyAnsweredByMe = dailyEntry?.myAnswer != nil
         snapshot.dailyBothAnswered = dailyEntry?.bothAnswered ?? false
         snapshot.streak = dailyEntry?.streak ?? 0
+        snapshot.canvasStrokeCount = widgetCanvasStrokeCount
         if let photo = widgetPhoto {
             snapshot.photoURLString = api?.mediaURL(photo.thumbUrl ?? photo.url)?.absoluteString
             snapshot.photoCaption = photo.caption

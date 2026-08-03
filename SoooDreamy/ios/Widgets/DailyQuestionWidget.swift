@@ -70,11 +70,76 @@ struct DailyQuestionWidgetView: View {
         Group {
             switch family {
             case .accessoryRectangular: rectangular
+            case .systemSmall: small
+            case .systemLarge: large
             default: medium
             }
         }
-        .containerBackground(for: .widget) { WTheme.bgGradient }
+        .widgetChrome()
         .widgetURL(URL(string: "sooodreamy://daily"))
+    }
+
+    private var small: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 4) {
+                Text("💌")
+                    .font(.system(size: 15))
+                Spacer(minLength: 0)
+                if streak > 1 {
+                    Text("🔥 \(streak)")
+                        .font(.system(.caption2, design: .rounded).weight(.bold))
+                        .foregroundStyle(WTheme.gold)
+                }
+            }
+            Text(question ?? WText.t("Öffne SoooDreamy für eure heutige Frage",
+                                     "Open SoooDreamy for today's question"))
+                .font(.system(.caption, design: .rounded).weight(.bold))
+                .foregroundStyle(.white)
+                .lineLimit(4)
+                .minimumScaleFactor(0.75)
+            Spacer(minLength: 0)
+            HStack(spacing: 5) {
+                Circle()
+                    .fill(stateColor)
+                    .frame(width: 7, height: 7)
+                Text(stateLine)
+                    .font(.system(.caption2, design: .rounded).weight(.semibold))
+                    .foregroundStyle(stateColor)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+        }
+    }
+
+    private var large: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            header
+            Spacer(minLength: 0)
+            Text(question ?? WText.t("Öffne SoooDreamy für eure heutige Frage",
+                                     "Open SoooDreamy for today's question"))
+                .font(.system(.title3, design: .rounded).weight(.bold))
+                .foregroundStyle(.white)
+                .lineLimit(6)
+                .minimumScaleFactor(0.7)
+            Spacer(minLength: 0)
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(stateColor)
+                    .frame(width: 8, height: 8)
+                Text(stateLine)
+                    .font(.system(.subheadline, design: .rounded).weight(.bold))
+                    .foregroundStyle(stateColor)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                Spacer(minLength: 0)
+            }
+            .padding(.vertical, 9)
+            .padding(.horizontal, 12)
+            .background(Capsule().fill(Color.white.opacity(0.08)))
+            Text(WText.t("Zum Antworten tippen", "Tap to answer"))
+                .font(.system(.caption2, design: .rounded))
+                .foregroundStyle(WTheme.textSecondary)
+        }
     }
 
     private var medium: some View {
@@ -141,6 +206,6 @@ struct DailyQuestionWidget: Widget {
         .configurationDisplayName(WText.t("Frage des Tages", "Daily question"))
         .description(WText.t("Eure tägliche Frage — antwortet beide und enthüllt die Antworten.",
                              "Your daily question — both answer to reveal."))
-        .supportedFamilies([.systemMedium, .accessoryRectangular])
+        .supportedFamilies([.systemSmall, .systemMedium, .systemLarge, .accessoryRectangular])
     }
 }

@@ -115,6 +115,14 @@ _(hier beantworte ich dein Feedback, wenn ich es umgesetzt habe)_
 - `[2026-08-03 23:05 UTC]` **LayoutMetrics**: Design-Breite 430pt (Pro Max). Kleinere Geräte skalieren Fonts/Frames/Paddings/Spacings proportional (zusätzlicher Faktor unter 410pt). Pro Max bleibt 1.0.
 - `[2026-08-03 23:05 UTC]` `Font.scaled`, `glassCard`/Buttons, Dashboard/Onboarding/Games/Memories/Chat umgestellt. RootView: `.fitsPhoneLayout()`. IPA **1.2.1**.
 
+### Iteration 13 — Notifications, Widgets & Live Activities (4× Fable-Max) 🔔🧩🏝️
+- `[2026-08-03 23:45 UTC]` **Server v1.5** (77/77): `GET /api/widget-snapshot` (Bearer oder `?token=`), `GET /api/canvas?limit=N`.
+- `[2026-08-03 23:45 UTC]` **Lokale Couple-Alerts** mit wählbaren Sounds (7 WAVs: soft/chime/heartbeat/kiss/sparkle/whoosh/tada): Touch, Chat, Foto, Daily-Reveal, Partner-online, Coupon — Einstellungen + Sound-Picker.
+- `[2026-08-03 23:45 UTC]` **Foto-Widget gefixt**: Cache im App-Group, Fallback bei Netzfehler; Sizes Small/Medium/Large + Lock-Screen rectangular.
+- `[2026-08-03 23:45 UTC]` **🎨 Canvas-Widget** neu (zeichnet eure Strokes); mehr Sizes auf Days/Mood/Countdown/Daily; **Custom-Hintergründe** (night/sunset/ocean/blush/mono/photo) in Einstellungen.
+- `[2026-08-03 23:45 UTC]` **Live Activity „Couple Pulse“**: Lock Screen + Dynamic Island mit Mood/Online/letzter Touch/Streak — Updates lokal über WebSocket. Countdown-Activity zeigt jetzt auch Pulse-Strip. IPA **1.3.0**.
+- Hinweis: echte Push-Notifications (App geschlossen) brauchen Apple-Signing/APNs — bei Sideload nur lokal solange die App/WS läuft (+ tägliche Erinnerung).
+
 ## 🔄 Als Nächstes
-- Nach Sideload von IPA 1.2.1 auf iPhone 16 prüfen, ob Abstände/Hero-Emojis passen — Feedback willkommen.
-- Ideen für kommende Wellen: Coupons mit Ablaufdatum, Fotoalben, Canvas-Farbverlauf-Pinsel, Live-Activity für „Partner ist online“, Soundtrack-Import per Link-Vorschau.
+- IPA 1.3.0 sideloaden: Benachrichtigungen einschalten, Widget-Hintergründe wählen, Canvas + Foto auf Home/Lock Screen, Couple-Pulse Live Activity starten.
+- Ideen: Coupons mit Ablaufdatum, Fotoalben, Canvas-Pinsel, Soundtrack-Link-Vorschau, Inbox-Endpoint für verpasste Events.

@@ -1,7 +1,6 @@
 import WidgetKit
 import SwiftUI
 import UIKit
-import ImageIO
 
 // MARK: - Timeline
 
@@ -13,67 +12,68 @@ struct PhotoEntry: TimelineEntry {
 
 struct PhotoProvider: TimelineProvider {
     func placeholder(in context: Context) -> PhotoEntry {
-        PhotoEntry(date: Date(), image: nil, caption: nil)
+        PhotoEntry(date: Date(), image: Self.cachedImage(), caption: nil)
     }
 
     func getSnapshot(in context: Context, completion: @escaping (PhotoEntry) -> Void) {
-        // Gallery preview: no network fetch, just the graceful gradient state.
-        completion(PhotoEntry(date: Date(), image: nil, caption: SharedStore.readSnapshot()?.photoCaption))
+        // Gallery preview: no network fetch — show the last cached photo
+        // instead of a blank gradient whenever one exists.
+        completion(PhotoEntry(date: Date(), image: Self.cachedImage(),
+                              caption: SharedStore.readSnapshot()?.photoCaption))
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<PhotoEntry>) -> Void) {
         let snapshot = SharedStore.readSnapshot()
         let refresh = Date().addingTimeInterval(30 * 60)
         guard let urlString = snapshot?.photoURLString, let url = URL(string: urlString) else {
+            // No showcase photo (e.g. gallery emptied) — genuine empty state.
             completion(Timeline(entries: [PhotoEntry(date: Date(), image: nil, caption: nil)],
                                 policy: .after(refresh)))
             return
         }
         Task {
             // The URL is already authenticated (token as query param) — plain GET.
-            let image = await Self.fetchImage(from: url)
+            let image: UIImage?
+            if let data = await Self.fetchImageData(from: url),
+               let fetched = WidgetImages.decode(data, maxDimension: 800) {
+                // Remember the bytes so the widget survives the server napping.
+                SharedStore.writeCachedPhotoJPEG(data)
+                image = fetched
+            } else {
+                // Offline / server asleep: fall back to the last good photo.
+                image = Self.cachedImage()
+            }
             let entry = PhotoEntry(date: Date(), image: image, caption: snapshot?.photoCaption)
             completion(Timeline(entries: [entry], policy: .after(refresh)))
         }
     }
 
-    private static func fetchImage(from url: URL) async -> UIImage? {
+    static func cachedImage() -> UIImage? {
+        guard let data = SharedStore.readCachedPhotoJPEG() else { return nil }
+        return WidgetImages.decode(data, maxDimension: 800)
+    }
+
+    private static func fetchImageData(from url: URL) async -> Data? {
         let request = URLRequest(url: url, timeoutInterval: 15)
         guard let (data, response) = try? await URLSession.shared.data(for: request) else { return nil }
         if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
             return nil
         }
-        return thumbnail(from: data, maxDimension: 800)
-    }
-
-    /// Memory-safe decode: `CGImageSourceCreateThumbnailAtIndex` never
-    /// materializes the full-resolution bitmap, so even a huge thumb-less
-    /// photo stays within the widget's tight memory budget.
-    private static func thumbnail(from data: Data, maxDimension: CGFloat) -> UIImage? {
-        let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
-        guard let source = CGImageSourceCreateWithData(data as CFData, sourceOptions) else { return nil }
-        let thumbOptions = [
-            kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceShouldCacheImmediately: true,
-            kCGImageSourceThumbnailMaxPixelSize: maxDimension
-        ] as CFDictionary
-        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, thumbOptions) else { return nil }
-        return UIImage(cgImage: cgImage)
+        return data.isEmpty ? nil : data
     }
 }
 
 // MARK: - Views
 
 struct PhotoWidgetView: View {
+    @Environment(\.widgetFamily) private var family
     let entry: PhotoEntry
 
     var body: some View {
         Group {
-            if entry.image != nil {
-                captionOverlay
-            } else {
-                emptyState
+            switch family {
+            case .accessoryRectangular: rectangular
+            default: photoOrEmpty
             }
         }
         .containerBackground(for: .widget) { background }
@@ -81,8 +81,17 @@ struct PhotoWidgetView: View {
     }
 
     @ViewBuilder
+    private var photoOrEmpty: some View {
+        if entry.image != nil {
+            captionOverlay
+        } else {
+            emptyState
+        }
+    }
+
+    @ViewBuilder
     private var background: some View {
-        if let image = entry.image {
+        if family != .accessoryRectangular, let image = entry.image {
             ZStack {
                 Image(uiImage: image)
                     .resizable()
@@ -90,7 +99,7 @@ struct PhotoWidgetView: View {
                 bottomScrim
             }
         } else {
-            WTheme.bgGradient
+            WidgetChromeBackground(photoFriendly: true)
         }
     }
 
@@ -108,7 +117,7 @@ struct PhotoWidgetView: View {
                     Text(caption)
                         .font(.system(.caption, design: .rounded).weight(.semibold))
                         .foregroundStyle(.white)
-                        .lineLimit(2)
+                        .lineLimit(family == .systemLarge ? 3 : 2)
                         .minimumScaleFactor(0.8)
                         .shadow(color: .black.opacity(0.6), radius: 2)
                 }
@@ -122,11 +131,37 @@ struct PhotoWidgetView: View {
     private var emptyState: some View {
         VStack(spacing: 6) {
             Text("📸")
-                .font(.system(size: 30))
+                .font(.system(size: family == .systemSmall ? 30 : 40))
             Text(WText.t("Noch kein Foto", "No photo yet"))
                 .font(.system(.caption, design: .rounded).weight(.semibold))
                 .foregroundStyle(WTheme.textSecondary)
                 .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var rectangular: some View {
+        HStack(spacing: 8) {
+            Text("📸")
+                .font(.system(size: 24))
+            VStack(alignment: .leading, spacing: 1) {
+                Text(WText.t("Euer Foto", "Your photo"))
+                    .font(.system(.headline, design: .rounded).weight(.bold))
+                    .lineLimit(1)
+                    .widgetAccentable()
+                if let caption = entry.caption, !caption.isEmpty {
+                    Text(caption)
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                } else {
+                    Text(WText.t("Tippen zum Ansehen", "Tap to view"))
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+            Spacer(minLength: 0)
         }
     }
 }
@@ -143,6 +178,6 @@ struct PhotoWidget: Widget {
         .configurationDisplayName(WText.t("Euer Foto", "Your photo"))
         .description(WText.t("Zeigt euer schönstes gemeinsames Foto.",
                              "Shows your favorite photo together."))
-        .supportedFamilies([.systemSmall, .systemMedium])
+        .supportedFamilies([.systemSmall, .systemMedium, .systemLarge, .accessoryRectangular])
     }
 }

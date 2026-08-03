@@ -260,6 +260,10 @@ struct EventsView: View {
         Task {
             do {
                 try await api.deleteEvent(id: event.id)
+                if isRunningActivity(event) {
+                    CountdownActivityController.stop(matchingTitle: event.title)
+                    activityRefresh += 1
+                }
                 await appState.refreshEvents()
                 appState.updateWidgetSnapshot()
                 appState.showToast(L10n.t("memories.events.deleted"), style: .info)
