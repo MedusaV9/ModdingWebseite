@@ -1,0 +1,35 @@
+# Node
+node_modules/
+npm-debug.log*
+*.tsbuildinfo
+
+# Server runtime data (couples, photos, voice notes)
+server/data/
+
+# macOS / Xcode
+.DS_Store
+xcuserdata/
+*.xcworkspace/xcuserdata/
+build/
+DerivedData/
+*.ipa
+*.xcarchive
+
+# XcodeGen output (generated from project.yml)
+ios/SoooDreamy.xcodeproj/
+
+# Swift Package Manager
+.build/
+.swiftpm/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Blender
+*.blend1
+
+# Misc
+*.log
+.env
