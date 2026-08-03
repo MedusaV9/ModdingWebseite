@@ -101,7 +101,7 @@ struct SealedLetterCard: View {
     let onOpen: () -> Void
 
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: LayoutMetrics.s(12)) {
             envelope
             Text(L10n.t("chat.sealedTitle"))
                 .font(.system(.headline, design: .rounded).weight(.bold))
@@ -114,14 +114,14 @@ struct SealedLetterCard: View {
             ChatTimestampText(date: message.createdAt, isMine: false)
         }
         .frame(maxWidth: .infinity)
-        .padding(16)
+        .padding(LayoutMetrics.s(16))
         .background(sealedBackground)
     }
 
     private var envelope: some View {
         ZStack(alignment: .center) {
             Text("💌")
-                .font(.system(size: 46))
+                .font(.scaled(46))
             waxSeal
                 .offset(x: 20, y: 15)
         }
@@ -137,7 +137,7 @@ struct SealedLetterCard: View {
             .frame(width: 24, height: 24)
             .overlay(
                 Image(systemName: "heart.fill")
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.scaled(10, weight: .bold))
                     .foregroundStyle(.white)
             )
             .overlay(Circle().strokeBorder(Color.white.opacity(0.6), lineWidth: 1))
@@ -184,9 +184,9 @@ struct LetterReaderView: View {
             ZStack {
                 DreamyBackground()
                 ScrollView {
-                    VStack(spacing: 16) {
+                    VStack(spacing: LayoutMetrics.s(16)) {
                         Text("💌")
-                            .font(.system(size: 48))
+                            .font(.scaled(48))
                             .padding(.top, 8)
                         Text(titleText)
                             .font(.system(.largeTitle, design: .rounded).weight(.heavy))
@@ -198,7 +198,7 @@ struct LetterReaderView: View {
                         letterCard
                         metaRow
                     }
-                    .padding(20)
+                    .padding(LayoutMetrics.s(20))
                 }
             }
             .toolbar {
@@ -226,7 +226,7 @@ struct LetterReaderView: View {
         }
         .foregroundStyle(Theme.gold)
         .padding(.vertical, 5)
-        .padding(.horizontal, 12)
+        .padding(.horizontal, LayoutMetrics.s(12))
         .background(Capsule().fill(Theme.gold.opacity(0.14)))
     }
 
@@ -237,7 +237,7 @@ struct LetterReaderView: View {
             .foregroundStyle(Theme.textPrimary)
             .lineSpacing(5)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(20)
+            .padding(LayoutMetrics.s(20))
             .background(
                 RoundedRectangle(cornerRadius: 24, style: .continuous)
                     .fill(
@@ -260,6 +260,6 @@ struct LetterReaderView: View {
                 .font(.system(.caption, design: .rounded))
                 .foregroundStyle(Theme.textTertiary)
         }
-        .padding(.bottom, 12)
+        .padding(.bottom, LayoutMetrics.s(12))
     }
 }

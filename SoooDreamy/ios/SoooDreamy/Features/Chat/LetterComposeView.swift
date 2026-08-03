@@ -43,14 +43,14 @@ struct LetterComposeView: View {
             ZStack {
                 DreamyBackground()
                 ScrollView {
-                    VStack(spacing: 16) {
+                    VStack(spacing: LayoutMetrics.s(16)) {
                         titleField
                         editor
                         sealPicker
                         previewCard
                         sendButton
                     }
-                    .padding(16)
+                    .padding(LayoutMetrics.s(16))
                 }
                 .scrollDismissesKeyboard(.interactively)
                 if sent {
@@ -90,8 +90,8 @@ struct LetterComposeView: View {
                 Text(L10n.t("chat.letterPlaceholder"))
                     .font(.system(.body, design: .rounded))
                     .foregroundStyle(Theme.textTertiary)
-                    .padding(.top, 16)
-                    .padding(.leading, 17)
+                    .padding(.top, LayoutMetrics.s(16))
+                    .padding(.leading, LayoutMetrics.s(17))
                     .allowsHitTesting(false)
             }
             TextEditor(text: $text)
@@ -99,8 +99,8 @@ struct LetterComposeView: View {
                 .foregroundStyle(Theme.textPrimary)
                 .scrollContentBackground(.hidden)
                 .padding(.vertical, 8)
-                .padding(.horizontal, 12)
-                .frame(minHeight: 180)
+                .padding(.horizontal, LayoutMetrics.s(12))
+                .frame(minHeight: LayoutMetrics.s(180))
         }
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
@@ -115,7 +115,7 @@ struct LetterComposeView: View {
     // MARK: Seal picker
 
     private var sealPicker: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: LayoutMetrics.s(10)) {
             Text(L10n.t("chat.sealPickerTitle"))
                 .font(.system(.caption, design: .rounded).weight(.bold))
                 .foregroundStyle(Theme.gold)
@@ -175,7 +175,7 @@ struct LetterComposeView: View {
             }
             .foregroundStyle(selected ? Theme.textPrimary : Theme.textSecondary)
             .padding(.vertical, 7)
-            .padding(.horizontal, 12)
+            .padding(.horizontal, LayoutMetrics.s(12))
             .background(
                 Capsule()
                     .fill(selected ? Theme.pink.opacity(0.35) : Color.white.opacity(0.06))
@@ -191,7 +191,7 @@ struct LetterComposeView: View {
     // MARK: Preview
 
     private var previewCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: LayoutMetrics.s(10)) {
             HStack(spacing: 6) {
                 Text("💌")
                 Text(L10n.t("chat.letterPreview"))
@@ -210,7 +210,7 @@ struct LetterComposeView: View {
                 .foregroundStyle(text.isEmpty ? Theme.textTertiary : Theme.textPrimary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(18)
+        .padding(LayoutMetrics.s(18))
         .background(
             RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .fill(
@@ -227,7 +227,7 @@ struct LetterComposeView: View {
     private func previewSealRow(_ token: String) -> some View {
         HStack(spacing: 5) {
             Text("🔒")
-                .font(.system(size: 10))
+                .font(.scaled(10))
             Text(LetterSeal.sentence(for: token))
                 .font(.system(.caption2, design: .rounded).weight(.semibold))
                 .lineLimit(2)

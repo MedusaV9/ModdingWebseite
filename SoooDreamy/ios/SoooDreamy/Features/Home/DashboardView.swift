@@ -14,7 +14,7 @@ struct DashboardView: View {
             ZStack {
                 DreamyBackground()
                 ScrollView {
-                    VStack(spacing: 16) {
+                    VStack(spacing: LayoutMetrics.s(16)) {
                         header
 
                         if let milestone = monthiversary {
@@ -41,8 +41,8 @@ struct DashboardView: View {
                             nextEventCard(next.event, days: next.days)
                         }
                     }
-                    .padding(16)
-                    .padding(.bottom, 12)
+                    .padding(LayoutMetrics.s(16))
+                    .padding(.bottom, LayoutMetrics.s(12))
                 }
                 .refreshable {
                     await appState.refreshAll()
@@ -96,7 +96,7 @@ struct DashboardView: View {
         Button {
             appState.activeTab = .memories
         } label: {
-            HStack(spacing: 12) {
+            HStack(spacing: LayoutMetrics.s(12)) {
                 switch item {
                 case .photo(let photo, let daysAgo):
                     if let url = appState.api?.mediaURL(photo.thumbUrl ?? photo.url) {
@@ -105,7 +105,7 @@ struct DashboardView: View {
                         } placeholder: {
                             Color.white.opacity(0.08)
                         }
-                        .frame(width: 60, height: 60)
+                        .frame(width: LayoutMetrics.s(60), height: LayoutMetrics.s(60))
                         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                     }
                     VStack(alignment: .leading, spacing: 3) {
@@ -124,7 +124,7 @@ struct DashboardView: View {
                     }
                 case .daily(_, let question, let daysAgo):
                     Text("💭")
-                        .font(.system(size: 34))
+                        .font(.scaled(34))
                     VStack(alignment: .leading, spacing: 3) {
                         Text(L10n.t("home.flashbackQuestion"))
                             .font(.system(.caption, design: .rounded).weight(.bold))
@@ -140,7 +140,7 @@ struct DashboardView: View {
                 }
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .bold))
+                    .font(.scaled(12, weight: .bold))
                     .foregroundStyle(Theme.textTertiary)
             }
             .glassCard(padding: 14)
@@ -203,16 +203,16 @@ struct DashboardView: View {
                 .opacity(0.85)
             FloatingHeartsView(emojis: milestone.years ? ["🥂", "💍", "💖"] : ["🎉", "💞", "✨"], count: 8)
                 .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-            HStack(spacing: 12) {
+            HStack(spacing: LayoutMetrics.s(12)) {
                 Text(milestone.years ? "🥂" : "🎉")
-                    .font(.system(size: 34))
+                    .font(.scaled(34))
                 Text(text)
                     .font(.system(.headline, design: .rounded).weight(.heavy))
                     .foregroundStyle(.white)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
             }
-            .padding(16)
+            .padding(LayoutMetrics.s(16))
         }
         .frame(minHeight: 68)
         .shadow(color: Theme.pink.opacity(0.4), radius: 14, y: 6)
@@ -221,7 +221,7 @@ struct DashboardView: View {
     // MARK: Session loading / retry (cold start without network)
 
     private var sessionStateCard: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: LayoutMetrics.s(12)) {
             if appState.sessionLoading {
                 ProgressView()
                     .tint(Theme.pink)
@@ -230,7 +230,7 @@ struct DashboardView: View {
                     .foregroundStyle(Theme.textSecondary)
             } else {
                 Text("📡")
-                    .font(.system(size: 40))
+                    .font(.scaled(40))
                 Text(L10n.t("error.network"))
                     .font(.system(.subheadline, design: .rounded).weight(.semibold))
                     .foregroundStyle(Theme.textSecondary)
@@ -251,10 +251,10 @@ struct DashboardView: View {
     // MARK: Partner card
 
     private var partnerCard: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: LayoutMetrics.s(14)) {
             EmojiAvatarView(emoji: appState.partner?.avatar,
                             colorHex: appState.partner?.color,
-                            size: 58,
+                            size: LayoutMetrics.s(58),
                             online: appState.partner?.online ?? false)
 
             VStack(alignment: .leading, spacing: 4) {
@@ -286,7 +286,7 @@ struct DashboardView: View {
                     .font(.system(.caption, design: .rounded))
                     .foregroundStyle(Theme.textSecondary)
                     .padding(.vertical, 5)
-                    .padding(.horizontal, 10)
+                    .padding(.horizontal, LayoutMetrics.s(10))
                     .background(Capsule().fill(Color.white.opacity(0.08)))
                 }
             }
@@ -299,8 +299,8 @@ struct DashboardView: View {
             } label: {
                 VStack(spacing: 4) {
                     Text(appState.me?.mood ?? "➕")
-                        .font(.system(size: 26))
-                        .frame(width: 52, height: 52)
+                        .font(.scaled(26))
+                        .frame(width: LayoutMetrics.s(52), height: LayoutMetrics.s(52))
                         .background(Circle().fill(Theme.purple.opacity(0.25)))
                         .overlay(Circle().strokeBorder(Theme.purple.opacity(0.5), lineWidth: 1.5))
                     Text(L10n.t("home.yourMood"))
@@ -318,7 +318,7 @@ struct DashboardView: View {
     private var heartCard: some View {
         VStack(spacing: 4) {
             Heart3DView(burstTrigger: heartBurst)
-                .frame(height: 250)
+                .frame(height: LayoutMetrics.s(250))
                 .contentShape(Rectangle())
                 .onTapGesture {
                     heartBurst += 1
@@ -335,7 +335,7 @@ struct DashboardView: View {
     // MARK: Touch grid
 
     private var touchGrid: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: LayoutMetrics.s(12)) {
             SectionHeader(title: L10n.t("home.sendLove"))
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
                 ForEach(TouchKind.allCases) { kind in
@@ -351,7 +351,7 @@ struct DashboardView: View {
     // MARK: Daily question
 
     private var dailyCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: LayoutMetrics.s(12)) {
             HStack {
                 SectionHeader(title: L10n.t("home.dailyQuestion"))
                 if let streak = appState.dailyEntry?.streak, streak > 1 {
@@ -386,7 +386,7 @@ struct DashboardView: View {
                             .foregroundStyle(Theme.textSecondary)
                     }
                 } else {
-                    HStack(spacing: 10) {
+                    HStack(spacing: LayoutMetrics.s(10)) {
                         TextField(L10n.t("home.answerNow"), text: $dailyAnswerText, axis: .vertical)
                             .textFieldStyle(DreamyFieldStyle())
                             .lineLimit(1...4)
@@ -397,11 +397,11 @@ struct DashboardView: View {
                                 ProgressView().tint(.white)
                             } else {
                                 Image(systemName: "paperplane.fill")
-                                    .font(.system(size: 17, weight: .bold))
+                                    .font(.scaled(17, weight: .bold))
                                     .foregroundStyle(.white)
                             }
                         }
-                        .frame(width: 46, height: 46)
+                        .frame(width: LayoutMetrics.s(46), height: LayoutMetrics.s(46))
                         .background(Circle().fill(Theme.heroGradient))
                         .disabled(sendingDaily || dailyAnswerText.trimmingCharacters(in: .whitespaces).isEmpty)
                     }
@@ -451,9 +451,9 @@ struct DashboardView: View {
     // MARK: Next event
 
     private func nextEventCard(_ event: EventItem, days: Int) -> some View {
-        HStack(spacing: 14) {
+        HStack(spacing: LayoutMetrics.s(14)) {
             Text(event.emoji)
-                .font(.system(size: 34))
+                .font(.scaled(34))
             VStack(alignment: .leading, spacing: 2) {
                 Text(L10n.t("home.nextEvent"))
                     .font(.system(.caption, design: .rounded).weight(.semibold))
@@ -495,7 +495,7 @@ struct TouchButton: View {
         } label: {
             VStack(spacing: 6) {
                 Text(kind.emoji)
-                    .font(.system(size: 30))
+                    .font(.scaled(30))
                     .scaleEffect(pressed ? 1.35 : 1)
                 Text(L10n.t(kind.titleKey))
                     .font(.system(.caption2, design: .rounded).weight(.bold))
@@ -504,7 +504,7 @@ struct TouchButton: View {
                     .minimumScaleFactor(0.8)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
+            .padding(.vertical, LayoutMetrics.s(14))
             .background(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
                     .fill(Color.white.opacity(pressed ? 0.16 : 0.06))
@@ -526,9 +526,9 @@ struct WaitingForPartnerCard: View {
     @State private var copied = false
 
     var body: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: LayoutMetrics.s(14)) {
             Text("💌")
-                .font(.system(size: 44))
+                .font(.scaled(44))
             Text(L10n.t("home.waitingForPartner"))
                 .font(.system(.title3, design: .rounded).weight(.heavy))
                 .foregroundStyle(Theme.textPrimary)
@@ -539,10 +539,10 @@ struct WaitingForPartnerCard: View {
 
             if let code = appState.couple?.code {
                 Text(code.map(String.init).joined(separator: " "))
-                    .font(.system(size: 34, weight: .heavy, design: .monospaced))
+                    .font(.scaled(34, weight: .heavy, design: .monospaced))
                     .foregroundStyle(Theme.gold)
-                    .padding(.vertical, 10)
-                    .padding(.horizontal, 18)
+                    .padding(.vertical, LayoutMetrics.s(10))
+                    .padding(.horizontal, LayoutMetrics.s(18))
                     .background(
                         RoundedRectangle(cornerRadius: 16, style: .continuous)
                             .fill(Color.black.opacity(0.3))
@@ -552,7 +552,7 @@ struct WaitingForPartnerCard: View {
                             )
                     )
 
-                HStack(spacing: 10) {
+                HStack(spacing: LayoutMetrics.s(10)) {
                     Button {
                         UIPasteboard.general.string = code
                         copied = true
@@ -589,7 +589,7 @@ struct WaitingForPartnerCard: View {
                             .resizable()
                             .interpolation(.none)
                             .scaledToFit()
-                            .frame(width: 180, height: 180)
+                            .frame(width: LayoutMetrics.s(180), height: LayoutMetrics.s(180))
                             .padding(10)
                             .background(RoundedRectangle(cornerRadius: 16).fill(.white))
                         Text(L10n.t("pairing.qrHint"))
@@ -637,7 +637,7 @@ struct MoodPickerSheet: View {
             ZStack {
                 DreamyBackground(showStars: false)
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 16) {
+                    VStack(alignment: .leading, spacing: LayoutMetrics.s(16)) {
                         EmojiPickerGrid(emojis: Self.moods, selection: $selected)
                         TextField(L10n.t("home.moodNote"), text: $note, axis: .vertical)
                             .textFieldStyle(DreamyFieldStyle())
@@ -658,7 +658,7 @@ struct MoodPickerSheet: View {
                             .buttonStyle(SecondaryButtonStyle())
                         }
                     }
-                    .padding(20)
+                    .padding(LayoutMetrics.s(20))
                 }
             }
             .navigationTitle(L10n.t("home.setMood"))
@@ -704,9 +704,9 @@ struct TouchReceivedOverlay: View {
             FloatingHeartsView(emojis: heartsFor, count: 22)
                 .ignoresSafeArea()
 
-            VStack(spacing: 18) {
+            VStack(spacing: LayoutMetrics.s(18)) {
                 Text(touch.type.emoji)
-                    .font(.system(size: 110))
+                    .font(.scaled(110))
                     .scaleEffect(pulse ? 1.15 : 0.9)
                     .shadow(color: Theme.pink.opacity(0.8), radius: 40)
                     .animation(.easeInOut(duration: 0.55).repeatForever(autoreverses: true), value: pulse)
@@ -716,7 +716,7 @@ struct TouchReceivedOverlay: View {
                     .font(.system(.title2, design: .rounded).weight(.heavy))
                     .foregroundStyle(.white)
                     .multilineTextAlignment(.center)
-                    .padding(.horizontal, 30)
+                    .padding(.horizontal, LayoutMetrics.s(30))
             }
         }
         .contentShape(Rectangle())

@@ -16,7 +16,7 @@ struct ServerListSheet: View {
             ZStack {
                 DreamyBackground(showStars: false)
                 ScrollView {
-                    VStack(spacing: 12) {
+                    VStack(spacing: LayoutMetrics.s(12)) {
                         ForEach(appState.servers.profiles) { profile in
                             serverRow(profile)
                         }
@@ -35,7 +35,7 @@ struct ServerListSheet: View {
                             .fixedSize(horizontal: false, vertical: true)
                             .padding(.top, 4)
                     }
-                    .padding(20)
+                    .padding(LayoutMetrics.s(20))
                 }
             }
             .navigationTitle(L10n.t("server.manage"))
@@ -73,13 +73,13 @@ struct ServerListSheet: View {
 
     private func serverRow(_ profile: ServerProfile) -> some View {
         let isActive = appState.servers.activeProfileID == profile.id
-        return VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 12) {
+        return VStack(alignment: .leading, spacing: LayoutMetrics.s(10)) {
+            HStack(spacing: LayoutMetrics.s(12)) {
                 ZStack(alignment: .bottomTrailing) {
                     Image(systemName: "server.rack")
-                        .font(.system(size: 18, weight: .semibold))
+                        .font(.scaled(18, weight: .semibold))
                         .foregroundStyle(isActive ? Theme.pink : Theme.textSecondary)
-                        .frame(width: 42, height: 42)
+                        .frame(width: LayoutMetrics.s(42), height: LayoutMetrics.s(42))
                         .background(Circle().fill(Color.white.opacity(0.08)))
                     Circle()
                         .fill(healthColor(profile))

@@ -71,8 +71,8 @@ enum CoreStrings {
                                       en: "Really remove “{name}”? Your pairing on that server will be lost on this device."),
         "server.paired": LText(de: "Gekoppelt", en: "Paired"),
         "server.notPaired": LText(de: "Noch nicht gekoppelt", en: "Not paired yet"),
-        "server.hint": LText(de: "★ Build 1.2.0 — HTTP ist freigeschaltet. Wenn du diesen Satz siehst, bist du auf dem richtigen IPA. Adresse z. B. http://138.x.x.x:4321. Server = Ordner „server“, `npm start`.",
-                             en: "★ Build 1.2.0 — HTTP is unlocked. If you see this sentence, you have the right IPA. Address e.g. http://138.x.x.x:4321. Server = “server” folder, `npm start`."),
+        "server.hint": LText(de: "★ Build 1.2.1+ — HTTP ist freigeschaltet. Wenn du den mintfarbenen App-Build-Badge siehst, bist du auf dem richtigen IPA. Adresse z. B. http://138.x.x.x:4321.",
+                             en: "★ Build 1.2.1+ — HTTP is unlocked. If you see the mint App-Build badge, you have the right IPA. Address e.g. http://138.x.x.x:4321."),
         "server.continue": LText(de: "Weiter", en: "Continue"),
         "server.pickTitle": LText(de: "Mit welchem Server?", en: "Which server?"),
 

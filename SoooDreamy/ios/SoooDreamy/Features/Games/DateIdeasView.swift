@@ -30,13 +30,13 @@ struct DateIdeasView: View {
         ZStack {
             DreamyBackground()
             ScrollView {
-                VStack(spacing: 16) {
+                VStack(spacing: LayoutMetrics.s(16)) {
                     filtersCard
                     resultArea
                     generateButtons
                 }
-                .padding(16)
-                .padding(.bottom, 12)
+                .padding(LayoutMetrics.s(16))
+                .padding(.bottom, LayoutMetrics.s(12))
             }
         }
         .navigationTitle(L10n.t("games.card.dateideas.title"))
@@ -61,7 +61,7 @@ struct DateIdeasView: View {
     // MARK: Filters UI
 
     private var filtersCard: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: LayoutMetrics.s(14)) {
             locationSection
             budgetSection
             moodSection
@@ -159,7 +159,7 @@ struct DateIdeasView: View {
                 .font(.system(.caption, design: .rounded).weight(.semibold))
                 .foregroundStyle(Theme.textPrimary)
                 .padding(.vertical, 7)
-                .padding(.horizontal, 12)
+                .padding(.horizontal, LayoutMetrics.s(12))
                 .background(
                     Capsule().fill(selected ? Theme.pink.opacity(0.38) : Color.white.opacity(0.07))
                 )
@@ -189,9 +189,9 @@ struct DateIdeasView: View {
     }
 
     private var idleCard: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: LayoutMetrics.s(12)) {
             Text("🎰")
-                .font(.system(size: 58))
+                .font(.scaled(58))
             Text(L10n.t("games.dateideas.idle.title"))
                 .font(.system(.title3, design: .rounded).weight(.bold))
                 .foregroundStyle(Theme.textPrimary)
@@ -201,14 +201,14 @@ struct DateIdeasView: View {
                 .foregroundStyle(Theme.textSecondary)
                 .multilineTextAlignment(.center)
         }
-        .frame(maxWidth: .infinity, minHeight: 200)
+        .frame(maxWidth: .infinity, minHeight: LayoutMetrics.s(200))
         .glassCard(padding: 20)
     }
 
     private var spinCard: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: LayoutMetrics.s(12)) {
             Text(spinIdea?.emoji ?? "🎰")
-                .font(.system(size: 58))
+                .font(.scaled(58))
                 .id(spinIdea?.id ?? -1)
                 .transition(.scale(scale: 0.6).combined(with: .opacity))
             Text(spinIdea?.title.resolved(L10n.lang) ?? "…")
@@ -217,15 +217,15 @@ struct DateIdeasView: View {
                 .multilineTextAlignment(.center)
                 .blur(radius: 1.5)
         }
-        .frame(maxWidth: .infinity, minHeight: 200)
+        .frame(maxWidth: .infinity, minHeight: LayoutMetrics.s(200))
         .glassCard(padding: 20)
         .animation(.spring(response: 0.2), value: spinIdea?.id)
     }
 
     private func resultCard(_ idea: DateIdea) -> some View {
-        VStack(spacing: 14) {
+        VStack(spacing: LayoutMetrics.s(14)) {
             Text(idea.emoji)
-                .font(.system(size: 64))
+                .font(.scaled(64))
                 .shadow(color: Theme.pink.opacity(0.5), radius: 18)
             Text(idea.title.resolved(L10n.lang))
                 .font(.system(.title2, design: .rounded).weight(.heavy))

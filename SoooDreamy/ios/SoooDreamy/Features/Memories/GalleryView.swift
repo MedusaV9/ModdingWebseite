@@ -124,8 +124,8 @@ struct GalleryView: View {
             }
             Spacer()
         }
-        .padding(.horizontal, 12)
-        .padding(.top, 10)
+        .padding(.horizontal, LayoutMetrics.s(12))
+        .padding(.top, LayoutMetrics.s(10))
     }
 
     private func filterChip(_ candidate: GalleryFilter) -> some View {
@@ -137,7 +137,7 @@ struct GalleryView: View {
                 .font(.system(.footnote, design: .rounded).weight(.semibold))
                 .foregroundStyle(filter == candidate ? .white : Theme.textSecondary)
                 .padding(.vertical, 7)
-                .padding(.horizontal, 14)
+                .padding(.horizontal, LayoutMetrics.s(14))
                 .background(
                     Capsule().fill(filter == candidate ? Theme.pink.opacity(0.55) : Color.white.opacity(0.07))
                 )
@@ -158,9 +158,9 @@ struct GalleryView: View {
                     .buttonStyle(.plain)
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.top, 10)
-            .padding(.bottom, 96)
+            .padding(.horizontal, LayoutMetrics.s(12))
+            .padding(.top, LayoutMetrics.s(10))
+            .padding(.bottom, LayoutMetrics.s(96))
         }
         .refreshable { await loadPhotos() }
     }
@@ -174,22 +174,22 @@ struct GalleryView: View {
                     ZStack {
                         Circle()
                             .fill(Theme.heroGradient)
-                            .frame(width: 60, height: 60)
+                            .frame(width: LayoutMetrics.s(60), height: LayoutMetrics.s(60))
                             .shadow(color: Theme.pink.opacity(0.5), radius: 14, y: 6)
                         if uploading {
                             ProgressView()
                                 .tint(.white)
                         } else {
                             Image(systemName: "plus")
-                                .font(.system(size: 24, weight: .bold))
+                                .font(.scaled(24, weight: .bold))
                                 .foregroundStyle(.white)
                         }
                     }
                 }
                 .disabled(uploading)
                 .accessibilityLabel(L10n.t("memories.gallery.add"))
-                .padding(.trailing, 20)
-                .padding(.bottom, 24)
+                .padding(.trailing, LayoutMetrics.s(20))
+                .padding(.bottom, LayoutMetrics.s(24))
             }
         }
     }
@@ -359,7 +359,7 @@ private struct GalleryCell: View {
     private var favoriteBadge: some View {
         if !(photo.favorites ?? []).isEmpty {
             Image(systemName: "heart.fill")
-                .font(.system(size: 11, weight: .bold))
+                .font(.scaled(11, weight: .bold))
                 .foregroundStyle(photo.isFavorite(of: memberId) ? Theme.pink : Color.white.opacity(0.85))
                 .padding(5)
                 .background(Circle().fill(Color.black.opacity(0.35)))
@@ -393,7 +393,7 @@ private struct GalleryCell: View {
                            startPoint: .topLeading, endPoint: .bottomTrailing)
             if let icon {
                 Image(systemName: icon)
-                    .font(.system(size: 20))
+                    .font(.scaled(20))
                     .foregroundStyle(Theme.textTertiary)
             } else {
                 ProgressView()
@@ -416,7 +416,7 @@ private struct CaptionSheet: View {
         NavigationStack {
             ZStack {
                 DreamyBackground(showStars: false)
-                VStack(spacing: 18) {
+                VStack(spacing: LayoutMetrics.s(18)) {
                     Image(uiImage: pending.image)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
@@ -434,7 +434,7 @@ private struct CaptionSheet: View {
                     .buttonStyle(PrimaryButtonStyle())
                     Spacer()
                 }
-                .padding(16)
+                .padding(LayoutMetrics.s(16))
             }
             .navigationTitle(L10n.t("memories.gallery.captionTitle"))
             .navigationBarTitleDisplayMode(.inline)
@@ -533,7 +533,7 @@ private struct PhotoPagerView: View {
                             .aspectRatio(contentMode: .fit)
                     case .failure:
                         Image(systemName: "photo.badge.exclamationmark")
-                            .font(.system(size: 40))
+                            .font(.scaled(40))
                             .foregroundStyle(Theme.textTertiary)
                     default:
                         ProgressView()
@@ -547,10 +547,10 @@ private struct PhotoPagerView: View {
     }
 
     private func captionBar(_ photo: Photo) -> some View {
-        HStack(alignment: .center, spacing: 12) {
+        HStack(alignment: .center, spacing: LayoutMetrics.s(12)) {
             EmojiAvatarView(emoji: uploader(of: photo)?.avatar,
                             colorHex: uploader(of: photo)?.color,
-                            size: 40)
+                            size: LayoutMetrics.s(40))
             VStack(alignment: .leading, spacing: 2) {
                 if let caption = photo.caption, !caption.isEmpty {
                     Text(caption)
@@ -564,15 +564,15 @@ private struct PhotoPagerView: View {
             }
             Spacer()
         }
-        .padding(14)
+        .padding(LayoutMetrics.s(14))
         .glassCard(padding: 12)
-        .padding(.horizontal, 16)
-        .padding(.bottom, 24)
+        .padding(.horizontal, LayoutMetrics.s(16))
+        .padding(.bottom, LayoutMetrics.s(24))
     }
 
     private var overlayControls: some View {
         VStack {
-            HStack(spacing: 14) {
+            HStack(spacing: LayoutMetrics.s(14)) {
                 circleButton(icon: "xmark") { dismiss() }
                 Spacer()
                 if busy {
@@ -587,7 +587,7 @@ private struct PhotoPagerView: View {
                     }
                 }
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, LayoutMetrics.s(16))
             .padding(.top, 8)
             Spacer()
         }
@@ -612,9 +612,9 @@ private struct PhotoPagerView: View {
             action()
         } label: {
             Image(systemName: icon)
-                .font(.system(size: 15, weight: .bold))
+                .font(.scaled(15, weight: .bold))
                 .foregroundStyle(tint)
-                .frame(width: 38, height: 38)
+                .frame(width: LayoutMetrics.s(38), height: LayoutMetrics.s(38))
                 .background(Circle().fill(Color.white.opacity(0.14)))
         }
         .buttonStyle(.plain)

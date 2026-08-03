@@ -27,7 +27,7 @@ struct SettingsView: View {
             ZStack {
                 DreamyBackground(showStars: false)
                 ScrollView {
-                    VStack(spacing: 16) {
+                    VStack(spacing: LayoutMetrics.s(16)) {
                         profileCard
                         coupleCard
                         serverCard
@@ -35,7 +35,7 @@ struct SettingsView: View {
                         dangerCard
                         aboutCard
                     }
-                    .padding(16)
+                    .padding(LayoutMetrics.s(16))
                 }
             }
             .navigationTitle(L10n.t("settings.title"))
@@ -63,8 +63,8 @@ struct SettingsView: View {
         Button {
             showProfileEdit = true
         } label: {
-            HStack(spacing: 14) {
-                EmojiAvatarView(emoji: appState.me?.avatar, colorHex: appState.me?.color, size: 56)
+            HStack(spacing: LayoutMetrics.s(14)) {
+                EmojiAvatarView(emoji: appState.me?.avatar, colorHex: appState.me?.color, size: LayoutMetrics.s(56))
                 VStack(alignment: .leading, spacing: 3) {
                     Text(appState.me?.name ?? "–")
                         .font(.system(.headline, design: .rounded).weight(.bold))
@@ -75,7 +75,7 @@ struct SettingsView: View {
                 }
                 Spacer()
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 13, weight: .bold))
+                    .font(.scaled(13, weight: .bold))
                     .foregroundStyle(Theme.textTertiary)
             }
             .glassCard(padding: 14)
@@ -84,7 +84,7 @@ struct SettingsView: View {
     }
 
     private var coupleCard: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: LayoutMetrics.s(14)) {
             SectionHeader(title: L10n.t("settings.couple"))
 
             TextField(L10n.t("settings.coupleName"), text: $coupleName)
@@ -117,11 +117,11 @@ struct SettingsView: View {
     }
 
     private var serverCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: LayoutMetrics.s(12)) {
             SectionHeader(title: L10n.t("settings.connection"))
 
             if let profile = appState.servers.activeProfile {
-                HStack(spacing: 10) {
+                HStack(spacing: LayoutMetrics.s(10)) {
                     Image(systemName: "server.rack")
                         .foregroundStyle(Theme.pink)
                     VStack(alignment: .leading, spacing: 2) {
@@ -148,7 +148,7 @@ struct SettingsView: View {
     }
 
     private var appCard: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: LayoutMetrics.s(14)) {
             SectionHeader(title: "App")
 
             // Language
@@ -263,7 +263,7 @@ struct SettingsView: View {
     }
 
     private var dangerCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: LayoutMetrics.s(12)) {
             Button {
                 confirmLeave = true
             } label: {
@@ -314,7 +314,7 @@ struct SettingsView: View {
                     .foregroundStyle(Theme.textPrimary)
                 Spacer()
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 13, weight: .bold))
+                    .font(.scaled(13, weight: .bold))
                     .foregroundStyle(Theme.textTertiary)
             }
             .glassCard(padding: 16)
@@ -374,9 +374,9 @@ struct ProfileEditSheet: View {
             ZStack {
                 DreamyBackground(showStars: false)
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 16) {
-                        HStack(spacing: 14) {
-                            EmojiAvatarView(emoji: avatar, colorHex: colorHex, size: 64)
+                    VStack(alignment: .leading, spacing: LayoutMetrics.s(16)) {
+                        HStack(spacing: LayoutMetrics.s(14)) {
+                            EmojiAvatarView(emoji: avatar, colorHex: colorHex, size: LayoutMetrics.s(64))
                             TextField(L10n.t("pairing.yourName"), text: $name)
                                 .textFieldStyle(DreamyFieldStyle())
                         }
@@ -397,7 +397,7 @@ struct ProfileEditSheet: View {
                         .buttonStyle(PrimaryButtonStyle())
                         .disabled(busy || name.trimmingCharacters(in: .whitespaces).isEmpty)
                     }
-                    .padding(20)
+                    .padding(LayoutMetrics.s(20))
                 }
             }
             .navigationTitle(L10n.t("settings.profile"))
@@ -441,10 +441,10 @@ struct AboutSheet: View {
         NavigationStack {
             ZStack {
                 DreamyBackground()
-                VStack(spacing: 16) {
+                VStack(spacing: LayoutMetrics.s(16)) {
                     Spacer()
                     Text("💜")
-                        .font(.system(size: 72))
+                        .font(.scaled(72))
                         .shadow(color: Theme.pink.opacity(0.7), radius: 24)
                     Text("SoooDreamy")
                         .font(.system(.largeTitle, design: .rounded).weight(.heavy))
@@ -456,7 +456,7 @@ struct AboutSheet: View {
                         .font(.system(.subheadline, design: .rounded))
                         .foregroundStyle(Theme.textSecondary)
                         .multilineTextAlignment(.center)
-                        .padding(.horizontal, 40)
+                        .padding(.horizontal, LayoutMetrics.s(40))
                     Spacer()
                     Spacer()
                 }

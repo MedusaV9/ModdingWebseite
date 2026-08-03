@@ -57,10 +57,10 @@ struct LockScreenView: View {
     var body: some View {
         ZStack {
             DreamyBackground()
-            VStack(spacing: 20) {
+            VStack(spacing: LayoutMetrics.s(20)) {
                 Spacer()
                 Text("💜")
-                    .font(.system(size: 74))
+                    .font(.scaled(74))
                     .shadow(color: Theme.pink.opacity(0.75), radius: 28)
                 Text(L10n.t("lock.title"))
                     .font(.system(.title2, design: .rounded).weight(.heavy))
@@ -69,7 +69,7 @@ struct LockScreenView: View {
                     .font(.system(.subheadline, design: .rounded))
                     .foregroundStyle(Theme.textSecondary)
                     .multilineTextAlignment(.center)
-                    .padding(.horizontal, 40)
+                    .padding(.horizontal, LayoutMetrics.s(40))
                 Spacer()
                 Button {
                     Task { await appLock.unlock() }
@@ -77,7 +77,7 @@ struct LockScreenView: View {
                     Label(L10n.t("lock.unlock"), systemImage: "faceid")
                 }
                 .buttonStyle(PrimaryButtonStyle(fullWidth: false))
-                .padding(.bottom, 40)
+                .padding(.bottom, LayoutMetrics.s(40))
             }
         }
         .task {

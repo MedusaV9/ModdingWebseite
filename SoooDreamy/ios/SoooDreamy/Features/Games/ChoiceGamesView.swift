@@ -157,7 +157,7 @@ struct ChoiceGamesView: View {
             if session.state == "lobby" {
                 ScrollView {
                     GameLobbyView(engine: engine, accent: accent)
-                        .padding(16)
+                        .padding(LayoutMetrics.s(16))
                 }
             } else if showEndScreen {
                 endScreen
@@ -179,9 +179,9 @@ struct ChoiceGamesView: View {
 
     private var setupScreen: some View {
         ScrollView {
-            VStack(spacing: 16) {
+            VStack(spacing: LayoutMetrics.s(16)) {
                 Text(isWouldYouRather ? "🤯" : "⚡️")
-                    .font(.system(size: 56))
+                    .font(.scaled(56))
                 Text(L10n.t("games.card.\(kind.rawValue).title"))
                     .font(.system(.title3, design: .rounded).weight(.bold))
                     .foregroundStyle(Theme.textPrimary)
@@ -201,7 +201,7 @@ struct ChoiceGamesView: View {
                 .disabled(engine.busy)
             }
             .glassCard(padding: 22)
-            .padding(16)
+            .padding(LayoutMetrics.s(16))
         }
     }
 
@@ -233,13 +233,13 @@ struct ChoiceGamesView: View {
 
     private var playScreen: some View {
         ScrollView {
-            VStack(spacing: 14) {
+            VStack(spacing: LayoutMetrics.s(14)) {
                 playHeader
                 GameProgressBar(progress: Double(min(cursor, totalRounds)) / Double(max(totalRounds, 1)),
                                 tint: accent)
                 roundCard
             }
-            .padding(16)
+            .padding(LayoutMetrics.s(16))
         }
     }
 
@@ -259,7 +259,7 @@ struct ChoiceGamesView: View {
     private var roundCard: some View {
         if cursor < totalRounds, cursor < pairs.count {
             let pair = pairs[cursor]
-            VStack(spacing: 14) {
+            VStack(spacing: LayoutMetrics.s(14)) {
                 if isWouldYouRather {
                     Text(L10n.t("games.wyr.prefix"))
                         .font(.system(.headline, design: .rounded).weight(.bold))
@@ -290,7 +290,7 @@ struct ChoiceGamesView: View {
     }
 
     private var revealFooter: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: LayoutMetrics.s(10)) {
             Text(revealState == .match
                  ? L10n.t("games.choice.match")
                  : L10n.t("games.choice.noMatch"))
@@ -330,8 +330,8 @@ struct ChoiceGamesView: View {
                 }
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 18)
-            .padding(.horizontal, 14)
+            .padding(.vertical, LayoutMetrics.s(18))
+            .padding(.horizontal, LayoutMetrics.s(14))
             .background(
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
                     .fill(tint.opacity(isMine ? 0.34 : 0.14))
@@ -440,14 +440,14 @@ struct ChoiceGamesView: View {
 
     private var endScreen: some View {
         ScrollView {
-            VStack(spacing: 16) {
+            VStack(spacing: LayoutMetrics.s(16)) {
                 Text(matchPercent >= 65 ? "💞" : "🎉")
-                    .font(.system(size: 60))
+                    .font(.scaled(60))
                 Text(L10n.t("games.choice.end.title"))
                     .font(.system(.title2, design: .rounded).weight(.heavy))
                     .foregroundStyle(Theme.textPrimary)
                 Text("\(matchPercent)%")
-                    .font(.system(size: 58, weight: .heavy, design: .rounded))
+                    .font(.scaled(58, weight: .heavy, design: .rounded))
                     .foregroundStyle(
                         LinearGradient(colors: [Theme.rose, Theme.pink, Theme.purple],
                                        startPoint: .leading, endPoint: .trailing)
@@ -471,7 +471,7 @@ struct ChoiceGamesView: View {
             }
             .frame(maxWidth: .infinity)
             .glassCard(padding: 22)
-            .padding(16)
+            .padding(LayoutMetrics.s(16))
         }
         .onAppear {
             maybeFinish()

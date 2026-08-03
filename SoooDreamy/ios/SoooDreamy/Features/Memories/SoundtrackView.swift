@@ -88,7 +88,7 @@ struct SoundtrackView: View {
                             .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
                     }
                     Color.clear
-                        .frame(height: 70)
+                        .frame(height: LayoutMetrics.s(70))
                         .listRowBackground(Color.clear)
                         .listRowSeparator(.hidden)
                 }
@@ -108,15 +108,15 @@ struct SoundtrackView: View {
     }
 
     private func header(_ proxy: ScrollViewProxy) -> some View {
-        HStack(spacing: 10) {
+        HStack(spacing: LayoutMetrics.s(10)) {
             Text(countText)
                 .font(.system(.footnote, design: .rounded).weight(.semibold))
                 .foregroundStyle(Theme.textSecondary)
             Spacer()
             shuffleButton(proxy)
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 10)
+        .padding(.horizontal, LayoutMetrics.s(16))
+        .padding(.top, LayoutMetrics.s(10))
         .padding(.bottom, 4)
     }
 
@@ -131,7 +131,7 @@ struct SoundtrackView: View {
             }
             .foregroundStyle(Theme.mint)
             .padding(.vertical, 7)
-            .padding(.horizontal, 12)
+            .padding(.horizontal, LayoutMetrics.s(12))
             .background(Capsule().fill(Theme.mint.opacity(0.14)))
         }
         .buttonStyle(.plain)
@@ -197,7 +197,7 @@ struct SoundtrackView: View {
 
     private func songCard(_ song: Song) -> some View {
         let highlighted = highlightedId == song.id
-        return HStack(alignment: .top, spacing: 12) {
+        return HStack(alignment: .top, spacing: LayoutMetrics.s(12)) {
             noteTile
             VStack(alignment: .leading, spacing: 3) {
                 Text(song.title)
@@ -237,8 +237,8 @@ struct SoundtrackView: View {
 
     private var noteTile: some View {
         Text("🎵")
-            .font(.system(size: 24))
-            .frame(width: 48, height: 48)
+            .font(.scaled(24))
+            .frame(width: LayoutMetrics.s(48), height: LayoutMetrics.s(48))
             .background(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .fill(LinearGradient(colors: [Theme.mint.opacity(0.25), Theme.blue.opacity(0.18)],
@@ -281,12 +281,12 @@ struct SoundtrackView: View {
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: mine ? "heart.fill" : "heart")
-                    .font(.system(size: 13, weight: .bold))
+                    .font(.scaled(13, weight: .bold))
                 Text(String(count))
                     .font(.system(.caption, design: .rounded).weight(.bold))
                 if count >= 2 {
                     Text("💞")
-                        .font(.system(size: 10))
+                        .font(.scaled(10))
                 }
             }
             .foregroundStyle(mine ? Theme.pink : Theme.textSecondary)
@@ -368,17 +368,17 @@ struct SoundtrackView: View {
                     ZStack {
                         Circle()
                             .fill(Theme.heroGradient)
-                            .frame(width: 60, height: 60)
+                            .frame(width: LayoutMetrics.s(60), height: LayoutMetrics.s(60))
                             .shadow(color: Theme.pink.opacity(0.5), radius: 14, y: 6)
                         Image(systemName: "plus")
-                            .font(.system(size: 24, weight: .bold))
+                            .font(.scaled(24, weight: .bold))
                             .foregroundStyle(.white)
                     }
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(L10n.t("memories.soundtrack.add"))
-                .padding(.trailing, 20)
-                .padding(.bottom, 24)
+                .padding(.trailing, LayoutMetrics.s(20))
+                .padding(.bottom, LayoutMetrics.s(24))
             }
         }
     }
@@ -474,14 +474,14 @@ private struct SongEditorSheet: View {
             ZStack {
                 DreamyBackground(showStars: false)
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 14) {
+                    VStack(alignment: .leading, spacing: LayoutMetrics.s(14)) {
                         titleField
                         artistField
                         noteField
                         linkField
                         saveButton
                     }
-                    .padding(16)
+                    .padding(LayoutMetrics.s(16))
                 }
             }
             .navigationTitle(L10n.t(song == nil

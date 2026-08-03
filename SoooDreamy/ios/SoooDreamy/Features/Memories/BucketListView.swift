@@ -110,7 +110,7 @@ struct BucketListView: View {
     // MARK: Progress header
 
     private var progressCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: LayoutMetrics.s(10)) {
             Text(progressText)
                 .font(.system(.headline, design: .rounded).weight(.bold))
                 .foregroundStyle(Theme.textPrimary)
@@ -149,8 +149,8 @@ struct BucketListView: View {
     // MARK: Add card
 
     private var addCard: some View {
-        VStack(spacing: 10) {
-            HStack(spacing: 10) {
+        VStack(spacing: LayoutMetrics.s(10)) {
+            HStack(spacing: LayoutMetrics.s(10)) {
                 emojiButton
                 TextField(L10n.t("memories.bucket.placeholder"), text: $newText)
                     .textFieldStyle(DreamyFieldStyle())
@@ -174,8 +174,8 @@ struct BucketListView: View {
             withAnimation(.spring(response: 0.3)) { showEmojiPicker.toggle() }
         } label: {
             Text(selectedEmoji.isEmpty ? "🌟" : selectedEmoji)
-                .font(.system(size: 22))
-                .frame(width: 44, height: 44)
+                .font(.scaled(22))
+                .frame(width: LayoutMetrics.s(44), height: LayoutMetrics.s(44))
                 .background(
                     Circle().fill(selectedEmoji.isEmpty ? Color.white.opacity(0.07) : Theme.purple.opacity(0.3))
                 )
@@ -194,12 +194,12 @@ struct BucketListView: View {
             if adding {
                 ProgressView()
                     .tint(.white)
-                    .frame(width: 44, height: 44)
+                    .frame(width: LayoutMetrics.s(44), height: LayoutMetrics.s(44))
             } else {
                 Image(systemName: "plus")
-                    .font(.system(size: 18, weight: .bold))
+                    .font(.scaled(18, weight: .bold))
                     .foregroundStyle(.white)
-                    .frame(width: 44, height: 44)
+                    .frame(width: LayoutMetrics.s(44), height: LayoutMetrics.s(44))
                     .background(Circle().fill(Theme.heroGradient))
             }
         }
@@ -211,7 +211,7 @@ struct BucketListView: View {
     // MARK: Row
 
     private func row(_ item: BucketItem) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: LayoutMetrics.s(12)) {
             checkbox(item)
             VStack(alignment: .leading, spacing: 2) {
                 Text(rowTitle(item))
@@ -255,10 +255,10 @@ struct BucketListView: View {
                 Circle()
                     .strokeBorder(item.done ? Theme.mint : Color.white.opacity(0.3), lineWidth: 2)
                     .background(Circle().fill(item.done ? Theme.mint.opacity(0.25) : Color.clear))
-                    .frame(width: 32, height: 32)
+                    .frame(width: LayoutMetrics.s(32), height: LayoutMetrics.s(32))
                 if item.done {
                     Image(systemName: "checkmark")
-                        .font(.system(size: 14, weight: .heavy))
+                        .font(.scaled(14, weight: .heavy))
                         .foregroundStyle(Theme.mint)
                 }
             }

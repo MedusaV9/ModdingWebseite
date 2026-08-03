@@ -85,9 +85,9 @@ struct TruthOrDareView: View {
 
     private var setupScreen: some View {
         ScrollView {
-            VStack(spacing: 16) {
+            VStack(spacing: LayoutMetrics.s(16)) {
                 Text("🎭")
-                    .font(.system(size: 56))
+                    .font(.scaled(56))
                 Text(L10n.t("games.card.truthordare.title"))
                     .font(.system(.title3, design: .rounded).weight(.bold))
                     .foregroundStyle(Theme.textPrimary)
@@ -105,12 +105,12 @@ struct TruthOrDareView: View {
                 .buttonStyle(PrimaryButtonStyle())
             }
             .glassCard(padding: 22)
-            .padding(16)
+            .padding(LayoutMetrics.s(16))
         }
     }
 
     private var spicePicker: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: LayoutMetrics.s(10)) {
             Text(L10n.t("games.tod.spiceTitle"))
                 .font(.system(.caption, design: .rounded).weight(.semibold))
                 .foregroundStyle(Theme.textTertiary)
@@ -128,9 +128,9 @@ struct TruthOrDareView: View {
             spice = level
             Haptics.shared.tap()
         } label: {
-            HStack(spacing: 12) {
+            HStack(spacing: LayoutMetrics.s(12)) {
                 Text(emoji)
-                    .font(.system(size: 26))
+                    .font(.scaled(26))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(L10n.t("games.tod.spice\(level)"))
                         .font(.system(.headline, design: .rounded).weight(.bold))
@@ -143,7 +143,7 @@ struct TruthOrDareView: View {
                 Image(systemName: selected ? "checkmark.circle.fill" : "circle")
                     .foregroundStyle(selected ? Theme.pink : Theme.textTertiary)
             }
-            .padding(12)
+            .padding(LayoutMetrics.s(12))
             .background(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .fill(selected ? Theme.pink.opacity(0.18) : Color.white.opacity(0.05))
@@ -191,12 +191,12 @@ struct TruthOrDareView: View {
 
     private var choosingScreen: some View {
         ScrollView {
-            VStack(spacing: 16) {
+            VStack(spacing: LayoutMetrics.s(16)) {
                 statusHeader
-                VStack(spacing: 14) {
+                VStack(spacing: LayoutMetrics.s(14)) {
                     EmojiAvatarView(emoji: currentMember?.avatar,
                                     colorHex: currentMember?.color,
-                                    size: 62)
+                                    size: LayoutMetrics.s(62))
                     Text(L10n.t("games.tod.turn", ["name": currentName]))
                         .font(.system(.title3, design: .rounded).weight(.bold))
                         .foregroundStyle(Theme.textPrimary)
@@ -204,7 +204,7 @@ struct TruthOrDareView: View {
                     Text(L10n.t("games.tod.pickPrompt"))
                         .font(.system(.subheadline, design: .rounded))
                         .foregroundStyle(Theme.textSecondary)
-                    HStack(spacing: 12) {
+                    HStack(spacing: LayoutMetrics.s(12)) {
                         choiceButton(isDare: false)
                         choiceButton(isDare: true)
                     }
@@ -212,7 +212,7 @@ struct TruthOrDareView: View {
                 .frame(maxWidth: .infinity)
                 .glassCard(padding: 20)
             }
-            .padding(16)
+            .padding(LayoutMetrics.s(16))
         }
     }
 
@@ -222,13 +222,13 @@ struct TruthOrDareView: View {
         } label: {
             VStack(spacing: 8) {
                 Text(isDare ? "💋" : "💬")
-                    .font(.system(size: 34))
+                    .font(.scaled(34))
                 Text(L10n.t(isDare ? "games.tod.dare" : "games.tod.truth"))
                     .font(.system(.headline, design: .rounded).weight(.heavy))
                     .foregroundStyle(.white)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 26)
+            .padding(.vertical, LayoutMetrics.s(26))
             .background(
                 RoundedRectangle(cornerRadius: 22, style: .continuous)
                     .fill(isDare ? darePinkGradient : truthBlueGradient)
@@ -281,7 +281,7 @@ struct TruthOrDareView: View {
 
     private var cardScreen: some View {
         ScrollView {
-            VStack(spacing: 16) {
+            VStack(spacing: LayoutMetrics.s(16)) {
                 statusHeader
                 Text(L10n.t("games.tod.turn", ["name": currentName]))
                     .font(.system(.headline, design: .rounded).weight(.bold))
@@ -291,7 +291,7 @@ struct TruthOrDareView: View {
                     actionButtons
                 }
             }
-            .padding(16)
+            .padding(LayoutMetrics.s(16))
         }
     }
 
@@ -312,14 +312,14 @@ struct TruthOrDareView: View {
     }
 
     private var cardBack: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: LayoutMetrics.s(10)) {
             Text("❔")
-                .font(.system(size: 60))
+                .font(.scaled(60))
             Text(L10n.t("games.tod.pickPrompt"))
                 .font(.system(.caption, design: .rounded).weight(.semibold))
                 .foregroundStyle(.white.opacity(0.8))
         }
-        .frame(maxWidth: .infinity, minHeight: 300)
+        .frame(maxWidth: .infinity, minHeight: LayoutMetrics.s(300))
         .background(
             RoundedRectangle(cornerRadius: 26, style: .continuous)
                 .fill(LinearGradient(colors: [Theme.bgBottom, Theme.indigo],
@@ -332,13 +332,13 @@ struct TruthOrDareView: View {
     }
 
     private func cardFront(_ card: TruthOrDareItem) -> some View {
-        VStack(spacing: 16) {
+        VStack(spacing: LayoutMetrics.s(16)) {
             HStack {
                 PillTag(text: L10n.t(card.isDare ? "games.tod.dare" : "games.tod.truth"),
                         tint: .black.opacity(0.5))
                 Spacer()
                 Text(String(repeating: "🌶️", count: card.spice))
-                    .font(.system(size: 15))
+                    .font(.scaled(15))
             }
             Spacer()
             Text(card.text.resolved(L10n.lang))
@@ -348,8 +348,8 @@ struct TruthOrDareView: View {
                 .fixedSize(horizontal: false, vertical: true)
             Spacer()
         }
-        .padding(20)
-        .frame(maxWidth: .infinity, minHeight: 300)
+        .padding(LayoutMetrics.s(20))
+        .frame(maxWidth: .infinity, minHeight: LayoutMetrics.s(300))
         .background(
             RoundedRectangle(cornerRadius: 26, style: .continuous)
                 .fill(card.isDare ? darePinkGradient : truthBlueGradient)
@@ -358,7 +358,7 @@ struct TruthOrDareView: View {
     }
 
     private var actionButtons: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: LayoutMetrics.s(10)) {
             Button {
                 skip()
             } label: {

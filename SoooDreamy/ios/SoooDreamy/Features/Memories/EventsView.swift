@@ -70,7 +70,7 @@ struct EventsView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 18) {
+        VStack(spacing: LayoutMetrics.s(18)) {
             Spacer()
             EmptyStateView(emoji: "🗓️",
                            title: L10n.t("memories.events.empty.title"),
@@ -126,10 +126,10 @@ struct EventsView: View {
     }
 
     private func rowContent(_ event: EventItem, days: Int?) -> some View {
-        HStack(spacing: 14) {
+        HStack(spacing: LayoutMetrics.s(14)) {
             Text(event.emoji)
-                .font(.system(size: 30))
-                .frame(width: 52, height: 52)
+                .font(.scaled(30))
+                .frame(width: LayoutMetrics.s(52), height: LayoutMetrics.s(52))
                 .background(
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
                         .fill(Color.white.opacity(0.07))
@@ -182,7 +182,7 @@ struct EventsView: View {
             } label: {
                 HStack(spacing: 4) {
                     Image(systemName: running ? "stop.circle.fill" : "timer")
-                        .font(.system(size: 11, weight: .bold))
+                        .font(.scaled(11, weight: .bold))
                     Text(L10n.t(running ? "memories.events.liveStop" : "memories.events.liveStart"))
                         .font(.system(.caption2, design: .rounded).weight(.semibold))
                 }
@@ -311,14 +311,14 @@ private struct EventEditorSheet: View {
             ZStack {
                 DreamyBackground(showStars: false)
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 16) {
+                    VStack(alignment: .leading, spacing: LayoutMetrics.s(16)) {
                         titleField
                         emojiSection
                         dateSection
                         yearlyToggle
                         saveButton
                     }
-                    .padding(16)
+                    .padding(LayoutMetrics.s(16))
                 }
             }
             .navigationTitle(L10n.t(event == nil ? "memories.events.add" : "memories.events.edit"))

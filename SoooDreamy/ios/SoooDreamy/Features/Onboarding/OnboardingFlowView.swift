@@ -16,12 +16,14 @@ struct OnboardingFlowView: View {
                 Spacer()
 
                 Text("💜")
-                    .font(.system(size: 84))
+                    .font(.scaled(84))
                     .shadow(color: Theme.pink.opacity(0.8), radius: 30)
-                    .padding(.bottom, 18)
+                    .padding(.bottom, LayoutMetrics.s(18))
 
                 Text(L10n.t("onboarding.title"))
-                    .font(.system(size: 44, weight: .heavy, design: .rounded))
+                    .font(.scaled(44, weight: .heavy, design: .rounded))
+                    .minimumScaleFactor(0.75)
+                    .lineLimit(2)
                     .foregroundStyle(
                         LinearGradient(colors: [Theme.rose, Theme.pink, Theme.purple],
                                        startPoint: .leading, endPoint: .trailing)
@@ -31,23 +33,23 @@ struct OnboardingFlowView: View {
                     .font(.system(.body, design: .rounded))
                     .foregroundStyle(Theme.textSecondary)
                     .multilineTextAlignment(.center)
-                    .padding(.horizontal, 36)
-                    .padding(.top, 10)
+                    .padding(.horizontal, LayoutMetrics.s(36))
+                    .padding(.top, LayoutMetrics.s(10))
 
-                VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: LayoutMetrics.s(14)) {
                     featureRow("heart.fill", "onboarding.feature1", Theme.pink)
                     featureRow("bubble.left.and.bubble.right.fill", "onboarding.feature2", Theme.blue)
                     featureRow("gamecontroller.fill", "onboarding.feature3", Theme.purple)
                     featureRow("sparkles", "onboarding.feature4", Theme.gold)
                 }
                 .glassCard(padding: 20)
-                .padding(.horizontal, 24)
-                .padding(.top, 30)
+                .padding(.horizontal, LayoutMetrics.s(24))
+                .padding(.top, LayoutMetrics.s(30))
 
                 Spacer()
 
                 languagePicker
-                    .padding(.bottom, 14)
+                    .padding(.bottom, LayoutMetrics.s(14))
 
                 Button(L10n.t("onboarding.start")) {
                     Haptics.shared.tap()
@@ -55,8 +57,8 @@ struct OnboardingFlowView: View {
                     showServerSetup = true
                 }
                 .buttonStyle(PrimaryButtonStyle())
-                .padding(.horizontal, 24)
-                .padding(.bottom, 30)
+                .padding(.horizontal, LayoutMetrics.s(24))
+                .padding(.bottom, LayoutMetrics.s(30))
             }
         }
         .sheet(isPresented: $showServerSetup) {
@@ -65,11 +67,11 @@ struct OnboardingFlowView: View {
     }
 
     private func featureRow(_ icon: String, _ key: String, _ tint: Color) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: LayoutMetrics.s(12)) {
             Image(systemName: icon)
-                .font(.system(size: 16, weight: .bold))
+                .font(.scaled(16, weight: .bold))
                 .foregroundStyle(tint)
-                .frame(width: 34, height: 34)
+                .frame(width: LayoutMetrics.s(34), height: LayoutMetrics.s(34))
                 .background(Circle().fill(tint.opacity(0.18)))
             Text(L10n.t(key))
                 .font(.system(.subheadline, design: .rounded).weight(.medium))
@@ -89,7 +91,7 @@ struct OnboardingFlowView: View {
                         .font(.system(.caption, design: .rounded).weight(.semibold))
                         .foregroundStyle(L10n.language == lang ? .white : Theme.textSecondary)
                         .padding(.vertical, 7)
-                        .padding(.horizontal, 14)
+                        .padding(.horizontal, LayoutMetrics.s(14))
                         .background(
                             Capsule().fill(L10n.language == lang ? Theme.purple.opacity(0.6) : Color.white.opacity(0.07))
                         )
@@ -119,13 +121,13 @@ struct ServerSetupSheet: View {
             ZStack {
                 DreamyBackground(showStars: false)
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 18) {
+                    VStack(alignment: .leading, spacing: LayoutMetrics.s(18)) {
                         Text(L10n.t("server.setupSubtitle"))
                             .font(.system(.subheadline, design: .rounded))
                             .foregroundStyle(Theme.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
 
-                        VStack(spacing: 12) {
+                        VStack(spacing: LayoutMetrics.s(12)) {
                             TextField(L10n.t("server.name"), text: $name)
                                 .textFieldStyle(DreamyFieldStyle())
                             TextField(L10n.t("server.url"), text: $urlString)
@@ -175,7 +177,7 @@ struct ServerSetupSheet: View {
                             .foregroundStyle(Theme.textTertiary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
-                    .padding(20)
+                    .padding(LayoutMetrics.s(20))
                 }
             }
             .navigationTitle(L10n.t(existing == nil ? "server.add" : "common.edit"))
@@ -248,8 +250,8 @@ struct DreamyFieldStyle: TextFieldStyle {
         configuration
             .font(.system(.body, design: .rounded))
             .foregroundStyle(Theme.textPrimary)
-            .padding(.vertical, 13)
-            .padding(.horizontal, 16)
+            .padding(.vertical, LayoutMetrics.s(13))
+            .padding(.horizontal, LayoutMetrics.s(16))
             .background(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .fill(Color.white.opacity(0.07))

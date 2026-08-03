@@ -21,8 +21,8 @@ struct WordleRecordView: View {
             DreamyBackground()
             ScrollView {
                 content
-                    .padding(16)
-                    .padding(.bottom, 12)
+                    .padding(LayoutMetrics.s(16))
+                    .padding(.bottom, LayoutMetrics.s(12))
             }
             .refreshable { await load() }
         }
@@ -36,14 +36,14 @@ struct WordleRecordView: View {
         if loading && days.isEmpty {
             ProgressView()
                 .tint(Theme.pink)
-                .padding(.top, 120)
+                .padding(.top, LayoutMetrics.s(120))
         } else if days.isEmpty {
             EmptyStateView(emoji: "🥊",
                            title: L10n.t("games.wordle.record.emptyTitle"),
                            subtitle: L10n.t("games.wordle.record.emptyBody"))
-                .padding(.top, 80)
+                .padding(.top, LayoutMetrics.s(80))
         } else {
-            VStack(spacing: 14) {
+            VStack(spacing: LayoutMetrics.s(14)) {
                 recordCard
                 if playStreak >= 2 {
                     PillTag(text: L10n.t("games.wordle.record.streak",
@@ -89,17 +89,17 @@ struct WordleRecordView: View {
     private var recordCard: some View {
         let record = record
         let total = record.mine + record.ties + record.partner
-        return VStack(spacing: 12) {
-            HStack(alignment: .top, spacing: 12) {
+        return VStack(spacing: LayoutMetrics.s(12)) {
+            HStack(alignment: .top, spacing: LayoutMetrics.s(12)) {
                 recordColumn(name: myName,
                              avatar: appState.me?.avatar,
                              colorHex: appState.me?.color,
                              wins: record.mine)
                 VStack(spacing: 4) {
                     Text("\(record.ties)")
-                        .font(.system(size: 30, weight: .heavy, design: .rounded))
+                        .font(.scaled(30, weight: .heavy, design: .rounded))
                         .foregroundStyle(Theme.textSecondary)
-                        .padding(.top, 12)
+                        .padding(.top, LayoutMetrics.s(12))
                     Text(L10n.t("games.wordle.record.ties"))
                         .font(.system(.caption2, design: .rounded).weight(.semibold))
                         .foregroundStyle(Theme.textTertiary)
@@ -127,13 +127,13 @@ struct WordleRecordView: View {
     private func recordColumn(name: String, avatar: String?, colorHex: String?,
                               wins: Int) -> some View {
         VStack(spacing: 6) {
-            EmojiAvatarView(emoji: avatar, colorHex: colorHex, size: 40)
+            EmojiAvatarView(emoji: avatar, colorHex: colorHex, size: LayoutMetrics.s(40))
             Text(name)
                 .font(.system(.caption, design: .rounded).weight(.semibold))
                 .foregroundStyle(Theme.textSecondary)
                 .lineLimit(1)
             Text("\(wins)")
-                .font(.system(size: 30, weight: .heavy, design: .rounded))
+                .font(.scaled(30, weight: .heavy, design: .rounded))
                 .foregroundStyle(Theme.textPrimary)
         }
         .frame(maxWidth: .infinity)
@@ -176,7 +176,7 @@ struct WordleRecordView: View {
     // MARK: Day list
 
     private var dayList: some View {
-        LazyVStack(spacing: 10) {
+        LazyVStack(spacing: LayoutMetrics.s(10)) {
             ForEach(days, id: \.dateKey) { day in
                 dayRow(day)
             }
@@ -185,7 +185,7 @@ struct WordleRecordView: View {
 
     private func dayRow(_ day: WordleDayResponse) -> some View {
         let expandable = day.mine != nil && day.partner != nil
-        return VStack(spacing: 12) {
+        return VStack(spacing: LayoutMetrics.s(12)) {
             Button {
                 toggle(day.dateKey)
             } label: {
@@ -202,7 +202,7 @@ struct WordleRecordView: View {
     }
 
     private func dayHeader(_ day: WordleDayResponse, expandable: Bool) -> some View {
-        HStack(spacing: 10) {
+        HStack(spacing: LayoutMetrics.s(10)) {
             Text(prettyDate(day.dateKey))
                 .font(.system(.footnote, design: .rounded).weight(.semibold))
                 .foregroundStyle(Theme.textPrimary)
@@ -213,10 +213,10 @@ struct WordleRecordView: View {
                 .foregroundStyle(Theme.textTertiary)
             scoreText(day.partner)
             Text(outcomeIcon(day))
-                .font(.system(size: 16))
+                .font(.scaled(16))
                 .frame(width: 24)
             Image(systemName: "chevron.down")
-                .font(.system(size: 11, weight: .bold))
+                .font(.scaled(11, weight: .bold))
                 .foregroundStyle(Theme.textTertiary)
                 .rotationEffect(.degrees(expandedKeys.contains(day.dateKey) ? 180 : 0))
                 .opacity(expandable ? 1 : 0)
@@ -256,7 +256,7 @@ struct WordleRecordView: View {
     }
 
     private func expandedGrids(mine: WordleResult, partner: WordleResult) -> some View {
-        HStack(alignment: .top, spacing: 14) {
+        HStack(alignment: .top, spacing: LayoutMetrics.s(14)) {
             gridColumn(name: myName, result: mine)
             Rectangle()
                 .fill(Color.white.opacity(0.1))
@@ -275,7 +275,7 @@ struct WordleRecordView: View {
                 ForEach(Array(result.grid.split(separator: "\n").enumerated()),
                         id: \.offset) { _, line in
                     Text(String(line))
-                        .font(.system(size: 13))
+                        .font(.scaled(13))
                         .kerning(1)
                 }
             }

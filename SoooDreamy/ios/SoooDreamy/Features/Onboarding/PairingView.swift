@@ -19,23 +19,23 @@ struct PairingView: View {
         ZStack {
             DreamyBackground()
             ScrollView {
-                VStack(spacing: 20) {
+                VStack(spacing: LayoutMetrics.s(20)) {
                     header
 
                     // Mode switch
-                    HStack(spacing: 10) {
+                    HStack(spacing: LayoutMetrics.s(10)) {
                         modeButton(.create, label: L10n.t("pairing.create"), icon: "plus.heart.fill")
                         modeButton(.join, label: L10n.t("pairing.join"), icon: "link")
                     }
 
                     // Profile
-                    VStack(alignment: .leading, spacing: 14) {
+                    VStack(alignment: .leading, spacing: LayoutMetrics.s(14)) {
                         Text(L10n.t("pairing.profileTitle"))
                             .font(.system(.headline, design: .rounded).weight(.bold))
                             .foregroundStyle(Theme.textPrimary)
 
-                        HStack(spacing: 14) {
-                            EmojiAvatarView(emoji: avatar, colorHex: colorHex, size: 64)
+                        HStack(spacing: LayoutMetrics.s(14)) {
+                            EmojiAvatarView(emoji: avatar, colorHex: colorHex, size: LayoutMetrics.s(64))
                             TextField(L10n.t("pairing.yourName"), text: $name)
                                 .textFieldStyle(DreamyFieldStyle())
                         }
@@ -54,7 +54,7 @@ struct PairingView: View {
 
                     // Join: code entry + QR scan
                     if mode == .join {
-                        VStack(spacing: 12) {
+                        VStack(spacing: LayoutMetrics.s(12)) {
                             TextField(L10n.t("pairing.codePlaceholder"), text: $code)
                                 .textFieldStyle(DreamyFieldStyle())
                                 .textInputAutocapitalization(.characters)
@@ -85,7 +85,7 @@ struct PairingView: View {
                     .buttonStyle(PrimaryButtonStyle())
                     .disabled(busy || !isValid)
                 }
-                .padding(20)
+                .padding(LayoutMetrics.s(20))
             }
         }
         .sheet(isPresented: $showScanner) {
@@ -111,7 +111,7 @@ struct PairingView: View {
     private var header: some View {
         VStack(spacing: 8) {
             Text("💞")
-                .font(.system(size: 56))
+                .font(.scaled(56))
             Text(L10n.t("pairing.title"))
                 .font(.system(.largeTitle, design: .rounded).weight(.heavy))
                 .foregroundStyle(Theme.textPrimary)
@@ -126,22 +126,22 @@ struct PairingView: View {
                 } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "server.rack")
-                            .font(.system(size: 11, weight: .bold))
+                            .font(.scaled(11, weight: .bold))
                         Text(profile.name)
                             .font(.system(.caption, design: .rounded).weight(.semibold))
                         Image(systemName: "chevron.up.chevron.down")
-                            .font(.system(size: 9, weight: .bold))
+                            .font(.scaled(9, weight: .bold))
                     }
                     .foregroundStyle(Theme.textSecondary)
                     .padding(.vertical, 6)
-                    .padding(.horizontal, 12)
+                    .padding(.horizontal, LayoutMetrics.s(12))
                     .background(Capsule().fill(Color.white.opacity(0.08)))
                 }
                 .buttonStyle(.plain)
                 .padding(.top, 4)
             }
         }
-        .padding(.top, 12)
+        .padding(.top, LayoutMetrics.s(12))
     }
 
     private func modeButton(_ m: Mode, label: String, icon: String) -> some View {
@@ -151,14 +151,14 @@ struct PairingView: View {
         } label: {
             VStack(spacing: 6) {
                 Image(systemName: icon)
-                    .font(.system(size: 20, weight: .bold))
+                    .font(.scaled(20, weight: .bold))
                 Text(label)
                     .font(.system(.footnote, design: .rounded).weight(.bold))
                     .multilineTextAlignment(.center)
             }
             .foregroundStyle(mode == m ? .white : Theme.textSecondary)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 16)
+            .padding(.vertical, LayoutMetrics.s(16))
             .background(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
                     .fill(mode == m ? AnyShapeStyle(Theme.heroGradient) : AnyShapeStyle(Color.white.opacity(0.07)))

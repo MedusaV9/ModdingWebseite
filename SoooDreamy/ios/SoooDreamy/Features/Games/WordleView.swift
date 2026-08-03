@@ -262,7 +262,7 @@ struct WordleView: View {
         ZStack {
             DreamyBackground()
             ScrollView {
-                VStack(spacing: 16) {
+                VStack(spacing: LayoutMetrics.s(16)) {
                     headerHint
                     hardModeRow
                     grid
@@ -275,8 +275,8 @@ struct WordleView: View {
                     duelSection
                     recordLink
                 }
-                .padding(16)
-                .padding(.bottom, 12)
+                .padding(LayoutMetrics.s(16))
+                .padding(.bottom, LayoutMetrics.s(12))
             }
             if celebrate {
                 FloatingHeartsView(emojis: ["💘", "💚", "💛", "✨", "💞"])
@@ -348,7 +348,7 @@ struct WordleView: View {
                 .font(.system(.caption2, design: .rounded).weight(.bold))
                 .foregroundStyle(active ? Theme.bgTop : Theme.textSecondary)
                 .padding(.vertical, 6)
-                .padding(.horizontal, 11)
+                .padding(.horizontal, LayoutMetrics.s(11))
                 .background(
                     Capsule().fill(active ? Theme.gold : Color.white.opacity(0.12))
                 )
@@ -440,7 +440,7 @@ struct WordleView: View {
         VStack(spacing: 7) {
             keyRow(keyboardRows[0])
             keyRow(keyboardRows[1])
-                .padding(.horizontal, 16)
+                .padding(.horizontal, LayoutMetrics.s(16))
             HStack(spacing: 5) {
                 enterKey
                 keyRow(keyboardRows[2])
@@ -467,7 +467,7 @@ struct WordleView: View {
                 .font(.system(.callout, design: .rounded).weight(.bold))
                 .foregroundStyle(keyTextColor(mark))
                 .frame(maxWidth: .infinity)
-                .frame(height: 46)
+                .frame(height: LayoutMetrics.s(46))
                 .background(
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
                         .fill(keyFillColor(mark))
@@ -479,9 +479,9 @@ struct WordleView: View {
     private var enterKey: some View {
         Button(action: submitGuess) {
             Image(systemName: "return")
-                .font(.system(size: 15, weight: .bold))
+                .font(.scaled(15, weight: .bold))
                 .foregroundStyle(Theme.textPrimary)
-                .frame(width: 46, height: 46)
+                .frame(width: LayoutMetrics.s(46), height: LayoutMetrics.s(46))
                 .background(
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
                         .fill(Theme.pink.opacity(0.45))
@@ -493,9 +493,9 @@ struct WordleView: View {
     private var backspaceKey: some View {
         Button(action: tapBackspace) {
             Image(systemName: "delete.left")
-                .font(.system(size: 15, weight: .bold))
+                .font(.scaled(15, weight: .bold))
                 .foregroundStyle(Theme.textPrimary)
-                .frame(width: 46, height: 46)
+                .frame(width: LayoutMetrics.s(46), height: LayoutMetrics.s(46))
                 .background(
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
                         .fill(Color.white.opacity(0.12))
@@ -641,9 +641,9 @@ struct WordleView: View {
     // MARK: End card
 
     private var endCard: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: LayoutMetrics.s(12)) {
             Text(didWin ? "💘" : "🫂")
-                .font(.system(size: 48))
+                .font(.scaled(48))
             Text(didWin ? praiseText : L10n.t("games.wordle.lossTitle"))
                 .font(.system(.title3, design: .rounded).weight(.heavy))
                 .foregroundStyle(Theme.textPrimary)
@@ -925,13 +925,13 @@ struct WordleView: View {
         } label: {
             HStack(spacing: 8) {
                 Text("📊")
-                    .font(.system(size: 16))
+                    .font(.scaled(16))
                 Text(L10n.t("games.wordle.record.button"))
                     .font(.system(.caption, design: .rounded).weight(.bold))
                     .foregroundStyle(Theme.textSecondary)
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.scaled(11, weight: .bold))
                     .foregroundStyle(Theme.textTertiary)
             }
             .glassCard(padding: 12)
@@ -940,9 +940,9 @@ struct WordleView: View {
     }
 
     private var retryCard: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: LayoutMetrics.s(10)) {
             Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 16))
+                .font(.scaled(16))
                 .foregroundStyle(Theme.gold)
             Text(L10n.t("games.wordle.duel.sendFailed"))
                 .font(.system(.caption, design: .rounded).weight(.semibold))
@@ -954,7 +954,7 @@ struct WordleView: View {
                     .font(.system(.caption, design: .rounded).weight(.bold))
                     .foregroundStyle(Theme.bgTop)
                     .padding(.vertical, 7)
-                    .padding(.horizontal, 12)
+                    .padding(.horizontal, LayoutMetrics.s(12))
                     .background(Capsule().fill(Theme.gold))
             }
             .buttonStyle(.plain)
@@ -965,7 +965,7 @@ struct WordleView: View {
     private var stillSolvingCard: some View {
         HStack(spacing: 8) {
             Text("🥊")
-                .font(.system(size: 20))
+                .font(.scaled(20))
             Text(L10n.t("games.wordle.duel.stillSolving", ["name": appState.partnerName]))
                 .font(.system(.caption, design: .rounded).weight(.semibold))
                 .foregroundStyle(Theme.textSecondary)
@@ -978,7 +978,7 @@ struct WordleView: View {
     private var teaserCard: some View {
         HStack(spacing: 8) {
             Text("🥊")
-                .font(.system(size: 20))
+                .font(.scaled(20))
             Text(L10n.t("games.wordle.duel.teaser", ["name": appState.partnerName]))
                 .font(.system(.caption, design: .rounded).weight(.semibold))
                 .foregroundStyle(Theme.textPrimary)
@@ -989,7 +989,7 @@ struct WordleView: View {
     }
 
     private var revealingCard: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: LayoutMetrics.s(10)) {
             ProgressView()
                 .tint(Theme.pink)
             Text(L10n.t("games.wordle.duel.revealing"))
@@ -1001,14 +1001,14 @@ struct WordleView: View {
     }
 
     private func duelCard(mine: WordleResult, partner: WordleResult) -> some View {
-        VStack(spacing: 14) {
+        VStack(spacing: LayoutMetrics.s(14)) {
             HStack(spacing: 8) {
                 Text("🥊")
                 Text(L10n.t("games.wordle.duel.title"))
                     .font(.system(.headline, design: .rounded).weight(.bold))
                     .foregroundStyle(Theme.textPrimary)
             }
-            HStack(alignment: .top, spacing: 14) {
+            HStack(alignment: .top, spacing: LayoutMetrics.s(14)) {
                 duelColumn(name: appState.me?.name ?? L10n.t("common.you"), result: mine)
                 Rectangle()
                     .fill(Color.white.opacity(0.1))
@@ -1043,7 +1043,7 @@ struct WordleView: View {
         VStack(spacing: 2) {
             ForEach(Array(grid.split(separator: "\n").enumerated()), id: \.offset) { _, line in
                 Text(String(line))
-                    .font(.system(size: 13))
+                    .font(.scaled(13))
                     .kerning(1)
             }
         }
@@ -1150,7 +1150,7 @@ private struct WordleTileView: View {
                 // Colorblind-friendly secondary cue on top of the colors.
                 if let icon = cueIcon(resolvedMark) {
                     Image(systemName: icon)
-                        .font(.system(size: 8, weight: .black))
+                        .font(.scaled(8, weight: .black))
                         .foregroundStyle(letterColor(resolvedMark).opacity(0.75))
                         .padding(4)
                 }

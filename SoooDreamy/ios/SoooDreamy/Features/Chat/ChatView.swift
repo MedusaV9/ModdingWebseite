@@ -59,10 +59,10 @@ struct ChatView: View {
     // MARK: Header
 
     private var header: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: LayoutMetrics.s(12)) {
             EmojiAvatarView(emoji: appState.partner?.avatar,
                             colorHex: appState.partner?.color,
-                            size: 42,
+                            size: LayoutMetrics.s(42),
                             online: appState.partner?.online ?? false)
             VStack(alignment: .leading, spacing: 1) {
                 Text(appState.partnerName)
@@ -73,8 +73,8 @@ struct ChatView: View {
             Spacer()
             ConnectionBanner(state: appState.socket.state)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .padding(.horizontal, LayoutMetrics.s(16))
+        .padding(.vertical, LayoutMetrics.s(10))
     }
 
     @ViewBuilder private var headerStatus: some View {
@@ -118,7 +118,7 @@ struct ChatView: View {
     private var messageList: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(spacing: 10, pinnedViews: [.sectionHeaders]) {
+                LazyVStack(spacing: LayoutMetrics.s(10), pinnedViews: [.sectionHeaders]) {
                     ForEach(model.sections) { section in
                         Section {
                             ForEach(section.messages) { message in
@@ -139,7 +139,7 @@ struct ChatView: View {
                         .frame(height: 1)
                         .id(Self.bottomAnchorID)
                 }
-                .padding(.horizontal, 14)
+                .padding(.horizontal, LayoutMetrics.s(14))
                 .padding(.top, 2)
                 .padding(.bottom, 6)
                 .animation(.spring(response: 0.35), value: model.messages)
@@ -182,8 +182,8 @@ struct ChatView: View {
             messageField
             sendButton
         }
-        .padding(.horizontal, 12)
-        .padding(.top, 10)
+        .padding(.horizontal, LayoutMetrics.s(12))
+        .padding(.top, LayoutMetrics.s(10))
         .padding(.bottom, 8)
         .background(.ultraThinMaterial)
     }
@@ -210,9 +210,9 @@ struct ChatView: View {
             sendDraft()
         } label: {
             Image(systemName: "paperplane.fill")
-                .font(.system(size: 16, weight: .bold))
+                .font(.scaled(16, weight: .bold))
                 .foregroundStyle(.white)
-                .frame(width: 40, height: 40)
+                .frame(width: LayoutMetrics.s(40), height: LayoutMetrics.s(40))
                 .background(
                     Circle().fill(trimmedDraft.isEmpty
                                   ? AnyShapeStyle(Color.white.opacity(0.10))
@@ -233,9 +233,9 @@ struct ChatView: View {
             action()
         } label: {
             Image(systemName: icon)
-                .font(.system(size: 16, weight: .semibold))
+                .font(.scaled(16, weight: .semibold))
                 .foregroundStyle(Theme.textSecondary)
-                .frame(width: 40, height: 40)
+                .frame(width: LayoutMetrics.s(40), height: LayoutMetrics.s(40))
                 .background(
                     Circle()
                         .fill(Color.white.opacity(0.08))
@@ -276,7 +276,7 @@ struct ChatMessageRow: View {
                 Spacer(minLength: 44)
                 bubbleColumn
             } else {
-                EmojiAvatarView(emoji: partner?.avatar, colorHex: partner?.color, size: 28)
+                EmojiAvatarView(emoji: partner?.avatar, colorHex: partner?.color, size: LayoutMetrics.s(28))
                 bubbleColumn
                 Spacer(minLength: 44)
             }
@@ -353,7 +353,7 @@ struct ChatTextBubble: View {
             ChatTimestampText(date: message.createdAt, isMine: isMine)
         }
         .padding(.vertical, 9)
-        .padding(.horizontal, 13)
+        .padding(.horizontal, LayoutMetrics.s(13))
         .background(ChatBubbleBackground(isMine: isMine))
         .onTapGesture(count: 2) {
             onReact(ChatReactions.quick)
@@ -463,7 +463,7 @@ struct ChatLetterBubble: View {
                 ChatTimestampText(date: message.createdAt, isMine: isMine)
             }
         }
-        .padding(15)
+        .padding(LayoutMetrics.s(15))
         .background(letterBackground)
         .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
         .onTapGesture(count: 2) {
@@ -494,7 +494,7 @@ struct ChatLetterBubble: View {
         if let token = message.openWhen {
             HStack(spacing: 5) {
                 Text("🔒")
-                    .font(.system(size: 10))
+                    .font(.scaled(10))
                 Text(LetterSeal.sentence(for: token))
                     .font(.system(.caption2, design: .rounded).weight(.semibold))
                     .lineLimit(2)
@@ -570,7 +570,7 @@ struct ChatDateChip: View {
             .font(.system(.caption2, design: .rounded).weight(.semibold))
             .foregroundStyle(Theme.textSecondary)
             .padding(.vertical, 5)
-            .padding(.horizontal, 12)
+            .padding(.horizontal, LayoutMetrics.s(12))
             .background(
                 Capsule()
                     .fill(Color.black.opacity(0.35))
@@ -589,15 +589,15 @@ struct ChatTypingRow: View {
 
     var body: some View {
         HStack(alignment: .bottom, spacing: 8) {
-            EmojiAvatarView(emoji: partner?.avatar, colorHex: partner?.color, size: 28)
+            EmojiAvatarView(emoji: partner?.avatar, colorHex: partner?.color, size: LayoutMetrics.s(28))
             HStack(spacing: 8) {
                 ChatTypingDots()
                 Text(L10n.t("chat.typing", ["name": name]))
                     .font(.system(.caption, design: .rounded))
                     .foregroundStyle(Theme.textSecondary)
             }
-            .padding(.vertical, 10)
-            .padding(.horizontal, 13)
+            .padding(.vertical, LayoutMetrics.s(10))
+            .padding(.horizontal, LayoutMetrics.s(13))
             .background(ChatBubbleBackground(isMine: false))
             Spacer(minLength: 44)
         }
@@ -698,7 +698,7 @@ struct ChatReactionChips: View {
         } label: {
             HStack(spacing: 3) {
                 Text(entry.emoji)
-                    .font(.system(size: 12))
+                    .font(.scaled(12))
                 if entry.count > 1 {
                     Text("\(entry.count)")
                         .font(.system(.caption2, design: .rounded).weight(.bold))

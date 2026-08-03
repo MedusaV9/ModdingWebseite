@@ -42,13 +42,13 @@ struct JournalView: View {
 
     private var list: some View {
         ScrollView {
-            LazyVStack(spacing: 14) {
+            LazyVStack(spacing: LayoutMetrics.s(14)) {
                 ForEach(entries, id: \.dateKey) { entry in
                     entryCard(entry)
                 }
             }
-            .padding(16)
-            .padding(.bottom, 12)
+            .padding(LayoutMetrics.s(16))
+            .padding(.bottom, LayoutMetrics.s(12))
         }
         .refreshable { await loadEntries() }
     }
@@ -56,7 +56,7 @@ struct JournalView: View {
     // MARK: Entry card
 
     private func entryCard(_ entry: DailyEntry) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: LayoutMetrics.s(10)) {
             Text(prettyDate(entry.dateKey))
                 .font(.system(.caption, design: .rounded).weight(.bold))
                 .foregroundStyle(Theme.textTertiary)

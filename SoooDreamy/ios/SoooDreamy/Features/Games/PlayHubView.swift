@@ -23,15 +23,15 @@ struct PlayHubView: View {
             ZStack {
                 DreamyBackground()
                 ScrollView {
-                    VStack(spacing: 16) {
+                    VStack(spacing: LayoutMetrics.s(16)) {
                         header
                         sessionBanner
                         wordleCard
                         gameGrid
                         dateIdeasCard
                     }
-                    .padding(16)
-                    .padding(.bottom, 12)
+                    .padding(LayoutMetrics.s(16))
+                    .padding(.bottom, LayoutMetrics.s(12))
                 }
             }
             .toolbar(.hidden, for: .navigationBar)
@@ -102,7 +102,7 @@ struct PlayHubView: View {
                     )
                 Spacer()
                 Text("🎲")
-                    .font(.system(size: 34))
+                    .font(.scaled(34))
             }
             Text(L10n.t("games.subtitle"))
                 .font(.system(.subheadline, design: .rounded))
@@ -131,10 +131,10 @@ struct PlayHubView: View {
     }
 
     private func inviteBanner(kind: GameKind, destination: GameDestination) -> some View {
-        VStack(spacing: 12) {
-            HStack(spacing: 12) {
+        VStack(spacing: LayoutMetrics.s(12)) {
+            HStack(spacing: LayoutMetrics.s(12)) {
                 Text("💌")
-                    .font(.system(size: 34))
+                    .font(.scaled(34))
                 Text(L10n.t("games.invite.body",
                             ["name": appState.partnerName, "game": Self.gameTitle(for: kind)]))
                     .font(.system(.subheadline, design: .rounded).weight(.bold))
@@ -154,8 +154,8 @@ struct PlayHubView: View {
     }
 
     private func waitingBanner(destination: GameDestination) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 10) {
+        VStack(alignment: .leading, spacing: LayoutMetrics.s(10)) {
+            HStack(spacing: LayoutMetrics.s(10)) {
                 ProgressView()
                     .tint(Theme.pink)
                 Text(L10n.t("games.invite.waitingTitle"))
@@ -167,7 +167,7 @@ struct PlayHubView: View {
                 .font(.system(.caption, design: .rounded))
                 .foregroundStyle(Theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
-            HStack(spacing: 10) {
+            HStack(spacing: LayoutMetrics.s(10)) {
                 Button {
                     path.append(destination)
                 } label: {
@@ -196,10 +196,10 @@ struct PlayHubView: View {
     }
 
     private func continueBanner(kind: GameKind, destination: GameDestination) -> some View {
-        VStack(spacing: 12) {
-            HStack(spacing: 12) {
+        VStack(spacing: LayoutMetrics.s(12)) {
+            HStack(spacing: LayoutMetrics.s(12)) {
                 Text("🔥")
-                    .font(.system(size: 30))
+                    .font(.scaled(30))
                 Text(L10n.t("games.continue.body", ["game": Self.gameTitle(for: kind)]))
                     .font(.system(.subheadline, design: .rounded).weight(.bold))
                     .foregroundStyle(Theme.textPrimary)
@@ -232,13 +232,13 @@ struct PlayHubView: View {
         Button {
             path.append(.wordle)
         } label: {
-            HStack(spacing: 14) {
+            HStack(spacing: LayoutMetrics.s(14)) {
                 ZStack(alignment: .bottomTrailing) {
                     Text("💘")
-                        .font(.system(size: 40))
+                        .font(.scaled(40))
                     if wordleDoneToday {
                         Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 16, weight: .bold))
+                            .font(.scaled(16, weight: .bold))
                             .foregroundStyle(Theme.mint)
                             .background(Circle().fill(Theme.bgTop).padding(1))
                             .offset(x: 4, y: 2)
@@ -252,7 +252,7 @@ struct PlayHubView: View {
                         PillTag(text: L10n.t("games.wordle.daily"), tint: Theme.gold)
                         if let badge = wordleDuelBadge {
                             Text(badge)
-                                .font(.system(size: 13))
+                                .font(.scaled(13))
                         }
                     }
                     Text(L10n.t(wordleDoneToday ? "games.wordle.done" : "games.wordle.teaser"))
@@ -263,7 +263,7 @@ struct PlayHubView: View {
                 }
                 Spacer()
                 Image(systemName: wordleDoneToday ? "checkmark.seal.fill" : "chevron.right")
-                    .font(.system(size: wordleDoneToday ? 20 : 14, weight: .bold))
+                    .font(.scaled(wordleDoneToday ? 20 : 14, weight: .bold))
                     .foregroundStyle(wordleDoneToday ? Theme.mint : Theme.gold)
             }
             .glassCard(padding: 16)
@@ -338,9 +338,9 @@ struct PlayHubView: View {
         Button {
             path.append(.dateideas)
         } label: {
-            HStack(spacing: 14) {
+            HStack(spacing: LayoutMetrics.s(14)) {
                 Text("🎰")
-                    .font(.system(size: 40))
+                    .font(.scaled(40))
                 VStack(alignment: .leading, spacing: 3) {
                     Text(L10n.t("games.card.dateideas.title"))
                         .font(.system(.headline, design: .rounded).weight(.bold))
@@ -351,7 +351,7 @@ struct PlayHubView: View {
                 }
                 Spacer()
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 14, weight: .bold))
+                    .font(.scaled(14, weight: .bold))
                     .foregroundStyle(Theme.gold)
             }
             .glassCard(padding: 16)
@@ -416,10 +416,10 @@ private struct GameCardView: View {
     let card: GameCardInfo
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: LayoutMetrics.s(10)) {
             Text(card.emoji)
-                .font(.system(size: 30))
-                .frame(width: 52, height: 52)
+                .font(.scaled(30))
+                .frame(width: LayoutMetrics.s(52), height: LayoutMetrics.s(52))
                 .background(Circle().fill(card.tint.opacity(0.22)))
             Text(L10n.t(card.titleKey))
                 .font(.system(.headline, design: .rounded).weight(.bold))
@@ -435,7 +435,7 @@ private struct GameCardView: View {
             PillTag(text: L10n.t(card.multiplayer ? "games.badge.multiplayer" : "games.badge.local"),
                     tint: card.multiplayer ? Theme.pink : Theme.mint)
         }
-        .frame(maxWidth: .infinity, minHeight: 172, alignment: .topLeading)
+        .frame(maxWidth: .infinity, minHeight: LayoutMetrics.s(172), alignment: .topLeading)
         .glassCard(padding: 14)
     }
 }
@@ -450,7 +450,7 @@ struct GameNeedsPartnerView: View {
                        title: L10n.t("games.needPartner.title"),
                        subtitle: L10n.t("games.needPartner.body"))
             .glassCard(padding: 8)
-            .padding(16)
+            .padding(LayoutMetrics.s(16))
     }
 }
 
@@ -463,7 +463,7 @@ struct GameLobbyView: View {
     let accent: Color
 
     var body: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: LayoutMetrics.s(14)) {
             if isMine {
                 waitingContent
             } else {
@@ -479,10 +479,10 @@ struct GameLobbyView: View {
     }
 
     private var waitingContent: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: LayoutMetrics.s(14)) {
             EmojiAvatarView(emoji: appState.partner?.avatar,
                             colorHex: appState.partner?.color,
-                            size: 64,
+                            size: LayoutMetrics.s(64),
                             online: appState.partner?.online ?? false)
             Text(L10n.t("games.waitingFor", ["name": appState.partnerName]))
                 .font(.system(.title3, design: .rounded).weight(.bold))
@@ -515,9 +515,9 @@ struct GameLobbyView: View {
     }
 
     private var joinContent: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: LayoutMetrics.s(14)) {
             Text("💌")
-                .font(.system(size: 52))
+                .font(.scaled(52))
             Text(L10n.t("games.lobby.joinTitle", ["name": appState.partnerName]))
                 .font(.system(.title3, design: .rounded).weight(.bold))
                 .foregroundStyle(Theme.textPrimary)

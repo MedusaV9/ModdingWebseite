@@ -55,6 +55,7 @@ struct RootView: View {
         .animation(.spring(response: 0.4), value: appState.toast)
         .animation(.easeOut(duration: 0.3), value: appLock.locked)
         .id(appState.uiRefresh)   // full rebuild on language switch
+        .fitsPhoneLayout()        // shrink layout on non–Pro Max widths
     }
 }
 

@@ -65,9 +65,9 @@ struct Questions36View: View {
 
     private var setupScreen: some View {
         ScrollView {
-            VStack(spacing: 16) {
+            VStack(spacing: LayoutMetrics.s(16)) {
                 Text("💫")
-                    .font(.system(size: 56))
+                    .font(.scaled(56))
                 Text(L10n.t("games.card.questions36.title"))
                     .font(.system(.title3, design: .rounded).weight(.bold))
                     .foregroundStyle(Theme.textPrimary)
@@ -89,7 +89,7 @@ struct Questions36View: View {
                 .buttonStyle(PrimaryButtonStyle())
             }
             .glassCard(padding: 22)
-            .padding(16)
+            .padding(LayoutMetrics.s(16))
         }
     }
 
@@ -99,9 +99,9 @@ struct Questions36View: View {
             selectedSet = set
             Haptics.shared.tap()
         } label: {
-            HStack(spacing: 12) {
+            HStack(spacing: LayoutMetrics.s(12)) {
                 Text(emoji)
-                    .font(.system(size: 26))
+                    .font(.scaled(26))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(L10n.t("games.q36.set", ["n": String(set)]))
                         .font(.system(.headline, design: .rounded).weight(.bold))
@@ -114,7 +114,7 @@ struct Questions36View: View {
                 Image(systemName: selected ? "checkmark.circle.fill" : "circle")
                     .foregroundStyle(selected ? Theme.blue : Theme.textTertiary)
             }
-            .padding(12)
+            .padding(LayoutMetrics.s(12))
             .background(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .fill(selected ? Theme.blue.opacity(0.18) : Color.white.opacity(0.05))
@@ -139,7 +139,7 @@ struct Questions36View: View {
 
     private var deckScreen: some View {
         ScrollView {
-            VStack(spacing: 16) {
+            VStack(spacing: LayoutMetrics.s(16)) {
                 VStack(spacing: 8) {
                     Text(L10n.t("games.q36.progress",
                                 ["n": String(index + 1), "total": String(questions.count)]))
@@ -154,16 +154,16 @@ struct Questions36View: View {
                     .font(.system(.caption2, design: .rounded))
                     .foregroundStyle(Theme.textTertiary)
             }
-            .padding(16)
+            .padding(LayoutMetrics.s(16))
         }
     }
 
     @ViewBuilder
     private var questionCard: some View {
         if index < questions.count {
-            VStack(spacing: 14) {
+            VStack(spacing: LayoutMetrics.s(14)) {
                 Text("„")
-                    .font(.system(size: 44, weight: .heavy, design: .rounded))
+                    .font(.scaled(44, weight: .heavy, design: .rounded))
                     .foregroundStyle(Theme.blue.opacity(0.7))
                     .frame(maxWidth: .infinity, alignment: .leading)
                 Text(questions[index].text.resolved(L10n.lang))
@@ -173,8 +173,8 @@ struct Questions36View: View {
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
             }
-            .padding(20)
-            .frame(maxWidth: .infinity, minHeight: 280)
+            .padding(LayoutMetrics.s(20))
+            .frame(maxWidth: .infinity, minHeight: LayoutMetrics.s(280))
             .background(
                 RoundedRectangle(cornerRadius: 26, style: .continuous)
                     .fill(LinearGradient(colors: [Theme.indigo.opacity(0.45), Theme.purple.opacity(0.35)],
@@ -211,14 +211,14 @@ struct Questions36View: View {
     }
 
     private var deckControls: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: LayoutMetrics.s(12)) {
             Button {
                 goBack()
             } label: {
                 Image(systemName: "chevron.left")
-                    .font(.system(size: 17, weight: .bold))
+                    .font(.scaled(17, weight: .bold))
                     .foregroundStyle(Theme.textPrimary)
-                    .frame(width: 54, height: 48)
+                    .frame(width: LayoutMetrics.s(54), height: LayoutMetrics.s(48))
                     .background(Capsule().fill(Color.white.opacity(0.08)))
             }
             .buttonStyle(.plain)
@@ -262,9 +262,9 @@ struct Questions36View: View {
 
     private var finishScreen: some View {
         ScrollView {
-            VStack(spacing: 16) {
+            VStack(spacing: LayoutMetrics.s(16)) {
                 Text(timerDone ? "🥹" : "👀")
-                    .font(.system(size: 56))
+                    .font(.scaled(56))
                 Text(L10n.t("games.q36.finishTitle"))
                     .font(.system(.title2, design: .rounded).weight(.heavy))
                     .foregroundStyle(Theme.textPrimary)
@@ -293,7 +293,7 @@ struct Questions36View: View {
             }
             .frame(maxWidth: .infinity)
             .glassCard(padding: 22)
-            .padding(16)
+            .padding(LayoutMetrics.s(16))
         }
     }
 
@@ -311,11 +311,11 @@ struct Questions36View: View {
                 .rotationEffect(.degrees(-90))
                 .animation(.linear(duration: 0.4), value: timerProgress)
             Text(timeString)
-                .font(.system(size: 42, weight: .heavy, design: .rounded))
+                .font(.scaled(42, weight: .heavy, design: .rounded))
                 .foregroundStyle(Theme.textPrimary)
                 .monospacedDigit()
         }
-        .frame(width: 190, height: 190)
+        .frame(width: LayoutMetrics.s(190), height: LayoutMetrics.s(190))
         .padding(.vertical, 6)
     }
 
@@ -328,7 +328,7 @@ struct Questions36View: View {
     }
 
     private var timerButtons: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: LayoutMetrics.s(10)) {
             Button {
                 toggleTimer()
             } label: {
@@ -340,9 +340,9 @@ struct Questions36View: View {
                 resetTimer()
             } label: {
                 Image(systemName: "arrow.counterclockwise")
-                    .font(.system(size: 17, weight: .bold))
+                    .font(.scaled(17, weight: .bold))
                     .foregroundStyle(Theme.textPrimary)
-                    .frame(width: 54, height: 48)
+                    .frame(width: LayoutMetrics.s(54), height: LayoutMetrics.s(48))
                     .background(Capsule().fill(Color.white.opacity(0.08)))
             }
             .buttonStyle(.plain)

@@ -137,7 +137,7 @@ struct QuizGameView: View {
             if session.state == "lobby" {
                 ScrollView {
                     GameLobbyView(engine: engine, accent: Theme.pink)
-                        .padding(16)
+                        .padding(LayoutMetrics.s(16))
                 }
             } else if finished {
                 endScreen
@@ -155,9 +155,9 @@ struct QuizGameView: View {
 
     private var setupScreen: some View {
         ScrollView {
-            VStack(spacing: 16) {
+            VStack(spacing: LayoutMetrics.s(16)) {
                 Text("🧠")
-                    .font(.system(size: 56))
+                    .font(.scaled(56))
                 Text(L10n.t("games.card.quiz.teaser"))
                     .font(.system(.title3, design: .rounded).weight(.bold))
                     .foregroundStyle(Theme.textPrimary)
@@ -177,7 +177,7 @@ struct QuizGameView: View {
                 .disabled(engine.busy)
             }
             .glassCard(padding: 22)
-            .padding(16)
+            .padding(LayoutMetrics.s(16))
         }
     }
 
@@ -186,7 +186,7 @@ struct QuizGameView: View {
             Text(L10n.t("games.quiz.setup.rounds"))
                 .font(.system(.caption, design: .rounded).weight(.semibold))
                 .foregroundStyle(Theme.textTertiary)
-            HStack(spacing: 10) {
+            HStack(spacing: LayoutMetrics.s(10)) {
                 ForEach(Self.roundOptions, id: \.self) { option in
                     Button {
                         setupRounds = option
@@ -195,7 +195,7 @@ struct QuizGameView: View {
                         Text("\(option)")
                             .font(.system(.headline, design: .rounded).weight(.bold))
                             .foregroundStyle(Theme.textPrimary)
-                            .frame(width: 56, height: 44)
+                            .frame(width: LayoutMetrics.s(56), height: LayoutMetrics.s(44))
                             .background(
                                 Capsule().fill(setupRounds == option
                                                ? Theme.pink.opacity(0.4)
@@ -235,20 +235,20 @@ struct QuizGameView: View {
 
     private var playScreen: some View {
         ScrollView {
-            VStack(spacing: 14) {
+            VStack(spacing: LayoutMetrics.s(14)) {
                 scoreHeader
                 GameProgressBar(progress: Double(currentRound) / Double(max(totalRounds, 1)),
                                 tint: Theme.pink)
                 lastRoundBanner
                 roundCard
             }
-            .padding(16)
+            .padding(LayoutMetrics.s(16))
         }
         .scrollDismissesKeyboard(.interactively)
     }
 
     private var scoreHeader: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: LayoutMetrics.s(12)) {
             scoreBadge(memberId: appState.memberId, alignment: .leading)
             Spacer()
             PillTag(text: L10n.t("games.round",
@@ -266,13 +266,13 @@ struct QuizGameView: View {
         let points = memberId.map { score(for: $0) } ?? 0
         return HStack(spacing: 8) {
             if alignment == .leading {
-                EmojiAvatarView(emoji: member?.avatar, colorHex: member?.color, size: 34)
+                EmojiAvatarView(emoji: member?.avatar, colorHex: member?.color, size: LayoutMetrics.s(34))
             }
             Text("\(points)")
                 .font(.system(.title2, design: .rounded).weight(.heavy))
                 .foregroundStyle(Theme.gold)
             if alignment == .trailing {
-                EmojiAvatarView(emoji: member?.avatar, colorHex: member?.color, size: 34)
+                EmojiAvatarView(emoji: member?.avatar, colorHex: member?.color, size: LayoutMetrics.s(34))
             }
         }
     }
@@ -294,7 +294,7 @@ struct QuizGameView: View {
     private var roundCard: some View {
         let round = currentRound
         if round < totalRounds, round < questions.count, let subject = subjectId(round: round) {
-            VStack(spacing: 16) {
+            VStack(spacing: LayoutMetrics.s(16)) {
                 Text(questions[round].text.filled(partner: name(of: subject), lang: L10n.lang))
                     .font(.system(.title3, design: .rounded).weight(.bold))
                     .foregroundStyle(Theme.textPrimary)
@@ -325,7 +325,7 @@ struct QuizGameView: View {
         if myAnswer == nil {
             answerInput(round: round)
         } else if partnerAnswer == nil {
-            VStack(spacing: 10) {
+            VStack(spacing: LayoutMetrics.s(10)) {
                 answerBubble(label: L10n.t("games.quiz.answered"),
                              text: myAnswer?.data["value"]?.stringValue ?? "",
                              tint: Theme.purple)
@@ -340,7 +340,7 @@ struct QuizGameView: View {
     }
 
     private func answerInput(round: Int) -> some View {
-        HStack(spacing: 10) {
+        HStack(spacing: LayoutMetrics.s(10)) {
             TextField(L10n.t("games.quiz.answerPlaceholder"), text: $answerText, axis: .vertical)
                 .textFieldStyle(DreamyFieldStyle())
                 .lineLimit(1...3)
@@ -352,11 +352,11 @@ struct QuizGameView: View {
                         .tint(.white)
                 } else {
                     Image(systemName: "paperplane.fill")
-                        .font(.system(size: 17, weight: .bold))
+                        .font(.scaled(17, weight: .bold))
                         .foregroundStyle(.white)
                 }
             }
-            .frame(width: 46, height: 46)
+            .frame(width: LayoutMetrics.s(46), height: LayoutMetrics.s(46))
             .background(Circle().fill(Theme.heroGradient))
             .disabled(sending || answerText.trimmingCharacters(in: .whitespaces).isEmpty)
         }
@@ -369,7 +369,7 @@ struct QuizGameView: View {
         let subjectMove = iAmSubject ? myAnswer : partnerAnswer
         let guessMove = iAmSubject ? partnerAnswer : myAnswer
         let guesserName = name(of: guesserId(round: round) ?? "")
-        VStack(spacing: 12) {
+        VStack(spacing: LayoutMetrics.s(12)) {
             answerBubble(label: L10n.t("games.quiz.truthLabel") + " · " + name(of: subject),
                          text: subjectMove?.data["value"]?.stringValue ?? "",
                          tint: Theme.gold)
@@ -391,11 +391,11 @@ struct QuizGameView: View {
     }
 
     private func verdictButtons(round: Int, guesserName: String) -> some View {
-        VStack(spacing: 10) {
+        VStack(spacing: LayoutMetrics.s(10)) {
             Text(L10n.t("games.quiz.verdictQuestion", ["name": guesserName]))
                 .font(.system(.subheadline, design: .rounded).weight(.semibold))
                 .foregroundStyle(Theme.textPrimary)
-            HStack(spacing: 10) {
+            HStack(spacing: LayoutMetrics.s(10)) {
                 Button {
                     submitVerdict(round: round, value: "right")
                 } label: {
@@ -424,7 +424,7 @@ struct QuizGameView: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
+        .padding(LayoutMetrics.s(12))
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(tint.opacity(0.14))
@@ -496,9 +496,9 @@ struct QuizGameView: View {
 
     private var endScreen: some View {
         ScrollView {
-            VStack(spacing: 16) {
+            VStack(spacing: LayoutMetrics.s(16)) {
                 Text("🏆")
-                    .font(.system(size: 60))
+                    .font(.scaled(60))
                 Text(L10n.t("games.quiz.end.title"))
                     .font(.system(.title2, design: .rounded).weight(.heavy))
                     .foregroundStyle(Theme.textPrimary)
@@ -523,12 +523,12 @@ struct QuizGameView: View {
             }
             .frame(maxWidth: .infinity)
             .glassCard(padding: 22)
-            .padding(16)
+            .padding(LayoutMetrics.s(16))
         }
     }
 
     private var finalScoreRow: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: LayoutMetrics.s(14)) {
             endScoreColumn(member: appState.me)
             Text(":")
                 .font(.system(.largeTitle, design: .rounded).weight(.heavy))
@@ -539,9 +539,9 @@ struct QuizGameView: View {
 
     private func endScoreColumn(member: Member?) -> some View {
         VStack(spacing: 6) {
-            EmojiAvatarView(emoji: member?.avatar, colorHex: member?.color, size: 46)
+            EmojiAvatarView(emoji: member?.avatar, colorHex: member?.color, size: LayoutMetrics.s(46))
             Text("\(member.map { score(for: $0.id) } ?? 0)")
-                .font(.system(size: 44, weight: .heavy, design: .rounded))
+                .font(.scaled(44, weight: .heavy, design: .rounded))
                 .foregroundStyle(Theme.gold)
             Text(member?.name ?? "–")
                 .font(.system(.caption, design: .rounded).weight(.semibold))

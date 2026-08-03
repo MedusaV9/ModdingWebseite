@@ -111,6 +111,10 @@ _(hier beantworte ich dein Feedback, wenn ich es umgesetzt habe)_
 - `[2026-08-03 22:50 UTC]` Server-Health von hier aus grün: `http://138.201.60.230:4321/api/health` und `http://ark.atomi23.de:4321/api/health` → SoooDreamy **1.4.0**. Release-IPA **1.1.0** enthält ATS + neuen Tip-Text (im Binary verifiziert). Screenshot-Tip endet noch beim alten Text → Client war veraltet.
 - `[2026-08-03 22:50 UTC]` **IPA 1.2.0 (build 12)**: committed Info.plists, Extra-Exception-Domains (`ark.atomi23.de`), sichtbares „App-Build … · HTTP freigeschaltet“, Tip beginnt mit „★ Build 1.2.0“, ATS-Fehler zeigt klare Neuinstall-Anleitung.
 
+### Iteration 12 — Responsive UI-Skalierung (iPhone 16 vs Pro Max) 📐
+- `[2026-08-03 23:05 UTC]` **LayoutMetrics**: Design-Breite 430pt (Pro Max). Kleinere Geräte skalieren Fonts/Frames/Paddings/Spacings proportional (zusätzlicher Faktor unter 410pt). Pro Max bleibt 1.0.
+- `[2026-08-03 23:05 UTC]` `Font.scaled`, `glassCard`/Buttons, Dashboard/Onboarding/Games/Memories/Chat umgestellt. RootView: `.fitsPhoneLayout()`. IPA **1.2.1**.
+
 ## 🔄 Als Nächstes
-- Nach Neu-Sideload von IPA 1.2.0 Verbindungstest gegen `http://138.201.60.230:4321` — wenn der mintfarbene Build-Badge sichtbar ist und ATS trotzdem kommt, melden.
+- Nach Sideload von IPA 1.2.1 auf iPhone 16 prüfen, ob Abstände/Hero-Emojis passen — Feedback willkommen.
 - Ideen für kommende Wellen: Coupons mit Ablaufdatum, Fotoalben, Canvas-Farbverlauf-Pinsel, Live-Activity für „Partner ist online“, Soundtrack-Import per Link-Vorschau.

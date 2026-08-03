@@ -75,7 +75,7 @@ struct EmojiRiddleView: View {
 
     private var setupScreen: some View {
         ScrollView {
-            VStack(spacing: 16) {
+            VStack(spacing: LayoutMetrics.s(16)) {
                 explainerCard
                 roundsCard
                 categoriesCard
@@ -85,14 +85,14 @@ struct EmojiRiddleView: View {
                 .buttonStyle(PrimaryButtonStyle())
                 .disabled(selectedCategories.isEmpty)
             }
-            .padding(16)
+            .padding(LayoutMetrics.s(16))
         }
     }
 
     private var explainerCard: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: LayoutMetrics.s(12)) {
             Text("🧩")
-                .font(.system(size: 40))
+                .font(.scaled(40))
             Text(L10n.t("games.emoji.howto"))
                 .font(.system(.subheadline, design: .rounded))
                 .foregroundStyle(Theme.textSecondary)
@@ -103,11 +103,11 @@ struct EmojiRiddleView: View {
     }
 
     private var roundsCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: LayoutMetrics.s(10)) {
             Text(L10n.t("games.emoji.rounds"))
                 .font(.system(.subheadline, design: .rounded).weight(.bold))
                 .foregroundStyle(Theme.textPrimary)
-            HStack(spacing: 10) {
+            HStack(spacing: LayoutMetrics.s(10)) {
                 ForEach(Self.roundOptions, id: \.self) { option in
                     roundChip(option)
                 }
@@ -127,7 +127,7 @@ struct EmojiRiddleView: View {
                 .font(.system(.callout, design: .rounded).weight(.bold))
                 .foregroundStyle(selected ? Theme.bgTop : Theme.textPrimary)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 10)
+                .padding(.vertical, LayoutMetrics.s(10))
                 .background(
                     Capsule().fill(selected ? Theme.gold : Color.white.opacity(0.08))
                 )
@@ -136,7 +136,7 @@ struct EmojiRiddleView: View {
     }
 
     private var categoriesCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: LayoutMetrics.s(10)) {
             Text(L10n.t("games.emoji.categories"))
                 .font(.system(.subheadline, design: .rounded).weight(.bold))
                 .foregroundStyle(Theme.textPrimary)
@@ -165,7 +165,7 @@ struct EmojiRiddleView: View {
         } label: {
             VStack(spacing: 4) {
                 Text(Self.categoryEmoji[category] ?? "❓")
-                    .font(.system(size: 22))
+                    .font(.scaled(22))
                 Text(L10n.t("games.emoji.cat.\(category)"))
                     .font(.system(.caption2, design: .rounded).weight(.semibold))
                     .foregroundStyle(selected ? Theme.textPrimary : Theme.textTertiary)
@@ -173,7 +173,7 @@ struct EmojiRiddleView: View {
                     .minimumScaleFactor(0.8)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 10)
+            .padding(.vertical, LayoutMetrics.s(10))
             .background(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .fill(selected ? Theme.pink.opacity(0.25) : Color.white.opacity(0.05))
@@ -202,7 +202,7 @@ struct EmojiRiddleView: View {
     // MARK: Playing
 
     private var playScreen: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: LayoutMetrics.s(14)) {
             scoreHeader
             Spacer(minLength: 0)
             if let riddle = currentRiddle {
@@ -211,11 +211,11 @@ struct EmojiRiddleView: View {
             Spacer(minLength: 0)
             controls
         }
-        .padding(16)
+        .padding(LayoutMetrics.s(16))
     }
 
     private var scoreHeader: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: LayoutMetrics.s(12)) {
             scoreBadge(0)
             VStack(spacing: 5) {
                 Text(L10n.t("games.emoji.round",
@@ -235,7 +235,7 @@ struct EmojiRiddleView: View {
         HStack(spacing: 6) {
             EmojiAvatarView(emoji: playerAvatars[index],
                             colorHex: playerColors[index],
-                            size: 30)
+                            size: LayoutMetrics.s(30))
             Text("\(scores[index])")
                 .font(.system(.title3, design: .rounded).weight(.heavy))
                 .foregroundStyle(Theme.textPrimary)
@@ -264,10 +264,10 @@ struct EmojiRiddleView: View {
     }
 
     private func riddleFront(_ riddle: EmojiRiddle) -> some View {
-        VStack(spacing: 16) {
+        VStack(spacing: LayoutMetrics.s(16)) {
             categoryPill(riddle.category)
             Text(riddle.emojis)
-                .font(.system(size: 54))
+                .font(.scaled(54))
                 .multilineTextAlignment(.center)
                 .lineSpacing(8)
                 .minimumScaleFactor(0.6)
@@ -275,14 +275,14 @@ struct EmojiRiddleView: View {
                 .font(.system(.caption, design: .rounded))
                 .foregroundStyle(Theme.textTertiary)
         }
-        .frame(maxWidth: .infinity, minHeight: 240)
+        .frame(maxWidth: .infinity, minHeight: LayoutMetrics.s(240))
         .glassCard(padding: 20)
     }
 
     private func riddleBack(_ riddle: EmojiRiddle) -> some View {
-        VStack(spacing: 12) {
+        VStack(spacing: LayoutMetrics.s(12)) {
             Text(riddle.emojis)
-                .font(.system(size: 26))
+                .font(.scaled(26))
                 .minimumScaleFactor(0.6)
                 .lineLimit(1)
             Text(riddle.answer.resolved(L10n.lang))
@@ -295,7 +295,7 @@ struct EmojiRiddleView: View {
                 .foregroundStyle(lastWinner == nil ? Theme.textSecondary : Theme.gold)
                 .multilineTextAlignment(.center)
         }
-        .frame(maxWidth: .infinity, minHeight: 240)
+        .frame(maxWidth: .infinity, minHeight: LayoutMetrics.s(240))
         .glassCard(padding: 20)
     }
 
@@ -321,8 +321,8 @@ struct EmojiRiddleView: View {
             }
             .buttonStyle(PrimaryButtonStyle())
         } else {
-            VStack(spacing: 10) {
-                HStack(spacing: 10) {
+            VStack(spacing: LayoutMetrics.s(10)) {
+                HStack(spacing: LayoutMetrics.s(10)) {
                     pointButton(0)
                     pointButton(1)
                 }
@@ -347,7 +347,7 @@ struct EmojiRiddleView: View {
                     .minimumScaleFactor(0.75)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
+            .padding(.vertical, LayoutMetrics.s(12))
             .background(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .fill(tint.opacity(0.28))
@@ -368,7 +368,7 @@ struct EmojiRiddleView: View {
                 .font(.system(.footnote, design: .rounded).weight(.semibold))
                 .foregroundStyle(Theme.textSecondary)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 10)
+                .padding(.vertical, LayoutMetrics.s(10))
                 .background(
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .fill(Color.white.opacity(0.06))
@@ -437,10 +437,10 @@ struct EmojiRiddleView: View {
 
     private var endScreen: some View {
         ScrollView {
-            VStack(spacing: 18) {
+            VStack(spacing: LayoutMetrics.s(18)) {
                 Text(isTie ? "💞" : "🏆")
-                    .font(.system(size: 64))
-                    .padding(.top, 24)
+                    .font(.scaled(64))
+                    .padding(.top, LayoutMetrics.s(24))
                 Text(isTie
                      ? L10n.t("games.emoji.tie")
                      : L10n.t("games.emoji.winner", ["name": playerNames[winnerIndex]]))
@@ -462,16 +462,16 @@ struct EmojiRiddleView: View {
                 }
                 .buttonStyle(.plain)
             }
-            .padding(16)
+            .padding(LayoutMetrics.s(16))
         }
     }
 
     private var finalScoreCard: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: LayoutMetrics.s(12)) {
             Text(L10n.t("games.emoji.finalScore"))
                 .font(.system(.caption, design: .rounded).weight(.semibold))
                 .foregroundStyle(Theme.textSecondary)
-            HStack(spacing: 20) {
+            HStack(spacing: LayoutMetrics.s(20)) {
                 finalScoreColumn(0)
                 Text(":")
                     .font(.system(.title, design: .rounded).weight(.heavy))
@@ -487,7 +487,7 @@ struct EmojiRiddleView: View {
         VStack(spacing: 8) {
             EmojiAvatarView(emoji: playerAvatars[index],
                             colorHex: playerColors[index],
-                            size: 48)
+                            size: LayoutMetrics.s(48))
             Text(playerNames[index])
                 .font(.system(.caption, design: .rounded).weight(.semibold))
                 .foregroundStyle(Theme.textSecondary)

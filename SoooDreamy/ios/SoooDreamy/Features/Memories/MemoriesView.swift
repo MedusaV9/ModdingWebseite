@@ -18,11 +18,11 @@ struct MemoriesView: View {
             ZStack {
                 DreamyBackground()
                 ScrollView {
-                    VStack(spacing: 18) {
+                    VStack(spacing: LayoutMetrics.s(18)) {
                         header
                         couponsCard
                         soundtrackCard
-                        LazyVGrid(columns: columns, spacing: 14) {
+                        LazyVGrid(columns: columns, spacing: LayoutMetrics.s(14)) {
                             galleryCard
                             canvasCard
                             bucketCard
@@ -31,8 +31,8 @@ struct MemoriesView: View {
                             journalCard
                         }
                     }
-                    .padding(16)
-                    .padding(.bottom, 12)
+                    .padding(LayoutMetrics.s(16))
+                    .padding(.bottom, LayoutMetrics.s(12))
                 }
                 .refreshable {
                     await appState.refreshStats()
@@ -79,9 +79,9 @@ struct MemoriesView: View {
         NavigationLink {
             CouponsView()
         } label: {
-            HStack(spacing: 14) {
+            HStack(spacing: LayoutMetrics.s(14)) {
                 Text("🎟️")
-                    .font(.system(size: 34))
+                    .font(.scaled(34))
                 VStack(alignment: .leading, spacing: 4) {
                     Text(L10n.t("memories.card.coupons"))
                         .font(.system(.headline, design: .rounded).weight(.bold))
@@ -90,7 +90,7 @@ struct MemoriesView: View {
                 }
                 Spacer()
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .bold))
+                    .font(.scaled(12, weight: .bold))
                     .foregroundStyle(Theme.textTertiary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -123,9 +123,9 @@ struct MemoriesView: View {
         NavigationLink {
             SoundtrackView()
         } label: {
-            HStack(spacing: 14) {
+            HStack(spacing: LayoutMetrics.s(14)) {
                 Text("🎵")
-                    .font(.system(size: 34))
+                    .font(.scaled(34))
                 VStack(alignment: .leading, spacing: 4) {
                     Text(L10n.t("memories.card.soundtrack"))
                         .font(.system(.headline, design: .rounded).weight(.bold))
@@ -134,7 +134,7 @@ struct MemoriesView: View {
                 }
                 Spacer()
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .bold))
+                    .font(.scaled(12, weight: .bold))
                     .foregroundStyle(Theme.textTertiary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -190,7 +190,7 @@ struct MemoriesView: View {
                               tint: Theme.purple) {
                 HStack(spacing: 6) {
                     Image(systemName: "scribble.variable")
-                        .font(.system(size: 13, weight: .bold))
+                        .font(.scaled(13, weight: .bold))
                         .foregroundStyle(Theme.purple)
                     Text(L10n.t("memories.card.drawTogether"))
                         .font(.system(.caption, design: .rounded).weight(.semibold))
@@ -367,13 +367,13 @@ private struct MemoryFeatureCard<Teaser: View>: View {
     @ViewBuilder var teaser: Teaser
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: LayoutMetrics.s(10)) {
             HStack(alignment: .top) {
                 Text(emoji)
-                    .font(.system(size: 32))
+                    .font(.scaled(32))
                 Spacer()
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .bold))
+                    .font(.scaled(12, weight: .bold))
                     .foregroundStyle(Theme.textTertiary)
                     .padding(.top, 6)
             }
@@ -386,7 +386,7 @@ private struct MemoryFeatureCard<Teaser: View>: View {
             teaser
                 .frame(height: 26, alignment: .leading)
         }
-        .frame(maxWidth: .infinity, minHeight: 138, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: LayoutMetrics.s(138), alignment: .leading)
         .glassCard()
         .overlay(
             RoundedRectangle(cornerRadius: 24, style: .continuous)

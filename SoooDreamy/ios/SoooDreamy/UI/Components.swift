@@ -64,9 +64,9 @@ struct EmptyStateView: View {
     let subtitle: String
 
     var body: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: LayoutMetrics.s(10)) {
             Text(emoji)
-                .font(.system(size: 54))
+                .font(.scaled(54))
             Text(title)
                 .font(.system(.headline, design: .rounded).weight(.bold))
                 .foregroundStyle(Theme.textPrimary)
@@ -76,8 +76,8 @@ struct EmptyStateView: View {
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 36)
-        .padding(.horizontal, 24)
+        .padding(.vertical, LayoutMetrics.s(36))
+        .padding(.horizontal, LayoutMetrics.s(24))
     }
 }
 
@@ -87,7 +87,7 @@ struct LoadingView: View {
     var text: String = L10n.t("common.loading")
 
     var body: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: LayoutMetrics.s(14)) {
             ProgressView()
                 .tint(Theme.pink)
                 .scaleEffect(1.3)
@@ -129,7 +129,7 @@ struct ToastView: View {
     let toast: Toast
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: LayoutMetrics.s(10)) {
             Image(systemName: toast.icon)
                 .foregroundStyle(toast.tint)
             Text(toast.text)
@@ -137,15 +137,15 @@ struct ToastView: View {
                 .foregroundStyle(Theme.textPrimary)
                 .lineLimit(2)
         }
-        .padding(.vertical, 12)
-        .padding(.horizontal, 18)
+        .padding(.vertical, LayoutMetrics.s(12))
+        .padding(.horizontal, LayoutMetrics.s(18))
         .background(
             Capsule()
                 .fill(.ultraThinMaterial)
                 .overlay(Capsule().strokeBorder(toast.tint.opacity(0.5), lineWidth: 1))
         )
         .shadow(color: .black.opacity(0.35), radius: 12, y: 4)
-        .padding(.horizontal, 24)
+        .padding(.horizontal, LayoutMetrics.s(24))
     }
 }
 
@@ -175,8 +175,8 @@ struct FloatingHeartsView: View {
             Particle(x: 0.05 + rnd() * 0.9,
                      delay: Double(rnd()) * 1.4,
                      speed: 0.55 + Double(rnd()) * 0.8,
-                     size: 18 + rnd() * 22,
-                     sway: 14 + rnd() * 26,
+                     size: LayoutMetrics.s(18 + rnd() * 22),
+                     sway: LayoutMetrics.s(14 + rnd() * 26),
                      emojiIndex: i % emojis.count)
         }
     }
@@ -228,7 +228,7 @@ struct ConnectionBanner: View {
                 .foregroundStyle(Theme.textSecondary)
         }
         .padding(.vertical, 6)
-        .padding(.horizontal, 14)
+        .padding(.horizontal, LayoutMetrics.s(14))
         .background(Capsule().fill(Color.black.opacity(0.35)))
     }
 }
@@ -247,8 +247,8 @@ struct EmojiPickerGrid: View {
                     Haptics.shared.tap()
                 } label: {
                     Text(e)
-                        .font(.system(size: 26))
-                        .frame(width: 46, height: 46)
+                        .font(.scaled(26))
+                        .frame(width: LayoutMetrics.s(46), height: LayoutMetrics.s(46))
                         .background(
                             Circle().fill(selection == e ? Theme.pink.opacity(0.35) : Color.white.opacity(0.06))
                         )
@@ -268,7 +268,7 @@ struct MemberColorPicker: View {
     @Binding var selection: String
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: LayoutMetrics.s(12)) {
             ForEach(Theme.memberColors, id: \.self) { hex in
                 Button {
                     selection = hex
@@ -276,7 +276,7 @@ struct MemberColorPicker: View {
                 } label: {
                     Circle()
                         .fill(Color(hex: hex))
-                        .frame(width: 34, height: 34)
+                        .frame(width: LayoutMetrics.s(34), height: LayoutMetrics.s(34))
                         .overlay(
                             Circle().strokeBorder(.white, lineWidth: selection == hex ? 3 : 0)
                         )
@@ -299,7 +299,7 @@ struct PillTag: View {
             .font(.system(.caption, design: .rounded).weight(.semibold))
             .foregroundStyle(Theme.textPrimary)
             .padding(.vertical, 5)
-            .padding(.horizontal, 11)
+            .padding(.horizontal, LayoutMetrics.s(11))
             .background(Capsule().fill(tint.opacity(0.30)))
     }
 }

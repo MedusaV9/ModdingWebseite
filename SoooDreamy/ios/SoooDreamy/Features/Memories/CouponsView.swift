@@ -126,7 +126,7 @@ struct CouponsView: View {
                 SectionHeader(title: L10n.t("memories.coupons.fromYou"))
             }
             Color.clear
-                .frame(height: 70)
+                .frame(height: LayoutMetrics.s(70))
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
         }
@@ -150,10 +150,10 @@ struct CouponsView: View {
 
     private func voucherCard(_ coupon: Coupon) -> some View {
         let redeemed = coupon.redeemedAt != nil
-        return VStack(spacing: 12) {
-            HStack(spacing: 14) {
+        return VStack(spacing: LayoutMetrics.s(12)) {
+            HStack(spacing: LayoutMetrics.s(14)) {
                 Text(coupon.emoji)
-                    .font(.system(size: 40))
+                    .font(.scaled(40))
                 VStack(alignment: .leading, spacing: 4) {
                     Text(coupon.title)
                         .font(.system(.headline, design: .rounded).weight(.bold))
@@ -182,7 +182,7 @@ struct CouponsView: View {
                 .buttonStyle(PrimaryButtonStyle())
             }
         }
-        .padding(16)
+        .padding(LayoutMetrics.s(16))
         .background(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .fill(LinearGradient(colors: [Theme.pink.opacity(redeemed ? 0.06 : 0.16),
@@ -201,14 +201,14 @@ struct CouponsView: View {
     private func redeemedStamp(_ date: Date) -> some View {
         HStack(spacing: 6) {
             Image(systemName: "checkmark.seal.fill")
-                .font(.system(size: 13, weight: .bold))
+                .font(.scaled(13, weight: .bold))
             Text(L10n.t("memories.coupons.redeemedAt",
                         ["date": date.formatted(date: .abbreviated, time: .omitted)]))
                 .font(.system(.caption, design: .rounded).weight(.bold))
         }
         .foregroundStyle(Theme.mint)
         .padding(.vertical, 6)
-        .padding(.horizontal, 12)
+        .padding(.horizontal, LayoutMetrics.s(12))
         .background(Capsule().fill(Theme.mint.opacity(0.14)))
         .rotationEffect(.degrees(-2))
     }
@@ -223,9 +223,9 @@ struct CouponsView: View {
     // MARK: Created row (by me)
 
     private func createdRow(_ coupon: Coupon) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: LayoutMetrics.s(12)) {
             Text(coupon.emoji)
-                .font(.system(size: 26))
+                .font(.scaled(26))
             VStack(alignment: .leading, spacing: 2) {
                 Text(coupon.title)
                     .font(.system(.body, design: .rounded).weight(.semibold))
@@ -282,17 +282,17 @@ struct CouponsView: View {
                     ZStack {
                         Circle()
                             .fill(Theme.heroGradient)
-                            .frame(width: 60, height: 60)
+                            .frame(width: LayoutMetrics.s(60), height: LayoutMetrics.s(60))
                             .shadow(color: Theme.pink.opacity(0.5), radius: 14, y: 6)
                         Image(systemName: "plus")
-                            .font(.system(size: 24, weight: .bold))
+                            .font(.scaled(24, weight: .bold))
                             .foregroundStyle(.white)
                     }
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(L10n.t("memories.coupons.create"))
-                .padding(.trailing, 20)
-                .padding(.bottom, 24)
+                .padding(.trailing, LayoutMetrics.s(20))
+                .padding(.bottom, LayoutMetrics.s(24))
             }
         }
     }
@@ -425,14 +425,14 @@ private struct CouponCreateSheet: View {
             ZStack {
                 DreamyBackground(showStars: false)
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 16) {
+                    VStack(alignment: .leading, spacing: LayoutMetrics.s(16)) {
                         presetRow
                         titleField
                         noteField
                         emojiSection
                         createButton
                     }
-                    .padding(16)
+                    .padding(LayoutMetrics.s(16))
                 }
             }
             .navigationTitle(L10n.t("memories.coupons.createTitle"))
@@ -472,7 +472,7 @@ private struct CouponCreateSheet: View {
                 .font(.system(.footnote, design: .rounded).weight(.semibold))
                 .foregroundStyle(Theme.textPrimary)
                 .padding(.vertical, 8)
-                .padding(.horizontal, 12)
+                .padding(.horizontal, LayoutMetrics.s(12))
                 .background(
                     Capsule()
                         .fill(Color.white.opacity(0.07))

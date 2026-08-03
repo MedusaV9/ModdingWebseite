@@ -51,14 +51,14 @@ struct LoveStatsView: View {
 
     private func statsScroll(_ stats: Stats) -> some View {
         ScrollView {
-            VStack(spacing: 16) {
+            VStack(spacing: LayoutMetrics.s(16)) {
                 heroTiles(stats)
                 touchComparisonCard(stats)
                 moodTimelineCard
                 caption(stats)
             }
-            .padding(16)
-            .padding(.bottom, 12)
+            .padding(LayoutMetrics.s(16))
+            .padding(.bottom, LayoutMetrics.s(12))
         }
         .refreshable {
             await appState.refreshStats()
@@ -69,7 +69,7 @@ struct LoveStatsView: View {
     // MARK: Hero tiles
 
     private func heroTiles(_ stats: Stats) -> some View {
-        LazyVGrid(columns: columns, spacing: 12) {
+        LazyVGrid(columns: columns, spacing: LayoutMetrics.s(12)) {
             StatTile(emoji: "💞",
                      value: String(stats.daysTogether ?? appState.daysTogether ?? 0),
                      label: L10n.t("memories.stats.daysTogether"),
@@ -100,7 +100,7 @@ struct LoveStatsView: View {
     // MARK: Touch comparison
 
     private func touchComparisonCard(_ stats: Stats) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: LayoutMetrics.s(14)) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(L10n.t("memories.stats.touchTitle"))
                     .font(.system(.title3, design: .rounded).weight(.bold))
@@ -236,18 +236,18 @@ struct LoveStatsView: View {
     private func moodChip(_ item: MoodCount) -> some View {
         HStack(spacing: 5) {
             Text(item.mood)
-                .font(.system(size: 18))
+                .font(.scaled(18))
             Text(L10n.t("memories.stats.topMoodCount", ["n": String(item.count)]))
                 .font(.system(.caption, design: .rounded).weight(.bold))
                 .foregroundStyle(Theme.textSecondary)
         }
         .padding(.vertical, 6)
-        .padding(.horizontal, 10)
+        .padding(.horizontal, LayoutMetrics.s(10))
         .background(Capsule().fill(Color.white.opacity(0.08)))
     }
 
     private var moodTimelineCard: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: LayoutMetrics.s(14)) {
             Text(L10n.t("memories.stats.moodTitle"))
                 .font(.system(.title3, design: .rounded).weight(.bold))
                 .foregroundStyle(Theme.textPrimary)
@@ -279,10 +279,10 @@ struct LoveStatsView: View {
 
     private func moodRow(_ entry: MoodEntry) -> some View {
         let author = member(of: entry)
-        return HStack(spacing: 10) {
-            EmojiAvatarView(emoji: author?.avatar, colorHex: author?.color, size: 34)
+        return HStack(spacing: LayoutMetrics.s(10)) {
+            EmojiAvatarView(emoji: author?.avatar, colorHex: author?.color, size: LayoutMetrics.s(34))
             Text(entry.mood)
-                .font(.system(size: 26))
+                .font(.scaled(26))
             VStack(alignment: .leading, spacing: 1) {
                 if let note = entry.moodNote, !note.isEmpty {
                     Text(note)
@@ -348,7 +348,7 @@ private struct StatTile: View {
     var body: some View {
         VStack(spacing: 6) {
             Text(emoji)
-                .font(.system(size: 28))
+                .font(.scaled(28))
             Text(value)
                 .font(.system(.title2, design: .rounded).weight(.heavy))
                 .foregroundStyle(Theme.textPrimary)
@@ -360,7 +360,7 @@ private struct StatTile: View {
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
         }
-        .frame(maxWidth: .infinity, minHeight: 108)
+        .frame(maxWidth: .infinity, minHeight: LayoutMetrics.s(108))
         .glassCard(padding: 14)
         .overlay(
             RoundedRectangle(cornerRadius: 24, style: .continuous)

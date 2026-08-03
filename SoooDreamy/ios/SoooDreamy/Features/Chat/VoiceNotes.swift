@@ -126,7 +126,7 @@ struct ChatVoiceBubble: View {
     private var isCurrent: Bool { player.playingId == message.id }
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: LayoutMetrics.s(10)) {
             playButton
             VStack(alignment: .leading, spacing: 5) {
                 ChatWaveformBars(seed: message.id,
@@ -142,8 +142,8 @@ struct ChatVoiceBubble: View {
                 }
             }
         }
-        .padding(.vertical, 10)
-        .padding(.horizontal, 12)
+        .padding(.vertical, LayoutMetrics.s(10))
+        .padding(.horizontal, LayoutMetrics.s(12))
         .background(ChatBubbleBackground(isMine: isMine))
         .onTapGesture(count: 2) {
             onReact(ChatReactions.quick)
@@ -159,9 +159,9 @@ struct ChatVoiceBubble: View {
             player.toggle(message: message, api: appState.api)
         } label: {
             Image(systemName: isCurrent && player.isPlaying ? "pause.fill" : "play.fill")
-                .font(.system(size: 15, weight: .bold))
+                .font(.scaled(15, weight: .bold))
                 .foregroundStyle(isMine ? Theme.purple : .white)
-                .frame(width: 36, height: 36)
+                .frame(width: LayoutMetrics.s(36), height: LayoutMetrics.s(36))
                 .background(
                     Circle().fill(isMine
                                   ? AnyShapeStyle(Color.white)
@@ -352,13 +352,13 @@ struct VoiceRecorderSheet: View {
     var body: some View {
         ZStack {
             DreamyBackground(showStars: false)
-            VStack(spacing: 22) {
+            VStack(spacing: LayoutMetrics.s(22)) {
                 titleRow
                 stage
                 Spacer(minLength: 0)
                 buttons
             }
-            .padding(22)
+            .padding(LayoutMetrics.s(22))
         }
         .presentationDetents([.medium])
         .interactiveDismissDisabled(sending)
@@ -374,7 +374,7 @@ struct VoiceRecorderSheet: View {
                 .font(.system(.title3, design: .rounded).weight(.bold))
                 .foregroundStyle(Theme.textPrimary)
         }
-        .padding(.top, 16)
+        .padding(.top, LayoutMetrics.s(16))
     }
 
     @ViewBuilder private var stage: some View {
@@ -395,7 +395,7 @@ struct VoiceRecorderSheet: View {
     }
 
     private var recordingStage: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: LayoutMetrics.s(14)) {
             ChatRecorderLevelBars(levels: model.levels, live: model.phase == .recording)
             Text(timeLabel)
                 .font(.system(.title2, design: .rounded).weight(.bold))
@@ -418,7 +418,7 @@ struct VoiceRecorderSheet: View {
     }
 
     private var buttons: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: LayoutMetrics.s(12)) {
             Button(L10n.t("chat.cancel")) {
                 Haptics.shared.tap()
                 model.cancel()
@@ -503,7 +503,7 @@ struct ChatRecorderLevelBars: View {
                 bar(at: i)
             }
         }
-        .frame(height: 64)
+        .frame(height: LayoutMetrics.s(64))
     }
 
     private func bar(at index: Int) -> some View {

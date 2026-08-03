@@ -50,7 +50,7 @@ struct CanvasView: View {
     var body: some View {
         ZStack {
             DreamyBackground(showStars: false)
-            VStack(spacing: 14) {
+            VStack(spacing: LayoutMetrics.s(14)) {
                 subtitle
                 board
                 Group {
@@ -60,7 +60,7 @@ struct CanvasView: View {
                 .opacity(replay == nil ? 1 : 0.3)
                 .disabled(replay != nil)
             }
-            .padding(16)
+            .padding(LayoutMetrics.s(16))
             if let started = replayCelebration {
                 FloatingHeartsView(emojis: ["🎨", "💜", "✨", "💖"], count: 16, startedAt: started)
                     .ignoresSafeArea()
@@ -131,7 +131,7 @@ struct CanvasView: View {
                         Spacer()
                         replayBar(session)
                     }
-                    .padding(12)
+                    .padding(LayoutMetrics.s(12))
                 }
             }
             .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
@@ -238,9 +238,9 @@ struct CanvasView: View {
 
     /// Progress is derived from the same clock that drives the stroke drawing.
     private func replayBar(_ session: ReplaySession) -> some View {
-        HStack(spacing: 10) {
+        HStack(spacing: LayoutMetrics.s(10)) {
             Image(systemName: "play.fill")
-                .font(.system(size: 11, weight: .bold))
+                .font(.scaled(11, weight: .bold))
                 .foregroundStyle(Theme.pink)
             TimelineView(.animation) { timeline in
                 GeometryReader { geo in
@@ -258,7 +258,7 @@ struct CanvasView: View {
                 stopReplay(celebrating: false)
             } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.scaled(11, weight: .bold))
                     .foregroundStyle(.white)
                     .frame(width: 26, height: 26)
                     .background(Circle().fill(Color.black.opacity(0.4)))
@@ -267,7 +267,7 @@ struct CanvasView: View {
             .accessibilityLabel(L10n.t("common.close"))
         }
         .padding(.vertical, 8)
-        .padding(.horizontal, 12)
+        .padding(.horizontal, LayoutMetrics.s(12))
         .background(Capsule().fill(.ultraThinMaterial))
     }
 
@@ -310,7 +310,7 @@ struct CanvasView: View {
         if let point = partnerPoint {
             EmojiAvatarView(emoji: appState.partner?.avatar,
                             colorHex: appState.partner?.color,
-                            size: 32)
+                            size: LayoutMetrics.s(32))
                 .position(x: point.x * size.width,
                           y: max(point.y * size.height - 28, 16))
                 .transition(.scale.combined(with: .opacity))
@@ -394,7 +394,7 @@ struct CanvasView: View {
     }
 
     private var palette: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: LayoutMetrics.s(10)) {
             ForEach(paletteColors, id: \.self) { hex in
                 Button {
                     selectedColor = hex
@@ -403,7 +403,7 @@ struct CanvasView: View {
                 } label: {
                     Circle()
                         .fill(Color(hex: hex))
-                        .frame(width: 30, height: 30)
+                        .frame(width: LayoutMetrics.s(30), height: LayoutMetrics.s(30))
                         .overlay(
                             Circle().strokeBorder(.white, lineWidth: selectedColor == hex ? 3 : 1)
                         )
@@ -417,8 +417,8 @@ struct CanvasView: View {
     }
 
     private var controls: some View {
-        VStack(spacing: 12) {
-            HStack(spacing: 10) {
+        VStack(spacing: LayoutMetrics.s(12)) {
+            HStack(spacing: LayoutMetrics.s(10)) {
                 toolPicker
                 undoButton
                 Spacer()
@@ -434,9 +434,9 @@ struct CanvasView: View {
             undoLastStroke()
         } label: {
             Image(systemName: "arrow.uturn.backward")
-                .font(.system(size: 15, weight: .semibold))
+                .font(.scaled(15, weight: .semibold))
                 .foregroundStyle(myLastUndoableStroke == nil ? Theme.textTertiary : Theme.textPrimary)
-                .frame(width: 40, height: 34)
+                .frame(width: LayoutMetrics.s(40), height: LayoutMetrics.s(34))
                 .background(Capsule().fill(Color.white.opacity(0.06)))
         }
         .buttonStyle(.plain)
@@ -452,9 +452,9 @@ struct CanvasView: View {
                     Haptics.shared.tap()
                 } label: {
                     Image(systemName: candidate.icon)
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.scaled(15, weight: .semibold))
                         .foregroundStyle(tool == candidate ? Color.white : Theme.textSecondary)
-                        .frame(width: 40, height: 34)
+                        .frame(width: LayoutMetrics.s(40), height: LayoutMetrics.s(34))
                         .background(
                             Capsule().fill(tool == candidate ? Theme.purple.opacity(0.65) : Color.white.opacity(0.06))
                         )
@@ -474,14 +474,14 @@ struct CanvasView: View {
                 .font(.system(.footnote, design: .rounded).weight(.semibold))
                 .foregroundStyle(Color(hex: "F87171"))
                 .padding(.vertical, 8)
-                .padding(.horizontal, 12)
+                .padding(.horizontal, LayoutMetrics.s(12))
                 .background(Capsule().fill(Color(hex: "F87171").opacity(0.14)))
         }
         .buttonStyle(.plain)
     }
 
     private var widthSlider: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: LayoutMetrics.s(12)) {
             Circle()
                 .fill(Theme.textSecondary)
                 .frame(width: 5, height: 5)
