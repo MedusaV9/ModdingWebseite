@@ -26,6 +26,7 @@ let package = Package(
                 "SoooDreamy/Content/Data/Questions36Data.swift",
                 "SoooDreamy/Content/Data/DateIdeasData.swift",
                 "SoooDreamy/Content/Data/WordleWordsData.swift",
+                "SoooDreamy/Content/Data/EmojiRiddlesData.swift",
                 "Shared/SharedBridge.swift",
                 "SoooDreamy/Core/SeededRandom.swift",
                 "SoooDreamy/Core/L10n.swift",

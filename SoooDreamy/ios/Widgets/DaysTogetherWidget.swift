@@ -54,6 +54,7 @@ struct DaysTogetherWidgetView: View {
         Group {
             switch family {
             case .accessoryCircular: circular
+            case .accessoryInline: inline
             default: small
             }
         }
@@ -119,6 +120,16 @@ struct DaysTogetherWidgetView: View {
         }
     }
 
+    private var inline: some View {
+        Text(inlineText)
+    }
+
+    private var inlineText: String {
+        guard let days else { return "SoooDreamy 💜" }
+        if days == 1 { return WText.t("💜 1 Tag", "💜 1 day") }
+        return WText.t("💜 \(days) Tage", "💜 \(days) days")
+    }
+
     private var circular: some View {
         ZStack {
             AccessoryWidgetBackground()
@@ -147,6 +158,6 @@ struct DaysTogetherWidget: Widget {
         .configurationDisplayName(WText.t("Tage zusammen", "Days together"))
         .description(WText.t("Zählt eure gemeinsamen Tage seit dem Jahrestag.",
                              "Counts your days together since your anniversary."))
-        .supportedFamilies([.systemSmall, .accessoryCircular])
+        .supportedFamilies([.systemSmall, .accessoryCircular, .accessoryInline])
     }
 }

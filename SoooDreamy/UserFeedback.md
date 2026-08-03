@@ -57,6 +57,18 @@ _(hier beantworte ich dein Feedback, wenn ich es umgesetzt habe)_
 - `[2026-08-03 20:21 UTC]` **E2E-Smoke v1.1 grün**: versiegelter Brief (openWhen ✓), Thumb-Upload (Partner → 403 ✓, Abruf 200 ✓), Stroke-Undo (fremd → 403, eigen → 200 ✓), Mood-Verlauf ✓, Tagebuch-Reveal ✓, alle 7 WS-Events live empfangen ✓.
 - `[2026-08-03 20:25 UTC]` **CI ausgebaut**: neuer Job „Logic tests (Swift on Linux)“ + rollendes GitHub-Prerelease `sooodreamy-latest` mit dem frischen IPA als Download (best-effort).
 
+### Iteration 5 — Welle 5: Duell, Reaktionen, Gutscheine 🥊
+- `[2026-08-03 20:50 UTC]` **Server v1.2** (63/63 Tests): Nachrichten-**Reaktionen** (Toggle, `message_updated`), **Wordle-Duell-Endpoints** mit Anti-Spoiler (Partner-Ergebnis erst sichtbar, wenn man selbst fertig ist — auch in den WS-Payloads pro Person zugeschnitten), **Foto-Favoriten**, **Love-Coupons** (erstellen → Partner löst ein, komplette Rechte-Matrix) — plus erweiterter v1.0-Kompatibilitätstest.
+- `[2026-08-03 20:50 UTC]` **Chat-Reaktionen** ❤️😂😮🥺🔥👍: Doppeltipp = schnelles Herz, „Reagieren…“-Menü, Chips unter den Bubbles (eigene pink markiert), live via WebSocket.
+- `[2026-08-03 20:50 UTC]` **Wordle-Duell** 🥊: Auto-Submit nach dem Lösen, Duell-Karte mit beiden Emoji-Grids nebeneinander, Sieger-Logik (Sieg schlägt Niederlage → weniger Versuche → Unentschieden 💞), Spoiler-freier Teaser solange man selbst noch rätselt, 🏆-Badge im Hub.
+- `[2026-08-03 20:50 UTC]` **Foto-Favoriten** (Herz im Vollbild, Filter „Favoriten ❤️“, Live-Sync), **Canvas-Replay** 🎬 (Strich-für-Strich-Wiedergabe eurer Kunstwerke), **Love-Coupons** 🎟 (Gutschein-Karten mit gestricheltem Rand, 10 Ideen-Presets, Einlöse-Zeremonie mit Konfetti, globale Toasts).
+- `[2026-08-03 20:50 UTC]` **Dashboard-Erinnerung** 💭 (zufälliges altes Foto oder alte Tagesfrage, > 7 Tage her), Pairing-Konfetti, **einstellbare Erinnerungszeit** für die Tagesfrage.
+
+### Iteration 6 — Welle 6: Foto-Widget & Emoji-Rätsel 🧩
+- `[2026-08-03 21:05 UTC]` **Foto-Widget** „Euer Foto“ (Small/Medium): zeigt euer neuestes Favoriten-Foto (sonst neuestes) als Vollbild-Widget mit Caption — lädt selbstständig vom eigenen Server; dazu **Tage-zusammen als Inline-Widget** (oberhalb der Uhr auf dem Lock Screen).
+- `[2026-08-03 21:05 UTC]` **🧩 Emoji-Rätsel**: Party-Spiel mit **140 validierten Rätseln** in 6 Kategorien (Filme mit deutschen/englischen Titeln, Songs, Orte, Essen, Paar-Dinge, Aktivitäten) — Karten-Flip-Reveal, Punktevergabe pro Partner, Sieger-Zeremonie, Revanche.
+- `[2026-08-03 21:10 UTC]` Logic-Test-Suite auf **46 Tests** erweitert (Emoji-Rätsel-Integrität: Kategorien, keine ASCII-Zeichen in Emoji-Strings, keine doppelten Antworten).
+
 ## 🔄 Als Nächstes
-- Auf dein Feedback warten — schreib es oben in „💬 Dein Feedback“! Ich lese es bei der nächsten Iteration und setze es um. 💜
-- Ideen für kommende Iterationen: Wordle-Duell-Ansicht (Ergebnisse beider Partner nebeneinander), Foto-Alben/Favoriten, Canvas-Replay als Video, Erinnerungs-Rückblicke („vor einem Jahr…“), mehr Live-Activity-Typen.
+- Auf dein Feedback warten — schreib es oben in „💬 Dein Feedback“! Ich lese es bei jeder Iteration. 💜
+- Ideen für kommende Wellen: gemeinsame Playlist-Wünsche, Countdown-Sharing als Nachricht, Wordle-Statistik-Verlauf, Coupons mit Ablaufdatum, Stimmungs-Trends, Fotoalben.

@@ -4,7 +4,7 @@ import Combine
 // MARK: - Navigation destinations
 
 enum GameDestination: String, Hashable, Identifiable {
-    case wordle, quiz, thisorthat, wouldyourather, truthordare, questions36, dateideas
+    case wordle, quiz, thisorthat, wouldyourather, truthordare, questions36, emojiriddle, dateideas
     var id: String { rawValue }
 }
 
@@ -310,7 +310,8 @@ struct PlayHubView: View {
         GameCardInfo(destination: .thisorthat, emoji: "⚡️", tint: Theme.purple, multiplayer: true),
         GameCardInfo(destination: .wouldyourather, emoji: "🤯", tint: Theme.indigo, multiplayer: true),
         GameCardInfo(destination: .truthordare, emoji: "🎭", tint: Theme.rose, multiplayer: false),
-        GameCardInfo(destination: .questions36, emoji: "💫", tint: Theme.blue, multiplayer: false)
+        GameCardInfo(destination: .questions36, emoji: "💫", tint: Theme.blue, multiplayer: false),
+        GameCardInfo(destination: .emojiriddle, emoji: "🧩", tint: Theme.gold, multiplayer: false)
     ]
 
     private var gameGrid: some View {
@@ -369,6 +370,8 @@ struct PlayHubView: View {
             TruthOrDareView()
         case .questions36:
             Questions36View()
+        case .emojiriddle:
+            EmojiRiddleView()
         case .dateideas:
             DateIdeasView()
         }
