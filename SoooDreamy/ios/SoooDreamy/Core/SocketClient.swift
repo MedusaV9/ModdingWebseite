@@ -26,6 +26,11 @@ final class SocketClient {
     // MARK: Public API
 
     func connect(baseURL: URL, token: String) {
+        // Already connected (or connecting) to exactly this target? Keep it.
+        if let desired, desired.baseURL == baseURL, desired.token == token,
+           state != .disconnected {
+            return
+        }
         desired = (baseURL, token)
         reconnectAttempt = 0
         openSocket()
@@ -58,6 +63,9 @@ final class SocketClient {
         guard let desired else { return }
         generation += 1
         let gen = generation
+        // Drop any stale socket before opening a fresh one.
+        task?.cancel(with: .goingAway, reason: nil)
+        task = nil
 
         guard var comps = URLComponents(url: desired.baseURL, resolvingAgainstBaseURL: false) else { return }
         comps.scheme = (comps.scheme == "https") ? "wss" : "ws"

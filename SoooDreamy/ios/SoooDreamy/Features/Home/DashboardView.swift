@@ -16,7 +16,9 @@ struct DashboardView: View {
                     VStack(spacing: 16) {
                         header
 
-                        if appState.partner == nil {
+                        if appState.couple == nil {
+                            sessionStateCard
+                        } else if appState.partner == nil {
                             WaitingForPartnerCard()
                         } else {
                             partnerCard
@@ -65,6 +67,36 @@ struct DashboardView: View {
             ConnectionBanner(state: appState.socket.state)
         }
         .padding(.top, 6)
+    }
+
+    // MARK: Session loading / retry (cold start without network)
+
+    private var sessionStateCard: some View {
+        VStack(spacing: 12) {
+            if appState.sessionLoading {
+                ProgressView()
+                    .tint(Theme.pink)
+                Text(L10n.t("common.loading"))
+                    .font(.system(.subheadline, design: .rounded))
+                    .foregroundStyle(Theme.textSecondary)
+            } else {
+                Text("📡")
+                    .font(.system(size: 40))
+                Text(L10n.t("error.network"))
+                    .font(.system(.subheadline, design: .rounded).weight(.semibold))
+                    .foregroundStyle(Theme.textSecondary)
+                    .multilineTextAlignment(.center)
+                Button(L10n.t("common.retry")) {
+                    Task {
+                        await appState.refreshAll()
+                        appState.connectSocket()
+                    }
+                }
+                .buttonStyle(SecondaryButtonStyle(fullWidth: false))
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .glassCard(padding: 24)
     }
 
     // MARK: Partner card

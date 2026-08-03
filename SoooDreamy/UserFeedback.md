@@ -36,7 +36,13 @@ _(hier beantworte ich dein Feedback, wenn ich es umgesetzt habe)_
 - `[2026-08-03 19:20 UTC]` **Widgets** (Tage zusammen, Partner-Stimmung, Countdown, Tagesfrage — Home & Lock Screen) + **App Intents/Siri** („Schick Liebe mit SoooDreamy").
 - `[2026-08-03 19:30 UTC]` **GitHub Actions**: Workflow `SoooDreamy` — Server-Tests (Ubuntu) + **unsigniertes IPA** (macOS, XcodeGen + xcodebuild, Icon wird prozedural gerendert) als Build-Artifact `SoooDreamy-unsigned-ipa`.
 
+### Iteration 2 — CI grün, Review & Fixes 💅
+- `[2026-08-03 19:28 UTC]` **GitHub Actions komplett grün im ersten Anlauf**: Server-Tests ✓ (38/38), iOS-Build ✓ `** BUILD SUCCEEDED **` — Artifact `SoooDreamy-unsigned-ipa` (3,0 MB) mit App-Binary (7,4 MB), Widget-Extension, App-Intents-Metadaten. IPA heruntergeladen & Inhalt verifiziert.
+- `[2026-08-03 19:30 UTC]` **Manueller E2E-Smoke** gegen laufenden Server: Mia erstellt Paar (Code `JPAY4U`) → Ben tritt bei → Ben empfängt via WebSocket live: `welcome`, `touch` (Herzklopfen 💓), `message`, `daily_answer` (Reveal-Logik: Antwort erst sichtbar, als beide geantwortet hatten ✓, Streak 1), `game_started`, `game_move`. **Alles grün.**
+- `[2026-08-03 19:35 UTC]` App-Icon visuell geprüft (prozedurale Renderlogik nachgestellt) — dreamy Nachthimmel, Herz-Paar, Sterne ✨.
+- `[2026-08-03 19:45 UTC]` **Review-Fixes**: `SocketClient` cancelt jetzt alte Sockets vor dem Neuverbinden und überspringt redundante Connects (kein Socket-Leak mehr beim App-Foreground); Dashboard zeigt beim Kaltstart ohne Netz jetzt einen Lade-/Retry-Zustand statt einer leeren Warte-Karte.
+
 ## 🔄 Als Nächstes
-- CI-Lauf beobachten, iOS-Build grünschalten (Compile-Fixes), IPA-Artifact verifizieren.
-- Polish-Loop: Animations-Feinschliff, Edge-Cases (Partner offline, Server-Wechsel mitten im Spiel), Empty-States, Accessibility.
+- CI-Re-Run nach den Review-Fixes prüfen.
+- Polish-Loop fortsetzen: Edge-Cases (Server-Wechsel mitten im Spiel), Feinschliff, ggf. Release-Anhang fürs IPA.
 - Auf dein Feedback warten — schreib es oben rein! 💬
