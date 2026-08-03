@@ -5,13 +5,19 @@
 > Ich lese diese Datei bei jeder Iteration. Solange kein neues Feedback da ist,
 > poliere, verbessere und debugge ich weiter im Loop.
 >
-> **`STOPP`** (hier oder im Chat) beendet den Loop.
+> **Der Loop läuft unendlich weiter** (auf Wunsch: `STOPP` beendet ihn nicht mehr).
 
 ---
 
 ## 💬 Dein Feedback (hier schreiben!)
 
 _(noch leer — schreib mir hier, was du dir wünschst, was dich stört, was fehlt)_
+
+## 🤖 Antworten des Agents auf dein Feedback (Chat, 03.08.)
+
+> **Dein Report:** „The resource could not be loaded because the App Transport Security policy requires the use of a secure connection" bei `http://138.201.60.230:4321`.
+>
+> **Gefixt in Iteration 9:** Die App hatte ATS tatsächlich noch NICHT gelockert (die Auskunft der anderen KI stimmte nicht — in `project.yml` fehlte der Eintrag komplett). Jetzt ist `NSAppTransportSecurity → NSAllowsArbitraryLoads` für App **und** Widget-Extension gesetzt: normales `http://` funktioniert ab dem nächsten IPA (Version 1.1.0) — LAN-IP, öffentliche IP oder Domain, mit und ohne Port. WebSockets (`ws://`) sind damit ebenfalls erlaubt. Dein Server ist übrigens korrekt „public": Der Pairing-Code schützt den Zugang zu eurem Paar; für dauerhaft öffentliche Server empfehle ich zusätzlich HTTPS via Reverse-Proxy (Caddy/nginx) — `https://ark.atomi23.de` würde die App genauso schlucken. Einfach das neue IPA aus dem Release `sooodreamy-latest` sideloaden.
 
 ---
 

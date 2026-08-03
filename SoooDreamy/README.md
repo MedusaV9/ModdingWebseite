@@ -70,6 +70,8 @@ open SoooDreamy.xcodeproj
 
 > ⚠️ Hinweise zum unsignierten Build: Kein Remote-Push (Realtime läuft über WebSocket, solange die App offen ist — die tägliche Erinnerung ist eine lokale Notification). App Groups (Widget-Daten) funktionieren, wenn euer Sideload-Tool die `group.app.sooodreamy.shared`-Entitlement mitsigniert (AltStore/SideStore tun das); sonst zeigen Widgets Platzhalter.
 
+> 🔓 **HTTP erlaubt:** App Transport Security ist bewusst geöffnet (`NSAllowsArbitraryLoads`), damit euer selbst gehosteter Server ohne TLS funktioniert — egal ob LAN-IP (`http://192.168.1.20:4321`) oder öffentliche IP (`http://138.201.60.230:4321`). Für dauerhaft öffentlich erreichbare Server empfehlen wir trotzdem HTTPS über einen Reverse-Proxy (Caddy/nginx auf Port 443, dann einfach `https://euredomain.de` eintragen) — die App kann beides.
+
 ## 🔄 Feedback-Loop
 
 Dieses Projekt wird iterativ von einem Agenten weiterentwickelt. Schreib dein Feedback in **`UserFeedback.md`** (Abschnitt „💬 Dein Feedback") — es wird bei jeder Iteration gelesen und umgesetzt.

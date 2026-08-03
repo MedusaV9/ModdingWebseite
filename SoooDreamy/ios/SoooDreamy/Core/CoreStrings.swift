@@ -68,8 +68,8 @@ enum CoreStrings {
                                       en: "Really remove “{name}”? Your pairing on that server will be lost on this device."),
         "server.paired": LText(de: "Gekoppelt", en: "Paired"),
         "server.notPaired": LText(de: "Noch nicht gekoppelt", en: "Not paired yet"),
-        "server.hint": LText(de: "Tipp: Der Server ist ein kleines Node.js-Programm aus dem SoooDreamy-Projekt (Ordner „server“). `npm start` genügt.",
-                             en: "Tip: The server is a tiny Node.js program from the SoooDreamy project (“server” folder). Just run `npm start`."),
+        "server.hint": LText(de: "Tipp: Der Server ist ein kleines Node.js-Programm aus dem SoooDreamy-Projekt (Ordner „server“). `npm start` genügt. Normales http:// funktioniert (z. B. 192.168.1.20:4321 oder eine öffentliche IP) — für Server im offenen Internet empfehlen wir https:// über einen Reverse-Proxy.",
+                             en: "Tip: The server is a tiny Node.js program from the SoooDreamy project (“server” folder). Just run `npm start`. Plain http:// works (e.g. 192.168.1.20:4321 or a public IP) — for servers on the open internet we recommend https:// via a reverse proxy."),
         "server.continue": LText(de: "Weiter", en: "Continue"),
         "server.pickTitle": LText(de: "Mit welchem Server?", en: "Which server?"),
 

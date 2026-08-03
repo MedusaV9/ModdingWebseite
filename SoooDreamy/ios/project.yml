@@ -8,7 +8,7 @@ options:
 settings:
   base:
     SWIFT_VERSION: "5.0"
-    MARKETING_VERSION: "1.0.0"
+    MARKETING_VERSION: "1.1.0"
     CURRENT_PROJECT_VERSION: "1"
     GENERATE_INFOPLIST_FILE: NO
     ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
@@ -43,6 +43,13 @@ targets:
         NSCameraUsageDescription: "SoooDreamy uses the camera to scan your partner's pairing QR code."
         NSPhotoLibraryAddUsageDescription: "SoooDreamy can save shared photos to your photo library."
         NSFaceIDUsageDescription: "SoooDreamy can lock your shared moments behind Face ID."
+        NSLocalNetworkUsageDescription: "SoooDreamy connects to your own couple server on your home network."
+        # Self-hosted couple servers usually run plain HTTP (LAN IP / Raspberry Pi /
+        # port-forward). ATS is opened deliberately; HTTPS still works and is
+        # recommended for servers exposed to the internet (reverse proxy).
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+          NSAllowsLocalNetworking: true
         ITSAppUsesNonExemptEncryption: false
         CFBundleURLTypes:
           - CFBundleURLName: app.sooodreamy.ios
@@ -75,6 +82,11 @@ targets:
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
+        # The photo widget fetches images from the self-hosted (often plain
+        # HTTP) couple server — same deliberate ATS opening as the app.
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+          NSAllowsLocalNetworking: true
     entitlements:
       path: Config/SoooDreamyWidgets.entitlements
       properties:
