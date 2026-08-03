@@ -30,16 +30,28 @@ struct API {
     let baseURL: URL
     let token: String?
 
+    // ISO8601DateFormatter is documented thread-safe; the unsafe marker only
+    // silences the Swift 6 Sendable-capture warning.
+    nonisolated(unsafe) private static let isoFracFormatter: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+
+    nonisolated(unsafe) private static let isoFormatter: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime]
+        return f
+    }()
+
     static let decoder: JSONDecoder = {
         let d = JSONDecoder()
-        let isoFrac = ISO8601DateFormatter()
-        isoFrac.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let iso = ISO8601DateFormatter()
-        iso.formatOptions = [.withInternetDateTime]
         d.dateDecodingStrategy = .custom { decoder in
             let c = try decoder.singleValueContainer()
             let s = try c.decode(String.self)
-            if let date = isoFrac.date(from: s) ?? iso.date(from: s) { return date }
+            if let date = API.isoFracFormatter.date(from: s) ?? API.isoFormatter.date(from: s) {
+                return date
+            }
             throw DecodingError.dataCorruptedError(in: c, debugDescription: "Bad date: \(s)")
         }
         return d

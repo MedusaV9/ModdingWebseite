@@ -8,16 +8,20 @@
 
 - **Herzklopfen & Berührungen** — sende Herzklopfen, Küsse, Umarmungen … mit echten CoreHaptics-Mustern und synthetisierten Sounds. Empfangene Berührungen erscheinen als Vollbild-Moment.
 - **3D-Herz** — ein prozedural generiertes, schlagendes SceneKit-Herz auf dem Dashboard (tippen = Herzklopfen senden 💓).
-- **Chat** — Texte, 💌 Liebesbriefe (mit eigenem Composer) und Sprachnachrichten mit Live-Pegel, Tipp-Indikator, Tag-Gruppierung.
-- **Frage des Tages** — 185 bilinguale Fragen, deterministisch pro Tag & Paar; Antworten werden erst enthüllt, wenn beide geantwortet haben. Mit 🔥-Serie (Streak).
+- **Chat** — Texte, 💌 Liebesbriefe (mit eigenem Composer + Vollbild-Leser) und Sprachnachrichten mit Live-Pegel, Tipp-Indikator, Tag-Gruppierung.
+- **„Öffnen wenn…"-Briefe** 🔒 — versiegelte Liebesbriefe („Öffne mich, wenn du traurig bist / mich vermisst / nicht schlafen kannst …"); der Empfänger bricht das Siegel mit einer dramatischen Enthüllungs-Animation.
+- **Frage des Tages** — 185 bilinguale Fragen, deterministisch pro Tag & Paar; Antworten werden erst enthüllt, wenn beide geantwortet haben. Mit 🔥-Serie (Streak) und **📖 „Unser Tagebuch"** zum Durchblättern aller bisherigen Antworten.
+- **💘 Liebes-Wordle** — tägliches Paar-Wordle: beide raten dasselbe Wort (514 deutsche / 461 englische Wörter), Ergebnis-Grid direkt in den Chat teilen.
 - **Spiele** — „Wer kennt wen besser?"-Quiz, This-or-That, Würdest-du-eher (alle realtime-multiplayer über den Server), Wahrheit-oder-Pflicht (Couple-Edition, 3 Schärfegrade), die 36 Fragen zum Verlieben, Date-Ideen-Generator mit Filtern (110+ Ideen, auch für Fernbeziehungen).
-- **Gemeinsame Galerie** — Fotos hochladen (automatisch verkleinert), Vollbild-Pager, in die Fotobibliothek sichern.
-- **Kritzel-Canvas** — zeichnet zusammen in Echtzeit (WebSocket), Stift/Marker/Radierer.
+- **Gemeinsame Galerie** — Fotos hochladen (automatisch verkleinert, mit Grid-Thumbnails), Vollbild-Pager, in die Fotobibliothek sichern.
+- **Kritzel-Canvas** — zeichnet zusammen in Echtzeit (WebSocket), Stift/Marker/Radierer + Undo.
 - **Bucket List** — eure gemeinsamen Träume, mit Konfetti beim Abhaken.
-- **Momente & Countdowns** — Jahrestage & besondere Termine, optional jährlich wiederholend, mit **Live Activity / Dynamic Island Countdown**.
+- **Momente & Countdowns** — Jahrestage & besondere Termine, optional jährlich wiederholend, mit **Live Activity / Dynamic Island Countdown**. Das Dashboard feiert **Monatstage & Jahrestage** automatisch. 🎉
+- **Stimmungen** — Mood + Notiz teilen, Partner-Stimmung auf Dashboard & Widget, **Stimmungsverlauf-Timeline** in den Love-Stats.
 - **Love-Stats** — Tage zusammen, gesendete vs. empfangene Berührungen, Nachrichten, Spiele, Streak.
 - **Widgets** — Tage zusammen, Partner-Stimmung, Countdown, Frage des Tages (Home Screen + Lock Screen).
 - **App Intents / Siri** — „Schick Liebe mit SoooDreamy", Partner-Stimmung abfragen.
+- **App-Sperre** 🔒 — optional per Face ID / Touch ID / Code.
 - **Mehrere Server, ein Tap** — Server in den Einstellungen anlegen, testen, **wechseln** (jeder Server hat seine eigene Kopplung). Pairing per 6-stelligem Code **oder QR-Code** (Server + Code in einem Scan).
 
 ## 🏗 Architektur
@@ -52,7 +56,7 @@ npm test             # 38 E2E-Tests (node:test)
 
 ## 📱 App bauen
 
-**Unsigniertes IPA aus CI:** Der GitHub-Actions-Workflow `SoooDreamy` baut bei jedem Push automatisch `SoooDreamy-unsigned.ipa` als Artifact (Job „Unsigned IPA"). Das IPA installiert ihr mit [AltStore](https://altstore.io), [SideStore](https://sidestore.io), Sideloadly o. ä. — die signieren es beim Installieren mit eurer Apple-ID.
+**Unsigniertes IPA aus CI:** Der GitHub-Actions-Workflow `SoooDreamy` baut bei jedem Push automatisch `SoooDreamy-unsigned.ipa` — als Workflow-Artifact **und** als Download im rollenden Release [`sooodreamy-latest`](https://github.com/MedusaV9/ModdingWebseite/releases/tag/sooodreamy-latest). Das IPA installiert ihr mit [AltStore](https://altstore.io), [SideStore](https://sidestore.io), Sideloadly o. ä. — die signieren es beim Installieren mit eurer Apple-ID.
 
 **Lokal mit Xcode (macOS):**
 

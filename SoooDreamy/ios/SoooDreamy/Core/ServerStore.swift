@@ -42,8 +42,8 @@ final class ServerStore {
     private(set) var profiles: [ServerProfile] = []
     private(set) var activeProfileID: UUID?
 
-    private static let storageKey = "sooodreamy.servers.v1"
-    private static let activeKey = "sooodreamy.activeServer.v1"
+    private nonisolated static let storageKey = "sooodreamy.servers.v1"
+    private nonisolated static let activeKey = "sooodreamy.activeServer.v1"
 
     init() {
         load()
