@@ -271,10 +271,41 @@ Umzug komplett gelandet — die Marker oben waren nur veraltet.
       Klammer mit Licht-Sweep + Tagesausblick, Gute-Nacht-Bilanz im Bett —
       und der Overlay-Stau nach dem Onboarding ist damit entzerrt:
       Ritual → Bonus → Tour, nacheinander statt gestapelt).
-- [~] **R3 läuft:** nächste Verifikations-Playtests + weitere Top-Ideen
-      (Beute-Flug, Icon-Bühne/Querformat-HUD, Hero-Morph, Wochen-Vorhaben,
-      Level-Reise, Brief-Duell …) im Dauerloop — ich schaue vor/nach jeder
-      Runde hier rein.
+**W18/R3 FERTIG (8 Pakete, Suite 3658 Tests / 0 rot, CI der Vorrunde GRÜN
+— die frische .ipa liegt als Actions-Artefakt im neuen Repo):**
+- [x] **Verifikations-Playtest:** ALLE 7 R2-Fixes + 5 Features nachgemessen —
+      0 Regressionen (der Ex-Crash-Tap im Geschichten-Buch läuft jetzt per
+      echten Eingabe-Events grün durch). 5 neue Befunde notiert (größter:
+      das nächtliche Gewitter-Angst-Overlay schluckt Welt-Taps → R4).
+- [x] **10 weitere Bugs gefixt:** Parkplatz-Anker im Collider, IKEA-Kaufknopf
+      als Sticky-Footer, Telefon-Münzen live, Antwort-Chips ohne Frage, Mumie
+      parkt Gooby nicht mehr auf dem Tisch, Onboarding-Editor-Karte entquetscht,
+      passiver Münz-Zuwachs DIAGNOSTIZIERT (Goobys Sofa-Funde!) → jetzt sichtbar
+      als Toast + 10-Münzen-Tagesdeckel, Wochenmarkt-Öffnungszeiten mit Charme
+      (Planen + „Bis Samstag!"-Schild statt harter Sperre, Stand immer bestückbar),
+      stabile Fahrdienst-Knöpfe, cityDrive-Checkpoint liegt jetzt auf der Münzkette.
+- [x] **DEIN LETZTER OFFENER SCREENSHOT-BEFUND IST WEG:** Icon-Bühne — die
+      HUD-Kacheln sind im Querformat jetzt icon-only (nichts mehr kürzbar),
+      Beschriftung per Namensschild-Parade beim Einstieg + Long-Press auf
+      jeder Kachel + Dauerschilder im Coachmark. Hochformat unverändert.
+- [x] **3 neue Wohlfühl-Features:** BEUTE-FLUG (Münzen fliegen bei jeder
+      großen Belohnung sichtbar in Bögen zur Münz-Pille, mit Pitch-Treppe +
+      Haptik-Ticken, Zähler zählt synchron — an 7 Momenten verzahnt),
+      WOCHEN-VORHABEN (jede Woche EIN erzählter 3-5-Schritte-Bogen mit
+      Gooby-Zwischentexten, z. B. „Goobys Drachenfest" — oben im
+      Tagesquests-Blatt, Finale mit Konfetti), LEVEL-REISE (Serpentinen-Karte
+      1→40 im Profil mit echten Freischalt-Toren, jedes 5. Level ein
+      Torten-Fest im Wohnzimmer, Reisepass-Stempel).
+- [x] **DLC-Welle-B-Playtest:** 603 grüne Schritte, über 60 exakte
+      Geld-Nachrechnungen, 0 Geld-Fehler — 4 kleinere Befunde (Hochformat-
+      Slot am Rand, Rampen-Listen-Panel, Angebots-Sheet-Leerfläche,
+      Backofen-Kalendertag) → R4.
+
+- [~] **R4 (nächste Runde im Dauerloop):** V1-V5 + D1-D4 fixen (Gewitter-
+      Overlay, Hochformat-Slot, Rampen-Panel …), weitere Top-Ideen
+      (Hero-Morph, Stadt-Cast, Andenken-Regal, adaptive Heim-Musik,
+      Monats-Stempelheft, Brief-Duell), nächster Trailer-Refresh — ich
+      schaue vor/nach jeder Runde hier rein.
 
 ---
 
