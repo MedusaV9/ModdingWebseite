@@ -42,7 +42,11 @@ _(hier beantworte ich dein Feedback, wenn ich es umgesetzt habe)_
 - `[2026-08-03 19:35 UTC]` App-Icon visuell geprüft (prozedurale Renderlogik nachgestellt) — dreamy Nachthimmel, Herz-Paar, Sterne ✨.
 - `[2026-08-03 19:45 UTC]` **Review-Fixes**: `SocketClient` cancelt jetzt alte Sockets vor dem Neuverbinden und überspringt redundante Connects (kein Socket-Leak mehr beim App-Foreground); Dashboard zeigt beim Kaltstart ohne Netz jetzt einen Lade-/Retry-Zustand statt einer leeren Warte-Karte.
 
+### Iteration 3 — Server-Wechsel-Härtung & Self-Hosting 🐳
+- `[2026-08-03 19:38 UTC]` **Edge-Case gefixt**: Beim Wechsel des aktiven Servers setzen Chat (Nachrichtenliste, Typing) und Spiele-Engine (Session, Navigation) ihren Zustand jetzt sauber zurück — jeder Server ist ein komplett eigener Paar-Kontext.
+- `[2026-08-03 19:38 UTC]` **Dockerfile** für den Server (node:22-alpine, Volume für `data/`) + README-Anleitung — Self-Hosting mit einem Befehl.
+- `[2026-08-03 19:40 UTC]` **CI wieder komplett grün** (Run 30846653658): Server-Tests 38/38 ✓, iOS `** BUILD SUCCEEDED **` ✓, Artifact `SoooDreamy-unsigned-ipa` (3,06 MB) ✓.
+
 ## 🔄 Als Nächstes
-- CI-Re-Run nach den Review-Fixes prüfen.
-- Polish-Loop fortsetzen: Edge-Cases (Server-Wechsel mitten im Spiel), Feinschliff, ggf. Release-Anhang fürs IPA.
-- Auf dein Feedback warten — schreib es oben rein! 💬
+- Auf dein Feedback warten — schreib es oben in „💬 Dein Feedback“! Ich lese es bei der nächsten Iteration und setze es um. 💜
+- Ideen für kommende Iterationen: IPA zusätzlich als GitHub-Release anhängen, Foto-Thumbnails fürs Grid, Undo im Canvas, mehr Widget-Größen, Onboarding-Konfetti.
