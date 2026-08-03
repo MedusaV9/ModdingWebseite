@@ -1,0 +1,19 @@
+{
+  "name": "sooodreamy-server",
+  "version": "1.0.0",
+  "description": "Self-hosted server for the SoooDreamy couple app (pairing, realtime WebSocket, messages, photos, games).",
+  "type": "module",
+  "private": true,
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test \"test/*.test.js\""
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}
