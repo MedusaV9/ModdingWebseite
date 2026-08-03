@@ -49,6 +49,15 @@ struct Question36: Identifiable, Hashable {
     let text: LText
 }
 
+/// Emoji riddle: guess the movie/song/place/… from an emoji sequence.
+/// `category`: "movie" | "song" | "place" | "food" | "couple" | "activity".
+struct EmojiRiddle: Identifiable, Hashable {
+    let id: Int
+    let emojis: String
+    let answer: LText
+    let category: String
+}
+
 /// Date idea for the generator. `budget`: 0 = free … 3 = splurge.
 struct DateIdea: Identifiable, Hashable {
     let id: Int

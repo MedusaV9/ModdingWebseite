@@ -26,6 +26,8 @@ final class AppState {
     var dailyEntry: DailyEntry?
     var stats: Stats?
     var sessionLoading = false
+    /// Showcase photo for the photo widget (newest favorite, else newest).
+    var widgetPhoto: Photo?
 
     // UI state
     var activeTab: AppTab = .home
@@ -152,8 +154,16 @@ final class AppState {
         async let e: Void = refreshEvents()
         async let d: Void = refreshDaily()
         async let s: Void = refreshStats()
-        _ = await (e, d, s)
+        async let p: Void = refreshWidgetPhoto()
+        _ = await (e, d, s, p)
         updateWidgetSnapshot()
+    }
+
+    func refreshWidgetPhoto() async {
+        guard let api else { return }
+        if let photos = try? await api.photos() {
+            widgetPhoto = photos.first { !($0.favorites ?? []).isEmpty } ?? photos.first
+        }
     }
 
     func refreshCouple() async {
@@ -303,6 +313,11 @@ final class AppState {
                 await refreshEvents()
                 updateWidgetSnapshot()
             }
+        case .photoAdded, .photoUpdated, .photoDeleted:
+            Task {
+                await refreshWidgetPhoto()
+                updateWidgetSnapshot()
+            }
         case .couponAdded:
             if let coupon = event.decode(CouponResponse.self)?.coupon, coupon.forMember == memberId {
                 showToast(L10n.t("coupon.receivedToast"), style: .love)
@@ -429,6 +444,10 @@ final class AppState {
         snapshot.dailyAnsweredByMe = dailyEntry?.myAnswer != nil
         snapshot.dailyBothAnswered = dailyEntry?.bothAnswered ?? false
         snapshot.streak = dailyEntry?.streak ?? 0
+        if let photo = widgetPhoto {
+            snapshot.photoURLString = api?.mediaURL(photo.thumbUrl ?? photo.url)?.absoluteString
+            snapshot.photoCaption = photo.caption
+        }
         snapshot.updatedAt = Date()
         SharedStore.writeSnapshot(snapshot)
         WidgetCenter.shared.reloadAllTimelines()

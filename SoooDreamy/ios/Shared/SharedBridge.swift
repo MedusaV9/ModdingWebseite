@@ -55,6 +55,10 @@ struct WidgetSnapshot: Codable {
     var dailyAnsweredByMe: Bool
     var dailyBothAnswered: Bool
     var streak: Int
+    /// Authed absolute URL of the couple's showcase photo (newest favorite,
+    /// else newest photo; thumbnail preferred) — for the photo widget.
+    var photoURLString: String?
+    var photoCaption: String?
     var updatedAt: Date
 
     init(partnerName: String? = nil, partnerAvatar: String? = nil, partnerColorHex: String? = nil,
@@ -63,7 +67,8 @@ struct WidgetSnapshot: Codable {
          nextEventTitle: String? = nil, nextEventEmoji: String? = nil, nextEventDate: String? = nil,
          dailyQuestionDE: String? = nil, dailyQuestionEN: String? = nil,
          dailyAnsweredByMe: Bool = false, dailyBothAnswered: Bool = false,
-         streak: Int = 0, updatedAt: Date = Date()) {
+         streak: Int = 0, photoURLString: String? = nil, photoCaption: String? = nil,
+         updatedAt: Date = Date()) {
         self.partnerName = partnerName
         self.partnerAvatar = partnerAvatar
         self.partnerColorHex = partnerColorHex
@@ -81,6 +86,8 @@ struct WidgetSnapshot: Codable {
         self.dailyAnsweredByMe = dailyAnsweredByMe
         self.dailyBothAnswered = dailyBothAnswered
         self.streak = streak
+        self.photoURLString = photoURLString
+        self.photoCaption = photoCaption
         self.updatedAt = updatedAt
     }
 }
