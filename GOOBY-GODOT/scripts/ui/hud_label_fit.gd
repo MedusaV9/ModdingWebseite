@@ -11,6 +11,9 @@ extends RefCounted
 
 ## Unterste lesbare Schriftgröße (Design-px) — darunter Ellipsis.
 const MIN_PX := 8
+## J2-Kurzform-Pfad: unter dieser Größe gilt der VOLLE Name als „quetscht
+## sich nur noch rein“ — dann ist die gepflegte Kurzform die bessere Wahl.
+const KURZ_AB_PX := 10
 
 
 ## Gerenderte Textbreite in px für Font/Größe (0 ohne Font — headless-sicher).
@@ -30,3 +33,25 @@ static func passende_groesse(
 	while px > MIN_PX and text_breite(font, text, px) > verfuegbar:
 		px -= 1
 	return {"px": px, "passt": text_breite(font, text, px) <= verfuegbar}
+
+
+## G8/IDEA-J2 — Kurzform-Pfad (deterministisches Sicherheitsnetz der
+## Icon-Bühne): statt blindem Ellipsis wählt der Aufrufer BEWUSST zwischen
+## vollem Namen und gepflegter Kurzform (`hud.<id>.kurz`, „Garderobe“ →
+## „Mode“). Regel: der volle Name gewinnt, wenn er bei ≥ KURZ_AB_PX lesbar
+## passt; sonst die Kurzform (die noch bis MIN_PX schrumpfen darf); passt
+## selbst die nicht, meldet `passt=false` — sichtbares Kürzen bleibt die
+## bewusste letzte Ausnahme des Aufrufers.
+## Rückgabe: {"text": String, "px": int, "passt": bool}.
+static func kurzform_wahl(
+	font: Font, voll: String, kurz: String, wunsch_px: int, verfuegbar: float
+) -> Dictionary:
+	var fit_voll := passende_groesse(font, voll, wunsch_px, verfuegbar)
+	if bool(fit_voll["passt"]) and int(fit_voll["px"]) >= KURZ_AB_PX:
+		return {"text": voll, "px": int(fit_voll["px"]), "passt": true}
+	if kurz != "" and kurz != voll:
+		var fit_kurz := passende_groesse(font, kurz, wunsch_px, verfuegbar)
+		if bool(fit_kurz["passt"]):
+			return {"text": kurz, "px": int(fit_kurz["px"]), "passt": true}
+		return {"text": kurz, "px": int(fit_kurz["px"]), "passt": false}
+	return {"text": voll, "px": int(fit_voll["px"]), "passt": bool(fit_voll["passt"])}

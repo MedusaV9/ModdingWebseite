@@ -64,11 +64,17 @@ func hud_da() -> bool:
 	return false
 
 
-## User-Befund 1 (1.8.): HUD-Kacheln schnitten Wörter ab („IGohbi"/…).
-## P50-Fix = Font-Autoshrink OHNE Trimming — hier nachgemessen: der Text
-## jeder sichtbaren Kachel passt bei seiner gesetzten Schriftgröße in die
-## Kachelbreite (minus StyleBox-Ränder) und Ellipsis ist AUS.
+## User-Befund 1 (1.8.): HUD-Kacheln schnitten Wörter ab („IGohbi"/…) —
+## seit G8/IDEA-J2 eine ERFOLGS-Erwartung mit ZWEI Verträgen (die alte
+## B4-Sonde): QUER sind die Kacheln ICON-ONLY (kein Text in der Kachel =
+## strukturell nichts mehr abschneidbar; die Beschriftung liefern die
+## Namensschilder der Icon-Bühne), HOCHKANT gilt der P50-Vertrag weiter
+## (Font-Autoshrink OHNE Trimming — nachgemessen wie zuvor).
 func hud_labels_vollstaendig() -> bool:
+	var wurzel := hud()
+	if wurzel == null:
+		return false
+	var quer: bool = int(wurzel.get("current_layout")) == HudLayoutLogic.Layout.LANDSCAPE
 	var alle_ok := true
 	var gesehen := 0
 	for knopf_name in HUD_KNOEPFE:
@@ -76,31 +82,60 @@ func hud_labels_vollstaendig() -> bool:
 		if knopf == null or not knopf.is_visible_in_tree():
 			continue
 		gesehen += 1
-		var breite := HudLabelFit.text_breite(
-			knopf.get_theme_font("font"), knopf.text, knopf.get_theme_font_size("font_size")
-		)
-		var verfuegbar := knopf.size.x
-		var stil := knopf.get_theme_stylebox("normal")
-		if stil != null:
-			verfuegbar -= stil.get_content_margin(SIDE_LEFT) + stil.get_content_margin(SIDE_RIGHT)
-		var kein_trim := knopf.text_overrun_behavior == TextServer.OVERRUN_NO_TRIMMING
-		var ok := kein_trim and breite <= verfuegbar + 0.5
-		print(
-			(
-				"[PT4] Kachel %s '%s': Text %.0f px / Platz %.0f px, Trim=%s -> %s"
-				% [
-					knopf_name,
-					knopf.text,
-					breite,
-					verfuegbar,
-					"aus" if kein_trim else "ELLIPSIS",
-					"ok" if ok else "ABGESCHNITTEN",
-				]
-			)
+		var ok := (
+			_kachel_iconbuehne_ok(knopf_name, knopf)
+			if quer
+			else _kachel_label_ok(knopf_name, knopf)
 		)
 		if not ok:
 			alle_ok = false
 	return alle_ok and gesehen > 0
+
+
+## J2-Quer-Vertrag: Kachel trägt Icon statt Text — kein Ellipsis mehr möglich.
+func _kachel_iconbuehne_ok(knopf_name: String, knopf: Button) -> bool:
+	var kein_trim := knopf.text_overrun_behavior == TextServer.OVERRUN_NO_TRIMMING
+	var ok := knopf.text == "" and kein_trim and knopf.icon != null
+	print(
+		(
+			"[PT4] Kachel %s quer: Text='%s' Icon=%s Trim=%s -> %s"
+			% [
+				knopf_name,
+				knopf.text,
+				"da" if knopf.icon != null else "FEHLT",
+				"aus" if kein_trim else "ELLIPSIS",
+				"icon-only ok" if ok else "VERLETZT",
+			]
+		)
+	)
+	return ok
+
+
+## P50-Hochkant-Vertrag: Text passt bei gesetzter Schriftgröße, Trimming aus.
+func _kachel_label_ok(knopf_name: String, knopf: Button) -> bool:
+	var breite := HudLabelFit.text_breite(
+		knopf.get_theme_font("font"), knopf.text, knopf.get_theme_font_size("font_size")
+	)
+	var verfuegbar := knopf.size.x
+	var stil := knopf.get_theme_stylebox("normal")
+	if stil != null:
+		verfuegbar -= stil.get_content_margin(SIDE_LEFT) + stil.get_content_margin(SIDE_RIGHT)
+	var kein_trim := knopf.text_overrun_behavior == TextServer.OVERRUN_NO_TRIMMING
+	var ok := kein_trim and breite <= verfuegbar + 0.5
+	print(
+		(
+			"[PT4] Kachel %s '%s': Text %.0f px / Platz %.0f px, Trim=%s -> %s"
+			% [
+				knopf_name,
+				knopf.text,
+				breite,
+				verfuegbar,
+				"aus" if kein_trim else "ELLIPSIS",
+				"ok" if ok else "ABGESCHNITTEN",
+			]
+		)
+	)
+	return ok
 
 
 ## Oberstes offenes PanelSheet im Baum (null = keins sichtbar).

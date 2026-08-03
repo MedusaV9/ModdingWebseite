@@ -8,10 +8,13 @@ extends TestCase
 ## (b) Blatt offen → HUD weicht; ZÄHLER-Logik mit zwei Blättern, Blatt
 ##     während Baumodus, offen freigegebenes Blatt und HUD-eigenem
 ##     Status-Sheet (zählt nicht).
-## (c) Label-Wache: kein Kachel-Label wird visuell abgeschnitten
-##     (Font-Messung ≤ verfügbare Breite) in quer 2868×1320 (iPhone 17 Pro
-##     Max — Leitformat), quer 2556×1179 und hoch 1179×2556; der „Wo ist
-##     mein Gooby?“-Chip deckt seine Textbreite ab.
+## (c) Label-Wache — seit G8/IDEA-J2 „Icon-Bühne“ zweigleisig: QUER
+##     (2868×1320 iPhone 17 Pro Max Leitformat, 2556×1179) sind die
+##     Kacheln ICON-ONLY (kein Text, kein Ellipsis-Fallback mehr messbar)
+##     und die Namensschilder der Bühne kollidieren weder untereinander
+##     noch mit den Kacheln; HOCH (1179×2556) gilt der P50-Vertrag
+##     unverändert (Label passt, kein Trimming). Der „Wo ist mein
+##     Gooby?“-Chip deckt seine Textbreite in allen Formaten ab.
 
 const HUD_SCENE := preload("res://scripts/ui/hud.tscn")
 const SHEET_SCENE := preload("res://scripts/ui/panel_sheet.tscn")
@@ -240,11 +243,13 @@ func test_eigenes_status_sheet_verdeckt_hud_nicht() -> void:
 	_set_reduced_motion(rm_vorher)
 
 
-# ── (c) Label-Wache ──────────────────────────────────────────────────────────
+# ── (c) Label-Wache (seit J2: Icon-Bühne) ────────────────────────────────────
 
 
 func test_kachel_labels_nie_abgeschnitten_in_leitformaten() -> void:
 	var fenster_vorher: Vector2i = tree.root.size
+	# Die Wache misst Geometrie, keine Choreografie — Parade abhaken.
+	HudIconBuehne.parade_abhaken()
 	for format: Array in FORMATE:
 		var fenster: Vector2i = format[0]
 		var scale: float = format[1]
@@ -263,24 +268,15 @@ func test_kachel_labels_nie_abgeschnitten_in_leitformaten() -> void:
 		await wait_frames(2)
 		var hud := _hud_bauen()
 		await wait_frames(2)
+		var portrait := fenster.y > fenster.x
 		for id: StringName in hud._buttons:
 			var btn: Button = hud._buttons[id]
-			var font := btn.get_theme_font("font")
-			var px := btn.get_theme_font_size("font_size")
-			var avail := hud._label_breite(btn)
-			var breite := HudLabelFit.text_breite(font, btn.text, px)
-			assert_true(
-				breite <= avail + 0.5,
-				(
-					"%s: „%s“ (%d px) misst %.1f > verfügbar %.1f @ %s"
-					% [id, btn.text, px, breite, avail, fenster]
-				)
-			)
-			assert_eq(
-				btn.text_overrun_behavior,
-				TextServer.OVERRUN_NO_TRIMMING,
-				"%s braucht kein Ellipsis @ %s" % [id, fenster]
-			)
+			if portrait:
+				_hochkant_label_wache(hud, id, btn, fenster)
+			else:
+				_quer_iconbuehne_wache(id, btn, fenster)
+		if not portrait:
+			await _schilder_kollisions_wache(hud, fenster)
 		# „Wo ist mein Gooby?“-Chip: Mindestbreite deckt die Textbreite.
 		var chip: Button = hud._gooby_chip
 		var chip_breite := HudLabelFit.text_breite(
@@ -303,4 +299,86 @@ func test_kachel_labels_nie_abgeschnitten_in_leitformaten() -> void:
 	UiScale.insets_override = Rect2()
 	tree.root.size = fenster_vorher
 	tree.root.size_changed.emit()
+	await wait_frames(1)
+
+
+## Hochkant-Vertrag (P50 unverändert): Label passt bei gesetzter
+## Schriftgröße in die Kachelbreite, Ellipsis bleibt aus.
+func _hochkant_label_wache(hud: Hud, id: StringName, btn: Button, fenster: Vector2i) -> void:
+	var breite := HudLabelFit.text_breite(
+		btn.get_theme_font("font"), btn.text, btn.get_theme_font_size("font_size")
+	)
+	var avail := hud._label_breite(btn)
+	assert_true(
+		breite <= avail + 0.5,
+		(
+			"%s: „%s“ (%d px) misst %.1f > verfügbar %.1f @ %s"
+			% [id, btn.text, btn.get_theme_font_size("font_size"), breite, avail, fenster]
+		)
+	)
+	assert_eq(
+		btn.text_overrun_behavior,
+		TextServer.OVERRUN_NO_TRIMMING,
+		"%s braucht kein Ellipsis @ %s" % [id, fenster]
+	)
+
+
+## Quer-Vertrag (J2): Kacheln sind ICON-ONLY — kein Label-Text mehr in der
+## Kachel, damit strukturell KEIN Ellipsis-Fallback mehr messbar; das Icon
+## existiert und ist mindestens auf die alte 22×f-Referenz gedeckelt.
+func _quer_iconbuehne_wache(id: StringName, btn: Button, fenster: Vector2i) -> void:
+	assert_eq(btn.text, "", "J2: Quer-Kachel %s ist icon-only @ %s" % [id, fenster])
+	assert_eq(
+		btn.text_overrun_behavior,
+		TextServer.OVERRUN_NO_TRIMMING,
+		"J2: kein Ellipsis-Fallback mehr in %s @ %s" % [id, fenster]
+	)
+	assert_true(btn.icon != null, "Quer-Kachel %s trägt ihr Icon @ %s" % [id, fenster])
+	var f := UiScale.for_viewport(btn.get_viewport())
+	var deckel := btn.get_theme_constant("icon_max_width")
+	assert_true(
+		float(deckel) >= maxf(HudLayoutLogic.LANDSCAPE_ICON * f, 16.0) - 0.5,
+		"Icon von %s wächst mindestens auf die alte Referenz (%d) @ %s" % [id, deckel, fenster]
+	)
+
+
+## J2-Schilder-Wache: die Namensschilder der Bühne (Dauerschild-Modus als
+## deterministischer Stellvertreter aller drei Auftritte — gleiche
+## rest_plan/entzerre-Geometrie) kollidieren NIE untereinander, decken
+## keine Kachel ab und bleiben im Canvas.
+func _schilder_kollisions_wache(hud: Hud, fenster: Vector2i) -> void:
+	var buehne: HudIconBuehne = hud._buehne
+	buehne.dauerschilder(true)
+	await wait_frames(2)
+	var schilder := buehne.dauer_schilder()
+	assert_eq(schilder.size(), hud._buttons.size(), "je Kachel ein Namensschild @ %s" % fenster)
+	var rects: Array[Rect2] = []
+	for schild in schilder:
+		assert_true(schild.visible, "Schild %s sichtbar @ %s" % [schild.name, fenster])
+		assert_true(
+			schild.text_anzeige() != "", "Schild %s trägt Text @ %s" % [schild.name, fenster]
+		)
+		rects.append(schild.get_global_rect())
+	for i in rects.size():
+		for j in range(i + 1, rects.size()):
+			var schnitt := rects[i].intersection(rects[j])
+			assert_false(
+				schnitt.size.x > 0.5 and schnitt.size.y > 0.5,
+				"Schilder %d/%d kollidieren: %s @ %s" % [i, j, schnitt, fenster]
+			)
+	for id: StringName in hud._buttons:
+		var kachel: Rect2 = (hud._buttons[id] as Button).get_global_rect()
+		for i in rects.size():
+			var schnitt := rects[i].intersection(kachel)
+			assert_false(
+				schnitt.size.x > 0.5 and schnitt.size.y > 0.5,
+				"Schild %d deckt Kachel %s ab: %s @ %s" % [i, id, schnitt, fenster]
+			)
+	var canvas := Rect2(Vector2.ZERO, Vector2(tree.root.get_visible_rect().size))
+	for i in rects.size():
+		assert_true(
+			canvas.grow(1.0).encloses(rects[i]),
+			"Schild %d bleibt im Canvas: %s @ %s" % [i, rects[i], fenster]
+		)
+	buehne.dauerschilder(false)
 	await wait_frames(1)

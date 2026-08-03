@@ -1,0 +1,14 @@
+{
+  "hud": {
+    "album": {"kurz": "Album"},
+    "arcade": {"kurz": "Arcade"},
+    "bau": {"kurz": "Bau"},
+    "gestalten": {"kurz": "Deko"},
+    "igohbie": {"kurz": "Handy"},
+    "ikea": {"kurz": "Möbel"},
+    "profil": {"kurz": "Profil"},
+    "quests": {"kurz": "Quests"},
+    "reise": {"kurz": "Reise"},
+    "wardrobe": {"kurz": "Mode"}
+  }
+}

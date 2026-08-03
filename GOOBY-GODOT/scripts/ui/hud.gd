@@ -43,6 +43,8 @@ extends Control
 ## `hud_sichtbarkeit.gd` (findet BuildMode/PanelSheet selbst über den
 ## SceneTree, keine fremden Hunks). Kachel-Labels schrumpfen per
 ## Font-Autoshrink (`hud_label_fit.gd`) statt abgeschnitten zu erscheinen.
+## G8/IDEA-J2 (PT4-B4-Wurzelfix): quer sind Kacheln ICON-ONLY, Beschriftung
+## liefern Namensschilder (Parade/Langdruck/Coachmark, `hud/icon_buehne.gd`).
 
 ## Ein Haupt-Button wurde gedrückt (reise/arcade/bau/album/profil/igohbie).
 signal action_pressed(action: StringName)
@@ -62,9 +64,8 @@ const STAT_ALERT_THRESHOLD := 25.0
 ## die Endgroesse um Bruchteile eines Punktes beschneiden kann.
 const TOUCH_MIN_PT := 46.0
 const EDGE_PAD := 8.0
-## Label unter den Cockpit-Buttons (Design-px, skaliert mit f).
+## Cockpit-Label-Basis (Design-px; J2: quer icon-only — Hochkant-Pfad).
 const LABEL_FONT := 12
-const LABEL_PAD := 20.0
 ## Abstand zwischen den Cockpit-Knöpfen (Canvas-px).
 const COLUMN_SEP := 10.0
 ## FB3 — Hochkant-Dock (Web .g5-hud-btn/.g5-hud-btns): 3.375rem-Kachel mit
@@ -115,6 +116,9 @@ const RING_PX := 40.0
 const COIN_ICON_PX := 22.0
 const COIN_FONT_PX := 17
 const RING_FONT_PX := 16
+## J1 BeuteFlug: Pillen-Mini-Puls je Münz-Ankunft + Übernahme-Frist.
+const MUENZFLUG_PULS := 1.04
+const MUENZFLUG_FRIST_MS := 4000
 
 var current_layout: HudLayoutLogic.Layout = HudLayoutLogic.Layout.PORTRAIT
 ## Notch-Simulation für Tests: Safe-Area in CANVAS-Koordinaten
@@ -135,6 +139,9 @@ var _coin_icon: TextureRect
 var _coin_chip: Control
 var _coin_tween: Tween
 var _coin_shown := 0
+## J1 BeuteFlug: laufender Münzflug treibt das Pillen-Label selbst.
+var _muenzflug_aktiv := false
+var _muenzflug_seit_ms := 0
 var _status_sheet: PanelSheet
 var _eye_timer: Timer
 var _coachmark: Control
@@ -142,6 +149,8 @@ var _coachmark: Control
 var _sichtbarkeit: HudSichtbarkeit
 ## G8/IDEA-SEELE: Stimmungs-Herz am Gooby-Chip (Logik in stimmungs_herz.gd).
 var _herz: StimmungsHerz
+## G8/IDEA-J2: Icon-Bühne (Quer-Kacheln icon-only + Namensschilder).
+var _buehne: HudIconBuehne
 ## Breite der Cockpit-Spalte (setzt apply_layout; refresh_safe_area liest).
 var _column_width := 88.0
 ## Oberkante der Cockpit-Spalte in Canvas-px (unter dem Zahnrad).
@@ -174,6 +183,7 @@ func _ready() -> void:
 	_build_status_chips()
 	_setup_static_buttons()
 	_baue_sichtbarkeit()
+	_buehne = HudIconBuehne.anbringen(self, _buttons, _landscape_column)
 	_eye_timer = Timer.new()
 	_eye_timer.one_shot = true
 	_eye_timer.timeout.connect(_on_eye_timeout)
@@ -210,8 +220,8 @@ func apply_layout(layout: HudLayoutLogic.Layout) -> void:
 	_left_column.visible = not portrait
 	_status_row.visible = portrait
 	var btn_size := maxf((DOCK_BTN if portrait else HudLayoutLogic.LANDSCAPE_BTN) * f, floor_px)
-	# Hochkant: Label sitzt IN der Kachel (Web .g5-btn-label) — kein Anbau.
-	var label_h := 0.0 if portrait else LABEL_PAD * f
+	# Hochkant-Label sitzt IN der Kachel, quer icon-only (J2): kein Anbau.
+	var label_h := 0.0
 	_column_top = EDGE_PAD + float(insets["top"]) + maxf(56.0 * f, floor_px) + 12.0
 	var button_parent: Container = _portrait_dock if portrait else _landscape_column
 	# W14: Daumen-Ordnung (H-Doc §1.3) — Hochkant fix, Cockpit wird nach dem
@@ -243,8 +253,8 @@ func apply_layout(layout: HudLayoutLogic.Layout) -> void:
 		_portrait_dock.add_theme_constant_override("v_separation", int(_dock_gap_px))
 	else:
 		btn_size = _fit_landscape_column(canvas, insets, btn_size, label_h, floor_px)
-		# G7-P50: der Messpass kann die Kacheln GESCHRUMPFT haben — Labels
-		# auf die endgültige Breite neu einpassen (sonst wieder „Garder…").
+		# J2: der Messpass kann die Kacheln GESCHRUMPFT haben — Icon-Bühne
+		# auf die endgültige Größe nachziehen (Icon wächst auf die Fläche).
 		for id: StringName in order:
 			_apply_button_label(_buttons[id], id, false, f)
 	var chip_parent: Container = _status_row if portrait else _left_column
@@ -296,6 +306,7 @@ func apply_layout(layout: HudLayoutLogic.Layout) -> void:
 	)
 	_herz.skaliere(f)
 	refresh_safe_area()
+	_buehne.nach_layout(portrait)
 	# G7-P50: apply_layout blendet Dock/Spalte selbst ein — eine aktive
 	# Verdeckung (Baumodus/Blatt) muss danach erneut erzwungen werden.
 	if _sichtbarkeit != null:
@@ -420,6 +431,10 @@ func set_coins(coins: int) -> void:
 		_coin_tween.kill()
 	var from := _coin_shown
 	_coin_shown = coins
+	# J1: ein laufender Münzflug treibt das Label; nach der Frist lösen wir.
+	if _muenzflug_aktiv and Time.get_ticks_msec() - _muenzflug_seit_ms < MUENZFLUG_FRIST_MS:
+		return
+	_muenzflug_aktiv = false
 	# UICOZY: Zähl-Animation + Münz-Wackler + Chip-Hüpfer über die gemeinsame
 	# UiMotion-Bibliothek (reduced-motion-gated, W4/POLISH-4 → Web-Parität).
 	_coin_tween = UiMotion.count_to(_coin_label, from, coins)
@@ -428,6 +443,42 @@ func set_coins(coins: int) -> void:
 		_coin_chip.scale = Vector2.ONE
 		UiMotion.wiggle(_coin_icon)
 		UiMotion.bounce(_coin_chip)
+
+
+# ── J1 BeuteFlug: Münz-Pille als Flug-Ziel + Zähler-Übernahme (NUR Pille) ────
+
+
+## Andock-Ziel des Beute-Flugs: globale Rect der Münz-Pille.
+func coin_ziel_rect() -> Rect2:
+	return _coin_chip.get_global_rect() if _coin_chip != null else Rect2()
+
+
+## Flug übernimmt: Label auf den Stand VOR der Buchung, die Serie zählt hoch.
+func muenzflug_start(betrag: int) -> Dictionary:
+	if _coin_tween != null and _coin_tween.is_valid():
+		_coin_tween.kill()
+	_muenzflug_aktiv = true
+	_muenzflug_seit_ms = Time.get_ticks_msec()
+	var bis := _coin_shown
+	var von := clampi(bis - maxi(betrag, 0), 0, bis)
+	_coin_label.text = str(von)
+	return {"von": von, "bis": bis}
+
+
+func muenzflug_schritt(wert: int) -> void:
+	if _muenzflug_aktiv:
+		_coin_label.text = str(clampi(wert, 0, _coin_shown))
+		UiMotion.bounce(_coin_chip, MUENZFLUG_PULS)
+
+
+## Serienende: IMMER die aktuelle Wahrheit zeigen + voller Buchungs-Puls.
+func muenzflug_abschluss() -> void:
+	if not _muenzflug_aktiv:
+		return
+	_muenzflug_aktiv = false
+	_coin_label.text = str(_coin_shown)
+	UiMotion.wiggle(_coin_icon)
+	UiMotion.bounce(_coin_chip)
 
 
 func set_level(level: int, xp_ratio: float = 0.0) -> void:
@@ -720,28 +771,11 @@ func _scale_font(ctl: Control, base_px: int, f: float) -> void:
 	ctl.add_theme_font_size_override("font_size", int(maxf(base_px * f, 10.0)))
 
 
-## FIX1 „Die Tasten rechts werden nichtmal erklärt“ + FB3-Web-Parität: der
-## Name steht in BEIDEN Layouts unterm Icon (Web .g5-btn-label) — Hochkant
-## kompakt (9 px Basis), Cockpit etwas größer (12 px Basis).
-## G7-P50: Labels erscheinen NIE stumm abgeschnitten — die Schrift schrumpft
-## per `HudLabelFit` auf die Kachelbreite (bestehende Begriffe bleiben);
-## Ellipsis nur als bewusster letzter Ausweg, wenn selbst das Minimum nicht
-## passt (iPhone-Befund „IGohbi“/„Garder“/„Gestalt“).
+## FIX1/FB3: Hochkant trägt der Name die Kachel (P50-Autoshrink); QUER ist
+## seit J2 icon-only — Beschriftungs-Logik liegt in `hud/icon_buehne.gd`.
 func _apply_button_label(btn: Button, id: StringName, portrait: bool, f: float) -> void:
-	btn.text = I18nService.t("hud." + String(id))
-	btn.alignment = HORIZONTAL_ALIGNMENT_CENTER
-	btn.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	btn.vertical_icon_alignment = VERTICAL_ALIGNMENT_TOP
-	btn.clip_text = true
 	var base := DOCK_LABEL_FONT if portrait else LABEL_FONT
-	var wunsch := int(maxf(float(base) * f, 10.0))
-	var fit := HudLabelFit.passende_groesse(
-		btn.get_theme_font("font"), btn.text, wunsch, _label_breite(btn)
-	)
-	btn.add_theme_font_size_override("font_size", int(fit["px"]))
-	btn.text_overrun_behavior = (
-		TextServer.OVERRUN_NO_TRIMMING if bool(fit["passt"]) else TextServer.OVERRUN_TRIM_ELLIPSIS
-	)
+	HudIconBuehne.beschrifte(btn, id, portrait, f, base, _label_breite(btn))
 
 
 ## Für Text nutzbare Breite einer Kachel: Mindestbreite minus der
@@ -780,6 +814,8 @@ func _maybe_show_coachmark() -> void:
 		return
 	_coachmark = _build_coachmark()
 	add_child(_coachmark)
+	# J2 (c): Dauerschilder neben der Spalte, solange der Coachmark zeigt.
+	_buehne.dauerschilder(true)
 	_position_coachmark()
 	_coachmark.minimum_size_changed.connect(_position_coachmark)
 	_position_coachmark.call_deferred()
@@ -851,7 +887,9 @@ func _position_coachmark() -> void:
 	size.x = minf(size.x, maxf(right - left, 1.0))
 	size.y = minf(size.y, maxf(bottom - top, 1.0))
 	_coachmark.size = size
-	var x := canvas.x - float(insets["right"]) - EDGE_PAD - _column_width - 16.0 - size.x
+	# J2: Karte rückt um die Dauerschild-Schiene weiter nach links.
+	var schiene := _buehne.dauerschild_breite() if _buehne != null else 0.0
+	var x := canvas.x - float(insets["right"]) - EDGE_PAD - _column_width - 16.0 - size.x - schiene
 	var y := (canvas.y - size.y) / 2.0
 	_coachmark.position = Vector2(
 		clampf(x, left, maxf(right - size.x, left)), clampf(y, top, maxf(bottom - size.y, top))
@@ -865,6 +903,8 @@ func _on_coachmark_dismissed() -> void:
 	if _coachmark != null:
 		_coachmark.queue_free()
 		_coachmark = null
+	# J2: Dauerschilder weg — die Parade übernimmt als Abschieds-Runde.
+	_buehne.dauerschilder(false)
 
 
 ## Insets in Canvas-Koordinaten: Override (Tests/Notch-Simulation) >
@@ -925,6 +965,9 @@ func _on_viewport_resized() -> void:
 
 
 func _on_action_pressed(id: StringName) -> void:
+	# J2: der Release NACH einem Langdruck (Namensschild) öffnet keine App.
+	if _buehne != null and _buehne.schluckt_tap(id):
+		return
 	AudioDirector.try_play(self, "ui_click")
 	action_pressed.emit(id)
 

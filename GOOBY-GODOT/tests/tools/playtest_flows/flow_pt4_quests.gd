@@ -54,6 +54,16 @@ func schritte() -> Array[Dictionary]:
 					"timeout_s": 60.0,
 				},
 				{"name": "wohnzimmer_kurz", "aktion": "warte", "sekunden": 2.0},
+				# G8/IDEA-J2: GENAU dieser Frame belegte Befund B4
+				# („Albu/IGohb/Garde/Gestal/Arcad/Quest") — die Sonde steht
+				# jetzt auf ERFOLG: quer icon-only, nichts mehr abschneidbar
+				# (Beschriftung liefern die Namensschilder der Icon-Bühne).
+				{
+					"name": "hud_quer_ohne_kuerzungen",
+					"aktion": "tue",
+					"funktion": hud_labels_vollstaendig,
+					"erwartung": "J2: Quer-HUD ohne abgeschnittene Kachel-Labels",
+				},
 				{"name": "muenzen_vor_belohnung", "aktion": "tue", "funktion": merke_muenzen},
 				# ── Belohnung abholen + Erfolg (ERSTES Blatt-Öffnen, s. Kopf).
 				{
@@ -64,6 +74,16 @@ func schritte() -> Array[Dictionary]:
 					"timeout_s": 45.0,
 				},
 				{"name": "abholen_knopf_ansehen", "aktion": "warte", "sekunden": 1.5},
+				# Seit dem Wochen-Vorhaben-Panel („Diese Woche", W18/R3)
+				# sitzt die Tagesliste TIEFER im Blatt — den Einkaufsbummel
+				# erst in Sicht scrollen, wie ein Spieler es täte.
+				{
+					"name": "einkauf_in_sicht_scrollen",
+					"aktion": "tue",
+					"funktion": einkauf_claim_anscrollen,
+					"erwartung": "ClaimEinkauf1 ins Blatt-Sichtfeld gescrollt",
+				},
+				{"name": "scroll_setzen_lassen", "aktion": "warte", "sekunden": 0.5},
 				# GEZIELT den Einkaufsbummel-Knopf (ClaimEinkauf1) tippen:
 				# tipp_text „Abholen" fand in Lauf 1 den Knopf der DRITTEN
 				# Quest — der liegt unterm Sichtfalz des Blatts, der Tap
@@ -157,6 +177,12 @@ func einkauf_quest_da() -> bool:
 		if entry is Dictionary and str((entry as Dictionary).get("id", "")) == "einkauf1":
 			return true
 	return false
+
+
+## Blatt-Scroll zum Einkaufsbummel-Claim (das Vorhaben-Panel schiebt die
+## Tagesliste unter den Sichtfalz — ensure_control_visible statt Wisch-Raten).
+func einkauf_claim_anscrollen() -> bool:
+	return liste_anscrollen("SheetScroll", "ClaimEinkauf1")
 
 
 ## Quest-Metrik „muenzen_ausgegeben": nach dem Beanie-Kauf > 0.
