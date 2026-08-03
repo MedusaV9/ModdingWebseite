@@ -180,9 +180,11 @@ struct API {
     }
 
     @discardableResult
-    func sendMessage(type: MessageKind, text: String, title: String? = nil) async throws -> Message {
+    func sendMessage(type: MessageKind, text: String, title: String? = nil,
+                     openWhen: String? = nil) async throws -> Message {
         try await request("POST", "/api/messages",
-                          jsonBody: ["type": type.rawValue, "text": text, "title": title],
+                          jsonBody: ["type": type.rawValue, "text": text, "title": title,
+                                     "openWhen": openWhen],
                           as: MessageResponse.self).message
     }
 
@@ -214,6 +216,13 @@ struct API {
     func deletePhoto(id: String) async throws {
         struct OK: Decodable { let ok: Bool }
         _ = try await request("DELETE", "/api/photos/\(id)", as: OK.self)
+    }
+
+    /// Attach a small grid thumbnail to an uploaded photo (uploader only).
+    @discardableResult
+    func uploadPhotoThumb(photoId: String, jpeg: Data) async throws -> Photo {
+        try await request("POST", "/api/photos/\(photoId)/thumb", rawBody: jpeg,
+                          contentType: "image/jpeg", as: PhotoResponse.self).photo
     }
 
     /// Absolute media URL with `?token=` for AsyncImage / AVPlayer.
@@ -307,6 +316,25 @@ struct API {
     func clearCanvas() async throws {
         struct OK: Decodable { let ok: Bool }
         _ = try await request("DELETE", "/api/canvas", as: OK.self)
+    }
+
+    /// Remove one of MY strokes (undo). 403 for the partner's strokes.
+    func deleteStroke(id: String) async throws {
+        struct OK: Decodable { let ok: Bool }
+        _ = try await request("DELETE", "/api/canvas/strokes/\(id)", as: OK.self)
+    }
+
+    // MARK: Mood history & daily journal
+
+    func moods(limit: Int = 80) async throws -> [MoodEntry] {
+        try await request("GET", "/api/moods", query: ["limit": String(limit)],
+                          as: MoodsResponse.self).moods
+    }
+
+    /// Past daily-question entries (my view), newest dateKey first.
+    func dailyHistory(limit: Int = 60) async throws -> [DailyEntry] {
+        try await request("GET", "/api/daily", query: ["limit": String(limit)],
+                          as: DailyListResponse.self).entries
     }
 
     // MARK: Games

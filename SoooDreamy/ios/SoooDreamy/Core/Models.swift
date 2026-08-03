@@ -73,6 +73,9 @@ struct Message: Codable, Identifiable, Hashable {
     let title: String?
     let audioUrl: String?
     let durationSec: Double?
+    /// Letters only: seal tag like "sad", "missme", "custom:<text>" —
+    /// the recipient opens the letter when the moment fits.
+    let openWhen: String?
     let createdAt: Date
 }
 
@@ -81,8 +84,18 @@ struct Photo: Codable, Identifiable, Hashable {
     let uploaderId: String
     let caption: String?
     let url: String
+    let thumbUrl: String?
     let width: Int?
     let height: Int?
+    let createdAt: Date
+}
+
+/// One entry of a member's mood history (server keeps the last ~60 per member).
+struct MoodEntry: Codable, Identifiable, Hashable {
+    let id: String
+    let memberId: String
+    let mood: String
+    let moodNote: String?
     let createdAt: Date
 }
 
@@ -178,6 +191,8 @@ struct HealthResponse: Codable {
 
 struct MessagesResponse: Codable { let messages: [Message] }
 struct PhotosResponse: Codable { let photos: [Photo] }
+struct MoodsResponse: Codable { let moods: [MoodEntry] }
+struct DailyListResponse: Codable { let entries: [DailyEntry] }
 struct EventsResponse: Codable { let events: [EventItem] }
 struct BucketResponse: Codable { let items: [BucketItem] }
 struct StrokesResponse: Codable { let strokes: [CanvasStroke] }
@@ -206,7 +221,9 @@ enum ServerEventType: String, Codable {
     case canvasStroke = "canvas_stroke"
     case canvasClear = "canvas_clear"
     case photoAdded = "photo_added"
+    case photoUpdated = "photo_updated"
     case photoDeleted = "photo_deleted"
+    case canvasStrokeDeleted = "canvas_stroke_deleted"
     case eventAdded = "event_added"
     case eventUpdated = "event_updated"
     case eventDeleted = "event_deleted"

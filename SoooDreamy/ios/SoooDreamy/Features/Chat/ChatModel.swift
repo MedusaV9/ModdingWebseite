@@ -98,6 +98,7 @@ final class ChatModel {
                            title: nil,
                            audioUrl: nil,
                            durationSec: nil,
+                           openWhen: nil,
                            createdAt: Date())
         insert(temp)
         do {
