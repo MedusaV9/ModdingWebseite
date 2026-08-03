@@ -3,11 +3,12 @@
 Self-hosted Node.js server for the SoooDreamy couple app. One server can host many couples.
 Base URL example: `http://192.168.1.20:4321` (the app lets you add/switch servers in Settings).
 
-Server version `1.3.0` (reported by `GET /api/health`).
+Server version `1.4.0` (reported by `GET /api/health`).
 v1.1 added photo thumbnails, canvas stroke delete (undo), mood history, the daily journal list, and sealed letters (`openWhen`).
 v1.2 adds message reactions, the Wordle duel, photo favorites, and love coupons.
 v1.2.1 makes Wordle results language-specific (per `dateKey` AND `lang`), restricts Wordle submits to server-today ±1 day, and broadcasts `coupon_deleted` for coupons evicted by the cap.
 v1.3 adds the Wordle history list (`GET /api/wordle`).
+v1.4 adds the shared soundtrack (`/api/songs`).
 All releases are backward compatible: a v1.0/v1.1/v1.2.0 `store.json` loads unchanged and missing fields/structures default to `null`/empty on read (v1.2.0 wordle buckets are normalized lazily).
 
 - All request/response bodies are JSON (`camelCase` keys) unless stated otherwise (media uploads are raw bodies).
@@ -55,6 +56,11 @@ All releases are backward compatible: a v1.0/v1.1/v1.2.0 `store.json` loads unch
 // Coupon (love coupon 🎟 — forMember is always the creator's partner)
 { "id": "cp_…", "title": "Breakfast in bed", "emoji": "🥞", "note": "on a lazy Sunday",
   "createdBy": "m_…", "forMember": "m_…", "redeemedAt": null, "createdAt": "…" }
+
+// Song (shared soundtrack 🎶 — title trimmed/required; artist/note/link optional, trimmed,
+// null when absent; link is any string, no URL validation; heartedBy: memberIds who hearted)
+{ "id": "sg_…", "title": "Sooo Dreamy", "artist": "The Couple", "note": "our song 💞",
+  "link": "https://…", "addedBy": "m_…", "heartedBy": ["m_…"], "createdAt": "…" }
 
 // EventItem
 { "id": "ev_…", "title": "Anniversary", "emoji": "💍", "date": "2026-11-07",
@@ -125,6 +131,11 @@ All releases are backward compatible: a v1.0/v1.1/v1.2.0 `store.json` loads unch
 | `POST /api/coupons` | yes | `{title (≤80), emoji (≤16), note? (≤200)}`; receiver `forMember` is always the partner (`409 no_partner` on a single-member couple) | `201 {coupon}` | `coupon_added {coupon}`; plus `coupon_deleted {id}` for each coupon evicted by the 200-cap (sent before `coupon_added`) |
 | `POST /api/coupons/:id/redeem` | yes (receiver only, else `403 not_yours`) | – | `{coupon}` with `redeemedAt` set; `409 already_redeemed` on a second redeem | `coupon_redeemed {coupon}` |
 | `DELETE /api/coupons/:id` | yes (creator only, else `403 not_yours`) | – | `{ok}`; `409 already_redeemed` once redeemed | `coupon_deleted {id}` |
+| `GET /api/songs` | yes | – | `{songs}` newest first | – |
+| `POST /api/songs` | yes | `{title (≤120, `400 bad_title` when empty/too long), artist? (≤120), note? (≤300), link? (≤500)}` — over-long optionals → `400 too_long` | `201 {song}` | `song_added {song}`; plus `song_deleted {id}` for each song evicted by the 300-cap (sent before `song_added`) |
+| `PATCH /api/songs/:id` | yes (adder only, else `403 not_yours`) | partial `{title?, artist?, note?, link?}` — explicit `null` clears artist/note/link; title can never be cleared (`400 bad_title`) | `{song}` | `song_updated {song}` |
+| `POST /api/songs/:id/heart` | yes | – (toggles the caller in `heartedBy`) | `{song}`; `404 not_found` unknown | `song_updated {song}` |
+| `DELETE /api/songs/:id` | yes (adder only, else `403 not_yours`) | – | `{ok}` | `song_deleted {id}` |
 | `GET /api/daily?limit=60` | yes | – | `{entries}` — journal of every day where at least one member answered, `dateKey` descending, same per-member reveal semantics as the single-day endpoint (`limit` capped at 366) | – |
 | `GET /api/daily/:dateKey` | yes | – | `DailyEntry` | – |
 | `POST /api/daily/:dateKey` | yes | `{questionId, text}` | `DailyEntry` (my view) | `daily_answer` → per-member tailored `DailyEntry` |
@@ -142,14 +153,14 @@ All releases are backward compatible: a v1.0/v1.1/v1.2.0 `store.json` loads unch
 | `GET /api/games/active` | yes | – | `{game}` or `{game:null}` (latest lobby/active) | – |
 | `GET /api/stats` | yes | – | `Stats` | – |
 
-Limits: photo body ≤ 15 MB (`413 too_large`), voice ≤ 15 MB, thumbnail ≤ 2 MB, `text` ≤ 5000 chars, `openWhen` ≤ 64 chars (after trim), reaction emoji ≤ 16 chars (after trim), Wordle `grid` ≤ 160 chars, stroke ≤ 2000 points. Canvas keeps at most 8000 strokes (oldest dropped). Messages/touches history capped at 5000/500 entries. Mood history keeps the last 60 entries per member. Wordle keeps the last 60 dateKeys per couple (each dateKey bucket holds up to 2 languages). Coupons cap at 200 per couple (oldest redeemed pruned first, then oldest overall; evictions are broadcast as `coupon_deleted`).
+Limits: photo body ≤ 15 MB (`413 too_large`), voice ≤ 15 MB, thumbnail ≤ 2 MB, `text` ≤ 5000 chars, `openWhen` ≤ 64 chars (after trim), reaction emoji ≤ 16 chars (after trim), Wordle `grid` ≤ 160 chars, stroke ≤ 2000 points. Canvas keeps at most 8000 strokes (oldest dropped). Messages/touches history capped at 5000/500 entries. Mood history keeps the last 60 entries per member. Wordle keeps the last 60 dateKeys per couple (each dateKey bucket holds up to 2 languages). Coupons cap at 200 per couple (oldest redeemed pruned first, then oldest overall; evictions are broadcast as `coupon_deleted`). Songs cap at 300 per couple (oldest evicted; evictions are broadcast as `song_deleted`).
 
 ## WebSocket
 
 `GET /ws?token=<token>` (same HTTP server, upgrade). Frames are JSON: `{ "type": "<event>", "payload": { … }, "ts": "<ISO>" }`.
 
 - On connect the server sends `welcome {memberId, coupleId, partnerOnline}` and broadcasts `presence {memberId, online:true}` to the partner. On last socket close: `presence {memberId, online:false, lastSeenAt}`.
-- Server→client event types: `welcome, presence, touch, message, message_updated, member_updated, couple_updated, couple_dissolved, partner_joined, daily_answer, wordle_result, canvas_stroke, canvas_stroke_deleted, canvas_clear, photo_added, photo_updated, photo_deleted, event_added, event_updated, event_deleted, bucket_added, bucket_updated, bucket_deleted, coupon_added, coupon_redeemed, coupon_deleted, game_created, game_started, game_move, game_ended, typing, pong`.
+- Server→client event types: `welcome, presence, touch, message, message_updated, member_updated, couple_updated, couple_dissolved, partner_joined, daily_answer, wordle_result, canvas_stroke, canvas_stroke_deleted, canvas_clear, photo_added, photo_updated, photo_deleted, event_added, event_updated, event_deleted, bucket_added, bucket_updated, bucket_deleted, coupon_added, coupon_redeemed, coupon_deleted, song_added, song_updated, song_deleted, game_created, game_started, game_move, game_ended, typing, pong`.
 - Client→server: `{"type":"ping"}` → `pong`; `{"type":"typing","payload":{"isTyping":true}}` → forwarded to partner as `typing {memberId, isTyping}`.
 - REST-triggered broadcasts go to **all sockets of the couple** (sender's other devices included) except `touch` and `typing`, which go to the **partner only**. `daily_answer` sends a per-member tailored `DailyEntry`; `wordle_result` sends a per-member tailored Wordle day view (anti-spoiler applies).
 - Server pings sockets every 30 s and terminates dead ones. A member is `online` if they have ≥ 1 open socket.
@@ -159,6 +170,6 @@ Limits: photo body ≤ 15 MB (`413 too_large`), voice ≤ 15 MB, thumbnail ≤ 2
 - Plain Node.js ≥ 20, only npm dependency: `ws`. Entry: `server/src/server.js` (`npm start`), app factory `createApp()` in `server/src/app.js` (used by tests; `PORT=0` for ephemeral).
 - Env: `PORT` (default `4321`), `HOST` (default `0.0.0.0`), `DATA_DIR` (default `server/data`).
 - Persistence: `DATA_DIR/store.json` (debounced atomic writes: tmp file + rename, flush on SIGINT/SIGTERM) + media files in `DATA_DIR/media/photos/`, `DATA_DIR/media/voice/`. Photo thumbnails live next to their photo as `DATA_DIR/media/photos/<id>.thumb.jpg` and are deleted together with the photo (and on couple dissolve).
-- Backward compatibility: a v1.0/v1.1/v1.2.0 `store.json` loads without migration — missing structures (`moodHistory`, `wordle`, `coupons`, `thumbUrl`, `favorites`, `openWhen`, `reactions`) are defaulted on read (`null`/empty). v1.2.0 wordle day buckets (`{memberId: WordleResult}`) are normalized lazily to the per-language shape (`{lang: {memberId: WordleResult}}`) when a day is accessed, using each stored result's own `lang`.
+- Backward compatibility: any pre-1.4 `store.json` loads without migration — missing structures (`moodHistory`, `wordle`, `coupons`, `songs`, `thumbUrl`, `favorites`, `openWhen`, `reactions`) are defaulted on read (`null`/empty). v1.2.0 wordle day buckets (`{memberId: WordleResult}`) are normalized lazily to the per-language shape (`{lang: {memberId: WordleResult}}`) when a day is accessed, using each stored result's own `lang`.
 - CORS: permissive (`*`) — the server is self-hosted for exactly one couple (or a few friends).
 - Streak: number of consecutive days ending today (or yesterday if today unanswered) where **both** members answered the daily question.

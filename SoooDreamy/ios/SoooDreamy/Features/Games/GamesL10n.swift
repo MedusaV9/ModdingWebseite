@@ -231,6 +231,14 @@ enum GamesL10n {
                                               en: "Your result couldn't be sent."),
         "games.wordle.duel.retry": LText(de: "Nochmal senden", en: "Send again"),
 
+        // MARK: Wordle Hard-Mode
+        "games.wordle.hard.toggle": LText(de: "💪 Schwer", en: "💪 Hard"),
+        "games.wordle.hard.pill": LText(de: "💪 Schwer gespielt", en: "💪 Hard mode"),
+        "games.wordle.hard.keepGreen": LText(de: "{letter} muss an Stelle {n} bleiben",
+                                             en: "{letter} must stay in spot {n}"),
+        "games.wordle.hard.useYellow": LText(de: "{letter} muss vorkommen",
+                                             en: "Must include {letter}"),
+
         // MARK: Wordle Duell-Bilanz
         "games.wordle.record.button": LText(de: "Bilanz ansehen 📊", en: "View record 📊"),
         "games.wordle.record.title": LText(de: "Duell-Bilanz", en: "Duel Record"),

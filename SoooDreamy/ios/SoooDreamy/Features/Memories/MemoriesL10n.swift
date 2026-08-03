@@ -28,6 +28,11 @@ enum MemoriesL10n {
         "memories.card.couponsRedeemable": LText(de: "{n} einlösbar", en: "{n} to redeem"),
         "memories.card.couponsHint": LText(de: "Verwöhn-Gutscheine für euch zwei",
                                            en: "Treat vouchers for the two of you"),
+        "memories.card.soundtrack": LText(de: "Unser Soundtrack", en: "Our Soundtrack"),
+        "memories.card.songOne": LText(de: "1 Song", en: "1 song"),
+        "memories.card.songCount": LText(de: "{n} Songs", en: "{n} songs"),
+        "memories.card.soundtrackHint": LText(de: "Sammelt die Songs, die nach euch klingen",
+                                              en: "Collect the songs that sound like you two"),
 
         // Countdown chips
         "memories.countdown.today": LText(de: "HEUTE 🎉", en: "TODAY 🎉"),
@@ -180,6 +185,35 @@ enum MemoriesL10n {
         "memories.coupons.noPartner.title": LText(de: "Noch niemand zum Verwöhnen da",
                                                   en: "No one to spoil yet"),
         "memories.coupons.noPartner.subtitle": LText(de: "Sobald dein Schatz beigetreten ist, könnt ihr euch gegenseitig Gutscheine schenken 🎟️",
-                                                     en: "Once your sweetheart joins, you can gift each other coupons 🎟️")
+                                                     en: "Once your sweetheart joins, you can gift each other coupons 🎟️"),
+
+        // Soundtrack
+        "memories.soundtrack.title": LText(de: "Unser Soundtrack", en: "Our Soundtrack"),
+        "memories.soundtrack.count": LText(de: "{n} Songs in eurer Playlist",
+                                           en: "{n} songs in your playlist"),
+        "memories.soundtrack.countOne": LText(de: "1 Song in eurer Playlist",
+                                              en: "1 song in your playlist"),
+        "memories.soundtrack.shuffle": LText(de: "Zufalls-Song", en: "Random song"),
+        "memories.soundtrack.listen": LText(de: "Anhören ↗", en: "Listen ↗"),
+        "memories.soundtrack.by": LText(de: "Von {name}", en: "By {name}"),
+        "memories.soundtrack.heart": LText(de: "Song herzen", en: "Heart this song"),
+        "memories.soundtrack.add": LText(de: "Song hinzufügen", en: "Add a song"),
+        "memories.soundtrack.addTitle": LText(de: "Neuer Song", en: "New song"),
+        "memories.soundtrack.editTitle": LText(de: "Song bearbeiten", en: "Edit song"),
+        "memories.soundtrack.titleField": LText(de: "Songtitel", en: "Song title"),
+        "memories.soundtrack.artistField": LText(de: "Artist (optional)", en: "Artist (optional)"),
+        "memories.soundtrack.noteField": LText(de: "Warum dieser Song? (optional)",
+                                               en: "Why this song? (optional)"),
+        "memories.soundtrack.linkField": LText(de: "Link — Spotify, YouTube … (optional)",
+                                               en: "Link — Spotify, YouTube … (optional)"),
+        "memories.soundtrack.added": LText(de: "Song zu eurem Soundtrack hinzugefügt 🎵",
+                                           en: "Song added to your soundtrack 🎵"),
+        "memories.soundtrack.updated": LText(de: "Song aktualisiert 🎵", en: "Song updated 🎵"),
+        "memories.soundtrack.deleted": LText(de: "Song entfernt", en: "Song removed"),
+        "memories.soundtrack.deleteConfirm": LText(de: "Diesen Song wirklich aus eurem Soundtrack entfernen?",
+                                                   en: "Really remove this song from your soundtrack?"),
+        "memories.soundtrack.empty.title": LText(de: "Noch keine Songs", en: "No songs yet"),
+        "memories.soundtrack.empty.subtitle": LText(de: "Füge den ersten Song hinzu, der nach euch beiden klingt 🎶",
+                                                    en: "Add the first song that sounds like the two of you 🎶")
     ]
 }

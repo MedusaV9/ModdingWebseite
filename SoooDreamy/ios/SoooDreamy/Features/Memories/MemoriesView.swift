@@ -6,6 +6,7 @@ struct MemoriesView: View {
     @Environment(AppState.self) private var appState
 
     @State private var openCouponCount: Int?
+    @State private var songCount: Int?
 
     private let columns = [
         GridItem(.flexible(), spacing: 14),
@@ -20,6 +21,7 @@ struct MemoriesView: View {
                     VStack(spacing: 18) {
                         header
                         couponsCard
+                        soundtrackCard
                         LazyVGrid(columns: columns, spacing: 14) {
                             galleryCard
                             canvasCard
@@ -36,6 +38,7 @@ struct MemoriesView: View {
                     await appState.refreshStats()
                     await appState.refreshEvents()
                     await loadCouponTeaser()
+                    await loadSongTeaser()
                 }
             }
             .toolbar(.hidden, for: .navigationBar)
@@ -43,6 +46,7 @@ struct MemoriesView: View {
         .task {
             await appState.refreshStats()
             await loadCouponTeaser()
+            await loadSongTeaser()
         }
         .onReceive(NotificationCenter.default.publisher(for: .serverEvent)) { note in
             guard let event = note.object as? ServerEvent else { return }
@@ -112,6 +116,56 @@ struct MemoriesView: View {
                 .foregroundStyle(Theme.textSecondary)
                 .lineLimit(1)
         }
+    }
+
+    /// Full-width soundtrack card — the shared playlist sits below the coupons ticket.
+    private var soundtrackCard: some View {
+        NavigationLink {
+            SoundtrackView()
+        } label: {
+            HStack(spacing: 14) {
+                Text("🎵")
+                    .font(.system(size: 34))
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(L10n.t("memories.card.soundtrack"))
+                        .font(.system(.headline, design: .rounded).weight(.bold))
+                        .foregroundStyle(Theme.textPrimary)
+                    soundtrackTeaser
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(Theme.textTertiary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .glassCard()
+            .overlay(
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .strokeBorder(LinearGradient(colors: [Theme.mint.opacity(0.45), Theme.blue.opacity(0.4)],
+                                                 startPoint: .leading, endPoint: .trailing),
+                                  lineWidth: 1.5)
+            )
+            .shadow(color: Theme.mint.opacity(0.12), radius: 12, y: 5)
+        }
+        .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
+    private var soundtrackTeaser: some View {
+        if let count = songCount, count > 0 {
+            PillTag(text: "🎶 " + songCountText(count), tint: Theme.mint)
+        } else {
+            Text(L10n.t("memories.card.soundtrackHint"))
+                .font(.system(.caption, design: .rounded).weight(.semibold))
+                .foregroundStyle(Theme.textSecondary)
+                .lineLimit(1)
+        }
+    }
+
+    private func songCountText(_ count: Int) -> String {
+        count == 1
+            ? L10n.t("memories.card.songOne")
+            : L10n.t("memories.card.songCount", ["n": String(count)])
     }
 
     private var galleryCard: some View {
@@ -283,12 +337,21 @@ struct MemoriesView: View {
         }
     }
 
+    private func loadSongTeaser() async {
+        guard let api = appState.api else { return }
+        if let list = try? await api.songs() {
+            songCount = list.count
+        }
+    }
+
     private func handleServerEvent(_ event: ServerEvent) {
         switch event.type {
         case .photoAdded, .photoDeleted, .bucketAdded, .bucketUpdated, .bucketDeleted:
             Task { await appState.refreshStats() }
         case .couponAdded, .couponRedeemed, .couponDeleted:
             Task { await loadCouponTeaser() }
+        case .songAdded, .songDeleted:
+            Task { await loadSongTeaser() }
         default:
             break
         }

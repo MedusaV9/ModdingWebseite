@@ -41,6 +41,11 @@ const LIMITS = {
   couponTitle: 80,
   couponEmoji: 16,
   couponNote: 200,
+  songs: 300,
+  songTitle: 120,
+  songArtist: 120,
+  songNote: 300,
+  songLink: 500,
 };
 
 // ---------------------------------------------------------------------------
@@ -144,6 +149,31 @@ function couponsOf(couple) {
   return couple.coupons;
 }
 
+/** Shared soundtrack list; pre-v1.4 stores lack the structure. */
+function songsOf(couple) {
+  if (!couple.songs) couple.songs = [];
+  return couple.songs;
+}
+
+/** Song title: trimmed, non-empty, ≤ 120 chars — all violations are `bad_title`. */
+function asSongTitle(value) {
+  if (typeof value !== 'string') throw httpError(400, 'bad_title', '"title" must be a string');
+  const title = value.trim();
+  if (title.length === 0 || title.length > LIMITS.songTitle) {
+    throw httpError(400, 'bad_title', `"title" must be 1-${LIMITS.songTitle} characters after trimming`);
+  }
+  return title;
+}
+
+/** Optional song field: null stays null, strings are trimmed (empty → null), length-capped. */
+function asSongField(value, field, max) {
+  if (value == null) return null;
+  if (typeof value !== 'string') throw httpError(400, 'invalid_request', `"${field}" must be a string`);
+  const trimmed = value.trim();
+  if (trimmed.length > max) throw httpError(400, 'too_long', `"${field}" must be at most ${max} characters`);
+  return trimmed.length === 0 ? null : trimmed;
+}
+
 // ---------------------------------------------------------------------------
 // couple/member factories
 
@@ -183,6 +213,7 @@ function newCouple(store) {
     moodHistory: {},
     wordle: {},
     coupons: [],
+    songs: [],
     counters: { messages: 0, gamesPlayed: 0, touches: {} },
   };
 }
@@ -895,6 +926,77 @@ route('DELETE', '/api/coupons/:id', { auth: true }, (c) => {
   list.splice(list.indexOf(coupon), 1);
   c.store.markDirty();
   c.realtime.broadcastCouple(c.auth.coupleId, 'coupon_deleted', { id: coupon.id });
+  sendJson(c.res, 200, { ok: true });
+});
+
+// --- shared soundtrack (songs) -------------------------------------------------------
+
+function findSong(couple, songId) {
+  const song = songsOf(couple).find((s) => s.id === songId);
+  if (!song) throw httpError(404, 'not_found', 'Unknown song');
+  return song;
+}
+
+route('GET', '/api/songs', { auth: true }, (c) => {
+  sendJson(c.res, 200, { songs: songsOf(c.auth.couple).slice().reverse() });
+});
+
+route('POST', '/api/songs', { auth: true }, async (c) => {
+  const body = await readJsonObject(c.req);
+  const song = {
+    id: id('sg'),
+    title: asSongTitle(body.title),
+    artist: asSongField(body.artist, 'artist', LIMITS.songArtist),
+    note: asSongField(body.note, 'note', LIMITS.songNote),
+    link: asSongField(body.link, 'link', LIMITS.songLink),
+    addedBy: c.auth.memberId,
+    heartedBy: [],
+    createdAt: nowIso(),
+  };
+  const list = songsOf(c.auth.couple);
+  list.push(song);
+  const evicted = capList(list, LIMITS.songs);
+  c.store.markDirty();
+  // Evictions first, so clients applying frames in order never exceed the cap.
+  for (const old of evicted) c.realtime.broadcastCouple(c.auth.coupleId, 'song_deleted', { id: old.id });
+  c.realtime.broadcastCouple(c.auth.coupleId, 'song_added', { song });
+  sendJson(c.res, 201, { song });
+});
+
+route('PATCH', '/api/songs/:id', { auth: true }, async (c) => {
+  const body = await readJsonObject(c.req);
+  const song = findSong(c.auth.couple, c.params.id);
+  if (song.addedBy !== c.auth.memberId) {
+    throw httpError(403, 'not_yours', 'Only the member who added a song may edit it');
+  }
+  if ('title' in body) song.title = asSongTitle(body.title); // title can never be cleared
+  if ('artist' in body) song.artist = asSongField(body.artist, 'artist', LIMITS.songArtist);
+  if ('note' in body) song.note = asSongField(body.note, 'note', LIMITS.songNote);
+  if ('link' in body) song.link = asSongField(body.link, 'link', LIMITS.songLink);
+  c.store.markDirty();
+  c.realtime.broadcastCouple(c.auth.coupleId, 'song_updated', { song });
+  sendJson(c.res, 200, { song });
+});
+
+route('POST', '/api/songs/:id/heart', { auth: true }, (c) => {
+  const song = findSong(c.auth.couple, c.params.id);
+  const at = song.heartedBy.indexOf(c.auth.memberId);
+  if (at === -1) song.heartedBy.push(c.auth.memberId);
+  else song.heartedBy.splice(at, 1);
+  c.store.markDirty();
+  c.realtime.broadcastCouple(c.auth.coupleId, 'song_updated', { song });
+  sendJson(c.res, 200, { song });
+});
+
+route('DELETE', '/api/songs/:id', { auth: true }, (c) => {
+  const list = songsOf(c.auth.couple);
+  const song = findSong(c.auth.couple, c.params.id);
+  if (song.addedBy !== c.auth.memberId) {
+    throw httpError(403, 'not_yours', 'Only the member who added a song may delete it');
+  }
+  list.splice(list.indexOf(song), 1);
+  c.store.markDirty();
+  c.realtime.broadcastCouple(c.auth.coupleId, 'song_deleted', { id: song.id });
   sendJson(c.res, 200, { ok: true });
 });
 

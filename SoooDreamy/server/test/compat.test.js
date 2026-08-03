@@ -176,4 +176,13 @@ test('a v1.0 store.json loads cleanly and all v1.1/v1.2 endpoints work on it', a
   const redeemed = await b.post(`/api/coupons/${coupon.body.coupon.id}/redeem`);
   assert.equal(redeemed.status, 200);
   assert.ok(redeemed.body.coupon.redeemedAt);
+
+  // Songs (couple.songs is defaulted lazily): empty list, add, heart by the partner.
+  assert.deepEqual((await a.get('/api/songs')).body, { songs: [] });
+  const song = await a.post('/api/songs', { json: { title: 'Vintage tune', artist: 'Oldies' } });
+  assert.equal(song.status, 201);
+  const hearted = await b.post(`/api/songs/${song.body.song.id}/heart`);
+  assert.equal(hearted.status, 200);
+  assert.deepEqual(hearted.body.song.heartedBy, ['m_b']);
+  assert.equal((await b.get('/api/songs')).body.songs[0].title, 'Vintage tune');
 });

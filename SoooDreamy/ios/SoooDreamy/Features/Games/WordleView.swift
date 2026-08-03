@@ -142,6 +142,33 @@ enum WordleDaily {
         UserDefaults.standard.set(true, forKey: submittedKey(coupleId: coupleId, dateKey: dateKey, lang: lang))
     }
 
+    // MARK: Hard mode 💪 (client-side preference + per-day record)
+
+    private static let hardModeKey = "sooodreamy.wordle.hardMode"
+
+    static var hardMode: Bool {
+        UserDefaults.standard.bool(forKey: hardModeKey)
+    }
+
+    static func setHardMode(_ enabled: Bool) {
+        UserDefaults.standard.set(enabled, forKey: hardModeKey)
+    }
+
+    /// Whether a specific day's board was played in hard mode — written at
+    /// the first guess (the toggle is locked from then on) so the end-card
+    /// pill and the share asterisk survive a restore.
+    private static func hardKey(coupleId: String, dateKey: String, lang: String) -> String {
+        "sooodreamy.wordle.hard.\(coupleId).\(dateKey).\(lang)"
+    }
+
+    static func wasHardMode(coupleId: String, dateKey: String, lang: String) -> Bool {
+        UserDefaults.standard.bool(forKey: hardKey(coupleId: coupleId, dateKey: dateKey, lang: lang))
+    }
+
+    static func markHardMode(coupleId: String, dateKey: String, lang: String) {
+        UserDefaults.standard.set(true, forKey: hardKey(coupleId: coupleId, dateKey: dateKey, lang: lang))
+    }
+
     // MARK: Simple local stats (no streaks, just counters)
 
     private static let playedKey = "sooodreamy.wordle.stats.played"
@@ -181,6 +208,7 @@ struct WordleView: View {
     @State private var dateKey = SharedDates.todayKey()
     @State private var day: WordleDayResponse?
     @State private var submitFailed = false
+    @State private var hardMode = WordleDaily.hardMode
 
     // MARK: Derived state
 
@@ -198,6 +226,19 @@ struct WordleView: View {
 
     private var finished: Bool {
         didWin || guesses.count >= WordleDaily.maxGuesses
+    }
+
+    /// Whether THIS board runs under hard-mode rules. An empty board follows
+    /// the live preference; once a guess exists the per-day flag is the
+    /// truth (immune to preference flips via the other language's board).
+    private var hardModeActive: Bool {
+        guesses.isEmpty ? hardMode : boardWasHard
+    }
+
+    /// Per-day record — read for validation, the end-card pill and the
+    /// share asterisk (survives restore).
+    private var boardWasHard: Bool {
+        WordleDaily.wasHardMode(coupleId: coupleId, dateKey: dateKey, lang: lang)
     }
 
     /// Best-known state per keyboard letter across all submitted guesses.
@@ -223,6 +264,7 @@ struct WordleView: View {
             ScrollView {
                 VStack(spacing: 16) {
                     headerHint
+                    hardModeRow
                     grid
                     if finished && endVisible {
                         endCard
@@ -264,6 +306,7 @@ struct WordleView: View {
         guesses = WordleDaily.loadGuesses(coupleId: coupleId, dateKey: dateKey, lang: lang)
         flippedRows = Set(0..<guesses.count)
         endVisible = finished
+        hardMode = WordleDaily.hardMode
     }
 
     // MARK: Header
@@ -281,6 +324,45 @@ struct WordleView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .glassCard(padding: 12)
         }
+    }
+
+    // MARK: Hard-mode toggle
+
+    /// The pill is only switchable while today's board is still empty —
+    /// changing the rules mid-game would be cheating.
+    @ViewBuilder
+    private var hardModeRow: some View {
+        if !finished {
+            HStack {
+                hardModeChip
+                Spacer(minLength: 0)
+            }
+        }
+    }
+
+    private var hardModeChip: some View {
+        let active = hardModeActive
+        let locked = !guesses.isEmpty
+        return Button(action: toggleHardMode) {
+            Text(L10n.t("games.wordle.hard.toggle"))
+                .font(.system(.caption2, design: .rounded).weight(.bold))
+                .foregroundStyle(active ? Theme.bgTop : Theme.textSecondary)
+                .padding(.vertical, 6)
+                .padding(.horizontal, 11)
+                .background(
+                    Capsule().fill(active ? Theme.gold : Color.white.opacity(0.12))
+                )
+        }
+        .buttonStyle(.plain)
+        .disabled(locked)
+        .opacity(locked ? 0.45 : 1)
+    }
+
+    private func toggleHardMode() {
+        guard guesses.isEmpty else { return }
+        hardMode.toggle()
+        WordleDaily.setHardMode(hardMode)
+        Haptics.shared.tap()
     }
 
     // MARK: Grid
@@ -463,9 +545,17 @@ struct WordleView: View {
             rejectGuess(messageKey: "games.wordle.notInList")
             return
         }
+        if hardModeActive, let hint = hardModeViolation(for: currentGuess) {
+            rejectGuess(text: hint)
+            return
+        }
         let guess = currentGuess
         currentGuess = ""
         let row = guesses.count
+        if row == 0 && hardMode {
+            // Lock the board's mode in with the first guess.
+            WordleDaily.markHardMode(coupleId: coupleId, dateKey: dateKey, lang: lang)
+        }
         guesses.append(guess)
         WordleDaily.saveGuesses(guesses, coupleId: coupleId, dateKey: dateKey, lang: lang)
         flippedRows.insert(row)
@@ -480,11 +570,46 @@ struct WordleView: View {
     }
 
     private func rejectGuess(messageKey: String) {
+        rejectGuess(text: L10n.t(messageKey))
+    }
+
+    private func rejectGuess(text: String) {
         Haptics.shared.warning()
-        appState.showToast(L10n.t(messageKey), style: .info)
+        appState.showToast(text, style: .info)
         withAnimation(.linear(duration: 0.45)) {
             shakePhase += 1
         }
+    }
+
+    /// First hard-mode violation for the candidate, or nil. Constraints are
+    /// re-derived from the per-row `score` results: greens pin their exact
+    /// position, yellows demand at least one occurrence anywhere (classic
+    /// simple rule — deliberately not count-aware). A letter that later went
+    /// green satisfies its earlier yellow demand via the position check.
+    private func hardModeViolation(for candidate: String) -> String? {
+        let candidateChars = Array(candidate)
+        var pinned: [Int: Character] = [:]
+        var required: Set<Character> = []
+        for guess in guesses {
+            let marks = WordleDaily.score(guess: guess, solution: solution)
+            for (index, letter) in Array(guess).enumerated() {
+                switch marks[index] {
+                case .correct: pinned[index] = letter
+                case .present: required.insert(letter)
+                case .absent: break
+                }
+            }
+        }
+        for index in 0..<candidateChars.count {
+            if let letter = pinned[index], candidateChars[index] != letter {
+                return L10n.t("games.wordle.hard.keepGreen",
+                              ["letter": String(letter), "n": String(index + 1)])
+            }
+        }
+        for letter in required.sorted() where !candidateChars.contains(letter) {
+            return L10n.t("games.wordle.hard.useYellow", ["letter": String(letter)])
+        }
+        return nil
     }
 
     private func finishGame(won: Bool, row: Int) {
@@ -522,6 +647,9 @@ struct WordleView: View {
             Text(didWin ? praiseText : L10n.t("games.wordle.lossTitle"))
                 .font(.system(.title3, design: .rounded).weight(.heavy))
                 .foregroundStyle(Theme.textPrimary)
+            if boardWasHard {
+                PillTag(text: L10n.t("games.wordle.hard.pill"), tint: Theme.gold)
+            }
             if !didWin {
                 solutionReveal
                 Text(L10n.t("games.wordle.lossBody"))
@@ -589,9 +717,12 @@ struct WordleView: View {
         WordleDaily.emojiGrid(guesses: guesses, solution: solution)
     }
 
-    /// Classic emoji summary — header + result grid for the chat.
+    /// Classic emoji summary — header + result grid for the chat. Hard-mode
+    /// boards get the classic asterisk ("4/6*"); the duel submit payload is
+    /// deliberately untouched (grid + rows only, no shape change).
     private var shareText: String {
-        let scoreText = didWin ? "\(guesses.count)/6" : "X/6"
+        let hardSuffix = boardWasHard ? "*" : ""
+        let scoreText = (didWin ? "\(guesses.count)/6" : "X/6") + hardSuffix
         let header = L10n.t("games.wordle.shareTitle",
                             ["date": displayDate, "score": scoreText])
         return header + "\n" + emojiGrid

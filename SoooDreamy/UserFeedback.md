@@ -90,6 +90,15 @@ _(hier beantworte ich dein Feedback, wenn ich es umgesetzt habe)_
 - `[2026-08-03 21:40 UTC]` **📊 Duell-Bilanz-Screen**: Gesamtstand mit Avataren („{du} X · U · Y {Schatz}“, 👑 für die Führung), 🔥-Spiel-Serie, Tagesliste mit Ausgang-Icons (🏆/💪/💞/👀) und aufklappbaren Emoji-Grid-Vergleichen. Erreichbar aus dem Wordle.
 - `[2026-08-03 21:40 UTC]` **Countdown teilen**: Events lassen sich per Kontextmenü als hübsche Nachricht in den Chat senden („🗓️ 💍 Jahrestag — Noch 12 Tage“). **Top-Stimmungen**: die 3 häufigsten Moods der letzten 30 Tage als Chips über dem Stimmungsverlauf.
 
+### Iteration 9 — Dein HTTP-Fix 🔓 (User-Feedback aus dem Chat!)
+- `[2026-08-03 22:18 UTC]` **ATS-Fix**: App Transport Security war tatsächlich noch NICHT gelockert (anders als dir gesagt wurde) — jetzt erlauben App **und** Widget-Extension Klartext-HTTP (`NSAllowsArbitraryLoads` + `NSAllowsLocalNetworking` + Local-Network-Beschreibung). `http://138.201.60.230:4321` & Co. funktionieren ab IPA **v1.1.0** — im IPA nachgeprüft (beide Info.plists enthalten den Schlüssel ✓). WebSockets (`ws://`) inklusive. Server-Hinweis in der App + README um HTTPS-Empfehlung (Reverse-Proxy) für öffentliche Server ergänzt.
+- `[2026-08-03 22:18 UTC]` Loop-Regel geändert: **`STOPP` beendet den Loop nicht mehr** — es geht unendlich weiter, wie gewünscht.
+
+### Iteration 10 — Welle 9: Soundtrack & Hard-Mode 🎵💪
+- `[2026-08-03 22:30 UTC]` **Server v1.4** (74/74 Tests): „Unser Soundtrack“ — Songs mit Titel/Artist/Notiz/Link, Herz-Toggle beider Partner, Bearbeiten/Löschen nur durch den Ersteller, 300er-Kap mit Eviction-Broadcast.
+- `[2026-08-03 22:30 UTC]` **🎵 „Unser Soundtrack“** im Wir-Tab: Song-Karten mit Herzen (💞 wenn beide), „Anhören ↗“-Link (Spotify/YouTube/…), 🎲 Zufalls-Song mit Scroll+Puls-Animation, Add/Edit-Sheets, Live-Sync.
+- `[2026-08-03 22:30 UTC]` **💪 Wordle Hard-Mode**: klassische NYT-Regeln (Grün bleibt stehen, Gelb muss vorkommen), Umschalten nur vor dem ersten Versuch, spezifische Hinweis-Toasts, „4/6*“-Stern im Share-Text, Hard-Pill auf der Endkarte.
+
 ## 🔄 Als Nächstes
 - Auf dein Feedback warten — schreib es oben in „💬 Dein Feedback“! Ich lese es bei jeder Iteration. 💜
-- Ideen für kommende Wellen: gemeinsame Playlist-Wünsche, Coupons mit Ablaufdatum, Fotoalben, Canvas-Farbverlauf-Pinsel, Wordle-Hard-Mode, Live-Activity für „Partner ist online“.
+- Ideen für kommende Wellen: Coupons mit Ablaufdatum, Fotoalben, Canvas-Farbverlauf-Pinsel, Live-Activity für „Partner ist online“, Soundtrack-Import per Link-Vorschau.
