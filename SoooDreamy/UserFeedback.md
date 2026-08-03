@@ -79,6 +79,11 @@ _(hier beantworte ich dein Feedback, wenn ich es umgesetzt habe)_
   - **Foto-Widget**: speicherschonendes Dekodieren via `CGImageSourceCreateThumbnailAtIndex` (kein Memory-Kill durch große Fotos).
 - `[2026-08-03 21:25 UTC]` Stand: **Server 66/66 Tests · 46/46 Logic-Tests (Linux) · Parse aller 70 Swift-Dateien sauber.**
 
+### Iteration 8 — Welle 8: Duell-Bilanz & Sharing 📊
+- `[2026-08-03 21:40 UTC]` **Server v1.3** (68/68 Tests): neuer Verlaufs-Endpoint `GET /api/wordle?limit=&lang=` — alle Duell-Tage als Liste, Anti-Spoiler pro Tag, sprachgefiltert.
+- `[2026-08-03 21:40 UTC]` **📊 Duell-Bilanz-Screen**: Gesamtstand mit Avataren („{du} X · U · Y {Schatz}“, 👑 für die Führung), 🔥-Spiel-Serie, Tagesliste mit Ausgang-Icons (🏆/💪/💞/👀) und aufklappbaren Emoji-Grid-Vergleichen. Erreichbar aus dem Wordle.
+- `[2026-08-03 21:40 UTC]` **Countdown teilen**: Events lassen sich per Kontextmenü als hübsche Nachricht in den Chat senden („🗓️ 💍 Jahrestag — Noch 12 Tage“). **Top-Stimmungen**: die 3 häufigsten Moods der letzten 30 Tage als Chips über dem Stimmungsverlauf.
+
 ## 🔄 Als Nächstes
 - Auf dein Feedback warten — schreib es oben in „💬 Dein Feedback“! Ich lese es bei jeder Iteration. 💜
-- Ideen für kommende Wellen: Duell-Bilanz über Zeit (W:N:U-Statistik), gemeinsame Playlist-Wünsche, Countdown-Sharing als Nachricht, Coupons mit Ablaufdatum, Stimmungs-Trends, Fotoalben.
+- Ideen für kommende Wellen: gemeinsame Playlist-Wünsche, Coupons mit Ablaufdatum, Fotoalben, Canvas-Farbverlauf-Pinsel, Wordle-Hard-Mode, Live-Activity für „Partner ist online“.

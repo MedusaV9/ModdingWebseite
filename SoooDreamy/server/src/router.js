@@ -937,6 +937,24 @@ route('POST', '/api/daily/:dateKey', { auth: true }, async (c) => {
 
 // --- wordle duel ---------------------------------------------------------------------
 
+// History: one day view per stored dateKey that has at least one result in the
+// requested language, newest first. The plain `/api/wordle` path (2 segments)
+// never clashes with `/api/wordle/:dateKey` (3 segments).
+route('GET', '/api/wordle', { auth: true }, (c) => {
+  const lang = c.url.searchParams.get('lang');
+  if (!WORDLE_LANGS.includes(lang)) {
+    throw httpError(400, 'bad_lang', `"lang" query param is required and must be one of: ${WORDLE_LANGS.join(', ')}`);
+  }
+  const limit = queryInt(c.url, 'limit', 30, 1, 60);
+  const couple = c.auth.couple;
+  const dateKeys = Object.keys(couple.wordle ?? {})
+    .filter((key) => Object.keys(wordleDay(couple, key)?.[lang] ?? {}).length > 0)
+    .sort()
+    .reverse()
+    .slice(0, limit);
+  sendJson(c.res, 200, { days: dateKeys.map((key) => wordleViewFor(couple, key, lang, c.auth.memberId)) });
+});
+
 route('GET', '/api/wordle/:dateKey', { auth: true }, (c) => {
   const dateKey = asDateKey(c.params.dateKey, 'dateKey');
   const lang = c.url.searchParams.get('lang');

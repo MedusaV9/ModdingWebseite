@@ -70,6 +70,23 @@ enum WordleDaily {
         return marks
     }
 
+    /// Outcome of a completed duel day — the verdict rule of the daily duel:
+    /// a win beats a loss, two wins are ranked by row count. Equal wins and
+    /// shared defeats both land on `.tie` (that's how the record counts them).
+    enum DuelOutcome {
+        case meWin, partnerWin, tie
+    }
+
+    static func duelOutcome(mine: WordleResult, partner: WordleResult) -> DuelOutcome {
+        if mine.win && !partner.win { return .meWin }
+        if partner.win && !mine.win { return .partnerWin }
+        if mine.win && partner.win {
+            if mine.rows < partner.rows { return .meWin }
+            if mine.rows > partner.rows { return .partnerWin }
+        }
+        return .tie
+    }
+
     /// Spoiler-free 🟩🟨⬛ rows for a full board — used for chat sharing and
     /// as the duel `grid` payload (also for boards restored from storage).
     static func emojiGrid(guesses: [String], solution: String) -> String {
@@ -214,6 +231,7 @@ struct WordleView: View {
                         keyboard
                     }
                     duelSection
+                    recordLink
                 }
                 .padding(16)
                 .padding(.bottom, 12)
@@ -766,6 +784,28 @@ struct WordleView: View {
                 revealingCard
             }
         }
+    }
+
+    /// Small always-available entry into the running duel record —
+    /// `WordleView` sits in PlayHub's NavigationStack, so a plain link pushes.
+    private var recordLink: some View {
+        NavigationLink {
+            WordleRecordView()
+        } label: {
+            HStack(spacing: 8) {
+                Text("📊")
+                    .font(.system(size: 16))
+                Text(L10n.t("games.wordle.record.button"))
+                    .font(.system(.caption, design: .rounded).weight(.bold))
+                    .foregroundStyle(Theme.textSecondary)
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(Theme.textTertiary)
+            }
+            .glassCard(padding: 12)
+        }
+        .buttonStyle(.plain)
     }
 
     private var retryCard: some View {

@@ -18,6 +18,12 @@ struct LoveStatsView: View {
         let entries: [MoodEntry]
     }
 
+    private struct MoodCount: Identifiable {
+        let mood: String
+        let count: Int
+        var id: String { mood }
+    }
+
     var body: some View {
         ZStack {
             DreamyBackground(showStars: false)
@@ -193,11 +199,59 @@ struct LoveStatsView: View {
         }
     }
 
+    /// The 3 most frequent moods across BOTH members in the last 30 days —
+    /// hidden while there are fewer than 3 entries to aggregate.
+    private var topMoods: [MoodCount] {
+        let calendar = SharedDates.calendar
+        guard let cutoff = calendar.date(byAdding: .day, value: -30, to: Date()) else { return [] }
+        let recent = moods.filter { $0.createdAt >= cutoff }
+        guard recent.count >= 3 else { return [] }
+        let counts = Dictionary(grouping: recent) { $0.mood }.mapValues { $0.count }
+        return counts
+            .sorted { lhs, rhs in
+                lhs.value != rhs.value ? lhs.value > rhs.value : lhs.key < rhs.key
+            }
+            .prefix(3)
+            .map { MoodCount(mood: $0.key, count: $0.value) }
+    }
+
+    @ViewBuilder
+    private var topMoodsRow: some View {
+        let top = topMoods
+        if !top.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(L10n.t("memories.stats.topMoods"))
+                    .font(.system(.caption, design: .rounded).weight(.bold))
+                    .foregroundStyle(Theme.textTertiary)
+                HStack(spacing: 8) {
+                    ForEach(top) { item in
+                        moodChip(item)
+                    }
+                    Spacer()
+                }
+            }
+        }
+    }
+
+    private func moodChip(_ item: MoodCount) -> some View {
+        HStack(spacing: 5) {
+            Text(item.mood)
+                .font(.system(size: 18))
+            Text(L10n.t("memories.stats.topMoodCount", ["n": String(item.count)]))
+                .font(.system(.caption, design: .rounded).weight(.bold))
+                .foregroundStyle(Theme.textSecondary)
+        }
+        .padding(.vertical, 6)
+        .padding(.horizontal, 10)
+        .background(Capsule().fill(Color.white.opacity(0.08)))
+    }
+
     private var moodTimelineCard: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text(L10n.t("memories.stats.moodTitle"))
                 .font(.system(.title3, design: .rounded).weight(.bold))
                 .foregroundStyle(Theme.textPrimary)
+            topMoodsRow
             if moods.isEmpty {
                 Text(L10n.t("memories.stats.moodEmpty"))
                     .font(.system(.caption, design: .rounded))

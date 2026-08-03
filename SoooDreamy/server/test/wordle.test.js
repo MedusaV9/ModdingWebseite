@@ -218,6 +218,81 @@ test('wordle keeps at most 60 dateKeys per couple (oldest pruned on submit)', as
   assert.ok((await a.get(`/api/wordle/${dateKeyDaysAgo(0)}?lang=en`)).body.mine);
 });
 
+test('wordle history: desc order, lang filter, per-day anti-spoiler, bad_lang', async (t) => {
+  const finishedAt = '2024-01-02T00:00:00.000Z';
+  const fin = (memberId, rows, lang) => ({ memberId, rows, win: true, grid: `${lang}-${memberId}`, lang, finishedAt });
+  const d = (days) => dateKeyDaysAgo(days);
+  const { a, b } = await makeSeededApp(t, {
+    wordle: {
+      [d(10)]: { m_a: fin('m_a', 4, 'de'), m_b: fin('m_b', 2, 'de') }, // old v1.2.0 shape — normalized in the list too
+      [d(5)]: { de: { m_a: fin('m_a', 3, 'de'), m_b: fin('m_b', 5, 'de') } }, // both finished DE
+      [d(4)]: { de: { m_b: fin('m_b', 6, 'de') } }, // only B finished DE
+      [d(3)]: { de: { m_a: fin('m_a', 1, 'de') } }, // only A finished DE
+      [d(2)]: { en: { m_a: fin('m_a', 2, 'en'), m_b: fin('m_b', 2, 'en') } }, // EN-only day
+    },
+  });
+
+  // A's DE history: newest first, the EN-only day excluded, lang echoed per day.
+  const res = await a.get('/api/wordle?lang=de');
+  assert.equal(res.status, 200);
+  const days = res.body.days;
+  assert.deepEqual(days.map((v) => v.dateKey), [d(3), d(4), d(5), d(10)]);
+  assert.ok(days.every((v) => v.lang === 'de'));
+
+  // d(3): A finished, B did not → partner truthfully unfinished.
+  assert.equal(days[0].mine.rows, 1);
+  assert.equal(days[0].partner, null);
+  assert.equal(days[0].partnerFinished, false);
+  // d(4): only B finished → anti-spoiler hides the grid but partnerFinished is truthful.
+  assert.equal(days[1].mine, null);
+  assert.equal(days[1].partner, null);
+  assert.equal(days[1].partnerFinished, true);
+  // d(5): both finished → revealed.
+  assert.equal(days[2].mine.rows, 3);
+  assert.equal(days[2].partner.rows, 5);
+  // d(10): the old-shape bucket shows up normalized.
+  assert.equal(days[3].mine.rows, 4);
+  assert.equal(days[3].partner.rows, 2);
+
+  // B's view mirrors per member: d(4) is theirs, d(3) is hidden-but-finished.
+  const bDays = (await b.get('/api/wordle?lang=de')).body.days;
+  assert.equal(bDays[0].dateKey, d(3));
+  assert.equal(bDays[0].mine, null);
+  assert.equal(bDays[0].partner, null);
+  assert.equal(bDays[0].partnerFinished, true);
+  assert.equal(bDays[1].mine.rows, 6);
+  assert.equal(bDays[1].partnerFinished, false);
+
+  // EN history only contains the EN day, fully revealed (both finished).
+  const enDays = (await a.get('/api/wordle?lang=en')).body.days;
+  assert.deepEqual(enDays.map((v) => v.dateKey), [d(2)]);
+  assert.equal(enDays[0].partner.rows, 2);
+
+  // lang is required and validated.
+  const missing = await a.get('/api/wordle');
+  assert.equal(missing.status, 400);
+  assert.equal(missing.body.error, 'bad_lang');
+  assert.equal((await a.get('/api/wordle?lang=fr')).body.error, 'bad_lang');
+});
+
+test('wordle history: limit defaults to 30 and is capped at 60', async (t) => {
+  const finishedAt = '2024-01-02T00:00:00.000Z';
+  const wordle = {};
+  for (let days = 1; days <= 65; days++) {
+    wordle[dateKeyDaysAgo(days)] = {
+      en: { m_a: { memberId: 'm_a', rows: 3, win: true, grid: 'g', lang: 'en', finishedAt } },
+    };
+  }
+  const { a } = await makeSeededApp(t, { wordle });
+
+  assert.equal((await a.get('/api/wordle?lang=en')).body.days.length, 30); // default
+  assert.equal((await a.get('/api/wordle?lang=en&limit=60')).body.days.length, 60);
+  assert.equal((await a.get('/api/wordle?lang=en&limit=999')).body.days.length, 60); // clamped to the cap
+  const top = (await a.get('/api/wordle?lang=en&limit=5')).body.days;
+  assert.deepEqual(top.map((v) => v.dateKey), [1, 2, 3, 4, 5].map(dateKeyDaysAgo)); // newest first
+  assert.equal((await a.get('/api/wordle?lang=en&limit=nope')).status, 400);
+});
+
 test('v1.2.0 wordle store shape (no lang buckets) is normalized lazily on read', async (t) => {
   const today = dateKeyDaysAgo(0);
   const finishedAt = '2024-01-02T00:00:00.000Z';

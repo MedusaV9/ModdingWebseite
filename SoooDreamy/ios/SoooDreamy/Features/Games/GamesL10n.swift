@@ -231,6 +231,24 @@ enum GamesL10n {
                                               en: "Your result couldn't be sent."),
         "games.wordle.duel.retry": LText(de: "Nochmal senden", en: "Send again"),
 
+        // MARK: Wordle Duell-Bilanz
+        "games.wordle.record.button": LText(de: "Bilanz ansehen 📊", en: "View record 📊"),
+        "games.wordle.record.title": LText(de: "Duell-Bilanz", en: "Duel Record"),
+        "games.wordle.record.subtitle": LText(de: "Gemeinsame Duelle: {n}",
+                                              en: "Shared duels: {n}"),
+        "games.wordle.record.ties": LText(de: "Remis", en: "Ties"),
+        "games.wordle.record.leaderMe": LText(de: "Du führst! 👑",
+                                              en: "You're in the lead! 👑"),
+        "games.wordle.record.leaderPartner": LText(de: "{name} führt! 👑",
+                                                   en: "{name} is in the lead! 👑"),
+        "games.wordle.record.leaderTie": LText(de: "Gleichstand — ihr seid ein Dreamteam! 💞",
+                                               en: "All tied — you two are a dream team! 💞"),
+        "games.wordle.record.streak": LText(de: "🔥 {n} Tage in Folge gespielt",
+                                            en: "🔥 {n} days played in a row"),
+        "games.wordle.record.emptyTitle": LText(de: "Noch keine Duelle", en: "No duels yet"),
+        "games.wordle.record.emptyBody": LText(de: "Spielt euer erstes Wordle!",
+                                               en: "Play your first Wordle together!"),
+
         // MARK: Emoji-Rätsel
         "games.card.emojiriddle.title": LText(de: "Emoji-Rätsel", en: "Emoji Riddles"),
         "games.card.emojiriddle.teaser": LText(de: "Erratet Filme, Songs & mehr aus Emojis",

@@ -3,10 +3,11 @@
 Self-hosted Node.js server for the SoooDreamy couple app. One server can host many couples.
 Base URL example: `http://192.168.1.20:4321` (the app lets you add/switch servers in Settings).
 
-Server version `1.2.1` (reported by `GET /api/health`).
+Server version `1.3.0` (reported by `GET /api/health`).
 v1.1 added photo thumbnails, canvas stroke delete (undo), mood history, the daily journal list, and sealed letters (`openWhen`).
 v1.2 adds message reactions, the Wordle duel, photo favorites, and love coupons.
 v1.2.1 makes Wordle results language-specific (per `dateKey` AND `lang`), restricts Wordle submits to server-today ±1 day, and broadcasts `coupon_deleted` for coupons evicted by the cap.
+v1.3 adds the Wordle history list (`GET /api/wordle`).
 All releases are backward compatible: a v1.0/v1.1/v1.2.0 `store.json` loads unchanged and missing fields/structures default to `null`/empty on read (v1.2.0 wordle buckets are normalized lazily).
 
 - All request/response bodies are JSON (`camelCase` keys) unless stated otherwise (media uploads are raw bodies).
@@ -127,6 +128,7 @@ All releases are backward compatible: a v1.0/v1.1/v1.2.0 `store.json` loads unch
 | `GET /api/daily?limit=60` | yes | – | `{entries}` — journal of every day where at least one member answered, `dateKey` descending, same per-member reveal semantics as the single-day endpoint (`limit` capped at 366) | – |
 | `GET /api/daily/:dateKey` | yes | – | `DailyEntry` | – |
 | `POST /api/daily/:dateKey` | yes | `{questionId, text}` | `DailyEntry` (my view) | `daily_answer` → per-member tailored `DailyEntry` |
+| `GET /api/wordle?limit=30&lang=de` | yes | `lang` REQUIRED (`"de"`\|`"en"`, else `400 bad_lang`); `limit` default 30, capped at 60 | `{days}` — one day view (same shape as the single-day endpoint) per stored dateKey with ≥ 1 result in that language from either member, `dateKey` descending; the per-day anti-spoiler applies | – |
 | `GET /api/wordle/:dateKey?lang=de` | yes | `lang` REQUIRED (`"de"`\|`"en"`, else `400 bad_lang`); any dateKey may be browsed | Wordle day view for that language (per member, anti-spoiler) | – |
 | `POST /api/wordle/:dateKey` | yes | `{rows (int 1–6), win (bool), grid (string ≤ 160), lang ("de"\|"en")}` — dateKey must be within ±1 day of server-today (UTC), else `400 bad_datekey`; one result per member per (dateKey, lang); a resubmit returns the stored result unchanged (idempotent, no broadcast) | Wordle day view (my view, incl. `lang`) | `wordle_result` → per-member tailored day view (incl. `lang`) |
 | `GET /api/canvas` | yes | – | `{strokes}` (ascending) | – |

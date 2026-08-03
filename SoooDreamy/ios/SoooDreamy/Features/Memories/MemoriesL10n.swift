@@ -113,6 +113,12 @@ enum MemoriesL10n {
         "memories.events.liveStop": LText(de: "Stoppen", en: "Stop"),
         "memories.events.liveStarted": LText(de: "Live-Countdown läuft! ⏳", en: "Live countdown running! ⏳"),
         "memories.events.liveStopped": LText(de: "Live-Countdown gestoppt", en: "Live countdown stopped"),
+        "memories.events.share": LText(de: "In den Chat senden 💬", en: "Send to chat 💬"),
+        "memories.events.shareHeader": LText(de: "🗓️ {emoji} {title}", en: "🗓️ {emoji} {title}"),
+        "memories.events.shareToday": LText(de: "HEUTE! 🎉 — {date}", en: "TODAY! 🎉 — {date}"),
+        "memories.events.shareOneDay": LText(de: "Noch 1 Tag — {date}", en: "1 day to go — {date}"),
+        "memories.events.shareInDays": LText(de: "Noch {n} Tage — {date}", en: "{n} days to go — {date}"),
+        "memories.events.shareSent": LText(de: "Im Chat geteilt 💬", en: "Shared to chat 💬"),
         "memories.events.liveFailed": LText(de: "Live Activity konnte nicht starten — Berechtigung prüfen",
                                             en: "Couldn't start the Live Activity — check permissions"),
 
@@ -133,6 +139,8 @@ enum MemoriesL10n {
         "memories.stats.moodTitle": LText(de: "Stimmungsverlauf", en: "Mood timeline"),
         "memories.stats.moodEmpty": LText(de: "Noch keine Stimmungen geteilt — sag deinem Schatz, wie du dich fühlst 💜",
                                           en: "No moods shared yet — tell your sweetheart how you feel 💜"),
+        "memories.stats.topMoods": LText(de: "Top-Stimmungen (30 Tage)", en: "Top moods (30 days)"),
+        "memories.stats.topMoodCount": LText(de: "×{n}", en: "×{n}"),
 
         // Journal
         "memories.journal.title": LText(de: "Unser Tagebuch", en: "Our Journal"),

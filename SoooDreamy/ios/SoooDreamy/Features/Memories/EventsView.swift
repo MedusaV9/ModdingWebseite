@@ -116,6 +116,13 @@ struct EventsView: View {
                 Label(L10n.t("common.delete"), systemImage: "trash")
             }
         }
+        .contextMenu {
+            Button {
+                shareToChat(event, days: days)
+            } label: {
+                Label(L10n.t("memories.events.share"), systemImage: "paperplane.fill")
+            }
+        }
     }
 
     private func rowContent(_ event: EventItem, days: Int?) -> some View {
@@ -212,6 +219,41 @@ struct EventsView: View {
     }
 
     // MARK: Actions
+
+    /// Posts a pretty two-line countdown message into the couple chat.
+    private func shareToChat(_ event: EventItem, days: Int?) {
+        guard let api = appState.api else { return }
+        let text = shareText(event, days: days)
+        Task {
+            do {
+                try await api.sendMessage(type: .text, text: text)
+                Haptics.shared.success()
+                SoundEngine.shared.play(.pop)
+                appState.showToast(L10n.t("memories.events.shareSent"), style: .success)
+            } catch {
+                appState.handleAPIError(error)
+            }
+        }
+    }
+
+    private func shareText(_ event: EventItem, days: Int?) -> String {
+        let header = L10n.t("memories.events.shareHeader",
+                            ["emoji": event.emoji, "title": event.title])
+        let date = prettyDate(event.date)
+        let line: String
+        switch days {
+        case .some(0):
+            line = L10n.t("memories.events.shareToday", ["date": date])
+        case .some(1):
+            line = L10n.t("memories.events.shareOneDay", ["date": date])
+        case .some(let n) where n > 1:
+            line = L10n.t("memories.events.shareInDays", ["n": String(n), "date": date])
+        default:
+            // Past non-repeating (or unparseable) events get a plain date line.
+            line = date
+        }
+        return header + "\n" + line
+    }
 
     private func deleteEvent(_ event: EventItem) {
         guard let api = appState.api else { return }
