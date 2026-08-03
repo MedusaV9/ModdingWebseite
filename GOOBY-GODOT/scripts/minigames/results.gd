@@ -211,7 +211,7 @@ func show_results(breakdown: Dictionary, meta: Dictionary, juice: JuiceKit = nul
 		_juice.count_to(score, 0, final_score, 0.9, parts[0], suffix)
 		_juice.scale_pop(_panel, 1.06, 260)
 		if coins > 0:
-			_pulse_later(0.5, coins_line)
+			_pulse_later(0.5, coins_line, coins)
 
 
 ## FERTIG-1 (EVAL Rang 12): war ein Modifier-Event aktiv, zeigt der Screen
@@ -301,18 +301,20 @@ func _zeige_rekord_feier(line: Label) -> void:
 	_juice.scale_pop(line, 1.35, 300)
 
 
-func _pulse_later(delay: float, line: Label) -> void:
+func _pulse_later(delay: float, line: Label, muenzen: int) -> void:
 	var tree := get_tree()
 	if tree == null:
 		return
 	# Gebundene Methode statt Lambda (REST5, B2) — s. _feier_level_up.
-	tree.create_timer(delay).timeout.connect(_pulse_now.bind(line))
+	tree.create_timer(delay).timeout.connect(_pulse_now.bind(line, muenzen))
 
 
-func _pulse_now(line: Label) -> void:
+func _pulse_now(line: Label, muenzen: int) -> void:
 	if not visible or _juice == null:
 		return
-	_juice.coin_rain(24)
+	# J1 Beute-Flug: die Münzen REISEN von der Münz-Zeile Richtung Börse
+	# (Pitch-Treppe + ui_coins am Serienende) statt nur dekorativ zu regnen.
+	BeuteFlug.fliegen(self, line, muenzen)
 	_juice.scale_pop(line, 1.18, 220)
 
 

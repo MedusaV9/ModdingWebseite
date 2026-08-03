@@ -12,6 +12,9 @@ extends VBoxContainer
 
 signal claim_pressed(id: String)
 signal reroll_pressed
+## G8 IDEA-WOCHE: Feiern-Tap aus dem „Diese Woche“-Abschnitt (Finale des
+## Wochen-Vorhabens) — der DailyQuestService zahlt aus und feiert.
+signal vorhaben_feiern_pressed
 
 const ICON_DIR := "res://assets/ui/icons/"
 ## Kategorie → Icon + Identitätsfarbe (AC-Kategorien-Farbwelt).
@@ -36,12 +39,19 @@ func _enter_tree() -> void:
 	_apply_touch_floor()
 
 
-func rebuild(board: Array, bonus: Dictionary, reroll_available: bool, f: float) -> void:
+## G8 IDEA-WOCHE: `vorhaben` (optional, {} = kein Abschnitt) rendert den
+## „Diese Woche“-Abschnitt OBEN im Blatt — Bestands-Aufrufer ohne das
+## fünfte Argument bleiben unverändert.
+func rebuild(
+	board: Array, bonus: Dictionary, reroll_available: bool, f: float, vorhaben := {}
+) -> void:
 	_f = maxf(f, 0.5)
 	_rows.clear()
 	for child in get_children():
 		child.queue_free()
 	add_theme_constant_override("separation", int(10.0 * _f))
+	if not vorhaben.is_empty():
+		add_child(_build_vorhaben(vorhaben))
 	var subtitle := Label.new()
 	subtitle.name = "Untertitel"
 	subtitle.theme_type_variation = "CaptionLabel"
@@ -62,6 +72,11 @@ func rebuild(board: Array, bonus: Dictionary, reroll_available: bool, f: float) 
 	add_child(_build_reroll(reroll_available))
 
 
+## J1 Beute-Flug: Quell-Control für den Münzflug (Karte der Quest-Zeile).
+func claim_quelle(id: String) -> Control:
+	return (_rows.get(id, {}) as Dictionary).get("card") as Control
+
+
 ## Häkchen-Moment nach erfolgreichem Claim (Service ruft das statt rebuild).
 func mark_claimed(id: String, bonus: Dictionary) -> void:
 	var row: Dictionary = _rows.get(id, {})
@@ -77,6 +92,15 @@ func mark_claimed(id: String, bonus: Dictionary) -> void:
 	bar.value = bar.max_value
 	(row["count"] as Label).text = I18nService.t("quests.erledigt")
 	_update_bonus(bonus)
+
+
+## G8 IDEA-WOCHE: „Diese Woche“-Karte (eigene Sektion-Klasse) bauen und
+## ihren Feiern-Tap als Panel-Signal weiterreichen.
+func _build_vorhaben(vorhaben: Dictionary) -> Control:
+	var sektion := WochenVorhabenSection.new()
+	sektion.rebuild(vorhaben, _f)
+	sektion.feiern_pressed.connect(func() -> void: vorhaben_feiern_pressed.emit())
+	return sektion
 
 
 func _build_row(row: Dictionary) -> Control:

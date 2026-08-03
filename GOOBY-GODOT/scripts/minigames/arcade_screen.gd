@@ -349,6 +349,9 @@ func _claim_sternenbuch_meilensteine() -> void:
 	)
 	AudioDirector.try_play(self, "ui_levelup")
 	RewardFx.konfetti_2d(self, 40, size.x)
+	# J1 Beute-Flug: die Meilenstein-Münzen reisen vom Arcade-Screen zur
+	# Börse (ui_coins + Erfolgs-Haptik am Serienende im Flug-Layer).
+	BeuteFlug.fliegen(self, self, int(folge.get("coins", 0)))
 
 
 ## FERTIG-1 (EVAL Rang 12): Bonus-Badge auf der Ziel-Kachel des aktiven

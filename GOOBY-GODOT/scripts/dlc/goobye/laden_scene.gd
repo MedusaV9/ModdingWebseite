@@ -235,8 +235,10 @@ func laden_oeffnen() -> void:
 func feierabend() -> void:
 	if phase != PHASE_ABSCHLUSS:
 		return
-	AudioDirector.try_play(self, "ui_coins")
-	Haptics.success(self)
+	# J1 Beute-Flug: Umsatz reist zur Börse (ui_coins + Erfolgs-Haptik am
+	# Serienende); ohne Umsatz bleibt ein neutraler Bestätigungs-Klang.
+	if not BeuteFlug.fliegen(self, _feierabend_knopf, umsatz_heute):
+		AudioDirector.try_play(self, "ui_confirm")
 	_umsatz_verbuchen()
 	if _abschluss_overlay != null:
 		_abschluss_overlay.queue_free()

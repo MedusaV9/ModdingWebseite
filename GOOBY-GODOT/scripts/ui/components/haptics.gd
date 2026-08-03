@@ -27,6 +27,9 @@ const TAP_MS := 10
 const SUCCESS_MS := 8
 const SUCCESS_PAUSE_S := 0.08
 const WARN_MS := 40
+## J1 Beute-Flug: 3-ms-Mikro-Tick je Münz-Ankunft (Partitur „zaehl_tick“) —
+## bewusst UNTER tap (10 ms): eine Serie soll kitzeln, nicht brummen.
+const ZAEHL_TICK_MS := 3
 ## Dauer-Multiplikator je Stärke-Stufe (`controls.haptics`, app_settings.gd).
 const LEVEL_FACTORS := {"dezent": 0.6, "normal": 1.0, "stark": 1.6}
 
@@ -49,6 +52,11 @@ static func warn(from_node: Node = null) -> void:
 	_fire("warn", from_node)
 
 
+## Mikro-Tick — eine Münz-Ankunft im Beute-Flug (J1): 3 ms, Serie-tauglich.
+static func zaehl_tick(from_node: Node = null) -> void:
+	_fire("zaehl_tick", from_node)
+
+
 ## Alt-API (RW-7, settings_screen/dev_unlock): kräftiger Einzelimpuls.
 static func heavy(from_node: Node = null) -> void:
 	_fire("warn", from_node)
@@ -62,6 +70,8 @@ static func plan(art: String, stufe := "normal") -> Array[int]:
 			return [_skaliert(SUCCESS_MS, faktor), _skaliert(SUCCESS_MS, faktor)]
 		"warn":
 			return [_skaliert(WARN_MS, faktor)]
+		"zaehl_tick":
+			return [_skaliert(ZAEHL_TICK_MS, faktor)]
 		_:
 			return [_skaliert(TAP_MS, faktor)]
 

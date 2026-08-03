@@ -257,7 +257,9 @@ func _on_claim() -> void:
 	)
 	if bool(result.get("ok", false)):
 		_gs.notify_slice_changed("daily")
-		AudioDirector.try_play(self, "ui_coins")
+		# J1 Beute-Flug: die Münzen REISEN vom Abholen-Knopf zur HUD-Pille;
+		# ui_coins + Erfolgs-Haptik klingen am Serienende im Flug-Layer.
+		BeuteFlug.fliegen(self, _claim_btn, int(result.get("coins", 0)))
 		claimed.emit(result)
 	set_process(false)
 	queue_free()

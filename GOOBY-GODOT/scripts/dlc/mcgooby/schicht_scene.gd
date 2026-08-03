@@ -723,6 +723,9 @@ func _schicht_ende() -> void:
 	_ende_fuellen()
 	_ende_overlay.visible = true
 	UiMotion.pop_in(_ende_karte)
+	# J1 Beute-Flug: die Schicht-Münzen reisen von der Kassensturz-Karte
+	# zur Börse (ui_coins am Serienende — mg_win bleibt der Sieg-Jingle).
+	BeuteFlug.fliegen(self, _ende_karte, int(_kasse.get("muenzen", 0)))
 
 
 func _ende_fuellen() -> void:

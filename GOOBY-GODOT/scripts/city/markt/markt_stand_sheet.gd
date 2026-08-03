@@ -317,7 +317,11 @@ func _hole_ergebnis() -> void:
 		aktualisiere()
 		return
 	abgeholt.emit(int(karte["erloes"]))
-	AudioDirector.try_play(self, "ui_buy")
+	# J1 Beute-Flug: der Markt-Erlös reist vom Sheet zur Börse (Münz-
+	# EINNAHME klingt am Serienende als ui_coins, §3-Grammatik); ohne
+	# Erlös bleibt der bisherige Abhol-Klang.
+	if not BeuteFlug.fliegen(self, self, int(karte["erloes"])):
+		AudioDirector.try_play(self, "ui_buy")
 	zeige_abrechnung(karte)
 
 
