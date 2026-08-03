@@ -15,9 +15,17 @@ _(noch leer — schreib mir hier, was du dir wünschst, was dich stört, was feh
 
 ## 🤖 Antworten des Agents auf dein Feedback (Chat, 03.08.)
 
-> **Dein Report:** „The resource could not be loaded because the App Transport Security policy requires the use of a secure connection" bei `http://138.201.60.230:4321`.
+> **Dein Report:** „The resource could not be loaded because the App Transport Security policy requires the use of a secure connection" bei `http://138.201.60.230:4321` — auch „mit neuester Version".
 >
-> **Gefixt in Iteration 9:** Die App hatte ATS tatsächlich noch NICHT gelockert (die Auskunft der anderen KI stimmte nicht — in `project.yml` fehlte der Eintrag komplett). Jetzt ist `NSAppTransportSecurity → NSAllowsArbitraryLoads` für App **und** Widget-Extension gesetzt: normales `http://` funktioniert ab dem nächsten IPA (Version 1.1.0) — LAN-IP, öffentliche IP oder Domain, mit und ohne Port. WebSockets (`ws://`) sind damit ebenfalls erlaubt. Dein Server ist übrigens korrekt „public": Der Pairing-Code schützt den Zugang zu eurem Paar; für dauerhaft öffentliche Server empfehle ich zusätzlich HTTPS via Reverse-Proxy (Caddy/nginx) — `https://ark.atomi23.de` würde die App genauso schlucken. Einfach das neue IPA aus dem Release `sooodreamy-latest` sideloaden.
+> **Diagnose:** Dein **Server** ist korrekt und erreichbar (`/api/health` → SoooDreamy 1.4.0). Der Fehler kommt vom **iPhone-Client**. Im Screenshot endet der Tipp noch mit „`npm start` genügt." — genau dieser Text ist in IPA **1.1.0+** länger („Normales http:// funktioniert…"). Damit ist klar: auf dem Gerät läuft noch ein **altes IPA** (vor dem ATS-Fix). Das Release `sooodreamy-latest` hatte den Fix schon; Download-Count war 0.
+>
+> **Bitte so installieren (wichtig: alte App zuerst löschen):**
+> 1. SoooDreamy auf dem iPhone **löschen** (sonst bleibt oft die alte Binary).
+> 2. Frisches IPA laden: https://github.com/MedusaV9/ModdingWebseite/releases/tag/sooodreamy-latest → `SoooDreamy-unsigned.ipa`
+> 3. Mit AltStore / SideStore / Sideloadly neu sideloaden.
+> 4. Unter „Server hinzufügen" muss stehen: **„App-Build 1.2.0 … · HTTP freigeschaltet"** und der Tipp beginnt mit **„★ Build 1.2.0"**. Erst dann „Verbindung testen".
+>
+> Adresse weiter: `http://138.201.60.230:4321` (oder `http://ark.atomi23.de:4321` — Port **4321** nicht weglassen; ohne Port zeigt nginx die AMP-Seite).
 
 ---
 
@@ -99,6 +107,10 @@ _(hier beantworte ich dein Feedback, wenn ich es umgesetzt habe)_
 - `[2026-08-03 22:30 UTC]` **🎵 „Unser Soundtrack“** im Wir-Tab: Song-Karten mit Herzen (💞 wenn beide), „Anhören ↗“-Link (Spotify/YouTube/…), 🎲 Zufalls-Song mit Scroll+Puls-Animation, Add/Edit-Sheets, Live-Sync.
 - `[2026-08-03 22:30 UTC]` **💪 Wordle Hard-Mode**: klassische NYT-Regeln (Grün bleibt stehen, Gelb muss vorkommen), Umschalten nur vor dem ersten Versuch, spezifische Hinweis-Toasts, „4/6*“-Stern im Share-Text, Hard-Pill auf der Endkarte.
 
+### Iteration 11 — ATS-Follow-up: altes IPA erkannt 📱
+- `[2026-08-03 22:50 UTC]` Server-Health von hier aus grün: `http://138.201.60.230:4321/api/health` und `http://ark.atomi23.de:4321/api/health` → SoooDreamy **1.4.0**. Release-IPA **1.1.0** enthält ATS + neuen Tip-Text (im Binary verifiziert). Screenshot-Tip endet noch beim alten Text → Client war veraltet.
+- `[2026-08-03 22:50 UTC]` **IPA 1.2.0 (build 12)**: committed Info.plists, Extra-Exception-Domains (`ark.atomi23.de`), sichtbares „App-Build … · HTTP freigeschaltet“, Tip beginnt mit „★ Build 1.2.0“, ATS-Fehler zeigt klare Neuinstall-Anleitung.
+
 ## 🔄 Als Nächstes
-- Auf dein Feedback warten — schreib es oben in „💬 Dein Feedback“! Ich lese es bei jeder Iteration. 💜
+- Nach Neu-Sideload von IPA 1.2.0 Verbindungstest gegen `http://138.201.60.230:4321` — wenn der mintfarbene Build-Badge sichtbar ist und ATS trotzdem kommt, melden.
 - Ideen für kommende Wellen: Coupons mit Ablaufdatum, Fotoalben, Canvas-Farbverlauf-Pinsel, Live-Activity für „Partner ist online“, Soundtrack-Import per Link-Vorschau.

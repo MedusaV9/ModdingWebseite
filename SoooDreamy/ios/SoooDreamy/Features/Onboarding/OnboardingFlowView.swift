@@ -165,6 +165,11 @@ struct ServerSetupSheet: View {
                         .buttonStyle(PrimaryButtonStyle())
                         .disabled(normalized == nil)
 
+                        Text(L10n.t("server.buildBadge", ["version": appVersionLabel]))
+                            .font(.system(.caption, design: .rounded).weight(.semibold))
+                            .foregroundStyle(Theme.mint)
+                            .padding(.top, 4)
+
                         Text(L10n.t("server.hint"))
                             .font(.system(.footnote, design: .rounded))
                             .foregroundStyle(Theme.textTertiary)
@@ -190,6 +195,12 @@ struct ServerSetupSheet: View {
         }
     }
 
+    private var appVersionLabel: String {
+        let short = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?"
+        return "\(short) (\(build))"
+    }
+
     private var normalized: String? {
         ServerProfile.normalize(urlString)
     }
@@ -206,7 +217,14 @@ struct ServerSetupSheet: View {
             testResult = (true, L10n.t("server.testOK", ["name": health.name, "version": health.version]))
             Haptics.shared.success()
         } catch {
-            testResult = (false, L10n.t("server.testFail", ["error": error.localizedDescription]))
+            let raw = error.localizedDescription
+            let looksLikeATS = raw.localizedCaseInsensitiveContains("App Transport Security")
+                || raw.localizedCaseInsensitiveContains("secure connection")
+            if looksLikeATS {
+                testResult = (false, L10n.t("server.testFailATS"))
+            } else {
+                testResult = (false, L10n.t("server.testFail", ["error": raw]))
+            }
             Haptics.shared.warning()
         }
     }

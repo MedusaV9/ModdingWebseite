@@ -17,7 +17,9 @@ DerivedData/
 
 # XcodeGen output (generated from project.yml)
 ios/SoooDreamy.xcodeproj/
-ios/Config/
+ios/Config/*
+# Keep Info.plists committed so ATS HTTP unlock cannot be "lost" in a sideload build.
+!ios/Config/*-Info.plist
 
 # App icon is rendered in CI by ios/scripts/GenerateIcon.swift
 ios/SoooDreamy/Resources/Assets.xcassets/AppIcon.appiconset/icon_1024.png
