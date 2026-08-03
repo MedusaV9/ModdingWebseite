@@ -302,6 +302,16 @@ final class AppState {
                 await refreshEvents()
                 updateWidgetSnapshot()
             }
+        case .couponAdded:
+            if let coupon = event.decode(CouponResponse.self)?.coupon, coupon.forMember == memberId {
+                showToast(L10n.t("coupon.receivedToast"), style: .love)
+                SoundEngine.shared.play(.sparkle)
+            }
+        case .couponRedeemed:
+            if let coupon = event.decode(CouponResponse.self)?.coupon, coupon.createdBy == memberId {
+                showToast(L10n.t("coupon.redeemedToast", ["title": coupon.title]), style: .love)
+                SoundEngine.shared.play(.tada)
+            }
         case .typing:
             if let p = event.decode(TypingPayload.self), p.memberId != memberId {
                 partnerTyping = p.isTyping

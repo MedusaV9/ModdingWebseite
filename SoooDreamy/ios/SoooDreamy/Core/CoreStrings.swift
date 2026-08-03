@@ -181,6 +181,15 @@ enum CoreStrings {
         "home.anniversaryOneYear": LText(de: "1 Jahr zusammen — happy Jahrestag! 🥂",
                                          en: "1 year together — happy anniversary! 🥂"),
 
+        // Coupons (global toasts)
+        "coupon.receivedToast": LText(de: "Neuer Gutschein für dich! 🎟️", en: "A new coupon for you! 🎟️"),
+        "coupon.redeemedToast": LText(de: "„{title}“ wurde eingelöst! 🎉", en: "“{title}” was redeemed! 🎉"),
+
+        // Flashback card
+        "home.flashback": LText(de: "Erinnerung", en: "Memory"),
+        "home.flashbackDaysAgo": LText(de: "vor {n} Tagen", en: "{n} days ago"),
+        "home.flashbackQuestion": LText(de: "Eure Frage von damals", en: "Your question back then"),
+
         // Connection banner
         "conn.connecting": LText(de: "Verbinde…", en: "Connecting…"),
         "conn.offline": LText(de: "Offline — versuche es wieder…", en: "Offline — retrying…"),

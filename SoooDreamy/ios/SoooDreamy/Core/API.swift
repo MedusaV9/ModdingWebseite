@@ -207,6 +207,26 @@ struct API {
                           as: MessageResponse.self).message
     }
 
+    /// Toggle my emoji reaction on a message.
+    @discardableResult
+    func toggleReaction(messageId: String, emoji: String) async throws -> Message {
+        try await request("POST", "/api/messages/\(messageId)/reactions",
+                          jsonBody: ["emoji": emoji], as: MessageResponse.self).message
+    }
+
+    // MARK: Wordle duel
+
+    @discardableResult
+    func submitWordle(dateKey: String, rows: Int, win: Bool, grid: String, lang: String) async throws -> WordleDayResponse {
+        try await request("POST", "/api/wordle/\(dateKey)",
+                          jsonBody: ["rows": rows, "win": win, "grid": grid, "lang": lang],
+                          as: WordleDayResponse.self)
+    }
+
+    func wordleDay(dateKey: String) async throws -> WordleDayResponse {
+        try await request("GET", "/api/wordle/\(dateKey)", as: WordleDayResponse.self)
+    }
+
     // MARK: Photos
 
     func photos() async throws -> [Photo] {
@@ -235,6 +255,40 @@ struct API {
     func uploadPhotoThumb(photoId: String, jpeg: Data) async throws -> Photo {
         try await request("POST", "/api/photos/\(photoId)/thumb", rawBody: jpeg,
                           contentType: "image/jpeg", as: PhotoResponse.self).photo
+    }
+
+    /// Toggle whether the photo is one of MY favorites.
+    @discardableResult
+    func togglePhotoFavorite(id: String) async throws -> Photo {
+        try await request("POST", "/api/photos/\(id)/favorite", jsonBody: [:],
+                          as: PhotoResponse.self).photo
+    }
+
+    // MARK: Love coupons
+
+    func coupons() async throws -> [Coupon] {
+        try await request("GET", "/api/coupons", as: CouponsResponse.self).coupons
+    }
+
+    /// Creates a coupon FOR the partner (server resolves the receiver).
+    @discardableResult
+    func createCoupon(title: String, emoji: String, note: String?) async throws -> Coupon {
+        try await request("POST", "/api/coupons",
+                          jsonBody: ["title": title, "emoji": emoji, "note": note],
+                          as: CouponResponse.self).coupon
+    }
+
+    /// Redeem a coupon that was made for me.
+    @discardableResult
+    func redeemCoupon(id: String) async throws -> Coupon {
+        try await request("POST", "/api/coupons/\(id)/redeem", jsonBody: [:],
+                          as: CouponResponse.self).coupon
+    }
+
+    /// Delete an unredeemed coupon I created.
+    func deleteCoupon(id: String) async throws {
+        struct OK: Decodable { let ok: Bool }
+        _ = try await request("DELETE", "/api/coupons/\(id)", as: OK.self)
     }
 
     /// Absolute media URL with `?token=` for AsyncImage / AVPlayer.

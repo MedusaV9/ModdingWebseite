@@ -76,6 +76,8 @@ struct Message: Codable, Identifiable, Hashable {
     /// Letters only: seal tag like "sad", "missme", "custom:<text>" —
     /// the recipient opens the letter when the moment fits.
     let openWhen: String?
+    /// Emoji reactions: emoji → memberIds who reacted.
+    var reactions: [String: [String]]?
     let createdAt: Date
 }
 
@@ -87,6 +89,45 @@ struct Photo: Codable, Identifiable, Hashable {
     let thumbUrl: String?
     let width: Int?
     let height: Int?
+    /// memberIds who marked this photo as a favorite.
+    var favorites: [String]?
+    let createdAt: Date
+
+    func isFavorite(of memberId: String?) -> Bool {
+        guard let memberId else { return false }
+        return favorites?.contains(memberId) ?? false
+    }
+}
+
+// MARK: - Wordle duel
+
+struct WordleResult: Codable, Hashable {
+    let memberId: String
+    let rows: Int
+    let win: Bool
+    let grid: String            // emoji grid (🟩🟨⬛ lines)
+    let lang: String
+    let finishedAt: Date
+}
+
+/// Per-member view: partner's result stays hidden until I finished (no spoilers).
+struct WordleDayResponse: Codable, Hashable {
+    let dateKey: String
+    let mine: WordleResult?
+    let partner: WordleResult?
+    let partnerFinished: Bool
+}
+
+// MARK: - Love coupons
+
+struct Coupon: Codable, Identifiable, Hashable {
+    let id: String
+    var title: String
+    var emoji: String
+    var note: String?
+    let createdBy: String
+    let forMember: String
+    var redeemedAt: Date?
     let createdAt: Date
 }
 
@@ -193,6 +234,8 @@ struct MessagesResponse: Codable { let messages: [Message] }
 struct PhotosResponse: Codable { let photos: [Photo] }
 struct MoodsResponse: Codable { let moods: [MoodEntry] }
 struct DailyListResponse: Codable { let entries: [DailyEntry] }
+struct CouponsResponse: Codable { let coupons: [Coupon] }
+struct CouponResponse: Codable { let coupon: Coupon }
 struct EventsResponse: Codable { let events: [EventItem] }
 struct BucketResponse: Codable { let items: [BucketItem] }
 struct StrokesResponse: Codable { let strokes: [CanvasStroke] }
@@ -234,6 +277,11 @@ enum ServerEventType: String, Codable {
     case gameStarted = "game_started"
     case gameMove = "game_move"
     case gameEnded = "game_ended"
+    case messageUpdated = "message_updated"
+    case wordleResult = "wordle_result"
+    case couponAdded = "coupon_added"
+    case couponRedeemed = "coupon_redeemed"
+    case couponDeleted = "coupon_deleted"
     case typing, pong
 }
 
