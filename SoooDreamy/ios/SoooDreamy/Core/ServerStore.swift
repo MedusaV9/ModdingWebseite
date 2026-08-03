@@ -106,6 +106,21 @@ final class ServerStore {
         persist()
     }
 
+    // MARK: Static access (App Intents run outside SwiftUI)
+
+    /// Reads the active profile straight from UserDefaults without needing
+    /// the main-actor store (used by App Intents / background helpers).
+    nonisolated static func loadActiveProfileStatic() -> ServerProfile? {
+        let d = UserDefaults.standard
+        guard let data = d.data(forKey: storageKey),
+              let profiles = try? JSONDecoder().decode([ServerProfile].self, from: data) else { return nil }
+        if let raw = d.string(forKey: activeKey), let id = UUID(uuidString: raw),
+           let profile = profiles.first(where: { $0.id == id }) {
+            return profile
+        }
+        return profiles.first
+    }
+
     // MARK: Persistence
 
     private func load() {

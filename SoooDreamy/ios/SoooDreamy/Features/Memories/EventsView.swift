@@ -1,0 +1,382 @@
+import SwiftUI
+import Combine
+
+/// Countdowns & special moments — events with days-until chips and Live Activity countdowns.
+struct EventsView: View {
+    @Environment(AppState.self) private var appState
+
+    @State private var editorTarget: EditorTarget?
+    @State private var activityRefresh = 0
+
+    private struct EditorTarget: Identifiable {
+        let id: String
+        let event: EventItem?
+    }
+
+    private struct EventEntry: Identifiable {
+        let event: EventItem
+        let days: Int?
+        var id: String { event.id }
+    }
+
+    var body: some View {
+        ZStack {
+            DreamyBackground(showStars: false)
+            content
+        }
+        .navigationTitle(L10n.t("memories.events.title"))
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    Haptics.shared.tap()
+                    editorTarget = EditorTarget(id: "new", event: nil)
+                } label: {
+                    Image(systemName: "plus.circle.fill")
+                        .foregroundStyle(Theme.pink)
+                }
+                .accessibilityLabel(L10n.t("memories.events.add"))
+            }
+        }
+        .task { await appState.refreshEvents() }
+        .sheet(item: $editorTarget) { target in
+            EventEditorSheet(event: target.event)
+        }
+    }
+
+    private var sortedEvents: [EventEntry] {
+        appState.events
+            .map { EventEntry(event: $0, days: SharedDates.daysUntil($0.date, repeatsYearly: $0.repeatsYearly)) }
+            .sorted { lhs, rhs in
+                sortRank(lhs.days) < sortRank(rhs.days)
+            }
+    }
+
+    /// Upcoming first (soonest at top), past events afterwards (most recent first).
+    private func sortRank(_ days: Int?) -> Int {
+        guard let days else { return Int.max }
+        return days >= 0 ? days : 100_000 - days
+    }
+
+    // MARK: Content
+
+    @ViewBuilder
+    private var content: some View {
+        if appState.events.isEmpty {
+            emptyState
+        } else {
+            eventList
+        }
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 18) {
+            Spacer()
+            EmptyStateView(emoji: "🗓️",
+                           title: L10n.t("memories.events.empty.title"),
+                           subtitle: L10n.t("memories.events.empty.subtitle"))
+            Button(L10n.t("memories.events.add")) {
+                Haptics.shared.tap()
+                editorTarget = EditorTarget(id: "new", event: nil)
+            }
+            .buttonStyle(PrimaryButtonStyle(fullWidth: false))
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var eventList: some View {
+        List {
+            ForEach(sortedEvents) { entry in
+                row(entry.event, days: entry.days)
+            }
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .refreshable { await appState.refreshEvents() }
+    }
+
+    // MARK: Row
+
+    private func row(_ event: EventItem, days: Int?) -> some View {
+        Button {
+            Haptics.shared.tap()
+            editorTarget = EditorTarget(id: event.id, event: event)
+        } label: {
+            rowContent(event, days: days)
+        }
+        .buttonStyle(.plain)
+        .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
+        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+            Button(role: .destructive) {
+                deleteEvent(event)
+            } label: {
+                Label(L10n.t("common.delete"), systemImage: "trash")
+            }
+        }
+    }
+
+    private func rowContent(_ event: EventItem, days: Int?) -> some View {
+        HStack(spacing: 14) {
+            Text(event.emoji)
+                .font(.system(size: 30))
+                .frame(width: 52, height: 52)
+                .background(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(Color.white.opacity(0.07))
+                )
+            VStack(alignment: .leading, spacing: 4) {
+                Text(event.title)
+                    .font(.system(.headline, design: .rounded).weight(.bold))
+                    .foregroundStyle(Theme.textPrimary)
+                    .lineLimit(1)
+                HStack(spacing: 6) {
+                    Text(prettyDate(event.date))
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(Theme.textSecondary)
+                    if event.repeatsYearly {
+                        PillTag(text: L10n.t("memories.events.yearlyBadge"), tint: Theme.indigo)
+                    }
+                }
+            }
+            Spacer()
+            VStack(alignment: .trailing, spacing: 8) {
+                countdownChip(days: days)
+                liveActivityButton(event, days: days)
+            }
+        }
+        .glassCard(padding: 14)
+    }
+
+    @ViewBuilder
+    private func countdownChip(days: Int?) -> some View {
+        if let days {
+            if days == 0 {
+                PillTag(text: L10n.t("memories.countdown.today"), tint: Theme.pink)
+            } else if days == 1 {
+                PillTag(text: L10n.t("memories.countdown.tomorrow"), tint: Theme.gold)
+            } else if days > 1 {
+                PillTag(text: L10n.t("memories.countdown.inDays", ["n": String(days)]), tint: Theme.gold)
+            } else {
+                PillTag(text: L10n.t("memories.countdown.daysAgo", ["n": String(-days)]),
+                        tint: Color.gray)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func liveActivityButton(_ event: EventItem, days: Int?) -> some View {
+        let running = isRunningActivity(event)
+        if CountdownActivityController.isSupported && (running || (days ?? -1) > 0) {
+            Button {
+                toggleActivity(event)
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: running ? "stop.circle.fill" : "timer")
+                        .font(.system(size: 11, weight: .bold))
+                    Text(L10n.t(running ? "memories.events.liveStop" : "memories.events.liveStart"))
+                        .font(.system(.caption2, design: .rounded).weight(.semibold))
+                }
+                .foregroundStyle(running ? Color(hex: "F87171") : Theme.mint)
+                .padding(.vertical, 4)
+                .padding(.horizontal, 9)
+                .background(
+                    Capsule().fill((running ? Color(hex: "F87171") : Theme.mint).opacity(0.15))
+                )
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    // MARK: Live Activity
+
+    private func isRunningActivity(_ event: EventItem) -> Bool {
+        _ = activityRefresh
+        return CountdownActivityController.activeEventTitle == event.title
+    }
+
+    private func toggleActivity(_ event: EventItem) {
+        Haptics.shared.tap()
+        if isRunningActivity(event) {
+            CountdownActivityController.stopAll()
+            appState.showToast(L10n.t("memories.events.liveStopped"), style: .info)
+        } else if CountdownActivityController.start(for: event, partnerName: appState.partner?.name) {
+            SoundEngine.shared.play(.chime)
+            appState.showToast(L10n.t("memories.events.liveStarted"), style: .success)
+        } else {
+            appState.showToast(L10n.t("memories.events.liveFailed"), style: .error)
+        }
+        activityRefresh += 1
+    }
+
+    // MARK: Actions
+
+    private func deleteEvent(_ event: EventItem) {
+        guard let api = appState.api else { return }
+        Task {
+            do {
+                try await api.deleteEvent(id: event.id)
+                await appState.refreshEvents()
+                appState.updateWidgetSnapshot()
+                appState.showToast(L10n.t("memories.events.deleted"), style: .info)
+            } catch {
+                appState.handleAPIError(error)
+            }
+        }
+    }
+
+    private func prettyDate(_ key: String) -> String {
+        guard let date = SharedDates.parse(key) else { return key }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: L10n.isGerman ? "de_DE" : "en_US")
+        formatter.dateStyle = .long
+        return formatter.string(from: date)
+    }
+}
+
+// MARK: - Editor sheet
+
+private struct EventEditorSheet: View {
+    @Environment(AppState.self) private var appState
+    @Environment(\.dismiss) private var dismiss
+
+    let event: EventItem?
+
+    @State private var title: String
+    @State private var emoji: String
+    @State private var date: Date
+    @State private var repeatsYearly: Bool
+    @State private var saving = false
+
+    private static let emojis = [
+        "🎂", "💍", "✈️", "🎄", "🎉", "💞", "🌙", "🎓",
+        "🏝️", "🎁", "🥂", "🎃", "🐣", "❤️", "🗓️", "⭐️",
+        "🎆", "🏡"
+    ]
+
+    init(event: EventItem?) {
+        self.event = event
+        _title = State(initialValue: event?.title ?? "")
+        _emoji = State(initialValue: event?.emoji ?? "🎉")
+        _date = State(initialValue: SharedDates.parse(event?.date) ?? Date())
+        _repeatsYearly = State(initialValue: event?.repeatsYearly ?? false)
+    }
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                DreamyBackground(showStars: false)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        titleField
+                        emojiSection
+                        dateSection
+                        yearlyToggle
+                        saveButton
+                    }
+                    .padding(16)
+                }
+            }
+            .navigationTitle(L10n.t(event == nil ? "memories.events.add" : "memories.events.edit"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(L10n.t("common.cancel")) { dismiss() }
+                        .tint(Theme.pink)
+                }
+            }
+        }
+        .preferredColorScheme(.dark)
+    }
+
+    private var titleField: some View {
+        TextField(L10n.t("memories.events.titleField"), text: $title)
+            .textFieldStyle(DreamyFieldStyle())
+            .submitLabel(.done)
+    }
+
+    private var emojiSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(L10n.t("memories.events.emoji"))
+                .font(.system(.footnote, design: .rounded).weight(.semibold))
+                .foregroundStyle(Theme.textSecondary)
+            EmojiPickerGrid(emojis: Self.emojis, selection: $emoji)
+        }
+    }
+
+    private var dateSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(L10n.t("memories.events.date"))
+                .font(.system(.footnote, design: .rounded).weight(.semibold))
+                .foregroundStyle(Theme.textSecondary)
+            DatePicker(L10n.t("memories.events.date"),
+                       selection: $date,
+                       displayedComponents: .date)
+                .datePickerStyle(.graphical)
+                .tint(Theme.pink)
+                .environment(\.colorScheme, .dark)
+                .glassCard(padding: 8)
+        }
+    }
+
+    private var yearlyToggle: some View {
+        Toggle(isOn: $repeatsYearly) {
+            Text(L10n.t("memories.events.yearly"))
+                .font(.system(.body, design: .rounded).weight(.semibold))
+                .foregroundStyle(Theme.textPrimary)
+        }
+        .tint(Theme.pink)
+        .glassCard(padding: 14)
+    }
+
+    private var saveButton: some View {
+        Button {
+            save()
+        } label: {
+            if saving {
+                ProgressView()
+                    .tint(.white)
+                    .frame(maxWidth: .infinity)
+            } else {
+                Text(L10n.t("common.save"))
+            }
+        }
+        .buttonStyle(PrimaryButtonStyle())
+        .disabled(saving || title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+    }
+
+    private func save() {
+        guard let api = appState.api, !saving else { return }
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        saving = true
+        let dateKey = Self.dateKey(date)
+        Task {
+            do {
+                if let event {
+                    _ = try await api.updateEvent(id: event.id, title: trimmed, emoji: emoji,
+                                                  date: dateKey, repeatsYearly: repeatsYearly)
+                } else {
+                    _ = try await api.addEvent(title: trimmed, emoji: emoji,
+                                               date: dateKey, repeatsYearly: repeatsYearly)
+                }
+                await appState.refreshEvents()
+                appState.updateWidgetSnapshot()
+                Haptics.shared.success()
+                SoundEngine.shared.play(.chime)
+                appState.showToast(L10n.t("memories.events.saved"), style: .success)
+                dismiss()
+            } catch {
+                appState.handleAPIError(error)
+            }
+            saving = false
+        }
+    }
+
+    private static func dateKey(_ date: Date) -> String {
+        let comps = SharedDates.calendar.dateComponents([.year, .month, .day], from: date)
+        return String(format: "%04d-%02d-%02d", comps.year ?? 0, comps.month ?? 0, comps.day ?? 0)
+    }
+}

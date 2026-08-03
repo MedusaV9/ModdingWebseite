@@ -1,7 +1,119 @@
 import Foundation
 
 /// Memories (gallery, canvas, bucket list, events, stats) strings.
-/// Filled by the memories feature implementation.
 enum MemoriesL10n {
-    static let table: [String: LText] = [:]
+    static let table: [String: LText] = [
+        // Hub
+        "memories.title": LText(de: "Wir zwei", en: "The two of us"),
+        "memories.subtitle": LText(de: "Eure Erinnerungen, Träume & Momente 💜",
+                                   en: "Your memories, dreams & moments 💜"),
+        "memories.card.gallery": LText(de: "Galerie", en: "Gallery"),
+        "memories.card.canvas": LText(de: "Kritzel-Canvas", en: "Doodle Canvas"),
+        "memories.card.bucket": LText(de: "Bucket List", en: "Bucket List"),
+        "memories.card.events": LText(de: "Momente", en: "Moments"),
+        "memories.card.stats": LText(de: "Love-Stats", en: "Love Stats"),
+        "memories.card.noPhotos": LText(de: "Noch keine Fotos", en: "No photos yet"),
+        "memories.card.photoOne": LText(de: "1 Foto", en: "1 photo"),
+        "memories.card.photoCount": LText(de: "{n} Fotos", en: "{n} photos"),
+        "memories.card.drawTogether": LText(de: "Malt zusammen — live", en: "Draw together — live"),
+        "memories.card.dreams": LText(de: "Träume", en: "dreams"),
+        "memories.card.noBucket": LText(de: "Sammelt eure Träume", en: "Collect your dreams"),
+        "memories.card.noEvent": LText(de: "Plant etwas Schönes", en: "Plan something lovely"),
+        "memories.card.daysOfLove": LText(de: "{n} Tage Liebe", en: "{n} days of love"),
+        "memories.card.statsHint": LText(de: "Eure Liebe in Zahlen", en: "Your love in numbers"),
+
+        // Countdown chips
+        "memories.countdown.today": LText(de: "HEUTE 🎉", en: "TODAY 🎉"),
+        "memories.countdown.tomorrow": LText(de: "morgen!", en: "tomorrow!"),
+        "memories.countdown.inDays": LText(de: "in {n} Tagen", en: "in {n} days"),
+        "memories.countdown.daysAgo": LText(de: "vor {n} Tagen", en: "{n} days ago"),
+
+        // Gallery
+        "memories.gallery.title": LText(de: "Galerie", en: "Gallery"),
+        "memories.gallery.empty.title": LText(de: "Noch keine Fotos", en: "No photos yet"),
+        "memories.gallery.empty.subtitle": LText(de: "Ladet euer erstes gemeinsames Foto hoch 📸",
+                                                 en: "Upload your first photo together 📸"),
+        "memories.gallery.add": LText(de: "Foto hinzufügen", en: "Add photo"),
+        "memories.gallery.captionTitle": LText(de: "Kleine Bildunterschrift?", en: "A little caption?"),
+        "memories.gallery.captionPlaceholder": LText(de: "z. B. Unser Tag am See 🌊 (optional)",
+                                                     en: "e.g. Our day at the lake 🌊 (optional)"),
+        "memories.gallery.upload": LText(de: "Hochladen", en: "Upload"),
+        "memories.gallery.uploaded": LText(de: "Foto gespeichert! 📸", en: "Photo saved! 📸"),
+        "memories.gallery.readFailed": LText(de: "Das Foto konnte nicht geladen werden",
+                                             en: "Couldn't load that photo"),
+        "memories.gallery.deleteConfirm": LText(de: "Dieses Foto wirklich löschen?",
+                                                en: "Really delete this photo?"),
+        "memories.gallery.deleted": LText(de: "Foto gelöscht", en: "Photo deleted"),
+        "memories.gallery.savedToLibrary": LText(de: "In deine Fotos gesichert 💾",
+                                                 en: "Saved to your Photos 💾"),
+        "memories.gallery.saveFailed": LText(de: "Sichern hat nicht geklappt",
+                                             en: "Couldn't save the photo"),
+        "memories.gallery.by": LText(de: "von {name}", en: "by {name}"),
+
+        // Canvas
+        "memories.canvas.title": LText(de: "Kritzel-Canvas", en: "Doodle Canvas"),
+        "memories.canvas.subtitle": LText(de: "Malt zusammen — dein Schatz sieht jeden Strich live 🎨",
+                                          en: "Draw together — your sweetheart sees every stroke live 🎨"),
+        "memories.canvas.empty": LText(de: "Malt euer erstes Kunstwerk 🎨",
+                                       en: "Draw your first masterpiece 🎨"),
+        "memories.canvas.tool.pen": LText(de: "Stift", en: "Pen"),
+        "memories.canvas.tool.marker": LText(de: "Marker", en: "Marker"),
+        "memories.canvas.tool.eraser": LText(de: "Radierer", en: "Eraser"),
+        "memories.canvas.width": LText(de: "Strichstärke", en: "Stroke width"),
+        "memories.canvas.clear": LText(de: "Alles löschen", en: "Clear all"),
+        "memories.canvas.clearConfirm": LText(de: "Euer ganzes Kunstwerk löschen? Das gilt für euch beide.",
+                                              en: "Erase your whole artwork? This clears it for both of you."),
+        "memories.canvas.cleared": LText(de: "Canvas gelöscht", en: "Canvas cleared"),
+
+        // Bucket list
+        "memories.bucket.title": LText(de: "Bucket List", en: "Bucket List"),
+        "memories.bucket.placeholder": LText(de: "Wovon träumt ihr?", en: "What do you dream of?"),
+        "memories.bucket.pickEmoji": LText(de: "Emoji auswählen", en: "Pick an emoji"),
+        "memories.bucket.progress": LText(de: "{done} von {total} Träumen erfüllt",
+                                          en: "{done} of {total} dreams fulfilled"),
+        "memories.bucket.progressEmpty": LText(de: "Eure gemeinsame Träumeliste",
+                                               en: "Your shared list of dreams"),
+        "memories.bucket.openSection": LText(de: "Träume 🌌", en: "Dreams 🌌"),
+        "memories.bucket.doneSection": LText(de: "Geschafft ✨", en: "Done ✨"),
+        "memories.bucket.empty.title": LText(de: "Noch ganz leer hier", en: "Still empty here"),
+        "memories.bucket.empty.subtitle": LText(de: "Was wollt ihr zusammen erleben? Schreibt's auf! 🌠",
+                                                en: "What do you want to experience together? Write it down! 🌠"),
+        "memories.bucket.completed": LText(de: "Traum erfüllt! 🎉", en: "Dream fulfilled! 🎉"),
+
+        // Events / moments
+        "memories.events.title": LText(de: "Momente", en: "Moments"),
+        "memories.events.empty.title": LText(de: "Keine Momente geplant", en: "No moments planned"),
+        "memories.events.empty.subtitle": LText(de: "Zählt gemeinsam die Tage bis zu eurem nächsten Highlight 🗓️",
+                                                en: "Count down the days to your next highlight together 🗓️"),
+        "memories.events.add": LText(de: "Moment hinzufügen", en: "Add moment"),
+        "memories.events.edit": LText(de: "Moment bearbeiten", en: "Edit moment"),
+        "memories.events.titleField": LText(de: "Titel, z. B. Jahrestag", en: "Title, e.g. anniversary"),
+        "memories.events.emoji": LText(de: "Emoji", en: "Emoji"),
+        "memories.events.date": LText(de: "Datum", en: "Date"),
+        "memories.events.yearly": LText(de: "Wiederholt sich jährlich", en: "Repeats yearly"),
+        "memories.events.yearlyBadge": LText(de: "jährlich ♻️", en: "yearly ♻️"),
+        "memories.events.saved": LText(de: "Moment gespeichert 🗓️", en: "Moment saved 🗓️"),
+        "memories.events.deleted": LText(de: "Moment gelöscht", en: "Moment deleted"),
+        "memories.events.liveStart": LText(de: "Countdown", en: "Countdown"),
+        "memories.events.liveStop": LText(de: "Stoppen", en: "Stop"),
+        "memories.events.liveStarted": LText(de: "Live-Countdown läuft! ⏳", en: "Live countdown running! ⏳"),
+        "memories.events.liveStopped": LText(de: "Live-Countdown gestoppt", en: "Live countdown stopped"),
+        "memories.events.liveFailed": LText(de: "Live Activity konnte nicht starten — Berechtigung prüfen",
+                                            en: "Couldn't start the Live Activity — check permissions"),
+
+        // Love stats
+        "memories.stats.title": LText(de: "Love-Stats", en: "Love Stats"),
+        "memories.stats.daysTogether": LText(de: "Tage zusammen", en: "days together"),
+        "memories.stats.streak": LText(de: "Tage-Serie", en: "day streak"),
+        "memories.stats.messages": LText(de: "Nachrichten", en: "messages"),
+        "memories.stats.photos": LText(de: "Fotos", en: "photos"),
+        "memories.stats.games": LText(de: "Spiele gespielt", en: "games played"),
+        "memories.stats.bucket": LText(de: "Träume erfüllt", en: "dreams fulfilled"),
+        "memories.stats.touchTitle": LText(de: "Liebesgrüße", en: "Love touches"),
+        "memories.stats.touchSubtitle": LText(de: "gesendet vs. empfangen", en: "sent vs. received"),
+        "memories.stats.caption": LText(de: "Ihr habt euch schon {n} Liebesgrüße geschickt 💌",
+                                        en: "You've already sent each other {n} love touches 💌"),
+        "memories.stats.empty": LText(de: "Noch keine Liebesgrüße — schick doch gleich einen! 💜",
+                                      en: "No love touches yet — go send one! 💜")
+    ]
 }
