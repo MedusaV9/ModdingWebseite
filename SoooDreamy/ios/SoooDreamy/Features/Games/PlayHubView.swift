@@ -46,6 +46,12 @@ struct PlayHubView: View {
             guard let event = note.object as? ServerEvent else { return }
             receive(event)
         }
+        .onChange(of: appState.servers.activeProfileID) {
+            // Switching servers switches the whole couple context.
+            engine.adopt(nil)
+            path = []
+            Task { await engine.resume(api: appState.api) }
+        }
     }
 
     // MARK: Event handling

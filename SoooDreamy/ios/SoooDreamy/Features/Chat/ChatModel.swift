@@ -31,6 +31,17 @@ final class ChatModel {
         self.appState = appState
     }
 
+    /// Wipe everything (e.g. after switching to another server — each server
+    /// is a completely separate couple context).
+    func reset() {
+        messages = []
+        loaded = false
+        canLoadOlder = false
+        initialLoading = false
+        loadingOlder = false
+        stopTyping()
+    }
+
     /// Messages grouped by calendar day, ascending.
     var sections: [ChatDaySection] {
         let cal = Calendar.current

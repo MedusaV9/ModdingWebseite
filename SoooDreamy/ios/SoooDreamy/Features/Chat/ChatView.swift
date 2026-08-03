@@ -34,6 +34,11 @@ struct ChatView: View {
         .onDisappear {
             model.stopTyping()
         }
+        .onChange(of: appState.servers.activeProfileID) {
+            // Switching servers switches the whole couple context.
+            model.reset()
+            Task { await model.loadInitial() }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .serverEvent)) { note in
             guard let event = note.object as? ServerEvent else { return }
             model.handle(event)

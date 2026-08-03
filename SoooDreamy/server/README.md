@@ -16,6 +16,14 @@ npm start          # → http://0.0.0.0:4321
 
 Requires Node.js ≥ 20. The only dependency is `ws`.
 
+Or with Docker:
+
+```bash
+cd server
+docker build -t sooodreamy-server .
+docker run -d --name sooodreamy -p 4321:4321 -v sooodreamy-data:/app/data sooodreamy-server
+```
+
 | Env var    | Default          | Meaning                              |
 |------------|------------------|--------------------------------------|
 | `PORT`     | `4321`           | HTTP + WebSocket port                |
