@@ -1,0 +1,24 @@
+{
+	"levelreise": {
+		"titel": "Die Level-Reise",
+		"hinweis": "Noch {xp} XP bis Level {level}.",
+		"hinweis_fest": "Fest-Halt Level {level} — noch {xp} XP!",
+		"hinweis_max": "Reiseziel erreicht — Level {max}! Die Goldene Möhre gehört euch.",
+		"marker_xp": "noch {xp} XP",
+		"stempel_label": "Level {level}",
+		"toast": "Meilenstein-Fest: Level {level}!",
+		"gate": {
+			"lieferung": "Blitz-Lieferung",
+			"goobye": "Goo und Bye",
+			"mcgooby": "McGooby",
+			"ranch": "Gooby-Ranch"
+		},
+		"extra_garderobe": "+{n} Garderobe",
+		"extra_modifier": "+{n} Arcade-Bonus",
+		"jubel_1": "Level {level}! Torte für alle — und der Stempel ist im Reisepass!",
+		"jubel_2": "Juhu, Level {level}! {gooby} tanzt — neuer Stempel im Reisepass!",
+		"jubel_3": "Level {level} geschafft! Die Torte duftet, der Reisepass hat einen Stempel mehr.",
+		"jubel_4": "Was für eine Reise — Level {level}! Stempel drauf und weiter geht’s!",
+		"jubel_max": "Level {level} — die GOLDENE MÖHRE! {gooby} hat das Reiseziel erreicht!"
+	}
+}

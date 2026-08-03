@@ -489,6 +489,10 @@ func _baue_rueckseite() -> VBoxContainer:
 	titel.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(titel)
 	var liste := stempel_von(_state())
+	# W18/R3 Level-Reise: Meilenstein-Stempel (Level 5/10/… — Torte, L40 die
+	# Goldene Möhre) ADDITIV hinter den Reise-Stempeln; rückwirkend still
+	# gestempelte tragen at_ms 0 und damit kein Datum.
+	liste.append_array(LevelReiseLogic.meilenstein_stempel(_state()))
 	if liste.is_empty():
 		var leer := Label.new()
 		leer.name = "StempelLeer"
@@ -551,7 +555,13 @@ func _stempel_chip(eintrag: Dictionary) -> Control:
 	var zeile := Label.new()
 	zeile.name = "StempelName"
 	zeile.theme_type_variation = &"SoftLabel"
-	zeile.text = "%s %s" % [str(eintrag["glyph"]), I18nService.t(str(eintrag["name_key"]))]
+	# W18/R3: Einträge mit vor-lokalisiertem `label` (Meilenstein-Stempel
+	# „Level {n}“ — der Platzhalter braucht Args) nutzen diesen direkt,
+	# klassische Einträge weiter ihren name_key.
+	var stempel_text := str(eintrag.get("label", ""))
+	if stempel_text.is_empty():
+		stempel_text = I18nService.t(str(eintrag["name_key"]))
+	zeile.text = "%s %s" % [str(eintrag["glyph"]), stempel_text]
 	zeile.add_theme_color_override("font_color", farbe)
 	box.add_child(zeile)
 	var at_ms := int(eintrag["at_ms"])

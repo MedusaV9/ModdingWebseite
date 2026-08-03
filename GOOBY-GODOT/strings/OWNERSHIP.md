@@ -202,3 +202,30 @@ merged flach) | G5 P31 MG-GHOST-SPLIT | W17
 Morgen-Ritual-Gruß (Wetter/Markt/Quest-Ausblick) + Gute-Nacht-Mini-Bilanz der
 Bett-Nachtkarte; `soul.*`/`sleep.*` bleiben bei ihren Ownern, werden nur
 konsumiert) | G8 IDEA-SEELE | G8
+
+>> `vorhaben.*` (Datei `strings/<locale>/vorhaben.json` — Wochen-Vorhaben:
+„Diese Woche“-Abschnitt im Tagesquests-Blatt (Kopf, Wohlfühl-/Feier-Zeilen,
+Toast) + Bogen-Texte `vorhaben.b.<id>.titel/finale` und pro Schritt
+`vorhaben.b.<id>.s<n>.text/zwischen`; die `quests.*`-Keys bleiben beim
+REST-2-Owner, werden nur konsumiert) | G8 IDEA-WOCHE | G8
+
+>> `levelreise.*` (Datei `strings/<locale>/levelreise.json` — Level-Reise im
+Profil: Karten-Kopf/XP-Hinweise, Gate-Namen `levelreise.gate.*` (Radio-Tore
+konsumieren die `audio.station.*`-Keys ihres Owners), Meilenstein-Stempel-
+Label, Fest-Toast + Jubel-Zeilen `levelreise.jubel_*`; `reisepass.*`/
+`profil.*` bleiben bei ihren Ownern, werden nur konsumiert) |
+W18/R3 IDEA-LEVELREISE | G8
+
+>> `hud.<aktion>.kurz` (Datei `strings/<locale>/hud.json` — J2 Icon-Bühne:
+gepflegte KURZFORMEN der zehn Kachel-Namen für Namensschilder/Coachmark-
+Dauerschilder, z. B. „Garderobe“ → „Mode“; ADDITIV zum W1c-Bestand `hud.*`
+in `<locale>.json` — eigener Unterschlüssel `.kurz`, darum kollisionsfrei
+zum flachen `hud.<aktion>`-Key) | W18/R3 IDEA-J2 | G8
+
+>> NEUE `markt.stand_knopf`- + `markt.geschlossen.schild/titel/ankauf`-Keys
+(additiv in `markt.json` — PT2-B10 Geschlossen-Charme des Wochenmarkts:
+„Mein Marktstand“-Knopf, „Bis Samstag!“-Schild, Ankauf-Vertröstung; alle
+übrigen `markt.*`-Keys bleiben beim W15-MARKT-Owner) + NEUER
+`rewards.fund.toast`-Key (additiv in `rewards.json` — PT2-B13 macht Seelen-
+Münzfunde als Toast sichtbar; `rewards.fund.a/b/c` bleiben beim EF-1-Owner) |
+W18/R3 FIX-9 | G8

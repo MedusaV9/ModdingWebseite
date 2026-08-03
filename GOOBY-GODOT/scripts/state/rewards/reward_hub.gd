@@ -21,12 +21,18 @@ extends Node
 signal sticker_celebrated(def: Dictionary)
 signal achievement_celebrated(def: Dictionary)
 signal daily_bonus_claimed(reward: Dictionary)
+## W18/R3 Level-Reise: Meilenstein-Fest (Level 5/10/…) wurde gefeiert.
+signal meilenstein_celebrated(level: int)
 
 ## Serialisierung der Feiern — nie zwei Konfetti-Bursts übereinander.
 const FEIER_ABSTAND_S := 2.6
 const KONFETTI_TEILE := 40
 const SET_REWARD_COINS := 120
 const GROUP := &"reward_hub"
+## W18/R3: Bühne-frei-Warten des Meilenstein-Fests (Morgen-Bremse/Bonus-
+## Popup) — Poll-Takt + Sicherheitsdeckel gegen Hänger.
+const BUEHNE_POLL_S := 0.25
+const BUEHNE_MAX_S := 60.0
 
 const Economy := preload("res://scripts/logic/economy.gd")
 
@@ -108,6 +114,12 @@ func _ready() -> void:
 		# Einladung daraus ("Bonus-Event: Doppel-Gold in Teeparty!").
 		if _gs is Node and (_gs as Node).has_signal("gooby_events"):
 			(_gs as Node).gooby_events.connect(_on_gooby_events)
+		# W18/R3 Level-Reise: bereits überschrittene Meilensteine gelten als
+		# gefeiert (stiller Reisepass-Stempel, KEIN Nachfeier-Spam); künftige
+		# Überschreitungen beobachtet der level_changed-Hook.
+		_meilenstein_backfill()
+		if _gs is Node and (_gs as Node).has_signal("level_changed"):
+			(_gs as Node).level_changed.connect(_on_level_changed)
 
 
 ## REST-1: Tagesbonus beim ersten Start des Tages anbieten. Mit Router
@@ -166,8 +178,14 @@ func _drain_queue() -> void:
 	while not _queue.is_empty():
 		var entry: Dictionary = _queue.pop_front()
 		var def: Dictionary = entry.get("def", {})
-		if str(entry.get("kind", "sticker")) == "erfolg":
+		var kind := str(entry.get("kind", "sticker"))
+		if kind == "erfolg":
 			_celebrate_achievement(def)
+		elif kind == "fest":
+			# W18/R3: das Meilenstein-Fest wartet, bis die Bühne frei ist
+			# (Morgen-Kette fertig, Tagesbonus zu) — NIE über Overlays.
+			await _warte_buehne_frei()
+			_celebrate_meilenstein(def)
 		else:
 			_celebrate(def)
 		var tree := get_tree()
@@ -218,6 +236,79 @@ func _celebrate_achievement(def: Dictionary) -> void:
 	# W15/VOICE2 (W13-Request): Erfolgs-Feier → Gooby jubelt mit (None-sicher).
 	SeeleRunner.kommentar_global("feier.erfolg")
 	achievement_celebrated.emit(def)
+
+
+## ── W18/R3 Level-Reise: Meilenstein-Feste (G8-IDEE Progression Nr. 2) ────────
+
+
+## Rückwirkend-Regel beim Andocken: alles bereits Überschrittene STILL als
+## gefeiert stempeln (at_ms 0 — Stempel ohne Datum im Reisepass). Idempotent,
+## der zweite Start stempelt nichts mehr (LevelReiseLogic.backfill_stille).
+func _meilenstein_backfill() -> void:
+	if LevelReiseLogic.offene_meilensteine(_gs.state()).is_empty():
+		return
+	_gs.update(func(state: Dictionary) -> void: LevelReiseLogic.backfill_stille(state))
+
+
+## level_changed feuert bei Level- UND XP-Änderung (game_state._emit_watched)
+## — die Prüfung ist deshalb bewusst billig und idempotent.
+func _on_level_changed(_level: int, _xp_ratio: float) -> void:
+	_pruefe_meilensteine()
+
+
+## Frisch überschrittene Meilensteine SOFORT stempeln (Doppel-Queue-Schutz
+## bei schnellen XP-Folgen) und als Fest einreihen — dieselbe Feier-Queue
+## wie Sticker/Erfolge serialisiert (nie zwei Bursts übereinander).
+func _pruefe_meilensteine() -> void:
+	if _gs == null:
+		return
+	var offen := LevelReiseLogic.offene_meilensteine(_gs.state())
+	if offen.is_empty():
+		return
+	var at_ms := _now_ms()
+	for m in offen:
+		_gs.update(
+			func(state: Dictionary) -> void: LevelReiseLogic.stemple_gefeiert(state, m, at_ms)
+		)
+		_queue.append({"kind": "fest", "def": {"level": m}})
+	if not _draining:
+		_drain_queue()
+
+
+## Bühne-frei-Warten fürs Fest: solange die Morgen-Sequenz-Bremse hält oder
+## das Tagesbonus-Popup offen ist, wartet das Fest (R2-Kette respektiert,
+## nur KONSUMIERT — die Bremse selbst bleibt unangetastet). Deckel gegen
+## Hänger: nach BUEHNE_MAX_S feiern wir trotzdem.
+func _warte_buehne_frei() -> void:
+	var deadline := Time.get_ticks_msec() + int(BUEHNE_MAX_S * 1000.0)
+	while Time.get_ticks_msec() < deadline:
+		if not _bremse_haelt() and not _bonus_popup_offen():
+			return
+		var tree := get_tree()
+		if tree == null:
+			return
+		await tree.create_timer(BUEHNE_POLL_S).timeout
+
+
+func _bonus_popup_offen() -> bool:
+	return (
+		_daily_popup != null and is_instance_valid(_daily_popup) and _daily_popup.is_inside_tree()
+	)
+
+
+## Das Fest selbst: Toast + 2D-Konfetti auf der Hub-Layer (wirkt überall)
+## PLUS das Raum-Fest (Torte/3D-Konfetti/Tanz/Bubble via MeilensteinFest),
+## wenn gerade ein Zuhause auf dem Schirm ist; den Stinger spielt das Fest.
+func _celebrate_meilenstein(def: Dictionary) -> void:
+	var level := int(def.get("level", 0))
+	_toasts.show_toast(I18nService.t("levelreise.toast", {"level": level}))
+	var breite := 640.0
+	var viewport := get_viewport()
+	if viewport != null:
+		breite = viewport.get_visible_rect().size.x
+	RewardFx.konfetti_2d(_toasts, KONFETTI_TEILE, breite)
+	MeilensteinFest.zeige_in(self, level, _gs)
+	meilenstein_celebrated.emit(level)
 
 
 ## REST-1: Tagesbonus-Popup anbieten, wenn heute noch nichts abgeholt wurde

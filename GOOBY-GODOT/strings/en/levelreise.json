@@ -1,0 +1,24 @@
+{
+	"levelreise": {
+		"titel": "The Level Journey",
+		"hinweis": "{xp} XP to go until level {level}.",
+		"hinweis_fest": "Party stop at level {level} — {xp} XP to go!",
+		"hinweis_max": "Journey complete — level {max}! The Golden Carrot is yours.",
+		"marker_xp": "{xp} XP to go",
+		"stempel_label": "Level {level}",
+		"toast": "Milestone party: level {level}!",
+		"gate": {
+			"lieferung": "Express delivery",
+			"goobye": "Goo and Bye",
+			"mcgooby": "McGooby",
+			"ranch": "Gooby Ranch"
+		},
+		"extra_garderobe": "+{n} wardrobe",
+		"extra_modifier": "+{n} arcade bonus",
+		"jubel_1": "Level {level}! Cake for everyone — and the stamp is in the passport!",
+		"jubel_2": "Yay, level {level}! {gooby} is dancing — new stamp in the passport!",
+		"jubel_3": "Level {level} done! The cake smells lovely, and the passport has one more stamp.",
+		"jubel_4": "What a journey — level {level}! Stamp it and off we go!",
+		"jubel_max": "Level {level} — the GOLDEN CARROT! {gooby} has reached the journey’s end!"
+	}
+}

@@ -42,6 +42,8 @@ var _back_btn: Button
 var _nav_btns: Array[Button] = []
 var _portrait: Control
 var _pass_card: PassportCard
+## W18/R3: die Level-Reise-Karte (eigener Abschnitt unter dem Pass).
+var _reise_card: LevelReiseCard
 
 
 ## HUD-Dispatch (home_entry._dispatch_to_screens): Profil-Knopf → dieser
@@ -100,6 +102,9 @@ func _build_ui() -> void:
 	scroll.add_child(_list_box)
 
 	_list_box.add_child(_build_pass_card())
+	# W18/R3 (G8-IDEE Progression Nr. 2): die Level-Reise 1→40 direkt unter
+	# dem Pass — Stempel-Pfad, echte Gates, Meilenstein-Feste, Gooby-Marker.
+	_list_box.add_child(_build_reise_card())
 	# FERTIG-1 (EVAL „Rundes Ende“): Spiel-Abschluss als sichtbares
 	# Langzeit-Ziel direkt unter dem Pass — Prozent + vier Sammlungen.
 	_list_box.add_child(_build_abschluss_card())
@@ -152,6 +157,17 @@ func _build_pass_card() -> Control:
 	card.gs = _gs
 	_portrait = card.foto_slot
 	_pass_card = card
+	return card
+
+
+## Level-Reise-Karte (W18/R3): Aufbau/Daten wohnen komplett in
+## `level_reise_card.gd` + `level_reise_logic.gd`; der Screen liefert nur
+## GameState + Metrics-Hook (wie bei der PassportCard).
+func _build_reise_card() -> Control:
+	var card := LevelReiseCard.new()
+	card.name = "LevelReiseCard"
+	card.gs = _gs
+	_reise_card = card
 	return card
 
 
@@ -546,6 +562,9 @@ func _apply_metrics() -> void:
 		# Pass-Feldzeilen (Web-Referenz .b3-pass-field) — trifft Hochformat-
 		# Telefone, Querformate und iPad bleiben einzeilig.
 		_pass_card.setze_schmal(avail < 560.0 * f)
+	if _reise_card != null and is_instance_valid(_reise_card):
+		# W18/R3: Reise-Knoten skalieren mit f und halten den 44-pt-Floor.
+		_reise_card.wende_metrics_an(m)
 
 
 func _on_achievements_pressed() -> void:
