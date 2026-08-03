@@ -252,6 +252,67 @@ struct HealthResponse: Codable {
     let version: String
 }
 
+// MARK: - Widget snapshot (thin mirror of GET /api/widget-snapshot)
+
+/// One-call server payload for home-screen widgets. Named `…Response` (with
+/// nested parts) because `WidgetSnapshot` is taken by the App Group blob in
+/// Shared/SharedBridge.swift, which compiles into the same targets.
+struct WidgetSnapshotResponse: Codable, Hashable {
+    struct Partner: Codable, Hashable {
+        let id: String
+        let name: String
+        let avatar: String
+        let color: String
+        let mood: String?
+        let moodNote: String?
+        let moodUpdatedAt: Date?
+        let online: Bool
+        let lastSeenAt: Date?
+    }
+
+    struct Me: Codable, Hashable {
+        let id: String
+        let name: String
+        let avatar: String
+        let color: String
+    }
+
+    struct CoupleInfo: Codable, Hashable {
+        let id: String
+        let name: String?
+        let anniversary: String?    // "YYYY-MM-DD"
+    }
+
+    struct LatestPhoto: Codable, Hashable {
+        let id: String
+        let url: String
+        let thumbUrl: String?
+        let caption: String?
+        let favorites: [String]
+    }
+
+    struct NextEvent: Codable, Hashable {
+        let id: String
+        let title: String
+        let emoji: String?
+        let date: String            // resolved next occurrence, "YYYY-MM-DD" (yearly events wrap)
+        let repeatsYearly: Bool
+    }
+
+    let partner: Partner?           // nil on a single-member couple
+    let me: Me
+    let couple: CoupleInfo
+    let daysTogether: Int
+    let streak: Int
+    let bothAnsweredToday: Bool
+    let dailyAnsweredByMe: Bool
+    let latestPhoto: LatestPhoto?   // newest favorited, else newest overall
+    let nextEvent: NextEvent?       // soonest upcoming
+    let canvasStrokeCount: Int
+    let canvasUpdatedAt: Date?
+    let serverTime: Date
+}
+
 // MARK: - List wrappers
 
 struct MessagesResponse: Codable { let messages: [Message] }

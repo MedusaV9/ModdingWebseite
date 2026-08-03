@@ -32,6 +32,28 @@ test('strokes: create, broadcast, list ascending, clear with broadcast', async (
   assert.equal((await a.api.get('/api/canvas')).body.strokes.length, 0);
 });
 
+test('GET /api/canvas?limit=N returns the last N strokes, still ascending', async (t) => {
+  const { baseUrl } = await makeApp(t);
+  const { a } = await setupCouple(baseUrl);
+  const ids = [];
+  for (let i = 0; i < 4; i++) {
+    const res = await a.api.post('/api/canvas/strokes', { json: { points: [[i / 10, 0.5]] } });
+    assert.equal(res.status, 201);
+    ids.push(res.body.stroke.id);
+  }
+
+  const limited = await a.api.get('/api/canvas?limit=2');
+  assert.equal(limited.status, 200);
+  assert.deepEqual(limited.body.strokes.map((s) => s.id), ids.slice(-2)); // last two, ascending
+
+  // No limit → everything; a limit larger than the list is harmless.
+  assert.deepEqual((await a.api.get('/api/canvas')).body.strokes.map((s) => s.id), ids);
+  assert.deepEqual((await a.api.get('/api/canvas?limit=500')).body.strokes.map((s) => s.id), ids);
+  assert.deepEqual((await a.api.get('/api/canvas?limit=1')).body.strokes.map((s) => s.id), ids.slice(-1));
+
+  assert.equal((await a.api.get('/api/canvas?limit=nope')).status, 400);
+});
+
 test('stroke with more than 2000 points → 400 too_many_points', async (t) => {
   const { baseUrl } = await makeApp(t);
   const { a } = await setupCouple(baseUrl);

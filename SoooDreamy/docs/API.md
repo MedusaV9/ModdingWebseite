@@ -3,12 +3,13 @@
 Self-hosted Node.js server for the SoooDreamy couple app. One server can host many couples.
 Base URL example: `http://192.168.1.20:4321` (the app lets you add/switch servers in Settings).
 
-Server version `1.4.0` (reported by `GET /api/health`).
+Server version `1.5.0` (reported by `GET /api/health`).
 v1.1 added photo thumbnails, canvas stroke delete (undo), mood history, the daily journal list, and sealed letters (`openWhen`).
 v1.2 adds message reactions, the Wordle duel, photo favorites, and love coupons.
 v1.2.1 makes Wordle results language-specific (per `dateKey` AND `lang`), restricts Wordle submits to server-today ±1 day, and broadcasts `coupon_deleted` for coupons evicted by the cap.
 v1.3 adds the Wordle history list (`GET /api/wordle`).
 v1.4 adds the shared soundtrack (`/api/songs`).
+v1.5 adds the widget snapshot (`GET /api/widget-snapshot`) and an optional `?limit` on `GET /api/canvas`.
 All releases are backward compatible: a v1.0/v1.1/v1.2.0 `store.json` loads unchanged and missing fields/structures default to `null`/empty on read (v1.2.0 wordle buckets are normalized lazily).
 
 - All request/response bodies are JSON (`camelCase` keys) unless stated otherwise (media uploads are raw bodies).
@@ -91,6 +92,24 @@ All releases are backward compatible: a v1.0/v1.1/v1.2.0 `store.json` loads unch
 { "daysTogether": 1002, "touchesSent": { "total": 10, "byType": {"kiss": 4} },
   "touchesReceived": { "total": 8, "byType": {} }, "messages": 120, "photos": 33,
   "bucketDone": 3, "bucketTotal": 9, "dailyStreak": 5, "dailyAnswered": 40, "gamesPlayed": 7 }
+
+// WidgetSnapshot (one-call payload for home-screen widgets; see GET /api/widget-snapshot)
+// partner: null on a single-member couple. latestPhoto: newest favorited photo, else newest
+// overall, null when no photos. nextEvent: soonest upcoming event — its `date` is the resolved
+// next occurrence (a passed repeatsYearly event wraps into the next year), null when nothing
+// is upcoming. daysTogether counts from the anniversary (couple createdAt when unset), like Stats.
+// streak/bothAnsweredToday follow the daily-question semantics; dailyAnsweredByMe is caller-specific.
+{ "partner": { "id": "m_…", "name": "Ben", "avatar": "🐻", "color": "#4A90D9",
+    "mood": "🥰", "moodNote": "miss you", "moodUpdatedAt": "…",
+    "online": true, "lastSeenAt": "…" },
+  "me": { "id": "m_…", "name": "Mia", "avatar": "🦊", "color": "#FF5C8A" },
+  "couple": { "id": "c_…", "name": "Mia & Ben", "anniversary": "2023-11-07" },
+  "daysTogether": 1002, "streak": 5, "bothAnsweredToday": false, "dailyAnsweredByMe": true,
+  "latestPhoto": { "id": "ph_…", "url": "/api/photos/ph_…/raw",
+    "thumbUrl": "/api/photos/ph_…/thumb/raw", "caption": "Sunset 🌇", "favorites": ["m_…"] },
+  "nextEvent": { "id": "ev_…", "title": "Anniversary", "emoji": "💍", "date": "2026-11-07",
+    "repeatsYearly": true },
+  "canvasStrokeCount": 42, "canvasUpdatedAt": "…", "serverTime": "…" }
 ```
 
 ## REST endpoints
@@ -142,7 +161,7 @@ All releases are backward compatible: a v1.0/v1.1/v1.2.0 `store.json` loads unch
 | `GET /api/wordle?limit=30&lang=de` | yes | `lang` REQUIRED (`"de"`\|`"en"`, else `400 bad_lang`); `limit` default 30, capped at 60 | `{days}` — one day view (same shape as the single-day endpoint) per stored dateKey with ≥ 1 result in that language from either member, `dateKey` descending; the per-day anti-spoiler applies | – |
 | `GET /api/wordle/:dateKey?lang=de` | yes | `lang` REQUIRED (`"de"`\|`"en"`, else `400 bad_lang`); any dateKey may be browsed | Wordle day view for that language (per member, anti-spoiler) | – |
 | `POST /api/wordle/:dateKey` | yes | `{rows (int 1–6), win (bool), grid (string ≤ 160), lang ("de"\|"en")}` — dateKey must be within ±1 day of server-today (UTC), else `400 bad_datekey`; one result per member per (dateKey, lang); a resubmit returns the stored result unchanged (idempotent, no broadcast) | Wordle day view (my view, incl. `lang`) | `wordle_result` → per-member tailored day view (incl. `lang`) |
-| `GET /api/canvas` | yes | – | `{strokes}` (ascending) | – |
+| `GET /api/canvas?limit=N` | yes | `limit` optional (default all, capped at 500) | `{strokes}` — the **last** `limit` strokes, still ascending | – |
 | `POST /api/canvas/strokes` | yes | `{color, width, tool, points}` | `201 {stroke}` | `canvas_stroke {stroke}` |
 | `DELETE /api/canvas/strokes/:id` | yes (author only, else `403 not_yours`) | – | `{ok:true}`; `404 not_found` for unknown stroke | `canvas_stroke_deleted {id}` |
 | `DELETE /api/canvas` | yes | – | `{ok}` | `canvas_clear {}` |
@@ -152,6 +171,7 @@ All releases are backward compatible: a v1.0/v1.1/v1.2.0 `store.json` loads unch
 | `POST /api/games/:id/end` | yes | `{result?}` | `{game}` (state → ended) | `game_ended {game}` |
 | `GET /api/games/active` | yes | – | `{game}` or `{game:null}` (latest lobby/active) | – |
 | `GET /api/stats` | yes | – | `Stats` | – |
+| `GET /api/widget-snapshot` | yes/`?token` | – | `WidgetSnapshot` — everything a home-screen widget needs in one call | – |
 
 Limits: photo body ≤ 15 MB (`413 too_large`), voice ≤ 15 MB, thumbnail ≤ 2 MB, `text` ≤ 5000 chars, `openWhen` ≤ 64 chars (after trim), reaction emoji ≤ 16 chars (after trim), Wordle `grid` ≤ 160 chars, stroke ≤ 2000 points. Canvas keeps at most 8000 strokes (oldest dropped). Messages/touches history capped at 5000/500 entries. Mood history keeps the last 60 entries per member. Wordle keeps the last 60 dateKeys per couple (each dateKey bucket holds up to 2 languages). Coupons cap at 200 per couple (oldest redeemed pruned first, then oldest overall; evictions are broadcast as `coupon_deleted`). Songs cap at 300 per couple (oldest evicted; evictions are broadcast as `song_deleted`).
 

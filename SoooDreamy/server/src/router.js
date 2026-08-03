@@ -1111,7 +1111,9 @@ route('POST', '/api/wordle/:dateKey', { auth: true }, async (c) => {
 // --- canvas -----------------------------------------------------------------------------
 
 route('GET', '/api/canvas', { auth: true }, (c) => {
-  sendJson(c.res, 200, { strokes: c.auth.couple.strokes });
+  const limit = queryInt(c.url, 'limit', null, 1, 500);
+  const strokes = c.auth.couple.strokes;
+  sendJson(c.res, 200, { strokes: limit === null ? strokes : strokes.slice(-limit) });
 });
 
 route('POST', '/api/canvas/strokes', { auth: true }, async (c) => {
@@ -1267,6 +1269,88 @@ route('GET', '/api/stats', { auth: true }, (c) => {
     dailyStreak: computeStreak(couple),
     dailyAnswered: Object.values(couple.daily).filter((rec) => rec.answers[me]?.text != null).length,
     gamesPlayed: couple.counters.gamesPlayed,
+  });
+});
+
+// --- widget snapshot ---------------------------------------------------------------------------
+
+/** Next occurrence of an event on/after `today` (yearly events wrap into the next year); null when past. */
+function nextEventOccurrence(event, today) {
+  if (event.date >= today) return event.date;
+  if (!event.repeatsYearly) return null;
+  const monthDay = event.date.slice(4); // "-MM-DD"
+  const thisYear = today.slice(0, 4) + monthDay;
+  return thisYear >= today ? thisYear : `${Number(today.slice(0, 4)) + 1}${monthDay}`;
+}
+
+// One-call payload for home-screen widgets. `?token=` is accepted so widget
+// extensions can fetch it the same way they load media.
+route('GET', '/api/widget-snapshot', { auth: true, queryToken: true }, (c) => {
+  const couple = c.auth.couple;
+  const me = c.auth.member;
+  const partner = partnerOf(couple, me.id);
+  const today = todayKey();
+  // Newest favorited photo wins; otherwise the newest photo overall.
+  const photos = couple.photos;
+  let latestPhoto = photos.length > 0 ? photos[photos.length - 1] : null;
+  for (let i = photos.length - 1; i >= 0; i--) {
+    if ((photos[i].favorites ?? []).length > 0) {
+      latestPhoto = photos[i];
+      break;
+    }
+  }
+  // Soonest upcoming event; a yearly event whose date passed wraps to its next occurrence.
+  let nextEvent = null;
+  let nextDate = null;
+  for (const event of couple.events) {
+    const occurrence = nextEventOccurrence(event, today);
+    if (occurrence !== null && (nextDate === null || occurrence < nextDate)) {
+      nextEvent = event;
+      nextDate = occurrence;
+    }
+  }
+  const lastStroke = couple.strokes.length > 0 ? couple.strokes[couple.strokes.length - 1] : null;
+  sendJson(c.res, 200, {
+    partner: partner
+      ? {
+          id: partner.id,
+          name: partner.name,
+          avatar: partner.avatar,
+          color: partner.color,
+          mood: partner.mood,
+          moodNote: partner.moodNote,
+          moodUpdatedAt: partner.moodUpdatedAt,
+          online: c.realtime.isOnline(couple.id, partner.id),
+          lastSeenAt: partner.lastSeenAt,
+        }
+      : null,
+    me: { id: me.id, name: me.name, avatar: me.avatar, color: me.color },
+    couple: { id: couple.id, name: couple.name, anniversary: couple.anniversary },
+    daysTogether: daysBetween(couple.anniversary ?? couple.createdAt.slice(0, 10)),
+    streak: computeStreak(couple),
+    bothAnsweredToday: bothAnsweredOn(couple, today),
+    dailyAnsweredByMe: couple.daily[today]?.answers[me.id]?.text != null,
+    latestPhoto: latestPhoto
+      ? {
+          id: latestPhoto.id,
+          url: latestPhoto.url,
+          thumbUrl: latestPhoto.thumbUrl ?? null,
+          caption: latestPhoto.caption,
+          favorites: latestPhoto.favorites ?? [],
+        }
+      : null,
+    nextEvent: nextEvent
+      ? {
+          id: nextEvent.id,
+          title: nextEvent.title,
+          emoji: nextEvent.emoji,
+          date: nextDate,
+          repeatsYearly: nextEvent.repeatsYearly,
+        }
+      : null,
+    canvasStrokeCount: couple.strokes.length,
+    canvasUpdatedAt: lastStroke ? lastStroke.createdAt : null,
+    serverTime: nowIso(),
   });
 });
 

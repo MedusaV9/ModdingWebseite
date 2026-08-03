@@ -491,4 +491,12 @@ struct API {
     func stats() async throws -> Stats {
         try await request("GET", "/api/stats", as: Stats.self)
     }
+
+    // MARK: Widget snapshot
+
+    /// Everything a home-screen widget needs in one call (the endpoint also
+    /// accepts `?token=` for extension contexts without header plumbing).
+    func widgetSnapshot() async throws -> WidgetSnapshotResponse {
+        try await request("GET", "/api/widget-snapshot", as: WidgetSnapshotResponse.self)
+    }
 }
