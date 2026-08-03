@@ -7,6 +7,7 @@ struct DashboardView: View {
     @State private var showMoodPicker = false
     @State private var dailyAnswerText = ""
     @State private var sendingDaily = false
+    @State private var flashback: FlashbackItem?
 
     var body: some View {
         NavigationStack {
@@ -32,6 +33,10 @@ struct DashboardView: View {
                         touchGrid
                         dailyCard
 
+                        if let flashback {
+                            flashbackCard(flashback)
+                        }
+
                         if let next = appState.nextEvent {
                             nextEventCard(next.event, days: next.days)
                         }
@@ -48,6 +53,96 @@ struct DashboardView: View {
         .sheet(isPresented: $showMoodPicker) {
             MoodPickerSheet()
         }
+        .task(id: appState.couple?.id) {
+            await loadFlashback()
+        }
+    }
+
+    // MARK: Flashback ("memory of the day")
+
+    enum FlashbackItem {
+        case photo(Photo, daysAgo: Int)
+        case daily(DailyEntry, DailyQuestion, daysAgo: Int)
+    }
+
+    private func loadFlashback() async {
+        guard flashback == nil, let api = appState.api, let couple = appState.couple else { return }
+        let cutoff = Date().addingTimeInterval(-7 * 86400)
+        var candidates: [FlashbackItem] = []
+        if let photos = try? await api.photos() {
+            for photo in photos where photo.createdAt < cutoff {
+                let days = Int(Date().timeIntervalSince(photo.createdAt) / 86400)
+                candidates.append(.photo(photo, daysAgo: days))
+            }
+        }
+        if let entries = try? await api.dailyHistory(limit: 120) {
+            for entry in entries where entry.bothAnswered {
+                if let date = SharedDates.parse(entry.dateKey), date < cutoff {
+                    let question = ContentPack.dailyQuestions.first { $0.id == entry.questionId }
+                        ?? ContentPack.dailyQuestion(dateKey: entry.dateKey, coupleId: couple.id)
+                    let days = Int(Date().timeIntervalSince(date) / 86400)
+                    candidates.append(.daily(entry, question, daysAgo: days))
+                }
+            }
+        }
+        flashback = candidates.randomElement()
+    }
+
+    @ViewBuilder
+    private func flashbackCard(_ item: FlashbackItem) -> some View {
+        Button {
+            appState.activeTab = .memories
+        } label: {
+            HStack(spacing: 12) {
+                switch item {
+                case .photo(let photo, let daysAgo):
+                    if let url = appState.api?.mediaURL(photo.thumbUrl ?? photo.url) {
+                        AsyncImage(url: url) { image in
+                            image.resizable().scaledToFill()
+                        } placeholder: {
+                            Color.white.opacity(0.08)
+                        }
+                        .frame(width: 60, height: 60)
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    }
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("💭 " + L10n.t("home.flashback"))
+                            .font(.system(.caption, design: .rounded).weight(.bold))
+                            .foregroundStyle(Theme.gold)
+                        if let caption = photo.caption, !caption.isEmpty {
+                            Text(caption)
+                                .font(.system(.subheadline, design: .rounded).weight(.semibold))
+                                .foregroundStyle(Theme.textPrimary)
+                                .lineLimit(2)
+                        }
+                        Text(L10n.t("home.flashbackDaysAgo", ["n": String(daysAgo)]))
+                            .font(.system(.caption2, design: .rounded))
+                            .foregroundStyle(Theme.textTertiary)
+                    }
+                case .daily(_, let question, let daysAgo):
+                    Text("💭")
+                        .font(.system(size: 34))
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(L10n.t("home.flashbackQuestion"))
+                            .font(.system(.caption, design: .rounded).weight(.bold))
+                            .foregroundStyle(Theme.gold)
+                        Text(question.text.filled(partner: appState.partnerName, lang: L10n.lang))
+                            .font(.system(.subheadline, design: .rounded).weight(.semibold))
+                            .foregroundStyle(Theme.textPrimary)
+                            .lineLimit(2)
+                        Text(L10n.t("home.flashbackDaysAgo", ["n": String(daysAgo)]))
+                            .font(.system(.caption2, design: .rounded))
+                            .foregroundStyle(Theme.textTertiary)
+                    }
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(Theme.textTertiary)
+            }
+            .glassCard(padding: 14)
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: Header

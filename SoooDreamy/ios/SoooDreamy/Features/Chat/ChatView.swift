@@ -124,7 +124,9 @@ struct ChatView: View {
                             ForEach(section.messages) { message in
                                 ChatMessageRow(message: message,
                                                isMine: message.senderId == appState.memberId,
-                                               partner: appState.partner)
+                                               partner: appState.partner) { emoji in
+                                    model.toggleReaction(on: message, emoji: emoji)
+                                }
                             }
                         } header: {
                             ChatDateChip(day: section.id)
@@ -262,32 +264,51 @@ struct ChatView: View {
 // MARK: - Message row
 
 struct ChatMessageRow: View {
+    @Environment(AppState.self) private var appState
     let message: Message
     let isMine: Bool
     let partner: Member?
+    let onReact: (String) -> Void
 
     var body: some View {
         HStack(alignment: .bottom, spacing: 8) {
             if isMine {
                 Spacer(minLength: 44)
-                bubble
+                bubbleColumn
             } else {
                 EmojiAvatarView(emoji: partner?.avatar, colorHex: partner?.color, size: 28)
-                bubble
+                bubbleColumn
                 Spacer(minLength: 44)
             }
         }
         .id(message.id)
     }
 
+    private var bubbleColumn: some View {
+        VStack(alignment: isMine ? .trailing : .leading, spacing: 4) {
+            bubble
+            if !isSealedLetter {
+                ChatReactionChips(message: message,
+                                  myMemberId: appState.memberId,
+                                  onToggle: onReact)
+            }
+        }
+    }
+
+    /// Received sealed letters get no reaction affordances until opened.
+    private var isSealedLetter: Bool {
+        guard message.type == .letter, !isMine, message.openWhen != nil else { return false }
+        return !OpenedLettersStore.shared.isOpened(message.id, coupleId: appState.couple?.id)
+    }
+
     @ViewBuilder private var bubble: some View {
         switch message.type {
         case .text:
-            ChatTextBubble(message: message, isMine: isMine)
+            ChatTextBubble(message: message, isMine: isMine, onReact: onReact)
         case .voice:
-            ChatVoiceBubble(message: message, isMine: isMine)
+            ChatVoiceBubble(message: message, isMine: isMine, onReact: onReact)
         case .letter:
-            ChatLetterBubble(message: message, isMine: isMine)
+            ChatLetterBubble(message: message, isMine: isMine, onReact: onReact)
         }
     }
 }
@@ -321,6 +342,7 @@ struct ChatTextBubble: View {
     @Environment(AppState.self) private var appState
     let message: Message
     let isMine: Bool
+    let onReact: (String) -> Void
 
     var body: some View {
         VStack(alignment: isMine ? .trailing : .leading, spacing: 3) {
@@ -333,7 +355,11 @@ struct ChatTextBubble: View {
         .padding(.vertical, 9)
         .padding(.horizontal, 13)
         .background(ChatBubbleBackground(isMine: isMine))
+        .onTapGesture(count: 2) {
+            onReact(ChatReactions.quick)
+        }
         .contextMenu {
+            ChatReactMenu(onReact: onReact)
             Button {
                 UIPasteboard.general.string = message.text ?? ""
                 Haptics.shared.tap()
@@ -351,6 +377,7 @@ struct ChatLetterBubble: View {
     @Environment(AppState.self) private var appState
     let message: Message
     let isMine: Bool
+    let onReact: (String) -> Void
 
     @State private var unsealing = false
     @State private var celebrating = false
@@ -439,11 +466,15 @@ struct ChatLetterBubble: View {
         .padding(15)
         .background(letterBackground)
         .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .onTapGesture(count: 2) {
+            onReact(ChatReactions.quick)
+        }
         .onTapGesture {
             Haptics.shared.tap()
             showReader = true
         }
         .contextMenu {
+            ChatReactMenu(onReact: onReact)
             copyButton
             readButton
         }
@@ -589,5 +620,104 @@ struct ChatTypingDots: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - Reactions
+
+/// The fixed reaction palette; double-tap sends the quick heart.
+enum ChatReactions {
+    static let palette = ["❤️", "😂", "😮", "🥺", "🔥", "👍"]
+    static let quick = "❤️"
+}
+
+/// "Reagieren …" submenu for bubble context menus.
+struct ChatReactMenu: View {
+    let onReact: (String) -> Void
+
+    var body: some View {
+        Menu {
+            ForEach(ChatReactions.palette, id: \.self) { emoji in
+                Button {
+                    onReact(emoji)
+                } label: {
+                    Text(emoji)
+                }
+                .accessibilityLabel(L10n.t("chat.reactWith", ["emoji": emoji]))
+            }
+        } label: {
+            Label(L10n.t("chat.react"), systemImage: "face.smiling")
+        }
+    }
+}
+
+/// Capsule chips under a bubble showing existing reactions;
+/// tapping a chip toggles that emoji for me.
+struct ChatReactionChips: View {
+    let message: Message
+    let myMemberId: String?
+    let onToggle: (String) -> Void
+
+    private struct Entry: Identifiable {
+        let emoji: String
+        let count: Int
+        let mine: Bool
+        var id: String { emoji }
+    }
+
+    private var entries: [Entry] {
+        guard let reactions = message.reactions else { return [] }
+        return reactions
+            .filter { !$0.value.isEmpty }
+            .sorted { a, b in
+                let ia = ChatReactions.palette.firstIndex(of: a.key) ?? Int.max
+                let ib = ChatReactions.palette.firstIndex(of: b.key) ?? Int.max
+                if ia != ib { return ia < ib }
+                return a.key < b.key
+            }
+            .map { emoji, ids in
+                Entry(emoji: emoji,
+                      count: ids.count,
+                      mine: myMemberId.map { ids.contains($0) } ?? false)
+            }
+    }
+
+    @ViewBuilder var body: some View {
+        if !entries.isEmpty {
+            HStack(spacing: 5) {
+                ForEach(entries) { entry in
+                    chip(entry)
+                }
+            }
+        }
+    }
+
+    private func chip(_ entry: Entry) -> some View {
+        Button {
+            onToggle(entry.emoji)
+        } label: {
+            HStack(spacing: 3) {
+                Text(entry.emoji)
+                    .font(.system(size: 12))
+                if entry.count > 1 {
+                    Text("\(entry.count)")
+                        .font(.system(.caption2, design: .rounded).weight(.bold))
+                        .foregroundStyle(entry.mine ? Theme.pink : Theme.textSecondary)
+                        .monospacedDigit()
+                }
+            }
+            .padding(.vertical, 3)
+            .padding(.horizontal, 7)
+            .background(
+                Capsule()
+                    .fill(entry.mine ? Theme.pink.opacity(0.22) : Color.white.opacity(0.08))
+                    .overlay(
+                        Capsule().strokeBorder(entry.mine ? Theme.pink.opacity(0.8) : Color.white.opacity(0.14),
+                                               lineWidth: 1)
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(L10n.t("chat.reactWith", ["emoji": entry.emoji]))
     }
 }

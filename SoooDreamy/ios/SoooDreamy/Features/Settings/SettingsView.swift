@@ -13,6 +13,10 @@ struct SettingsView: View {
     @State private var hapticsOn = Haptics.enabled
     @State private var reminderOn = ReminderManager.isEnabled
     @State private var appLockOn = AppLock.isEnabled
+    @State private var reminderTime: Date = {
+        let t = ReminderManager.time
+        return Calendar.current.date(bySettingHour: t.hour, minute: t.minute, second: 0, of: Date()) ?? Date()
+    }()
 
     @State private var coupleName = ""
     @State private var anniversary = Date()
@@ -229,6 +233,21 @@ struct SettingsView: View {
                 Text(L10n.t("settings.reminderHint"))
                     .font(.system(.caption2, design: .rounded))
                     .foregroundStyle(Theme.textTertiary)
+                if reminderOn {
+                    DatePicker(L10n.t("settings.reminderTime"),
+                               selection: $reminderTime,
+                               displayedComponents: .hourAndMinute)
+                        .font(.system(.subheadline, design: .rounded))
+                        .foregroundStyle(Theme.textSecondary)
+                        .tint(Theme.pink)
+                        .onChange(of: reminderTime) { _, newValue in
+                            let comps = Calendar.current.dateComponents([.hour, .minute], from: newValue)
+                            Task {
+                                await ReminderManager.setTime(hour: comps.hour ?? 20,
+                                                              minute: comps.minute ?? 0)
+                            }
+                        }
+                }
             }
 
             VStack(alignment: .leading, spacing: 4) {

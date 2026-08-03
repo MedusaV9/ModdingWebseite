@@ -213,6 +213,19 @@ enum GamesL10n {
         "games.wordle.shareTitle": LText(de: "💘 Liebes-Wordle {date} {score}",
                                          en: "💘 Love Wordle {date} {score}"),
         "games.wordle.newWord": LText(de: "Um Mitternacht gibt's ein neues Wort.",
-                                      en: "A new word arrives at midnight.")
+                                      en: "A new word arrives at midnight."),
+
+        // MARK: Liebes-Wordle daily duel
+        "games.wordle.duel.title": LText(de: "Tages-Duell", en: "Daily duel"),
+        "games.wordle.duel.stillSolving": LText(de: "{name} rätselt noch", en: "{name} is still puzzling"),
+        "games.wordle.duel.teaser": LText(de: "{name} ist fertig! Löse dein Wordle, um das Ergebnis zu sehen 👀",
+                                          en: "{name} is done! Solve your Wordle to see the result 👀"),
+        "games.wordle.duel.revealing": LText(de: "Ergebnis wird geladen…", en: "Loading the result…"),
+        "games.wordle.duel.iWin": LText(de: "Du gewinnst das Duell! 🏆", en: "You win the duel! 🏆"),
+        "games.wordle.duel.partnerWins": LText(de: "{name} gewinnt heute 💪", en: "{name} wins today 💪"),
+        "games.wordle.duel.tie": LText(de: "Unentschieden — ihr seid ein Herz und eine Seele 💞",
+                                       en: "It's a tie — two hearts, one mind 💞"),
+        "games.wordle.duel.bothLost": LText(de: "Das Wort hat euch beide besiegt 😅",
+                                            en: "The word defeated you both 😅")
     ]
 }

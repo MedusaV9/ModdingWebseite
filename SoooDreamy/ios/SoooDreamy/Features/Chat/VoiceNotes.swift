@@ -120,6 +120,7 @@ struct ChatVoiceBubble: View {
     @Environment(AppState.self) private var appState
     let message: Message
     let isMine: Bool
+    let onReact: (String) -> Void
 
     private var player: VoicePlayer { VoicePlayer.shared }
     private var isCurrent: Bool { player.playingId == message.id }
@@ -144,6 +145,12 @@ struct ChatVoiceBubble: View {
         .padding(.vertical, 10)
         .padding(.horizontal, 12)
         .background(ChatBubbleBackground(isMine: isMine))
+        .onTapGesture(count: 2) {
+            onReact(ChatReactions.quick)
+        }
+        .contextMenu {
+            ChatReactMenu(onReact: onReact)
+        }
     }
 
     private var playButton: some View {

@@ -128,6 +128,11 @@ final class ChatModel {
             if let message = event.decode(MessageResponse.self)?.message {
                 insert(message)
             }
+        case .messageUpdated:
+            // Reaction changes etc. — replace by id, order stays (createdAt fixed).
+            if let message = event.decode(MessageResponse.self)?.message {
+                update(message)
+            }
         case .welcome:
             // Socket (re)connected — pull anything missed while offline.
             if loaded {
@@ -143,6 +148,55 @@ final class ChatModel {
         if let page = try? await api.messages(limit: Self.pageSize) {
             mergeIn(page)
         }
+    }
+
+    // MARK: Reactions
+
+    /// Toggle my `emoji` reaction on a message: optimistic local update,
+    /// reconciled with the server response, reverted on error.
+    func toggleReaction(on message: Message, emoji: String) {
+        guard let appState, let api = appState.api,
+              let memberId = appState.memberId else { return }
+        guard !message.id.hasPrefix("local-"),
+              let idx = messages.firstIndex(where: { $0.id == message.id }) else { return }
+        let adding = !(messages[idx].reactions?[emoji] ?? []).contains(memberId)
+        messages[idx] = Self.togglingReaction(messages[idx], emoji: emoji, memberId: memberId)
+        Haptics.shared.tap()
+        if adding {
+            SoundEngine.shared.play(.pop)
+        }
+        Task {
+            do {
+                let updated = try await api.toggleReaction(messageId: message.id, emoji: emoji)
+                update(updated)
+            } catch {
+                // Revert only my toggle so partner updates that arrived
+                // in the meantime are preserved.
+                if let current = messages.first(where: { $0.id == message.id }) {
+                    update(Self.togglingReaction(current, emoji: emoji, memberId: memberId))
+                }
+                appState.handleAPIError(error)
+            }
+        }
+    }
+
+    private static func togglingReaction(_ message: Message, emoji: String,
+                                         memberId: String) -> Message {
+        var updated = message
+        var reactions = updated.reactions ?? [:]
+        var ids = reactions[emoji] ?? []
+        if let existing = ids.firstIndex(of: memberId) {
+            ids.remove(at: existing)
+        } else {
+            ids.append(memberId)
+        }
+        if ids.isEmpty {
+            reactions.removeValue(forKey: emoji)
+        } else {
+            reactions[emoji] = ids
+        }
+        updated.reactions = reactions.isEmpty ? nil : reactions
+        return updated
     }
 
     // MARK: Typing state (outgoing, debounced)
@@ -177,6 +231,13 @@ final class ChatModel {
     }
 
     // MARK: Internals
+
+    /// Replace an existing message in place (unknown ids are ignored).
+    private func update(_ message: Message) {
+        if let idx = messages.firstIndex(where: { $0.id == message.id }) {
+            messages[idx] = message
+        }
+    }
 
     private func insert(_ message: Message) {
         guard !messages.contains(where: { $0.id == message.id }) else { return }

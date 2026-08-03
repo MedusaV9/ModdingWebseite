@@ -14,9 +14,23 @@ struct CanvasView: View {
     @State private var confirmClear = false
     @State private var partnerPoint: CGPoint?
     @State private var indicatorTask: Task<Void, Never>?
+    @State private var replay: ReplaySession?
+    @State private var replayEndTask: Task<Void, Never>?
+    @State private var replayCelebration: Date?
+    @State private var celebrationTask: Task<Void, Never>?
 
     /// Board background — the eraser paints in exactly this color.
     private static let boardHex = "FDF4E8"
+
+    /// Immutable snapshot of the stroke list at replay start, so strokes
+    /// arriving live during the replay don't glitch the animation.
+    private struct ReplaySession {
+        let strokes: [CanvasStroke]
+        let startedAt: Date
+        let strokeDuration: Double
+
+        var total: Double { Double(strokes.count) * strokeDuration }
+    }
 
     private enum CanvasTool: String, CaseIterable, Identifiable {
         case pen, marker, eraser
@@ -39,13 +53,34 @@ struct CanvasView: View {
             VStack(spacing: 14) {
                 subtitle
                 board
-                palette
-                controls
+                Group {
+                    palette
+                    controls
+                }
+                .opacity(replay == nil ? 1 : 0.3)
+                .disabled(replay != nil)
             }
             .padding(16)
+            if let started = replayCelebration {
+                FloatingHeartsView(emojis: ["🎨", "💜", "✨", "💖"], count: 16, startedAt: started)
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
+            }
         }
         .navigationTitle(L10n.t("memories.canvas.title"))
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    startReplay()
+                } label: {
+                    Image(systemName: "play.circle")
+                        .foregroundStyle(strokes.isEmpty || replay != nil ? Theme.textTertiary : Theme.pink)
+                }
+                .disabled(strokes.isEmpty || replay != nil)
+                .accessibilityLabel(L10n.t("memories.canvas.replay"))
+            }
+        }
         .task { await loadStrokes() }
         .onAppear { pickInitialColor() }
         .onReceive(NotificationCenter.default.publisher(for: .serverEvent)) { note in
@@ -85,6 +120,13 @@ struct CanvasView: View {
                         .allowsHitTesting(false)
                 }
                 partnerIndicator(size: geo.size)
+                if let session = replay {
+                    VStack {
+                        Spacer()
+                        replayBar(session)
+                    }
+                    .padding(12)
+                }
             }
             .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
             .gesture(drawGesture(size: geo.size))
@@ -93,13 +135,22 @@ struct CanvasView: View {
         .frame(maxWidth: .infinity)
     }
 
+    @ViewBuilder
     private var strokeCanvas: some View {
-        Canvas { context, size in
-            for stroke in strokes {
-                drawStroke(stroke, context: &context, size: size)
+        if let session = replay {
+            TimelineView(.animation) { timeline in
+                Canvas { context, size in
+                    drawReplayFrame(session, at: timeline.date, context: &context, size: size)
+                }
             }
-            if !currentPoints.isEmpty {
-                drawStroke(liveStroke, context: &context, size: size)
+        } else {
+            Canvas { context, size in
+                for stroke in strokes {
+                    drawStroke(stroke, context: &context, size: size)
+                }
+                if !currentPoints.isEmpty {
+                    drawStroke(liveStroke, context: &context, size: size)
+                }
             }
         }
     }
@@ -145,6 +196,109 @@ struct CanvasView: View {
                        style: StrokeStyle(lineWidth: width, lineCap: .round, lineJoin: .round))
     }
 
+    // MARK: Replay
+
+    /// Draws strokes 0..<n fully plus a point-prefix of the currently animating stroke.
+    private func drawReplayFrame(_ session: ReplaySession, at date: Date,
+                                 context: inout GraphicsContext, size: CGSize) {
+        let elapsed = date.timeIntervalSince(session.startedAt)
+        guard elapsed >= 0 else { return }
+        let fullCount = Int(elapsed / session.strokeDuration)
+        for (index, stroke) in session.strokes.enumerated() {
+            if index < fullCount {
+                drawStroke(stroke, context: &context, size: size)
+            } else if index == fullCount {
+                let fraction = (elapsed - Double(index) * session.strokeDuration) / session.strokeDuration
+                drawPartialStroke(stroke, fraction: fraction, context: &context, size: size)
+            } else {
+                break
+            }
+        }
+    }
+
+    private func drawPartialStroke(_ stroke: CanvasStroke, fraction: Double,
+                                   context: inout GraphicsContext, size: CGSize) {
+        let clamped = min(max(fraction, 0), 1)
+        let prefixCount = max(1, Int(Double(stroke.points.count) * clamped))
+        let partial = CanvasStroke(id: stroke.id,
+                                   memberId: stroke.memberId,
+                                   color: stroke.color,
+                                   width: stroke.width,
+                                   tool: stroke.tool,
+                                   points: Array(stroke.points.prefix(prefixCount)),
+                                   createdAt: stroke.createdAt)
+        drawStroke(partial, context: &context, size: size)
+    }
+
+    /// Progress is derived from the same clock that drives the stroke drawing.
+    private func replayBar(_ session: ReplaySession) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "play.fill")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(Theme.pink)
+            TimelineView(.animation) { timeline in
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        Capsule()
+                            .fill(Color.black.opacity(0.15))
+                        Capsule()
+                            .fill(Theme.pink)
+                            .frame(width: geo.size.width * replayProgress(session, at: timeline.date))
+                    }
+                }
+            }
+            .frame(height: 6)
+            Button {
+                stopReplay(celebrating: false)
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 26, height: 26)
+                    .background(Circle().fill(Color.black.opacity(0.4)))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(L10n.t("common.close"))
+        }
+        .padding(.vertical, 8)
+        .padding(.horizontal, 12)
+        .background(Capsule().fill(.ultraThinMaterial))
+    }
+
+    private func replayProgress(_ session: ReplaySession, at date: Date) -> CGFloat {
+        guard session.total > 0 else { return 1 }
+        let elapsed = date.timeIntervalSince(session.startedAt)
+        return CGFloat(min(max(elapsed / session.total, 0), 1))
+    }
+
+    private func startReplay() {
+        guard replay == nil, !strokes.isEmpty else { return }
+        Haptics.shared.tap()
+        SoundEngine.shared.play(.pop)
+        let session = ReplaySession(strokes: strokes, startedAt: Date(), strokeDuration: 0.25)
+        replay = session
+        replayEndTask?.cancel()
+        replayEndTask = Task {
+            try? await Task.sleep(nanoseconds: UInt64(session.total * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            stopReplay(celebrating: true)
+        }
+    }
+
+    private func stopReplay(celebrating: Bool) {
+        replayEndTask?.cancel()
+        replay = nil
+        guard celebrating else { return }
+        SoundEngine.shared.play(.sparkle)
+        Haptics.shared.success()
+        replayCelebration = Date()
+        celebrationTask?.cancel()
+        celebrationTask = Task {
+            try? await Task.sleep(nanoseconds: 2_400_000_000)
+            if !Task.isCancelled { replayCelebration = nil }
+        }
+    }
+
     @ViewBuilder
     private func partnerIndicator(size: CGSize) -> some View {
         if let point = partnerPoint {
@@ -163,6 +317,7 @@ struct CanvasView: View {
     private func drawGesture(size: CGSize) -> some Gesture {
         DragGesture(minimumDistance: 0)
             .onChanged { value in
+                guard replay == nil else { return }
                 let x = min(max(value.location.x / size.width, 0), 1)
                 let y = min(max(value.location.y / size.height, 0), 1)
                 currentPoints.append([Double(x), Double(y)])
@@ -173,6 +328,7 @@ struct CanvasView: View {
                 }
             }
             .onEnded { _ in
+                guard replay == nil else { return }
                 let segment = currentPoints
                 currentPoints = []
                 guard !segment.isEmpty else { return }
@@ -403,6 +559,7 @@ struct CanvasView: View {
         case .canvasClear:
             strokes = []
             currentPoints = []
+            stopReplay(celebrating: false)
         default:
             break
         }

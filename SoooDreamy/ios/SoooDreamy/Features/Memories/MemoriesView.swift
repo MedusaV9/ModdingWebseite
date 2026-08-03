@@ -5,6 +5,8 @@ import Combine
 struct MemoriesView: View {
     @Environment(AppState.self) private var appState
 
+    @State private var openCouponCount: Int?
+
     private let columns = [
         GridItem(.flexible(), spacing: 14),
         GridItem(.flexible(), spacing: 14)
@@ -17,6 +19,7 @@ struct MemoriesView: View {
                 ScrollView {
                     VStack(spacing: 18) {
                         header
+                        couponsCard
                         LazyVGrid(columns: columns, spacing: 14) {
                             galleryCard
                             canvasCard
@@ -32,12 +35,14 @@ struct MemoriesView: View {
                 .refreshable {
                     await appState.refreshStats()
                     await appState.refreshEvents()
+                    await loadCouponTeaser()
                 }
             }
             .toolbar(.hidden, for: .navigationBar)
         }
         .task {
             await appState.refreshStats()
+            await loadCouponTeaser()
         }
         .onReceive(NotificationCenter.default.publisher(for: .serverEvent)) { note in
             guard let event = note.object as? ServerEvent else { return }
@@ -64,6 +69,50 @@ struct MemoriesView: View {
     }
 
     // MARK: Cards
+
+    /// Full-width "ticket" card — coupons get featured above the grid.
+    private var couponsCard: some View {
+        NavigationLink {
+            CouponsView()
+        } label: {
+            HStack(spacing: 14) {
+                Text("🎟️")
+                    .font(.system(size: 34))
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(L10n.t("memories.card.coupons"))
+                        .font(.system(.headline, design: .rounded).weight(.bold))
+                        .foregroundStyle(Theme.textPrimary)
+                    couponTeaser
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(Theme.textTertiary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .glassCard()
+            .overlay(
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .strokeBorder(Theme.gold.opacity(0.4),
+                                  style: StrokeStyle(lineWidth: 1.5, dash: [7, 5]))
+            )
+            .shadow(color: Theme.gold.opacity(0.12), radius: 12, y: 5)
+        }
+        .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
+    private var couponTeaser: some View {
+        if let count = openCouponCount, count > 0 {
+            PillTag(text: "🎁 " + L10n.t("memories.card.couponsRedeemable", ["n": String(count)]),
+                    tint: Theme.gold)
+        } else {
+            Text(L10n.t("memories.card.couponsHint"))
+                .font(.system(.caption, design: .rounded).weight(.semibold))
+                .foregroundStyle(Theme.textSecondary)
+                .lineLimit(1)
+        }
+    }
 
     private var galleryCard: some View {
         NavigationLink {
@@ -227,10 +276,19 @@ struct MemoriesView: View {
 
     // MARK: Realtime teaser refresh
 
+    private func loadCouponTeaser() async {
+        guard let api = appState.api, let myId = appState.memberId else { return }
+        if let list = try? await api.coupons() {
+            openCouponCount = list.filter { $0.forMember == myId && $0.redeemedAt == nil }.count
+        }
+    }
+
     private func handleServerEvent(_ event: ServerEvent) {
         switch event.type {
         case .photoAdded, .photoDeleted, .bucketAdded, .bucketUpdated, .bucketDeleted:
             Task { await appState.refreshStats() }
+        case .couponAdded, .couponRedeemed, .couponDeleted:
+            Task { await loadCouponTeaser() }
         default:
             break
         }

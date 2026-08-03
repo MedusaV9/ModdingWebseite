@@ -19,6 +19,7 @@ import {
 const TOUCH_TYPES = ['heartbeat', 'kiss', 'hug', 'missyou', 'tickle', 'thinking'];
 const MESSAGE_TYPES = ['text', 'letter'];
 const GAME_TYPES = ['quiz', 'thisorthat', 'wouldyourather', 'truthordare', 'questions36'];
+const WORDLE_LANGS = ['de', 'en'];
 
 const LIMITS = {
   media: 15 * 1024 * 1024, // photo & voice bodies
@@ -26,12 +27,19 @@ const LIMITS = {
   json: 1024 * 1024,
   text: 5000,
   openWhen: 64,
+  reactionEmoji: 16,
   strokePoints: 2000,
   strokes: 8000,
   messages: 5000,
   touches: 500,
   games: 100,
   moodHistory: 60, // per member
+  wordleGrid: 160,
+  wordleDays: 60, // dateKeys kept per couple
+  coupons: 200,
+  couponTitle: 80,
+  couponEmoji: 16,
+  couponNote: 200,
 };
 
 // ---------------------------------------------------------------------------
@@ -106,14 +114,14 @@ function partnerOf(couple, memberId) {
   return couple.members.find((m) => m.id !== memberId) ?? null;
 }
 
-/** v1.0 stores have no `openWhen` on messages — default it on the way out. */
+/** Pre-v1.2 stores lack `openWhen`/`reactions` on messages — default them on the way out. */
 function serializeMessage(message) {
-  return { ...message, openWhen: message.openWhen ?? null };
+  return { ...message, openWhen: message.openWhen ?? null, reactions: message.reactions ?? null };
 }
 
-/** v1.0 stores have no `thumbUrl` on photos — default it on the way out. */
+/** Pre-v1.2 stores lack `thumbUrl`/`favorites` on photos — default them on the way out. */
 function serializePhoto(photo) {
-  return { ...photo, thumbUrl: photo.thumbUrl ?? null };
+  return { ...photo, thumbUrl: photo.thumbUrl ?? null, favorites: photo.favorites ?? [] };
 }
 
 /** Per-member mood history lives on the couple; v1.0 stores lack it entirely. */
@@ -121,6 +129,18 @@ function moodHistoryOf(couple, memberId) {
   if (!couple.moodHistory) couple.moodHistory = {};
   if (!couple.moodHistory[memberId]) couple.moodHistory[memberId] = [];
   return couple.moodHistory[memberId];
+}
+
+/** Wordle results per dateKey per member; pre-v1.2 stores lack the structure. */
+function wordleOf(couple) {
+  if (!couple.wordle) couple.wordle = {};
+  return couple.wordle;
+}
+
+/** Love coupons list; pre-v1.2 stores lack the structure. */
+function couponsOf(couple) {
+  if (!couple.coupons) couple.coupons = [];
+  return couple.coupons;
 }
 
 // ---------------------------------------------------------------------------
@@ -160,6 +180,8 @@ function newCouple(store) {
     daily: {},
     games: [],
     moodHistory: {},
+    wordle: {},
+    coupons: [],
     counters: { messages: 0, gamesPlayed: 0, touches: {} },
   };
 }
@@ -208,6 +230,26 @@ function dailyEntryFor(couple, dateKey, memberId) {
     partnerAnswer: bothAnswered ? partnerAnswer : null,
     bothAnswered,
     streak: computeStreak(couple),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// wordle duel helpers
+
+/**
+ * Per-member day view. Anti-spoiler: the partner's result (grid/rows) is only
+ * revealed once the viewer submitted their own; `partnerFinished` is always truthful.
+ */
+function wordleViewFor(couple, dateKey, memberId) {
+  const day = couple.wordle?.[dateKey] ?? {};
+  const partner = partnerOf(couple, memberId);
+  const mine = day[memberId] ?? null;
+  const theirs = partner ? (day[partner.id] ?? null) : null;
+  return {
+    dateKey,
+    mine,
+    partner: mine && theirs ? theirs : null,
+    partnerFinished: Boolean(theirs),
   };
 }
 
@@ -489,7 +531,7 @@ function pushMessage(c, message) {
     if (old.type === 'voice') c.store.deleteMedia('voice', `${old.id}.m4a`);
   }
   c.store.markDirty();
-  c.realtime.broadcastCouple(couple.id, 'message', { message });
+  c.realtime.broadcastCouple(couple.id, 'message', { message: serializeMessage(message) });
 }
 
 route('POST', '/api/messages', { auth: true }, async (c) => {
@@ -519,7 +561,30 @@ route('POST', '/api/messages', { auth: true }, async (c) => {
     createdAt: nowIso(),
   };
   pushMessage(c, message);
-  sendJson(c.res, 201, { message });
+  sendJson(c.res, 201, { message: serializeMessage(message) });
+});
+
+route('POST', '/api/messages/:id/reactions', { auth: true }, async (c) => {
+  const body = await readJsonObject(c.req);
+  if (typeof body.emoji !== 'string') throw httpError(400, 'bad_emoji', '"emoji" must be a string');
+  const emoji = body.emoji.trim();
+  if (emoji.length === 0 || emoji.length > LIMITS.reactionEmoji) {
+    throw httpError(400, 'bad_emoji', `"emoji" must be 1-${LIMITS.reactionEmoji} characters after trimming`);
+  }
+  // Pruned (capped) messages are gone from the list → same 404 as unknown ids.
+  const message = c.auth.couple.messages.find((m) => m.id === c.params.id);
+  if (!message) throw httpError(404, 'not_found', 'Unknown message');
+  if (!message.reactions) message.reactions = {};
+  const members = message.reactions[emoji] ?? (message.reactions[emoji] = []);
+  const at = members.indexOf(c.auth.memberId);
+  if (at === -1) members.push(c.auth.memberId);
+  else members.splice(at, 1);
+  if (members.length === 0) delete message.reactions[emoji];
+  if (Object.keys(message.reactions).length === 0) delete message.reactions;
+  c.store.markDirty();
+  const serialized = serializeMessage(message);
+  c.realtime.broadcastCouple(c.auth.coupleId, 'message_updated', { message: serialized });
+  sendJson(c.res, 200, { message: serialized });
 });
 
 route('POST', '/api/voice', { auth: true }, async (c) => {
@@ -540,7 +605,7 @@ route('POST', '/api/voice', { auth: true }, async (c) => {
     createdAt: nowIso(),
   };
   pushMessage(c, message);
-  sendJson(c.res, 201, { message });
+  sendJson(c.res, 201, { message: serializeMessage(message) });
 });
 
 route('GET', '/api/voice/:id/raw', { auth: true, queryToken: true }, async (c) => {
@@ -579,8 +644,9 @@ route('POST', '/api/photos', { auth: true }, async (c) => {
   };
   c.auth.couple.photos.push(photo);
   c.store.markDirty();
-  c.realtime.broadcastCouple(c.auth.coupleId, 'photo_added', { photo });
-  sendJson(c.res, 201, { photo });
+  const serialized = serializePhoto(photo);
+  c.realtime.broadcastCouple(c.auth.coupleId, 'photo_added', { photo: serialized });
+  sendJson(c.res, 201, { photo: serialized });
 });
 
 route('GET', '/api/photos', { auth: true }, (c) => {
@@ -603,6 +669,20 @@ route('POST', '/api/photos/:id/thumb', { auth: true }, async (c) => {
   if (buf.length === 0) throw httpError(400, 'empty_body', 'Thumbnail upload body is empty');
   await c.store.saveMedia('photos', `${photo.id}.thumb.jpg`, buf);
   photo.thumbUrl = `/api/photos/${photo.id}/thumb/raw`;
+  c.store.markDirty();
+  const serialized = serializePhoto(photo);
+  c.realtime.broadcastCouple(c.auth.coupleId, 'photo_updated', { photo: serialized });
+  sendJson(c.res, 200, { photo: serialized });
+});
+
+route('POST', '/api/photos/:id/favorite', { auth: true }, (c) => {
+  const photo = c.auth.couple.photos.find((p) => p.id === c.params.id);
+  if (!photo) throw httpError(404, 'not_found', 'Unknown photo');
+  if (!photo.favorites) photo.favorites = [];
+  const at = photo.favorites.indexOf(c.auth.memberId);
+  if (at === -1) photo.favorites.push(c.auth.memberId);
+  else photo.favorites.splice(at, 1);
+  if (photo.favorites.length === 0) delete photo.favorites;
   c.store.markDirty();
   const serialized = serializePhoto(photo);
   c.realtime.broadcastCouple(c.auth.coupleId, 'photo_updated', { photo: serialized });
@@ -720,6 +800,73 @@ route('DELETE', '/api/bucket/:id', { auth: true }, (c) => {
   sendJson(c.res, 200, { ok: true });
 });
 
+// --- love coupons ------------------------------------------------------------------
+
+/** Keeps the list at `max`: oldest REDEEMED coupons go first, then oldest overall. */
+function pruneCoupons(list, max) {
+  while (list.length > max) {
+    const redeemedIdx = list.findIndex((cp) => cp.redeemedAt); // list is chronological
+    list.splice(redeemedIdx === -1 ? 0 : redeemedIdx, 1);
+  }
+}
+
+function findCoupon(couple, couponId) {
+  const coupon = couponsOf(couple).find((cp) => cp.id === couponId);
+  if (!coupon) throw httpError(404, 'not_found', 'Unknown coupon');
+  return coupon;
+}
+
+route('GET', '/api/coupons', { auth: true }, (c) => {
+  sendJson(c.res, 200, { coupons: couponsOf(c.auth.couple).slice().reverse() });
+});
+
+route('POST', '/api/coupons', { auth: true }, async (c) => {
+  const body = await readJsonObject(c.req);
+  const partner = partnerOf(c.auth.couple, c.auth.memberId);
+  if (!partner) throw httpError(409, 'no_partner', 'Coupons need a partner to receive them');
+  const coupon = {
+    id: id('cp'),
+    title: asString(body.title, 'title', { max: LIMITS.couponTitle }),
+    emoji: asString(body.emoji, 'emoji', { max: LIMITS.couponEmoji }),
+    note: body.note == null ? null : asString(body.note, 'note', { max: LIMITS.couponNote, nonEmpty: false }),
+    createdBy: c.auth.memberId,
+    forMember: partner.id,
+    redeemedAt: null,
+    createdAt: nowIso(),
+  };
+  const list = couponsOf(c.auth.couple);
+  list.push(coupon);
+  pruneCoupons(list, LIMITS.coupons);
+  c.store.markDirty();
+  c.realtime.broadcastCouple(c.auth.coupleId, 'coupon_added', { coupon });
+  sendJson(c.res, 201, { coupon });
+});
+
+route('POST', '/api/coupons/:id/redeem', { auth: true }, (c) => {
+  const coupon = findCoupon(c.auth.couple, c.params.id);
+  if (coupon.forMember !== c.auth.memberId) {
+    throw httpError(403, 'not_yours', 'Only the receiving member may redeem this coupon');
+  }
+  if (coupon.redeemedAt) throw httpError(409, 'already_redeemed', 'This coupon was already redeemed');
+  coupon.redeemedAt = nowIso();
+  c.store.markDirty();
+  c.realtime.broadcastCouple(c.auth.coupleId, 'coupon_redeemed', { coupon });
+  sendJson(c.res, 200, { coupon });
+});
+
+route('DELETE', '/api/coupons/:id', { auth: true }, (c) => {
+  const list = couponsOf(c.auth.couple);
+  const coupon = findCoupon(c.auth.couple, c.params.id);
+  if (coupon.createdBy !== c.auth.memberId) {
+    throw httpError(403, 'not_yours', 'Only the creator may delete a coupon');
+  }
+  if (coupon.redeemedAt) throw httpError(409, 'already_redeemed', 'Redeemed coupons cannot be deleted');
+  list.splice(list.indexOf(coupon), 1);
+  c.store.markDirty();
+  c.realtime.broadcastCouple(c.auth.coupleId, 'coupon_deleted', { id: coupon.id });
+  sendJson(c.res, 200, { ok: true });
+});
+
 // --- daily question ------------------------------------------------------------------
 
 // Journal list: every day where at least one member answered, newest first.
@@ -755,6 +902,48 @@ route('POST', '/api/daily/:dateKey', { auth: true }, async (c) => {
     c.realtime.sendToMember(couple.id, member.id, 'daily_answer', dailyEntryFor(couple, dateKey, member.id));
   }
   sendJson(c.res, 200, dailyEntryFor(couple, dateKey, c.auth.memberId));
+});
+
+// --- wordle duel ---------------------------------------------------------------------
+
+route('GET', '/api/wordle/:dateKey', { auth: true }, (c) => {
+  const dateKey = asDateKey(c.params.dateKey, 'dateKey');
+  sendJson(c.res, 200, wordleViewFor(c.auth.couple, dateKey, c.auth.memberId));
+});
+
+route('POST', '/api/wordle/:dateKey', { auth: true }, async (c) => {
+  const dateKey = asDateKey(c.params.dateKey, 'dateKey');
+  const body = await readJsonObject(c.req);
+  if (!Number.isInteger(body.rows) || body.rows < 1 || body.rows > 6) {
+    throw httpError(400, 'invalid_request', '"rows" must be an integer between 1 and 6');
+  }
+  if (typeof body.win !== 'boolean') throw httpError(400, 'invalid_request', '"win" must be a boolean');
+  const grid = asString(body.grid, 'grid', { max: LIMITS.wordleGrid });
+  const lang = asEnum(body.lang, 'lang', WORDLE_LANGS);
+  const couple = c.auth.couple;
+  const wordle = wordleOf(couple);
+  const day = wordle[dateKey] ?? (wordle[dateKey] = {});
+  if (!day[c.auth.memberId]) {
+    // First submit wins — resubmits are idempotent and never overwrite.
+    day[c.auth.memberId] = {
+      memberId: c.auth.memberId,
+      rows: body.rows,
+      win: body.win,
+      grid,
+      lang,
+      finishedAt: nowIso(),
+    };
+    const keys = Object.keys(wordle);
+    if (keys.length > LIMITS.wordleDays) {
+      keys.sort();
+      for (const old of keys.slice(0, keys.length - LIMITS.wordleDays)) delete wordle[old];
+    }
+    c.store.markDirty();
+    for (const member of couple.members) {
+      c.realtime.sendToMember(couple.id, member.id, 'wordle_result', wordleViewFor(couple, dateKey, member.id));
+    }
+  }
+  sendJson(c.res, 200, wordleViewFor(couple, dateKey, c.auth.memberId));
 });
 
 // --- canvas -----------------------------------------------------------------------------

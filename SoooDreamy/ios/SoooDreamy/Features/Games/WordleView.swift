@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 // MARK: - Daily word logic + persistence
 
@@ -94,6 +95,20 @@ enum WordleDaily {
         return guesses.last == solution(coupleId: coupleId, dateKey: dateKey, lang: lang)
     }
 
+    // MARK: Duel submission flag (server is idempotent; this just avoids re-sends)
+
+    private static func submittedKey(coupleId: String, dateKey: String, lang: String) -> String {
+        "sooodreamy.wordle.submitted.\(coupleId).\(dateKey).\(lang)"
+    }
+
+    static func isSubmitted(coupleId: String, dateKey: String, lang: String) -> Bool {
+        UserDefaults.standard.bool(forKey: submittedKey(coupleId: coupleId, dateKey: dateKey, lang: lang))
+    }
+
+    static func markSubmitted(coupleId: String, dateKey: String, lang: String) {
+        UserDefaults.standard.set(true, forKey: submittedKey(coupleId: coupleId, dateKey: dateKey, lang: lang))
+    }
+
     // MARK: Simple local stats (no streaks, just counters)
 
     private static let playedKey = "sooodreamy.wordle.stats.played"
@@ -131,6 +146,7 @@ struct WordleView: View {
     @State private var shared = false
     @State private var restored = false
     @State private var dateKey = SharedDates.todayKey()
+    @State private var day: WordleDayResponse?
 
     // MARK: Derived state
 
@@ -180,6 +196,7 @@ struct WordleView: View {
                     } else {
                         keyboard
                     }
+                    duelSection
                 }
                 .padding(16)
                 .padding(.bottom, 12)
@@ -191,7 +208,16 @@ struct WordleView: View {
         }
         .navigationTitle(L10n.t("games.wordle.title"))
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear(perform: restore)
+        .onAppear {
+            restore()
+            // Retries a submit that failed earlier (e.g. offline yesterday evening).
+            submitResultIfNeeded()
+            loadDay()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .serverEvent)) { note in
+            guard let event = note.object as? ServerEvent else { return }
+            receiveDuelEvent(event)
+        }
     }
 
     private func restore() {
@@ -426,6 +452,7 @@ struct WordleView: View {
 
     private func finishGame(won: Bool, row: Int) {
         WordleDaily.recordFinish(won: won)
+        submitResultIfNeeded()
         Task {
             // Let the row finish its flip reveal first.
             try? await Task.sleep(nanoseconds: 1_400_000_000)
@@ -520,12 +547,9 @@ struct WordleView: View {
         .disabled(sendingShare || shared || appState.api == nil)
     }
 
-    /// Classic emoji summary — spoiler-free result grid for the chat.
-    private var shareText: String {
-        let scoreText = didWin ? "\(guesses.count)/6" : "X/6"
-        let header = L10n.t("games.wordle.shareTitle",
-                            ["date": displayDate, "score": scoreText])
-        let rows = guesses.map { guess in
+    /// Spoiler-free 🟩🟨⬛ rows — sent to chat and submitted as the duel grid.
+    private var emojiGrid: String {
+        guesses.map { guess in
             WordleDaily.score(guess: guess, solution: solution).map { mark -> String in
                 switch mark {
                 case .correct: return "🟩"
@@ -535,7 +559,15 @@ struct WordleView: View {
             }
             .joined()
         }
-        return ([header] + rows).joined(separator: "\n")
+        .joined(separator: "\n")
+    }
+
+    /// Classic emoji summary — header + result grid for the chat.
+    private var shareText: String {
+        let scoreText = didWin ? "\(guesses.count)/6" : "X/6"
+        let header = L10n.t("games.wordle.shareTitle",
+                            ["date": displayDate, "score": scoreText])
+        return header + "\n" + emojiGrid
     }
 
     private var displayDate: String {
@@ -563,6 +595,203 @@ struct WordleView: View {
                 appState.handleAPIError(error)
             }
             sendingShare = false
+        }
+    }
+
+    // MARK: Duel networking
+
+    private func loadDay() {
+        guard let api = appState.api else { return }
+        Task {
+            if let response = try? await api.wordleDay(dateKey: dateKey) {
+                day = response
+            }
+        }
+    }
+
+    /// Fire-and-forget submission of a finished board. Failures stay silent —
+    /// the flag stays unset, so the next `onAppear` retries (server is
+    /// idempotent, a duplicate just echoes the stored result).
+    private func submitResultIfNeeded() {
+        guard finished, !guesses.isEmpty else { return }
+        guard let api = appState.api else { return }
+        guard !WordleDaily.isSubmitted(coupleId: coupleId, dateKey: dateKey, lang: lang) else { return }
+        let submittedDateKey = dateKey
+        let rows = guesses.count
+        let win = didWin
+        let grid = emojiGrid
+        let submittedLang = lang
+        let submittedCoupleId = coupleId
+        Task {
+            guard let response = try? await api.submitWordle(dateKey: submittedDateKey,
+                                                             rows: rows,
+                                                             win: win,
+                                                             grid: grid,
+                                                             lang: submittedLang) else { return }
+            WordleDaily.markSubmitted(coupleId: submittedCoupleId,
+                                      dateKey: submittedDateKey,
+                                      lang: submittedLang)
+            day = response
+        }
+    }
+
+    private func receiveDuelEvent(_ event: ServerEvent) {
+        guard event.type == .wordleResult,
+              let response = event.decode(WordleDayResponse.self),
+              response.dateKey == dateKey else { return }
+        let partnerWasFinished = day?.partnerFinished ?? false
+        day = response
+        if !partnerWasFinished && response.partnerFinished {
+            SoundEngine.shared.play(.chime)
+            Haptics.shared.tap()
+        }
+    }
+
+    // MARK: Duel section
+
+    @ViewBuilder
+    private var duelSection: some View {
+        if appState.partner != nil, let day, day.dateKey == dateKey {
+            if let mine = day.mine, let partnerResult = day.partner {
+                duelCard(mine: mine, partner: partnerResult)
+            } else if !day.partnerFinished {
+                stillSolvingCard
+            } else if !finished {
+                teaserCard
+            } else {
+                // I just finished, partner too — my submit round-trip is in flight.
+                revealingCard
+            }
+        }
+    }
+
+    private var stillSolvingCard: some View {
+        HStack(spacing: 8) {
+            Text("🥊")
+                .font(.system(size: 20))
+            Text(L10n.t("games.wordle.duel.stillSolving", ["name": appState.partnerName]))
+                .font(.system(.caption, design: .rounded).weight(.semibold))
+                .foregroundStyle(Theme.textSecondary)
+            WordleDuelDots()
+            Spacer(minLength: 0)
+        }
+        .glassCard(padding: 12)
+    }
+
+    private var teaserCard: some View {
+        HStack(spacing: 8) {
+            Text("🥊")
+                .font(.system(size: 20))
+            Text(L10n.t("games.wordle.duel.teaser", ["name": appState.partnerName]))
+                .font(.system(.caption, design: .rounded).weight(.semibold))
+                .foregroundStyle(Theme.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+        .glassCard(padding: 12)
+    }
+
+    private var revealingCard: some View {
+        HStack(spacing: 10) {
+            ProgressView()
+                .tint(Theme.pink)
+            Text(L10n.t("games.wordle.duel.revealing"))
+                .font(.system(.caption, design: .rounded).weight(.semibold))
+                .foregroundStyle(Theme.textSecondary)
+            Spacer(minLength: 0)
+        }
+        .glassCard(padding: 12)
+    }
+
+    private func duelCard(mine: WordleResult, partner: WordleResult) -> some View {
+        VStack(spacing: 14) {
+            HStack(spacing: 8) {
+                Text("🥊")
+                Text(L10n.t("games.wordle.duel.title"))
+                    .font(.system(.headline, design: .rounded).weight(.bold))
+                    .foregroundStyle(Theme.textPrimary)
+            }
+            HStack(alignment: .top, spacing: 14) {
+                duelColumn(name: appState.me?.name ?? L10n.t("common.you"), result: mine)
+                Rectangle()
+                    .fill(Color.white.opacity(0.1))
+                    .frame(width: 1)
+                duelColumn(name: appState.partnerName, result: partner)
+            }
+            Text(verdictText(mine: mine, partner: partner))
+                .font(.system(.subheadline, design: .rounded).weight(.bold))
+                .foregroundStyle(Theme.gold)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity)
+        .glassCard(padding: 16)
+    }
+
+    private func duelColumn(name: String, result: WordleResult) -> some View {
+        VStack(spacing: 6) {
+            Text(name)
+                .font(.system(.caption, design: .rounded).weight(.semibold))
+                .foregroundStyle(Theme.textSecondary)
+                .lineLimit(1)
+            emojiGridView(result.grid)
+            Text(result.win ? "\(result.rows)/6" : "X/6")
+                .font(.system(.caption, design: .rounded).weight(.heavy))
+                .foregroundStyle(result.win ? Theme.mint : Theme.textTertiary)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func emojiGridView(_ grid: String) -> some View {
+        VStack(spacing: 2) {
+            ForEach(Array(grid.split(separator: "\n").enumerated()), id: \.offset) { _, line in
+                Text(String(line))
+                    .font(.system(size: 13))
+                    .kerning(1)
+            }
+        }
+    }
+
+    /// Duel verdict: a win always beats a loss; two wins are ranked by row
+    /// count (fewer wins, equal is a tie); two losses share the blame.
+    private func verdictText(mine: WordleResult, partner: WordleResult) -> String {
+        if mine.win && !partner.win {
+            return L10n.t("games.wordle.duel.iWin")
+        }
+        if partner.win && !mine.win {
+            return L10n.t("games.wordle.duel.partnerWins", ["name": appState.partnerName])
+        }
+        if mine.win && partner.win {
+            if mine.rows < partner.rows {
+                return L10n.t("games.wordle.duel.iWin")
+            }
+            if mine.rows > partner.rows {
+                return L10n.t("games.wordle.duel.partnerWins", ["name": appState.partnerName])
+            }
+            return L10n.t("games.wordle.duel.tie")
+        }
+        return L10n.t("games.wordle.duel.bothLost")
+    }
+}
+
+// MARK: - Subtle "…" typing dots for the waiting state
+
+private struct WordleDuelDots: View {
+    @State private var animating = false
+
+    var body: some View {
+        HStack(spacing: 3) {
+            ForEach(0..<3, id: \.self) { index in
+                Circle()
+                    .fill(Theme.textSecondary)
+                    .frame(width: 4, height: 4)
+                    .opacity(animating ? 1 : 0.25)
+                    .animation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true)
+                        .delay(Double(index) * 0.2), value: animating)
+            }
+        }
+        .onAppear {
+            animating = true
         }
     }
 }

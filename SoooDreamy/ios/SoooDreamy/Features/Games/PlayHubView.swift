@@ -16,6 +16,7 @@ struct PlayHubView: View {
     @State private var engine = GameEngine()
     @State private var path: [GameDestination] = []
     @State private var wordleDoneToday = false
+    @State private var wordleDuelBadge: String?
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -66,6 +67,12 @@ struct PlayHubView: View {
     // MARK: Event handling
 
     private func receive(_ event: ServerEvent) {
+        if event.type == .wordleResult {
+            if let response = event.decode(WordleDayResponse.self) {
+                applyWordleDuel(response)
+            }
+            return
+        }
         let previousId = engine.session?.id
         engine.handle(event)
         // Little chime when a fresh invitation from the partner lands.
@@ -239,6 +246,10 @@ struct PlayHubView: View {
                             .font(.system(.headline, design: .rounded).weight(.bold))
                             .foregroundStyle(Theme.textPrimary)
                         PillTag(text: L10n.t("games.wordle.daily"), tint: Theme.gold)
+                        if let badge = wordleDuelBadge {
+                            Text(badge)
+                                .font(.system(size: 13))
+                        }
                     }
                     Text(L10n.t(wordleDoneToday ? "games.wordle.done" : "games.wordle.teaser"))
                         .font(.system(.caption, design: .rounded))
@@ -259,11 +270,37 @@ struct PlayHubView: View {
     private func refreshWordleDone() {
         guard let couple = appState.couple else {
             wordleDoneToday = false
+            wordleDuelBadge = nil
             return
         }
         wordleDoneToday = WordleDaily.isFinished(coupleId: couple.id,
                                                  dateKey: SharedDates.todayKey(),
                                                  lang: L10n.lang)
+        refreshWordleDuel()
+    }
+
+    /// Cheap, non-blocking duel check for the badge — only fires once my
+    /// own board is done (before that no duel outcome can exist anyway).
+    private func refreshWordleDuel() {
+        guard wordleDoneToday, let api = appState.api else {
+            wordleDuelBadge = nil
+            return
+        }
+        Task {
+            guard let response = try? await api.wordleDay(dateKey: SharedDates.todayKey()) else { return }
+            applyWordleDuel(response)
+        }
+    }
+
+    private func applyWordleDuel(_ response: WordleDayResponse) {
+        guard response.dateKey == SharedDates.todayKey() else { return }
+        guard let mine = response.mine, let partner = response.partner else {
+            wordleDuelBadge = nil
+            return
+        }
+        // 🏆 when the duel has a winner, 💞 for ties and shared defeats.
+        let decided = mine.win != partner.win || (mine.win && partner.win && mine.rows != partner.rows)
+        wordleDuelBadge = decided ? "🏆" : "💞"
     }
 
     // MARK: Game grid

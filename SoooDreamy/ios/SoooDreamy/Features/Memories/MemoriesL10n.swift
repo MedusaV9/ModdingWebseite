@@ -24,6 +24,10 @@ enum MemoriesL10n {
         "memories.card.journal": LText(de: "Unser Tagebuch", en: "Our Journal"),
         "memories.card.journalCount": LText(de: "{n} Antworten", en: "{n} answers"),
         "memories.card.journalHint": LText(de: "Eure Fragen des Tages", en: "Your daily questions"),
+        "memories.card.coupons": LText(de: "Love-Coupons", en: "Love Coupons"),
+        "memories.card.couponsRedeemable": LText(de: "{n} einlösbar", en: "{n} to redeem"),
+        "memories.card.couponsHint": LText(de: "Verwöhn-Gutscheine für euch zwei",
+                                           en: "Treat vouchers for the two of you"),
 
         // Countdown chips
         "memories.countdown.today": LText(de: "HEUTE 🎉", en: "TODAY 🎉"),
@@ -52,6 +56,12 @@ enum MemoriesL10n {
         "memories.gallery.saveFailed": LText(de: "Sichern hat nicht geklappt",
                                              en: "Couldn't save the photo"),
         "memories.gallery.by": LText(de: "von {name}", en: "by {name}"),
+        "memories.gallery.favorite": LText(de: "Favorit", en: "Favorite"),
+        "memories.gallery.filterAll": LText(de: "Alle", en: "All"),
+        "memories.gallery.filterFavorites": LText(de: "Favoriten ❤️", en: "Favorites ❤️"),
+        "memories.gallery.favEmpty.title": LText(de: "Noch keine Favoriten", en: "No favorites yet"),
+        "memories.gallery.favEmpty.subtitle": LText(de: "Tipp im Foto aufs Herz, um es hier zu sammeln 💗",
+                                                    en: "Tap the heart on a photo to collect it here 💗"),
 
         // Canvas
         "memories.canvas.title": LText(de: "Kritzel-Canvas", en: "Doodle Canvas"),
@@ -68,6 +78,7 @@ enum MemoriesL10n {
                                               en: "Erase your whole artwork? This clears it for both of you."),
         "memories.canvas.cleared": LText(de: "Canvas gelöscht", en: "Canvas cleared"),
         "memories.canvas.undo": LText(de: "Letzten Strich zurücknehmen", en: "Undo last stroke"),
+        "memories.canvas.replay": LText(de: "Kunstwerk abspielen", en: "Replay artwork"),
 
         // Bucket list
         "memories.bucket.title": LText(de: "Bucket List", en: "Bucket List"),
@@ -130,6 +141,37 @@ enum MemoriesL10n {
                                                  en: "Answer today's daily question — it'll live here forever 💌"),
         "memories.journal.waiting": LText(de: "wartet noch auf {name}…", en: "still waiting for {name}…"),
         "memories.journal.noAnswer": LText(de: "Hier fehlt noch eine Antwort von euch 🌙",
-                                           en: "One of you didn't answer this one 🌙")
+                                           en: "One of you didn't answer this one 🌙"),
+
+        // Love coupons
+        "memories.coupons.title": LText(de: "Love-Coupons", en: "Love Coupons"),
+        "memories.coupons.forYou": LText(de: "Für dich 🎁", en: "For you 🎁"),
+        "memories.coupons.fromYou": LText(de: "Von dir 💝", en: "From you 💝"),
+        "memories.coupons.redeem": LText(de: "Einlösen", en: "Redeem"),
+        "memories.coupons.redeemConfirm": LText(de: "Diesen Gutschein jetzt einlösen? Dein Schatz bekommt Bescheid 💌",
+                                                en: "Redeem this coupon now? Your sweetheart will be notified 💌"),
+        "memories.coupons.redeemedAt": LText(de: "Eingelöst ✓ {date}", en: "Redeemed ✓ {date}"),
+        "memories.coupons.statusOpen": LText(de: "offen", en: "open"),
+        "memories.coupons.statusRedeemed": LText(de: "eingelöst ✓", en: "redeemed ✓"),
+        "memories.coupons.deleteConfirm": LText(de: "Diesen Gutschein wirklich löschen?",
+                                                en: "Really delete this coupon?"),
+        "memories.coupons.from": LText(de: "von {name}", en: "from {name}"),
+        "memories.coupons.forName": LText(de: "für {name}", en: "for {name}"),
+        "memories.coupons.emptyForYou": LText(de: "Noch keine Gutscheine für dich — dein Schatz ist dran 😉",
+                                              en: "No coupons for you yet — your sweetheart's turn 😉"),
+        "memories.coupons.emptyFromYou": LText(de: "Verschenk deinem Schatz einen kleinen Gutschein 💝",
+                                               en: "Gift your sweetheart a little voucher 💝"),
+        "memories.coupons.create": LText(de: "Gutschein verschenken", en: "Gift a coupon"),
+        "memories.coupons.createTitle": LText(de: "Neuer Gutschein", en: "New coupon"),
+        "memories.coupons.titleField": LText(de: "Was schenkst du? z. B. 1× Massage",
+                                             en: "What are you gifting? e.g. 1× massage"),
+        "memories.coupons.noteField": LText(de: "Kleine Notiz dazu? (optional)",
+                                            en: "A little note? (optional)"),
+        "memories.coupons.ideas": LText(de: "Ideen", en: "Ideas"),
+        "memories.coupons.created": LText(de: "Gutschein verschenkt! 🎟️", en: "Coupon gifted! 🎟️"),
+        "memories.coupons.noPartner.title": LText(de: "Noch niemand zum Verwöhnen da",
+                                                  en: "No one to spoil yet"),
+        "memories.coupons.noPartner.subtitle": LText(de: "Sobald dein Schatz beigetreten ist, könnt ihr euch gegenseitig Gutscheine schenken 🎟️",
+                                                     en: "Once your sweetheart joins, you can gift each other coupons 🎟️")
     ]
 }

@@ -15,6 +15,19 @@ struct GalleryView: View {
     @State private var pagerTarget: Photo?
     @State private var celebrationDate: Date?
     @State private var celebrationTask: Task<Void, Never>?
+    @State private var filter: GalleryFilter = .all
+
+    private enum GalleryFilter: String, CaseIterable, Identifiable {
+        case all, favorites
+        var id: String { rawValue }
+
+        var titleKey: String {
+            switch self {
+            case .all: return "memories.gallery.filterAll"
+            case .favorites: return "memories.gallery.filterFavorites"
+            }
+        }
+    }
 
     private let columns = [
         GridItem(.flexible(), spacing: 6),
@@ -64,7 +77,7 @@ struct GalleryView: View {
         } else if photos.isEmpty {
             emptyState
         } else {
-            grid
+            gridArea
         }
     }
 
@@ -78,15 +91,68 @@ struct GalleryView: View {
         }
     }
 
+    /// Photos matching the active filter (favorites = liked by either member).
+    private var displayedPhotos: [Photo] {
+        switch filter {
+        case .all:
+            return photos
+        case .favorites:
+            return photos.filter { !($0.favorites ?? []).isEmpty }
+        }
+    }
+
+    private var gridArea: some View {
+        VStack(spacing: 0) {
+            filterChips
+            if filter == .favorites && displayedPhotos.isEmpty {
+                Spacer()
+                EmptyStateView(emoji: "💗",
+                               title: L10n.t("memories.gallery.favEmpty.title"),
+                               subtitle: L10n.t("memories.gallery.favEmpty.subtitle"))
+                Spacer()
+            } else {
+                grid
+            }
+        }
+    }
+
+    private var filterChips: some View {
+        HStack(spacing: 8) {
+            ForEach(GalleryFilter.allCases) { candidate in
+                filterChip(candidate)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 12)
+        .padding(.top, 10)
+    }
+
+    private func filterChip(_ candidate: GalleryFilter) -> some View {
+        Button {
+            Haptics.shared.tap()
+            withAnimation(.spring(response: 0.3)) { filter = candidate }
+        } label: {
+            Text(L10n.t(candidate.titleKey))
+                .font(.system(.footnote, design: .rounded).weight(.semibold))
+                .foregroundStyle(filter == candidate ? .white : Theme.textSecondary)
+                .padding(.vertical, 7)
+                .padding(.horizontal, 14)
+                .background(
+                    Capsule().fill(filter == candidate ? Theme.pink.opacity(0.55) : Color.white.opacity(0.07))
+                )
+        }
+        .buttonStyle(.plain)
+    }
+
     private var grid: some View {
         ScrollView {
             LazyVGrid(columns: columns, spacing: 6) {
-                ForEach(photos) { photo in
+                ForEach(displayedPhotos) { photo in
                     Button {
                         Haptics.shared.tap()
                         pagerTarget = photo
                     } label: {
-                        GalleryCell(photo: photo, api: appState.api)
+                        GalleryCell(photo: photo, api: appState.api, memberId: appState.memberId)
                     }
                     .buttonStyle(.plain)
                 }
@@ -273,6 +339,7 @@ private struct PendingUpload: Identifiable {
 private struct GalleryCell: View {
     let photo: Photo
     let api: API?
+    let memberId: String?
 
     var body: some View {
         Color.clear
@@ -283,6 +350,20 @@ private struct GalleryCell: View {
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
             )
+            .overlay(alignment: .topTrailing) { favoriteBadge }
+    }
+
+    /// Pink heart when I favorited, soft white heart when only the partner did.
+    @ViewBuilder
+    private var favoriteBadge: some View {
+        if !(photo.favorites ?? []).isEmpty {
+            Image(systemName: "heart.fill")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(photo.isFavorite(of: memberId) ? Theme.pink : Color.white.opacity(0.85))
+                .padding(5)
+                .background(Circle().fill(Color.black.opacity(0.35)))
+                .padding(5)
+        }
     }
 
     @ViewBuilder
@@ -468,6 +549,7 @@ private struct PhotoPagerView: View {
                         .tint(.white)
                         .padding(10)
                 } else {
+                    favoriteButton
                     circleButton(icon: "square.and.arrow.down") { saveCurrent() }
                     if currentPhoto?.uploaderId == appState.memberId {
                         circleButton(icon: "trash") { confirmDelete = true }
@@ -480,14 +562,27 @@ private struct PhotoPagerView: View {
         }
     }
 
-    private func circleButton(icon: String, action: @escaping () -> Void) -> some View {
+    private var currentIsFavorite: Bool {
+        currentPhoto?.isFavorite(of: appState.memberId) ?? false
+    }
+
+    private var favoriteButton: some View {
+        circleButton(icon: currentIsFavorite ? "heart.fill" : "heart",
+                     tint: currentIsFavorite ? Theme.pink : .white) {
+            toggleFavorite()
+        }
+        .accessibilityLabel(L10n.t("memories.gallery.favorite"))
+    }
+
+    private func circleButton(icon: String, tint: Color = .white,
+                              action: @escaping () -> Void) -> some View {
         Button {
             Haptics.shared.tap()
             action()
         } label: {
             Image(systemName: icon)
                 .font(.system(size: 15, weight: .bold))
-                .foregroundStyle(.white)
+                .foregroundStyle(tint)
                 .frame(width: 38, height: 38)
                 .background(Circle().fill(Color.white.opacity(0.14)))
         }
@@ -507,6 +602,39 @@ private struct PhotoPagerView: View {
     }
 
     // MARK: Actions
+
+    private func toggleFavorite() {
+        guard let photo = currentPhoto, let api = appState.api,
+              let myId = appState.memberId else { return }
+        let original = photo.favorites
+        var favorites = original ?? []
+        if favorites.contains(myId) {
+            favorites.removeAll { $0 == myId }
+        } else {
+            favorites.append(myId)
+        }
+        setFavorites(favorites, for: photo.id)
+        Haptics.shared.success()
+        Task {
+            do {
+                let updated = try await api.togglePhotoFavorite(id: photo.id)
+                merge(updated)
+            } catch {
+                setFavorites(original ?? [], for: photo.id)
+                appState.handleAPIError(error)
+            }
+        }
+    }
+
+    private func setFavorites(_ favorites: [String], for id: String) {
+        guard let idx = photos.firstIndex(where: { $0.id == id }) else { return }
+        photos[idx].favorites = favorites
+    }
+
+    private func merge(_ photo: Photo) {
+        guard let idx = photos.firstIndex(where: { $0.id == photo.id }) else { return }
+        photos[idx] = photo
+    }
 
     private func deleteCurrent() {
         guard let photo = currentPhoto, let api = appState.api else { return }

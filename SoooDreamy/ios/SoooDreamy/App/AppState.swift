@@ -132,6 +132,7 @@ final class AppState {
         servers.setActive(id: profileID)
         couple = auth.couple
         connectSocket()
+        celebrateNow()
         Task { await refreshAll() }
     }
 

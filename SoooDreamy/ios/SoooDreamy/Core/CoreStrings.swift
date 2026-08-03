@@ -148,6 +148,7 @@ enum CoreStrings {
         "settings.haptics": LText(de: "Haptik", en: "Haptics"),
         "settings.reminder": LText(de: "Tägliche Erinnerung", en: "Daily reminder"),
         "settings.reminderHint": LText(de: "Erinnert euch abends an die Frage des Tages", en: "Evening nudge for the question of the day"),
+        "settings.reminderTime": LText(de: "Uhrzeit", en: "Time"),
         "settings.unpair": LText(de: "Paar auflösen", en: "Dissolve couple"),
         "settings.unpairConfirm": LText(de: "Wirklich? Das löscht ALLE eure Daten auf dem Server — Chats, Fotos, alles. Das kann nicht rückgängig gemacht werden.",
                                         en: "Really? This deletes ALL your data on the server — chats, photos, everything. This cannot be undone."),

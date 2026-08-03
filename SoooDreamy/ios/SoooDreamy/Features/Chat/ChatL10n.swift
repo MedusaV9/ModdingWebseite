@@ -59,6 +59,8 @@ enum ChatL10n {
         "chat.copy": LText(de: "Kopieren", en: "Copy"),
         "chat.copied": LText(de: "Kopiert!", en: "Copied!"),
         "chat.read": LText(de: "Lesen", en: "Read"),
+        "chat.react": LText(de: "Reagieren …", en: "React …"),
+        "chat.reactWith": LText(de: "Mit {emoji} reagieren", en: "React with {emoji}"),
         "chat.readerClose": LText(de: "Schließen", en: "Close"),
         "chat.readerFrom": LText(de: "Von {name}", en: "From {name}"),
 

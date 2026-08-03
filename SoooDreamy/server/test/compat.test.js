@@ -6,8 +6,9 @@ import path from 'node:path';
 import { makeApp, client } from './helpers.js';
 
 /**
- * A store.json exactly as a v1.0 server would have written it: no moodHistory
- * on the couple, no thumbUrl on photos, no openWhen on messages.
+ * A store.json exactly as a v1.0 server would have written it: no moodHistory,
+ * wordle or coupons on the couple, no thumbUrl/favorites on photos, no
+ * openWhen/reactions on messages.
  */
 function v1StoreJson() {
   const at = '2024-01-02T00:00:00.000Z';
@@ -75,7 +76,7 @@ function v1StoreJson() {
   };
 }
 
-test('a v1.0 store.json loads cleanly and all v1.1 endpoints work on it', async (t) => {
+test('a v1.0 store.json loads cleanly and all v1.1/v1.2 endpoints work on it', async (t) => {
   const dataDir = await mkdtemp(path.join(os.tmpdir(), 'sooodreamy-compat-'));
   await writeFile(path.join(dataDir, 'store.json'), JSON.stringify(v1StoreJson(), null, 2), 'utf8');
 
@@ -91,17 +92,19 @@ test('a v1.0 store.json loads cleanly and all v1.1 endpoints work on it', async 
   assert.equal(couple.body.couple.id, 'c_old');
   assert.equal(couple.body.couple.members.length, 2);
 
-  // Old messages gain openWhen: null on the way out.
+  // Old messages gain openWhen: null and reactions: null on the way out.
   const messages = await a.get('/api/messages');
   assert.equal(messages.status, 200);
   assert.equal(messages.body.messages[0].id, 'msg_old1');
   assert.equal(messages.body.messages[0].openWhen, null);
+  assert.equal(messages.body.messages[0].reactions, null);
 
-  // Old photos gain thumbUrl: null on the way out.
+  // Old photos gain thumbUrl: null and favorites: [] on the way out.
   const photos = await b.get('/api/photos');
   assert.equal(photos.status, 200);
   assert.equal(photos.body.photos[0].id, 'ph_old1');
   assert.equal(photos.body.photos[0].thumbUrl, null);
+  assert.deepEqual(photos.body.photos[0].favorites, []);
   assert.equal((await a.get('/api/photos/ph_old1/thumb/raw')).body.error, 'no_thumb');
 
   // Thumbs can be attached to a v1.0 photo (uploader only).
@@ -143,4 +146,32 @@ test('a v1.0 store.json loads cleanly and all v1.1 endpoints work on it', async 
   const letter = await b.post('/api/messages', { json: { type: 'letter', text: 'new sealed', openWhen: 'someday' } });
   assert.equal(letter.status, 201);
   assert.equal(letter.body.message.openWhen, 'someday');
+
+  // --- v1.2 features on the old store ---
+
+  // Reactions toggle on the v1.0 message (no reactions key stored).
+  const reacted = await b.post('/api/messages/msg_old1/reactions', { json: { emoji: '💌' } });
+  assert.equal(reacted.status, 200);
+  assert.deepEqual(reacted.body.message.reactions, { '💌': ['m_b'] });
+
+  // Wordle duel (couple.wordle is defaulted lazily) with anti-spoiler view.
+  const wordle = await a.post('/api/wordle/2026-08-03', { json: { rows: 4, win: true, grid: '🟩', lang: 'de' } });
+  assert.equal(wordle.status, 200);
+  assert.equal(wordle.body.mine.rows, 4);
+  const bWordle = await b.get('/api/wordle/2026-08-03');
+  assert.equal(bWordle.body.partner, null);
+  assert.equal(bWordle.body.partnerFinished, true);
+
+  // Favorite the v1.0 photo (no favorites key stored).
+  const fav = await b.post('/api/photos/ph_old1/favorite');
+  assert.equal(fav.status, 200);
+  assert.deepEqual(fav.body.photo.favorites, ['m_b']);
+
+  // Coupons (couple.coupons is defaulted lazily): create, redeem by the partner.
+  const coupon = await a.post('/api/coupons', { json: { title: 'Retro dinner', emoji: '🍝' } });
+  assert.equal(coupon.status, 201);
+  assert.equal(coupon.body.coupon.forMember, 'm_b');
+  const redeemed = await b.post(`/api/coupons/${coupon.body.coupon.id}/redeem`);
+  assert.equal(redeemed.status, 200);
+  assert.ok(redeemed.body.coupon.redeemedAt);
 });
