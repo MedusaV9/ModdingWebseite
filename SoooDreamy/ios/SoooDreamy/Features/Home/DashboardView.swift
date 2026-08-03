@@ -66,7 +66,10 @@ struct DashboardView: View {
     }
 
     private func loadFlashback() async {
-        guard flashback == nil, let api = appState.api, let couple = appState.couple else { return }
+        // Reset on every (re-)run — the task id changes with the couple, so a
+        // server/couple switch must never show the previous couple's memory.
+        flashback = nil
+        guard let api = appState.api, let couple = appState.couple else { return }
         let cutoff = Date().addingTimeInterval(-7 * 86400)
         var candidates: [FlashbackItem] = []
         if let photos = try? await api.photos() {

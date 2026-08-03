@@ -126,6 +126,9 @@ final class ChatModel {
         switch event.type {
         case .message:
             if let message = event.decode(MessageResponse.self)?.message {
+                if message.senderId == appState?.memberId {
+                    removeMatchingPendingTemp(for: message)
+                }
                 insert(message)
             }
         case .messageUpdated:
@@ -143,17 +146,47 @@ final class ChatModel {
         }
     }
 
+    /// The couple-wide socket echo of my own message can arrive before the
+    /// POST response removes the optimistic temp — drop one matching temp
+    /// (same type + trimmed text) so both never render together.
+    private func removeMatchingPendingTemp(for message: Message) {
+        let incomingText = (message.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if let idx = messages.firstIndex(where: { candidate in
+            candidate.id.hasPrefix("local-")
+                && candidate.type == message.type
+                && (candidate.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines) == incomingText
+        }) {
+            messages.remove(at: idx)
+        }
+    }
+
+    /// After a reconnect, page backwards from the newest message until the
+    /// fetched window overlaps the previously-newest cached message
+    /// (bounded to 4 extra pages), so long offline stretches leave no
+    /// invisible history hole and overlapping reactions get refreshed.
     private func refreshLatest() async {
         guard let api = appState?.api else { return }
-        if let page = try? await api.messages(limit: Self.pageSize) {
-            mergeIn(page)
+        let previousNewestId = messages.last(where: { !$0.id.hasPrefix("local-") })?.id
+        guard var page = try? await api.messages(limit: Self.pageSize) else { return }
+        mergeIn(page)
+        guard let previousNewestId else { return }
+        var extraPages = 0
+        while extraPages < 4,
+              page.count >= Self.pageSize,
+              !page.contains(where: { $0.id == previousNewestId }),
+              let oldest = page.first {
+            guard let older = try? await api.messages(limit: Self.pageSize, before: oldest.id),
+                  !older.isEmpty else { return }
+            mergeIn(older)
+            page = older
+            extraPages += 1
         }
     }
 
     // MARK: Reactions
 
     /// Toggle my `emoji` reaction on a message: optimistic local update,
-    /// reconciled with the server response, reverted on error.
+    /// reconciled with the server response, resynced from the server on error.
     func toggleReaction(on message: Message, emoji: String) {
         guard let appState, let api = appState.api,
               let memberId = appState.memberId else { return }
@@ -170,13 +203,23 @@ final class ChatModel {
                 let updated = try await api.toggleReaction(messageId: message.id, emoji: emoji)
                 update(updated)
             } catch {
-                // Revert only my toggle so partner updates that arrived
-                // in the meantime are preserved.
-                if let current = messages.first(where: { $0.id == message.id }) {
-                    update(Self.togglingReaction(current, emoji: emoji, memberId: memberId))
-                }
+                // The outcome is unknown (the POST may have committed even
+                // though the response was lost), so don't guess with a local
+                // re-toggle — restore server truth for this message instead.
+                await resyncMessage(id: message.id)
                 appState.handleAPIError(error)
             }
+        }
+    }
+
+    /// Re-fetches the newest page and replaces the given message with
+    /// server truth when present. Leaves state untouched when the fetch
+    /// fails too (the next `message_updated`/reconnect refresh fixes it).
+    private func resyncMessage(id: String) async {
+        guard let api = appState?.api else { return }
+        guard let page = try? await api.messages(limit: Self.pageSize) else { return }
+        if let fresh = page.first(where: { $0.id == id }) {
+            update(fresh)
         }
     }
 
@@ -245,9 +288,15 @@ final class ChatModel {
         messages.sort { $0.createdAt < $1.createdAt }
     }
 
+    /// Merge a fetched page: known ids are replaced with server truth
+    /// (refreshing reactions etc.), unknown ones are inserted.
     private func mergeIn(_ page: [Message]) {
-        for message in page where !messages.contains(where: { $0.id == message.id }) {
-            messages.append(message)
+        for message in page {
+            if let idx = messages.firstIndex(where: { $0.id == message.id }) {
+                messages[idx] = message
+            } else {
+                messages.append(message)
+            }
         }
         messages.sort { $0.createdAt < $1.createdAt }
     }

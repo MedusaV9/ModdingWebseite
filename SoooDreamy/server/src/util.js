@@ -42,6 +42,10 @@ export function prevDateKey(dateKey) {
   return new Date(Date.parse(`${dateKey}T00:00:00.000Z`) - DAY_MS).toISOString().slice(0, 10);
 }
 
+export function nextDateKey(dateKey) {
+  return new Date(Date.parse(`${dateKey}T00:00:00.000Z`) + DAY_MS).toISOString().slice(0, 10);
+}
+
 export function isValidDateKey(value) {
   return (
     typeof value === 'string' &&

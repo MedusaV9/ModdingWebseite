@@ -9,6 +9,7 @@ import {
   nowIso,
   todayKey,
   prevDateKey,
+  nextDateKey,
   isValidDateKey,
   daysBetween,
   sendJson,
@@ -237,16 +238,42 @@ function dailyEntryFor(couple, dateKey, memberId) {
 // wordle duel helpers
 
 /**
- * Per-member day view. Anti-spoiler: the partner's result (grid/rows) is only
- * revealed once the viewer submitted their own; `partnerFinished` is always truthful.
+ * Lazily migrates a v1.2.0 day bucket ({memberId: WordleResult}) to the
+ * v1.2.1 shape ({lang: {memberId: WordleResult}}), taking the lang from each
+ * stored result. New-shape (and empty) buckets pass through untouched.
  */
-function wordleViewFor(couple, dateKey, memberId) {
-  const day = couple.wordle?.[dateKey] ?? {};
+function normalizeWordleDay(day) {
+  if (!day || Object.keys(day).every((key) => WORDLE_LANGS.includes(key))) return day;
+  const byLang = {};
+  for (const result of Object.values(day)) {
+    const lang = WORDLE_LANGS.includes(result?.lang) ? result.lang : 'en';
+    (byLang[lang] ??= {})[result.memberId] = result;
+  }
+  return byLang;
+}
+
+/** Normalized day bucket for a dateKey (undefined when the day has no results). */
+function wordleDay(couple, dateKey) {
+  const raw = couple.wordle?.[dateKey];
+  if (!raw) return undefined;
+  const normalized = normalizeWordleDay(raw);
+  if (normalized !== raw) couple.wordle[dateKey] = normalized;
+  return normalized;
+}
+
+/**
+ * Per-member view of one (dateKey, lang). Anti-spoiler: the partner's result
+ * (grid/rows) is only revealed once the viewer submitted their own for that
+ * language; `partnerFinished` is always truthful.
+ */
+function wordleViewFor(couple, dateKey, lang, memberId) {
+  const byMember = wordleDay(couple, dateKey)?.[lang] ?? {};
   const partner = partnerOf(couple, memberId);
-  const mine = day[memberId] ?? null;
-  const theirs = partner ? (day[partner.id] ?? null) : null;
+  const mine = byMember[memberId] ?? null;
+  const theirs = partner ? (byMember[partner.id] ?? null) : null;
   return {
     dateKey,
+    lang,
     mine,
     partner: mine && theirs ? theirs : null,
     partnerFinished: Boolean(theirs),
@@ -802,12 +829,14 @@ route('DELETE', '/api/bucket/:id', { auth: true }, (c) => {
 
 // --- love coupons ------------------------------------------------------------------
 
-/** Keeps the list at `max`: oldest REDEEMED coupons go first, then oldest overall. */
+/** Keeps the list at `max`: oldest REDEEMED coupons go first, then oldest overall. Returns the evicted ones. */
 function pruneCoupons(list, max) {
+  const evicted = [];
   while (list.length > max) {
     const redeemedIdx = list.findIndex((cp) => cp.redeemedAt); // list is chronological
-    list.splice(redeemedIdx === -1 ? 0 : redeemedIdx, 1);
+    evicted.push(...list.splice(redeemedIdx === -1 ? 0 : redeemedIdx, 1));
   }
+  return evicted;
 }
 
 function findCoupon(couple, couponId) {
@@ -836,8 +865,10 @@ route('POST', '/api/coupons', { auth: true }, async (c) => {
   };
   const list = couponsOf(c.auth.couple);
   list.push(coupon);
-  pruneCoupons(list, LIMITS.coupons);
+  const evicted = pruneCoupons(list, LIMITS.coupons);
   c.store.markDirty();
+  // Evictions first, so clients applying frames in order never exceed the cap.
+  for (const old of evicted) c.realtime.broadcastCouple(c.auth.coupleId, 'coupon_deleted', { id: old.id });
   c.realtime.broadcastCouple(c.auth.coupleId, 'coupon_added', { coupon });
   sendJson(c.res, 201, { coupon });
 });
@@ -908,11 +939,21 @@ route('POST', '/api/daily/:dateKey', { auth: true }, async (c) => {
 
 route('GET', '/api/wordle/:dateKey', { auth: true }, (c) => {
   const dateKey = asDateKey(c.params.dateKey, 'dateKey');
-  sendJson(c.res, 200, wordleViewFor(c.auth.couple, dateKey, c.auth.memberId));
+  const lang = c.url.searchParams.get('lang');
+  if (!WORDLE_LANGS.includes(lang)) {
+    throw httpError(400, 'bad_lang', `"lang" query param is required and must be one of: ${WORDLE_LANGS.join(', ')}`);
+  }
+  sendJson(c.res, 200, wordleViewFor(c.auth.couple, dateKey, lang, c.auth.memberId));
 });
 
 route('POST', '/api/wordle/:dateKey', { auth: true }, async (c) => {
   const dateKey = asDateKey(c.params.dateKey, 'dateKey');
+  // Submits are only accepted for server-today ±1 day (UTC) — timezones may
+  // straddle midnight, but a week-old or far-future result is bogus.
+  const today = todayKey();
+  if (dateKey !== today && dateKey !== prevDateKey(today) && dateKey !== nextDateKey(today)) {
+    throw httpError(400, 'bad_datekey', `"dateKey" must be within one day of the server date (${today})`);
+  }
   const body = await readJsonObject(c.req);
   if (!Number.isInteger(body.rows) || body.rows < 1 || body.rows > 6) {
     throw httpError(400, 'invalid_request', '"rows" must be an integer between 1 and 6');
@@ -922,10 +963,11 @@ route('POST', '/api/wordle/:dateKey', { auth: true }, async (c) => {
   const lang = asEnum(body.lang, 'lang', WORDLE_LANGS);
   const couple = c.auth.couple;
   const wordle = wordleOf(couple);
-  const day = wordle[dateKey] ?? (wordle[dateKey] = {});
-  if (!day[c.auth.memberId]) {
-    // First submit wins — resubmits are idempotent and never overwrite.
-    day[c.auth.memberId] = {
+  const day = wordleDay(couple, dateKey) ?? (wordle[dateKey] = {});
+  const byMember = day[lang] ?? (day[lang] = {});
+  if (!byMember[c.auth.memberId]) {
+    // First submit per (member, dateKey, lang) wins — resubmits are idempotent and never overwrite.
+    byMember[c.auth.memberId] = {
       memberId: c.auth.memberId,
       rows: body.rows,
       win: body.win,
@@ -940,10 +982,10 @@ route('POST', '/api/wordle/:dateKey', { auth: true }, async (c) => {
     }
     c.store.markDirty();
     for (const member of couple.members) {
-      c.realtime.sendToMember(couple.id, member.id, 'wordle_result', wordleViewFor(couple, dateKey, member.id));
+      c.realtime.sendToMember(couple.id, member.id, 'wordle_result', wordleViewFor(couple, dateKey, lang, member.id));
     }
   }
-  sendJson(c.res, 200, wordleViewFor(couple, dateKey, c.auth.memberId));
+  sendJson(c.res, 200, wordleViewFor(couple, dateKey, lang, c.auth.memberId));
 });
 
 // --- canvas -----------------------------------------------------------------------------

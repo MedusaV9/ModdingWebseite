@@ -227,6 +227,9 @@ enum GamesL10n {
                                        en: "It's a tie — two hearts, one mind 💞"),
         "games.wordle.duel.bothLost": LText(de: "Das Wort hat euch beide besiegt 😅",
                                             en: "The word defeated you both 😅"),
+        "games.wordle.duel.sendFailed": LText(de: "Dein Ergebnis konnte nicht gesendet werden.",
+                                              en: "Your result couldn't be sent."),
+        "games.wordle.duel.retry": LText(de: "Nochmal senden", en: "Send again"),
 
         // MARK: Emoji-Rätsel
         "games.card.emojiriddle.title": LText(de: "Emoji-Rätsel", en: "Emoji Riddles"),

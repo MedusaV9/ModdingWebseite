@@ -3,10 +3,11 @@
 Self-hosted Node.js server for the SoooDreamy couple app. One server can host many couples.
 Base URL example: `http://192.168.1.20:4321` (the app lets you add/switch servers in Settings).
 
-Server version `1.2.0` (reported by `GET /api/health`).
+Server version `1.2.1` (reported by `GET /api/health`).
 v1.1 added photo thumbnails, canvas stroke delete (undo), mood history, the daily journal list, and sealed letters (`openWhen`).
 v1.2 adds message reactions, the Wordle duel, photo favorites, and love coupons.
-All releases are backward compatible: a v1.0/v1.1 `store.json` loads unchanged and missing fields/structures default to `null`/empty on read.
+v1.2.1 makes Wordle results language-specific (per `dateKey` AND `lang`), restricts Wordle submits to server-today ±1 day, and broadcasts `coupon_deleted` for coupons evicted by the cap.
+All releases are backward compatible: a v1.0/v1.1/v1.2.0 `store.json` loads unchanged and missing fields/structures default to `null`/empty on read (v1.2.0 wordle buckets are normalized lazily).
 
 - All request/response bodies are JSON (`camelCase` keys) unless stated otherwise (media uploads are raw bodies).
 - Auth: `Authorization: Bearer <token>` header. Media `GET` endpoints also accept `?token=<token>` (for AVPlayer/AsyncImage).
@@ -42,12 +43,13 @@ All releases are backward compatible: a v1.0/v1.1 `store.json` loads unchanged a
 // moodNote is the note set in the same request, else null)
 { "id": "md_…", "memberId": "m_…", "mood": "🥰", "moodNote": "miss you", "createdAt": "…" }
 
-// WordleResult (one per member per dateKey; first submit wins, resubmits are ignored)
+// WordleResult (one per member per dateKey per lang; first submit wins, resubmits are ignored)
 { "memberId": "m_…", "rows": 3, "win": true, "grid": "🟩🟨⬛…", "lang": "de", "finishedAt": "…" }
 
-// Wordle day view (per member; anti-spoiler: `partner` stays null until `mine` exists,
-// `partnerFinished` is always truthful)
-{ "dateKey": "2026-08-03", "mine": WordleResult|null, "partner": WordleResult|null, "partnerFinished": true }
+// Wordle day view (per member AND per language; anti-spoiler: `partner` stays null until
+// `mine` exists for that (dateKey, lang), `partnerFinished` is always truthful per language)
+{ "dateKey": "2026-08-03", "lang": "de", "mine": WordleResult|null, "partner": WordleResult|null,
+  "partnerFinished": true }
 
 // Coupon (love coupon 🎟 — forMember is always the creator's partner)
 { "id": "cp_…", "title": "Breakfast in bed", "emoji": "🥞", "note": "on a lazy Sunday",
@@ -109,7 +111,7 @@ All releases are backward compatible: a v1.0/v1.1 `store.json` loads unchanged a
 | `POST /api/photos/:id/thumb` | yes (uploader only, else `403 not_yours`) | raw `image/jpeg` body ≤ 2 MB | `{photo}` with `thumbUrl` set; `404 not_found` for unknown photo | `photo_updated {photo}` |
 | `GET /api/photos/:id/thumb/raw` | yes/`?token` | – | thumbnail bytes; `404 no_thumb` when none uploaded | – |
 | `POST /api/photos/:id/favorite` | yes | – (toggles the caller in `favorites`) | `{photo}`; `404 not_found` unknown | `photo_updated {photo}` |
-| `DELETE /api/photos/:id` | yes | – | `{ok}` (also deletes the thumb file, if any) | `photo_deleted {id}` |
+| `DELETE /api/photos/:id` | yes | – | `{ok}` (also deletes the thumb file, if any). The gallery is shared: BOTH partners may delete any photo, by design — deletion is not restricted to the uploader. | `photo_deleted {id}` |
 | `GET /api/events` | yes | – | `{events}` | – |
 | `POST /api/events` | yes | `{title, emoji, date, repeatsYearly}` | `201 {event}` | `event_added {event}` |
 | `PATCH /api/events/:id` | yes | partial | `{event}` | `event_updated {event}` |
@@ -119,14 +121,14 @@ All releases are backward compatible: a v1.0/v1.1 `store.json` loads unchanged a
 | `PATCH /api/bucket/:id` | yes | `{text?, emoji?, done?}` (`done:true` sets `doneAt`) | `{item}` | `bucket_updated {item}` |
 | `DELETE /api/bucket/:id` | yes | – | `{ok}` | `bucket_deleted {id}` |
 | `GET /api/coupons` | yes | – | `{coupons}` newest first | – |
-| `POST /api/coupons` | yes | `{title (≤80), emoji (≤16), note? (≤200)}`; receiver `forMember` is always the partner (`409 no_partner` on a single-member couple) | `201 {coupon}` | `coupon_added {coupon}` |
+| `POST /api/coupons` | yes | `{title (≤80), emoji (≤16), note? (≤200)}`; receiver `forMember` is always the partner (`409 no_partner` on a single-member couple) | `201 {coupon}` | `coupon_added {coupon}`; plus `coupon_deleted {id}` for each coupon evicted by the 200-cap (sent before `coupon_added`) |
 | `POST /api/coupons/:id/redeem` | yes (receiver only, else `403 not_yours`) | – | `{coupon}` with `redeemedAt` set; `409 already_redeemed` on a second redeem | `coupon_redeemed {coupon}` |
 | `DELETE /api/coupons/:id` | yes (creator only, else `403 not_yours`) | – | `{ok}`; `409 already_redeemed` once redeemed | `coupon_deleted {id}` |
 | `GET /api/daily?limit=60` | yes | – | `{entries}` — journal of every day where at least one member answered, `dateKey` descending, same per-member reveal semantics as the single-day endpoint (`limit` capped at 366) | – |
 | `GET /api/daily/:dateKey` | yes | – | `DailyEntry` | – |
 | `POST /api/daily/:dateKey` | yes | `{questionId, text}` | `DailyEntry` (my view) | `daily_answer` → per-member tailored `DailyEntry` |
-| `GET /api/wordle/:dateKey` | yes | – | Wordle day view (per member, anti-spoiler) | – |
-| `POST /api/wordle/:dateKey` | yes | `{rows (int 1–6), win (bool), grid (string ≤ 160), lang ("de"\|"en")}` — one result per member per day; a resubmit returns the stored result unchanged (idempotent, no broadcast) | Wordle day view (my view) | `wordle_result` → per-member tailored day view |
+| `GET /api/wordle/:dateKey?lang=de` | yes | `lang` REQUIRED (`"de"`\|`"en"`, else `400 bad_lang`); any dateKey may be browsed | Wordle day view for that language (per member, anti-spoiler) | – |
+| `POST /api/wordle/:dateKey` | yes | `{rows (int 1–6), win (bool), grid (string ≤ 160), lang ("de"\|"en")}` — dateKey must be within ±1 day of server-today (UTC), else `400 bad_datekey`; one result per member per (dateKey, lang); a resubmit returns the stored result unchanged (idempotent, no broadcast) | Wordle day view (my view, incl. `lang`) | `wordle_result` → per-member tailored day view (incl. `lang`) |
 | `GET /api/canvas` | yes | – | `{strokes}` (ascending) | – |
 | `POST /api/canvas/strokes` | yes | `{color, width, tool, points}` | `201 {stroke}` | `canvas_stroke {stroke}` |
 | `DELETE /api/canvas/strokes/:id` | yes (author only, else `403 not_yours`) | – | `{ok:true}`; `404 not_found` for unknown stroke | `canvas_stroke_deleted {id}` |
@@ -138,7 +140,7 @@ All releases are backward compatible: a v1.0/v1.1 `store.json` loads unchanged a
 | `GET /api/games/active` | yes | – | `{game}` or `{game:null}` (latest lobby/active) | – |
 | `GET /api/stats` | yes | – | `Stats` | – |
 
-Limits: photo body ≤ 15 MB (`413 too_large`), voice ≤ 15 MB, thumbnail ≤ 2 MB, `text` ≤ 5000 chars, `openWhen` ≤ 64 chars (after trim), reaction emoji ≤ 16 chars (after trim), Wordle `grid` ≤ 160 chars, stroke ≤ 2000 points. Canvas keeps at most 8000 strokes (oldest dropped). Messages/touches history capped at 5000/500 entries. Mood history keeps the last 60 entries per member. Wordle keeps the last 60 dateKeys per couple. Coupons cap at 200 per couple (oldest redeemed pruned first, then oldest overall).
+Limits: photo body ≤ 15 MB (`413 too_large`), voice ≤ 15 MB, thumbnail ≤ 2 MB, `text` ≤ 5000 chars, `openWhen` ≤ 64 chars (after trim), reaction emoji ≤ 16 chars (after trim), Wordle `grid` ≤ 160 chars, stroke ≤ 2000 points. Canvas keeps at most 8000 strokes (oldest dropped). Messages/touches history capped at 5000/500 entries. Mood history keeps the last 60 entries per member. Wordle keeps the last 60 dateKeys per couple (each dateKey bucket holds up to 2 languages). Coupons cap at 200 per couple (oldest redeemed pruned first, then oldest overall; evictions are broadcast as `coupon_deleted`).
 
 ## WebSocket
 
@@ -155,6 +157,6 @@ Limits: photo body ≤ 15 MB (`413 too_large`), voice ≤ 15 MB, thumbnail ≤ 2
 - Plain Node.js ≥ 20, only npm dependency: `ws`. Entry: `server/src/server.js` (`npm start`), app factory `createApp()` in `server/src/app.js` (used by tests; `PORT=0` for ephemeral).
 - Env: `PORT` (default `4321`), `HOST` (default `0.0.0.0`), `DATA_DIR` (default `server/data`).
 - Persistence: `DATA_DIR/store.json` (debounced atomic writes: tmp file + rename, flush on SIGINT/SIGTERM) + media files in `DATA_DIR/media/photos/`, `DATA_DIR/media/voice/`. Photo thumbnails live next to their photo as `DATA_DIR/media/photos/<id>.thumb.jpg` and are deleted together with the photo (and on couple dissolve).
-- Backward compatibility: a v1.0/v1.1 `store.json` loads without migration — missing structures (`moodHistory`, `wordle`, `coupons`, `thumbUrl`, `favorites`, `openWhen`, `reactions`) are defaulted on read (`null`/empty).
+- Backward compatibility: a v1.0/v1.1/v1.2.0 `store.json` loads without migration — missing structures (`moodHistory`, `wordle`, `coupons`, `thumbUrl`, `favorites`, `openWhen`, `reactions`) are defaulted on read (`null`/empty). v1.2.0 wordle day buckets (`{memberId: WordleResult}`) are normalized lazily to the per-language shape (`{lang: {memberId: WordleResult}}`) when a day is accessed, using each stored result's own `lang`.
 - CORS: permissive (`*`) — the server is self-hosted for exactly one couple (or a few friends).
 - Streak: number of consecutive days ending today (or yesterday if today unanswered) where **both** members answered the daily question.

@@ -52,6 +52,10 @@ struct PlayHubView: View {
                 refreshWordleDone()
             }
         }
+        .onChange(of: appState.couple?.id) {
+            // Pairing / couple switch changes the daily word and duel state.
+            refreshWordleDone()
+        }
         .onReceive(NotificationCenter.default.publisher(for: .serverEvent)) { note in
             guard let event = note.object as? ServerEvent else { return }
             receive(event)
@@ -287,13 +291,15 @@ struct PlayHubView: View {
             return
         }
         Task {
-            guard let response = try? await api.wordleDay(dateKey: SharedDates.todayKey()) else { return }
+            guard let response = try? await api.wordleDay(dateKey: SharedDates.todayKey(),
+                                                          lang: L10n.lang) else { return }
             applyWordleDuel(response)
         }
     }
 
     private func applyWordleDuel(_ response: WordleDayResponse) {
-        guard response.dateKey == SharedDates.todayKey() else { return }
+        guard response.dateKey == SharedDates.todayKey(),
+              (response.lang ?? L10n.lang) == L10n.lang else { return }
         guard let mine = response.mine, let partner = response.partner else {
             wordleDuelBadge = nil
             return

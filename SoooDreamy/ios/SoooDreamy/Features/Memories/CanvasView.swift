@@ -83,6 +83,12 @@ struct CanvasView: View {
         }
         .task { await loadStrokes() }
         .onAppear { pickInitialColor() }
+        .onDisappear {
+            // Kill the delayed replay-end/celebration work — otherwise the tada
+            // sound + haptic would fire minutes later from another screen.
+            replayEndTask?.cancel()
+            celebrationTask?.cancel()
+        }
         .onReceive(NotificationCenter.default.publisher(for: .serverEvent)) { note in
             guard let event = note.object as? ServerEvent else { return }
             handleServerEvent(event)

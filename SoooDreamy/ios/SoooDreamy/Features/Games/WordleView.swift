@@ -70,6 +70,22 @@ enum WordleDaily {
         return marks
     }
 
+    /// Spoiler-free 🟩🟨⬛ rows for a full board — used for chat sharing and
+    /// as the duel `grid` payload (also for boards restored from storage).
+    static func emojiGrid(guesses: [String], solution: String) -> String {
+        guesses.map { guess in
+            score(guess: guess, solution: solution).map { mark -> String in
+                switch mark {
+                case .correct: return "🟩"
+                case .present: return "🟨"
+                case .absent: return "⬛"
+                }
+            }
+            .joined()
+        }
+        .joined(separator: "\n")
+    }
+
     // MARK: Board persistence (per couple + day + language)
 
     static func storageKey(coupleId: String, dateKey: String, lang: String) -> String {
@@ -147,6 +163,7 @@ struct WordleView: View {
     @State private var restored = false
     @State private var dateKey = SharedDates.todayKey()
     @State private var day: WordleDayResponse?
+    @State private var submitFailed = false
 
     // MARK: Derived state
 
@@ -210,7 +227,9 @@ struct WordleView: View {
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             restore()
-            // Retries a submit that failed earlier (e.g. offline yesterday evening).
+            // A board finished late yesterday may still be waiting for its submit.
+            submitOrphanedYesterday()
+            // Retries a today-submit that failed earlier.
             submitResultIfNeeded()
             loadDay()
         }
@@ -549,17 +568,7 @@ struct WordleView: View {
 
     /// Spoiler-free 🟩🟨⬛ rows — sent to chat and submitted as the duel grid.
     private var emojiGrid: String {
-        guesses.map { guess in
-            WordleDaily.score(guess: guess, solution: solution).map { mark -> String in
-                switch mark {
-                case .correct: return "🟩"
-                case .present: return "🟨"
-                case .absent: return "⬛"
-                }
-            }
-            .joined()
-        }
-        .joined(separator: "\n")
+        WordleDaily.emojiGrid(guesses: guesses, solution: solution)
     }
 
     /// Classic emoji summary — header + result grid for the chat.
@@ -602,20 +611,38 @@ struct WordleView: View {
 
     private func loadDay() {
         guard let api = appState.api else { return }
+        let requestedDateKey = dateKey
+        let requestedLang = lang
         Task {
-            if let response = try? await api.wordleDay(dateKey: dateKey) {
-                day = response
-            }
+            guard let response = try? await api.wordleDay(dateKey: requestedDateKey,
+                                                          lang: requestedLang) else { return }
+            applyDay(response)
         }
     }
 
-    /// Fire-and-forget submission of a finished board. Failures stay silent —
-    /// the flag stays unset, so the next `onAppear` retries (server is
-    /// idempotent, a duplicate just echoes the stored result).
+    /// Single choke point for `day` updates: drops responses for other
+    /// days/languages and never lets a stale fetch regress a state that
+    /// already knows my own result (e.g. a slow GET finishing after the
+    /// submit round-trip already delivered `mine`).
+    @discardableResult
+    private func applyDay(_ response: WordleDayResponse) -> Bool {
+        guard response.dateKey == dateKey else { return false }
+        if let responseLang = response.lang, responseLang != lang { return false }
+        if day?.mine != nil && response.mine == nil { return false }
+        day = response
+        return true
+    }
+
+    /// Fire-and-forget submission of the finished board for today. On failure
+    /// the local flag stays unset (next `onAppear` or the retry button tries
+    /// again); a `bad_datekey` rejection is terminal, so we mark it submitted
+    /// to stop retrying. The server is idempotent — a duplicate submit just
+    /// echoes the stored result.
     private func submitResultIfNeeded() {
         guard finished, !guesses.isEmpty else { return }
         guard let api = appState.api else { return }
         guard !WordleDaily.isSubmitted(coupleId: coupleId, dateKey: dateKey, lang: lang) else { return }
+        submitFailed = false
         let submittedDateKey = dateKey
         let rows = guesses.count
         let win = didWin
@@ -623,24 +650,96 @@ struct WordleView: View {
         let submittedLang = lang
         let submittedCoupleId = coupleId
         Task {
-            guard let response = try? await api.submitWordle(dateKey: submittedDateKey,
-                                                             rows: rows,
-                                                             win: win,
-                                                             grid: grid,
-                                                             lang: submittedLang) else { return }
-            WordleDaily.markSubmitted(coupleId: submittedCoupleId,
-                                      dateKey: submittedDateKey,
-                                      lang: submittedLang)
-            day = response
+            do {
+                let response = try await api.submitWordle(dateKey: submittedDateKey,
+                                                          rows: rows,
+                                                          win: win,
+                                                          grid: grid,
+                                                          lang: submittedLang)
+                WordleDaily.markSubmitted(coupleId: submittedCoupleId,
+                                          dateKey: submittedDateKey,
+                                          lang: submittedLang)
+                applyDay(response)
+            } catch {
+                if Self.isBadDateKey(error) {
+                    WordleDaily.markSubmitted(coupleId: submittedCoupleId,
+                                              dateKey: submittedDateKey,
+                                              lang: submittedLang)
+                } else {
+                    submitFailed = true
+                }
+            }
         }
+    }
+
+    /// A board finished late yesterday but never submitted (app killed,
+    /// offline, …) would be orphaned because `restore()` targets today.
+    /// Checks yesterday's storage for both languages and submits with THAT
+    /// dateKey — the server accepts ±1 day.
+    private func submitOrphanedYesterday() {
+        guard let api = appState.api else { return }
+        guard let yesterday = yesterdayKey() else { return }
+        for boardLang in ["de", "en"] {
+            submitStoredBoard(api: api, dateKey: yesterday, lang: boardLang)
+        }
+    }
+
+    private func submitStoredBoard(api: API, dateKey boardDateKey: String, lang boardLang: String) {
+        let boardCoupleId = coupleId
+        guard !WordleDaily.isSubmitted(coupleId: boardCoupleId,
+                                       dateKey: boardDateKey,
+                                       lang: boardLang) else { return }
+        let boardGuesses = WordleDaily.loadGuesses(coupleId: boardCoupleId,
+                                                   dateKey: boardDateKey,
+                                                   lang: boardLang)
+        guard !boardGuesses.isEmpty else { return }
+        let boardSolution = WordleDaily.solution(coupleId: boardCoupleId,
+                                                 dateKey: boardDateKey,
+                                                 lang: boardLang)
+        let won = boardGuesses.last == boardSolution
+        guard won || boardGuesses.count >= WordleDaily.maxGuesses else { return }
+        let grid = WordleDaily.emojiGrid(guesses: boardGuesses, solution: boardSolution)
+        Task {
+            do {
+                _ = try await api.submitWordle(dateKey: boardDateKey,
+                                               rows: boardGuesses.count,
+                                               win: won,
+                                               grid: grid,
+                                               lang: boardLang)
+                WordleDaily.markSubmitted(coupleId: boardCoupleId,
+                                          dateKey: boardDateKey,
+                                          lang: boardLang)
+            } catch {
+                // Too old by now — stop retrying forever. Other errors stay
+                // unmarked and get another chance on the next appear.
+                if Self.isBadDateKey(error) {
+                    WordleDaily.markSubmitted(coupleId: boardCoupleId,
+                                              dateKey: boardDateKey,
+                                              lang: boardLang)
+                }
+            }
+        }
+    }
+
+    private func yesterdayKey() -> String? {
+        guard let date = SharedDates.calendar.date(byAdding: .day, value: -1, to: Date()) else {
+            return nil
+        }
+        return SharedDates.todayKey(date)
+    }
+
+    private static func isBadDateKey(_ error: Error) -> Bool {
+        if case APIError.http(_, let code, _) = error, code == "bad_datekey" {
+            return true
+        }
+        return false
     }
 
     private func receiveDuelEvent(_ event: ServerEvent) {
         guard event.type == .wordleResult,
-              let response = event.decode(WordleDayResponse.self),
-              response.dateKey == dateKey else { return }
+              let response = event.decode(WordleDayResponse.self) else { return }
         let partnerWasFinished = day?.partnerFinished ?? false
-        day = response
+        guard applyDay(response) else { return }
         if !partnerWasFinished && response.partnerFinished {
             SoundEngine.shared.play(.chime)
             Haptics.shared.tap()
@@ -651,18 +750,45 @@ struct WordleView: View {
 
     @ViewBuilder
     private var duelSection: some View {
-        if appState.partner != nil, let day, day.dateKey == dateKey {
+        if appState.partner != nil, let day,
+           day.dateKey == dateKey, (day.lang ?? lang) == lang {
             if let mine = day.mine, let partnerResult = day.partner {
                 duelCard(mine: mine, partner: partnerResult)
             } else if !day.partnerFinished {
                 stillSolvingCard
             } else if !finished {
                 teaserCard
+            } else if submitFailed {
+                // My submit failed — offer a retry instead of an eternal spinner.
+                retryCard
             } else {
                 // I just finished, partner too — my submit round-trip is in flight.
                 revealingCard
             }
         }
+    }
+
+    private var retryCard: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 16))
+                .foregroundStyle(Theme.gold)
+            Text(L10n.t("games.wordle.duel.sendFailed"))
+                .font(.system(.caption, design: .rounded).weight(.semibold))
+                .foregroundStyle(Theme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+            Button(action: submitResultIfNeeded) {
+                Text(L10n.t("games.wordle.duel.retry"))
+                    .font(.system(.caption, design: .rounded).weight(.bold))
+                    .foregroundStyle(Theme.bgTop)
+                    .padding(.vertical, 7)
+                    .padding(.horizontal, 12)
+                    .background(Capsule().fill(Theme.gold))
+            }
+            .buttonStyle(.plain)
+        }
+        .glassCard(padding: 12)
     }
 
     private var stillSolvingCard: some View {

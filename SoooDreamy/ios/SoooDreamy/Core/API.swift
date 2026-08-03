@@ -223,8 +223,9 @@ struct API {
                           as: WordleDayResponse.self)
     }
 
-    func wordleDay(dateKey: String) async throws -> WordleDayResponse {
-        try await request("GET", "/api/wordle/\(dateKey)", as: WordleDayResponse.self)
+    func wordleDay(dateKey: String, lang: String) async throws -> WordleDayResponse {
+        try await request("GET", "/api/wordle/\(dateKey)", query: ["lang": lang],
+                          as: WordleDayResponse.self)
     }
 
     // MARK: Photos

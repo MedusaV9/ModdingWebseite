@@ -86,9 +86,11 @@ test('coupon permission matrix: no_partner, wrong redeemer, double redeem, wrong
   assert.equal((await a.api.post('/api/coupons', { json: { title: '  ', emoji: '🎟' } })).status, 400);
 });
 
-test('coupon list caps at 200: oldest redeemed pruned first, then oldest overall', async (t) => {
+test('coupon list caps at 200: oldest redeemed pruned first (with coupon_deleted broadcast), then oldest overall', async (t) => {
   const { baseUrl } = await makeApp(t);
   const { a, b } = await setupCouple(baseUrl);
+  const bSock = await wsOpen(baseUrl, b.token, t);
+  await bSock.waitFor('welcome');
 
   const ids = [];
   for (let i = 0; i < 200; i++) {
@@ -100,13 +102,18 @@ test('coupon list caps at 200: oldest redeemed pruned first, then oldest overall
   await b.api.post(`/api/coupons/${ids[5]}/redeem`);
 
   const overflow1 = (await a.api.post('/api/coupons', { json: { title: 'overflow 1', emoji: '🎟' } })).body.coupon;
+  // The cap eviction is announced like a normal delete.
+  const evicted1 = await bSock.waitFor('coupon_deleted');
+  assert.deepEqual(evicted1.payload, { id: ids[5] });
   let list = (await a.api.get('/api/coupons')).body.coupons;
   assert.equal(list.length, 200);
   assert.ok(!list.some((cp) => cp.id === ids[5])); // redeemed one went first
   assert.ok(list.some((cp) => cp.id === ids[0])); // oldest unredeemed survived
 
-  // No redeemed coupons left → now the oldest overall is pruned.
+  // No redeemed coupons left → now the oldest overall is pruned (and broadcast).
   const overflow2 = (await a.api.post('/api/coupons', { json: { title: 'overflow 2', emoji: '🎟' } })).body.coupon;
+  const evicted2 = await bSock.waitFor('coupon_deleted');
+  assert.deepEqual(evicted2.payload, { id: ids[0] });
   list = (await a.api.get('/api/coupons')).body.coupons;
   assert.equal(list.length, 200);
   assert.ok(!list.some((cp) => cp.id === ids[0]));

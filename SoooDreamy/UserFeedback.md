@@ -69,6 +69,16 @@ _(hier beantworte ich dein Feedback, wenn ich es umgesetzt habe)_
 - `[2026-08-03 21:05 UTC]` **🧩 Emoji-Rätsel**: Party-Spiel mit **140 validierten Rätseln** in 6 Kategorien (Filme mit deutschen/englischen Titeln, Songs, Orte, Essen, Paar-Dinge, Aktivitäten) — Karten-Flip-Reveal, Punktevergabe pro Partner, Sieger-Zeremonie, Revanche.
 - `[2026-08-03 21:10 UTC]` Logic-Test-Suite auf **46 Tests** erweitert (Emoji-Rätsel-Integrität: Kategorien, keine ASCII-Zeichen in Emoji-Strings, keine doppelten Antworten).
 
+### Iteration 7 — Qualitätswelle: Deep-Review & 15 Fixes 🔍
+- `[2026-08-03 21:20 UTC]` Ein unabhängiger Review-Agent hat alle Wellen-5/6-Features tiefgeprüft (Chat-Reaktionen, Duell-Statemachine, Replay, Coupons, Widgets, Server-Endpoints): **15 Findings (5× Medium, 10× Low, 0 kritisch)** — alle behoben:
+  - **Wordle**: Ergebnisse jetzt **pro Sprache** gespeichert (Server v1.2.1, lazy Migration alter Daten), gestern-fertig-aber-offline-Boards werden nachgereicht, kein Endlos-Spinner mehr bei fehlgeschlagenem Submit (Retry-Button), Race-Guard gegen veraltete Antworten, absurde Datums-Submits abgelehnt (±1 Tag).
+  - **Chat**: Fehler-Pfad der Reaktionen synchronisiert jetzt mit Server-Wahrheit statt blind zurückzutoggeln; Echo-Duplikat beim Senden eliminiert; Reconnect lädt Lücken seitenweise nach (max. 4 Seiten) und frischt Reaktionen auf.
+  - **Galerie/Canvas**: Favoriten-Fehlerpfad überschreibt keine Partner-Herzen mehr; Favoriten-Filter gilt jetzt auch im Vollbild-Pager; Replay-Tasks werden beim Verlassen gecancelt.
+  - **Coupons**: Kap-Räumung broadcastet jetzt `coupon_deleted` (keine Geister-Gutscheine).
+  - **Dashboard**: Erinnerungs-Karte resettet beim Server-/Paar-Wechsel.
+  - **Foto-Widget**: speicherschonendes Dekodieren via `CGImageSourceCreateThumbnailAtIndex` (kein Memory-Kill durch große Fotos).
+- `[2026-08-03 21:25 UTC]` Stand: **Server 66/66 Tests · 46/46 Logic-Tests (Linux) · Parse aller 70 Swift-Dateien sauber.**
+
 ## 🔄 Als Nächstes
 - Auf dein Feedback warten — schreib es oben in „💬 Dein Feedback“! Ich lese es bei jeder Iteration. 💜
-- Ideen für kommende Wellen: gemeinsame Playlist-Wünsche, Countdown-Sharing als Nachricht, Wordle-Statistik-Verlauf, Coupons mit Ablaufdatum, Stimmungs-Trends, Fotoalben.
+- Ideen für kommende Wellen: Duell-Bilanz über Zeit (W:N:U-Statistik), gemeinsame Playlist-Wünsche, Countdown-Sharing als Nachricht, Coupons mit Ablaufdatum, Stimmungs-Trends, Fotoalben.

@@ -111,8 +111,10 @@ struct WordleResult: Codable, Hashable {
 }
 
 /// Per-member view: partner's result stays hidden until I finished (no spoilers).
+/// Results are per language — the duel compares same-language boards.
 struct WordleDayResponse: Codable, Hashable {
     let dateKey: String
+    let lang: String?
     let mine: WordleResult?
     let partner: WordleResult?
     let partnerFinished: Bool

@@ -60,7 +60,8 @@ struct GalleryView: View {
             }
         }
         .fullScreenCover(item: $pagerTarget) { photo in
-            PhotoPagerView(photos: $photos, startId: photo.id)
+            PhotoPagerView(photos: $photos, startId: photo.id,
+                           favoritesOnly: filter == .favorites)
         }
         .onReceive(NotificationCenter.default.publisher(for: .serverEvent)) { note in
             guard let event = note.object as? ServerEvent else { return }
@@ -456,8 +457,12 @@ private struct PhotoPagerView: View {
 
     @Binding var photos: [Photo]
     let startId: String
+    let favoritesOnly: Bool
 
     @State private var currentId = ""
+    /// Last known position of `currentId` within the visible slice — used to
+    /// clamp to a neighbor when the current photo drops out of the slice.
+    @State private var lastVisibleIndex = 0
     @State private var confirmDelete = false
     @State private var busy = false
 
@@ -467,12 +472,38 @@ private struct PhotoPagerView: View {
             pager
             overlayControls
         }
-        .onAppear { currentId = startId }
+        .onAppear {
+            currentId = startId
+            lastVisibleIndex = visiblePhotos.firstIndex { $0.id == startId } ?? 0
+        }
+        .onChange(of: currentId) { _, newId in
+            if let idx = visiblePhotos.firstIndex(where: { $0.id == newId }) {
+                lastVisibleIndex = idx
+            }
+        }
+        .onChange(of: visibleIds) { _, ids in
+            guard !ids.contains(currentId) else { return }
+            guard !ids.isEmpty else {
+                dismiss()
+                return
+            }
+            currentId = ids[min(lastVisibleIndex, ids.count - 1)]
+        }
         .confirmationDialog(L10n.t("memories.gallery.deleteConfirm"),
                             isPresented: $confirmDelete, titleVisibility: .visible) {
             Button(L10n.t("common.delete"), role: .destructive) { deleteCurrent() }
             Button(L10n.t("common.cancel"), role: .cancel) {}
         }
+    }
+
+    /// The slice the pager pages over — mirrors the grid filter. Derived from
+    /// the master array so mutations (favorites, deletes) flow straight back.
+    private var visiblePhotos: [Photo] {
+        favoritesOnly ? photos.filter { !($0.favorites ?? []).isEmpty } : photos
+    }
+
+    private var visibleIds: [String] {
+        visiblePhotos.map(\.id)
     }
 
     private var currentPhoto: Photo? {
@@ -481,12 +512,12 @@ private struct PhotoPagerView: View {
 
     private var pager: some View {
         TabView(selection: $currentId) {
-            ForEach(photos) { photo in
+            ForEach(visiblePhotos) { photo in
                 pageContent(photo)
                     .tag(photo.id)
             }
         }
-        .tabViewStyle(.page(indexDisplayMode: photos.count > 1 ? .automatic : .never))
+        .tabViewStyle(.page(indexDisplayMode: visiblePhotos.count > 1 ? .automatic : .never))
         .indexViewStyle(.page(backgroundDisplayMode: .never))
     }
 
@@ -606,28 +637,31 @@ private struct PhotoPagerView: View {
     private func toggleFavorite() {
         guard let photo = currentPhoto, let api = appState.api,
               let myId = appState.memberId else { return }
-        let original = photo.favorites
-        var favorites = original ?? []
-        if favorites.contains(myId) {
-            favorites.removeAll { $0 == myId }
-        } else {
-            favorites.append(myId)
-        }
-        setFavorites(favorites, for: photo.id)
+        let wasFavorite = photo.isFavorite(of: myId)
+        setMyFavorite(!wasFavorite, on: photo.id, myId: myId)
         Haptics.shared.success()
         Task {
             do {
                 let updated = try await api.togglePhotoFavorite(id: photo.id)
                 merge(updated)
             } catch {
-                setFavorites(original ?? [], for: photo.id)
+                // Revert by inverting only MY op on the CURRENT array — a partner's
+                // concurrent photo_updated (their heart) stays intact.
+                setMyFavorite(wasFavorite, on: photo.id, myId: myId)
                 appState.handleAPIError(error)
             }
         }
     }
 
-    private func setFavorites(_ favorites: [String], for id: String) {
-        guard let idx = photos.firstIndex(where: { $0.id == id }) else { return }
+    /// Adds/removes only MY member id in the photo's current favorites array.
+    private func setMyFavorite(_ favorite: Bool, on photoId: String, myId: String) {
+        guard let idx = photos.firstIndex(where: { $0.id == photoId }) else { return }
+        var favorites = photos[idx].favorites ?? []
+        if favorite {
+            if !favorites.contains(myId) { favorites.append(myId) }
+        } else {
+            favorites.removeAll { $0 == myId }
+        }
         photos[idx].favorites = favorites
     }
 

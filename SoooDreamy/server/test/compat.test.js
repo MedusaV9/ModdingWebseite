@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { makeApp, client } from './helpers.js';
+import { makeApp, client, dateKeyDaysAgo } from './helpers.js';
 
 /**
  * A store.json exactly as a v1.0 server would have written it: no moodHistory,
@@ -155,10 +155,12 @@ test('a v1.0 store.json loads cleanly and all v1.1/v1.2 endpoints work on it', a
   assert.deepEqual(reacted.body.message.reactions, { '💌': ['m_b'] });
 
   // Wordle duel (couple.wordle is defaulted lazily) with anti-spoiler view.
-  const wordle = await a.post('/api/wordle/2026-08-03', { json: { rows: 4, win: true, grid: '🟩', lang: 'de' } });
+  const today = dateKeyDaysAgo(0);
+  const wordle = await a.post(`/api/wordle/${today}`, { json: { rows: 4, win: true, grid: '🟩', lang: 'de' } });
   assert.equal(wordle.status, 200);
+  assert.equal(wordle.body.lang, 'de');
   assert.equal(wordle.body.mine.rows, 4);
-  const bWordle = await b.get('/api/wordle/2026-08-03');
+  const bWordle = await b.get(`/api/wordle/${today}?lang=de`);
   assert.equal(bWordle.body.partner, null);
   assert.equal(bWordle.body.partnerFinished, true);
 

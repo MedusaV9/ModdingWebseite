@@ -8,7 +8,7 @@
 
 - **Herzklopfen & Berührungen** — sende Herzklopfen, Küsse, Umarmungen … mit echten CoreHaptics-Mustern und synthetisierten Sounds. Empfangene Berührungen erscheinen als Vollbild-Moment.
 - **3D-Herz** — ein prozedural generiertes, schlagendes SceneKit-Herz auf dem Dashboard (tippen = Herzklopfen senden 💓).
-- **Chat** — Texte, 💌 Liebesbriefe (mit eigenem Composer + Vollbild-Leser) und Sprachnachrichten mit Live-Pegel, Tipp-Indikator, Tag-Gruppierung.
+- **Chat** — Texte, 💌 Liebesbriefe (mit eigenem Composer + Vollbild-Leser) und Sprachnachrichten mit Live-Pegel, Tipp-Indikator, Tag-Gruppierung, **Emoji-Reaktionen** (Doppeltipp ❤️).
 - **„Öffnen wenn…"-Briefe** 🔒 — versiegelte Liebesbriefe („Öffne mich, wenn du traurig bist / mich vermisst / nicht schlafen kannst …"); der Empfänger bricht das Siegel mit einer dramatischen Enthüllungs-Animation.
 - **Frage des Tages** — 185 bilinguale Fragen, deterministisch pro Tag & Paar; Antworten werden erst enthüllt, wenn beide geantwortet haben. Mit 🔥-Serie (Streak) und **📖 „Unser Tagebuch"** zum Durchblättern aller bisherigen Antworten.
 - **💘 Liebes-Wordle** — tägliches Paar-Wordle: beide raten dasselbe Wort (514 deutsche / 461 englische Wörter), Ergebnis-Grid direkt in den Chat teilen.

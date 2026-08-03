@@ -1,6 +1,7 @@
 import WidgetKit
 import SwiftUI
 import UIKit
+import ImageIO
 
 // MARK: - Timeline
 
@@ -42,22 +43,23 @@ struct PhotoProvider: TimelineProvider {
         if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
             return nil
         }
-        guard let image = UIImage(data: data) else { return nil }
-        return downscaled(image, maxDimension: 800)
+        return thumbnail(from: data, maxDimension: 800)
     }
 
-    /// Defensive downscale so the widget stays within its memory budget.
-    private static func downscaled(_ image: UIImage, maxDimension: CGFloat) -> UIImage {
-        let size = image.size
-        let longest = max(size.width, size.height)
-        guard longest > maxDimension, longest > 0 else { return image }
-        let factor = maxDimension / longest
-        let target = CGSize(width: size.width * factor, height: size.height * factor)
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = 1
-        return UIGraphicsImageRenderer(size: target, format: format).image { _ in
-            image.draw(in: CGRect(origin: .zero, size: target))
-        }
+    /// Memory-safe decode: `CGImageSourceCreateThumbnailAtIndex` never
+    /// materializes the full-resolution bitmap, so even a huge thumb-less
+    /// photo stays within the widget's tight memory budget.
+    private static func thumbnail(from data: Data, maxDimension: CGFloat) -> UIImage? {
+        let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
+        guard let source = CGImageSourceCreateWithData(data as CFData, sourceOptions) else { return nil }
+        let thumbOptions = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxDimension
+        ] as CFDictionary
+        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, thumbOptions) else { return nil }
+        return UIImage(cgImage: cgImage)
     }
 }
 
