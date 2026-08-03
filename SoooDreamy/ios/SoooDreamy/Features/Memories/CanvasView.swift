@@ -258,12 +258,28 @@ struct CanvasView: View {
         VStack(spacing: 12) {
             HStack(spacing: 10) {
                 toolPicker
+                undoButton
                 Spacer()
                 clearButton
             }
             widthSlider
         }
         .glassCard(padding: 14)
+    }
+
+    private var undoButton: some View {
+        Button {
+            undoLastStroke()
+        } label: {
+            Image(systemName: "arrow.uturn.backward")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(myLastUndoableStroke == nil ? Theme.textTertiary : Theme.textPrimary)
+                .frame(width: 40, height: 34)
+                .background(Capsule().fill(Color.white.opacity(0.06)))
+        }
+        .buttonStyle(.plain)
+        .disabled(myLastUndoableStroke == nil)
+        .accessibilityLabel(L10n.t("memories.canvas.undo"))
     }
 
     private var toolPicker: some View {
@@ -334,6 +350,28 @@ struct CanvasView: View {
         loading = false
     }
 
+    /// My most recent stroke that already has a server id (in-flight "local-" temps can't be undone yet).
+    private var myLastUndoableStroke: CanvasStroke? {
+        strokes.last { $0.memberId == appState.memberId && !$0.id.hasPrefix("local-") }
+    }
+
+    private func undoLastStroke() {
+        guard let api = appState.api, let stroke = myLastUndoableStroke else { return }
+        guard let idx = strokes.firstIndex(where: { $0.id == stroke.id }) else { return }
+        strokes.remove(at: idx)
+        Haptics.shared.tap()
+        Task {
+            do {
+                try await api.deleteStroke(id: stroke.id)
+            } catch {
+                if !strokes.contains(where: { $0.id == stroke.id }) {
+                    strokes.insert(stroke, at: min(idx, strokes.count))
+                }
+                appState.handleAPIError(error)
+            }
+        }
+    }
+
     private func clearAll() {
         guard let api = appState.api else { return }
         Task {
@@ -359,6 +397,9 @@ struct CanvasView: View {
                 SoundEngine.shared.play(.pop)
                 showPartnerIndicator(for: stroke)
             }
+        case .canvasStrokeDeleted:
+            guard let id = event.decode(IdPayload.self)?.id else { return }
+            strokes.removeAll { $0.id == id }
         case .canvasClear:
             strokes = []
             currentPoints = []

@@ -2,6 +2,7 @@ import SwiftUI
 
 struct RootView: View {
     @Environment(AppState.self) private var appState
+    @Environment(AppLock.self) private var appLock
 
     var body: some View {
         ZStack {
@@ -41,10 +42,18 @@ struct RootView: View {
                 .transition(.move(edge: .top).combined(with: .opacity))
                 .zIndex(12)
             }
+
+            // App lock gate (Face ID / passcode)
+            if appLock.locked {
+                LockScreenView()
+                    .transition(.opacity)
+                    .zIndex(100)
+            }
         }
         .animation(.spring(response: 0.4), value: appState.phase)
         .animation(.spring(response: 0.4), value: appState.incomingTouch != nil)
         .animation(.spring(response: 0.4), value: appState.toast)
+        .animation(.easeOut(duration: 0.3), value: appLock.locked)
         .id(appState.uiRefresh)   // full rebuild on language switch
     }
 }

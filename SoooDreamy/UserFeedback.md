@@ -47,6 +47,16 @@ _(hier beantworte ich dein Feedback, wenn ich es umgesetzt habe)_
 - `[2026-08-03 19:38 UTC]` **Dockerfile** für den Server (node:22-alpine, Volume für `data/`) + README-Anleitung — Self-Hosting mit einem Befehl.
 - `[2026-08-03 19:40 UTC]` **CI wieder komplett grün** (Run 30846653658): Server-Tests 38/38 ✓, iOS `** BUILD SUCCEEDED **` ✓, Artifact `SoooDreamy-unsigned-ipa` (3,06 MB) ✓.
 
+### Iteration 4 — Die große Feature-Welle (5 parallele Subagents) 🌊
+- `[2026-08-03 20:15 UTC]` **Server v1.1** (52/52 Tests): Foto-**Thumbnails** (`POST /api/photos/:id/thumb`), **Canvas-Undo** (`DELETE /api/canvas/strokes/:id`, nur eigene), **Stimmungs-Verlauf** (`GET /api/moods`, letzte 60 pro Person), **Tagebuch-Liste** (`GET /api/daily?limit=`), **versiegelte Briefe** (`openWhen`-Feld) — alles abwärtskompatibel zu v1.0-Daten (eigener Kompat-Test), `docs/API.md` aktualisiert.
+- `[2026-08-03 20:15 UTC]` **💌🔒 „Öffnen wenn…“-Briefe**: Siegel-Auswahl beim Schreiben (traurig 😢, vermisst mich 🥺, feiern 🥳, mieser Tag 🌧, schlaflos 🌙, Jahrestag 💍, eigenes), Empfänger sieht einen versiegelten Umschlag und öffnet ihn mit dramatischer Enthüllungs-Animation; dazu Brief-Vollbild-Leser & Kopieren-Kontextmenüs im Chat.
+- `[2026-08-03 20:15 UTC]` **💘 Liebes-Wordle**: tägliches Paar-Wordle — beide raten dasselbe Wort (deterministisch pro Tag & Paar), 514 deutsche + 461 englische Wörter (validiert), QWERTZ/QWERTY-Tastatur, korrektes Zwei-Pass-Scoring bei doppelten Buchstaben, Tages-Persistenz, Ergebnis-Grid (🟩🟨⬛) direkt in den Chat teilen, Hub-Karte mit Täglich-Badge & Erledigt-Häkchen.
+- `[2026-08-03 20:15 UTC]` **Galerie-Thumbnails** (Grid lädt jetzt ~320px-Thumbs, alte Fotos fallen aufs Original zurück), **Canvas-Undo-Button** (optimistisch + Partner-Undos live), **Stimmungsverlauf-Timeline** in den Love-Stats, **📖 „Unser Tagebuch“** — alle bisherigen Tagesfragen mit beiden Antworten zum Durchblättern.
+- `[2026-08-03 20:15 UTC]` **🔒 App-Sperre** (Face ID/Touch ID/Code, sperrt beim Verlassen der App) + **🎉 Monatstag-Feier**: Dashboard feiert automatisch „X Monate/Jahre zusammen — genau heute!“ mit Herzchen-Regen.
+- `[2026-08-03 20:20 UTC]` **Neue Test-Ebene**: SwiftPM-Package `SoooDreamyLogic` — **40 Logik-Tests laufen auf Linux** (`swift test`): Content-Integrität (alle 7 Packs + Wordle-Wörter), Datums-Mathe, deterministischer Seeded-Shuffle, L10n-Tabellen (keine leeren/doppelten Keys) und ein statischer Quellcode-Scan, der prüft, dass jeder verwendete `L10n.t("…")`-Key existiert.
+- `[2026-08-03 20:21 UTC]` **E2E-Smoke v1.1 grün**: versiegelter Brief (openWhen ✓), Thumb-Upload (Partner → 403 ✓, Abruf 200 ✓), Stroke-Undo (fremd → 403, eigen → 200 ✓), Mood-Verlauf ✓, Tagebuch-Reveal ✓, alle 7 WS-Events live empfangen ✓.
+- `[2026-08-03 20:25 UTC]` **CI ausgebaut**: neuer Job „Logic tests (Swift on Linux)“ + rollendes GitHub-Prerelease `sooodreamy-latest` mit dem frischen IPA als Download (best-effort).
+
 ## 🔄 Als Nächstes
 - Auf dein Feedback warten — schreib es oben in „💬 Dein Feedback“! Ich lese es bei der nächsten Iteration und setze es um. 💜
-- Ideen für kommende Iterationen: IPA zusätzlich als GitHub-Release anhängen, Foto-Thumbnails fürs Grid, Undo im Canvas, mehr Widget-Größen, Onboarding-Konfetti.
+- Ideen für kommende Iterationen: Wordle-Duell-Ansicht (Ergebnisse beider Partner nebeneinander), Foto-Alben/Favoriten, Canvas-Replay als Video, Erinnerungs-Rückblicke („vor einem Jahr…“), mehr Live-Activity-Typen.

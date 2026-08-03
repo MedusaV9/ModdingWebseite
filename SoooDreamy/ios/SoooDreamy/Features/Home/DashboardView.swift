@@ -16,6 +16,10 @@ struct DashboardView: View {
                     VStack(spacing: 16) {
                         header
 
+                        if let milestone = monthiversary {
+                            monthiversaryCard(milestone)
+                        }
+
                         if appState.couple == nil {
                             sessionStateCard
                         } else if appState.partner == nil {
@@ -67,6 +71,53 @@ struct DashboardView: View {
             ConnectionBanner(state: appState.socket.state)
         }
         .padding(.top, 6)
+    }
+
+    // MARK: Monthiversary (exactly X months / years together today)
+
+    private var monthiversary: (count: Int, years: Bool)? {
+        guard let key = appState.couple?.anniversary,
+              let start = SharedDates.parse(key) else { return nil }
+        let cal = SharedDates.calendar
+        let startDay = cal.startOfDay(for: start)
+        let today = cal.startOfDay(for: Date())
+        guard today > startDay else { return nil }
+        let comps = cal.dateComponents([.month, .day], from: startDay, to: today)
+        guard let months = comps.month, months >= 1, comps.day == 0 else { return nil }
+        if months % 12 == 0 { return (months / 12, true) }
+        return (months, false)
+    }
+
+    private func monthiversaryCard(_ milestone: (count: Int, years: Bool)) -> some View {
+        let text: String
+        if milestone.years {
+            text = milestone.count == 1
+                ? L10n.t("home.anniversaryOneYear")
+                : L10n.t("home.anniversaryYears", ["n": String(milestone.count)])
+        } else {
+            text = milestone.count == 1
+                ? L10n.t("home.monthiversaryOne")
+                : L10n.t("home.monthiversary", ["n": String(milestone.count)])
+        }
+        return ZStack {
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(Theme.heroGradient)
+                .opacity(0.85)
+            FloatingHeartsView(emojis: milestone.years ? ["🥂", "💍", "💖"] : ["🎉", "💞", "✨"], count: 8)
+                .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+            HStack(spacing: 12) {
+                Text(milestone.years ? "🥂" : "🎉")
+                    .font(.system(size: 34))
+                Text(text)
+                    .font(.system(.headline, design: .rounded).weight(.heavy))
+                    .foregroundStyle(.white)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+            }
+            .padding(16)
+        }
+        .frame(minHeight: 68)
+        .shadow(color: Theme.pink.opacity(0.4), radius: 14, y: 6)
     }
 
     // MARK: Session loading / retry (cold start without network)

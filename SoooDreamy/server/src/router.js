@@ -22,13 +22,16 @@ const GAME_TYPES = ['quiz', 'thisorthat', 'wouldyourather', 'truthordare', 'ques
 
 const LIMITS = {
   media: 15 * 1024 * 1024, // photo & voice bodies
+  thumb: 2 * 1024 * 1024, // photo thumbnail bodies
   json: 1024 * 1024,
   text: 5000,
+  openWhen: 64,
   strokePoints: 2000,
   strokes: 8000,
   messages: 5000,
   touches: 500,
   games: 100,
+  moodHistory: 60, // per member
 };
 
 // ---------------------------------------------------------------------------
@@ -103,6 +106,23 @@ function partnerOf(couple, memberId) {
   return couple.members.find((m) => m.id !== memberId) ?? null;
 }
 
+/** v1.0 stores have no `openWhen` on messages — default it on the way out. */
+function serializeMessage(message) {
+  return { ...message, openWhen: message.openWhen ?? null };
+}
+
+/** v1.0 stores have no `thumbUrl` on photos — default it on the way out. */
+function serializePhoto(photo) {
+  return { ...photo, thumbUrl: photo.thumbUrl ?? null };
+}
+
+/** Per-member mood history lives on the couple; v1.0 stores lack it entirely. */
+function moodHistoryOf(couple, memberId) {
+  if (!couple.moodHistory) couple.moodHistory = {};
+  if (!couple.moodHistory[memberId]) couple.moodHistory[memberId] = [];
+  return couple.moodHistory[memberId];
+}
+
 // ---------------------------------------------------------------------------
 // couple/member factories
 
@@ -139,6 +159,7 @@ function newCouple(store) {
     strokes: [],
     daily: {},
     games: [],
+    moodHistory: {},
     counters: { messages: 0, gamesPlayed: 0, touches: {} },
   };
 }
@@ -358,6 +379,19 @@ route('PATCH', '/api/me', { auth: true }, async (c) => {
     member.moodNote = body.moodNote === null ? null : asString(body.moodNote, 'moodNote', { max: 500, nonEmpty: false });
     if (!('mood' in body)) member.moodUpdatedAt = nowIso();
   }
+  if ('mood' in body && body.mood !== null) {
+    // Setting a (non-null) mood appends to the per-member history. The entry
+    // carries the note only when it was set in the same request.
+    const history = moodHistoryOf(c.auth.couple, member.id);
+    history.push({
+      id: id('md'),
+      memberId: member.id,
+      mood: member.mood,
+      moodNote: 'moodNote' in body && body.moodNote != null ? member.moodNote : null,
+      createdAt: nowIso(),
+    });
+    capList(history, LIMITS.moodHistory);
+  }
   c.store.markDirty();
   const serialized = serializeMember(c.auth.couple, member, c.realtime);
   c.realtime.broadcastCouple(c.auth.coupleId, 'member_updated', { member: serialized });
@@ -380,7 +414,10 @@ route('PATCH', '/api/couple', { auth: true }, async (c) => {
 route('DELETE', '/api/couple', { auth: true }, async (c) => {
   const couple = c.auth.couple;
   c.realtime.broadcastCouple(couple.id, 'couple_dissolved', {});
-  for (const photo of couple.photos) await c.store.deleteMedia('photos', `${photo.id}.jpg`);
+  for (const photo of couple.photos) {
+    await c.store.deleteMedia('photos', `${photo.id}.jpg`);
+    await c.store.deleteMedia('photos', `${photo.id}.thumb.jpg`);
+  }
   for (const msg of couple.messages) {
     if (msg.type === 'voice') await c.store.deleteMedia('voice', `${msg.id}.m4a`);
   }
@@ -391,6 +428,19 @@ route('DELETE', '/api/couple', { auth: true }, async (c) => {
   c.store.markDirty();
   c.realtime.closeCouple(couple.id);
   sendJson(c.res, 200, { ok: true });
+});
+
+// --- mood history ------------------------------------------------------------
+
+route('GET', '/api/moods', { auth: true }, (c) => {
+  const limit = queryInt(c.url, 'limit', 80, 1, 200);
+  const merged = [];
+  for (const list of Object.values(c.auth.couple.moodHistory ?? {})) {
+    for (let i = list.length - 1; i >= 0; i--) merged.push(list[i]); // newest first per member
+  }
+  // Stable sort keeps each member's newest-first order for same-ms entries.
+  merged.sort((x, y) => (x.createdAt < y.createdAt ? 1 : x.createdAt > y.createdAt ? -1 : 0));
+  sendJson(c.res, 200, { moods: merged.slice(0, limit) });
 });
 
 // --- touches -----------------------------------------------------------------
@@ -427,7 +477,7 @@ route('GET', '/api/messages', { auth: true }, (c) => {
     if (endIdx === -1) throw httpError(404, 'not_found', 'Unknown "before" message id');
   }
   const startIdx = Math.max(0, endIdx - limit);
-  sendJson(c.res, 200, { messages: list.slice(startIdx, endIdx) });
+  sendJson(c.res, 200, { messages: list.slice(startIdx, endIdx).map(serializeMessage) });
 });
 
 function pushMessage(c, message) {
@@ -448,12 +498,22 @@ route('POST', '/api/messages', { auth: true }, async (c) => {
   const text = asText(body.text, 'text');
   const title =
     type === 'letter' && body.title != null ? asString(body.title, 'title', { max: 200, nonEmpty: false }) : null;
+  // "Sealed letter" hint — stored for letters only, silently ignored otherwise.
+  let openWhen = null;
+  if (type === 'letter' && body.openWhen != null) {
+    const trimmed = asString(body.openWhen, 'openWhen', { nonEmpty: false, max: LIMITS.text }).trim();
+    if (trimmed.length > LIMITS.openWhen) {
+      throw httpError(400, 'openwhen_too_long', `"openWhen" must be at most ${LIMITS.openWhen} characters`);
+    }
+    if (trimmed.length > 0) openWhen = trimmed;
+  }
   const message = {
     id: id('msg'),
     senderId: c.auth.memberId,
     type,
     text,
     title,
+    openWhen,
     audioUrl: null,
     durationSec: null,
     createdAt: nowIso(),
@@ -474,6 +534,7 @@ route('POST', '/api/voice', { auth: true }, async (c) => {
     type: 'voice',
     text: null,
     title: null,
+    openWhen: null,
     audioUrl: `/api/voice/${msgId}/raw`,
     durationSec: Number.isFinite(duration) ? duration : null,
     createdAt: nowIso(),
@@ -511,6 +572,7 @@ route('POST', '/api/photos', { auth: true }, async (c) => {
     uploaderId: c.auth.memberId,
     caption,
     url: `/api/photos/${photoId}/raw`,
+    thumbUrl: null,
     width: Number.isFinite(width) && width > 0 ? width : null,
     height: Number.isFinite(height) && height > 0 ? height : null,
     createdAt: nowIso(),
@@ -522,7 +584,7 @@ route('POST', '/api/photos', { auth: true }, async (c) => {
 });
 
 route('GET', '/api/photos', { auth: true }, (c) => {
-  sendJson(c.res, 200, { photos: c.auth.couple.photos.slice().reverse() });
+  sendJson(c.res, 200, { photos: c.auth.couple.photos.slice().reverse().map(serializePhoto) });
 });
 
 route('GET', '/api/photos/:id/raw', { auth: true, queryToken: true }, async (c) => {
@@ -531,11 +593,35 @@ route('GET', '/api/photos/:id/raw', { auth: true, queryToken: true }, async (c) 
   await serveFile(c.req, c.res, c.store.mediaPath('photos', `${photo.id}.jpg`), 'image/jpeg');
 });
 
+route('POST', '/api/photos/:id/thumb', { auth: true }, async (c) => {
+  const photo = c.auth.couple.photos.find((p) => p.id === c.params.id);
+  if (!photo) throw httpError(404, 'not_found', 'Unknown photo');
+  if (photo.uploaderId !== c.auth.memberId) {
+    throw httpError(403, 'not_yours', 'Only the uploader may add a thumbnail');
+  }
+  const buf = await readBody(c.req, LIMITS.thumb);
+  if (buf.length === 0) throw httpError(400, 'empty_body', 'Thumbnail upload body is empty');
+  await c.store.saveMedia('photos', `${photo.id}.thumb.jpg`, buf);
+  photo.thumbUrl = `/api/photos/${photo.id}/thumb/raw`;
+  c.store.markDirty();
+  const serialized = serializePhoto(photo);
+  c.realtime.broadcastCouple(c.auth.coupleId, 'photo_updated', { photo: serialized });
+  sendJson(c.res, 200, { photo: serialized });
+});
+
+route('GET', '/api/photos/:id/thumb/raw', { auth: true, queryToken: true }, async (c) => {
+  const photo = c.auth.couple.photos.find((p) => p.id === c.params.id);
+  if (!photo) throw httpError(404, 'not_found', 'Unknown photo');
+  if (!photo.thumbUrl) throw httpError(404, 'no_thumb', 'This photo has no thumbnail');
+  await serveFile(c.req, c.res, c.store.mediaPath('photos', `${photo.id}.thumb.jpg`), 'image/jpeg');
+});
+
 route('DELETE', '/api/photos/:id', { auth: true }, async (c) => {
   const idx = c.auth.couple.photos.findIndex((p) => p.id === c.params.id);
   if (idx === -1) throw httpError(404, 'not_found', 'Unknown photo');
   const [photo] = c.auth.couple.photos.splice(idx, 1);
   await c.store.deleteMedia('photos', `${photo.id}.jpg`);
+  await c.store.deleteMedia('photos', `${photo.id}.thumb.jpg`);
   c.store.markDirty();
   c.realtime.broadcastCouple(c.auth.coupleId, 'photo_deleted', { id: photo.id });
   sendJson(c.res, 200, { ok: true });
@@ -636,6 +722,19 @@ route('DELETE', '/api/bucket/:id', { auth: true }, (c) => {
 
 // --- daily question ------------------------------------------------------------------
 
+// Journal list: every day where at least one member answered, newest first.
+// The plain `/api/daily` path (2 segments) never clashes with `/api/daily/:dateKey` (3 segments).
+route('GET', '/api/daily', { auth: true }, (c) => {
+  const limit = queryInt(c.url, 'limit', 60, 1, 366);
+  const couple = c.auth.couple;
+  const dateKeys = Object.keys(couple.daily)
+    .filter((key) => Object.values(couple.daily[key]?.answers ?? {}).some((a) => a?.text != null))
+    .sort()
+    .reverse()
+    .slice(0, limit);
+  sendJson(c.res, 200, { entries: dateKeys.map((key) => dailyEntryFor(couple, key, c.auth.memberId)) });
+});
+
 route('GET', '/api/daily/:dateKey', { auth: true }, (c) => {
   const dateKey = asDateKey(c.params.dateKey, 'dateKey');
   sendJson(c.res, 200, dailyEntryFor(c.auth.couple, dateKey, c.auth.memberId));
@@ -694,6 +793,19 @@ route('POST', '/api/canvas/strokes', { auth: true }, async (c) => {
   c.store.markDirty();
   c.realtime.broadcastCouple(c.auth.coupleId, 'canvas_stroke', { stroke });
   sendJson(c.res, 201, { stroke });
+});
+
+route('DELETE', '/api/canvas/strokes/:id', { auth: true }, (c) => {
+  const strokes = c.auth.couple.strokes;
+  const idx = strokes.findIndex((s) => s.id === c.params.id);
+  if (idx === -1) throw httpError(404, 'not_found', 'Unknown stroke');
+  if (strokes[idx].memberId !== c.auth.memberId) {
+    throw httpError(403, 'not_yours', 'Only the author may delete a stroke');
+  }
+  const [stroke] = strokes.splice(idx, 1);
+  c.store.markDirty();
+  c.realtime.broadcastCouple(c.auth.coupleId, 'canvas_stroke_deleted', { id: stroke.id });
+  sendJson(c.res, 200, { ok: true });
 });
 
 route('DELETE', '/api/canvas', { auth: true }, (c) => {

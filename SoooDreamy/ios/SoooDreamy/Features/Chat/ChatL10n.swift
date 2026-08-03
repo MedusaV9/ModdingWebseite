@@ -52,6 +52,48 @@ enum ChatL10n {
         "chat.letterPreviewEmpty": LText(de: "Hier erscheint dein Brief …", en: "Your letter will appear here …"),
         "chat.letterSend": LText(de: "Brief senden 💌", en: "Send letter 💌"),
         "chat.letterSending": LText(de: "Wird verschickt …", en: "Sending …"),
-        "chat.letterSent": LText(de: "Dein Brief ist unterwegs 💌", en: "Your letter is on its way 💌")
+        "chat.letterSent": LText(de: "Dein Brief ist unterwegs 💌", en: "Your letter is on its way 💌"),
+
+        // Context menus & reader
+        "chat.you": LText(de: "Du", en: "You"),
+        "chat.copy": LText(de: "Kopieren", en: "Copy"),
+        "chat.copied": LText(de: "Kopiert!", en: "Copied!"),
+        "chat.read": LText(de: "Lesen", en: "Read"),
+        "chat.readerClose": LText(de: "Schließen", en: "Close"),
+        "chat.readerFrom": LText(de: "Von {name}", en: "From {name}"),
+
+        // "Öffnen wenn …" seals — chip labels
+        "chat.sealPickerTitle": LText(de: "Versiegeln — öffnen, wenn …", en: "Seal it — open when …"),
+        "chat.sealNone": LText(de: "Ohne Siegel", en: "No seal"),
+        "chat.sealCustom": LText(de: "Eigenes …", en: "Custom …"),
+        "chat.sealCustomPlaceholder": LText(de: "Dein Moment, z. B. „wenn du Kuchen isst“",
+                                            en: "Your moment, e.g. “when you're eating cake”"),
+        "chat.seal.sad": LText(de: "Traurig", en: "Sad"),
+        "chat.seal.missme": LText(de: "Sehnsucht", en: "Missing me"),
+        "chat.seal.happy": LText(de: "Freude", en: "Celebrating"),
+        "chat.seal.badday": LText(de: "Mieser Tag", en: "Bad day"),
+        "chat.seal.night": LText(de: "Schlaflos", en: "Sleepless"),
+        "chat.seal.anniversary": LText(de: "Jahrestag", en: "Anniversary"),
+
+        // Seal sentences (on the sealed envelope & seal chips)
+        "chat.sealLine.sad": LText(de: "Öffne mich, wenn du traurig bist",
+                                   en: "Open me when you're feeling sad"),
+        "chat.sealLine.missme": LText(de: "Öffne mich, wenn du mich vermisst",
+                                      en: "Open me when you're missing me"),
+        "chat.sealLine.happy": LText(de: "Öffne mich, wenn du etwas zu feiern hast",
+                                     en: "Open me when you've got something to celebrate"),
+        "chat.sealLine.badday": LText(de: "Öffne mich nach einem richtig miesen Tag",
+                                      en: "Open me after a really rough day"),
+        "chat.sealLine.night": LText(de: "Öffne mich, wenn du nachts nicht schlafen kannst",
+                                     en: "Open me when you can't sleep at night"),
+        "chat.sealLine.anniversary": LText(de: "Öffne mich an unserem Jahrestag",
+                                           en: "Open me on our anniversary"),
+        "chat.sealLine.custom": LText(de: "Öffne mich: „{text}“", en: "Open me: “{text}”"),
+        "chat.sealLine.generic": LText(de: "Öffne mich im richtigen Moment",
+                                       en: "Open me when the moment is right"),
+
+        // Sealed envelope card
+        "chat.sealedTitle": LText(de: "Ein versiegelter Liebesbrief", en: "A sealed love letter"),
+        "chat.sealedOpen": LText(de: "Öffnen", en: "Open")
     ]
 }

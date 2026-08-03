@@ -146,6 +146,15 @@ struct GalleryView: View {
         photos.sort { $0.createdAt > $1.createdAt }
     }
 
+    /// Replace an existing photo (id match) or insert it.
+    private func apply(_ photo: Photo) {
+        if let idx = photos.firstIndex(where: { $0.id == photo.id }) {
+            photos[idx] = photo
+        } else {
+            insert(photo)
+        }
+    }
+
     // MARK: Upload flow
 
     private func preparePhoto(_ item: PhotosPickerItem) async {
@@ -181,10 +190,20 @@ struct GalleryView: View {
                 Haptics.shared.success()
                 appState.showToast(L10n.t("memories.gallery.uploaded"), style: .love)
                 celebrate()
+                await uploadThumbnail(for: photo, from: pending.image, api: api)
             } catch {
                 appState.handleAPIError(error)
             }
             uploading = false
+        }
+    }
+
+    /// Best-effort grid thumbnail — the grid falls back to the full url if it fails.
+    private func uploadThumbnail(for photo: Photo, from image: UIImage, api: API) async {
+        let thumb = Self.downscaled(image, maxDimension: 320)
+        guard let jpeg = thumb.jpegData(compressionQuality: 0.7) else { return }
+        if let updated = try? await api.uploadPhotoThumb(photoId: photo.id, jpeg: jpeg) {
+            apply(updated)
         }
     }
 
@@ -229,6 +248,9 @@ struct GalleryView: View {
             if isNew && photo.uploaderId != appState.memberId {
                 SoundEngine.shared.play(.pop)
             }
+        case .photoUpdated:
+            guard let photo = event.decode(PhotoResponse.self)?.photo else { return }
+            apply(photo)
         case .photoDeleted:
             guard let id = event.decode(IdPayload.self)?.id else { return }
             photos.removeAll { $0.id == id }
@@ -265,7 +287,7 @@ private struct GalleryCell: View {
 
     @ViewBuilder
     private var thumbnail: some View {
-        if let url = api?.mediaURL(photo.url) {
+        if let url = api?.mediaURL(photo.thumbUrl ?? photo.url) {
             AsyncImage(url: url) { phase in
                 switch phase {
                 case .success(let image):

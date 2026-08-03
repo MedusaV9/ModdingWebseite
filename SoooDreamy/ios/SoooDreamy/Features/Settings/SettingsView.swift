@@ -12,6 +12,7 @@ struct SettingsView: View {
     @State private var soundsOn = SoundEngine.enabled
     @State private var hapticsOn = Haptics.enabled
     @State private var reminderOn = ReminderManager.isEnabled
+    @State private var appLockOn = AppLock.isEnabled
 
     @State private var coupleName = ""
     @State private var anniversary = Date()
@@ -192,6 +193,24 @@ struct SettingsView: View {
             .onChange(of: hapticsOn) { _, on in
                 Haptics.enabled = on
                 if on { Haptics.shared.play(.heartbeat) }
+            }
+
+            if AppLock.isAvailable {
+                VStack(alignment: .leading, spacing: 4) {
+                    Toggle(isOn: $appLockOn) {
+                        Label(L10n.t("settings.appLock"), systemImage: "faceid")
+                            .font(.system(.subheadline, design: .rounded).weight(.semibold))
+                            .foregroundStyle(Theme.textPrimary)
+                    }
+                    .tint(Theme.pink)
+                    .onChange(of: appLockOn) { _, on in
+                        AppLock.isEnabled = on
+                        Haptics.shared.tap()
+                    }
+                    Text(L10n.t("settings.appLockHint"))
+                        .font(.system(.caption2, design: .rounded))
+                        .foregroundStyle(Theme.textTertiary)
+                }
             }
 
             VStack(alignment: .leading, spacing: 4) {

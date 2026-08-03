@@ -45,7 +45,7 @@ Everything lives under `DATA_DIR`:
 
 - `store.json` — all couples, members, messages, events, … (single JSON file,
   written atomically with a ~500 ms debounce, flushed on SIGINT/SIGTERM)
-- `media/photos/*.jpg`, `media/voice/*.m4a` — raw uploads
+- `media/photos/*.jpg` (+ `*.thumb.jpg` thumbnails), `media/voice/*.m4a` — raw uploads
 
 **Backup = copy the `data/` folder.** Restore = put it back and restart.
 

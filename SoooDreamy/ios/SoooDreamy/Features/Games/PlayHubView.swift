@@ -4,7 +4,7 @@ import Combine
 // MARK: - Navigation destinations
 
 enum GameDestination: String, Hashable, Identifiable {
-    case quiz, thisorthat, wouldyourather, truthordare, questions36, dateideas
+    case wordle, quiz, thisorthat, wouldyourather, truthordare, questions36, dateideas
     var id: String { rawValue }
 }
 
@@ -15,6 +15,7 @@ struct PlayHubView: View {
 
     @State private var engine = GameEngine()
     @State private var path: [GameDestination] = []
+    @State private var wordleDoneToday = false
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -24,6 +25,7 @@ struct PlayHubView: View {
                     VStack(spacing: 16) {
                         header
                         sessionBanner
+                        wordleCard
                         gameGrid
                         dateIdeasCard
                     }
@@ -40,7 +42,14 @@ struct PlayHubView: View {
             engine.onError = { [weak appState] error in
                 appState?.handleAPIError(error)
             }
+            refreshWordleDone()
             await engine.resume(api: appState.api)
+        }
+        .onChange(of: path) { _, newPath in
+            // Refresh the daily-card checkmark when coming back from the game.
+            if newPath.isEmpty {
+                refreshWordleDone()
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: .serverEvent)) { note in
             guard let event = note.object as? ServerEvent else { return }
@@ -206,6 +215,57 @@ struct PlayHubView: View {
         }
     }
 
+    // MARK: Daily Liebes-Wordle card
+
+    private var wordleCard: some View {
+        Button {
+            path.append(.wordle)
+        } label: {
+            HStack(spacing: 14) {
+                ZStack(alignment: .bottomTrailing) {
+                    Text("💘")
+                        .font(.system(size: 40))
+                    if wordleDoneToday {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundStyle(Theme.mint)
+                            .background(Circle().fill(Theme.bgTop).padding(1))
+                            .offset(x: 4, y: 2)
+                    }
+                }
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 8) {
+                        Text(L10n.t("games.wordle.title"))
+                            .font(.system(.headline, design: .rounded).weight(.bold))
+                            .foregroundStyle(Theme.textPrimary)
+                        PillTag(text: L10n.t("games.wordle.daily"), tint: Theme.gold)
+                    }
+                    Text(L10n.t(wordleDoneToday ? "games.wordle.done" : "games.wordle.teaser"))
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(Theme.textSecondary)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer()
+                Image(systemName: wordleDoneToday ? "checkmark.seal.fill" : "chevron.right")
+                    .font(.system(size: wordleDoneToday ? 20 : 14, weight: .bold))
+                    .foregroundStyle(wordleDoneToday ? Theme.mint : Theme.gold)
+            }
+            .glassCard(padding: 16)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func refreshWordleDone() {
+        guard let couple = appState.couple else {
+            wordleDoneToday = false
+            return
+        }
+        wordleDoneToday = WordleDaily.isFinished(coupleId: couple.id,
+                                                 dateKey: SharedDates.todayKey(),
+                                                 lang: L10n.lang)
+    }
+
     // MARK: Game grid
 
     private static let gridCards: [GameCardInfo] = [
@@ -260,6 +320,8 @@ struct PlayHubView: View {
     @ViewBuilder
     private func gameView(for destination: GameDestination) -> some View {
         switch destination {
+        case .wordle:
+            WordleView()
         case .quiz:
             QuizGameView(engine: engine)
         case .thisorthat:

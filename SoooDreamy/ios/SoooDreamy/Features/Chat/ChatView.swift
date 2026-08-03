@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import UIKit
 
 /// Chat tab: day-grouped message list, typing indicator, input bar with
 /// voice notes and love letters.
@@ -317,6 +318,7 @@ struct ChatBubbleBackground: View {
 // MARK: - Text bubble
 
 struct ChatTextBubble: View {
+    @Environment(AppState.self) private var appState
     let message: Message
     let isMine: Bool
 
@@ -331,18 +333,96 @@ struct ChatTextBubble: View {
         .padding(.vertical, 9)
         .padding(.horizontal, 13)
         .background(ChatBubbleBackground(isMine: isMine))
+        .contextMenu {
+            Button {
+                UIPasteboard.general.string = message.text ?? ""
+                Haptics.shared.tap()
+                appState.showToast(L10n.t("chat.copied"), style: .success)
+            } label: {
+                Label(L10n.t("chat.copy"), systemImage: "doc.on.doc")
+            }
+        }
     }
 }
 
 // MARK: - Love letter bubble
 
 struct ChatLetterBubble: View {
+    @Environment(AppState.self) private var appState
     let message: Message
     let isMine: Bool
 
+    @State private var unsealing = false
+    @State private var celebrating = false
+    @State private var showReader = false
+
+    /// Received sealed letters stay closed until opened once on this device.
+    private var isSealed: Bool {
+        guard !isMine, message.openWhen != nil else { return false }
+        return !OpenedLettersStore.shared.isOpened(message.id, coupleId: appState.couple?.id)
+    }
+
     var body: some View {
+        Group {
+            if isSealed {
+                sealedCard
+                    .transition(.scale(scale: 1.15).combined(with: .opacity))
+            } else {
+                openCard
+                    .transition(.scale(scale: 0.7).combined(with: .opacity))
+            }
+        }
+        .overlay(celebrationOverlay)
+        .sheet(isPresented: $showReader) {
+            LetterReaderView(message: message, senderName: senderName)
+        }
+    }
+
+    private var senderName: String {
+        if isMine { return appState.me?.name ?? L10n.t("chat.you") }
+        return appState.partnerName
+    }
+
+    // MARK: Sealed state
+
+    private var sealedCard: some View {
+        SealedLetterCard(message: message, unsealing: unsealing, onOpen: unseal)
+            .scaleEffect(unsealing ? 1.08 : 1)
+            .rotation3DEffect(.degrees(unsealing ? 360 : 0), axis: (x: 0, y: 1, z: 0))
+            .animation(.easeInOut(duration: 0.65), value: unsealing)
+    }
+
+    private func unseal() {
+        guard !unsealing else { return }
+        unsealing = true
+        celebrating = true
+        Haptics.shared.success()
+        SoundEngine.shared.play(.tada)
+        Task {
+            try? await Task.sleep(nanoseconds: 700_000_000)
+            withAnimation(.spring(response: 0.55)) {
+                OpenedLettersStore.shared.markOpened(message.id, coupleId: appState.couple?.id)
+            }
+            try? await Task.sleep(nanoseconds: 2_200_000_000)
+            celebrating = false
+            unsealing = false
+        }
+    }
+
+    @ViewBuilder private var celebrationOverlay: some View {
+        if celebrating {
+            FloatingHeartsView(emojis: ["💌", "💖", "✨", "💜"], count: 12)
+                .allowsHitTesting(false)
+                .transition(.opacity)
+        }
+    }
+
+    // MARK: Open state
+
+    private var openCard: some View {
         VStack(alignment: .leading, spacing: 8) {
             badge
+            sealChip
             if let title = message.title, !title.isEmpty {
                 Text(title)
                     .font(.system(.headline, design: .rounded).weight(.bold))
@@ -358,6 +438,15 @@ struct ChatLetterBubble: View {
         }
         .padding(15)
         .background(letterBackground)
+        .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .onTapGesture {
+            Haptics.shared.tap()
+            showReader = true
+        }
+        .contextMenu {
+            copyButton
+            readButton
+        }
     }
 
     private var badge: some View {
@@ -366,6 +455,42 @@ struct ChatLetterBubble: View {
             Text(L10n.t("chat.letterBadge"))
                 .font(.system(.caption, design: .rounded).weight(.bold))
                 .foregroundStyle(Theme.gold)
+        }
+    }
+
+    /// Small seal hint on own sealed letters (and on opened received ones).
+    @ViewBuilder private var sealChip: some View {
+        if let token = message.openWhen {
+            HStack(spacing: 5) {
+                Text("🔒")
+                    .font(.system(size: 10))
+                Text(LetterSeal.sentence(for: token))
+                    .font(.system(.caption2, design: .rounded).weight(.semibold))
+                    .lineLimit(2)
+            }
+            .foregroundStyle(Theme.gold)
+            .padding(.vertical, 4)
+            .padding(.horizontal, 9)
+            .background(Capsule().fill(Theme.gold.opacity(0.14)))
+        }
+    }
+
+    private var copyButton: some View {
+        Button {
+            let parts = [message.title, message.text].compactMap { $0 }.filter { !$0.isEmpty }
+            UIPasteboard.general.string = parts.joined(separator: "\n\n")
+            Haptics.shared.tap()
+            appState.showToast(L10n.t("chat.copied"), style: .success)
+        } label: {
+            Label(L10n.t("chat.copy"), systemImage: "doc.on.doc")
+        }
+    }
+
+    private var readButton: some View {
+        Button {
+            showReader = true
+        } label: {
+            Label(L10n.t("chat.read"), systemImage: "book.fill")
         }
     }
 

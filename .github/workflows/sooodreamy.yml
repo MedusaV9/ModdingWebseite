@@ -30,6 +30,15 @@ jobs:
       - name: Run tests
         run: npm test
 
+  logic-tests:
+    name: Logic tests (Swift on Linux)
+    runs-on: ubuntu-latest
+    container: swift:6.0
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run swift test
+        run: swift test --package-path SoooDreamy/ios
+
   build-ipa:
     name: Unsigned IPA (iOS)
     runs-on: macos-15
@@ -98,3 +107,27 @@ jobs:
           name: xcodebuild-log
           path: SoooDreamy/ios/xcodebuild.log
           if-no-files-found: ignore
+
+  release-latest:
+    name: Rolling prerelease (IPA download link)
+    needs: build-ipa
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    continue-on-error: true
+    steps:
+      - name: Download IPA artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: SoooDreamy-unsigned-ipa
+      - name: Update rolling prerelease
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: sooodreamy-latest
+          name: "SoooDreamy — latest unsigned IPA"
+          prerelease: true
+          body: |
+            Rolling build from `${{ github.sha }}` (branch `cursor/sooodreamy-couple-app-82d4`).
+            Sideload with AltStore / SideStore / Sideloadly. Server setup: see `SoooDreamy/server/README.md`.
+          files: SoooDreamy-unsigned.ipa

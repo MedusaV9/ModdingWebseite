@@ -21,6 +21,9 @@ enum MemoriesL10n {
         "memories.card.noEvent": LText(de: "Plant etwas Schönes", en: "Plan something lovely"),
         "memories.card.daysOfLove": LText(de: "{n} Tage Liebe", en: "{n} days of love"),
         "memories.card.statsHint": LText(de: "Eure Liebe in Zahlen", en: "Your love in numbers"),
+        "memories.card.journal": LText(de: "Unser Tagebuch", en: "Our Journal"),
+        "memories.card.journalCount": LText(de: "{n} Antworten", en: "{n} answers"),
+        "memories.card.journalHint": LText(de: "Eure Fragen des Tages", en: "Your daily questions"),
 
         // Countdown chips
         "memories.countdown.today": LText(de: "HEUTE 🎉", en: "TODAY 🎉"),
@@ -64,6 +67,7 @@ enum MemoriesL10n {
         "memories.canvas.clearConfirm": LText(de: "Euer ganzes Kunstwerk löschen? Das gilt für euch beide.",
                                               en: "Erase your whole artwork? This clears it for both of you."),
         "memories.canvas.cleared": LText(de: "Canvas gelöscht", en: "Canvas cleared"),
+        "memories.canvas.undo": LText(de: "Letzten Strich zurücknehmen", en: "Undo last stroke"),
 
         // Bucket list
         "memories.bucket.title": LText(de: "Bucket List", en: "Bucket List"),
@@ -114,6 +118,18 @@ enum MemoriesL10n {
         "memories.stats.caption": LText(de: "Ihr habt euch schon {n} Liebesgrüße geschickt 💌",
                                         en: "You've already sent each other {n} love touches 💌"),
         "memories.stats.empty": LText(de: "Noch keine Liebesgrüße — schick doch gleich einen! 💜",
-                                      en: "No love touches yet — go send one! 💜")
+                                      en: "No love touches yet — go send one! 💜"),
+        "memories.stats.moodTitle": LText(de: "Stimmungsverlauf", en: "Mood timeline"),
+        "memories.stats.moodEmpty": LText(de: "Noch keine Stimmungen geteilt — sag deinem Schatz, wie du dich fühlst 💜",
+                                          en: "No moods shared yet — tell your sweetheart how you feel 💜"),
+
+        // Journal
+        "memories.journal.title": LText(de: "Unser Tagebuch", en: "Our Journal"),
+        "memories.journal.empty.title": LText(de: "Noch keine Einträge", en: "No entries yet"),
+        "memories.journal.empty.subtitle": LText(de: "Beantworte heute eure Frage des Tages — sie landet dann für immer hier 💌",
+                                                 en: "Answer today's daily question — it'll live here forever 💌"),
+        "memories.journal.waiting": LText(de: "wartet noch auf {name}…", en: "still waiting for {name}…"),
+        "memories.journal.noAnswer": LText(de: "Hier fehlt noch eine Antwort von euch 🌙",
+                                           en: "One of you didn't answer this one 🌙")
     ]
 }

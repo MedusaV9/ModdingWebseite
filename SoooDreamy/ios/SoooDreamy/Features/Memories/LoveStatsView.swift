@@ -1,15 +1,22 @@
 import SwiftUI
 
-/// Love statistics dashboard — hero tiles plus sent-vs-received touch bars.
+/// Love statistics dashboard — hero tiles, sent-vs-received touch bars & mood timeline.
 struct LoveStatsView: View {
     @Environment(AppState.self) private var appState
 
     @State private var barsAppeared = false
+    @State private var moods: [MoodEntry] = []
 
     private let columns = [
         GridItem(.flexible(), spacing: 12),
         GridItem(.flexible(), spacing: 12)
     ]
+
+    private struct MoodDay: Identifiable {
+        let id: String
+        let date: Date
+        let entries: [MoodEntry]
+    }
 
     var body: some View {
         ZStack {
@@ -20,6 +27,7 @@ struct LoveStatsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task {
             await appState.refreshStats()
+            await loadMoods()
             withAnimation(.spring(response: 0.8).delay(0.15)) {
                 barsAppeared = true
             }
@@ -40,12 +48,16 @@ struct LoveStatsView: View {
             VStack(spacing: 16) {
                 heroTiles(stats)
                 touchComparisonCard(stats)
+                moodTimelineCard
                 caption(stats)
             }
             .padding(16)
             .padding(.bottom, 12)
         }
-        .refreshable { await appState.refreshStats() }
+        .refreshable {
+            await appState.refreshStats()
+            await loadMoods()
+        }
     }
 
     // MARK: Hero tiles
@@ -159,6 +171,93 @@ struct LoveStatsView: View {
 
     private var partnerColor: Color {
         Color(hex: appState.partner?.color ?? "A855F7")
+    }
+
+    // MARK: Mood timeline
+
+    private func loadMoods() async {
+        guard let api = appState.api else { return }
+        if let list = try? await api.moods() {
+            moods = list
+        }
+    }
+
+    /// Moods grouped by calendar day, newest day (and newest entry) first.
+    private var moodDays: [MoodDay] {
+        let calendar = SharedDates.calendar
+        let grouped = Dictionary(grouping: moods) { calendar.startOfDay(for: $0.createdAt) }
+        return grouped.keys.sorted(by: >).map { day in
+            MoodDay(id: SharedDates.todayKey(day),
+                    date: day,
+                    entries: (grouped[day] ?? []).sorted { $0.createdAt > $1.createdAt })
+        }
+    }
+
+    private var moodTimelineCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text(L10n.t("memories.stats.moodTitle"))
+                .font(.system(.title3, design: .rounded).weight(.bold))
+                .foregroundStyle(Theme.textPrimary)
+            if moods.isEmpty {
+                Text(L10n.t("memories.stats.moodEmpty"))
+                    .font(.system(.caption, design: .rounded))
+                    .foregroundStyle(Theme.textSecondary)
+            } else {
+                ForEach(moodDays) { day in
+                    moodDaySection(day)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassCard()
+    }
+
+    private func moodDaySection(_ day: MoodDay) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(prettyDay(day.date))
+                .font(.system(.caption, design: .rounded).weight(.bold))
+                .foregroundStyle(Theme.textTertiary)
+            ForEach(day.entries) { entry in
+                moodRow(entry)
+            }
+        }
+    }
+
+    private func moodRow(_ entry: MoodEntry) -> some View {
+        let author = member(of: entry)
+        return HStack(spacing: 10) {
+            EmojiAvatarView(emoji: author?.avatar, colorHex: author?.color, size: 34)
+            Text(entry.mood)
+                .font(.system(size: 26))
+            VStack(alignment: .leading, spacing: 1) {
+                if let note = entry.moodNote, !note.isEmpty {
+                    Text(note)
+                        .font(.system(.subheadline, design: .rounded))
+                        .foregroundStyle(Theme.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Text(entry.createdAt.formatted(date: .omitted, time: .shortened))
+                    .font(.system(.caption2, design: .rounded))
+                    .foregroundStyle(Theme.textTertiary)
+            }
+            Spacer()
+        }
+        .padding(8)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color(hex: author?.color ?? "A855F7").opacity(0.10))
+        )
+    }
+
+    private func member(of entry: MoodEntry) -> Member? {
+        appState.couple?.members.first { $0.id == entry.memberId }
+    }
+
+    private func prettyDay(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: L10n.isGerman ? "de_DE" : "en_US")
+        formatter.dateStyle = .long
+        return formatter.string(from: date)
     }
 
     // MARK: Caption

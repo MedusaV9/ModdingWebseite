@@ -23,6 +23,7 @@ struct MemoriesView: View {
                             bucketCard
                             eventsCard
                             statsCard
+                            journalCard
                         }
                     }
                     .padding(16)
@@ -137,6 +138,19 @@ struct MemoriesView: View {
         .buttonStyle(.plain)
     }
 
+    private var journalCard: some View {
+        NavigationLink {
+            JournalView()
+        } label: {
+            MemoryFeatureCard(emoji: "📖",
+                              title: L10n.t("memories.card.journal"),
+                              tint: Theme.rose) {
+                journalTeaser
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
     // MARK: Teasers
 
     private var photoTeaserText: String {
@@ -186,6 +200,19 @@ struct MemoriesView: View {
                     tint: Theme.mint)
         } else {
             Text(L10n.t("memories.card.statsHint"))
+                .font(.system(.caption, design: .rounded).weight(.semibold))
+                .foregroundStyle(Theme.textSecondary)
+                .lineLimit(1)
+        }
+    }
+
+    @ViewBuilder
+    private var journalTeaser: some View {
+        if let answered = appState.stats?.dailyAnswered, answered > 0 {
+            PillTag(text: L10n.t("memories.card.journalCount", ["n": String(answered)]),
+                    tint: Theme.rose)
+        } else {
+            Text(L10n.t("memories.card.journalHint"))
                 .font(.system(.caption, design: .rounded).weight(.semibold))
                 .foregroundStyle(Theme.textSecondary)
                 .lineLimit(1)

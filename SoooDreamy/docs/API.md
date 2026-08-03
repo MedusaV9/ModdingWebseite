@@ -1,7 +1,9 @@
-# SoooDreamy Server — API Spec (v1)
+# SoooDreamy Server — API Spec (v1.1)
 
 Self-hosted Node.js server for the SoooDreamy couple app. One server can host many couples.
 Base URL example: `http://192.168.1.20:4321` (the app lets you add/switch servers in Settings).
+
+Server version `1.1.0` (reported by `GET /api/health`). v1.1 adds photo thumbnails, canvas stroke delete (undo), mood history, the daily journal list, and sealed letters (`openWhen`) — all backward compatible: a v1.0 `store.json` loads unchanged and the new fields default to `null`/empty.
 
 - All request/response bodies are JSON (`camelCase` keys) unless stated otherwise (media uploads are raw bodies).
 - Auth: `Authorization: Bearer <token>` header. Media `GET` endpoints also accept `?token=<token>` (for AVPlayer/AsyncImage).
@@ -22,12 +24,17 @@ Base URL example: `http://192.168.1.20:4321` (the app lets you add/switch server
   "createdAt": "…", "members": [Member, Member] }
 
 // Message  (type: "text" | "letter" | "voice")
+// openWhen: sealed-letter hint ("open when …"); letters only, null when absent (always null for text/voice)
 { "id": "msg_…", "senderId": "m_…", "type": "text", "text": "hi", "title": null,
-  "audioUrl": "/api/voice/msg_…/raw", "durationSec": 12.4, "createdAt": "…" }
+  "openWhen": null, "audioUrl": "/api/voice/msg_…/raw", "durationSec": 12.4, "createdAt": "…" }
 
-// Photo
+// Photo  (thumbUrl: null until a thumbnail is uploaded)
 { "id": "ph_…", "uploaderId": "m_…", "caption": "Sunset 🌇", "url": "/api/photos/ph_…/raw",
-  "width": 1920, "height": 1080, "createdAt": "…" }
+  "thumbUrl": "/api/photos/ph_…/thumb/raw", "width": 1920, "height": 1080, "createdAt": "…" }
+
+// MoodEntry (appended whenever a member sets a non-null mood via PATCH /api/me;
+// moodNote is the note set in the same request, else null)
+{ "id": "md_…", "memberId": "m_…", "mood": "🥰", "moodNote": "miss you", "createdAt": "…" }
 
 // EventItem
 { "id": "ev_…", "title": "Anniversary", "emoji": "💍", "date": "2026-11-07",
@@ -68,19 +75,22 @@ Base URL example: `http://192.168.1.20:4321` (the app lets you add/switch server
 | `POST /api/couples` | no | `{name, avatar, color}` | `201 {token, coupleId, memberId, couple}` (couple gets 6-char code from `ABCDEFGHJKLMNPQRSTUVWXYZ23456789`) | – |
 | `POST /api/couples/join` | no | `{code, name, avatar, color}` | `{token, coupleId, memberId, couple}`; `404 unknown_code`; `409 couple_full` | `partner_joined {member}` |
 | `GET /api/couple` | yes | – | `{couple, me}` (`me` = my memberId; members include `online`/`lastSeenAt`) | – |
-| `PATCH /api/me` | yes | any of `{name, avatar, color, mood, moodNote}` (`mood:null` clears) | `{member}` | `member_updated {member}` |
+| `PATCH /api/me` | yes | any of `{name, avatar, color, mood, moodNote}` (`mood:null` clears) | `{member}`; a non-null `mood` also appends a MoodEntry to the mood history (clearing does not) | `member_updated {member}` |
+| `GET /api/moods?limit=80` | yes | – | `{moods}` — both members' MoodEntries merged, newest first (`limit` capped at 200) | – |
 | `PATCH /api/couple` | yes | any of `{name, anniversary}` | `{couple}` | `couple_updated {couple}` |
 | `DELETE /api/couple` | yes | – | `{ok:true}` (wipes all couple data + media, invalidates both tokens) | `couple_dissolved {}` |
 | `POST /api/touches` | yes | `{type}` | `201 {touch}` | `touch {touch}` → partner only |
 | `GET /api/touches/recent?limit=30` | yes | – | `{touches}` (newest first) | – |
 | `GET /api/messages?limit=50&before=<msgId>` | yes | – | `{messages}` ascending `createdAt`; `before` pages older | – |
-| `POST /api/messages` | yes | `{type:"text"\|"letter", text, title?}` | `201 {message}` | `message {message}` |
+| `POST /api/messages` | yes | `{type:"text"\|"letter", text, title?, openWhen?}` (`openWhen`: trimmed string ≤ 64 chars → `400 openwhen_too_long`; stored for letters only, silently ignored for other types) | `201 {message}` | `message {message}` |
 | `POST /api/voice` | yes | raw `audio/mp4` body; headers `X-Duration-Sec` | `201 {message}` (type `voice`) | `message {message}` |
 | `GET /api/voice/:id/raw` | yes/`?token` | – | audio bytes | – |
 | `POST /api/photos` | yes | raw `image/jpeg` body; headers `X-Caption` (URI-encoded), `X-Width`, `X-Height` | `201 {photo}` | `photo_added {photo}` |
 | `GET /api/photos` | yes | – | `{photos}` newest first | – |
 | `GET /api/photos/:id/raw` | yes/`?token` | – | image bytes | – |
-| `DELETE /api/photos/:id` | yes | – | `{ok}` | `photo_deleted {id}` |
+| `POST /api/photos/:id/thumb` | yes (uploader only, else `403 not_yours`) | raw `image/jpeg` body ≤ 2 MB | `{photo}` with `thumbUrl` set; `404 not_found` for unknown photo | `photo_updated {photo}` |
+| `GET /api/photos/:id/thumb/raw` | yes/`?token` | – | thumbnail bytes; `404 no_thumb` when none uploaded | – |
+| `DELETE /api/photos/:id` | yes | – | `{ok}` (also deletes the thumb file, if any) | `photo_deleted {id}` |
 | `GET /api/events` | yes | – | `{events}` | – |
 | `POST /api/events` | yes | `{title, emoji, date, repeatsYearly}` | `201 {event}` | `event_added {event}` |
 | `PATCH /api/events/:id` | yes | partial | `{event}` | `event_updated {event}` |
@@ -89,10 +99,12 @@ Base URL example: `http://192.168.1.20:4321` (the app lets you add/switch server
 | `POST /api/bucket` | yes | `{text, emoji?}` | `201 {item}` | `bucket_added {item}` |
 | `PATCH /api/bucket/:id` | yes | `{text?, emoji?, done?}` (`done:true` sets `doneAt`) | `{item}` | `bucket_updated {item}` |
 | `DELETE /api/bucket/:id` | yes | – | `{ok}` | `bucket_deleted {id}` |
+| `GET /api/daily?limit=60` | yes | – | `{entries}` — journal of every day where at least one member answered, `dateKey` descending, same per-member reveal semantics as the single-day endpoint (`limit` capped at 366) | – |
 | `GET /api/daily/:dateKey` | yes | – | `DailyEntry` | – |
 | `POST /api/daily/:dateKey` | yes | `{questionId, text}` | `DailyEntry` (my view) | `daily_answer` → per-member tailored `DailyEntry` |
 | `GET /api/canvas` | yes | – | `{strokes}` (ascending) | – |
 | `POST /api/canvas/strokes` | yes | `{color, width, tool, points}` | `201 {stroke}` | `canvas_stroke {stroke}` |
+| `DELETE /api/canvas/strokes/:id` | yes (author only, else `403 not_yours`) | – | `{ok:true}`; `404 not_found` for unknown stroke | `canvas_stroke_deleted {id}` |
 | `DELETE /api/canvas` | yes | – | `{ok}` | `canvas_clear {}` |
 | `POST /api/games` | yes | `{type, payload?}` (ends any previous non-ended game) | `201 {game}` | `game_created {game}` |
 | `POST /api/games/:id/join` | yes | – | `{game}` (state → active) | `game_started {game}` |
@@ -101,14 +113,14 @@ Base URL example: `http://192.168.1.20:4321` (the app lets you add/switch server
 | `GET /api/games/active` | yes | – | `{game}` or `{game:null}` (latest lobby/active) | – |
 | `GET /api/stats` | yes | – | `Stats` | – |
 
-Limits: photo body ≤ 15 MB (`413 too_large`), voice ≤ 15 MB, `text` ≤ 5000 chars, stroke ≤ 2000 points. Canvas keeps at most 8000 strokes (oldest dropped). Messages/touches history capped at 5000/500 entries.
+Limits: photo body ≤ 15 MB (`413 too_large`), voice ≤ 15 MB, thumbnail ≤ 2 MB, `text` ≤ 5000 chars, `openWhen` ≤ 64 chars (after trim), stroke ≤ 2000 points. Canvas keeps at most 8000 strokes (oldest dropped). Messages/touches history capped at 5000/500 entries. Mood history keeps the last 60 entries per member.
 
 ## WebSocket
 
 `GET /ws?token=<token>` (same HTTP server, upgrade). Frames are JSON: `{ "type": "<event>", "payload": { … }, "ts": "<ISO>" }`.
 
 - On connect the server sends `welcome {memberId, coupleId, partnerOnline}` and broadcasts `presence {memberId, online:true}` to the partner. On last socket close: `presence {memberId, online:false, lastSeenAt}`.
-- Server→client event types: `welcome, presence, touch, message, member_updated, couple_updated, couple_dissolved, partner_joined, daily_answer, canvas_stroke, canvas_clear, photo_added, photo_deleted, event_added, event_updated, event_deleted, bucket_added, bucket_updated, bucket_deleted, game_created, game_started, game_move, game_ended, typing, pong`.
+- Server→client event types: `welcome, presence, touch, message, member_updated, couple_updated, couple_dissolved, partner_joined, daily_answer, canvas_stroke, canvas_stroke_deleted, canvas_clear, photo_added, photo_updated, photo_deleted, event_added, event_updated, event_deleted, bucket_added, bucket_updated, bucket_deleted, game_created, game_started, game_move, game_ended, typing, pong`.
 - Client→server: `{"type":"ping"}` → `pong`; `{"type":"typing","payload":{"isTyping":true}}` → forwarded to partner as `typing {memberId, isTyping}`.
 - REST-triggered broadcasts go to **all sockets of the couple** (sender's other devices included) except `touch` and `typing`, which go to the **partner only**. `daily_answer` sends a per-member tailored `DailyEntry`.
 - Server pings sockets every 30 s and terminates dead ones. A member is `online` if they have ≥ 1 open socket.
@@ -117,6 +129,7 @@ Limits: photo body ≤ 15 MB (`413 too_large`), voice ≤ 15 MB, `text` ≤ 5000
 
 - Plain Node.js ≥ 20, only npm dependency: `ws`. Entry: `server/src/server.js` (`npm start`), app factory `createApp()` in `server/src/app.js` (used by tests; `PORT=0` for ephemeral).
 - Env: `PORT` (default `4321`), `HOST` (default `0.0.0.0`), `DATA_DIR` (default `server/data`).
-- Persistence: `DATA_DIR/store.json` (debounced atomic writes: tmp file + rename, flush on SIGINT/SIGTERM) + media files in `DATA_DIR/media/photos/`, `DATA_DIR/media/voice/`.
+- Persistence: `DATA_DIR/store.json` (debounced atomic writes: tmp file + rename, flush on SIGINT/SIGTERM) + media files in `DATA_DIR/media/photos/`, `DATA_DIR/media/voice/`. Photo thumbnails live next to their photo as `DATA_DIR/media/photos/<id>.thumb.jpg` and are deleted together with the photo (and on couple dissolve).
+- Backward compatibility: a v1.0 `store.json` loads without migration — missing structures (`moodHistory`, `thumbUrl`, `openWhen`) are defaulted on read (`null`/empty).
 - CORS: permissive (`*`) — the server is self-hosted for exactly one couple (or a few friends).
 - Streak: number of consecutive days ending today (or yesterday if today unanswered) where **both** members answered the daily question.

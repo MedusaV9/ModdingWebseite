@@ -162,6 +162,25 @@ enum CoreStrings {
         "settings.widgetsHint": LText(de: "Lange auf den Homescreen drücken → „Widget hinzufügen“ → SoooDreamy",
                                       en: "Long-press your home screen → “Add widget” → SoooDreamy"),
 
+        // App lock
+        "lock.title": LText(de: "SoooDreamy ist gesperrt", en: "SoooDreamy is locked"),
+        "lock.subtitle": LText(de: "Eure Momente gehören nur euch zwei.", en: "Your moments belong to the two of you only."),
+        "lock.unlock": LText(de: "Entsperren", en: "Unlock"),
+        "lock.reason": LText(de: "Eure gemeinsamen Momente entsperren", en: "Unlock your shared moments"),
+        "settings.appLock": LText(de: "App-Sperre", en: "App lock"),
+        "settings.appLockHint": LText(de: "Beim Öffnen mit Face ID / Touch ID oder Code entsperren",
+                                      en: "Unlock with Face ID / Touch ID or passcode when opening"),
+
+        // Monthiversary
+        "home.monthiversary": LText(de: "{n} Monate zusammen — genau heute! 🎉",
+                                    en: "{n} months together — today! 🎉"),
+        "home.monthiversaryOne": LText(de: "1 Monat zusammen — genau heute! 🎉",
+                                       en: "1 month together — today! 🎉"),
+        "home.anniversaryYears": LText(de: "{n} Jahre zusammen — happy Jahrestag! 🥂",
+                                       en: "{n} years together — happy anniversary! 🥂"),
+        "home.anniversaryOneYear": LText(de: "1 Jahr zusammen — happy Jahrestag! 🥂",
+                                         en: "1 year together — happy anniversary! 🥂"),
+
         // Connection banner
         "conn.connecting": LText(de: "Verbinde…", en: "Connecting…"),
         "conn.offline": LText(de: "Offline — versuche es wieder…", en: "Offline — retrying…"),
