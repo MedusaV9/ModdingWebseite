@@ -47,7 +47,12 @@ const ARCADE := {
 }
 
 ## Ein Checkpoint spawnt mindestens so weit weg (m) — sonst „Ankunft“ gratis.
-const CHECKPOINT_MIN_DIST_M := 40.0
+## PT3-B5: 40 → 24 m — bei 9–15 m/s steht der Ring nach wenigen Sekunden im
+## Bild statt dauerhaft „72 m“ entfernt (2×90-s-Läufe: 0 Checkpoints).
+const CHECKPOINT_MIN_DIST_M := 24.0
+## PT3-B5: Ring höchstens so weit weg ankern — hält ihn auf der Fahrlinie
+## der nahen Münz-Kette (Band [MIN, MAX]; nur Fallback geht darüber).
+const CHECKPOINT_MAX_DIST_M := 90.0
 
 # ── Kompaktes Stadtraster (7×7 Ring+Kreuz, Kacheln wie die 9×9-Stadt) ───────
 const GRID := 7
@@ -205,9 +210,16 @@ static func scatter_coins(rng: GoobyRng, count: int) -> Array[Vector2]:
 	return out
 
 
-## Gesäte Checkpoint-Wahl: zufällige Straßenkachel mit Mindestabstand zum
-## Wagen (CHECKPOINT_MIN_DIST_M) — der fernste Kandidat, falls keiner passt.
-static func next_checkpoint(rng: GoobyRng, from: Vector2) -> Vector2:
+## Gesäte Checkpoint-Wahl. PT3-B5: der Ring ankert auf einer AKTIVEN Münze
+## im Abstands-Band [MIN, MAX] — Münz-Jäger (der Autopilot lenkt wie jedes
+## Kind zur nächsten Münze) fahren die Kette ohnehin ab, und der Pickup-
+## Radius (3 m) liegt INNERHALB des Ring-Radius (4 m): wer die Anker-Münze
+## einsammelt, hat den Ring garantiert durchfahren. Ohne Band-Kandidaten
+## nimmt der Fallback die fernste Münze (nie „Ankunft gratis“ direkt am
+## Wagen); ganz ohne Münzen bleibt die alte Kachel-Logik (Bestands-Rufe).
+static func next_checkpoint(rng: GoobyRng, from: Vector2, coins: Array[Vector2] = []) -> Vector2:
+	if not coins.is_empty():
+		return _checkpoint_an_muenze(rng, from, coins)
 	var tiles := road_tiles()
 	var best := from
 	var best_d := -1.0
@@ -221,6 +233,24 @@ static func next_checkpoint(rng: GoobyRng, from: Vector2) -> Vector2:
 			best_d = d
 			best = w
 	return best
+
+
+## Münz-Anker (PT3-B5): gesät EINE Münze aus dem Band [MIN, MAX] wählen —
+## Varianz bleibt (nicht immer dieselbe Ecke), Erreichbarkeit ist Geometrie.
+static func _checkpoint_an_muenze(rng: GoobyRng, from: Vector2, coins: Array[Vector2]) -> Vector2:
+	var band: Array[Vector2] = []
+	var fern := coins[0]
+	var fern_d := from.distance_to(fern)
+	for coin in coins:
+		var d := from.distance_to(coin)
+		if d >= CHECKPOINT_MIN_DIST_M and d <= CHECKPOINT_MAX_DIST_M:
+			band.append(coin)
+		if d > fern_d:
+			fern_d = d
+			fern = coin
+	if band.is_empty():
+		return fern
+	return band[int(rng.next() * float(band.size())) % band.size()]
 
 
 ## Voller Rundenscore (Test-/Tuning-Helfer + Bot-Grundlage).

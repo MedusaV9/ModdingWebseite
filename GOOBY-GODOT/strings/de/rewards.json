@@ -17,7 +17,8 @@
 		"fund": {
 			"a": "Oh! Da lag ja eine Münze!",
 			"b": "Hihi — Fundstück! Die heb ich auf.",
-			"c": "Glückstag! Eine Münze für uns."
+			"c": "Glückstag! Eine Münze für uns.",
+			"toast": "{gooby} hat {n} ᴳ gefunden!"
 		},
 		"levelup": {
 			"titel": "Level {level}!",

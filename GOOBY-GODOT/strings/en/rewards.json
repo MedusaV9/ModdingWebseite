@@ -17,7 +17,8 @@
 		"fund": {
 			"a": "Oh! There was a coin lying here!",
 			"b": "Hehe — a little find! I am keeping it.",
-			"c": "Lucky day! A coin for us."
+			"c": "Lucky day! A coin for us.",
+			"toast": "{gooby} found {n} ᴳ!"
 		},
 		"levelup": {
 			"titel": "Level {level}!",

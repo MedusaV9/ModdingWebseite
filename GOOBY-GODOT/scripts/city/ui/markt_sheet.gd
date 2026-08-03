@@ -28,9 +28,19 @@ func unix_s() -> int:
 
 func aktualisiere() -> void:
 	for kind in get_children():
+		# PT2-B11-Muster: Name sofort freigeben (queue_free ist deferred).
+		remove_child(kind)
 		kind.queue_free()
 	_baue_schild()
 	CitySheetBausteine.coins_zeile(self, _coins())
+	# PT2-B10: außerhalb Sa 8–14 Uhr ist Greta nicht da — der Ankauf
+	# vertröstet freundlich statt zu verkaufen (Regel aus city_map.json;
+	# draußen zeigen Planen + Schild denselben Zustand).
+	if not OrtKatalog.ist_offen("wochenmarkt", unix_s()):
+		var karte := CitySheetBausteine.karte(self)
+		CitySheetBausteine.label(karte, I18nService.t("markt.geschlossen.titel"), "HeadlineLabel")
+		CitySheetBausteine.label(karte, I18nService.t("markt.geschlossen.ankauf"), "CaptionLabel")
+		return
 	var angebot := MarktPreise.angebot_des_spielers(gs, unix_s())
 	if angebot.is_empty():
 		CitySheetBausteine.label(self, I18nService.t("city.markt.nichts_dabei"))

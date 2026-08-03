@@ -16,6 +16,21 @@ extends OrtScene
 ## bestücktem Stand — der Grund-Markt bekommt deshalb OrtLeben-Bummler
 ## (Paket-Träger zwischen den Buden, ein Bank-Ausruher) plus Markt-Momente
 ## (Marktschreier-Glocke, Melonen-Schnäppchen). W17-Deko bleibt unberührt.
+##
+## W18/R3 PT2-B10 — Öffnungszeiten mit Charme statt Schranke: der Platz
+## bleibt IMMER betretbar (Wohlfühl-Spiel!), aber außerhalb Sa 8–14 Uhr
+## (Regel aus city_map.json via OrtKatalog) ruhen die Stände sichtbar —
+## Planen über den Auslagen, ein „Bis Samstag!“-Schild am Greta-Platz,
+## Greta selbst ist NICHT da (kein Dialog, der Ankauf-Tab vertröstet
+## freundlich), und das Markt-Leben (Bummler, Schreier-Glocke, Gemurmel)
+## ruht unsichtbar/eingefroren — die _leben_konfig() selbst bleibt
+## zeitunabhängig (test_g8_ort_leben_rollout wacht über den Momente-
+## Vertrag). Der EIGENE Stand bleibt über den „Mein Marktstand“-Knopf
+## jederzeit erreichbar — bestückt wird ja gerade VOR dem Markttag;
+## verkauft wird wie gehabt nur am Samstag (MarktSim bindet an den
+## Markttag — das sagt das Stand-Sheet sichtbar an). Tests injizieren
+## `zeit_override` (Muster MarktSheet/MarktStandSheet) und rufen danach
+## `aktualisiere_marktzustand()`.
 
 const INNEN := "res://assets/city/innen"
 const ESSEN := "res://assets/city/essen"
@@ -43,22 +58,70 @@ const KUNDEN_PLAETZE: Array[Vector3] = [
 	Vector3(-3.4, 0.0, 1.2),
 ]
 
+## Geschlossen-Charme (PT2-B10): Planen-Segeltuch + Schild-Holz.
+const PLANE_FARBE := Color("#E8DAC0")
+const SCHILD_HOLZ := Color("#B98A5A")
+const SCHILD_TINTE := Color("#4A3B33")
+
 ## Der stolze Stand-Gooby (mit Schürze) hinter dem Eigenstand.
 var stand_gooby: GoobyRig
+## Tests/Screenshots frieren die Zeit ein (< 0 = echte Systemzeit) — wird
+## beim Sheet-Öffnen in beide Tabs weitergereicht (PT2-B10).
+var zeit_override := -1
 
 var _kunden: Array[GoobyRig] = []
 var _waren_deko: Node3D
 var _naechster_hopser := 0
 var _musik_gepusht := false
 var _schuerze_gag_gezeigt := false
+var _geschlossen_deko: Node3D
+## Gretas Dialog lief schon (oder der Aufbau war offen)? Beim Flip auf
+## OFFEN via aktualisiere_marktzustand() wird er sonst nachgestartet.
+var _dialog_lief := false
 
 
 func _ready() -> void:
 	super._ready()
+	_dialog_lief = markt_offen()
+	_baue_stand_knopf()
+	aktualisiere_marktzustand()
 	_starte_marktmusik()
 	var gs := game_state()
 	if gs != null and gs.has_signal("slice_changed"):
 		gs.slice_changed.connect(_on_slice_changed)
+
+
+## Injizierte Zeit (Unix-Sekunden) — dasselbe Muster wie die Markt-Sheets.
+func unix_s() -> int:
+	if zeit_override >= 0:
+		return zeit_override
+	return int(Time.get_unix_time_from_system())
+
+
+## Ist der Markt JETZT offen? (Sa 8–14 Uhr, Quelle city_map.json.)
+func markt_offen() -> bool:
+	return OrtKatalog.ist_offen("wochenmarkt", unix_s())
+
+
+## Geschlossen-Charme an/aus je nach (injizierter) Zeit: Greta samt Dialog
+## nur zur Marktzeit, sonst Planen + Schild. Beim Betreten automatisch;
+## Flows/Tests rufen es nach dem Setzen von `zeit_override` erneut — beim
+## Flip auf OFFEN startet Gretas Dialog nach, falls der Aufbau ihn (weil
+## geschlossen) übersprungen hatte.
+func aktualisiere_marktzustand() -> void:
+	var offen := markt_offen()
+	if rig != null:
+		rig.visible = offen
+	if _geschlossen_deko != null:
+		_geschlossen_deko.visible = not offen
+	# Markt-Leben ruht MIT den Ständen: unsichtbar + eingefroren (keine
+	# Schreier-Glocke, kein Gemurmel, keine Bummler) — der Platz ist still.
+	if leben != null:
+		leben.visible = offen
+		leben.process_mode = Node.PROCESS_MODE_INHERIT if offen else Node.PROCESS_MODE_DISABLED
+	if offen and not _dialog_lief:
+		_dialog_lief = true
+		_starte_dialog()
 
 
 func _exit_tree() -> void:
@@ -105,9 +168,14 @@ func _baue_innenraum() -> void:
 	_baue_eigenstand()
 	_aktualisiere_stand_deko()
 	_richte_kunden_ein()
+	_baue_geschlossen_deko()
 
 
+## Greta führt nur zur Marktzeit durch den Ankauf — außerhalb ist sie nicht
+## da (PT2-B10), also startet auch kein Dialog.
 func _dialog_pfad() -> String:
+	if not markt_offen():
+		return ""
 	return "res://scripts/city/data/dialoge/wochenmarkt.json"
 
 
@@ -123,6 +191,9 @@ func _npc_konfig() -> Dictionary:
 ## (laden_glocke TIEF als Handglocke) und das Melonen-Schnäppchen
 ## (mg_good = plumpst in die Tasche). Eigenstand-Kunden bleiben unberührt.
 func _leben_konfig() -> Dictionary:
+	# PT2-B10-Hinweis: die Konfig bleibt bewusst ZEITUNABHÄNGIG (Vertrag
+	# in test_g8_ort_leben_rollout) — ruht der Markt, legt
+	# aktualisiere_marktzustand() den fertigen OrtLeben-Node still.
 	return {
 		"besucher": 3,
 		# z ≤ 1,6 hält die Bummler im Kamera-Mittelgrund (s. flughafen.gd).
@@ -170,6 +241,16 @@ func _leben_konfig() -> Dictionary:
 ## Ein Sheet mit zwei Tabs: Ankauf (MarktSheet) und „Mein Stand“
 ## (MarktStandSheet mit Bestücken/Preis-Slidern/Replay/Abrechnung).
 func oeffne_laden() -> void:
+	_oeffne_markt_sheet(false)
+
+
+## PT2-B10: der eigene Stand direkt — der „Mein Marktstand“-Knopf landet
+## gleich im Eigenstand-Tab (geschlossen ist er der einzige Weg ins Sheet).
+func oeffne_stand() -> void:
+	_oeffne_markt_sheet(true)
+
+
+func _oeffne_markt_sheet(eigenstand: bool) -> void:
 	var inhalt := VBoxContainer.new()
 	inhalt.add_theme_constant_override("separation", 10)
 	var tabs := HBoxContainer.new()
@@ -183,7 +264,7 @@ func oeffne_laden() -> void:
 	tabs.add_child(eigen)
 	ankauf.pressed.connect(_zeige_tab.bind(halter, ankauf, eigen, false))
 	eigen.pressed.connect(_zeige_tab.bind(halter, ankauf, eigen, true))
-	_zeige_tab(halter, ankauf, eigen, false)
+	_zeige_tab(halter, ankauf, eigen, eigenstand)
 	zeige_sheet(I18nService.t("city.markt.sheet_titel"), inhalt)
 
 
@@ -284,7 +365,90 @@ func _richte_kunden_ein() -> void:
 		_kunden.append(kunde)
 
 
+## ------------------------------------------- Geschlossen-Charme (PT2-B10)
+
+
+## Planen über den Auslagen + „Bis Samstag!“-Schild am Greta-Platz — als
+## EINE Gruppe gebaut und per Sichtbarkeit geschaltet, damit Flows den
+## Zustand über aktualisiere_marktzustand() flippen können.
+func _baue_geschlossen_deko() -> void:
+	_geschlossen_deko = Node3D.new()
+	_geschlossen_deko.name = "GeschlossenDeko"
+	_geschlossen_deko.visible = false
+	add_child(_geschlossen_deko)
+	# Segeltuch über beiden Auslage-Tischen und dem kleinen Markttresen
+	# (Maße folgen _baue_innenraum: table.glb-Platte ~0,39, Ware ~0,4–0,6).
+	_plane(Vector3(-3.4, 0.62, -0.35), Vector3(3.1, 0.5, 1.8), 4.0)
+	_plane(Vector3(3.4, 0.62, -0.35), Vector3(3.1, 0.5, 1.8), -3.0)
+	_plane(Vector3(2.6, 0.6, -4.0), Vector3(1.7, 0.5, 1.3), 6.0)
+	_baue_samstag_schild()
+
+
+## Eine Stand-Plane: weiches Segeltuch-Rechteck, leicht verdreht.
+func _plane(pos: Vector3, groesse: Vector3, rot_grad: float) -> void:
+	var plane := MeshInstance3D.new()
+	var box := BoxMesh.new()
+	box.size = groesse
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = PLANE_FARBE
+	mat.roughness = 1.0
+	box.material = mat
+	plane.mesh = box
+	plane.position = pos
+	plane.rotation_degrees.y = rot_grad
+	_geschlossen_deko.add_child(plane)
+
+
+## Holzschild „Bis Samstag! Sa 8–14 Uhr“ dort, wo sonst Greta steht.
+func _baue_samstag_schild() -> void:
+	var halter := Node3D.new()
+	halter.name = "SamstagSchild"
+	halter.position = Vector3(0.0, 0.0, -2.4)
+	halter.rotation_degrees.y = -4.0
+	_geschlossen_deko.add_child(halter)
+	var pfosten := MeshInstance3D.new()
+	var pbox := BoxMesh.new()
+	pbox.size = Vector3(0.07, 0.95, 0.07)
+	var pmat := StandardMaterial3D.new()
+	pmat.albedo_color = SCHILD_HOLZ
+	pbox.material = pmat
+	pfosten.mesh = pbox
+	pfosten.position = Vector3(0.0, 0.48, 0.0)
+	halter.add_child(pfosten)
+	var brett := MeshInstance3D.new()
+	var bbox := BoxMesh.new()
+	bbox.size = Vector3(1.2, 0.62, 0.05)
+	var bmat := StandardMaterial3D.new()
+	bmat.albedo_color = PLANE_FARBE
+	bbox.material = bmat
+	brett.mesh = bbox
+	brett.position = Vector3(0.0, 1.1, 0.0)
+	halter.add_child(brett)
+	var text := Label3D.new()
+	text.name = "SchildText"
+	text.text = I18nService.t("markt.geschlossen.schild")
+	text.font_size = 44
+	text.pixel_size = 0.004
+	text.modulate = SCHILD_TINTE
+	text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	text.position = Vector3(0.0, 1.1, 0.04)
+	halter.add_child(text)
+
+
 ## ------------------------------------------------------ Eigenstand (UI)
+
+
+## „Mein Marktstand“ unten in der Safe-Area-Leiste (PT2-B10): der eigene
+## Stand ist so AUCH ohne Greta erreichbar — bestückt wird gerade dann,
+## wenn der Markt noch gar nicht läuft.
+func _baue_stand_knopf() -> void:
+	var knopf := Button.new()
+	knopf.name = "StandKnopf"
+	knopf.theme_type_variation = "AccentButton"
+	knopf.text = I18nService.t("markt.stand_knopf")
+	knopf.pressed.connect(oeffne_stand)
+	var knoepfe: Array[Button] = [knopf]
+	_baue_knopfleiste(knoepfe, "MarktKnoepfe")
 
 
 func _tab_knopf(text: String) -> Button:
@@ -297,18 +461,25 @@ func _tab_knopf(text: String) -> Button:
 
 func _zeige_tab(halter: VBoxContainer, ankauf: Button, eigen: Button, eigenstand: bool) -> void:
 	for kind in halter.get_children():
+		# Wie panel_sheet.add_content/PT2-B11: Name sofort freigeben, damit
+		# ein Neuaufbau im selben Frame keine umnummerierten Knoten erbt.
+		halter.remove_child(kind)
 		kind.queue_free()
 	ankauf.theme_type_variation = "PrimaryButton" if not eigenstand else "GhostButton"
 	eigen.theme_type_variation = "PrimaryButton" if eigenstand else "GhostButton"
 	if not eigenstand:
 		var markt := MarktSheet.new()
 		markt.gs = game_state()
+		# PT2-B10: die (injizierte) Ort-Zeit gilt auch im Tab — der Ankauf
+		# vertröstet außerhalb Sa 8–14 freundlich.
+		markt.zeit_override = zeit_override
 		markt.erstes_mal = ist_erstbesuch
 		markt.verkauft.connect(_on_verkauft)
 		halter.add_child(markt)
 		return
 	var stand := MarktStandSheet.new()
 	stand.gs = game_state()
+	stand.zeit_override = zeit_override
 	stand.erstes_mal = ist_erstbesuch
 	stand.replay_gestartet.connect(_on_replay_gestartet)
 	stand.verkauf_gezeigt.connect(_on_verkauf_gezeigt)

@@ -300,7 +300,9 @@ func _pet_feedback(pets_today: int) -> void:
 		RewardFx.herz_burst(room, pos, 4)
 	if not pet_bonus_due(pets_today):
 		return
-	_grant_coins(PET_BONUS_COINS)
+	# PT2-B13: Tagesbuch voll = Herzchen-Moment ohne Gold-Float.
+	if _grant_coins(PET_BONUS_COINS) <= 0:
+		return
 	AudioDirector.try_play(self, "ui_coins")
 	if visuals_enabled and room != null and gooby != null:
 		RewardFx.float_text(room, pos, "+%d" % PET_BONUS_COINS, RewardFx.GOLD)
@@ -380,6 +382,9 @@ func _run_surprise() -> void:
 	var moment := SoulService.pick_surprise(slice, _defs, ctx, rng.randf(), rng.randf())
 	if moment.is_empty():
 		return
+	# PT2-B13: Münz-Fund nur bei Platz im Tagesbuch — VOR dem Buchen raus.
+	if str(moment.get("aktion", "")) == "muenze" and _fund_deckel_erreicht():
+		return
 	SoulState.mutate(
 		gs, func(s: Dictionary) -> void: SoulService.book_surprise(s, moment, _now_ms())
 	)
@@ -393,25 +398,52 @@ func _run_surprise() -> void:
 	_show_moment(moment)
 
 
-func _grant_coins(amount: int) -> void:
+## Seelen-Münzen buchen (PT2-B13): reason `soul_sofa_fund` gegen das
+## SOUL_DAY_CAP-Tagesbuch; Rückgabe = WIRKLICH gewährt. Echte Buchungen
+## werden als Toast sichtbar (Float/Spruch verdeckt Telefon/Sheet).
+func _grant_coins(amount: int) -> int:
+	var day := SoulTriggers.day_string(_date_now())
+	var buchung := {"n": 0}
 	gs.update(
 		func(s: Dictionary) -> void:
 			var econ: Dictionary = s.get("economy", {})
-			Economy.award(econ, amount, "soul_sofa_fund")
+			buchung["n"] = Economy.award(econ, amount, "soul_sofa_fund", day)
 	)
+	if int(buchung["n"]) > 0:
+		_zeige_fund_toast(int(buchung["n"]))
+	return int(buchung["n"])
 
 
-## Mini-Fund (EF-1, EVAL-1 D4): etwa alle FUND_INTERVAL_S ein kleiner
-## Moment — Gooby findet eine Münze (Funken + „+1“-Float + Münz-Ton +
-## Zeile). Die Frequenz läuft über die VORHANDENE Seelen-Bremse
-## (ambient_allowed: 90-s-Mindestabstand + Tagesdeckel) — kein zweites
-## Bremssystem, nichts darf nerven.
+## Ist das Seelen-Fund-Tagesbuch für `betrag` weitere Münzen schon voll?
+func _fund_deckel_erreicht(betrag := 1) -> bool:
+	var econ: Variant = gs.get_value("economy", {})
+	if not (econ is Dictionary):
+		return false
+	return Economy.soul_headroom(econ, SoulTriggers.day_string(_date_now())) < betrag
+
+
+## Fund-Buchung als Toast über allen Flächen (RewardHub-/Ort-ToastLayer).
+func _zeige_fund_toast(anzahl: int) -> void:
+	if not is_inside_tree():
+		return
+	var toasts := get_tree().root.find_children("*", "ToastLayer", true, false)
+	if toasts.is_empty():
+		return
+	var nickname := str(gs.get_value("meta.goobyNickname", "Gooby"))
+	toasts[0].show_toast(I18nService.t("rewards.fund.toast", {"gooby": nickname, "n": anzahl}))
+
+
+## Mini-Fund (EF-1, EVAL-1 D4): etwa alle FUND_INTERVAL_S ein Moment —
+## Gooby findet eine Münze (Funken + „+1“-Float + Münz-Ton + Zeile).
+## Frequenz über die VORHANDENE Seelen-Bremse (ambient_allowed); PT2-B13
+## deckelt die SUMME übers Tagesbuch — voll = Moment entfällt KOMPLETT.
 func _run_mini_fund() -> void:
 	var ctx := _ctx(0)
-	if not _ambient_ok():
+	if _fund_deckel_erreicht() or not _ambient_ok():
 		return
 	_book_ambient(ctx)
-	_grant_coins(MINI_FUND_COINS)
+	if _grant_coins(MINI_FUND_COINS) <= 0:
+		return
 	AudioDirector.try_play(self, "ui_coins")
 	if visuals_enabled and gooby != null and room != null:
 		var pos := _gooby_pos()

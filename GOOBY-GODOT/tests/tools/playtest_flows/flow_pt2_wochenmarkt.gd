@@ -1,11 +1,16 @@
 extends "res://tests/tools/playtest_flows/flow_pt2_basis.gd"
-## PT-2 Flow (c) „Wochenmarkt“ (Welle H): mit Ernte im Korb zum Markt
-## fahren, Gretas Dialog durchtippen („Ich möchte Ernte verkaufen.“),
-## im ANKAUF-Tab alle Tomaten verkaufen (Geld/Inventar nachrechnen),
-## dann im Tab „Mein Stand“ den Eigenstand bestücken (Möhren+Radieschen),
-## den Preis-Slider WIRKLICH ziehen (billiger = verkauft sich schneller),
-## den Markttag per zeit_override auf Samstag 9 Uhr stellen, das Replay
-## anschauen und die Abrechnung abholen. Zum Schluss zurück nach Hause.
+## PT-2 Flow (c) „Wochenmarkt“ (Welle H; W18/R3 PT2-B10-Umbau): der Markt
+## ist IMMER betretbar, aber außerhalb Sa 8–14 Uhr ruht er sichtbar. Der
+## Flow spielt beide Seiten: (1) Zeit auf Samstag 6 Uhr pinnen → Planen,
+## „Bis Samstag!“-Schild, Greta weg; über den „Mein Marktstand“-Knopf den
+## Eigenstand TROTZDEM bestücken (Möhren+Radieschen, Preis-Slider ziehen)
+## und den vertrösteten Ankauf-Tab sehen („Greta macht Pause“). (2) Zeit
+## auf Samstag 9 Uhr flippen → Greta ist da, ihr Dialog startet nach, im
+## Ankauf alle Tomaten verkaufen (Geld/Inventar nachrechnen), dann läuft
+## der Markttag: Replay anschauen, Abrechnung abholen, nach Hause.
+## HINWEIS: Läuft der Flow REAL samstags 8–14 Uhr, ist der Markt beim
+## Betreten schon offen und Gretas Dialog liegt über dem Geschlossen-Teil
+## — bewusst hingenommen (163 von 168 Wochenstunden sind eindeutig).
 ## Aufruf: tools/ci/run_playtest.sh flow_pt2_wochenmarkt
 
 const MOEHREN := 3
@@ -49,9 +54,8 @@ func schritte() -> Array[Dictionary]:
 					"funktion": fahre_zu.bind("wochenmarkt"),
 					"erwartung": "Auto steht am Marktplatz",
 				},
-				# HINWEIS Öffnungsregel: laut city_map.json hat der Markt nur
-				# samstags 8–14 Uhr offen — der Prompt erscheint trotzdem an
-				# jedem Tag (Befund, s. Report). Der Flow nutzt das aus.
+				# PT2-B10: der Platz ist bewusst IMMER betretbar — die
+				# Öffnungszeiten zeigen sich DRINNEN als Geschlossen-Charme.
 				{
 					"name": "markt_betreten",
 					"aktion": "tipp_text",
@@ -60,6 +64,131 @@ func schritte() -> Array[Dictionary]:
 					"timeout_s": 120.0,
 				},
 				{"name": "marktplatz_ansehen", "aktion": "warte", "sekunden": 3.0},
+				# ── Teil 1: GESCHLOSSEN (Samstag 6 Uhr, vor Marktbeginn) ──
+				{
+					"name": "zeit_auf_sa_frueh",
+					"aktion": "tue",
+					"funktion": _zeit_setzen.bind(6),
+					"erwartung": "zeit_override = Samstag 6 Uhr, Markt zu",
+				},
+				{
+					"name": "geschlossen_charme",
+					"aktion": "tue",
+					"funktion": _geschlossen_geprueft,
+					"erwartung": "Greta weg, Planen + Bis-Samstag-Schild sichtbar",
+				},
+				{"name": "geschlossen_ansehen", "aktion": "warte", "sekunden": 2.0},
+				{
+					"name": "stand_knopf_tipp",
+					"aktion": "tipp_name",
+					"node": "StandKnopf",
+					"timeout_s": 20.0,
+				},
+				{
+					"name": "stand_titel_da",
+					"aktion": "warte_bis",
+					"text": "Dein Marktstand",
+					"timeout_s": 20.0,
+				},
+			]
+		)
+	)
+	# Lager-Zeilen liegen unter der langen Erste-Male-Karte — jede Ware
+	# erst über beide Scroller ins Bild rollen („{name} — {basis} ᴳ“-
+	# Zeile; der „Alle n“-Knopf legt den GANZEN Vorrat auf den Stand).
+	liste.append_array(rolle_schritte("Möhre —", "moehren"))
+	(
+		liste
+		. append_array(
+			[
+				{
+					"name": "moehren_auflegen",
+					"aktion": "tipp_pos",
+					"pos_funktion": knopf_neben_label.bind("Möhre —"),
+					"timeout_s": 20.0,
+				},
+				{"name": "auflegen_pling", "aktion": "warte", "sekunden": 1.5},
+			]
+		)
+	)
+	liste.append_array(rolle_schritte("Radieschen —", "radieschen"))
+	(
+		liste
+		. append_array(
+			[
+				{
+					"name": "radieschen_auflegen",
+					"aktion": "tipp_pos",
+					"pos_funktion": knopf_neben_label.bind("Radieschen —"),
+					"timeout_s": 20.0,
+				},
+				{"name": "auflegen_pling_2", "aktion": "warte", "sekunden": 1.5},
+				{
+					"name": "stand_bestueckt",
+					"aktion": "tue",
+					"funktion": _stand_hat_slots.bind(2),
+					"erwartung":
+					"2 Slots auf dem Stand (Möhre + Radieschen) — GESCHLOSSEN bestückt",
+				},
+				# Preis-Slider WIRKLICH ziehen: erster Slot (Möhre) auf billig —
+				# billiger verkauft sich schneller, das Replay wird voller.
+				{
+					"name": "preis_slider_ziehen",
+					"aktion": "wisch",
+					"von_funktion": slider_punkt.bind(0.0),
+					"nach_funktion": slider_punkt.bind(-0.6),
+					"dauer_s": 0.6,
+				},
+				{
+					"name": "preis_gesenkt",
+					"aktion": "tue",
+					"funktion": _faktor_unter_eins,
+					"erwartung": "ein Slot-Preis-Faktor unter 1,0 (Slider hat gegriffen)",
+					"pflicht": false,
+				},
+			]
+		)
+	)
+	# Ankauf-Tab bei GESCHLOSSENEM Markt: Greta vertröstet freundlich.
+	liste.append_array(rolle_schritte("Ankauf", "tab_ankauf_zu"))
+	(
+		liste
+		. append_array(
+			[
+				{
+					"name": "tab_ankauf_zu",
+					"aktion": "tipp_text",
+					"text": "Ankauf",
+					"timeout_s": 20.0,
+				},
+				{
+					"name": "greta_macht_pause",
+					"aktion": "warte_bis",
+					"text": "Greta macht Pause",
+					"timeout_s": 20.0,
+				},
+				# Sheet per BACKDROP-Tipp schließen (oben rechts, klar neben
+				# dem Sheet) — s. Kommentar beim zweiten Schließen unten.
+				{
+					"name": "sheet_zu_vor_flip",
+					"aktion": "tipp_pos",
+					"pos_funktion": canvas_punkt.bind(Vector2(0.9, 0.08)),
+					"pflicht": false,
+				},
+				{"name": "sheet_zu_abwarten_1", "aktion": "warte", "sekunden": 1.5},
+				# ── Teil 2: OFFEN (Samstag 9 Uhr) — Greta kommt nach ──
+				{
+					"name": "zeit_auf_samstag",
+					"aktion": "tue",
+					"funktion": _zeit_setzen.bind(9),
+					"erwartung": "zeit_override = Samstag 9 Uhr, Markt offen",
+				},
+				{
+					"name": "greta_ist_da",
+					"aktion": "tue",
+					"funktion": _offen_geprueft,
+					"erwartung": "Greta sichtbar, Planen/Schild weg",
+				},
 			]
 		)
 	)
@@ -141,73 +270,8 @@ func schritte() -> Array[Dictionary]:
 					"text": "Mein Stand",
 					"timeout_s": 20.0,
 				},
-				{
-					"name": "stand_titel_da",
-					"aktion": "warte_bis",
-					"text": "Dein Marktstand",
-					"timeout_s": 20.0,
-				},
-			]
-		)
-	)
-	# Lager-Zeilen liegen unter der langen Erste-Male-Karte — jede Ware
-	# erst über beide Scroller ins Bild rollen („{name} — {basis} ᴳ“-
-	# Zeile; der „Alle n“-Knopf legt den GANZEN Vorrat auf den Stand).
-	liste.append_array(rolle_schritte("Möhre —", "moehren"))
-	(
-		liste
-		. append_array(
-			[
-				{
-					"name": "moehren_auflegen",
-					"aktion": "tipp_pos",
-					"pos_funktion": knopf_neben_label.bind("Möhre —"),
-					"timeout_s": 20.0,
-				},
-				{"name": "auflegen_pling", "aktion": "warte", "sekunden": 1.5},
-			]
-		)
-	)
-	liste.append_array(rolle_schritte("Radieschen —", "radieschen"))
-	(
-		liste
-		. append_array(
-			[
-				{
-					"name": "radieschen_auflegen",
-					"aktion": "tipp_pos",
-					"pos_funktion": knopf_neben_label.bind("Radieschen —"),
-					"timeout_s": 20.0,
-				},
-				{"name": "auflegen_pling_2", "aktion": "warte", "sekunden": 1.5},
-				{
-					"name": "stand_bestueckt",
-					"aktion": "tue",
-					"funktion": _stand_hat_slots.bind(2),
-					"erwartung": "2 Slots auf dem Stand (Möhre + Radieschen)",
-				},
-				# Preis-Slider WIRKLICH ziehen: erster Slot (Möhre) auf billig —
-				# billiger verkauft sich schneller, das Replay wird voller.
-				{
-					"name": "preis_slider_ziehen",
-					"aktion": "wisch",
-					"von_funktion": slider_punkt.bind(0.0),
-					"nach_funktion": slider_punkt.bind(-0.6),
-					"dauer_s": 0.6,
-				},
-				{
-					"name": "preis_gesenkt",
-					"aktion": "tue",
-					"funktion": _faktor_unter_eins,
-					"erwartung": "ein Slot-Preis-Faktor unter 1,0 (Slider hat gegriffen)",
-					"pflicht": false,
-				},
-				{
-					"name": "zeit_auf_samstag",
-					"aktion": "tue",
-					"funktion": _markttag_starten,
-					"erwartung": "zeit_override = Samstag 9 Uhr, Sheet im LAEUFT-Zustand",
-				},
+				# Ort-zeit_override (Sa 9 Uhr) wird in den Tab durchgereicht
+				# (PT2-B10) — der VOR Marktbeginn bestückte Stand läuft jetzt.
 				{
 					"name": "markttag_laeuft",
 					"aktion": "warte_bis",
@@ -323,25 +387,56 @@ func _faktor_unter_eins() -> bool:
 	return false
 
 
-## Markttag anwerfen: Sheet finden, Zeit auf den gebundenen Samstag 9 Uhr
-## einfrieren und neu aufbauen — der Stand steht dann mitten im Markttag.
-func _markttag_starten() -> bool:
-	var sheet := _finde_stand_sheet(harness.root)
-	if sheet == null:
-		print("[PT2] MarktStandSheet nicht gefunden")
+## PT2-B10-Zeithebel: die Ort-Uhr auf den gebundenen Samstag `stunde` Uhr
+## pinnen und den Marktzustand nachziehen — 6 Uhr = zu (vor Marktbeginn,
+## bestücken bindet DIESEN Samstag), 9 Uhr = offen (Greta kommt nach).
+func _zeit_setzen(stunde: int) -> bool:
+	var markt := _finde_markt()
+	if markt == null:
+		print("[PT2] _zeit_setzen: kein OrtWochenmarkt aktiv")
 		return false
-	sheet.zeit_override = naechster_samstag_unix(9)
-	sheet.aktualisiere()
-	print("[PT2] zeit_override = %d (Samstag 9 Uhr)" % sheet.zeit_override)
-	return true
+	markt.zeit_override = naechster_samstag_unix(stunde)
+	markt.aktualisiere_marktzustand()
+	var offen: bool = markt.markt_offen()
+	print("[PT2] zeit_override = %d (Sa %d Uhr) → offen=%s" % [markt.zeit_override, stunde, offen])
+	return offen == (stunde >= 8 and stunde < 14)
 
 
-func _finde_stand_sheet(wurzel: Node) -> MarktStandSheet:
-	var stapel: Array[Node] = [wurzel]
-	while not stapel.is_empty():
-		var aktuell: Node = stapel.pop_back()
-		if aktuell is MarktStandSheet:
-			return aktuell
-		for kind in aktuell.get_children():
-			stapel.append(kind)
-	return null
+## Geschlossen-Charme-Sonde: Greta (rig) unsichtbar, GeschlossenDeko
+## (Planen + „Bis Samstag!“-Schild) sichtbar, Markt-Leben ruht,
+## StandKnopf erreichbar.
+func _geschlossen_geprueft() -> bool:
+	var markt := _finde_markt()
+	if markt == null:
+		return false
+	var deko: Node3D = markt.get("_geschlossen_deko")
+	var greta_weg: bool = markt.rig != null and not markt.rig.visible
+	var deko_da := deko != null and deko.visible
+	var schild := deko != null and deko.find_child("SamstagSchild", true, false) != null
+	var leben_ruht := markt.leben == null or not markt.leben.visible
+	var knopf := harness.root.find_child("StandKnopf", true, false) != null
+	print(
+		(
+			"[PT2] geschlossen: greta_weg=%s deko=%s schild=%s leben_ruht=%s stand_knopf=%s"
+			% [greta_weg, deko_da, schild, leben_ruht, knopf]
+		)
+	)
+	return greta_weg and deko_da and schild and leben_ruht and knopf
+
+
+## Offen-Sonde nach dem Zeit-Flip: Greta sichtbar, Deko weg, Leben läuft.
+func _offen_geprueft() -> bool:
+	var markt := _finde_markt()
+	if markt == null:
+		return false
+	var deko: Node3D = markt.get("_geschlossen_deko")
+	var greta_da: bool = markt.rig != null and markt.rig.visible
+	var deko_weg := deko == null or not deko.visible
+	var leben_da := markt.leben != null and markt.leben.visible
+	print("[PT2] offen: greta_da=%s deko_weg=%s leben=%s" % [greta_da, deko_weg, leben_da])
+	return greta_da and deko_weg and leben_da
+
+
+func _finde_markt() -> OrtWochenmarkt:
+	var szene := aktuelle_szene()
+	return szene if szene is OrtWochenmarkt else null

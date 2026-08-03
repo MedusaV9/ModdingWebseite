@@ -4,6 +4,12 @@
 			"ankauf": "Buy-up",
 			"eigenstand": "My stall"
 		},
+		"stand_knopf": "My market stall",
+		"geschlossen": {
+			"schild": "See you Saturday!\nSat 8 a.m.–2 p.m.",
+			"titel": "Greta is off duty",
+			"ankauf": "The buy-up is open Saturdays from 8 a.m. to 2 p.m. — that’s when Greta is back. In the meantime, why not put fresh goods on your own stall?"
+		},
 		"stand": {
 			"titel": "Your market stall",
 			"nachfrage": "Everyone loves {ware} today!",

@@ -305,9 +305,9 @@ static func _clamp_core(s: Dictionary, raw: Dictionary, now_ms: int) -> void:
 		gooby["health"]["state"] = "healthy"
 
 	var econ: Dictionary = s["economy"]
-	for key in ["coins", "coinsEarned", "coinsSpent", "dayCoins", "endlessCoins"]:
+	for key in ["coins", "coinsEarned", "coinsSpent", "dayCoins", "endlessCoins", "soulCoins"]:
 		econ[key] = maxi(0, int(floor(_num(econ.get(key)))))
-	for key in ["dayCoinsDay", "endlessCoinsDay"]:
+	for key in ["dayCoinsDay", "endlessCoinsDay", "soulCoinsDay"]:
 		if not (econ.get(key) is String):
 			econ[key] = ""
 

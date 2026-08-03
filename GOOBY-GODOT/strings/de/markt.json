@@ -4,6 +4,12 @@
 			"ankauf": "Ankauf",
 			"eigenstand": "Mein Stand"
 		},
+		"stand_knopf": "Mein Marktstand",
+		"geschlossen": {
+			"schild": "Bis Samstag!\nSa 8–14 Uhr",
+			"titel": "Greta macht Pause",
+			"ankauf": "Der Ankauf hat samstags von 8 bis 14 Uhr geöffnet — dann steht Greta wieder hier. Leg doch schon mal frische Ware auf deinen eigenen Stand!"
+		},
 		"stand": {
 			"titel": "Dein Marktstand",
 			"nachfrage": "Heute lieben alle {ware}!",

@@ -11,16 +11,28 @@ extends RefCounted
 ## 150 c/local-day modifier ledger, 'endless' against the 100 c/local-day
 ## endless ledger; every other reason is uncapped logging metadata.
 ## Parity proven against golden_values.json economy.steps.
+## GODOT-EIGEN (W18/R3 PT2-B13): reason 'soul_sofa_fund' (Seelen-Taschengeld:
+## Sofa-Fund-Überraschung, Mini-Fund, Streichel-Bonus) bucht gegen ein
+## eigenes 10-c-Tagesbuch — das Web kennt kein Seelen-System, der Leerlauf
+## darf Münzen aber nicht unbegrenzt anhäufen (Playtest: ~+5 c/4 min).
 
 ## §C-SYS11.1 row 5: modifier surplus (doppelGold + glueckspilz) per local day.
 const DAY_COIN_CAP := 150
 ## §C-SYS11.1 row 6: coins from `reason: 'endless'` per local day.
 const ENDLESS_DAY_CAP := 100
+## PT2-B13: Seelen-Funde (`reason: 'soul_sofa_fund'`) pro Lokaltag.
+const SOUL_DAY_CAP := 10
 ## Quick Delivery (§C4.6): +20% markup, rounded up.
 const QUICK_DELIVERY_MARKUP := 0.2
 const QUICK_DELIVERY_PRICE := 400
 const QUICK_DELIVERY_LEVEL := 8
 const STARTING_COINS := 100
+
+## Diagnose-/Test-Hahn (PT2-B13 „Ledger-Wache“): wenn gesetzt, wird JEDE
+## Buchung als tap.call(reason, angefragt, gewaehrt) gemeldet — Tests
+## weisen so nach, dass der Leerlauf keine unerklärten Münzen bucht.
+## Produktion lässt den Callable leer (ein is_valid()-Check pro award).
+static var award_tap := Callable()
 
 
 ## Fresh economy slice (v5 defaults; STARTING_COINS mirrors web §C5.1).
@@ -33,6 +45,8 @@ static func default_slice() -> Dictionary:
 		"dayCoinsDay": "",
 		"endlessCoins": 0,
 		"endlessCoinsDay": "",
+		"soulCoins": 0,
+		"soulCoinsDay": "",
 	}
 
 
@@ -64,10 +78,23 @@ static func award(econ: Dictionary, amount: Variant, reason := "", day := "") ->
 		granted = _book_day_ledger(econ, n, day, "dayCoins", "dayCoinsDay", DAY_COIN_CAP)
 	elif reason == "endless":
 		granted = _book_day_ledger(econ, n, day, "endlessCoins", "endlessCoinsDay", ENDLESS_DAY_CAP)
+	elif reason == "soul_sofa_fund":
+		granted = _book_day_ledger(econ, n, day, "soulCoins", "soulCoinsDay", SOUL_DAY_CAP)
 	if granted > 0:
 		econ["coins"] = int(econ.get("coins", 0)) + granted
 		econ["coinsEarned"] = int(econ.get("coinsEarned", 0)) + granted
+	if award_tap.is_valid():
+		award_tap.call(reason, n, granted)
 	return granted
+
+
+## Verbleibender Tages-Spielraum des Seelen-Fund-Buchs (PT2-B13). 0 = Deckel
+## erreicht — die Seele lässt den Fund-Moment dann KOMPLETT aus (kein Ton/
+## Float/Spruch ohne echte Münze). Liest nur, bucht nichts.
+static func soul_headroom(econ: Dictionary, day: String) -> int:
+	if str(econ.get("soulCoinsDay", "")) != day:
+		return SOUL_DAY_CAP
+	return maxi(0, SOUL_DAY_CAP - int(econ.get("soulCoins", 0)))
 
 
 ## Spend coins atomically: either the full amount is deducted or nothing

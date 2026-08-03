@@ -136,7 +136,8 @@ func setup(context: MinigameCtx) -> void:
 	# Start unten auf der Ringstraße, Blick nach Osten.
 	van_pos = Vector2(0.0, RING_M)
 	van_heading = PI * 0.5
-	_checkpoint = Logic.next_checkpoint(rng, van_pos)
+	# PT3-B5: Ring ankert auf der Münz-Kette — wer Münzen jagt, fährt durch.
+	_checkpoint = Logic.next_checkpoint(rng, van_pos, _coins)
 	_spawn_traffic()
 	_build_stage()
 	_build_hud()
@@ -617,7 +618,7 @@ func _check_checkpoint() -> void:
 	score = Logic.apply_checkpoint(score, tune)
 	checkpoints += 1
 	var reached := _checkpoint
-	_checkpoint = Logic.next_checkpoint(rng, van_pos)
+	_checkpoint = Logic.next_checkpoint(rng, van_pos, _coins)
 	_place_venue()
 	AudioDirector.try_play(self, "mg_win", 1.0 + 0.04 * float(mini(checkpoints, 5)))
 	_stage.call("pulse_glow", 1.0)

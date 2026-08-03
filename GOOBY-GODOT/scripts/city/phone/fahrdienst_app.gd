@@ -56,7 +56,14 @@ func stunde_lokal() -> float:
 
 
 func aktualisiere() -> void:
+	# PT2-B11: erst remove_child, DANN queue_free — queue_free allein ist
+	# deferred, der sterbende Knoten blockiert seinen Namen bis Frame-Ende
+	# und Godot nummeriert die im SELBEN Frame neu gebauten Knöpfe um
+	# (@RufenButton@…). Mit remove_child ist der Name sofort frei — Tests/
+	# Coachmarks finden „RufenButton“ & Co. stabil (Muster wie
+	# panel_sheet.gd:add_content).
 	for kind in get_children():
+		remove_child(kind)
 		kind.queue_free()
 	if gs == null:
 		return
