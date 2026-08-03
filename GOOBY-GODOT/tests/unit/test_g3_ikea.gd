@@ -7,6 +7,9 @@ extends TestCase
 
 const QUER := Vector2i(1280, 800)
 const HOCH := Vector2i(800, 1280)
+## PT2-B6: Leitformat der G8-Playtests (2868×1320 quer) — hier lag der
+## Kaufen-Knopf am Scroller-Ende unterm Falz.
+const LEIT_QUER := Vector2i(2868, 1320)
 const SCREEN_QUELLE := "res://scripts/shop/ikea_screen.gd"
 
 var _root_size := Vector2i.ZERO
@@ -55,7 +58,9 @@ func test_portrait_reflow_stapelt_einspaltig_und_zurueck() -> void:
 	var screen := await _mount(HOCH)
 	var body := screen.get("_body") as BoxContainer
 	assert_true(body.vertical, "Hochformat: Body stapelt vertikal")
-	assert_eq(String(body.get_child(0).name), "DetailScroll", "Hochformat: Vitrine + Details oben")
+	# PT2-B6: die rechte Spalte heißt jetzt DetailColumn (Scroller + Kauf-
+	# Footer) — im Stapel steht sie weiterhin oben.
+	assert_eq(String(body.get_child(0).name), "DetailColumn", "Hochformat: Vitrine + Details oben")
 	var left := screen.get("_left_column") as Control
 	assert_eq(left.custom_minimum_size.x, 0.0, "Liste nimmt im Stapel die volle Spaltenbreite")
 	assert_true(
@@ -68,6 +73,29 @@ func test_portrait_reflow_stapelt_einspaltig_und_zurueck() -> void:
 	assert_false(body.vertical, "zurück im Querformat: 2 Spalten")
 	assert_true(body.get_child(0) == left, "zurück im Querformat: Liste wieder links")
 	assert_true(left.custom_minimum_size.x > 0.0, "Listen-Mindestbreite wieder gesetzt")
+	await _drop(screen)
+
+
+func test_kaufzeile_ist_sticky_footer_im_leitformat() -> void:
+	# PT2-B6: Im Leitformat quer (2868×1320) lag der Kaufen-Knopf am Ende
+	# des DetailScroll-Inhalts unterm Falz (pt2_b1/047: Tap ins Leere).
+	# Jetzt wohnt die Kaufzeile AUSSERHALB des Scrollers und ist ohne
+	# Scrollen komplett im Canvas.
+	var screen := await _mount(LEIT_QUER)
+	await wait_frames(2)
+	var buy := screen.find_child("BuyButton", true, false) as Control
+	assert_true(buy != null, "BuyButton existiert")
+	var ahn: Node = buy.get_parent()
+	while ahn != null and not (ahn is ScrollContainer):
+		ahn = ahn.get_parent()
+	assert_true(ahn == null, "Kaufzeile hängt in KEINEM ScrollContainer mehr")
+	var canvas := Vector2(screen.get_viewport().get_visible_rect().size)
+	var rect := buy.get_global_rect()
+	assert_true(
+		rect.position.y >= 0.0 and rect.end.y <= canvas.y + 0.5,
+		"Kaufen ohne Scrollen im Canvas (Knopf %s, Canvas %s)" % [rect, canvas]
+	)
+	assert_true(rect.end.x <= canvas.x + 0.5, "Kaufen läuft rechts nicht aus dem Canvas")
 	await _drop(screen)
 
 

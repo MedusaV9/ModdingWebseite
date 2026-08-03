@@ -404,3 +404,42 @@ func test_grid_spalten_fenster() -> void:
 	assert_eq(PhoneShell.grid_spalten(604.0, 1.0), 5, "Quer-Basis f=1: 5 Spalten")
 	assert_eq(PhoneShell.grid_spalten(5000.0, 1.0), 5, "Deckel bei 5 Spalten")
 	assert_eq(PhoneShell.grid_spalten(464.0, 1.0), 4, "4 Kacheln + Lücken → 4 Spalten")
+
+
+# ------------------------------------------------- Statusleiste live (B8)
+
+
+## GameState-Double MIT den echten Store-Signalen (PT2-B8): die Shell hört
+## auf coins_changed/stats_changed, der Basis-Fake oben hat sie bewusst
+## nicht (has_signal-Wache bleibt so mitgetestet).
+class FakeGameStateMitSignalen:
+	extends FakeGameState
+	signal coins_changed(coins: int)
+	signal stats_changed(stats: Dictionary)
+
+
+func test_statusleiste_folgt_buchungen_live() -> void:
+	# PT2-B8: Nach der GOOBERANDO-Bestellung (−19 ᴳ) zeigte die Status-
+	# Zeile weiter „300“, während das HUD 281 zeigte — erst ein App-/
+	# Grid-Wechsel aktualisierte sie. Jetzt folgt sie den Signalen sofort.
+	var rm: Variant = _set_reduced_motion(true)
+	await _pin(Vector2i(1280, 720))
+	var gs := FakeGameStateMitSignalen.new()
+	var shell := await _oeffne_shell(gs)
+	var muenzen: Label = shell._muenzen
+	var akku: ProgressBar = shell._akku
+	assert_eq(muenzen.text, "300", "Öffnen zeigt den Startstand")
+	gs.set_value("economy.coins", 281)
+	gs.coins_changed.emit(281)
+	assert_eq(muenzen.text, "281", "Buchung aktualisiert die Leiste OHNE App-Wechsel")
+	gs.set_value("gooby.stats.energy", 55.0)
+	gs.stats_changed.emit({"energy": 55.0})
+	assert_almost(akku.value, 55.0, 0.01, "Akku folgt stats_changed live")
+	await _schliesse_shell(shell)
+	# Basis-Fake OHNE Signale: Öffnen darf nicht krachen (has_signal-Wache).
+	var stumm := FakeGameState.new()
+	var shell2 := await _oeffne_shell(stumm)
+	assert_eq((shell2._muenzen as Label).text, "300", "stummer Store: Leiste steht trotzdem")
+	await _schliesse_shell(shell2)
+	await _unpin()
+	_restore_reduced_motion(rm)

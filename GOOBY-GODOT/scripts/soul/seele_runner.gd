@@ -62,6 +62,12 @@ static var _aktive_seele: SeeleRunner = null
 ## Der GoobyReactions-Runner (bewusst untypisiert — kein Klassen-Zyklus).
 var runner: Node = null
 
+## PT1-B5: Zähler gesprochener Lines — sagt() ist der EINE Trichter, durch
+## den jede sichtbare Bubble läuft (runner._say, zeige_linie, Momente).
+## Die Antwort-Chips koppeln sich daran: keine sichtbare Frage seit ihrem
+## Anlass, dann reicht GoobyGespraech die Anlass-Zeile nach.
+var gesprochene_lines := 0
+
 var _expressions: GoobyExpressions = null
 var _voice: GoobyVoice = null
 var _mood_timer := 0.0
@@ -305,6 +311,7 @@ func aufmerken() -> void:
 ## Gebrabbel zur Bubble: die Stimme moduliert nach Stimmung UND Moment-
 ## Emotion (GoobyVoice.modulation) — man HÖRT, wie es Gooby geht.
 func sagt(text: String, emotion := "") -> void:
+	gesprochene_lines += 1
 	if _voice != null:
 		_voice.sagt(text, emotion if not emotion.is_empty() else ruhe_emotion_jetzt())
 

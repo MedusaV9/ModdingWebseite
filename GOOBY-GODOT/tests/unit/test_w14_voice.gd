@@ -1,4 +1,4 @@
-extends TestCase
+extends TestCase  # gdlint: ignore=max-public-methods
 ## W14/VOICE — Gooby wird gesprächiger: Mini-Dialoge (Antwort-Chips),
 ## 120 neue Text-Lines mit Anti-Wiederholungs-Gedächtnis, Gebrabbel-
 ## Melodien. Alles pur getestet (Zufall als roll, keine OS-Uhr):
@@ -391,8 +391,9 @@ func test_gespraech_chips_ende_zu_ende() -> void:
 	var gespraech: GoobyGespraech = seele.get_node("GoobyGespraech")
 	# Anlass mit chance 1.0 → deterministisch ohne rng-Seed.
 	assert_true(gespraech.starte("gruss_eingeschnappt"), "Gespräch dockt am Gruß an")
-	assert_true(gespraech.aktiv(), "Chips stehen")
+	# PT1-B5: Chips kommen einen Frame später — gekoppelt an ihre Frage.
 	await wait_frames(1)
+	assert_true(gespraech.aktiv(), "Chips stehen")
 	var panel: Control = room.layer.get_node("GoobyGespraechChips")
 	var row: HBoxContainer = panel.get_child(0)
 	assert_eq(row.get_child_count(), 2, "zwei Antwort-Chips")
@@ -418,6 +419,59 @@ func test_gespraech_chips_ende_zu_ende() -> void:
 	assert_eq(str(eintrag.get("antwort", "")), "entschuldigen", "Antwort landet im Soul-Slice")
 	assert_eq(int(eintrag.get("anzahl", 0)), 1, "Zähler startet bei 1")
 	assert_false(gespraech.aktiv(), "eingeschnappt hat keine Ebene 2 — Gespräch zu Ende")
+	room.queue_free()
+	gs.queue_free()
+	await wait_frames(1)
+
+
+func test_chips_reichen_frage_nach_oder_bleiben_weg() -> void:
+	# PT1-B5: Verschluckte die Feelings-Sperre die Gruß-Zeile (oder kam der
+	# öffentliche stoss_gruss-Hook ohne Betreten-Moment), standen die Chips
+	# ohne Frage über einer alten Fremd-Line („Ball! Bester Ball der Welt!“).
+	# Jetzt: (1) keine Line seit dem Anlass → Anlass-Zeile wird nachgereicht;
+	# (2) Anlass-Line kam → nichts doppelt sprechen; (3) nichts
+	# rekonstruierbar (erinnerung) → Chips bleiben weg.
+	var gs := _fresh_gs()
+	var room := RoomStub.new()
+	room.gs_ref = gs
+	tree.root.add_child(room)
+	var runner := GoobyReactions.new()
+	runner.name = "GoobyReactions"
+	runner.now_ms_override = NOW_MS
+	runner.visuals_enabled = false
+	room.add_child(runner)
+	runner.setup(room)
+	var seele: SeeleRunner = runner.get_node("SeeleRunner")
+	var gespraech: GoobyGespraech = seele.get_node("GoobyGespraech")
+	# (1) Hook ohne Moment-Line: die Frage kommt mit den Chips.
+	assert_true(gespraech.starte("gruss_eingeschnappt"), "Gespräch angenommen")
+	await wait_frames(1)
+	assert_true(gespraech.aktiv(), "Chips stehen")
+	var bubble := _neuste_bubble(room)
+	assert_true(bubble != null, "nachgereichte Frage-Zeile steht als Bubble")
+	if bubble != null:
+		var erwartet := [
+			I18nService.t("soul.gruss.eingeschnappt.a"),
+			I18nService.t("soul.gruss.eingeschnappt.b"),
+		]
+		assert_true(
+			erwartet.has(bubble.current_line()),
+			"Bubble zeigt die eingeschnappt-Gruß-Zeile (%s)" % bubble.current_line()
+		)
+	gespraech._chips_weg()
+	# (2) Anlass-Line kam wie beim Betreten-Moment: keine Doppel-Frage.
+	assert_true(gespraech.starte("gruss_eingeschnappt"), "zweites Gespräch angenommen")
+	runner._say(I18nService.t("soul.gruss.eingeschnappt.a"), "angry")
+	var stand := int(seele.gesprochene_lines)
+	await wait_frames(1)
+	assert_true(gespraech.aktiv(), "Chips stehen (Frage kam vom Moment)")
+	assert_eq(int(seele.gesprochene_lines), stand, "keine Doppel-Frage nachgereicht")
+	gespraech._chips_weg()
+	# (3) erinnerung hat keinen festen Text-Pool: ohne Frage keine Chips.
+	var erinnerung := GoobyGespraech.fuer_anlass(_gespraeche(), "erinnerung")
+	assert_false(erinnerung.is_empty(), "erinnerung dockt an ein Gespräch an")
+	gespraech._starte_mit_frage(erinnerung, "erinnerung", int(seele.gesprochene_lines))
+	assert_false(gespraech.aktiv(), "ohne rekonstruierbare Frage bleiben die Chips weg")
 	room.queue_free()
 	gs.queue_free()
 	await wait_frames(1)

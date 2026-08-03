@@ -68,8 +68,12 @@ var _wallet_zeile: HBoxContainer
 var _title_label: Label
 var _body: BoxContainer
 var _left_column: VBoxContainer
+## PT2-B6: rechte Spalte = Scroller + Sticky-Kauf-Footer (Kaufen bleibt
+## IMMER im Bild, nur die Details darüber scrollen).
+var _right_column: VBoxContainer
 var _detail_scroll: ScrollContainer
 var _detail_panel: PanelContainer
+var _kauf_footer: PanelContainer
 var _f := 1.0
 var _floor := float(AcTokens.TOUCH_FLOOR)
 
@@ -161,7 +165,13 @@ func _apply_metrics() -> void:
 	if portrait:
 		# Im Hochformat-Stapel gehört der Vitrinen-Spalte nur ihr Anteil.
 		body_h *= PORTRAIT_DETAIL_SHARE
-	var detail_h := _detail_panel.get_combined_minimum_size().y
+	# PT2-B6: der Kauf-Footer wohnt AUSSERHALB des Scrollers — er gehört
+	# trotzdem ins Höhen-Budget (plus die 8er-Separation der Spalte).
+	var detail_h := (
+		_detail_panel.get_combined_minimum_size().y
+		+ _kauf_footer.get_combined_minimum_size().y
+		+ 8.0
+	)
 	var show_min := clampf(body_h - detail_h - 44.0, 140.0, canvas.y * 0.4)
 	_showcase.custom_minimum_size = Vector2(0.0, show_min)
 
@@ -198,16 +208,16 @@ func _layout_header_nachziehen() -> void:
 ## 1-spaltig — Vitrine + Details oben, Suche/Chips/Regalliste darunter;
 ## im Querformat die gewohnten zwei Spalten (Liste links, Vitrine rechts).
 func _apply_body_layout(portrait: bool, m: Dictionary) -> void:
-	if _body == null or _detail_scroll == null:
+	if _body == null or _right_column == null:
 		return
 	_body.vertical = portrait
 	if portrait:
-		if _body.get_child(0) != _detail_scroll:
-			_body.move_child(_detail_scroll, 0)
+		if _body.get_child(0) != _right_column:
+			_body.move_child(_right_column, 0)
 		_left_column.custom_minimum_size = Vector2.ZERO
 		_left_column.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		_left_column.size_flags_stretch_ratio = 1.0 - PORTRAIT_DETAIL_SHARE
-		_detail_scroll.size_flags_stretch_ratio = PORTRAIT_DETAIL_SHARE
+		_right_column.size_flags_stretch_ratio = PORTRAIT_DETAIL_SHARE
 		return
 	if _body.get_child(0) != _left_column:
 		_body.move_child(_left_column, 0)
@@ -215,7 +225,7 @@ func _apply_body_layout(portrait: bool, m: Dictionary) -> void:
 	_left_column.custom_minimum_size = Vector2(minf(LIST_WIDTH * _f, spalte * 0.42), 0.0)
 	_left_column.size_flags_vertical = Control.SIZE_FILL
 	_left_column.size_flags_stretch_ratio = 1.0
-	_detail_scroll.size_flags_stretch_ratio = 1.0
+	_right_column.size_flags_stretch_ratio = 1.0
 
 
 ## Ein Möbel in die Vitrine stellen (auch von Tests/Screenshots gerufen).
@@ -388,12 +398,21 @@ func _build_right_column() -> Control:
 	# FB3: die Spalte scrollt vertikal — vorher drückte ihre Minimalhöhe
 	# (Vitrine + Detail-Panel) in Quer-Formaten den ganzen Body unter den
 	# Canvas-Rand (Kaufen-Knopf/Swatches unerreichbar).
+	# PT2-B6: die Kaufzeile wohnt jetzt als STICKY-FOOTER unter dem
+	# Scroller (Muster HaendlerSheet: Aktion immer im Bild) — am Listenende
+	# im Scroller lag sie im Leitformat quer unterm Falz („kein Kaufknopf“).
+	_right_column = VBoxContainer.new()
+	_right_column.name = "DetailColumn"
+	_right_column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_right_column.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_right_column.add_theme_constant_override("separation", 8)
 	var scroll := ScrollContainer.new()
 	scroll.name = "DetailScroll"
 	_detail_scroll = scroll
 	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_right_column.add_child(scroll)
 	var column := VBoxContainer.new()
 	column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	column.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -414,7 +433,8 @@ func _build_right_column() -> Control:
 	_showcase.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	card.add_child(_showcase)
 	column.add_child(_build_detail_panel())
-	return scroll
+	_right_column.add_child(_build_kauf_footer())
+	return _right_column
 
 
 func _build_detail_panel() -> Control:
@@ -444,8 +464,18 @@ func _build_detail_panel() -> Control:
 	meta.add_child(_meta_label)
 	rows.add_child(_build_variant_row())
 	rows.add_child(_build_zoom_row())
-	rows.add_child(_build_buy_row())
 	return panel
+
+
+## PT2-B6: Kaufzeile als eigene Karte UNTER dem Scroller — bleibt in jedem
+## Format ohne Scrollen sichtbar (der Erst-Eindruck „kein Kaufknopf“ war
+## ein Tap ins Leere unterm Falz, Beleg pt2_b1/047).
+func _build_kauf_footer() -> Control:
+	_kauf_footer = PanelContainer.new()
+	_kauf_footer.name = "KaufFooter"
+	_kauf_footer.theme_type_variation = &"AcCard"
+	_kauf_footer.add_child(_build_buy_row())
+	return _kauf_footer
 
 
 func _build_variant_row() -> Control:

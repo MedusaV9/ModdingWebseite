@@ -40,6 +40,9 @@ class FakeGooby:
 	var rig: FakeRig = FakeRig.new()
 	var wander := true
 	var clips: Array[String] = []
+	# PT1-B7: MumieSzene muss Gooby VOR dem Einfrieren auf den Boden snappen.
+	var snaps := 0
+	var snap_bei_aktivem_wander := false
 
 	func _init() -> void:
 		add_child(rig)
@@ -49,6 +52,10 @@ class FakeGooby:
 
 	func play_clip(clip: String) -> void:
 		clips.append(clip)
+
+	func snap_to_walkable() -> void:
+		snaps += 1
+		snap_bei_aktivem_wander = wander
 
 
 class FakeRoom:
@@ -241,6 +248,22 @@ func test_mumie_fuenf_taps_zustandsmaschine() -> void:
 	assert_almost(GoobyBuffs.stat_bonus(buffs, "fun", NOW_MS), 8.0, 1e-9, "+8 Spaß-Buff")
 	var gooby := (ctx["room"] as FakeRoom).gooby_node
 	assert_true(gooby.clips.has("hop"), "Befreiungs-Hop")
+	await _teardown(ctx)
+
+
+## PT1-B7 (G8-Playtest): Die Mumie erwischte Gooby dort, wo der Wander-Tick
+## ihn gerade abgestellt hatte — im Beleg mitten AUF dem Küchentischchen.
+## Das Setup muss ihn deshalb ERST auf eine begehbare Bodenzelle stellen
+## (snap_to_walkable) und DANN das Wandern einfrieren.
+func test_mumie_snappt_gooby_vor_dem_einfrieren() -> void:
+	var ctx := _stage("klopapier_mumie")
+	var gooby := (ctx["room"] as FakeRoom).gooby_node
+	assert_eq(gooby.snaps, 1, "Setup ruft snap_to_walkable genau einmal")
+	assert_true(
+		gooby.snap_bei_aktivem_wander,
+		"Snap passiert VOR set_wander_enabled(false) — sonst friert er auf dem Möbel fest"
+	)
+	assert_false(gooby.wander, "…und danach ist das Wandern eingefroren")
 	await _teardown(ctx)
 
 

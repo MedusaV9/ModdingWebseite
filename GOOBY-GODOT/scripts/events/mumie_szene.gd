@@ -21,6 +21,11 @@ static func setup(runner: EventRunner, wickel_taps: int) -> void:
 	if gooby == null or not ("rig" in gooby) or gooby.rig == null:
 		runner._running = false
 		return
+	# PT1-B7: Erst auf eine begehbare Bodenzelle stellen, DANN einfrieren —
+	# sonst parkte die Mumie Gooby dort, wo der Wander-Tick ihn gerade
+	# erwischt hat (im Playtest: mitten AUF dem Küchentischchen).
+	if gooby.has_method("snap_to_walkable"):
+		gooby.snap_to_walkable()
 	gooby.set_wander_enabled(false)
 	runner._set_gooby_emotion("dizzy")
 	runner._remaining = maxi(1, wickel_taps)

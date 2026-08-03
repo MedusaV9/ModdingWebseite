@@ -18,13 +18,16 @@ func stadt() -> Node:
 
 ## Auto direkt an den Parkplatz-Trigger eines Orts stellen (wie ein
 ## Spieler, der vorgefahren ist). _spawn_bei räumt das Ausparken auf und
-## setzt Collider. WICHTIG (Lauf pt2_a1/a2): (1) Das Auto ist ein Auto-
-## Runner — Bremse HALTEN, sonst rollt es aus dem Prompt-Radius. (2) Der
-## Trigger liegt 0,5 m IM Fassaden-Collider (offset 7,0 < halb 7,5) — wer
-## GENAU darauf teleportiert, wird von _kollidiere() zur WEST-Kante der
-## Box geworfen (Flughafen/Post: quer durchs Gebäude, Prompt weg). Also
-## wie ein echter Spieler AUSSEN am Bordstein stehen: 2,5 m Richtung
-## Straße (Trigger-Distanz 2,5 < Radius 7, Box-Abstand 2,0 > Auto 1,5).
+## setzt Collider. WICHTIG (Lauf pt2_a1/a2): Das Auto ist ein Auto-
+## Runner — Bremse HALTEN, sonst rollt es aus dem Prompt-Radius. Und
+## selbst MIT Bremse kriecht es weiter (BRAKE_MIN_SPEED, Web-Parität
+## §C7.2) und der Spur-Assist zieht es seitwärts Richtung Fahrbahn —
+## deshalb steht das Auto GENAU auf dem Anker (Distanz 0 = volle
+## 4-m-Radius-Reserve gegen das Kriechen). Der frühere +2,5-m-Versatz
+## Richtung Straße stammte aus der Zeit, als der Anker selbst im
+## Fassaden-Collider steckte; seit dem PT2-B3-Fix (Offset ≥ halb 7,5 +
+## Auto 1,5 + Luft) ist der Anker frei und der Versatz verschenkte nur
+## Reserve (Lauf fix8_stadt_v2: Prompt riss beim Flughafen ab).
 func fahre_zu(ort_id: String) -> bool:
 	var szene := stadt()
 	if szene == null:
@@ -32,11 +35,9 @@ func fahre_zu(ort_id: String) -> bool:
 		return false
 	szene.call("_spawn_bei", ort_id)
 	var park: Vector3 = szene.karte.parkplatz_welt(ort_id)
-	var mitte: Vector3 = szene.karte.tile_zu_welt(szene.karte.welt_zu_tile(park))
-	var stand: Vector3 = park + (park - mitte).normalized() * 2.5
-	szene.auto.teleport(stand.x, stand.z)
+	szene.auto.teleport(park.x, park.z)
 	szene.auto.set_brake(true)
-	print("[PT2] Auto steht (Bremse an) vor %s (%s)" % [ort_id, str(stand)])
+	print("[PT2] Auto steht (Bremse an) vor %s (%s)" % [ort_id, str(park)])
 	return true
 
 

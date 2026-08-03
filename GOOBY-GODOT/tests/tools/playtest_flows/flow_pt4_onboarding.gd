@@ -31,8 +31,7 @@ func schritte() -> Array[Dictionary]:
 			"name": "welcome_karte_zentriert",
 			"aktion": "tue",
 			"funktion": karte_zentriert.bind("StepWelcome"),
-			"erwartung": "Welcome-Karte sitzt mittig im Canvas (Pionier-Befund)",
-			"pflicht": false,
+			"erwartung": "Welcome-Karte sitzt mittig im SAFE-Feld (PT4-B5, Pflicht seit R3)",
 		},
 		{"name": "name_eingeben", "aktion": "eingabe", "node": "NameEdit", "text": "Pionier"},
 		{
@@ -55,6 +54,12 @@ func schritte() -> Array[Dictionary]:
 		},
 		{"name": "editor_ansehen", "aktion": "warte", "sekunden": 1.5},
 		{
+			"name": "editor_inhalt_sichtbar",
+			"aktion": "tue",
+			"funktion": editor_inhalt_sichtbar,
+			"erwartung": "Editor-Karte zeigt Preview + Regler VOLL (PT4-B5: Scroll bekam Krümel)",
+		},
+		{
 			"name": "editor_slider_ziehen",
 			"aktion": "wisch",
 			"von_funktion": slider_griff_pos,
@@ -65,8 +70,7 @@ func schritte() -> Array[Dictionary]:
 			"name": "editor_karte_zentriert",
 			"aktion": "tue",
 			"funktion": karte_zentriert.bind("StepEditor"),
-			"erwartung": "Editor-Karte sitzt mittig im Canvas (Pionier-Befund)",
-			"pflicht": false,
+			"erwartung": "Editor-Karte sitzt mittig im SAFE-Feld (PT4-B5, Pflicht seit R3)",
 		},
 		{
 			"name": "editor_weiter",
@@ -157,21 +161,48 @@ func schritte() -> Array[Dictionary]:
 	]
 
 
-## Onboarding-Karte (Node-Name) horizontal zentriert im Canvas?
+## Onboarding-Karte (Node-Name) horizontal zentriert im NUTZBAREN Feld?
+## PT4-B5/PT3-B6: Referenz ist das SAFE-Rechteck, nicht der volle Canvas —
+## der zu kleine xvfb-Screen erzeugt Phantom-Insets rechts/unten, die das
+## nutzbare Feld nach links schieben; die Karten zentrieren korrekt IM Feld.
+## Die alte Canvas-Referenz maß deshalb konstant 7,5 % „Versatz".
 func karte_zentriert(node_name: String) -> bool:
 	var karte := harness.root.find_child(node_name, true, false) as Control
 	if karte == null or not karte.is_visible_in_tree():
 		return false
 	var canvas := harness.root.get_visible_rect().size
+	var insets := UiScale.safe_insets_canvas(harness.root)
+	var safe_mitte := (float(insets["left"]) + canvas.x - float(insets["right"])) / 2.0
 	var mitte := karte.get_global_rect().get_center().x
-	var abweichung: float = absf(mitte - canvas.x / 2.0) / canvas.x
+	var abweichung: float = absf(mitte - safe_mitte) / canvas.x
 	print(
 		(
-			"[PT4] Karte %s: Mitte %.0f / Canvas %.0f (Abweichung %.1f%%)"
-			% [node_name, mitte, canvas.x, abweichung * 100.0]
+			"[PT4] Karte %s: Mitte %.0f / Safe-Mitte %.0f / Canvas %.0f (Abweichung %.1f%%)"
+			% [node_name, mitte, safe_mitte, canvas.x, abweichung * 100.0]
 		)
 	)
 	return abweichung <= ZENTRIER_TOLERANZ
+
+
+## PT4-B5: Editor-Karte NICHT gequetscht — Preview sichtbar, VOLL in der
+## Karte, und der Scroll mindestens so hoch wie die Preview (im Leitformat
+## ist Platz; vorher bekam der Scroll nur ~27 px Krümel).
+func editor_inhalt_sichtbar() -> bool:
+	var karte := harness.root.find_child("StepEditor", true, false) as Control
+	var preview := harness.root.find_child("GoobyPreview", true, false) as Control
+	var scroll := harness.root.find_child("EditorScroll", true, false) as Control
+	if karte == null or preview == null or scroll == null:
+		return false
+	var karten_rect := karte.get_global_rect()
+	var preview_rect := preview.get_global_rect()
+	var drin := karten_rect.encloses(preview_rect)
+	print(
+		(
+			"[PT4] Editor-Inhalt: Scroll %.0f px hoch, Preview %s in Karte %s (drin=%s)"
+			% [scroll.size.y, preview_rect, karten_rect, drin]
+		)
+	)
+	return drin and preview.is_visible_in_tree() and scroll.size.y >= preview_rect.size.y - 1.0
 
 
 ## Erste Editor-Slider-Position (Griff ≈ Wertposition im Slider-Rect).

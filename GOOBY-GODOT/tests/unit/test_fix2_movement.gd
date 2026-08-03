@@ -151,6 +151,37 @@ func test_idle_wandern_bewegt_sich_wirklich() -> void:
 	await _cleanup(room, gs)
 
 
+## PT1-B7 (G8-Playtest): snap_to_walkable stellt Gooby von einer Möbel-Zelle
+## auf die nächste begehbare Bodenzelle (Mumie-Event fror ihn sonst AUF dem
+## Küchentisch ein) — und ist auf begehbarem Boden ein No-Op (kein Hop).
+func test_snap_to_walkable_holt_gooby_vom_moebel() -> void:
+	var gs := _fresh_gs()
+	var room: RoomBase = await _make_living_room(gs)
+	var gooby := room.gooby()
+	gooby.set_wander_enabled(false)
+	# Couchtisch-Zelle (5,5): Welt x 2.5..3.0, z 2.5..3.0 — unbegehbar.
+	gooby.global_position = Vector3(2.75, 0.0, 2.75)
+	assert_false(
+		gooby.grid.walkable(GridData.cell_of(gooby.global_position)),
+		"Startzelle liegt wirklich auf dem Couchtisch"
+	)
+	gooby.snap_to_walkable()
+	var zelle := GridData.cell_of(gooby.global_position)
+	assert_true(gooby.grid.walkable(zelle), "nach dem Snap steht Gooby auf begehbarer Zelle")
+	assert_almost(gooby.global_position.y, 0.0, 0.001, "…und auf dem Boden (y=0)")
+	assert_true(
+		GoobyHome._xz(gooby.global_position - Vector3(2.75, 0.0, 2.75)).length() <= 2.0,
+		"Snap bleibt in der Nachbarschaft (Ring-Suche, kein Teleport quer durch den Raum)"
+	)
+	# Schon begehbar → No-Op, kein sichtbarer Versatz.
+	var vorher := gooby.global_position
+	gooby.snap_to_walkable()
+	assert_almost(
+		(gooby.global_position - vorher).length(), 0.0, 0.0001, "No-Op auf begehbarer Zelle"
+	)
+	await _cleanup(room, gs)
+
+
 func test_pfad_fuehrt_um_moebel_herum() -> void:
 	var gs := _fresh_gs()
 	var room: RoomBase = await _make_living_room(gs)

@@ -249,7 +249,30 @@ func _ready() -> void:
 	_baue_geraet()
 	zeige_grid()
 	get_viewport().size_changed.connect(_on_canvas_geaendert)
+	_verbinde_status_signale()
 	_anim_geraet_auf()
+
+
+## PT2-B8: Statusleiste LIVE halten — Buchungen IN einer App (GOOBERANDO-
+## Bestellung, Guber-Fahrt) änderten die Münzen, die Leiste zeigte aber bis
+## zum App-/Grid-Wechsel den alten Stand („● 300“ vs. HUD „281“). Die Shell
+## hängt sich an die bestehenden GameState-Signale; die Verbindung stirbt
+## mit der Shell (queue_free beim Schließen), nichts abzumelden.
+func _verbinde_status_signale() -> void:
+	if gs == null:
+		return
+	if gs.has_signal("coins_changed"):
+		gs.connect("coins_changed", _on_status_coins)
+	if gs.has_signal("stats_changed"):
+		gs.connect("stats_changed", _on_status_stats)
+
+
+func _on_status_coins(_coins: int) -> void:
+	_aktualisiere_status()
+
+
+func _on_status_stats(_stats: Dictionary) -> void:
+	_aktualisiere_status()
 
 
 func _process(_delta: float) -> void:

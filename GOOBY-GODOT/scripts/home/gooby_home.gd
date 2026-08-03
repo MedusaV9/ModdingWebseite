@@ -334,6 +334,21 @@ func current_cell() -> Vector2i:
 	return GridData.cell_of(global_position)
 
 
+## PT1-B7: Gooby auf die nächste BEGEHBARE Bodenzelle stellen (Ring-Suche
+## wie _nearest_walkable). Events, die ihn an Ort und Stelle einfrieren
+## (Klopapier-Mumie), erwischten ihn sonst AUF einem Möbel — die Mumie saß
+## bis zum Freitippen mitten auf dem Küchentischchen. Steht er schon auf
+## einer begehbaren Zelle am Boden, passiert nichts (kein sichtbarer Hop).
+func snap_to_walkable() -> void:
+	if grid == null:
+		return
+	var cell := GridData.cell_of(global_position)
+	var am_boden := absf(global_position.y) < 0.05
+	if am_boden and grid.walkable(cell):
+		return
+	global_position = GridData.world_center(_nearest_walkable(cell), Vector2i.ONE, 0)
+
+
 ## BODEN-IST-LAVA-Gag (Doc F §6): Panik, Sprung an die Decke, Hold,
 ## Plumps zurück. Awaitbar; Bubble-Texte macht RoomBase.
 ## Reduced Motion (W4-P3 POLISH-16): Instant-Pfad ohne Bounce-Tweens.

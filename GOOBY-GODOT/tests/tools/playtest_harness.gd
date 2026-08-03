@@ -89,9 +89,16 @@ const STANDARD_TIMEOUT_S := 30.0
 const STANDARD_MAX_SEC := 900
 const FLOW_ORDNER := "res://tests/tools/playtest_flows"
 const MAIN_SZENE := "res://scripts/boot/main.tscn"
-## Frames zwischen Druck und Loslassen eines Taps (llvmpipe: 1 Frame kann
-## ~0,5 s dauern — 3 Frames sind ein sauberer, kurzer Spieler-Tap).
+## Frames zwischen Druck und Loslassen eines Taps (Events brauchen einen
+## Frame, um zu propagieren) — Deckel in Wandzeit: TAP_MAX_MS.
 const TAP_FRAMES := 3
+## Ein Tap ist ein KURZER Druck — in ZEIT, nicht in Frames: unter llvmpipe
+## dauern TAP_FRAMES im vollen Wohnzimmer schon mal > 400 ms, und seit der
+## Icon-Bühne (G8/IDEA-J2) ist so ein Halten ein LANGDRUCK — der Release
+## der HUD-Kachel wird geschluckt (HudLangdruckGeste.SCHWELLE_MS) und die
+## App geht nie auf (flaky, zuerst gesehen an flow_fix8_stadt/in_die_stadt).
+## 150 ms liegen deutlich unter der Schwelle und über einem echten Finger-Tipp.
+const TAP_MAX_MS := 150
 ## Mindestabstand zwischen zwei Nebenbei-Taps (Tap-Mash-Gag) in ms.
 const NEBENBEI_TAKT_MS := 250
 
@@ -510,9 +517,21 @@ func _tippe_canvas(canvas_pos: Vector2) -> void:
 	_maus_bewegung(px, Vector2.ZERO, false)
 	await _warte_frames(1)
 	_maus_knopf(px, true)
-	await _warte_frames(TAP_FRAMES)
+	await _tap_haltezeit()
 	_maus_knopf(px, false)
 	await _warte_frames(TAP_FRAMES)
+
+
+## Haltezeit zwischen Druck und Loslassen: mindestens 1 Frame (Propagation),
+## höchstens TAP_FRAMES — und sobald TAP_MAX_MS Wandzeit um sind, ist Schluss
+## (sonst wird der Tap bei niedriger Framerate ungewollt zum J2-Langdruck
+## und der Kachel-Release öffnet keine App, s. Konstanten-Kommentar).
+func _tap_haltezeit() -> void:
+	var t0 := Time.get_ticks_msec()
+	for _i in TAP_FRAMES:
+		await process_frame
+		if Time.get_ticks_msec() - t0 >= TAP_MAX_MS:
+			return
 
 
 ## Fingerzug von A nach B (Canvas-Koordinaten) über `dauer` Sekunden —

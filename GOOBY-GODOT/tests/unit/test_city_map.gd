@@ -54,6 +54,39 @@ func test_parkplatz_liegt_richtung_strasse() -> void:
 	assert_almost(karte.park_radius(), 4.0, 0.001, "DRIVE.PARKING_RADIUS = 4")
 
 
+func test_parkplatz_anker_ausserhalb_aller_collider() -> void:
+	# PT2-B3: Der Anker lag 0,5 m IM 7,5-m-Tile-Collider — _kollidiere()
+	# warf das parkende Auto raus, der „Betreten“-Prompt flackerte. Jetzt
+	# muss ein Auto (Radius 1,5 m) MITTIG auf jedem Anker stehen können,
+	# ohne irgendeinen Ort-Tile-Quader des eigenen Orts zu berühren.
+	var karte := CityMap.laden()
+	for eintrag: Dictionary in karte.orte():
+		var id := str(eintrag.get("id", "?"))
+		var park := karte.parkplatz_welt(id)
+		for tile_raw: Array in eintrag.get("tiles", []):
+			var mitte := karte.tile_zu_welt(CityMap._tile_von(tile_raw))
+			var dx := maxf(0.0, absf(park.x - mitte.x) - CityMap.ORT_COLLIDER_HALB_M)
+			var dz := maxf(0.0, absf(park.z - mitte.z) - CityMap.ORT_COLLIDER_HALB_M)
+			var abstand := Vector2(dx, dz).length()
+			assert_true(
+				abstand >= CityCarFeel.CAR_RADIUS_M,
+				"%s: Anker nur %0.2f m vor Box %s (Auto braucht 1,5)" % [id, abstand, str(tile_raw)]
+			)
+
+
+func test_parkplatz_flughafen_am_zubringer() -> void:
+	# PT2-B3: tiles[0] des Flughafens liegt 2 Tiles tief im Block — der
+	# Anker gehört vor das straßennächste Tile [0,3] am Zubringer [0,4],
+	# nicht in die Gasse zwischen den beiden Gebäude-Collidern.
+	var karte := CityMap.laden()
+	var park := karte.parkplatz_welt("flughafen")
+	var strasse := karte.tile_zu_welt(Vector2i(0, 4))
+	var d := Vector2(park.x, park.z).distance_to(Vector2(strasse.x, strasse.z))
+	assert_true(d <= karte.tile_m, "Anker am Zubringer (%0.1f m ≤ 20 m)" % d)
+	var tief := karte.tile_zu_welt(Vector2i(0, 2))
+	assert_true(park.x > tief.x, "Anker liegt östlich des tiefen Blocks")
+
+
 func test_road_piece_suche() -> void:
 	var gerade := CityMap.road_piece_for(false, true, false, true)
 	assert_eq(gerade["piece"], "road-straight")

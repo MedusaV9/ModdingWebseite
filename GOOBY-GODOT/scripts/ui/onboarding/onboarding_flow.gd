@@ -177,6 +177,16 @@ func _relayout() -> void:
 	# P57 Höhen-Deckel: erst Chrome (Titel/Text/Knopfleiste/Karten-Ränder)
 	# OHNE Scroll-Inhalt messen, dann bekommt der Scroll GENAU den Rest der
 	# Safe-Höhe — passt der Inhalt, bleibt das Layout wie bisher.
+	# PT4-B5: Den Autowrap-EditorText VOR der Chrome-Messung auf seine echte
+	# Kartenbreite bringen. Bei _ready ist er noch 0 px breit und meldet
+	# Wort-pro-Zeile-Minimalhöhe (~350 px statt ~2 Zeilen) — chrome_h war so
+	# aufgebläht, dass der Scroll nur Krümel bekam (Playtest: Editor-Karte
+	# ohne Preview/Regler, nur „Augenabstand" + Scrollbalken ragten heraus).
+	# update_minimum_size ist Pflicht: der Min-Size-Cache des Labels wird
+	# beim reinen size-Setzen erst im NÄCHSTEN Layout-Pass ungültig.
+	var editor_text := %EditorText as Control
+	editor_text.size.x = maxf(editor_w - _card_pad_x(%StepEditor), 0.0)
+	editor_text.update_minimum_size()
 	var scroll: ScrollContainer = %EditorScroll
 	scroll.custom_minimum_size = Vector2.ZERO
 	var insets: Dictionary = m["insets"]

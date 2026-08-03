@@ -136,7 +136,8 @@ func aktiv() -> bool:
 
 ## Öffentlicher Einstieg (SeeleRunner.stoss_gruss ruft mit JEDER Betreten-
 ## Moment-Id): passt ein Gespräch und würfelt die Chance, erscheinen die
-## Ebene-1-Chips. true = Gespräch läuft.
+## Ebene-1-Chips EINEN Frame später — gekoppelt an ihre sichtbare Frage
+## (PT1-B5, s. _starte_mit_frage). true = Gespräch wird eröffnet.
 func starte(anlass_id: String) -> bool:
 	if aktiv() or seele == null or _ui_layer() == null:
 		return false
@@ -146,8 +147,44 @@ func starte(anlass_id: String) -> bool:
 	var rng: RandomNumberGenerator = seele.runner.rng
 	if rng.randf() >= float(gespraech.get("chance", 1.0)):
 		return false
+	# PT1-B5: Der Anlass-Aufrufer spricht seine Zeile ERST NACH stoss_gruss
+	# (_run_enter → _show_moment) — deshalb einen Frame zurückstellen und
+	# dann prüfen, ob die Frage wirklich zu sehen war.
+	_starte_mit_frage.call_deferred(gespraech, anlass_id, int(seele.gesprochene_lines))
+	return true
+
+
+## PT1-B5: Chips nur MIT sichtbarer Frage. Wurde seit starte() KEINE Line
+## gesprochen (die Feelings-Sperre verschluckte die Gruß-Zeile, oder der
+## öffentliche stoss_gruss-Hook kam ohne Betreten-Moment), reicht Gooby die
+## Anlass-Zeile aus dem Moment-Def selbst nach. Gibt es dort nichts
+## Rekonstruierbares (erinnerung: Text hängt am Memory), bleiben die Chips
+## weg — Chips über einer alten Fremd-Line („Ball! Bester Ball der Welt!“)
+## waren der Playtest-Befund.
+func _starte_mit_frage(gespraech: Dictionary, anlass_id: String, lines_stand: int) -> void:
+	if aktiv() or seele == null or _ui_layer() == null:
+		return
+	if int(seele.gesprochene_lines) == lines_stand and not _frage_nachreichen(anlass_id):
+		return
 	_ebene = 1
 	_zeige_chips(gespraech)
+
+
+## Anlass-Zeile aus dem Soul-Moment-Def rekonstruieren und sprechen
+## (true = eine Frage steht jetzt sichtbar in der Blase).
+func _frage_nachreichen(anlass_id: String) -> bool:
+	var runner: Node = seele.runner
+	var def: Dictionary = SoulService.def_by_id(runner._defs, anlass_id)
+	var keys := SoulService.text_pool(def)
+	if keys.is_empty():
+		return false
+	var roll: float = runner.rng.randf()
+	var key := str(keys[int(clampf(roll, 0.0, 0.999999) * keys.size())])
+	var ctx: Dictionary = runner._ctx(0)
+	var slice := SoulState.slice_of(runner.gs)
+	zeige_linie(
+		I18nService.t(key, text_args(slice, ctx)), str(def.get("emotion", "happy")), "gooby"
+	)
 	return true
 
 

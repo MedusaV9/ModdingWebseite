@@ -26,6 +26,11 @@ const SEARCH_PIECES: Array[String] = [
 	"road-straight", "road-bend", "road-intersection", "road-crossroad", "road-end"
 ]
 
+## Halbe Kantenlänge der Ort-Tile-Kollisionsquader (CityBau.baue_orte legt
+## je Ort-Tile eine 15×15-m-AABB an — hier gespiegelt, damit der Parkplatz-
+## Anker rechnerisch AUSSERHALB dieser Box bleibt).
+const ORT_COLLIDER_HALB_M := 7.5
+
 var daten: Dictionary = {}
 var spalten := 15
 var reihen := 12
@@ -199,19 +204,42 @@ func zuhause_einfahrt() -> Dictionary:
 	}
 
 
-## Parkplatz-Trigger-Position eines Orts: Ort-Tile-Mitte, um trigger_offset_m
-## Richtung Straßen-Tile geschoben (Auto parkt am Bordstein vorm Laden).
+## Parkplatz-Trigger-Position eines Orts: Mitte des STRASSENNÄCHSTEN
+## Ort-Tiles, Richtung Straßen-Tile geschoben (Auto parkt am Bordstein).
+## PT2-B3: trigger_offset_m (7,0) lag IN der 7,5-m-Collider-Halbkante —
+## _kollidiere() warf das Auto zur Westkante (Flughafen/Post: quer durchs
+## Gebäude, „Betreten“-Prompt flackerte). Der Offset ist deshalb auf
+## Collider-Halbkante + Auto-Radius + Luft geklemmt, und beim Flughafen
+## zählt das Tile am Zubringer statt tiles[0] (das liegt 2 Tiles tief).
 func parkplatz_welt(ort_id: String) -> Vector3:
 	var eintrag: Dictionary = ort(ort_id) if ort_id != "zuhause" else {}
 	var tile := zuhause_tile()
 	var strasse := _zuhause_strasse()
 	if not eintrag.is_empty():
-		tile = _tile_von(eintrag.get("tiles", [[0, 0]])[0])
 		strasse = _tile_von(eintrag.get("strasse", [0, 0]))
+		tile = _naechstes_tile(eintrag.get("tiles", [[0, 0]]), strasse)
 	var mitte := tile_zu_welt(tile)
 	var richtung := (tile_zu_welt(strasse) - mitte).normalized()
-	var offset := float(daten.get("parken", {}).get("trigger_offset_m", 7.0))
+	var offset := maxf(
+		float(daten.get("parken", {}).get("trigger_offset_m", 7.0)),
+		ORT_COLLIDER_HALB_M + CityCarFeel.CAR_RADIUS_M + 0.5
+	)
 	return mitte + richtung * offset
+
+
+## Straßennächstes Tile eines Orts (PT2-B3): beim Flughafen liegt tiles[0]
+## ZWEI Tiles vom Zubringer — der Anker gehört vor das Tile an der Straße,
+## sonst zeigt er in die Gasse zwischen zwei Gebäude-Collidern.
+static func _naechstes_tile(tiles: Array, strasse: Vector2i) -> Vector2i:
+	var best := _tile_von(tiles[0] if not tiles.is_empty() else [0, 0])
+	var best_d := (best - strasse).length_squared()
+	for raw: Variant in tiles:
+		var t := _tile_von(raw)
+		var d := (t - strasse).length_squared()
+		if d < best_d:
+			best = t
+			best_d = d
+	return best
 
 
 func park_radius() -> float:
