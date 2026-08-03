@@ -124,6 +124,24 @@ struct WordleHistoryResponse: Codable {
     let days: [WordleDayResponse]
 }
 
+// MARK: - Shared soundtrack
+
+struct Song: Codable, Identifiable, Hashable {
+    let id: String
+    var title: String
+    var artist: String?
+    var note: String?
+    var link: String?
+    let addedBy: String
+    var heartedBy: [String]?
+    let createdAt: Date
+
+    func isHearted(by memberId: String?) -> Bool {
+        guard let memberId else { return false }
+        return heartedBy?.contains(memberId) ?? false
+    }
+}
+
 // MARK: - Love coupons
 
 struct Coupon: Codable, Identifiable, Hashable {
@@ -242,6 +260,8 @@ struct MoodsResponse: Codable { let moods: [MoodEntry] }
 struct DailyListResponse: Codable { let entries: [DailyEntry] }
 struct CouponsResponse: Codable { let coupons: [Coupon] }
 struct CouponResponse: Codable { let coupon: Coupon }
+struct SongsResponse: Codable { let songs: [Song] }
+struct SongResponse: Codable { let song: Song }
 struct EventsResponse: Codable { let events: [EventItem] }
 struct BucketResponse: Codable { let items: [BucketItem] }
 struct StrokesResponse: Codable { let strokes: [CanvasStroke] }
@@ -288,6 +308,9 @@ enum ServerEventType: String, Codable {
     case couponAdded = "coupon_added"
     case couponRedeemed = "coupon_redeemed"
     case couponDeleted = "coupon_deleted"
+    case songAdded = "song_added"
+    case songUpdated = "song_updated"
+    case songDeleted = "song_deleted"
     case typing, pong
 }
 

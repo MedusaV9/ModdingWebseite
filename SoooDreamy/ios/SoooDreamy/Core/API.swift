@@ -298,6 +298,43 @@ struct API {
         _ = try await request("DELETE", "/api/coupons/\(id)", as: OK.self)
     }
 
+    // MARK: Shared soundtrack
+
+    func songs() async throws -> [Song] {
+        try await request("GET", "/api/songs", as: SongsResponse.self).songs
+    }
+
+    @discardableResult
+    func addSong(title: String, artist: String?, note: String?, link: String?) async throws -> Song {
+        try await request("POST", "/api/songs",
+                          jsonBody: ["title": title, "artist": artist, "note": note, "link": link],
+                          as: SongResponse.self).song
+    }
+
+    @discardableResult
+    func updateSong(id: String, title: String? = nil, artist: String? = nil,
+                    note: String? = nil, link: String? = nil) async throws -> Song {
+        var body: [String: Any?] = [:]
+        if let title { body["title"] = title }
+        if let artist { body["artist"] = artist }
+        if let note { body["note"] = note }
+        if let link { body["link"] = link }
+        return try await request("PATCH", "/api/songs/\(id)", jsonBody: body,
+                                 as: SongResponse.self).song
+    }
+
+    /// Toggle my heart on a song.
+    @discardableResult
+    func toggleSongHeart(id: String) async throws -> Song {
+        try await request("POST", "/api/songs/\(id)/heart", jsonBody: [:],
+                          as: SongResponse.self).song
+    }
+
+    func deleteSong(id: String) async throws {
+        struct OK: Decodable { let ok: Bool }
+        _ = try await request("DELETE", "/api/songs/\(id)", as: OK.self)
+    }
+
     /// Absolute media URL with `?token=` for AsyncImage / AVPlayer.
     func mediaURL(_ path: String) -> URL? {
         guard var comps = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else { return nil }
