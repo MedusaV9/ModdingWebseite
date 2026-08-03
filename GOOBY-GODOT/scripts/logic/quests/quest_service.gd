@@ -99,6 +99,7 @@ func _ready() -> void:
 	ensure_roll()
 	_wire_router()
 	refresh_hint()
+	_vorhaben_setup()
 
 
 ## --- Brett / Fortschritt -----------------------------------------------------
@@ -313,7 +314,10 @@ func open_panel() -> void:
 		_panel = DailyQuestPanel.new()
 		_panel.claim_pressed.connect(_on_panel_claim)
 		_panel.reroll_pressed.connect(_on_panel_reroll)
+		_panel.vorhaben_feiern_pressed.connect(_on_panel_vorhaben_feiern)
 	ensure_roll()
+	ensure_vorhaben()
+	_vorhaben_fortschreiben()
 	_sheet.set_title(I18nService.t("quests.titel"))
 	_refresh_panel()
 	_sheet.add_content(_panel)
@@ -327,7 +331,7 @@ func _refresh_panel() -> void:
 	if _panel == null:
 		return
 	var f := UiScale.for_viewport(get_viewport())
-	_panel.rebuild(board(), _bonus_info(), reroll_available(), f)
+	_panel.rebuild(board(), _bonus_info(), reroll_available(), f, vorhaben_info())
 
 
 func _bonus_info() -> Dictionary:
@@ -357,6 +361,11 @@ func _on_panel_claim(id: String) -> void:
 	)
 	if _panel != null:
 		_panel.mark_claimed(id, _bonus_info())
+		# J1 Beute-Flug: Münzen reisen von der Quest-Karte zur HUD-Pille —
+		# die Erfolgs-Haptik summte schon am Claim (keine Doppel-Partitur).
+		BeuteFlug.fliegen(
+			self, _panel.claim_quelle(id), int(result["muenzen"]), {"erfolgs_haptik": false}
+		)
 	var bonus: Dictionary = result.get("bonus", {})
 	if not bonus.is_empty() and _panel != null:
 		AudioDirector.try_play(self, "mg_win")
@@ -495,3 +504,165 @@ func _slice_of(state: Dictionary) -> Dictionary:
 	if not (state.get("quests") is Dictionary):
 		state["quests"] = {"completedTotal": 0}
 	return state["quests"]
+
+
+## --- Wochen-Vorhaben (G8 IDEA-WOCHE) ------------------------------------------
+## Der erzählte 3–5-Schritte-Bogen der Woche lebt ADDITIV im selben
+## quests-Slice (quests.vorhaben) und im selben Blatt („Diese Woche“ oben).
+## Engine: WochenVorhaben (pure, Wochen-Seed + Baseline-Messung); Auszahlung
+## des Finales über denselben _pay-Pfad (reason "vorhaben"), kein zweites
+## Belohnungssystem.
+
+
+## Verdrahtung (Ende von _ready): eigener Fortschritts-Lauscher + der
+## vorhandene Tages-Puls; startet das Vorhaben der aktuellen Woche.
+func _vorhaben_setup() -> void:
+	if _gs == null:
+		return
+	if _gs.has_signal("slice_changed"):
+		_gs.slice_changed.connect(_on_vorhaben_slice_changed)
+	if _gs.has_signal("coins_changed"):
+		_gs.coins_changed.connect(func(_coins: int) -> void: _vorhaben_fortschreiben())
+	if _timer != null:
+		_timer.timeout.connect(_vorhaben_tick)
+	ensure_vorhaben()
+	_vorhaben_fortschreiben()
+
+
+## Vorhaben der aktuellen Woche sicherstellen (No-op, solange eines läuft
+## oder das Wochen-Finale schon gefeiert wurde).
+func ensure_vorhaben() -> void:
+	if _gs == null:
+		return
+	var woche := WochenVorhaben.woche_von(today())
+	var pool_defs := WochenVorhabenKatalog.pool()
+	var quest_ctx := ctx()
+	# Dictionary-Capture statt Wert-Capture (Muster ensure_roll, W13C).
+	var neu := {"v": false}
+	_gs.update(
+		func(state: Dictionary) -> void:
+			neu["v"] = WochenVorhaben.ensure_aktiv(
+				_slice_of(state), woche, pool_defs, quest_ctx, state
+			)
+	)
+	if bool(neu["v"]):
+		_gs.notify_slice_changed("quests")
+		quests_changed.emit()
+
+
+## Anzeigedaten für den „Diese Woche“-Abschnitt ({} = nichts zu zeigen).
+func vorhaben_info() -> Dictionary:
+	if _gs == null:
+		return {}
+	var state: Dictionary = _gs.state()
+	var v := WochenVorhaben.slice_von(_slice_of(state))
+	var woche := WochenVorhaben.woche_von(today())
+	if WochenVorhaben.fertig_diese_woche(v, woche):
+		return {"fertig": true, "def": WochenVorhabenKatalog.def_by_id(str(v["letzteId"]))}
+	var def := WochenVorhabenKatalog.def_by_id(str(v["id"]))
+	if def.is_empty():
+		return {}
+	var schritte := WochenVorhaben.schritte_von(def)
+	var index := clampi(int(v["schritt"]), 0, schritte.size())
+	var target := 1
+	if index < schritte.size():
+		target = maxi(1, int((schritte[index] as Dictionary).get("ziel", 1)))
+	return {
+		"def": def,
+		"schritt": index,
+		"progress": WochenVorhaben.schritt_fortschritt(v, def, state),
+		"target": target,
+		"erfuellbar": WochenVorhaben.erfuellbar(v, def),
+		"fertig": false,
+		"muenzen": maxi(0, int(def.get("muenzen", 0))),
+		"xp": maxi(0, int(def.get("xp", 0))),
+	}
+
+
+## Finale feiern: Engine-Claim + Auszahlung über die EINEN Geld/XP-Pfade
+## (reason "vorhaben"). Liefert {"ok", "muenzen", "xp"} — idempotent, ein
+## zweiter Aufruf zahlt NIE doppelt (Engine leert den aktiv-Slot).
+func vorhaben_feiern() -> Dictionary:
+	if _gs == null:
+		return {"ok": false, "muenzen": 0, "xp": 0}
+	var day := today()
+	var woche := WochenVorhaben.woche_von(day)
+	var def := _vorhaben_def()
+	var result := {"ok": false, "muenzen": 0, "xp": 0}
+	if def.is_empty():
+		return result
+	_gs.update(
+		func(state: Dictionary) -> void:
+			# merge-Mutation statt Reassignment (Muster claim, W13C).
+			result.merge(WochenVorhaben.feiern(_slice_of(state), def, woche), true)
+			if not bool(result["ok"]):
+				return
+			_pay(state, int(result["muenzen"]), int(result["xp"]), day, "vorhaben")
+	)
+	if not bool(result["ok"]):
+		return result
+	_gs.notify_slice_changed("quests")
+	quests_changed.emit()
+	return result
+
+
+## Def des gerade laufenden Bogens ({} ohne aktives Vorhaben).
+func _vorhaben_def() -> Dictionary:
+	if _gs == null:
+		return {}
+	var v := WochenVorhaben.slice_von(_slice_of(_gs.state()))
+	var id := str(v["id"])
+	return WochenVorhabenKatalog.def_by_id(id) if not id.is_empty() else {}
+
+
+## Fällige Schritte weiterschalten (Baseline-Deltas der bestehenden
+## Zähler); bei Bewegung Blatt auffrischen.
+func _vorhaben_fortschreiben() -> void:
+	if _gs == null:
+		return
+	var def := _vorhaben_def()
+	if def.is_empty():
+		return
+	var geschafft := {"v": 0}
+	_gs.update(
+		func(state: Dictionary) -> void:
+			geschafft["v"] = WochenVorhaben.fortschreiben(_slice_of(state), def, state)
+	)
+	if int(geschafft["v"]) <= 0:
+		return
+	_gs.notify_slice_changed("quests")
+	quests_changed.emit()
+	if _sheet != null and is_instance_valid(_sheet) and _sheet.is_open():
+		_refresh_panel()
+
+
+## Feiern-Tap aus dem Blatt: auszahlen, Häkchen-Moment + Konfetti (Muster
+## Abschluss-Bonus in _on_panel_claim), danach zeigt das Blatt den
+## Geschafft-Zustand der Woche.
+func _on_panel_vorhaben_feiern() -> void:
+	var result := vorhaben_feiern()
+	_refresh_panel()
+	if not bool(result["ok"]):
+		return
+	AudioDirector.try_play(self, "mg_win")
+	Haptics.success(self)
+	_toasts.show_toast(
+		I18nService.t(
+			"vorhaben.claim_toast", {"muenzen": int(result["muenzen"]), "xp": int(result["xp"])}
+		)
+	)
+	var breite := 640.0
+	var viewport := get_viewport()
+	if viewport != null:
+		breite = viewport.get_visible_rect().size.x
+	RewardFx.konfetti_2d(_toasts, 40, breite)
+
+
+func _on_vorhaben_slice_changed(slice_id: String, _data: Variant) -> void:
+	if slice_id in ["achievements", "minigames"]:
+		_vorhaben_fortschreiben()
+
+
+func _vorhaben_tick() -> void:
+	ensure_vorhaben()
+	_vorhaben_fortschreiben()

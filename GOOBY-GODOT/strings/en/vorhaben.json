@@ -1,0 +1,130 @@
+{
+	"vorhaben": {
+		"titel": "This Week",
+		"laeuft_weiter": "No rush: your project simply keeps going — nothing expires.",
+		"fortschritt": "{n}/{ziel}",
+		"belohnung": "+{muenzen} · {xp} XP",
+		"feiern": "Celebrate!",
+		"geschafft": "Project complete!",
+		"naechste_woche": "A new project is waiting for you next week.",
+		"claim_toast": "Project complete! +{muenzen} coins, +{xp} XP",
+		"b": {
+			"drachenfest": {
+				"titel": "Gooby’s Kite Festival",
+				"finale": "The kite is dancing! Gooby takes a solemn bow before the wind.",
+				"s0": {
+					"text": "Harvest 2 beds — wind berries for the festival.",
+					"zwischen": "Gooby holds a finger into the breeze: “Perfect kite weather! Nothing takes off without wind berries.”"
+				},
+				"s1": {
+					"text": "Practise airy stunts: play 3 minigame rounds.",
+					"zwischen": "“The kite is already practising loops. I’m practising… watching.”"
+				},
+				"s2": {
+					"text": "Festival feast: feed Gooby 3 times.",
+					"zwischen": "“A kite festival without a picnic is just… wind.”"
+				}
+			},
+			"picknick": {
+				"titel": "The Great Meadow Picnic",
+				"finale": "Blanket out, sunshine on — that was the best picnic of the week!",
+				"s0": {
+					"text": "Water 4 times — make those beds sparkle.",
+					"zwischen": "“First watering, then feasting. Says Gooby. Repeatedly.”"
+				},
+				"s1": {
+					"text": "Harvest 2 beds for the picnic basket.",
+					"zwischen": "“The basket is still as empty as Gooby’s tummy.”"
+				},
+				"s2": {
+					"text": "Taste test! Feed Gooby 2 times.",
+					"zwischen": "“One taste, one re-taste. Purely for quality control!”"
+				}
+			},
+			"funkelputz": {
+				"titel": "The Big Sparkle-Clean Week",
+				"finale": "Gooby sparkles so much the mirror is wearing sunglasses.",
+				"s0": {
+					"text": "Wash Gooby 2 times in the bathtub.",
+					"zwischen": "“Operation Foam Crown in progress. Do not disturb.”"
+				},
+				"s1": {
+					"text": "Brush Gooby’s teeth 2 times.",
+					"zwischen": "“Squeaky clean on top — now the smile sparkles too.”"
+				},
+				"s2": {
+					"text": "Tickle Gooby 3 times — good-mood polish!",
+					"zwischen": "“Finishing touch: polishing the laugh lines!”"
+				}
+			},
+			"muenzmission": {
+				"titel": "The Carrot-Gold Mission",
+				"finale": "Mission complete! Gooby tosses a coin and wishes for… another week like this.",
+				"s0": {
+					"text": "Earn 80 coins.",
+					"zwischen": "“Pocket-money time! Gooby counts every coin twice. Out of joy.”"
+				},
+				"s1": {
+					"text": "Treat yourself — spend a few coins.",
+					"zwischen": "“Saving is great. Treating yourself is greater.”"
+				},
+				"s2": {
+					"text": "Victory laps: play 2 minigames.",
+					"zwischen": "“Rich AND playful — what a week!”"
+				}
+			},
+			"arcadetour": {
+				"titel": "The Grand Arcade Tour",
+				"finale": "Tour finished! Gooby waves at the crowd. The crowd is the fridge.",
+				"s0": {
+					"text": "Play 2 different minigames.",
+					"zwischen": "“Tour rule number one: variety beats high scores. Almost.”"
+				},
+				"s1": {
+					"text": "Play 4 rounds in total.",
+					"zwischen": "“The machines are already whispering your name.”"
+				},
+				"s2": {
+					"text": "Winner’s snack: feed Gooby 2 times.",
+					"zwischen": "“Champions need provisions. Says the coach. The coach is Gooby.”"
+				}
+			},
+			"beetballett": {
+				"titel": "The Garden-Bed Ballet",
+				"finale": "Applause, applause! The veggies take a bow. So does Gooby.",
+				"s0": {
+					"text": "Plant 2 seedlings — the grand entrance.",
+					"zwischen": "“Act one: the seedlings take the stage!”"
+				},
+				"s1": {
+					"text": "Water 4 times, right on beat.",
+					"zwischen": "“Act two: rain dance! Gooby conducts with the watering can.”"
+				},
+				"s2": {
+					"text": "Finale: harvest 2 ripe beds.",
+					"zwischen": "“The curtain is about to fall — er, the harvest!”"
+				}
+			},
+			"wellness": {
+				"titel": "Wellness for World Champions",
+				"finale": "Deeply relaxed and utterly happy — champion-level wellness complete!",
+				"s0": {
+					"text": "Make Gooby squeal with joy — tickling helps.",
+					"zwischen": "“Wellness plan, item one: laugh until the belly wobbles.”"
+				},
+				"s1": {
+					"text": "A bath for Gooby — one good lather, please.",
+					"zwischen": "“Item two: bubbles up to behind the ears.”"
+				},
+				"s2": {
+					"text": "Brush Gooby’s teeth once.",
+					"zwischen": "“Item three: freshness for the champion smile.”"
+				},
+				"s3": {
+					"text": "Pampering menu: feed Gooby 2 times.",
+					"zwischen": "“And finally: room service! Gooby has already taken a seat.”"
+				}
+			}
+		}
+	}
+}

@@ -1,0 +1,79 @@
+{
+	"schema": "gooby.vorhaben/1",
+	"items": [
+		{
+			"id": "drachenfest",
+			"schritte": [
+				{"messung": {"typ": "counter", "key": "harvests"}, "ziel": 2},
+				{"messung": {"typ": "spiele_gesamt"}, "ziel": 3},
+				{"messung": {"typ": "counter", "key": "feeds"}, "ziel": 3}
+			],
+			"muenzen": 50,
+			"xp": 25,
+			"braucht": {"garden": true}
+		},
+		{
+			"id": "picknick",
+			"schritte": [
+				{"messung": {"typ": "counter", "key": "waterings"}, "ziel": 4},
+				{"messung": {"typ": "counter", "key": "harvests"}, "ziel": 2},
+				{"messung": {"typ": "counter", "key": "feeds"}, "ziel": 2}
+			],
+			"muenzen": 45,
+			"xp": 20,
+			"braucht": {"garden": true}
+		},
+		{
+			"id": "funkelputz",
+			"schritte": [
+				{"messung": {"typ": "counter", "key": "washes"}, "ziel": 2},
+				{"messung": {"typ": "counter", "key": "teeth_brushed"}, "ziel": 2},
+				{"messung": {"typ": "counter", "key": "tickles"}, "ziel": 3}
+			],
+			"muenzen": 45,
+			"xp": 20
+		},
+		{
+			"id": "muenzmission",
+			"schritte": [
+				{"messung": {"typ": "muenzen_verdient"}, "ziel": 80},
+				{"messung": {"typ": "muenzen_ausgegeben"}, "ziel": 1},
+				{"messung": {"typ": "spiele_gesamt"}, "ziel": 2}
+			],
+			"muenzen": 50,
+			"xp": 25
+		},
+		{
+			"id": "arcadetour",
+			"schritte": [
+				{"messung": {"typ": "spiele_verschieden"}, "ziel": 2},
+				{"messung": {"typ": "spiele_gesamt"}, "ziel": 4},
+				{"messung": {"typ": "counter", "key": "feeds"}, "ziel": 2}
+			],
+			"muenzen": 55,
+			"xp": 25
+		},
+		{
+			"id": "beetballett",
+			"schritte": [
+				{"messung": {"typ": "counter", "key": "plantings"}, "ziel": 2},
+				{"messung": {"typ": "counter", "key": "waterings"}, "ziel": 4},
+				{"messung": {"typ": "counter", "key": "harvests"}, "ziel": 2}
+			],
+			"muenzen": 50,
+			"xp": 25,
+			"braucht": {"garden": true}
+		},
+		{
+			"id": "wellness",
+			"schritte": [
+				{"messung": {"typ": "counter", "key": "tickles"}, "ziel": 1},
+				{"messung": {"typ": "counter", "key": "washes"}, "ziel": 1},
+				{"messung": {"typ": "counter", "key": "teeth_brushed"}, "ziel": 1},
+				{"messung": {"typ": "counter", "key": "feeds"}, "ziel": 2}
+			],
+			"muenzen": 60,
+			"xp": 30
+		}
+	]
+}

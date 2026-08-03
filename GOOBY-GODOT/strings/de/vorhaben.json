@@ -1,0 +1,130 @@
+{
+	"vorhaben": {
+		"titel": "Diese Woche",
+		"laeuft_weiter": "Kein Stress: Dein Vorhaben läuft einfach weiter — nichts verfällt.",
+		"fortschritt": "{n}/{ziel}",
+		"belohnung": "+{muenzen} · {xp} XP",
+		"feiern": "Feiern!",
+		"geschafft": "Vorhaben geschafft!",
+		"naechste_woche": "Nächste Woche wartet ein neues Vorhaben auf dich.",
+		"claim_toast": "Vorhaben geschafft! +{muenzen} Münzen, +{xp} XP",
+		"b": {
+			"drachenfest": {
+				"titel": "Goobys Drachenfest",
+				"finale": "Der Drache tanzt! Gooby verbeugt sich feierlich vor dem Wind.",
+				"s0": {
+					"text": "Ernte 2 Beete — Windbeeren fürs Fest.",
+					"zwischen": "Gooby hält den Finger in den Wind: „Perfektes Drachenwetter! Ohne Windbeeren hebt hier gar nichts ab.“"
+				},
+				"s1": {
+					"text": "Übe luftige Kunststücke: Spiel 3 Minispiel-Runden.",
+					"zwischen": "„Der Drache übt schon Loopings. Ich übe… Zuschauen.“"
+				},
+				"s2": {
+					"text": "Festschmaus: Füttere Gooby 3-mal.",
+					"zwischen": "„Ein Drachenfest ohne Picknick ist nur… Wind.“"
+				}
+			},
+			"picknick": {
+				"titel": "Das große Wiesen-Picknick",
+				"finale": "Decke raus, Sonne an — das war das schönste Picknick der Woche!",
+				"s0": {
+					"text": "Gieße 4-mal — die Beete sollen glänzen.",
+					"zwischen": "„Erst gießen, dann genießen. Sagt Gooby. Immer wieder.“"
+				},
+				"s1": {
+					"text": "Ernte 2 Beete für den Picknickkorb.",
+					"zwischen": "„Der Korb ist noch so leer wie Goobys Bauch.“"
+				},
+				"s2": {
+					"text": "Kostprobe! Füttere Gooby 2-mal.",
+					"zwischen": "„Einmal probieren, einmal nachprobieren. Reine Sorgfalt!“"
+				}
+			},
+			"funkelputz": {
+				"titel": "Die große Funkel-Putzwoche",
+				"finale": "Gooby funkelt so sehr, dass der Spiegel eine Sonnenbrille trägt.",
+				"s0": {
+					"text": "Wasch Gooby 2-mal in der Badewanne.",
+					"zwischen": "„Operation Schaumkrone läuft. Bitte nicht stören.“"
+				},
+				"s1": {
+					"text": "Putz Gooby 2-mal die Zähne.",
+					"zwischen": "„Blitzeblank von oben — jetzt funkelt auch das Lächeln.“"
+				},
+				"s2": {
+					"text": "Kitzle Gooby 3-mal durch — Gute-Laune-Politur!",
+					"zwischen": "„Letzter Schliff: Lachfalten polieren!“"
+				}
+			},
+			"muenzmission": {
+				"titel": "Die Möhrengold-Mission",
+				"finale": "Mission erfüllt! Gooby wirft eine Münze und wünscht sich… noch so eine Woche.",
+				"s0": {
+					"text": "Verdiene 80 Münzen.",
+					"zwischen": "„Taschengeld-Zeit! Gooby zählt jede Münze doppelt. Aus Freude.“"
+				},
+				"s1": {
+					"text": "Gönn dir was — gib ein paar Münzen aus.",
+					"zwischen": "„Sparen ist toll. Gönnen ist toller.“"
+				},
+				"s2": {
+					"text": "Feier-Runden: Spiel 2 Minispiele.",
+					"zwischen": "„Reich UND verspielt — was für eine Woche!“"
+				}
+			},
+			"arcadetour": {
+				"titel": "Die große Arcade-Tournee",
+				"finale": "Tournee beendet! Gooby winkt ins Publikum. Das Publikum ist der Kühlschrank.",
+				"s0": {
+					"text": "Spiel 2 verschiedene Minispiele.",
+					"zwischen": "„Tournee-Regel Nummer eins: Abwechslung schlägt Highscore. Fast.“"
+				},
+				"s1": {
+					"text": "Spiel insgesamt 4 Runden.",
+					"zwischen": "„Die Automaten flüstern schon deinen Namen.“"
+				},
+				"s2": {
+					"text": "Siegersnack: Füttere Gooby 2-mal.",
+					"zwischen": "„Champions brauchen Proviant. Sagt der Trainer. Der Trainer ist Gooby.“"
+				}
+			},
+			"beetballett": {
+				"titel": "Das Beet-Ballett",
+				"finale": "Applaus, Applaus! Das Gemüse verbeugt sich. Gooby auch.",
+				"s0": {
+					"text": "Pflanze 2 Setzlinge — der große Auftritt.",
+					"zwischen": "„Erster Akt: die Setzlinge betreten die Bühne!“"
+				},
+				"s1": {
+					"text": "Gieße 4-mal im Takt.",
+					"zwischen": "„Zweiter Akt: Regentanz! Gooby dirigiert mit der Gießkanne.“"
+				},
+				"s2": {
+					"text": "Finale: Ernte 2 reife Beete.",
+					"zwischen": "„Gleich fällt der Vorhang — äh, die Ernte!“"
+				}
+			},
+			"wellness": {
+				"titel": "Wellness für Weltmeister",
+				"finale": "Tiefenentspannt und rundum glücklich — Weltmeister-Wellness geschafft!",
+				"s0": {
+					"text": "Bring Gooby einmal zum Jauchzen — Kitzeln hilft.",
+					"zwischen": "„Wellness-Plan, Punkt eins: lachen, bis der Bauch wackelt.“"
+				},
+				"s1": {
+					"text": "Ein Bad für Gooby — einmal einseifen, bitte.",
+					"zwischen": "„Punkt zwei: Blubberblasen bis hinter die Ohren.“"
+				},
+				"s2": {
+					"text": "Putz Gooby einmal die Zähne.",
+					"zwischen": "„Punkt drei: Frische fürs Weltmeister-Lächeln.“"
+				},
+				"s3": {
+					"text": "Verwöhn-Menü: Füttere Gooby 2-mal.",
+					"zwischen": "„Zum Schluss: Room-Service! Gooby hat schon mal Platz genommen.“"
+				}
+			}
+		}
+	}
+}
