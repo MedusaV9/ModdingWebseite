@@ -7,6 +7,8 @@ struct DashboardView: View {
     @State private var showMoodPicker = false
     @State private var dailyAnswerText = ""
     @State private var sendingDaily = false
+    @State private var sharingDailyAnswers = false
+    @State private var sharedDailyAnswers = false
     @State private var flashback: FlashbackItem?
 
     var body: some View {
@@ -483,9 +485,13 @@ struct DashboardView: View {
                                      text: entry?.myAnswer ?? "", tint: Theme.purple)
                         answerBubble(name: appState.partnerName,
                                      text: entry?.partnerAnswer ?? "", tint: Theme.pink)
-                        Text(L10n.t("home.bothAnswered"))
-                            .font(.system(.caption, design: .rounded).weight(.semibold))
-                            .foregroundStyle(Theme.mint)
+                        HStack {
+                            Text(L10n.t("home.bothAnswered"))
+                                .font(.system(.caption, design: .rounded).weight(.semibold))
+                                .foregroundStyle(Theme.mint)
+                            Spacer(minLength: 0)
+                            shareAnswersButton(question: question)
+                        }
                     }
                 } else if entry?.myAnswer != nil {
                     VStack(alignment: .leading, spacing: 8) {
@@ -537,6 +543,53 @@ struct DashboardView: View {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(tint.opacity(0.14))
         )
+    }
+
+    /// Once both answered, the reveal can be kept forever in the chat.
+    @ViewBuilder
+    private func shareAnswersButton(question: DailyQuestion) -> some View {
+        if appState.api != nil {
+            Button {
+                shareDailyAnswers(question: question)
+            } label: {
+                if sharingDailyAnswers {
+                    ProgressView()
+                        .tint(Theme.pink)
+                } else {
+                    Label(L10n.t(sharedDailyAnswers ? "games.sharedToChat" : "home.shareAnswers"),
+                          systemImage: sharedDailyAnswers ? "checkmark" : "paperplane.fill")
+                }
+            }
+            .buttonStyle(.plain)
+            .font(.system(.caption, design: .rounded).weight(.bold))
+            .foregroundStyle(Theme.pink)
+            .disabled(sharingDailyAnswers || sharedDailyAnswers)
+        }
+    }
+
+    /// Posts today's question with both answers into the couple chat.
+    private func shareDailyAnswers(question: DailyQuestion) {
+        guard let api = appState.api, let entry = appState.dailyEntry,
+              entry.bothAnswered, !sharingDailyAnswers, !sharedDailyAnswers else { return }
+        sharingDailyAnswers = true
+        Haptics.shared.tap()
+        let myName = appState.me?.name ?? L10n.t("common.you")
+        let text = L10n.t("home.dailyShareHeader") + " "
+            + question.text.filled(partner: appState.partnerName, lang: L10n.lang) + "\n"
+            + "\(myName): \(entry.myAnswer ?? "")" + "\n"
+            + "\(appState.partnerName): \(entry.partnerAnswer ?? "")"
+        Task {
+            do {
+                _ = try await api.sendMessage(type: .text, text: text)
+                sharedDailyAnswers = true
+                SoundEngine.shared.play(.pop)
+                Haptics.shared.success()
+                appState.showToast(L10n.t("games.sharedToChat"), style: .success)
+            } catch {
+                appState.handleAPIError(error)
+            }
+            sharingDailyAnswers = false
+        }
     }
 
     private func submitDaily(question: DailyQuestion) async {

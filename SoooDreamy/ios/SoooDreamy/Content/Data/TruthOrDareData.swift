@@ -1,5 +1,6 @@
 // TruthOrDareData.swift
-// Truth-or-Dare pack, couple edition: 60 truths (ids 1–60) and 60 dares (ids 61–120).
+// Truth-or-Dare pack, couple edition: 60 truths (ids 1–60), 60 dares (ids 61–120),
+// plus a mixed batch (ids 121–130: 5 truths + 5 dares).
 // spice: 1 = sweet/harmless, 2 = flirty, 3 = spicy but tasteful. Distribution ≈ 40/35/25 %.
 // Several dares work over distance too (voice note, selfie, text).
 
@@ -126,6 +127,16 @@ extension ContentPack {
         TruthOrDareItem(id: 117, isDare: true, spice: 3, text: LText(de: "Zeig mir in 30 Sekunden, wie du mich verführen würdest — nur mit Blicken.", en: "Show me in 30 seconds how you'd seduce me — using only your eyes.")),
         TruthOrDareItem(id: 118, isDare: true, spice: 3, text: LText(de: "Gib mir einen Eskimo-Kuss, dann einen Schmetterlingskuss, dann einen richtigen.", en: "Give me an Eskimo kiss, then a butterfly kiss, then a real one.")),
         TruthOrDareItem(id: 119, isDare: true, spice: 3, text: LText(de: "Beschreibe mir dein perfektes romantisches Wochenende mit mir — flüsternd, Wange an Wange.", en: "Describe your perfect romantic weekend with me — whispering, cheek to cheek.")),
-        TruthOrDareItem(id: 120, isDare: true, spice: 3, text: LText(de: "Schreib mit deinem Finger eine Liebesbotschaft auf meinen Arm — ich rate, was da steht.", en: "Write a love message on my arm with your finger — I'll guess what it says."))
+        TruthOrDareItem(id: 120, isDare: true, spice: 3, text: LText(de: "Schreib mit deinem Finger eine Liebesbotschaft auf meinen Arm — ich rate, was da steht.", en: "Write a love message on my arm with your finger — I'll guess what it says.")),
+        TruthOrDareItem(id: 121, isDare: false, spice: 1, text: LText(de: "Welches unserer kleinen Rituale möchtest du niemals aufgeben?", en: "Which of our little rituals would you never want to give up?")),
+        TruthOrDareItem(id: 122, isDare: false, spice: 1, text: LText(de: "Was fühlt sich in unserem Zuhause am meisten nach „uns“ an?", en: "What about our home feels the most like “us” to you?")),
+        TruthOrDareItem(id: 123, isDare: false, spice: 2, text: LText(de: "Welche Nachricht von mir liest du manchmal heimlich nochmal?", en: "Which message from me do you secretly reread sometimes?")),
+        TruthOrDareItem(id: 124, isDare: false, spice: 2, text: LText(de: "Bei welchem Anblick von mir musstest du zuletzt grinsen, ohne dass ich es gemerkt habe?", en: "What sight of me last made you grin without me noticing?")),
+        TruthOrDareItem(id: 125, isDare: false, spice: 3, text: LText(de: "Welcher unserer Küsse geht dir bis heute nicht aus dem Kopf?", en: "Which of our kisses still lives rent-free in your head?")),
+        TruthOrDareItem(id: 126, isDare: true, spice: 1, text: LText(de: "Beschreibe mich in genau fünf Wörtern — du hast 10 Sekunden!", en: "Describe me in exactly five words — you have 10 seconds!")),
+        TruthOrDareItem(id: 127, isDare: true, spice: 1, text: LText(de: "Summ unser Lied, bis ich errate, welches es ist.", en: "Hum our song until I guess which one it is.")),
+        TruthOrDareItem(id: 128, isDare: true, spice: 2, text: LText(de: "Schau mir 20 Sekunden in die Augen und sag danach deinen ersten Gedanken laut.", en: "Look into my eyes for 20 seconds, then say your first thought out loud.")),
+        TruthOrDareItem(id: 129, isDare: true, spice: 2, text: LText(de: "Erfinde jetzt einen neuen Kosenamen für mich und benutze ihn den restlichen Abend.", en: "Invent a new pet name for me right now and use it for the rest of the evening.")),
+        TruthOrDareItem(id: 130, isDare: true, spice: 3, text: LText(de: "Flüstere mir, wo du mich in genau einer Minute küssen wirst — und halte dich daran.", en: "Whisper where you'll kiss me in exactly one minute — then follow through."))
     ]
 }

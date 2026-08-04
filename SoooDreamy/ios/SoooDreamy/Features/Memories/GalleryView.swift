@@ -42,12 +42,16 @@ struct GalleryView: View {
     @State private var filter: GalleryFilter = .all
     @State private var albumPromptPhoto: Photo?
     @State private var newAlbumName = ""
+    /// Grid density (2 = big tiles, 3 = classic) — survives app restarts.
+    @AppStorage("sooodreamy.gallery.columns") private var storedColumnCount = 3
 
-    private let columns = [
-        GridItem(.flexible(), spacing: 6),
-        GridItem(.flexible(), spacing: 6),
-        GridItem(.flexible(), spacing: 6)
-    ]
+    private var columnCount: Int {
+        storedColumnCount == 2 ? 2 : 3
+    }
+
+    private var columns: [GridItem] {
+        Array(repeating: GridItem(.flexible(), spacing: 6), count: columnCount)
+    }
 
     var body: some View {
         ZStack {
@@ -62,6 +66,11 @@ struct GalleryView: View {
         }
         .navigationTitle(L10n.t("memories.gallery.title"))
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                densityToggle
+            }
+        }
         .task { await loadPhotos() }
         .onChange(of: pickerItem) { _, item in
             guard let item else { return }
@@ -182,6 +191,20 @@ struct GalleryView: View {
                 )
         }
         .buttonStyle(.plain)
+    }
+
+    /// 2 ↔ 3 columns — the icon previews the layout a tap switches TO.
+    private var densityToggle: some View {
+        Button {
+            Haptics.shared.tap()
+            withAnimation(.spring(response: 0.35)) {
+                storedColumnCount = columnCount == 3 ? 2 : 3
+            }
+        } label: {
+            Image(systemName: columnCount == 3 ? "square.grid.2x2" : "square.grid.3x3")
+                .foregroundStyle(Theme.pink)
+        }
+        .accessibilityLabel(L10n.t("memories.gallery.density"))
     }
 
     private var grid: some View {

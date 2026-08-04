@@ -18,9 +18,14 @@ struct CanvasView: View {
     @State private var replayEndTask: Task<Void, Never>?
     @State private var replayCelebration: Date?
     @State private var celebrationTask: Task<Void, Never>?
+    /// Last colors actually drawn with (newest first, max 6) — persisted.
+    @State private var recentColors: [String] = []
 
     /// Board background — the eraser paints in exactly this color.
     private static let boardHex = "FDF4E8"
+
+    private static let recentColorsKey = "sooodreamy.canvas.recentColors"
+    private static let recentColorsMax = 6
 
     /// Immutable snapshot of the stroke list at replay start, so strokes
     /// arriving live during the replay don't glitch the animation.
@@ -58,6 +63,7 @@ struct CanvasView: View {
                 board
                 Group {
                     palette
+                    recentColorsRow
                     controls
                 }
                 .opacity(replay == nil ? 1 : 0.3)
@@ -85,7 +91,10 @@ struct CanvasView: View {
             }
         }
         .task { await loadStrokes() }
-        .onAppear { pickInitialColor() }
+        .onAppear {
+            pickInitialColor()
+            recentColors = UserDefaults.standard.stringArray(forKey: Self.recentColorsKey) ?? []
+        }
         .onDisappear {
             // Kill the delayed replay-end/celebration work — otherwise the tada
             // sound + haptic would fire minutes later from another screen.
@@ -376,6 +385,9 @@ struct CanvasView: View {
                                 points: points,
                                 createdAt: Date())
         strokes.append(temp)
+        if tool != .eraser {
+            recordRecentColor(selectedColor)
+        }
         Haptics.shared.tap()
         Task {
             do {
@@ -438,6 +450,50 @@ struct CanvasView: View {
             }
         }
         .frame(maxWidth: .infinity)
+    }
+
+    // MARK: Recent colors (last 6 actually drawn with)
+
+    private func recordRecentColor(_ hex: String) {
+        var list = recentColors
+        list.removeAll { $0 == hex }
+        list.insert(hex, at: 0)
+        if list.count > Self.recentColorsMax {
+            list = Array(list.prefix(Self.recentColorsMax))
+        }
+        guard list != recentColors else { return }
+        recentColors = list
+        UserDefaults.standard.set(list, forKey: Self.recentColorsKey)
+    }
+
+    /// Small quick-access strip under the palette: the last colors a stroke
+    /// was actually drawn with (persists across sessions).
+    @ViewBuilder private var recentColorsRow: some View {
+        if !recentColors.isEmpty {
+            HStack(spacing: LayoutMetrics.s(8)) {
+                Image(systemName: "clock.arrow.circlepath")
+                    .font(.scaled(11, weight: .semibold))
+                    .foregroundStyle(Theme.textTertiary)
+                ForEach(recentColors, id: \.self) { hex in
+                    Button {
+                        selectedColor = hex
+                        if tool == .eraser { tool = .pen }
+                        Haptics.shared.tap()
+                    } label: {
+                        Circle()
+                            .fill(Color(hex: hex))
+                            .frame(width: LayoutMetrics.s(20), height: LayoutMetrics.s(20))
+                            .overlay(
+                                Circle().strokeBorder(.white, lineWidth: selectedColor == hex ? 2 : 0.5)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                }
+                Spacer(minLength: 0)
+            }
+            .accessibilityLabel(L10n.t("memories.canvas.recent"))
+            .animation(.spring(response: 0.3), value: recentColors)
+        }
     }
 
     private var controls: some View {

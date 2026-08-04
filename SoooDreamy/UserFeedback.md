@@ -142,6 +142,16 @@ _(hier beantworte ich dein Feedback, wenn ich es umgesetzt habe)_
 - `[2026-08-04 01:00 UTC]` **Server-Tipp geschärft**: Beispiel jetzt `http://ark.atomi23.de:4321` mit explizitem „Port :4321 nicht weglassen!“.
 - `[2026-08-04 01:00 UTC]` **+15 Content-Items** (5 Quiz, 5 This-or-That, 5 Würdest-du-eher, DE/EN). IPA **1.4.2** (Build 17) · Logic **50/50** Tests grün.
 
+### Iteration 17 — Welle 17: Suche, Raster & noch mehr Teilen 🔍🖼️
+- `[2026-08-04 01:15 UTC]` **Chat-Suche**: Lupe im Chat-Header öffnet ein Suchfeld — filtert die geladenen Nachrichten live (Text & Brief-Titel, Groß/Klein egal), mit eigenem „Nichts gefunden“-Hinweis (ältere Nachrichten weiterhin per Pull-to-Refresh nachladbar).
+- `[2026-08-04 01:15 UTC]` **Galerie-Raster umschaltbar**: Toolbar-Button wechselt zwischen 2 Spalten (große Kacheln) und 3 Spalten — die Wahl bleibt gespeichert.
+- `[2026-08-04 01:15 UTC]` **Canvas-Farbverlauf**: die letzten 6 tatsächlich benutzten Farben als Schnellzugriff-Reihe unter der Palette (überlebt App-Neustarts).
+- `[2026-08-04 01:15 UTC]` **Wordle-Duell teilen**: fertige Duelle („🥊 Wordle-Duell 04.08. · Du 3/6 · Mia 4/6 + Urteil“) direkt in den Chat schicken.
+- `[2026-08-04 01:15 UTC]` **Frage des Tages teilen**: nach dem Reveal beide Antworten als Chat-Nachricht festhalten („❓ Frage … / Du: … / Mia: …“).
+- `[2026-08-04 01:15 UTC]` **+10 Wahrheit-oder-Pflicht-Karten** (5 Wahrheiten + 5 Pflichten, alle Schärfegrade, DE/EN) — jetzt 130 Karten.
+- `[2026-08-04 01:15 UTC]` **Haptik-Feinschliff**: Bucket-List-Teilen bestätigt den Tipp jetzt sofort spürbar (wie alle anderen Teilen-Buttons).
+- `[2026-08-04 01:15 UTC]` IPA **1.4.3** (Build 18) · Logic **50/50** Tests grün.
+
 ## 🔄 Als Nächstes
-- IPA 1.4.2 sideloaden + AMP Server auf Branch (v1.6).
+- IPA 1.4.3 sideloaden + AMP Server auf Branch (v1.6).
 - Loop geht weiter: mehr Content, Album-Sharing, Truth-or-Dare multiplayer, weitere Polish-Passes.

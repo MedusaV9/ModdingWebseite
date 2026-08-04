@@ -15,7 +15,10 @@ struct ChatView: View {
     /// alive near the fold, so this flips only after real scrolling) —
     /// drives the "jump to latest" floating button.
     @State private var nearBottom = true
+    @State private var searchActive = false
+    @State private var searchQuery = ""
     @FocusState private var inputFocused: Bool
+    @FocusState private var searchFocused: Bool
 
     private static let bottomAnchorID = "chat.bottomAnchor"
 
@@ -25,6 +28,7 @@ struct ChatView: View {
                 DreamyBackground()
                 VStack(spacing: 0) {
                     header
+                    searchBar
                     messageArea
                 }
             }
@@ -75,10 +79,101 @@ struct ChatView: View {
                 headerStatus
             }
             Spacer()
+            searchToggleButton
             ConnectionBanner(state: appState.socket.state)
         }
         .padding(.horizontal, LayoutMetrics.s(16))
         .padding(.vertical, LayoutMetrics.s(10))
+    }
+
+    // MARK: Search
+
+    /// Trimmed query — filtering only kicks in with a non-empty search.
+    private var searchText: String {
+        searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var isFiltering: Bool {
+        searchActive && !searchText.isEmpty
+    }
+
+    /// Day sections narrowed to messages matching the query (text or letter
+    /// title, case-insensitive) — empty days disappear entirely.
+    private var displaySections: [ChatDaySection] {
+        guard isFiltering else { return model.sections }
+        let query = searchText
+        return model.sections.compactMap { section in
+            let matches = section.messages.filter { message in
+                (message.text?.localizedCaseInsensitiveContains(query) ?? false)
+                    || (message.title?.localizedCaseInsensitiveContains(query) ?? false)
+            }
+            return matches.isEmpty ? nil : ChatDaySection(id: section.id, messages: matches)
+        }
+    }
+
+    private var searchToggleButton: some View {
+        Button {
+            Haptics.shared.tap()
+            withAnimation(.spring(response: 0.3)) {
+                searchActive.toggle()
+            }
+            if searchActive {
+                searchFocused = true
+            } else {
+                searchQuery = ""
+            }
+        } label: {
+            Image(systemName: searchActive ? "xmark" : "magnifyingglass")
+                .font(.scaled(13, weight: .bold))
+                .foregroundStyle(searchActive ? Theme.pink : Theme.textSecondary)
+                .frame(width: LayoutMetrics.s(32), height: LayoutMetrics.s(32))
+                .background(
+                    Circle()
+                        .fill(Color.white.opacity(searchActive ? 0.14 : 0.08))
+                        .overlay(Circle().strokeBorder(Color.white.opacity(0.12), lineWidth: 1))
+                )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(L10n.t("chat.searchA11y"))
+    }
+
+    @ViewBuilder private var searchBar: some View {
+        if searchActive {
+            HStack(spacing: 8) {
+                TextField(L10n.t("chat.searchPlaceholder"),
+                          text: $searchQuery,
+                          prompt: Text(L10n.t("chat.searchPlaceholder")).foregroundStyle(Theme.textTertiary))
+                    .textFieldStyle(DreamyFieldStyle())
+                    .focused($searchFocused)
+                    .submitLabel(.search)
+                if !searchQuery.isEmpty {
+                    Button {
+                        Haptics.shared.tap()
+                        searchQuery = ""
+                        searchFocused = true
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.scaled(16, weight: .semibold))
+                            .foregroundStyle(Theme.textTertiary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(L10n.t("common.delete"))
+                }
+            }
+            .padding(.horizontal, LayoutMetrics.s(16))
+            .padding(.bottom, LayoutMetrics.s(8))
+            .transition(.move(edge: .top).combined(with: .opacity))
+        }
+    }
+
+    private var searchEmptyState: some View {
+        VStack {
+            Spacer()
+            EmptyStateView(emoji: "🔍",
+                           title: L10n.t("chat.searchNoResults.title"),
+                           subtitle: L10n.t("chat.searchNoResults.subtitle", ["query": searchText]))
+            Spacer()
+        }
     }
 
     @ViewBuilder private var headerStatus: some View {
@@ -104,6 +199,8 @@ struct ChatView: View {
             LoadingView()
         } else if model.messages.isEmpty {
             emptyState
+        } else if isFiltering && displaySections.isEmpty {
+            searchEmptyState
         } else {
             messageList
         }
@@ -123,7 +220,7 @@ struct ChatView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(spacing: LayoutMetrics.s(10), pinnedViews: [.sectionHeaders]) {
-                    ForEach(model.sections) { section in
+                    ForEach(displaySections) { section in
                         Section {
                             ForEach(section.messages) { message in
                                 ChatMessageRow(message: message,
@@ -140,7 +237,7 @@ struct ChatView: View {
                             ChatDateChip(day: section.id)
                         }
                     }
-                    if appState.partnerTyping {
+                    if appState.partnerTyping && !isFiltering {
                         ChatTypingRow(name: appState.partnerName, partner: appState.partner)
                     }
                     Color.clear
@@ -162,7 +259,7 @@ struct ChatView: View {
             .scrollDismissesKeyboard(.interactively)
             .refreshable { await model.loadOlder() }
             .overlay(alignment: .bottomTrailing) {
-                if !nearBottom {
+                if !nearBottom && !isFiltering {
                     jumpToLatestButton(proxy)
                 }
             }

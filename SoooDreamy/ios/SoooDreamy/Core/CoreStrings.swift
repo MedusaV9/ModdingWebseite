@@ -121,6 +121,8 @@ enum CoreStrings {
         "home.answerNow": LText(de: "Jetzt antworten", en: "Answer now"),
         "home.waitingPartnerAnswer": LText(de: "Warte auf {name}s Antwort…", en: "Waiting for {name}'s answer…"),
         "home.bothAnswered": LText(de: "Ihr habt beide geantwortet! 💞", en: "You both answered! 💞"),
+        "home.shareAnswers": LText(de: "Antworten in den Chat 💬", en: "Send answers to chat 💬"),
+        "home.dailyShareHeader": LText(de: "❓ Frage des Tages:", en: "❓ Question of the day:"),
         "home.streak": LText(de: "{n}er-Serie", en: "{n}-day streak"),
         "home.nextEvent": LText(de: "Als Nächstes", en: "Up next"),
         "home.inDays": LText(de: "in {n} Tagen", en: "in {n} days"),

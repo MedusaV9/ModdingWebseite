@@ -235,6 +235,7 @@ enum GamesL10n {
         "games.wordle.duel.sendFailed": LText(de: "Dein Ergebnis konnte nicht gesendet werden.",
                                               en: "Your result couldn't be sent."),
         "games.wordle.duel.retry": LText(de: "Nochmal senden", en: "Send again"),
+        "games.wordle.duel.shareTitle": LText(de: "🥊 Wordle-Duell {date}", en: "🥊 Wordle duel {date}"),
 
         // MARK: Wordle Hard-Mode
         "games.wordle.hard.toggle": LText(de: "💪 Schwer", en: "💪 Hard"),

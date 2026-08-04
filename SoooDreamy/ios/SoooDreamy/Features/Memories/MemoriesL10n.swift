@@ -81,6 +81,7 @@ enum MemoriesL10n {
         "memories.gallery.editCaption": LText(de: "Bildunterschrift bearbeiten", en: "Edit caption"),
         "memories.gallery.captionSaved": LText(de: "Bildunterschrift gespeichert ✏️",
                                                en: "Caption saved ✏️"),
+        "memories.gallery.density": LText(de: "Rastergröße umschalten", en: "Toggle grid size"),
 
         // Canvas
         "memories.canvas.title": LText(de: "Kritzel-Canvas", en: "Doodle Canvas"),
@@ -101,6 +102,7 @@ enum MemoriesL10n {
         "memories.canvas.cleared": LText(de: "Canvas gelöscht", en: "Canvas cleared"),
         "memories.canvas.undo": LText(de: "Letzten Strich zurücknehmen", en: "Undo last stroke"),
         "memories.canvas.replay": LText(de: "Kunstwerk abspielen", en: "Replay artwork"),
+        "memories.canvas.recent": LText(de: "Zuletzt benutzte Farben", en: "Recently used colors"),
 
         // Bucket list
         "memories.bucket.title": LText(de: "Bucket List", en: "Bucket List"),

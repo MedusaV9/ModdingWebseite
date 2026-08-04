@@ -204,6 +204,8 @@ struct WordleView: View {
     @State private var bounceRow: Int?
     @State private var sendingShare = false
     @State private var shared = false
+    @State private var duelSharing = false
+    @State private var duelShared = false
     @State private var restored = false
     @State private var dateKey = SharedDates.todayKey()
     @State private var day: WordleDayResponse?
@@ -1020,9 +1022,57 @@ struct WordleView: View {
                 .foregroundStyle(Theme.gold)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
+            duelShareButton(mine: mine, partner: partner)
         }
         .frame(maxWidth: .infinity)
         .glassCard(padding: 16)
+    }
+
+    /// Posts the finished duel (scores + verdict) into the couple chat.
+    @ViewBuilder
+    private func duelShareButton(mine: WordleResult, partner: WordleResult) -> some View {
+        if appState.api != nil {
+            Button {
+                shareDuelToChat(mine: mine, partner: partner)
+            } label: {
+                if duelSharing {
+                    ProgressView()
+                        .tint(Theme.pink)
+                } else {
+                    Label(L10n.t(duelShared ? "games.sharedToChat" : "games.shareToChat"),
+                          systemImage: duelShared ? "checkmark" : "paperplane.fill")
+                }
+            }
+            .buttonStyle(.plain)
+            .font(.system(.footnote, design: .rounded).weight(.bold))
+            .foregroundStyle(Theme.pink)
+            .disabled(duelSharing || duelShared)
+        }
+    }
+
+    private func shareDuelToChat(mine: WordleResult, partner: WordleResult) {
+        guard let api = appState.api, !duelSharing, !duelShared else { return }
+        duelSharing = true
+        Haptics.shared.tap()
+        let myName = appState.me?.name ?? L10n.t("common.you")
+        let myScore = mine.win ? "\(mine.rows)/6" : "X/6"
+        let partnerScore = partner.win ? "\(partner.rows)/6" : "X/6"
+        let header = L10n.t("games.wordle.duel.shareTitle", ["date": displayDate])
+        let text = header + "\n"
+            + "\(myName) \(myScore) · \(appState.partnerName) \(partnerScore)" + "\n"
+            + verdictText(mine: mine, partner: partner)
+        Task {
+            do {
+                _ = try await api.sendMessage(type: .text, text: text)
+                duelShared = true
+                SoundEngine.shared.play(.pop)
+                Haptics.shared.success()
+                appState.showToast(L10n.t("games.sharedToChat"), style: .success)
+            } catch {
+                appState.handleAPIError(error)
+            }
+            duelSharing = false
+        }
     }
 
     private func duelColumn(name: String, result: WordleResult) -> some View {

@@ -318,6 +318,7 @@ struct BucketListView: View {
     /// celebration message, open ones as a teaser.
     private func shareToChat(_ item: BucketItem) {
         guard let api = appState.api else { return }
+        Haptics.shared.tap()
         let key = item.done ? "memories.bucket.shareDone" : "memories.bucket.shareOpen"
         let text = L10n.t(key, ["item": rowTitle(item)])
         Task {

@@ -61,6 +61,13 @@ enum ChatL10n {
         "chat.deleteMessage": LText(de: "Nachricht löschen", en: "Delete message"),
         "chat.deleted": LText(de: "Nachricht gelöscht", en: "Message deleted"),
 
+        // Search (filter over the loaded messages)
+        "chat.searchA11y": LText(de: "Nachrichten durchsuchen", en: "Search messages"),
+        "chat.searchPlaceholder": LText(de: "Nachrichten durchsuchen …", en: "Search messages …"),
+        "chat.searchNoResults.title": LText(de: "Nichts gefunden", en: "No matches"),
+        "chat.searchNoResults.subtitle": LText(de: "Kein Treffer für „{query}“ — ältere Nachrichten lädst du oben per Ziehen nach.",
+                                               en: "Nothing found for “{query}” — pull down at the top to load older messages."),
+
         // Read receipts (a11y labels for the bubble checkmarks)
         "chat.receipt.sent": LText(de: "Gesendet", en: "Sent"),
         "chat.receipt.read": LText(de: "Gelesen", en: "Read"),
