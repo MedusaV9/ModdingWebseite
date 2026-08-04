@@ -1,6 +1,44 @@
 import SwiftUI
 import Combine
 
+/// Music provider detected from a song's link — powers the branded listen chip.
+private enum MusicProvider {
+    case spotify, appleMusic, youtube, soundcloud, other
+
+    /// Brand display name; nil = use the generic localized "Listen" label.
+    var name: String? {
+        switch self {
+        case .spotify: return "Spotify"
+        case .appleMusic: return "Apple Music"
+        case .youtube: return "YouTube"
+        case .soundcloud: return "SoundCloud"
+        case .other: return nil
+        }
+    }
+
+    var tint: Color {
+        switch self {
+        case .spotify: return Color(hex: "1DB954")
+        case .appleMusic: return Color(hex: "FA243C")
+        case .youtube: return Color(hex: "FF0000")
+        case .soundcloud: return Color(hex: "FF5500")
+        case .other: return Theme.blue
+        }
+    }
+
+    static func detect(from url: URL) -> MusicProvider {
+        let host = (url.host ?? "").lowercased()
+        func matches(_ domain: String) -> Bool {
+            host == domain || host.hasSuffix("." + domain)
+        }
+        if matches("spotify.com") || matches("spotify.link") { return .spotify }
+        if matches("music.apple.com") || matches("itunes.apple.com") { return .appleMusic }
+        if matches("youtube.com") || matches("youtu.be") { return .youtube }
+        if matches("soundcloud.com") { return .soundcloud }
+        return .other
+    }
+}
+
 /// "Unser Soundtrack" — the couple's shared song list with hearts,
 /// listen links and a random-pick shuffle.
 struct SoundtrackView: View {
@@ -330,19 +368,25 @@ struct SoundtrackView: View {
 
     // MARK: Listen link
 
+    /// Branded per-provider (Spotify/Apple Music/YouTube/SoundCloud), with a
+    /// generic localized fallback for everything else.
     private func listenButton(_ url: URL) -> some View {
-        Button {
+        let provider = MusicProvider.detect(from: url)
+        let label = provider.name.map { $0 + " ↗" } ?? L10n.t("memories.soundtrack.listen")
+        return Button {
             Haptics.shared.tap()
             openURL(url)
         } label: {
-            Text(L10n.t("memories.soundtrack.listen"))
+            Text(label)
                 .font(.system(.caption, design: .rounded).weight(.bold))
-                .foregroundStyle(Theme.blue)
+                .foregroundStyle(provider.tint)
+                .lineLimit(1)
                 .padding(.vertical, 5)
                 .padding(.horizontal, 9)
-                .background(Capsule().fill(Theme.blue.opacity(0.14)))
+                .background(Capsule().fill(provider.tint.opacity(0.14)))
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(L10n.t("memories.soundtrack.listen"))
     }
 
     /// Builds a tappable URL — prepends https:// when the link has no scheme.
@@ -572,16 +616,24 @@ private struct SongEditorSheet: View {
         }
     }
 
-    /// PATCHes only changed, non-empty fields. The API client only serializes
-    /// non-nil params (it can't express an explicit null), so CLEARING a field
-    /// by leaving it empty is NOT supported client-side yet — empty optionals
-    /// are simply skipped and keep their server value.
+    /// PATCHes only changed fields. Emptying an optional field CLEARS it on
+    /// the server via an explicit JSON null (double-optional `.some(nil)`,
+    /// serialized by `API.encodeNulls`); unchanged fields are omitted and
+    /// keep their server value.
     private func update(_ song: Song, api: API, title: String,
                         artist: String, note: String, link: String) async throws {
-        let newTitle = title != song.title ? title : nil
-        let newArtist = (!artist.isEmpty && artist != song.artist) ? artist : nil
-        let newNote = (!note.isEmpty && note != song.note) ? note : nil
-        let newLink = (!link.isEmpty && link != song.link) ? link : nil
+        let newTitle: String? = title != song.title ? title : nil
+
+        /// `.none` = unchanged (omit), `.some(nil)` = cleared, `.some(v)` = replaced.
+        func delta(_ current: String?, _ edited: String) -> String?? {
+            let normalizedCurrent = (current?.isEmpty ?? true) ? nil : current
+            let normalizedEdited = edited.isEmpty ? nil : edited
+            return normalizedCurrent == normalizedEdited ? String??.none : .some(normalizedEdited)
+        }
+
+        let newArtist = delta(song.artist, artist)
+        let newNote = delta(song.note, note)
+        let newLink = delta(song.link, link)
         if newTitle == nil && newArtist == nil && newNote == nil && newLink == nil {
             dismiss()
             return

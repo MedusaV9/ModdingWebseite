@@ -5,6 +5,7 @@ import Combine
 
 enum GameDestination: String, Hashable, Identifiable {
     case wordle, quiz, thisorthat, wouldyourather, truthordare, questions36, emojiriddle, dateideas
+    case record   // scoreboard of past games
     var id: String { rawValue }
 }
 
@@ -29,6 +30,7 @@ struct PlayHubView: View {
                         wordleCard
                         gameGrid
                         dateIdeasCard
+                        recordCard
                     }
                     .padding(LayoutMetrics.s(16))
                     .padding(.bottom, LayoutMetrics.s(12))
@@ -359,6 +361,35 @@ struct PlayHubView: View {
         .buttonStyle(.plain)
     }
 
+    // MARK: Scoreboard entry
+
+    private var recordCard: some View {
+        Button {
+            path.append(.record)
+        } label: {
+            HStack(spacing: LayoutMetrics.s(14)) {
+                Text("🏆")
+                    .font(.scaled(40))
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(L10n.t("games.card.record.title"))
+                        .font(.system(.headline, design: .rounded).weight(.bold))
+                        .foregroundStyle(Theme.textPrimary)
+                    Text(L10n.t("games.card.record.teaser"))
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(Theme.textSecondary)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.scaled(14, weight: .bold))
+                    .foregroundStyle(Theme.gold)
+            }
+            .glassCard(padding: 16)
+        }
+        .buttonStyle(.plain)
+    }
+
     // MARK: Destination mapping
 
     @ViewBuilder
@@ -380,6 +411,8 @@ struct PlayHubView: View {
             EmojiRiddleView()
         case .dateideas:
             DateIdeasView()
+        case .record:
+            GamesRecordView()
         }
     }
 

@@ -121,6 +121,7 @@ struct ChatVoiceBubble: View {
     let message: Message
     let isMine: Bool
     let onReact: (String) -> Void
+    var onDelete: (() -> Void)? = nil
 
     private var player: VoicePlayer { VoicePlayer.shared }
     private var isCurrent: Bool { player.playingId == message.id }
@@ -138,7 +139,9 @@ struct ChatVoiceBubble: View {
                         .font(.system(.caption2, design: .rounded).weight(.semibold))
                         .monospacedDigit()
                         .foregroundStyle(isMine ? Color.white.opacity(0.85) : Theme.textSecondary)
-                    ChatTimestampText(date: message.createdAt, isMine: isMine)
+                    ChatTimestampText(date: message.createdAt, isMine: isMine,
+                                      read: chatReadReceipt(for: message, isMine: isMine,
+                                                            partner: appState.partner))
                 }
             }
         }
@@ -150,6 +153,9 @@ struct ChatVoiceBubble: View {
         }
         .contextMenu {
             ChatReactMenu(onReact: onReact)
+            if let onDelete {
+                ChatDeleteButton(onDelete: onDelete)
+            }
         }
     }
 

@@ -33,13 +33,16 @@ struct CanvasView: View {
     }
 
     private enum CanvasTool: String, CaseIterable, Identifiable {
-        case pen, marker, eraser
+        case pen, marker, glow, dotted, calligraphy, eraser
         var id: String { rawValue }
 
         var icon: String {
             switch self {
             case .pen: return "pencil.tip"
             case .marker: return "highlighter"
+            case .glow: return "sparkles"
+            case .dotted: return "circle.dotted"
+            case .calligraphy: return "paintbrush.pointed.fill"
             case .eraser: return "eraser.fill"
             }
         }
@@ -186,20 +189,41 @@ struct CanvasView: View {
                 path.addLine(to: point)
             }
         }
-        var color = Color(hex: stroke.color)
-        var width = stroke.width
+        let color = Color(hex: stroke.color)
+        let width = stroke.width
+
+        func solid(_ lineWidth: Double) -> StrokeStyle {
+            StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round)
+        }
+
+        // Tool is a free string on the wire — unknown tools fall back to pen,
+        // so older clients render newer strokes gracefully.
         switch stroke.tool {
         case "marker":
-            width *= 2.5
-            color = color.opacity(0.6)
+            context.stroke(path, with: .color(color.opacity(0.6)), style: solid(width * 2.5))
         case "eraser":
-            color = Color(hex: Self.boardHex)
-            width *= 2.5
+            context.stroke(path, with: .color(Color(hex: Self.boardHex)), style: solid(width * 2.5))
+        case "glow":
+            // Neon look: soft shadow halo underneath + a bright core stroke.
+            var halo = context
+            halo.addFilter(.shadow(color: color.opacity(0.85), radius: width * 1.4))
+            halo.stroke(path, with: .color(color.opacity(0.55)), style: solid(width * 1.6))
+            context.stroke(path, with: .color(color), style: solid(width))
+        case "dotted":
+            // Zero-ish dash segments with round caps render as evenly spaced dots.
+            context.stroke(path, with: .color(color),
+                           style: StrokeStyle(lineWidth: width * 1.4, lineCap: .round,
+                                              lineJoin: .round, dash: [0.1, width * 2.8]))
+        case "calligraphy":
+            // Variable-width illusion: main stroke + a thinner, diagonally
+            // offset twin — diagonals thicken, horizontals stay slim.
+            let offset = max(width * 0.45, 1.2)
+            let slanted = path.applying(CGAffineTransform(translationX: offset, y: -offset))
+            context.stroke(path, with: .color(color), style: solid(width * 0.75))
+            context.stroke(slanted, with: .color(color.opacity(0.85)), style: solid(width * 0.55))
         default:
-            break
+            context.stroke(path, with: .color(color), style: solid(width))
         }
-        context.stroke(path, with: .color(color),
-                       style: StrokeStyle(lineWidth: width, lineCap: .round, lineJoin: .round))
     }
 
     // MARK: Replay
@@ -421,7 +445,6 @@ struct CanvasView: View {
             HStack(spacing: LayoutMetrics.s(10)) {
                 toolPicker
                 undoButton
-                Spacer()
                 clearButton
             }
             widthSlider
@@ -444,23 +467,26 @@ struct CanvasView: View {
         .accessibilityLabel(L10n.t("memories.canvas.undo"))
     }
 
+    /// Six brushes don't fit a fixed row on small phones — the picker scrolls.
     private var toolPicker: some View {
-        HStack(spacing: 6) {
-            ForEach(CanvasTool.allCases) { candidate in
-                Button {
-                    tool = candidate
-                    Haptics.shared.tap()
-                } label: {
-                    Image(systemName: candidate.icon)
-                        .font(.scaled(15, weight: .semibold))
-                        .foregroundStyle(tool == candidate ? Color.white : Theme.textSecondary)
-                        .frame(width: LayoutMetrics.s(40), height: LayoutMetrics.s(34))
-                        .background(
-                            Capsule().fill(tool == candidate ? Theme.purple.opacity(0.65) : Color.white.opacity(0.06))
-                        )
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(CanvasTool.allCases) { candidate in
+                    Button {
+                        tool = candidate
+                        Haptics.shared.tap()
+                    } label: {
+                        Image(systemName: candidate.icon)
+                            .font(.scaled(15, weight: .semibold))
+                            .foregroundStyle(tool == candidate ? Color.white : Theme.textSecondary)
+                            .frame(width: LayoutMetrics.s(40), height: LayoutMetrics.s(34))
+                            .background(
+                                Capsule().fill(tool == candidate ? Theme.purple.opacity(0.65) : Color.white.opacity(0.06))
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(L10n.t(candidate.titleKey))
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(L10n.t(candidate.titleKey))
             }
         }
     }

@@ -29,7 +29,7 @@ struct ChatView: View {
         }
         .onAppear {
             model.configure(appState)
-            appState.unreadChat = 0
+            appState.markChatRead()
             Task { await model.loadInitial() }
         }
         .onDisappear {
@@ -124,9 +124,13 @@ struct ChatView: View {
                             ForEach(section.messages) { message in
                                 ChatMessageRow(message: message,
                                                isMine: message.senderId == appState.memberId,
-                                               partner: appState.partner) { emoji in
-                                    model.toggleReaction(on: message, emoji: emoji)
-                                }
+                                               partner: appState.partner,
+                                               onReact: { emoji in
+                                                   model.toggleReaction(on: message, emoji: emoji)
+                                               },
+                                               onDelete: {
+                                                   model.deleteMessage(message)
+                                               })
                             }
                         } header: {
                             ChatDateChip(day: section.id)
@@ -269,6 +273,8 @@ struct ChatMessageRow: View {
     let isMine: Bool
     let partner: Member?
     let onReact: (String) -> Void
+    /// Wired only for messages the current member may delete (their own).
+    var onDelete: (() -> Void)? = nil
 
     var body: some View {
         HStack(alignment: .bottom, spacing: 8) {
@@ -282,6 +288,12 @@ struct ChatMessageRow: View {
             }
         }
         .id(message.id)
+    }
+
+    /// Delete is only offered on my own, server-confirmed messages.
+    private var deleteAction: (() -> Void)? {
+        guard isMine, !message.id.hasPrefix("local-") else { return nil }
+        return onDelete
     }
 
     private var bubbleColumn: some View {
@@ -304,11 +316,56 @@ struct ChatMessageRow: View {
     @ViewBuilder private var bubble: some View {
         switch message.type {
         case .text:
-            ChatTextBubble(message: message, isMine: isMine, onReact: onReact)
+            ChatTextBubble(message: message, isMine: isMine, onReact: onReact,
+                           onDelete: deleteAction)
         case .voice:
-            ChatVoiceBubble(message: message, isMine: isMine, onReact: onReact)
+            ChatVoiceBubble(message: message, isMine: isMine, onReact: onReact,
+                            onDelete: deleteAction)
         case .letter:
-            ChatLetterBubble(message: message, isMine: isMine, onReact: onReact)
+            ChatLetterBubble(message: message, isMine: isMine, onReact: onReact,
+                             onDelete: deleteAction)
+        }
+    }
+}
+
+// MARK: - Read receipts
+
+/// nil → no receipt (partner's message or optimistic temp) · false → sent ·
+/// true → partner's `lastReadAt` covers this message (they read it).
+func chatReadReceipt(for message: Message, isMine: Bool, partner: Member?) -> Bool? {
+    guard isMine, !message.id.hasPrefix("local-") else { return nil }
+    guard let readAt = partner?.lastReadAt else { return false }
+    return readAt >= message.createdAt
+}
+
+/// WhatsApp-style checkmarks: one = sent, two (mint) = read by the partner.
+struct ChatReadReceiptMark: View {
+    let read: Bool
+
+    var body: some View {
+        ZStack(alignment: .leading) {
+            Image(systemName: "checkmark")
+            if read {
+                Image(systemName: "checkmark")
+                    .offset(x: LayoutMetrics.s(4))
+            }
+        }
+        .font(.scaled(9, weight: .bold))
+        .foregroundStyle(read ? Theme.mint : Color.white.opacity(0.65))
+        .padding(.trailing, read ? LayoutMetrics.s(4) : 0)
+        .accessibilityLabel(L10n.t(read ? "chat.receipt.read" : "chat.receipt.sent"))
+    }
+}
+
+/// "Delete my message" context-menu row (shared by all bubble types).
+struct ChatDeleteButton: View {
+    let onDelete: () -> Void
+
+    var body: some View {
+        Button(role: .destructive) {
+            onDelete()
+        } label: {
+            Label(L10n.t("chat.deleteMessage"), systemImage: "trash")
         }
     }
 }
@@ -343,6 +400,7 @@ struct ChatTextBubble: View {
     let message: Message
     let isMine: Bool
     let onReact: (String) -> Void
+    var onDelete: (() -> Void)? = nil
 
     var body: some View {
         VStack(alignment: isMine ? .trailing : .leading, spacing: 3) {
@@ -350,7 +408,9 @@ struct ChatTextBubble: View {
                 .font(.system(.body, design: .rounded))
                 .foregroundStyle(Theme.textPrimary)
                 .multilineTextAlignment(isMine ? .trailing : .leading)
-            ChatTimestampText(date: message.createdAt, isMine: isMine)
+            ChatTimestampText(date: message.createdAt, isMine: isMine,
+                              read: chatReadReceipt(for: message, isMine: isMine,
+                                                    partner: appState.partner))
         }
         .padding(.vertical, 9)
         .padding(.horizontal, LayoutMetrics.s(13))
@@ -367,6 +427,9 @@ struct ChatTextBubble: View {
             } label: {
                 Label(L10n.t("chat.copy"), systemImage: "doc.on.doc")
             }
+            if let onDelete {
+                ChatDeleteButton(onDelete: onDelete)
+            }
         }
     }
 }
@@ -378,6 +441,7 @@ struct ChatLetterBubble: View {
     let message: Message
     let isMine: Bool
     let onReact: (String) -> Void
+    var onDelete: (() -> Void)? = nil
 
     @State private var unsealing = false
     @State private var celebrating = false
@@ -460,7 +524,9 @@ struct ChatLetterBubble: View {
                 .foregroundStyle(Theme.textPrimary)
             HStack {
                 Spacer()
-                ChatTimestampText(date: message.createdAt, isMine: isMine)
+                ChatTimestampText(date: message.createdAt, isMine: isMine,
+                                  read: chatReadReceipt(for: message, isMine: isMine,
+                                                        partner: appState.partner))
             }
         }
         .padding(LayoutMetrics.s(15))
@@ -477,6 +543,9 @@ struct ChatLetterBubble: View {
             ChatReactMenu(onReact: onReact)
             copyButton
             readButton
+            if let onDelete {
+                ChatDeleteButton(onDelete: onDelete)
+            }
         }
     }
 
@@ -545,11 +614,18 @@ struct ChatLetterBubble: View {
 struct ChatTimestampText: View {
     let date: Date
     let isMine: Bool
+    /// Read receipt next to the time — nil hides the checkmarks entirely.
+    var read: Bool? = nil
 
     var body: some View {
-        Text(date.formatted(date: .omitted, time: .shortened))
-            .font(.system(.caption2, design: .rounded))
-            .foregroundStyle(isMine ? Color.white.opacity(0.72) : Theme.textTertiary)
+        HStack(spacing: 4) {
+            Text(date.formatted(date: .omitted, time: .shortened))
+                .font(.system(.caption2, design: .rounded))
+                .foregroundStyle(isMine ? Color.white.opacity(0.72) : Theme.textTertiary)
+            if let read {
+                ChatReadReceiptMark(read: read)
+            }
+        }
     }
 }
 

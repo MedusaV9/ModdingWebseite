@@ -257,6 +257,25 @@ enum GamesL10n {
         "games.wordle.record.emptyBody": LText(de: "Spielt euer erstes Wordle!",
                                                en: "Play your first Wordle together!"),
 
+        // MARK: Spiele-Bilanz (scoreboard of past games)
+        "games.card.record.title": LText(de: "Spiele-Bilanz", en: "Scoreboard"),
+        "games.card.record.teaser": LText(de: "Eure letzten Spiele — wer gewinnt öfter?",
+                                          en: "Your recent games — who wins more often?"),
+        "games.record.title": LText(de: "Spiele-Bilanz", en: "Scoreboard"),
+        "games.record.subtitle": LText(de: "Gewertete Quiz-Duelle: {n}",
+                                       en: "Quiz duels counted: {n}"),
+        "games.record.ties": LText(de: "Remis", en: "Ties"),
+        "games.record.leaderMe": LText(de: "Du führst! 👑", en: "You're in the lead! 👑"),
+        "games.record.leaderPartner": LText(de: "{name} führt! 👑",
+                                            en: "{name} is in the lead! 👑"),
+        "games.record.leaderTie": LText(de: "Gleichstand — ihr seid ebenbürtig! 💞",
+                                        en: "All tied — evenly matched! 💞"),
+        "games.record.recent": LText(de: "Letzte Spiele", en: "Recent games"),
+        "games.record.matches": LText(de: "{n}/{total} Matches", en: "{n}/{total} matches"),
+        "games.record.emptyTitle": LText(de: "Noch keine Spiele", en: "No games yet"),
+        "games.record.emptyBody": LText(de: "Spielt ein Paar-Quiz oder Dies oder Das — eure Ergebnisse landen hier!",
+                                        en: "Play a couple quiz or This or That — your results will land here!"),
+
         // MARK: Emoji-Rätsel
         "games.card.emojiriddle.title": LText(de: "Emoji-Rätsel", en: "Emoji Riddles"),
         "games.card.emojiriddle.teaser": LText(de: "Erratet Filme, Songs & mehr aus Emojis",

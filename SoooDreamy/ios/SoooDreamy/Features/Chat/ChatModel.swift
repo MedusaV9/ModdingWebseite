@@ -120,6 +120,26 @@ final class ChatModel {
         insert(message)
     }
 
+    // MARK: Deleting
+
+    /// Delete one of MY messages on the server, then drop it locally.
+    /// The `message_deleted` socket echo is idempotent with the local removal.
+    func deleteMessage(_ message: Message) {
+        guard let appState, let api = appState.api,
+              message.senderId == appState.memberId,
+              !message.id.hasPrefix("local-") else { return }
+        Task {
+            do {
+                try await api.deleteMessage(id: message.id)
+                messages.removeAll { $0.id == message.id }
+                Haptics.shared.tap()
+                appState.showToast(L10n.t("chat.deleted"), style: .info)
+            } catch {
+                appState.handleAPIError(error)
+            }
+        }
+    }
+
     // MARK: Realtime
 
     func handle(_ event: ServerEvent) {
@@ -135,6 +155,11 @@ final class ChatModel {
             // Reaction changes etc. — replace by id, order stays (createdAt fixed).
             if let message = event.decode(MessageResponse.self)?.message {
                 update(message)
+            }
+        case .messageDeleted:
+            // Either partner may have deleted their own message — drop it.
+            if let payload = event.decode(IdPayload.self) {
+                messages.removeAll { $0.id == payload.id }
             }
         case .welcome:
             // Socket (re)connected — pull anything missed while offline.

@@ -35,13 +35,26 @@ final class AppState {
     @ObservationIgnored private var cachedWidgetPhotoId: String?
 
     // UI state
-    var activeTab: AppTab = .home
+    var activeTab: AppTab = .home {
+        didSet {
+            if activeTab == .chat, oldValue != .chat {
+                markChatRead()
+            }
+        }
+    }
     var toast: Toast?
     var incomingTouch: Touch?
     var partnerTyping = false
-    var unreadChat = 0
+    var unreadChat = 0 {
+        didSet { persistUnreadChat() }
+    }
     var celebrate = false
     var uiRefresh = 0
+
+    /// Aggregated activity missed since the last inbox check (v1.6
+    /// `GET /api/inbox`) — non-nil drives the "While you were away" card
+    /// on the dashboard; cleared when the user taps or dismisses it.
+    var missedInbox: InboxResponse?
 
     /// Last touch received from the partner — feeds widgets & live activities.
     /// Seeded from the shared snapshot so it survives app relaunches.
@@ -119,6 +132,7 @@ final class AppState {
         Haptics.shared.prepare()
         SoundEngine.shared.prepare()
         guard phase == .main else { return }
+        restoreUnreadChat()
         await refreshAll()
         connectSocket()
         CouplePulseController.startIfEnabled(from: self)
@@ -132,8 +146,9 @@ final class AppState {
         events = []
         dailyEntry = nil
         stats = nil
-        unreadChat = 0
+        missedInbox = nil
         servers.setActive(id: id)
+        restoreUnreadChat()
         if let profile = servers.activeProfile {
             showToast(L10n.t("server.switched", ["name": profile.name]), style: .success)
         }
@@ -176,8 +191,65 @@ final class AppState {
         async let s: Void = refreshStats()
         async let p: Void = refreshWidgetPhoto()
         async let c: Void = refreshWidgetCanvas()
-        _ = await (e, d, s, p, c)
+        async let i: Void = refreshInbox()
+        _ = await (e, d, s, p, c, i)
         updateWidgetSnapshot()
+    }
+
+    // MARK: Missed inbox (v1.6)
+
+    /// UserDefaults key for the last inbox check, scoped per couple so
+    /// switching servers/couples never leaks another couple's window.
+    private var lastInboxKey: String? {
+        servers.activeProfile?.coupleId.map { "inbox.lastAt.\($0)" }
+    }
+
+    /// Fetch everything missed since the last check and surface it as the
+    /// "While you were away" card. Best effort: pre-v1.6 servers 404 here,
+    /// which stays silent; the window only advances after a successful fetch
+    /// (or on the very first run, which just seeds the timestamp).
+    func refreshInbox() async {
+        guard let api, let key = lastInboxKey else { return }
+        let defaults = UserDefaults.standard
+        guard let stored = defaults.object(forKey: key) as? Double else {
+            defaults.set(Date().timeIntervalSince1970, forKey: key)
+            return
+        }
+        guard let inbox = try? await api.inbox(since: Date(timeIntervalSince1970: stored)) else {
+            return
+        }
+        defaults.set(Date().timeIntervalSince1970, forKey: key)
+        if !inbox.isEmpty {
+            missedInbox = inbox
+        }
+    }
+
+    // MARK: Chat read state
+
+    /// Zero the unread badge and tell the server the chat was read (v1.6
+    /// read receipts). Older servers 404 the POST — silently ignored.
+    func markChatRead() {
+        unreadChat = 0
+        guard let api else { return }
+        Task { _ = try? await api.markMessagesRead() }
+    }
+
+    /// The unread-chat badge survives app restarts (persisted per couple).
+    private var unreadChatKey: String? {
+        servers.activeProfile?.coupleId.map { "chat.unread.\($0)" }
+    }
+
+    private func persistUnreadChat() {
+        guard let key = unreadChatKey else { return }
+        UserDefaults.standard.set(unreadChat, forKey: key)
+    }
+
+    private func restoreUnreadChat() {
+        guard let key = unreadChatKey else {
+            unreadChat = 0
+            return
+        }
+        unreadChat = UserDefaults.standard.integer(forKey: key)
     }
 
     func refreshWidgetPhoto() async {
@@ -303,6 +375,7 @@ final class AppState {
         dailyEntry = nil
         stats = nil
         unreadChat = 0
+        missedInbox = nil
         CouplePulseController.stop()
         CountdownActivityController.stopAll()
         updateWidgetSnapshot()
@@ -326,6 +399,8 @@ final class AppState {
             if let payload = event.decode(WelcomePayload.self) {
                 setPartnerOnline(payload.partnerOnline, lastSeen: nil)
                 pushLiveActivityUpdates()
+                // Socket (re)connected — check what happened while offline.
+                Task { await refreshInbox() }
             }
         case .presence:
             if let p = event.decode(PresencePayload.self), p.memberId != memberId {
@@ -345,9 +420,18 @@ final class AppState {
                     if activeTab != .chat {
                         unreadChat += 1
                         notifyMessage(payload.message)
+                    } else {
+                        // Chat is on screen — the message is read right away.
+                        markChatRead()
                     }
                     SoundEngine.shared.play(.pop)
                 }
+            }
+        case .messageRead:
+            // Partner (or my other device) marked the chat as read — feeds
+            // the read-receipt checkmarks on own bubbles.
+            if let payload = event.decode(MessageReadPayload.self) {
+                applyLastReadAt(memberId: payload.memberId, at: payload.at)
             }
         case .memberUpdated:
             if let payload = event.decode(MemberResponse.self) {
@@ -461,6 +545,15 @@ final class AppState {
             couple.members[idx] = member
             couple.members[idx].online = member.online ?? wasOnline
         }
+        self.couple = couple
+    }
+
+    /// Advance a member's `lastReadAt` (never backwards — events may race).
+    private func applyLastReadAt(memberId id: String, at: Date) {
+        guard var couple else { return }
+        guard let idx = couple.members.firstIndex(where: { $0.id == id }) else { return }
+        if let current = couple.members[idx].lastReadAt, current >= at { return }
+        couple.members[idx].lastReadAt = at
         self.couple = couple
     }
 

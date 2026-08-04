@@ -12,6 +12,7 @@ struct Member: Codable, Identifiable, Hashable {
     var moodUpdatedAt: Date?
     var online: Bool?
     var lastSeenAt: Date?
+    var lastReadAt: Date?
     var joinedAt: Date?
 }
 
@@ -84,11 +85,13 @@ struct Message: Codable, Identifiable, Hashable {
 struct Photo: Codable, Identifiable, Hashable {
     let id: String
     let uploaderId: String
-    let caption: String?
+    var caption: String?
     let url: String
     let thumbUrl: String?
     let width: Int?
     let height: Int?
+    /// Optional album name (free string) — nil = not filed in any album.
+    var album: String?
     /// memberIds who marked this photo as a favorite.
     var favorites: [String]?
     let createdAt: Date
@@ -152,7 +155,16 @@ struct Coupon: Codable, Identifiable, Hashable {
     let createdBy: String
     let forMember: String
     var redeemedAt: Date?
+    /// Optional expiry — an unredeemed coupon past this date can no longer
+    /// be redeemed (the server answers `409 expired`).
+    var expiresAt: Date?
     let createdAt: Date
+
+    /// Expired = past its expiry date and never redeemed.
+    func isExpired(at now: Date = Date()) -> Bool {
+        guard redeemedAt == nil, let expiresAt else { return false }
+        return expiresAt <= now
+    }
 }
 
 /// One entry of a member's mood history (server keeps the last ~60 per member).
@@ -313,6 +325,56 @@ struct WidgetSnapshotResponse: Codable, Hashable {
     let serverTime: Date
 }
 
+// MARK: - Inbox (v1.6 — GET /api/inbox?since=ISO)
+
+/// Aggregated "missed while you were away" activity strictly after `since`.
+/// Mirrors the server shape: one `{count, last?}` bucket per category — the
+/// buckets (and their counts) stay optional so the client tolerates servers
+/// that omit categories. Untyped `last` teasers (touch/photo/coupon) are
+/// ignored; only the message teaser is consumed for the dashboard card.
+struct InboxResponse: Codable, Hashable {
+    struct Bucket: Codable, Hashable {
+        let count: Int?
+    }
+
+    /// Teaser of the newest missed message (`text` truncated server-side).
+    struct MessageTeaser: Codable, Hashable {
+        let id: String
+        let senderId: String?
+        let kind: String?
+        let text: String?
+        let createdAt: Date?
+    }
+
+    struct MessagesBucket: Codable, Hashable {
+        let count: Int?
+        let last: MessageTeaser?
+    }
+
+    let messages: MessagesBucket?
+    let touches: Bucket?
+    let photos: Bucket?
+    let couponsForMe: Bucket?
+    let songs: Bucket?
+    let canvasStrokes: Bucket?
+    let dailyPartnerAnswered: Bool?
+    let serverTime: Date?
+
+    var messageCount: Int { messages?.count ?? 0 }
+    var touchCount: Int { touches?.count ?? 0 }
+    var photoCount: Int { photos?.count ?? 0 }
+    var couponCount: Int { couponsForMe?.count ?? 0 }
+    var songCount: Int { songs?.count ?? 0 }
+    var canvasCount: Int { canvasStrokes?.count ?? 0 }
+    var partnerAnsweredDaily: Bool { dailyPartnerAnswered ?? false }
+
+    var total: Int {
+        messageCount + touchCount + photoCount + couponCount + songCount
+            + canvasCount + (partnerAnsweredDaily ? 1 : 0)
+    }
+    var isEmpty: Bool { total == 0 }
+}
+
 // MARK: - List wrappers
 
 struct MessagesResponse: Codable { let messages: [Message] }
@@ -338,6 +400,10 @@ struct StrokeResponse: Codable { let stroke: CanvasStroke }
 struct TouchResponse: Codable { let touch: Touch }
 struct GameOnlyResponse: Codable { let game: GameSession }
 struct MoveResponse: Codable { let move: GameMove }
+/// v1.6 `GET /api/games?limit=` — past sessions, newest first.
+struct GamesListResponse: Codable { let games: [GameSession] }
+/// v1.6 `POST /api/messages/read` — server timestamp of the read receipt.
+struct MessagesReadResponse: Codable { let at: Date }
 
 // MARK: - WebSocket events
 
@@ -372,6 +438,8 @@ enum ServerEventType: String, Codable {
     case songAdded = "song_added"
     case songUpdated = "song_updated"
     case songDeleted = "song_deleted"
+    case messageDeleted = "message_deleted"
+    case messageRead = "message_read"
     case typing, pong
 }
 
@@ -417,6 +485,12 @@ struct IdPayload: Codable { let id: String }
 struct GameMovePayload: Codable {
     let gameId: String
     let move: GameMove
+}
+
+/// v1.6 `message_read` event: a member marked the chat as read at `at`.
+struct MessageReadPayload: Codable {
+    let memberId: String
+    let at: Date
 }
 
 // MARK: - JSONValue (free-form JSON for game payloads/moves)

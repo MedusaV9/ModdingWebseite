@@ -242,6 +242,17 @@ enum CoreStrings {
         "home.flashbackDaysAgo": LText(de: "vor {n} Tagen", en: "{n} days ago"),
         "home.flashbackQuestion": LText(de: "Eure Frage von damals", en: "Your question back then"),
 
+        // "While you were away" card (missed inbox)
+        "home.missedTitle": LText(de: "Während du weg warst", en: "While you were away"),
+        "home.missedBody": LText(de: "Tippen, um alles nachzuholen", en: "Tap to catch up"),
+        "home.missed.messages": LText(de: "Nachrichten", en: "Messages"),
+        "home.missed.touches": LText(de: "Berührungen", en: "Touches"),
+        "home.missed.photos": LText(de: "Fotos", en: "Photos"),
+        "home.missed.coupons": LText(de: "Gutscheine", en: "Coupons"),
+        "home.missed.songs": LText(de: "Songs", en: "Songs"),
+        "home.missed.canvas": LText(de: "Leinwand-Kritzeleien", en: "Canvas doodles"),
+        "home.missed.daily": LText(de: "Frage des Tages beantwortet", en: "Daily question answered"),
+
         // Connection banner
         "conn.connecting": LText(de: "Verbinde…", en: "Connecting…"),
         "conn.offline": LText(de: "Offline — versuche es wieder…", en: "Offline — retrying…"),

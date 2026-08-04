@@ -74,6 +74,20 @@ struct API {
     private struct ErrorBody: Decodable { let error: String?; let message: String? }
     private struct Empty: Decodable {}
 
+    /// ISO8601 string (with fractional seconds) for dates in JSON bodies —
+    /// matches the wire format the server emits and `decoder` parses.
+    static func isoString(_ date: Date) -> String {
+        isoFracFormatter.string(from: date)
+    }
+
+    /// Folds a double-optional PATCH parameter into a JSON body so endpoints
+    /// that support clearing can distinguish the three cases:
+    /// `.none` = omit (keep server value), `.some(nil)` = explicit JSON null
+    /// (clear the field), `.some(value)` = set the new value.
+    static func encodeNulls(_ body: inout [String: Any?], _ key: String, _ value: String??) {
+        if case .some(let inner) = value { body[key] = inner ?? NSNull() }
+    }
+
     // MARK: Request core
 
     private func request<T: Decodable>(_ method: String, _ path: String,
@@ -214,6 +228,28 @@ struct API {
                           jsonBody: ["emoji": emoji], as: MessageResponse.self).message
     }
 
+    /// v1.6: delete one of MY messages (server broadcasts `message_deleted {id}`).
+    func deleteMessage(id: String) async throws {
+        struct OK: Decodable { let ok: Bool }
+        _ = try await request("DELETE", "/api/messages/\(id)", as: OK.self)
+    }
+
+    /// v1.6: mark the whole chat as read for me — returns the server-side
+    /// read timestamp and broadcasts `message_read {memberId, at}`.
+    @discardableResult
+    func markMessagesRead() async throws -> Date {
+        try await request("POST", "/api/messages/read", jsonBody: [:],
+                          as: MessagesReadResponse.self).at
+    }
+
+    // MARK: Inbox (v1.6)
+
+    /// Aggregated activity the caller missed since `since` (missed-inbox card).
+    func inbox(since: Date) async throws -> InboxResponse {
+        try await request("GET", "/api/inbox", query: ["since": API.isoString(since)],
+                          as: InboxResponse.self)
+    }
+
     // MARK: Wordle duel
 
     @discardableResult
@@ -271,6 +307,17 @@ struct API {
                           as: PhotoResponse.self).photo
     }
 
+    /// PATCH caption and/or album. Double optionals distinguish "leave as-is"
+    /// (`.none`) from "clear" (`.some(nil)` → explicit JSON null).
+    @discardableResult
+    func patchPhoto(id: String, caption: String?? = nil, album: String?? = nil) async throws -> Photo {
+        var body: [String: Any?] = [:]
+        API.encodeNulls(&body, "caption", caption)
+        API.encodeNulls(&body, "album", album)
+        return try await request("PATCH", "/api/photos/\(id)", jsonBody: body,
+                                 as: PhotoResponse.self).photo
+    }
+
     // MARK: Love coupons
 
     func coupons() async throws -> [Coupon] {
@@ -278,11 +325,14 @@ struct API {
     }
 
     /// Creates a coupon FOR the partner (server resolves the receiver).
+    /// `expiresAt` is optional — past it the coupon can no longer be redeemed.
     @discardableResult
-    func createCoupon(title: String, emoji: String, note: String?) async throws -> Coupon {
-        try await request("POST", "/api/coupons",
-                          jsonBody: ["title": title, "emoji": emoji, "note": note],
-                          as: CouponResponse.self).coupon
+    func createCoupon(title: String, emoji: String, note: String?,
+                      expiresAt: Date? = nil) async throws -> Coupon {
+        var body: [String: Any?] = ["title": title, "emoji": emoji, "note": note]
+        if let expiresAt { body["expiresAt"] = API.isoString(expiresAt) }
+        return try await request("POST", "/api/coupons", jsonBody: body,
+                                 as: CouponResponse.self).coupon
     }
 
     /// Redeem a coupon that was made for me.
@@ -311,14 +361,17 @@ struct API {
                           as: SongResponse.self).song
     }
 
+    /// PATCH a song. `title` can only be replaced; artist/note/link are
+    /// double optionals so callers can CLEAR them with an explicit JSON null
+    /// (`.some(nil)`) or leave them untouched (`.none`) — see `encodeNulls`.
     @discardableResult
-    func updateSong(id: String, title: String? = nil, artist: String? = nil,
-                    note: String? = nil, link: String? = nil) async throws -> Song {
+    func updateSong(id: String, title: String? = nil, artist: String?? = nil,
+                    note: String?? = nil, link: String?? = nil) async throws -> Song {
         var body: [String: Any?] = [:]
         if let title { body["title"] = title }
-        if let artist { body["artist"] = artist }
-        if let note { body["note"] = note }
-        if let link { body["link"] = link }
+        API.encodeNulls(&body, "artist", artist)
+        API.encodeNulls(&body, "note", note)
+        API.encodeNulls(&body, "link", link)
         return try await request("PATCH", "/api/songs/\(id)", jsonBody: body,
                                  as: SongResponse.self).song
     }
@@ -484,6 +537,12 @@ struct API {
 
     func activeGame() async throws -> GameSession? {
         try await request("GET", "/api/games/active", as: GameResponse.self).game
+    }
+
+    /// v1.6: past game sessions (incl. results), newest first.
+    func games(limit: Int = 30) async throws -> [GameSession] {
+        try await request("GET", "/api/games", query: ["limit": String(limit)],
+                          as: GamesListResponse.self).games
     }
 
     // MARK: Stats

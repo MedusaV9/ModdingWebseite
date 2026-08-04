@@ -3,7 +3,31 @@ import Combine
 import PhotosUI
 import UIKit
 
-/// Shared photo gallery: grid, PhotosPicker upload with caption, fullscreen pager.
+/// Grid filter: everything, favorites, or one named album (dynamic —
+/// album chips are derived from the photos themselves).
+private enum GalleryFilter: Hashable {
+    case all, favorites
+    case album(String)
+
+    var title: String {
+        switch self {
+        case .all: return L10n.t("memories.gallery.filterAll")
+        case .favorites: return L10n.t("memories.gallery.filterFavorites")
+        case .album(let name): return "📁 " + name
+        }
+    }
+
+    func matches(_ photo: Photo) -> Bool {
+        switch self {
+        case .all: return true
+        case .favorites: return !(photo.favorites ?? []).isEmpty
+        case .album(let name): return photo.album == name
+        }
+    }
+}
+
+/// Shared photo gallery: grid, PhotosPicker upload with caption + album,
+/// album filter chips, fullscreen pager.
 struct GalleryView: View {
     @Environment(AppState.self) private var appState
 
@@ -16,18 +40,8 @@ struct GalleryView: View {
     @State private var celebrationDate: Date?
     @State private var celebrationTask: Task<Void, Never>?
     @State private var filter: GalleryFilter = .all
-
-    private enum GalleryFilter: String, CaseIterable, Identifiable {
-        case all, favorites
-        var id: String { rawValue }
-
-        var titleKey: String {
-            switch self {
-            case .all: return "memories.gallery.filterAll"
-            case .favorites: return "memories.gallery.filterFavorites"
-            }
-        }
-    }
+    @State private var albumPromptPhoto: Photo?
+    @State private var newAlbumName = ""
 
     private let columns = [
         GridItem(.flexible(), spacing: 6),
@@ -55,13 +69,26 @@ struct GalleryView: View {
             Task { await preparePhoto(item) }
         }
         .sheet(item: $pendingUpload) { pending in
-            CaptionSheet(pending: pending) { caption in
-                upload(pending, caption: caption)
+            CaptionSheet(pending: pending, albumSuggestions: albums) { caption, album in
+                upload(pending, caption: caption, album: album)
             }
         }
         .fullScreenCover(item: $pagerTarget) { photo in
-            PhotoPagerView(photos: $photos, startId: photo.id,
-                           favoritesOnly: filter == .favorites)
+            PhotoPagerView(photos: $photos, startId: photo.id, filter: filter)
+        }
+        .alert(L10n.t("memories.gallery.newAlbumTitle"),
+               isPresented: Binding(get: { albumPromptPhoto != nil },
+                                    set: { if !$0 { albumPromptPhoto = nil } }),
+               presenting: albumPromptPhoto) { photo in
+            TextField(L10n.t("memories.gallery.albumName"), text: $newAlbumName)
+            Button(L10n.t("common.save")) { move(photo, toAlbum: newAlbumName) }
+            Button(L10n.t("common.cancel"), role: .cancel) {}
+        }
+        .onChange(of: photos) { _, _ in
+            // The chip for an album disappears with its last photo — fall back.
+            if case .album(let name) = filter, !albums.contains(name) {
+                filter = .all
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: .serverEvent)) { note in
             guard let event = note.object as? ServerEvent else { return }
@@ -94,12 +121,22 @@ struct GalleryView: View {
 
     /// Photos matching the active filter (favorites = liked by either member).
     private var displayedPhotos: [Photo] {
-        switch filter {
-        case .all:
-            return photos
-        case .favorites:
-            return photos.filter { !($0.favorites ?? []).isEmpty }
+        photos.filter { filter.matches($0) }
+    }
+
+    /// Distinct album names across all photos, alphabetical.
+    private var albums: [String] {
+        var seen = Set<String>()
+        var names: [String] = []
+        for photo in photos {
+            guard let album = photo.album, !album.isEmpty, seen.insert(album).inserted else { continue }
+            names.append(album)
         }
+        return names.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+    }
+
+    private var allFilters: [GalleryFilter] {
+        [.all, .favorites] + albums.map { GalleryFilter.album($0) }
     }
 
     private var gridArea: some View {
@@ -118,13 +155,14 @@ struct GalleryView: View {
     }
 
     private var filterChips: some View {
-        HStack(spacing: 8) {
-            ForEach(GalleryFilter.allCases) { candidate in
-                filterChip(candidate)
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(allFilters, id: \.self) { candidate in
+                    filterChip(candidate)
+                }
             }
-            Spacer()
+            .padding(.horizontal, LayoutMetrics.s(12))
         }
-        .padding(.horizontal, LayoutMetrics.s(12))
         .padding(.top, LayoutMetrics.s(10))
     }
 
@@ -133,9 +171,10 @@ struct GalleryView: View {
             Haptics.shared.tap()
             withAnimation(.spring(response: 0.3)) { filter = candidate }
         } label: {
-            Text(L10n.t(candidate.titleKey))
+            Text(candidate.title)
                 .font(.system(.footnote, design: .rounded).weight(.semibold))
                 .foregroundStyle(filter == candidate ? .white : Theme.textSecondary)
+                .lineLimit(1)
                 .padding(.vertical, 7)
                 .padding(.horizontal, LayoutMetrics.s(14))
                 .background(
@@ -156,6 +195,7 @@ struct GalleryView: View {
                         GalleryCell(photo: photo, api: appState.api, memberId: appState.memberId)
                     }
                     .buttonStyle(.plain)
+                    .contextMenu { albumMenu(photo) }
                 }
             }
             .padding(.horizontal, LayoutMetrics.s(12))
@@ -163,6 +203,41 @@ struct GalleryView: View {
             .padding(.bottom, LayoutMetrics.s(96))
         }
         .refreshable { await loadPhotos() }
+    }
+
+    /// "Move to album…" context menu: pick an existing album, create a new
+    /// one, or take the photo out of its album.
+    @ViewBuilder
+    private func albumMenu(_ photo: Photo) -> some View {
+        Menu {
+            ForEach(albums, id: \.self) { name in
+                Button {
+                    move(photo, toAlbum: name)
+                } label: {
+                    if photo.album == name {
+                        Label(name, systemImage: "checkmark")
+                    } else {
+                        Text(name)
+                    }
+                }
+            }
+            if !albums.isEmpty { Divider() }
+            Button {
+                newAlbumName = ""
+                albumPromptPhoto = photo
+            } label: {
+                Label(L10n.t("memories.gallery.newAlbum"), systemImage: "plus")
+            }
+        } label: {
+            Label(L10n.t("memories.gallery.moveToAlbum"), systemImage: "folder")
+        }
+        if photo.album != nil {
+            Button(role: .destructive) {
+                move(photo, toAlbum: nil)
+            } label: {
+                Label(L10n.t("memories.gallery.removeFromAlbum"), systemImage: "folder.badge.minus")
+            }
+        }
     }
 
     private var floatingAddButton: some View {
@@ -242,10 +317,11 @@ struct GalleryView: View {
         }
     }
 
-    private func upload(_ pending: PendingUpload, caption: String) {
+    private func upload(_ pending: PendingUpload, caption: String, album: String) {
         guard let api = appState.api else { return }
         uploading = true
         let trimmed = caption.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedAlbum = album.trimmingCharacters(in: .whitespacesAndNewlines)
         Task {
             do {
                 let photo = try await api.uploadPhoto(jpeg: pending.jpeg,
@@ -257,11 +333,39 @@ struct GalleryView: View {
                 Haptics.shared.success()
                 appState.showToast(L10n.t("memories.gallery.uploaded"), style: .love)
                 celebrate()
+                // Album is a follow-up PATCH (upload itself is a raw JPEG POST).
+                // Best effort — the photo is already safely uploaded.
+                if !trimmedAlbum.isEmpty,
+                   let filed = try? await api.patchPhoto(id: photo.id, album: .some(trimmedAlbum)) {
+                    apply(filed)
+                }
                 await uploadThumbnail(for: photo, from: pending.image, api: api)
             } catch {
                 appState.handleAPIError(error)
             }
             uploading = false
+        }
+    }
+
+    /// PATCH the album (nil / empty = remove from its album, via explicit null).
+    private func move(_ photo: Photo, toAlbum album: String?) {
+        guard let api = appState.api else { return }
+        let trimmed = album?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let target: String? = (trimmed?.isEmpty ?? true) ? nil : trimmed
+        guard photo.album != target else { return }
+        Task {
+            do {
+                let updated = try await api.patchPhoto(id: photo.id, album: .some(target))
+                apply(updated)
+                Haptics.shared.success()
+                if let name = updated.album, !name.isEmpty {
+                    appState.showToast(L10n.t("memories.gallery.moved", ["name": name]), style: .success)
+                } else {
+                    appState.showToast(L10n.t("memories.gallery.removedFromAlbum"), style: .info)
+                }
+            } catch {
+                appState.handleAPIError(error)
+            }
         }
     }
 
@@ -408,33 +512,38 @@ private struct GalleryCell: View {
 private struct CaptionSheet: View {
     @Environment(\.dismiss) private var dismiss
     let pending: PendingUpload
-    let onUpload: (String) -> Void
+    let albumSuggestions: [String]
+    let onUpload: (String, String) -> Void
 
     @State private var caption = ""
+    @State private var album = ""
 
     var body: some View {
         NavigationStack {
             ZStack {
                 DreamyBackground(showStars: false)
-                VStack(spacing: LayoutMetrics.s(18)) {
-                    Image(uiImage: pending.image)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(maxHeight: 300)
-                        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-                        .shadow(color: .black.opacity(0.3), radius: 12, y: 5)
-                    TextField(L10n.t("memories.gallery.captionPlaceholder"), text: $caption, axis: .vertical)
-                        .textFieldStyle(DreamyFieldStyle())
-                        .lineLimit(1...3)
-                    Button(L10n.t("memories.gallery.upload")) {
-                        Haptics.shared.tap()
-                        dismiss()
-                        onUpload(caption)
+                ScrollView {
+                    VStack(spacing: LayoutMetrics.s(18)) {
+                        Image(uiImage: pending.image)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(maxHeight: 300)
+                            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                            .shadow(color: .black.opacity(0.3), radius: 12, y: 5)
+                        TextField(L10n.t("memories.gallery.captionPlaceholder"), text: $caption, axis: .vertical)
+                            .textFieldStyle(DreamyFieldStyle())
+                            .lineLimit(1...3)
+                        albumField
+                        Button(L10n.t("memories.gallery.upload")) {
+                            Haptics.shared.tap()
+                            dismiss()
+                            onUpload(caption, album)
+                        }
+                        .buttonStyle(PrimaryButtonStyle())
+                        Spacer()
                     }
-                    .buttonStyle(PrimaryButtonStyle())
-                    Spacer()
+                    .padding(LayoutMetrics.s(16))
                 }
-                .padding(LayoutMetrics.s(16))
             }
             .navigationTitle(L10n.t("memories.gallery.captionTitle"))
             .navigationBarTitleDisplayMode(.inline)
@@ -447,6 +556,38 @@ private struct CaptionSheet: View {
         }
         .presentationDetents([.large])
     }
+
+    private var albumField: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            TextField(L10n.t("memories.gallery.albumField"), text: $album)
+                .textFieldStyle(DreamyFieldStyle())
+                .submitLabel(.done)
+            if !albumSuggestions.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(albumSuggestions, id: \.self) { name in
+                            Button {
+                                Haptics.shared.tap()
+                                album = name
+                            } label: {
+                                Text("📁 " + name)
+                                    .font(.system(.footnote, design: .rounded).weight(.semibold))
+                                    .foregroundStyle(album == name ? .white : Theme.textSecondary)
+                                    .padding(.vertical, 7)
+                                    .padding(.horizontal, LayoutMetrics.s(12))
+                                    .background(
+                                        Capsule().fill(album == name
+                                                       ? Theme.pink.opacity(0.55)
+                                                       : Color.white.opacity(0.07))
+                                    )
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 // MARK: - Fullscreen pager
@@ -457,13 +598,15 @@ private struct PhotoPagerView: View {
 
     @Binding var photos: [Photo]
     let startId: String
-    let favoritesOnly: Bool
+    let filter: GalleryFilter
 
     @State private var currentId = ""
     /// Last known position of `currentId` within the visible slice — used to
     /// clamp to a neighbor when the current photo drops out of the slice.
     @State private var lastVisibleIndex = 0
     @State private var confirmDelete = false
+    @State private var editingCaption = false
+    @State private var captionDraft = ""
     @State private var busy = false
 
     var body: some View {
@@ -494,12 +637,17 @@ private struct PhotoPagerView: View {
             Button(L10n.t("common.delete"), role: .destructive) { deleteCurrent() }
             Button(L10n.t("common.cancel"), role: .cancel) {}
         }
+        .alert(L10n.t("memories.gallery.editCaption"), isPresented: $editingCaption) {
+            TextField(L10n.t("memories.gallery.captionPlaceholder"), text: $captionDraft)
+            Button(L10n.t("common.save")) { saveCaption() }
+            Button(L10n.t("common.cancel"), role: .cancel) {}
+        }
     }
 
     /// The slice the pager pages over — mirrors the grid filter. Derived from
     /// the master array so mutations (favorites, deletes) flow straight back.
     private var visiblePhotos: [Photo] {
-        favoritesOnly ? photos.filter { !($0.favorites ?? []).isEmpty } : photos
+        photos.filter { filter.matches($0) }
     }
 
     private var visibleIds: [String] {
@@ -561,6 +709,12 @@ private struct PhotoPagerView: View {
                 Text(uploadInfo(photo))
                     .font(.system(.caption, design: .rounded))
                     .foregroundStyle(Theme.textSecondary)
+                if let album = photo.album, !album.isEmpty {
+                    Text("📁 " + album)
+                        .font(.system(.caption2, design: .rounded).weight(.semibold))
+                        .foregroundStyle(Theme.textTertiary)
+                        .lineLimit(1)
+                }
             }
             Spacer()
         }
@@ -581,6 +735,10 @@ private struct PhotoPagerView: View {
                         .padding(10)
                 } else {
                     favoriteButton
+                    circleButton(icon: "pencil") {
+                        captionDraft = currentPhoto?.caption ?? ""
+                        editingCaption = true
+                    }
                     circleButton(icon: "square.and.arrow.down") { saveCurrent() }
                     if currentPhoto?.uploaderId == appState.memberId {
                         circleButton(icon: "trash") { confirmDelete = true }
@@ -668,6 +826,26 @@ private struct PhotoPagerView: View {
     private func merge(_ photo: Photo) {
         guard let idx = photos.firstIndex(where: { $0.id == photo.id }) else { return }
         photos[idx] = photo
+    }
+
+    /// PATCH the caption (empty draft = clear it via explicit null).
+    private func saveCaption() {
+        guard let photo = currentPhoto, let api = appState.api else { return }
+        let trimmed = captionDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        let target: String? = trimmed.isEmpty ? nil : trimmed
+        guard (photo.caption ?? "") != (target ?? "") else { return }
+        busy = true
+        Task {
+            do {
+                let updated = try await api.patchPhoto(id: photo.id, caption: .some(target))
+                merge(updated)
+                Haptics.shared.success()
+                appState.showToast(L10n.t("memories.gallery.captionSaved"), style: .success)
+            } catch {
+                appState.handleAPIError(error)
+            }
+            busy = false
+        }
     }
 
     private func deleteCurrent() {

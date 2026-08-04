@@ -17,6 +17,10 @@ struct DashboardView: View {
                     VStack(spacing: LayoutMetrics.s(16)) {
                         header
 
+                        if let inbox = appState.missedInbox, !inbox.isEmpty {
+                            missedInboxCard(inbox)
+                        }
+
                         if let milestone = monthiversary {
                             monthiversaryCard(milestone)
                         }
@@ -146,6 +150,106 @@ struct DashboardView: View {
             .glassCard(padding: 14)
         }
         .buttonStyle(.plain)
+    }
+
+    // MARK: "While you were away" (missed inbox)
+
+    /// Non-zero categories as (emoji, a11y label key, count) chips.
+    private func missedEntries(_ inbox: InboxResponse) -> [(key: String, emoji: String, count: Int)] {
+        [(key: "home.missed.messages", emoji: "💬", count: inbox.messageCount),
+         (key: "home.missed.touches", emoji: "💓", count: inbox.touchCount),
+         (key: "home.missed.photos", emoji: "📸", count: inbox.photoCount),
+         (key: "home.missed.coupons", emoji: "🎟️", count: inbox.couponCount),
+         (key: "home.missed.songs", emoji: "🎶", count: inbox.songCount),
+         (key: "home.missed.canvas", emoji: "🎨", count: inbox.canvasCount),
+         (key: "home.missed.daily", emoji: "❓", count: inbox.partnerAnsweredDaily ? 1 : 0)]
+            .filter { $0.count > 0 }
+    }
+
+    /// Preview of the newest missed message — only when the PARTNER sent it.
+    private func missedTeaser(_ inbox: InboxResponse) -> String? {
+        guard let last = inbox.messages?.last,
+              last.senderId != appState.memberId,
+              let text = last.text?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !text.isEmpty else { return nil }
+        return text
+    }
+
+    private func missedInboxCard(_ inbox: InboxResponse) -> some View {
+        VStack(alignment: .leading, spacing: LayoutMetrics.s(10)) {
+            HStack(spacing: LayoutMetrics.s(10)) {
+                Text("💤")
+                    .font(.scaled(26))
+                Text(L10n.t("home.missedTitle"))
+                    .font(.system(.headline, design: .rounded).weight(.bold))
+                    .foregroundStyle(Theme.textPrimary)
+                Spacer(minLength: 0)
+                Button {
+                    Haptics.shared.tap()
+                    withAnimation(.spring(response: 0.35)) {
+                        appState.missedInbox = nil
+                    }
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.scaled(11, weight: .bold))
+                        .foregroundStyle(Theme.textTertiary)
+                        .frame(width: LayoutMetrics.s(26), height: LayoutMetrics.s(26))
+                        .background(Circle().fill(Color.white.opacity(0.08)))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(L10n.t("common.close"))
+            }
+            HStack(spacing: 6) {
+                ForEach(missedEntries(inbox), id: \.key) { entry in
+                    HStack(spacing: 4) {
+                        Text(entry.emoji)
+                            .font(.scaled(13))
+                        Text("\(entry.count)")
+                            .font(.system(.caption, design: .rounded).weight(.bold))
+                            .foregroundStyle(Theme.textPrimary)
+                            .monospacedDigit()
+                    }
+                    .padding(.vertical, 4)
+                    .padding(.horizontal, LayoutMetrics.s(9))
+                    .background(
+                        Capsule()
+                            .fill(Theme.purple.opacity(0.22))
+                            .overlay(Capsule().strokeBorder(Theme.purple.opacity(0.45), lineWidth: 1))
+                    )
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("\(L10n.t(entry.key)): \(entry.count)")
+                }
+                Spacer(minLength: 0)
+            }
+            if let teaser = missedTeaser(inbox) {
+                Text("💬 „\(teaser)“")
+                    .font(.system(.caption, design: .rounded).weight(.semibold))
+                    .foregroundStyle(Theme.textSecondary)
+                    .lineLimit(1)
+            }
+            Text(L10n.t("home.missedBody"))
+                .font(.system(.caption, design: .rounded))
+                .foregroundStyle(Theme.textSecondary)
+        }
+        .glassCard(padding: 14)
+        .contentShape(RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous))
+        .onTapGesture {
+            openMissedInbox(inbox)
+        }
+    }
+
+    /// Tap = clear the card and jump to where most of the action happened
+    /// (touches & the daily answer already live here on the dashboard).
+    private func openMissedInbox(_ inbox: InboxResponse) {
+        Haptics.shared.tap()
+        withAnimation(.spring(response: 0.35)) {
+            appState.missedInbox = nil
+        }
+        if inbox.messageCount > 0 {
+            appState.activeTab = .chat
+        } else if inbox.photoCount + inbox.couponCount + inbox.songCount + inbox.canvasCount > 0 {
+            appState.activeTab = .memories
+        }
     }
 
     // MARK: Header

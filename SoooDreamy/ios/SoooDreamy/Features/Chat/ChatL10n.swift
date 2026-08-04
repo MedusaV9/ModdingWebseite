@@ -58,6 +58,12 @@ enum ChatL10n {
         "chat.you": LText(de: "Du", en: "You"),
         "chat.copy": LText(de: "Kopieren", en: "Copy"),
         "chat.copied": LText(de: "Kopiert!", en: "Copied!"),
+        "chat.deleteMessage": LText(de: "Nachricht löschen", en: "Delete message"),
+        "chat.deleted": LText(de: "Nachricht gelöscht", en: "Message deleted"),
+
+        // Read receipts (a11y labels for the bubble checkmarks)
+        "chat.receipt.sent": LText(de: "Gesendet", en: "Sent"),
+        "chat.receipt.read": LText(de: "Gelesen", en: "Read"),
         "chat.read": LText(de: "Lesen", en: "Read"),
         "chat.react": LText(de: "Reagieren …", en: "React …"),
         "chat.reactWith": LText(de: "Mit {emoji} reagieren", en: "React with {emoji}"),

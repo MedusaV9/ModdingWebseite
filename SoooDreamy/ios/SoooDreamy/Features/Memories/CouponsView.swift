@@ -56,14 +56,19 @@ struct CouponsView: View {
 
     // MARK: Derived lists
 
-    /// Coupons made for me — unredeemed first, newest first within each group.
+    /// Coupons made for me — redeemable first, then expired, then redeemed;
+    /// newest first within each group.
     private var forMe: [Coupon] {
-        coupons
+        func rank(_ coupon: Coupon) -> Int {
+            if coupon.redeemedAt != nil { return 2 }
+            return coupon.isExpired() ? 1 : 0
+        }
+        return coupons
             .filter { $0.forMember == appState.memberId }
             .sorted { lhs, rhs in
-                if (lhs.redeemedAt == nil) != (rhs.redeemedAt == nil) {
-                    return lhs.redeemedAt == nil
-                }
+                let lhsRank = rank(lhs)
+                let rhsRank = rank(rhs)
+                if lhsRank != rhsRank { return lhsRank < rhsRank }
                 return lhs.createdAt > rhs.createdAt
             }
     }
@@ -148,8 +153,17 @@ struct CouponsView: View {
 
     // MARK: Voucher card (for me)
 
+    /// The minute-level clock keeps countdowns fresh and flips a card into
+    /// its expired look the moment its expiry passes.
     private func voucherCard(_ coupon: Coupon) -> some View {
-        let redeemed = coupon.redeemedAt != nil
+        TimelineView(.everyMinute) { timeline in
+            voucherBody(coupon, now: timeline.date)
+        }
+    }
+
+    private func voucherBody(_ coupon: Coupon, now: Date) -> some View {
+        let expired = coupon.isExpired(at: now)
+        let inactive = coupon.redeemedAt != nil || expired
         return VStack(spacing: LayoutMetrics.s(12)) {
             HStack(spacing: LayoutMetrics.s(14)) {
                 Text(coupon.emoji)
@@ -157,7 +171,7 @@ struct CouponsView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(coupon.title)
                         .font(.system(.headline, design: .rounded).weight(.bold))
-                        .foregroundStyle(redeemed ? Theme.textSecondary : Theme.textPrimary)
+                        .foregroundStyle(inactive ? Theme.textSecondary : Theme.textPrimary)
                         .fixedSize(horizontal: false, vertical: true)
                     if let note = coupon.note, !note.isEmpty {
                         Text(note)
@@ -173,7 +187,12 @@ struct CouponsView: View {
             }
             if let redeemedAt = coupon.redeemedAt {
                 redeemedStamp(redeemedAt)
+            } else if expired, let expiresAt = coupon.expiresAt {
+                expiredStamp(expiresAt)
             } else {
+                if let expiresAt = coupon.expiresAt {
+                    countdownChip(expiresAt, now: now)
+                }
                 Button(L10n.t("memories.coupons.redeem")) {
                     Haptics.shared.tap()
                     redeemTarget = coupon
@@ -185,17 +204,17 @@ struct CouponsView: View {
         .padding(LayoutMetrics.s(16))
         .background(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(LinearGradient(colors: [Theme.pink.opacity(redeemed ? 0.06 : 0.16),
-                                              Theme.purple.opacity(redeemed ? 0.05 : 0.12)],
+                .fill(LinearGradient(colors: [Theme.pink.opacity(inactive ? 0.06 : 0.16),
+                                              Theme.purple.opacity(inactive ? 0.05 : 0.12)],
                                      startPoint: .topLeading, endPoint: .bottomTrailing))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .strokeBorder(Theme.pink.opacity(redeemed ? 0.25 : 0.55),
+                .strokeBorder(Theme.pink.opacity(inactive ? 0.25 : 0.55),
                               style: StrokeStyle(lineWidth: 1.5, dash: [7, 5]))
         )
-        .saturation(redeemed ? 0.4 : 1)
-        .opacity(redeemed ? 0.75 : 1)
+        .saturation(inactive ? 0.4 : 1)
+        .opacity(inactive ? 0.75 : 1)
     }
 
     private func redeemedStamp(_ date: Date) -> some View {
@@ -211,6 +230,50 @@ struct CouponsView: View {
         .padding(.horizontal, LayoutMetrics.s(12))
         .background(Capsule().fill(Theme.mint.opacity(0.14)))
         .rotationEffect(.degrees(-2))
+    }
+
+    private func expiredStamp(_ date: Date) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "hourglass.bottomhalf.filled")
+                .font(.scaled(13, weight: .bold))
+            Text(L10n.t("memories.coupons.expiredAt",
+                        ["date": date.formatted(date: .abbreviated, time: .omitted)]))
+                .font(.system(.caption, design: .rounded).weight(.bold))
+        }
+        .foregroundStyle(Color(hex: "F87171"))
+        .padding(.vertical, 6)
+        .padding(.horizontal, LayoutMetrics.s(12))
+        .background(Capsule().fill(Color(hex: "F87171").opacity(0.14)))
+        .rotationEffect(.degrees(-2))
+    }
+
+    private func countdownChip(_ expiresAt: Date, now: Date) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: "hourglass")
+                .font(.scaled(11, weight: .bold))
+            Text(expiryCountdown(expiresAt, now: now))
+                .font(.system(.caption2, design: .rounded).weight(.bold))
+        }
+        .foregroundStyle(Theme.gold)
+        .padding(.vertical, 5)
+        .padding(.horizontal, LayoutMetrics.s(10))
+        .background(Capsule().fill(Theme.gold.opacity(0.14)))
+    }
+
+    /// Short "time left" label: minutes under an hour, hours under two days,
+    /// then days (rounded up).
+    private func expiryCountdown(_ expiresAt: Date, now: Date) -> String {
+        let remaining = expiresAt.timeIntervalSince(now)
+        let minutes = max(Int(remaining / 60), 1)
+        if minutes < 60 {
+            return L10n.t("memories.coupons.expiresInMinutes", ["n": String(minutes)])
+        }
+        let hours = minutes / 60
+        if hours < 48 {
+            return L10n.t("memories.coupons.expiresInHours", ["n": String(hours)])
+        }
+        let days = Int((remaining / 86_400).rounded(.up))
+        return L10n.t("memories.coupons.expiresInDays", ["n": String(days)])
     }
 
     private func fromInfo(_ coupon: Coupon) -> String {
@@ -234,6 +297,11 @@ struct CouponsView: View {
                 Text(forInfo(coupon))
                     .font(.system(.caption2, design: .rounded))
                     .foregroundStyle(Theme.textTertiary)
+                if coupon.redeemedAt == nil, !coupon.isExpired(), let expiresAt = coupon.expiresAt {
+                    Text(expiryCountdown(expiresAt, now: Date()))
+                        .font(.system(.caption2, design: .rounded).weight(.semibold))
+                        .foregroundStyle(Theme.gold)
+                }
             }
             Spacer()
             statusChip(coupon)
@@ -258,6 +326,8 @@ struct CouponsView: View {
     private func statusChip(_ coupon: Coupon) -> some View {
         if coupon.redeemedAt != nil {
             PillTag(text: L10n.t("memories.coupons.statusRedeemed"), tint: Theme.mint)
+        } else if coupon.isExpired() {
+            PillTag(text: L10n.t("memories.coupons.statusExpired"), tint: Color(hex: "F87171"))
         } else {
             PillTag(text: L10n.t("memories.coupons.statusOpen"), tint: Theme.gold)
         }
@@ -319,7 +389,14 @@ struct CouponsView: View {
                 Haptics.shared.success()
                 celebrate()
             } catch {
-                appState.handleAPIError(error)
+                // Server v1.6: redeem answers 409 `expired` past `expiresAt`
+                // (clock skew can let a locally-fresh coupon expire server-side).
+                if case APIError.http(let status, let code, _) = error, status == 409, code == "expired" {
+                    appState.showToast(L10n.t("memories.coupons.expiredToast"), style: .error)
+                    await loadCoupons()
+                } else {
+                    appState.handleAPIError(error)
+                }
             }
         }
     }
@@ -392,6 +469,8 @@ private struct CouponCreateSheet: View {
     @State private var title = ""
     @State private var note = ""
     @State private var emoji = "🎟️"
+    @State private var hasExpiry = false
+    @State private var expiryDate = Date().addingTimeInterval(7 * 86_400)
     @State private var saving = false
 
     private static let emojis = [
@@ -430,6 +509,7 @@ private struct CouponCreateSheet: View {
                         titleField
                         noteField
                         emojiSection
+                        expirySection
                         createButton
                     }
                     .padding(LayoutMetrics.s(16))
@@ -503,6 +583,29 @@ private struct CouponCreateSheet: View {
         }
     }
 
+    private var expirySection: some View {
+        VStack(alignment: .leading, spacing: LayoutMetrics.s(10)) {
+            Toggle(isOn: $hasExpiry.animation(.spring(response: 0.3))) {
+                Text(L10n.t("memories.coupons.expiryToggle"))
+                    .font(.system(.body, design: .rounded).weight(.semibold))
+                    .foregroundStyle(Theme.textPrimary)
+            }
+            .tint(Theme.pink)
+            if hasExpiry {
+                DatePicker(L10n.t("memories.coupons.expiryPicker"),
+                           selection: $expiryDate,
+                           in: Date()...,
+                           displayedComponents: [.date, .hourAndMinute])
+                    .datePickerStyle(.compact)
+                    .tint(Theme.pink)
+                    .environment(\.colorScheme, .dark)
+                    .font(.system(.subheadline, design: .rounded).weight(.semibold))
+                    .foregroundStyle(Theme.textSecondary)
+            }
+        }
+        .glassCard(padding: 14)
+    }
+
     private var createButton: some View {
         Button {
             create()
@@ -529,7 +632,8 @@ private struct CouponCreateSheet: View {
             do {
                 let coupon = try await api.createCoupon(title: trimmedTitle,
                                                         emoji: emoji,
-                                                        note: trimmedNote.isEmpty ? nil : trimmedNote)
+                                                        note: trimmedNote.isEmpty ? nil : trimmedNote,
+                                                        expiresAt: hasExpiry ? expiryDate : nil)
                 onCreated(coupon)
                 SoundEngine.shared.play(.chime)
                 Haptics.shared.success()

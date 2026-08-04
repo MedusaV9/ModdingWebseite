@@ -100,20 +100,37 @@ struct CanvasWidgetView: View {
         // Widths were drawn against the app's ~330pt board; scale them down
         // for small widgets so doodles keep their proportions.
         let scale = max(0.4, min(size.width, size.height) / 330)
-        var width = stroke.width * scale
-        var color = Color(hexString: stroke.color)
+        let width = stroke.width * scale
+        let color = Color(hexString: stroke.color)
+
+        func solid(_ lineWidth: Double) -> StrokeStyle {
+            StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round)
+        }
+
+        // Mirrors CanvasView.drawStroke — tool is a free string, unknown
+        // tools fall back to a plain pen stroke.
         switch stroke.tool {
         case "marker":
-            width *= 2.5
-            color = color.opacity(0.6)
+            context.stroke(path, with: .color(color.opacity(0.6)), style: solid(width * 2.5))
         case "eraser":
-            width *= 2.5
-            color = Self.boardColor
+            context.stroke(path, with: .color(Self.boardColor), style: solid(width * 2.5))
+        case "glow":
+            var halo = context
+            halo.addFilter(.shadow(color: color.opacity(0.85), radius: width * 1.4))
+            halo.stroke(path, with: .color(color.opacity(0.55)), style: solid(width * 1.6))
+            context.stroke(path, with: .color(color), style: solid(width))
+        case "dotted":
+            context.stroke(path, with: .color(color),
+                           style: StrokeStyle(lineWidth: width * 1.4, lineCap: .round,
+                                              lineJoin: .round, dash: [0.1, width * 2.8]))
+        case "calligraphy":
+            let offset = max(width * 0.45, 1.2)
+            let slanted = path.applying(CGAffineTransform(translationX: offset, y: -offset))
+            context.stroke(path, with: .color(color), style: solid(width * 0.75))
+            context.stroke(slanted, with: .color(color.opacity(0.85)), style: solid(width * 0.55))
         default:
-            break
+            context.stroke(path, with: .color(color), style: solid(width))
         }
-        context.stroke(path, with: .color(color),
-                       style: StrokeStyle(lineWidth: width, lineCap: .round, lineJoin: .round))
     }
 
     private var emptyBoard: some View {
