@@ -207,7 +207,7 @@ struct CanvasStroke: Codable, Identifiable, Hashable {
 }
 
 enum GameKind: String, Codable, CaseIterable, Identifiable {
-    case quiz, thisorthat, wouldyourather, truthordare, questions36
+    case quiz, thisorthat, wouldyourather, truthordare, questions36, emojiriddle
     var id: String { rawValue }
 }
 

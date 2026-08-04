@@ -79,3 +79,37 @@ enum ContentPack {
         return list[Int(seed % UInt64(list.count))]
     }
 }
+
+/// Pure deck derivation for the LIVE (two-phone) emoji riddle mode: both
+/// clients turn the shared create payload (seed + category bitmask + round
+/// count) into the IDENTICAL riddle deck. Kept UI-free here so the Linux
+/// logic tests can pin the determinism the multiplayer protocol relies on.
+enum EmojiRiddleDeck {
+    /// Canonical category order — the payload's "cats" bitmask indexes into this.
+    static let categories = ["movie", "song", "place", "food", "couple", "activity"]
+
+    static func categoryMask(for selected: Set<String>) -> Int {
+        var mask = 0
+        for (index, category) in categories.enumerated() where selected.contains(category) {
+            mask |= 1 << index
+        }
+        return mask
+    }
+
+    /// Bit i set = category i in play; 0 (or a mask matching nothing) = all.
+    static func selectedCategories(mask: Int) -> Set<String> {
+        guard mask > 0 else { return Set(categories) }
+        var result: Set<String> = []
+        for (index, category) in categories.enumerated() where mask & (1 << index) != 0 {
+            result.insert(category)
+        }
+        return result.isEmpty ? Set(categories) : result
+    }
+
+    /// Deterministic session deck: filter by mask, seeded shuffle, cap at rounds.
+    static func deck(seed: Int, mask: Int, rounds: Int) -> [EmojiRiddle] {
+        let cats = selectedCategories(mask: mask)
+        let pool = ContentPack.emojiRiddles.filter { cats.contains($0.category) }
+        return Array(pool.seededShuffled(seed: seed).prefix(max(rounds, 1)))
+    }
+}

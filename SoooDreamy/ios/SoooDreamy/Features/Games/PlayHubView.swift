@@ -319,7 +319,7 @@ struct PlayHubView: View {
         GameCardInfo(destination: .wouldyourather, emoji: "🤯", tint: Theme.indigo, multiplayer: true),
         GameCardInfo(destination: .truthordare, emoji: "🎭", tint: Theme.rose, multiplayer: false),
         GameCardInfo(destination: .questions36, emoji: "💫", tint: Theme.blue, multiplayer: false),
-        GameCardInfo(destination: .emojiriddle, emoji: "🧩", tint: Theme.gold, multiplayer: false)
+        GameCardInfo(destination: .emojiriddle, emoji: "🧩", tint: Theme.gold, multiplayer: true)
     ]
 
     private var gameGrid: some View {
@@ -408,7 +408,7 @@ struct PlayHubView: View {
         case .questions36:
             Questions36View()
         case .emojiriddle:
-            EmojiRiddleView()
+            EmojiRiddleView(engine: engine)
         case .dateideas:
             DateIdeasView()
         case .record:
@@ -423,6 +423,7 @@ struct PlayHubView: View {
         case .wouldyourather: return .wouldyourather
         case .truthordare: return .truthordare
         case .questions36: return .questions36
+        case .emojiriddle: return .emojiriddle
         }
     }
 

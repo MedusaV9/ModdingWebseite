@@ -156,6 +156,18 @@ extension ContentPack {
         EmojiRiddle(id: 137, emojis: "🎢🎡🍭", answer: LText(de: "Freizeitpark", en: "Amusement park"), category: "activity"),
         EmojiRiddle(id: 138, emojis: "🧺🌳🥪", answer: LText(de: "Picknick", en: "Picnic"), category: "activity"),
         EmojiRiddle(id: 139, emojis: "🔭🌌✨", answer: LText(de: "Sterne gucken", en: "Stargazing"), category: "activity"),
-        EmojiRiddle(id: 140, emojis: "🧖♨️💆", answer: LText(de: "Wellness", en: "Spa day"), category: "activity")
+        EmojiRiddle(id: 140, emojis: "🧖♨️💆", answer: LText(de: "Wellness", en: "Spa day"), category: "activity"),
+        EmojiRiddle(id: 141, emojis: "💚👹🐴", answer: LText(de: "Shrek", en: "Shrek"), category: "movie"),
+        EmojiRiddle(id: 142, emojis: "🦁🦓🦒🐧", answer: LText(de: "Madagascar", en: "Madagascar"), category: "movie"),
+        EmojiRiddle(id: 143, emojis: "❄️👸🎶", answer: LText(de: "Let It Go", en: "Let It Go"), category: "song"),
+        EmojiRiddle(id: 144, emojis: "👑🎸🎭", answer: LText(de: "Bohemian Rhapsody", en: "Bohemian Rhapsody"), category: "song"),
+        EmojiRiddle(id: 145, emojis: "🦘🐨🏄", answer: LText(de: "Australien", en: "Australia"), category: "place"),
+        EmojiRiddle(id: 146, emojis: "🛶🌉🎭", answer: LText(de: "Venedig", en: "Venice"), category: "place"),
+        EmojiRiddle(id: 147, emojis: "🌭🍛🍟", answer: LText(de: "Currywurst", en: "Currywurst"), category: "food"),
+        EmojiRiddle(id: 148, emojis: "🥛🍓🥤", answer: LText(de: "Milchshake", en: "Milkshake"), category: "food"),
+        EmojiRiddle(id: 149, emojis: "👫💞🚶", answer: LText(de: "Händchenhalten", en: "Holding hands"), category: "couple"),
+        EmojiRiddle(id: 150, emojis: "🌙😘💤", answer: LText(de: "Gute-Nacht-Kuss", en: "Goodnight kiss"), category: "couple"),
+        EmojiRiddle(id: 151, emojis: "⛸️❄️🧤", answer: LText(de: "Schlittschuhlaufen", en: "Ice skating"), category: "activity"),
+        EmojiRiddle(id: 152, emojis: "⛳🏌️🌈", answer: LText(de: "Minigolf", en: "Mini golf"), category: "activity")
     ]
 }

@@ -370,9 +370,15 @@ struct DashboardView: View {
                         .font(.system(.caption, design: .rounded).weight(.semibold))
                         .foregroundStyle(Theme.mint)
                 } else if let lastSeen = appState.partner?.lastSeenAt {
-                    Text(L10n.t("home.lastSeen", ["time": lastSeen.formatted(.relative(presentation: .named))]))
-                        .font(.system(.caption, design: .rounded))
-                        .foregroundStyle(Theme.textTertiary)
+                    // Compact app-language relative time + clock icon — easier
+                    // to spot than the old locale-driven system phrasing.
+                    HStack(spacing: 4) {
+                        Image(systemName: "clock")
+                            .font(.scaled(9, weight: .semibold))
+                        Text(L10n.t("home.lastSeen", ["time": L10n.relativeShort(lastSeen)]))
+                            .font(.system(.caption, design: .rounded).weight(.semibold))
+                    }
+                    .foregroundStyle(Theme.textSecondary)
                 } else {
                     Text(L10n.t("home.offline"))
                         .font(.system(.caption, design: .rounded))
@@ -459,7 +465,7 @@ struct DashboardView: View {
             HStack {
                 SectionHeader(title: L10n.t("home.dailyQuestion"))
                 if let streak = appState.dailyEntry?.streak, streak > 1 {
-                    PillTag(text: "🔥 " + L10n.t("home.streak", ["n": String(streak)]), tint: Theme.gold)
+                    StreakFirePill(streak: streak)
                 }
             }
 
@@ -576,6 +582,40 @@ struct DashboardView: View {
         .glassCard(padding: 16)
         .onTapGesture {
             appState.activeTab = .memories
+        }
+    }
+}
+
+// MARK: - Streak pill
+
+/// Daily-question streak pill; from a 3-day streak on, the flame gently
+/// pulses to celebrate that the streak is worth protecting.
+struct StreakFirePill: View {
+    let streak: Int
+
+    @State private var pulsing = false
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Text("🔥")
+                .font(.scaled(12))
+                .scaleEffect(pulsing ? 1.3 : 1.0)
+                .animation(pulsing
+                           ? .easeInOut(duration: 0.7).repeatForever(autoreverses: true)
+                           : .default,
+                           value: pulsing)
+            Text(L10n.t("home.streak", ["n": String(streak)]))
+                .font(.system(.caption, design: .rounded).weight(.semibold))
+                .foregroundStyle(Theme.textPrimary)
+        }
+        .padding(.vertical, 5)
+        .padding(.horizontal, LayoutMetrics.s(11))
+        .background(Capsule().fill(Theme.gold.opacity(0.30)))
+        .onAppear {
+            pulsing = streak >= 3
+        }
+        .onChange(of: streak) { _, newValue in
+            pulsing = newValue >= 3
         }
     }
 }

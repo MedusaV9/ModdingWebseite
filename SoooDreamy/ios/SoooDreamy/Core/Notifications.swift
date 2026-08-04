@@ -295,4 +295,62 @@ enum ReminderManager {
             return true
         }
     }
+
+    // MARK: Streak guard ("streak at risk" late-evening nudge)
+
+    static let streakIdentifier = "sooodreamy.streakReminder"
+    private static let streakEnabledKey = "sooodreamy.streakReminderEnabled"
+
+    /// Fixed late-evening slot — deliberately after the regular reminder's
+    /// default (20:00), acting as a last call before the day (and streak) ends.
+    static let streakGuardHour = 21
+    static let streakGuardMinute = 30
+
+    static var isStreakGuardEnabled: Bool {
+        UserDefaults.standard.bool(forKey: streakEnabledKey)
+    }
+
+    static func setStreakGuardEnabled(_ enabled: Bool, entry: DailyEntry?) async -> Bool {
+        if enabled {
+            guard await CoupleNotify.requestAuthorizationIfNeeded() else {
+                UserDefaults.standard.set(false, forKey: streakEnabledKey)
+                return false
+            }
+        }
+        UserDefaults.standard.set(enabled, forKey: streakEnabledKey)
+        await syncStreakGuard(entry: entry)
+        return true
+    }
+
+    /// (Re-)schedules tonight's ONE-SHOT "streak at risk" nudge from the
+    /// latest daily entry. Called on every dailyEntry change: answering
+    /// today's question cancels it, an unanswered day with a running streak
+    /// re-arms it. The server keeps yesterday's streak alive until midnight,
+    /// so `streak > 0` + `myAnswer == nil` is exactly the at-risk state.
+    static func syncStreakGuard(entry: DailyEntry?) async {
+        let center = UNUserNotificationCenter.current()
+        center.removePendingNotificationRequests(withIdentifiers: [streakIdentifier])
+        guard isStreakGuardEnabled,
+              let entry,
+              entry.dateKey == SharedDates.todayKey(),
+              entry.myAnswer == nil,
+              entry.streak > 0 else { return }
+        // Only schedule while tonight's slot is still ahead — firing
+        // tomorrow about "today's" streak would be misleading.
+        var comps = SharedDates.calendar.dateComponents([.year, .month, .day], from: Date())
+        comps.hour = streakGuardHour
+        comps.minute = streakGuardMinute
+        guard let fireDate = SharedDates.calendar.date(from: comps),
+              fireDate.timeIntervalSinceNow > 60 else { return }
+        let content = UNMutableNotificationContent()
+        content.title = L10n.t("notif.streak.title")
+        content.body = L10n.t("notif.streak.body", ["n": String(entry.streak)])
+        content.sound = NotificationPrefs.globalSound.unSound
+        content.userInfo = [CoupleNotify.linkKey: "sooodreamy://daily"]
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: fireDate.timeIntervalSinceNow,
+                                                        repeats: false)
+        let request = UNNotificationRequest(identifier: streakIdentifier,
+                                            content: content, trigger: trigger)
+        try? await center.add(request)
+    }
 }

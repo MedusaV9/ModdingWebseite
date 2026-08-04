@@ -84,7 +84,7 @@ struct GamesRecordView: View {
     private func outcome(of game: GameSession) -> Outcome? {
         guard let kind = game.kind, let result = game.result else { return nil }
         switch kind {
-        case .quiz:
+        case .quiz, .emojiriddle:
             guard let scores = result["scores"]?.objectValue else { return nil }
             let mine = appState.memberId.flatMap { scores[$0]?.intValue } ?? 0
             let partner = scores.first { $0.key != appState.memberId }?.value.intValue ?? 0
@@ -176,7 +176,7 @@ struct GamesRecordView: View {
 
     private static let kindEmoji: [GameKind: String] = [
         .quiz: "🧠", .thisorthat: "⚡️", .wouldyourather: "🤯",
-        .truthordare: "🎭", .questions36: "💫"
+        .truthordare: "🎭", .questions36: "💫", .emojiriddle: "🧩"
     ]
 
     private var gameList: some View {

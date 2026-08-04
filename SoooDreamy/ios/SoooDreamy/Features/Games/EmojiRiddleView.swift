@@ -1,19 +1,24 @@
 import SwiftUI
+import Combine
 
-// MARK: - Emoji-Rätsel 🧩 (local pass-and-play party game)
+// MARK: - Emoji-Rätsel 🧩 (local pass-and-play party game + live mode)
 // Both partners look at the same screen, shout their guess, and whoever
 // was first taps their own name to claim the point. Works solo-with-friends
 // too: without a partner the second player is a generic "Team 2".
+// With a paired partner the setup also offers the LIVE two-phone mode
+// (EmojiRiddleLiveView) played via the game-session relay.
 
 struct EmojiRiddleView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
 
+    let engine: GameEngine
+
     private enum Stage {
         case setup, playing, finished
     }
 
-    private static let categories = ["movie", "song", "place", "food", "couple", "activity"]
+    private static let categories = EmojiRiddleLive.categories
     private static let categoryEmoji: [String: String] = [
         "movie": "🎬", "song": "🎵", "place": "🌍",
         "food": "🍕", "couple": "💞", "activity": "🎯"
@@ -22,7 +27,7 @@ struct EmojiRiddleView: View {
 
     @State private var stage = Stage.setup
     @State private var roundCount = 15
-    @State private var selectedCategories = Set(EmojiRiddleView.categories)
+    @State private var selectedCategories = Set(EmojiRiddleLive.categories)
     @State private var deck: [EmojiRiddle] = []
     @State private var cursor = 0
     @State private var scores = [0, 0]
@@ -54,6 +59,43 @@ struct EmojiRiddleView: View {
     var body: some View {
         ZStack {
             DreamyBackground()
+            if isLive {
+                EmojiRiddleLiveView(engine: engine)
+            } else {
+                localContent
+            }
+        }
+        .navigationTitle(L10n.t("games.emoji.title"))
+        .navigationBarTitleDisplayMode(.inline)
+        .onReceive(NotificationCenter.default.publisher(for: .serverEvent)) { note in
+            if let event = note.object as? ServerEvent {
+                engine.handle(event)
+            }
+        }
+        .task {
+            engine.onError = { [weak appState] error in
+                appState?.handleAPIError(error)
+            }
+            if engine.session == nil {
+                await engine.resume(api: appState.api)
+            }
+        }
+    }
+
+    /// Live sessions take over the screen; ended sessions only keep it when
+    /// they actually finished (their end screen) — a cancelled invitation
+    /// falls back to the local pass-and-play mode.
+    private var isLive: Bool {
+        guard let session = engine.session, session.kind == .emojiriddle else { return false }
+        if session.state == "ended" {
+            return EmojiRiddleLive.finished(engine: engine,
+                                            memberIds: (appState.couple?.members.map(\.id) ?? []).sorted())
+        }
+        return true
+    }
+
+    private var localContent: some View {
+        ZStack {
             switch stage {
             case .setup:
                 setupScreen
@@ -67,8 +109,6 @@ struct EmojiRiddleView: View {
                     .allowsHitTesting(false)
             }
         }
-        .navigationTitle(L10n.t("games.emoji.title"))
-        .navigationBarTitleDisplayMode(.inline)
     }
 
     // MARK: Setup
@@ -79,13 +119,41 @@ struct EmojiRiddleView: View {
                 explainerCard
                 roundsCard
                 categoriesCard
-                Button(action: start) {
-                    Text(L10n.t("games.emoji.start"))
+                if appState.partner != nil {
+                    Button(action: startLive) {
+                        Text(L10n.t("games.emoji.playLive"))
+                    }
+                    .buttonStyle(PrimaryButtonStyle())
+                    .disabled(selectedCategories.isEmpty || engine.busy)
+                    Button(action: start) {
+                        Text(L10n.t("games.emoji.playLocal"))
+                    }
+                    .buttonStyle(SecondaryButtonStyle())
+                    .disabled(selectedCategories.isEmpty)
+                } else {
+                    Button(action: start) {
+                        Text(L10n.t("games.emoji.start"))
+                    }
+                    .buttonStyle(PrimaryButtonStyle())
+                    .disabled(selectedCategories.isEmpty)
                 }
-                .buttonStyle(PrimaryButtonStyle())
-                .disabled(selectedCategories.isEmpty)
             }
             .padding(LayoutMetrics.s(16))
+        }
+    }
+
+    /// Creates a live two-phone session over the game relay; the seed +
+    /// options in the payload let both clients derive the identical deck.
+    private func startLive() {
+        guard !engine.busy else { return }
+        let options = ["rounds": roundCount,
+                       "cats": EmojiRiddleLive.categoryMask(for: selectedCategories)]
+        Task {
+            let payload = GameEngine.makePayload(options: options)
+            if await engine.create(api: appState.api, type: .emojiriddle, payload: payload) {
+                SoundEngine.shared.play(.pop)
+                Haptics.shared.tap()
+            }
         }
     }
 

@@ -190,6 +190,14 @@ extension ContentPack {
         DailyQuestion(id: 182, text: LText(de: "Was macht dir gerade ein bisschen Sorgen — und wie kann ich helfen?", en: "What's worrying you a little at the moment — and how can I help?")),
         DailyQuestion(id: 183, text: LText(de: "Welcher Tag mit mir würde als „bester Tag ever“ in dein Tagebuch kommen?", en: "Which day with me would go down in your diary as the \"best day ever\"?")),
         DailyQuestion(id: 184, text: LText(de: "Was war heute dein Soundtrack — welcher Song lief rauf und runter?", en: "What was your soundtrack today — which song was on repeat?")),
-        DailyQuestion(id: 185, text: LText(de: "Was möchtest du mir sagen, bevor der Tag zu Ende geht?", en: "What do you want to tell me before the day ends?"))
+        DailyQuestion(id: 185, text: LText(de: "Was möchtest du mir sagen, bevor der Tag zu Ende geht?", en: "What do you want to tell me before the day ends?")),
+        DailyQuestion(id: 186, text: LText(de: "Welches Emoji beschreibt unsere Beziehung diese Woche am besten — und warum?", en: "Which emoji describes our relationship this week best — and why?")),
+        DailyQuestion(id: 187, text: LText(de: "Wenn wir jetzt sofort ins Auto steigen würden — wohin sollte unser Spontan-Trip gehen?", en: "If we hopped in the car right now — where should our spontaneous trip take us?")),
+        DailyQuestion(id: 188, text: LText(de: "Welche kleine Geste von mir sollte ich viel öfter machen?", en: "Which little gesture of mine should I do way more often?")),
+        DailyQuestion(id: 189, text: LText(de: "Womit kann ich dich nach einem anstrengenden Tag am schnellsten aufmuntern?", en: "What's the fastest way for me to cheer you up after an exhausting day?")),
+        DailyQuestion(id: 190, text: LText(de: "Welcher Song müsste im Abspann eines Films über uns laufen?", en: "Which song would have to play over the closing credits of a movie about us?")),
+        DailyQuestion(id: 191, text: LText(de: "Welche Frage wolltest du mir immer schon stellen, hast dich aber nie getraut?", en: "Which question have you always wanted to ask me but never dared to?")),
+        DailyQuestion(id: 192, text: LText(de: "Beschreibe uns als Paar in genau drei Worten.", en: "Describe us as a couple in exactly three words.")),
+        DailyQuestion(id: 193, text: LText(de: "Wenn heute unser erstes Date gewesen wäre — was hätte dich von einem zweiten überzeugt?", en: "If today had been our first date — what would have convinced you to go on a second one?"))
     ]
 }

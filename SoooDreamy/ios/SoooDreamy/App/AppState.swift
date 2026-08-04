@@ -23,7 +23,14 @@ final class AppState {
     // Session data (per active server)
     var couple: Couple?
     var events: [EventItem] = []
-    var dailyEntry: DailyEntry?
+    var dailyEntry: DailyEntry? {
+        didSet {
+            // Keep the "streak at risk" evening nudge in sync with every
+            // change (fetch, own answer, partner's socket event, sign-out).
+            let entry = dailyEntry
+            Task { await ReminderManager.syncStreakGuard(entry: entry) }
+        }
+    }
     var stats: Stats?
     var sessionLoading = false
     /// Showcase photo for the photo widget (newest favorite, else newest).

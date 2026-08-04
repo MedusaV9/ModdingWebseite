@@ -64,6 +64,7 @@ enum ChatL10n {
         // Read receipts (a11y labels for the bubble checkmarks)
         "chat.receipt.sent": LText(de: "Gesendet", en: "Sent"),
         "chat.receipt.read": LText(de: "Gelesen", en: "Read"),
+        "chat.jumpLatest": LText(de: "Zur neuesten Nachricht springen", en: "Jump to latest message"),
         "chat.read": LText(de: "Lesen", en: "Read"),
         "chat.react": LText(de: "Reagieren …", en: "React …"),
         "chat.reactWith": LText(de: "Mit {emoji} reagieren", en: "React with {emoji}"),

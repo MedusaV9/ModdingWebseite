@@ -262,8 +262,8 @@ enum GamesL10n {
         "games.card.record.teaser": LText(de: "Eure letzten Spiele — wer gewinnt öfter?",
                                           en: "Your recent games — who wins more often?"),
         "games.record.title": LText(de: "Spiele-Bilanz", en: "Scoreboard"),
-        "games.record.subtitle": LText(de: "Gewertete Quiz-Duelle: {n}",
-                                       en: "Quiz duels counted: {n}"),
+        "games.record.subtitle": LText(de: "Gewertete Duelle: {n}",
+                                       en: "Duels counted: {n}"),
         "games.record.ties": LText(de: "Remis", en: "Ties"),
         "games.record.leaderMe": LText(de: "Du führst! 👑", en: "You're in the lead! 👑"),
         "games.record.leaderPartner": LText(de: "{name} führt! 👑",
@@ -307,6 +307,23 @@ enum GamesL10n {
                                  en: "It's a tie — you two are simply equally good 💞"),
         "games.emoji.finalScore": LText(de: "Endstand", en: "Final score"),
         "games.emoji.rematch": LText(de: "Revanche!", en: "Rematch!"),
-        "games.emoji.backToHub": LText(de: "Zurück zur Übersicht", en: "Back to games")
+        "games.emoji.backToHub": LText(de: "Zurück zur Übersicht", en: "Back to games"),
+
+        // MARK: Emoji-Rätsel live (two-phone mode)
+        "games.emoji.playLive": LText(de: "Live zu zweit spielen 📱📱", en: "Play live together 📱📱"),
+        "games.emoji.playLocal": LText(de: "An einem Handy spielen", en: "Play on one phone"),
+        "games.emoji.live.guessPlaceholder": LText(de: "Was ist gemeint?", en: "What do the emojis mean?"),
+        "games.emoji.live.guessHint": LText(de: "Tipp abgeben — die Lösung erscheint, sobald ihr beide geraten habt.",
+                                            en: "Send your guess — the answer appears once you've both guessed."),
+        "games.emoji.live.guessed": LText(de: "Dein Tipp ist drin!", en: "Your guess is in!"),
+        "games.emoji.live.answerLabel": LText(de: "Lösung", en: "Answer"),
+        "games.emoji.live.myGuess": LText(de: "Dein Tipp", en: "Your guess"),
+        "games.emoji.live.partnerGuess": LText(de: "{name}s Tipp", en: "{name}'s guess"),
+        "games.emoji.live.claimQuestion": LText(de: "Hattest du's richtig?", en: "Did you get it right?"),
+        "games.emoji.live.claimYes": LText(de: "Ja, Punkt für mich!", en: "Yes, point for me!"),
+        "games.emoji.live.claimNo": LText(de: "Leider nicht", en: "Not quite"),
+        "games.emoji.live.waitClaim": LText(de: "{name} wertet noch…", en: "{name} is still scoring…"),
+        "games.emoji.live.honor": LText(de: "Ehrensache: Bewerte deinen Tipp fair 🤝",
+                                        en: "Honor system: score your guess fairly 🤝")
     ]
 }

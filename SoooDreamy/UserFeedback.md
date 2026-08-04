@@ -123,6 +123,15 @@ _(hier beantworte ich dein Feedback, wenn ich es umgesetzt habe)_
 - `[2026-08-03 23:45 UTC]` **Live Activity „Couple Pulse“**: Lock Screen + Dynamic Island mit Mood/Online/letzter Touch/Streak — Updates lokal über WebSocket. Countdown-Activity zeigt jetzt auch Pulse-Strip. IPA **1.3.0**.
 - Hinweis: echte Push-Notifications (App geschlossen) brauchen Apple-Signing/APNs — bei Sideload nur lokal solange die App/WS läuft (+ tägliche Erinnerung).
 
+### Iteration 14 — Riesenwelle (Server 1.6 + iOS 1.4.0) 🌊
+- `[2026-08-04 00:20 UTC]` **Server v1.6** (86/86): Coupon-`expiresAt`, `GET /api/inbox?since=`, Photo-`album` + PATCH, Message-Delete, Read-Receipts, `GET /api/games`, `emojiriddle` Type.
+- `[2026-08-04 00:20 UTC]` Coupons mit Ablauf, Foto-Alben, Canvas-Pinsel (Glow/Dotted/Calligraphy), Soundtrack-Provider-Chips, Chat löschen + ✓✓, „Während du weg warst“-Karte, Spiele-Bilanz. IPA **1.4.0**.
+
+### Iteration 15 — Noch mehr Loop 🔁
+- `[2026-08-04 00:40 UTC]` **Emoji-Rätsel Live-Multiplayer** (zwei Handys, Move-Relay), Solo bleibt.
+- `[2026-08-04 00:40 UTC]` **Streak-Guard**-Reminder (21:30 wenn Frage offen & Streak > 0), Settings-Toggle.
+- `[2026-08-04 00:40 UTC]` +26 Content-Items (Daily/Dates/Rätsel), Chat „Jump to latest“ FAB, Partner last-seen relativ, 🔥-Pulse ab Streak 3. IPA **1.4.1** · Logic **50** Tests.
+
 ## 🔄 Als Nächstes
-- IPA 1.3.0 sideloaden: Benachrichtigungen einschalten, Widget-Hintergründe wählen, Canvas + Foto auf Home/Lock Screen, Couple-Pulse Live Activity starten.
-- Ideen: Coupons mit Ablaufdatum, Fotoalben, Canvas-Pinsel, Soundtrack-Link-Vorschau, Inbox-Endpoint für verpasste Events.
+- IPA 1.4.1 sideloaden + AMP Server auf Branch (v1.6).
+- Loop geht weiter: mehr Content, Album-Sharing, Truth-or-Dare multiplayer, weitere Polish-Passes.

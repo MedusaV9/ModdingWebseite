@@ -23,6 +23,13 @@ enum CoreStrings {
         "common.today": LText(de: "Heute", en: "Today"),
         "common.days": LText(de: "Tage", en: "days"),
         "common.day": LText(de: "Tag", en: "day"),
+
+        // Compact relative times (see L10n.relativeShort)
+        "time.justNow": LText(de: "gerade eben", en: "just now"),
+        "time.minutesAgo": LText(de: "vor {n} Min.", en: "{n} min ago"),
+        "time.hoursAgo": LText(de: "vor {n} Std.", en: "{n} h ago"),
+        "time.yesterday": LText(de: "gestern", en: "yesterday"),
+        "time.daysAgo": LText(de: "vor {n} Tagen", en: "{n} days ago"),
         "common.you": LText(de: "Du", en: "You"),
         "common.partner": LText(de: "Schatz", en: "Sweetheart"),
         "common.send": LText(de: "Senden", en: "Send"),
@@ -152,6 +159,9 @@ enum CoreStrings {
         "settings.reminder": LText(de: "Tägliche Erinnerung", en: "Daily reminder"),
         "settings.reminderHint": LText(de: "Erinnert euch abends an die Frage des Tages", en: "Evening nudge for the question of the day"),
         "settings.reminderTime": LText(de: "Uhrzeit", en: "Time"),
+        "settings.streakGuard": LText(de: "Serien-Schutz", en: "Streak guard"),
+        "settings.streakGuardHint": LText(de: "Zweite Erinnerung um 21:30, wenn eure Antwort-Serie in Gefahr ist",
+                                          en: "Second reminder at 9:30 pm when your answer streak is at risk"),
         "settings.unpair": LText(de: "Paar auflösen", en: "Dissolve couple"),
         "settings.unpairConfirm": LText(de: "Wirklich? Das löscht ALLE eure Daten auf dem Server — Chats, Fotos, alles. Das kann nicht rückgängig gemacht werden.",
                                         en: "Really? This deletes ALL your data on the server — chats, photos, everything. This cannot be undone."),
@@ -213,6 +223,9 @@ enum CoreStrings {
         "notif.online.body": LText(de: "Jetzt wäre ein Herzklopfen perfekt …", en: "Now would be perfect for a heartbeat…"),
         "notif.coupon.title": LText(de: "Neuer Gutschein 🎟️", en: "New coupon 🎟️"),
         "notif.coupon.body": LText(de: "{name} schenkt dir: „{title}“", en: "{name} gives you: “{title}”"),
+        "notif.streak.title": LText(de: "Eure Serie ist in Gefahr! 🔥", en: "Your streak is at risk! 🔥"),
+        "notif.streak.body": LText(de: "Beantworte noch schnell die Frage des Tages und rette eure {n}er-Serie.",
+                                   en: "Answer today's question quickly and save your {n}-day streak."),
 
         // App lock
         "lock.title": LText(de: "SoooDreamy ist gesperrt", en: "SoooDreamy is locked"),

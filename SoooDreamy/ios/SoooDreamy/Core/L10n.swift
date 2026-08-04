@@ -57,4 +57,20 @@ enum L10n {
         }
         return s
     }
+
+    /// Compact relative time in the APP language — the system relative
+    /// formatter follows the device locale, which can differ from the
+    /// in-app language choice. "gerade eben" · "vor 5 Min." · "vor 3 Std."
+    /// · "gestern" · "vor 4 Tagen" (and the English equivalents).
+    static func relativeShort(_ date: Date, now: Date = Date()) -> String {
+        let seconds = now.timeIntervalSince(date)
+        if seconds < 90 { return t("time.justNow") }
+        let minutes = Int(seconds / 60)
+        if minutes < 60 { return t("time.minutesAgo", ["n": String(minutes)]) }
+        let hours = Int(seconds / 3600)
+        if hours < 24 { return t("time.hoursAgo", ["n": String(hours)]) }
+        let days = Int(seconds / 86400)
+        if days == 1 { return t("time.yesterday") }
+        return t("time.daysAgo", ["n": String(days)])
+    }
 }

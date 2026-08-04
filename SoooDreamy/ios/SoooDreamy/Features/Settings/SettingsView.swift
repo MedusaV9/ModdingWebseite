@@ -13,6 +13,7 @@ struct SettingsView: View {
     @State private var soundsOn = SoundEngine.enabled
     @State private var hapticsOn = Haptics.enabled
     @State private var reminderOn = ReminderManager.isEnabled
+    @State private var streakGuardOn = ReminderManager.isStreakGuardEnabled
     @State private var appLockOn = AppLock.isEnabled
     @State private var pulseOn = CouplePulseController.isEnabled
     @State private var reminderTime: Date = {
@@ -439,6 +440,25 @@ struct SettingsView: View {
                             }
                         }
                 }
+            }
+
+            // Streak guard (second, "streak at risk" evening nudge)
+            VStack(alignment: .leading, spacing: 4) {
+                Toggle(isOn: $streakGuardOn) {
+                    Label(L10n.t("settings.streakGuard"), systemImage: "flame.fill")
+                        .font(.system(.subheadline, design: .rounded).weight(.semibold))
+                        .foregroundStyle(Theme.textPrimary)
+                }
+                .tint(Theme.pink)
+                .onChange(of: streakGuardOn) { _, on in
+                    Task {
+                        let ok = await ReminderManager.setStreakGuardEnabled(on, entry: appState.dailyEntry)
+                        if !ok { streakGuardOn = false }
+                    }
+                }
+                Text(L10n.t("settings.streakGuardHint"))
+                    .font(.system(.caption2, design: .rounded))
+                    .foregroundStyle(Theme.textTertiary)
             }
         }
         .glassCard(padding: 16)

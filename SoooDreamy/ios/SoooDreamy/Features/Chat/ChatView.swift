@@ -11,6 +11,10 @@ struct ChatView: View {
     @State private var draft = ""
     @State private var showVoiceRecorder = false
     @State private var showLetterComposer = false
+    /// Tracks whether the bottom anchor is on screen (LazyVStack keeps it
+    /// alive near the fold, so this flips only after real scrolling) —
+    /// drives the "jump to latest" floating button.
+    @State private var nearBottom = true
     @FocusState private var inputFocused: Bool
 
     private static let bottomAnchorID = "chat.bottomAnchor"
@@ -142,6 +146,12 @@ struct ChatView: View {
                     Color.clear
                         .frame(height: 1)
                         .id(Self.bottomAnchorID)
+                        .onAppear {
+                            withAnimation(.spring(response: 0.3)) { nearBottom = true }
+                        }
+                        .onDisappear {
+                            withAnimation(.spring(response: 0.3)) { nearBottom = false }
+                        }
                 }
                 .padding(.horizontal, LayoutMetrics.s(14))
                 .padding(.top, 2)
@@ -151,16 +161,49 @@ struct ChatView: View {
             .defaultScrollAnchor(.bottom)
             .scrollDismissesKeyboard(.interactively)
             .refreshable { await model.loadOlder() }
+            .overlay(alignment: .bottomTrailing) {
+                if !nearBottom {
+                    jumpToLatestButton(proxy)
+                }
+            }
             .onChange(of: model.messages.last?.id) {
-                scrollToBottom(proxy)
+                // Stay put while reading history (the FAB signals the way
+                // down) — unless the newest message is my own send.
+                if nearBottom || model.messages.last?.senderId == appState.memberId {
+                    scrollToBottom(proxy)
+                }
             }
             .onChange(of: appState.partnerTyping) {
-                if appState.partnerTyping { scrollToBottom(proxy) }
+                if appState.partnerTyping && nearBottom { scrollToBottom(proxy) }
             }
             .onChange(of: inputFocused) {
                 if inputFocused { scrollToBottom(proxy) }
             }
         }
+    }
+
+    /// Floating "jump to latest" button, shown while scrolled up in history.
+    private func jumpToLatestButton(_ proxy: ScrollViewProxy) -> some View {
+        Button {
+            Haptics.shared.tap()
+            scrollToBottom(proxy)
+        } label: {
+            Image(systemName: "chevron.down")
+                .font(.scaled(15, weight: .bold))
+                .foregroundStyle(Theme.textPrimary)
+                .frame(width: LayoutMetrics.s(40), height: LayoutMetrics.s(40))
+                .background(
+                    Circle()
+                        .fill(.ultraThinMaterial)
+                        .overlay(Circle().strokeBorder(Color.white.opacity(0.16), lineWidth: 1))
+                        .shadow(color: .black.opacity(0.35), radius: 8, y: 3)
+                )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(L10n.t("chat.jumpLatest"))
+        .padding(.trailing, LayoutMetrics.s(14))
+        .padding(.bottom, LayoutMetrics.s(10))
+        .transition(.scale(scale: 0.6).combined(with: .opacity))
     }
 
     private func scrollToBottom(_ proxy: ScrollViewProxy) {
