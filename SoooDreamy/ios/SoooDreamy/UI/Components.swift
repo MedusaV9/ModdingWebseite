@@ -204,32 +204,97 @@ struct FloatingHeartsView: View {
 
 // MARK: - Connection banner
 
+/// Compact socket-status pill (v1.5.3 polish): a softly pulsing dot while
+/// connecting, a clear wifi-slash badge while offline (the socket retries
+/// on its own) and a short mint "Verbunden" flash right after a reconnect.
 struct ConnectionBanner: View {
     let state: SocketState
+
+    /// True for a moment right after a reconnect — flashes the mint
+    /// confirmation before the banner fades back to nothing.
+    @State private var showReconnected = false
+    @State private var reconnectFlashTask: Task<Void, Never>?
 
     var body: some View {
         Group {
             switch state {
             case .connected:
-                EmptyView()
+                if showReconnected {
+                    label(L10n.t("conn.connected"), color: Theme.mint, icon: "checkmark")
+                }
             case .connecting:
-                label(L10n.t("conn.connecting"), color: Theme.gold)
+                label(L10n.t("conn.connecting"), color: Theme.gold, pulsing: true)
             case .disconnected:
-                label(L10n.t("conn.offline"), color: Color(hex: "F87171"))
+                label(L10n.t("conn.offline"), color: Color(hex: "F87171"), icon: "wifi.slash")
+            }
+        }
+        .animation(.spring(response: 0.35), value: state)
+        .animation(.spring(response: 0.35), value: showReconnected)
+        .onChange(of: state) { oldValue, newValue in
+            reconnectFlashTask?.cancel()
+            guard newValue == .connected, oldValue != .connected else {
+                showReconnected = false
+                return
+            }
+            showReconnected = true
+            reconnectFlashTask = Task {
+                try? await Task.sleep(nanoseconds: 2_500_000_000)
+                guard !Task.isCancelled else { return }
+                showReconnected = false
             }
         }
     }
 
-    private func label(_ text: String, color: Color) -> some View {
-        HStack(spacing: 8) {
-            Circle().fill(color).frame(width: 8, height: 8)
+    private func label(_ text: String, color: Color,
+                       icon: String? = nil, pulsing: Bool = false) -> some View {
+        HStack(spacing: 7) {
+            if let icon {
+                Image(systemName: icon)
+                    .font(.scaled(10, weight: .bold))
+                    .foregroundStyle(color)
+            } else {
+                ConnectionStatusDot(color: color, pulsing: pulsing)
+            }
             Text(text)
                 .font(.system(.caption, design: .rounded).weight(.semibold))
                 .foregroundStyle(Theme.textSecondary)
         }
         .padding(.vertical, 6)
-        .padding(.horizontal, LayoutMetrics.s(14))
-        .background(Capsule().fill(Color.black.opacity(0.35)))
+        .padding(.horizontal, LayoutMetrics.s(13))
+        .background(
+            Capsule()
+                .fill(Color.black.opacity(0.35))
+                .overlay(Capsule().strokeBorder(color.opacity(0.40), lineWidth: 1))
+        )
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(text)
+        .transition(.scale(scale: 0.85).combined(with: .opacity))
+    }
+}
+
+/// Status dot with an optional expanding-ring pulse (while connecting).
+private struct ConnectionStatusDot: View {
+    let color: Color
+    var pulsing = false
+
+    @State private var animating = false
+
+    var body: some View {
+        Circle()
+            .fill(color)
+            .frame(width: 8, height: 8)
+            .overlay(
+                Circle()
+                    .stroke(color.opacity(0.7), lineWidth: 1.5)
+                    .scaleEffect(animating ? 2.2 : 1)
+                    .opacity(animating ? 0 : 0.8)
+            )
+            .onAppear {
+                guard pulsing else { return }
+                withAnimation(.easeOut(duration: 1.0).repeatForever(autoreverses: false)) {
+                    animating = true
+                }
+            }
     }
 }
 

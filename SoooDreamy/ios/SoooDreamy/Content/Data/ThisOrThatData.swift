@@ -130,6 +130,14 @@ extension ContentPack {
         ChoicePair(id: 123, a: LText(de: "Segelboot", en: "Sailboat"), b: LText(de: "Kanu", en: "Canoe")),
         ChoicePair(id: 124, a: LText(de: "Hängematte", en: "Hammock"), b: LText(de: "Schaukelstuhl", en: "Rocking chair")),
         ChoicePair(id: 125, a: LText(de: "Flip-Flops", en: "Flip-flops"), b: LText(de: "Sneaker", en: "Sneakers")),
-        ChoicePair(id: 126, a: LText(de: "Drachen steigen lassen", en: "Kite flying"), b: LText(de: "Seifenblasen", en: "Blowing bubbles"))
+        ChoicePair(id: 126, a: LText(de: "Drachen steigen lassen", en: "Kite flying"), b: LText(de: "Seifenblasen", en: "Blowing bubbles")),
+        ChoicePair(id: 127, a: LText(de: "Gewitter beobachten", en: "Watching thunderstorms"), b: LText(de: "Sternschnuppen zählen", en: "Counting shooting stars")),
+        ChoicePair(id: 128, a: LText(de: "Heißluftballon", en: "Hot-air balloon"), b: LText(de: "Seilbahn", en: "Cable car")),
+        ChoicePair(id: 129, a: LText(de: "Waldspaziergang", en: "Forest walk"), b: LText(de: "Strandspaziergang", en: "Beach walk")),
+        ChoicePair(id: 130, a: LText(de: "Kirschblütenfest", en: "Cherry blossom festival"), b: LText(de: "Weihnachtsmarkt", en: "Christmas market")),
+        ChoicePair(id: 131, a: LText(de: "Polaroid", en: "Polaroid"), b: LText(de: "Fotoautomat", en: "Photo booth")),
+        ChoicePair(id: 132, a: LText(de: "Bubble Tea", en: "Bubble tea"), b: LText(de: "Limonade", en: "Lemonade")),
+        ChoicePair(id: 133, a: LText(de: "Nachtzug", en: "Night train"), b: LText(de: "Fähre", en: "Ferry")),
+        ChoicePair(id: 134, a: LText(de: "Kuschelsocken", en: "Cozy socks"), b: LText(de: "Kapuzenpulli", en: "Hoodie"))
     ]
 }

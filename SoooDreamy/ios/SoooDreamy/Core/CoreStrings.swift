@@ -147,6 +147,8 @@ enum CoreStrings {
         "touch.received.missyou": LText(de: "{name} vermisst dich", en: "{name} misses you"),
         "touch.received.tickle": LText(de: "{name} kitzelt dich", en: "{name} tickles you"),
         "touch.received.thinking": LText(de: "{name} denkt gerade an dich", en: "{name} is thinking of you"),
+        // Floating 💭 quick action on the dashboard (v1.5.3)
+        "home.thinkingFabA11y": LText(de: "„Denk an dich“ senden", en: "Send a “thinking of you”"),
 
         // Settings
         "settings.title": LText(de: "Mehr", en: "More"),

@@ -11,6 +11,8 @@ struct DashboardView: View {
     @State private var sharingDailyAnswers = false
     @State private var sharedDailyAnswers = false
     @State private var flashback: FlashbackItem?
+    /// Pop animation of the floating 💭 quick-action button (v1.5.3).
+    @State private var thinkingPulse = false
 
     var body: some View {
         NavigationStack {
@@ -53,6 +55,11 @@ struct DashboardView: View {
                 }
                 .refreshable {
                     await appState.refreshAll()
+                }
+            }
+            .overlay(alignment: .bottomTrailing) {
+                if appState.partner != nil {
+                    thinkingFab
                 }
             }
             .toolbar(.hidden, for: .navigationBar)
@@ -462,6 +469,36 @@ struct DashboardView: View {
             }
         }
         .glassCard(padding: 16)
+    }
+
+    // MARK: Floating "thinking of you" quick action (v1.5.3)
+
+    /// One-tap 💭 mini button floating over the dashboard — the most-loved
+    /// touch without scrolling down to the touch grid.
+    private var thinkingFab: some View {
+        Button {
+            withAnimation(.spring(response: 0.25, dampingFraction: 0.5)) { thinkingPulse = true }
+            appState.sendTouch(.thinking)
+            Task {
+                try? await Task.sleep(nanoseconds: 450_000_000)
+                withAnimation(.spring(response: 0.3)) { thinkingPulse = false }
+            }
+        } label: {
+            Text("💭")
+                .font(.scaled(25))
+                .scaleEffect(thinkingPulse ? 1.3 : 1)
+                .frame(width: LayoutMetrics.s(52), height: LayoutMetrics.s(52))
+                .background(
+                    Circle()
+                        .fill(.ultraThinMaterial)
+                        .overlay(Circle().strokeBorder(Theme.purple.opacity(0.55), lineWidth: 1.5))
+                        .shadow(color: Theme.purple.opacity(0.45), radius: 10, y: 4)
+                )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(L10n.t("home.thinkingFabA11y"))
+        .padding(.trailing, LayoutMetrics.s(16))
+        .padding(.bottom, LayoutMetrics.s(12))
     }
 
     // MARK: Daily question

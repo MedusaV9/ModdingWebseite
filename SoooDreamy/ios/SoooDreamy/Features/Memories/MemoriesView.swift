@@ -7,6 +7,10 @@ struct MemoriesView: View {
 
     @State private var openCouponCount: Int?
     @State private var songCount: Int?
+    // Recent-activity strip (v1.5.3): newest photo / song / coupon.
+    @State private var latestPhoto: Photo?
+    @State private var latestSong: Song?
+    @State private var latestCoupon: Coupon?
 
     private let columns = [
         GridItem(.flexible(), spacing: 14),
@@ -20,6 +24,9 @@ struct MemoriesView: View {
                 ScrollView {
                     VStack(spacing: LayoutMetrics.s(18)) {
                         header
+                        if latestPhoto != nil || latestSong != nil || latestCoupon != nil {
+                            recentStrip
+                        }
                         couponsCard
                         soundtrackCard
                         LazyVGrid(columns: columns, spacing: LayoutMetrics.s(14)) {
@@ -39,6 +46,7 @@ struct MemoriesView: View {
                     await appState.refreshEvents()
                     await loadCouponTeaser()
                     await loadSongTeaser()
+                    await loadLatestPhoto()
                 }
             }
             .toolbar(.hidden, for: .navigationBar)
@@ -47,6 +55,7 @@ struct MemoriesView: View {
             await appState.refreshStats()
             await loadCouponTeaser()
             await loadSongTeaser()
+            await loadLatestPhoto()
         }
         .onReceive(NotificationCenter.default.publisher(for: .serverEvent)) { note in
             guard let event = note.object as? ServerEvent else { return }
@@ -70,6 +79,92 @@ struct MemoriesView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.top, 6)
+    }
+
+    // MARK: Recent activity strip (v1.5.3)
+
+    /// Horizontal "what's new between you two" ribbon under the header:
+    /// the newest photo, song and coupon, each deep-linking to its screen.
+    private var recentStrip: some View {
+        VStack(alignment: .leading, spacing: LayoutMetrics.s(8)) {
+            Text(L10n.t("memories.recent.title"))
+                .font(.system(.subheadline, design: .rounded).weight(.bold))
+                .foregroundStyle(Theme.textSecondary)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: LayoutMetrics.s(10)) {
+                    if let photo = latestPhoto {
+                        NavigationLink {
+                            GalleryView()
+                        } label: {
+                            RecentActivityChip(kind: L10n.t("memories.recent.photo"),
+                                               text: photoChipText(photo),
+                                               time: L10n.relativeShort(photo.createdAt),
+                                               tint: Theme.pink) {
+                                photoChipThumb(photo)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    if let song = latestSong {
+                        NavigationLink {
+                            SoundtrackView()
+                        } label: {
+                            RecentActivityChip(kind: L10n.t("memories.recent.song"),
+                                               text: songChipText(song),
+                                               time: L10n.relativeShort(song.createdAt),
+                                               tint: Theme.mint) {
+                                Text("🎶")
+                                    .font(.scaled(22))
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    if let coupon = latestCoupon {
+                        NavigationLink {
+                            CouponsView()
+                        } label: {
+                            RecentActivityChip(kind: L10n.t("memories.recent.coupon"),
+                                               text: coupon.title,
+                                               time: L10n.relativeShort(coupon.createdAt),
+                                               tint: Theme.gold) {
+                                Text(coupon.emoji)
+                                    .font(.scaled(22))
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// Caption when present, otherwise "by <uploader>".
+    private func photoChipText(_ photo: Photo) -> String {
+        if let caption = photo.caption, !caption.isEmpty { return caption }
+        let uploader = appState.couple?.members.first { $0.id == photo.uploaderId }?.name
+        return L10n.t("memories.gallery.by", ["name": uploader ?? "💜"])
+    }
+
+    private func songChipText(_ song: Song) -> String {
+        if let artist = song.artist, !artist.isEmpty { return "\(song.title) · \(artist)" }
+        return song.title
+    }
+
+    @ViewBuilder
+    private func photoChipThumb(_ photo: Photo) -> some View {
+        if let url = appState.api?.mediaURL(photo.thumbUrl ?? photo.url) {
+            AsyncImage(url: url) { image in
+                image.resizable().scaledToFill()
+            } placeholder: {
+                Color.white.opacity(0.08)
+            }
+            .frame(width: LayoutMetrics.s(38), height: LayoutMetrics.s(38))
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        } else {
+            Text("📸")
+                .font(.scaled(22))
+        }
     }
 
     // MARK: Cards
@@ -334,6 +429,7 @@ struct MemoriesView: View {
         guard let api = appState.api, let myId = appState.memberId else { return }
         if let list = try? await api.coupons() {
             openCouponCount = list.filter { $0.forMember == myId && $0.redeemedAt == nil }.count
+            latestCoupon = list.max { $0.createdAt < $1.createdAt }
         }
     }
 
@@ -341,12 +437,26 @@ struct MemoriesView: View {
         guard let api = appState.api else { return }
         if let list = try? await api.songs() {
             songCount = list.count
+            latestSong = list.max { $0.createdAt < $1.createdAt }
+        }
+    }
+
+    /// Newest photo for the recent-activity strip (v1.5.3).
+    private func loadLatestPhoto() async {
+        guard let api = appState.api else { return }
+        if let list = try? await api.photos() {
+            latestPhoto = list.max { $0.createdAt < $1.createdAt }
         }
     }
 
     private func handleServerEvent(_ event: ServerEvent) {
         switch event.type {
-        case .photoAdded, .photoDeleted, .bucketAdded, .bucketUpdated, .bucketDeleted:
+        case .photoAdded, .photoDeleted:
+            Task {
+                await appState.refreshStats()
+                await loadLatestPhoto()
+            }
+        case .bucketAdded, .bucketUpdated, .bucketDeleted:
             Task { await appState.refreshStats() }
         case .couponAdded, .couponRedeemed, .couponDeleted:
             Task { await loadCouponTeaser() }
@@ -393,6 +503,47 @@ private struct MemoryFeatureCard<Teaser: View>: View {
                 .strokeBorder(tint.opacity(0.22), lineWidth: 1)
         )
         .shadow(color: tint.opacity(0.14), radius: 12, y: 5)
+    }
+}
+
+// MARK: - Recent activity chip (v1.5.3)
+
+/// One small card in the horizontal recent-activity ribbon:
+/// leading visual + kind label + one-line content + relative time.
+private struct RecentActivityChip<Leading: View>: View {
+    let kind: String
+    let text: String
+    let time: String
+    let tint: Color
+    @ViewBuilder var leading: Leading
+
+    var body: some View {
+        HStack(spacing: LayoutMetrics.s(9)) {
+            leading
+            VStack(alignment: .leading, spacing: 1) {
+                Text(kind)
+                    .font(.system(.caption2, design: .rounded).weight(.bold))
+                    .foregroundStyle(tint)
+                Text(text)
+                    .font(.system(.caption, design: .rounded).weight(.semibold))
+                    .foregroundStyle(Theme.textPrimary)
+                    .lineLimit(1)
+                Text(time)
+                    .font(.system(.caption2, design: .rounded))
+                    .foregroundStyle(Theme.textTertiary)
+            }
+        }
+        .padding(.vertical, LayoutMetrics.s(8))
+        .padding(.horizontal, LayoutMetrics.s(11))
+        .frame(maxWidth: LayoutMetrics.s(220), alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color.white.opacity(0.06))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .strokeBorder(tint.opacity(0.30), lineWidth: 1)
+                )
+        )
     }
 }
 

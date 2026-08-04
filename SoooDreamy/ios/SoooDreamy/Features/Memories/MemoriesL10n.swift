@@ -34,6 +34,12 @@ enum MemoriesL10n {
         "memories.card.soundtrackHint": LText(de: "Sammelt die Songs, die nach euch klingen",
                                               en: "Collect the songs that sound like you two"),
 
+        // Recent activity strip (v1.5.3)
+        "memories.recent.title": LText(de: "Zuletzt bei euch", en: "Latest from you two"),
+        "memories.recent.photo": LText(de: "Neues Foto", en: "New photo"),
+        "memories.recent.song": LText(de: "Neuer Song", en: "New song"),
+        "memories.recent.coupon": LText(de: "Neuer Gutschein", en: "New coupon"),
+
         // Countdown chips
         "memories.countdown.today": LText(de: "HEUTE 🎉", en: "TODAY 🎉"),
         "memories.countdown.tomorrow": LText(de: "morgen!", en: "tomorrow!"),

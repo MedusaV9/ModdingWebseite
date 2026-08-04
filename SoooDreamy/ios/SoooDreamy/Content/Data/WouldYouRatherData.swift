@@ -111,6 +111,13 @@ extension ContentPack {
         ChoicePair(id: 103, a: LText(de: "jeden Tag ein neues Gericht kochen müssen", en: "have to cook a new dish every day"), b: LText(de: "nie wieder zweimal ins selbe Restaurant dürfen", en: "never get to visit the same restaurant twice")),
         ChoicePair(id: 104, a: LText(de: "alle unsere Gespräche automatisch als Tagebuch gespeichert bekommen", en: "have all our conversations auto-saved as a diary"), b: LText(de: "alle unsere Insider-Witze in einem Buch gesammelt haben", en: "have all our inside jokes collected in a book")),
         ChoicePair(id: 105, a: LText(de: "bei Regen immer trocken bleiben", en: "always stay dry in the rain"), b: LText(de: "im Winter nie frieren", en: "never feel cold in winter")),
-        ChoicePair(id: 106, a: LText(de: "jedes Wochenende einen Mini-Trip mit mir machen", en: "take a mini trip with me every weekend"), b: LText(de: "einmal im Jahr eine große Traumreise mit mir machen", en: "take one big dream trip with me once a year"))
+        ChoicePair(id: 106, a: LText(de: "jedes Wochenende einen Mini-Trip mit mir machen", en: "take a mini trip with me every weekend"), b: LText(de: "einmal im Jahr eine große Traumreise mit mir machen", en: "take one big dream trip with me once a year")),
+        ChoicePair(id: 107, a: LText(de: "mit mir Nordlichter sehen", en: "see the northern lights with me"), b: LText(de: "mit mir ein leuchtendes Meer sehen", en: "see a glowing ocean with me")),
+        ChoicePair(id: 108, a: LText(de: "eine Woche ohne Handy auskommen", en: "go a week without your phone"), b: LText(de: "eine Woche ohne Süßigkeiten auskommen", en: "go a week without sweets")),
+        ChoicePair(id: 109, a: LText(de: "unsere Liebesgeschichte als Film sehen", en: "watch our love story as a movie"), b: LText(de: "unsere Liebesgeschichte als Buch lesen", en: "read our love story as a book")),
+        ChoicePair(id: 110, a: LText(de: "jeden Freitag Date-Abend haben", en: "have date night every Friday"), b: LText(de: "jeden Sonntag Frühstück im Bett bekommen", en: "get breakfast in bed every Sunday")),
+        ChoicePair(id: 111, a: LText(de: "einmal schwerelos mit mir schweben", en: "float in zero gravity with me once"), b: LText(de: "einmal mit mir mit Walen tauchen", en: "dive with whales with me once")),
+        ChoicePair(id: 112, a: LText(de: "immer perfekt zusammenpassende Playlists haben", en: "always have perfectly matching playlists"), b: LText(de: "immer den gleichen Filmgeschmack haben", en: "always share the same taste in movies")),
+        ChoicePair(id: 113, a: LText(de: "ein Baumhaus mit mir bauen", en: "build a treehouse with me"), b: LText(de: "eine Kissenburg mit mir bauen", en: "build a pillow fort with me"))
     ]
 }

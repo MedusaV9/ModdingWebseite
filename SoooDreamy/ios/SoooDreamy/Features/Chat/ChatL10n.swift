@@ -69,6 +69,18 @@ enum ChatL10n {
         // Letter forwarding (v1.5.2 — re-send a letter as a brand-new one)
         "chat.forwardLetter": LText(de: "Als neuen Brief senden", en: "Forward as new letter"),
 
+        // Local message pins (v1.5.3 — personal bookmarks, this device only)
+        "chat.pin": LText(de: "Nachricht anpinnen", en: "Pin message"),
+        "chat.unpin": LText(de: "Pin lösen", en: "Unpin message"),
+        "chat.pinnedBadge": LText(de: "Angepinnt", en: "Pinned"),
+        "chat.pinnedMore": LText(de: "+{n} weitere", en: "+{n} more"),
+        "chat.pinnedToast": LText(de: "Nachricht angepinnt 📌", en: "Message pinned 📌"),
+        "chat.unpinnedToast": LText(de: "Pin gelöst", en: "Pin removed"),
+        "chat.pinnedJumpA11y": LText(de: "Zur angepinnten Nachricht springen",
+                                     en: "Jump to the pinned message"),
+        "chat.pinnedNotLoaded": LText(de: "Die angepinnte Nachricht ist weiter oben — lade oben ältere Nachrichten nach.",
+                                      en: "The pinned message is further up — pull down at the top to load older messages."),
+
         // Message edit (v1.8 — own text/letter messages only)
         "chat.editMessage": LText(de: "Nachricht bearbeiten", en: "Edit message"),
         "chat.editTitle": LText(de: "Nachricht bearbeiten", en: "Edit message"),

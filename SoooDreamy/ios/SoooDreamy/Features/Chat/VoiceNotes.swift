@@ -204,6 +204,7 @@ struct ChatVoiceBubble: View {
         }
         .contextMenu {
             ChatReactMenu(onReact: onReact)
+            ChatPinButton(message: message)
             if let onDelete {
                 ChatDeleteButton(onDelete: onDelete)
             }

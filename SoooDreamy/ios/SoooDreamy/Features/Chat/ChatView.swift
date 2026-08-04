@@ -22,6 +22,9 @@ struct ChatView: View {
     @State private var nearBottom = true
     @State private var searchActive = false
     @State private var searchQuery = ""
+    /// Message id the pinned banner asked to scroll to (v1.5.3) — consumed
+    /// by the message list's ScrollViewReader, then reset to nil.
+    @State private var pinnedJumpTarget: String?
     @FocusState private var inputFocused: Bool
     @FocusState private var searchFocused: Bool
 
@@ -34,6 +37,11 @@ struct ChatView: View {
                 VStack(spacing: 0) {
                     header
                     searchBar
+                    if !searchActive {
+                        ChatPinnedBanner(messages: model.messages) { messageId in
+                            jumpToPinned(messageId)
+                        }
+                    }
                     messageArea
                 }
             }
@@ -298,6 +306,25 @@ struct ChatView: View {
             .onChange(of: inputFocused) {
                 if inputFocused { scrollToBottom(proxy) }
             }
+            .onChange(of: pinnedJumpTarget) {
+                guard let target = pinnedJumpTarget else { return }
+                withAnimation(.spring(response: 0.4)) {
+                    proxy.scrollTo(target, anchor: .center)
+                }
+                pinnedJumpTarget = nil
+            }
+        }
+    }
+
+    /// Banner tap: scroll to the pinned bubble when it's in the loaded
+    /// window, otherwise explain how to reach it (pull-to-refresh loads
+    /// older pages).
+    private func jumpToPinned(_ messageId: String) {
+        Haptics.shared.tap()
+        if model.messages.contains(where: { $0.id == messageId }) {
+            pinnedJumpTarget = messageId
+        } else {
+            appState.showToast(L10n.t("chat.pinnedNotLoaded"), style: .info)
         }
     }
 
@@ -566,6 +593,7 @@ struct ChatPhotoBubble: View {
         }
         .contextMenu {
             ChatReactMenu(onReact: onReact)
+            ChatPinButton(message: message)
             if let onDelete {
                 ChatDeleteButton(onDelete: onDelete)
             }
@@ -881,6 +909,7 @@ struct ChatTextBubble: View {
             } label: {
                 Label(L10n.t("chat.copy"), systemImage: "doc.on.doc")
             }
+            ChatPinButton(message: message)
             if let onEdit {
                 ChatEditButton(onEdit: onEdit)
             }
@@ -1003,6 +1032,7 @@ struct ChatLetterBubble: View {
             ChatReactMenu(onReact: onReact)
             copyButton
             readButton
+            ChatPinButton(message: message)
             if let onForward {
                 forwardButton(onForward)
             }

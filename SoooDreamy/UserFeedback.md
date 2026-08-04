@@ -171,6 +171,13 @@ _(hier beantworte ich dein Feedback, wenn ich es umgesetzt habe)_
 ### Iteration 20 — Forward, Stats-Share, Server-Version 💌
 - `[2026-08-04 02:20 UTC]` Briefe als neuen Brief weiterleiten; Top-Moods & Date-Ideen in den Chat; Server-Version in Einstellungen; +20 Content. IPA **1.5.2**.
 
+### Iteration 21 — Welle 21: Pins, 💭-Button, Frische-Momente-Leiste 📌
+- `[2026-08-04 02:35 UTC]` **📌 Nachrichten anpinnen** (lokal, pro Gerät): Kontextmenü auf allen Bubble-Typen (Text/Brief/Sprach/Foto), Banner oben im Chat zeigt den neuesten Pin (+Zähler bei mehreren) — Tipp springt zur Nachricht (oder erklärt, wie ältere Seiten nachgeladen werden), Pin-lösen-Button direkt im Banner. Bis 30 Pins pro Paar, UserDefaults mit Vorschau-Snapshot.
+- `[2026-08-04 02:35 UTC]` **💭 Schwebender „Denk an dich“-Button** auf dem Dashboard — die liebste Berührung ohne Scrollen zum Touch-Grid, mit Pop-Animation.
+- `[2026-08-04 02:35 UTC]` **„Zuletzt bei euch“-Leiste** im Wir-Tab: neuestes Foto (Thumb + Bildunterschrift/Uploader), neuester Song, neuester Gutschein — je mit relativer Zeit, tippen führt direkt in Galerie/Soundtrack/Coupons; live-aktualisiert über die Server-Events.
+- `[2026-08-04 02:35 UTC]` **Verbindungs-Pill poliert**: pulsierender Punkt beim Verbinden, klares 📶-Offline-Badge mit farbigem Rand, kurzes mintgrünes „Verbunden“-Aufblitzen nach jedem Reconnect, A11y-Labels.
+- `[2026-08-04 02:35 UTC]` **+15 Content-Items** (8 This-or-That, 7 Würdest-du-eher, DE/EN). IPA **1.5.3** (Build 22) · Logic **50/50** Tests grün · Parse aller 83 Swift-Dateien sauber.
+
 ## 🔄 Als Nächstes
-- IPA 1.5.2 sideloaden + AMP Server v1.8.
+- IPA 1.5.3 sideloaden + AMP Server v1.8.
 - Infinite Fable-Max-Subagent-Loop läuft weiter.
