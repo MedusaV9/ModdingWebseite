@@ -19,7 +19,7 @@ import {
 
 const TOUCH_TYPES = ['heartbeat', 'kiss', 'hug', 'missyou', 'tickle', 'thinking'];
 const MESSAGE_TYPES = ['text', 'letter'];
-const GAME_TYPES = ['quiz', 'thisorthat', 'wouldyourather', 'truthordare', 'questions36'];
+const GAME_TYPES = ['quiz', 'thisorthat', 'wouldyourather', 'truthordare', 'questions36', 'emojiriddle'];
 const WORDLE_LANGS = ['de', 'en'];
 
 const LIMITS = {
@@ -46,6 +46,8 @@ const LIMITS = {
   songArtist: 120,
   songNote: 300,
   songLink: 500,
+  photoAlbum: 40,
+  inboxTeaser: 80,
 };
 
 // ---------------------------------------------------------------------------
@@ -101,6 +103,7 @@ function serializeMember(couple, member, realtime) {
     moodUpdatedAt: member.moodUpdatedAt,
     online: realtime.isOnline(couple.id, member.id),
     lastSeenAt: member.lastSeenAt,
+    lastReadAt: member.lastReadAt ?? null, // pre-v1.6 stores lack it
     joinedAt: member.joinedAt,
   };
 }
@@ -125,9 +128,14 @@ function serializeMessage(message) {
   return { ...message, openWhen: message.openWhen ?? null, reactions: message.reactions ?? null };
 }
 
-/** Pre-v1.2 stores lack `thumbUrl`/`favorites` on photos — default them on the way out. */
+/** Pre-v1.2 stores lack `thumbUrl`/`favorites`, pre-v1.6 stores lack `album` — default them on the way out. */
 function serializePhoto(photo) {
-  return { ...photo, thumbUrl: photo.thumbUrl ?? null, favorites: photo.favorites ?? [] };
+  return { ...photo, thumbUrl: photo.thumbUrl ?? null, favorites: photo.favorites ?? [], album: photo.album ?? null };
+}
+
+/** Pre-v1.6 stores lack `expiresAt` on coupons — default it on the way out. */
+function serializeCoupon(coupon) {
+  return { ...coupon, expiresAt: coupon.expiresAt ?? null };
 }
 
 /** Per-member mood history lives on the couple; v1.0 stores lack it entirely. */
@@ -174,6 +182,34 @@ function asSongField(value, field, max) {
   return trimmed.length === 0 ? null : trimmed;
 }
 
+/** Optional coupon expiry: null stays null, date strings are normalized to ISO — else `bad_expiry`. */
+function asExpiresAt(value) {
+  if (value == null) return null;
+  if (typeof value !== 'string' || !Number.isFinite(Date.parse(value))) {
+    throw httpError(400, 'bad_expiry', '"expiresAt" must be an ISO-8601 date string or null');
+  }
+  return new Date(Date.parse(value)).toISOString();
+}
+
+/** Optional photo album: null stays null, strings are trimmed (empty → null), ≤ 40 chars → `album_too_long`. */
+function asPhotoAlbum(value) {
+  if (value == null) return null;
+  if (typeof value !== 'string') throw httpError(400, 'invalid_request', '"album" must be a string');
+  const trimmed = value.trim();
+  if (trimmed.length > LIMITS.photoAlbum) {
+    throw httpError(400, 'album_too_long', `"album" must be at most ${LIMITS.photoAlbum} characters`);
+  }
+  return trimmed.length === 0 ? null : trimmed;
+}
+
+/** Optional ISO timestamp (e.g. `at`, `since`): normalized to ISO — else the given error code. */
+function asIsoTimestamp(value, field, code) {
+  if (typeof value !== 'string' || !Number.isFinite(Date.parse(value))) {
+    throw httpError(400, code, `"${field}" must be an ISO-8601 timestamp`);
+  }
+  return new Date(Date.parse(value)).toISOString();
+}
+
 // ---------------------------------------------------------------------------
 // couple/member factories
 
@@ -187,6 +223,7 @@ function newMember({ name, avatar, color }) {
     moodNote: null,
     moodUpdatedAt: null,
     lastSeenAt: null,
+    lastReadAt: null,
     joinedAt: nowIso(),
   };
 }
@@ -645,6 +682,35 @@ route('POST', '/api/messages/:id/reactions', { auth: true }, async (c) => {
   sendJson(c.res, 200, { message: serialized });
 });
 
+route('DELETE', '/api/messages/:id', { auth: true }, async (c) => {
+  const list = c.auth.couple.messages;
+  const idx = list.findIndex((m) => m.id === c.params.id);
+  if (idx === -1) throw httpError(404, 'not_found', 'Unknown message');
+  if (list[idx].senderId !== c.auth.memberId) {
+    throw httpError(403, 'not_yours', 'Only the sender may delete a message');
+  }
+  const [message] = list.splice(idx, 1);
+  if (message.type === 'voice') await c.store.deleteMedia('voice', `${message.id}.m4a`);
+  // counters.messages is a lifetime total and intentionally stays untouched.
+  c.store.markDirty();
+  c.realtime.broadcastCouple(c.auth.coupleId, 'message_deleted', { id: message.id });
+  sendJson(c.res, 200, { ok: true });
+});
+
+// Read receipt: marks everything up to `at` (default: now) as read by me.
+route('POST', '/api/messages/read', { auth: true }, async (c) => {
+  const body = await readJsonObject(c.req).catch((err) => {
+    // Allow an empty body for "read right now".
+    if (err instanceof HttpError && err.code === 'invalid_json') return {};
+    throw err;
+  });
+  const at = body.at == null ? nowIso() : asIsoTimestamp(body.at, 'at', 'bad_at');
+  c.auth.member.lastReadAt = at;
+  c.store.markDirty();
+  c.realtime.broadcastCouple(c.auth.coupleId, 'message_read', { memberId: c.auth.memberId, at });
+  sendJson(c.res, 200, { memberId: c.auth.memberId, at });
+});
+
 route('POST', '/api/voice', { auth: true }, async (c) => {
   const buf = await readBody(c.req, LIMITS.media);
   if (buf.length === 0) throw httpError(400, 'empty_body', 'Voice upload body is empty');
@@ -698,6 +764,7 @@ route('POST', '/api/photos', { auth: true }, async (c) => {
     thumbUrl: null,
     width: Number.isFinite(width) && width > 0 ? width : null,
     height: Number.isFinite(height) && height > 0 ? height : null,
+    album: null,
     createdAt: nowIso(),
   };
   c.auth.couple.photos.push(photo);
@@ -752,6 +819,21 @@ route('GET', '/api/photos/:id/thumb/raw', { auth: true, queryToken: true }, asyn
   if (!photo) throw httpError(404, 'not_found', 'Unknown photo');
   if (!photo.thumbUrl) throw httpError(404, 'no_thumb', 'This photo has no thumbnail');
   await serveFile(c.req, c.res, c.store.mediaPath('photos', `${photo.id}.thumb.jpg`), 'image/jpeg');
+});
+
+// The gallery is shared: like delete, BOTH partners may edit caption/album.
+route('PATCH', '/api/photos/:id', { auth: true }, async (c) => {
+  const body = await readJsonObject(c.req);
+  const photo = c.auth.couple.photos.find((p) => p.id === c.params.id);
+  if (!photo) throw httpError(404, 'not_found', 'Unknown photo');
+  if ('caption' in body) {
+    photo.caption = body.caption === null ? null : asString(body.caption, 'caption', { max: LIMITS.text, nonEmpty: false });
+  }
+  if ('album' in body) photo.album = asPhotoAlbum(body.album);
+  c.store.markDirty();
+  const serialized = serializePhoto(photo);
+  c.realtime.broadcastCouple(c.auth.coupleId, 'photo_updated', { photo: serialized });
+  sendJson(c.res, 200, { photo: serialized });
 });
 
 route('DELETE', '/api/photos/:id', { auth: true }, async (c) => {
@@ -877,7 +959,7 @@ function findCoupon(couple, couponId) {
 }
 
 route('GET', '/api/coupons', { auth: true }, (c) => {
-  sendJson(c.res, 200, { coupons: couponsOf(c.auth.couple).slice().reverse() });
+  sendJson(c.res, 200, { coupons: couponsOf(c.auth.couple).slice().reverse().map(serializeCoupon) });
 });
 
 route('POST', '/api/coupons', { auth: true }, async (c) => {
@@ -892,6 +974,7 @@ route('POST', '/api/coupons', { auth: true }, async (c) => {
     createdBy: c.auth.memberId,
     forMember: partner.id,
     redeemedAt: null,
+    expiresAt: asExpiresAt(body.expiresAt),
     createdAt: nowIso(),
   };
   const list = couponsOf(c.auth.couple);
@@ -900,8 +983,9 @@ route('POST', '/api/coupons', { auth: true }, async (c) => {
   c.store.markDirty();
   // Evictions first, so clients applying frames in order never exceed the cap.
   for (const old of evicted) c.realtime.broadcastCouple(c.auth.coupleId, 'coupon_deleted', { id: old.id });
-  c.realtime.broadcastCouple(c.auth.coupleId, 'coupon_added', { coupon });
-  sendJson(c.res, 201, { coupon });
+  const serialized = serializeCoupon(coupon);
+  c.realtime.broadcastCouple(c.auth.coupleId, 'coupon_added', { coupon: serialized });
+  sendJson(c.res, 201, { coupon: serialized });
 });
 
 route('POST', '/api/coupons/:id/redeem', { auth: true }, (c) => {
@@ -910,10 +994,14 @@ route('POST', '/api/coupons/:id/redeem', { auth: true }, (c) => {
     throw httpError(403, 'not_yours', 'Only the receiving member may redeem this coupon');
   }
   if (coupon.redeemedAt) throw httpError(409, 'already_redeemed', 'This coupon was already redeemed');
+  if (coupon.expiresAt && Date.parse(coupon.expiresAt) < Date.now()) {
+    throw httpError(409, 'expired', 'This coupon has expired');
+  }
   coupon.redeemedAt = nowIso();
   c.store.markDirty();
-  c.realtime.broadcastCouple(c.auth.coupleId, 'coupon_redeemed', { coupon });
-  sendJson(c.res, 200, { coupon });
+  const serialized = serializeCoupon(coupon);
+  c.realtime.broadcastCouple(c.auth.coupleId, 'coupon_redeemed', { coupon: serialized });
+  sendJson(c.res, 200, { coupon: serialized });
 });
 
 route('DELETE', '/api/coupons/:id', { auth: true }, (c) => {
@@ -1249,6 +1337,13 @@ route('GET', '/api/games/active', { auth: true }, (c) => {
   sendJson(c.res, 200, { game: null });
 });
 
+// History: recent games (any state, incl. result), newest first. The plain
+// `/api/games` path (2 segments) never clashes with `/api/games/active` (3 segments).
+route('GET', '/api/games', { auth: true }, (c) => {
+  const limit = queryInt(c.url, 'limit', 30, 1, LIMITS.games);
+  sendJson(c.res, 200, { games: c.auth.couple.games.slice(-limit).reverse().map(serializeGame) });
+});
+
 // --- stats -----------------------------------------------------------------------------------
 
 route('GET', '/api/stats', { auth: true }, (c) => {
@@ -1350,6 +1445,57 @@ route('GET', '/api/widget-snapshot', { auth: true, queryToken: true }, (c) => {
       : null,
     canvasStrokeCount: couple.strokes.length,
     canvasUpdatedAt: lastStroke ? lastStroke.createdAt : null,
+    serverTime: nowIso(),
+  });
+});
+
+// --- inbox -------------------------------------------------------------------------------------
+
+// "What happened since I last looked": counts (and a last teaser where useful)
+// of everything created strictly after `since`. Only `couponsForMe` filters by
+// receiver — other buckets include both members' items (`senderId` lets
+// clients tell them apart). Counts are limited by what the capped lists still hold.
+route('GET', '/api/inbox', { auth: true }, (c) => {
+  const raw = c.url.searchParams.get('since');
+  if (!raw) throw httpError(400, 'bad_since', '"since" query param is required (ISO-8601 timestamp)');
+  const since = asIsoTimestamp(raw, 'since', 'bad_since');
+  const couple = c.auth.couple;
+  const me = c.auth.memberId;
+  const newerThan = (list) => list.filter((item) => item.createdAt > since);
+
+  const messages = newerThan(couple.messages);
+  const lastMessage = messages.length > 0 ? messages[messages.length - 1] : null;
+  const touches = newerThan(couple.touches);
+  const photos = newerThan(couple.photos);
+  const lastPhoto = photos.length > 0 ? photos[photos.length - 1] : null;
+  const couponsForMe = couponsOf(couple).filter(
+    (cp) => cp.createdAt > since && cp.forMember === me && cp.createdBy !== me,
+  );
+  const partner = partnerOf(couple, me);
+  const partnerAnswer = partner ? couple.daily[todayKey()]?.answers[partner.id] : undefined;
+
+  sendJson(c.res, 200, {
+    messages: {
+      count: messages.length,
+      last: lastMessage
+        ? {
+            id: lastMessage.id,
+            senderId: lastMessage.senderId,
+            kind: lastMessage.type,
+            text: lastMessage.text == null ? null : lastMessage.text.slice(0, LIMITS.inboxTeaser),
+            createdAt: lastMessage.createdAt,
+          }
+        : null,
+    },
+    touches: { count: touches.length, last: touches.length > 0 ? touches[touches.length - 1] : null },
+    photos: { count: photos.length, last: lastPhoto ? { id: lastPhoto.id, caption: lastPhoto.caption } : null },
+    couponsForMe: {
+      count: couponsForMe.length,
+      last: couponsForMe.length > 0 ? serializeCoupon(couponsForMe[couponsForMe.length - 1]) : null,
+    },
+    songs: { count: songsOf(couple).filter((s) => s.createdAt > since).length },
+    dailyPartnerAnswered: Boolean(partnerAnswer && partnerAnswer.answeredAt > since),
+    canvasStrokes: { count: couple.strokes.filter((s) => s.createdAt > since).length },
     serverTime: nowIso(),
   });
 });

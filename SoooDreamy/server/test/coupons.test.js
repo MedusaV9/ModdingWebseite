@@ -86,6 +86,74 @@ test('coupon permission matrix: no_partner, wrong redeemer, double redeem, wrong
   assert.equal((await a.api.post('/api/coupons', { json: { title: '  ', emoji: '🎟' } })).status, 400);
 });
 
+test('coupon expiry: expiresAt stored (normalized ISO), broadcast, expired redeem → 409 expired', async (t) => {
+  const { baseUrl } = await makeApp(t);
+  const { a, b } = await setupCouple(baseUrl);
+  const bSock = await wsOpen(baseUrl, b.token, t);
+  await bSock.waitFor('welcome');
+
+  // Future expiry: stored, normalized to ISO with milliseconds, redeemable.
+  const res = await a.api.post('/api/coupons', {
+    json: { title: 'Spa day', emoji: '🧖', expiresAt: '2030-06-01T12:00:00Z' },
+  });
+  assert.equal(res.status, 201);
+  assert.equal(res.body.coupon.expiresAt, '2030-06-01T12:00:00.000Z');
+  const added = await bSock.waitFor('coupon_added');
+  assert.deepEqual(added.payload.coupon, res.body.coupon);
+  const redeemed = await b.api.post(`/api/coupons/${res.body.coupon.id}/redeem`);
+  assert.equal(redeemed.status, 200);
+  assert.equal(redeemed.body.coupon.expiresAt, '2030-06-01T12:00:00.000Z');
+  assert.ok(redeemed.body.coupon.redeemedAt);
+
+  // No / null expiresAt → null.
+  const plain = (await a.api.post('/api/coupons', { json: { title: 'No expiry', emoji: '♾️' } })).body.coupon;
+  assert.equal(plain.expiresAt, null);
+  const explicit = (await a.api.post('/api/coupons', { json: { title: 'Null expiry', emoji: '🫥', expiresAt: null } }))
+    .body.coupon;
+  assert.equal(explicit.expiresAt, null);
+
+  // Past expiry: creating is allowed, redeeming is not.
+  const past = new Date(Date.now() - 60_000).toISOString();
+  const stale = (await a.api.post('/api/coupons', { json: { title: 'Too late', emoji: '⌛', expiresAt: past } })).body
+    .coupon;
+  const denied = await b.api.post(`/api/coupons/${stale.id}/redeem`);
+  assert.equal(denied.status, 409);
+  assert.equal(denied.body.error, 'expired');
+  // Expired coupons stay listed (and deletable by the creator).
+  assert.ok((await b.api.get('/api/coupons')).body.coupons.some((cp) => cp.id === stale.id));
+  assert.deepEqual((await a.api.del(`/api/coupons/${stale.id}`)).body, { ok: true });
+
+  // Invalid expiresAt → 400 bad_expiry.
+  for (const bad of ['not-a-date', 42, true]) {
+    const invalid = await a.api.post('/api/coupons', { json: { title: 'Bad', emoji: '❓', expiresAt: bad } });
+    assert.equal(invalid.status, 400);
+    assert.equal(invalid.body.error, 'bad_expiry');
+  }
+});
+
+test('pre-v1.6 coupons without expiresAt serialize expiresAt: null', async (t) => {
+  const { baseUrl, app } = await makeApp(t);
+  const { a, b, coupleId } = await setupCouple(baseUrl);
+  // A coupon exactly as a v1.5 server stored it: no expiresAt key at all.
+  app.store.data.couples[coupleId].coupons.push({
+    id: 'cp_legacy',
+    title: 'From the old days',
+    emoji: '📼',
+    note: null,
+    createdBy: a.memberId,
+    forMember: b.memberId,
+    redeemedAt: null,
+    createdAt: '2025-01-01T00:00:00.000Z',
+  });
+  const list = (await b.api.get('/api/coupons')).body.coupons;
+  assert.equal(list[0].id, 'cp_legacy');
+  assert.equal(list[0].expiresAt, null);
+  // Redeeming the legacy coupon works (no expiry ⇒ never expired).
+  const redeemed = await b.api.post('/api/coupons/cp_legacy/redeem');
+  assert.equal(redeemed.status, 200);
+  assert.equal(redeemed.body.coupon.expiresAt, null);
+});
+
 test('coupon list caps at 200: oldest redeemed pruned first (with coupon_deleted broadcast), then oldest overall', async (t) => {
   const { baseUrl } = await makeApp(t);
   const { a, b } = await setupCouple(baseUrl);

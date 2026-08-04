@@ -74,6 +74,48 @@ test('photo body over 15 MB → 413, empty body → 400', async (t) => {
   assert.equal(empty.status, 400);
 });
 
+test('photo albums: default null, PATCH caption/album by either partner, photo_updated broadcast', async (t) => {
+  const { baseUrl, app } = await makeApp(t);
+  const { a, b, coupleId } = await setupCouple(baseUrl);
+  const aSock = await wsOpen(baseUrl, a.token, t);
+  await aSock.waitFor('welcome');
+
+  const up = await a.api.post('/api/photos', { body: Buffer.from('jpeg'), headers: { 'content-type': 'image/jpeg' } });
+  const photo = up.body.photo;
+  assert.equal(photo.album, null); // new photos start without an album
+
+  // The NON-uploader may edit too (shared gallery, like delete).
+  const patched = await b.api.patch(`/api/photos/${photo.id}`, { json: { caption: 'Our trip', album: ' Italy 2026 ' } });
+  assert.equal(patched.status, 200);
+  assert.equal(patched.body.photo.caption, 'Our trip');
+  assert.equal(patched.body.photo.album, 'Italy 2026'); // trimmed
+  const frame = await aSock.waitFor('photo_updated');
+  assert.deepEqual(frame.payload.photo, patched.body.photo);
+
+  // List includes the album.
+  const list = (await a.api.get('/api/photos')).body.photos;
+  assert.equal(list[0].album, 'Italy 2026');
+
+  // null clears caption; empty-string album clears to null; omitted fields stay.
+  const cleared = (await a.api.patch(`/api/photos/${photo.id}`, { json: { caption: null, album: '' } })).body.photo;
+  assert.equal(cleared.caption, null);
+  assert.equal(cleared.album, null);
+  const untouched = (await a.api.patch(`/api/photos/${photo.id}`, { json: { album: 'Sommer' } })).body.photo;
+  assert.equal(untouched.caption, null);
+  assert.equal(untouched.album, 'Sommer');
+
+  // Validation: album > 40 chars → album_too_long; unknown id → 404.
+  const tooLong = await a.api.patch(`/api/photos/${photo.id}`, { json: { album: 'x'.repeat(41) } });
+  assert.equal(tooLong.status, 400);
+  assert.equal(tooLong.body.error, 'album_too_long');
+  assert.equal((await a.api.patch(`/api/photos/${photo.id}`, { json: { album: 'x'.repeat(40) } })).status, 200);
+  assert.equal((await a.api.patch('/api/photos/ph_nope', { json: { album: 'x' } })).status, 404);
+
+  // Pre-v1.6 photos without the album key serialize album: null.
+  delete app.store.data.couples[coupleId].photos[0].album;
+  assert.equal((await b.api.get('/api/photos')).body.photos[0].album, null);
+});
+
 test('photos of another couple are not accessible', async (t) => {
   const { baseUrl } = await makeApp(t);
   const couple1 = await setupCouple(baseUrl);

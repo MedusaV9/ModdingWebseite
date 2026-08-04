@@ -91,6 +91,8 @@ test('a v1.0 store.json loads cleanly and all v1.1/v1.2 endpoints work on it', a
   assert.equal(couple.status, 200);
   assert.equal(couple.body.couple.id, 'c_old');
   assert.equal(couple.body.couple.members.length, 2);
+  // v1.6: old members without lastReadAt default to null on the way out.
+  assert.deepEqual(couple.body.couple.members.map((m) => m.lastReadAt), [null, null]);
 
   // Old messages gain openWhen: null and reactions: null on the way out.
   const messages = await a.get('/api/messages');
@@ -99,12 +101,13 @@ test('a v1.0 store.json loads cleanly and all v1.1/v1.2 endpoints work on it', a
   assert.equal(messages.body.messages[0].openWhen, null);
   assert.equal(messages.body.messages[0].reactions, null);
 
-  // Old photos gain thumbUrl: null and favorites: [] on the way out.
+  // Old photos gain thumbUrl: null, favorites: [] and album: null on the way out.
   const photos = await b.get('/api/photos');
   assert.equal(photos.status, 200);
   assert.equal(photos.body.photos[0].id, 'ph_old1');
   assert.equal(photos.body.photos[0].thumbUrl, null);
   assert.deepEqual(photos.body.photos[0].favorites, []);
+  assert.equal(photos.body.photos[0].album, null);
   assert.equal((await a.get('/api/photos/ph_old1/thumb/raw')).body.error, 'no_thumb');
 
   // Thumbs can be attached to a v1.0 photo (uploader only).

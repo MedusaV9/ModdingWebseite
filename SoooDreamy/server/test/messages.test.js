@@ -1,5 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { access } from 'node:fs/promises';
+import path from 'node:path';
 import { makeApp, setupCouple, wsOpen, client } from './helpers.js';
 
 test('text + letter messages, WS broadcast to both members', async (t) => {
@@ -94,6 +96,79 @@ test('voice upload: raw body → message, media auth via ?token=', async (t) => 
   assert.equal(denied.body.error, 'invalid_token');
 
   assert.equal((await a.api.get('/api/voice/msg_nope/raw')).status, 404);
+});
+
+test('message delete: sender only, voice file removed, message_deleted broadcast', async (t) => {
+  const { baseUrl, dataDir } = await makeApp(t);
+  const { a, b } = await setupCouple(baseUrl);
+  const bSock = await wsOpen(baseUrl, b.token, t);
+  await bSock.waitFor('welcome');
+
+  const msg = (await a.api.post('/api/messages', { json: { type: 'text', text: 'oops, typo' } })).body.message;
+
+  // Only the sender may delete.
+  const denied = await b.api.del(`/api/messages/${msg.id}`);
+  assert.equal(denied.status, 403);
+  assert.equal(denied.body.error, 'not_yours');
+
+  const del = await a.api.del(`/api/messages/${msg.id}`);
+  assert.equal(del.status, 200);
+  assert.deepEqual(del.body, { ok: true });
+  const frame = await bSock.waitFor('message_deleted');
+  assert.deepEqual(frame.payload, { id: msg.id });
+  assert.ok(!(await a.api.get('/api/messages')).body.messages.some((m) => m.id === msg.id));
+
+  // Deleted / unknown ids → 404.
+  assert.equal((await a.api.del(`/api/messages/${msg.id}`)).status, 404);
+  assert.equal((await a.api.del('/api/messages/msg_nope')).status, 404);
+
+  // Deleting a voice message also removes its media file.
+  const voice = (
+    await a.api.post('/api/voice', { body: Buffer.from('bytes'), headers: { 'content-type': 'audio/mp4' } })
+  ).body.message;
+  const file = path.join(dataDir, 'media', 'voice', `${voice.id}.m4a`);
+  await access(file);
+  assert.equal((await a.api.del(`/api/messages/${voice.id}`)).status, 200);
+  await assert.rejects(access(file));
+  assert.equal((await a.api.get(`/api/voice/${voice.id}/raw`)).status, 404);
+});
+
+test('read receipts: POST /api/messages/read sets lastReadAt, broadcasts message_read, shows on members', async (t) => {
+  const { baseUrl, app } = await makeApp(t);
+  const { a, b, coupleId } = await setupCouple(baseUrl);
+  const aSock = await wsOpen(baseUrl, a.token, t);
+  const bSock = await wsOpen(baseUrl, b.token, t);
+  await aSock.waitFor('welcome');
+  await bSock.waitFor('welcome');
+
+  // Default: never read anything (also for members stored before v1.6).
+  delete app.store.data.couples[coupleId].members[0].lastReadAt;
+  let members = (await a.api.get('/api/couple')).body.couple.members;
+  assert.deepEqual(members.map((m) => m.lastReadAt), [null, null]);
+
+  // Empty body → "read right now".
+  const now = await a.api.post('/api/messages/read');
+  assert.equal(now.status, 200);
+  assert.equal(now.body.memberId, a.memberId);
+  assert.ok(now.body.at);
+  // Broadcast goes to the whole couple (sender's other devices included).
+  const aFrame = await aSock.waitFor('message_read');
+  const bFrame = await bSock.waitFor('message_read');
+  assert.deepEqual(aFrame.payload, { memberId: a.memberId, at: now.body.at });
+  assert.deepEqual(bFrame.payload, { memberId: a.memberId, at: now.body.at });
+
+  // Explicit at → normalized ISO, visible on the member in couple responses.
+  const explicit = await b.api.post('/api/messages/read', { json: { at: '2026-08-01T10:00:00Z' } });
+  assert.equal(explicit.body.at, '2026-08-01T10:00:00.000Z');
+  members = (await a.api.get('/api/couple')).body.couple.members;
+  const byId = Object.fromEntries(members.map((m) => [m.id, m.lastReadAt]));
+  assert.equal(byId[a.memberId], now.body.at);
+  assert.equal(byId[b.memberId], '2026-08-01T10:00:00.000Z');
+
+  // Invalid at → 400 bad_at.
+  const bad = await a.api.post('/api/messages/read', { json: { at: 'gestern' } });
+  assert.equal(bad.status, 400);
+  assert.equal(bad.body.error, 'bad_at');
 });
 
 test('voice upload over 15 MB → 413 too_large', async (t) => {

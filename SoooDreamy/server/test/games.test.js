@@ -74,3 +74,44 @@ test('game validation: unknown type / unknown id', async (t) => {
   assert.equal((await a.api.post('/api/games/g_nope/join', { json: {} })).status, 404);
   assert.equal((await a.api.post('/api/games/g_nope/move', { json: { data: {} } })).status, 404);
 });
+
+test('games list: newest first with result/state/type, limit default 30 capped at 100', async (t) => {
+  const { baseUrl } = await makeApp(t);
+  const { a, b } = await setupCouple(baseUrl);
+
+  assert.deepEqual((await a.api.get('/api/games')).body, { games: [] });
+
+  const ids = [];
+  for (let i = 0; i < 35; i++) {
+    const game = (await a.api.post('/api/games', { json: { type: 'quiz', payload: { n: i } } })).body.game;
+    ids.push(game.id);
+  }
+  // End the newest one with a result; older ones were auto-ended without one.
+  await b.api.post(`/api/games/${ids[34]}/end`, { json: { result: { winner: b.memberId } } });
+
+  const page = (await a.api.get('/api/games')).body.games;
+  assert.equal(page.length, 30); // default limit
+  assert.equal(page[0].id, ids[34]); // newest first
+  assert.equal(page[0].type, 'quiz');
+  assert.equal(page[0].state, 'ended');
+  assert.deepEqual(page[0].result, { winner: b.memberId });
+  assert.deepEqual(page[0].payload, { n: 34 });
+  assert.equal(page[29].id, ids[5]);
+  assert.equal(page[1].result, null);
+
+  const two = (await a.api.get('/api/games?limit=2')).body.games;
+  assert.deepEqual(two.map((g) => g.id), [ids[34], ids[33]]);
+
+  // limit is clamped to 1..100 (no 400s), so huge values return everything stored.
+  const all = (await a.api.get('/api/games?limit=1000')).body.games;
+  assert.equal(all.length, 35);
+});
+
+test('emojiriddle is an accepted game type', async (t) => {
+  const { baseUrl } = await makeApp(t);
+  const { a } = await setupCouple(baseUrl);
+  const res = await a.api.post('/api/games', { json: { type: 'emojiriddle', payload: { riddleId: 7 } } });
+  assert.equal(res.status, 201);
+  assert.equal(res.body.game.type, 'emojiriddle');
+  assert.equal((await a.api.get('/api/games?limit=1')).body.games[0].type, 'emojiriddle');
+});
