@@ -178,6 +178,14 @@ _(hier beantworte ich dein Feedback, wenn ich es umgesetzt habe)_
 - `[2026-08-04 02:35 UTC]` **Verbindungs-Pill poliert**: pulsierender Punkt beim Verbinden, klares 📶-Offline-Badge mit farbigem Rand, kurzes mintgrünes „Verbunden“-Aufblitzen nach jedem Reconnect, A11y-Labels.
 - `[2026-08-04 02:35 UTC]` **+15 Content-Items** (8 This-or-That, 7 Würdest-du-eher, DE/EN). IPA **1.5.3** (Build 22) · Logic **50/50** Tests grün · Parse aller 83 Swift-Dateien sauber.
 
+### Iteration 22 — Welle 22: Song-Teilen, Momente-Filter, Flashback-Teilen 🎵🗓️
+- `[2026-08-04 02:45 UTC]` **🎵 Songs in den Chat teilen**: Kontextmenü auf jeder Song-Karte (auch bei Songs vom Schatz) — schickt „🎵 Aus unserem Soundtrack:“ mit Titel — Artist, eurer Notiz in Anführungszeichen und dem Anhören-Link als Chat-Nachricht.
+- `[2026-08-04 02:45 UTC]` **Momente-Filter**: Chips Alle / Bevorstehend ⏳ / Vergangen 🕰️ über der Momente-Liste (wie bei der Bucket List) — mit eigenen Leer-Hinweisen pro Filter; der Monatstag-Vorschlag versteckt sich unter „Vergangen“.
+- `[2026-08-04 02:45 UTC]` **💭 Flashback in den Chat teilen**: Kontextmenü auf der Erinnerungs-Karte am Dashboard — alte Fotos gehen als echte Foto-Bubble (mit „💭 Erinnerung von vor {n} Tagen“-Text + Bildunterschrift), alte Tagesfragen als Text mit euren beiden Antworten von damals.
+- `[2026-08-04 02:45 UTC]` **+12 Quizfragen** (DE/EN, jetzt 138): Superkraft, Koffer-Packstil, Immer-dabei-Dinge, Bestes Gericht, inneres Alter, Zeitreise, Alltagsluxus, Filmcharakter, Kino vs. Couch, Jeden-Tag-Gericht, Lieblingsgeräusch, Jahres-Traum.
+- `[2026-08-04 02:45 UTC]` **A11y**: alle 5 Haupt-Tabs haben jetzt explizite Accessibility-Labels; der Chat-Tab sagt VoiceOver zusätzlich die Ungelesen-Zahl an („Chat, {n} ungelesen“).
+- `[2026-08-04 02:45 UTC]` IPA **1.5.4** (Build 23) · Logic **50/50** Tests grün · Parse aller 93 Swift-Dateien sauber.
+
 ## 🔄 Als Nächstes
-- IPA 1.5.3 sideloaden + AMP Server v1.8.
+- IPA 1.5.4 sideloaden + AMP Server v1.8.
 - Infinite Fable-Max-Subagent-Loop läuft weiter.

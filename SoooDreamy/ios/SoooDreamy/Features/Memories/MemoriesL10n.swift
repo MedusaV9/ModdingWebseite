@@ -183,6 +183,13 @@ enum MemoriesL10n {
         "memories.events.monthiversaryTitle": LText(de: "{n} Monate zusammen", en: "{n} months together"),
         "memories.events.monthiversaryExists": LText(de: "Euer Monatstag steht schon in der Liste 💞",
                                                      en: "Your monthiversary is already on the list 💞"),
+        "memories.events.filter.all": LText(de: "Alle", en: "All"),
+        "memories.events.filter.upcoming": LText(de: "Bevorstehend ⏳", en: "Upcoming ⏳"),
+        "memories.events.filter.past": LText(de: "Vergangen 🕰️", en: "Past 🕰️"),
+        "memories.events.emptyUpcoming": LText(de: "Nichts geplant — Zeit für euer nächstes Highlight! 🗓️",
+                                               en: "Nothing coming up — time to plan your next highlight! 🗓️"),
+        "memories.events.emptyPast": LText(de: "Noch keine vergangenen Momente 🕰️",
+                                           en: "No past moments yet 🕰️"),
 
         // Love stats
         "memories.stats.title": LText(de: "Love-Stats", en: "Love Stats"),
@@ -301,6 +308,10 @@ enum MemoriesL10n {
                                                    en: "Really remove this song from your soundtrack?"),
         "memories.soundtrack.empty.title": LText(de: "Noch keine Songs", en: "No songs yet"),
         "memories.soundtrack.empty.subtitle": LText(de: "Füge den ersten Song hinzu, der nach euch beiden klingt 🎶",
-                                                    en: "Add the first song that sounds like the two of you 🎶")
+                                                    en: "Add the first song that sounds like the two of you 🎶"),
+        "memories.soundtrack.share": LText(de: "In den Chat senden 💬", en: "Send to chat 💬"),
+        "memories.soundtrack.shareHeader": LText(de: "🎵 Aus unserem Soundtrack:",
+                                                 en: "🎵 From our soundtrack:"),
+        "memories.soundtrack.shareSent": LText(de: "Song im Chat geteilt 🎵", en: "Song shared to chat 🎵")
     ]
 }

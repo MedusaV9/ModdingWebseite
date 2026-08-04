@@ -40,6 +40,7 @@ enum CoreStrings {
         "tab.play": LText(de: "Spielen", en: "Play"),
         "tab.us": LText(de: "Wir", en: "Us"),
         "tab.more": LText(de: "Mehr", en: "More"),
+        "tab.chat.unreadA11y": LText(de: "Chat, {n} ungelesen", en: "Chat, {n} unread"),
 
         // Onboarding
         "onboarding.title": LText(de: "SoooDreamy", en: "SoooDreamy"),
@@ -275,6 +276,11 @@ enum CoreStrings {
         "home.flashback": LText(de: "Erinnerung", en: "Memory"),
         "home.flashbackDaysAgo": LText(de: "vor {n} Tagen", en: "{n} days ago"),
         "home.flashbackQuestion": LText(de: "Eure Frage von damals", en: "Your question back then"),
+        "home.flashbackShare": LText(de: "In den Chat senden 💬", en: "Send to chat 💬"),
+        "home.flashbackShareHeader": LText(de: "💭 Erinnerung von vor {n} Tagen:",
+                                           en: "💭 A memory from {n} days ago:"),
+        "home.flashbackShared": LText(de: "Erinnerung im Chat geteilt 💭",
+                                      en: "Memory shared to chat 💭"),
 
         // Streak calendar (sheet behind the dashboard streak pill)
         "home.streakCalendar.title": LText(de: "Serien-Kalender", en: "Streak calendar"),

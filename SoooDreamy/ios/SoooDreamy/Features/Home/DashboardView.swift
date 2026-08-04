@@ -163,6 +163,48 @@ struct DashboardView: View {
             .glassCard(padding: 14)
         }
         .buttonStyle(.plain)
+        .contextMenu {
+            Button {
+                shareFlashback(item)
+            } label: {
+                Label(L10n.t("home.flashbackShare"), systemImage: "paperplane.fill")
+            }
+        }
+    }
+
+    /// Re-posts the memory into the chat — photos as a real photo bubble,
+    /// daily questions as text with both answers of back then.
+    private func shareFlashback(_ item: FlashbackItem) {
+        guard let api = appState.api else { return }
+        Haptics.shared.tap()
+        Task {
+            do {
+                switch item {
+                case .photo(let photo, let daysAgo):
+                    var text = L10n.t("home.flashbackShareHeader", ["n": String(daysAgo)])
+                    if let caption = photo.caption, !caption.isEmpty {
+                        text += " " + caption
+                    }
+                    _ = try await api.sendPhotoMessage(photoId: photo.id, text: text)
+                case .daily(let entry, let question, let daysAgo):
+                    var lines = [L10n.t("home.flashbackShareHeader", ["n": String(daysAgo)]),
+                                 question.text.filled(partner: appState.partnerName, lang: L10n.lang)]
+                    let myName = appState.me?.name ?? L10n.t("common.you")
+                    if let mine = entry.myAnswer, !mine.isEmpty {
+                        lines.append("\(myName): \(mine)")
+                    }
+                    if let theirs = entry.partnerAnswer, !theirs.isEmpty {
+                        lines.append("\(appState.partnerName): \(theirs)")
+                    }
+                    _ = try await api.sendMessage(type: .text, text: lines.joined(separator: "\n"))
+                }
+                SoundEngine.shared.play(.pop)
+                Haptics.shared.success()
+                appState.showToast(L10n.t("home.flashbackShared"), style: .success)
+            } catch {
+                appState.handleAPIError(error)
+            }
+        }
     }
 
     // MARK: "While you were away" (missed inbox)

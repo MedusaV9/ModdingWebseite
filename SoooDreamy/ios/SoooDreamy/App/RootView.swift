@@ -66,29 +66,51 @@ struct MainTabView: View {
         @Bindable var state = appState
         TabView(selection: $state.activeTab) {
             DashboardView()
-                .tabItem { Label(L10n.t("tab.home"), systemImage: "house.fill") }
+                .tabItem {
+                    Label(L10n.t("tab.home"), systemImage: "house.fill")
+                        .accessibilityLabel(L10n.t("tab.home"))
+                }
                 .tag(AppTab.home)
 
             ChatView()
-                .tabItem { Label(L10n.t("tab.chat"), systemImage: "bubble.left.and.bubble.right.fill") }
+                .tabItem {
+                    Label(L10n.t("tab.chat"), systemImage: "bubble.left.and.bubble.right.fill")
+                        .accessibilityLabel(chatTabA11yLabel)
+                }
                 .badge(appState.unreadChat > 0 ? appState.unreadChat : 0)
                 .tag(AppTab.chat)
 
             PlayHubView()
-                .tabItem { Label(L10n.t("tab.play"), systemImage: "gamecontroller.fill") }
+                .tabItem {
+                    Label(L10n.t("tab.play"), systemImage: "gamecontroller.fill")
+                        .accessibilityLabel(L10n.t("tab.play"))
+                }
                 .tag(AppTab.play)
 
             MemoriesView()
-                .tabItem { Label(L10n.t("tab.us"), systemImage: "photo.on.rectangle.angled") }
+                .tabItem {
+                    Label(L10n.t("tab.us"), systemImage: "photo.on.rectangle.angled")
+                        .accessibilityLabel(L10n.t("tab.us"))
+                }
                 .tag(AppTab.memories)
 
             SettingsView()
-                .tabItem { Label(L10n.t("tab.more"), systemImage: "ellipsis.circle.fill") }
+                .tabItem {
+                    Label(L10n.t("tab.more"), systemImage: "ellipsis.circle.fill")
+                        .accessibilityLabel(L10n.t("tab.more"))
+                }
                 .tag(AppTab.settings)
         }
         .tint(Theme.pink)
         .onChange(of: appState.activeTab) { _, newTab in
             if newTab == .chat { appState.unreadChat = 0 }
         }
+    }
+
+    /// VoiceOver announces the unread count together with the tab name.
+    private var chatTabA11yLabel: String {
+        appState.unreadChat > 0
+            ? L10n.t("tab.chat.unreadA11y", ["n": String(appState.unreadChat)])
+            : L10n.t("tab.chat")
     }
 }

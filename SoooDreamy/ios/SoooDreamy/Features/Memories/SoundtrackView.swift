@@ -208,6 +208,7 @@ struct SoundtrackView: View {
         if isMine(song) {
             songCard(song)
                 .contextMenu {
+                    shareButton(song)
                     Button {
                         editorTarget = EditorTarget(id: song.id, song: song)
                     } label: {
@@ -230,7 +231,52 @@ struct SoundtrackView: View {
                 }
         } else {
             songCard(song)
+                .contextMenu {
+                    shareButton(song)
+                }
         }
+    }
+
+    // MARK: Share to chat
+
+    private func shareButton(_ song: Song) -> some View {
+        Button {
+            shareToChat(song)
+        } label: {
+            Label(L10n.t("memories.soundtrack.share"), systemImage: "paperplane.fill")
+        }
+    }
+
+    /// Posts the song (title, artist, note, link) as a chat message.
+    private func shareToChat(_ song: Song) {
+        guard let api = appState.api else { return }
+        let text = shareText(song)
+        Haptics.shared.tap()
+        Task {
+            do {
+                _ = try await api.sendMessage(type: .text, text: text)
+                Haptics.shared.success()
+                SoundEngine.shared.play(.pop)
+                appState.showToast(L10n.t("memories.soundtrack.shareSent"), style: .success)
+            } catch {
+                appState.handleAPIError(error)
+            }
+        }
+    }
+
+    private func shareText(_ song: Song) -> String {
+        var titleLine = song.title
+        if let artist = song.artist, !artist.isEmpty {
+            titleLine += " — " + artist
+        }
+        var lines = [L10n.t("memories.soundtrack.shareHeader"), titleLine]
+        if let note = song.note, !note.isEmpty {
+            lines.append("„" + note + "“")
+        }
+        if let url = listenURL(song.link) {
+            lines.append(url.absoluteString)
+        }
+        return lines.joined(separator: "\n")
     }
 
     private func songCard(_ song: Song) -> some View {

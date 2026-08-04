@@ -7,10 +7,18 @@ struct EventsView: View {
 
     @State private var editorTarget: EditorTarget?
     @State private var activityRefresh = 0
+    @State private var filter: EventFilter = .all
 
     private struct EditorTarget: Identifiable {
         let id: String
         let event: EventItem?
+    }
+
+    /// Upcoming = today or later (incl. yearly repeats); past = already over.
+    private enum EventFilter: String, CaseIterable, Identifiable {
+        case all, upcoming, past
+        var id: String { rawValue }
+        var labelKey: String { "memories.events.filter.\(rawValue)" }
     }
 
     private struct EventEntry: Identifiable {
@@ -58,6 +66,19 @@ struct EventsView: View {
         return days >= 0 ? days : 100_000 - days
     }
 
+    private var filteredEvents: [EventEntry] {
+        sortedEvents.filter { matches($0.days) }
+    }
+
+    /// Unparseable dates (days == nil) count as past, matching their sort position.
+    private func matches(_ days: Int?) -> Bool {
+        switch filter {
+        case .all: return true
+        case .upcoming: return (days ?? -1) >= 0
+        case .past: return (days ?? -1) < 0
+        }
+    }
+
     // MARK: Content
 
     @ViewBuilder
@@ -91,19 +112,75 @@ struct EventsView: View {
 
     private var eventList: some View {
         List {
-            if let suggestion = monthiversarySuggestion {
+            filterRow
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+                .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 2, trailing: 16))
+            // The suggestion is always an upcoming event — hide it under "past".
+            if filter != .past, let suggestion = monthiversarySuggestion {
                 monthiversaryButton(suggestion)
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
                     .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
             }
-            ForEach(sortedEvents) { entry in
+            if filteredEvents.isEmpty {
+                filteredEmptyRow
+            }
+            ForEach(filteredEvents) { entry in
                 row(entry.event, days: entry.days)
             }
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .refreshable { await appState.refreshEvents() }
+    }
+
+    // MARK: Filter (all / upcoming / past)
+
+    private var filterRow: some View {
+        HStack(spacing: LayoutMetrics.s(8)) {
+            ForEach(EventFilter.allCases) { f in
+                filterChip(f)
+            }
+            Spacer()
+        }
+    }
+
+    private func filterChip(_ f: EventFilter) -> some View {
+        let selected = filter == f
+        return Button {
+            Haptics.shared.tap()
+            withAnimation(.spring(response: 0.3)) { filter = f }
+        } label: {
+            Text(L10n.t(f.labelKey))
+                .font(.system(.caption, design: .rounded).weight(.bold))
+                .foregroundStyle(selected ? Theme.textPrimary : Theme.textSecondary)
+                .padding(.vertical, 7)
+                .padding(.horizontal, LayoutMetrics.s(14))
+                .background(
+                    Capsule().fill(selected ? Theme.purple.opacity(0.45) : Color.white.opacity(0.06))
+                )
+                .overlay(
+                    Capsule().strokeBorder(selected ? Theme.pink : Color.white.opacity(0.12), lineWidth: 1)
+                )
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// Hint when the chosen filter has nothing to show (but the list isn't empty).
+    @ViewBuilder
+    private var filteredEmptyRow: some View {
+        if filter != .all {
+            Text(L10n.t(filter == .upcoming
+                        ? "memories.events.emptyUpcoming"
+                        : "memories.events.emptyPast"))
+                .font(.system(.footnote, design: .rounded))
+                .foregroundStyle(Theme.textTertiary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, LayoutMetrics.s(24))
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+        }
     }
 
     // MARK: Monthiversary helper

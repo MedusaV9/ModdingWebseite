@@ -131,6 +131,18 @@ extension ContentPack {
         QuizQuestion(id: 123, text: LText(de: "Welchen Song singt {partner} unter der Dusche?", en: "Which song does {partner} sing in the shower?")),
         QuizQuestion(id: 124, text: LText(de: "Welches Möbelstück würde {partner} zuerst für unsere Traumwohnung aussuchen?", en: "Which piece of furniture would {partner} pick first for our dream home?")),
         QuizQuestion(id: 125, text: LText(de: "Wie viele Wecker braucht {partner}, um wirklich aufzustehen?", en: "How many alarms does {partner} need to actually get up?")),
-        QuizQuestion(id: 126, text: LText(de: "Welches Brettspiel gewinnt {partner} fast immer?", en: "Which board game does {partner} almost always win?"))
+        QuizQuestion(id: 126, text: LText(de: "Welches Brettspiel gewinnt {partner} fast immer?", en: "Which board game does {partner} almost always win?")),
+        QuizQuestion(id: 127, text: LText(de: "Welche Superkraft würde {partner} wählen?", en: "Which superpower would {partner} choose?")),
+        QuizQuestion(id: 128, text: LText(de: "Packt {partner} den Koffer Tage vorher oder in letzter Minute?", en: "Does {partner} pack their suitcase days ahead or last minute?")),
+        QuizQuestion(id: 129, text: LText(de: "Welche drei Dinge hat {partner} immer dabei?", en: "Which three things does {partner} always have on them?")),
+        QuizQuestion(id: 130, text: LText(de: "Was kocht {partner} am besten?", en: "Which dish does {partner} cook best?")),
+        QuizQuestion(id: 131, text: LText(de: "Wie alt fühlt sich {partner} innerlich wirklich?", en: "How old does {partner} really feel inside?")),
+        QuizQuestion(id: 132, text: LText(de: "Würde {partner} lieber in die Vergangenheit oder in die Zukunft reisen?", en: "Would {partner} rather travel to the past or the future?")),
+        QuizQuestion(id: 133, text: LText(de: "Was ist {partner}s kleiner Alltagsluxus?", en: "What is {partner}'s little everyday luxury?")),
+        QuizQuestion(id: 134, text: LText(de: "Welchem Filmcharakter ist {partner} am ähnlichsten?", en: "Which movie character is {partner} most similar to?")),
+        QuizQuestion(id: 135, text: LText(de: "Kinoabend oder Serienmarathon auf der Couch — was wählt {partner}?", en: "Movie night at the cinema or a series marathon on the couch — which does {partner} pick?")),
+        QuizQuestion(id: 136, text: LText(de: "Welches Gericht könnte {partner} eine Woche lang jeden Tag essen?", en: "Which dish could {partner} eat every day for a week?")),
+        QuizQuestion(id: 137, text: LText(de: "Was ist {partner}s Lieblingsgeräusch?", en: "What is {partner}'s favorite sound?")),
+        QuizQuestion(id: 138, text: LText(de: "Welchen kleinen Traum will {partner} sich dieses Jahr noch erfüllen?", en: "Which little dream does {partner} want to fulfil before the year ends?"))
     ]
 }
