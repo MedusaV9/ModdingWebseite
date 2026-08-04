@@ -80,6 +80,10 @@ struct EventsView: View {
                 editorTarget = EditorTarget(id: "new", event: nil)
             }
             .buttonStyle(PrimaryButtonStyle(fullWidth: false))
+            if let suggestion = monthiversarySuggestion {
+                monthiversaryButton(suggestion)
+                    .padding(.horizontal, LayoutMetrics.s(16))
+            }
             Spacer()
         }
         .frame(maxWidth: .infinity)
@@ -87,6 +91,12 @@ struct EventsView: View {
 
     private var eventList: some View {
         List {
+            if let suggestion = monthiversarySuggestion {
+                monthiversaryButton(suggestion)
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+                    .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+            }
             ForEach(sortedEvents) { entry in
                 row(entry.event, days: entry.days)
             }
@@ -94,6 +104,89 @@ struct EventsView: View {
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .refreshable { await appState.refreshEvents() }
+    }
+
+    // MARK: Monthiversary helper
+
+    private struct MonthiversarySuggestion {
+        let months: Int
+        let dateKey: String
+        var title: String {
+            L10n.t("memories.events.monthiversaryTitle", ["n": String(months)])
+        }
+    }
+
+    /// The next monthiversary (anniversary day-of-month, ≥ today) — nil while
+    /// no anniversary is set, or once the suggested event already exists.
+    private var monthiversarySuggestion: MonthiversarySuggestion? {
+        guard let key = appState.couple?.anniversary,
+              let anniversary = SharedDates.parse(key) else { return nil }
+        let calendar = SharedDates.calendar
+        let annDay = calendar.startOfDay(for: anniversary)
+        let today = calendar.startOfDay(for: Date())
+        var months = max(calendar.dateComponents([.month], from: annDay, to: today).month ?? 0, 1)
+        var candidate = calendar.date(byAdding: .month, value: months, to: annDay)
+        while let c = candidate, calendar.startOfDay(for: c) < today {
+            months += 1
+            candidate = calendar.date(byAdding: .month, value: months, to: annDay)
+        }
+        guard let date = candidate else { return nil }
+        let comps = calendar.dateComponents([.year, .month, .day], from: date)
+        let dateKey = String(format: "%04d-%02d-%02d",
+                             comps.year ?? 0, comps.month ?? 0, comps.day ?? 0)
+        let suggestion = MonthiversarySuggestion(months: months, dateKey: dateKey)
+        guard !appState.events.contains(where: { $0.date == dateKey && $0.title == suggestion.title }) else {
+            return nil
+        }
+        return suggestion
+    }
+
+    private func monthiversaryButton(_ suggestion: MonthiversarySuggestion) -> some View {
+        Button {
+            addMonthiversary(suggestion)
+        } label: {
+            HStack(spacing: LayoutMetrics.s(12)) {
+                Text("💞")
+                    .font(.scaled(26))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(L10n.t("memories.events.addMonthiversary"))
+                        .font(.system(.subheadline, design: .rounded).weight(.bold))
+                        .foregroundStyle(Theme.textPrimary)
+                    Text(L10n.t("memories.events.monthiversarySub",
+                                ["n": String(suggestion.months), "date": prettyDate(suggestion.dateKey)]))
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(Theme.textSecondary)
+                }
+                Spacer()
+                Image(systemName: "plus.circle.fill")
+                    .font(.scaled(20))
+                    .foregroundStyle(Theme.pink)
+            }
+            .glassCard(padding: 14)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func addMonthiversary(_ suggestion: MonthiversarySuggestion) {
+        guard let api = appState.api else { return }
+        guard !appState.events.contains(where: { $0.date == suggestion.dateKey && $0.title == suggestion.title }) else {
+            appState.showToast(L10n.t("memories.events.monthiversaryExists"), style: .info)
+            return
+        }
+        Haptics.shared.tap()
+        Task {
+            do {
+                _ = try await api.addEvent(title: suggestion.title, emoji: "💞",
+                                           date: suggestion.dateKey, repeatsYearly: false)
+                await appState.refreshEvents()
+                appState.updateWidgetSnapshot()
+                SoundEngine.shared.play(.chime)
+                Haptics.shared.success()
+                appState.showToast(L10n.t("memories.events.saved"), style: .success)
+            } catch {
+                appState.handleAPIError(error)
+            }
+        }
     }
 
     // MARK: Row

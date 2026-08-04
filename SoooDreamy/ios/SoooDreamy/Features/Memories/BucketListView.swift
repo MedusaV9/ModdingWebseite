@@ -5,12 +5,19 @@ import Combine
 struct BucketListView: View {
     @Environment(AppState.self) private var appState
 
+    private enum Filter: String, CaseIterable, Identifiable {
+        case all, open, done
+        var id: String { rawValue }
+        var labelKey: String { "memories.bucket.filter.\(rawValue)" }
+    }
+
     @State private var items: [BucketItem] = []
     @State private var loading = true
     @State private var newText = ""
     @State private var selectedEmoji = ""
     @State private var showEmojiPicker = false
     @State private var adding = false
+    @State private var filter: Filter = .all
     @State private var celebrationDate: Date?
     @State private var celebrationTask: Task<Void, Never>?
 
@@ -62,8 +69,10 @@ struct BucketListView: View {
             headerRows
             if items.isEmpty {
                 emptyRow
+            } else if filteredEmptyHint != nil {
+                filteredEmptyRow
             }
-            if !openItems.isEmpty {
+            if filter != .done, !openItems.isEmpty {
                 Section {
                     ForEach(openItems) { item in
                         row(item)
@@ -72,7 +81,7 @@ struct BucketListView: View {
                     SectionHeader(title: L10n.t("memories.bucket.openSection"))
                 }
             }
-            if !doneItems.isEmpty {
+            if filter != .open, !doneItems.isEmpty {
                 Section {
                     ForEach(doneItems) { item in
                         row(item)
@@ -88,15 +97,73 @@ struct BucketListView: View {
         .refreshable { await loadItems() }
     }
 
+    /// Hint text when the chosen filter has nothing to show (but the list isn't empty).
+    private var filteredEmptyHint: String? {
+        switch filter {
+        case .all: return nil
+        case .open: return openItems.isEmpty ? L10n.t("memories.bucket.emptyOpen") : nil
+        case .done: return doneItems.isEmpty ? L10n.t("memories.bucket.emptyDone") : nil
+        }
+    }
+
+    @ViewBuilder
+    private var filteredEmptyRow: some View {
+        if let hint = filteredEmptyHint {
+            Text(hint)
+                .font(.system(.subheadline, design: .rounded))
+                .foregroundStyle(Theme.textSecondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, LayoutMetrics.s(24))
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+        }
+    }
+
     @ViewBuilder
     private var headerRows: some View {
         Group {
             progressCard
             addCard
+            if !items.isEmpty {
+                filterRow
+            }
         }
         .listRowBackground(Color.clear)
         .listRowSeparator(.hidden)
         .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+    }
+
+    // MARK: Filter (all / open / done)
+
+    private var filterRow: some View {
+        HStack(spacing: LayoutMetrics.s(8)) {
+            ForEach(Filter.allCases) { f in
+                filterChip(f)
+            }
+            Spacer()
+        }
+    }
+
+    private func filterChip(_ f: Filter) -> some View {
+        let selected = filter == f
+        return Button {
+            Haptics.shared.tap()
+            withAnimation(.spring(response: 0.3)) { filter = f }
+        } label: {
+            Text(L10n.t(f.labelKey))
+                .font(.system(.caption, design: .rounded).weight(.bold))
+                .foregroundStyle(selected ? Theme.textPrimary : Theme.textSecondary)
+                .padding(.vertical, 7)
+                .padding(.horizontal, LayoutMetrics.s(14))
+                .background(
+                    Capsule().fill(selected ? Theme.purple.opacity(0.45) : Color.white.opacity(0.06))
+                )
+                .overlay(
+                    Capsule().strokeBorder(selected ? Theme.pink : Color.white.opacity(0.12), lineWidth: 1)
+                )
+        }
+        .buttonStyle(.plain)
     }
 
     private var emptyRow: some View {
@@ -236,6 +303,31 @@ struct BucketListView: View {
                 deleteItem(item)
             } label: {
                 Label(L10n.t("common.delete"), systemImage: "trash")
+            }
+        }
+        .contextMenu {
+            Button {
+                shareToChat(item)
+            } label: {
+                Label(L10n.t("memories.bucket.share"), systemImage: "paperplane.fill")
+            }
+        }
+    }
+
+    /// Posts the item into the couple chat — completed dreams as a little
+    /// celebration message, open ones as a teaser.
+    private func shareToChat(_ item: BucketItem) {
+        guard let api = appState.api else { return }
+        let key = item.done ? "memories.bucket.shareDone" : "memories.bucket.shareOpen"
+        let text = L10n.t(key, ["item": rowTitle(item)])
+        Task {
+            do {
+                try await api.sendMessage(type: .text, text: text)
+                Haptics.shared.success()
+                SoundEngine.shared.play(.pop)
+                appState.showToast(L10n.t("memories.bucket.shareSent"), style: .success)
+            } catch {
+                appState.handleAPIError(error)
             }
         }
     }

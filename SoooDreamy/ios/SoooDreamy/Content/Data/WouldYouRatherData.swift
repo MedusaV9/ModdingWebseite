@@ -100,6 +100,11 @@ extension ContentPack {
         ChoicePair(id: 92, a: LText(de: "von mir ein Gedicht bekommen", en: "get a poem from me"), b: LText(de: "von mir ein selbst gekochtes Drei-Gänge-Menü bekommen", en: "get a home-cooked three-course dinner from me")),
         ChoicePair(id: 93, a: LText(de: "gemeinsam einen Marathon laufen", en: "run a marathon together"), b: LText(de: "gemeinsam einen Berg besteigen", en: "climb a mountain together")),
         ChoicePair(id: 94, a: LText(de: "jedes Gespräch mit einer Umarmung beginnen", en: "start every conversation with a hug"), b: LText(de: "jedes Gespräch mit einem High Five beenden", en: "end every conversation with a high five")),
-        ChoicePair(id: 95, a: LText(de: "nie wieder etwas verlieren", en: "never lose anything again"), b: LText(de: "nie wieder etwas vergessen", en: "never forget anything again"))
+        ChoicePair(id: 95, a: LText(de: "nie wieder etwas verlieren", en: "never lose anything again"), b: LText(de: "nie wieder etwas vergessen", en: "never forget anything again")),
+        ChoicePair(id: 96, a: LText(de: "ein Zeitlupen-Video von unserem ersten Kuss haben", en: "have a slow-motion video of our first kiss"), b: LText(de: "ein Fotoalbum von jedem unserer Dates haben", en: "have a photo album of every one of our dates")),
+        ChoicePair(id: 97, a: LText(de: "eine Woche lang jede Mahlzeit für mich kochen", en: "cook every meal for me for a week"), b: LText(de: "eine Woche lang meinen kompletten Abwasch übernehmen", en: "do all of my dishes for a week")),
+        ChoicePair(id: 98, a: LText(de: "immer wissen, wo ich gerade bin", en: "always know where I am"), b: LText(de: "immer wissen, wie es mir gerade geht", en: "always know how I'm feeling")),
+        ChoicePair(id: 99, a: LText(de: "mit mir über Nacht in einer Bibliothek eingeschlossen sein", en: "be locked in a library with me overnight"), b: LText(de: "mit mir über Nacht in einem Süßigkeitenladen eingeschlossen sein", en: "be locked in a candy store with me overnight")),
+        ChoicePair(id: 100, a: LText(de: "jeden Morgen von deinem Lieblingssong geweckt werden", en: "wake up to your favorite song every morning"), b: LText(de: "jeden Abend mit einer Gute-Nacht-Geschichte einschlafen", en: "fall asleep to a bedtime story every night"))
     ]
 }

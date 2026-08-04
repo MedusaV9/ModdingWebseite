@@ -119,6 +119,11 @@ extension ContentPack {
         ChoicePair(id: 112, a: LText(de: "Lagerfeuer", en: "Campfire"), b: LText(de: "Kamin", en: "Fireplace")),
         ChoicePair(id: 113, a: LText(de: "Rührei", en: "Scrambled eggs"), b: LText(de: "Müsli", en: "Granola")),
         ChoicePair(id: 114, a: LText(de: "Tandem", en: "Tandem bike"), b: LText(de: "Ruderboot", en: "Rowboat")),
-        ChoicePair(id: 115, a: LText(de: "Kuscheln", en: "Cuddling"), b: LText(de: "Händchenhalten", en: "Holding hands"))
+        ChoicePair(id: 115, a: LText(de: "Kuscheln", en: "Cuddling"), b: LText(de: "Händchenhalten", en: "Holding hands")),
+        ChoicePair(id: 116, a: LText(de: "Frühstücksdate", en: "Breakfast date"), b: LText(de: "Mitternachtssnack", en: "Midnight snack")),
+        ChoicePair(id: 117, a: LText(de: "Handgeschriebener Brief", en: "Handwritten letter"), b: LText(de: "Sprachnachricht", en: "Voice note")),
+        ChoicePair(id: 118, a: LText(de: "Sofa-Festung", en: "Blanket fort"), b: LText(de: "Bett-Kino", en: "Movies in bed")),
+        ChoicePair(id: 119, a: LText(de: "Blumenstrauß", en: "Bouquet"), b: LText(de: "Pralinen", en: "Box of chocolates")),
+        ChoicePair(id: 120, a: LText(de: "Partner-Pyjamas", en: "Matching pajamas"), b: LText(de: "Partner-Tattoos", en: "Matching tattoos"))
     ]
 }

@@ -132,6 +132,16 @@ _(hier beantworte ich dein Feedback, wenn ich es umgesetzt habe)_
 - `[2026-08-04 00:40 UTC]` **Streak-Guard**-Reminder (21:30 wenn Frage offen & Streak > 0), Settings-Toggle.
 - `[2026-08-04 00:40 UTC]` +26 Content-Items (Daily/Dates/Rätsel), Chat „Jump to latest“ FAB, Partner last-seen relativ, 🔥-Pulse ab Streak 3. IPA **1.4.1** · Logic **50** Tests.
 
+### Iteration 16 — Welle 16: Teilen, Filter & Wochen-Chart 💬📊
+- `[2026-08-04 01:00 UTC]` **In-den-Chat-Teilen überall**: Wahrheit-oder-Pflicht-Karten („💋 Pflicht für Mia: …“), 36-Fragen-Karten („💫 36 Fragen — Frage 7: …“) und Bucket-List-Einträge (erfüllte Träume als 🎉-Feier-Nachricht, offene als 🌌-Teaser, per Kontextmenü).
+- `[2026-08-04 01:00 UTC]` **Merkt sich eure Wahl**: Wahrheit-oder-Pflicht startet mit der zuletzt gewählten Schärfestufe, 36 Fragen mit dem zuletzt gewählten Set.
+- `[2026-08-04 01:00 UTC]` **Bucket List**: Filter-Chips Alle / Offen 🌌 / Geschafft ✨ mit eigenen Leer-Hinweisen.
+- `[2026-08-04 01:00 UTC]` **Momente**: Ein-Tipp-Helfer „Monatstag hinzufügen“ (wenn Jahrestag gesetzt) — schlägt den nächsten Monatstag mit Datum vor, dedupliziert, verschwindet sobald er in der Liste steht.
+- `[2026-08-04 01:00 UTC]` **Love-Stats**: neues „Diese Woche“-Balkendiagramm (letzte 7 Tage, gestapelt Du/Schatz in euren Farben, Wochentags-Beschriftung) + größerer Leer-Zustand.
+- `[2026-08-04 01:00 UTC]` **Einstellungen**: „Paar-Code & QR zeigen“ — Code, Kopieren/Teilen & Pairing-QR (Server+Code) jederzeit wieder abrufbar, z. B. für ein neues Gerät.
+- `[2026-08-04 01:00 UTC]` **Server-Tipp geschärft**: Beispiel jetzt `http://ark.atomi23.de:4321` mit explizitem „Port :4321 nicht weglassen!“.
+- `[2026-08-04 01:00 UTC]` **+15 Content-Items** (5 Quiz, 5 This-or-That, 5 Würdest-du-eher, DE/EN). IPA **1.4.2** (Build 17) · Logic **50/50** Tests grün.
+
 ## 🔄 Als Nächstes
-- IPA 1.4.1 sideloaden + AMP Server auf Branch (v1.6).
+- IPA 1.4.2 sideloaden + AMP Server auf Branch (v1.6).
 - Loop geht weiter: mehr Content, Album-Sharing, Truth-or-Dare multiplayer, weitere Polish-Passes.

@@ -6,6 +6,7 @@ struct LoveStatsView: View {
 
     @State private var barsAppeared = false
     @State private var moods: [MoodEntry] = []
+    @State private var touches: [Touch] = []
 
     private let columns = [
         GridItem(.flexible(), spacing: 12),
@@ -34,6 +35,7 @@ struct LoveStatsView: View {
         .task {
             await appState.refreshStats()
             await loadMoods()
+            await loadTouches()
             withAnimation(.spring(response: 0.8).delay(0.15)) {
                 barsAppeared = true
             }
@@ -54,6 +56,7 @@ struct LoveStatsView: View {
             VStack(spacing: LayoutMetrics.s(16)) {
                 heroTiles(stats)
                 touchComparisonCard(stats)
+                weeklyTouchesCard
                 moodTimelineCard
                 caption(stats)
             }
@@ -63,6 +66,7 @@ struct LoveStatsView: View {
         .refreshable {
             await appState.refreshStats()
             await loadMoods()
+            await loadTouches()
         }
     }
 
@@ -177,6 +181,132 @@ struct LoveStatsView: View {
 
     private var partnerColor: Color {
         Color(hex: appState.partner?.color ?? "A855F7")
+    }
+
+    // MARK: Weekly touches chart
+
+    private func loadTouches() async {
+        guard let api = appState.api else { return }
+        if let list = try? await api.recentTouches(limit: 200) {
+            touches = list
+        }
+    }
+
+    private struct WeekDay: Identifiable {
+        let id: String
+        let date: Date
+        let mine: Int
+        let partners: Int
+        var total: Int { mine + partners }
+    }
+
+    /// Last 7 calendar days (oldest → today), touches split by sender.
+    private var weekDays: [WeekDay] {
+        let calendar = SharedDates.calendar
+        let today = calendar.startOfDay(for: Date())
+        let myId = appState.me?.id
+        return (0..<7).reversed().map { offset in
+            let day = calendar.date(byAdding: .day, value: -offset, to: today) ?? today
+            let dayTouches = touches.filter { calendar.isDate($0.createdAt, inSameDayAs: day) }
+            let mine = dayTouches.filter { $0.senderId == myId }.count
+            return WeekDay(id: SharedDates.todayKey(day), date: day,
+                           mine: mine, partners: dayTouches.count - mine)
+        }
+    }
+
+    private var weeklyTouchesCard: some View {
+        let days = weekDays
+        let maxCount = max(days.map(\.total).max() ?? 0, 1)
+        let weekTotal = days.reduce(0) { $0 + $1.total }
+        return VStack(alignment: .leading, spacing: LayoutMetrics.s(14)) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(L10n.t("memories.stats.weekTitle"))
+                    .font(.system(.title3, design: .rounded).weight(.bold))
+                    .foregroundStyle(Theme.textPrimary)
+                Text(L10n.t("memories.stats.weekSubtitle"))
+                    .font(.system(.caption, design: .rounded))
+                    .foregroundStyle(Theme.textSecondary)
+            }
+            if weekTotal == 0 {
+                Text(L10n.t("memories.stats.weekEmpty"))
+                    .font(.system(.caption, design: .rounded))
+                    .foregroundStyle(Theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                HStack(alignment: .bottom, spacing: LayoutMetrics.s(10)) {
+                    ForEach(days) { day in
+                        weekColumn(day, maxCount: maxCount)
+                    }
+                }
+                weekLegend
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassCard()
+    }
+
+    private func weekColumn(_ day: WeekDay, maxCount: Int) -> some View {
+        VStack(spacing: 5) {
+            Text(day.total > 0 ? String(day.total) : " ")
+                .font(.system(.caption2, design: .rounded).weight(.bold))
+                .foregroundStyle(Theme.textSecondary)
+                .monospacedDigit()
+            VStack(spacing: 2) {
+                if day.partners > 0 {
+                    RoundedRectangle(cornerRadius: 3, style: .continuous)
+                        .fill(partnerColor)
+                        .frame(height: weekBarHeight(count: day.partners, maxCount: maxCount))
+                }
+                if day.mine > 0 {
+                    RoundedRectangle(cornerRadius: 3, style: .continuous)
+                        .fill(myColor)
+                        .frame(height: weekBarHeight(count: day.mine, maxCount: maxCount))
+                }
+                if day.total == 0 {
+                    RoundedRectangle(cornerRadius: 3, style: .continuous)
+                        .fill(Color.white.opacity(0.07))
+                        .frame(height: 4)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .animation(.spring(response: 0.8), value: barsAppeared)
+            Text(weekdayLetter(day.date))
+                .font(.system(.caption2, design: .rounded).weight(.semibold))
+                .foregroundStyle(Theme.textTertiary)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func weekBarHeight(count: Int, maxCount: Int) -> CGFloat {
+        guard barsAppeared, count > 0 else { return 4 }
+        return max(6, 80 * CGFloat(count) / CGFloat(maxCount))
+    }
+
+    private var weekLegend: some View {
+        HStack(spacing: LayoutMetrics.s(14)) {
+            legendDot(color: myColor, label: L10n.t("common.you"))
+            legendDot(color: partnerColor, label: appState.partnerName)
+            Spacer()
+        }
+    }
+
+    private func legendDot(color: Color, label: String) -> some View {
+        HStack(spacing: 5) {
+            Circle()
+                .fill(color)
+                .frame(width: 8, height: 8)
+            Text(label)
+                .font(.system(.caption2, design: .rounded).weight(.semibold))
+                .foregroundStyle(Theme.textSecondary)
+                .lineLimit(1)
+        }
+    }
+
+    private func weekdayLetter(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: L10n.isGerman ? "de_DE" : "en_US")
+        formatter.dateFormat = "EEEEE"
+        return formatter.string(from: date)
     }
 
     // MARK: Mood timeline
@@ -327,10 +457,9 @@ struct LoveStatsView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.top, 2)
         } else {
-            Text(L10n.t("memories.stats.empty"))
-                .font(.system(.footnote, design: .rounded).weight(.semibold))
-                .foregroundStyle(Theme.textSecondary)
-                .multilineTextAlignment(.center)
+            EmptyStateView(emoji: "💌",
+                           title: L10n.t("memories.stats.emptyTitle"),
+                           subtitle: L10n.t("memories.stats.empty"))
                 .frame(maxWidth: .infinity)
                 .padding(.top, 2)
         }

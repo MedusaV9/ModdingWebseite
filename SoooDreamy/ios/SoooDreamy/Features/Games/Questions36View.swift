@@ -5,16 +5,27 @@ import SwiftUI
 /// both answer. The finish screen suggests the famous 4 minutes of eye
 /// contact with a built-in countdown.
 struct Questions36View: View {
+    @Environment(AppState.self) private var appState
+
     private enum Stage {
         case setup, deck, finish
     }
 
     private static let eyeContactSeconds = 240
 
+    /// Last chosen question set survives app restarts.
+    private static let setKey = "sooodreamy.q36.set"
+
+    private static var storedSet: Int {
+        let value = UserDefaults.standard.integer(forKey: setKey)
+        return (1...3).contains(value) ? value : 1
+    }
+
     @State private var stage: Stage = .setup
-    @State private var selectedSet = 1
+    @State private var selectedSet = Questions36View.storedSet
     @State private var index = 0
     @State private var goingForward = true
+    @State private var sharing = false
 
     // Eye-contact countdown
     @State private var remaining = Questions36View.eyeContactSeconds
@@ -97,6 +108,7 @@ struct Questions36View: View {
         let selected = selectedSet == set
         return Button {
             selectedSet = set
+            UserDefaults.standard.set(set, forKey: Self.setKey)
             Haptics.shared.tap()
         } label: {
             HStack(spacing: LayoutMetrics.s(12)) {
@@ -150,6 +162,7 @@ struct Questions36View: View {
                 }
                 questionCard
                 deckControls
+                shareButton
                 Text(L10n.t("games.q36.swipeHint"))
                     .font(.system(.caption2, design: .rounded))
                     .foregroundStyle(Theme.textTertiary)
@@ -232,6 +245,47 @@ struct Questions36View: View {
                      : L10n.t("games.next"))
             }
             .buttonStyle(PrimaryButtonStyle())
+        }
+    }
+
+    @ViewBuilder
+    private var shareButton: some View {
+        if appState.api != nil, index < questions.count {
+            Button {
+                shareToChat()
+            } label: {
+                if sharing {
+                    ProgressView()
+                        .tint(Theme.pink)
+                } else {
+                    Label(L10n.t("games.shareToChat"), systemImage: "paperplane.fill")
+                }
+            }
+            .buttonStyle(.plain)
+            .font(.system(.footnote, design: .rounded).weight(.bold))
+            .foregroundStyle(Theme.pink)
+            .disabled(sharing)
+        }
+    }
+
+    /// Posts the current question into the couple chat ("💫 36 Questions — question 7: …").
+    private func shareToChat() {
+        guard let api = appState.api, index < questions.count, !sharing else { return }
+        let question = questions[index]
+        sharing = true
+        Haptics.shared.tap()
+        let header = L10n.t("games.q36.shareHeader", ["n": String(question.id)])
+        let text = header + "\n" + question.text.resolved(L10n.lang)
+        Task {
+            do {
+                try await api.sendMessage(type: .text, text: text)
+                SoundEngine.shared.play(.pop)
+                Haptics.shared.success()
+                appState.showToast(L10n.t("games.sharedToChat"), style: .success)
+            } catch {
+                appState.handleAPIError(error)
+            }
+            sharing = false
         }
     }
 

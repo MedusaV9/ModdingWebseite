@@ -7,6 +7,7 @@ struct SettingsView: View {
     @State private var showProfileEdit = false
     @State private var showServers = false
     @State private var showAbout = false
+    @State private var showPairingCode = false
     @State private var confirmDissolve = false
     @State private var confirmLeave = false
 
@@ -54,6 +55,7 @@ struct SettingsView: View {
         .sheet(isPresented: $showProfileEdit) { ProfileEditSheet() }
         .sheet(isPresented: $showServers) { ServerListSheet() }
         .sheet(isPresented: $showAbout) { AboutSheet() }
+        .sheet(isPresented: $showPairingCode) { PairingCodeSheet() }
         .onAppear { syncFromState() }
         .onChange(of: appState.couple) { syncFromState() }
     }
@@ -119,6 +121,22 @@ struct SettingsView: View {
                     }
                 if !hasAnniversary {
                     Text(L10n.t("home.sinceHint"))
+                        .font(.system(.caption2, design: .rounded))
+                        .foregroundStyle(Theme.textTertiary)
+                }
+            }
+
+            // Re-show the pairing code & QR (new device, or partner needs it again).
+            if appState.couple?.code != nil {
+                VStack(alignment: .leading, spacing: 4) {
+                    Button {
+                        Haptics.shared.tap()
+                        showPairingCode = true
+                    } label: {
+                        Label(L10n.t("settings.pairingShow"), systemImage: "qrcode")
+                    }
+                    .buttonStyle(SecondaryButtonStyle())
+                    Text(L10n.t("settings.pairingHint"))
                         .font(.system(.caption2, design: .rounded))
                         .foregroundStyle(Theme.textTertiary)
                 }
@@ -665,6 +683,111 @@ struct ProfileEditSheet: View {
         } catch {
             appState.handleAPIError(error)
         }
+    }
+}
+
+// MARK: - Pairing code & QR (re-show after pairing)
+
+/// Shows the couple code + pairing QR again — e.g. to pair a new device or
+/// when the partner needs the code once more. Mirrors WaitingForPartnerCard.
+struct PairingCodeSheet: View {
+    @Environment(AppState.self) private var appState
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var copied = false
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                DreamyBackground(showStars: false)
+                ScrollView {
+                    VStack(spacing: LayoutMetrics.s(16)) {
+                        Text("💞")
+                            .font(.scaled(48))
+                        Text(L10n.t("pairing.yourCode"))
+                            .font(.system(.title3, design: .rounded).weight(.heavy))
+                            .foregroundStyle(Theme.textPrimary)
+
+                        if let code = appState.couple?.code {
+                            Text(code.map(String.init).joined(separator: " "))
+                                .font(.scaled(34, weight: .heavy, design: .monospaced))
+                                .foregroundStyle(Theme.gold)
+                                .padding(.vertical, LayoutMetrics.s(10))
+                                .padding(.horizontal, LayoutMetrics.s(18))
+                                .background(
+                                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                        .fill(Color.black.opacity(0.3))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                                .strokeBorder(Theme.gold.opacity(0.4), lineWidth: 1)
+                                        )
+                                )
+
+                            HStack(spacing: LayoutMetrics.s(10)) {
+                                Button {
+                                    UIPasteboard.general.string = code
+                                    copied = true
+                                    Haptics.shared.success()
+                                    Task {
+                                        try? await Task.sleep(nanoseconds: 2_000_000_000)
+                                        copied = false
+                                    }
+                                } label: {
+                                    Label(L10n.t(copied ? "common.copied" : "common.copy"),
+                                          systemImage: copied ? "checkmark" : "doc.on.doc")
+                                }
+                                .buttonStyle(SecondaryButtonStyle())
+
+                                ShareLink(item: shareText(code: code)) {
+                                    Label(L10n.t("common.share"), systemImage: "square.and.arrow.up")
+                                }
+                                .buttonStyle(SecondaryButtonStyle())
+                            }
+
+                            if let server = appState.servers.activeProfile?.urlString,
+                               let qr = QRGenerator.image(for: PairQRPayload.encode(server: server, code: code)) {
+                                VStack(spacing: 6) {
+                                    Image(uiImage: qr)
+                                        .resizable()
+                                        .interpolation(.none)
+                                        .scaledToFit()
+                                        .frame(width: LayoutMetrics.s(200), height: LayoutMetrics.s(200))
+                                        .padding(10)
+                                        .background(RoundedRectangle(cornerRadius: 16).fill(.white))
+                                    Text(L10n.t("pairing.qrHint"))
+                                        .font(.system(.caption2, design: .rounded))
+                                        .foregroundStyle(Theme.textTertiary)
+                                        .multilineTextAlignment(.center)
+                                }
+                            }
+                        }
+
+                        Text(L10n.t("settings.pairingHint"))
+                            .font(.system(.footnote, design: .rounded))
+                            .foregroundStyle(Theme.textSecondary)
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(LayoutMetrics.s(20))
+                }
+            }
+            .navigationTitle(L10n.t("settings.pairingShow"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(L10n.t("common.done")) { dismiss() }
+                }
+            }
+        }
+        .preferredColorScheme(.dark)
+    }
+
+    private func shareText(code: String) -> String {
+        let server = appState.servers.activeProfile?.urlString ?? ""
+        return L10n.isGerman
+            ? "Komm zu mir auf SoooDreamy! 💜\nServer: \(server)\nCode: \(code)"
+            : "Join me on SoooDreamy! 💜\nServer: \(server)\nCode: \(code)"
     }
 }
 

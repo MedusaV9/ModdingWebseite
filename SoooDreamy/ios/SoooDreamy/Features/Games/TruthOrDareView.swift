@@ -11,8 +11,16 @@ struct TruthOrDareView: View {
         case setup, choosing, card
     }
 
+    /// Last chosen spice level survives app restarts (defaults to Flirty).
+    private static let spiceKey = "sooodreamy.tod.spice"
+
+    private static var storedSpice: Int {
+        let value = UserDefaults.standard.integer(forKey: spiceKey)
+        return (1...3).contains(value) ? value : 2
+    }
+
     @State private var stage: Stage = .setup
-    @State private var spice = 2
+    @State private var spice = TruthOrDareView.storedSpice
     @State private var currentPlayer = 0
     @State private var streak = 0
     @State private var skipsLeft = [3, 3]
@@ -20,6 +28,7 @@ struct TruthOrDareView: View {
     @State private var usedDareIds: Set<Int> = []
     @State private var card: TruthOrDareItem?
     @State private var flipped = false
+    @State private var sharing = false
     @State private var heartsVisible = false
     @State private var heartsTask: Task<Void, Never>?
 
@@ -126,6 +135,7 @@ struct TruthOrDareView: View {
         let selected = spice == level
         return Button {
             spice = level
+            UserDefaults.standard.set(level, forKey: Self.spiceKey)
             Haptics.shared.tap()
         } label: {
             HStack(spacing: LayoutMetrics.s(12)) {
@@ -289,6 +299,7 @@ struct TruthOrDareView: View {
                 flipCard
                 if flipped {
                     actionButtons
+                    shareButton
                 }
             }
             .padding(LayoutMetrics.s(16))
@@ -373,6 +384,47 @@ struct TruthOrDareView: View {
                 Text(L10n.t("games.tod.done"))
             }
             .buttonStyle(PrimaryButtonStyle())
+        }
+    }
+
+    @ViewBuilder
+    private var shareButton: some View {
+        if appState.api != nil {
+            Button {
+                shareToChat()
+            } label: {
+                if sharing {
+                    ProgressView()
+                        .tint(Theme.pink)
+                } else {
+                    Label(L10n.t("games.shareToChat"), systemImage: "paperplane.fill")
+                }
+            }
+            .buttonStyle(.plain)
+            .font(.system(.footnote, design: .rounded).weight(.bold))
+            .foregroundStyle(Theme.pink)
+            .disabled(sharing)
+        }
+    }
+
+    /// Posts the current card into the couple chat ("💋 Dare for Mia: …").
+    private func shareToChat() {
+        guard let api = appState.api, let card, !sharing else { return }
+        sharing = true
+        Haptics.shared.tap()
+        let header = L10n.t(card.isDare ? "games.tod.shareDare" : "games.tod.shareTruth",
+                            ["name": currentName])
+        let text = header + "\n" + card.text.resolved(L10n.lang)
+        Task {
+            do {
+                try await api.sendMessage(type: .text, text: text)
+                SoundEngine.shared.play(.pop)
+                Haptics.shared.success()
+                appState.showToast(L10n.t("games.sharedToChat"), style: .success)
+            } catch {
+                appState.handleAPIError(error)
+            }
+            sharing = false
         }
     }
 

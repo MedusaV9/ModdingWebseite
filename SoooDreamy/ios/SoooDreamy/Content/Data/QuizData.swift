@@ -120,6 +120,11 @@ extension ContentPack {
         QuizQuestion(id: 112, text: LText(de: "Welches Dessert macht {partner} schwach?", en: "Which dessert makes {partner} weak?")),
         QuizQuestion(id: 113, text: LText(de: "Wie sieht {partner}s Morgenroutine an einem freien Tag aus?", en: "What is {partner}'s morning routine on a day off?")),
         QuizQuestion(id: 114, text: LText(de: "Welchen Film oder welche Serie würde {partner} sofort nochmal mit mir schauen?", en: "Which movie or series would {partner} instantly rewatch with me?")),
-        QuizQuestion(id: 115, text: LText(de: "Was ist das Erste, das {partner} an einem Menschen bemerkt?", en: "What's the first thing {partner} notices about a person?"))
+        QuizQuestion(id: 115, text: LText(de: "Was ist das Erste, das {partner} an einem Menschen bemerkt?", en: "What's the first thing {partner} notices about a person?")),
+        QuizQuestion(id: 116, text: LText(de: "Welches Emoji beschreibt {partner}s heutige Laune am besten?", en: "Which emoji best describes {partner}'s mood today?")),
+        QuizQuestion(id: 117, text: LText(de: "Welche kleine Geste von mir macht {partner} am glücklichsten?", en: "Which little gesture of mine makes {partner} happiest?")),
+        QuizQuestion(id: 118, text: LText(de: "Wobei verliert {partner} komplett das Zeitgefühl?", en: "Doing what does {partner} completely lose track of time?")),
+        QuizQuestion(id: 119, text: LText(de: "Welchen Ort aus der Kindheit würde {partner} gern nochmal besuchen?", en: "Which childhood place would {partner} love to visit again?")),
+        QuizQuestion(id: 120, text: LText(de: "Worauf freut sich {partner} diese Woche am meisten?", en: "What is {partner} most looking forward to this week?"))
     ]
 }

@@ -56,6 +56,8 @@ enum GamesL10n {
         "games.next": LText(de: "Weiter", en: "Next"),
         "games.start": LText(de: "Spiel starten", en: "Start game"),
         "games.rematch": LText(de: "Revanche!", en: "Rematch!"),
+        "games.shareToChat": LText(de: "In den Chat senden 💬", en: "Send to chat 💬"),
+        "games.sharedToChat": LText(de: "Im Chat geteilt 💬", en: "Shared to chat 💬"),
 
         // Quiz
         "games.quiz.setup.body": LText(de: "Ihr wechselt euch ab: Eine:r von euch antwortet ehrlich über sich, die/der andere rät. Richtig geraten = Punkt!",
@@ -129,6 +131,8 @@ enum GamesL10n {
         "games.tod.streak": LText(de: "Serie {n}", en: "Streak {n}"),
         "games.tod.reshuffled": LText(de: "Alle Karten gespielt — neu gemischt!",
                                       en: "All cards played — reshuffled!"),
+        "games.tod.shareTruth": LText(de: "💬 Wahrheit für {name}:", en: "💬 Truth for {name}:"),
+        "games.tod.shareDare": LText(de: "💋 Pflicht für {name}:", en: "💋 Dare for {name}:"),
 
         // 36 Questions
         "games.q36.intro": LText(de: "Die berühmten 36 Fragen zum Verlieben (nach Arthur Aron): Lest jede Frage laut vor und beantwortet sie beide — ohne Eile.",
@@ -148,6 +152,7 @@ enum GamesL10n {
         "games.q36.timerDone": LText(de: "Wow — ihr habt es durchgezogen. Magisch. ✨",
                                      en: "Wow — you actually did it. Magical. ✨"),
         "games.q36.again": LText(de: "Nochmal von vorn", en: "Start over"),
+        "games.q36.shareHeader": LText(de: "💫 36 Fragen — Frage {n}:", en: "💫 36 Questions — question {n}:"),
 
         // Date ideas
         "games.dateideas.location": LText(de: "Ort", en: "Location"),
