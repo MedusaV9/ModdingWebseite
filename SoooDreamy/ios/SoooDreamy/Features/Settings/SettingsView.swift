@@ -15,6 +15,7 @@ struct SettingsView: View {
     @State private var hapticsOn = Haptics.enabled
     @State private var reminderOn = ReminderManager.isEnabled
     @State private var streakGuardOn = ReminderManager.isStreakGuardEnabled
+    @State private var couponReminderOn = CouponReminder.isEnabled
     @State private var appLockOn = AppLock.isEnabled
     @State private var pulseOn = CouplePulseController.isEnabled
     @State private var reminderTime: Date = {
@@ -475,6 +476,30 @@ struct SettingsView: View {
                     }
                 }
                 Text(L10n.t("settings.streakGuardHint"))
+                    .font(.system(.caption2, design: .rounded))
+                    .foregroundStyle(Theme.textTertiary)
+            }
+
+            // Coupon expiry reminder ("expiring soon" nudge)
+            VStack(alignment: .leading, spacing: 4) {
+                Toggle(isOn: $couponReminderOn) {
+                    Label(L10n.t("settings.couponReminder"), systemImage: "ticket.fill")
+                        .font(.system(.subheadline, design: .rounded).weight(.semibold))
+                        .foregroundStyle(Theme.textPrimary)
+                }
+                .tint(Theme.pink)
+                .onChange(of: couponReminderOn) { _, on in
+                    Task {
+                        var coupons: [Coupon] = []
+                        if on, let api = appState.api {
+                            coupons = (try? await api.coupons()) ?? []
+                        }
+                        let ok = await CouponReminder.setEnabled(on, coupons: coupons,
+                                                                 myMemberId: appState.memberId)
+                        if !ok { couponReminderOn = false }
+                    }
+                }
+                Text(L10n.t("settings.couponReminderHint"))
                     .font(.system(.caption2, design: .rounded))
                     .foregroundStyle(Theme.textTertiary)
             }

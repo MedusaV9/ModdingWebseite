@@ -11,6 +11,8 @@ struct ChatView: View {
     @State private var draft = ""
     @State private var showVoiceRecorder = false
     @State private var showLetterComposer = false
+    /// My text/letter message currently being edited (drives the edit sheet).
+    @State private var editingMessage: Message?
     /// Tracks whether the bottom anchor is on screen (LazyVStack keeps it
     /// alive near the fold, so this flips only after real scrolling) —
     /// drives the "jump to latest" floating button.
@@ -60,6 +62,11 @@ struct ChatView: View {
         .sheet(isPresented: $showLetterComposer) {
             LetterComposeView { message in
                 model.acceptSent(message)
+            }
+        }
+        .sheet(item: $editingMessage) { message in
+            MessageEditSheet(message: message) { newText in
+                model.editMessage(message, newText: newText)
             }
         }
     }
@@ -228,6 +235,9 @@ struct ChatView: View {
                                                partner: appState.partner,
                                                onReact: { emoji in
                                                    model.toggleReaction(on: message, emoji: emoji)
+                                               },
+                                               onEdit: {
+                                                   editingMessage = message
                                                },
                                                onDelete: {
                                                    model.deleteMessage(message)
@@ -413,6 +423,8 @@ struct ChatMessageRow: View {
     let isMine: Bool
     let partner: Member?
     let onReact: (String) -> Void
+    /// Wired only for messages the current member may edit (their own text/letter).
+    var onEdit: (() -> Void)? = nil
     /// Wired only for messages the current member may delete (their own).
     var onDelete: (() -> Void)? = nil
 
@@ -436,6 +448,14 @@ struct ChatMessageRow: View {
         return onDelete
     }
 
+    /// Edit is only offered on my own, server-confirmed text/letter messages
+    /// (v1.8 — voice and photo messages are not editable).
+    private var editAction: (() -> Void)? {
+        guard isMine, !message.id.hasPrefix("local-"),
+              message.type == .text || message.type == .letter else { return nil }
+        return onEdit
+    }
+
     private var bubbleColumn: some View {
         VStack(alignment: isMine ? .trailing : .leading, spacing: 4) {
             bubble
@@ -457,13 +477,13 @@ struct ChatMessageRow: View {
         switch message.type {
         case .text:
             ChatTextBubble(message: message, isMine: isMine, onReact: onReact,
-                           onDelete: deleteAction)
+                           onEdit: editAction, onDelete: deleteAction)
         case .voice:
             ChatVoiceBubble(message: message, isMine: isMine, onReact: onReact,
                             onDelete: deleteAction)
         case .letter:
             ChatLetterBubble(message: message, isMine: isMine, onReact: onReact,
-                             onDelete: deleteAction)
+                             onEdit: editAction, onDelete: deleteAction)
         case .photo:
             ChatPhotoBubble(message: message, isMine: isMine, onReact: onReact,
                             onDelete: deleteAction)
@@ -700,6 +720,85 @@ struct ChatDeleteButton: View {
     }
 }
 
+/// "Edit my message" context-menu row (text & letter bubbles only, v1.8).
+struct ChatEditButton: View {
+    let onEdit: () -> Void
+
+    var body: some View {
+        Button {
+            onEdit()
+        } label: {
+            Label(L10n.t("chat.editMessage"), systemImage: "pencil")
+        }
+    }
+}
+
+// MARK: - Message edit sheet (v1.8)
+
+/// Small sheet for rewriting one of MY text/letter messages. Saving PATCHes
+/// the server, which sets `editedAt` and echoes `message_updated`.
+struct MessageEditSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let message: Message
+    let onSave: (String) -> Void
+
+    @State private var draft = ""
+    @FocusState private var focused: Bool
+
+    private var trimmed: String {
+        draft.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Saving is only enabled for a non-empty text that actually changed.
+    private var canSave: Bool {
+        !trimmed.isEmpty && trimmed != (message.text ?? "")
+    }
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                DreamyBackground(showStars: false)
+                VStack(alignment: .leading, spacing: LayoutMetrics.s(12)) {
+                    TextField(L10n.t("chat.inputPlaceholder"),
+                              text: $draft,
+                              prompt: Text(L10n.t("chat.inputPlaceholder")).foregroundStyle(Theme.textTertiary),
+                              axis: .vertical)
+                        .lineLimit(3...10)
+                        .textFieldStyle(DreamyFieldStyle())
+                        .focused($focused)
+                    Text(L10n.t("chat.editHint"))
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(Theme.textTertiary)
+                    Spacer()
+                }
+                .padding(LayoutMetrics.s(16))
+            }
+            .navigationTitle(L10n.t("chat.editTitle"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(L10n.t("common.cancel")) { dismiss() }
+                        .tint(Theme.pink)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(L10n.t("common.save")) {
+                        Haptics.shared.tap()
+                        dismiss()
+                        onSave(draft)
+                    }
+                    .tint(Theme.pink)
+                    .disabled(!canSave)
+                }
+            }
+            .onAppear {
+                draft = message.text ?? ""
+                focused = true
+            }
+        }
+        .presentationDetents([.medium])
+    }
+}
+
 // MARK: - Bubble background
 
 /// Mine: hero-gradient fill. Partner: glass card look.
@@ -730,6 +829,7 @@ struct ChatTextBubble: View {
     let message: Message
     let isMine: Bool
     let onReact: (String) -> Void
+    var onEdit: (() -> Void)? = nil
     var onDelete: (() -> Void)? = nil
 
     var body: some View {
@@ -740,7 +840,8 @@ struct ChatTextBubble: View {
                 .multilineTextAlignment(isMine ? .trailing : .leading)
             ChatTimestampText(date: message.createdAt, isMine: isMine,
                               read: chatReadReceipt(for: message, isMine: isMine,
-                                                    partner: appState.partner))
+                                                    partner: appState.partner),
+                              edited: message.editedAt != nil)
         }
         .padding(.vertical, 9)
         .padding(.horizontal, LayoutMetrics.s(13))
@@ -757,6 +858,9 @@ struct ChatTextBubble: View {
             } label: {
                 Label(L10n.t("chat.copy"), systemImage: "doc.on.doc")
             }
+            if let onEdit {
+                ChatEditButton(onEdit: onEdit)
+            }
             if let onDelete {
                 ChatDeleteButton(onDelete: onDelete)
             }
@@ -771,6 +875,7 @@ struct ChatLetterBubble: View {
     let message: Message
     let isMine: Bool
     let onReact: (String) -> Void
+    var onEdit: (() -> Void)? = nil
     var onDelete: (() -> Void)? = nil
 
     @State private var unsealing = false
@@ -856,7 +961,8 @@ struct ChatLetterBubble: View {
                 Spacer()
                 ChatTimestampText(date: message.createdAt, isMine: isMine,
                                   read: chatReadReceipt(for: message, isMine: isMine,
-                                                        partner: appState.partner))
+                                                        partner: appState.partner),
+                                  edited: message.editedAt != nil)
             }
         }
         .padding(LayoutMetrics.s(15))
@@ -873,6 +979,9 @@ struct ChatLetterBubble: View {
             ChatReactMenu(onReact: onReact)
             copyButton
             readButton
+            if let onEdit {
+                ChatEditButton(onEdit: onEdit)
+            }
             if let onDelete {
                 ChatDeleteButton(onDelete: onDelete)
             }
@@ -946,9 +1055,16 @@ struct ChatTimestampText: View {
     let isMine: Bool
     /// Read receipt next to the time — nil hides the checkmarks entirely.
     var read: Bool? = nil
+    /// Shows a small "(edited)" hint before the time (v1.8).
+    var edited: Bool = false
 
     var body: some View {
         HStack(spacing: 4) {
+            if edited {
+                Text(L10n.t("chat.edited"))
+                    .font(.system(.caption2, design: .rounded).italic())
+                    .foregroundStyle(isMine ? Color.white.opacity(0.6) : Theme.textTertiary)
+            }
             Text(date.formatted(date: .omitted, time: .shortened))
                 .font(.system(.caption2, design: .rounded))
                 .foregroundStyle(isMine ? Color.white.opacity(0.72) : Theme.textTertiary)

@@ -101,6 +101,7 @@ final class ChatModel {
                            photoId: nil,
                            openWhen: nil,
                            reactions: nil,
+                           editedAt: nil,
                            createdAt: Date())
         insert(temp)
         do {
@@ -119,6 +120,30 @@ final class ChatModel {
     /// Insert a message that the server already accepted (letters, voice notes).
     func acceptSent(_ message: Message) {
         insert(message)
+    }
+
+    // MARK: Editing
+
+    /// Rewrite the text of one of MY text/letter messages (v1.8). The server
+    /// response replaces the message in place; the `message_updated` socket
+    /// echo is idempotent with that (same replace-by-id as reactions).
+    func editMessage(_ message: Message, newText: String) {
+        let text = newText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty, text != message.text,
+              let appState, let api = appState.api,
+              message.senderId == appState.memberId,
+              message.type == .text || message.type == .letter,
+              !message.id.hasPrefix("local-") else { return }
+        Task {
+            do {
+                let updated = try await api.editMessage(id: message.id, text: text)
+                update(updated)
+                Haptics.shared.success()
+                appState.showToast(L10n.t("chat.editSaved"), style: .success)
+            } catch {
+                appState.handleAPIError(error)
+            }
+        }
     }
 
     // MARK: Deleting

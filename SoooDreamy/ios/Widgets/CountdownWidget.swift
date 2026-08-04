@@ -70,7 +70,7 @@ struct CountdownWidgetView: View {
             }
         }
         .widgetChrome()
-        .widgetURL(URL(string: "sooodreamy://tab/memories"))
+        .widgetURL(URL(string: "sooodreamy://events"))
     }
 
     private var small: some View {

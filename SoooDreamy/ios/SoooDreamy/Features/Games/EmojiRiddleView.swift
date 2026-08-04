@@ -34,6 +34,8 @@ struct EmojiRiddleView: View {
     @State private var revealed = false
     @State private var lastWinner: Int?
     @State private var celebrate = false
+    @State private var sharing = false
+    @State private var shared = false
 
     // MARK: Players (index 0 = me, 1 = partner or generic team 2)
 
@@ -262,6 +264,8 @@ struct EmojiRiddleView: View {
         scores = [0, 0]
         revealed = false
         lastWinner = nil
+        sharing = false
+        shared = false
         stage = .playing
         SoundEngine.shared.play(.whoosh)
         Haptics.shared.tap()
@@ -517,6 +521,7 @@ struct EmojiRiddleView: View {
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
                 finalScoreCard
+                shareButton
                 Button(action: start) {
                     Text(L10n.t("games.emoji.rematch"))
                 }
@@ -531,6 +536,59 @@ struct EmojiRiddleView: View {
                 .buttonStyle(.plain)
             }
             .padding(LayoutMetrics.s(16))
+        }
+    }
+
+    // MARK: Share to chat
+
+    @ViewBuilder
+    private var shareButton: some View {
+        if appState.api != nil {
+            Button {
+                shareToChat()
+            } label: {
+                if sharing {
+                    ProgressView()
+                        .tint(Theme.pink)
+                } else {
+                    Label(L10n.t(shared ? "games.sharedToChat" : "games.shareToChat"),
+                          systemImage: shared ? "checkmark" : "paperplane.fill")
+                }
+            }
+            .buttonStyle(.plain)
+            .font(.system(.footnote, design: .rounded).weight(.bold))
+            .foregroundStyle(Theme.pink)
+            .disabled(sharing || shared)
+        }
+    }
+
+    /// Posts the final score into the couple chat (Wordle/ToD pattern).
+    private var shareText: String {
+        let header = L10n.t("games.share.header",
+                            ["game": "🧩 " + L10n.t("games.emoji.title")])
+        let scoreLine = "\(playerNames[0]) \(scores[0]) : \(scores[1]) \(playerNames[1])"
+        let verdict = isTie
+            ? L10n.t("games.emoji.tie")
+            : L10n.t("games.emoji.winner", ["name": playerNames[winnerIndex]])
+        return header + "\n" + scoreLine + "\n" + verdict
+    }
+
+    private func shareToChat() {
+        guard let api = appState.api, !sharing, !shared else { return }
+        sharing = true
+        Haptics.shared.tap()
+        let text = shareText
+        Task {
+            do {
+                try await api.sendMessage(type: .text, text: text)
+                shared = true
+                SoundEngine.shared.play(.pop)
+                Haptics.shared.success()
+                appState.showToast(L10n.t("games.sharedToChat"), style: .success)
+            } catch {
+                appState.handleAPIError(error)
+            }
+            sharing = false
         }
     }
 

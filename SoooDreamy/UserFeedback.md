@@ -160,6 +160,14 @@ _(hier beantworte ich dein Feedback, wenn ich es umgesetzt habe)_
 - `[2026-08-04 01:55 UTC]` **Streak-Kalender** (Tap auf 🔥) — Tage an denen beide geantwortet haben.
 - `[2026-08-04 01:55 UTC]` Voice-Player: Scrub, 1×/1.5×/2×, Restzeit. +36 Content-Items. IPA **1.5.0**.
 
+### Iteration 19 — Edit, Alben 2.0, Canvas-Export, Streak-Widget ✏️🖼️
+- `[2026-08-04 02:10 UTC]` **Server v1.8** (93/93): `PATCH /api/messages/:id` (bearbeiten + `editedAt`).
+- `[2026-08-04 02:10 UTC]` Chat: Nachrichten bearbeiten + „(bearbeitet)“-Label.
+- `[2026-08-04 02:10 UTC]` Galerie: Alben umbenennen, Multi-Select (verschieben/favorisieren), Zähler auf Chips.
+- `[2026-08-04 02:10 UTC]` Canvas als Bild exportieren (Share / Fotos / Galerie-Upload).
+- `[2026-08-04 02:10 UTC]` Quiz/Choices/Emoji-Rätsel Ergebnisse in den Chat teilen.
+- `[2026-08-04 02:10 UTC]` **Streak-Widget** + bessere Widget-Deeplinks; Coupon „Nochmal schenken“ + Ablauf-Reminder. IPA **1.5.1**.
+
 ## 🔄 Als Nächstes
-- IPA 1.5.0 sideloaden + AMP Server v1.7.
-- Loop: Message-Edit, Album-Verwaltung 2.0, Canvas-Export, mehr Share-to-Chat, Widgets, Coupon-Reminders.
+- IPA 1.5.1 sideloaden + AMP Server v1.8.
+- Loop läuft weiter unendlich mit Fable-Max-Subagents.

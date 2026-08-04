@@ -257,9 +257,16 @@ enum CoreStrings {
         "gallery.sendToChat": LText(de: "In den Chat senden", en: "Send to chat"),
         "gallery.sentToChat": LText(de: "Foto in den Chat geschickt 💬", en: "Photo sent to chat 💬"),
 
-        // Coupons (global toasts)
+        // Coupons (global toasts + polish; the coupons screen itself lives in MemoriesL10n)
         "coupon.receivedToast": LText(de: "Neuer Gutschein für dich! 🎟️", en: "A new coupon for you! 🎟️"),
         "coupon.redeemedToast": LText(de: "„{title}“ wurde eingelöst! 🎉", en: "“{title}” was redeemed! 🎉"),
+        "coupon.giftAgain": LText(de: "Nochmal schenken", en: "Gift again"),
+        "settings.couponReminder": LText(de: "Gutschein-Ablauf-Erinnerung", en: "Coupon expiry reminder"),
+        "settings.couponReminderHint": LText(de: "Erinnert dich, bevor ein Gutschein für dich abläuft (bis 48 Stunden vorher)",
+                                             en: "Nudges you before a coupon gifted to you expires (up to 48 hours ahead)"),
+        "notif.couponExpiry.title": LText(de: "Gutschein läuft bald ab ⏳", en: "Coupon expiring soon ⏳"),
+        "notif.couponExpiry.body": LText(de: "„{title}“ läuft bald ab — löse ihn schnell ein! 🎟️",
+                                         en: "“{title}” is about to expire — redeem it soon! 🎟️"),
 
         // Flashback card
         "home.flashback": LText(de: "Erinnerung", en: "Memory"),

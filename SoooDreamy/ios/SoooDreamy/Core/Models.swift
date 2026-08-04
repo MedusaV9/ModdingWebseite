@@ -82,6 +82,9 @@ struct Message: Codable, Identifiable, Hashable {
     let openWhen: String?
     /// Emoji reactions: emoji → memberIds who reacted.
     var reactions: [String: [String]]?
+    /// v1.8: set when the sender edited the text (text/letter only);
+    /// nil = never edited. `createdAt` (and thus ordering) never changes.
+    var editedAt: Date?
     let createdAt: Date
 }
 

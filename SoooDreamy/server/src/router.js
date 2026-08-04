@@ -123,13 +123,17 @@ function partnerOf(couple, memberId) {
   return couple.members.find((m) => m.id !== memberId) ?? null;
 }
 
-/** Pre-v1.2 stores lack `openWhen`/`reactions`, pre-v1.7 stores lack `photoId` — default them on the way out. */
+/**
+ * Pre-v1.2 stores lack `openWhen`/`reactions`, pre-v1.7 stores lack `photoId`,
+ * pre-v1.8 stores lack `editedAt` — default them on the way out.
+ */
 function serializeMessage(message) {
   return {
     ...message,
     openWhen: message.openWhen ?? null,
     reactions: message.reactions ?? null,
     photoId: message.photoId ?? null,
+    editedAt: message.editedAt ?? null,
   };
 }
 
@@ -699,6 +703,29 @@ route('POST', '/api/messages/:id/reactions', { auth: true }, async (c) => {
   else members.splice(at, 1);
   if (members.length === 0) delete message.reactions[emoji];
   if (Object.keys(message.reactions).length === 0) delete message.reactions;
+  c.store.markDirty();
+  const serialized = serializeMessage(message);
+  c.realtime.broadcastCouple(c.auth.coupleId, 'message_updated', { message: serialized });
+  sendJson(c.res, 200, { message: serialized });
+});
+
+// Message edit (v1.8): the sender may rewrite the text of their own text or
+// letter messages. Voice and photo messages are not editable (a photo
+// message's `text` is a caption tied to the send, not free-standing prose).
+route('PATCH', '/api/messages/:id', { auth: true }, async (c) => {
+  const body = await readJsonObject(c.req);
+  const text = asText(body.text, 'text');
+  // Pruned (capped) messages are gone from the list → same 404 as unknown ids.
+  const message = c.auth.couple.messages.find((m) => m.id === c.params.id);
+  if (!message) throw httpError(404, 'not_found', 'Unknown message');
+  if (message.senderId !== c.auth.memberId) {
+    throw httpError(403, 'not_yours', 'Only the sender may edit a message');
+  }
+  if (message.type !== 'text' && message.type !== 'letter') {
+    throw httpError(400, 'not_editable', 'Only text and letter messages can be edited');
+  }
+  message.text = text;
+  message.editedAt = nowIso();
   c.store.markDirty();
   const serialized = serializeMessage(message);
   c.realtime.broadcastCouple(c.auth.coupleId, 'message_updated', { message: serialized });

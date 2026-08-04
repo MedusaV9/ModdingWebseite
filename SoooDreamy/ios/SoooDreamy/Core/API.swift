@@ -238,6 +238,14 @@ struct API {
                           jsonBody: ["emoji": emoji], as: MessageResponse.self).message
     }
 
+    /// v1.8: rewrite the text of one of MY text/letter messages — the server
+    /// sets `editedAt` and broadcasts `message_updated {message}`.
+    @discardableResult
+    func editMessage(id: String, text: String) async throws -> Message {
+        try await request("PATCH", "/api/messages/\(id)",
+                          jsonBody: ["text": text], as: MessageResponse.self).message
+    }
+
     /// v1.6: delete one of MY messages (server broadcasts `message_deleted {id}`).
     func deleteMessage(id: String) async throws {
         struct OK: Decodable { let ok: Bool }

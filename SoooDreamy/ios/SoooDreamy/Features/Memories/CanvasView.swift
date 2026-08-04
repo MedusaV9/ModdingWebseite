@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import UIKit
 
 /// Shared realtime doodle canvas — both partners draw on the same board.
 struct CanvasView: View {
@@ -20,6 +21,8 @@ struct CanvasView: View {
     @State private var celebrationTask: Task<Void, Never>?
     /// Last colors actually drawn with (newest first, max 6) — persisted.
     @State private var recentColors: [String] = []
+    /// Rendered board bitmap awaiting export (drives the export sheet).
+    @State private var exportItem: CanvasExportItem?
 
     /// Board background — the eraser paints in exactly this color.
     private static let boardHex = "FDF4E8"
@@ -79,7 +82,15 @@ struct CanvasView: View {
         .navigationTitle(L10n.t("memories.canvas.title"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .primaryAction) {
+            ToolbarItemGroup(placement: .primaryAction) {
+                Button {
+                    exportBoard()
+                } label: {
+                    Image(systemName: "square.and.arrow.up")
+                        .foregroundStyle(strokes.isEmpty || replay != nil ? Theme.textTertiary : Theme.pink)
+                }
+                .disabled(strokes.isEmpty || replay != nil)
+                .accessibilityLabel(CanvasExportStrings.t("export.title"))
                 Button {
                     startReplay()
                 } label: {
@@ -89,6 +100,9 @@ struct CanvasView: View {
                 .disabled(strokes.isEmpty || replay != nil)
                 .accessibilityLabel(L10n.t("memories.canvas.replay"))
             }
+        }
+        .sheet(item: $exportItem) { item in
+            CanvasExportSheet(image: item.image)
         }
         .task { await loadStrokes() }
         .onAppear {
@@ -233,6 +247,40 @@ struct CanvasView: View {
         default:
             context.stroke(path, with: .color(color), style: solid(width))
         }
+    }
+
+    // MARK: Export
+
+    /// Renders the finished board and opens the export sheet.
+    private func exportBoard() {
+        guard !strokes.isEmpty, replay == nil else { return }
+        guard let image = renderBoardImage() else {
+            appState.showToast(CanvasExportStrings.t("export.renderFailed"), style: .error)
+            return
+        }
+        Haptics.shared.tap()
+        SoundEngine.shared.play(.pop)
+        exportItem = CanvasExportItem(image: image)
+    }
+
+    /// Renders all strokes into a bitmap with the same 3:4 aspect ratio as
+    /// the on-screen board, reusing the exact `drawStroke` code (points are
+    /// normalized, so any output resolution works).
+    private func renderBoardImage() -> UIImage? {
+        let exportSize = CGSize(width: 1080, height: 1440)
+        let snapshot = strokes
+        let board = Canvas { context, size in
+            context.fill(Path(CGRect(origin: .zero, size: size)),
+                         with: .color(Color(hex: Self.boardHex)))
+            for stroke in snapshot {
+                drawStroke(stroke, context: &context, size: size)
+            }
+        }
+        .frame(width: exportSize.width, height: exportSize.height)
+        let renderer = ImageRenderer(content: board)
+        renderer.scale = 1
+        renderer.isOpaque = true
+        return renderer.uiImage
     }
 
     // MARK: Replay
@@ -666,5 +714,210 @@ struct CanvasView: View {
                 partnerPoint = nil
             }
         }
+    }
+}
+
+// MARK: - Export sheet
+
+/// Identifiable wrapper so `.sheet(item:)` re-renders per export.
+private struct CanvasExportItem: Identifiable {
+    let id = UUID()
+    let image: UIImage
+}
+
+/// Share / save / upload options for an exported canvas bitmap.
+private struct CanvasExportSheet: View {
+    @Environment(AppState.self) private var appState
+    @Environment(\.dismiss) private var dismiss
+
+    let image: UIImage
+
+    @State private var savingToPhotos = false
+    @State private var savedToPhotos = false
+    @State private var uploading = false
+    @State private var uploaded = false
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                DreamyBackground(showStars: false)
+                ScrollView {
+                    VStack(spacing: LayoutMetrics.s(16)) {
+                        preview
+                        actions
+                    }
+                    .padding(LayoutMetrics.s(16))
+                }
+            }
+            .navigationTitle(CanvasExportStrings.t("export.title"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(L10n.t("common.close")) { dismiss() }
+                }
+            }
+        }
+    }
+
+    private var preview: some View {
+        Image(uiImage: image)
+            .resizable()
+            .scaledToFit()
+            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .shadow(color: .black.opacity(0.3), radius: 12, y: 6)
+            .frame(maxHeight: LayoutMetrics.s(400))
+    }
+
+    private var actions: some View {
+        VStack(spacing: LayoutMetrics.s(10)) {
+            ShareLink(item: Image(uiImage: image),
+                      preview: SharePreview(CanvasExportStrings.t("export.previewTitle"),
+                                            image: Image(uiImage: image))) {
+                Label(CanvasExportStrings.t("export.share"), systemImage: "square.and.arrow.up")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(PrimaryButtonStyle())
+
+            Button(action: saveToPhotos) {
+                HStack(spacing: 8) {
+                    if savingToPhotos {
+                        ProgressView()
+                            .tint(Theme.textPrimary)
+                    } else {
+                        Label(CanvasExportStrings.t(savedToPhotos
+                                                    ? "export.savedToPhotos"
+                                                    : "export.saveToPhotos"),
+                              systemImage: savedToPhotos ? "checkmark" : "photo.on.rectangle.angled")
+                    }
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(SecondaryButtonStyle())
+            .disabled(savingToPhotos || savedToPhotos)
+
+            if appState.api != nil {
+                Button(action: uploadToGallery) {
+                    HStack(spacing: 8) {
+                        if uploading {
+                            ProgressView()
+                                .tint(Theme.textPrimary)
+                        } else {
+                            Label(CanvasExportStrings.t(uploaded
+                                                        ? "export.uploaded"
+                                                        : "export.upload"),
+                                  systemImage: uploaded ? "checkmark" : "photo.stack")
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(SecondaryButtonStyle())
+                .disabled(uploading || uploaded)
+            }
+        }
+    }
+
+    /// Add-only photo library write — covered by NSPhotoLibraryAddUsageDescription.
+    private func saveToPhotos() {
+        guard !savingToPhotos, !savedToPhotos else { return }
+        savingToPhotos = true
+        Haptics.shared.tap()
+        CanvasImageSaver.save(image) { ok in
+            savingToPhotos = false
+            if ok {
+                savedToPhotos = true
+                SoundEngine.shared.play(.chime)
+                Haptics.shared.success()
+                appState.showToast(CanvasExportStrings.t("export.savedToast"), style: .success)
+            } else {
+                appState.showToast(CanvasExportStrings.t("export.saveFailed"), style: .error)
+            }
+        }
+    }
+
+    /// Uploads the artwork into the shared couple gallery (same flow as a
+    /// gallery upload: full JPEG + best-effort grid thumbnail).
+    private func uploadToGallery() {
+        guard let api = appState.api, !uploading, !uploaded else { return }
+        guard let jpeg = image.jpegData(compressionQuality: 0.85) else {
+            appState.showToast(CanvasExportStrings.t("export.uploadFailed"), style: .error)
+            return
+        }
+        uploading = true
+        Haptics.shared.tap()
+        Task {
+            do {
+                let photo = try await api.uploadPhoto(jpeg: jpeg,
+                                                      caption: CanvasExportStrings.t("export.caption"),
+                                                      width: Int(image.size.width),
+                                                      height: Int(image.size.height))
+                let thumb = GalleryView.downscaled(image, maxDimension: 320)
+                if let thumbJpeg = thumb.jpegData(compressionQuality: 0.7) {
+                    _ = try? await api.uploadPhotoThumb(photoId: photo.id, jpeg: thumbJpeg)
+                }
+                uploaded = true
+                SoundEngine.shared.play(.sparkle)
+                Haptics.shared.success()
+                appState.showToast(CanvasExportStrings.t("export.uploadedToast"), style: .love)
+            } catch {
+                appState.handleAPIError(error)
+            }
+            uploading = false
+        }
+    }
+}
+
+// MARK: - Photo library saver
+
+/// UIImageWriteToSavedPhotosAlbum needs an Obj-C completion target;
+/// instances keep themselves alive until the callback fires.
+private final class CanvasImageSaver: NSObject {
+    private static var active: [CanvasImageSaver] = []
+    private var completion: ((Bool) -> Void)?
+
+    static func save(_ image: UIImage, completion: @escaping (Bool) -> Void) {
+        let saver = CanvasImageSaver()
+        saver.completion = completion
+        active.append(saver)
+        UIImageWriteToSavedPhotosAlbum(image, saver,
+                                       #selector(CanvasImageSaver.image(_:didFinishSavingWithError:contextInfo:)), nil)
+    }
+
+    @objc private func image(_ image: UIImage,
+                             didFinishSavingWithError error: Error?,
+                             contextInfo: UnsafeRawPointer) {
+        let ok = error == nil
+        DispatchQueue.main.async {
+            self.completion?(ok)
+            Self.active.removeAll { $0 === self }
+        }
+    }
+}
+
+// MARK: - Export strings
+
+/// File-private strings for the export feature — deliberately NOT part of
+/// MemoriesL10n (kept local to this file), resolved via the same LText type.
+private enum CanvasExportStrings {
+    static let table: [String: LText] = [
+        "export.title": LText(de: "Kunstwerk exportieren", en: "Export artwork"),
+        "export.previewTitle": LText(de: "Kritzel-Canvas", en: "Doodle canvas"),
+        "export.share": LText(de: "Teilen…", en: "Share…"),
+        "export.saveToPhotos": LText(de: "In Fotos sichern", en: "Save to Photos"),
+        "export.savedToPhotos": LText(de: "In Fotos gesichert ✓", en: "Saved to Photos ✓"),
+        "export.savedToast": LText(de: "In deiner Fotomediathek gesichert 🎨",
+                                   en: "Saved to your photo library 🎨"),
+        "export.saveFailed": LText(de: "Sichern fehlgeschlagen", en: "Couldn't save the image"),
+        "export.upload": LText(de: "In eure Galerie hochladen", en: "Upload to your gallery"),
+        "export.uploaded": LText(de: "In eurer Galerie ✓", en: "In your gallery ✓"),
+        "export.uploadedToast": LText(de: "In eurer Galerie gespeichert 💜",
+                                      en: "Added to your gallery 💜"),
+        "export.uploadFailed": LText(de: "Upload fehlgeschlagen", en: "Upload failed"),
+        "export.caption": LText(de: "Kritzel-Canvas 🎨", en: "Doodle canvas 🎨"),
+        "export.renderFailed": LText(de: "Export fehlgeschlagen — versuch es nochmal.",
+                                     en: "Export failed — try again.")
+    ]
+
+    static func t(_ key: String) -> String {
+        table[key]?.resolved(L10n.lang) ?? key
     }
 }

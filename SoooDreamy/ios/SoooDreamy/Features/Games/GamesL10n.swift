@@ -58,6 +58,7 @@ enum GamesL10n {
         "games.rematch": LText(de: "Revanche!", en: "Rematch!"),
         "games.shareToChat": LText(de: "In den Chat senden 💬", en: "Send to chat 💬"),
         "games.sharedToChat": LText(de: "Im Chat geteilt 💬", en: "Shared to chat 💬"),
+        "games.share.header": LText(de: "{game} — Euer Ergebnis", en: "{game} — your result"),
 
         // Quiz
         "games.quiz.setup.body": LText(de: "Ihr wechselt euch ab: Eine:r von euch antwortet ehrlich über sich, die/der andere rät. Richtig geraten = Punkt!",

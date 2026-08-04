@@ -22,6 +22,8 @@ struct QuizGameView: View {
     @State private var setupRounds = 8
     @State private var didSendEnd = false
     @State private var celebrate = false
+    @State private var sharing = false
+    @State private var shared = false
 
     private static let roundOptions = [4, 8, 12]
 
@@ -229,6 +231,8 @@ struct QuizGameView: View {
         sending = false
         didSendEnd = false
         celebrate = false
+        sharing = false
+        shared = false
     }
 
     // MARK: Play
@@ -513,6 +517,7 @@ struct QuizGameView: View {
                     .foregroundStyle(Theme.textSecondary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
+                shareButton
                 Button {
                     startGame(rounds: totalRounds)
                 } label: {
@@ -524,6 +529,58 @@ struct QuizGameView: View {
             .frame(maxWidth: .infinity)
             .glassCard(padding: 22)
             .padding(LayoutMetrics.s(16))
+        }
+    }
+
+    // MARK: Share to chat
+
+    @ViewBuilder
+    private var shareButton: some View {
+        if appState.api != nil {
+            Button {
+                shareToChat()
+            } label: {
+                if sharing {
+                    ProgressView()
+                        .tint(Theme.pink)
+                } else {
+                    Label(L10n.t(shared ? "games.sharedToChat" : "games.shareToChat"),
+                          systemImage: shared ? "checkmark" : "paperplane.fill")
+                }
+            }
+            .buttonStyle(.plain)
+            .font(.system(.footnote, design: .rounded).weight(.bold))
+            .foregroundStyle(Theme.pink)
+            .disabled(sharing || shared)
+        }
+    }
+
+    /// Posts the final score into the couple chat (Wordle/ToD pattern).
+    private var shareText: String {
+        let myId = appState.memberId ?? ""
+        let partnerId = appState.partner?.id ?? ""
+        let header = L10n.t("games.share.header",
+                            ["game": "🧠 " + L10n.t("games.card.quiz.title")])
+        let scoreLine = "\(name(of: myId)) \(score(for: myId)) : \(score(for: partnerId)) \(name(of: partnerId))"
+        return header + "\n" + scoreLine + "\n" + endVerdictLine
+    }
+
+    private func shareToChat() {
+        guard let api = appState.api, !sharing, !shared else { return }
+        sharing = true
+        Haptics.shared.tap()
+        let text = shareText
+        Task {
+            do {
+                try await api.sendMessage(type: .text, text: text)
+                shared = true
+                SoundEngine.shared.play(.pop)
+                Haptics.shared.success()
+                appState.showToast(L10n.t("games.sharedToChat"), style: .success)
+            } catch {
+                appState.handleAPIError(error)
+            }
+            sharing = false
         }
     }
 

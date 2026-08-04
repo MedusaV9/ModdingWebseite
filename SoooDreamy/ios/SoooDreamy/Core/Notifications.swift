@@ -354,3 +354,88 @@ enum ReminderManager {
         try? await center.add(request)
     }
 }
+
+// MARK: - Coupon expiry reminders ("expiring soon")
+
+/// One-shot local nudges for unredeemed coupons gifted TO me that expire
+/// soon. Local-only like everything above: (re-)synced whenever the coupon
+/// list loads or changes (CouponsView), so redeeming/deleting a coupon
+/// naturally cancels its pending reminder.
+enum CouponReminder {
+    /// Pending-request identifier per coupon: "sooodreamy.couponExpiry.<id>".
+    static let identifierPrefix = "sooodreamy.couponExpiry."
+    private static let enabledKey = "sooodreamy.couponExpiryReminderEnabled"
+
+    /// Only coupons expiring within this window get a reminder scheduled.
+    /// Sync runs on every coupons load, so a far-away expiry is picked up
+    /// once it slides into the window.
+    static let expiringSoonWindow: TimeInterval = 48 * 3600
+    /// Preferred lead time before expiry …
+    static let primaryLead: TimeInterval = 24 * 3600
+    /// … and the "last call" lead when less than a day remains.
+    static let lastCallLead: TimeInterval = 3600
+
+    /// On by default — the master alerts switch and the per-kind `.coupon`
+    /// toggle still gate the actual scheduling (see `sync`).
+    static var isEnabled: Bool {
+        get { UserDefaults.standard.object(forKey: enabledKey) as? Bool ?? true }
+        set { UserDefaults.standard.set(newValue, forKey: enabledKey) }
+    }
+
+    /// Settings toggle entry point — mirrors ReminderManager.setEnabled:
+    /// requests permission when turning on, then re-syncs from the given list.
+    static func setEnabled(_ enabled: Bool, coupons: [Coupon], myMemberId: String?) async -> Bool {
+        if enabled {
+            guard await CoupleNotify.requestAuthorizationIfNeeded() else {
+                isEnabled = false
+                return false
+            }
+        }
+        isEnabled = enabled
+        await sync(coupons: coupons, myMemberId: myMemberId)
+        return true
+    }
+
+    /// When the reminder for a coupon should fire — nil when none should
+    /// pend (redeemed, no/near/passed expiry, or outside the 48 h window).
+    static func fireDate(for coupon: Coupon, now: Date = Date()) -> Date? {
+        guard coupon.redeemedAt == nil,
+              let expiresAt = coupon.expiresAt,
+              expiresAt > now,
+              expiresAt.timeIntervalSince(now) <= expiringSoonWindow else { return nil }
+        let primary = expiresAt.addingTimeInterval(-primaryLead)
+        if primary > now { return primary }
+        let lastCall = expiresAt.addingTimeInterval(-lastCallLead)
+        // Under an hour left: skip — the user just saw the live countdown chip.
+        return lastCall > now ? lastCall : nil
+    }
+
+    /// Replaces ALL pending coupon reminders with fresh ones for the coupons
+    /// currently expiring soon. Cheap enough to call on every list change.
+    static func sync(coupons: [Coupon], myMemberId: String?) async {
+        let center = UNUserNotificationCenter.current()
+        let stale = await center.pendingNotificationRequests()
+            .map(\.identifier)
+            .filter { $0.hasPrefix(identifierPrefix) }
+        center.removePendingNotificationRequests(withIdentifiers: stale)
+        guard isEnabled, NotificationPrefs.enabled, NotificationPrefs.isEnabled(.coupon),
+              let myMemberId else { return }
+        let now = Date()
+        let expiring = coupons
+            .filter { $0.forMember == myMemberId }
+            .compactMap { coupon in fireDate(for: coupon, now: now).map { (coupon, $0) } }
+        guard !expiring.isEmpty, await CoupleNotify.requestAuthorizationIfNeeded() else { return }
+        for (coupon, fireAt) in expiring {
+            let content = UNMutableNotificationContent()
+            content.title = L10n.t("notif.couponExpiry.title")
+            content.body = L10n.t("notif.couponExpiry.body", ["title": coupon.title])
+            content.sound = NotificationPrefs.sound(for: .coupon).unSound
+            content.userInfo = [CoupleNotify.linkKey: "sooodreamy://coupons"]
+            let trigger = UNTimeIntervalNotificationTrigger(
+                timeInterval: fireAt.timeIntervalSince(now), repeats: false)
+            let request = UNNotificationRequest(identifier: identifierPrefix + coupon.id,
+                                                content: content, trigger: trigger)
+            try? await center.add(request)
+        }
+    }
+}

@@ -8,6 +8,7 @@ struct SoooDreamyWidgetsBundle: WidgetBundle {
         MoodWidget()
         CountdownWidget()
         DailyQuestionWidget()
+        StreakWidget()
         PhotoWidget()
         CanvasWidget()
         #if canImport(ActivityKit)

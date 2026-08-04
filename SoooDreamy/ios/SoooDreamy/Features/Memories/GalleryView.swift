@@ -42,6 +42,14 @@ struct GalleryView: View {
     @State private var filter: GalleryFilter = .all
     @State private var albumPromptPhoto: Photo?
     @State private var newAlbumName = ""
+    /// Album currently being renamed (drives the rename prompt).
+    @State private var renameAlbumTarget: String?
+    @State private var renameAlbumName = ""
+    /// Multi-select mode: pick several photos, then move/favorite them at once.
+    @State private var selecting = false
+    @State private var selectedIds = Set<String>()
+    /// "New album…" prompt for the multi-select move menu.
+    @State private var bulkNewAlbumPrompt = false
     /// Grid density (2 = big tiles, 3 = classic) — survives app restarts.
     @AppStorage("sooodreamy.gallery.columns") private var storedColumnCount = 3
 
@@ -57,7 +65,11 @@ struct GalleryView: View {
         ZStack {
             DreamyBackground(showStars: false)
             content
-            floatingAddButton
+            if selecting {
+                selectionBar
+            } else {
+                floatingAddButton
+            }
             if let started = celebrationDate {
                 FloatingHeartsView(emojis: ["📸", "💜", "✨", "💖"], count: 14, startedAt: started)
                     .ignoresSafeArea()
@@ -67,6 +79,11 @@ struct GalleryView: View {
         .navigationTitle(L10n.t("memories.gallery.title"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                if !photos.isEmpty {
+                    selectToggle
+                }
+            }
             ToolbarItem(placement: .primaryAction) {
                 densityToggle
             }
@@ -93,11 +110,26 @@ struct GalleryView: View {
             Button(L10n.t("common.save")) { move(photo, toAlbum: newAlbumName) }
             Button(L10n.t("common.cancel"), role: .cancel) {}
         }
+        .alert(L10n.t("memories.gallery.renameAlbumTitle"),
+               isPresented: Binding(get: { renameAlbumTarget != nil },
+                                    set: { if !$0 { renameAlbumTarget = nil } }),
+               presenting: renameAlbumTarget) { name in
+            TextField(L10n.t("memories.gallery.albumName"), text: $renameAlbumName)
+            Button(L10n.t("common.save")) { renameAlbum(name, to: renameAlbumName) }
+            Button(L10n.t("common.cancel"), role: .cancel) {}
+        }
+        .alert(L10n.t("memories.gallery.newAlbumTitle"), isPresented: $bulkNewAlbumPrompt) {
+            TextField(L10n.t("memories.gallery.albumName"), text: $newAlbumName)
+            Button(L10n.t("common.save")) { moveSelected(toAlbum: newAlbumName) }
+            Button(L10n.t("common.cancel"), role: .cancel) {}
+        }
         .onChange(of: photos) { _, _ in
             // The chip for an album disappears with its last photo — fall back.
             if case .album(let name) = filter, !albums.contains(name) {
                 filter = .all
             }
+            // Photos deleted elsewhere (partner, other device) leave the selection.
+            selectedIds.formIntersection(photos.map(\.id))
         }
         .onReceive(NotificationCenter.default.publisher(for: .serverEvent)) { note in
             guard let event = note.object as? ServerEvent else { return }
@@ -180,7 +212,7 @@ struct GalleryView: View {
             Haptics.shared.tap()
             withAnimation(.spring(response: 0.3)) { filter = candidate }
         } label: {
-            Text(candidate.title)
+            Text(chipTitle(candidate))
                 .font(.system(.footnote, design: .rounded).weight(.semibold))
                 .foregroundStyle(filter == candidate ? .white : Theme.textSecondary)
                 .lineLimit(1)
@@ -191,6 +223,44 @@ struct GalleryView: View {
                 )
         }
         .buttonStyle(.plain)
+        .contextMenu {
+            if case .album(let name) = candidate {
+                Button {
+                    renameAlbumName = name
+                    renameAlbumTarget = name
+                } label: {
+                    Label(L10n.t("memories.gallery.renameAlbum"), systemImage: "pencil")
+                }
+            }
+        }
+    }
+
+    /// Album chips carry their photo count, e.g. "📁 Urlaub (12)".
+    private func chipTitle(_ candidate: GalleryFilter) -> String {
+        guard case .album = candidate else { return candidate.title }
+        let count = photos.filter { candidate.matches($0) }.count
+        return "\(candidate.title) (\(count))"
+    }
+
+    /// Enters/leaves multi-select mode (leaving always clears the selection).
+    private var selectToggle: some View {
+        Button {
+            Haptics.shared.tap()
+            withAnimation(.spring(response: 0.3)) {
+                selecting.toggle()
+                if !selecting { selectedIds.removeAll() }
+            }
+        } label: {
+            if selecting {
+                Text(L10n.t("common.done"))
+                    .font(.system(.subheadline, design: .rounded).weight(.semibold))
+                    .foregroundStyle(Theme.pink)
+            } else {
+                Image(systemName: "checkmark.circle")
+                    .foregroundStyle(Theme.pink)
+            }
+        }
+        .accessibilityLabel(L10n.t("memories.gallery.select"))
     }
 
     /// 2 ↔ 3 columns — the icon previews the layout a tap switches TO.
@@ -213,14 +283,21 @@ struct GalleryView: View {
                 ForEach(displayedPhotos) { photo in
                     Button {
                         Haptics.shared.tap()
-                        pagerTarget = photo
+                        if selecting {
+                            toggleSelection(photo)
+                        } else {
+                            pagerTarget = photo
+                        }
                     } label: {
-                        GalleryCell(photo: photo, api: appState.api, memberId: appState.memberId)
+                        GalleryCell(photo: photo, api: appState.api, memberId: appState.memberId,
+                                    selected: selecting ? selectedIds.contains(photo.id) : nil)
                     }
                     .buttonStyle(.plain)
                     .contextMenu {
-                        sendToChatButton(photo)
-                        albumMenu(photo)
+                        if !selecting {
+                            sendToChatButton(photo)
+                            albumMenu(photo)
+                        }
                     }
                 }
             }
@@ -286,6 +363,177 @@ struct GalleryView: View {
                 move(photo, toAlbum: nil)
             } label: {
                 Label(L10n.t("memories.gallery.removeFromAlbum"), systemImage: "folder.badge.minus")
+            }
+        }
+    }
+
+    // MARK: Multi-select
+
+    private func toggleSelection(_ photo: Photo) {
+        if selectedIds.remove(photo.id) == nil {
+            selectedIds.insert(photo.id)
+        }
+    }
+
+    private func finishSelection() {
+        withAnimation(.spring(response: 0.3)) {
+            selecting = false
+            selectedIds.removeAll()
+        }
+    }
+
+    /// Bottom bar in multi-select mode: selection count + bulk actions.
+    private var selectionBar: some View {
+        VStack {
+            Spacer()
+            HStack(spacing: LayoutMetrics.s(14)) {
+                Text(selectedIds.isEmpty
+                     ? L10n.t("memories.gallery.selectHint")
+                     : L10n.t("memories.gallery.selectedCount", ["n": String(selectedIds.count)]))
+                    .font(.system(.footnote, design: .rounded).weight(.semibold))
+                    .foregroundStyle(Theme.textSecondary)
+                    .lineLimit(1)
+                Spacer()
+                bulkAlbumMenu
+                bulkFavoriteButton
+            }
+            .padding(.vertical, LayoutMetrics.s(4))
+            .padding(.horizontal, LayoutMetrics.s(6))
+            .glassCard(padding: 10)
+            .padding(.horizontal, LayoutMetrics.s(16))
+            .padding(.bottom, LayoutMetrics.s(16))
+        }
+        .transition(.move(edge: .bottom).combined(with: .opacity))
+    }
+
+    /// Bulk "Move to album…" menu: existing albums, a new one, or none.
+    private var bulkAlbumMenu: some View {
+        Menu {
+            ForEach(albums, id: \.self) { name in
+                Button {
+                    moveSelected(toAlbum: name)
+                } label: {
+                    Text(name)
+                }
+            }
+            if !albums.isEmpty { Divider() }
+            Button {
+                newAlbumName = ""
+                bulkNewAlbumPrompt = true
+            } label: {
+                Label(L10n.t("memories.gallery.newAlbum"), systemImage: "plus")
+            }
+            Button(role: .destructive) {
+                moveSelected(toAlbum: nil)
+            } label: {
+                Label(L10n.t("memories.gallery.removeFromAlbum"), systemImage: "folder.badge.minus")
+            }
+        } label: {
+            Image(systemName: "folder")
+                .font(.scaled(15, weight: .bold))
+                .foregroundStyle(selectedIds.isEmpty ? Theme.textTertiary : Theme.pink)
+                .frame(width: LayoutMetrics.s(38), height: LayoutMetrics.s(38))
+                .background(Circle().fill(Color.white.opacity(0.10)))
+        }
+        .disabled(selectedIds.isEmpty)
+        .accessibilityLabel(L10n.t("memories.gallery.moveToAlbum"))
+    }
+
+    private var bulkFavoriteButton: some View {
+        Button {
+            Haptics.shared.tap()
+            favoriteSelected()
+        } label: {
+            Image(systemName: "heart")
+                .font(.scaled(15, weight: .bold))
+                .foregroundStyle(selectedIds.isEmpty ? Theme.textTertiary : Theme.pink)
+                .frame(width: LayoutMetrics.s(38), height: LayoutMetrics.s(38))
+                .background(Circle().fill(Color.white.opacity(0.10)))
+        }
+        .buttonStyle(.plain)
+        .disabled(selectedIds.isEmpty)
+        .accessibilityLabel(L10n.t("memories.gallery.favoriteSelected"))
+    }
+
+    /// Move every selected photo into `album` (nil / empty = out of its album),
+    /// one PATCH per photo. Photos already there are skipped.
+    private func moveSelected(toAlbum album: String?) {
+        guard let api = appState.api, !selectedIds.isEmpty else { return }
+        let trimmed = album?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let target: String? = (trimmed?.isEmpty ?? true) ? nil : trimmed
+        let targets = photos.filter { selectedIds.contains($0.id) && $0.album != target }
+        let count = selectedIds.count
+        finishSelection()
+        Task {
+            do {
+                for photo in targets {
+                    let updated = try await api.patchPhoto(id: photo.id, album: .some(target))
+                    apply(updated)
+                }
+                Haptics.shared.success()
+                if let name = target {
+                    appState.showToast(count == 1
+                                       ? L10n.t("memories.gallery.moved", ["name": name])
+                                       : L10n.t("memories.gallery.movedCount",
+                                                ["n": String(count), "name": name]),
+                                       style: .success)
+                } else {
+                    appState.showToast(L10n.t("memories.gallery.removedFromAlbum"), style: .info)
+                }
+            } catch {
+                appState.handleAPIError(error)
+            }
+        }
+    }
+
+    /// Mark every selected photo as one of MY favorites. The server endpoint
+    /// is a toggle, so photos I already favorited are skipped (never unhearted).
+    private func favoriteSelected() {
+        guard let api = appState.api, let myId = appState.memberId,
+              !selectedIds.isEmpty else { return }
+        let targets = photos.filter { selectedIds.contains($0.id) && !$0.isFavorite(of: myId) }
+        let count = selectedIds.count
+        finishSelection()
+        Task {
+            do {
+                for photo in targets {
+                    let updated = try await api.togglePhotoFavorite(id: photo.id)
+                    apply(updated)
+                }
+                Haptics.shared.success()
+                appState.showToast(count == 1
+                                   ? L10n.t("memories.gallery.favoritedOne")
+                                   : L10n.t("memories.gallery.favoritedCount", ["n": String(count)]),
+                                   style: .love)
+            } catch {
+                appState.handleAPIError(error)
+            }
+        }
+    }
+
+    /// Rename a whole album: PATCH every photo filed in it to the new name
+    /// (renaming onto an existing album merges the two). The active filter
+    /// follows the rename so the grid keeps showing the same photos.
+    private func renameAlbum(_ oldName: String, to rawNewName: String) {
+        guard let api = appState.api else { return }
+        let newName = rawNewName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !newName.isEmpty, newName != oldName else { return }
+        let targets = photos.filter { $0.album == oldName }
+        guard !targets.isEmpty else { return }
+        if filter == .album(oldName) {
+            filter = .album(newName)
+        }
+        Task {
+            do {
+                for photo in targets {
+                    let updated = try await api.patchPhoto(id: photo.id, album: .some(newName))
+                    apply(updated)
+                }
+                Haptics.shared.success()
+                appState.showToast(L10n.t("memories.gallery.renamed", ["name": newName]),
+                                   style: .success)
+            } catch {
+                appState.handleAPIError(error)
             }
         }
     }
@@ -495,6 +743,8 @@ private struct GalleryCell: View {
     let photo: Photo
     let api: API?
     let memberId: String?
+    /// nil = multi-select off; true/false = this cell's selection state.
+    var selected: Bool? = nil
 
     var body: some View {
         Color.clear
@@ -503,9 +753,24 @@ private struct GalleryCell: View {
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
+                    .strokeBorder(selected == true ? Theme.pink : Color.white.opacity(0.10),
+                                  lineWidth: selected == true ? 2 : 1)
             )
             .overlay(alignment: .topTrailing) { favoriteBadge }
+            .overlay(alignment: .bottomLeading) { selectionBadge }
+    }
+
+    /// Selection circle in multi-select mode (filled pink when selected).
+    @ViewBuilder
+    private var selectionBadge: some View {
+        if let selected {
+            Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                .font(.scaled(15, weight: .bold))
+                .foregroundStyle(selected ? Theme.pink : Color.white.opacity(0.85))
+                .padding(4)
+                .background(Circle().fill(Color.black.opacity(0.35)))
+                .padding(5)
+        }
     }
 
     /// Pink heart when I favorited, soft white heart when only the partner did.

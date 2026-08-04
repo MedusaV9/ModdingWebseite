@@ -55,7 +55,7 @@ struct CanvasWidgetView: View {
             }
         }
         .widgetChrome(photoFriendly: true)
-        .widgetURL(URL(string: "sooodreamy://tab/memories"))
+        .widgetURL(URL(string: "sooodreamy://canvas"))
     }
 
     // MARK: Board

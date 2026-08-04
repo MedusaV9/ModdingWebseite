@@ -66,6 +66,14 @@ enum ChatL10n {
         "chat.deleteMessage": LText(de: "Nachricht löschen", en: "Delete message"),
         "chat.deleted": LText(de: "Nachricht gelöscht", en: "Message deleted"),
 
+        // Message edit (v1.8 — own text/letter messages only)
+        "chat.editMessage": LText(de: "Nachricht bearbeiten", en: "Edit message"),
+        "chat.editTitle": LText(de: "Nachricht bearbeiten", en: "Edit message"),
+        "chat.editHint": LText(de: "Dein Schatz sieht ein kleines „(bearbeitet)“ an der Nachricht.",
+                               en: "Your sweetheart will see a little “(edited)” on the message."),
+        "chat.editSaved": LText(de: "Nachricht bearbeitet ✏️", en: "Message edited ✏️"),
+        "chat.edited": LText(de: "(bearbeitet)", en: "(edited)"),
+
         // Search (filter over the loaded messages)
         "chat.searchA11y": LText(de: "Nachrichten durchsuchen", en: "Search messages"),
         "chat.searchPlaceholder": LText(de: "Nachrichten durchsuchen …", en: "Search messages …"),

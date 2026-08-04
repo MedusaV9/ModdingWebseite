@@ -23,6 +23,8 @@ struct ChoiceGamesView: View {
     @State private var heartsVisible = false
     @State private var endCelebrated = false
     @State private var heartsTask: Task<Void, Never>?
+    @State private var sharing = false
+    @State private var shared = false
 
     private static let defaultRounds = 12
 
@@ -223,6 +225,8 @@ struct ChoiceGamesView: View {
         didSendEnd = false
         endCelebrated = false
         heartsVisible = false
+        sharing = false
+        shared = false
     }
 
     private func syncCursor() {
@@ -461,6 +465,7 @@ struct ChoiceGamesView: View {
                     .foregroundStyle(Theme.gold)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
+                shareButton
                 Button {
                     startGame()
                 } label: {
@@ -476,6 +481,58 @@ struct ChoiceGamesView: View {
         .onAppear {
             maybeFinish()
             celebrateEnd()
+        }
+    }
+
+    // MARK: Share to chat
+
+    @ViewBuilder
+    private var shareButton: some View {
+        if appState.api != nil {
+            Button {
+                shareToChat()
+            } label: {
+                if sharing {
+                    ProgressView()
+                        .tint(Theme.pink)
+                } else {
+                    Label(L10n.t(shared ? "games.sharedToChat" : "games.shareToChat"),
+                          systemImage: shared ? "checkmark" : "paperplane.fill")
+                }
+            }
+            .buttonStyle(.plain)
+            .font(.system(.footnote, design: .rounded).weight(.bold))
+            .foregroundStyle(Theme.pink)
+            .disabled(sharing || shared)
+        }
+    }
+
+    /// Posts the match result into the couple chat (Wordle/ToD pattern).
+    private var shareText: String {
+        let game = (isWouldYouRather ? "🤯 " : "⚡️ ") + L10n.t("games.card.\(kind.rawValue).title")
+        let header = L10n.t("games.share.header", ["game": game])
+        let summary = "\(matchPercent)% · " + L10n.t("games.choice.end.summary",
+                                                     ["n": String(matchCount),
+                                                      "total": String(totalRounds)])
+        return header + "\n" + summary + "\n" + endFlavor
+    }
+
+    private func shareToChat() {
+        guard let api = appState.api, !sharing, !shared else { return }
+        sharing = true
+        Haptics.shared.tap()
+        let text = shareText
+        Task {
+            do {
+                try await api.sendMessage(type: .text, text: text)
+                shared = true
+                SoundEngine.shared.play(.pop)
+                Haptics.shared.success()
+                appState.showToast(L10n.t("games.sharedToChat"), style: .success)
+            } catch {
+                appState.handleAPIError(error)
+            }
+            sharing = false
         }
     }
 

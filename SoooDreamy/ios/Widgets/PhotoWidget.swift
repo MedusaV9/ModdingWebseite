@@ -77,7 +77,7 @@ struct PhotoWidgetView: View {
             }
         }
         .containerBackground(for: .widget) { background }
-        .widgetURL(URL(string: "sooodreamy://tab/memories"))
+        .widgetURL(URL(string: "sooodreamy://photos"))
     }
 
     @ViewBuilder

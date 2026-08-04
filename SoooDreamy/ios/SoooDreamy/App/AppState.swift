@@ -653,8 +653,14 @@ final class AppState {
         switch host {
         case "tab":
             if let tab = AppTab(rawValue: path) { activeTab = tab }
-        case "daily":
+        case "daily", "streak":
+            // Daily question & answer streak both live on the dashboard.
             activeTab = .home
+        case "coupons", "events", "photos", "canvas":
+            // Feature-specific widget/notification links — these features live
+            // in the "Us" tab. Kept as distinct hosts so future sub-navigation
+            // can route deeper without touching the widgets again.
+            activeTab = .memories
         case "action":
             if path == "sendlove" {
                 let comps = URLComponents(url: url, resolvingAgainstBaseURL: false)

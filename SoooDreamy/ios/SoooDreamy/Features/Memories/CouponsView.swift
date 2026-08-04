@@ -14,6 +14,8 @@ struct CouponsView: View {
     @State private var confirmDelete = false
     @State private var celebrationDate: Date?
     @State private var celebrationTask: Task<Void, Never>?
+    /// Coupon ids with a "gift again" POST in flight (prevents double taps).
+    @State private var regifting: Set<String> = []
 
     var body: some View {
         ZStack {
@@ -304,7 +306,12 @@ struct CouponsView: View {
                 }
             }
             Spacer()
-            statusChip(coupon)
+            VStack(alignment: .trailing, spacing: 6) {
+                statusChip(coupon)
+                if coupon.redeemedAt != nil || coupon.isExpired() {
+                    giftAgainButton(coupon)
+                }
+            }
         }
         .glassCard(padding: 12)
         .listRowBackground(Color.clear)
@@ -336,6 +343,29 @@ struct CouponsView: View {
     private func forInfo(_ coupon: Coupon) -> String {
         let date = coupon.createdAt.formatted(date: .abbreviated, time: .omitted)
         return L10n.t("memories.coupons.forName", ["name": appState.partnerName]) + " · " + date
+    }
+
+    /// "Gift again" — re-gifts a redeemed/expired coupon as a fresh one.
+    private func giftAgainButton(_ coupon: Coupon) -> some View {
+        Button {
+            Haptics.shared.tap()
+            giftAgain(coupon)
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "arrow.counterclockwise")
+                    .font(.scaled(10, weight: .bold))
+                Text(L10n.t("coupon.giftAgain"))
+                    .font(.system(.caption2, design: .rounded).weight(.bold))
+            }
+            .foregroundStyle(Theme.pink)
+            .padding(.vertical, 5)
+            .padding(.horizontal, LayoutMetrics.s(10))
+            .background(Capsule().fill(Theme.pink.opacity(0.14)))
+            .overlay(Capsule().strokeBorder(Theme.pink.opacity(0.4), lineWidth: 1))
+            .opacity(regifting.contains(coupon.id) ? 0.5 : 1)
+        }
+        .buttonStyle(.borderless)   // keep the tap target tight inside the list row
+        .disabled(regifting.contains(coupon.id))
     }
 
     // MARK: Create button
@@ -373,10 +403,33 @@ struct CouponsView: View {
         guard let api = appState.api else { return }
         do {
             coupons = try await api.coupons()
+            // Fresh list in hand — (re-)arm the "expiring soon" reminders.
+            await CouponReminder.sync(coupons: coupons, myMemberId: appState.memberId)
         } catch {
             appState.handleAPIError(error)
         }
         loading = false
+    }
+
+    /// Re-gift a redeemed/expired coupon: POST a fresh one with the same
+    /// title/emoji/note (deliberately without the old, already-past expiry).
+    private func giftAgain(_ coupon: Coupon) {
+        guard let api = appState.api, !regifting.contains(coupon.id) else { return }
+        regifting.insert(coupon.id)
+        Task {
+            do {
+                let fresh = try await api.createCoupon(title: coupon.title,
+                                                       emoji: coupon.emoji,
+                                                       note: coupon.note)
+                insert(fresh)
+                SoundEngine.shared.play(.chime)
+                Haptics.shared.success()
+                appState.showToast(L10n.t("memories.coupons.created"), style: .love)
+            } catch {
+                appState.handleAPIError(error)
+            }
+            regifting.remove(coupon.id)
+        }
     }
 
     private func redeem(_ coupon: Coupon) {
@@ -404,6 +457,7 @@ struct CouponsView: View {
     private func delete(_ coupon: Coupon) {
         guard let api = appState.api else { return }
         coupons.removeAll { $0.id == coupon.id }
+        syncExpiryReminders()
         Task {
             do {
                 try await api.deleteCoupon(id: coupon.id)
@@ -428,6 +482,7 @@ struct CouponsView: View {
     private func insert(_ coupon: Coupon) {
         guard !coupons.contains(where: { $0.id == coupon.id }) else { return }
         coupons.append(coupon)
+        syncExpiryReminders()
     }
 
     private func apply(_ coupon: Coupon) {
@@ -436,6 +491,17 @@ struct CouponsView: View {
         } else {
             coupons.append(coupon)
         }
+        syncExpiryReminders()
+    }
+
+    /// The local list changed (new/redeemed/deleted coupon) — re-arm the
+    /// "expiring soon" reminders to match. A coupon received while this
+    /// screen is open that already expires within 48 h gets its reminder
+    /// scheduled right away.
+    private func syncExpiryReminders() {
+        let list = coupons
+        let me = appState.memberId
+        Task { await CouponReminder.sync(coupons: list, myMemberId: me) }
     }
 
     private func handleServerEvent(_ event: ServerEvent) {
@@ -451,6 +517,7 @@ struct CouponsView: View {
         case .couponDeleted:
             if let id = event.decode(IdPayload.self)?.id {
                 coupons.removeAll { $0.id == id }
+                syncExpiryReminders()
             }
         default:
             break
