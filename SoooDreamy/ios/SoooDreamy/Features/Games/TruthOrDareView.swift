@@ -1,11 +1,16 @@
 import SwiftUI
+import Combine
 
 /// Truth or Dare — couple edition. Local pass-and-play on ONE phone
 /// (works offline, no server session): you take turns, pick truth or dare,
 /// flip the card, do the thing. Spice filter, skips (max 3 each) and a
 /// shared streak counter keep it spicy.
+/// With a paired partner the setup also offers the LIVE two-phone mode
+/// (TruthOrDareLiveView) played via the game-session relay.
 struct TruthOrDareView: View {
     @Environment(AppState.self) private var appState
+
+    let engine: GameEngine
 
     private enum Stage {
         case setup, choosing, card
@@ -35,17 +40,16 @@ struct TruthOrDareView: View {
     var body: some View {
         ZStack {
             DreamyBackground()
-            content
-            if heartsVisible {
-                FloatingHeartsView(emojis: ["🔥", "💖", "✨", "😏"], count: 16)
-                    .ignoresSafeArea()
-                    .allowsHitTesting(false)
+            if isLive {
+                TruthOrDareLiveView(engine: engine)
+            } else {
+                localContent
             }
         }
         .navigationTitle(L10n.t("games.card.truthordare.title"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            if stage != .setup {
+            if stage != .setup && !isLive {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         restart()
@@ -56,8 +60,44 @@ struct TruthOrDareView: View {
                 }
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .serverEvent)) { note in
+            if let event = note.object as? ServerEvent {
+                engine.handle(event)
+            }
+        }
+        .task {
+            engine.onError = { [weak appState] error in
+                appState?.handleAPIError(error)
+            }
+            if engine.session == nil {
+                await engine.resume(api: appState.api)
+            }
+        }
         .onDisappear {
             heartsTask?.cancel()
+        }
+    }
+
+    /// Live sessions take over the screen; ended sessions only keep it when
+    /// they actually finished (their end screen) — a cancelled invitation
+    /// falls back to the local pass-and-play mode.
+    private var isLive: Bool {
+        guard let session = engine.session, session.kind == .truthordare else { return false }
+        if session.state == "ended" {
+            return TruthOrDareLive.finished(engine: engine,
+                                            memberIds: (appState.couple?.members.map(\.id) ?? []).sorted())
+        }
+        return true
+    }
+
+    private var localContent: some View {
+        ZStack {
+            content
+            if heartsVisible {
+                FloatingHeartsView(emojis: ["🔥", "💖", "✨", "😏"], count: 16)
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
+            }
         }
     }
 
@@ -106,15 +146,45 @@ struct TruthOrDareView: View {
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
                 spicePicker
-                Button {
-                    start()
-                } label: {
-                    Text(L10n.t("games.start"))
+                if appState.partner != nil {
+                    Button {
+                        startLive()
+                    } label: {
+                        Text(L10n.t("games.tod.playLive"))
+                    }
+                    .buttonStyle(PrimaryButtonStyle())
+                    .disabled(engine.busy)
+                    Button {
+                        start()
+                    } label: {
+                        Text(L10n.t("games.tod.playLocal"))
+                    }
+                    .buttonStyle(SecondaryButtonStyle())
+                } else {
+                    Button {
+                        start()
+                    } label: {
+                        Text(L10n.t("games.start"))
+                    }
+                    .buttonStyle(PrimaryButtonStyle())
                 }
-                .buttonStyle(PrimaryButtonStyle())
             }
             .glassCard(padding: 22)
             .padding(LayoutMetrics.s(16))
+        }
+    }
+
+    /// Creates a live two-phone session over the game relay; seed + spice +
+    /// rounds in the payload let both clients derive the identical decks.
+    private func startLive() {
+        guard !engine.busy else { return }
+        let options = ["rounds": TruthOrDareLive.defaultRounds, "spice": spice]
+        Task {
+            let payload = GameEngine.makePayload(options: options)
+            if await engine.create(api: appState.api, type: .truthordare, payload: payload) {
+                SoundEngine.shared.play(.pop)
+                Haptics.shared.tap()
+            }
         }
     }
 

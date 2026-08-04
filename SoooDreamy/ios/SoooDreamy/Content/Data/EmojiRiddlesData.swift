@@ -168,6 +168,12 @@ extension ContentPack {
         EmojiRiddle(id: 149, emojis: "👫💞🚶", answer: LText(de: "Händchenhalten", en: "Holding hands"), category: "couple"),
         EmojiRiddle(id: 150, emojis: "🌙😘💤", answer: LText(de: "Gute-Nacht-Kuss", en: "Goodnight kiss"), category: "couple"),
         EmojiRiddle(id: 151, emojis: "⛸️❄️🧤", answer: LText(de: "Schlittschuhlaufen", en: "Ice skating"), category: "activity"),
-        EmojiRiddle(id: 152, emojis: "⛳🏌️🌈", answer: LText(de: "Minigolf", en: "Mini golf"), category: "activity")
+        EmojiRiddle(id: 152, emojis: "⛳🏌️🌈", answer: LText(de: "Minigolf", en: "Mini golf"), category: "activity"),
+        EmojiRiddle(id: 153, emojis: "🕰️🚗⚡️", answer: LText(de: "Zurück in die Zukunft", en: "Back to the Future"), category: "movie"),
+        EmojiRiddle(id: 154, emojis: "🏠😱🎄", answer: LText(de: "Kevin – Allein zu Haus", en: "Home Alone"), category: "movie"),
+        EmojiRiddle(id: 155, emojis: "🙏🎹🕊️", answer: LText(de: "Hallelujah", en: "Hallelujah"), category: "song"),
+        EmojiRiddle(id: 156, emojis: "🚋🌊🧁", answer: LText(de: "Lissabon", en: "Lisbon"), category: "place"),
+        EmojiRiddle(id: 157, emojis: "🍓🫙🍞", answer: LText(de: "Marmelade", en: "Jam"), category: "food"),
+        EmojiRiddle(id: 158, emojis: "🕊️🕊️💕", answer: LText(de: "Turteltauben", en: "Lovebirds"), category: "couple")
     ]
 }

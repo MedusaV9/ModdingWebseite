@@ -125,6 +125,12 @@ extension ContentPack {
         QuizQuestion(id: 117, text: LText(de: "Welche kleine Geste von mir macht {partner} am glücklichsten?", en: "Which little gesture of mine makes {partner} happiest?")),
         QuizQuestion(id: 118, text: LText(de: "Wobei verliert {partner} komplett das Zeitgefühl?", en: "Doing what does {partner} completely lose track of time?")),
         QuizQuestion(id: 119, text: LText(de: "Welchen Ort aus der Kindheit würde {partner} gern nochmal besuchen?", en: "Which childhood place would {partner} love to visit again?")),
-        QuizQuestion(id: 120, text: LText(de: "Worauf freut sich {partner} diese Woche am meisten?", en: "What is {partner} most looking forward to this week?"))
+        QuizQuestion(id: 120, text: LText(de: "Worauf freut sich {partner} diese Woche am meisten?", en: "What is {partner} most looking forward to this week?")),
+        QuizQuestion(id: 121, text: LText(de: "Was würde {partner} mit einem komplett freien Nachmittag ganz allein anfangen?", en: "What would {partner} do with a completely free afternoon all to themselves?")),
+        QuizQuestion(id: 122, text: LText(de: "Welches Gericht würde {partner} nie freiwillig probieren?", en: "Which dish would {partner} never voluntarily try?")),
+        QuizQuestion(id: 123, text: LText(de: "Welchen Song singt {partner} unter der Dusche?", en: "Which song does {partner} sing in the shower?")),
+        QuizQuestion(id: 124, text: LText(de: "Welches Möbelstück würde {partner} zuerst für unsere Traumwohnung aussuchen?", en: "Which piece of furniture would {partner} pick first for our dream home?")),
+        QuizQuestion(id: 125, text: LText(de: "Wie viele Wecker braucht {partner}, um wirklich aufzustehen?", en: "How many alarms does {partner} need to actually get up?")),
+        QuizQuestion(id: 126, text: LText(de: "Welches Brettspiel gewinnt {partner} fast immer?", en: "Which board game does {partner} almost always win?"))
     ]
 }

@@ -124,6 +124,12 @@ extension ContentPack {
         ChoicePair(id: 117, a: LText(de: "Handgeschriebener Brief", en: "Handwritten letter"), b: LText(de: "Sprachnachricht", en: "Voice note")),
         ChoicePair(id: 118, a: LText(de: "Sofa-Festung", en: "Blanket fort"), b: LText(de: "Bett-Kino", en: "Movies in bed")),
         ChoicePair(id: 119, a: LText(de: "Blumenstrauß", en: "Bouquet"), b: LText(de: "Pralinen", en: "Box of chocolates")),
-        ChoicePair(id: 120, a: LText(de: "Partner-Pyjamas", en: "Matching pajamas"), b: LText(de: "Partner-Tattoos", en: "Matching tattoos"))
+        ChoicePair(id: 120, a: LText(de: "Partner-Pyjamas", en: "Matching pajamas"), b: LText(de: "Partner-Tattoos", en: "Matching tattoos")),
+        ChoicePair(id: 121, a: LText(de: "Smoothie", en: "Smoothie"), b: LText(de: "Milchshake", en: "Milkshake")),
+        ChoicePair(id: 122, a: LText(de: "Leuchtturm", en: "Lighthouse"), b: LText(de: "Windmühle", en: "Windmill")),
+        ChoicePair(id: 123, a: LText(de: "Segelboot", en: "Sailboat"), b: LText(de: "Kanu", en: "Canoe")),
+        ChoicePair(id: 124, a: LText(de: "Hängematte", en: "Hammock"), b: LText(de: "Schaukelstuhl", en: "Rocking chair")),
+        ChoicePair(id: 125, a: LText(de: "Flip-Flops", en: "Flip-flops"), b: LText(de: "Sneaker", en: "Sneakers")),
+        ChoicePair(id: 126, a: LText(de: "Drachen steigen lassen", en: "Kite flying"), b: LText(de: "Seifenblasen", en: "Blowing bubbles"))
     ]
 }

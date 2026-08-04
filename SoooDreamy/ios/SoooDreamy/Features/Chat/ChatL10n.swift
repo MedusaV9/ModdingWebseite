@@ -54,6 +54,11 @@ enum ChatL10n {
         "chat.letterSending": LText(de: "Wird verschickt …", en: "Sending …"),
         "chat.letterSent": LText(de: "Dein Brief ist unterwegs 💌", en: "Your letter is on its way 💌"),
 
+        // Photo messages (v1.7)
+        "chat.photoMessage": LText(de: "Foto", en: "Photo"),
+        "chat.photoFailed": LText(de: "Foto konnte nicht geladen werden — vielleicht wurde es aus der Galerie gelöscht.",
+                                  en: "Couldn't load the photo — it may have been deleted from the gallery."),
+
         // Context menus & reader
         "chat.you": LText(de: "Du", en: "You"),
         "chat.copy": LText(de: "Kopieren", en: "Copy"),

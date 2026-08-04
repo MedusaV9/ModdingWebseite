@@ -198,6 +198,15 @@ enum MemoriesL10n {
         "memories.journal.waiting": LText(de: "wartet noch auf {name}…", en: "still waiting for {name}…"),
         "memories.journal.noAnswer": LText(de: "Hier fehlt noch eine Antwort von euch 🌙",
                                            en: "One of you didn't answer this one 🌙"),
+        "memories.journal.searchPlaceholder": LText(de: "Tagebuch durchsuchen …",
+                                                    en: "Search the journal …"),
+        "memories.journal.searchNoResults.title": LText(de: "Nichts gefunden", en: "No matches"),
+        "memories.journal.searchNoResults.subtitle": LText(de: "Kein Eintrag passt zu „{query}“",
+                                                           en: "No entry matches “{query}”"),
+        "memories.journal.share": LText(de: "In den Chat senden 💬", en: "Send to chat 💬"),
+        "memories.journal.shareHeader": LText(de: "📖 Aus unserem Tagebuch — {date}:",
+                                              en: "📖 From our journal — {date}:"),
+        "memories.journal.shareSent": LText(de: "Im Chat geteilt 💬", en: "Shared to chat 💬"),
 
         // Love coupons
         "memories.coupons.title": LText(de: "Love-Coupons", en: "Love Coupons"),

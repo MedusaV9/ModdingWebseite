@@ -20,8 +20,8 @@ enum GamesL10n {
         "games.card.wouldyourather.teaser": LText(de: "Verrückte Dilemmata mit Diskussionsgarantie",
                                                   en: "Wild dilemmas, discussion guaranteed"),
         "games.card.truthordare.title": LText(de: "Wahrheit oder Pflicht", en: "Truth or Dare"),
-        "games.card.truthordare.teaser": LText(de: "Couple-Edition zum Hin- und Herreichen",
-                                               en: "Couple edition, pass the phone"),
+        "games.card.truthordare.teaser": LText(de: "Couple-Edition — ein Handy oder live zu zweit",
+                                               en: "Couple edition — one phone or live together"),
         "games.card.questions36.title": LText(de: "36 Fragen", en: "36 Questions"),
         "games.card.questions36.teaser": LText(de: "Der Klassiker zum (Neu-)Verlieben",
                                                en: "The classic for falling in love (again)"),
@@ -112,8 +112,8 @@ enum GamesL10n {
                                         en: "You keep it spicy — weeks of things to discuss!"),
 
         // Truth or Dare
-        "games.tod.setup.body": LText(de: "Kein Server, kein Warten: Reicht das Handy hin und her. Wählt eure Stufe — dann Wahrheit oder Pflicht!",
-                                      en: "No server, no waiting: pass the phone back and forth. Pick your level — then truth or dare!"),
+        "games.tod.setup.body": LText(de: "Wählt eure Stufe — dann Wahrheit oder Pflicht! An einem Handy hin- und herreichen oder live auf zwei Handys spielen.",
+                                      en: "Pick your level — then truth or dare! Pass one phone back and forth, or play live on two phones."),
         "games.tod.spiceTitle": LText(de: "Wie mutig seid ihr heute?", en: "How brave are you today?"),
         "games.tod.spice1": LText(de: "Süß", en: "Sweet"),
         "games.tod.spice1.sub": LText(de: "Herzige Fragen & liebe Aufgaben", en: "Wholesome questions & cute dares"),
@@ -133,6 +133,23 @@ enum GamesL10n {
                                       en: "All cards played — reshuffled!"),
         "games.tod.shareTruth": LText(de: "💬 Wahrheit für {name}:", en: "💬 Truth for {name}:"),
         "games.tod.shareDare": LText(de: "💋 Pflicht für {name}:", en: "💋 Dare for {name}:"),
+
+        // MARK: Wahrheit oder Pflicht live (two-phone mode)
+        "games.tod.playLive": LText(de: "Live zu zweit spielen 📱📱", en: "Play live together 📱📱"),
+        "games.tod.playLocal": LText(de: "An einem Handy spielen", en: "Play on one phone"),
+        "games.tod.live.partnerPicking": LText(de: "{name} wählt gerade Wahrheit oder Pflicht…",
+                                               en: "{name} is choosing truth or dare…"),
+        "games.tod.live.yourCard": LText(de: "Deine Karte — trau dich!",
+                                         en: "Your card — you've got this!"),
+        "games.tod.live.partnerCard": LText(de: "{name} hat diese Karte gezogen",
+                                            en: "{name} drew this card"),
+        "games.tod.live.partnerDoing": LText(de: "Warte, bis {name} fertig ist…",
+                                             en: "Waiting for {name} to finish…"),
+        "games.tod.live.winner": LText(de: "{name} hat mehr geschafft! 🏆",
+                                       en: "{name} pulled off more! 🏆"),
+        "games.tod.live.tie": LText(de: "Unentschieden — ihr seid beide mutig! 💞",
+                                    en: "It's a tie — you're both daring! 💞"),
+        "games.tod.live.finalScore": LText(de: "Geschaffte Karten", en: "Cards completed"),
 
         // 36 Questions
         "games.q36.intro": LText(de: "Die berühmten 36 Fragen zum Verlieben (nach Arthur Aron): Lest jede Frage laut vor und beantwortet sie beide — ohne Eile.",

@@ -596,6 +596,8 @@ final class AppState {
             body = L10n.t("notif.message.letter")
         case .voice:
             body = L10n.t("notif.message.voice")
+        case .photo:
+            body = L10n.t("notif.message.photo")
         }
         guard !body.isEmpty else { return }
         CoupleNotify.alert(.message,

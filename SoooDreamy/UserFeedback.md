@@ -152,6 +152,14 @@ _(hier beantworte ich dein Feedback, wenn ich es umgesetzt habe)_
 - `[2026-08-04 01:15 UTC]` **Haptik-Feinschliff**: Bucket-List-Teilen bestätigt den Tipp jetzt sofort spürbar (wie alle anderen Teilen-Buttons).
 - `[2026-08-04 01:15 UTC]` IPA **1.4.3** (Build 18) · Logic **50/50** Tests grün.
 
+### Iteration 18 — Foto-Chat, ToD-Live, Journal, Streak-Kalender 📸🃏
+- `[2026-08-04 01:55 UTC]` **Server v1.7** (89/89): Chat-Nachrichten vom Typ `photo` mit `photoId`.
+- `[2026-08-04 01:55 UTC]` Fotos aus der Galerie in den Chat senden + Foto-Bubbles mit Vollbild.
+- `[2026-08-04 01:55 UTC]` **Wahrheit-oder-Pflicht Live** zu zweit (Move-Relay); Solo bleibt.
+- `[2026-08-04 01:55 UTC]` Journal: Suche, Monatsgruppen, Eintrag teilen.
+- `[2026-08-04 01:55 UTC]` **Streak-Kalender** (Tap auf 🔥) — Tage an denen beide geantwortet haben.
+- `[2026-08-04 01:55 UTC]` Voice-Player: Scrub, 1×/1.5×/2×, Restzeit. +36 Content-Items. IPA **1.5.0**.
+
 ## 🔄 Als Nächstes
-- IPA 1.4.3 sideloaden + AMP Server auf Branch (v1.6).
-- Loop geht weiter: mehr Content, Album-Sharing, Truth-or-Dare multiplayer, weitere Polish-Passes.
+- IPA 1.5.0 sideloaden + AMP Server v1.7.
+- Loop: Message-Edit, Album-Verwaltung 2.0, Canvas-Export, mehr Share-to-Chat, Widgets, Coupon-Reminders.

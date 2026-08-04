@@ -464,7 +464,197 @@ struct ChatMessageRow: View {
         case .letter:
             ChatLetterBubble(message: message, isMine: isMine, onReact: onReact,
                              onDelete: deleteAction)
+        case .photo:
+            ChatPhotoBubble(message: message, isMine: isMine, onReact: onReact,
+                            onDelete: deleteAction)
         }
+    }
+}
+
+// MARK: - Photo bubble (v1.7)
+
+/// A shared gallery photo in the chat (`message.photoId`). Tries the photo's
+/// small grid thumbnail first and falls back to the full image when there is
+/// none; tapping opens a fullscreen viewer. The referenced photo has its own
+/// lifetime — if it was deleted from the gallery, the media 404s and the
+/// bubble shows an error placeholder.
+struct ChatPhotoBubble: View {
+    @Environment(AppState.self) private var appState
+    let message: Message
+    let isMine: Bool
+    let onReact: (String) -> Void
+    var onDelete: (() -> Void)? = nil
+
+    /// Set when the thumbnail fails (e.g. none was ever uploaded) —
+    /// switches the bubble to the full-resolution URL.
+    @State private var thumbFailed = false
+    @State private var showViewer = false
+
+    private var side: CGFloat { LayoutMetrics.s(210) }
+
+    private var imageURL: URL? {
+        guard let api = appState.api, let photoId = message.photoId else { return nil }
+        let path = thumbFailed ? "/api/photos/\(photoId)/raw" : "/api/photos/\(photoId)/thumb/raw"
+        return api.mediaURL(path)
+    }
+
+    var body: some View {
+        VStack(alignment: isMine ? .trailing : .leading, spacing: 6) {
+            photoArea
+            if let caption = message.text, !caption.isEmpty {
+                Text(caption)
+                    .font(.system(.callout, design: .rounded))
+                    .foregroundStyle(Theme.textPrimary)
+                    .multilineTextAlignment(isMine ? .trailing : .leading)
+            }
+            ChatTimestampText(date: message.createdAt, isMine: isMine,
+                              read: chatReadReceipt(for: message, isMine: isMine,
+                                                    partner: appState.partner))
+        }
+        .padding(LayoutMetrics.s(8))
+        .background(ChatBubbleBackground(isMine: isMine))
+        .contentShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .onTapGesture(count: 2) {
+            onReact(ChatReactions.quick)
+        }
+        .onTapGesture {
+            Haptics.shared.tap()
+            showViewer = true
+        }
+        .contextMenu {
+            ChatReactMenu(onReact: onReact)
+            if let onDelete {
+                ChatDeleteButton(onDelete: onDelete)
+            }
+        }
+        .accessibilityLabel(L10n.t("chat.photoMessage"))
+        .fullScreenCover(isPresented: $showViewer) {
+            ChatPhotoViewer(message: message)
+        }
+    }
+
+    @ViewBuilder private var photoArea: some View {
+        Group {
+            if let url = imageURL {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    case .failure:
+                        if thumbFailed {
+                            photoPlaceholder(icon: "photo.badge.exclamationmark")
+                        } else {
+                            // No thumbnail on the server — retry with the full image.
+                            photoPlaceholder(icon: nil)
+                                .onAppear { thumbFailed = true }
+                        }
+                    default:
+                        photoPlaceholder(icon: nil)
+                    }
+                }
+            } else {
+                photoPlaceholder(icon: "photo")
+            }
+        }
+        .frame(width: side, height: side)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    private func photoPlaceholder(icon: String?) -> some View {
+        ZStack {
+            LinearGradient(colors: [Theme.purple.opacity(0.25), Theme.indigo.opacity(0.2)],
+                           startPoint: .topLeading, endPoint: .bottomTrailing)
+            if let icon {
+                Image(systemName: icon)
+                    .font(.scaled(26))
+                    .foregroundStyle(Theme.textTertiary)
+            } else {
+                ProgressView()
+                    .tint(Theme.textTertiary)
+            }
+        }
+    }
+}
+
+/// Fullscreen viewer for one photo message (full-resolution image + caption).
+struct ChatPhotoViewer: View {
+    @Environment(AppState.self) private var appState
+    @Environment(\.dismiss) private var dismiss
+    let message: Message
+
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            imageArea
+            VStack {
+                HStack {
+                    closeButton
+                    Spacer()
+                }
+                .padding(.horizontal, LayoutMetrics.s(16))
+                .padding(.top, 8)
+                Spacer()
+                if let caption = message.text, !caption.isEmpty {
+                    Text(caption)
+                        .font(.system(.subheadline, design: .rounded).weight(.semibold))
+                        .foregroundStyle(Theme.textPrimary)
+                        .multilineTextAlignment(.center)
+                        .padding(LayoutMetrics.s(14))
+                        .glassCard(padding: 12)
+                        .padding(.horizontal, LayoutMetrics.s(16))
+                        .padding(.bottom, LayoutMetrics.s(24))
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private var imageArea: some View {
+        if let photoId = message.photoId,
+           let url = appState.api?.mediaURL("/api/photos/\(photoId)/raw") {
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case .success(let image):
+                    image
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                case .failure:
+                    failurePlaceholder
+                default:
+                    ProgressView()
+                        .tint(.white)
+                }
+            }
+        } else {
+            failurePlaceholder
+        }
+    }
+
+    private var failurePlaceholder: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "photo.badge.exclamationmark")
+                .font(.scaled(40))
+                .foregroundStyle(Theme.textTertiary)
+            Text(L10n.t("chat.photoFailed"))
+                .font(.system(.footnote, design: .rounded))
+                .foregroundStyle(Theme.textTertiary)
+        }
+    }
+
+    private var closeButton: some View {
+        Button {
+            Haptics.shared.tap()
+            dismiss()
+        } label: {
+            Image(systemName: "xmark")
+                .font(.scaled(15, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: LayoutMetrics.s(38), height: LayoutMetrics.s(38))
+                .background(Circle().fill(Color.white.opacity(0.14)))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(L10n.t("chat.readerClose"))
     }
 }
 

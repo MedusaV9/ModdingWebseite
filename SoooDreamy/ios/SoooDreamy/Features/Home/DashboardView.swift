@@ -5,6 +5,7 @@ struct DashboardView: View {
 
     @State private var heartBurst = 0
     @State private var showMoodPicker = false
+    @State private var showStreakCalendar = false
     @State private var dailyAnswerText = ""
     @State private var sendingDaily = false
     @State private var sharingDailyAnswers = false
@@ -58,6 +59,9 @@ struct DashboardView: View {
         }
         .sheet(isPresented: $showMoodPicker) {
             MoodPickerSheet()
+        }
+        .sheet(isPresented: $showStreakCalendar) {
+            StreakCalendarView()
         }
         .task(id: appState.couple?.id) {
             await loadFlashback()
@@ -467,7 +471,14 @@ struct DashboardView: View {
             HStack {
                 SectionHeader(title: L10n.t("home.dailyQuestion"))
                 if let streak = appState.dailyEntry?.streak, streak > 1 {
-                    StreakFirePill(streak: streak)
+                    Button {
+                        Haptics.shared.tap()
+                        showStreakCalendar = true
+                    } label: {
+                        StreakFirePill(streak: streak)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(L10n.t("home.streakCalendar.open"))
                 }
             }
 

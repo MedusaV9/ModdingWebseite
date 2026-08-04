@@ -214,6 +214,16 @@ struct API {
                           as: MessageResponse.self).message
     }
 
+    /// v1.7: send a photo message referencing an existing gallery photo
+    /// (either member's). `text` is an optional caption.
+    @discardableResult
+    func sendPhotoMessage(photoId: String, text: String? = nil) async throws -> Message {
+        try await request("POST", "/api/messages",
+                          jsonBody: ["type": MessageKind.photo.rawValue, "photoId": photoId,
+                                     "text": text],
+                          as: MessageResponse.self).message
+    }
+
     @discardableResult
     func sendVoice(data: Data, durationSec: Double) async throws -> Message {
         try await request("POST", "/api/voice", rawBody: data, contentType: "audio/mp4",

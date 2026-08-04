@@ -105,6 +105,12 @@ extension ContentPack {
         ChoicePair(id: 97, a: LText(de: "eine Woche lang jede Mahlzeit für mich kochen", en: "cook every meal for me for a week"), b: LText(de: "eine Woche lang meinen kompletten Abwasch übernehmen", en: "do all of my dishes for a week")),
         ChoicePair(id: 98, a: LText(de: "immer wissen, wo ich gerade bin", en: "always know where I am"), b: LText(de: "immer wissen, wie es mir gerade geht", en: "always know how I'm feeling")),
         ChoicePair(id: 99, a: LText(de: "mit mir über Nacht in einer Bibliothek eingeschlossen sein", en: "be locked in a library with me overnight"), b: LText(de: "mit mir über Nacht in einem Süßigkeitenladen eingeschlossen sein", en: "be locked in a candy store with me overnight")),
-        ChoicePair(id: 100, a: LText(de: "jeden Morgen von deinem Lieblingssong geweckt werden", en: "wake up to your favorite song every morning"), b: LText(de: "jeden Abend mit einer Gute-Nacht-Geschichte einschlafen", en: "fall asleep to a bedtime story every night"))
+        ChoicePair(id: 100, a: LText(de: "jeden Morgen von deinem Lieblingssong geweckt werden", en: "wake up to your favorite song every morning"), b: LText(de: "jeden Abend mit einer Gute-Nacht-Geschichte einschlafen", en: "fall asleep to a bedtime story every night")),
+        ChoicePair(id: 101, a: LText(de: "immer den perfekten Parkplatz finden", en: "always find the perfect parking spot"), b: LText(de: "immer sofort wissen, was ich mir gerade wünsche", en: "always instantly know what I'm wishing for")),
+        ChoicePair(id: 102, a: LText(de: "mit mir eine Nacht im Iglu verbringen", en: "spend a night in an igloo with me"), b: LText(de: "mit mir eine Nacht in der Wüste campen", en: "camp out in the desert with me for a night")),
+        ChoicePair(id: 103, a: LText(de: "jeden Tag ein neues Gericht kochen müssen", en: "have to cook a new dish every day"), b: LText(de: "nie wieder zweimal ins selbe Restaurant dürfen", en: "never get to visit the same restaurant twice")),
+        ChoicePair(id: 104, a: LText(de: "alle unsere Gespräche automatisch als Tagebuch gespeichert bekommen", en: "have all our conversations auto-saved as a diary"), b: LText(de: "alle unsere Insider-Witze in einem Buch gesammelt haben", en: "have all our inside jokes collected in a book")),
+        ChoicePair(id: 105, a: LText(de: "bei Regen immer trocken bleiben", en: "always stay dry in the rain"), b: LText(de: "im Winter nie frieren", en: "never feel cold in winter")),
+        ChoicePair(id: 106, a: LText(de: "jedes Wochenende einen Mini-Trip mit mir machen", en: "take a mini trip with me every weekend"), b: LText(de: "einmal im Jahr eine große Traumreise mit mir machen", en: "take one big dream trip with me once a year"))
     ]
 }

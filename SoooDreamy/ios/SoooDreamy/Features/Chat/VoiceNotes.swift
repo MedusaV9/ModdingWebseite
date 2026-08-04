@@ -17,10 +17,17 @@ func chatDurationString(_ seconds: Double) -> String {
 final class VoicePlayer {
     static let shared = VoicePlayer()
 
+    /// Cycled by the speed button: 1× → 1.5× → 2× → 1×.
+    static let playbackRates: [Double] = [1.0, 1.5, 2.0]
+
     private(set) var playingId: String?
     private(set) var isPlaying = false
     /// 0…1 for the currently playing message.
     private(set) var progress: Double = 0
+    /// Total duration (seconds) of the current message, 0 when unknown.
+    private(set) var duration: Double = 0
+    /// Playback speed; kept across messages so the preference sticks.
+    private(set) var rate: Double = 1.0
 
     @ObservationIgnored private var player: AVPlayer?
     @ObservationIgnored private var timeObserver: Any?
@@ -28,6 +35,14 @@ final class VoicePlayer {
     @ObservationIgnored private var fallbackDuration: Double = 0
 
     private init() {}
+
+    /// "1×", "1.5×", "2×" — literal labels, deliberately not localized.
+    var rateLabel: String {
+        rate == rate.rounded() ? "\(Int(rate))×" : String(format: "%.1f×", rate)
+    }
+
+    /// Seconds left in the current message at the current progress.
+    var remainingSeconds: Double { max(0, duration * (1 - progress)) }
 
     func toggle(message: Message, api: API?) {
         if playingId == message.id {
@@ -45,6 +60,8 @@ final class VoicePlayer {
         playingId = message.id
         progress = 0
         fallbackDuration = message.durationSec ?? 0
+        duration = fallbackDuration
+        newPlayer.defaultRate = Float(rate)
         endObserver = NotificationCenter.default.addObserver(
             forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main
         ) { [weak self] _ in
@@ -88,13 +105,33 @@ final class VoicePlayer {
         playingId = nil
         isPlaying = false
         progress = 0
+        duration = 0
         restoreAmbientSession()
+    }
+
+    /// Jump to a position (0…1) in the current message — works while paused too.
+    func seek(toProgress target: Double) {
+        let clamped = min(1, max(0, target))
+        progress = clamped
+        guard let player, duration > 0 else { return }
+        let time = CMTime(seconds: clamped * duration, preferredTimescale: 600)
+        player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero)
+    }
+
+    /// Advance to the next playback speed (1× → 1.5× → 2× → 1×).
+    func cycleRate() {
+        let rates = Self.playbackRates
+        let index = rates.firstIndex(of: rate) ?? 0
+        rate = rates[(index + 1) % rates.count]
+        player?.defaultRate = Float(rate)
+        if isPlaying { player?.rate = Float(rate) }
     }
 
     private func updateProgress(_ time: CMTime) {
         guard let player else { return }
         var total = player.currentItem.map { $0.duration.seconds } ?? 0
         if !total.isFinite || total <= 0 { total = fallbackDuration }
+        duration = total
         guard total > 0 else {
             progress = 0
             return
@@ -123,22 +160,36 @@ struct ChatVoiceBubble: View {
     let onReact: (String) -> Void
     var onDelete: (() -> Void)? = nil
 
+    /// Non-nil while the user drags the scrub slider; the seek happens on release.
+    @State private var scrubProgress: Double?
+
     private var player: VoicePlayer { VoicePlayer.shared }
     private var isCurrent: Bool { player.playingId == message.id }
+
+    private var displayedProgress: Double {
+        guard isCurrent else { return 0 }
+        return scrubProgress ?? player.progress
+    }
 
     var body: some View {
         HStack(spacing: LayoutMetrics.s(10)) {
             playButton
             VStack(alignment: .leading, spacing: 5) {
                 ChatWaveformBars(seed: message.id,
-                                 progress: isCurrent ? player.progress : 0,
+                                 progress: displayedProgress,
                                  activeTint: isMine ? .white : Theme.pink,
                                  inactiveTint: Color.white.opacity(isMine ? 0.45 : 0.25))
+                if isCurrent {
+                    scrubSlider
+                }
                 HStack(spacing: 8) {
-                    Text(chatDurationString(message.durationSec ?? 0))
+                    Text(timeText)
                         .font(.system(.caption2, design: .rounded).weight(.semibold))
                         .monospacedDigit()
                         .foregroundStyle(isMine ? Color.white.opacity(0.85) : Theme.textSecondary)
+                    if isCurrent {
+                        speedButton
+                    }
                     ChatTimestampText(date: message.createdAt, isMine: isMine,
                                       read: chatReadReceipt(for: message, isMine: isMine,
                                                             partner: appState.partner))
@@ -157,6 +208,55 @@ struct ChatVoiceBubble: View {
                 ChatDeleteButton(onDelete: onDelete)
             }
         }
+    }
+
+    /// Remaining time ("-m:ss") while this message is loaded, total duration otherwise.
+    private var timeText: String {
+        if isCurrent, player.duration > 0 {
+            let remaining = max(0, player.duration * (1 - displayedProgress))
+            return "-" + chatDurationString(remaining)
+        }
+        return chatDurationString(message.durationSec ?? 0)
+    }
+
+    private var scrubSlider: some View {
+        Slider(
+            value: Binding(
+                get: { scrubProgress ?? player.progress },
+                set: { scrubProgress = $0 }
+            ),
+            in: 0...1
+        ) { editing in
+            if !editing {
+                if let target = scrubProgress {
+                    player.seek(toProgress: target)
+                }
+                scrubProgress = nil
+            }
+        }
+        .tint(isMine ? .white : Theme.pink)
+        .frame(height: LayoutMetrics.s(20))
+    }
+
+    private var speedButton: some View {
+        Button {
+            Haptics.shared.tap()
+            player.cycleRate()
+        } label: {
+            Text(player.rateLabel)
+                .font(.system(.caption2, design: .rounded).weight(.bold))
+                .monospacedDigit()
+                .foregroundStyle(isMine ? Theme.purple : .white)
+                .padding(.horizontal, 7)
+                .padding(.vertical, 2)
+                .background(
+                    Capsule().fill(isMine
+                                   ? AnyShapeStyle(Color.white.opacity(0.9))
+                                   : AnyShapeStyle(Theme.heroGradient))
+                )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text(verbatim: player.rateLabel))
     }
 
     private var playButton: some View {

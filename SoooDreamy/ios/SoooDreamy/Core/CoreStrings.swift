@@ -220,6 +220,7 @@ enum CoreStrings {
         "notif.message.title": LText(de: "Neue Nachricht von {name}", en: "New message from {name}"),
         "notif.message.letter": LText(de: "Ein Brief für dich 💌", en: "A letter for you 💌"),
         "notif.message.voice": LText(de: "Eine Sprachnachricht für dich 🎤", en: "A voice note for you 🎤"),
+        "notif.message.photo": LText(de: "Ein Foto für dich 📸", en: "A photo for you 📸"),
         "notif.photo.title": LText(de: "Neues Foto 📸", en: "New photo 📸"),
         "notif.photo.body": LText(de: "{name} hat ein neues Foto geteilt", en: "{name} shared a new photo"),
         "notif.daily.body": LText(de: "Eure Antworten auf die Frage des Tages sind jetzt sichtbar",
@@ -251,6 +252,11 @@ enum CoreStrings {
         "home.anniversaryOneYear": LText(de: "1 Jahr zusammen — happy Jahrestag! 🥂",
                                          en: "1 year together — happy anniversary! 🥂"),
 
+        // Gallery → chat (v1.7 photo messages; lives here — not in MemoriesL10n —
+        // because the chat feature owns the flow end to end)
+        "gallery.sendToChat": LText(de: "In den Chat senden", en: "Send to chat"),
+        "gallery.sentToChat": LText(de: "Foto in den Chat geschickt 💬", en: "Photo sent to chat 💬"),
+
         // Coupons (global toasts)
         "coupon.receivedToast": LText(de: "Neuer Gutschein für dich! 🎟️", en: "A new coupon for you! 🎟️"),
         "coupon.redeemedToast": LText(de: "„{title}“ wurde eingelöst! 🎉", en: "“{title}” was redeemed! 🎉"),
@@ -259,6 +265,18 @@ enum CoreStrings {
         "home.flashback": LText(de: "Erinnerung", en: "Memory"),
         "home.flashbackDaysAgo": LText(de: "vor {n} Tagen", en: "{n} days ago"),
         "home.flashbackQuestion": LText(de: "Eure Frage von damals", en: "Your question back then"),
+
+        // Streak calendar (sheet behind the dashboard streak pill)
+        "home.streakCalendar.title": LText(de: "Serien-Kalender", en: "Streak calendar"),
+        "home.streakCalendar.open": LText(de: "Serien-Kalender öffnen", en: "Open streak calendar"),
+        "home.streakCalendar.prevMonth": LText(de: "Voriger Monat", en: "Previous month"),
+        "home.streakCalendar.nextMonth": LText(de: "Nächster Monat", en: "Next month"),
+        "home.streakCalendar.legendBoth": LText(de: "Beide geantwortet", en: "Both answered"),
+        "home.streakCalendar.legendMine": LText(de: "Nur du", en: "Only you"),
+        "home.streakCalendar.monthCount": LText(de: "{n}× beide geantwortet in diesem Monat",
+                                                en: "{n}× both answered this month"),
+        "home.streakCalendar.empty": LText(de: "Noch keine gemeinsamen Antworten — beantwortet heute eure erste Frage des Tages! 💫",
+                                           en: "No shared answers yet — answer your first daily question today! 💫"),
 
         // "While you were away" card (missed inbox)
         "home.missedTitle": LText(de: "Während du weg warst", en: "While you were away"),

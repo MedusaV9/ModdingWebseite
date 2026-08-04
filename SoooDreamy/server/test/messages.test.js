@@ -42,6 +42,98 @@ test('message validation: bad type, missing/too-long text', async (t) => {
   assert.equal((await a.api.post('/api/messages', { json: { type: 'text', text: 'x'.repeat(5000) } })).status, 201);
 });
 
+test('photo messages: reference a gallery photo, optional caption, WS broadcast, photoId serialized', async (t) => {
+  const { baseUrl } = await makeApp(t);
+  const { a, b } = await setupCouple(baseUrl);
+  const bSock = await wsOpen(baseUrl, b.token, t);
+  await bSock.waitFor('welcome');
+
+  // Either member's gallery photo may be referenced — b uploads, a sends.
+  const photo = (
+    await b.api.post('/api/photos', { body: Buffer.from('jpeg-bytes'), headers: { 'content-type': 'image/jpeg' } })
+  ).body.photo;
+
+  const res = await a.api.post('/api/messages', { json: { type: 'photo', photoId: photo.id } });
+  assert.equal(res.status, 201);
+  const msg = res.body.message;
+  assert.equal(msg.type, 'photo');
+  assert.equal(msg.photoId, photo.id);
+  assert.equal(msg.text, null);
+  assert.equal(msg.title, null);
+  assert.equal(msg.audioUrl, null);
+
+  const frame = await bSock.waitFor('message', (m) => m.payload.message.type === 'photo');
+  assert.deepEqual(frame.payload.message, msg);
+
+  // Optional caption rides along; blank captions are stored as null.
+  const captioned = await a.api.post('/api/messages', { json: { type: 'photo', photoId: photo.id, text: 'us 🌇' } });
+  assert.equal(captioned.status, 201);
+  assert.equal(captioned.body.message.text, 'us 🌇');
+  const blank = await a.api.post('/api/messages', { json: { type: 'photo', photoId: photo.id, text: '   ' } });
+  assert.equal(blank.body.message.text, null);
+
+  // Non-photo messages serialize photoId as null (incl. pre-v1.7 stored ones).
+  const text = await a.api.post('/api/messages', { json: { type: 'text', text: 'hi' } });
+  assert.equal(text.body.message.photoId, null);
+  const list = (await a.api.get('/api/messages')).body.messages;
+  assert.ok(list.every((m) => 'photoId' in m));
+});
+
+test('photo message validation: missing/bad/unknown/foreign photoId, over-long caption', async (t) => {
+  const { baseUrl } = await makeApp(t);
+  const { a } = await setupCouple(baseUrl);
+
+  const missing = await a.api.post('/api/messages', { json: { type: 'photo' } });
+  assert.equal(missing.status, 400);
+  assert.equal(missing.body.error, 'bad_photo');
+  assert.equal((await a.api.post('/api/messages', { json: { type: 'photo', photoId: 42 } })).status, 400);
+  assert.equal((await a.api.post('/api/messages', { json: { type: 'photo', photoId: '' } })).status, 400);
+
+  const unknown = await a.api.post('/api/messages', { json: { type: 'photo', photoId: 'ph_nope' } });
+  assert.equal(unknown.status, 404);
+  assert.equal(unknown.body.error, 'unknown_photo');
+
+  // A photoId from ANOTHER couple's gallery is just as unknown.
+  const other = await setupCouple(baseUrl);
+  const foreign = (
+    await other.a.api.post('/api/photos', { body: Buffer.from('x'), headers: { 'content-type': 'image/jpeg' } })
+  ).body.photo;
+  assert.equal((await a.api.post('/api/messages', { json: { type: 'photo', photoId: foreign.id } })).status, 404);
+
+  // Captions obey the same 5000-char text limit.
+  const mine = (
+    await a.api.post('/api/photos', { body: Buffer.from('y'), headers: { 'content-type': 'image/jpeg' } })
+  ).body.photo;
+  const tooLong = await a.api.post('/api/messages', {
+    json: { type: 'photo', photoId: mine.id, text: 'x'.repeat(5001) },
+  });
+  assert.equal(tooLong.status, 400);
+  assert.equal(tooLong.body.error, 'text_too_long');
+});
+
+test('photo messages and gallery photos have independent lifetimes', async (t) => {
+  const { baseUrl, dataDir } = await makeApp(t);
+  const { a } = await setupCouple(baseUrl);
+  const photo = (
+    await a.api.post('/api/photos', { body: Buffer.from('jpeg'), headers: { 'content-type': 'image/jpeg' } })
+  ).body.photo;
+  const file = path.join(dataDir, 'media', 'photos', `${photo.id}.jpg`);
+
+  // Deleting the photo MESSAGE keeps the gallery photo (list + file).
+  const msg = (await a.api.post('/api/messages', { json: { type: 'photo', photoId: photo.id } })).body.message;
+  assert.equal((await a.api.del(`/api/messages/${msg.id}`)).status, 200);
+  assert.ok((await a.api.get('/api/photos')).body.photos.some((p) => p.id === photo.id));
+  await access(file);
+
+  // Deleting the PHOTO keeps the message; its photoId simply dangles
+  // (clients get a 404 for the media, like any deleted photo).
+  const msg2 = (await a.api.post('/api/messages', { json: { type: 'photo', photoId: photo.id } })).body.message;
+  assert.equal((await a.api.del(`/api/photos/${photo.id}`)).status, 200);
+  await assert.rejects(access(file));
+  const list = (await a.api.get('/api/messages')).body.messages;
+  assert.ok(list.some((m) => m.id === msg2.id && m.photoId === photo.id));
+});
+
 test('pagination with before pages older messages in ascending order', async (t) => {
   const { baseUrl } = await makeApp(t);
   const { a } = await setupCouple(baseUrl);

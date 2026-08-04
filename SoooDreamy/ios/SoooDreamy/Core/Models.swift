@@ -63,7 +63,7 @@ struct Touch: Codable, Identifiable, Hashable {
 }
 
 enum MessageKind: String, Codable {
-    case text, letter, voice
+    case text, letter, voice, photo
 }
 
 struct Message: Codable, Identifiable, Hashable {
@@ -74,6 +74,9 @@ struct Message: Codable, Identifiable, Hashable {
     let title: String?
     let audioUrl: String?
     let durationSec: Double?
+    /// Photo messages only (v1.7): id of the referenced gallery photo.
+    /// The photo has its own lifetime — its media may 404 after deletion.
+    let photoId: String?
     /// Letters only: seal tag like "sad", "missme", "custom:<text>" —
     /// the recipient opens the letter when the moment fits.
     let openWhen: String?

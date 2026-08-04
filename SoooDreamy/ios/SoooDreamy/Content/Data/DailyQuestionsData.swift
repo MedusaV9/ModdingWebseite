@@ -198,6 +198,12 @@ extension ContentPack {
         DailyQuestion(id: 190, text: LText(de: "Welcher Song müsste im Abspann eines Films über uns laufen?", en: "Which song would have to play over the closing credits of a movie about us?")),
         DailyQuestion(id: 191, text: LText(de: "Welche Frage wolltest du mir immer schon stellen, hast dich aber nie getraut?", en: "Which question have you always wanted to ask me but never dared to?")),
         DailyQuestion(id: 192, text: LText(de: "Beschreibe uns als Paar in genau drei Worten.", en: "Describe us as a couple in exactly three words.")),
-        DailyQuestion(id: 193, text: LText(de: "Wenn heute unser erstes Date gewesen wäre — was hätte dich von einem zweiten überzeugt?", en: "If today had been our first date — what would have convinced you to go on a second one?"))
+        DailyQuestion(id: 193, text: LText(de: "Wenn heute unser erstes Date gewesen wäre — was hätte dich von einem zweiten überzeugt?", en: "If today had been our first date — what would have convinced you to go on a second one?")),
+        DailyQuestion(id: 194, text: LText(de: "Was hat dich diese Woche stolz auf uns gemacht?", en: "What made you proud of us this week?")),
+        DailyQuestion(id: 195, text: LText(de: "Wenn du mir jetzt einen Brief schreiben würdest — wie würde der erste Satz lauten?", en: "If you wrote me a letter right now — what would the first sentence be?")),
+        DailyQuestion(id: 196, text: LText(de: "Welchen Ort in unserer Nähe sollten wir zu unserem Stammplatz erklären?", en: "Which spot near us should we make our regular place?")),
+        DailyQuestion(id: 197, text: LText(de: "Womit könnte ich dich morgen früh am schönsten überraschen?", en: "What would be the loveliest way for me to surprise you tomorrow morning?")),
+        DailyQuestion(id: 198, text: LText(de: "Welcher Moment mit mir hat sich zuletzt wie Magie angefühlt?", en: "Which recent moment with me felt like magic?")),
+        DailyQuestion(id: 199, text: LText(de: "Was möchtest du nächste Woche zum ersten Mal mit mir ausprobieren?", en: "What do you want to try with me for the first time next week?"))
     ]
 }

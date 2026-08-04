@@ -317,7 +317,7 @@ struct PlayHubView: View {
         GameCardInfo(destination: .quiz, emoji: "🧠", tint: Theme.pink, multiplayer: true),
         GameCardInfo(destination: .thisorthat, emoji: "⚡️", tint: Theme.purple, multiplayer: true),
         GameCardInfo(destination: .wouldyourather, emoji: "🤯", tint: Theme.indigo, multiplayer: true),
-        GameCardInfo(destination: .truthordare, emoji: "🎭", tint: Theme.rose, multiplayer: false),
+        GameCardInfo(destination: .truthordare, emoji: "🎭", tint: Theme.rose, multiplayer: true),
         GameCardInfo(destination: .questions36, emoji: "💫", tint: Theme.blue, multiplayer: false),
         GameCardInfo(destination: .emojiriddle, emoji: "🧩", tint: Theme.gold, multiplayer: true)
     ]
@@ -404,7 +404,7 @@ struct PlayHubView: View {
         case .wouldyourather:
             ChoiceGamesView(engine: engine, kind: .wouldyourather)
         case .truthordare:
-            TruthOrDareView()
+            TruthOrDareView(engine: engine)
         case .questions36:
             Questions36View()
         case .emojiriddle:

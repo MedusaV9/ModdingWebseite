@@ -98,6 +98,7 @@ final class ChatModel {
                            title: nil,
                            audioUrl: nil,
                            durationSec: nil,
+                           photoId: nil,
                            openWhen: nil,
                            reactions: nil,
                            createdAt: Date())

@@ -18,7 +18,7 @@ import {
 } from './util.js';
 
 const TOUCH_TYPES = ['heartbeat', 'kiss', 'hug', 'missyou', 'tickle', 'thinking'];
-const MESSAGE_TYPES = ['text', 'letter'];
+const MESSAGE_TYPES = ['text', 'letter', 'photo'];
 const GAME_TYPES = ['quiz', 'thisorthat', 'wouldyourather', 'truthordare', 'questions36', 'emojiriddle'];
 const WORDLE_LANGS = ['de', 'en'];
 
@@ -123,9 +123,14 @@ function partnerOf(couple, memberId) {
   return couple.members.find((m) => m.id !== memberId) ?? null;
 }
 
-/** Pre-v1.2 stores lack `openWhen`/`reactions` on messages — default them on the way out. */
+/** Pre-v1.2 stores lack `openWhen`/`reactions`, pre-v1.7 stores lack `photoId` — default them on the way out. */
 function serializeMessage(message) {
-  return { ...message, openWhen: message.openWhen ?? null, reactions: message.reactions ?? null };
+  return {
+    ...message,
+    openWhen: message.openWhen ?? null,
+    reactions: message.reactions ?? null,
+    photoId: message.photoId ?? null,
+  };
 }
 
 /** Pre-v1.2 stores lack `thumbUrl`/`favorites`, pre-v1.6 stores lack `album` — default them on the way out. */
@@ -632,7 +637,24 @@ function pushMessage(c, message) {
 route('POST', '/api/messages', { auth: true }, async (c) => {
   const body = await readJsonObject(c.req);
   const type = asEnum(body.type, 'type', MESSAGE_TYPES);
-  const text = asText(body.text, 'text');
+  // Photo messages reference an existing gallery photo (either member's);
+  // their "text" is an optional caption (blank → null). Other types require text.
+  let text;
+  let photoId = null;
+  if (type === 'photo') {
+    if (typeof body.photoId !== 'string' || body.photoId.length === 0) {
+      throw httpError(400, 'bad_photo', '"photoId" must be a non-empty string');
+    }
+    const photo = c.auth.couple.photos.find((p) => p.id === body.photoId);
+    if (!photo) throw httpError(404, 'unknown_photo', 'No photo with this id in your gallery');
+    photoId = photo.id;
+    text =
+      body.text == null
+        ? null
+        : asString(body.text, 'text', { max: LIMITS.text, nonEmpty: false, code: 'text_too_long' }).trim() || null;
+  } else {
+    text = asText(body.text, 'text');
+  }
   const title =
     type === 'letter' && body.title != null ? asString(body.title, 'title', { max: 200, nonEmpty: false }) : null;
   // "Sealed letter" hint — stored for letters only, silently ignored otherwise.
@@ -651,6 +673,7 @@ route('POST', '/api/messages', { auth: true }, async (c) => {
     text,
     title,
     openWhen,
+    photoId,
     audioUrl: null,
     durationSec: null,
     createdAt: nowIso(),

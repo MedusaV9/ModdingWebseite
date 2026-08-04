@@ -3,7 +3,7 @@
 Self-hosted Node.js server for the SoooDreamy couple app. One server can host many couples.
 Base URL example: `http://192.168.1.20:4321` (the app lets you add/switch servers in Settings).
 
-Server version `1.6.0` (reported by `GET /api/health`).
+Server version `1.7.0` (reported by `GET /api/health`).
 v1.1 added photo thumbnails, canvas stroke delete (undo), mood history, the daily journal list, and sealed letters (`openWhen`).
 v1.2 adds message reactions, the Wordle duel, photo favorites, and love coupons.
 v1.2.1 makes Wordle results language-specific (per `dateKey` AND `lang`), restricts Wordle submits to server-today ±1 day, and broadcasts `coupon_deleted` for coupons evicted by the cap.
@@ -11,7 +11,8 @@ v1.3 adds the Wordle history list (`GET /api/wordle`).
 v1.4 adds the shared soundtrack (`/api/songs`).
 v1.5 adds the widget snapshot (`GET /api/widget-snapshot`) and an optional `?limit` on `GET /api/canvas`.
 v1.6 adds coupon expiry (`expiresAt`), the inbox digest (`GET /api/inbox`), photo albums + `PATCH /api/photos/:id`, message delete, read receipts (`POST /api/messages/read`, `lastReadAt` on members), the games history list (`GET /api/games`), and the `emojiriddle` game type.
-All releases are backward compatible: a pre-v1.6 `store.json` loads unchanged and missing fields/structures default to `null`/empty on read (v1.2.0 wordle buckets are normalized lazily).
+v1.7 adds photo messages: `POST /api/messages` accepts `type:"photo"` + `photoId` (must reference an existing gallery photo of the couple), and every message serializes a `photoId` field (null for non-photo messages).
+All releases are backward compatible: a pre-v1.7 `store.json` loads unchanged and missing fields/structures default to `null`/empty on read (v1.2.0 wordle buckets are normalized lazily).
 
 - All request/response bodies are JSON (`camelCase` keys) unless stated otherwise (media uploads are raw bodies).
 - Auth: `Authorization: Bearer <token>` header. Media `GET` endpoints also accept `?token=<token>` (for AVPlayer/AsyncImage).
@@ -31,11 +32,15 @@ All releases are backward compatible: a pre-v1.6 `store.json` loads unchanged an
 { "id": "c_…", "code": "H4XK9P", "name": "Mia & Ben", "anniversary": "2023-11-07",
   "createdAt": "…", "members": [Member, Member] }
 
-// Message  (type: "text" | "letter" | "voice")
-// openWhen: sealed-letter hint ("open when …"); letters only, null when absent (always null for text/voice)
+// Message  (type: "text" | "letter" | "voice" | "photo")
+// openWhen: sealed-letter hint ("open when …"); letters only, null when absent (always null for text/voice/photo)
 // reactions: { "<emoji>": [memberId, …] } — null when nobody reacted (works on all message types)
+// photoId: photo messages only — id of the referenced gallery photo (null otherwise); the photo
+// and the message have independent lifetimes: deleting either leaves the other in place (a photo
+// message whose photo was deleted keeps its photoId; the media then 404s like any deleted photo).
+// For photo messages `text` is an optional caption (trimmed, blank → null).
 { "id": "msg_…", "senderId": "m_…", "type": "text", "text": "hi", "title": null,
-  "openWhen": null, "reactions": { "❤️": ["m_…"] },
+  "openWhen": null, "reactions": { "❤️": ["m_…"] }, "photoId": null,
   "audioUrl": "/api/voice/msg_…/raw", "durationSec": 12.4, "createdAt": "…" }
 
 // Photo  (thumbUrl: null until a thumbnail is uploaded; favorites: memberIds who favorited, default [];
@@ -91,7 +96,8 @@ All releases are backward compatible: a pre-v1.6 `store.json` loads unchanged an
 // Counts cover items created strictly after `since`. Only couponsForMe filters by receiver
 // (forMember == me && createdBy != me) — other buckets include both members' items
 // (senderId disambiguates). messages.last is a teaser: `kind` is the message type and
-// `text` is truncated to 80 chars (null for voice). dailyPartnerAnswered: the partner
+// `text` is truncated to 80 chars (null for voice and caption-less photo messages).
+// dailyPartnerAnswered: the partner
 // answered TODAY's daily question after `since`. Counts are limited by the capped lists.
 { "messages": { "count": 2, "last": { "id": "msg_…", "senderId": "m_…", "kind": "text",
     "text": "hi ❤️", "createdAt": "…" } },
@@ -146,7 +152,7 @@ All releases are backward compatible: a pre-v1.6 `store.json` loads unchanged an
 | `POST /api/touches` | yes | `{type}` | `201 {touch}` | `touch {touch}` → partner only |
 | `GET /api/touches/recent?limit=30` | yes | – | `{touches}` (newest first) | – |
 | `GET /api/messages?limit=50&before=<msgId>` | yes | – | `{messages}` ascending `createdAt`; `before` pages older | – |
-| `POST /api/messages` | yes | `{type:"text"\|"letter", text, title?, openWhen?}` (`openWhen`: trimmed string ≤ 64 chars → `400 openwhen_too_long`; stored for letters only, silently ignored for other types) | `201 {message}` | `message {message}` |
+| `POST /api/messages` | yes | `{type:"text"\|"letter"\|"photo", text, title?, openWhen?, photoId?}` (`openWhen`: trimmed string ≤ 64 chars → `400 openwhen_too_long`; stored for letters only, silently ignored for other types). Photo messages: `photoId` REQUIRED, must be an existing gallery photo of the couple (missing/non-string → `400 bad_photo`, unknown → `404 unknown_photo`); `text` becomes an OPTIONAL caption (trimmed, blank/omitted → `null`, > 5000 chars → `400 text_too_long`) | `201 {message}` | `message {message}` |
 | `POST /api/messages/:id/reactions` | yes | `{emoji}` (trimmed, 1–16 chars → `400 bad_emoji`) — toggles the caller in `reactions[emoji]`; works on all message types; `404 not_found` for unknown/pruned ids | `{message}` | `message_updated {message}` |
 | `DELETE /api/messages/:id` | yes (sender only, else `403 not_yours`) | – | `{ok:true}`; `404 not_found` for unknown/pruned ids; a voice message's media file is deleted too (`counters.messages` stays untouched — it is a lifetime total) | `message_deleted {id}` |
 | `POST /api/messages/read` | yes | optional `{at?}` (ISO timestamp, normalized; invalid → `400 bad_at`; empty body / omitted → server now) — sets MY `lastReadAt` read receipt | `{memberId, at}` | `message_read {memberId, at}` |
@@ -214,6 +220,6 @@ Limits: photo body ≤ 15 MB (`413 too_large`), voice ≤ 15 MB, thumbnail ≤ 2
 - Plain Node.js ≥ 20, only npm dependency: `ws`. Entry: `server/src/server.js` (`npm start`), app factory `createApp()` in `server/src/app.js` (used by tests; `PORT=0` for ephemeral).
 - Env: `PORT` (default `4321`), `HOST` (default `0.0.0.0`), `DATA_DIR` (default `server/data`).
 - Persistence: `DATA_DIR/store.json` (debounced atomic writes: tmp file + rename, flush on SIGINT/SIGTERM) + media files in `DATA_DIR/media/photos/`, `DATA_DIR/media/voice/`. Photo thumbnails live next to their photo as `DATA_DIR/media/photos/<id>.thumb.jpg` and are deleted together with the photo (and on couple dissolve).
-- Backward compatibility: any pre-1.6 `store.json` loads without migration — missing structures (`moodHistory`, `wordle`, `coupons`, `songs`, `thumbUrl`, `favorites`, `openWhen`, `reactions`, `album`, `expiresAt`, `lastReadAt`) are defaulted on read (`null`/empty). v1.2.0 wordle day buckets (`{memberId: WordleResult}`) are normalized lazily to the per-language shape (`{lang: {memberId: WordleResult}}`) when a day is accessed, using each stored result's own `lang`.
+- Backward compatibility: any pre-1.7 `store.json` loads without migration — missing structures (`moodHistory`, `wordle`, `coupons`, `songs`, `thumbUrl`, `favorites`, `openWhen`, `reactions`, `album`, `expiresAt`, `lastReadAt`, `photoId`) are defaulted on read (`null`/empty). v1.2.0 wordle day buckets (`{memberId: WordleResult}`) are normalized lazily to the per-language shape (`{lang: {memberId: WordleResult}}`) when a day is accessed, using each stored result's own `lang`.
 - CORS: permissive (`*`) — the server is self-hosted for exactly one couple (or a few friends).
 - Streak: number of consecutive days ending today (or yesterday if today unanswered) where **both** members answered the daily question.

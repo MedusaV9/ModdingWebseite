@@ -218,7 +218,10 @@ struct GalleryView: View {
                         GalleryCell(photo: photo, api: appState.api, memberId: appState.memberId)
                     }
                     .buttonStyle(.plain)
-                    .contextMenu { albumMenu(photo) }
+                    .contextMenu {
+                        sendToChatButton(photo)
+                        albumMenu(photo)
+                    }
                 }
             }
             .padding(.horizontal, LayoutMetrics.s(12))
@@ -226,6 +229,30 @@ struct GalleryView: View {
             .padding(.bottom, LayoutMetrics.s(96))
         }
         .refreshable { await loadPhotos() }
+    }
+
+    /// "Send to chat" context-menu row: posts a v1.7 photo message that
+    /// references this gallery photo (the photo itself is not re-uploaded).
+    private func sendToChatButton(_ photo: Photo) -> some View {
+        Button {
+            sendToChat(photo)
+        } label: {
+            Label(L10n.t("gallery.sendToChat"), systemImage: "paperplane")
+        }
+    }
+
+    private func sendToChat(_ photo: Photo) {
+        guard let api = appState.api else { return }
+        Task {
+            do {
+                _ = try await api.sendPhotoMessage(photoId: photo.id)
+                Haptics.shared.success()
+                SoundEngine.shared.play(.pop)
+                appState.showToast(L10n.t("gallery.sentToChat"), style: .love)
+            } catch {
+                appState.handleAPIError(error)
+            }
+        }
     }
 
     /// "Move to album…" context menu: pick an existing album, create a new
