@@ -168,6 +168,9 @@ _(hier beantworte ich dein Feedback, wenn ich es umgesetzt habe)_
 - `[2026-08-04 02:10 UTC]` Quiz/Choices/Emoji-Rätsel Ergebnisse in den Chat teilen.
 - `[2026-08-04 02:10 UTC]` **Streak-Widget** + bessere Widget-Deeplinks; Coupon „Nochmal schenken“ + Ablauf-Reminder. IPA **1.5.1**.
 
+### Iteration 20 — Forward, Stats-Share, Server-Version 💌
+- `[2026-08-04 02:20 UTC]` Briefe als neuen Brief weiterleiten; Top-Moods & Date-Ideen in den Chat; Server-Version in Einstellungen; +20 Content. IPA **1.5.2**.
+
 ## 🔄 Als Nächstes
-- IPA 1.5.1 sideloaden + AMP Server v1.8.
-- Loop läuft weiter unendlich mit Fable-Max-Subagents.
+- IPA 1.5.2 sideloaden + AMP Server v1.8.
+- Infinite Fable-Max-Subagent-Loop läuft weiter.

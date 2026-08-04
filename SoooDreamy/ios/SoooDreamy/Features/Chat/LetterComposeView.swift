@@ -21,6 +21,15 @@ struct LetterComposeView: View {
     @State private var sent = false
     let onSent: (Message) -> Void
 
+    /// Empty by default; pre-filled when forwarding an existing letter
+    /// as a new one (the seal is deliberately NOT copied over).
+    init(initialTitle: String = "", initialText: String = "",
+         onSent: @escaping (Message) -> Void) {
+        _title = State(initialValue: initialTitle)
+        _text = State(initialValue: initialText)
+        self.onSent = onSent
+    }
+
     private var trimmedText: String {
         text.trimmingCharacters(in: .whitespacesAndNewlines)
     }

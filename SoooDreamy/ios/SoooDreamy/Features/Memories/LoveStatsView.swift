@@ -7,6 +7,8 @@ struct LoveStatsView: View {
     @State private var barsAppeared = false
     @State private var moods: [MoodEntry] = []
     @State private var touches: [Touch] = []
+    @State private var sharingMoods = false
+    @State private var sharedMoods = false
 
     private let columns = [
         GridItem(.flexible(), spacing: 12),
@@ -359,7 +361,54 @@ struct LoveStatsView: View {
                     }
                     Spacer()
                 }
+                shareMoodsButton
             }
+        }
+    }
+
+    /// Posts the top-moods summary into the couple chat (v1.5.2).
+    @ViewBuilder
+    private var shareMoodsButton: some View {
+        if appState.api != nil {
+            Button {
+                shareTopMoods()
+            } label: {
+                if sharingMoods {
+                    ProgressView()
+                        .tint(Theme.pink)
+                } else {
+                    Label(L10n.t(sharedMoods ? "memories.stats.moodShared" : "memories.stats.moodShare"),
+                          systemImage: sharedMoods ? "checkmark" : "paperplane.fill")
+                        .font(.system(.footnote, design: .rounded).weight(.bold))
+                }
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(sharedMoods ? Theme.mint : Theme.pink)
+            .disabled(sharingMoods || sharedMoods)
+        }
+    }
+
+    private func shareTopMoods() {
+        guard let api = appState.api, !sharingMoods, !sharedMoods else { return }
+        let top = topMoods
+        guard !top.isEmpty else { return }
+        sharingMoods = true
+        Haptics.shared.tap()
+        let summary = top
+            .map { "\($0.mood) \(L10n.t("memories.stats.topMoodCount", ["n": String($0.count)]))" }
+            .joined(separator: "  ·  ")
+        let text = L10n.t("memories.stats.moodShareHeader") + "\n" + summary
+        Task {
+            do {
+                try await api.sendMessage(type: .text, text: text)
+                sharedMoods = true
+                SoundEngine.shared.play(.pop)
+                Haptics.shared.success()
+                appState.showToast(L10n.t("memories.stats.moodShareSent"), style: .success)
+            } catch {
+                appState.handleAPIError(error)
+            }
+            sharingMoods = false
         }
     }
 

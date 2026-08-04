@@ -174,6 +174,7 @@ enum CoreStrings {
         "settings.version": LText(de: "Version", en: "Version"),
         "settings.madeWith": LText(de: "Mit 💜 gebaut — für euch zwei.", en: "Built with 💜 — for the two of you."),
         "settings.connection": LText(de: "Verbindung", en: "Connection"),
+        "settings.serverVersion": LText(de: "Server-Version {version}", en: "Server version {version}"),
         "settings.pairingShow": LText(de: "Paar-Code & QR zeigen", en: "Show couple code & QR"),
         "settings.pairingHint": LText(de: "Zum Koppeln eines neuen Geräts — oder falls dein Schatz den Code nochmal braucht.",
                                       en: "For pairing a new device — or in case your sweetheart needs the code again."),

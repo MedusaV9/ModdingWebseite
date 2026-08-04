@@ -66,6 +66,9 @@ enum ChatL10n {
         "chat.deleteMessage": LText(de: "Nachricht löschen", en: "Delete message"),
         "chat.deleted": LText(de: "Nachricht gelöscht", en: "Message deleted"),
 
+        // Letter forwarding (v1.5.2 — re-send a letter as a brand-new one)
+        "chat.forwardLetter": LText(de: "Als neuen Brief senden", en: "Forward as new letter"),
+
         // Message edit (v1.8 — own text/letter messages only)
         "chat.editMessage": LText(de: "Nachricht bearbeiten", en: "Edit message"),
         "chat.editTitle": LText(de: "Nachricht bearbeiten", en: "Edit message"),

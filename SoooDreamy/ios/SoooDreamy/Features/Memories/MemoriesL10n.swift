@@ -203,6 +203,12 @@ enum MemoriesL10n {
                                           en: "No moods shared yet — tell your sweetheart how you feel 💜"),
         "memories.stats.topMoods": LText(de: "Top-Stimmungen (30 Tage)", en: "Top moods (30 days)"),
         "memories.stats.topMoodCount": LText(de: "×{n}", en: "×{n}"),
+        "memories.stats.moodShare": LText(de: "In den Chat senden 💬", en: "Send to chat 💬"),
+        "memories.stats.moodShared": LText(de: "Im Chat geteilt 💬", en: "Shared to chat 💬"),
+        "memories.stats.moodShareHeader": LText(de: "💜 Unsere Top-Stimmungen der letzten 30 Tage:",
+                                                en: "💜 Our top moods of the last 30 days:"),
+        "memories.stats.moodShareSent": LText(de: "Stimmungs-Bilanz im Chat geteilt 💜",
+                                              en: "Mood summary shared to chat 💜"),
 
         // Journal
         "memories.journal.title": LText(de: "Unser Tagebuch", en: "Our Journal"),

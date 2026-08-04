@@ -34,6 +34,9 @@ struct SettingsView: View {
     @State private var anniversary = Date()
     @State private var hasAnniversary = false
 
+    /// Server version reported by `/api/health` (nil while loading/unreachable).
+    @State private var serverVersion: String?
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -59,6 +62,15 @@ struct SettingsView: View {
         .sheet(isPresented: $showPairingCode) { PairingCodeSheet() }
         .onAppear { syncFromState() }
         .onChange(of: appState.couple) { syncFromState() }
+        .task(id: appState.servers.activeProfileID) { await loadServerVersion() }
+    }
+
+    /// Fetches the server version for the connection card — re-runs whenever
+    /// the active server profile changes.
+    private func loadServerVersion() async {
+        serverVersion = nil
+        guard let api = appState.api else { return }
+        serverVersion = try? await api.health().version
     }
 
     private func syncFromState() {
@@ -161,6 +173,11 @@ struct SettingsView: View {
                         Text(profile.urlString)
                             .font(.system(.caption, design: .rounded))
                             .foregroundStyle(Theme.textTertiary)
+                        if let serverVersion {
+                            Text(L10n.t("settings.serverVersion", ["version": serverVersion]))
+                                .font(.system(.caption2, design: .rounded))
+                                .foregroundStyle(Theme.textTertiary)
+                        }
                     }
                     Spacer()
                     ConnectionBanner(state: appState.socket.state)

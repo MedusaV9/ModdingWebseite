@@ -1,6 +1,6 @@
 // TruthOrDareData.swift
 // Truth-or-Dare pack, couple edition: 60 truths (ids 1–60), 60 dares (ids 61–120),
-// plus a mixed batch (ids 121–130: 5 truths + 5 dares).
+// plus mixed batches (ids 121–130 and 131–140: 5 truths + 5 dares each).
 // spice: 1 = sweet/harmless, 2 = flirty, 3 = spicy but tasteful. Distribution ≈ 40/35/25 %.
 // Several dares work over distance too (voice note, selfie, text).
 
@@ -137,6 +137,16 @@ extension ContentPack {
         TruthOrDareItem(id: 127, isDare: true, spice: 1, text: LText(de: "Summ unser Lied, bis ich errate, welches es ist.", en: "Hum our song until I guess which one it is.")),
         TruthOrDareItem(id: 128, isDare: true, spice: 2, text: LText(de: "Schau mir 20 Sekunden in die Augen und sag danach deinen ersten Gedanken laut.", en: "Look into my eyes for 20 seconds, then say your first thought out loud.")),
         TruthOrDareItem(id: 129, isDare: true, spice: 2, text: LText(de: "Erfinde jetzt einen neuen Kosenamen für mich und benutze ihn den restlichen Abend.", en: "Invent a new pet name for me right now and use it for the rest of the evening.")),
-        TruthOrDareItem(id: 130, isDare: true, spice: 3, text: LText(de: "Flüstere mir, wo du mich in genau einer Minute küssen wirst — und halte dich daran.", en: "Whisper where you'll kiss me in exactly one minute — then follow through."))
+        TruthOrDareItem(id: 130, isDare: true, spice: 3, text: LText(de: "Flüstere mir, wo du mich in genau einer Minute küssen wirst — und halte dich daran.", en: "Whisper where you'll kiss me in exactly one minute — then follow through.")),
+        TruthOrDareItem(id: 131, isDare: false, spice: 1, text: LText(de: "Welche Angewohnheit hast du dir von mir abgeschaut, ohne es zu wollen?", en: "Which habit of mine have you picked up without meaning to?")),
+        TruthOrDareItem(id: 132, isDare: false, spice: 1, text: LText(de: "Was war der Moment diese Woche, in dem du am liebsten sofort bei mir gewesen wärst?", en: "What moment this week made you wish you could be with me instantly?")),
+        TruthOrDareItem(id: 133, isDare: false, spice: 2, text: LText(de: "Welches Geheimnis über deine Gefühle für mich hast du am längsten für dich behalten?", en: "Which secret about your feelings for me did you keep to yourself the longest?")),
+        TruthOrDareItem(id: 134, isDare: false, spice: 2, text: LText(de: "Was denkst du als Erstes, wenn ich morgens verschlafen neben dir aufwache?", en: "What's the first thing you think when I wake up all sleepy next to you?")),
+        TruthOrDareItem(id: 135, isDare: false, spice: 3, text: LText(de: "Welche Berührung von mir bringt dich jedes Mal aus dem Konzept?", en: "Which touch of mine throws you off every single time?")),
+        TruthOrDareItem(id: 136, isDare: true, spice: 1, text: LText(de: "Stell mein Lieblingsemoji mit deinem ganzen Körper nach — ich muss es erraten.", en: "Act out my favorite emoji with your whole body — I have to guess it.")),
+        TruthOrDareItem(id: 137, isDare: true, spice: 1, text: LText(de: "Sing die nächste Antwort, statt sie zu sprechen — Opernstimme erwünscht.", en: "Sing your next answer instead of speaking it — opera voice encouraged.")),
+        TruthOrDareItem(id: 138, isDare: true, spice: 2, text: LText(de: "Schreib mir mit geschlossenen Augen eine Liebesnachricht und schick sie ab, ohne sie zu korrigieren.", en: "Type me a love note with your eyes closed and send it without fixing anything.")),
+        TruthOrDareItem(id: 139, isDare: true, spice: 2, text: LText(de: "Erkläre mir mit ernster Stimme wie in einer Doku, warum ich unwiderstehlich bin.", en: "In a serious documentary-narrator voice, explain why I'm irresistible.")),
+        TruthOrDareItem(id: 140, isDare: true, spice: 3, text: LText(de: "Wähle einen Ort an mir aus, den du gleich küsst — aber kündige ihn erst mit einem Blick an.", en: "Pick a spot on me to kiss in a moment — but announce it only with a look."))
     ]
 }

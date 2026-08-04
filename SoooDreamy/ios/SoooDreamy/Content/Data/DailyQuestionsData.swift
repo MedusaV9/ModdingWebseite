@@ -204,6 +204,16 @@ extension ContentPack {
         DailyQuestion(id: 196, text: LText(de: "Welchen Ort in unserer Nähe sollten wir zu unserem Stammplatz erklären?", en: "Which spot near us should we make our regular place?")),
         DailyQuestion(id: 197, text: LText(de: "Womit könnte ich dich morgen früh am schönsten überraschen?", en: "What would be the loveliest way for me to surprise you tomorrow morning?")),
         DailyQuestion(id: 198, text: LText(de: "Welcher Moment mit mir hat sich zuletzt wie Magie angefühlt?", en: "Which recent moment with me felt like magic?")),
-        DailyQuestion(id: 199, text: LText(de: "Was möchtest du nächste Woche zum ersten Mal mit mir ausprobieren?", en: "What do you want to try with me for the first time next week?"))
+        DailyQuestion(id: 199, text: LText(de: "Was möchtest du nächste Woche zum ersten Mal mit mir ausprobieren?", en: "What do you want to try with me for the first time next week?")),
+        DailyQuestion(id: 200, text: LText(de: "Welches Geräusch oder welcher Geruch erinnert dich sofort an mich?", en: "Which sound or smell instantly reminds you of me?")),
+        DailyQuestion(id: 201, text: LText(de: "Was würdest du unserem jüngeren Ich über uns erzählen, wenn du eine Minute Zeit hättest?", en: "If you had one minute, what would you tell our younger selves about us?")),
+        DailyQuestion(id: 202, text: LText(de: "Bei welcher gemeinsamen Aufgabe sind wir das beste Team?", en: "At which shared task are we the best team?")),
+        DailyQuestion(id: 203, text: LText(de: "Welchen Mini-Luxus sollten wir uns viel öfter zusammen gönnen?", en: "Which little luxury should we treat ourselves to together way more often?")),
+        DailyQuestion(id: 204, text: LText(de: "Was hast du heute gesehen, das ich bestimmt auch geliebt hätte?", en: "What did you see today that I definitely would have loved too?")),
+        DailyQuestion(id: 205, text: LText(de: "Welche Jahreszeit fühlt sich am meisten nach uns an — und warum?", en: "Which season feels the most like us — and why?")),
+        DailyQuestion(id: 206, text: LText(de: "Worüber würdest du gern mal eine ganze Nacht mit mir reden?", en: "What would you love to talk with me about for a whole night?")),
+        DailyQuestion(id: 207, text: LText(de: "Welche Superkraft hätte unsere Beziehung, wenn sie eine Superheldin wäre?", en: "If our relationship were a superhero, what would its superpower be?")),
+        DailyQuestion(id: 208, text: LText(de: "Was war das Mutigste, das wir bisher zusammen gemacht haben?", en: "What's the bravest thing we've done together so far?")),
+        DailyQuestion(id: 209, text: LText(de: "Welchen kleinen Moment von heute möchtest du dir für immer merken?", en: "Which small moment from today do you want to remember forever?"))
     ]
 }

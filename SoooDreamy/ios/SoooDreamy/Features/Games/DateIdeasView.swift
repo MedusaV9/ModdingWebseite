@@ -25,6 +25,8 @@ struct DateIdeasView: View {
     @State private var spinning = false
     @State private var addingToBucket = false
     @State private var addedIdeaIds: Set<Int> = []
+    @State private var sharingIdea = false
+    @State private var sharedIdeaIds: Set<Int> = []
 
     var body: some View {
         ZStack {
@@ -239,6 +241,7 @@ struct DateIdeasView: View {
                 .fixedSize(horizontal: false, vertical: true)
             ideaPills(idea)
             bucketButton(idea)
+            shareButton(idea)
         }
         .frame(maxWidth: .infinity)
         .glassCard(padding: 20)
@@ -269,6 +272,51 @@ struct DateIdeasView: View {
         .buttonStyle(PrimaryButtonStyle())
         .disabled(added || addingToBucket || appState.api == nil)
         .opacity(added ? 0.6 : 1)
+    }
+
+    /// Posts the rolled idea into the couple chat (v1.5.2).
+    @ViewBuilder
+    private func shareButton(_ idea: DateIdea) -> some View {
+        if appState.api != nil {
+            let shared = sharedIdeaIds.contains(idea.id)
+            Button {
+                shareToChat(idea)
+            } label: {
+                if sharingIdea {
+                    ProgressView()
+                        .tint(Theme.pink)
+                } else {
+                    Label(L10n.t(shared ? "games.sharedToChat" : "games.shareToChat"),
+                          systemImage: shared ? "checkmark" : "paperplane.fill")
+                        .font(.system(.footnote, design: .rounded).weight(.bold))
+                }
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(shared ? Theme.mint : Theme.pink)
+            .disabled(sharingIdea || shared)
+        }
+    }
+
+    private func shareToChat(_ idea: DateIdea) {
+        guard let api = appState.api, !sharingIdea,
+              !sharedIdeaIds.contains(idea.id) else { return }
+        sharingIdea = true
+        Haptics.shared.tap()
+        let text = L10n.t("games.dateideas.shareHeader")
+            + "\n\(idea.emoji) \(idea.title.resolved(L10n.lang))"
+            + "\n" + idea.details.resolved(L10n.lang)
+        Task {
+            do {
+                try await api.sendMessage(type: .text, text: text)
+                sharedIdeaIds.insert(idea.id)
+                SoundEngine.shared.play(.pop)
+                Haptics.shared.success()
+                appState.showToast(L10n.t("games.sharedToChat"), style: .success)
+            } catch {
+                appState.handleAPIError(error)
+            }
+            sharingIdea = false
+        }
     }
 
     // MARK: Generate

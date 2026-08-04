@@ -13,6 +13,9 @@ struct ChatView: View {
     @State private var showLetterComposer = false
     /// My text/letter message currently being edited (drives the edit sheet).
     @State private var editingMessage: Message?
+    /// Letter being forwarded — opens the composer pre-filled with its
+    /// title/text so it can be sent again as a brand-new letter (v1.5.2).
+    @State private var forwardingLetter: Message?
     /// Tracks whether the bottom anchor is on screen (LazyVStack keeps it
     /// alive near the fold, so this flips only after real scrolling) —
     /// drives the "jump to latest" floating button.
@@ -67,6 +70,12 @@ struct ChatView: View {
         .sheet(item: $editingMessage) { message in
             MessageEditSheet(message: message) { newText in
                 model.editMessage(message, newText: newText)
+            }
+        }
+        .sheet(item: $forwardingLetter) { letter in
+            LetterComposeView(initialTitle: letter.title ?? "",
+                              initialText: letter.text ?? "") { message in
+                model.acceptSent(message)
             }
         }
     }
@@ -241,6 +250,9 @@ struct ChatView: View {
                                                },
                                                onDelete: {
                                                    model.deleteMessage(message)
+                                               },
+                                               onForward: {
+                                                   forwardingLetter = message
                                                })
                             }
                         } header: {
@@ -427,6 +439,9 @@ struct ChatMessageRow: View {
     var onEdit: (() -> Void)? = nil
     /// Wired only for messages the current member may delete (their own).
     var onDelete: (() -> Void)? = nil
+    /// Wired for letters — opens the composer pre-filled to send the letter
+    /// again as a new one (v1.5.2).
+    var onForward: (() -> Void)? = nil
 
     var body: some View {
         HStack(alignment: .bottom, spacing: 8) {
@@ -456,6 +471,13 @@ struct ChatMessageRow: View {
         return onEdit
     }
 
+    /// Forward is offered on any server-confirmed letter (mine or my
+    /// partner's) — sealed received letters expose no menu until opened.
+    private var forwardAction: (() -> Void)? {
+        guard message.type == .letter, !message.id.hasPrefix("local-") else { return nil }
+        return onForward
+    }
+
     private var bubbleColumn: some View {
         VStack(alignment: isMine ? .trailing : .leading, spacing: 4) {
             bubble
@@ -483,7 +505,8 @@ struct ChatMessageRow: View {
                             onDelete: deleteAction)
         case .letter:
             ChatLetterBubble(message: message, isMine: isMine, onReact: onReact,
-                             onEdit: editAction, onDelete: deleteAction)
+                             onEdit: editAction, onDelete: deleteAction,
+                             onForward: forwardAction)
         case .photo:
             ChatPhotoBubble(message: message, isMine: isMine, onReact: onReact,
                             onDelete: deleteAction)
@@ -877,6 +900,7 @@ struct ChatLetterBubble: View {
     let onReact: (String) -> Void
     var onEdit: (() -> Void)? = nil
     var onDelete: (() -> Void)? = nil
+    var onForward: (() -> Void)? = nil
 
     @State private var unsealing = false
     @State private var celebrating = false
@@ -979,6 +1003,9 @@ struct ChatLetterBubble: View {
             ChatReactMenu(onReact: onReact)
             copyButton
             readButton
+            if let onForward {
+                forwardButton(onForward)
+            }
             if let onEdit {
                 ChatEditButton(onEdit: onEdit)
             }
@@ -1030,6 +1057,15 @@ struct ChatLetterBubble: View {
             showReader = true
         } label: {
             Label(L10n.t("chat.read"), systemImage: "book.fill")
+        }
+    }
+
+    private func forwardButton(_ onForward: @escaping () -> Void) -> some View {
+        Button {
+            Haptics.shared.tap()
+            onForward()
+        } label: {
+            Label(L10n.t("chat.forwardLetter"), systemImage: "arrowshape.turn.up.right")
         }
     }
 

@@ -200,6 +200,7 @@ enum GamesL10n {
                                             en: "No idea survives these filters — loosen them a little."),
         "games.dateideas.generate": LText(de: "Idee würfeln", en: "Roll an idea"),
         "games.dateideas.regenerate": LText(de: "Nochmal würfeln", en: "Roll again"),
+        "games.dateideas.shareHeader": LText(de: "🎲 Date-Idee für uns:", en: "🎲 Date idea for us:"),
         "games.dateideas.bucket": LText(de: "Auf die Bucket List", en: "Add to bucket list"),
         "games.dateideas.bucketDone": LText(de: "Gespeichert", en: "Saved"),
         "games.dateideas.bucketAdded": LText(de: "Auf eurer Bucket List gespeichert! ✨",
