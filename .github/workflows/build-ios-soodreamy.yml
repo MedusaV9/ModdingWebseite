@@ -1,0 +1,81 @@
+name: Build SooDreamy IPA (farm)
+
+# Free public-repo macOS build of the SooDreamy iOS app (unsigned .ipa, sideload
+# via AltStore/SideStore). Checks out the private BiggerRepo soodreamy branch,
+# builds with XcodeGen + xcodebuild (no signing), and commits the .ipa into
+# versions/ on that branch. Triggered via the REST API.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "BiggerRepo branch (SooDreamy)"
+        required: true
+        default: "cursor/soodreamy-ab64"
+      commit_ipa:
+        description: "Commit the .ipa into versions/ on that branch"
+        required: false
+        default: "true"
+
+jobs:
+  build-ipa:
+    runs-on: macos-15
+    timeout-minutes: 90
+    steps:
+      - name: Checkout SooDreamy (private BiggerRepo @ ref)
+        uses: actions/checkout@v4
+        with:
+          repository: MedusaV9/BiggerRepo
+          ref: ${{ github.event.inputs.ref }}
+          token: ${{ secrets.GH_PAT }}
+          fetch-depth: 0
+      - run: xcodebuild -version
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Render app icons (procedural)
+        run: |
+          if [ -f SoooDreamy/ios/scripts/GenerateIcon.swift ]; then
+            swift SoooDreamy/ios/scripts/GenerateIcon.swift SoooDreamy/ios/SoooDreamy/Resources/Assets.xcassets/AppIcon.appiconset/icon_1024.png classic || true
+            for v in sunset midnight mint rose ocean gold lavender blossom; do
+              swift SoooDreamy/ios/scripts/GenerateIcon.swift "SoooDreamy/ios/SoooDreamy/Resources/Assets.xcassets/AppIcon-$v.appiconset/icon_1024.png" "$v" || true
+            done
+          fi
+      - name: Generate Xcode project
+        working-directory: SoooDreamy/ios
+        run: xcodegen generate
+      - name: Build (unsigned)
+        working-directory: SoooDreamy/ios
+        run: |
+          xcodebuild \
+            -project SoooDreamy.xcodeproj \
+            -scheme SoooDreamy \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" DEVELOPMENT_TEAM="" \
+            build 2>&1 | tee xcodebuild.log | grep -E "error:|\*\* BUILD" || true
+          test -d build/Build/Products/Release-iphoneos/SoooDreamy.app
+      - name: Package IPA
+        working-directory: SoooDreamy/ios
+        run: |
+          APP_DIR="build/Build/Products/Release-iphoneos/SoooDreamy.app"
+          mkdir -p dist/Payload && cp -R "$APP_DIR" dist/Payload/
+          (cd dist && zip -qry SoooDreamy-unsigned.ipa Payload && ls -la)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SoooDreamy-unsigned-ipa
+          path: SoooDreamy/ios/dist/SoooDreamy-unsigned.ipa
+          if-no-files-found: error
+      - name: Commit IPA into versions/
+        if: ${{ github.event.inputs.commit_ipa != 'false' }}
+        run: |
+          VER=$(grep -oE 'MARKETING_VERSION: *[0-9.]+' SoooDreamy/ios/project.yml | grep -oE '[0-9.]+' | head -1)
+          VER=${VER:-4.0.0}
+          mkdir -p versions
+          cp SoooDreamy/ios/dist/SoooDreamy-unsigned.ipa "versions/SoooDreamy-${VER}-unsigned.ipa"
+          git config user.name "sonic0810-buildbot"
+          git config user.email "buildbot@users.noreply.github.com"
+          git add versions/
+          if git diff --cached --quiet; then echo "no ipa change"; else
+            git commit -m "ci: SooDreamy ${VER} unsigned .ipa -> versions/"
+            git push origin "HEAD:${{ github.event.inputs.ref }}"
+          fi
