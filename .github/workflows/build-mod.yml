@@ -1,0 +1,78 @@
+name: Build Mod (build farm)
+
+# Free public-repo build farm: builds any BiggerRepo mod branch on GitHub's
+# runners (no local VM load), runs GameTests fail-closed, and commits the built
+# jar into that branch's versions/ folder. Triggered via the REST API
+# (workflow_dispatch) with the branch name as input.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "BiggerRepo branch to build (e.g. cursor/gooby-mod-ab64)"
+        required: true
+      commit_jar:
+        description: "Commit the built jar into versions/ on that branch"
+        required: false
+        default: "true"
+      run_gametests:
+        description: "Run runGameTestServer (fail-closed)"
+        required: false
+        default: "true"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout mod source (private BiggerRepo @ ref)
+        uses: actions/checkout@v4
+        with:
+          repository: MedusaV9/BiggerRepo
+          ref: ${{ github.event.inputs.ref }}
+          token: ${{ secrets.GH_PAT }}
+          fetch-depth: 0
+          path: modsrc
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+      - name: Fetch assets (if the branch has a fetch step)
+        working-directory: modsrc
+        run: if [ -f tools/fetch_assets.py ]; then python3 tools/fetch_assets.py || true; fi
+      - name: Build
+        working-directory: modsrc
+        run: chmod +x gradlew && ./gradlew build --no-daemon --max-workers=2 --stacktrace
+      - name: GameTests (fail-closed)
+        if: ${{ github.event.inputs.run_gametests != 'false' }}
+        working-directory: modsrc
+        run: ./gradlew runGameTestServer --no-daemon --max-workers=2 || (echo "GameTests failed"; exit 1)
+      - name: Stage jar into versions/
+        id: stage
+        working-directory: modsrc
+        run: |
+          VER=$(grep -E '^mod_version=' gradle.properties | head -1 | cut -d= -f2 | tr -d '[:space:]')
+          MODID=$(grep -E '^mod_id=' gradle.properties | head -1 | cut -d= -f2 | tr -d '[:space:]')
+          mkdir -p versions
+          JAR=$(ls build/libs/*.jar | grep -vE 'sources|javadoc' | head -1)
+          cp "$JAR" "versions/${MODID}-${VER}.jar"
+          echo "ver=$VER" >> "$GITHUB_OUTPUT"
+          echo "modid=$MODID" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mod-jar-${{ steps.stage.outputs.modid }}-${{ steps.stage.outputs.ver }}
+          path: modsrc/versions/*.jar
+          if-no-files-found: error
+      - name: Commit jar back into the branch versions/
+        if: ${{ github.event.inputs.commit_jar != 'false' }}
+        working-directory: modsrc
+        run: |
+          git config user.name "sonic0810-buildbot"
+          git config user.email "buildbot@users.noreply.github.com"
+          git add versions/
+          if git diff --cached --quiet; then
+            echo "no jar change to commit"
+          else
+            git commit -m "ci: build ${{ steps.stage.outputs.modid }} ${{ steps.stage.outputs.ver }} jar -> versions/"
+            git push origin "HEAD:${{ github.event.inputs.ref }}"
+          fi
