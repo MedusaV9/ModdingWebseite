@@ -1,0 +1,133 @@
+name: SoooDreamy
+
+on:
+  push:
+    branches:
+      - "cursor/sooodreamy-couple-app-82d4"
+    paths:
+      - "SoooDreamy/**"
+      - ".github/workflows/sooodreamy.yml"
+  workflow_dispatch: {}
+
+concurrency:
+  group: sooodreamy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  server-tests:
+    name: Server tests (Node)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: SoooDreamy/server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm ci
+      - name: Run tests
+        run: npm test
+
+  logic-tests:
+    name: Logic tests (Swift on Linux)
+    runs-on: ubuntu-latest
+    container: swift:6.0
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run swift test
+        run: swift test --package-path SoooDreamy/ios
+
+  build-ipa:
+    name: Unsigned IPA (iOS)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Xcode version
+        run: xcodebuild -version
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Render app icon (procedural, no binary assets in repo)
+        run: swift SoooDreamy/ios/scripts/GenerateIcon.swift SoooDreamy/ios/SoooDreamy/Resources/Assets.xcassets/AppIcon.appiconset/icon_1024.png
+
+      - name: Generate Xcode project
+        working-directory: SoooDreamy/ios
+        run: xcodegen generate
+
+      - name: Build (unsigned)
+        working-directory: SoooDreamy/ios
+        shell: bash {0}
+        run: |
+          xcodebuild \
+            -project SoooDreamy.xcodeproj \
+            -scheme SoooDreamy \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM="" \
+            build 2>&1 | tee xcodebuild.log | grep -E "error:|warning: .*deprecat|\*\* BUILD"
+          status=${PIPESTATUS[0]}
+          echo "xcodebuild exit code: $status"
+          exit $status
+
+      - name: Show errors on failure
+        if: failure()
+        working-directory: SoooDreamy/ios
+        run: grep -B 2 -A 6 "error:" xcodebuild.log | head -300 || true
+
+      - name: Package IPA
+        working-directory: SoooDreamy/ios
+        run: |
+          APP_DIR="build/Build/Products/Release-iphoneos/SoooDreamy.app"
+          test -d "$APP_DIR"
+          mkdir -p dist/Payload
+          cp -R "$APP_DIR" dist/Payload/
+          cd dist
+          zip -qry SoooDreamy-unsigned.ipa Payload
+          ls -la
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SoooDreamy-unsigned-ipa
+          path: SoooDreamy/ios/dist/SoooDreamy-unsigned.ipa
+          if-no-files-found: error
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcodebuild-log
+          path: SoooDreamy/ios/xcodebuild.log
+          if-no-files-found: ignore
+
+  release-latest:
+    name: Rolling prerelease (IPA download link)
+    needs: build-ipa
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    continue-on-error: true
+    steps:
+      - name: Download IPA artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: SoooDreamy-unsigned-ipa
+      - name: Update rolling prerelease
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: sooodreamy-latest
+          name: "SoooDreamy — latest unsigned IPA"
+          prerelease: true
+          body: |
+            Rolling build from `${{ github.sha }}` (branch `cursor/sooodreamy-couple-app-82d4`).
+            Sideload with AltStore / SideStore / Sideloadly. Server setup: see `SoooDreamy/server/README.md`.
+          files: SoooDreamy-unsigned.ipa
