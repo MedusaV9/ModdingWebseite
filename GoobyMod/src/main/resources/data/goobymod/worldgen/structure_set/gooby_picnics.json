@@ -1,0 +1,14 @@
+{
+  "structures": [
+    {
+      "structure": "goobymod:gooby_picnic",
+      "weight": 1
+    }
+  ],
+  "placement": {
+    "type": "minecraft:random_spread",
+    "salt": 810082,
+    "spacing": 64,
+    "separation": 32
+  }
+}

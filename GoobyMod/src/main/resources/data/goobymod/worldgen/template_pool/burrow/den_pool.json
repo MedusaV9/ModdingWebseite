@@ -1,0 +1,24 @@
+{
+  "name": "goobymod:burrow/den_pool",
+  "fallback": "goobymod:burrow/terminator_pool",
+  "elements": [
+    {
+      "weight": 3,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "goobymod:burrow/den_small",
+        "processors": "minecraft:empty",
+        "projection": "rigid"
+      }
+    },
+    {
+      "weight": 2,
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "goobymod:burrow/pantry",
+        "processors": "minecraft:empty",
+        "projection": "rigid"
+      }
+    }
+  ]
+}
