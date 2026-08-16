@@ -1,5 +1,6 @@
 package de.sonic0810.goobymod;
 
+import de.sonic0810.goobymod.client.config.GoobyConfigScreens;
 import de.sonic0810.goobymod.compat.CreateCompat;
 import de.sonic0810.goobymod.registry.ModBlocks;
 import de.sonic0810.goobymod.registry.ModBlockEntities;
@@ -13,6 +14,7 @@ import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.config.ModConfig;
+import net.neoforged.fml.loading.FMLEnvironment;
 
 /**
  * GOOBY MOD — der dicke, grosse, niedliche Hase, der immer laechelt.
@@ -33,6 +35,11 @@ public final class GoobyMod {
         ModCreativeTabs.register(modEventBus);
         container.registerConfig(ModConfig.Type.SERVER, GoobyConfig.SPEC);
         container.registerConfig(ModConfig.Type.CLIENT, GoobyClientConfig.SPEC);
+        // Dist gate: GoobyConfigScreens references client-only classes and must
+        // never be classloaded on a dedicated server.
+        if (FMLEnvironment.dist.isClient()) {
+            GoobyConfigScreens.register(container);
+        }
         CreateCompat.logDiagnostics();
     }
 }

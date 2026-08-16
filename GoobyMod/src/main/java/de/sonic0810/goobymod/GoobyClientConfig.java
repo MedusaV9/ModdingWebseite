@@ -21,6 +21,10 @@ public final class GoobyClientConfig {
     public static final boolean DEFAULT_SCREEN_EFFECTS = true;
     public static final boolean DEFAULT_CAMERA_SHAKE = true;
 
+    /** Shared offset range — single source for the spec below and the config screen. */
+    public static final int COMPANION_HUD_OFFSET_MIN = 0;
+    public static final int COMPANION_HUD_OFFSET_MAX = 4096;
+
     static {
         ModConfigSpec.Builder builder = new ModConfigSpec.Builder();
         builder.push("accessibility");
@@ -38,10 +42,12 @@ public final class GoobyClientConfig {
                 .define("showCompanionHud", DEFAULT_SHOW_COMPANION_HUD);
         COMPANION_HUD_OFFSET_X = builder
                 .comment("Horizontal offset of the companion card from the top-left corner, in GUI pixels.")
-                .defineInRange("companionHudOffsetX", DEFAULT_COMPANION_HUD_OFFSET_X, 0, 4096);
+                .defineInRange("companionHudOffsetX", DEFAULT_COMPANION_HUD_OFFSET_X,
+                        COMPANION_HUD_OFFSET_MIN, COMPANION_HUD_OFFSET_MAX);
         COMPANION_HUD_OFFSET_Y = builder
                 .comment("Vertical offset of the companion card from the top-left corner, in GUI pixels.")
-                .defineInRange("companionHudOffsetY", DEFAULT_COMPANION_HUD_OFFSET_Y, 0, 4096);
+                .defineInRange("companionHudOffsetY", DEFAULT_COMPANION_HUD_OFFSET_Y,
+                        COMPANION_HUD_OFFSET_MIN, COMPANION_HUD_OFFSET_MAX);
         builder.pop();
         builder.push("screenFx");
         SCREEN_EFFECTS = builder
