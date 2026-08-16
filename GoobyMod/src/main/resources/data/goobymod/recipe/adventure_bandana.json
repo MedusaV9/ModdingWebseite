@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "WSW",
+    " G "
+  ],
+  "key": {
+    "W": { "tag": "minecraft:wool" },
+    "S": { "item": "minecraft:string" },
+    "G": { "item": "goobymod:gooby_fluff" }
+  },
+  "result": {
+    "id": "goobymod:adventure_bandana",
+    "count": 1
+  }
+}

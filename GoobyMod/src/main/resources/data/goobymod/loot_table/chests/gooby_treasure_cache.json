@@ -18,6 +18,11 @@
           "type": "minecraft:item",
           "name": "goobymod:gooby_scarf",
           "weight": 2
+        },
+        {
+          "type": "minecraft:item",
+          "name": "goobymod:picnic_backpack",
+          "weight": 1
         }
       ]
     },

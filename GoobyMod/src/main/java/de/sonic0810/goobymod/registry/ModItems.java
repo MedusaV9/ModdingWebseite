@@ -63,6 +63,28 @@ public final class ModItems {
             () -> new GoobyAccessoryItem(new Item.Properties().stacksTo(1),
                     "tooltip.goobymod.tiny_satchel"));
 
+    // ------------------------------------------------------------------
+    // Explorer-Outfit (v5.4): drei aufeinander abgestimmte Accessoires fuer
+    // Kopf-, Hals- und Ruecken-Slot. Der Blumenkranz laeuft ueber den
+    // bestehenden #goobymod:gooby_hats-Tag-Pfad; Halstuch und Rucksack
+    // werden von ExplorerOutfitEvents ausgeruestet (GoobyEntity unveraendert).
+    // ------------------------------------------------------------------
+
+    /** Blumenkranz: Explorer-Hut via Tag; selten im Picknick-Loot. */
+    public static final DeferredItem<Item> FLOWER_CROWN = ITEMS.register("flower_crown",
+            () -> new GoobyAccessoryItem(new Item.Properties().stacksTo(1).rarity(Rarity.UNCOMMON),
+                    "tooltip.goobymod.flower_crown"));
+
+    /** Abenteuer-Halstuch: faerbbar wie der Schal (Crafting UND direkt am Gooby). */
+    public static final DeferredItem<Item> ADVENTURE_BANDANA = ITEMS.register("adventure_bandana",
+            () -> new GoobyAccessoryItem(new Item.Properties().stacksTo(1),
+                    "tooltip.goobymod.adventure_bandana"));
+
+    /** Picknick-Rucksack: kosmetisches Ruecken-Accessoire; selten im Schatzversteck. */
+    public static final DeferredItem<Item> PICNIC_BACKPACK = ITEMS.register("picnic_backpack",
+            () -> new GoobyAccessoryItem(new Item.Properties().stacksTo(1).rarity(Rarity.UNCOMMON),
+                    "tooltip.goobymod.picnic_backpack"));
+
     public static final DeferredItem<TornMapScrapItem> TORN_MAP_SCRAP = ITEMS.register("torn_map_scrap",
             () -> new TornMapScrapItem(new Item.Properties().rarity(Rarity.UNCOMMON)));
 

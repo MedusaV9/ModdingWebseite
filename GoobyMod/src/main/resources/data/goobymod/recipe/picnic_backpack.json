@@ -1,0 +1,19 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "SLS",
+    "LWL",
+    "LBL"
+  ],
+  "key": {
+    "S": { "item": "minecraft:string" },
+    "L": { "item": "minecraft:leather" },
+    "W": { "item": "goobymod:gooby_wool" },
+    "B": { "item": "goobymod:button_eye" }
+  },
+  "result": {
+    "id": "goobymod:picnic_backpack",
+    "count": 1
+  }
+}

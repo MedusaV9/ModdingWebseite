@@ -73,6 +73,64 @@ def animation_doc():
     }
 
 
+def accessory_model_doc(config):
+    """Minimal gueltiges Explorer-Accessoire-Itemmodell fuer die Fixture."""
+    elements = []
+    for index in range(config["min_elements"]):
+        face = {"texture": "#skin", "uv": [0, 0, 4, 4]}
+        if config["tintable"]:
+            face["tintindex"] = 0
+        elements.append({
+            "name": f"part_{index}",
+            "from": [2, index, 2],
+            "to": [14, index + 2, 14],
+            "faces": {direction: dict(face) for direction in
+                      ("north", "east", "south", "west", "up", "down")},
+        })
+    return {
+        "textures": {"skin": "goobymod:item/fixture",
+                     "particle": "goobymod:item/fixture"},
+        "elements": elements,
+        "display": {
+            "gui": {"rotation": [30, 225, 0], "scale": [0.6, 0.6, 0.6]},
+            "ground": {"scale": [0.5, 0.5, 0.5]},
+            "head": {"scale": [1.0, 1.0, 1.0]},
+        },
+    }
+
+
+def accessory_bbmodel_doc(name, model_doc, config):
+    """Zur Fixture passende java_block-Blockbench-Quelle."""
+    scale = config["resolution"] / 16.0
+    elements = []
+    for index, element in enumerate(model_doc["elements"]):
+        faces = {}
+        for direction, spec in element["faces"].items():
+            face = {"uv": [value * scale for value in spec["uv"]], "texture": 0}
+            if "tintindex" in spec:
+                face["tint"] = spec["tintindex"]
+            faces[direction] = face
+        elements.append({
+            "name": element["name"],
+            "uuid": f"e-{name}-{index}",
+            "from": element["from"],
+            "to": element["to"],
+            "faces": faces,
+            "type": "cube",
+        })
+    return {
+        "meta": {"format_version": "4.10", "model_format": "java_block",
+                 "box_uv": False},
+        "name": name,
+        "resolution": {"width": config["resolution"],
+                       "height": config["resolution"]},
+        "elements": elements,
+        "outliner": [{"name": name, "uuid": f"g-{name}",
+                      "children": [element["uuid"] for element in elements]}],
+        "display": dict(model_doc["display"]),
+    }
+
+
 def bbmodel_doc(geo):
     geometry = geo["minecraft:geometry"][0]
     bones = geometry["bones"]
@@ -117,13 +175,22 @@ class ValidatorFixtureTest(unittest.TestCase):
         self.anim_dir = self.root / validate_assets.ASSET_BASE / "animations"
         self.tex_dir = (self.root / validate_assets.ASSET_BASE
                         / "textures" / "entity")
+        self.item_model_dir = (self.root / validate_assets.ASSET_BASE
+                               / "models" / "item")
+        self.item_tex_dir = (self.root / validate_assets.ASSET_BASE
+                             / "textures" / "item")
         self.bb_dir = self.root / "assets_src" / "blockbench"
-        for directory in (self.geo_dir, self.anim_dir, self.tex_dir, self.bb_dir):
+        for directory in (self.geo_dir, self.anim_dir, self.tex_dir,
+                          self.item_model_dir, self.item_tex_dir, self.bb_dir):
             directory.mkdir(parents=True)
 
         self.adult = adult_geo()
         self.baby = baby_geo()
         self.animation = animation_doc()
+        self.accessories = {
+            name: accessory_model_doc(config)
+            for name, config in validate_assets.ITEM_ACCESSORIES.items()
+        }
         self.write_all()
 
     def tearDown(self):
@@ -142,6 +209,14 @@ class ValidatorFixtureTest(unittest.TestCase):
             json.dumps(bbmodel_doc(self.adult)))
         (self.bb_dir / "gooby_baby.bbmodel").write_text(
             json.dumps(bbmodel_doc(self.baby)))
+        for name, config in validate_assets.ITEM_ACCESSORIES.items():
+            model = self.accessories[name]
+            (self.item_model_dir / f"{name}.json").write_text(json.dumps(model))
+            resolution = config["resolution"]
+            Image.new("RGBA", (resolution, resolution),
+                      (150, 180, 120, 255)).save(self.item_tex_dir / f"{name}.png")
+            (self.bb_dir / f"{name}.bbmodel").write_text(
+                json.dumps(accessory_bbmodel_doc(name, model, config)))
 
     def run_validator(self):
         return validate_assets.run(str(self.root))

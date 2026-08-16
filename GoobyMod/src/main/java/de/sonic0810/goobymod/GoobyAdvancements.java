@@ -21,6 +21,7 @@ public final class GoobyAdvancements {
     public static final String ALL_TRICKS_MASTERED = "all_tricks_mastered";
     public static final String GOOBY_FAMILY = "gooby_family";
     public static final String FULL_OUTFIT = "full_outfit";
+    public static final String EXPLORER_OUTFIT = "explorer_outfit";
     public static final String FOUND_BURROW = "found_burrow";
     public static final String GROUP_NAP = "group_nap";
     public static final String TREASURE_MAP_COMPLETE = "treasure_map_complete";

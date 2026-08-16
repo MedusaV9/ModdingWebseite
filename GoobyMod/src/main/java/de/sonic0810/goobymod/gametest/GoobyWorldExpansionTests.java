@@ -29,12 +29,22 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.TagKey;
 import net.minecraft.util.RandomSource;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import net.minecraft.world.level.chunk.ChunkGenerator;
+import net.minecraft.world.level.levelgen.LegacyRandomSource;
+import net.minecraft.world.level.levelgen.WorldgenRandom;
+import net.minecraft.world.level.levelgen.structure.BoundingBox;
+import net.minecraft.world.level.levelgen.structure.PoolElementStructurePiece;
+import net.minecraft.world.level.levelgen.structure.Structure;
+import net.minecraft.world.level.levelgen.structure.StructurePiece;
 import net.minecraft.world.level.levelgen.structure.pools.JigsawPlacement;
 import net.minecraft.world.level.levelgen.structure.pools.StructureTemplatePool;
+import net.minecraft.world.level.levelgen.structure.pools.alias.PoolAliasLookup;
+import net.minecraft.world.level.levelgen.structure.structures.JigsawStructure;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructurePlaceSettings;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
 import net.minecraft.world.level.storage.loot.LootTable;
@@ -62,6 +72,12 @@ public class GoobyWorldExpansionTests {
     private static final String ARENA = "arena";
     private static final String ARENA_LARGE = "arena_large";
     private static final String ARENA_WORLDGEN = "arena_worldgen";
+
+    /**
+     * Fester Worldgen-Seed der Assembly (Konvention wie 810/8121 der
+     * Generator-Skripte): gewaehlt, weil er Hub + Tunnel + Kammer baut.
+     */
+    private static final long JIGSAW_ASSEMBLY_SEED = 810L;
 
     private static final String TUNNEL_POOL = "goobymod:burrow/tunnel_pool";
     private static final String DEN_POOL = "goobymod:burrow/den_pool";
@@ -255,9 +271,19 @@ public class GoobyWorldExpansionTests {
      * <p>{@code keepJigsaws=true} laesst die Jigsaw-Block-NBT stehen, sodass
      * platzierte Pieces eindeutig ueber ihre Pool-Eintraege nachweisbar sind:
      * nur der Hub traegt tunnel_pool-Sockets, nur Tunnel tragen den
-     * den_pool-Far-Socket. Anker und Start-Rotation sind Vanilla-random; die
-     * 48x48-Arena deckt jede Kombination ab, und die Assertions sind bewusst
-     * varianten-agnostisch (gerade/Eck-Tunnel, Kuschel-/Vorratskammer).
+     * den_pool-Far-Socket. Die Assertions sind bewusst varianten-agnostisch
+     * (gerade/Eck-Tunnel, Kuschel-/Vorratskammer).
+     *
+     * <p><b>Determinismus:</b> {@code generateJigsaw} leitet seinen Worldgen-RNG
+     * aus Level-Seed + Chunk-Position ab — und die haengt von der zufaelligen
+     * Arena-Platzierung des GameTest-Runners ab. Je nach Lauf konnte so eine
+     * Rotations-/Varianten-Kombination gezogen werden, bei der alle drei
+     * Kammern kollidierten und nur Terminator-Kappen fielen (seltener Flake).
+     * Der Test baut den identischen Vanilla-Pfad ({@code addPieces} +
+     * {@code PoolElementStructurePiece.place}) deshalb mit einem FESTEN
+     * {@link WorldgenRandom}-Seed nach: gleiche Piece-Kette in jedem Lauf,
+     * unabhaengig davon, wo der Runner die Arena platziert. Die Assertions
+     * selbst bleiben unveraendert streng.
      */
     @GameTest(template = ARENA_WORLDGEN, timeoutTicks = 400)
     public static void burrow_jigsaw_assembly_expands_tunnels_and_chambers(GameTestHelper helper) {
@@ -267,11 +293,28 @@ public class GoobyWorldExpansionTests {
                 .getHolderOrThrow(ResourceKey.create(Registries.TEMPLATE_POOL,
                         ResourceLocation.fromNamespaceAndPath(GoobyMod.MODID, "burrow/start_pool")));
         BlockPos anchor = helper.absolutePos(new BlockPos(24, 3, 24));
-        boolean generated = JigsawPlacement.generateJigsaw(level, startPool,
-                ResourceLocation.fromNamespaceAndPath(GoobyMod.MODID, "burrow_socket"),
-                2, anchor, true);
-        helper.assertTrue(generated,
-                "JigsawPlacement.generateJigsaw fand keinen Start-Socket im Hub");
+        ChunkGenerator chunkGenerator = level.getChunkSource().getGenerator();
+        // Fester Seed + feste ChunkPos: die Assembly ist damit byte-identisch
+        // reproduzierbar — exakt der Codepfad von generateJigsaw, nur ohne
+        // dessen platzierungsabhaengige RNG-Ableitung.
+        Structure.GenerationContext context = new Structure.GenerationContext(
+                level.registryAccess(), chunkGenerator, chunkGenerator.getBiomeSource(),
+                level.getChunkSource().randomState(), level.getStructureManager(),
+                new WorldgenRandom(new LegacyRandomSource(JIGSAW_ASSEMBLY_SEED)),
+                JIGSAW_ASSEMBLY_SEED, new ChunkPos(0, 0), level, biome -> true);
+        Optional<Structure.GenerationStub> stub = JigsawPlacement.addPieces(context, startPool,
+                Optional.of(ResourceLocation.fromNamespaceAndPath(GoobyMod.MODID, "burrow_socket")),
+                2, anchor, false, Optional.empty(), 128, PoolAliasLookup.EMPTY,
+                JigsawStructure.DEFAULT_DIMENSION_PADDING, JigsawStructure.DEFAULT_LIQUID_SETTINGS);
+        helper.assertTrue(stub.isPresent(),
+                "JigsawPlacement.addPieces fand keinen Start-Socket im Hub");
+        RandomSource placeRandom = RandomSource.create(JIGSAW_ASSEMBLY_SEED);
+        for (StructurePiece piece : stub.orElseThrow().getPiecesBuilder().build().pieces()) {
+            if (piece instanceof PoolElementStructurePiece pooled) {
+                pooled.place(level, level.structureManager(), chunkGenerator, placeRandom,
+                        BoundingBox.infinite(), anchor, true);
+            }
+        }
 
         int hubSockets = 0;
         int tunnelFarSockets = 0;

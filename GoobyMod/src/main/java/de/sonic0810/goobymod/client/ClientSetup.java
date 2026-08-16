@@ -1,6 +1,9 @@
 package de.sonic0810.goobymod.client;
 
 import de.sonic0810.goobymod.GoobyMod;
+import de.sonic0810.goobymod.client.particle.ConfettiParticle;
+import de.sonic0810.goobymod.client.particle.FluffPuffParticle;
+import de.sonic0810.goobymod.client.particle.MusicNoteParticle;
 import de.sonic0810.goobymod.registry.ModBlockEntities;
 import de.sonic0810.goobymod.registry.ModEntities;
 import de.sonic0810.goobymod.registry.ModItems;
@@ -29,6 +32,9 @@ public final class ClientSetup {
         event.registerSpriteSet(ModParticles.ZZZ.get(), ZzzParticle.Provider::new);
         event.registerSpriteSet(ModParticles.HEART_GOLD.get(), HeartGoldParticle.Provider::new);
         event.registerSpriteSet(ModParticles.PAW_PRINT.get(), PawPrintParticle.Provider::new);
+        event.registerSpriteSet(ModParticles.CONFETTI.get(), ConfettiParticle.Provider::new);
+        event.registerSpriteSet(ModParticles.FLUFF_PUFF.get(), FluffPuffParticle.Provider::new);
+        event.registerSpriteSet(ModParticles.MUSIC_NOTE.get(), MusicNoteParticle.Provider::new);
     }
 
     @SubscribeEvent

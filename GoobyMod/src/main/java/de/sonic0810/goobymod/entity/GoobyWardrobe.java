@@ -35,6 +35,15 @@ import net.minecraft.world.item.component.DyedItemColor;
  */
 public final class GoobyWardrobe {
     public static final int DEFAULT_SCARF_COLOR = 0xB8325E;
+    /** Ungefaerbtes Halstuch-Orange (Item-Tint-Default, analog Schal-Beere). */
+    public static final int DEFAULT_BANDANA_COLOR = 0xC65D34;
+    /**
+     * Obergrenze fuer synchronisierte Wardrobe-/Sync-Strings. Zentrale
+     * Wahrheit fuer Entity UND Event-Handler: ein Encode ueber dieser Grenze
+     * wuerde beim Reload durch Truncation + {@link #reconcile} vernichtet,
+     * deshalb lehnen alle Equip-/Dye-Pfade solche Stacks fail-closed ab.
+     */
+    public static final int MAX_SYNCED_KEY_LENGTH = 128;
 
     /** The three synchronized accessory slots and their NBT keys. */
     public enum Slot {
@@ -48,7 +57,8 @@ public final class GoobyWardrobe {
             this.tagKey = tagKey;
         }
 
-        String tagKey() {
+        /** NBT-Schluessel des Slots innerhalb von {@code WardrobeItems}. */
+        public String tagKey() {
             return this.tagKey;
         }
     }

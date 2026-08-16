@@ -1010,6 +1010,160 @@ def gen_v53_fetch_ball():
     img.save(ensure(os.path.join(ROOT, "item", "gooby_ball.png")))
 
 
+def gen_v54_explorer_outfit():
+    """Explorer-Outfit v5.4: Blumenkranz, Abenteuer-Halstuch, Picknick-Rucksack.
+
+    Eigener Seed (5406) wie bei den v5.2/v5.3-Wellen: die drei Texturen sind
+    byte-identisch reproduzierbar, unabhaengig davon, was andere Generatoren
+    vorher am geteilten RNG-Strom gezogen haben. Die bemalten Regionen sind
+    exakt die UV-Fenster der handgeschriebenen 3D-Itemmodelle
+    (models/item/{flower_crown,adventure_bandana,picnic_backpack}.json) —
+    validate_assets.py prueft beides gegeneinander.
+    """
+    outfit_rng = random.Random(5406)
+
+    def shaded_fill(draw, box, base, spread=6):
+        x0, y0, x1, y1 = box
+        for x in range(x0, x1):
+            for y in range(y0, y1):
+                n = outfit_rng.randint(-spread, spread)
+                draw.point((x, y), fill=(max(0, min(255, base[0] + n)),
+                                         max(0, min(255, base[1] + n)),
+                                         max(0, min(255, base[2] + n)), 255))
+
+    # --- Blumenkranz (16x16) -------------------------------------------
+    # Zeilen 0-3: Seiten-Streifen des geflochtenen Bands, Zeilen 8-11 Band
+    # oben (mit Knospen), Zeilen 12-15 Band unten (dunkler); dazwischen die
+    # vier 4x4-Bluetenfenster (rosa, Margerite, blau, Blatt).
+    vine = (110, 84, 48)
+    vine_dark = (84, 62, 34)
+    leaf_green = (96, 142, 74)
+    leaf_dark = (68, 108, 52)
+    crown = Image.new("RGBA", (16, 16), (0, 0, 0, 0))
+    d = ImageDraw.Draw(crown)
+    shaded_fill(d, (0, 0, 16, 4), vine)
+    for x in range(0, 16, 4):  # Flecht-Diagonalen
+        d.line((x, 3, x + 3, 0), fill=vine_dark + (255,))
+        d.point((x + 1, 2), fill=leaf_green + (255,))
+    shaded_fill(d, (0, 8, 16, 12), leaf_green)
+    for x in range(1, 16, 3):  # Knospenpunkte auf der Bandoberseite
+        d.point((x, 9 + (x % 2)), fill=(233, 196, 106, 255))
+        d.point((x + 1, 10), fill=leaf_dark + (255,))
+    shaded_fill(d, (0, 12, 16, 16), vine_dark)
+    for x in range(2, 16, 4):
+        d.line((x, 15, x + 2, 12), fill=vine + (255,))
+    # Rosa Bluete (0,4)-(4,8)
+    shaded_fill(d, (0, 4, 4, 8), (232, 130, 168), spread=8)
+    d.point((1, 5), fill=(255, 190, 213, 255))
+    d.point((2, 6), fill=(240, 196, 92, 255))  # Zentrum
+    d.point((1, 6), fill=(214, 100, 142, 255))
+    # Margerite (4,4)-(8,8)
+    shaded_fill(d, (4, 4, 8, 8), (243, 240, 228), spread=5)
+    d.point((5, 5), fill=(255, 255, 250, 255))
+    d.point((6, 6), fill=(238, 186, 66, 255))  # Zentrum
+    d.point((6, 5), fill=(222, 214, 194, 255))
+    # Kornblumen-Blau (8,4)-(12,8)
+    shaded_fill(d, (8, 4, 12, 8), (94, 122, 198), spread=8)
+    d.point((9, 5), fill=(150, 172, 232, 255))
+    d.point((10, 6), fill=(64, 84, 152, 255))
+    d.point((10, 5), fill=(238, 232, 160, 255))  # Pollenpunkt
+    # Blattfenster (12,4)-(16,8)
+    shaded_fill(d, (12, 4, 16, 8), leaf_green, spread=7)
+    d.line((12, 7, 15, 4), fill=leaf_dark + (255,))  # Blattader
+    d.point((13, 5), fill=(150, 190, 120, 255))
+    crown.save(ensure(os.path.join(ROOT, "item", "flower_crown.png")))
+
+    # --- Abenteuer-Halstuch (16x16, tint-bereites Graustufen-Tuch) ------
+    # Zeilen 0-5 Haupttuch, 6-9 Knoten-/Rollstreifen, (0,10)-(8,16)
+    # Dreieckszipfel, (8,10)-(16,16) Kanten-/Fransenstreifen.
+    bandana = Image.new("RGBA", (16, 16), (0, 0, 0, 0))
+    d = ImageDraw.Draw(bandana)
+    shaded_fill(d, (0, 0, 16, 6), (208, 208, 208), spread=5)
+    for x, y in ((2, 1), (5, 3), (9, 1), (12, 4), (14, 2), (7, 4)):
+        d.point((x, y), fill=(178, 178, 178, 255))       # Paisley-Punkte
+        d.point((x + 1, y), fill=(232, 232, 232, 255))   # Lichtkante
+    d.line((0, 5, 15, 5), fill=(170, 170, 170, 255))     # Saumnaht
+    shaded_fill(d, (0, 6, 16, 10), (186, 186, 186), spread=5)
+    for x in range(0, 16, 3):  # Falten der Rolle
+        d.line((x, 6, x + 1, 9), fill=(158, 158, 158, 255))
+        d.point((x + 2, 7), fill=(214, 214, 214, 255))
+    shaded_fill(d, (0, 10, 8, 16), (204, 204, 204), spread=5)
+    d.line((0, 10, 7, 10), fill=(168, 168, 168, 255))    # Zipfel-Bordüre
+    d.line((0, 15, 7, 15), fill=(150, 150, 150, 255))    # Fransenreihe
+    d.point((3, 12), fill=(178, 178, 178, 255))
+    d.point((5, 13), fill=(230, 230, 230, 255))
+    shaded_fill(d, (8, 10, 16, 16), (172, 172, 172), spread=5)
+    for y in range(10, 16, 2):
+        d.point((9, y), fill=(146, 146, 146, 255))
+        d.point((13, y + 1), fill=(200, 200, 200, 255))
+    bandana.save(ensure(os.path.join(ROOT, "item", "adventure_bandana.png")))
+
+    # --- Picknick-Rucksack (32x32) --------------------------------------
+    leather = (139, 87, 50)
+    leather_light = (168, 110, 65)
+    leather_dark = (91, 57, 34)
+    stitch = (222, 186, 128)
+    blanket_red = (196, 60, 60)
+    blanket_cream = (241, 230, 213)
+    pack = Image.new("RGBA", (32, 32), (0, 0, 0, 0))
+    d = ImageDraw.Draw(pack)
+    # Grundierung: gesamte Flaeche deckend, damit keine UV-Region Loecher hat.
+    shaded_fill(d, (0, 0, 32, 32), leather)
+    # Frontpanel (0,0)-(12,12) mit Ziernaht
+    shaded_fill(d, (0, 0, 12, 12), leather)
+    d.rectangle((0, 0, 11, 11), outline=leather_dark + (255,))
+    d.rectangle((1, 1, 10, 10), outline=stitch + (255,))
+    # Rueckenpanel (12,0)-(24,12) mit Kreuznaehten
+    shaded_fill(d, (12, 0, 24, 12), leather)
+    d.rectangle((12, 0, 23, 11), outline=leather_dark + (255,))
+    for x, y in ((15, 3), (20, 3), (15, 8), (20, 8)):
+        d.line((x - 1, y, x + 1, y), fill=stitch + (255,))
+        d.line((x, y - 1, x, y + 1), fill=stitch + (255,))
+    # Seitenpanels (0,12)-(6,24) und (6,12)-(12,24)
+    shaded_fill(d, (0, 12, 6, 24), leather_light, spread=7)
+    shaded_fill(d, (6, 12, 12, 24), leather_light, spread=7)
+    for x0 in (0, 6):
+        d.rectangle((x0, 12, x0 + 5, 23), outline=leather_dark + (255,))
+        d.point((x0 + 2, 17), fill=leather_dark + (255,))  # Schnallenpunkt
+        d.point((x0 + 3, 18), fill=stitch + (255,))
+    # Deckelklappe (12,12)-(24,18)
+    shaded_fill(d, (12, 12, 24, 18), leather_light, spread=7)
+    d.rectangle((12, 12, 23, 17), outline=leather_dark + (255,))
+    d.line((13, 16, 22, 16), fill=stitch + (255,))
+    # Boden (12,18)-(24,24) dunkel
+    shaded_fill(d, (12, 18, 24, 24), leather_dark)
+    # Deckenrolle (0,24)-(24,30): rot-cremefarbene Streifen
+    for x in range(0, 24):
+        stripe = blanket_red if (x // 3) % 2 == 0 else blanket_cream
+        for y in range(24, 30):
+            n = outfit_rng.randint(-6, 6)
+            d.point((x, y), fill=(max(0, min(255, stripe[0] + n)),
+                                  max(0, min(255, stripe[1] + n)),
+                                  max(0, min(255, stripe[2] + n)), 255))
+    d.line((0, 24, 23, 24), fill=(150, 42, 42, 255))
+    # Rollen-Enden (24,24)-(30,30): Spirale
+    shaded_fill(d, (24, 24, 30, 30), blanket_cream, spread=4)
+    d.ellipse((24, 24, 29, 29), outline=blanket_red + (255,))
+    d.point((26, 26), fill=blanket_red + (255,))
+    d.point((27, 27), fill=blanket_red + (255,))
+    # Riemenstreifen (24,0)-(28,12) mit Loechern
+    shaded_fill(d, (24, 0, 28, 12), leather_dark)
+    for y in range(2, 12, 3):
+        d.point((25, y), fill=(56, 34, 20, 255))
+        d.point((26, y), fill=leather_light + (255,))
+    # Snack-Tasche (24,12)-(32,20) mit Holz-Knebel
+    shaded_fill(d, (24, 12, 32, 20), leather_light, spread=7)
+    d.rectangle((24, 12, 31, 19), outline=leather_dark + (255,))
+    d.line((25, 14, 30, 14), fill=stitch + (255,))
+    d.rectangle((27, 15, 28, 17), fill=(196, 148, 92, 255))
+    # Knopfauge-Schnalle (28,0)-(32,4): Bernstein mit Fadenkreuz
+    d.rectangle((28, 0, 31, 3), fill=(222, 160, 64, 255))
+    d.rectangle((28, 0, 31, 3), outline=(92, 58, 20, 255))
+    d.point((29, 1), fill=(255, 236, 190, 255))
+    d.point((30, 2), fill=(121, 85, 58, 255))
+    pack.save(ensure(os.path.join(ROOT, "item", "picnic_backpack.png")))
+
+
 if __name__ == "__main__":
     gen_gooby()
     gen_nutella_item()
@@ -1032,4 +1186,5 @@ if __name__ == "__main__":
     gen_speech_bubble()
     gen_v52_content_wave()
     gen_v53_fetch_ball()
+    gen_v54_explorer_outfit()
     print("Alle Gooby-Texturen generiert!")

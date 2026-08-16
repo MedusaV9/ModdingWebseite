@@ -11,6 +11,13 @@ Koordinaten-Konvention (Bedrock -> Blockbench):
     bone:  origin = [-px, py, pz],   rotation = [-rx, -ry, rz]
     animation: rotation unveraendert, position x negiert
 
+Zusaetzlich (Explorer-Outfit v5.4): Java-Block/Item-Projekte fuer die
+handgeschriebenen 3D-Accessoire-Itemmodelle (flower_crown,
+adventure_bandana, picnic_backpack). Quelle der Wahrheit sind die
+models/item/*.json — Elemente, Rotationen, Face-UVs (skaliert auf die
+Texturaufloesung), Tints und Display-Transforms werden 1:1 uebernommen,
+validate_assets.py prueft die Konsistenz fail-closed.
+
 Aufruf:  python3 scripts/gen_bbmodel.py
 """
 from __future__ import annotations
@@ -279,6 +286,130 @@ def build_project(model, geo_path, texture_file, animation_path=None):
     return project
 
 
+# ---------------------------------------------------------------------------
+# Explorer-Outfit: Java-Block/Item-Projekte aus models/item/*.json
+# ---------------------------------------------------------------------------
+
+ITEM_ACCESSORY_JOBS = [
+    ("flower_crown", 16),
+    ("adventure_bandana", 16),
+    ("picnic_backpack", 32),
+]
+
+FACE_ORDER = ("north", "east", "south", "west", "up", "down")
+
+
+def item_texture_entry(model, texture_file, size):
+    path = os.path.join(ASSETS, "textures", "item", texture_file)
+    with open(path, "rb") as handle:
+        payload = base64.b64encode(handle.read()).decode("ascii")
+    return {
+        "path": f"textures/item/{texture_file}",
+        "name": texture_file,
+        "folder": "item",
+        "namespace": "goobymod",
+        "id": "0",
+        "group": "",
+        "width": size,
+        "height": size,
+        "uv_width": size,
+        "uv_height": size,
+        "particle": True,
+        "use_as_default": False,
+        "layers_enabled": False,
+        "sync_to_project": "",
+        "render_mode": "default",
+        "render_sides": "auto",
+        "frame_time": 1,
+        "frame_order_type": "loop",
+        "frame_order": "",
+        "frame_interpolate": False,
+        "visible": True,
+        "internal": True,
+        "saved": True,
+        "uuid": stable_uuid(model, "texture", texture_file),
+        "relative_path": f"../../src/main/resources/assets/goobymod/textures/item/{texture_file}",
+        "source": f"data:image/png;base64,{payload}",
+    }
+
+
+def item_element(model, element, index, scale):
+    entry = {
+        "name": element.get("name", f"cube_{index}"),
+        "box_uv": False,
+        "rescale": False,
+        "locked": False,
+        "render_order": "default",
+        "allow_mirror_modeling": True,
+        "from": list(element["from"]),
+        "to": list(element["to"]),
+        "autouv": 0,
+        "color": index % 8,
+        "origin": list(element.get("rotation", {}).get("origin", [8, 8, 8])),
+        "type": "cube",
+        "uuid": stable_uuid(model, "element", index),
+    }
+    rotation = element.get("rotation")
+    if rotation:
+        vector = [0.0, 0.0, 0.0]
+        vector["xyz".index(rotation["axis"])] = rotation["angle"]
+        entry["rotation"] = vector
+    faces = {}
+    for face in FACE_ORDER:
+        spec = element.get("faces", {}).get(face)
+        if spec is None:
+            faces[face] = {"uv": [0, 0, 0, 0], "texture": None}
+            continue
+        entry_face = {"uv": [value * scale for value in spec["uv"]], "texture": 0}
+        if "tintindex" in spec:
+            entry_face["tint"] = spec["tintindex"]
+        faces[face] = entry_face
+    entry["faces"] = faces
+    return entry
+
+
+def build_item_project(model, resolution):
+    document = load(os.path.join(ASSETS, "models", "item", f"{model}.json"))
+    scale = resolution / 16.0
+    elements = [item_element(model, element, index, scale)
+                for index, element in enumerate(document["elements"])]
+    group = {
+        "name": model,
+        "origin": [8, 8, 8],
+        "rotation": [0, 0, 0],
+        "bedrock_binding": "",
+        "color": 0,
+        "uuid": stable_uuid(model, "group", model),
+        "export": True,
+        "mirror_uv": False,
+        "isOpen": True,
+        "locked": False,
+        "visibility": True,
+        "autouv": 0,
+        "children": [element["uuid"] for element in elements],
+    }
+    return {
+        "meta": {
+            "format_version": "4.10",
+            "model_format": "java_block",
+            "box_uv": False,
+        },
+        "name": model,
+        "parent": document.get("parent", ""),
+        "ambientocclusion": True,
+        "front_gui_light": False,
+        "visible_box": [1, 1, 0],
+        "variable_placeholders": "",
+        "variable_placeholder_buttons": [],
+        "unhandled_root_fields": {},
+        "resolution": {"width": resolution, "height": resolution},
+        "elements": elements,
+        "outliner": [group],
+        "textures": [item_texture_entry(model, f"{model}.png", resolution)],
+        "display": document.get("display", {}),
+    }
+
+
 def main():
     os.makedirs(OUT_DIR, exist_ok=True)
     jobs = [
@@ -299,6 +430,15 @@ def main():
         print(f"geschrieben: assets_src/blockbench/{model}.bbmodel "
               f"({len(project['elements'])} Cubes, "
               f"{len(project.get('animations', []))} Clips)")
+
+    for model, resolution in ITEM_ACCESSORY_JOBS:
+        project = build_item_project(model, resolution)
+        out_path = os.path.join(OUT_DIR, f"{model}.bbmodel")
+        with open(out_path, "w", encoding="utf-8") as handle:
+            json.dump(project, handle, indent=1)
+            handle.write("\n")
+        print(f"geschrieben: assets_src/blockbench/{model}.bbmodel "
+              f"({len(project['elements'])} Elemente, java_block)")
 
 
 if __name__ == "__main__":

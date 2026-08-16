@@ -56,6 +56,7 @@ jobs:
         run: |
           python3 scripts/test_validate_assets.py
           python3 scripts/validate_assets.py
+          python3 scripts/gen_particle_textures.py --check
       - name: Worldgen validator (fail-closed)
         run: python3 scripts/validate_worldgen.py
       - name: Release metadata gate (fail-closed)

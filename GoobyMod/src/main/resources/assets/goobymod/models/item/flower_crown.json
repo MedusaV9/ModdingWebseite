@@ -1,0 +1,122 @@
+{
+  "parent": "minecraft:block/block",
+  "credit": "GoobyMod Explorer-Outfit (handmodelliert)",
+  "textures": {
+    "crown": "goobymod:item/flower_crown",
+    "particle": "goobymod:item/flower_crown"
+  },
+  "elements": [
+    {
+      "name": "band_north",
+      "from": [2, 0, 2],
+      "to": [14, 3, 4],
+      "faces": {
+        "north": { "texture": "#crown", "uv": [2, 0, 14, 3] },
+        "south": { "texture": "#crown", "uv": [2, 0, 14, 3] },
+        "east": { "texture": "#crown", "uv": [0, 0, 2, 3] },
+        "west": { "texture": "#crown", "uv": [0, 0, 2, 3] },
+        "up": { "texture": "#crown", "uv": [2, 8, 14, 11] },
+        "down": { "texture": "#crown", "uv": [2, 12, 14, 15] }
+      }
+    },
+    {
+      "name": "band_south",
+      "from": [2, 0, 12],
+      "to": [14, 3, 14],
+      "faces": {
+        "north": { "texture": "#crown", "uv": [2, 0, 14, 3] },
+        "south": { "texture": "#crown", "uv": [2, 0, 14, 3] },
+        "east": { "texture": "#crown", "uv": [0, 0, 2, 3] },
+        "west": { "texture": "#crown", "uv": [0, 0, 2, 3] },
+        "up": { "texture": "#crown", "uv": [2, 8, 14, 11] },
+        "down": { "texture": "#crown", "uv": [2, 12, 14, 15] }
+      }
+    },
+    {
+      "name": "band_west",
+      "from": [2, 0, 4],
+      "to": [4, 3, 12],
+      "faces": {
+        "north": { "texture": "#crown", "uv": [0, 0, 2, 3] },
+        "south": { "texture": "#crown", "uv": [0, 0, 2, 3] },
+        "east": { "texture": "#crown", "uv": [3, 0, 11, 3] },
+        "west": { "texture": "#crown", "uv": [3, 0, 11, 3] },
+        "up": { "texture": "#crown", "uv": [2, 8, 10, 11] },
+        "down": { "texture": "#crown", "uv": [2, 12, 10, 15] }
+      }
+    },
+    {
+      "name": "band_east",
+      "from": [12, 0, 4],
+      "to": [14, 3, 12],
+      "faces": {
+        "north": { "texture": "#crown", "uv": [0, 0, 2, 3] },
+        "south": { "texture": "#crown", "uv": [0, 0, 2, 3] },
+        "east": { "texture": "#crown", "uv": [3, 0, 11, 3] },
+        "west": { "texture": "#crown", "uv": [3, 0, 11, 3] },
+        "up": { "texture": "#crown", "uv": [2, 8, 10, 11] },
+        "down": { "texture": "#crown", "uv": [2, 12, 10, 15] }
+      }
+    },
+    {
+      "name": "blossom_pink",
+      "from": [6.5, 2.5, 1],
+      "to": [9.5, 5.5, 3.5],
+      "faces": {
+        "north": { "texture": "#crown", "uv": [0, 4, 4, 8] },
+        "south": { "texture": "#crown", "uv": [0, 4, 4, 8] },
+        "east": { "texture": "#crown", "uv": [0, 4, 4, 8] },
+        "west": { "texture": "#crown", "uv": [0, 4, 4, 8] },
+        "up": { "texture": "#crown", "uv": [0, 4, 4, 8] },
+        "down": { "texture": "#crown", "uv": [0, 4, 4, 8] }
+      }
+    },
+    {
+      "name": "blossom_daisy",
+      "from": [1.5, 2.5, 6.5],
+      "to": [4, 5.5, 9.5],
+      "faces": {
+        "north": { "texture": "#crown", "uv": [4, 4, 8, 8] },
+        "south": { "texture": "#crown", "uv": [4, 4, 8, 8] },
+        "east": { "texture": "#crown", "uv": [4, 4, 8, 8] },
+        "west": { "texture": "#crown", "uv": [4, 4, 8, 8] },
+        "up": { "texture": "#crown", "uv": [4, 4, 8, 8] },
+        "down": { "texture": "#crown", "uv": [4, 4, 8, 8] }
+      }
+    },
+    {
+      "name": "blossom_blue",
+      "from": [12, 2.5, 6.5],
+      "to": [14.5, 5.5, 9.5],
+      "faces": {
+        "north": { "texture": "#crown", "uv": [8, 4, 12, 8] },
+        "south": { "texture": "#crown", "uv": [8, 4, 12, 8] },
+        "east": { "texture": "#crown", "uv": [8, 4, 12, 8] },
+        "west": { "texture": "#crown", "uv": [8, 4, 12, 8] },
+        "up": { "texture": "#crown", "uv": [8, 4, 12, 8] },
+        "down": { "texture": "#crown", "uv": [8, 4, 12, 8] }
+      }
+    },
+    {
+      "name": "leaf_tuft",
+      "from": [6.5, 2, 12],
+      "to": [9.5, 4.5, 14.5],
+      "rotation": { "origin": [8, 3, 13], "axis": "y", "angle": 22.5 },
+      "faces": {
+        "north": { "texture": "#crown", "uv": [12, 4, 16, 8] },
+        "south": { "texture": "#crown", "uv": [12, 4, 16, 8] },
+        "east": { "texture": "#crown", "uv": [12, 4, 16, 8] },
+        "west": { "texture": "#crown", "uv": [12, 4, 16, 8] },
+        "up": { "texture": "#crown", "uv": [12, 4, 16, 8] },
+        "down": { "texture": "#crown", "uv": [12, 4, 16, 8] }
+      }
+    }
+  ],
+  "display": {
+    "gui": { "rotation": [30, 225, 0], "translation": [0, -1, 0], "scale": [0.9, 0.9, 0.9] },
+    "ground": { "rotation": [0, 0, 0], "translation": [0, 2, 0], "scale": [0.45, 0.45, 0.45] },
+    "head": { "rotation": [0, 0, 0], "translation": [0, 14, 0], "scale": [1.7, 1.7, 1.7] },
+    "thirdperson_righthand": { "rotation": [75, 45, 0], "translation": [0, 2.5, 0], "scale": [0.375, 0.375, 0.375] },
+    "firstperson_righthand": { "rotation": [0, 45, 0], "translation": [0, 1, 0], "scale": [0.4, 0.4, 0.4] }
+  }
+}

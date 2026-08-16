@@ -31,6 +31,9 @@ public final class ModCreativeTabs {
                         output.accept(ModItems.GOOBY_SCARF.get());
                         output.accept(ModItems.GOOBY_BOWTIE.get());
                         output.accept(ModItems.TINY_SATCHEL.get());
+                        output.accept(ModItems.FLOWER_CROWN.get());
+                        output.accept(ModItems.ADVENTURE_BANDANA.get());
+                        output.accept(ModItems.PICNIC_BACKPACK.get());
                         output.accept(ModItems.TORN_MAP_SCRAP.get());
                         output.accept(ModItems.GOOBY_TREASURE_MAP.get());
                         output.accept(ModItems.BUTTON_EYE.get());

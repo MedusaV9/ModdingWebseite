@@ -176,13 +176,28 @@ public class GoobyEntity extends TamableAnimal implements GeoEntity, MenuProvide
     public static final int FETCH_SATISFACTION = 4;
     public static final int FETCH_FRIENDSHIP = 2;
     public static final int FETCH_REWARD_COOLDOWN_TICKS = 600;
+    // Feedback-Wave: feste Low-Count-Budgets pro Trigger (keine Partikelflut)
+    // plus Anti-Spam-Cooldowns. Konstanten sind public, damit die GameTests
+    // Budget und Gating direkt gegen die Spawn-Aufrufe pruefen koennen.
+    public static final int CONFETTI_TIER_UP_COUNT = 10;
+    public static final int CONFETTI_TIER_UP_BEST_COUNT = 14;
+    public static final int CONFETTI_TRICK_COUNT = 6;
+    /** Zwischen zwei Trick-Konfetti-Salven liegen mindestens 5 Sekunden. */
+    public static final int CONFETTI_TRICK_COOLDOWN_TICKS = 100;
+    public static final int FLUFF_BRUSH_COUNT = 6;
+    public static final int FLUFF_DRESS_UP_COUNT = 5;
+    public static final int FLUFF_LANDING_COUNT = 6;
+    public static final int MUSIC_NOTE_SPEAK_COUNT = 3;
+    public static final int MUSIC_NOTE_DANCE_COUNT = 5;
+    public static final int MUSIC_NOTE_PET_COUNT = 2;
+    /** Streichel-Noten hoechstens alle 2 Sekunden — Klickspam bleibt stumm. */
+    public static final int MUSIC_NOTE_PET_COOLDOWN_TICKS = 40;
     public static final float TREASURE_SCRAP_CHANCE = 0.05F;
     public static final int MAX_STORED_FRIENDSHIPS = 32;
     public static final int MAX_TRANSIENT_PLAYER_ENTRIES = 128;
     public static final int MAX_PARTNER_HISTORY_ENTRIES = 128;
     public static final String GIFT_PRIORITY_UNTIL_TAG = "GoobyModGiftPriorityUntil";
     private static final long TRANSIENT_PLAYER_STATE_TTL = 20L * 60L * 10L;
-    private static final int MAX_SYNCED_KEY_LENGTH = 128;
     private static final int MAX_SYNCED_ARGUMENT_LENGTH = 256;
     private static final int[][] ESCAPE_OFFSETS = {
             {0, 0}, {1, 0}, {-1, 0}, {0, 1}, {0, -1},
@@ -436,6 +451,14 @@ public class GoobyEntity extends TamableAnimal implements GeoEntity, MenuProvide
     private int tagAlongTicks;
     private long lastTrainingTime = Long.MIN_VALUE;
     private int performedTrickCount;
+    // Feedback-Wave: Countdown bis zum Konfetti des VOLLENDETEN Tricks,
+    // Cooldown-Gates und reine Burst-Zaehler fuer die GameTests.
+    private int trickConfettiIn;
+    private long trickConfettiCooldownUntil;
+    private long petNoteCooldownUntil;
+    private int confettiBursts;
+    private int fluffPuffBursts;
+    private int musicNoteBursts;
     private int hutchWakeRoutineTicks;
     private int babyTumbleCooldown;
     private boolean wasBabyLastTick;
@@ -1112,6 +1135,21 @@ public class GoobyEntity extends TamableAnimal implements GeoEntity, MenuProvide
         return this.landingSquashes;
     }
 
+    /** Nur fuer GameTests: Anzahl bisher gesendeter Konfetti-Salven. */
+    public int getConfettiBursts() {
+        return this.confettiBursts;
+    }
+
+    /** Nur fuer GameTests: Anzahl bisher gesendeter Fellfussel-Bursts. */
+    public int getFluffPuffBursts() {
+        return this.fluffPuffBursts;
+    }
+
+    /** Nur fuer GameTests: Anzahl bisher gesendeter Musiknoten-Bursts. */
+    public int getMusicNoteBursts() {
+        return this.musicNoteBursts;
+    }
+
     public int getActionAnimationTicks() {
         return this.actionAnimationTicks;
     }
@@ -1341,6 +1379,9 @@ public class GoobyEntity extends TamableAnimal implements GeoEntity, MenuProvide
                             ? ModParticles.HEART_GOLD.get() : ParticleTypes.HEART,
                     getX(), getY() + 1.3, getZ(), tier == FriendshipTier.BEST_FRIEND ? 16 : 10,
                     0.5, 0.4, 0.5, 0.03);
+            // Tier-Ups sind selten (max. 3 pro Freundschaft) — Konfetti immer.
+            spawnConfettiBurst(serverLevel, tier == FriendshipTier.BEST_FRIEND
+                    ? CONFETTI_TIER_UP_BEST_COUNT : CONFETTI_TIER_UP_COUNT);
         }
         playSound(ModSounds.GOOBY_TIER_UP_JINGLE.get(), 1.0F, 1.0F);
         showBubble(switch (tier) {
@@ -1488,6 +1529,10 @@ public class GoobyEntity extends TamableAnimal implements GeoEntity, MenuProvide
 
         if (this.brushCooldown > 0) {
             this.brushCooldown--;
+        }
+        if (this.trickConfettiIn > 0 && --this.trickConfettiIn == 0) {
+            // Der Trick ist jetzt VOLLENDET (Countdown = Clip-Dauer).
+            spawnConfettiBurst(level, CONFETTI_TRICK_COUNT);
         }
         if (this.giftCooldown > 0) {
             this.giftCooldown--;
@@ -1951,8 +1996,9 @@ public class GoobyEntity extends TamableAnimal implements GeoEntity, MenuProvide
             double drop = this.airborneStartY - getY();
             if (drop > 2.0 && tryTriggerAction("land", 8)) {
                 this.landingSquashes++;
-                level.sendParticles(ParticleTypes.CLOUD, getX(), getY() + 0.08, getZ(),
-                        8, 0.45, 0.05, 0.45, 0.025);
+                // Landungs-Plumps (inkl. Fetch-Spruenge): Fell staubt kurz auf.
+                // tryTriggerAction("land", 8) dedupliziert bereits pro Landung.
+                spawnFluffPuffs(level, FLUFF_LANDING_COUNT, getY() + 0.15);
             }
         }
         this.wasOnGroundLastTick = grounded;
@@ -2401,31 +2447,33 @@ public class GoobyEntity extends TamableAnimal implements GeoEntity, MenuProvide
             }
             return InteractionResult.sidedSuccess(this.level().isClientSide);
         }
-        if (stack.getItem() instanceof DyeItem dye && getNeckStack().is(ModItems.GOOBY_SCARF.get())) {
+        if (stack.getItem() instanceof DyeItem dye && isDyeableNeckAccessory(getNeckStack())) {
             if (!this.level().isClientSide) {
-                dyeScarf(player, stack, dye);
+                tryDyeNeckAccessory(player, stack, dye);
             }
             return InteractionResult.sidedSuccess(this.level().isClientSide);
         }
         if (isNeckAccessory(stack)) {
             if (!this.level().isClientSide) {
-                equipAccessory(player, stack, GoobyWardrobe.Slot.NECK);
+                tryEquipAccessory(player, stack, GoobyWardrobe.Slot.NECK);
             }
             return InteractionResult.sidedSuccess(this.level().isClientSide);
         }
-        if (stack.is(ModItems.TINY_SATCHEL.get())) {
+        if (isBackAccessory(stack)) {
             if (!this.level().isClientSide) {
-                if (hasSatchel()) {
+                // Eine getragene Tasche wird per erneutem Tasche-Benutzen
+                // GEOEFFNET; jedes andere Ruecken-Accessoire tauscht den Slot.
+                if (stack.is(ModItems.TINY_SATCHEL.get()) && hasSatchel()) {
                     openSatchel(player);
                 } else {
-                    equipAccessory(player, stack, GoobyWardrobe.Slot.BACK);
+                    tryEquipAccessory(player, stack, GoobyWardrobe.Slot.BACK);
                 }
             }
             return InteractionResult.sidedSuccess(this.level().isClientSide);
         }
         if (isHatItem(stack)) {
             if (!this.level().isClientSide) {
-                equipAccessory(player, stack, GoobyWardrobe.Slot.HEAD);
+                tryEquipAccessory(player, stack, GoobyWardrobe.Slot.HEAD);
             }
             return InteractionResult.sidedSuccess(this.level().isClientSide);
         }
@@ -2470,11 +2518,11 @@ public class GoobyEntity extends TamableAnimal implements GeoEntity, MenuProvide
                 || stack.is(ModItems.SHIMMER_FLUFF.get())
                 || stack.is(ModItems.TRAINING_TREAT.get())
                 || stack.is(ModItems.GOOBY_WHISTLE.get())
-                || stack.is(ModItems.TINY_SATCHEL.get())
+                || isBackAccessory(stack)
                 || isHatItem(stack)
                 || isNeckAccessory(stack)
                 || (stack.is(Items.SHEARS) && hasWardrobe())
-                || (stack.getItem() instanceof DyeItem && getNeckStack().is(ModItems.GOOBY_SCARF.get()));
+                || (stack.getItem() instanceof DyeItem && isDyeableNeckAccessory(getNeckStack()));
     }
 
     /** Reiten/Create-Sitz: nur fuer gezaehmte Goobys, Reiter brauchen Freundschaft. */
@@ -2703,6 +2751,13 @@ public class GoobyEntity extends TamableAnimal implements GeoEntity, MenuProvide
         getLookControl().setLookAt(player, 30.0F, 30.0F);
         triggerPriorityAction(this.selectedTrick.animation(), this.selectedTrick.durationTicks());
         this.performedTrickCount++;
+        // Konfetti erst zum ENDE des Clips (vollendeter Trick) — und pro
+        // Cooldown-Fenster hoechstens eine Salve (Doppelklick-Spam bleibt still).
+        long now = this.level().getGameTime();
+        if (now >= this.trickConfettiCooldownUntil) {
+            this.trickConfettiCooldownUntil = now + CONFETTI_TRICK_COOLDOWN_TICKS;
+            this.trickConfettiIn = this.selectedTrick.durationTicks();
+        }
         playTrickPerformFeedback(this.selectedTrick);
         player.displayClientMessage(Component.translatable("msg.goobymod.trick_performed",
                 getName(), Component.translatable(this.selectedTrick.translationKey())), true);
@@ -2729,12 +2784,36 @@ public class GoobyEntity extends TamableAnimal implements GeoEntity, MenuProvide
             switch (trick) {
                 case ROLL -> serverLevel.sendParticles(ParticleTypes.CLOUD,
                         getX(), getY() + 0.25, getZ(), 8, 0.45, 0.1, 0.45, 0.02);
-                case DANCE -> serverLevel.sendParticles(ParticleTypes.NOTE,
-                        getX(), getY() + 1.35, getZ(), 6, 0.5, 0.4, 0.5, 0.9);
+                case DANCE -> spawnMusicNotes(serverLevel, MUSIC_NOTE_DANCE_COUNT);
+                case SPEAK -> spawnMusicNotes(serverLevel, MUSIC_NOTE_SPEAK_COUNT);
                 default -> serverLevel.sendParticles(ParticleTypes.HAPPY_VILLAGER,
                         getX(), getY() + 1.1, getZ(), 5, 0.4, 0.35, 0.4, 0.03);
             }
         }
+    }
+
+    // ------------------------------------------------------------------
+    // Feedback-Wave: gebuendelte Low-Count-Spawns (Radius <= 0.6, feste
+    // Budgets). sendParticles liefert nur an Spieler in Sichtweite aus —
+    // Multiplayer-/Dedicated-sicher, kein Client-Code auf dem Server.
+    // ------------------------------------------------------------------
+
+    private void spawnConfettiBurst(ServerLevel level, int count) {
+        this.confettiBursts++;
+        level.sendParticles(ModParticles.CONFETTI.get(),
+                getX(), getY() + 1.4, getZ(), count, 0.45, 0.25, 0.45, 0.11);
+    }
+
+    private void spawnFluffPuffs(ServerLevel level, int count, double y) {
+        this.fluffPuffBursts++;
+        level.sendParticles(ModParticles.FLUFF_PUFF.get(),
+                getX(), y, getZ(), count, 0.4, 0.2, 0.4, 0.02);
+    }
+
+    private void spawnMusicNotes(ServerLevel level, int count) {
+        this.musicNoteBursts++;
+        level.sendParticles(ModParticles.MUSIC_NOTE.get(),
+                getX(), getY() + 1.35, getZ(), count, 0.45, 0.3, 0.45, 0.05);
     }
 
     public boolean selectTrick(Player player, GoobyTrick trick) {
@@ -2935,6 +3014,12 @@ public class GoobyEntity extends TamableAnimal implements GeoEntity, MenuProvide
         if (this.level() instanceof ServerLevel serverLevel) {
             serverLevel.sendParticles(ParticleTypes.HEART,
                     getX(), getY() + 1.3, getZ(), 5, 0.45, 0.3, 0.45, 0.02);
+            // Schnurr-Kontext: zufriedene Noten, aber hoechstens alle 2 s.
+            long now = serverLevel.getGameTime();
+            if (now >= this.petNoteCooldownUntil) {
+                this.petNoteCooldownUntil = now + MUSIC_NOTE_PET_COOLDOWN_TICKS;
+                spawnMusicNotes(serverLevel, MUSIC_NOTE_PET_COUNT);
+            }
         }
         playSound(this.random.nextBoolean() ? ModSounds.GOOBY_SQUEAK.get() : ModSounds.GOOBY_PURR.get(),
                 0.9F, 0.95F + this.random.nextFloat() * 0.15F);
@@ -2994,7 +3079,9 @@ public class GoobyEntity extends TamableAnimal implements GeoEntity, MenuProvide
         addSatisfaction(8);
         playSound(ModSounds.GOOBY_BRUSH.get(), 0.75F, 1.0F);
         if (this.level() instanceof ServerLevel serverLevel) {
-            serverLevel.sendParticles(ParticleTypes.CLOUD, getX(), getY() + 0.9, getZ(), 6, 0.4, 0.3, 0.4, 0.01);
+            // Fellfussel statt generischer Wolke — der 20-s-brushCooldown
+            // oben ist zugleich das Anti-Spam-Gate fuer diesen Burst.
+            spawnFluffPuffs(serverLevel, FLUFF_BRUSH_COUNT, getY() + 0.9);
         }
         stack.hurtAndBreak(1, player, hand == InteractionHand.MAIN_HAND
                 ? net.minecraft.world.entity.EquipmentSlot.MAINHAND
@@ -3077,7 +3164,26 @@ public class GoobyEntity extends TamableAnimal implements GeoEntity, MenuProvide
     }
 
     public static boolean isNeckAccessory(ItemStack stack) {
-        return stack.is(ModItems.GOOBY_SCARF.get()) || stack.is(ModItems.GOOBY_BOWTIE.get());
+        return stack.is(ModItems.GOOBY_SCARF.get()) || stack.is(ModItems.GOOBY_BOWTIE.get())
+                || stack.is(ModItems.ADVENTURE_BANDANA.get());
+    }
+
+    public static boolean isBackAccessory(ItemStack stack) {
+        return stack.is(ModItems.TINY_SATCHEL.get()) || stack.is(ModItems.PICNIC_BACKPACK.get());
+    }
+
+    /** Am Gooby direkt umfaerbbare Hals-Accessoires (Schal und Abenteuer-Halstuch). */
+    public static boolean isDyeableNeckAccessory(ItemStack stack) {
+        return stack.is(ModItems.GOOBY_SCARF.get()) || stack.is(ModItems.ADVENTURE_BANDANA.get());
+    }
+
+    /** Vollstaendige Slot↔Item-Validierung des serverautoritativen Equip-Pfads. */
+    public static boolean isAccessoryForSlot(GoobyWardrobe.Slot slot, ItemStack stack) {
+        return switch (slot) {
+            case HEAD -> isHatItem(stack);
+            case NECK -> isNeckAccessory(stack);
+            case BACK -> isBackAccessory(stack);
+        };
     }
 
     public boolean hasHat() {
@@ -3160,7 +3266,7 @@ public class GoobyEntity extends TamableAnimal implements GeoEntity, MenuProvide
     }
 
     public void setHatItemId(String itemId) {
-        setSynced(DATA_HAT, boundedSyncString(itemId, MAX_SYNCED_KEY_LENGTH));
+        setSynced(DATA_HAT, boundedSyncString(itemId, GoobyWardrobe.MAX_SYNCED_KEY_LENGTH));
         this.wardrobe.reconcile(GoobyWardrobe.Slot.HEAD, getHatItemId());
     }
 
@@ -3169,7 +3275,7 @@ public class GoobyEntity extends TamableAnimal implements GeoEntity, MenuProvide
     }
 
     public void setNeckAccessoryData(String encodedStack) {
-        setSynced(DATA_NECK, boundedSyncString(encodedStack, MAX_SYNCED_KEY_LENGTH));
+        setSynced(DATA_NECK, boundedSyncString(encodedStack, GoobyWardrobe.MAX_SYNCED_KEY_LENGTH));
         this.wardrobe.reconcile(GoobyWardrobe.Slot.NECK, getNeckAccessoryData());
     }
 
@@ -3178,7 +3284,7 @@ public class GoobyEntity extends TamableAnimal implements GeoEntity, MenuProvide
     }
 
     public void setBackAccessoryData(String encodedStack) {
-        setSynced(DATA_BACK, boundedSyncString(encodedStack, MAX_SYNCED_KEY_LENGTH));
+        setSynced(DATA_BACK, boundedSyncString(encodedStack, GoobyWardrobe.MAX_SYNCED_KEY_LENGTH));
         this.wardrobe.reconcile(GoobyWardrobe.Slot.BACK, getBackAccessoryData());
     }
 
@@ -3197,7 +3303,7 @@ public class GoobyEntity extends TamableAnimal implements GeoEntity, MenuProvide
             return;
         }
         String encoded = GoobyWardrobe.encode(full);
-        if (encoded.length() > MAX_SYNCED_KEY_LENGTH) {
+        if (encoded.length() > GoobyWardrobe.MAX_SYNCED_KEY_LENGTH) {
             return;
         }
         switch (slot) {
@@ -3263,29 +3369,50 @@ public class GoobyEntity extends TamableAnimal implements GeoEntity, MenuProvide
         return this.cachedBackStack;
     }
 
-    private void equipAccessory(Player player, ItemStack stack, GoobyWardrobe.Slot slot) {
+    /**
+     * Serverautoritativer Equip-Pfad fuer alle drei Garderoben-Slots — die
+     * EINE Wahrheit fuer {@code mobInteract} UND
+     * {@link de.sonic0810.goobymod.event.ExplorerOutfitEvents}. Validiert
+     * Slot↔Item fail-closed, prueft Baby/Zaehmung/Besitzer und die
+     * Sync-Grenze, uebernimmt den vollen Stack (Custom Name, Verzauberungen,
+     * beliebige DataComponents) in die Garderobe, droppt das verdraengte
+     * Accessoire (eine getragene Tasche gibt vorher ihren Inhalt zurueck)
+     * und verbraucht das Item ausserhalb des Kreativmodus.
+     *
+     * @return {@code true} nur, wenn das Accessoire tatsaechlich angelegt
+     *         wurde; abgelehnte Versuche konsumieren nichts.
+     */
+    public boolean tryEquipAccessory(Player player, ItemStack stack, GoobyWardrobe.Slot slot) {
+        if (this.level().isClientSide) {
+            return false;
+        }
+        if (!isAccessoryForSlot(slot, stack)) {
+            // Slot↔Item-Mismatch (nur per API-Fehlgebrauch erreichbar):
+            // fail-closed ohne Konsum, ohne Slot-Aenderung, ohne Feedback.
+            return false;
+        }
         if (isBaby()) {
             denyBabyAction(player, "msg.goobymod.baby_no_accessory");
-            return;
+            return false;
         }
         if (!isTame()) {
             denyInteraction(player, "msg.goobymod.not_tamed");
-            return;
+            return false;
         }
         if (!isOwnedBy(player)) {
             denyInteraction(player, "msg.goobymod.not_owner");
-            return;
+            return false;
         }
         // Der volle Stack (inkl. Custom Name/Verzauberungen/Components) wird
         // serverseitig behalten; der Sync-String traegt nur Id + Farbe.
         ItemStack equipped = stack.copyWithCount(1);
         String encoded = GoobyWardrobe.encode(equipped);
-        if (encoded.length() > MAX_SYNCED_KEY_LENGTH) {
+        if (encoded.length() > GoobyWardrobe.MAX_SYNCED_KEY_LENGTH) {
             // Fail-closed VOR dem Ausziehen des alten Accessoires: eine Id
             // ueber der Sync-Grenze wuerde beim Reload durch Truncation +
             // reconcile vernichtet. Item bleibt beim Spieler.
             denyInteraction(player, "msg.goobymod.accessory_id_too_long");
-            return;
+            return false;
         }
         dropWardrobeSlot(slot);
         switch (slot) {
@@ -3301,8 +3428,8 @@ public class GoobyEntity extends TamableAnimal implements GeoEntity, MenuProvide
         player.displayClientMessage(Component.translatable(
                 "msg.goobymod.accessory_equipped", getName(), equipped.getHoverName()), true);
         if (this.level() instanceof ServerLevel serverLevel) {
-            serverLevel.sendParticles(ParticleTypes.HAPPY_VILLAGER, getX(), getY() + 1.5, getZ(),
-                    6, 0.3, 0.2, 0.3, 0.01);
+            // Beim Anziehen wirbelt das Fell: Fussel statt Villager-Funken.
+            spawnFluffPuffs(serverLevel, FLUFF_DRESS_UP_COUNT, getY() + 1.2);
         }
         if (slot == GoobyWardrobe.Slot.HEAD && player instanceof ServerPlayer serverPlayer) {
             GoobyAdvancements.grant(serverPlayer, GoobyAdvancements.HAT_FASHION);
@@ -3311,25 +3438,51 @@ public class GoobyEntity extends TamableAnimal implements GeoEntity, MenuProvide
                 && player instanceof ServerPlayer serverPlayer) {
             GoobyAdvancements.grant(serverPlayer, GoobyAdvancements.FULL_OUTFIT);
         }
+        return true;
     }
 
-    private void dyeScarf(Player player, ItemStack dyeStack, DyeItem dye) {
+    /**
+     * Faerbt das GETRAGENE Hals-Accessoire (Schal oder Abenteuer-Halstuch)
+     * direkt am Gooby — serverautoritativ, ohne NBT-Reload. Crafting-Faerben
+     * laeuft weiterhin ueber den Vanilla-{@code minecraft:dyeable}-Tag.
+     *
+     * @return {@code true} nur, wenn tatsaechlich gefaerbt wurde; abgelehnte
+     *         Versuche konsumieren keinen Farbstoff.
+     */
+    public boolean tryDyeNeckAccessory(Player player, ItemStack dyeStack, DyeItem dye) {
+        if (this.level().isClientSide) {
+            return false;
+        }
+        ItemStack worn = getNeckStack();
+        if (!isDyeableNeckAccessory(worn)) {
+            return false;
+        }
         if (!isOwnedBy(player)) {
             denyInteraction(player, "msg.goobymod.not_owner");
-            return;
+            return false;
         }
-        ItemStack scarf = getNeckStack().copy();
+        ItemStack dyed = worn.copy();
         int color = dye.getDyeColor().getTextureDiffuseColor() & 0xFFFFFF;
-        scarf.set(DataComponents.DYED_COLOR, new DyedItemColor(color, true));
-        setNeckAccessoryData(GoobyWardrobe.encode(scarf));
-        this.wardrobe.set(GoobyWardrobe.Slot.NECK, scarf);
+        dyed.set(DataComponents.DYED_COLOR, new DyedItemColor(color, true));
+        String encoded = GoobyWardrobe.encode(dyed);
+        if (encoded.length() > GoobyWardrobe.MAX_SYNCED_KEY_LENGTH) {
+            // Der #rrggbb-Suffix darf ein Accessoire an der Sync-Grenze nicht
+            // in die reload-vernichtende Truncation schieben.
+            denyInteraction(player, "msg.goobymod.accessory_id_too_long");
+            return false;
+        }
+        setNeckAccessoryData(encoded);
+        this.wardrobe.set(GoobyWardrobe.Slot.NECK, dyed);
         if (!player.getAbilities().instabuild) {
             dyeStack.shrink(1);
         }
         playSound(ModSounds.GOOBY_DRESS_UP.get(), 0.7F, 1.08F);
         sendWardrobeParticles(color, 12);
-        player.displayClientMessage(Component.translatable("msg.goobymod.scarf_dyed", getName(),
-                Component.translatable("color.minecraft." + dye.getDyeColor().getName())), true);
+        player.displayClientMessage(Component.translatable(
+                dyed.is(ModItems.ADVENTURE_BANDANA.get())
+                        ? "msg.goobymod.bandana_dyed" : "msg.goobymod.scarf_dyed",
+                getName(), Component.translatable("color.minecraft." + dye.getDyeColor().getName())), true);
+        return true;
     }
 
     private void stripWardrobe(Player player) {
@@ -3790,7 +3943,13 @@ public class GoobyEntity extends TamableAnimal implements GeoEntity, MenuProvide
         if (isEscapableDanger(source) && teleportOutOfDanger()) {
             return false;
         }
-        return super.hurt(source, amount);
+        boolean damaged = super.hurt(source, amount);
+        if (damaged) {
+            // Echter Treffer (auch der Panik-Ausloeser wilder Goobys)
+            // unterbricht das Kunststueck — abgebrochene Tricks feiern nicht.
+            this.trickConfettiIn = 0;
+        }
+        return damaged;
     }
 
     private void applyPlayerHitSatisfactionLoss(Player player) {
@@ -4102,7 +4261,7 @@ public class GoobyEntity extends TamableAnimal implements GeoEntity, MenuProvide
     }
 
     public void showBubble(String translationKey, String argument) {
-        setSynced(DATA_BUBBLE_KEY, boundedSyncString(translationKey, MAX_SYNCED_KEY_LENGTH));
+        setSynced(DATA_BUBBLE_KEY, boundedSyncString(translationKey, GoobyWardrobe.MAX_SYNCED_KEY_LENGTH));
         setSynced(DATA_BUBBLE_ARG, boundedSyncString(argument, MAX_SYNCED_ARGUMENT_LENGTH));
         this.bubbleTicks = 100;
     }
@@ -4121,6 +4280,11 @@ public class GoobyEntity extends TamableAnimal implements GeoEntity, MenuProvide
     }
 
     private void triggerPriorityAction(String animation, int durationTicks) {
+        // Feedback-Wave: eine ersetzende Priority-Action bricht den laufenden
+        // Trick-Clip ab — sein "Vollendet"-Konfetti wird storniert. Beim
+        // Trick-Start selbst ist das harmlos: requestSelectedTrick armiert
+        // den Countdown erst NACH diesem Aufruf.
+        this.trickConfettiIn = 0;
         this.actionAnimationTicks = Math.max(1, durationTicks);
         triggerAnim("actions", animation);
     }

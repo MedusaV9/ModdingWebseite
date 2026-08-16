@@ -14,6 +14,11 @@ Prueft (Exit-Code != 0 bei jedem Fehler):
   7. Alpha-Coverage: jede belegte UV-Region ist auf jedem zugehoerigen
      Sheet deckend bemalt (>= 95 % Alpha), damit keine Loecher im Fell sind.
   8. .bbmodel-Konsistenz: Aufloesung, Bone-/Gruppen-Namen, Element-Refs.
+  9. Explorer-Accessoire-Itemmodelle (flower_crown, adventure_bandana,
+     picnic_backpack): Element-/UV-/Rotations-Grenzen, Displays
+     (gui/ground/head), Tint-Policy, Textur-Dimension + Alpha-Coverage der
+     Face-UV-Fenster sowie 1:1-Abgleich mit den java_block-.bbmodel-Quellen
+     unter assets_src/blockbench/.
 
 Aufruf:  python3 scripts/validate_assets.py [--root PFAD]
 """
@@ -61,6 +66,16 @@ GECKOLIB_EASINGS = {
 KEYFRAME_KEYS = {"vector", "pre", "post", "easing", "easingArgs", "lerp_mode"}
 ALPHA_COVERAGE_MIN = 0.95
 ALPHA_THRESHOLD = 8
+
+# Explorer-Outfit v5.4: handgeschriebene 3D-Itemmodelle + java_block-Quellen.
+ITEM_ACCESSORIES = {
+    "flower_crown": {"resolution": 16, "tintable": False, "min_elements": 6},
+    "adventure_bandana": {"resolution": 16, "tintable": True, "min_elements": 4},
+    "picnic_backpack": {"resolution": 32, "tintable": False, "min_elements": 6},
+}
+REQUIRED_ITEM_DISPLAYS = {"gui", "ground", "head"}
+VALID_ELEMENT_ANGLES = {-45.0, -22.5, 0.0, 22.5, 45.0}
+FACE_ORDER = ("north", "east", "south", "west", "up", "down")
 
 
 class ValidationError(Exception):
@@ -352,6 +367,174 @@ def validate_bbmodel(path, geometry, filename):
 
 
 # ---------------------------------------------------------------------------
+# Explorer-Accessoire-Itemmodelle (v5.4)
+# ---------------------------------------------------------------------------
+
+def validate_item_model(document, name, config):
+    """Struktur-Checks des handgeschriebenen Itemmodells; Rueckgabe Fehlerliste."""
+    errors = []
+    elements = document.get("elements")
+    if not isinstance(elements, list) or len(elements) < config["min_elements"]:
+        return [f"{name}.json: erwartet >= {config['min_elements']} Elemente, "
+                f"gefunden {0 if not isinstance(elements, list) else len(elements)}"]
+    textures = document.get("textures", {})
+    if "particle" not in textures:
+        errors.append(f"{name}.json: particle-Textur fehlt")
+    for index, element in enumerate(elements):
+        tag = f"{name}.json[{index}]"
+        source = element.get("from")
+        target = element.get("to")
+        if (not isinstance(source, list) or not isinstance(target, list)
+                or len(source) != 3 or len(target) != 3):
+            errors.append(f"{tag}: from/to unvollstaendig")
+            continue
+        for axis in range(3):
+            if not (-16 <= source[axis] <= 32 and -16 <= target[axis] <= 32):
+                errors.append(f"{tag}: Koordinate ausserhalb [-16,32]")
+                break
+            if source[axis] > target[axis]:
+                errors.append(f"{tag}: from > to auf Achse {axis}")
+                break
+        rotation = element.get("rotation")
+        if rotation is not None:
+            if rotation.get("axis") not in ("x", "y", "z"):
+                errors.append(f"{tag}: Rotationsachse '{rotation.get('axis')}' ungueltig")
+            if float(rotation.get("angle", 0)) not in VALID_ELEMENT_ANGLES:
+                errors.append(f"{tag}: Rotationswinkel {rotation.get('angle')} "
+                              f"nicht in 22.5er-Schritten")
+            origin = rotation.get("origin")
+            if not isinstance(origin, list) or len(origin) != 3:
+                errors.append(f"{tag}: Rotations-Origin fehlt")
+        faces = element.get("faces", {})
+        if not faces:
+            errors.append(f"{tag}: keine Faces definiert")
+        for face, spec in faces.items():
+            face_tag = f"{tag}.{face}"
+            if face not in FACE_ORDER:
+                errors.append(f"{face_tag}: unbekannte Face-Richtung")
+                continue
+            uv = spec.get("uv")
+            if not isinstance(uv, list) or len(uv) != 4:
+                errors.append(f"{face_tag}: uv fehlt (Pflicht fuer .bbmodel-Abgleich)")
+                continue
+            if not all(0 <= value <= 16 for value in uv):
+                errors.append(f"{face_tag}: uv {uv} verlaesst 0..16")
+            if uv[0] >= uv[2] or uv[1] >= uv[3]:
+                errors.append(f"{face_tag}: uv {uv} ist leer oder gespiegelt")
+            texture_ref = spec.get("texture", "")
+            if not texture_ref.startswith("#") or texture_ref[1:] not in textures:
+                errors.append(f"{face_tag}: Texturref '{texture_ref}' unaufgeloest")
+            has_tint = "tintindex" in spec
+            if config["tintable"] and (not has_tint or spec["tintindex"] != 0):
+                errors.append(f"{face_tag}: faerbbares Accessoire braucht tintindex 0")
+            if not config["tintable"] and has_tint:
+                errors.append(f"{face_tag}: tintindex ohne registrierten Farb-Handler")
+    display = document.get("display", {})
+    missing = REQUIRED_ITEM_DISPLAYS - set(display)
+    if missing:
+        errors.append(f"{name}.json: Display-Sektionen fehlen: {sorted(missing)}")
+    return errors
+
+
+def validate_item_texture(document, texture_path, name, config):
+    """Dimension + Alpha-Coverage aller referenzierten Face-UV-Fenster."""
+    if not os.path.isfile(texture_path):
+        return [f"{name}: Textur fehlt: textures/item/{name}.png"]
+    errors = []
+    resolution = config["resolution"]
+    with Image.open(texture_path) as handle:
+        image = handle.convert("RGBA")
+    if image.size != (resolution, resolution):
+        return [f"{name}.png: Groesse {image.size} != erwartet "
+                f"({resolution}, {resolution})"]
+    pixels = image.load()
+    scale = resolution / 16.0
+    for index, element in enumerate(document.get("elements", [])):
+        for face, spec in element.get("faces", {}).items():
+            uv = spec.get("uv")
+            if not isinstance(uv, list) or len(uv) != 4:
+                continue
+            x0, y0, x1, y1 = inward((uv[0] * scale, uv[1] * scale,
+                                     uv[2] * scale, uv[3] * scale))
+            x0, y0 = max(0, x0), max(0, y0)
+            x1, y1 = min(image.width, x1), min(image.height, y1)
+            if x1 <= x0 or y1 <= y0:
+                continue
+            total = (x1 - x0) * (y1 - y0)
+            opaque = sum(1 for x in range(x0, x1) for y in range(y0, y1)
+                         if pixels[x, y][3] >= ALPHA_THRESHOLD)
+            if opaque / total < ALPHA_COVERAGE_MIN:
+                errors.append(f"{name}.png: UV-Fenster [{index}].{face} "
+                              f"({x0},{y0})-({x1},{y1}) nur {opaque}/{total} px deckend")
+    return errors
+
+
+def validate_item_bbmodel(document, bbmodel_path, name, config):
+    """1:1-Abgleich Itemmodell <-> java_block-Blockbench-Quelle."""
+    errors = []
+    project = load_json(bbmodel_path)
+    filename = f"{name}.bbmodel"
+    meta = project.get("meta", {})
+    if meta.get("model_format") != "java_block":
+        errors.append(f"{filename}: model_format '{meta.get('model_format')}' "
+                      f"!= 'java_block'")
+    resolution = project.get("resolution", {})
+    expected = config["resolution"]
+    if (resolution.get("width"), resolution.get("height")) != (expected, expected):
+        errors.append(f"{filename}: resolution {resolution} != {expected}x{expected}")
+    model_elements = document.get("elements", [])
+    project_elements = project.get("elements", [])
+    if len(model_elements) != len(project_elements):
+        return errors + [f"{filename}: {len(project_elements)} Elemente, aber "
+                         f"{len(model_elements)} im Itemmodell"]
+    scale = expected / 16.0
+    for index, (model_element, project_element) in enumerate(
+            zip(model_elements, project_elements)):
+        tag = f"{filename}[{index}]"
+        for key in ("from", "to"):
+            expected_vec = [float(v) for v in model_element[key]]
+            actual_vec = [float(v) for v in project_element.get(key, [])]
+            if len(actual_vec) != 3 or any(
+                    abs(a - b) > 1e-6 for a, b in zip(expected_vec, actual_vec)):
+                errors.append(f"{tag}: {key} {actual_vec} != Itemmodell {expected_vec}")
+        rotation = model_element.get("rotation")
+        project_rotation = project_element.get("rotation", [0, 0, 0])
+        expected_rotation = [0.0, 0.0, 0.0]
+        if rotation is not None:
+            expected_rotation["xyz".index(rotation["axis"])] = float(rotation["angle"])
+        if any(abs(float(a) - b) > 1e-6
+               for a, b in zip(project_rotation, expected_rotation)):
+            errors.append(f"{tag}: rotation {project_rotation} != {expected_rotation}")
+        project_faces = project_element.get("faces", {})
+        for face, spec in model_element.get("faces", {}).items():
+            face_tag = f"{tag}.{face}"
+            project_face = project_faces.get(face)
+            if project_face is None:
+                errors.append(f"{face_tag}: fehlt in der Blockbench-Quelle")
+                continue
+            expected_uv = [float(v) * scale for v in spec["uv"]]
+            actual_uv = [float(v) for v in project_face.get("uv", [])]
+            if len(actual_uv) != 4 or any(
+                    abs(a - b) > 1e-6 for a, b in zip(expected_uv, actual_uv)):
+                errors.append(f"{face_tag}: uv {actual_uv} != skaliert {expected_uv}")
+            expected_tint = spec.get("tintindex", -1)
+            if project_face.get("tint", -1) != expected_tint:
+                errors.append(f"{face_tag}: tint {project_face.get('tint', -1)} "
+                              f"!= {expected_tint}")
+    element_uuids = [element.get("uuid") for element in project_elements]
+    groups, element_refs = [], []
+    collect_outliner(project.get("outliner", []), groups, element_refs)
+    if sorted(filter(None, element_refs)) != sorted(filter(None, element_uuids)):
+        errors.append(f"{filename}: Outliner-Referenzen decken die Elemente "
+                      f"nicht exakt ab")
+    display = project.get("display", {})
+    if set(display) != set(document.get("display", {})):
+        errors.append(f"{filename}: Display-Sektionen {sorted(display)} != "
+                      f"Itemmodell {sorted(document.get('display', {}))}")
+    return errors
+
+
+# ---------------------------------------------------------------------------
 # Orchestrierung
 # ---------------------------------------------------------------------------
 
@@ -413,6 +596,28 @@ def run(root):
             errors.extend(bbmodel_errors)
         else:
             passed.append(f"Blockbench-Quelle ok: {bbmodel_name}")
+
+    item_model_dir = os.path.join(root, ASSET_BASE, "models", "item")
+    item_texture_dir = os.path.join(root, ASSET_BASE, "textures", "item")
+    for name, config in ITEM_ACCESSORIES.items():
+        try:
+            document = load_json(os.path.join(item_model_dir, f"{name}.json"))
+        except ValidationError as error:
+            errors.append(str(error))
+            continue
+        model_errors = validate_item_model(document, name, config)
+        texture_errors = validate_item_texture(
+            document, os.path.join(item_texture_dir, f"{name}.png"), name, config)
+        try:
+            bbmodel_errors = validate_item_bbmodel(
+                document, os.path.join(bbmodel_dir, f"{name}.bbmodel"), name, config)
+        except ValidationError as error:
+            bbmodel_errors = [str(error)]
+        if model_errors or texture_errors or bbmodel_errors:
+            errors.extend(model_errors + texture_errors + bbmodel_errors)
+        else:
+            passed.append(f"Explorer-Accessoire ok: {name} "
+                          f"(Itemmodell + Textur + Blockbench-Quelle)")
 
     return errors, passed
 

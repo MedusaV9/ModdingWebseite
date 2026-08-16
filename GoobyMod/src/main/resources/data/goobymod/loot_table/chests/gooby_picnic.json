@@ -111,6 +111,11 @@
           "type": "minecraft:item",
           "name": "goobymod:gooby_bowtie",
           "weight": 2
+        },
+        {
+          "type": "minecraft:item",
+          "name": "goobymod:flower_crown",
+          "weight": 1
         }
       ]
     }

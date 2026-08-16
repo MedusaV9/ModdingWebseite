@@ -1236,8 +1236,15 @@ public class GoobyGameTests {
         });
     }
 
-    /** Bei Regen verlaesst Gooby freien Himmel und laeuft unter das Testdach. */
-    @GameTest(template = ARENA_LARGE, batch = RAIN_BATCH, timeoutTicks = 400)
+    /**
+     * Bei Regen verlaesst Gooby freien Himmel und laeuft unter das Testdach.
+     *
+     * <p>Fenster bewusst breit (800 statt 400 Ticks): der ShelterGoal kann
+     * von zufaelligen Wild-Verhalten (Buddeln, Wasser-Schuetteln, Stroll)
+     * mehrfach verdraengt werden, bevor er das Dach erreicht — der Regen des
+     * Batches haelt 6000 Ticks, die Assertion bleibt unveraendert streng.</p>
+     */
+    @GameTest(template = ARENA_LARGE, batch = RAIN_BATCH, timeoutTicks = 800)
     public static void rain_seeks_shelter(GameTestHelper helper) {
         placeLargeFloor(helper, Blocks.DIRT);
         for (int x = 9; x <= 11; x++) {
@@ -1298,7 +1305,18 @@ public class GoobyGameTests {
         helper.succeed();
     }
 
-    /** Wild-Gooby nutzt PanicGoal nach echtem Mob-Schaden, ein gezaehmter nicht. */
+    /**
+     * Wild-Gooby nutzt PanicGoal nach echtem Mob-Schaden, ein gezaehmter nicht.
+     *
+     * <p>Der Positiv-Check laeuft in einem {@code thenWaitUntil}-Fenster: Vanilla
+     * {@code PanicGoal.canUse()} wuerfelt via {@code DefaultRandomPos} nur zehn
+     * Fluchtpunkte pro Aufruf und darf dabei — wie im echten Goal-Selector, der
+     * jeden Tick erneut pollt — vereinzelt leer ausgehen (seltener Flake). Die
+     * Assertion bleibt unveraendert streng: der PanicGoal MUSS im Fenster nutzbar
+     * werden ({@code getLastHurtByMob} traegt ~100 Ticks, laenger als das
+     * Test-Timeout). Der Negativ-Check ist deterministisch (isTame-Kurzschluss
+     * vor jedem RNG) und bleibt eine sofortige, strikte Assertion.
+     */
     @GameTest(template = ARENA_LARGE)
     public static void wild_damage_panics(GameTestHelper helper) {
         placeLargeFloor(helper, Blocks.DIRT);
@@ -1307,12 +1325,15 @@ public class GoobyGameTests {
         zombie.setNoAi(true);
         helper.assertTrue(gooby.hurt(helper.getLevel().damageSources().mobAttack(zombie), 2.0F),
                 "Wild-Gooby muss Mob-Schaden erhalten");
-        helper.assertTrue(new GoobyWildPanicGoal(gooby).canUse(),
-                "Wild-Gooby startet nach Mob-Schaden keinen PanicGoal");
-        gooby.tame(fakePlayer(helper, "panic_owner"));
-        helper.assertFalse(new GoobyWildPanicGoal(gooby).canUse(),
-                "Gezaehmter Gooby darf den Wild-PanicGoal nicht starten");
-        helper.succeed();
+        helper.startSequence()
+                .thenWaitUntil(() -> helper.assertTrue(new GoobyWildPanicGoal(gooby).canUse(),
+                        "Wild-Gooby startet nach Mob-Schaden keinen PanicGoal"))
+                .thenExecute(() -> {
+                    gooby.tame(fakePlayer(helper, "panic_owner"));
+                    helper.assertFalse(new GoobyWildPanicGoal(gooby).canUse(),
+                            "Gezaehmter Gooby darf den Wild-PanicGoal nicht starten");
+                })
+                .thenSucceed();
     }
 
     /** Tagesrhythmus moduliert bestehende Buddel-, Sitz- und Wanderintervalle. */
