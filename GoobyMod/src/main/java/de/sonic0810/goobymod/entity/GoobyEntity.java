@@ -12,6 +12,7 @@ import de.sonic0810.goobymod.block.RabbitHutchBlock;
 import de.sonic0810.goobymod.client.sound.GoobyPurrSound;
 import de.sonic0810.goobymod.compat.CreateCompat;
 import de.sonic0810.goobymod.entity.animation.GoobyAnimationState;
+import de.sonic0810.goobymod.entity.animation.GoobyLocomotion;
 import de.sonic0810.goobymod.entity.goals.GoobyAlertGoal;
 import de.sonic0810.goobymod.entity.goals.GoobyDigGoal;
 import de.sonic0810.goobymod.entity.goals.GoobyFamilyPlayGoal;
@@ -243,7 +244,12 @@ public class GoobyEntity extends TamableAnimal implements GeoEntity, MenuProvide
 
     // GeckoLib-Animationen
     protected static final RawAnimation ANIM_IDLE = RawAnimation.begin().thenLoop("animation.gooby.idle");
+    // Legacy-Loop: fuer Adults durch die Gait-Clips walk/run ersetzt. Konstante
+    // und JSON-Clip "animation.gooby.hop" bleiben bewusst erhalten, damit
+    // Resource-Packs und externe Trigger auf den Namen weiter funktionieren.
     protected static final RawAnimation ANIM_HOP = RawAnimation.begin().thenLoop("animation.gooby.hop");
+    protected static final RawAnimation ANIM_WALK = RawAnimation.begin().thenLoop("animation.gooby.walk");
+    protected static final RawAnimation ANIM_RUN = RawAnimation.begin().thenLoop("animation.gooby.run");
     protected static final RawAnimation ANIM_SLEEP = RawAnimation.begin().thenLoop("animation.gooby.sleep");
     protected static final RawAnimation ANIM_SLEEP_CURL_TIGHT =
             RawAnimation.begin().thenLoop("animation.gooby.sleep_curl_tight");
@@ -338,6 +344,7 @@ public class GoobyEntity extends TamableAnimal implements GeoEntity, MenuProvide
 
     private final AnimatableInstanceCache geckoCache = GeckoLibUtil.createInstanceCache(this);
     private final GoobyAnimationState clientAnimationState = new GoobyAnimationState();
+    private final GoobyLocomotion clientLocomotion = new GoobyLocomotion();
 
     // Serverseitige Zustaende (persistiert)
     private final LinkedHashMap<UUID, Integer> friendship = new LinkedHashMap<>(16, 0.75F, true);
@@ -4235,6 +4242,10 @@ public class GoobyEntity extends TamableAnimal implements GeoEntity, MenuProvide
     }
 
     private PlayState movementAnimation(AnimationState<GoobyEntity> state) {
+        // Gait from replicated position deltas; GoobyLocomotion smooths and
+        // clamps the samples (turn dips, teleport spikes) and its hysteresis
+        // keeps boundary speeds from flickering between clips.
+        GoobyLocomotion.Gait gait = this.clientLocomotion.update(this.tickCount, horizontalTickSpeed());
         if (CreateCompat.isOnContraption(this)) {
             return state.setAndContinue(CreateCompat.contraptionMotionSqr(this) > 0.01
                     ? ANIM_TRAIN_LEAN : ANIM_SEATED_CONTRAPTION);
@@ -4252,11 +4263,11 @@ public class GoobyEntity extends TamableAnimal implements GeoEntity, MenuProvide
         if (isGoobySleeping() && hasSleepingNeighbor()) {
             return state.setAndContinue(ANIM_NAP_HUDDLE);
         }
-        if (isShyWild() && !state.isMoving() && this.level().getNearestPlayer(this, 12.0) != null) {
+        if (isShyWild() && !gait.isMoving() && this.level().getNearestPlayer(this, 12.0) != null) {
             return state.setAndContinue(ANIM_SHY_PEEK);
         }
         GoobyAnimationState.Pose desired = GoobyAnimationState.selectPose(
-                state.isMoving(), isGoobySleeping(), isDigging(), isSitting(), isSad(), isAlerting());
+                gait.isMoving(), isGoobySleeping(), isDigging(), isSitting(), isSad(), isAlerting());
         this.clientAnimationState.update(desired, this.tickCount);
         if (this.clientAnimationState.isTransitioning()) {
             return state.setAndContinue(switch (this.clientAnimationState.transition()) {
@@ -4268,7 +4279,12 @@ public class GoobyEntity extends TamableAnimal implements GeoEntity, MenuProvide
             });
         }
         return state.setAndContinue(switch (this.clientAnimationState.stablePose()) {
-            case HOP -> isBaby() ? ANIM_BABY_HOP : ANIM_HOP;
+            // Babys teilen sich den Adult-run-Clip: GoobyRenderer#preRender
+            // skaliert den ganzen PoseStack uniform (0.55), Root-/Limb-
+            // Amplituden bleiben am Baby-Geo also proportional identisch.
+            case HOP -> isBaby()
+                    ? (gait == GoobyLocomotion.Gait.RUN ? ANIM_RUN : ANIM_BABY_HOP)
+                    : (gait == GoobyLocomotion.Gait.RUN ? ANIM_RUN : ANIM_WALK);
             case SIT -> ANIM_SIT;
             case SLEEP -> isInHutch() ? ANIM_SLEEP_CURL_TIGHT : ANIM_SLEEP;
             case DIG -> ANIM_DIG;
@@ -4276,6 +4292,20 @@ public class GoobyEntity extends TamableAnimal implements GeoEntity, MenuProvide
             case ALERT -> ANIM_ALERT;
             case IDLE -> ANIM_IDLE;
         });
+    }
+
+    /**
+     * Horizontal distance covered in the last tick, in blocks. Based on the
+     * replicated positions ({@code xo}/{@code zo}); the client interpolates
+     * remote positions over a few ticks, so its values closely track — but are
+     * not bit-identical to — the server's. Teleport-sized spikes (which the
+     * client lerp spreads over ~3 ticks) are discarded by
+     * {@link GoobyLocomotion#MAX_PLAUSIBLE_SPEED} before they reach the gait.
+     */
+    public double horizontalTickSpeed() {
+        double dx = getX() - this.xo;
+        double dz = getZ() - this.zo;
+        return Math.sqrt(dx * dx + dz * dz);
     }
 
     private PlayState microAnimation(AnimationState<GoobyEntity> state) {
@@ -4296,7 +4326,10 @@ public class GoobyEntity extends TamableAnimal implements GeoEntity, MenuProvide
         if (this.level().isThundering() && getMood() == GoobyMood.SCARED) {
             return state.setAndContinue(ANIM_SHIVER);
         }
-        if (state.isMoving()) {
+        // Dieselbe Gait-Wahrheit wie der movement-Controller (idempotent pro
+        // Tick): GeckoLibs state.isMoving() nutzt eine eigene Schwelle und
+        // wuerde Micro-Clips schon unterdruecken, waehrend noch Idle laeuft.
+        if (this.clientLocomotion.update(this.tickCount, horizontalTickSpeed()).isMoving()) {
             this.clientMicroAnimation = null;
             return PlayState.STOP;
         }
