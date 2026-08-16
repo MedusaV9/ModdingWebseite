@@ -27,6 +27,7 @@ import de.sonic0810.goobymod.entity.goals.GoobyWildPanicGoal;
 import de.sonic0810.goobymod.item.GoobyHandbookItem;
 import de.sonic0810.goobymod.item.GoobyWhistleItem;
 import de.sonic0810.goobymod.menu.GoobySatchelMenu;
+import de.sonic0810.goobymod.network.GoobyNetwork;
 import de.sonic0810.goobymod.registry.ModBlocks;
 import de.sonic0810.goobymod.registry.ModEntities;
 import de.sonic0810.goobymod.registry.ModItemTags;
@@ -307,6 +308,10 @@ public class GoobyEntity extends TamableAnimal implements GeoEntity, MenuProvide
             RawAnimation.begin().thenPlay("animation.gooby.trick_flop");
     protected static final RawAnimation ANIM_TRICK_SPEAK =
             RawAnimation.begin().thenPlay("animation.gooby.trick_speak");
+    protected static final RawAnimation ANIM_TRICK_ROLL =
+            RawAnimation.begin().thenPlay("animation.gooby.trick_roll");
+    protected static final RawAnimation ANIM_TRICK_DANCE =
+            RawAnimation.begin().thenPlay("animation.gooby.trick_dance");
     protected static final RawAnimation ANIM_TRAINING_SUCCESS =
             RawAnimation.begin().thenPlay("animation.gooby.training_success_hop");
     protected static final RawAnimation ANIM_HUTCH_ENTER =
@@ -2652,21 +2657,38 @@ public class GoobyEntity extends TamableAnimal implements GeoEntity, MenuProvide
         getLookControl().setLookAt(player, 30.0F, 30.0F);
         triggerPriorityAction(this.selectedTrick.animation(), this.selectedTrick.durationTicks());
         this.performedTrickCount++;
-        if (this.selectedTrick == GoobyTrick.SPEAK) {
-            showBubble(GoobySpeech.pickFrom(GoobySpeech.GENERAL, this.random));
-            SoundEvent ambient = getAmbientSound();
-            if (ambient != null) {
-                playSound(ambient, 0.75F, 1.05F);
-            }
-        } else if (this.selectedTrick == GoobyTrick.FLOP) {
-            playSound(ModSounds.GOOBY_FLOP_THUD.get(), 0.75F, 1.0F);
-        } else {
-            // SPIN und HIGH_FIVE waren komplett stumm — jede Interaktion klingt.
-            playSound(ModSounds.GOOBY_SQUEAK.get(), 0.7F, 1.2F);
-        }
+        playTrickPerformFeedback(this.selectedTrick);
         player.displayClientMessage(Component.translatable("msg.goobymod.trick_performed",
                 getName(), Component.translatable(this.selectedTrick.translationKey())), true);
         return true;
+    }
+
+    /** Hoer- UND sichtbares Vorfuehr-Feedback pro Kunststueck — nur vorhandene Sounds/Partikel. */
+    private void playTrickPerformFeedback(GoobyTrick trick) {
+        switch (trick) {
+            case SPEAK -> {
+                showBubble(GoobySpeech.pickFrom(GoobySpeech.GENERAL, this.random));
+                SoundEvent ambient = getAmbientSound();
+                if (ambient != null) {
+                    playSound(ambient, 0.75F, 1.05F);
+                }
+            }
+            case FLOP -> playSound(ModSounds.GOOBY_FLOP_THUD.get(), 0.75F, 1.0F);
+            case ROLL -> playSound(ModSounds.GOOBY_BOING.get(), 0.75F, 1.05F);
+            case DANCE -> playSound(ModSounds.GOOBY_CHIRP_SOCIAL.get(), 0.8F, 1.1F);
+            // SPIN und HIGH_FIVE waren komplett stumm — jede Interaktion klingt.
+            case SPIN, HIGH_FIVE -> playSound(ModSounds.GOOBY_SQUEAK.get(), 0.7F, 1.2F);
+        }
+        if (this.level() instanceof ServerLevel serverLevel) {
+            switch (trick) {
+                case ROLL -> serverLevel.sendParticles(ParticleTypes.CLOUD,
+                        getX(), getY() + 0.25, getZ(), 8, 0.45, 0.1, 0.45, 0.02);
+                case DANCE -> serverLevel.sendParticles(ParticleTypes.NOTE,
+                        getX(), getY() + 1.35, getZ(), 6, 0.5, 0.4, 0.5, 0.9);
+                default -> serverLevel.sendParticles(ParticleTypes.HAPPY_VILLAGER,
+                        getX(), getY() + 1.1, getZ(), 5, 0.4, 0.35, 0.4, 0.03);
+            }
+        }
     }
 
     public boolean selectTrick(Player player, GoobyTrick trick) {
@@ -2686,6 +2708,40 @@ public class GoobyEntity extends TamableAnimal implements GeoEntity, MenuProvide
         return true;
     }
 
+    /**
+     * Whistle 3.0: oeffnet den nativen Trick-Selection-Screen. Validiert
+     * Erwachsenenstatus, Besitz und Distanz serverseitig und schickt dann die
+     * gebundeten S2C-Menuedaten; Clients ohne den Mod-Kanal erhalten ueber
+     * {@link GoobyNetwork#sendTrickMenu} das alte Chat-Menue als Fallback.
+     */
+    public boolean openTrickMenu(ServerPlayer player) {
+        if (!isAlive()) {
+            // Gleiche Invariante wie GoobyNetwork.trySelectTrick: tote oder
+            // bereits entfernte Goobys oeffnen kein Menue. Feedback nur an
+            // den Sender — die sterbende Entity soll nicht noch quietschen.
+            player.displayClientMessage(
+                    Component.translatable("msg.goobymod.trick_menu_invalid"), true);
+            player.playNotifySound(ModSounds.GOOBY_WHISTLE_DENIED.get(),
+                    SoundSource.PLAYERS, 0.6F, 1.0F);
+            return false;
+        }
+        if (isBaby()) {
+            denyBabyAction(player, "msg.goobymod.baby_no_tricks");
+            return false;
+        }
+        if (!isOwnedBy(player)) {
+            denyTraining(player);
+            return false;
+        }
+        if (player.distanceToSqr(this) > GoobyNetwork.TRICK_MENU_RANGE * GoobyNetwork.TRICK_MENU_RANGE) {
+            denyInteraction(player, Component.translatable("msg.goobymod.trick_menu_too_far", getName()));
+            return false;
+        }
+        GoobyNetwork.sendTrickMenu(player, this);
+        return true;
+    }
+
+    /** Legacy-Chat-Menue — Fallback fuer Clients ohne Payload-Kanal und Addon-Kompatibilitaet. */
     public void sendTrickMenu(Player player) {
         if (isBaby()) {
             denyBabyAction(player, "msg.goobymod.baby_no_tricks");
@@ -2698,15 +2754,30 @@ public class GoobyEntity extends TamableAnimal implements GeoEntity, MenuProvide
         player.sendSystemMessage(Component.translatable("msg.goobymod.trick_menu", getName())
                 .withStyle(ChatFormatting.GOLD));
         for (GoobyTrick trick : GoobyTrick.values()) {
-            String command = "/goobytrick " + getUUID() + " " + trick.serializedName();
-            Component option = Component.literal("  ")
-                    .append(Component.translatable(trick.translationKey()))
-                    .append(Component.literal(" " + proficiencyStars(getTrickProficiency(trick))))
-                    .withStyle(style -> style.withColor(trick == this.selectedTrick
-                                    ? ChatFormatting.GREEN : ChatFormatting.AQUA)
-                            .withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, command)));
-            player.sendSystemMessage(option);
+            player.sendSystemMessage(buildTrickMenuLine(trick));
         }
+    }
+
+    /**
+     * Eine Zeile des Chat-Menues. Gleiche Policy wie der native Screen und
+     * {@code GoobyNetwork.trySelectTrick}: nur trainierte Kunststuecke sind
+     * klickbar; gesperrte tragen statt des Click-Events den Trainings-Hinweis
+     * (trainiert wird per Sneak + Trainingshappen). Oeffentlich fuer GameTests.
+     */
+    public Component buildTrickMenuLine(GoobyTrick trick) {
+        int stars = getTrickProficiency(trick);
+        var line = Component.literal("  ")
+                .append(Component.translatable(trick.translationKey()))
+                .append(Component.literal(" " + proficiencyStars(stars)));
+        if (stars == 0) {
+            return line.append(Component.literal(" — "))
+                    .append(Component.translatable("screen.goobymod.trick_select.state.locked"))
+                    .withStyle(ChatFormatting.DARK_GRAY);
+        }
+        String command = "/goobytrick " + getUUID() + " " + trick.serializedName();
+        return line.withStyle(style -> style.withColor(trick == this.selectedTrick
+                        ? ChatFormatting.GREEN : ChatFormatting.AQUA)
+                .withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, command)));
     }
 
     /** Returns true when the long-range call used a safe teleport. */
@@ -4222,6 +4293,8 @@ public class GoobyEntity extends TamableAnimal implements GeoEntity, MenuProvide
                 .triggerableAnim("trick_high_five", ANIM_TRICK_HIGH_FIVE)
                 .triggerableAnim("trick_flop", ANIM_TRICK_FLOP)
                 .triggerableAnim("trick_speak", ANIM_TRICK_SPEAK)
+                .triggerableAnim("trick_roll", ANIM_TRICK_ROLL)
+                .triggerableAnim("trick_dance", ANIM_TRICK_DANCE)
                 .triggerableAnim("training_success", ANIM_TRAINING_SUCCESS)
                 .triggerableAnim("hutch_enter", ANIM_HUTCH_ENTER)
                 .triggerableAnim("hutch_exit", ANIM_HUTCH_EXIT)

@@ -8,6 +8,7 @@ import de.sonic0810.goobymod.entity.GoobySoundLimiter;
 import de.sonic0810.goobymod.entity.GoobyTrick;
 import de.sonic0810.goobymod.entity.goals.CatStareAtGoobyGoal;
 import de.sonic0810.goobymod.entity.goals.RabbitFollowWildGoobyGoal;
+import de.sonic0810.goobymod.network.GoobyNetwork;
 import de.sonic0810.goobymod.registry.ModItems;
 import java.util.Locale;
 import net.minecraft.commands.Commands;
@@ -139,6 +140,7 @@ public final class GoobyEvents {
         if (!(event.getEntity() instanceof ServerPlayer player)) {
             return;
         }
+        GoobyNetwork.forgetSelectSender(player.getUUID());
         for (var level : player.getServer().getAllLevels()) {
             for (var entity : level.getAllEntities()) {
                 if (entity instanceof GoobyEntity gooby) {
@@ -151,6 +153,7 @@ public final class GoobyEvents {
     @SubscribeEvent
     public static void onServerStopped(ServerStoppedEvent event) {
         GoobySoundLimiter.clear();
+        GoobyNetwork.clearSelectThrottle();
     }
 
     /** Bounded nearby scan; returns the number of owned Goobys that reacted. */
@@ -183,23 +186,19 @@ public final class GoobyEvents {
                                                 .map(GoobyTrick::serializedName), builder))
                                 .executes(context -> {
                                     ServerPlayer player = context.getSource().getPlayerOrException();
-                                    var entity = player.serverLevel().getEntity(
-                                            UuidArgument.getUuid(context, "gooby"));
-                                    if (!(entity instanceof GoobyEntity gooby)
-                                            || !gooby.isOwnedBy(player)) {
+                                    GoobyTrick trick = GoobyTrick.byNameStrict(
+                                            StringArgumentType.getString(context, "trick"));
+                                    if (trick == null) {
                                         context.getSource().sendFailure(
                                                 Component.translatable("msg.goobymod.trick_menu_invalid"));
                                         return 0;
                                     }
-                                    String trickName = StringArgumentType.getString(context, "trick");
-                                    boolean known = java.util.Arrays.stream(GoobyTrick.values())
-                                            .anyMatch(trick -> trick.serializedName().equalsIgnoreCase(trickName));
-                                    if (!known) {
-                                        context.getSource().sendFailure(
-                                                Component.translatable("msg.goobymod.trick_menu_invalid"));
-                                        return 0;
-                                    }
-                                    return gooby.selectTrick(player, GoobyTrick.byName(trickName)) ? 1 : 0;
+                                    // Exakt dieselbe Autorisierung wie der native Screen
+                                    // (alive/owner/baby/range/trainiert) inklusive
+                                    // Spam-Drosselung — keine Policy-Divergenz.
+                                    return GoobyNetwork.handleSelectRequest(player,
+                                            UuidArgument.getUuid(context, "gooby"), trick)
+                                            .accepted() ? 1 : 0;
                                 }))));
     }
 

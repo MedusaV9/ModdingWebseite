@@ -9,6 +9,7 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResultHolder;
@@ -37,7 +38,9 @@ public final class GoobyWhistleItem extends Item {
                 level.playSound(null, player.blockPosition(), ModSounds.GOOBY_WHISTLE_DENIED.get(),
                         SoundSource.PLAYERS, 0.7F, 1.0F);
             } else if (player.isSecondaryUseActive()) {
-                nearest.sendTrickMenu(player);
+                if (player instanceof ServerPlayer serverPlayer) {
+                    nearest.openTrickMenu(serverPlayer);
+                }
             } else {
                 nearest.callToOwner(player);
                 rememberMode(stack, nearest.getCommandMode());

@@ -6,6 +6,54 @@
 
 ---
 
+## Unreleased — „Kunststück-Welle" / “Trick Wave” · in Arbeit / work in progress
+
+### DE
+
+**Kunststück-Welle**
+- Der Schleich-Luftpfiff öffnet jetzt einen richtigen Auswahlbildschirm statt
+  des Chat-Menüs: Karten für alle Kunststücke mit Sternen und Status, per
+  Maus, Tastatur und Narrator bedienbar. Fertig bestätigt, Abbrechen/Esc
+  verwirft — „Aktiv" zeigt immer nur den wirklich gespeicherten Stand.
+- Zwei neue Kunststücke: **Rolle** (Anlauf, Überschlag um die Körpermitte,
+  weiche Landung mit Wölkchen) und **Tanz** (Hüpf-Freudentanz mit
+  schwingenden Ohren und Noten). Beide werden wie gewohnt mit
+  Trainingshappen bis drei Sterne trainiert.
+- Die Rolle bleibt dabei vollständig über dem Boden — und ein neuer
+  automatischer Geometrie-Test stellt sicher, dass kein Kunststück jemals im
+  Boden versinkt.
+- Reichweite: Menü öffnen und Kunststück wählen funktioniert bis
+  **64 Blöcke** Entfernung zum Gooby; darüber hinaus gibt es eine klare
+  Actionbar-Meldung.
+- Gesperrte Kunststücke sind im Bildschirm sichtbar, aber nicht auswählbar —
+  der Tooltip erklärt den Weg: Schleich-benutze Trainingshappen am Gooby, um
+  das Trainingsziel durchzuschalten, dann füttere Happen zum Freischalten.
+- Handbuch und Pfeifen-Tooltip sind auf sechs Kunststücke, den neuen
+  Bildschirm und die 64-Block-Reichweite aktualisiert.
+
+### EN
+
+**Trick Wave**
+- The sneak air-whistle now opens a proper selection screen instead of the
+  chat menu: cards for every trick with stars and status, usable via mouse,
+  keyboard, and narrator. Done confirms, Cancel/Esc discards — “Active”
+  always reflects only the truly saved state.
+- Two new tricks: **Roll** (wind-up, somersault around the body center, soft
+  landing with a puff) and **Dance** (a bouncy happy dance with swinging ears
+  and musical notes). Both train with Training Treats up to three stars as
+  usual.
+- The roll stays completely above the ground — and a new automatic geometry
+  test makes sure no trick ever sinks into the floor.
+- Range: opening the menu and picking a trick works up to **64 blocks** from
+  your Gooby; beyond that you get a clear action-bar message.
+- Locked tricks are visible on the screen but not selectable — the tooltip
+  explains the path: sneak-use Training Treats on your Gooby to cycle the
+  training target, then feed treats to unlock.
+- The handbook and the whistle tooltip now cover six tricks, the new screen,
+  and the 64-block range.
+
+---
+
 ## v5.1.0 — „Interaktions-Politur" / “Interaction Polish” · 2026-08-13
 
 ### DE

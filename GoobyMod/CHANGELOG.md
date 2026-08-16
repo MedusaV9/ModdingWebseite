@@ -1,5 +1,70 @@
 # Changelog — Gooby Mod
 
+## Unreleased — „Kunststück-Welle" / “Trick Wave” (in Arbeit / in progress)
+
+### Engineering (DE)
+
+- Neuer Custom-Payload-Layer (`goobymod:trick_menu` S2C, `goobymod:trick_select`
+  C2S): Codecs hart gebounded und fail-closed, komplette serverseitige
+  Autorisierung (Besitz, Erwachsenenstatus, Dimension, Distanz, Trainingsstand)
+  in `GoobyNetwork.trySelectTrick`. Der Sneak-Luftpfiff öffnet den nativen
+  Trick-Auswahlbildschirm; Clients ohne Payload-Kanal erhalten das klickbare
+  Chat-Menü als Fallback. Menü-Öffnung UND Auswahl gelten bis **64 Blöcke**
+  Entfernung (`GoobyNetwork.TRICK_MENU_RANGE`).
+- Zwei neue Kunststücke ROLL und DANCE: Enum append-only, name-keyed NBT —
+  alte Vier-Trick-Saves laden verlustfrei, neue Tricks starten bei null
+  Sternen. `trick_roll` rotiert geometrisch korrekt um die Körpermitte
+  (Root-Lift kompensiert den Bodenpivot exakt), Anticipation und weiche
+  Landung bleiben erhalten; Runtime-JSON und Blockbench-Quelle werden per
+  `scripts/gen_bbmodel.py` synchron gehalten.
+- Neuer Geometrie-GameTest (`GoobyAnimationGeometryTests`) sampelt ALLE
+  Animations-Clips hierarchisch gegen Adult- UND Baby-Geometrie
+  (Easing-Kurven, Vorzeichen-agnostisch): Voll-Überschläge müssen die
+  kompletten Bounds über dem Boden halten, kein Clip darf praktisch komplett
+  im Boden verschwinden — Unterboden-Rollen werden künftig rot.
+- Trick-Screen: Statuszeilen strikt auf Kartenbreite geklammert (Scrolltext
+  statt Überlauf), „Aktiv" zeigt ausschließlich den serverseitig bestätigten
+  Stand, die unbestätigte Wahl heißt „Ausgewählt" (Cancel/Esc kann nie eine
+  falsche Aktiv-Aussage hinterlassen). Initialfokus läuft über den
+  parameterlosen `setInitialFocus()`-Hook, damit Tastatur/Narrator exakt auf
+  der aktiven Karte starten. Gesperrte Karten bleiben bewusst nicht
+  auswählbar; ihr Tooltip erklärt, dass Sneak+Trainingshappen das
+  Trainingsziel durchschaltet.
+- Handbuch (Buchseiten + Kapitel 3) und Pfeifen-Tooltip auf sechs
+  Kunststücke, den nativen Bildschirm und die 64-Block-Reichweite
+  aktualisiert; alle neuen Lang-Keys DE/EN paritätisch.
+
+### Engineering (EN)
+
+- New custom payload layer (`goobymod:trick_menu` S2C, `goobymod:trick_select`
+  C2S): codecs hard-bounded and fail-closed, full server-side authorization
+  (ownership, adult status, dimension, distance, training level) in
+  `GoobyNetwork.trySelectTrick`. The sneak air-whistle opens the native trick
+  selection screen; clients without the payload channel fall back to the
+  clickable chat menu. Opening the menu AND selecting are valid up to
+  **64 blocks** (`GoobyNetwork.TRICK_MENU_RANGE`).
+- Two new tricks, ROLL and DANCE: enum append-only, name-keyed NBT — old
+  four-trick saves load losslessly and the new tricks start at zero stars.
+  `trick_roll` now rotates geometrically around the body center (the root
+  lift compensates the ground-level pivot exactly) while keeping anticipation
+  and the soft landing; runtime JSON and the Blockbench source stay in sync
+  via `scripts/gen_bbmodel.py`.
+- New geometry GameTest (`GoobyAnimationGeometryTests`) samples ALL animation
+  clips hierarchically against the adult AND baby geometry (easing curves,
+  sign-agnostic): full flips must keep the complete bounds above ground and
+  no clip may effectively vanish below the floor — under-floor rolls now
+  fail red.
+- Trick screen: status rows are strictly clamped to card width (scrolling
+  text instead of overflow), “Active” exclusively reflects the server-side
+  confirmed state while the unconfirmed pick reads “Selected” (Cancel/Esc can
+  never leave a false active claim). Initial focus goes through the
+  parameterless `setInitialFocus()` hook so keyboard/narrator users start on
+  the active card. Locked cards deliberately stay unselectable; their tooltip
+  explains that sneak-using Training Treats cycles the training target.
+- Handbook (book pages + chapter 3) and the whistle tooltip now cover six
+  tricks, the native screen, and the 64-block range; all new language keys
+  are DE/EN paritous.
+
 ## 5.1.0 „Interaktions-Politur" / “Interaction Polish” (2026-08-13)
 
 ### Engineering (DE)
