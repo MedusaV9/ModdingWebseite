@@ -1,0 +1,41 @@
+name: Mod Jar + Create
+
+on:
+  push:
+    branches:
+      - main
+      - "cursor/**"
+    tags:
+      - "v*"
+    paths:
+      - "src/**"
+      - "scripts/**"
+      - "docs/**"
+      - "build.gradle"
+      - "gradle.properties"
+      - ".github/workflows/modjar-create.yml"
+  workflow_dispatch: {}
+
+concurrency:
+  group: modjar-create-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  create-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    strategy:
+      fail-fast: true
+      matrix:
+        create: ["6.0.10"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+      - name: Build against Create ${{ matrix.create }}
+        run: ./gradlew clean build -PwithCreate --no-daemon --max-workers=2
+      - name: Run Create integration GameTests
+        run: ./gradlew runGameTestServer -PwithCreate --no-daemon --max-workers=2

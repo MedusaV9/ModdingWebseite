@@ -1,0 +1,10 @@
+{
+  "type": "neoforge:add_spawns",
+  "biomes": "#goobymod:has_wild_goobys",
+  "spawners": {
+    "type": "goobymod:gooby",
+    "weight": 1,
+    "minCount": 1,
+    "maxCount": 1
+  }
+}

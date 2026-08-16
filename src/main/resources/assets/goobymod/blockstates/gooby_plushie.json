@@ -1,0 +1,8 @@
+{
+  "variants": {
+    "facing=north": {"model": "goobymod:block/gooby_plushie"},
+    "facing=east": {"model": "goobymod:block/gooby_plushie", "y": 90},
+    "facing=south": {"model": "goobymod:block/gooby_plushie", "y": 180},
+    "facing=west": {"model": "goobymod:block/gooby_plushie", "y": 270}
+  }
+}

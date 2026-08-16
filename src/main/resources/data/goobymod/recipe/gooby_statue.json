@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "building",
+  "pattern": [
+    " E ",
+    "SSS",
+    "SSS"
+  ],
+  "key": {
+    "E": {"item": "goobymod:button_eye"},
+    "S": {"item": "minecraft:stone_bricks"}
+  },
+  "result": {
+    "id": "goobymod:gooby_statue",
+    "count": 1
+  }
+}

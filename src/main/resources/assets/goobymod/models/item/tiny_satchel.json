@@ -1,0 +1,31 @@
+{
+  "parent": "minecraft:block/block",
+  "textures": {
+    "bag": "goobymod:item/tiny_satchel",
+    "particle": "goobymod:item/tiny_satchel"
+  },
+  "elements": [
+    {
+      "from": [3, 2, 4],
+      "to": [13, 12, 12],
+      "faces": {
+        "north": { "texture": "#bag" }, "south": { "texture": "#bag" },
+        "east": { "texture": "#bag" }, "west": { "texture": "#bag" },
+        "up": { "texture": "#bag" }, "down": { "texture": "#bag" }
+      }
+    },
+    {
+      "from": [4, 10, 3],
+      "to": [12, 14, 13],
+      "faces": {
+        "north": { "texture": "#bag" }, "south": { "texture": "#bag" },
+        "east": { "texture": "#bag" }, "west": { "texture": "#bag" },
+        "up": { "texture": "#bag" }, "down": { "texture": "#bag" }
+      }
+    }
+  ],
+  "display": {
+    "ground": { "translation": [0, 1, 0], "scale": [0.7, 0.7, 0.7] },
+    "gui": { "rotation": [25, 225, 0], "scale": [0.75, 0.75, 0.75] }
+  }
+}

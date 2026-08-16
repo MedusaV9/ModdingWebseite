@@ -1,0 +1,20 @@
+{
+  "parent": "minecraft:block/block",
+  "textures": {
+    "bedding": "goobymod:block/rabbit_hutch_bedding_2",
+    "particle": "goobymod:block/rabbit_hutch_bedding_2"
+  },
+  "elements": [
+    {
+      "from": [2, 1, 2],
+      "to": [14, 2.5, 14],
+      "faces": {
+        "up": {"uv": [2, 2, 14, 14], "texture": "#bedding"},
+        "north": {"uv": [2, 13, 14, 15], "texture": "#bedding"},
+        "south": {"uv": [2, 13, 14, 15], "texture": "#bedding"},
+        "east": {"uv": [2, 13, 14, 15], "texture": "#bedding"},
+        "west": {"uv": [2, 13, 14, 15], "texture": "#bedding"}
+      }
+    }
+  ]
+}

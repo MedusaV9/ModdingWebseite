@@ -1,0 +1,23 @@
+{
+  "parent": "goobymod:root",
+  "display": {
+    "icon": {
+      "id": "minecraft:grass_block"
+    },
+    "title": {
+      "translate": "advancements.goobymod.found_burrow.title"
+    },
+    "description": {
+      "translate": "advancements.goobymod.found_burrow.description"
+    },
+    "frame": "task",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {
+    "granted": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}

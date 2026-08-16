@@ -1,0 +1,7 @@
+# LF-only: alle Textdateien werden mit LF eingecheckt und ausgecheckt
+* text=auto eol=lf
+*.png binary
+*.ogg binary
+*.nbt binary
+*.jar binary
+versions/*.jar binary

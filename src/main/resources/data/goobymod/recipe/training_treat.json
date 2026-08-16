@@ -1,0 +1,13 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    { "item": "goobymod:gooby_fluff" },
+    { "item": "minecraft:sugar" },
+    { "item": "minecraft:cocoa_beans" }
+  ],
+  "result": {
+    "id": "goobymod:training_treat",
+    "count": 3
+  }
+}

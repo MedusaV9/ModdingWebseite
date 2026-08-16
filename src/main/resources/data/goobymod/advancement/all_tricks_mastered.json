@@ -1,0 +1,17 @@
+{
+  "parent": "goobymod:first_trick",
+  "display": {
+    "icon": { "id": "minecraft:nether_star" },
+    "title": { "translate": "advancements.goobymod.all_tricks_mastered.title" },
+    "description": { "translate": "advancements.goobymod.all_tricks_mastered.description" },
+    "frame": "challenge",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {
+    "granted": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}

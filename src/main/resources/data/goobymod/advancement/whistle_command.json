@@ -1,0 +1,17 @@
+{
+  "parent": "goobymod:tame_gooby",
+  "display": {
+    "icon": { "id": "goobymod:gooby_whistle" },
+    "title": { "translate": "advancements.goobymod.whistle_command.title" },
+    "description": { "translate": "advancements.goobymod.whistle_command.description" },
+    "frame": "task",
+    "show_toast": true,
+    "announce_to_chat": false,
+    "hidden": false
+  },
+  "criteria": {
+    "granted": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}

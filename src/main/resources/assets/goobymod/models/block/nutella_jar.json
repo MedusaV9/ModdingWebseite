@@ -1,0 +1,33 @@
+{
+  "parent": "minecraft:block/block",
+  "textures": {
+    "side": "goobymod:block/nutella_jar_side",
+    "top": "goobymod:block/nutella_jar_top",
+    "particle": "goobymod:block/nutella_jar_side"
+  },
+  "elements": [
+    {
+      "from": [5, 0, 5],
+      "to": [11, 5, 11],
+      "faces": {
+        "north": {"uv": [5, 11, 11, 16], "texture": "#side"},
+        "south": {"uv": [5, 11, 11, 16], "texture": "#side"},
+        "east": {"uv": [5, 11, 11, 16], "texture": "#side"},
+        "west": {"uv": [5, 11, 11, 16], "texture": "#side"},
+        "down": {"uv": [5, 5, 11, 11], "texture": "#top"}
+      }
+    },
+    {
+      "from": [4.5, 5, 4.5],
+      "to": [11.5, 7, 11.5],
+      "faces": {
+        "north": {"uv": [4.5, 2, 11.5, 4], "texture": "#side"},
+        "south": {"uv": [4.5, 2, 11.5, 4], "texture": "#side"},
+        "east": {"uv": [4.5, 2, 11.5, 4], "texture": "#side"},
+        "west": {"uv": [4.5, 2, 11.5, 4], "texture": "#side"},
+        "up": {"uv": [4.5, 4.5, 11.5, 11.5], "texture": "#top"},
+        "down": {"uv": [4.5, 4.5, 11.5, 11.5], "texture": "#top"}
+      }
+    }
+  ]
+}
