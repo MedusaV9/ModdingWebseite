@@ -41,6 +41,7 @@ public class GoobyRenderer extends GeoEntityRenderer<GoobyEntity> {
     private static final String HAT_ANCHOR_BONE = "hat_anchor";
     private static final String NECK_ANCHOR_BONE = "neck_anchor";
     private static final String BACK_ANCHOR_BONE = "back_anchor";
+    private static final String MOUTH_ANCHOR_BONE = "mouth_anchor";
     private final Map<Integer, BubbleVisual> bubbleVisuals = new HashMap<>();
 
     private static final class BubbleVisual {
@@ -64,6 +65,12 @@ public class GoobyRenderer extends GeoEntityRenderer<GoobyEntity> {
 
         @Override
         protected ItemStack getStackForBone(GeoBone bone, GoobyEntity gooby) {
+            // Der Apportier-Ball haengt am Maul-Anker beider Geos — auch beim
+            // Baby (das Feature startet fuer Babys nie, aber ein per Save
+            // hereingetragener Ball darf niemals unsichtbar verschwinden).
+            if (MOUTH_ANCHOR_BONE.equals(bone.getName())) {
+                return gooby.getCarriedFetchItem();
+            }
             if (gooby.isBaby()) {
                 return ItemStack.EMPTY;
             }
@@ -92,6 +99,8 @@ public class GoobyRenderer extends GeoEntityRenderer<GoobyEntity> {
             } else if (BACK_ANCHOR_BONE.equals(bone.getName())) {
                 poseStack.mulPose(Axis.XP.rotationDegrees(90.0F));
                 poseStack.scale(0.82F, 0.82F, 0.82F);
+            } else if (MOUTH_ANCHOR_BONE.equals(bone.getName())) {
+                poseStack.scale(0.62F, 0.62F, 0.62F);
             }
             super.renderStackForBone(poseStack, bone, stack, gooby, bufferSource, partialTick, packedLight,
                     packedOverlay);

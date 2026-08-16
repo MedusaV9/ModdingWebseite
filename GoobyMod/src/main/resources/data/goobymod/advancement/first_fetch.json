@@ -1,0 +1,17 @@
+{
+  "parent": "goobymod:tame_gooby",
+  "display": {
+    "icon": { "id": "goobymod:gooby_ball" },
+    "title": { "translate": "advancements.goobymod.first_fetch.title" },
+    "description": { "translate": "advancements.goobymod.first_fetch.description" },
+    "frame": "task",
+    "show_toast": true,
+    "announce_to_chat": false,
+    "hidden": false
+  },
+  "criteria": {
+    "granted": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}

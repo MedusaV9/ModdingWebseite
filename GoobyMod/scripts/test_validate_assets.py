@@ -28,6 +28,7 @@ def adult_geo():
                 {"name": "hat_anchor", "parent": "body", "pivot": [0, 2, 0]},
                 {"name": "neck_anchor", "parent": "body", "pivot": [0, 2, -1]},
                 {"name": "back_anchor", "parent": "body", "pivot": [0, 1, 1]},
+                {"name": "mouth_anchor", "parent": "body", "pivot": [0, 1, -1]},
             ],
         }],
     }
@@ -44,6 +45,7 @@ def baby_geo():
                 {"name": "body", "parent": "root", "pivot": [0, 1, 0],
                  "cubes": [{"origin": [0, 0, 0], "size": [2, 2, 2], "uv": [0, 0]}]},
                 {"name": "hat_anchor", "parent": "body", "pivot": [0, 2, 0]},
+                {"name": "mouth_anchor", "parent": "body", "pivot": [0, 1, -1]},
             ],
         }],
     }

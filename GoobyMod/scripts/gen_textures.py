@@ -946,6 +946,70 @@ def gen_speech_bubble():
     img.save(ensure(os.path.join(ROOT, "misc", "speech_bubble.png")))
 
 
+def gen_v53_fetch_ball():
+    """Fetch-Wave v5.3: Gooby-Ball (Apportier-Spielzeug).
+
+    Nutzt wie gen_v52_content_wave einen EIGENEN Seed, damit die Textur
+    byte-identisch reproduzierbar bleibt, egal welche anderen Generatoren
+    vorher am geteilten RNG-Strom (Seed 8108) gezogen haben.
+    """
+    ball_rng = random.Random(5310)
+
+    img = Image.new("RGBA", (16, 16), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    outline = SMILE + (255,)
+
+    # Weicher Bodenschatten unter dem Ball
+    d.ellipse((4, 12, 11, 14), fill=(60, 42, 32, 70))
+
+    # Ballkoerper: 12x12-Kugel, obere Halbkugel rosa, untere creme.
+    # Pro Pixel radial schattiert (Licht oben links, Schatten unten rechts)
+    # plus leichtes deterministisches Gummi-Rauschen.
+    cx, cy, radius = 7.5, 6.5, 5.7
+    for y in range(1, 13):
+        for x in range(2, 14):
+            dx, dy = x - cx, y - cy
+            if dx * dx + dy * dy > radius * radius:
+                continue
+            if y <= 6:
+                base, dark = PINK, PINK_DARK
+            else:
+                base, dark = CREAM, CREAM_DARK
+            shade = (dx + dy) / radius
+            if shade < -0.55:
+                base = tuple(min(255, c + 24) for c in base)
+            elif shade > 0.7:
+                base = dark
+            n = ball_rng.randint(-4, 4)
+            d.point((x, y), fill=(max(0, min(255, base[0] + n)),
+                                  max(0, min(255, base[1] + n)),
+                                  max(0, min(255, base[2] + n)), 255))
+
+    # Kontur + gestrichelte Aequator-Naht zwischen den Halbkugeln
+    d.ellipse((2, 1, 13, 12), outline=outline)
+    for x in range(3, 13):
+        if x % 3 != 2:
+            d.point((x, 6), fill=outline)
+        if x % 3 == 1:
+            d.point((x, 7), fill=SMILE + (110,))
+
+    # Aufgestickter Pfotenabdruck auf der Creme-Halbkugel
+    paw = FUR_DARK + (255,)
+    d.point((7, 9), fill=paw)
+    d.point((8, 9), fill=paw)
+    d.point((7, 10), fill=paw)
+    d.point((8, 10), fill=paw)
+    d.point((6, 8), fill=paw)
+    d.point((9, 8), fill=paw)
+
+    # Glanzlicht oben links auf der rosa Halbkugel
+    d.point((4, 3), fill=(255, 228, 238, 255))
+    d.point((5, 3), fill=(255, 214, 228, 255))
+    d.point((4, 4), fill=(255, 214, 228, 255))
+
+    img.save(ensure(os.path.join(ROOT, "item", "gooby_ball.png")))
+
+
 if __name__ == "__main__":
     gen_gooby()
     gen_nutella_item()
@@ -967,4 +1031,5 @@ if __name__ == "__main__":
     gen_v50_handbook_assets()
     gen_speech_bubble()
     gen_v52_content_wave()
+    gen_v53_fetch_ball()
     print("Alle Gooby-Texturen generiert!")

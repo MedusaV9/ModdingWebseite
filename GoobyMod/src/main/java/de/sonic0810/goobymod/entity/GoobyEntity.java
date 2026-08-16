@@ -16,6 +16,7 @@ import de.sonic0810.goobymod.entity.animation.GoobyLocomotion;
 import de.sonic0810.goobymod.entity.goals.GoobyAlertGoal;
 import de.sonic0810.goobymod.entity.goals.GoobyDigGoal;
 import de.sonic0810.goobymod.entity.goals.GoobyFamilyPlayGoal;
+import de.sonic0810.goobymod.entity.goals.GoobyFetchGoal;
 import de.sonic0810.goobymod.entity.goals.GoobyFollowParentGoal;
 import de.sonic0810.goobymod.entity.goals.GoobyFollowOwnerGoal;
 import de.sonic0810.goobymod.entity.goals.GoobyRandomSitGoal;
@@ -24,6 +25,7 @@ import de.sonic0810.goobymod.entity.goals.GoobyShelterGoal;
 import de.sonic0810.goobymod.entity.goals.GoobySleepGoal;
 import de.sonic0810.goobymod.entity.goals.GoobySocialGoal;
 import de.sonic0810.goobymod.entity.goals.GoobyWildPanicGoal;
+import de.sonic0810.goobymod.item.GoobyBallItem;
 import de.sonic0810.goobymod.item.GoobyHandbookItem;
 import de.sonic0810.goobymod.item.GoobyWhistleItem;
 import de.sonic0810.goobymod.menu.GoobySatchelMenu;
@@ -92,6 +94,7 @@ import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.goal.AvoidEntityGoal;
 import net.minecraft.world.entity.ai.goal.FloatGoal;
+import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.entity.ai.goal.LookAtPlayerGoal;
 import net.minecraft.world.entity.ai.goal.RandomLookAroundGoal;
 import net.minecraft.world.entity.ai.goal.SitWhenOrderedToGoal;
@@ -169,6 +172,10 @@ public class GoobyEntity extends TamableAnimal implements GeoEntity, MenuProvide
     public static final int SOCIAL_PAIR_COOLDOWN_TICKS = 6000;
     public static final int SATCHEL_SIZE = 4;
     public static final int GIFT_PICKUP_PRIORITY_TICKS = 200;
+    /** Satisfaction-/Freundschafts-Bonus pro erfolgreichem Apport — mit Cooldown. */
+    public static final int FETCH_SATISFACTION = 4;
+    public static final int FETCH_FRIENDSHIP = 2;
+    public static final int FETCH_REWARD_COOLDOWN_TICKS = 600;
     public static final float TREASURE_SCRAP_CHANCE = 0.05F;
     public static final int MAX_STORED_FRIENDSHIPS = 32;
     public static final int MAX_TRANSIENT_PLAYER_ENTRIES = 128;
@@ -235,6 +242,13 @@ public class GoobyEntity extends TamableAnimal implements GeoEntity, MenuProvide
             SynchedEntityData.defineId(GoobyEntity.class, EntityDataSerializers.STRING);
     private static final EntityDataAccessor<Boolean> DATA_SEEKING_TREASURE =
             SynchedEntityData.defineId(GoobyEntity.class, EntityDataSerializers.BOOLEAN);
+    /**
+     * Getragener Apportier-Ball. Bewusst der Vanilla-ItemStack-Serializer
+     * (bounded, gleiche Wire-Sicherheit wie ItemEntity/ItemFrame) — der Slot
+     * traegt maximal einen kleinen Wurf-Stack, nie Fremd-NBT-Berge.
+     */
+    private static final EntityDataAccessor<ItemStack> DATA_CARRIED_BALL =
+            SynchedEntityData.defineId(GoobyEntity.class, EntityDataSerializers.ITEM_STACK);
 
     private static final ResourceLocation HAPPY_SPEED_ID =
             ResourceLocation.fromNamespaceAndPath(GoobyMod.MODID, "happy_speed");
@@ -379,6 +393,8 @@ public class GoobyEntity extends TamableAnimal implements GeoEntity, MenuProvide
     private boolean fedOnce;
     private boolean burrowResident;
     private long seekCooldownUntil;
+    /** GameTime, ab der der naechste Apport wieder Bonus gibt (Anti-Spam, persistent). */
+    private long fetchRewardCooldownUntil;
     @Nullable
     private BlockPos seekTarget;
 
@@ -584,6 +600,7 @@ public class GoobyEntity extends TamableAnimal implements GeoEntity, MenuProvide
         builder.define(DATA_SOCIAL_ACTION, SOCIAL_NONE);
         builder.define(DATA_SOCIAL_PARTNER, "");
         builder.define(DATA_SEEKING_TREASURE, false);
+        builder.define(DATA_CARRIED_BALL, ItemStack.EMPTY);
     }
 
     private <T> void setSynced(EntityDataAccessor<T> accessor, T value) {
@@ -642,6 +659,12 @@ public class GoobyEntity extends TamableAnimal implements GeoEntity, MenuProvide
         if (this.seekTarget != null) {
             tag.put("SeekTarget", NbtUtils.writeBlockPos(this.seekTarget));
         }
+        // Voller Stack inkl. DataComponents — Save liest nur, loescht nie
+        // (keine Duplikation, kein Verlust bei Chunk-/Server-Reload).
+        if (isCarryingFetchItem()) {
+            tag.put("CarriedBall", getCarriedFetchItem().save(registryAccess()));
+        }
+        tag.putLong("FetchRewardCooldownUntil", this.fetchRewardCooldownUntil);
         tag.put("SatchelInventory", saveSatchelInventory());
         tag.putByte("SelectedTrick", (byte) this.selectedTrick.ordinal());
         CompoundTag trickLevels = new CompoundTag();
@@ -737,6 +760,10 @@ public class GoobyEntity extends TamableAnimal implements GeoEntity, MenuProvide
         this.seekCooldownUntil = tag.getLong("SeekCooldownUntil");
         this.seekTarget = NbtUtils.readBlockPos(tag, "SeekTarget").orElse(null);
         this.entityData.set(DATA_SEEKING_TREASURE, this.seekTarget != null);
+        this.entityData.set(DATA_CARRIED_BALL, tag.contains("CarriedBall", Tag.TAG_COMPOUND)
+                ? ItemStack.parse(registryAccess(), tag.getCompound("CarriedBall")).orElse(ItemStack.EMPTY)
+                : ItemStack.EMPTY);
+        this.fetchRewardCooldownUntil = tag.getLong("FetchRewardCooldownUntil");
         loadSatchelInventory(tag.getList("SatchelInventory", Tag.TAG_COMPOUND));
         this.selectedTrick = tag.contains("SelectedTrick")
                 ? GoobyTrick.byId(tag.getByte("SelectedTrick")) : GoobyTrick.SPIN;
@@ -1340,6 +1367,15 @@ public class GoobyEntity extends TamableAnimal implements GeoEntity, MenuProvide
         this.goalSelector.addGoal(3, new GoobyShelterGoal(this));
         this.goalSelector.addGoal(4, new GoobyFollowParentGoal(this));
         this.goalSelector.addGoal(4, new GoobySitGoal(this));
+        // Gleiche Prioritaet wie GoobyTemptGoal, aber VOR ihm registriert:
+        // starten beide im selben Tick, gewinnt der Apport (Insertion-Order).
+        // Ein BEREITS laufendes Tempt wird bewusst NICHT unterbrochen —
+        // gleiche Prioritaet preemptet in Vanilla nie (WrappedGoal
+        // .canBeReplacedBy verlangt strikt kleinere Zahl); der Apport startet,
+        // sobald die Nutella-Lockung endet. Sicherheit/Flucht (Panic/Alert/
+        // Shelter, Prio 1-3) bleibt immer vorrangig und beendet ueber die
+        // canWork-Gates auch einen laufenden Apport sofort.
+        this.goalSelector.addGoal(5, new GoobyFetchGoal(this, 1.25));
         this.goalSelector.addGoal(5, new GoobyTemptGoal(this));
         this.goalSelector.addGoal(6, new GoobyFollowOwnerGoal(this, 1.15, 6.0F, 2.5F));
         this.goalSelector.addGoal(7, new GoobySleepGoal(this));
@@ -1350,6 +1386,16 @@ public class GoobyEntity extends TamableAnimal implements GeoEntity, MenuProvide
         this.goalSelector.addGoal(11, new LookAtPlayerGoal(this, Player.class, 10.0F));
         this.goalSelector.addGoal(12, new RandomLookAroundGoal(this));
         this.goalSelector.addGoal(13, new GoobySocialGoal(this));
+    }
+
+    /**
+     * Nur fuer GameTests: laeuft im GoalSelector gerade ein Goal dieses Typs
+     * (inkl. Subklassen)? Macht Prioritaets-/Preemption-Verhalten testbar,
+     * ohne Reflection auf Vanilla-Interna.
+     */
+    public boolean isGoalRunning(Class<? extends Goal> type) {
+        return this.goalSelector.getAvailableGoals().stream()
+                .anyMatch(wrapped -> wrapped.isRunning() && type.isInstance(wrapped.getGoal()));
     }
 
     /**
@@ -3451,6 +3497,7 @@ public class GoobyEntity extends TamableAnimal implements GeoEntity, MenuProvide
         // captureDrops-Fensters von dropAllDeathLoot und ist damit fuer
         // LivingDropsEvent-Listener (Grave-/Loot-Mods) sichtbar.
         dropWardrobe();
+        dropCarriedFetchItem();
     }
 
     @Override
@@ -3461,6 +3508,7 @@ public class GoobyEntity extends TamableAnimal implements GeoEntity, MenuProvide
         // Tascheninhalt trotzdem niemals vernichten. dropWardrobeSlot leert
         // die Slots, daher ist der Doppel-Aufruf idempotent (kein Dupe).
         dropWardrobe();
+        dropCarriedFetchItem();
     }
 
     // ------------------------------------------------------------------
@@ -3581,6 +3629,114 @@ public class GoobyEntity extends TamableAnimal implements GeoEntity, MenuProvide
 
     public static boolean rollsTreasureScrap(RandomSource random, FriendshipTier tier) {
         return tier == FriendshipTier.BEST_FRIEND && random.nextFloat() < TREASURE_SCRAP_CHANCE;
+    }
+
+    // ------------------------------------------------------------------
+    // Apportieren (Gooby-Ball): tragen, atomar aufnehmen, zurueckbringen
+    // ------------------------------------------------------------------
+
+    public boolean isCarryingFetchItem() {
+        return !this.entityData.get(DATA_CARRIED_BALL).isEmpty();
+    }
+
+    /**
+     * Synchronisierter Trage-Stack (Renderer + Checks). Rueckgabe ist eine
+     * defensive Kopie — Mutationen am Ergebnis schlagen nie in den
+     * synchronisierten Slot durch.
+     */
+    public ItemStack getCarriedFetchItem() {
+        return this.entityData.get(DATA_CARRIED_BALL).copy();
+    }
+
+    public void setCarriedFetchItem(ItemStack stack) {
+        this.entityData.set(DATA_CARRIED_BALL, stack.copy());
+    }
+
+    public long getFetchRewardCooldownUntil() {
+        return this.fetchRewardCooldownUntil;
+    }
+
+    /**
+     * Nur eigene geworfene Gooby-Baelle zaehlen: Item-Typ UND Owner-UUID in
+     * den PersistentData der ItemEntity muessen zum Besitzer passen —
+     * fremde Baelle werden kategorisch ignoriert.
+     */
+    public boolean isOwnFetchBall(ItemEntity item) {
+        UUID ownerId = getOwnerUUID();
+        return ownerId != null && item.isAlive() && ownerId.equals(GoobyBallItem.throwerOf(item));
+    }
+
+    /**
+     * Atomarer Pickup auf dem Server-Thread, Ball fuer Ball: aus der
+     * ItemEntity wandert genau EIN Ball (inklusive aller DataComponents) in
+     * den Trage-Slot; ein (same-owner-)gemergter Rest bleibt mitsamt
+     * Owner-Signatur liegen und wird beim naechsten Apport geholt. split +
+     * setItem/discard laufen im selben Aufruf — kein Dupe-/Verlustfenster.
+     * Ein bereits tragender Gooby oder eine schon von einem anderen Gooby
+     * geleerte Entity nimmt nie doppelt.
+     */
+    public boolean tryPickUpFetchBall(ItemEntity ball) {
+        if (this.level().isClientSide || isCarryingFetchItem() || !isOwnFetchBall(ball)) {
+            return false;
+        }
+        ItemStack remainder = ball.getItem().copy();
+        ItemStack taken = remainder.split(1);
+        setCarriedFetchItem(taken);
+        if (remainder.isEmpty()) {
+            ball.discard();
+        } else {
+            ball.setItem(remainder);
+        }
+        playSound(ModSounds.GOOBY_SQUEAK.get(), 0.8F, 1.25F);
+        if (this.level() instanceof ServerLevel serverLevel) {
+            serverLevel.sendParticles(ParticleTypes.POOF, ball.getX(), ball.getY() + 0.2, ball.getZ(),
+                    4, 0.2, 0.15, 0.2, 0.01);
+        }
+        return true;
+    }
+
+    /**
+     * Rueckgabe an den Besitzer ueber denselben Empfaenger-Prioritaets-Pfad
+     * wie Buddelgeschenke ({@link #spawnGiftForRecipient}): Target-UUID,
+     * Thrower und Prioritaetsfenster inklusive. Bonus (Satisfaction +
+     * Freundschaft) nur ausserhalb des Fetch-Cooldowns — kein Spam-Farming.
+     */
+    public boolean deliverFetchBallTo(ServerPlayer owner) {
+        if (!(this.level() instanceof ServerLevel serverLevel)
+                || !isCarryingFetchItem() || !isOwnedBy(owner)) {
+            return false;
+        }
+        ItemStack delivered = getCarriedFetchItem();
+        setCarriedFetchItem(ItemStack.EMPTY);
+        spawnGiftForRecipient(serverLevel, delivered, owner);
+        triggerPriorityAction("present_item", 30);
+        playSound(ModSounds.GOOBY_TRICK_CHIME.get(), 0.8F, 1.15F);
+        showBubble(GoobySpeech.pickFrom(GoobySpeech.GIFT, this.random));
+        owner.displayClientMessage(Component.translatable("msg.goobymod.fetch_returned", getName()), true);
+        long now = serverLevel.getGameTime();
+        if (now >= this.fetchRewardCooldownUntil) {
+            this.fetchRewardCooldownUntil = now + FETCH_REWARD_COOLDOWN_TICKS;
+            addSatisfaction(FETCH_SATISFACTION);
+            gainFriendship(owner, FETCH_FRIENDSHIP, true);
+            serverLevel.sendParticles(ParticleTypes.HEART, getX(), getY() + 1.3, getZ(),
+                    5, 0.4, 0.3, 0.4, 0.02);
+        }
+        GoobyAdvancements.grant(owner, GoobyAdvancements.FIRST_FETCH);
+        return true;
+    }
+
+    /**
+     * Tod (beide Loot-Pfade): der getragene Ball wird sicher gedroppt, nie
+     * vernichtet. Slot wird VOR dem Spawn geleert — Doppel-Aufruf bleibt
+     * idempotent (kein Dupe), genau wie bei der Garderobe.
+     */
+    private void dropCarriedFetchItem() {
+        if (this.level().isClientSide || !isCarryingFetchItem()) {
+            return;
+        }
+        ItemStack carried = getCarriedFetchItem();
+        setCarriedFetchItem(ItemStack.EMPTY);
+        spawnAtLocation(carried, 0.8F);
     }
 
     // ------------------------------------------------------------------

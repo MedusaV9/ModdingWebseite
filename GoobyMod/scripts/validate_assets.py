@@ -36,8 +36,8 @@ GEO_TEXTURES = {
     "gooby_baby.geo.json": ["gooby_baby.png"],
 }
 REQUIRED_ANCHORS = {
-    "gooby.geo.json": {"hat_anchor", "neck_anchor", "back_anchor"},
-    "gooby_baby.geo.json": {"hat_anchor"},
+    "gooby.geo.json": {"hat_anchor", "neck_anchor", "back_anchor", "mouth_anchor"},
+    "gooby_baby.geo.json": {"hat_anchor", "mouth_anchor"},
 }
 BBMODEL_FOR_GEO = {
     "gooby.geo.json": "gooby.bbmodel",

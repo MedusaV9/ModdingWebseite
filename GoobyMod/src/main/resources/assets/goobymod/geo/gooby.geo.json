@@ -38,6 +38,11 @@
           "pivot": [0, 20.2, -0.5]
         },
         {
+          "name": "mouth_anchor",
+          "parent": "head",
+          "pivot": [0, 12.4, -7.6]
+        },
+        {
           "name": "neck_anchor",
           "parent": "body",
           "pivot": [0, 11.5, -4.8]

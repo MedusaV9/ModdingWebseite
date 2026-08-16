@@ -23,6 +23,7 @@ public final class ModCreativeTabs {
                         output.accept(ModItems.NUTELLA_TOAST.get());
                         output.accept(ModItems.GOOBY_BRUSH.get());
                         output.accept(ModItems.TRAINING_TREAT.get());
+                        output.accept(ModItems.GOOBY_BALL.get());
                         output.accept(ModItems.GOOBY_WHISTLE.get());
                         output.accept(ModItems.GOOBY_HANDBOOK.get());
                         output.accept(ModItems.GOOBY_FLUFF.get());

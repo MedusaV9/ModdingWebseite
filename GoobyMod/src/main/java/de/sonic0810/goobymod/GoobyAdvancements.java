@@ -25,6 +25,7 @@ public final class GoobyAdvancements {
     public static final String GROUP_NAP = "group_nap";
     public static final String TREASURE_MAP_COMPLETE = "treasure_map_complete";
     public static final String SATCHEL_FULL = "satchel_full";
+    public static final String FIRST_FETCH = "first_fetch";
 
     public static void grant(ServerPlayer player, String path) {
         AdvancementHolder holder = player.server.getAdvancements()

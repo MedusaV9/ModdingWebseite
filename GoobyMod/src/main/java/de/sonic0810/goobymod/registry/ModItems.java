@@ -3,6 +3,7 @@ package de.sonic0810.goobymod.registry;
 import de.sonic0810.goobymod.GoobyMod;
 import de.sonic0810.goobymod.item.EmptyJarItem;
 import de.sonic0810.goobymod.item.GoobyAccessoryItem;
+import de.sonic0810.goobymod.item.GoobyBallItem;
 import de.sonic0810.goobymod.item.GoobyHandbookItem;
 import de.sonic0810.goobymod.item.GoobyTooltipItem;
 import de.sonic0810.goobymod.item.GoobyTreasureMapItem;
@@ -72,6 +73,10 @@ public final class ModItems {
     public static final DeferredItem<Item> TRAINING_TREAT = ITEMS.register("training_treat",
             () -> new GoobyTooltipItem(new Item.Properties(),
                     "tooltip.goobymod.training_treat"));
+
+    /** Gooby-Ball: werfen — der eigene Gooby apportiert ihn zurueck. */
+    public static final DeferredItem<GoobyBallItem> GOOBY_BALL = ITEMS.register("gooby_ball",
+            () -> new GoobyBallItem(new Item.Properties().stacksTo(16)));
 
     /** Gooby-Pfeife: schaltet fuer den BESITZER Wander → Follow → Stay durch. */
     public static final DeferredItem<GoobyWhistleItem> GOOBY_WHISTLE = ITEMS.register("gooby_whistle",

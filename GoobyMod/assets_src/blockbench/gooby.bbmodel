@@ -1291,6 +1291,29 @@
          "children": []
         },
         {
+         "name": "mouth_anchor",
+         "origin": [
+          0,
+          12.4,
+          -7.6
+         ],
+         "rotation": [
+          0,
+          0,
+          0
+         ],
+         "bedrock_binding": "",
+         "color": 0,
+         "uuid": "128fb35a-d310-537c-b4d4-eeb41f018e78",
+         "export": true,
+         "mirror_uv": false,
+         "isOpen": true,
+         "locked": false,
+         "visibility": true,
+         "autouv": 0,
+         "children": []
+        },
+        {
          "name": "nose",
          "origin": [
           0,
