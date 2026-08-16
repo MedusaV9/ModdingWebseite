@@ -1,0 +1,120 @@
+{
+  "parent": "minecraft:block/block",
+  "textures": {
+    "stone": "goobymod:block/gooby_statue_stone",
+    "face": "goobymod:block/gooby_statue_face",
+    "base": "goobymod:block/gooby_statue_base",
+    "particle": "goobymod:block/gooby_statue_stone"
+  },
+  "elements": [
+    {
+      "__comment": "Sockelplatte mit Pfoten-Gravur oben",
+      "from": [2, 0, 2],
+      "to": [14, 3, 14],
+      "faces": {
+        "north": {"uv": [2, 13, 14, 16], "texture": "#stone"},
+        "south": {"uv": [2, 13, 14, 16], "texture": "#stone"},
+        "east": {"uv": [2, 13, 14, 16], "texture": "#stone"},
+        "west": {"uv": [2, 13, 14, 16], "texture": "#stone"},
+        "up": {"uv": [0, 0, 16, 16], "texture": "#base"},
+        "down": {"uv": [2, 2, 14, 14], "texture": "#stone"}
+      }
+    },
+    {
+      "__comment": "Zierstufe zwischen Sockel und Rumpf",
+      "from": [3.5, 3, 3.5],
+      "to": [12.5, 4, 12.5],
+      "faces": {
+        "north": {"uv": [3.5, 12, 12.5, 13], "texture": "#stone"},
+        "south": {"uv": [3.5, 12, 12.5, 13], "texture": "#stone"},
+        "east": {"uv": [3.5, 12, 12.5, 13], "texture": "#stone"},
+        "west": {"uv": [3.5, 12, 12.5, 13], "texture": "#stone"},
+        "up": {"uv": [3.5, 3.5, 12.5, 12.5], "texture": "#stone"}
+      }
+    },
+    {
+      "__comment": "Gemeisselter Rumpf",
+      "from": [4.5, 4, 5],
+      "to": [11.5, 9.5, 11],
+      "faces": {
+        "north": {"uv": [4.5, 5, 11.5, 10.5], "texture": "#stone"},
+        "south": {"uv": [4.5, 5, 11.5, 10.5], "texture": "#stone"},
+        "east": {"uv": [5, 5, 11, 10.5], "texture": "#stone"},
+        "west": {"uv": [5, 5, 11, 10.5], "texture": "#stone"},
+        "up": {"uv": [4.5, 5, 11.5, 11], "texture": "#stone"}
+      }
+    },
+    {
+      "__comment": "Kopf mit graviertem Laecheln",
+      "from": [5.25, 9.5, 5.25],
+      "to": [10.75, 14, 10.75],
+      "faces": {
+        "north": {"uv": [2, 2, 14, 14], "texture": "#face"},
+        "south": {"uv": [5.25, 2, 10.75, 6.5], "texture": "#stone"},
+        "east": {"uv": [2, 2, 7.5, 6.5], "texture": "#stone"},
+        "west": {"uv": [8.5, 2, 14, 6.5], "texture": "#stone"},
+        "up": {"uv": [5.25, 5.25, 10.75, 10.75], "texture": "#stone"}
+      }
+    },
+    {
+      "__comment": "Linkes Steinohr",
+      "from": [5.75, 14, 7],
+      "to": [7.25, 16, 8.5],
+      "faces": {
+        "north": {"uv": [3, 0, 4.5, 2], "texture": "#stone"},
+        "south": {"uv": [11.5, 0, 13, 2], "texture": "#stone"},
+        "east": {"uv": [5, 0, 6.5, 2], "texture": "#stone"},
+        "west": {"uv": [9.5, 0, 11, 2], "texture": "#stone"},
+        "up": {"uv": [5.75, 7, 7.25, 8.5], "texture": "#stone"}
+      }
+    },
+    {
+      "__comment": "Rechtes Steinohr",
+      "from": [8.75, 14, 7],
+      "to": [10.25, 16, 8.5],
+      "faces": {
+        "north": {"uv": [11.5, 0, 13, 2], "texture": "#stone"},
+        "south": {"uv": [3, 0, 4.5, 2], "texture": "#stone"},
+        "east": {"uv": [5, 0, 6.5, 2], "texture": "#stone"},
+        "west": {"uv": [9.5, 0, 11, 2], "texture": "#stone"},
+        "up": {"uv": [8.75, 7, 10.25, 8.5], "texture": "#stone"}
+      }
+    },
+    {
+      "__comment": "Linke Pfoten-Relief vorne",
+      "from": [5, 4, 4.6],
+      "to": [6.75, 6, 5],
+      "faces": {
+        "north": {"uv": [5, 10, 6.75, 12], "texture": "#stone"},
+        "east": {"uv": [7, 10, 7.4, 12], "texture": "#stone"},
+        "west": {"uv": [8.6, 10, 9, 12], "texture": "#stone"},
+        "up": {"uv": [5, 10, 6.75, 10.4], "texture": "#stone"},
+        "down": {"uv": [5, 11.6, 6.75, 12], "texture": "#stone"}
+      }
+    },
+    {
+      "__comment": "Rechte Pfoten-Relief vorne",
+      "from": [9.25, 4, 4.6],
+      "to": [11, 6, 5],
+      "faces": {
+        "north": {"uv": [9.25, 10, 11, 12], "texture": "#stone"},
+        "east": {"uv": [7, 10, 7.4, 12], "texture": "#stone"},
+        "west": {"uv": [8.6, 10, 9, 12], "texture": "#stone"},
+        "up": {"uv": [9.25, 10, 11, 10.4], "texture": "#stone"},
+        "down": {"uv": [9.25, 11.6, 11, 12], "texture": "#stone"}
+      }
+    },
+    {
+      "__comment": "Puschelschwanz-Relief hinten",
+      "from": [7, 5, 11],
+      "to": [9, 7, 11.9],
+      "faces": {
+        "south": {"uv": [7, 9, 9, 11], "texture": "#stone"},
+        "east": {"uv": [6, 9, 6.9, 11], "texture": "#stone"},
+        "west": {"uv": [9.1, 9, 10, 11], "texture": "#stone"},
+        "up": {"uv": [7, 9, 9, 9.9], "texture": "#stone"},
+        "down": {"uv": [7, 10.1, 9, 11], "texture": "#stone"}
+      }
+    }
+  ]
+}

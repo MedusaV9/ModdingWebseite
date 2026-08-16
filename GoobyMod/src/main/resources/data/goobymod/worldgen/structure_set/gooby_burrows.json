@@ -1,0 +1,14 @@
+{
+  "structures": [
+    {
+      "structure": "goobymod:gooby_burrow",
+      "weight": 1
+    }
+  ],
+  "placement": {
+    "type": "minecraft:random_spread",
+    "salt": 810041,
+    "spacing": 480,
+    "separation": 320
+  }
+}

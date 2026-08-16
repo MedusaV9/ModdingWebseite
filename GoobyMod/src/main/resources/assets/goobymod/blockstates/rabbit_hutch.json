@@ -1,0 +1,23 @@
+{
+  "multipart": [
+    {"when": {"facing": "north"}, "apply": {"model": "goobymod:block/rabbit_hutch"}},
+    {"when": {"facing": "east"}, "apply": {"model": "goobymod:block/rabbit_hutch", "y": 90}},
+    {"when": {"facing": "south"}, "apply": {"model": "goobymod:block/rabbit_hutch", "y": 180}},
+    {"when": {"facing": "west"}, "apply": {"model": "goobymod:block/rabbit_hutch", "y": 270}},
+
+    {"when": {"facing": "north", "bedding": "1"}, "apply": {"model": "goobymod:block/rabbit_hutch_bedding_1"}},
+    {"when": {"facing": "east", "bedding": "1"}, "apply": {"model": "goobymod:block/rabbit_hutch_bedding_1", "y": 90}},
+    {"when": {"facing": "south", "bedding": "1"}, "apply": {"model": "goobymod:block/rabbit_hutch_bedding_1", "y": 180}},
+    {"when": {"facing": "west", "bedding": "1"}, "apply": {"model": "goobymod:block/rabbit_hutch_bedding_1", "y": 270}},
+
+    {"when": {"facing": "north", "bedding": "2"}, "apply": {"model": "goobymod:block/rabbit_hutch_bedding_2"}},
+    {"when": {"facing": "east", "bedding": "2"}, "apply": {"model": "goobymod:block/rabbit_hutch_bedding_2", "y": 90}},
+    {"when": {"facing": "south", "bedding": "2"}, "apply": {"model": "goobymod:block/rabbit_hutch_bedding_2", "y": 180}},
+    {"when": {"facing": "west", "bedding": "2"}, "apply": {"model": "goobymod:block/rabbit_hutch_bedding_2", "y": 270}},
+
+    {"when": {"facing": "north", "bedding": "3"}, "apply": {"model": "goobymod:block/rabbit_hutch_bedding_3"}},
+    {"when": {"facing": "east", "bedding": "3"}, "apply": {"model": "goobymod:block/rabbit_hutch_bedding_3", "y": 90}},
+    {"when": {"facing": "south", "bedding": "3"}, "apply": {"model": "goobymod:block/rabbit_hutch_bedding_3", "y": 180}},
+    {"when": {"facing": "west", "bedding": "3"}, "apply": {"model": "goobymod:block/rabbit_hutch_bedding_3", "y": 270}}
+  ]
+}

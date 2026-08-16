@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "building",
+  "pattern": [
+    "PPP",
+    "PHP",
+    "P P"
+  ],
+  "key": {
+    "P": {"tag": "minecraft:planks"},
+    "H": {"item": "minecraft:hay_block"}
+  },
+  "result": {
+    "id": "goobymod:rabbit_hutch",
+    "count": 1
+  }
+}

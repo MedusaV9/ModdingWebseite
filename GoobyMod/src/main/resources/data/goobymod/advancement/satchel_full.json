@@ -1,0 +1,23 @@
+{
+  "parent": "goobymod:full_outfit",
+  "display": {
+    "icon": {
+      "id": "goobymod:tiny_satchel"
+    },
+    "title": {
+      "translate": "advancements.goobymod.satchel_full.title"
+    },
+    "description": {
+      "translate": "advancements.goobymod.satchel_full.description"
+    },
+    "frame": "task",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {
+    "granted": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}

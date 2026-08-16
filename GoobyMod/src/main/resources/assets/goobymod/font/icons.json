@@ -1,0 +1,17 @@
+{
+  "providers": [
+    {
+      "type": "bitmap",
+      "file": "goobymod:font/icons.png",
+      "ascent": 7,
+      "height": 8,
+      "chars": [
+        ""
+      ]
+    },
+    {
+      "type": "reference",
+      "id": "minecraft:default"
+    }
+  ]
+}

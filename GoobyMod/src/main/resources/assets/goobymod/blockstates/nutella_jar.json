@@ -1,0 +1,6 @@
+{
+  "variants": {
+    "claimed=false": { "model": "goobymod:block/nutella_jar" },
+    "claimed=true": { "model": "goobymod:block/nutella_jar" }
+  }
+}

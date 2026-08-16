@@ -1,0 +1,9 @@
+{
+  "parent": "minecraft:block/cake",
+  "textures": {
+    "bottom": "minecraft:block/cake_bottom",
+    "side": "minecraft:block/cake_side",
+    "top": "goobymod:block/nutella_cake_top",
+    "particle": "goobymod:block/nutella_cake_top"
+  }
+}
