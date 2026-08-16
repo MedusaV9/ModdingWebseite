@@ -1,0 +1,74 @@
+name: Gooby Mod
+
+# GoobyMod lebt als Unterprojekt in GoobyMod/ — dessen genestete Workflows
+# (GoobyMod/.github/workflows/) fuehrt GitHub NICHT aus. Dieser Root-Workflow
+# ist daher das fail-closed CI-Gate fuer alle Mod-Aenderungen: Audio-Gate
+# (Manifest + Container + Lautheit), Asset-/Worldgen-Validatoren, Python-Tests,
+# Release-Gate, Gradle-Build und GameTests. Es wird niemals ein Jar ins Repo
+# zurueckcommittet — das gebaute Jar wird nur als Workflow-Artefakt hochgeladen.
+on:
+  push:
+    branches:
+      - main
+      - "cursor/**"
+    paths:
+      - "GoobyMod/**"
+      - ".github/workflows/gooby-mod.yml"
+  pull_request:
+    paths:
+      - "GoobyMod/**"
+      - ".github/workflows/gooby-mod.yml"
+  workflow_dispatch: {}
+
+concurrency:
+  group: gooby-mod-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gates-build-gametests:
+    name: Audio/Asset-Gates, Build, GameTests
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: GoobyMod
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install audio/asset toolchain (ffmpeg, numpy, Pillow)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg
+          python3 -m pip install --upgrade pip
+          python3 -m pip install numpy Pillow
+      - name: Fetch optional external assets
+        run: if [ -f tools/fetch_assets.py ]; then python3 tools/fetch_assets.py; fi
+      - name: Audio gate — Manifest, Container, Lautheit (fail-closed)
+        run: python3 scripts/gen_sounds.py --verify
+      - name: Asset validators (fail-closed)
+        run: |
+          python3 scripts/test_validate_assets.py
+          python3 scripts/validate_assets.py
+      - name: Worldgen validator (fail-closed)
+        run: python3 scripts/validate_worldgen.py
+      - name: Release metadata gate (fail-closed)
+        run: |
+          python3 scripts/test_release.py
+          python3 scripts/release.py --check-only
+      - name: Build mod jar
+        run: chmod +x gradlew && ./gradlew clean build --no-daemon --max-workers=2
+      - name: Run GameTests (fail-closed)
+        run: ./gradlew runGameTestServer --no-daemon --max-workers=2
+      - name: Upload jar artifact (kein Commit zurueck ins Repo)
+        uses: actions/upload-artifact@v4
+        with:
+          name: goobymod-${{ github.sha }}
+          path: GoobyMod/build/libs/*.jar
+          if-no-files-found: error

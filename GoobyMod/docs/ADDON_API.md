@@ -40,4 +40,18 @@ GoobyApi.registerSpeechPool(
 Provide every key in each language supported by the addon. Pool identifiers
 must be unique, keys must be nonblank, and registration is fail-fast.
 
+## Stable sound events
+
+Every Gooby sound event under `goobymod:entity.gooby.*` is declared in
+`assets/goobymod/sounds.json` and registered 1:1 (game-test enforced), so
+addons can resolve them via `BuiltInRegistries.SOUND_EVENT` and play them
+like any vanilla event. Subtitles ship for `en_us` and `de_de`.
+
+`goobymod:entity.gooby.ambient` is a **stable, addon-facing fallback**: the
+mod itself voices ambience through the mood pools (`ambient_neutral`,
+`ambient_happy`, `ambient_sleepy`), while the generic event stays registered
+and aliases the neutral pool. Addons that want a mood-agnostic Gooby chirp
+can play it without tracking mood state; it will not be removed within the
+5.x line. See `docs/AUDIO.md` for the full pool/variant policy.
+
 Made by Sonic0810.

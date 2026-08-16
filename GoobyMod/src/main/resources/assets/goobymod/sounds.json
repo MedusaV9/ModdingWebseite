@@ -2,72 +2,81 @@
   "entity.gooby.squeak": {
     "subtitle": "subtitles.goobymod.squeak",
     "sounds": [
-      "goobymod:entity/gooby/squeak1",
-      "goobymod:entity/gooby/squeak2",
-      "goobymod:entity/gooby/squeak3"
+      { "name": "goobymod:entity/gooby/squeak1", "weight": 3 },
+      { "name": "goobymod:entity/gooby/squeak2", "weight": 2, "pitch": 0.97, "volume": 0.97 },
+      { "name": "goobymod:entity/gooby/squeak3", "weight": 2, "pitch": 1.04, "volume": 0.95 }
     ]
   },
   "entity.gooby.purr": {
     "subtitle": "subtitles.goobymod.purr",
     "sounds": [
-      "goobymod:entity/gooby/purr1",
-      "goobymod:entity/gooby/purr2",
-      "goobymod:entity/gooby/purr3"
+      { "name": "goobymod:entity/gooby/purr1", "weight": 3 },
+      { "name": "goobymod:entity/gooby/purr2", "weight": 2, "pitch": 0.96, "volume": 0.97 },
+      { "name": "goobymod:entity/gooby/purr3", "weight": 2, "pitch": 1.03, "volume": 0.95 }
     ]
   },
   "entity.gooby.boing": {
     "subtitle": "subtitles.goobymod.boing",
     "sounds": [
-      "goobymod:entity/gooby/boing1",
-      "goobymod:entity/gooby/boing2"
+      { "name": "goobymod:entity/gooby/boing1", "weight": 3 },
+      { "name": "goobymod:entity/gooby/boing2", "weight": 2, "pitch": 0.97, "volume": 0.96 },
+      { "name": "goobymod:entity/gooby/boing3", "weight": 2, "pitch": 1.04, "volume": 0.94 }
     ]
   },
   "entity.gooby.plop": {
     "subtitle": "subtitles.goobymod.plop",
     "sounds": [
-      "goobymod:entity/gooby/plop1",
-      "goobymod:entity/gooby/plop2"
+      { "name": "goobymod:entity/gooby/plop1", "weight": 3 },
+      { "name": "goobymod:entity/gooby/plop2", "weight": 2, "pitch": 0.96, "volume": 0.97 },
+      { "name": "goobymod:entity/gooby/plop3", "weight": 2, "pitch": 1.05, "volume": 0.95 }
     ]
   },
   "entity.gooby.munch": {
     "subtitle": "subtitles.goobymod.munch",
     "sounds": [
-      "goobymod:entity/gooby/munch1",
-      "goobymod:entity/gooby/munch2",
-      "goobymod:entity/gooby/munch3"
+      { "name": "goobymod:entity/gooby/munch1", "weight": 3 },
+      { "name": "goobymod:entity/gooby/munch2", "weight": 2, "pitch": 0.97, "volume": 0.97 },
+      { "name": "goobymod:entity/gooby/munch3", "weight": 2, "pitch": 1.03, "volume": 0.96 }
     ]
   },
   "entity.gooby.snore": {
     "subtitle": "subtitles.goobymod.snore",
     "sounds": [
-      "goobymod:entity/gooby/snore1",
-      "goobymod:entity/gooby/snore2"
+      { "name": "goobymod:entity/gooby/snore1", "weight": 3 },
+      { "name": "goobymod:entity/gooby/snore2", "weight": 2, "pitch": 0.97, "volume": 0.95 },
+      { "name": "goobymod:entity/gooby/snore3", "weight": 2, "pitch": 1.02, "volume": 0.93 }
     ]
   },
   "entity.gooby.ambient": {
     "subtitle": "subtitles.goobymod.ambient",
     "sounds": [
-      "goobymod:entity/gooby/ambient_neutral1",
-      "goobymod:entity/gooby/ambient_neutral2",
-      "goobymod:entity/gooby/ambient_neutral3"
+      { "name": "goobymod:entity/gooby/ambient_neutral1", "weight": 3 },
+      { "name": "goobymod:entity/gooby/ambient_neutral2", "weight": 2, "pitch": 0.97, "volume": 0.97 },
+      { "name": "goobymod:entity/gooby/ambient_neutral3", "weight": 2, "pitch": 1.03, "volume": 0.95 }
     ]
   },
   "entity.gooby.sad_whimper": {
     "subtitle": "subtitles.goobymod.sad_whimper",
     "sounds": [
-      "goobymod:entity/gooby/sad_whimper1",
-      "goobymod:entity/gooby/sad_whimper2"
+      { "name": "goobymod:entity/gooby/sad_whimper1", "weight": 3 },
+      { "name": "goobymod:entity/gooby/sad_whimper2", "weight": 2, "pitch": 0.97, "volume": 0.96 },
+      { "name": "goobymod:entity/gooby/sad_whimper3", "weight": 2, "pitch": 1.02, "volume": 0.94 }
     ]
   },
   "entity.gooby.yawn": {
     "subtitle": "subtitles.goobymod.yawn",
-    "sounds": ["goobymod:entity/gooby/yawn"]
+    "sounds": [
+      { "name": "goobymod:entity/gooby/yawn1", "weight": 3 },
+      { "name": "goobymod:entity/gooby/yawn2", "weight": 2, "pitch": 0.97, "volume": 0.96 },
+      { "name": "goobymod:entity/gooby/yawn3", "weight": 2, "pitch": 1.03, "volume": 0.94 }
+    ]
   },
   "entity.gooby.sniff": {
     "subtitle": "subtitles.goobymod.sniff",
     "sounds": [
-      "goobymod:entity/gooby/sniff1",
-      "goobymod:entity/gooby/sniff2"
+      { "name": "goobymod:entity/gooby/sniff1", "weight": 3 },
+      { "name": "goobymod:entity/gooby/sniff2", "weight": 2, "pitch": 0.96, "volume": 0.97 },
+      { "name": "goobymod:entity/gooby/sniff3", "weight": 2, "pitch": 1.04, "volume": 0.95 }
     ]
   },
   "entity.gooby.purr_loop": {
@@ -77,24 +86,25 @@
   "entity.gooby.ambient_neutral": {
     "subtitle": "subtitles.goobymod.ambient_neutral",
     "sounds": [
-      "goobymod:entity/gooby/ambient_neutral1",
-      "goobymod:entity/gooby/ambient_neutral2",
-      "goobymod:entity/gooby/ambient_neutral3"
+      { "name": "goobymod:entity/gooby/ambient_neutral1", "weight": 3 },
+      { "name": "goobymod:entity/gooby/ambient_neutral2", "weight": 2, "pitch": 0.97, "volume": 0.97 },
+      { "name": "goobymod:entity/gooby/ambient_neutral3", "weight": 2, "pitch": 1.03, "volume": 0.95 }
     ]
   },
   "entity.gooby.ambient_happy": {
     "subtitle": "subtitles.goobymod.ambient_happy",
     "sounds": [
-      "goobymod:entity/gooby/ambient_happy1",
-      "goobymod:entity/gooby/ambient_happy2",
-      "goobymod:entity/gooby/ambient_happy3"
+      { "name": "goobymod:entity/gooby/ambient_happy1", "weight": 3 },
+      { "name": "goobymod:entity/gooby/ambient_happy2", "weight": 2, "pitch": 0.98, "volume": 0.97 },
+      { "name": "goobymod:entity/gooby/ambient_happy3", "weight": 2, "pitch": 1.04, "volume": 0.95 }
     ]
   },
   "entity.gooby.ambient_sleepy": {
     "subtitle": "subtitles.goobymod.ambient_sleepy",
     "sounds": [
-      "goobymod:entity/gooby/ambient_sleepy1",
-      "goobymod:entity/gooby/ambient_sleepy2"
+      { "name": "goobymod:entity/gooby/ambient_sleepy1", "weight": 3 },
+      { "name": "goobymod:entity/gooby/ambient_sleepy2", "weight": 2, "pitch": 0.96, "volume": 0.96 },
+      { "name": "goobymod:entity/gooby/ambient_sleepy3", "weight": 2, "pitch": 1.02, "volume": 0.93 }
     ]
   },
   "entity.gooby.whistle_wander": {
@@ -112,22 +122,25 @@
   "entity.gooby.brush": {
     "subtitle": "subtitles.goobymod.brush",
     "sounds": [
-      "goobymod:entity/gooby/brush1",
-      "goobymod:entity/gooby/brush2"
+      { "name": "goobymod:entity/gooby/brush1", "weight": 3 },
+      { "name": "goobymod:entity/gooby/brush2", "weight": 2, "pitch": 0.97, "volume": 0.97 },
+      { "name": "goobymod:entity/gooby/brush3", "weight": 2, "pitch": 1.03, "volume": 0.95 }
     ]
   },
   "entity.gooby.whine_hungry": {
     "subtitle": "subtitles.goobymod.whine_hungry",
     "sounds": [
-      "goobymod:entity/gooby/whine_hungry1",
-      "goobymod:entity/gooby/whine_hungry2"
+      { "name": "goobymod:entity/gooby/whine_hungry1", "weight": 3 },
+      { "name": "goobymod:entity/gooby/whine_hungry2", "weight": 2, "pitch": 0.97, "volume": 0.97 },
+      { "name": "goobymod:entity/gooby/whine_hungry3", "weight": 2, "pitch": 1.03, "volume": 0.95 }
     ]
   },
   "entity.gooby.lonely_sigh": {
     "subtitle": "subtitles.goobymod.lonely_sigh",
     "sounds": [
-      "goobymod:entity/gooby/lonely_sigh1",
-      "goobymod:entity/gooby/lonely_sigh2"
+      { "name": "goobymod:entity/gooby/lonely_sigh1", "weight": 3 },
+      { "name": "goobymod:entity/gooby/lonely_sigh2", "weight": 2, "pitch": 0.97, "volume": 0.96 },
+      { "name": "goobymod:entity/gooby/lonely_sigh3", "weight": 2, "pitch": 1.02, "volume": 0.94 }
     ]
   },
   "entity.gooby.alarm_squeak": {
@@ -139,11 +152,19 @@
   },
   "entity.gooby.shake": {
     "subtitle": "subtitles.goobymod.shake",
-    "sounds": ["goobymod:entity/gooby/shake"]
+    "sounds": [
+      { "name": "goobymod:entity/gooby/shake1", "weight": 3 },
+      { "name": "goobymod:entity/gooby/shake2", "weight": 2, "pitch": 0.97, "volume": 0.96 },
+      { "name": "goobymod:entity/gooby/shake3", "weight": 2, "pitch": 1.03, "volume": 0.94 }
+    ]
   },
   "entity.gooby.tier_up_jingle": {
     "subtitle": "subtitles.goobymod.tier_up_jingle",
-    "sounds": ["goobymod:entity/gooby/tier_up_jingle"]
+    "sounds": [
+      { "name": "goobymod:entity/gooby/tier_up_jingle1", "weight": 3 },
+      { "name": "goobymod:entity/gooby/tier_up_jingle2", "weight": 2, "volume": 0.96 },
+      { "name": "goobymod:entity/gooby/tier_up_jingle3", "weight": 2, "volume": 0.94 }
+    ]
   },
   "entity.gooby.snuggle_purr_long": {
     "subtitle": "subtitles.goobymod.snuggle_purr_long",
@@ -151,48 +172,88 @@
   },
   "entity.gooby.trick_chime": {
     "subtitle": "subtitles.goobymod.trick_chime",
-    "sounds": ["goobymod:entity/gooby/trick_chime"]
+    "sounds": [
+      { "name": "goobymod:entity/gooby/trick_chime1", "weight": 3 },
+      { "name": "goobymod:entity/gooby/trick_chime2", "weight": 2, "volume": 0.96 },
+      { "name": "goobymod:entity/gooby/trick_chime3", "weight": 2, "volume": 0.94 }
+    ]
   },
   "entity.gooby.flop_thud": {
     "subtitle": "subtitles.goobymod.flop_thud",
-    "sounds": ["goobymod:entity/gooby/flop_thud"]
+    "sounds": [
+      { "name": "goobymod:entity/gooby/flop_thud1", "weight": 3 },
+      { "name": "goobymod:entity/gooby/flop_thud2", "weight": 2, "pitch": 0.96, "volume": 0.97 },
+      { "name": "goobymod:entity/gooby/flop_thud3", "weight": 2, "pitch": 1.04, "volume": 0.94 }
+    ]
   },
   "entity.gooby.whistle_denied": {
     "subtitle": "subtitles.goobymod.whistle_denied",
     "sounds": [
       { "name": "goobymod:entity/gooby/squeak1", "pitch": 0.65 },
-      { "name": "goobymod:entity/gooby/squeak2", "pitch": 0.65 }
+      { "name": "goobymod:entity/gooby/squeak2", "pitch": 0.65 },
+      { "name": "goobymod:entity/gooby/squeak3", "pitch": 0.65 }
     ]
   },
   "entity.gooby.hutch_rustle": {
     "subtitle": "subtitles.goobymod.hutch_rustle",
-    "sounds": ["goobymod:entity/gooby/hutch_rustle"]
+    "sounds": [
+      { "name": "goobymod:entity/gooby/hutch_rustle1", "weight": 3 },
+      { "name": "goobymod:entity/gooby/hutch_rustle2", "weight": 2, "pitch": 0.97, "volume": 0.97 },
+      { "name": "goobymod:entity/gooby/hutch_rustle3", "weight": 2, "pitch": 1.03, "volume": 0.95 }
+    ]
   },
   "entity.gooby.hutch_creak": {
     "subtitle": "subtitles.goobymod.hutch_creak",
-    "sounds": ["goobymod:entity/gooby/hutch_creak"]
+    "sounds": [
+      { "name": "goobymod:entity/gooby/hutch_creak1", "weight": 3 },
+      { "name": "goobymod:entity/gooby/hutch_creak2", "weight": 2, "pitch": 0.96, "volume": 0.96 },
+      { "name": "goobymod:entity/gooby/hutch_creak3", "weight": 2, "pitch": 1.03, "volume": 0.94 }
+    ]
   },
   "entity.gooby.baby_squeak": {
     "subtitle": "subtitles.goobymod.baby_squeak",
     "sounds": [
-      "goobymod:entity/gooby/baby_squeak1",
-      "goobymod:entity/gooby/baby_squeak2",
-      "goobymod:entity/gooby/baby_squeak3"
+      { "name": "goobymod:entity/gooby/baby_squeak1", "weight": 3 },
+      { "name": "goobymod:entity/gooby/baby_squeak2", "weight": 2, "pitch": 0.98, "volume": 0.97 },
+      { "name": "goobymod:entity/gooby/baby_squeak3", "weight": 2, "pitch": 1.04, "volume": 0.95 }
     ]
   },
   "entity.gooby.nuzzle": {
     "subtitle": "subtitles.goobymod.nuzzle",
-    "sounds": ["goobymod:entity/gooby/nuzzle"]
+    "sounds": [
+      { "name": "goobymod:entity/gooby/nuzzle1", "weight": 3 },
+      { "name": "goobymod:entity/gooby/nuzzle2", "weight": 2, "pitch": 0.97, "volume": 0.96 },
+      { "name": "goobymod:entity/gooby/nuzzle3", "weight": 2, "pitch": 1.03, "volume": 0.94 }
+    ]
   },
   "entity.gooby.dress_up": {
     "subtitle": "subtitles.goobymod.dress_up",
-    "sounds": ["goobymod:entity/gooby/dress_up"]
+    "sounds": [
+      { "name": "goobymod:entity/gooby/dress_up1", "weight": 3 },
+      { "name": "goobymod:entity/gooby/dress_up2", "weight": 2, "pitch": 0.97, "volume": 0.96 },
+      { "name": "goobymod:entity/gooby/dress_up3", "weight": 2, "pitch": 1.03, "volume": 0.95 }
+    ]
   },
   "entity.gooby.wild_call": {
     "subtitle": "subtitles.goobymod.wild_call",
     "sounds": [
       {
-        "name": "goobymod:entity/gooby/wild_call",
+        "name": "goobymod:entity/gooby/wild_call1",
+        "weight": 3,
+        "attenuation_distance": 32
+      },
+      {
+        "name": "goobymod:entity/gooby/wild_call2",
+        "weight": 2,
+        "pitch": 0.97,
+        "volume": 0.97,
+        "attenuation_distance": 32
+      },
+      {
+        "name": "goobymod:entity/gooby/wild_call3",
+        "weight": 2,
+        "pitch": 1.03,
+        "volume": 0.95,
         "attenuation_distance": 32
       }
     ]
@@ -200,16 +261,25 @@
   "entity.gooby.chirp_social": {
     "subtitle": "subtitles.goobymod.chirp_social",
     "sounds": [
-      "goobymod:entity/gooby/chirp_social1",
-      "goobymod:entity/gooby/chirp_social2"
+      { "name": "goobymod:entity/gooby/chirp_social1", "weight": 3 },
+      { "name": "goobymod:entity/gooby/chirp_social2", "weight": 2, "pitch": 0.97, "volume": 0.97 },
+      { "name": "goobymod:entity/gooby/chirp_social3", "weight": 2, "pitch": 1.04, "volume": 0.95 }
     ]
   },
   "entity.gooby.sniff_long": {
     "subtitle": "subtitles.goobymod.sniff_long",
-    "sounds": ["goobymod:entity/gooby/sniff_long"]
+    "sounds": [
+      { "name": "goobymod:entity/gooby/sniff_long1", "weight": 3 },
+      { "name": "goobymod:entity/gooby/sniff_long2", "weight": 2, "pitch": 0.97, "volume": 0.97 },
+      { "name": "goobymod:entity/gooby/sniff_long3", "weight": 2, "pitch": 1.03, "volume": 0.95 }
+    ]
   },
   "entity.gooby.map_rustle": {
     "subtitle": "subtitles.goobymod.map_rustle",
-    "sounds": ["goobymod:entity/gooby/map_rustle"]
+    "sounds": [
+      { "name": "goobymod:entity/gooby/map_rustle1", "weight": 3 },
+      { "name": "goobymod:entity/gooby/map_rustle2", "weight": 2, "pitch": 0.97, "volume": 0.97 },
+      { "name": "goobymod:entity/gooby/map_rustle3", "weight": 2, "pitch": 1.03, "volume": 0.95 }
+    ]
   }
 }
