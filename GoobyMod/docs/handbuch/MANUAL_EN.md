@@ -1,6 +1,89 @@
-# Gooby Player Manual EN · v5.1.0 “Interaction Polish”
+# Gooby Player Manual EN · v5.2.0 “Companion Deluxe”
 
 For **Minecraft 1.21.1**, NeoForge **21.1.248**, and GeckoLib 4.9.x.
+
+## New in v5.2.0
+
+- **Fetch:** Throw the new Gooby Ball (slime ball + string + Gooby Fluff,
+  makes two) — your adult Gooby returns exactly your ball, losslessly across
+  chunk and server reloads.
+- **Six tricks:** Roll and Dance join Spin, High Five, Flop, and Speak. The
+  sneak air-whistle now opens a real selection screen; selecting works up to
+  64 blocks away.
+- **Explorer outfit:** Flower Crown (head), dyeable Adventure Bandana
+  (neck), and Picnic Backpack (back) — the complete set grants “Ready for
+  Adventure”.
+- **Companion HUD & effects:** compact companion card, cuddle vignette,
+  alarm pulse, and gentle camera shake, all adjustable in the new config
+  screen (mod list → Config).
+- **Decor & snacks:** Nutella Toast (speed boost), Button Eye, squeezable
+  Gooby Plushie (cushions landings like Gooby Wool), and the nightly
+  sparkling Gooby Statue (“Set in Stone”).
+- **World:** Gooby burrows now have tunnels, dens, and a pantry; rare Gooby
+  picnics await in plains, meadows, flower forests, and cherry groves.
+- **Motion & looks:** real walk/run gaits for adults and babies; all five
+  coats repainted as premium textures.
+- **Voice:** 91 audio clips — virtually every noise now has three variants.
+
+## Fetch with the Gooby Ball
+
+1. Craft Gooby Balls shapelessly from a slime ball, string, and Gooby Fluff
+   (makes two).
+2. Throw a ball with right-click. Only your own adult Gooby recognizes your
+   throw and dashes after it.
+3. Gooby picks up exactly one ball and brings it back to you; the return
+   trip resumes even after a chunk change or server restart.
+4. The first successful return grants “Fetch!”.
+
+If a ball is unreachable (hole, fence), Gooby gives up after a short while
+and temporarily avoids that specific ball instead of pathfinding against it
+forever. Picked-up balls are ordinary throwable items again. Stay, alarm,
+and family behavior still take priority over play.
+
+## Explorer outfit
+
+Three matching accessories for your adult Gooby's server-authoritative
+wardrobe path:
+
+| Accessory | Slot | Recipe |
+|---|---|---|
+| Flower Crown | head | 3× small flower over string–fluff–string |
+| Adventure Bandana | neck | wool–string–wool over Gooby Fluff |
+| Picnic Backpack | back | leather frame around Gooby Wool + Button Eye |
+
+The bandana can be dyed in crafting or directly on the worn Gooby with all
+16 vanilla dyes. Shears still remove the complete outfit at once; swapping
+in a different accessory safely drops the old piece. The full three-piece
+set grants “Ready for Adventure”.
+
+## Companion HUD, effects & config screen
+
+The companion card in the top-left shows the name, mood, whistle command,
+plus health and satisfaction bars of your nearest own Gooby. It only uses
+already-synchronized data, fades out after brief inactivity, and hides
+behind menus, the debug overlay, and F1.
+
+Cuddling shows a warm vignette; a real alarm subtly pulses at the screen
+edge and adds a minimal camera shake. Reduced motion automatically disables
+the pulse and shake as well.
+
+The config screen (mod list → Config) gathers every client option: sliders
+and toggles edit a draft, **Done** saves everything at once, **Cancel**/Esc
+discards (with a confirmation when changes are unsaved). A live preview on
+the right shows the companion card including GUI-scale-dependent position
+clamping.
+
+## Picnic blankets & expanded burrows
+
+Gooby burrows are small cave systems: tunnels, dens, and a pantry with its
+own chest (carrots, wheat, fluff, Nutella, button eyes, rarely a golden
+carrot) attach to the grassy mound. The resident stays persistent and
+treats the den as home.
+
+Very rarely you will find a **Gooby Picnic** in plains, sunflower plains,
+flower forests, meadows, and cherry groves: a laid-out blanket with treats
+like Nutella Toast, cake, and cookies — sometimes even a plushie, a bowtie,
+or a flower crown.
 
 ## New in v5.1.0
 
@@ -300,14 +383,27 @@ area, forgets only that home, and remains unharmed.
 
 ## Training tricks
 
+Since v5.2.0 Gooby knows six tricks: **Spin**, **High Five**, **Flop**,
+**Speak**, **Roll**, and **Dance**.
+
 1. Sneak-use a Training Treat until the desired trick appears, or select it
-   from the whistle menu.
+   on the selection screen.
 2. Use the treat normally. Gooby needs a two-second breather after each
    successful round; only successful rounds consume a treat.
 3. One star unlocks performance and three stars master the trick. Shift-look
    inspection shows the selected trick and its stars.
 4. Double-use Gooby with an empty hand. **Speak** guarantees a voice and speech
-   bubble; **Flop** ends with a soft plush landing.
+   bubble; **Flop** ends with a soft plush landing. The **Roll** somersaults
+   around the body center while staying completely above the ground; the
+   **Dance** bounces with swinging ears and musical notes.
+
+The sneak air-whistle opens the native selection screen: cards for all six
+tricks with stars and status, usable via mouse, keyboard, and narrator.
+**Done** confirms, **Cancel**/Esc discards — “Active” always reflects only
+the truly saved state. Locked cards are visible but not selectable; their
+tooltip explains the training path. Opening the menu and selecting work up
+to **64 blocks** away; clients without the payload channel keep the
+clickable chat menu.
 
 The whistle remembers its most recent Wander/Follow/Stay mode in its tooltip.
 Foreign and wild Goobys answer with a clearly lower denial cue.
@@ -565,12 +661,18 @@ File: `serverconfig/goobymod-server.toml`
 
 ## Client config
 
-File: `config/goobymod-client.toml`
+File: `config/goobymod-client.toml` — every value can also be adjusted on
+the in-game config screen (mod list → Config).
 
 | Key | Default | Effect |
 |---|---:|---|
 | `accessibility.reducedMotion` | `false` | stop cosmetic micro-animation and bubble motion |
 | `accessibility.highContrastBubbles` | `false` | use opaque cream bubbles and darker text |
+| `companionHud.showCompanionHud` | `true` | companion card for your nearest own Gooby |
+| `companionHud.companionHudOffsetX` | `4` | horizontal card position in GUI pixels |
+| `companionHud.companionHudOffsetY` | `4` | vertical card position in GUI pixels |
+| `screenFx.screenEffects` | `true` | cuddle vignette and subtle alarm pulse |
+| `screenFx.cameraShake` | `true` | gentle camera shake on a real alarm |
 
 ## Troubleshooting
 

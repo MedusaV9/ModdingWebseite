@@ -2,10 +2,11 @@
 
 **GOOBY** — ein dicker, großer, niedlicher Hase (ca. 1,4 Blöcke hoch, kugelrund), der IMMER
 lächelt, freundlich ist und die ganze Zeit gestreichelt werden will. Seit 4.3
-„Schatzsucher" ist Gooby ein vollwertiger Abenteuerbegleiter; auf die gehärtete
-LTS-Fassung 5.0.2 „Ausdauernd" folgt 5.1.0 „Interaktions-Politur".
+„Schatzsucher" ist Gooby ein vollwertiger Abenteuerbegleiter; auf 5.1.0
+„Interaktions-Politur" folgt 5.2.0 „Begleiter-Deluxe" mit Apportieren,
+Explorer-Outfit, Begleiter-HUD, sechs Kunststücken und Premium-Fellen.
 
-- **Mod-Id:** `goobymod` · **Version:** 5.1.0 · **Autor:** made by Sonic0810
+- **Mod-Id:** `goobymod` · **Version:** 5.2.0 · **Autor:** made by Sonic0810
 - **Minecraft:** 1.21.1 · **Loader:** NeoForge 21.1.x · **Benötigt:** GeckoLib 4.9+
 - **Optional:** Create 6.0.10+ (typisierte Sitz-, Konstruktions- und Kinetik-Integration;
   ohne Create bleiben alle Pfade vollständig inaktiv)
@@ -25,6 +26,39 @@ LTS-Fassung 5.0.2 „Ausdauernd" folgt 5.1.0 „Interaktions-Politur".
 2. Nachts hoppelt ein **wilder** Gooby heran und schleckt das Glas leer.
    (Jedes Glas ruft genau EINEN Gooby — es wird beim Losschicken reserviert.)
 3. Wilde Goobys zähmst du, indem du ihnen ein Nutella-Glas fütterst.
+
+## Begleiter-Deluxe (5.2)
+
+- **Apportieren:** Der Gooby-Ball (Schleimball + Faden + Fussel) lässt sich
+  werfen; dein erwachsener Gooby bringt GENAU deinen Ball zurück — verlustfrei
+  über Chunk- und Server-Reloads. Unerreichbare Bälle werden kurz gemieden
+  statt endlos angelaufen.
+- **Sechs Kunststücke & nativer Trick-Bildschirm:** Rolle und Tanz ergänzen
+  Drehung, Pfötchen, Flauf und Sprich. Der Schleich-Luftpfiff öffnet einen
+  echten Auswahlbildschirm (Maus/Tastatur/Narrator) mit serverseitig
+  autorisierter Auswahl bis 64 Blöcke; Clients ohne Payload-Kanal behalten
+  das Chat-Menü.
+- **Begleiter-HUD, Screen-FX & Config-Bildschirm:** kompakte Begleiter-Karte
+  (Name, Stimmung, Kommando, Balken), Kuschel-Vignette, Alarm-Puls und
+  sanfter Kamera-Shake — alles einzeln abschaltbar und Reduced-Motion-treu.
+  Der neue Config-Bildschirm bietet Live-Vorschau und atomares Speichern.
+- **Explorer-Outfit & eigene Partikel:** Blumenkranz, färbbares
+  Abenteuer-Halstuch und Picknick-Rucksack über den serverautoritativen
+  Garderobenpfad; Konfetti-, Flausch- und Notenpartikel aus eigenen,
+  deterministisch generierten Sheets.
+- **Deko & Snacks:** Nutella-Toast (Schnelligkeitsschub), Knopfauge,
+  knuddelbares Gooby-Plüschtier (dämpft Landungen) und nachts funkelnde
+  Gooby-Statue.
+- **Welt:** Gooby-Baue expandieren als echtes Jigsaw (Tunnel, Kammern,
+  Vorratskammer), dazu die neue oberirdische Picknick-Begegnung in Ebenen,
+  Wiesen, Blumenwäldern und Kirschhainen.
+- **Bewegung & Optik:** deterministische Walk/Run-Gangarten mit Hysterese für
+  Adult und Baby; alle fünf Entity-Felle als Premium-Texturen direkt aus den
+  Runtime-Geometrien gemalt.
+- **Stimme:** 91 deterministische Audio-Clips mit Drei-Varianten-Pools und
+  fail-closed Audio-Gate (Manifest, Container, Lautheit).
+- **Sichere Garderobe:** volle ItemStack-Persistenz inkl. DataComponents;
+  Fremd-Mod-Accessoires überleben das Fehlen ihres Mods unangetastet.
 
 ## Hochglanz-LTS (5.0)
 
@@ -224,6 +258,7 @@ LTS-Fassung 5.0.2 „Ausdauernd" folgt 5.1.0 „Interaktions-Politur".
 | **Streichel-Wunsch** | Alle 1–2 Minuten schaut er dich an: „Streicheln? 🥺" |
 | **Nutella füttern** | Rechtsklick mit Nutella → Gesicht ins Glas! +Zufriedenheit +Freundschaft |
 | **Folgen (Lockmittel)** | Gooby folgt Spielern mit Nutella in der Hand |
+| **Apportieren** | Gooby-Ball werfen → dein erwachsener Gooby bringt genau deinen Ball zurück („Apport!") |
 | **Buddeln** | Gooby buddelt zum Spaß — Geschenke gibt's nur über das Geschenk-System |
 | **Bürsten** | Gooby-Bürste (Wolle + Stock) → Gooby-Fussel; bei Beste Freunde 5 % Funkel-Fussel für Fellvarianten |
 | **Gooby-Wolle** | Deko-Block, SO weich, dass er Fallschaden KOMPLETT dämpft |
@@ -262,10 +297,17 @@ Liegt pro Welt unter `serverconfig/goobymod-server.toml`, wird zu Clients synchr
 - `seek.allowOres` (`false`) · `seek.cooldown` (`6000`) — optionale Erzsuche
   und Fünf-Minuten-Abklingzeit
 
-Lokale Client-Barrierefreiheit liegt in `config/goobymod-client.toml`:
+Lokale Client-Optionen liegen in `config/goobymod-client.toml` und sind auch
+über den Ingame-Config-Bildschirm (Mod-Liste → Konfiguration) einstellbar:
 
 - `accessibility.reducedMotion` (`false`)
 - `accessibility.highContrastBubbles` (`false`)
+- `companionHud.showCompanionHud` (`true`) — Begleiter-Karte des nächsten
+  eigenen Goobys
+- `companionHud.companionHudOffsetX` / `companionHudOffsetY` (`4`/`4`) —
+  Kartenposition in GUI-Pixeln
+- `screenFx.screenEffects` (`true`) — Kuschel-Vignette und Alarm-Puls
+- `screenFx.cameraShake` (`true`) — sanfter Kamera-Shake bei echtem Alarm
 
 ## Rezepte
 
@@ -283,15 +325,25 @@ Lokale Client-Barrierefreiheit liegt in `config/goobymod-client.toml`:
 - **Gooby-Bürste:** beliebige Wolle über Stock
 - **Gooby-Wolle:** 2×2 Gooby-Fussel
 - **Hasenstall:** 8× Bretter (unten Mitte frei = Eingang) + Heuballen in der Mitte
+- **Nutella-Toast (2×):** Brot + Nutella-Glas (formlos)
+- **Knopfauge (2×):** 4× Goldnugget um eine Honigwabe
+- **Gooby-Plüschtier:** 2× Knopfauge oben, Fussel–Gooby-Wolle–Fussel, Gooby-Wolle unten
+- **Gooby-Statue:** Knopfauge über 2×3 Steinziegeln
+- **Gooby-Ball (2×):** Schleimball + Faden + Gooby-Fussel (formlos)
+- **Blumenkranz:** 3× kleine Blume über Faden–Fussel–Faden
+- **Abenteuer-Halstuch:** Wolle–Faden–Wolle über Gooby-Fussel; färbbar
+- **Picknick-Rucksack:** Leder-Rahmen um Gooby-Wolle, unten mittig ein Knopfauge
 
 ## Entwicklung
 
 ```bash
-./gradlew build --max-workers=2 # Jar bauen (build/libs/goobymod-5.1.0.jar)
-./gradlew runGameTestServer --max-workers=2 # 125 Default-GameTests (in CI fatal)
+./gradlew build --max-workers=2 # Jar bauen (build/libs/goobymod-5.2.0.jar)
+./gradlew runGameTestServer --max-workers=2 # 203 Kernsuite-GameTests (in CI fatal)
 ./gradlew runGameTestServer -PwithCreate --max-workers=2 # 3 Create-GameTests
+./gradlew runGameTestServer -PwithSoak --max-workers=2   # Langzeit-Soak-Suite
 ./gradlew runServer          # Dev-Server (Port 26565)
 ./gradlew runClientMp        # Testclient, verbindet direkt auf den Dev-Server
+python3 scripts/release.py --check-only # Release-Metadaten fail-closed prüfen
 python3 scripts/release.py   # prüfen, bauen, nummeriert unter versions/ archivieren
 ```
 
@@ -302,13 +354,18 @@ python3 scripts/gen_textures.py         # Item-/Block-/GUI-Texturen (Pillow);
                                         # fasst textures/entity/ NIE an
 python3 scripts/gen_entity_textures.py  # die fünf Premium-Entity-Sheets
                                         # (gooby, cream, cocoa, spotted, baby)
+python3 scripts/gen_particle_textures.py # Partikel-Sheets; --check verifiziert
 python3 scripts/gen_bbmodel.py          # Blockbench-Quellen aus den Runtime-Assets
 python3 scripts/validate_assets.py      # fail-closed: Geos, Animationen, UVs,
                                         # Texturen, .bbmodel-Konsistenz
+python3 scripts/validate_worldgen.py    # fail-closed: Structure→Set→Pool→NBT→Loot
+python3 scripts/gen_sounds.py --verify  # Audio-Gate: Manifest, Container, Lautheit
 ```
 
 Daneben: `scripts/gen_whistle_texture.py`, `scripts/gen_sounds.py`
-(numpy + ffmpeg), `scripts/gen_structure.py` (GameTest-Arenen).
+(numpy + ffmpeg, siehe `docs/AUDIO.md`), `scripts/gen_structure.py`
+(GameTest-Arenen und Worldgen-Templates); Modellquellen unter
+`assets_src/blockbench/` (generiert) und `assets_src/blender/` (Referenz).
 
 `PATCHNOTES.md` enthält die spielerfreundlichen DE+EN-Änderungen.
 `versions/README.md` indexiert die reproduzierbaren Release-Jars.

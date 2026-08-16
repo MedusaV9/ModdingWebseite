@@ -26,6 +26,7 @@ files are canonical; unnumbered copies support existing server tooling.
 | 18 | 5.1.0 | `18-goobymod-5.1.0.jar` | 1.21.1 / 21.1.248 | 4.9.2 | 6.0.10-280 | build + 118 default + 3 Create + 1 soak GameTest (12k ticks) + 9.5 min RCON wall-clock soak |
 
 Every jar is binary-tracked. `scripts/release.py` validates language parity,
-patch notes, and both manuals before building and copying an archive.
+the README, changelog, patch notes, and all four manuals before building and
+copying an archive.
 
 Made by Sonic0810.

@@ -6,9 +6,45 @@
 
 ---
 
-## Unreleased — „Kunststück-Welle" / “Trick Wave” · in Arbeit / work in progress
+## v5.2.0 — „Begleiter-Deluxe" / “Companion Deluxe” · 2026-08-16
 
 ### DE
+
+**Begleiter-HUD, Effekte & Config-Bildschirm**
+- Eine kompakte Begleiter-Karte zeigt Name, Stimmung, Pfeifkommando sowie
+  Lebens- und Zufriedenheitsbalken deines nächsten eigenen Goobys. Sie
+  blendet sich nach Inaktivität sanft aus und versteckt sich hinter Menüs,
+  Debug-Overlay und F1.
+- Beim Kuscheln erscheint eine warme Vignette, ein echter Alarm pulsiert
+  dezent am Bildschirmrand und schüttelt die Kamera ganz leicht. Alles ist
+  einzeln abschaltbar; reduzierte Bewegung deaktiviert Puls und Shake mit.
+- Der neue Config-Bildschirm (Mod-Liste → Konfiguration) bündelt alle
+  Client-Optionen mit Schiebereglern, Live-Vorschau der Begleiter-Karte und
+  „Fertig speichert / Abbrechen verwirft" — komplett per Maus, Tastatur und
+  Narrator bedienbar.
+
+**Neue Begleiter-Inhalte**
+- **Nutella-Toast** (Brot + Nutella): sättigt kräftig und gibt einen kurzen
+  Zuckerschub (Schnelligkeit I). **Knopfauge** (Goldnuggets + Honigwabe):
+  Bastelmaterial, das wilde Goobys auch in Bauten horten.
+- **Gooby-Plüschtier**: hinstellen, knuddeln (Quietschen + Herzchen) — und
+  es dämpft jede Landung so weich wie Gooby-Wolle. **Gooby-Statue**: ein
+  gemeißeltes Denkmal, das nachts sanft funkelt („In Stein gemeißelt").
+
+**Apportieren**
+- Der neue **Gooby-Ball** (Schleimball + Faden + Gooby-Fussel, ergibt zwei)
+  lässt sich werfen; dein erwachsener Gooby flitzt hinterher und bringt
+  GENAU deinen Ball zurück — auch nach Chunk-Wechsel oder Server-Neustart
+  geht kein Ball verloren. Advancement: „Apport!".
+- Unerreichbare Bälle (Loch, Zaun) gibt Gooby nach kurzer Zeit auf und
+  probiert es später erneut, statt endlos dagegen zu laufen.
+
+**Explorer-Outfit & Partikel**
+- Drei aufeinander abgestimmte Accessoires: **Blumenkranz** (Kopf),
+  färbbares **Abenteuer-Halstuch** (Hals) und **Picknick-Rucksack**
+  (Rücken). Das komplette Set verleiht „Bereit fürs Abenteuer".
+- Eigene Konfetti-, Flausch- und Notenpartikel begleiten Feiern, Landungen
+  und den Freudentanz.
 
 **Kunststück-Welle**
 - Der Schleich-Luftpfiff öffnet jetzt einen richtigen Auswahlbildschirm statt
@@ -31,7 +67,70 @@
 - Handbuch und Pfeifen-Tooltip sind auf sechs Kunststücke, den neuen
   Bildschirm und die 64-Block-Reichweite aktualisiert.
 
+**Bewegung & Optik**
+- Gooby hat jetzt echte Gangarten: gemütliches Gehen und flottes Rennen
+  wechseln flüssig je nach Tempo — beim Erwachsenen wie beim Baby. Kein
+  Gleiten mehr zwischen Stehen und Hoppeln.
+- Alle fünf Felle (klassisch, Creme, Kakao, gefleckt, Baby) wurden als
+  Premium-Texturen neu gemalt: Fellrichtung, weiche Schatten an den Kanten,
+  Glanzlichter und organisch gewachsene Flecken.
+
+**Draußen in der Welt**
+- Gooby-Baue sind echte kleine Höhlensysteme geworden: Tunnel, Kammern und
+  eine Vorratskammer mit eigener Truhe schließen sich an den Grashügel an.
+- Neu: das seltene **Gooby-Picknick** auf Wiesen, in Ebenen, Blumenwäldern
+  und Kirschhainen — eine gedeckte Decke mit Leckereien (auch mal ein
+  Plüschtier oder Blumenkranz) lädt zum Entdecken ein.
+
+**Goobys Stimme**
+- Die Klangbibliothek wächst auf 91 Clips: praktisch jedes Geräusch besitzt
+  jetzt drei Varianten — Knarzen, Rascheln, Nuzzeln, Gähnen, Schnarchen und
+  viele mehr klingen nie zweimal exakt gleich.
+
+**Technik & Sicherheit**
+- Die Garderobe speichert jetzt den vollständigen Item-Zustand (z. B.
+  Namen und Verzauberungs-Glint von Hüten) verlustfrei. Accessoires aus
+  entfernten Dritt-Mods gehen beim Laden nicht mehr verloren, sondern warten
+  unangetastet auf die Rückkehr des Mods.
+- Jede Mod-Änderung läuft durch ein neues, strenges CI-Gate: Audio-,
+  Asset- und Weltgenerierungs-Validatoren, Release-Prüfung, Build und alle
+  203 Kernsuite-GameTests müssen grün sein.
+
 ### EN
+
+**Companion HUD, effects & config screen**
+- A compact companion card shows the name, mood, whistle command, plus
+  health and satisfaction bars of your nearest own Gooby. It gently fades
+  after inactivity and hides behind menus, the debug overlay, and F1.
+- Cuddling shows a warm vignette, a real alarm subtly pulses at the screen
+  edge and adds a gentle camera shake. Everything can be toggled
+  individually; reduced motion also disables pulse and shake.
+- The new config screen (mod list → Config) gathers every client option
+  with sliders, a live preview of the companion card, and “Done saves /
+  Cancel discards” — fully usable via mouse, keyboard, and narrator.
+
+**New companion content**
+- **Nutella Toast** (bread + Nutella): filling, with a short sugar rush
+  (Speed I). **Button Eye** (gold nuggets + honeycomb): crafting material
+  that wild Goobys also hoard in burrows.
+- **Gooby Plushie**: place it, squeeze it (squeak + hearts) — and it
+  cushions every landing as softly as Gooby Wool. **Gooby Statue**: a
+  carved monument that sparkles softly at night (“Set in Stone”).
+
+**Fetch**
+- The new **Gooby Ball** (slime ball + string + Gooby Fluff, makes two) can
+  be thrown; your adult Gooby dashes after it and returns EXACTLY your ball
+  — no ball is lost even across chunk changes or server restarts.
+  Advancement: “Fetch!”.
+- Unreachable balls (hole, fence) are given up after a short while and
+  retried later instead of pathfinding against them forever.
+
+**Explorer outfit & particles**
+- Three matching accessories: **Flower Crown** (head), dyeable **Adventure
+  Bandana** (neck), and **Picnic Backpack** (back). The complete set grants
+  “Ready for Adventure”.
+- Custom confetti, fluff, and music-note particles accompany celebrations,
+  landings, and the happy dance.
 
 **Trick Wave**
 - The sneak air-whistle now opens a proper selection screen instead of the
@@ -51,6 +150,35 @@
   training target, then feed treats to unlock.
 - The handbook and the whistle tooltip now cover six tricks, the new screen,
   and the 64-block range.
+
+**Motion & looks**
+- Gooby now has real gaits: relaxed walking and brisk running blend smoothly
+  with its speed — for adults and babies alike. No more gliding between
+  standing and hopping.
+- All five coats (classic, cream, cocoa, spotted, baby) were repainted as
+  premium textures: fur direction, soft edge shading, highlights, and
+  organically grown spots.
+
+**Out in the world**
+- Gooby burrows have become real little cave systems: tunnels, dens, and a
+  pantry with its own chest attach to the grassy mound.
+- New: the rare **Gooby Picnic** in meadows, plains, flower forests, and
+  cherry groves — a laid-out blanket with treats (sometimes even a plushie
+  or flower crown) invites exploration.
+
+**Gooby's voice**
+- The sound library grows to 91 clips: virtually every noise now has three
+  variants — creaks, rustles, nuzzles, yawns, snores, and many more never
+  sound exactly the same twice.
+
+**Tech & safety**
+- The wardrobe now stores the complete item state (for example names and
+  enchantment glint on hats) losslessly. Accessories from removed
+  third-party mods are no longer lost on load; they wait untouched for the
+  mod's return.
+- Every mod change now passes a strict new CI gate: audio, asset, and
+  worldgen validators, the release check, the build, and all 203 core-suite
+  GameTests must be green.
 
 ---
 

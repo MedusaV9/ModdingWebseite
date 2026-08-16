@@ -1,9 +1,54 @@
 # Changelog — Gooby Mod
 
-## Unreleased — „Kunststück-Welle" / “Trick Wave” (in Arbeit / in progress)
+## 5.2.0 „Begleiter-Deluxe" / “Companion Deluxe” (2026-08-16)
 
 ### Engineering (DE)
 
+- Premium-Entity-Texturen: `scripts/gen_entity_textures.py` malt die fünf
+  Entity-Sheets (classic, cream, cocoa, spotted, baby) deterministisch direkt
+  aus den Runtime-Geometrien — gerichtete Fellsträhnen, Kanten-AO,
+  Face-abhängiges Licht, Rim-Highlights und organisch gewachsene Flecken.
+  `gen_textures.py` fasst `textures/entity/` bewusst nie mehr an;
+  `validate_assets.py` prüft Geos, Clips, UVs, Texturen und
+  `.bbmodel`-Konsistenz fail-closed. Blockbench-Quellen unter
+  `assets_src/blockbench/` entstehen synchron über `scripts/gen_bbmodel.py`,
+  eine Blender-Referenz liegt unter `assets_src/blender/`.
+- Walk/Run-Lokomotion: `GoobyLocomotion` wählt den Gang deterministisch über
+  geglättete Blocks/Tick mit Hysterese (Walk-Enter 0,04 / -Exit 0,02,
+  Run-Enter 0,204 / -Exit 0,196), sodass Follow-Tempo im Walk- und
+  Panik-/Zulauf-Tempo im Run-Band liegt. Walk-/Run-Clips existieren für
+  Adult- UND Baby-Geometrie; `GoobyLocomotionTests` decken die Bänder ab.
+- Begleiter-HUD & Screen-FX: `GoobyCompanionHud` rendert eine kompakte Karte
+  des nächsten eigenen Goobys (Name, Mood-Glyphe, Pfeifkommando, Lebens- und
+  Zufriedenheitsbalken) rein aus bereits synchronisierter Entity-Data — kein
+  zusätzliches Networking. Auto-Fade nach Inaktivität; versteckt hinter
+  Screens, Debug-Overlay und F1. `GoobyScreenEffects` zeichnet Kuschel-
+  Vignette und Alarm-Puls shaderfrei über GUI-Quads; `GoobyCameraShake`
+  bleibt über `screenFx.cameraShake` UND `reducedMotion` abschaltbar.
+- Config-Screen: `GoobyConfigScreen` (Mod-Liste → Config) editiert auf einem
+  `GoobyConfigDraft` — Fertig speichert atomar, Abbrechen/Esc fragt bei
+  ungespeicherten Änderungen nach. Live-Vorschau der Begleiter-Karte inkl.
+  GUI-Scale-abhängiger Offset-Klammerung; neue Client-Keys
+  `companionHud.showCompanionHud`/`companionHudOffsetX`/`companionHudOffsetY`
+  und `screenFx.screenEffects`/`cameraShake`.
+- Content-Welle: `NutellaToastItem` (7 Hunger / 9,1 Sättigung, 10 s
+  Schnelligkeit I), Knopfauge (2× aus Goldnuggets + Honigwabe),
+  `GoobyPlushieBlock` (Knuddel-Quietschen samt Herzchen, dämpft Landungen wie
+  Gooby-Wolle) und wasserloggbare `GoobyStatueBlock` mit nächtlichem
+  Ehrenfunke plus Advancement „In Stein gemeißelt".
+- Sichere Garderoben-Persistenz: `GoobyWardrobe` hält serverseitig den VOLLEN
+  ItemStack inkl. DataComponents und speichert ihn verlustfrei nach NBT.
+  Alte Wire-String-Saves migrieren automatisch; nicht parsebares
+  Fremd-Mod-Slot-NBT wird wörtlich konserviert und wieder ausgegeben.
+  `reconcile()` heilt abgeschnittene oder inkonsistente Sync-Werte.
+- Worldgen-Welle: Der Gooby-Bau expandiert zum echten Mehrteile-Jigsaw
+  (Tunnel gerade/Ecke, kleine Kammer, Vorratskammer mit eigenem Pantry-Loot,
+  Terminator-Kappen samt Template-Pools). Neu ist die oberirdische
+  Picknick-Begegnung `goobymod:gooby_picnic` (Structure-Set, Biome-Tag
+  `#goobymod:has_gooby_picnics`, eigener Loot mit Toast, Plüschtier und
+  Blumenkranz). `scripts/validate_worldgen.py` prüft die Datenkette
+  Structure→Set→Pool→NBT→Loot fail-closed; ein GameTest assembelt den Bau
+  mit dem echten `JigsawPlacement`-Placer.
 - Neuer Custom-Payload-Layer (`goobymod:trick_menu` S2C, `goobymod:trick_select`
   C2S): Codecs hart gebounded und fail-closed, komplette serverseitige
   Autorisierung (Besitz, Erwachsenenstatus, Dimension, Distanz, Trainingsstand)
@@ -33,9 +78,89 @@
 - Handbuch (Buchseiten + Kapitel 3) und Pfeifen-Tooltip auf sechs
   Kunststücke, den nativen Bildschirm und die 64-Block-Reichweite
   aktualisiert; alle neuen Lang-Keys DE/EN paritätisch.
+- Fetch-Welle: `GoobyBallItem` wirft GENAU einen Ball als `ItemEntity` mit
+  Besitzer-Signatur in den PersistentData (überlebt Chunk-Reload, liegt nie
+  im ItemStack — aufgehobene Bälle sind wieder normale Wurf-Items).
+  `GoobyFetchGoal` apportiert ausschließlich Bälle des eigenen Besitzers,
+  hält den Trage-Zustand synced + NBT-persistent über Chunk-/Server-Reloads
+  und blacklistet unerreichbare Bälle zeitlich begrenzt und hart gebounded —
+  keine Endlos-Pathfinding-Schleifen. Rezept (2× aus Schleimball + Faden +
+  Gooby-Fussel) und Advancement „Apport!".
+- Audio-Ausbau: Die vollsynthetische, deterministische Bibliothek
+  (`scripts/gen_sounds.py`, numpy → WAV → ffmpeg/libvorbis) wächst auf
+  91 OGG-Clips mit Drei-Varianten-Pools für alle Kernereignisse.
+  `docs/audio_manifest.json` + `gen_sounds.py --verify` bilden ein
+  fail-closed Audio-Gate (SHA-256-Manifest, Container, Lautheit), Details in
+  `docs/AUDIO.md`; `GoobyAudioExpansionTests` prüfen Registry und Pools.
+- Explorer-Outfit: Blumenkranz (HEAD über `#goobymod:gooby_hats`), färbbares
+  Abenteuer-Halstuch (NECK, `minecraft:dyeable` + Item-Tint) und
+  Picknick-Rucksack (BACK) laufen über denselben serverautoritativen
+  `tryEquipAccessory`-Pfad wie die bestehende Garderobe (Policy-Gates,
+  Swap-Drop inkl. Tascheninhalt, volle DataComponents). Set-Advancement
+  „Bereit fürs Abenteuer", handmodellierte 3D-Itemmodelle plus
+  Blockbench-Quellen.
+- Eigene Partikel: `ConfettiParticle`, `FluffPuffParticle` und
+  `MusicNoteParticle` mit über `scripts/gen_particle_textures.py --check`
+  verifizierten, deterministisch generierten Sheets;
+  `GoobyParticleWaveTests` decken Registrierung und Assets ab.
+- Root-CI: `.github/workflows/gooby-mod.yml` ist das fail-closed Gate für
+  alle Mod-Änderungen (genestete Workflows unter `GoobyMod/.github/` führt
+  GitHub nicht aus) — Audio-Gate, Asset-/Worldgen-Validatoren, Python-Tests,
+  Release-Gate, Gradle-Build und GameTests. Jars werden nur als
+  Workflow-Artefakt hochgeladen, nie ins Repo committet.
+- Release-Gate: `scripts/release.py --check-only` verlangt jetzt zusätzlich
+  die versionierte CHANGELOG-Sektion (neben README, PATCHNOTES, allen vier
+  Handbüchern und der DE/EN-Sprachparität).
+- Suite: 203 Kernsuite-GameTests (`runGameTestServer`), dazu 3 isolierte
+  Create-Tests (`-PwithCreate`) und die separate Soak-Suite (`-PwithSoak`).
 
 ### Engineering (EN)
 
+- Premium entity textures: `scripts/gen_entity_textures.py` deterministically
+  paints all five entity sheets (classic, cream, cocoa, spotted, baby)
+  directly from the runtime geometries — directional fur strands, edge
+  ambient occlusion, face-dependent lighting, rim highlights, and organically
+  grown spots. `gen_textures.py` deliberately never touches
+  `textures/entity/` anymore; `validate_assets.py` gates geos, clips, UVs,
+  textures, and `.bbmodel` consistency fail-closed. Blockbench sources
+  (`assets_src/blockbench/`) stay in sync via `scripts/gen_bbmodel.py`, with
+  a Blender reference under `assets_src/blender/`.
+- Walk/run locomotion: `GoobyLocomotion` picks the gait deterministically
+  from smoothed blocks/tick with hysteresis (walk enter 0.04 / exit 0.02,
+  run enter 0.204 / exit 0.196), placing follow speed inside the walk band
+  and panic/tempt speed inside the run band. Walk/run clips exist for the
+  adult AND baby geometry; `GoobyLocomotionTests` cover the bands.
+- Companion HUD & screen FX: `GoobyCompanionHud` renders a compact card for
+  the nearest own tamed Gooby (name, mood glyph, whistle command, health and
+  satisfaction bars) purely from already-synchronized entity data — no extra
+  networking. It auto-fades after inactivity and hides behind screens, the
+  debug overlay, and F1. `GoobyScreenEffects` draws the cuddle vignette and
+  alarm pulse shader-free through GUI quads; `GoobyCameraShake` stays
+  disableable via `screenFx.cameraShake` AND `reducedMotion`.
+- Config screen: `GoobyConfigScreen` (mod list → Config) edits on a
+  `GoobyConfigDraft` — Done saves atomically, Cancel/Esc confirms when
+  changes are unsaved. Live preview of the companion card including
+  GUI-scale-dependent offset clamping; new client keys
+  `companionHud.showCompanionHud`/`companionHudOffsetX`/`companionHudOffsetY`
+  and `screenFx.screenEffects`/`cameraShake`.
+- Content wave: `NutellaToastItem` (7 hunger / 9.1 saturation, 10 s Speed I),
+  Button Eye (2× from gold nuggets + honeycomb), `GoobyPlushieBlock`
+  (squeeze squeak with hearts, cushions landings like Gooby Wool), and the
+  waterloggable `GoobyStatueBlock` with a nightly honor sparkle plus the
+  “Set in Stone” advancement.
+- Safe wardrobe persistence: `GoobyWardrobe` keeps the FULL server-side
+  ItemStack including data components and persists it losslessly to NBT.
+  Legacy wire-string saves migrate automatically; slot NBT that fails to
+  parse (removed third-party mod) is preserved verbatim and re-emitted.
+  `reconcile()` heals truncated or inconsistent sync values.
+- Worldgen wave: the Gooby burrow expands into a true multi-piece jigsaw
+  (straight/corner tunnels, small den, pantry with its own loot table,
+  terminator caps with template pools). New above-ground picnic encounter
+  `goobymod:gooby_picnic` (structure set, biome tag
+  `#goobymod:has_gooby_picnics`, dedicated loot with toast, plushie, and
+  flower crown). `scripts/validate_worldgen.py` gates the
+  structure→set→pool→NBT→loot data chain fail-closed; a GameTest assembles
+  the burrow with the real `JigsawPlacement` placer.
 - New custom payload layer (`goobymod:trick_menu` S2C, `goobymod:trick_select`
   C2S): codecs hard-bounded and fail-closed, full server-side authorization
   (ownership, adult status, dimension, distance, training level) in
@@ -64,6 +189,40 @@
 - Handbook (book pages + chapter 3) and the whistle tooltip now cover six
   tricks, the native screen, and the 64-block range; all new language keys
   are DE/EN paritous.
+- Fetch wave: `GoobyBallItem` throws EXACTLY one ball as an `ItemEntity`
+  carrying the owner signature in persistent data (survives chunk reload,
+  never lives in the ItemStack — picked-up balls are ordinary throwables
+  again). `GoobyFetchGoal` only fetches balls thrown by the Gooby's own
+  owner, keeps the carry state synced + NBT-persistent across chunk/server
+  reloads, and time-blacklists unreachable balls with hard bounds — no
+  endless pathfinding loops. Recipe (2× from slime ball + string + Gooby
+  Fluff) and the “Fetch!” advancement.
+- Audio expansion: the fully synthetic deterministic library
+  (`scripts/gen_sounds.py`, numpy → WAV → ffmpeg/libvorbis) grows to 91 OGG
+  clips with three-variant pools for every core event.
+  `docs/audio_manifest.json` + `gen_sounds.py --verify` form a fail-closed
+  audio gate (SHA-256 manifest, container, loudness), documented in
+  `docs/AUDIO.md`; `GoobyAudioExpansionTests` verify registry and pools.
+- Explorer outfit: Flower Crown (HEAD via `#goobymod:gooby_hats`), dyeable
+  Adventure Bandana (NECK, `minecraft:dyeable` + item tint), and Picnic
+  Backpack (BACK) run through the same server-authoritative
+  `tryEquipAccessory` path as the existing wardrobe (policy gates, swap drop
+  including satchel contents, full data components). Set advancement
+  “Ready for Adventure”, hand-modeled 3D item models plus Blockbench sources.
+- Custom particles: `ConfettiParticle`, `FluffPuffParticle`, and
+  `MusicNoteParticle` with deterministically generated sheets verified via
+  `scripts/gen_particle_textures.py --check`; `GoobyParticleWaveTests` cover
+  registration and assets.
+- Root CI: `.github/workflows/gooby-mod.yml` is the fail-closed gate for all
+  mod changes (GitHub does not execute nested workflows under
+  `GoobyMod/.github/`) — audio gate, asset/worldgen validators, Python
+  tests, release gate, Gradle build, and GameTests. Jars are only uploaded
+  as workflow artifacts, never committed back into the repo.
+- Release gate: `scripts/release.py --check-only` now additionally requires
+  the versioned CHANGELOG section (alongside README, PATCHNOTES, all four
+  manuals, and DE/EN language parity).
+- Suite: 203 core-suite GameTests (`runGameTestServer`), plus 3 isolated
+  Create tests (`-PwithCreate`) and the separate soak suite (`-PwithSoak`).
 
 ## 5.1.0 „Interaktions-Politur" / “Interaction Polish” (2026-08-13)
 

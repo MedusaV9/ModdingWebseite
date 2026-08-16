@@ -15,7 +15,7 @@ ROADMAP_VERSIONS = (
     "3.0.0", "3.1.0", "3.2.0", "3.3.0", "3.4.0",
     "3.5.0", "3.6.0", "3.7.0", "3.8.0", "3.9.0",
     "4.0.0", "4.1.0", "4.2.0", "4.3.0", "5.0.0",
-    "5.0.1", "5.0.2", "5.1.0",
+    "5.0.1", "5.0.2", "5.1.0", "5.2.0",
 )
 MANUALS = (
     "docs/HANDBUCH_DE.md",
@@ -44,6 +44,13 @@ def validate(root: Path, version: str) -> None:
     patchnotes = (root / "PATCHNOTES.md").read_text(encoding="utf-8")
     if not re.search(rf"^## v{re.escape(version)}\b", patchnotes, re.MULTILINE):
         raise ReleaseError(f"PATCHNOTES.md has no v{version} section")
+
+    changelog_path = root / "CHANGELOG.md"
+    if not changelog_path.is_file():
+        raise ReleaseError("CHANGELOG.md is missing")
+    changelog = changelog_path.read_text(encoding="utf-8")
+    if not re.search(rf"^## {re.escape(version)}\b", changelog, re.MULTILINE):
+        raise ReleaseError(f"CHANGELOG.md has no {version} section")
 
     readme_path = root / "README.md"
     if not readme_path.is_file():

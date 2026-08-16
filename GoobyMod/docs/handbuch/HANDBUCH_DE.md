@@ -1,6 +1,92 @@
-# Gooby-Handbuch DE · v5.1.0 „Interaktions-Politur"
+# Gooby-Handbuch DE · v5.2.0 „Begleiter-Deluxe"
 
 Für **Minecraft 1.21.1**, NeoForge **21.1.248** und GeckoLib 4.9.x.
+
+## Neu in v5.2.0
+
+- **Apportieren:** Wirf den neuen Gooby-Ball (Schleimball + Faden +
+  Gooby-Fussel, ergibt zwei) — dein erwachsener Gooby bringt genau deinen
+  Ball zurück, verlustfrei über Chunk- und Server-Reloads.
+- **Sechs Kunststücke:** Rolle und Tanz ergänzen Drehung, Pfötchen, Flauf
+  und Sprich. Der Schleich-Luftpfiff öffnet jetzt einen echten
+  Auswahlbildschirm; Auswahl funktioniert bis 64 Blöcke Entfernung.
+- **Explorer-Outfit:** Blumenkranz (Kopf), färbbares Abenteuer-Halstuch
+  (Hals) und Picknick-Rucksack (Rücken) — das komplette Set verleiht
+  „Bereit fürs Abenteuer".
+- **Begleiter-HUD & Effekte:** kompakte Begleiter-Karte, Kuschel-Vignette,
+  Alarm-Puls und sanfter Kamera-Shake, alles im neuen Config-Bildschirm
+  einstellbar (Mod-Liste → Konfiguration).
+- **Deko & Snacks:** Nutella-Toast (Schnelligkeitsschub), Knopfauge,
+  knuddelbares Gooby-Plüschtier (dämpft Landungen wie Gooby-Wolle) und die
+  nachts funkelnde Gooby-Statue („In Stein gemeißelt").
+- **Welt:** Gooby-Baue haben jetzt Tunnel, Kammern und eine Vorratskammer;
+  auf Ebenen, Wiesen, Blumenwäldern und Kirschhainen warten seltene
+  Gooby-Picknicks.
+- **Bewegung & Optik:** echte Walk/Run-Gangarten für Erwachsene und Babys;
+  alle fünf Felle als neu gemalte Premium-Texturen.
+- **Stimme:** 91 Audio-Clips — praktisch jedes Geräusch hat jetzt drei
+  Varianten.
+
+## Apportieren mit dem Gooby-Ball
+
+1. Crafte Gooby-Bälle formlos aus Schleimball, Faden und Gooby-Fussel
+   (ergibt zwei Stück).
+2. Wirf einen Ball per Rechtsklick. Nur dein eigener, erwachsener Gooby
+   erkennt deinen Wurf und flitzt hinterher.
+3. Gooby nimmt genau einen Ball auf und bringt ihn dir zurück; der Rückweg
+   wird auch nach einem Chunk-Wechsel oder Server-Neustart fortgesetzt.
+4. Die erste erfolgreiche Rückgabe verleiht „Apport!".
+
+Liegt ein Ball unerreichbar (Loch, Zaun), gibt Gooby nach kurzer Zeit auf
+und meidet genau diesen Ball vorübergehend, statt endlos dagegen zu laufen.
+Aufgehobene Bälle sind wieder ganz normale Wurf-Items. Bleiben-, Alarm- und
+Familienverhalten haben weiterhin Vorrang vor dem Spiel.
+
+## Explorer-Outfit
+
+Drei aufeinander abgestimmte Accessoires für den serverautoritativen
+Garderobenpfad deines erwachsenen Goobys:
+
+| Accessoire | Slot | Rezept |
+|---|---|---|
+| Blumenkranz | Kopf | 3× kleine Blume über Faden–Fussel–Faden |
+| Abenteuer-Halstuch | Hals | Wolle–Faden–Wolle über Gooby-Fussel |
+| Picknick-Rucksack | Rücken | Leder-Rahmen um Gooby-Wolle + Knopfauge |
+
+Das Halstuch lässt sich im Crafting oder direkt am getragenen Gooby mit
+allen 16 Vanilla-Farbstoffen färben. Die Schere nimmt weiterhin das
+komplette Outfit gemeinsam ab; Tausch gegen ein anderes Accessoire droppt
+das alte Teil sicher. Das vollständige Drei-Teile-Set verleiht „Bereit fürs
+Abenteuer".
+
+## Begleiter-HUD, Effekte & Config-Bildschirm
+
+Die Begleiter-Karte oben links zeigt Name, Stimmung, Pfeifkommando sowie
+Lebens- und Zufriedenheitsbalken deines nächsten eigenen Goobys. Sie nutzt
+nur bereits synchronisierte Daten, blendet nach kurzer Inaktivität aus und
+versteckt sich hinter Menüs, Debug-Overlay und F1.
+
+Beim Kuscheln erscheint eine warme Vignette; ein echter Alarm pulsiert
+dezent am Bildschirmrand und schüttelt die Kamera minimal. Reduzierte
+Bewegung deaktiviert Puls und Shake automatisch mit.
+
+Der Config-Bildschirm (Mod-Liste → Konfiguration) bündelt alle
+Client-Optionen: Schieberegler und Schalter bearbeiten einen Entwurf,
+**Fertig** speichert alles auf einmal, **Abbrechen**/Esc verwirft (mit
+Rückfrage bei ungespeicherten Änderungen). Rechts zeigt eine Live-Vorschau
+die Begleiter-Karte samt GUI-Scale-abhängiger Positionsklammerung.
+
+## Picknick-Decken & ausgebaute Baue
+
+Gooby-Baue sind kleine Höhlensysteme: An den Grashügel schließen sich
+Tunnel, Kammern und eine Vorratskammer mit eigener Truhe (Karotten, Weizen,
+Fussel, Nutella, Knopfaugen, selten eine goldene Karotte) an. Der Bewohner
+bleibt persistent und behandelt die Kammer als Zuhause.
+
+Sehr selten findest du in Ebenen, Sonnenblumenebenen, Blumenwäldern, Wiesen
+und Kirschhainen ein **Gooby-Picknick**: eine gedeckte Decke mit Leckereien
+wie Nutella-Toast, Kuchen und Keksen — manchmal liegt auch ein Plüschtier,
+eine Fliege oder ein Blumenkranz dabei.
 
 ## Neu in v5.1.0
 
@@ -309,14 +395,27 @@ der Kollisionsfläche auf, verliert nur dieses Zuhause und bleibt unverletzt.
 
 ## Kunststücke trainieren
 
+Seit v5.2.0 beherrscht Gooby sechs Kunststücke: **Drehung**, **Pfötchen**,
+**Flauf**, **Sprich**, **Rolle** und **Tanz**.
+
 1. Schleiche und rechtsklicke mit einem Trainingshappen, bis das gewünschte
-   Kunststück angezeigt wird. Alternativ wählst du es im Pfeifenmenü.
+   Kunststück angezeigt wird. Alternativ wählst du es im Auswahlbildschirm.
 2. Rechtsklicke normal mit dem Happen. Nach jeder erfolgreichen Runde braucht
    Gooby zwei Sekunden Pause; nur erfolgreiche Runden verbrauchen einen Happen.
 3. Bereits ein Stern schaltet die Vorführung frei. Drei Sterne meistern das
    Kunststück. Die Shift-Blick-Statuszeile zeigt Auswahl und Sterne.
 4. Doppelklicke Gooby mit leerer Hand. **Sprich** erzeugt garantiert eine
    Sprechblase samt Stimme; **Flauf** endet mit einer weichen Plüschlandung.
+   Die **Rolle** überschlägt sich um die Körpermitte und bleibt dabei komplett
+   über dem Boden; der **Tanz** hüpft mit schwingenden Ohren und Noten.
+
+Der Schleich-Luftpfiff öffnet den nativen Auswahlbildschirm: Karten für alle
+sechs Kunststücke mit Sternen und Status, bedienbar per Maus, Tastatur und
+Narrator. **Fertig** bestätigt, **Abbrechen**/Esc verwirft — „Aktiv" zeigt
+immer nur den wirklich gespeicherten Stand. Gesperrte Karten sind sichtbar,
+aber nicht auswählbar; ihr Tooltip erklärt den Trainingsweg. Menü öffnen und
+Auswählen funktionieren bis **64 Blöcke** Entfernung; Clients ohne den
+Payload-Kanal erhalten weiterhin das klickbare Chat-Menü.
 
 Die Pfeife merkt ihren letzten Wander-/Follow-/Stay-Modus im Tooltip.
 Fremde oder wilde Goobys antworten mit einem klar tieferen Ablehnungssignal.
@@ -582,12 +681,18 @@ Datei: `serverconfig/goobymod-server.toml`
 
 ## Client-Config
 
-Datei: `config/goobymod-client.toml`
+Datei: `config/goobymod-client.toml` — alle Werte sind auch über den
+Ingame-Config-Bildschirm (Mod-Liste → Konfiguration) einstellbar.
 
 | Schlüssel | Standard | Wirkung |
 |---|---:|---|
 | `accessibility.reducedMotion` | `false` | Kosmetik-Mikroanimation und Blasenbewegung stoppen |
 | `accessibility.highContrastBubbles` | `false` | blickdichte Cremeblasen mit dunklerem Text |
+| `companionHud.showCompanionHud` | `true` | Begleiter-Karte des nächsten eigenen Goobys |
+| `companionHud.companionHudOffsetX` | `4` | horizontale Kartenposition in GUI-Pixeln |
+| `companionHud.companionHudOffsetY` | `4` | vertikale Kartenposition in GUI-Pixeln |
+| `screenFx.screenEffects` | `true` | Kuschel-Vignette und dezenter Alarm-Puls |
+| `screenFx.cameraShake` | `true` | sanfter Kamera-Shake bei echtem Alarm |
 
 ## Hilfe bei Problemen
 
