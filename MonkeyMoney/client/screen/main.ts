@@ -432,6 +432,7 @@ function zeichne(): void {
       raumConfig,
       aufgedeckt,
       { status: tunnelStatus, cmd: tunnelCmd },
+      screenNext,
     )}
     ${musikControl(sound, () => zeichne())} ${soundEcke(sound, () => zeichne())}
     ${pauseOverlay(view.paused, conn.serverNow())}`,
@@ -448,6 +449,17 @@ function zeichne(): void {
   fuellePuppen(app);
   // META (§7.4): Shop-Kosmetik (Avatar-Extras) — respektiert alltimeItems.
   schmueckePuppen(app, view.alltimeItems);
+}
+
+// Welle 1 „Start/Skip ohne GameMaster": der Screen (Raum-Ersteller) drückt den
+// Universal-Weiter selbst — Lobby: Match-Start, sonst Skip (wie GM flow.next).
+function screenNext(): void {
+  void conn.socket
+    .timeout(4000)
+    .emitWithAck("screen.next", {})
+    .catch(() => {
+      /* Netz-Hickser: nächster Versuch per erneutem Tap */
+    });
 }
 
 // LOBBY: Sichtbarkeit/Name ändern (room.config) — der Server broadcastet dann

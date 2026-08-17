@@ -236,3 +236,29 @@ describe("sockets: GM-Kommando raum.schliessen (Eval-7 P2 max-rooms)", () => {
     expect(await closedGesehen).toBe("gm-ende");
   });
 });
+
+describe("sockets: screen.next (Welle 1 — Start/Skip ohne GameMaster)", () => {
+  it("Screen startet aus der Lobby und skippt Phasen; Spieler dürfen nicht", async () => {
+    const { code, screen, p1 } = await raumMitSpieler();
+    // Zweiter Spieler — das Match braucht mindestens 2 Affen.
+    const p2 = await verbinde(welt);
+    await emitAck(p2, "hello", { roomCode: code, role: "player", name: "Kai", avatar: "rot" });
+
+    // Spieler-Sockets sind NICHT berechtigt (kein heimlicher Skip vom Handy).
+    const verboten = await emitAck<{ ok: boolean; error?: string }>(p1, "screen.next", {});
+    expect(verboten.ok).toBe(false);
+    expect(verboten.error).toBe("kein-screen");
+
+    // Der Screen startet das Match OHNE GameMaster:
+    const start = await emitAck<{ ok: boolean }>(screen, "screen.next", {});
+    expect(start.ok).toBe(true);
+    const room = welt.manager.finde(code)!;
+    expect(room.state.phase).not.toBe("lobby");
+
+    // … und skippt die aktuelle Phase (Universal-Weiter wie GM flow.next).
+    const phaseVorher = room.state.phase;
+    const skip = await emitAck<{ ok: boolean }>(screen, "screen.next", {});
+    expect(skip.ok).toBe(true);
+    expect(room.state.phase).not.toBe(phaseVorher);
+  });
+});

@@ -345,6 +345,27 @@ export function wireSockets(io: Server, manager: RoomManager, extras: SocketExtr
       void Promise.resolve(handleGmCmd(state.room, parsed.data)).then((antwort) => ack?.(antwort));
     });
 
+    // Welle 1 „Start/Skip ohne GameMaster": der SCREEN des Raums (Ersteller-
+    // Gerät, iPad/TV) darf den Universal-Weiter drücken — Lobby: Match-Start,
+    // sonst gm.next (Skip). Spieler und Beobachter bleiben außen vor.
+    socket.on("screen.next", (_payload: unknown, ack?: Ack) => {
+      if (!state.room || state.role !== "screen") {
+        return ack?.({ ok: false, error: "kein-screen" });
+      }
+      const warLobby = state.room.state.phase === "lobby";
+      const result = warLobby
+        ? state.room.startMatch()
+        : state.room.applyAction({ type: "gm.next" });
+      if (result.ok) {
+        state.room.gmLogEintrag(
+          "screen.next",
+          {},
+          warLobby ? "Match gestartet (Screen)" : "Weiter (Screen)",
+        );
+      }
+      ack?.(result);
+    });
+
     // ---------- INTERNET-LINK (ADDITIV): Tunnel-Kommandos + Status ----------
     // Berechtigt sind NUR der Screen des Raums (Ersteller-Gerät) und das
     // AKTIVE GM-Cockpit — Spieler und Beobachter-GMs starten keine Tunnel.

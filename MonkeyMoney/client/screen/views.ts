@@ -40,6 +40,10 @@ export interface TunnelUi {
   cmd: (aktion: "start" | "stop") => void;
 }
 
+/** Welle 1 „Start/Skip ohne GameMaster": screen.next-Sender (main.ts injiziert)
+ * — Lobby: Match-Start; sonst: Universal-Weiter (wie GM flow.next). */
+export type ScreenNextSender = () => void;
+
 export function renderPhase(
   view: ScreenView,
   mgHost: TemplateResult,
@@ -51,6 +55,7 @@ export function renderPhase(
   // keine Chips/Gesichter) — der Flip kommt exakt mit der Fanfare (main.ts).
   aufgedeckt = true,
   tunnel: TunnelUi | null = null,
+  screenNext: ScreenNextSender | null = null,
 ): TemplateResult {
   const inhalt = phaseInhalt(
     view,
@@ -61,6 +66,7 @@ export function renderPhase(
     raumConfig,
     aufgedeckt,
     tunnel,
+    screenNext,
   );
   // Cutscenes (Opening/Sudden-Death/Highlights/Siegerehrung/Abspann) laufen
   // OHNE Ticker + Banner — „Frage 0/15" wäre dort nur Störfeuer.
@@ -97,6 +103,20 @@ export function renderPhase(
     </div>
     ${mitPodien ? podiumReihe(podiumSpieler, { gesichter: gesichter(view), einflug: view.phase === "lobby", teamFarben }) : ""}
     ${jackpotGlas(view.jackpotGlas, false)} ${votingBanner(view)}
+    ${
+      // Welle 1 „ohne GameMaster spielbar": dezenter Universal-Weiter direkt am
+      // Screen (iPad-Touch) — gleiche Wirkung wie GM flow.next (Skip).
+      screenNext !== null && view.phase !== "lobby" && view.phase !== "ende"
+        ? html`<button
+            class="screen-weiter"
+            data-testid="screen-weiter"
+            title="Weiter / Phase überspringen"
+            @click=${() => screenNext()}
+          >
+            ⏭ Weiter
+          </button>`
+        : ""
+    }
   </div>`;
 }
 
@@ -109,10 +129,11 @@ function phaseInhalt(
   raumConfig: RaumConfigSender | null,
   aufgedeckt = true,
   tunnel: TunnelUi | null = null,
+  screenNext: ScreenNextSender | null = null,
 ): TemplateResult {
   switch (view.phase) {
     case "lobby":
-      return lobby(view, lobbyBoards, serverNow, raumConfig, tunnel);
+      return lobby(view, lobbyBoards, serverNow, raumConfig, tunnel, screenNext);
     case "intro":
       return introCutscene(view);
     case "kategorie-wahl":
@@ -609,6 +630,7 @@ function lobby(
   nowMs: number,
   raumConfig: RaumConfigSender | null,
   tunnel: TunnelUi | null = null,
+  screenNext: ScreenNextSender | null = null,
 ): TemplateResult {
   const slides = lobbySlides(boards);
   const slide = slides[lobbySlideIndex(nowMs, slides.length)];
@@ -626,18 +648,43 @@ function lobby(
         <p class="muted" style="margin:0">Handy-Kamera drauf oder tippen:</p>
         <p style="font-size:1.3rem;margin:4px 0">${view.joinUrl}</p>
         <p class="mono" style="font-size:3.2rem;margin:8px 0;color:var(--gold)">${view.roomCode}</p>
-        <p class="muted" style="font-size:0.9rem">
-          🎩 Show-Master-PIN: <strong>${view.gmPin}</strong>
-        </p>
+        ${
+          // Welle 1 (Eval „PIN offen auf dem TV"): PIN erst nach Reveal-Tipp —
+          // plus GM-Link, damit der Show-Master weiß, WO er die PIN eingibt.
+          html`<details class="pin-reveal" data-testid="pin-reveal">
+            <summary class="muted">🎩 Show-Master? Zum Aufdecken tippen …</summary>
+            <p style="margin:6px 0 2px">
+              PIN: <strong class="mono" style="color:var(--gold)">${view.gmPin}</strong>
+            </p>
+            <p class="muted" style="margin:0;font-size:0.85rem">
+              Cockpit: ${view.joinUrl.replace(/\/j\/.*$/, "/gm.html")}
+            </p>
+          </details>`
+        }
       </div>
       ${internetLinkBereich(view, tunnel)}
     </div>
     ${raumConfig !== null ? lobbyConfigZeile(view, raumConfig) : ""}
+    ${
+      // Welle 1 „Start ohne GameMaster": Match-Start direkt am Screen (iPad).
+      screenNext !== null
+        ? html`<button
+            class="screen-start"
+            data-testid="screen-start"
+            ?disabled=${view.players.length < 2}
+            @click=${() => screenNext()}
+          >
+            ▶️ Match starten
+          </button>`
+        : ""
+    }
     <p class="muted">
       ${
         view.players.length === 0
           ? "Noch keine Affen im Studio …"
-          : `${view.players.length} / 8 Spieler — der Show-Master startet das Match (mind. 2).`
+          : view.players.length < 2
+            ? `${view.players.length} / 8 Spieler — ab 2 Affen geht's los.`
+            : `${view.players.length} / 8 Spieler — Start hier am Bildschirm oder per Show-Master.`
       }
     </p>
     ${
