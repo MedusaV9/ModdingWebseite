@@ -1,0 +1,35 @@
+{
+  "id": "euro-truck-simulator-2",
+  "name": "Euro Truck Simulator 2 (Convoy)",
+  "category": "simulation",
+  "description": "Convoy multiplayer for SCS's trucking simulator. Dedicated server installed via SteamCMD (anonymous); needs server packages exported from the game client.",
+  "icon": "car",
+  "color": "#1d4ed8",
+  "platforms": ["linux", "win32"],
+  "install": [
+    { "type": "steamcmd", "appId": 1948160, "validate": true },
+    {
+      "type": "writeFile",
+      "path": "server_config.sii",
+      "content": "SiiNunit\n{\nserver_config : _nameless.1 {\n lobby_name: \"{{HOSTNAME}}\"\n description: \"Hosted with Between\"\n welcome_message: \"Welcome to the convoy!\"\n password: \"{{SERVER_PASSWORD}}\"\n max_players: {{MAX_PLAYERS}}\n connection_virtual_port: 100\n query_virtual_port: 101\n connection_dedicated_port: {{SERVER_PORT}}\n query_dedicated_port: {{QUERY_PORT}}\n}\n}\n"
+    }
+  ],
+  "startCommand": "./bin/linux_x64/eurotrucks2_server -nosingle -server_cfg server_config.sii -homedir .",
+  "stop": { "type": "signal", "signal": "SIGINT", "timeoutS": 30 },
+  "variables": [
+    { "key": "HOSTNAME", "label": "Server name", "type": "string", "default": "Between ETS2 Convoy", "required": true },
+    { "key": "SERVER_PASSWORD", "label": "Join password", "description": "Empty = no password.", "type": "password", "default": "" },
+    { "key": "MAX_PLAYERS", "label": "Max players", "type": "number", "default": 8, "min": 1, "max": 8 },
+    { "key": "SERVER_PORT", "label": "Connection port (UDP)", "type": "number", "default": 27015, "min": 1024, "max": 65535, "isPort": true },
+    { "key": "QUERY_PORT", "label": "Query port (UDP)", "type": "number", "default": 27016, "min": 1024, "max": 65535, "isPort": true }
+  ],
+  "ports": [
+    { "name": "game", "variable": "SERVER_PORT", "protocol": "udp" },
+    { "name": "query", "variable": "QUERY_PORT", "protocol": "udp" }
+  ],
+  "query": { "type": "none" },
+  "configFiles": [{ "path": "server_config.sii", "format": "raw" }],
+  "backupExcludes": ["steamapps/**"],
+  "notes": "REQUIRED: the server refuses to start without server_packages.sii and server_packages.dat — generate them in the ETS2 game client (console command: export_server_packages, files land in your ETS2 Documents folder; the client's DLC/mod set must match the server's) and upload both next to server_config.sii via the file manager. -homedir . keeps everything inside the server directory. Windows hosts: set the start command override to bin\\win_x64\\eurotrucks2_server.exe with the same arguments. American Truck Simulator has its own server app (2239530) and works the same way.",
+  "version": "1"
+}

@@ -1,0 +1,34 @@
+{
+  "id": "arma-reforger",
+  "name": "Arma Reforger",
+  "category": "shooter",
+  "description": "Enfusion-engine military sandbox on Everon. Dedicated server installed via SteamCMD (anonymous); a minimal config.json is generated at install.",
+  "icon": "plane",
+  "color": "#3f6212",
+  "platforms": ["linux", "win32"],
+  "install": [
+    { "type": "steamcmd", "appId": 1874900, "validate": true },
+    { "type": "mkdir", "path": "profile" },
+    {
+      "type": "writeFile",
+      "path": "config.json",
+      "content": "{\n  \"bindAddress\": \"0.0.0.0\",\n  \"bindPort\": {{SERVER_PORT}},\n  \"publicAddress\": \"\",\n  \"publicPort\": {{SERVER_PORT}},\n  \"game\": {\n    \"name\": \"{{HOSTNAME}}\",\n    \"password\": \"{{SERVER_PASSWORD}}\",\n    \"passwordAdmin\": \"{{ADMIN_PASSWORD}}\",\n    \"scenarioId\": \"{{SCENARIO_ID}}\",\n    \"maxPlayers\": {{MAX_PLAYERS}},\n    \"visible\": true,\n    \"crossPlatform\": true\n  }\n}\n"
+    }
+  ],
+  "startCommand": "./ArmaReforgerServer -config config.json -profile ./profile -maxFPS 60",
+  "stop": { "type": "signal", "signal": "SIGTERM", "timeoutS": 30 },
+  "variables": [
+    { "key": "HOSTNAME", "label": "Server name", "type": "string", "default": "Between Reforger Server", "required": true },
+    { "key": "SERVER_PASSWORD", "label": "Join password", "description": "Empty = public join.", "type": "password", "default": "" },
+    { "key": "ADMIN_PASSWORD", "label": "Admin password", "type": "password", "default": "changeme", "required": true },
+    { "key": "SCENARIO_ID", "label": "Scenario ID", "description": "Case-sensitive scenario resource, e.g. {ECC61978EDCC2B5A}Missions/23_Campaign.conf (Conflict Everon).", "type": "string", "default": "{ECC61978EDCC2B5A}Missions/23_Campaign.conf", "required": true },
+    { "key": "MAX_PLAYERS", "label": "Max players", "type": "number", "default": 64, "min": 1, "max": 128 },
+    { "key": "SERVER_PORT", "label": "Game port (UDP)", "type": "number", "default": 2001, "min": 1024, "max": 65535, "isPort": true }
+  ],
+  "ports": [{ "name": "game", "variable": "SERVER_PORT", "protocol": "udp" }],
+  "query": { "type": "none" },
+  "configFiles": [{ "path": "config.json", "format": "json" }],
+  "backupExcludes": ["steamapps/**"],
+  "notes": "config.json keys are case-sensitive; it is written at install from the panel variables — re-run install or edit it directly for advanced options (an \"a2s\" block enables Steam query, \"rcon\" enables RCON, \"game.mods\" loads workshop mods). Logs and saves go to ./profile. Windows hosts: set the start command override to ArmaReforgerServer.exe with the same arguments.",
+  "version": "1"
+}

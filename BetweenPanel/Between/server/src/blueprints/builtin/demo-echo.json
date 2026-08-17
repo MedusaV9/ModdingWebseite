@@ -1,0 +1,58 @@
+{
+  "id": "demo-echo",
+  "name": "Demo Server (built-in)",
+  "category": "custom",
+  "description": "A tiny fake game server for testing Between end-to-end in seconds — no downloads. Opens a real TCP port, prints Minecraft-style logs, supports console commands (help, say, list, tps, crash, stop) and simulates player joins and crashes.",
+  "icon": "flask",
+  "color": "#8b5cf6",
+  "platforms": [
+    "linux",
+    "win32",
+    "darwin"
+  ],
+  "docker": {
+    "image": "node:22-alpine"
+  },
+  "install": [
+    {
+      "type": "writeFile",
+      "path": "demo-server.cjs",
+      "content": "@asset:demo-server.cjs"
+    },
+    {
+      "type": "writeFile",
+      "path": "README.txt",
+      "content": "This is the Between demo server.\nStart it from the panel and try console commands: help, say hi, list, tps, crash, stop.\n"
+    }
+  ],
+  "startCommand": "node demo-server.cjs {{SERVER_PORT}}",
+  "stop": {
+    "type": "command",
+    "command": "stop",
+    "timeoutS": 15
+  },
+  "variables": [
+    {
+      "key": "SERVER_PORT",
+      "label": "Server port",
+      "description": "TCP port the demo server listens on.",
+      "type": "number",
+      "default": 27777,
+      "min": 1024,
+      "max": 65535,
+      "isPort": true
+    }
+  ],
+  "ports": [
+    {
+      "name": "game",
+      "variable": "SERVER_PORT",
+      "protocol": "tcp"
+    }
+  ],
+  "query": {
+    "type": "none"
+  },
+  "readyRegex": "Done \\([0-9.]+s\\)!",
+  "notes": "Perfect first server: instant install, instant start. Try the 'crash' command to see crash detection and auto-restart in action."
+}

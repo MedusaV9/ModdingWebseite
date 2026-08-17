@@ -1,0 +1,44 @@
+{
+  "id": "multi-theft-auto",
+  "name": "Multi Theft Auto: San Andreas",
+  "category": "other",
+  "description": "The Lua-scriptable GTA: San Andreas multiplayer mod. Official server tarball downloaded from multitheftauto.com (always the latest stable).",
+  "icon": "car",
+  "color": "#16a34a",
+  "platforms": ["linux"],
+  "install": [
+    { "type": "download", "url": "https://linux.multitheftauto.com/dl/multitheftauto_linux_x64.tar.gz", "target": "mta.tar.gz", "extract": true },
+    { "type": "command", "command": "cp -r multitheftauto_linux_x64/* . && rm -rf multitheftauto_linux_x64 && chmod +x mta-server64" },
+    { "type": "download", "url": "https://mirror-cdn.multitheftauto.com/mtasa/resources/mtasa-resources-latest.zip", "target": "mtasa-resources.zip", "extract": false },
+    { "type": "command", "command": "mkdir -p mods/deathmatch/resources && if command -v unzip >/dev/null 2>&1; then unzip -oq mtasa-resources.zip -d mods/deathmatch/resources && rm mtasa-resources.zip; else echo 'NOTE: unzip not found — extract mtasa-resources.zip into mods/deathmatch/resources manually'; fi" },
+    {
+      "type": "writeFile",
+      "path": "mods/deathmatch/mtaserver.conf",
+      "content": "<config>\n    <servername>{{HOSTNAME}}</servername>\n    <serverip>auto</serverip>\n    <serverport>{{SERVER_PORT}}</serverport>\n    <maxplayers>{{MAX_PLAYERS}}</maxplayers>\n    <password></password>\n    <httpserver>1</httpserver>\n    <httpport>{{HTTP_PORT}}</httpport>\n    <httpdownloadurl></httpdownloadurl>\n    <httpmaxconnectionsperclient>5</httpmaxconnectionsperclient>\n    <ase>1</ase>\n    <donotbroadcastlan>0</donotbroadcastlan>\n    <bandwidth_reduction>medium</bandwidth_reduction>\n    <voice>0</voice>\n    <resource src=\"admin\" startup=\"1\" protected=\"0\" />\n    <resource src=\"defaultstats\" startup=\"1\" protected=\"0\" />\n    <resource src=\"helpmanager\" startup=\"1\" protected=\"0\" />\n    <resource src=\"joinquit\" startup=\"1\" protected=\"0\" />\n    <resource src=\"mapcycler\" startup=\"1\" protected=\"0\" />\n    <resource src=\"mapmanager\" startup=\"1\" protected=\"0\" />\n    <resource src=\"parachute\" startup=\"1\" protected=\"0\" />\n    <resource src=\"play\" startup=\"1\" protected=\"0\" />\n    <resource src=\"resourcebrowser\" startup=\"1\" protected=\"1\" default=\"true\" />\n    <resource src=\"resourcemanager\" startup=\"1\" protected=\"1\" />\n    <resource src=\"scoreboard\" startup=\"1\" protected=\"0\" />\n    <resource src=\"spawnmanager\" startup=\"1\" protected=\"0\" />\n    <resource src=\"votemanager\" startup=\"1\" protected=\"0\" />\n    <resource src=\"webadmin\" startup=\"1\" protected=\"0\" />\n</config>\n"
+    },
+    {
+      "type": "writeFile",
+      "path": "mods/deathmatch/acl.xml",
+      "content": "<acl>\n    <acl name=\"Default\">\n        <right name=\"general.ModifyOtherObjects\" access=\"false\"></right>\n        <right name=\"general.http\" access=\"false\"></right>\n    </acl>\n    <acl name=\"Moderator\">\n        <right name=\"general.ModifyOtherObjects\" access=\"false\"></right>\n        <right name=\"function.kickPlayer\" access=\"true\"></right>\n        <right name=\"function.setPlayerMuted\" access=\"true\"></right>\n    </acl>\n    <acl name=\"Admin\">\n        <right name=\"general.ModifyOtherObjects\" access=\"true\"></right>\n        <right name=\"general.http\" access=\"true\"></right>\n        <right name=\"general.adminpanel\" access=\"true\"></right>\n        <right name=\"command.start\" access=\"true\"></right>\n        <right name=\"command.stop\" access=\"true\"></right>\n        <right name=\"command.restart\" access=\"true\"></right>\n        <right name=\"command.refresh\" access=\"true\"></right>\n        <right name=\"command.shutdown\" access=\"true\"></right>\n        <right name=\"function.kickPlayer\" access=\"true\"></right>\n        <right name=\"function.banPlayer\" access=\"true\"></right>\n        <right name=\"function.setServerPassword\" access=\"true\"></right>\n    </acl>\n    <group name=\"Everyone\">\n        <acl name=\"Default\"></acl>\n        <object name=\"user.*\"></object>\n        <object name=\"resource.*\"></object>\n    </group>\n    <group name=\"Moderator\">\n        <acl name=\"Moderator\"></acl>\n    </group>\n    <group name=\"Admin\">\n        <acl name=\"Moderator\"></acl>\n        <acl name=\"Admin\"></acl>\n        <object name=\"resource.admin\"></object>\n        <object name=\"resource.webadmin\"></object>\n    </group>\n</acl>\n"
+    }
+  ],
+  "startCommand": "./mta-server64",
+  "stop": { "type": "command", "command": "shutdown", "timeoutS": 30 },
+  "variables": [
+    { "key": "HOSTNAME", "label": "Server name", "description": "Avoid the characters & < > (written into an XML config).", "type": "string", "default": "Between MTA Server", "pattern": "^[^&<>]+$", "required": true },
+    { "key": "SERVER_PORT", "label": "Game port (UDP)", "type": "number", "default": 22003, "min": 1024, "max": 65535, "isPort": true },
+    { "key": "HTTP_PORT", "label": "HTTP port (TCP)", "description": "Serves resource downloads to joining players.", "type": "number", "default": 22005, "min": 1024, "max": 65535, "isPort": true },
+    { "key": "QUERY_PORT", "label": "ASE query port (UDP)", "description": "Always game port + 123 (default 22126); used by the ASE server list.", "type": "number", "default": 22126, "min": 1024, "max": 65535, "isPort": true, "advanced": true },
+    { "key": "MAX_PLAYERS", "label": "Max players", "type": "number", "default": 32, "min": 1, "max": 4096 }
+  ],
+  "ports": [
+    { "name": "game", "variable": "SERVER_PORT", "protocol": "udp" },
+    { "name": "http", "variable": "HTTP_PORT", "protocol": "tcp" },
+    { "name": "query", "variable": "QUERY_PORT", "protocol": "udp" }
+  ],
+  "query": { "type": "none" },
+  "configFiles": [{ "path": "mods/deathmatch/mtaserver.conf", "format": "raw" }],
+  "readyRegex": "Server started and is ready to accept connections",
+  "notes": "The Linux tarball ships without mtaserver.conf/acl.xml — the install writes working ones (edit them freely; re-running install overwrites them). The default resources (gamemode 'play', admin panel, etc.) are fetched as a zip and need the host's unzip binary — if it is missing, extract mtasa-resources.zip into mods/deathmatch/resources via the file manager. Create an admin account in the server console with: addaccount <name> <password>, then map it to the Admin group in acl.xml. The console command 'shutdown' stops the server gracefully.",
+  "version": "1"
+}

@@ -1,0 +1,173 @@
+{
+  "id": "minecraft-vanilla",
+  "name": "Minecraft: Java Edition (Vanilla)",
+  "category": "minecraft",
+  "description": "The official vanilla Minecraft: Java Edition server, downloaded from Mojang's version manifest.",
+  "icon": "box",
+  "color": "#84cc16",
+  "platforms": [
+    "linux",
+    "win32",
+    "darwin"
+  ],
+  "docker": {
+    "image": "eclipse-temurin:21-jre",
+    "images": [
+      {
+        "label": "Java 21 (MC 1.18–1.21.x)",
+        "image": "eclipse-temurin:21-jre"
+      },
+      {
+        "label": "Java 25 (MC 26.1+)",
+        "image": "eclipse-temurin:25-jre"
+      },
+      {
+        "label": "Java 17 (MC 1.17.x)",
+        "image": "eclipse-temurin:17-jre"
+      },
+      {
+        "label": "Java 8 (legacy MC)",
+        "image": "eclipse-temurin:8-jre"
+      }
+    ]
+  },
+  "install": [
+    {
+      "type": "vanilla-minecraft",
+      "versionVar": "MC_VERSION",
+      "target": "server.jar"
+    },
+    {
+      "type": "writeFile",
+      "path": "eula.txt",
+      "content": "eula={{ACCEPT_EULA}}\n"
+    },
+    {
+      "type": "writeFile",
+      "path": "server.properties",
+      "content": "server-port={{SERVER_PORT}}\nmotd={{MOTD}}\nmax-players={{MAX_PLAYERS}}\nonline-mode={{ONLINE_MODE}}\n"
+    }
+  ],
+  "startCommand": "{{JAVA_BIN}} -Xms{{MEMORY_MB}}M -Xmx{{MEMORY_MB}}M -jar server.jar nogui",
+  "stop": {
+    "type": "command",
+    "command": "stop",
+    "timeoutS": 60
+  },
+  "variables": [
+    {
+      "key": "MC_VERSION",
+      "label": "Minecraft version",
+      "description": "Exact version (e.g. 1.21.8) or 'latest'.",
+      "type": "string",
+      "default": "latest",
+      "required": true
+    },
+    {
+      "key": "SERVER_PORT",
+      "label": "Server port",
+      "type": "number",
+      "default": 25565,
+      "min": 1024,
+      "max": 65535,
+      "isPort": true
+    },
+    {
+      "key": "MEMORY_MB",
+      "label": "Memory (MiB)",
+      "type": "number",
+      "default": 2048,
+      "min": 512,
+      "max": 65536
+    },
+    {
+      "key": "MOTD",
+      "label": "MOTD",
+      "type": "string",
+      "default": "A Between-powered Minecraft server"
+    },
+    {
+      "key": "MAX_PLAYERS",
+      "label": "Max players",
+      "type": "number",
+      "default": 20,
+      "min": 1,
+      "max": 1000
+    },
+    {
+      "key": "ACCEPT_EULA",
+      "label": "Accept the Minecraft EULA",
+      "type": "boolean",
+      "default": false,
+      "required": true
+    },
+    {
+      "key": "ONLINE_MODE",
+      "label": "Online mode",
+      "type": "boolean",
+      "default": true,
+      "advanced": true
+    },
+    {
+      "key": "JAVA_BIN",
+      "label": "Java binary",
+      "description": "Java executable for this server (e.g. /usr/lib/jvm/temurin-25/bin/java). Keep 'java' for the system default.",
+      "type": "string",
+      "default": "java",
+      "advanced": true
+    }
+  ],
+  "ports": [
+    {
+      "name": "game",
+      "variable": "SERVER_PORT",
+      "protocol": "tcp"
+    }
+  ],
+  "query": {
+    "type": "minecraft",
+    "portVariable": "SERVER_PORT"
+  },
+  "playerActions": [
+    {
+      "key": "kick",
+      "label": "Kick",
+      "command": "kick {{PLAYER}}"
+    },
+    {
+      "key": "ban",
+      "label": "Ban",
+      "command": "ban {{PLAYER}}",
+      "confirm": true
+    },
+    {
+      "key": "op",
+      "label": "Op",
+      "command": "op {{PLAYER}}",
+      "confirm": true
+    },
+    {
+      "key": "deop",
+      "label": "Deop",
+      "command": "deop {{PLAYER}}"
+    }
+  ],
+  "configFiles": [
+    {
+      "path": "server.properties",
+      "format": "properties",
+      "mappings": {
+        "SERVER_PORT": "server-port",
+        "MOTD": "motd",
+        "MAX_PLAYERS": "max-players",
+        "ONLINE_MODE": "online-mode"
+      }
+    }
+  ],
+  "readyRegex": "Done \\([0-9.]+s\\)!",
+  "backupExcludes": [
+    "libraries/**",
+    "versions/**",
+    "logs/**"
+  ]
+}

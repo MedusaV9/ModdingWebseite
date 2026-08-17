@@ -1,0 +1,47 @@
+{
+  "id": "icarus",
+  "name": "Icarus",
+  "category": "survival",
+  "description": "Session-based PvE survival on an alien planet. Dedicated server installed via SteamCMD (anonymous); the server binary is a Windows executable.",
+  "icon": "globe",
+  "color": "#ca8a04",
+  "platforms": ["linux", "win32"],
+  "install": [
+    { "type": "steamcmd", "appId": 2089300, "validate": true, "platformOverride": "windows" },
+    {
+      "type": "writeFile",
+      "path": "Icarus/Saved/Config/WindowsServer/ServerSettings.ini",
+      "content": "[ServerSettings]\nSessionName={{HOSTNAME}}\nJoinPassword={{SERVER_PASSWORD}}\nAdminPassword={{ADMIN_PASSWORD}}\nMaxPlayers={{MAX_PLAYERS}}\n"
+    }
+  ],
+  "startCommand": "IcarusServer.exe -Log -SteamServerName=\"{{HOSTNAME}}\" -PORT={{SERVER_PORT}} -QueryPort={{QUERY_PORT}}",
+  "stop": { "type": "signal", "signal": "SIGTERM", "timeoutS": 30 },
+  "variables": [
+    { "key": "HOSTNAME", "label": "Server name", "type": "string", "default": "Between Icarus Server", "required": true },
+    { "key": "SERVER_PORT", "label": "Game port (UDP)", "type": "number", "default": 17777, "min": 1024, "max": 65535, "isPort": true },
+    { "key": "QUERY_PORT", "label": "Query port (UDP)", "type": "number", "default": 27015, "min": 1024, "max": 65535, "isPort": true },
+    { "key": "MAX_PLAYERS", "label": "Max players", "type": "number", "default": 8, "min": 1, "max": 8 },
+    { "key": "SERVER_PASSWORD", "label": "Join password", "description": "Empty = no password.", "type": "password", "default": "" },
+    { "key": "ADMIN_PASSWORD", "label": "Admin password", "type": "password", "default": "changeme", "required": true }
+  ],
+  "ports": [
+    { "name": "game", "variable": "SERVER_PORT", "protocol": "udp" },
+    { "name": "query", "variable": "QUERY_PORT", "protocol": "udp" }
+  ],
+  "query": { "type": "source", "portVariable": "QUERY_PORT" },
+  "configFiles": [
+    {
+      "path": "Icarus/Saved/Config/WindowsServer/ServerSettings.ini",
+      "format": "ini",
+      "mappings": {
+        "HOSTNAME": "ServerSettings.SessionName",
+        "SERVER_PASSWORD": "ServerSettings.JoinPassword",
+        "ADMIN_PASSWORD": "ServerSettings.AdminPassword",
+        "MAX_PLAYERS": "ServerSettings.MaxPlayers"
+      }
+    }
+  ],
+  "backupExcludes": ["steamapps/**"],
+  "notes": "The install always fetches the Windows depot (platformOverride) — on Linux hosts run it with Wine/Proton, e.g. start command override: wine IcarusServer.exe -Log -SteamServerName=\"name\" -PORT=17777 -QueryPort=27015. Prospects (saves) live under Icarus/Saved/PlayerData/DedicatedServer/Prospects/. Players join via the in-game server browser or Steam's Favorites list using IP:QueryPort.",
+  "version": "1"
+}

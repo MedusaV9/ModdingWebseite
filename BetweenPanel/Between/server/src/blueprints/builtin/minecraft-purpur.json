@@ -1,0 +1,195 @@
+{
+  "id": "minecraft-purpur",
+  "name": "Minecraft: Java Edition (Purpur)",
+  "category": "minecraft",
+  "description": "Paper fork with extensive gameplay configurability (ridable mobs and hundreds of toggles). Downloads the latest Purpur build for a Minecraft version from the PurpurMC API.",
+  "icon": "box",
+  "color": "#a855f7",
+  "platforms": [
+    "linux",
+    "win32",
+    "darwin"
+  ],
+  "docker": {
+    "image": "eclipse-temurin:21-jre",
+    "images": [
+      {
+        "label": "Java 21 (MC 1.18–1.21.x)",
+        "image": "eclipse-temurin:21-jre"
+      },
+      {
+        "label": "Java 25 (MC 26.1+)",
+        "image": "eclipse-temurin:25-jre"
+      },
+      {
+        "label": "Java 17 (MC 1.17.x)",
+        "image": "eclipse-temurin:17-jre"
+      },
+      {
+        "label": "Java 8 (legacy MC)",
+        "image": "eclipse-temurin:8-jre"
+      }
+    ]
+  },
+  "install": [
+    {
+      "type": "download",
+      "url": "https://api.purpurmc.org/v2/purpur/{{MC_VERSION}}/latest/download",
+      "target": "server.jar"
+    },
+    {
+      "type": "writeFile",
+      "path": "eula.txt",
+      "content": "# Accepted via Between panel\neula={{ACCEPT_EULA}}\n"
+    },
+    {
+      "type": "writeFile",
+      "path": "server.properties",
+      "content": "server-port={{SERVER_PORT}}\nmotd={{MOTD}}\nmax-players={{MAX_PLAYERS}}\nonline-mode={{ONLINE_MODE}}\nview-distance={{VIEW_DISTANCE}}\nenable-command-block=true\nspawn-protection=0\n"
+    }
+  ],
+  "startCommand": "{{JAVA_BIN}} -Xms{{MEMORY_MB}}M -Xmx{{MEMORY_MB}}M -Dcom.mojang.eula.agree={{ACCEPT_EULA}} -jar server.jar nogui",
+  "stop": {
+    "type": "command",
+    "command": "stop",
+    "timeoutS": 60
+  },
+  "variables": [
+    {
+      "key": "MC_VERSION",
+      "label": "Minecraft version",
+      "description": "Exact version (e.g. 1.21.8) — the Purpur API has no 'latest' alias, so pin a version and re-run install to update.",
+      "type": "string",
+      "default": "1.21.8",
+      "pattern": "^[0-9]+\\.[0-9]+(\\.[0-9]+)?$",
+      "required": true
+    },
+    {
+      "key": "SERVER_PORT",
+      "label": "Server port",
+      "type": "number",
+      "default": 25565,
+      "min": 1024,
+      "max": 65535,
+      "isPort": true
+    },
+    {
+      "key": "MEMORY_MB",
+      "label": "Memory (MiB)",
+      "description": "Java heap size for the server (-Xmx).",
+      "type": "number",
+      "default": 2048,
+      "min": 512,
+      "max": 65536
+    },
+    {
+      "key": "MOTD",
+      "label": "MOTD",
+      "type": "string",
+      "default": "A Between-powered Purpur server"
+    },
+    {
+      "key": "MAX_PLAYERS",
+      "label": "Max players",
+      "type": "number",
+      "default": 20,
+      "min": 1,
+      "max": 1000
+    },
+    {
+      "key": "ACCEPT_EULA",
+      "label": "Accept the Minecraft EULA",
+      "description": "You must accept the Minecraft EULA (minecraft.net/eula) to run a server.",
+      "type": "boolean",
+      "default": false,
+      "required": true
+    },
+    {
+      "key": "ONLINE_MODE",
+      "label": "Online mode",
+      "type": "boolean",
+      "default": true,
+      "advanced": true
+    },
+    {
+      "key": "VIEW_DISTANCE",
+      "label": "View distance",
+      "type": "number",
+      "default": 10,
+      "min": 2,
+      "max": 32,
+      "advanced": true
+    },
+    {
+      "key": "JAVA_BIN",
+      "label": "Java binary",
+      "description": "Java executable for this server (e.g. /usr/lib/jvm/temurin-25/bin/java). Keep 'java' for the system default.",
+      "type": "string",
+      "default": "java",
+      "advanced": true
+    }
+  ],
+  "ports": [
+    {
+      "name": "game",
+      "variable": "SERVER_PORT",
+      "protocol": "tcp"
+    }
+  ],
+  "query": {
+    "type": "minecraft",
+    "portVariable": "SERVER_PORT"
+  },
+  "mods": {
+    "platform": "modrinth",
+    "loader": "paper",
+    "dir": "plugins",
+    "versionVariable": "MC_VERSION"
+  },
+  "playerActions": [
+    {
+      "key": "kick",
+      "label": "Kick",
+      "command": "kick {{PLAYER}}"
+    },
+    {
+      "key": "ban",
+      "label": "Ban",
+      "command": "ban {{PLAYER}}",
+      "confirm": true
+    },
+    {
+      "key": "op",
+      "label": "Op",
+      "command": "op {{PLAYER}}",
+      "confirm": true
+    },
+    {
+      "key": "deop",
+      "label": "Deop",
+      "command": "deop {{PLAYER}}"
+    }
+  ],
+  "configFiles": [
+    {
+      "path": "server.properties",
+      "format": "properties",
+      "mappings": {
+        "SERVER_PORT": "server-port",
+        "MOTD": "motd",
+        "MAX_PLAYERS": "max-players",
+        "ONLINE_MODE": "online-mode",
+        "VIEW_DISTANCE": "view-distance"
+      }
+    }
+  ],
+  "readyRegex": "Done \\([0-9.]+s\\)!",
+  "backupExcludes": [
+    "cache/**",
+    "libraries/**",
+    "versions/**",
+    "logs/**"
+  ],
+  "notes": "Requires Java 21+ on the host for recent Minecraft versions. Purpur-specific toggles live in purpur.yml after first start; Paper/Spigot/Bukkit configs also apply. Plugins go in plugins/.",
+  "version": "1"
+}

@@ -1,0 +1,85 @@
+{
+  "id": "custom-steamcmd",
+  "name": "Custom Server (SteamCMD)",
+  "category": "steam",
+  "description": "Install any dedicated server from Steam by app ID via SteamCMD (anonymous login), then start it with your own command. Great for games not yet in the blueprint library.",
+  "icon": "download",
+  "color": "#60a5fa",
+  "platforms": [
+    "linux",
+    "win32"
+  ],
+  "docker": {
+    "image": "debian:bookworm-slim",
+    "images": [
+      {
+        "label": "Debian 12 (slim)",
+        "image": "debian:bookworm-slim"
+      },
+      {
+        "label": "Ubuntu 24.04",
+        "image": "ubuntu:24.04"
+      }
+    ]
+  },
+  "install": [
+    {
+      "type": "steamcmd",
+      "appId": "{{APP_ID}}",
+      "validate": true
+    }
+  ],
+  "startCommand": "{{START_CMD}}",
+  "stop": {
+    "type": "signal",
+    "signal": "SIGINT",
+    "timeoutS": 30
+  },
+  "variables": [
+    {
+      "key": "APP_ID",
+      "label": "Steam app ID",
+      "description": "The dedicated server app ID (e.g. 896660 for Valheim).",
+      "type": "string",
+      "default": "",
+      "required": true,
+      "pattern": "^[0-9]{2,10}$"
+    },
+    {
+      "key": "START_CMD",
+      "label": "Start command",
+      "description": "Executed in the install directory after SteamCMD finishes.",
+      "type": "string",
+      "default": "",
+      "required": true
+    },
+    {
+      "key": "SERVER_PORT",
+      "label": "Main port (for your reference)",
+      "type": "number",
+      "default": 27015,
+      "min": 1,
+      "max": 65535,
+      "isPort": true
+    },
+    {
+      "key": "BETA_BRANCH",
+      "label": "Beta branch (optional)",
+      "type": "string",
+      "default": "",
+      "advanced": true
+    }
+  ],
+  "ports": [
+    {
+      "name": "game",
+      "variable": "SERVER_PORT",
+      "protocol": "both"
+    }
+  ],
+  "query": {
+    "type": "source",
+    "portVariable": "SERVER_PORT"
+  },
+  "notes": "SteamCMD is downloaded and managed automatically by Between the first time it is needed. If the app cannot be downloaded anonymously, sign in with a Steam account under Panel Settings → Steam and enable 'Install with the panel Steam account' in this server's settings."
+}

@@ -1,0 +1,28 @@
+{
+  "id": "sven-coop",
+  "name": "Sven Co-op",
+  "category": "shooter",
+  "description": "Free co-op Half-Life campaigns and custom maps. GoldSrc (HLDS) dedicated server installed via SteamCMD (anonymous).",
+  "icon": "gamepad-2",
+  "color": "#ca8a04",
+  "platforms": ["linux", "win32"],
+  "install": [
+    { "type": "steamcmd", "appId": 276060, "validate": true },
+    { "type": "writeFile", "path": "svencoop/server.cfg", "content": "hostname \"{{HOSTNAME}}\"\nsv_region 255\nmp_timelimit 60\n" }
+  ],
+  "startCommand": "./svends_run -game svencoop -port {{SERVER_PORT}} +map {{MAP}} +maxplayers {{MAX_PLAYERS}}",
+  "stop": { "type": "command", "command": "quit", "timeoutS": 30 },
+  "variables": [
+    { "key": "SERVER_PORT", "label": "Game port", "type": "number", "default": 27015, "min": 1024, "max": 65535, "isPort": true },
+    { "key": "MAP", "label": "Start map", "description": "e.g. svencoop1 (intro campaign), hl_c01_a1 (Half-Life campaign).", "type": "string", "default": "svencoop1", "required": true },
+    { "key": "HOSTNAME", "label": "Server name", "type": "string", "default": "Between Sven Co-op Server", "required": true },
+    { "key": "MAX_PLAYERS", "label": "Max players", "type": "number", "default": 12, "min": 1, "max": 32 }
+  ],
+  "ports": [{ "name": "game", "variable": "SERVER_PORT", "protocol": "both" }],
+  "query": { "type": "source", "portVariable": "SERVER_PORT" },
+  "playerActions": [{ "key": "kick", "label": "Kick", "command": "kick {{PLAYER}}" }],
+  "configFiles": [{ "path": "svencoop/server.cfg", "format": "keyvalue", "mappings": { "HOSTNAME": "hostname" } }],
+  "backupExcludes": ["steamapps/**", "svencoop_downloads/**"],
+  "notes": "GoldSrc servers use the legacy UDP RCON protocol, so the panel's Source RCON support does not apply — console commands go through stdin instead. Server config lives in svencoop/server.cfg; admins go in svencoop/admins.txt. Windows hosts: set the start command override to svends.exe -game svencoop with the same arguments.",
+  "version": "1"
+}

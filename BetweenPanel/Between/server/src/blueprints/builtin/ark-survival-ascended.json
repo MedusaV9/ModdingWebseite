@@ -1,0 +1,43 @@
+{
+  "id": "ark-survival-ascended",
+  "name": "ARK: Survival Ascended",
+  "category": "survival",
+  "description": "The Unreal Engine 5 remake of ARK. Dedicated server installed via SteamCMD (anonymous); very large download, and the server binary is a Windows executable.",
+  "icon": "mountain",
+  "color": "#7c3aed",
+  "platforms": ["linux", "win32"],
+  "install": [{ "type": "steamcmd", "appId": 2430930, "validate": true, "platformOverride": "windows" }],
+  "startCommand": "ShooterGame/Binaries/Win64/ArkAscendedServer.exe \"{{MAP}}?listen?SessionName={{HOSTNAME}}?Port={{SERVER_PORT}}?ServerPassword={{SERVER_PASSWORD}}?ServerAdminPassword={{ADMIN_PASSWORD}}?RCONEnabled=True?RCONPort={{RCON_PORT}}\" -WinLiveMaxPlayers={{MAX_PLAYERS}} -log -NoBattlEye",
+  "stop": { "type": "rcon", "command": "DoExit", "timeoutS": 120 },
+  "variables": [
+    {
+      "key": "MAP",
+      "label": "Map",
+      "type": "enum",
+      "default": "TheIsland_WP",
+      "options": [
+        { "value": "TheIsland_WP", "label": "The Island" },
+        { "value": "ScorchedEarth_WP", "label": "Scorched Earth" },
+        { "value": "TheCenter_WP", "label": "The Center" },
+        { "value": "Aberration_WP", "label": "Aberration" },
+        { "value": "Extinction_WP", "label": "Extinction" },
+        { "value": "Ragnarok_WP", "label": "Ragnarok" }
+      ]
+    },
+    { "key": "HOSTNAME", "label": "Server name", "description": "Avoid spaces and special characters — the name is passed inside the map argument string.", "type": "string", "default": "Between-ASA-Server", "pattern": "^[^?\"]+$", "required": true },
+    { "key": "SERVER_PORT", "label": "Game port (UDP)", "type": "number", "default": 7777, "min": 1024, "max": 65535, "isPort": true },
+    { "key": "RCON_PORT", "label": "RCON port (TCP)", "type": "number", "default": 27020, "min": 1024, "max": 65535, "isPort": true, "advanced": true },
+    { "key": "ADMIN_PASSWORD", "label": "Admin/RCON password", "description": "Used for in-game admin (enablecheats) and Source RCON.", "type": "password", "default": "changeme", "required": true },
+    { "key": "SERVER_PASSWORD", "label": "Join password", "description": "Empty = no password.", "type": "password", "default": "" },
+    { "key": "MAX_PLAYERS", "label": "Max players", "type": "number", "default": 20, "min": 1, "max": 200 }
+  ],
+  "ports": [
+    { "name": "game", "variable": "SERVER_PORT", "protocol": "udp" },
+    { "name": "rcon", "variable": "RCON_PORT", "protocol": "tcp" }
+  ],
+  "query": { "type": "none" },
+  "rcon": { "portVariable": "RCON_PORT", "passwordVariable": "ADMIN_PASSWORD" },
+  "backupExcludes": ["steamapps/**"],
+  "notes": "The install always fetches the Windows depot (platformOverride) — on Linux hosts run it with Wine/Proton (GE-Proton is the community favourite); set the start command override to e.g. wine ShooterGame/Binaries/Win64/ArkAscendedServer.exe ... with the same arguments. ASA uses EOS for the server list (no A2S query); the panel stop sends the RCON command DoExit which saves the world (falls back to SIGTERM if RCON is unreachable). GameUserSettings.ini/Game.ini live under ShooterGame/Saved/Config/WindowsServer/, saves under ShooterGame/Saved/SavedArks/. The download is 30+ GB.",
+  "version": "1"
+}

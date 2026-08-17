@@ -1,0 +1,24 @@
+{
+  "id": "enshrouded",
+  "name": "Enshrouded",
+  "category": "survival",
+  "description": "Survival action RPG in a voxel world consumed by the Shroud. Windows dedicated server installed via SteamCMD (anonymous).",
+  "icon": "mountain",
+  "color": "#fbbf24",
+  "platforms": ["win32"],
+  "install": [{ "type": "steamcmd", "appId": 2278520, "validate": true }],
+  "startCommand": "enshrouded_server.exe",
+  "stop": { "type": "signal", "signal": "SIGTERM", "timeoutS": 30 },
+  "variables": [
+    { "key": "SERVER_PORT", "label": "Game port (UDP)", "description": "Must match gamePort in enshrouded_server.json (default 15636).", "type": "number", "default": 15636, "min": 1024, "max": 65534, "isPort": true },
+    { "key": "QUERY_PORT", "label": "Query port (UDP)", "description": "Must match queryPort in enshrouded_server.json (default 15637).", "type": "number", "default": 15637, "min": 1024, "max": 65535, "isPort": true, "advanced": true }
+  ],
+  "ports": [
+    { "name": "game", "variable": "SERVER_PORT", "protocol": "udp" },
+    { "name": "query", "variable": "QUERY_PORT", "protocol": "udp" }
+  ],
+  "query": { "type": "none" },
+  "backupExcludes": ["steamapps/**"],
+  "notes": "enshrouded_server.json is generated next to the executable on first start — set name, password, slotCount and the ports there, then restart. Save data goes to ./savegame. The server binary is Windows-only (runs under Wine/Proton on Linux hosts outside this blueprint's platform list).",
+  "version": "1"
+}

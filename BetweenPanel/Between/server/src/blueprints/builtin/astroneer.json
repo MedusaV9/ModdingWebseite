@@ -1,0 +1,21 @@
+{
+  "id": "astroneer",
+  "name": "Astroneer",
+  "category": "sandbox",
+  "description": "Aerospace sandbox exploration and base building. Windows dedicated server installed via SteamCMD (anonymous).",
+  "icon": "globe",
+  "color": "#7c3aed",
+  "platforms": ["win32"],
+  "install": [{ "type": "steamcmd", "appId": 728470, "validate": true }],
+  "startCommand": "AstroServer.exe",
+  "stop": { "type": "signal", "signal": "SIGTERM", "timeoutS": 30 },
+  "variables": [
+    { "key": "SERVER_PORT", "label": "Game port (UDP)", "description": "Must match the Port setting in Astro/Saved/Config/WindowsServer/Engine.ini (default 8777).", "type": "number", "default": 8777, "min": 1024, "max": 65535, "isPort": true },
+    { "key": "OWNER_NAME", "label": "Owner Steam name", "description": "Must also be set as OwnerName in AstroServerSettings.ini — the owner claims the server in-game.", "type": "string", "default": "" }
+  ],
+  "ports": [{ "name": "game", "variable": "SERVER_PORT", "protocol": "udp" }],
+  "query": { "type": "none" },
+  "backupExcludes": ["steamapps/**"],
+  "notes": "After the first run, edit Astro/Saved/Config/WindowsServer/AstroServerSettings.ini: set OwnerName (Steam profile name), PublicIP (the server's public IPv4) and ServerName; set the port under [URL] in Engine.ini. Players join via IP:port from the in-game co-op menu. The server binary is Windows-only.",
+  "version": "1"
+}

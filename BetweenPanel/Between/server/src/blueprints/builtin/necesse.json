@@ -1,0 +1,26 @@
+{
+  "id": "necesse",
+  "name": "Necesse",
+  "category": "survival",
+  "description": "Top-down sandbox survival adventure (Terraria-meets-Zelda). Java dedicated server installed via SteamCMD (anonymous).",
+  "icon": "pickaxe",
+  "color": "#0d9488",
+  "platforms": ["linux", "win32"],
+  "install": [{ "type": "steamcmd", "appId": 1169370, "validate": true }],
+  "startCommand": "{{JAVA_BIN}} -Xmx{{MEMORY_MB}}M -jar Server.jar -nogui -localdir -world \"{{WORLD_NAME}}\" -port {{SERVER_PORT}} -slots {{MAX_PLAYERS}} -password \"{{SERVER_PASSWORD}}\"",
+  "stop": { "type": "command", "command": "stop", "timeoutS": 30 },
+  "variables": [
+    { "key": "WORLD_NAME", "label": "World name", "description": "World save name (created on first start).", "type": "string", "default": "world", "pattern": "^[A-Za-z0-9_-]+$", "required": true },
+    { "key": "SERVER_PORT", "label": "Server port (UDP)", "type": "number", "default": 14159, "min": 1024, "max": 65535, "isPort": true },
+    { "key": "MAX_PLAYERS", "label": "Player slots", "type": "number", "default": 10, "min": 1, "max": 250 },
+    { "key": "SERVER_PASSWORD", "label": "Server password", "description": "Empty = no password.", "type": "password", "default": "" },
+    { "key": "MEMORY_MB", "label": "Memory (MiB)", "description": "Java heap size for the server (-Xmx).", "type": "number", "default": 2048, "min": 512, "max": 32768 },
+    { "key": "JAVA_BIN", "label": "Java binary", "description": "Java executable for this server. Keep 'java' for the system default (Java 8+ required).", "type": "string", "default": "java", "advanced": true }
+  ],
+  "ports": [{ "name": "game", "variable": "SERVER_PORT", "protocol": "udp" }],
+  "query": { "type": "none" },
+  "docker": { "image": "eclipse-temurin:21-jre" },
+  "backupExcludes": ["steamapps/**"],
+  "notes": "-localdir keeps saves, logs and settings inside the server directory (./saves, ./cfg) so panel backups include them; without it Necesse uses ~/.config/Necesse. The console accepts commands (help, say, stop) — 'stop' saves the world before shutting down. Server settings beyond the launch arguments live in cfg/server.cfg after first start.",
+  "version": "1"
+}

@@ -1,0 +1,54 @@
+{
+  "id": "openttd",
+  "name": "OpenTTD",
+  "category": "simulation",
+  "description": "The open-source transport tycoon simulator. Official generic Linux binary downloaded from cdn.openttd.org.",
+  "icon": "car",
+  "color": "#dc2626",
+  "platforms": ["linux"],
+  "install": [
+    { "type": "download", "url": "https://cdn.openttd.org/openttd-releases/{{OPENTTD_VERSION}}/openttd-{{OPENTTD_VERSION}}-linux-generic-amd64.tar.xz", "target": "openttd.tar.xz", "extract": false },
+    { "type": "command", "command": "tar -xf openttd.tar.xz --strip-components=1 && rm openttd.tar.xz" },
+    {
+      "type": "writeFile",
+      "path": "openttd.cfg",
+      "content": "[network]\nserver_name = {{HOSTNAME}}\nserver_port = {{SERVER_PORT}}\nserver_password = {{SERVER_PASSWORD}}\nserver_game_type = {{GAME_TYPE}}\n"
+    }
+  ],
+  "startCommand": "./openttd -D -c openttd.cfg",
+  "stop": { "type": "command", "command": "quit", "timeoutS": 30 },
+  "variables": [
+    { "key": "OPENTTD_VERSION", "label": "OpenTTD version", "description": "Release version used in the download URL (cdn.openttd.org). Re-run install after changing it.", "type": "string", "default": "14.1", "pattern": "^[0-9]+\\.[0-9]+(\\.[0-9]+)?$", "required": true },
+    { "key": "HOSTNAME", "label": "Server name", "type": "string", "default": "Between OpenTTD Server", "required": true },
+    { "key": "SERVER_PORT", "label": "Server port (TCP+UDP)", "type": "number", "default": 3979, "min": 1024, "max": 65535, "isPort": true },
+    { "key": "SERVER_PASSWORD", "label": "Join password", "description": "Empty = no password.", "type": "password", "default": "" },
+    {
+      "key": "GAME_TYPE",
+      "label": "Visibility",
+      "description": "Direct IP connections work in every mode.",
+      "type": "enum",
+      "default": "invite-only",
+      "options": [
+        { "value": "local", "label": "Local (LAN)" },
+        { "value": "invite-only", "label": "Invite only" },
+        { "value": "public", "label": "Public (server list)" }
+      ]
+    }
+  ],
+  "ports": [{ "name": "game", "variable": "SERVER_PORT", "protocol": "both" }],
+  "query": { "type": "none" },
+  "configFiles": [
+    {
+      "path": "openttd.cfg",
+      "format": "ini",
+      "mappings": {
+        "HOSTNAME": "network.server_name",
+        "SERVER_PORT": "network.server_port",
+        "SERVER_PASSWORD": "network.server_password",
+        "GAME_TYPE": "network.server_game_type"
+      }
+    }
+  ],
+  "notes": "The dedicated console accepts commands on stdin (save, kick, ban, server_info, quit) — 'quit' exits without prompting, so save first or rely on autosaves. The .tar.xz release is unpacked with a shell tar step (hence linux-only); the generic build bundles its dependencies. Saves live in the save/ directory once the config's save path defaults are used.",
+  "version": "1"
+}

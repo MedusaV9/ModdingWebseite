@@ -1,0 +1,23 @@
+{
+  "id": "core-keeper",
+  "name": "Core Keeper",
+  "category": "survival",
+  "description": "Cozy mining-sandbox survival for up to 8 players. Dedicated server installed via SteamCMD (anonymous); players join via a Game ID over Steam relay — no port forwarding needed.",
+  "icon": "pickaxe",
+  "color": "#a855f7",
+  "platforms": ["linux"],
+  "install": [
+    { "type": "steamcmd", "appId": 1963720, "validate": true },
+    { "type": "command", "command": "chmod +x _launch.sh CoreKeeperServer 2>/dev/null || true" }
+  ],
+  "startCommand": "./_launch.sh -batchmode",
+  "stop": { "type": "signal", "signal": "SIGTERM", "timeoutS": 30 },
+  "variables": [
+    { "key": "SERVER_PORT", "label": "Direct-connect port", "description": "Only relevant if you bypass Steam relay networking with extra launch options; by default no open ports are needed.", "type": "number", "default": 27015, "min": 1024, "max": 65535, "isPort": true, "advanced": true }
+  ],
+  "ports": [],
+  "query": { "type": "none" },
+  "backupExcludes": ["steamapps/**"],
+  "notes": "The server prints a Game ID to the console once ready (also written to GameID.txt) — players join with that ID from the in-game menu; traffic goes over the Steam relay so no ports need to be opened. World and settings flags (-world, -worldname, -maxplayers) can be appended to the start command. The bundled _launch.sh sets up the required Steam client libraries.",
+  "version": "1"
+}

@@ -1,0 +1,28 @@
+{
+  "id": "left-4-dead-2",
+  "name": "Left 4 Dead 2",
+  "category": "shooter",
+  "description": "Co-op zombie survival for 4 (or 8 in versus) players. SRCDS dedicated server installed via SteamCMD (anonymous).",
+  "icon": "skull",
+  "color": "#65a30d",
+  "platforms": ["linux", "win32"],
+  "install": [
+    { "type": "steamcmd", "appId": 222860, "validate": true },
+    { "type": "writeFile", "path": "left4dead2/cfg/server.cfg", "content": "hostname \"{{HOSTNAME}}\"\nsv_region 255\nsv_allow_lobby_connect_only 0\n" }
+  ],
+  "startCommand": "./srcds_run -game left4dead2 -port {{SERVER_PORT}} +map {{MAP}} +rcon_password \"{{RCON_PASSWORD}}\"",
+  "stop": { "type": "command", "command": "quit", "timeoutS": 30 },
+  "variables": [
+    { "key": "SERVER_PORT", "label": "Game port", "type": "number", "default": 27015, "min": 1024, "max": 65535, "isPort": true },
+    { "key": "MAP", "label": "Start map", "description": "e.g. c1m1_hotel (Dead Center), c2m1_highway (Dark Carnival), c5m1_waterfront (The Parish).", "type": "string", "default": "c1m1_hotel", "required": true },
+    { "key": "HOSTNAME", "label": "Server name", "type": "string", "default": "Between L4D2 Server", "required": true },
+    { "key": "RCON_PASSWORD", "label": "RCON password", "description": "Enables console commands via Source RCON (on the game port) when set. Leave empty to disable RCON.", "type": "password", "default": "", "advanced": true }
+  ],
+  "ports": [{ "name": "game", "variable": "SERVER_PORT", "protocol": "both" }],
+  "query": { "type": "source", "portVariable": "SERVER_PORT" },
+  "rcon": { "portVariable": "SERVER_PORT", "passwordVariable": "RCON_PASSWORD" },
+  "playerActions": [{ "key": "kick", "label": "Kick", "command": "kick {{PLAYER}}" }],
+  "backupExcludes": ["steamapps/**", "left4dead2/downloads/**"],
+  "notes": "A basic left4dead2/cfg/server.cfg is written at install; edit it in the file manager for more settings (sv_password, rcon_password, sv_steamgroup). Windows hosts: set the start command override to srcds.exe -game left4dead2 with the same arguments.",
+  "version": "1"
+}

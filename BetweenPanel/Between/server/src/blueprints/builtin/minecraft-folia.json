@@ -1,0 +1,58 @@
+{
+  "id": "minecraft-folia",
+  "name": "Minecraft: Java Edition (Folia)",
+  "category": "minecraft",
+  "description": "PaperMC's regionised multithreaded Minecraft server for very high player counts. Downloads the requested build straight from the PaperMC API.",
+  "icon": "box",
+  "color": "#65a30d",
+  "platforms": ["linux", "win32", "darwin"],
+  "docker": {
+    "image": "eclipse-temurin:25-jre",
+    "images": [
+      { "label": "Java 25 (MC 26.1+)", "image": "eclipse-temurin:25-jre" },
+      { "label": "Java 21 (MC 1.20-1.21.x)", "image": "eclipse-temurin:21-jre" }
+    ]
+  },
+  "install": [
+    { "type": "paper", "project": "folia", "versionVar": "MC_VERSION", "target": "server.jar" },
+    { "type": "writeFile", "path": "eula.txt", "content": "# Accepted via Between panel\neula={{ACCEPT_EULA}}\n" },
+    {
+      "type": "writeFile",
+      "path": "server.properties",
+      "content": "server-port={{SERVER_PORT}}\nmotd={{MOTD}}\nmax-players={{MAX_PLAYERS}}\nonline-mode={{ONLINE_MODE}}\nview-distance={{VIEW_DISTANCE}}\n"
+    }
+  ],
+  "startCommand": "{{JAVA_BIN}} -Xms{{MEMORY_MB}}M -Xmx{{MEMORY_MB}}M -Dcom.mojang.eula.agree={{ACCEPT_EULA}} -jar server.jar nogui",
+  "stop": { "type": "command", "command": "stop", "timeoutS": 60 },
+  "variables": [
+    { "key": "MC_VERSION", "label": "Minecraft version", "description": "Exact version (e.g. 1.21.8) or 'latest'.", "type": "string", "default": "latest", "required": true },
+    { "key": "SERVER_PORT", "label": "Server port", "type": "number", "default": 25565, "min": 1024, "max": 65535, "isPort": true },
+    { "key": "MEMORY_MB", "label": "Memory (MiB)", "description": "Java heap size for the server (-Xmx). Folia targets big servers — give it plenty.", "type": "number", "default": 4096, "min": 1024, "max": 131072 },
+    { "key": "MOTD", "label": "MOTD", "type": "string", "default": "A Between-powered Folia server" },
+    { "key": "MAX_PLAYERS", "label": "Max players", "type": "number", "default": 100, "min": 1, "max": 1000 },
+    { "key": "ACCEPT_EULA", "label": "Accept the Minecraft EULA", "description": "You must accept the Minecraft EULA (minecraft.net/eula) to run a server.", "type": "boolean", "default": false, "required": true },
+    { "key": "ONLINE_MODE", "label": "Online mode", "type": "boolean", "default": true, "advanced": true },
+    { "key": "VIEW_DISTANCE", "label": "View distance", "type": "number", "default": 10, "min": 2, "max": 32, "advanced": true },
+    { "key": "JAVA_BIN", "label": "Java binary", "description": "Java executable for this server. Keep 'java' for the system default (Folia needs Java 21+, MC 26.1+ needs Java 25+).", "type": "string", "default": "java", "advanced": true }
+  ],
+  "ports": [{ "name": "game", "variable": "SERVER_PORT", "protocol": "tcp" }],
+  "query": { "type": "minecraft", "portVariable": "SERVER_PORT" },
+  "playerActions": [
+    { "key": "kick", "label": "Kick", "command": "kick {{PLAYER}}" },
+    { "key": "ban", "label": "Ban", "command": "ban {{PLAYER}}", "confirm": true },
+    { "key": "op", "label": "Op", "command": "op {{PLAYER}}", "confirm": true },
+    { "key": "deop", "label": "Deop", "command": "deop {{PLAYER}}" }
+  ],
+  "configFiles": [
+    {
+      "path": "server.properties",
+      "format": "properties",
+      "mappings": { "SERVER_PORT": "server-port", "MOTD": "motd", "MAX_PLAYERS": "max-players", "ONLINE_MODE": "online-mode", "VIEW_DISTANCE": "view-distance" }
+    },
+    { "path": "config/paper-global.yml", "format": "yaml" }
+  ],
+  "readyRegex": "Done \\([0-9.]+s\\)!",
+  "backupExcludes": ["cache/**", "libraries/**", "versions/**", "logs/**"],
+  "notes": "Folia splits the world into independently ticking regions across threads — it shines with 4+ dedicated cores and hundreds of spread-out players, and is NOT a drop-in Paper replacement: most Bukkit/Spigot/Paper plugins do not work unless explicitly Folia-supported. Vanilla-style single-region gameplay is better served by the Paper blueprint. config/paper-global.yml appears after the first start.",
+  "version": "1"
+}

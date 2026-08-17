@@ -1,0 +1,32 @@
+{
+  "id": "open-mp",
+  "name": "open.mp (GTA: San Andreas)",
+  "category": "other",
+  "description": "Open Multiplayer — the SA-MP-compatible multiplayer mod for GTA: San Andreas. Official server package downloaded from GitHub.",
+  "icon": "gamepad-2",
+  "color": "#9333ea",
+  "platforms": ["linux"],
+  "install": [
+    { "type": "download", "url": "https://github.com/openmultiplayer/open.mp/releases/download/{{OMP_VERSION}}/open.mp-linux-x86.tar.gz", "target": "openmp.tar.gz", "extract": true },
+    { "type": "command", "command": "cp -r Server/* . && rm -rf Server && chmod +x omp-server" }
+  ],
+  "startCommand": "./omp-server",
+  "stop": { "type": "signal", "signal": "SIGTERM", "timeoutS": 30 },
+  "variables": [
+    { "key": "OMP_VERSION", "label": "open.mp release tag", "description": "GitHub release tag used in the download URL (github.com/openmultiplayer/open.mp/releases). Re-run install after changing it.", "type": "string", "default": "v1.5.8.3079", "pattern": "^v[0-9][0-9.]*$", "required": true },
+    { "key": "HOSTNAME", "label": "Server name", "type": "string", "default": "Between open.mp Server", "required": true },
+    { "key": "SERVER_PORT", "label": "Server port (UDP)", "type": "number", "default": 7777, "min": 1024, "max": 65535, "isPort": true },
+    { "key": "MAX_PLAYERS", "label": "Max players", "type": "number", "default": 50, "min": 1, "max": 1000 }
+  ],
+  "ports": [{ "name": "game", "variable": "SERVER_PORT", "protocol": "udp" }],
+  "query": { "type": "none" },
+  "configFiles": [
+    {
+      "path": "config.json",
+      "format": "json",
+      "mappings": { "HOSTNAME": "name", "SERVER_PORT": "network.port", "MAX_PLAYERS": "max_players" }
+    }
+  ],
+  "notes": "The server is a 32-bit binary — 64-bit hosts need 32-bit runtime libraries (Debian/Ubuntu: apt install libc6-i386 lib32stdc++6 lib32atomic1). All settings live in config.json; the package ships with Pawn gamemodes (gungame is the default main script — change pawn.main_scripts to switch). Legacy SA-MP gamemodes and most plugins are compatible. Save variables here, then adjust the rest of config.json in the file manager.",
+  "version": "1"
+}

@@ -1,0 +1,66 @@
+{
+  "id": "minecraft-forge",
+  "name": "Minecraft: Java Edition (Forge)",
+  "category": "minecraft",
+  "description": "The classic Minecraft mod loader. Downloads the official Forge installer from the Forge Maven and runs its server install.",
+  "icon": "box",
+  "color": "#a16207",
+  "platforms": ["linux", "win32", "darwin"],
+  "docker": {
+    "image": "eclipse-temurin:17-jre",
+    "images": [
+      { "label": "Java 17 (MC 1.18-1.20.4)", "image": "eclipse-temurin:17-jre" },
+      { "label": "Java 21 (MC 1.20.5+)", "image": "eclipse-temurin:21-jre" },
+      { "label": "Java 8 (legacy MC)", "image": "eclipse-temurin:8-jre" }
+    ]
+  },
+  "install": [
+    {
+      "type": "download",
+      "url": "https://maven.minecraftforge.net/net/minecraftforge/forge/{{MC_VERSION}}-{{FORGE_VERSION}}/forge-{{MC_VERSION}}-{{FORGE_VERSION}}-installer.jar",
+      "target": "forge-installer.jar"
+    },
+    { "type": "command", "command": "{{JAVA_BIN}} -jar forge-installer.jar --installServer" },
+    { "type": "command", "command": "rm -f forge-installer.jar forge-installer.jar.log" },
+    { "type": "writeFile", "path": "user_jvm_args.txt", "content": "-Xms{{MEMORY_MB}}M\n-Xmx{{MEMORY_MB}}M\n" },
+    { "type": "writeFile", "path": "eula.txt", "content": "# Accepted via Between panel\neula={{ACCEPT_EULA}}\n" },
+    {
+      "type": "writeFile",
+      "path": "server.properties",
+      "content": "server-port={{SERVER_PORT}}\nmotd={{MOTD}}\nmax-players={{MAX_PLAYERS}}\nonline-mode={{ONLINE_MODE}}\n"
+    }
+  ],
+  "startCommand": "sh run.sh nogui",
+  "stop": { "type": "command", "command": "stop", "timeoutS": 60 },
+  "variables": [
+    { "key": "MC_VERSION", "label": "Minecraft version", "description": "Exact version, e.g. 1.20.1 — must match the Forge version below.", "type": "string", "default": "1.20.1", "pattern": "^[0-9]+\\.[0-9]+(\\.[0-9]+)?$", "required": true },
+    { "key": "FORGE_VERSION", "label": "Forge version", "description": "Exact Forge build for that Minecraft version (see files.minecraftforge.net), e.g. 47.2.0 for 1.20.1.", "type": "string", "default": "47.2.0", "pattern": "^[0-9][0-9.]*$", "required": true },
+    { "key": "SERVER_PORT", "label": "Server port", "type": "number", "default": 25565, "min": 1024, "max": 65535, "isPort": true },
+    { "key": "MEMORY_MB", "label": "Memory (MiB)", "description": "Java heap size, written to user_jvm_args.txt (modpacks want 4096+).", "type": "number", "default": 4096, "min": 1024, "max": 65536 },
+    { "key": "MOTD", "label": "MOTD", "type": "string", "default": "A Between-powered Forge server" },
+    { "key": "MAX_PLAYERS", "label": "Max players", "type": "number", "default": 20, "min": 1, "max": 1000 },
+    { "key": "ACCEPT_EULA", "label": "Accept the Minecraft EULA", "description": "You must accept the Minecraft EULA (minecraft.net/eula) to run a server.", "type": "boolean", "default": false, "required": true },
+    { "key": "ONLINE_MODE", "label": "Online mode", "type": "boolean", "default": true, "advanced": true },
+    { "key": "JAVA_BIN", "label": "Java binary (installer)", "description": "Java executable used to run the Forge installer. The generated run.sh uses the system 'java' — edit user_jvm_args.txt or run.sh for a custom runtime.", "type": "string", "default": "java", "advanced": true }
+  ],
+  "ports": [{ "name": "game", "variable": "SERVER_PORT", "protocol": "tcp" }],
+  "query": { "type": "minecraft", "portVariable": "SERVER_PORT" },
+  "playerActions": [
+    { "key": "kick", "label": "Kick", "command": "kick {{PLAYER}}" },
+    { "key": "ban", "label": "Ban", "command": "ban {{PLAYER}}", "confirm": true },
+    { "key": "op", "label": "Op", "command": "op {{PLAYER}}", "confirm": true },
+    { "key": "deop", "label": "Deop", "command": "deop {{PLAYER}}" }
+  ],
+  "configFiles": [
+    {
+      "path": "server.properties",
+      "format": "properties",
+      "mappings": { "SERVER_PORT": "server-port", "MOTD": "motd", "MAX_PLAYERS": "max-players", "ONLINE_MODE": "online-mode" }
+    },
+    { "path": "config/forge-server.toml", "format": "toml" }
+  ],
+  "readyRegex": "Done \\([0-9.]+s\\)!",
+  "backupExcludes": ["libraries/**", "logs/**"],
+  "notes": "The installer generates run.sh + user_jvm_args.txt for Minecraft 1.17+; for older Forge versions start the generated forge-<version>.jar directly via a start command override. Mods go in the mods/ folder (clients need matching mods); config/forge-server.toml appears after the first start. Windows hosts: set the start command override to run.bat nogui.",
+  "version": "1"
+}

@@ -1,0 +1,50 @@
+{
+  "id": "tmodloader",
+  "name": "Terraria (tModLoader)",
+  "category": "sandbox",
+  "description": "Modded Terraria via tModLoader. Official release zip downloaded from GitHub (always the latest stable).",
+  "icon": "pickaxe",
+  "color": "#a21caf",
+  "platforms": ["linux"],
+  "install": [
+    { "type": "download", "url": "https://github.com/tModLoader/tModLoader/releases/latest/download/tModLoader.zip", "target": "tmodloader.zip", "extract": true },
+    { "type": "command", "command": "chmod +x start-tModLoaderServer.sh LaunchUtils/ScriptCaller.sh 2>/dev/null || true" },
+    { "type": "mkdir", "path": "worlds" },
+    {
+      "type": "writeFile",
+      "path": "serverconfig.txt",
+      "content": "world=worlds/{{WORLD_NAME}}.wld\nautocreate={{WORLD_SIZE}}\nworldname={{WORLD_NAME}}\nport={{SERVER_PORT}}\nmaxplayers={{MAX_PLAYERS}}\npassword={{SERVER_PASSWORD}}\n"
+    }
+  ],
+  "startCommand": "./start-tModLoaderServer.sh -nosteam -config serverconfig.txt",
+  "stop": { "type": "command", "command": "exit", "timeoutS": 60 },
+  "variables": [
+    { "key": "WORLD_NAME", "label": "World name", "description": "World file name under worlds/ (created on first start).", "type": "string", "default": "world", "pattern": "^[A-Za-z0-9_-]+$", "required": true },
+    {
+      "key": "WORLD_SIZE",
+      "label": "World size (when auto-creating)",
+      "type": "enum",
+      "default": "2",
+      "options": [
+        { "value": "1", "label": "Small" },
+        { "value": "2", "label": "Medium" },
+        { "value": "3", "label": "Large" }
+      ]
+    },
+    { "key": "SERVER_PORT", "label": "Server port (TCP)", "type": "number", "default": 7777, "min": 1024, "max": 65535, "isPort": true },
+    { "key": "MAX_PLAYERS", "label": "Max players", "type": "number", "default": 8, "min": 1, "max": 255 },
+    { "key": "SERVER_PASSWORD", "label": "Server password", "description": "Empty = no password.", "type": "password", "default": "" }
+  ],
+  "ports": [{ "name": "game", "variable": "SERVER_PORT", "protocol": "tcp" }],
+  "query": { "type": "none" },
+  "readyRegex": "Server started",
+  "configFiles": [
+    {
+      "path": "serverconfig.txt",
+      "format": "properties",
+      "mappings": { "SERVER_PORT": "port", "MAX_PLAYERS": "maxplayers", "SERVER_PASSWORD": "password" }
+    }
+  ],
+  "notes": "The launch script downloads a private .NET runtime on first start (needs curl or wget on the host). Mods: place .tmod files in ~/.local/share/Terraria/tModLoader/Mods (or use the console's 'modpacks'/workshop tooling) and enable them in enabled.json. The console accepts Terraria commands (help, save, exit) — 'exit' saves the world before shutting down. Clients must run the same tModLoader version.",
+  "version": "1"
+}

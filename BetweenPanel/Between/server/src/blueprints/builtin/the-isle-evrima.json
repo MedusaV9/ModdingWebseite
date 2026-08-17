@@ -1,0 +1,43 @@
+{
+  "id": "the-isle-evrima",
+  "name": "The Isle (Evrima)",
+  "category": "survival",
+  "description": "Open-world dinosaur survival. Dedicated server installed via SteamCMD (anonymous) from the EVRIMA beta branch.",
+  "icon": "footprints",
+  "color": "#4d7c0f",
+  "platforms": ["linux", "win32"],
+  "install": [
+    { "type": "steamcmd", "appId": 412680, "betaBranch": "evrima", "validate": true },
+    {
+      "type": "writeFile",
+      "path": "TheIsle/Saved/Config/LinuxServer/Game.ini",
+      "content": "[/Script/TheIsle.TIGameSession]\nServerName={{HOSTNAME}}\nMaxPlayerCount={{MAX_PLAYERS}}\nbQueueEnabled=false\nbServerPassword=false\nServerPassword=\n"
+    }
+  ],
+  "startCommand": "./TheIsle/Binaries/Linux/TheIsleServer-Linux-Shipping TheIsle -Log -Port={{SERVER_PORT}} -QueryPort={{QUERY_PORT}}",
+  "stop": { "type": "signal", "signal": "SIGTERM", "timeoutS": 60 },
+  "variables": [
+    { "key": "HOSTNAME", "label": "Server name", "type": "string", "default": "Between Isle Server", "required": true },
+    { "key": "MAX_PLAYERS", "label": "Max players", "type": "number", "default": 50, "min": 1, "max": 300 },
+    { "key": "SERVER_PORT", "label": "Game port (UDP)", "type": "number", "default": 7777, "min": 1024, "max": 65535, "isPort": true },
+    { "key": "QUERY_PORT", "label": "Query port (UDP)", "type": "number", "default": 27015, "min": 1024, "max": 65535, "isPort": true }
+  ],
+  "ports": [
+    { "name": "game", "variable": "SERVER_PORT", "protocol": "udp" },
+    { "name": "query", "variable": "QUERY_PORT", "protocol": "udp" }
+  ],
+  "query": { "type": "source", "portVariable": "QUERY_PORT" },
+  "configFiles": [
+    {
+      "path": "TheIsle/Saved/Config/LinuxServer/Game.ini",
+      "format": "ini",
+      "mappings": {
+        "HOSTNAME": "/Script/TheIsle.TIGameSession.ServerName",
+        "MAX_PLAYERS": "/Script/TheIsle.TIGameSession.MaxPlayerCount"
+      }
+    }
+  ],
+  "backupExcludes": ["steamapps/**"],
+  "notes": "The install pins the EVRIMA beta branch (the actively developed build; the Legacy branch is the default branch of app 412680). Game.ini keys change between Evrima patches — check the community server guides after updates. RCON uses a custom Evrima protocol (not Source RCON), so the panel's RCON support does not apply. Windows hosts: set the start command override to TheIsle\\Binaries\\Win64\\TheIsleServer-Win64-Shipping.exe with the same arguments and move Game.ini to Config/WindowsServer/.",
+  "version": "1"
+}

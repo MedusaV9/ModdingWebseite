@@ -1,0 +1,93 @@
+{
+  "id": "velocity",
+  "name": "Velocity (Minecraft proxy)",
+  "category": "minecraft",
+  "description": "The modern, high-performance Minecraft proxy by PaperMC — front multiple backend servers behind one address.",
+  "icon": "network",
+  "color": "#38bdf8",
+  "platforms": [
+    "linux",
+    "win32",
+    "darwin"
+  ],
+  "docker": {
+    "image": "eclipse-temurin:21-jre",
+    "images": [
+      {
+        "label": "Java 21",
+        "image": "eclipse-temurin:21-jre"
+      },
+      {
+        "label": "Java 25",
+        "image": "eclipse-temurin:25-jre"
+      }
+    ]
+  },
+  "install": [
+    {
+      "type": "paper",
+      "project": "velocity",
+      "versionVar": "VELOCITY_VERSION",
+      "target": "velocity.jar"
+    }
+  ],
+  "startCommand": "{{JAVA_BIN}} -Xms{{MEMORY_MB}}M -Xmx{{MEMORY_MB}}M -jar velocity.jar",
+  "stop": {
+    "type": "command",
+    "command": "shutdown",
+    "timeoutS": 30
+  },
+  "variables": [
+    {
+      "key": "VELOCITY_VERSION",
+      "label": "Velocity version",
+      "description": "Exact version or 'latest'.",
+      "type": "string",
+      "default": "latest",
+      "required": true
+    },
+    {
+      "key": "SERVER_PORT",
+      "label": "Proxy port",
+      "description": "Set this to the same port as 'bind' in velocity.toml (generated on first start).",
+      "type": "number",
+      "default": 25577,
+      "min": 1024,
+      "max": 65535,
+      "isPort": true
+    },
+    {
+      "key": "MEMORY_MB",
+      "label": "Memory (MiB)",
+      "type": "number",
+      "default": 512,
+      "min": 256,
+      "max": 8192
+    },
+    {
+      "key": "JAVA_BIN",
+      "label": "Java binary",
+      "description": "Java executable for this server (e.g. /usr/lib/jvm/temurin-25/bin/java). Keep 'java' for the system default.",
+      "type": "string",
+      "default": "java",
+      "advanced": true
+    }
+  ],
+  "ports": [
+    {
+      "name": "proxy",
+      "variable": "SERVER_PORT",
+      "protocol": "tcp"
+    }
+  ],
+  "query": {
+    "type": "none"
+  },
+  "mods": {
+    "platform": "modrinth",
+    "loader": "velocity",
+    "dir": "plugins"
+  },
+  "readyRegex": "Done \\([0-9.]+s\\)!",
+  "notes": "velocity.toml is generated on first start; edit it in the file manager (bind, servers, forwarding mode)."
+}

@@ -1,0 +1,30 @@
+{
+  "id": "fistful-of-frags",
+  "name": "Fistful of Frags",
+  "category": "shooter",
+  "description": "Free wild-west shooter on the Source engine. SRCDS dedicated server installed via SteamCMD (anonymous).",
+  "icon": "crosshair",
+  "color": "#92400e",
+  "platforms": ["linux", "win32"],
+  "install": [
+    { "type": "steamcmd", "appId": 295230, "validate": true },
+    { "type": "writeFile", "path": "fof/cfg/server.cfg", "content": "hostname \"{{HOSTNAME}}\"\nsv_region 255\n" }
+  ],
+  "startCommand": "./srcds_run -game fof -port {{SERVER_PORT}} +map {{MAP}} +maxplayers {{MAX_PLAYERS}} +rcon_password \"{{RCON_PASSWORD}}\"",
+  "stop": { "type": "command", "command": "quit", "timeoutS": 30 },
+  "variables": [
+    { "key": "SERVER_PORT", "label": "Game port", "type": "number", "default": 27015, "min": 1024, "max": 65535, "isPort": true },
+    { "key": "MAP", "label": "Start map", "description": "e.g. fof_fistful, fof_depot, fof_robertlee.", "type": "string", "default": "fof_fistful", "required": true },
+    { "key": "HOSTNAME", "label": "Server name", "type": "string", "default": "Between FoF Server", "required": true },
+    { "key": "MAX_PLAYERS", "label": "Max players", "type": "number", "default": 16, "min": 1, "max": 20 },
+    { "key": "RCON_PASSWORD", "label": "RCON password", "description": "Enables console commands via Source RCON (on the game port) when set. Leave empty to disable RCON.", "type": "password", "default": "", "advanced": true }
+  ],
+  "ports": [{ "name": "game", "variable": "SERVER_PORT", "protocol": "both" }],
+  "query": { "type": "source", "portVariable": "SERVER_PORT" },
+  "rcon": { "portVariable": "SERVER_PORT", "passwordVariable": "RCON_PASSWORD" },
+  "playerActions": [{ "key": "kick", "label": "Kick", "command": "kick {{PLAYER}}" }],
+  "configFiles": [{ "path": "fof/cfg/server.cfg", "format": "keyvalue", "mappings": { "HOSTNAME": "hostname" } }],
+  "backupExcludes": ["steamapps/**", "fof/download/**"],
+  "notes": "The game and its server are free. Server config lives in fof/cfg/server.cfg. Windows hosts: set the start command override to srcds.exe -game fof with the same arguments.",
+  "version": "1"
+}

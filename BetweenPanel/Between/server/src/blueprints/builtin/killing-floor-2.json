@@ -1,0 +1,25 @@
+{
+  "id": "killing-floor-2",
+  "name": "Killing Floor 2",
+  "category": "shooter",
+  "description": "Co-op wave-based zed slaughter for up to 6 players. Dedicated server installed via SteamCMD (anonymous).",
+  "icon": "skull",
+  "color": "#7f1d1d",
+  "platforms": ["linux", "win32"],
+  "install": [{ "type": "steamcmd", "appId": 232130, "validate": true }],
+  "startCommand": "./Binaries/Win64/KFGameSteamServer.bin.x86_64 {{MAP}}?Port={{SERVER_PORT}}",
+  "stop": { "type": "signal", "signal": "SIGTERM", "timeoutS": 30 },
+  "variables": [
+    { "key": "MAP", "label": "Start map", "type": "string", "default": "KF-BioticsLab", "required": true },
+    { "key": "SERVER_PORT", "label": "Game port (UDP)", "type": "number", "default": 7777, "min": 1024, "max": 65535, "isPort": true },
+    { "key": "QUERY_PORT", "label": "Query port (UDP)", "description": "Steam query port (default 27015); change it with ?QueryPort= in the start URL.", "type": "number", "default": 27015, "min": 1024, "max": 65535, "isPort": true, "advanced": true }
+  ],
+  "ports": [
+    { "name": "game", "variable": "SERVER_PORT", "protocol": "udp" },
+    { "name": "query", "variable": "QUERY_PORT", "protocol": "udp" }
+  ],
+  "query": { "type": "source", "portVariable": "QUERY_PORT" },
+  "backupExcludes": ["steamapps/**"],
+  "notes": "The Linux binary really does live under Binaries/Win64/. Configuration is written to KFGame/Config/ on first start (LinuxServer-KFGame.ini for game settings, KFWeb.ini to enable the web admin on TCP 8080). Windows hosts: set the start command override to Binaries\\Win64\\KFServer.exe {{MAP}}?Port={{SERVER_PORT}}.",
+  "version": "1"
+}

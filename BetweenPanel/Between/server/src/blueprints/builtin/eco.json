@@ -1,0 +1,24 @@
+{
+  "id": "eco",
+  "name": "Eco",
+  "category": "simulation",
+  "description": "Build a civilization in a fully simulated ecosystem — with laws, economy and government. Dedicated server installed via SteamCMD (anonymous).",
+  "icon": "globe",
+  "color": "#16a34a",
+  "platforms": ["linux", "win32"],
+  "install": [{ "type": "steamcmd", "appId": 739590, "validate": true }],
+  "startCommand": "./EcoServer",
+  "stop": { "type": "signal", "signal": "SIGINT", "timeoutS": 60 },
+  "variables": [
+    { "key": "SERVER_PORT", "label": "Game port (UDP)", "description": "Must match GameServerPort in Configs/Network.eco (default 3000).", "type": "number", "default": 3000, "min": 1024, "max": 65535, "isPort": true },
+    { "key": "WEB_PORT", "label": "Web UI port (TCP)", "description": "Must match WebServerPort in Configs/Network.eco (default 3001).", "type": "number", "default": 3001, "min": 1024, "max": 65535, "isPort": true }
+  ],
+  "ports": [
+    { "name": "game", "variable": "SERVER_PORT", "protocol": "udp" },
+    { "name": "web", "variable": "WEB_PORT", "protocol": "tcp" }
+  ],
+  "query": { "type": "none" },
+  "backupExcludes": ["steamapps/**"],
+  "notes": "Configuration lives in Configs/*.eco (JSON): Network.eco for name/description/ports, Difficulty.eco for world settings. The web UI on the web port includes admin tools. World storage is in Storage/. Windows hosts: set the start command override to EcoServer.exe.",
+  "version": "1"
+}

@@ -1,0 +1,26 @@
+{
+  "id": "the-forest",
+  "name": "The Forest",
+  "category": "survival",
+  "description": "Co-op cannibal-island survival horror. Windows dedicated server installed via SteamCMD (anonymous).",
+  "icon": "trees",
+  "color": "#15803d",
+  "platforms": ["win32"],
+  "install": [{ "type": "steamcmd", "appId": 556450, "validate": true }],
+  "startCommand": "TheForestDedicatedServer.exe -batchmode -dedicated -nosteamclient",
+  "stop": { "type": "signal", "signal": "SIGTERM", "timeoutS": 30 },
+  "variables": [
+    { "key": "SERVER_PORT", "label": "Steam port (UDP)", "description": "serverSteamPort in the config (default 27015).", "type": "number", "default": 27015, "min": 1024, "max": 65535, "isPort": true },
+    { "key": "QUERY_PORT", "label": "Query port (UDP)", "description": "serverQueryPort in the config (default 27016).", "type": "number", "default": 27016, "min": 1024, "max": 65535, "isPort": true },
+    { "key": "GAME_PORT", "label": "Game port (UDP)", "description": "serverGamePort in the config (default 8766).", "type": "number", "default": 8766, "min": 1024, "max": 65535, "isPort": true }
+  ],
+  "ports": [
+    { "name": "steam", "variable": "SERVER_PORT", "protocol": "udp" },
+    { "name": "query", "variable": "QUERY_PORT", "protocol": "udp" },
+    { "name": "game", "variable": "GAME_PORT", "protocol": "udp" }
+  ],
+  "query": { "type": "source", "portVariable": "SERVER_PORT" },
+  "backupExcludes": ["steamapps/**"],
+  "notes": "Server name, password, player count, save slot and ports are configured in a config file passed with -configfilepath (a default config is created under the server directory on first run). Add -savefolderpath ./saves to keep saves inside the server directory for panel backups. The server binary is Windows-only (commonly run under Wine on Linux outside this blueprint's platform list).",
+  "version": "1"
+}

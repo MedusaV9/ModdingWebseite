@@ -1,0 +1,620 @@
+@import 'tailwindcss';
+
+/* ------------------------------------------------------------------------ */
+/* Self-hosted webfonts (privacy + air-gapped LANs — no Google Fonts CDN).
+   Variable woff2 subsets (Inter wght 400–800, JetBrains Mono wght 400–600),
+   split latin / latin-ext via unicode-range: latin covers Basic Latin +
+   Latin-1 Supplement (incl. German ä/ö/ü/ß); latin-ext only downloads when
+   a glyph needs it. No italics — the app never uses them. Files live in
+   public/fonts/; the latin pair is preloaded from index.html.               */
+/* ------------------------------------------------------------------------ */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url('/fonts/inter-var.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304,
+    U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url('/fonts/inter-var-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308,
+    U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113,
+    U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url('/fonts/jetbrains-mono-var.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304,
+    U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url('/fonts/jetbrains-mono-var-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308,
+    U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113,
+    U+2C60-2C7F, U+A720-A7FF;
+}
+
+/* Map Tailwind color tokens to live theme variables (set by ThemeContext). */
+@theme inline {
+  --color-bg: var(--t-bg);
+  --color-surface: var(--t-surface);
+  --color-elevated: var(--t-elevated);
+  --color-line: var(--t-line);
+  --color-text: var(--t-text);
+  --color-muted: var(--t-muted);
+  --color-accent: var(--t-accent);
+  --color-accent2: var(--t-accent2);
+  --color-onaccent: var(--t-on-accent);
+  --color-success: var(--t-success);
+  --color-warn: var(--t-warn);
+  --color-danger: var(--t-danger);
+  /* SF on Apple devices, Segoe UI Variable on Win 11, Inter (webfont) elsewhere. */
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI Variable', 'Inter', ui-sans-serif,
+    system-ui, 'Segoe UI', sans-serif;
+  --font-display:
+    -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI Variable Display', 'Inter',
+    ui-sans-serif, system-ui, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'Cascadia Code', Consolas, monospace;
+}
+
+:root {
+  /* default theme (between-dark); ThemeContext overrides these */
+  --t-bg: #0b0d14;
+  --t-surface: #12151f;
+  --t-elevated: #191d2b;
+  --t-line: #262b3d;
+  --t-text: #e8eaf2;
+  --t-muted: #8b91a7;
+  --t-accent: #6366f1;
+  --t-accent2: #a855f7;
+  --t-on-accent: #ffffff;
+  --t-success: #22c55e;
+  --t-warn: #f59e0b;
+  --t-danger: #ef4444;
+
+  /* Liquid Glass knobs (dark defaults). Light themes flip these via the
+     html[data-theme-dark='false'] block below (attribute set by applyTheme);
+     individual themes may override any knob through their `vars` record. */
+  --glass-tint: var(--t-surface);
+  --glass-opacity: 62%;
+  --glass-opacity-strong: 80%;
+  --glass-opacity-subtle: 48%;
+  --glass-blur: 20px;
+  --glass-blur-strong: 28px;
+  --glass-saturate: 1.6;
+  --glass-border: color-mix(in srgb, var(--t-line) 68%, transparent);
+  --glass-highlight: rgba(255, 255, 255, 0.07);
+  --glass-shadow: 0 8px 32px -12px rgba(0, 0, 0, 0.45);
+  --glass-shadow-strong: 0 16px 48px -12px rgba(0, 0, 0, 0.55);
+  --noise-opacity: 0.05;
+  --vignette: rgba(0, 0, 0, 0.26);
+
+  /* Fixed dark console surface — theme-invariant on purpose (readability).
+     Used via bg-(--console-bg) on Terminal / Shell scrollback. */
+  --console-bg: #0a0c11;
+
+  /* Fixed console text palette. The console surface never follows the theme,
+     so text on it must not either (theme text/accents can be near-black on
+     light themes → black-on-black). Values are pinned readable-on-dark hex,
+     aligned with the ANSI palette in Terminal.tsx. Consume via
+     text-(--console-text) etc. — never theme tokens inside the console. */
+  --console-text: #e5e7eb; /* stdout */
+  --console-text-dim: rgba(255, 255, 255, 0.38); /* timestamps, empty state */
+  --console-text-stderr: #f87171;
+  --console-text-system: #818cf8;
+  --console-text-input: #c084fc;
+  --console-text-install: #4ade80;
+}
+
+/* Glass on light = white frost: higher opacity, darker hairlines, softer shadows. */
+html[data-theme-dark='false'] {
+  --glass-opacity: 74%;
+  --glass-opacity-strong: 86%;
+  --glass-opacity-subtle: 60%;
+  --glass-border: color-mix(in srgb, var(--t-line) 90%, transparent);
+  --glass-highlight: rgba(255, 255, 255, 0.7);
+  --glass-shadow: 0 8px 28px -16px rgba(30, 41, 74, 0.22);
+  --glass-shadow-strong: 0 16px 40px -16px rgba(30, 41, 74, 0.28);
+  --noise-opacity: 0.03;
+  --vignette: rgba(30, 41, 74, 0.07);
+}
+
+html {
+  /* Fluid root size: the whole rem-based scale breathes with the viewport
+     (phones ~13.5px → 4K 16px). Keep component text in rem, not px. */
+  font-size: clamp(13.5px, 12.6px + 0.22vw, 16px);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--t-bg);
+  color: var(--t-text);
+  font-family: var(--font-sans);
+  font-size: 0.9375rem;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Smooth in-page scrolling for the app viewport only — programmatic route
+   resets pass behavior:'instant' and .console-scroll pins behavior:auto. */
+main {
+  scroll-behavior: smooth;
+}
+
+/* ------------------------------------------------------------------------ */
+/* Ambient backdrop: layered accent radials + vignette + film grain + a very
+   slow accent drift (desktop only, disabled under reduced motion).          */
+/* ------------------------------------------------------------------------ */
+.app-bg {
+  position: relative;
+  isolation: isolate;
+  background:
+    radial-gradient(1200px 600px at 85% -10%, color-mix(in oklab, var(--t-accent) 16%, transparent), transparent 62%),
+    radial-gradient(1000px 560px at -10% 110%, color-mix(in oklab, var(--t-accent2) 12%, transparent), transparent 62%),
+    radial-gradient(120% 100% at 50% 0%, transparent 58%, var(--vignette) 100%),
+    var(--t-bg);
+}
+.app-bg::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: var(--noise-opacity);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+.app-bg::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  pointer-events: none;
+  display: none;
+}
+@media (min-width: 64rem) and (prefers-reduced-motion: no-preference) {
+  .app-bg::after {
+    display: block;
+    top: -30%;
+    left: 30%;
+    width: 55vw;
+    height: 55vw;
+    border-radius: 50%;
+    background: radial-gradient(circle, color-mix(in oklab, var(--t-accent) 9%, transparent), transparent 65%);
+    /* transform-only → composited, no main-thread paints */
+    animation: ambient-drift 80s ease-in-out infinite alternate;
+  }
+}
+@keyframes ambient-drift {
+  from {
+    transform: translate3d(-12%, 0, 0) scale(1);
+  }
+  to {
+    transform: translate3d(10%, 12%, 0) scale(1.18);
+  }
+}
+
+.text-gradient {
+  background: linear-gradient(100deg, var(--t-accent), var(--t-accent2));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.btn-gradient {
+  background: linear-gradient(100deg, var(--t-accent), var(--t-accent2));
+  color: var(--t-on-accent);
+}
+.btn-gradient:hover {
+  filter: brightness(1.1);
+}
+/* Disabled primary = quiet flat chip, not a dimmed gradient smudge.
+   Unlayered on purpose: it must beat the unlayered .btn-gradient background,
+   the .glow-accent shadow AND the utilities-layer disabled:opacity/saturate
+   dimming from Button's base (utilities can't win against unlayered CSS, so
+   the disabled treatment lives here rather than in ui.tsx classNames). */
+.btn-gradient:disabled {
+  background: color-mix(in srgb, var(--t-elevated) 60%, transparent);
+  color: var(--t-muted);
+  box-shadow: none;
+  filter: none;
+  opacity: 1;
+}
+
+/* Scrollbars: thin + themed everywhere. Lives in @layer base so plain
+   utilities (e.g. [scrollbar-width:none]) override it without `!`. */
+@layer base {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--t-line) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: var(--t-line);
+    border-radius: 6px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+/* Interactive cards: gentle lift + accent border + press. Safe with modals
+   because they render through portals (a hover transform never contains them).
+   The hover shadow re-states the specular inset so .glass keeps its edge. */
+.card-hover {
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.25s ease,
+    transform 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.card-hover:hover {
+  border-color: color-mix(in oklab, var(--t-accent) 50%, var(--t-line));
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    0 12px 32px -12px color-mix(in oklab, var(--t-accent) 30%, rgba(0, 0, 0, 0.45));
+  transform: translateY(-2px);
+}
+.card-hover:active {
+  transform: translateY(0) scale(0.99);
+}
+
+/* Running status: soft green glow behind the dot */
+.glow-success {
+  box-shadow: 0 0 8px 1px color-mix(in oklab, var(--t-success) 60%, transparent);
+}
+
+/* Accent glow for primary actions (gradient buttons, brand mark). */
+.glow-accent {
+  box-shadow:
+    0 4px 20px -6px color-mix(in srgb, var(--t-accent) 55%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+
+/* Console */
+.console-scroll {
+  overflow-anchor: none;
+  scroll-behavior: auto;
+}
+/* Console scrollbar: the console keeps its fixed dark surface (--console-bg)
+   on every theme, so the themed var(--t-line) thumb from the base layer can
+   clash on light themes — use a fixed low-alpha white thumb instead.
+   Components layer: beats the base-layer globals, utilities still win. */
+@layer components {
+  .console-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+  }
+  .console-scroll::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.18);
+    border-radius: 6px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  .console-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+.pulse-dot {
+  animation: pulse-dot 1.6s ease-in-out infinite;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes slide-up-sheet {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+@keyframes slide-in-left {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+/* Shimmer sweep for .skeleton (transform-only → composited). */
+@keyframes skeleton-shimmer {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
+/* ------------------------------------------------------------------------ */
+/* Motion. Defined as @utility (not @layer components) so they take variants:
+   `sm:scale-in`, `max-sm:fade-in`, … All entry animations use `backwards`
+   fill (never `both`): a retained end-state transform would turn every
+   animated wrapper into a containing block for position:fixed descendants
+   (modals!), confining them to the wrapper. The prefers-reduced-motion
+   block below still neutralizes them (universal selector + !important).   */
+/* ------------------------------------------------------------------------ */
+@utility fade-in-up {
+  animation: fade-in-up 0.35s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+@utility fade-in {
+  animation: fade-in 0.2s ease-out backwards;
+}
+@utility scale-in {
+  /* transform-origin aware: default center, override with origin-* utilities */
+  animation: scale-in 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
+}
+@utility slide-up-sheet {
+  animation: slide-up-sheet 0.4s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+@utility slide-in-left {
+  animation: slide-in-left 0.35s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+
+/* Stagger helper: put on a grid/list container whose children carry an
+   entry animation (.fade-in-up / .scale-in). Caps at 8 children. Must be an
+   @utility too: the motion utilities' animation shorthand resets
+   animation-delay, so these child rules need to sit in the same utilities
+   layer where their higher specificity wins. */
+@utility stagger {
+  & > *:nth-child(1) {
+    animation-delay: 0ms;
+  }
+  & > *:nth-child(2) {
+    animation-delay: 40ms;
+  }
+  & > *:nth-child(3) {
+    animation-delay: 80ms;
+  }
+  & > *:nth-child(4) {
+    animation-delay: 120ms;
+  }
+  & > *:nth-child(5) {
+    animation-delay: 160ms;
+  }
+  & > *:nth-child(6) {
+    animation-delay: 200ms;
+  }
+  & > *:nth-child(7) {
+    animation-delay: 240ms;
+  }
+  & > *:nth-child(8) {
+    animation-delay: 280ms;
+  }
+  & > *:nth-child(n + 9) {
+    animation-delay: 320ms;
+  }
+}
+
+/* ------------------------------------------------------------------------ */
+/* Design-system classes. They live in the components layer so Tailwind
+   utilities always win — pages can extend/opt out via className.            */
+/* ------------------------------------------------------------------------ */
+@layer components {
+  /* Liquid Glass materials.
+     Blur budget: backdrop-filter ONLY on chrome-level surfaces (sidebar,
+     topbar, bottom dock, cards, modals, palette, toasts) — never on per-row
+     list items or tiny elements. .glass-subtle is blur-free on purpose so it
+     is safe anywhere (chips, badges, small controls). No will-change. */
+  .glass {
+    background: color-mix(in srgb, var(--glass-tint) var(--glass-opacity), transparent);
+    border: 1px solid var(--glass-border);
+    box-shadow:
+      inset 0 1px 0 var(--glass-highlight),
+      var(--glass-shadow);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  }
+  .glass-strong {
+    background: color-mix(in srgb, var(--glass-tint) var(--glass-opacity-strong), transparent);
+    border: 1px solid var(--glass-border);
+    box-shadow:
+      inset 0 1px 0 var(--glass-highlight),
+      var(--glass-shadow-strong);
+    -webkit-backdrop-filter: blur(var(--glass-blur-strong)) saturate(var(--glass-saturate));
+    backdrop-filter: blur(var(--glass-blur-strong)) saturate(var(--glass-saturate));
+  }
+  .glass-subtle {
+    background: color-mix(in srgb, var(--glass-tint) var(--glass-opacity-subtle), transparent);
+    border: 1px solid color-mix(in srgb, var(--t-line) 55%, transparent);
+    box-shadow: inset 0 1px 0 var(--glass-highlight);
+  }
+
+  /* Specular top edge only — cheap, safe on per-row elements. */
+  .sheen {
+    box-shadow: inset 0 1px 0 var(--glass-highlight);
+  }
+
+  /* Skeleton loading block (Skeleton in ui.tsx): glass-subtle tint carrying a
+     transform-only shimmer sweep on ::after. The sweep exists ONLY under
+     prefers-reduced-motion: no-preference — reduced motion gets the plain
+     static block (no ::after at all, not a 0.01ms flash). Blur-free, safe to
+     repeat per row. Base radius = rounded-xl; utilities override. */
+  .skeleton {
+    position: relative;
+    overflow: hidden;
+    border-radius: 0.75rem;
+    background: color-mix(in srgb, var(--glass-tint) var(--glass-opacity-subtle), transparent);
+    border: 1px solid color-mix(in srgb, var(--t-line) 45%, transparent);
+    box-shadow: inset 0 1px 0 var(--glass-highlight);
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .skeleton::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      transform: translateX(-100%);
+      background: linear-gradient(100deg, transparent 25%, var(--glass-highlight) 50%, transparent 75%);
+      animation: skeleton-shimmer 1.8s ease-in-out infinite;
+    }
+  }
+
+  /* Tabular figures for stats/uptimes/counters that must not jitter. */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* THE micro-label spec for content: field labels, stat/metric captions,
+     form-section headings. (Matches Field's label in ui.tsx.) The tinier
+     0.625rem/0.14em variant is reserved for chrome — nav section labels,
+     palette group headers, dock labels. Utilities override per usual
+     (e.g. `microlabel text-accent`). */
+  .microlabel {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--t-muted);
+  }
+
+  /* Display type = same stack as sans, tightened. tracking-* utilities win. */
+  .font-display {
+    letter-spacing: -0.02em;
+  }
+
+  /* Safe-area paddings — apply to a wrapper that has no own padding on that
+     side (the env() value replaces, not adds to, padding utilities). */
+  .safe-top {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  /* Horizontal-scroll wrapper for wide tables (see DESIGN.md). */
+  .table-scroll {
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+  }
+
+  /* Springy press feedback for buttons/controls. Includes its own multi-prop
+     transition — do NOT combine with transition-* utilities (they override). */
+  .pressable {
+    transition:
+      transform 0.16s cubic-bezier(0.34, 1.56, 0.64, 1),
+      background-color 0.15s ease,
+      border-color 0.15s ease,
+      color 0.15s ease,
+      box-shadow 0.2s ease,
+      opacity 0.15s ease,
+      filter 0.15s ease;
+  }
+  .pressable:active {
+    transform: scale(0.97);
+  }
+}
+
+/* No backdrop-filter support → near-opaque panels so text stays readable. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .glass,
+  .glass-strong {
+    background: color-mix(in srgb, var(--glass-tint) 96%, transparent);
+  }
+}
+
+/* Touch ergonomics: interactive controls grow to a 44px target on touch
+   screens. ui.tsx applies .ui-control to Button/Input/Select/etc.; custom
+   page controls should do the same. .icon-btn keeps icon buttons square. */
+@media (pointer: coarse) {
+  .ui-control {
+    min-height: 44px;
+  }
+  .icon-btn {
+    min-width: 44px;
+  }
+  /* Hint that a wide table keeps going — fade its trailing edge. */
+  .table-scroll {
+    mask-image: linear-gradient(to right, black calc(100% - 24px), rgba(0, 0, 0, 0.35));
+    -webkit-mask-image: linear-gradient(to right, black calc(100% - 24px), rgba(0, 0, 0, 0.35));
+  }
+}
+
+/* Reduced motion: collapse every custom animation/transition. The loading
+   spinner stays visible (slower) because it conveys state, not decoration. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    /* Also zero the delay: .stagger children keep their per-child delay
+       otherwise, and with `backwards` fill they'd stay invisible and pop in
+       one-by-one — exactly the motion this block must remove. */
+    animation-delay: 0s !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .animate-spin {
+    animation-duration: 1.5s !important;
+    animation-iteration-count: infinite !important;
+  }
+  main {
+    scroll-behavior: auto;
+  }
+}
+
+input[type='checkbox'] {
+  accent-color: var(--t-accent);
+}
+
+::selection {
+  background: color-mix(in oklab, var(--t-accent) 45%, transparent);
+}

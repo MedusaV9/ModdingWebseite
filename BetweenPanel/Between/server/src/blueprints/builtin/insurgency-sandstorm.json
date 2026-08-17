@@ -1,0 +1,25 @@
+{
+  "id": "insurgency-sandstorm",
+  "name": "Insurgency: Sandstorm",
+  "category": "shooter",
+  "description": "Hardcore tactical FPS with intense close-quarters combat. Dedicated server installed via SteamCMD (anonymous).",
+  "icon": "crosshair",
+  "color": "#ca8a04",
+  "platforms": ["linux", "win32"],
+  "install": [{ "type": "steamcmd", "appId": 581330, "validate": true }],
+  "startCommand": "./Insurgency/Binaries/Linux/InsurgencyServer-Linux-Shipping {{SCENARIO}} -Port={{SERVER_PORT}} -QueryPort={{QUERY_PORT}}",
+  "stop": { "type": "signal", "signal": "SIGTERM", "timeoutS": 30 },
+  "variables": [
+    { "key": "SCENARIO", "label": "Startup scenario", "description": "Travel string Scenario_<Map>_<Mode>_<Faction>, e.g. Scenario_Farmhouse_Checkpoint_Security or Scenario_Crossing_Push_Security.", "type": "string", "default": "Scenario_Farmhouse_Checkpoint_Security", "required": true },
+    { "key": "SERVER_PORT", "label": "Game port (UDP)", "type": "number", "default": 27102, "min": 1024, "max": 65535, "isPort": true },
+    { "key": "QUERY_PORT", "label": "Query port (UDP)", "type": "number", "default": 27131, "min": 1024, "max": 65535, "isPort": true }
+  ],
+  "ports": [
+    { "name": "game", "variable": "SERVER_PORT", "protocol": "udp" },
+    { "name": "query", "variable": "QUERY_PORT", "protocol": "udp" }
+  ],
+  "query": { "type": "source", "portVariable": "QUERY_PORT" },
+  "backupExcludes": ["steamapps/**"],
+  "notes": "Server name, passwords, rcon and map cycle are configured in Insurgency/Saved/Config/LinuxServer/Game.ini (WindowsServer on Windows) plus -hostname/-password launch args; a MapCycle.txt can be referenced with -MapCycle. A GameStats token (from the official website) is optional and only needed for stats-enabled servers. Windows hosts: set the start command override to Insurgency\\Binaries\\Win64\\InsurgencyServer.exe with the same arguments.",
+  "version": "1"
+}
