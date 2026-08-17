@@ -1,0 +1,36 @@
+{
+  "name": "early-trailers-remotion",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Remotion project rendering the four EARLY drink trailers (hype/clean x tiktok/landscape).",
+  "scripts": {
+    "postinstall": "node scripts/sync-assets.mjs",
+    "sync-assets": "node scripts/sync-assets.mjs",
+    "prestudio": "node scripts/sync-assets.mjs",
+    "studio": "remotion studio",
+    "precompositions": "node scripts/sync-assets.mjs",
+    "compositions": "remotion compositions",
+    "prerender:all": "node scripts/sync-assets.mjs",
+    "render:all": "node scripts/render-all.mjs",
+    "prerender:one": "node scripts/sync-assets.mjs",
+    "render:one": "node scripts/render-all.mjs --require-id",
+    "render:v2": "node scripts/render-v2.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@remotion/bundler": "^4.0.512",
+    "@remotion/cli": "^4.0.512",
+    "@remotion/noise": "^4.0.512",
+    "@remotion/renderer": "^4.0.512",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "remotion": "^4.0.512"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "prettier": "^3.9.6",
+    "typescript": "~5.9.0"
+  }
+}
