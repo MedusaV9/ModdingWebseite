@@ -92,12 +92,7 @@ describe("kategorieOptionen: nur tragfähige Kategorien (Vote-Fix)", () => {
   });
 
   it("Notleiter: trägt kaum eine Kategorie, kommen die vorrätigsten zuerst", () => {
-    const pool = [
-      frage("qa1"),
-      frage("qa2"),
-      frage("qa3"),
-      frage("qm1", { category: "musik" }),
-    ];
+    const pool = [frage("qa1"), frage("qa2"), frage("qa3"), frage("qm1", { category: "musik" })];
     const a = abschnitt(); // braucht 4 — keine Kategorie trägt allein
     const s = planState(pool, a);
     const optionen = kategorieOptionen(s, a, createRng(3));

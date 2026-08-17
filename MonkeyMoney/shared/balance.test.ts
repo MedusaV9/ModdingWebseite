@@ -71,7 +71,9 @@ describe("balance: Format-Kurven", () => {
   it("Taschendieb-Klau und Wer-singt's steigen mit der Schwierigkeit", () => {
     for (let i = 1; i < SCHWIERIGKEITEN.length; i++) {
       const [a, b] = [SCHWIERIGKEITEN[i - 1], SCHWIERIGKEITEN[i]];
-      expect(BALANCE.formate.taschendiebKlau[b]).toBeGreaterThan(BALANCE.formate.taschendiebKlau[a]);
+      expect(BALANCE.formate.taschendiebKlau[b]).toBeGreaterThan(
+        BALANCE.formate.taschendiebKlau[a],
+      );
       expect(BALANCE.formate.werSingts[b]).toBeGreaterThan(BALANCE.formate.werSingts[a]);
     }
   });

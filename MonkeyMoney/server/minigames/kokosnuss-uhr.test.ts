@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import type { ContentSlice, Question } from "../../shared/content";
 import { asPlayerId } from "../../shared/ids";
 import { sackWertBei } from "../../shared/minigames/kokosnuss-uhr.meta";
+import { FRAGE_TIMER_MS } from "../../shared/money";
 import { createRng } from "../../shared/rng";
 import { createTestClock } from "../../shared/time";
 import type { GmAction, PlayerAction } from "./_api/plugin";
@@ -13,7 +14,7 @@ const frageMedium: Question = {
   id: "q_kuhr_m",
   kind: "choice4",
   category: "test",
-  difficulty: "medium", // Sack 400 MM, 8 Ticks / 15 s ⇒ alle 1.875 ms (§2.2)
+  difficulty: "medium", // Sack 400 MM, 8 Ticks / 20 s ⇒ alle 2.500 ms (§2.2 + Pacing-Config)
   text: "Testfrage?",
   options: ["A", "B", "C", "D"],
   answer: 1,
@@ -46,22 +47,22 @@ function antwort(
 }
 
 describe("kokosnuss-uhr: Sack-Tick-Goldens (§2.2)", () => {
-  it("MEDIUM: friert 400 MM im ersten Tick ein, 300 MM nach 4 s (Tick 2)", () => {
+  it("MEDIUM: friert 400 MM im ersten Tick ein, 300 MM nach 5 s (Tick 2)", () => {
     const { ctx, state } = setup();
     let s = kokosnussUhrPlugin.reduce(state, antwort("p1", 1, 1_000), ctx) as KokosnussUhrState;
-    s = kokosnussUhrPlugin.reduce(s, antwort("p2", 1, 4_000), ctx) as KokosnussUhrState;
+    s = kokosnussUhrPlugin.reduce(s, antwort("p2", 1, 5_000), ctx) as KokosnussUhrState;
     s = { ...s, finished: true };
     const scores = kokosnussUhrPlugin.scores(s);
-    expect(scores[spieler[0]]).toBe(400); // floor(1000/1875) = 0 Ticks
-    expect(scores[spieler[1]]).toBe(300); // floor(4000/1875) = 2 Ticks ⇒ 400 − 100
+    expect(scores[spieler[0]]).toBe(400); // floor(1000/2500) = 0 Ticks
+    expect(scores[spieler[1]]).toBe(300); // floor(5000/2500) = 2 Ticks ⇒ 400 − 100
   });
 
-  it("HARD: 750 MM Start, nach 10 s sind 7 Ticks weg ⇒ 400 MM eingefroren", () => {
+  it("HARD: 750 MM Start, nach 10 s sind 6 Ticks weg ⇒ 450 MM eingefroren", () => {
     const { ctx, state } = setup(frageHard);
     let s = kokosnussUhrPlugin.reduce(state, antwort("p1", 1, 10_000), ctx) as KokosnussUhrState;
     s = { ...s, finished: true };
-    // 15 Ticks / 20 s ⇒ alle 1333,3 ms; floor(10000/1333,3) = 7 ⇒ 750 − 350.
-    expect(kokosnussUhrPlugin.scores(s)[spieler[0]]).toBe(400);
+    // 15 Ticks / 25 s ⇒ alle 1666,7 ms; floor(10000/1666,7) = 6 ⇒ 750 − 300.
+    expect(kokosnussUhrPlugin.scores(s)[spieler[0]]).toBe(450);
   });
 
   it("falsche Antwort = 0 MM, auch bei vollem Sack", () => {
@@ -75,9 +76,13 @@ describe("kokosnuss-uhr: Sack-Tick-Goldens (§2.2)", () => {
 
   it("der Sack wird nie negativ: Antwort im Gnadenfenster friert 0 MM ein", () => {
     const { ctx, state } = setup();
-    const s = kokosnussUhrPlugin.reduce(state, antwort("p1", 1, 15_200), ctx) as KokosnussUhrState;
+    const s = kokosnussUhrPlugin.reduce(
+      state,
+      antwort("p1", 1, FRAGE_TIMER_MS.medium + 200),
+      ctx,
+    ) as KokosnussUhrState;
     expect(s.answers.p1.eingefroren).toBe(0);
-    expect(sackWertBei(400, 1875, 99_999)).toBe(0);
+    expect(sackWertBei(400, 2_500, 99_999)).toBe(0);
   });
 });
 
@@ -92,9 +97,17 @@ describe("kokosnuss-uhr: Antwort-Lock + Spätantwort", () => {
 
   it("verwirft Antworten nach dem Gnadenfenster (+400 ms) und ungültige Choices", () => {
     const { ctx, state } = setup();
-    const zuSpaet = kokosnussUhrPlugin.reduce(state, antwort("p1", 1, 15_401), ctx);
+    const zuSpaet = kokosnussUhrPlugin.reduce(
+      state,
+      antwort("p1", 1, FRAGE_TIMER_MS.medium + 401),
+      ctx,
+    );
     expect((zuSpaet as KokosnussUhrState).answers.p1).toBeUndefined();
-    const geradeNoch = kokosnussUhrPlugin.reduce(state, antwort("p1", 1, 15_399), ctx);
+    const geradeNoch = kokosnussUhrPlugin.reduce(
+      state,
+      antwort("p1", 1, FRAGE_TIMER_MS.medium + 399),
+      ctx,
+    );
     expect((geradeNoch as KokosnussUhrState).answers.p1).toBeDefined();
     const kaputt = kokosnussUhrPlugin.reduce(state, antwort("p1", 7, 1_000), ctx);
     expect((kaputt as KokosnussUhrState).answers.p1).toBeUndefined();
@@ -106,25 +119,29 @@ describe("kokosnuss-uhr: GM-Zeit-Eingriffe", () => {
     const { clock, ctx, state } = setup();
     const extend: GmAction = { kind: "gm", type: "timer.extend", ms: 15_000 };
     let s = kokosnussUhrPlugin.reduce(state, extend, ctx) as KokosnussUhrState;
-    expect(s.endsAt).toBe(30_000);
-    clock.advance(16_000); // Original-Timer wäre vorbei, Sack ist leer
+    expect(s.endsAt).toBe(FRAGE_TIMER_MS.medium + 15_000);
+    clock.advance(FRAGE_TIMER_MS.medium + 1_000); // Original-Timer wäre vorbei, Sack ist leer
     s = kokosnussUhrPlugin.tick(s, ctx) as KokosnussUhrState;
     expect(s.finished).toBe(false);
     expect(s.sackWert).toBe(0);
-    s = kokosnussUhrPlugin.reduce(s, antwort("p1", 1, 16_000), ctx) as KokosnussUhrState;
+    s = kokosnussUhrPlugin.reduce(
+      s,
+      antwort("p1", 1, FRAGE_TIMER_MS.medium + 1_000),
+      ctx,
+    ) as KokosnussUhrState;
     expect(s.answers.p1.eingefroren).toBe(0); // richtig, aber der Sack ist aufgegessen
   });
 
   it("timer.shift (Pause) friert den Sack über die Pausendauer ein", () => {
     const { clock, ctx, state } = setup();
-    clock.advance(5_000);
+    clock.advance(8_000);
     const shift: GmAction = { kind: "gm", type: "timer.shift", ms: 3_000 };
     let s = kokosnussUhrPlugin.reduce(state, shift, ctx) as KokosnussUhrState;
     s = kokosnussUhrPlugin.tick(s, ctx) as KokosnussUhrState;
-    // Effektiv vergangen: 5000 − 3000 = 2000 ms ⇒ 1 Tick ⇒ 350 (statt 300 ohne Shift).
-    expect(s.sackWert).toBe(350);
-    const a = kokosnussUhrPlugin.reduce(s, antwort("p1", 1, 5_000), ctx) as KokosnussUhrState;
-    expect(a.answers.p1.eingefroren).toBe(350);
+    // Effektiv vergangen: 8000 − 3000 = 5000 ms ⇒ 2 Ticks ⇒ 300 (statt 250 ohne Shift).
+    expect(s.sackWert).toBe(300);
+    const a = kokosnussUhrPlugin.reduce(s, antwort("p1", 1, 8_000), ctx) as KokosnussUhrState;
+    expect(a.answers.p1.eingefroren).toBe(300);
   });
 });
 
@@ -146,7 +163,7 @@ describe("kokosnuss-uhr: Disconnect + Rundenende", () => {
 
   it("endet bei Timeout auch ohne Antworten", () => {
     const { clock, ctx, state } = setup();
-    clock.advance(15_001);
+    clock.advance(FRAGE_TIMER_MS.medium + 1);
     const s = kokosnussUhrPlugin.tick(state, ctx) as KokosnussUhrState;
     expect(s.finished).toBe(true);
     expect(kokosnussUhrPlugin.scores(s)[spieler[0]]).toBe(0);
@@ -175,7 +192,7 @@ describe("kokosnuss-uhr: Leak-Schutz + Contract", () => {
       eingefrorene: { playerId: string; betrag: number }[];
     };
     expect(view.answeredCount).toBe(1);
-    expect(view.endsAt).toBe(15_000);
+    expect(view.endsAt).toBe(FRAGE_TIMER_MS.medium);
     expect(view.eingefrorene).toEqual([{ playerId: "p1", betrag: 400 }]);
   });
 
@@ -191,12 +208,13 @@ describe("kokosnuss-uhr: Leak-Schutz + Contract", () => {
 
   it("outcomes(): richtig bleibt richtig, auch wenn der Sack leer eingefroren wurde", () => {
     const { ctx, state } = setup();
-    let s = kokosnussUhrPlugin.reduce(state, antwort("p1", 1, 15_200), ctx) as KokosnussUhrState;
+    const spaet = FRAGE_TIMER_MS.medium + 200; // im Gnadenfenster, Sack längst leer
+    let s = kokosnussUhrPlugin.reduce(state, antwort("p1", 1, spaet), ctx) as KokosnussUhrState;
     s = { ...s, finished: true };
     // Richtig mit 0 MM (Sack leer): delta = 0, aber die Streak-Kette hält (§2.2).
     expect(kokosnussUhrPlugin.scores(s)[spieler[0]]).toBe(0);
     const outcomes = kokosnussUhrPlugin.outcomes!(s);
-    expect(outcomes[spieler[0]]).toEqual({ correct: true, nachMs: 15_200 });
+    expect(outcomes[spieler[0]]).toEqual({ correct: true, nachMs: spaet });
     expect(outcomes[spieler[1]]).toEqual({ correct: null }); // keine Antwort
   });
 

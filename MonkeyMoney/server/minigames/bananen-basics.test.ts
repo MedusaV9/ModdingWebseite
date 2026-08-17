@@ -69,7 +69,11 @@ describe("bananen-basics: Scoring-Goldens (§2.1/§3.1)", () => {
 
   it("Antwort auf den letzten Drücker = nur der Grundwert (Speed-Bonus 0)", () => {
     const { ctx, state } = setup();
-    let s = bananenBasicsPlugin.reduce(state, antwort("p1", 1, 15_000), ctx) as BananenBasicsState;
+    let s = bananenBasicsPlugin.reduce(
+      state,
+      antwort("p1", 1, FRAGE_TIMER_MS.medium),
+      ctx,
+    ) as BananenBasicsState;
     s = { ...s, finished: true };
     expect(bananenBasicsPlugin.scores(s)[P1]).toBe(250);
   });
@@ -167,7 +171,11 @@ describe("bananen-basics: Joker-Hooks (§5.1)", () => {
     expect(s.gesperrt.p1).toContain(0);
     expect(s.zweitversuch.p1).toBe(true);
     // Zweiter Versuch richtig auf den letzten Drücker: 250 / 2 → 130 (10er-Rundung).
-    s = bananenBasicsPlugin.reduce(s, antwort("p1", 1, 15_000), ctx) as BananenBasicsState;
+    s = bananenBasicsPlugin.reduce(
+      s,
+      antwort("p1", 1, FRAGE_TIMER_MS.medium),
+      ctx,
+    ) as BananenBasicsState;
     s = { ...s, finished: true };
     expect(bananenBasicsPlugin.scores(s)[P1]).toBe(130);
     expect(bananenBasicsPlugin.outcomes!(s)[P1].zweitversuch).toBe(true);

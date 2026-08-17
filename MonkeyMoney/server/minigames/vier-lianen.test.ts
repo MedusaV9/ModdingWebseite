@@ -2,6 +2,7 @@
 import { describe, expect, it } from "vitest";
 import type { ContentSlice, Question } from "../../shared/content";
 import { asPlayerId } from "../../shared/ids";
+import { FRAGE_TIMER_MS } from "../../shared/money";
 import { createRng } from "../../shared/rng";
 import { createTestClock } from "../../shared/time";
 import type { PlayerAction } from "./_api/plugin";
@@ -53,13 +54,13 @@ describe("vier-lianen: Antwort-Lock", () => {
     const { ctx, state } = setup();
     const zuSpaet = vierLianenPlugin.reduce(
       state,
-      antwortAktion("p1", 2, 15_401),
+      antwortAktion("p1", 2, FRAGE_TIMER_MS.easy + 401),
       ctx,
     ) as VierLianenState;
     expect(zuSpaet.answers.p1).toBeUndefined();
     const geradeNoch = vierLianenPlugin.reduce(
       state,
-      antwortAktion("p1", 2, 15_399),
+      antwortAktion("p1", 2, FRAGE_TIMER_MS.easy + 399),
       ctx,
     ) as VierLianenState;
     expect(geradeNoch.answers.p1).toBeDefined();
@@ -76,7 +77,7 @@ describe("vier-lianen: Antwort-Lock", () => {
 
     const { ctx: ctx2, state: frisch, clock: clock2 } = setup();
     void clock;
-    clock2.advance(15_001);
+    clock2.advance(FRAGE_TIMER_MS.easy + 1);
     const nachTimeout = vierLianenPlugin.tick(frisch, ctx2) as VierLianenState;
     expect(vierLianenPlugin.isFinished(nachTimeout)).toBe(true);
   });
