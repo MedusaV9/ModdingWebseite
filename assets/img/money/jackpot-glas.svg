@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 260" role="img" aria-label="Jackpot-Glas">
+  <title>Jackpot-Glas — der Dauer-Spannungs-Anker (Bühnen-Zone D)</title>
+  <g transform="rotate(2 100 130)">
+    <!-- Inhalt: Münzen + Scheine (hinter dem Glas) -->
+    <g stroke="#1A1208" stroke-width="3.5">
+      <rect x="46" y="180" width="108" height="40" rx="6" fill="#85BB65"/>
+      <rect x="52" y="164" width="96" height="30" rx="5" fill="#85BB65" transform="rotate(-4 100 179)"/>
+      <circle cx="70" cy="158" r="15" fill="#F5B301"/>
+      <circle cx="104" cy="150" r="17" fill="#F5B301"/>
+      <circle cx="136" cy="160" r="14" fill="#FFDE6B"/>
+      <circle cx="88" cy="132" r="13" fill="#FFDE6B"/>
+      <circle cx="120" cy="126" r="12" fill="#F5B301"/>
+    </g>
+    <!-- Glaskörper -->
+    <path d="M 42 66 C 34 74 30 90 30 110 L 30 200 C 30 224 50 236 100 236 C 150 236 170 224 170 200 L 170 110 C 170 90 166 74 158 66 Z"
+      fill="#29D9D5" opacity="0.28"/>
+    <path d="M 42 66 C 34 74 30 90 30 110 L 30 200 C 30 224 50 236 100 236 C 150 236 170 224 170 200 L 170 110 C 170 90 166 74 158 66 Z"
+      fill="none" stroke="#1A1208" stroke-width="6"/>
+    <!-- Glanzkante -->
+    <path d="M 44 88 C 40 100 38 120 38 140 L 38 190" fill="none" stroke="#FFF6E3" stroke-width="6" stroke-linecap="round" opacity="0.7"/>
+    <!-- Deckel -->
+    <rect x="36" y="42" width="128" height="28" rx="10" fill="#F5B301" stroke="#1A1208" stroke-width="6"/>
+    <rect x="52" y="30" width="96" height="18" rx="8" fill="#FFDE6B" stroke="#1A1208" stroke-width="5"/>
+    <!-- Münzschlitz im Deckel -->
+    <rect x="82" y="36" width="36" height="6" rx="3" fill="#1A1208"/>
+    <!-- Etikett -->
+    <g transform="rotate(-3 100 106)">
+      <rect x="48" y="88" width="104" height="36" rx="8" fill="#FFF6E3" stroke="#1A1208" stroke-width="5"/>
+      <text x="100" y="113" text-anchor="middle" font-family="Bungee,sans-serif" font-size="19" fill="#C2183B">JACKPOT</text>
+    </g>
+  </g>
+</svg>

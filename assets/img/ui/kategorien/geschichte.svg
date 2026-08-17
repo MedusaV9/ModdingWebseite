@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-label="Geschichte">
+  <title>Geschichte — antike Säule mit Affenkopf</title>
+  <g fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" transform="rotate(-2 48 48)">
+    <path d="M 20 84 L 76 84 M 26 74 L 70 74"/>
+    <path d="M 34 74 L 34 38 M 48 74 L 48 38 M 62 74 L 62 38"/>
+    <path d="M 26 38 L 70 38 M 22 28 L 74 28"/>
+    <circle cx="48" cy="16" r="8"/>
+    <circle cx="39" cy="13" r="3.5" fill="currentColor" stroke="none"/>
+    <circle cx="57" cy="13" r="3.5" fill="currentColor" stroke="none"/>
+  </g>
+</svg>

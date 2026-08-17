@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-label="Joker: Rückgaberecht (Zweitantwort)">
+  <title>J5 Rückgaberecht — falsche Antwort umtauschen (Gewinn 50 %)</title>
+  <g fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" transform="rotate(-2 48 48)">
+    <path d="M 74 36 C 66 24 50 18 36 24 C 24 29 16 40 17 54"/>
+    <path d="M 74 22 L 74 38 L 58 38" />
+    <path d="M 24 62 C 32 74 48 80 62 74 C 70 70 76 64 79 55"/>
+    <path d="M 24 76 L 24 60 L 40 60"/>
+  </g>
+</svg>

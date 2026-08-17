@@ -1,0 +1,19 @@
+<!-- Fell Sternenhimmel"  nahtlose Pattern-Kachel (52×52), Formen komplett im Tile. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 52 52">
+  <rect width="52" height="52" fill="var(--fell, #6B4226)"/>
+  <g fill="#FFF6E3" stroke="#1A1208" stroke-width="1.4" stroke-linejoin="round">
+    <path d="M 13 8 L 14.8 12.2 L 19 14 L 14.8 15.8 L 13 20 L 11.2 15.8 L 7 14 L 11.2 12.2 Z"/>
+    <path d="M 38 6 L 39.5 9.5 L 43 11 L 39.5 12.5 L 38 16 L 36.5 12.5 L 33 11 L 36.5 9.5 Z"/>
+    <path d="M 26 34 L 27.8 38.2 L 32 40 L 27.8 41.8 L 26 46 L 24.2 41.8 L 20 40 L 24.2 38.2 Z"/>
+  </g>
+  <g fill="#F5B301">
+    <path d="M 44 30 L 45.2 33 L 48 34.2 L 45.2 35.4 L 44 38.4 L 42.8 35.4 L 40 34.2 L 42.8 33 Z"/>
+    <path d="M 8 38 L 9 40.5 L 11.5 41.5 L 9 42.5 L 8 45 L 7 42.5 L 4.5 41.5 L 7 40.5 Z"/>
+  </g>
+  <g fill="#FFF6E3" opacity="0.7">
+    <circle cx="30" cy="20" r="1"/>
+    <circle cx="46" cy="14" r="1"/>
+    <circle cx="16" cy="28" r="1"/>
+    <circle cx="40" cy="46" r="1"/>
+  </g>
+</svg>

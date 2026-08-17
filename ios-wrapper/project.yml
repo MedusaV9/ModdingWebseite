@@ -1,0 +1,63 @@
+# XcodeGen-Spec für den MONKEY-MONEY-iPad-Wrapper (TECH-SPEC §6.1).
+# Kein .xcodeproj im Repo — der CI-Job (und lokal: `xcodegen generate --spec
+# ios-wrapper/project.yml --project ios-wrapper`) erzeugt es aus dieser Datei.
+# Kein Signing: der ipa-Job baut mit CODE_SIGNING_ALLOWED=NO; die .ipa wird beim
+# Sideload (AltStore/Sideloadly) neu signiert.
+name: MonkeyMoneyPad
+
+options:
+  createIntermediateGroups: true
+  deploymentTarget:
+    iOS: "15.0"
+
+# Standalone-Modus (EmbeddedServer.swift): Swifter liefert HTTP+WebSocket auf
+# Port 8080 — via SPM, damit XcodeGen/CI ohne manuelle Framework-Pflege bauen.
+packages:
+  Swifter:
+    url: https://github.com/httpswift/swifter.git
+    from: 1.5.0
+
+targets:
+  MonkeyMoneyPad:
+    type: application
+    platform: iOS
+    sources:
+      - Sources
+      - Assets.xcassets
+      # Standalone-Bundles (erzeugt der CI-ipa-Job, .gitignore-d):
+      #   WebDist/ = client/dist (Vite-Build inkl. host.html + host-content.json)
+      #   Media/   = Laufzeit-Medien aus assets/ (Pixel-Bilder, Stinger-/Tutorial-Videos)
+      # optional: lokale Builds ohne die Ordner funktionieren (nur ohne Standalone).
+      - path: WebDist
+        type: folder
+        buildPhase: resources
+        optional: true
+      - path: Media
+        type: folder
+        buildPhase: resources
+        optional: true
+    dependencies:
+      - package: Swifter
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: de.monkeymoney.pad
+        PRODUCT_NAME: MonkeyMoneyPad
+        INFOPLIST_FILE: Info.plist
+        GENERATE_INFOPLIST_FILE: false
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        # Nur iPad (2) — das Gastgeber-Gerät; Gäste-iPhones joinen per QR in Safari.
+        TARGETED_DEVICE_FAMILY: "2"
+        SWIFT_VERSION: "5.0"
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        ENABLE_BITCODE: false
+
+# Expliziter (geteilter) Scheme — xcodebuild braucht ihn fürs Archive;
+# ohne schemes-Block schreibt XcodeGen keine .xcscheme-Datei.
+schemes:
+  MonkeyMoneyPad:
+    build:
+      targets:
+        MonkeyMoneyPad: all
+    archive:
+      config: Release

@@ -1,0 +1,1505 @@
+/* Bühnen-Look des Screens (ART-PLAN §3.1: 5-Ebenen-Studio).
+   Ebene 1–2 = Hintergrund + LED-Wand (CSS), Ebene 3 = Podien,
+   Ebene 4 = Frage-/Phasen-Inhalt, Ebene 5 = Partikel-Canvas (fixed). */
+
+.studio {
+  /* Skalierungs-Pass (P2 „LED-Wand nutzt 1080p schlecht"): Frage-/Antwort-
+     Typo skaliert mit dem Viewport — Ziel Sofa-Lesbarkeit, Frage ≥40 px bei
+     1920×1080. Die Variablen gelten NUR im Studio (Player-Handys lesen sie
+     nie); die Format-Klassen werden weiter unten zentral überschrieben. */
+  --wand-frage: clamp(1.45rem, 2.5vw, 3rem);
+  --wand-antwort: clamp(1.05rem, 1.7vw, 2rem);
+  --wand-antwort-s: clamp(0.95rem, 1.35vw, 1.55rem);
+
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background:
+    radial-gradient(ellipse 60% 45% at 50% 0%, rgb(41 217 213 / 10%), transparent 70%),
+    radial-gradient(ellipse 45% 38% at 18% 8%, rgb(255 222 107 / 8%), transparent 70%),
+    radial-gradient(ellipse 45% 38% at 82% 8%, rgb(255 62 142 / 7%), transparent 70%),
+    radial-gradient(
+      150% 130% at 50% -20%,
+      var(--mm-jungle-night) 62%,
+      color-mix(in srgb, var(--mm-jungle-night) 78%, var(--mm-outline)) 100%
+    );
+}
+
+/* ---------- Kopf: Ticker-Leiste (Zone A) ----------
+   Typografisch beruhigt (W3): eine ruhige Zeile mit Punkt-Trennern statt
+   lauter gleichgewichteter Blöcke — nur Zähler + Gold-Momente stechen raus. */
+
+.studio-kopf {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  padding: 7px 20px;
+  font-weight: 600;
+  font-size: clamp(0.95rem, 1.05vw, 1.3rem);
+  letter-spacing: 0.015em;
+  color: var(--muted);
+  background: rgb(10 26 18 / 72%);
+  border-bottom: var(--mm-outline-s) solid var(--mm-outline);
+}
+
+.studio-kopf > span {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.studio-kopf > span + span::before {
+  content: "·";
+  margin: 0 14px;
+  opacity: 0.45;
+  font-weight: 400;
+}
+
+.studio-kopf .gold {
+  color: var(--gold);
+  font-weight: 700;
+}
+
+.studio-kopf .zaehler {
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  font-weight: 700;
+}
+
+/* ---------- Mitte: Phasen-Inhalt ---------- */
+
+.studio-mitte {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 8px 24px;
+}
+
+/* Phasen-Container (W3): jeder Phasenwechsel blendet sanft ein (keyed-Wrapper
+   in views.ts erzeugt den Container pro Phase neu) — statt hartem Austausch.
+   Nur opacity/transform, Beamer-freundlich. */
+.phasen-container {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+
+  /* „safe": lange Fragen dürfen den Kopf-Ticker NICHT überlappen —
+     bei Überlauf oben andocken statt in beide Richtungen zu wachsen. */
+  justify-content: safe center;
+  animation: phase-rein var(--mm-dauer-show) var(--mm-kurve-snap) both;
+}
+
+@keyframes phase-rein {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* LED-Fragen-Wand (Zone B): Cyan-GLOW statt harter Kante (W3) — der Rahmen
+   bleibt Sticker (Outline-Warm-Schwarz), das LED-Licht kommt als weiche
+   Leucht-Schicht innen + außen (Leucht-Effekt, kein Schlagschatten). */
+.led-wand {
+  position: relative;
+  background:
+    repeating-linear-gradient(0deg, rgb(41 217 213 / 4%) 0 2px, transparent 2px 5px),
+    radial-gradient(
+      140% 110% at 50% 0%,
+      color-mix(in srgb, var(--mm-jungle-night) 60%, var(--mm-deep-palm)) 0%,
+      var(--mm-jungle-night) 100%
+    );
+  border: var(--mm-outline-m) solid var(--mm-outline);
+  outline: 2px solid color-mix(in srgb, var(--mm-studio-led) 45%, transparent);
+  outline-offset: -8px;
+  border-radius: var(--mm-radius-xl);
+  box-shadow:
+    var(--mm-schatten-sticker-gross),
+    0 0 46px rgb(41 217 213 / 18%),
+    inset 0 0 36px rgb(41 217 213 / 9%);
+  padding: 14px 28px;
+  margin: 0 auto;
+  width: min(1040px, 96%);
+}
+
+/* In der Wand reicht die kompakte Banane — Platz für 3-zeilige Fragen. */
+.led-wand .mm-timer-banane {
+  width: min(320px, 40vw);
+}
+
+/* ---------- Zentraler Skalierungs-Pass: Frage/Antworten aller Formate ----------
+   Ein Ort statt 20 Format-Dateien: die Screen-Frage-/Options-Klassen lesen im
+   Studio die Viewport-Variablen (Player-Renderer nutzen andere Klassen bzw.
+   haben kein .studio drumherum — dort bleibt das Format-eigene clamp()). */
+.studio
+  :is(
+    .vl-frage,
+    .bb-frage,
+    .ku-frage,
+    .bt-frage,
+    .al-frage,
+    .ab-frage,
+    .aob-frage,
+    .td-frage,
+    .mkt-frage,
+    .ga-frage,
+    .brs-frage,
+    .bbf-frage,
+    .lf-frage,
+    .ld-frage,
+    .auk-frage
+  ) {
+  font-size: var(--wand-frage);
+
+  /* Enge Zeilen + schlanke Ränder: auch 4–5-zeilige Fragen bleiben komplett
+     in der Wand (1080p-Guard) — h2-Default-Margins wären bei 48 px riesig. */
+  line-height: 1.15;
+  margin: 0.15em 0;
+}
+
+.studio
+  :is(
+    .vl-option,
+    .ku-option,
+    .ss-option,
+    .aob-option,
+    .td-option,
+    .lf-option,
+    .ga-option,
+    .pd-option,
+    .rb-option,
+    .ld-option,
+    .bbf-option,
+    .btg-option,
+    .ab-option,
+    .auk-option,
+    .mvr-option
+  ) {
+  font-size: var(--wand-antwort);
+}
+
+/* 4-Spalten-Grid (Bananen-Basics-Lianen): eine Stufe kleiner, sonst brechen
+   die schmalen Spalten bei 1080p in 4+ Zeilen. */
+.studio .bb-liane {
+  font-size: var(--wand-antwort-s);
+}
+
+/* Ab Full-HD: die Wand nutzt die Breite — 1040 px wären nur 54 % von 1920. */
+@media (min-width: 1600px) {
+  .led-wand {
+    width: min(1280px, 82vw);
+  }
+
+  .studio
+    :is(
+      .vl-screen,
+      .bb-screen,
+      .ku-screen,
+      .ss-screen,
+      .aob-screen,
+      .td-screen,
+      .lf-screen,
+      .ga-screen,
+      .pd-screen,
+      .rb-screen,
+      .ld-screen,
+      .bbf-screen,
+      .btg-screen,
+      .ab-screen,
+      .auk-screen,
+      .al-screen,
+      .bt-screen,
+      .sb-screen,
+      .brs-screen,
+      .mkt-screen,
+      .mvr-screen
+    ) {
+    width: min(1190px, 96%);
+    max-width: none;
+  }
+}
+
+/* Auflösungs-Spannungs-Fenster (P1-Spoiler-Fix): die Wand zappt/flackert
+   neutral über dem Riser, bis die Fanfare (+2,4 s) alles gleichzeitig
+   aufdeckt — nur filter/opacity, kein Layout. */
+.led-wand.spannung {
+  animation: wand-zappen 0.36s steps(2, jump-none) infinite;
+}
+
+.led-wand.spannung::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: repeating-linear-gradient(0deg, rgb(41 217 213 / 9%) 0 3px, transparent 3px 9px);
+  animation: wand-scan 0.9s linear infinite;
+}
+
+@keyframes wand-zappen {
+  0%,
+  100% {
+    filter: brightness(0.96) saturate(0.92);
+  }
+  50% {
+    filter: brightness(1.22) saturate(1.18) contrast(1.04);
+  }
+}
+
+@keyframes wand-scan {
+  from {
+    transform: translateY(-9px);
+    opacity: 0.75;
+  }
+  to {
+    transform: translateY(9px);
+    opacity: 1;
+  }
+}
+
+/* ---------- Podien-Reihe (Zone C) ---------- */
+
+.studio-podien {
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  gap: clamp(8px, 1.6vw, 22px);
+  padding: 4px 12px 12px;
+}
+
+.podium {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: clamp(96px, 11.5vw, 160px);
+  position: relative;
+}
+
+.podium.offline {
+  opacity: 0.5;
+  filter: saturate(0.4);
+}
+
+.podium-puppe {
+  width: 86%;
+  aspect-ratio: 240 / 320;
+  position: relative;
+  z-index: 1;
+  margin-bottom: -6px;
+}
+
+.podium-puppe svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Clown-Strafe: Avatar dreht durch */
+.podium.clown .podium-puppe {
+  filter: hue-rotate(140deg) saturate(1.6);
+}
+
+/* Geldstapel (W3): dockt IMMER exakt an der Pult-Oberkante an — er sitzt im
+   Pult (position:relative) und wächst von dessen Kante nach oben, egal wie
+   hoch Namensschild/Konto gerade rendern. */
+.podium-geld {
+  position: absolute;
+  left: -6%;
+  bottom: calc(100% - 7px);
+  width: 46%;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.podium-pult {
+  position: relative;
+  width: 100%;
+  background: radial-gradient(
+    130% 120% at 50% 0%,
+    var(--mm-deep-palm) 0%,
+    color-mix(in srgb, var(--mm-deep-palm) 50%, var(--mm-jungle-night)) 100%
+  );
+  border: var(--mm-outline-s) solid var(--mm-outline);
+  border-radius: var(--mm-radius-m) var(--mm-radius-m) var(--mm-radius-s) var(--mm-radius-s);
+  box-shadow: var(--mm-schatten-sticker);
+  padding: 6px 5px 7px;
+  text-align: center;
+  z-index: 1;
+}
+
+.podium-name {
+  display: block;
+  background: var(--spielerfarbe, var(--gold));
+  color: var(--mm-outline);
+  font-weight: 800;
+  font-size: clamp(0.72rem, 1.1vw, 1.2rem);
+  border: 2px solid var(--mm-outline);
+  border-radius: var(--mm-radius-s);
+  box-shadow: var(--mm-schatten-sticker);
+  padding: 2px 6px;
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  rotate: var(--kipp, -1deg);
+}
+
+.podium-konto {
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  font-size: clamp(0.85rem, 1.3vw, 1.4rem);
+  color: var(--gold);
+}
+
+.podium-badges {
+  min-height: 1.15em;
+  font-size: clamp(0.85rem, 1vw, 1.1rem);
+  line-height: 1.15;
+}
+
+/* Einflug-Choreo (Intro/Lobby): Affen hüpfen nacheinander rein */
+.podium.einflug {
+  animation: podium-hop 0.65s var(--mm-kurve-bounce) both;
+  animation-delay: calc(var(--einflug-index, 0) * 220ms);
+}
+
+@keyframes podium-hop {
+  0% {
+    opacity: 0;
+    transform: translateY(70px) scale(0.7);
+  }
+  60% {
+    opacity: 1;
+    transform: translateY(-14px) scale(1.06);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Sieger-Puls für Platz 1 (Siegerehrung) */
+.podium.sieger .podium-puppe {
+  animation: sieger-huepf 0.8s var(--mm-kurve-bounce) infinite;
+}
+
+@keyframes sieger-huepf {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  40% {
+    transform: translateY(-12px);
+  }
+}
+
+/* ---------- Jackpot-Glas (Zone D) ---------- */
+
+.jackpot-glas {
+  position: absolute;
+  right: 14px;
+  bottom: 96px;
+  width: clamp(72px, 8vw, 104px);
+  text-align: center;
+  z-index: 3;
+}
+
+.jackpot-glas img {
+  width: 100%;
+  display: block;
+  filter: drop-shadow(3px 3px 0 var(--mm-schatten-farbe));
+}
+
+.jackpot-glas .betrag {
+  display: inline-block;
+  background: var(--gold);
+  color: var(--mm-outline);
+  border: 2px solid var(--mm-outline);
+  border-radius: 6px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.85rem;
+  padding: 1px 7px;
+  margin-top: -10px;
+  rotate: 2deg;
+}
+
+.jackpot-glas.gefuettert {
+  animation: jackpot-wackel 0.5s ease-in-out;
+}
+
+@keyframes jackpot-wackel {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  30% {
+    transform: rotate(-4deg) scale(1.05);
+  }
+  70% {
+    transform: rotate(3deg);
+  }
+}
+
+/* ---------- Cutscenes ---------- */
+
+.cutscene {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  text-align: center;
+  padding: 16px;
+}
+
+.cutscene-logo {
+  width: min(430px, 52vw);
+  animation: logo-stinger 0.9s var(--mm-kurve-bounce) both;
+  filter: drop-shadow(6px 6px 0 var(--mm-schatten-farbe));
+}
+
+/* Logo-Stinger-Video (Opening): Vollbild-Overlay VOR der Kandidaten-Vorstellung.
+   Solange es läuft, pausieren die Einlauf-Animationen darunter (kein Beat geht
+   verloren); Ende/Fehler blenden zur bisherigen Logo-Vorstellung über. */
+.stinger-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+}
+
+.stinger-video {
+  width: min(74vw, 1100px);
+  max-height: 82vh;
+}
+
+.stinger-aktiv .cutscene-logo,
+.stinger-aktiv .kandidaten-karte,
+.stinger-aktiv p {
+  animation-play-state: paused !important;
+}
+
+/* Tutorial-Video auf der Erklärkarte (Match-Setting tutorialVideos) */
+.tutorial-knopf {
+  font-size: 1.05rem;
+  font-weight: 800;
+  padding: 8px 20px;
+  border: var(--mm-outline-s) solid var(--mm-outline);
+  border-radius: var(--mm-radius-m);
+  background: var(--gold);
+  color: var(--mm-outline);
+  box-shadow: var(--mm-schatten-sticker);
+  cursor: pointer;
+}
+
+.tutorial-video {
+  width: min(480px, 46vw);
+  max-height: 30vh;
+  border: var(--mm-outline-s) solid var(--mm-outline);
+  border-radius: var(--mm-radius-m);
+  /* Kino-Schwarz hinter echtem Video (Token-Ausnahme, siehe tokens.css). */
+  background: #000;
+}
+
+@keyframes logo-stinger {
+  0% {
+    opacity: 0;
+    transform: scale(0.3) rotate(-14deg);
+  }
+  70% {
+    opacity: 1;
+    transform: scale(1.12) rotate(3deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(-2deg);
+  }
+}
+
+.kandidaten-karte {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  animation: kandidat-rein 0.6s var(--mm-kurve-bounce) both;
+}
+
+/* Rollen-Label unter dem Kandidaten: auf Sofadistanz lesbar (Playtest 3). */
+.kandidaten-rolle {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--mm-ticket-paper);
+  opacity: 0.92;
+}
+
+/* Spotlight-Sweep überm Opening: 2 warme Kegel wandern über die dunkle Bühne
+   (nur transform/opacity — günstig, kein Layout). */
+.intro-cutscene {
+  position: relative;
+  overflow: hidden;
+}
+
+.intro-cutscene > :not(.spotlight-sweep) {
+  z-index: 1;
+}
+
+.spotlight-sweep {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 26% 60% at 22% 0%, rgb(255 222 107 / 20%), transparent 72%),
+    radial-gradient(ellipse 22% 52% at 78% 0%, rgb(255 62 142 / 15%), transparent 72%);
+  animation: spotlight-sweep 5.2s ease-in-out infinite alternate;
+}
+
+@keyframes spotlight-sweep {
+  from {
+    transform: translateX(-14%);
+    opacity: 0.85;
+  }
+  to {
+    transform: translateX(14%);
+    opacity: 1;
+  }
+}
+
+@keyframes kandidat-rein {
+  0% {
+    opacity: 0;
+    transform: translateY(60px) scale(0.6) rotate(-8deg);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1) rotate(0deg);
+  }
+}
+
+.kandidaten-puppe {
+  width: clamp(130px, 17vw, 200px);
+  aspect-ratio: 240 / 320;
+}
+
+/* ---------- Opening-Beat 2 (W3, Eval-1 „steht danach nur rum"): nach dem
+   Einflug schwenkt ein Spotlight im Loop von Affe zu Affe — der angestrahlte
+   Kandidat wächst kurz, sein Namensschild ruft groß (Name-Callout). Reines
+   CSS: Zyklus = Kandidaten × Takt, aktives Fenster 0–13 % der Keyframes. ---------- */
+
+.kandidaten-reihe {
+  --beat-takt: 1.7s;
+  --beat-zyklus: calc(var(--kandidaten, 4) * var(--beat-takt));
+
+  display: flex;
+  gap: 26px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.kandidaten-reihe .kandidaten-karte {
+  position: relative;
+}
+
+/* Spotlight-Kegel: Token-Glow, wandert per Delay von Karte zu Karte */
+.kandidaten-reihe .kandidaten-karte::before {
+  content: "";
+  position: absolute;
+  inset: -14% -22%;
+  pointer-events: none;
+  background: var(--mm-glow-spot);
+  opacity: 0;
+  animation: beat-spot var(--beat-zyklus) linear infinite;
+  animation-delay: calc(var(--beat-start, 3s) + var(--beat-index, 0) * var(--beat-takt));
+}
+
+.kandidaten-reihe .kandidaten-puppe {
+  animation: beat-puppe var(--beat-zyklus) var(--mm-kurve-snap) infinite;
+  animation-delay: calc(var(--beat-start, 3s) + var(--beat-index, 0) * var(--beat-takt));
+}
+
+/* Name-Callout: das Schild ruft GROSS, solange der Spot auf dem Affen steht */
+.kandidaten-reihe .podium-name {
+  animation: beat-name var(--beat-zyklus) var(--mm-kurve-bounce) infinite;
+  animation-delay: calc(var(--beat-start, 3s) + var(--beat-index, 0) * var(--beat-takt));
+}
+
+/* Aktives Fenster ~5–21 % des Zyklus: deckt bei 3–6 Kandidaten den Großteil
+   des Takts ab (Iteration 1: bei 3 Affen stand der Spot nur 8 % der Zeit —
+   zu viel dunkle Bühne zwischen den Schwenks). */
+@keyframes beat-spot {
+  0%,
+  25%,
+  100% {
+    opacity: 0;
+  }
+  5%,
+  21% {
+    opacity: 1;
+  }
+}
+
+@keyframes beat-puppe {
+  0%,
+  25%,
+  100% {
+    transform: none;
+  }
+  6%,
+  21% {
+    transform: translateY(-8px) scale(1.08);
+  }
+}
+
+@keyframes beat-name {
+  0%,
+  25%,
+  100% {
+    transform: none;
+  }
+  6%,
+  21% {
+    transform: scale(1.45) rotate(-2deg);
+  }
+}
+
+/* Solange das Stinger-Video läuft, pausiert auch der Beat-2-Loop */
+.stinger-aktiv .kandidaten-karte::before,
+.stinger-aktiv .kandidaten-puppe,
+.stinger-aktiv .podium-name {
+  animation-play-state: paused !important;
+}
+
+/* Runden-Ankündigungs-Karte: Format-Logo + Regel-Beats */
+.runden-karte {
+  width: min(760px, 92%);
+  margin: 0 auto;
+  background: var(--mm-ticket-paper);
+  color: var(--mm-outline);
+  border: var(--mm-outline-l) solid var(--mm-outline);
+  border-radius: var(--mm-radius-xl);
+  box-shadow: var(--mm-schatten-sticker-gross);
+  padding: 26px 34px;
+  rotate: var(--mm-kipp-l);
+  animation: karte-slide 0.5s var(--mm-kurve-bounce) both;
+  text-align: center;
+}
+
+@keyframes karte-slide {
+  from {
+    opacity: 0;
+    transform: translateY(-60px) rotate(3deg);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) rotate(0deg);
+  }
+}
+
+.runden-karte .slot-tag {
+  display: inline-block;
+  background: var(--mm-spotlight-pink);
+  color: var(--mm-ticket-paper);
+  border: 3px solid var(--mm-outline);
+  border-radius: var(--mm-radius-rund);
+  font-weight: 800;
+  font-size: 0.95rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 3px 16px;
+  rotate: 2deg;
+}
+
+.runden-karte h1 {
+  font-size: var(--mm-display-l);
+  margin: 10px 0 4px;
+  color: var(--mm-deep-palm);
+}
+
+.runden-karte .regel {
+  font-size: 1.35rem;
+  max-width: 30em;
+  margin: 8px auto;
+}
+
+.runden-karte .anim {
+  font-size: 2.6rem;
+  line-height: 1;
+}
+
+.bereit-punkte {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 8px;
+}
+
+.bereit-punkt {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 3px solid var(--mm-outline);
+  background: color-mix(in srgb, var(--mm-ticket-paper) 85%, var(--mm-outline));
+}
+
+.bereit-punkt.ja {
+  background: var(--mm-leaf);
+}
+
+/* Siegerehrung: Podest 3-2-1 */
+.podest-reihe {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 20px;
+}
+
+.podest {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  animation: podium-hop 0.7s var(--mm-kurve-bounce) both;
+  animation-delay: var(--einlauf-delay, 0s);
+}
+
+.podest .kandidaten-puppe {
+  width: clamp(110px, 14vw, 170px);
+}
+
+.podest-block {
+  width: clamp(120px, 15vw, 190px);
+  background: radial-gradient(
+    140% 130% at 50% 0%,
+    var(--mm-vault-gold) 0%,
+    color-mix(in srgb, var(--mm-vault-gold) 80%, var(--mm-outline)) 100%
+  );
+  border: var(--mm-outline-m) solid var(--mm-outline);
+  border-radius: 10px 10px 0 0;
+  box-shadow: var(--mm-schatten-sticker-gross);
+  text-align: center;
+  font-family: var(--mm-font-display);
+  font-size: 2.2rem;
+  color: var(--mm-outline);
+  padding-top: 6px;
+}
+
+.podest.platz-1 .podest-block {
+  height: 120px;
+}
+/* Silber/Bronze: BEWUSSTE Medaillen-Metalle außerhalb der Palette
+   (Token-Ausnahme, siehe tokens.css) — Verläufe radial nach Gesetz 4. */
+.podest.platz-2 .podest-block {
+  height: 84px;
+  background: radial-gradient(140% 130% at 50% 0%, #cfd6dd 0%, #97a1ab 100%);
+}
+.podest.platz-3 .podest-block {
+  height: 62px;
+  background: radial-gradient(140% 130% at 50% 0%, #d9a066 0%, #a9713e 100%);
+}
+
+/* Award-Zone: reservierte Fläche, in der die Awards als Beats NACHEINANDER
+   groß einlaufen (der letzte bleibt stehen) — Paper-Look gewinnt gegen Konfetti. */
+.award-zone {
+  display: grid;
+  justify-items: center;
+  align-items: center;
+  min-height: 84px;
+  width: min(880px, 92vw);
+}
+
+.award-karte {
+  grid-area: 1 / 1;
+  background: var(--mm-ticket-paper);
+  color: var(--mm-outline);
+  border: var(--mm-outline-m) solid var(--mm-outline);
+  border-radius: var(--mm-radius-m);
+  box-shadow: var(--mm-schatten-sticker-gross);
+  padding: 12px 26px;
+  font-size: 1.5rem;
+  rotate: var(--kipp, -1.5deg);
+  animation: award-beat var(--beat-dauer, 2.2s) var(--mm-kurve-bounce) both;
+  animation-delay: var(--einlauf-delay, 0s);
+}
+
+.award-karte .award-wert {
+  color: var(--mm-spotlight-pink);
+  font-weight: 800;
+}
+
+.award-karte.bleibt {
+  animation-name: award-beat-final;
+}
+
+@keyframes award-beat {
+  0% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  14% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  86% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.88);
+  }
+}
+
+@keyframes award-beat-final {
+  0% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  14%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* All-Time-Zuwachs + Nicht-Podest-Zeile: groß + kontrastreich (Sofadistanz). */
+.podium-at {
+  color: var(--gold);
+  font-weight: 800;
+  font-size: 1rem;
+  white-space: nowrap;
+}
+
+.sieger-restzeile {
+  margin: 0;
+  font-size: 1.2rem;
+  color: var(--mm-ticket-paper);
+}
+
+/* ---------- Zwischenstand-Tabelle (W3): Zebra + Platz-Hierarchie ----------
+   Platz 1/2/3 tragen Gold/Silber/Bronze als linke Medaillen-Kante + gestufte
+   Größe, der Rest bekommt Zebra-Flächen. Silber/Bronze = dokumentierte
+   Medaillen-Ausnahme (tokens.css), Reihen-Reihenfolge IST die Platzierung. */
+
+.studio .zwischenstand-zeile {
+  border-left: 8px solid var(--mm-flaeche-chip);
+}
+
+.studio .zwischenstand-choreo > .zwischenstand-zeile:nth-child(even) {
+  background: color-mix(in srgb, var(--mm-flaeche-tief) 62%, var(--mm-deep-palm));
+}
+
+.studio .zwischenstand-choreo > .zwischenstand-zeile:nth-child(1) {
+  border-left-color: var(--mm-vault-gold);
+  background: color-mix(in srgb, var(--mm-vault-gold) 13%, var(--mm-flaeche-tief));
+  font-size: 1.35rem;
+}
+
+.studio .zwischenstand-choreo > .zwischenstand-zeile:nth-child(2) {
+  border-left-color: #cfd6dd;
+  font-size: 1.2rem;
+}
+
+.studio .zwischenstand-choreo > .zwischenstand-zeile:nth-child(3) {
+  border-left-color: #d9a066;
+  font-size: 1.12rem;
+}
+
+.studio .zwischenstand-choreo > .zwischenstand-zeile:nth-child(1) strong:first-child {
+  color: var(--mm-vault-gold);
+}
+
+.studio .zwischenstand-choreo > .zwischenstand-zeile:nth-child(2) strong:first-child {
+  color: #cfd6dd;
+}
+
+.studio .zwischenstand-choreo > .zwischenstand-zeile:nth-child(3) strong:first-child {
+  color: #d9a066;
+}
+
+/* ---------- Einheitliche Phasen-Überschriften + Chips (W3-Sweep) ---------- */
+
+.studio .zentriert > h1 {
+  font-size: var(--mm-display-m);
+  color: var(--gold);
+}
+
+/* Kontext-Chip („📚 Gaming · Minecraft" u. ä.): EINE Badge-Form für alle
+   Phasen — Pill, dunkle Fläche, dezente Kante (ersetzt Inline-Wildwuchs). */
+.phasen-chip {
+  display: inline-block;
+  padding: 3px 16px;
+  border-radius: var(--mm-radius-rund);
+  background: var(--mm-flaeche-tief);
+  border: 2px solid var(--mm-flaeche-chip);
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--mm-text-gedimmt);
+}
+
+/* ---------- Zwischenstand: die EINE News des Beats hüpft ein ---------- */
+
+.stand-story {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 24px;
+  background: var(--mm-ticket-paper);
+  color: var(--mm-outline);
+  border: var(--mm-outline-m) solid var(--mm-outline);
+  border-radius: var(--mm-radius-m);
+  box-shadow: var(--mm-schatten-sticker-gross);
+  /* Rubik-bold statt Bungee: Display-Schrift NIE unter 32px (Typo-Gesetz). */
+  font-family: var(--mm-font-text);
+  font-weight: 800;
+  font-size: 1.5rem;
+  rotate: -1.2deg;
+  animation: stand-story-hop 0.65s 0.25s var(--mm-kurve-bounce) both;
+}
+
+.stand-story-icon {
+  font-size: 1.9rem;
+}
+
+@keyframes stand-story-hop {
+  0% {
+    opacity: 0;
+    transform: translateY(26px) scale(0.6);
+  }
+  70% {
+    transform: translateY(-6px) scale(1.05);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* ---------- Glücksrad ---------- */
+
+.rad-buehne {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 40px;
+  flex: 1;
+}
+
+.rad-svg {
+  width: min(430px, 44vh);
+  filter: drop-shadow(5px 5px 0 var(--mm-schatten-farbe));
+}
+
+.rad-ergebnis-karte {
+  max-width: 380px;
+  animation: karte-slide 0.5s var(--mm-kurve-bounce) both;
+}
+
+/* Zeiger-Detail (W3): wippt beim Durchrattern wie eine echte Rad-Zunge —
+   nur solange gedreht wird (Klasse „dreht" auf dem SVG). */
+.rad-zeiger {
+  transform-box: fill-box;
+  transform-origin: 50% 16%;
+  rotate: 2deg;
+}
+
+.rad-svg.dreht .rad-zeiger {
+  animation: zeiger-wippen 0.22s ease-in-out infinite;
+}
+
+@keyframes zeiger-wippen {
+  0%,
+  100% {
+    rotate: 2.5deg;
+  }
+  50% {
+    rotate: -4deg;
+  }
+}
+
+/* Live-Vorschau rechts neben dem Rad (W3: Karte im Sticker-Look statt
+   schwebender Textblöcke): anvisiertes Segment groß + 1-Zeiler-Wirkung.
+   Feste Breite/Höhen-Reserve — das Panel darf beim Durchrattern nicht zappeln. */
+.rad-vorschau {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: min(400px, 36vw);
+  min-height: 250px;
+  text-align: center;
+  background: var(--mm-ticket-paper);
+  color: var(--mm-outline);
+  border: var(--mm-outline-l) solid var(--mm-outline);
+  border-radius: var(--mm-radius-l);
+  box-shadow: var(--mm-schatten-sticker-gross);
+  padding: 22px 24px;
+  rotate: var(--mm-kipp-r);
+}
+
+.rad-vorschau-titel {
+  margin: 0;
+  font-family: var(--mm-font-text);
+  font-weight: 800;
+  font-size: 1.25rem;
+  letter-spacing: 0.02em;
+}
+
+.rad-vorschau-segment {
+  width: 100%;
+  padding: 16px 18px;
+  background: var(--segment-farbe, var(--gruen));
+  color: var(--mm-outline);
+  border: var(--mm-outline-m) solid var(--mm-outline);
+  border-radius: var(--mm-radius-m);
+  box-shadow: var(--mm-schatten-sticker);
+  font-family: var(--mm-font-display);
+  font-size: 2rem;
+  line-height: 1.15;
+  transition: background var(--mm-dauer-schnell) var(--mm-kurve-snap);
+}
+
+.rad-vorschau-wirkung {
+  margin: 0;
+  min-height: 3.6em;
+  font-size: 1.15rem;
+  color: color-mix(in srgb, var(--mm-outline) 78%, var(--mm-ticket-paper));
+  max-width: 34ch;
+}
+
+/* Klau-Cutscene: Affenhand wischt über den Screen */
+.klau-hand {
+  position: fixed;
+  left: -30vw;
+  top: 30vh;
+  font-size: 9rem;
+  z-index: 55;
+  pointer-events: none;
+  animation: klau-wisch 1.5s var(--mm-kurve-snap) both;
+  filter: drop-shadow(4px 4px 0 var(--mm-schatten-farbe));
+}
+
+@keyframes klau-wisch {
+  0% {
+    transform: translateX(0) rotate(-20deg);
+  }
+  45% {
+    transform: translateX(58vw) rotate(8deg);
+  }
+  55% {
+    transform: translateX(58vw) rotate(-6deg);
+  }
+  100% {
+    transform: translateX(130vw) rotate(10deg);
+  }
+}
+
+/* Kategorien-Wahl: Icon-Karten mit Live-Balken */
+.kategorie-karten {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: min(640px, 86%);
+  margin: 0 auto;
+}
+
+.kategorie-karte {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--bg2);
+  border: var(--mm-outline-s) solid var(--mm-outline);
+  border-radius: var(--mm-radius-m);
+  box-shadow: var(--mm-schatten-sticker);
+  padding: 8px 16px;
+  animation: kandidat-rein 0.45s var(--mm-kurve-bounce) both;
+  animation-delay: calc(var(--einflug-index, 0) * 110ms);
+}
+
+.kategorie-karte img {
+  width: 52px;
+  height: 52px;
+  flex: none;
+}
+
+.kategorie-karte .name {
+  font-weight: 700;
+  font-size: 1.25rem;
+  flex: 1;
+  text-align: left;
+}
+
+.kategorie-karte .balken {
+  flex: 1.2;
+  height: 24px;
+  background: var(--mm-jungle-night);
+  border: 2px solid var(--mm-outline);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.kategorie-karte .balken > div {
+  height: 100%;
+  background: var(--gold);
+  transition: width 200ms var(--mm-kurve-snap);
+}
+
+/* ---------- Kompakt-Pass für niedrige Viewports (Beamer 1280×800, iPad
+   1024×768): Podium-sichere Höhen — Optionen C/D + Gesperrt-Zeile dürfen NIE
+   hinter der Podium-Leiste verschwinden (studio-mitte clippt bei Überlauf). */
+@media (max-height: 850px) {
+  .studio {
+    --wand-frage: clamp(1.25rem, 2.35vw, 1.8rem);
+    --wand-antwort: clamp(0.95rem, 1.5vw, 1.25rem);
+    --wand-antwort-s: clamp(0.85rem, 1.2vw, 1.1rem);
+  }
+
+  .studio-mitte {
+    padding: 6px 20px;
+  }
+
+  .led-wand {
+    padding: 10px 20px;
+  }
+
+  .led-wand .mm-timer-banane {
+    width: min(240px, 30vw);
+  }
+
+  .studio-podien {
+    padding: 2px 10px 8px;
+  }
+
+  .podium {
+    width: clamp(84px, 9.6vw, 120px);
+  }
+
+  .cutscene {
+    gap: 10px;
+    padding: 10px 16px;
+  }
+
+  .runden-karte {
+    padding: 16px 26px;
+  }
+
+  .runden-karte h1 {
+    font-size: var(--mm-display-m);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .podium.einflug,
+  .kandidaten-karte,
+  .runden-karte,
+  .podest,
+  .kategorie-karte,
+  .cutscene-logo,
+  .klau-hand {
+    animation-duration: 1ms;
+  }
+
+  /* Awards ohne Beats: alle ruhig nebeneinander zeigen. */
+  .award-zone {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .award-karte {
+    animation: none;
+  }
+
+  .spotlight-sweep,
+  .stand-story {
+    animation-duration: 1ms;
+  }
+
+  /* Spannungs-Zapp der Auflösung: ruhig stehen lassen (Flip bleibt gleich). */
+  .led-wand.spannung,
+  .led-wand.spannung::before {
+    animation: none;
+  }
+
+  /* W3: Phasen-Crossfade, Beat-2-Loop und Zeiger-Wippen ruhigstellen. */
+  .phasen-container {
+    animation-duration: 1ms;
+  }
+
+  .kandidaten-reihe .kandidaten-karte::before,
+  .kandidaten-reihe .kandidaten-puppe,
+  .kandidaten-reihe .podium-name,
+  .rad-svg.dreht .rad-zeiger {
+    animation: none;
+  }
+}
+
+/* ---------- W4-Auflösungs-Polish: Gold-Puls, Erklärungs-Sticker, Avatar-Chips ---------- */
+
+/* Gold-Puls-Rahmen der KORREKTEN Antwort (alle Formate zentral): der bestehende
+   Gold-Outline atmet + glüht. Formate mit eigener Aufdeck-Animation (Basics,
+   Market) behalten sie — der Puls startet danach. */
+.studio
+  :is(
+    .vl-option.richtig,
+    .ku-option.richtig,
+    .ss-option.richtig,
+    .rb-option.richtig,
+    .td-option.richtig,
+    .pd-option.richtig,
+    .lf-option.richtig,
+    .ws-option.richtig,
+    .ga-tuer.richtig
+  ) {
+  outline: 4px solid var(--gold);
+  animation: gold-puls 1.15s ease-in-out infinite;
+}
+
+.studio .bb-liane.traegt {
+  animation:
+    bb-hochziehen 0.6s var(--mm-kurve-bounce, ease) both,
+    gold-puls 1.15s ease-in-out 0.6s infinite;
+}
+
+.studio .mkt-tuer.richtig {
+  animation:
+    mkt-aufgehen 0.5s var(--mm-kurve-bounce, ease) both,
+    gold-puls 1.15s ease-in-out 0.5s infinite;
+}
+
+@keyframes gold-puls {
+  0%,
+  100% {
+    outline-color: var(--gold);
+    box-shadow: 0 0 10px rgb(230 184 48 / 25%);
+  }
+  50% {
+    outline-color: var(--mm-coin-shine, #ffde6b);
+    box-shadow: 0 0 30px rgb(230 184 48 / 65%);
+  }
+}
+
+/* Erklärungs-Karte als Sticker mit Buch-Icon: die Erklärungs-Zeile aller
+   Formate ist EIN p.muted in der Wand — zentral zum Papier-Sticker gedreht. */
+.studio[data-phase="aufloesung"] .led-wand p.muted:not(:empty) {
+  display: table;
+  margin: 8px auto 4px;
+  max-width: 58ch;
+  background: var(--mm-ticket-paper);
+  color: var(--mm-outline);
+  border: 3px solid var(--mm-outline);
+  border-radius: var(--mm-radius-m);
+  box-shadow: var(--mm-schatten-sticker);
+  padding: 7px 18px;
+  font-weight: 700;
+  font-size: 1.02rem;
+  line-height: 1.3;
+  text-align: left;
+  rotate: -0.8deg;
+  animation: stand-story-hop 0.5s 0.15s var(--mm-kurve-bounce) both;
+}
+
+.studio[data-phase="aufloesung"] .led-wand p.muted:not(:empty)::before {
+  content: "📖 ";
+}
+
+/* Ergebnis-Chips: Puppen-Kopf-Mini (Kopf-Ausschnitt der 240×320-Puppe) +
+   Name + Delta — sauber ausgerichtete Reihe, gestaffelter Einflug. */
+.ergebnis-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--mm-flaeche-tief);
+  border: 3px solid var(--rot);
+  border-radius: var(--mm-radius-rund);
+  box-shadow: var(--mm-schatten-sticker);
+  padding: 4px 14px 4px 5px;
+  font-weight: 700;
+  animation: stand-story-hop 0.45s var(--mm-kurve-bounce) both;
+  animation-delay: calc(0.25s + var(--chip-i, 0) * 90ms);
+}
+
+.ergebnis-chip.richtig {
+  border-color: var(--gruen);
+  background: color-mix(in srgb, var(--gruen) 14%, var(--mm-flaeche-tief));
+}
+
+.ergebnis-kopf {
+  flex: none;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 2px solid var(--mm-outline);
+  background: var(--mm-flaeche-chip);
+  overflow: hidden;
+  display: flex;
+  justify-content: center;
+}
+
+.ergebnis-kopf svg {
+  width: 64px;
+  height: 85px;
+  flex: none;
+  margin-top: -3px;
+}
+
+.ergebnis-name {
+  font-size: 1.05rem;
+}
+
+.ergebnis-delta {
+  font-variant-numeric: tabular-nums;
+  font-size: 1.05rem;
+}
+
+.ergebnis-delta.plus {
+  color: var(--gruen);
+}
+
+.ergebnis-delta.minus {
+  color: var(--rot);
+}
+
+.ergebnis-delta.null {
+  color: var(--mm-text-gedimmt);
+  font-weight: 600;
+}
+
+/* ---------- W4-Ende-Screen: Rematch-CTA prominent, Rest gestuft ---------- */
+
+.ende-rematch {
+  font-family: var(--mm-font-display);
+  font-size: clamp(1.4rem, 2.6vw, 2rem);
+  color: var(--mm-outline);
+  background: var(--gold);
+  border: var(--mm-outline-m) solid var(--mm-outline);
+  border-radius: var(--mm-radius-l);
+  box-shadow: var(--mm-schatten-sticker-gross);
+  padding: 14px 42px;
+  rotate: -1deg;
+  cursor: pointer;
+  animation:
+    stand-story-hop 0.55s 0.35s var(--mm-kurve-bounce) both,
+    rematch-puls 1.6s 1.2s ease-in-out infinite;
+}
+
+@keyframes rematch-puls {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.04);
+  }
+}
+
+.ende-sekundaer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 26px;
+  flex-wrap: wrap;
+  padding: 10px 22px;
+  border-radius: var(--mm-radius-l);
+  background: color-mix(in srgb, var(--mm-flaeche-tief) 72%, transparent);
+  border: 2px solid var(--mm-flaeche-chip);
+}
+
+.ende-credits {
+  color: var(--mm-text-gedimmt);
+  font-size: 0.85rem;
+  max-width: 46em;
+}
+
+.ende-credits summary {
+  cursor: pointer;
+  display: inline-block;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  opacity: 0.75;
+}
+
+.ende-credits p {
+  margin: 6px 0 0;
+}
+
+/* Overlay-Ordnung: das Jackpot-Glas hat im Abspann nichts zu suchen (es
+   überlappte die Musik-/Feedback-Ecke) — und schwebt sonst ÜBER den fixen
+   Musik-Knöpfen statt in sie hinein. */
+.studio[data-phase="ende"] .jackpot-glas {
+  display: none;
+}
+
+.jackpot-glas {
+  bottom: 124px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .studio :is(.vl-option.richtig, .bb-liane.traegt, .mkt-tuer.richtig),
+  .ende-rematch,
+  .ergebnis-chip {
+    animation-duration: 1ms;
+    animation-iteration-count: 1;
+  }
+}
+
+/* ---------- INTERNET-LINK (W4): 🌐-Karte neben dem LAN-QR ---------- */
+.internet-link {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 14px 18px;
+  border-radius: 14px;
+  background: var(--bg2);
+  border: 2px dashed var(--gold);
+  text-align: center;
+  max-width: min(640px, 80vw);
+}
+
+.internet-link-titel {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--gold);
+}
+
+/* Lade-Spinner („Link erstellen" → cloudflared verhandelt die URL, ~5–15 s). */
+.lade-kringel {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  vertical-align: -0.15em;
+  border: 3px solid var(--gold);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: lade-kringel-dreh 0.9s linear infinite;
+}
+
+@keyframes lade-kringel-dreh {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lade-kringel {
+    animation: none;
+    border-top-color: var(--gold);
+    opacity: 0.6;
+  }
+}

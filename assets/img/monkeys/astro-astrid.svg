@@ -1,0 +1,136 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 320" class="mm-affe" data-affe="astro-astrid" role="img" aria-label="Astro-Astrid">
+  <title>Astro-Astrid  die Raumfahrerin (Helm-Kuppel + Mond-Stiefel)</title>
+  <style>
+    svg[data-affe="astro-astrid"] .fell{fill:var(--fell,#8FCBA8)}
+    svg[data-affe="astro-astrid"] .fell-hell{fill:var(--fell-hell,#DEF3E6)}
+    svg[data-affe="astro-astrid"] .fell-s{stroke:var(--fell,#8FCBA8);fill:none}
+    svg[data-affe="astro-astrid"] .o{stroke:#1A1208;stroke-width:5;stroke-linejoin:round;stroke-linecap:round}
+    svg[data-affe="astro-astrid"] .os{stroke:#1A1208;fill:none;stroke-linecap:round}
+    svg[data-affe="astro-astrid"] .anzug{fill:var(--prop,#FFF6E3)}
+    svg[data-affe="astro-astrid"] #kopf,svg[data-affe="astro-astrid"] #arm-l,svg[data-affe="astro-astrid"] #arm-r,svg[data-affe="astro-astrid"] #bein-l,svg[data-affe="astro-astrid"] #bein-r,svg[data-affe="astro-astrid"] #schwanz,svg[data-affe="astro-astrid"] #antenne{transform-box:view-box}
+    svg[data-affe="astro-astrid"] #kopf{transform-origin:120px 148px}
+    svg[data-affe="astro-astrid"] #arm-l{transform-origin:86px 164px}
+    svg[data-affe="astro-astrid"] #arm-r{transform-origin:154px 164px}
+    svg[data-affe="astro-astrid"] #bein-l{transform-origin:102px 240px}
+    svg[data-affe="astro-astrid"] #bein-r{transform-origin:138px 240px}
+    svg[data-affe="astro-astrid"] #schwanz{transform-origin:146px 240px}
+    svg[data-affe="astro-astrid"] #antenne{transform-origin:120px 46px}
+    svg[data-affe="astro-astrid"] .gesicht{display:none}
+    svg[data-affe="astro-astrid"] #gesicht-neutral{display:inline}
+    svg[data-affe="astro-astrid"][data-gesicht=jubel] #gesicht-neutral,svg[data-affe="astro-astrid"][data-gesicht=frust] #gesicht-neutral,svg[data-affe="astro-astrid"][data-gesicht=denk] #gesicht-neutral{display:none}
+    svg[data-affe="astro-astrid"][data-gesicht=jubel] #gesicht-jubel{display:inline}
+    svg[data-affe="astro-astrid"][data-gesicht=frust] #gesicht-frust{display:inline}
+    svg[data-affe="astro-astrid"][data-gesicht=denk] #gesicht-denk{display:inline}
+  </style>
+
+  <g id="schwanz">
+    <!-- Nackter Affenschwanz aus dem Raumanzug  Zero-G-Schwung -->
+    <path class="os" d="M 144 242 C 192 250 212 212 186 200 C 170 192 162 208 176 212" stroke-width="16"/>
+    <path class="fell-s" d="M 144 242 C 192 250 212 212 186 200 C 170 192 162 208 176 212" stroke-width="9"/>
+  </g>
+
+  <g id="bein-l">
+    <path class="os" d="M 102 240 C 98 258 96 272 95 284" stroke-width="22"/>
+    <path d="M 102 240 C 98 258 96 272 95 284" stroke="#FFF6E3" stroke-width="14" fill="none" stroke-linecap="round"/>
+    <!-- Klobiger Mond-Stiefel -->
+    <path class="o" d="M 70 304 C 70 290 78 282 92 282 C 106 282 112 290 112 304 Z" fill="#FFF6E3"/>
+    <path d="M 70 304 L 112 304" stroke="#7D8CA3" stroke-width="6" stroke-linecap="round"/>
+  </g>
+  <g id="bein-r">
+    <path class="os" d="M 138 240 C 142 258 144 272 145 284" stroke-width="22"/>
+    <path d="M 138 240 C 142 258 144 272 145 284" stroke="#FFF6E3" stroke-width="14" fill="none" stroke-linecap="round"/>
+    <path class="o" d="M 128 304 C 128 290 134 282 148 282 C 162 282 170 290 170 304 Z" fill="#FFF6E3"/>
+    <path d="M 128 304 L 170 304" stroke="#7D8CA3" stroke-width="6" stroke-linecap="round"/>
+  </g>
+
+  <g id="koerper">
+    <!-- Klobiger Raumanzug-Torso -->
+    <path class="anzug o" d="M 78 156 C 68 178 70 216 84 240 L 156 240 C 170 216 172 178 162 156 C 146 144 94 144 78 156 Z"/>
+    <!-- Brust-Panel mit Knöpfen -->
+    <rect x="98" y="176" width="44" height="30" rx="6" fill="#29D9D5" stroke="#1A1208" stroke-width="4"/>
+    <circle cx="108" cy="186" r="4" fill="#FF3E8E" stroke="#1A1208" stroke-width="2.5"/>
+    <circle cx="121" cy="186" r="4" fill="#F5B301" stroke="#1A1208" stroke-width="2.5"/>
+    <circle cx="134" cy="186" r="4" fill="#8FE04B" stroke="#1A1208" stroke-width="2.5"/>
+    <path d="M 104 198 L 136 198" stroke="#1A1208" stroke-width="2.5" stroke-linecap="round"/>
+    <!-- Bananen-Mission-Patch -->
+    <path d="M 86 168 C 90 160 98 158 104 162" fill="none" stroke="#FFC93C" stroke-width="6" stroke-linecap="round"/>
+    <!-- Anzug-Nähte -->
+    <path class="os" d="M 82 216 L 158 216" stroke-width="3" opacity="0.4"/>
+  </g>
+
+  <g id="arm-l">
+    <!-- Zero-G: Arme schweben leicht vom Körper weg -->
+    <path class="os" d="M 86 164 C 68 176 58 192 56 208" stroke-width="20"/>
+    <path d="M 86 164 C 68 176 58 192 56 208" stroke="#FFF6E3" stroke-width="13" fill="none" stroke-linecap="round"/>
+    <circle class="fell o" cx="55" cy="216" r="10.5"/>
+  </g>
+  <g id="arm-r">
+    <path class="os" d="M 154 164 C 172 176 182 192 184 208" stroke-width="20"/>
+    <path d="M 154 164 C 172 176 182 192 184 208" stroke="#FFF6E3" stroke-width="13" fill="none" stroke-linecap="round"/>
+    <circle class="fell o" cx="185" cy="216" r="10.5"/>
+  </g>
+
+  <g id="kopf">
+    <!-- Hals-Ring des Helms -->
+    <ellipse class="o" cx="120" cy="140" rx="32" ry="9" fill="#7D8CA3"/>
+    <circle class="fell o" cx="120" cy="96" r="34"/>
+    <circle class="fell o" cx="82" cy="90" r="9"/>
+    <circle class="fell o" cx="158" cy="90" r="9"/>
+    <circle class="fell-hell" cx="82" cy="90" r="4"/>
+    <circle class="fell-hell" cx="158" cy="90" r="4"/>
+    <ellipse class="fell-hell o" cx="120" cy="108" rx="21" ry="15" stroke-width="4"/>
+
+    <g id="gesicht-neutral" class="gesicht">
+      <circle cx="107" cy="88" r="6" fill="#FFF6E3"/>
+      <circle cx="133" cy="88" r="6" fill="#FFF6E3"/>
+      <circle cx="108" cy="89" r="2.8" fill="#1A1208"/>
+      <circle cx="132" cy="89" r="2.8" fill="#1A1208"/>
+      <path class="os" d="M 100 79 L 113 78" stroke-width="3.5"/>
+      <path class="os" d="M 127 78 L 140 79" stroke-width="3.5"/>
+      <circle cx="114" cy="103" r="1.8" fill="#1A1208"/>
+      <circle cx="126" cy="103" r="1.8" fill="#1A1208"/>
+      <path class="os" d="M 108 113 Q 120 118 132 113" stroke-width="3.5"/>
+    </g>
+    <g id="gesicht-jubel" class="gesicht">
+      <!-- Sternchen-Augen -->
+      <path d="M 107 82 L 109 87 L 114 88 L 109 90 L 107 95 L 105 90 L 100 88 L 105 87 Z" fill="#1A1208"/>
+      <path d="M 133 82 L 135 87 L 140 88 L 135 90 L 133 95 L 131 90 L 126 88 L 131 87 Z" fill="#1A1208"/>
+      <circle cx="114" cy="101" r="1.8" fill="#1A1208"/>
+      <circle cx="126" cy="101" r="1.8" fill="#1A1208"/>
+      <path d="M 106 108 Q 120 126 134 108 Q 120 113 106 108 Z" fill="#1A1208"/>
+    </g>
+    <g id="gesicht-frust" class="gesicht">
+      <path class="os" d="M 100 80 L 113 84" stroke-width="4"/>
+      <path class="os" d="M 140 80 L 127 84" stroke-width="4"/>
+      <circle cx="108" cy="90" r="2.7" fill="#1A1208"/>
+      <circle cx="132" cy="90" r="2.7" fill="#1A1208"/>
+      <circle cx="114" cy="103" r="1.8" fill="#1A1208"/>
+      <circle cx="126" cy="103" r="1.8" fill="#1A1208"/>
+      <path class="os" d="M 109 115 Q 120 108 131 115" stroke-width="3.5"/>
+    </g>
+    <g id="gesicht-denk" class="gesicht">
+      <circle cx="107" cy="88" r="6" fill="#FFF6E3"/>
+      <circle cx="133" cy="88" r="6" fill="#FFF6E3"/>
+      <circle cx="106" cy="85" r="2.7" fill="#1A1208"/>
+      <circle cx="132" cy="85" r="2.7" fill="#1A1208"/>
+      <path class="os" d="M 99 77 L 112 74" stroke-width="3.5"/>
+      <circle cx="114" cy="103" r="1.8" fill="#1A1208"/>
+      <circle cx="126" cy="103" r="1.8" fill="#1A1208"/>
+      <path class="os" d="M 110 113 Q 115 109 120 113 Q 125 117 130 113" stroke-width="3.5"/>
+    </g>
+
+    <!-- Glas-Kuppel ÜBER dem Gesicht (immer sichtbar) -->
+    <g id="prop-helm">
+      <circle cx="120" cy="96" r="50" fill="#BFE9F2" opacity="0.28"/>
+      <circle class="os" cx="120" cy="96" r="50" stroke-width="5"/>
+      <path d="M 84 66 C 90 56 100 50 110 48" fill="none" stroke="#FFF6E3" stroke-width="5" stroke-linecap="round" opacity="0.8"/>
+    </g>
+    <!-- Antenne mit Blink-Kugel (Nachschwing-Gelenk) -->
+    <g id="antenne">
+      <path class="os" d="M 120 46 L 120 27" stroke-width="4.5"/>
+      <circle class="o" cx="120" cy="20" r="7" fill="#FF3E8E" stroke-width="4"/>
+      <path class="os" d="M 106 16 L 100 12 M 134 16 L 140 12" stroke-width="3" opacity="0.7"/>
+    </g>
+    <g id="accessoire"/>
+  </g>
+</svg>

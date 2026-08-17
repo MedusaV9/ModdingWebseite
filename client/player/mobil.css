@@ -1,0 +1,952 @@
+/* Handy-Polish (iPhone hochkant, Safe-Areas iPhone 11+, Touch ≥ 44pt). */
+
+/* ---------- Layout-Wächter: nie quetschen, lieber scrollen ----------
+   #app ist eine 100dvh-Flex-Spalte; wenn Frage + Psst-Umschlag + Joker-Leiste
+   zusammen höher werden, drückte Flex-Shrink sonst Umschlag/Timer zusammen
+   (Banane malte über den Tipp, Option D rutschte aus dem Bild). */
+#app {
+  overflow-y: auto;
+  overflow-x: clip;
+}
+
+#app > * {
+  flex-shrink: 0;
+}
+
+/* ---------- Kopfzeile: Mini-Affe + Kontostand ---------- */
+
+.spieler-kopf {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  /* Kompakter Kopf (Eval 2): jede gesparte Zeile kommt den 4 Antworten
+     im 100dvh-Frage-Layout zugute. */
+  padding: 5px 12px;
+  padding-top: max(5px, env(safe-area-inset-top));
+  background: var(--bg2);
+  border-bottom: var(--mm-outline-s) solid var(--mm-outline);
+  /* Kopf-Konsistenz (W3): feste Mindesthöhe (Mini-Affe 44px + 2×5px Padding)
+     — Badges (Streak/Schild/Team) kommen und gehen, ohne dass etwas springt.
+     Bei Phasen-Übergängen wird der Kopf separat gesnapshottet (steht still). */
+  min-height: 54px;
+  view-transition-name: mm-spieler-kopf;
+}
+
+.spieler-kopf .kopf-name {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.spieler-kopf .mini-affe {
+  width: 34px;
+  height: 44px;
+  flex: none;
+}
+
+.spieler-kopf .konto {
+  margin-left: auto;
+  color: var(--gold);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  font-size: 1.15rem;
+  flex: none;
+}
+
+/* Konto-Tick (handy-fx.fuelleKonto): kurzer Flash beim Hoch-/Runterzählen. */
+.spieler-kopf .konto.tickt-hoch {
+  animation: konto-tick-hoch 0.7s var(--mm-kurve-snap) both;
+}
+
+.spieler-kopf .konto.tickt-runter {
+  animation: konto-tick-runter 0.7s var(--mm-kurve-snap) both;
+}
+
+@keyframes konto-tick-hoch {
+  0% {
+    transform: scale(1);
+  }
+  25% {
+    transform: scale(1.18);
+    color: var(--mm-coin-shine);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes konto-tick-runter {
+  0% {
+    transform: scale(1);
+  }
+  25% {
+    transform: scale(0.92);
+    color: var(--rot);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* ---------- Streak-Badge: Flammen-Steigerung ×2 → ×3 → ×5 ---------- */
+
+.streak-badge {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 2px;
+  flex: none;
+  padding: 1px 8px;
+  border: 2px solid var(--mm-outline);
+  border-radius: var(--mm-radius-rund);
+  background: var(--mm-flaeche-tief);
+  color: var(--mm-banana-leaf);
+  font-weight: 800;
+  font-size: 0.85rem;
+  animation: streak-pop 0.5s var(--mm-kurve-bounce) both;
+}
+
+.streak-badge[data-stufe="3"] {
+  color: var(--gold);
+  border-color: var(--gold);
+  animation:
+    streak-pop 0.5s var(--mm-kurve-bounce) both,
+    streak-flackern 1.8s ease-in-out 0.5s infinite;
+}
+
+.streak-badge[data-stufe="5"] {
+  color: var(--mm-coin-shine);
+  border-color: var(--gold);
+  /* Gold-GLOW = Leucht-Effekt (tokens.css-Ausnahme), kein Schlagschatten. */
+  box-shadow: 0 0 10px 1px rgb(245 179 1 / 55%);
+  animation:
+    streak-pop 0.5s var(--mm-kurve-bounce) both,
+    streak-flackern 1.1s ease-in-out 0.5s infinite;
+}
+
+@keyframes streak-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.3) rotate(-10deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+@keyframes streak-flackern {
+  0%,
+  100% {
+    transform: scale(1) rotate(0deg);
+  }
+  50% {
+    transform: scale(1.09) rotate(-2deg);
+  }
+}
+
+/* Sound-Control als RESERVIERTES Kopfzeilen-Element (Playtest 3: der floating
+   Eck-Knopf überdeckte Antwort D + Feedback-Feld). Lautstärke im Mini-Sheet. */
+.sound-kopf {
+  position: relative;
+  display: flex;
+  gap: 4px;
+  flex: none;
+}
+
+.sound-kopf-knopf {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 4px 8px;
+  font-size: 1.05rem;
+  border-radius: var(--mm-radius-rund);
+  opacity: 0.9;
+}
+
+.sound-kopf-knopf.aktiv {
+  outline: 3px solid var(--gold);
+}
+
+.sound-sheet {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 70;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 14px;
+  background: var(--bg2);
+  border: var(--mm-outline-s) solid var(--mm-outline);
+  border-radius: var(--mm-radius-m);
+  box-shadow: var(--mm-schatten-sticker);
+  animation: umschlag-auf 0.25s var(--mm-kurve-snap) both;
+}
+
+.sound-sheet input[type="range"] {
+  width: 150px;
+  min-height: 32px;
+  padding: 0;
+  accent-color: var(--gold);
+  border: none;
+  background: none;
+}
+
+/* ---------- Phasen-Übergangs-Choreo (W3): alt raus, neu rein ----------
+   View Transitions (Chrome/Safari 18+): der Root cross-slidet in 200–250 ms,
+   NUR transform/opacity. Phase-Akzente über html[data-mm-phase]: die Frage
+   kommt von unten, die Auflösung zoomt. Der Spieler-Kopf hat einen eigenen
+   view-transition-name und bleibt dabei bewegungslos stehen (kein Springen). */
+
+.phase-buehne {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* Gleiche Quetsch-Wächter-Semantik wie #app > * (mobil.css oben). */
+.phase-buehne > * {
+  flex-shrink: 0;
+}
+
+::view-transition-old(root) {
+  animation: mm-phase-raus 200ms var(--mm-kurve-snap) both;
+}
+
+::view-transition-new(root) {
+  animation: mm-phase-rein 240ms var(--mm-kurve-snap) both;
+}
+
+html[data-mm-phase="frage"]::view-transition-new(root) {
+  animation-name: mm-phase-rein-hoch;
+}
+
+html[data-mm-phase="aufloesung"]::view-transition-new(root) {
+  animation-name: mm-phase-rein-zoom;
+  animation-timing-function: var(--mm-kurve-bounce);
+}
+
+::view-transition-old(mm-spieler-kopf),
+::view-transition-new(mm-spieler-kopf) {
+  animation: none;
+}
+
+/* Fallback ohne View-Transition-Support: nur die neue Phase fliegt ein. */
+.phase-buehne.phase-einflug {
+  animation: mm-phase-rein 240ms var(--mm-kurve-snap) both;
+}
+
+.phase-buehne.phase-einflug[data-phase="frage"] {
+  animation-name: mm-phase-rein-hoch;
+}
+
+.phase-buehne.phase-einflug[data-phase="aufloesung"] {
+  animation-name: mm-phase-rein-zoom;
+  animation-timing-function: var(--mm-kurve-bounce);
+}
+
+@keyframes mm-phase-raus {
+  to {
+    opacity: 0;
+    transform: translateX(-28px);
+  }
+}
+
+@keyframes mm-phase-rein {
+  from {
+    opacity: 0;
+    transform: translateX(28px);
+  }
+}
+
+@keyframes mm-phase-rein-hoch {
+  from {
+    opacity: 0;
+    transform: translateY(44px);
+  }
+}
+
+@keyframes mm-phase-rein-zoom {
+  from {
+    opacity: 0;
+    transform: scale(0.82);
+  }
+}
+
+/* ---------- Mikro-Feedback: Press-States am Handy ----------
+   Sanfter als der Bühnen-Look aus base.css (0.92 + Rotation): am Daumen fühlt
+   sich scale(0.97) + eingedrückter Schatten präziser an. */
+
+button:active:not(:disabled) {
+  transform: scale(0.97);
+  box-shadow: var(--mm-schatten-gedrueckt);
+}
+
+.primaer:active:not(:disabled) {
+  transform: scale(0.97) translateY(1px);
+}
+
+/* ---------- Fortschritts-Pille: „2 von 4 haben geantwortet" ---------- */
+
+.antwort-fortschritt {
+  margin: 2px auto;
+  width: fit-content;
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--muted);
+  background: var(--mm-flaeche-tief);
+  border-radius: var(--mm-radius-rund);
+  padding: 3px 14px;
+  animation: fortschritt-rein 0.3s var(--mm-kurve-snap) both;
+}
+
+@keyframes fortschritt-rein {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+/* ---------- Join-Steps: Code → Affe & Name → Los! ---------- */
+
+.join-schritte {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.join-schritt {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.join-schritt:not(:first-child)::before {
+  content: "";
+  width: 14px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--mm-text-gedimmt);
+  opacity: 0.5;
+  margin-right: 4px;
+}
+
+.join-punkt {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid var(--mm-outline);
+  background: var(--mm-flaeche-tief);
+  color: var(--muted);
+  font-weight: 800;
+  font-size: 0.72rem;
+}
+
+.join-schritt.aktiv {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.join-schritt.aktiv .join-punkt {
+  background: var(--gold);
+  color: var(--mm-outline);
+  border-color: var(--gold);
+  animation: streak-pop 0.4s var(--mm-kurve-bounce) both;
+}
+
+.join-schritt.fertig .join-punkt {
+  background: var(--gruen);
+  color: var(--mm-ticket-paper);
+}
+
+/* Schritt 2 (Name + Affe + Farbe) fliegt als Block von unten ein. */
+.join-einflug {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  animation: mm-phase-rein-hoch 280ms var(--mm-kurve-snap) both;
+}
+
+/* „Raum gefunden ✓" ploppt kurz — der Moment fühlt sich wie ein Erfolg an. */
+[data-testid="raum-gefunden"] {
+  display: inline-block;
+  animation: streak-pop 0.45s var(--mm-kurve-bounce) both;
+}
+
+/* ---------- Idle-Einlagen des eigenen Affen (handy-fx.starteIdleChoreo) ----
+   One-Shot-Animationen auf den Gelenk-Gruppen (nur transform); überstimmen
+   kurz das Dauer-Atmen/-Wippen aus base.css (.mm-affe-idle). */
+
+.eigene-puppe.idle-gaehnt svg #kopf {
+  animation: mm-idle-gaehn-kopf 1.7s ease-in-out 1 both;
+}
+
+.eigene-puppe.idle-gaehnt svg #arm-l {
+  animation: mm-idle-gaehn-arm-l 1.7s ease-in-out 1 both;
+}
+
+.eigene-puppe.idle-gaehnt svg #arm-r {
+  animation: mm-idle-gaehn-arm-r 1.7s ease-in-out 1 both;
+}
+
+@keyframes mm-idle-gaehn-kopf {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  35%,
+  65% {
+    transform: rotate(-7deg) translateY(-3px);
+  }
+}
+
+@keyframes mm-idle-gaehn-arm-l {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  35%,
+  65% {
+    transform: rotate(-100deg);
+  }
+}
+
+@keyframes mm-idle-gaehn-arm-r {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  35%,
+  65% {
+    transform: rotate(100deg);
+  }
+}
+
+.eigene-puppe.idle-wippt svg #koerper {
+  animation: mm-idle-wipp 1.7s ease-in-out 1 both;
+}
+
+.eigene-puppe.idle-wippt svg #kopf {
+  animation: mm-idle-wipp-kopf 1.7s ease-in-out 1 both;
+}
+
+@keyframes mm-idle-wipp {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  20% {
+    transform: translateY(3px) scale(1.04, 0.94);
+  }
+  40% {
+    transform: translateY(-6px) scale(0.98, 1.04);
+  }
+  60% {
+    transform: translateY(2px) scale(1.03, 0.96);
+  }
+  80% {
+    transform: translateY(-3px) scale(1);
+  }
+}
+
+@keyframes mm-idle-wipp-kopf {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  25% {
+    transform: translateY(4px);
+  }
+  45% {
+    transform: translateY(-5px);
+  }
+  65% {
+    transform: translateY(2px);
+  }
+}
+
+.eigene-puppe.idle-schaut svg #kopf {
+  animation: mm-idle-schaut 1.7s ease-in-out 1 both;
+}
+
+@keyframes mm-idle-schaut {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  20%,
+  40% {
+    transform: rotate(9deg) translateX(2px);
+  }
+  60%,
+  85% {
+    transform: rotate(-9deg) translateX(-2px);
+  }
+}
+
+/* ---------- Join: Affen-Wahl-Karussell + Farbreihe ---------- */
+
+.affen-wahl {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: min(340px, 88vw);
+}
+
+.affen-wahl .pfeil {
+  min-height: 64px;
+  min-width: 52px;
+  padding: 6px;
+  font-size: 1.5rem;
+  flex: none;
+}
+
+.affen-buehne {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.affen-buehne .grosse-puppe {
+  width: min(150px, 38vw);
+  aspect-ratio: 240 / 320;
+}
+
+.affen-buehne .affen-name {
+  font-weight: 800;
+  font-size: 1.05rem;
+}
+
+.affen-buehne .affen-rolle {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.farb-reihe {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+  max-width: 340px;
+}
+
+.farb-knopf {
+  width: 48px;
+  height: 48px;
+  min-height: 48px;
+  border-radius: 50%;
+  padding: 0;
+  background: var(--farbe);
+}
+
+.farb-knopf.gewaehlt {
+  outline: 4px solid var(--mm-ticket-paper);
+  transform: scale(1.12);
+}
+
+/* ---------- Münz-Einwurf beim Antwort-Lock-in ---------- */
+
+.muenz-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  pointer-events: none;
+  z-index: 65;
+}
+
+.muenz-overlay .schlitz {
+  width: 92px;
+  height: 12px;
+  background: var(--mm-outline);
+  border-radius: 6px;
+  border: 3px solid var(--gold);
+  animation: schlitz-blink 0.9s ease-out both;
+}
+
+.muenz-overlay .muenze {
+  width: 74px;
+  height: 74px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at 34% 30%,
+    var(--mm-coin-shine) 0%,
+    var(--mm-vault-gold) 55%,
+    color-mix(in srgb, var(--mm-vault-gold) 78%, var(--mm-outline)) 100%
+  );
+  border: 4px solid var(--mm-outline);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  animation: muenze-einwurf 0.9s var(--mm-kurve-snap) both;
+}
+
+@keyframes muenze-einwurf {
+  0% {
+    opacity: 0;
+    transform: translateY(-38vh) rotateX(0deg) scale(1.1);
+  }
+  55% {
+    opacity: 1;
+    transform: translateY(-6px) rotateX(60deg) scale(1);
+  }
+  80% {
+    transform: translateY(2px) rotateX(84deg) scaleY(0.24);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(10px) rotateX(90deg) scaleY(0.1);
+  }
+}
+
+@keyframes schlitz-blink {
+  0%,
+  60% {
+    box-shadow: 0 0 0 0 rgb(245 179 1 / 0%);
+  }
+  75% {
+    box-shadow: 0 0 22px 6px rgb(245 179 1 / 55%);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgb(245 179 1 / 0%);
+  }
+}
+
+.muenz-overlay .eingerastet {
+  font-family: var(--mm-font-text);
+  font-weight: 800;
+  font-size: 1.3rem;
+  color: var(--gold);
+  animation: kandidat-hoch 0.6s 0.5s var(--mm-kurve-bounce) both;
+}
+
+@keyframes kandidat-hoch {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* ---------- Warte-Screen: eigener Mini-Affe + Zwischenstands-Story ---------- */
+
+.warte-screen {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  text-align: center;
+  padding: 16px;
+}
+
+.warte-screen .eigene-puppe {
+  width: min(140px, 36vw);
+  aspect-ratio: 240 / 320;
+}
+
+.warte-story {
+  background: var(--bg2);
+  border: var(--mm-outline-s) solid var(--mm-outline);
+  border-radius: var(--mm-radius-m);
+  box-shadow: var(--mm-schatten-sticker);
+  padding: 10px 18px;
+  font-size: 1.05rem;
+  max-width: 90vw;
+  rotate: -1deg;
+}
+
+/* ---------- Flüster-Tipp: „Psst…"-Umschlag ---------- */
+
+.psst-umschlag {
+  margin: 8px 12px;
+  background: var(--mm-ticket-paper);
+  color: var(--mm-outline);
+  border: var(--mm-outline-s) solid var(--mm-outline);
+  border-radius: var(--mm-radius-m);
+  box-shadow: var(--mm-schatten-sticker);
+  padding: 10px 14px;
+  rotate: -1.2deg;
+  animation: umschlag-auf 0.7s var(--mm-kurve-bounce) both;
+  position: relative;
+  overflow: hidden;
+}
+
+.psst-umschlag::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 26px;
+  background: radial-gradient(
+    120% 160% at 50% -30%,
+    color-mix(in srgb, var(--mm-ticket-paper) 94%, var(--mm-outline)) 0%,
+    transparent 100%
+  );
+  border-bottom: 2px dashed rgb(26 18 8 / 30%);
+  transform-origin: top;
+  animation: lasche-auf 0.55s 0.15s var(--mm-kurve-snap) both;
+}
+
+@keyframes umschlag-auf {
+  0% {
+    opacity: 0;
+    transform: translateY(20px) scale(0.85);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes lasche-auf {
+  from {
+    transform: scaleY(1);
+  }
+  to {
+    transform: scaleY(0);
+  }
+}
+
+.psst-umschlag .psst {
+  font-family: var(--mm-font-text);
+  font-weight: 800;
+  font-size: 0.95rem;
+  color: var(--mm-spotlight-pink);
+}
+
+/* ---------- Joker-Leiste mit Icons ---------- */
+
+.joker-leiste {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 10px;
+  padding-bottom: max(10px, env(safe-area-inset-bottom));
+  align-items: stretch;
+}
+
+.joker-knopf {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 86px;
+  /* Lange Namen („Überziehungskredit") liefen auf 390 px in die Nachbar-Kachel
+     — Kachelbreite deckeln, Label darunter per Ellipsis kappen (Playtest 1). */
+  max-width: 112px;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  padding: 8px 10px;
+  line-height: 1.2;
+}
+
+.joker-knopf span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.joker-knopf img {
+  width: 40px;
+  height: 40px;
+}
+
+.joker-knopf .ladung {
+  color: var(--gold);
+  font-weight: 800;
+}
+
+/* ---------- Buzzer XXL ---------- */
+
+.buzzer-xxl {
+  width: min(74vw, 42dvh);
+  aspect-ratio: 1;
+  min-height: 0;
+  border-radius: 50%;
+  padding: 0;
+  margin: 0 auto;
+  background: radial-gradient(
+    circle at 50% 32%,
+    var(--spielerfarbe, var(--mm-spotlight-pink)) 0%,
+    color-mix(in srgb, var(--spielerfarbe, var(--mm-spotlight-pink)) 62%, var(--mm-outline)) 100%
+  );
+  border: 6px solid var(--mm-outline);
+  box-shadow:
+    0 12px 0 0 color-mix(in srgb, var(--mm-vault-gold) 45%, var(--mm-outline)),
+    var(--mm-schatten-sticker-gross);
+  /* Rubik-bold statt Bungee: Display-Schrift NIE unter 32px (Typo-Gesetz). */
+  font-family: var(--mm-font-text);
+  font-weight: 800;
+  font-size: 1.6rem;
+  color: var(--mm-ticket-paper);
+  text-shadow: 2px 2px 0 var(--mm-outline);
+}
+
+/* Spring-Feedback (W3): Drücken snappt schnell rein, Loslassen federt mit
+   Bounce-Kurve zurück — fühlt sich wie eine echte Buzzer-Mechanik an. */
+.buzzer-xxl {
+  transition:
+    transform 340ms var(--mm-kurve-bounce),
+    box-shadow 340ms var(--mm-kurve-bounce);
+}
+
+.buzzer-xxl:active:not(:disabled) {
+  transform: translateY(9px) scale(0.96);
+  box-shadow:
+    0 3px 0 0 color-mix(in srgb, var(--mm-vault-gold) 45%, var(--mm-outline)),
+    var(--mm-schatten-gedrueckt);
+  transition-duration: 70ms;
+  transition-timing-function: var(--mm-kurve-snap);
+}
+
+.buzzer-xxl:disabled {
+  filter: saturate(0.35);
+  box-shadow: 0 4px 0 0 color-mix(in srgb, var(--mm-outline) 60%, var(--mm-ticket-paper));
+}
+
+/* ---------- Auflösung: RICHTIG/FALSCH-Stempel ---------- */
+
+.ergebnis-stempel {
+  font-family: var(--mm-font-display);
+  font-size: clamp(var(--mm-display-s), 10.5vw, var(--mm-display-l));
+  line-height: var(--mm-zeilenhoehe-display);
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  animation: stempel 0.5s var(--mm-kurve-bounce) both;
+}
+
+@keyframes stempel {
+  0% {
+    opacity: 0;
+    transform: scale(2.2) rotate(8deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(-2deg);
+  }
+}
+
+/* Falsch: nach dem Stempel EIN kurzes, sanftes Schütteln — tröstlich,
+   nicht strafend (kein rotes Blinken, keine Dauer-Animation). */
+.ergebnis-stempel.falsch {
+  animation:
+    stempel 0.5s var(--mm-kurve-bounce) both,
+    mm-schuettel-sanft 0.45s ease-in-out 0.5s 1;
+}
+
+@keyframes mm-schuettel-sanft {
+  0%,
+  100% {
+    transform: rotate(-2deg) translateX(0);
+  }
+  25% {
+    transform: rotate(-2deg) translateX(-7px);
+  }
+  50% {
+    transform: rotate(-2deg) translateX(6px);
+  }
+  75% {
+    transform: rotate(-2deg) translateX(-3px);
+  }
+}
+
+/* Richtig: der Money-Zähler (handy-fx.fuelleZaehler zählt 600 ms hoch). */
+.ergebnis-geld {
+  margin: 0;
+  font-size: 2rem;
+  color: var(--gold);
+  animation: kandidat-hoch 0.4s var(--mm-kurve-bounce) both;
+}
+
+/* Streak-Moment unterm Count-up: ploppt NACH dem Zähler-Start ein. */
+.streak-moment {
+  margin: 0;
+  font-weight: 800;
+  font-size: 1.1rem;
+  color: var(--mm-banana-leaf);
+  animation: streak-pop 0.5s 0.45s var(--mm-kurve-bounce) both;
+}
+
+.streak-moment[data-stufe="3"] {
+  color: var(--gold);
+}
+
+.streak-moment[data-stufe="5"] {
+  color: var(--mm-coin-shine);
+  text-shadow: 0 0 12px rgb(245 179 1 / 60%);
+}
+
+/* Trost-Karte im Falsch-Screen: warm, kurz, wie ein Zettel vom Kumpel. */
+.trost {
+  margin: 0;
+  color: var(--text);
+  background: var(--mm-flaeche-tief);
+  border: var(--mm-outline-s) solid var(--mm-outline);
+  border-radius: var(--mm-radius-m);
+  box-shadow: var(--mm-schatten-sticker);
+  padding: 8px 16px;
+  max-width: 88vw;
+  rotate: 1deg;
+  animation: umschlag-auf 0.45s 0.3s var(--mm-kurve-snap) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .muenz-overlay .muenze,
+  .psst-umschlag,
+  .ergebnis-stempel,
+  .ergebnis-stempel.falsch,
+  .ergebnis-geld,
+  .streak-moment,
+  .trost,
+  .antwort-fortschritt,
+  .join-einflug,
+  .join-schritt.aktiv .join-punkt,
+  [data-testid="raum-gefunden"],
+  .phase-buehne.phase-einflug,
+  .spieler-kopf .konto.tickt-hoch,
+  .spieler-kopf .konto.tickt-runter {
+    animation-duration: 1ms;
+    animation-delay: 0ms;
+  }
+
+  .streak-badge,
+  .streak-badge[data-stufe="3"],
+  .streak-badge[data-stufe="5"] {
+    animation: none;
+  }
+
+  .eigene-puppe.idle-gaehnt svg #kopf,
+  .eigene-puppe.idle-gaehnt svg #arm-l,
+  .eigene-puppe.idle-gaehnt svg #arm-r,
+  .eigene-puppe.idle-wippt svg #koerper,
+  .eigene-puppe.idle-wippt svg #kopf,
+  .eigene-puppe.idle-schaut svg #kopf {
+    animation: none;
+  }
+
+  .buzzer-xxl {
+    transition-duration: 1ms;
+  }
+
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none;
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "name": "monkey-money-videos",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MONKEY MONEY — Remotion-Teilprojekt: Trailer + Tutorial-Templates (Build-Zeit-Videos, ART-SOUND-VIDEO-PLAN §5.2)",
+  "scripts": {
+    "sync-assets": "bash scripts/sync-assets.sh",
+    "studio": "remotion studio",
+    "render:trailer": "remotion render Trailer ../assets/video/trailer.mp4 --codec h264",
+    "render:tutorials": "remotion render TutorialVierLianen ../assets/video/tutorial_vier-lianen.mp4 --codec h264 && remotion render TutorialStinkbanane ../assets/video/tutorial_stinkbanane.mp4 --codec h264",
+    "render:rollout": "bash scripts/render-tutorials.sh"
+  },
+  "dependencies": {
+    "@remotion/cli": "^4.0.410",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "remotion": "^4.0.410"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "typescript": "^5.8.2"
+  }
+}

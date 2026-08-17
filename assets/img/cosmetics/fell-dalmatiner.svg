@@ -1,0 +1,17 @@
+<!-- Fell Dalmatiner-Bananen"  nahtlose Pattern-Kachel (56×56): statt Punkten
+     regnet es Mini-Bananen aufs Fell. Alle Formen liegen komplett im Tile. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 56 56">
+  <rect width="56" height="56" fill="var(--fell, #6B4226)"/>
+  <g fill="#F5B301" stroke="#1A1208" stroke-width="2.4" stroke-linejoin="round">
+    <path d="M 8 13 C 12 2.5 22 2.5 26 13 C 22 9.5 12 9.5 8 13 Z" transform="rotate(24 17 9)"/>
+    <path d="M 32 12 C 36 1.5 46 1.5 50 12 C 46 8.5 36 8.5 32 12 Z" transform="rotate(-18 41 8)"/>
+    <path d="M 12 41 C 16 30.5 26 30.5 30 41 C 26 37.5 16 37.5 12 41 Z" transform="rotate(-38 21 36)"/>
+    <path d="M 34 44 C 38 33.5 48 33.5 52 44 C 48 40.5 38 40.5 34 44 Z" transform="rotate(14 43 39)"/>
+  </g>
+  <g fill="#6B4226" opacity="0.9">
+    <circle cx="10.5" cy="8.5" r="1.1"/>
+    <circle cx="34" cy="9" r="1.1"/>
+    <circle cx="15" cy="41.5" r="1.1"/>
+    <circle cx="36" cy="44" r="1.1"/>
+  </g>
+</svg>

@@ -1,0 +1,11 @@
+<!-- Gesicht XXL-Kaugummi-Blase"  Overlay im #kopf (Mund H 120/112).
+     Pulsiert dezent per CSS (class mm-kaugummi, meta-avatar.ts). -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 320">
+  <g class="mm-kaugummi">
+    <circle cx="121" cy="128" r="19" fill="#F9A8D4" stroke="#1A1208" stroke-width="4"/>
+    <circle cx="121" cy="128" r="14" fill="#FBC1E0" opacity="0.6"/>
+    <circle cx="114" cy="120" r="5" fill="#FFF6E3" opacity="0.85"/>
+    <path d="M 112 111.5 Q 118 108.5 124 111.5" fill="none"
+      stroke="#E77BB4" stroke-width="3.5" stroke-linecap="round"/>
+  </g>
+</svg>

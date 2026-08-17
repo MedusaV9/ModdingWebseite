@@ -1,0 +1,141 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 320" class="mm-affe" data-affe="oma-zinseszins" role="img" aria-label="Oma Zinseszins">
+  <title>Oma Zinseszins — die Unterschätzte (gebückte Silhouette)</title>
+  <style>
+    svg[data-affe="oma-zinseszins"] .fell{fill:var(--fell,#A99BB5)}
+    svg[data-affe="oma-zinseszins"] .fell-hell{fill:var(--fell-hell,#E2DAEA)}
+    svg[data-affe="oma-zinseszins"] .fell-s{stroke:var(--fell,#A99BB5);fill:none}
+    svg[data-affe="oma-zinseszins"] .o{stroke:#1A1208;stroke-width:5;stroke-linejoin:round;stroke-linecap:round}
+    svg[data-affe="oma-zinseszins"] .os{stroke:#1A1208;fill:none;stroke-linecap:round}
+    svg[data-affe="oma-zinseszins"] #kopf,svg[data-affe="oma-zinseszins"] #arm-l,svg[data-affe="oma-zinseszins"] #arm-r,svg[data-affe="oma-zinseszins"] #bein-l,svg[data-affe="oma-zinseszins"] #bein-r,svg[data-affe="oma-zinseszins"] #schwanz{transform-box:view-box}
+    svg[data-affe="oma-zinseszins"] #kopf{transform-origin:112px 178px}
+    svg[data-affe="oma-zinseszins"] #arm-l{transform-origin:84px 196px}
+    svg[data-affe="oma-zinseszins"] #arm-r{transform-origin:148px 196px}
+    svg[data-affe="oma-zinseszins"] #bein-l{transform-origin:104px 258px}
+    svg[data-affe="oma-zinseszins"] #bein-r{transform-origin:136px 258px}
+    svg[data-affe="oma-zinseszins"] #schwanz{transform-origin:144px 258px}
+    svg[data-affe="oma-zinseszins"] .gesicht{display:none}
+    svg[data-affe="oma-zinseszins"] #gesicht-neutral{display:inline}
+    svg[data-affe="oma-zinseszins"][data-gesicht=jubel] #gesicht-neutral,svg[data-affe="oma-zinseszins"][data-gesicht=frust] #gesicht-neutral,svg[data-affe="oma-zinseszins"][data-gesicht=denk] #gesicht-neutral{display:none}
+    svg[data-affe="oma-zinseszins"][data-gesicht=jubel] #gesicht-jubel{display:inline}
+    svg[data-affe="oma-zinseszins"][data-gesicht=frust] #gesicht-frust{display:inline}
+    svg[data-affe="oma-zinseszins"][data-gesicht=denk] #gesicht-denk{display:inline}
+  </style>
+
+  <g id="schwanz">
+    <path class="os" d="M 142 260 C 186 270 206 238 184 226 C 168 218 160 234 174 238" stroke-width="15"/>
+    <path class="fell-s" d="M 142 260 C 186 270 206 238 184 226 C 168 218 160 234 174 238" stroke-width="8.5"/>
+  </g>
+
+  <g id="bein-l">
+    <path class="os" d="M 104 258 C 100 274 98 286 96 298" stroke-width="18"/>
+    <path class="fell-s" d="M 104 258 C 100 274 98 286 96 298" stroke-width="11"/>
+    <ellipse class="fell o" cx="91" cy="304" rx="15" ry="8.5"/>
+  </g>
+  <g id="bein-r">
+    <path class="os" d="M 136 258 C 140 274 142 286 144 298" stroke-width="18"/>
+    <path class="fell-s" d="M 136 258 C 140 274 142 286 144 298" stroke-width="11"/>
+    <ellipse class="fell o" cx="149" cy="304" rx="15" ry="8.5"/>
+  </g>
+
+  <g id="koerper">
+    <!-- Gebückter Rücken: Buckel ragt hinter dem Kopf hoch -->
+    <path class="o" d="M 88 168 C 76 148 96 128 122 132 C 156 138 170 168 166 204 C 164 236 154 256 146 262 L 98 262 C 88 244 84 200 88 168 Z" fill="#7BA05B"/>
+    <!-- Schürze/Kleid-Muster: kleine Kreuzstich-Blümchen -->
+    <g stroke="#FFF6E3" stroke-width="2.5" stroke-linecap="round" opacity="0.9">
+      <path d="M 108 200 L 116 208 M 116 200 L 108 208"/>
+      <path d="M 134 216 L 142 224 M 142 216 L 134 224"/>
+      <path d="M 112 236 L 120 244 M 120 236 L 112 244"/>
+    </g>
+    <path class="os" d="M 96 258 L 148 258" stroke-width="4"/>
+  </g>
+
+  <g id="arm-l">
+    <path class="os" d="M 84 196 C 72 210 68 224 70 238" stroke-width="17"/>
+    <path class="fell-s" d="M 84 196 C 72 210 68 224 70 238" stroke-width="10.5"/>
+    <circle class="fell o" cx="71" cy="245" r="9.5"/>
+    <!-- Riesen-Handtasche -->
+    <g id="prop-handtasche" transform="rotate(-4 60 276)">
+      <path d="M 46 252 C 46 240 84 240 84 252" fill="none" stroke="#1A1208" stroke-width="5"/>
+      <rect x="30" y="250" width="70" height="52" rx="12" fill="#C2183B" stroke="#1A1208" stroke-width="5"/>
+      <path d="M 30 268 L 100 268" stroke="#1A1208" stroke-width="3.5"/>
+      <circle cx="65" cy="268" r="6" fill="#F5B301" stroke="#1A1208" stroke-width="3"/>
+    </g>
+  </g>
+  <g id="arm-r">
+    <path class="os" d="M 148 196 C 160 210 164 222 162 234" stroke-width="17"/>
+    <path class="fell-s" d="M 148 196 C 160 210 164 222 162 234" stroke-width="10.5"/>
+    <circle class="fell o" cx="161" cy="241" r="9.5"/>
+    <!-- Strickzeug: Nadeln + angefangener Schal -->
+    <g id="prop-strickzeug">
+      <path d="M 150 232 L 186 210 M 154 244 L 192 228" stroke="#1A1208" stroke-width="4" stroke-linecap="round"/>
+      <circle cx="188" cy="208" r="4" fill="#F5B301" stroke="#1A1208" stroke-width="2.5"/>
+      <circle cx="194" cy="226" r="4" fill="#F5B301" stroke="#1A1208" stroke-width="2.5"/>
+      <path d="M 158 240 C 156 254 162 266 158 280" fill="none" stroke="#29D9D5" stroke-width="9"/>
+      <path d="M 158 240 C 156 254 162 266 158 280" fill="none" stroke="#1A1208" stroke-width="2" stroke-dasharray="3 4"/>
+      <circle cx="176" cy="252" r="8" fill="#29D9D5" stroke="#1A1208" stroke-width="3.5"/>
+    </g>
+  </g>
+
+  <g id="kopf">
+    <!-- Kopf sitzt tief und vorgebeugt -->
+    <circle class="fell o" cx="112" cy="140" r="38"/>
+    <circle class="fell o" cx="72" cy="136" r="11"/>
+    <circle class="fell-hell" cx="72" cy="136" r="5"/>
+    <ellipse class="fell-hell o" cx="112" cy="152" rx="24" ry="17" stroke-width="4"/>
+
+    <g id="gesicht-neutral" class="gesicht">
+      <circle cx="98" cy="130" r="6.5" fill="#FFF6E3"/>
+      <circle cx="126" cy="130" r="6.5" fill="#FFF6E3"/>
+      <circle cx="99" cy="131" r="2.9" fill="#1A1208"/>
+      <circle cx="125" cy="131" r="2.9" fill="#1A1208"/>
+      <circle cx="106" cy="146" r="1.8" fill="#1A1208"/>
+      <circle cx="118" cy="146" r="1.8" fill="#1A1208"/>
+      <path class="os" d="M 100 157 Q 112 163 124 157" stroke-width="3.5"/>
+      <!-- Lachfältchen -->
+      <path class="os" d="M 88 138 L 84 142 M 136 138 L 140 142" stroke-width="2.5"/>
+    </g>
+    <g id="gesicht-jubel" class="gesicht">
+      <path class="os" d="M 92 130 Q 98 123 104 130" stroke-width="4"/>
+      <path class="os" d="M 120 130 Q 126 123 132 130" stroke-width="4"/>
+      <circle cx="106" cy="144" r="1.8" fill="#1A1208"/>
+      <circle cx="118" cy="144" r="1.8" fill="#1A1208"/>
+      <path d="M 98 151 Q 112 168 126 151 Q 112 156 98 151 Z" fill="#1A1208"/>
+    </g>
+    <g id="gesicht-frust" class="gesicht">
+      <path class="os" d="M 91 123 L 105 127" stroke-width="4"/>
+      <path class="os" d="M 133 123 L 119 127" stroke-width="4"/>
+      <circle cx="100" cy="133" r="2.7" fill="#1A1208"/>
+      <circle cx="124" cy="133" r="2.7" fill="#1A1208"/>
+      <circle cx="106" cy="146" r="1.8" fill="#1A1208"/>
+      <circle cx="118" cy="146" r="1.8" fill="#1A1208"/>
+      <path class="os" d="M 101 160 Q 112 153 123 160" stroke-width="3.5"/>
+    </g>
+    <g id="gesicht-denk" class="gesicht">
+      <circle cx="98" cy="130" r="6.5" fill="#FFF6E3"/>
+      <circle cx="126" cy="130" r="6.5" fill="#FFF6E3"/>
+      <circle cx="97" cy="127" r="2.7" fill="#1A1208"/>
+      <circle cx="125" cy="127" r="2.7" fill="#1A1208"/>
+      <path class="os" d="M 89 119 L 103 116" stroke-width="3.5"/>
+      <circle cx="106" cy="146" r="1.8" fill="#1A1208"/>
+      <circle cx="118" cy="146" r="1.8" fill="#1A1208"/>
+      <path class="os" d="M 102 157 Q 107 153 112 157 Q 117 161 122 157" stroke-width="3.5"/>
+    </g>
+
+    <!-- Runde Oma-Brille (immer sichtbar) -->
+    <g id="prop-brille" fill="none" stroke="#1A1208" stroke-width="3">
+      <circle cx="98" cy="131" r="9.5"/>
+      <circle cx="126" cy="131" r="9.5"/>
+      <line x1="107" y1="130" x2="117" y2="130"/>
+    </g>
+
+    <!-- Kopftuch mit Knoten (immer sichtbar) -->
+    <g id="accessoire">
+      <g id="prop-kopftuch">
+        <path class="o" d="M 76 128 C 68 96 92 76 116 78 C 142 80 156 100 152 128 C 140 116 132 110 112 110 C 92 110 84 118 76 128 Z" fill="#C2183B"/>
+        <path class="o" d="M 148 122 C 158 118 166 122 168 130 C 160 130 154 132 150 138 Z" fill="#C2183B" stroke-width="4"/>
+        <path class="o" d="M 150 136 C 160 138 164 146 162 154 C 154 148 148 146 144 146 Z" fill="#C2183B" stroke-width="4"/>
+        <path d="M 88 100 C 96 90 110 86 122 88" fill="none" stroke="#FFF6E3" stroke-width="3" stroke-linecap="round" opacity="0.7"/>
+      </g>
+    </g>
+  </g>
+</svg>

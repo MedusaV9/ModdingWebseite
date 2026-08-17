@@ -1,0 +1,243 @@
+# MONKEY MONEY CI — Jobs nach TECH-SPEC §8.3:
+#
+#   lint             Prettier-Check + ESLint + tsc --noEmit (ubuntu)
+#   test             Vitest (Unit + Protokoll + Minigame-Tests)
+#   build            Vite-Clients + Server-esbuild-Bundle → Artefakt "monkey-money-dist"
+#                    (= AMP-Deploy-Inhalt: client/dist + server/dist + package.json +
+#                    Lockfile + content/packs + content/musik + assets — keine
+#                    nativen Module. assets/ + content/musik/ sind LAUFZEIT-Medien:
+#                    der Server serviert sie dist-relativ als /media/* bzw.
+#                    /media-musik/* — ohne sie 404en Pixel-Bilder, Logo-Stinger,
+#                    Tutorial-Videos und ALLE Songs, siehe Eval 9)
+#   content-validate Fragen-Pack-Gate (node tools/content/validate.mjs, nur Node-Builtins)
+#   bots-e2e         ECHTES End-zu-End-Gate: Server starten, 3 Bots spielen ein
+#                    komplettes Quick-Match durch (Seed 42, ~4–8 min); Exit ≠ 0 bei
+#                    Invarianten-Verletzung (Phasen fehlen, seq rückwärts, NaN-Konten)
+#   ipa-gate + ipa   Unsignierte iPad-.ipa (WKWebView-Wrapper, ios-wrapper/). macOS-Runner
+#                    sind ~10× teurer als ubuntu → der Job läuft NUR, wenn sich
+#                    ios-wrapper/** oder dieser Workflow ändern, oder bei
+#                    workflow_dispatch. Muster: der grüne ios-ipa-Job der
+#                    GOOBY-Godot-Pipeline (xcodebuild ohne Signing, Payload-Zip).
+#
+# GitHub kennt keine Job-level paths-Filter; ein Workflow-weiter paths-Filter würde
+# auch lint/test/bots abschalten. Deshalb entscheidet der billige ipa-gate-Job per
+# git diff, ob der macOS-Job laufen darf.
+name: MONKEY MONEY
+
+on:
+  push:
+    # Nur die monkey-money-Branch-Linie — main enthält ein ANDERES Projekt
+    # (Minecraft-Mod) und bleibt unberührt.
+    branches: ["cursor/monkey-money*"]
+  workflow_dispatch:
+
+concurrency:
+  group: monkey-money-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: "22"
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+      - run: npm ci
+      - name: Prettier + ESLint
+        run: npm run lint
+      - name: TypeScript (tsc --noEmit)
+        run: npm run typecheck
+
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+      - run: npm ci
+      - name: ffmpeg installieren (Audio-Dauer-Wächter brauchen ffprobe)
+        run: sudo apt-get update -q && sudo apt-get install -y -q ffmpeg
+      - name: Vitest
+        run: npm test
+
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+      - run: npm ci
+      - name: Vite-Clients + Server-Bundle bauen
+        run: npm run build
+      - name: Build-Beleg
+        run: |
+          set -euo pipefail
+          test -f client/dist/index.html
+          test -f client/dist/screen.html
+          test -f client/dist/player.html
+          test -f client/dist/gm.html
+          test -f server/dist/index.js
+          # Laufzeit-Medien fürs Artefakt (Eval-9-Regression: ohne sie 404t AMP)
+          test -f assets/video/logo_stinger.webm
+          test -d assets/img/generated/pixel
+          test -f content/musik/songs.json
+          ls assets/video/tutorial_*.mp4 >/dev/null
+          du -sh client/dist server/dist assets content/musik
+      # Artefakt = AMP-Deploy-Inhalt (docs/DEPLOY-AMP.md §1/§7 — Pfadliste dort
+      # synchron halten!). assets/ + content/musik/ MÜSSEN mit: server/core/http.ts
+      # (findMediaRoot/findMusikMediaRoot) erwartet beide dist-relativ im App-Root.
+      - name: dist-Artefakt hochladen
+        uses: actions/upload-artifact@v7
+        with:
+          name: monkey-money-dist
+          path: |
+            client/dist/
+            server/dist/
+            content/packs/
+            content/musik/
+            assets/
+            package.json
+            package-lock.json
+
+  content-validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      # Der Validator nutzt NUR Node-Builtins — kein npm ci nötig.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - name: Fragen-Packs validieren (14-Regeln-Gate)
+        run: node tools/content/validate.mjs
+
+  # Das ECHTE E2E-Gate: ein kompletter Quick-Match gegen den gebauten Server.
+  # Der Match dauert ~4–8 min (Engine-Phasen laufen in Echtzeit) — Timeout großzügig.
+  # Die Bots selbst brechen bei hängender Phase > 90 s bzw. > 20 min Gesamtzeit ab.
+  bots-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+      - run: npm ci
+      - run: npm run build
+      - name: Server starten (PORT 8080) und auf /healthz warten
+        run: |
+          set -euo pipefail
+          mkdir -p e2e-logs
+          PORT=8080 DATA_DIR="$RUNNER_TEMP/mm-data" node server/dist/index.js \
+            >e2e-logs/server.log 2>&1 &
+          echo $! > server.pid
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:8080/healthz >/dev/null 2>&1; then
+              echo "Server bereit nach ${i} s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::Server nach 30 s nicht erreichbar (/healthz)"
+          cat e2e-logs/server.log
+          exit 1
+      - name: Bots-Vollmatch (3 Spieler, Seed 42, Quick)
+        run: |
+          set -o pipefail
+          npm run bots -- --players 3 --seed 42 --modus quick 2>&1 | tee e2e-logs/bots.log
+      - name: Server stoppen
+        if: always()
+        run: kill "$(cat server.pid)" 2>/dev/null || true
+      - name: E2E-Logs hochladen (auch bei roten Läufen)
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: bots-e2e-logs
+          path: e2e-logs/
+
+  # ---------------------------------------------------------------------------
+  # iPad-.ipa (unsigniert, Sideload via AltStore/Sideloadly — TECH-SPEC §6).
+  # User-Entscheid: die .ipa wird bei JEDEM Push gebaut (immer aktuellstes
+  # Artefakt, inkl. Standalone-Bundle mit allen Fragen/Medien).
+  # ---------------------------------------------------------------------------
+  ipa:
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+
+      # ---------- Standalone-Bundle (iPad = Server, docs/IPAD-SETUP.md Weg 3) ----------
+      # Der Vite-Build enthält host.html (Browser-Spiel-Server) + host-content.json
+      # (alle Fragen als statisches JSON). Beides wandert MIT den Laufzeit-Medien
+      # in die App — die .ipa braucht dann keinerlei externen Server mehr.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+      - run: npm ci
+      - name: Client-Bundle bauen (inkl. Standalone-Host)
+        run: npm run build:client
+      - name: Web-Bundle + Medien in den Wrapper kopieren (WebDist/ + Media/)
+        run: |
+          set -euo pipefail
+          rm -rf ios-wrapper/WebDist ios-wrapper/Media
+          cp -R client/dist ios-wrapper/WebDist
+          # Laufzeit-Medien, die /media/* im Standalone braucht (EmbeddedServer):
+          # Pixel-Dschungel-Bilder + Stinger-/Tutorial-Videos (Pfade wie assets/).
+          mkdir -p ios-wrapper/Media/img/generated
+          cp -R assets/img/generated/pixel ios-wrapper/Media/img/generated/pixel
+          cp -R assets/video ios-wrapper/Media/video
+          du -sh ios-wrapper/WebDist ios-wrapper/Media
+
+      - name: XcodeGen installieren
+        run: brew install xcodegen
+
+      - name: Xcode-Projekt generieren (project.yml → .xcodeproj)
+        run: xcodegen generate --spec ios-wrapper/project.yml --project ios-wrapper
+
+      # Muster GOOBY-Godot ios-ipa: xcodebuild OHNE Signing — die .ipa wird beim
+      # Sideload (AltStore/Sideloadly) sowieso neu signiert.
+      - name: Archive (unsigned)
+        run: |
+          set -euo pipefail
+          xcodebuild archive \
+            -project ios-wrapper/MonkeyMoneyPad.xcodeproj \
+            -scheme MonkeyMoneyPad -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath build/MonkeyMoneyPad.xcarchive \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" DEVELOPMENT_TEAM=""
+
+      - name: .ipa packen (Payload-Zip)
+        run: |
+          set -euo pipefail
+          mkdir -p build/Payload
+          cp -R build/MonkeyMoneyPad.xcarchive/Products/Applications/*.app build/Payload/
+          (cd build && zip -qry MonkeyMoney-unsigned.ipa Payload)
+          ls -la build/MonkeyMoney-unsigned.ipa
+
+      # Erwartungen (Orientierungen, Bundle-Id, ATS, Vollbild) werden aus
+      # ios-wrapper/Info.plist + project.yml ABGELEITET (Godot-Muster: hart
+      # kodierte Sets veralten). Druckt ".ipa gebaut: X MB, Y Dateien im Payload".
+      - name: .ipa verifizieren
+        run: python3 ios-wrapper/verify_ipa.py build/MonkeyMoney-unsigned.ipa ios-wrapper
+
+      - name: .ipa hochladen
+        uses: actions/upload-artifact@v7
+        with:
+          name: monkey-money-unsigned-ipa
+          path: build/MonkeyMoney-unsigned.ipa

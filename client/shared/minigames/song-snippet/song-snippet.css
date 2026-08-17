@@ -1,0 +1,405 @@
+/* Der Blitz-DJ — Plattenspieler-Bühne (Screen) + Buzzer-XXL (Player) */
+.ss-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: min(980px, 94vw);
+  margin: 0 auto;
+}
+
+/* ---------- Verfalls-Treppe ---------- */
+.ss-treppe {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.ss-stufe {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: var(--mm-radius-s);
+  background: var(--panel);
+  font-size: 0.85rem;
+  opacity: 0.75;
+}
+
+.ss-stufe b {
+  color: var(--mm-studio-led);
+  font-size: 0.75rem;
+}
+
+.ss-stufe.aktiv {
+  background: var(--gold);
+  color: var(--mm-outline);
+  opacity: 1;
+  transform: scale(1.12) rotate(var(--mm-kipp-r));
+  box-shadow: var(--mm-schatten-sticker);
+}
+
+.ss-stufe.aktiv b {
+  color: var(--mm-outline);
+}
+
+.ss-stufe.verfallen {
+  opacity: 0.25;
+  text-decoration: line-through;
+}
+
+/* ---------- Bühne: Plattenspieler + Status ---------- */
+.ss-buehne {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+  min-height: 220px;
+  background: var(--bg2);
+  border-radius: var(--mm-radius-xl);
+  border: var(--mm-outline-m) solid var(--mm-outline);
+  box-shadow: var(--mm-schatten-sticker-gross);
+  padding: 18px 24px;
+}
+
+.ss-plattenspieler {
+  position: relative;
+  width: 170px;
+  height: 170px;
+  flex: none;
+}
+
+.ss-platte {
+  width: 100%;
+  height: 100%;
+  border-radius: var(--mm-radius-rund);
+  background: radial-gradient(
+    circle,
+    var(--mm-outline) 55%,
+    color-mix(in srgb, var(--mm-outline) 95%, var(--mm-banana)) 56%,
+    var(--mm-outline) 60%
+  );
+  border: var(--mm-outline-m) solid var(--mm-outline);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--mm-schatten-sticker);
+}
+
+.ss-rille {
+  position: absolute;
+  inset: 16px;
+  border-radius: var(--mm-radius-rund);
+  border: 2px dashed rgb(255 246 227 / 18%);
+}
+
+.ss-label {
+  width: 56px;
+  height: 56px;
+  border-radius: var(--mm-radius-rund);
+  background: var(--gold);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.6rem;
+  border: var(--mm-outline-s) solid var(--mm-outline);
+}
+
+.ss-plattenspieler.dreht .ss-platte {
+  animation: ss-drehen 1.4s linear infinite;
+}
+
+@keyframes ss-drehen {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.ss-tonarm {
+  position: absolute;
+  top: -6px;
+  right: -14px;
+  width: 10px;
+  height: 96px;
+  border-radius: 6px;
+  background: var(--mm-ticket-paper);
+  border: var(--mm-outline-s) solid var(--mm-outline);
+  transform: rotate(24deg);
+  transform-origin: top center;
+  transition: transform var(--mm-dauer-show) var(--mm-kurve-snap);
+}
+
+.ss-plattenspieler.dreht .ss-tonarm {
+  transform: rotate(38deg);
+}
+
+.ss-status {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: center;
+}
+
+.ss-lauschen-banner {
+  font-family: var(--mm-font-display);
+  font-size: var(--mm-display-m);
+  color: var(--mm-studio-led);
+  margin: 0;
+  animation: ss-puls 1.1s ease-in-out infinite;
+}
+
+.ss-lauschen-banner.leise {
+  color: var(--muted);
+  animation: none;
+  font-size: var(--mm-display-s);
+}
+
+@keyframes ss-puls {
+  50% {
+    transform: scale(1.06);
+  }
+}
+
+.ss-rater-banner {
+  font-family: var(--mm-font-display);
+  font-size: var(--mm-display-m);
+  color: var(--mm-spotlight-pink);
+  margin: 0;
+}
+
+.ss-fotofinish {
+  display: block;
+  font-size: var(--mm-text-m);
+  color: var(--gold);
+}
+
+.ss-snippet-info {
+  margin: 0;
+  color: var(--muted);
+}
+
+.ss-wert {
+  color: var(--gold);
+  font-variant-numeric: var(--mm-ziffern);
+}
+
+.ss-titel-reveal {
+  font-family: var(--mm-font-display);
+  font-size: var(--mm-display-m);
+  color: var(--gold);
+  margin: 0;
+}
+
+.ss-artist-reveal {
+  margin: 0;
+  font-size: var(--mm-text-xl);
+}
+
+.ss-gewinner {
+  margin: 0;
+  color: var(--mm-banana-leaf);
+  font-weight: 700;
+}
+
+.ss-gewinner.keiner {
+  color: var(--muted);
+}
+
+/* ---------- Optionen (Screen: Mitraten) ---------- */
+.ss-optionen {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.ss-option {
+  background: var(--panel);
+  border-left: 10px solid var(--deko);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  font-size: clamp(1rem, 2.2vw, 1.4rem);
+  font-weight: 600;
+
+  /* Lange Songtitel: max. 2 Zeilen + Ellipsis statt mitten-im-Wort-Kappung
+     (der Volltext hängt als title-Attribut an der Option). */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ss-option.richtig {
+  outline: 4px solid var(--gold);
+  background: var(--mm-flaeche-chip);
+}
+
+.ss-option.falsch {
+  opacity: 0.35;
+}
+
+.ss-deko {
+  display: inline-block;
+  min-width: 3em;
+  color: var(--deko);
+  font-weight: 800;
+}
+
+.ss-treffer {
+  margin-left: 8px;
+  color: var(--gold);
+}
+
+.ss-sperren {
+  text-align: center;
+  color: var(--muted);
+  margin: 0;
+}
+
+/* Kompakt-Pass 800p (Podium-sicher): Treppe + Bühne + 4 Optionen + Gesperrt-
+   Zeile passen komplett ÜBER die Podium-Leiste (1280×800-Befund: C/D weg). */
+@media (max-height: 850px) {
+  .ss-screen {
+    gap: 8px;
+  }
+
+  .ss-stufe {
+    padding: 2px 8px;
+    font-size: 0.74rem;
+  }
+
+  .ss-stufe b {
+    font-size: 0.68rem;
+  }
+
+  .ss-buehne {
+    min-height: 116px;
+    padding: 8px 16px;
+    gap: 20px;
+  }
+
+  .ss-plattenspieler {
+    width: 100px;
+    height: 100px;
+  }
+
+  .ss-rille {
+    inset: 10px;
+  }
+
+  .ss-label {
+    width: 34px;
+    height: 34px;
+    font-size: 1rem;
+  }
+
+  .ss-tonarm {
+    height: 58px;
+    top: -4px;
+    right: -8px;
+  }
+
+  .ss-lauschen-banner,
+  .ss-rater-banner,
+  .ss-titel-reveal {
+    font-size: var(--mm-display-s);
+  }
+
+  .ss-lauschen-banner.leise {
+    font-size: 1.3rem;
+  }
+
+  .ss-artist-reveal {
+    font-size: var(--mm-text-l);
+  }
+
+  .ss-optionen {
+    gap: 8px;
+  }
+
+  .ss-option {
+    padding: 8px 12px;
+  }
+}
+
+/* ---------- Player (iPhone hochkant) ---------- */
+.ss-player {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+  padding: 10px;
+}
+
+.ss-player.buzzerseite {
+  align-items: center;
+  justify-content: center;
+}
+
+.ss-player-kopf {
+  text-align: center;
+  background: var(--bg2);
+  border-radius: var(--radius);
+  padding: 10px;
+  font-size: 1.15rem;
+  width: 100%;
+}
+
+/* Buzzer-XXL: rund, riesig, nicht zu verfehlen (Tap-Ziel weit über Minimum). */
+.ss-buzzer {
+  width: min(72vw, 42dvh);
+  aspect-ratio: 1;
+  border-radius: var(--mm-radius-rund);
+  background: radial-gradient(
+    circle at 35% 30%,
+    color-mix(in srgb, var(--mm-spotlight-pink) 78%, var(--mm-ticket-paper)),
+    var(--mm-spotlight-pink) 60%
+  );
+  border: var(--mm-outline-l) solid var(--mm-outline);
+  box-shadow:
+    0 10px 0 0 color-mix(in srgb, var(--mm-spotlight-pink) 55%, var(--mm-outline)),
+    var(--mm-schatten-sticker-gross);
+  color: var(--mm-ticket-paper);
+  font-family: var(--mm-font-display);
+  font-size: clamp(2rem, 10vw, 3.2rem);
+  margin: auto 0;
+}
+
+.ss-buzzer:active {
+  transform: translateY(8px) scale(var(--mm-scale-gedrueckt));
+  box-shadow:
+    0 2px 0 0 color-mix(in srgb, var(--mm-spotlight-pink) 55%, var(--mm-outline)),
+    var(--mm-schatten-gedrueckt);
+}
+
+.ss-buzzer.aus {
+  filter: grayscale(0.8) brightness(0.6);
+}
+
+.ss-buzzer-hinweis {
+  text-align: center;
+  min-height: 2.6em;
+  padding: 0 12px;
+}
+
+.ss-antwort-button {
+  flex: 1;
+  min-height: 13dvh;
+  font-size: 1.2rem;
+  font-weight: 700;
+  text-align: left;
+  border-left: 12px solid var(--deko);
+  background: var(--panel);
+}
+
+.ss-verdeckt {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-align: center;
+  padding: 20px;
+}

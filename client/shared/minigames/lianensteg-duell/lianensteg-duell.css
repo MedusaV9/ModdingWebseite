@@ -1,0 +1,381 @@
+/* Duell am Lianensteg — Hängesteg über der Schlucht: zwei Puppen, Planken,
+   Seile, Wett-Fähnchen; Player: Gegner-Grid, Wett-Buttons, XXL-Antworten. */
+.ld-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(920px, 94vw);
+  margin: 0 auto;
+}
+
+.ld-kopf {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.ld-badge {
+  background: var(--gold);
+  color: var(--mm-outline, #1a1208);
+  border-radius: var(--mm-radius-s);
+  border: var(--mm-outline-m) solid var(--mm-outline);
+  box-shadow: var(--mm-schatten-sticker);
+  padding: 3px 10px;
+  font-weight: 800;
+  rotate: var(--mm-kipp-l, -2deg);
+}
+
+.ld-titel {
+  text-align: center;
+  margin: 0;
+}
+
+/* ---------- Der Hängesteg ---------- */
+.ld-steg {
+  position: relative;
+  background: radial-gradient(
+    140% 90% at 50% 115%,
+    color-mix(in srgb, var(--mm-deep-palm) 35%, transparent) 0%,
+    transparent 75%
+  );
+  border-radius: var(--mm-radius-l);
+  border: var(--mm-outline-m) solid var(--mm-outline);
+  box-shadow: var(--mm-schatten-sticker);
+  padding: 18px 24px 8px;
+  overflow: hidden;
+}
+
+.ld-seil {
+  height: 4px;
+  border-radius: 2px;
+  /* Holz-/Seil-Brauntöne: BEWUSSTE Requisiten-Farben außerhalb der Palette
+   * (siehe tokens.css-Ausnahmen); repeating-linear = Textur, kein Verlauf.
+   * Gilt auch für .ld-planke unten. */
+  background: repeating-linear-gradient(90deg, #8a5a3b 0 14px, #6d4429 14px 22px);
+}
+
+.ld-seil.oben {
+  margin-bottom: 44px;
+}
+
+.ld-seil.unten {
+  margin-top: 4px;
+}
+
+.ld-planken {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+}
+
+.ld-planke {
+  width: 34px;
+  height: 12px;
+  background: #a9743f;
+  border: 2px solid var(--mm-outline);
+  border-radius: 3px;
+  transform: rotate(-1deg);
+}
+
+.ld-planke:nth-child(2n) {
+  transform: rotate(2deg);
+  background: #97662f;
+}
+
+.ld-puppen {
+  position: absolute;
+  inset: 6px 24px auto;
+  display: flex;
+  justify-content: space-between;
+  pointer-events: none;
+}
+
+.ld-duellant {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  transition: transform 600ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Der Duell-Stand schiebt beide Puppen: + = Herausforderer drängt nach rechts. */
+.ld-duellant.links {
+  transform: translateX(calc(var(--schub, 0%) * 1));
+}
+
+.ld-duellant.rechts {
+  transform: translateX(calc(var(--schub, 0%) * 1)) scaleX(-1);
+}
+
+.ld-duellant.rechts .ld-name,
+.ld-duellant.rechts .ld-pips {
+  transform: scaleX(-1);
+}
+
+.ld-puppe {
+  width: 64px;
+  height: 64px;
+}
+
+.ld-puppe.gross {
+  width: 110px;
+  height: 110px;
+}
+
+.ld-name {
+  font-weight: 800;
+  font-size: 0.85rem;
+  background: var(--panel);
+  border-radius: var(--mm-radius-s);
+  padding: 1px 8px;
+  border: 2px solid var(--mm-outline);
+}
+
+.ld-pips {
+  display: flex;
+  gap: 3px;
+}
+
+.ld-pip {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid var(--mm-outline);
+  background: var(--panel);
+}
+
+.ld-pip.voll {
+  background: var(--gold);
+}
+
+.ld-faehnchen {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.ld-fahne {
+  font-size: 0.8rem;
+  background: var(--panel);
+  border: 2px solid var(--mm-outline);
+  border-radius: var(--mm-radius-s);
+  padding: 1px 8px;
+}
+
+.ld-fahne.geheim {
+  font-style: italic;
+}
+
+/* ---------- Countdown + Frage (Screen) ---------- */
+.ld-countdown {
+  font-size: clamp(4rem, 16vw, 9rem);
+  font-weight: 900;
+  text-align: center;
+  color: var(--gold);
+  text-shadow: 0 4px 0 var(--mm-outline);
+  animation: ld-puls 1s infinite;
+}
+
+.ld-countdown.klein {
+  font-size: clamp(3rem, 20vw, 6rem);
+}
+
+@keyframes ld-puls {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.15);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.ld-sudden {
+  text-align: center;
+  font-weight: 900;
+  color: var(--rot);
+  margin: 0;
+  animation: ld-puls 0.8s infinite;
+}
+
+.ld-frage {
+  text-align: center;
+  margin: 0;
+  font-size: clamp(1.2rem, 3vw, 2rem);
+}
+
+.ld-optionen {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.ld-option {
+  background: var(--panel);
+  border: var(--mm-outline-m) solid var(--mm-outline);
+  border-left: 10px solid var(--deko, var(--gold));
+  border-radius: var(--mm-radius-m);
+  padding: 10px 14px;
+  font-weight: 700;
+}
+
+.ld-deko {
+  font-weight: 900;
+  margin-right: 6px;
+}
+
+.ld-abrechnung {
+  text-align: center;
+  margin: 0;
+}
+
+.ld-bilanz {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ld-bilanz-zeile {
+  display: grid;
+  grid-template-columns: 36px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  background: var(--panel);
+  border: 2px solid var(--mm-outline);
+  border-radius: var(--mm-radius-m);
+  padding: 4px 12px;
+}
+
+.ld-bilanz-zeile.gewonnen {
+  border-color: var(--gold);
+}
+
+.ld-mini {
+  width: 32px;
+  height: 32px;
+}
+
+/* ---------- Player ---------- */
+.ld-player {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.ld-player-titel {
+  text-align: center;
+  margin: 0;
+}
+
+.ld-status {
+  background: var(--panel);
+  border: var(--mm-outline-m) solid var(--mm-outline);
+  border-radius: var(--mm-radius-l);
+  box-shadow: var(--mm-schatten-sticker);
+  padding: 16px;
+  text-align: center;
+  font-size: 1.05rem;
+}
+
+.ld-gegner-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.ld-gegner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  background: var(--panel);
+  border: var(--mm-outline-m) solid var(--mm-outline);
+  border-radius: var(--mm-radius-l);
+  box-shadow: var(--mm-schatten-sticker);
+  padding: 12px 8px;
+  font-weight: 800;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.ld-gegner:active {
+  transform: translateY(2px);
+}
+
+.ld-gegner.geschuetzt,
+.ld-gegner:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.ld-wett-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.ld-wett-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  background: var(--panel);
+  border: var(--mm-outline-m) solid var(--mm-outline);
+  border-radius: var(--mm-radius-l);
+  box-shadow: var(--mm-schatten-sticker);
+  padding: 16px 8px;
+  font-weight: 900;
+  font-size: 1.1rem;
+  cursor: pointer;
+}
+
+.ld-wett-button:active {
+  transform: translateY(2px);
+}
+
+.ld-frage-klein {
+  text-align: center;
+  font-weight: 700;
+  margin: 0;
+}
+
+.ld-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 64px;
+  background: var(--panel);
+  border: var(--mm-outline-m) solid var(--mm-outline);
+  border-left: 12px solid var(--deko, var(--gold));
+  border-radius: var(--mm-radius-l);
+  box-shadow: var(--mm-schatten-sticker);
+  padding: 10px 14px;
+  font-size: 1.1rem;
+  font-weight: 800;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ld-button:active {
+  transform: translateY(2px);
+}
+
+.ld-button.gewaehlt {
+  outline: 4px solid var(--gold);
+}
+
+.ld-button.gesperrt:not(.gewaehlt) {
+  opacity: 0.5;
+}
+
+.ld-button:disabled {
+  cursor: not-allowed;
+}

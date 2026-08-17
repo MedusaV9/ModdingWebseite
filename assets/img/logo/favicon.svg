@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="MONKEY MONEY App-Icon">
+  <title>Bananen-Dollar — App-Icon</title>
+  <defs>
+    <radialGradient id="glow" cx="0.5" cy="0.42" r="0.55">
+      <stop offset="0" stop-color="#F5B301" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#F5B301" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="512" height="512" rx="96" fill="#0E2A1F"/>
+  <rect x="14" y="14" width="484" height="484" rx="84" fill="none" stroke="#F5B301" stroke-width="12"/>
+  <circle cx="256" cy="248" r="210" fill="url(#glow)"/>
+  <g transform="translate(256 236) rotate(-6) scale(1.9)">
+    <path d="M -92 -20 C -78 26 -34 46 6 46 C 46 46 80 18 90 -24" fill="none" stroke="#1A1208" stroke-width="46" stroke-linecap="round"/>
+    <path d="M -92 -20 C -78 26 -34 46 6 46 C 46 46 80 18 90 -24" fill="none" stroke="#FFC93C" stroke-width="35" stroke-linecap="round"/>
+    <path d="M -78 -16 C -64 20 -28 36 4 37" fill="none" stroke="#FFDE6B" stroke-width="9" stroke-linecap="round"/>
+    <path d="M -100 -42 L -105 -56" stroke="#1A1208" stroke-width="15" stroke-linecap="round"/>
+    <path d="M 96 -46 L 100 -60" stroke="#1A1208" stroke-width="15" stroke-linecap="round"/>
+    <g stroke="#1A1208" stroke-width="5">
+      <rect x="-21" y="0" width="15" height="90" rx="7" fill="#F5B301" transform="rotate(3)"/>
+      <rect x="8" y="-2" width="15" height="90" rx="7" fill="#F5B301" transform="rotate(-2)"/>
+    </g>
+  </g>
+</svg>

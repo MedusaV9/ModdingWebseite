@@ -1,0 +1,292 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://monkey-money.example/content/schema/frage.schema.json",
+  "title": "MONKEY MONEY Fragen-Pack (Schema-Version 1)",
+  "description": "Maschinenlesbare Fassung von docs/CONTENT-PLAN.md §2. Eine Pack-Datei pro Unter-Kategorie: { pack_meta, fragen[] }. Die 14 semantischen Validierungsregeln (§2.5) prüft tools/content/validate.mjs — dieses Schema deckt Struktur & Enums ab.",
+  "type": "object",
+  "required": ["pack_meta", "fragen"],
+  "additionalProperties": false,
+  "properties": {
+    "pack_meta": { "$ref": "#/$defs/pack_meta" },
+    "fragen": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/frage" }
+    }
+  },
+  "$defs": {
+    "pack_meta": {
+      "type": "object",
+      "required": [
+        "name",
+        "oberkategorie",
+        "unterkategorie",
+        "schema_version",
+        "sprache",
+        "anzahl"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "oberkategorie": {
+          "type": ["string", "null"],
+          "description": "Slug aus Taxonomie 1.1; null nur bei Misch-Packs (z. B. _eich)."
+        },
+        "unterkategorie": {
+          "type": ["string", "null"],
+          "description": "Slug aus Taxonomie 1.2; null nur bei Misch-Packs (z. B. _eich)."
+        },
+        "schema_version": { "const": 1 },
+        "sprache": { "const": "de" },
+        "anzahl": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Vom Formatter gepflegt; muss fragen.length entsprechen."
+        }
+      }
+    },
+    "iso_datum": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+    "medien": {
+      "type": "object",
+      "required": ["datei", "quelle_art", "lizenz", "spoiler_sicher", "farbkritisch"],
+      "additionalProperties": false,
+      "properties": {
+        "datei": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Pfad relativ zu content/ ODER zum Repo-Root (z. B. assets/img/generated/...); der Server liefert Repo-assets/ unter /media/ aus."
+        },
+        "quelle_art": { "enum": ["generiert", "wikimedia", "eigenaufnahme", "cc_pack"] },
+        "lizenz": {
+          "enum": ["eigen", "CC0", "Public Domain", "CC-BY 3.0", "CC-BY 4.0", "OGA-BY 3.0"]
+        },
+        "autor": { "type": "string" },
+        "quelle_url": { "type": "string" },
+        "aenderungen": { "type": "string" },
+        "spoiler_sicher": { "type": "boolean" },
+        "farbkritisch": { "type": "boolean" }
+      }
+    },
+    "schaetz_objekt": {
+      "type": "object",
+      "required": [
+        "richtwert",
+        "einheit",
+        "toleranz_prozent",
+        "eingabe_min",
+        "eingabe_max",
+        "skala"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "richtwert": { "type": "number" },
+        "einheit": { "type": "string", "minLength": 1 },
+        "toleranz_prozent": { "type": "number", "minimum": 1, "maximum": 50 },
+        "eingabe_min": { "type": "number" },
+        "eingabe_max": { "type": "number" },
+        "skala": { "enum": ["linear", "log"] }
+      }
+    },
+    "frage_basis": {
+      "type": "object",
+      "required": [
+        "id",
+        "schema_version",
+        "kategorie",
+        "unterkategorie",
+        "schwierigkeit",
+        "region",
+        "typ",
+        "altersfreigabe",
+        "tags",
+        "text",
+        "tipps",
+        "erklaerung",
+        "quelle",
+        "stand_datum",
+        "verfallsdatum",
+        "faktencheck_status",
+        "erstellt_von",
+        "erstellt_am"
+      ],
+      "properties": {
+        "id": { "type": "string", "pattern": "^q_[a-z0-9_]+_[0-9]{6}$" },
+        "schema_version": { "const": 1 },
+        "kategorie": { "type": "string", "minLength": 1 },
+        "unterkategorie": { "type": "string", "minLength": 1 },
+        "schwierigkeit": { "enum": ["leicht", "mittel", "schwer", "ultrahard"] },
+        "region": { "enum": ["de", "global"] },
+        "typ": {
+          "enum": [
+            "choice",
+            "wahr_falsch",
+            "schaetz",
+            "sortier",
+            "bild_pixel",
+            "audio",
+            "emoji",
+            "mehrfach"
+          ]
+        },
+        "altersfreigabe": { "enum": ["ab0", "ab12", "ab18"] },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "text": { "type": "string", "minLength": 1, "maxLength": 190 },
+        "tipps": { "type": "array", "items": { "type": "string", "maxLength": 90 } },
+        "erklaerung": { "type": "string", "minLength": 1, "maxLength": 220 },
+        "quelle": { "type": "string", "minLength": 1 },
+        "stand_datum": { "$ref": "#/$defs/iso_datum" },
+        "verfallsdatum": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/iso_datum" }] },
+        "faktencheck_status": { "enum": ["entwurf", "geprueft", "community"] },
+        "faktencheck_notiz": { "type": "string" },
+        "erstellt_von": { "type": "string", "minLength": 1 },
+        "geprueft_von": { "type": "string" },
+        "erstellt_am": { "$ref": "#/$defs/iso_datum" }
+      }
+    },
+    "frage": {
+      "allOf": [
+        { "$ref": "#/$defs/frage_basis" },
+        {
+          "oneOf": [
+            {
+              "title": "choice",
+              "type": "object",
+              "properties": {
+                "typ": { "const": "choice" },
+                "antworten": {
+                  "type": "array",
+                  "items": { "type": "string", "maxLength": 40 },
+                  "minItems": 4,
+                  "maxItems": 4
+                },
+                "korrekt": { "type": "integer", "minimum": 0, "maximum": 3 },
+                "tipps": { "minItems": 3, "maxItems": 3 },
+                "medien": { "$ref": "#/$defs/medien" }
+              },
+              "required": ["antworten", "korrekt"]
+            },
+            {
+              "title": "wahr_falsch",
+              "type": "object",
+              "properties": {
+                "typ": { "const": "wahr_falsch" },
+                "korrekt_bool": { "type": "boolean" },
+                "tipps": { "maxItems": 0 }
+              },
+              "required": ["korrekt_bool"]
+            },
+            {
+              "title": "schaetz",
+              "type": "object",
+              "properties": {
+                "typ": { "const": "schaetz" },
+                "schaetz": { "$ref": "#/$defs/schaetz_objekt" },
+                "tipps": { "minItems": 3, "maxItems": 3 }
+              },
+              "required": ["schaetz"]
+            },
+            {
+              "title": "sortier",
+              "type": "object",
+              "properties": {
+                "typ": { "const": "sortier" },
+                "elemente": {
+                  "type": "array",
+                  "items": { "type": "string", "maxLength": 40 },
+                  "minItems": 4,
+                  "maxItems": 4
+                },
+                "korrekt_reihenfolge": {
+                  "type": "array",
+                  "items": { "type": "integer", "minimum": 0, "maximum": 3 },
+                  "minItems": 4,
+                  "maxItems": 4
+                },
+                "aufloesung_werte": {
+                  "type": "array",
+                  "items": { "type": "string" },
+                  "minItems": 4,
+                  "maxItems": 4
+                },
+                "tipps": { "minItems": 3, "maxItems": 3 }
+              },
+              "required": ["elemente", "korrekt_reihenfolge", "aufloesung_werte"]
+            },
+            {
+              "title": "bild_pixel",
+              "type": "object",
+              "properties": {
+                "typ": { "const": "bild_pixel" },
+                "antworten": {
+                  "type": "array",
+                  "items": { "type": "string", "maxLength": 40 },
+                  "minItems": 4,
+                  "maxItems": 4
+                },
+                "korrekt": { "type": "integer", "minimum": 0, "maximum": 3 },
+                "medien": { "$ref": "#/$defs/medien" },
+                "tipps": { "minItems": 3, "maxItems": 3 }
+              },
+              "required": ["antworten", "korrekt", "medien"]
+            },
+            {
+              "title": "audio",
+              "type": "object",
+              "properties": {
+                "typ": { "const": "audio" },
+                "antworten": {
+                  "type": "array",
+                  "items": { "type": "string", "maxLength": 40 },
+                  "minItems": 4,
+                  "maxItems": 4
+                },
+                "korrekt": { "type": "integer", "minimum": 0, "maximum": 3 },
+                "medien": { "$ref": "#/$defs/medien" },
+                "tipps": { "minItems": 3, "maxItems": 3 }
+              },
+              "required": ["antworten", "korrekt", "medien"]
+            },
+            {
+              "title": "emoji",
+              "type": "object",
+              "properties": {
+                "typ": { "const": "emoji" },
+                "emojis": { "type": "string", "minLength": 3 },
+                "antworten": {
+                  "type": "array",
+                  "items": { "type": "string", "maxLength": 40 },
+                  "minItems": 4,
+                  "maxItems": 4
+                },
+                "korrekt": { "type": "integer", "minimum": 0, "maximum": 3 },
+                "freitext_akzeptanzen": { "type": "array", "items": { "type": "string" } },
+                "tipps": { "minItems": 3, "maxItems": 3 }
+              },
+              "required": ["emojis", "antworten", "korrekt"]
+            },
+            {
+              "title": "mehrfach",
+              "type": "object",
+              "properties": {
+                "typ": { "const": "mehrfach" },
+                "antworten": {
+                  "type": "array",
+                  "items": { "type": "string", "maxLength": 40 },
+                  "minItems": 6,
+                  "maxItems": 6
+                },
+                "korrekt_mehrfach": {
+                  "type": "array",
+                  "items": { "type": "integer", "minimum": 0, "maximum": 5 },
+                  "minItems": 2,
+                  "maxItems": 2
+                },
+                "tipps": { "minItems": 3, "maxItems": 3 }
+              },
+              "required": ["antworten", "korrekt_mehrfach"]
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

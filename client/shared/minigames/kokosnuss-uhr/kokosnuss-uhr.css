@@ -1,0 +1,232 @@
+/* Stopp die Kokosnuss-Uhr — Bühne (Geldsack + Ticks) und Player (XXL-Buttons).
+   Nutzt die Banana-Vault-Tokens; Fallbacks auf die base.css-Variablen. */
+@import "../../styles/tokens.css";
+
+/* ---------- Timer-Banane (gemeinsamer Baustein aller 3 Spiele dieses Agents) ---------- */
+
+.mm-timer-banane {
+  width: min(420px, 60vw);
+  margin: 0 auto;
+}
+
+.mm-timer-banane svg {
+  display: block;
+  width: 100%;
+}
+
+/* Fortschritt (1 = volle Zeit, 0 = aufgegessen) via CSS-Var — wie im Asset dokumentiert */
+.mm-timer-banane .banane-voll {
+  clip-path: inset(-20% calc((1 - var(--fortschritt, 1)) * 88% + 6%) -20% -2%);
+}
+
+.mm-timer-banane.kritisch {
+  animation: mm-banane-puls 0.5s ease-in-out infinite;
+}
+
+@keyframes mm-banane-puls {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.06) rotate(1deg);
+  }
+}
+
+/* ---------- Screen ---------- */
+
+.ku-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: min(960px, 94vw);
+  margin: 0 auto;
+}
+
+.ku-kopf {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--mm-raum-6, 32px);
+  flex-wrap: wrap;
+}
+
+.ku-sack {
+  display: flex;
+  align-items: center;
+  gap: var(--mm-raum-3, 12px);
+  padding: var(--mm-raum-3, 12px) var(--mm-raum-5, 24px);
+  background: var(--mm-flaeche, var(--panel));
+  border-radius: var(--mm-radius-l, 20px);
+  rotate: var(--mm-kipp-r, 2.5deg);
+}
+
+.ku-sack-emoji {
+  font-size: 3rem;
+  display: inline-block;
+  transition: transform var(--mm-dauer-normal, 240ms) var(--mm-kurve-bounce, ease);
+}
+
+.ku-sack-betrag {
+  font-size: var(--mm-display-m, 2.5rem);
+  font-variant-numeric: tabular-nums;
+  color: var(--mm-vault-gold, var(--gold));
+}
+
+.ku-frage {
+  text-align: center;
+  font-size: clamp(1.4rem, 3.5vw, 2.4rem);
+}
+
+.ku-optionen {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.ku-option {
+  background: var(--mm-flaeche, var(--panel));
+  border-left: 10px solid var(--deko);
+  border-radius: var(--mm-radius-m, 12px);
+  box-shadow: var(--mm-schatten-sticker, none);
+  padding: 18px;
+  font-size: clamp(1.1rem, 2.4vw, 1.6rem);
+  font-weight: 600;
+
+  /* Lange Antworten: max. 2 Zeilen + Ellipsis statt mitten-im-Wort-Kappung
+     (der Volltext hängt als title-Attribut an der Option). */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ku-option.richtig {
+  outline: 4px solid var(--mm-vault-gold, var(--gold));
+  background: var(--mm-flaeche-chip);
+}
+
+.ku-option.falsch {
+  opacity: 0.35;
+}
+
+.ku-deko {
+  display: inline-block;
+  min-width: 3.2em;
+  color: var(--deko);
+  font-weight: 800;
+}
+
+.ku-eis-reihe {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  align-items: center;
+  min-height: 44px;
+}
+
+.ku-eis-chip {
+  background: rgb(41 217 213 / 18%);
+  border: 2px solid var(--mm-studio-led, #29d9d5);
+  border-radius: var(--mm-radius-rund, 999px);
+  padding: 6px 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.ku-eis-chip.richtig {
+  border-color: var(--mm-leaf, var(--gruen));
+  background: rgb(34 165 89 / 18%);
+}
+
+/* Kompakt-Pass 800p (Podium-sicher): Sack + Banane + 3-zeilige Frage + 4
+   Optionen + Eis-Reihe passen komplett ÜBER die Podium-Leiste. */
+@media (max-height: 850px) {
+  .ku-screen {
+    gap: 10px;
+  }
+
+  .ku-kopf {
+    gap: 16px;
+  }
+
+  .ku-sack {
+    padding: 6px 16px;
+    gap: 8px;
+  }
+
+  .ku-sack-emoji {
+    font-size: 2rem;
+  }
+
+  .ku-sack-betrag {
+    font-size: var(--mm-display-s, 2rem);
+  }
+
+  .ku-option {
+    padding: 10px 14px;
+  }
+
+  .ku-eis-reihe {
+    min-height: 32px;
+    gap: 6px;
+  }
+}
+
+/* ---------- Player (iPhone hochkant, XXL-Targets) ---------- */
+
+.ku-player {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+  padding: 10px;
+}
+
+.ku-player-sack {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 10px;
+  border-radius: var(--mm-radius-m, 12px);
+  background: var(--mm-flaeche, var(--panel));
+  font-weight: 700;
+}
+
+.ku-player-sack .ku-sack-betrag {
+  font-size: var(--mm-text-xl, 1.5rem);
+}
+
+.ku-player-sack.eingefroren {
+  background: rgb(41 217 213 / 20%);
+  outline: 3px solid var(--mm-studio-led, #29d9d5);
+}
+
+.ku-frage-klein {
+  text-align: center;
+  margin: 4px 0;
+  color: var(--muted);
+}
+
+.ku-button {
+  flex: 1;
+  min-height: 15dvh;
+  font-size: 1.25rem;
+  font-weight: 700;
+  text-align: left;
+  border-left: 12px solid var(--deko);
+  background: var(--mm-flaeche, var(--panel));
+}
+
+.ku-button.gewaehlt {
+  outline: 4px solid var(--mm-vault-gold, var(--gold));
+  background: var(--mm-flaeche-chip);
+}
+
+.ku-button.gesperrt:not(.gewaehlt) {
+  opacity: 0.35;
+}

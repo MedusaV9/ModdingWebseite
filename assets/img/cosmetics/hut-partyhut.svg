@@ -1,0 +1,21 @@
+<!-- Kopf Party-Hut"  Overlay für den #accessoire-Slot (viewBox 0 0 240 320).
+     Die Konfetti-Spitze (class mm-partyhut-konfetti) flattert per CSS (meta-avatar.ts). -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 320">
+  <g transform="rotate(7 120 54)">
+    <path d="M 98 58 L 120 10 L 142 58 C 128 64 112 64 98 58 Z"
+      fill="#29D9D5" stroke="#1A1208" stroke-width="4" stroke-linejoin="round"/>
+    <path d="M 114.2 23 L 125.8 23 L 129.3 31 L 110.7 31 Z" fill="#F5B301"
+      stroke="#1A1208" stroke-width="2.5" stroke-linejoin="round"/>
+    <path d="M 106.3 41 L 133.7 41 L 137.6 50 L 102.4 50 Z" fill="#FF3E8E"
+      stroke="#1A1208" stroke-width="2.5" stroke-linejoin="round"/>
+    <circle cx="120" cy="10" r="6" fill="#FFC93C" stroke="#1A1208" stroke-width="3"/>
+    <g class="mm-partyhut-konfetti">
+      <rect x="102" y="4" width="5" height="5" rx="1" fill="#FF3E8E" transform="rotate(20 104 6)"/>
+      <rect x="133" y="1" width="5" height="5" rx="1" fill="#8FE04B" transform="rotate(-15 135 3)"/>
+      <circle cx="120" cy="0.5" r="2.4" fill="#F5B301"/>
+      <rect x="110" y="0" width="4" height="4" rx="1" fill="#29D9D5" transform="rotate(30 112 2)"/>
+      <circle cx="141" cy="11" r="2.2" fill="#B26BFF"/>
+      <circle cx="99" cy="13" r="2" fill="#FFF6E3"/>
+    </g>
+  </g>
+</svg>

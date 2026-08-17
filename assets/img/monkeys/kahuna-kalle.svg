@@ -1,0 +1,144 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 320" class="mm-affe" data-affe="kahuna-kalle" role="img" aria-label="Kahuna-Kalle">
+  <title>Kahuna-Kalle  der Surfer (Schwanz hält das Surfbrett + Shaka)</title>
+  <style>
+    svg[data-affe="kahuna-kalle"] .fell{fill:var(--fell,#C87137)}
+    svg[data-affe="kahuna-kalle"] .fell-hell{fill:var(--fell-hell,#F2CFA5)}
+    svg[data-affe="kahuna-kalle"] .fell-s{stroke:var(--fell,#C87137);fill:none}
+    svg[data-affe="kahuna-kalle"] .o{stroke:#1A1208;stroke-width:5;stroke-linejoin:round;stroke-linecap:round}
+    svg[data-affe="kahuna-kalle"] .os{stroke:#1A1208;fill:none;stroke-linecap:round}
+    svg[data-affe="kahuna-kalle"] .brett{fill:var(--prop,#29D9D5)}
+    svg[data-affe="kahuna-kalle"] #kopf,svg[data-affe="kahuna-kalle"] #arm-l,svg[data-affe="kahuna-kalle"] #arm-r,svg[data-affe="kahuna-kalle"] #bein-l,svg[data-affe="kahuna-kalle"] #bein-r,svg[data-affe="kahuna-kalle"] #schwanz,svg[data-affe="kahuna-kalle"] #frisur{transform-box:view-box}
+    svg[data-affe="kahuna-kalle"] #kopf{transform-origin:120px 144px}
+    svg[data-affe="kahuna-kalle"] #arm-l{transform-origin:88px 160px}
+    svg[data-affe="kahuna-kalle"] #arm-r{transform-origin:152px 160px}
+    svg[data-affe="kahuna-kalle"] #bein-l{transform-origin:102px 240px}
+    svg[data-affe="kahuna-kalle"] #bein-r{transform-origin:138px 240px}
+    svg[data-affe="kahuna-kalle"] #schwanz{transform-origin:144px 240px}
+    svg[data-affe="kahuna-kalle"] #frisur{transform-origin:120px 70px}
+    svg[data-affe="kahuna-kalle"] .gesicht{display:none}
+    svg[data-affe="kahuna-kalle"] #gesicht-neutral{display:inline}
+    svg[data-affe="kahuna-kalle"][data-gesicht=jubel] #gesicht-neutral,svg[data-affe="kahuna-kalle"][data-gesicht=frust] #gesicht-neutral,svg[data-affe="kahuna-kalle"][data-gesicht=denk] #gesicht-neutral{display:none}
+    svg[data-affe="kahuna-kalle"][data-gesicht=jubel] #gesicht-jubel{display:inline}
+    svg[data-affe="kahuna-kalle"][data-gesicht=frust] #gesicht-frust{display:inline}
+    svg[data-affe="kahuna-kalle"][data-gesicht=denk] #gesicht-denk{display:inline}
+  </style>
+
+  <g id="schwanz">
+    <!-- DER Gag: der Schwanz hält das Surfbrett -->
+    <g id="prop-surfbrett">
+      <path class="brett o" d="M 204 84 C 220 124 222 210 208 288 C 204 296 194 296 190 288 C 176 210 178 124 194 84 C 197 76 201 76 204 84 Z"/>
+      <path d="M 199 96 C 192 150 192 230 199 280" fill="none" stroke="#FFF6E3" stroke-width="7"/>
+      <circle cx="199" cy="140" r="8" fill="#FF3E8E" stroke="#1A1208" stroke-width="3"/>
+      <path class="o" d="M 190 268 C 182 272 178 280 178 288 C 184 286 190 282 192 276 Z" fill="#FFF6E3" stroke-width="3.5"/>
+    </g>
+    <path class="os" d="M 142 242 C 172 244 186 226 186 200 C 186 190 192 184 200 186" stroke-width="15"/>
+    <path class="fell-s" d="M 142 242 C 172 244 186 226 186 200 C 186 190 192 184 200 186" stroke-width="8.5"/>
+  </g>
+
+  <g id="bein-l">
+    <path class="os" d="M 102 240 C 98 262 96 278 94 294" stroke-width="19"/>
+    <path class="fell-s" d="M 102 240 C 98 262 96 278 94 294" stroke-width="12"/>
+    <ellipse class="fell o" cx="88" cy="301" rx="16" ry="9"/>
+  </g>
+  <g id="bein-r">
+    <path class="os" d="M 138 240 C 142 262 144 278 146 294" stroke-width="19"/>
+    <path class="fell-s" d="M 138 240 C 142 262 144 278 146 294" stroke-width="12"/>
+    <ellipse class="fell o" cx="152" cy="301" rx="16" ry="9"/>
+  </g>
+
+  <g id="koerper">
+    <!-- Freier Oberkörper mit Surfer-Bauch -->
+    <path class="fell o" d="M 88 154 C 78 178 80 214 92 242 L 148 242 C 160 214 162 178 152 154 C 138 142 100 142 88 154 Z"/>
+    <ellipse class="fell-hell o" cx="120" cy="200" rx="22" ry="28" stroke-width="4"/>
+    <!-- Boardshorts mit Hibiskus -->
+    <path class="o" d="M 90 214 L 150 214 C 152 226 152 236 150 244 L 90 244 C 88 236 88 226 90 214 Z" fill="#F97316"/>
+    <path d="M 92 222 Q 104 216 112 224 Q 120 216 132 222" fill="none" stroke="#FFF6E3" stroke-width="3" stroke-linecap="round"/>
+    <g fill="#FFF6E3">
+      <circle cx="138" cy="230" r="3"/><circle cx="143" cy="234" r="3"/><circle cx="137" cy="237" r="3"/>
+      <circle cx="132" cy="234" r="3"/><circle cx="138" cy="233" r="2" fill="#F5B301"/>
+    </g>
+    <!-- Blumenkette (Lei) -->
+    <g stroke="#1A1208" stroke-width="2.5">
+      <circle cx="94" cy="156" r="6" fill="#FF3E8E"/>
+      <circle cx="106" cy="164" r="6" fill="#FFC93C"/>
+      <circle cx="120" cy="167" r="6" fill="#FFF6E3"/>
+      <circle cx="134" cy="164" r="6" fill="#FF3E8E"/>
+      <circle cx="146" cy="156" r="6" fill="#FFC93C"/>
+    </g>
+  </g>
+
+  <g id="arm-l">
+    <!-- Shaka, Brudi! -->
+    <path class="os" d="M 88 160 C 70 152 56 138 50 122" stroke-width="19"/>
+    <path class="fell-s" d="M 88 160 C 70 152 56 138 50 122" stroke-width="12"/>
+    <circle class="fell o" cx="47" cy="114" r="10.5"/>
+    <path class="os" d="M 40 108 L 28 100" stroke-width="9"/>
+    <path class="fell-s" d="M 40 108 L 28 100" stroke-width="5"/>
+    <path class="os" d="M 50 105 L 52 91" stroke-width="9"/>
+    <path class="fell-s" d="M 50 105 L 52 91" stroke-width="5"/>
+  </g>
+  <g id="arm-r">
+    <path class="os" d="M 152 160 C 164 180 170 198 172 214" stroke-width="19"/>
+    <path class="fell-s" d="M 152 160 C 164 180 170 198 172 214" stroke-width="12"/>
+    <circle class="fell o" cx="173" cy="221" r="10.5"/>
+  </g>
+
+  <g id="kopf">
+    <circle class="fell o" cx="120" cy="96" r="41"/>
+    <circle class="fell o" cx="77" cy="92" r="12"/>
+    <circle class="fell o" cx="163" cy="92" r="12"/>
+    <circle class="fell-hell" cx="77" cy="92" r="5.5"/>
+    <circle class="fell-hell" cx="163" cy="92" r="5.5"/>
+    <ellipse class="fell-hell o" cx="120" cy="110" rx="25" ry="18" stroke-width="4"/>
+    <!-- Zink-Sonnencreme auf der Nase -->
+    <path d="M 108 100 Q 120 94 132 100" fill="none" stroke="#FFF6E3" stroke-width="6" stroke-linecap="round" opacity="0.9"/>
+
+    <g id="gesicht-neutral" class="gesicht">
+      <!-- Tiefenentspannt, aber wach -->
+      <circle cx="105" cy="86" r="6.5" fill="#FFF6E3"/>
+      <circle cx="135" cy="86" r="6.5" fill="#FFF6E3"/>
+      <circle cx="106" cy="87" r="3" fill="#1A1208"/>
+      <circle cx="134" cy="87" r="3" fill="#1A1208"/>
+      <path class="os" d="M 97 78 Q 105 74 113 77" stroke-width="4"/>
+      <path class="os" d="M 127 77 Q 135 74 143 78" stroke-width="4"/>
+      <circle cx="113" cy="103" r="1.9" fill="#1A1208"/>
+      <circle cx="127" cy="103" r="1.9" fill="#1A1208"/>
+      <path class="os" d="M 107 115 Q 120 121 133 115" stroke-width="4"/>
+    </g>
+    <g id="gesicht-jubel" class="gesicht">
+      <!-- Perfekte Welle! -->
+      <path class="os" d="M 98 86 Q 105 78 112 86" stroke-width="4.5"/>
+      <path class="os" d="M 128 86 Q 135 78 142 86" stroke-width="4.5"/>
+      <circle cx="113" cy="101" r="1.9" fill="#1A1208"/>
+      <circle cx="127" cy="101" r="1.9" fill="#1A1208"/>
+      <path d="M 103 108 Q 120 129 137 108 Q 120 114 103 108 Z" fill="#1A1208"/>
+      <path d="M 111 117 Q 120 124 129 117 Q 120 126 111 117 Z" fill="#FF3E8E"/>
+    </g>
+    <g id="gesicht-frust" class="gesicht">
+      <!-- Wipeout: Schwindel-Spiralen -->
+      <path d="M 105 86 m 5 0 a 5 5 0 1 1 -2 -4 M 105 86 m 2.5 0 a 2.5 2.5 0 1 1 -1 -2" fill="none" stroke="#1A1208" stroke-width="2.5"/>
+      <path d="M 135 86 m 5 0 a 5 5 0 1 1 -2 -4 M 135 86 m 2.5 0 a 2.5 2.5 0 1 1 -1 -2" fill="none" stroke="#1A1208" stroke-width="2.5"/>
+      <circle cx="113" cy="103" r="1.9" fill="#1A1208"/>
+      <circle cx="127" cy="103" r="1.9" fill="#1A1208"/>
+      <path class="os" d="M 110 117 Q 115 112 120 116 Q 125 120 130 114" stroke-width="4"/>
+    </g>
+    <g id="gesicht-denk" class="gesicht">
+      <!-- Wartet auf die Antwort-Welle -->
+      <circle cx="105" cy="86" r="6.5" fill="#FFF6E3"/>
+      <circle cx="135" cy="86" r="6.5" fill="#FFF6E3"/>
+      <circle cx="107" cy="83" r="2.9" fill="#1A1208"/>
+      <circle cx="137" cy="83" r="2.9" fill="#1A1208"/>
+      <path class="os" d="M 97 75 L 112 72" stroke-width="4"/>
+      <circle cx="113" cy="103" r="1.9" fill="#1A1208"/>
+      <circle cx="127" cy="103" r="1.9" fill="#1A1208"/>
+      <path class="os" d="M 110 115 Q 115 111 120 115 Q 125 119 130 115" stroke-width="4"/>
+    </g>
+
+    <!-- Sonnengebleichte Zottel-Mähne (Nachschwing-Gelenk) -->
+    <g id="frisur">
+      <path class="o" d="M 82 92 C 76 70 88 52 110 48 C 116 42 130 42 136 48 C 156 52 166 70 158 92 C 154 80 150 84 146 74 C 142 84 136 78 132 68 C 126 78 118 74 116 64 C 110 76 102 78 98 70 C 94 82 88 78 82 92 Z" fill="#FFE9AD"/>
+      <path d="M 100 60 C 104 56 110 54 116 55 M 128 56 C 134 56 140 60 143 65" fill="none" stroke="#1A1208" stroke-width="2.5" stroke-linecap="round" opacity="0.4"/>
+    </g>
+    <g id="accessoire"/>
+  </g>
+</svg>

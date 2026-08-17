@@ -1,0 +1,234 @@
+/* Die Affenbank — Tresor + Ketten-Leiter (Screen), roter BANK!-Button XXL
+   über den 4 Antwort-Buttons (Player). Verrats-Outing als Banner. */
+.ab-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(900px, 94vw);
+  margin: 0 auto;
+}
+
+.ab-kopf {
+  text-align: center;
+  color: var(--muted);
+  margin: 0;
+}
+
+/* Tresor: füllt sich mit der Kette, glüht bei Inhalt. */
+.ab-tresor {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  background: var(--panel);
+  border: var(--mm-outline-m) solid var(--mm-outline);
+  border-radius: var(--mm-radius-l);
+  padding: 10px 16px;
+  box-shadow: var(--mm-schatten-sticker);
+}
+
+.ab-tresor.gefuellt {
+  outline: 3px solid var(--gold);
+}
+
+.ab-tresor-tuer {
+  font-size: 2.4rem;
+}
+
+.ab-pott {
+  font-size: clamp(1.6rem, 4vw, 2.6rem);
+}
+
+.ab-kette {
+  display: flex;
+  gap: 4px;
+}
+
+.ab-stufe {
+  padding: 3px 7px;
+  border-radius: var(--mm-radius-s);
+  background: rgb(26 18 8 / 35%);
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.ab-stufe.erreicht {
+  background: var(--mm-leaf, #22a559);
+  color: var(--mm-ticket-paper, #fff6e3);
+}
+
+.ab-stufe.aktiv {
+  outline: 2px solid var(--gold);
+  transform: scale(1.12);
+}
+
+/* Verrats-Outing: „TOM SICHERT SICH 400!" */
+.ab-outing {
+  text-align: center;
+  background: var(--gold);
+  color: var(--mm-outline, #1a1208);
+  font-weight: 800;
+  border-radius: var(--radius);
+  padding: 8px 12px;
+  rotate: var(--mm-kipp-l, -2deg);
+  animation: ab-outing-pop 0.4s var(--mm-kurve-bounce, ease) both;
+}
+
+@keyframes ab-outing-pop {
+  from {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.ab-frage {
+  text-align: center;
+  font-size: clamp(1.2rem, 2.8vw, 1.8rem);
+  line-height: 1.2;
+  margin: 0.15em 0;
+}
+
+.ab-optionen {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.ab-option {
+  background: var(--panel);
+  border-left: 10px solid var(--deko);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  font-size: clamp(1rem, 2.2vw, 1.4rem);
+  font-weight: 600;
+}
+
+.ab-deko {
+  display: inline-block;
+  min-width: 3em;
+  color: var(--deko);
+  font-weight: 800;
+}
+
+.ab-ticker {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 3.4em;
+}
+
+.ab-ticker-eintrag {
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.ab-ticker-eintrag:first-child {
+  color: var(--mm-text-hell, #fff6e3);
+  font-weight: 600;
+}
+
+.ab-bilanz {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: min(560px, 90vw);
+  margin: 0 auto;
+}
+
+.ab-bilanz-zeile {
+  display: grid;
+  grid-template-columns: 2rem 1fr auto;
+  gap: 8px;
+  align-items: center;
+  background: var(--panel);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+}
+
+.ab-bilanz-zeile.hat-gebankt {
+  outline: 2px solid var(--gold);
+}
+
+/* ---------- Player (hochkant XXL) ---------- */
+.ab-player {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  padding: 10px;
+}
+
+/* Der fette rote BANK!-Button (§2.8) — Buzzer-Charakter, ~22 % Bildhöhe. */
+.ab-bank-button {
+  min-height: 22dvh;
+  border-radius: var(--mm-radius-l);
+  background: var(--rot);
+  border: var(--mm-outline-m) solid var(--mm-outline);
+  box-shadow: var(--mm-schatten-sticker-gross);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.ab-bank-button:disabled {
+  filter: grayscale(0.7);
+  opacity: 0.55;
+}
+
+.ab-bank-button.scharf:active {
+  transform: scale(var(--mm-scale-gedrueckt, 0.92)) rotate(2deg);
+}
+
+.ab-bank-label {
+  font-family: var(--mm-font-display, sans-serif);
+  font-size: var(--mm-display-m, 2.5rem);
+  color: var(--mm-ticket-paper, #fff6e3);
+  letter-spacing: 0.04em;
+}
+
+.ab-bank-pott {
+  font-size: 1.5rem;
+  color: var(--mm-coin-shine, #ffde6b);
+}
+
+.ab-gesichert {
+  text-align: center;
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.ab-button {
+  flex: 1;
+  min-height: 11dvh;
+  font-size: 1.15rem;
+  font-weight: 700;
+  text-align: left;
+  border-left: 12px solid var(--deko);
+  background: var(--panel);
+}
+
+.ab-button.gewaehlt {
+  outline: 4px solid var(--gold);
+  background: var(--mm-flaeche-chip);
+}
+
+.ab-button.gesperrt:not(.gewaehlt) {
+  opacity: 0.35;
+}
+
+.ab-status {
+  text-align: center;
+  padding: 22px 12px;
+  background: var(--panel);
+  border-radius: var(--radius);
+  font-size: 1.1rem;
+}

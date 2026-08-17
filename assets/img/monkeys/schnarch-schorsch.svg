@@ -1,0 +1,126 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 320" class="mm-affe" data-affe="schnarch-schorsch" role="img" aria-label="Schnarch-Schorsch">
+  <title>Schnarch-Schorsch — der Tiefenentspannte (hängende Silhouette)</title>
+  <style>
+    svg[data-affe="schnarch-schorsch"] .fell{fill:var(--fell,#7D8CA3)}
+    svg[data-affe="schnarch-schorsch"] .fell-hell{fill:var(--fell-hell,#C9D2DE)}
+    svg[data-affe="schnarch-schorsch"] .fell-s{stroke:var(--fell,#7D8CA3);fill:none}
+    svg[data-affe="schnarch-schorsch"] .o{stroke:#1A1208;stroke-width:5;stroke-linejoin:round;stroke-linecap:round}
+    svg[data-affe="schnarch-schorsch"] .os{stroke:#1A1208;fill:none;stroke-linecap:round}
+    svg[data-affe="schnarch-schorsch"] #kopf,svg[data-affe="schnarch-schorsch"] #arm-l,svg[data-affe="schnarch-schorsch"] #arm-r,svg[data-affe="schnarch-schorsch"] #bein-l,svg[data-affe="schnarch-schorsch"] #bein-r,svg[data-affe="schnarch-schorsch"] #schwanz,svg[data-affe="schnarch-schorsch"] #bommel{transform-box:view-box}
+    svg[data-affe="schnarch-schorsch"] #kopf{transform-origin:120px 152px}
+    svg[data-affe="schnarch-schorsch"] #arm-l{transform-origin:92px 170px}
+    svg[data-affe="schnarch-schorsch"] #arm-r{transform-origin:148px 170px}
+    svg[data-affe="schnarch-schorsch"] #bein-l{transform-origin:104px 244px}
+    svg[data-affe="schnarch-schorsch"] #bein-r{transform-origin:136px 244px}
+    svg[data-affe="schnarch-schorsch"] #schwanz{transform-origin:144px 244px}
+    svg[data-affe="schnarch-schorsch"] #bommel{transform-origin:174px 96px}
+    svg[data-affe="schnarch-schorsch"] .gesicht{display:none}
+    svg[data-affe="schnarch-schorsch"] #gesicht-neutral{display:inline}
+    svg[data-affe="schnarch-schorsch"][data-gesicht=jubel] #gesicht-neutral,svg[data-affe="schnarch-schorsch"][data-gesicht=frust] #gesicht-neutral,svg[data-affe="schnarch-schorsch"][data-gesicht=denk] #gesicht-neutral{display:none}
+    svg[data-affe="schnarch-schorsch"][data-gesicht=jubel] #gesicht-jubel{display:inline}
+    svg[data-affe="schnarch-schorsch"][data-gesicht=frust] #gesicht-frust{display:inline}
+    svg[data-affe="schnarch-schorsch"][data-gesicht=denk] #gesicht-denk{display:inline}
+  </style>
+
+  <g id="schwanz">
+    <!-- Schlaff heruntergesunkener Schwanz -->
+    <path class="os" d="M 142 246 C 176 262 192 282 186 298 C 182 308 170 306 172 296" stroke-width="15"/>
+    <path class="fell-s" d="M 142 246 C 176 262 192 282 186 298 C 182 308 170 306 172 296" stroke-width="8.5"/>
+  </g>
+
+  <g id="bein-l">
+    <path class="os" d="M 104 244 C 100 264 98 280 96 296" stroke-width="19"/>
+    <path class="fell-s" d="M 104 244 C 100 264 98 280 96 296" stroke-width="12"/>
+    <ellipse class="fell o" cx="91" cy="302" rx="16" ry="9"/>
+  </g>
+  <g id="bein-r">
+    <path class="os" d="M 136 244 C 140 264 142 280 144 296" stroke-width="19"/>
+    <path class="fell-s" d="M 136 244 C 140 264 142 280 144 296" stroke-width="12"/>
+    <ellipse class="fell o" cx="149" cy="302" rx="16" ry="9"/>
+  </g>
+
+  <g id="koerper">
+    <!-- Eingesackter, schmaler Körper mit hängenden Schultern -->
+    <path class="fell o" d="M 96 166 C 86 186 86 222 96 244 L 144 244 C 154 222 154 186 144 166 C 136 154 104 154 96 166 Z"/>
+    <ellipse class="fell-hell o" cx="120" cy="212" rx="18" ry="24" stroke-width="4"/>
+    <!-- Eingefallene Schulterlinie -->
+    <path class="os" d="M 98 168 C 106 176 134 176 142 168" stroke-width="3.5" opacity="0.6"/>
+  </g>
+
+  <g id="arm-l">
+    <!-- Extra lange, schlaff hängende Arme -->
+    <path class="os" d="M 92 170 C 82 196 78 226 80 252" stroke-width="17"/>
+    <path class="fell-s" d="M 92 170 C 82 196 78 226 80 252" stroke-width="10.5"/>
+    <circle class="fell o" cx="81" cy="260" r="10"/>
+  </g>
+  <g id="arm-r">
+    <path class="os" d="M 148 170 C 158 196 162 226 160 252" stroke-width="17"/>
+    <path class="fell-s" d="M 148 170 C 158 196 162 226 160 252" stroke-width="10.5"/>
+    <circle class="fell o" cx="159" cy="260" r="10"/>
+  </g>
+
+  <g id="kopf" transform="rotate(-5 120 152)">
+    <circle class="fell o" cx="120" cy="106" r="42"/>
+    <circle class="fell o" cx="76" cy="100" r="12"/>
+    <circle class="fell o" cx="164" cy="100" r="12"/>
+    <circle class="fell-hell" cx="76" cy="100" r="5.5"/>
+    <circle class="fell-hell" cx="164" cy="100" r="5.5"/>
+    <ellipse class="fell-hell o" cx="120" cy="118" rx="26" ry="19" stroke-width="4"/>
+
+    <!-- Alle Gesichter mit schweren Lidern -->
+    <g id="gesicht-neutral" class="gesicht">
+      <path d="M 97 95 A 8 8 0 0 0 113 95 Z" fill="#FFF6E3"/>
+      <path d="M 127 95 A 8 8 0 0 0 143 95 Z" fill="#FFF6E3"/>
+      <circle cx="105" cy="98" r="2.6" fill="#1A1208"/>
+      <circle cx="135" cy="98" r="2.6" fill="#1A1208"/>
+      <path class="os" d="M 96 95 L 114 95 M 126 95 L 144 95" stroke-width="4"/>
+      <circle cx="113" cy="112" r="2" fill="#1A1208"/>
+      <circle cx="127" cy="112" r="2" fill="#1A1208"/>
+      <path class="os" d="M 110 125 Q 120 128 130 125" stroke-width="4"/>
+      <!-- Sabber-Tropfen -->
+      <path d="M 133 128 C 133 133 130 135 131 139 C 134 141 137 138 136 134 C 135 131 134 130 133 128 Z" fill="#29D9D5" stroke="#1A1208" stroke-width="2"/>
+    </g>
+    <g id="gesicht-jubel" class="gesicht">
+      <!-- Schlagartig wach! -->
+      <circle cx="105" cy="95" r="8" fill="#FFF6E3"/>
+      <circle cx="135" cy="95" r="8" fill="#FFF6E3"/>
+      <circle cx="105" cy="95" r="3.4" fill="#1A1208"/>
+      <circle cx="135" cy="95" r="3.4" fill="#1A1208"/>
+      <path class="os" d="M 95 84 L 112 82 M 128 82 L 145 84" stroke-width="4"/>
+      <circle cx="113" cy="110" r="2" fill="#1A1208"/>
+      <circle cx="127" cy="110" r="2" fill="#1A1208"/>
+      <path d="M 106 118 Q 120 136 134 118 Q 120 123 106 118 Z" fill="#1A1208"/>
+    </g>
+    <g id="gesicht-frust" class="gesicht">
+      <path class="os" d="M 96 90 L 112 93 M 144 90 L 128 93" stroke-width="4"/>
+      <path class="os" d="M 98 98 L 112 98 M 128 98 L 142 98" stroke-width="4"/>
+      <circle cx="113" cy="112" r="2" fill="#1A1208"/>
+      <circle cx="127" cy="112" r="2" fill="#1A1208"/>
+      <!-- Gähn-Mund -->
+      <ellipse cx="120" cy="126" rx="9" ry="11" fill="#1A1208"/>
+      <ellipse cx="120" cy="130" rx="4.5" ry="4" fill="#FF3E8E"/>
+    </g>
+    <g id="gesicht-denk" class="gesicht">
+      <!-- Ein Auge blinzelt auf -->
+      <path class="os" d="M 96 95 L 114 95" stroke-width="4"/>
+      <circle cx="135" cy="95" r="7" fill="#FFF6E3"/>
+      <circle cx="134" cy="93" r="3" fill="#1A1208"/>
+      <circle cx="113" cy="112" r="2" fill="#1A1208"/>
+      <circle cx="127" cy="112" r="2" fill="#1A1208"/>
+      <path class="os" d="M 111 124 Q 116 121 121 124 Q 126 127 130 124" stroke-width="4"/>
+    </g>
+
+    <!-- Zipfelmütze mit Nachschwing-Bommel -->
+    <g id="accessoire">
+      <g id="prop-muetze">
+        <path class="o" d="M 82 84 C 88 56 106 42 124 44 C 150 47 162 62 158 84 C 134 72 106 72 82 84 Z" fill="#8FE04B"/>
+        <path class="o" d="M 152 62 C 166 58 176 68 174 82 C 173 88 168 92 166 96" fill="none" stroke-width="5"/>
+        <path d="M 152 62 C 166 58 176 68 174 82 C 173 88 168 92 166 96" fill="none" stroke="#8FE04B" stroke-width="10"/>
+        <path class="o" d="M 80 88 C 104 74 136 74 160 88 L 158 78 C 134 66 106 66 82 78 Z" fill="#FFF6E3" stroke-width="4"/>
+      </g>
+      <g id="bommel">
+        <circle class="o" cx="172" cy="102" r="10" fill="#FFF6E3"/>
+      </g>
+    </g>
+  </g>
+</svg>

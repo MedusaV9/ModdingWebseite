@@ -1,0 +1,14 @@
+<!-- Kopf Heiligenschein"  Overlay für den #accessoire-Slot (viewBox 0 0 240 320).
+     Schwebt per CSS-Animation (class mm-heiligenschein, meta-avatar.ts). -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 320">
+  <g class="mm-heiligenschein">
+    <ellipse cx="120" cy="26" rx="31" ry="9" fill="none"
+      stroke="#F5B301" stroke-width="14" opacity="0.28"/>
+    <ellipse cx="120" cy="26" rx="31" ry="9" fill="none"
+      stroke="#1A1208" stroke-width="9.5"/>
+    <ellipse cx="120" cy="26" rx="31" ry="9" fill="none"
+      stroke="#F5B301" stroke-width="6"/>
+    <ellipse cx="120" cy="24.5" rx="31" ry="9" fill="none"
+      stroke="#FFF3B0" stroke-width="2" opacity="0.95"/>
+  </g>
+</svg>

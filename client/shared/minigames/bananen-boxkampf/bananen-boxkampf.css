@@ -1,0 +1,587 @@
+/* Bananen-Boxkampf — Boxring mit Pfosten/Seilen, 2 Puppen-Ecken mit HP-Balken,
+   Punch über die Gelenk-Gruppen der Inline-SVGs (#arm-r), K.O.-Sterne;
+   Player: Gegner-Grid, Wett-Buttons, XXL-Antworten. */
+.bx-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(920px, 94vw);
+  margin: 0 auto;
+}
+
+.bx-kopf {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.bx-badge {
+  background: var(--gold);
+  color: var(--mm-outline, #1a1208);
+  border-radius: var(--mm-radius-s);
+  border: var(--mm-outline-m) solid var(--mm-outline);
+  box-shadow: var(--mm-schatten-sticker);
+  padding: 3px 10px;
+  font-weight: 800;
+  rotate: var(--mm-kipp-l, -2deg);
+}
+
+.bx-titel {
+  text-align: center;
+  margin: 0;
+}
+
+.bx-frage {
+  text-align: center;
+  margin: 4px 0;
+}
+
+.bx-optionen {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.bx-option {
+  border: var(--mm-outline-m) solid var(--mm-outline);
+  border-left: 10px solid var(--deko);
+  border-radius: var(--mm-radius-s);
+  padding: 8px 12px;
+  background: color-mix(in srgb, var(--deko) 12%, transparent);
+  font-weight: 700;
+}
+
+.bx-deko {
+  opacity: 0.85;
+  margin-right: 6px;
+}
+
+/* ---------- Der Boxring ---------- */
+.bx-ring {
+  position: relative;
+  border-radius: var(--mm-radius-l);
+  border: var(--mm-outline-m) solid var(--mm-outline);
+  box-shadow: var(--mm-schatten-sticker);
+  padding: 14px 26px 6px;
+  overflow: hidden;
+  background: radial-gradient(
+    140% 90% at 50% 115%,
+    color-mix(in srgb, var(--mm-deep-palm) 35%, transparent) 0%,
+    transparent 75%
+  );
+}
+
+.bx-pfosten {
+  position: absolute;
+  top: 10px;
+  bottom: 22px;
+  width: 10px;
+  border-radius: 5px;
+  /* Ring-Requisite: bewusste Pfosten-Farbe außerhalb der Palette (Ausnahme
+   * wie Steg-Holz, s. tokens.css) — Textur statt Verlauf. */
+  background: repeating-linear-gradient(0deg, #d1495b 0 16px, #f4f0e6 16px 32px);
+  border: 2px solid var(--mm-outline);
+  z-index: 1;
+}
+
+.bx-pfosten.links {
+  left: 8px;
+}
+
+.bx-pfosten.rechts {
+  right: 8px;
+}
+
+.bx-seile {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  top: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  z-index: 0;
+}
+
+.bx-seil {
+  height: 4px;
+  border-radius: 2px;
+  background: repeating-linear-gradient(90deg, #f4f0e6 0 14px, #cfc7b2 14px 22px);
+  opacity: 0.9;
+}
+
+.bx-boden {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 18px;
+  background: color-mix(in srgb, var(--mm-outline) 30%, transparent);
+}
+
+.bx-boxer {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  padding: 26px 26px 16px;
+  z-index: 2;
+}
+
+.bx-ecke {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.bx-puppe-wrap {
+  position: relative;
+  display: inline-block;
+}
+
+.bx-puppe {
+  display: inline-block;
+  width: clamp(64px, 10vw, 104px);
+  height: clamp(64px, 10vw, 104px);
+}
+
+.bx-puppe.gross {
+  width: clamp(90px, 14vw, 140px);
+  height: clamp(90px, 14vw, 140px);
+}
+
+/* Rechte Ecke spiegelt die Puppe — beide schauen sich an. */
+.bx-ecke.rechts .bx-puppe svg {
+  transform: scaleX(-1);
+}
+
+.bx-handschuh {
+  position: absolute;
+  right: -12px;
+  bottom: 8px;
+  font-size: 1.4rem;
+  transition: transform 0.25s ease;
+}
+
+.bx-ecke.rechts .bx-handschuh {
+  right: auto;
+  left: -12px;
+  transform: scaleX(-1);
+}
+
+.bx-name {
+  font-weight: 800;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- HP-Balken ---------- */
+.bx-hp {
+  position: relative;
+  width: clamp(110px, 16vw, 170px);
+  height: 18px;
+  border: var(--mm-outline-m) solid var(--mm-outline);
+  border-radius: var(--mm-radius-s);
+  background: color-mix(in srgb, var(--mm-outline) 25%, transparent);
+  overflow: hidden;
+}
+
+.bx-hp-fuellung {
+  display: block;
+  height: 100%;
+  transition: width 0.6s ease;
+}
+
+.bx-hp-fuellung.gruen {
+  background: var(--gruen);
+}
+
+.bx-hp-fuellung.orange {
+  background: var(--gold);
+}
+
+.bx-hp-fuellung.rot {
+  background: var(--rot);
+}
+
+.bx-hp-zahl {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: #fff;
+  text-shadow: 0 1px 0 var(--mm-outline);
+}
+
+/* ---------- Punch/Hit/K.O. (Gelenk-Gruppen der Inline-SVGs) ---------- */
+/* Der Schlagende: Körper lehnt vor, der Schlag-Arm (#arm-r) jabt — die
+   transform-origins liefern die Puppen-SVGs selbst (README Gelenk-Puppen). */
+.bx-ecke.punch .bx-puppe svg #arm-r {
+  animation: bx-jab 0.7s ease-in-out both;
+  animation-delay: calc(var(--schlag-i) * 1.1s);
+}
+
+.bx-ecke.punch .bx-puppe-wrap {
+  animation: bx-ausfall 0.7s ease-in-out both;
+  animation-delay: calc(var(--schlag-i) * 1.1s);
+}
+
+.bx-ecke.rechts.punch .bx-puppe-wrap {
+  animation-name: bx-ausfall-rechts;
+}
+
+.bx-ecke.punch .bx-handschuh {
+  animation: bx-handschuh-jab 0.7s ease-in-out both;
+  animation-delay: calc(var(--schlag-i) * 1.1s);
+}
+
+@keyframes bx-jab {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  40% {
+    transform: rotate(-95deg);
+  }
+  60% {
+    transform: rotate(-80deg);
+  }
+}
+
+@keyframes bx-ausfall {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  45% {
+    transform: translateX(18px);
+  }
+}
+
+@keyframes bx-ausfall-rechts {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  45% {
+    transform: translateX(-18px);
+  }
+}
+
+@keyframes bx-handschuh-jab {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  45% {
+    transform: translate(10px, -14px) scale(1.35);
+  }
+}
+
+/* Der Getroffene: Rückstoß + Wackeln, zeitlich zum Treffer-Schlag versetzt. */
+.bx-ecke.hit .bx-puppe-wrap {
+  animation: bx-recoil 0.55s ease-out both;
+  animation-delay: calc(var(--treffer-i) * 1.1s + 0.35s);
+}
+
+.bx-ecke.rechts.hit .bx-puppe-wrap {
+  animation-name: bx-recoil-rechts;
+}
+
+@keyframes bx-recoil {
+  0% {
+    transform: translateX(0) rotate(0deg);
+  }
+  35% {
+    transform: translateX(14px) rotate(9deg);
+  }
+  100% {
+    transform: translateX(0) rotate(0deg);
+  }
+}
+
+@keyframes bx-recoil-rechts {
+  0% {
+    transform: translateX(0) rotate(0deg);
+  }
+  35% {
+    transform: translateX(-14px) rotate(-9deg);
+  }
+  100% {
+    transform: translateX(0) rotate(0deg);
+  }
+}
+
+/* K.O.: Puppe kippt, Sterne kreisen. */
+.bx-ecke.ko .bx-puppe {
+  transform: rotate(78deg) translateY(10%);
+  transition: transform 0.5s ease-in 0.6s;
+}
+
+.bx-sterne {
+  position: absolute;
+  left: 50%;
+  top: -18px;
+  font-size: 1.6rem;
+  transform-origin: center 34px;
+  animation: bx-sterne 1.4s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes bx-sterne {
+  from {
+    transform: translateX(-50%) rotate(0turn);
+  }
+  to {
+    transform: translateX(-50%) rotate(1turn);
+  }
+}
+
+/* K.O.-Zeitlupe (W4): zum Einschlag des K.O.-Schlags zoomt der ganze Ring in
+   0,5 s langsam auf (slow-scale, gehalten) + kurzer Sättigungs-Blitz; die
+   Benommenheits-Sterne kreisen im Zeitlupen-Tempo. Nur transform/filter. */
+.bx-ring.ko-zeitlupe {
+  animation: bx-zeitlupe 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: calc(var(--ko-i, 0) * 1.1s + 0.4s);
+}
+
+@keyframes bx-zeitlupe {
+  0% {
+    transform: scale(1);
+    filter: saturate(1) brightness(1);
+  }
+  30% {
+    filter: saturate(1.4) brightness(1.14);
+  }
+  100% {
+    transform: scale(1.045);
+    filter: saturate(1.12) brightness(1.03);
+  }
+}
+
+.bx-ring.ko-zeitlupe .bx-sterne {
+  animation-duration: 3.2s;
+}
+
+/* Sieger-Pose (W4): Arme hoch liefert data-gesicht="jubel" (Gelenk-Rotation,
+   base.css) — dazu Champion-Hüpfer, gereckter Handschuh + Pokal. */
+.bx-ecke.sieger .bx-puppe-wrap {
+  animation: bx-sieger-hops 0.75s var(--mm-kurve-bounce, ease) infinite;
+}
+
+@keyframes bx-sieger-hops {
+  0%,
+  100% {
+    transform: translateY(0) scale(1.06);
+  }
+  40% {
+    transform: translateY(-12px) scale(1.06);
+  }
+}
+
+.bx-ecke.sieger .bx-handschuh {
+  transform: translateY(-34px) rotate(-24deg) scale(1.2);
+}
+
+.bx-ecke.rechts.sieger .bx-handschuh {
+  transform: translateY(-34px) rotate(24deg) scale(-1.2, 1.2);
+}
+
+.bx-sieger-guertel {
+  position: absolute;
+  left: 50%;
+  /* Dicht überm Kopf statt -26px: dort klebte der Pokal optisch am HP-Balken
+     (W4-Sichtung des Sieger-Screenshots). */
+  top: -12px;
+  transform: translateX(-50%);
+  font-size: 1.5rem;
+  filter: drop-shadow(2px 2px 0 var(--mm-schatten-farbe, rgb(26 18 8 / 55%)));
+  animation: bx-pokal-pop 0.5s var(--mm-kurve-bounce, ease) both;
+}
+
+@keyframes bx-pokal-pop {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) scale(0.3);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) scale(1);
+  }
+}
+
+/* ---------- Wett-Fähnchen an den Seilen ---------- */
+.bx-faehnchen {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  padding: 2px 0 6px;
+}
+
+.bx-fahne {
+  font-size: 0.8rem;
+  border: var(--mm-outline-s) solid var(--mm-outline);
+  border-radius: var(--mm-radius-s);
+  padding: 1px 8px;
+  background: color-mix(in srgb, var(--gold) 14%, transparent);
+}
+
+.bx-fahne.rechts {
+  background: color-mix(in srgb, var(--rot) 14%, transparent);
+}
+
+.bx-fahne.geheim {
+  opacity: 0.8;
+}
+
+/* ---------- Countdown / Abrechnung / Bilanz ---------- */
+.bx-countdown {
+  text-align: center;
+  font-size: clamp(3rem, 9vw, 5.5rem);
+  font-weight: 900;
+  color: var(--gold);
+  text-shadow: 0 3px 0 var(--mm-outline);
+}
+
+.bx-countdown.klein {
+  font-size: 3rem;
+}
+
+.bx-abrechnung {
+  text-align: center;
+  margin: 0;
+}
+
+.bx-bilanz {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.bx-bilanz-zeile {
+  display: grid;
+  grid-template-columns: 34px 1fr auto auto;
+  gap: 10px;
+  align-items: center;
+  border: var(--mm-outline-s) solid var(--mm-outline);
+  border-radius: var(--mm-radius-s);
+  padding: 4px 10px;
+}
+
+.bx-bilanz-zeile.gewonnen {
+  background: color-mix(in srgb, var(--gold) 18%, transparent);
+}
+
+.bx-mini {
+  display: inline-block;
+  width: 30px;
+  height: 30px;
+}
+
+.bx-wahl {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+}
+
+/* ---------- Player ---------- */
+.bx-player {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.bx-player-titel {
+  text-align: center;
+  margin: 0;
+}
+
+.bx-status {
+  text-align: center;
+  padding: 14px 8px;
+  border: var(--mm-outline-s) solid var(--mm-outline);
+  border-radius: var(--mm-radius-s);
+}
+
+.bx-hp-eigen {
+  text-align: center;
+  font-weight: 800;
+  margin: 0;
+}
+
+.bx-frage-klein {
+  text-align: center;
+  font-weight: 700;
+  margin: 0;
+}
+
+.bx-button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 64px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  border: var(--mm-outline-m) solid var(--mm-outline);
+  border-left: 12px solid var(--deko);
+  border-radius: var(--mm-radius-s);
+  background: color-mix(in srgb, var(--deko) 14%, transparent);
+  color: inherit;
+  padding: 8px 12px;
+}
+
+.bx-button.gewaehlt {
+  outline: 3px solid var(--gold);
+}
+
+.bx-button.gesperrt {
+  opacity: 0.55;
+}
+
+.bx-gegner-grid,
+.bx-wett-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.bx-gegner,
+.bx-wett-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  border: var(--mm-outline-m) solid var(--mm-outline);
+  border-radius: var(--mm-radius-s);
+  background: color-mix(in srgb, var(--gold) 10%, transparent);
+  color: inherit;
+  padding: 10px 6px;
+  font-weight: 700;
+}
+
+.bx-gegner.geschuetzt {
+  opacity: 0.5;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bx-ecke.punch .bx-puppe svg #arm-r,
+  .bx-ecke.punch .bx-puppe-wrap,
+  .bx-ecke.punch .bx-handschuh,
+  .bx-ecke.hit .bx-puppe-wrap,
+  .bx-ring.ko-zeitlupe,
+  .bx-ecke.sieger .bx-puppe-wrap,
+  .bx-sterne {
+    animation: none;
+  }
+}

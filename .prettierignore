@@ -1,0 +1,15 @@
+# Nicht von Prettier angefasst: Fremd-Inhalte, Doku-Bestand, Build-Artefakte
+node_modules/
+client/dist/
+server/dist/
+data/
+assets/
+docs/GAME-DESIGN.md
+docs/TECH-SPEC.md
+docs/CONTENT-PLAN.md
+docs/ART-SOUND-VIDEO-PLAN.md
+docs/ideen/
+CREDITS.md
+package-lock.json
+# Maschinell geschrieben von tools/musik/import.mjs (songs.json + Credits)
+content/musik/

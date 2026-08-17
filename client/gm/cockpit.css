@@ -1,0 +1,372 @@
+/* GM-Cockpit „Zonen statt Button-Wand" (W3-Redesign).
+   Aufbau: Regie-Leiste (sticky, die 3 Meistgenutzten GROSS) → Kontext-Karte
+   (was läuft + passende Aktionen) → Akkordeon-Zonen (Spieler/Fragen/Show/Log).
+   NUR Token aus tokens.css — Status-Farben: Gold = Geld/Fokus, LED-Cyan =
+   Info/Phase, Curtain-Rot = Gefahr/Fehler, Leaf = Erfolg. */
+
+.cockpit {
+  padding: 12px 14px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow: auto;
+}
+
+/* ---------- Regie-Leiste: immer sichtbar, nie scrollen ---------- */
+
+.regie-leiste {
+  position: sticky;
+  top: 0;
+  z-index: 8;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: -12px -14px 0;
+  padding: 10px 14px 8px;
+  background: var(--mm-bg);
+  border-bottom: var(--mm-outline-s) solid var(--mm-flaeche-tief);
+}
+
+.regie-zeile {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.regie-status {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.regie-gross {
+  min-height: 64px;
+  font-size: 1.1rem;
+  padding: 12px 24px;
+}
+
+.regie-gross.primaer {
+  font-size: 1.25rem;
+}
+
+.regie-ende {
+  margin-left: auto;
+  min-height: 48px;
+  padding: 8px 14px;
+  font-size: 0.9rem;
+  border-color: var(--mm-fehler);
+  opacity: 0.9;
+}
+
+/* ---------- Status-Chips (einheitliche Badge-Form aller Zustände) ---------- */
+
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: var(--mm-radius-rund);
+  border: 2px solid var(--mm-flaeche-chip);
+  background: var(--mm-flaeche-tief);
+  color: var(--mm-text-gedimmt);
+  font-size: 0.85rem;
+  font-weight: 700;
+  white-space: nowrap;
+  font-variant-numeric: var(--mm-ziffern);
+}
+
+.status-chip.chip-gold {
+  color: var(--mm-money);
+  border-color: color-mix(in srgb, var(--mm-money) 55%, transparent);
+}
+
+.status-chip.chip-cyan {
+  color: var(--mm-timer);
+  border-color: color-mix(in srgb, var(--mm-timer) 45%, transparent);
+}
+
+.status-chip.chip-rot {
+  color: var(--mm-text-hell);
+  background: var(--mm-fehler);
+  border-color: var(--mm-outline);
+}
+
+/* ---------- Anker-Chips (Zonen-Navigation) ---------- */
+
+.anker-chips {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.anker-chip {
+  min-height: 44px;
+  padding: 6px 16px;
+  font-size: 0.9rem;
+  border-radius: var(--mm-radius-rund);
+  background: var(--mm-flaeche-tief);
+}
+
+/* ---------- Kontext-Karte: „was läuft gerade" ---------- */
+
+.cockpit-zone {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  scroll-margin-top: 150px; /* Anker-Sprünge landen unter der sticky Leiste */
+}
+
+.kontext-karte {
+  border-left: 6px solid var(--mm-money);
+}
+
+.kontext-kopf {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.kontext-titel {
+  font-size: 1.2rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-right: 4px;
+}
+
+.kontext-tipp {
+  margin: 0 0 8px;
+  color: var(--mm-money);
+}
+
+.kontext-hinweis {
+  margin: 4px 0;
+  color: var(--mm-text-gedimmt);
+  font-size: 1.05rem;
+}
+
+/* Spickzettel (GEHEIM) in der Kontext-Karte */
+
+.spickzettel h3 {
+  margin: 0 0 6px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.geheim-tag {
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  padding: 2px 10px;
+  border-radius: var(--mm-radius-rund);
+  background: var(--mm-fehler);
+  color: var(--mm-text-hell);
+  border: 2px solid var(--mm-outline);
+  rotate: var(--mm-kipp-r);
+}
+
+.spick-frage {
+  margin: 4px 0;
+  font-size: 1.1rem;
+}
+
+.spick-antwort {
+  margin: 4px 0 8px;
+  font-size: 1.15rem;
+  color: var(--mm-erfolg);
+}
+
+/* ---------- Werkzeug-Zeilen: eine Aktion-Gruppe pro Zeile ---------- */
+
+.werkzeug-zeile {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.werkzeug-zeile + .werkzeug-zeile {
+  margin-top: 8px;
+}
+
+/* Kompaktere Knöpfe in den Zonen (die GROSSEN sitzen in der Regie-Leiste) */
+
+.kontext-karte button:not(.primaer),
+.akkordeon button:not(.primaer) {
+  min-height: 48px;
+  padding: 8px 16px;
+  font-size: 0.92rem;
+}
+
+/* 2-Tap-Bestätigung: „Wirklich?"-Zustand klar rot */
+
+button.warnt {
+  border-color: var(--mm-fehler);
+  color: var(--mm-text-hell);
+  background: color-mix(in srgb, var(--mm-fehler) 35%, var(--mm-flaeche));
+}
+
+/* Verschachtelte Karten (metaKarte in Kontext/Extras) flach rendern —
+   eine Karte in der Karte wäre doppelte Sticker-Optik. */
+
+.kontext-karte .karte,
+.akkordeon .karte {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+}
+
+/* ---------- Akkordeon-Zonen ---------- */
+
+details.akkordeon {
+  padding: 0;
+  overflow: hidden;
+}
+
+details.akkordeon summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  min-height: 56px;
+  padding: 8px 16px;
+  font-weight: 800;
+  font-size: 1.05rem;
+  user-select: none;
+}
+
+details.akkordeon summary::-webkit-details-marker {
+  display: none;
+}
+
+details.akkordeon summary::after {
+  content: "▸";
+  margin-left: auto;
+  color: var(--mm-text-gedimmt);
+  transition: rotate var(--mm-dauer-normal) var(--mm-kurve-snap);
+}
+
+details.akkordeon[open] summary::after {
+  rotate: 90deg;
+}
+
+details.akkordeon summary:hover {
+  background: color-mix(in srgb, var(--mm-flaeche-tief) 55%, transparent);
+}
+
+.akkordeon-info {
+  font-weight: 500;
+  font-size: 0.85rem;
+  color: var(--mm-text-gedimmt);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.akkordeon-inhalt {
+  padding: 4px 16px 16px;
+  border-top: 2px solid var(--mm-flaeche-tief);
+}
+
+/* ---------- Spieler-Matrix ---------- */
+
+.spieler-matrix {
+  display: flex;
+  flex-direction: column;
+}
+
+.spieler-zeile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  flex-wrap: wrap;
+  cursor: pointer;
+  border-radius: var(--mm-radius-s);
+  border: 2px solid transparent;
+}
+
+.spieler-zeile:nth-child(even) {
+  background: color-mix(in srgb, var(--mm-flaeche-tief) 45%, transparent);
+}
+
+.spieler-zeile:hover {
+  background: var(--mm-flaeche-tief);
+}
+
+.spieler-zeile.gewaehlt {
+  border-color: var(--mm-money);
+  background: color-mix(in srgb, var(--mm-money) 12%, transparent);
+}
+
+.spieler-konto {
+  margin-left: auto;
+  color: var(--mm-money);
+  font-weight: 800;
+  font-variant-numeric: var(--mm-ziffern);
+}
+
+/* ---------- Fragen-Regal ---------- */
+
+.regal-zeile {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--mm-flaeche-tief);
+  flex-wrap: wrap;
+}
+
+.regal-antwort {
+  color: var(--mm-erfolg);
+}
+
+/* ---------- Log ---------- */
+
+.log-zeile {
+  padding: 4px 0;
+  border-bottom: 1px solid var(--mm-flaeche-tief);
+  font-size: 0.92rem;
+}
+
+.log-zeit {
+  letter-spacing: 0;
+  margin-right: 8px;
+  font-size: 0.8rem;
+}
+
+/* ---------- Beobachter + Login ---------- */
+
+.beobachter-banner {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  border: 2px solid var(--mm-money);
+}
+
+.login-karte {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 28px 40px;
+  rotate: var(--mm-kipp-l);
+}
+
+.login-fehler {
+  margin: 0;
+  color: var(--mm-text-hell);
+  background: var(--mm-fehler);
+  border: 2px solid var(--mm-outline);
+  border-radius: var(--mm-radius-s);
+  padding: 6px 14px;
+  font-weight: 700;
+}

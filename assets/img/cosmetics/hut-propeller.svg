@@ -1,0 +1,24 @@
+<!-- Kopf Propeller-Kappe"  Overlay für den #accessoire-Slot (viewBox 0 0 240 320).
+     Der Propeller (class mm-propeller) dreht per CSS-Animation aus meta-avatar.ts. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 320">
+  <g>
+    <path d="M 84 58 C 84 34 100 24 120 24 C 140 24 156 34 156 58 C 132 50 108 50 84 58 Z"
+      fill="#FF3E8E" stroke="#1A1208" stroke-width="4" stroke-linejoin="round"/>
+    <path d="M 97 32 C 104 27 112 24 120 24 L 120 51 C 112 51 104 52 97 54 Z"
+      fill="#29D9D5"/>
+    <path d="M 143 32 C 136 27 128 24 120 24 L 120 51 C 128 51 136 52 143 54 Z"
+      fill="#F5B301"/>
+    <path d="M 84 58 C 84 34 100 24 120 24 C 140 24 156 34 156 58 C 132 50 108 50 84 58 Z"
+      fill="none" stroke="#1A1208" stroke-width="4" stroke-linejoin="round"/>
+    <path d="M 84 58 C 108 48 132 48 156 58 L 156 64 C 132 54 108 54 84 64 Z"
+      fill="#FFF6E3" stroke="#1A1208" stroke-width="3.5" stroke-linejoin="round"/>
+    <line x1="120" y1="24" x2="120" y2="15" stroke="#1A1208" stroke-width="4"/>
+    <g class="mm-propeller">
+      <path d="M 120 14 C 106 6 90 7 85 13 C 92 19 108 20 120 14 Z"
+        fill="#8FE04B" stroke="#1A1208" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M 120 14 C 134 8 150 9 155 15 C 148 21 132 20 120 14 Z"
+        fill="#8FE04B" stroke="#1A1208" stroke-width="3" stroke-linejoin="round"/>
+    </g>
+    <circle cx="120" cy="14" r="4.5" fill="#F5B301" stroke="#1A1208" stroke-width="3"/>
+  </g>
+</svg>

@@ -1,0 +1,118 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 320" class="mm-affe" data-affe="kiki-krawall" role="img" aria-label="Kiki Krawall">
+  <title>Kiki Krawall — das Chaos-Äffchen (kleinste Silhouette)</title>
+  <style>
+    svg[data-affe="kiki-krawall"] .fell{fill:var(--fell,#F472B6)}
+    svg[data-affe="kiki-krawall"] .fell-hell{fill:var(--fell-hell,#FBD3E8)}
+    svg[data-affe="kiki-krawall"] .fell-s{stroke:var(--fell,#F472B6);fill:none}
+    svg[data-affe="kiki-krawall"] .o{stroke:#1A1208;stroke-width:5;stroke-linejoin:round;stroke-linecap:round}
+    svg[data-affe="kiki-krawall"] .os{stroke:#1A1208;fill:none;stroke-linecap:round}
+    svg[data-affe="kiki-krawall"] #kopf,svg[data-affe="kiki-krawall"] #arm-l,svg[data-affe="kiki-krawall"] #arm-r,svg[data-affe="kiki-krawall"] #bein-l,svg[data-affe="kiki-krawall"] #bein-r,svg[data-affe="kiki-krawall"] #schwanz,svg[data-affe="kiki-krawall"] #frisur{transform-box:view-box}
+    svg[data-affe="kiki-krawall"] #kopf{transform-origin:120px 204px}
+    svg[data-affe="kiki-krawall"] #arm-l{transform-origin:94px 216px}
+    svg[data-affe="kiki-krawall"] #arm-r{transform-origin:146px 216px}
+    svg[data-affe="kiki-krawall"] #bein-l{transform-origin:106px 272px}
+    svg[data-affe="kiki-krawall"] #bein-r{transform-origin:134px 272px}
+    svg[data-affe="kiki-krawall"] #schwanz{transform-origin:138px 272px}
+    svg[data-affe="kiki-krawall"] #frisur{transform-origin:120px 128px}
+    svg[data-affe="kiki-krawall"] .gesicht{display:none}
+    svg[data-affe="kiki-krawall"] #gesicht-neutral{display:inline}
+    svg[data-affe="kiki-krawall"][data-gesicht=jubel] #gesicht-neutral,svg[data-affe="kiki-krawall"][data-gesicht=frust] #gesicht-neutral,svg[data-affe="kiki-krawall"][data-gesicht=denk] #gesicht-neutral{display:none}
+    svg[data-affe="kiki-krawall"][data-gesicht=jubel] #gesicht-jubel{display:inline}
+    svg[data-affe="kiki-krawall"][data-gesicht=frust] #gesicht-frust{display:inline}
+    svg[data-affe="kiki-krawall"][data-gesicht=denk] #gesicht-denk{display:inline}
+  </style>
+
+  <g id="schwanz">
+    <path class="os" d="M 136 274 C 178 288 206 260 184 244 C 168 234 158 250 172 256" stroke-width="15"/>
+    <path class="fell-s" d="M 136 274 C 178 288 206 260 184 244 C 168 234 158 250 172 256" stroke-width="8.5"/>
+  </g>
+
+  <g id="bein-l">
+    <path class="os" d="M 106 272 C 102 284 100 292 98 300" stroke-width="17"/>
+    <path class="fell-s" d="M 106 272 C 102 284 100 292 98 300" stroke-width="10.5"/>
+    <ellipse class="fell o" cx="93" cy="305" rx="14" ry="8"/>
+  </g>
+  <g id="bein-r">
+    <path class="os" d="M 134 272 C 138 284 140 292 142 300" stroke-width="17"/>
+    <path class="fell-s" d="M 134 272 C 138 284 140 292 142 300" stroke-width="10.5"/>
+    <ellipse class="fell o" cx="147" cy="305" rx="14" ry="8"/>
+  </g>
+
+  <g id="koerper">
+    <path class="fell o" d="M 98 210 C 92 226 92 252 100 268 L 140 268 C 148 252 148 226 142 210 C 134 202 106 202 98 210 Z"/>
+    <ellipse class="fell-hell o" cx="120" cy="242" rx="15" ry="18" stroke-width="3.5"/>
+  </g>
+
+  <g id="arm-l">
+    <!-- Immer in Bewegung: Arm hoch! -->
+    <path class="os" d="M 94 216 C 80 208 70 194 66 178" stroke-width="16"/>
+    <path class="fell-s" d="M 94 216 C 80 208 70 194 66 178" stroke-width="9.5"/>
+    <circle class="fell o" cx="64" cy="171" r="9"/>
+  </g>
+  <g id="arm-r">
+    <path class="os" d="M 146 216 C 160 208 170 194 174 178" stroke-width="16"/>
+    <path class="fell-s" d="M 146 216 C 160 208 170 194 174 178" stroke-width="9.5"/>
+    <circle class="fell o" cx="176" cy="171" r="9"/>
+  </g>
+
+  <g id="kopf">
+    <circle class="fell o" cx="120" cy="166" r="36"/>
+    <circle class="fell o" cx="84" cy="160" r="11"/>
+    <circle class="fell o" cx="156" cy="160" r="11"/>
+    <circle class="fell-hell" cx="84" cy="160" r="5"/>
+    <circle class="fell-hell" cx="156" cy="160" r="5"/>
+    <ellipse class="fell-hell o" cx="120" cy="176" rx="22" ry="16" stroke-width="4"/>
+
+    <g id="gesicht-neutral" class="gesicht">
+      <circle cx="107" cy="157" r="6.5" fill="#FFF6E3"/>
+      <circle cx="133" cy="157" r="6.5" fill="#FFF6E3"/>
+      <circle cx="108" cy="158" r="3" fill="#1A1208"/>
+      <circle cx="132" cy="158" r="3" fill="#1A1208"/>
+      <circle cx="114" cy="171" r="1.8" fill="#1A1208"/>
+      <circle cx="126" cy="171" r="1.8" fill="#1A1208"/>
+      <path d="M 108 178 Q 120 190 132 178 Q 120 183 108 178 Z" fill="#1A1208"/>
+    </g>
+    <g id="gesicht-jubel" class="gesicht">
+      <path class="os" d="M 100 157 Q 107 149 114 157" stroke-width="4"/>
+      <path class="os" d="M 126 157 Q 133 149 140 157" stroke-width="4"/>
+      <circle cx="114" cy="169" r="1.8" fill="#1A1208"/>
+      <circle cx="126" cy="169" r="1.8" fill="#1A1208"/>
+      <path d="M 104 175 Q 120 196 136 175 Q 120 181 104 175 Z" fill="#1A1208"/>
+      <path d="M 112 184 Q 120 191 128 184 Q 120 193 112 184 Z" fill="#FF3E8E"/>
+    </g>
+    <g id="gesicht-frust" class="gesicht">
+      <path class="os" d="M 100 149 L 114 154" stroke-width="4"/>
+      <path class="os" d="M 140 149 L 126 154" stroke-width="4"/>
+      <circle cx="109" cy="160" r="2.8" fill="#1A1208"/>
+      <circle cx="131" cy="160" r="2.8" fill="#1A1208"/>
+      <circle cx="114" cy="171" r="1.8" fill="#1A1208"/>
+      <circle cx="126" cy="171" r="1.8" fill="#1A1208"/>
+      <path d="M 108 184 Q 120 176 132 184 L 130 187 Q 120 181 110 187 Z" fill="#1A1208"/>
+    </g>
+    <g id="gesicht-denk" class="gesicht">
+      <circle cx="107" cy="157" r="6.5" fill="#FFF6E3"/>
+      <circle cx="133" cy="157" r="6.5" fill="#FFF6E3"/>
+      <circle cx="106" cy="154" r="2.8" fill="#1A1208"/>
+      <circle cx="132" cy="154" r="2.8" fill="#1A1208"/>
+      <path class="os" d="M 99 147 L 113 143" stroke-width="4"/>
+      <circle cx="114" cy="171" r="1.8" fill="#1A1208"/>
+      <circle cx="126" cy="171" r="1.8" fill="#1A1208"/>
+      <path class="os" d="M 111 180 Q 116 176 121 180 Q 126 184 130 180" stroke-width="3.5"/>
+    </g>
+
+    <!-- Riesige Antennen-Wuschelfrisur (nachwippend via #frisur) -->
+    <g id="frisur">
+      <path class="o" d="M 88 146 C 74 140 72 120 84 112 C 78 96 92 82 108 86 C 112 70 128 70 132 86 C 148 82 162 96 156 112 C 168 120 166 140 152 146 C 140 152 100 152 88 146 Z" fill="#F97316"/>
+      <g fill="none" stroke="#1A1208" stroke-width="3" opacity="0.55">
+        <path d="M 94 128 C 100 120 110 118 116 124"/>
+        <path d="M 126 106 C 134 102 142 108 142 116"/>
+        <path d="M 104 100 C 110 94 120 96 122 104"/>
+      </g>
+      <path class="os" d="M 104 84 C 100 68 104 52 96 40" stroke-width="6"/>
+      <path class="os" d="M 136 84 C 142 66 138 54 148 42" stroke-width="6"/>
+      <circle class="o" cx="93" cy="33" r="9" fill="#F97316"/>
+      <circle class="o" cx="151" cy="35" r="9" fill="#F97316"/>
+    </g>
+    <g id="accessoire"/>
+  </g>
+</svg>

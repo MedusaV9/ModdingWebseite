@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 120" data-timer="" role="img" aria-label="Timer-Banane">
+  <title>Timer-Banane — wird von rechts aufgegessen" (Plan §3.1 Zone E)</title>
+  <!--
+    Nutzung: inline einbetten, Fortschritt (1 = volle Zeit, 0 = Zeit um)
+    über die CSS-Variable --fortschritt am <svg> oder Wrapper setzen:
+      svgEl.style.setProperty('--fortschritt', restzeit / gesamtzeit)
+    Die volle Banane wird per clip-path von rechts abgeschnitten;
+    die abgegessene" Geister-Banane bleibt als Restspur sichtbar.
+  -->
+  <style>
+    svg[data-timer] #banane-voll{
+      clip-path: inset(-20% calc((1 - var(--fortschritt, 1)) * 88% + 6%) -20% -2%);
+    }
+  </style>
+
+  <!-- Geister-Banane (abgegessener Teil) -->
+  <g id="banane-geist" opacity="0.3">
+    <path d="M 40 44 C 90 86 200 106 300 100 C 380 95 432 72 448 46"
+      fill="none" stroke="#FFF6E3" stroke-width="40" stroke-linecap="round" stroke-dasharray="2 16"/>
+  </g>
+
+  <!-- Volle Banane (wird geclippt) -->
+  <g id="banane-voll">
+    <path d="M 40 44 C 90 86 200 106 300 100 C 380 95 432 72 448 46"
+      fill="none" stroke="#1A1208" stroke-width="52" stroke-linecap="round"/>
+    <path d="M 40 44 C 90 86 200 106 300 100 C 380 95 432 72 448 46"
+      fill="none" stroke="#FFC93C" stroke-width="40" stroke-linecap="round"/>
+    <path d="M 60 62 C 110 94 210 108 300 102"
+      fill="none" stroke="#FFDE6B" stroke-width="10" stroke-linecap="round"/>
+    <path d="M 34 38 L 22 26" stroke="#1A1208" stroke-width="16" stroke-linecap="round"/>
+    <path d="M 452 40 L 462 28" stroke="#1A1208" stroke-width="14" stroke-linecap="round"/>
+  </g>
+</svg>

@@ -1,0 +1,842 @@
+{
+  "schema_version": 1,
+  "stand": "2026-08-14",
+  "quelle": "docs/CONTENT-PLAN.md §1 (verbindlich)",
+  "oberkategorien": [
+    {
+      "id": "gaming",
+      "name": "Gaming",
+      "emoji": "🎮",
+      "farbe": "#7C4DFF",
+      "farbe_name": "Violett",
+      "icon_idee": "Retro-Gamepad mit Bananen-D-Pad"
+    },
+    {
+      "id": "filme_serien",
+      "name": "Filme & Serien",
+      "emoji": "🎬",
+      "farbe": "#E53935",
+      "farbe_name": "Rot",
+      "icon_idee": "Filmklappe mit Affenpfoten-Abdruck"
+    },
+    {
+      "id": "musik",
+      "name": "Musik",
+      "emoji": "🎵",
+      "farbe": "#FF9800",
+      "farbe_name": "Orange",
+      "icon_idee": "Banane als Note / Kopfhörer-Affe"
+    },
+    {
+      "id": "sport",
+      "name": "Sport",
+      "emoji": "⚽",
+      "farbe": "#4CAF50",
+      "farbe_name": "Grün",
+      "icon_idee": "Fußball mit Bananenschale"
+    },
+    {
+      "id": "wissenschaft",
+      "name": "Wissenschaft",
+      "emoji": "🔬",
+      "farbe": "#00BCD4",
+      "farbe_name": "Cyan",
+      "icon_idee": "Reagenzglas mit Banane"
+    },
+    {
+      "id": "geschichte",
+      "name": "Geschichte",
+      "emoji": "🏛️",
+      "farbe": "#795548",
+      "farbe_name": "Braun",
+      "icon_idee": "Antike Säule mit sitzendem Affen"
+    },
+    {
+      "id": "geographie",
+      "name": "Geographie",
+      "emoji": "🌍",
+      "farbe": "#3F51B5",
+      "farbe_name": "Indigo",
+      "icon_idee": "Globus mit Bananen-Äquator"
+    },
+    {
+      "id": "essen_trinken",
+      "name": "Essen & Trinken",
+      "emoji": "🍕",
+      "farbe": "#FFC107",
+      "farbe_name": "Amber",
+      "icon_idee": "Banane im Burger"
+    },
+    {
+      "id": "internet_memes",
+      "name": "Internet & Memes",
+      "emoji": "😂",
+      "farbe": "#FF4081",
+      "farbe_name": "Pink",
+      "icon_idee": "Affe mit Sonnenbrille"
+    },
+    {
+      "id": "deutschland_spezial",
+      "name": "Deutschland-Spezial",
+      "emoji": "🇩🇪",
+      "farbe": "#111111",
+      "farbe_akzent": "#FFCC00",
+      "farbe_name": "Schwarz + Gold",
+      "icon_idee": "Adler mit Banane"
+    },
+    {
+      "id": "tiere_natur",
+      "name": "Tiere & Natur",
+      "emoji": "🦁",
+      "farbe": "#8BC34A",
+      "farbe_name": "Hellgrün",
+      "icon_idee": "Affenkopf im Blätterkranz"
+    },
+    {
+      "id": "kunst_literatur",
+      "name": "Kunst & Literatur",
+      "emoji": "🎨",
+      "farbe": "#9C27B0",
+      "farbe_name": "Lila",
+      "icon_idee": "Pinsel malt Banane"
+    },
+    {
+      "id": "technik_autos",
+      "name": "Technik & Autos",
+      "emoji": "🚗",
+      "farbe": "#607D8B",
+      "farbe_name": "Blaugrau",
+      "icon_idee": "Zahnrad mit Bananen-Zähnen"
+    },
+    {
+      "id": "kurioses_mixed",
+      "name": "Kurioses & Mixed",
+      "emoji": "🎲",
+      "farbe": "#009688",
+      "farbe_name": "Teal",
+      "icon_idee": "Würfel mit Banane als Sechs"
+    }
+  ],
+  "unterkategorien": [
+    {
+      "oberkategorie": "gaming",
+      "slug": "league_of_legends",
+      "name": "League of Legends",
+      "region": "global",
+      "kern": false,
+      "notiz": "Champions, Lore, E-Sport"
+    },
+    {
+      "oberkategorie": "gaming",
+      "slug": "pokemon",
+      "name": "Pokémon",
+      "region": "global",
+      "kern": false,
+      "notiz": "Spiele/Anime/Karten per Tags trennen"
+    },
+    {
+      "oberkategorie": "gaming",
+      "slug": "minecraft",
+      "name": "Minecraft",
+      "region": "global",
+      "kern": true,
+      "notiz": "Crafting als Bild-Fragen ideal"
+    },
+    {
+      "oberkategorie": "gaming",
+      "slug": "fortnite_battle_royale",
+      "name": "Fortnite & Battle Royale",
+      "region": "global",
+      "kern": false,
+      "notiz": "hoher Verfalls-Anteil → Verfallsdaten!"
+    },
+    {
+      "oberkategorie": "gaming",
+      "slug": "nintendo_universum",
+      "name": "Nintendo-Universum",
+      "region": "global",
+      "kern": true,
+      "notiz": "Mario, Zelda, Kirby, Konsolen"
+    },
+    {
+      "oberkategorie": "gaming",
+      "slug": "retro_arcade",
+      "name": "Retro & Arcade",
+      "region": "global",
+      "kern": false,
+      "notiz": "Pac-Man bis PS1, Pixel-Bilder"
+    },
+    {
+      "oberkategorie": "gaming",
+      "slug": "esport_gaming_kultur",
+      "name": "E-Sport & Gaming-Kultur",
+      "region": "mix",
+      "kern": false,
+      "notiz": "Twitch, Speedruns, Gamescom (de)"
+    },
+    {
+      "oberkategorie": "gaming",
+      "slug": "deutsche_gaming_szene",
+      "name": "Deutsche Gaming-Szene",
+      "region": "de",
+      "kern": false,
+      "notiz": "Gronkh, Rocket Beans, HandOfBlood"
+    },
+    {
+      "oberkategorie": "filme_serien",
+      "slug": "blockbuster_hollywood",
+      "name": "Blockbuster & Hollywood",
+      "region": "global",
+      "kern": true,
+      "notiz": "inkl. Klassiker vor 2000 (Merge)"
+    },
+    {
+      "oberkategorie": "filme_serien",
+      "slug": "animationsfilme",
+      "name": "Animationsfilme",
+      "region": "global",
+      "kern": true,
+      "notiz": "Pixar, Disney, Ghibli"
+    },
+    {
+      "oberkategorie": "filme_serien",
+      "slug": "streaming_serien",
+      "name": "Streaming-Serien-Hits",
+      "region": "global",
+      "kern": false,
+      "notiz": "Verfallsdaten bei „neueste Staffel“"
+    },
+    {
+      "oberkategorie": "filme_serien",
+      "slug": "anime",
+      "name": "Anime",
+      "region": "global",
+      "kern": false,
+      "notiz": ""
+    },
+    {
+      "oberkategorie": "filme_serien",
+      "slug": "scifi_fantasy",
+      "name": "Sci-Fi & Fantasy",
+      "region": "global",
+      "kern": false,
+      "notiz": "Star Wars, HdR, Marvel"
+    },
+    {
+      "oberkategorie": "filme_serien",
+      "slug": "filmzitate_emoji",
+      "name": "Filmzitate & Emoji-Rätsel",
+      "region": "mix",
+      "kern": true,
+      "notiz": "Heimat des emoji-Typs"
+    },
+    {
+      "oberkategorie": "filme_serien",
+      "slug": "deutsche_filme_serien",
+      "name": "Deutsche Filme & Serien",
+      "region": "de",
+      "kern": false,
+      "notiz": "Tatort, Fack ju Göhte, Dark, Stromberg"
+    },
+    {
+      "oberkategorie": "musik",
+      "slug": "pop_international",
+      "name": "Pop international",
+      "region": "global",
+      "kern": false,
+      "notiz": ""
+    },
+    {
+      "oberkategorie": "musik",
+      "slug": "rock_metal",
+      "name": "Rock & Metal",
+      "region": "global",
+      "kern": false,
+      "notiz": ""
+    },
+    {
+      "oberkategorie": "musik",
+      "slug": "deutschrap_hiphop",
+      "name": "Deutschrap & Hip-Hop",
+      "region": "de",
+      "kern": false,
+      "notiz": "Capital Bra bis Fanta 4"
+    },
+    {
+      "oberkategorie": "musik",
+      "slug": "charts_onehit_esc",
+      "name": "Charts, One-Hit-Wonder & ESC",
+      "region": "mix",
+      "kern": true,
+      "notiz": "Merge aus 2 Katalog-Kats"
+    },
+    {
+      "oberkategorie": "musik",
+      "slug": "schlager_volksmusik",
+      "name": "Schlager & Volksmusik",
+      "region": "de",
+      "kern": false,
+      "notiz": "Helene Fischer als Leicht-Anker"
+    },
+    {
+      "oberkategorie": "musik",
+      "slug": "klassik_filmmusik",
+      "name": "Klassik & Filmmusik",
+      "region": "global",
+      "kern": false,
+      "notiz": ""
+    },
+    {
+      "oberkategorie": "musik",
+      "slug": "intro_erkennen",
+      "name": "Intro erkennen (Audio)",
+      "region": "mix",
+      "kern": false,
+      "notiz": "v1 KLEIN: nur PD-Klassik/Eigenaufnahme (7.4)"
+    },
+    {
+      "oberkategorie": "sport",
+      "slug": "bundesliga",
+      "name": "Bundesliga",
+      "region": "de",
+      "kern": true,
+      "notiz": "Pflicht-Highlight"
+    },
+    {
+      "oberkategorie": "sport",
+      "slug": "dfb_nationalelf",
+      "name": "DFB & Nationalelf",
+      "region": "de",
+      "kern": false,
+      "notiz": "Sommermärchen, WM-Titel"
+    },
+    {
+      "oberkategorie": "sport",
+      "slug": "fussball_international",
+      "name": "Fußball international",
+      "region": "global",
+      "kern": false,
+      "notiz": "WM/EM/CL, Messi/Ronaldo"
+    },
+    {
+      "oberkategorie": "sport",
+      "slug": "olympia_wintersport",
+      "name": "Olympia & Wintersport",
+      "region": "mix",
+      "kern": false,
+      "notiz": "Merge; Wintersport DE-lean"
+    },
+    {
+      "oberkategorie": "sport",
+      "slug": "us_sport",
+      "name": "US-Sport (NBA, NFL, MLB)",
+      "region": "global",
+      "kern": false,
+      "notiz": ""
+    },
+    {
+      "oberkategorie": "sport",
+      "slug": "motorsport_formel1",
+      "name": "Motorsport & Formel 1",
+      "region": "mix",
+      "kern": false,
+      "notiz": "Schumacher, Vettel"
+    },
+    {
+      "oberkategorie": "sport",
+      "slug": "sport_rekorde_kurioses",
+      "name": "Sport-Rekorde & Kurioses",
+      "region": "global",
+      "kern": false,
+      "notiz": "ideal für Schätzfragen"
+    },
+    {
+      "oberkategorie": "wissenschaft",
+      "slug": "physik_chemie",
+      "name": "Physik & Chemie",
+      "region": "global",
+      "kern": false,
+      "notiz": ""
+    },
+    {
+      "oberkategorie": "wissenschaft",
+      "slug": "biologie_koerper",
+      "name": "Biologie & menschlicher Körper",
+      "region": "global",
+      "kern": false,
+      "notiz": ""
+    },
+    {
+      "oberkategorie": "wissenschaft",
+      "slug": "weltraum_astronomie",
+      "name": "Weltraum & Astronomie",
+      "region": "global",
+      "kern": false,
+      "notiz": ""
+    },
+    {
+      "oberkategorie": "wissenschaft",
+      "slug": "mathe_logik",
+      "name": "Mathe & Logik",
+      "region": "global",
+      "kern": false,
+      "notiz": "Schätz-Typ passt perfekt"
+    },
+    {
+      "oberkategorie": "wissenschaft",
+      "slug": "erfindungen_entdeckungen",
+      "name": "Erfindungen & Entdeckungen",
+      "region": "mix",
+      "kern": false,
+      "notiz": "deutsche Erfinder als DE-Slice"
+    },
+    {
+      "oberkategorie": "wissenschaft",
+      "slug": "alltagswissenschaft",
+      "name": "Alltags-Wissenschaft",
+      "region": "global",
+      "kern": true,
+      "notiz": "„Warum ist der Himmel blau?“"
+    },
+    {
+      "oberkategorie": "geschichte",
+      "slug": "antike",
+      "name": "Antike",
+      "region": "global",
+      "kern": false,
+      "notiz": "Ägypten, Rom, Griechenland"
+    },
+    {
+      "oberkategorie": "geschichte",
+      "slug": "mittelalter_ritter",
+      "name": "Mittelalter & Ritter",
+      "region": "global",
+      "kern": false,
+      "notiz": ""
+    },
+    {
+      "oberkategorie": "geschichte",
+      "slug": "zwanzigstes_jahrhundert",
+      "name": "20. Jahrhundert & Weltkriege",
+      "region": "mix",
+      "kern": false,
+      "notiz": ""
+    },
+    {
+      "oberkategorie": "geschichte",
+      "slug": "deutsche_geschichte",
+      "name": "Deutsche Geschichte",
+      "region": "de",
+      "kern": false,
+      "notiz": ""
+    },
+    {
+      "oberkategorie": "geschichte",
+      "slug": "ddr_wiedervereinigung",
+      "name": "DDR & Wiedervereinigung",
+      "region": "de",
+      "kern": false,
+      "notiz": "bei Ü40-Runden Gold wert"
+    },
+    {
+      "oberkategorie": "geschichte",
+      "slug": "persoenlichkeiten_entdecker",
+      "name": "Persönlichkeiten & Entdecker",
+      "region": "global",
+      "kern": false,
+      "notiz": "Merge aus 2 Katalog-Kats"
+    },
+    {
+      "oberkategorie": "geographie",
+      "slug": "laender_hauptstaedte",
+      "name": "Länder & Hauptstädte",
+      "region": "global",
+      "kern": true,
+      "notiz": ""
+    },
+    {
+      "oberkategorie": "geographie",
+      "slug": "flaggen_erkennen",
+      "name": "Flaggen erkennen",
+      "region": "global",
+      "kern": true,
+      "notiz": "Bild-Typ, Flaggen = PD (7.5)"
+    },
+    {
+      "oberkategorie": "geographie",
+      "slug": "deutschland_geographie",
+      "name": "Deutschland-Geographie",
+      "region": "de",
+      "kern": false,
+      "notiz": "Bundesländer, „Wo liegt Bielefeld?“"
+    },
+    {
+      "oberkategorie": "geographie",
+      "slug": "europa",
+      "name": "Europa",
+      "region": "mix",
+      "kern": false,
+      "notiz": ""
+    },
+    {
+      "oberkategorie": "geographie",
+      "slug": "erd_rekorde",
+      "name": "Rekorde der Erde",
+      "region": "global",
+      "kern": false,
+      "notiz": "Schätz-Typ"
+    },
+    {
+      "oberkategorie": "geographie",
+      "slug": "staedte_wahrzeichen",
+      "name": "Städte & Wahrzeichen",
+      "region": "global",
+      "kern": false,
+      "notiz": "Bild-Typ (Skylines)"
+    },
+    {
+      "oberkategorie": "essen_trinken",
+      "slug": "deutsche_kueche",
+      "name": "Deutsche Küche",
+      "region": "de",
+      "kern": false,
+      "notiz": "Spätzle-Geographie, Döner-Geschichte"
+    },
+    {
+      "oberkategorie": "essen_trinken",
+      "slug": "internationale_kueche",
+      "name": "Internationale Küche",
+      "region": "global",
+      "kern": false,
+      "notiz": ""
+    },
+    {
+      "oberkategorie": "essen_trinken",
+      "slug": "suessigkeiten_snacks",
+      "name": "Süßigkeiten & Snack-Marken",
+      "region": "mix",
+      "kern": true,
+      "notiz": "DE-lean (Haribo, Milka, Kinder)"
+    },
+    {
+      "oberkategorie": "essen_trinken",
+      "slug": "bier_wein_getraenke",
+      "name": "Bier, Wein & Getränke",
+      "region": "mix",
+      "kern": false,
+      "notiz": "Alkohol-Fragen → ab18 (Abschnitt 5.8)"
+    },
+    {
+      "oberkategorie": "essen_trinken",
+      "slug": "fastfood_marken",
+      "name": "Fast Food & Marken-Logos",
+      "region": "global",
+      "kern": false,
+      "notiz": "Bild-Typ"
+    },
+    {
+      "oberkategorie": "essen_trinken",
+      "slug": "kochen_zutaten",
+      "name": "Kochen & Zutaten",
+      "region": "global",
+      "kern": false,
+      "notiz": ""
+    },
+    {
+      "oberkategorie": "internet_memes",
+      "slug": "meme_klassiker",
+      "name": "Meme-Klassiker",
+      "region": "global",
+      "kern": false,
+      "notiz": "Bild-Typ (Rechte je Meme prüfen!)"
+    },
+    {
+      "oberkategorie": "internet_memes",
+      "slug": "deutsche_internet_kultur",
+      "name": "Deutsche Internet-Kultur",
+      "region": "de",
+      "kern": false,
+      "notiz": "YouTube-DE-Historie, Vong-Sprache"
+    },
+    {
+      "oberkategorie": "internet_memes",
+      "slug": "youtuber_streamer",
+      "name": "YouTuber & Streamer",
+      "region": "mix",
+      "kern": false,
+      "notiz": ""
+    },
+    {
+      "oberkategorie": "internet_memes",
+      "slug": "internet_geschichte",
+      "name": "Internet-Geschichte",
+      "region": "global",
+      "kern": false,
+      "notiz": "ICQ bis KI-Boom"
+    },
+    {
+      "oberkategorie": "internet_memes",
+      "slug": "virale_trends",
+      "name": "Virale Trends & Fails",
+      "region": "mix",
+      "kern": false,
+      "notiz": "Merge (TikTok+Fails); höchster Verfall der App"
+    },
+    {
+      "oberkategorie": "deutschland_spezial",
+      "slug": "politik_bundestag",
+      "name": "Politik & Bundestag",
+      "region": "de",
+      "kern": false,
+      "notiz": "NUR Fakten, keine Meinungen (5.8)"
+    },
+    {
+      "oberkategorie": "deutschland_spezial",
+      "slug": "tv_shows",
+      "name": "Deutsches TV & Shows",
+      "region": "de",
+      "kern": true,
+      "notiz": "Wetten dass, GZSZ, Löwen"
+    },
+    {
+      "oberkategorie": "deutschland_spezial",
+      "slug": "promis_boulevard",
+      "name": "Promis & Boulevard",
+      "region": "de",
+      "kern": false,
+      "notiz": "Dschungelcamp = ULTRAHARD-Fundgrube"
+    },
+    {
+      "oberkategorie": "deutschland_spezial",
+      "slug": "alltag_buerokratie",
+      "name": "Alltag & Bürokratie",
+      "region": "de",
+      "kern": false,
+      "notiz": "Mülltrennung, Amts-Deutsch"
+    },
+    {
+      "oberkategorie": "deutschland_spezial",
+      "slug": "dialekte_sprache",
+      "name": "Dialekte & Sprache",
+      "region": "de",
+      "kern": false,
+      "notiz": "„Was heißt ‚Bemme'?“"
+    },
+    {
+      "oberkategorie": "deutschland_spezial",
+      "slug": "werbung_slogans",
+      "name": "Werbung & Marken-Slogans",
+      "region": "de",
+      "kern": true,
+      "notiz": "„Wohnst du noch oder…“"
+    },
+    {
+      "oberkategorie": "deutschland_spezial",
+      "slug": "feiertage_traditionen",
+      "name": "Feiertage & Traditionen",
+      "region": "de",
+      "kern": false,
+      "notiz": ""
+    },
+    {
+      "oberkategorie": "deutschland_spezial",
+      "slug": "made_in_germany",
+      "name": "Made in Germany",
+      "region": "de",
+      "kern": false,
+      "notiz": "Autobahn, Bahn, Exportschlager"
+    },
+    {
+      "oberkategorie": "tiere_natur",
+      "slug": "saeugetiere_haustiere",
+      "name": "Säugetiere & Haustiere",
+      "region": "global",
+      "kern": false,
+      "notiz": "Merge aus 2 Katalog-Kats"
+    },
+    {
+      "oberkategorie": "tiere_natur",
+      "slug": "ozean_meerestiere",
+      "name": "Ozean & Meerestiere",
+      "region": "global",
+      "kern": false,
+      "notiz": ""
+    },
+    {
+      "oberkategorie": "tiere_natur",
+      "slug": "insekten_krabbeltiere",
+      "name": "Insekten & Krabbeltiere",
+      "region": "global",
+      "kern": false,
+      "notiz": ""
+    },
+    {
+      "oberkategorie": "tiere_natur",
+      "slug": "heimische_tiere_wald",
+      "name": "Heimische Tiere & Wald",
+      "region": "de",
+      "kern": false,
+      "notiz": ""
+    },
+    {
+      "oberkategorie": "tiere_natur",
+      "slug": "pflanzen_baeume",
+      "name": "Pflanzen & Bäume",
+      "region": "mix",
+      "kern": false,
+      "notiz": ""
+    },
+    {
+      "oberkategorie": "tiere_natur",
+      "slug": "tier_rekorde",
+      "name": "Tier-Rekorde",
+      "region": "global",
+      "kern": true,
+      "notiz": "Schätz-Typ + Audio (Tierstimmen)"
+    },
+    {
+      "oberkategorie": "kunst_literatur",
+      "slug": "gemaelde_erkennen",
+      "name": "Berühmte Gemälde erkennen",
+      "region": "global",
+      "kern": false,
+      "notiz": "Bild-Typ; gemeinfreie Kunst (7.3)"
+    },
+    {
+      "oberkategorie": "kunst_literatur",
+      "slug": "weltliteratur",
+      "name": "Weltliteratur",
+      "region": "global",
+      "kern": false,
+      "notiz": ""
+    },
+    {
+      "oberkategorie": "kunst_literatur",
+      "slug": "deutsche_literatur",
+      "name": "Deutsche Literatur & Dichter",
+      "region": "de",
+      "kern": false,
+      "notiz": "Goethe skaliert Leicht→ULTRAHARD"
+    },
+    {
+      "oberkategorie": "kunst_literatur",
+      "slug": "architektur_bauwerke",
+      "name": "Architektur & Bauwerke",
+      "region": "mix",
+      "kern": false,
+      "notiz": ""
+    },
+    {
+      "oberkategorie": "kunst_literatur",
+      "slug": "comics_graphic_novels",
+      "name": "Comics & Graphic Novels",
+      "region": "global",
+      "kern": false,
+      "notiz": ""
+    },
+    {
+      "oberkategorie": "kunst_literatur",
+      "slug": "theater_musical",
+      "name": "Theater & Musical",
+      "region": "mix",
+      "kern": false,
+      "notiz": ""
+    },
+    {
+      "oberkategorie": "technik_autos",
+      "slug": "autos_marken",
+      "name": "Autos & Marken",
+      "region": "mix",
+      "kern": false,
+      "notiz": "DE-lean (VW/BMW/Mercedes)"
+    },
+    {
+      "oberkategorie": "technik_autos",
+      "slug": "smartphones_gadgets",
+      "name": "Smartphones & Gadgets",
+      "region": "global",
+      "kern": false,
+      "notiz": ""
+    },
+    {
+      "oberkategorie": "technik_autos",
+      "slug": "computer_internet_technik",
+      "name": "Computer & Internet-Technik",
+      "region": "global",
+      "kern": false,
+      "notiz": ""
+    },
+    {
+      "oberkategorie": "technik_autos",
+      "slug": "ki_zukunftstechnik",
+      "name": "KI & Zukunftstechnik",
+      "region": "global",
+      "kern": false,
+      "notiz": "Verfallsdaten Pflicht-Kandidat"
+    },
+    {
+      "oberkategorie": "technik_autos",
+      "slug": "raumfahrt_technik",
+      "name": "Raumfahrt-Technik",
+      "region": "global",
+      "kern": false,
+      "notiz": ""
+    },
+    {
+      "oberkategorie": "technik_autos",
+      "slug": "bahn_verkehr_mobilitaet",
+      "name": "Bahn, Verkehr & Mobilität",
+      "region": "de",
+      "kern": false,
+      "notiz": "DB-Fragen = garantierte Lacher"
+    },
+    {
+      "oberkategorie": "kurioses_mixed",
+      "slug": "schaetzmeister",
+      "name": "Schätzmeister",
+      "region": "mix",
+      "kern": true,
+      "notiz": "reine Schätzfragen quer durch alles"
+    },
+    {
+      "oberkategorie": "kurioses_mixed",
+      "slug": "stimmts_oder_quatsch",
+      "name": "Stimmt's oder Quatsch?",
+      "region": "mix",
+      "kern": true,
+      "notiz": "Heimat des wahr_falsch-Typs"
+    },
+    {
+      "oberkategorie": "kurioses_mixed",
+      "slug": "verrueckte_gesetze",
+      "name": "Verrückte Gesetze weltweit",
+      "region": "global",
+      "kern": false,
+      "notiz": ""
+    },
+    {
+      "oberkategorie": "kurioses_mixed",
+      "slug": "rekorde_superlative",
+      "name": "Rekorde & Superlative",
+      "region": "global",
+      "kern": false,
+      "notiz": ""
+    },
+    {
+      "oberkategorie": "kurioses_mixed",
+      "slug": "wer_bin_ich",
+      "name": "Wer bin ich?",
+      "region": "mix",
+      "kern": false,
+      "notiz": "Personen-Rätsel, lebt von den 3 Tipps"
+    },
+    {
+      "oberkategorie": "kurioses_mixed",
+      "slug": "buchstaben_woerter",
+      "name": "Buchstaben & Wörter",
+      "region": "de",
+      "kern": false,
+      "notiz": "Sprach-Spielereien"
+    }
+  ]
+}

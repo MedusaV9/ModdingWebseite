@@ -1,0 +1,1265 @@
+/* Erklär-Demo-Bühne (Mario-Party-Prinzip): zwei Gelenk-Puppen spielen die
+   Kern-Mechanik vor. Bewegung NUR über transform/opacity (Plan §1.3 Gesetz 6);
+   die wenigen left/bottom-Tweens sitzen auf einzelnen kleinen absoluten
+   Elementen und wechseln nur an Beat-Grenzen (~alle 2 s). Look: tokens.css
+   (Sticker-Prinzip, Outline-Warm-Schwarz, LED-Wand-Rahmen). */
+
+.ed-slot {
+  width: 100%;
+}
+
+/* ---------- Kernregel-Banner (W4, Eval-6): 1-Satz-Merksatz ÜBER der Bühne ---------- */
+
+.ed-kernregel {
+  position: relative;
+  z-index: 2;
+  display: table;
+  margin: 0 auto -12px;
+  max-width: 92%;
+  background: var(--mm-vault-gold);
+  color: var(--mm-outline);
+  font-family: var(--mm-font-text);
+  font-weight: 800;
+  font-size: clamp(1.02rem, 1.5vw, 1.3rem);
+  line-height: 1.2;
+  border: var(--mm-outline-m) solid var(--mm-outline);
+  border-radius: var(--mm-radius-m);
+  box-shadow: var(--mm-schatten-sticker);
+  padding: 6px 20px;
+  rotate: -1.2deg;
+  animation: ed-pop 0.45s var(--mm-kurve-bounce) both;
+}
+
+.ed-kernregel-pin {
+  margin-right: 8px;
+}
+
+/* ---------- ✓/✗-Stempel (W4): Auflösungs-Urteil knallt auf die Puppe ---------- */
+
+.ed-stempel {
+  position: absolute;
+  top: -6px;
+  right: -14px;
+  z-index: 5;
+  pointer-events: none;
+}
+
+.ed-akteur-b .ed-stempel {
+  right: auto;
+  left: -14px;
+}
+
+.ed-stempel-mal {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 3px solid var(--mm-outline);
+  box-shadow: var(--mm-schatten-sticker);
+  font-weight: 900;
+  font-size: 1.5rem;
+  line-height: 1;
+  color: var(--mm-ticket-paper);
+  rotate: 8deg;
+  animation: ed-stempel-knall 0.45s var(--mm-kurve-bounce) both;
+}
+
+.ed-stempel-mal.haken {
+  background: var(--mm-leaf);
+}
+
+.ed-stempel-mal.kreuz {
+  background: var(--mm-curtain);
+  rotate: -7deg;
+}
+
+@keyframes ed-stempel-knall {
+  0% {
+    opacity: 0;
+    transform: scale(2.4);
+  }
+  70% {
+    opacity: 1;
+    transform: scale(0.92);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.ed-buehne {
+  --ed-a: var(--mm-spotlight-pink); /* Mia (rot/pink — FARBWERTE.rot) */
+  --ed-b: var(--mm-studio-led); /* Bo (tuerkis) */
+
+  position: relative;
+  width: min(860px, 100%);
+  /* 28vh statt 30vh: auch die Finale-Karte (Extra-wFinal-Zeile) passt komplett. */
+  height: clamp(190px, 28vh, 280px);
+  margin: 0 auto;
+  overflow: hidden;
+  background:
+    repeating-linear-gradient(0deg, rgb(41 217 213 / 4%) 0 2px, transparent 2px 5px),
+    radial-gradient(
+      140% 110% at 50% 0%,
+      color-mix(in srgb, var(--mm-jungle-night) 60%, var(--mm-deep-palm)) 0%,
+      var(--mm-jungle-night) 100%
+    );
+  border: var(--mm-outline-m) solid var(--mm-outline);
+  outline: 3px solid var(--mm-studio-led);
+  outline-offset: -6px;
+  border-radius: var(--mm-radius-l);
+  box-shadow: var(--mm-schatten-sticker-gross);
+  color: var(--mm-ticket-paper);
+}
+
+.ed-buehne.wackelt {
+  animation: ed-beben 0.5s ease-in-out;
+}
+
+@keyframes ed-beben {
+  0%,
+  100% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+  25% {
+    transform: translate(-5px, 2px) rotate(-0.6deg);
+  }
+  60% {
+    transform: translate(4px, -2px) rotate(0.5deg);
+  }
+}
+
+/* ---------- Akteure (Mia links, Bo rechts) ---------- */
+
+.ed-akteur {
+  position: absolute;
+  bottom: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  z-index: 2;
+}
+
+.ed-akteur-a {
+  left: 3%;
+}
+
+.ed-akteur-b {
+  right: 3%;
+}
+
+.ed-puppe {
+  width: clamp(76px, 10vw, 118px);
+  aspect-ratio: 240 / 320;
+}
+
+/* Bo schaut nach links (die Affen spielen einander zugewandt). */
+.ed-akteur-b .ed-puppe {
+  transform: scaleX(-1);
+}
+
+.ed-name {
+  display: inline-block;
+  font-weight: 800;
+  font-size: 0.8rem;
+  color: var(--mm-outline);
+  border: 2px solid var(--mm-outline);
+  border-radius: var(--mm-radius-s);
+  padding: 0 8px;
+  rotate: -1.5deg;
+}
+
+.ed-name.von-a {
+  background: var(--ed-a);
+}
+
+.ed-name.von-b {
+  background: var(--ed-b);
+}
+
+/* ---------- Posen (Gelenk-Rotationen + Körper-Transform, nie Layout) ---------- */
+
+.ed-puppe svg {
+  transition: transform 0.46s var(--mm-kurve-bounce);
+}
+
+.ed-puppe svg #arm-l,
+.ed-puppe svg #arm-r,
+.ed-puppe svg #kopf {
+  transition: transform 0.38s var(--mm-kurve-bounce);
+}
+
+.ed-pose-denk svg #kopf {
+  animation: none;
+  transform: rotate(7deg);
+}
+
+.ed-pose-denk svg #arm-l {
+  transform: rotate(-56deg);
+}
+
+.ed-pose-tipp svg {
+  transform: translateY(-4px);
+}
+
+.ed-pose-tipp svg #arm-r {
+  transform: rotate(-100deg);
+}
+
+.ed-pose-buzz svg {
+  transform: translateY(-10px) rotate(-3deg) scale(1.05);
+}
+
+.ed-pose-buzz svg #arm-r {
+  transform: rotate(-132deg);
+}
+
+.ed-pose-jubel svg,
+.ed-pose-huepf svg {
+  animation: ed-hop 0.75s var(--mm-kurve-bounce) infinite;
+}
+
+.ed-pose-frust svg {
+  transform: translateY(6px) rotate(3deg);
+}
+
+.ed-pose-frust svg #arm-l,
+.ed-pose-frust svg #arm-r {
+  transform: rotate(-10deg);
+}
+
+.ed-pose-duck svg {
+  transform: translateY(9px) scale(1, 0.86);
+}
+
+.ed-pose-zeig svg #arm-r {
+  transform: rotate(-72deg);
+}
+
+.ed-pose-wackel svg {
+  animation: ed-balance 0.5s ease-in-out infinite alternate;
+}
+
+.ed-pose-fall svg {
+  transform: translateY(36px) rotate(64deg);
+  opacity: 0.85;
+}
+
+.ed-pose-schleich svg {
+  transform: translateX(26px) rotate(6deg);
+}
+
+.ed-pose-schleich svg #arm-r {
+  transform: rotate(-84deg);
+}
+
+@keyframes ed-hop {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  40% {
+    transform: translateY(-14px);
+  }
+}
+
+@keyframes ed-balance {
+  from {
+    transform: rotate(-7deg) translateY(2px);
+  }
+  to {
+    transform: rotate(6deg) translateY(-2px);
+  }
+}
+
+/* ---------- Sprech-Blasen ---------- */
+
+.ed-blase {
+  position: absolute;
+  /* Deutlich in den Kopf gezogen: bei 28vh-Bühnen (Screen 800px hoch) ragte
+     die Blase sonst über die Bühnenkante und wurde vom overflow:hidden
+     halbiert (W4-Sichtung: Affenbank-Demo, Bos „Danke“-Blase unlesbar). */
+  bottom: calc(100% - 34px);
+  opacity: 0;
+  z-index: 4;
+  pointer-events: none;
+}
+
+.ed-akteur-a .ed-blase {
+  left: 10%;
+}
+
+.ed-akteur-b .ed-blase {
+  right: 10%;
+}
+
+.ed-blase.sichtbar {
+  opacity: 1;
+}
+
+.ed-blase-inhalt {
+  position: relative;
+  display: inline-block;
+  white-space: nowrap;
+  background: var(--mm-ticket-paper);
+  color: var(--mm-outline);
+  font-weight: 800;
+  font-size: 0.92rem;
+  border: 3px solid var(--mm-outline);
+  border-radius: var(--mm-radius-m);
+  padding: 4px 12px;
+  box-shadow: var(--mm-schatten-sticker);
+  animation: ed-pop 0.38s var(--mm-kurve-bounce) both;
+}
+
+.ed-blase-inhalt::after {
+  content: "";
+  position: absolute;
+  bottom: -8px;
+  left: 22px;
+  width: 12px;
+  height: 12px;
+  background: var(--mm-ticket-paper);
+  border-right: 3px solid var(--mm-outline);
+  border-bottom: 3px solid var(--mm-outline);
+  transform: rotate(45deg) skew(12deg, 12deg);
+}
+
+.ed-akteur-b .ed-blase-inhalt::after {
+  left: auto;
+  right: 22px;
+}
+
+/* ---------- Requisiten-Ebene ---------- */
+
+.ed-mitte {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 12px 19%;
+  z-index: 1;
+  pointer-events: none;
+}
+
+@keyframes ed-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.4) rotate(-6deg);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+/* Frage-Karte */
+.ed-frage {
+  background: var(--mm-ticket-paper);
+  color: var(--mm-outline);
+  border: var(--mm-outline-s) solid var(--mm-outline);
+  border-radius: var(--mm-radius-m);
+  box-shadow: var(--mm-schatten-sticker);
+  padding: 8px 16px;
+  text-align: center;
+  rotate: -1deg;
+  animation: ed-pop 0.42s var(--mm-kurve-bounce) both;
+}
+
+.ed-frage-text {
+  font-weight: 800;
+  font-size: 1rem;
+}
+
+.ed-frage-meta {
+  font-size: 0.78rem;
+  opacity: 0.75;
+}
+
+.ed-optionen {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  margin-top: 6px;
+}
+
+.ed-option {
+  display: inline-block;
+  font-weight: 800;
+  font-size: 0.85rem;
+  background: color-mix(in srgb, var(--mm-ticket-paper) 94%, var(--mm-outline));
+  border: 2px solid var(--mm-outline);
+  border-radius: var(--mm-radius-s);
+  padding: 2px 8px;
+  transition:
+    transform 0.3s var(--mm-kurve-bounce),
+    background 0.3s;
+}
+
+.ed-option.tipp-a {
+  box-shadow: 0 0 0 3px var(--ed-a);
+  transform: translateY(-3px);
+}
+
+.ed-option.tipp-b {
+  box-shadow: 0 0 0 3px var(--ed-b);
+  transform: translateY(-3px);
+}
+
+.ed-option.tipp-a.tipp-b {
+  box-shadow:
+    0 0 0 3px var(--ed-a),
+    0 0 0 6px var(--ed-b);
+}
+
+.ed-option.richtig {
+  background: var(--mm-leaf);
+  color: var(--mm-ticket-paper);
+  animation: ed-puls 0.6s var(--mm-kurve-bounce) 2;
+}
+
+.ed-option.falsch {
+  background: var(--mm-curtain);
+  color: var(--mm-ticket-paper);
+}
+
+@keyframes ed-puls {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.14);
+  }
+}
+
+/* Buzzer */
+.ed-buzzer {
+  width: 84px;
+  height: 84px;
+  border-radius: var(--mm-radius-rund);
+  background: radial-gradient(
+    circle at 35% 30%,
+    color-mix(in srgb, var(--mm-spotlight-pink) 78%, var(--mm-ticket-paper)),
+    var(--mm-spotlight-pink) 70%
+  );
+  border: var(--mm-outline-m) solid var(--mm-outline);
+  box-shadow: var(--mm-schatten-sticker-gross);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mm-font-text);
+  font-weight: 800;
+  font-size: 0.95rem;
+  color: var(--mm-ticket-paper);
+  transition: transform 0.18s var(--mm-kurve-snap);
+  animation: ed-pop 0.42s var(--mm-kurve-bounce) both;
+}
+
+.ed-buzzer.gedrueckt {
+  transform: scale(0.88) translateY(4px);
+  box-shadow: var(--mm-schatten-gedrueckt);
+}
+
+.ed-buzzer.gedrueckt.von-a {
+  box-shadow:
+    var(--mm-schatten-gedrueckt),
+    0 0 0 5px var(--ed-a);
+}
+
+.ed-buzzer.gedrueckt.von-b {
+  box-shadow:
+    var(--mm-schatten-gedrueckt),
+    0 0 0 5px var(--ed-b);
+}
+
+/* Schätz-Slider (Tresor) */
+.ed-slider {
+  width: min(430px, 100%);
+  animation: ed-pop 0.42s var(--mm-kurve-bounce) both;
+}
+
+.ed-slider-bahn {
+  position: relative;
+  height: 16px;
+  background: var(--mm-jungle-night);
+  border: 3px solid var(--mm-outline);
+  border-radius: var(--mm-radius-rund);
+}
+
+.ed-slider-griff {
+  position: absolute;
+  top: 50%;
+  left: calc(var(--pos, 0) * 100%);
+  transform: translate(-50%, -58%);
+  font-size: 1.7rem;
+  filter: drop-shadow(2px 2px 0 var(--mm-schatten-farbe));
+  transition: left 1.4s var(--mm-kurve-snap);
+}
+
+.ed-slider-ziel {
+  position: absolute;
+  bottom: 100%;
+  left: calc(var(--pos, 0) * 100%);
+  transform: translateX(-50%);
+  font-size: 1.3rem;
+  animation: ed-pop 0.4s var(--mm-kurve-bounce) both;
+}
+
+.ed-slider-marken {
+  position: relative;
+  height: 20px;
+}
+
+.ed-slider-marke {
+  position: absolute;
+  top: 0;
+  left: calc(var(--pos, 0) * 100%);
+  transform: translateX(-50%);
+  font-size: 0.9rem;
+  animation: ed-pop 0.35s var(--mm-kurve-bounce) both;
+}
+
+.ed-slider-marke.von-a {
+  color: var(--ed-a);
+}
+
+.ed-slider-marke.von-b {
+  color: var(--ed-b);
+}
+
+/* Antwort-Türen mit Chips (Market/Goldener Affe) */
+.ed-tueren {
+  display: flex;
+  gap: 10px;
+}
+
+.ed-tuer {
+  width: 72px;
+  min-height: 74px;
+  background: radial-gradient(
+    130% 120% at 50% 0%,
+    var(--mm-deep-palm),
+    color-mix(in srgb, var(--mm-deep-palm) 50%, var(--mm-jungle-night))
+  );
+  border: var(--mm-outline-s) solid var(--mm-outline);
+  border-radius: var(--mm-radius-m);
+  box-shadow: var(--mm-schatten-sticker);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 4px;
+  transition:
+    transform 0.35s var(--mm-kurve-bounce),
+    opacity 0.35s;
+  animation: ed-pop 0.42s var(--mm-kurve-bounce) both;
+}
+
+.ed-tuer.offen {
+  background: radial-gradient(
+    130% 120% at 50% 0%,
+    var(--mm-leaf),
+    color-mix(in srgb, var(--mm-leaf) 40%, var(--mm-deep-palm))
+  );
+  transform: translateY(-7px) scale(1.07);
+}
+
+.ed-tuer.daneben {
+  opacity: 0.5;
+}
+
+.ed-tuer-kopf {
+  font-weight: 800;
+  font-size: 0.85rem;
+}
+
+.ed-tuer-chips {
+  display: flex;
+  gap: 3px;
+}
+
+.ed-chip {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid var(--mm-outline);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 0.72rem;
+  color: var(--mm-outline);
+}
+
+.ed-chip.von-a {
+  background: var(--ed-a);
+}
+
+.ed-chip.von-b {
+  background: var(--ed-b);
+}
+
+.ed-tuer-mal {
+  font-family: var(--mm-font-display);
+  color: var(--mm-coin-shine);
+  animation: ed-pop 0.4s var(--mm-kurve-bounce) both;
+}
+
+/* Pott-Kette (Affenbank) */
+.ed-kette {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.ed-glied {
+  display: inline-block;
+  background: var(--mm-ticket-paper);
+  color: var(--mm-outline);
+  font-weight: 800;
+  font-variant-numeric: var(--mm-ziffern);
+  border: 3px solid var(--mm-outline);
+  border-radius: var(--mm-radius-rund);
+  padding: 3px 10px;
+  animation: ed-pop 0.38s var(--mm-kurve-bounce) both;
+  transition: opacity 0.4s;
+}
+
+.ed-glied.aktiv {
+  background: var(--mm-vault-gold);
+  animation:
+    ed-pop 0.38s var(--mm-kurve-bounce) both,
+    ed-puls 0.9s ease-in-out 0.4s infinite;
+}
+
+.ed-kette.gerissen .ed-glied {
+  opacity: 0.3;
+}
+
+.ed-bank-knopf {
+  font-family: var(--mm-font-text);
+  font-weight: 800;
+  font-size: 1rem;
+  background: var(--mm-curtain);
+  color: var(--mm-ticket-paper);
+  border: var(--mm-outline-s) solid var(--mm-outline);
+  border-radius: var(--mm-radius-rund);
+  padding: 6px 14px;
+  rotate: 3deg;
+  animation: ed-pop 0.4s var(--mm-kurve-bounce) both;
+}
+
+.ed-bank-knopf.von-a {
+  box-shadow: 0 0 0 4px var(--ed-a);
+}
+
+.ed-bank-knopf.von-b {
+  box-shadow: 0 0 0 4px var(--ed-b);
+}
+
+.ed-kette-riss {
+  font-size: 1.7rem;
+  animation: ed-pop 0.32s var(--mm-kurve-bounce) both;
+}
+
+/* Stinkbanane */
+.ed-banane {
+  position: absolute;
+  top: 26%;
+  left: var(--ort-x, 50%);
+  transform: translateX(-50%);
+  font-size: 2.8rem;
+  filter: drop-shadow(3px 3px 0 var(--mm-schatten-farbe));
+  transition: left 0.9s var(--mm-kurve-bounce);
+  z-index: 3;
+}
+
+.ed-banane:not(.geplatzt) {
+  animation: ed-ticken 0.9s ease-in-out infinite;
+}
+
+.ed-banane.hektisch {
+  animation-duration: 0.35s;
+}
+
+.ed-banane.geplatzt {
+  animation: ed-platzer 0.6s var(--mm-kurve-bounce) both;
+  font-size: 3.2rem;
+}
+
+@keyframes ed-ticken {
+  0%,
+  100% {
+    transform: translateX(-50%) rotate(-9deg) scale(1);
+  }
+  50% {
+    transform: translateX(-50%) rotate(9deg) scale(1.07);
+  }
+}
+
+@keyframes ed-platzer {
+  0% {
+    transform: translateX(-50%) scale(0.5);
+    opacity: 0.4;
+  }
+  60% {
+    transform: translateX(-50%) scale(1.35);
+  }
+  100% {
+    transform: translateX(-50%) scale(1);
+    opacity: 1;
+  }
+}
+
+.ed-ort-a {
+  --ort-x: 15%;
+}
+
+.ed-ort-mitte {
+  --ort-x: 50%;
+}
+
+.ed-ort-b {
+  --ort-x: 85%;
+}
+
+/* Pixel-Bild (Pixel-Dschungel) */
+.ed-pixel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  animation: ed-pop 0.42s var(--mm-kurve-bounce) both;
+}
+
+.ed-pixel-bild {
+  position: relative;
+  width: 152px;
+  height: 106px;
+  background: color-mix(in srgb, var(--mm-jungle-night) 78%, var(--mm-outline));
+  border: var(--mm-outline-s) solid var(--mm-outline);
+  border-radius: var(--mm-radius-m);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ed-pixel-motiv {
+  font-size: 3.4rem;
+}
+
+.ed-pixel-raster {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  grid-template-rows: repeat(4, 1fr);
+}
+
+.ed-pixel-block {
+  /* Block deckt zu, solange die Schärfe seine Hülle nicht erreicht hat. */
+  opacity: clamp(0, (var(--block-huelle, 0.5) + 0.2 - var(--schaerfe, 0)) * 4, 1);
+  transition: opacity 0.7s ease-out;
+}
+
+.ed-pixel-block:nth-child(3n) {
+  background: var(--mm-deep-palm);
+}
+
+.ed-pixel-block:nth-child(3n + 1) {
+  background: var(--mm-leaf);
+}
+
+.ed-pixel-block:nth-child(3n + 2) {
+  background: var(--mm-jungle-night);
+}
+
+.ed-pixel-preis {
+  display: inline-block;
+  background: var(--mm-vault-gold);
+  color: var(--mm-outline);
+  font-weight: 800;
+  font-variant-numeric: var(--mm-ziffern);
+  border: 2px solid var(--mm-outline);
+  border-radius: var(--mm-radius-s);
+  padding: 1px 10px;
+}
+
+/* Sortier-Leiter (Affenleiter) */
+.ed-leiter {
+  position: relative;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 5px;
+  animation: ed-pop 0.42s var(--mm-kurve-bounce) both;
+}
+
+.ed-sprosse {
+  display: inline-block;
+  min-width: 190px;
+  text-align: center;
+  background: var(--mm-ticket-paper);
+  color: var(--mm-outline);
+  font-weight: 800;
+  font-size: 0.88rem;
+  border: 3px solid var(--mm-outline);
+  border-radius: var(--mm-radius-s);
+  padding: 2px 10px;
+}
+
+.ed-leiter.perfekt .ed-sprosse {
+  background: var(--mm-coin-shine);
+}
+
+.ed-leiter-bonus {
+  position: absolute;
+  right: -30px;
+  top: -14px;
+  font-family: var(--mm-font-text);
+  font-weight: 800;
+  font-size: 0.95rem;
+  background: var(--mm-vault-gold);
+  border: 3px solid var(--mm-outline);
+  border-radius: var(--mm-radius-s);
+  padding: 2px 10px;
+  color: var(--mm-outline);
+  rotate: 6deg;
+  animation: ed-pop 0.4s var(--mm-kurve-bounce) both;
+}
+
+/* Schrumpfender Geldsack (Kokosnuss-Uhr) */
+.ed-sack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.ed-sack-beutel {
+  font-size: 3rem;
+  filter: drop-shadow(3px 3px 0 var(--mm-schatten-farbe));
+}
+
+.ed-sack-betrag {
+  display: inline-block;
+  background: var(--mm-vault-gold);
+  color: var(--mm-outline);
+  font-weight: 800;
+  font-variant-numeric: var(--mm-ziffern);
+  border: 3px solid var(--mm-outline);
+  border-radius: var(--mm-radius-s);
+  padding: 2px 12px;
+  font-size: 1.1rem;
+}
+
+.ed-frost {
+  display: inline-block;
+  background: color-mix(in srgb, var(--mm-ticket-paper) 80%, var(--mm-studio-led));
+  color: var(--mm-outline);
+  font-weight: 800;
+  font-size: 0.82rem;
+  border: 3px solid var(--mm-outline);
+  border-radius: var(--mm-radius-rund);
+  padding: 1px 10px;
+  animation: ed-pop 0.4s var(--mm-kurve-bounce) both;
+}
+
+.ed-frost.von-a {
+  box-shadow: 0 0 0 3px var(--ed-a);
+}
+
+.ed-frost.von-b {
+  box-shadow: 0 0 0 3px var(--ed-b);
+}
+
+/* Lianen überm Krokodil-Fluss (Finale) */
+.ed-lianen {
+  position: absolute;
+  inset: 0;
+}
+
+.ed-liane {
+  position: absolute;
+  top: 0;
+  bottom: 24%;
+  width: 7px;
+  background: radial-gradient(
+    150% 120% at 50% 0%,
+    color-mix(in srgb, var(--mm-leaf) 70%, var(--mm-deep-palm)),
+    color-mix(in srgb, var(--mm-leaf) 30%, var(--mm-deep-palm))
+  );
+  border: 2px solid var(--mm-outline);
+  border-radius: var(--mm-radius-rund);
+}
+
+.ed-liane:nth-of-type(1) {
+  left: 38%;
+}
+
+.ed-liane:nth-of-type(2) {
+  left: 60%;
+}
+
+.ed-kletterer {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--hoehe, 0.5) * 72%);
+  transform: translateX(-50%);
+  font-size: 1.9rem;
+  filter: drop-shadow(2px 2px 0 var(--mm-schatten-farbe));
+  transition: bottom 0.9s var(--mm-kurve-bounce);
+}
+
+.ed-kletterer.von-a {
+  text-shadow: 0 0 0 var(--ed-a);
+}
+
+.ed-kroko {
+  position: absolute;
+  bottom: 2%;
+  left: 49%;
+  transform: translateX(-50%);
+  font-size: 2.3rem;
+  filter: drop-shadow(2px 2px 0 var(--mm-schatten-farbe));
+}
+
+.ed-kroko.schnappt {
+  animation: ed-schnappen 0.7s var(--mm-kurve-bounce) both;
+}
+
+.ed-kroko.zu-a {
+  --schnapp-x: -46px;
+}
+
+.ed-kroko.zu-b {
+  --schnapp-x: 46px;
+}
+
+@keyframes ed-schnappen {
+  0% {
+    transform: translateX(-50%);
+  }
+  55% {
+    transform: translate(calc(-50% + var(--schnapp-x, 0px)), -52px) rotate(-14deg) scale(1.2);
+  }
+  100% {
+    transform: translate(calc(-50% + var(--schnapp-x, 0px)), -8px);
+  }
+}
+
+/* Hängesteg (Lianensteg-Duell): Plattform unter den Füßen */
+.ed-steg {
+  position: absolute;
+  left: 6%;
+  right: 6%;
+  bottom: 3px;
+  height: 13px;
+  z-index: 0;
+}
+
+.ed-steg-planke {
+  position: absolute;
+  inset: 0;
+  /* Holz-Brauntöne: BEWUSSTE Requisiten-Farben außerhalb der Palette
+   * (siehe tokens.css-Ausnahmen); repeating-linear = Planken-Textur. */
+  background: repeating-linear-gradient(90deg, #8a5a3b 0 26px, #6f4327 26px 30px);
+  border: 3px solid var(--mm-outline);
+  border-radius: var(--mm-radius-s);
+}
+
+.ed-steg-seil {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -7px;
+  border-top: 3px dashed #6f4327;
+}
+
+/* Schilder (Gebote, Quoten, Einsätze, Pötte …) */
+.ed-schild {
+  display: inline-block;
+  font-weight: 800;
+  font-size: 0.95rem;
+  border: 3px solid var(--mm-outline);
+  border-radius: var(--mm-radius-m);
+  box-shadow: var(--mm-schatten-sticker);
+  padding: 3px 12px;
+  rotate: -2deg;
+  animation: ed-pop 0.4s var(--mm-kurve-bounce) both;
+  z-index: 3;
+}
+
+.ed-schild.ton-papier {
+  background: var(--mm-ticket-paper);
+  color: var(--mm-outline);
+}
+
+.ed-schild.ton-gold {
+  background: var(--mm-vault-gold);
+  color: var(--mm-outline);
+}
+
+.ed-schild.ton-rot {
+  background: var(--mm-curtain);
+  color: var(--mm-ticket-paper);
+}
+
+.ed-schild.ton-gruen {
+  background: var(--mm-leaf);
+  color: var(--mm-ticket-paper);
+}
+
+.ed-schild.ton-cyan {
+  background: var(--mm-studio-led);
+  color: var(--mm-outline);
+}
+
+.ed-schild.ed-ort-a,
+.ed-schild.ed-ort-b {
+  position: absolute;
+  top: 13%;
+  transform: translateX(-50%);
+}
+
+/* 8 % nach innen gerückt: kein Clipping am Bühnenrand, keine Kopf-Kollision.
+   z-index 6: Gebots-/Einsatz-Schilder kleben ÜBER den Puppen (Sticker-Look). */
+.ed-schild.ed-ort-a {
+  left: calc(var(--ort-x) + 8%);
+  z-index: 6;
+}
+
+.ed-schild.ed-ort-b {
+  left: calc(var(--ort-x) - 8%);
+  z-index: 6;
+}
+
+/* ---------- FX-Ebene: Konfetti, Explosion, Geld-Flüge ---------- */
+
+.ed-fx {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+}
+
+.ed-konfetti {
+  position: absolute;
+  left: 50%;
+  top: 44%;
+  width: 10px;
+  height: 7px;
+  transform: rotate(calc(var(--i, 0) * 30deg)) translateY(-12px);
+  animation: ed-konfetti-schuss 1s ease-out both;
+}
+
+.ed-konfetti:nth-child(3n) {
+  background: var(--mm-vault-gold);
+}
+
+.ed-konfetti:nth-child(3n + 1) {
+  background: var(--mm-spotlight-pink);
+}
+
+.ed-konfetti:nth-child(3n + 2) {
+  background: var(--mm-studio-led);
+}
+
+@keyframes ed-konfetti-schuss {
+  0% {
+    opacity: 1;
+    transform: rotate(calc(var(--i, 0) * 30deg)) translateY(-12px);
+  }
+  100% {
+    opacity: 0;
+    transform: rotate(calc(var(--i, 0) * 30deg)) translateY(-105px);
+  }
+}
+
+.ed-explosion {
+  position: absolute;
+  left: 50%;
+  top: 38%;
+  transform: translate(-50%, -50%);
+  font-size: 3.6rem;
+  animation: ed-explosion-puls 0.75s var(--mm-kurve-bounce) both;
+}
+
+@keyframes ed-explosion-puls {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.3);
+  }
+  55% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.5);
+  }
+  100% {
+    opacity: 0.9;
+    transform: translate(-50%, -50%) scale(1.1);
+  }
+}
+
+.ed-schein {
+  position: absolute;
+  left: var(--von-x, 50%);
+  top: 46%;
+  font-size: 1.5rem;
+  animation: ed-geldflug 0.95s var(--mm-kurve-snap) both;
+  animation-delay: calc(var(--i, 0) * 130ms);
+}
+
+/* Geld-Fluss-Pfeil (W4): gestrichelte Gold-Bahn zeichnet sich von Zahler zu
+   Empfänger, Pfeilspitze am Ziel — die Scheine fliegen obendrüber. */
+.ed-geldpfeil {
+  position: absolute;
+  left: var(--von-x, 15%);
+  width: var(--breite, 70%);
+  top: 54%;
+  height: 0;
+  border-top: 5px dashed var(--mm-vault-gold);
+  filter: drop-shadow(2px 2px 0 var(--mm-schatten-farbe));
+  transform-origin: left center;
+  animation: ed-pfeil-ziehen 0.7s var(--mm-kurve-snap) both;
+}
+
+.ed-geldpfeil.nach-links {
+  transform-origin: right center;
+}
+
+.ed-geldpfeil::after {
+  content: "";
+  position: absolute;
+  right: -6px;
+  top: -13px;
+  border: 11px solid transparent;
+  border-left: 16px solid var(--mm-vault-gold);
+  border-right-width: 0;
+}
+
+.ed-geldpfeil.nach-links::after {
+  right: auto;
+  left: -6px;
+  border-left-width: 0;
+  border-right: 16px solid var(--mm-vault-gold);
+}
+
+@keyframes ed-pfeil-ziehen {
+  from {
+    opacity: 0;
+    transform: scaleX(0.15);
+  }
+  to {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+}
+
+@keyframes ed-geldflug {
+  0% {
+    left: var(--von-x, 50%);
+    opacity: 0;
+    transform: translateY(0) rotate(-10deg);
+  }
+  20% {
+    opacity: 1;
+  }
+  50% {
+    transform: translateY(-46px) rotate(8deg);
+  }
+  100% {
+    left: var(--zu-x, 50%);
+    opacity: 0.9;
+    transform: translateY(0) rotate(-6deg);
+  }
+}
+
+/* ---------- Erklärkarte im Demo-Modus: Bühne groß, Regeltext 2 Zeilen ---------- */
+
+.runden-karte.mit-demo {
+  width: min(960px, 94%);
+  padding: 10px 26px 10px;
+}
+
+.runden-karte.mit-demo h1 {
+  font-size: var(--mm-display-m);
+  margin: 2px 0 4px;
+}
+
+.runden-karte.mit-demo .regel {
+  font-size: 1.12rem;
+  max-width: 46em;
+  margin: 6px auto 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Safe-Bereich für niedrige Viewports (1024×768-Befund: Spielerleiste
+   überlagert die Demo-Bühne): Bühne + Karte schrumpfen responsive, damit die
+   komplette Erklärkarte ÜBER der Podium-Leiste bleibt. */
+@media (max-height: 850px) {
+  .ed-buehne {
+    height: clamp(150px, 21vh, 210px);
+  }
+
+  .ed-kernregel {
+    font-size: 0.95rem;
+    padding: 4px 14px;
+    margin-bottom: -9px;
+  }
+
+  .runden-karte.mit-demo {
+    padding: 8px 22px;
+  }
+
+  .runden-karte.mit-demo h1 {
+    font-size: var(--mm-display-s);
+    margin: 2px 0;
+  }
+
+  .runden-karte.mit-demo .regel {
+    font-size: 1rem;
+    margin-top: 4px;
+  }
+
+  .ed-puppe {
+    width: clamp(64px, 8.5vw, 96px);
+  }
+}
+
+/* ---------- Reduced Motion: Beats bleiben, Zappeln nicht ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .ed-puppe svg,
+  .ed-banane,
+  .ed-kroko.schnappt,
+  .ed-konfetti,
+  .ed-explosion,
+  .ed-schein,
+  .ed-buehne.wackelt,
+  .ed-pose-jubel svg,
+  .ed-pose-huepf svg,
+  .ed-pose-wackel svg,
+  .ed-kernregel,
+  .ed-stempel-mal,
+  .ed-geldpfeil {
+    animation-duration: 1ms;
+  }
+
+  .ed-puppe svg,
+  .ed-slider-griff,
+  .ed-kletterer,
+  .ed-banane {
+    transition-duration: 1ms;
+  }
+}

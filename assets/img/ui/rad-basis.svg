@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 440 440" data-rad="" role="img" aria-label="Glücksrad-Basis">
+  <title>Glücksrad-Basis — 10 Segment-Slots (Klassen seg-gruen/seg-blau/seg-gold)</title>
+  <!--
+    Nutzung (Screen-Client): SVG inline einbetten, pro Dreh die ~10 kompatiblen
+    Segmente (GAME-DESIGN §5.3) auf die <use>-Slots mappen: Klasse setzen
+    (seg-gruen | seg-blau | seg-gold) und Label als <text> auf Pfad #seg-label-N
+    bzw. rotiert einhängen. Drehen über #rad { transform: rotate(...) }.
+  -->
+  <style>
+    svg[data-rad] .seg-gruen{fill:#22A559}
+    svg[data-rad] .seg-blau{fill:#3B82F6}
+    svg[data-rad] .seg-gold{fill:#F5B301}
+    svg[data-rad] #rad{transform-box:view-box;transform-origin:220px 220px}
+  </style>
+  <defs>
+    <!-- Ein 36°-Segment, Spitze im Zentrum (220,220), Radius 170 -->
+    <path id="segment" d="M 220 220 L 220 50 A 170 170 0 0 1 319.9 82.5 Z" stroke="#1A1208" stroke-width="5" stroke-linejoin="round"/>
+  </defs>
+
+  <!-- Außenring mit Studio-Glühbirnen -->
+  <circle cx="220" cy="220" r="196" fill="#14532D" stroke="#1A1208" stroke-width="7"/>
+  <circle cx="220" cy="220" r="178" fill="none" stroke="#F5B301" stroke-width="12"/>
+  <g fill="#FFDE6B" stroke="#1A1208" stroke-width="3">
+    <circle cx="220" cy="26" r="7"/><circle cx="334" cy="63" r="7"/><circle cx="405" cy="160" r="7"/>
+    <circle cx="405" cy="280" r="7"/><circle cx="334" cy="377" r="7"/><circle cx="220" cy="414" r="7"/>
+    <circle cx="106" cy="377" r="7"/><circle cx="35" cy="280" r="7"/><circle cx="35" cy="160" r="7"/>
+    <circle cx="106" cy="63" r="7"/>
+  </g>
+
+  <!-- Das drehbare Rad: 10 Segment-Slots -->
+  <g id="rad">
+    <use href="#segment" id="seg-1" class="seg-gruen"/>
+    <use href="#segment" id="seg-2" class="seg-blau" transform="rotate(36 220 220)"/>
+    <use href="#segment" id="seg-3" class="seg-gruen" transform="rotate(72 220 220)"/>
+    <use href="#segment" id="seg-4" class="seg-blau" transform="rotate(108 220 220)"/>
+    <use href="#segment" id="seg-5" class="seg-gold" transform="rotate(144 220 220)"/>
+    <use href="#segment" id="seg-6" class="seg-blau" transform="rotate(180 220 220)"/>
+    <use href="#segment" id="seg-7" class="seg-gruen" transform="rotate(216 220 220)"/>
+    <use href="#segment" id="seg-8" class="seg-blau" transform="rotate(252 220 220)"/>
+    <use href="#segment" id="seg-9" class="seg-gruen" transform="rotate(288 220 220)"/>
+    <use href="#segment" id="seg-10" class="seg-blau" transform="rotate(324 220 220)"/>
+  </g>
+
+  <!-- Nabe: Bananen-Dollar -->
+  <circle cx="220" cy="220" r="46" fill="#0E2A1F" stroke="#1A1208" stroke-width="6"/>
+  <circle cx="220" cy="220" r="38" fill="none" stroke="#F5B301" stroke-width="4"/>
+  <g transform="translate(220 222) rotate(-6) scale(0.3)">
+    <path d="M -92 -20 C -78 26 -34 46 6 46 C 46 46 80 18 90 -24" fill="none" stroke="#1A1208" stroke-width="46" stroke-linecap="round"/>
+    <path d="M -92 -20 C -78 26 -34 46 6 46 C 46 46 80 18 90 -24" fill="none" stroke="#FFC93C" stroke-width="35" stroke-linecap="round"/>
+    <g stroke="#1A1208" stroke-width="5">
+      <rect x="-21" y="0" width="15" height="90" rx="7" fill="#F5B301" transform="rotate(3)"/>
+      <rect x="8" y="-2" width="15" height="90" rx="7" fill="#F5B301" transform="rotate(-2)"/>
+    </g>
+  </g>
+
+  <!-- Zeiger (oben, zeigt aufs Segment unter ihm) -->
+  <g id="zeiger" transform="rotate(2 220 30)">
+    <path d="M 198 14 L 242 14 L 220 58 Z" fill="#FF3E8E" stroke="#1A1208" stroke-width="6" stroke-linejoin="round"/>
+    <circle cx="220" cy="18" r="9" fill="#FFDE6B" stroke="#1A1208" stroke-width="4"/>
+  </g>
+</svg>

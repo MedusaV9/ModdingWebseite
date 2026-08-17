@@ -1,0 +1,119 @@
+/* Vier Lianen — Screen-Optionen + Player-XXL-Buttons.
+   Vertikal kompakt: 3-zeilige Fragen + Erklärtext müssen in die LED-Wand
+   passen, ohne dass die Ergebnis-Chips unter der Wand abgeschnitten werden. */
+.vl-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(900px, 94vw);
+  margin: 0 auto;
+}
+
+.vl-frage {
+  text-align: center;
+  font-size: clamp(1.4rem, 3.2vw, 2.1rem);
+  line-height: 1.2;
+  margin: 0.2em 0;
+}
+
+.vl-optionen {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.vl-option {
+  background: var(--panel);
+  border-left: 10px solid var(--deko);
+  border-radius: var(--radius);
+  padding: 13px 16px;
+  font-size: clamp(1.1rem, 2.4vw, 1.6rem);
+  font-weight: 600;
+}
+
+.vl-option.richtig {
+  outline: 4px solid var(--gold);
+  background: var(--mm-flaeche-chip);
+}
+
+.vl-option.falsch {
+  opacity: 0.35;
+}
+
+.vl-deko {
+  display: inline-block;
+  min-width: 3.2em;
+  margin-right: 6px;
+  padding: 2px 8px;
+  border-radius: 8px;
+  /* Kontrast-Fix (Eval 2, 1,51:1): Marker-Farbe als CHIP-Hintergrund mit
+     dunkler Schrift statt farbiger Schrift auf Panel — alle 4 Marker ≥3:1
+     (A 10,2:1 · B 3,3:1 · C 4,4:1 · D 4,5:1 gegen #14100a). */
+  background: var(--deko);
+  color: #14100a;
+  font-weight: 800;
+  text-align: center;
+}
+
+/* Player: 4 XXL-Buttons vertikal, je ~18 % Bildhöhe (Touch-Target weit über 44pt) */
+.vl-player {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+  padding: 10px;
+}
+
+.vl-frage-klein {
+  text-align: center;
+  margin: 4px 0;
+  color: var(--muted);
+}
+
+.vl-button {
+  flex: 1;
+  /* Eval-2-Fix „Antwort D angeschnitten": 4×17dvh + Kopf + Timer + Psst +
+     Joker-Leiste sprengten 100dvh — 12dvh garantiert, dass alle 4 Antworten
+     im Bild sind; flex:1 streckt sie weiter, wenn Platz da ist. */
+  min-height: 12dvh;
+  font-size: 1.25rem;
+  font-weight: 700;
+  text-align: left;
+  border-left: 12px solid var(--deko);
+  background: var(--panel);
+}
+
+.vl-button.gewaehlt {
+  outline: 4px solid var(--gold);
+  background: var(--mm-flaeche-chip);
+}
+
+.vl-button.gesperrt:not(.gewaehlt) {
+  opacity: 0.35;
+}
+
+/* Abgerissene Option (Tipp-Kanone/50:50): durchgestrichen + ausgegraut. */
+.vl-option.entfernt,
+.vl-button.entfernt {
+  opacity: 0.3;
+  text-decoration: line-through;
+  filter: grayscale(0.8);
+}
+
+/* Wahr/Falsch (kind wahr_falsch): 2 Optionen untereinander, deutlich größer. */
+.vl-optionen.zweier {
+  grid-template-columns: 1fr;
+}
+
+.vl-optionen.zweier .vl-option {
+  padding: 22px 24px;
+  font-size: clamp(1.4rem, 3vw, 2rem);
+  text-align: center;
+}
+
+/* Handy: 2 XXL-Buttons füllen die Fläche der sonst 4 Buttons. */
+.vl-button.xxl {
+  min-height: 26dvh;
+  font-size: 1.7rem;
+  text-align: center;
+}
