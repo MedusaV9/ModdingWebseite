@@ -1,0 +1,216 @@
+# MONKEY MONEY CI (ROOT-Workflow) — Kopie der Jobs aus
+# MonkeyMoney/.github/workflows/monkey-money.yml, denn GitHub Actions liest
+# NUR Workflows unter dem Repo-Root .github/ (verschachtelte .github/-Ordner
+# laufen nie). Branch-scoped auf die monkey-money-Linie; main (anderes
+# Projekt) bleibt unberührt. IPA-Muster: build-ios-soodreamy.yml (unsigniert,
+# Sideload via AltStore/Sideloadly).
+#
+# Jobs (TECH-SPEC §8.3):
+#   lint             Prettier + ESLint + tsc --noEmit
+#   test             Vitest (Unit + Protokoll + Minigame + Balance-Invarianten)
+#   build            Vite-Clients + Server-Bundle → Artefakt "monkey-money-dist"
+#   content-validate Fragen-Pack-Gate (nur Node-Builtins)
+#   bots-e2e         Kompletter Quick-Match: Server + 3 Bots (Seed 42)
+#   ipa              Unsignierte iPad-.ipa (WKWebView-Wrapper, macOS-Runner)
+name: MONKEY MONEY
+
+on:
+  push:
+    branches: ["cursor/monkey-money-82d4", "cursor/monkey-money*"]
+  workflow_dispatch:
+
+concurrency:
+  group: monkey-money-root-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: "22"
+
+defaults:
+  run:
+    working-directory: MonkeyMoney
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+          cache-dependency-path: MonkeyMoney/package-lock.json
+      - run: npm ci
+      - name: Prettier + ESLint
+        run: npm run lint
+      - name: TypeScript (tsc --noEmit)
+        run: npm run typecheck
+
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+          cache-dependency-path: MonkeyMoney/package-lock.json
+      - run: npm ci
+      - name: ffmpeg installieren (Audio-Dauer-Wächter brauchen ffprobe)
+        run: sudo apt-get update -q && sudo apt-get install -y -q ffmpeg
+      - name: Vitest
+        run: npm test
+
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+          cache-dependency-path: MonkeyMoney/package-lock.json
+      - run: npm ci
+      - name: Vite-Clients + Server-Bundle bauen
+        run: npm run build
+      - name: Build-Beleg
+        run: |
+          set -euo pipefail
+          test -f client/dist/index.html
+          test -f client/dist/screen.html
+          test -f client/dist/player.html
+          test -f client/dist/gm.html
+          test -f server/dist/index.js
+          test -f assets/video/logo_stinger.webm
+          test -d assets/img/generated/pixel
+          test -f content/musik/songs.json
+          ls assets/video/tutorial_*.mp4 >/dev/null
+          du -sh client/dist server/dist assets content/musik
+      - name: dist-Artefakt hochladen
+        uses: actions/upload-artifact@v4
+        with:
+          name: monkey-money-dist
+          path: |
+            MonkeyMoney/client/dist/
+            MonkeyMoney/server/dist/
+            MonkeyMoney/content/packs/
+            MonkeyMoney/content/musik/
+            MonkeyMoney/assets/
+            MonkeyMoney/package.json
+            MonkeyMoney/package-lock.json
+
+  content-validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Fragen-Packs validieren (14-Regeln-Gate)
+        run: node tools/content/validate.mjs
+
+  # Das ECHTE E2E-Gate: kompletter Quick-Match gegen den gebauten Server
+  # (~4–8 min Echtzeit; die Bots brechen bei hängender Phase > 90 s ab).
+  bots-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+          cache-dependency-path: MonkeyMoney/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - name: Server starten (PORT 8080) und auf /healthz warten
+        run: |
+          set -euo pipefail
+          mkdir -p e2e-logs
+          PORT=8080 DATA_DIR="$RUNNER_TEMP/mm-data" node server/dist/index.js \
+            >e2e-logs/server.log 2>&1 &
+          echo $! > server.pid
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:8080/healthz >/dev/null 2>&1; then
+              echo "Server bereit nach ${i} s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::Server nach 30 s nicht erreichbar (/healthz)"
+          cat e2e-logs/server.log
+          exit 1
+      - name: Bots-Vollmatch (3 Spieler, Seed 42, Quick)
+        run: |
+          set -o pipefail
+          npm run bots -- --players 3 --seed 42 --modus quick 2>&1 | tee e2e-logs/bots.log
+      - name: Server stoppen
+        if: always()
+        run: kill "$(cat server.pid)" 2>/dev/null || true
+      - name: E2E-Logs hochladen (auch bei roten Läufen)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bots-e2e-logs
+          path: MonkeyMoney/e2e-logs/
+
+  # ---------------------------------------------------------------------------
+  # iPad-.ipa (unsigniert, Sideload — TECH-SPEC §6). Muster:
+  # .github/workflows/build-ios-soodreamy.yml (xcodebuild ohne Signing,
+  # Payload-Zip). Läuft bei JEDEM Push der Branch-Linie (User-Entscheid:
+  # immer aktuellstes Artefakt; die .ipa darf 4–5 GB groß werden).
+  # ---------------------------------------------------------------------------
+  ipa:
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+          cache-dependency-path: MonkeyMoney/package-lock.json
+      - run: npm ci
+      - name: Client-Bundle bauen (inkl. Standalone-Host)
+        run: npm run build:client
+      - name: Web-Bundle + Medien in den Wrapper kopieren (WebDist/ + Media/)
+        run: |
+          set -euo pipefail
+          rm -rf ios-wrapper/WebDist ios-wrapper/Media
+          cp -R client/dist ios-wrapper/WebDist
+          mkdir -p ios-wrapper/Media/img/generated
+          cp -R assets/img/generated/pixel ios-wrapper/Media/img/generated/pixel
+          cp -R assets/video ios-wrapper/Media/video
+          du -sh ios-wrapper/WebDist ios-wrapper/Media
+      - name: XcodeGen installieren
+        run: brew install xcodegen
+      - name: Xcode-Projekt generieren (project.yml → .xcodeproj)
+        run: xcodegen generate --spec ios-wrapper/project.yml --project ios-wrapper
+      - name: Archive (unsigned)
+        run: |
+          set -euo pipefail
+          xcodebuild archive \
+            -project ios-wrapper/MonkeyMoneyPad.xcodeproj \
+            -scheme MonkeyMoneyPad -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath build/MonkeyMoneyPad.xcarchive \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" DEVELOPMENT_TEAM=""
+      - name: .ipa packen (Payload-Zip)
+        run: |
+          set -euo pipefail
+          mkdir -p build/Payload
+          cp -R build/MonkeyMoneyPad.xcarchive/Products/Applications/*.app build/Payload/
+          (cd build && zip -qry MonkeyMoney-unsigned.ipa Payload)
+          ls -la build/MonkeyMoney-unsigned.ipa
+      - name: .ipa verifizieren
+        run: python3 ios-wrapper/verify_ipa.py build/MonkeyMoney-unsigned.ipa ios-wrapper
+      - name: .ipa hochladen
+        uses: actions/upload-artifact@v4
+        with:
+          name: monkey-money-unsigned-ipa
+          path: MonkeyMoney/build/MonkeyMoney-unsigned.ipa
