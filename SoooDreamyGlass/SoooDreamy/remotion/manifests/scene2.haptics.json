@@ -1,0 +1,40 @@
+{
+  "video": "scene2_envelope.mp4",
+  "composition": "Scene2Envelope",
+  "fps": 30,
+  "durationSec": 8,
+  "posterTime": 6.8,
+  "beats": [
+    {
+      "t": 3,
+      "type": "soft",
+      "i": 0.45,
+      "s": 0.3,
+      "d": 0.22
+    },
+    {
+      "t": 5.2,
+      "type": "tap",
+      "i": 0.9,
+      "s": 0.62,
+      "d": 0
+    },
+    {
+      "t": 5.34,
+      "type": "soft",
+      "i": 0.32,
+      "s": 0.2,
+      "d": 0.16
+    }
+  ],
+  "cues": [
+    {
+      "t": 3,
+      "id": "drop"
+    },
+    {
+      "t": 5.2,
+      "id": "sealed"
+    }
+  ]
+}

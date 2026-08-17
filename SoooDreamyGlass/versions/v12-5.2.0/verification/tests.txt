@@ -1,0 +1,13 @@
+SoooDreamy 5.2.0 pre-farm verification — 2026-08-11 UTC
+
+- Server: PASS 260/260
+- Swift logic: PASS 215/215
+- Swift parse: PASS 224 files
+- Legacy storage migration: PASS; logical content survives segmented compaction and restart.
+- Health storage stats: PASS for segment/media bytes, files, quota and usage.
+- Offline retries: PASS for exactly-once reaction and daily-answer broadcasts.
+- Long-couple fixture: PASS with 10,000 messages, bounded reads, cursor pagination and stats.
+- Outbox widening: PASS for scoped FIFO reaction, daily, quest and rating operations.
+- Reconnect jitter: PASS for monotonic bounded exponential delay.
+- macOS unsigned device build: PASS (run 31515504991; complete 31-entry IPA).
+- Physical device: not performed.

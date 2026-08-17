@@ -1,0 +1,11 @@
+SoooDreamy 4.4.0 verification — 2026-08-11 UTC
+
+- Server: npm test — PASS 248/248
+- Swift logic: swift test --package-path SoooDreamy/ios — PASS 183/183
+- Swift syntax: all modified App Lock, outbox, chat, shared component, Replay,
+  Tournament, and SurfaceState sources parse successfully.
+- State matrix: loading/content/empty/offline/failure precedence covered.
+- Outbox: same client id across two profiles cannot cross-attempt or cross-delete;
+  scoped remove-all, FIFO, persistence, and bounded queue covered.
+- Device biometrics/app-kill walkthrough: not available on Linux; macOS compile is
+  the release gate and hardware status remains explicitly unverified.

@@ -1,0 +1,13 @@
+{
+  "name": "sooodreamy-arena",
+  "version": "1.0.0",
+  "description": "Multi-couple live test arena for the SoooDreamy server: plays real app flows over HTTP+WS with seeded parallel scenarios and checks invariants.",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "arena": "node arena.mjs"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

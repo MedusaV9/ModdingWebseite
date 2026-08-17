@@ -1,0 +1,213 @@
+name: SoooDreamy
+options:
+  bundleIdPrefix: app.sooodreamy
+  # iOS 26-only (v10.1 „Große Polish-Runde"): CI builds on the macos-26
+  # runner image (Xcode 26.6 default, iOS 26.x SDK), so the app targets the
+  # current OS generation directly — no #available(iOS 26) gates, real
+  # glassEffect everywhere. See docs/IOS-26.md for the runner/SDK survey.
+  deploymentTarget:
+    iOS: "26.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "16.0.0"
+    CURRENT_PROJECT_VERSION: "54"
+    GENERATE_INFOPLIST_FILE: NO
+    ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+    ENABLE_USER_SCRIPT_SANDBOXING: NO
+    DEVELOPMENT_TEAM: ""
+  configs:
+    Debug:
+      APS_ENVIRONMENT: development
+    Release:
+      APS_ENVIRONMENT: production
+
+targets:
+  SoooDreamy:
+    type: application
+    platform: iOS
+    sources:
+      - path: SoooDreamy
+      - path: Shared
+    settings:
+      base: &app-base-settings
+        PRODUCT_BUNDLE_IDENTIFIER: app.sooodreamy.ios
+        PRODUCT_NAME: SoooDreamy
+        # iPhone + iPad. iPad runs WITHOUT UIRequiresFullScreen so Split
+        # View / Slide Over / Stage Manager work — compact widths reuse the
+        # phone layout, regular widths get centered content columns.
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SUPPORTS_MACCATALYST: NO
+        # v3.0 icon gifts (Agent C): alternate icons rendered procedurally in
+        # CI (GenerateIcon.swift <out> <variant>) — must match AppIconKit.
+        ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES: "AppIcon-sunset AppIcon-midnight AppIcon-mint AppIcon-rose AppIcon-ocean AppIcon-gold AppIcon-lavender AppIcon-blossom AppIcon-aurora"
+        ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS: YES
+    info:
+      path: Config/SoooDreamy-Info.plist
+      properties: &app-info-properties
+        CFBundleDisplayName: SoooDreamy
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        SoooDreamyKeychainAccessGroup: "$(AppIdentifierPrefix)group.app.sooodreamy.shared"
+        UILaunchScreen:
+          UIColorName: LaunchBackground
+        # iPhone stays portrait-only (the base key); iPad supports all four
+        # orientations — required for multitasking, since the app ships
+        # without UIRequiresFullScreen.
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        NSSupportsLiveActivities: true
+        # Background refresh: BGAppRefreshTask pulls partner status/countdowns
+        # and refreshes widgets. iOS grants these runs opportunistically —
+        # see README ("Background-Refresh") for the honest limitations.
+        UIBackgroundModes:
+          - fetch
+          - processing
+        BGTaskSchedulerPermittedIdentifiers:
+          - app.sooodreamy.refresh
+        NSMicrophoneUsageDescription: "SoooDreamy uses the microphone to record voice notes for your partner."
+        NSCameraUsageDescription: "SoooDreamy uses the camera to scan your partner's pairing QR code."
+        NSPhotoLibraryAddUsageDescription: "SoooDreamy can save shared photos and videos to your photo library."
+        NSFaceIDUsageDescription: "SoooDreamy can lock your shared moments behind Face ID."
+        NSLocalNetworkUsageDescription: "SoooDreamy connects to your own couple server on your home network."
+        # ATS allows cleartext HTTP connections to self-hosted/home servers.
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+        ITSAppUsesNonExemptEncryption: false
+        CFBundleURLTypes:
+          - CFBundleURLName: app.sooodreamy.ios
+            CFBundleURLSchemes:
+              - sooodreamy
+    entitlements:
+      path: Config/SoooDreamy.entitlements
+      properties: &app-entitlements-properties
+        com.apple.security.application-groups:
+          - group.app.sooodreamy.shared
+        keychain-access-groups:
+          - "$(AppIdentifierPrefix)group.app.sooodreamy.shared"
+        # Honored only when the provisioning profile carries Push capability.
+        # Unsigned/free-profile sideloads commonly strip it; local alerts stay.
+        aps-environment: "$(APS_ENVIRONMENT)"
+        # iCloud backup (v2.0): CloudKit private DB + iCloud Drive export.
+        # Sideload signing often strips these — the app detects that at
+        # runtime and degrades to the always-working file export.
+        com.apple.developer.icloud-services:
+          - CloudKit
+          - CloudDocuments
+        com.apple.developer.icloud-container-identifiers:
+          - iCloud.app.sooodreamy.ios
+        com.apple.developer.ubiquity-container-identifiers:
+          - iCloud.app.sooodreamy.ios
+    dependencies:
+      - target: SoooDreamyWidgets
+
+  # SoooDreamy-Lite: identical app WITHOUT the widget extension. Sideload
+  # tools then only have to register ONE App ID (app.sooodreamy.ios) —
+  # Apple allows widgets exclusively as an embedded extension with its own
+  # bundle id, so "widgets with a single id" is impossible by platform rule.
+  # Same sources, same bundle id (installing Lite over the full app keeps
+  # all data); the only difference is the missing PlugIns/ folder.
+  SoooDreamyLite:
+    type: application
+    platform: iOS
+    sources:
+      - path: SoooDreamy
+      - path: Shared
+    settings:
+      base: *app-base-settings
+    info:
+      path: Config/SoooDreamyLite-Info.plist
+      properties: *app-info-properties
+    entitlements:
+      path: Config/SoooDreamyLite.entitlements
+      properties: *app-entitlements-properties
+
+  # P1-D: XCUITest bundle driving the REAL app in the CI simulator
+  # (job "ui-tests"). Runs only via `xcodebuild test -scheme SoooDreamy
+  # -only-testing:SoooDreamyUITests`; no signing needed in the simulator.
+  SoooDreamyUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: UITests
+    dependencies:
+      - target: SoooDreamy
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.sooodreamy.ios.uitests
+        # The UI-test runner attaches to (and launches) the app target.
+        TEST_TARGET_NAME: SoooDreamy
+    info:
+      path: Config/SoooDreamyUITests-Info.plist
+      properties:
+        CFBundleDisplayName: "SoooDreamy UITests"
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+
+  SoooDreamyWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: Widgets
+      - path: Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.sooodreamy.ios.widgets
+        # Must match the host apps (iPhone + iPad), or the App Store/
+        # sideload validation rejects the embedded extension.
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SKIP_INSTALL: YES
+    info:
+      path: Config/SoooDreamyWidgets-Info.plist
+      properties:
+        CFBundleDisplayName: "SoooDreamy Widgets"
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        SoooDreamyKeychainAccessGroup: "$(AppIdentifierPrefix)group.app.sooodreamy.shared"
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+        # Same ATS HTTP policy as the app.
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+    entitlements:
+      path: Config/SoooDreamyWidgets.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.app.sooodreamy.shared
+        keychain-access-groups:
+          - "$(AppIdentifierPrefix)group.app.sooodreamy.shared"
+
+schemes:
+  SoooDreamy:
+    build:
+      targets:
+        SoooDreamy: all
+    run:
+      config: Debug
+    # P1-D: the ui-tests CI job runs this test action with
+    # -only-testing:SoooDreamyUITests. Parallelization/random order stay
+    # OFF (XcodeGen default): the suite is ONE class whose alphabetical
+    # test01…test05 order is a scripted journey (test01 needs the erased
+    # first-launch state, later tests pin their state via launch args).
+    test:
+      config: Debug
+      targets:
+        - SoooDreamyUITests
+    archive:
+      config: Release
+
+  SoooDreamy-Lite:
+    build:
+      targets:
+        SoooDreamyLite: all
+    run:
+      config: Debug
+    archive:
+      config: Release

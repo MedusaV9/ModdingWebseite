@@ -1,0 +1,11 @@
+SoooDreamy 5.1.0 verification — 2026-08-11 UTC
+
+- Server: PASS 256/256
+- Swift logic: PASS 211/211
+- Swift parse: PASS 220 files
+- Word Chain: PASS for daily keys, dictionary validation, chaining, repeats, and server authority.
+- Hangman: PASS for commitment-backed setup, pending guesses, reveal positions, and forgiveness budget.
+- Couple Bingo: PASS for 60 bilingual actions, event-only checks, unique 4×4 boards, and line completion.
+- Tutorials: PASS for all 19 game kinds, three resumable steps, skip, and local practice turns.
+- macOS unsigned device build: PASS (run 31513825989; complete 31-entry IPA).
+- Physical device: not performed.

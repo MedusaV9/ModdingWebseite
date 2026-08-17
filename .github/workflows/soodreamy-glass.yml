@@ -1,0 +1,146 @@
+name: SoooDreamyGlass
+
+# CI for the SoooDreamyGlass/ redesign branch (REDESIGN.md): the workflows
+# under SoooDreamyGlass/.github/ never run (nested repo copy), so this ROOT
+# workflow drives the branch — Linux quality gates (SwiftPM logic tests,
+# swiftc -parse over every source, the anti-slop charter ratchet) plus the
+# unsigned-IPA macOS build (XcodeGen + xcodebuild, sideload via
+# AltStore/SideStore). Pattern: .github/workflows/build-ios-soodreamy.yml,
+# runner macos-26 because the app targets iOS 26.
+#
+# Deliberately WITHOUT the Remotion video render: the app has a procedural
+# intro fallback when the cinematic videos are absent (the Lite build ships
+# that way on purpose), and the redesign iterations need a fast IPA loop.
+on:
+  push:
+    branches:
+      - "cursor/soodreamy-glass-82d4"
+    paths:
+      - "SoooDreamyGlass/**"
+      - ".github/workflows/soodreamy-glass.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soodreamy-glass-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  charter-lint:
+    name: Anti-slop charter ratchet
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install ripgrep and jq
+        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends ripgrep jq
+      - name: Charter ratchet (slop counters may only go down)
+        run: bash SoooDreamyGlass/SoooDreamy/tools/charter_lint.sh
+
+  logic-tests:
+    name: Logic tests (Swift on Linux)
+    runs-on: ubuntu-latest
+    container: swift:6.0
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run swift test
+        run: swift test --package-path SoooDreamyGlass/SoooDreamy/ios
+      - name: Parse every Swift source
+        shell: bash
+        run: |
+          # Container checkout belongs to a foreign uid — without
+          # safe.directory `git ls-files` dies with "dubious ownership"
+          # and the loop would run over NOTHING (false-green). Hard
+          # non-empty check, fail-closed.
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          mapfile -d '' sources < <(git ls-files -z ':(glob)SoooDreamyGlass/SoooDreamy/ios/**/*.swift')
+          if (( ${#sources[@]} == 0 )); then
+            echo "::error::git ls-files returned no Swift sources — the parse step would have checked nothing" >&2
+            exit 1
+          fi
+          echo "Parsing ${#sources[@]} Swift sources"
+          for source in "${sources[@]}"; do
+            swiftc -parse "$source"
+          done
+
+  build-ipa:
+    name: Unsigned IPA (iOS)
+    runs-on: macos-26
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Xcode version
+        run: xcodebuild -version
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Render app icons (procedural, no binary assets in repo)
+        working-directory: SoooDreamyGlass
+        run: |
+          swift SoooDreamy/ios/scripts/GenerateIcon.swift SoooDreamy/ios/SoooDreamy/Resources/Assets.xcassets/AppIcon.appiconset/icon_1024.png classic
+          for v in sunset midnight mint rose ocean gold lavender blossom aurora; do
+            swift SoooDreamy/ios/scripts/GenerateIcon.swift "SoooDreamy/ios/SoooDreamy/Resources/Assets.xcassets/AppIcon-$v.appiconset/icon_1024.png" "$v"
+          done
+
+      - name: Generate Xcode project
+        working-directory: SoooDreamyGlass/SoooDreamy/ios
+        run: xcodegen generate
+
+      - name: Read app version
+        run: |
+          version=$(sed -n 's/.*MARKETING_VERSION: "\(.*\)"/\1/p' SoooDreamyGlass/SoooDreamy/ios/project.yml)
+          test -n "$version"
+          echo "APP_VERSION=$version" >> "$GITHUB_ENV"
+
+      - name: Build (unsigned)
+        working-directory: SoooDreamyGlass/SoooDreamy/ios
+        shell: bash {0}
+        run: |
+          xcodebuild \
+            -project SoooDreamy.xcodeproj \
+            -scheme SoooDreamy \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM="" \
+            build 2>&1 | tee xcodebuild.log | grep -E "error:|\*\* BUILD"
+          status=${PIPESTATUS[0]}
+          echo "xcodebuild exit code: $status"
+          exit $status
+
+      - name: Show errors on failure
+        if: failure()
+        working-directory: SoooDreamyGlass/SoooDreamy/ios
+        run: grep -B 2 -A 6 "error:" xcodebuild.log | head -300 || true
+
+      - name: Package IPA
+        working-directory: SoooDreamyGlass/SoooDreamy/ios
+        run: |
+          APP_DIR="build/Build/Products/Release-iphoneos/SoooDreamy.app"
+          test -d "$APP_DIR"
+          mkdir -p dist/Payload
+          cp -R "$APP_DIR" dist/Payload/
+          cd dist
+          zip -qry "SoooDreamyGlass-unsigned-${APP_VERSION}.ipa" Payload
+          ls -la
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SoooDreamyGlass-unsigned-${{ env.APP_VERSION }}
+          path: SoooDreamyGlass/SoooDreamy/ios/dist/SoooDreamyGlass-unsigned-${{ env.APP_VERSION }}.ipa
+          if-no-files-found: error
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcodebuild-log
+          path: SoooDreamyGlass/SoooDreamy/ios/xcodebuild.log
+          if-no-files-found: ignore

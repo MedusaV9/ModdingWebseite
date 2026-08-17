@@ -1,0 +1,8 @@
+SoooDreamy 5.3.0 verification
+
+- Server npm test: 262/262 passed
+- Swift logic: 220/220 passed
+- Swift parse: 227 tracked Swift files passed
+- macOS unsigned IPA farm: success — run 31517340446
+- Embedded IPA metadata: 5.3.0 (39), 31 archive entries
+- Real iPhone: not run; signing-dependent behavior is not claimed

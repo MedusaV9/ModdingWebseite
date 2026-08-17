@@ -1,0 +1,715 @@
+import SwiftUI
+import Combine
+
+/// Music provider detected from a song's link — powers the branded listen chip.
+private enum MusicProvider {
+    case spotify, appleMusic, youtube, soundcloud, other
+
+    /// Brand display name; nil = use the generic localized "Listen" label.
+    var name: String? {
+        switch self {
+        case .spotify: return "Spotify"
+        case .appleMusic: return "Apple Music"
+        case .youtube: return "YouTube"
+        case .soundcloud: return "SoundCloud"
+        case .other: return nil
+        }
+    }
+
+    static func detect(from url: URL) -> MusicProvider {
+        let host = (url.host ?? "").lowercased()
+        func matches(_ domain: String) -> Bool {
+            host == domain || host.hasSuffix("." + domain)
+        }
+        if matches("spotify.com") || matches("spotify.link") { return .spotify }
+        if matches("music.apple.com") || matches("itunes.apple.com") { return .appleMusic }
+        if matches("youtube.com") || matches("youtu.be") { return .youtube }
+        if matches("soundcloud.com") { return .soundcloud }
+        return .other
+    }
+}
+
+/// "Unser Soundtrack" — the couple's shared song list with hearts,
+/// listen links and a random-pick shuffle.
+struct SoundtrackView: View {
+    @Environment(AppState.self) private var appState
+    @Environment(\.openURL) private var openURL
+    @Environment(\.coupleTint) private var coupleTint
+
+    @State private var songs: [Song] = []
+    @State private var loading = true
+    @State private var editorTarget: EditorTarget?
+    @State private var deleteTarget: Song?
+    @State private var confirmDelete = false
+    @State private var highlightedId: String?
+    @State private var highlightTask: Task<Void, Never>?
+
+    private struct EditorTarget: Identifiable {
+        let id: String
+        let song: Song?
+    }
+
+    var body: some View {
+        ZStack {
+            DreamyBackground(showStars: false)
+            content
+            floatingAddButton
+        }
+        .navigationTitle(L10n.t("memories.soundtrack.title"))
+        .navigationBarTitleDisplayMode(.inline)
+        .task { await loadSongs() }
+        .sheet(item: $editorTarget) { target in
+            SongEditorSheet(song: target.song) { saved in
+                apply(saved)
+            }
+        }
+        .confirmationDialog(L10n.t("memories.soundtrack.deleteConfirm"),
+                            isPresented: $confirmDelete, titleVisibility: .visible,
+                            presenting: deleteTarget) { song in
+            Button(L10n.t("common.delete"), role: .destructive) { delete(song) }
+            Button(L10n.t("common.cancel"), role: .cancel) {}
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .serverEvent)) { note in
+            guard let event = note.object as? ServerEvent else { return }
+            handleServerEvent(event)
+        }
+        .onDisappear { highlightTask?.cancel() }
+    }
+
+    /// Newest first, independent of insertion order.
+    private var sortedSongs: [Song] {
+        songs.sorted { $0.createdAt > $1.createdAt }
+    }
+
+    // MARK: Content
+
+    @ViewBuilder
+    private var content: some View {
+        if loading {
+            ScrollView {
+                VStack(spacing: Space.m) {
+                    ForEach(0..<4, id: \.self) { _ in
+                        PaperSkeleton(kind: .card(height: 92), onNacht: true)
+                    }
+                }
+                .padding(Space.l)
+            }
+        } else if songs.isEmpty {
+            emptyState
+        } else {
+            songList
+        }
+    }
+
+    private var emptyState: some View {
+        VStack {
+            Spacer()
+            EmptyStateView(systemImage: "music.note",
+                           title: L10n.t("memories.soundtrack.empty.title"),
+                           subtitle: L10n.t("memories.soundtrack.empty.subtitle"),
+                           actionTitle: L10n.t("memories.soundtrack.empty.action"),
+                           action: {
+                               Haptics.shared.tap()
+                               editorTarget = EditorTarget(id: "new", song: nil)
+                           })
+            Spacer()
+        }
+    }
+
+    private var songList: some View {
+        ScrollViewReader { proxy in
+            VStack(spacing: 0) {
+                header(proxy)
+                List {
+                    ForEach(sortedSongs) { song in
+                        row(song)
+                            .id(song.id)
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                            .listRowInsets(EdgeInsets(top: Space.xs, leading: Space.l,
+                                                      bottom: Space.xs, trailing: Space.l))
+                    }
+                    Color.clear
+                        .frame(height: LayoutMetrics.s(70))
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+                .refreshable { await loadSongs() }
+            }
+        }
+    }
+
+    // MARK: Header
+
+    private var countText: String {
+        songs.count == 1
+            ? L10n.t("memories.soundtrack.countOne")
+            : L10n.t("memories.soundtrack.count", ["n": String(songs.count)])
+    }
+
+    private func header(_ proxy: ScrollViewProxy) -> some View {
+        HStack(spacing: Space.m) {
+            Text(countText)
+                .font(.system(.footnote, design: .rounded).weight(.semibold))
+                .foregroundStyle(Theme.textSecondary)
+            Spacer()
+            shuffleButton(proxy)
+        }
+        .padding(.horizontal, Space.l)
+        .padding(.top, Space.m)
+        .padding(.bottom, Space.xs)
+    }
+
+    private func shuffleButton(_ proxy: ScrollViewProxy) -> some View {
+        Button {
+            shuffle(proxy)
+        } label: {
+            HStack(spacing: Space.xs) {
+                Image(icon: .games)
+                    .font(.system(.footnote, design: .rounded))
+                    .symbolRenderingMode(.hierarchical)
+                Text(L10n.t("memories.soundtrack.shuffle"))
+                    .font(.system(.footnote, design: .rounded).weight(.bold))
+            }
+            .foregroundStyle(Theme.mint)
+            .padding(.vertical, Space.s)
+            .padding(.horizontal, Space.m)
+            .background(Capsule().fill(Theme.mint.opacity(0.14)))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(L10n.t("memories.soundtrack.shuffle"))
+    }
+
+    /// Picks a random song, scrolls to it and pulses its card briefly.
+    private func shuffle(_ proxy: ScrollViewProxy) {
+        guard let song = sortedSongs.randomElement() else { return }
+        Haptics.shared.tap()
+        SoundEngine.shared.play(.pop)
+        withAnimation(Theme.Motion.arrive) {
+            proxy.scrollTo(song.id, anchor: .center)
+        }
+        withAnimation(Theme.Motion.settle) {
+            highlightedId = song.id
+        }
+        highlightTask?.cancel()
+        highlightTask = Task {
+            try? await Task.sleep(nanoseconds: 1_600_000_000)
+            guard !Task.isCancelled else { return }
+            withAnimation(Theme.Motion.settle) {
+                highlightedId = nil
+            }
+        }
+    }
+
+    // MARK: Row
+
+    private func isMine(_ song: Song) -> Bool {
+        song.addedBy == appState.memberId
+    }
+
+    @ViewBuilder
+    private func row(_ song: Song) -> some View {
+        if isMine(song) {
+            songCard(song)
+                .contextMenu {
+                    shareButton(song)
+                    Button {
+                        editorTarget = EditorTarget(id: song.id, song: song)
+                    } label: {
+                        Label(L10n.t("common.edit"), systemImage: "pencil")
+                    }
+                    Button(role: .destructive) {
+                        deleteTarget = song
+                        confirmDelete = true
+                    } label: {
+                        Label(L10n.t("common.delete"), systemImage: "trash")
+                    }
+                }
+                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                    Button(role: .destructive) {
+                        deleteTarget = song
+                        confirmDelete = true
+                    } label: {
+                        Label(L10n.t("common.delete"), systemImage: "trash")
+                    }
+                }
+        } else {
+            songCard(song)
+                .contextMenu {
+                    shareButton(song)
+                }
+        }
+    }
+
+    // MARK: Share to chat
+
+    private func shareButton(_ song: Song) -> some View {
+        Button {
+            shareToChat(song)
+        } label: {
+            Label(L10n.t("memories.soundtrack.share"), systemImage: "paperplane.fill")
+        }
+    }
+
+    /// Posts the song (title, artist, note, link) as a chat message.
+    private func shareToChat(_ song: Song) {
+        guard let api = appState.api else { return }
+        let text = shareText(song)
+        Haptics.shared.tap()
+        Task {
+            do {
+                _ = try await api.sendMessage(type: .text, text: text)
+                Haptics.shared.success()
+                SoundEngine.shared.play(.pop)
+                appState.showToast(L10n.t("memories.soundtrack.shareSent"), style: .success)
+            } catch {
+                appState.handleAPIError(error)
+            }
+        }
+    }
+
+    private func shareText(_ song: Song) -> String {
+        var titleLine = song.title
+        if let artist = song.artist, !artist.isEmpty {
+            titleLine += " — " + artist
+        }
+        var lines = [L10n.t("memories.soundtrack.shareHeader"), titleLine]
+        if let note = song.note, !note.isEmpty {
+            lines.append("„" + note + "“")
+        }
+        if let url = listenURL(song.link) {
+            lines.append(url.absoluteString)
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    private func songCard(_ song: Song) -> some View {
+        let highlighted = highlightedId == song.id
+        return HStack(alignment: .top, spacing: Space.m) {
+            noteTile
+            VStack(alignment: .leading, spacing: Space.xs) {
+                Text(song.title)
+                    .font(.system(.headline, design: .rounded).weight(.bold))
+                    .foregroundStyle(Papier.aufNacht)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let artist = song.artist, !artist.isEmpty {
+                    Text(artist)
+                        .font(.system(.subheadline, design: .rounded))
+                        .foregroundStyle(Nacht.sekundaer)
+                        .lineLimit(1)
+                }
+                if let note = song.note, !note.isEmpty {
+                    // The note is the couple's own words — italic voice,
+                    // rounded on the night card (serif stays paper-only).
+                    Text(note)
+                        .font(.system(.body, design: .rounded).italic())
+                        .foregroundStyle(Papier.aufNacht)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                addedByLine(song)
+                    .padding(.top, Space.xs)
+            }
+            Spacer(minLength: Space.s)
+            VStack(alignment: .trailing, spacing: Space.s) {
+                heartButton(song)
+                if let url = listenURL(song.link) {
+                    listenButton(url)
+                }
+            }
+        }
+        .nightCard()
+        .overlay(
+            RoundedRectangle(cornerRadius: Radius.papier, style: .continuous)
+                .strokeBorder(coupleTint.blend.opacity(highlighted ? 0.75 : 0), lineWidth: 1.5)
+        )
+        .scaleEffect(highlighted ? 1.03 : 1)
+    }
+
+    /// Music-note tile on the NIGHT card — matte night well, couple blend
+    /// as non-text icon accent; the old free-hand −5° tilt fell to the
+    /// seeded-PaperTilt-only rotation law.
+    private var noteTile: some View {
+        Image(systemName: "music.note")
+            .font(.system(.title2, design: .rounded))
+            .foregroundStyle(coupleTint.blend)
+            .symbolRenderingMode(.hierarchical)
+            .frame(width: LayoutMetrics.s(48), height: LayoutMetrics.s(48))
+            .background(
+                RoundedRectangle(cornerRadius: Radius.control, style: .continuous)
+                    .fill(Papier.nachtInnenFill)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: Radius.control, style: .continuous)
+                            .strokeBorder(Nacht.naht, lineWidth: Theme.hairlineWidth)
+                    )
+            )
+    }
+
+    private func addedByLine(_ song: Song) -> some View {
+        HStack(spacing: Space.xs) {
+            EmojiAvatarView(emoji: adder(of: song)?.avatar,
+                            colorHex: adder(of: song)?.color,
+                            size: 16)
+            Text(addedInfo(song))
+                .font(.system(.caption2, design: .rounded))
+                .foregroundStyle(Nacht.sekundaer)
+                .lineLimit(1)
+        }
+    }
+
+    private func adder(of song: Song) -> Member? {
+        appState.couple?.members.first { $0.id == song.addedBy }
+    }
+
+    private func addedInfo(_ song: Song) -> String {
+        let name = isMine(song)
+            ? L10n.t("common.you")
+            : (adder(of: song)?.name ?? appState.partnerName)
+        let date = song.createdAt.formatted(date: .abbreviated, time: .omitted)
+        return L10n.t("memories.soundtrack.by", ["name": name]) + " · " + date
+    }
+
+    // MARK: Heart
+
+    private func heartButton(_ song: Song) -> some View {
+        let mine = song.isHearted(by: appState.memberId)
+        let count = song.heartedBy?.count ?? 0
+        return Button {
+            toggleHeart(song)
+        } label: {
+            HStack(spacing: Space.xs) {
+                Image(systemName: mine ? "heart.fill" : "heart")
+                    .font(.system(.footnote, design: .rounded).weight(.bold))
+                Text(String(count))
+                    .font(.system(.caption, design: .rounded).weight(.bold))
+                if count >= 2 {
+                    Image(icon: .memory)
+                        .font(.system(.caption2, design: .rounded))
+                        .foregroundStyle(Theme.gold)
+                }
+            }
+            .foregroundStyle(mine ? Licht.lampengold : Nacht.sekundaer)
+            .padding(.vertical, Space.xs)
+            .padding(.horizontal, Space.s)
+            .background(Capsule().fill(mine ? Licht.lampengold.opacity(0.14) : Papier.nachtInnenFill))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(L10n.t("memories.soundtrack.heart"))
+    }
+
+    private func toggleHeart(_ song: Song) {
+        guard let api = appState.api, let myId = appState.memberId else { return }
+        let wasHearted = song.isHearted(by: myId)
+        setMyHeart(!wasHearted, on: song.id, myId: myId)
+        Haptics.shared.tap()
+        Task {
+            do {
+                let updated = try await api.toggleSongHeart(id: song.id)
+                apply(updated)
+            } catch {
+                // Revert by inverting only MY op on the CURRENT array — a
+                // partner's concurrent song_updated heart stays intact.
+                setMyHeart(wasHearted, on: song.id, myId: myId)
+                appState.handleAPIError(error)
+            }
+        }
+    }
+
+    /// Adds/removes only MY member id in the song's current heartedBy array.
+    private func setMyHeart(_ hearted: Bool, on songId: String, myId: String) {
+        guard let idx = songs.firstIndex(where: { $0.id == songId }) else { return }
+        var hearts = songs[idx].heartedBy ?? []
+        if hearted {
+            if !hearts.contains(myId) { hearts.append(myId) }
+        } else {
+            hearts.removeAll { $0 == myId }
+        }
+        songs[idx].heartedBy = hearts
+    }
+
+    // MARK: Listen link
+
+    /// Named per-provider (Spotify/Apple Music/YouTube/SoundCloud), with a
+    /// generic localized fallback for everything else. On the NIGHT card the
+    /// label speaks lamplight (pinned 9.5:1) — brand identity lives in the
+    /// provider NAME; the retired brand-hex inks only guaranteed contrast
+    /// on paper tones.
+    private func listenButton(_ url: URL) -> some View {
+        let provider = MusicProvider.detect(from: url)
+        let label = provider.name.map { $0 + " ↗" } ?? L10n.t("memories.soundtrack.listen")
+        let ink = Licht.lampengold
+        return Button {
+            Haptics.shared.tap()
+            openURL(url)
+        } label: {
+            Text(label)
+                .font(.system(.caption, design: .rounded).weight(.bold))
+                .foregroundStyle(ink)
+                .lineLimit(1)
+                .padding(.vertical, Space.xs)
+                .padding(.horizontal, Space.s)
+                .background(Capsule().fill(ink.opacity(0.12)))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(L10n.t("memories.soundtrack.listen"))
+    }
+
+    /// Builds a tappable URL — prepends https:// when the link has no scheme.
+    private func listenURL(_ link: String?) -> URL? {
+        guard let link else { return nil }
+        let trimmed = link.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        let candidate = trimmed.contains("://") ? trimmed : "https://" + trimmed
+        return URL(string: candidate)
+    }
+
+    // MARK: Add button
+
+    private var floatingAddButton: some View {
+        VStack {
+            Spacer()
+            HStack {
+                Spacer()
+                Button {
+                    Haptics.shared.tap()
+                    editorTarget = EditorTarget(id: "new", song: nil)
+                } label: {
+                    ZStack {
+                        // Computed ink + platter: white read only 2.94:1 on
+                        // the static brand gradient (Schlussrunde 5).
+                        Theme.heroPlatter(in: Circle())
+                            .frame(width: LayoutMetrics.s(60), height: LayoutMetrics.s(60))
+                            .shadow(color: coupleTint.blend.opacity(0.5), radius: 14, y: 6)
+                        Image(systemName: "plus")
+                            .font(.system(.title2, design: .rounded).weight(.bold))
+                            .foregroundStyle(Theme.onHero)
+                    }
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(L10n.t("memories.soundtrack.add"))
+                .padding(.trailing, Space.xl)
+                .padding(.bottom, Space.xl)
+            }
+        }
+    }
+
+    // MARK: Actions
+
+    private func loadSongs() async {
+        guard let api = appState.api else { return }
+        do {
+            songs = try await api.songs()
+        } catch {
+            appState.handleAPIError(error)
+        }
+        loading = false
+    }
+
+    private func delete(_ song: Song) {
+        guard let api = appState.api else { return }
+        songs.removeAll { $0.id == song.id }
+        Task {
+            do {
+                try await api.deleteSong(id: song.id)
+                appState.showToast(L10n.t("memories.soundtrack.deleted"), style: .info)
+            } catch {
+                insert(song)
+                appState.handleAPIError(error)
+            }
+        }
+    }
+
+    // MARK: Realtime
+
+    private func insert(_ song: Song) {
+        guard !songs.contains(where: { $0.id == song.id }) else { return }
+        songs.append(song)
+    }
+
+    private func apply(_ song: Song) {
+        if let idx = songs.firstIndex(where: { $0.id == song.id }) {
+            songs[idx] = song
+        } else {
+            songs.append(song)
+        }
+    }
+
+    private func handleServerEvent(_ event: ServerEvent) {
+        switch event.type {
+        case .songAdded:
+            if let song = event.decode(SongResponse.self)?.song {
+                insert(song)
+            }
+        case .songUpdated:
+            if let song = event.decode(SongResponse.self)?.song {
+                apply(song)
+            }
+        case .songDeleted:
+            if let id = event.decode(IdPayload.self)?.id {
+                songs.removeAll { $0.id == id }
+            }
+        default:
+            break
+        }
+    }
+}
+
+// MARK: - Add / edit sheet
+
+private struct SongEditorSheet: View {
+    @Environment(AppState.self) private var appState
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.coupleTint) private var coupleTint
+
+    /// nil = add a new song, non-nil = edit my existing song.
+    let song: Song?
+    let onSaved: (Song) -> Void
+
+    @State private var title: String
+    @State private var artist: String
+    @State private var note: String
+    @State private var link: String
+    @State private var saving = false
+
+    init(song: Song?, onSaved: @escaping (Song) -> Void) {
+        self.song = song
+        self.onSaved = onSaved
+        _title = State(initialValue: song?.title ?? "")
+        _artist = State(initialValue: song?.artist ?? "")
+        _note = State(initialValue: song?.note ?? "")
+        _link = State(initialValue: song?.link ?? "")
+    }
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                DreamyBackground(showStars: false)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: Space.l) {
+                        titleField
+                        artistField
+                        noteField
+                        linkField
+                        saveButton
+                    }
+                    .padding(Space.l)
+                }
+            }
+            .navigationTitle(L10n.t(song == nil
+                                    ? "memories.soundtrack.addTitle"
+                                    : "memories.soundtrack.editTitle"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(L10n.t("common.cancel")) { dismiss() }
+                        .tint(coupleTint.blend)
+                }
+            }
+        }
+        .preferredColorScheme(.dark)
+    }
+
+    private var titleField: some View {
+        TextField(L10n.t("memories.soundtrack.titleField"), text: $title)
+            .textFieldStyle(DreamyFieldStyle())
+            .submitLabel(.next)
+    }
+
+    private var artistField: some View {
+        TextField(L10n.t("memories.soundtrack.artistField"), text: $artist)
+            .textFieldStyle(DreamyFieldStyle())
+            .submitLabel(.next)
+    }
+
+    private var noteField: some View {
+        TextField(L10n.t("memories.soundtrack.noteField"), text: $note, axis: .vertical)
+            .textFieldStyle(DreamyFieldStyle())
+            .lineLimit(1...3)
+    }
+
+    private var linkField: some View {
+        TextField(L10n.t("memories.soundtrack.linkField"), text: $link)
+            .textFieldStyle(DreamyFieldStyle())
+            .keyboardType(.URL)
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
+            .submitLabel(.done)
+    }
+
+    private var saveButton: some View {
+        Button {
+            save()
+        } label: {
+            if saving {
+                BusySpinner()
+                    .frame(maxWidth: .infinity)
+            } else {
+                Text(L10n.t("common.save"))
+            }
+        }
+        .buttonStyle(PrimaryButtonStyle())
+        .disabled(saving || title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+    }
+
+    private func save() {
+        guard let api = appState.api, !saving else { return }
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedTitle.isEmpty else { return }
+        let trimmedArtist = artist.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedNote = note.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedLink = link.trimmingCharacters(in: .whitespacesAndNewlines)
+        saving = true
+        Task {
+            do {
+                if let song {
+                    try await update(song, api: api, title: trimmedTitle,
+                                     artist: trimmedArtist, note: trimmedNote, link: trimmedLink)
+                } else {
+                    let created = try await api.addSong(title: trimmedTitle,
+                                                        artist: trimmedArtist.isEmpty ? nil : trimmedArtist,
+                                                        note: trimmedNote.isEmpty ? nil : trimmedNote,
+                                                        link: trimmedLink.isEmpty ? nil : trimmedLink)
+                    onSaved(created)
+                    SoundEngine.shared.play(.pop)
+                    Haptics.shared.success()
+                    appState.showToast(L10n.t("memories.soundtrack.added"), style: .love)
+                    dismiss()
+                }
+            } catch {
+                appState.handleAPIError(error)
+            }
+            saving = false
+        }
+    }
+
+    /// PATCHes only changed fields. Emptying an optional field CLEARS it on
+    /// the server via an explicit JSON null (double-optional `.some(nil)`,
+    /// serialized by `API.encodeNulls`); unchanged fields are omitted and
+    /// keep their server value.
+    private func update(_ song: Song, api: API, title: String,
+                        artist: String, note: String, link: String) async throws {
+        let newTitle: String? = title != song.title ? title : nil
+
+        /// `.none` = unchanged (omit), `.some(nil)` = cleared, `.some(v)` = replaced.
+        func delta(_ current: String?, _ edited: String) -> String?? {
+            let normalizedCurrent = (current?.isEmpty ?? true) ? nil : current
+            let normalizedEdited = edited.isEmpty ? nil : edited
+            return normalizedCurrent == normalizedEdited ? String??.none : .some(normalizedEdited)
+        }
+
+        let newArtist = delta(song.artist, artist)
+        let newNote = delta(song.note, note)
+        let newLink = delta(song.link, link)
+        if newTitle == nil && newArtist == nil && newNote == nil && newLink == nil {
+            dismiss()
+            return
+        }
+        let updated = try await api.updateSong(id: song.id, title: newTitle, artist: newArtist,
+                                               note: newNote, link: newLink)
+        onSaved(updated)
+        Haptics.shared.success()
+        appState.showToast(L10n.t("memories.soundtrack.updated"), style: .success)
+        dismiss()
+    }
+}

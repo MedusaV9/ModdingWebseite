@@ -1,0 +1,11 @@
+SoooDreamy 5.0.0 verification — 2026-08-11 UTC
+
+- Server: PASS 254/254
+- Swift logic: PASS 206/206
+- Swift parse: PASS 217 files
+- Calendar authority: PASS for recipient-only open, future-door lock, payload redaction, idempotent event, and archive deletion rights.
+- Date math: PASS across DST, month boundaries, and leap day.
+- Hemisphere mapping: PASS for northern and southern seasons.
+- Content integrity: PASS 60 complete bilingual door templates.
+- macOS unsigned device build: PASS (run 31511719845; complete 31-entry IPA).
+- Physical device: not performed.
