@@ -137,7 +137,11 @@ public final class RestrictionGametests {
         dev.projecteclipse.eclipse.core.state.EclipseWorldState.get(server).setSanctumBuilt(altar);
         SanctumProtection.refresh(server);
         BlockPos inside = altar.offset(2, 0, 0);
-        BlockPos outside = altar.offset(SanctumProtection.RADIUS + 4, 0, 0);
+        // WAVE10: the spawn zone has been the BROAD protection.json cylinder (default
+        // r=71, plans_v5 B10/ALTARFIX2) since long before this suite first ran — the old
+        // "RADIUS + 4" probe (r=18 sanctum zone + 4) sat well inside the broad zone and
+        // failed the assert. Probe past the actual gameplay radius instead.
+        BlockPos outside = altar.offset(SanctumProtection.spawnRadius(server) + 8, 0, 0);
         helper.assertTrue(SpawnProtectionRules.isInProtectionZone(helper.getLevel(), inside), "inside zone");
         helper.assertFalse(SpawnProtectionRules.isInProtectionZone(helper.getLevel(), outside), "outside zone");
         helper.succeed();

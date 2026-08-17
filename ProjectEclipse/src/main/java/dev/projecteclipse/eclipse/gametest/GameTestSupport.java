@@ -16,14 +16,22 @@ import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.GameType;
+import net.neoforged.neoforge.network.registration.NetworkRegistry;
 
 /**
  * Shared helpers for Eclipse NeoForge gametests (P4-A1 scaffolding). Wave-B packages import
  * these utilities instead of duplicating mock-player and day-set boilerplate.
  */
 public final class GameTestSupport {
-    /** Structure template id for empty 1×1×1 scenes. */
-    public static final String EMPTY_TEMPLATE = "gametest.empty";
+    /**
+     * Structure template id for empty 1×1×1 scenes. MUST stay a slash path: template ids map
+     * literally onto {@code data/eclipse/structure/<path>.nbt}, and the shipped nbt lives at
+     * {@code structure/gametest/empty.nbt}. The original {@code gametest.empty} spelling
+     * resolved to the non-existent {@code structure/gametest.empty.nbt} — GameTestServer
+     * crashed with "Missing test structure" before running a single test, which is why the
+     * suite was never runnable headless (WAVE10 fix).
+     */
+    public static final String EMPTY_TEMPLATE = "gametest/empty";
 
     private GameTestSupport() {}
 
@@ -32,6 +40,13 @@ public final class GameTestSupport {
     public static ServerPlayer mockServerPlayer(GameTestHelper helper, GameType gameType) {
         ServerPlayer player = helper.makeMockServerPlayerInLevel();
         helper.assertTrue(player != null, "mock server player");
+        // A mock connection negotiates no payload channels, so EVERY
+        // PacketDistributor.sendToPlayer(mock, <eclipse payload>) throws
+        // UnsupportedOperationException — that failed 16 tests outright and even crashed
+        // the whole GameTestServer when UnlockSync's tick broadcast hit a lingering mock.
+        // NeoForge ships this exact hook for gametests: it marks the connection as a
+        // modded connection that accepts all registered channels (packets go nowhere).
+        NetworkRegistry.configureMockConnection(player.connection.getConnection());
         player.setGameMode(gameType);
         return player;
     }

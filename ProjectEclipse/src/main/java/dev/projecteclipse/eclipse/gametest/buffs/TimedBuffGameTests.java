@@ -7,18 +7,15 @@ import dev.projecteclipse.eclipse.EclipseMod;
 import dev.projecteclipse.eclipse.buffs.BuffConfig;
 import dev.projecteclipse.eclipse.buffs.BuffMath;
 import dev.projecteclipse.eclipse.buffs.PlacedBlockCheck;
-import dev.projecteclipse.eclipse.analytics.PlacedBlockData;
+import dev.projecteclipse.eclipse.analytics.PlacedBlockTracker;
 import dev.projecteclipse.eclipse.gametest.GameTestSupport;
-import dev.projecteclipse.eclipse.registry.EclipseAttachments;
 import dev.projecteclipse.eclipse.voice.VoiceMuteApi;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.level.chunk.LevelChunk;
 import net.neoforged.neoforge.gametest.GameTestHolder;
-import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 /**
@@ -82,11 +79,10 @@ public final class TimedBuffGameTests {
     public static void placedBlockNaturalCheck(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos pos = helper.absolutePos(new BlockPos(0, 0, 0));
-        LevelChunk chunk = level.getChunkAt(pos);
-        PlacedBlockData data = PlacedBlockData.empty();
-        long[] bits = data.sectionBits(level.getSectionIndex(pos.getY()), true);
-        bits[0] = 1L;
-        chunk.setData(EclipseAttachments.PLACED_BLOCKS, data);
+        // WAVE10: go through the production write path. The old hand-rolled version set
+        // bit 0 of the section (= local (0,0,0)), which only matches when the random
+        // gametest pad happens to sit on a section corner — the test could never pass.
+        PlacedBlockTracker.markPlaced(level, pos);
 
         helper.assertTrue(PlacedBlockCheck.isPlaced(level, pos), "marked placed");
         helper.assertFalse(PlacedBlockCheck.isNatural(level, pos), "not natural");
