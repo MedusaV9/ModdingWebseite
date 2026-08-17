@@ -1,0 +1,29 @@
+# SoooDreamy in 2 Befehlen (Autostart + Neustart-bei-Absturz inklusive):
+#
+#   docker compose up -d          # bauen + starten (läuft nach jedem Reboot weiter)
+#   docker compose logs -f        # Start-Banner mit Admin-Passwort + QR ansehen
+#
+# Daten (Paare, Fotos, Backups) liegen im benannten Volume `sooodreamy-data`
+# und überleben Container-Updates:  docker compose build --pull && docker compose up -d
+services:
+  sooodreamy:
+    build: .
+    container_name: sooodreamy
+    restart: unless-stopped
+    ports:
+      - "4321:4321"
+    volumes:
+      - sooodreamy-data:/app/data
+    environment:
+      # QR im Log-Banner bleibt an; zum Abschalten NO_QR=1 setzen.
+      # Weitere Variablen: siehe README (BACKUP_*, DISK_WARN_MB, LOG_FILE, …).
+      - NO_QR=0
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:4321/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  sooodreamy-data:

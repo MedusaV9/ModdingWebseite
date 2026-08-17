@@ -1,0 +1,29 @@
+# SoooDreamy als systemd-Dienst (Linux) — Details: docs/AUTOSTART.md
+#
+#   sudo cp deploy/sooodreamy.service /etc/systemd/system/
+#   sudo nano /etc/systemd/system/sooodreamy.service   # Pfade + User anpassen!
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now sooodreamy
+#
+# Läuft es?   systemctl status sooodreamy
+# Logs:       journalctl -u sooodreamy -f     (Admin-Passwort steht im Start-Banner)
+[Unit]
+Description=SoooDreamy couple server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# ▼ ANPASSEN: Benutzer + Pfad zu eurem server/-Ordner
+User=sooodreamy
+WorkingDirectory=/opt/sooodreamy/SoooDreamy/server
+# .env wird von src/server.js selbst geladen (process.loadEnvFile) — Variablen
+# können alternativ hier stehen:
+Environment=NO_QR=1
+Environment=LOG_FILE=1
+ExecStart=/usr/bin/env node src/server.js
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

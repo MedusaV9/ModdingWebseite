@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SoooDreamy als macOS-launchd-Dienst — Details: docs/AUTOSTART.md
+
+       cp deploy/com.sooodreamy.server.plist ~/Library/LaunchAgents/
+       nano ~/Library/LaunchAgents/com.sooodreamy.server.plist   # Pfade anpassen!
+       launchctl load -w ~/Library/LaunchAgents/com.sooodreamy.server.plist
+
+     Läuft es?   launchctl list | grep sooodreamy
+     Logs:       tail -f ~/Library/Logs/sooodreamy.log            -->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.sooodreamy.server</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/local/bin/node</string>
+    <string>src/server.js</string>
+  </array>
+  <!-- ▼ ANPASSEN: Pfad zu eurem server/-Ordner -->
+  <key>WorkingDirectory</key>
+  <string>/Users/DEIN-NAME/SoooDreamy/server</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>NO_QR</key>
+    <string>1</string>
+    <key>LOG_FILE</key>
+    <string>1</string>
+  </dict>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>/tmp/sooodreamy.launchd.log</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/sooodreamy.launchd.log</string>
+</dict>
+</plist>

@@ -1,0 +1,5 @@
+# FullRelease N1-C — Render-Output ist CI-Artefakt, nie Repo-Inhalt
+# (Philosophie-Invariante: kein Video-Binary wird je committet).
+out/
+strips/
+node_modules/

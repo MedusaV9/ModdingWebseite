@@ -1,0 +1,8 @@
+SoooDreamy 4.3.0 server verification
+Date: 2026-08-11 UTC
+Focused command: node --test test/season.test.js
+Focused result: PASS — 2/2
+Stress fixture: 250 ended sessions + two Wordle languages = 252 canonical entries; July filter = 127.
+Full command: npm test
+Full result: PASS — 248/248
+Pagination regression: default 30, cursor continuation, total, terminal null cursor, and 200 cap all pass.

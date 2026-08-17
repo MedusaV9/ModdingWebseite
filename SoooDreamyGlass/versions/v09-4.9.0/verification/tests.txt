@@ -1,0 +1,11 @@
+SoooDreamy 4.9.0 verification — 2026-08-11 UTC
+
+- Server: PASS 252/252
+- Swift logic: PASS 202/202
+- Swift parse: PASS 214 files
+- Localization literal gate: PASS; widget presence labels use the bilingual widget table.
+- Formatter checks: PASS for independent de_DE and en_US date/number rendering.
+- Plural checks: PASS for one/other variants in DE and EN.
+- Handbook coverage: PASS for every feature-view category and all stable deep-link anchors.
+- macOS unsigned device build: PASS (run 31510256901; complete 31-entry IPA).
+- Physical device: not performed.
