@@ -67,7 +67,10 @@ struct DashboardView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                DreamyBackground()
+                // Redesign wave 1 (REDESIGN.md §2.1): the living room —
+                // same room, same lamp, same dust, plus the Atemglühen
+                // breathing in the couple's colors under the cone.
+                AnimatedBackground()
                 // Seasonal particles decorate ONLY the resting state — motion
                 // must mean "something is here today", and when everything is
                 // shared, calm may shimmer (Dossier 23, ideas 14/22).

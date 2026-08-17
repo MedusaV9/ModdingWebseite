@@ -29,6 +29,20 @@ enum PostfachL10n {
             de: "Nachtpost",
             en: "Night post"),
 
+        // Begrüßungszeile des Postfach-Kopfes (Redesign Welle 1,
+        // REDESIGN.md §2.1): die Zustellrunde sagt zuerst Hallo, dann
+        // kommen die Zahlen. Klartext, keine Post-Vokabel — das
+        // Postdeutsch-Budget trägt weiterhin allein die Stempelzeile.
+        "postfach.gruss.morgenpost": LText(
+            de: "Guten Morgen",
+            en: "Good morning"),
+        "postfach.gruss.tagespost": LText(
+            de: "Schönen Tag euch",
+            en: "Good afternoon"),
+        "postfach.gruss.nachtpost": LText(
+            de: "Guten Abend",
+            en: "Good evening"),
+
         // Briefschlitz-Ansage (VoiceOver, ganzer Satz — ENTSCHEID §4.6):
         // „Tagespost ist da: Frage des Tages."
         "postfach.briefschlitz.a11y": LText(

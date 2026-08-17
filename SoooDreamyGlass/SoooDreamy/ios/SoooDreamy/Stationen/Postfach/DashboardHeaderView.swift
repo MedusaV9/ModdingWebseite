@@ -88,6 +88,7 @@ struct DashboardHeaderView: View {
                 avatarPair
             }
             VStack(alignment: .leading, spacing: 2) {
+                greetingLine
                 // Priority rule for tight widths: the title scales down
                 // first; the status pill keeps its natural size and is
                 // never truncated or wrapped (EVAL P0-1).
@@ -119,9 +120,25 @@ struct DashboardHeaderView: View {
                 HandbookButton(anchor: "home")
                 editButton
             }
+            greetingLine
             titleText(compact: false)
             statusLine
             ConnectionBanner(state: connectionState)
+        }
+    }
+
+    /// The greeting line (redesign wave 1, REDESIGN.md §2.1): the mailbox
+    /// says hello before it counts days — morning/midday/evening from the
+    /// Zustellrunde of the minute tick. Device-local hour, same honesty
+    /// contract as the stamp line (ZustellrundenLogic); the LogicTests
+    /// pin all three greeting keys against the PostfachL10n table.
+    private var greetingLine: some View {
+        TimelineView(.periodic(from: .now, by: 60)) { timeline in
+            let runde = Zustellrunde.from(
+                hour: Calendar.current.component(.hour, from: timeline.date))
+            Text(L10n.t(runde.greetingKey))
+                .font(.system(.caption, design: .rounded).weight(.semibold))
+                .foregroundStyle(Theme.textSecondary)
         }
     }
 
@@ -185,7 +202,9 @@ struct DashboardHeaderView: View {
             .frame(width: 44, height: 44)
             .background(Circle().fill(Theme.innerFill))
         }
-        .buttonStyle(.plain)
+        // Redesign wave 1: the chrome circle answers the finger visibly
+        // (DS press response), not only through haptics.
+        .buttonStyle(DSPressableStyle(compact: true))
         .accessibilityLabel(L10n.t("postfach.dienstlicht.a11y"))
         .accessibilityValue(dienstlichtA11yWert)
     }
@@ -230,7 +249,7 @@ struct DashboardHeaderView: View {
                 .frame(width: 44, height: 44)
                 .background(Circle().fill(Theme.innerFill))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(DSPressableStyle(compact: true))
         .accessibilityLabel(L10n.t("dashboard.edit.title"))
     }
 
@@ -254,7 +273,9 @@ struct DashboardHeaderView: View {
                                 : .clear,
                             radius: 9)
             }
-            .buttonStyle(.plain)
+            // Redesign wave 1: every touch answers in the frame (comm. 14)
+            // — the avatar breathes under the finger now.
+            .buttonStyle(DSPressableStyle(compact: true))
             .accessibilityLabel(L10n.t("home.myAvatarA11y"))
             .zIndex(1)
 
@@ -422,28 +443,22 @@ struct DashboardHeaderView: View {
     }
 
     /// "I see you" closes the loop that today ends in silence — a soft hug
-    /// touch, no chat message needed.
+    /// touch, no chat message needed. Redesign wave 1: the hand-built
+    /// capsule became a DSChip — one chip vocabulary for the whole app,
+    /// same states (inviting couple wash → quiet done-mint), plus the
+    /// shared press response.
     private func moodAckChip(updatedAt: Date?) -> some View {
         let acked = ackedMoodStamp != nil && ackedMoodStamp == (updatedAt ?? .distantPast)
-        return Button {
+        return DSChip(
+            icon: acked ? "checkmark" : "heart.fill",
+            title: L10n.t(acked ? "home.mood.acked" : "home.mood.ack"),
+            tint: acked ? Theme.mint : coupleTint.blend,
+            prominence: acked ? .quiet : .filled
+        ) {
             Haptics.shared.tap()
             appState.sendTouch(.hug)
             ackedMoodStamp = updatedAt ?? .distantPast
-        } label: {
-            HStack(spacing: Space.xs) {
-                Image(systemName: acked ? "checkmark" : "heart.fill")
-                    .font(.system(.caption2, design: .rounded).weight(.bold))
-                Text(L10n.t(acked ? "home.mood.acked" : "home.mood.ack"))
-                    .font(.system(.caption, design: .rounded).weight(.bold))
-            }
-            .foregroundStyle(acked ? Theme.mint : Theme.textPrimary)
-            .padding(.vertical, 5)
-            .padding(.horizontal, LayoutMetrics.s(11))
-            .background(
-                Capsule().fill(acked ? Theme.mint.opacity(0.14) : coupleTint.blend.opacity(0.3))
-            )
         }
-        .buttonStyle(.plain)
         .disabled(acked)
     }
 

@@ -61,7 +61,10 @@ struct PlayHubView: View {
     var body: some View {
         NavigationStack(path: $path) {
             ZStack {
-                DreamyBackground()
+                // Redesign wave 1 (REDESIGN.md §2.2): the living room —
+                // the game table breathes with the same Atemglühen as
+                // the mailbox.
+                AnimatedBackground()
                 ScrollView {
                     // The four zones of the games table, in the BINDING
                     // order of ENTSCHEID §4.3: (1) Aushang — season line +
@@ -295,6 +298,23 @@ struct PlayHubView: View {
                     }
                 }
             }
+        } else {
+            // Redesign wave 1 (REDESIGN.md §2.2): 0 open rounds used to
+            // make this zone vanish wordlessly — the free table now says
+            // so and hands over the door: the chip opens the „Am Tisch"
+            // drawer of the cabinet right below.
+            DSEmptyState(
+                systemImage: "rectangle.portrait.on.rectangle.portrait.angled",
+                title: L10n.t("games.tischfrei.titel"),
+                subtitle: L10n.t("games.tischfrei.text"),
+                actionTitle: L10n.t("games.tischfrei.cta"),
+                actionIcon: "sparkles"
+            ) {
+                Haptics.shared.tap()
+                withAnimation(Theme.Motion.settle) {
+                    offenesFach = KartenschrankFach.amTisch.rawValue
+                }
+            }
         }
     }
 
@@ -356,8 +376,9 @@ struct PlayHubView: View {
                         // on light couple colors (mint/gold/sky, round 3).
                         .foregroundStyle(invited || awaiting ? coupleTint.onBlend : Papier.aufNacht)
                 }
-                .buttonStyle(.plain)
-                .hoverEffect(.highlight)
+                // Redesign wave 1: the most-tapped control of the hub
+                // answers with the shared press response.
+                .buttonStyle(DSPressableStyle())
                 .disabled(coordinator.engine(for: kind).busy)
             }
             .nightCard()
@@ -1007,7 +1028,9 @@ struct PlayHubView: View {
                     eingeklappt: collapsed)
                     .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            // Redesign wave 1: drawer heads answer the finger visibly
+            // (DS press response) instead of replying only via haptics.
+            .buttonStyle(DSPressableStyle())
             .accessibilityLabel(fachA11yLabel(fach))
             .accessibilityValue(L10n.t(collapsed
                                        ? "games.hub.group.collapsed"

@@ -87,6 +87,18 @@ enum GamesL10n {
         "games.fach.partien.a11y.floor.other": LText(de: "mindestens {n} gespielte Partien",
                                                      en: "at least {n} rounds played"),
         "games.zahl.floor.a11y": LText(de: "mindestens {n}", en: "at least {n}"),
+        // Der freie Tisch (Redesign Welle 1, REDESIGN.md §2.2): 0 offene
+        // Partien ist ein Zustand mit Einladung — die Zone verschwindet
+        // nicht mehr wortlos. Der Chip öffnet das „Am Tisch"-Fach.
+        "games.tischfrei.titel": LText(
+            de: "Der Tisch ist frei",
+            en: "The table is clear"),
+        "games.tischfrei.text": LText(
+            de: "Gerade liegt kein Blatt auf. Sucht euch etwas Neues aus dem Kartenschrank aus.",
+            en: "No open rounds right now. Deal something new from the cabinet."),
+        "games.tischfrei.cta": LText(
+            de: "Spiel aussuchen",
+            en: "Pick a game"),
         "games.spielbuch.title": LText(de: "Spielbuch", en: "Game book"),
         "games.umschlag.anschrift": LText(de: "Für {name}", en: "For {name}"),
         "games.lasche.beginnt": LText(de: "{game} beginnt.", en: "{game} is starting."),

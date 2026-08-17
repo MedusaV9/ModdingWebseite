@@ -202,4 +202,21 @@ final class ZustellrundenLogicTests: XCTestCase {
                             "\(runde.titleKey) missing from PostfachL10n")
         }
     }
+
+    func testGreetingKeysResolveInBothLanguages() {
+        // The greeting line of the mailbox head (redesign wave 1): every
+        // round owns a resolvable greeting in DE and EN — a broken key
+        // would print its raw name into the first line of the app.
+        XCTAssertEqual(Zustellrunde.morgenpost.greetingKey, "postfach.gruss.morgenpost")
+        XCTAssertEqual(Zustellrunde.tagespost.greetingKey, "postfach.gruss.tagespost")
+        XCTAssertEqual(Zustellrunde.nachtpost.greetingKey, "postfach.gruss.nachtpost")
+        for runde in Zustellrunde.allCases {
+            let text = PostfachL10n.table[runde.greetingKey]
+            XCTAssertNotNil(text, "\(runde.greetingKey) missing from PostfachL10n")
+            XCTAssertFalse(text?.de.isEmpty ?? true,
+                           "\(runde.greetingKey) has an empty German greeting")
+            XCTAssertFalse(text?.en.isEmpty ?? true,
+                           "\(runde.greetingKey) has an empty English greeting")
+        }
+    }
 }

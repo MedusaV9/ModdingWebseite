@@ -39,6 +39,12 @@ enum Zustellrunde: String, Codable, CaseIterable {
     /// L10n-Schlüssel des Rundennamens („Morgenpost" / "Morning post") —
     /// Stempelzeile und Zustellzettel lesen denselben Namen.
     var titleKey: String { "postfach.runde.\(rawValue)" }
+
+    /// L10n-Schlüssel der Begrüßungszeile des Postfach-Kopfes („Guten
+    /// Morgen" / „Guten Abend") — der Screen sagt zuerst Hallo, dann
+    /// Zahlen (REDESIGN.md §2.1). Dieselbe Runde, dieselbe lokale
+    /// Gerätestunde, derselbe Ehrlichkeits-Vertrag wie oben.
+    var greetingKey: String { "postfach.gruss.\(rawValue)" }
 }
 
 /// Das Runden-Mengen-Modell (Fix2-A №6, vorher Ein-Marken-Modell): genau
