@@ -26,8 +26,13 @@ export const STINKBANANE_META = {
  */
 export type StinkbananeAction = { type: "answer"; choice: 0 | 1 | 2 | 3 } | { type: "anfeuern" };
 
+import { ANTWORT_COOLDOWN_MS } from "../pacing";
+
 // ---------- Timing & Ökonomie (GAME-DESIGN §2.6, verbindlich) ----------
 export const SB_FRAGE_MS = 8_000; // 8 s pro Weitergabe-Frage
+/** Welle 1 (Eval „Panik-Spirale"): Verschnaufpause nach FALSCHER Antwort —
+ * die Zündschnur pausiert mit (keine versteckte Zusatz-Strafe). */
+export const SB_COOLDOWN_MS = ANTWORT_COOLDOWN_MS;
 export const SB_ZUENDSCHNUR_MIN_MS = 45_000; // verdeckter Zufalls-Timer: 45–75 s
 export const SB_ZUENDSCHNUR_MAX_MS = 75_000;
 export const SB_WEITERGABE_MM = 150; // jede erfolgreiche Weitergabe: +150 MM

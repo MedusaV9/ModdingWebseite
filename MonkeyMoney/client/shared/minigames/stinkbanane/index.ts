@@ -44,6 +44,8 @@ interface StinkbananeView {
   you?: string | null;
   istHalter?: boolean;
   frage?: { text: string; options: string[] } | null;
+  /** Welle 1: „Durchatmen"-Cooldown nach falscher Antwort (Server-Deadline). */
+  cooldownBisAt?: number | null;
   aufloesung: {
     erklaerung: string;
     perPlayer: {
@@ -190,6 +192,19 @@ const modul: MinigameClientModule = {
           <p class="muted">
             ${duBistMatsch ? `−${formatMM(SB_EXPLOSION_MM)} ins Jackpot-Glas …` : "Gleich geht's weiter."}
           </p>
+        </div>`,
+        host,
+      );
+      return;
+    }
+
+    if (v.istHalter && v.cooldownBisAt !== null && v.cooldownBisAt !== undefined) {
+      // Cooldown nach falscher Antwort: bewusst ruhiger Beat statt Panik-Spirale.
+      render(
+        html`<div class="sb-verdeckt">
+          <span style="font-size:4rem">😮‍💨🍌</span>
+          <h2>Durchatmen …</h2>
+          <p class="muted">Falsch war's — gleich kommt die nächste Frage. Die Banane pausiert.</p>
         </div>`,
         host,
       );

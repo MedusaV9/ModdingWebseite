@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import type { ContentSlice, Question } from "../../shared/content";
 import { asPlayerId, type PlayerId } from "../../shared/ids";
 import {
+  SB_COOLDOWN_MS,
   SB_EXPLOSION_MM,
   SB_FRAGE_MS,
   SB_SPLATTER_MS,
@@ -84,6 +85,27 @@ describe("stinkbanane: Start + Wander-Logik", () => {
     const zuschauer = spieler.find((p) => p !== halter)!;
     const fremd = stinkbananePlugin.reduce(state, antwort(zuschauer, 2, 1_000), ctx);
     expect(fremd).toBe(state); // unverändert — kein Nicht-Halter-Input
+  });
+
+  it("Welle 1: falsche Antwort startet Cooldown — Frage verdeckt, Zündschnur pausiert", () => {
+    const { clock, ctx, state } = setup();
+    const halter = state.holder!;
+    const zuenderVorher = state.zuendschnurEndetAt;
+    const s = stinkbananePlugin.reduce(state, antwort(halter, 0, 1_000), ctx) as StinkbananeState;
+    expect(s.cooldownBisAt).toBe(clock.now() + SB_COOLDOWN_MS);
+    expect(s.zuendschnurEndetAt).toBe(zuenderVorher + SB_COOLDOWN_MS); // Lunte pausiert
+    expect(s.frageEndsAt).toBe(s.cooldownBisAt! + SB_FRAGE_MS); // volles Fenster danach
+    // Während des Cooldowns: Frage verdeckt, Eingaben eingefroren.
+    const viewCd = stinkbananePlugin.viewFor(s, "player", halter) as { frage: unknown };
+    expect(viewCd.frage).toBeNull();
+    const eingefroren = stinkbananePlugin.reduce(s, antwort(halter, 2, 2_000), ctx);
+    expect(eingefroren).toBe(s);
+    // Cooldown abgelaufen ⇒ tick räumt auf, die Frage wird sichtbar.
+    clock.advance(SB_COOLDOWN_MS + 1);
+    const s2 = stinkbananePlugin.tick(s, ctx) as StinkbananeState;
+    expect(s2.cooldownBisAt).toBeNull();
+    const view = stinkbananePlugin.viewFor(s2, "player", halter) as { frage: unknown };
+    expect(view.frage).not.toBeNull();
   });
 
   it("zu langsam (8-s-Timeout im Tick) = festhalten + neue Frage", () => {

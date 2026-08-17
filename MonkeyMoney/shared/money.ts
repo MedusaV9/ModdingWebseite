@@ -9,13 +9,9 @@ export const FRAGE_WERTE: Record<Schwierigkeit, number> = {
   ultrahard: 1000,
 };
 
-/** Antwortzeit-Fenster je Schwierigkeit in Millisekunden. */
-export const FRAGE_TIMER_MS: Record<Schwierigkeit, number> = {
-  easy: 15_000,
-  medium: 15_000,
-  hard: 20_000,
-  ultrahard: 25_000,
-};
+/** Antwortzeit-Fenster je Schwierigkeit in Millisekunden — Werte leben in der
+ * zentralen Pacing-Config (shared/pacing.ts, Welle 1); Re-Export für Callsites. */
+export { FRAGE_TIMER_MS } from "./pacing";
 
 /**
  * Speed-Bonus (abgeknickte Gerade, kein Blind-Tipp-Exploit):

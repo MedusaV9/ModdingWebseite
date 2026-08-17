@@ -391,25 +391,23 @@ export interface EngineResult {
 }
 
 // Anzeige-Dauern der Server-getakteten Phasen (Timer laufen NUR auf dem Server).
-export const INTRO_MS = 6_000;
-export const KATEGORIE_WAHL_MS = 12_000;
-export const ERKLAERKARTE_MS = 12_000;
-export const ERKLAERKARTE_KURZ_MS = 7_000;
-export const AUFLOESUNG_MS = 6_000;
-// Playtest 3: 7 s statischer Zwischenstand fühlte sich nach Wartezimmer an —
-// 5 s + EINE animierte Stand-Story (Screen) halten den News-Beat knackig.
-export const ZWISCHENSTAND_MS = 5_000;
-// Playtest 3: nach Fanfare + Podest + Awards standen 20 s Nachlauf — 12 s
-// halten den Peak (Awards laufen jetzt als Beats nacheinander, siehe Screen).
-export const SIEGEREHRUNG_MS = 12_000;
-export const MOOD_POLL_MS = 4_000;
-export const VOTING_MS = 15_000;
-export const VOTING_ERGEBNIS_MS = 7_000;
-// ---------- v2: Sudden-Death (Kokosnuss-Shake) + Replay-Highlights ----------
-export const TIEBREAKER_COUNTDOWN_MS = 3_000;
-export const TIEBREAKER_SHAKE_MS = 10_000;
-export const TIEBREAKER_ERGEBNIS_MS = 5_000;
+// Welle 1: die Werte leben zentral in shared/pacing.ts (Eval: Tempo-Regler an
+// EINEM Ort) — hier nur Re-Export, damit alle Engine-Callsites unberührt bleiben.
+export {
+  AUFLOESUNG_MS,
+  ERKLAERKARTE_KURZ_MS,
+  ERKLAERKARTE_MS,
+  HIGHLIGHT_KARTE_MS,
+  INTRO_MS,
+  KATEGORIE_WAHL_MS,
+  MOOD_POLL_MS,
+  SIEGEREHRUNG_MS,
+  TIEBREAKER_COUNTDOWN_MS,
+  TIEBREAKER_ERGEBNIS_MS,
+  TIEBREAKER_SHAKE_MS,
+  VOTING_ERGEBNIS_MS,
+  VOTING_MS,
+  ZWISCHENSTAND_MS,
+} from "../../shared/pacing";
 /** Nach 3 Shake-Runden mit Tap-Gleichstand entscheidet das Los (Rng). */
 export const TIEBREAKER_MAX_RUNDEN = 3;
-/** Anzeigedauer einer Highlight-Karte (4–5 s, skippable via gm.next). */
-export const HIGHLIGHT_KARTE_MS = 4_500;

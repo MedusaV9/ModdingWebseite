@@ -5,6 +5,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Question } from "../../shared/content";
 import { MITLEIDS_BANANE, wFinal } from "../../shared/economy";
+import { FRAGE_TIMER_MS } from "../../shared/money";
 import { createRng } from "../../shared/rng";
 import { AB_KETTE_MS, AB_QUICK_KETTE_MS } from "../../shared/minigames/affenbank.meta";
 import { defaultSettings, type MatchSettings } from "../../shared/settings";
@@ -292,7 +293,7 @@ describe("engine: Phasen-Fluss", () => {
   it("löst nach Timer-Ablauf auf (Timeout ohne Antwort)", () => {
     let s = gestartet();
     s = bisErsteFrage(s);
-    s = weiter(s, 15_000); // easy-Timer
+    s = weiter(s, FRAGE_TIMER_MS.easy); // easy-Timer
     expect(s.phase).toBe("aufloesung");
     expect(s.players.p1.balance).toBe(0);
   });
@@ -665,7 +666,7 @@ describe("engine: GM-Werkzeuge", () => {
   it("timer.extend: rettet eine ablaufende Frage, max. 2× pro Frage", () => {
     let s = gestartet();
     s = bisErsteFrage(s);
-    clock.advance(15_001); // eigentlich abgelaufen …
+    clock.advance(FRAGE_TIMER_MS.easy + 1); // eigentlich abgelaufen …
     s = reduce(s, { type: "gm.timerExtend", ms: 15_000 }, deps, ctx).state;
     s = tick(s, deps, ctx).state;
     expect(s.phase).toBe("frage"); // … aber der GM hat verlängert
@@ -698,7 +699,7 @@ describe("engine: GM-Werkzeuge", () => {
     s = tick(s, deps, ctx).state;
     expect(s.phase).toBe("frage"); // Timer lief NICHT weiter
     s = reduce(s, { type: "gm.resume" }, deps, ctx).state;
-    s = weiter(s, 14_000);
+    s = weiter(s, FRAGE_TIMER_MS.easy - 1_000);
     expect(s.phase).toBe("frage"); // Restzeit läuft normal
     s = weiter(s, 2_000);
     expect(s.phase).toBe("aufloesung");
@@ -925,7 +926,7 @@ describe("engine: Presence", () => {
     ).state;
     clock.advance(1_000);
     s = antwort(s, "p1", 1);
-    s = weiter(s, 15_000); // Timeout — p2 hat (offline) nicht geantwortet
+    s = weiter(s, FRAGE_TIMER_MS.easy); // Timeout — p2 hat (offline) nicht geantwortet
     expect(s.phase).toBe("aufloesung");
     expect(s.players.p2.streak).toBe(1); // eingefroren statt gerissen
   });

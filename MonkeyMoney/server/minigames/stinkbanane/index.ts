@@ -15,6 +15,7 @@
 import type { ContentSlice, Question } from "../../../shared/content";
 import type { PlayerId } from "../../../shared/ids";
 import {
+  SB_COOLDOWN_MS,
   SB_DURCHGAENGE,
   SB_EXPLOSION_MM,
   SB_FRAGE_MS,
@@ -51,6 +52,10 @@ export interface StinkbananeState {
   durchgangStartetAt: number; // öffentlich: Client eskaliert Ticken/Spannung lokal
   frageEndsAt: number;
   splatterEndetAt: number | null;
+  /** Welle 1: „Durchatmen"-Cooldown nach falscher Antwort — bis dahin keine
+   * neue Frage, keine Eingaben; die Zündschnur wurde um dieselbe Spanne
+   * verlängert (der Cooldown frisst keine Lunte). */
+  cooldownBisAt: number | null;
   connected: Record<string, boolean>;
   weitergaben: Record<string, number>; // je +150 MM
   explodiert: Record<string, number>; // je −500 MM ins Glas
@@ -146,6 +151,7 @@ export const stinkbananePlugin: MinigamePlugin<StinkbananeState, StinkbananeActi
       durchgangStartetAt: now,
       frageEndsAt: now + SB_FRAGE_MS,
       splatterEndetAt: null,
+      cooldownBisAt: null,
       connected: Object.fromEntries(players.map((p) => [p, true])),
       weitergaben: {},
       explodiert: {},
@@ -176,6 +182,7 @@ export const stinkbananePlugin: MinigamePlugin<StinkbananeState, StinkbananeActi
         zuendschnurEndetAt: state.zuendschnurEndetAt + action.ms,
         durchgangStartetAt: state.durchgangStartetAt + action.ms,
         splatterEndetAt: state.splatterEndetAt === null ? null : state.splatterEndetAt + action.ms,
+        cooldownBisAt: state.cooldownBisAt === null ? null : state.cooldownBisAt + action.ms,
       };
     }
     if (state.finished) return state;
@@ -194,6 +201,8 @@ export const stinkbananePlugin: MinigamePlugin<StinkbananeState, StinkbananeActi
 
     // MC-4-Antwort: NUR der Halter, nur solange die Banane tickt.
     if (state.phase !== "ticken" || action.playerId !== state.holder) return state;
+    // Cooldown nach falscher Antwort: Eingaben sind eingefroren (Durchatmen!).
+    if (state.cooldownBisAt !== null && action.atServerTime < state.cooldownBisAt) return state;
     // Explosions-Edge: Server-Empfang VOR dem Explosions-Tick zählt noch.
     if (action.atServerTime >= state.zuendschnurEndetAt) return state;
     // Zu langsam (8-s-Fenster vorbei): der Tick regelt „festhalten + neue Frage".
@@ -219,9 +228,18 @@ export const stinkbananePlugin: MinigamePlugin<StinkbananeState, StinkbananeActi
       );
       return mitNeuerFrage(s, ctx.clock.now());
     }
-    // Falsch: festhalten, neue Frage.
+    // Falsch: festhalten + Cooldown (Welle 1) — erst durchatmen, DANN die
+    // nächste Frage; die Zündschnur pausiert um dieselbe Spanne mit.
     const s = protokolliere(basis, { typ: "falsch", von: action.playerId }, action.atServerTime);
-    return mitNeuerFrage(s, ctx.clock.now());
+    const cooldownEnde = ctx.clock.now() + SB_COOLDOWN_MS;
+    return mitNeuerFrage(
+      {
+        ...s,
+        cooldownBisAt: cooldownEnde,
+        zuendschnurEndetAt: s.zuendschnurEndetAt + SB_COOLDOWN_MS,
+      },
+      cooldownEnde,
+    );
   },
 
   tick(state: StinkbananeState, ctx: Ctx): StinkbananeState {
@@ -249,6 +267,10 @@ export const stinkbananePlugin: MinigamePlugin<StinkbananeState, StinkbananeActi
     }
 
     // Phase "ticken":
+    // Cooldown abgelaufen ⇒ die (schon vorbereitete) nächste Frage wird sichtbar.
+    if (state.cooldownBisAt !== null && now >= state.cooldownBisAt) {
+      return { ...state, cooldownBisAt: null };
+    }
     if (now >= state.zuendschnurEndetAt) {
       // EXPLOSION! Der Halter zahlt 500 MM ins Jackpot-Glas + Matsch bis Match-Ende.
       const opfer = state.holder !== null && state.connected[state.holder] ? state.holder : null;
@@ -318,6 +340,7 @@ export const stinkbananePlugin: MinigamePlugin<StinkbananeState, StinkbananeActi
       maxZuendschnurMs: SB_ZUENDSCHNUR_MAX_MS,
       endsAt: state.phase === "splatter" ? (state.splatterEndetAt ?? 0) : state.frageEndsAt,
       timerMs: state.phase === "splatter" ? SB_SPLATTER_MS : SB_FRAGE_MS,
+      cooldownBisAt: state.cooldownBisAt,
       weitergaben: state.weitergaben,
       matsch: state.matsch,
       trommel: Object.values(state.trommel).reduce((a, b) => a + b, 0),
@@ -358,9 +381,10 @@ export const stinkbananePlugin: MinigamePlugin<StinkbananeState, StinkbananeActi
         ...basis,
         you: player ?? null,
         istHalter,
-        // NUR der Halter sieht die aktuelle Frage (Design-Regel).
+        // NUR der Halter sieht die aktuelle Frage (Design-Regel) — und erst
+        // NACH dem Cooldown (kein früher Lese-Vorsprung durchs DOM).
         frage:
-          istHalter && state.phase === "ticken" && !state.finished
+          istHalter && state.phase === "ticken" && !state.finished && state.cooldownBisAt === null
             ? { text: frage.text, options: frage.options }
             : null,
         aufloesung,
