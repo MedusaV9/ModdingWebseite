@@ -1,0 +1,10 @@
+SoooDreamy 6.0.0 verification
+
+- Server npm test: 266/266 passed
+- Server A → server B logical migration: passed, including re-pair/tamper/freshness cases
+- Swift logic: 223/223 passed
+- Swift parse: 231/231 tracked Swift files passed
+- DE/EN parity and literal-usage scans: passed within Swift logic suite
+- macOS unsigned IPA farm: success — run 31522093314, `** BUILD SUCCEEDED **`
+- Embedded IPA metadata: 6.0.0 (41), 31 archive entries, app/widget executables present
+- Real iPhone: not run; signing-dependent behavior is not claimed

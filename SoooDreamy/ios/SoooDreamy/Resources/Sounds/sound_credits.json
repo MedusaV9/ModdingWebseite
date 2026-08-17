@@ -1,0 +1,224 @@
+{
+  "version": 1,
+  "sounds": [
+    {
+      "cue": "received",
+      "mode": "sample",
+      "file": "cue_received.caf",
+      "gain": -2.0,
+      "source": {
+        "title": "Glass Ping",
+        "author": "tix99",
+        "url": "https://freesound.org/s/745014/",
+        "license": "CC0-1.0",
+        "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "downloadedAt": "2026-08-14",
+        "sha256": "9594c564c73a2a89948af002d1fe7dac4721c126537af2c1620b74a2b787a26e",
+        "edits": "getrimmt (1.1 s), mono, Fades, auf -6 dBTP normalisiert"
+      }
+    },
+    { "cue": "sent", "mode": "synth" },
+    {
+      "cue": "sealed",
+      "mode": "hybrid",
+      "file": "cue_sealed.caf",
+      "gain": -1.5,
+      "source": {
+        "title": "Wax seal",
+        "author": "Cerise_Virtuelle",
+        "url": "https://freesound.org/s/759526/",
+        "license": "CC0-1.0",
+        "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "downloadedAt": "2026-08-14",
+        "sha256": "14430f5a6c31df7576f84d1117bab57bd4b047cf164601c94770949f81e3c3b3",
+        "edits": "getrimmt (0.9 s), mono, Fades, auf -6 dBTP normalisiert"
+      }
+    },
+    {
+      "cue": "unseal",
+      "mode": "sample",
+      "file": "cue_unseal.caf",
+      "gain": -1.0,
+      "source": {
+        "title": "Packaging Paper Tear Short",
+        "author": "afleetingspeck",
+        "url": "https://freesound.org/s/140461/",
+        "license": "CC0-1.0",
+        "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "downloadedAt": "2026-08-14",
+        "sha256": "834570068d693f490e7f04b1d0076323f2e5e17a74891c53950eca6f5f8907c3",
+        "edits": "getrimmt, mono, Fades, auf -6 dBTP normalisiert"
+      }
+    },
+    {
+      "cue": "kiss",
+      "mode": "sample",
+      "file": "cue_kiss.caf",
+      "gain": -1.0,
+      "source": {
+        "title": "Short kiss",
+        "author": "Vospi",
+        "url": "https://freesound.org/s/344209/",
+        "license": "CC0-1.0",
+        "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "downloadedAt": "2026-08-14",
+        "sha256": "a68205fb1c1885ba30a2effd9f5bf08cec5fa6d1918a62c50131015727286625",
+        "edits": "getrimmt, mono, Fades, auf -6 dBTP normalisiert"
+      }
+    },
+    {
+      "cue": "hug",
+      "mode": "hybrid",
+      "file": "cue_hug.caf",
+      "gain": -3.0,
+      "source": {
+        "title": "RPG Audio (cloth3)",
+        "author": "Kenney",
+        "url": "https://kenney.nl/assets/rpg-audio",
+        "license": "CC0-1.0",
+        "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "downloadedAt": "2026-08-14",
+        "sha256": "a48632d17a4f1416541d261a32a31612e01267144c407fa3ecab3ff410f0085b",
+        "edits": "mono, Fades, auf -6 dBTP normalisiert"
+      }
+    },
+    { "cue": "heartbeat", "mode": "synth" },
+    { "cue": "sparkle", "mode": "synth" },
+    { "cue": "vibe", "mode": "synth" },
+    { "cue": "pairing", "mode": "synth" },
+    {
+      "cue": "chime",
+      "mode": "hybrid",
+      "file": "cue_chime.caf",
+      "gain": -2.0,
+      "source": {
+        "title": "Glass Tap",
+        "author": "Unicornaphobist",
+        "url": "https://freesound.org/s/262958/",
+        "license": "CC0-1.0",
+        "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "downloadedAt": "2026-08-14",
+        "sha256": "392752ae436412efb86fff705930284bceca610f82ff901941b336a9627c3248",
+        "edits": "mono, Fades, auf -6 dBTP normalisiert"
+      }
+    },
+    { "cue": "click", "mode": "synth" },
+    { "cue": "success", "mode": "synth" },
+    {
+      "cue": "reveal",
+      "mode": "sample",
+      "file": "cue_reveal.caf",
+      "gain": -1.0,
+      "source": {
+        "title": "PB Bar Chimes (long)",
+        "author": "petebuchwald",
+        "url": "https://freesound.org/s/271355/",
+        "license": "CC0-1.0",
+        "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "downloadedAt": "2026-08-14",
+        "sha256": "9a7b45487d87b303cbc82fef5c60cb02dd59351dd426adac971321bd649934f9",
+        "edits": "Ausschnitt (1.3 s, aufsteigender Sweep), mono, Fades, auf -6 dBTP normalisiert"
+      }
+    },
+    {
+      "cue": "unlock",
+      "mode": "hybrid",
+      "file": "cue_unlock.caf",
+      "gain": -3.0,
+      "source": {
+        "title": "RPG Audio (metalLatch)",
+        "author": "Kenney",
+        "url": "https://kenney.nl/assets/rpg-audio",
+        "license": "CC0-1.0",
+        "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "downloadedAt": "2026-08-14",
+        "sha256": "ba9ba60b172b3ebc131a940f25793cd2e207aca7af73dc80d637277f060f1708",
+        "edits": "mono, Fades, auf -6 dBTP normalisiert"
+      }
+    },
+    {
+      "cue": "drop",
+      "mode": "sample",
+      "file": "cue_drop.caf",
+      "gain": -2.0,
+      "source": {
+        "title": "Slow Single Water Drop Splash",
+        "author": "qubodup",
+        "url": "https://freesound.org/s/792932/",
+        "license": "CC0-1.0",
+        "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "downloadedAt": "2026-08-14",
+        "sha256": "50a6e45020753f5e26b9d05b018848f52ef7100ccaa8bc224e2cd701d8fa05e0",
+        "edits": "tiefer gepitcht (x0.85), mono, Fades, auf -6 dBTP normalisiert"
+      }
+    },
+    { "cue": "fanfareSmall", "mode": "synth" },
+    { "cue": "fanfareMedium", "mode": "synth" },
+    { "cue": "fanfareEpic", "mode": "synth" },
+    { "cue": "lose", "mode": "synth" },
+    {
+      "cue": "dice",
+      "mode": "sample",
+      "file": "cue_dice.caf",
+      "gain": -2.0,
+      "source": {
+        "title": "Casino Audio (die-throw-2)",
+        "author": "Kenney",
+        "url": "https://kenney.nl/assets/casino-audio",
+        "license": "CC0-1.0",
+        "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "downloadedAt": "2026-08-14",
+        "sha256": "a2702cfe14d24aab302483a1499daa88474a4af4acd794b58d97f4af16333b3d",
+        "edits": "mono, Fades, auf -6 dBTP normalisiert"
+      }
+    },
+    {
+      "cue": "chip",
+      "mode": "sample",
+      "file": "cue_chip.caf",
+      "gain": -2.5,
+      "source": {
+        "title": "Casino Audio (chip-lay-2)",
+        "author": "Kenney",
+        "url": "https://kenney.nl/assets/casino-audio",
+        "license": "CC0-1.0",
+        "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "downloadedAt": "2026-08-14",
+        "sha256": "8ca8b2d450741c04ed7b4ba51ed3f73c2400c8b3dbe83b974be4fe4774a76712",
+        "edits": "mono, Fades, auf -6 dBTP normalisiert"
+      }
+    },
+    {
+      "cue": "splash",
+      "mode": "sample",
+      "file": "cue_splash.caf",
+      "gain": -2.0,
+      "source": {
+        "title": "WaterSplash",
+        "author": "Ryanz-Official",
+        "url": "https://freesound.org/s/646568/",
+        "license": "CC0-1.0",
+        "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "downloadedAt": "2026-08-14",
+        "sha256": "56775d4d5cfd3f92d480e5e93637aecaeaae8fae553ef90c8d8d181364d177b7",
+        "edits": "getrimmt (0.9 s), mono, Fades, auf -6 dBTP normalisiert"
+      }
+    },
+    {
+      "cue": "hit",
+      "mode": "sample",
+      "file": "cue_hit.caf",
+      "gain": -3.0,
+      "source": {
+        "title": "Impact Sounds (impactSoft_heavy_001)",
+        "author": "Kenney",
+        "url": "https://kenney.nl/assets/impact-sounds",
+        "license": "CC0-1.0",
+        "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "downloadedAt": "2026-08-14",
+        "sha256": "4d0096364ba9e46119d2ff6df493fdc101bd2e1efae061da5e5f77a53b3fdcb6",
+        "edits": "mono, Fades, auf -6 dBTP normalisiert"
+      }
+    }
+  ]
+}

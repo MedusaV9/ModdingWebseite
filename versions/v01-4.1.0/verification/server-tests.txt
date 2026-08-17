@@ -1,0 +1,9 @@
+SoooDreamy 4.1.0 server verification
+Date: 2026-08-11 UTC
+Command: cd SoooDreamy/server && npm ci && npm test
+Runtime: Node.js v22.14.0
+Result: PASS
+Tests: 243
+Passed: 243
+Failed: 0
+Includes: exact APP_EVENT_TYPES documentation parity and canonical still_locked error-code contract.

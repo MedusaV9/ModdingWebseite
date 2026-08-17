@@ -1,0 +1,45 @@
+# Node
+node_modules/
+npm-debug.log*
+*.tsbuildinfo
+
+# Server runtime data (couples, photos, voice notes)
+server/data/
+
+# macOS / Xcode
+.DS_Store
+xcuserdata/
+*.xcworkspace/xcuserdata/
+build/
+DerivedData/
+*.ipa
+*.xcarchive
+
+# XcodeGen output (generated from project.yml)
+ios/SoooDreamy.xcodeproj/
+ios/Config/*
+# Keep Info.plists committed so ATS HTTP unlock cannot be "lost" in a sideload build.
+!ios/Config/*-Info.plist
+
+# App icon is rendered in CI by ios/scripts/GenerateIcon.swift
+ios/SoooDreamy/Resources/Assets.xcassets/AppIcon.appiconset/icon_1024.png
+
+# Raw sound downloads (originals stay out of the repo — the processed
+# cue_*.caf files are committed, provenance lives in sound_credits.json)
+tools/sound_sources/
+
+# Swift Package Manager
+.build/
+.swiftpm/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Blender
+*.blend1
+
+# Misc
+*.log
+.env

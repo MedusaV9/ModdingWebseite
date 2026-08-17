@@ -1,0 +1,13 @@
+SoooDreamy 4.1.0 Swift verification
+Date: 2026-08-11 UTC
+Toolchain: Swift 6.0.3 (swift-6.0.3-RELEASE), x86_64-unknown-linux-gnu
+Command: swift test --package-path SoooDreamy/ios
+Result: PASS
+Tests: 177
+Passed: 177
+Failed: 0
+Localization coverage: CoreStrings, ChatL10n, GamesL10n, MemoriesL10n, RitualsL10n, PlatformL10n.
+
+Syntax command: swiftc -parse, run independently for each tracked Swift source
+Syntax result: PASS
+Swift files parsed: 195

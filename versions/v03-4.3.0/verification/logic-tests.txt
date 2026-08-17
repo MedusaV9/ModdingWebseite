@@ -1,0 +1,6 @@
+SoooDreamy 4.3.0 Swift verification
+Date: 2026-08-11 UTC
+Command: swift test --package-path SoooDreamy/ios
+Result: PASS — 182/182
+New proof: every one of the 21 canonical game identifiers maps to an explicit replay adapter; unknown identifiers return nil.
+Modified API/model/tournament/replay sources also pass swiftc -parse.

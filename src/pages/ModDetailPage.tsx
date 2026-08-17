@@ -1,0 +1,226 @@
+import { useEffect, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
+import { Link, useParams } from 'react-router-dom'
+import Badge from '../components/Badge'
+import GradientButton from '../components/GradientButton'
+import ModCard from '../components/ModCard'
+import ModImage from '../components/ModImage'
+import usePageTitle from '../hooks/usePageTitle'
+import { LINKS } from '../data/links'
+import { MODS } from '../data/mods'
+import type { Mod } from '../data/mods'
+import NotFound from './NotFound'
+
+/** Render plain text, turning any http(s) URLs into styled external links. */
+function linkify(text: string) {
+  return text.split(/(https?:\/\/\S+)/g).map((part, index) =>
+    /^https?:\/\//.test(part) ? (
+      <a
+        key={index}
+        href={part}
+        target="_blank"
+        rel="noreferrer"
+        className="text-bap-pink hover:underline"
+      >
+        {part}
+      </a>
+    ) : (
+      part
+    ),
+  )
+}
+
+function CopyIdRow({ id }: { id: string }) {
+  const [copied, setCopied] = useState(false)
+  const codeRef = useRef<HTMLElement>(null)
+  const timeoutRef = useRef<number | undefined>(undefined)
+
+  useEffect(() => () => window.clearTimeout(timeoutRef.current), [])
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(id)
+      setCopied(true)
+      window.clearTimeout(timeoutRef.current)
+      timeoutRef.current = window.setTimeout(() => setCopied(false), 2000)
+    } catch {
+      // Clipboard API unavailable (permissions / insecure context):
+      // select the id text so the user can copy it manually.
+      const node = codeRef.current
+      const selection = window.getSelection()
+      if (node && selection) {
+        const range = document.createRange()
+        range.selectNodeContents(node)
+        selection.removeAllRanges()
+        selection.addRange(range)
+      }
+    }
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-3 border border-bap-line bg-bap-plum px-4 py-3">
+      <span className="font-teko uppercase text-lg leading-none tracking-wide text-white/40">
+        MOD ID
+      </span>
+      <code ref={codeRef} className="font-mono text-sm text-white/80 break-all">
+        {id}
+      </code>
+      <button
+        type="button"
+        onClick={copy}
+        className="ml-auto font-teko uppercase text-lg leading-none pt-[7px] px-3 pb-1 border border-bap-line text-white/60 hover:text-bap-pink transition cursor-pointer"
+      >
+        COPY
+      </button>
+      <span aria-live="polite" className="font-teko uppercase text-lg leading-none text-bap-pink">
+        {copied ? 'COPIED!' : ''}
+      </span>
+    </div>
+  )
+}
+
+function ModDetail({ mod }: { mod: Mod }) {
+  usePageTitle(mod.name)
+
+  const related = MODS.filter((other) => other.id !== mod.id)
+    .map((other) => ({
+      mod: other,
+      score:
+        ((other.track ?? null) === (mod.track ?? null) ? 2 : 0) +
+        (other.type === mod.type ? 1 : 0),
+    }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3)
+    .map((entry) => entry.mod)
+
+  const meta: { term: string; detail: ReactNode }[] = [
+    { term: 'VERSION', detail: `v${mod.version}` },
+    {
+      term: 'AUTHOR',
+      detail: mod.authorUrl ? (
+        <a
+          href={mod.authorUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="text-bap-pink hover:underline"
+        >
+          {mod.author}
+        </a>
+      ) : (
+        mod.author
+      ),
+    },
+    { term: 'ADDED', detail: mod.added },
+    { term: 'UPDATED', detail: mod.updated },
+    { term: 'REQUIRES', detail: mod.requires },
+    { term: 'TRACK', detail: mod.track === 'boss-rush' ? 'Boss Rush' : 'All tracks' },
+    { term: 'TYPE', detail: mod.type },
+  ]
+
+  return (
+    <section className="mx-auto max-w-7xl px-4 py-20 md:px-6 md:py-28">
+      <Link
+        to="/mods"
+        className="inline-block font-teko uppercase text-lg leading-none tracking-wide text-white/60 hover:text-bap-pink transition"
+      >
+        ← ALL MODS
+      </Link>
+
+      <div className="mt-8 grid grid-cols-1 gap-10 lg:grid-cols-2 lg:gap-16">
+        <div className="flex flex-col gap-6">
+          <div className="relative">
+            <ModImage mod={mod} className="aspect-video border border-bap-line" />
+            {mod.ribbon === 'host-only' && (
+              <Badge tone="amber" className="absolute top-2 left-2">
+                HOST-ONLY
+              </Badge>
+            )}
+            {mod.ribbon === 'new' && (
+              <Badge tone="pink" className="absolute top-2 left-2">
+                NEW
+              </Badge>
+            )}
+          </div>
+
+          <dl className="grid grid-cols-2 gap-x-6 gap-y-4 border border-bap-line bg-bap-plum p-5 sm:grid-cols-3">
+            {meta.map((entry) => (
+              <div key={entry.term} className="flex flex-col gap-1">
+                <dt className="font-teko uppercase text-lg leading-none tracking-wide text-white/40">
+                  {entry.term}
+                </dt>
+                <dd className="text-white text-sm">{entry.detail}</dd>
+              </div>
+            ))}
+          </dl>
+
+          <CopyIdRow id={mod.id} />
+        </div>
+
+        <div className="flex flex-col gap-6">
+          <h1 className="font-display uppercase text-3xl text-white md:text-4xl">
+            {mod.name}
+          </h1>
+          <p className="text-white/80">{mod.summary}</p>
+          <p className="text-white/60 text-sm">{mod.description}</p>
+          {mod.longDescription && (
+            <p className="text-white/60 text-sm">{linkify(mod.longDescription)}</p>
+          )}
+
+          <div className="flex flex-wrap gap-1.5">
+            {mod.tags.map((tag) => (
+              <Badge key={tag}>{tag}</Badge>
+            ))}
+          </div>
+
+          <div className="flex flex-col border border-bap-line bg-bap-black">
+            <div className="border-b border-bap-line px-5 py-3">
+              <span className="font-teko uppercase text-xl leading-none tracking-widest text-white">
+                VERSION HISTORY
+              </span>
+            </div>
+            <ul className="flex flex-col divide-y divide-bap-line">
+              {mod.versions.map((entry) => (
+                <li key={entry.version} className="flex flex-col gap-1 px-5 py-4">
+                  <span className="font-teko uppercase text-xl leading-none text-bap-pink">
+                    v{entry.version}
+                  </span>
+                  <p className="text-white/80 text-sm">{entry.changelog}</p>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-4">
+            <GradientButton to="/launcher">INSTALL VIA LAUNCHER</GradientButton>
+            <GradientButton
+              variant="outline"
+              href={LINKS.discord}
+              target="_blank"
+              rel="noreferrer"
+            >
+              GET HELP ON DISCORD
+            </GradientButton>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-20 flex flex-col gap-6">
+        <h2 className="font-display uppercase text-2xl text-white">MORE MODS</h2>
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {related.map((other) => (
+            <ModCard key={other.id} mod={other} />
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+export default function ModDetailPage() {
+  const { id } = useParams<'id'>()
+  const mod = MODS.find((entry) => entry.id === id)
+
+  if (!mod) return <NotFound />
+
+  return <ModDetail key={mod.id} mod={mod} />
+}

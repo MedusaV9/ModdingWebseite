@@ -1,0 +1,24 @@
+{
+  "_rule": "Zähler dürfen nur sinken. Siehe DESIGN.md — bash tools/charter_lint.sh",
+  "metrics": {
+      "emoji_as_text": 21,
+      "emoji_in_de_copy": 21,
+      "epic_celebrations": 1,
+      "try_await_api": 87,
+      "bare_progressview": 36,
+      "bang_strings_de": 0,
+      "spring_literals": 5,
+      "easing_literals": 6,
+      "bare_white_opacity": 7,
+      "raw_corner_radius": 32,
+      "hardcoded_pink_purple_features": 0,
+      "ultrathin_material_features": 0,
+      "surface_glass_features": 2,
+      "bright_paper_features": 69,
+      "raw_rotation_features": 11,
+      "smallcaps_features": 0,
+      "fixed_font_sizes": 3,
+      "system_size_fonts": 13,
+      "version_graffiti": 0
+  }
+}

@@ -1,0 +1,40 @@
+# SoooDreamy — Anti-Slop-Editorregeln (siehe ../DESIGN.md).
+#
+# Bewusst NUR die vier Muster, die sich sauber per Regex fassen lassen —
+# alles Weichere (Fehlertext-Qualität, Vorlese-Test, „der eine Moment")
+# bleibt Review-Ritual. Die harte CI-Grenze ist tools/charter_lint.sh
+# (Ratchet); diese Regeln sind die Frühwarnung im Editor.
+only_rules:
+  - custom_rules
+
+included:
+  - SoooDreamy
+  - Shared
+  - Widgets
+
+custom_rules:
+  no_emoji_icon:
+    name: "Gebot 1 — Kein Emoji ist ein Icon"
+    message: "Emoji gehören dem Paar (Avatare, Nachrichten, Partikel) — UI-Chrome nutzt SF Symbols in Paar-Tint. Siehe DESIGN.md, Gebot 1."
+    regex: 'Text\("[^"]*[\x{1F300}-\x{1FAFF}\x{2600}-\x{27BF}]'
+    severity: warning
+
+  no_spring_literal_outside_theme:
+    name: "Gebot 11 — Motion ist ein Token"
+    message: "Freihand-spring(response:) verboten — Theme.Motion.settle/arrive/playful/drift verwenden (oder die Kurve dort benennen). Siehe DESIGN.md, Gebot 11."
+    regex: '\.spring\(response: 0\.'
+    excluded: '.*UI/Theme\.swift'
+    severity: warning
+
+  no_bare_opacity_in_features:
+    name: "Gebot 11 — Transparenz ist ein Token"
+    message: "white.opacity(0.x) in Features verboten — Theme.innerFill / Theme.hairline / Theme.card verwenden. Siehe DESIGN.md, Gebot 11."
+    regex: 'white\.opacity\(0\.'
+    included: '.*(Stationen|Kino|Zeremonien|Zustelldienst)/.*'
+    severity: warning
+
+  no_agent_graffiti:
+    name: "Symptom 12 — Kein Versions-Graffiti"
+    message: "Kommentare erzählen das Warum, nicht die Entstehungsgeschichte — Versions-/Agenten-Marker entfernen. Siehe DESIGN.md, Symptom 12."
+    regex: '// v[0-9]+\.[0-9]|\(Agent [A-Z]\)|\(v[0-9]+\.[0-9]'
+    severity: warning

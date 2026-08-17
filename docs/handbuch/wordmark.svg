@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="560" height="120" viewBox="0 0 560 120" role="img" aria-labelledby="title desc">
+  <title id="title">made by Sonic0810</title>
+  <desc id="desc">SoooDreamy author wordmark with two linked hearts</desc>
+  <defs>
+    <linearGradient id="dream" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f472b6"/>
+      <stop offset="1" stop-color="#8b5cf6"/>
+    </linearGradient>
+  </defs>
+  <rect width="560" height="120" rx="28" fill="#100d23"/>
+  <path d="M55 43C42 25 15 34 15 57c0 23 40 42 40 42s40-19 40-42c0-23-27-32-40-14Z" fill="url(#dream)"/>
+  <path d="M77 52c-9-13-29-6-29 10 0 15 29 29 29 29s29-14 29-29c0-16-20-23-29-10Z" fill="none" stroke="#fff" stroke-width="4" opacity=".85"/>
+  <text x="130" y="72" fill="#fff" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="34" font-weight="700">made by Sonic0810</text>
+</svg>

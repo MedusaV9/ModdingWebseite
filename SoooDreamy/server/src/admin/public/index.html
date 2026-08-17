@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex, nofollow">
+  <title>SoooDreamy · Admin</title>
+  <link rel="stylesheet" href="/admin/assets/admin.css">
+</head>
+<body>
+  <div class="aurora" aria-hidden="true"><span class="blob b1"></span><span class="blob b2"></span><span class="blob b3"></span></div>
+
+  <header class="topbar glass" id="topbar" hidden>
+    <div class="brand"><span class="brand-heart">💌</span><span class="brand-name">SoooDreamy</span><span class="brand-sub" data-i18n="app.admin">Admin</span></div>
+    <div class="topbar-actions">
+      <button class="pill" id="lang-toggle" type="button" title="Deutsch / English">DE</button>
+      <button class="pill" id="theme-toggle" type="button" aria-label="Theme">🌙</button>
+      <button class="pill pill-accent" id="logout-btn" type="button" data-i18n="nav.logout" hidden>Abmelden</button>
+    </div>
+  </header>
+
+  <!-- Login -->
+  <main class="login-wrap" id="login-view" hidden>
+    <form class="glass card login-card" id="login-form">
+      <div class="login-heart">💌</div>
+      <h1 data-i18n="login.title">Willkommen zurück</h1>
+      <p class="muted" data-i18n="login.hint">Das Passwort steht in der Server-Konsole — bei jedem Start neu.</p>
+      <input class="input" id="login-password" type="password" autocomplete="current-password"
+             data-i18n-placeholder="login.placeholder" placeholder="wolke-herz-funke-mond" required>
+      <p class="login-error" id="login-error" hidden></p>
+      <button class="btn btn-accent" id="login-submit" type="submit" data-i18n="login.submit">Anmelden</button>
+    </form>
+  </main>
+
+  <!-- Dashboard -->
+  <main class="dash" id="dash-view" hidden>
+    <section class="dash-grid">
+      <article class="glass card" id="server-card"></article>
+      <article class="glass card" id="backup-card"></article>
+    </section>
+    <section>
+      <div class="section-head">
+        <h2 data-i18n="couples.title">Paare</h2>
+        <button class="pill" id="refresh-btn" type="button" data-i18n="nav.refresh">Aktualisieren</button>
+      </div>
+      <div id="couples-list" class="couples"></div>
+    </section>
+    <section class="dash-grid">
+      <article class="glass card" id="logs-card"></article>
+      <article class="glass card" id="audit-card"></article>
+    </section>
+    <footer class="footer muted" data-i18n="footer.note">Mit 💜 verwaltet · made by Sonic0810</footer>
+  </main>
+
+  <!-- Confirm dialog -->
+  <div class="modal-backdrop" id="confirm-backdrop" hidden>
+    <div class="glass card modal" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+      <h3 id="confirm-title"></h3>
+      <p id="confirm-text" class="muted"></p>
+      <div class="modal-actions">
+        <button class="btn" id="confirm-no" type="button" data-i18n="confirm.no">Abbrechen</button>
+        <button class="btn btn-danger" id="confirm-yes" type="button" data-i18n="confirm.yes">Ja, machen</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toasts" class="toasts" aria-live="polite"></div>
+
+  <script src="/admin/assets/admin.js"></script>
+</body>
+</html>

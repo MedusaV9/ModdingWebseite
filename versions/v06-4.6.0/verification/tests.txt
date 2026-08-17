@@ -1,0 +1,10 @@
+SoooDreamy 4.6.0 verification — 2026-08-11 UTC
+
+- Server: PASS 248/248
+- Swift logic: PASS 191/191
+- Backup contract additions: 5 tests covering manifest round-trip, v1 migration,
+  invalid schemas, selected restore domains, transaction commit and rollback.
+- CloudBackup, ICloudSheet, catalog and pure contract syntax: PASS.
+- Existing cryptographic implementation: AES-GCM envelope, PBKDF2-HMAC-SHA256
+  with 210,000 iterations, random 16-byte salt; wrong key fails authentication.
+- Real CloudKit/Drive entitlement test: not run; macOS unsigned compile remains gate.

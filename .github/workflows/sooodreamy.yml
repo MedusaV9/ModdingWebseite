@@ -1,0 +1,1295 @@
+name: SoooDreamy
+
+on:
+  push:
+    branches:
+      - main
+      - "cursor/**"
+    paths:
+      - "SoooDreamy/**"
+      - "PATCHNOTES.md"
+      - "docs/HANDBUCH.de.md"
+      - "docs/MANUAL.en.md"
+      - ".github/workflows/sooodreamy.yml"
+  workflow_dispatch:
+    inputs:
+      version_ordinal:
+        description: "Optional release ordinal for a sooodreamy-vNN tag"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sooodreamy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  server-tests:
+    name: Server tests (Node)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: SoooDreamy/server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm ci
+      - name: Run tests
+        run: npm test
+
+  charter-lint:
+    name: Anti-slop charter ratchet
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install ripgrep and jq
+        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends ripgrep jq
+      - name: Charter ratchet (slop counters may only go down)
+        run: bash SoooDreamy/tools/charter_lint.sh
+
+  logic-tests:
+    name: Logic tests (Swift on Linux)
+    runs-on: ubuntu-latest
+    container: swift:6.0
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run swift test
+        run: swift test --package-path SoooDreamy/ios
+      - name: Parse every Swift source
+        shell: bash
+        run: |
+          # Fix-Runde 4, S3: im swift:6.0-Container gehört der Checkout
+          # einem fremden uid — ohne safe.directory bricht `git ls-files`
+          # mit "dubious ownership", die Prozesssubstitution bleibt LEER
+          # und die for-Schleife lief über nichts: der Step war falsch-
+          # grün. Deshalb erst die Freigabe, dann eine HARTE Nichtleer-
+          # Prüfung der Dateiliste (fail-closed statt leise leer).
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          mapfile -d '' sources < <(git ls-files -z ':(glob)SoooDreamy/ios/**/*.swift')
+          if (( ${#sources[@]} == 0 )); then
+            echo "::error::git ls-files lieferte keine Swift-Quellen — der Parse-Step hätte nichts geprüft" >&2
+            exit 1
+          fi
+          echo "Parsing ${#sources[@]} Swift sources"
+          for source in "${sources[@]}"; do
+            swiftc -parse "$source"
+          done
+
+  # FullRelease N1-C: Kino-Prolog-Videos (SoooDreamy/remotion) — in CI
+  # gerendert, nie committet (Philosophie: Icons/Sounds-Muster). Voller
+  # Bauplan mit Belegen: SoooDreamy/docs/styles/RECON_REMOTION_PIPELINE.md.
+  # Cache-Idee: gerendert wird NUR, wenn sich Remotion-Quellen ändern;
+  # sonst kommt out/ aus dem actions/cache und der Job ist in <1 min durch.
+  render-videos:
+    name: Render cinematic videos (Remotion)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/cache@v4
+        id: video-cache
+        with:
+          path: SoooDreamy/remotion/out
+          # manifests/** gehört in den Key: ein von Hand editiertes Manifest
+          # erzwingt so einen Cache-Miss und läuft durchs Drift-Gate.
+          # v2: hev1→hvc1-Remux ist Teil des Render-Flows — der v1-Cache
+          # trug hev1-Dateien (Geräte-Bug) und wird bewusst verwaisen.
+          key: remotion-videos-v2-${{ hashFiles('SoooDreamy/remotion/src/**', 'SoooDreamy/remotion/manifests/**', 'SoooDreamy/remotion/remotion.config.ts', 'SoooDreamy/remotion/package-lock.json') }}
+
+      - uses: actions/setup-node@v4
+        if: steps.video-cache.outputs.cache-hit != 'true'
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: SoooDreamy/remotion/package-lock.json
+
+      # https://www.remotion.dev/docs/miscellaneous/linux-dependencies —
+      # der Runner bringt die Chrome-Libs meist mit; der Step ist die
+      # idempotente Absicherung gegen Runner-Image-Rotationen (~10 s).
+      - name: Install Linux deps for Chrome Headless Shell
+        if: steps.video-cache.outputs.cache-hit != 'true'
+        run: >
+          sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends
+          libnss3 libdbus-1-3 libatk1.0-0 libasound2t64 libxrandr2 libxkbcommon-dev
+          libxfixes3 libxcomposite1 libxdamage1 libgbm-dev libcups2 libcairo2
+          libpango-1.0-0 libatk-bridge2.0-0
+
+      - name: Install npm deps + Chrome Headless Shell
+        if: steps.video-cache.outputs.cache-hit != 'true'
+        working-directory: SoooDreamy/remotion
+        run: |
+          npm ci
+          npx remotion browser ensure
+
+      # Manifeste sind committet, aber aus src/timeline.mjs generiert —
+      # driftet das JSON von der Timeline, ist der Build rot (eine Quelle
+      # für Bild UND Haptik, RECON §3.6).
+      - name: Manifest drift gate
+        if: steps.video-cache.outputs.cache-hit != 'true'
+        working-directory: SoooDreamy/remotion
+        run: node src/export-manifests.mjs --check
+
+      # Determinismus-Gate: dieselbe 2-s-Probe zweimal rendern — die
+      # SHA-256-Hashes müssen byte-identisch sein. Fängt eingeschlepptes
+      # Math.random()/Date.now(), bevor es den Render-Cache vergiftet
+      # (RECON §5.2; auf identischer Umgebung [Gemessen] stabil).
+      - name: Determinism gate (2-second probe rendered twice)
+        if: steps.video-cache.outputs.cache-hit != 'true'
+        working-directory: SoooDreamy/remotion
+        run: |
+          for i in 1 2; do
+            npx remotion render src/index.ts Scene3SealBreak "/tmp/determinism_$i.mp4" \
+              --frames=0-59 --codec=h265 --crf=23 --color-space=bt709 --muted
+          done
+          h1=$(sha256sum /tmp/determinism_1.mp4 | cut -d' ' -f1)
+          h2=$(sha256sum /tmp/determinism_2.mp4 | cut -d' ' -f1)
+          echo "probe 1: $h1"
+          echo "probe 2: $h2"
+          test "$h1" = "$h2"
+
+      # HEVC halbiert gegenüber H.264 [Gemessen, RECON §4.1]; bt709 ist
+      # Pflicht (4.0-Default ist BT.601, RECON §6.2); muted, weil der Ton
+      # aus der App-SoundEngine kommt. KEIN --gl-Flag (RECON §1.3).
+      - name: Render the three scene compositions (HEVC, bt709, muted)
+        if: steps.video-cache.outputs.cache-hit != 'true'
+        working-directory: SoooDreamy/remotion
+        run: |
+          mkdir -p out
+          npx remotion render src/index.ts Scene2Envelope out/scene2_envelope.mp4 \
+            --codec=h265 --crf=23 --color-space=bt709 --muted
+          npx remotion render src/index.ts Scene3SealBreak out/scene3_seal.mp4 \
+            --codec=h265 --crf=23 --color-space=bt709 --muted
+          npx remotion render src/index.ts Scene6Polaroid out/scene6_polaroid.mp4 \
+            --codec=h265 --crf=23 --color-space=bt709 --muted
+
+      # Kein Linux-Test "sieht" ein Video — die Filmstreifen (alle 2 s ein
+      # Full-Res-Still) sind das Review-Artefakt für Agents und Menschen,
+      # gleiche Review-Kultur wie die Simulator-Screenshots (RECON §5.1).
+      - name: Render filmstrip stills (every 2 seconds)
+        if: steps.video-cache.outputs.cache-hit != 'true'
+        working-directory: SoooDreamy/remotion
+        run: |
+          mkdir -p strips
+          render_strip() { # <composition> <slug>
+            local comp=$1 slug=$2
+            local dur last f
+            dur=$(jq -r .durationSec "manifests/${slug}.haptics.json")
+            last=$((dur * 30 - 1))
+            for f in $(seq 0 60 "$last") "$last"; do
+              npx remotion still src/index.ts "$comp" \
+                "strips/${slug}_f$(printf %04d "$f").png" --frame="$f"
+            done
+          }
+          render_strip Scene2Envelope scene2
+          render_strip Scene3SealBreak scene3
+          render_strip Scene6Polaroid scene6
+
+      - name: Upload filmstrips
+        if: steps.video-cache.outputs.cache-hit != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: SoooDreamy-video-filmstrips
+          path: SoooDreamy/remotion/strips
+          if-no-files-found: error
+
+      # GERÄTE-BUG (User-Report, 15.0.0): Remotions h265-Ausgabe trägt das
+      # 'hev1'-Sample-Entry — echte iPhones (Hardware-Decoder) verlangen
+      # 'hvc1' und lassen hev1-Items STILL sterben: die AVQueuePlayer-Queue
+      # läuft leer, das Kino zeigt leeren Raum mit Caption. Der Simulator
+      # dekodiert in Software und spielte hev1 → CI war grün, Gerät kaputt.
+      # Verlustfreier Remux (-c copy -tag:v hvc1) mit Remotions GEBÜNDELTEM
+      # ffmpeg (der Runner hat keins; npx remotion ffmpeg ist nach npm ci
+      # da — deshalb nur bei Cache-Miss: der v2-Cache speichert bereits
+      # remuxte hvc1-Dateien).
+      - name: Remux to hvc1 (iPhone hardware decoder requirement)
+        if: steps.video-cache.outputs.cache-hit != 'true'
+        working-directory: SoooDreamy/remotion
+        run: |
+          for f in out/*.mp4; do
+            npx remotion ffmpeg -v error -y -i "$f" -c copy -tag:v hvc1 "${f%.mp4}.hvc1.mp4"
+            mv "${f%.mp4}.hvc1.mp4" "$f"
+          done
+
+      # Fail-closed-Gate: JEDES frisch gerenderte Video muss hvc1 tragen,
+      # sonst bricht der Job — die Bugklasse "spielt im Simulator, stirbt
+      # auf dem iPhone" kann nie wieder unbemerkt in den Cache shippen.
+      - name: Codec tag gate (every MP4 must be hvc1)
+        if: steps.video-cache.outputs.cache-hit != 'true'
+        working-directory: SoooDreamy/remotion
+        run: |
+          for f in out/*.mp4; do
+            tag=$(npx remotion ffprobe -v error -select_streams v:0 \
+              -show_entries stream=codec_tag_string -of csv=p=0 "$f" | tail -1)
+            echo "$f: codec_tag=$tag"
+            test "$tag" = "hvc1"
+          done
+
+      # Re-Eval Befund 17: die npx-basierten Remux/ffprobe-Gates oben
+      # laufen NUR bei Cache-Miss (ohne npm ci gibt es kein remotion-
+      # ffprobe) — ein vergifteter oder von Hand restaurierter Cache käme
+      # daran vorbei. Dieses dependency-freie Gate läuft deshalb IMMER,
+      # auch bei Cache-Hit. Re-Eval Runde 2 (Befund 4): der alte
+      # finditer(b'stsd')-Scan war KEIN Parser (traf jede Bytefolge, auch
+      # mitten im mdat) — jetzt läuft ein echter ISO-BMFF-Box-Walker
+      # moov→trak→mdia→minf→stbl→stsd je VIDEO-Track (hdlr==vide) und
+      # prüft jeden Sample-Entry-FourCC: hvc1 Pflicht, hev1 verboten.
+      # Negativprobe OHNE ffmpeg: der Selbsttest konstruiert minimale
+      # Fake-Boxen in-memory (hvc1 passiert, hev1 fällt, Audio-only
+      # fällt) und bricht den Step, bevor irgendeine Datei geprüft wird.
+      # Zusätzlich gegen echte x265-Dateien verifiziert: der hev1-
+      # Default fällt, der hvc1-Remux passiert, mp4a-Audiospuren werden
+      # ignoriert (hdlr-Weiche).
+      - name: hvc1 gate (ISO-BMFF box walker, also on cache-hit)
+        run: |
+          cat > /tmp/hvc1_gate.py <<'PY'
+          import struct
+          import sys
+
+          def boxes(data, start, end):
+              """Yield (fourcc, body_start, box_end) per box in [start, end)."""
+              off = start
+              while off + 8 <= end:
+                  size, = struct.unpack('>I', data[off:off + 4])
+                  kind, header = data[off + 4:off + 8], 8
+                  if size == 1:  # 64-bit largesize
+                      size, = struct.unpack('>Q', data[off + 8:off + 16])
+                      header = 16
+                  elif size == 0:  # box extends to the end of the space
+                      size = end - off
+                  assert size >= header and off + size <= end, \
+                      ('malformed box', kind, off, size)
+                  yield kind, off + header, off + size
+                  off += size
+
+          def walk(data, start, end, path):
+              """Yield (body_start, body_end) of every box matching path."""
+              if not path:
+                  yield start, end
+                  return
+              for kind, body, stop in boxes(data, start, end):
+                  if kind == path[0]:
+                      yield from walk(data, body, stop, path[1:])
+
+          def video_entries(data):
+              """stsd sample-entry FourCCs of all video (hdlr==vide) tracks."""
+              found = []
+              for trak, trak_end in walk(data, 0, len(data), [b'moov', b'trak']):
+                  for mdia, mdia_end in walk(data, trak, trak_end, [b'mdia']):
+                      # hdlr FullBox: version/flags(4) + pre_defined(4) + type(4)
+                      handlers = [data[b + 8:b + 12]
+                                  for k, b, e in boxes(data, mdia, mdia_end)
+                                  if k == b'hdlr']
+                      if handlers != [b'vide']:
+                          continue
+                      for stsd, stsd_end in walk(data, mdia, mdia_end,
+                                                 [b'minf', b'stbl', b'stsd']):
+                          # stsd FullBox: version/flags(4) + entry_count(4)
+                          count, = struct.unpack('>I', data[stsd + 4:stsd + 8])
+                          entries = [k for k, b, e
+                                     in boxes(data, stsd + 8, stsd_end)]
+                          assert len(entries) == count, (count, entries)
+                          found += entries
+              return found
+
+          def gate(entries):
+              """Pass only with >= 1 video entry and nothing but hvc1."""
+              return bool(entries) and all(e == b'hvc1' for e in entries)
+
+          def fake(codec, handler=b'vide'):
+              """Minimal in-memory ISO-BMFF fixture for the self-test."""
+              def box(kind, payload):
+                  return struct.pack('>I', 8 + len(payload)) + kind + payload
+              hdlr = box(b'hdlr', b'\0' * 8 + handler + b'\0' * 12)
+              stsd = box(b'stsd', b'\0' * 4 + struct.pack('>I', 1)
+                         + box(codec, b'\0' * 78))
+              mdia = box(b'mdia', hdlr + box(b'minf', box(b'stbl', stsd)))
+              return (box(b'ftyp', b'isom' + b'\0' * 4)
+                      + box(b'moov', box(b'trak', mdia)))
+
+          assert gate(video_entries(fake(b'hvc1'))), 'self-test: hvc1 must pass'
+          assert not gate(video_entries(fake(b'hev1'))), 'self-test: hev1 must fail'
+          assert not gate(video_entries(fake(b'mp4a', b'soun'))), \
+              'self-test: audio-only must fail'
+
+          for path in sys.argv[1:]:
+              entries = video_entries(open(path, 'rb').read())
+              assert gate(entries), (path, [e.decode('ascii', 'replace')
+                                            for e in entries])
+              print(path, 'video sample entries:',
+                    [e.decode('ascii', 'replace') for e in entries])
+          PY
+          python3 /tmp/hvc1_gate.py SoooDreamy/remotion/out/*.mp4
+
+      # Die Manifeste reisen im selben Artefakt wie die Videos — der
+      # IPA-Job legt beides zusammen ins Bundle (ein Download, ein Pfad).
+      - name: Assemble video artifact (manifests ride along)
+        run: cp SoooDreamy/remotion/manifests/*.haptics.json SoooDreamy/remotion/out/
+
+      # Größen-Gate, fail-closed, läuft auch bei Cache-Hit: 3 Szenen ohne
+      # Sprachdopplung ≤ 15 MB. Budget ist Code, nicht Absicht — gleicher
+      # Geist wie das 120-KB-Gate in prepare_sounds.sh (RECON §4.3).
+      - name: Video budget gate (total MP4 size <= 15 MB)
+        run: |
+          total=$(du -cb SoooDreamy/remotion/out/*.mp4 | tail -1 | cut -f1)
+          echo "Videos gesamt: $total Bytes ($((total / 1048576)) MB)"
+          test "$total" -le $((15 * 1048576))
+
+      - name: Upload cinematic videos artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SoooDreamy-cinematic-videos
+          path: SoooDreamy/remotion/out
+          if-no-files-found: error
+
+  build-ipa:
+    name: Unsigned IPA (iOS)
+    runs-on: macos-26
+    # FullRelease N1-C: Videos entstehen VOR dem IPA (bei Cache-Hit kostet
+    # das <1 min; RECON §6.3 benennt die neue serielle Abhängigkeit ehrlich).
+    needs: [render-videos]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Xcode version
+        run: xcodebuild -version
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Render app icons (procedural, no binary assets in repo)
+        run: |
+          swift SoooDreamy/ios/scripts/GenerateIcon.swift SoooDreamy/ios/SoooDreamy/Resources/Assets.xcassets/AppIcon.appiconset/icon_1024.png classic
+          # Icon gifts: alternate icon variants
+          for v in sunset midnight mint rose ocean gold lavender blossom aurora; do
+            swift SoooDreamy/ios/scripts/GenerateIcon.swift "SoooDreamy/ios/SoooDreamy/Resources/Assets.xcassets/AppIcon-$v.appiconset/icon_1024.png" "$v"
+          done
+
+      # FullRelease N1-C: Videos + Haptik-Manifeste VOR xcodegen generate
+      # platzieren — XcodeGen scannt das Dateisystem beim Generate, nicht
+      # beim Build (exakt das Icon-Muster oben; RECON §2.5).
+      - name: Inject cinematic videos (rendered in CI, never committed)
+        uses: actions/download-artifact@v4
+        with:
+          name: SoooDreamy-cinematic-videos
+          path: SoooDreamy/ios/SoooDreamy/Resources/Videos
+
+      # Re-Eval Befund 17, zweite Sperre: dasselbe dependency-freie Gate
+      # VOR dem Packen — das IPA darf nie ein hev1-Video einbetten, egal
+      # woher das heruntergeladene Artefakt stammt. Re-Eval Runde 2
+      # (Befund 4): identischer ISO-BMFF-Box-Walker wie im render-videos-
+      # Job (dort steht die Herleitung) — eigener Job, eigener Checkout,
+      # deshalb reist das Skript als Heredoc-Zwilling mit; der In-Memory-
+      # Selbsttest (hvc1 passiert, hev1 fällt, Audio-only fällt) läuft
+      # auch hier, bevor irgendeine Datei geprüft wird.
+      - name: hvc1 gate before IPA packaging (ISO-BMFF box walker)
+        run: |
+          cat > /tmp/hvc1_gate.py <<'PY'
+          import struct
+          import sys
+
+          def boxes(data, start, end):
+              """Yield (fourcc, body_start, box_end) per box in [start, end)."""
+              off = start
+              while off + 8 <= end:
+                  size, = struct.unpack('>I', data[off:off + 4])
+                  kind, header = data[off + 4:off + 8], 8
+                  if size == 1:  # 64-bit largesize
+                      size, = struct.unpack('>Q', data[off + 8:off + 16])
+                      header = 16
+                  elif size == 0:  # box extends to the end of the space
+                      size = end - off
+                  assert size >= header and off + size <= end, \
+                      ('malformed box', kind, off, size)
+                  yield kind, off + header, off + size
+                  off += size
+
+          def walk(data, start, end, path):
+              """Yield (body_start, body_end) of every box matching path."""
+              if not path:
+                  yield start, end
+                  return
+              for kind, body, stop in boxes(data, start, end):
+                  if kind == path[0]:
+                      yield from walk(data, body, stop, path[1:])
+
+          def video_entries(data):
+              """stsd sample-entry FourCCs of all video (hdlr==vide) tracks."""
+              found = []
+              for trak, trak_end in walk(data, 0, len(data), [b'moov', b'trak']):
+                  for mdia, mdia_end in walk(data, trak, trak_end, [b'mdia']):
+                      # hdlr FullBox: version/flags(4) + pre_defined(4) + type(4)
+                      handlers = [data[b + 8:b + 12]
+                                  for k, b, e in boxes(data, mdia, mdia_end)
+                                  if k == b'hdlr']
+                      if handlers != [b'vide']:
+                          continue
+                      for stsd, stsd_end in walk(data, mdia, mdia_end,
+                                                 [b'minf', b'stbl', b'stsd']):
+                          # stsd FullBox: version/flags(4) + entry_count(4)
+                          count, = struct.unpack('>I', data[stsd + 4:stsd + 8])
+                          entries = [k for k, b, e
+                                     in boxes(data, stsd + 8, stsd_end)]
+                          assert len(entries) == count, (count, entries)
+                          found += entries
+              return found
+
+          def gate(entries):
+              """Pass only with >= 1 video entry and nothing but hvc1."""
+              return bool(entries) and all(e == b'hvc1' for e in entries)
+
+          def fake(codec, handler=b'vide'):
+              """Minimal in-memory ISO-BMFF fixture for the self-test."""
+              def box(kind, payload):
+                  return struct.pack('>I', 8 + len(payload)) + kind + payload
+              hdlr = box(b'hdlr', b'\0' * 8 + handler + b'\0' * 12)
+              stsd = box(b'stsd', b'\0' * 4 + struct.pack('>I', 1)
+                         + box(codec, b'\0' * 78))
+              mdia = box(b'mdia', hdlr + box(b'minf', box(b'stbl', stsd)))
+              return (box(b'ftyp', b'isom' + b'\0' * 4)
+                      + box(b'moov', box(b'trak', mdia)))
+
+          assert gate(video_entries(fake(b'hvc1'))), 'self-test: hvc1 must pass'
+          assert not gate(video_entries(fake(b'hev1'))), 'self-test: hev1 must fail'
+          assert not gate(video_entries(fake(b'mp4a', b'soun'))), \
+              'self-test: audio-only must fail'
+
+          for path in sys.argv[1:]:
+              entries = video_entries(open(path, 'rb').read())
+              assert gate(entries), (path, [e.decode('ascii', 'replace')
+                                            for e in entries])
+              print(path, 'video sample entries:',
+                    [e.decode('ascii', 'replace') for e in entries])
+          PY
+          python3 /tmp/hvc1_gate.py SoooDreamy/ios/SoooDreamy/Resources/Videos/*.mp4
+
+      - name: Generate Xcode project
+        working-directory: SoooDreamy/ios
+        run: xcodegen generate
+
+      - name: Read app version
+        run: |
+          version=$(sed -n 's/.*MARKETING_VERSION: "\(.*\)"/\1/p' SoooDreamy/ios/project.yml)
+          test -n "$version"
+          echo "APP_VERSION=$version" >> "$GITHUB_ENV"
+
+      - name: Build (unsigned)
+        working-directory: SoooDreamy/ios
+        shell: bash {0}
+        run: |
+          xcodebuild \
+            -project SoooDreamy.xcodeproj \
+            -scheme SoooDreamy \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM="" \
+            build 2>&1 | tee xcodebuild.log | grep -E "error:|warning: .*deprecat|\*\* BUILD"
+          status=${PIPESTATUS[0]}
+          echo "xcodebuild exit code: $status"
+          exit $status
+
+      - name: Show errors on failure
+        if: failure()
+        working-directory: SoooDreamy/ios
+        run: grep -B 2 -A 6 "error:" xcodebuild.log | head -300 || true
+
+      - name: Package IPA
+        working-directory: SoooDreamy/ios
+        run: |
+          APP_DIR="build/Build/Products/Release-iphoneos/SoooDreamy.app"
+          test -d "$APP_DIR"
+          # FullRelease N1-C, fail-closed: Videos + Manifeste MÜSSEN im
+          # Bundle sein. XcodeGen kopiert Einzeldateien flach (wie die
+          # Sounds); falls ein Runner-/XcodeGen-Update stattdessen eine
+          # Videos/-Folder-Reference erzeugt, akzeptieren wir auch das und
+          # loggen den Ort — die App-Welle prüft den Pfad beim ersten Lauf.
+          for f in scene2_envelope.mp4 scene3_seal.mp4 scene6_polaroid.mp4 \
+                   scene2.haptics.json scene3.haptics.json scene6.haptics.json; do
+            if [ -f "$APP_DIR/$f" ]; then
+              echo "bundle ok (flat): $f"
+            elif [ -f "$APP_DIR/Videos/$f" ]; then
+              echo "bundle ok (Videos/): $f"
+            else
+              echo "MISSING in app bundle: $f" >&2
+              exit 1
+            fi
+          done
+          mkdir -p dist/Payload
+          cp -R "$APP_DIR" dist/Payload/
+          cd dist
+          zip -qry "SoooDreamy-unsigned-${APP_VERSION}.ipa" Payload
+          ls -la
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SoooDreamy-unsigned-${{ env.APP_VERSION }}
+          path: SoooDreamy/ios/dist/SoooDreamy-unsigned-${{ env.APP_VERSION }}.ipa
+          if-no-files-found: error
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcodebuild-log
+          path: SoooDreamy/ios/xcodebuild.log
+          if-no-files-found: ignore
+
+  # SoooDreamy-Lite: same app without the widget extension → the IPA
+  # contains exactly ONE bundle id (app.sooodreamy.ios) for sideload
+  # signing flows that cannot register two App IDs. See docs/SOOODREAMY-LITE.md.
+  build-ipa-lite:
+    name: Unsigned Lite IPA (iOS, no widgets)
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Render app icons (procedural, no binary assets in repo)
+        run: |
+          swift SoooDreamy/ios/scripts/GenerateIcon.swift SoooDreamy/ios/SoooDreamy/Resources/Assets.xcassets/AppIcon.appiconset/icon_1024.png classic
+          for v in sunset midnight mint rose ocean gold lavender blossom aurora; do
+            swift SoooDreamy/ios/scripts/GenerateIcon.swift "SoooDreamy/ios/SoooDreamy/Resources/Assets.xcassets/AppIcon-$v.appiconset/icon_1024.png" "$v"
+          done
+
+      - name: Generate Xcode project
+        working-directory: SoooDreamy/ios
+        run: xcodegen generate
+
+      - name: Read app version
+        run: |
+          version=$(sed -n 's/.*MARKETING_VERSION: "\(.*\)"/\1/p' SoooDreamy/ios/project.yml)
+          test -n "$version"
+          echo "APP_VERSION=$version" >> "$GITHUB_ENV"
+
+      - name: Build Lite (unsigned)
+        working-directory: SoooDreamy/ios
+        shell: bash {0}
+        run: |
+          xcodebuild \
+            -project SoooDreamy.xcodeproj \
+            -scheme SoooDreamy-Lite \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build-lite \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM="" \
+            build 2>&1 | tee xcodebuild-lite.log | grep -E "error:|warning: .*deprecat|\*\* BUILD"
+          status=${PIPESTATUS[0]}
+          echo "xcodebuild exit code: $status"
+          exit $status
+
+      - name: Show errors on failure
+        if: failure()
+        working-directory: SoooDreamy/ios
+        run: grep -B 2 -A 6 "error:" xcodebuild-lite.log | head -300 || true
+
+      - name: Package Lite IPA (verify single bundle id)
+        working-directory: SoooDreamy/ios
+        run: |
+          APP_DIR="build-lite/Build/Products/Release-iphoneos/SoooDreamy.app"
+          test -d "$APP_DIR"
+          # The whole point of Lite: no embedded extension bundles.
+          if [ -d "$APP_DIR/PlugIns" ] || [ -d "$APP_DIR/Extensions" ]; then
+            echo "Lite build unexpectedly contains embedded extensions" >&2
+            exit 1
+          fi
+          # FullRelease N1-C, spiegelbildlich: Lite bleibt bewusst OHNE
+          # Kino-Videos (kein needs/download — die Dateien existieren beim
+          # xcodegen generate gar nicht erst; RECON §2.6). Fehlende Videos
+          # sind ein legaler Zustand: Lite = prozeduraler Intro-Pfad.
+          for f in scene2_envelope.mp4 scene3_seal.mp4 scene6_polaroid.mp4; do
+            if [ -e "$APP_DIR/$f" ] || [ -e "$APP_DIR/Videos/$f" ]; then
+              echo "Lite build unexpectedly contains cinematic video $f" >&2
+              exit 1
+            fi
+          done
+          mkdir -p dist-lite/Payload
+          cp -R "$APP_DIR" dist-lite/Payload/
+          cd dist-lite
+          zip -qry "SoooDreamy-Lite-unsigned-${APP_VERSION}.ipa" Payload
+          ls -la
+
+      - name: Upload Lite IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SoooDreamy-Lite-unsigned-${{ env.APP_VERSION }}
+          path: SoooDreamy/ios/dist-lite/SoooDreamy-Lite-unsigned-${{ env.APP_VERSION }}.ipa
+          if-no-files-found: error
+
+      - name: Upload Lite build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcodebuild-lite-log
+          path: SoooDreamy/ios/xcodebuild-lite.log
+          if-no-files-found: ignore
+
+  simulator-screenshots:
+    name: Simulator build and screenshots
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Render app icons
+        run: |
+          swift SoooDreamy/ios/scripts/GenerateIcon.swift SoooDreamy/ios/SoooDreamy/Resources/Assets.xcassets/AppIcon.appiconset/icon_1024.png classic
+          for v in sunset midnight mint rose ocean gold lavender blossom aurora; do
+            swift SoooDreamy/ios/scripts/GenerateIcon.swift "SoooDreamy/ios/SoooDreamy/Resources/Assets.xcassets/AppIcon-$v.appiconset/icon_1024.png" "$v"
+          done
+      # Runner images rotate their simulator device set (e.g. "iPhone 16
+      # Pro" disappears once newer Xcode ships) — pick whatever iPhone the
+      # image actually provides instead of hardcoding a model name. The
+      # image also ships SEVERAL iOS runtimes whose device lists differ
+      # (e.g. "iPhone 16e" exists on 26.2 but not 26.5), so pick from the
+      # NEWEST runtime and address the device by UDID from then on.
+      - name: Pick an available iPhone simulator
+        run: |
+          xcrun simctl list devices available
+          # JSON + jq: device names may contain parentheses themselves
+          # ("iPhone SE (3rd generation)"), so no line-based parsing.
+          picked=$(xcrun simctl list -j devices available | jq -r '
+            .devices
+            | to_entries
+            | map(select(.key | test("SimRuntime\\.iOS")))
+            | map({key, phones: [.value[] | select(.isAvailable and (.name | startswith("iPhone")))]})
+            | map(select(.phones | length > 0))
+            | sort_by(.key | capture("iOS-(?<maj>[0-9]+)-(?<min>[0-9]+)") | [(.maj | tonumber), (.min | tonumber)])
+            | last.phones | last | "\(.udid) \(.name)"')
+          udid=${picked%% *}
+          name=${picked#* }
+          test -n "$udid" && test "$udid" != "null"
+          echo "Using simulator: $name ($udid)"
+          echo "SIM_UDID=$udid" >> "$GITHUB_ENV"
+          echo "SIM_NAME=$name" >> "$GITHUB_ENV"
+      - name: Generate and build for simulator
+        working-directory: SoooDreamy/ios
+        run: |
+          xcodegen generate
+          xcodebuild \
+            -project SoooDreamy.xcodeproj \
+            -scheme SoooDreamy \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination "platform=iOS Simulator,id=${SIM_UDID}" \
+            -derivedDataPath build-simulator \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+      # The screenshot matrix is the visual regression proof of the app
+      # (EVAL P1-9): About + pairing stage, plus five staged PAIRED states
+      # (dashboard with the couple's own palette, chat with messages,
+      # sealed reveal, play hub, settings) in German and English — plus one
+      # AX5 dynamic-type pass of the dashboard (Gebot 12's review question,
+      # answered in CI) and one DE composer close-up (exposed chat input
+      # chrome). The staged states live in ScreenshotSeed.swift.
+      # Re-Eval Befund 18 schließt vier Beweislücken (nur DE): das echte
+      # In-App-Demo mit MUSTERBETRIEB-Band, der statische Guide nach
+      # Kino-Skip, die iPhone-Schrankfront mit offenem Fach und der
+      # Spieltisch unter AX5 — alle über vorhandene Modi/Defaults-Pins,
+      # keine neuen ScreenshotModes.
+      - name: Capture screenshot matrix in German and English
+        working-directory: SoooDreamy/ios
+        run: |
+          mkdir -p screenshots
+          xcrun simctl boot "$SIM_UDID" || true
+          xcrun simctl bootstatus "$SIM_UDID" -b
+          # QuickPath ("slide to type") keyboard onboarding covered the DE
+          # composer close-up with an English tutorial sheet. Mark the intro
+          # as already seen BEFORE any launch — the documented preference is
+          # DidShowContinuousPathIntroduction in com.apple.keyboard.preferences
+          # (iOS 15+; appium/appium-ios-simulator#315, Chromium iossim_util);
+          # com.apple.Preferences is the pre-iOS-15 domain, harmless extra.
+          xcrun simctl spawn booted defaults write com.apple.keyboard.preferences DidShowContinuousPathIntroduction 1
+          xcrun simctl spawn booted defaults write com.apple.Preferences DidShowContinuousPathIntroduction 1
+          xcrun simctl install booted build-simulator/Build/Products/Debug-iphonesimulator/SoooDreamy.app
+          shoot() { # shoot <lang> <file-slug> <extra launch args...>
+            local lang=$1 slug=$2; shift 2
+            local locale=$([ "$lang" = de ] && echo de_DE || echo en_US)
+            local file="screenshots/$slug-$lang.png"
+            launch() {
+              xcrun simctl terminate booted app.sooodreamy.ios || true
+              # -SoooDreamyQuietPermissions: Beweis-Shots fahren echte
+              # App-Pfade (Demo/Guide) — ohne die Naht legte sich der
+              # System-Notification-Alert mitten über die Bühne.
+              xcrun simctl launch booted app.sooodreamy.ios \
+                -AppleLanguages "($lang)" \
+                -AppleLocale "$locale" \
+                -SoooDreamyQuietPermissions \
+                "$@"
+            }
+            launch "$@"
+            # A not-yet-rendered first frame is a flat color and compresses
+            # to a tiny PNG (~70 KB vs >1 MB for a real screen). A fixed
+            # sleep proved flaky on loaded runners (main-en, chat-de and
+            # paired-en each blanked once in consecutive runs, app alive
+            # per log dump) — so POLL up to 8x3 s instead, and relaunch
+            # once at half budget in case the launch itself wedged.
+            local attempt
+            for attempt in 1 2 3 4 5 6 7 8; do
+              sleep 3
+              xcrun simctl io booted screenshot "$file"
+              [ "$(stat -f%z "$file")" -ge "${SHOOT_MIN_BYTES:-150000}" ] && break
+              echo "::warning::$file still blank after ${attempt}x3s"
+              if [ "$attempt" = 4 ]; then
+                echo "::warning::relaunching app.sooodreamy.ios for $file"
+                launch "$@"
+              fi
+            done
+            # Fail CLOSED: a blank shot that survives the full budget is a
+            # broken visual proof, not a shippable artifact (re-eval round
+            # 2 found a fully blank paired-de.png waved through as warning).
+            if [ "$(stat -f%z "$file")" -lt "${SHOOT_MIN_BYTES:-150000}" ]; then
+              echo "::error::$file is still blank after retries — failing the job"
+              exit 1
+            fi
+            # Fail CLOSED, zweite Klinge: ein Jetsam-/Watchdog-Kill zeigt
+            # den bunten HOMESCREEN, der den Groessen-Floor PASSIERT
+            # (Reveal-Jagd: reveal-de.png war 3 MB Springboard-Wallpaper).
+            # Der Shot zaehlt nur, wenn die App beim Druecken noch lebt.
+            if ! xcrun simctl spawn booted launchctl list 2>/dev/null \
+                | grep -q "app.sooodreamy.ios"; then
+              echo "::error::$file captured but app.sooodreamy.ios is no longer running (jetsam/watchdog?) — failing the job"
+              exit 1
+            fi
+          }
+          for lang in de en; do
+            for mode in About Main Paired Chat Reveal Play Settings; do
+              slug=$(echo "$mode" | tr '[:upper:]' '[:lower:]')
+              shoot "$lang" "$slug" "-SoooDreamyScreenshot$mode"
+            done
+          done
+          # Gebot 12 review question ("screenshot at AX5 font size") —
+          # the paired dashboard at the largest accessibility size.
+          shoot de paired-ax5 -SoooDreamyScreenshotPaired \
+            -UIPreferredContentSizeCategoryName UICTContentSizeCategoryAccessibilityXXXL
+          # Composer close-up (wave-2 glass proof): chat staging plus a
+          # prefilled draft — field focused, keyboard up, dock stepped
+          # aside, so field chrome + tinted send capsule are fully visible.
+          shoot de chat-composer -SoooDreamyScreenshotChat \
+            -SoooDreamyScreenshotComposer
+          # W8D first-launch cinematic, frozen deep in its "home" act (all
+          # four glass vignettes settled) — the flag pins the intro's clock
+          # to ScreenshotSeed.cinematicFreezeTime instead of racing a
+          # 23-second animation against the screenshot timer.
+          shoot de cinematic -SoooDreamyScreenshotCinematic
+          # P1-B Kino-Frame-Serie: acht eingefrorene Playheads über alle
+          # Kapiteltypen (Zeiten == CinematicScript.screenshotFrameSeries,
+          # von den Logic-Tests gepinnt). Video-Kapitel rendern ihr
+          # prozedurales Poster-Standbild — der Simulator-Build schifft
+          # keine Videos, der Poster-Pfad IST der Sichtbeweis. simctl
+          # reicht Env nur mit SIMCTL_CHILD_-Präfix an die App durch.
+          # Der t=2-Frame (dunkler Raum, zwei Sprachkarten) ist der
+          # flachste der Serie — eigener 100-KB-Floor statt mehr Sleep.
+          export SHOOT_MIN_BYTES=100000
+          for t in 2 9 12 20 30 41 50 57; do
+            export SIMCTL_CHILD_SoooDreamyCinematicFreeze="$t"
+            shoot de "cinematic-t$t" -SoooDreamyScreenshotCinematic
+          done
+          # Re-Eval Runde 2 (Befund 3): die Serie bewies Kapitel, nie
+          # AUSWAHLZUSTÄNDE — t2 stand ungewählt, t30 fror inkHex nil.
+          # Zwei geseedete Frames ergänzen die Beweise: das Sprachgate
+          # mit GEWÄHLTER Karte (Stempelpunkt + Lift) und die Tinten-
+          # bühne mit gezogener Spur (Drop fertig, Strich gezeichnet,
+          # Approach sichtbar mittendrin — Offset-Regel und Palette-
+          # Validierung: CinematicScript.screenshotInkPickOffset +
+          # ScreenshotSeed; von den Logic-Tests gepinnt).
+          export SIMCTL_CHILD_SoooDreamyCinematicFreeze=2
+          export SIMCTL_CHILD_SoooDreamyCinematicLanguage=de
+          shoot de cinematic-t2-gewaehlt -SoooDreamyScreenshotCinematic
+          unset SIMCTL_CHILD_SoooDreamyCinematicLanguage
+          export SIMCTL_CHILD_SoooDreamyCinematicFreeze=30
+          export SIMCTL_CHILD_SoooDreamyCinematicInk=FF5C8A
+          shoot de cinematic-t30-tinte -SoooDreamyScreenshotCinematic
+          unset SIMCTL_CHILD_SoooDreamyCinematicInk
+          unset SIMCTL_CHILD_SoooDreamyCinematicFreeze
+          unset SHOOT_MIN_BYTES
+          # Re-Eval Befund 18 — vier neue Belege, alle deterministisch über
+          # NSArgumentDomain-Pins (höchste UserDefaults-Präzedenz, exakt die
+          # UITest-Mechanik aus UITestSupport.swift):
+          # demo-main: das ECHTE In-App-Demo („Erst mal ansehen") über den
+          # persistierten Pfad — demo.active gepinnt, introSeen unterdrückt
+          # das Erststart-Kino; RootView → MainTabView trägt das
+          # MUSTERBETRIEB-Band (DemoBadge) über dem Demo-Postfach.
+          shoot de demo-main -demo.active YES -sooodreamy.cinematicIntroSeen YES
+          # guide: der STATISCHE Guide (OnboardingFlowView, Seite 1) nach
+          # Kino-Skip — introSeen=YES lässt CinematicIntroGate.shouldPlay
+          # sofort passieren, die Welcome-Phase rendert den Guide direkt.
+          # Der Guide ist die dunkle Raum-Atmosphäre (Lampenkegel + Tinten-
+          # staub) — gleicher 100-KB-Floor wie der flache t2-Kino-Frame.
+          SHOOT_MIN_BYTES=100000 \
+            shoot de guide -sooodreamy.cinematicIntroSeen YES -demo.active NO
+          # guide-ende (Re-Eval Runde 2, Befund 3): die SCHLUSSSEITE des
+          # Guides (drei Schritte + Zweitgeräte-Pfad) — der NSArgument-
+          # Domain-Pin sooodreamy.guidePage staged die letzte Seite
+          # deterministisch (OnboardingFlowView klemmt den Index in die
+          # Seitenzahl, ein veralteter Pin zeigt nie ins Leere).
+          SHOOT_MIN_BYTES=100000 \
+            shoot de guide-ende -sooodreamy.cinematicIntroSeen YES \
+            -demo.active NO -sooodreamy.guidePage 4
+          # archiv-iphone: Schrankfront mit OFFENEM Alben-Fach — der
+          # persistierte openFach-Schlüssel (Befund 5b) wird gepinnt, damit
+          # die Schublade schon im allerersten Frame ausgezogen ist.
+          shoot de archiv-iphone -SoooDreamyScreenshotMemories \
+            -memories.schrank.openFach alben
+          # spieltisch-ax5: der Spieltisch-Katalog unter AX5 — zweiter
+          # Dynamic-Type-Beleg neben paired-ax5 (Gebot 12).
+          shoot de spieltisch-ax5 -SoooDreamyScreenshotPlay \
+            -UIPreferredContentSizeCategoryName UICTContentSizeCategoryAccessibilityXXXL
+          # kapsel-titel / kapsel-ohne-titel (Fix4 Befund 10): der geöffnete
+          # Kapsel-Brief in beiden Varianten — der stempelEinzug-Beweis (MIT
+          # Titel weicht die Überschrift dem Siegel, OHNE Titel rückt der
+          # Fließtext selbst ein). Der NSArgumentDomain-Pin sooodreamy.kapsel
+          # staged eine reife, geöffnete Kapsel; MemoriesView präsentiert die
+          # Ceremony mit startRevealed direkt (guide-Muster). Dunkler Raum
+          # hinter dem einen Briefbogen — gleicher 100-KB-Floor wie guide.
+          SHOOT_MIN_BYTES=100000 \
+            shoot de kapsel-titel -SoooDreamyScreenshotMemories \
+            -sooodreamy.kapsel titel
+          SHOOT_MIN_BYTES=100000 \
+            shoot de kapsel-ohne-titel -SoooDreamyScreenshotMemories \
+            -sooodreamy.kapsel ohnetitel
+      # iPad leg (Welle 1A iPad-Fundament + Welle 5 Vollausbau): the SAME
+      # simulator build runs on an iPad (TARGETED_DEVICE_FAMILY "1,2") —
+      # four German shots prove the regular-width layouts: the waiting
+      # card of a fresh couple (Sendung Nr. 1), two-column dashboard +
+      # centered dock, the chat's readable column, and the Memories
+      # split view (sidebar + detail). A landscape shot was tried
+      # and removed: a headless iPadOS 26 simulator honors neither
+      # requestGeometryUpdate nor the supportedInterfaceOrientationsFor
+      # contract (runs 31806640307 + 31814760385), and portrait width on
+      # the 13-inch Pro already exceeds every regular-width threshold.
+      # Prefer the 13-inch Pro when the image has it.
+      - name: Pick an available iPad simulator
+        run: |
+          picked=$(xcrun simctl list -j devices available | jq -r '
+            .devices
+            | to_entries
+            | map(select(.key | test("SimRuntime\\.iOS")))
+            | map({key, pads: [.value[] | select(.isAvailable and (.name | startswith("iPad")))]})
+            | map(select(.pads | length > 0))
+            | sort_by(.key | capture("iOS-(?<maj>[0-9]+)-(?<min>[0-9]+)") | [(.maj | tonumber), (.min | tonumber)])
+            | last.pads
+            | ((map(select(.name | contains("Pro 13"))) | last) // last)
+            | "\(.udid) \(.name)"')
+          udid=${picked%% *}
+          name=${picked#* }
+          test -n "$udid" && test "$udid" != "null"
+          echo "Using iPad simulator: $name ($udid)"
+          echo "PAD_UDID=$udid" >> "$GITHUB_ENV"
+      - name: Capture iPad screenshots in German
+        working-directory: SoooDreamy/ios
+        run: |
+          # Exactly one booted device at a time — `simctl … booted` must
+          # stay unambiguous, so the iPhone shuts down first.
+          xcrun simctl shutdown "$SIM_UDID" || true
+          xcrun simctl boot "$PAD_UDID" || true
+          xcrun simctl bootstatus "$PAD_UDID" -b
+          # Same QuickPath-tutorial suppression as the iPhone leg (the iPad
+          # is a fresh device with its own preference store).
+          xcrun simctl spawn booted defaults write com.apple.keyboard.preferences DidShowContinuousPathIntroduction 1
+          xcrun simctl spawn booted defaults write com.apple.Preferences DidShowContinuousPathIntroduction 1
+          xcrun simctl install booted build-simulator/Build/Products/Debug-iphonesimulator/SoooDreamy.app
+          shoot() { # shoot <file-slug> <extra launch args...>
+            local slug=$1; shift
+            local file="screenshots/$slug-de.png"
+            launch() {
+              xcrun simctl terminate booted app.sooodreamy.ios || true
+              xcrun simctl launch booted app.sooodreamy.ios \
+                -AppleLanguages "(de)" \
+                -AppleLocale de_DE \
+                -SoooDreamyQuietPermissions \
+                "$@"
+            }
+            launch "$@"
+            # Poll instead of a fixed sleep — same flaky-first-frame fix
+            # as the iPhone leg, relaunch once at half budget.
+            local attempt
+            for attempt in 1 2 3 4 5 6 7 8; do
+              sleep 3
+              xcrun simctl io booted screenshot "$file"
+              [ "$(stat -f%z "$file")" -ge "${SHOOT_MIN_BYTES:-150000}" ] && break
+              echo "::warning::$file still blank after ${attempt}x3s"
+              if [ "$attempt" = 4 ]; then
+                echo "::warning::relaunching app.sooodreamy.ios for $file"
+                launch "$@"
+              fi
+            done
+            # Fail CLOSED — same rule as the iPhone leg: no blank artifacts.
+            if [ "$(stat -f%z "$file")" -lt "${SHOOT_MIN_BYTES:-150000}" ]; then
+              echo "::error::$file is still blank after retries — failing the job"
+              exit 1
+            fi
+            # Fail CLOSED, zweite Klinge (wie iPhone-Leg): App muss beim
+            # Druecken noch leben — Homescreen passiert sonst den Floor.
+            if ! xcrun simctl spawn booted launchctl list 2>/dev/null \
+                | grep -q "app.sooodreamy.ios"; then
+              echo "::error::$file captured but app.sooodreamy.ios is no longer running (jetsam/watchdog?) — failing the job"
+              exit 1
+            fi
+          }
+          # ipad-main (Re-Eval Runde 2, Befund 13): Sendung Nr. 1 — das
+          # frisch angelegte Paar wartet auf den Partner — auf dem iPad;
+          # der Regular-Width-Beleg für die Warte-Karte.
+          shoot ipad-main -SoooDreamyScreenshotMain
+          shoot ipad-paired -SoooDreamyScreenshotPaired
+          shoot ipad-chat -SoooDreamyScreenshotChat
+          shoot ipad-memories -SoooDreamyScreenshotMemories
+      - name: Dump app log on failure
+        if: failure()
+        run: |
+          xcrun simctl spawn booted log show --last 5m \
+            --predicate 'process == "SoooDreamy"' \
+            --style compact 2>/dev/null | tail -120 || true
+
+      # Reveal-Jagd: ein stiller Prozess-Tod ohne Fatal-Zeile im
+      # process-gefilterten Log — die .ips-Crashreports des Sim-Hosts
+      # tragen Grund UND Stacktrace (auch Watchdog-Kills).
+      - name: Dump crash reports on failure
+        if: failure()
+        run: |
+          DIR="$HOME/Library/Logs/DiagnosticReports"
+          ls -la "$DIR" 2>/dev/null | tail -20 || true
+          for f in $(ls -t "$DIR"/SoooDreamy* 2>/dev/null | head -3); do
+            echo "===== $f ====="
+            head -c 20000 "$f"
+            echo
+          done
+          xcrun simctl spawn booted log show --last 6m \
+            --predicate 'messageType == fault OR messageType == error' \
+            --style compact 2>/dev/null | rg -i "SoooDreamy|watchdog|jetsam|fatal|exception" | tail -60 || true
+      - name: Upload simulator screenshots
+        # always(): a failed blank-check run MUST still ship its shots —
+        # debugging "which frame rendered black" is impossible otherwise.
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: SoooDreamy-simulator-screenshots
+          path: SoooDreamy/ios/screenshots
+          if-no-files-found: error
+
+  # P1-D: ECHTE Nutzungstests — XCUITest fährt die App im Simulator durch
+  # Erststart-Kino, Demo-Tour, Chat, Post-Station und (Königs-Test) das
+  # komplette Pairing gegen den ECHTEN Node-Server auf dem Runner. Der Job
+  # ist ein GATE (kein continue-on-error) und läuft PARALLEL zu build-ipa —
+  # eigener xcodebuild-Aufbau, gemeinsame Wurzel ist nur render-videos
+  # (die Bundle-Videos gehören zum Erststart-Kino, das test01 durchläuft).
+  ui-tests:
+    name: UI tests (simulator, real server)
+    runs-on: macos-26
+    needs: [render-videos]
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Xcode version
+        run: xcodebuild -version
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Render app icons (procedural, no binary assets in repo)
+        run: |
+          swift SoooDreamy/ios/scripts/GenerateIcon.swift SoooDreamy/ios/SoooDreamy/Resources/Assets.xcassets/AppIcon.appiconset/icon_1024.png classic
+          for v in sunset midnight mint rose ocean gold lavender blossom aurora; do
+            swift SoooDreamy/ios/scripts/GenerateIcon.swift "SoooDreamy/ios/SoooDreamy/Resources/Assets.xcassets/AppIcon-$v.appiconset/icon_1024.png" "$v"
+          done
+
+      # Videos VOR xcodegen generate platzieren (Icon-Muster, RECON §2.5):
+      # test01 läuft das Erststart-Kino inkl. Video-Kapiteln — der UITest-
+      # Build soll dem echten App-Bundle entsprechen, nicht der Lite-Welt.
+      - name: Inject cinematic videos (rendered in CI, never committed)
+        uses: actions/download-artifact@v4
+        with:
+          name: SoooDreamy-cinematic-videos
+          path: SoooDreamy/ios/SoooDreamy/Resources/Videos
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Der ECHTE Server aus SoooDreamy/server — kein Mock. Background-
+      # Start mit Health-Poll; DATA_DIR im Runner-Temp bleibt wegwerfbar.
+      - name: Start the real couple server (background, health-polled)
+        working-directory: SoooDreamy/server
+        run: |
+          npm ci
+          DATA_DIR="$RUNNER_TEMP/sooodreamy-data" PORT=4321 \
+            nohup node src/server.js > "$RUNNER_TEMP/sooodreamy-server.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/sooodreamy-server.pid"
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:4321/api/health > /dev/null 2>&1; then
+              echo "Server erreichbar nach ${i}s"
+              curl -fsS http://127.0.0.1:4321/api/health | jq '{name, version}'
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::Couple-Server kam nicht hoch" >&2
+          tail -50 "$RUNNER_TEMP/sooodreamy-server.log" >&2
+          exit 1
+
+      # Mitglied A („Mia") entsteht per dokumentierter API (docs/API.md,
+      # POST /api/couples) — der UITest tritt als Mitglied B per UI bei.
+      # Code + Token wandern über TEST_RUNNER_-Prefix in den Test-Runner.
+      - name: Create the test couple via API (member A)
+        run: |
+          response=$(curl -fsS -X POST http://127.0.0.1:4321/api/couples \
+            -H 'Content-Type: application/json' \
+            -d '{"name":"Mia","avatar":"🦊","color":"#60A5FA"}')
+          code=$(echo "$response" | jq -r .couple.code)
+          token=$(echo "$response" | jq -r .token)
+          test -n "$code" && test "$code" != "null"
+          test -n "$token" && test "$token" != "null"
+          echo "::add-mask::$token"
+          echo "PAIR_CODE=$code" >> "$GITHUB_ENV"
+          echo "MIA_TOKEN=$token" >> "$GITHUB_ENV"
+          echo "Paar angelegt — Code: $code"
+
+      # Gleiche Auswahl-Logik wie simulator-screenshots: neueste Runtime,
+      # Gerät ab dann per UDID.
+      - name: Pick an available iPhone simulator
+        run: |
+          picked=$(xcrun simctl list -j devices available | jq -r '
+            .devices
+            | to_entries
+            | map(select(.key | test("SimRuntime\\.iOS")))
+            | map({key, phones: [.value[] | select(.isAvailable and (.name | startswith("iPhone")))]})
+            | map(select(.phones | length > 0))
+            | sort_by(.key | capture("iOS-(?<maj>[0-9]+)-(?<min>[0-9]+)") | [(.maj | tonumber), (.min | tonumber)])
+            | last.phones | last | "\(.udid) \(.name)"')
+          udid=${picked%% *}
+          name=${picked#* }
+          test -n "$udid" && test "$udid" != "null"
+          echo "Using simulator: $name ($udid)"
+          echo "SIM_UDID=$udid" >> "$GITHUB_ENV"
+
+      # Frischer Erststart ist Teil des Vertrags von test01 (Sprach-Gate
+      # erscheint nur ohne persistierte Sprachwahl) — deshalb erase.
+      # QuickPath-Intro aus (bekannter Screenshot-Job-Fix) und Hardware-
+      # Tastatur ab: typeText braucht die Software-Tastatur.
+      - name: Prepare simulator (erase, QuickPath off, software keyboard)
+        run: |
+          xcrun simctl shutdown "$SIM_UDID" 2>/dev/null || true
+          xcrun simctl erase "$SIM_UDID"
+          defaults write com.apple.iphonesimulator ConnectHardwareKeyboard -bool false || true
+          xcrun simctl boot "$SIM_UDID"
+          xcrun simctl bootstatus "$SIM_UDID" -b
+          xcrun simctl spawn "$SIM_UDID" defaults write com.apple.keyboard.preferences DidShowContinuousPathIntroduction 1
+          xcrun simctl spawn "$SIM_UDID" defaults write com.apple.Preferences DidShowContinuousPathIntroduction 1
+          # Reduce Motion: das 60-fps-TimelineView-Kino macht XCUITest-
+          # Snapshots zäh bis zum Query-Timeout (Lauf 31904755259) — die
+          # Reduce-Motion-Fassung ist ein designter, getesteter Pfad und
+          # macht die ganze Suite deterministischer.
+          xcrun simctl spawn "$SIM_UDID" defaults write com.apple.Accessibility ReduceMotionEnabled -bool true
+
+      - name: Generate Xcode project
+        working-directory: SoooDreamy/ios
+        run: xcodegen generate
+
+      # Split build and run: the cold runner's FIRST app launch blew the
+      # XCUITest launch timeout (run 31902067688, tests 01–03). Building
+      # first, then pre-warming the installed app once via simctl (dyld
+      # caches, first-frame work) makes the in-test launches boring.
+      - name: Build for testing
+        working-directory: SoooDreamy/ios
+        shell: bash {0}
+        run: |
+          xcodebuild build-for-testing \
+            -project SoooDreamy.xcodeproj \
+            -scheme SoooDreamy \
+            -destination "platform=iOS Simulator,id=${SIM_UDID}" \
+            -derivedDataPath build-uitests \
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee xcodebuild-uitests-build.log | grep -E "error:|\*\* BUILD"
+          status=${PIPESTATUS[0]}
+          echo "xcodebuild exit code: $status"
+          exit $status
+
+      - name: Pre-warm the app in the simulator
+        working-directory: SoooDreamy/ios
+        run: |
+          APP="build-uitests/Build/Products/Debug-iphonesimulator/SoooDreamy.app"
+          test -d "$APP"
+          xcrun simctl install "$SIM_UDID" "$APP"
+          # One throwaway foreground launch on the About stage (no cinema,
+          # no network) — then terminate. The NEXT launch is warm.
+          xcrun simctl launch "$SIM_UDID" app.sooodreamy.ios \
+            -SoooDreamyScreenshotAbout || true
+          sleep 25
+          xcrun simctl terminate "$SIM_UDID" app.sooodreamy.ios || true
+          # The warm-up run PERSISTED first-run state (language/intro seen)
+          # and killed test01's language gate (run 31903489346). Wipe the
+          # app's defaults — standard AND app-group — while keeping the
+          # warmed binary installed.
+          xcrun simctl spawn "$SIM_UDID" defaults delete app.sooodreamy.ios || true
+          xcrun simctl spawn "$SIM_UDID" defaults delete group.app.sooodreamy.shared || true
+
+      - name: Run XCUITests (gate — real app, real server)
+        working-directory: SoooDreamy/ios
+        shell: bash {0}
+        run: |
+          # TEST_RUNNER_ forwarding only works as REAL environment
+          # variables — as settings-style xcodebuild args they never
+          # reached the runner under test-without-building (run
+          # 31908566583: the test silently provisioned its own couple and
+          # the CI curl check stared at an empty journal).
+          export TEST_RUNNER_SOOODREAMY_SERVER_URL="http://127.0.0.1:4321"
+          export TEST_RUNNER_SOOODREAMY_PAIR_CODE="$PAIR_CODE"
+          export TEST_RUNNER_SOOODREAMY_MIA_TOKEN="$MIA_TOKEN"
+          xcodebuild test-without-building \
+            -project SoooDreamy.xcodeproj \
+            -scheme SoooDreamy \
+            -destination "platform=iOS Simulator,id=${SIM_UDID}" \
+            -derivedDataPath build-uitests \
+            -resultBundlePath TestResults/SoooDreamyUITests.xcresult \
+            -only-testing:SoooDreamyUITests \
+            2>&1 | tee xcodebuild-uitests.log \
+            | grep -E "Test [Cc]ase|Test [Ss]uite|error:|\*\* TEST"
+          status=${PIPESTATUS[0]}
+          echo "xcodebuild exit code: $status"
+          exit $status
+
+      # Der vom Auftrag geforderte API-Check NACH dem Test: der per UI
+      # gesendete Erste-Gruß-Heartbeat MUSS im Journal und in
+      # touches/recent liegen — unabhängiger zweiter Beweis.
+      - name: Verify the greeting reached the server (journal + recent)
+        run: |
+          journal=$(curl -fsS http://127.0.0.1:4321/api/post/journal \
+            -H "Authorization: Bearer $MIA_TOKEN")
+          echo "$journal" | jq '[.entries[] | {kind, type}]'
+          echo "$journal" | jq -e '.entries | any(.kind == "touch" and .type == "heartbeat")'
+          recent=$(curl -fsS "http://127.0.0.1:4321/api/touches/recent?limit=10" \
+            -H "Authorization: Bearer $MIA_TOKEN")
+          echo "$recent" | jq -e '.touches | any(.type == "heartbeat")'
+
+      - name: Export test attachments (screenshots from the run)
+        if: always()
+        working-directory: SoooDreamy/ios
+        run: |
+          if [ -d TestResults/SoooDreamyUITests.xcresult ]; then
+            mkdir -p TestResults/attachments
+            xcrun xcresulttool export attachments \
+              --path TestResults/SoooDreamyUITests.xcresult \
+              --output-path TestResults/attachments || true
+          fi
+
+      - name: Upload UI test results (.xcresult + attachments + log)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: SoooDreamy-ui-test-results
+          path: |
+            SoooDreamy/ios/TestResults
+            SoooDreamy/ios/xcodebuild-uitests.log
+          if-no-files-found: warn
+
+      - name: Dump server log on failure
+        if: failure()
+        run: tail -200 "$RUNNER_TEMP/sooodreamy-server.log" || true
+
+  release-latest:
+    name: Rolling prerelease (IPA download link)
+    needs: [build-ipa, build-ipa-lite]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    continue-on-error: true
+    steps:
+      - name: Download IPA artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: SoooDreamy-*unsigned-*
+          merge-multiple: true
+      - name: Update rolling prerelease
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: sooodreamy-latest
+          name: "SoooDreamy — latest unsigned IPA"
+          prerelease: true
+          body: |
+            Rolling build from `${{ github.sha }}` (branch `${{ github.ref_name }}`).
+            Sideload with AltStore / SideStore / Sideloadly. Server setup: see `SoooDreamy/server/README.md`.
+            `SoooDreamy-Lite-…` = same app without widgets → only ONE bundle id to sign (see `docs/SOOODREAMY-LITE.md`).
+          files: |
+            SoooDreamy-unsigned-*.ipa
+            SoooDreamy-Lite-unsigned-*.ipa
+
+  release-full:
+    # FullRelease P7: a REAL versioned GitHub release (not the rolling
+    # prerelease). Fires only when the lockstep release commit carries the
+    # explicit [full-release] marker — never on ordinary pushes.
+    name: Versioned full release
+    needs: [build-ipa, build-ipa-lite]
+    if: github.event_name == 'push' && contains(github.event.head_commit.message, '[full-release]')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read lockstep version
+        id: version
+        run: |
+          VERSION=$(python3 -c "import json;print(json.load(open('SoooDreamy/server/package.json'))['version'])")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          # Head section of PATCHNOTES.md (this release only) as the body.
+          python3 - <<'EOF'
+          import re
+          text = open('PATCHNOTES.md', encoding='utf-8').read()
+          parts = re.split(r'^## ', text, flags=re.M)
+          body = '## ' + parts[1] if len(parts) > 1 else text
+          open('release-body.md', 'w', encoding='utf-8').write(body)
+          EOF
+      - name: Download IPA artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: SoooDreamy-*unsigned-*
+          merge-multiple: true
+      - name: Publish versioned release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: "SoooDreamy ${{ steps.version.outputs.version }}"
+          prerelease: false
+          body_path: release-body.md
+          files: |
+            SoooDreamy-unsigned-*.ipa
+            SoooDreamy-Lite-unsigned-*.ipa
+
+  version-tag:
+    name: Create release version tag
+    if: github.event_name == 'workflow_dispatch' && inputs.version_ordinal != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Validate and create sooodreamy-vNN tag
+        uses: actions/github-script@v7
+        env:
+          ORDINAL: ${{ inputs.version_ordinal }}
+        with:
+          script: |
+            const ordinal = process.env.ORDINAL;
+            if (!/^(0[1-9]|1[0-5])$/.test(ordinal)) {
+              core.setFailed('version_ordinal must be 01 through 15');
+              return;
+            }
+            await github.rest.git.createRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: `refs/tags/sooodreamy-v${ordinal}`,
+              sha: context.sha,
+            });

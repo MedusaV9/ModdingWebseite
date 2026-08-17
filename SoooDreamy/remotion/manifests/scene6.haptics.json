@@ -1,0 +1,54 @@
+{
+  "video": "scene6_polaroid.mp4",
+  "composition": "Scene6Polaroid",
+  "fps": 30,
+  "durationSec": 8,
+  "posterTime": 7.2,
+  "beats": [
+    {
+      "t": 1.4,
+      "type": "soft",
+      "i": 0.5,
+      "s": 0.35,
+      "d": 0
+    },
+    {
+      "t": 2.2,
+      "type": "tap",
+      "i": 0.22,
+      "s": 0.4,
+      "d": 0
+    },
+    {
+      "t": 2.9,
+      "type": "tap",
+      "i": 0.16,
+      "s": 0.4,
+      "d": 0
+    },
+    {
+      "t": 5.8,
+      "type": "success",
+      "i": 0.5,
+      "s": 0.5,
+      "d": 0
+    },
+    {
+      "t": 5.91,
+      "type": "success",
+      "i": 0.65,
+      "s": 0.55,
+      "d": 0
+    }
+  ],
+  "cues": [
+    {
+      "t": 1.4,
+      "id": "drop"
+    },
+    {
+      "t": 5.8,
+      "id": "chime"
+    }
+  ]
+}

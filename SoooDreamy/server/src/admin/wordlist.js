@@ -1,0 +1,40 @@
+// Word list for the per-boot admin password: 256 short, friendly, unambiguous
+// words (lowercase, no umlauts, no homoglyph traps) — easy to read from the
+// console and type on a phone. 4 words drawn with crypto.randomInt give
+// 256^4 = 2^32 combinations; together with the strict login rate limit and
+// the per-boot rotation this is far beyond online-guessing reach.
+export const PASSWORD_WORDS = Object.freeze([
+  'abend', 'ahorn', 'alge', 'alm', 'ampel', 'anker', 'apfel', 'arm',
+  'atem', 'auge', 'bach', 'ball', 'band', 'bart', 'baum', 'beere',
+  'berg', 'biene', 'bild', 'birke', 'blatt', 'blick', 'blitz', 'blume',
+  'boden', 'bogen', 'boot', 'bote', 'brief', 'brise',
+  'brot', 'buch', 'burg', 'chor', 'dach', 'damm', 'dank', 'daune',
+  'decke', 'delta', 'dorf', 'dorn', 'drache', 'draht', 'dune',
+  'echo', 'edel', 'eiche', 'eis', 'elch', 'elfe', 'engel', 'erde',
+  'erle', 'ernte', 'esche', 'fabel', 'faden', 'falke', 'farbe', 'farn',
+  'feder', 'feige', 'feld', 'fels', 'fern', 'fest', 'feuer', 'fichte',
+  'fisch', 'flach', 'flair', 'fluss', 'flut', 'forst', 'frost',
+  'fuchs', 'funke', 'gabel', 'garn', 'garten', 'gasse', 'gast', 'gipfel',
+  'glanz', 'glut', 'gnom', 'gold', 'gras', 'grat', 'grund', 'gurt',
+  'hafen', 'hain', 'halm', 'hase', 'haus', 'hecke', 'heide', 'heim',
+  'held', 'herz', 'hirsch', 'honig', 'horn', 'huegel', 'hummel', 
+  'igel', 'insel', 'jade', 'jahr', 'joker', 'juwel', 'kabel', 'kahn',
+  'kamin', 'kanu', 'karte', 'kater', 'kerze', 'kiesel', 'kirsche', 'klang',
+  'klee', 'knopf', 'kobold', 'kohle', 'komet', 'korb', 'korn', 'kranich',
+  'kreide', 'krone', 'krug', 'kuppe', 'kurs', 'lachs', 'lager', 'lampe',
+  'land', 'laterne', 'laub', 'lava', 'leder', 'lerche', 'licht', 'lied',
+  'lilie', 'linde', 'linse', 'lotse', 'luchs', 'luft', 'lupe', 'magie',
+  'mais', 'marke', 'markt', 'maus', 'meer', 'meise', 'melone', 'milch',
+  'minze', 'mond', 'moos', 'morgen', 'motte', 'muschel', 'mut', 
+  'nadel', 'nebel', 'nest', 'netz', 'nord', 'note', 'oase', 'ofen',
+  'ohr', 'opal', 'orgel', 'ost', 'otter', 'palme', 'panda', 'pfad',
+  'pfau', 'pferd', 'pilz', 'pinsel', 'plan', 'pol', 'post', 'puma',
+  'quarz', 'quelle', 'rabe', 'rad', 'rahmen', 'rasen', 'raum', 'rebe',
+  'regal', 'regen', 'reh', 'reif', 'reise', 'riff', 'rinde', 'ring',
+  'robbe', 'rose', 'rubin', 'ruder', 'runde', 'saat', 'sage',
+  'salbei', 'sand', 'schaf', 'schatz', 'schaum', 'schiff', 'schilf', 'schnee',
+  'segel', 'seide', 'seil', 'sichel', 'sofa', 'sommer', 'sonne',
+  'spatz', 'specht', 'spur', 'stein', 'stern', 'stuhl', 'sturm', 'tal',
+  'tanne', 'tanz', 'tau', 'teich', 'tiger', 'ton', 'tor', 'traum',
+  'trumpf', 'tulpe', 'ufer', 'uhr', 'wal', 'wald', 'welle', 'wiese',
+]);

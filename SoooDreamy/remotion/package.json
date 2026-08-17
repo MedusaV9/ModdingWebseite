@@ -1,0 +1,27 @@
+{
+  "name": "sooodreamy-remotion",
+  "version": "1.0.0",
+  "private": true,
+  "description": "SooDreamy Kino-Prolog — textfreie Papier&Licht-Videoszenen, in CI gerendert, nie committet. FullRelease N1-C.",
+  "scripts": {
+    "studio": "remotion studio src/index.ts",
+    "manifests": "node src/export-manifests.mjs",
+    "manifests:check": "node src/export-manifests.mjs --check",
+    "typecheck": "tsc --noEmit",
+    "render:scene2": "remotion render src/index.ts Scene2Envelope out/scene2_envelope.mp4 --codec=h265 --crf=23 --color-space=bt709 --muted",
+    "render:scene3": "remotion render src/index.ts Scene3SealBreak out/scene3_seal.mp4 --codec=h265 --crf=23 --color-space=bt709 --muted",
+    "render:scene6": "remotion render src/index.ts Scene6Polaroid out/scene6_polaroid.mp4 --codec=h265 --crf=23 --color-space=bt709 --muted",
+    "remux:hvc1": "for f in out/*.mp4; do npx remotion ffmpeg -v error -y -i \"$f\" -c copy -tag:v hvc1 \"${f%.mp4}.hvc1.mp4\" && mv \"${f%.mp4}.hvc1.mp4\" \"$f\"; done",
+    "render:all": "npm run render:scene2 && npm run render:scene3 && npm run render:scene6"
+  },
+  "dependencies": {
+    "@remotion/cli": "^4.0.512",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "remotion": "^4.0.512"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "typescript": "^5.5.4"
+  }
+}

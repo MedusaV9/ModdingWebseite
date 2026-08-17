@@ -1,0 +1,68 @@
+{
+  "video": "scene3_seal.mp4",
+  "composition": "Scene3SealBreak",
+  "fps": 30,
+  "durationSec": 10,
+  "posterTime": 8.6,
+  "beats": [
+    {
+      "t": 1.2,
+      "type": "soft",
+      "i": 0.35,
+      "s": 0.2,
+      "d": 0.9
+    },
+    {
+      "t": 2.4,
+      "type": "tap",
+      "i": 0.85,
+      "s": 0.72,
+      "d": 0
+    },
+    {
+      "t": 2.56,
+      "type": "tap",
+      "i": 0.4,
+      "s": 0.5,
+      "d": 0
+    },
+    {
+      "t": 3.6,
+      "type": "soft",
+      "i": 0.3,
+      "s": 0.15,
+      "d": 0.5
+    },
+    {
+      "t": 4.5,
+      "type": "soft",
+      "i": 0.26,
+      "s": 0.15,
+      "d": 0.4
+    },
+    {
+      "t": 5.4,
+      "type": "success",
+      "i": 0.5,
+      "s": 0.5,
+      "d": 0
+    },
+    {
+      "t": 5.51,
+      "type": "success",
+      "i": 0.65,
+      "s": 0.55,
+      "d": 0
+    }
+  ],
+  "cues": [
+    {
+      "t": 2.4,
+      "id": "unseal"
+    },
+    {
+      "t": 3.6,
+      "id": "reveal"
+    }
+  ]
+}
