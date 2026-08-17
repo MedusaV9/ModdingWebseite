@@ -142,13 +142,16 @@ export function waehleFrage(
     pool.filter((q) => !used.has(q.id) && filter(q));
 
   const passt = (q: Question): boolean => passtFrageZuFormat(q, abschnitt.minigameId);
+  const inKategorie = (q: Question): boolean =>
+    abschnitt.kategorie === null || q.category === abschnitt.kategorie;
   // Bild-Formate ziehen bevorzugt echte Bild-Fragen (statt Platzhalter-Motiven).
+  // Welle 1 (Kategorie-Vote-Fix): die KATEGORIE hält länger durch als die
+  // Schwierigkeit — eine gewählte Kategorie zu ignorieren fällt dem Publikum
+  // sofort auf (Eval), eine leichtere/schwerere Frage nicht.
   const bildBevorzugt: ((q: Question) => boolean)[] = BILD_FORMATE.has(abschnitt.minigameId)
     ? [
-        (q) =>
-          q.media !== undefined &&
-          (abschnitt.kategorie === null || q.category === abschnitt.kategorie) &&
-          schwierigkeiten.includes(q.difficulty),
+        (q) => q.media !== undefined && inKategorie(q) && schwierigkeiten.includes(q.difficulty),
+        (q) => q.media !== undefined && inKategorie(q),
         (q) => q.media !== undefined && schwierigkeiten.includes(q.difficulty),
         (q) => q.media !== undefined,
       ]
@@ -156,12 +159,9 @@ export function waehleFrage(
 
   const stufen: ((q: Question) => boolean)[] = [
     ...bildBevorzugt,
-    (q) =>
-      passt(q) &&
-      (abschnitt.kategorie === null || q.category === abschnitt.kategorie) &&
-      schwierigkeiten.includes(q.difficulty),
+    (q) => passt(q) && inKategorie(q) && schwierigkeiten.includes(q.difficulty),
+    (q) => passt(q) && inKategorie(q), // Kategorie VOR Schwierigkeit (Vote-Fix)
     (q) => passt(q) && schwierigkeiten.includes(q.difficulty),
-    (q) => passt(q) && (abschnitt.kategorie === null || q.category === abschnitt.kategorie),
     (q) => passt(q),
     () => true, // Not-Ausstieg: lieber Format-fremd als gar keine Frage
   ];
@@ -207,7 +207,10 @@ export function waehleErsatzFrage(
   return kandidaten[rng.int(kandidaten.length)];
 }
 
-/** Kategorien-Optionen für die Wahl-Phase (max. 3, aus dem ungenutzten Pool). */
+/** Kategorien-Optionen für die Wahl-Phase (max. 3, aus dem ungenutzten Pool).
+ * Welle 1 (Kategorie-Vote-Fix): angeboten wird nur, was die Runde auch TRAGEN
+ * kann — genug passende Fragen für alle `abschnitt.fragen` Beats. Sonst
+ * gewinnt ein Vote und die Degradations-Kette liefert doch fremde Kategorien. */
 export function kategorieOptionen(state: EngineState, abschnitt: Abschnitt, rng: Rng): string[] {
   const used = new Set(state.usedQuestionIds);
   const passend = state.fragenPool.filter(
@@ -216,9 +219,26 @@ export function kategorieOptionen(state: EngineState, abschnitt: Abschnitt, rng:
       passtFrageZuFormat(q, abschnitt.minigameId) &&
       abschnitt.schwierigkeiten.includes(q.difficulty),
   );
-  const quelle = passend.length > 0 ? passend : state.fragenPool;
-  const kategorien = [...new Set(quelle.map((q) => q.category))];
+  const proKategorie = new Map<string, number>();
+  for (const q of passend) {
+    proKategorie.set(q.category, (proKategorie.get(q.category) ?? 0) + 1);
+  }
+  const tragfaehig = [...proKategorie.keys()].filter(
+    (k) => (proKategorie.get(k) ?? 0) >= abschnitt.fragen,
+  );
+  if (tragfaehig.length < 2) {
+    // Notleiter: kaum eine Kategorie trägt die volle Runde ⇒ die vorrätigsten
+    // zuerst (stabile Sortierung, deterministisch); ganz leer ⇒ Alt-Verhalten.
+    if (proKategorie.size > 0) {
+      return [...proKategorie.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 3)
+        .map(([k]) => k);
+    }
+    return [...new Set(state.fragenPool.map((q) => q.category))].slice(0, 3);
+  }
   // Deterministisch mischen, dann bis zu 3 anbieten.
+  const kategorien = tragfaehig;
   for (let i = kategorien.length - 1; i > 0; i--) {
     const j = rng.int(i + 1);
     [kategorien[i], kategorien[j]] = [kategorien[j], kategorien[i]];

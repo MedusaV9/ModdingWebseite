@@ -14,7 +14,7 @@ import type { JubilaeumsView } from "../../shared/views";
 import type { Rng } from "../../shared/rng";
 import type { Clock } from "../../shared/time";
 import { createMatchEventLog, type MatchEventLog } from "../analytics/event-log";
-import type { ContentLoader } from "../content-loader/index";
+import type { ContentLoader, PlanFrageTyp } from "../content-loader/index";
 import * as engine from "../engine/engine";
 import type { EngineDeps } from "../engine/engine";
 import type { EngineAction, EngineEvent, EngineState } from "../engine/types";
@@ -23,6 +23,10 @@ import type { MinigamePlugin } from "../minigames/_api/plugin";
 import type { Storage } from "../persistence/storage";
 import { autoRaumName } from "./lobby";
 import { createSessionStore, type SessionStore } from "./sessions";
+
+/** Kappe des Abend-Gedächtnisses (Welle 1): so viele zuletzt gespielte
+ * Fragen-IDs bleiben über Matches hinweg gesperrt (LRU). */
+const ABEND_GEDAECHTNIS_MAX = 500;
 
 /** META-Hooks (ADDITIV, Meta-Agent): AT-Buchung, In-Prozess-Bots, Save/Load.
  * Interface lebt HIER (Room kennt nur den Vertrag — keine Import-Zyklen). */
@@ -114,6 +118,11 @@ export class Room {
   readonly deps: RoomDeps;
   /** RTT-Proben pro Spieler (letzte 5) — Grundlage der Buzzer-Kompensation. */
   private readonly rtts = new Map<string, number[]>();
+  /** Abend-Gedächtnis (Welle 1, Eval „Dauerwiederholungen"): über MATCHES
+   * hinweg gespielte Fragen-IDs — Match 2 des Abends zieht frische Fragen.
+   * LRU-gedeckelt; reicht der Rest-Vorrat nicht, füllt startMatch per Top-Up
+   * kontrolliert mit Wiederholungen auf (kleine Packs verhungern nicht). */
+  private readonly abendFragenIds: string[] = [];
 
   constructor(code: string, origin: string, deps: RoomDeps) {
     this.code = code;
@@ -338,32 +347,65 @@ export class Room {
     });
   }
 
-  /** Match starten: Fragen-Pool über den Content-Loader ziehen (gekapselt!). */
-  startMatch(): { ok: boolean; error?: string } {
-    const fragenPool = this.deps.contentLoader.pickQuestions({
-      // Großzügiger Pool: die Engine wählt daraus nach Plan (Rest bleibt ungenutzt).
-      anzahl: Math.max(this.deps.fragenProMatch, 120),
+  /** Gespielte Fragen ins Abend-Gedächtnis übernehmen (Recycle-Klone `id~n`
+   * zählen für ihre Basis-Frage); älteste Einträge fallen LRU-artig raus. */
+  private merkeAbendFragen(ids: readonly string[]): void {
+    const bekannt = new Set(this.abendFragenIds);
+    for (const id of ids) {
+      const basis = id.split("~")[0];
+      if (!bekannt.has(basis)) {
+        bekannt.add(basis);
+        this.abendFragenIds.push(basis);
+      }
+    }
+    const zuViel = this.abendFragenIds.length - ABEND_GEDAECHTNIS_MAX;
+    if (zuViel > 0) this.abendFragenIds.splice(0, zuViel);
+  }
+
+  /** Frische Fragen ziehen (Abend-Gedächtnis respektiert), bei Mangel per
+   * Top-Up mit Wiederholungen auffüllen — Match-intern bleibt alles eindeutig. */
+  private ziehefragen(anzahl: number, imMatch: string[], typen?: PlanFrageTyp[]): Question[] {
+    const frisch = this.deps.contentLoader.pickQuestions({
+      anzahl,
+      typen,
+      usedQuestionIds: [...this.abendFragenIds, ...imMatch],
       rng: this.deps.rng,
     });
+    imMatch.push(...frisch.map((q) => q.id));
+    if (frisch.length >= anzahl) return frisch;
+    // Kleines Pack / langer Abend: Rest MIT Abend-Wiederholungen auffüllen
+    // (Id-Filter schützt gegen Loader, die usedQuestionIds ignorieren).
+    const imMatchSet = new Set(imMatch);
+    const topUp = this.deps.contentLoader
+      .pickQuestions({
+        anzahl: anzahl - frisch.length,
+        typen,
+        usedQuestionIds: imMatch,
+        rng: this.deps.rng,
+      })
+      .filter((q) => !imMatchSet.has(q.id));
+    imMatch.push(...topUp.map((q) => q.id));
+    return [...frisch, ...topUp];
+  }
+
+  /** Match starten: Fragen-Pool über den Content-Loader ziehen (gekapselt!). */
+  startMatch(): { ok: boolean; error?: string } {
+    // Abend-Gedächtnis (Welle 1): die Fragen des VORIGEN Matches jetzt einsammeln.
+    this.merkeAbendFragen(this.state.usedQuestionIds);
+    const imMatch: string[] = [];
+    // Großzügiger Pool: die Engine wählt daraus nach Plan (Rest bleibt ungenutzt).
+    const fragenPool = this.ziehefragen(Math.max(this.deps.fragenProMatch, 120), imMatch);
     // Format-gebundene Typen GARANTIERT beimischen: der Zufalls-Pool enthält
     // sonst oft zu wenige — Pixel-Dschungel soll echte Bilder zeigen, der
     // Bananen-Tresor echte schaetz- und die Affenleiter echte sortier-Fragen
     // (statt der eingebauten Fallback-Pools; engine/plan.ts passtFrageZuFormat).
-    const benutzt = fragenPool.map((q) => q.id);
     const extraFragen: Question[] = [];
     for (const [typ, anzahl] of [
       ["bild_pixel", 12],
       ["schaetz", 10],
       ["sortier", 10],
     ] as const) {
-      const extra = this.deps.contentLoader.pickQuestions({
-        anzahl,
-        typen: [typ],
-        usedQuestionIds: benutzt,
-        rng: this.deps.rng,
-      });
-      extraFragen.push(...extra);
-      benutzt.push(...extra.map((q) => q.id));
+      extraFragen.push(...this.ziehefragen(anzahl, imMatch, [typ]));
     }
     // ADDITIV (Musik): Song-Pool ziehen (ohne Region-Filter — wie der
     // Fragen-Pool; Regler kommt ggf. später über die Settings). Ohne Songs

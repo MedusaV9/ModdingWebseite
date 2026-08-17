@@ -512,3 +512,20 @@ svg[data-gesicht="denk"] #kopf {
     animation: none;
   }
 }
+
+/* ---------- Welle 1 (Eval „Fragen zu klein am Handy") ---------- */
+/* Die Frage ist der STAR des Beats: alle Format-Varianten (*-frage-klein)
+   lesbar groß, fett und in voller Textfarbe — statt klein und gedimmt.
+   (Doppelter Attribut-Selektor gewinnt gegen die einfachen Format-Klassen.) */
+[class*="-frage-klein"][class*="-frage-klein"] {
+  font-size: clamp(1.15rem, 4.2vw, 1.6rem);
+  line-height: 1.35;
+  font-weight: 700;
+  color: var(--text);
+}
+
+/* Bewusst gedimmte Varianten (verdeckte/wartende Zustände) bleiben gedimmt. */
+[class*="-frage-klein"][class*="-frage-klein"].muted {
+  color: var(--muted);
+  font-weight: 600;
+}

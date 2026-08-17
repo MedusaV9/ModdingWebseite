@@ -893,6 +893,30 @@ button:active:not(:disabled) {
   text-shadow: 0 0 12px rgb(245 179 1 / 60%);
 }
 
+/* Welle 1 (Eval „Erklärung auf TV"): richtige Antwort + Warum-Karte am Handy. */
+.aufloesung-wissen {
+  margin: 10px auto 0;
+  max-width: 88vw;
+  background: var(--mm-flaeche-tief);
+  border: var(--mm-outline-s) solid var(--mm-outline);
+  border-radius: var(--mm-radius-m);
+  padding: 10px 14px;
+  text-align: left;
+}
+
+.aufloesung-antwort {
+  margin: 0 0 6px;
+  color: var(--text);
+  font-size: 1.05rem;
+}
+
+.aufloesung-erklaerung {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+  line-height: 1.4;
+}
+
 /* Trost-Karte im Falsch-Screen: warm, kurz, wie ein Zettel vom Kumpel. */
 .trost {
   margin: 0;

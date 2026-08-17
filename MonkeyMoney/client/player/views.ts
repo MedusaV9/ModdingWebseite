@@ -19,11 +19,16 @@ export type SendeAktion = (event: string, payload?: Record<string, unknown>) => 
 interface MgPlayerView {
   endsAt: number;
   timerMs: number;
+  /** Frage-Formate liefern Text + Optionen — Basis der Handy-Auflösung. */
+  text?: string;
+  options?: string[];
   /** „x von y haben geantwortet" — nicht jedes Format liefert die Felder. */
   answeredCount?: number;
   spielerZahl?: number;
   aufloesung: {
-    correctIndex: number;
+    correctIndex?: number;
+    /** Warum-Karte (Pack-Pflichtfeld) — Welle 1: AUCH am Handy zeigen. */
+    erklaerung?: string;
     perPlayer: {
       playerId: string;
       choice: number | null;
@@ -224,6 +229,7 @@ function phaseInhalt(
                 </div>
                 <p class="trost">${meins?.hinweis ?? trostText(view.frageNr)}</p>`
         }
+        ${aufloesungsWissen(mg)}
         <p class="muted" style="font-size:0.95rem">${standStory(view)}</p>
       </div>`;
     }
@@ -276,6 +282,22 @@ function phaseInhalt(
       </div>`;
     }
   }
+}
+
+/** Welle 1 (Eval „Erklärung auf TV"): richtige Antwort + Warum-Karte AUCH am
+ * Handy — niemand soll zum Screen schielen müssen, um zu verstehen. */
+function aufloesungsWissen(mg: MgPlayerView | undefined): TemplateResult | "" {
+  const a = mg?.aufloesung;
+  if (!a) return "";
+  const korrekt =
+    typeof a.correctIndex === "number" && mg?.options !== undefined
+      ? (mg.options[a.correctIndex] ?? null)
+      : null;
+  if (korrekt === null && (a.erklaerung === undefined || a.erklaerung === "")) return "";
+  return html`<div class="aufloesung-wissen" data-testid="aufloesung-wissen">
+    ${korrekt !== null ? html`<p class="aufloesung-antwort">Richtig war: <strong>${korrekt}</strong></p>` : ""}
+    ${a.erklaerung ? html`<p class="aufloesung-erklaerung">💡 ${a.erklaerung}</p>` : ""}
+  </div>`;
 }
 
 /** Dezenter Fortschritts-Hinweis unter der Frage: „2 von 4 haben geantwortet"
