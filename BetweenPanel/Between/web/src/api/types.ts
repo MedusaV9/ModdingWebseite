@@ -62,6 +62,8 @@ export interface Blueprint {
   configFiles?: { path: string; format: string; mappings?: Record<string, string> }[]
   notes?: string
   custom?: boolean
+  /** Set when the blueprint was loaded from a data/templates drop-in file. */
+  templateFile?: string
   install?: unknown[]
   /** Detail responses only: whether the install pipeline contains a steamcmd step. */
   hasSteamcmd?: boolean

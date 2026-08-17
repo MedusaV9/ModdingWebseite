@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Braces, Check, Download, Egg, Link2, Package, Plus, Search, Trash2, Upload } from 'lucide-react'
+import { Braces, Check, Download, Egg, FileCode2, Link2, Package, Plus, RefreshCw, Search, Trash2, Upload } from 'lucide-react'
 import { api, ApiError } from '../api/client.ts'
 import type { Blueprint } from '../api/types.ts'
 import { downloadBlob } from '../lib/download.ts'
@@ -52,6 +52,7 @@ export function Blueprints() {
   const [saving, setSaving] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<Blueprint | null>(null)
   const [busy, setBusy] = useState(false)
+  const [rescanning, setRescanning] = useState(false)
   const importInput = useRef<HTMLInputElement>(null)
 
   // Pterodactyl egg import state
@@ -191,6 +192,23 @@ export function Blueprints() {
     }
   }
 
+  // Re-read the data/templates drop-in directory (docs/TEMPLATES.md) so new
+  // or edited template files show up without a panel restart.
+  const rescanTemplates = async () => {
+    setRescanning(true)
+    try {
+      const res = await api.post<{ scan: { loaded: unknown[]; errors: { file: string; problems: string[] }[] } }>('/api/templates/rescan')
+      const { loaded, errors } = res.scan
+      toast(errors.length > 0 ? 'error' : 'success', t('bp.rescanDone', { loaded: loaded.length, errors: errors.length }))
+      for (const e of errors) toast('error', `${e.file}: ${e.problems.join('; ')}`)
+      await load()
+    } catch (err) {
+      toast('error', err instanceof ApiError ? err.message : String(err))
+    } finally {
+      setRescanning(false)
+    }
+  }
+
   // --- Pterodactyl egg import ------------------------------------------------
   const openEggImport = () => {
     setEggJson('')
@@ -277,6 +295,10 @@ export function Blueprints() {
                 <Upload size={15} />
                 {t('bp.import')}
               </Button>
+              <Button variant="secondary" onClick={() => void rescanTemplates()} loading={rescanning}>
+                <RefreshCw size={15} />
+                {t('bp.rescanTemplates')}
+              </Button>
               <Button variant="secondary" onClick={openEggImport}>
                 <Egg size={15} />
                 {t('eggs.import')}
@@ -336,6 +358,7 @@ export function Blueprints() {
                   <div className="text-[0.6875rem] capitalize text-muted">{bp.category}</div>
                 </div>
                 {bp.custom && <Badge className="text-accent2">{t('bp.custom')}</Badge>}
+                {bp.templateFile && <Badge className="text-accent">{t('bp.templateBadge')}</Badge>}
                 {/* Compatibility is the default — only the exception (not runnable here) gets a badge. */}
                 {!onHost && <Badge className="shrink-0 text-warn">{t('bp.notOnHost')}</Badge>}
               </div>
@@ -371,7 +394,7 @@ export function Blueprints() {
                   </Button>
                 </>
               )}
-              {detail.custom && (
+              {(detail.custom || detail.templateFile) && (
                 <IconButton label={t('bp.export')} onClick={() => exportBlueprint(detail)}>
                   <Download size={15} />
                 </IconButton>
@@ -393,6 +416,12 @@ export function Blueprints() {
         {detail && !showJson && (
           <div className="space-y-4 text-sm">
             <p className="leading-relaxed text-text/90">{detail.description}</p>
+            {detail.templateFile && (
+              <p className="glass-subtle flex items-start gap-2 rounded-xl px-3 py-2 text-xs leading-relaxed text-muted">
+                <FileCode2 size={14} className="mt-0.5 shrink-0 text-accent" />
+                {t('bp.templateFileInfo', { file: detail.templateFile })}
+              </p>
+            )}
             {detail.notes && <p className="glass-subtle rounded-xl px-3 py-2 text-xs leading-relaxed text-muted">{detail.notes}</p>}
             <div className="grid gap-4 sm:grid-cols-3">
               <div>

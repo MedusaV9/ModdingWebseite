@@ -1,0 +1,86 @@
+id: tpl-rust
+name: Rust
+category: survival
+description: "Hardcore multiplayer survival. Dedicated server installed via SteamCMD (anonymous); large download (10+ GB)."
+icon: radiation
+color: "#ce422b"
+platforms:
+  - linux
+  - win32
+install:
+  - type: steamcmd
+    appId: 258550
+    validate: true
+startCommand: "./RustDedicated -batchmode +server.port {{SERVER_PORT}} +server.identity \"{{IDENTITY}}\" +server.hostname \"{{HOSTNAME}}\" +server.maxplayers {{MAX_PLAYERS}} +server.worldsize {{WORLD_SIZE}} +server.seed {{SEED}} +rcon.port {{RCON_PORT}} +rcon.password \"{{RCON_PASSWORD}}\" +rcon.web 1"
+stop:
+  type: signal
+  signal: SIGINT
+  timeoutS: 60
+variables:
+  - key: HOSTNAME
+    label: Server name
+    type: string
+    default: Between Rust Server
+    required: true
+  - key: SERVER_PORT
+    label: "Game port (UDP)"
+    type: number
+    default: 28015
+    min: 1024
+    max: 65535
+    isPort: true
+  - key: RCON_PORT
+    label: "RCON port (TCP)"
+    type: number
+    default: 28016
+    min: 1024
+    max: 65535
+    isPort: true
+    advanced: true
+  - key: RCON_PASSWORD
+    label: RCON password
+    type: password
+    default: changeme
+    required: true
+  - key: MAX_PLAYERS
+    label: Max players
+    type: number
+    default: 50
+    min: 1
+    max: 500
+  - key: WORLD_SIZE
+    label: World size
+    description: "Map size in meters (1000-6000)."
+    type: number
+    default: 3500
+    min: 1000
+    max: 6000
+  - key: SEED
+    label: Map seed
+    description: "Change the seed to generate a new map (commonly done on wipe day)."
+    type: number
+    default: 1337
+    min: 0
+    max: 2147483647
+    advanced: true
+  - key: IDENTITY
+    label: Server identity
+    description: "Folder name under server/ that holds this server's map, saves and config."
+    type: string
+    default: main
+    pattern: "^[A-Za-z0-9_-]+$"
+    advanced: true
+ports:
+  - name: game
+    variable: SERVER_PORT
+    protocol: udp
+  - name: rcon
+    variable: RCON_PORT
+    protocol: tcp
+query:
+  type: source
+  portVariable: SERVER_PORT
+backupExcludes:
+  - "steamapps/**"
+notes: "Rust has forced map wipes on the first Thursday of every month (server update required; blueprint wipes are occasionally forced too). To wipe manually, delete the .map/.sav files under server/<identity>/ and/or change the seed. Server data lives in server/<identity>/. Windows hosts: set the start command override to RustDedicated.exe with the same arguments. Do not expose the RCON port publicly unless the password is strong. Rust uses WebRCON (a WebSocket-based protocol), not Source RCON, so the panel's RCON support does not apply yet."
+version: "1"

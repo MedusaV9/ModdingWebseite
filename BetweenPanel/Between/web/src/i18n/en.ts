@@ -747,6 +747,11 @@ export const en = {
   'audit.steam.login': 'signed in to Steam',
   'audit.steam.login_failed': 'failed Steam sign-in',
   'audit.steam.logout': 'signed out of Steam',
+  'bp.templateBadge': 'template',
+  'bp.rescanTemplates': 'Rescan templates',
+  'bp.rescanDone': '{loaded} template file(s) loaded, {errors} error(s)',
+  'bp.templateFileInfo': 'Loaded from template file "{file}" in the templates directory. To change or remove it, edit or delete the file and rescan.',
+  'audit.templates.rescanned': 'rescanned template files',
 } as const
 
 export type I18nKey = keyof typeof en

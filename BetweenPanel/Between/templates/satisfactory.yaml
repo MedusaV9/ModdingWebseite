@@ -1,0 +1,43 @@
+id: tpl-satisfactory
+name: Satisfactory
+category: simulation
+description: "First-person open-world factory building. Dedicated server installed via SteamCMD (anonymous)."
+icon: cpu
+color: "#f97316"
+platforms:
+  - linux
+  - win32
+install:
+  - type: steamcmd
+    appId: 1690800
+    validate: true
+startCommand: "./FactoryServer.sh -Port={{SERVER_PORT}}"
+stop:
+  type: signal
+  signal: SIGINT
+  timeoutS: 60
+variables:
+  - key: SERVER_PORT
+    label: Server port
+    description: "Since 1.0 a single port carries game traffic (UDP) and the HTTPS API (TCP)."
+    type: number
+    default: 7777
+    min: 1024
+    max: 65535
+    isPort: true
+  - key: BETA_BRANCH
+    label: Beta branch
+    description: "e.g. 'experimental' — leave empty for the stable branch."
+    type: string
+    default: ""
+    advanced: true
+ports:
+  - name: game
+    variable: SERVER_PORT
+    protocol: both
+query:
+  type: none
+backupExcludes:
+  - "steamapps/**"
+notes: "After first start, claim the server (set admin password and create the game) from the in-game Server Manager or via the HTTPS API on the same port. On Linux, saves live in ~/.config/Epic/FactoryGame/Saved/SaveGames/server — outside the server directory, so panel backups do not include them by default. Windows hosts: set the start command override to FactoryServer.exe -Port={{SERVER_PORT}}."
+version: "1"

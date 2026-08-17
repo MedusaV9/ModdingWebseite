@@ -1,0 +1,60 @@
+id: tpl-palworld
+name: Palworld
+category: survival
+description: "Open-world creature-collecting survival for up to 32 players. Dedicated server installed via SteamCMD (anonymous)."
+icon: zap
+color: "#38bdf8"
+platforms:
+  - linux
+  - win32
+install:
+  - type: steamcmd
+    appId: 2394010
+    validate: true
+startCommand: "./PalServer.sh -port={{SERVER_PORT}} -players={{MAX_PLAYERS}} -publiclobby"
+stop:
+  type: signal
+  signal: SIGTERM
+  timeoutS: 30
+variables:
+  - key: SERVER_PORT
+    label: "Game port (UDP)"
+    type: number
+    default: 8211
+    min: 1024
+    max: 65535
+    isPort: true
+  - key: MAX_PLAYERS
+    label: Max players
+    type: number
+    default: 32
+    min: 1
+    max: 32
+  - key: RCON_PORT
+    label: RCON port
+    description: "Only used if RCONEnabled=True is set in PalWorldSettings.ini."
+    type: number
+    default: 25575
+    min: 1024
+    max: 65535
+    isPort: true
+    advanced: true
+  - key: RCON_PASSWORD
+    label: RCON password
+    description: "Must match AdminPassword in PalWorldSettings.ini (RCON also requires RCONEnabled=True there). Leave empty if RCON is disabled."
+    type: password
+    default: ""
+    advanced: true
+ports:
+  - name: game
+    variable: SERVER_PORT
+    protocol: udp
+query:
+  type: none
+rcon:
+  portVariable: RCON_PORT
+  passwordVariable: RCON_PASSWORD
+backupExcludes:
+  - "steamapps/**"
+notes: "Server settings (name, password, RCON, rates) live in Pal/Saved/Config/LinuxServer/PalWorldSettings.ini (WindowsServer on Windows); copy DefaultPalWorldSettings.ini there if it is missing. Saves live under Pal/Saved/SaveGames/. Remove -publiclobby from the start command for an invite-only server. Windows hosts: set the start command override to PalServer.exe with the same arguments."
+version: "1"

@@ -749,4 +749,9 @@ export const de: Record<I18nKey, string> = {
   'audit.steam.login': 'bei Steam angemeldet',
   'audit.steam.login_failed': 'Steam-Anmeldung fehlgeschlagen',
   'audit.steam.logout': 'von Steam abgemeldet',
+  'bp.templateBadge': 'Template',
+  'bp.rescanTemplates': 'Templates neu einlesen',
+  'bp.rescanDone': '{loaded} Template-Datei(en) geladen, {errors} Fehler',
+  'bp.templateFileInfo': 'Aus der Template-Datei „{file}" im Templates-Ordner geladen. Zum Ändern oder Entfernen die Datei bearbeiten bzw. löschen und neu einlesen.',
+  'audit.templates.rescanned': 'Template-Dateien neu eingelesen',
 }

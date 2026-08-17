@@ -147,6 +147,12 @@ export interface Blueprint {
   notes?: string
   /** Custom (user-created) blueprints are stored in the DB, builtin ones ship with the panel. */
   custom?: boolean
+  /**
+   * Set on blueprints loaded from a template file in data/templates (the
+   * AMP-Generic-style drop-in directory); value is the source filename.
+   * File templates are read-only in the API — edit the file and rescan.
+   */
+  templateFile?: string
   version?: string
 }
 

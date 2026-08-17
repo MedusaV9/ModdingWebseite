@@ -48,6 +48,7 @@ const ACTION_LABEL_KEYS: Record<string, I18nKey> = {
   'steam.login': 'audit.steam.login',
   'steam.login_failed': 'audit.steam.login_failed',
   'steam.logout': 'audit.steam.logout',
+  'templates.rescanned': 'audit.templates.rescanned',
 }
 
 /**

@@ -1,0 +1,70 @@
+id: tpl-7-days-to-die
+name: 7 Days to Die
+category: survival
+description: "Voxel zombie survival with base building and horde nights. Dedicated server installed via SteamCMD (anonymous)."
+icon: skull
+color: "#b91c1c"
+platforms:
+  - linux
+  - win32
+install:
+  - type: steamcmd
+    appId: 294420
+    validate: true
+  - type: writeFile
+    path: serverconfig.xml
+    content: |
+      <?xml version="1.0"?>
+      <!-- Minimal config written by Between; any property not listed here uses the game default. -->
+      <ServerSettings>
+        <property name="ServerName" value="{{HOSTNAME}}"/>
+        <property name="ServerPort" value="{{SERVER_PORT}}"/>
+        <property name="ServerMaxPlayerCount" value="{{MAX_PLAYERS}}"/>
+        <property name="ServerPassword" value="{{SERVER_PASSWORD}}"/>
+        <property name="TerminalWindowEnabled" value="false"/>
+        <property name="UserDataFolder" value="./UserData"/>
+      </ServerSettings>
+startCommand: "./7DaysToDieServer.x86_64 -configfile=serverconfig.xml -logfile /dev/stdout -quit -batchmode -nographics -dedicated"
+stop:
+  type: signal
+  signal: SIGTERM
+  timeoutS: 90
+variables:
+  - key: HOSTNAME
+    label: Server name
+    type: string
+    default: Between 7DTD Server
+    required: true
+  - key: SERVER_PORT
+    label: Game port
+    description: "The server also uses the two following UDP ports (default 26900-26902)."
+    type: number
+    default: 26900
+    min: 1024
+    max: 65533
+    isPort: true
+  - key: MAX_PLAYERS
+    label: Max players
+    type: number
+    default: 8
+    min: 1
+    max: 100
+  - key: SERVER_PASSWORD
+    label: Server password
+    description: "Empty = no password."
+    type: password
+    default: ""
+ports:
+  - name: game
+    variable: SERVER_PORT
+    protocol: both
+query:
+  type: source
+  portVariable: SERVER_PORT
+configFiles:
+  - path: serverconfig.xml
+    format: raw
+backupExcludes:
+  - "steamapps/**"
+notes: "A minimal serverconfig.xml is written at install (world, difficulty, telnet and many more properties can be added there — missing properties use game defaults). Enable telnet in serverconfig.xml for a remote console. Saves are kept in ./UserData via the UserDataFolder property so panel backups include them. Windows hosts: set the start command override to 7DaysToDieServer.exe -configfile=serverconfig.xml -logfile logs/output.log -quit -batchmode -nographics -dedicated."
+version: "1"

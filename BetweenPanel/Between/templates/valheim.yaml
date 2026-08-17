@@ -1,0 +1,83 @@
+id: tpl-valheim
+name: Valheim
+category: survival
+description: "Brutal Viking survival and exploration for up to 10 players. Dedicated server installed via SteamCMD (anonymous)."
+icon: ship
+color: "#b45309"
+platforms:
+  - linux
+  - win32
+install:
+  - type: steamcmd
+    appId: 896660
+    validate: true
+startCommand: "./valheim_server.x86_64 -nographics -batchmode -name \"{{SERVER_NAME_VISIBLE}}\" -port {{SERVER_PORT}} -world \"{{WORLD_NAME}}\" -password \"{{SERVER_PASSWORD}}\" -public {{PUBLIC}}"
+stop:
+  type: signal
+  signal: SIGINT
+  timeoutS: 30
+variables:
+  - key: SERVER_NAME_VISIBLE
+    label: Server name
+    description: Name shown in the in-game server browser.
+    type: string
+    default: Between Valheim Server
+    required: true
+  - key: WORLD_NAME
+    label: World name
+    description: "World save name (created on first start)."
+    type: string
+    default: Dedicated
+    pattern: "^[A-Za-z0-9_-]+$"
+    required: true
+  - key: SERVER_PASSWORD
+    label: Server password
+    description: Must be at least 5 characters and must not be contained in the server name.
+    type: password
+    default: changeme
+    required: true
+  - key: SERVER_PORT
+    label: "Game port (UDP)"
+    type: number
+    default: 2456
+    min: 1024
+    max: 65535
+    isPort: true
+  - key: QUERY_PORT
+    label: "Query port (UDP)"
+    description: "Valheim always uses game port + 1. Keep this in sync with the game port."
+    type: number
+    default: 2457
+    min: 1024
+    max: 65535
+    isPort: true
+  - key: PUBLIC
+    label: Public listing
+    description: "Note: private servers do not answer A2S queries, so the panel cannot show live player counts for them."
+    type: enum
+    default: "0"
+    options:
+      - value: "0"
+        label: "Private (join via IP)"
+      - value: "1"
+        label: "Public (community server list)"
+  - key: LD_LIBRARY_PATH
+    label: "LD_LIBRARY_PATH (Linux)"
+    description: Exported to the server process so the bundled Steam libraries are found. Leave as-is.
+    type: string
+    default: "./linux64"
+    advanced: true
+ports:
+  - name: game
+    variable: SERVER_PORT
+    protocol: udp
+  - name: query
+    variable: QUERY_PORT
+    protocol: udp
+query:
+  type: source
+  portVariable: QUERY_PORT
+backupExcludes:
+  - "steamapps/**"
+notes: "Windows hosts: set the start command override to valheim_server.exe with the same arguments. World saves default to ~/.config/unity3d/IronGate/Valheim (add -savedir ./saves to the start command to keep worlds inside the server directory so panel backups include them). The query port is always game port + 1; open both UDP ports. Crossplay can be enabled with -crossplay."
+version: "1"

@@ -1,0 +1,67 @@
+id: tpl-terraria
+name: Terraria
+category: sandbox
+description: "The classic 2D sandbox adventure. Official vanilla dedicated server, downloaded directly from terraria.org."
+icon: pickaxe
+color: "#4ade80"
+platforms:
+  - linux
+install:
+  - type: download
+    url: "https://terraria.org/api/download/pc-dedicated-server/terraria-server-1449.zip"
+    target: terraria-server.zip
+    extract: true
+  - type: command
+    command: "cp -r 1449/Linux/* . && chmod +x TerrariaServer TerrariaServer.bin.x86_64 && rm -rf 1449"
+  - type: mkdir
+    path: worlds
+startCommand: "./TerrariaServer.bin.x86_64 -port {{SERVER_PORT}} -world worlds/{{WORLD_NAME}}.wld -autocreate {{WORLD_SIZE}} -maxplayers {{MAX_PLAYERS}} -password \"{{SERVER_PASSWORD}}\""
+stop:
+  type: command
+  command: exit
+  timeoutS: 30
+variables:
+  - key: SERVER_PORT
+    label: "Server port (TCP)"
+    type: number
+    default: 7777
+    min: 1024
+    max: 65535
+    isPort: true
+  - key: WORLD_NAME
+    label: World name
+    description: "World file name under worlds/ (created on first start)."
+    type: string
+    default: world
+    pattern: "^[A-Za-z0-9_-]+$"
+    required: true
+  - key: WORLD_SIZE
+    label: "World size (when auto-creating)"
+    type: enum
+    default: "2"
+    options:
+      - value: "1"
+        label: Small
+      - value: "2"
+        label: Medium
+      - value: "3"
+        label: Large
+  - key: MAX_PLAYERS
+    label: Max players
+    type: number
+    default: 8
+    min: 1
+    max: 255
+  - key: SERVER_PASSWORD
+    label: Server password
+    description: "Empty = no password."
+    type: password
+    default: ""
+ports:
+  - name: game
+    variable: SERVER_PORT
+    protocol: tcp
+query:
+  type: none
+notes: "The official zip nests the binaries under 1449/Linux/ — the install copies them into the server root (blueprint pins server version 1.4.4.9). -autocreate only generates the world if the .wld file does not exist yet. The console accepts commands (help, save, exit); 'exit' saves the world before shutting down. Only the Linux binary is set up by this blueprint, hence platforms is linux-only."
+version: "1"

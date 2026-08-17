@@ -90,6 +90,8 @@ export function miscRouter(ctx: AppContext): Router {
   )
 
   router.put('/blueprints/:id', requireAdmin, (req: AuthedRequest, res) => {
+    if (ctx.registry.isFileTemplate(req.params.id))
+      throw new HttpError(400, 'template file blueprints are read-only — edit the file in the templates directory and rescan')
     const { ok, problems } = ctx.registry.updateCustom(req.params.id, req.body?.blueprint as Blueprint)
     if (!ok) throw new HttpError(400, problems.join('; '))
     ctx.manager.refreshBlueprint(req.params.id)
@@ -99,11 +101,29 @@ export function miscRouter(ctx: AppContext): Router {
 
   router.delete('/blueprints/:id', requireAdmin, (req: AuthedRequest, res) => {
     if (ctx.registry.isBuiltin(req.params.id)) throw new HttpError(400, 'builtin blueprints cannot be deleted')
+    if (ctx.registry.isFileTemplate(req.params.id))
+      throw new HttpError(400, 'template file blueprints are removed by deleting the file in the templates directory and rescanning')
     const inUse = ctx.manager.servers.filter((s) => s.blueprintId === req.params.id)
     if (inUse.length > 0) throw new HttpError(400, `blueprint is used by ${inUse.length} server(s)`)
     if (!ctx.registry.removeCustom(req.params.id)) throw new HttpError(404, 'custom blueprint not found')
     ctx.audit.log(req, 'blueprint.deleted', { target: req.params.id })
     res.json({ ok: true })
+  })
+
+  // --- Template files (AMP-Generic-style drop-in directory) --------------------
+  // data/templates/*.json|yaml|yml are loaded as read-only blueprints at boot;
+  // rescan picks up added/changed/removed files without a panel restart.
+  router.get('/templates', requireAdmin, (_req, res) => {
+    res.json({ scan: ctx.registry.lastTemplateScan })
+  })
+
+  router.post('/templates/rescan', requireAdmin, (req: AuthedRequest, res) => {
+    const scan = ctx.registry.loadFileTemplates()
+    // Running servers cache their blueprint — changed templates must apply
+    // to existing instances just like custom blueprint edits do.
+    for (const tpl of scan.loaded) ctx.manager.refreshBlueprint(tpl.id)
+    ctx.audit.log(req, 'templates.rescanned', { meta: { loaded: scan.loaded.length, errors: scan.errors.length } })
+    res.json({ scan })
   })
 
   // --- Game Library catalog ----------------------------------------------------
