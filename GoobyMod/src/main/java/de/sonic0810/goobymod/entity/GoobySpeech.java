@@ -14,7 +14,10 @@ import net.minecraft.world.entity.player.Player;
  * <p>Die Special-Lines fuer {@link #SOPHIE_NAME} sind REIN kosmetisch: eine
  * lokale Sprechblase, kein Gameplay-Effekt, keine Logs/Telemetrie. Ueber die
  * Server-Config ({@code enableSpecialLines}) komplett abschaltbar; der Client
- * rendert sie zusaetzlich nur fuer den passenden Spieler selbst.
+ * rendert sie zusaetzlich nur fuer den passenden Spieler selbst. Seit 5.3
+ * koennen Datapacks ueber die {@link SpecialLineRegistry} weitere
+ * Spielername→Line-Pool-Eintraege liefern — der eingebaute Sophie-Default und
+ * der Config-Killswitch bleiben dabei unveraendert bestehen.
  */
 public final class GoobySpeech {
     public static final String SOPHIE_NAME = "sophiex456";
@@ -97,9 +100,46 @@ public final class GoobySpeech {
         return SOPHIE_NAME.equalsIgnoreCase(name);
     }
 
+    /**
+     * Voller Special-Pool fuer einen Spieler: eingebauter Sophie-Default plus
+     * optionale Datapack-Pools aus der {@link SpecialLineRegistry}. Datapack-
+     * Eintraege fuer {@link #SOPHIE_NAME} ERGAENZEN den eingebauten Pool nur.
+     */
+    public static List<String> specialPoolFor(@Nullable Player player) {
+        return player == null ? List.of() : specialPoolFor(player.getGameProfile().getName());
+    }
+
+    public static List<String> specialPoolFor(@Nullable String name) {
+        if (name == null) {
+            return List.of();
+        }
+        List<String> datapack = SpecialLineRegistry.linesFor(name);
+        if (isSophie(name)) {
+            return datapack.isEmpty() ? SOPHIE : concat(SOPHIE, datapack);
+        }
+        return datapack;
+    }
+
     /** Ist der Key eine der namensgebundenen Special-Lines? (Fuer lokales Client-Rendering.) */
     public static boolean isSpecialLine(@Nullable String key) {
-        return key != null && key.startsWith(SPECIAL_PREFIX);
+        return specialLineOwner(key) != null;
+    }
+
+    /**
+     * Kleingeschriebener Besitzername einer Special-Line oder {@code null} fuer
+     * normale Keys. Eingebaute sophie-Keys gehoeren immer {@link #SOPHIE_NAME};
+     * Datapack-Keys ihrem jeweiligen Eintrag (im Netzwerkspiel nur aufloesbar,
+     * wo die Datapack-Daten geladen sind — sonst normale, ungefilterte Blase).
+     */
+    @Nullable
+    public static String specialLineOwner(@Nullable String key) {
+        if (key == null) {
+            return null;
+        }
+        if (key.startsWith(SPECIAL_PREFIX)) {
+            return SOPHIE_NAME;
+        }
+        return SpecialLineRegistry.ownerOf(key);
     }
 
     public static String pickFrom(List<String> pool, RandomSource random) {
@@ -114,14 +154,17 @@ public final class GoobySpeech {
     }
 
     /**
-     * Testbare Variante mit explizitem Killswitch + Chance. Sophie
-     * (case-insensitive) bekommt mit erhoehter Haeufigkeit ihre Special-Lines;
-     * alle anderen Spieler NIE.
+     * Testbare Variante mit explizitem Killswitch + Chance. Spieler mit
+     * Special-Pool (eingebaut: Sophie; erweiterbar per Datapack) bekommen mit
+     * erhoehter Haeufigkeit ihre Special-Lines; alle anderen Spieler NIE.
+     * Der RNG-Verbrauch ist identisch zur Pre-5.3-Logik: ohne Special-Pool
+     * wird KEIN nextFloat gezogen.
      */
     public static String pickIdleLine(@Nullable Player nearest, boolean raining, boolean night, boolean cakeNearby,
             RandomSource random, boolean specialLinesEnabled, float specialLineChance) {
-        if (specialLinesEnabled && isSophie(nearest) && random.nextFloat() < specialLineChance) {
-            return pickFrom(SOPHIE, random);
+        List<String> special = specialLinesEnabled ? specialPoolFor(nearest) : List.of();
+        if (!special.isEmpty() && random.nextFloat() < specialLineChance) {
+            return pickFrom(special, random);
         }
         if (cakeNearby && random.nextFloat() < 0.6F) {
             return pickFrom(CAKE, random);
@@ -141,7 +184,7 @@ public final class GoobySpeech {
         return index < GENERAL.size() ? GENERAL.get(index) : addon.get(index - GENERAL.size());
     }
 
-    /** Reaktions-Line auf eine Interaktion; Sophie-Pool hat auch hier Vorrang (rein kosmetisch). */
+    /** Reaktions-Line auf eine Interaktion; Special-Pools haben auch hier Vorrang (rein kosmetisch). */
     public static String pickReaction(List<String> pool, @Nullable Player player, RandomSource random) {
         return pickReaction(pool, player, random, GoobyConfig.enableSpecialLines());
     }
@@ -149,8 +192,9 @@ public final class GoobySpeech {
     /** Testbare Variante mit explizitem Killswitch. */
     public static String pickReaction(List<String> pool, @Nullable Player player, RandomSource random,
             boolean specialLinesEnabled) {
-        if (specialLinesEnabled && isSophie(player) && random.nextFloat() < 0.4F) {
-            return pickFrom(SOPHIE, random);
+        List<String> special = specialLinesEnabled ? specialPoolFor(player) : List.of();
+        if (!special.isEmpty() && random.nextFloat() < 0.4F) {
+            return pickFrom(special, random);
         }
         return pickFrom(pool, random);
     }

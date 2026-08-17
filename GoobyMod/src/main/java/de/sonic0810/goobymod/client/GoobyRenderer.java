@@ -165,10 +165,13 @@ public class GoobyRenderer extends GeoEntityRenderer<GoobyEntity> {
             return;
         }
         // Special-Lines sind eine rein LOKALE kosmetische Blase: sie erscheinen nur
-        // auf dem Bildschirm des passenden Spielers selbst, nie bei Umstehenden.
-        if (GoobySpeech.isSpecialLine(key)) {
+        // auf dem Bildschirm des Besitzer-Spielers selbst, nie bei Umstehenden
+        // (eingebauter Sophie-Default und Datapack-Pools gleichermassen).
+        String specialOwner = GoobySpeech.specialLineOwner(key);
+        if (specialOwner != null) {
             LocalPlayer localPlayer = Minecraft.getInstance().player;
-            if (localPlayer == null || !GoobySpeech.isSophie(localPlayer.getGameProfile().getName())) {
+            if (localPlayer == null
+                    || !specialOwner.equalsIgnoreCase(localPlayer.getGameProfile().getName())) {
                 return;
             }
         }

@@ -1,17 +1,22 @@
 package de.sonic0810.goobymod.gametest;
 
+import com.mojang.authlib.GameProfile;
 import de.sonic0810.goobymod.GoobyMod;
 import de.sonic0810.goobymod.block.GoobyCouchBlock;
 import de.sonic0810.goobymod.block.RabbitHutchBlock;
 import de.sonic0810.goobymod.entity.CouchSeatEntity;
 import de.sonic0810.goobymod.entity.GoobyEntity;
+import de.sonic0810.goobymod.entity.GoobySpeech;
+import de.sonic0810.goobymod.entity.SpecialLineRegistry;
 import de.sonic0810.goobymod.entity.goals.GoobySleepGoal;
 import de.sonic0810.goobymod.registry.ModBlocks;
 import de.sonic0810.goobymod.registry.ModEntities;
 import de.sonic0810.goobymod.registry.ModItems;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.Registry;
@@ -20,11 +25,13 @@ import net.minecraft.gametest.framework.AfterBatch;
 import net.minecraft.gametest.framework.BeforeBatch;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.locale.Language;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.tags.PaintingVariantTags;
+import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.decoration.Painting;
 import net.minecraft.world.entity.decoration.PaintingVariant;
 import net.minecraft.world.entity.item.ItemEntity;
@@ -38,13 +45,16 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
+import net.neoforged.neoforge.common.util.FakePlayer;
+import net.neoforged.neoforge.common.util.FakePlayerFactory;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 /**
- * Welle 6 "Cozy Home & Performance" (v5.3.0): Gooby-Woll-Couch —
- * Rezept/Loot, serverautoritatives Sitzen ueber das Sitz-Entity und die
- * Couch-Prioritaet im Schlaf-Goal (Stall gewinnt weiterhin immer).
+ * Welle 6 "Cozy Home & Performance" (v5.3.0), Content-Teil: Gooby-Woll-Couch
+ * (Rezept/Loot, serverautoritatives Sitzen, Couch-Prioritaet im Schlaf-Goal —
+ * Stall gewinnt weiterhin immer), datengetriebene Gooby-Gemaelde und die
+ * datapack-faehigen Special-Lines.
  */
 @GameTestHolder(GoobyMod.MODID)
 @PrefixGameTestTemplate(false)
@@ -349,6 +359,71 @@ public class GoobyCozyHomeTests {
         }
         helper.assertFalse(painting.survives(), "Gemaelde haengt ohne Traegerwand in der Luft");
         painting.discard();
+        helper.succeed();
+    }
+
+    // ------------------------------------------------------------------
+    // Special-Lines aus Datapacks (Beispiel-Eintrag des Mod-eigenen Datapacks)
+    // ------------------------------------------------------------------
+
+    private static FakePlayer fakePlayer(GameTestHelper helper, String name) {
+        return FakePlayerFactory.get(helper.getLevel(),
+                new GameProfile(UUID.nameUUIDFromBytes(name.getBytes(StandardCharsets.UTF_8)), name));
+    }
+
+    /**
+     * Der mitgelieferte Test-/Beispiel-Eintrag
+     * {@code data/goobymod/special_lines/example.json} laeuft durch den echten
+     * Reload-Listener: Pool geladen, nur fuer den passenden Namen aktiv,
+     * Killswitch greift, Sophie-Default und Owner-Aufloesung bleiben intakt.
+     */
+    @GameTest(template = ARENA)
+    public static void special_lines_datapack_pool(GameTestHelper helper) {
+        List<String> pool = SpecialLineRegistry.linesFor("GOOBY_example");
+        helper.assertTrue(List.of("bubble.goobymod.example_fan1", "bubble.goobymod.example_fan2",
+                        "bubble.goobymod.example_fan3").equals(pool),
+                "Datapack-Pool fehlt oder falsch (case-insensitive Lookup): " + pool);
+        Language lang = Language.getInstance();
+        for (String key : pool) {
+            helper.assertTrue(lang.has(key), "Special-Line ohne Uebersetzung: " + key);
+        }
+
+        FakePlayer fan = fakePlayer(helper, "gooby_example");
+        FakePlayer stranger = fakePlayer(helper, "gooby_example2");
+        RandomSource random = RandomSource.create(53001L);
+
+        int idleHits = 0;
+        int reactionHits = 0;
+        for (int i = 0; i < 300; i++) {
+            if (pool.contains(GoobySpeech.pickIdleLine(fan, false, false, false, random, true, 0.65F))) {
+                idleHits++;
+            }
+            if (pool.contains(GoobySpeech.pickReaction(GoobySpeech.PET, fan, random, true))) {
+                reactionHits++;
+            }
+        }
+        helper.assertTrue(idleHits > 120, "Datapack-Idle-Lines zu selten: " + idleHits + "/300");
+        helper.assertTrue(reactionHits > 60, "Datapack-Reaktions-Lines zu selten: " + reactionHits + "/300");
+
+        // Aehnliche Namen matchen NIE, und der Config-Killswitch gilt auch hier.
+        for (int i = 0; i < 300; i++) {
+            String key = GoobySpeech.pickIdleLine(stranger, false, false, false, random, true, 1.0F);
+            helper.assertFalse(pool.contains(key), "Datapack-Line fuer fremden Spieler: " + key);
+            String muted = GoobySpeech.pickIdleLine(fan, false, false, false, random, false, 1.0F);
+            helper.assertFalse(pool.contains(muted), "Killswitch ignoriert (idle): " + muted);
+            String reaction = GoobySpeech.pickReaction(GoobySpeech.PET, fan, random, false);
+            helper.assertFalse(pool.contains(reaction), "Killswitch ignoriert (reaction): " + reaction);
+        }
+
+        // Eingebauter Default + Owner-Aufloesung (Client-Gating) bleiben stabil.
+        helper.assertTrue(GoobySpeech.SOPHIE.equals(GoobySpeech.specialPoolFor(GoobySpeech.SOPHIE_NAME)),
+                "Eingebauter Sophie-Default wurde durch die Registry veraendert");
+        helper.assertTrue("gooby_example".equals(GoobySpeech.specialLineOwner("bubble.goobymod.example_fan2")),
+                "Datapack-Line loest den falschen Besitzer auf");
+        helper.assertTrue(GoobySpeech.SOPHIE_NAME.equals(GoobySpeech.specialLineOwner("bubble.goobymod.sophie3")),
+                "Eingebaute sophie-Keys verloren ihren Besitzer");
+        helper.assertTrue(GoobySpeech.specialLineOwner("bubble.goobymod.idle1") == null,
+                "Normale Keys duerfen keinen Special-Besitzer haben");
         helper.succeed();
     }
 

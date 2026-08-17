@@ -7,6 +7,7 @@ import de.sonic0810.goobymod.entity.GoobyEntity;
 import de.sonic0810.goobymod.entity.GoobyLoadedIndex;
 import de.sonic0810.goobymod.entity.GoobySoundLimiter;
 import de.sonic0810.goobymod.entity.GoobyTrick;
+import de.sonic0810.goobymod.entity.SpecialLineRegistry;
 import de.sonic0810.goobymod.entity.goals.CatStareAtGoobyGoal;
 import de.sonic0810.goobymod.entity.goals.RabbitFollowWildGoobyGoal;
 import de.sonic0810.goobymod.network.GoobyNetwork;
@@ -30,6 +31,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.event.AddReloadListenerEvent;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.event.ServerChatEvent;
 import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
@@ -138,6 +140,12 @@ public final class GoobyEvents {
         if (GoobyConfig.nameRecognition()) {
             handleNameRecognition(event.getPlayer(), event.getRawText());
         }
+    }
+
+    /** Datapack-Special-Lines: laedt data/&lt;ns&gt;/special_lines/*.json bei Start und /reload. */
+    @SubscribeEvent
+    public static void onAddReloadListeners(AddReloadListenerEvent event) {
+        event.addListener(new SpecialLineRegistry());
     }
 
     @SubscribeEvent
