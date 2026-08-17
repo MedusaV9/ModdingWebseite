@@ -1,0 +1,48 @@
+{
+	"id": "wake_morning",
+	"title_key": "cutscene.wake.titel",
+	"room": "bedroom",
+	"steps": [
+		{"op": "fade", "to": 1.0, "duration": 0.05},
+		{"op": "letterbox", "on": true},
+		{"op": "music", "track": "room-pixie-puddle-sleeping", "fade": 0.5},
+		{"op": "place_gooby", "at": {"anchor": "center", "offset": [-0.5, 0, 0.3]}, "face_deg": 160},
+		{"op": "clip", "clip": "sleep"},
+		{"op": "emotion", "emotion": "sleepy"},
+		{
+			"op": "parallel",
+			"steps": [
+				{"op": "fade", "to": 0.0, "duration": 1.8},
+				{"op": "caption", "key": "cutscene.wake.dawn"},
+				{
+					"op": "camera",
+					"move": "fly",
+					"pos": {"anchor": "center", "offset": [0.6, 2.4, 3.0]},
+					"look": {"anchor": "gooby", "offset": [0, 0.4, 0]},
+					"duration": 2.4
+				}
+			]
+		},
+		{"op": "wait", "duration": 1.0},
+		{"op": "music", "track": "room-pixie-puddle-awake", "fade": 2.0},
+		{"op": "clip", "clip": "idle_lookaround"},
+		{"op": "caption", "key": "cutscene.wake.yawn"},
+		{"op": "wait", "duration": 1.8},
+		{
+			"op": "parallel",
+			"steps": [
+				{"op": "camera", "move": "push_in", "duration": 1.4},
+				{"op": "emotion", "emotion": "happy"},
+				{"op": "clip", "clip": "hop"},
+				{"op": "sfx", "id": "ui_toast"},
+				{"op": "caption", "key": "cutscene.wake.ready"},
+				{"op": "wait", "duration": 1.8}
+			]
+		},
+		{"op": "caption_clear", "keep_on_skip": true},
+		{"op": "letterbox", "on": false},
+		{"op": "camera", "move": "restore", "duration": 1.0},
+		{"op": "emotion", "emotion": "happy", "keep_on_skip": true},
+		{"op": "music", "context": "room:bedroom", "keep_on_skip": true}
+	]
+}

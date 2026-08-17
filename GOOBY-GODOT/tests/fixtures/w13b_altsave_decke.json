@@ -1,0 +1,9 @@
+{
+	"kommentar": "W13B Alt-Save-Fixture: Decken-Items lagen VOR der CEILING-Migration als Wand-Platzierungen im Save (Katalog-Layer war WALL). Raum living, Grid 12x10. Erwartung nach normalize_ceiling_entries: Lampe N:5 -> Decke [5,0], Lampion E:3 -> Decke [11,3], Stuhl bleibt unveraendert am Boden.",
+	"room_id": "living",
+	"items": [
+		{ "uid": "i-000901", "item": "lampSquareCeiling", "wall": "N", "at": [5, 0], "rot": 0 },
+		{ "uid": "i-000902", "item": "lampionHanging", "wall": "E", "at": [3, 0], "rot": 0 },
+		{ "uid": "i-000903", "item": "chair", "at": [4, 4], "rot": 0 }
+	]
+}

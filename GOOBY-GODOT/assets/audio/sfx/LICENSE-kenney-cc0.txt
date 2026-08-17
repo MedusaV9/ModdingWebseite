@@ -1,0 +1,19 @@
+SFX-Quellen (W4-P1 SFX-Pass)
+============================
+
+Alle OGG-Dateien in diesem Ordner stammen aus zwei Kenney-Paketen
+(Kopien aus der Web-Referenz GOOBY/public/assets/kenney/):
+
+- "Interface Sounds" (1.0), Kenney (www.kenney.nl)
+  click_*, back_*, confirmation_*, error_*, open_*, close_*, switch_*,
+  tick_*, glass_*, drop_*, pluck_*
+- "Impact Sounds" (1.1), Kenney (www.kenney.nl)
+  impact*_*
+
+Lizenz beider Pakete: Creative Commons Zero (CC0)
+http://creativecommons.org/publicdomain/zero/1.0/
+Frei für private, schulische und kommerzielle Projekte; Namensnennung
+von Kenney ist freiwillig, aber nett.
+
+Zuordnung Sound-Id -> Datei: scripts/audio/sfx_map.gd (einzige Quelle
+der Wahrheit — neue Sounds bitte dort eintragen).

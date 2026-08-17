@@ -1,0 +1,412 @@
+{
+ "v": 4,
+ "createdAt": 1761998400000,
+ "lastTickAt": 1768476000000,
+ "stats": {
+  "hunger": 74,
+  "energy": 68,
+  "hygiene": 80,
+  "fun": 91
+ },
+ "sleep": {
+  "sleeping": false,
+  "startedAt": 0,
+  "wakeAt": 0
+ },
+ "grumpyUntil": 0,
+ "coins": 1180,
+ "xp": 140,
+ "level": 22,
+ "inventory": {
+  "carrot": 2,
+  "apple": 4,
+  "cupcake": 1,
+  "burger": 2
+ },
+ "furniture": {
+  "owned": [
+   "radio",
+   "loungeSofa",
+   "televisionModern",
+   "rugRound",
+   "pottedPlant",
+   "lampRoundFloor",
+   "bookcaseOpen",
+   "table",
+   "kitchenFridge",
+   "toaster",
+   "bathtub"
+  ],
+  "placed": {
+   "living:shelf1": "radio",
+   "living:sofa": "loungeSofa",
+   "living:tv": "televisionModern",
+   "living:rug": "rugRound"
+  }
+ },
+ "decor": {
+  "wallpaper": {
+   "living": "sky"
+  },
+  "floor": {
+   "living": "wood"
+  }
+ },
+ "outfits": {
+  "owned": [
+   "strawHat",
+   "sunglasses",
+   "spaceHelm",
+   "pirateHat",
+   "scarf"
+  ],
+  "equipped": {
+   "hat": "strawHat",
+   "glasses": "sunglasses",
+   "neck": null,
+   "back": null
+  }
+ },
+ "minigames": {
+  "best": {
+   "carrotCatch": 48,
+   "bunnyHop": 17
+  },
+  "plays": {
+   "carrotCatch": 20,
+   "bunnyHop": 9,
+   "memoryMatch": 3
+  },
+  "lastPlayDay": {
+   "bunnyHop": "2026-01-10"
+  },
+  "difficulty": {
+   "bunnyHop": "normal"
+  },
+  "beaten": {},
+  "bestByDiff": {
+   "bunnyHop": {
+    "normal": 17
+   }
+  },
+  "endlessBest": {}
+ },
+ "achievements": {
+  "unlocked": {
+   "firstFeed": 1762002000000,
+   "firstWash": 1762005600000,
+   "firstSleep": 1762088400000,
+   "firstTrip": 1762520400000,
+   "trips10": 1766750400000
+  },
+  "counters": {
+   "feeds": 96,
+   "washes": 24,
+   "sleeps": 30,
+   "trips": 11,
+   "tickles": 40,
+   "petsToday": 0,
+   "petsDay": "",
+   "harvests": 12,
+   "plantings": 15,
+   "waterings": 41,
+   "sells": 2,
+   "cures": 1,
+   "vetTrips": 1,
+   "deliveries": 4,
+   "questsDone": 12,
+   "photosTaken": 6,
+   "nightPlays": 1,
+   "medsGiven": 1,
+   "balls": 0,
+   "nougatGlobs": 0,
+   "cakesServed": 3,
+   "perfectCakes": 1,
+   "surfRuns": 4,
+   "surfDistanceM": 820,
+   "races": 2,
+   "ghostsCaught": 0,
+   "rescues": 0,
+   "cratesShipped": 5,
+   "codesRedeemed": 1,
+   "modifierPlays": 3,
+   "recapsSeen": 2,
+   "radioMinutes": 65,
+   "galleryPhotos": 6
+  }
+ },
+ "daily": {
+  "lastClaimDay": "2026-01-11",
+  "streak": 2
+ },
+ "quickDelivery": true,
+ "settings": {
+  "lang": "de",
+  "sfx": true,
+  "music": true,
+  "haptics": false,
+  "notifications": "granted",
+  "uiScale": 100,
+  "volumes": {
+   "master": 80,
+   "sfx": 90,
+   "music": 70,
+   "voice": 100,
+   "ambience": 60
+  },
+  "devUnlocked": false,
+  "gyro": true,
+  "controls": {
+   "invertX": false,
+   "invertY": true
+  },
+  "goobyWeltQuality": "low"
+ },
+ "onboarding": {
+  "done": true,
+  "step": 99,
+  "whatsNew2Seen": true,
+  "whatsNew3Seen": true,
+  "whatsNew4Seen": true
+ },
+ "garden": {
+  "plotsOwned": 4,
+  "plots": [
+   {
+    "crop": "pumpkin",
+    "plantedAt": 1768060800000,
+    "progressMin": 460,
+    "wateredUntil": 0,
+    "waterings": 3,
+    "fertilized": false
+   },
+   {
+    "crop": null,
+    "plantedAt": 0,
+    "progressMin": 0,
+    "wateredUntil": 0,
+    "waterings": 0,
+    "fertilized": false
+   },
+   {
+    "crop": null,
+    "plantedAt": 0,
+    "progressMin": 0,
+    "wateredUntil": 0,
+    "waterings": 0,
+    "fertilized": false
+   },
+   {
+    "crop": null,
+    "plantedAt": 0,
+    "progressMin": 0,
+    "wateredUntil": 0,
+    "waterings": 0,
+    "fertilized": false
+   },
+   {
+    "crop": null,
+    "plantedAt": 0,
+    "progressMin": 0,
+    "wateredUntil": 0,
+    "waterings": 0,
+    "fertilized": false
+   },
+   {
+    "crop": null,
+    "plantedAt": 0,
+    "progressMin": 0,
+    "wateredUntil": 0,
+    "waterings": 0,
+    "fertilized": false
+   }
+  ],
+  "lastTickAt": 1768471200000
+ },
+ "health": {
+  "state": "healthy",
+  "junkScore": 12,
+  "neglectMin": 0,
+  "recoverMin": 0,
+  "since": 0
+ },
+ "weight": {
+  "value": 48
+ },
+ "quests": {
+  "day": "2026-01-11",
+  "active": [],
+  "rerolledDay": "",
+  "completedTotal": 12
+ },
+ "collections": {
+  "entries": {
+   "sunnyCarp": 1
+  },
+  "claimedSets": {}
+ },
+ "skins": {
+  "owned": [
+   "cream",
+   "snow",
+   "midnight"
+  ],
+  "equipped": "midnight"
+ },
+ "items": {
+  "medicine": 0,
+  "fertilizer": 1,
+  "seed:pumpkin": 2
+ },
+ "profile": {
+  "playtimeMin": 1650,
+  "coinsEarned": 6400,
+  "coinsSpent": 5220,
+  "distanceM": 7300,
+  "photos": 6
+ },
+ "stickers": {
+  "unlocked": {
+   "firstNom": 1762002000000,
+   "squeakyClean": 1762005600000,
+   "sleepyhead": 1762088400000,
+   "roadTripper": 1762520400000,
+   "towTrouble": 1763125200000,
+   "firstSprout": 1763730000000,
+   "starGazer": 1764334800000,
+   "sayCheese": 1764939600000,
+   "bigTen": 1765544400000,
+   "grumpMorning": 1766149200000
+  },
+  "seen": {
+   "firstNom": true,
+   "squeakyClean": true,
+   "sleepyhead": true,
+   "roadTripper": true,
+   "towTrouble": true,
+   "firstSprout": true,
+   "starGazer": true,
+   "sayCheese": true,
+   "bigTen": true,
+   "grumpMorning": false
+  }
+ },
+ "nougat": {
+  "lastGlobAt": 0,
+  "installed": false
+ },
+ "radio": {
+  "station": "bordmusik",
+  "playing": false,
+  "shuffle": true,
+  "replaceContext": true,
+  "lastTrack": "",
+  "trims": {},
+  "recapHeard": {
+   "recap-20": 1767355200000
+  }
+ },
+ "codes": {
+  "redeemed": {
+   "UpdateLiebe": 1763125200000
+  },
+  "lockUntil": 0,
+  "buffs": {
+   "doubleCoinsUntil": 0
+  }
+ },
+ "modifiers": {
+  "nextAt": 0,
+  "seed": 918273645,
+  "current": null,
+  "lastGameId": "",
+  "dayCoins": 0,
+  "dayCoinsDay": ""
+ },
+ "recap": {
+  "lastRecapLevel": 20,
+  "baseline": {},
+  "baselineAt": 0,
+  "pendingLevel": 0,
+  "history": [
+   {
+    "level": 20,
+    "at": 1767355200000,
+    "stats": {
+     "feeds": 80
+    }
+   }
+  ]
+ },
+ "gallery": {
+  "count": 6,
+  "lastAddedAt": 1767960000000,
+  "hintShown": true
+ },
+ "vacation": {
+  "phase": "returnReady",
+  "destId": "space",
+  "bookedAt": 1768089600000,
+  "returnAt": 1768435200000,
+  "pickupBy": 1768521600000,
+  "postcards": 3,
+  "trips": 3,
+  "archive": [
+   {
+    "destId": "bigCity",
+    "dayIndex": 2,
+    "variant": 0,
+    "atMs": 1766232000000
+   },
+   {
+    "destId": "bigCity",
+    "dayIndex": 3,
+    "variant": 2,
+    "atMs": 1766318400000
+   },
+   {
+    "destId": "space",
+    "dayIndex": 1,
+    "variant": 1,
+    "atMs": 1768176000000
+   },
+   {
+    "destId": "space",
+    "dayIndex": 2,
+    "variant": 0,
+    "atMs": 1768262400000
+   },
+   {
+    "destId": "space",
+    "dayIndex": 3,
+    "variant": 3,
+    "atMs": 1768348800000
+   }
+  ],
+  "lastPostcardDayProcessed": 3,
+  "visited": {
+   "beach": true,
+   "harbor": true,
+   "bigCity": true
+  }
+ },
+ "themePark": {
+  "visits": 2,
+  "nightVisit": false,
+  "rides": {
+   "coaster": 2
+  },
+  "handsUp": 1,
+  "candyBought": 2
+ },
+ "care": {
+  "toiletAt": 1768471200000,
+  "sickNotifyAt": 0
+ },
+ "cutscenes": {
+  "seen": {
+   "intro": true,
+   "vacationSpace": true
+  }
+ }
+}

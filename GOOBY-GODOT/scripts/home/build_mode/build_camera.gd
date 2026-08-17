@@ -1,0 +1,232 @@
+class_name BuildCamera
+extends Node
+## Freie Baumodus-Kamera (FIX-3, User: „man kann sich nicht umherschwenken").
+## Übernimmt im Baumodus die Kamera des HomeCameraRig und bietet:
+## - Schwenken (Ein-Finger-Drag auf leerem Boden — BuildMode entscheidet per
+##   Trefferprüfung, ob ein Möbel gegriffen oder geschwenkt wird),
+## - Pinch-Zoom + Zwei-Finger-Drehen,
+## - Draufsicht/Schrägsicht-Presets und 4×90°-Schnapp-Drehung,
+## - sanftes Nachziehen und Klemmung des Pivots an die Raumgrenzen.
+##
+## Das Rig selbst wird währenddessen schlafen gelegt (set_process(false)) —
+## nach dem Baumodus übernimmt es wieder und lerpt weich zurück zu Gooby.
+## Die Mathe-Helfer sind static/pure (test_build_camera.gd).
+
+## Schrägsicht = Blickwinkel des alten festen BUILD_OFFSET (0, 6.8, 3.2).
+const PITCH_SCHRAEG := 1.1314  # atan2(6.8, 3.2) ≈ 64,8°
+## Draufsicht: knapp unter 90°, damit look_at mit Vector3.UP stabil bleibt.
+const PITCH_OBEN := 1.5184  # 87°
+## Decken-Bau (W13B, Doc D §2.1): flachere Neigung + Blickpunkt an der
+## Decke — die Kamera schaut leicht nach oben.
+const PITCH_DECKE := 0.62  # ≈ 35,5°
+const BLICK_BODEN := 0.4
+const BLICK_DECKE := 2.1
+const GLAETTUNG := 9.0
+const DIST_MIN := 3.5
+## Maximal so weit raus wie die alte Fix-Kamera × Faktor (Stadt-Kulisse!).
+const DIST_MAX_FAKTOR := 1.9
+const ZOOM_SCHRITT := 1.12
+## Platzier-Nick (W21 P2 Delight): Dauer + Tiefe des sanften Kamera-Dips
+## beim „Festklopfen“ eines Möbels — Reduced-Motion-gated in nick().
+const NICK_S := 0.22
+const NICK_TIEFE := 0.14
+
+var _rig: HomeCameraRig
+var _room_size := Vector2(6, 5)
+var _pivot := Vector3.ZERO
+var _yaw := 0.0
+var _pitch := PITCH_SCHRAEG
+var _dist := 8.0
+var _dist_max := 18.0
+var _anzeige_pivot := Vector3.ZERO
+var _aktiv := false
+var _decken_blick := false
+var _blick_y := BLICK_BODEN
+## Restzeit des laufenden Platzier-Nicks (0 = keiner) + der im letzten
+## Frame angewandte Versatz (wird vor dem Glätten wieder abgezogen, damit
+## der Dip nicht in die Lerp-Basis zurückkoppelt).
+var _nick_rest := 0.0
+var _nick_angewandt := 0.0
+
+
+## Kamera-Offset (Pivot → Kamera) aus Gier/Neigung/Distanz — pure.
+static func offset_fuer(yaw: float, pitch: float, dist: float) -> Vector3:
+	var flach := cos(pitch) * dist
+	return Vector3(sin(yaw) * flach, sin(pitch) * dist, cos(yaw) * flach)
+
+
+## Pivot in die Raumgrenzen klemmen (XZ, y bleibt 0) — pure.
+static func clamp_pivot(pivot: Vector3, room_size: Vector2) -> Vector3:
+	return Vector3(clampf(pivot.x, 0.0, room_size.x), 0.0, clampf(pivot.z, 0.0, room_size.y))
+
+
+## Nächster 90°-Schnapp-Winkel ab `yaw`, `richtung` = ±1 — pure.
+static func schnapp_yaw(yaw: float, richtung: int) -> float:
+	var viertel := roundf(yaw / (PI * 0.5))
+	return (viertel + signf(richtung)) * PI * 0.5
+
+
+## Vertikaler Nick-Versatz (Meter, negativ = Dip) für die Restzeit `rest`
+## eines Nicks der Dauer `dauer` — Halbsinus: sanft rein, sanft raus. Pure
+## (test_w21_bau_welt prüft Kurvenform + Enden).
+static func nick_versatz(rest: float, dauer: float, tiefe: float) -> float:
+	if rest <= 0.0 or dauer <= 0.0 or rest > dauer:
+		return 0.0
+	return -sin((1.0 - rest / dauer) * PI) * tiefe
+
+
+func activate(rig: HomeCameraRig, room_size: Vector2) -> void:
+	_rig = rig
+	_room_size = room_size
+	var aspekt := 16.0 / 9.0
+	if is_inside_tree():
+		var vp := get_viewport().get_visible_rect().size
+		if vp.y > 0.0:
+			aspekt = vp.x / vp.y
+	_dist = HomeCameraRig.build_distanz(room_size, aspekt)
+	_dist_max = maxf(_dist * DIST_MAX_FAKTOR, DIST_MIN + 1.0)
+	_pivot = Vector3(room_size.x * 0.5, 0.0, room_size.y * 0.5)
+	_anzeige_pivot = _pivot
+	_yaw = 0.0
+	_pitch = PITCH_SCHRAEG
+	_decken_blick = false
+	_blick_y = BLICK_BODEN
+	_aktiv = true
+	_rig.set_process(false)
+	set_process(true)
+
+
+func deactivate() -> void:
+	_aktiv = false
+	set_process(false)
+	if _rig != null:
+		_rig.set_process(true)
+
+
+func ist_aktiv() -> bool:
+	return _aktiv
+
+
+func pivot() -> Vector3:
+	return _pivot
+
+
+func yaw() -> float:
+	return _yaw
+
+
+func pitch() -> float:
+	return _pitch
+
+
+func distanz() -> float:
+	return _dist
+
+
+## Ein-Finger-Schwenk: „Boden festhalten" — beide Screen-Punkte auf die
+## Bodenebene projizieren und den Pivot um die Differenz verschieben.
+func pan_screen(von: Vector2, nach: Vector2) -> void:
+	var a := _boden_punkt(von)
+	var b := _boden_punkt(nach)
+	if a == Vector3.INF or b == Vector3.INF:
+		return
+	_pivot = clamp_pivot(_pivot + (a - b), _room_size)
+
+
+## Pinch: faktor > 1 = Finger auseinander = ranzoomen.
+func zoom_um(faktor: float) -> void:
+	if faktor <= 0.0001:
+		return
+	_dist = clampf(_dist / faktor, DIST_MIN, _dist_max)
+
+
+func rotate_um(delta_yaw: float) -> void:
+	_yaw = wrapf(_yaw + delta_yaw, -PI, PI)
+
+
+func schnapp_90(richtung: int) -> void:
+	_yaw = wrapf(schnapp_yaw(_yaw, richtung), -PI, PI)
+
+
+## Sanfter Platzier-Nick (W21 P2): kurzer Halbsinus-Dip der Kamera — das
+## „Festklopfen“ ist auch im Bild spürbar. Reduced Motion: kein Nick.
+func nick() -> void:
+	if not _aktiv or ThemeService.is_reduced_motion(self):
+		return
+	_nick_rest = NICK_S
+
+
+func nickt() -> bool:
+	return _nick_rest > 0.0
+
+
+func set_draufsicht(oben: bool) -> void:
+	_pitch = PITCH_OBEN if oben else _pitch_flach()
+
+
+func ist_draufsicht() -> bool:
+	return _pitch > (PITCH_OBEN + PITCH_SCHRAEG) * 0.5
+
+
+## Decken-Bau (W13B): Neigung wird flacher, der Blickpunkt wandert zur
+## Decke — beides gleitet über das vorhandene exponentielle Nachziehen in
+## _process weich hinterher (sanfter Tween ohne Tween-Node).
+func set_decken_blick(aktiv: bool) -> void:
+	_decken_blick = aktiv
+	if not ist_draufsicht():
+		_pitch = _pitch_flach()
+
+
+func ist_decken_blick() -> bool:
+	return _decken_blick
+
+
+## Ziel-Höhe des look_at-Punkts (der Ist-Wert _blick_y gleitet hinterher).
+func blick_ziel_y() -> float:
+	return BLICK_DECKE if _decken_blick else BLICK_BODEN
+
+
+## ENDPOSE des Kamera-Flugs (Position + Blick auf den Pivot) — die Anzeige
+## gleitet in _process erst dorthin. Spawn-/Layout-Entscheidungen (W18
+## Befund 2: Ghost-Spawnzelle) rechnen gegen DIESE Pose statt gegen die
+## noch fliegende Ist-Kamera, sonst wandert der gewählte Bildschirmpunkt
+## nach dem Flug hinter die UI.
+func ziel_transform() -> Transform3D:
+	var pos := _pivot + offset_fuer(_yaw, _pitch, _dist)
+	var blick := _pivot + Vector3(0.0, blick_ziel_y(), 0.0)
+	return Transform3D(Basis.looking_at(blick - pos, Vector3.UP), pos)
+
+
+func _pitch_flach() -> float:
+	return PITCH_DECKE if _decken_blick else PITCH_SCHRAEG
+
+
+func _process(delta: float) -> void:
+	if not _aktiv or _rig == null or _rig.camera == null:
+		return
+	var t := 1.0 - exp(-GLAETTUNG * delta)
+	_anzeige_pivot = _anzeige_pivot.lerp(_pivot, t)
+	_blick_y = lerpf(_blick_y, blick_ziel_y(), t)
+	var ziel := _anzeige_pivot + offset_fuer(_yaw, _pitch, _dist)
+	var camera := _rig.camera
+	# Nick-Versatz des Vorframes VOR dem Glätten abziehen — der Dip liegt
+	# als reine Anzeige-Schicht ÜBER der gelerpten Kamerabahn.
+	camera.global_position.y -= _nick_angewandt
+	camera.global_position = camera.global_position.lerp(ziel, t)
+	_nick_angewandt = nick_versatz(_nick_rest, NICK_S, NICK_TIEFE)
+	_nick_rest = maxf(_nick_rest - delta, 0.0)
+	camera.global_position.y += _nick_angewandt
+	camera.look_at(_anzeige_pivot + Vector3(0, _blick_y, 0), Vector3.UP)
+
+
+func _boden_punkt(screen_pos: Vector2) -> Vector3:
+	if _rig == null or _rig.camera == null:
+		return Vector3.INF
+	var origin := _rig.camera.project_ray_origin(screen_pos)
+	var richtung := _rig.camera.project_ray_normal(screen_pos)
+	if absf(richtung.y) < 0.0001:
+		return Vector3.INF
+	var t := -origin.y / richtung.y
+	if t < 0.0:
+		return Vector3.INF
+	return origin + richtung * t

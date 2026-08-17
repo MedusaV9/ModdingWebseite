@@ -1,0 +1,10 @@
+{
+	"id": "purblePlace",
+	"title_key": "mg.purblePlace.title",
+	"scene": "res://scripts/minigames/games/purble_place/purble_place.tscn",
+	"coin_table": {"divisor": 5, "min": 5, "max": 30},
+	"target": 120,
+	"orientation": "portrait",
+	"supports_endless": true,
+	"energy_cost": 8
+}

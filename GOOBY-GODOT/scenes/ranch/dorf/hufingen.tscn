@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://rw4hufingen001"]
+
+[ext_resource type="Script" path="res://scripts/ranch/dorf/hufingen_szene.gd" id="1_dorf"]
+
+[node name="Hufingen" type="Node3D"]
+script = ExtResource("1_dorf")

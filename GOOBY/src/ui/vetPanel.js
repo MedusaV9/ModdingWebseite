@@ -1,0 +1,299 @@
+// Vet arrival panel (V2/G21, PLAN2 §C9.2): the screen that opens over the
+// parked-at-the-clinic backdrop after a vet trip (screen id 'vetPanel' —
+// registered from systems/shopTrip.js's initShopTrip, mirroring the G11 shop
+// registration). Dr. Hoppel offers:
+//
+//   Behandlung 120c — only while queasy/sick (economy.payVet(store,'cure') —
+//     §C3.5 FULL cure: junk/neglect counters reset + +10 all stats; stronger
+//     than the 40c medicine item, and the copy says so). Can't afford → the
+//     gentle „medicine costs 40c at the shop" hint (§C9.2).
+//   Checkup 30c — anytime (economy.payVet(store,'checkup')): health report
+//     card (junkScore band / neglect / weight tier / current state) + resets
+//     neglectMin. The pre-checkup neglect value is captured BEFORE paying so
+//     the card can show what was reset.
+//   „Nach Hause" — teleport home (no return drive, v1 ruling) via the
+//     injected goHome().
+//
+// After a cure Gooby wears the §C3.5 bandaged-ear gag for 10 min —
+// `vetBandageUntil()` exposes the runtime timestamp (session-only, not saved)
+// for the character/ambience agents (G26/G29) to render on the 3D rabbit;
+// this panel shows the 🩹 badge itself while active.
+//
+// Module level stays DOM-free (like ui/shopScreen.js) so node tests can
+// import the systems/shopTrip.js chain headlessly.
+
+import { VET, ITEM_PRICES } from '../data/constants.js';
+import { t } from '../data/strings.js';
+import { payVet, canAfford } from '../systems/economy.js';
+import { HEALTH } from '../systems/health.js';
+import { tierOf } from '../systems/weight.js';
+import { icon } from './icons.js';
+
+// V6/FIX3 (P2-6) vet polish (injected like questBoard's owned block — the
+// base .vet-* rules live in styles.css, another agent's file):
+//  - avatar: the vetRabbit glyph filled currentColor→brown at 44px and read
+//    as a harsh black blob; give it the clinic-mint circle chip and tint the
+//    glyph teal-dark (the screen-vetPanel accent) — soft bunny-doctor face.
+//  - title: „Vet Clinic"/„Tierarztpraxis" could wrap to an awkward 2nd line
+//    under the icon; keep it one line and let the home button use the
+//    .vet-head flex-wrap line instead (the F3 320px rule already right-aligns
+//    it there via margin-left:auto).
+const VET_FIX_CSS = `
+.vet-avatar{width:3.75rem;height:3.75rem;border-radius:50%;background:rgba(89,201,185,.18);box-shadow:inset 0 0 0 0.125rem rgba(89,201,185,.4);display:flex;align-items:center;justify-content:center;color:var(--teal-dark);}
+.vet-avatar svg{color:var(--teal-dark);}
+.vet-title{white-space:nowrap;}
+`;
+
+/** §C3.5 bandaged-ear gag duration after a vet cure (ms). */
+export const BANDAGE_MS = 10 * 60 * 1000;
+
+/** Runtime-only (session) timestamp until which Gooby wears the bandage. */
+let bandageUntil = 0;
+
+/** @returns {number} epoch ms until which the §C3.5 bandage gag is active */
+export function vetBandageUntil() {
+  return bandageUntil;
+}
+
+/**
+ * §C7 junkScore band for the report card (green/yellow/orange — informed
+ * players, no nagging): green below the recovery-clean line, yellow from
+ * there up to the queasy threshold, orange beyond.
+ * @param {number} junkScore
+ * @returns {'green'|'yellow'|'orange'}
+ */
+export function junkBand(junkScore) {
+  const j = Math.max(0, Number(junkScore) || 0);
+  if (j < HEALTH.RECOVER_JUNK_BELOW) return 'green';
+  if (j < HEALTH.QUEASY_JUNK) return 'yellow';
+  return 'orange';
+}
+
+/**
+ * Register the 'vetPanel' screen (§C9.2). Called once from initShopTrip.
+ * @param {{store: object, ui: object, audio: object, goHome: () => void,
+ *   getArrival: () => ({coins: number}|null),
+ *   isVetArrival?: () => boolean}} deps isVetArrival: a vetTrip is at its
+ *   destination (drives the mgResults trip decoration below)
+ */
+export function registerVetPanel({ store, ui, audio, goHome, getArrival, isVetArrival }) {
+  if (typeof document === 'undefined') return;
+  if (!document.querySelector('style[data-owner="fix3-vet"]')) {
+    const style = document.createElement('style');
+    style.dataset.owner = 'fix3-vet';
+    style.textContent = VET_FIX_CSS;
+    document.head.appendChild(style);
+  }
+  installResultsHook({ ui, isVetArrival });
+
+  /** @type {Array<() => void>} */
+  let subs = [];
+  /** @type {HTMLElement|null} */
+  let wrapEl = null;
+  /** neglect minutes captured for the report card (pre-checkup value) */
+  let reportNeglect = 0;
+  let showReport = false;
+
+  const healthState = () => {
+    const s = store.get('health.state');
+    return s === 'queasy' || s === 'sick' ? s : 'healthy';
+  };
+
+  function coinsPill() {
+    // V4/UI-DEEP: rides the shared .ac-chip pill (paper face + hairline ring)
+    return `<span class="shop-coins ac-chip">${icon('coin', 18)}<span class="shop-coins-n">${store.get('coins') ?? 0}</span></span>`;
+  }
+
+  function render() {
+    if (!wrapEl) return;
+    const state = healthState();
+    const unwell = state !== 'healthy';
+    const coins = store.get('coins') ?? 0;
+    const arrival = getArrival?.();
+    const bandaged = Date.now() < bandageUntil;
+
+    wrapEl.innerHTML = `
+      <div class="vet-head">
+        <h1 class="vet-title">${icon('stethoscope', 26)} ${t('vet.title')}</h1>
+        ${coinsPill()}
+        <button class="btn btn-teal vet-home">${icon('home', 18)} ${t('trip.goHome')}</button>
+      </div>
+      ${arrival ? `<div class="vet-hint">${icon('sparkle', 15)} ${t('trip.earned', { coins: arrival.coins ?? 0 })}</div>` : ''}
+      <div class="vet-body">
+        <div class="vet-doc">
+          <span class="vet-avatar" aria-hidden="true">${icon('vetRabbit', 44)}</span>
+          <span class="vet-doc-text">
+            <span class="vet-doc-name">${t('vet.doctor')}${bandaged ? ` <span class="vet-bandage-badge">${icon('bandage', 15)}</span>` : ''}</span>
+            <span class="vet-doc-line">${t(`vet.greet.${state}`)}</span>
+          </span>
+        </div>
+        <div class="vet-actions">
+          <button class="vet-action vet-act-cure" ${unwell ? '' : 'disabled'}>
+            <span class="vet-action-head">
+              <span class="vet-action-name">${icon('medicine', 17)} ${t('vet.cure')}</span>
+              <span class="shop-price">${icon('coin', 13)}${VET.CURE_PRICE}</span>
+            </span>
+            <span class="vet-action-desc">${unwell
+              ? t('vet.cureDesc', { bonus: VET.CURE_STAT_BONUS })
+              : t('vet.cureNotNeeded')}</span>
+          </button>
+          ${unwell && !canAfford(store, VET.CURE_PRICE)
+            ? `<div class="vet-hint vet-hint-soft">${icon('bulb', 15)} ${t('vet.hintMedicine', { price: ITEM_PRICES.medicine })}</div>`
+            : ''}
+          <button class="vet-action vet-act-checkup">
+            <span class="vet-action-head">
+              <span class="vet-action-name">${icon('clipboard', 17)} ${t('vet.checkup')}</span>
+              <span class="shop-price">${icon('coin', 13)}${VET.CHECKUP_PRICE}</span>
+            </span>
+            <span class="vet-action-desc">${t('vet.checkupDesc')}</span>
+          </button>
+        </div>
+        ${showReport ? renderReport() : ''}
+      </div>`;
+
+    wrapEl.querySelector('.vet-home').addEventListener('click', () => {
+      audio.play('ui.tap');
+      goHome();
+    });
+    wrapEl.querySelector('.vet-act-cure').addEventListener('click', onCure);
+    wrapEl.querySelector('.vet-act-checkup').addEventListener('click', onCheckup);
+    wrapEl.querySelector('.vet-report-done')?.addEventListener('click', () => {
+      audio.play('ui.tap');
+      showReport = false;
+      render();
+    });
+    void coins; // coins pill re-renders via the coinsChanged sub below
+  }
+
+  /** Report card (§C9.2: junkScore band / neglect / weight tier). */
+  function renderReport() {
+    const state = healthState();
+    const band = junkBand(store.get('health.junkScore'));
+    const tier = tierOf(store.get('weight.value'));
+    const neglectMin = Math.round(reportNeglect);
+    return `
+      <div class="vet-report">
+        <div class="vet-report-title ac-ribbon">${icon('clipboard', 15)} ${t('vet.report.title')}</div>
+        <div class="vet-report-row"><span>${t('vet.report.state')}</span><span>${t(`vet.state.${state}`)}</span></div>
+        <div class="vet-report-row"><span>${t('vet.report.junk')}</span><span class="vet-band vet-band-${band}">${t(`vet.junk.${band}`)}</span></div>
+        <div class="vet-report-row"><span>${t('vet.report.neglect')}</span><span>${neglectMin > 0
+          ? t('vet.neglect.some', { min: neglectMin })
+          : t('vet.neglect.ok')}</span></div>
+        <div class="vet-report-row"><span>${t('vet.report.weight')}</span><span>${t(`vet.tier.${tier}`)}</span></div>
+        <button class="btn btn-teal vet-report-done">${t('vet.reportDone')}</button>
+      </div>`;
+  }
+
+  /** Behandlung (§C3.5): full cure — economy.payVet pays exactly once. */
+  function onCure() {
+    audio.play('ui.tap');
+    const res = payVet(store, 'cure');
+    if (res.ok) {
+      bandageUntil = Date.now() + BANDAGE_MS; // §C3.5 bandaged-ear gag
+      audio.play('vet.cure');
+      ui.toast('vet.cured');
+      ui.toast('vet.bandage');
+      // confetti burst (dynamic import — keeps three.js/DOM-heavy gfx out of
+      // the node:test import chain, same pattern as shopScreen's decor boot)
+      const el = wrapEl;
+      if (el) {
+        import('../gfx/particles.js')
+          .then((m) => m.burstConfettiDom(el))
+          .catch(() => {});
+      }
+      showReport = false;
+      render();
+    } else if (res.reason === 'coins') {
+      audio.play('ui.error');
+      ui.toast('toast.notEnoughCoins');
+    } else {
+      // 'healthy' — button should already be disabled; render to resync
+      render();
+    }
+  }
+
+  /** Checkup (§C3.5): report card + neglect reset — capture BEFORE paying. */
+  function onCheckup() {
+    audio.play('ui.tap');
+    const before = Number(store.get('health.neglectMin')) || 0;
+    const res = payVet(store, 'checkup');
+    if (res.ok) {
+      reportNeglect = before;
+      showReport = true;
+      audio.play('vet.checkup');
+      render();
+    } else if (res.reason === 'coins') {
+      audio.play('ui.error');
+      ui.toast('toast.notEnoughCoins');
+    }
+  }
+
+  ui.registerScreen('vetPanel', {
+    /** @param {HTMLElement} el */
+    mount(el) {
+      try {
+        audio.radio?.playContext?.('location:vet'); // V4/POLISH-G: real clinic track (§B2.4)
+      } catch { /* no radio engine in this context */ }
+      wrapEl = document.createElement('div');
+      wrapEl.className = 'vet-wrap';
+      el.appendChild(wrapEl);
+      showReport = false;
+      render();
+      subs = [
+        store.on('coinsChanged', (coins) => {
+          const n = wrapEl?.querySelector('.shop-coins-n');
+          if (n) n.textContent = String(coins);
+        }),
+      ];
+      audio.play('vet.doorbell');
+    },
+    unmount() {
+      // V4/POLISH-G: hand the element back — only when the clinic track
+      // still owns it. stop() resumes the remembered room wish; a persisted
+      // user radio session re-asserts.
+      try {
+        const radio = audio.radio;
+        if (radio?.getStats?.().context === 'location:vet') {
+          if (store.get('radio')?.playing === true) radio.start?.();
+          else radio.stop?.();
+        }
+      } catch { /* no radio engine in this context */ }
+      for (const off of subs) off?.();
+      subs = [];
+      wrapEl = null;
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// mgResults decoration for vet arrivals (no framework.js edit — G23's file):
+// same MutationObserver pattern as ui/shopScreen.js's sibling-panel hooks.
+// The framework renders vetTrip results with the arcade layout (its trip
+// check is shopTrip-only); when a vet trip is at its destination this strips
+// the Score/Best rows (the trip "score" IS the coin payout, F4 P2-6 ruling)
+// and relabels the exit button — it continues INTO the clinic via onExit.
+// ---------------------------------------------------------------------------
+
+/** @param {{ui: object, isVetArrival?: () => boolean}} deps */
+function installResultsHook({ ui, isVetArrival }) {
+  if (!ui.el || typeof window === 'undefined' || !window.MutationObserver || !isVetArrival) return;
+
+  const observer = new window.MutationObserver((mutations) => {
+    for (const m of mutations) {
+      for (const node of m.addedNodes) {
+        if (!(node instanceof HTMLElement)) continue;
+        if (node.classList.contains('screen-mgResults') && isVetArrival()) decorateResults(node);
+      }
+    }
+  });
+  observer.observe(ui.el, { childList: true });
+
+  /** @param {HTMLElement} screen */
+  function decorateResults(screen) {
+    const rows = screen.querySelectorAll('.mg-results-row');
+    for (let i = 0; i < rows.length - 1; i++) rows[i].remove(); // keep the coins row
+    const btns = screen.querySelectorAll('.mg-btn-row .btn');
+    const exitBtn = btns[btns.length - 1];
+    if (exitBtn) exitBtn.innerHTML = `${icon('stethoscope', 18)} ${t('vet.title')}`;
+  }
+}

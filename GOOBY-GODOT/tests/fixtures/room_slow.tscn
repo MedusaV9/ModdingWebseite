@@ -1,0 +1,7 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://tests/fixtures/fixture_room.gd" id="1_room"]
+
+[node name="RoomSlow" type="Node"]
+script = ExtResource("1_room")
+ready_delay_frames = 8

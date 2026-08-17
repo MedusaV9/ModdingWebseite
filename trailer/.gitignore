@@ -1,0 +1,8 @@
+# Remotion-Arbeitsordner: nur Quellcode + fertiges Video gehoeren ins Repo.
+node_modules/
+out/
+# Roh-Aufnahmen aus Godot (AVI/PNG-Folgen) — mit tools/capture/finals.sh neu erzeugbar.
+captures/
+probe/
+# Roh-Clips (85 MB) werden aus dem Spiel neu aufgenommen — siehe README.
+public/clips/

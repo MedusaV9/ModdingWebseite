@@ -1,0 +1,1000 @@
+class_name RoomBase
+extends Node3D
+## Basis aller Raum-Szenen (W2a HOUSE). Baut den Raum PROZEDURAL aus
+## RoomDefs-Daten (Boden/Wände/Fenster-Platzhalter, Tür-Nodes, Grid-Mount,
+## Gooby-Spawn, NavigationRegion3D, Kamera-Rig, warmes Licht) und verdrahtet
+## Baumodus + Tür-Reisen + Blockade-Gag.
+##
+## Router-Verträge (W1a): `ready_for_reveal` nach dem Aufbau,
+## `receive_params({door_id})` vor add_child → Gooby spawnt an dieser Tür.
+
+signal ready_for_reveal
+signal door_tapped(door_id: String)
+signal build_mode_toggled(active: bool)
+
+const GoobySpawn := preload("res://scripts/home/gooby_spawn.gd")
+
+const WALL_HEIGHT := 2.5
+const WALL_THICKNESS := 0.1
+const FENCE_HEIGHT := 0.55
+const REBAKE_DEBOUNCE_S := 0.5
+## Wand-Ausschnitt eines Außenfensters (Doc D §1.2): genau so hoch, dass das
+## Fenster-Modul (FurnitureNode-Lift 1.35 m) darin sitzt und der Blick auf das
+## Straßen-Diorama frei ist.
+const FENSTER_Y0 := 1.28
+const FENSTER_Y1 := 2.3
+
+## Deko-GLBs (FIX-3) je Raum auf der Fensterbank: [Unterpfad, Zielhöhe m].
+const FENSTERBANK_DEKO := {
+	"living": [["pflanzen/sansevieria_plant_small_potted", 0.26]],
+	"kitchen": [["kueche/kettle", 0.2], ["kueche/mug_red", 0.09]],
+	"bathroom": [["bad/ducky", 0.12], ["bad/soap_dish_pink", 0.05]],
+	"bedroom": [["pflanzen/sansevieria_plant_small_potted", 0.22]],
+}
+
+@export var room_id := "living"
+
+## Tests injizieren hier ein frisches GameState (statt /root/GameState).
+var game_state_override: Object = null
+## Tests/Screenshots erzwingen eine Uhrzeit (< 0 = echte Systemzeit).
+var stunde_override := -1.0
+## Tests/Screenshots erzwingen eine Wetterlage für den Außen-Himmel
+## ({} = echter SoulWetter-Tagesplan von heute).
+var wetter_override: Dictionary = {}
+## Tests erzwingen die Tür-Bestätigung (-1 = AppSettings entscheidet).
+var tuer_confirm_override := -1
+var grid: GridData
+
+var _room_def: Dictionary = {}
+var _gs: Object = null
+var _spawn_door_id := ""
+var _gooby: GoobyHome
+var _doors: Dictionary = {}
+var _furniture: Dictionary = {}
+var _dioramas: Dictionary = {}
+var _nav_region: NavigationRegion3D
+var _nav_map := RID()
+var _blockers: Node3D
+var _grid_mount: Node3D
+var _wall_mount: Node3D
+var _overlay: GridOverlay
+var _camera_rig: HomeCameraRig
+var _build_mode: BuildMode
+var _skyline: CitySkyline
+var _ui_layer: CanvasLayer
+var _bubble: AcBubble
+var _choice: Control
+var _rebake_pending := false
+var _uid_seq := 0
+var _fenster_energie := HomeLicht.FENSTER_TAG
+var _fenster_stand := ""
+
+
+func _ready() -> void:
+	_room_def = RoomDefs.room(room_id)
+	if _room_def.is_empty():
+		push_error("Unbekannter Raum: %s" % room_id)
+		return
+	HomeState.register_slice()
+	_resolve_game_state()
+	_load_grid()
+	_build_environment()
+	_build_nav_and_floor()
+	_build_boden_deko()
+	_build_walls()
+	_build_doors()
+	_build_grid_mount()
+	rebuild_furniture()
+	_build_camera()
+	_build_skyline()
+	HausKontext.attach_to(self)
+	_build_ui()
+	_spawn_gooby()
+	# Garten 2.0 (Doc D §6): Beete/Bauten/Sammel-Spots liegen NICHT im
+	# Möbel-Grid, sondern im eigenen Garten-Grid — der Host baut sie auf.
+	GardenHost.attach_to(self)
+	# W6/HAUS-CUSTOM: gewaehlte Tapete/Boden auf diesen Raum anwenden.
+	HouseStyle.apply_to_room(self, HouseStyleState.style(_gs))
+	_announce_moving_day()
+	_emit_ready_for_reveal.call_deferred()
+
+
+## Router-Params-Contract (W1a): {door_id} = Ziel-Tür im NEUEN Raum.
+func receive_params(params: Dictionary) -> void:
+	_spawn_door_id = str(params.get("door_id", ""))
+
+
+func game_state() -> Object:
+	return _gs
+
+
+func grid_mount() -> Node3D:
+	return _grid_mount
+
+
+func gooby() -> GoobyHome:
+	return _gooby
+
+
+func room_def() -> Dictionary:
+	return _room_def
+
+
+## UI-Ebene des Raums (Panels von Werkstatt/Goobay/Garten hängen sich hier ein).
+func ui_layer() -> CanvasLayer:
+	return _ui_layer
+
+
+func camera_rig() -> HomeCameraRig:
+	return _camera_rig
+
+
+## Navmesh-Blocker-Mount (Garten-Bauten hängen sich hier ein, damit Gooby
+## nicht durch Shed und Gewächshaus läuft).
+func blockers() -> Node3D:
+	return _blockers
+
+
+func open_build_mode() -> void:
+	_build_mode.open()
+
+
+func is_build_mode_active() -> bool:
+	return _build_mode != null and _build_mode.is_active()
+
+
+## Gooby-Bubble (W14/UIKERN: AcBubble, folgt Goobys Kopf). Der Raum hält EINE
+## Blase: neue Sprüche ERSETZEN sie (Leak-Guard test_build_reliability).
+func say(text: String) -> void:
+	if text.is_empty():
+		return
+	if _bubble != null and is_instance_valid(_bubble) and _bubble.ersetze_text(text):
+		return
+	_bubble = AcBubble.show_bubble(_ui_layer, text, {"speaker_3d": _gooby})
+
+
+func set_furniture_visible(uid: String, furniture_visible: bool) -> void:
+	var node: Variant = _furniture.get(uid)
+	if is_instance_valid(node) and node is Node3D:
+		(node as Node3D).visible = furniture_visible
+
+
+## Trägerhöhe für SURFACE-Items auf einer Zelle.
+func surface_height_at(cell: Vector2i) -> float:
+	var node: Variant = _furniture.get(grid.item_at(cell, GridData.Layer.FLOOR))
+	if is_instance_valid(node) and node is FurnitureNode:
+		return (node as FurnitureNode).top_y()
+	return 0.4
+
+
+## Alle Möbel-Nodes aus dem Grid neu aufbauen (nach Bau-Commits).
+func rebuild_furniture() -> void:
+	# Beim Szenen-Abbau kann ein Möbel-Node schon weg sein, während ein
+	# nachgereichtes `furniture_changed` noch hier landet — nie hart casten.
+	for node: Variant in _furniture.values():
+		if is_instance_valid(node) and node is Node:
+			(node as Node).queue_free()
+	_furniture = {}
+	var surface_entries: Array = []
+	for entry: Dictionary in grid.to_items_array():
+		var def := FurnitureCatalog.def(str(entry["item"]))
+		if def.is_empty():
+			continue
+		if int(def["layer"]) == GridData.Layer.SURFACE:
+			surface_entries.append(entry)
+		else:
+			_spawn_furniture(entry, def)
+	for entry: Dictionary in surface_entries:
+		_spawn_furniture(entry, FurnitureCatalog.def(str(entry["item"])))
+	# Ein neu gehängtes Außenfenster schneidet ein Loch in die Wand — deshalb
+	# nach jedem Bau-Commit prüfen, ob die Wände neu gesetzt werden müssen.
+	if _fenster_signatur() != _fenster_stand:
+		_build_walls()
+	_rebuild_dioramas()
+	request_rebake()
+
+
+## Fenster-Dioramen (Doc D §1.2): pro Außenwand höchstens eins (Garten-
+## oder Straßen-Variante je Vista, s. GartenDiorama.fuer_vista), und nur
+## solange dort wirklich ein Fenster hängt — nach jedem Bau-Commit neu.
+## Im Baumodus versteckt (FIX-3): dort übernimmt die CitySkyline-Kulisse.
+func _rebuild_dioramas() -> void:
+	for diorama: Variant in _dioramas.values():
+		if is_instance_valid(diorama) and diorama is Node:
+			(diorama as Node).queue_free()
+	_dioramas = {}
+	var exterior := RoomDefs.exterior_walls(_room_def)
+	for wall: String in exterior:
+		var diorama := GartenDiorama.fuer_vista(
+			self, grid, _world_size(), wall, str(exterior[wall])
+		)
+		if diorama != null:
+			diorama.visible = not is_build_mode_active()
+			_dioramas[wall] = diorama
+
+
+func _set_dioramas_visible(dioramas_visible: bool) -> void:
+	for diorama: Variant in _dioramas.values():
+		if is_instance_valid(diorama) and diorama is Node3D:
+			(diorama as Node3D).visible = dioramas_visible
+
+
+## Navmesh-Rebake, debounced (Doc F §7). Synchron gebaked (Räume sind klein;
+## async-Bake + Szenen-Freigabe wäre ein Race — M2-Optimierung).
+func request_rebake() -> void:
+	if _rebake_pending or _nav_region == null or not is_inside_tree():
+		return
+	_rebake_pending = true
+	get_tree().create_timer(REBAKE_DEBOUNCE_S).timeout.connect(_on_rebake_timeout)
+
+
+func _on_rebake_timeout() -> void:
+	_rebake_pending = false
+	if is_inside_tree():
+		# REST5 (B5): CPU-Bake aus Boden-Rechteck + Blocker-AABBs — das alte
+		# bake_navigation_mesh() las Render-Meshes zur Laufzeit von der GPU.
+		RoomNavmesh.bake(_nav_region, _world_size(), _blockers.get_children())
+
+
+func _exit_tree() -> void:
+	# Die private Navigation-Map gehört dem Raum — ohne free_rid leakt die
+	# RID beim Beenden (EVAL-2 B4).
+	_nav_map = RoomNavmesh.free_private_map(_nav_map)
+
+
+## Hammer-Aufbau-Gag (Doc D §3.1): Gooby hämmert, Qualm, Jubel.
+## Reduced Motion (W4-P3 POLISH-16): kein Qualm, stark verkürzte Pausen.
+func play_hammer_gag(world_pos: Vector3) -> void:
+	if _gooby == null:
+		return
+	var reduced := _reduced_motion()
+	_gooby.set_wander_enabled(false)
+	await _gooby.walk_to(world_pos + Vector3(0.5, 0.0, 0.5), 3.0)
+	_gooby.rig.play_clip("build_hammer")
+	var smoke: GPUParticles3D = null
+	if not reduced:
+		smoke = _make_smoke(world_pos)
+	AudioDirector.try_play(self, "build_hammer")
+	await get_tree().create_timer(0.3 if reduced else 1.8).timeout
+	if smoke != null:
+		smoke.emitting = false
+	_gooby.rig.play_clip("celebrate")
+	_gooby.rig.set_emotion("ecstatic")
+	say(I18nService.t("build.hammer_fertig"))
+	await get_tree().create_timer(0.2 if reduced else 1.2).timeout
+	if smoke != null:
+		smoke.queue_free()
+	_gooby.rig.set_emotion("happy")
+	_gooby.set_wander_enabled(not is_build_mode_active())
+
+
+func _reduced_motion() -> bool:
+	var settings := get_node_or_null("/root/AppSettings")
+	return settings != null and settings.is_reduced_motion()
+
+
+func _resolve_game_state() -> void:
+	_gs = game_state_override
+	if _gs == null:
+		var autoload := get_node_or_null("/root/GameState")
+		if autoload != null and autoload.is_loaded():
+			_gs = autoload
+
+
+func _load_grid() -> void:
+	if _gs != null:
+		HomeState.ensure_initialized(_gs)
+		grid = HomeState.load_room_grid(_gs, room_id)
+		return
+	grid = RoomDefs.make_grid(room_id)
+	for entry: Dictionary in RoomDefs.default_layout(room_id):
+		var def := FurnitureCatalog.def(str(entry.get("item", "")))
+		if def.is_empty():
+			continue
+		_uid_seq += 1
+		var uid := "room-%04d" % _uid_seq
+		if entry.has("wall"):
+			grid.place_wall(def, str(entry["wall"]), int(entry["at"][0]), uid)
+		else:
+			var at := Vector2i(int(entry["at"][0]), int(entry["at"][1]))
+			grid.place(def, at, int(entry.get("rot", 0)), uid)
+
+
+# ── Aufbau ───────────────────────────────────────────────────────────────────
+
+
+func _world_size() -> Vector2:
+	var cells: Vector2i = _room_def["grid"]
+	return Vector2(cells.x * GridData.CELL_SIZE, cells.y * GridData.CELL_SIZE)
+
+
+func _is_outdoor() -> bool:
+	return bool(_room_def.get("outdoor", false))
+
+
+## Raum-Licht (W4-P3 POLISH-6 → EVAL-2026-08 Lens B): Aufbau lebt in
+## RaumLicht (HomeLicht-Profil + GLOBALE LichtKalibrierung; draußen echter
+## GoobyHimmel + Nebel statt flacher Hintergrund-Farbe).
+func _build_environment() -> void:
+	var teile := RaumLicht.anbauen(
+		self, room_id, _is_outdoor(), _stunde(), wetter_override, _world_size()
+	)
+	_fenster_energie = teile["fenster_energie"]
+
+
+## Uhrzeit mit Bruchteilen (Tests/Screenshots setzen stunde_override).
+func _stunde() -> float:
+	if stunde_override >= 0.0:
+		return stunde_override
+	var jetzt := Time.get_time_dict_from_system()
+	return float(jetzt["hour"]) + float(jetzt["minute"]) / 60.0
+
+
+## Öffentliche Uhrzeit für Anbauten (GartenHaus-Fensterglut, GartenLeben-
+## Nachtruhe via HausKontext) — spiegelt _stunde() inkl. Override.
+func stunde_aktuell() -> float:
+	return _stunde()
+
+
+func _build_nav_and_floor() -> void:
+	_nav_region = NavigationRegion3D.new()
+	_nav_region.name = "NavRegion"
+	# REST5 (EVAL-2 B3/B5/B10): voxel-exaktes Mesh, eigene Map je Raum und
+	# CPU-Quellgeometrie statt Visual-Mesh-Parsing — Details in RoomNavmesh.
+	_nav_region.navigation_mesh = RoomNavmesh.make_mesh()
+	add_child(_nav_region)
+	_nav_map = RoomNavmesh.attach_private_map(_nav_region)
+	var size := _world_size()
+	var floor_mesh := MeshInstance3D.new()
+	floor_mesh.name = "Floor"
+	var box := BoxMesh.new()
+	box.size = Vector3(size.x, 0.12, size.y)
+	floor_mesh.mesh = box
+	# Draußen: Rasen im Grundstücks-Belag des Gestalten-Modus (EVAL-2026-08
+	# Lens B Befund 5: kohärent mit dem Baumodus statt flacher Farbfläche).
+	if _is_outdoor():
+		floor_mesh.material_override = HouseExterior.teil_material(
+			"grund", HouseStyleState.style(game_state())
+		)
+	else:
+		floor_mesh.material_override = _flat_material(_room_def["floor_color"])
+	floor_mesh.position = Vector3(size.x * 0.5, -0.06, size.y * 0.5)
+	_nav_region.add_child(floor_mesh)
+	_blockers = Node3D.new()
+	_blockers.name = "Blockers"
+	_nav_region.add_child(_blockers)
+
+
+## Dielen-/Fliesenfugen (FIX-3, User: „nur Primitives"): EIN MultiMesh aus
+## dunkleren Fugenstreifen macht aus der flachen Farbplatte einen Boden.
+## Hängt bewusst NICHT unter der NavRegion (würde sonst mitgebaked).
+## Innenräume: Küche/Bad = Fliesen (beide Richtungen), sonst Dielen.
+func _build_boden_deko() -> void:
+	if _is_outdoor():
+		return
+	var size := _world_size()
+	var fliesen := room_id == "kitchen" or room_id == "bathroom"
+	var fugen_farbe: Color = (_room_def["floor_color"] as Color).darkened(0.22)
+	var transforms: Array[Transform3D] = []
+	var schritt := 0.5 if fliesen else 0.66
+	var z := schritt
+	while z < size.y - 0.01:
+		var basis := Basis.from_scale(Vector3(size.x, 1.0, 1.0))
+		transforms.append(Transform3D(basis, Vector3(size.x * 0.5, 0.004, z)))
+		z += schritt
+	if fliesen:
+		var x := schritt
+		while x < size.x - 0.01:
+			# Lokal skalieren, DANN drehen — sonst streckt die Skalierung
+			# die falsche Weltachse.
+			var basis := Basis(Vector3.UP, PI * 0.5) * Basis.from_scale(Vector3(size.y, 1.0, 1.0))
+			transforms.append(Transform3D(basis, Vector3(x, 0.004, size.y * 0.5)))
+			x += schritt
+	var streifen := BoxMesh.new()
+	streifen.size = Vector3(1.0, 0.006, 0.018)
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = fugen_farbe
+	mat.roughness = 1.0
+	streifen.material = mat
+	var multi := MultiMesh.new()
+	multi.transform_format = MultiMesh.TRANSFORM_3D
+	multi.mesh = streifen
+	multi.instance_count = transforms.size()
+	for i in transforms.size():
+		multi.set_instance_transform(i, transforms[i])
+	var instanz := MultiMeshInstance3D.new()
+	instanz.name = "BodenFugen"
+	instanz.multimesh = multi
+	instanz.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(instanz)
+
+
+func _build_walls() -> void:
+	if _wall_mount != null:
+		# Erst umbenennen, sonst bekommt der neue Mount einen Suffix-Namen
+		# (der alte hängt bis zum Frame-Ende noch im Baum).
+		_wall_mount.name = "WallsAlt"
+		_wall_mount.queue_free()
+	_wall_mount = Node3D.new()
+	_wall_mount.name = "Walls"
+	add_child(_wall_mount)
+	_fenster_stand = _fenster_signatur()
+	var spans: Dictionary = RoomDefs.wall_door_spans(_room_def)
+	# S-Wand (Kameraseite) bleibt innen offen, damit die Sicht frei ist.
+	var walls: Array[String] = ["N", "W", "E"]
+	if _is_outdoor():
+		walls.append("S")
+	for wall: String in walls:
+		_build_wall_segments(wall, spans.get(wall, []))
+	for window: Dictionary in _room_def.get("windows", []):
+		if not _fenster_verdeckt(window):
+			_build_window(window)
+	_build_wandbord()
+	# WELT2: statische Wand-Deko (Lichtschalter/Steckdosen/Heizkörper/Bild)
+	# — hängt am Walls-Mount und macht Fenster-Rebuilds automatisch mit.
+	if not _is_outdoor():
+		var belegte := {}
+		for wall: String in GridData.WALLS:
+			var wand_spans: Array = []
+			wand_spans.assign(spans.get(wall, []))
+			for span: Array in _fenster_spans(wall):
+				wand_spans.append(span)
+			belegte[wall] = wand_spans
+		RoomDeko.anbringen(_wall_mount, _room_def, belegte, grid)
+
+
+## Wand aus Segmenten: Türen und Außenfenster lassen jeweils eine Öffnung
+## frei (Fenster nur in Brüstungshöhe, damit das Diorama sichtbar wird).
+func _build_wall_segments(wall: String, door_spans: Array) -> void:
+	var width := grid.wall_width(wall)
+	var height := FENCE_HEIGHT if _is_outdoor() else WALL_HEIGHT
+	var oeffnungen: Array[Dictionary] = []
+	for span: Array in door_spans:
+		var oben := height if _is_outdoor() else DoorTransition.DOOR_HEIGHT
+		oeffnungen.append({"von": int(span[0]), "bis": int(span[1]), "y0": 0.0, "y1": oben})
+	# HAUS-SICHT: kein Garten-Zaun, wo die Hausfassade die Grenze ist.
+	if _is_outdoor() and wall == "N":
+		oeffnungen.append_array(HouseLayout.zaun_oeffnungen(_room_def, height))
+	for span: Array in _fenster_spans(wall):
+		oeffnungen.append(
+			{"von": int(span[0]), "bis": int(span[1]), "y0": FENSTER_Y0, "y1": FENSTER_Y1}
+		)
+	oeffnungen.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return a["von"] < b["von"])
+	var cursor := 0
+	for loch: Dictionary in oeffnungen:
+		_add_wall_box(wall, cursor, int(loch["von"]), 0.0, height)
+		_add_wall_box(wall, int(loch["von"]), int(loch["bis"]), 0.0, float(loch["y0"]))
+		_add_wall_box(wall, int(loch["von"]), int(loch["bis"]), float(loch["y1"]), height)
+		cursor = maxi(cursor, int(loch["bis"]))
+	_add_wall_box(wall, cursor, width, 0.0, height)
+
+
+## Fingerabdruck aller Fenster-Ausschnitte — ändert er sich, müssen die
+## Wandsegmente neu gebaut werden.
+func _fenster_signatur() -> String:
+	var teile: Array[String] = []
+	for wall: String in GridData.WALLS:
+		for span: Array in _fenster_spans(wall):
+			teile.append("%s%d-%d" % [wall, int(span[0]), int(span[1])])
+	return "|".join(teile)
+
+
+## Spannen aller Außenfenster (WALL-Items mit `exterior`) auf einer Wand.
+func _fenster_spans(wall: String) -> Array[Array]:
+	var spans: Array[Array] = []
+	var offset := 0
+	while offset < grid.wall_width(wall):
+		var uid := grid.wall_item_at(wall, offset)
+		if uid == "":
+			offset += 1
+			continue
+		var def: Dictionary = grid.get_item(uid).get("def", {})
+		var span := maxi(1, int(def.get("wall_size", 1)))
+		if bool(def.get("exterior", false)):
+			spans.append([offset, offset + span])
+		offset += span
+	return spans
+
+
+## Steht auf der Fensterattrappe aus rooms.json schon ein echtes Fenster?
+func _fenster_verdeckt(window: Dictionary) -> bool:
+	var wall := str(window.get("wall", "N"))
+	var von := int(window.get("offset", 0))
+	var bis := von + int(window.get("size", 2))
+	for span: Array in _fenster_spans(wall):
+		if von < int(span[1]) and bis > int(span[0]):
+			return true
+	return false
+
+
+## Wand-Quader von Zelle `from` bis `to` (exklusiv), von y0 bis y1.
+func _add_wall_box(wall: String, from: int, to: int, y0: float, y1: float) -> void:
+	if to <= from or y1 <= y0:
+		return
+	var length := (to - from) * GridData.CELL_SIZE
+	var mid := (from + to) * 0.5 * GridData.CELL_SIZE
+	var size := _world_size()
+	var mesh := MeshInstance3D.new()
+	var box := BoxMesh.new()
+	var along_x := wall == "N" or wall == "S"
+	box.size = (
+		Vector3(length, y1 - y0, WALL_THICKNESS)
+		if along_x
+		else Vector3(WALL_THICKNESS, y1 - y0, length)
+	)
+	mesh.mesh = box
+	# Draußen: Zaun-Material des Gestalten-Modus (EVAL-2026-08 Lens B, B5).
+	if _is_outdoor():
+		mesh.material_override = GartenLeben.zaun_material(HouseStyleState.style(game_state()))
+	else:
+		mesh.material_override = _flat_material(_room_def["wall_color"])
+	var y := (y0 + y1) * 0.5
+	match wall:
+		"N":
+			mesh.position = Vector3(mid, y, -WALL_THICKNESS * 0.5)
+		"S":
+			mesh.position = Vector3(mid, y, size.y + WALL_THICKNESS * 0.5)
+		"W":
+			mesh.position = Vector3(-WALL_THICKNESS * 0.5, y, mid)
+		"E":
+			mesh.position = Vector3(size.x + WALL_THICKNESS * 0.5, y, mid)
+	mesh.name = "Wall_%s_%d_%d_%d" % [wall, from, to, int(y0 * 100.0)]
+	# Sockelleiste (FIX-3, User: „richtige Assets") an jedem Wandfuß innen —
+	# als Kind des Wandsegments, damit sie Tür-/Fenster-Rebuilds mitmacht.
+	if y0 == 0.0 and not _is_outdoor():
+		mesh.add_child(_sockelleiste(wall, along_x, length, y0, y1))
+	# Zaun-Handlauf oben (EVAL-2026-08 Lens B): macht die Mini-Mauer zum Zaun.
+	if _is_outdoor() and y1 >= FENCE_HEIGHT - 0.001:
+		mesh.add_child(GartenLeben.zaun_kappe(mesh, along_x, length, y0, y1))
+	_wall_mount.add_child(mesh)
+
+
+func _sockelleiste(wall: String, along_x: bool, length: float, y0: float, y1: float) -> Node3D:
+	var leiste := MeshInstance3D.new()
+	leiste.name = "Sockel"
+	var box := BoxMesh.new()
+	box.size = Vector3(length, 0.09, 0.035) if along_x else Vector3(0.035, 0.09, length)
+	leiste.mesh = box
+	leiste.material_override = _flat_material(Color(0.97, 0.94, 0.88))
+	var innen := (WALL_THICKNESS + 0.035) * 0.5
+	var lokal_y := -(y0 + y1) * 0.5 + 0.045
+	match wall:
+		"N":
+			leiste.position = Vector3(0.0, lokal_y, innen)
+		"S":
+			leiste.position = Vector3(0.0, lokal_y, -innen)
+		"W":
+			leiste.position = Vector3(innen, lokal_y, 0.0)
+		"E":
+			leiste.position = Vector3(-innen, lokal_y, 0.0)
+	return leiste
+
+
+## Fenster-Platzhalter: heller Emissive-Quad AUF der Wand (Doc D §1.2 —
+## kein CSG; Vista-Diorama = M2-Backlog).
+func _build_window(window: Dictionary) -> void:
+	var wall := str(window.get("wall", "N"))
+	var offset := int(window.get("offset", 0))
+	var cells := int(window.get("size", 2))
+	var width := cells * GridData.CELL_SIZE
+	var mesh := MeshInstance3D.new()
+	var quad := QuadMesh.new()
+	quad.size = Vector2(width, 0.9)
+	mesh.mesh = quad
+	var mat := StandardMaterial3D.new()
+	# Tags hell strahlend, nachts fast dunkel (HomeLicht-Tageszeit-Lerp).
+	mat.albedo_color = Color("#CFEFFF").lerp(Color("#1E2A4A"), 1.0 - _fenster_energie)
+	mat.emission_enabled = true
+	mat.emission = Color("#BFE8FF")
+	mat.emission_energy_multiplier = _fenster_energie
+	mesh.material_override = mat
+	var along := offset * GridData.CELL_SIZE + width * 0.5
+	var size := _world_size()
+	var y := 1.5
+	match wall:
+		"N":
+			mesh.position = Vector3(along, y, 0.02)
+		"S":
+			mesh.position = Vector3(along, y, size.y - 0.02)
+			mesh.rotation.y = PI
+		"W":
+			mesh.position = Vector3(0.02, y, along)
+			mesh.rotation.y = -PI / 2.0
+		"E":
+			mesh.position = Vector3(size.x - 0.02, y, along)
+			mesh.rotation.y = PI / 2.0
+	# WELT2: echter Blender-Fensterrahmen (weiche Kapsel-Leisten + Sprossen)
+	# statt der nackten Rahmen-Box; Primitive-Fallback ohne Asset.
+	var rahmen_glb := HomeProps.prop_glb("fenster_rahmen_%d" % clampi(cells, 1, 3))
+	if rahmen_glb != null and cells >= 1 and cells <= 3:
+		rahmen_glb.position = Vector3(0.0, 0.0, 0.02)
+		mesh.add_child(rahmen_glb)
+	else:
+		var frame := MeshInstance3D.new()
+		var frame_box := BoxMesh.new()
+		frame_box.size = Vector3(width + 0.1, 1.0, 0.04)
+		frame.mesh = frame_box
+		frame.material_override = _flat_material(Color(0.95, 0.9, 0.82))
+		frame.position = Vector3(0.0, 0.0, -0.03)
+		mesh.add_child(frame)
+	_build_fensterbank(mesh, width)
+	_wall_mount.add_child(mesh)
+
+
+## Fensterbank + Tiny-Treats-Deko (FIX-3): lokal +z zeigt nach der Rotation
+## des Fenster-Nodes immer in den Raum.
+func _build_fensterbank(fenster: Node3D, width: float) -> void:
+	var bank := MeshInstance3D.new()
+	bank.name = "Fensterbank"
+	var box := BoxMesh.new()
+	box.size = Vector3(width + 0.14, 0.05, 0.2)
+	bank.mesh = box
+	bank.material_override = _flat_material(Color(0.97, 0.94, 0.88))
+	bank.position = Vector3(0.0, -0.5, 0.07)
+	fenster.add_child(bank)
+	var eintraege: Array = FENSTERBANK_DEKO.get(room_id, [])
+	for i in eintraege.size():
+		var eintrag: Array = eintraege[i]
+		var deko := HomeProps.deko_glb(str(eintrag[0]), float(eintrag[1]))
+		if deko == null:
+			continue
+		var x := 0.0 if eintraege.size() == 1 else (-width * 0.22 + i * width * 0.44)
+		deko.position = Vector3(x, -0.475, 0.07)
+		fenster.add_child(deko)
+
+
+## Wandbord mit Küchen-/Bad-Deko (Tiny Treats) an der Nordwand.
+func _build_wandbord() -> void:
+	var bord_def: Dictionary = (
+		{
+			"kitchen":
+			{
+				"von": 0.5,
+				"bis": 1.7,
+				"hoehe": 1.6,
+				"items": [["kueche/pot", 0.16], ["kueche/pan", 0.1]]
+			},
+			"bathroom":
+			{"von": 0.6, "bis": 1.6, "hoehe": 1.5, "items": [["bad/toilet_roll_holder", 0.13]]},
+		}
+		. get(room_id, {})
+	)
+	if bord_def.is_empty():
+		return
+	var von := float(bord_def["von"])
+	var bis := float(bord_def["bis"])
+	var mitte := (von + bis) * 0.5
+	var brett := MeshInstance3D.new()
+	brett.name = "Wandbord"
+	var box := BoxMesh.new()
+	box.size = Vector3(bis - von, 0.045, 0.22)
+	brett.mesh = box
+	brett.material_override = _flat_material(Color("#B98D62"))
+	brett.position = Vector3(mitte, float(bord_def["hoehe"]), WALL_THICKNESS * 0.5 + 0.11)
+	_wall_mount.add_child(brett)
+	var items: Array = bord_def["items"]
+	for i in items.size():
+		var eintrag: Array = items[i]
+		var deko := HomeProps.deko_glb(str(eintrag[0]), float(eintrag[1]))
+		if deko == null:
+			continue
+		var breite := bis - von
+		var x := mitte if items.size() == 1 else (von + (i + 0.5) * breite / items.size())
+		deko.position = Vector3(x, float(bord_def["hoehe"]) + 0.025, WALL_THICKNESS * 0.5 + 0.11)
+		_wall_mount.add_child(deko)
+
+
+func _build_doors() -> void:
+	for door_def: Dictionary in _room_def.get("doors", []):
+		var door := DoorTransition.new()
+		door.setup(
+			str(door_def["id"]), str(door_def.get("to", "")), str(door_def.get("to_door", ""))
+		)
+		door.position = RoomDefs.door_world_pos(_room_def, door_def)
+		door.rotation.y = _inward_yaw(str(door_def.get("wall", "N")))
+		door.tapped.connect(_on_door_tapped)
+		door.stuck_started.connect(func() -> void: say(I18nService.t("home.tuer.stuck")))
+		add_child(door)
+		_doors[str(door_def["id"])] = door
+
+
+func _build_grid_mount() -> void:
+	_grid_mount = Node3D.new()
+	_grid_mount.name = "GridMount"
+	add_child(_grid_mount)
+	_overlay = GridOverlay.new()
+	_overlay.name = "GridOverlay"
+	add_child(_overlay)
+	_overlay.setup(grid)
+
+
+func _build_camera() -> void:
+	_camera_rig = HomeCameraRig.new()
+	_camera_rig.name = "CameraRig"
+	add_child(_camera_rig)
+	_camera_rig.setup(_world_size())
+
+
+## Vorstadt-Kulisse (FIX-3/HAUS-SICHT): schläft in Innenräumen außerhalb
+## des Baumodus. DRAUSSEN (Garten) bleibt sie IMMER an — sie ist der
+## Nachbarschafts-Horizont (EVAL-2026-08 Lens B Befund 5: „Garten endet
+## in blauer Leere“); das Kamera-Gating drosselt Draufsichten weiter.
+func _build_skyline() -> void:
+	_skyline = CitySkyline.attach_to(self, _world_size(), room_id.hash(), room_id)
+	_skyline.stunde = _stunde()
+	if _is_outdoor():
+		_skyline.set_aktiv(true)
+
+
+func skyline() -> CitySkyline:
+	return _skyline
+
+
+func _build_ui() -> void:
+	_ui_layer = CanvasLayer.new()
+	_ui_layer.layer = 5
+	add_child(_ui_layer)
+	_build_mode = BuildMode.new()
+	_build_mode.name = "BuildMode"
+	add_child(_build_mode)
+	_build_mode.setup(self, grid, _overlay, _ui_layer, _camera_rig)
+	_build_mode.furniture_changed.connect(rebuild_furniture)
+	_build_mode.opened.connect(_on_build_opened)
+	_build_mode.closed.connect(_on_build_closed)
+
+
+func _spawn_gooby() -> void:
+	# W18/4-B9: verreist → KEIN Home-Gooby, nur der Urlaubs-Hinweis
+	# (Details: gooby_spawn.gd); gooby() liefert dann null.
+	if gooby_im_urlaub():
+		say(GoobySpawn.urlaubs_hinweis(_gs))
+		return
+	_gooby = GoobyHome.new()
+	_gooby.name = "Gooby"
+	_gooby.grid = grid
+	add_child(_gooby)
+	_camera_rig.follow_target = _gooby
+	_gooby.position = GoobySpawn.spawn_pos(_room_def, room_id, _spawn_door_id, grid)
+
+
+## W18/4-B9: Verreist laut vacation-Slice? Dann existiert KEIN Home-Gooby.
+func gooby_im_urlaub() -> bool:
+	return GoobySpawn.ist_verreist(_gs)
+
+
+func _spawn_furniture(entry: Dictionary, def: Dictionary) -> void:
+	var uid := str(entry["uid"])
+	var node: FurnitureNode
+	if entry.has("wall"):
+		node = FurnitureNode.create_wall(
+			def, str(entry["wall"]), int(entry["at"][0]), grid.size, uid
+		)
+	else:
+		var at := Vector2i(int(entry["at"][0]), int(entry["at"][1]))
+		node = FurnitureNode.create(def, at, int(entry.get("rot", 0)), uid)
+		if node != null and int(def["layer"]) == GridData.Layer.SURFACE:
+			node.position.y = surface_height_at(at)
+	if node == null:
+		return
+	if bool(def.get("blocks_movement", false)) and not entry.has("wall"):
+		_blockers.add_child(node)
+	else:
+		_grid_mount.add_child(node)
+	_furniture[uid] = node
+
+
+# ── Türen & Blockade-Gag ─────────────────────────────────────────────────────
+
+
+func _on_door_tapped(door_id: String) -> void:
+	if is_build_mode_active() or _choice != null:
+		return
+	var door: DoorTransition = _doors.get(door_id)
+	var door_def := RoomDefs.door(room_id, door_id)
+	if door == null or door.is_busy() or door_def.is_empty():
+		return
+	door_tapped.emit(door_id)
+	var zone := RoomDefs.door_zone(_room_def, door_def)
+	# B9: ohne Gooby (Urlaub) kein Blockade-Gag — Raumwechsel direkt.
+	if _gooby != null and not grid.is_zone_reachable(_gooby.current_cell(), zone):
+		_blocked_flow()
+		return
+	# FIX-3 (User-Wunsch): kurze Bestätigung vor der Tür-Reise — in den
+	# Einstellungen abschaltbar (AppSettings door_confirmation, Default an).
+	if _door_confirm_enabled():
+		_show_door_confirm(door)
+		return
+	_start_door_travel(door)
+
+
+func _start_door_travel(door: DoorTransition) -> void:
+	var router := get_node_or_null("/root/SceneRouter")
+	if router != null:
+		router.preload_target(RoomDefs.route_target(door.target_room))
+	if _gooby != null:
+		_gooby.set_wander_enabled(false)
+	door.travel(_gooby, _ui_layer)
+
+
+func _door_confirm_enabled() -> bool:
+	if tuer_confirm_override >= 0:
+		return tuer_confirm_override == 1
+	var settings := get_node_or_null("/root/AppSettings")
+	return settings != null and settings.is_door_confirmation_enabled()
+
+
+## Bestätigungs-Karte („In die Küche?" / „Nach draußen gehen?") — nutzt den
+## _choice-Slot, damit Tür-Taps währenddessen gesperrt sind (wie beim
+## Blockade-Gag).
+func _show_door_confirm(door: DoorTransition) -> void:
+	var ziel := RoomDefs.room(door.target_room)
+	var frage := I18nService.t("home.tuer.confirm_draussen")
+	if not bool(ziel.get("outdoor", false)):
+		var raum_name := I18nService.t(str(ziel.get("name_key", "")))
+		frage = I18nService.t("home.tuer.confirm_raum", {"raum": raum_name})
+	_choice = PanelContainer.new()
+	_choice.name = "TuerConfirm"
+	_choice.theme = ThemeService.theme()
+	_choice.theme_type_variation = "AcCard"
+	_choice.set_anchors_preset(Control.PRESET_CENTER)
+	_choice.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_choice.grow_vertical = Control.GROW_DIRECTION_BOTH
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 10)
+	_choice.add_child(box)
+	var label := Label.new()
+	label.text = frage
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(label)
+	var reihe := HBoxContainer.new()
+	reihe.add_theme_constant_override("separation", 10)
+	reihe.alignment = BoxContainer.ALIGNMENT_CENTER
+	box.add_child(reihe)
+	var ja := Button.new()
+	ja.text = I18nService.t("home.tuer.confirm_ja")
+	ja.theme_type_variation = "PrimaryButton"
+	ja.pressed.connect(_on_door_confirm.bind(door, true))
+	reihe.add_child(ja)
+	var nein := Button.new()
+	nein.text = I18nService.t("home.tuer.confirm_nein")
+	nein.theme_type_variation = "GhostButton"
+	nein.pressed.connect(_on_door_confirm.bind(door, false))
+	reihe.add_child(nein)
+	_ui_layer.add_child(_choice)
+
+
+func _on_door_confirm(door: DoorTransition, bestaetigt: bool) -> void:
+	if _choice != null:
+		_choice.queue_free()
+		_choice = null
+	if bestaetigt:
+		_start_door_travel(door)
+
+
+## Doc F §6: Beschwerde-Bubble + Choice „Ich baue um“ / „BODEN IST LAVA“.
+func _blocked_flow() -> void:
+	_gooby.set_wander_enabled(false)
+	_gooby.rig.set_emotion("sad")
+	say(I18nService.t("home.blocked.bubble"))
+	_choice = PanelContainer.new()
+	_choice.theme = ThemeService.theme()
+	_choice.theme_type_variation = "AcCard"
+	_choice.set_anchors_preset(Control.PRESET_CENTER)
+	_choice.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_choice.grow_vertical = Control.GROW_DIRECTION_BOTH
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 10)
+	_choice.add_child(box)
+	var rebuild := Button.new()
+	rebuild.text = I18nService.t("home.blocked.umbauen")
+	rebuild.theme_type_variation = "PrimaryButton"
+	rebuild.pressed.connect(_on_blocked_choice.bind(false))
+	box.add_child(rebuild)
+	var lava := Button.new()
+	lava.text = I18nService.t("home.blocked.lava")
+	lava.theme_type_variation = "AccentButton"
+	lava.pressed.connect(_on_blocked_choice.bind(true))
+	box.add_child(lava)
+	_ui_layer.add_child(_choice)
+
+
+func _on_blocked_choice(lava: bool) -> void:
+	_choice.queue_free()
+	_choice = null
+	if lava:
+		_spidergooby_flow()
+		return
+	_gooby.set_wander_enabled(true)
+	open_build_mode()
+
+
+func _spidergooby_flow() -> void:
+	say(I18nService.t("home.blocked.spidergooby"))
+	await _gooby.spidergooby_gag()
+	open_build_mode()
+
+
+func _on_build_opened() -> void:
+	build_mode_toggled.emit(true)
+	if _skyline != null:
+		_skyline.set_aktiv(true)
+	_set_dioramas_visible(false)
+	if _gooby != null:
+		_gooby.set_wander_enabled(true)
+		_gooby.rig.play_clip("idle")
+		say(I18nService.t("home.gooby.watch"))
+
+
+func _on_build_closed() -> void:
+	build_mode_toggled.emit(false)
+	if _skyline != null:
+		_skyline.set_aktiv(_is_outdoor())
+	_set_dioramas_visible(true)
+	if _gooby != null:
+		_gooby.rig.play_clip("idle")
+		_gooby.set_wander_enabled(true)
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	var pressed: bool = (
+		(event is InputEventMouseButton and event.pressed)
+		or (event is InputEventScreenTouch and event.pressed)
+	)
+	if not pressed:
+		return
+	for door_id: String in _doors:
+		var door: DoorTransition = _doors[door_id]
+		if door.is_busy():
+			door.skip()
+
+
+func _announce_moving_day() -> void:
+	if _gs != null and bool(_gs.get_value("home.movingDay", false)):
+		say(I18nService.t("home.umzug"))
+		_gs.set_value("home.movingDay", false)
+
+
+func _emit_ready_for_reveal() -> void:
+	await get_tree().process_frame
+	ready_for_reveal.emit()
+
+
+func _inward_yaw(wall: String) -> float:
+	match wall:
+		"N":
+			return 0.0
+		"S":
+			return PI
+		"W":
+			return PI / 2.0
+	return -PI / 2.0
+
+
+func _make_smoke(world_pos: Vector3) -> GPUParticles3D:
+	var smoke := GPUParticles3D.new()
+	smoke.amount = 20
+	smoke.lifetime = 0.9
+	var mat := ParticleProcessMaterial.new()
+	mat.direction = Vector3(0, 1, 0)
+	mat.spread = 40.0
+	mat.initial_velocity_min = 0.4
+	mat.initial_velocity_max = 0.9
+	mat.gravity = Vector3.ZERO
+	mat.scale_min = 0.6
+	mat.scale_max = 1.4
+	smoke.process_material = mat
+	var mesh := SphereMesh.new()
+	mesh.radius = 0.05
+	mesh.height = 0.1
+	smoke.draw_pass_1 = mesh
+	smoke.position = world_pos + Vector3(0, 0.4, 0)
+	smoke.emitting = true
+	add_child(smoke)
+	return smoke
+
+
+func _flat_material(color: Color) -> StandardMaterial3D:
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = color
+	mat.roughness = 0.9
+	return mat

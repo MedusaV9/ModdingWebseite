@@ -1,0 +1,10 @@
+{
+	"id": "goobySays",
+	"title_key": "mg.goobySays.title",
+	"scene": "res://scripts/minigames/games/gooby_says/gooby_says.tscn",
+	"coin_table": {"divisor": 5, "min": 4, "max": 24},
+	"target": 70,
+	"orientation": "portrait",
+	"supports_endless": true,
+	"energy_cost": 8
+}

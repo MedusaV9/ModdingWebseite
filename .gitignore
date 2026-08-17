@@ -1,0 +1,4 @@
+asset-staging/
+/test-reports/
+__pycache__/
+*.py[cod]

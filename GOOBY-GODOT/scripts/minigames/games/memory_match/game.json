@@ -1,0 +1,10 @@
+{
+	"id": "memoryMatch",
+	"title_key": "mg.memoryMatch.title",
+	"scene": "res://scripts/minigames/games/memory_match/memory_match.tscn",
+	"coin_table": {"divisor": 2, "min": 5, "max": 24},
+	"target": 40,
+	"orientation": "portrait",
+	"supports_endless": true,
+	"energy_cost": 8
+}

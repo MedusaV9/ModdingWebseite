@@ -1,0 +1,107 @@
+=== FINAL ranch_zonen (1920x1080) 01:32:28
+WARNING: Could not set V-Sync mode, as changing V-Sync mode is not supported by the graphics driver.
+WARNING: Orientation not supported by this display server.
+[capture] Auto-Profil hätte gewählt: { "scale_3d": 1.0, "fps": 60, "msaa": "2x", "shadows": "hoch", "draw_distance": 1.0, "particles": 1.0, "post_fx": "hoch" }
+[capture] Qualität erzwungen: preset=hoch scale_3d=1.00 msaa=2 schatten_atlas=4096 fenster=(1920, 1080)
+[capture] Clip 'ranch_zonen' gestartet
+[capture] Clip fertig (18.4 s)
+Done recording movie at path: /workspace/trailer/captures/ranch_zonen/f.png
+1104 frames at 60 FPS (movie length: 00.0:00.0:18.0), recorded in 00.0:35.0:15.0 (0% of real-time speed).
+WARNING: ObjectDB instances leaked at exit (run with --verbose for details).
+ERROR: 2 resources still in use at exit (run with --verbose for details).
+ffmpeg: /exec-daemon/tmux-root/lib/libncursesw.so.6: no version information available (required by /lib/x86_64-linux-gnu/libcaca.so.0)
+ffmpeg: /exec-daemon/tmux-root/lib/libncursesw.so.6: no version information available (required by /lib/x86_64-linux-gnu/libcaca.so.0)
+    → /workspace/trailer/public/clips/ranch_zonen.mp4 (1104 Frames, 121M)
+=== FINAL ranch_berge (1920x1080) 02:12:10
+WARNING: Could not set V-Sync mode, as changing V-Sync mode is not supported by the graphics driver.
+WARNING: Orientation not supported by this display server.
+[capture] Auto-Profil hätte gewählt: { "scale_3d": 1.0, "fps": 60, "msaa": "2x", "shadows": "hoch", "draw_distance": 1.0, "particles": 1.0, "post_fx": "hoch" }
+[capture] Qualität erzwungen: preset=hoch scale_3d=1.00 msaa=2 schatten_atlas=4096 fenster=(1920, 1080)
+[capture] Clip 'ranch_berge' gestartet
+[capture] Clip fertig (13.0 s)
+Done recording movie at path: /workspace/trailer/captures/ranch_berge/f.png
+780 frames at 60 FPS (movie length: 00.0:00.0:13.0), recorded in 00.0:28.0:53.0 (0% of real-time speed).
+WARNING: ObjectDB instances leaked at exit (run with --verbose for details).
+ERROR: 4 resources still in use at exit (run with --verbose for details).
+ffmpeg: /exec-daemon/tmux-root/lib/libncursesw.so.6: no version information available (required by /lib/x86_64-linux-gnu/libcaca.so.0)
+ffmpeg: /exec-daemon/tmux-root/lib/libncursesw.so.6: no version information available (required by /lib/x86_64-linux-gnu/libcaca.so.0)
+    → /workspace/trailer/public/clips/ranch_berge.mp4 (780 Frames, 47M)
+=== FINAL ranch_wetter (1920x1080) 02:43:53
+WARNING: Could not set V-Sync mode, as changing V-Sync mode is not supported by the graphics driver.
+WARNING: Orientation not supported by this display server.
+[capture] Auto-Profil hätte gewählt: { "scale_3d": 1.0, "fps": 60, "msaa": "2x", "shadows": "hoch", "draw_distance": 1.0, "particles": 1.0, "post_fx": "hoch" }
+[capture] Qualität erzwungen: preset=hoch scale_3d=1.00 msaa=2 schatten_atlas=4096 fenster=(1920, 1080)
+[capture] Clip 'ranch_wetter' gestartet
+[capture] Clip fertig (12.0 s)
+Done recording movie at path: /workspace/trailer/captures/ranch_wetter/f.png
+720 frames at 60 FPS (movie length: 00.0:00.0:12.0), recorded in 00.0:23.0:10.0 (0% of real-time speed).
+WARNING: ObjectDB instances leaked at exit (run with --verbose for details).
+ERROR: 2 resources still in use at exit (run with --verbose for details).
+ffmpeg: /exec-daemon/tmux-root/lib/libncursesw.so.6: no version information available (required by /lib/x86_64-linux-gnu/libcaca.so.0)
+ffmpeg: /exec-daemon/tmux-root/lib/libncursesw.so.6: no version information available (required by /lib/x86_64-linux-gnu/libcaca.so.0)
+    → /workspace/trailer/public/clips/ranch_wetter.mp4 (720 Frames, 24M)
+=== FINAL ranch_ride (1920x1080) 03:09:25
+WARNING: Could not set V-Sync mode, as changing V-Sync mode is not supported by the graphics driver.
+WARNING: Orientation not supported by this display server.
+[capture] Auto-Profil hätte gewählt: { "scale_3d": 1.0, "fps": 60, "msaa": "2x", "shadows": "hoch", "draw_distance": 1.0, "particles": 1.0, "post_fx": "hoch" }
+[capture] Qualität erzwungen: preset=hoch scale_3d=1.00 msaa=2 schatten_atlas=4096 fenster=(1920, 1080)
+[capture] Clip 'ranch_ride' gestartet
+[capture] Clip fertig (12.0 s)
+Done recording movie at path: /workspace/trailer/captures/ranch_ride/f.png
+720 frames at 60 FPS (movie length: 00.0:00.0:12.0), recorded in 00.0:24.0:25.0 (0% of real-time speed).
+WARNING: ObjectDB instances leaked at exit (run with --verbose for details).
+ERROR: 2 resources still in use at exit (run with --verbose for details).
+ffmpeg: /exec-daemon/tmux-root/lib/libncursesw.so.6: no version information available (required by /lib/x86_64-linux-gnu/libcaca.so.0)
+ffmpeg: /exec-daemon/tmux-root/lib/libncursesw.so.6: no version information available (required by /lib/x86_64-linux-gnu/libcaca.so.0)
+    → /workspace/trailer/public/clips/ranch_ride.mp4 (720 Frames, 35M)
+=== FINAL ranch_fahrt (1920x1080) 03:36:13
+WARNING: Could not set V-Sync mode, as changing V-Sync mode is not supported by the graphics driver.
+WARNING: Orientation not supported by this display server.
+[capture] Auto-Profil hätte gewählt: { "scale_3d": 1.0, "fps": 60, "msaa": "2x", "shadows": "hoch", "draw_distance": 1.0, "particles": 1.0, "post_fx": "hoch" }
+[capture] Qualität erzwungen: preset=hoch scale_3d=1.00 msaa=2 schatten_atlas=4096 fenster=(1920, 1080)
+[capture] Clip 'ranch_fahrt' gestartet
+[capture] Clip fertig (12.0 s)
+Done recording movie at path: /workspace/trailer/captures/ranch_fahrt/f.png
+720 frames at 60 FPS (movie length: 00.0:00.0:12.0), recorded in 00.0:17.0:36.0 (1% of real-time speed).
+WARNING: ObjectDB instances leaked at exit (run with --verbose for details).
+ffmpeg: /exec-daemon/tmux-root/lib/libncursesw.so.6: no version information available (required by /lib/x86_64-linux-gnu/libcaca.so.0)
+ffmpeg: /exec-daemon/tmux-root/lib/libncursesw.so.6: no version information available (required by /lib/x86_64-linux-gnu/libcaca.so.0)
+    → /workspace/trailer/public/clips/ranch_fahrt.mp4 (720 Frames, 12M)
+=== FINAL ranch (1920x1080) 03:55:13
+WARNING: Could not set V-Sync mode, as changing V-Sync mode is not supported by the graphics driver.
+WARNING: Orientation not supported by this display server.
+[capture] Auto-Profil hätte gewählt: { "scale_3d": 1.0, "fps": 60, "msaa": "2x", "shadows": "hoch", "draw_distance": 1.0, "particles": 1.0, "post_fx": "hoch" }
+[capture] Qualität erzwungen: preset=hoch scale_3d=1.00 msaa=2 schatten_atlas=4096 fenster=(1920, 1080)
+[capture] Clip 'ranch' gestartet
+[capture] Clip fertig (11.0 s)
+Done recording movie at path: /workspace/trailer/captures/ranch/f.png
+660 frames at 60 FPS (movie length: 00.0:00.0:11.0), recorded in 00.0:17.0:43.0 (1% of real-time speed).
+ffmpeg: /exec-daemon/tmux-root/lib/libncursesw.so.6: no version information available (required by /lib/x86_64-linux-gnu/libcaca.so.0)
+ffmpeg: /exec-daemon/tmux-root/lib/libncursesw.so.6: no version information available (required by /lib/x86_64-linux-gnu/libcaca.so.0)
+    → /workspace/trailer/public/clips/ranch.mp4 (660 Frames, 27M)
+=== FINAL ranch_comp (1920x1080) 04:14:31
+WARNING: Could not set V-Sync mode, as changing V-Sync mode is not supported by the graphics driver.
+WARNING: Orientation not supported by this display server.
+[capture] Auto-Profil hätte gewählt: { "scale_3d": 1.0, "fps": 60, "msaa": "2x", "shadows": "hoch", "draw_distance": 1.0, "particles": 1.0, "post_fx": "hoch" }
+[capture] Qualität erzwungen: preset=hoch scale_3d=1.00 msaa=2 schatten_atlas=4096 fenster=(1920, 1080)
+[capture] Clip 'ranch_comp' gestartet
+[capture] Clip fertig (12.0 s)
+Done recording movie at path: /workspace/trailer/captures/ranch_comp/f.png
+720 frames at 60 FPS (movie length: 00.0:00.0:12.0), recorded in 00.0:18.0:43.0 (1% of real-time speed).
+ffmpeg: /exec-daemon/tmux-root/lib/libncursesw.so.6: no version information available (required by /lib/x86_64-linux-gnu/libcaca.so.0)
+ffmpeg: /exec-daemon/tmux-root/lib/libncursesw.so.6: no version information available (required by /lib/x86_64-linux-gnu/libcaca.so.0)
+    → /workspace/trailer/public/clips/ranch_comp.mp4 (720 Frames, 8.9M)
+=== FINAL ranch_dorf (1920x1080) 04:34:24
+=== FINAL ranch_dorf (1920x1080) 04:37:12
+WARNING: Could not set V-Sync mode, as changing V-Sync mode is not supported by the graphics driver.
+WARNING: Orientation not supported by this display server.
+[capture] Auto-Profil hätte gewählt: { "scale_3d": 1.0, "fps": 60, "msaa": "2x", "shadows": "hoch", "draw_distance": 1.0, "particles": 1.0, "post_fx": "hoch" }
+[capture] Qualität erzwungen: preset=hoch scale_3d=1.00 msaa=2 schatten_atlas=4096 fenster=(1920, 1080)
+[capture] Clip 'ranch_dorf' gestartet
+[capture] Clip fertig (10.0 s)
+Done recording movie at path: /workspace/trailer/captures/ranch_dorf/f.png
+600 frames at 60 FPS (movie length: 00.0:00.0:10.0), recorded in 00.0:12.0:39.0 (1% of real-time speed).
+ffmpeg: /exec-daemon/tmux-root/lib/libncursesw.so.6: no version information available (required by /lib/x86_64-linux-gnu/libcaca.so.0)
+ffmpeg: /exec-daemon/tmux-root/lib/libncursesw.so.6: no version information available (required by /lib/x86_64-linux-gnu/libcaca.so.0)
+    → /workspace/trailer/public/clips/ranch_dorf.mp4 (600 Frames, 8.1M)
+=== FERTIG 04:50:43

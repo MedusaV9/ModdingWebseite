@@ -1,0 +1,10 @@
+{
+	"id": "basketBounce",
+	"title_key": "mg.basketBounce.title",
+	"scene": "res://scripts/minigames/games/basket_bounce/basket_bounce.tscn",
+	"coin_table": {"divisor": 3, "min": 4, "max": 26},
+	"target": 65,
+	"orientation": "portrait",
+	"supports_endless": true,
+	"energy_cost": 8
+}

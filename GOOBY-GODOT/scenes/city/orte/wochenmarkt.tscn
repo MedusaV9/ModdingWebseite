@@ -1,0 +1,7 @@
+[gd_scene load_steps=2 format=3 uid="uid://c3aortwochenmarkt1"]
+
+[ext_resource type="Script" path="res://scripts/city/orte/wochenmarkt.gd" id="1_wochenmarkt"]
+
+[node name="Wochenmarkt" type="Node3D"]
+script = ExtResource("1_wochenmarkt")
+ort_id = "wochenmarkt"

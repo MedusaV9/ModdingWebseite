@@ -1,0 +1,182 @@
+// Kitchen room definition (§C2, §C5.2) — PURE DATA, no three.js/DOM imports so
+// test/rooms.test.js can validate it headlessly. src/home/roomManager.js turns
+// this table into meshes/anchors/tap targets.
+//
+// Fixed interactables: fridge (opens the food tray — G5 subscribes
+// roomManager.on('tap:fridge')), counter (composition, anchor only).
+// Decor slots (§C5.2): tableSet(2) · fridge(2) · appliance(3) · wallShelf(2).
+//
+// Coordinates are room-local meters: x → right, z → toward the camera,
+// origin at the room's floor center. Furniture entries are auto-grounded and
+// footprint-centered by roomManager (Kenney GLBs have corner origins);
+// `at[1]` is extra lift for wall-mounted pieces. `rotY` in degrees, 0 = the
+// model's authored facing (Kenney furniture faces +z / the camera).
+//
+// Entry shape (shared by all rooms/*.js — see roomManager.js JSDoc):
+//   { item?, proc?, slot?, pieces?, at:[x,y,z], rotY?, scale?, interact?,
+//     anchor?, hitSize?:[w,h,d], noShadow? }
+
+/** @type {import('../roomManager.js').RoomDef} */
+export const ROOM = Object.freeze({
+  id: 'kitchen',
+
+  /** §C5.2 decor slots: default item + purchasable variants (ids = GLB names). */
+  slots: Object.freeze({
+    tableSet: Object.freeze({ default: 'table', items: Object.freeze(['table', 'tableCloth']) }),
+    fridge: Object.freeze({ default: 'kitchenFridge', items: Object.freeze(['kitchenFridge', 'kitchenFridgeLarge']) }),
+    // V2/G22 (§C8.1): + microwave 4th appliance variant
+    appliance: Object.freeze({ default: 'toaster', items: Object.freeze(['toaster', 'kitchenCoffeeMachine', 'kitchenBlender', 'kitchenMicrowave']) }),
+    wallShelf: Object.freeze({ default: 'kitchenCabinetUpper', items: Object.freeze(['kitchenCabinetUpper', 'kitchenCabinetUpperDouble']) }),
+    // V2/G22 (§C8.1) new slot: breakfast-bar corner, empty until bought —
+    // kitchenBar counter or a 2-stool set (stoolBar "pairs with bar")
+    bar: Object.freeze({ default: null, items: Object.freeze(['kitchenBar', 'stoolBar']) }),
+  }),
+
+  // ---- V4/G79 (PLAN4-GAMES §G9.1): static room dressing, never saved ------
+  // Batch ids are the draw-call contract consumed by decor.js: all procedural
+  // trim/utensils merge once; the shared Tiny Treats atlas merges the bakery
+  // corner once (2 added calls total, below the ≤4 room delta).
+  dressing: Object.freeze([
+    Object.freeze({
+      id: 'wallTrim', kind: 'wallTrim', batch: 'color',
+      tint: '#E8D5C0', walls: Object.freeze(['back', 'left']),
+    }),
+    // V6/E4: + cash_register on the display case's right end completes the
+    // Purble-Bäckerei corner (pack faces +x natively ⇒ rotY −90 turns it to
+    // the camera). The mixer slides to the case's left end and the macaron
+    // trio regroups front-left so all four props share the 0.57×0.42 m top
+    // without clipping.
+    Object.freeze({
+      id: 'bakeryCorner', kind: 'assetCluster', batch: 'bakery',
+      pieces: Object.freeze([
+        Object.freeze({ key: 'bakery-interior/display_case_short', at: Object.freeze([1.55, 0, -0.58]), scale: 0.42, rotY: -90 }),
+        Object.freeze({ key: 'bakery-interior/stand_mixer', at: Object.freeze([1.4, 0.66, -0.63]), scale: 0.22, rotY: -90 }),
+        Object.freeze({ key: 'bakery-interior/cash_register', at: Object.freeze([1.68, 0.66, -0.55]), scale: 0.28, rotY: -90 }),
+        Object.freeze({ key: 'bakery-interior/macaron_pink', at: Object.freeze([1.33, 0.68, -0.42]), scale: 0.42 }),
+        Object.freeze({ key: 'bakery-interior/macaron_blue', at: Object.freeze([1.49, 0.68, -0.43]), scale: 0.42 }),
+        Object.freeze({ key: 'bakery-interior/macaron_yellow', at: Object.freeze([1.41, 0.68, -0.5]), scale: 0.42 }),
+      ]),
+    }),
+    Object.freeze({
+      id: 'hangingUtensils', kind: 'hangingUtensils', batch: 'color',
+      at: Object.freeze([0.72, 1.72, -1.43]),
+    }),
+    // ---- V5/ASSETS: Tiny Treats counter dressing (charming-kitchen pack) ---
+    // Kettle + mugs on the right cabinet top (y 0.698 counter surface), pot and
+    // pan on the stove, dish rack left of the drawer unit's toaster, and a
+    // potted pothos filling the front-left floor corner. One extra merged
+    // atlas batch ('kitchenware') — same shared tiny_treats_texture_1 atlas.
+    Object.freeze({
+      id: 'kitchenware', kind: 'assetCluster', batch: 'kitchenware',
+      pieces: Object.freeze([
+        Object.freeze({ key: 'charming-kitchen/kettle', at: Object.freeze([1.3, 0.698, -1.15]), scale: 0.32, rotY: 15 }),
+        Object.freeze({ key: 'charming-kitchen/mug_blue', at: Object.freeze([1.58, 0.698, -1.1]), scale: 0.32, rotY: -25 }),
+        Object.freeze({ key: 'charming-kitchen/mug_red', at: Object.freeze([1.52, 0.698, -1.28]), scale: 0.32, rotY: 140 }),
+        Object.freeze({ key: 'charming-kitchen/pot', at: Object.freeze([0.68, 0.698, -1.18]), scale: 0.34 }),
+        Object.freeze({ key: 'charming-kitchen/pan', at: Object.freeze([0.95, 0.698, -1.14]), scale: 0.3 }),
+        Object.freeze({ key: 'charming-kitchen/dishrack_plates', at: Object.freeze([-0.76, 0.698, -1.28]), scale: 0.36 }),
+        Object.freeze({ key: 'house-plants/pothos_plant_large_potted', at: Object.freeze([-1.55, 0, 1.05]), scale: 0.24, rotY: 30 }),
+      ]),
+    }),
+    // ---- end V5/ASSETS -------------------------------------------------------
+    // ---- V6/E4: baked-goods breakfast on the dining table (top y 0.405 —
+    // table native 0.32673 × FURNITURE_SCALE 1.55 × entry scale 0.8). The
+    // pack's GLBs embed their own copy of the Tiny Treats atlas, so they get
+    // their OWN merged batch (+1 call, kitchen dressing total 4) instead of
+    // piggybacking the kitchenware batch's external texture.
+    Object.freeze({
+      id: 'breakfastSet', kind: 'assetCluster', batch: 'baked',
+      pieces: Object.freeze([
+        Object.freeze({ key: 'baked-goods/croissant', at: Object.freeze([0.65, 0.406, 0.12]), scale: 0.5, rotY: -15 }),
+        Object.freeze({ key: 'baked-goods/cupcake', at: Object.freeze([0.98, 0.406, 0.28]), scale: 0.45 }),
+      ]),
+    }),
+    // ---- end V6/E4 -------------------------------------------------------------
+    // ---- V6.1/G2 (A1): stove pilot glow — a warm emissive bulb sitting on
+    // the stove's back rim between the burners (stove top y 0.698, spans
+    // x 0.386..1.054/z −1.47..−0.77 at [0.72, 0, −1.12]). Opens the kitchen's
+    // merged `fairy` batch (+1 call — kitchen dressing total 5, +2 vs the V5
+    // baseline 3, inside the ≤4-added budget) and anchors the dusk/night
+    // kitchen point light homeScene.js parks at the same spot, so the warm
+    // pool reads as coming FROM a lit fixture. Bulb top y 0.845 stays under
+    // the Nougatschleuse fixture's lowest part (chute tip y ≈ 0.89 when
+    // installed at [0.95, 1.24, −1.34]) — no visual clip either way.
+    Object.freeze({
+      id: 'stovePilotGlow', kind: 'lampGlow', at: Object.freeze([0.72, 0.76, -1.33]),
+    }),
+    // ---- end V6.1/G2 (A1) -------------------------------------------------------
+  ]),
+  // ---- end V4/G79 ----------------------------------------------------------
+
+  furniture: Object.freeze([
+    // fridge — fixed interactable + decor slot (model swap kitchenFridgeLarge)
+    // V4/AC-3D: the fridge GLB is shallower than the counter units, so the
+    // old center-aligned z −1.12 left its back 15 cm off the wall (roomAudit
+    // 'facing' wall-backed check). z −1.27 puts the back flush with the wall.
+    Object.freeze({
+      slot: 'fridge', item: 'kitchenFridge', at: Object.freeze([-1.28, 0, -1.27]),
+      rotY: 0, interact: 'fridge', anchor: 'fridge', hitSize: Object.freeze([0.8, 1.5, 0.7]),
+    }),
+    // counter run along the back wall: drawers · sink · stove (flush 0.67 m
+    // pieces). V4/POLISH-I: + a base cabinet right of the stove so the run
+    // reaches the right corner (continuous worktop under the Nougatschleuse).
+    Object.freeze({ item: 'kitchenCabinetDrawer', at: Object.freeze([-0.62, 0, -1.12]), rotY: 0 }),
+    Object.freeze({ item: 'kitchenSink', at: Object.freeze([0.05, 0, -1.12]), rotY: 0, anchor: 'counter' }),
+    Object.freeze({ item: 'kitchenStove', at: Object.freeze([0.72, 0, -1.12]), rotY: 0 }),
+    Object.freeze({ item: 'kitchenCabinet', at: Object.freeze([1.39, 0, -1.12]), rotY: 0 }),
+    // wall shelf above the counter (decor slot) + V4/POLISH-I: a matching
+    // fixed upper over the drawer unit so the wall reads as one fitted kitchen
+    Object.freeze({ slot: 'wallShelf', item: 'kitchenCabinetUpper', at: Object.freeze([0.05, 1.5, -1.3]), rotY: 0 }),
+    Object.freeze({ item: 'kitchenCabinetUpper', at: Object.freeze([-0.62, 1.5, -1.3]), rotY: 0 }),
+    // small appliance on the counter top (decor slot)
+    Object.freeze({ slot: 'appliance', item: 'toaster', at: Object.freeze([-0.62, 0.71, -1.05]), rotY: 0 }),
+    // V4/POLISH-I: dining rug under the table set anchors the eating corner
+    // (layered look — the set's legs stand on it)
+    Object.freeze({ item: 'rugRectangle', at: Object.freeze([0.82, 0, 0.22]), rotY: 0, scale: 0.9, noShadow: true }),
+    // table set (decor slot): table + 2 chairs across it (variant: tableCloth +
+    // chairCushion). Chairs sit front/back so the set reads well in portrait.
+    Object.freeze({
+      slot: 'tableSet', item: 'table', at: Object.freeze([0.82, 0, 0.18]), rotY: 0, scale: 0.8,
+      pieces: Object.freeze([
+        Object.freeze({ item: 'table', at: Object.freeze([0, 0, 0]), rotY: 0 }),
+        Object.freeze({ item: 'chair', at: Object.freeze([-0.2, 0, -0.62]), rotY: 0 }),
+        Object.freeze({ item: 'chair', at: Object.freeze([0.2, 0, 0.62]), rotY: 180 }),
+      ]),
+      piecesByItem: Object.freeze({
+        tableCloth: Object.freeze([
+          Object.freeze({ item: 'tableCloth', at: Object.freeze([0, 0, 0]), rotY: 0 }),
+          Object.freeze({ item: 'chairCushion', at: Object.freeze([-0.2, 0, -0.62]), rotY: 0 }),
+          Object.freeze({ item: 'chairCushion', at: Object.freeze([0.2, 0, 0.62]), rotY: 180 }),
+        ]),
+      }),
+    }),
+    // set dressing — V4/POLISH-I: the bin tucks beside the fridge (its old
+    // corner spot now holds the counter run's right cabinet)
+    Object.freeze({ item: 'trashcan', at: Object.freeze([-1.78, 0, -0.6]), rotY: 0 }),
+    // ---- V3/G46 (§C11.1): committed furniture-kit room dressing ----------
+    // Real coffee machine fills the last clear counter patch; the appliance
+    // slot and all of its saved variants remain untouched.
+    Object.freeze({
+      item: 'kitchenCoffeeMachine', at: Object.freeze([0.35, 0.71, -1.04]),
+      rotY: 0, scale: 1.05, dressing: 'v3-real-asset',
+    }),
+    // ---- end V3/G46 --------------------------------------------------------
+    // ---- V2/G22 (§C8.1): bar slot anchor on the left, facing the table ----
+    Object.freeze({
+      slot: 'bar', at: Object.freeze([-1.15, 0, 0.62]), rotY: 90,
+      // the stool "set" lays out two stools side by side (local x runs along
+      // the wall after the 90° holder turn)
+      piecesByItem: Object.freeze({
+        stoolBar: Object.freeze([
+          Object.freeze({ item: 'stoolBar', at: Object.freeze([-0.3, 0, 0]), rotY: 0 }),
+          Object.freeze({ item: 'stoolBar', at: Object.freeze([0.3, 0, 0]), rotY: 25 }),
+        ]),
+      }),
+    }),
+  ]),
+
+  /** Point anchors (world y included; goobyIdle is where Gooby stands here). */
+  anchors: Object.freeze({
+    goobyIdle: Object.freeze([-0.45, 0, 0.6]),
+  }),
+});

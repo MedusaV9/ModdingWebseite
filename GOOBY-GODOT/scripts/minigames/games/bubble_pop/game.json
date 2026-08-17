@@ -1,0 +1,10 @@
+{
+	"id": "bubblePop",
+	"title_key": "mg.bubblePop.title",
+	"scene": "res://scripts/minigames/games/bubble_pop/bubble_pop.tscn",
+	"coin_table": {"divisor": 4, "min": 4, "max": 24},
+	"target": 80,
+	"orientation": "portrait",
+	"supports_endless": true,
+	"energy_cost": 8
+}

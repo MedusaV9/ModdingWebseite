@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://c3areisecut01"]
+
+[ext_resource type="Script" path="res://scripts/city/travel/reise_cutscene.gd" id="1_cut"]
+
+[node name="ReiseCutscene" type="Node3D"]
+script = ExtResource("1_cut")

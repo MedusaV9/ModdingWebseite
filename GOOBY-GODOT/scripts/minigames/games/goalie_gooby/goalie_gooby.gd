@@ -1,0 +1,950 @@
+extends MinigameBase
+## Torwart-Gooby (goalieGooby) — Spiel-Szene. Alle MECHANIK-Zahlen aus
+## GoalieGoobyLogic (zahlengleich zum Web): 5 Bahnen, Ankündigung 0.9 s → 0.45 s,
+## Heber/Roller, Parade +4 (+2 Superparade), 3 Gegentore beenden früh,
+## alle 10 Paraden Jubel + 10 % Tempo, Elfmeterfinale ab Sekunde 50.
+##
+## ECHTES 3D (Agent 3D-A, Rückbau): die Kamera steht dort, wo der Schütze
+## anläuft (GOALIE_JUICE.CAM_Z_*), und blickt auf ein echtes Tor mit Pfosten,
+## Latte und Netz auf einem Bolzplatz im Park. Gooby ist als ECHTES Rig der
+## Torwart — er steht dem Spieler ZUGEWANDT auf der Linie, hechtet in die
+## gewischte Bahn, springt beim Heber, geht beim Roller runter und jubelt
+## nach der Parade.
+##
+## Der MinigameBase-Vertrag bleibt: Wurzel ist Node2D, die 3D-Welt hängt
+## darunter, HUD/Banner/Gegentor-Punkte sind CanvasItems obenauf.
+##
+## Die Steuerung ist unverändert: wischen = hechten, tippen = Mitte. Die Bahn
+## 0…4 liegt weiterhin links → rechts im Bild, weil die Kamera achsparallel
+## auf −z blickt.
+##
+## W17/G4-Politur (NUR Präsentation): Intro-Beat 1,2 s mit Kameraflug
+## Vereinsheim→Tor + Telegraph-Legende (M1/M4, Sim-Uhr wartet), das tote
+## Jubel-Feature _crowd_pulse ist bei Parade UND Gegentor angeschlossen
+## (M2/M8), _ui-Skalierung des HUD samt Hint-Fade (M9/M6) und Cheer-Band
+## mit Kontur (M7). Park-Kranz lebt jetzt in goalie_gooby_scenery.gd.
+
+const Logic := preload("res://scripts/minigames/games/goalie_gooby/goalie_gooby_logic.gd")
+const Scenery := preload("res://scripts/minigames/games/goalie_gooby/goalie_gooby_scenery.gd")
+const Stage3D := preload("res://scripts/minigames/games/_3da_stage/stage3d.gd")
+const Props3D := preload("res://scripts/minigames/games/_3da_stage/props3d.gd")
+const GoobyActor := preload("res://scripts/minigames/games/_3da_stage/gooby_actor.gd")
+const Spark3D := preload("res://scripts/minigames/games/_3da_stage/spark3d.gd")
+
+const ASSETS := "res://assets/minigames/goalie_gooby/"
+
+## Mindest-Wischweg (px), bevor eine Geste als Hechte gilt.
+const SWIPE_MIN_PX := 10.0
+## Torhöhe im Verhältnis zur halben Torbreite (Kinderfeld-Proportion).
+const GOAL_H_RATIO := 0.8
+## Elfmeterpunkt (Meter vor der Linie) — von dort kommt jeder Schuss.
+const SPOT_Z := 7.4
+## Ballradius in Metern.
+const BALL_R := 0.16
+## Nachspiel des Balls NACH der Entscheidung (Parade-Abwehr bzw. Einschlag).
+const BALL_FX_SEC := 0.7
+## Anlaufweg des Schützen-Blobs hinter dem Elfmeterpunkt (Meter).
+const STRIKER_RUN := 1.9
+## W17 M1: Intro-Beat (s) — Kameraflug Vereinsheim→Tor, die Sim-Uhr wartet.
+const INTRO_S := 1.2
+
+const GRASS := Color(0.35, 0.61, 0.33)
+const POST := Color(0.99, 0.99, 0.97)
+const BALL_COLOR := Color(0.99, 0.99, 0.96)
+
+var tune: Dictionary = {}
+var rng: GoobyRng
+var score := 0
+var saves := 0
+var goals := 0
+## Parade-Serie ohne Gegentor (nur Anzeige/Feel — Combo-Ton steigt mit).
+var save_streak := 0
+var elapsed := 0.0
+var kick: Dictionary = {}
+var kick_start := 0.0
+var arrive_t := 0.0
+var next_kick_at := 0.6
+var dive: Dictionary = {}
+var finished := false
+var view_size := Vector2(844.0, 390.0)
+var landscape := true
+
+var _stream: Callable
+var _drag_from := Vector2.ZERO
+var _ring := 0.0
+var _ring_scale := 1.0
+var _pip_pop := 0.0
+var _flash := 0.0
+var _flash_text := ""
+var _time_label: Label
+var _saves_label: Label
+var _hint_label: Label
+## W21/P5: Kit-Plates — Frost-Pille hinter Zeit/Paraden, Banner-Standard.
+var _hud_plate := StyleBoxFlat.new()
+var _banner_plate := StyleBoxFlat.new()
+
+var _stage: Stage3D
+var _gooby: GoobyActor
+var _sparks: Spark3D
+var _goal: Node3D
+var _lane_glow: MeshInstance3D
+var _ball_node: Node3D
+var _ball_shadow: MeshInstance3D
+var _save_ring: MeshInstance3D
+var _crowd: Node3D
+var _striker: Node3D
+var _net_node: Node3D
+var _keeper_x := 0.0
+var _keeper_y := 0.0
+var _built_half := 0.0
+## Nachspiel des Balls: {"kind": "deflect"|"goal", "t": s, "from": Vector3,
+## "vel": Vector3} — reine Ansicht, die Logik ist längst entschieden.
+var _ball_fx: Dictionary = {}
+var _crowd_pulse := 0.0
+var _net_ripple := 0.0
+## Tritt-Animation des Schützen-Blobs (Restzeit).
+var _strike_t := 0.0
+## W17 M9: HUD-Skalierungsfaktor (Kurzkante/390, 0.75..3.0).
+var _ui := 1.0
+## W17 M1: Restzeit des Intro-Beats (gatet Sim + Eingabe) und des Banners.
+var _intro_left := 0.0
+var _intro_banner_t := 0.0
+## Spielpose aus fit() — Ziel des Intro-Kameraflugs.
+var _play_cam := Transform3D.IDENTITY
+## Legende des Intro-Banners: [[Telegraph-Farbe, Erklärtext], …] (M4).
+var _intro_legend: Array = []
+
+
+func setup(context: MinigameCtx) -> void:
+	super.setup(context)
+	tune = Logic.apply_difficulty(Logic.GOALIE, ctx.difficulty)
+	rng = ctx.rng()
+	_stream = func() -> float: return rng.next()
+	_build_world()
+	_build_hud()
+	# W17 M1: Intro-Beat — die Sim-Uhr wartet, das Banner erklärt Bahn-Glühen
+	# und Telegraph-Farben (Heber blau, Roller rosa). RNG bleibt unberührt.
+	_intro_left = INTRO_S
+	_intro_banner_t = INTRO_S + 0.8
+	_intro_legend = [
+		[Scenery.LOB_TINT, I18nService.t("mg.goalieGooby.intro_lob")],
+		[Scenery.ROLLER_TINT, I18nService.t("mg.goalieGooby.intro_roller")],
+	]
+	_fit_viewport()
+	if is_inside_tree():
+		get_viewport().size_changed.connect(_fit_viewport)
+
+
+func end() -> void:
+	super.end()
+	finished = true
+
+
+## Pflicht-Layouthook: beide Orientierungen laufen über DIESE Funktion.
+## Das Tor ist hochkant SCHMALER (GOAL_HALF_W_PORTRAIT) — es wird also neu
+## gebaut, nicht nur die Kamera verschoben.
+func apply_view(size: Vector2) -> void:
+	if size.x > 1.0 and size.y > 1.0:
+		view_size = size
+	landscape = view_size.x > view_size.y
+	# W21/P5: der _ui-Faktor kommt aus dem MgHudKit (EINE Quelle statt acht).
+	_ui = MgHudKit.ui_scale(view_size)
+	position = Vector2.ZERO
+	if _stage != null:
+		_stage.apply_size(view_size)
+		_stage.set_fov(40.0 if landscape else 36.0)
+		_build_goal()
+		_frame_goal()
+	_layout_hud()
+	queue_redraw()
+
+
+## W21/P5: Zeit/Paraden als Kit-Chip (Frost-Pille, EIN Raster über alle
+## Spiele), Hinweis mit Typo-MINIMUM — die Hinweis-Breite hängt an der
+## Viewport-Breite statt an Fix-300-px (Krümel-HUD auf Tablets).
+func _layout_hud() -> void:
+	if _time_label == null:
+		return
+	MgHudKit.style_chip(_time_label, _saves_label, _ui)
+	MgHudKit.layout_chip(_time_label, _saves_label, _ui)
+	var hint_w := minf(view_size.x - 32.0 * _ui, 460.0 * _ui)
+	_hint_label.add_theme_font_size_override("font_size", MgHudKit.font_px(20.0, _ui))
+	_hint_label.add_theme_constant_override("outline_size", int(5.0 * _ui))
+	_hint_label.position = Vector2((view_size.x - hint_w) * 0.5, view_size.y - 64.0 * _ui)
+	_hint_label.size = Vector2(hint_w, 56.0 * _ui)
+
+
+func _process(delta: float) -> void:
+	if not is_active() or finished:
+		return
+	_intro_banner_t = maxf(0.0, _intro_banner_t - delta)
+	if _intro_left > 0.0:
+		_tick_intro(delta)
+		return
+	elapsed += delta
+	_ring = maxf(0.0, _ring - delta)
+	_pip_pop = maxf(0.0, _pip_pop - delta)
+	_flash = maxf(0.0, _flash - delta)
+	_stage.tick(delta)
+	_gooby.tick(delta)
+	if not bool(tune["ENDLESS"]) and elapsed >= float(tune["DURATION_SEC"]):
+		_finish()
+		return
+	if kick.is_empty():
+		if elapsed >= next_kick_at:
+			_spawn_kick()
+	elif elapsed >= arrive_t:
+		_resolve_kick()
+	_tick_keeper(delta)
+	_tick_ball()
+	_tick_ball_fx(delta)
+	_tick_striker(delta)
+	_tick_crowd(delta)
+	_tick_net_ripple(delta)
+	_tick_telegraph()
+	_tick_ring(delta)
+	_update_labels()
+	queue_redraw()
+
+
+## W17 M1: Intro-Beat — Kameraflug vom Vereinsheim in die Spielpose. elapsed
+## (und damit Spawn-Uhr und RNG-Reihenfolge) wartet: der Lauf bleibt nach dem
+## Beat zahlengleich (Crosscheck-Vertrag unberührt).
+func _tick_intro(delta: float) -> void:
+	_intro_left = maxf(0.0, _intro_left - delta)
+	_stage.tick(delta)
+	_gooby.tick(delta)
+	if _intro_left <= 0.0:
+		_frame_goal()
+	else:
+		_aim_intro()
+	_update_labels()
+	queue_redraw()
+
+
+## Intro-Flugbahn ansteuern. Reduced Motion überspringt den Flug (eigener
+## Bewegungs-FX, Call-Site-Gate) — die Kamera steht dann sofort im Spiel.
+func _aim_intro() -> void:
+	if _intro_left <= 0.0 or _stage.reduced_motion():
+		return
+	var pose: Dictionary = Scenery.intro_cam(1.0 - _intro_left / INTRO_S, _play_cam)
+	_stage.aim(pose["from"], pose["look"])
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if not is_active() or finished or _intro_left > 0.0:
+		return
+	if event is InputEventScreenTouch:
+		if event.pressed:
+			_drag_from = event.position
+		else:
+			_dive(event.position - _drag_from)
+
+
+## Aktuelle Torbreite in Weltmetern (quer breiter als hochkant).
+func goal_half_width() -> float:
+	var juice: Dictionary = Logic.GOALIE_JUICE
+	return float(juice["GOAL_HALF_W_LANDSCAPE" if landscape else "GOAL_HALF_W_PORTRAIT"])
+
+
+## Wie weit der aktuelle Schuss geflogen ist (0 Ankündigung … 1 Linie).
+func kick_progress() -> float:
+	if kick.is_empty():
+		return 0.0
+	var telegraph := float(kick["telegraph"])
+	var flight := float(kick["flight"])
+	var t := elapsed - kick_start
+	if t < telegraph:
+		return 0.0
+	return clampf((t - telegraph) / maxf(0.001, flight), 0.0, 1.0)
+
+
+# ------------------------------------------------------------------ Aufbau
+
+
+func _build_world() -> void:
+	_stage = Stage3D.new()
+	add_child(_stage)
+	(
+		_stage
+		. build(
+			{
+				"sky_top": Color(0.36, 0.63, 0.95),
+				"sky_horizon": Color(0.92, 0.96, 1.0),
+				# Boden-Hemisphäre = Nebelfarbe: die Wiese endet irgendwo, und
+				# ohne diesen Abgleich klebt dort ein dunkelgrüner Balken.
+				"ground_horizon": Color(0.86, 0.93, 0.92),
+				"ground_bottom": Color(0.86, 0.93, 0.92),
+				"fog_color": Color(0.86, 0.93, 0.92),
+				# Nebel erst SPÄT: hochkant steht die Kamera fast 20 m zurück,
+				# ein früher Nebel bleicht dann den halben Platz aus.
+				"fog_from": 38.0,
+				"fog_to": 100.0,
+				"fog_density": 1.0,
+				"sun_dir": Vector3(-0.36, -0.84, 0.4),
+				"sun_color": Color(1.0, 0.95, 0.85),
+				"sun_energy": 1.25,
+				"ambient": 0.32,
+				"ambient_color": Color(0.92, 0.9, 0.84),
+				"sky_ambient": 0.34,
+				# MP-E: eine Idee dunkler — der Rasen lag noch ~15 Luma-Stufen
+				# über dem Ziel und fraß die weißen Torlinien.
+				"exposure": 0.42,
+				"fill_energy": 0.24,
+				"glow": 0.3,
+				"shadow_distance": 26.0,
+				"fov": 40.0,
+			}
+		)
+	)
+	_stage.add_child(Props3D.ground(Vector2(220.0, 220.0), Props3D.flat(GRASS), -0.01))
+	# Rasenbahnen, Park-Kranz und Vereinsgelände leben in der Scenery; die
+	# Zuschauer kommen zurück (Paraden-Hüpfer). Der Schütze bleibt hier.
+	_crowd = Scenery.build(_stage, SPOT_Z, GRASS)
+	_build_striker()
+
+	_goal = Node3D.new()
+	_stage.add_child(_goal)
+
+	_ball_node = Node3D.new()
+	_ball_node.add_child(Props3D.sphere(BALL_R, Props3D.flat(BALL_COLOR, 0.55)))
+	for i in 6:
+		var a := TAU * float(i) / 6.0
+		var patch := Props3D.sphere(BALL_R * 0.34, Props3D.flat(Color(0.22, 0.24, 0.3), 0.6))
+		patch.position = (
+			Vector3(sin(a), 0.35 * (1 if i % 2 == 0 else -1), cos(a)).normalized() * BALL_R * 0.92
+		)
+		_ball_node.add_child(patch)
+	_stage.add_child(_ball_node)
+	_ball_shadow = Props3D.blob_shadow(BALL_R * 2.2, 0.3)
+	_stage.add_child(_ball_shadow)
+
+	_save_ring = Props3D.torus(0.4, 0.05, Props3D.glow(Color(1.0, 0.88, 0.42), 2.6))
+	_save_ring.visible = false
+	_stage.add_child(_save_ring)
+
+	_gooby = GoobyActor.new()
+	_stage.add_child(_gooby)
+	# yaw 0 = zur Kamera: der Torwart schaut dem Schützen (und dem Spieler)
+	# ins Gesicht — genau darum geht es in diesem Spiel.
+	_gooby.mount(1.2, 0.0)
+	_gooby.hold(
+		_build_glove(Color(0.98, 0.55, 0.35)),
+		"arm.R",
+		Transform3D(Basis.IDENTITY, Vector3(0.0, -0.16, 0.0))
+	)
+	_gooby.hold(
+		_build_glove(Color(0.98, 0.55, 0.35)),
+		"arm.L",
+		Transform3D(Basis.IDENTITY, Vector3(0.0, -0.16, 0.0))
+	)
+
+	_sparks = Spark3D.new()
+	_stage.add_child(_sparks)
+	_sparks.build({"color": Color(1.0, 0.9, 0.5), "amount": 24, "speed": Vector2(1.5, 3.6)})
+
+
+func _build_glove(color: Color) -> Node3D:
+	var holder := Node3D.new()
+	var pad := Props3D.sphere(0.11, Props3D.flat(color, 0.7))
+	pad.scale = Vector3(1.0, 1.25, 0.75)
+	holder.add_child(pad)
+	return holder
+
+
+## Schützen-Blob am Elfmeterpunkt: er läuft während der Ankündigung an und
+## tritt beim Abschuss durch — der Schuss hat damit einen sichtbaren Absender
+## statt aus dem Nichts zu kommen.
+func _build_striker() -> void:
+	_striker = Node3D.new()
+	_striker.name = "Striker"
+	var body := Props3D.sphere(0.24, Props3D.flat(Color(0.55, 0.68, 0.92), 0.85))
+	body.position.y = 0.3
+	body.scale = Vector3(1.0, 1.2, 0.92)
+	_striker.add_child(body)
+	var head := Props3D.sphere(0.15, Props3D.flat(Color(0.98, 0.9, 0.78), 0.85))
+	head.position.y = 0.68
+	_striker.add_child(head)
+	var cap := Props3D.sphere(0.155, Props3D.flat(Color(0.92, 0.42, 0.38), 0.85))
+	cap.position.y = 0.73
+	cap.scale = Vector3(1.0, 0.55, 1.0)
+	_striker.add_child(cap)
+	var boot := Props3D.sphere(0.09, Props3D.flat(Color(0.32, 0.3, 0.34), 0.9))
+	boot.name = "Boot"
+	# Fuß zeigt Richtung Tor (-Z), nicht zur Kamera.
+	boot.position = Vector3(-0.08, 0.08, -0.2)
+	boot.scale = Vector3(1.0, 0.7, 1.4)
+	_striker.add_child(boot)
+	_striker.add_child(Props3D.blob_shadow(0.34, 0.3))
+	_striker.position = _striker_home()
+	_stage.add_child(_striker)
+
+
+## Wartepunkt des Schützen: deutlich SEITLICH des Elfmeterpunkts, nicht
+## dahinter — direkt hinter dem Punkt schneidet ihn die Kamera am unteren
+## Bildrand ab und der Anlauf wäre unsichtbar.
+func _striker_home() -> Vector3:
+	return Vector3(STRIKER_RUN, 0.0, SPOT_Z + 0.9)
+
+
+## Tor mit Pfosten, Latte, Netz und Strafraumlinien. Wird bei jedem
+## Orientierungswechsel neu gebaut — hochkant ist es 2×2,4 m statt 2×3,1 m.
+func _build_goal() -> void:
+	var half := goal_half_width()
+	if absf(half - _built_half) < 0.001:
+		return
+	_built_half = half
+	for child in _goal.get_children():
+		child.queue_free()
+	_lane_glow = null
+	_net_node = null
+	var height := half * GOAL_H_RATIO * 2.0 * 0.5 + 0.4
+	var post_mat := Props3D.flat(POST, 0.4)
+	for side: float in [-1.0, 1.0]:
+		var post := Props3D.cylinder(0.075, height, post_mat)
+		post.position = Vector3(side * half, height * 0.5, 0.0)
+		_goal.add_child(post)
+	var bar := Props3D.cylinder(0.075, half * 2.0, post_mat)
+	bar.rotation.z = PI * 0.5
+	bar.position = Vector3(0.0, height, 0.0)
+	_goal.add_child(bar)
+	# Netz: Rückwand + zwei Seiten + Dach, jeweils als Gitter aus dünnen
+	# Stäben in EINEM MultiMesh (vier Draw-Calls wären Verschwendung).
+	_build_net(half, height)
+	_build_pitch_lines(half)
+	_build_lane_strips(half)
+	# Leuchtfeld für die angekündigte Bahn.
+	_lane_glow = Props3D.box(
+		Vector3(half * 2.0 / float(tune["LANES"]), height, 0.05),
+		Props3D.glass(Color(1.0, 0.85, 0.35, 0.3), true)
+	)
+	_lane_glow.visible = false
+	_goal.add_child(_lane_glow)
+
+
+func _build_net(half: float, height: float) -> void:
+	var depth := 1.5
+	var mesh := BoxMesh.new()
+	mesh.size = Vector3(0.02, 1.0, 0.02)
+	mesh.material = Props3D.glass(Color(1.0, 1.0, 1.0, 0.55), true)
+	var poses: Array = []
+	var steps := 15
+	for i in steps + 1:
+		var x := -half + 2.0 * half * float(i) / float(steps)
+		poses.append(_bar(Vector3(x, height * 0.5, -depth), Vector3(0.0, height, 0.0)))
+	for i in 7:
+		var y := height * float(i) / 6.0
+		poses.append(_bar(Vector3(0.0, y, -depth), Vector3(half * 2.0, 0.0, 0.0)))
+	for side: float in [-1.0, 1.0]:
+		for i in 5:
+			var y := height * float(i) / 4.0
+			poses.append(_bar(Vector3(side * half, y, -depth * 0.5), Vector3(0.0, 0.0, depth)))
+		for i in 5:
+			var z := -depth * float(i) / 4.0
+			poses.append(_bar(Vector3(side * half, height * 0.5, z), Vector3(0.0, height, 0.0)))
+	for i in 5:
+		var z := -depth * float(i) / 4.0
+		poses.append(_bar(Vector3(0.0, height, z), Vector3(half * 2.0, 0.0, 0.0)))
+	_net_node = Props3D.swarm_mesh(mesh, poses, 6.0)
+	_goal.add_child(_net_node)
+
+
+## Ein Netzstab: Mitte + Richtungsvektor (Länge = Betrag).
+func _bar(at: Vector3, along: Vector3) -> Transform3D:
+	var length := along.length()
+	var basis := Basis.IDENTITY
+	if absf(along.x) > 0.001:
+		basis = Basis(Vector3.FORWARD, PI * 0.5)
+	elif absf(along.z) > 0.001:
+		basis = Basis(Vector3.RIGHT, PI * 0.5)
+	return Transform3D(basis * Basis.from_scale(Vector3(1.0, length, 1.0)), at)
+
+
+## Torlinie, Strafraum und Elfmeterpunkt als flache Streifen.
+func _build_pitch_lines(half: float) -> void:
+	var mesh := PlaneMesh.new()
+	mesh.size = Vector2(1.0, 1.0)
+	mesh.material = Props3D.flat(Color(1.0, 0.99, 0.96), 0.85)
+	var box_half := half + 3.4
+	var box_depth := SPOT_Z + 2.2
+	var poses: Array = [
+		Transform3D(Basis.from_scale(Vector3(box_half * 2.0, 1.0, 0.1)), Vector3(0.0, 0.012, 0.0)),
+		Transform3D(
+			Basis.from_scale(Vector3(box_half * 2.0, 1.0, 0.1)), Vector3(0.0, 0.012, box_depth)
+		),
+		Transform3D(
+			Basis.from_scale(Vector3(0.1, 1.0, box_depth)),
+			Vector3(-box_half, 0.012, box_depth * 0.5)
+		),
+		Transform3D(
+			Basis.from_scale(Vector3(0.1, 1.0, box_depth)),
+			Vector3(box_half, 0.012, box_depth * 0.5)
+		),
+		Transform3D(Basis.from_scale(Vector3(0.24, 1.0, 0.24)), Vector3(0.0, 0.014, SPOT_Z)),
+	]
+	_goal.add_child(Props3D.swarm_mesh(mesh, poses, 12.0))
+
+
+## Fünf helle Kreidebahnen vom Elfmeterpunkt zur Linie — wie im Web. Sie
+## erzählen dem Spieler, wohin gehechtet werden kann, und füllen hochkant den
+## sonst leeren Vordergrund mit Fluchtlinien.
+func _build_lane_strips(half: float) -> void:
+	var mesh := PlaneMesh.new()
+	mesh.size = Vector2(1.0, 1.0)
+	mesh.material = Props3D.flat(Color(1.0, 1.0, 0.98, 0.2))
+	mesh.material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	var lanes := int(tune["LANES"])
+	var length := SPOT_Z + 0.6
+	var poses: Array = []
+	for i in lanes:
+		var x := lane_world(i, 0.0).x
+		poses.append(
+			Transform3D(
+				Basis.from_scale(Vector3(half * 2.0 / float(lanes) * 0.52, 1.0, length)),
+				Vector3(x * 0.86, 0.011, length * 0.5)
+			)
+		)
+	_goal.add_child(Props3D.swarm_mesh(mesh, poses, 24.0))
+
+
+## W21/P5: Zeit/Paraden sitzen als Tinte auf der Kit-Frost-Pille — die
+## Flutlicht-Sonderfarben mit Saum sind Geschichte (Konsistenz-Matrix).
+func _build_hud() -> void:
+	_time_label = Label.new()
+	_time_label.theme_type_variation = &"HeadlineLabel"
+	add_child(_time_label)
+	_saves_label = Label.new()
+	_saves_label.theme_type_variation = &"CaptionLabel"
+	add_child(_saves_label)
+	_hint_label = Label.new()
+	_hint_label.theme_type_variation = &"SoftLabel"
+	_hint_label.text = I18nService.t("mg.goalieGooby.hint")
+	_hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	# M9: hochkant bricht der lange Hinweis sauber um, statt überzulaufen.
+	_hint_label.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
+	_hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_hint_label.add_theme_color_override("font_color", Color(1.0, 0.99, 0.95, 0.95))
+	_hint_label.add_theme_color_override("font_outline_color", Color(0.16, 0.24, 0.15, 0.75))
+	add_child(_hint_label)
+	_update_labels()
+
+
+func _fit_viewport() -> void:
+	apply_view(get_viewport_rect().size)
+
+
+# ------------------------------------------------------------------ Kamera
+
+
+## Kamera dorthin, wo der Schütze anläuft — leicht erhöht, achsparallel auf
+## −z, damit Bahn 0…4 weiterhin links → rechts im Bild liegt.
+func _frame_goal() -> void:
+	if _stage == null:
+		return
+	var half := goal_half_width()
+	var height := half * GOAL_H_RATIO + 0.4
+	# Hochkant zählt NICHT der ganze Anlauf zum Bildausschnitt: nähme man den
+	# Elfmeterpunkt mit, bände die Höhe den Ausschnitt und das Tor bliebe ein
+	# schmaler Streifen in der Bildmitte. Der Ball fliegt die erste Zehntel-
+	# sekunde dann knapp außerhalb — genau wie in der Web-Fassung.
+	var near_z := SPOT_Z + 0.6 if landscape else SPOT_Z * 0.55
+	var points: Array = [
+		Vector3(-half - 0.9, 0.0, 0.0),
+		Vector3(half + 0.9, 0.0, 0.0),
+		Vector3(-half - 0.9, height + 0.7, 0.0),
+		Vector3(half + 0.9, height + 0.7, 0.0),
+		Vector3(0.0, 0.0, near_z),
+	]
+	var center := Vector3(0.0, height * 0.55, near_z * 0.42)
+	# Hochkant steiler und enger: sonst steht das Tor als schmaler Streifen in
+	# der Bildmitte, oben nur Himmel, unten nur Rasen.
+	_stage.fit(points, center, 8.0 if landscape else 16.0, 0.0, 0.94 if landscape else 0.96)
+	# Spielpose für den Intro-Flug festhalten (fit() ist die Wahrheit) und im
+	# Beat sofort wieder auf die Flugbahn einschwenken (Resize-Fall).
+	_play_cam = _stage.camera.transform
+	_aim_intro()
+
+
+# ------------------------------------------------------------------- Szene
+
+
+## Weltmitte einer Torbahn auf der Linie.
+func lane_world(lane: int, y := 0.9) -> Vector3:
+	var lanes := int(tune["LANES"])
+	var span := goal_half_width() - 0.42
+	var t := (float(lane) - (lanes - 1) * 0.5) / maxf(1.0, (lanes - 1) * 0.5)
+	return Vector3(t * span, y, 0.0)
+
+
+## Zielhöhe eines Schusses nach Art (Heber hoch, Roller flach).
+func _kick_height(kind: String) -> float:
+	var height := goal_half_width() * GOAL_H_RATIO + 0.4
+	match kind:
+		"lob":
+			return height * 0.82
+		"roller":
+			return BALL_R + 0.04
+		_:
+			return height * 0.42
+
+
+func _tick_keeper(_delta: float) -> void:
+	if _gooby == null:
+		return
+	var lane := int(dive.get("lane", 2))
+	var v := str(dive.get("v", "mid"))
+	var target := lane_world(lane)
+	var lift := 0.0
+	if v == "up":
+		lift = 0.34
+	elif v == "down":
+		lift = -0.12
+	# Sanft nachziehen: der harte Sprung der 2D-Fassung wirkt in 3D wie ein
+	# Teleport. Die LOGIK entscheidet weiterhin allein über die Parade.
+	# MP-E: etwas straffer und mit mehr Körperlage — die Hechte soll nach
+	# Absprung aussehen, nicht nach Schlittenfahrt.
+	_keeper_x = lerpf(_keeper_x, target.x, 0.48)
+	_keeper_y = lerpf(_keeper_y, lift, 0.38)
+	_gooby.position = Vector3(_keeper_x, maxf(0.0, _keeper_y), 0.22)
+	_gooby.rotation.z = -clampf((target.x - _keeper_x) * 0.75 + _keeper_x * 0.14, -0.62, 0.62)
+
+
+func _tick_ball() -> void:
+	if _ball_node == null:
+		return
+	if kick.is_empty():
+		if _ball_fx.is_empty():
+			_ball_node.visible = false
+			_ball_shadow.visible = false
+		return
+	_ball_node.visible = true
+	_ball_shadow.visible = true
+	var p := kick_progress()
+	var kind := str(kick["kind"])
+	var target := lane_world(int(kick["lane"]), _kick_height(kind))
+	var from := Vector3(0.0, BALL_R + 0.06, SPOT_Z)
+	var at := from.lerp(target, p)
+	if kind == "lob":
+		at.y += sin(p * PI) * 0.85
+	elif kind == "roller":
+		at.y = BALL_R + 0.02
+	else:
+		at.y += sin(p * PI) * 0.22
+	_ball_node.position = at
+	_ball_node.rotation.x -= 0.35 * p
+	_ball_shadow.position = Vector3(at.x, 0.02, at.z)
+	_ball_shadow.scale = Vector3.ONE * clampf(1.3 - at.y * 0.2, 0.6, 1.3)
+
+
+## Nachspiel des Balls: die Parade FAUSTET den Ball sichtbar weg, das
+## Gegentor schlägt sichtbar im Netz ein — vorher verschwand der Ball im
+## Entscheidungs-Frame einfach.
+func _tick_ball_fx(delta: float) -> void:
+	if _ball_fx.is_empty() or _ball_node == null:
+		return
+	var t := float(_ball_fx["t"]) + delta
+	if t >= BALL_FX_SEC:
+		_ball_fx = {}
+		return
+	_ball_fx["t"] = t
+	var from: Vector3 = _ball_fx["from"]
+	var vel: Vector3 = _ball_fx["vel"]
+	var at := from + vel * t + Vector3(0.0, -6.5, 0.0) * t * t * 0.5
+	if str(_ball_fx["kind"]) == "goal":
+		# Im Netz bleibt der Ball hängen: Bewegung klingt schnell ab.
+		var brake := clampf(1.0 - t * 3.2, 0.0, 1.0)
+		at = from + vel * t * brake + Vector3(0.0, -1.6, 0.0) * t * t
+		at.z = maxf(at.z, -1.25)
+	at.y = maxf(at.y, BALL_R)
+	_ball_node.visible = true
+	_ball_shadow.visible = true
+	_ball_node.position = at
+	_ball_node.rotation.x -= 9.0 * delta
+	_ball_shadow.position = Vector3(at.x, 0.02, at.z)
+	_ball_shadow.scale = Vector3.ONE * clampf(1.3 - at.y * 0.2, 0.6, 1.3)
+
+
+## Schützen-Blob: läuft in der Ankündigung an, tritt beim Abschuss durch und
+## trabt danach zurück zum Wartepunkt.
+func _tick_striker(delta: float) -> void:
+	if _striker == null:
+		return
+	_strike_t = maxf(0.0, _strike_t - delta)
+	var home := _striker_home()
+	var target := home
+	if not kick.is_empty():
+		var telegraph := float(kick["telegraph"])
+		var t := elapsed - kick_start
+		if t < telegraph:
+			# Anlauf: die letzten 60 % der Ankündigung tragen den Sprint.
+			var run := clampf(t / maxf(0.001, telegraph) - 0.4, 0.0, 0.6) / 0.6
+			var eased := run * run
+			target = home.lerp(Vector3(0.42, 0.0, SPOT_Z + 0.42), eased)
+			_striker.rotation.x = -0.14 * eased
+		else:
+			target = Vector3(0.42, 0.0, SPOT_Z + 0.42)
+			if _strike_t <= 0.0 and t < telegraph + 0.3:
+				_strike_t = 0.3
+	else:
+		_striker.rotation.x = lerpf(_striker.rotation.x, 0.0, 0.15)
+	var speed := 0.5 if kick.is_empty() else 1.0
+	_striker.position = _striker.position.lerp(target, speed * 14.0 * delta)
+	if _strike_t > 0.0:
+		# Durchziehen: kurzer Körper-Kick nach vorn.
+		var f := sin((1.0 - _strike_t / 0.3) * PI)
+		_striker.rotation.x = -0.55 * f
+	# Kleines Lauf-Wippen, solange er unterwegs ist.
+	var moving := _striker.position.distance_to(target) > 0.08
+	if moving:
+		_striker.position.y = absf(sin(elapsed * 14.0)) * 0.05
+
+
+## Zuschauer-Blobs: Grundwippen, bei Paraden ein Freuden-Hüpfer.
+func _tick_crowd(delta: float) -> void:
+	if _crowd == null:
+		return
+	_crowd_pulse = maxf(0.0, _crowd_pulse - delta * 1.3)
+	var hop := 0.18 * _crowd_pulse * absf(sin((1.0 - _crowd_pulse) * PI * 4.0))
+	_crowd.position.y = 0.03 * sin(elapsed * 1.9) + hop
+
+
+## Netz-Wellen nach dem Einschlag: das Netz beult kurz nach hinten aus.
+func _tick_net_ripple(delta: float) -> void:
+	if _net_node == null:
+		return
+	_net_ripple = maxf(0.0, _net_ripple - delta)
+	var f := _net_ripple / 0.5
+	var wave := sin((1.0 - f) * PI * 2.5) * f
+	_net_node.scale = Vector3(1.0, 1.0, 1.0 + 0.3 * maxf(0.0, wave) + 0.08 * f)
+
+
+func _tick_telegraph() -> void:
+	if _lane_glow == null:
+		return
+	if kick.is_empty() or elapsed - kick_start > float(kick["telegraph"]):
+		_lane_glow.visible = false
+		return
+	var height := goal_half_width() * GOAL_H_RATIO + 0.4
+	_lane_glow.visible = true
+	_lane_glow.position = Vector3(lane_world(int(kick["lane"])).x, height * 0.5, -0.1)
+	var mat := _lane_glow.get_active_material(0)
+	if mat is StandardMaterial3D:
+		var pulse := 0.18 + 0.24 * absf(sin((elapsed - kick_start) * 16.0))
+		# Heber/Roller leuchten in den Farben, die das Intro-Banner erklärt.
+		var tint := Color(1.0, 0.85, 0.35, pulse)
+		if str(kick["kind"]) == "lob":
+			tint = Color(Scenery.LOB_TINT, pulse)
+		elif str(kick["kind"]) == "roller":
+			tint = Color(Scenery.ROLLER_TINT, pulse)
+		(mat as StandardMaterial3D).albedo_color = tint
+
+
+func _tick_ring(delta: float) -> void:
+	if _save_ring == null:
+		return
+	if _ring <= 0.0:
+		_save_ring.visible = false
+		return
+	_ring = maxf(0.0, _ring)
+	var f := 1.0 - _ring / float(Logic.GOALIE_JUICE["RING_LIFE_SEC"])
+	_save_ring.visible = true
+	_save_ring.scale = Vector3.ONE * (0.5 + f * _ring_scale * 0.5)
+	_save_ring.rotation.y += delta * 3.0
+
+
+# ---------------------------------------------------------------- Spielzug
+
+
+func _spawn_kick() -> void:
+	var shootout := Logic.is_shootout_at(elapsed, tune)
+	var rolled := Logic.roll_kick(_stream, elapsed)
+	var telegraph: float = (
+		tune["SHOOTOUT_TELEGRAPH_SEC"] if shootout else Logic.telegraph_sec_at(elapsed, tune)
+	)
+	var flight: float = (
+		tune["SHOOTOUT_FLIGHT_SEC"]
+		if shootout
+		else Logic.flight_sec_at(Logic.cheers_at(saves), tune)
+	)
+	kick = {
+		"lane": int(rolled["lane"]),
+		"kind": str(rolled["kind"]),
+		"telegraph": telegraph,
+		"flight": flight,
+		"shootout": shootout,
+	}
+	kick_start = elapsed
+	arrive_t = elapsed + telegraph + flight
+	dive = {}
+	AudioDirector.try_play(self, "mg_junk", 0.7)
+	_gooby.emote("scared", telegraph)
+
+
+## Hechte in die gewischte Bahn (Tippen = Mitte).
+func _dive(delta_px: Vector2) -> void:
+	var lane := Logic.lane_from_swipe(delta_px.x, delta_px.y)
+	var v := Logic.v_kind_from_swipe(delta_px.y)
+	if delta_px.length() < SWIPE_MIN_PX:
+		lane = 2
+		v = "mid"
+	dive = {"lane": lane, "v": v, "t": elapsed}
+	AudioDirector.try_play(self, "mg_good", 1.1)
+	if v == "up":
+		_gooby.hop(0.4, 0.3)
+	elif lane == 0 or lane == 4:
+		# Hechte in die Außenbahn: kleiner Absprung verkauft den Sprung.
+		_gooby.hop(0.32, 0.16)
+	_gooby.play_for("wave", 0.45)
+	_gooby.swing(0.35, 30.0, Vector3.FORWARD)
+	if ctx.juice != null:
+		ctx.juice.shake(0.1)
+
+
+func _resolve_kick() -> void:
+	var saved := (
+		not dive.is_empty()
+		and Logic.save_matches(kick, dive)
+		and Logic.dive_covers(float(dive["t"]), arrive_t, tune)
+	)
+	var shootout := bool(kick["shootout"])
+	if saved:
+		_on_save()
+	else:
+		_on_goal()
+	kick = {}
+	next_kick_at = elapsed + float(tune["SHOOTOUT_GAP_SEC" if shootout else "GAP_SEC"])
+
+
+func _on_save() -> void:
+	var super_save := Logic.is_super_save(float(dive["t"]), arrive_t, tune)
+	var shootout := bool(kick["shootout"])
+	var points := Logic.save_points(super_save, shootout, tune)
+	var before := Logic.cheers_at(saves)
+	saves += 1
+	save_streak += 1
+	score += points
+	var world := lane_world(int(kick["lane"]), _kick_height(str(kick["kind"])))
+	_ring = float(Logic.GOALIE_JUICE["RING_LIFE_SEC"])
+	_ring_scale = float(Logic.GOALIE_JUICE["RING_SCALE_SUPER" if super_save else "RING_SCALE_SAVE"])
+	_save_ring.position = world
+	# W21/P5 Feier-Beat: die Superparade ist DER Kern-Moment — Gold-Pille +
+	# Sparkle (MotionKit/RM-gated); normale Paraden melden sich im Banner.
+	if super_save:
+		MgHudKit.feier_beat(self, view_size, _ui, I18nService.t("mg.goalieGooby.super"))
+	else:
+		_flash_text = "+%d" % points
+		_flash = 0.8
+	# G4: totes Jubel-Feature eingelöst — die Tribüne hüpft bei jeder Parade
+	# (Superparade höher). Eigener Bewegungs-FX, darum Call-Site-RM-Gate.
+	if not _stage.reduced_motion():
+		_crowd_pulse = 1.25 if super_save else 1.0
+	# Parade-Serie klingt pro Halten einen Halbton höher.
+	AudioDirector.try_play(
+		self, "mg_perfect" if super_save else "mg_good", FeelSfx.combo_pitch(save_streak)
+	)
+	_sparks.burst(world)
+	_stage.pulse_glow(1.0 if super_save else 0.5)
+	_stage.shake(0.06 if super_save else 0.03, 0.22)
+	_gooby.play("celebrate")
+	_gooby.emote("ecstatic", 1.2)
+	if ctx.juice != null:
+		# Nur die Punktzahl schwebt — der Klartext steht schon als Banner da.
+		ctx.juice.float_text(_stage.to_screen(world), "+%d" % points, Color(1.0, 0.78, 0.3))
+		ctx.juice.overlay_ring(
+			_stage.to_screen(world), Color(1.0, 0.85, 0.4), 84.0 if super_save else 56.0
+		)
+		ctx.juice.hit_freeze(70 if super_save else 35)
+		ctx.juice.bloom_pulse(0.9 if super_save else 0.4)
+		if save_streak >= 2:
+			ctx.juice.show_combo(save_streak)
+		if super_save:
+			ctx.juice.slowmo(0.35, 260)
+	if Logic.cheers_at(saves) > before:
+		# W21/P5: der Zehner-Jubel feiert als Kit-Beat (statt Jubelband).
+		MgHudKit.feier_beat(self, view_size, _ui, I18nService.t("mg.goalieGooby.cheer"))
+		_gooby.hop(0.6, 0.4)
+		AudioDirector.try_play(self, "mg_golden")
+		# Beim Zehner-Jubel springt die ganze Tribüne am höchsten.
+		if not _stage.reduced_motion():
+			_crowd_pulse = 1.6
+		if ctx.juice != null:
+			ctx.juice.bloom_pulse(1.0)
+	ctx.report_score(score, points)
+
+
+func _on_goal() -> void:
+	goals += 1
+	save_streak = 0
+	_pip_pop = 0.4
+	_flash_text = I18nService.t("mg.goalieGooby.goal")
+	_flash = 1.0
+	# G4: auch das Gegentor erreicht die Tribüne — kurzes flaches Zucken,
+	# bewusst schwächer als der Paraden-Hüpfer (reine Präsentation).
+	if not _stage.reduced_motion():
+		_crowd_pulse = 0.45
+	AudioDirector.try_play(self, "mg_spill")
+	_gooby.play("idle")
+	_gooby.emote("sad", 1.3)
+	_stage.shake(0.1, 0.35)
+	if ctx.juice != null:
+		ctx.juice.shake(0.5)
+		ctx.juice.hit_flash(Color(0.9, 0.32, 0.22, 0.16), 180)
+		ctx.juice.sfx("game_miss")
+		ctx.juice.show_combo(0)
+	ctx.report_score(score, 0)
+	if goals >= int(tune["MAX_GOALS"]):
+		_finish()
+
+
+func _finish() -> void:
+	if finished:
+		return
+	finished = true
+	running = false
+	ctx.report_end({"score": score, "saves": saves, "goals": goals})
+
+
+func _update_labels() -> void:
+	if bool(tune["ENDLESS"]):
+		_time_label.text = I18nService.t(
+			"mg.goalieGooby.conceded", {"n": goals, "max": int(tune["ENDLESS_GOALS"])}
+		)
+	else:
+		var left := maxi(0, int(ceil(float(tune["DURATION_SEC"]) - elapsed)))
+		_time_label.text = I18nService.t("mg.game.time", {"sec": left})
+	_saves_label.text = I18nService.t("mg.goalieGooby.saves", {"n": saves})
+	# M6: der Hinweis blendet nach 5 s Spielzeit aus (das Intro zählt nicht).
+	_hint_label.modulate.a = clampf(1.0 - (elapsed - 5.0) / 1.5, 0.0, 1.0)
+
+
+# ---------------------------------------------------------------- HUD 2D
+
+
+## Kit-Chip, Gegentor-Punkte, Trefferbanner (Kit-Standard) und Intro-Banner
+## — die Szene selbst ist 3D. Alle Maße skalieren mit dem _ui-Faktor.
+func _draw() -> void:
+	if _time_label != null:
+		MgHudKit.draw_chip(self, _hud_plate, _time_label, _saves_label, _ui)
+	_draw_pips()
+	_draw_flash()
+	if _intro_banner_t > 0.0:
+		var alpha := clampf(_intro_banner_t * 1.4, 0.0, 1.0)
+		Scenery.draw_intro_banner(
+			self, view_size, _ui, alpha, I18nService.t("mg.goalieGooby.intro"), _intro_legend
+		)
+
+
+func _draw_pips() -> void:
+	var maxg := int(tune["ENDLESS_GOALS"] if bool(tune["ENDLESS"]) else tune["MAX_GOALS"])
+	for i in maxg:
+		var pos := Vector2(view_size.x - (34.0 + i * 30.0) * _ui, 26.0 * _ui)
+		var rad := 10.0 * _ui
+		if i == goals - 1 and _pip_pop > 0.0:
+			rad *= 1.0 + (float(Logic.GOALIE_JUICE["PIP_POP_SCALE"]) - 1.0) * (_pip_pop / 0.4)
+		draw_circle(pos, rad, Color(0.9, 0.35, 0.35) if i < goals else Color(1, 1, 1, 0.35))
+
+
+## W21/P5: Parade-/Gegentor-Meldung im Kit-Banner-Standard — vorher stand
+## Gold auf dunklem Eigen-Band am unteren Rand (eigene Banner-Welt).
+func _draw_flash() -> void:
+	MgHudKit.draw_banner(self, _banner_plate, view_size, _ui, _flash_text, _flash)

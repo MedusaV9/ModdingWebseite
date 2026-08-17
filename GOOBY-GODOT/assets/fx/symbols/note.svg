@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 96 96">
+  <!-- Freude: Achtelnote (summendes Trällern) -->
+  <g stroke-linejoin="round" stroke-linecap="round">
+    <g stroke="#FFFFFF" stroke-width="14" fill="#FFFFFF">
+      <path d="M60 16 L60 62"/>
+      <path d="M60 16 C70 20 76 26 74 36 C72 30 66 27 60 28 Z"/>
+      <ellipse cx="47" cy="66" rx="14" ry="10" transform="rotate(-18 47 66)"/>
+    </g>
+    <g stroke="#1E5D54" stroke-width="4">
+      <path d="M60 16 L60 62" stroke-width="8" stroke="#3FBFAE"/>
+      <path d="M60 16 L60 62" fill="none"/>
+      <path d="M60 16 C70 20 76 26 74 36 C72 30 66 27 60 28 Z" fill="#3FBFAE"/>
+      <ellipse cx="47" cy="66" rx="14" ry="10" transform="rotate(-18 47 66)" fill="#3FBFAE"/>
+    </g>
+  </g>
+</svg>

@@ -1,0 +1,345 @@
+// V2/G19: Sky module (§C2.1/§C10.2/§C11.2) — the garden sky dome and the
+// indoor window sky textures, both procedural CanvasTextures driven by the
+// day/night band (constants.DAYNIGHT §C10.2) and the weather state (§C11).
+//
+// ── Contracts exposed (PLAN2 §E G19; consumed by G26's ambience pass) ───────
+//   makeDome(band, weather)      → THREE.Mesh — ONE draw call; call
+//       mesh.userData.setSky(band, weather) to retexture on band/weather
+//       changes (roomManager.setAmbience drives this); dispose via
+//       mesh.userData.dispose().
+//   windowTexture(band, weather) → THREE.CanvasTexture for the indoor window
+//       panes (cached per band:weather — never dispose these).
+//   domeTexture(band, weather)   → THREE.CanvasTexture for the dome interior
+//       (cached — shared with makeDome).
+//
+// Bands: 'day'|'dawn'|'dusk'|'night' (systems/dayNight.js). Weather:
+// 'clear'|'cloudy'|'rain' (systems/weather.js). Night gets procedural star
+// dots + a moon disc (§C10.2); cloudy mixes grey + cloud puffs; rain darkens
+// further (§C11.2 — the animated rain FX themselves are G26's weatherFx.js).
+
+import * as THREE from 'three';
+import { DAYNIGHT } from '../data/constants.js';
+
+/** Dome geometry numbers: radius encloses the §C2 room camera (dist ≈ 7.6). */
+export const SKY = Object.freeze({
+  DOME_RADIUS: 11,
+  /** Dome dips slightly below the horizon so no backdrop peeks through. */
+  DOME_OVERHANG_RAD: 0.35,
+});
+
+/** Horizon (lower gradient stop) per band — warm haze under the §C10.2 sky. */
+const HORIZON = Object.freeze({
+  day: '#E8F6E4',
+  dawn: '#FFEFD8',
+  dusk: '#C98BB8', // §C10.2: dusk dome is a FFB38A → C98BB8 gradient
+  night: '#2E3760',
+});
+
+/** Grey overlay strength (§C11.2: cloudy +20% grey; rain a bit more). */
+const GREY_MIX = Object.freeze({ clear: 0, cloudy: 0.2, rain: 0.38 });
+
+/**
+ * V4/POLISH-C dome-texture quality tuning: the dome canvas goes 512×256 →
+ * 2048×1024 (still cached per band:weather — ≤12 combos, a few MB each, only
+ * the combos actually seen get painted), painted clouds/haze land in the
+ * camera's actually-VISIBLE band (v ≈ 0.55–0.95 — see the V2/G26 note in
+ * paintSky), and a grain dither + 3-stop gradient kill the banding the old
+ * ~7×-magnified 512-px canvas showed. REF_W keeps the star/puff painters'
+ * pixel sizes resolution-independent (they were tuned at 512).
+ */
+const DOME_TEX = Object.freeze({
+  W: 2048,
+  H: 1024,
+  /** The painter's original tuning width — px sizes scale by w / REF_W. */
+  REF_W: 512,
+  /** Dome gradient mid stop position (v) + mix toward the horizon color. */
+  GRAD_MID_V: 0.55,
+  GRAD_MID_MIX: 0.42,
+  /** Painted cloud clusters (dome) — the camera slice shows only ~11% of u. */
+  CLOUD_CLUSTERS: 22,
+  /** Painted-cloud band: v = CLOUD_V0 + hash·CLOUD_V_SPAN (above the haze). */
+  CLOUD_V0: 0.54,
+  CLOUD_V_SPAN: 0.26,
+  /** Dome puff size factor vs the window painter (distant static layer). */
+  CLOUD_SCALE: 0.45,
+  /** Banding-dither grain: dot count + alpha floor/jitter. */
+  GRAIN_COUNT: 2400,
+  GRAIN_ALPHA: 0.02,
+  GRAIN_ALPHA_JITTER: 0.03,
+  /** Aerial-perspective haze streaks inside the visible band. */
+  HAZE_STREAKS: 3,
+  HAZE_V0: 0.58,
+  HAZE_V_SPAN: 0.2,
+  HAZE_ALPHA: 0.055,
+});
+
+/** deterministic pseudo-random helper for star/cloud placement */
+const jitter = (i, salt) => (((i * 73 + salt * 37) % 89) / 89);
+
+// V2/G26: jitter() is affine in i, so two jitter(i, …) streams are perfectly
+// correlated — fine for cloud puffs, but dome stars sampled with it all land
+// on one diagonal. hash() decorrelates without losing determinism.
+const hash = (i, salt) => {
+  const s = Math.sin(i * 127.1 + salt * 311.7) * 43758.5453;
+  return s - Math.floor(s);
+};
+
+/**
+ * Mix a hex color toward grey (§C11.2 desaturation).
+ * @param {string} hex @param {number} amount 0..1
+ * @returns {string} css color
+ */
+function greyed(hex, amount) {
+  if (amount <= 0) return hex;
+  const c = new THREE.Color(hex);
+  const g = new THREE.Color('#9AA3AD');
+  c.lerp(g, amount);
+  return `#${c.getHexString()}`;
+}
+
+/** @type {Map<string, THREE.CanvasTexture>} permanent texture caches */
+const domeCache = new Map();
+const windowCache = new Map();
+
+/**
+ * Paint the shared sky background (vertical gradient + stars/moon/clouds)
+ * onto a 2D context. `w`/`h` are the canvas dimensions.
+ */
+function paintSky(g, w, h, band, weather) {
+  const cfg = DAYNIGHT[band] ?? DAYNIGHT.day;
+  const grey = GREY_MIX[weather] ?? 0;
+  const top = greyed(cfg.sky, grey);
+  const bottom = greyed(cfg.sky2 ?? HORIZON[band] ?? HORIZON.day, grey);
+
+  // V2/G26 (§C10.2/CP-W3 "stars visible in the garden"): the dome canvas is
+  // the wide one (w > h); its VISIBLE band for the §C2 garden camera is only
+  // v ≈ 0.55–0.95 (just above the horizon — the zenith is off-screen), so
+  // dome stars/moon/clouds must land THERE and draw bigger (the canvas spans
+  // the whole hemisphere). The square window canvas keeps the v1 composition.
+  // V4/POLISH-C: px scales the absolute-pixel painters with the dome canvas
+  // resolution (tuned at DOME_TEX.REF_W = 512, now painted at 2048).
+  const dome = w > h;
+  const px = dome ? w / DOME_TEX.REF_W : 1;
+
+  const grad = g.createLinearGradient(0, 0, 0, h);
+  grad.addColorStop(0, top);
+  if (dome) {
+    // V4/POLISH-C: 3-stop gradient — a mid color biased toward the horizon
+    // gives the visible band a smoother, richer falloff than 2 stops.
+    const mid = new THREE.Color(top).lerp(new THREE.Color(bottom), DOME_TEX.GRAD_MID_MIX);
+    grad.addColorStop(DOME_TEX.GRAD_MID_V, `#${mid.getHexString()}`);
+  }
+  grad.addColorStop(1, bottom);
+  g.fillStyle = grad;
+  g.fillRect(0, 0, w, h);
+
+  if (dome) {
+    // V4/POLISH-C: subtle grain dither — breaks up gradient banding that the
+    // magnified dome makes obvious (deterministic, painted once per combo).
+    const grain = Math.max(1, Math.round(px / 2));
+    for (let i = 0; i < DOME_TEX.GRAIN_COUNT; i += 1) {
+      g.globalAlpha = DOME_TEX.GRAIN_ALPHA + hash(i, 67) * DOME_TEX.GRAIN_ALPHA_JITTER;
+      g.fillStyle = hash(i, 71) < 0.5 ? '#ffffff' : '#000000';
+      g.fillRect(hash(i, 57) * w, hash(i, 61) * h, grain, grain);
+    }
+    g.globalAlpha = 1;
+    // V4/POLISH-C: soft aerial-perspective haze streaks in the visible band
+    const hazeTint = band === 'night' ? '150,165,215' : band === 'dusk' ? '255,205,170' : '255,255,255';
+    for (let i = 0; i < DOME_TEX.HAZE_STREAKS; i += 1) {
+      const cx = hash(i, 83) * w;
+      const cy = (DOME_TEX.HAZE_V0 + (i / DOME_TEX.HAZE_STREAKS + hash(i, 89) * 0.2) * DOME_TEX.HAZE_V_SPAN) * h;
+      const rx = w * (0.2 + hash(i, 97) * 0.14);
+      const ry = h * 0.022;
+      g.save();
+      g.translate(cx, cy);
+      g.scale(1, ry / rx);
+      const hz = g.createRadialGradient(0, 0, 0, 0, 0, rx);
+      hz.addColorStop(0, `rgba(${hazeTint},${DOME_TEX.HAZE_ALPHA})`);
+      hz.addColorStop(1, `rgba(${hazeTint},0)`);
+      g.fillStyle = hz;
+      g.fillRect(-rx, -rx, rx * 2, rx * 2);
+      g.restore();
+    }
+  }
+
+  if (cfg.stars) {
+    // procedural star dots (§C10.2) — deterministic, denser near the top.
+    // Dome: the camera sees only ~11% of the texture width (u ≈ 0.72 ± 0.05,
+    // magnified), so paint MORE stars there so ~a dozen land on screen.
+    g.fillStyle = '#FFE9A8';
+    const starCount = dome ? 170 : 70; // V2/G26
+    for (let i = 0; i < starCount; i += 1) {
+      const x = (dome ? hash(i, 3) : jitter(i, 3)) * w; // V2/G26 decorrelated
+      const y = dome ? (0.42 + hash(i, 11) * 0.5) * h : jitter(i, 11) * h * 0.7; // V2/G26
+      g.globalAlpha = 0.35 + jitter(i, 7) * 0.6 * (weather === 'clear' ? 1 : 0.4);
+      const r = (dome ? 0.75 : 1) * (0.6 + jitter(i, 5) * 1.1) * px; // V2/G26; V4/POLISH-C ×px
+      g.beginPath();
+      g.arc(x, y, r, 0, Math.PI * 2);
+      g.fill();
+    }
+    g.globalAlpha = 1;
+  }
+  if (cfg.moon && weather !== 'rain') {
+    // moon disc with a soft crater-side shadow (§C10.2)
+    // V2/G26: dome u 0.78 sits beside the −z camera axis (u ≈ 0.72); keep it
+    // inside the visible v band but SMALL — that band is magnified ~7×, so a
+    // window-sized disc would fill the whole screen.
+    const mx = w * (dome ? 0.78 : 0.72);
+    const my = h * (dome ? 0.58 : 0.2);
+    const mr = Math.min(w, h) * (dome ? 0.026 : 0.07); // V2/G26
+    g.fillStyle = '#F4EFD9';
+    g.beginPath();
+    g.arc(mx, my, mr, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = 'rgba(160,160,190,0.35)';
+    for (const [dx, dy, rr] of [[-0.3, -0.15, 0.22], [0.25, 0.3, 0.16], [0.05, -0.4, 0.12]]) {
+      g.beginPath();
+      g.arc(mx + dx * mr, my + dy * mr, rr * mr, 0, Math.PI * 2);
+      g.fill();
+    }
+  }
+  if (weather !== 'clear') {
+    // drifting-look cloud puffs (§C11.2 — static here; G26 animates sprites)
+    if (dome) {
+      // V4/POLISH-C: the old clusters sat at v 0.12–0.47 — ABOVE the visible
+      // band, so the garden barely saw them. Paint soft radial-gradient puffs
+      // (style-matched to weatherFx's sprite clouds) inside v ≈ 0.54–0.80,
+      // decorrelated across u so a few always land in the ~11% camera slice.
+      const tint = weather === 'rain' ? '120,128,140' : '255,255,255';
+      const baseA = weather === 'rain' ? 0.4 : 0.34;
+      for (let i = 0; i < DOME_TEX.CLOUD_CLUSTERS; i += 1) {
+        const cx = hash(i, 17) * w;
+        const cy = (DOME_TEX.CLOUD_V0 + hash(i, 23) * DOME_TEX.CLOUD_V_SPAN) * h;
+        const s = (0.5 + hash(i, 29) * 0.9) * px * DOME_TEX.CLOUD_SCALE;
+        for (const [dx, dy, r] of [[-0.9, 0, 0.7], [0, -0.45, 0.95], [0.95, 0, 0.75], [0.35, 0.3, 0.8]]) {
+          const pr = r * 20 * s;
+          const pcx = cx + dx * 22 * s;
+          const pcy = cy + dy * 14 * s;
+          const puff = g.createRadialGradient(pcx, pcy, pr * 0.1, pcx, pcy, pr);
+          puff.addColorStop(0, `rgba(${tint},${baseA})`);
+          puff.addColorStop(0.6, `rgba(${tint},${baseA * 0.55})`);
+          puff.addColorStop(1, `rgba(${tint},0)`);
+          g.fillStyle = puff;
+          g.beginPath();
+          g.arc(pcx, pcy, pr, 0, Math.PI * 2);
+          g.fill();
+        }
+      }
+    } else {
+      g.fillStyle = weather === 'rain' ? 'rgba(120,128,140,0.55)' : 'rgba(255,255,255,0.5)';
+      for (let i = 0; i < 7; i += 1) {
+        const cx = jitter(i, 17) * w;
+        const cy = (0.12 + jitter(i, 23) * 0.35) * h;
+        const s = 0.5 + jitter(i, 29) * 0.9;
+        for (const [dx, dy, r] of [[-0.9, 0, 0.7], [0, -0.45, 0.95], [0.95, 0, 0.75], [0.35, 0.3, 0.8]]) {
+          g.beginPath();
+          g.ellipse(cx + dx * 22 * s, cy + dy * 14 * s, r * 20 * s, r * 12 * s, 0, 0, Math.PI * 2);
+          g.fill();
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Dome interior texture for a band/weather combo (cached, do not dispose).
+ * @param {'day'|'dawn'|'dusk'|'night'} band
+ * @param {'clear'|'cloudy'|'rain'} weather
+ * @returns {THREE.CanvasTexture}
+ */
+export function domeTexture(band, weather) {
+  const key = `${band}:${weather}`;
+  if (domeCache.has(key)) return domeCache.get(key);
+  const W = DOME_TEX.W; // V4/POLISH-C: 512×256 → 2048×1024 (crisp backdrop)
+  const H = DOME_TEX.H;
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
+  const g = canvas.getContext('2d');
+  paintSky(g, W, H, band, weather);
+  // horizon haze band at the very bottom so the dome's below-horizon skirt
+  // reads as a distant meadow instead of a hard gradient cut
+  const haze = g.createLinearGradient(0, H * 0.82, 0, H);
+  haze.addColorStop(0, 'rgba(190,214,178,0)');
+  haze.addColorStop(1, greyed(band === 'night' ? '#39406B' : '#BCD8A8', GREY_MIX[weather] ?? 0));
+  g.fillStyle = haze;
+  g.fillRect(0, H * 0.82, W, H * 0.18);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.wrapS = THREE.RepeatWrapping;
+  domeCache.set(key, tex);
+  return tex;
+}
+
+/**
+ * Indoor window sky texture (§C10.2 window column; G26 layers rain streaks
+ * on top in wave 3). Cached per band:weather — treat as permanent.
+ * @param {'day'|'dawn'|'dusk'|'night'} band
+ * @param {'clear'|'cloudy'|'rain'} weather
+ * @returns {THREE.CanvasTexture}
+ */
+export function windowTexture(band, weather) {
+  const key = `${band}:${weather}`;
+  if (windowCache.has(key)) return windowCache.get(key);
+  const S = 128;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = S;
+  const g = canvas.getContext('2d');
+  paintSky(g, S, S, band, weather);
+  if (weather === 'rain') {
+    // static droplet streak hints (animated overlay is G26's §C11.2 work)
+    g.strokeStyle = 'rgba(225,240,255,0.4)';
+    g.lineWidth = 1.5;
+    for (let i = 0; i < 9; i += 1) {
+      const x = jitter(i, 41) * S;
+      const y = jitter(i, 43) * S * 0.7;
+      g.beginPath();
+      g.moveTo(x, y);
+      g.lineTo(x - 2, y + 10 + jitter(i, 47) * 14);
+      g.stroke();
+    }
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  windowCache.set(key, tex);
+  return tex;
+}
+
+/**
+ * Build the garden sky dome (§C2.1): ONE mesh = one draw call. The dome is an
+ * inward-facing hemisphere (+ a small below-horizon skirt) big enough to
+ * enclose the §C2 room camera. Returns the mesh; the creator adds it to the
+ * garden group and toggles `.visible` (the dome must not swallow the indoor
+ * rooms' backdrop — roomManager shows it only around the garden).
+ *
+ * mesh.userData.setSky(band, weather)  — swap the cached texture (cheap).
+ * mesh.userData.dispose()              — free the geometry (textures are cached).
+ *
+ * @param {'day'|'dawn'|'dusk'|'night'} band
+ * @param {'clear'|'cloudy'|'rain'} weather
+ * @returns {THREE.Mesh}
+ */
+export function makeDome(band, weather) {
+  const geo = new THREE.SphereGeometry(
+    SKY.DOME_RADIUS, 24, 12,
+    0, Math.PI * 2,
+    0, Math.PI / 2 + SKY.DOME_OVERHANG_RAD
+  );
+  const mat = new THREE.MeshBasicMaterial({
+    map: domeTexture(band, weather),
+    side: THREE.BackSide,
+    fog: false,
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.name = 'skyDome';
+  mesh.userData.setSky = (b, w) => {
+    mat.map = domeTexture(b, w);
+    mat.needsUpdate = true;
+  };
+  mesh.userData.dispose = () => {
+    geo.dispose();
+    mat.dispose(); // material only — the CanvasTextures stay cached
+  };
+  return mesh;
+}

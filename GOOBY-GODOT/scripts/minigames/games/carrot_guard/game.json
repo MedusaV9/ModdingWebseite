@@ -1,0 +1,10 @@
+{
+	"id": "carrotGuard",
+	"title_key": "mg.carrotGuard.title",
+	"scene": "res://scripts/minigames/games/carrot_guard/carrot_guard.tscn",
+	"coin_table": {"divisor": 3, "min": 4, "max": 25},
+	"target": 70,
+	"orientation": "portrait",
+	"supports_endless": true,
+	"energy_cost": 8
+}

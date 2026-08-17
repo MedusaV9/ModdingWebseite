@@ -1,0 +1,73 @@
+{
+	"chess": {
+		"title": "Schach",
+		"button": "Schach",
+		"practice": "Schach üben",
+		"your_turn": "Du bist am Zug",
+		"their_turn": "{name} ist am Zug",
+		"check": "Schach!",
+		"thinking": "{name} denkt nach…",
+		"win": "Gewonnen!",
+		"lose": "Verloren…",
+		"draw": "Remis!",
+		"moves": "Züge",
+		"reason": {
+			"checkmate": "Schachmatt",
+			"stalemate": "Patt",
+			"draw_50": "50-Züge-Regel",
+			"draw_repetition": "Dreifache Wiederholung",
+			"draw_material": "Zu wenig Material",
+			"surrender": "Aufgabe",
+			"forfeit": "Gegner ist gegangen"
+		},
+		"surrender": "Aufgeben",
+		"surrender_confirm": "Wirklich aufgeben? {name} gewinnt dann sofort!",
+		"leave": "‹ Verlassen",
+		"exit": "‹ Raus hier",
+		"new_game": "Neue Partie",
+		"rematch": {
+			"button": "Revanche!",
+			"waiting": "{name} überlegt noch…",
+			"incoming": "{name} will eine Revanche!",
+			"declined": "{name} hat genug für heute.",
+			"failed": "Revanche fehlgeschlagen: {code}"
+		},
+		"solo": {
+			"title": "Schach gegen den Gooby-Bot",
+			"subtitle": "Such dir aus, wie gemein er sein soll:",
+			"strength1": "Gemütlich",
+			"strength2": "Munter",
+			"strength3": "Knifflig",
+			"white": "Als Weiß spielen",
+			"black": "Als Schwarz spielen",
+			"bot_name": "Gooby-Bot"
+		},
+		"promo": {
+			"title": "Umwandeln in…",
+			"queen": "Dame",
+			"rook": "Turm",
+			"bishop": "Läufer",
+			"knight": "Springer"
+		},
+		"invited": "{name} fordert dich zum Schach heraus!",
+		"invite_sent": "Schach-Einladung an {name} verschickt…",
+		"invite_failed": "Einladung fehlgeschlagen: {code}",
+		"accept": "Annehmen",
+		"decline": "Ablehnen",
+		"declined_by": "{name} mag gerade nicht spielen.",
+		"peer": {
+			"down": "{name} hat Verbindungsprobleme…",
+			"up": "{name} ist wieder da!"
+		},
+		"resumed": "Partie fortgesetzt.",
+		"emote_button": "Emote",
+		"pieces": {
+			"king": "K",
+			"queen": "D",
+			"rook": "T",
+			"bishop": "L",
+			"knight": "S",
+			"pawn": "B"
+		}
+	}
+}

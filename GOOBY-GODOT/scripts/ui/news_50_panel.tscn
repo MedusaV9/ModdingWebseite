@@ -1,0 +1,7 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="PackedScene" path="res://scripts/ui/panel_sheet.tscn" id="1_sheet"]
+[ext_resource type="Script" path="res://scripts/ui/news_50_panel.gd" id="2_news"]
+
+[node name="News50Panel" instance=ExtResource("1_sheet")]
+script = ExtResource("2_news")

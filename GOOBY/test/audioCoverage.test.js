@@ -1,0 +1,311 @@
+// Audio coverage — V4/G78 (PLAN4 §C-SYS1.9 exact-set contract):
+//   • exactly the 4 frozen non-loop ids may remain synth-backed (V4/POLISH-K
+//     converted cheer/horn/pickup/boing to committed samples; only the water
+//     recipes remain — no committed pack has a water recording).
+//   • exactly the 3 seamless loop ids may remain synth-backed; Gooby's 15
+//     identity-voice ids remain in goobyVoice.js.
+//   • every other id is sample-backed (including all 46 replacement-table ids).
+//   • every sample key in SFX_MAP has a `src/audio/loudness.json` entry
+//     (§B2.5 — the normalization pass measured every mapped file).
+//   • the §C3.3 medley composition tables reference ONLY committed jingle
+//     files, and every referenced file has a loudness entry too.
+//   • every id resolves to a committed file or an implemented synth/voice
+//     recipe — nothing dangles (complements test/onboarding.test.js's
+//     unmapped-play()-id gate and test/audioV2.test.js's recipe scan).
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import {
+  SFX_MAP, allSampleKeys, getSfxDef, UI_INTERACTION_SOUNDS, uiSoundFor,
+} from '../src/audio/sfxMap.js';
+import { MEDLEY, MEDLEY_CONTEXTS } from '../src/audio/musicDirector.js';
+
+const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
+const LOUDNESS = JSON.parse(
+  fs.readFileSync(path.join(ROOT, 'src', 'audio', 'loudness.json'), 'utf8')
+);
+
+/** '<pack>/<file>' → committed ogg path (mirrors core/assets.getAudioUrl). */
+const oggPath = (key) => {
+  const [pack, file] = key.split('/');
+  if (pack === 'itch-sfx') {
+    return path.join(ROOT, 'public', 'assets', 'itch', pack, `${file}.ogg`);
+  }
+  return path.join(ROOT, 'public', 'assets', 'kenney', pack, 'audio', `${file}.ogg`);
+};
+
+const FROZEN_NON_LOOP_SYNTH_IDS = Object.freeze([
+  'garden.water',
+  'pipe.fill',
+  'toilet.flush',
+  'wash.splash',
+].sort());
+
+const FROZEN_SYNTH_LOOP_IDS = Object.freeze([
+  'ambience.birdsong',
+  'ambience.rain',
+  'rocket.thrust',
+].sort());
+
+const FROZEN_VOICE_IDS = Object.freeze([
+  'gooby.brrr',
+  'gooby.gasp',
+  'gooby.giggle',
+  'gooby.hiccup',
+  'gooby.purr',
+  'gooby.refuse',
+  'gooby.sigh',
+  'gooby.sniff',
+  'gooby.sniffle',
+  'gooby.snore',
+  'gooby.squeak',
+  'gooby.squeakDizzy',
+  'gooby.squeakHappy',
+  'gooby.yawn',
+  'health.sneeze',
+].sort());
+
+const REPLACED_IDS = Object.freeze([
+  'album.claim', 'ball.throw', 'basket.swish', 'cake.splat', 'chop.junk',
+  'chop.lob', 'chop.slice', 'dance.fever', 'dance.good', 'dance.miss',
+  'dance.perfect', 'delivery.drop', 'fish.cast', 'garden.fertilize',
+  'garden.harvest', 'garden.plant', 'goalie.dive', 'goalie.super', 'golf.bump',
+  'golf.sink', 'harbor.boost', 'hop.bell', 'hopper.gold', 'hopper.lane',
+  'hopper.shield', 'hunt.boo', 'hunt.powerup', 'mole.whiff', 'pancake.drop',
+  'pancake.slice', 'pancake.topping', 'photo.shutter', 'pipe.connect',
+  'racer.block', 'racer.boost', 'racer.shield', 'rocket.wind', 'says.pad1',
+  'says.pad2', 'says.pad3', 'says.pad4', 'sticker.get', 'throw.whoosh', 'tow',
+  'vet.cure', 'whoosh',
+].sort());
+
+/** Every audio.play('<literal>') id used anywhere in src/. */
+function collectUsedSfxIds() {
+  const ids = new Set();
+  const walk = (dir) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const p = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(p);
+      else if (entry.name.endsWith('.js')) {
+        const src = fs.readFileSync(p, 'utf8');
+        for (const m of src.matchAll(/audio(?:\??\.)play\(\s*'([^']+)'/g)) ids.add(m[1]);
+        for (const m of src.matchAll(/audioOnce\(\s*\w+,\s*'([^']+)'/g)) ids.add(m[1]);
+      }
+    }
+  };
+  walk(path.join(ROOT, 'src'));
+  return ids;
+}
+
+// ----------------------------------------------- §C-SYS1.9 exact-set gates
+
+test('§C-SYS1.9: EXACTLY the 4 frozen non-loop ids remain synthesized', () => {
+  const actual = Object.entries(SFX_MAP)
+    .filter(([, def]) => def.kind === 'synth' && !def.loop)
+    .map(([id]) => id)
+    .sort();
+  assert.deepEqual(actual, FROZEN_NON_LOOP_SYNTH_IDS);
+});
+
+test('§C-SYS1.9: voice and synth-loop exemption classes are exact', () => {
+  const voices = Object.entries(SFX_MAP)
+    .filter(([, def]) => def.kind === 'voice')
+    .map(([id]) => id)
+    .sort();
+  const loops = Object.entries(SFX_MAP)
+    .filter(([, def]) => def.kind === 'synth' && def.loop)
+    .map(([id]) => id)
+    .sort();
+  assert.deepEqual(voices, FROZEN_VOICE_IDS, 'only Gooby identity voices are exempt');
+  assert.deepEqual(loops, FROZEN_SYNTH_LOOP_IDS, 'only the 3 unsourceable loop recipes are exempt');
+});
+
+test('§C-SYS1.9: all 46 table ids and every other eligible id are samples', () => {
+  assert.equal(REPLACED_IDS.length, 46, 'replacement table count stays pinned');
+  for (const id of REPLACED_IDS) {
+    assert.equal(getSfxDef(id)?.kind, 'sample', `${id}: replacement table id must use a real file`);
+  }
+  const exempt = new Set([...FROZEN_NON_LOOP_SYNTH_IDS, ...FROZEN_SYNTH_LOOP_IDS, ...FROZEN_VOICE_IDS]);
+  const offenders = Object.entries(SFX_MAP)
+    .filter(([id, def]) => !exempt.has(id) && def.kind !== 'sample')
+    .map(([id, def]) => `${id} (${def.kind}:${def.name})`);
+  assert.deepEqual(offenders, [], `non-sample ids outside exact exemptions: ${offenders.join(', ')}`);
+});
+
+test('§C-SYS1.9: says pads share one real sample at C-D-E-G playback rates', () => {
+  const pads = ['says.pad1', 'says.pad2', 'says.pad3', 'says.pad4'].map(getSfxDef);
+  assert.deepEqual(pads.map((def) => def.keys), Array(4).fill(['itch-sfx/cursor_style_4']));
+  assert.deepEqual(pads.map((def) => def.rate), [1, 1.125, 1.25, 1.5]);
+});
+
+test('§C-SYS1.9: zero literal audio.play ids are unmapped', () => {
+  const unmapped = [...collectUsedSfxIds()].filter((id) => !getSfxDef(id));
+  assert.deepEqual(unmapped, [], `unmapped sfx ids: ${unmapped.join(', ')}`);
+});
+
+// --------------------------------------------------------- §B2.5 loudness pass
+
+test('§B2.5: every mapped sample key has a loudness.json entry', () => {
+  const missing = allSampleKeys().filter((key) => typeof LOUDNESS[key] !== 'number');
+  assert.deepEqual(missing, [], `keys without a loudness measurement: ${missing.join(', ')}`);
+});
+
+test('§B2.5: loudness entries are sane dBFS means', () => {
+  assert.ok(Object.keys(LOUDNESS).length >= 250, 'the sweep measured the committed library');
+  for (const [key, db] of Object.entries(LOUDNESS)) {
+    assert.ok(Number.isFinite(db) && db < 0 && db > -70, `${key}: implausible mean ${db} dBFS`);
+  }
+});
+
+test('§C3.5: per-id volumes are normalized multipliers in (0, 1]', () => {
+  for (const [id, def] of Object.entries(SFX_MAP)) {
+    if (def.volume == null) continue;
+    assert.ok(def.volume > 0 && def.volume <= 1, `${id}: volume ${def.volume} out of range`);
+  }
+  // the §C3.5 offender pins (final effective volumes, verbatim).
+  // V4/POLISH-L1 re-pins: the comfy sweep moved jingle.levelUp/daily to the
+  // warm PIZZI04/PIZZI08 files (−16.3/−16.6 dBFS → −18 dBFS trims 0.82/0.85,
+  // capped at the 0.75 hand intent) and golf.ace to HIT05 (−15.3 → 0.73).
+  const pins = {
+    'eat.chomp': 0.5, 'crash': 0.6, 'mole.bonk': 0.6, 'photo.shutter': 0.7,
+    'gooby.snore': 0.55, 'hopper.crash': 0.6, 'jingle.levelUp': 0.75,
+    'jingle.daily': 0.75, 'golf.ace': 0.73, 'delivery.drop': 0.6,
+    'tramp.butt': 0.55, 'dance.fever': 0.55, 'ui.go': 0.6,
+  };
+  for (const [id, vol] of Object.entries(pins)) {
+    assert.equal(SFX_MAP[id]?.volume, vol, `§C3.5 pin: ${id} → ${vol}`);
+  }
+});
+
+// --------------------------------------------------------- committed-file gates
+
+test('§C-SYS1.9: every sample key resolves to a committed ogg (zero dangling ids)', () => {
+  const missing = allSampleKeys().filter((key) => !fs.existsSync(oggPath(key)));
+  assert.deepEqual(missing, [], `missing committed files: ${missing.join(', ')}`);
+});
+
+test('§C3.3: medley tables reference only committed jingles (with loudness entries)', () => {
+  assert.deepEqual(MEDLEY_CONTEXTS, ['home', 'garden', 'arcade', 'city', 'shop']);
+  for (const ctxId of MEDLEY_CONTEXTS) {
+    const keys = MEDLEY[ctxId].bars.filter(Boolean);
+    assert.ok(keys.length >= 8, `${ctxId}: a real composition (${keys.length} jingle bars)`);
+    for (const key of keys) {
+      assert.match(key, /^music-jingles\/jingles_(NES|HIT|PIZZI|SAX|STEEL)\d{2}$/, `${ctxId}: '${key}' family`);
+      assert.ok(fs.existsSync(oggPath(key)), `${ctxId}: '${key}' not committed`);
+      assert.ok(typeof LOUDNESS[key] === 'number', `${ctxId}: '${key}' unmeasured`);
+    }
+  }
+  // §C3.3 stingers + §C3.4 accent are committed too
+  for (const key of ['jingles_HIT15', 'jingles_HIT10', 'jingles_HIT08', 'jingles_HIT00']) {
+    assert.ok(fs.existsSync(oggPath(`music-jingles/${key}`)), `${key} not committed`);
+  }
+});
+
+// ------------------------------- V3/FIX-B (E19): UI-interaction vocabulary
+
+test('V3/FIX-B (E19): every UI-interaction contract id is mapped + sample-backed', () => {
+  const expected = {
+    tap: 'ui.tap',
+    open: 'ui.open',
+    close: 'ui.close',
+    back: 'ui.close',
+    pick: 'ui.pick',
+    tab: 'ui.tabSwitch',
+    toggleOn: 'ui.toggleOn',
+    toggleOff: 'ui.toggleOff',
+    slider: 'ui.slider',
+    confirm: 'ui.confirmBig',
+    buy: 'coin.spend',
+    claim: 'quest.claim',
+    stepper: 'ui.count',
+    error: 'ui.error',
+  };
+  assert.deepEqual({ ...UI_INTERACTION_SOUNDS }, expected, 'the contract table is pinned');
+  for (const [interaction, id] of Object.entries(UI_INTERACTION_SOUNDS)) {
+    const def = SFX_MAP[id];
+    assert.ok(def, `contract '${interaction}' → '${id}' must be mapped`);
+    assert.equal(def.kind, 'sample', `'${id}' must be real-sample-backed`);
+  }
+  assert.equal(uiSoundFor('confirm'), 'ui.confirmBig');
+  assert.equal(uiSoundFor('nonsense'), 'ui.tap', 'unknown types fall back to ui.tap');
+});
+
+test('V3/FIX-B (E19): vocabulary aliases fire the SAME samples as their canonical ids', () => {
+  const aliases = {
+    'ui.tab': 'ui.tabSwitch',
+    'ui.confirm': 'ui.confirmBig',
+    'ui.back': 'ui.close',
+    'ui.toggle': 'ui.toggleOn',
+    'ui.buy': 'coin.spend',
+    'ui.claim': 'quest.claim',
+  };
+  for (const [alias, canonical] of Object.entries(aliases)) {
+    assert.ok(SFX_MAP[alias], `'${alias}' mapped`);
+    assert.deepEqual(SFX_MAP[alias].keys, SFX_MAP[canonical].keys, `'${alias}' keys = '${canonical}' keys`);
+    assert.equal(SFX_MAP[alias].volume, SFX_MAP[canonical].volume, `'${alias}' volume = '${canonical}' volume`);
+  }
+});
+
+// ------------------------------- V4/FIX-AUDIO: cozy ≤5 kHz swoosh/tap bar
+
+test('V4/FIX-AUDIO: the last bright swoosh/tap cues sit on warm keys + rates', () => {
+  // POLISH-L1's rate:0.8 pitch-down left the minimize/maximize pools above
+  // the cozy bar (bright members are ~5.4–10 kHz raw → ~5.3–8.5 kHz
+  // effective). The fix keeps only the two warm swooshes per pool (the
+  // _001/_002 files, ≤ ~5.8 kHz raw), moves the two falling cues to the
+  // footstep_snow air-whoosh language, and drops the ~9.9 kHz click_004 from
+  // ui.tap. Every pinned id measures ≤ ~4.5 kHz mean / ≤ ~5 kHz worst-file
+  // EFFECTIVE centroid (sample centroid × rate).
+  const MIN2 = ['interface-sounds/minimize_001', 'interface-sounds/minimize_002'];
+  const MAX2 = ['interface-sounds/maximize_001', 'interface-sounds/maximize_002'];
+  const SNOW = [
+    'impact-sounds/footstep_snow_000', 'impact-sounds/footstep_snow_001',
+    'impact-sounds/footstep_snow_002', 'impact-sounds/footstep_snow_003',
+    'impact-sounds/footstep_snow_004',
+  ];
+  /** id → [keys, rate] (the FIX-AUDIO remap table, pinned verbatim) */
+  const pins = {
+    'dance.tierUp': [MAX2, 0.7],
+    'tramp.tierUp': [MAX2, 0.7],
+    'dance.fever': [MAX2, 0.8],
+    'fish.escape': [MIN2, 0.7],
+    'mole.steal': [MIN2, 0.75],
+    'racer.block': [MIN2, 0.75],
+    'hunt.gone': [MIN2, 0.75],
+    'rocket.tow': [MIN2, 0.75],
+    'pancake.drop': [SNOW, 0.85],
+    'chop.miss': [SNOW, 0.95],
+  };
+  for (const [id, [keys, rate]] of Object.entries(pins)) {
+    const def = getSfxDef(id);
+    assert.equal(def?.kind, 'sample', `${id} stays sample-backed`);
+    assert.deepEqual(def.keys, keys, `${id} keys`);
+    assert.equal(def.rate, rate, `${id} rate`);
+  }
+  // goalie.goal's minimize_007–009 set was already warm (~1.3 kHz mean) — kept.
+  assert.deepEqual(getSfxDef('goalie.goal').keys, [
+    'interface-sounds/minimize_007', 'interface-sounds/minimize_008',
+    'interface-sounds/minimize_009',
+  ]);
+  // ui.tap: no pool member may exceed ~5 kHz effective — the bright click_004
+  // (~9.9 kHz raw → ~8.4 kHz at rate 0.85) is banned from the pool.
+  const tap = getSfxDef('ui.tap');
+  assert.equal(tap.rate, 0.85, 'ui.tap keeps the POLISH-L1 pitch-down');
+  assert.ok(!tap.keys.includes('interface-sounds/click_004'), 'bright click_004 stays out of ui.tap');
+  assert.deepEqual(tap.keys, [
+    'interface-sounds/click_001', 'interface-sounds/click_002',
+    'interface-sounds/click_003', 'interface-sounds/click_005',
+  ]);
+});
+
+test('V3/FIX-B (E19 P2): ui.confirmBig sits under the −6 dBFS peak bar', () => {
+  // E19 measured click-a peaks of −5.9 dBFS at volume 0.9 (default sliders),
+  // so it was trimmed to 0.75. V4/POLISH-L1 moved the CTA to the warm
+  // itch-sfx confirm_style_5 set whose worst committed peak is −1.9 dBFS raw
+  // — at the restored 0.9 hand intent × default sliders (master 0.9×0.64)
+  // the worst frame lands ≈ −8.5 dBFS, ~2.5 dB of margin under the bar.
+  assert.equal(SFX_MAP['ui.confirmBig'].volume, 0.9);
+  assert.equal(SFX_MAP['ui.confirm'].volume, 0.9);
+});

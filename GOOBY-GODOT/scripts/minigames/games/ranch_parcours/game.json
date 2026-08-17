@@ -1,0 +1,10 @@
+{
+	"id": "ranchParcours",
+	"title_key": "mg.ranchParcours.title",
+	"scene": "res://scripts/minigames/games/ranch_parcours/parcours_game.tscn",
+	"coin_table": {"divisor": 3, "min": 4, "max": 40},
+	"target": 300,
+	"orientation": "landscape",
+	"supports_endless": false,
+	"energy_cost": 8
+}

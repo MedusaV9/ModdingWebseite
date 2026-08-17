@@ -1,0 +1,7 @@
+[gd_scene load_steps=2 format=3 uid="uid://c3aortrehwei1"]
+
+[ext_resource type="Script" path="res://scripts/city/orte/rehwei.gd" id="1_rehwei"]
+
+[node name="Rehwei" type="Node3D"]
+script = ExtResource("1_rehwei")
+ort_id = "rehwei"

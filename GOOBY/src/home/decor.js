@@ -1,0 +1,1461 @@
+// Home decor (§C5.2 — agent G11): applies the saved decor state to the 3D
+// home and owns decorate mode.
+//
+// 3D application — on home-scene (re)build and on every store 'decorChanged':
+//   · wallpaper/floor per room via G4's roomManager setWallpaper/setFloor
+//   · furniture GLB swaps inside the roomManager slot holders (multi-piece
+//     sets use the room defs' piecesByItem layouts)
+//   · procedural pieces built in code: the framed wall-art canvases
+//     (sunset / carrot / abstract + V2/G22 skyline / rainbow), the mini-Gooby
+//     doll plushie, and the V2/G22 §C8.3 garden pieces (benches, gnomes,
+//     birdbath, dirt path)
+//
+// V2/G22 (PLAN2 §C8): new indoor slots (ceilingFan/sideboard/bar/washer/
+// sideTable/floorClutter) work through the same slot pipeline; the ceiling
+// fan hangs from its anchor (mount:'ceiling'); garden items resolve
+// pack-qualified GLBs (entry.glb / cluster), get §C8.3 tints (blossom tree,
+// rose bed) and render as soon as G19's garden RoomDef is in ROOM_DEFS —
+// placement/persistence works beforehand via the catalog fallback in
+// systems/furniturePlacement.js.
+//
+// Decorate mode: long-press anywhere in a room (ENGINE.HOLD_MS on the canvas)
+// or the shop's "place now" → the 'decorate' bottom sheet: pick a slot of the
+// room, then apply any owned variant (placement rules/persistence live in
+// systems/furniturePlacement.js — this module is the 3D/UI side).
+//
+// The room manager is recreated on every home-scene enter, so a small poll
+// re-detects the live instance and re-applies (same guarded pattern as
+// systems/shopTrip.js's front-door hook). Browser-only module (three.js) —
+// only ever loaded via dynamic import (ui/shopScreen.js).
+
+import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { ENGINE, ROOMS } from '../data/constants.js';
+import { t } from '../data/strings.js';
+// V2/G22: + roomSlots (garden fallback); V2/FIX-C: + rewardSlots (§C6 decos)
+import { getEntry, roomSlots, rewardSlots } from '../data/furniture.js';
+import {
+  place,
+  placedItem,
+  slotDefault,
+  slotOptions,
+} from '../systems/furniturePlacement.js';
+import { getCamera, getGooby, getRoomManager } from './homeScene.js';
+import { ROOM_DEFS, FURNITURE_SCALE, SHELL } from './roomManager.js';
+import { standardMat, goobyMat, disposeIfOwned, PALETTE } from '../gfx/materials.js';
+// V6/D3: authored slot/furniture card art (shopScreen's SLOT_EMOJI/furnEmoji
+// emoji tables are retired — foodIcons.js is the one source of truth).
+import { getSlotIcon, getFurnitureIcon } from '../ui/foodIcons.js';
+import { icon } from '../ui/icons.js';
+import * as assets from '../core/assets.js';
+
+/**
+ * V3/G46 (§C11.1): procedural catalog ids whose RENDERING is upgraded to
+ * committed models. The ids remain frozen for rewards, ownership, placement
+ * and save compatibility; only their visual builders change.
+ */
+export const DECOR_MODEL_KEYS = Object.freeze({
+  'proc:benchWood': Object.freeze(['nature-kit/bench']),
+  'proc:benchPastel': Object.freeze(['nature-kit/bench']),
+  'proc:goldenWateringCan': Object.freeze(['survival-kit/bucket']),
+  'proc:toyCity': Object.freeze([
+    'toy-car-kit/track-narrow-straight',
+    'toy-car-kit/track-narrow-curve',
+    'toy-car-kit/track-narrow-corner-small',
+  ]),
+  'proc:candyJar': Object.freeze(['kaykit-restaurant/jar_A_large']),
+});
+
+let wired = false;
+
+/**
+ * Boot the decor system (idempotent). Called from ui/shopScreen.js.
+ * @param {{store: object, ui: object, audio: object}} deps
+ */
+export function initDecor({ store, ui, audio }) {
+  if (wired) return;
+  wired = true;
+
+  ui.registerPanel('decorate', createDecoratePanel({ store, ui, audio }));
+
+  // ------------------------------------------------------------- 3D apply
+  /** @type {object|null} live roomManager instance */
+  let rm = null;
+  /** slot state the CURRENT rm instance shows: 'roomId:slotId' → itemId */
+  let applied = new Map();
+  /** disposal records per slot key: geometries/materials/textures we created */
+  let built = new Map();
+  /**
+   * Holders WE created for slots the roomManager starts empty (wallArt):
+   * 'roomId:slotId' → THREE.Group. Reused across re-applies — creating a fresh
+   * holder per apply would leave the old one (with its disposed meshes)
+   * parented in the scene → unbounded scene-graph growth + the renderer
+   * re-uploading disposed GPU resources.
+   */
+  let createdHolders = new Map();
+  /** serialized apply runs (GLB preloads are async) */
+  let applying = Promise.resolve();
+  /** V4/G79 static room-dressing resources for the current roomManager. */
+  let roomDressing = null;
+
+  function disposeBuilt(key) {
+    const rec = built.get(key);
+    if (!rec) return;
+    for (const g of rec.geos) g.dispose();
+    for (const m of rec.mats) disposeIfOwned(m);
+    for (const tx of rec.textures) tx.dispose();
+    built.delete(key);
+  }
+
+  function disposeRoomDressing() {
+    if (!roomDressing) return;
+    disposeG79RoomDressing(roomDressing);
+    roomDressing = null;
+  }
+
+  /**
+   * V2/FIX-C: all decor slot ids of a room — the RoomDef slot table PLUS the
+   * catalog-only reward slots (§C6 set decos have no room-def entry; their
+   * anchors live in REWARD_SLOT_SPOTS below).
+   * @param {{id: string, slots: object}} def @returns {string[]}
+   */
+  const allSlotIds = (def) => {
+    const base = Object.keys(def.slots);
+    return [...base, ...rewardSlots(def.id).filter((s) => !base.includes(s))];
+  };
+
+  function resetForInstance(nextRm) {
+    disposeRoomDressing(); // V4/G79: old room groups/resources never leak
+    for (const key of [...built.keys()]) disposeBuilt(key); // old scene is gone
+    createdHolders = new Map(); // holders belonged to the old scene graph
+    applied = new Map();
+    for (const def of ROOM_DEFS) {
+      for (const slotId of allSlotIds(def)) {
+        // a fresh roomManager always builds the free defaults (§C5.2)
+        applied.set(`${def.id}:${slotId}`, slotDefault(def.id, slotId));
+      }
+    }
+    rm = nextRm;
+  }
+
+  async function applyAll() {
+    if (!rm) return;
+    const target = rm;
+    if (roomDressing?.rm !== target) {
+      const next = await buildG79RoomDressing(target);
+      if (rm !== target) {
+        disposeG79RoomDressing(next);
+        return;
+      }
+      roomDressing = next;
+    }
+    for (const def of ROOM_DEFS) {
+      if (rm !== target) return; // scene switched mid-apply
+      // V2/G22: outdoor rooms (G19's garden) have no wallpaper/floor decor
+      if (!def.outdoor) {
+        rm.setWallpaper(def.id, store.get(`decor.wallpaper.${def.id}`) ?? 'cream');
+        rm.setFloor(def.id, store.get(`decor.floor.${def.id}`) ?? 'wood');
+      }
+      for (const slotId of allSlotIds(def)) {
+        await applySlot(def, slotId).catch((err) =>
+          console.warn(`[decor] slot ${def.id}:${slotId} apply failed:`, err)
+        );
+      }
+    }
+  }
+
+  const scheduleApply = () => {
+    applying = applying.then(applyAll);
+  };
+
+  async function applySlot(def, slotId) {
+    const roomId = def.id;
+    const key = `${roomId}:${slotId}`;
+    const itemId = placedItem(store, roomId, slotId);
+    if (applied.get(key) === itemId) return;
+    applied.set(key, itemId);
+
+    const defEntry = def.furniture.find((f) => f.slot === slotId);
+    // Reuse any holder we created earlier for this slot (wallArt) — never
+    // stack a fresh holder next to the old one (§E1 dispose discipline).
+    let holder = rm.getSlotHolder(roomId, slotId) ?? createdHolders.get(key) ?? null;
+    if (holder && holder.parent == null) holder = null; // stale (scene rebuilt)
+    if (!holder) {
+      holder = createSlotHolder(roomId, slotId, defEntry);
+      if (holder) createdHolders.set(key, holder);
+    }
+    if (!holder) return;
+
+    // clear previous contents + our owned GPU resources (GLB clones share
+    // geometry/materials with the asset cache — removal is enough for those)
+    disposeBuilt(key);
+    for (const child of [...holder.children]) holder.remove(child);
+    if (itemId == null) return; // wallArt back to empty
+
+    const rec = { geos: [], mats: [], textures: [] };
+    built.set(key, rec);
+    const track = {
+      geo(g) {
+        rec.geos.push(g);
+        return g;
+      },
+      mat(m) {
+        rec.mats.push(m);
+        return m;
+      },
+      tex(tx) {
+        rec.textures.push(tx);
+        return tx;
+      },
+    };
+
+    const entry = getEntry(itemId); // V2/G22: catalog row drives glb/mount/tint
+    const replacementKeys = DECOR_MODEL_KEYS[itemId];
+    if (replacementKeys) {
+      // V3/G46 (§C11.1): preserve the procedural catalog ids while replacing
+      // their scene content with committed models. Explicit preloading keeps
+      // these reward-only assets out of the always-on home preload budget.
+      await assets.preload(replacementKeys);
+      if (rm.getSlotHolder(roomId, slotId) !== holder && holder.parent == null) return;
+      holder.add(buildAssetReplacement(itemId, track));
+    } else if (entry?.procedural) {
+      const proc = buildProcedural(itemId, track);
+      if (rm.getSlotHolder(roomId, slotId) !== holder && holder.parent == null) return;
+      holder.add(proc);
+    } else {
+      // piece layout: variant table from the room def, else the catalog's
+      // V2/G22 cluster scatter (garden flower beds), else a single piece
+      const pieces =
+        defEntry?.piecesByItem?.[itemId] ??
+        (defEntry?.item === itemId && defEntry?.pieces ? defEntry.pieces : null) ??
+        entry?.cluster ??
+        [{ item: itemId, at: [0, 0, 0], rotY: 0 }];
+      // V2/G22: garden entries resolve to pack-qualified keys ('nature-kit/…')
+      // via entry.glb / cluster piece.glb; room-def piece names stay short
+      // furniture-kit GLB names.
+      const keyOf = (p) =>
+        p.glb ?? (p.item === itemId && entry?.glb ? entry.glb : `furniture-kit/${p.item}`);
+      await assets.preload(pieces.map(keyOf)); // cached after the first load
+      if (rm.getSlotHolder(roomId, slotId) !== holder && holder.parent == null) return;
+      for (const piece of pieces) {
+        const model = assets.getModel(keyOf(piece));
+        model.scale.setScalar(FURNITURE_SCALE);
+        // V2/G22: ceiling-mounted items (fan) hang from the anchor instead
+        if (entry?.mount === 'ceiling') hangAndCenter(model);
+        else groundAndCenter(model);
+        if (entry?.tint) tintModel(model, entry.tint, entry.tintTarget, track); // V2/G22
+        const pieceHolder = new THREE.Group();
+        pieceHolder.position.set(piece.at[0], piece.at[1], piece.at[2]);
+        pieceHolder.rotation.y = ((piece.rotY ?? 0) * Math.PI) / 180;
+        if (piece.scale != null) pieceHolder.scale.setScalar(piece.scale);
+        pieceHolder.add(model);
+        holder.add(pieceHolder);
+      }
+    }
+    holder.traverse((obj) => {
+      if (obj.isMesh) obj.castShadow = !defEntry?.noShadow;
+    });
+  }
+
+  /**
+   * The wallArt slot starts empty, so the roomManager never made a holder for
+   * it — create one at the room-def position inside the live room group.
+   * V2/FIX-C: reward slots (§C6 decos) have no room-def entry at all — their
+   * anchors come from the REWARD_SLOT_SPOTS table instead.
+   */
+  function createSlotHolder(roomId, slotId, defEntry) {
+    const spot = defEntry ?? REWARD_SLOT_SPOTS[`${roomId}:${slotId}`]; // V2/FIX-C
+    if (!spot) return null;
+    const def = ROOM_DEFS.find((d) => d.id === roomId);
+    const sibling = Object.keys(def.slots)
+      .map((s) => rm.getSlotHolder(roomId, s))
+      .find(Boolean);
+    const roomGroup = sibling?.parent;
+    if (!roomGroup) return null;
+    const holder = new THREE.Group();
+    holder.name = `slot-${slotId}`;
+    holder.position.set(spot.at[0], spot.at[1], spot.at[2]);
+    holder.rotation.y = ((spot.rotY ?? 0) * Math.PI) / 180;
+    // V6/FIX4 (P1-8): honor the def entry's scale — the bedroom plushie spot
+    // is now empty-by-default, so its holder is created HERE on first place
+    // (roomManager only scales holders it builds itself).
+    if (spot.scale != null) {
+      if (Array.isArray(spot.scale)) holder.scale.set(spot.scale[0], spot.scale[1], spot.scale[2]);
+      else holder.scale.setScalar(spot.scale);
+    }
+    roomGroup.add(holder);
+    return holder;
+  }
+
+  // poll for the live room manager (recreated on every home enter — §E1)
+  setInterval(() => {
+    const next = getRoomManager();
+    if (next !== rm) {
+      resetForInstance(next);
+      if (next) scheduleApply();
+    }
+  }, 400);
+
+  store.on('decorChanged', scheduleApply);
+
+  // ------------------------------------------------- long-press → decorate
+  const canvas = typeof document !== 'undefined' ? document.getElementById('scene') : null;
+  if (canvas) {
+    const pickRay = new THREE.Raycaster();
+    const pickNdc = new THREE.Vector2();
+    /** Presses that start on Gooby are care gestures (§C3), never decorate. */
+    const onGooby = (clientX, clientY) => {
+      const gooby = getGooby();
+      const camera = getCamera();
+      if (!gooby?.group || !camera) return false;
+      const w = typeof innerWidth !== 'undefined' ? innerWidth : 1;
+      const h = typeof innerHeight !== 'undefined' ? innerHeight : 1;
+      pickNdc.set((clientX / w) * 2 - 1, -(clientY / h) * 2 + 1);
+      pickRay.setFromCamera(pickNdc, camera);
+      return pickRay.intersectObject(gooby.group, true).length > 0;
+    };
+    let timer = null;
+    let downAt = null;
+    const cancel = () => {
+      if (timer != null) clearTimeout(timer);
+      timer = null;
+      downAt = null;
+    };
+    /** Real-time settle (ms) inside the post-hold re-check window — long
+     * enough for queued/in-flight cancel events to land under heavy jank. */
+    const HOLD_SETTLE_MS = 120;
+    canvas.addEventListener('pointerdown', (e) => {
+      cancel();
+      // Long-press must be a genuinely still hold on furniture/empty space —
+      // slow pet strokes over Gooby must never open the decorate picker.
+      if (onGooby(e.clientX, e.clientY)) return;
+      downAt = { x: e.clientX, y: e.clientY, path: 0, at: performance.now() };
+      const gesture = downAt;
+      // F6 (RE1): under main-thread jank this timer can fire while a slow
+      // flick's pointermove/pointerup cancels are still queued (renderer
+      // input queue, or even still in flight from the browser process), so
+      // cancel ORDERING is not trustworthy. Instead of deciding immediately,
+      // run a settle window: a rendered frame (rAF-aligned input dispatches
+      // before rAF callbacks), a short real-time settle for late-arriving
+      // events, then one more frame. Only then re-check the LIVE gesture
+      // state — same gesture token still down, cumulative path within the
+      // tap budget, genuinely elapsed hold. A long-press opening ~150 ms
+      // later is imperceptible; a picker popping mid-flick is the bug.
+      timer = setTimeout(() => {
+        timer = null;
+        if (downAt !== gesture) return; // already released / superseded
+        requestAnimationFrame(() => {
+          if (downAt !== gesture) return; // cancelled by frame-1 input
+          setTimeout(() => {
+            if (downAt !== gesture) return; // cancelled during the settle
+            requestAnimationFrame(() => {
+              if (downAt !== gesture) return; // cancelled by frame-2 input
+              if (gesture.path > ENGINE.TAP_MAX_PX) return; // drag/flick
+              if (performance.now() - gesture.at < ENGINE.HOLD_MS) return; // too short
+              const live = getRoomManager();
+              if (!live) return; // only over the home scene
+              // §C8.1: don't let the player wander off the scripted first-run
+              // flow — no decorate mode while the tutorial overlay is active.
+              if (!store.get('onboarding.done') && document.querySelector('.g14-ob')) return;
+              downAt = null; // consume the gesture
+              audio.play('ui.open');
+              ui.openPanel('decorate', { roomId: live.activeRoom() });
+            });
+          }, HOLD_SETTLE_MS);
+        });
+      }, ENGINE.HOLD_MS + 60);
+    });
+    canvas.addEventListener('pointermove', (e) => {
+      if (!downAt) return;
+      // Cumulative path (not net displacement): a slow back-and-forth pet
+      // stroke returns near its origin but is still a drag, not a hold.
+      downAt.path += Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y);
+      downAt.x = e.clientX;
+      downAt.y = e.clientY;
+      if (downAt.path > ENGINE.TAP_MAX_PX) cancel();
+    });
+    canvas.addEventListener('pointerup', cancel);
+    canvas.addEventListener('pointercancel', cancel);
+  }
+}
+
+// ===========================================================================
+// V4/G79 (PLAN4-GAMES §G9.1): draw-call-batched static room dressing
+// ===========================================================================
+
+const G79_DRESSING_ASSET_KEYS = Object.freeze([
+  ...new Set(
+    ROOM_DEFS.flatMap((def) =>
+      (def.dressing ?? []).flatMap((entry) => {
+        if (entry.kind === 'asset') return [entry.key];
+        if (entry.kind === 'assetCluster') return entry.pieces.map((piece) => piece.key);
+        return [];
+      })
+    )
+  ),
+]);
+
+/**
+ * @typedef {{
+ *   rm: object, groups: THREE.Group[], geos: THREE.BufferGeometry[],
+ *   mats: THREE.Material[], textures: THREE.Texture[]
+ * }} G79DressingRecord
+ */
+
+/**
+ * Build all four indoor dressing groups. Colored props/procedural details are
+ * flattened to vertex colors; Tiny Treats keeps its shared atlas UVs in one
+ * batch; each sticker picture is one texture plane. `castShadow=false` keeps
+ * those batches to one renderer call each even with the home shadow pass.
+ * @param {object} target live roomManager
+ * @returns {Promise<G79DressingRecord>}
+ */
+async function buildG79RoomDressing(target) {
+  await assets.preload(G79_DRESSING_ASSET_KEYS);
+  const rec = { rm: target, groups: [], geos: [], mats: [], textures: [] };
+
+  for (const def of ROOM_DEFS) {
+    // V6/E4: the garden ships a dressing table too (Tiny Treats park pieces
+    // + the picnic-blanket painter) — every room with rows gets a group.
+    if (!def.dressing?.length) continue;
+    const room = target.getRoomGroup(def.id);
+    if (!room) continue;
+
+    const group = new THREE.Group();
+    group.name = `v4-g79-dressing-${def.id}`;
+    room.add(group);
+    rec.groups.push(group);
+
+    const colored = [];
+    const fairy = [];
+    const textured = new Map();
+    const pictures = [];
+
+    for (const entry of def.dressing) {
+      if (entry.kind === 'asset') {
+        colored.push(...g79AssetGeometries(entry, 'color'));
+      } else if (entry.kind === 'assetCluster') {
+        const batch = textured.get(entry.batch) ?? { geos: [], material: null };
+        for (const piece of entry.pieces) {
+          const result = g79AssetGeometries(piece, 'texture');
+          batch.geos.push(...result.geos);
+          batch.material ??= result.material;
+        }
+        textured.set(entry.batch, batch);
+      } else if (entry.kind === 'wallTrim') {
+        g79WallTrim(entry, colored);
+      } else if (entry.kind === 'hangingUtensils') {
+        g79HangingUtensils(entry, colored);
+      } else if (entry.kind === 'towelRail') {
+        g79TowelRail(entry, colored);
+      } else if (entry.kind === 'fairyLights') {
+        g79FairyLights(entry, colored, fairy);
+      } else if (entry.kind === 'lampGlow') {
+        g79LampGlow(entry, fairy); // V6/FIX4 (P1-7): lit bulb in a lamp shade
+      } else if (entry.kind === 'foldedBlanket') {
+        g79FoldedBlanket(entry, colored); // V6/FIX4 (P1-8): cozy bed prop
+      } else if (entry.kind === 'picture') {
+        g79PictureFrame(entry, colored);
+        pictures.push(entry);
+      } else if (entry.kind === 'picnicBlanket') {
+        g79PicnicBlanket(group, entry, rec); // V6/E4 (own mesh — 1 call)
+      }
+    }
+
+    g79AddMergedMesh(group, colored, new THREE.MeshStandardMaterial({
+      vertexColors: true,
+      roughness: 0.82,
+      metalness: 0,
+    }), `${def.id}-color`, rec);
+
+    for (const [batchId, batch] of textured) {
+      const material = batch.material?.clone() ?? new THREE.MeshStandardMaterial({ color: '#FFF6EC' });
+      material.userData = { ...material.userData, shared: false };
+      if ('metalness' in material) material.metalness = 0;
+      if ('roughness' in material) material.roughness = Math.max(0.65, material.roughness ?? 0);
+      g79AddMergedMesh(group, batch.geos, material, `${def.id}-${batchId}`, rec);
+    }
+
+    if (fairy.length) {
+      g79AddMergedMesh(group, fairy, new THREE.MeshStandardMaterial({
+        color: '#FFE7A3',
+        emissive: '#FFB85C',
+        emissiveIntensity: 1.5,
+        roughness: 0.5,
+        metalness: 0,
+      }), `${def.id}-fairy`, rec);
+    }
+
+    for (const picture of pictures) g79AddPicture(group, picture, rec);
+    group.userData.drawCalls = group.children.filter((child) => child.isMesh).length;
+  }
+  return rec;
+}
+
+/** @param {G79DressingRecord} rec */
+function disposeG79RoomDressing(rec) {
+  for (const group of rec.groups) group.parent?.remove(group);
+  for (const geo of rec.geos) geo.dispose();
+  for (const mat of rec.mats) disposeIfOwned(mat);
+  for (const texture of rec.textures) texture.dispose();
+  rec.groups.length = 0;
+  rec.geos.length = 0;
+  rec.mats.length = 0;
+  rec.textures.length = 0;
+}
+
+/**
+ * Clone and flatten one committed model while leaving cache masters untouched.
+ * @param {object} piece
+ * @param {'color'|'texture'} mode
+ * @returns {THREE.BufferGeometry[]|{geos: THREE.BufferGeometry[], material: THREE.Material|null}}
+ */
+function g79AssetGeometries(piece, mode) {
+  const model = assets.getModel(piece.key);
+  const scale = piece.scale ?? 1;
+  if (Array.isArray(scale)) model.scale.set(scale[0], scale[1], scale[2]);
+  else model.scale.setScalar(scale);
+  model.rotation.set(
+    THREE.MathUtils.degToRad(piece.rotX ?? 0),
+    THREE.MathUtils.degToRad(piece.rotY ?? 0),
+    THREE.MathUtils.degToRad(piece.rotZ ?? 0)
+  );
+  groundAndCenter(model);
+  model.position.add(new THREE.Vector3(...piece.at));
+  model.updateMatrixWorld(true);
+
+  const geos = [];
+  let material = null;
+  model.traverse((obj) => {
+    if (!obj.isMesh || !obj.geometry) return;
+    const mat = Array.isArray(obj.material) ? obj.material[0] : obj.material;
+    material ??= mat ?? null;
+    geos.push(g79FlattenGeometry(
+      obj.geometry,
+      obj.matrixWorld,
+      mode,
+      mat?.color ?? new THREE.Color('#FFFFFF')
+    ));
+  });
+  return mode === 'texture' ? { geos, material } : geos;
+}
+
+/**
+ * Normalize attributes before merging: every color batch has position/normal/
+ * color; every textured batch has position/normal/uv.
+ */
+function g79FlattenGeometry(source, matrix, mode, color) {
+  const geo = source.index ? source.toNonIndexed() : source.clone();
+  geo.applyMatrix4(matrix);
+  if (!geo.getAttribute('normal')) geo.computeVertexNormals();
+  const keep = new Set(mode === 'texture'
+    ? ['position', 'normal', 'uv']
+    : ['position', 'normal', 'color']);
+  for (const name of Object.keys(geo.attributes)) {
+    if (!keep.has(name)) geo.deleteAttribute(name);
+  }
+  const count = geo.getAttribute('position').count;
+  if (mode === 'texture' && !geo.getAttribute('uv')) {
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(count * 2), 2));
+  }
+  if (mode === 'color') {
+    const values = new Float32Array(count * 3);
+    for (let i = 0; i < count; i += 1) color.toArray(values, i * 3);
+    geo.setAttribute('color', new THREE.Float32BufferAttribute(values, 3));
+  }
+  return geo;
+}
+
+function g79Primitive(geo, color, at, rot = [0, 0, 0], scale = [1, 1, 1]) {
+  const matrix = new THREE.Matrix4().compose(
+    new THREE.Vector3(...at),
+    new THREE.Quaternion().setFromEuler(new THREE.Euler(...rot)),
+    new THREE.Vector3(...scale)
+  );
+  return g79FlattenGeometry(geo, matrix, 'color', new THREE.Color(color));
+}
+
+function g79WallTrim(entry, out) {
+  const y = 1.04;
+  if (entry.walls.includes('back')) {
+    out.push(g79Primitive(
+      new THREE.BoxGeometry(SHELL.WIDTH - 0.14, 0.12, 0.05),
+      entry.tint,
+      [0, y, -SHELL.DEPTH / 2 + 0.075]
+    ));
+  }
+  for (const side of ['left', 'right']) {
+    if (!entry.walls.includes(side)) continue;
+    out.push(g79Primitive(
+      new THREE.BoxGeometry(0.05, 0.12, SHELL.SIDE_DEPTH - 0.14),
+      entry.tint,
+      [(side === 'left' ? -1 : 1) * (SHELL.WIDTH / 2 - 0.075), y, -0.62]
+    ));
+  }
+}
+
+function g79HangingUtensils(entry, out) {
+  const [x, y, z] = entry.at;
+  out.push(g79Primitive(new THREE.BoxGeometry(0.95, 0.045, 0.035), '#A98B72', [x, y, z]));
+  const colors = ['#D9E8E4', '#F4C6C6', '#E8D5C0', '#BDD7E7'];
+  for (let i = 0; i < 4; i += 1) {
+    const ux = x - 0.34 + i * 0.23;
+    out.push(g79Primitive(
+      new THREE.CylinderGeometry(0.018, 0.018, 0.34, 8),
+      '#806B59',
+      [ux, y - 0.19, z + 0.015]
+    ));
+    if (i % 2 === 0) {
+      out.push(g79Primitive(
+        new THREE.SphereGeometry(0.065, 10, 8),
+        colors[i],
+        [ux, y - 0.39, z + 0.02],
+        [0, 0, 0],
+        [0.75, 1, 0.35]
+      ));
+    } else {
+      out.push(g79Primitive(
+        new THREE.BoxGeometry(0.105, 0.13, 0.025),
+        colors[i],
+        [ux, y - 0.39, z + 0.02]
+      ));
+    }
+  }
+}
+
+function g79TowelRail(entry, out) {
+  const [x, y, z] = entry.at;
+  out.push(g79Primitive(
+    new THREE.CylinderGeometry(0.025, 0.025, 0.78, 10),
+    '#9DABA8',
+    [x, y, z],
+    [0, 0, Math.PI / 2]
+  ));
+  for (const [dx, color] of [[-0.19, '#F4B9C8'], [0.19, '#AFCFDE']]) {
+    out.push(g79Primitive(
+      new THREE.BoxGeometry(0.28, 0.45, 0.035),
+      color,
+      [x + dx, y - 0.25, z + 0.025]
+    ));
+  }
+}
+
+function g79FairyLights(entry, colored, fairy) {
+  const [cx, cy, z] = entry.at;
+  const points = [];
+  for (let i = 0; i < entry.count; i += 1) {
+    const t = i / (entry.count - 1);
+    const x = cx - entry.width / 2 + t * entry.width;
+    const y = cy - Math.sin(t * Math.PI) * 0.2;
+    points.push(new THREE.Vector3(x, y, z));
+    fairy.push(g79Primitive(new THREE.SphereGeometry(0.045, 9, 7), '#FFE7A3', [x, y, z + 0.025]));
+  }
+  const curve = new THREE.CatmullRomCurve3(points);
+  colored.push(g79Primitive(new THREE.TubeGeometry(curve, 32, 0.009, 5, false), '#806B59', [0, 0, 0]));
+}
+
+// V6/FIX4 (P1-7): one warm emissive bulb merged into the room's `fairy`
+// batch — anchors the night ambience point light (homeScene.js parks it at
+// the same spot) to a visibly lit lamp instead of a bare wall corner.
+function g79LampGlow(entry, fairy) {
+  const [x, y, z] = entry.at;
+  fairy.push(g79Primitive(new THREE.SphereGeometry(0.085, 12, 9), '#FFE7A3', [x, y, z]));
+}
+
+// V6/FIX4 (P1-8): folded blanket on the bed's foot — a tight stack of three
+// flat slabs (the room's pillows are sharp-edged boxes too, so boxes match
+// the bedding style) with slightly varied tints/turns so the layers read as
+// folds, plus a small fold roll on top. Merged into the room's `color`
+// batch (no extra draw call).
+function g79FoldedBlanket(entry, colored) {
+  const [x, y, z] = entry.at;
+  colored.push(g79Primitive(
+    new THREE.BoxGeometry(0.66, 0.075, 0.44), '#A9CBB8',
+    [x, y + 0.038, z], [0, 0.05, 0]
+  ));
+  colored.push(g79Primitive(
+    new THREE.BoxGeometry(0.6, 0.065, 0.37), '#B8D6C4',
+    [x + 0.02, y + 0.105, z + 0.01], [0, -0.06, 0]
+  ));
+  colored.push(g79Primitive(
+    new THREE.BoxGeometry(0.54, 0.055, 0.3), '#F2E7D5',
+    [x - 0.01, y + 0.163, z + 0.015], [0, 0.03, 0]
+  ));
+  // fold roll along the top front edge (sells the "folded" read)
+  colored.push(g79Primitive(
+    new THREE.CylinderGeometry(0.045, 0.045, 0.5, 10), '#F2E7D5',
+    [x - 0.01, y + 0.2, z + 0.12], [0, 0.03, Math.PI / 2]
+  ));
+}
+
+function g79PictureFrame(entry, colored) {
+  colored.push(g79Primitive(
+    new THREE.BoxGeometry(0.58, 0.46, 0.035),
+    '#8B6248',
+    entry.at
+  ));
+}
+
+function g79AddMergedMesh(group, sources, material, name, rec) {
+  if (!sources.length) {
+    material.dispose();
+    return;
+  }
+  const merged = mergeGeometries(sources, false);
+  for (const source of sources) source.dispose();
+  if (!merged) {
+    material.dispose();
+    throw new Error(`[V4/G79] failed to merge dressing batch '${name}'`);
+  }
+  const mesh = new THREE.Mesh(merged, material);
+  mesh.name = `v4-g79-${name}`;
+  mesh.castShadow = false;
+  mesh.receiveShadow = true;
+  group.add(mesh);
+  rec.geos.push(merged);
+  rec.mats.push(material);
+}
+
+function g79AddPicture(group, entry, rec) {
+  const texture = new THREE.TextureLoader().load(
+    `${import.meta.env?.BASE_URL ?? '/'}assets/stickers/${entry.art}.png`
+  );
+  texture.colorSpace = THREE.SRGBColorSpace;
+  const geo = new THREE.PlaneGeometry(0.48, 0.36);
+  const mat = new THREE.MeshBasicMaterial({ map: texture, toneMapped: false });
+  const picture = new THREE.Mesh(geo, mat);
+  picture.name = `v4-g79-picture-${entry.art}`;
+  picture.position.set(entry.at[0], entry.at[1], entry.at[2] + 0.021);
+  picture.castShadow = false;
+  group.add(picture);
+  rec.geos.push(geo);
+  rec.mats.push(mat);
+  rec.textures.push(texture);
+}
+
+/**
+ * V6/E4: checkered picnic-blanket ground quad for the garden's picnic
+ * corner — a CanvasTexture painter following the room painter pattern
+ * (roomManager makeTexture): warm cream base, rose gingham bands, darker
+ * squares where they cross, stitched border. One mesh = one draw call;
+ * MeshStandardMaterial (NOT basic) so setAmbience's light lerp dims it at
+ * night like every other garden prop. Sits at entry.at[1] (≈5 mm above the
+ * grass — same anti-z-fight lift as the dirt path / layered rugs).
+ * @param {THREE.Group} group @param {object} entry @param {G79DressingRecord} rec
+ */
+function g79PicnicBlanket(group, entry, rec) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 128;
+  canvas.height = 128;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#FFF6EC';
+  ctx.fillRect(0, 0, 128, 128);
+  const CELL = 16;
+  ctx.fillStyle = 'rgba(242, 169, 184, 0.55)'; // rose bands, both directions
+  for (let i = 0; i < 8; i += 2) {
+    ctx.fillRect(i * CELL, 0, CELL, 128);
+    ctx.fillRect(0, i * CELL, 128, CELL);
+  }
+  ctx.fillStyle = 'rgba(226, 121, 144, 0.5)'; // darker where bands cross
+  for (let ix = 0; ix < 8; ix += 2) {
+    for (let iz = 0; iz < 8; iz += 2) {
+      ctx.fillRect(ix * CELL, iz * CELL, CELL, CELL);
+    }
+  }
+  ctx.strokeStyle = '#E27990'; // stitched border
+  ctx.lineWidth = 3;
+  ctx.setLineDash([6, 4]);
+  ctx.strokeRect(4, 4, 120, 120);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+
+  const [w, d] = entry.size ?? [1.2, 0.9];
+  const geo = new THREE.PlaneGeometry(w, d);
+  const mat = new THREE.MeshStandardMaterial({
+    map: texture, roughness: 0.92, metalness: 0,
+  });
+  const blanket = new THREE.Mesh(geo, mat);
+  blanket.name = `v6-g79-picnic-blanket-${entry.id}`;
+  blanket.rotation.x = -Math.PI / 2; // lay the plane flat on the grass
+  blanket.rotation.z = THREE.MathUtils.degToRad(entry.rotY ?? 0);
+  blanket.position.set(entry.at[0], entry.at[1], entry.at[2]);
+  blanket.castShadow = false;
+  blanket.receiveShadow = true;
+  group.add(blanket);
+  rec.geos.push(geo);
+  rec.mats.push(mat);
+  rec.textures.push(texture);
+}
+
+// ============================================================= end V4/G79 ==
+
+// ---------------------------------------------------------------------------
+// Decorate-mode slot picker (bottom sheet)
+// ---------------------------------------------------------------------------
+
+/** @param {{store: object, ui: object, audio: object}} deps */
+function createDecoratePanel({ store, ui, audio }) {
+  return {
+    /**
+     * @param {HTMLElement} el
+     * @param {{roomId?: string, slotId?: string, onApplied?: () => void}} [params]
+     */
+    mount(el, params = {}) {
+      // V2/G22: the garden (G19's 5th room) is not in ROOMS.ORDER — accept
+      // any room the CATALOG knows decor slots for, so garden placement works
+      // through the same picker (3D application activates once G19's room
+      // def is in ROOM_DEFS).
+      const known =
+        ROOMS.ORDER.includes(params.roomId) || roomSlots(params.roomId ?? '').length > 0;
+      const roomId = known ? params.roomId : ROOMS.DEFAULT;
+      let slotId = params.slotId ?? null;
+      const def = ROOM_DEFS.find((d) => d.id === roomId) ?? null;
+
+      function render() {
+        el.innerHTML = `
+          <div class="decor-head">
+            ${slotId ? `<button class="decor-back" aria-label="${t('ui.back')}">${icon('arrowLeft', 18)}</button>` : ''}
+            <h2 class="decor-title">${icon('palette', 20)} ${t('decor.title')} · ${slotId ? t(`slot.${slotId}`) : t(`room.${roomId}`)}</h2>
+          </div>
+          <div class="decor-sub">${slotId ? t('decor.shopHint') : t('decor.pickSlot')}</div>
+          <div class="decor-grid"></div>`;
+        el.querySelector('.decor-back')?.addEventListener('click', () => {
+          audio.play('ui.tap');
+          slotId = null;
+          render();
+        });
+        const grid = el.querySelector('.decor-grid');
+        if (!slotId) renderSlots(grid);
+        else renderVariants(grid);
+      }
+
+      function renderSlots(grid) {
+        // V2/G22: room-def slot order when available, catalog order otherwise.
+        // V2/FIX-C: union in the reward-only slots (§C6 set decos live in
+        // catalog-only slots the shop grid hides — the picker must offer
+        // them). A reward slot only shows once its deco is actually owned
+        // (claimed) — before that it would just be a locked 0c curiosity.
+        const base = def ? Object.keys(def.slots) : roomSlots(roomId);
+        const rewards = rewardSlots(roomId).filter(
+          (s) => !base.includes(s) && slotOptions(store, roomId, s).some((o) => o.owned)
+        );
+        for (const s of [...base, ...rewards]) {
+          const current = placedItem(store, roomId, s);
+          const card = document.createElement('button');
+          card.className = 'shop-card';
+          card.innerHTML = `
+            <span class="shop-emoji">${getSlotIcon(s, 34)}</span>
+            <span class="shop-name">${t(`slot.${s}`)}</span>
+            <span class="shop-state">${current ? t(getEntry(current)?.nameKey ?? '') : '—'}</span>`;
+          card.addEventListener('click', () => {
+            audio.play('ui.tap');
+            slotId = s;
+            render();
+          });
+          grid.appendChild(card);
+        }
+      }
+
+      function renderVariants(grid) {
+        for (const { entry, owned, placed } of slotOptions(store, roomId, slotId)) {
+          const card = document.createElement('button');
+          card.className = `shop-card${placed ? ' shop-card-sel' : ''}`;
+          card.innerHTML = `
+            <span class="shop-emoji">${getFurnitureIcon(entry, 34)}</span>
+            <span class="shop-name">${t(entry.nameKey)}</span>
+            ${placed
+              ? `<span class="shop-state">${icon('check', 11)} ${t('shop.placed')}</span>`
+              : owned
+                ? `<span class="shop-state">${t('shop.apply')}</span>`
+                : `<span class="shop-price">${icon('coin', 13)}${entry.price} ${icon('lock', 11)}</span>`}`;
+          card.addEventListener('click', () => {
+            audio.play('ui.tap');
+            if (placed) return;
+            if (!owned) {
+              ui.toast('decor.shopHint');
+              return;
+            }
+            const res = place(store, entry.id, roomId, slotId);
+            if (res.ok) {
+              ui.toast('toast.placedItem', { name: t(entry.nameKey) });
+              params.onApplied?.();
+              render();
+            }
+          });
+          grid.appendChild(card);
+        }
+      }
+
+      render();
+    },
+    unmount() {},
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Procedural pieces (§C5.2): framed wall-art canvases + mini-Gooby doll
+// ---------------------------------------------------------------------------
+
+/** @typedef {{geo: Function, mat: Function, tex: Function}} Track */
+
+/** @param {string} itemId @param {Track} track */
+function buildProcedural(itemId, track) {
+  switch (itemId) {
+    case 'proc:artSunset':
+      return buildWallArt('sunset', track);
+    case 'proc:artCarrot':
+      return buildWallArt('carrot', track);
+    case 'proc:artAbstract':
+      return buildWallArt('abstract', track);
+    case 'proc:miniGooby':
+      return buildMiniGooby(track);
+    // ---- V2/G22 (§C8.1): 2 new canvases ----
+    case 'proc:artSkyline':
+      return buildWallArt('skyline', track);
+    case 'proc:artRainbow':
+      return buildWallArt('rainbow', track);
+    // ---- V2/G22 (§C8.3): garden decor ----
+    case 'proc:gnome':
+      return buildGnome(track, false);
+    case 'proc:gnomeGold':
+      return buildGnome(track, true);
+    case 'proc:birdbath':
+      return buildBirdbath(track);
+    case 'proc:pathDirt':
+      return buildDirtPath(track);
+    // ---- V2/FIX-C (§C6): the 4 collection-set completion rewards ----
+    case 'proc:goldfishBowl':
+      return buildGoldfishBowl(track);
+    default: {
+      // unknown procedural id: a friendly placeholder cube (never throws)
+      const grp = new THREE.Group();
+      grp.add(new THREE.Mesh(track.geo(new THREE.BoxGeometry(0.3, 0.3, 0.3)), standardMat('#FF7BA9')));
+      return grp;
+    }
+  }
+}
+
+/** Paint one of the §C5.2 / V2/G22 §C8.1 art motifs onto a 2D canvas. */
+function paintArt(variant, g, W, H) {
+  if (variant === 'skyline') {
+    // V2/G22 „City Skyline": night sky, moon, lit building silhouettes
+    const sky = g.createLinearGradient(0, 0, 0, H);
+    sky.addColorStop(0, '#232B52');
+    sky.addColorStop(1, '#3A4374');
+    g.fillStyle = sky;
+    g.fillRect(0, 0, W, H);
+    g.fillStyle = '#FFF3C4';
+    g.beginPath();
+    g.arc(W * 0.78, H * 0.24, H * 0.1, 0, Math.PI * 2);
+    g.fill();
+    const buildings = [
+      [0.02, 0.42, 0.14], [0.18, 0.3, 0.16], [0.36, 0.5, 0.12],
+      [0.5, 0.24, 0.18], [0.7, 0.44, 0.13], [0.85, 0.34, 0.13],
+    ];
+    for (const [x, top, w] of buildings) {
+      g.fillStyle = '#2A3260';
+      g.fillRect(W * x, H * top, W * w, H * (1 - top));
+      g.fillStyle = '#FFD166';
+      for (let wy = top + 0.07; wy < 0.92; wy += 0.11) {
+        for (let wx = x + 0.025; wx < x + w - 0.03; wx += 0.045) {
+          if ((wx * 31 + wy * 17) % 0.13 < 0.07) g.fillRect(W * wx, H * wy, W * 0.02, H * 0.045);
+        }
+      }
+    }
+  } else if (variant === 'rainbow') {
+    // V2/G22 „Rainbow": arcs over two puffy clouds
+    g.fillStyle = '#DBEEF9';
+    g.fillRect(0, 0, W, H);
+    const cols = ['#E0655F', '#FF9F5A', '#FFD166', '#59C9B9', '#6EC6FF'];
+    g.lineWidth = H * 0.055;
+    for (let i = 0; i < cols.length; i += 1) {
+      g.strokeStyle = cols[i];
+      g.beginPath();
+      g.arc(W / 2, H * 1.05, H * (0.82 - i * 0.06), Math.PI * 1.08, Math.PI * 1.92);
+      g.stroke();
+    }
+    g.fillStyle = '#FFFFFF';
+    for (const [cx, cy] of [[0.16, 0.72], [0.84, 0.72]]) {
+      for (const [dx, dy, r] of [[-0.05, 0, 0.07], [0.05, 0, 0.07], [0, -0.045, 0.08], [0, 0.03, 0.075]]) {
+        g.beginPath();
+        g.arc(W * (cx + dx), H * (cy + dy), H * r, 0, Math.PI * 2);
+        g.fill();
+      }
+    }
+  } else if (variant === 'sunset') {
+    const sky = g.createLinearGradient(0, 0, 0, H);
+    sky.addColorStop(0, '#FFD9A3');
+    sky.addColorStop(0.62, '#FF9E7B');
+    sky.addColorStop(1, '#C86B85');
+    g.fillStyle = sky;
+    g.fillRect(0, 0, W, H);
+    g.fillStyle = '#FFF3C4';
+    g.beginPath();
+    g.arc(W / 2, H * 0.58, H * 0.2, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = '#8A5A7A';
+    g.beginPath();
+    g.moveTo(0, H);
+    g.lineTo(0, H * 0.78);
+    g.quadraticCurveTo(W * 0.3, H * 0.6, W * 0.55, H * 0.82);
+    g.quadraticCurveTo(W * 0.78, H * 0.68, W, H * 0.8);
+    g.lineTo(W, H);
+    g.fill();
+  } else if (variant === 'carrot') {
+    g.fillStyle = '#DEF3E2';
+    g.fillRect(0, 0, W, H);
+    g.save();
+    g.translate(W / 2, H / 2);
+    g.rotate(0.5);
+    g.fillStyle = '#FF9F5A';
+    g.beginPath();
+    g.moveTo(-W * 0.05, -H * 0.28);
+    g.quadraticCurveTo(W * 0.16, -H * 0.1, 0, H * 0.34);
+    g.quadraticCurveTo(-W * 0.16, -H * 0.1, W * 0.05, -H * 0.28);
+    g.fill();
+    g.fillStyle = '#59C9B9';
+    for (const a of [-0.5, 0, 0.5]) {
+      g.beginPath();
+      g.ellipse(a * W * 0.08, -H * 0.34, W * 0.035, H * 0.1, a * 0.5, 0, Math.PI * 2);
+      g.fill();
+    }
+    g.restore();
+  } else {
+    g.fillStyle = '#FBF3E4';
+    g.fillRect(0, 0, W, H);
+    g.fillStyle = '#FF7BA9';
+    g.beginPath();
+    g.arc(W * 0.32, H * 0.4, H * 0.22, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = '#59C9B9';
+    g.fillRect(W * 0.52, H * 0.22, W * 0.3, H * 0.3);
+    g.fillStyle = '#FFD166';
+    g.beginPath();
+    g.moveTo(W * 0.2, H * 0.85);
+    g.lineTo(W * 0.5, H * 0.55);
+    g.lineTo(W * 0.8, H * 0.85);
+    g.fill();
+    g.strokeStyle = '#4A3B36';
+    g.lineWidth = 6;
+    g.beginPath();
+    g.moveTo(W * 0.12, H * 0.7);
+    g.quadraticCurveTo(W * 0.5, H * 0.9, W * 0.88, H * 0.62);
+    g.stroke();
+  }
+}
+
+/**
+ * A framed canvas print for the living-room wallArt slot (§C5.2). The slot
+ * anchor sits on the back wall (z ≈ −1.47) — the art faces the camera (+z).
+ * @param {'sunset'|'carrot'|'abstract'|'skyline'|'rainbow'} variant @param {Track} track
+ */
+function buildWallArt(variant, track) {
+  const grp = new THREE.Group();
+  grp.name = `wallArt-${variant}`;
+
+  const W = 256;
+  const H = 192;
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
+  paintArt(variant, canvas.getContext('2d'), W, H);
+  const tex = track.tex(new THREE.CanvasTexture(canvas));
+  tex.colorSpace = THREE.SRGBColorSpace;
+
+  const frame = new THREE.Mesh(
+    track.geo(new THREE.BoxGeometry(0.92, 0.7, 0.05)),
+    standardMat('#FFFDF4', { roughness: 0.8 })
+  );
+  const art = new THREE.Mesh(
+    track.geo(new THREE.PlaneGeometry(0.8, 0.58)),
+    track.mat(new THREE.MeshBasicMaterial({ map: tex }))
+  );
+  art.position.z = 0.03;
+  grp.add(frame, art);
+  return grp;
+}
+
+/**
+ * Mini-Gooby doll plushie (§C5.2, 600c): a palm-sized fabric copy of the fat
+ * rabbit — bulbous body, floppy ears, stitched face — built from the §D2.1
+ * palette so it reads instantly as "little Gooby".
+ * @param {Track} track
+ */
+function buildMiniGooby(track) {
+  const grp = new THREE.Group();
+  grp.name = 'miniGooby';
+  const body = goobyMat('body');
+  const belly = goobyMat('belly');
+  const earIn = goobyMat('earInner');
+  const eye = goobyMat('eye');
+
+  const torso = new THREE.Mesh(track.geo(new THREE.SphereGeometry(0.16, 20, 16)), body);
+  torso.position.y = 0.15;
+  torso.scale.set(1, 1.12, 0.94);
+
+  const tummy = new THREE.Mesh(track.geo(new THREE.SphereGeometry(0.115, 18, 14)), belly);
+  tummy.position.set(0, 0.13, 0.065);
+  tummy.scale.set(0.86, 0.95, 0.62);
+
+  for (const sx of [-1, 1]) {
+    const ear = new THREE.Mesh(track.geo(new THREE.SphereGeometry(0.052, 12, 10)), body);
+    ear.position.set(sx * 0.075, 0.36, -0.01);
+    ear.scale.set(0.62, 2.1, 0.55);
+    ear.rotation.z = sx * -0.28;
+    const inner = new THREE.Mesh(track.geo(new THREE.SphereGeometry(0.028, 10, 8)), earIn);
+    inner.position.set(sx * 0.078, 0.365, 0.022);
+    inner.scale.set(0.5, 1.7, 0.4);
+    inner.rotation.z = sx * -0.28;
+    grp.add(ear, inner);
+  }
+
+  for (const sx of [-1, 1]) {
+    const e = new THREE.Mesh(track.geo(new THREE.SphereGeometry(0.017, 8, 8)), eye);
+    e.position.set(sx * 0.055, 0.21, 0.135);
+    grp.add(e);
+    const paw = new THREE.Mesh(track.geo(new THREE.SphereGeometry(0.05, 10, 8)), body);
+    paw.position.set(sx * 0.115, 0.045, 0.05);
+    paw.scale.set(0.85, 0.6, 1.1);
+    grp.add(paw);
+  }
+
+  const nose = new THREE.Mesh(
+    track.geo(new THREE.SphereGeometry(0.014, 8, 8)),
+    standardMat(PALETTE.NOSE, { roughness: 0.55 })
+  );
+  nose.position.set(0, 0.185, 0.145);
+  grp.add(torso, tummy, nose);
+  return grp;
+}
+
+// ---------------------------------------------------------------------------
+// V2/G22 (§C8.3): procedural garden pieces — gnomes, birdbath, path
+// ---------------------------------------------------------------------------
+
+/**
+ * Garden gnome (§C8.3): pointy hat, round body, white beard — the golden
+ * variant swaps every material for metallic gold (endgame flex).
+ * @param {Track} track @param {boolean} golden
+ */
+function buildGnome(track, golden) {
+  const grp = new THREE.Group();
+  grp.name = golden ? 'gnomeGold' : 'gnome';
+  const gold = standardMat('#E8C24A', { roughness: 0.35, metalness: 0.6 });
+  const mat = (color, opts) => (golden ? gold : standardMat(color, opts));
+  const body = new THREE.Mesh(track.geo(new THREE.ConeGeometry(0.13, 0.26, 14)), mat('#5B7DB8', { roughness: 0.7 }));
+  body.position.y = 0.13;
+  const head = new THREE.Mesh(track.geo(new THREE.SphereGeometry(0.075, 14, 10)), mat('#F2C9A0', { roughness: 0.7 }));
+  head.position.set(0, 0.29, 0.01);
+  const beard = new THREE.Mesh(
+    track.geo(new THREE.SphereGeometry(0.062, 12, 8, 0, Math.PI * 2, Math.PI * 0.35, Math.PI * 0.65)),
+    mat('#F4F0E6', { roughness: 0.9 })
+  );
+  beard.position.set(0, 0.275, 0.045);
+  beard.scale.set(1, 1.25, 0.8);
+  const hat = new THREE.Mesh(track.geo(new THREE.ConeGeometry(0.085, 0.24, 12)), mat('#E0655F', { roughness: 0.65 }));
+  hat.position.set(0, 0.42, 0);
+  hat.rotation.x = 0.12;
+  const nose = new THREE.Mesh(track.geo(new THREE.SphereGeometry(0.02, 8, 6)), mat('#E8A87C', { roughness: 0.6 }));
+  nose.position.set(0, 0.3, 0.078);
+  const feetGeo = track.geo(new THREE.SphereGeometry(0.035, 8, 6));
+  for (const sx of [-1, 1]) {
+    const foot = new THREE.Mesh(feetGeo, mat('#4A3B36', { roughness: 0.8 }));
+    foot.position.set(sx * 0.055, 0.02, 0.09);
+    foot.scale.set(1, 0.55, 1.4);
+    grp.add(foot);
+  }
+  grp.add(body, head, beard, hat, nose);
+  return grp;
+}
+
+/** Birdbath 240 (§C8.3): stone pedestal + basin + still water disc. */
+function buildBirdbath(track) {
+  const grp = new THREE.Group();
+  grp.name = 'birdbath';
+  const stone = standardMat('#C9C4BA', { roughness: 0.9 });
+  const base = new THREE.Mesh(track.geo(new THREE.CylinderGeometry(0.16, 0.2, 0.07, 16)), stone);
+  base.position.y = 0.035;
+  const column = new THREE.Mesh(track.geo(new THREE.CylinderGeometry(0.055, 0.075, 0.34, 12)), stone);
+  column.position.y = 0.24;
+  const basin = new THREE.Mesh(track.geo(new THREE.CylinderGeometry(0.24, 0.14, 0.09, 18)), stone);
+  basin.position.y = 0.45;
+  const water = new THREE.Mesh(
+    track.geo(new THREE.CylinderGeometry(0.205, 0.205, 0.02, 18)),
+    standardMat('#A9DCF2', { roughness: 0.15 })
+  );
+  water.position.y = 0.485;
+  grp.add(base, column, basin, water);
+  return grp;
+}
+
+// ---------------------------------------------------------------------------
+// V2/FIX-C (§C6): collection-set reward decos — placement anchors + builders
+// ---------------------------------------------------------------------------
+
+/**
+ * Placement anchors for the reward-only slots (§C6 decos). These slots have
+ * no room-def entry, so createSlotHolder
+ * reads this table instead. Spots were picked clear of the fixed
+ * interactables and existing decor slots of each room.
+ * @type {Record<string, {at: readonly number[], rotY?: number}>}
+ */
+const REWARD_SLOT_SPOTS = Object.freeze({
+  // fish set: goldfish bowl on the living-room coffee table (top ≈ y 0.37),
+  // right of the set-dressing book stack at x −0.9
+  'living:fishBowl': Object.freeze({ at: Object.freeze([-0.5, 0.37, 0.28]), rotY: -15 }),
+  // veggies set: golden watering can displayed by the tool stump (x 1.35) —
+  // a trophy next to the everyday tin can
+  'garden:gardenTrophy': Object.freeze({ at: Object.freeze([1.95, 0, 0.7]), rotY: -30 }),
+  // landmarks set: toy city on the bedroom floor between bed foot and rug
+  'bedroom:toyCorner': Object.freeze({ at: Object.freeze([-0.55, 0, 1.05]), rotY: 15 }),
+  // treats set: candy jar on the kitchen counter top (y 0.71) between the
+  // drawer unit and the sink, clear of the appliance slot at x −0.62
+  'kitchen:candyShelf': Object.freeze({ at: Object.freeze([-0.35, 0.71, -1.02]), rotY: 0 }),
+});
+
+/**
+ * Goldfish bowl (fish-set reward): glass sphere + water fill + sand base +
+ * a chunky orange goldfish mid-swim (§C6 „cute, small, distinct").
+ * @param {Track} track
+ */
+function buildGoldfishBowl(track) {
+  const grp = new THREE.Group();
+  grp.name = 'goldfishBowl';
+  const glass = new THREE.Mesh(
+    track.geo(new THREE.SphereGeometry(0.115, 18, 14, 0, Math.PI * 2, Math.PI * 0.14)),
+    track.mat(new THREE.MeshStandardMaterial({
+      color: '#DFF2FB', roughness: 0.08, transparent: true, opacity: 0.3, side: THREE.DoubleSide,
+    }))
+  );
+  glass.position.y = 0.115;
+  const water = new THREE.Mesh(
+    track.geo(new THREE.SphereGeometry(0.104, 16, 12, 0, Math.PI * 2, Math.PI * 0.3)),
+    track.mat(new THREE.MeshStandardMaterial({
+      color: '#A9DCF2', roughness: 0.15, transparent: true, opacity: 0.55,
+    }))
+  );
+  water.position.y = 0.115;
+  const sand = new THREE.Mesh(
+    track.geo(new THREE.SphereGeometry(0.095, 14, 6, 0, Math.PI * 2, Math.PI * 0.72)),
+    standardMat('#EAD9A8', { roughness: 0.95 })
+  );
+  sand.position.y = 0.115;
+  // the resident: body + tail fin + eye dots
+  const orange = standardMat('#FF9F5A', { roughness: 0.6 });
+  const body = new THREE.Mesh(track.geo(new THREE.SphereGeometry(0.034, 12, 10)), orange);
+  body.scale.set(1.35, 1, 0.8);
+  body.position.set(0.012, 0.125, 0);
+  body.rotation.y = 0.6;
+  const tail = new THREE.Mesh(track.geo(new THREE.ConeGeometry(0.02, 0.036, 8)), orange);
+  tail.position.set(-0.038, 0.125, -0.025);
+  tail.rotation.z = Math.PI / 2;
+  tail.rotation.y = 0.6;
+  const eyeMat = standardMat('#4A3B36', { roughness: 0.4 });
+  const eye = new THREE.Mesh(track.geo(new THREE.SphereGeometry(0.006, 6, 6)), eyeMat);
+  eye.position.set(0.052, 0.132, 0.022);
+  grp.add(glass, water, sand, body, tail, eye);
+  return grp;
+}
+
+/**
+ * V3/G46 (§C11.1): build a catalog-compatible replacement from committed
+ * models. The cache masters stay immutable; any tint uses tracked material
+ * clones and preserves the loader's metalness normalization.
+ * @param {string} itemId @param {Track} track
+ */
+function buildAssetReplacement(itemId, track) {
+  const grp = new THREE.Group();
+  grp.name = `${itemId.slice('proc:'.length)}-realAsset`;
+  grp.userData.assetKeys = DECOR_MODEL_KEYS[itemId];
+
+  if (itemId === 'proc:benchWood' || itemId === 'proc:benchPastel') {
+    const bench = assets.getModel('nature-kit/bench');
+    bench.scale.setScalar(FURNITURE_SCALE);
+    groundAndCenter(bench);
+    if (itemId === 'proc:benchPastel') {
+      cloneModelMaterials(bench, (mat) => {
+        if (!mat.color) return;
+        mat.color.set(mat.name === 'woodInner' ? '#FFB7D5' : '#8FD8CB');
+        if ('metalness' in mat) mat.metalness = 0;
+        if ('roughness' in mat) mat.roughness = 0.9;
+      }, track);
+    }
+    grp.add(bench);
+    return grp;
+  }
+
+  if (itemId === 'proc:goldenWateringCan') {
+    const gold = standardMat('#E8C24A', { roughness: 0.38, metalness: 0.55 });
+    const plinth = new THREE.Mesh(
+      track.geo(new THREE.CylinderGeometry(0.2, 0.24, 0.1, 14)),
+      standardMat('#C9C4BA', { roughness: 0.9 })
+    );
+    plinth.position.y = 0.05;
+    const bucket = assets.getModel('survival-kit/bucket');
+    bucket.scale.setScalar(1.48);
+    groundAndCenter(bucket);
+    bucket.position.y = 0.1;
+    cloneModelMaterials(bucket, (mat) => {
+      mat.color?.set('#E8C24A');
+      if ('metalness' in mat) mat.metalness = 0.55;
+      if ('roughness' in mat) mat.roughness = 0.38;
+    }, track);
+    // The real bucket supplies body + handle; the recognizable watering-can
+    // silhouette still needs a compact spout and rose (§C11.1 binding).
+    const spout = new THREE.Mesh(
+      track.geo(new THREE.CylinderGeometry(0.022, 0.034, 0.27, 8)),
+      gold
+    );
+    spout.position.set(0.19, 0.22, 0);
+    spout.rotation.z = Math.PI / 2.55;
+    const rose = new THREE.Mesh(
+      track.geo(new THREE.CylinderGeometry(0.052, 0.028, 0.04, 10)),
+      gold
+    );
+    rose.position.set(0.3, 0.285, 0);
+    rose.rotation.z = Math.PI / 2.55;
+    grp.add(plinth, bucket, spout, rose);
+    return grp;
+  }
+
+  if (itemId === 'proc:toyCity') {
+    const plate = new THREE.Mesh(
+      track.geo(new THREE.BoxGeometry(0.68, 0.035, 0.52)),
+      standardMat('#9FD8A4', { roughness: 0.9 })
+    );
+    plate.position.y = 0.0175;
+    grp.add(plate);
+    const pieces = [
+      ['toy-car-kit/track-narrow-straight', -0.2, 0.01, 0.085, 0],
+      ['toy-car-kit/track-narrow-curve', 0.12, -0.08, 0.082, Math.PI / 2],
+      ['toy-car-kit/track-narrow-corner-small', 0.16, 0.14, 0.09, Math.PI],
+    ];
+    for (const [key, x, z, scale, rotY] of pieces) {
+      const model = assets.getModel(key);
+      model.scale.setScalar(scale);
+      groundAndCenter(model);
+      const holder = new THREE.Group();
+      holder.position.set(x, 0.035, z);
+      holder.rotation.y = rotY;
+      holder.add(model);
+      grp.add(holder);
+    }
+    return grp;
+  }
+
+  if (itemId === 'proc:candyJar') {
+    const jar = assets.getModel('kaykit-restaurant/jar_A_large');
+    jar.scale.setScalar(0.34);
+    groundAndCenter(jar);
+    cloneModelMaterials(jar, (mat) => {
+      if (mat.color) mat.color.lerp(new THREE.Color('#FF7BA9'), 0.24);
+      if ('metalness' in mat) mat.metalness = 0;
+      if ('roughness' in mat) mat.roughness = Math.max(0.55, mat.roughness);
+    }, track);
+    grp.add(jar);
+    return grp;
+  }
+
+  return grp;
+}
+
+/**
+ * Clone every distinct material in a model once, mutate the clones, and track
+ * them for slot-swap disposal. Cache-owned masters are never modified.
+ * @param {THREE.Object3D} model
+ * @param {(material: THREE.Material) => void} mutate
+ * @param {Track} track
+ */
+function cloneModelMaterials(model, mutate, track) {
+  const clones = new Map();
+  const cloneOne = (material) => {
+    if (!material) return material;
+    if (!clones.has(material)) {
+      const clone = material.clone();
+      clone.userData = { ...clone.userData, shared: false };
+      mutate(clone);
+      clones.set(material, track.mat(clone));
+    }
+    return clones.get(material);
+  };
+  model.traverse((obj) => {
+    if (!obj.isMesh || !obj.material) return;
+    obj.material = Array.isArray(obj.material)
+      ? obj.material.map(cloneOne)
+      : cloneOne(obj.material);
+  });
+}
+
+/** Free dirt path (§C8.3): 3 flattened earth patches in a walking line. */
+function buildDirtPath(track) {
+  const grp = new THREE.Group();
+  grp.name = 'pathDirt';
+  const dirt = standardMat('#8A6844', { roughness: 1 });
+  const patchGeo = track.geo(new THREE.CylinderGeometry(0.17, 0.19, 0.025, 10));
+  for (const [x, z, s] of [[-0.32, 0.05, 1], [0, -0.06, 0.9], [0.32, 0.04, 1.05]]) {
+    const patch = new THREE.Mesh(patchGeo, dirt);
+    patch.position.set(x, 0.012, z);
+    patch.scale.set(s, 1, s * 0.8);
+    patch.rotation.y = x * 2;
+    grp.add(patch);
+  }
+  return grp;
+}
+
+/**
+ * Kenney furniture GLBs have corner origins — recenter the footprint on x/z
+ * and drop the bounding-box bottom onto y=0 (mirrors roomManager's grounding
+ * so swapped variants sit exactly where the defaults did).
+ * @param {THREE.Object3D} model
+ */
+function groundAndCenter(model) {
+  const box = new THREE.Box3().setFromObject(model);
+  const center = box.getCenter(new THREE.Vector3());
+  model.position.x -= center.x;
+  model.position.z -= center.z;
+  model.position.y -= box.min.y;
+}
+
+/**
+ * V2/G22: ceiling-mount grounding (§C8.1 fan) — center x/z but pull the
+ * bounding-box TOP up to y=0 so the model hangs from the slot anchor.
+ * @param {THREE.Object3D} model
+ */
+function hangAndCenter(model) {
+  const box = new THREE.Box3().setFromObject(model);
+  const center = box.getCenter(new THREE.Vector3());
+  model.position.x -= center.x;
+  model.position.z -= center.z;
+  model.position.y -= box.max.y;
+}
+
+/**
+ * V2/G22 (§C8.3): tint a GLB clone's materials — 'foliage' recolors the
+ * green-dominant materials (blossom-tree canopy), 'bloom' recolors everything
+ * else (rose-bed petals; leaves/stems stay green). Materials are cloned per
+ * application (the asset cache's shared materials are never mutated) and
+ * tracked for disposal on the next slot swap.
+ * @param {THREE.Object3D} model @param {string} tintHex
+ * @param {'foliage'|'bloom'|undefined} target @param {Track} track
+ */
+function tintModel(model, tintHex, target, track) {
+  const tint = new THREE.Color(tintHex);
+  const clones = new Map();
+  model.traverse((obj) => {
+    if (!obj.isMesh || !obj.material) return;
+    const swap = (m) => {
+      if (!m?.color) return m;
+      const { r, g, b } = m.color;
+      const greenish = g > r * 1.05 && g > b * 1.05;
+      if ((target === 'foliage') !== greenish) return m;
+      if (!clones.has(m)) {
+        const clone = m.clone();
+        clone.userData.shared = false;
+        clone.color.lerp(tint, 0.72);
+        clones.set(m, track.mat(clone));
+      }
+      return clones.get(m);
+    };
+    obj.material = Array.isArray(obj.material) ? obj.material.map(swap) : swap(obj.material);
+  });
+}

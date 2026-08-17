@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/minigames/games/dance_party/dance_party.gd" id="1"]
+
+[node name="DanceParty" type="Node2D"]
+script = ExtResource("1")

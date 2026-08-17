@@ -1,0 +1,516 @@
+// GOOBY boot (§B): store.load → (offline sim, G6) → scenes+UI init → RAF.
+// The RAF loop lives in core/sceneManager.js; the 1 s stat tick in
+// core/timeEngine.js. The dev harness (§E9) handles URL-param routing in dev.
+
+import './ui/styles.css';
+import { XP } from './data/constants.js';
+import { setLang, EN as STRINGS_EN, DE as STRINGS_DE } from './data/strings.js'; // V4/FIX-JUICE: + runtime dicts for the loading-keys merge block
+// V4/FIX-JUICE: loading-veil/loading-card dictionaries for the marked merge
+// block below (owned modules — strings.js itself stays frozen §E0.1-8).
+import { EN as ACUI_LOADING_EN, DE as ACUI_LOADING_DE } from './data/strings/v4-acui-loading.js';
+import { EN as UI2_LOADING_EN, DE as UI2_LOADING_DE } from './data/strings/v4-ui2.js';
+import * as save from './core/save.js';
+import { now } from './core/clock.js';
+import { createStore } from './core/store.js';
+import { createInput } from './core/input.js';
+import { createSceneManager } from './core/sceneManager.js';
+import { createTimeEngine } from './core/timeEngine.js';
+import { createUi } from './ui/ui.js';
+import audio from './audio/audio.js';
+import { createMinigameFramework } from './minigames/framework.js';
+import { createHomeScene, HOME_ASSET_KEYS } from './home/homeScene.js';
+// G6: offline sim + notification hooks — imports for the marked block in boot()
+import { simulateOffline, offlineToastVars } from './systems/offline.js';
+import { installNotificationHooks } from './core/notifications.js';
+import { initPermissionFlow } from './ui/permissionPrompt.js';
+import { createSettingsScreen } from './ui/settingsScreen.js';
+import { initSleepFlow } from './ui/sleepFlow.js';
+// end G6 imports
+// V3/G33: UI-scale boot applier — import for the marked block below (PLAN3 §B3)
+import { initUiScale } from './ui/settingsScreen.js';
+// G12: wardrobe/outfits, achievements, daily bonus — imports for the marked block
+import { initAchievements } from './systems/achievementsEngine.js';
+import { initOutfitSync } from './character/outfitAttach.js';
+import { registerWardrobe } from './ui/wardrobeScreen.js';
+import { registerAchievementsScreen } from './ui/achievementsScreen.js';
+import { initDailyBonus } from './ui/dailyBonusPopup.js';
+// end G12 imports
+// V2/G22: fur-skin applier — import for the marked block below (PLAN2 §C8.5)
+import { initSkinSync } from './character/skins.js';
+// V2/G30: one-time "What's new in 2.0" panel — import for the marked block below (§A3-12)
+import { initWhatsNew } from './ui/whatsNew.js';
+// V3/G34: sticker-book engine — import for the marked block below (PLAN3 §B5/§C5)
+import { initStickerBook } from './systems/stickerBook.js';
+// V4/G55: recap trigger plumbing — imports for the marked block below (PLAN4 §B5.2)
+import { defaultRecapSlice, initialLastRecapLevel, milestoneCrossed, snapshot as recapSnapshot } from './systems/recap.js';
+// V2/G23: progression UI — imports for the marked block below (PLAN2 §C5/C6/C12)
+import { registerQuestBoard } from './ui/questBoard.js';
+import { registerAlbumScreen } from './ui/albumScreen.js';
+import { registerProfileScreen } from './ui/profileScreen.js';
+import { initPhotoMode } from './ui/photoMode.js';
+import { registerXpInfoSheet, consumeRecentXpSource } from './ui/xpInfoSheet.js'; // V4/G69: XP sheet + level-up source (§C-SYS3)
+// end V2/G23 imports
+// V2/G19: garden panels + interactions — imports for the marked block below
+import { registerGardenUi } from './ui/gardenPanel.js';
+import { initGardenInteractions } from './home/gardenInteractions.js';
+// end V2/G19 imports
+import { initOnboarding } from './ui/onboarding.js'; // G14: first-run tutorial (§C8.1)
+
+// Agent G2's core/assets.js is discovered at transform time; the empty-map
+// fallback keeps boot working until it lands (coordination note — the glob
+// becomes a bundled import automatically once the file exists).
+const assetsModules = import.meta.glob('./core/assets.js');
+
+/** Minimal assets stand-in matching the §E1 contract until G2 lands. */
+const assetsStub = {
+  async preload() {},
+  getModel(key) {
+    throw new Error(`[assets stub] getModel('${key}') — core/assets.js (G2) not present yet`);
+  },
+  getAudioUrl(key) {
+    console.warn(`[assets stub] getAudioUrl('${key}') — core/assets.js (G2) not present yet`);
+    return null;
+  },
+};
+
+async function loadAssets() {
+  const loader = assetsModules['./core/assets.js'];
+  if (!loader) return assetsStub;
+  try {
+    const mod = await loader();
+    if (typeof mod.preload === 'function') return mod;
+    if (mod.default && typeof mod.default.preload === 'function') return mod.default;
+    if (typeof mod.createAssets === 'function') return mod.createAssets();
+    console.warn('[boot] core/assets.js has an unexpected shape, using stub');
+    return assetsStub;
+  } catch (err) {
+    console.warn('[boot] core/assets.js failed to load, using stub:', err);
+    return assetsStub;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Boot
+// ---------------------------------------------------------------------------
+async function boot() {
+  // Dev harness pre-boot: ?now / ?fast / ?reset / ?lang (§E9, dev builds only).
+  let harness = null;
+  if (import.meta.env.DEV) {
+    harness = await import('./dev/harness.js');
+    harness.preBoot();
+  }
+
+  const loaded = save.load();
+  const store = createStore(loaded.state);
+  setLang(store.get('settings.lang'));
+
+  // ---- V4/FIX-JUICE: loading i18n keys → runtime dicts (single marked block) ----
+  // The AC-3 veil + POLISH-D loading card resolve their strings through local
+  // tx() fallbacks (G52 pattern; strings.js stays frozen §E0.1-8), but every
+  // t() miss first logs '[strings] missing key: acui.loading.* / ui2.loading.*'
+  // to the console. Spread the two owned loading dictionaries into the RUNTIME
+  // dicts additively (existing global keys always win) so t() resolves them
+  // silently; the module tx() fallbacks stay as the node-safe second line.
+  for (const [globalDict, moduleDicts] of [
+    [STRINGS_EN, [ACUI_LOADING_EN, UI2_LOADING_EN]],
+    [STRINGS_DE, [ACUI_LOADING_DE, UI2_LOADING_DE]],
+  ]) {
+    for (const dict of moduleDicts) {
+      for (const [key, value] of Object.entries(dict)) {
+        if (!(key in globalDict)) globalDict[key] = value;
+      }
+    }
+  }
+  // ---- end V4/FIX-JUICE merge block ----
+
+  // Apply the validated UI scale before the first rendered scene.
+  // Root font-size + data-ui-scale from settings.uiScale BEFORE the first
+  // paint (index.html's inline pre-boot line already set it from the raw
+  // save to avoid FOUC — this re-applies from the validated store and then
+  // follows it live, emitting 'uiScaleChanged' §B10 on every change).
+  initUiScale({ store });
+
+  const assets = await loadAssets();
+
+  const canvas = document.getElementById('scene');
+  const input = createInput(canvas);
+  const ui = createUi();
+  const sceneManager = createSceneManager({ canvas, assets, input, audio, store, ui });
+
+  // Real home scene (G4): 4 furnished rooms + Gooby (§C2/§D3/§D4).
+  sceneManager.register('home', createHomeScene, HOME_ASSET_KEYS);
+
+  const framework = createMinigameFramework({ sceneManager, store, ui, audio });
+
+  // ---- V4/G52: radio UI + now-playing chip (PLAN4 §C-SYS1.3–1.8) ----
+  // Same-wave G51 engine modules are discovered inside radioScreen.js; until
+  // they land, the UI keeps a feature-detected 14-track catalog fallback.
+  try {
+    const [{ registerRadioUi }, { initNowPlaying }] = await Promise.all([
+      import('./ui/radioScreen.js'),
+      import('./ui/nowPlaying.js'),
+    ]);
+    registerRadioUi({ store, ui, audio, sceneManager, framework });
+    initNowPlaying({ store, ui, audio, sceneManager, framework });
+  } catch (err) {
+    console.warn('[boot] V4/G52 radio UI unavailable:', err);
+  }
+  // ---- end V4/G52 radio UI block ----
+
+  // ---- G5 wiring hook (the single marked G5 integration point) ----
+  // Registers the home HUD, arcade screen and food-tray panel, and wraps the
+  // home-scene factory so care interactions (§C3: pet/tickle/poke, feed, wash,
+  // toilet, ball toss) wire up with the live scene handles after every home
+  // enter and tear down on exit. Fully feature-detected/guarded: the transform
+  // -time glob keeps boot working even while G4's home scene hasn't landed.
+  try {
+    const care = await import('./home/interactions.js');
+    await care.registerCareUi({ store, ui, audio, input, sceneManager, framework, assets });
+    const homeLoader = import.meta.glob('./home/homeScene.js')['./home/homeScene.js'];
+    const home = homeLoader ? await homeLoader().catch(() => null) : null;
+    if (home?.createHomeScene) {
+      sceneManager.register('home', (ctx) => {
+        const inst = home.createHomeScene(ctx);
+        const origEnter = inst.enter?.bind(inst);
+        const origExit = inst.exit?.bind(inst);
+        inst.enter = async (params) => {
+          await origEnter?.(params);
+          care.initInteractions({
+            scene: inst.scene,
+            camera: inst.camera,
+            roomManager: inst.getRoomManager?.(),
+            gooby: inst.getGooby?.(),
+            store, ui, audio, input,
+          });
+        };
+        inst.exit = () => {
+          care.teardown();
+          origExit?.();
+        };
+        return inst;
+      }, home.HOME_ASSET_KEYS ?? []);
+    }
+  } catch (err) {
+    console.warn('[boot] G5 care wiring unavailable:', err);
+  }
+  // ---- end G5 wiring hook ----
+
+  // ---- G6: offline sim + notification hooks (single marked G6 block) ----
+  // Offline catch-up (§E4) BEFORE the first render, with welcome-back toast.
+  const beforeOffline = { ...store.get('stats') };
+  const offlineSim = simulateOffline(store.get(), now());
+  store.update((state) => Object.assign(state, offlineSim.state));
+  const offlineVars = offlineToastVars(beforeOffline, offlineSim);
+  if (offlineVars) ui.toast('offline.welcomeBack', offlineVars);
+  // Notifications (§C7/§E7): cancel-on-open + background/save reschedule hooks.
+  installNotificationHooks({ store });
+  // Permission soft-ask flow (§C7), settings screen, sleep flow (§C1.4 — the
+  // lamp/bed taps self-wire to G4's home scene via sleepFlow's guarded hook).
+  // F2: sceneManager lets the soft-ask defer while a minigame/shop trip runs.
+  // F6: framework.isActive() belt-and-braces + boot-window (currentId null) defer.
+  initPermissionFlow({ store, ui, sceneManager, framework });
+  ui.registerScreen('settings', createSettingsScreen({ store, ui }));
+  initSleepFlow({ store, ui });
+  // ---- end G6 block ----
+
+  // ---- V3/G33: hidden dev panel (PLAN3 §B4/§C4, single marked block) ----
+  // Registered UNCONDITIONALLY as §E6 screen id 'devPanel' but the module
+  // itself is lazy-loaded on first open (§B4: hidden-by-flag, no build
+  // stripping; the settings entry row renders only when devUnlocked, and
+  // the dev harness ?open=devPanel works in dev builds regardless §E9).
+  {
+    let devPanelMod = null;
+    ui.registerScreen('devPanel', {
+      mount(el, params) {
+        const deps = { store, ui, audio, sceneManager, framework };
+        if (devPanelMod) {
+          devPanelMod.mountDevPanel(el, deps, params);
+          return;
+        }
+        import('./ui/devPanel.js').then((mod) => {
+          devPanelMod = mod;
+          // Only mount if this screen instance is still the active one.
+          if (el.isConnected) mod.mountDevPanel(el, deps, params);
+        });
+      },
+      unmount() {
+        devPanelMod?.unmountDevPanel();
+      },
+    });
+  }
+  // ---- end V3/G33 block ----
+
+  // ---- V2/G19: garden — panels + self-wiring 3D interactions (PLAN2 §C2) ----
+  // Panels register once; gardenInteractions polls for the live roomManager
+  // (rebuilt on every home enter — sleepFlow pattern) and wires plots/drags.
+  registerGardenUi({ store, ui });
+  initGardenInteractions({ store, ui, audio, input, assets });
+  // ---- end V2/G19 block ----
+
+  // ---- G12: wardrobe/outfits, achievements, daily bonus (single marked G12 block) ----
+  // Achievements engine (§C8.3): store-event unlock detection + rewards; the
+  // framework handle enables the noCrash shop-trip tap. Wardrobe + achievements
+  // screens register early so G11's shop Outfits tab can feature-detect them.
+  // Outfit sync keeps the home Gooby dressed (§C5.3); daily bonus (§C8.2)
+  // auto-shows its popup on the first open per local day.
+  initAchievements({ store, ui, audio, framework });
+  registerWardrobe({ store, ui, audio });
+  registerAchievementsScreen({ store, ui, audio });
+  initOutfitSync({ store });
+  initDailyBonus({ store, ui, audio, sceneManager });
+  // ---- end G12 block ----
+
+  // ---- V3/G34: sticker-book engine (PLAN3 §B5/§C5, single marked block) ----
+  // Wires condition checks to the coalesced 'change' event and the runtime
+  // 'stickerHook' event (§E0.1-7: firers call store.emit('stickerHook',{id})).
+  // Sits after the achievements engine so its counter latches (sickEver etc.)
+  // land before sticker evaluation; the Stickerbuch UI lives in albumScreen.
+  initStickerBook({ store, ui, audio });
+  // ---- end V3/G34 block ----
+
+  // ---- V2/G30: one-time "What's new in 2.0" panel (PLAN2 §A3 checklist 12) ----
+  // Shows ONCE for migrated v1 veterans (onboarding.whatsNew2Seen === false,
+  // set by migrations[1] — §E0.1-6); fresh saves default the flag to true and
+  // never see it. Waits for a quiet home scene like the daily popup above.
+  initWhatsNew({ store, ui, audio, sceneManager });
+  // ---- end V2/G30 block ----
+
+  // ---- V2/G23: progression UI wiring (PLAN2 §C5/§C6/§C12) ----
+  // Quest board / sticker album / profile screens + photo mode. The engines
+  // themselves (daily roll + midnight rollover, quest-event forwarding,
+  // sticker XP/toasts, photo XP cap) went live inside initAchievements above
+  // (systems/achievementsEngine.js V2/G23 block); HUD buttons live in hud.js.
+  registerQuestBoard({ store, ui, audio });
+  registerAlbumScreen({ store, ui, audio });
+  registerProfileScreen({ store, ui, audio, sceneManager });
+  initPhotoMode({ ui, audio, sceneManager });
+  registerXpInfoSheet({ store, ui, audio }); // V4/G69: §E6 panel `xpInfo`
+  // ---- end V2/G23 block ----
+
+  // ---- V2/G22: fur-skin boot application (PLAN2 §C8.5) ----
+  // Applies skins.equipped to the shared Gooby materials at boot, re-applies
+  // on 'skinChanged' and keeps the live home rig tinted (cameos/photo mode
+  // inherit through the shared materials — see character/skins.js).
+  initSkinSync({ store });
+  // ---- end V2/G22 block ----
+
+  const timeEngine = createTimeEngine(store);
+  timeEngine.start();
+
+  // ---- V4/G56 (§C-SYS3.3, marked block): level-up toast + next-unlock ----
+  // preview „ · Nächstes: {name} (L{n})" via leveling.nextUnlock. Lazy import
+  // of the strings module (§E0.1-11 fallback until G53 spreads it); when the
+  // next unlock's name key resolves nowhere yet, the toast falls back to the
+  // exact v3 copy — never a raw key on screen.
+  store.on('levelUp', ({ level }) => {
+    const coins = XP.LEVEL_UP_COINS_PER_LEVEL * level;
+    const xpSource = consumeRecentXpSource(); // V4/G69: source that triggered this coalesced level-up event
+    Promise.all([import('./systems/leveling.js'), import('./data/strings/v4-difficulty.js'), import('./data/strings.js')])
+      .then(([{ nextUnlock }, diffStrings, { t, getLang }]) => {
+        const next = nextUnlock(level);
+        const local = getLang() === 'de' ? diffStrings.DE : diffStrings.EN;
+        const tx = (key) => (t(key) !== key ? t(key) : local[key] ?? key);
+        const name = next ? tx(next.nameKey) : tx('unlock.all');
+        const template = tx('toast.levelUpNext');
+        if (name === (next ? next.nameKey : 'unlock.all') || template === 'toast.levelUpNext') {
+          ui.toast('toast.levelUp', { level, coins }); // fallback: v3 copy
+          return;
+        }
+        const vars = {
+          level,
+          coins,
+          name,
+          n: next?.level ?? level,
+          source: xpSource ? t(`xp.source.${xpSource}`) : '',
+        };
+        if (xpSource) {
+          ui.toast(next ? 'xp.toast.levelUpNextSource' : 'xp.toast.levelUpAllSource', vars);
+        } else if (next) {
+          ui.toast('toast.levelUpNext', vars);
+        } else {
+          ui.toast('xp.toast.levelUpAll', vars);
+        }
+      })
+      .catch(() => ui.toast('toast.levelUp', { level, coins }));
+    audio.play('jingle.levelUp');
+  });
+  // ---- end V4/G56 block ----
+  if (loaded.recovered) ui.toast('boot.saveCorrupt');
+
+  // ---- V4/G55: recap trigger plumbing (PLAN4 §B5.2/§C-SYS2.1, single marked block) ----
+  // Level-change listener: milestoneCrossed() queues the lowest un-recapped
+  // milestone (5,10,…,40) into recap.pendingLevel (§B5.1 — an L4→L11 jump
+  // queues 5) and emits the runtime 'recapChanged' {pendingLevel,
+  // lastRecapLevel} event (§B10). pendingLevel survives reload (the §E3
+  // pipeline passes the slice through) and is cleared ONLY by the §B5.2
+  // completion write. Saves without a recap slice (pre-G53 migrations[3])
+  // get the retro-safe §B1 #3 init here on their first level-up
+  // (lastRecapLevel floored to the pre-jump milestone + baseline snapshot),
+  // so veterans never see instant-recap spam; G53's migration makes this
+  // init path dead.
+  // Plays-on-next-home-enter hook (wave 2 registers it): the recap NEVER
+  // starts from this listener. G64's recapOverlay subscribes to home-scene
+  // enters (plus 'recapChanged' while home is already active), reads
+  // recap.pendingLevel, builds the cue timeline via systems/recapDirector.js
+  // buildTimeline(), and on finish/skip commits systems/recap.js
+  // completeRecap() in ONE store.update (atomic §B5.2: history + baseline +
+  // lastRecapLevel + pendingLevel=0). It must never fire mid-minigame/trip.
+  {
+    let recapPrevLevel = Math.max(1, Math.floor(Number(store.get('level')) || 1));
+    store.on('xpChanged', ({ level }) => {
+      const prev = recapPrevLevel;
+      recapPrevLevel = level;
+      if (!(level > prev)) return; // level-downs (dev harness) just resync
+      let payload = null;
+      store.update((s) => {
+        const hadSlice = s.recap != null && typeof s.recap === 'object' && !Array.isArray(s.recap);
+        const recap = hadSlice
+          ? { ...defaultRecapSlice(), ...s.recap }
+          : {
+              ...defaultRecapSlice(),
+              lastRecapLevel: initialLastRecapLevel(prev),
+              baseline: recapSnapshot(s, now()),
+              baselineAt: now(),
+            };
+        const pending = Math.max(0, Math.floor(Number(recap.pendingLevel) || 0));
+        const milestone = milestoneCrossed(prev, level, recap.lastRecapLevel);
+        recap.pendingLevel = milestone > 0 && (pending === 0 || milestone < pending) ? milestone : pending;
+        s.recap = recap;
+        if (recap.pendingLevel !== pending || !hadSlice) {
+          payload = { pendingLevel: recap.pendingLevel, lastRecapLevel: recap.lastRecapLevel };
+        }
+      });
+      if (payload) store.emit('recapChanged', payload);
+    });
+  }
+  // ---- end V4/G55 block ----
+
+  // ---- V4/G64: recap cinematic player (PLAN4 §C-SYS2, single marked block) ----
+  // Consumes G55's recap.pendingLevel: the overlay polls for the NEXT quiet
+  // home moment (home scene, no switch in flight, no active screen — never
+  // mid-gameplay §C-SYS2.1) and plays the beat-synced cinematic; finish/skip
+  // commits systems/recap.js completeRecap() atomically (§B5.2 — the ONLY
+  // pendingLevel-clearing path). Also registers the 'recap' §E1 scene (G63's
+  // vignettes, feature-detected w/ DOM backdrop fallback) and the dev-card-15
+  // playback API. Lazy import + guard: a broken recap chunk never kills boot.
+  try {
+    const { initRecapOverlay } = await import('./ui/recapOverlay.js');
+    initRecapOverlay({ store, ui, audio, sceneManager, assets });
+  } catch (err) {
+    console.warn('[boot] V4/G64 recap player unavailable:', err);
+  }
+  // ---- end V4/G64 block ----
+
+  // ---- V6/A1: cutscene director (PLAN6 Wave A/A1, single marked block) ----
+  // Registers the cinematic view driver (ui/cutsceneView.js) — it binds the
+  // PURE sequencer (systems/cutscene.js) to the live home scene under a
+  // strict camera lease with finally-restores — and arms the dev-harness
+  // `?cutscene=<id>` kick (plays after the next home enter, so this block
+  // must precede the boot switchTo('home') below). Lazy import + guard: a
+  // broken cutscene chunk never kills boot.
+  try {
+    const { initCutsceneView } = await import('./ui/cutsceneView.js');
+    initCutsceneView({ store, ui, audio, sceneManager, assets });
+  } catch (err) {
+    console.warn('[boot] V6/A1 cutscene director unavailable:', err);
+  }
+  // ---- end V6/A1 block ----
+
+  // ---- V6.1/G3: Gooby-versary + charm strings (FINAL-WAVE B5, single marked block) ----
+  // Merges the G3 fallback dictionaries (cutscene.versary.*, postcard
+  // variants 4/5, gallery.frame.park, park.wheel.apexNight, settings.loveNote
+  // — manifest handed to G1) into the RUNTIME dicts additively (existing
+  // keys, i.e. G1's canonical strings, always win — the V4/FIX-JUICE merge
+  // pattern), then arms the quiet-home versary poll on top of the A1 director
+  // registered above. Lazy import + guard: a broken versary chunk never
+  // kills boot.
+  try {
+    const versaryMod = await import('./ui/versary.js');
+    for (const [globalDict, dict] of [
+      [STRINGS_EN, versaryMod.VERSARY_EN],
+      [STRINGS_DE, versaryMod.VERSARY_DE],
+    ]) {
+      for (const [key, value] of Object.entries(dict)) {
+        if (!(key in globalDict)) globalDict[key] = value;
+      }
+    }
+    const { playCutscene, isCutsceneActive } = await import('./ui/cutsceneView.js');
+    versaryMod.initVersary({ store, ui, sceneManager, playCutscene, isCutsceneActive });
+  } catch (err) {
+    console.warn('[boot] V6.1/G3 versary unavailable:', err);
+  }
+  // ---- end V6.1/G3 block ----
+
+  // ---- V6/E1: Funkelpark plaza hub (PLAN6 Wave E/E1, single marked block) ----
+  // Registers the 'park' §E1 scene (park/parkScene.js — builds the plaza from
+  // parkBuilder, mounts E3's dressing, wires E2's coaster kiosk + E3's stall
+  // counters via initParkStall on enter), the 'parkLeaveConfirm' §E6 panel and
+  // the dev-harness kicks `?park=1` / `?coaster=1` (the official route
+  // replacing E2's deleted temp kick). The trip side (`?parktrip=1`, the
+  // door-sheet park row, parkLeaveRequested→goHome) lives in
+  // systems/shopTrip.js, which registerCareUi already wired above. Must
+  // precede the boot switchTo('home') below so the kicks arm in time. Lazy
+  // import + guard: a broken park chunk never kills boot.
+  try {
+    const { initParkScene } = await import('./park/parkScene.js');
+    initParkScene({ store, ui, audio, sceneManager, assets });
+  } catch (err) {
+    console.warn('[boot] V6/E1 Funkelpark unavailable:', err);
+  }
+  // ---- end V6/E1 block ----
+
+  // ---- V4/AC-9: interaction juice (single marked block) ----
+  // Press squash + tap pops + coin-fly + springy toasts (ui/juice.js): one
+  // delegated listener set on the #ui root, pooled DOM effects, fully gated
+  // by prefers-reduced-motion. Adds NO sounds to existing call sites; exposes
+  // window.__goobyJuice.flyCoins for later feature-detected wiring. Lazy
+  // import + guard: a broken juice chunk never kills boot.
+  try {
+    const { initJuice } = await import('./ui/juice.js');
+    initJuice({ ui, audio });
+  } catch (err) {
+    console.warn('[boot] V4/AC-9 interaction juice unavailable:', err);
+  }
+  // ---- end V4/AC-9 block ----
+
+  // First-gesture audio unlock (iOS requirement §D6).
+  const unlock = () => {
+    audio.init();
+    window.removeEventListener('pointerdown', unlock);
+  };
+  window.addEventListener('pointerdown', unlock);
+
+  const routed = harness
+    ? await harness.postBoot({ store, ui, sceneManager, framework, assets })
+    : false;
+  // ---- V4/FIX-JUICE: cold-boot cozy veil (single marked block) ----
+  // The first switchTo('home') used to run behind only the bare §E1 black
+  // fade — the room popped in on cold boot. Cover boot with the AC-3 home
+  // veil and reveal after the home enter() resolved (the veil's own settle
+  // frames + minShown + HARD_TIMEOUT/watchdog ceilings mean boot can never
+  // deadlock behind the curtain). Feature-detected lazy import + guard: a
+  // broken veil chunk never blocks boot. Harness-routed boots (?minigame=…)
+  // keep their own transitions.
+  let bootVeil = null;
+  if (!routed) {
+    try {
+      const veilMod = await import('./ui/loadingVeil.js');
+      veilMod.initLoadingVeil({ sceneManager });
+      veilMod.veil.show({ mode: 'home' });
+      bootVeil = veilMod.veil;
+    } catch (err) {
+      console.warn('[boot] V4/FIX-JUICE cold-boot veil unavailable:', err);
+    }
+  }
+  if (!routed) await sceneManager.switchTo('home');
+  bootVeil?.hide();
+  // ---- end V4/FIX-JUICE cold-boot veil block ----
+
+  // ---- G14: first-run onboarding (§C8.1 — no-op for returning users) ----
+  initOnboarding({ store, ui, audio, sceneManager, framework });
+  // ---- end G14 ----
+}
+
+boot().catch((err) => {
+  console.error('[boot] fatal:', err);
+});

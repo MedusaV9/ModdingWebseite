@@ -1,0 +1,10 @@
+{
+	"id": "danceParty",
+	"title_key": "mg.danceParty.title",
+	"scene": "res://scripts/minigames/games/dance_party/dance_party.tscn",
+	"coin_table": {"divisor": 6, "min": 4, "max": 28},
+	"target": 140,
+	"orientation": "portrait",
+	"supports_endless": true,
+	"energy_cost": 8
+}

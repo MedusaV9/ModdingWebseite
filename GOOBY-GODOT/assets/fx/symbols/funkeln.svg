@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 96 96">
+  <!-- Begeisterung: großes Funkeln + zwei kleine (weiche Vierzack-Sterne) -->
+  <g stroke-linejoin="round">
+    <path d="M38 12 L46 38 L72 46 L46 54 L38 80 L30 54 L4 46 L30 38 Z"
+          fill="#FFFFFF" stroke="#FFFFFF" stroke-width="10"/>
+    <path d="M38 12 L46 38 L72 46 L46 54 L38 80 L30 54 L4 46 L30 38 Z"
+          fill="#FFE98A" stroke="#C08A1E" stroke-width="4"/>
+    <path d="M76 10 L80 22 L92 26 L80 30 L76 42 L72 30 L60 26 L72 22 Z"
+          fill="#FFFFFF" stroke="#FFFFFF" stroke-width="7"/>
+    <path d="M76 10 L80 22 L92 26 L80 30 L76 42 L72 30 L60 26 L72 22 Z"
+          fill="#FFF6C9" stroke="#C08A1E" stroke-width="3.5"/>
+    <path d="M74 58 L77 68 L87 71 L77 74 L74 84 L71 74 L61 71 L71 68 Z"
+          fill="#FFFFFF" stroke="#FFFFFF" stroke-width="6"/>
+    <path d="M74 58 L77 68 L87 71 L77 74 L74 84 L71 74 L61 71 L71 68 Z"
+          fill="#FFE98A" stroke="#C08A1E" stroke-width="3"/>
+  </g>
+</svg>

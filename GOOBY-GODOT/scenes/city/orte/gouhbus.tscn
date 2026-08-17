@@ -1,0 +1,7 @@
+[gd_scene load_steps=2 format=3 uid="uid://c3aortgouhb01"]
+
+[ext_resource type="Script" path="res://scripts/city/orte/gouhbus.gd" id="1_gouhbus"]
+
+[node name="Gouhbus" type="Node3D"]
+script = ExtResource("1_gouhbus")
+ort_id = "gouhbus"

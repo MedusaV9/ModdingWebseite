@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 96 96">
+  <!-- Stolz: fünfzackiger Goldstern -->
+  <g stroke-linejoin="round">
+    <path d="M48 8 L59 36 L89 38 L66 57 L74 86 L48 69 L22 86 L30 57 L7 38 L37 36 Z"
+          fill="#FFFFFF" stroke="#FFFFFF" stroke-width="12"/>
+    <path d="M48 8 L59 36 L89 38 L66 57 L74 86 L48 69 L22 86 L30 57 L7 38 L37 36 Z"
+          fill="#FFD166" stroke="#8F6212" stroke-width="4"/>
+    <path d="M48 20 L54 37 L71 38" fill="none" stroke="#FFE9AE" stroke-width="6" stroke-linecap="round"/>
+  </g>
+</svg>

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 96 96">
+  <!-- Überraschung: spitzer Aufblitz-Stern (acht Zacken, hell mit Orange) -->
+  <g stroke-linejoin="round">
+    <path d="M48 4 L55 33 L82 14 L63 41 L92 48 L63 55 L82 82 L55 63 L48 92 L41 63 L14 82 L33 55 L4 48 L33 41 L14 14 L41 33 Z"
+          fill="#FFFFFF" stroke="#FFFFFF" stroke-width="8"/>
+    <path d="M48 4 L55 33 L82 14 L63 41 L92 48 L63 55 L82 82 L55 63 L48 92 L41 63 L14 82 L33 55 L4 48 L33 41 L14 14 L41 33 Z"
+          fill="#FFF3B0" stroke="#E8712D" stroke-width="4"/>
+    <circle cx="48" cy="48" r="10" fill="#FFD166" stroke="#E8712D" stroke-width="3"/>
+  </g>
+</svg>

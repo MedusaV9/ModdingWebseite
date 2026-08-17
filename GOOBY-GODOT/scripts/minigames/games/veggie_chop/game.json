@@ -1,0 +1,10 @@
+{
+	"id": "veggieChop",
+	"title_key": "mg.veggieChop.title",
+	"scene": "res://scripts/minigames/games/veggie_chop/veggie_chop.tscn",
+	"coin_table": {"divisor": 5, "min": 4, "max": 26},
+	"target": 105,
+	"orientation": "portrait",
+	"supports_endless": true,
+	"energy_cost": 8
+}

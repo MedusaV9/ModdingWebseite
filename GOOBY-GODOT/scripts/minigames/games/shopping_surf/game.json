@@ -1,0 +1,10 @@
+{
+	"id": "shoppingSurf",
+	"title_key": "mg.shoppingSurf.title",
+	"scene": "res://scripts/minigames/games/shopping_surf/shopping_surf.tscn",
+	"coin_table": {"divisor": 40, "min": 5, "max": 34},
+	"target": 900,
+	"orientation": "portrait",
+	"supports_endless": true,
+	"energy_cost": 8
+}
