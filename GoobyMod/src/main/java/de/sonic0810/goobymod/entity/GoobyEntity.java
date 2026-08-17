@@ -2025,6 +2025,28 @@ public class GoobyEntity extends TamableAnimal implements GeoEntity, MenuProvide
         trimOldest(this.familyRituals, MAX_PARTNER_HISTORY_ENTRIES);
     }
 
+    /**
+     * Symmetrische Lifecycle-Hooks pflegen den {@link GoobyLoadedIndex}:
+     * Chunk-Load/-Unload, Discard, Tod und Dimensionswechsel halten ihn exakt
+     * auf der Menge der geladenen serverseitigen Goobys (Logout-Cleanup laeuft
+     * seit 5.3 ueber diesen Index statt ueber einen All-Entities-Scan).
+     */
+    @Override
+    public void onAddedToLevel() {
+        super.onAddedToLevel();
+        if (!level().isClientSide) {
+            GoobyLoadedIndex.add(this);
+        }
+    }
+
+    @Override
+    public void onRemovedFromLevel() {
+        if (!level().isClientSide) {
+            GoobyLoadedIndex.remove(this);
+        }
+        super.onRemovedFromLevel();
+    }
+
     /** Drops session-only state immediately when a player disconnects. */
     public void removeTransientPlayerState(UUID playerId) {
         this.greetedPlayers.remove(playerId);

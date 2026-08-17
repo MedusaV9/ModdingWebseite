@@ -4,6 +4,7 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import de.sonic0810.goobymod.GoobyConfig;
 import de.sonic0810.goobymod.GoobyMod;
 import de.sonic0810.goobymod.entity.GoobyEntity;
+import de.sonic0810.goobymod.entity.GoobyLoadedIndex;
 import de.sonic0810.goobymod.entity.GoobySoundLimiter;
 import de.sonic0810.goobymod.entity.GoobyTrick;
 import de.sonic0810.goobymod.entity.goals.CatStareAtGoobyGoal;
@@ -11,6 +12,7 @@ import de.sonic0810.goobymod.entity.goals.RabbitFollowWildGoobyGoal;
 import de.sonic0810.goobymod.network.GoobyNetwork;
 import de.sonic0810.goobymod.registry.ModItems;
 import java.util.Locale;
+import java.util.UUID;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.commands.arguments.UuidArgument;
@@ -34,7 +36,7 @@ import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent.PlayerLoggedOutEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
 import net.neoforged.neoforge.event.server.ServerStoppedEvent;
-import net.neoforged.neoforge.event.tick.EntityTickEvent;
+import net.neoforged.neoforge.event.tick.ServerTickEvent;
 
 @EventBusSubscriber(modid = GoobyMod.MODID)
 public final class GoobyEvents {
@@ -70,6 +72,12 @@ public final class GoobyEvents {
     public static void onEntityJoin(EntityJoinLevelEvent event) {
         if (!event.getLevel().isClientSide) {
             injectFaunaGoals(event.getEntity());
+            if (event.getEntity() instanceof ItemEntity item) {
+                // Frisch gespawnte UND aus dem Chunk nachgeladene Gift-/Ball-Drops
+                // laufen beide hier durch — der Tracker sieht also exakt die
+                // Drops, die der alte globale Entity-Tick-Hook gesehen haette.
+                GiftPriorityTracker.trackIfPrioritized(item);
+            }
         }
     }
 
@@ -114,18 +122,15 @@ public final class GoobyEvents {
         return false;
     }
 
-    /** Gift ownership is exclusive for ten seconds, then normal pickup rules resume. */
+    /**
+     * Gift ownership is exclusive for ten seconds, then normal pickup rules
+     * resume. Seit 5.3 sweept ein Server-Tick nur noch die im
+     * {@link GiftPriorityTracker} registrierten Drops — der fruehere
+     * {@code EntityTickEvent.Post}-Hook lief fuer JEDES ItemEntity der Welt.
+     */
     @SubscribeEvent
-    public static void onItemTick(EntityTickEvent.Post event) {
-        if (!(event.getEntity() instanceof ItemEntity item)
-                || item.level().isClientSide || item.getTarget() == null) {
-            return;
-        }
-        long priorityUntil = item.getPersistentData().getLong(GoobyEntity.GIFT_PRIORITY_UNTIL_TAG);
-        if (priorityUntil > 0L && item.level().getGameTime() >= priorityUntil) {
-            item.setTarget(null);
-            item.getPersistentData().remove(GoobyEntity.GIFT_PRIORITY_UNTIL_TAG);
-        }
+    public static void onServerTick(ServerTickEvent.Post event) {
+        GiftPriorityTracker.tickServer();
     }
 
     @SubscribeEvent
@@ -137,16 +142,21 @@ public final class GoobyEvents {
 
     @SubscribeEvent
     public static void onPlayerLogout(PlayerLoggedOutEvent event) {
-        if (!(event.getEntity() instanceof ServerPlayer player)) {
-            return;
+        if (event.getEntity() instanceof ServerPlayer player) {
+            handlePlayerLogout(player.getUUID());
         }
-        GoobyNetwork.forgetSelectSender(player.getUUID());
-        for (var level : player.getServer().getAllLevels()) {
-            for (var entity : level.getAllEntities()) {
-                if (entity instanceof GoobyEntity gooby) {
-                    gooby.removeTransientPlayerState(player.getUUID());
-                }
-            }
+    }
+
+    /**
+     * Testbarer Logout-Kern: raeumt Session-Zustand ueber den bounded
+     * {@link GoobyLoadedIndex} auf, statt wie frueher ALLE geladenen Entities
+     * ALLER Level zu scannen. Der Index enthaelt dimensionsuebergreifend exakt
+     * die Goobys, die der alte Scan gefunden haette.
+     */
+    public static void handlePlayerLogout(UUID playerId) {
+        GoobyNetwork.forgetSelectSender(playerId);
+        for (GoobyEntity gooby : GoobyLoadedIndex.snapshot()) {
+            gooby.removeTransientPlayerState(playerId);
         }
     }
 
@@ -154,6 +164,8 @@ public final class GoobyEvents {
     public static void onServerStopped(ServerStoppedEvent event) {
         GoobySoundLimiter.clear();
         GoobyNetwork.clearSelectThrottle();
+        GiftPriorityTracker.clear();
+        GoobyLoadedIndex.clear();
     }
 
     /** Bounded nearby scan; returns the number of owned Goobys that reacted. */
