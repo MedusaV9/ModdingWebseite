@@ -47,9 +47,9 @@ public final class AnalyticsGameTests {
 
     /** Survival mock ServerPlayer (unique UUID per test = counter isolation). */
     private static ServerPlayer mockPlayer(GameTestHelper helper) {
-        ServerPlayer player = helper.makeMockServerPlayerInLevel();
-        player.setGameMode(GameType.SURVIVAL);
-        return player;
+        // WAVE10: central helper — configures the mock connection so tick broadcasters
+        // (InvLockSync/UnlockSync) can't crash the GameTestServer on a lingering mock.
+        return GameTestSupport.mockServerPlayer(helper, GameType.SURVIVAL);
     }
 
     @GameTest(template = GameTestSupport.EMPTY_TEMPLATE)

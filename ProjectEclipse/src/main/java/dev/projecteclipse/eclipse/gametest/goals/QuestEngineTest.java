@@ -109,7 +109,7 @@ public final class QuestEngineTest {
                       { "id": "t1_p5", "trigger": { "type": "manual" }, "text": "P5", "weight": 1 } ] }
                     """));
             GameTestSupport.setEventDay(server, 2);
-            ServerPlayer player = helper.makeMockServerPlayerInLevel();
+            ServerPlayer player = GameTestSupport.mockServerPlayerInLevel(helper);
             mocks.add(player);
 
             List<GoalSpec> personals = QuestApi.personals(server, player);
@@ -174,7 +174,7 @@ public final class QuestEngineTest {
                         "trigger": { "type": "breed_animals", "count": 1 }, "text": "Breed" } ] } ] }
                     """, NO_PERSONALS));
             GameTestSupport.setEventDay(server, 3);
-            ServerPlayer player = helper.makeMockServerPlayerInLevel();
+            ServerPlayer player = GameTestSupport.mockServerPlayerInLevel(helper);
             mocks.add(player);
             QuestDetectors.rearmSignalListenersForTest(server);
             List<String> completions = new CopyOnWriteArrayList<>();
@@ -262,7 +262,7 @@ public final class QuestEngineTest {
                     """, NO_PERSONALS));
             GameTestSupport.setEventDay(server, 4);
             // Login AFTER day+config are live → stat baselines snapshot the current values.
-            ServerPlayer player = helper.makeMockServerPlayerInLevel();
+            ServerPlayer player = GameTestSupport.mockServerPlayerInLevel(helper);
             mocks.add(player);
 
             QuestEngine.runPollNow(server);
@@ -314,8 +314,8 @@ public final class QuestEngineTest {
                         "trigger": { "type": "manual", "beatId": "herald_summoned" }, "text": "Summon" } ] } ] }
                     """, NO_PERSONALS));
             GameTestSupport.setEventDay(server, 5);
-            ServerPlayer playerA = helper.makeMockServerPlayerInLevel();
-            ServerPlayer playerB = helper.makeMockServerPlayerInLevel();
+            ServerPlayer playerA = GameTestSupport.mockServerPlayerInLevel(helper);
+            ServerPlayer playerB = GameTestSupport.mockServerPlayerInLevel(helper);
             mocks.add(playerA);
             mocks.add(playerB);
             QuestDetectors.rearmSignalListenersForTest(server);
@@ -373,8 +373,8 @@ public final class QuestEngineTest {
                         "text": "Survive" } ] } ] }
                     """, NO_PERSONALS));
             GameTestSupport.setEventDay(server, 6);
-            ServerPlayer survivor = helper.makeMockServerPlayerInLevel();
-            ServerPlayer wounded = helper.makeMockServerPlayerInLevel();
+            ServerPlayer survivor = GameTestSupport.mockServerPlayerInLevel(helper);
+            ServerPlayer wounded = GameTestSupport.mockServerPlayerInLevel(helper);
             mocks.add(survivor);
             mocks.add(wounded);
 
@@ -423,7 +423,7 @@ public final class QuestEngineTest {
                         "text": "A side" } ] } ] }
                     """, NO_PERSONALS));
             GameTestSupport.setEventDay(server, 7);
-            ServerPlayer player = helper.makeMockServerPlayerInLevel();
+            ServerPlayer player = GameTestSupport.mockServerPlayerInLevel(helper);
             mocks.add(player);
 
             // Legacy adapter: /eclipse goals tick path → mains[0] manual-complete + bitmask.

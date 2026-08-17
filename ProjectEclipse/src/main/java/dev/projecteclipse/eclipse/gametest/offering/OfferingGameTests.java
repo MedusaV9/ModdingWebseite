@@ -80,8 +80,7 @@ public final class OfferingGameTests {
     @GameTest(template = GameTestSupport.EMPTY_TEMPLATE)
     public static void onePerDaySignalAndConsumption(GameTestHelper helper) {
         MinecraftServer server = helper.getLevel().getServer();
-        ServerPlayer player = helper.makeMockServerPlayerInLevel();
-        player.setGameMode(GameType.SURVIVAL);
+        ServerPlayer player = GameTestSupport.mockServerPlayer(helper, GameType.SURVIVAL);
         int day = DayScheduler.getDay(server);
         AtomicInteger signals = new AtomicInteger();
         EclipseSignals.onAltarDeposit((who, item, count, purpose) -> {

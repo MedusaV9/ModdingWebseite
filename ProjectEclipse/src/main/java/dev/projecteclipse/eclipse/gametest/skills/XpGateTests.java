@@ -33,9 +33,10 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 public final class XpGateTests {
     private XpGateTests() {}
 
-    @SuppressWarnings("removal")
     private static ServerPlayer mockServerPlayer(GameTestHelper helper) {
-        return helper.makeMockServerPlayerInLevel();
+        // WAVE10: central helper — configures the mock connection so tick broadcasters
+        // (InvLockSync/UnlockSync) can't crash the GameTestServer on a lingering mock.
+        return GameTestSupport.mockServerPlayerInLevel(helper);
     }
 
     private static SkillState.Entry freshEntry(ServerPlayer player) {

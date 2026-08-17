@@ -36,18 +36,20 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
  * cap clamp/rollover, placed-block anti-abuse on ore procs, procmsg opt-out, payload codec
  * round-trips, SavedData NBT round-trip.
  *
- * <p>Uses {@code makeMockServerPlayerInLevel()} (NeoForge patch, deprecated-but-only-option
- * in 1.21.1) because the pipeline ends in real payload sends — vanilla's
- * {@code makeMockPlayer} returns a bare {@code Player} without a connection.</p>
+ * <p>Uses {@link GameTestSupport#mockServerPlayerInLevel} (wraps NeoForge's
+ * {@code makeMockServerPlayerInLevel()} + mock-connection setup) because the pipeline ends
+ * in real payload sends — vanilla's {@code makeMockPlayer} returns a bare {@code Player}
+ * without a connection.</p>
  */
 @PrefixGameTestTemplate(false)
 @GameTestHolder(EclipseMod.MOD_ID)
 public final class SkillSystemGameTests {
     private SkillSystemGameTests() {}
 
-    @SuppressWarnings("removal")
     private static ServerPlayer mockServerPlayer(GameTestHelper helper) {
-        return helper.makeMockServerPlayerInLevel();
+        // WAVE10: central helper — configures the mock connection so tick broadcasters
+        // (InvLockSync/UnlockSync) can't crash the GameTestServer on a lingering mock.
+        return GameTestSupport.mockServerPlayerInLevel(helper);
     }
 
     private static SkillState.Entry freshEntry(ServerPlayer player) {

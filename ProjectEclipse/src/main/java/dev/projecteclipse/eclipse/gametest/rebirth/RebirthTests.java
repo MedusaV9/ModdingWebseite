@@ -34,9 +34,10 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 public final class RebirthTests {
     private RebirthTests() {}
 
-    @SuppressWarnings("removal")
     private static ServerPlayer mockServerPlayer(GameTestHelper helper) {
-        return helper.makeMockServerPlayerInLevel();
+        // WAVE10: central helper — configures the mock connection so tick broadcasters
+        // (InvLockSync/UnlockSync) can't crash the GameTestServer on a lingering mock.
+        return GameTestSupport.mockServerPlayerInLevel(helper);
     }
 
     /** Zeroes skill + rebirth + economy + lives state so tests are order-independent. */

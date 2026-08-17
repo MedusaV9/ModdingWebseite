@@ -36,9 +36,10 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 public final class HeartTheftTests {
     private HeartTheftTests() {}
 
-    @SuppressWarnings("removal")
     private static ServerPlayer mockPlayer(GameTestHelper helper) {
-        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        // WAVE10: central helper — configures the mock connection so tick broadcasters
+        // (InvLockSync/UnlockSync) can't crash the GameTestServer on a lingering mock.
+        ServerPlayer player = GameTestSupport.mockServerPlayerInLevel(helper);
         player.setGameMode(GameType.SURVIVAL);
         return player;
     }

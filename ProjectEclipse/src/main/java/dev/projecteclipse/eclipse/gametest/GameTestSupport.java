@@ -35,18 +35,28 @@ public final class GameTestSupport {
 
     private GameTestSupport() {}
 
-    /** Spawns a real mock {@link ServerPlayer} at the structure origin in the requested mode. */
+    /**
+     * THE one true way to spawn a mock {@link ServerPlayer} in gametests. Every test MUST route
+     * through here (never call {@code helper.makeMockServerPlayerInLevel()} directly): a raw
+     * mock connection negotiates no payload channels, so EVERY
+     * {@code PacketDistributor.sendToPlayer(mock, <eclipse payload>)} throws
+     * UnsupportedOperationException — that failed 16 tests outright, and worse, the per-tick
+     * broadcasters ({@code UnlockSync}/{@code InvLockSync} onServerTick) crash the WHOLE
+     * GameTestServer when their sweep hits a lingering unconfigured mock. NeoForge ships this
+     * exact hook for gametests: it marks the connection as a modded connection that accepts
+     * all registered channels (packets go nowhere).
+     */
     @SuppressWarnings("removal")
-    public static ServerPlayer mockServerPlayer(GameTestHelper helper, GameType gameType) {
+    public static ServerPlayer mockServerPlayerInLevel(GameTestHelper helper) {
         ServerPlayer player = helper.makeMockServerPlayerInLevel();
         helper.assertTrue(player != null, "mock server player");
-        // A mock connection negotiates no payload channels, so EVERY
-        // PacketDistributor.sendToPlayer(mock, <eclipse payload>) throws
-        // UnsupportedOperationException — that failed 16 tests outright and even crashed
-        // the whole GameTestServer when UnlockSync's tick broadcast hit a lingering mock.
-        // NeoForge ships this exact hook for gametests: it marks the connection as a
-        // modded connection that accepts all registered channels (packets go nowhere).
         NetworkRegistry.configureMockConnection(player.connection.getConnection());
+        return player;
+    }
+
+    /** Spawns a real mock {@link ServerPlayer} at the structure origin in the requested mode. */
+    public static ServerPlayer mockServerPlayer(GameTestHelper helper, GameType gameType) {
+        ServerPlayer player = mockServerPlayerInLevel(helper);
         player.setGameMode(gameType);
         return player;
     }

@@ -84,7 +84,7 @@ public final class PhaseAwareDrawTests {
             GameTestSupport.setEventDay(server, 1);
             helper.assertTrue(!UnlockState.isUnlocked(server, "nether"),
                     "precondition: default day-1 plan has not granted 'nether'");
-            ServerPlayer player = helper.makeMockServerPlayerInLevel();
+            ServerPlayer player = GameTestSupport.mockServerPlayerInLevel(helper);
             mocks.add(player);
 
             List<String> day1 = QuestApi.personals(server, player).stream().map(GoalSpec::id).toList();
