@@ -6,6 +6,7 @@ import {CLEAN_DURATION_IN_FRAMES, FPS, HYPE_DURATION_IN_FRAMES} from './config/t
 import {HypeLandscape} from './hype/HypeLandscape';
 import {HypeTikTok} from './hype/HypeTikTok';
 import {loadBrandFonts} from './shared/fonts';
+import {registerV2} from './v2/registerV2';
 
 loadBrandFonts();
 
@@ -44,6 +45,7 @@ export const RemotionRoot: React.FC = () => {
         width={1920}
         height={1080}
       />
+      {registerV2()}
     </>
   );
 };
