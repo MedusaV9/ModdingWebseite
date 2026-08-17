@@ -9,14 +9,24 @@ import de.sonic0810.goobymod.entity.goals.GoobySleepGoal;
 import de.sonic0810.goobymod.registry.ModBlocks;
 import de.sonic0810.goobymod.registry.ModEntities;
 import de.sonic0810.goobymod.registry.ModItems;
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.List;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Holder;
+import net.minecraft.core.Registry;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.AfterBatch;
 import net.minecraft.gametest.framework.BeforeBatch;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.tags.PaintingVariantTags;
+import net.minecraft.world.entity.decoration.Painting;
+import net.minecraft.world.entity.decoration.PaintingVariant;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -270,6 +280,76 @@ public class GoobyCozyHomeTests {
                             "Gooby schlaeft nicht im Stall-Innenanker: " + gooby.position());
                 })
                 .thenSucceed();
+    }
+
+    // ------------------------------------------------------------------
+    // Gooby-Gemaelde: datengetriebene painting_variants (1.21.1-Format)
+    // ------------------------------------------------------------------
+
+    private record ExpectedPainting(String id, int width, int height) {
+    }
+
+    /** Registry, Blockmasse, asset_id, placeable-Tag und Motiv-Texturen. */
+    @GameTest(template = ARENA)
+    public static void painting_variants_registered(GameTestHelper helper) {
+        Registry<PaintingVariant> registry = helper.getLevel().registryAccess()
+                .registryOrThrow(Registries.PAINTING_VARIANT);
+        for (ExpectedPainting expected : List.of(new ExpectedPainting("gooby_portrait", 1, 1),
+                new ExpectedPainting("gooby_picnic", 2, 1), new ExpectedPainting("gooby_trio", 2, 2))) {
+            ResourceLocation id = ResourceLocation.fromNamespaceAndPath(GoobyMod.MODID, expected.id());
+            Holder.Reference<PaintingVariant> holder = registry
+                    .getHolder(ResourceKey.create(Registries.PAINTING_VARIANT, id)).orElse(null);
+            if (holder == null) {
+                helper.fail("painting_variant fehlt in der Registry: " + id);
+                return;
+            }
+            PaintingVariant variant = holder.value();
+            helper.assertTrue(variant.width() == expected.width() && variant.height() == expected.height(),
+                    id + ": Masse " + variant.width() + "x" + variant.height()
+                            + " statt " + expected.width() + "x" + expected.height());
+            helper.assertTrue(id.equals(variant.assetId()), id + ": asset_id zeigt auf " + variant.assetId());
+            helper.assertTrue(holder.is(PaintingVariantTags.PLACEABLE),
+                    id + " fehlt im minecraft:placeable-Tag (Kreativ/Staffelei-Zyklus)");
+            String texture = "assets/goobymod/textures/painting/" + expected.id() + ".png";
+            try (InputStream stream = GoobyCozyHomeTests.class.getClassLoader().getResourceAsStream(texture)) {
+                helper.assertTrue(stream != null, "Motiv-Textur fehlt im Runtime-Classpath: " + texture);
+            } catch (IOException exception) {
+                helper.fail("Motiv-Textur nicht lesbar: " + texture);
+                return;
+            }
+        }
+        helper.succeed();
+    }
+
+    /** Echte Platzierung: das 2x2-Trio haengt an der Wand — und nur an der Wand. */
+    @GameTest(template = ARENA)
+    public static void painting_hangs_on_wall(GameTestHelper helper) {
+        placeFloor(helper);
+        for (int x = 0; x < 5; x++) {
+            for (int y = 2; y <= 5; y++) {
+                helper.setBlock(new BlockPos(x, y, 4), Blocks.OAK_PLANKS);
+            }
+        }
+        Registry<PaintingVariant> registry = helper.getLevel().registryAccess()
+                .registryOrThrow(Registries.PAINTING_VARIANT);
+        Holder<PaintingVariant> trio = registry.getHolderOrThrow(ResourceKey.create(
+                Registries.PAINTING_VARIANT,
+                ResourceLocation.fromNamespaceAndPath(GoobyMod.MODID, "gooby_trio")));
+        // facing=NORTH: das Gemaelde haengt im Luftblock VOR der Wand (Wand = pos.south()).
+        Painting painting = new Painting(helper.getLevel(),
+                helper.absolutePos(new BlockPos(2, 3, 3)), net.minecraft.core.Direction.NORTH, trio);
+        helper.assertTrue(painting.survives(), "2x2-Gemaelde ueberlebt nicht an einer 5x4-Wand");
+        helper.assertTrue(helper.getLevel().addFreshEntity(painting), "Gemaelde liess sich nicht spawnen");
+
+        // Traegerwand weg -> survives() kippt sofort (der Drop folgt im Recheck-Tick).
+        for (int x = 0; x < 5; x++) {
+            for (int y = 2; y <= 5; y++) {
+                helper.setBlock(new BlockPos(x, y, 4), Blocks.AIR);
+            }
+        }
+        helper.assertFalse(painting.survives(), "Gemaelde haengt ohne Traegerwand in der Luft");
+        painting.discard();
+        helper.succeed();
     }
 
     /** Landungen auf der Couch sind komplett wollweich (kein Fallschaden-Callback). */

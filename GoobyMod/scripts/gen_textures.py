@@ -1238,6 +1238,101 @@ def gen_v55_cozy_home():
     wood.save(ensure(os.path.join(ROOT, "block", "gooby_couch_wood.png")))
 
 
+def gen_v55_paintings():
+    """Gooby-Gemaelde (Release 5.3.0): drei painting_variant-Motive.
+
+    Eigener Seed (5531) wie bei den uebrigen Wellen: jedes Motiv ist
+    byte-identisch reproduzierbar, egal was andere Generatoren vorher am
+    geteilten RNG-Strom gezogen haben. Groessen folgen dem Vanilla-Raster
+    16 px pro Block: Portraet 1x1, Picknick 2x1, Trio 2x2. Alle Pixel sind
+    voll deckend — Gemaelde haben keinen Alpha-Kanal-Spielraum.
+    """
+    art_rng = random.Random(5531)
+
+    def art_noise(draw, box, base, spread=7):
+        x0, y0, x1, y1 = box
+        for x in range(x0, x1):
+            for y in range(y0, y1):
+                n = art_rng.randint(-spread, spread)
+                draw.point((x, y), fill=(max(0, min(255, base[0] + n)),
+                                         max(0, min(255, base[1] + n)),
+                                         max(0, min(255, base[2] + n)), 255))
+
+    def gooby_head(d, cx, cy, fur, fur_dark):
+        """Frontales Gooby-Koepfchen (~9x8 px) mit Ohren um (cx, cy)."""
+        for ex in (cx - 3, cx + 2):  # Ohren zuerst, der Kopf ueberdeckt den Ansatz
+            art_noise(d, (ex, cy - 7, ex + 2, cy - 2), fur, spread=6)
+            d.point((ex, cy - 6), fill=PINK + (255,))
+            d.point((ex, cy - 5), fill=PINK + (255,))
+        art_noise(d, (cx - 4, cy - 3, cx + 5, cy + 5), fur, spread=6)
+        art_noise(d, (cx - 2, cy + 2, cx + 3, cy + 5), CREAM, spread=5)  # Schnauze
+        d.point((cx - 4, cy - 3), fill=fur_dark + (255,))  # weiche Kopfkanten
+        d.point((cx + 4, cy - 3), fill=fur_dark + (255,))
+        d.point((cx - 2, cy), fill=PUPIL + (255,))
+        d.point((cx + 2, cy), fill=PUPIL + (255,))
+        d.point((cx - 3, cy + 1), fill=PINK + (255,))  # Wangenrouge
+        d.point((cx + 3, cy + 1), fill=PINK + (255,))
+        d.point((cx, cy + 2), fill=PINK_DARK + (255,))  # Naeschen
+        d.point((cx - 1, cy + 3), fill=SMILE + (255,))
+        d.point((cx + 1, cy + 3), fill=SMILE + (255,))
+
+    gold = (208, 168, 92, 255)
+    gold_dark = (150, 112, 56, 255)
+
+    # --- gooby_portrait (1x1): wuerdevolles Studio-Portraet vor Nachtblau ---
+    portrait = Image.new("RGBA", (16, 16), (0, 0, 0, 0))
+    d = ImageDraw.Draw(portrait)
+    art_noise(d, (0, 0, 16, 16), (52, 66, 94), spread=6)
+    for _ in range(6):  # ein paar Sternchen im Hintergrund
+        d.point((art_rng.randint(1, 14), art_rng.randint(1, 5)), fill=(226, 232, 246, 255))
+    gooby_head(d, 8, 9, FUR, FUR_DARK)
+    d.rectangle((0, 0, 15, 15), outline=gold)
+    for corner in ((0, 0), (15, 0), (0, 15), (15, 15)):
+        d.point(corner, fill=gold_dark)
+    portrait.save(ensure(os.path.join(ROOT, "painting", "gooby_portrait.png")))
+
+    # --- gooby_picnic (2x1): Picknickdecke, Nutella-Glas und Sonnenschein ---
+    picnic = Image.new("RGBA", (32, 16), (0, 0, 0, 0))
+    d = ImageDraw.Draw(picnic)
+    art_noise(d, (0, 0, 32, 7), (146, 198, 234), spread=5)   # Himmel
+    art_noise(d, (0, 7, 32, 16), (104, 156, 82), spread=8)   # Wiese
+    for sx, sy in ((3, 1), (4, 1), (3, 2), (4, 2), (5, 1)):  # Sonne links oben
+        d.point((sx, sy), fill=(250, 220, 120, 255))
+    d.point((4, 1), fill=(255, 240, 170, 255))
+    # Rot-weiss karierte Decke in leichter Draufsicht
+    for x in range(4, 18):
+        for y in range(10, 15):
+            checker = (222, 84, 84) if (x // 2 + y // 2) % 2 == 0 else (240, 226, 214)
+            n = art_rng.randint(-6, 6)
+            d.point((x, y), fill=(max(0, min(255, checker[0] + n)),
+                                  max(0, min(255, checker[1] + n)),
+                                  max(0, min(255, checker[2] + n)), 255))
+    # Nutella-Glas auf der Decke: Glaskoerper, Deckel, Etikett
+    art_noise(d, (8, 8, 12, 12), (92, 58, 34), spread=5)
+    d.line((8, 8, 11, 8), fill=(226, 226, 232, 255))
+    d.point((9, 10), fill=(238, 232, 220, 255))
+    d.point((10, 10), fill=(238, 232, 220, 255))
+    gooby_head(d, 24, 9, FUR, FUR_DARK)
+    picnic.save(ensure(os.path.join(ROOT, "painting", "gooby_picnic.png")))
+
+    # --- gooby_trio (2x2): drei Fellfarben vor Sonnenuntergangs-Wiese ---
+    trio = Image.new("RGBA", (32, 32), (0, 0, 0, 0))
+    d = ImageDraw.Draw(trio)
+    for y, base in ((0, (238, 180, 128)), (5, (232, 160, 118)), (10, (222, 138, 110))):
+        art_noise(d, (0, y, 32, min(32, y + 5)), base, spread=5)  # Abendhimmel
+    art_noise(d, (0, 15, 32, 32), (96, 142, 76), spread=8)        # Wiese
+    for sx in (3, 11, 21, 28):  # Wiesenblumen
+        d.point((sx, art_rng.randint(26, 30)), fill=(246, 214, 96, 255))
+    d.ellipse((13, 2, 18, 7), fill=(250, 232, 170, 255))          # tiefe Sonne
+    gooby_head(d, 8, 22, FUR, FUR_DARK)                            # Klassiker
+    gooby_head(d, 24, 22, (226, 205, 173), (204, 180, 146))        # Creme
+    gooby_head(d, 16, 13, (121, 85, 58), (96, 66, 44))             # Kakao
+    d.rectangle((0, 0, 31, 31), outline=gold)
+    for corner in ((0, 0), (31, 0), (0, 31), (31, 31)):
+        d.point(corner, fill=gold_dark)
+    trio.save(ensure(os.path.join(ROOT, "painting", "gooby_trio.png")))
+
+
 if __name__ == "__main__":
     gen_gooby()
     gen_nutella_item()
@@ -1262,4 +1357,5 @@ if __name__ == "__main__":
     gen_v53_fetch_ball()
     gen_v54_explorer_outfit()
     gen_v55_cozy_home()
+    gen_v55_paintings()
     print("Alle Gooby-Texturen generiert!")
