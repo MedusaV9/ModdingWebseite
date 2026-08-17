@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "SS",
+    "SS"
+  ],
+  "key": {
+    "S": {
+      "item": "goobymod:torn_map_scrap"
+    }
+  },
+  "result": {
+    "id": "goobymod:gooby_treasure_map",
+    "count": 1
+  }
+}

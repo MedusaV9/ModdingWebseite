@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "WWW",
+    " F "
+  ],
+  "key": {
+    "W": { "tag": "minecraft:wool" },
+    "F": { "item": "goobymod:gooby_fluff" }
+  },
+  "result": {
+    "id": "goobymod:gooby_scarf",
+    "count": 1
+  }
+}

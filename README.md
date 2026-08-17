@@ -52,6 +52,7 @@ npm run dev     # dev server on http://localhost:5173
 - `src/sections/` — home-page sections (Hero, HowItWorks, plus legacy single-page sections)
 - `src/hooks/` — `useReveal` scroll-reveal hook (IntersectionObserver, respects `prefers-reduced-motion`), `usePageTitle`
 - `src/data/` — **all site content lives here**: `mods.ts` (BAPHub catalog), `modes.ts` (game modes/tracks), `launcher.ts` (Nexus features + changelog), `radio.ts` (soundtrack station), `versions.ts` (archived builds), `bundles.ts` (game-mode bundles), `links.ts` (external URLs). Edit these files to change what the pages show — no component changes needed.
+- `GoobyMod/` — unrelated subproject: the Gooby Mod for Minecraft 1.21.1 (NeoForge, Java 21, Gradle). See `GoobyMod/README.md` and the GoobyMod section in `AGENTS.md`; CI gate is `.github/workflows/gooby-mod.yml`.
 
 ## Asset drop-in convention
 

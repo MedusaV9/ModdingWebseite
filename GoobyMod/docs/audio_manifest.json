@@ -1,0 +1,466 @@
+{
+  "_comment": "Committete SHA-256-Referenz aller generierten Gooby-Clips. Nur bewusst aktualisieren via 'python3 scripts/gen_sounds.py --update-manifest' (siehe docs/AUDIO.md).",
+  "clips": {
+    "alarm_squeak1": {
+      "duration": 0.405,
+      "sha256": "317effa751c46a3c320fa9cf688320db69ad82be7787fcfe140267b77f710ce9",
+      "size": 4700
+    },
+    "alarm_squeak2": {
+      "duration": 0.405,
+      "sha256": "ba73bf7ede71b40f824812e3d68af36107e5cdc84b80f662e4abcb40d075a790",
+      "size": 4695
+    },
+    "ambient_happy1": {
+      "duration": 0.51,
+      "sha256": "9cf13368b06f841f45212e3af4cd2b68fba26868670915ca60a078ea141a4246",
+      "size": 4820
+    },
+    "ambient_happy2": {
+      "duration": 0.54,
+      "sha256": "bb1c81a3156e112eff6ecaaf67cfbd5beedf0c54e4709ce6d01e2f83db9b1ed4",
+      "size": 4829
+    },
+    "ambient_happy3": {
+      "duration": 0.57,
+      "sha256": "7928896965a8cd2dbb3f932012d85fbc5d35de8702254a74fde32726cffb192f",
+      "size": 4922
+    },
+    "ambient_neutral1": {
+      "duration": 0.515,
+      "sha256": "b7be1f81aae3718c8a9e77538be92b7e6e787aa72105c7c6914f29c8fd1b1cfc",
+      "size": 4677
+    },
+    "ambient_neutral2": {
+      "duration": 0.55,
+      "sha256": "8606b2d51ee2c4daf5b86ea6e9c9195035d27a232b5a1a68befc645c1fc23c02",
+      "size": 4753
+    },
+    "ambient_neutral3": {
+      "duration": 0.585,
+      "sha256": "83ddcb2ed7355ccd32b74d7ca3cc551d4c7579c2ea2580a119e5d4351cde6d8e",
+      "size": 4790
+    },
+    "ambient_sleepy1": {
+      "duration": 0.8,
+      "sha256": "41fe245bc9ae4aa43335b97cd3c89ab8f62e99d0af5db0085b7ac1291539beac",
+      "size": 5222
+    },
+    "ambient_sleepy2": {
+      "duration": 0.88,
+      "sha256": "ebd5e5655f167f0f44248f6bd0b5d5dd063ecea5d215b16eb098fcfd5133a547",
+      "size": 5305
+    },
+    "ambient_sleepy3": {
+      "duration": 0.98,
+      "sha256": "5ab1dc5dfdd5cae3b84bdfccbf7db37368565d571d9afc4cd4cfdad1e562651b",
+      "size": 9853
+    },
+    "baby_squeak1": {
+      "duration": 0.265,
+      "sha256": "763b8fb03be0eca38136deac652283a4ac2ed0d958e20f4b5b26476ee50a0fd6",
+      "size": 4528
+    },
+    "baby_squeak2": {
+      "duration": 0.29,
+      "sha256": "ae0e96acf1c3f368391ca944cb7c3b36b1b3a3de7c88fafe9b48ca45f9a0553a",
+      "size": 4567
+    },
+    "baby_squeak3": {
+      "duration": 0.315,
+      "sha256": "dba2813685d9910cfc28c445b9c05448868906bdcdb6ccf4d7706575bc5b4dd5",
+      "size": 4596
+    },
+    "boing1": {
+      "duration": 0.56,
+      "sha256": "2a6168e514cc857425cef79951bc7535ebc1cb7dfb5b985fe13dd69b5b8b606a",
+      "size": 4849
+    },
+    "boing2": {
+      "duration": 0.6,
+      "sha256": "4505dd12c83f0703ff7771832d69ab33d0cfff51380a5ee3496245b3819f4886",
+      "size": 4888
+    },
+    "boing3": {
+      "duration": 0.5,
+      "sha256": "bc5d6e0b3ab774314ca1932323821c7a1ed2d798596a3e0084578636b364549e",
+      "size": 4873
+    },
+    "brush1": {
+      "duration": 0.48,
+      "sha256": "f134b56bfa62d9c2fe6a0d724764e99c324292889d651f9104f984dd7fafcfa0",
+      "size": 8262
+    },
+    "brush2": {
+      "duration": 0.48,
+      "sha256": "5a54cfb745941c1dae04069ac462153cb3fdc42891dfbe1875207d80c7607807",
+      "size": 8329
+    },
+    "brush3": {
+      "duration": 0.6,
+      "sha256": "163e29a7c992b572f1a81b218d021b2c4fea61aaf6340d6aea11500a8bd06db5",
+      "size": 9318
+    },
+    "chirp_social1": {
+      "duration": 0.37,
+      "sha256": "76a9d5059b89b2dd7fa35ccf3afc2be3cadb7e49aaf7c22c808b4533071e6cc5",
+      "size": 4484
+    },
+    "chirp_social2": {
+      "duration": 0.4,
+      "sha256": "e1aa2c7cc2f7efdf0948d592b6be2f20598815a902ea153de7c371a8b4aa21b9",
+      "size": 4530
+    },
+    "chirp_social3": {
+      "duration": 0.42,
+      "sha256": "a434f2d3229fd17d87449c0afb3836995fa68e3c0302d426897eecead22f9c8b",
+      "size": 4635
+    },
+    "dress_up1": {
+      "duration": 0.58,
+      "sha256": "965a014769ecdac07decc67cc09ba5b4d26013f023e0769bb176250a84682275",
+      "size": 9366
+    },
+    "dress_up2": {
+      "duration": 0.52,
+      "sha256": "d43a677c77a6fd5f5a67c88d03f002389efe1b3b1b98c89ec4114f6c7429c689",
+      "size": 8327
+    },
+    "dress_up3": {
+      "duration": 0.65,
+      "sha256": "68e9fff8d5ab55fd4a4636d8a7e92921555b551a94a36965fea3c137d100edbf",
+      "size": 9843
+    },
+    "flop_thud1": {
+      "duration": 0.42,
+      "sha256": "aaa56d3e7aaff82321724dfdbb8346641af55997a37fd756f01bc555fcffa160",
+      "size": 7365
+    },
+    "flop_thud2": {
+      "duration": 0.52,
+      "sha256": "9e0e91757a1ef3ef053415de66a9d1060ccd34889eb8d13616b823a85463d836",
+      "size": 8146
+    },
+    "flop_thud3": {
+      "duration": 0.3,
+      "sha256": "731e746812d537d7734866da9afeb24215cec2542c7d1b3f6f1411b5bc4dced9",
+      "size": 6395
+    },
+    "hutch_creak1": {
+      "duration": 0.72,
+      "sha256": "a5a68cfdd70348aac8979ceac2553349b54e17f1eab97f4e6ef09502d8a09e4c",
+      "size": 9588
+    },
+    "hutch_creak2": {
+      "duration": 0.62,
+      "sha256": "72970b66b660c20298e48240d340a296a889a745790f5526d175e2d354de6f5a",
+      "size": 8862
+    },
+    "hutch_creak3": {
+      "duration": 0.85,
+      "sha256": "445cf36fc496defb6a3ad5f53dfe5620c9badbd120d196842bb077b6c91177db",
+      "size": 10795
+    },
+    "hutch_rustle1": {
+      "duration": 0.62,
+      "sha256": "20c5c6c2aa33e768d3ad6d570248b1f9bdc16981bfdee8c506b48dbd593ba930",
+      "size": 9332
+    },
+    "hutch_rustle2": {
+      "duration": 0.55,
+      "sha256": "0bf155db9b4afdc46f717b84a444ff9cdb6b946b87184358e55bef09070c47c6",
+      "size": 9041
+    },
+    "hutch_rustle3": {
+      "duration": 0.75,
+      "sha256": "60d1520c5b2409a9d7e0b569c7467bf3645d5e753ada279057af4fdcbcd29c31",
+      "size": 10735
+    },
+    "lonely_sigh1": {
+      "duration": 1.0,
+      "sha256": "f1bb1a3ee033295f157c2851b3b12ec576796a18495f17b3542f9840632c2bb7",
+      "size": 5619
+    },
+    "lonely_sigh2": {
+      "duration": 1.08,
+      "sha256": "a8368390e0c42280e930ecf800314959d346b80e9bcd687ac6107a5f306d4d83",
+      "size": 5746
+    },
+    "lonely_sigh3": {
+      "duration": 1.14,
+      "sha256": "721e675d0ae046b00d8de95959bcd93e08147c022c74f6e2910fe7625d59fcbe",
+      "size": 10193
+    },
+    "map_rustle1": {
+      "duration": 0.82,
+      "sha256": "6618d4ec6ef5e9a855d0cf26f4752440d141683c8bd23d9cfca4492cb45f1ecb",
+      "size": 11141
+    },
+    "map_rustle2": {
+      "duration": 0.75,
+      "sha256": "a9ee3a555b3d61fa287be4c83c88c8fd186e536b1571e03bdc9525d0404f104f",
+      "size": 10575
+    },
+    "map_rustle3": {
+      "duration": 0.95,
+      "sha256": "5d2329c00a32b402d14337514c4cbdb0faffe95e1ed2ddb32c98691228fb4e35",
+      "size": 12496
+    },
+    "munch1": {
+      "duration": 0.74,
+      "sha256": "f23127d31c9ed0e8b7ca1bfc9e992698f4ea897b71a599c564a9ca52717fd88f",
+      "size": 8649
+    },
+    "munch2": {
+      "duration": 0.525,
+      "sha256": "d4d4f5b6fd9beaaca157690b87f808576cb79b7e7ef61c4bd89d6ff8cf422cdb",
+      "size": 7327
+    },
+    "munch3": {
+      "duration": 0.74,
+      "sha256": "b45166e1b598f4f7b4bd8b408b7f0e5e0bf87f55aba3a7d265bbc6ff4bc1d2c3",
+      "size": 8705
+    },
+    "nuzzle1": {
+      "duration": 1.05,
+      "sha256": "3071f47bd311257673be682d51f5007781d64f34e5cd4392452e6328329de617",
+      "size": 12662
+    },
+    "nuzzle2": {
+      "duration": 1.2,
+      "sha256": "c8b9b0336c23774f6257e0993adf41386eae3c0ecec4a6675a5e2baad8027a27",
+      "size": 13453
+    },
+    "nuzzle3": {
+      "duration": 0.9,
+      "sha256": "f1d7acf5f2dac357d1fb3ab02df0b1daeeb848cb3ce681a7886b52c162ca89a5",
+      "size": 11656
+    },
+    "plop1": {
+      "duration": 0.49,
+      "sha256": "31c4556342c3e0360d85e00aaa98af7b2c687f1f3546828189e7354f30f9619a",
+      "size": 5036
+    },
+    "plop2": {
+      "duration": 0.49,
+      "sha256": "688c452016967d8dc4c0d8abb9f3187e48e5a2b3bc7363d5b5d843a28d0dd38d",
+      "size": 5006
+    },
+    "plop3": {
+      "duration": 0.62,
+      "sha256": "d2e469c3a793ed279045d151e28c4aac8b96f7c535a83920d89b5ba963f648ee",
+      "size": 5539
+    },
+    "purr1": {
+      "duration": 1.33,
+      "sha256": "f056c63800e770c49be81e00ec24179d81a20d3bf050f946389481bb49d5c305",
+      "size": 6124
+    },
+    "purr2": {
+      "duration": 1.41,
+      "sha256": "268d0370e088903662b5ef4e9578f1c0afff834db044f61b093e64842b07e8f8",
+      "size": 6199
+    },
+    "purr3": {
+      "duration": 1.49,
+      "sha256": "7350d68de5a5705a93abb01a277be5aacb1b696b61839af2fe705efdaa2ff380",
+      "size": 6486
+    },
+    "purr_loop": {
+      "duration": 2.0,
+      "sha256": "bb91eb4045042afb2b5d9973ae6817965c8f415668fcf9a29ce52b09f39e6360",
+      "size": 6755
+    },
+    "sad_whimper1": {
+      "duration": 0.72,
+      "sha256": "6fcdfbded0ac0df7e6a9930f07ea38805a0913bb395992d70c5b704f82e00fda",
+      "size": 7855
+    },
+    "sad_whimper2": {
+      "duration": 0.86,
+      "sha256": "a0ee9467cd65f35fdd8a0c081a795eb7fb178807f8cb12739bd704447d5f2d7e",
+      "size": 8756
+    },
+    "sad_whimper3": {
+      "duration": 0.87,
+      "sha256": "f0c921abae6faabff87dc153359f7162e0a46b771c25f3f3276a0889e1eb8dfa",
+      "size": 9005
+    },
+    "shake1": {
+      "duration": 1.0,
+      "sha256": "170ca9c3bcf1a4ff985ddaf5729de9a5ac0577b5f051f422b55182b01cc91a9c",
+      "size": 12817
+    },
+    "shake2": {
+      "duration": 0.8,
+      "sha256": "55077b4b77ba6234030c63efc1796119330f27e52295317a5c4b68b4f0e8194e",
+      "size": 11455
+    },
+    "shake3": {
+      "duration": 1.1,
+      "sha256": "01fb0ef1ba3c9beb7e3ebca09bc38a4b4f10a7ddacc461d6ec68a9e88ea26105",
+      "size": 14511
+    },
+    "sniff1": {
+      "duration": 0.328,
+      "sha256": "e5f51305946d169e935fedbf76f9d40a5d0751cf7c8feb0cbefc698a8c658f2d",
+      "size": 5901
+    },
+    "sniff2": {
+      "duration": 0.328,
+      "sha256": "10d52d9c905a459dfde837fdea643c08907779e0f336b1208f4bdd15e78725d3",
+      "size": 5905
+    },
+    "sniff3": {
+      "duration": 0.411,
+      "sha256": "48fbc8fcce4d5b5287a53d1c849f8639f4409945c5ae0b0e518296058aed761f",
+      "size": 6760
+    },
+    "sniff_long1": {
+      "duration": 1.45,
+      "sha256": "ef70f0d1dad4cb57245d7bffc9e6a89cb3e1ebbb7fa5445f54d2e4201a8bcb90",
+      "size": 17010
+    },
+    "sniff_long2": {
+      "duration": 1.29,
+      "sha256": "e60eada42e959820ef7597e200162a587afc17c1b5fef9768d61f2849603c727",
+      "size": 13809
+    },
+    "sniff_long3": {
+      "duration": 1.35,
+      "sha256": "c7dfd66bf6764f87d2988920ae3401275de98ebb2ca908da73bc36d805beb364",
+      "size": 16329
+    },
+    "snore1": {
+      "duration": 1.71,
+      "sha256": "26c670da634559b9f80237a64ba2829554b8b9c5e731454bfa810a3e9713c5f5",
+      "size": 19412
+    },
+    "snore2": {
+      "duration": 1.87,
+      "sha256": "6abd7d1aac83f362d12445ead735044b7aaae4ed8cc2194a3ad135df2566e9e3",
+      "size": 20539
+    },
+    "snore3": {
+      "duration": 1.95,
+      "sha256": "4e5d9870ce08aae5615ff575fa89b5c52b324c68529aa10cdbfe557f5f54fd9a",
+      "size": 21498
+    },
+    "snuggle_purr_long": {
+      "duration": 4.2,
+      "sha256": "df2abc2ed42a5586765e1be987cf0537aa918e5b205a649b7b547ef2e8b7f409",
+      "size": 11577
+    },
+    "squeak1": {
+      "duration": 0.353,
+      "sha256": "f755580c87bf9629c1af9ab2d14be04a6fd36f99f36c3e0f02e5cfd5545c3ec0",
+      "size": 4606
+    },
+    "squeak2": {
+      "duration": 0.361,
+      "sha256": "ddef2df546bb57778acf1c45fdb9879d11f71aaf8bffc5dd5b63dcdda6af1ea7",
+      "size": 4596
+    },
+    "squeak3": {
+      "duration": 0.369,
+      "sha256": "7b3de8a41a2a6111461ba807d1fd0552f4d0ac69814cce333019fcc6682c62d2",
+      "size": 4549
+    },
+    "tier_up_jingle1": {
+      "duration": 0.82,
+      "sha256": "fe3a97dbc9da59bf7c601ddf4c15cb727bf67be117751dde3255a358d1fd3158",
+      "size": 5503
+    },
+    "tier_up_jingle2": {
+      "duration": 0.76,
+      "sha256": "b3ef3695e620433c7d808e879e833b22317bed79406d074abaa8b0a3402f66c7",
+      "size": 6764
+    },
+    "tier_up_jingle3": {
+      "duration": 0.94,
+      "sha256": "faceace2742f59c3c5300c4ccf26be84b1c4ec96e1c30a6e850712863fce9cdb",
+      "size": 6276
+    },
+    "trick_chime1": {
+      "duration": 0.444,
+      "sha256": "aca931ed9487433bc0be3ff4b801ca179ad3cf5fd709cfac06d3ba591e8c91d1",
+      "size": 4756
+    },
+    "trick_chime2": {
+      "duration": 0.43,
+      "sha256": "dc25ef9beada89f359fd9498f854c96f55283dbbfa01411defd001c64dd83b6f",
+      "size": 5404
+    },
+    "trick_chime3": {
+      "duration": 0.51,
+      "sha256": "6be4df28d74cc61a323c94f1621ff9fa95d629696269c6f437d923d80818b64b",
+      "size": 5255
+    },
+    "whine_hungry1": {
+      "duration": 0.74,
+      "sha256": "0f176dd65f67cfa82e8f873a617f718059762a089e7acf12d149cb859464c950",
+      "size": 5102
+    },
+    "whine_hungry2": {
+      "duration": 0.8,
+      "sha256": "2111b3ee456431b1edc80861d4257b2bff53feef749928bd26316c8225277a4e",
+      "size": 5192
+    },
+    "whine_hungry3": {
+      "duration": 0.84,
+      "sha256": "acc998bac2621a229264d5e7cbbb445315b0e5fd75255f3fc855864419378337",
+      "size": 5248
+    },
+    "whistle_follow": {
+      "duration": 0.34,
+      "sha256": "aaa3481efaa328c8153f5195f65cb7d5b7de3149cbf9f9ac8fe20d20ea55268a",
+      "size": 4439
+    },
+    "whistle_stay": {
+      "duration": 0.34,
+      "sha256": "0a5b2acadccbf10dcbbcc95fb2d403ce6021f8ace3b5dbb80f86ef6b4932a1b2",
+      "size": 4404
+    },
+    "whistle_wander": {
+      "duration": 0.34,
+      "sha256": "fd03f7d3b92162c9481b77c096c767e2d418d9c1b6631ad87c399bb2c91e56b3",
+      "size": 4375
+    },
+    "wild_call1": {
+      "duration": 1.76,
+      "sha256": "10777e373d49976a16de9346294ddfa1b3c6f3d1293058c0d3cff6fab5c56de4",
+      "size": 7127
+    },
+    "wild_call2": {
+      "duration": 1.97,
+      "sha256": "1b681a54645e7136d310304b5e82e46510836ae1b5bad4f13f4e8b92ee14a3b3",
+      "size": 7422
+    },
+    "wild_call3": {
+      "duration": 1.93,
+      "sha256": "28dd5564c800043cb89f00427609eaab1962d53739307a5b3e2f271c6d10c362",
+      "size": 7452
+    },
+    "yawn1": {
+      "duration": 1.15,
+      "sha256": "1363e2806017e2643b7e5408d7bef08d36bf20270a5d6583384c9bea9d4089ca",
+      "size": 6288
+    },
+    "yawn2": {
+      "duration": 1.3,
+      "sha256": "b240ddbc6dd4c88d5df780288ebf7d6a3a6917d3a4c8dfb1bc18a61a24bd9e6a",
+      "size": 11975
+    },
+    "yawn3": {
+      "duration": 0.95,
+      "sha256": "8c18038fc79c56ba7da5d54cb3b560756572ead3df6a4349a34afa1170515cc2",
+      "size": 6182
+    }
+  },
+  "toolchain": {
+    "ffmpeg": "ffmpeg version 6.1.1-3ubuntu5",
+    "note": "Nur Dokumentation der Referenz-Toolchain -- verify() vergleicht ausschliesslich die sha256-Werte unter 'clips'.",
+    "numpy": "2.4.4",
+    "python": "3.12.3"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "parent": "goobymod:tame_gooby",
+  "display": {
+    "icon": { "id": "minecraft:golden_carrot" },
+    "title": { "translate": "advancements.goobymod.best_friends.title" },
+    "description": { "translate": "advancements.goobymod.best_friends.description" },
+    "frame": "challenge",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {
+    "granted": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}

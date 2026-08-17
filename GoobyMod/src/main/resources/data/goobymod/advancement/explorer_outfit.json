@@ -1,0 +1,17 @@
+{
+  "parent": "goobymod:full_outfit",
+  "display": {
+    "icon": { "id": "goobymod:flower_crown" },
+    "title": { "translate": "advancements.goobymod.explorer_outfit.title" },
+    "description": { "translate": "advancements.goobymod.explorer_outfit.description" },
+    "frame": "challenge",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {
+    "granted": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}

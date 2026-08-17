@@ -1,0 +1,18 @@
+{
+  "ambientocclusion": false,
+  "textures": {
+    "particle": "goobymod:block/dug_dirt",
+    "decal": "goobymod:block/dug_dirt"
+  },
+  "elements": [
+    {
+      "from": [1, 0.01, 1],
+      "to": [15, 0.03, 15],
+      "faces": {
+        "up": {
+          "texture": "#decal"
+        }
+      }
+    }
+  ]
+}

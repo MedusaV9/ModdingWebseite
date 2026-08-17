@@ -1,0 +1,22 @@
+{
+  "display": {
+    "icon": { "id": "goobymod:nutella" },
+    "title": { "translate": "advancements.goobymod.root.title" },
+    "description": { "translate": "advancements.goobymod.root.description" },
+    "frame": "task",
+    "background": "minecraft:textures/block/dirt.png",
+    "show_toast": true,
+    "announce_to_chat": false,
+    "hidden": false
+  },
+  "criteria": {
+    "has_nutella": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          { "items": ["goobymod:nutella"] }
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "building",
+  "pattern": [
+    "W  ",
+    "WWW",
+    "PPP"
+  ],
+  "key": {
+    "W": {"item": "goobymod:gooby_wool"},
+    "P": {"tag": "minecraft:planks"}
+  },
+  "result": {
+    "id": "goobymod:gooby_couch",
+    "count": 1
+  }
+}

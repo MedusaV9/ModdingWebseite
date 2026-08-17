@@ -1,0 +1,17 @@
+{
+  "parent": "goobymod:tame_gooby",
+  "display": {
+    "icon": { "id": "minecraft:poppy" },
+    "title": { "translate": "advancements.goobymod.hat_fashion.title" },
+    "description": { "translate": "advancements.goobymod.hat_fashion.description" },
+    "frame": "task",
+    "show_toast": true,
+    "announce_to_chat": false,
+    "hidden": false
+  },
+  "criteria": {
+    "granted": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}

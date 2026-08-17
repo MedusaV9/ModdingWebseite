@@ -1,0 +1,17 @@
+{
+  "parent": "goobymod:tame_gooby",
+  "display": {
+    "icon": { "id": "goobymod:training_treat" },
+    "title": { "translate": "advancements.goobymod.first_trick.title" },
+    "description": { "translate": "advancements.goobymod.first_trick.description" },
+    "frame": "task",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {
+    "granted": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}

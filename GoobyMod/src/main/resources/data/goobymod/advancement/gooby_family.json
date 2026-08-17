@@ -1,0 +1,17 @@
+{
+  "parent": "goobymod:best_friends",
+  "display": {
+    "icon": { "id": "minecraft:cake" },
+    "title": { "translate": "advancements.goobymod.gooby_family.title" },
+    "description": { "translate": "advancements.goobymod.gooby_family.description" },
+    "frame": "challenge",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {
+    "granted": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}

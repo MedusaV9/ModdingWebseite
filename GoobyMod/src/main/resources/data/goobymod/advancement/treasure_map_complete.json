@@ -1,0 +1,23 @@
+{
+  "parent": "goobymod:best_friends",
+  "display": {
+    "icon": {
+      "id": "goobymod:gooby_treasure_map"
+    },
+    "title": {
+      "translate": "advancements.goobymod.treasure_map_complete.title"
+    },
+    "description": {
+      "translate": "advancements.goobymod.treasure_map_complete.description"
+    },
+    "frame": "goal",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {
+    "granted": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}

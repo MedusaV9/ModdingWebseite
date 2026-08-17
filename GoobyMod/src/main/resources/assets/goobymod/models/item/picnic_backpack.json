@@ -1,0 +1,108 @@
+{
+  "parent": "minecraft:block/block",
+  "credit": "GoobyMod Explorer-Outfit (handmodelliert)",
+  "textures": {
+    "pack": "goobymod:item/picnic_backpack",
+    "particle": "goobymod:item/picnic_backpack"
+  },
+  "elements": [
+    {
+      "name": "body",
+      "from": [3, 1, 5],
+      "to": [13, 11, 11],
+      "faces": {
+        "north": { "texture": "#pack", "uv": [0, 0, 6, 6] },
+        "south": { "texture": "#pack", "uv": [6, 0, 12, 6] },
+        "east": { "texture": "#pack", "uv": [0, 6, 3, 12] },
+        "west": { "texture": "#pack", "uv": [3, 6, 6, 12] },
+        "up": { "texture": "#pack", "uv": [6, 6, 12, 9] },
+        "down": { "texture": "#pack", "uv": [6, 9, 12, 12] }
+      }
+    },
+    {
+      "name": "lid",
+      "from": [2.5, 9.5, 4.5],
+      "to": [13.5, 12.5, 11.5],
+      "faces": {
+        "north": { "texture": "#pack", "uv": [6, 6, 12, 9] },
+        "south": { "texture": "#pack", "uv": [6, 6, 12, 9] },
+        "east": { "texture": "#pack", "uv": [6, 6, 9, 9] },
+        "west": { "texture": "#pack", "uv": [9, 6, 12, 9] },
+        "up": { "texture": "#pack", "uv": [6, 6, 12, 9] },
+        "down": { "texture": "#pack", "uv": [6, 9, 12, 12] }
+      }
+    },
+    {
+      "name": "blanket_roll",
+      "from": [2, 12.5, 5.5],
+      "to": [14, 15.5, 8.5],
+      "faces": {
+        "north": { "texture": "#pack", "uv": [0, 12, 12, 15] },
+        "south": { "texture": "#pack", "uv": [0, 12, 12, 15] },
+        "east": { "texture": "#pack", "uv": [12, 12, 15, 15] },
+        "west": { "texture": "#pack", "uv": [12, 12, 15, 15] },
+        "up": { "texture": "#pack", "uv": [0, 12, 12, 15] },
+        "down": { "texture": "#pack", "uv": [0, 12, 12, 15] }
+      }
+    },
+    {
+      "name": "strap_left",
+      "from": [4.5, 1.5, 4.3],
+      "to": [6, 10.5, 5.1],
+      "faces": {
+        "north": { "texture": "#pack", "uv": [12, 0, 14, 6] },
+        "south": { "texture": "#pack", "uv": [12, 0, 14, 6] },
+        "east": { "texture": "#pack", "uv": [12, 0, 13, 6] },
+        "west": { "texture": "#pack", "uv": [13, 0, 14, 6] },
+        "up": { "texture": "#pack", "uv": [12, 0, 14, 1] },
+        "down": { "texture": "#pack", "uv": [12, 5, 14, 6] }
+      }
+    },
+    {
+      "name": "strap_right",
+      "from": [10, 1.5, 4.3],
+      "to": [11.5, 10.5, 5.1],
+      "faces": {
+        "north": { "texture": "#pack", "uv": [12, 0, 14, 6] },
+        "south": { "texture": "#pack", "uv": [12, 0, 14, 6] },
+        "east": { "texture": "#pack", "uv": [12, 0, 13, 6] },
+        "west": { "texture": "#pack", "uv": [13, 0, 14, 6] },
+        "up": { "texture": "#pack", "uv": [12, 0, 14, 1] },
+        "down": { "texture": "#pack", "uv": [12, 5, 14, 6] }
+      }
+    },
+    {
+      "name": "snack_pocket",
+      "from": [6.5, 2, 3.9],
+      "to": [9.5, 6.5, 5.2],
+      "faces": {
+        "north": { "texture": "#pack", "uv": [12, 6, 16, 10] },
+        "south": { "texture": "#pack", "uv": [12, 6, 16, 10] },
+        "east": { "texture": "#pack", "uv": [12, 6, 13.5, 10] },
+        "west": { "texture": "#pack", "uv": [14.5, 6, 16, 10] },
+        "up": { "texture": "#pack", "uv": [12, 6, 16, 7.5] },
+        "down": { "texture": "#pack", "uv": [12, 8.5, 16, 10] }
+      }
+    },
+    {
+      "name": "button_clasp",
+      "from": [7.4, 7, 4.4],
+      "to": [8.6, 8.4, 5.3],
+      "faces": {
+        "north": { "texture": "#pack", "uv": [14, 0, 16, 2] },
+        "south": { "texture": "#pack", "uv": [14, 0, 16, 2] },
+        "east": { "texture": "#pack", "uv": [14, 0, 16, 2] },
+        "west": { "texture": "#pack", "uv": [14, 0, 16, 2] },
+        "up": { "texture": "#pack", "uv": [14, 0, 16, 2] },
+        "down": { "texture": "#pack", "uv": [14, 0, 16, 2] }
+      }
+    }
+  ],
+  "display": {
+    "gui": { "rotation": [30, 225, 0], "translation": [0, 0, 0], "scale": [0.62, 0.62, 0.62] },
+    "ground": { "rotation": [0, 0, 0], "translation": [0, 1, 0], "scale": [0.62, 0.62, 0.62] },
+    "head": { "rotation": [0, 0, 0], "translation": [0, -3, 0], "scale": [1.0, 1.0, 1.0] },
+    "thirdperson_righthand": { "rotation": [75, 45, 0], "translation": [0, 2.5, 0], "scale": [0.375, 0.375, 0.375] },
+    "firstperson_righthand": { "rotation": [0, 45, 0], "translation": [0, 1, 0], "scale": [0.4, 0.4, 0.4] }
+  }
+}

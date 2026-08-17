@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    {"item": "minecraft:bread"},
+    {"item": "goobymod:nutella"}
+  ],
+  "result": {
+    "id": "goobymod:nutella_toast",
+    "count": 2
+  }
+}

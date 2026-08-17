@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    " G ",
+    "GHG",
+    " G "
+  ],
+  "key": {
+    "G": {"item": "minecraft:gold_nugget"},
+    "H": {"item": "minecraft:honeycomb"}
+  },
+  "result": {
+    "id": "goobymod:button_eye",
+    "count": 2
+  }
+}

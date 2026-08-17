@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "LSL",
+    "LFL"
+  ],
+  "key": {
+    "L": { "item": "minecraft:leather" },
+    "S": { "item": "minecraft:string" },
+    "F": { "item": "goobymod:gooby_fluff" }
+  },
+  "result": {
+    "id": "goobymod:tiny_satchel",
+    "count": 1
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "parent": "goobymod:best_friends",
+  "display": {
+    "icon": { "id": "minecraft:golden_apple" },
+    "title": { "translate": "advancements.goobymod.snuggle_time.title" },
+    "description": { "translate": "advancements.goobymod.snuggle_time.description" },
+    "frame": "goal",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {
+    "granted": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}

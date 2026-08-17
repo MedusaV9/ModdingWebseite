@@ -1,0 +1,23 @@
+.gradle/
+build/
+run/
+run-data/
+run-gametest/
+run-server/*
+!run-server/eula.txt
+!run-server/server.properties
+run-mp/*
+!run-mp/options.txt
+run-mp2/*
+!run-mp2/options.txt
+out/
+*.iml
+.idea/
+eclipse/
+bin/
+logs/
+__pycache__/
+*.py[cod]
+# Generierte Blender-Szenen (Quelle: assets_src/blender/build_gooby_reference.py)
+assets_src/blender/*.blend
+assets_src/blender/*.blend1

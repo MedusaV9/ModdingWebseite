@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "FFF",
+    "SGS"
+  ],
+  "key": {
+    "F": { "tag": "minecraft:small_flowers" },
+    "S": { "item": "minecraft:string" },
+    "G": { "item": "goobymod:gooby_fluff" }
+  },
+  "result": {
+    "id": "goobymod:flower_crown",
+    "count": 1
+  }
+}

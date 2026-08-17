@@ -1,0 +1,82 @@
+{
+  "parent": "minecraft:block/block",
+  "credit": "GoobyMod Explorer-Outfit (handmodelliert)",
+  "textures": {
+    "cloth": "goobymod:item/adventure_bandana",
+    "particle": "goobymod:item/adventure_bandana"
+  },
+  "elements": [
+    {
+      "name": "collar_band",
+      "from": [3, 8, 4],
+      "to": [13, 11, 10],
+      "faces": {
+        "north": { "texture": "#cloth", "uv": [0, 0, 10, 3], "tintindex": 0 },
+        "south": { "texture": "#cloth", "uv": [0, 0, 10, 3], "tintindex": 0 },
+        "east": { "texture": "#cloth", "uv": [10, 6, 16, 9], "tintindex": 0 },
+        "west": { "texture": "#cloth", "uv": [10, 6, 16, 9], "tintindex": 0 },
+        "up": { "texture": "#cloth", "uv": [0, 0, 10, 6], "tintindex": 0 },
+        "down": { "texture": "#cloth", "uv": [0, 3, 10, 6], "tintindex": 0 }
+      }
+    },
+    {
+      "name": "knot",
+      "from": [6.5, 6, 3],
+      "to": [9.5, 9, 5.5],
+      "faces": {
+        "north": { "texture": "#cloth", "uv": [0, 6, 3, 9], "tintindex": 0 },
+        "south": { "texture": "#cloth", "uv": [0, 6, 3, 9], "tintindex": 0 },
+        "east": { "texture": "#cloth", "uv": [3, 6, 6, 9], "tintindex": 0 },
+        "west": { "texture": "#cloth", "uv": [3, 6, 6, 9], "tintindex": 0 },
+        "up": { "texture": "#cloth", "uv": [6, 6, 9, 9], "tintindex": 0 },
+        "down": { "texture": "#cloth", "uv": [6, 6, 9, 9], "tintindex": 0 }
+      }
+    },
+    {
+      "name": "tail_wide",
+      "from": [4.5, 4, 3.6],
+      "to": [11.5, 8, 4.9],
+      "faces": {
+        "north": { "texture": "#cloth", "uv": [0, 10, 7, 14], "tintindex": 0 },
+        "south": { "texture": "#cloth", "uv": [0, 10, 7, 14], "tintindex": 0 },
+        "east": { "texture": "#cloth", "uv": [8, 10, 10, 14], "tintindex": 0 },
+        "west": { "texture": "#cloth", "uv": [8, 10, 10, 14], "tintindex": 0 },
+        "up": { "texture": "#cloth", "uv": [0, 10, 7, 11], "tintindex": 0 },
+        "down": { "texture": "#cloth", "uv": [0, 13, 7, 14], "tintindex": 0 }
+      }
+    },
+    {
+      "name": "tail_middle",
+      "from": [5.5, 2, 3.7],
+      "to": [10.5, 4, 4.8],
+      "faces": {
+        "north": { "texture": "#cloth", "uv": [1, 12, 6, 14], "tintindex": 0 },
+        "south": { "texture": "#cloth", "uv": [1, 12, 6, 14], "tintindex": 0 },
+        "east": { "texture": "#cloth", "uv": [8, 12, 10, 14], "tintindex": 0 },
+        "west": { "texture": "#cloth", "uv": [8, 12, 10, 14], "tintindex": 0 },
+        "up": { "texture": "#cloth", "uv": [1, 12, 6, 13], "tintindex": 0 },
+        "down": { "texture": "#cloth", "uv": [1, 13, 6, 14], "tintindex": 0 }
+      }
+    },
+    {
+      "name": "tail_tip",
+      "from": [7, 0.5, 3.8],
+      "to": [9, 2, 4.7],
+      "faces": {
+        "north": { "texture": "#cloth", "uv": [3, 14, 5, 15.5], "tintindex": 0 },
+        "south": { "texture": "#cloth", "uv": [3, 14, 5, 15.5], "tintindex": 0 },
+        "east": { "texture": "#cloth", "uv": [8, 14, 9, 15.5], "tintindex": 0 },
+        "west": { "texture": "#cloth", "uv": [8, 14, 9, 15.5], "tintindex": 0 },
+        "up": { "texture": "#cloth", "uv": [3, 14, 5, 15], "tintindex": 0 },
+        "down": { "texture": "#cloth", "uv": [3, 14.5, 5, 15.5], "tintindex": 0 }
+      }
+    }
+  ],
+  "display": {
+    "gui": { "rotation": [25, 225, 0], "translation": [0, 1, 0], "scale": [0.85, 0.85, 0.85] },
+    "ground": { "rotation": [0, 0, 0], "translation": [0, 2, 0], "scale": [0.8, 0.8, 0.8] },
+    "head": { "rotation": [0, 0, 0], "translation": [0, -2, 0], "scale": [1.2, 1.2, 1.2] },
+    "thirdperson_righthand": { "rotation": [75, 45, 0], "translation": [0, 2.5, 0], "scale": [0.375, 0.375, 0.375] },
+    "firstperson_righthand": { "rotation": [0, 45, 0], "translation": [0, 1, 0], "scale": [0.4, 0.4, 0.4] }
+  }
+}
