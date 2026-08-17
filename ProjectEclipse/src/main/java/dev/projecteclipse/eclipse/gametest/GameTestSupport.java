@@ -3,6 +3,7 @@ package dev.projecteclipse.eclipse.gametest;
 import java.util.Objects;
 import java.util.UUID;
 
+import com.mojang.authlib.GameProfile;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.DynamicOps;
 import com.mojang.serialization.JsonOps;
@@ -11,10 +12,15 @@ import dev.projecteclipse.eclipse.core.signal.EclipseSignals;
 import dev.projecteclipse.eclipse.progression.DayScheduler;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
+import io.netty.channel.embedded.EmbeddedChannel;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.network.Connection;
 import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.PacketFlow;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.network.CommonListenerCookie;
 import net.minecraft.world.level.GameType;
 import net.neoforged.neoforge.network.registration.NetworkRegistry;
 
@@ -42,15 +48,38 @@ public final class GameTestSupport {
      * {@code PacketDistributor.sendToPlayer(mock, <eclipse payload>)} throws
      * UnsupportedOperationException — that failed 16 tests outright, and worse, the per-tick
      * broadcasters ({@code UnlockSync}/{@code InvLockSync} onServerTick) crash the WHOLE
-     * GameTestServer when their sweep hits a lingering unconfigured mock. NeoForge ships this
-     * exact hook for gametests: it marks the connection as a modded connection that accepts
-     * all registered channels (packets go nowhere).
+     * GameTestServer when their sweep hits a lingering unconfigured mock.
+     *
+     * <p>This is NeoForge's deprecated {@code makeMockServerPlayerInLevel()} re-inlined with
+     * ONE ordering change: {@link NetworkRegistry#configureMockConnection} (the official
+     * gametest hook that marks the connection as modded and accepting every registered
+     * channel — packets go nowhere) runs BEFORE {@code placeNewPlayer}. Configuring after the
+     * helper returned was not enough: {@code PlayerLoggedInEvent} fires inside
+     * {@code placeNewPlayer}, dozens of login syncs send payloads right there, and the first
+     * unguarded one (e.g. {@code InvLockSync.onPlayerLoggedIn}) threw, aborted the spawn
+     * mid-login and left an unconfigurable half-mock in the player list — the tick sweep then
+     * killed the whole suite one config reload later.</p>
      */
-    @SuppressWarnings("removal")
     public static ServerPlayer mockServerPlayerInLevel(GameTestHelper helper) {
-        ServerPlayer player = helper.makeMockServerPlayerInLevel();
-        helper.assertTrue(player != null, "mock server player");
-        NetworkRegistry.configureMockConnection(player.connection.getConnection());
+        ServerLevel level = helper.getLevel();
+        CommonListenerCookie cookie = CommonListenerCookie.createInitial(
+                new GameProfile(UUID.randomUUID(), "test-mock-player"), false);
+        ServerPlayer player = new ServerPlayer(
+                level.getServer(), level, cookie.gameProfile(), cookie.clientInformation()) {
+            @Override
+            public boolean isSpectator() {
+                return false;
+            }
+
+            @Override
+            public boolean isCreative() {
+                return true;
+            }
+        };
+        Connection connection = new Connection(PacketFlow.SERVERBOUND);
+        new EmbeddedChannel(connection);
+        NetworkRegistry.configureMockConnection(connection);
+        level.getServer().getPlayerList().placeNewPlayer(connection, player, cookie);
         return player;
     }
 
