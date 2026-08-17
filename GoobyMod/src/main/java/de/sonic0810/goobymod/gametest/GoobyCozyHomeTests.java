@@ -11,6 +11,8 @@ import de.sonic0810.goobymod.registry.ModEntities;
 import de.sonic0810.goobymod.registry.ModItems;
 import java.util.List;
 import net.minecraft.core.BlockPos;
+import net.minecraft.gametest.framework.AfterBatch;
+import net.minecraft.gametest.framework.BeforeBatch;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
@@ -38,7 +40,32 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 @PrefixGameTestTemplate(false)
 public class GoobyCozyHomeTests {
     private static final String ARENA = "arena";
-    private static final String NIGHT_BATCH = "goobyNight";
+    // Eigene Ein-Test-Batches statt "goobyNight": Sozialschlaf hat im
+    // Produktions-Goal Prioritaet vor Couch/Stall, d.h. ein schlafender
+    // Nachbar-Gooby aus einem parallel laufenden Batch-Test wuerde den
+    // Prueflingsschlaf nichtdeterministisch umlenken (6-Block-Scan).
+    private static final String COUCH_NAP_BATCH = "goobyCouchNap";
+    private static final String COUCH_VS_HUTCH_BATCH = "goobyCouchVsHutch";
+
+    @BeforeBatch(batch = COUCH_NAP_BATCH)
+    public static void beforeCouchNapBatch(ServerLevel level) {
+        level.setDayTime(18000);
+    }
+
+    @AfterBatch(batch = COUCH_NAP_BATCH)
+    public static void afterCouchNapBatch(ServerLevel level) {
+        level.setDayTime(6000);
+    }
+
+    @BeforeBatch(batch = COUCH_VS_HUTCH_BATCH)
+    public static void beforeCouchVsHutchBatch(ServerLevel level) {
+        level.setDayTime(18000);
+    }
+
+    @AfterBatch(batch = COUCH_VS_HUTCH_BATCH)
+    public static void afterCouchVsHutchBatch(ServerLevel level) {
+        level.setDayTime(6000);
+    }
 
     private static void placeFloor(GameTestHelper helper) {
         for (int x = 0; x < 5; x++) {
@@ -46,6 +73,16 @@ public class GoobyCozyHomeTests {
                 helper.setBlock(new BlockPos(x, 1, z), Blocks.DIRT);
             }
         }
+    }
+
+    /**
+     * Entfernt uebrig gebliebene Goobys frueherer (bereits abgeschlossener)
+     * Batches rund um die Arena. Ein dort noch schlafender Gooby waere sonst
+     * ein Sozialschlaf-Magnet fuer den Pruefling (siehe Batch-Kommentar).
+     */
+    private static void purgeForeignGoobys(GameTestHelper helper) {
+        AABB area = new AABB(helper.absolutePos(BlockPos.ZERO)).inflate(24.0);
+        helper.getLevel().getEntitiesOfClass(GoobyEntity.class, area).forEach(GoobyEntity::discard);
     }
 
     private static BlockHitResult couchHit(GameTestHelper helper, BlockPos couchRel) {
@@ -190,8 +227,9 @@ public class GoobyCozyHomeTests {
     }
 
     /** Nachts kuschelt sich Gooby auf das Kissen — exakt auf den Nap-Anker. */
-    @GameTest(template = ARENA, batch = NIGHT_BATCH, timeoutTicks = 1200)
+    @GameTest(template = ARENA, batch = COUCH_NAP_BATCH, timeoutTicks = 1200)
     public static void couch_night_nap(GameTestHelper helper) {
+        purgeForeignGoobys(helper);
         placeFloor(helper);
         BlockPos couchRel = new BlockPos(2, 2, 2);
         helper.setBlock(couchRel, ModBlocks.GOOBY_COUCH.get());
@@ -210,8 +248,9 @@ public class GoobyCozyHomeTests {
     }
 
     /** Regression: ein verfuegbarer Stall gewinnt IMMER gegen die Couch. */
-    @GameTest(template = ARENA, batch = NIGHT_BATCH, timeoutTicks = 1200)
+    @GameTest(template = ARENA, batch = COUCH_VS_HUTCH_BATCH, timeoutTicks = 1200)
     public static void hutch_beats_couch(GameTestHelper helper) {
+        purgeForeignGoobys(helper);
         placeFloor(helper);
         BlockPos hutchRel = new BlockPos(1, 2, 1);
         BlockPos couchRel = new BlockPos(3, 2, 3);
