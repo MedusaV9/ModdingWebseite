@@ -1,0 +1,26 @@
+{
+  "id": "garrys-mod",
+  "name": "Garry's Mod",
+  "category": "sandbox",
+  "description": "The famous physics sandbox with hundreds of community gamemodes. SRCDS dedicated server installed via SteamCMD (anonymous).",
+  "icon": "wrench",
+  "color": "#0ea5e9",
+  "platforms": ["linux", "win32"],
+  "install": [{ "type": "steamcmd", "appId": 4020, "validate": true }],
+  "startCommand": "./srcds_run -game garrysmod -port {{SERVER_PORT}} +map {{MAP}} +maxplayers {{MAX_PLAYERS}} +gamemode {{GAMEMODE}} +rcon_password \"{{RCON_PASSWORD}}\"",
+  "stop": { "type": "command", "command": "quit", "timeoutS": 30 },
+  "variables": [
+    { "key": "SERVER_PORT", "label": "Game port", "type": "number", "default": 27015, "min": 1024, "max": 65535, "isPort": true },
+    { "key": "MAP", "label": "Start map", "type": "string", "default": "gm_construct", "required": true },
+    { "key": "GAMEMODE", "label": "Gamemode", "description": "e.g. sandbox, terrortown (TTT), darkrp, prop_hunt.", "type": "string", "default": "sandbox", "required": true },
+    { "key": "MAX_PLAYERS", "label": "Max players", "type": "number", "default": 16, "min": 1, "max": 128 },
+    { "key": "RCON_PASSWORD", "label": "RCON password", "description": "Enables console commands via Source RCON (on the game port) when set. Leave empty to disable RCON.", "type": "password", "default": "", "advanced": true }
+  ],
+  "ports": [{ "name": "game", "variable": "SERVER_PORT", "protocol": "both" }],
+  "query": { "type": "source", "portVariable": "SERVER_PORT" },
+  "rcon": { "portVariable": "SERVER_PORT", "passwordVariable": "RCON_PASSWORD" },
+  "playerActions": [{ "key": "kick", "label": "Kick", "command": "kick {{PLAYER}}" }],
+  "backupExcludes": ["steamapps/**", "garrysmod/cache/**", "garrysmod/downloads/**"],
+  "notes": "Server config lives in garrysmod/cfg/server.cfg. Mount Counter-Strike: Source or other Source content via garrysmod/cfg/mount.cfg. Workshop addons: add +host_workshop_collection <collectionId> and -authkey <Steam Web API key> to the start command. A GSLT (app 4000) is recommended for public servers: +sv_setsteamaccount <token>. Windows hosts: set the start command override to srcds.exe -game garrysmod with the same arguments.",
+  "version": "1"
+}

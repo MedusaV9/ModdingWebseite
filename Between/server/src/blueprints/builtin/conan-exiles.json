@@ -1,0 +1,27 @@
+{
+  "id": "conan-exiles",
+  "name": "Conan Exiles",
+  "category": "survival",
+  "description": "Open-world survival in the brutal lands of Conan the Barbarian. Dedicated server installed via SteamCMD (anonymous); the server binary is a Windows executable.",
+  "icon": "castle",
+  "color": "#9a3412",
+  "platforms": ["linux", "win32"],
+  "install": [{ "type": "steamcmd", "appId": 443030, "validate": true, "platformOverride": "windows" }],
+  "startCommand": "ConanSandboxServer.exe -log -Port={{SERVER_PORT}} -QueryPort={{QUERY_PORT}} -MaxPlayers={{MAX_PLAYERS}} -ServerName=\"{{HOSTNAME}}\"",
+  "stop": { "type": "signal", "signal": "SIGTERM", "timeoutS": 90 },
+  "variables": [
+    { "key": "HOSTNAME", "label": "Server name", "type": "string", "default": "Between Conan Exiles Server", "required": true },
+    { "key": "SERVER_PORT", "label": "Game port (UDP)", "description": "The server also uses game port + 1 (raw UDP traffic).", "type": "number", "default": 7777, "min": 1024, "max": 65534, "isPort": true },
+    { "key": "QUERY_PORT", "label": "Query port (UDP)", "type": "number", "default": 27015, "min": 1024, "max": 65535, "isPort": true },
+    { "key": "MAX_PLAYERS", "label": "Max players", "type": "number", "default": 40, "min": 1, "max": 70 }
+  ],
+  "ports": [
+    { "name": "game", "variable": "SERVER_PORT", "protocol": "udp" },
+    { "name": "query", "variable": "QUERY_PORT", "protocol": "udp" }
+  ],
+  "query": { "type": "source", "portVariable": "QUERY_PORT" },
+  "configFiles": [{ "path": "ConanSandbox/Saved/Config/WindowsServer/ServerSettings.ini", "format": "ini" }],
+  "backupExcludes": ["steamapps/**"],
+  "notes": "The install always fetches the Windows depot (platformOverride) — on Linux hosts run it with Wine/Proton (start command override: wine ConanSandboxServer.exe ... with the same arguments). Also open UDP game port + 1 (default 7778). Set AdminPassword and other settings in ConanSandbox/Saved/Config/WindowsServer/ServerSettings.ini (created on first start). Database/saves live in ConanSandbox/Saved/.",
+  "version": "1"
+}

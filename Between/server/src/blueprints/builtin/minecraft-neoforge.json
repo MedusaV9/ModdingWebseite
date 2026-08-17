@@ -1,0 +1,65 @@
+{
+  "id": "minecraft-neoforge",
+  "name": "Minecraft: Java Edition (NeoForge)",
+  "category": "minecraft",
+  "description": "The community continuation of Forge (most 1.20.2+ mods target it). Downloads the official NeoForge installer from the NeoForged Maven and runs its server install.",
+  "icon": "box",
+  "color": "#c2410c",
+  "platforms": ["linux", "win32", "darwin"],
+  "docker": {
+    "image": "eclipse-temurin:21-jre",
+    "images": [
+      { "label": "Java 21 (MC 1.20.5+)", "image": "eclipse-temurin:21-jre" },
+      { "label": "Java 25 (MC 26.1+)", "image": "eclipse-temurin:25-jre" },
+      { "label": "Java 17 (MC 1.20.2-1.20.4)", "image": "eclipse-temurin:17-jre" }
+    ]
+  },
+  "install": [
+    {
+      "type": "download",
+      "url": "https://maven.neoforged.net/releases/net/neoforged/neoforge/{{NEOFORGE_VERSION}}/neoforge-{{NEOFORGE_VERSION}}-installer.jar",
+      "target": "neoforge-installer.jar"
+    },
+    { "type": "command", "command": "{{JAVA_BIN}} -jar neoforge-installer.jar --install-server" },
+    { "type": "command", "command": "rm -f neoforge-installer.jar neoforge-installer.jar.log" },
+    { "type": "writeFile", "path": "user_jvm_args.txt", "content": "-Xms{{MEMORY_MB}}M\n-Xmx{{MEMORY_MB}}M\n" },
+    { "type": "writeFile", "path": "eula.txt", "content": "# Accepted via Between panel\neula={{ACCEPT_EULA}}\n" },
+    {
+      "type": "writeFile",
+      "path": "server.properties",
+      "content": "server-port={{SERVER_PORT}}\nmotd={{MOTD}}\nmax-players={{MAX_PLAYERS}}\nonline-mode={{ONLINE_MODE}}\n"
+    }
+  ],
+  "startCommand": "sh run.sh nogui",
+  "stop": { "type": "command", "command": "stop", "timeoutS": 60 },
+  "variables": [
+    { "key": "NEOFORGE_VERSION", "label": "NeoForge version", "description": "Exact NeoForge build (see projects.neoforged.net); the Minecraft version is implied — e.g. 21.1.x targets MC 1.21.1.", "type": "string", "default": "21.1.248", "pattern": "^[0-9][0-9.]*$", "required": true },
+    { "key": "SERVER_PORT", "label": "Server port", "type": "number", "default": 25565, "min": 1024, "max": 65535, "isPort": true },
+    { "key": "MEMORY_MB", "label": "Memory (MiB)", "description": "Java heap size, written to user_jvm_args.txt (modpacks want 4096+).", "type": "number", "default": 4096, "min": 1024, "max": 65536 },
+    { "key": "MOTD", "label": "MOTD", "type": "string", "default": "A Between-powered NeoForge server" },
+    { "key": "MAX_PLAYERS", "label": "Max players", "type": "number", "default": 20, "min": 1, "max": 1000 },
+    { "key": "ACCEPT_EULA", "label": "Accept the Minecraft EULA", "description": "You must accept the Minecraft EULA (minecraft.net/eula) to run a server.", "type": "boolean", "default": false, "required": true },
+    { "key": "ONLINE_MODE", "label": "Online mode", "type": "boolean", "default": true, "advanced": true },
+    { "key": "JAVA_BIN", "label": "Java binary (installer)", "description": "Java executable used to run the NeoForge installer. The generated run.sh uses the system 'java' — edit user_jvm_args.txt or run.sh for a custom runtime.", "type": "string", "default": "java", "advanced": true }
+  ],
+  "ports": [{ "name": "game", "variable": "SERVER_PORT", "protocol": "tcp" }],
+  "query": { "type": "minecraft", "portVariable": "SERVER_PORT" },
+  "playerActions": [
+    { "key": "kick", "label": "Kick", "command": "kick {{PLAYER}}" },
+    { "key": "ban", "label": "Ban", "command": "ban {{PLAYER}}", "confirm": true },
+    { "key": "op", "label": "Op", "command": "op {{PLAYER}}", "confirm": true },
+    { "key": "deop", "label": "Deop", "command": "deop {{PLAYER}}" }
+  ],
+  "configFiles": [
+    {
+      "path": "server.properties",
+      "format": "properties",
+      "mappings": { "SERVER_PORT": "server-port", "MOTD": "motd", "MAX_PLAYERS": "max-players", "ONLINE_MODE": "online-mode" }
+    },
+    { "path": "config/neoforge-server.toml", "format": "toml" }
+  ],
+  "readyRegex": "Done \\([0-9.]+s\\)!",
+  "backupExcludes": ["libraries/**", "logs/**"],
+  "notes": "The installer generates run.sh + user_jvm_args.txt. Mods go in the mods/ folder (clients need matching mods); config/neoforge-server.toml appears after the first start. Windows hosts: set the start command override to run.bat nogui.",
+  "version": "1"
+}

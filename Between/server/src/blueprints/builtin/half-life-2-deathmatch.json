@@ -1,0 +1,30 @@
+{
+  "id": "half-life-2-deathmatch",
+  "name": "Half-Life 2: Deathmatch",
+  "category": "shooter",
+  "description": "Fast gravity-gun deathmatch in the Half-Life 2 universe. SRCDS dedicated server installed via SteamCMD (anonymous).",
+  "icon": "zap",
+  "color": "#f97316",
+  "platforms": ["linux", "win32"],
+  "install": [
+    { "type": "steamcmd", "appId": 232370, "validate": true },
+    { "type": "writeFile", "path": "hl2mp/cfg/server.cfg", "content": "hostname \"{{HOSTNAME}}\"\nsv_region 255\nmp_timelimit 20\nmp_teamplay 0\n" }
+  ],
+  "startCommand": "./srcds_run -game hl2mp -port {{SERVER_PORT}} +map {{MAP}} +maxplayers {{MAX_PLAYERS}} +rcon_password \"{{RCON_PASSWORD}}\"",
+  "stop": { "type": "command", "command": "quit", "timeoutS": 30 },
+  "variables": [
+    { "key": "SERVER_PORT", "label": "Game port", "type": "number", "default": 27015, "min": 1024, "max": 65535, "isPort": true },
+    { "key": "MAP", "label": "Start map", "description": "e.g. dm_lockdown, dm_overwatch, dm_runoff.", "type": "string", "default": "dm_lockdown", "required": true },
+    { "key": "HOSTNAME", "label": "Server name", "type": "string", "default": "Between HL2:DM Server", "required": true },
+    { "key": "MAX_PLAYERS", "label": "Max players", "type": "number", "default": 16, "min": 1, "max": 32 },
+    { "key": "RCON_PASSWORD", "label": "RCON password", "description": "Enables console commands via Source RCON (on the game port) when set. Leave empty to disable RCON.", "type": "password", "default": "", "advanced": true }
+  ],
+  "ports": [{ "name": "game", "variable": "SERVER_PORT", "protocol": "both" }],
+  "query": { "type": "source", "portVariable": "SERVER_PORT" },
+  "rcon": { "portVariable": "SERVER_PORT", "passwordVariable": "RCON_PASSWORD" },
+  "playerActions": [{ "key": "kick", "label": "Kick", "command": "kick {{PLAYER}}" }],
+  "configFiles": [{ "path": "hl2mp/cfg/server.cfg", "format": "keyvalue", "mappings": { "HOSTNAME": "hostname" } }],
+  "backupExcludes": ["steamapps/**", "hl2mp/download/**"],
+  "notes": "Server config lives in hl2mp/cfg/server.cfg (mp_teamplay 1 for team deathmatch). A GSLT from steamcommunity.com/dev/managegameservers (app 320) is recommended for public servers: +sv_setsteamaccount <token>. Windows hosts: set the start command override to srcds.exe -game hl2mp with the same arguments.",
+  "version": "1"
+}

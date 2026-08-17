@@ -1,0 +1,26 @@
+{
+  "id": "counter-strike-2",
+  "name": "Counter-Strike 2",
+  "category": "shooter",
+  "description": "Valve's competitive FPS. Dedicated server installed via SteamCMD (anonymous); very large download (~35 GB).",
+  "icon": "crosshair",
+  "color": "#f59e0b",
+  "platforms": ["linux", "win32"],
+  "install": [{ "type": "steamcmd", "appId": 730, "validate": true }],
+  "startCommand": "./game/bin/linuxsteamrt64/cs2 -dedicated -port {{SERVER_PORT}} +map {{MAP}} +maxplayers {{MAX_PLAYERS}} +rcon_password \"{{RCON_PASSWORD}}\"",
+  "stop": { "type": "command", "command": "quit", "timeoutS": 30 },
+  "variables": [
+    { "key": "SERVER_PORT", "label": "Game port", "type": "number", "default": 27015, "min": 1024, "max": 65535, "isPort": true },
+    { "key": "MAP", "label": "Start map", "type": "string", "default": "de_dust2", "required": true },
+    { "key": "MAX_PLAYERS", "label": "Max players", "type": "number", "default": 10, "min": 1, "max": 64 },
+    { "key": "LD_LIBRARY_PATH", "label": "LD_LIBRARY_PATH (Linux)", "description": "Exported to the server process so the CS2 runtime libraries are found. Leave as-is.", "type": "string", "default": "./game/bin/linuxsteamrt64", "advanced": true },
+    { "key": "RCON_PASSWORD", "label": "RCON password", "description": "Enables console commands via Source RCON (on the game port) when set. Leave empty to disable RCON.", "type": "password", "default": "", "advanced": true }
+  ],
+  "ports": [{ "name": "game", "variable": "SERVER_PORT", "protocol": "both" }],
+  "query": { "type": "source", "portVariable": "SERVER_PORT" },
+  "rcon": { "portVariable": "SERVER_PORT", "passwordVariable": "RCON_PASSWORD" },
+  "playerActions": [{ "key": "kick", "label": "Kick", "command": "kick {{PLAYER}}" }],
+  "backupExcludes": ["steamapps/**", "game/csgo/maps/workshop/**"],
+  "notes": "Public/community-listed servers require a Game Server Login Token (GSLT) for app 730 from steamcommunity.com/dev/managegameservers — add +sv_setsteamaccount <token> to the start command. Windows hosts: set the start command override to game\\bin\\win64\\cs2.exe with the same arguments. Server config lives in game/csgo/cfg/.",
+  "version": "1"
+}

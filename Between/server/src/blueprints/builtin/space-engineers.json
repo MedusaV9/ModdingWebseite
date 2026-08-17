@@ -1,0 +1,23 @@
+{
+  "id": "space-engineers",
+  "name": "Space Engineers",
+  "category": "sandbox",
+  "description": "Volumetric space engineering sandbox. Windows dedicated server installed via SteamCMD (anonymous).",
+  "icon": "rocket",
+  "color": "#64748b",
+  "platforms": ["win32"],
+  "install": [
+    { "type": "steamcmd", "appId": 298740, "validate": true },
+    { "type": "mkdir", "path": "instance" }
+  ],
+  "startCommand": "\"DedicatedServer64\\SpaceEngineersDedicated.exe\" -console -path \"{{SERVER_DIR}}\\instance\"",
+  "stop": { "type": "signal", "signal": "SIGTERM", "timeoutS": 30 },
+  "variables": [
+    { "key": "SERVER_PORT", "label": "Game port (UDP)", "description": "Must match ServerPort in instance/SpaceEngineers-Dedicated.cfg (default 27016).", "type": "number", "default": 27016, "min": 1024, "max": 65535, "isPort": true }
+  ],
+  "ports": [{ "name": "game", "variable": "SERVER_PORT", "protocol": "udp" }],
+  "query": { "type": "source", "portVariable": "SERVER_PORT" },
+  "backupExcludes": ["steamapps/**"],
+  "notes": "-console runs headless without the GUI; all world/session settings live in instance\\SpaceEngineers-Dedicated.cfg (created on first run; you can generate one with the GUI tool on a desktop machine and upload it). Worlds are stored in the instance folder, so panel backups include them. Requires .NET Framework 4.8 on the host.",
+  "version": "1"
+}

@@ -1,0 +1,25 @@
+{
+  "id": "v-rising",
+  "name": "V Rising",
+  "category": "survival",
+  "description": "Gothic vampire survival — build your castle and rule the night. Windows dedicated server installed via SteamCMD (anonymous).",
+  "icon": "castle",
+  "color": "#dc2626",
+  "platforms": ["win32"],
+  "install": [{ "type": "steamcmd", "appId": 1829350, "validate": true }],
+  "startCommand": "VRisingServer.exe -persistentDataPath \".\\save-data\" -serverName \"{{SERVER_NAME_VISIBLE}}\" -gamePort {{SERVER_PORT}} -queryPort {{QUERY_PORT}}",
+  "stop": { "type": "signal", "signal": "SIGTERM", "timeoutS": 30 },
+  "variables": [
+    { "key": "SERVER_NAME_VISIBLE", "label": "Server name", "type": "string", "default": "Between V Rising Server", "required": true },
+    { "key": "SERVER_PORT", "label": "Game port (UDP)", "type": "number", "default": 9876, "min": 1024, "max": 65535, "isPort": true },
+    { "key": "QUERY_PORT", "label": "Query port (UDP)", "type": "number", "default": 9877, "min": 1024, "max": 65535, "isPort": true }
+  ],
+  "ports": [
+    { "name": "game", "variable": "SERVER_PORT", "protocol": "udp" },
+    { "name": "query", "variable": "QUERY_PORT", "protocol": "udp" }
+  ],
+  "query": { "type": "source", "portVariable": "QUERY_PORT" },
+  "backupExcludes": ["steamapps/**"],
+  "notes": "The server binary is Windows-only (it also runs under Wine/Proton on Linux hosts outside this blueprint's platform list). Detailed settings live in save-data\\Settings\\ServerHostSettings.json and ServerGameSettings.json — copy the defaults from VRisingServer_Data\\StreamingAssets\\Settings\\ on first setup. Saves are kept inside .\\save-data so panel backups include them.",
+  "version": "1"
+}

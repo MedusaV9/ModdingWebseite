@@ -1,0 +1,25 @@
+{
+  "id": "squad",
+  "name": "Squad",
+  "category": "shooter",
+  "description": "Large-scale tactical military FPS with 100-player battles. Dedicated server installed via SteamCMD (anonymous); large download.",
+  "icon": "shield",
+  "color": "#4d7c0f",
+  "platforms": ["linux", "win32"],
+  "install": [{ "type": "steamcmd", "appId": 403240, "validate": true }],
+  "startCommand": "./SquadGameServer.sh Port={{SERVER_PORT}} QueryPort={{QUERY_PORT}} FIXEDMAXPLAYERS={{MAX_PLAYERS}}",
+  "stop": { "type": "signal", "signal": "SIGTERM", "timeoutS": 30 },
+  "variables": [
+    { "key": "SERVER_PORT", "label": "Game port (UDP)", "type": "number", "default": 7787, "min": 1024, "max": 65535, "isPort": true },
+    { "key": "QUERY_PORT", "label": "Query port (UDP)", "type": "number", "default": 27165, "min": 1024, "max": 65535, "isPort": true },
+    { "key": "MAX_PLAYERS", "label": "Max players", "type": "number", "default": 80, "min": 2, "max": 100 }
+  ],
+  "ports": [
+    { "name": "game", "variable": "SERVER_PORT", "protocol": "udp" },
+    { "name": "query", "variable": "QUERY_PORT", "protocol": "udp" }
+  ],
+  "query": { "type": "source", "portVariable": "QUERY_PORT" },
+  "backupExcludes": ["steamapps/**"],
+  "notes": "Server configuration lives in SquadGame/ServerConfig/ (Server.cfg for name/passwords, Rcon.cfg for RCON on TCP 21114, Admins.cfg, map rotations). A server license from Offworld Industries is only needed for licensed-server features; unlicensed community servers work fine. Windows hosts: set the start command override to SquadGameServer.exe with the same arguments.",
+  "version": "1"
+}

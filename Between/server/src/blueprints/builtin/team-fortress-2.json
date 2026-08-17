@@ -1,0 +1,25 @@
+{
+  "id": "team-fortress-2",
+  "name": "Team Fortress 2",
+  "category": "shooter",
+  "description": "Valve's classic class-based shooter. SRCDS dedicated server installed via SteamCMD (anonymous).",
+  "icon": "target",
+  "color": "#cf7336",
+  "platforms": ["linux", "win32"],
+  "install": [{ "type": "steamcmd", "appId": 232250, "validate": true }],
+  "startCommand": "./srcds_run -game tf -port {{SERVER_PORT}} +map {{MAP}} +maxplayers {{MAX_PLAYERS}} +rcon_password \"{{RCON_PASSWORD}}\"",
+  "stop": { "type": "command", "command": "quit", "timeoutS": 30 },
+  "variables": [
+    { "key": "SERVER_PORT", "label": "Game port", "type": "number", "default": 27015, "min": 1024, "max": 65535, "isPort": true },
+    { "key": "MAP", "label": "Start map", "type": "string", "default": "cp_dustbowl", "required": true },
+    { "key": "MAX_PLAYERS", "label": "Max players", "type": "number", "default": 24, "min": 1, "max": 100 },
+    { "key": "RCON_PASSWORD", "label": "RCON password", "description": "Enables console commands via Source RCON (on the game port) when set. Leave empty to disable RCON.", "type": "password", "default": "", "advanced": true }
+  ],
+  "ports": [{ "name": "game", "variable": "SERVER_PORT", "protocol": "both" }],
+  "query": { "type": "source", "portVariable": "SERVER_PORT" },
+  "rcon": { "portVariable": "SERVER_PORT", "passwordVariable": "RCON_PASSWORD" },
+  "playerActions": [{ "key": "kick", "label": "Kick", "command": "kick {{PLAYER}}" }],
+  "backupExcludes": ["steamapps/**", "tf/download/**", "tf/maps/workshop/**"],
+  "notes": "Server config lives in tf/cfg/server.cfg (hostname, rcon_password, sv_password). A GSLT from steamcommunity.com/dev/managegameservers (app 440) is recommended for public servers: +sv_setsteamaccount <token>. Windows hosts: set the start command override to srcds.exe -game tf with the same arguments. 64-bit builds also ship srcds_run_64.",
+  "version": "1"
+}

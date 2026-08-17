@@ -1,0 +1,75 @@
+{
+  "id": "factorio",
+  "name": "Factorio",
+  "category": "simulation",
+  "description": "The factory-building phenomenon. Official headless server, downloaded directly from factorio.com (stable branch).",
+  "icon": "flask",
+  "color": "#d97706",
+  "platforms": [
+    "linux"
+  ],
+  "docker": {
+    "image": "debian:bookworm-slim"
+  },
+  "install": [
+    {
+      "type": "download",
+      "url": "https://factorio.com/get-download/stable/headless/linux64",
+      "target": "factorio-headless.tar.xz",
+      "extract": false
+    },
+    {
+      "type": "command",
+      "command": "tar -xf factorio-headless.tar.xz --strip-components=1 && rm factorio-headless.tar.xz"
+    },
+    {
+      "type": "command",
+      "command": "cp -n data/server-settings.example.json data/server-settings.json 2>/dev/null || true"
+    },
+    {
+      "type": "command",
+      "command": "test -f \"saves/{{SAVE_NAME}}.zip\" || ./bin/x64/factorio --create \"saves/{{SAVE_NAME}}.zip\""
+    }
+  ],
+  "startCommand": "./bin/x64/factorio --start-server-load-latest --server-settings data/server-settings.json --port {{SERVER_PORT}}",
+  "stop": {
+    "type": "signal",
+    "signal": "SIGINT",
+    "timeoutS": 30
+  },
+  "variables": [
+    {
+      "key": "SERVER_PORT",
+      "label": "Server port (UDP)",
+      "type": "number",
+      "default": 34197,
+      "min": 1024,
+      "max": 65535,
+      "isPort": true
+    },
+    {
+      "key": "SAVE_NAME",
+      "label": "Initial save name",
+      "description": "A new map with this name is generated at install if missing; the server then always loads the latest save.",
+      "type": "string",
+      "default": "map",
+      "pattern": "^[A-Za-z0-9_-]+$"
+    }
+  ],
+  "ports": [
+    {
+      "name": "game",
+      "variable": "SERVER_PORT",
+      "protocol": "udp"
+    }
+  ],
+  "query": {
+    "type": "none"
+  },
+  "readyRegex": "changing state from\\(CreatingGame\\) to\\(InGame\\)",
+  "backupExcludes": [
+    "temp/**"
+  ],
+  "notes": "The stable headless build ships as .tar.xz, which the built-in extractor does not handle — a shell tar step unpacks it instead (hence linux-only). Edit data/server-settings.json for name, description, visibility and game password; public listing additionally requires factorio.com credentials in that file. Admins go in server-adminlist.json. SIGINT saves the map before exiting.",
+  "version": "1"
+}

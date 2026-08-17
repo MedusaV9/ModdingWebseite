@@ -1,0 +1,722 @@
+[
+  {
+    "id": "7-days-to-die",
+    "name": "7 Days to Die",
+    "category": "survival",
+    "description": "Voxel zombie survival with base building and horde nights. Dedicated server installed via SteamCMD (anonymous).",
+    "icon": "skull",
+    "color": "#b91c1c",
+    "source": {
+      "type": "builtin",
+      "blueprintId": "7-days-to-die"
+    }
+  },
+  {
+    "id": "ark-survival-evolved",
+    "name": "ARK: Survival Evolved",
+    "category": "survival",
+    "description": "Tame dinosaurs and survive on a hostile island. Dedicated server installed via SteamCMD (anonymous); large download.",
+    "icon": "mountain",
+    "color": "#0d9488",
+    "source": {
+      "type": "builtin",
+      "blueprintId": "ark-survival-evolved"
+    }
+  },
+  {
+    "id": "arma-3",
+    "name": "Arma 3",
+    "category": "shooter",
+    "description": "The military sandbox simulator. Dedicated server installed via SteamCMD (anonymous); a basic server.cfg is generated at install.",
+    "icon": "plane",
+    "color": "#166534",
+    "source": {
+      "type": "builtin",
+      "blueprintId": "arma-3"
+    }
+  },
+  {
+    "id": "arma-reforger",
+    "name": "Arma Reforger",
+    "category": "shooter",
+    "description": "Enfusion-engine military sandbox on Everon. Dedicated server installed via SteamCMD (anonymous); a minimal config.json is generated at install.",
+    "icon": "plane",
+    "color": "#3f6212",
+    "source": {
+      "type": "builtin",
+      "blueprintId": "arma-reforger"
+    }
+  },
+  {
+    "id": "astroneer",
+    "name": "Astroneer",
+    "category": "sandbox",
+    "description": "Aerospace sandbox exploration and base building. Windows dedicated server installed via SteamCMD (anonymous).",
+    "icon": "globe",
+    "color": "#7c3aed",
+    "source": {
+      "type": "builtin",
+      "blueprintId": "astroneer"
+    }
+  },
+  {
+    "id": "barotrauma",
+    "name": "Barotrauma",
+    "category": "simulation",
+    "description": "Co-op submarine survival horror on Europa. Dedicated server installed via SteamCMD (anonymous).",
+    "icon": "anchor",
+    "color": "#0369a1",
+    "source": {
+      "type": "builtin",
+      "blueprintId": "barotrauma"
+    }
+  },
+  {
+    "id": "core-keeper",
+    "name": "Core Keeper",
+    "category": "survival",
+    "description": "Cozy mining-sandbox survival for up to 8 players. Dedicated server installed via SteamCMD (anonymous); players join via a Game ID over Steam relay — no port forwarding needed.",
+    "icon": "pickaxe",
+    "color": "#a855f7",
+    "source": {
+      "type": "builtin",
+      "blueprintId": "core-keeper"
+    }
+  },
+  {
+    "id": "counter-strike-2",
+    "name": "Counter-Strike 2",
+    "category": "shooter",
+    "description": "Valve's competitive FPS. Dedicated server installed via SteamCMD (anonymous); very large download (~35 GB).",
+    "icon": "crosshair",
+    "color": "#f59e0b",
+    "source": {
+      "type": "builtin",
+      "blueprintId": "counter-strike-2"
+    }
+  },
+  {
+    "id": "dont-starve-together",
+    "name": "Don't Starve Together",
+    "category": "survival",
+    "description": "Klei's co-op wilderness survival. Dedicated server installed via SteamCMD (anonymous); requires a free Klei cluster token.",
+    "icon": "bug",
+    "color": "#713f12",
+    "source": {
+      "type": "builtin",
+      "blueprintId": "dont-starve-together"
+    }
+  },
+  {
+    "id": "eco",
+    "name": "Eco",
+    "category": "simulation",
+    "description": "Build a civilization in a fully simulated ecosystem — with laws, economy and government. Dedicated server installed via SteamCMD (anonymous).",
+    "icon": "globe",
+    "color": "#16a34a",
+    "source": {
+      "type": "builtin",
+      "blueprintId": "eco"
+    }
+  },
+  {
+    "id": "enshrouded",
+    "name": "Enshrouded",
+    "category": "survival",
+    "description": "Survival action RPG in a voxel world consumed by the Shroud. Windows dedicated server installed via SteamCMD (anonymous).",
+    "icon": "mountain",
+    "color": "#fbbf24",
+    "source": {
+      "type": "builtin",
+      "blueprintId": "enshrouded"
+    }
+  },
+  {
+    "id": "factorio",
+    "name": "Factorio",
+    "category": "simulation",
+    "description": "The factory-building phenomenon. Official headless server, downloaded directly from factorio.com (stable branch).",
+    "icon": "flask",
+    "color": "#d97706",
+    "source": {
+      "type": "builtin",
+      "blueprintId": "factorio"
+    }
+  },
+  {
+    "id": "garrys-mod",
+    "name": "Garry's Mod",
+    "category": "sandbox",
+    "description": "The famous physics sandbox with hundreds of community gamemodes. SRCDS dedicated server installed via SteamCMD (anonymous).",
+    "icon": "wrench",
+    "color": "#0ea5e9",
+    "source": {
+      "type": "builtin",
+      "blueprintId": "garrys-mod"
+    }
+  },
+  {
+    "id": "insurgency-sandstorm",
+    "name": "Insurgency: Sandstorm",
+    "category": "shooter",
+    "description": "Hardcore tactical FPS with intense close-quarters combat. Dedicated server installed via SteamCMD (anonymous).",
+    "icon": "crosshair",
+    "color": "#ca8a04",
+    "source": {
+      "type": "builtin",
+      "blueprintId": "insurgency-sandstorm"
+    }
+  },
+  {
+    "id": "killing-floor-2",
+    "name": "Killing Floor 2",
+    "category": "shooter",
+    "description": "Co-op wave-based zed slaughter for up to 6 players. Dedicated server installed via SteamCMD (anonymous).",
+    "icon": "skull",
+    "color": "#7f1d1d",
+    "source": {
+      "type": "builtin",
+      "blueprintId": "killing-floor-2"
+    }
+  },
+  {
+    "id": "left-4-dead-2",
+    "name": "Left 4 Dead 2",
+    "category": "shooter",
+    "description": "Co-op zombie survival for 4 (or 8 in versus) players. SRCDS dedicated server installed via SteamCMD (anonymous).",
+    "icon": "skull",
+    "color": "#65a30d",
+    "source": {
+      "type": "builtin",
+      "blueprintId": "left-4-dead-2"
+    }
+  },
+  {
+    "id": "minecraft-bedrock",
+    "name": "Minecraft: Bedrock Edition",
+    "category": "minecraft",
+    "description": "The official Minecraft Bedrock dedicated server (for phones, consoles and Windows 10/11 clients), downloaded from Mojang.",
+    "icon": "box",
+    "color": "#10b981",
+    "source": {
+      "type": "builtin",
+      "blueprintId": "minecraft-bedrock"
+    }
+  },
+  {
+    "id": "minecraft-fabric",
+    "name": "Minecraft: Java Edition (Fabric)",
+    "category": "minecraft",
+    "description": "Minecraft: Java Edition server with the Fabric mod loader, resolved from the official Fabric meta API.",
+    "icon": "box",
+    "color": "#eab308",
+    "source": {
+      "type": "builtin",
+      "blueprintId": "minecraft-fabric"
+    }
+  },
+  {
+    "id": "minecraft-paper",
+    "name": "Minecraft: Java Edition (Paper)",
+    "category": "minecraft",
+    "description": "High-performance Minecraft: Java Edition server with plugin support (Paper). Downloads the requested build straight from the PaperMC API.",
+    "icon": "box",
+    "color": "#22c55e",
+    "source": {
+      "type": "builtin",
+      "blueprintId": "minecraft-paper"
+    }
+  },
+  {
+    "id": "minecraft-purpur",
+    "name": "Minecraft: Java Edition (Purpur)",
+    "category": "minecraft",
+    "description": "Paper fork with extensive gameplay configurability (ridable mobs and hundreds of toggles). Downloads the latest Purpur build for a Minecraft version from the PurpurMC API.",
+    "icon": "box",
+    "color": "#a855f7",
+    "source": {
+      "type": "builtin",
+      "blueprintId": "minecraft-purpur"
+    }
+  },
+  {
+    "id": "minecraft-vanilla",
+    "name": "Minecraft: Java Edition (Vanilla)",
+    "category": "minecraft",
+    "description": "The official vanilla Minecraft: Java Edition server, downloaded from Mojang's version manifest.",
+    "icon": "box",
+    "color": "#84cc16",
+    "source": {
+      "type": "builtin",
+      "blueprintId": "minecraft-vanilla"
+    }
+  },
+  {
+    "id": "mordhau",
+    "name": "Mordhau",
+    "category": "shooter",
+    "description": "Skill-based medieval melee combat for up to 64 players. Dedicated server installed via SteamCMD (anonymous).",
+    "icon": "swords",
+    "color": "#92400e",
+    "source": {
+      "type": "builtin",
+      "blueprintId": "mordhau"
+    }
+  },
+  {
+    "id": "palworld",
+    "name": "Palworld",
+    "category": "survival",
+    "description": "Open-world creature-collecting survival for up to 32 players. Dedicated server installed via SteamCMD (anonymous).",
+    "icon": "zap",
+    "color": "#38bdf8",
+    "source": {
+      "type": "builtin",
+      "blueprintId": "palworld"
+    }
+  },
+  {
+    "id": "project-zomboid",
+    "name": "Project Zomboid",
+    "category": "survival",
+    "description": "The hardcore isometric zombie survival sandbox. Dedicated server installed via SteamCMD (anonymous).",
+    "icon": "footprints",
+    "color": "#ef4444",
+    "source": {
+      "type": "builtin",
+      "blueprintId": "project-zomboid"
+    }
+  },
+  {
+    "id": "risk-of-rain-2",
+    "name": "Risk of Rain 2",
+    "category": "shooter",
+    "description": "Co-op roguelike third-person shooter. Windows dedicated server installed via SteamCMD (anonymous).",
+    "icon": "gamepad-2",
+    "color": "#3b82f6",
+    "source": {
+      "type": "builtin",
+      "blueprintId": "risk-of-rain-2"
+    }
+  },
+  {
+    "id": "rust",
+    "name": "Rust",
+    "category": "survival",
+    "description": "Hardcore multiplayer survival. Dedicated server installed via SteamCMD (anonymous); large download (10+ GB).",
+    "icon": "radiation",
+    "color": "#ce422b",
+    "source": {
+      "type": "builtin",
+      "blueprintId": "rust"
+    }
+  },
+  {
+    "id": "satisfactory",
+    "name": "Satisfactory",
+    "category": "simulation",
+    "description": "First-person open-world factory building. Dedicated server installed via SteamCMD (anonymous).",
+    "icon": "cpu",
+    "color": "#f97316",
+    "source": {
+      "type": "builtin",
+      "blueprintId": "satisfactory"
+    }
+  },
+  {
+    "id": "scp-secret-laboratory",
+    "name": "SCP: Secret Laboratory",
+    "category": "shooter",
+    "description": "Free multiplayer horror in the SCP universe. Dedicated server installed via SteamCMD (anonymous) and managed through the bundled LocalAdmin console.",
+    "icon": "flask",
+    "color": "#334155",
+    "source": {
+      "type": "builtin",
+      "blueprintId": "scp-secret-laboratory"
+    }
+  },
+  {
+    "id": "sons-of-the-forest",
+    "name": "Sons of the Forest",
+    "category": "survival",
+    "description": "Co-op survival horror sequel to The Forest. Dedicated server installed via SteamCMD (anonymous); the server binary is a Windows executable.",
+    "icon": "trees",
+    "color": "#166f4a",
+    "source": {
+      "type": "builtin",
+      "blueprintId": "sons-of-the-forest"
+    }
+  },
+  {
+    "id": "space-engineers",
+    "name": "Space Engineers",
+    "category": "sandbox",
+    "description": "Volumetric space engineering sandbox. Windows dedicated server installed via SteamCMD (anonymous).",
+    "icon": "rocket",
+    "color": "#64748b",
+    "source": {
+      "type": "builtin",
+      "blueprintId": "space-engineers"
+    }
+  },
+  {
+    "id": "squad",
+    "name": "Squad",
+    "category": "shooter",
+    "description": "Large-scale tactical military FPS with 100-player battles. Dedicated server installed via SteamCMD (anonymous); large download.",
+    "icon": "shield",
+    "color": "#4d7c0f",
+    "source": {
+      "type": "builtin",
+      "blueprintId": "squad"
+    }
+  },
+  {
+    "id": "stationeers",
+    "name": "Stationeers",
+    "category": "simulation",
+    "description": "Hard-science space station engineering and survival. Dedicated server installed via SteamCMD (anonymous).",
+    "icon": "rocket",
+    "color": "#ea580c",
+    "source": {
+      "type": "builtin",
+      "blueprintId": "stationeers"
+    }
+  },
+  {
+    "id": "team-fortress-2",
+    "name": "Team Fortress 2",
+    "category": "shooter",
+    "description": "Valve's classic class-based shooter. SRCDS dedicated server installed via SteamCMD (anonymous).",
+    "icon": "target",
+    "color": "#cf7336",
+    "source": {
+      "type": "builtin",
+      "blueprintId": "team-fortress-2"
+    }
+  },
+  {
+    "id": "terraria",
+    "name": "Terraria",
+    "category": "sandbox",
+    "description": "The classic 2D sandbox adventure. Official vanilla dedicated server, downloaded directly from terraria.org.",
+    "icon": "pickaxe",
+    "color": "#4ade80",
+    "source": {
+      "type": "builtin",
+      "blueprintId": "terraria"
+    }
+  },
+  {
+    "id": "the-forest",
+    "name": "The Forest",
+    "category": "survival",
+    "description": "Co-op cannibal-island survival horror. Windows dedicated server installed via SteamCMD (anonymous).",
+    "icon": "trees",
+    "color": "#15803d",
+    "source": {
+      "type": "builtin",
+      "blueprintId": "the-forest"
+    }
+  },
+  {
+    "id": "unturned",
+    "name": "Unturned",
+    "category": "survival",
+    "description": "Free-to-play blocky zombie survival. Dedicated server (U3DS) installed via SteamCMD (anonymous).",
+    "icon": "tent",
+    "color": "#84cc16",
+    "source": {
+      "type": "builtin",
+      "blueprintId": "unturned"
+    }
+  },
+  {
+    "id": "v-rising",
+    "name": "V Rising",
+    "category": "survival",
+    "description": "Gothic vampire survival — build your castle and rule the night. Windows dedicated server installed via SteamCMD (anonymous).",
+    "icon": "castle",
+    "color": "#dc2626",
+    "source": {
+      "type": "builtin",
+      "blueprintId": "v-rising"
+    }
+  },
+  {
+    "id": "valheim",
+    "name": "Valheim",
+    "category": "survival",
+    "description": "Brutal Viking survival and exploration for up to 10 players. Dedicated server installed via SteamCMD (anonymous).",
+    "icon": "ship",
+    "color": "#b45309",
+    "source": {
+      "type": "builtin",
+      "blueprintId": "valheim"
+    }
+  },
+  {
+    "id": "velocity",
+    "name": "Velocity (Minecraft proxy)",
+    "category": "minecraft",
+    "description": "The modern, high-performance Minecraft proxy by PaperMC — front multiple backend servers behind one address.",
+    "icon": "network",
+    "color": "#38bdf8",
+    "source": {
+      "type": "builtin",
+      "blueprintId": "velocity"
+    }
+  },
+  {
+    "id": "vintage-story",
+    "name": "Vintage Story",
+    "category": "survival",
+    "description": "Uncompromising wilderness survival sandbox with deep crafting. Official server tarball downloaded from cdn.vintagestory.at.",
+    "icon": "trees",
+    "color": "#78716c",
+    "source": {
+      "type": "builtin",
+      "blueprintId": "vintage-story"
+    }
+  },
+  {
+    "id": "minecraft-forge",
+    "name": "Minecraft: Java Edition (Forge)",
+    "category": "minecraft",
+    "description": "Modded Minecraft with the Forge mod loader — runs the huge ecosystem of classic Forge mods and modpacks.",
+    "icon": "box",
+    "color": "#b45309",
+    "source": {
+      "type": "egg-url",
+      "url": "https://raw.githubusercontent.com/parkervcp/eggs/master/game_eggs/minecraft/java/forge/forge/egg-forge-enhanced.json"
+    }
+  },
+  {
+    "id": "pocketmine-mp",
+    "name": "PocketMine-MP (Bedrock)",
+    "category": "minecraft",
+    "description": "Plugin-capable Minecraft Bedrock server software written in PHP — the classic choice for mobile-friendly servers.",
+    "icon": "box",
+    "color": "#0ea5e9",
+    "source": {
+      "type": "egg-url",
+      "url": "https://raw.githubusercontent.com/parkervcp/eggs/master/game_eggs/minecraft/bedrock/pocketmine_mp/egg-pocketmine-m-p.json"
+    }
+  },
+  {
+    "id": "fivem",
+    "name": "FiveM (GTA V)",
+    "category": "sandbox",
+    "description": "Multiplayer modification framework for Grand Theft Auto V with custom roleplay servers, scripts and resources.",
+    "icon": "car",
+    "color": "#f97316",
+    "source": {
+      "type": "egg-url",
+      "url": "https://raw.githubusercontent.com/parkervcp/eggs/master/game_eggs/gta/fivem/egg-five-m.json"
+    }
+  },
+  {
+    "id": "beammp",
+    "name": "BeamMP (BeamNG.drive)",
+    "category": "simulation",
+    "description": "Multiplayer server for the soft-body physics driving simulator BeamNG.drive.",
+    "icon": "car",
+    "color": "#ef4444",
+    "source": {
+      "type": "egg-url",
+      "url": "https://raw.githubusercontent.com/parkervcp/eggs/master/game_eggs/beamng/beammp/egg-beam-m-p-server.json"
+    }
+  },
+  {
+    "id": "among-us-impostor",
+    "name": "Among Us (Impostor)",
+    "category": "other",
+    "description": "Open-source private server for Among Us — host your own lobbies with the Impostor server implementation.",
+    "icon": "skull",
+    "color": "#dc2626",
+    "source": {
+      "type": "egg-url",
+      "url": "https://raw.githubusercontent.com/parkervcp/eggs/master/game_eggs/among_us/impostor_server/egg-among-us--impostor-server.json"
+    }
+  },
+  {
+    "id": "mindustry",
+    "name": "Mindustry",
+    "category": "simulation",
+    "description": "Tower-defense factory builder — automate resource chains and defend against waves, co-op or PvP.",
+    "icon": "cpu",
+    "color": "#f59e0b",
+    "source": {
+      "type": "egg-url",
+      "url": "https://raw.githubusercontent.com/parkervcp/eggs/master/game_eggs/mindustry/egg-mindustry.json"
+    }
+  },
+  {
+    "id": "xonotic",
+    "name": "Xonotic",
+    "category": "shooter",
+    "description": "Free and fast open-source arena shooter — the spiritual successor to Nexuiz.",
+    "icon": "crosshair",
+    "color": "#38bdf8",
+    "source": {
+      "type": "egg-url",
+      "url": "https://raw.githubusercontent.com/parkervcp/eggs/master/game_eggs/xonotic/xonotic/egg-xonotic.json"
+    }
+  },
+  {
+    "id": "luanti",
+    "name": "Luanti (Minetest)",
+    "category": "sandbox",
+    "description": "Open-source voxel game engine (formerly Minetest) with countless community games and mods.",
+    "icon": "box",
+    "color": "#16a34a",
+    "source": {
+      "type": "egg-url",
+      "url": "https://raw.githubusercontent.com/parkervcp/eggs/master/game_eggs/minetest/egg-minetest.json"
+    }
+  },
+  {
+    "id": "veloren",
+    "name": "Veloren",
+    "category": "survival",
+    "description": "Open-source multiplayer voxel action RPG inspired by Cube World — explore, craft and fight together.",
+    "icon": "mountain",
+    "color": "#7c3aed",
+    "source": {
+      "type": "egg-url",
+      "url": "https://raw.githubusercontent.com/parkervcp/eggs/master/game_eggs/veloren/egg-veloren.json"
+    }
+  },
+  {
+    "id": "space-station-14",
+    "name": "Space Station 14",
+    "category": "simulation",
+    "description": "Chaotic multiplayer roleplay in a space station — the open-source remake of Space Station 13.",
+    "icon": "rocket",
+    "color": "#6366f1",
+    "source": {
+      "type": "egg-url",
+      "url": "https://raw.githubusercontent.com/parkervcp/eggs/master/game_eggs/spacestation_14/egg-spacestation14.json"
+    }
+  },
+  {
+    "id": "terraria-tmodloader",
+    "name": "Terraria (tModLoader)",
+    "category": "sandbox",
+    "description": "Modded Terraria via tModLoader — run Calamity, Thorium and thousands of other mods on your server.",
+    "icon": "pickaxe",
+    "color": "#22c55e",
+    "source": {
+      "type": "egg-url",
+      "url": "https://raw.githubusercontent.com/parkervcp/eggs/master/game_eggs/terraria/tmodloader/egg-t-modloader.json"
+    }
+  },
+  {
+    "id": "conan-exiles",
+    "name": "Conan Exiles",
+    "category": "survival",
+    "description": "Survival in the brutal lands of Conan the Barbarian — build, dominate and enslave on your own server.",
+    "icon": "castle",
+    "color": "#b91c1c",
+    "source": {
+      "type": "egg-url",
+      "url": "https://raw.githubusercontent.com/parkervcp/eggs/master/game_eggs/steamcmd_servers/conan_exiles/egg-conan-exiles.json"
+    }
+  },
+  {
+    "id": "ark-survival-ascended",
+    "name": "ARK: Survival Ascended",
+    "category": "survival",
+    "description": "The Unreal Engine 5 remake of ARK — tame dinosaurs and survive on a dedicated server (runs via Proton).",
+    "icon": "mountain",
+    "color": "#0d9488",
+    "source": {
+      "type": "egg-url",
+      "url": "https://raw.githubusercontent.com/parkervcp/eggs/master/game_eggs/steamcmd_servers/ark_survival_ascended/egg-ark--survival-ascended.json"
+    }
+  },
+  {
+    "id": "starbound",
+    "name": "Starbound",
+    "category": "sandbox",
+    "description": "Explore a procedurally generated universe — 2D sandbox survival with quests, farming and dungeons.",
+    "icon": "rocket",
+    "color": "#a855f7",
+    "source": {
+      "type": "egg-url",
+      "url": "https://raw.githubusercontent.com/parkervcp/eggs/master/game_eggs/steamcmd_servers/starbound/egg-starbound.json"
+    }
+  },
+  {
+    "id": "assetto-corsa",
+    "name": "Assetto Corsa",
+    "category": "simulation",
+    "description": "Racing simulator dedicated server — host lobbies with custom tracks, cars and championships.",
+    "icon": "car",
+    "color": "#dc2626",
+    "source": {
+      "type": "egg-url",
+      "url": "https://raw.githubusercontent.com/parkervcp/eggs/master/game_eggs/steamcmd_servers/assetto_corsa/egg-assetto-corsa.json"
+    }
+  },
+  {
+    "id": "openttd",
+    "name": "OpenTTD",
+    "category": "simulation",
+    "description": "Open-source transport tycoon simulation — build rail empires with friends on a dedicated server.",
+    "icon": "globe",
+    "color": "#0369a1",
+    "source": {
+      "type": "egg-url",
+      "url": "https://raw.githubusercontent.com/parkervcp/eggs/master/game_eggs/tycoon_games/openttd/egg-open-t-t-d-server.json"
+    }
+  },
+  {
+    "id": "counter-strike-source",
+    "name": "Counter-Strike: Source",
+    "category": "shooter",
+    "description": "The Source-engine classic — bomb defusal and hostage rescue, moddable with SourceMod.",
+    "icon": "crosshair",
+    "color": "#eab308",
+    "source": {
+      "type": "egg-url",
+      "url": "https://raw.githubusercontent.com/parkervcp/eggs/master/game_eggs/steamcmd_servers/counter_strike/counter_strike_source/egg-counter--strike--source.json"
+    }
+  },
+  {
+    "id": "mumble",
+    "name": "Mumble",
+    "category": "voice",
+    "description": "Low-latency, open-source voice chat server (Murmur) — the self-hosted TeamSpeak alternative.",
+    "icon": "network",
+    "color": "#3b82f6",
+    "source": {
+      "type": "egg-url",
+      "url": "https://raw.githubusercontent.com/pelican-eggs/voice/main/mumble/egg-pterodactyl-mumble-server.json"
+    }
+  },
+  {
+    "id": "teamspeak6",
+    "name": "TeamSpeak 6",
+    "category": "voice",
+    "description": "The next generation TeamSpeak server — crystal-clear voice chat for your community.",
+    "icon": "network",
+    "color": "#2563eb",
+    "source": {
+      "type": "egg-url",
+      "url": "https://raw.githubusercontent.com/pelican-eggs/voice/main/ts6/egg-teamspeak6-server.json"
+    }
+  },
+  {
+    "id": "jmusicbot",
+    "name": "JMusicBot (Discord)",
+    "category": "other",
+    "description": "Easy-to-host Discord music bot written in Java — plays music in your voice channels.",
+    "icon": "joystick",
+    "color": "#8b5cf6",
+    "source": {
+      "type": "egg-url",
+      "url": "https://raw.githubusercontent.com/parkervcp/eggs/master/bots/discord/jmusicbot/egg-j-music-bot.json"
+    }
+  }
+]

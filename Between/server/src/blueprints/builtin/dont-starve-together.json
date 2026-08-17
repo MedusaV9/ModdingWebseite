@@ -1,0 +1,29 @@
+{
+  "id": "dont-starve-together",
+  "name": "Don't Starve Together",
+  "category": "survival",
+  "description": "Klei's co-op wilderness survival. Dedicated server installed via SteamCMD (anonymous); requires a free Klei cluster token.",
+  "icon": "bug",
+  "color": "#713f12",
+  "platforms": ["linux"],
+  "install": [
+    { "type": "steamcmd", "appId": 343050, "validate": true },
+    {
+      "type": "writeFile",
+      "path": "run_dst.sh",
+      "content": "#!/bin/sh\n# The DST binary must run with cwd inside its bin directory; this wrapper also\n# keeps cluster data inside the server directory so panel backups include it.\nROOT=\"$(pwd)\"\nmkdir -p \"$ROOT/klei/DoNotStarveTogether/$1\"\nif [ -x bin64/dontstarve_dedicated_server_nullrenderer_x64 ]; then\n  cd bin64 && exec ./dontstarve_dedicated_server_nullrenderer_x64 -console -persistent_storage_root \"$ROOT/klei\" -cluster \"$1\" -shard Master\nfi\ncd bin && exec ./dontstarve_dedicated_server_nullrenderer -console -persistent_storage_root \"$ROOT/klei\" -cluster \"$1\" -shard Master\n"
+    },
+    { "type": "command", "command": "chmod +x run_dst.sh" }
+  ],
+  "startCommand": "sh run_dst.sh {{CLUSTER_NAME}}",
+  "stop": { "type": "command", "command": "c_shutdown()", "timeoutS": 30 },
+  "variables": [
+    { "key": "CLUSTER_NAME", "label": "Cluster name", "description": "Folder name of the cluster under klei/DoNotStarveTogether/.", "type": "string", "default": "Cluster_1", "pattern": "^[A-Za-z0-9_-]+$", "required": true },
+    { "key": "SERVER_PORT", "label": "Game port (UDP)", "description": "Must match server_port in the shard's server.ini (default 10999).", "type": "number", "default": 10999, "min": 1024, "max": 65535, "isPort": true }
+  ],
+  "ports": [{ "name": "game", "variable": "SERVER_PORT", "protocol": "udp" }],
+  "query": { "type": "none" },
+  "backupExcludes": ["steamapps/**"],
+  "notes": "REQUIRED: create a cluster token at accounts.klei.com (Games > Don't Starve Together > Game Servers) and save it to klei/DoNotStarveTogether/<cluster>/cluster_token.txt via the file manager, then restart. Cluster settings live in cluster.ini, world settings in Master/leveldataoverride.lua; a Caves world needs a second shard. The stop command c_shutdown() saves the world before exiting.",
+  "version": "1"
+}

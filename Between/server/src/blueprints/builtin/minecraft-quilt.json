@@ -1,0 +1,60 @@
+{
+  "id": "minecraft-quilt",
+  "name": "Minecraft: Java Edition (Quilt)",
+  "category": "minecraft",
+  "description": "The Quilt mod loader (Fabric fork, runs most Fabric mods). Uses the official Quilt installer to set up the server.",
+  "icon": "box",
+  "color": "#8b5cf6",
+  "platforms": ["linux", "win32", "darwin"],
+  "docker": {
+    "image": "eclipse-temurin:21-jre",
+    "images": [
+      { "label": "Java 21 (MC 1.18-1.21.x)", "image": "eclipse-temurin:21-jre" },
+      { "label": "Java 25 (MC 26.1+)", "image": "eclipse-temurin:25-jre" },
+      { "label": "Java 17 (MC 1.17.x)", "image": "eclipse-temurin:17-jre" }
+    ]
+  },
+  "install": [
+    { "type": "download", "url": "https://quiltmc.org/api/v1/download-latest-installer/java-universal", "target": "quilt-installer.jar" },
+    { "type": "command", "command": "{{JAVA_BIN}} -jar quilt-installer.jar install server {{MC_VERSION}} --install-dir=. --download-server" },
+    { "type": "command", "command": "rm -f quilt-installer.jar" },
+    { "type": "writeFile", "path": "eula.txt", "content": "# Accepted via Between panel\neula={{ACCEPT_EULA}}\n" },
+    {
+      "type": "writeFile",
+      "path": "server.properties",
+      "content": "server-port={{SERVER_PORT}}\nmotd={{MOTD}}\nmax-players={{MAX_PLAYERS}}\nonline-mode={{ONLINE_MODE}}\n"
+    }
+  ],
+  "startCommand": "{{JAVA_BIN}} -Xms{{MEMORY_MB}}M -Xmx{{MEMORY_MB}}M -Dcom.mojang.eula.agree={{ACCEPT_EULA}} -jar quilt-server-launch.jar nogui",
+  "stop": { "type": "command", "command": "stop", "timeoutS": 60 },
+  "variables": [
+    { "key": "MC_VERSION", "label": "Minecraft version", "description": "Exact version, e.g. 1.21.1 (the installer needs an explicit version).", "type": "string", "default": "1.21.1", "pattern": "^[0-9]+\\.[0-9]+(\\.[0-9]+)?$", "required": true },
+    { "key": "SERVER_PORT", "label": "Server port", "type": "number", "default": 25565, "min": 1024, "max": 65535, "isPort": true },
+    { "key": "MEMORY_MB", "label": "Memory (MiB)", "description": "Java heap size for the server (-Xmx).", "type": "number", "default": 2048, "min": 512, "max": 65536 },
+    { "key": "MOTD", "label": "MOTD", "type": "string", "default": "A Between-powered Quilt server" },
+    { "key": "MAX_PLAYERS", "label": "Max players", "type": "number", "default": 20, "min": 1, "max": 1000 },
+    { "key": "ACCEPT_EULA", "label": "Accept the Minecraft EULA", "description": "You must accept the Minecraft EULA (minecraft.net/eula) to run a server.", "type": "boolean", "default": false, "required": true },
+    { "key": "ONLINE_MODE", "label": "Online mode", "type": "boolean", "default": true, "advanced": true },
+    { "key": "JAVA_BIN", "label": "Java binary", "description": "Java executable for this server. Keep 'java' for the system default.", "type": "string", "default": "java", "advanced": true }
+  ],
+  "ports": [{ "name": "game", "variable": "SERVER_PORT", "protocol": "tcp" }],
+  "query": { "type": "minecraft", "portVariable": "SERVER_PORT" },
+  "mods": { "platform": "modrinth", "loader": "fabric", "dir": "mods", "versionVariable": "MC_VERSION" },
+  "playerActions": [
+    { "key": "kick", "label": "Kick", "command": "kick {{PLAYER}}" },
+    { "key": "ban", "label": "Ban", "command": "ban {{PLAYER}}", "confirm": true },
+    { "key": "op", "label": "Op", "command": "op {{PLAYER}}", "confirm": true },
+    { "key": "deop", "label": "Deop", "command": "deop {{PLAYER}}" }
+  ],
+  "configFiles": [
+    {
+      "path": "server.properties",
+      "format": "properties",
+      "mappings": { "SERVER_PORT": "server-port", "MOTD": "motd", "MAX_PLAYERS": "max-players", "ONLINE_MODE": "online-mode" }
+    }
+  ],
+  "readyRegex": "Done \\([0-9.]+s\\)!",
+  "backupExcludes": ["libraries/**", "versions/**", "logs/**", ".cache/**"],
+  "notes": "Quilt loads most Fabric mods (the mod browser uses the Fabric loader index) plus Quilt-native ones — mods go in mods/. Change the Minecraft version by updating the variable and re-running install. Java 21+ recommended for 1.20.5+.",
+  "version": "1"
+}

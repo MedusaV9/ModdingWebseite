@@ -1,0 +1,34 @@
+{
+  "id": "pavlov-vr",
+  "name": "Pavlov VR",
+  "category": "shooter",
+  "description": "The VR shooter (CS-style Search and Destroy, TDM, gun game). Dedicated server installed via SteamCMD (anonymous).",
+  "icon": "target",
+  "color": "#6d28d9",
+  "platforms": ["linux"],
+  "install": [
+    { "type": "steamcmd", "appId": 622970, "validate": true },
+    {
+      "type": "writeFile",
+      "path": "Pavlov/Saved/Config/LinuxServer/Game.ini",
+      "content": "[/Script/Pavlov.DedicatedServer]\nbEnabled=true\nServerName=\"{{HOSTNAME}}\"\nMaxPlayers={{MAX_PLAYERS}}\nbSecured=true\nMapRotation=(MapId=\"datacenter\", GameMode=\"SND\")\nMapRotation=(MapId=\"sand\", GameMode=\"SND\")\n"
+    }
+  ],
+  "startCommand": "./PavlovServer.sh Pavlov -Log -Port={{SERVER_PORT}}",
+  "stop": { "type": "signal", "signal": "SIGTERM", "timeoutS": 30 },
+  "variables": [
+    { "key": "HOSTNAME", "label": "Server name", "type": "string", "default": "Between Pavlov Server", "required": true },
+    { "key": "MAX_PLAYERS", "label": "Max players", "type": "number", "default": 10, "min": 1, "max": 24 },
+    { "key": "SERVER_PORT", "label": "Game port (UDP)", "description": "Pavlov also uses game port + 400 for pings (default 8177). Open both.", "type": "number", "default": 7777, "min": 1024, "max": 65135, "isPort": true },
+    { "key": "PING_PORT", "label": "Ping port (UDP)", "description": "Always game port + 400. Keep this in sync with the game port.", "type": "number", "default": 8177, "min": 1024, "max": 65535, "isPort": true, "advanced": true }
+  ],
+  "ports": [
+    { "name": "game", "variable": "SERVER_PORT", "protocol": "udp" },
+    { "name": "ping", "variable": "PING_PORT", "protocol": "udp" }
+  ],
+  "query": { "type": "none" },
+  "configFiles": [{ "path": "Pavlov/Saved/Config/LinuxServer/Game.ini", "format": "ini", "mappings": { "MAX_PLAYERS": "/Script/Pavlov.DedicatedServer.MaxPlayers" } }],
+  "backupExcludes": ["steamapps/**"],
+  "notes": "Pavlov's server needs GLIBC 2.27+ and a steamclient.so reachable by the launcher script — if startup fails with a missing steamclient.so, symlink it from the panel's SteamCMD linux64 directory into ~/.steam/sdk64/. Map rotation, gamemodes and passwords live in Pavlov/Saved/Config/LinuxServer/Game.ini; Pavlov's RCON (RconSettings.txt) is a custom telnet-style protocol, not Source RCON.",
+  "version": "1"
+}

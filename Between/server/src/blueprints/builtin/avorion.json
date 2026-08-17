@@ -1,0 +1,30 @@
+{
+  "id": "avorion",
+  "name": "Avorion",
+  "category": "sandbox",
+  "description": "Procedural space sandbox — build ships block by block. Dedicated server installed via SteamCMD (anonymous).",
+  "icon": "rocket",
+  "color": "#0284c7",
+  "platforms": ["linux", "win32"],
+  "install": [{ "type": "steamcmd", "appId": 565060, "validate": true }],
+  "startCommand": "./server.sh --galaxy-name {{GALAXY_NAME}} --datapath ./galaxies --server-name \"{{HOSTNAME}}\" --port {{SERVER_PORT}} --query-port {{QUERY_PORT}} --steam-master-port {{STEAM_MASTER_PORT}} --max-players {{MAX_PLAYERS}}",
+  "stop": { "type": "command", "command": "/stop", "timeoutS": 60 },
+  "variables": [
+    { "key": "GALAXY_NAME", "label": "Galaxy name", "description": "Folder name of the galaxy under galaxies/ (created on first start).", "type": "string", "default": "avorion_galaxy", "pattern": "^[A-Za-z0-9_-]+$", "required": true },
+    { "key": "HOSTNAME", "label": "Server name", "type": "string", "default": "Between Avorion Server", "required": true },
+    { "key": "SERVER_PORT", "label": "Game port (TCP+UDP)", "type": "number", "default": 27000, "min": 1024, "max": 65535, "isPort": true },
+    { "key": "QUERY_PORT", "label": "Steam query port (UDP)", "type": "number", "default": 27003, "min": 1024, "max": 65535, "isPort": true },
+    { "key": "STEAM_MASTER_PORT", "label": "Steam master port (UDP)", "type": "number", "default": 27021, "min": 1024, "max": 65535, "isPort": true, "advanced": true },
+    { "key": "MAX_PLAYERS", "label": "Max players", "type": "number", "default": 10, "min": 1, "max": 100 }
+  ],
+  "ports": [
+    { "name": "game", "variable": "SERVER_PORT", "protocol": "both" },
+    { "name": "query", "variable": "QUERY_PORT", "protocol": "udp" },
+    { "name": "steam", "variable": "STEAM_MASTER_PORT", "protocol": "udp" }
+  ],
+  "query": { "type": "source", "portVariable": "QUERY_PORT" },
+  "configFiles": [{ "path": "galaxies/{{GALAXY_NAME}}/server.ini", "format": "ini" }],
+  "backupExcludes": ["steamapps/**"],
+  "notes": "server.sh wraps the AvorionServer binary and sets its library paths. Galaxy data and server.ini live under galaxies/<galaxy-name>/ after the first start; add admins with --admin <SteamID64> on the start command or via the in-game console. The console accepts commands starting with / — /stop saves and shuts down, /save forces a save. Windows hosts: set the start command override to bin\\AvorionServer.exe with the same arguments.",
+  "version": "1"
+}

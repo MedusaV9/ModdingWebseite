@@ -1,0 +1,25 @@
+{
+  "id": "unturned",
+  "name": "Unturned",
+  "category": "survival",
+  "description": "Free-to-play blocky zombie survival. Dedicated server (U3DS) installed via SteamCMD (anonymous).",
+  "icon": "tent",
+  "color": "#84cc16",
+  "platforms": ["linux", "win32"],
+  "install": [{ "type": "steamcmd", "appId": 1110390, "validate": true }],
+  "startCommand": "./ServerHelper.sh +InternetServer/{{WORLD_NAME}}",
+  "stop": { "type": "command", "command": "shutdown", "timeoutS": 30 },
+  "variables": [
+    { "key": "WORLD_NAME", "label": "Server instance name", "description": "Name of the folder under Servers/ that holds this server's config and saves.", "type": "string", "default": "Default", "pattern": "^[A-Za-z0-9_-]+$", "required": true },
+    { "key": "SERVER_PORT", "label": "Game port (UDP)", "description": "Set with 'Port <number>' in Servers/<name>/Server/Commands.dat (default 27015).", "type": "number", "default": 27015, "min": 1024, "max": 65534, "isPort": true },
+    { "key": "QUERY_PORT", "label": "Query port (UDP)", "description": "Always game port + 1.", "type": "number", "default": 27016, "min": 1024, "max": 65535, "isPort": true, "advanced": true }
+  ],
+  "ports": [
+    { "name": "game", "variable": "SERVER_PORT", "protocol": "udp" },
+    { "name": "query", "variable": "QUERY_PORT", "protocol": "udp" }
+  ],
+  "query": { "type": "source", "portVariable": "QUERY_PORT" },
+  "backupExcludes": ["steamapps/**"],
+  "notes": "Server settings live in Servers/<name>/Server/Commands.dat (Name, Port, Password, Map, Perspective ...) — created after the first start. The A2S query port is always game port + 1. Windows hosts: set the start command override to ServerHelper.bat +InternetServer/{{WORLD_NAME}}.",
+  "version": "1"
+}

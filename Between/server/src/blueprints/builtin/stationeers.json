@@ -1,0 +1,20 @@
+{
+  "id": "stationeers",
+  "name": "Stationeers",
+  "category": "simulation",
+  "description": "Hard-science space station engineering and survival. Dedicated server installed via SteamCMD (anonymous).",
+  "icon": "rocket",
+  "color": "#ea580c",
+  "platforms": ["linux", "win32"],
+  "install": [{ "type": "steamcmd", "appId": 600760, "validate": true }],
+  "startCommand": "./rocketstation_DedicatedServer.x86_64 -batchmode -nographics",
+  "stop": { "type": "signal", "signal": "SIGTERM", "timeoutS": 30 },
+  "variables": [
+    { "key": "SERVER_PORT", "label": "Game port (UDP)", "description": "Default game port 27016; change it in the server settings file or with launch options.", "type": "number", "default": 27016, "min": 1024, "max": 65535, "isPort": true }
+  ],
+  "ports": [{ "name": "game", "variable": "SERVER_PORT", "protocol": "udp" }],
+  "query": { "type": "none" },
+  "backupExcludes": ["steamapps/**"],
+  "notes": "Configure the server (name, password, save) via the settings file created on first run (setting.xml / default.ini in the server directory) or with launch options such as -loadlatest <savename> <worldtype> appended to the start command. Windows hosts: set the start command override to rocketstation_DedicatedServer.exe -batchmode -nographics.",
+  "version": "1"
+}

@@ -1,0 +1,20 @@
+{
+  "id": "risk-of-rain-2",
+  "name": "Risk of Rain 2",
+  "category": "shooter",
+  "description": "Co-op roguelike third-person shooter. Windows dedicated server installed via SteamCMD (anonymous).",
+  "icon": "gamepad-2",
+  "color": "#3b82f6",
+  "platforms": ["win32"],
+  "install": [{ "type": "steamcmd", "appId": 1180760, "validate": true }],
+  "startCommand": "RoR2DS.exe",
+  "stop": { "type": "signal", "signal": "SIGTERM", "timeoutS": 30 },
+  "variables": [
+    { "key": "SERVER_PORT", "label": "Game port (UDP)", "description": "steam_server_query_port / game port (default 27015); change via console cvars or an autoexec config.", "type": "number", "default": 27015, "min": 1024, "max": 65535, "isPort": true }
+  ],
+  "ports": [{ "name": "game", "variable": "SERVER_PORT", "protocol": "udp" }],
+  "query": { "type": "source", "portVariable": "SERVER_PORT" },
+  "backupExcludes": ["steamapps/**"],
+  "notes": "The server is configured through console cvars (steam_server_name, steam_server_password, sv_maxplayers ...) which can be typed into the panel console or placed in Risk of Rain 2_Data/Config/server.cfg. Some setups additionally require the Steam client libraries to be present on the host. The server binary is Windows-only.",
+  "version": "1"
+}

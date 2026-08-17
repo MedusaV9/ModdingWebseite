@@ -1,0 +1,30 @@
+{
+  "id": "zombie-panic-source",
+  "name": "Zombie Panic! Source",
+  "category": "shooter",
+  "description": "Free classic survivors-vs-zombies Source mod. SRCDS dedicated server installed via SteamCMD (anonymous).",
+  "icon": "skull",
+  "color": "#166534",
+  "platforms": ["linux", "win32"],
+  "install": [
+    { "type": "steamcmd", "appId": 17505, "validate": true },
+    { "type": "writeFile", "path": "zps/cfg/server.cfg", "content": "hostname \"{{HOSTNAME}}\"\nsv_region 255\n" }
+  ],
+  "startCommand": "./srcds_run -game zps -port {{SERVER_PORT}} +map {{MAP}} +maxplayers {{MAX_PLAYERS}} +rcon_password \"{{RCON_PASSWORD}}\"",
+  "stop": { "type": "command", "command": "quit", "timeoutS": 30 },
+  "variables": [
+    { "key": "SERVER_PORT", "label": "Game port", "type": "number", "default": 27015, "min": 1024, "max": 65535, "isPort": true },
+    { "key": "MAP", "label": "Start map", "description": "Objective maps use the zpo_ prefix, survival maps zps_ (e.g. zpo_frozenheart, zps_deadend).", "type": "string", "default": "zpo_frozenheart", "required": true },
+    { "key": "HOSTNAME", "label": "Server name", "type": "string", "default": "Between ZPS Server", "required": true },
+    { "key": "MAX_PLAYERS", "label": "Max players", "type": "number", "default": 20, "min": 1, "max": 32 },
+    { "key": "RCON_PASSWORD", "label": "RCON password", "description": "Enables console commands via Source RCON (on the game port) when set. Leave empty to disable RCON.", "type": "password", "default": "", "advanced": true }
+  ],
+  "ports": [{ "name": "game", "variable": "SERVER_PORT", "protocol": "both" }],
+  "query": { "type": "source", "portVariable": "SERVER_PORT" },
+  "rcon": { "portVariable": "SERVER_PORT", "passwordVariable": "RCON_PASSWORD" },
+  "playerActions": [{ "key": "kick", "label": "Kick", "command": "kick {{PLAYER}}" }],
+  "configFiles": [{ "path": "zps/cfg/server.cfg", "format": "keyvalue", "mappings": { "HOSTNAME": "hostname" } }],
+  "backupExcludes": ["steamapps/**", "zps/download/**"],
+  "notes": "The game and its server are free. Server config lives in zps/cfg/server.cfg. Windows hosts: set the start command override to srcds.exe -game zps with the same arguments.",
+  "version": "1"
+}

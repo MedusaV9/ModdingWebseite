@@ -1,0 +1,49 @@
+{
+  "id": "minecraft-bedrock",
+  "name": "Minecraft: Bedrock Edition",
+  "category": "minecraft",
+  "description": "The official Minecraft Bedrock dedicated server (for phones, consoles and Windows 10/11 clients), downloaded from Mojang.",
+  "icon": "box",
+  "color": "#10b981",
+  "platforms": ["linux", "win32"],
+  "install": [
+    { "type": "download", "url": "{{BEDROCK_URL}}", "target": "bedrock-server.zip", "extract": true },
+    {
+      "type": "writeFile",
+      "path": "server.properties",
+      "content": "server-name={{MOTD}}\ngamemode=survival\ndifficulty=easy\nallow-cheats=false\nmax-players={{MAX_PLAYERS}}\nonline-mode=true\nserver-port={{SERVER_PORT}}\nserver-portv6=19133\nview-distance=32\nplayer-idle-timeout=30\nlevel-name=Bedrock level\n"
+    }
+  ],
+  "startCommand": "./bedrock_server",
+  "stop": { "type": "command", "command": "stop", "timeoutS": 30 },
+  "variables": [
+    {
+      "key": "BEDROCK_URL",
+      "label": "Server download URL",
+      "description": "Version-pinned zip URL from minecraft.net/download/server/bedrock. Use the bin-linux zip on Linux hosts and the bin-win zip on Windows hosts, then re-run install to update.",
+      "type": "string",
+      "default": "https://minecraft.azureedge.net/bin-linux/bedrock-server-1.21.44.01.zip",
+      "required": true
+    },
+    { "key": "SERVER_PORT", "label": "Server port (UDP)", "type": "number", "default": 19132, "min": 1024, "max": 65535, "isPort": true },
+    { "key": "MOTD", "label": "Server name", "type": "string", "default": "Dedicated Server" },
+    { "key": "MAX_PLAYERS", "label": "Max players", "type": "number", "default": 10, "min": 1, "max": 200 },
+    { "key": "LD_LIBRARY_PATH", "label": "LD_LIBRARY_PATH (Linux)", "description": "Exported to the server process so the bundled libraries are found. Leave as-is.", "type": "string", "default": ".", "advanced": true }
+  ],
+  "ports": [{ "name": "game", "variable": "SERVER_PORT", "protocol": "udp" }],
+  "query": { "type": "none" },
+  "playerActions": [
+    { "key": "kick", "label": "Kick", "command": "kick {{PLAYER}}" },
+    { "key": "ban", "label": "Ban", "command": "ban {{PLAYER}}", "confirm": true }
+  ],
+  "configFiles": [
+    {
+      "path": "server.properties",
+      "format": "properties",
+      "mappings": { "SERVER_PORT": "server-port", "MOTD": "server-name", "MAX_PLAYERS": "max-players" }
+    }
+  ],
+  "readyRegex": "Server started\\.",
+  "notes": "Mojang's download URL is version-pinned — grab the current URL from the official download page when you want to update (the CDN can reject requests without a browser-like User-Agent; if the download fails, fetch the zip manually and extract it via the file manager). Worlds live in worlds/, permissions in allowlist.json and permissions.json. Windows hosts: the same start command works (resolves to bedrock_server.exe).",
+  "version": "1"
+}

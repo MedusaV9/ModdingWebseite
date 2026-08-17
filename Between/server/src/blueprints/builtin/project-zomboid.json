@@ -1,0 +1,26 @@
+{
+  "id": "project-zomboid",
+  "name": "Project Zomboid",
+  "category": "survival",
+  "description": "The hardcore isometric zombie survival sandbox. Dedicated server installed via SteamCMD (anonymous).",
+  "icon": "footprints",
+  "color": "#ef4444",
+  "platforms": ["linux", "win32"],
+  "install": [{ "type": "steamcmd", "appId": 380870, "validate": true }],
+  "startCommand": "./start-server.sh -servername {{WORLD_NAME}} -adminpassword {{ADMIN_PASSWORD}}",
+  "stop": { "type": "command", "command": "quit", "timeoutS": 60 },
+  "variables": [
+    { "key": "WORLD_NAME", "label": "Server/world name", "description": "Name of the server config and save set (no spaces).", "type": "string", "default": "servertest", "pattern": "^[A-Za-z0-9_-]+$", "required": true },
+    { "key": "ADMIN_PASSWORD", "label": "Admin password", "description": "Password for the in-game 'admin' account (set non-interactively on first boot).", "type": "password", "default": "changeme", "required": true },
+    { "key": "SERVER_PORT", "label": "Game port (UDP)", "description": "Must match DefaultPort in the server .ini (default 16261).", "type": "number", "default": 16261, "min": 1024, "max": 65534, "isPort": true },
+    { "key": "DIRECT_PORT", "label": "Direct connection port (UDP)", "description": "Second UDP port, default game port + 1.", "type": "number", "default": 16262, "min": 1024, "max": 65535, "isPort": true, "advanced": true }
+  ],
+  "ports": [
+    { "name": "game", "variable": "SERVER_PORT", "protocol": "udp" },
+    { "name": "direct", "variable": "DIRECT_PORT", "protocol": "udp" }
+  ],
+  "query": { "type": "source", "portVariable": "SERVER_PORT" },
+  "backupExcludes": ["steamapps/**"],
+  "notes": "Passing -adminpassword avoids the interactive admin-password prompt on first boot. Server config and saves are stored in ~/Zomboid/ (Server/<name>.ini, Saves/Multiplayer/) — outside the server directory, so panel backups do not include them by default; add -cachedir=./Zomboid to the start command to keep them local. Windows hosts: set the start command override to StartServer64.bat with the same arguments.",
+  "version": "1"
+}

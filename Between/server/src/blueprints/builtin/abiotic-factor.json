@@ -1,0 +1,28 @@
+{
+  "id": "abiotic-factor",
+  "name": "Abiotic Factor",
+  "category": "survival",
+  "description": "Co-op survival crafting in a secret underground research facility. Dedicated server installed via SteamCMD (anonymous); the server binary is a Windows executable.",
+  "icon": "flask",
+  "color": "#65a30d",
+  "platforms": ["linux", "win32"],
+  "install": [{ "type": "steamcmd", "appId": 2857200, "validate": true, "platformOverride": "windows" }],
+  "startCommand": "AbioticFactor/Binaries/Win64/AbioticFactorServer-Win64-Shipping.exe -log -useperfthreads -NoAsyncLoadingThread -MaxServerPlayers={{MAX_PLAYERS}} -PORT={{SERVER_PORT}} -QueryPort={{QUERY_PORT}} -ServerPassword=\"{{SERVER_PASSWORD}}\" -SteamServerName=\"{{HOSTNAME}}\" -WorldSaveName=\"{{WORLD_NAME}}\"",
+  "stop": { "type": "signal", "signal": "SIGTERM", "timeoutS": 60 },
+  "variables": [
+    { "key": "HOSTNAME", "label": "Server name", "type": "string", "default": "Between Abiotic Factor Server", "required": true },
+    { "key": "WORLD_NAME", "label": "World save name", "type": "string", "default": "Cascade", "pattern": "^[A-Za-z0-9_-]+$", "required": true },
+    { "key": "MAX_PLAYERS", "label": "Max players", "type": "number", "default": 6, "min": 1, "max": 32 },
+    { "key": "SERVER_PORT", "label": "Game port (UDP)", "type": "number", "default": 7777, "min": 1024, "max": 65535, "isPort": true },
+    { "key": "QUERY_PORT", "label": "Query port (UDP)", "type": "number", "default": 27015, "min": 1024, "max": 65535, "isPort": true },
+    { "key": "SERVER_PASSWORD", "label": "Join password", "description": "Empty = no password.", "type": "password", "default": "" }
+  ],
+  "ports": [
+    { "name": "game", "variable": "SERVER_PORT", "protocol": "udp" },
+    { "name": "query", "variable": "QUERY_PORT", "protocol": "udp" }
+  ],
+  "query": { "type": "source", "portVariable": "QUERY_PORT" },
+  "backupExcludes": ["steamapps/**"],
+  "notes": "The install always fetches the Windows depot (platformOverride) — on Linux hosts run it with Wine/Proton (start command override: wine AbioticFactor/Binaries/Win64/AbioticFactorServer-Win64-Shipping.exe ... with the same arguments). Saves live under AbioticFactor/Saved/SaveGames/Server/. Sandbox settings (difficulty, loot rates) can be tweaked in the world's SandboxSettings.ini after first start.",
+  "version": "1"
+}

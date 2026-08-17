@@ -1,0 +1,93 @@
+{
+  "id": "custom-command",
+  "name": "Custom Server (own command)",
+  "category": "custom",
+  "description": "Bring your own binary: point Between at any server executable or script. Optionally download and extract an archive first. Full console, backups, schedules and monitoring included.",
+  "icon": "wrench",
+  "color": "#a3a3a3",
+  "platforms": [
+    "linux",
+    "win32",
+    "darwin"
+  ],
+  "docker": {
+    "image": "debian:bookworm-slim",
+    "images": [
+      {
+        "label": "Debian 12 (slim)",
+        "image": "debian:bookworm-slim"
+      },
+      {
+        "label": "Ubuntu 24.04",
+        "image": "ubuntu:24.04"
+      },
+      {
+        "label": "Node 22",
+        "image": "node:22-bookworm-slim"
+      },
+      {
+        "label": "Java 21",
+        "image": "eclipse-temurin:21-jre"
+      }
+    ]
+  },
+  "install": [
+    {
+      "type": "download",
+      "url": "{{INSTALL_URL}}",
+      "target": "{{INSTALL_TARGET}}",
+      "extract": true
+    }
+  ],
+  "startCommand": "{{START_CMD}}",
+  "stop": {
+    "type": "signal",
+    "signal": "SIGINT",
+    "timeoutS": 30
+  },
+  "variables": [
+    {
+      "key": "START_CMD",
+      "label": "Start command",
+      "description": "Executed in the server directory, e.g. ./start.sh or java -jar server.jar",
+      "type": "string",
+      "default": "./start.sh",
+      "required": true
+    },
+    {
+      "key": "INSTALL_URL",
+      "label": "Install download URL (optional)",
+      "description": "Archive (.zip/.tar.gz) or single file to download during install. Leave empty to skip.",
+      "type": "string",
+      "default": ""
+    },
+    {
+      "key": "INSTALL_TARGET",
+      "label": "Download target name",
+      "description": "File name to save the download as (archives are extracted automatically).",
+      "type": "string",
+      "default": "server-files.zip",
+      "advanced": true
+    },
+    {
+      "key": "SERVER_PORT",
+      "label": "Main port (for your reference)",
+      "type": "number",
+      "default": 27015,
+      "min": 1,
+      "max": 65535,
+      "isPort": true
+    }
+  ],
+  "ports": [
+    {
+      "name": "game",
+      "variable": "SERVER_PORT",
+      "protocol": "both"
+    }
+  ],
+  "query": {
+    "type": "none"
+  },
+  "notes": "If your server has a graceful console stop command, override the stop behavior in the server settings."
+}

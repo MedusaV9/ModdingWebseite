@@ -1,0 +1,25 @@
+{
+  "id": "vintage-story",
+  "name": "Vintage Story",
+  "category": "survival",
+  "description": "Uncompromising wilderness survival sandbox with deep crafting. Official server tarball downloaded from cdn.vintagestory.at.",
+  "icon": "trees",
+  "color": "#78716c",
+  "platforms": ["linux"],
+  "install": [
+    { "type": "download", "url": "https://cdn.vintagestory.at/gamefiles/stable/vs_server_linux-x64_{{VS_VERSION}}.tar.gz", "target": "vs_server.tar.gz", "extract": true },
+    { "type": "command", "command": "chmod +x VintagestoryServer server.sh 2>/dev/null || true" },
+    { "type": "mkdir", "path": "data" }
+  ],
+  "startCommand": "./VintagestoryServer --dataPath ./data --port {{SERVER_PORT}}",
+  "stop": { "type": "command", "command": "/stop", "timeoutS": 60 },
+  "variables": [
+    { "key": "VS_VERSION", "label": "Vintage Story version", "description": "Exact stable version, e.g. 1.20.1 — used in the download URL. Re-run install after changing it.", "type": "string", "default": "1.20.1", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$", "required": true },
+    { "key": "SERVER_PORT", "label": "Server port (TCP)", "type": "number", "default": 42420, "min": 1024, "max": 65535, "isPort": true }
+  ],
+  "ports": [{ "name": "game", "variable": "SERVER_PORT", "protocol": "tcp" }],
+  "query": { "type": "none" },
+  "backupExcludes": ["Lib/**", "assets/**"],
+  "notes": "Recent server tarballs bundle a self-contained .NET runtime, so no dotnet install is needed on the host. All server data (serverconfig.json, Saves/, Logs/, Mods) lives under ./data thanks to --dataPath, so panel backups capture worlds. Console commands start with '/' — '/stop' saves and shuts down gracefully.",
+  "version": "1"
+}

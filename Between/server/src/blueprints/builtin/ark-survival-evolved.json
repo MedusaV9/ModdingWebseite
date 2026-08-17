@@ -1,0 +1,47 @@
+{
+  "id": "ark-survival-evolved",
+  "name": "ARK: Survival Evolved",
+  "category": "survival",
+  "description": "Tame dinosaurs and survive on a hostile island. Dedicated server installed via SteamCMD (anonymous); large download.",
+  "icon": "mountain",
+  "color": "#0d9488",
+  "platforms": ["linux", "win32"],
+  "install": [{ "type": "steamcmd", "appId": 376030, "validate": true }],
+  "startCommand": "./ShooterGame/Binaries/Linux/ShooterGameServer \"{{MAP}}?listen?SessionName={{SESSION_NAME}}?Port={{SERVER_PORT}}?QueryPort={{QUERY_PORT}}?MaxPlayers={{MAX_PLAYERS}}?ServerAdminPassword={{ADMIN_PASSWORD}}\" -server -log",
+  "stop": { "type": "signal", "signal": "SIGINT", "timeoutS": 120 },
+  "variables": [
+    {
+      "key": "MAP",
+      "label": "Map",
+      "type": "enum",
+      "default": "TheIsland",
+      "options": [
+        { "value": "TheIsland", "label": "The Island" },
+        { "value": "TheCenter", "label": "The Center" },
+        { "value": "ScorchedEarth_P", "label": "Scorched Earth" },
+        { "value": "Ragnarok", "label": "Ragnarok" },
+        { "value": "Aberration_P", "label": "Aberration" },
+        { "value": "Extinction", "label": "Extinction" },
+        { "value": "Valguero_P", "label": "Valguero" },
+        { "value": "CrystalIsles", "label": "Crystal Isles" },
+        { "value": "LostIsland", "label": "Lost Island" },
+        { "value": "Fjordur", "label": "Fjordur" }
+      ]
+    },
+    { "key": "SESSION_NAME", "label": "Session name", "description": "Server name shown in the browser (avoid spaces; they break the launch URL).", "type": "string", "default": "Between-ARK-Server", "pattern": "^[^?\\s]+$", "required": true },
+    { "key": "SERVER_PORT", "label": "Game port (UDP)", "description": "ARK also uses game port + 1 (raw UDP socket).", "type": "number", "default": 7777, "min": 1024, "max": 65534, "isPort": true },
+    { "key": "QUERY_PORT", "label": "Query port (UDP)", "type": "number", "default": 27015, "min": 1024, "max": 65535, "isPort": true },
+    { "key": "MAX_PLAYERS", "label": "Max players", "type": "number", "default": 70, "min": 1, "max": 200 },
+    { "key": "ADMIN_PASSWORD", "label": "Admin password", "type": "password", "default": "changeme", "required": true },
+    { "key": "RCON_PORT", "label": "RCON port (TCP)", "description": "Only used if RCONEnabled=True and RCONPort are set under [ServerSettings] in GameUserSettings.ini; RCON authenticates with the admin password.", "type": "number", "default": 27020, "min": 1024, "max": 65535, "isPort": true, "advanced": true }
+  ],
+  "ports": [
+    { "name": "game", "variable": "SERVER_PORT", "protocol": "udp" },
+    { "name": "query", "variable": "QUERY_PORT", "protocol": "udp" }
+  ],
+  "query": { "type": "source", "portVariable": "QUERY_PORT" },
+  "rcon": { "portVariable": "RCON_PORT", "passwordVariable": "ADMIN_PASSWORD" },
+  "backupExcludes": ["steamapps/**"],
+  "notes": "Also open UDP game port + 1 (default 7778). Raise the open-files limit on Linux (ulimit -n 100000) or the server may crash under load. Fine-tuning lives in ShooterGame/Saved/Config/LinuxServer/GameUserSettings.ini and Game.ini; saves in ShooterGame/Saved/SavedArks/. Windows hosts: set the start command override to ShooterGame\\Binaries\\Win64\\ShooterGameServer.exe with the same arguments.",
+  "version": "1"
+}

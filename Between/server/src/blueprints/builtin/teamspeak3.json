@@ -1,0 +1,42 @@
+{
+  "id": "teamspeak3",
+  "name": "TeamSpeak 3 Server",
+  "category": "voice",
+  "description": "The classic low-latency voice server. Official tarball downloaded from files.teamspeak-services.com (version-pinned).",
+  "icon": "network",
+  "color": "#2563eb",
+  "platforms": ["linux"],
+  "install": [
+    { "type": "download", "url": "https://files.teamspeak-services.com/releases/server/{{TS3_VERSION}}/teamspeak3-server_linux_amd64-{{TS3_VERSION}}.tar.bz2", "target": "ts3.tar.bz2", "extract": false },
+    { "type": "command", "command": "tar -xjf ts3.tar.bz2 --strip-components=1 && rm ts3.tar.bz2" }
+  ],
+  "startCommand": "./ts3server_minimal_runscript.sh default_voice_port={{VOICE_PORT}} query_port={{QUERY_PORT}} filetransfer_port={{FILE_TRANSFER_PORT}} license_accepted={{LICENSE_ACCEPTED}}",
+  "stop": { "type": "signal", "signal": "SIGTERM", "timeoutS": 30 },
+  "variables": [
+    { "key": "TS3_VERSION", "label": "TeamSpeak 3 server version", "description": "Exact version used in the download URL. Re-run install after changing it.", "type": "string", "default": "3.13.7", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$", "required": true },
+    {
+      "key": "LICENSE_ACCEPTED",
+      "label": "Accept the TeamSpeak license",
+      "description": "You must accept the TeamSpeak 3 server license (LICENSE file in the server directory) to run the server.",
+      "type": "enum",
+      "default": "0",
+      "options": [
+        { "value": "0", "label": "Not accepted (server will not start)" },
+        { "value": "1", "label": "Accepted" }
+      ],
+      "required": true
+    },
+    { "key": "VOICE_PORT", "label": "Voice port (UDP)", "type": "number", "default": 9987, "min": 1024, "max": 65535, "isPort": true },
+    { "key": "QUERY_PORT", "label": "ServerQuery port (TCP)", "type": "number", "default": 10011, "min": 1024, "max": 65535, "isPort": true, "advanced": true },
+    { "key": "FILE_TRANSFER_PORT", "label": "File transfer port (TCP)", "type": "number", "default": 30033, "min": 1024, "max": 65535, "isPort": true, "advanced": true }
+  ],
+  "ports": [
+    { "name": "voice", "variable": "VOICE_PORT", "protocol": "udp" },
+    { "name": "query", "variable": "QUERY_PORT", "protocol": "tcp" },
+    { "name": "files", "variable": "FILE_TRANSFER_PORT", "protocol": "tcp" }
+  ],
+  "query": { "type": "none" },
+  "backupExcludes": ["logs/**"],
+  "notes": "IMPORTANT: on the FIRST start the console prints the serveradmin ServerQuery password and a one-time admin privilege key — copy both from the console before they scroll away. All state lives in ts3server.sqlitedb in the server directory. Do not expose the ServerQuery port publicly without query_ip_allowlist tuning. This blueprint covers the classic TS3 server; the new TeamSpeak (6) server is a separate product.",
+  "version": "1"
+}
