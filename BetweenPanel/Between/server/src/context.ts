@@ -14,6 +14,7 @@ import type { WsHub } from './ws/hub.ts'
 import type { Collection } from './lib/jsonstore.ts'
 import type { PanelSettings } from './types.ts'
 import type { DockerService } from './services/docker.ts'
+import type { FileAccessService } from './services/fileaccess.ts'
 import type { NodeService } from './nodes/service.ts'
 import type { ServerGateway } from './nodes/gateway.ts'
 
@@ -34,6 +35,8 @@ export interface AppContext {
   docker: DockerService
   hub: WsHub
   settings: Collection<PanelSettings>
+  /** SFTP file-access config + provider seam (placeholder provider in v1). */
+  fileAccess: FileAccessService
   /** Remote node registry + health/mirror poller (inert in node-agent mode). */
   nodes: NodeService
   /** Local-vs-remote dispatch facade used by the server-scoped API routes. */

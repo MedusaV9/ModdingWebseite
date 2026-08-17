@@ -268,6 +268,29 @@ export function miscRouter(ctx: AppContext): Router {
     res.json({ settings: currentSettings(ctx) })
   })
 
+  // --- File access over standard protocols (SFTP) -------------------------------
+  // v1 ships the config model + an honest placeholder provider; the embedded
+  // SFTP listener arrives in a later wave (see services/fileaccess.ts).
+  router.get('/fileaccess', requireAdmin, (_req, res) => {
+    res.json({ sftp: ctx.fileAccess.status() })
+  })
+
+  router.patch(
+    '/fileaccess',
+    requireAdmin,
+    asyncHandler(async (req: AuthedRequest, res) => {
+      const { enabled, port, bind } = (req.body ?? {}) as Record<string, unknown>
+      const result = await ctx.fileAccess.applyConfig({
+        ...(enabled !== undefined ? { enabled: Boolean(enabled) } : {}),
+        ...(port !== undefined ? { port: port as number } : {}),
+        ...(bind !== undefined ? { bind: bind as string } : {}),
+      })
+      if (!result.ok) throw new HttpError(400, result.problems.join('; '))
+      ctx.audit.log(req, 'settings.updated', { meta: { keys: ['sftp'] } })
+      res.json({ sftp: ctx.fileAccess.status() })
+    }),
+  )
+
   // Deliver a `test` payload to the configured generic webhook so admins can
   // verify their receiver without waiting for a real event.
   router.post(

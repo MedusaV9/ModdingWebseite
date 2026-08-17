@@ -337,6 +337,11 @@ export interface PanelSettings extends Doc {
    * one interactive login, SteamCMD caches the session on disk afterwards).
    */
   steamUser?: string | null
+  /**
+   * File access over SFTP (config model only in v1 — the embedded listener
+   * arrives in a later wave). See services/fileaccess.ts.
+   */
+  sftp?: { enabled: boolean; port: number; bind: string }
 }
 
 // ---------------------------------------------------------------------------

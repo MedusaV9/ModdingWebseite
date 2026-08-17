@@ -10,6 +10,7 @@ import { BlueprintRegistry } from './blueprints/registry.ts'
 import { SteamCmdManager } from './steam/steamcmd.ts'
 import { SteamLoginService } from './steam/login.ts'
 import { DockerService } from './services/docker.ts'
+import { FileAccessService } from './services/fileaccess.ts'
 import { ServerManager } from './servers/manager.ts'
 import { BackupService } from './services/backups.ts'
 import { ScheduleService } from './services/schedules.ts'
@@ -62,6 +63,7 @@ export function createApp(overrides: Partial<PanelConfig> = {}): BetweenApp {
   const steamLogin = new SteamLoginService(steam, settings)
   const docker = new DockerService()
   const notifier = new Notifier(settings)
+  const fileAccess = new FileAccessService(settings)
 
   // Hub and schedule service are created after the manager; hooks close over these refs.
   let hub: WsHub
@@ -126,7 +128,7 @@ export function createApp(overrides: Partial<PanelConfig> = {}): BetweenApp {
   const metrics = new MetricsService(config.dataDir)
   metrics.onSample((snap) => hub.broadcast('system', { t: 'metrics', snap }))
 
-  const ctx: AppContext = { config, store, auth, manager, backups, schedules, metrics, audit, notifier, registry, steam, steamLogin, docker, hub, settings, nodes, gateway }
+  const ctx: AppContext = { config, store, auth, manager, backups, schedules, metrics, audit, notifier, registry, steam, steamLogin, docker, fileAccess, hub, settings, nodes, gateway }
   currentSettings(ctx) // ensure defaults exist
   // Warm the docker availability cache (sync callers read lastInfo).
   void docker.info().then((info) => {
@@ -224,6 +226,7 @@ export function createApp(overrides: Partial<PanelConfig> = {}): BetweenApp {
       bridge.stop()
       metrics.stop()
       notifier.stop()
+      await fileAccess.stop()
       hub.close()
       shell.close()
       await manager.shutdownAll()

@@ -41,7 +41,7 @@ Legende: ✅ vorhanden (Parität oder besser) · 🟡 teilweise · ❌ fehlt
 | **Scheduler** | Zeit- + Event-Trigger, Task-Ketten | Cron + Event-Trigger (Status + Player-Join/Leave), Task-Ketten, Template-Variablen, Run-Historie, Debounce | ✅ | Welle 2: Intervall-Trigger („alle N Minuten" ohne Cron-Syntax), mehr Events |
 | **Backups** | Lokal + S3-Upload, Retention | Zip, Locking, Notizen, Retention, Restore mit Safety-Backup | 🟡 | Welle 2: S3/objektbasierte Remote-Ziele, Backup-Zeitpläne-Presets |
 | **User/Rollen** | Rollen, Feingranular, LDAP | Admin/User + 12 Subuser-Rechte/Server, 2FA + Recovery, API-Keys mit Scopes, Audit | 🟡 | Welle 3: Rollen-Templates, LDAP/OIDC optional |
-| **SFTP** | Eingebauter SFTP-Server pro Instanz | **fehlte** → **Welle 1: eingebetteter SSH/SFTP-Server (handgerollt, zero-dep), Zugang pro Benutzer×Instanz, `safeJoin`-Sandbox** | ❌→✅ | Welle 2: Public-Key-Auth, SFTP auf Remote-Nodes |
+| **SFTP** | Eingebauter SFTP-Server pro Instanz | **Welle 1: saubere Schnittstelle** — Konfigurationsmodell (`settings.sftp`: enabled/port/bind), Provider-Seam + ehrlicher Platzhalter-Service (`services/fileaccess.ts`), Admin-API `GET`/`PATCH /api/fileaccess` (Aktivieren wird in v1 mit klarer Meldung abgelehnt) | ❌→🟡 | **Welle 2: konkrete Implementierung** (eingebetteter SSH/SFTP-Listener, s. §4.4); Welle 3: Public-Key-Auth, SFTP auf Remote-Nodes |
 | **FileManager** | Browser, Editor, Upload | Browser + Editor + Streaming-Upload/-Download, Drag&Drop (auch Ordner), rename/copy/move, Archiv/Extract (zip-slip-sicher), Bildvorschau, Rechte-Gating | ✅ | — (besser als AMP) |
 | **Metrics** | CPU/RAM pro Instanz, Spieler | Host- + Instanz-Metriken mit Historie (Reload-fest), Spielerlisten (A2S/MC) mit Quick-Actions | ✅ | Welle 2: längere Historie/Persistenz, Alarme |
 | **Templates (Generic)** | Generic Module + 237 `.kvp`-Community-Templates | Blueprint-JSON (73 builtin) + Egg-Import + Katalog; **Welle 1: Datei-Template-Loader (`data/templates/`, JSON + YAML) + dokumentiertes Format (`docs/TEMPLATES.md`)** | 🟡→✅ | Welle 2+: AMPTemplates-Lücken schließen (siehe Checkliste), `.kvp`-Import-Konverter |
@@ -53,7 +53,7 @@ Legende: ✅ vorhanden (Parität oder besser) · 🟡 teilweise · ❌ fehlt
 | **UI/UX** | WinForms-artige Web-UI | Liquid-Glass-Designsystem, Mobile-First, 2 Sprachen, 8 Themes, PWA, A11y | ✅ | — (deutlich besser) |
 | **Lizenz/Betrieb** | Kommerziell, Lizenzserver | Self-hosted, keine Lizenz, eine Node-Binary | ✅ | — |
 
-**Zusammenfassung:** Nach Welle 1 sind die beiden echten strukturellen Lücken zu AMP — **SFTP** und ein **dokumentiertes, dateibasiertes Generic-Template-System** — geschlossen. Verbleibende Teil-Lücken (S3-Backups, Workshop-Browser, Remote-Node-Parität, LDAP) sind in Welle 2/3 eingeplant.
+**Zusammenfassung:** Welle 1 schließt die Template-Lücke (**dokumentiertes, dateibasiertes Generic-Template-System**) vollständig und legt für die zweite strukturelle Lücke (**SFTP**) die stabile Schnittstelle an (Konfigurationsmodell + Provider-Seam + Platzhalter-Service, API-Fläche final) — der konkrete Protokoll-Listener folgt in Welle 2 und tauscht nur noch die Provider-Instanz aus. Verbleibende Teil-Lücken (S3-Backups, Workshop-Browser, Remote-Node-Parität, LDAP) sind in Welle 2/3 eingeplant.
 
 ---
 
@@ -312,8 +312,11 @@ Jedes nicht abgehakte Spiel ist über `custom-steamcmd` / `custom-command` / Egg
 1. **Dieses Dokument** (Audit + Matrix + Checkliste).
 2. **Generic-Instance-Template-System**: dokumentiertes deklaratives Template-Format (JSON **und** YAML) = Blueprint-Schema (steamcmd-app/docker-image, start-command, ports, env/variables, config-files, update über `steamAutoUpdate`/Reinstall); neuer **Datei-Template-Loader** (`data/templates/*.json|*.yaml|*.yml` — Drop-in wie bei AMPs Generic-Templates, Rescan zur Laufzeit per API/UI); Format-Doku `Between/docs/TEMPLATES.md`; Beispiel-Templates in `Between/templates/`. Die geforderten 10 Spiele (Minecraft Java/Bedrock, Valheim, Palworld, Rust, ARK, Terraria, Satisfactory, Factorio, 7DTD) existieren als kuratierte Builtins und zusätzlich als Datei-Template-Beispiele.
 3. **File-Manager-Backend**: existierte bereits vollständig (siehe Matrix) — Audit + Testabdeckung verifiziert, keine Lücken gefunden.
-4. **SFTP pro Instanz**: eingebetteter SSH-/SFTP-Server (handgerollt auf node:crypto, zero-dep wie der Rest des Panels): curve25519-sha256-KEX, ssh-ed25519-Hostkey, AES-CTR + HMAC-SHA2, Passwort-Auth gegen **pro Benutzer×Server** generierte SFTP-Zugangsdaten, jede Session strikt auf das Server-Verzeichnis gesandboxt (`safeJoin`), Rechte (`server.files.read`/`write`) bei jeder Operation re-validiert. UI-Karte im Files-Tab.
-5. **Tests**: bestehende Suite grün halten; neue Unit-/Integrationstests für Template-Loader, YAML-Dokument-Parser und SFTP (echter OpenSSH-Client als Gegenstelle); Docker-Instanz-Smoke-Test, wenn ein Daemon verfügbar ist.
+4. **Dateizugriff per Standard-Protokoll — Schnittstelle** (Implementierung folgt in Welle 2):
+   - **Wie die etablierten Panels es machen:** *Pterodactyl* bettet in den Wings-Daemon einen eigenen SFTP-Server ein (Standard-Port **2022**, kein OpenSSH beteiligt); Login ist `panelBenutzername.serverKurzId` mit dem Panel-Passwort (alternativ hinterlegte SSH-Keys), jede Session ist auf das Verzeichnis genau dieses Servers gejailt und die Panel-Rechte werden pro Operation durchgesetzt. *AMP* bettet den SFTP-über-SSH-Listener direkt in den jeweiligen Instanz-Prozess ein (ein Port pro Instanz); AMP-Panel-Zugangsdaten loggen sich direkt ein und sehen nur das Wurzelverzeichnis dieser Instanz. Gemeinsamer Nenner: **kein System-SSH, kein OS-Benutzer pro Spieler** — der Panel-Prozess spricht das Protokoll selbst und erzwingt sein eigenes Rechte-/Sandbox-Modell.
+   - **Between-Zielbild (Welle 2):** EIN eingebetteter, dependency-freier SFTP-Listener pro Panel/Agent (Pterodactyl-Muster, nicht ein Port pro Instanz), Zugangsdaten **pro Benutzer×Server**, jede Session durch dieselbe `safeJoin`-Sandbox wie der Web-Dateimanager, `server.files.read`/`write` bei **jeder** Operation re-validiert (entzogene Rechte beenden offene Sessions — dieselbe Invariante wie bei den WebSocket-Hubs).
+   - **In dieser Welle gebaut:** Konfigurationsmodell (`PanelSettings.sftp`: `enabled`/`port` (Default 2022)/`bind`), Provider-Interface `FileAccessProvider` (start/stop/running — genau das, was der echte Listener implementieren wird), ehrlicher `SftpPlaceholderProvider` (meldet `implemented: false` und verweigert das Aktivieren mit klarer Meldung, statt still nichts zu tun), `FileAccessService` mit Validierung/Persistenz/Reconcile + Shutdown-Pfad in `app.stop()`, Admin-API `GET`/`PATCH /api/fileaccess`. Die API-Fläche und Verdrahtung bleiben beim Tausch auf den echten Provider byte-identisch.
+5. **Tests**: bestehende Suite grün halten; neue Unit-/Integrationstests für Template-Loader, YAML-Dokument-Parser und die File-Access-Schnittstelle (inkl. Fake-Provider, der den Start/Stop/Reconcile-Lebenszyklus des künftigen echten Listeners beweist); Docker-Instanz-Smoke-Test, wenn ein Daemon verfügbar ist.
 
 ## 5. Welle 2+ — Plan
 
@@ -321,10 +324,10 @@ Jedes nicht abgehakte Spiel ist über `custom-steamcmd` / `custom-command` / Egg
 - **Scheduler**: Intervall-Trigger, mehr Events (Backup fertig, Update verfügbar), Zeitzonen-Anzeige.
 - **Backups**: S3-kompatible Remote-Ziele (zero-dep SigV4-Client), Backup-Verifikation, Download-Streaming von Remote-Nodes.
 - **Metrics**: persistente Langzeit-Historie (Downsampling), Schwellwert-Alarme → Webhooks.
-- **Remote-Node-Parität**: Config-Editor/Schedules/Clone/Zip auf Nodes, SFTP auf Nodes (Agent-seitiger SFTP-Listener), Steam-Login pro Node.
+- **Remote-Node-Parität**: Config-Editor/Schedules/Clone/Zip auf Nodes, Steam-Login pro Node (SFTP auf Nodes folgt in Welle 3, nach der Basis-Implementierung).
 - **Templates**: `.kvp`-Import-Konverter (AMPTemplates direkt einlesen), nächste Builtin-Charge aus der Checkliste (~30 Spiele: Luanti, BeamMP, DayZ, Starbound, TShock, CS 1.6/CZ, Quake III, UT99/2004, OpenRA-Familie, App-Runner-Familie, …), Wine/Proton-Unterstützung für Windows-only-Server unter Linux (Docker-Image-Preset).
 - **Rust WebRCON** + weitere Query-Protokolle (FiveM, TeamSpeak ServerQuery).
-- **SFTP v2**: Public-Key-Auth, optionale Read-only-Accounts, SCP-Kompatibilität.
+- **SFTP-Implementierung**: der echte eingebettete SSH-/SFTP-Listener hinter dem Welle-1-Provider-Seam (handgerollt auf node:crypto, zero-dep wie der Rest des Panels: curve25519-sha256-KEX, ssh-ed25519-Hostkey, AES-CTR + HMAC-SHA2), Passwort-Auth gegen pro Benutzer×Server generierte Zugangsdaten, `safeJoin`-Sandbox, Rechte-Re-Check pro Operation, UI-Karte im Files-Tab; getestet gegen einen echten OpenSSH-/`sftp`-Client. Danach (Welle 3): Public-Key-Auth, Read-only-Accounts, SFTP auf Remote-Nodes.
 
 **Welle 3 (Komfort/Enterprise):**
 - Steam-Workshop- und CurseForge-Browser (analog Modrinth).
