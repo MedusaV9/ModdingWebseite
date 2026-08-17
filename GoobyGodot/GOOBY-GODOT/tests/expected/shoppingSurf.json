@@ -1,0 +1,1812 @@
+{
+  "modes": {
+    "easy": [
+      {
+        "seed": 1,
+        "score": 1298,
+        "distanceM": 962.1530000000081,
+        "coins": 168,
+        "crashes": 4,
+        "elapsed": 122.03333333332897,
+        "ended": true
+      },
+      {
+        "seed": 2,
+        "score": 2489,
+        "distanceM": 1959.7491666667368,
+        "coins": 265,
+        "crashes": 0,
+        "elapsed": 179.99999999999235,
+        "ended": false
+      },
+      {
+        "seed": 3,
+        "score": 2102,
+        "distanceM": 1606.2195000000413,
+        "coins": 245,
+        "crashes": 2,
+        "elapsed": 179.99999999999235,
+        "ended": false
+      },
+      {
+        "seed": 4,
+        "score": 1680,
+        "distanceM": 1280.03483333333,
+        "coins": 198,
+        "crashes": 4,
+        "elapsed": 157.16666666666032,
+        "ended": true
+      },
+      {
+        "seed": 5,
+        "score": 1494,
+        "distanceM": 1068.2938333333527,
+        "coins": 210,
+        "crashes": 4,
+        "elapsed": 138.23333333332806,
+        "ended": true
+      },
+      {
+        "seed": 6,
+        "score": 2050,
+        "distanceM": 1544.047333333335,
+        "coins": 252,
+        "crashes": 2,
+        "elapsed": 179.99999999999235,
+        "ended": false
+      },
+      {
+        "seed": 7,
+        "score": 2242,
+        "distanceM": 1696.4861666667027,
+        "coins": 272,
+        "crashes": 2,
+        "elapsed": 179.99999999999235,
+        "ended": false
+      },
+      {
+        "seed": 8,
+        "score": 1928,
+        "distanceM": 1450.6369999999615,
+        "coins": 238,
+        "crashes": 3,
+        "elapsed": 179.99999999999235,
+        "ended": false
+      },
+      {
+        "seed": 9,
+        "score": 1893,
+        "distanceM": 1421.0288333333651,
+        "coins": 232,
+        "crashes": 4,
+        "elapsed": 178.3666666666591,
+        "ended": true
+      },
+      {
+        "seed": 10,
+        "score": 915,
+        "distanceM": 679.6943333333393,
+        "coins": 117,
+        "crashes": 4,
+        "elapsed": 93.59999999999725,
+        "ended": true
+      },
+      {
+        "seed": 11,
+        "score": 1422,
+        "distanceM": 1068.1438333333285,
+        "coins": 176,
+        "crashes": 4,
+        "elapsed": 133.33333333332834,
+        "ended": true
+      },
+      {
+        "seed": 12,
+        "score": 1177,
+        "distanceM": 891.7054999999838,
+        "coins": 143,
+        "crashes": 4,
+        "elapsed": 117.83333333332921,
+        "ended": true
+      },
+      {
+        "seed": 13,
+        "score": 2575,
+        "distanceM": 1931.0618333333748,
+        "coins": 322,
+        "crashes": 1,
+        "elapsed": 179.99999999999235,
+        "ended": false
+      },
+      {
+        "seed": 14,
+        "score": 1964,
+        "distanceM": 1456.0764999999758,
+        "coins": 253,
+        "crashes": 4,
+        "elapsed": 177.0666666666592,
+        "ended": true
+      },
+      {
+        "seed": 15,
+        "score": 1501,
+        "distanceM": 1103.5665000000204,
+        "coins": 197,
+        "crashes": 4,
+        "elapsed": 139.03333333332802,
+        "ended": true
+      },
+      {
+        "seed": 16,
+        "score": 2326,
+        "distanceM": 1796.9756666666683,
+        "coins": 262,
+        "crashes": 3,
+        "elapsed": 179.99999999999235,
+        "ended": false
+      },
+      {
+        "seed": 17,
+        "score": 2182,
+        "distanceM": 1672.083000000019,
+        "coins": 253,
+        "crashes": 2,
+        "elapsed": 179.99999999999235,
+        "ended": false
+      },
+      {
+        "seed": 18,
+        "score": 1330,
+        "distanceM": 998.8053333333327,
+        "coins": 165,
+        "crashes": 4,
+        "elapsed": 128.7333333333286,
+        "ended": true
+      },
+      {
+        "seed": 19,
+        "score": 2105,
+        "distanceM": 1613.7999999999881,
+        "coins": 244,
+        "crashes": 1,
+        "elapsed": 179.99999999999235,
+        "ended": false
+      },
+      {
+        "seed": 20,
+        "score": 2082,
+        "distanceM": 1562.7323333333857,
+        "coins": 260,
+        "crashes": 3,
+        "elapsed": 179.99999999999235,
+        "ended": false
+      },
+      {
+        "seed": 21,
+        "score": 2080,
+        "distanceM": 1612.7466666666733,
+        "coins": 233,
+        "crashes": 1,
+        "elapsed": 179.99999999999235,
+        "ended": false
+      },
+      {
+        "seed": 22,
+        "score": 2123,
+        "distanceM": 1643.5640000000412,
+        "coins": 240,
+        "crashes": 2,
+        "elapsed": 179.99999999999235,
+        "ended": false
+      },
+      {
+        "seed": 23,
+        "score": 2186,
+        "distanceM": 1622.1335000000522,
+        "coins": 281,
+        "crashes": 2,
+        "elapsed": 179.99999999999235,
+        "ended": false
+      },
+      {
+        "seed": 24,
+        "score": 1955,
+        "distanceM": 1487.0401666666621,
+        "coins": 232,
+        "crashes": 3,
+        "elapsed": 179.99999999999235,
+        "ended": false
+      },
+      {
+        "seed": 25,
+        "score": 1218,
+        "distanceM": 938.7831666666743,
+        "coins": 140,
+        "crashes": 4,
+        "elapsed": 125.63333333332876,
+        "ended": true
+      },
+      {
+        "seed": 26,
+        "score": 2217,
+        "distanceM": 1681.5000000000327,
+        "coins": 268,
+        "crashes": 2,
+        "elapsed": 179.99999999999235,
+        "ended": false
+      },
+      {
+        "seed": 27,
+        "score": 1585,
+        "distanceM": 1175.3036666666808,
+        "coins": 205,
+        "crashes": 4,
+        "elapsed": 150.13333333332739,
+        "ended": true
+      },
+      {
+        "seed": 28,
+        "score": 2282,
+        "distanceM": 1750.6456666666675,
+        "coins": 265,
+        "crashes": 3,
+        "elapsed": 179.99999999999235,
+        "ended": false
+      },
+      {
+        "seed": 29,
+        "score": 2211,
+        "distanceM": 1583.3956666667177,
+        "coins": 311,
+        "crashes": 2,
+        "elapsed": 179.99999999999235,
+        "ended": false
+      },
+      {
+        "seed": 30,
+        "score": 1928,
+        "distanceM": 1470.777499999948,
+        "coins": 227,
+        "crashes": 3,
+        "elapsed": 179.99999999999235,
+        "ended": false
+      },
+      {
+        "seed": 31,
+        "score": 1980,
+        "distanceM": 1488.052566666724,
+        "coins": 243,
+        "crashes": 3,
+        "elapsed": 179.99999999999235,
+        "ended": false
+      },
+      {
+        "seed": 32,
+        "score": 1959,
+        "distanceM": 1525.8893333333644,
+        "coins": 216,
+        "crashes": 3,
+        "elapsed": 179.99999999999235,
+        "ended": false
+      },
+      {
+        "seed": 33,
+        "score": 1497,
+        "distanceM": 1103.841066666672,
+        "coins": 196,
+        "crashes": 4,
+        "elapsed": 144.89999999999435,
+        "ended": true
+      },
+      {
+        "seed": 34,
+        "score": 1901,
+        "distanceM": 1451.920166666661,
+        "coins": 224,
+        "crashes": 3,
+        "elapsed": 179.99999999999235,
+        "ended": false
+      },
+      {
+        "seed": 35,
+        "score": 2043,
+        "distanceM": 1529.5425000000466,
+        "coins": 256,
+        "crashes": 2,
+        "elapsed": 179.99999999999235,
+        "ended": false
+      },
+      {
+        "seed": 36,
+        "score": 1951,
+        "distanceM": 1473.1412000000175,
+        "coins": 237,
+        "crashes": 2,
+        "elapsed": 179.99999999999235,
+        "ended": false
+      },
+      {
+        "seed": 37,
+        "score": 1908,
+        "distanceM": 1438.3310000000074,
+        "coins": 235,
+        "crashes": 3,
+        "elapsed": 179.99999999999235,
+        "ended": false
+      },
+      {
+        "seed": 38,
+        "score": 1989,
+        "distanceM": 1537.0103333333464,
+        "coins": 226,
+        "crashes": 2,
+        "elapsed": 179.99999999999235,
+        "ended": false
+      },
+      {
+        "seed": 39,
+        "score": 1705,
+        "distanceM": 1315.1316666667205,
+        "coins": 194,
+        "crashes": 4,
+        "elapsed": 163.89999999999327,
+        "ended": true
+      },
+      {
+        "seed": 40,
+        "score": 2158,
+        "distanceM": 1628.228333333378,
+        "coins": 264,
+        "crashes": 1,
+        "elapsed": 179.99999999999235,
+        "ended": false
+      },
+      {
+        "seed": 41,
+        "score": 1206,
+        "distanceM": 926.9871666666543,
+        "coins": 139,
+        "crashes": 4,
+        "elapsed": 122.13333333332896,
+        "ended": true
+      },
+      {
+        "seed": 42,
+        "score": 2392,
+        "distanceM": 1796.7390000000232,
+        "coins": 298,
+        "crashes": 2,
+        "elapsed": 179.99999999999235,
+        "ended": false
+      },
+      {
+        "seed": 43,
+        "score": 2092,
+        "distanceM": 1580.991633333352,
+        "coins": 254,
+        "crashes": 3,
+        "elapsed": 179.99999999999235,
+        "ended": false
+      },
+      {
+        "seed": 44,
+        "score": 2625,
+        "distanceM": 1959.3628333333968,
+        "coins": 331,
+        "crashes": 1,
+        "elapsed": 179.99999999999235,
+        "ended": false
+      },
+      {
+        "seed": 45,
+        "score": 2155,
+        "distanceM": 1591.3968333333921,
+        "coins": 280,
+        "crashes": 2,
+        "elapsed": 179.99999999999235,
+        "ended": false
+      },
+      {
+        "seed": 46,
+        "score": 1979,
+        "distanceM": 1535.4365000000016,
+        "coins": 220,
+        "crashes": 3,
+        "elapsed": 179.99999999999235,
+        "ended": false
+      },
+      {
+        "seed": 47,
+        "score": 2062,
+        "distanceM": 1534.8346666667135,
+        "coins": 263,
+        "crashes": 3,
+        "elapsed": 179.99999999999235,
+        "ended": false
+      },
+      {
+        "seed": 48,
+        "score": 2038,
+        "distanceM": 1598.9720000000493,
+        "coins": 219,
+        "crashes": 2,
+        "elapsed": 179.99999999999235,
+        "ended": false
+      },
+      {
+        "seed": 49,
+        "score": 2005,
+        "distanceM": 1493.0965000000508,
+        "coins": 254,
+        "crashes": 4,
+        "elapsed": 179.86666666665903,
+        "ended": true
+      },
+      {
+        "seed": 50,
+        "score": 2251,
+        "distanceM": 1677.808833333358,
+        "coins": 287,
+        "crashes": 1,
+        "elapsed": 179.99999999999235,
+        "ended": false
+      }
+    ],
+    "normal": [
+      {
+        "seed": 1,
+        "score": 706,
+        "distanceM": 520.4916666666675,
+        "coins": 92,
+        "crashes": 3,
+        "elapsed": 62.333333333332355,
+        "ended": true
+      },
+      {
+        "seed": 2,
+        "score": 2309,
+        "distanceM": 1699.2641666666648,
+        "coins": 302,
+        "crashes": 2,
+        "elapsed": 179.99999999999235,
+        "ended": false
+      },
+      {
+        "seed": 3,
+        "score": 1583,
+        "distanceM": 1119.932499999998,
+        "coins": 229,
+        "crashes": 3,
+        "elapsed": 123.19999999999557,
+        "ended": true
+      },
+      {
+        "seed": 4,
+        "score": 1138,
+        "distanceM": 822.1799999999806,
+        "coins": 158,
+        "crashes": 3,
+        "elapsed": 93.66666666666391,
+        "ended": true
+      },
+      {
+        "seed": 5,
+        "score": 819,
+        "distanceM": 609.304166666655,
+        "coins": 104,
+        "crashes": 3,
+        "elapsed": 71.1666666666652,
+        "ended": true
+      },
+      {
+        "seed": 6,
+        "score": 824,
+        "distanceM": 610.9750000000118,
+        "coins": 107,
+        "crashes": 3,
+        "elapsed": 71.19999999999852,
+        "ended": true
+      },
+      {
+        "seed": 7,
+        "score": 1140,
+        "distanceM": 822.0824999999758,
+        "coins": 159,
+        "crashes": 3,
+        "elapsed": 92.86666666666396,
+        "ended": true
+      },
+      {
+        "seed": 8,
+        "score": 2388,
+        "distanceM": 1664.0100000000164,
+        "coins": 362,
+        "crashes": 3,
+        "elapsed": 167.2333333333264,
+        "ended": true
+      },
+      {
+        "seed": 9,
+        "score": 1156,
+        "distanceM": 822.0391666666476,
+        "coins": 167,
+        "crashes": 3,
+        "elapsed": 94.96666666666384,
+        "ended": true
+      },
+      {
+        "seed": 10,
+        "score": 773,
+        "distanceM": 579.0949999999948,
+        "coins": 97,
+        "crashes": 3,
+        "elapsed": 68.1999999999987,
+        "ended": true
+      },
+      {
+        "seed": 11,
+        "score": 1178,
+        "distanceM": 822.0908333333675,
+        "coins": 177,
+        "crashes": 3,
+        "elapsed": 92.83333333333063,
+        "ended": true
+      },
+      {
+        "seed": 12,
+        "score": 1527,
+        "distanceM": 1089.3574999999873,
+        "coins": 218,
+        "crashes": 3,
+        "elapsed": 112.36666666666285,
+        "ended": true
+      },
+      {
+        "seed": 13,
+        "score": 2275,
+        "distanceM": 1693.9083333333476,
+        "coins": 291,
+        "crashes": 3,
+        "elapsed": 173.6999999999927,
+        "ended": true
+      },
+      {
+        "seed": 14,
+        "score": 2033,
+        "distanceM": 1509.09083333335,
+        "coins": 260,
+        "crashes": 3,
+        "elapsed": 156.89999999999367,
+        "ended": true
+      },
+      {
+        "seed": 15,
+        "score": 1137,
+        "distanceM": 849.2008333333429,
+        "coins": 142,
+        "crashes": 3,
+        "elapsed": 93.69999999999725,
+        "ended": true
+      },
+      {
+        "seed": 16,
+        "score": 2025,
+        "distanceM": 1479.1658333333592,
+        "coins": 272,
+        "crashes": 3,
+        "elapsed": 154.43333333332714,
+        "ended": true
+      },
+      {
+        "seed": 17,
+        "score": 928,
+        "distanceM": 668.9966666666671,
+        "coins": 130,
+        "crashes": 3,
+        "elapsed": 79.16666666666474,
+        "ended": true
+      },
+      {
+        "seed": 18,
+        "score": 2472,
+        "distanceM": 1812.7191666666365,
+        "coins": 328,
+        "crashes": 2,
+        "elapsed": 179.99999999999235,
+        "ended": false
+      },
+      {
+        "seed": 19,
+        "score": 841,
+        "distanceM": 639.5441666666552,
+        "coins": 101,
+        "crashes": 3,
+        "elapsed": 75.59999999999827,
+        "ended": true
+      },
+      {
+        "seed": 20,
+        "score": 1836,
+        "distanceM": 1332.276666666648,
+        "coins": 252,
+        "crashes": 3,
+        "elapsed": 143.13333333332778,
+        "ended": true
+      },
+      {
+        "seed": 21,
+        "score": 1415,
+        "distanceM": 1043.1333333333105,
+        "coins": 184,
+        "crashes": 3,
+        "elapsed": 103.56666666666335,
+        "ended": true
+      },
+      {
+        "seed": 22,
+        "score": 1235,
+        "distanceM": 911.6866666666583,
+        "coins": 161,
+        "crashes": 3,
+        "elapsed": 103.33333333333003,
+        "ended": true
+      },
+      {
+        "seed": 23,
+        "score": 2403,
+        "distanceM": 1791.053833333341,
+        "coins": 305,
+        "crashes": 3,
+        "elapsed": 176.29999999999256,
+        "ended": true
+      },
+      {
+        "seed": 24,
+        "score": 1376,
+        "distanceM": 998.9566666666918,
+        "coins": 189,
+        "crashes": 3,
+        "elapsed": 109.69999999999634,
+        "ended": true
+      },
+      {
+        "seed": 25,
+        "score": 1275,
+        "distanceM": 941.5200000000104,
+        "coins": 167,
+        "crashes": 3,
+        "elapsed": 107.83333333332978,
+        "ended": true
+      },
+      {
+        "seed": 26,
+        "score": 1521,
+        "distanceM": 1059.5616666666485,
+        "coins": 230,
+        "crashes": 3,
+        "elapsed": 114.16666666666275,
+        "ended": true
+      },
+      {
+        "seed": 27,
+        "score": 1621,
+        "distanceM": 1119.9633333333427,
+        "coins": 249,
+        "crashes": 3,
+        "elapsed": 125.33333333332878,
+        "ended": true
+      },
+      {
+        "seed": 28,
+        "score": 1471,
+        "distanceM": 1075.590833333337,
+        "coins": 196,
+        "crashes": 3,
+        "elapsed": 121.73333333332899,
+        "ended": true
+      },
+      {
+        "seed": 29,
+        "score": 2185,
+        "distanceM": 1599.0849999999932,
+        "coins": 292,
+        "crashes": 3,
+        "elapsed": 170.13333333332625,
+        "ended": true
+      },
+      {
+        "seed": 30,
+        "score": 764,
+        "distanceM": 564.0933333333296,
+        "coins": 99,
+        "crashes": 3,
+        "elapsed": 67.76666666666539,
+        "ended": true
+      },
+      {
+        "seed": 31,
+        "score": 2327,
+        "distanceM": 1691.8274999999858,
+        "coins": 317,
+        "crashes": 2,
+        "elapsed": 179.99999999999235,
+        "ended": false
+      },
+      {
+        "seed": 32,
+        "score": 1801,
+        "distanceM": 1299.2341666666953,
+        "coins": 251,
+        "crashes": 3,
+        "elapsed": 137.9666666666614,
+        "ended": true
+      },
+      {
+        "seed": 33,
+        "score": 934,
+        "distanceM": 700.0316666666606,
+        "coins": 117,
+        "crashes": 3,
+        "elapsed": 82.43333333333122,
+        "ended": true
+      },
+      {
+        "seed": 34,
+        "score": 1711,
+        "distanceM": 1269.4258333333194,
+        "coins": 220,
+        "crashes": 3,
+        "elapsed": 135.33333333332823,
+        "ended": true
+      },
+      {
+        "seed": 35,
+        "score": 607,
+        "distanceM": 459.38999999999623,
+        "coins": 74,
+        "crashes": 3,
+        "elapsed": 53.533333333332855,
+        "ended": true
+      },
+      {
+        "seed": 36,
+        "score": 2252,
+        "distanceM": 1602.3608333333216,
+        "coins": 323,
+        "crashes": 3,
+        "elapsed": 170.69999999999288,
+        "ended": true
+      },
+      {
+        "seed": 37,
+        "score": 1883,
+        "distanceM": 1359.360833333389,
+        "coins": 261,
+        "crashes": 3,
+        "elapsed": 142.69999999999447,
+        "ended": true
+      },
+      {
+        "seed": 38,
+        "score": 1262,
+        "distanceM": 910.1283333333017,
+        "coins": 174,
+        "crashes": 3,
+        "elapsed": 103.46666666666336,
+        "ended": true
+      },
+      {
+        "seed": 39,
+        "score": 1633,
+        "distanceM": 1179.4074999999848,
+        "coins": 226,
+        "crashes": 3,
+        "elapsed": 125.29999999999545,
+        "ended": true
+      },
+      {
+        "seed": 40,
+        "score": 1944,
+        "distanceM": 1422.604999999962,
+        "coins": 260,
+        "crashes": 3,
+        "elapsed": 153.46666666666053,
+        "ended": true
+      },
+      {
+        "seed": 41,
+        "score": 2506,
+        "distanceM": 1900.8491666666876,
+        "coins": 302,
+        "crashes": 2,
+        "elapsed": 179.99999999999235,
+        "ended": false
+      },
+      {
+        "seed": 42,
+        "score": 631,
+        "distanceM": 459.4374999999911,
+        "coins": 86,
+        "crashes": 3,
+        "elapsed": 54.16666666666615,
+        "ended": true
+      },
+      {
+        "seed": 43,
+        "score": 2484,
+        "distanceM": 1776.7350000000172,
+        "coins": 352,
+        "crashes": 2,
+        "elapsed": 179.99999999999235,
+        "ended": false
+      },
+      {
+        "seed": 44,
+        "score": 803,
+        "distanceM": 579.7150000000009,
+        "coins": 112,
+        "crashes": 3,
+        "elapsed": 69.09999999999864,
+        "ended": true
+      },
+      {
+        "seed": 45,
+        "score": 611,
+        "distanceM": 429.2416666666698,
+        "coins": 91,
+        "crashes": 3,
+        "elapsed": 52.566666666666244,
+        "ended": true
+      },
+      {
+        "seed": 46,
+        "score": 1055,
+        "distanceM": 789.4208333332949,
+        "coins": 132,
+        "crashes": 3,
+        "elapsed": 88.53333333333087,
+        "ended": true
+      },
+      {
+        "seed": 47,
+        "score": 949,
+        "distanceM": 699.843333333315,
+        "coins": 124,
+        "crashes": 3,
+        "elapsed": 77.86666666666481,
+        "ended": true
+      },
+      {
+        "seed": 48,
+        "score": 2646,
+        "distanceM": 1962.990000000025,
+        "coins": 338,
+        "crashes": 2,
+        "elapsed": 179.99999999999235,
+        "ended": false
+      },
+      {
+        "seed": 49,
+        "score": 1115,
+        "distanceM": 789.8050000000154,
+        "coins": 159,
+        "crashes": 3,
+        "elapsed": 90.63333333333075,
+        "ended": true
+      },
+      {
+        "seed": 50,
+        "score": 2064,
+        "distanceM": 1542.7591666666287,
+        "coins": 261,
+        "crashes": 3,
+        "elapsed": 165.56666666665984,
+        "ended": true
+      }
+    ],
+    "hard": [
+      {
+        "seed": 1,
+        "score": 1095,
+        "distanceM": 769.683500000022,
+        "coins": 161,
+        "crashes": 3,
+        "elapsed": 75.29999999999829,
+        "ended": true
+      },
+      {
+        "seed": 2,
+        "score": 708,
+        "distanceM": 480.8278333333293,
+        "coins": 112,
+        "crashes": 3,
+        "elapsed": 49.566666666666414,
+        "ended": true
+      },
+      {
+        "seed": 3,
+        "score": 1446,
+        "distanceM": 976.107500000019,
+        "coins": 232,
+        "crashes": 3,
+        "elapsed": 94.86666666666385,
+        "ended": true
+      },
+      {
+        "seed": 4,
+        "score": 784,
+        "distanceM": 570.8485000000102,
+        "coins": 106,
+        "crashes": 3,
+        "elapsed": 57.09999999999932,
+        "ended": true
+      },
+      {
+        "seed": 5,
+        "score": 632,
+        "distanceM": 454.04766666666893,
+        "coins": 88,
+        "crashes": 3,
+        "elapsed": 46.06666666666661,
+        "ended": true
+      },
+      {
+        "seed": 6,
+        "score": 806,
+        "distanceM": 594.9262333333403,
+        "coins": 104,
+        "crashes": 3,
+        "elapsed": 59.43333333333252,
+        "ended": true
+      },
+      {
+        "seed": 7,
+        "score": 1251,
+        "distanceM": 899.509666666692,
+        "coins": 175,
+        "crashes": 3,
+        "elapsed": 88.83333333333086,
+        "ended": true
+      },
+      {
+        "seed": 8,
+        "score": 2655,
+        "distanceM": 1941.398666666659,
+        "coins": 355,
+        "crashes": 3,
+        "elapsed": 171.5666666666595,
+        "ended": true
+      },
+      {
+        "seed": 9,
+        "score": 1209,
+        "distanceM": 857.3103333333581,
+        "coins": 174,
+        "crashes": 3,
+        "elapsed": 83.8999999999978,
+        "ended": true
+      },
+      {
+        "seed": 10,
+        "score": 1775,
+        "distanceM": 1265.7364333333269,
+        "coins": 253,
+        "crashes": 3,
+        "elapsed": 115.699999999996,
+        "ended": true
+      },
+      {
+        "seed": 11,
+        "score": 1309,
+        "distanceM": 921.9260000000074,
+        "coins": 192,
+        "crashes": 3,
+        "elapsed": 86.93333333333096,
+        "ended": true
+      },
+      {
+        "seed": 12,
+        "score": 1129,
+        "distanceM": 819.8168333333293,
+        "coins": 154,
+        "crashes": 3,
+        "elapsed": 77.39999999999817,
+        "ended": true
+      },
+      {
+        "seed": 13,
+        "score": 616,
+        "distanceM": 426.43850000000145,
+        "coins": 94,
+        "crashes": 3,
+        "elapsed": 44.5666666666667,
+        "ended": true
+      },
+      {
+        "seed": 14,
+        "score": 957,
+        "distanceM": 635.0498333333435,
+        "coins": 160,
+        "crashes": 3,
+        "elapsed": 63.233333333332304,
+        "ended": true
+      },
+      {
+        "seed": 15,
+        "score": 1628,
+        "distanceM": 1156.7559999999885,
+        "coins": 235,
+        "crashes": 3,
+        "elapsed": 108.66666666666306,
+        "ended": true
+      },
+      {
+        "seed": 16,
+        "score": 699,
+        "distanceM": 491.68016666667006,
+        "coins": 102,
+        "crashes": 3,
+        "elapsed": 50.033333333333054,
+        "ended": true
+      },
+      {
+        "seed": 17,
+        "score": 503,
+        "distanceM": 375.6394999999985,
+        "coins": 62,
+        "crashes": 3,
+        "elapsed": 39.06666666666701,
+        "ended": true
+      },
+      {
+        "seed": 18,
+        "score": 2739,
+        "distanceM": 2031.221833333298,
+        "coins": 351,
+        "crashes": 3,
+        "elapsed": 167.9666666666597,
+        "ended": true
+      },
+      {
+        "seed": 19,
+        "score": 1163,
+        "distanceM": 857.0911666666925,
+        "coins": 147,
+        "crashes": 3,
+        "elapsed": 84.73333333333109,
+        "ended": true
+      },
+      {
+        "seed": 20,
+        "score": 1628,
+        "distanceM": 1156.4739999999842,
+        "coins": 234,
+        "crashes": 3,
+        "elapsed": 105.5333333333299,
+        "ended": true
+      },
+      {
+        "seed": 21,
+        "score": 513,
+        "distanceM": 373.64566666666605,
+        "coins": 69,
+        "crashes": 3,
+        "elapsed": 38.03333333333374,
+        "ended": true
+      },
+      {
+        "seed": 22,
+        "score": 578,
+        "distanceM": 412.40399999999545,
+        "coins": 81,
+        "crashes": 3,
+        "elapsed": 42.70000000000014,
+        "ended": true
+      },
+      {
+        "seed": 23,
+        "score": 869,
+        "distanceM": 637.389166666682,
+        "coins": 115,
+        "crashes": 3,
+        "elapsed": 64.23333333333225,
+        "ended": true
+      },
+      {
+        "seed": 24,
+        "score": 1850,
+        "distanceM": 1316.8178333332917,
+        "coins": 264,
+        "crashes": 3,
+        "elapsed": 125.13333333332879,
+        "ended": true
+      },
+      {
+        "seed": 25,
+        "score": 757,
+        "distanceM": 545.234500000002,
+        "coins": 105,
+        "crashes": 3,
+        "elapsed": 54.99999999999944,
+        "ended": true
+      },
+      {
+        "seed": 26,
+        "score": 1308,
+        "distanceM": 924.4555000000299,
+        "coins": 189,
+        "crashes": 3,
+        "elapsed": 90.73333333333075,
+        "ended": true
+      },
+      {
+        "seed": 27,
+        "score": 647,
+        "distanceM": 479.60150000000004,
+        "coins": 83,
+        "crashes": 3,
+        "elapsed": 47.76666666666652,
+        "ended": true
+      },
+      {
+        "seed": 28,
+        "score": 2649,
+        "distanceM": 1891.0771666666346,
+        "coins": 378,
+        "crashes": 3,
+        "elapsed": 163.89999999999327,
+        "ended": true
+      },
+      {
+        "seed": 29,
+        "score": 1247,
+        "distanceM": 883.9366666666876,
+        "coins": 180,
+        "crashes": 3,
+        "elapsed": 86.79999999999764,
+        "ended": true
+      },
+      {
+        "seed": 30,
+        "score": 1368,
+        "distanceM": 974.2788333333513,
+        "coins": 195,
+        "crashes": 3,
+        "elapsed": 94.26666666666388,
+        "ended": true
+      },
+      {
+        "seed": 31,
+        "score": 1352,
+        "distanceM": 960.1341666666841,
+        "coins": 194,
+        "crashes": 3,
+        "elapsed": 91.19999999999739,
+        "ended": true
+      },
+      {
+        "seed": 32,
+        "score": 1262,
+        "distanceM": 862.7330000000298,
+        "coins": 198,
+        "crashes": 3,
+        "elapsed": 82.93333333333119,
+        "ended": true
+      },
+      {
+        "seed": 33,
+        "score": 1300,
+        "distanceM": 922.3781666666855,
+        "coins": 187,
+        "crashes": 3,
+        "elapsed": 91.46666666666404,
+        "ended": true
+      },
+      {
+        "seed": 34,
+        "score": 2823,
+        "distanceM": 2099.7044999999925,
+        "coins": 360,
+        "crashes": 2,
+        "elapsed": 179.99999999999235,
+        "ended": false
+      },
+      {
+        "seed": 35,
+        "score": 834,
+        "distanceM": 570.8510000000045,
+        "coins": 132,
+        "crashes": 3,
+        "elapsed": 57.3999999999993,
+        "ended": true
+      },
+      {
+        "seed": 36,
+        "score": 1196,
+        "distanceM": 844.0755000000204,
+        "coins": 176,
+        "crashes": 3,
+        "elapsed": 83.19999999999784,
+        "ended": true
+      },
+      {
+        "seed": 37,
+        "score": 1947,
+        "distanceM": 1417.7071999999732,
+        "coins": 263,
+        "crashes": 3,
+        "elapsed": 126.23333333332873,
+        "ended": true
+      },
+      {
+        "seed": 38,
+        "score": 406,
+        "distanceM": 288.31416666666695,
+        "coins": 58,
+        "crashes": 3,
+        "elapsed": 30.20000000000066,
+        "ended": true
+      },
+      {
+        "seed": 39,
+        "score": 941,
+        "distanceM": 675.8080000000066,
+        "coins": 132,
+        "crashes": 3,
+        "elapsed": 67.63333333333206,
+        "ended": true
+      },
+      {
+        "seed": 40,
+        "score": 1092,
+        "distanceM": 768.6561666666831,
+        "coins": 158,
+        "crashes": 3,
+        "elapsed": 77.06666666666486,
+        "ended": true
+      },
+      {
+        "seed": 41,
+        "score": 583,
+        "distanceM": 413.6214999999973,
+        "coins": 84,
+        "crashes": 3,
+        "elapsed": 43.16666666666678,
+        "ended": true
+      },
+      {
+        "seed": 42,
+        "score": 1078,
+        "distanceM": 778.9611666666729,
+        "coins": 147,
+        "crashes": 3,
+        "elapsed": 75.89999999999826,
+        "ended": true
+      },
+      {
+        "seed": 43,
+        "score": 1466,
+        "distanceM": 1026.4120000000316,
+        "coins": 218,
+        "crashes": 3,
+        "elapsed": 100.26666666666354,
+        "ended": true
+      },
+      {
+        "seed": 44,
+        "score": 2011,
+        "distanceM": 1423.2758333333052,
+        "coins": 291,
+        "crashes": 3,
+        "elapsed": 126.0999999999954,
+        "ended": true
+      },
+      {
+        "seed": 45,
+        "score": 421,
+        "distanceM": 297.28433333333345,
+        "coins": 61,
+        "crashes": 3,
+        "elapsed": 31.700000000000735,
+        "ended": true
+      },
+      {
+        "seed": 46,
+        "score": 638,
+        "distanceM": 452.6098333333382,
+        "coins": 89,
+        "crashes": 3,
+        "elapsed": 45.46666666666665,
+        "ended": true
+      },
+      {
+        "seed": 47,
+        "score": 1135,
+        "distanceM": 817.826166666699,
+        "coins": 156,
+        "crashes": 3,
+        "elapsed": 79.7666666666647,
+        "ended": true
+      },
+      {
+        "seed": 48,
+        "score": 941,
+        "distanceM": 649.0849333333499,
+        "coins": 143,
+        "crashes": 3,
+        "elapsed": 64.86666666666555,
+        "ended": true
+      },
+      {
+        "seed": 49,
+        "score": 969,
+        "distanceM": 689.5351666666719,
+        "coins": 138,
+        "crashes": 3,
+        "elapsed": 67.53333333333207,
+        "ended": true
+      },
+      {
+        "seed": 50,
+        "score": 1845,
+        "distanceM": 1351.6596333332845,
+        "coins": 244,
+        "crashes": 3,
+        "elapsed": 117.83333333332921,
+        "ended": true
+      }
+    ],
+    "endless": [
+      {
+        "seed": 1,
+        "score": 1465,
+        "distanceM": 1009.6156666666976,
+        "coins": 225,
+        "crashes": 3,
+        "elapsed": 97.96666666666367,
+        "ended": true
+      },
+      {
+        "seed": 2,
+        "score": 716,
+        "distanceM": 494.9936666666655,
+        "coins": 110,
+        "crashes": 3,
+        "elapsed": 50.933333333333,
+        "ended": true
+      },
+      {
+        "seed": 3,
+        "score": 1206,
+        "distanceM": 820.7446666666914,
+        "coins": 190,
+        "crashes": 3,
+        "elapsed": 79.7666666666647,
+        "ended": true
+      },
+      {
+        "seed": 4,
+        "score": 1886,
+        "distanceM": 1274.7414999999933,
+        "coins": 303,
+        "crashes": 3,
+        "elapsed": 119.53333333332911,
+        "ended": true
+      },
+      {
+        "seed": 5,
+        "score": 612,
+        "distanceM": 436.61600000000215,
+        "coins": 86,
+        "crashes": 3,
+        "elapsed": 44.40000000000004,
+        "ended": true
+      },
+      {
+        "seed": 6,
+        "score": 1433,
+        "distanceM": 1031.3535000000297,
+        "coins": 196,
+        "crashes": 3,
+        "elapsed": 100.83333333333017,
+        "ended": true
+      },
+      {
+        "seed": 7,
+        "score": 1473,
+        "distanceM": 1009.3586666667055,
+        "coins": 227,
+        "crashes": 3,
+        "elapsed": 98.76666666666362,
+        "ended": true
+      },
+      {
+        "seed": 8,
+        "score": 2214,
+        "distanceM": 1520.6298333333023,
+        "coins": 346,
+        "crashes": 3,
+        "elapsed": 133.8333333333283,
+        "ended": true
+      },
+      {
+        "seed": 9,
+        "score": 1087,
+        "distanceM": 755.4460000000228,
+        "coins": 162,
+        "crashes": 3,
+        "elapsed": 73.9333333333317,
+        "ended": true
+      },
+      {
+        "seed": 10,
+        "score": 482,
+        "distanceM": 338.1589999999966,
+        "coins": 70,
+        "crashes": 3,
+        "elapsed": 35.700000000000536,
+        "ended": true
+      },
+      {
+        "seed": 11,
+        "score": 3072,
+        "distanceM": 2046.964999999998,
+        "coins": 508,
+        "crashes": 2,
+        "elapsed": 179.99999999999235,
+        "ended": false
+      },
+      {
+        "seed": 12,
+        "score": 1019,
+        "distanceM": 743.0984999999973,
+        "coins": 136,
+        "crashes": 3,
+        "elapsed": 71.19999999999852,
+        "ended": true
+      },
+      {
+        "seed": 13,
+        "score": 601,
+        "distanceM": 411.1435000000018,
+        "coins": 94,
+        "crashes": 3,
+        "elapsed": 43.066666666666784,
+        "ended": true
+      },
+      {
+        "seed": 14,
+        "score": 790,
+        "distanceM": 516.5516666666631,
+        "coins": 136,
+        "crashes": 3,
+        "elapsed": 52.66666666666624,
+        "ended": true
+      },
+      {
+        "seed": 15,
+        "score": 1854,
+        "distanceM": 1286.2925000000387,
+        "coins": 279,
+        "crashes": 3,
+        "elapsed": 122.43333333332895,
+        "ended": true
+      },
+      {
+        "seed": 16,
+        "score": 401,
+        "distanceM": 281.9328333333319,
+        "coins": 59,
+        "crashes": 3,
+        "elapsed": 29.833333333333975,
+        "ended": true
+      },
+      {
+        "seed": 17,
+        "score": 437,
+        "distanceM": 315.00950000000034,
+        "coins": 59,
+        "crashes": 3,
+        "elapsed": 33.10000000000068,
+        "ended": true
+      },
+      {
+        "seed": 18,
+        "score": 2124,
+        "distanceM": 1506.6499999999974,
+        "coins": 306,
+        "crashes": 3,
+        "elapsed": 142.69999999999447,
+        "ended": true
+      },
+      {
+        "seed": 19,
+        "score": 966,
+        "distanceM": 708.9893333333417,
+        "coins": 124,
+        "crashes": 3,
+        "elapsed": 69.56666666666528,
+        "ended": true
+      },
+      {
+        "seed": 20,
+        "score": 1101,
+        "distanceM": 775.2715333333211,
+        "coins": 162,
+        "crashes": 3,
+        "elapsed": 71.56666666666517,
+        "ended": true
+      },
+      {
+        "seed": 21,
+        "score": 1665,
+        "distanceM": 1189.4664999999927,
+        "coins": 235,
+        "crashes": 3,
+        "elapsed": 107.79999999999644,
+        "ended": true
+      },
+      {
+        "seed": 22,
+        "score": 518,
+        "distanceM": 362.6531666666628,
+        "coins": 77,
+        "crashes": 3,
+        "elapsed": 38.1000000000004,
+        "ended": true
+      },
+      {
+        "seed": 23,
+        "score": 1415,
+        "distanceM": 977.9280000000228,
+        "coins": 216,
+        "crashes": 3,
+        "elapsed": 96.23333333333044,
+        "ended": true
+      },
+      {
+        "seed": 24,
+        "score": 1336,
+        "distanceM": 940.3581666666631,
+        "coins": 197,
+        "crashes": 3,
+        "elapsed": 89.59999999999748,
+        "ended": true
+      },
+      {
+        "seed": 25,
+        "score": 726,
+        "distanceM": 520.1294999999936,
+        "coins": 100,
+        "crashes": 3,
+        "elapsed": 53.3666666666662,
+        "ended": true
+      },
+      {
+        "seed": 26,
+        "score": 1712,
+        "distanceM": 1170.379666666646,
+        "coins": 269,
+        "crashes": 3,
+        "elapsed": 107.36666666666314,
+        "ended": true
+      },
+      {
+        "seed": 27,
+        "score": 1362,
+        "distanceM": 944.1406666666763,
+        "coins": 207,
+        "crashes": 3,
+        "elapsed": 91.93333333333068,
+        "ended": true
+      },
+      {
+        "seed": 28,
+        "score": 1624,
+        "distanceM": 1156.6476666667027,
+        "coins": 232,
+        "crashes": 3,
+        "elapsed": 110.73333333332961,
+        "ended": true
+      },
+      {
+        "seed": 29,
+        "score": 1457,
+        "distanceM": 965.9526666666899,
+        "coins": 245,
+        "crashes": 3,
+        "elapsed": 96.23333333333044,
+        "ended": true
+      },
+      {
+        "seed": 30,
+        "score": 460,
+        "distanceM": 314.4276666666656,
+        "coins": 70,
+        "crashes": 3,
+        "elapsed": 31.233333333334045,
+        "ended": true
+      },
+      {
+        "seed": 31,
+        "score": 1202,
+        "distanceM": 854.8758333333532,
+        "coins": 171,
+        "crashes": 3,
+        "elapsed": 84.03333333333113,
+        "ended": true
+      },
+      {
+        "seed": 32,
+        "score": 1627,
+        "distanceM": 1127.3233333333064,
+        "coins": 247,
+        "crashes": 3,
+        "elapsed": 101.26666666666348,
+        "ended": true
+      },
+      {
+        "seed": 33,
+        "score": 1133,
+        "distanceM": 787.3736666666922,
+        "coins": 171,
+        "crashes": 3,
+        "elapsed": 79.53333333333138,
+        "ended": true
+      },
+      {
+        "seed": 34,
+        "score": 2118,
+        "distanceM": 1468.6261666666635,
+        "coins": 323,
+        "crashes": 3,
+        "elapsed": 135.03333333332824,
+        "ended": true
+      },
+      {
+        "seed": 35,
+        "score": 1054,
+        "distanceM": 742.7245000000081,
+        "coins": 155,
+        "crashes": 3,
+        "elapsed": 72.53333333333178,
+        "ended": true
+      },
+      {
+        "seed": 36,
+        "score": 1824,
+        "distanceM": 1264.8506666666594,
+        "coins": 276,
+        "crashes": 3,
+        "elapsed": 120.06666666666241,
+        "ended": true
+      },
+      {
+        "seed": 37,
+        "score": 1967,
+        "distanceM": 1397.264500000041,
+        "coins": 280,
+        "crashes": 3,
+        "elapsed": 131.73333333332843,
+        "ended": true
+      },
+      {
+        "seed": 38,
+        "score": 832,
+        "distanceM": 590.8996666666774,
+        "coins": 119,
+        "crashes": 3,
+        "elapsed": 58.833333333332554,
+        "ended": true
+      },
+      {
+        "seed": 39,
+        "score": 1381,
+        "distanceM": 975.7845000000316,
+        "coins": 199,
+        "crashes": 3,
+        "elapsed": 93.8666666666639,
+        "ended": true
+      },
+      {
+        "seed": 40,
+        "score": 1142,
+        "distanceM": 798.9030000000104,
+        "coins": 168,
+        "crashes": 3,
+        "elapsed": 76.7999999999982,
+        "ended": true
+      },
+      {
+        "seed": 41,
+        "score": 1107,
+        "distanceM": 775.4611666666652,
+        "coins": 165,
+        "crashes": 3,
+        "elapsed": 75.7333333333316,
+        "ended": true
+      },
+      {
+        "seed": 42,
+        "score": 1844,
+        "distanceM": 1296.4039999999816,
+        "coins": 272,
+        "crashes": 3,
+        "elapsed": 115.29999999999602,
+        "ended": true
+      },
+      {
+        "seed": 43,
+        "score": 964,
+        "distanceM": 660.9526666666791,
+        "coins": 148,
+        "crashes": 3,
+        "elapsed": 66.96666666666543,
+        "ended": true
+      },
+      {
+        "seed": 44,
+        "score": 501,
+        "distanceM": 351.39483333333135,
+        "coins": 72,
+        "crashes": 3,
+        "elapsed": 36.80000000000047,
+        "ended": true
+      },
+      {
+        "seed": 45,
+        "score": 419,
+        "distanceM": 289.96683333333345,
+        "coins": 64,
+        "crashes": 3,
+        "elapsed": 30.966666666667365,
+        "ended": true
+      },
+      {
+        "seed": 46,
+        "score": 617,
+        "distanceM": 435.26400000000166,
+        "coins": 90,
+        "crashes": 3,
+        "elapsed": 44.83333333333335,
+        "ended": true
+      },
+      {
+        "seed": 47,
+        "score": 1534,
+        "distanceM": 1052.4450000000072,
+        "coins": 238,
+        "crashes": 3,
+        "elapsed": 99.96666666666356,
+        "ended": true
+      },
+      {
+        "seed": 48,
+        "score": 939,
+        "distanceM": 615.1371666666776,
+        "coins": 159,
+        "crashes": 3,
+        "elapsed": 61.666666666665726,
+        "ended": true
+      },
+      {
+        "seed": 49,
+        "score": 1481,
+        "distanceM": 1031.6815000000304,
+        "coins": 222,
+        "crashes": 3,
+        "elapsed": 99.2666666666636,
+        "ended": true
+      },
+      {
+        "seed": 50,
+        "score": 709,
+        "distanceM": 495.23050000000325,
+        "coins": 106,
+        "crashes": 3,
+        "elapsed": 50.86666666666634,
+        "ended": true
+      }
+    ]
+  }
+}

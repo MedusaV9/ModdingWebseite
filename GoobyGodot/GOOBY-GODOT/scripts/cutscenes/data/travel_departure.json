@@ -1,0 +1,112 @@
+{
+	"id": "travel_departure",
+	"title_key": "cutscene.depart.titel",
+	"room": "garden",
+	"steps": [
+		{"op": "letterbox", "on": true},
+		{"op": "music", "track": "location-stadtrundfahrt", "fade": 1.5},
+		{
+			"op": "parallel",
+			"steps": [
+				{
+					"op": "prop",
+					"action": "spawn",
+					"id": "koffer",
+					"glb": "res://assets/minigames/delivery_rush/car-kit/box.glb",
+					"at": {"anchor": "gooby", "offset": [0.7, 0, 0.4]},
+					"scale": 0.8
+				},
+				{"op": "sfx", "id": "ui_toast"},
+				{"op": "clip", "clip": "hop"},
+				{"op": "emotion", "emotion": "ecstatic"},
+				{"op": "caption", "key": "cutscene.depart.pack"},
+				{"op": "wait", "duration": 1.5}
+			]
+		},
+		{
+			"op": "prop",
+			"action": "spawn",
+			"id": "taxi",
+			"glb": "res://assets/city/autos/taxi.glb",
+			"at": {"anchor": "entry", "offset": [-9, 0, 0.7]},
+			"rot_deg": 90,
+			"scale": 1.05
+		},
+		{
+			"op": "parallel",
+			"steps": [
+				{
+					"op": "camera",
+					"move": "fly",
+					"pos": {"anchor": "entry", "offset": [2.4, 2.2, 4.6]},
+					"look": {"anchor": "entry", "offset": [0.5, 0.4, 0.7]},
+					"duration": 2.2
+				},
+				{
+					"op": "prop",
+					"action": "glide",
+					"id": "taxi",
+					"to": {"anchor": "entry", "offset": [1.2, 0, 0.7]},
+					"duration": 2.6
+				},
+				{"op": "caption", "key": "cutscene.depart.taxi"}
+			]
+		},
+		{"op": "sfx", "id": "door_knock"},
+		{
+			"op": "parallel",
+			"steps": [
+				{"op": "walk", "to": {"anchor": "entry", "offset": [0.2, 0, 1.6]}, "timeout": 6},
+				{
+					"op": "prop",
+					"action": "glide",
+					"id": "koffer",
+					"to": {"anchor": "entry", "offset": [0.8, 0.4, 0.9]},
+					"duration": 1.6
+				}
+			]
+		},
+		{"op": "clip", "clip": "wave"},
+		{"op": "caption", "key": "cutscene.depart.wave"},
+		{"op": "wait", "duration": 1.6},
+		{"op": "fade", "to": 1.0, "duration": 0.8},
+		{"op": "prop", "action": "despawn", "id": "taxi"},
+		{"op": "prop", "action": "despawn", "id": "koffer"},
+		{
+			"op": "prop",
+			"action": "spawn",
+			"id": "flieger",
+			"glb": "res://assets/minigames/rocket_rescue/craft_speederB.glb",
+			"at": {"anchor": "center", "offset": [-6, 6, -3]},
+			"rot_deg": -90,
+			"scale": 0.9
+		},
+		{
+			"op": "camera",
+			"move": "fly",
+			"pos": {"anchor": "center", "offset": [0, 5.2, 5.5]},
+			"look": {"anchor": "center", "offset": [0, 6.4, -3]},
+			"duration": 0.05
+		},
+		{
+			"op": "parallel",
+			"steps": [
+				{"op": "fade", "to": 0.0, "duration": 0.8},
+				{"op": "caption", "key": "cutscene.depart.sky"},
+				{
+					"op": "prop",
+					"action": "glide",
+					"id": "flieger",
+					"to": {"anchor": "center", "offset": [6, 7.2, -3.5]},
+					"duration": 3.2
+				}
+			]
+		},
+		{"op": "prop", "action": "despawn", "id": "flieger"},
+		{"op": "caption_clear", "keep_on_skip": true},
+		{"op": "letterbox", "on": false},
+		{"op": "camera", "move": "restore", "duration": 0.8},
+		{"op": "emotion", "emotion": "happy", "keep_on_skip": true},
+		{"op": "stinger", "track": "stinger-results", "keep_on_skip": true}
+	]
+}

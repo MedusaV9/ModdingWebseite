@@ -1,0 +1,462 @@
+class_name RanchRegionScene
+extends Node3D
+## Die offene Ranch-Region (RW-1): EINE zusammenhängende Welt aus neun
+## Zonen (RanchKarte) ohne Ladebildschirme — Gelände-Chunks (RanchTerrain),
+## Zonen-Deko (RanchZonenDeko, per Abstand gestreamt), deterministisches
+## Wetter (RanchWetterController), Wildtiere (RanchWildtiere) und der freie
+## Reiter (RanchWeltReiter). Entdeckte Zonen landen additiv im Save
+## (`ranch.welt`), der Wetter-Seed in `ranch.wetter`.
+##
+## Router-Contract (W1a): `ready_for_reveal` nach dem ESSENZ-Aufbau;
+## `receive_params({"spawn_zone": "see"})` setzt den Startpunkt.
+## Tests injizieren `game_state_override` VOR add_child.
+##
+## W19-Perf: der Aufbau ist ZWEISTUFIG. Vor dem Reveal steht nur die
+## Essenz (Licht, Fern-LODs + Fein-Chunks um den Spawn, Wege/Wasser,
+## Spawn-Zonen-Deko, Fernsicht, Wetter, Reiter, HUD) — der Rest der Welt
+## (ferne Fein-Chunks nach Spawn-Nähe, übrige Zonen-Deko, Wegenetz,
+## Atmosphäre, Fundorte, Streu, Wildtiere) streamt in den ersten
+## Sekunden NACH dem Reveal über ein Frame-Budget (WeltAufbauTakt) nach.
+## Vorher riss der komplette Synchron-Aufbau das 10-s-Reveal-Budget des
+## Routers auf schwacher Hardware (Hard-Timeout bei jedem Ausreiten).
+
+signal ready_for_reveal
+## Andock-Punkt für andere Agents (s. RW1-welt-api.md): feuert beim
+## Betreten einer neuen Zone (Zonen-Id aus RanchKarte, "" = freies Land).
+signal zone_gewechselt(zone_id: String)
+
+## Deko-Gruppen einer Zone verschwinden ab diesem Abstand zum Zonen-Rect.
+const STREAM_ABSTAND_M := 640.0
+
+## Striktes CPU-Zeitbudget (ms) des Nachlade-Streams nach dem Reveal.
+const AUFBAU_BUDGET_MS := WeltAufbauTakt.BUDGET_MS
+
+var game_state_override: Object
+## Tests/Screenshots erzwingen Uhrzeit (< 0 = Systemzeit) + Wetterlage.
+var stunde_override := -1.0
+var wetter_override := ""
+## -1 = Setting (city.lebenReduziert), 0/1 = erzwungen (Tests).
+var leben_reduziert_override := -1
+
+var reiter: RanchWeltReiter
+var wetter: RanchWetterController
+var wildtiere: RanchWildtiere
+## FB-2: Sky-Fahrer (prozeduraler Shader) + Fernsicht-Bergketten.
+var himmel: GoobyHimmel
+var fernsicht: WeltFernsicht
+## WELT-1: Morgennebel/Wolkenschatten/Lichtstrahlen/Vogelschwarm/Ambience.
+var atmosphaere: RanchAtmosphaere
+
+## true, sobald der gestreamte Rest-Aufbau komplett ist (Tools/Tests).
+var aufbau_fertig := false
+
+var _spawn_zone := "hof"
+## Deko-Bauer bleiben Member: Callables halten ihr Ziel nur SCHWACH —
+## ohne starke Referenz stürbe der RefCounted vor den Stream-Schritten.
+var _deko: RanchZonenDeko
+var _neue_zonen: RanchNeueZonen
+var _deko_gruppen: Dictionary = {}
+var _windrad_rotor: Node3D
+var _env: Environment
+var _sonne: DirectionalLight3D
+var _terrain: RanchTerrain
+var _takt: WeltAufbauTakt
+var _bach_punkte: Array[Vector2] = []
+var _toast: Node
+var _hud_zone: Label
+var _hud_status: Label
+var _stream_timer := 0.0
+
+
+func _ready() -> void:
+	var gs := game_state()
+	_baue_licht()
+	_terrain = RanchTerrain.new(RanchTerrain.saison_von_datum(RanchWetter.datum_heute()))
+	var spawn := RanchKarte.spawn_punkt(_spawn_zone)
+	var offene_chunks := _baue_gelaende_essenz(spawn)
+	_deko = RanchZonenDeko.new(RanchKarte.seed_wert())
+	_neue_zonen = RanchNeueZonen.new(RanchKarte.seed_wert())
+	var deko_schritte := _deko.schritte(self)
+	var neue_schritte := _neue_zonen.schritte(self)
+	_baue_spawn_deko(deko_schritte, neue_schritte)
+	fernsicht = WeltFernsicht.new()
+	fernsicht.name = "Fernsicht"
+	add_child(fernsicht)
+	fernsicht.einrichten(RanchKarte.seed_wert(), RanchKarte.grenzen().grow(6.0))
+	_baue_wetter(gs)
+	_merke_bach()
+	_baue_reiter()
+	_baue_hud()
+	_plane_nachlauf(offene_chunks, deko_schritte, neue_schritte)
+	ready_for_reveal.emit()
+
+
+func _process(delta: float) -> void:
+	# Release-P1: Nachlade-Stream — je Frame 4 ms Planbudget. Ein bereits
+	# laufender GDScript-Schritt ist nicht präemptierbar; der Takt startet
+	# nach Erreichen der Grenze aber keinen weiteren Schritt.
+	if _takt != null and not _takt.fertig():
+		_takt.tick()
+	if _windrad_rotor != null:
+		_windrad_rotor.rotation.z += delta * 0.9
+	var stunde := _stunde()
+	wetter.tick(delta, stunde, reiter.position)
+	wetter.set_bach_naehe(clampf(1.0 - _bach_abstand() / 55.0, 0.0, 1.0))
+	if wildtiere != null:
+		wildtiere.tick(delta, stunde, str(wetter.zustand["typ"]), reiter.position)
+	if fernsicht != null and himmel != null:
+		fernsicht.faerbe(himmel.horizont_farbe(), HimmelStimmungen.tageslicht(stunde))
+	if atmosphaere != null:
+		atmosphaere.tick(delta, stunde, reiter.aktuelle_zone())
+	_stream_timer -= delta
+	if _stream_timer <= 0.0:
+		_stream_timer = 0.5
+		_streame_zonen()
+		_zeige_status(stunde)
+		_pruefe_fundorte()
+
+
+## Router-Params (W1a-Contract).
+func receive_params(params: Dictionary) -> void:
+	var zone := str(params.get("spawn_zone", "hof"))
+	if not RanchKarte.zone(zone).is_empty():
+		_spawn_zone = zone
+
+
+func game_state() -> Object:
+	if game_state_override != null:
+		return game_state_override
+	return get_node_or_null("/root/GameState")
+
+
+## Tools/Tests: den gestreamten Rest-Aufbau SOFORT abschließen (statt
+## Frames zu ticken) — z. B. für Screenshots der KOMPLETTEN Welt.
+func baue_rest_sofort() -> void:
+	if _takt != null:
+		_takt.alles_sofort()
+
+
+## ---------------------------------------------------------------- Aufbau
+
+
+func _stunde() -> float:
+	if stunde_override >= 0.0:
+		return stunde_override
+	var jetzt := Time.get_time_dict_from_system()
+	return float(jetzt["hour"]) + float(jetzt["minute"]) / 60.0
+
+
+func _leben_reduziert() -> bool:
+	if leben_reduziert_override >= 0:
+		return leben_reduziert_override == 1
+	var gs := game_state()
+	return gs != null and bool(gs.get_value("city.lebenReduziert", false))
+
+
+## Qualitäts-Faktoren (FB-2 Budget): Streu-Dichte hängt am Partikel-Regler,
+## Kleinteil-Sichtweite am Sichtweiten-Regler — beides über das Quality-
+## Autoload (Tests/Headless ohne Autoload: 1.0).
+func _partikel_faktor() -> float:
+	var quality := get_node_or_null("/root/Quality")
+	if quality != null and quality.has_method("particle_factor"):
+		return clampf(float(quality.particle_factor()), 0.0, 1.0)
+	return 1.0
+
+
+func _sicht_faktor() -> float:
+	var quality := get_node_or_null("/root/Quality")
+	if quality != null and quality.has_method("draw_distance_factor"):
+		return clampf(float(quality.draw_distance_factor()), 0.25, 4.0)
+	return 1.0
+
+
+## Gelände-Essenz vor dem Reveal: ALLE Fern-LODs (grob = billig, das
+## Panorama steht sofort) + die Fein-Chunks im LOD-Radius um den Spawn +
+## Wege/Trampelpfade/Wasser. Rückgabe: die offenen Fein-Chunk-Pläne,
+## nach Spawn-Nähe sortiert (nahe zuerst nachladen).
+func _baue_gelaende_essenz(spawn: Vector3) -> Array[Dictionary]:
+	var offen: Array[Dictionary] = []
+	var spawn_xz := Vector2(spawn.x, spawn.z)
+	for plan: Dictionary in RanchTerrain.chunk_plaene():
+		var nah := _rect_abstand(plan["rect"], spawn_xz) < RanchTerrain.LOD_WECHSEL_M
+		if bool(plan["fern"]) or nah:
+			_terrain.baue_chunk_aus_plan(self, plan)
+		else:
+			offen.append(plan)
+	offen.sort_custom(
+		func(a: Dictionary, b: Dictionary) -> bool:
+			return _rect_abstand(a["rect"], spawn_xz) < _rect_abstand(b["rect"], spawn_xz)
+	)
+	_terrain.baue_wege(self)
+	_terrain.baue_trampelpfade(self)
+	_terrain.baue_wasser(self)
+	return offen
+
+
+## Spawn-Zonen-Deko VOR dem Reveal (der Spieler steht mitten drin):
+## verbraucht den passenden Schritt aus der jeweiligen Liste.
+func _baue_spawn_deko(deko_schritte: Array[Dictionary], neue_schritte: Array[Dictionary]) -> void:
+	for liste: Array[Dictionary] in [deko_schritte, neue_schritte]:
+		for i in liste.size():
+			if str(liste[i]["zone"]) == _spawn_zone:
+				_deko_schritt(liste[i])
+				liste.remove_at(i)
+				return
+
+
+## Ein Deko-Schritt (Essenz oder Stream): Gruppe ins Zonen-Streaming
+## einhängen, Windrad-Rotor nachziehen, sobald der Hof gebaut ist.
+func _deko_schritt(schritt: Dictionary) -> void:
+	var gruppe: Variant = (schritt["bau"] as Callable).call()
+	var zone := str(schritt["zone"])
+	if not zone.is_empty() and gruppe is Node3D:
+		_deko_gruppen[zone] = gruppe
+	if _windrad_rotor == null and _deko != null:
+		_windrad_rotor = _deko.windrad_rotor
+
+
+func _baue_wetter(gs: Object) -> void:
+	wetter = RanchWetterController.new()
+	wetter.name = "Wetter"
+	wetter.seed_wert = RanchWeltState.wetter_seed(gs)
+	wetter.datum = RanchWetter.datum_heute()
+	wetter.wetter_override = wetter_override
+	wetter.himmel = himmel
+	add_child(wetter)
+	# Das Gras-Material entsteht VOR dem gestreamten Gras-Bau — Wetter
+	# fährt den Wind-Uniform auf dem geteilten Material-Objekt.
+	wetter.einrichten(
+		_env,
+		_sonne,
+		_terrain.terrain_material,
+		_deko.erzeuge_gras_material(),
+		[_terrain.weg_material, _terrain.trampel_material]
+	)
+
+
+## Nachlade-Stream planen: ferne Fein-Chunks (nach Spawn-Nähe), übrige
+## Zonen-Deko, Wegenetz, Atmosphäre, Fundorte, Streu (je Sorte), Wild-
+## tiere, Kleinteil-Culling — läuft in _process über das Frame-Budget.
+func _plane_nachlauf(
+	offene_chunks: Array[Dictionary],
+	deko_schritte: Array[Dictionary],
+	neue_schritte: Array[Dictionary]
+) -> void:
+	_takt = WeltAufbauTakt.new(AUFBAU_BUDGET_MS)
+	for plan: Dictionary in offene_chunks:
+		_takt.fuege_hinzu(_terrain.baue_chunk_aus_plan.bind(self, plan))
+	for schritt: Dictionary in deko_schritte:
+		_takt.fuege_hinzu(_deko_schritt.bind(schritt))
+	for schritt: Dictionary in neue_schritte:
+		_takt.fuege_hinzu(_deko_schritt.bind(schritt))
+	_takt.fuege_hinzu(func() -> void: RanchWegenetz.baue(self))
+	_takt.fuege_hinzu(_baue_atmosphaere)
+	_takt.fuege_hinzu(func() -> void: RanchFundorteBau.new(_partikel_faktor()).baue(self))
+	for schritt: Callable in RanchStreu.bau_schritte(self, _partikel_faktor(), _sicht_faktor()):
+		_takt.fuege_hinzu(schritt)
+	_takt.fuege_hinzu(_baue_wildtiere)
+	_takt.fuege_hinzu(_schliesse_aufbau)
+
+
+func _baue_atmosphaere() -> void:
+	atmosphaere = RanchAtmosphaere.new()
+	atmosphaere.name = "Atmosphaere"
+	add_child(atmosphaere)
+	atmosphaere.einrichten(RanchKarte.seed_wert())
+
+
+func _baue_wildtiere() -> void:
+	wildtiere = RanchWildtiere.new()
+	wildtiere.name = "Wildtiere"
+	add_child(wildtiere)
+	wildtiere.einrichten(_leben_reduziert(), RanchKarte.seed_wert())
+
+
+## Abschluss des Streams: Kleinteil-Sichtweiten über den FERTIGEN Baum
+## (WELT-1-Budget-Nachlauf — wie beim alten Synchron-Aufbau am Ende).
+func _schliesse_aufbau() -> void:
+	WeltBudget.kleinteil_culling(self)
+	aufbau_fertig = true
+
+
+## Abstand eines Punkts zum Rechteck (0 = innen) — für Spawn-Nähe.
+static func _rect_abstand(rect: Rect2, p: Vector2) -> float:
+	var naechster := Vector2(
+		clampf(p.x, rect.position.x, rect.end.x), clampf(p.y, rect.position.y, rect.end.y)
+	)
+	return p.distance_to(naechster)
+
+
+func _baue_licht() -> void:
+	var env_node := WorldEnvironment.new()
+	env_node.name = "Umgebung"
+	_env = Environment.new()
+	# FB-2: prozeduraler GOOBY-Himmel (7 Stimmungen, weiches Blenden) statt
+	# ProceduralSkyMaterial — der Wetter-Controller fährt ihn im Tick.
+	himmel = GoobyHimmel.new()
+	himmel.wende_an(_stunde(), {"typ": "sonne"})
+	_env.background_mode = Environment.BG_SKY
+	_env.sky = himmel.sky
+	_env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	_env.ambient_light_color = Color(0.88, 0.9, 0.86)
+	# Lens B: 0,35 Sky-Anteil mischte den hellen Mittagshimmel am Budget
+	# vorbei ins Ambient — die Wiese blieb trotz gesenkter Energie über der
+	# Ziel-Luma. 0,15 lässt nur noch einen Hauch Himmelsfarbe durch.
+	_env.ambient_light_sky_contribution = 0.15
+	# EVAL-2026-08 Lens B (Handover lichtkalibrierung.md): Tonemap/Exposure
+	# kommen aus der EINEN globalen Belichtungs-Referenz (Ranch lag bei
+	# 0,85 Luma — Ziel 0,45–0,55), der Außen-Nebel bindet die Fern-Kulissen
+	# an die Horizontfarbe des Himmels (der Wetter-Controller skaliert die
+	# Dichte danach auf die Kilometer-Sichtweiten der Region).
+	LichtKalibrierung.anwenden(_env, "draussen")
+	LichtKalibrierung.nebel_anwenden(_env, himmel.horizont_farbe())
+	env_node.environment = _env
+	add_child(env_node)
+	_sonne = DirectionalLight3D.new()
+	_sonne.name = "Sonne"
+	_sonne.shadow_enabled = true
+	_sonne.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL
+	_sonne.directional_shadow_max_distance = 190.0
+	add_child(_sonne)
+
+
+func _merke_bach() -> void:
+	for paar: Array in RanchKarte.karte()["bach"]["punkte"]:
+		_bach_punkte.append(Vector2(float(paar[0]), float(paar[1])))
+
+
+func _bach_abstand() -> float:
+	var p := Vector2(reiter.position.x, reiter.position.z)
+	var best := INF
+	for punkt in _bach_punkte:
+		best = minf(best, p.distance_to(punkt))
+	return best
+
+
+func _baue_reiter() -> void:
+	reiter = RanchWeltReiter.new()
+	reiter.name = "Reiter"
+	add_child(reiter)
+	var spawn := RanchKarte.spawn_punkt(_spawn_zone)
+	reiter.springe_zu(spawn, PI if spawn.z > 0.0 else 0.0)
+	reiter.zone_gewechselt.connect(_on_zone_gewechselt)
+
+
+func _baue_hud() -> void:
+	var layer := CanvasLayer.new()
+	layer.name = "HudLayer"
+	add_child(layer)
+	var hud := Control.new()
+	hud.name = "RegionHud"
+	hud.theme = ThemeService.theme()
+	hud.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	hud.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(hud)
+	_hud_zone = Label.new()
+	_hud_zone.theme_type_variation = "TitleLabel"
+	_hud_zone.text = I18nService.t("rwelt.titel")
+	_hud_zone.set_anchors_and_offsets_preset(
+		Control.PRESET_CENTER_TOP, Control.PRESET_MODE_MINSIZE, 18
+	)
+	hud.add_child(_hud_zone)
+	_hud_status = Label.new()
+	_hud_status.set_anchors_and_offsets_preset(
+		Control.PRESET_TOP_LEFT, Control.PRESET_MODE_MINSIZE, 16
+	)
+	hud.add_child(_hud_status)
+	var hof := Button.new()
+	hof.theme_type_variation = "GhostButton"
+	hof.text = I18nService.t("rwelt.hud.zur_ranch")
+	hof.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT, Control.PRESET_MODE_MINSIZE, 16)
+	hof.pressed.connect(_on_zum_hof)
+	hud.add_child(hof)
+	# W19: Entdecker-Karte (Zonen-Fog, Fundort-Pins) — Daumen-Ecke links.
+	var karte := Button.new()
+	karte.theme_type_variation = "GhostButton"
+	karte.text = I18nService.t("rkarte.knopf")
+	karte.set_anchors_and_offsets_preset(
+		Control.PRESET_BOTTOM_LEFT, Control.PRESET_MODE_MINSIZE, 24
+	)
+	karte.pressed.connect(_on_karte)
+	hud.add_child(karte)
+	var galopp := Button.new()
+	galopp.theme_type_variation = "PrimaryButton"
+	galopp.toggle_mode = true
+	galopp.text = I18nService.t("ranch.hof.pferde_galopp")
+	galopp.set_anchors_and_offsets_preset(
+		Control.PRESET_BOTTOM_RIGHT, Control.PRESET_MODE_MINSIZE, 24
+	)
+	galopp.toggled.connect(func(an: bool) -> void: reiter.galopp = an)
+	hud.add_child(galopp)
+	_toast = load("res://scripts/ui/toast.gd").new()
+	_toast.theme = ThemeService.theme()
+	layer.add_child(_toast)
+	_toast.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+
+
+## ---------------------------------------------------------------- Laufzeit
+
+
+## Deko-Streaming: Zonen-Gruppen außerhalb des Abstands schlafen (kein
+## Ladebildschirm — nur Sichtbarkeit; Karte + Gelände bleiben immer da).
+func _streame_zonen() -> void:
+	var p := Vector2(reiter.position.x, reiter.position.z)
+	for zone_id: String in _deko_gruppen:
+		var rect := RanchKarte.zone_rect(RanchKarte.zone(zone_id))
+		var naechster := Vector2(
+			clampf(p.x, rect.position.x, rect.end.x), clampf(p.y, rect.position.y, rect.end.y)
+		)
+		(_deko_gruppen[zone_id] as Node3D).visible = (p.distance_to(naechster) < STREAM_ABSTAND_M)
+
+
+func _zeige_status(stunde: float) -> void:
+	var zone_id := reiter.aktuelle_zone()
+	if zone_id.is_empty():
+		zone_id = "frei"
+	_hud_zone.text = I18nService.t("rwelt.zone.%s" % zone_id)
+	var wetter_text := I18nService.t(str(wetter.zustand["name_key"]))
+	if bool(wetter.zustand["regenbogen"]):
+		wetter_text = I18nService.t("rwelt.wetter.regenbogen")
+	_hud_status.text = (
+		"%02d:%02d  ·  %s" % [int(stunde), int(fmod(stunde, 1.0) * 60.0), wetter_text]
+	)
+
+
+func _on_zone_gewechselt(zone_id: String) -> void:
+	zone_gewechselt.emit(zone_id)
+	if RanchWeltState.entdecke_zone(game_state(), zone_id):
+		var zonen_name := I18nService.t("rwelt.zone.%s" % zone_id)
+		_zeige_toast(I18nService.t("rwelt.entdeckt", {"zone": zonen_name}))
+
+
+## FB-2 „Dinge zum Erkunden": Reiter nah genug an einem noch nicht
+## gefundenen Fundort? → markieren, Münzen gutschreiben, Toast zeigen.
+func _pruefe_fundorte() -> void:
+	if reiter == null:
+		return
+	var eintrag := RanchEntdeckungen.fund_bei(game_state(), reiter.position)
+	if eintrag.is_empty():
+		return
+	var ergebnis := RanchEntdeckungen.entdecke(game_state(), str(eintrag["id"]))
+	if not bool(ergebnis["neu"]):
+		return
+	var fund_name := I18nService.t(str(ergebnis["name_key"]))
+	_zeige_toast(
+		I18nService.t(
+			"rwelt.fund_entdeckt", {"name": fund_name, "muenzen": str(int(ergebnis["muenzen"]))}
+		)
+	)
+
+
+func _on_zum_hof() -> void:
+	RanchRouten.fahre_zum_hof(get_tree())
+
+
+## W19: Entdecker-Karte öffnen — mit „Du bist hier“-Punkt des Reiters.
+func _on_karte() -> void:
+	RanchKarteRouten.oeffne_karte(get_tree(), {"spieler": [reiter.position.x, reiter.position.z]})
+
+
+func _zeige_toast(text: String) -> void:
+	if _toast != null and _toast.has_method("show_toast"):
+		_toast.show_toast(text)

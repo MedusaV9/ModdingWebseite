@@ -1,0 +1,41 @@
+{
+	"id": "sleep_night",
+	"title_key": "cutscene.sleep.titel",
+	"room": "bedroom",
+	"steps": [
+		{"op": "letterbox", "on": true},
+		{"op": "music", "track": "room-pixie-puddle-sleeping", "fade": 2.0},
+		{"op": "emotion", "emotion": "sleepy"},
+		{"op": "caption", "key": "cutscene.sleep.tired"},
+		{
+			"op": "parallel",
+			"steps": [
+				{
+					"op": "camera",
+					"move": "fly",
+					"pos": {"anchor": "center", "offset": [0.8, 2.2, 2.6]},
+					"look": {"anchor": "center", "offset": [-0.5, 0.3, 0.3]},
+					"duration": 2.2
+				},
+				{"op": "walk", "to": {"anchor": "center", "offset": [-0.5, 0, 0.3]}, "timeout": 5}
+			]
+		},
+		{"op": "clip", "clip": "sleep"},
+		{"op": "caption", "key": "cutscene.sleep.tucked"},
+		{"op": "wait", "duration": 1.6},
+		{
+			"op": "parallel",
+			"steps": [
+				{"op": "fade", "to": 1.0, "duration": 2.4},
+				{"op": "caption", "key": "cutscene.sleep.good_night"},
+				{"op": "wait", "duration": 2.4}
+			]
+		},
+		{"op": "wait", "duration": 0.8},
+		{"op": "caption_clear", "keep_on_skip": true},
+		{"op": "clip", "clip": "sleep", "keep_on_skip": true},
+		{"op": "letterbox", "on": false},
+		{"op": "camera", "move": "restore", "duration": 0.8},
+		{"op": "fade", "to": 0.0, "duration": 1.0}
+	]
+}

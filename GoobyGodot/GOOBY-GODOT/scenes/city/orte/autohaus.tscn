@@ -1,0 +1,7 @@
+[gd_scene load_steps=2 format=3 uid="uid://c3aortautohaus1"]
+
+[ext_resource type="Script" path="res://scripts/city/orte/autohaus.gd" id="1_autohaus"]
+
+[node name="Autohaus" type="Node3D"]
+script = ExtResource("1_autohaus")
+ort_id = "autohaus"

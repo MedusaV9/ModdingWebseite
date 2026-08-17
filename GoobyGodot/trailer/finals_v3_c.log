@@ -1,0 +1,120 @@
+=== FINAL emotion (1920x1080) 01:59:03
+WARNING: Could not set V-Sync mode, as changing V-Sync mode is not supported by the graphics driver.
+WARNING: Orientation not supported by this display server.
+[capture] Auto-Profil hätte gewählt: { "scale_3d": 1.0, "fps": 60, "msaa": "2x", "shadows": "hoch", "draw_distance": 1.0, "particles": 1.0, "post_fx": "hoch" }
+[capture] Qualität erzwungen: preset=hoch scale_3d=1.00 msaa=2 schatten_atlas=4096 fenster=(1920, 1080)
+[capture] Clip 'emotion' gestartet
+[capture] Clip fertig (9.4 s)
+Done recording movie at path: /workspace/trailer/captures/emotion/f.png
+586 frames at 60 FPS (movie length: 00.0:00.0:09.0), recorded in 00.0:06.0:03.0 (2% of real-time speed).
+ffmpeg: /exec-daemon/tmux-root/lib/libncursesw.so.6: no version information available (required by /lib/x86_64-linux-gnu/libcaca.so.0)
+ffmpeg: /exec-daemon/tmux-root/lib/libncursesw.so.6: no version information available (required by /lib/x86_64-linux-gnu/libcaca.so.0)
+    → /workspace/trailer/public/clips/emotion.mp4 (586 Frames, 2.8M)
+=== FERTIG 02:05:41
+=== FINAL funkelpark (1920x1080) 02:07:19
+WARNING: Could not set V-Sync mode, as changing V-Sync mode is not supported by the graphics driver.
+WARNING: Orientation not supported by this display server.
+[capture] Auto-Profil hätte gewählt: { "scale_3d": 1.0, "fps": 60, "msaa": "2x", "shadows": "hoch", "draw_distance": 1.0, "particles": 1.0, "post_fx": "hoch" }
+[capture] Qualität erzwungen: preset=hoch scale_3d=1.00 msaa=2 schatten_atlas=4096 fenster=(1920, 1080)
+[capture] Clip 'funkelpark' gestartet
+[capture] Clip fertig (15.5 s)
+Done recording movie at path: /workspace/trailer/captures/funkelpark/f.png
+930 frames at 60 FPS (movie length: 00.0:00.0:15.0), recorded in 00.0:09.0:38.0 (2% of real-time speed).
+WARNING: ObjectDB instances leaked at exit (run with --verbose for details).
+ERROR: 2 resources still in use at exit (run with --verbose for details).
+ffmpeg: /exec-daemon/tmux-root/lib/libncursesw.so.6: no version information available (required by /lib/x86_64-linux-gnu/libcaca.so.0)
+ffmpeg: /exec-daemon/tmux-root/lib/libncursesw.so.6: no version information available (required by /lib/x86_64-linux-gnu/libcaca.so.0)
+    → /workspace/trailer/public/clips/funkelpark.mp4 (930 Frames, 12M)
+=== FERTIG 02:18:12
+=== FINAL home_room (1920x1080) 02:26:34
+WARNING: Could not set V-Sync mode, as changing V-Sync mode is not supported by the graphics driver.
+WARNING: Orientation not supported by this display server.
+[capture] Auto-Profil hätte gewählt: { "scale_3d": 1.0, "fps": 60, "msaa": "2x", "shadows": "hoch", "draw_distance": 1.0, "particles": 1.0, "post_fx": "hoch" }
+[capture] Qualität erzwungen: preset=hoch scale_3d=1.00 msaa=2 schatten_atlas=4096 fenster=(1920, 1080)
+[capture] Clip 'home_room' gestartet
+[capture] Clip fertig (8.0 s)
+Done recording movie at path: /workspace/trailer/captures/home_room/f.png
+481 frames at 60 FPS (movie length: 00.0:00.0:08.0), recorded in 00.0:08.0:52.0 (1% of real-time speed).
+ffmpeg: /exec-daemon/tmux-root/lib/libncursesw.so.6: no version information available (required by /lib/x86_64-linux-gnu/libcaca.so.0)
+ffmpeg: /exec-daemon/tmux-root/lib/libncursesw.so.6: no version information available (required by /lib/x86_64-linux-gnu/libcaca.so.0)
+    → /workspace/trailer/public/clips/home_room.mp4 (481 Frames, 5.9M)
+=== FERTIG 02:36:16
+=== FINAL funkelpark (1920x1080) 02:38:06
+WARNING: Could not set V-Sync mode, as changing V-Sync mode is not supported by the graphics driver.
+WARNING: Orientation not supported by this display server.
+[capture] Auto-Profil hätte gewählt: { "scale_3d": 1.0, "fps": 60, "msaa": "2x", "shadows": "hoch", "draw_distance": 1.0, "particles": 1.0, "post_fx": "hoch" }
+[capture] Qualität erzwungen: preset=hoch scale_3d=1.00 msaa=2 schatten_atlas=4096 fenster=(1920, 1080)
+[capture] Clip 'funkelpark' gestartet
+[capture] Clip fertig (15.5 s)
+Done recording movie at path: /workspace/trailer/captures/funkelpark/f.png
+930 frames at 60 FPS (movie length: 00.0:00.0:15.0), recorded in 00.0:09.0:24.0 (2% of real-time speed).
+WARNING: ObjectDB instances leaked at exit (run with --verbose for details).
+ERROR: 2 resources still in use at exit (run with --verbose for details).
+ffmpeg: /exec-daemon/tmux-root/lib/libncursesw.so.6: no version information available (required by /lib/x86_64-linux-gnu/libcaca.so.0)
+ffmpeg: /exec-daemon/tmux-root/lib/libncursesw.so.6: no version information available (required by /lib/x86_64-linux-gnu/libcaca.so.0)
+    → /workspace/trailer/public/clips/funkelpark.mp4 (930 Frames, 11M)
+=== FERTIG 02:48:41
+=== FINAL home_build (1920x1080) 03:02:01
+WARNING: Could not set V-Sync mode, as changing V-Sync mode is not supported by the graphics driver.
+WARNING: Orientation not supported by this display server.
+[capture] Auto-Profil hätte gewählt: { "scale_3d": 1.0, "fps": 60, "msaa": "2x", "shadows": "hoch", "draw_distance": 1.0, "particles": 1.0, "post_fx": "hoch" }
+[capture] Qualität erzwungen: preset=hoch scale_3d=1.00 msaa=2 schatten_atlas=4096 fenster=(1920, 1080)
+[capture] Clip 'home_build' gestartet
+WARNING: [home_build] keine freie Zelle für plantSmall2
+[capture] Clip fertig (13.0 s)
+Done recording movie at path: /workspace/trailer/captures/home_build/f.png
+780 frames at 60 FPS (movie length: 00.0:00.0:13.0), recorded in 00.0:16.0:00.0 (1% of real-time speed).
+ffmpeg: /exec-daemon/tmux-root/lib/libncursesw.so.6: no version information available (required by /lib/x86_64-linux-gnu/libcaca.so.0)
+ffmpeg: /exec-daemon/tmux-root/lib/libncursesw.so.6: no version information available (required by /lib/x86_64-linux-gnu/libcaca.so.0)
+    → /workspace/trailer/public/clips/home_build.mp4 (780 Frames, 7.5M)
+=== FERTIG 03:19:07
+=== FINAL city_overview (1920x1080) 03:21:43
+WARNING: Could not set V-Sync mode, as changing V-Sync mode is not supported by the graphics driver.
+WARNING: Orientation not supported by this display server.
+[capture] Auto-Profil hätte gewählt: { "scale_3d": 1.0, "fps": 60, "msaa": "2x", "shadows": "hoch", "draw_distance": 1.0, "particles": 1.0, "post_fx": "hoch" }
+[capture] Qualität erzwungen: preset=hoch scale_3d=1.00 msaa=2 schatten_atlas=4096 fenster=(1920, 1080)
+[capture] Clip 'city_overview' gestartet
+[capture] Clip fertig (8.0 s)
+Done recording movie at path: /workspace/trailer/captures/city_overview/f.png
+481 frames at 60 FPS (movie length: 00.0:00.0:08.0), recorded in 00.0:14.0:37.0 (0% of real-time speed).
+ffmpeg: /exec-daemon/tmux-root/lib/libncursesw.so.6: no version information available (required by /lib/x86_64-linux-gnu/libcaca.so.0)
+ffmpeg: /exec-daemon/tmux-root/lib/libncursesw.so.6: no version information available (required by /lib/x86_64-linux-gnu/libcaca.so.0)
+    → /workspace/trailer/public/clips/city_overview.mp4 (481 Frames, 25M)
+=== FINAL city_day (1920x1080) 03:39:10
+WARNING: Could not set V-Sync mode, as changing V-Sync mode is not supported by the graphics driver.
+WARNING: Orientation not supported by this display server.
+[capture] Auto-Profil hätte gewählt: { "scale_3d": 1.0, "fps": 60, "msaa": "2x", "shadows": "hoch", "draw_distance": 1.0, "particles": 1.0, "post_fx": "hoch" }
+[capture] Qualität erzwungen: preset=hoch scale_3d=1.00 msaa=2 schatten_atlas=4096 fenster=(1920, 1080)
+[capture] Clip 'city_day' gestartet
+[capture] Clip fertig (14.0 s)
+Done recording movie at path: /workspace/trailer/captures/city_day/f.png
+840 frames at 60 FPS (movie length: 00.0:00.0:14.0), recorded in 00.0:25.0:44.0 (0% of real-time speed).
+WARNING: ObjectDB instances leaked at exit (run with --verbose for details).
+ffmpeg: /exec-daemon/tmux-root/lib/libncursesw.so.6: no version information available (required by /lib/x86_64-linux-gnu/libcaca.so.0)
+ffmpeg: /exec-daemon/tmux-root/lib/libncursesw.so.6: no version information available (required by /lib/x86_64-linux-gnu/libcaca.so.0)
+    → /workspace/trailer/public/clips/city_day.mp4 (840 Frames, 22M)
+=== FINAL city_night (1920x1080) 04:06:38
+WARNING: Could not set V-Sync mode, as changing V-Sync mode is not supported by the graphics driver.
+WARNING: Orientation not supported by this display server.
+[capture] Auto-Profil hätte gewählt: { "scale_3d": 1.0, "fps": 60, "msaa": "2x", "shadows": "hoch", "draw_distance": 1.0, "particles": 1.0, "post_fx": "hoch" }
+[capture] Qualität erzwungen: preset=hoch scale_3d=1.00 msaa=2 schatten_atlas=4096 fenster=(1920, 1080)
+[capture] Clip 'city_night' gestartet
+[capture] Clip fertig (10.0 s)
+Done recording movie at path: /workspace/trailer/captures/city_night/f.png
+600 frames at 60 FPS (movie length: 00.0:00.0:10.0), recorded in 00.0:16.0:41.0 (0% of real-time speed).
+ffmpeg: /exec-daemon/tmux-root/lib/libncursesw.so.6: no version information available (required by /lib/x86_64-linux-gnu/libcaca.so.0)
+ffmpeg: /exec-daemon/tmux-root/lib/libncursesw.so.6: no version information available (required by /lib/x86_64-linux-gnu/libcaca.so.0)
+    → /workspace/trailer/public/clips/city_night.mp4 (600 Frames, 11M)
+=== FINAL visit (1920x1080) 04:24:23
+WARNING: Could not set V-Sync mode, as changing V-Sync mode is not supported by the graphics driver.
+WARNING: Orientation not supported by this display server.
+[capture] Auto-Profil hätte gewählt: { "scale_3d": 1.0, "fps": 60, "msaa": "2x", "shadows": "hoch", "draw_distance": 1.0, "particles": 1.0, "post_fx": "hoch" }
+[capture] Qualität erzwungen: preset=hoch scale_3d=1.00 msaa=2 schatten_atlas=4096 fenster=(1920, 1080)
+[capture] Clip 'visit' gestartet
+[capture] Clip fertig (10.0 s)
+Done recording movie at path: /workspace/trailer/captures/visit/f.png
+600 frames at 60 FPS (movie length: 00.0:00.0:10.0), recorded in 00.0:10.0:55.0 (1% of real-time speed).
+ffmpeg: /exec-daemon/tmux-root/lib/libncursesw.so.6: no version information available (required by /lib/x86_64-linux-gnu/libcaca.so.0)
+ffmpeg: /exec-daemon/tmux-root/lib/libncursesw.so.6: no version information available (required by /lib/x86_64-linux-gnu/libcaca.so.0)
+    → /workspace/trailer/public/clips/visit.mp4 (600 Frames, 3.8M)
+=== FERTIG 04:35:55

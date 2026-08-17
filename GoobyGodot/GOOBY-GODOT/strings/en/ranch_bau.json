@@ -1,0 +1,190 @@
+{
+	"rbau": {
+		"titel": "Ranch Build",
+		"betreten": "Build",
+		"verlassen": "Done",
+		"kategorie": {
+			"anlage": "Facilities",
+			"deko": "Decor",
+			"boden": "Paths and Grounds",
+			"zaun": "Fences"
+		},
+		"item": {
+			"stallboxen": "Stable Boxes",
+			"weide": "Pasture",
+			"wasserstelle": "Water Trough",
+			"heulager": "Hay Storage",
+			"waschplatz": "Washing Bay",
+			"fuehranlage": "Horse Walker",
+			"reithalle": "Riding Hall",
+			"parcours": "Jumping Course",
+			"sattelkammer": "Tack Room",
+			"zuchtstall": "Breeding Barn",
+			"fohlenweide": "Foal Meadow",
+			"tribuene": "Grandstand",
+			"weidezaun": "Pasture Fence Upgrade",
+			"beet_blumen": "Flower Bed",
+			"beet_kraeuter": "Herb Bed",
+			"bank_holz": "Wooden Bench",
+			"laterne": "Yard Lantern",
+			"fahne": "Ranch Flag",
+			"blumenkuebel": "Flower Pot",
+			"vogelhaus": "Birdhouse",
+			"heuballen_deko": "Decorative Hay Bale",
+			"wegweiser": "Signpost",
+			"strohpuppe": "Straw Doll",
+			"weg_schotter": "Gravel Path",
+			"weg_pflaster": "Paved Path",
+			"sand": "Sand Ground",
+			"blumenwiese": "Flower Meadow",
+			"zaun_holz": "Wooden Fence",
+			"windspiel": "Wind Chime"
+		},
+		"nutzen": {
+			"stallboxen": "More boxes, more horses: {n} stalls.",
+			"weide": "Lush grass: horses get hungry more slowly.",
+			"wasserstelle": "Fresh water: thirst drops more slowly.",
+			"heulager": "Stockpiling: room for {n} hay bales.",
+			"waschplatz": "Faster grooming: brushing gives more.",
+			"fuehranlage": "Passive training: XP even without riding.",
+			"reithalle": "Training even in the rain.",
+			"parcours": "Jump training with bonus gold.",
+			"sattelkammer": "Outfit sets for quick tack changes.",
+			"zuchtstall": "Breeding: room for expecting mares.",
+			"fohlenweide": "Foals grow up faster here.",
+			"tribuene": "Crowd at home tournaments: {n} seats.",
+			"weidezaun": "Pretty fences keep the paddock cleaner."
+		},
+		"stufe": "Level {n}",
+		"stufe_max": "Fully upgraded",
+		"ausbauen": "Upgrade ({preis} G)",
+		"platzieren": "Build ({preis} G)",
+		"platzieren_gratis": "Place (in storage: {n})",
+		"drehen": "Rotate",
+		"abriss": "Demolish",
+		"abriss_erstattung": "Demolished: {n} G back.",
+		"gebaut": "Built!",
+		"ausgebaut": "Upgraded: {name} level {n}!",
+		"zone": {
+			"start": "Yard Core",
+			"nord": "North Meadow",
+			"ost": "East Field"
+		},
+		"zone_freischalten": "Unlock area ({preis} G)",
+		"zone_frei": "New build area: {name}!",
+		"fehler": {
+			"zuTeuer": "Not enough gold.",
+			"keinPlatz": "No room here.",
+			"out_of_bounds": "Outside the build area.",
+			"locked_zone": "This area is still locked.",
+			"occupied": "Something is already here.",
+			"schonGebaut": "Already exists on the ranch.",
+			"nichtGebaut": "Build it first, then upgrade.",
+			"vollAusgebaut": "Already fully upgraded.",
+			"unbekannt": "The blueprint does not know this."
+		}
+	},
+	"rdorf": {
+		"ortsname": "Hufingen",
+		"ortsschild": "Riding village on the hill",
+		"entdeckt": "Hufingen discovered! Fast travel is now open.",
+		"schnellreise": "Travel to Hufingen",
+		"schnellreise_gesperrt": "Ride there first and discover the village!",
+		"losreiten": "Ride to Hufingen",
+		"heimreiten": "Back to the ranch",
+		"anbinden": "Horse hitched.",
+		"theke": "Shop counter",
+		"laden": {
+			"reitladen": "Tack Shop",
+			"futterhof": "Feed Store",
+			"moebelscheune": "Furniture Barn",
+			"pferdehaendlerin": "Horse Trader",
+			"schmiede": "Smithy"
+		},
+		"npc": {
+			"reitladen": "Selma",
+			"futterhof": "Marta",
+			"moebelscheune": "Alwin",
+			"pferdehaendlerin": "Wilma",
+			"schmiede": "Eisenhuf"
+		},
+		"npc_rolle": {
+			"reitladen": "Saddler",
+			"futterhof": "Feed merchant",
+			"moebelscheune": "Carpenter",
+			"pferdehaendlerin": "Horse trader",
+			"schmiede": "Blacksmith"
+		},
+		"gruss": {
+			"reitladen": "Have a look around — all hand-stitched!",
+			"futterhof": "Fresh hay, crunchy treats!",
+			"moebelscheune": "Everything for yard and parlour.",
+			"pferdehaendlerin": "On offer today: three beauties.",
+			"schmiede": "New shoes for your horse?"
+		},
+		"kaufen": "Buy",
+		"verkaufen": "Sell",
+		"gekauft": "Bought!",
+		"verkauft": "Sold: +{n} G",
+		"besitz": "Owned",
+		"angebot_heute": "Today's offer",
+		"angebot_morgen": "New horses arrive tomorrow.",
+		"ankauf_titel": "We buy",
+		"waren": {
+			"heu": "Hay bale",
+			"heu_bund": "Hay bundle (5 bales)",
+			"hafer": "Oat sack",
+			"leckerli": "Treat",
+			"apfel": "Apple",
+			"hufeisen_bronze": "Bronze horseshoes",
+			"hufeisen_silber": "Silver horseshoes",
+			"hufeisen_gold": "Gold horseshoes"
+		},
+		"pferde": {
+			"keks": "Cookie",
+			"muschel": "Seashell",
+			"pfeffer": "Pepper",
+			"toffee": "Toffee",
+			"flocke": "Snowflake",
+			"kastanie": "Chestnut",
+			"lavendel": "Lavender",
+			"sternchen": "Little Star"
+		},
+		"fehler": {
+			"zuTeuer": "Not enough gold.",
+			"lagerVoll": "Your storage is full.",
+			"lagerLeer": "You do not have enough of that.",
+			"schonGekauft": "You already own this.",
+			"keinLager": "No storage found.",
+			"stallVoll": "Your stable is full — build more boxes!",
+			"nichtImAngebot": "Not on offer today.",
+			"letztesPferd": "Your last horse stays with you.",
+			"keinPferd": "I do not know this horse.",
+			"nichtGekauft": "Buy it first, then equip it.",
+			"unbekannt": "We do not carry that."
+		},
+		"fertig": "Done",
+		"moebel_titel": "Furniture for the House",
+		"eigene_pferde": "Your Horses",
+		"hufeisen_anlegen": "Equip",
+		"hufeisen_abnehmen": "Remove horseshoes",
+		"prompt": "[E] Enter {laden}"
+	},
+	"rnpc": {
+		"rw4_reitladen": {
+			"name": "Selma"
+		},
+		"rw4_futterhof": {
+			"name": "Marta"
+		},
+		"rw4_moebelscheune": {
+			"name": "Alwin"
+		},
+		"rw4_pferdehaendlerin": {
+			"name": "Wilma"
+		},
+		"rw4_schmiede": {
+			"name": "Eisenhuf"
+		}
+	}
+}

@@ -1,0 +1,10 @@
+{
+	"id": "runner",
+	"title_key": "mg.runner.title",
+	"scene": "res://scripts/minigames/games/runner/runner.tscn",
+	"coin_table": {"divisor": 15, "min": 4, "max": 30},
+	"target": 380,
+	"orientation": "landscape",
+	"supports_endless": true,
+	"energy_cost": 8
+}

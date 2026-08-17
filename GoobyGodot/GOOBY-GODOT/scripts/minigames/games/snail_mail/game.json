@@ -1,0 +1,10 @@
+{
+	"id": "snailMail",
+	"title_key": "mg.snailMail.title",
+	"scene": "res://scripts/minigames/games/snail_mail/snail_mail.tscn",
+	"coin_table": {"divisor": 4, "min": 4, "max": 25},
+	"target": 80,
+	"orientation": "portrait",
+	"supports_endless": true,
+	"energy_cost": 8
+}

@@ -1,0 +1,45 @@
+=== showcase (640x360)
+[capture] Clip 'showcase' gestartet
+[capture] Clip fertig (7.0 s)
+Done recording movie at path: /workspace/trailer/probe/showcase.avi
+421 frames at 60 FPS (movie length: 00.0:00.0:07.0), recorded in 00.0:01.0:23.0 (8% of real-time speed).
+ffmpeg: /exec-daemon/tmux-root/lib/libncursesw.so.6: no version information available (required by /lib/x86_64-linux-gnu/libcaca.so.0)
+ffmpeg: /exec-daemon/tmux-root/lib/libncursesw.so.6: no version information available (required by /lib/x86_64-linux-gnu/libcaca.so.0)
+ffmpeg: /exec-daemon/tmux-root/lib/libncursesw.so.6: no version information available (required by /lib/x86_64-linux-gnu/libcaca.so.0)
+ffmpeg: /exec-daemon/tmux-root/lib/libncursesw.so.6: no version information available (required by /lib/x86_64-linux-gnu/libcaca.so.0)
+    421 Frames → showcase_mid.png / _end.png
+=== home_room (640x360)
+[capture] Clip 'home_room' gestartet
+[capture] Clip fertig (8.0 s)
+Done recording movie at path: /workspace/trailer/probe/home_room.avi
+481 frames at 60 FPS (movie length: 00.0:00.0:08.0), recorded in 00.0:03.0:08.0 (4% of real-time speed).
+ffmpeg: /exec-daemon/tmux-root/lib/libncursesw.so.6: no version information available (required by /lib/x86_64-linux-gnu/libcaca.so.0)
+ffmpeg: /exec-daemon/tmux-root/lib/libncursesw.so.6: no version information available (required by /lib/x86_64-linux-gnu/libcaca.so.0)
+ffmpeg: /exec-daemon/tmux-root/lib/libncursesw.so.6: no version information available (required by /lib/x86_64-linux-gnu/libcaca.so.0)
+ffmpeg: /exec-daemon/tmux-root/lib/libncursesw.so.6: no version information available (required by /lib/x86_64-linux-gnu/libcaca.so.0)
+    481 Frames → home_room_mid.png / _end.png
+=== home_build (640x360)
+[capture] Clip 'home_build' gestartet
+[capture] Clip fertig (13.0 s)
+Done recording movie at path: /workspace/trailer/probe/home_build.avi
+780 frames at 60 FPS (movie length: 00.0:00.0:13.0), recorded in 00.0:05.0:50.0 (3% of real-time speed).
+ffmpeg: /exec-daemon/tmux-root/lib/libncursesw.so.6: no version information available (required by /lib/x86_64-linux-gnu/libcaca.so.0)
+ffmpeg: /exec-daemon/tmux-root/lib/libncursesw.so.6: no version information available (required by /lib/x86_64-linux-gnu/libcaca.so.0)
+ffmpeg: /exec-daemon/tmux-root/lib/libncursesw.so.6: no version information available (required by /lib/x86_64-linux-gnu/libcaca.so.0)
+ffmpeg: /exec-daemon/tmux-root/lib/libncursesw.so.6: no version information available (required by /lib/x86_64-linux-gnu/libcaca.so.0)
+    780 Frames → home_build_mid.png / _end.png
+=== ikea (640x360)
+[capture] Clip 'ikea' gestartet
+[capture] Clip fertig (11.0 s)
+Done recording movie at path: /workspace/trailer/probe/ikea.avi
+660 frames at 60 FPS (movie length: 00.0:00.0:11.0), recorded in 00.0:02.0:03.0 (8% of real-time speed).
+ffmpeg: /exec-daemon/tmux-root/lib/libncursesw.so.6: no version information available (required by /lib/x86_64-linux-gnu/libcaca.so.0)
+ffmpeg: /exec-daemon/tmux-root/lib/libncursesw.so.6: no version information available (required by /lib/x86_64-linux-gnu/libcaca.so.0)
+ffmpeg: /exec-daemon/tmux-root/lib/libncursesw.so.6: no version information available (required by /lib/x86_64-linux-gnu/libcaca.so.0)
+ffmpeg: /exec-daemon/tmux-root/lib/libncursesw.so.6: no version information available (required by /lib/x86_64-linux-gnu/libcaca.so.0)
+
+Enter command: <target>|all <time>|-1 <command>[ <argument>]
+
+Parse error, at least 3 arguments were expected, only 1 given in string 'apture/probe_all.sh ranch_fahrt ranch_berge ranch_zonen home_style ranch_mp 2>&1 | tee /workspace/trailer/probe_run2.log'
+    660 Frames → ikea_mid.png / _end.png
+=== wardrobe (640x360)

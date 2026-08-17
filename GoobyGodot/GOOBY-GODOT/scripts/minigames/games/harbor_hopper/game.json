@@ -1,0 +1,10 @@
+{
+	"id": "harborHopper",
+	"title_key": "mg.harborHopper.title",
+	"scene": "res://scripts/minigames/games/harbor_hopper/harbor_hopper.tscn",
+	"coin_table": {"divisor": 5, "min": 4, "max": 30},
+	"target": 110,
+	"orientation": "landscape",
+	"supports_endless": true,
+	"energy_cost": 8
+}

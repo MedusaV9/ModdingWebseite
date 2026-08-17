@@ -1,0 +1,82 @@
+{
+	"id": "vacation_arrival",
+	"title_key": "cutscene.arrive.titel",
+	"room": "garden",
+	"steps": [
+		{"op": "fade", "to": 1.0, "duration": 0.05},
+		{"op": "letterbox", "on": true},
+		{"op": "music", "track": "bordmusik-vacation-day", "fade": 1.0},
+		{
+			"op": "prop",
+			"action": "spawn",
+			"id": "taxi",
+			"glb": "res://assets/city/autos/taxi.glb",
+			"at": {"anchor": "entry", "offset": [-9, 0, 0.7]},
+			"rot_deg": 90,
+			"scale": 1.05
+		},
+		{"op": "place_gooby", "at": {"anchor": "entry", "offset": [-9.8, 0, 1.6]}},
+		{
+			"op": "parallel",
+			"steps": [
+				{"op": "fade", "to": 0.0, "duration": 1.2},
+				{
+					"op": "camera",
+					"move": "fly",
+					"pos": {"anchor": "entry", "offset": [2.2, 2.0, 4.8]},
+					"look": {"anchor": "entry", "offset": [0.6, 0.5, 0.9]},
+					"duration": 2.0
+				},
+				{
+					"op": "prop",
+					"action": "glide",
+					"id": "taxi",
+					"to": {"anchor": "entry", "offset": [1.0, 0, 0.7]},
+					"duration": 2.4
+				}
+			]
+		},
+		{"op": "place_gooby", "at": {"anchor": "entry", "offset": [0.0, 0, 1.7]}, "face_deg": 20},
+		{"op": "sfx", "id": "ui_open"},
+		{
+			"op": "parallel",
+			"steps": [
+				{"op": "clip", "clip": "hop"},
+				{"op": "emotion", "emotion": "ecstatic"},
+				{"op": "caption", "key": "cutscene.arrive.here"},
+				{"op": "wait", "duration": 1.6}
+			]
+		},
+		{
+			"op": "parallel",
+			"steps": [
+				{"op": "camera", "move": "push_in", "duration": 1.4},
+				{"op": "clip", "clip": "celebrate"},
+				{"op": "sfx", "id": "ui_coins"},
+				{"op": "caption", "key": "cutscene.arrive.happy"},
+				{"op": "wait", "duration": 1.8}
+			]
+		},
+		{
+			"op": "parallel",
+			"steps": [
+				{
+					"op": "prop",
+					"action": "glide",
+					"id": "taxi",
+					"to": {"anchor": "entry", "offset": [10, 0, 0.7]},
+					"duration": 2.2
+				},
+				{"op": "clip", "clip": "wave"},
+				{"op": "caption", "key": "cutscene.arrive.bye_taxi"},
+				{"op": "wait", "duration": 2.0}
+			]
+		},
+		{"op": "prop", "action": "despawn", "id": "taxi"},
+		{"op": "caption_clear", "keep_on_skip": true},
+		{"op": "letterbox", "on": false},
+		{"op": "camera", "move": "restore", "duration": 0.9},
+		{"op": "emotion", "emotion": "happy", "keep_on_skip": true},
+		{"op": "music", "context": "vacation", "keep_on_skip": true}
+	]
+}

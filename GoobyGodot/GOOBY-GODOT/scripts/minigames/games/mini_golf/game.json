@@ -1,0 +1,10 @@
+{
+	"id": "miniGolf",
+	"title_key": "mg.miniGolf.title",
+	"scene": "res://scripts/minigames/games/mini_golf/mini_golf.tscn",
+	"coin_table": {"divisor": 5, "min": 4, "max": 28},
+	"target": 110,
+	"orientation": "portrait",
+	"supports_endless": true,
+	"energy_cost": 8
+}

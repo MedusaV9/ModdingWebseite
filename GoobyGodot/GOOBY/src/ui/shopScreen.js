@@ -1,0 +1,1132 @@
+// Shop screen (§C5, §C4 — agent G11): the real shop UI. Full-screen with 5
+// tabs — Food (32 foods, qty picker; V2/G22: Alle/Gesund/Süßkram filters,
+// junk 🍬 badges and the Care section: medicine/fertilizer/seed packets per
+// PLAN2 §C7/§C3.5), Furniture (catalog by room+slot with owned/placed states
+// + "place now"; V2/G22: room filter chips incl. the §C8.3 Garden section),
+// Walls+Floors (buy+apply swatches per room), Outfits (opens G12's wardrobe
+// in buy mode — feature-detected) and Skins (V2/G22, PLAN2 §C8.5: fur-color
+// palette cards + live 3D try-on, L5 gate per §B6, economy.buySkin).
+//
+// Modes (§C4): 'trip' — opened by systems/shopTrip.js on arrival, everything
+// purchasable, "Go home" returns to the living room; 'browse' — opened from
+// home (fridge-tray Order chip / confirm-sheet "Just browse"), read-only
+// prices with the „Fahre zum Laden zum Einkaufen!" hint — EXCEPT food when
+// Quick Delivery (§C4.6) is owned: order at +20% markup straight to inventory.
+// The Quick Delivery unlock offer (400c, level ≥ 8) lives in the food tab
+// during trips.
+//
+// registerShopScreen() is called from the G11 marker in systems/shopTrip.js
+// (which boots from ui/hud.js). It also boots home/decor.js (dynamic import —
+// three.js stays out of the node:test import chain) and augments two sibling
+// panels via a MutationObserver so no G5/G7 file needs editing: the fridge
+// food tray gets the quick-delivery "Order more" chip, the shop-trip confirm
+// sheet gets a "Just browse" button.
+//
+// Module level stays DOM-free so systems/shopTrip.js (imported by node tests)
+// can import this file headlessly.
+
+import { ECONOMY, ROOMS, UNLOCKS, ITEM_PRICES } from '../data/constants.js'; // V2/G22: + UNLOCKS/ITEM_PRICES
+import { t, getLang } from '../data/strings.js'; // V4/G-UI: getLang for hyphens:auto lang tagging (FIX-C precedent)
+import { FOODS, visibleFoodValues } from '../data/foods.js'; // V4/G79: §G9.2 chips
+import { WALLPAPERS, FLOORS, furnitureFor, roomSlots } from '../data/furniture.js';
+import { CROPS } from '../data/crops.js'; // V2/G22: seed rows in the Care section (§C7)
+import { SKINS, DEFAULT_SKIN, getSkin } from '../data/skins.js'; // V2/G22: Skins tab (§C8.5)
+import { OUTFITS } from '../data/outfits.js'; // V3/G40: §C13 outfit level badges
+import musicDirector from '../audio/musicDirector.js'; // V3/G32: shop medley overlay (§B2.4)
+import { count as invCount } from '../systems/inventory.js';
+import { NOUGAT } from '../systems/nougat.logic.js'; // V3/G35: Nougatschleuse card (§C6.3)
+import {
+  canAfford,
+  buyFood,
+  quickPrice,
+  canBuyQuickDelivery,
+  buyQuickDelivery,
+  buyItem, // V2/G22: medicine/fertilizer (§C3.5/§C2.2)
+  buySeed, // V2/G22: seed packets (§C2.3)
+  buySkin, // V2/G22: fur skins (§C8.5)
+  spend, // V3/FIX-F: Nougatschleuse uses the single money path
+} from '../systems/economy.js';
+import {
+  isOwned,
+  isPlaced,
+  buyFurniture,
+  buySurface,
+  applySurface,
+  appliedSurface,
+} from '../systems/furniturePlacement.js';
+import { icon } from './icons.js';
+// V6/D3 (PLAN6 Wave D): authored food/furniture card art — the FOOD_EMOJI /
+// FURN_EMOJI / SLOT_EMOJI lookup tables that used to live here are retired;
+// foodIcons.js is the one source of truth (interactions.js + decor.js share it).
+import { getFoodIcon, getFurnitureIcon } from './foodIcons.js';
+// V6/B3: aisle-sign strings live in the owned v6 module — resolved through
+// the tx() fallback below until B2 commits the strings.js import pair.
+import { EN as THM_EN, DE as THM_DE } from '../data/strings/v6-screen-themes.js';
+
+/**
+ * CSS background for a wallpaper/floor swatch chip (§D3-ish motif preview).
+ * @param {import('../data/furniture.js').SurfaceEntry} entry
+ * @returns {string}
+ */
+export function swatchStyle(entry) {
+  if (entry.kind === 'floor') {
+    return `background: repeating-linear-gradient(90deg, ${entry.motif} 0 5px, transparent 5px 18px) ${entry.base};`;
+  }
+  return (
+    `background: radial-gradient(circle at 9px 9px, ${entry.motif} 3.2px, transparent 4px) ` +
+    `0 0 / 18px 18px ${entry.base};`
+  );
+}
+
+let wired = false;
+
+// V2/FIX-D (E17): ONE module-level try-on renderer for the Skins tab, reused
+// across mounts AND tab re-renders (renderBody rebuilds the stage per render).
+// Browsers cap live WebGL contexts (Chrome ≈16) and renderer.dispose() alone
+// never releases a context, so the old renderer-per-render pattern eventually
+// evicted the MAIN scene canvas and home rendered blank until reload.
+/** @type {object|null} THREE.WebGLRenderer — untyped: three.js only ever
+ * loads dynamically here (node:test import-chain rule, see mountSkinStage) */
+let skinRenderer = null;
+
+// V2/FIX-D (E16): module-scoped layout guards — styles.css belongs to another
+// agent, so the shop's own fixes live in this injected block (same pattern as
+// the other screens' data-owner styles).
+// P1-3: long one-word DE wallpaper names („Sternennacht", „Sonnenuntergang")
+//   painted over the neighbouring swatch's text at 390-430px — wrap them
+//   inside the 72px swatch column instead (same RE3 ruling as .shop-name).
+// P1-4: single-word tab labels (EN "Furniture") leaked into the neighbouring
+//   wrapped tab at 320px — shrink slightly, allow in-word wrapping and clip
+//   as a last resort; min-height keeps every tab ≥44px tall (§D5).
+// V3/G33 (§B3): mechanical px→rem sweep (÷16) of this injected CSS string —
+// exemptions (1px hairlines/999px pills/shadows/@media px) per PLAN3 §B3.
+const SHOP_FIX_CSS = `
+.swatch .swatch-name{max-width:100%;text-align:center;line-height:1.2;overflow-wrap:anywhere;}
+.swatch .swatch-price{max-width:100%;flex-wrap:wrap;justify-content:center;text-align:center;}
+.shop-tabs .shop-tab{flex:1 1 30%;min-width:0;min-height:max(44px, 2.875rem);overflow:hidden;overflow-wrap:break-word;hyphens:auto;font-size:clamp(0.6875rem,3.4vw,0.8125rem);line-height:1.2;padding:0.375rem 0.1875rem;} /* V4/G-UI: anywhere→break-word+hyphens — EN "Furniture" broke mid-word with no hyphen (album-tab convention). V4/UI-DEEP: explicit 30% basis (the .ac-tab-label kit defaults to flex:1 1 0) keeps the steady 2×3 grid. */
+/* V3/G40 (§C13.3): compact arcade-style lock rows in the shop's outfit tab. */
+.g40-shop-outfit-locks{width:100%;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0.375rem;margin-top:0.75rem;}
+.g40-shop-outfit-lock{min-width:0;display:flex;align-items:center;justify-content:space-between;gap:0.25rem;padding:0.375rem 0.5rem;border-radius:0.75rem;background:rgba(74,59,54,.08);font-size:0.6875rem;font-weight:800;}
+.g40-shop-outfit-lock-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.g40-shop-outfit-level{flex:none;display:inline-flex;align-items:center;gap:0.125rem;padding:0.125rem 0.3125rem;border-radius:999px;background:var(--brown);color:#fff;font-size:0.5625rem;}
+.g40-shop-outfit-level svg{color:var(--yellow);}
+/* V3/G48: Nutella + Nougatschleuse NEU ribbons; styles.css belongs to G47. */
+.shop-card.g48-new-content{position:relative;overflow:visible;}
+.g48-shop-ribbon{position:absolute;z-index:3;right:-0.3125rem;top:0.3125rem;min-width:2.75rem;padding:0.1875rem 0.4375rem;border-radius:999px;background:var(--pink);color:#fff;font-size:0.625rem;font-weight:900;line-height:1.2;letter-spacing:.04em;box-shadow:0 0.125rem 0 rgba(74,59,54,.16);transform:rotate(7deg);pointer-events:none;}
+/* ── V4/G79 food-value chips (§G9.2): identical to the fridge tray. */
+.screen-shop .g79-food-values{display:flex;align-items:center;justify-content:center;gap:.25rem;min-height:.75rem;color:var(--brown,#4A3B36);font-size:.625rem;font-weight:800;line-height:1;opacity:.7;pointer-events:none;}
+.screen-shop .g79-food-chip{display:inline-flex;align-items:center;gap:.0625rem;white-space:nowrap;}
+.screen-shop .g79-food-chip svg{width:.75rem;height:.75rem;}
+/* ── end V4/G79 food-value chips. */
+/* ── V4/G70 sick-shop focus block (owned): Care tab + medicine highlight. */
+.shop-card.g70-sick-medicine{outline:0.1875rem solid var(--pink);outline-offset:0.125rem;box-shadow:0 0 .75rem rgba(255,123,169,.28);}
+.shop-card.g70-sick-medicine.g70-pulse{animation:g70-shop-medicine 1.15s ease-in-out 3;}
+@keyframes g70-shop-medicine{0%,100%{transform:scale(1);box-shadow:0 0 .75rem rgba(255,123,169,.28)}50%{transform:scale(1.045);box-shadow:0 0 0 .5rem rgba(255,123,169,.18)}}
+/* ── end V4/G70 block. */
+/* ── V6/D3: authored SVG card art replaces font emoji (foodIcons.js). */
+.shop-card .shop-emoji svg{display:block;}
+.shop-buybar-name svg{vertical-align:-0.1875rem;}
+/* ── end V6/D3. */
+`;
+
+/**
+ * Pure V4/G70 shop-entry decision. Sick Gooby lands on the dedicated Care
+ * tab; the medicine card stays highlighted, while the stronger pulse is a
+ * one-time empty-stock cue.
+ * @param {string|undefined} health
+ * @param {number} medicineCount
+ * @param {boolean} pulseShown
+ */
+export function sickShopFocus(health, medicineCount, pulseShown = false) {
+  const sick = health === 'sick';
+  return Object.freeze({
+    tab: sick ? 'care' : null,
+    highlightMedicine: sick,
+    pulseMedicine: sick && Number(medicineCount) <= 0 && !pulseShown,
+  });
+}
+
+/** V4/G-UI: soft-hyphen break points for one-word tab labels ≥8 chars (EN
+ * "Furniture" broke mid-word with no hyphen — hyphens:auto needs dictionaries
+ * that not every runtime ships). FIX-C's hy() precedent; display-only. */
+const hyTab = (s) => String(s)
+  .replace(/[A-Za-zÀ-ÿ]{8,}/g, (w) => w.replace(/(.{5})(?=.{3})/g, '$1\u00AD'));
+
+/** V6/B3: t() with the module-local fallback (G52 tx() pattern) — B2 commits
+ * the strings.js import pair for v6-screen-themes.js; until then the aisle
+ * signs resolve through the owned module directly. */
+const tx = (key) => {
+  const v = t(key);
+  if (v !== key) return v;
+  return (getLang() === 'de' ? THM_DE : THM_EN)[key] ?? key;
+};
+
+/**
+ * Register the shop screen + quick-delivery hooks. Called once from the G11
+ * marker in systems/shopTrip.js (browser only).
+ * @param {{store: object, ui: object, audio: object, goHome: () => void,
+ *   getArrival: () => ({coins: number}|null), isAtShop: () => boolean}} deps
+ */
+export function registerShopScreen(deps) {
+  if (wired || typeof document === 'undefined') return;
+  wired = true;
+  const { store, ui, audio } = deps;
+
+  if (!document.querySelector('style[data-owner="v2fd-shop"]')) {
+    const style = document.createElement('style');
+    style.dataset.owner = 'v2fd-shop';
+    style.textContent = SHOP_FIX_CSS;
+    document.head.appendChild(style); // V2/FIX-D (E16): after styles.css → wins ties
+  }
+
+  ui.registerScreen('shop', createShopScreen(deps));
+  installPanelHooks(deps);
+
+  // Boot the decor system (3D application of the saved decor state + the
+  // decorate-mode slot picker). Dynamic import: home/decor.js pulls three.js,
+  // which must stay out of the shopTrip.js → shopScreen.js node import chain.
+  import('../home/decor.js')
+    .then((mod) => mod.initDecor({ store, ui, audio }))
+    .catch((err) => console.warn('[shop] decor wiring unavailable:', err));
+}
+
+// ---------------------------------------------------------------------------
+// Shop screen
+// ---------------------------------------------------------------------------
+
+/**
+ * @param {{store: object, ui: object, audio: object, goHome: () => void,
+ *   getArrival: () => ({coins: number}|null)}} deps
+ * @returns {{mount: Function, unmount: Function}}
+ */
+function createShopScreen({ store, ui, audio, goHome, getArrival }) {
+  /** @type {Array<() => void>} */
+  let subs = [];
+  /** @type {HTMLElement|null} */
+  let bodyEl = null;
+  let mode = 'browse';
+  let tab = 'food';
+  let decorRoom = ROOMS.DEFAULT;
+  /** selected food + qty for the buy bar */
+  let selFood = null;
+  let qty = 1;
+  // V2/G22 state: food category filter (§C7), furniture room filter (§C8.3),
+  // skins-tab try-on + its lazily booted 3D stage (§C8.5)
+  let foodFilter = 'all';
+  let furnRoom = 'all';
+  let selSkin = null;
+  // V4/G70: survives shop remounts for this runtime, so the stronger empty-
+  // medicine animation is shown once; the static sick highlight remains.
+  let medicinePulseShown = false;
+  let sickFocus = sickShopFocus();
+  /** @type {{dispose: () => void, setSkin: (id: string|null) => void}|null} */
+  let skinStage = null;
+
+  const atTrip = () => mode === 'trip';
+  /** food is buyable at the shop, or from home once Quick Delivery is owned */
+  const foodBuyable = () => atTrip() || !!store.get('quickDelivery');
+  const foodUnit = (food) => (atTrip() ? food.price : quickPrice(food.price));
+
+  function coinsPill() {
+    // V4/UI-DEEP: rides the shared .ac-chip pill (paper face + hairline ring)
+    return `<span class="shop-coins ac-chip">${icon('coin', 18)}<span class="shop-coins-n">${store.get('coins') ?? 0}</span></span>`;
+  }
+
+  function priceTag(price) {
+    return price > 0
+      ? `<span class="shop-price">${icon('coin', 13)}${price}</span>`
+      : `<span class="shop-price">${t('shop.free')}</span>`;
+  }
+
+  // ---- V4/G79 (§G9.2): hunger/fun chips from the catalog deltas ------------
+  function foodValueChips(food) {
+    const chips = visibleFoodValues(food).map(([stat, value]) => `
+      <span class="g79-food-chip" aria-label="${t(`food.value${stat === 'hunger' ? 'Hunger' : 'Fun'}`, { value })}">
+        +${value}${icon(stat, 12)}
+      </span>`);
+    return `<span class="g79-food-values">${chips.join('')}</span>`;
+  }
+  // ---- end V4/G79 ----------------------------------------------------------
+
+  // ------------------------------------------------------------------ food
+  /** V2/G22 (§C7): Alle/Gesund/Süßkram category filters on the food tab. */
+  const FOOD_FILTERS = [
+    ['all', 'shop.filter.all', () => true],
+    ['healthy', 'shop.filter.healthy', (f) => !f.junk],
+    ['treats', 'shop.filter.treats', (f) => f.junk],
+  ];
+
+  function renderFood() {
+    // V2/G22: category filter chips (§C7 — Alle/Gesund/Süßkram)
+    const chips = document.createElement('div');
+    chips.className = 'room-chips';
+    for (const [id, key] of FOOD_FILTERS) {
+      const chip = document.createElement('button');
+      chip.className = `room-chip${foodFilter === id ? ' room-chip-on' : ''}`;
+      chip.textContent = t(key);
+      chip.addEventListener('click', () => {
+        audio.play('ui.tap');
+        foodFilter = id;
+        selFood = null;
+        renderBody();
+      });
+      chips.appendChild(chip);
+    }
+    bodyEl.appendChild(chips);
+
+    const grid = document.createElement('div');
+    grid.className = 'shop-grid b3-shelf'; // V6/B3: cards sit on shelf planks
+    const inv = store.get('inventory') ?? {};
+    const matches = FOOD_FILTERS.find(([id]) => id === foodFilter)?.[2] ?? (() => true);
+    // V6/E3 (PLAN6 Wave E): park-exclusive foods (park: true) are hidden here —
+    // they sell only through the Funkelpark stall sheet (ui/parkStall.js).
+    for (const food of FOODS.filter((f) => f.park !== true).filter(matches)) {
+      const isNewContent = food.id === 'nutella'
+        && store.get('onboarding.v3ContentSeen.nutella') !== true;
+      const card = document.createElement('button');
+      const owned = invCount(inv, food.id);
+      card.className = `shop-card${selFood === food.id ? ' shop-card-sel' : ''}${isNewContent ? ' g48-new-content' : ''}`;
+      card.dataset.contentId = food.id;
+      card.innerHTML = `
+        ${isNewContent ? `<span class="g48-shop-ribbon">${t('new.ribbon')}</span>` : ''}
+        ${owned > 0 ? `<span class="shop-count">×${owned}</span>` : ''}
+        ${food.junk ? `<span class="g22-junk" aria-hidden="true">${icon('candy', 14)}</span>` : ''}
+        <span class="shop-emoji">${getFoodIcon(food.id, 34)}</span>
+        <span class="shop-name">${t(food.nameKey)}</span>
+        ${priceTag(foodUnit(food))}
+        ${foodValueChips(food)}`;
+      card.addEventListener('click', () => {
+        audio.play('ui.tap');
+        // V3/G48: clicking the featured content acknowledges its NEU ribbon.
+        if (isNewContent) {
+          store.set('onboarding.v3ContentSeen.nutella', true);
+          store.flush?.();
+          card.classList.remove('g48-new-content');
+          card.querySelector('.g48-shop-ribbon')?.remove();
+        }
+        if (!foodBuyable()) {
+          ui.toast('shop.browseHint');
+          return;
+        }
+        if (selFood !== food.id) {
+          selFood = food.id;
+          qty = 1;
+        }
+        renderBody();
+      });
+      grid.appendChild(card);
+    }
+
+    // quick-delivery unlock banner (§C4.6): offered at the shop until owned
+    if (!store.get('quickDelivery')) {
+      const level = store.get('level') ?? 1;
+      const banner = document.createElement('div');
+      banner.className = 'shop-banner';
+      const gate = canBuyQuickDelivery(store);
+      const canOffer = atTrip() && level >= ECONOMY.QUICK_DELIVERY_LEVEL;
+      banner.innerHTML = `
+        <span class="shop-banner-ico">${icon('scooter', 32)}</span>
+        <span class="shop-banner-text">
+          <span class="shop-banner-title">${t('shop.qd.title')}</span><br>
+          <span class="shop-banner-body">${t('shop.qd.pitch')}</span>
+        </span>
+        ${canOffer
+          ? `<button class="btn btn-yellow qd-buy" ${gate.ok ? '' : 'disabled'}>${t('shop.qd.unlock', { price: ECONOMY.QUICK_DELIVERY_PRICE })}</button>`
+          : `<span class="shop-banner-body shop-banner-hint">${level < ECONOMY.QUICK_DELIVERY_LEVEL
+    ? t('shop.qd.needLevel', { level: ECONOMY.QUICK_DELIVERY_LEVEL })
+    // V6/FIX3 (P1-12): browsing from home at unlock level used to repeat
+    // the page's „Drive to the shop…" banner — state the REAL unlock
+    // condition instead (price at the next in-person trip, §C4.6).
+    : t('shop.qd.unlockHint', { price: ECONOMY.QUICK_DELIVERY_PRICE })}</span>`}
+      `;
+      banner.querySelector('.qd-buy')?.addEventListener('click', () => {
+        const res = buyQuickDelivery(store);
+        if (res.ok) {
+          audio.play('coin.spend');
+          ui.toast('toast.qdUnlocked');
+        } else if (res.reason === 'coins') {
+          ui.toast('toast.notEnoughCoins');
+        }
+        renderBody();
+      });
+      bodyEl.appendChild(banner);
+    }
+
+    // buy bar (qty picker) for the selected food
+    if (selFood && foodBuyable()) {
+      const food = FOODS.find((f) => f.id === selFood);
+      const unit = foodUnit(food);
+      const bar = document.createElement('div');
+      bar.className = 'shop-buybar';
+      const total = () => unit * qty;
+      bar.innerHTML = `
+        <span class="shop-buybar-info">
+          <span class="shop-buybar-name">${getFoodIcon(food.id, 16)} ${t(food.nameKey)}</span>
+          <span class="shop-buybar-total">${t('shop.total')}: ${icon('coin', 13)}<span class="bb-total">${total()}</span>${atTrip() ? '' : ` · ${t('shop.qd.note')}`}</span>
+        </span>
+        <span class="shop-qty">
+          <button class="qty-btn bb-minus" aria-label="−">−</button>
+          <span class="qty-n bb-n">${qty}</span>
+          <button class="qty-btn bb-plus" aria-label="+">+</button>
+        </span>
+        <button class="btn btn-teal bb-buy">${t(atTrip() ? 'shop.buy' : 'shop.order')}</button>`;
+      const nEl = bar.querySelector('.bb-n');
+      const totalEl = bar.querySelector('.bb-total');
+      const buyBtn = bar.querySelector('.bb-buy');
+      const sync = () => {
+        nEl.textContent = String(qty);
+        totalEl.textContent = String(total());
+        buyBtn.disabled = !canAfford(store, total());
+      };
+      bar.querySelector('.bb-minus').addEventListener('click', () => {
+        qty = Math.max(1, qty - 1);
+        sync();
+      });
+      bar.querySelector('.bb-plus').addEventListener('click', () => {
+        qty = Math.min(99, qty + 1);
+        sync();
+      });
+      buyBtn.addEventListener('click', () => {
+        const res = buyFood(store, food.id, qty, { quick: !atTrip() });
+        if (res.ok) {
+          audio.play('coin.spend');
+          ui.toast(atTrip() ? 'toast.foodBought' : 'toast.foodOrdered', { name: t(food.nameKey), n: qty });
+          selFood = null;
+          qty = 1;
+        } else if (res.reason === 'coins') {
+          ui.toast('toast.notEnoughCoins');
+        }
+        renderBody();
+      });
+      sync();
+      bodyEl.appendChild(bar);
+    }
+
+    bodyEl.appendChild(grid);
+    renderCare(); // V2/G22: Care section under the food grid (§C7/§C3.5)
+  }
+
+  // ----------------------------------------------------------- care (V2/G22)
+  // §C7: medicine 40c + fertilizer 25c rendered distinctly (not eatable-
+  // looking) + seed packets (§C2.3, level-gated). All land in the `items`
+  // slice via economy.buyItem/buySeed; medicine is quick-delivery eligible
+  // (§C3.5) so the whole row follows the food-tab buyable gate.
+  function renderCare() {
+    const head = document.createElement('div');
+    head.className = 'shop-section';
+    head.textContent = t('shop.care.title');
+    bodyEl.appendChild(head);
+    const hint = document.createElement('div');
+    hint.className = 'shop-banner-body g22-care-hint';
+    hint.textContent = t('shop.care.hint');
+    bodyEl.appendChild(hint);
+
+    const row = document.createElement('div');
+    row.className = 'shop-grid b3-shelf'; // V6/B3: care row rides the shelf too
+    const level = store.get('level') ?? 1;
+
+    const careCard = ({ itemId, emoji, name, price, count, locked, lockLevel, onBuy }) => {
+      const card = document.createElement('button');
+      const medicine = itemId === 'medicine';
+      card.className =
+        `shop-card g22-care-card${locked ? ' g22-locked' : ''}` +
+        `${medicine && sickFocus.highlightMedicine ? ' g70-sick-medicine' : ''}` +
+        `${medicine && sickFocus.pulseMedicine ? ' g70-pulse' : ''}`;
+      if (itemId) card.dataset.careItem = itemId;
+      card.innerHTML = `
+        ${count > 0 ? `<span class="shop-count">×${count}</span>` : ''}
+        <span class="shop-emoji">${emoji}</span>
+        <span class="shop-name">${name}</span>
+        ${locked ? `<span class="shop-state">${icon('lock', 11)} ${t('shop.lvl', { level: lockLevel })}</span>` : priceTag(price)}`;
+      card.addEventListener('click', () => {
+        audio.play('ui.tap');
+        if (locked) {
+          ui.toast('shop.qd.needLevel', { level: lockLevel });
+          return;
+        }
+        if (!foodBuyable()) {
+          ui.toast('shop.browseHint');
+          return;
+        }
+        const res = onBuy();
+        if (res.ok) {
+          audio.play('coin.spend');
+          ui.toast('toast.itemBought', { name });
+        } else if (res.reason === 'coins') {
+          ui.toast('toast.notEnoughCoins');
+        } else if (res.reason === 'level') {
+          ui.toast('shop.qd.needLevel', { level: lockLevel });
+        }
+        renderBody();
+      });
+      return card;
+    };
+
+    row.appendChild(careCard({
+      itemId: 'medicine',
+      emoji: icon('medicine', 30), // V4/UI-DEEP: authored glyphs, not emoji
+      name: t('shop.item.medicine'),
+      price: ITEM_PRICES.medicine,
+      count: store.get('items.medicine') ?? 0,
+      onBuy: () => buyItem(store, 'medicine', 1),
+    }));
+    row.appendChild(careCard({
+      itemId: 'fertilizer',
+      emoji: icon('sprout', 30),
+      name: t('shop.item.fertilizer'),
+      price: ITEM_PRICES.fertilizer,
+      count: store.get('items.fertilizer') ?? 0,
+      onBuy: () => buyItem(store, 'fertilizer', 1),
+    }));
+    for (const crop of CROPS) {
+      row.appendChild(careCard({
+        itemId: `seed:${crop.id}`,
+        emoji: icon('seeds', 30),
+        name: t('shop.seedName', { name: t(crop.nameKey) }),
+        price: crop.seedPrice,
+        count: store.get(`items.seed:${crop.id}`) ?? 0,
+        locked: level < crop.unlock,
+        lockLevel: crop.unlock,
+        onBuy: () => buySeed(store, crop.id, 1),
+      }));
+    }
+    bodyEl.appendChild(row);
+  }
+
+  // ------------------------------------------------------------- furniture
+  // V2/G22: room filter chips incl. the Garden section (§C8.3 — garden decor
+  // is purchasable here; G19's rooms/garden.js renders the placed anchors).
+  function renderFurniture() {
+    const allRooms = [...ROOMS.ORDER, 'garden'];
+    const roomLabel = (roomId) =>
+      roomId === 'garden' ? t('shop.room.garden') : t(`room.${roomId}`);
+
+    const chips = document.createElement('div');
+    chips.className = 'room-chips';
+    for (const roomId of ['all', ...allRooms]) {
+      const chip = document.createElement('button');
+      chip.className = `room-chip${furnRoom === roomId ? ' room-chip-on' : ''}`;
+      chip.textContent = roomId === 'all' ? t('shop.filter.all') : roomLabel(roomId);
+      chip.addEventListener('click', () => {
+        audio.play('ui.tap');
+        furnRoom = roomId;
+        renderBody();
+      });
+      chips.appendChild(chip);
+    }
+    bodyEl.appendChild(chips);
+
+    const rooms = furnRoom === 'all' ? allRooms : [furnRoom];
+    for (const roomId of rooms) {
+      const head = document.createElement('div');
+      head.className = 'shop-section';
+      head.textContent = roomLabel(roomId);
+      bodyEl.appendChild(head);
+      const grid = document.createElement('div');
+      grid.className = 'shop-grid b3-shelf'; // V6/B3
+      for (const slotId of roomSlots(roomId)) {
+        for (const entry of furnitureFor(roomId, slotId)) {
+          grid.appendChild(furnitureCard(entry, roomId, slotId));
+        }
+      }
+      // ---- V3/G35 (§C6.3): Nougatschleuse — kitchen fixture, 400 c / L5 ----
+      if (roomId === 'kitchen') grid.appendChild(nougatCard());
+      // ---- end V3/G35 ----
+      bodyEl.appendChild(grid);
+    }
+  }
+
+  // ---- V3/G35 (§C6.3): Nougatschleuse shop card ----------------------------
+  // A FIXTURE, not decor: buying sets `nougat.installed = true` and it
+  // auto-mounts on the kitchen wall (roomManager follows 'nougatChanged') —
+  // NO decorate/placement step. 400 c, unlock L5 (numbers frozen in
+  // systems/nougat.logic.js per §E0.1-2).
+  function nougatCard() {
+    const installed = store.get('nougat.installed') === true;
+    const isNewContent = store.get('onboarding.v3ContentSeen.nougatschleuse') !== true;
+    const level = store.get('level') ?? 1;
+    const locked = level < NOUGAT.UNLOCK_LEVEL;
+    const card = document.createElement('button');
+    card.className = `shop-card${locked && !installed ? ' g22-locked' : ''}${isNewContent ? ' g48-new-content' : ''}`;
+    card.dataset.contentId = 'nougatschleuse';
+    const state = installed
+      ? `<span class="shop-state">${icon('check', 11)} ${t('shop.owned')}</span>`
+      : locked
+        ? `<span class="shop-state">${icon('lock', 11)} ${t('shop.lvl', { level: NOUGAT.UNLOCK_LEVEL })}</span>`
+        : priceTag(NOUGAT.PRICE);
+    card.innerHTML = `
+      ${isNewContent ? `<span class="g48-shop-ribbon">${t('new.ribbon')}</span>` : ''}
+      <span class="shop-emoji">${getFoodIcon('chocolate', 34)}</span>
+      <span class="shop-name">${t('nougat.shopName')}</span>
+      ${state}`;
+    card.addEventListener('click', () => {
+      audio.play('ui.tap');
+      // V3/G48: a first card interaction permanently acknowledges the item.
+      if (isNewContent) {
+        store.set('onboarding.v3ContentSeen.nougatschleuse', true);
+        store.flush?.();
+        card.classList.remove('g48-new-content');
+        card.querySelector('.g48-shop-ribbon')?.remove();
+      }
+      if (installed) return;
+      if (locked) {
+        ui.toast('shop.qd.needLevel', { level: NOUGAT.UNLOCK_LEVEL });
+        return;
+      }
+      if (!atTrip()) {
+        ui.toast('shop.browseHint');
+        return;
+      }
+      if (!spend(store, NOUGAT.PRICE, 'nougatschleuse')) {
+        ui.toast('toast.notEnoughCoins');
+        return;
+      }
+      store.update((st) => {
+        st.nougat = { ...(st.nougat ?? {}), installed: true };
+      });
+      audio.play('coin.spend');
+      store.emit?.('nougatChanged', { installed: true }); // §B10 — roomManager mounts it
+      ui.toast('nougat.installed'); // §C6.3 „Die Nougatschleuse ist installiert!"
+      renderBody();
+    });
+    return card;
+  }
+  // ---- end V3/G35 card ----
+
+  /** @param {import('../data/furniture.js').FurnitureEntry} entry */
+  function furnitureCard(entry, roomId, slotId) {
+    const owned = isOwned(store, entry);
+    const placed = isPlaced(store, entry.id, roomId, slotId);
+    const card = document.createElement('button');
+    card.className = 'shop-card';
+    const state = placed
+      ? `<span class="shop-state">${icon('check', 11)} ${t('shop.placed')}</span>`
+      : owned
+        ? `<span class="shop-state">${entry.default ? t('shop.free') : t('shop.owned')} · ${t('shop.placeNow')}</span>`
+        : priceTag(entry.price);
+    card.innerHTML = `
+      <span class="shop-emoji">${getFurnitureIcon(entry, 34)}</span>
+      <span class="shop-name">${t(entry.nameKey)}</span>
+      ${state}`;
+    card.addEventListener('click', () => {
+      audio.play('ui.tap');
+      if (!owned) {
+        if (!atTrip()) {
+          ui.toast('shop.browseHint');
+          return;
+        }
+        const res = buyFurniture(store, entry.id);
+        if (!res.ok) {
+          if (res.reason === 'coins') ui.toast('toast.notEnoughCoins');
+          return;
+        }
+        audio.play('coin.spend');
+        ui.toast('toast.itemBought', { name: t(entry.nameKey) });
+        renderBody();
+      }
+      // owned (or just bought): "place now" → decorate-mode slot picker
+      ui.openPanel('decorate', { roomId, slotId, onApplied: () => renderBody() });
+    });
+    return card;
+  }
+
+  // ------------------------------------------------- wallpaper + floor tab
+  function renderDecor() {
+    const chips = document.createElement('div');
+    chips.className = 'room-chips';
+    for (const roomId of ROOMS.ORDER) {
+      const chip = document.createElement('button');
+      chip.className = `room-chip${decorRoom === roomId ? ' room-chip-on' : ''}`;
+      chip.textContent = t(`room.${roomId}`);
+      chip.addEventListener('click', () => {
+        audio.play('ui.tap');
+        decorRoom = roomId;
+        renderBody();
+      });
+      chips.appendChild(chip);
+    }
+    bodyEl.appendChild(chips);
+
+    for (const [kind, list, labelKey] of [
+      ['wallpaper', WALLPAPERS, 'shop.wallpapers'],
+      ['floor', FLOORS, 'shop.floors'],
+    ]) {
+      const head = document.createElement('div');
+      head.className = 'shop-section';
+      head.textContent = t(labelKey);
+      bodyEl.appendChild(head);
+      const row = document.createElement('div');
+      row.className = 'swatch-row';
+      for (const entry of list) {
+        row.appendChild(swatchCard(kind, entry));
+      }
+      bodyEl.appendChild(row);
+    }
+  }
+
+  /** @param {'wallpaper'|'floor'} kind @param {import('../data/furniture.js').SurfaceEntry} entry */
+  function swatchCard(kind, entry) {
+    const owned = isOwned(store, entry);
+    const applied = appliedSurface(store, kind, decorRoom) === entry.id;
+    const sw = document.createElement('button');
+    sw.className = `swatch${applied ? ' swatch-on' : ''}`;
+    sw.innerHTML = `
+      <span class="swatch-chip" style="${swatchStyle(entry)}"></span>
+      <span class="swatch-name">${t(entry.nameKey)}</span>
+      ${applied
+        ? `<span class="swatch-price">${icon('check', 11)} ${t('shop.applied')}</span>`
+        : owned
+          ? `<span class="swatch-price">${t('shop.apply')}</span>`
+          : `<span class="swatch-price">${icon('coin', 12)}${entry.price}</span>`}`;
+    sw.addEventListener('click', () => {
+      audio.play('ui.tap');
+      if (applied) return;
+      if (!owned) {
+        if (!atTrip()) {
+          ui.toast('shop.browseHint');
+          return;
+        }
+        const res = buySurface(store, kind, entry.id);
+        if (!res.ok) {
+          if (res.reason === 'coins') ui.toast('toast.notEnoughCoins');
+          return;
+        }
+        audio.play('coin.spend');
+      }
+      applySurface(store, kind, decorRoom, entry.id); // buy + apply (§C5)
+      ui.toast('toast.appliedItem', { name: t(entry.nameKey) });
+      renderBody();
+    });
+    return sw;
+  }
+
+  // ---------------------------------------------------------------- outfits
+  function renderOutfits() {
+    // V3/G40 (§C13.3): the actual buy/equip path remains the wardrobe. This
+    // shop landing card only mirrors each currently locked gated row with the
+    // same level badge treatment as the arcade, so the gate is visible before
+    // entering buy mode.
+    const level = store.get('level') ?? 1;
+    const owned = store.get('outfits.owned') ?? [];
+    const lockedRows = OUTFITS.filter(
+      (def) => def.minLevel > level && !owned.includes(def.id)
+    );
+    const card = document.createElement('div');
+    card.className = 'card shop-outfits-card';
+    card.innerHTML = `
+      <span class="shop-outfits-emoji">${icon('hat', 40)}</span>
+      <div>${t('shop.outfitsPitch')}</div>
+      <button class="btn btn-teal outfits-open">${icon('shirt', 20)} ${t('shop.outfitsOpen')}</button>
+      ${atTrip() ? '' : `<div class="shop-banner-body">${t('wardrobe.shopOnly')}</div>`}
+      ${lockedRows.length === 0 ? '' : `
+        <div class="g40-shop-outfit-locks">
+          ${lockedRows.map((def) => `
+            <span class="g40-shop-outfit-lock">
+              <span class="g40-shop-outfit-lock-name">${t(def.nameKey)}</span>
+              <span class="g40-shop-outfit-level">${icon('lock', 11)}${t('arcade.lockLevel', { level: def.minLevel })}</span>
+            </span>`).join('')}
+        </div>`}`;
+    card.querySelector('.outfits-open').addEventListener('click', () => {
+      audio.play('ui.tap');
+      // G12 wires: the wardrobe screen registers itself at boot — open it in
+      // buy mode when present (feature-detect), else a friendly toast.
+      if (ui.hasScreen('wardrobe')) {
+        // F3: context-aware back — the wardrobe's back button must return to
+        // THIS shop screen (trip state intact; systems/shopTrip.js keeps the
+        // machine in 'shop' meanwhile) instead of ui.closeAll(), which would
+        // strand the player over the parked-car scene with no UI (§C4).
+        const returnMode = mode; // capture: the closure var resets on remount
+        ui.showScreen('wardrobe', {
+          mode: atTrip() ? 'buy' : 'browse',
+          from: 'shop',
+          onBack: () => ui.showScreen('shop', { mode: returnMode, tab: 'outfits' }),
+        });
+      } else {
+        ui.toast('toast.comingSoon');
+      }
+    });
+    bodyEl.appendChild(card);
+  }
+
+  // ------------------------------------------------------------ skins (V2/G22)
+  // §C8.5: palette swatch cards + a live 3D try-on stage. Equipping goes
+  // through skins.equipped (economy.buySkin equips on purchase); the applier
+  // in character/skins.js mutates the shared Gooby materials so the skin
+  // shows everywhere (home, cameos, photo mode). Tab unlocks at L5 (§B6).
+  /** @param {import('../data/skins.js').SkinDef} def */
+  function skinSwatchStyle(def) {
+    return (
+      `background: linear-gradient(135deg, ${def.colors.body} 0 55%, ` +
+      `${def.colors.belly} 55% 80%, ${def.colors.earInner} 80% 100%);`
+    );
+  }
+
+  function disposeSkinStage() {
+    skinStage?.dispose();
+    skinStage = null;
+  }
+
+  /** Boot the try-on renderer lazily — three.js must stay out of the
+   * node:test import chain (same rule as the decor boot above). */
+  async function mountSkinStage(stageEl, badgeEl) {
+    try {
+      const THREE = await import('three');
+      const { createGooby } = await import('../character/gooby.js');
+      const skinsMod = await import('../character/skins.js');
+      if (!bodyEl || !stageEl.isConnected) return; // tab switched meanwhile
+      // V2/FIX-D (E17): reuse the one module-level context across mounts —
+      // never a renderer per render (see the skinRenderer note up top).
+      if (!skinRenderer) {
+        skinRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      }
+      const renderer = skinRenderer;
+      renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+      const scene = new THREE.Scene();
+      const hemi = new THREE.HemisphereLight('#fff5e8', '#b8a898', 1.05);
+      const dir = new THREE.DirectionalLight('#fff2dd', 1.4);
+      dir.position.set(1.6, 2.4, 2.2);
+      scene.add(hemi, dir);
+      const gooby = createGooby();
+      gooby.setEmotion('happy');
+      scene.add(gooby.group);
+      stageEl.insertBefore(renderer.domElement, badgeEl);
+      const camera = new THREE.PerspectiveCamera(34, 1, 0.05, 20);
+      camera.position.set(0, 0.74, 1.8);
+      camera.lookAt(0, 0.5, 0);
+      const resize = () => {
+        const w = stageEl.clientWidth || 320;
+        const h = stageEl.clientHeight || 200;
+        renderer.setSize(w, h);
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+      };
+      resize();
+      window.addEventListener('resize', resize);
+      let raf = 0;
+      let last = performance.now();
+      const tick = (now) => {
+        raf = requestAnimationFrame(tick);
+        const dt = Math.min((now - last) / 1000, 0.1);
+        last = now;
+        gooby.update(dt);
+        gooby.group.rotation.y = Math.sin(now / 2400) * 0.5;
+        renderer.render(scene, camera);
+      };
+      raf = requestAnimationFrame(tick);
+      skinStage = {
+        setSkin(id) {
+          if (id) {
+            skinsMod.previewSkin(gooby, getSkin(id));
+            badgeEl.style.display = '';
+            badgeEl.textContent = t('wardrobe.tryOn', { name: t(getSkin(id).nameKey) });
+          } else {
+            skinsMod.clearSkinPreview(gooby);
+            badgeEl.style.display = 'none';
+          }
+        },
+        dispose() {
+          cancelAnimationFrame(raf);
+          window.removeEventListener('resize', resize);
+          skinsMod.clearSkinPreview(gooby);
+          gooby.dispose();
+          // V2/FIX-D (E17): detach the canvas, KEEP the shared context alive
+          renderer.domElement.remove();
+        },
+      };
+      if (selSkin) skinStage.setSkin(selSkin);
+    } catch (err) {
+      console.warn('[shop] skin try-on stage unavailable:', err);
+    }
+  }
+
+  function renderSkins() {
+    const level = store.get('level') ?? 1;
+    const locked = level < UNLOCKS.SKINS;
+    const ownedSkins = store.get('skins.owned') ?? [DEFAULT_SKIN];
+    const equippedSkin = store.get('skins.equipped') ?? DEFAULT_SKIN;
+
+    if (locked) {
+      const banner = document.createElement('div');
+      banner.className = 'shop-banner';
+      banner.innerHTML = `
+        <span class="shop-banner-ico">${icon('lock', 32)}</span>
+        <span class="shop-banner-text">
+          <span class="shop-banner-title">${t('shop.tab.skins')}</span><br>
+          <span class="shop-banner-body">${t('shop.skins.needLevel', { level: UNLOCKS.SKINS })}</span>
+        </span>`;
+      bodyEl.appendChild(banner);
+    } else {
+      const pitch = document.createElement('div');
+      pitch.className = 'shop-banner-body g22-care-hint';
+      pitch.textContent = t('shop.skins.pitch');
+      bodyEl.appendChild(pitch);
+    }
+
+    // live 3D try-on stage (lazy renderer boot)
+    const stageEl = document.createElement('div');
+    stageEl.className = 'g22-skin-stage';
+    const badgeEl = document.createElement('div');
+    badgeEl.className = 'g22-skin-badge';
+    badgeEl.style.display = 'none';
+    stageEl.appendChild(badgeEl);
+    bodyEl.appendChild(stageEl);
+    mountSkinStage(stageEl, badgeEl);
+
+    const grid = document.createElement('div');
+    grid.className = 'shop-grid b3-shelf'; // V6/B3
+    for (const def of SKINS) {
+      const owned = ownedSkins.includes(def.id);
+      const equipped = equippedSkin === def.id;
+      const card = document.createElement('button');
+      card.className =
+        `shop-card g22-skin-card${equipped ? ' shop-card-sel' : ''}` +
+        `${selSkin === def.id ? ' g22-skin-tryon' : ''}${locked ? ' g22-locked' : ''}`;
+      const state = equipped
+        ? `<span class="shop-state">${icon('check', 11)} ${t('wardrobe.equipped')}</span>`
+        : owned
+          ? `<span class="shop-state">${t('shop.owned')} · ${t('shop.apply')}</span>`
+          : priceTag(def.price);
+      card.innerHTML = `
+        <span class="g22-skin-chip" style="${skinSwatchStyle(def)}"></span>
+        <span class="shop-name">${t(def.nameKey)}</span>
+        ${state}`;
+      card.addEventListener('click', () => {
+        audio.play('ui.tap');
+        if (locked) {
+          ui.toast('shop.skins.needLevel', { level: UNLOCKS.SKINS });
+          return;
+        }
+        if (owned) {
+          if (!equipped) {
+            selSkin = null;
+            store.update((state2) => {
+              state2.skins.equipped = def.id;
+            });
+            ui.toast('toast.appliedItem', { name: t(def.nameKey) });
+          }
+          skinStage?.setSkin(null);
+          renderBody();
+          return;
+        }
+        // not owned: live try-on; buying needs the shop trip (§C4)
+        selSkin = selSkin === def.id ? null : def.id;
+        skinStage?.setSkin(selSkin);
+        if (!atTrip() && selSkin) ui.toast('shop.browseHint');
+        for (const el of grid.children) {
+          el.classList.toggle('g22-skin-tryon', el === card && !!selSkin);
+        }
+      });
+      if (atTrip() && !locked && !owned) {
+        const buyBtn = document.createElement('span');
+        buyBtn.className = 'btn btn-teal g22-skin-buy';
+        buyBtn.textContent = t('shop.buy');
+        buyBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const res = buySkin(store, def.id);
+          if (res.ok) {
+            selSkin = null;
+            audio.play('coin.spend');
+            audio.play('jingle.outfit');
+            ui.toast('toast.itemBought', { name: t(def.nameKey) });
+            skinStage?.setSkin(null);
+          } else if (res.reason === 'coins') {
+            ui.toast('toast.notEnoughCoins');
+          } else if (res.reason === 'level') {
+            ui.toast('shop.skins.needLevel', { level: UNLOCKS.SKINS });
+          }
+          renderBody();
+        });
+        card.appendChild(buyBtn);
+      }
+      grid.appendChild(card);
+    }
+    bodyEl.appendChild(grid);
+  }
+
+  // ------------------------------------------------------------ frame/tabs
+  const TABS = [
+    ['food', 'shop.tab.food', renderFood],
+    // V4/G70: direct Care surface; sick shop arrivals auto-select this row.
+    ['care', 'shop.tab.care', renderCare],
+    ['furniture', 'shop.tab.furniture', renderFurniture],
+    ['decor', 'shop.tab.decor', renderDecor],
+    ['outfits', 'shop.tab.outfits', renderOutfits],
+    ['skins', 'shop.tab.skins', renderSkins], // V2/G22 (§C8.5, L5 gate §B6)
+  ];
+
+  function renderBody() {
+    if (!bodyEl) return;
+    disposeSkinStage(); // V2/G22: the skins tab rebuilds its 3D stage per render
+    bodyEl.textContent = '';
+    // V6/B3: aisle header sign — echoes the active category (the tabs above
+    // stay the functional selector; the sign is decorative store dressing).
+    const aisle = document.createElement('div');
+    aisle.className = 'b3-aisle';
+    aisle.setAttribute('aria-hidden', 'true');
+    aisle.innerHTML = `<span class="b3-aisle-sign">${tx(`thm.shop.aisle.${tab}`)}</span>`;
+    bodyEl.appendChild(aisle);
+    TABS.find(([id]) => id === tab)?.[2]();
+  }
+
+  return {
+    /**
+     * @param {HTMLElement} el
+     * @param {{mode?: 'trip'|'browse', tab?: string}} [params]
+     */
+    mount(el, params = {}) {
+      musicDirector.pushContext('shop'); // V3/G32: shop medley overlay (§B2.4 — now the fallback wish)
+      try {
+        audio.radio?.playContext?.('location:shop'); // V4/POLISH-G: real IKEA track
+      } catch { /* no radio engine in this context */ }
+      mode = params.mode === 'trip' ? 'trip' : 'browse';
+      const requestedTab = TABS.some(([id]) => id === params.tab) ? params.tab : 'food';
+      sickFocus = sickShopFocus(
+        store.get('health.state'),
+        store.get('items.medicine') ?? 0,
+        medicinePulseShown
+      );
+      tab = sickFocus.tab ?? requestedTab;
+      selFood = null;
+      qty = 1;
+      foodFilter = 'all'; // V2/G22
+      furnRoom = 'all';
+      selSkin = null;
+
+      const wrap = document.createElement('div');
+      wrap.className = 'shop-wrap';
+      const arrival = atTrip() ? getArrival?.() : null;
+      wrap.innerHTML = `
+        <div class="shop-head">
+          ${atTrip() ? '' : `<button class="btn btn-ghost btn-round shop-close" aria-label="${t('ui.close')}">${icon('close', 20)}</button>`}
+          <h1 class="shop-title">${icon('cart', 26)} ${t('shop.title')}</h1>
+          ${coinsPill()}
+          ${atTrip() ? `<button class="btn btn-teal shop-home">${icon('home', 18)} ${t('trip.goHome')}</button>` : ''}
+        </div>
+        <div class="b3-awning" aria-hidden="true"></div>
+        ${arrival ? `<div class="shop-hint">${icon('sparkle', 15)} ${t('trip.earned', { coins: arrival.coins ?? 0 })}</div>` : ''}
+        ${atTrip() ? '' : `<div class="shop-hint">${icon('car', 15)} ${t('shop.browseHint')}</div>`}
+        <div class="shop-tabs ac-tabbar ac-tabbar-wrap"></div>
+        <div class="shop-body"></div>`;
+      const tabsEl = wrap.querySelector('.shop-tabs');
+      for (const [id, key] of TABS) {
+        const b = document.createElement('button');
+        // V4/UI-DEEP: shop tabs ride the shared .ac-tab kit (active = leaf)
+        b.className = `shop-tab ac-tab ac-tab-label${tab === id ? ' shop-tab-on' : ''}`;
+        b.setAttribute('aria-selected', tab === id ? 'true' : 'false');
+        b.dataset.tab = id;
+        b.lang = getLang(); // V4/G-UI: language-correct hyphenation (wardrobe precedent)
+        b.textContent = hyTab(t(key));
+        b.addEventListener('click', () => {
+          audio.play('ui.tap');
+          tab = id;
+          selFood = null;
+          for (const other of tabsEl.children) {
+            other.classList.toggle('shop-tab-on', other === b);
+            other.setAttribute('aria-selected', other === b ? 'true' : 'false');
+          }
+          renderBody();
+        });
+        tabsEl.appendChild(b);
+      }
+      wrap.querySelector('.shop-home')?.addEventListener('click', () => {
+        audio.play('ui.tap');
+        goHome();
+      });
+      wrap.querySelector('.shop-close')?.addEventListener('click', () => {
+        audio.play('ui.tap');
+        ui.closeAll();
+      });
+      el.appendChild(wrap);
+      bodyEl = wrap.querySelector('.shop-body');
+      renderBody();
+      if (sickFocus.pulseMedicine) {
+        // Keep the class on this rendered card, but prevent subsequent
+        // re-renders/remounts from replaying the stronger pulse.
+        medicinePulseShown = true;
+        sickFocus = Object.freeze({ ...sickFocus, pulseMedicine: false });
+      }
+
+      // live coin counter + re-render on inventory/decor changes from panels
+      const coinsEl = wrap.querySelector('.shop-coins-n');
+      subs = [
+        store.on('coinsChanged', (coins) => {
+          if (coinsEl) coinsEl.textContent = String(coins);
+        }),
+        store.on('decorChanged', () => renderBody()),
+      ];
+      audio.play('ui.open');
+    },
+
+    unmount() {
+      musicDirector.popContext('shop'); // V3/G32: back to the scene wish (§B2.4)
+      // V4/POLISH-G: hand the element back — only when the shop track still
+      // owns it (a user station was never displaced). stop() resumes the
+      // remembered room wish; a persisted user radio session re-asserts.
+      try {
+        const radio = audio.radio;
+        if (radio?.getStats?.().context === 'location:shop') {
+          if (store.get('radio')?.playing === true) radio.start?.();
+          else radio.stop?.();
+        }
+      } catch { /* no radio engine in this context */ }
+      for (const off of subs) off?.();
+      subs = [];
+      bodyEl = null;
+      disposeSkinStage(); // V2/G22: stop the skins-tab preview renderer
+      selSkin = null;
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Sibling-panel hooks (no G5/G7 file edits): fridge-tray Order chip +
+// confirm-sheet "Just browse" — a MutationObserver on the #ui root watches
+// for the panels' backdrops and augments them after mount.
+// ---------------------------------------------------------------------------
+
+/** @param {{store: object, ui: object, audio: object}} deps */
+function installPanelHooks({ store, ui, audio }) {
+  if (!ui.el || typeof window === 'undefined' || !window.MutationObserver) return;
+
+  const observer = new window.MutationObserver((mutations) => {
+    for (const m of mutations) {
+      for (const node of m.addedNodes) {
+        if (!(node instanceof HTMLElement)) continue;
+        if (node.classList.contains('panel-backdrop-foodTray')) decorateFoodTray(node);
+        else if (node.classList.contains('panel-backdrop-shopTripConfirm')) decorateConfirm(node);
+      }
+    }
+  });
+  observer.observe(ui.el, { childList: true });
+
+  /** Quick-delivery Order chip in the fridge tray (§C4.6) — only when owned. */
+  function decorateFoodTray(backdrop) {
+    if (!store.get('quickDelivery')) return;
+    const panel = backdrop.querySelector('.panel');
+    if (!panel || panel.querySelector('.g11-order-btn')) return;
+    const btn = document.createElement('button');
+    btn.className = 'btn btn-teal g11-order-btn';
+    btn.innerHTML = `${icon('cart', 18)} ${t('shop.orderMore')} <span style="opacity:.75;font-size:13px">· ${t('shop.qd.note')}</span>`;
+    btn.addEventListener('click', () => {
+      audio.play('ui.tap');
+      ui.closePanel('foodTray');
+      ui.showScreen('shop', { mode: 'browse', tab: 'food' });
+    });
+    panel.appendChild(btn);
+  }
+
+  /** "Just browse" on the shop-trip confirm sheet → read-only shop (§C5). */
+  function decorateConfirm(backdrop) {
+    const row = backdrop.querySelector('.mg-btn-row');
+    if (!row || row.querySelector('.g11-browse-btn')) return;
+    const btn = document.createElement('button');
+    btn.className = 'btn btn-ghost g11-browse-btn';
+    btn.textContent = t('shop.browse');
+    btn.addEventListener('click', () => {
+      audio.play('ui.tap');
+      ui.closePanel('shopTripConfirm');
+      ui.showScreen('shop', { mode: 'browse' });
+    });
+    row.appendChild(btn);
+  }
+}

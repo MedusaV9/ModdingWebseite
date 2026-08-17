@@ -1,0 +1,8 @@
+[gd_scene load_steps=2 format=3 uid="uid://c3aurlstrand1"]
+
+[ext_resource type="Script" path="res://scripts/city/urlaub/urlaubs_ort.gd" id="1_urlaub"]
+
+[node name="UrlaubStrand" type="Node3D"]
+script = ExtResource("1_urlaub")
+archetyp = "strand"
+ort_id = "urlaub_strand"

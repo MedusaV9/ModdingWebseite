@@ -1,0 +1,512 @@
+# GOOBY-GODOT CI (W1a CORE; W4-P5 INFRA: lint || tests parallelisiert,
+# Test-Report-Artefakte, Job-Timeouts; FB-6/CI: deterministisch gehärtet).
+#
+# LOKALES SPIEGELBILD: tools/ci/preflight.sh prüft VOR dem Push exakt die
+# Schritte dieses Workflows (Format, Lint, Import-Vollständigkeit, Tests,
+# Boot-Smoke) — Pflicht laut AGENTS.md. Wer die Preflight grün hat, ist
+# hier grün (ios-ipa-Job ausgenommen, der braucht macOS/xcodebuild).
+#
+# WICHTIG: Der bestehende Web-Spiel-Workflow .github/workflows/gooby-ios.yml
+# triggert auf GOOBY/** und bleibt UNBERÜHRT. Dieser Workflow hier triggert
+# ausschließlich auf GOOBY-GODOT/** + tools/ci/** + sich selbst.
+#
+# Job lint: NUR gdtoolkit via pip (braucht kein Godot-Binary) →
+# gdlint/gdformat. Läuft parallel zu linux-checks statt danach — spart
+# auf dem kritischen Pfad die komplette Lint-Zeit.
+#
+# Job linux-checks (Name bewusst stabil — needs: des ios-Skeletons zeigt
+# darauf): Godot 4.4.1 (gecacht via actions/cache + tools/ci/install_godot.sh,
+# Cache-Hit = kein Download) + Node-Serverdeps → Server-Suite →
+# Import-bis-vollständig-Schleife (ein einzelner Durchlauf lässt abhängige
+# Ressourcen offen — Gate ist check_imports.py, identisch zum ios-Job) →
+# beide Test-Runner (inkl. echter Godot↔Node-Netzintegration) → Boot-Smoke
+# (--quit). Fehlende Server-Voraussetzungen sind hart rot, niemals Skip.
+# Alle Logs landen als Artefakt "test-reports" (auch bei roten Läufen).
+#
+# Job ios-ipa: baut die UNSIGNIERTE .ipa (Sideload via AltStore/Sideloadly).
+# Godot-Export (export_project_only) -> Xcode-Projekt -> xcodebuild ohne
+# Signing -> Payload/ zippen -> tools/ci/verify_ipa.py (Erwartungen aus dem
+# Export-Preset ABGELEITET — ein hart kodierter Orientierungs-Set-Vergleich
+# hat nach dem bewussten Preset-Wechsel in W6/FIX 8 Runs in Folge rot
+# gemacht). Artefakt: GOOBY-godot-unsigned-ipa.
+#
+# Job release (W13C, B §5.2): läuft NUR bei Tag-Push `ipa-v*` oder bei
+# workflow_dispatch MIT gesetztem Input `release_version` — normale
+# Branch-Pushes erreichen den Job nie (if-Gate + needs auf grüne
+# linux-checks UND ios-ipa). Er benennt die .ipa versioniert um, legt sie
+# als GitHub-Release-Asset ab und bumpt danach `latest_native` im
+# manifest.json des rollenden `updates`-Release DIESES Repos (W15/UPDREPO;
+# der Step überspringt sich sauber, solange es den Release noch nicht gibt).
+name: GOOBY Godot
+
+on:
+  push:
+    # `branches: ["**"]` ist das EXPLIZITE Abbild des bisherigen Verhaltens
+    # (jeder Branch-Push, gefiltert über paths). Nötig, weil ein nacktes
+    # `tags:` sonst alle Branch-Pushes abschalten würde (GitHub-Semantik:
+    # nur definierte Ref-Filter triggern). paths-Filter werden bei
+    # Tag-Pushes von GitHub IGNORIERT — der ipa-v*-Tag triggert also
+    # zuverlässig die volle Kette lint/linux-checks/ios-ipa/release.
+    branches: ["**"]
+    tags: ["ipa-v*"]
+    paths:
+      - "GOOBY-GODOT/**"
+      - "GOOBY-SERVER/**"
+      - "tools/ci/**"
+      - ".github/workflows/gooby-godot.yml"
+  workflow_dispatch:
+    inputs:
+      # Leer (Default) = Verhalten wie bisher: nur Build, KEIN Release.
+      # Gesetzt (z. B. "5.1.0") = Release-Job läuft und erzeugt/aktualisiert
+      # das GitHub-Release ipa-v<version> samt versionierter .ipa.
+      release_version:
+        description: "IPA-Release bauen? Semver ohne Präfix (z. B. 5.1.0); leer = kein Release."
+        required: false
+        default: ""
+
+env:
+  GODOT_VERSION: "4.4.1"
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: gdtoolkit installieren
+        run: pip install "gdtoolkit==4.*"
+
+      # xargs splittet bei vielen Dateien in mehrere Aufrufe; ohne die Pipefail-
+      # Behandlung verschluckt die Shell sonst den ersten Fehler (Exit 123).
+      # Häufigste Rot-Ursache der CI-Historie (10 von 11 roten Runs):
+      # unformatierte Dateien — lokal fängt tools/ci/preflight.sh das ab.
+      - name: gdlint
+        working-directory: GOOBY-GODOT
+        run: |
+          set -o pipefail
+          git ls-files -z -- "*.gd" | xargs -0 --no-run-if-empty gdlint \
+            || { echo "::error::gdlint rot — vor dem Push tools/ci/preflight.sh laufen lassen"; exit 1; }
+
+      - name: gdformat --check
+        working-directory: GOOBY-GODOT
+        run: |
+          set -o pipefail
+          git ls-files -z -- "*.gd" | xargs -0 --no-run-if-empty gdformat --check \
+            || { echo "::error::unformatierte Dateien — 'gdformat' laufen lassen (tools/ci/preflight.sh prüft das vor dem Push)"; exit 1; }
+
+  linux-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Release-Tag, Projekt- und Bundle-Version vorprüfen
+        env:
+          INPUT_VERSION: ${{ inputs.release_version }}
+        run: |
+          python3 tools/ci/test_check_release_version.py
+          python3 tools/ci/check_release_version.py
+
+      # Normale Branch-Builds behalten den ehrlichen Offline-Default. Ein
+      # Tag-/Dispatch-Release ist dagegen nur grün, wenn die Repository-
+      # Variable auf einen öffentlichen wss://-Host zeigt.
+      - name: Öffentlichen Release-WSS-Endpunkt vorprüfen
+        env:
+          INPUT_VERSION: ${{ inputs.release_version }}
+          GOOBY_RELEASE_WSS_URL: ${{ vars.GOOBY_RELEASE_WSS_URL }}
+        run: |
+          python3 tools/ci/test_configure_release_endpoint.py
+          python3 tools/ci/configure_release_endpoint.py
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: GOOBY-SERVER/package-lock.json
+
+      - name: Server-Dependencies installieren
+        working-directory: GOOBY-SERVER
+        run: npm ci
+
+      - name: Node-Server-Suite
+        working-directory: GOOBY-SERVER
+        run: npm test
+
+      - name: Godot-Log-Gate Selbsttest
+        run: python3 tools/ci/test_check_godot_log.py
+
+      - name: Godot-Binary cachen
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/godot-bin
+          key: godot-${{ env.GODOT_VERSION }}-linux-x86_64
+
+      - name: Godot ${{ env.GODOT_VERSION }} installieren
+        run: bash tools/ci/install_godot.sh
+
+      # Ein Einzeldurchlauf lässt abhängige Ressourcen (Font-Varianten, SVGs)
+      # offen — deshalb dieselbe Import-bis-vollständig-Schleife wie im
+      # ios-Job: Gate ist die faktische Existenz aller dest_files-Ziele.
+      - name: Ressourcen importieren (bis alle Ziele existieren)
+        run: |
+          set -uo pipefail
+          mkdir -p test-reports
+          for i in 1 2 3 4; do
+            echo "--- Import-Durchlauf $i ---" | tee -a test-reports/import.log
+            godot --headless --path GOOBY-GODOT --import >>test-reports/import.log 2>&1 || true
+            if python3 tools/ci/check_imports.py GOOBY-GODOT | tee -a test-reports/import.log; then
+              echo "Alle Import-Ziele vorhanden nach Durchlauf $i"
+              exit 0
+            fi
+          done
+          echo "::error::Import unvollständig nach 4 Durchläufen"
+          python3 tools/ci/check_imports.py GOOBY-GODOT
+          exit 1
+
+      - name: Test-Runner
+        env:
+          GODOT_LOG_ALLOWLIST: tools/ci/godot-log-allowlist.txt
+        run: >
+          bash tools/ci/run_godot_checked.sh test-reports/run_tests.log --
+          bash tools/ci/run_godot_isolated.sh
+          godot --headless --path GOOBY-GODOT --script res://tests/run_tests.gd
+
+      - name: Unit-Tests (W1c-UI-Runner)
+        run: >
+          bash tools/ci/run_godot_checked.sh test-reports/run_w1c_tests.log --
+          bash tools/ci/run_godot_isolated.sh
+          godot --headless --path GOOBY-GODOT --script res://tests/unit/run_w1c_tests.gd
+
+      - name: Boot-Smoke (Projekt bootet headless)
+        run: >
+          bash tools/ci/run_godot_checked.sh test-reports/boot_smoke.log --
+          bash tools/ci/run_godot_isolated.sh
+          godot --headless --path GOOBY-GODOT --quit
+
+      - name: Test-Reports hochladen (auch bei roten Läufen)
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-reports
+          path: test-reports/
+
+  # ---------------------------------------------------------------------------
+  # Unsignierte .ipa fuer Sideload (AltStore/Sideloadly) — KEINE Apple-Zertifikate.
+  # Godot exportiert mit application/export_project_only=true ein Xcode-Projekt
+  # (lokal auf Linux verifiziert: GOOBY.xcodeproj + GOOBY.pck + xcframeworks),
+  # xcodebuild baut es ohne Signing, danach wird Payload/ zur .ipa gezippt.
+  # Die App-Store-Team-ID im Preset ist ein Platzhalter — fuer unsignierte
+  # Builds irrelevant, Godot verlangt das Feld aber beim Export.
+  # ---------------------------------------------------------------------------
+  ios-ipa:
+    runs-on: macos-15
+    needs: linux-checks
+    # Der Build bleibt nach den Linux-Tests eingeordnet, läuft aber auch bei
+    # roten Tests. So gibt es weiterhin eine testbare IPA; ihr Artefaktname
+    # kennzeichnet den roten Vorlauf unmissverständlich als UNVERIFIED.
+    if: ${{ always() && needs.linux-checks.result != 'cancelled' }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+
+      # Schreibt nur bei ipa-v*-Tag bzw. gesetztem Dispatch-Input. Ohne
+      # öffentliche Repository-Variable bricht ein Release fail-closed ab;
+      # normale Test-IPAs bleiben absichtlich offline statt localhost-falsch.
+      - name: Release-WSS-Endpunkt in das Config-Pack einbetten
+        env:
+          INPUT_VERSION: ${{ inputs.release_version }}
+          GOOBY_RELEASE_WSS_URL: ${{ vars.GOOBY_RELEASE_WSS_URL }}
+        run: python3 tools/ci/configure_release_endpoint.py --write
+
+      - name: Roten Linux-Vorlauf kennzeichnen
+        if: ${{ needs.linux-checks.result != 'success' }}
+        run: |
+          echo "::warning::Linux-Tests sind ${{ needs.linux-checks.result }}; die IPA wird nur zum Testen gebaut."
+          echo "## IPA aus rotem Linux-Vorlauf" >> "$GITHUB_STEP_SUMMARY"
+          echo "Artefakt wird als **UNVERIFIED** gekennzeichnet." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Godot (macOS) + Export-Templates cachen
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/godot-bin
+            ~/Library/Application Support/Godot/export_templates
+          key: godot-${{ env.GODOT_VERSION }}-macos-plus-templates
+
+      - name: Godot (macOS) + Export-Templates installieren
+        run: |
+          set -euo pipefail
+          BIN_DIR="$HOME/godot-bin"
+          APP="$BIN_DIR/Godot.app/Contents/MacOS/Godot"
+          if [ ! -x "$APP" ]; then
+            mkdir -p "$BIN_DIR"
+            curl -fL --retry 3 -o /tmp/godot.zip \
+              "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_macos.universal.zip"
+            unzip -q /tmp/godot.zip -d "$BIN_DIR"
+          fi
+          TPL_DIR="$HOME/Library/Application Support/Godot/export_templates/${GODOT_VERSION}.stable"
+          if [ ! -f "$TPL_DIR/ios.zip" ]; then
+            curl -fL --retry 3 -o /tmp/templates.tpz \
+              "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+            mkdir -p "$TPL_DIR"
+            unzip -q -o /tmp/templates.tpz -d /tmp/godot-templates
+            mv /tmp/godot-templates/templates/* "$TPL_DIR/"
+          fi
+          "$APP" --version
+
+      # Godot importiert in EINEM Durchlauf nicht alles: abhaengige Ressourcen
+      # (Font-Varianten, SVG-Texturen) werden erst nach dem ersten Scan bekannt.
+      # Auf Fehlerzeilen zu greppen taugt NICHT als Gate — die Autoloads laufen
+      # beim Start vor dem Import und melden dabei immer "have been imported".
+      # Deshalb wird faktisch geprueft, ob jedes `dest_files`-Ziel existiert.
+      - name: Ressourcen importieren (bis alle Ziele existieren)
+        run: |
+          set -uo pipefail
+          GODOT="$HOME/godot-bin/Godot.app/Contents/MacOS/Godot"
+          for i in 1 2 3 4; do
+            echo "--- Import-Durchlauf $i ---"
+            "$GODOT" --headless --path GOOBY-GODOT --import >/dev/null 2>&1 || true
+            if python3 tools/ci/check_imports.py GOOBY-GODOT; then
+              echo "Alle Import-Ziele vorhanden nach Durchlauf $i"
+              exit 0
+            fi
+          done
+          echo "::error::Import unvollstaendig nach 4 Durchlaeufen"
+          python3 tools/ci/check_imports.py GOOBY-GODOT
+          exit 1
+
+      # GOOBY-WIDGETS (1/3): statische Plugin-Lib VOR dem Export bauen — das
+      # Preset (plugins/goobykit=true) bindet ios/plugins/goobykit/goobykit.a
+      # via goobykit.gdip ein; fehlt die .a, bricht der Export ab.
+      - name: goobykit-Plugin (static lib) bauen
+        run: bash tools/ci/build_goobykit.sh
+
+      - name: iOS-Xcode-Projekt exportieren
+        run: |
+          set -euo pipefail
+          mkdir -p build/ios
+          "$HOME/godot-bin/Godot.app/Contents/MacOS/Godot" --headless --path GOOBY-GODOT \
+            --export-release "ios" "$PWD/build/ios/GOOBY.ipa" 2>&1 | tee /tmp/export.log
+          ls -la build/ios
+          # Fail-closed: ein Export mit fehlenden Ressourcen laeuft sonst
+          # "erfolgreich" durch und liefert eine .ipa mit leeren Texturen.
+          if grep -q "have been imported" /tmp/export.log; then
+            echo "::error::Export meldet nicht importierte Ressourcen"
+            exit 1
+          fi
+
+      # Lens C Befund 10c: Der Godot-Export muss WARNUNGSFREI sein. Historie
+      # (letzter Lauf VOR den Fixes): 'Unicode parsing error ... NUL character'
+      # (NUL-Literal in test_migration_fuzz.gd — gesaeubert, und tests/** ist
+      # inzwischen ganz vom Export ausgeschlossen) plus das Auto-Resize der
+      # beiden iPhone-Icons (jetzt echte 120/180-Assets im Preset). Gemustert
+      # wird auf WARNING:/ERROR:-Zeilen (Godot färbt sie ggf. mit ANSI-Codes
+      # ein — deshalb KEIN Zeilenanfang-Anker), die Unicode-Meldung (kommt
+      # OHNE WARNING-Präfix) und den Auto-Resize-Text. Die Whitelist ist
+      # bewusst LEER — der letzte gruene Lauf hatte nach den Fixes keine
+      # benignen Godot-Export-Warnungen. Neue benigne Warnungen hier als
+      # Regex-Alternative eintragen und im Kommentar begruenden. (Der lokale
+      # 'Invalid plugin config file goobykit.gdip'-Hinweis gehoert NICHT
+      # hierher: er tritt nur ohne gebaute goobykit.a auf — in CI baut
+      # build_goobykit.sh die Lib VOR dem Export, das Gate soll ein kaputtes
+      # Plugin-Setup gerade laut machen.)
+      - name: Export-Warnungs-Gate (Whitelist leer)
+        run: |
+          set -euo pipefail
+          WHITELIST_REGEX='^__nichts_whitelisted__$'
+          HITS="$(grep -E "WARNING:|ERROR:|Unicode parsing error|automatically resized" /tmp/export.log | grep -Ev "$WHITELIST_REGEX" || true)"
+          if [ -n "$HITS" ]; then
+            echo "::error::Godot-Export hat nicht-whitelistete Warnungen/Fehler (s. Step-Log; Whitelist im Workflow dokumentiert)"
+            echo "$HITS"
+            exit 1
+          fi
+          echo "Export-Log warnungsfrei (Muster: WARNING:/ERROR:/Unicode/Auto-Resize; Whitelist leer)."
+
+      # GOOBY-WIDGETS (2/3): WidgetKit-Extension als zweites Target + Swift-
+      # Laufzeit ins App-Target injizieren (ruby-Gem xcodeproj, idempotent).
+      # Das GOOBY-Scheme baut die Extension danach automatisch mit
+      # (Target-Dependency) und bettet sie unter PlugIns/ ein.
+      - name: Widget-Extension + goobykit-Runtime injizieren
+        run: |
+          set -euo pipefail
+          if ! ruby -e "require 'xcodeproj'" 2>/dev/null; then
+            gem install xcodeproj --no-document || sudo gem install xcodeproj --no-document
+          fi
+          ruby tools/ci/inject_widgets.rb build/ios/GOOBY.xcodeproj \
+            GOOBY-GODOT/ios/widgets GOOBY-GODOT/ios/plugins/goobykit \
+            group.com.permissionmaxed.gooby.shared com.permissionmaxed.gooby.widgets
+
+      - name: xcodebuild (unsigned)
+        run: |
+          set -euo pipefail
+          cd build/ios
+          xcodebuild -project GOOBY.xcodeproj -scheme GOOBY -configuration Release \
+            -sdk iphoneos -derivedDataPath dd \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            ENABLE_BITCODE=NO build
+
+      - name: .ipa packen
+        run: |
+          set -euo pipefail
+          cd build/ios
+          APP_PATH="$(find dd/Build/Products/Release-iphoneos -maxdepth 1 -name '*.app' | head -1)"
+          test -n "$APP_PATH"
+          rm -rf Payload && mkdir Payload
+          cp -R "$APP_PATH" Payload/
+          zip -qry GOOBY-godot-unsigned.ipa Payload
+          ls -la GOOBY-godot-unsigned.ipa
+
+      # Erwartungen (Orientierungen, Bundle-Id, Min-iOS, Device-Family) werden
+      # aus export_presets.cfg ABGELEITET — hart kodierte Sets veralten (8 rote
+      # Runs nach W6/FIX). Druckt am Ende ".ipa gebaut: X MB, Y Dateien im PCK".
+      - name: .ipa forensisch verifizieren
+        run: |
+          set -euo pipefail
+          python3 tools/ci/verify_ipa.py build/ios/GOOBY-godot-unsigned.ipa GOOBY-GODOT
+
+      # GOOBY-WIDGETS (3/3): eingebettete Extension belegen — unzip -l als
+      # Sichtbeleg (PlugIns/*.appex), danach die tiefe Pruefung (WidgetKit-
+      # Extension-Point, App-Group in beiden Entitlements, Live-Activity-
+      # Schalter, Symbol-Spuren) via verify_widgets.py.
+      - name: Widget-Extension forensisch verifizieren
+        run: |
+          set -euo pipefail
+          echo "--- unzip -l (PlugIns + Entitlements) ---"
+          unzip -l build/ios/GOOBY-godot-unsigned.ipa | grep -E "PlugIns/|\.entitlements" \
+            || { echo "::error::Keine PlugIns/Entitlements in der IPA"; exit 1; }
+          unzip -l build/ios/GOOBY-godot-unsigned.ipa | grep -q "PlugIns/GoobyWidgets.appex/" \
+            || { echo "::error::PlugIns/GoobyWidgets.appex fehlt in der IPA"; exit 1; }
+          python3 tools/ci/verify_widgets.py build/ios/GOOBY-godot-unsigned.ipa GOOBY-GODOT
+
+      - name: Verifizierte .ipa hochladen
+        if: ${{ needs.linux-checks.result == 'success' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: GOOBY-godot-unsigned-ipa
+          path: build/ios/GOOBY-godot-unsigned.ipa
+
+      - name: .ipa aus rotem Linux-Vorlauf hochladen
+        if: ${{ needs.linux-checks.result != 'success' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: GOOBY-godot-unsigned-ipa-UNVERIFIED-linux-${{ needs.linux-checks.result }}
+          path: build/ios/GOOBY-godot-unsigned.ipa
+
+  # ---------------------------------------------------------------------------
+  # IPA-Release (W13C; Doc B §5.2): NUR bei Tag-Push `ipa-v*` oder bei
+  # workflow_dispatch mit gesetztem Input `release_version`. Doppelt gegated:
+  # needs verlangt GRÜNE linux-checks UND ios-ipa (eine UNVERIFIED-.ipa aus
+  # rotem Linux-Vorlauf wird nie released), das if prüft zusätzlich den
+  # Trigger. Für Branch-Pushes ist der Job damit unerreichbar — der
+  # bestehende Push-Flow bleibt unangetastet.
+  #
+  # Release fahren (docs/UPDATES.md §6 „Release fahren“):
+  #   git tag ipa-v5.1.0 && git push origin ipa-v5.1.0
+  # oder Actions → „GOOBY Godot“ → Run workflow → release_version=5.1.0.
+  # ---------------------------------------------------------------------------
+  release:
+    runs-on: ubuntu-latest
+    needs: [linux-checks, ios-ipa]
+    if: >-
+      ${{ needs.linux-checks.result == 'success' &&
+          needs.ios-ipa.result == 'success' &&
+          (startsWith(github.ref, 'refs/tags/ipa-v') ||
+           (github.event_name == 'workflow_dispatch' &&
+            inputs.release_version != '')) }}
+    timeout-minutes: 15
+    # Standard-GITHUB_TOKEN reicht fürs Release IM SELBEN Repo — aber nur mit
+    # expliziter contents:write-Permission am Job (Default ist read-only).
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      # Derselbe fail-closed Wächter wie in linux-checks: Tag/Dispatch müssen
+      # EXAKT project.godot entsprechen. verify_ipa.py hat im ios-Job bereits
+      # bewiesen, dass beide Info.plist-Felder dieselbe Version tragen.
+      - name: Release-Version gegen Projektversion verknüpfen
+        id: version
+        env:
+          INPUT_VERSION: ${{ inputs.release_version }}
+        run: >
+          python3 tools/ci/check_release_version.py
+          --github-output "$GITHUB_OUTPUT"
+
+      # Das im SELBEN Lauf gebaute, verifizierte Artefakt — nicht irgendein
+      # alter Stand. (needs garantiert: ios-ipa hat es gerade hochgeladen.)
+      - name: Verifizierte .ipa aus diesem Lauf laden
+        uses: actions/download-artifact@v8
+        with:
+          name: GOOBY-godot-unsigned-ipa
+          path: release-staging
+
+      - name: .ipa versioniert benennen
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          test -f release-staging/GOOBY-godot-unsigned.ipa
+          mv release-staging/GOOBY-godot-unsigned.ipa \
+            "release-staging/GOOBY-godot-unsigned-v${VERSION}.ipa"
+          ls -la release-staging
+
+      # Erstellt das Release, falls der Tag frisch gepusht wurde; bei
+      # workflow_dispatch legt die Action Tag+Release am aktuellen Commit an.
+      # Existiert das Release schon, werden Assets/Notes aktualisiert.
+      - name: GitHub-Release erstellen/aktualisieren
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ipa-v${{ steps.version.outputs.version }}
+          name: "GOOBY v${{ steps.version.outputs.version }} — unsignierte iOS-IPA"
+          prerelease: false
+          files: release-staging/GOOBY-godot-unsigned-v${{ steps.version.outputs.version }}.ipa
+          body: |
+            ## GOOBY v${{ steps.version.outputs.version }} — unsignierte iOS-IPA (Sideload)
+
+            ### Was ist neu?
+            _Bitte nach dem Release-Lauf ausfüllen (Stichpunkte reichen)._
+
+            ### Installation
+            - `GOOBY-godot-unsigned-v${{ steps.version.outputs.version }}.ipa` laden und
+              per AltStore/Sideloadly aufs Gerät bringen (Runbook:
+              `docs/godot-rewrite/IOS-BUILD.md`).
+            - Die IPA ist **unsigniert** — kein App-Store-Download, keine Apple-Zertifikate.
+
+            ### Hinweise
+            - Daten-Updates (Cosmetics, Sticker, Balance, …) kommen weiterhin OHNE neue
+              IPA über „Nach Updates suchen“ in den Einstellungen (`docs/UPDATES.md`).
+            - `latest_native` im Update-Manifest (rollender Release `updates` in diesem
+              Repo) bumpt dieser Lauf automatisch auf diese Version — ältere Apps zeigen
+              dann den „Neue App-Version nötig“-Hinweis. Existiert der `updates`-Release
+              noch nicht, wird der Bump sauber übersprungen (s. Step-Notice).
+
+      # --- latest_native-Bump (zweite Hälfte von B §5.2; W15/UPDREPO: SCHARF) ---
+      # Der Client liest latest_native aus manifest.json am rollenden
+      # Release-Tag `updates` DIESES Repos (docs/UPDATES.md §3; Parser
+      # scripts/updates/manifest.gd — das separate Content-Repo gooby-updates
+      # entfällt endgültig, User-Entscheidung W15). Robust statt rot: gibt es
+      # den `updates`-Release noch nicht (erster Pack-Release per packs-v*-Tag
+      # bzw. gooby-packs-Dispatch mit publish=true steht aus) oder fehlt das
+      # manifest.json-Asset, wird der Step mit einer Notice übersprungen.
+      # GITHUB_TOKEN reicht (Release im selben Repo); das Bump-Script selbst
+      # ist fail-closed (striktes Semver, Schema-Check, Downgrade-Verweigerung,
+      # idempotente Re-Runs — tools/ci/bump_latest_native.mjs).
+      - name: latest_native im Update-Manifest bumpen
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          if ! gh release view updates --json tagName >/dev/null 2>&1; then
+            echo "::notice::Kein 'updates'-Release vorhanden — latest_native-Bump übersprungen. Ersten Pack-Release fahren: git tag packs-v1.0.0 && git push origin packs-v1.0.0"
+            exit 0
+          fi
+          mkdir -p manifest-bump
+          if ! gh release download updates --pattern manifest.json --dir manifest-bump; then
+            echo "::notice::'updates'-Release hat kein manifest.json-Asset — latest_native-Bump übersprungen (Pack-Release prüfen)."
+            exit 0
+          fi
+          node tools/ci/bump_latest_native.mjs \
+            --manifest manifest-bump/manifest.json --version "$VERSION"
+          gh release upload updates manifest-bump/manifest.json --clobber

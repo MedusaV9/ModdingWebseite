@@ -1,0 +1,10 @@
+{
+	"id": "deliveryRush",
+	"title_key": "mg.deliveryRush.title",
+	"scene": "res://scripts/minigames/games/delivery_rush/delivery_rush.tscn",
+	"coin_table": {"divisor": 8, "min": 5, "max": 32},
+	"target": 200,
+	"orientation": "portrait",
+	"supports_endless": true,
+	"energy_cost": 6
+}

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 96 96">
+  <!-- Neugier: Fragezeichen  Halo + Gold, dunkle Kontur -->
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M31 32 C31 19 40 12 49 12 C59 12 67 19 67 29 C67 38 61 41 55 46 C50 50 48 53 48 60"
+          stroke="#FFFFFF" stroke-width="26"/>
+    <circle cx="48" cy="79" r="12" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="4"/>
+    <path d="M31 32 C31 19 40 12 49 12 C59 12 67 19 67 29 C67 38 61 41 55 46 C50 50 48 53 48 60"
+          stroke="#6B4A12" stroke-width="18"/>
+    <path d="M31 32 C31 19 40 12 49 12 C59 12 67 19 67 29 C67 38 61 41 55 46 C50 50 48 53 48 60"
+          stroke="#FFB733" stroke-width="11"/>
+    <circle cx="48" cy="79" r="8" fill="#FFB733" stroke="#6B4A12" stroke-width="4"/>
+  </g>
+</svg>

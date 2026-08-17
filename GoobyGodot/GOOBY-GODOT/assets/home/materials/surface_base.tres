@@ -1,0 +1,11 @@
+[gd_resource type="ShaderMaterial" load_steps=2 format=3]
+
+[ext_resource type="Shader" path="res://assets/home/materials/surface_recolor.gdshader" id="1_shader"]
+
+[resource]
+shader = ExtResource("1_shader")
+shader_parameter/tint = Color(1, 1, 1, 1)
+shader_parameter/meter_pro_kachel = 1.0
+shader_parameter/roughness_value = 0.95
+shader_parameter/strength = 1.0
+shader_parameter/reference_luminance = 0.78

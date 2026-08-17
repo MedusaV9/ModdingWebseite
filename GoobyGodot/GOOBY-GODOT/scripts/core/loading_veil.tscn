@@ -1,0 +1,189 @@
+[gd_scene load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://scripts/core/loading_veil.gd" id="1_veil"]
+[ext_resource type="Script" path="res://scripts/ui/wallpaper.gd" id="2_wall"]
+[ext_resource type="Script" path="res://scripts/core/loading_veil_karte.gd" id="3_karte"]
+[ext_resource type="Script" path="res://scripts/core/loading_veil_sticker.gd" id="4_sticker"]
+[ext_resource type="Script" path="res://scripts/core/loading_veil_sweep.gd" id="5_sweep"]
+[ext_resource type="Script" path="res://scripts/core/loading_veil_balken.gd" id="6_balken"]
+[ext_resource type="Script" path="res://scripts/core/loading_veil_wipe.gd" id="7_wipe"]
+
+[node name="LoadingVeil" type="CanvasLayer"]
+layer = 100
+script = ExtResource("1_veil")
+
+[node name="Root" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 0
+script = ExtResource("7_wipe")
+
+[node name="Backdrop" type="ColorRect" parent="Root"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(1, 0.980392, 0.94902, 1)
+script = ExtResource("2_wall")
+pattern = "leaves"
+wash = Color(1, 0.980392, 0.94902, 1)
+pattern_opacity = 1.0
+drift = Vector2(0, 0)
+
+[node name="Spinner" type="ColorRect" parent="Root"]
+visible = false
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -24.0
+offset_top = -24.0
+offset_right = 24.0
+offset_bottom = 24.0
+grow_horizontal = 2
+grow_vertical = 2
+pivot_offset = Vector2(24, 24)
+color = Color(1, 0.482353, 0.662745, 1)
+
+[node name="Card" type="PanelContainer" parent="Root"]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("3_karte")
+
+[node name="Clip" type="PanelContainer" parent="Root/Card"]
+clip_children = 2
+layout_mode = 2
+
+[node name="CardBox" type="VBoxContainer" parent="Root/Card/Clip"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="CoverZone" type="Control" parent="Root/Card/Clip/CardBox"]
+custom_minimum_size = Vector2(320, 152)
+layout_mode = 2
+mouse_filter = 2
+
+[node name="Fallback" type="TextureRect" parent="Root/Card/Clip/CardBox/CoverZone"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+expand_mode = 1
+
+[node name="Cover" type="TextureRect" parent="Root/Card/Clip/CardBox/CoverZone"]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Shade" type="TextureRect" parent="Root/Card/Clip/CardBox/CoverZone"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+expand_mode = 1
+
+[node name="Ready" type="Label" parent="Root/Card/Clip/CardBox/CoverZone"]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -31.0
+offset_left = 16.0
+offset_right = -16.0
+offset_bottom = -10.0
+grow_horizontal = 2
+grow_vertical = 0
+
+[node name="Gooby" type="Control" parent="Root/Card/Clip/CardBox/CoverZone"]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -86.0
+offset_top = -60.0
+offset_right = -14.0
+offset_bottom = 12.0
+grow_horizontal = 0
+grow_vertical = 0
+script = ExtResource("4_sticker")
+
+[node name="Body" type="MarginContainer" parent="Root/Card/Clip/CardBox"]
+layout_mode = 2
+
+[node name="BodyBox" type="VBoxContainer" parent="Root/Card/Clip/CardBox/Body"]
+layout_mode = 2
+
+[node name="Title" type="Label" parent="Root/Card/Clip/CardBox/Body/BodyBox"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="BarZone" type="Control" parent="Root/Card/Clip/CardBox/Body/BodyBox"]
+custom_minimum_size = Vector2(0, 12)
+layout_mode = 2
+mouse_filter = 2
+
+[node name="Sweep" type="Control" parent="Root/Card/Clip/CardBox/Body/BodyBox/BarZone"]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("5_sweep")
+
+[node name="Progress" type="ProgressBar" parent="Root/Card/Clip/CardBox/Body/BodyBox/BarZone"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+max_value = 1.0
+step = 0.001
+show_percentage = false
+script = ExtResource("6_balken")
+
+[node name="Laedt" type="Label" parent="Root/Card/Clip/CardBox/Body/BodyBox"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="Tip" type="Label" parent="Root/Card/Clip/CardBox/Body/BodyBox"]
+unique_name_in_owner = true
+layout_mode = 2
+autowrap_mode = 2

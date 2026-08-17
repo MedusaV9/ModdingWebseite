@@ -1,0 +1,7 @@
+# Absichtlich ausgelöste Negativpfade der Unit-Suite. Jede Regex muss die
+# komplette Logzeile treffen; alle anderen SCRIPT ERROR/ERROR/Leaks/Skips
+# bleiben fail-closed.
+ERROR: AppSettings\.value_of: unbekannter Key 'gibt\.es\.nicht'\.
+ERROR: \[save_manager\] Save fehlgeschlagen: Schreiben nach user://w1d_tests/mgr_[0-9]+_[0-9]+/save_v5\.json\.tmp fehlgeschlagen \(store_string unvollständig — volle Platte\?\)
+ERROR: \[save_manager\] Save fehlgeschlagen: kann user://w1d_tests/mgr_[0-9]+_[0-9]+/save_v5\.json\.tmp nicht öffnen \(File: Permission denied\)
+ERROR: \[save_manager\] Save fehlgeschlagen: rename user://w1d_tests/mgr_[0-9]+_[0-9]+/save_v5\.json\.tmp → user://w1d_tests/mgr_[0-9]+_[0-9]+/save_v5\.json fehlgeschlagen \(Can't create\)

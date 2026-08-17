@@ -1,0 +1,10 @@
+{
+	"id": "fishingPond",
+	"title_key": "mg.fishingPond.title",
+	"scene": "res://scripts/minigames/games/fishing_pond/fishing_pond.tscn",
+	"coin_table": {"divisor": 3, "min": 4, "max": 26},
+	"target": 65,
+	"orientation": "portrait",
+	"supports_endless": true,
+	"energy_cost": 8
+}

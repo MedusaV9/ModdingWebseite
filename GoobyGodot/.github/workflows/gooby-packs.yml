@@ -1,0 +1,98 @@
+# GOOBY Pack-Build & -Release (W2b UPDATES; W15/UPDREPO; Doc B §5.1).
+#
+# Baut die Daten-Packs (GOOBY-GODOT/content/<id>/ → .pck via
+# `godot --headless --export-pack`, config als plain JSON), erzeugt
+# manifest.json und hängt alles an den rollenden Release-Tag `updates`.
+#
+# HOST = DIESES Repo (User-Entscheidung W15): Die GOOBY-Updates laufen über
+# MedusaV9/MinecraftBubbleShieldMod (seit dem W16-Umzug aus
+# MedusaV9/CustomServerPrivate); das früher geplante separate public
+# Content-Repo `gooby-updates` entfällt ENDGÜLTIG. Da dieses Repo PRIVAT
+# ist, liefern tokenlose browser-download-URLs (releases/download/…) 404 —
+# der Client lädt deshalb über die GitHub-Release-API (api.github.com,
+# Asset-Download mit Accept: application/octet-stream) und einem
+# fine-grained PAT (nur dieses Repo, nur contents:read), den der Betreiber
+# an die Spieler verteilt. Details: docs/UPDATES.md.
+#
+# Release fahren — zwei Wege:
+#   1. Tag-Push (kontrollierter Release, der Standard-Weg):
+#        git tag packs-v1.0.0 && git push origin packs-v1.0.0
+#      → implizit packs=all + publish=true.
+#   2. workflow_dispatch (Actions → gooby-packs → Run workflow) mit den
+#      Inputs `packs`/`publish` — publish=false ist der Probe-Lauf
+#      (nur Build-Artefakt, kein Release).
+name: gooby-packs
+
+on:
+  push:
+    # Kontrollierter Release per Tag: packs-v<beliebige Versionsnotiz>.
+    # Die Pack-Versionen selbst kommen IMMER aus content/<id>/pack.json —
+    # der Tag-Name dokumentiert nur den Release-Anlass.
+    tags: ["packs-v*"]
+  workflow_dispatch:
+    inputs:
+      packs:
+        description: "Pack-Id (core/balance/events/cosmetics/stickers/codes/config) oder 'all'"
+        required: false
+        default: "all"
+      publish:
+        description: "Release-Assets am Tag 'updates' veröffentlichen?"
+        type: boolean
+        required: false
+        default: false
+  # Bewusst KEIN branch-push-Trigger: der `updates`-Release ist der
+  # LIVE-Stand aller Clients — veröffentlicht wird nur kontrolliert per
+  # packs-v*-Tag oder explizitem Dispatch mit publish=true.
+
+concurrency: manifest-update # verhindert Races zweier paralleler Pack-Builds
+
+permissions:
+  contents: write
+
+jobs:
+  build-packs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Godot 4.4.1 cachen
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/godot-bin
+          key: godot-4.4.1-linux-x86_64
+
+      - name: Godot installieren
+        run: bash tools/ci/install_godot.sh
+
+      # Tag-Trigger: inputs sind leer → Fallback 'all' greift (implizit alles).
+      - name: Packs bauen + verifizieren + manifest.json
+        env:
+          RELEASE_BASE_URL: https://github.com/${{ github.repository }}/releases/download
+          RELEASE_TAG_MODE: single
+        run: tools/packs/build_packs.sh "${{ github.event.inputs.packs || 'all' }}"
+
+      - name: Artefakte hochladen (Build-Nachweis, auch ohne Release)
+        uses: actions/upload-artifact@v4
+        with:
+          name: gooby-packs
+          path: |
+            GOOBY-GODOT/build/packs/*.pck
+            GOOBY-GODOT/build/packs/config.json
+            GOOBY-GODOT/build/packs/manifest.json
+
+      # Publish-Gate: packs-v*-Tag = implizit publish=true; beim Dispatch
+      # entscheidet der Input. GITHUB_TOKEN reicht (Release im selben Repo).
+      - name: Release 'updates' aktualisieren (rollender Tag, Doc B §1.3)
+        if: >-
+          ${{ startsWith(github.ref, 'refs/tags/packs-v') ||
+              github.event.inputs.publish == 'true' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: updates
+          name: "GOOBY Updates (rollend)"
+          body: "Rollender Update-Release: manifest.json + aktuelle Packs. Download läuft clientseitig über die GitHub-Release-API (privates Repo, Token nötig). Details: docs/UPDATES.md"
+          prerelease: false
+          files: |
+            GOOBY-GODOT/build/packs/*.pck
+            GOOBY-GODOT/build/packs/config.json
+            GOOBY-GODOT/build/packs/manifest.json

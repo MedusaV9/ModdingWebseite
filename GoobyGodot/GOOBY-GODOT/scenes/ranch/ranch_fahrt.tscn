@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://ranchfahrt0001"]
+
+[ext_resource type="Script" path="res://scripts/ranch/ranch_fahrt_scene.gd" id="1_fahrt"]
+
+[node name="RanchFahrt" type="Node3D"]
+script = ExtResource("1_fahrt")

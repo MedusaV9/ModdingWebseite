@@ -1,0 +1,393 @@
+extends TestCase
+## W13/SAMMLUNG — Sammlungssets sichtbar machen (Web-Parität zu
+## GOOBY/src/systems/collections.js + ui/albumScreen.js):
+## Logik pur (Set-Definitionen/Belohnungen Web-verbatim, Vollständigkeit,
+## Claim einmalig + exakte Buchung, kaputte Slices normalisiert) und
+## UI-Smoke (Album zeigt den Sammlungs-Chip, 4 Set-Karten, Slot- und
+## Claim-Knopf-Zustände, Claim über den Knopf).
+
+const GameStateScript := preload("res://scripts/state/game_state.gd")
+const SaveSchema := preload("res://scripts/state/save_schema.gd")
+
+## Injizierte Test-Zeit (Zeit kommt IMMER als Parameter — kein Uhr-Zugriff).
+const NOW_MS := 1_234_567
+## Injizierte Garten-Zeit (Muster test_home_garden — Ernte-Verdrahtung).
+const GARTEN_JETZT_S := 1768478400.0
+
+var _dir_seq := 0
+
+# ── Logik pur ─────────────────────────────────────────────────────────────────
+
+
+func test_set_definitionen_web_verbatim() -> void:
+	var sets := CollectionsLogic.sets()
+	assert_eq(sets.size(), 4, "4 Sammlungssets (§C6)")
+	var expected := {
+		"fish": [8, 200, "proc:goldfishBowl"],
+		"veggies": [8, 150, "proc:goldenWateringCan"],
+		"landmarks": [6, 150, "proc:toyCity"],
+		"treats": [10, 150, "proc:candyJar"],
+	}
+	var order: Array[String] = []
+	for def: Dictionary in sets:
+		order.append(str(def["id"]))
+	assert_eq(order, ["fish", "veggies", "landmarks", "treats"], "§C6-Reihenfolge")
+	for set_id: String in expected:
+		var want: Array = expected[set_id]
+		var def := CollectionsLogic.set_def(set_id)
+		assert_eq((def["entries"] as Array).size(), int(want[0]), "%s-Setgröße" % set_id)
+		var reward := CollectionsLogic.reward_of(set_id)
+		assert_eq(int(reward["coins"]), int(want[1]), "%s-Münzen web-verbatim" % set_id)
+		assert_eq(str(reward["furniture"]), str(want[2]), "%s-Deko web-verbatim" % set_id)
+		assert_eq(int(reward["xp"]), 50, "%s: +50 XP (§C5.2)" % set_id)
+
+
+func test_normalize_heilt_kaputte_slices() -> void:
+	var healed := CollectionsLogic.normalize_slice(null)
+	assert_eq(healed, {"entries": {}, "claimedSets": {}}, "null → leerer Slice")
+	healed = CollectionsLogic.normalize_slice({"entries": [1, 2], "claimedSets": "kaputt"})
+	assert_eq(healed, {"entries": {}, "claimedSets": {}}, "falsche Typen → geheilt")
+	healed = (
+		CollectionsLogic
+		. normalize_slice(
+			{
+				"entries": {"fish.pinkKoi": 2, "fish.nightEel": 0, "": 3, "fish.blueDace": "x"},
+				"claimedSets": {"fish": true, "veggies": 99, "": 1},
+			}
+		)
+	)
+	assert_eq(healed["entries"], {"fish.pinkKoi": 2}, "nur Counts >= 1 mit echtem Key")
+	assert_true(healed["claimedSets"].has("fish"), "Claim-Key bleibt (nie ent-claimen)")
+	assert_eq(int(healed["claimedSets"]["veggies"]), 99, "Zeitstempel bleibt erhalten")
+	assert_false(healed["claimedSets"].has(""), "leerer Claim-Key fliegt raus")
+
+
+func test_vollstaendigkeit_und_fortschritt() -> void:
+	var c := {"entries": {}, "claimedSets": {}}
+	assert_false(CollectionsLogic.is_set_complete(c, "landmarks"), "leer ≠ komplett")
+	assert_false(CollectionsLogic.is_set_complete(c, "gibtsnicht"), "unbekanntes Set nie komplett")
+	for entry_id: String in ["shop", "vetClinic", "fountain", "skyTower", "parkGazebo"]:
+		c["entries"][CollectionsLogic.entry_key("landmarks", entry_id)] = 1
+	var p := CollectionsLogic.set_progress(c, "landmarks")
+	assert_eq(p, {"have": 5, "total": 6}, "5/6 gesammelt")
+	assert_false(CollectionsLogic.is_set_complete(c, "landmarks"), "5/6 ≠ komplett")
+	c["entries"]["landmarks.windmillCafe"] = 3
+	assert_true(CollectionsLogic.is_set_complete(c, "landmarks"), "6/6 = komplett")
+	var total := CollectionsLogic.total_progress(c)
+	assert_eq(total, {"have": 6, "total": 32}, "Gesamt 6/32")
+	assert_eq(CollectionsLogic.count_of(c, "landmarks", "windmillCafe"), 3, "×n-Zähler")
+
+
+func test_award_pur_web_semantik() -> void:
+	var c := {"entries": {}, "claimedSets": {"fish": 123}}
+	var first := CollectionsLogic.award(c, "fish", "pinkKoi")
+	assert_true(bool(first["first"]), "erstes Exemplar → first=true (Toast-Signal)")
+	assert_eq(CollectionsLogic.count_of(first["c"], "fish", "pinkKoi"), 1, "Zähler = 1")
+	assert_eq(int(first["c"]["claimedSets"]["fish"]), 123, "claimedSets bleibt erhalten")
+	assert_eq(c["entries"].size(), 0, "pure: Eingabe-Slice unverändert")
+	var again := CollectionsLogic.award(first["c"], "fish", "pinkKoi", 2)
+	assert_false(bool(again["first"]), "Wiederholung → first=false")
+	assert_eq(CollectionsLogic.count_of(again["c"], "fish", "pinkKoi"), 3, "n=2 addiert auf 3")
+	var noop := CollectionsLogic.award(c, "fish", "pinkKoi", 0)
+	assert_false(bool(noop["first"]), "n<=0 → first=false")
+	assert_true(noop["c"] == c, "n<=0 → selbe Slice-Referenz (Web-verbatim)")
+	var leer := CollectionsLogic.award(c, "", "pinkKoi")
+	assert_false(bool(leer["first"]), "leere setId → abgelehnt")
+
+
+func test_claim_pur_einmalig() -> void:
+	var c := _full_set_slice("fish")
+	var denied := CollectionsLogic.claim_set({"entries": {}, "claimedSets": {}}, "fish", NOW_MS)
+	assert_false(bool(denied["ok"]), "unvollständig → kein Claim")
+	var res := CollectionsLogic.claim_set(c, "fish", NOW_MS)
+	assert_true(bool(res["ok"]), "volles Set → Claim ok")
+	assert_eq(int(res["c"]["claimedSets"]["fish"]), NOW_MS, "Zeitstempel = injizierte Zeit")
+	assert_eq(int(res["reward"]["coins"]), 200, "Fisch-Belohnung 200 Münzen")
+	assert_eq(c.get("claimedSets", {}).size(), 0, "pure: Eingabe-Slice unverändert")
+	var again := CollectionsLogic.claim_set(res["c"], "fish", NOW_MS + 5)
+	assert_false(bool(again["ok"]), "zweiter Claim verweigert")
+
+
+func test_apply_claim_bucht_web_belohnung() -> void:
+	var gs := _fresh_gs()
+	_seed_full_set(gs, "fish")
+	var coins_before := int(gs.get_value("economy.coins", 0))
+	var reward := CollectionsLogic.apply_claim(gs, "fish", NOW_MS, "2026-07-31")
+	assert_eq(int(reward.get("coins", 0)), 200, "Belohnung zurückgereicht")
+	assert_eq(int(gs.get_value("economy.coins", 0)), coins_before + 200, "genau +200 Münzen (Web)")
+	assert_eq(int(gs.get_value("progression.xp", 0)), 50, "+50 XP (§C5.2)")
+	assert_eq(int(gs.get_value("collections.claimedSets.fish", -1)), NOW_MS, "Claim persistiert")
+	var storage: Array = gs.get_value("home.storage", [])
+	assert_eq(StorageLogic.count_of(storage, "proc:goldfishBowl"), 1, "Deko liegt im Hauslager")
+	# Idempotenz: zweiter Claim zahlt NICHTS doppelt.
+	var second := CollectionsLogic.apply_claim(gs, "fish", NOW_MS + 99, "2026-07-31")
+	assert_true(second.is_empty(), "zweiter Claim liefert {}")
+	assert_eq(int(gs.get_value("economy.coins", 0)), coins_before + 200, "keine Doppel-Münzen")
+	assert_eq(
+		StorageLogic.count_of(gs.get_value("home.storage", []), "proc:goldfishBowl"),
+		1,
+		"keine Doppel-Deko"
+	)
+	assert_eq(
+		int(gs.get_value("collections.claimedSets.fish", -1)), NOW_MS, "Zeitstempel unverändert"
+	)
+	gs.queue_free()
+	await wait_frames(1)
+
+
+func test_apply_claim_verweigert_unvollstaendig() -> void:
+	var gs := _fresh_gs()
+	gs.update(
+		func(state: Dictionary) -> void: state["collections"]["entries"]["veggies.carrot"] = 1
+	)
+	var coins_before := int(gs.get_value("economy.coins", 0))
+	var reward := CollectionsLogic.apply_claim(gs, "veggies", NOW_MS)
+	assert_true(reward.is_empty(), "1/8 → kein Claim")
+	assert_eq(int(gs.get_value("economy.coins", 0)), coins_before, "keine Münzen gebucht")
+	var claimed: Dictionary = gs.get_value("collections.claimedSets", {})
+	assert_false(claimed.has("veggies"), "kein Claim-Eintrag")
+	gs.queue_free()
+	await wait_frames(1)
+
+
+# ── Award-Verdrahtung der Quellsysteme ────────────────────────────────────────
+
+
+func test_mapping_crop_und_food_ids() -> void:
+	assert_eq(CollectionsLogic.veggie_entry_for_crop("carrot"), "carrot", "identische Id")
+	assert_eq(CollectionsLogic.veggie_entry_for_crop("tomate"), "tomato", "DE-Alias")
+	assert_eq(CollectionsLogic.veggie_entry_for_crop("melone"), "watermelon", "DE-Alias")
+	assert_eq(CollectionsLogic.veggie_entry_for_crop("salat"), "salad", "DE-Alias")
+	assert_eq(CollectionsLogic.veggie_entry_for_crop("pilz"), "", "Crop ohne Set-Pendant")
+	assert_eq(CollectionsLogic.treat_entry_for_food("cupcakePink"), "cupcake", "Skin-Alias")
+	assert_eq(CollectionsLogic.treat_entry_for_food("ice-cream"), "ice-cream", "identische Id")
+	assert_eq(CollectionsLogic.treat_entry_for_food("carrot"), "", "kein Treat = kein Award")
+
+
+func test_angel_fangliste_wird_zu_set_eintraegen() -> void:
+	var ids := FishingPondLogic.collection_ids(
+		["sunnyCarp", "pearlMinnow", "__bonus", "gildedWhopper", "sunnyCarp"]
+	)
+	assert_eq(
+		ids,
+		["sunnyCarp", "tinyMinnow", "goldenFish", "sunnyCarp"],
+		"Seltenheiten mappen auf Basis-Ids, __bonus-Marker fliegt raus"
+	)
+	# So bucht der Minigame-Host das report_end-Feld (fish zählt Wiederholungen).
+	var state := {"collections": {"entries": {}, "claimedSets": {}}}
+	CollectionsLogic.award_report(state, {"score": 1, "collections": {"fish": ids}})
+	var entries: Dictionary = state["collections"]["entries"]
+	assert_eq(int(entries["fish.sunnyCarp"]), 2, "Doppelfang zählt ×2")
+	assert_eq(int(entries["fish.tinyMinnow"]), 1)
+	assert_eq(int(entries["fish.goldenFish"]), 1)
+
+
+func test_landmark_report_bucht_first_only() -> void:
+	var state := {}
+	var report := {"collections": {"landmarks": ["shop", "shop", "vetClinic"]}}
+	CollectionsLogic.award_report(state, report)
+	var entries: Dictionary = state["collections"]["entries"]
+	assert_eq(int(entries["landmarks.shop"]), 1, "firstOnly: nie über 1 (Web)")
+	assert_eq(int(entries["landmarks.vetClinic"]), 1)
+	CollectionsLogic.award_report(state, report)
+	entries = state["collections"]["entries"]
+	assert_eq(int(entries["landmarks.shop"]), 1, "auch über Runden hinweg nur 1")
+	CollectionsLogic.award_report(state, {"collections": "kaputt"})
+	CollectionsLogic.award_report(state, {})
+	assert_eq((state["collections"]["entries"] as Dictionary).size(), 2, "Müll-Payload = No-Op")
+
+
+func test_ernte_bucht_veggies_eintrag() -> void:
+	var gs := _garden_gs()
+	var beet := Vector2i(2, 2)
+	assert_true(GardenState.pflanzen(gs, beet, "tomate"))
+	GardenState.tick(gs, GARTEN_JETZT_S)
+	GardenState.giessen(gs, beet, GARTEN_JETZT_S)
+	GardenState.tick(gs, GARTEN_JETZT_S + GardenCrops.total_minutes("tomate") * 60.0)
+	assert_true(GardenState.ernten(gs, beet) > 0, "Ernte klappt")
+	var entries: Dictionary = gs.get_value("collections.entries", {})
+	assert_eq(int(entries.get("veggies.tomato", 0)), 1, "Godot-Crop tomate → Web-Eintrag tomato")
+	assert_eq(entries.size(), 1, "genau EIN Set-Eintrag pro Erntesorte")
+	_garden_teardown(gs)
+
+
+func test_fuettern_bucht_treats_eintrag() -> void:
+	var state := _feed_state({"cupcakePink": 2, "carrot": 1})
+	assert_false(FoodCatalog.apply_feed(state, "cupcakePink").is_empty(), "Füttern klappt")
+	var entries: Dictionary = state["collections"]["entries"]
+	assert_eq(int(entries.get("treats.cupcake", 0)), 1, "cupcakePink → Web-Eintrag cupcake")
+	assert_false(FoodCatalog.apply_feed(state, "carrot").is_empty())
+	entries = state["collections"]["entries"]
+	assert_eq(entries.size(), 1, "Möhre ist kein Treat = kein Eintrag")
+	assert_false(FoodCatalog.apply_feed(state, "cupcakePink").is_empty())
+	entries = state["collections"]["entries"]
+	assert_eq(int(entries.get("treats.cupcake", 0)), 2, "Wiederholung zählt hoch (kein firstOnly)")
+
+
+# ── UI-Smoke ──────────────────────────────────────────────────────────────────
+
+
+func test_album_zeigt_sammlungs_bereich() -> void:
+	var ctx := await _open_album()
+	var album: AlbumScreen = ctx["album"]
+	var chip := album._rail_box.get_node_or_null("PageChip_%s" % AlbumScreen.COLLECTIONS_PAGE)
+	assert_true(chip is Button, "Sammlungs-Chip hängt in der Rail")
+	assert_true((chip as Button).text.contains("0/32"), "Chip zeigt 0/32: " + (chip as Button).text)
+	album.show_page(AlbumScreen.COLLECTIONS_PAGE)
+	await wait_frames(2)
+	var view: CollectionsView = album._collections_view
+	assert_true(view.visible, "Sammlungs-View sichtbar")
+	assert_false(album._grid_scroll.visible, "Sticker-Grid versteckt")
+	var cards := 0
+	for def: Dictionary in CollectionsLogic.sets():
+		var card := view.find_child("SetCard_%s" % str(def["id"]), true, false)
+		if card != null:
+			cards += 1
+			var grid := card.find_child("EntryGrid", true, false)
+			assert_eq(
+				grid.get_child_count(),
+				(def["entries"] as Array).size(),
+				"%s: ein Slot je Eintrag" % def["id"]
+			)
+			var claim := card.find_child("ClaimButton", true, false) as Button
+			assert_true(claim.disabled, "%s: Claim gesperrt ohne volles Set" % def["id"])
+	assert_eq(cards, 4, "4 Set-Karten")
+	var slot := view.find_child("Slot_sunnyCarp", true, false)
+	assert_true(slot != null, "Fisch-Slot existiert")
+	assert_true(
+		slot.find_child("MysteryMark", true, false) != null, "fehlender Eintrag = ?-Silhouette"
+	)
+	# Zurück zur Sticker-Seite: Grid wieder an, View wieder weg.
+	album.show_page("testset")
+	await wait_frames(1)
+	assert_true(album._grid_scroll.visible, "Grid zurück")
+	assert_false(view.visible, "Sammlungs-View versteckt")
+	await _close_album(ctx)
+
+
+func test_claim_knopf_im_album() -> void:
+	var ctx := await _open_album()
+	var album: AlbumScreen = ctx["album"]
+	var gs: Node = ctx["gs"]
+	_seed_full_set(gs, "fish")
+	album.show_page(AlbumScreen.COLLECTIONS_PAGE)
+	await wait_frames(2)
+	var view: CollectionsView = album._collections_view
+	var card := view.find_child("SetCard_fish", true, false)
+	var slot := card.find_child("Slot_sunnyCarp", true, false)
+	assert_true(slot.find_child("MysteryMark", true, false) == null, "gesammelter Eintrag ohne ?")
+	var claim := card.find_child("ClaimButton", true, false) as Button
+	assert_false(claim.disabled, "volles Set → Claim-Knopf aktiv")
+	assert_eq(claim.text, I18nService.t("collections.claim"), "Knopf-Text: Belohnung abholen")
+	var coins_before := int(gs.get_value("economy.coins", 0))
+	claim.pressed.emit()
+	await wait_frames(2)
+	assert_eq(int(gs.get_value("economy.coins", 0)), coins_before + 200, "Klick → +200 Münzen")
+	card = view.find_child("SetCard_fish", true, false)
+	claim = card.find_child("ClaimButton", true, false) as Button
+	assert_true(claim.disabled, "nach Claim gesperrt")
+	assert_eq(claim.text, I18nService.t("collections.claimed"), "Knopf zeigt Abgeholt!")
+	var chip := album._rail_box.get_node("PageChip_%s" % AlbumScreen.COLLECTIONS_PAGE) as Button
+	assert_true(chip.text.contains("8/32"), "Chip zählt 8/32: " + chip.text)
+	await _close_album(ctx)
+
+
+# ── Aufbau/Helfer ─────────────────────────────────────────────────────────────
+
+
+func _full_set_slice(set_id: String) -> Dictionary:
+	var c := {"entries": {}, "claimedSets": {}}
+	for entry_id: String in CollectionsLogic.set_def(set_id).get("entries", []):
+		c["entries"][CollectionsLogic.entry_key(set_id, entry_id)] = 1
+	return c
+
+
+func _seed_full_set(gs: Node, set_id: String) -> void:
+	gs.update(
+		func(state: Dictionary) -> void:
+			var entries: Dictionary = state["collections"]["entries"]
+			for entry_id: String in CollectionsLogic.set_def(set_id).get("entries", []):
+				entries[CollectionsLogic.entry_key(set_id, entry_id)] = 1
+	)
+	gs.notify_slice_changed("collections")
+
+
+func _fresh_gs() -> Node:
+	_dir_seq += 1
+	var dir := "user://w13_tests/gs_%d_%d" % [Time.get_ticks_usec(), _dir_seq]
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(dir))
+	var gs: Node = GameStateScript.new()
+	gs.initialize(dir + "/save_v5.json")
+	tree.root.add_child(gs)
+	return gs
+
+
+## GameState mit registriertem home-Slice + gepinnter Uhr (Muster
+## test_home_garden) — für den Ernte-Einbaupunkt in GardenState.ernten.
+func _garden_gs() -> Node:
+	_dir_seq += 1
+	var dir := "user://w13_tests/garten_%d_%d" % [Time.get_ticks_usec(), _dir_seq]
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(dir))
+	HomeState.register_slice()
+	var gs: Node = GameStateScript.new()
+	gs.clock.pin(int(GARTEN_JETZT_S * 1000.0))
+	gs.initialize(dir + "/save_v5.json")
+	return gs
+
+
+func _garden_teardown(gs: Node) -> void:
+	gs.free()
+	SaveSchema.unregister_slice(HomeState.SLICE_ID)
+	HomeState.reset_for_tests()
+
+
+## Minimaler Fütter-State (Muster test_ef1_fuettern._state).
+func _feed_state(food: Dictionary) -> Dictionary:
+	return {
+		"inventory": {"food": food},
+		"gooby":
+		{
+			"stats": {"hunger": 40.0, "fun": 50.0, "energy": 50.0, "hygiene": 50.0},
+			"weight": 50.0,
+			"health": {"junkScore": 0},
+		},
+		"achievements": {"counters": {}},
+	}
+
+
+func _open_album() -> Dictionary:
+	var gs := _fresh_gs()
+	var album := AlbumScreen.new()
+	album.auto_navigate = false
+	album.gs_override = gs
+	album.catalog_override = _mini_catalog()
+	album.pages_override = [
+		{"id": "testset", "title_de": "Testset", "icon": "star", "tint": "#CDE6BE", "order": 0}
+	]
+	tree.root.add_child(album)
+	await wait_frames(2)
+	return {"album": album, "gs": gs}
+
+
+func _close_album(ctx: Dictionary) -> void:
+	(ctx["album"] as Node).queue_free()
+	(ctx["gs"] as Node).queue_free()
+	await wait_frames(2)
+
+
+## Mini-Sticker-Katalog wie test_sticker_album_ui — hält den Album-Aufbau
+## klein und unabhängig vom echten Content-Pack.
+func _mini_catalog() -> Array:
+	return [
+		{
+			"id": "st_a",
+			"name_de": "Alpha-Sticker",
+			"flavor_de": "A.",
+			"hint_de": "Zähler A.",
+			"set": "testset",
+			"page": "testset",
+			"rarity": "haeufig",
+			"image": "res://content/stickers/assets/ranch_neuer_hof.png",
+			"cond": {"type": "counter", "key": "alpha_zaehler", "count": 1},
+		},
+	]

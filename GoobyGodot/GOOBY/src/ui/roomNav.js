@@ -1,0 +1,190 @@
+// Room navigation UI (§C2): edge arrow buttons + a dot indicator at the
+// bottom of the home view. Swipe navigation itself lives in homeScene.js
+// (canvas gestures); this module is the DOM part. Styles are scoped in an
+// injected <style> tag (ui/styles.css is owned by other agents).
+//
+// V2/G19 (PLAN2 §C2.1/§B6): 5 dots — the 5th (garden) shows a padlock below
+// UNLOCKS.GARDEN (L3) and unlocks live on level-up. Navigation to a locked
+// garden still calls onNavigate; roomManager.goTo gates it and emits the
+// 'gardenLocked' teaser (§B6 — locked surfaces keep the v1 "level N" pattern).
+
+import { t } from '../data/strings.js';
+import { ROOMS, UNLOCKS } from '../data/constants.js'; // V2/G19: + UNLOCKS
+import { NAV_ORDER } from '../home/roomManager.js'; // V2/G19: 5-room order (§B3)
+import { getStore } from '../core/store.js'; // V2/G19: live level for the padlock
+import audio from '../audio/audio.js'; // V3/FIX-D (E19): arrow/dot tap cues
+import { icon } from './icons.js'; // V4/UI-DEEP: padlock uses the authored glyph
+
+// V3/G33 (§B3 rem sweep + §C1.4): px → rem ÷16; safe-area offsets moved from
+// raw env() onto the §B9 root vars (--safe-*) so the dev-panel fake-notch
+// toggle reaches them; dots pinned per §C1.4 `max(12px, var(--safe-bottom))`.
+// V4/UI-DEEP: cozy-token pass — --font-round instead of system-ui, the arrow
+// pills swap the last old cream bevel for the paper face + hairline ring, and
+// the dot rail rides the --frost floating-chip surface.
+const NAV_CSS = `
+.room-nav{position:absolute;inset:0;pointer-events:none;font-family:var(--font-round);}
+.rn-arrow{pointer-events:auto;position:absolute;top:50%;transform:translateY(-50%);width:max(44px, 3rem);height:max(44px, 3.75rem);
+  border:none;border-radius:1rem;background:var(--frost);color:var(--brown);font-size:1.5rem;font-weight:800;
+  box-shadow:0 0 0 1px var(--outline-soft),0 3px 10px rgba(74,59,54,.16);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;transition:opacity .2s;}
+.rn-arrow:active{transform:translateY(-50%) scale(.94);}
+.rn-arrow[disabled]{opacity:0;pointer-events:none;}
+.rn-left{left:max(0.5rem, var(--safe-left));}
+.rn-right{right:max(0.5rem, var(--safe-right));}
+.rn-dots{pointer-events:auto;position:absolute;left:50%;transform:translateX(-50%);
+  bottom:max(0.875rem, calc(var(--safe-bottom) + 0.125rem));display:flex;gap:max(2rem, calc(44px - 0.75rem));padding:0.5rem 1rem;
+  background:var(--frost);border-radius:999px;box-shadow:0 0 0 1px var(--outline-soft),0 2px 8px rgba(74,59,54,.14);
+  /* F6 (RE3): above the HUD (z 40) so the g5-hud-btns row can't shave the top
+     of the dot halos to <44px; the 54px buttons keep ≥48px effective (§D5). */
+  z-index:calc(var(--z-hud) + 5);}
+.rn-dot{position:relative;width:0.75rem;height:0.75rem;border-radius:50%;border:none;padding:0;background:transparent;cursor:pointer;}
+/* F3 (§D5 44px targets): 32px dot pitch leaves room for tangent, non-overlapping
+   44x44 invisible hit areas per dot (12px dot + 16px halo each side). */
+.rn-dot::after{content:'';position:absolute;inset:calc((0.75rem - max(44px, 2.75rem)) / 2);}
+/* F6 (RE3): the VISUAL dot lives on ::before so the active scale(1.25) never
+   scales the 44px ::after hit halo (a scaled halo hit-tested over neighbours,
+   shrinking their effective targets to ~38px). */
+.rn-dot::before{content:'';position:absolute;inset:0;border-radius:50%;background:var(--paper-shade);
+  transition:background .2s,transform .2s;}
+.rn-dot.on::before{background:var(--pink);transform:scale(1.25);}
+/* V2/G19 (§B6): padlocked garden dot — lock glyph riding the dot, greyed */
+.rn-dot.rn-locked::before{background:#D5CBBE;}
+.rn-lock{position:absolute;left:50%;top:50%;transform:translate(-50%,-54%);
+  line-height:0;pointer-events:none;color:var(--brown);opacity:.8;}
+.rn-lock svg{display:block;}
+.rn-dot:not(.rn-locked) .rn-lock{display:none;}
+`;
+
+/**
+ * Create the room navigation overlay.
+ * @param {{onNavigate: (roomId: string) => void}} opts
+ *   onNavigate: called with the target room id when an arrow/dot is pressed.
+ * @returns {{
+ *   mount: (parentEl: HTMLElement) => void,
+ *   setActive: (roomId: string) => void,
+ *   unmount: () => void,
+ * }}
+ */
+export function createRoomNav({ onNavigate }) {
+  /** @type {HTMLElement|null} */
+  let rootEl = null;
+  /** @type {HTMLStyleElement|null} */
+  let styleEl = null;
+  /** @type {HTMLButtonElement|null} */
+  let leftBtn = null;
+  /** @type {HTMLButtonElement|null} */
+  let rightBtn = null;
+  /** @type {Map<string, HTMLButtonElement>} */
+  const dots = new Map();
+  let active = ROOMS.DEFAULT;
+  /** @type {(() => void)|null} V2/G19: xpChanged unsub (padlock refresh) */
+  let unsubLevel = null;
+
+  // V2/G19: live §B6 garden gate — guarded so the module stays importable in
+  // tests/before boot (getStore throws until createStore ran).
+  function gardenLocked() {
+    try {
+      return (getStore().get('level') ?? 1) < UNLOCKS.GARDEN;
+    } catch {
+      return false;
+    }
+  }
+
+  function refresh() {
+    const idx = NAV_ORDER.indexOf(active); // V2/G19: 5-room order
+    if (leftBtn) leftBtn.disabled = idx <= 0;
+    if (rightBtn) rightBtn.disabled = idx >= NAV_ORDER.length - 1;
+    const locked = gardenLocked(); // V2/G19
+    for (const [roomId, dot] of dots) {
+      dot.classList.toggle('on', roomId === active);
+      if (roomId === 'garden') dot.classList.toggle('rn-locked', locked);
+    }
+  }
+
+  function step(delta) {
+    const idx = NAV_ORDER.indexOf(active) + delta;
+    if (idx < 0 || idx >= NAV_ORDER.length) return;
+    onNavigate(NAV_ORDER[idx]);
+  }
+
+  return {
+    /** @param {HTMLElement} parentEl typically ctx.ui.el */
+    mount(parentEl) {
+      styleEl = document.createElement('style');
+      styleEl.textContent = NAV_CSS;
+      document.head.appendChild(styleEl);
+
+      rootEl = document.createElement('div');
+      rootEl.className = 'room-nav';
+
+      leftBtn = document.createElement('button');
+      leftBtn.className = 'rn-arrow rn-left';
+      leftBtn.textContent = '‹';
+      leftBtn.setAttribute('aria-label', t('nav.prevRoom'));
+      leftBtn.addEventListener('click', () => {
+        audio.play('ui.tap'); // V3/FIX-D (E19)
+        step(-1);
+      });
+      rootEl.appendChild(leftBtn);
+
+      rightBtn = document.createElement('button');
+      rightBtn.className = 'rn-arrow rn-right';
+      rightBtn.textContent = '›';
+      rightBtn.setAttribute('aria-label', t('nav.nextRoom'));
+      rightBtn.addEventListener('click', () => {
+        audio.play('ui.tap'); // V3/FIX-D (E19)
+        step(1);
+      });
+      rootEl.appendChild(rightBtn);
+
+      const dotsEl = document.createElement('div');
+      dotsEl.className = 'rn-dots';
+      for (const roomId of NAV_ORDER) {
+        const dot = document.createElement('button');
+        dot.className = 'rn-dot';
+        dot.setAttribute('aria-label', t(`room.${roomId}`));
+        dot.addEventListener('click', () => {
+          audio.play('ui.pick'); // V3/FIX-D (E19)
+          onNavigate(roomId);
+        });
+        // V2/G19 (§B6): padlock glyph on the garden dot (hidden once unlocked)
+        if (roomId === 'garden') {
+          const lock = document.createElement('span');
+          lock.className = 'rn-lock';
+          lock.innerHTML = icon('lock', 11); // V4/UI-DEEP: authored glyph
+          dot.appendChild(lock);
+        }
+        dotsEl.appendChild(dot);
+        dots.set(roomId, dot);
+      }
+      rootEl.appendChild(dotsEl);
+
+      parentEl.appendChild(rootEl);
+
+      // V2/G19: unlock the padlock live on level-up
+      try {
+        unsubLevel = getStore().on('xpChanged', refresh);
+      } catch { /* store not created (tests) — padlock stays static */ }
+
+      refresh();
+    },
+
+    /** Highlight a room without navigating. @param {string} roomId */
+    setActive(roomId) {
+      active = roomId;
+      refresh();
+    },
+
+    unmount() {
+      rootEl?.remove();
+      styleEl?.remove();
+      rootEl = null;
+      styleEl = null;
+      leftBtn = null;
+      rightBtn = null;
+      dots.clear();
+      unsubLevel?.(); // V2/G19
+      unsubLevel = null;
+    },
+  };
+}

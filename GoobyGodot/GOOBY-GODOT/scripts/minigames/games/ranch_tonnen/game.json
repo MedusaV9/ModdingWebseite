@@ -1,0 +1,10 @@
+{
+	"id": "ranchTonnen",
+	"title_key": "mg.ranchTonnen.title",
+	"scene": "res://scripts/minigames/games/ranch_tonnen/tonnen_game.tscn",
+	"coin_table": {"divisor": 3, "min": 4, "max": 40},
+	"target": 300,
+	"orientation": "landscape",
+	"supports_endless": false,
+	"energy_cost": 8
+}

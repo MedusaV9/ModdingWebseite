@@ -1,0 +1,11 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/home/home_entry.gd" id="1_entry"]
+
+[node name="HomeEntry" type="Node"]
+script = ExtResource("1_entry")
+
+[node name="World" type="Node3D" parent="."]
+
+[node name="UiLayer" type="CanvasLayer" parent="."]
+layer = 10

@@ -1,0 +1,10 @@
+{
+	"id": "burgerBuild",
+	"title_key": "mg.burgerBuild.title",
+	"scene": "res://scripts/minigames/games/burger_build/burger_build.tscn",
+	"coin_table": {"divisor": 4, "min": 4, "max": 26},
+	"target": 85,
+	"orientation": "portrait",
+	"supports_endless": true,
+	"energy_cost": 8
+}

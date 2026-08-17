@@ -1,0 +1,657 @@
+// Memory Match (§C6.1 #5, agent G8): 4×4 card grid (8 pairs; 6×4 with 12
+// pairs at level ≥6 — §C1.5). Card backs are a procedural pastel pattern,
+// faces are mini food GLBs parented to the cards, revealed by a flip
+// animation. Score = 20 − misses + timeBonus(0–8) + 20 clear bonus in every
+// mode (V4/G71b — §G5.4 cap 48). No fail state. Pure layout/deck/score
+// logic in memoryMatch.logic.js. Dev-only ?autoplay=1.
+//
+// Level source: ctx.params.level when the launcher provides it; otherwise the
+// dev-harness store handle (§E9 window.__gooby — games must not import the
+// store directly per §E8). Defaults to 1 (small layout).
+
+import * as THREE from 'three';
+import { t, getLang } from '../../data/strings.js'; // V6/C4: + getLang (tx fallback)
+import { tween, easings } from '../../gfx/tween.js';
+import { createParticles } from '../../gfx/particles.js';
+import { createGooby } from '../../character/gooby.js';
+import { applyEquippedOutfits } from '../../character/outfitAttach.js'; // G14: cameo outfits (§C5.3)
+// V6/C4 (GAME-JUICE): float texts + board-clear cascade gate + juice strings
+import { clampFloatTextToView } from '../framework.js';
+import { prefersReducedMotion } from '../../ui/ui.js';
+import { EN as JUICE_EN, DE as JUICE_DE } from '../../data/strings/v6-juice.js';
+import {
+  MEMORY,
+  MEMORY_JUICE, // V6/C4: streak-beat/token-pulse/clear-cascade tuning
+  FACE_KEYS,
+  layoutForLevel,
+  buildDeck,
+  memoryScore,
+  isMatch,
+  advancePeekProgress,
+  canUsePeek,
+  canFlipCard,
+  applyDifficulty,
+  isMemoryEndlessOver,
+} from './memoryMatch.logic.js';
+
+/** V6/C4: t() first, then the v6-juice EN/DE fallback (G52 tx pattern —
+ * C3 commits the strings.js import per the PLAN6 appendix rule). */
+function tx(key, vars) {
+  const global = t(key, vars);
+  if (global !== key) return global;
+  let text = (getLang() === 'de' ? JUICE_DE : JUICE_EN)[key] ?? key;
+  if (vars) {
+    for (const [name, value] of Object.entries(vars)) {
+      text = text.replaceAll(`{${name}}`, String(value));
+    }
+  }
+  return text;
+}
+
+/** V6/C4: tiny floating score text (teaParty.js recipe — self-disposing). */
+function createFloatTexts(scene, camera) {
+  const active = new Set();
+  return {
+    spawn(text, pos, color = '#4A3B36') {
+      const canvas = document.createElement('canvas');
+      canvas.width = 240;
+      canvas.height = 80;
+      const g = canvas.getContext('2d');
+      g.font = '900 40px system-ui, sans-serif';
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      g.lineWidth = 8;
+      g.strokeStyle = 'rgba(255,255,255,0.92)';
+      g.strokeText(text, 120, 40);
+      g.fillStyle = color;
+      g.fillText(text, 120, 40);
+      const tex = new THREE.CanvasTexture(canvas);
+      const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false });
+      const sprite = new THREE.Sprite(mat);
+      sprite.position.copy(clampFloatTextToView(pos.clone(), camera, { halfW: 0.75, halfH: 0.25 }));
+      sprite.scale.set(1.5, 0.5, 1);
+      scene.add(sprite);
+      active.add({ sprite, mat, tex, age: 0, life: 0.9 });
+    },
+    update(dt) {
+      for (const f of active) {
+        f.age += dt;
+        f.sprite.position.y += dt * 1.1;
+        f.mat.opacity = 1 - (f.age / f.life) ** 2;
+        if (f.age >= f.life) {
+          f.sprite.parent?.remove(f.sprite);
+          f.mat.dispose();
+          f.tex.dispose();
+          active.delete(f);
+        }
+      }
+    },
+    dispose() {
+      for (const f of active) {
+        f.sprite.parent?.remove(f.sprite);
+        f.mat.dispose();
+        f.tex.dispose();
+      }
+      active.clear();
+    },
+  };
+}
+
+/** Procedural pastel card-back texture (dots on pink, shared per round). */
+function makeBackTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 128;
+  const g = canvas.getContext('2d');
+  g.fillStyle = '#FF9EBF';
+  g.fillRect(0, 0, 128, 128);
+  g.strokeStyle = '#FF7BA9';
+  g.lineWidth = 6;
+  g.strokeRect(5, 5, 118, 118);
+  g.fillStyle = '#FFF6EC';
+  for (let y = 0; y < 4; y += 1) {
+    for (let x = 0; x < 4; x += 1) {
+      g.beginPath();
+      g.arc(24 + x * 27 + (y % 2) * 12, 26 + y * 27, 5.5, 0, Math.PI * 2);
+      g.fill();
+    }
+  }
+  return new THREE.CanvasTexture(canvas);
+}
+
+/** @type {object} §E8 plugin */
+export default {
+  id: 'memoryMatch',
+  assetKeys: FACE_KEYS.map((k) => `food-kit/${k}`),
+
+  /** @param {object} ctx §E8 game context */
+  init(ctx) {
+    this.ctx = ctx;
+    this.autoplay =
+      import.meta.env?.DEV && new URLSearchParams(location.search).get('autoplay') === '1';
+    const difficulty = ctx.params?.difficulty ?? 'normal';
+    this.tune = applyDifficulty(MEMORY, difficulty);
+
+    const level = Number.isFinite(ctx.params?.level)
+      ? ctx.params.level
+      : (globalThis.__gooby?.store?.get?.('level') ?? 1);
+    this.layout = layoutForLevel(level);
+
+    this.phase = 'play';
+    this.misses = 0;
+    this.totalMisses = 0;
+    this.totalScore = 0;
+    this.boards = 0;
+    this.boardStartedAt = 0;
+    this.finalScore = 0;
+    this.matched = 0;
+    this.finished = 0; // elapsed at completion (for the time bonus)
+    this.endT = 0;
+    this.revealT = 0;
+    this.peekT = 0;
+    this.peekUsed = false;
+    this.peekReady = false;
+    this.cleanMatches = 0;
+    this.peekUses = 0;
+    this.peekedIndices = [];
+    this.autoT = 0.6 / this.tune.PREVIEW_SPEED_MULT;
+    /** @type {number[]} indices of the currently face-up unresolved cards */
+    this.picked = [];
+    /** @type {Map<number, number[]>} autoplay memory: pairId → seen card indices */
+    this.memoryMap = new Map();
+
+    const camera = ctx.camera;
+    camera.position.set(0, 0, 10);
+    camera.lookAt(0, 0, 0);
+    this.halfH = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * 10;
+    this.halfW = this.halfH * (innerWidth / innerHeight);
+
+    const scene = ctx.scene;
+    scene.background = new THREE.Color('#EAF6EE');
+
+    this.ownedGeos = [];
+    this.ownedMats = [];
+
+    scene.add(new THREE.HemisphereLight(0xfff8ee, 0xd8e8d0, 1.2));
+    const dirLight = new THREE.DirectionalLight(0xfff2dd, 0.85);
+    dirLight.position.set(2, 4, 6);
+    scene.add(dirLight);
+
+    // --- shared card geometry/materials ---
+    this.backTex = makeBackTexture();
+    const cardGeo = new THREE.PlaneGeometry(MEMORY.CARD_W, MEMORY.CARD_H);
+    const backMat = new THREE.MeshStandardMaterial({ map: this.backTex, roughness: 0.85 });
+    const faceMat = new THREE.MeshStandardMaterial({ color: '#FFFFFF', roughness: 0.9 });
+    const matchedMat = new THREE.MeshStandardMaterial({ color: '#DFF3D8', roughness: 0.9 });
+    this.ownedGeos.push(cardGeo);
+    this.ownedMats.push(backMat, faceMat, matchedMat);
+    this.faceMat = faceMat;
+    this.matchedMat = matchedMat;
+
+    // --- deck + grid ---
+    const { cols, rows, pairs } = this.layout;
+    const deck = buildDeck(pairs, ctx.rng);
+    const gridH = (rows - 1) * MEMORY.SPACING_Y;
+    const originY = gridH / 2 - 0.75; // shifted down, Gooby watches from the top
+    const originX = -((cols - 1) * MEMORY.SPACING_X) / 2;
+
+    /** @type {Array<{group: THREE.Group, flipper: THREE.Group, pairId: number, state: 'down'|'up'|'matched'}>} */
+    this.cards = [];
+    deck.forEach((pairId, i) => {
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      const group = new THREE.Group();
+      group.position.set(
+        originX + col * MEMORY.SPACING_X,
+        originY - row * MEMORY.SPACING_Y,
+        0
+      );
+
+      const flipper = new THREE.Group();
+      const back = new THREE.Mesh(cardGeo, backMat);
+      back.position.z = 0.012;
+      const face = new THREE.Mesh(cardGeo, faceMat);
+      face.position.z = -0.012;
+      face.rotation.y = Math.PI;
+      flipper.add(back, face);
+
+      const food = this.ctx.assets.getModel(`food-kit/${FACE_KEYS[pairId]}`);
+      const box = new THREE.Box3().setFromObject(food);
+      const size = box.getSize(new THREE.Vector3());
+      food.scale.setScalar(0.62 / (Math.max(size.x, size.y, size.z) || 1));
+      box.setFromObject(food);
+      const center = box.getCenter(new THREE.Vector3());
+      food.position.sub(center);
+      const foodHolder = new THREE.Group();
+      foodHolder.add(food);
+      foodHolder.position.z = -0.16;
+      foodHolder.rotation.y = Math.PI;
+      foodHolder.rotation.x = 0.25; // tilt the mini toward the camera when revealed
+      // the 3D mini is deeper than the card offset and would poke through the
+      // back — hidden while face-down, shown at the flip halfway point
+      foodHolder.visible = false;
+      flipper.add(foodHolder);
+
+      group.add(flipper);
+      group.userData.cardIndex = i;
+      this.ctx.scene.add(group);
+      this.cards.push({ group, flipper, face, food: foodHolder, pairId, state: 'down' });
+    });
+
+    // --- Gooby cameo above the grid, watching the reveals ---
+    this.particles = createParticles(scene);
+    this.floats = createFloatTexts(scene, ctx.camera); // V6/C4: pair/streak floats
+    this.tokenSparkleT = MEMORY_JUICE.TOKEN_SPARKLE_EVERY_SEC; // V6/C4
+    this.gooby = createGooby({ particles: this.particles });
+    applyEquippedOutfits(this.gooby); // G14: cameo wears the equipped outfits
+    this.gooby.group.scale.setScalar(0.72);
+    this.gooby.group.position.set(0, originY + 0.85, -0.4);
+    this.gooby.setEmotion('happy');
+    scene.add(this.gooby.group);
+
+    // --- V3 peek powerup: earned after three matches without a miss ---
+    this.peekToken = new THREE.Group();
+    const peekRing = new THREE.Mesh(
+      new THREE.TorusGeometry(0.22, 0.08, 8, 18),
+      new THREE.MeshStandardMaterial({
+        color: '#FFD54F',
+        emissive: '#7A4B00',
+        emissiveIntensity: 0.35,
+        roughness: 0.35,
+      })
+    );
+    const peekEye = new THREE.Mesh(
+      new THREE.SphereGeometry(0.08, 10, 8),
+      new THREE.MeshStandardMaterial({ color: '#4A3B36', roughness: 0.5 })
+    );
+    peekEye.position.z = 0.03;
+    this.peekToken.add(peekRing, peekEye);
+    this.peekToken.position.set(-this.halfW + 0.5, originY + 0.85, 0.15);
+    this.peekToken.visible = false;
+    scene.add(this.peekToken);
+    this.ownedGeos.push(peekRing.geometry, peekEye.geometry);
+    this.ownedMats.push(peekRing.material, peekEye.material);
+
+    // --- input: tap a face-down card ---
+    this.offTap = ctx.input.on('tap', (p) => {
+      if (this.autoplay) return;
+      if (this.peekToken.visible && ctx.input.pick(ctx.camera, [this.peekToken], p)) {
+        this.usePeek();
+        return;
+      }
+      const targets = this.cards.filter((c) => c.state === 'down').map((c) => c.group);
+      const hit = ctx.input.pick(ctx.camera, targets, p);
+      if (!hit) return;
+      let obj = hit.object;
+      while (obj && obj.userData.cardIndex === undefined) obj = obj.parent;
+      if (obj) this.flipUp(obj.userData.cardIndex);
+    });
+
+    ctx.hud.setScore(MEMORY.SCORE_BASE);
+    ctx.hud.setTime(0);
+  },
+
+  flipUp(index) {
+    const card = this.cards[index];
+    if (!card || !canFlipCard({
+      phase: this.phase,
+      pickedCount: this.picked.length,
+      cardState: card.state,
+      peeking: this.peekT > 0,
+    })) return;
+    card.state = 'up';
+    this.picked.push(index);
+    this.ctx.audio.play('card.flip');
+    const flipper = card.flipper;
+    const food = card.food;
+    tween({
+      from: 0, to: Math.PI, duration: this.tune.FLIP_SEC, ease: easings.easeInOutQuad,
+      onUpdate: (v) => {
+        flipper.rotation.y = v;
+        flipper.position.z = Math.sin(v) * 0.3; // lift while turning
+        food.visible = v > Math.PI / 2; // mini appears past the halfway point
+      },
+    });
+    this.gooby.lookAt(card.group.getWorldPosition(new THREE.Vector3()));
+
+    // autoplay memory: remember what this card shows
+    if (!this.memoryMap.has(card.pairId)) this.memoryMap.set(card.pairId, []);
+    const seen = this.memoryMap.get(card.pairId);
+    if (!seen.includes(index)) seen.push(index);
+
+    if (this.picked.length === 2) {
+      const [a, b] = this.picked;
+      if (isMatch(this.cards[a].pairId, this.cards[b].pairId)) {
+        this.resolveMatch(a, b);
+      } else {
+        this.revealT = this.tune.REVEAL_SEC; // flip back after the reveal delay (dt-driven)
+        // V4/GAME-POLISH-2 juice: "nope" wiggle on both revealed cards
+        for (const i of [a, b]) {
+          const grp = this.cards[i].group;
+          tween({
+            from: 1, to: 0, duration: 0.45,
+            onUpdate: (v) => { grp.rotation.z = Math.sin(v * 22) * 0.09 * v; },
+          });
+        }
+      }
+    }
+  },
+
+  resolveMatch(a, b) {
+    for (const i of [a, b]) {
+      const card = this.cards[i];
+      card.state = 'matched';
+      card.face.material = this.matchedMat;
+      const grp = card.group;
+      tween({
+        from: 1, to: 1.06, duration: 0.3, ease: easings.easeOutBack,
+        onUpdate: (v) => grp.scale.setScalar(v),
+      });
+      this.particles.emit('sparkles', card.group.position.clone(), { count: 5 });
+    }
+    // V6/C4 juice: "Pair!" float at the matched pair's midpoint (§C.1 item 1)
+    const mid = this.cards[a].group.position.clone()
+      .add(this.cards[b].group.position)
+      .multiplyScalar(0.5)
+      .add(new THREE.Vector3(0, 0.15, 0.6));
+    this.floats.spawn(tx('v6.juice.pair'), mid, '#2E8B57');
+    this.picked = [];
+    this.matched += 1;
+    const progress = advancePeekProgress({
+      cleanMatches: this.cleanMatches,
+      peekReady: this.peekReady,
+      peekUsed: this.peekUsed,
+    }, true);
+    this.cleanMatches = progress.cleanMatches;
+    const justEarned = !this.peekReady && progress.peekReady;
+    this.peekReady = progress.peekReady;
+    this.peekToken.visible = canUsePeek(this);
+    if (justEarned) {
+      this.ctx.hud.banner(t('mg.memory.peekReady'));
+      // V6/C4 juice: clean-streak beat — combo chime + confetti at Gooby
+      // (§C.1 item 2; the peek-earn branch was banner-only before).
+      this.ctx.audio.play('combo.up');
+      const gpos = this.gooby.group.position.clone().add(new THREE.Vector3(0, 0.9, 0));
+      this.particles.emit('confetti', gpos, { count: MEMORY_JUICE.STREAK_CONFETTI });
+      this.floats.spawn(tx('v6.juice.streak', { n: this.cleanMatches }), gpos, '#D6428A');
+    }
+    this.ctx.audio.play('card.match');
+    this.gooby.play('happyBounce');
+  },
+
+  flipBackPicked(elapsed = this.boardStartedAt) {
+    for (const i of this.picked) {
+      const card = this.cards[i];
+      card.state = 'down';
+      const flipper = card.flipper;
+      const food = card.food;
+      tween({
+        from: Math.PI, to: 0, duration: this.tune.FLIP_SEC, ease: easings.easeInOutQuad,
+        onUpdate: (v) => {
+          flipper.rotation.y = v;
+          flipper.position.z = Math.sin(v) * 0.3;
+          food.visible = v > Math.PI / 2;
+        },
+      });
+    }
+    this.picked = [];
+    this.misses += 1;
+    this.totalMisses += 1;
+    const progress = advancePeekProgress({
+      cleanMatches: this.cleanMatches,
+      peekReady: this.peekReady,
+      peekUsed: this.peekUsed,
+    }, false);
+    this.cleanMatches = progress.cleanMatches;
+    this.peekReady = progress.peekReady;
+    const boardScore = Math.max(0, MEMORY.SCORE_BASE - this.misses);
+    this.ctx.hud.setScore(this.tune.ENDLESS ? this.totalScore + boardScore : boardScore);
+    this.ctx.audio.play('card.nomatch');
+    this.gooby.play('refuse');
+    if (isMemoryEndlessOver(this.totalMisses, this.tune)) {
+      this.finalScore = this.totalScore +
+        boardScore;
+      this.finished = elapsed;
+      this.phase = 'ending';
+      this.endT = 0;
+    }
+  },
+
+  usePeek() {
+    if (!canUsePeek(this) || this.phase !== 'play' || this.picked.length > 0) return;
+    this.peekReady = false;
+    this.peekUsed = true;
+    this.peekUses += 1;
+    this.peekT = this.tune.PEEK_SEC;
+    this.peekToken.visible = false;
+    this.peekedIndices = [];
+    for (let i = 0; i < this.cards.length; i += 1) {
+      const card = this.cards[i];
+      if (card.state !== 'down') continue;
+      this.peekedIndices.push(i);
+      card.flipper.rotation.y = Math.PI;
+      card.food.visible = true;
+      if (!this.memoryMap.has(card.pairId)) this.memoryMap.set(card.pairId, []);
+      const seen = this.memoryMap.get(card.pairId);
+      if (!seen.includes(i)) seen.push(i);
+    }
+    this.ctx.audio.play('card.flip');
+    this.ctx.audio.play('gooby.gasp'); // V6/C4 juice: delighted gasp on the peek
+    this.ctx.hud.banner(t('mg.memory.peek'));
+    this.particles.emit('sparkles', this.peekToken.position.clone(), { count: 10 });
+  },
+
+  endPeek() {
+    for (const i of this.peekedIndices) {
+      const card = this.cards[i];
+      if (card?.state !== 'down') continue;
+      card.flipper.rotation.y = 0;
+      card.flipper.position.z = 0;
+      card.food.visible = false;
+    }
+    this.peekedIndices = [];
+  },
+
+  /** Dev-only autoplay: good-not-perfect memory with human-ish flip cadence. */
+  autoplayTick(dt) {
+    if (this.picked.length >= 2) return;
+    if (canUsePeek(this) && this.picked.length === 0) {
+      this.usePeek();
+      return;
+    }
+    this.autoT -= dt;
+    if (this.autoT > 0) return;
+    this.autoT = (0.55 + this.ctx.rng() * 0.4) / this.tune.PREVIEW_SPEED_MULT;
+
+    const downCards = this.cards
+      .map((c, i) => ({ c, i }))
+      .filter(({ c }) => c.state === 'down');
+    if (downCards.length === 0) return;
+
+    const recallFail = this.tune.MODE === 'easy' ? 0.04
+      : this.tune.MODE === 'hard' || this.tune.MODE === 'endless' ? 0.12 : 0.08;
+    const recallOk = this.ctx.rng() > recallFail;
+
+    // 1) first pick: a fully-known pair? start flipping its halves
+    if (this.picked.length === 0 && recallOk) {
+      for (const [, seen] of this.memoryMap) {
+        const avail = seen.filter((i) => this.cards[i].state === 'down');
+        if (avail.length === 2) {
+          this.flipUp(avail[0]);
+          return;
+        }
+      }
+    }
+    // 2) second pick: do we know the twin of the first pick?
+    if (this.picked.length === 1 && recallOk) {
+      const firstPair = this.cards[this.picked[0]].pairId;
+      const seen = (this.memoryMap.get(firstPair) ?? []).filter(
+        (i) => i !== this.picked[0] && this.cards[i].state === 'down'
+      );
+      if (seen.length > 0) {
+        this.flipUp(seen[0]);
+        return;
+      }
+    }
+    // 3) explore an unseen card
+    const unseen = downCards.filter(
+      ({ i }) => ![...this.memoryMap.values()].some((seen) => seen.includes(i))
+    );
+    const pool = unseen.length > 0 ? unseen : downCards;
+    const pick = pool[Math.floor(this.ctx.rng() * pool.length)];
+    this.flipUp(pick.i);
+  },
+
+  /** Reset the same face set for the next endless board (new memory map). */
+  resetEndlessBoard(elapsed) {
+    const positions = this.cards.map((card) => card.group.position.clone());
+    const byPair = new Map();
+    for (const card of this.cards) {
+      if (!byPair.has(card.pairId)) byPair.set(card.pairId, []);
+      byPair.get(card.pairId).push(card);
+      card.state = 'down';
+      card.flipper.rotation.y = 0;
+      card.flipper.position.z = 0;
+      card.food.visible = false;
+      card.face.material = this.faceMat;
+      card.group.scale.setScalar(1);
+    }
+    const deck = buildDeck(this.layout.pairs, this.ctx.rng);
+    this.cards = deck.map((pairId) => byPair.get(pairId).pop());
+    this.cards.forEach((card, index) => {
+      card.group.position.copy(positions[index]);
+      card.group.userData.cardIndex = index;
+    });
+    this.picked = [];
+    this.matched = 0;
+    this.misses = 0;
+    this.revealT = 0;
+    this.peekT = 0;
+    this.peekUsed = false;
+    this.peekReady = false;
+    this.cleanMatches = 0;
+    this.peekedIndices = [];
+    this.memoryMap.clear();
+    this.boardStartedAt = elapsed;
+    this.autoT = 0.35 / this.tune.PREVIEW_SPEED_MULT;
+  },
+
+  update(dt, elapsed) {
+    const ctx = this.ctx;
+    this.gooby.update(dt);
+    this.particles.update(dt);
+    this.floats.update(dt); // V6/C4
+
+    // V6/C4 juice: peek-token idle life — sinus scale pulse (±6 %) + one
+    // sparkle every ~3 s while it waits to be tapped (§C.1 item 3).
+    if (this.peekToken.visible) {
+      const pulse = 1 + Math.sin(elapsed * MEMORY_JUICE.TOKEN_PULSE_HZ * Math.PI * 2)
+        * MEMORY_JUICE.TOKEN_PULSE_PCT;
+      this.peekToken.scale.setScalar(pulse);
+      this.tokenSparkleT -= dt;
+      if (this.tokenSparkleT <= 0) {
+        this.tokenSparkleT = MEMORY_JUICE.TOKEN_SPARKLE_EVERY_SEC;
+        this.particles.emit('sparkles', this.peekToken.position.clone(), { count: 1 });
+      }
+    } else {
+      this.peekToken.scale.setScalar(1);
+    }
+
+    if (this.phase === 'ending') {
+      this.endT += dt;
+      if (this.endT >= 1.5 && this.phase !== 'done') {
+        this.phase = 'done';
+        ctx.onEnd({ score: this.finalScore });
+      }
+      return;
+    }
+
+    ctx.hud.setTime(elapsed);
+
+    if (this.peekT > 0) {
+      this.peekT -= dt;
+      this.peekToken.rotation.z += dt * 5;
+      if (this.peekT <= 0) this.endPeek();
+    }
+
+    // pending flip-back (dt-driven, pause-safe §E8)
+    if (this.picked.length === 2 && this.revealT > 0) {
+      this.revealT -= dt;
+      if (this.revealT <= 0) this.flipBackPicked(elapsed);
+    }
+
+    if (this.autoplay) this.autoplayTick(dt);
+
+    if (this.matched >= this.layout.pairs && this.phase === 'play') {
+      const boardElapsed = elapsed - this.boardStartedAt;
+      const score = memoryScore(this.misses, boardElapsed, this.layout, this.tune);
+      if (this.tune.ENDLESS) {
+        this.totalScore += score;
+        this.boards += 1;
+        ctx.hud.setScore(this.totalScore);
+        ctx.hud.banner(t('mg.memory.cleared'));
+        ctx.audio.play('card.match');
+        // V4/GAME-POLISH-2 juice: celebrate every endless board clear
+        this.particles.emit('confetti', this.gooby.group.position.clone().add(new THREE.Vector3(0, 0.9, 0)), { count: 10 });
+        // V6/C4 juice: name the board points at Gooby (§C.1 item 1, endless)
+        this.floats.spawn(`+${score}`, this.gooby.group.position.clone().add(new THREE.Vector3(0, 0.5, 0.4)), '#2E8B57');
+        this.gooby.play('happyBounce');
+        this.resetEndlessBoard(elapsed);
+        return;
+      }
+      this.phase = 'ending';
+      this.finished = elapsed;
+      this.finalScore = score;
+      ctx.hud.setScore(score);
+      ctx.hud.banner(t('mg.memory.cleared'));
+      ctx.audio.play('ui.win');
+      this.gooby.setEmotion('ecstatic');
+      this.gooby.play('happyBounce');
+      this.particles.emit('confetti', this.gooby.group.position.clone().add(new THREE.Vector3(0, 0.9, 0)), { count: 16 });
+      this.floats.spawn(`+${score}`, this.gooby.group.position.clone().add(new THREE.Vector3(0, 0.5, 0.4)), '#2E8B57'); // V6/C4
+      // V6/C4 juice: board-clear cascade — every card hops once, staggered
+      // left→right before onEnd; the full sweep is motion, so it is gated
+      // behind the OS reduced-motion preference (§C.1 item 4).
+      if (!prefersReducedMotion()) {
+        this.cards.forEach((card, i) => {
+          const grp = card.group;
+          const baseY = grp.position.y;
+          tween({
+            from: 0, to: 1,
+            duration: MEMORY_JUICE.CLEAR_HOP_SEC,
+            delay: i * MEMORY_JUICE.CLEAR_HOP_STAGGER_SEC,
+            ease: easings.easeOutQuad,
+            onUpdate: (v) => {
+              grp.position.y = baseY + Math.sin(v * Math.PI) * MEMORY_JUICE.CLEAR_HOP_RISE;
+            },
+          });
+        });
+      }
+      if (this.autoplay) {
+        console.log(
+          `[memoryMatch] autoplay run ended — score ${score} ` +
+          `(misses ${this.misses}, ${this.finished.toFixed(1)}s, ` +
+          `${this.layout.pairs} pairs, peek ${this.peekUses})`
+        );
+      }
+    }
+  },
+
+  dispose() {
+    this.offTap?.();
+    this.particles?.dispose();
+    this.floats?.dispose(); // V6/C4
+    this.floats = null;
+    this.gooby?.dispose();
+    this.backTex?.dispose();
+    for (const geo of this.ownedGeos ?? []) geo.dispose();
+    for (const mat of this.ownedMats ?? []) mat.dispose();
+    this.cards = [];
+    this.memoryMap = null;
+    this.ctx = null;
+    this.gooby = null;
+    this.particles = null;
+    this.ownedGeos = [];
+    this.ownedMats = [];
+  },
+};
+export const controls = Object.freeze({ invertible: false }); // V4/G57 (§G2.1 rule 4, §G3.3): positional/tap/semantic input — inverting is nonsense here

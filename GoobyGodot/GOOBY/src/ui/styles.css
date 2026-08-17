@@ -1,0 +1,6325 @@
+/* GOOBY pastel brand system (§D5). Later agents append their screen styles.
+   Baseline: portrait 390×844, fluid 320–480. Touch targets ≥ 48 px.
+
+   V3/G33 (PLAN3 §B3 rem sweep): ALL DOM-UI font sizes, paddings, margins,
+   radii and fixed dimensions are rem (÷16, ≤4 decimals) so the root
+   font-size (16 · settings.uiScale/100, set on <html> + data-ui-scale attr)
+   scales the whole overlay 85–130 %. Exemptions that STAY px: 1px hairlines,
+   box/text-shadows, 999px pill-radius sentinels, @media conditions, env()
+   safe-area insets, keyframe/transform motion offsets, and the 44px real-px
+   tap-target floor inside max(44px, 2.75rem)-style rules. New declarations
+   must be rem-based — scripts/px-audit.mjs (npm run px-audit) gates this. */
+
+:root {
+  /* palette (§D5 — mirrored in data/constants.js UI_COLORS) */
+  --bg-cream: #fff6ec;
+  --pink: #ff7ba9;
+  --pink-dark: #e05f8d;
+  --teal: #59c9b9;
+  --teal-dark: #3fa89a;
+  --yellow: #ffd166;
+  --yellow-dark: #e0b04a;
+  --brown: #4a3b36;
+  --white: #ffffff;
+  --stat-hunger: #ff9f5a;
+  --stat-energy: #ffd166;
+  --stat-hygiene: #6ec6ff;
+  --stat-fun: #ff7ba9;
+  --card-radius: 1.25rem;
+  --btn-radius: 1.125rem;
+  /* V4/G-UI style-audit tokens: the de-facto repeated values, named so new
+     surfaces stop drifting. --radius-row is the small rounded-rect family
+     (list rows, hint banners, square icon buttons); --ink-soft is muted BODY
+     text (≈4.6:1 on white — WCAG-ish), --ink-faint is caption/footnote text
+     (deliberately lighter); --track-soft is the shared progress-track bed. */
+  --radius-row: 0.875rem;
+  --ink-soft: rgba(74, 59, 54, 0.72);
+  --ink-faint: rgba(74, 59, 54, 0.55);
+  --track-soft: rgba(74, 59, 54, 0.1);
+  --shadow-soft: 0 6px 24px rgba(74, 59, 54, 0.14);
+  /* POLISH-F consistency tokens: the remaining de-facto repeated values.
+     --gold is the modifier/coin gold accent (was 8+ hardcoded copies),
+     --danger the destructive-action red (settings reset, dev save-reset),
+     --frost the frosted white chip/pill surface floating over the 3D scene
+     (drifted 0.88–0.96 across HUD pills, station cards, transport buttons),
+     --veil the modal scrim behind sheets/panels. */
+  --gold: #ffd34d;
+  --danger: #e0655f;
+  --frost: rgba(255, 255, 255, 0.92);
+  --veil: rgba(74, 59, 54, 0.35);
+  /* V4/UI-DEEP: near-opaque warm-brown scrim for immersive media viewers
+     (photo viewer/sticker sheet) — replaces the off-token plum scrims. */
+  --veil-deep: rgba(46, 36, 32, 0.92);
+  /* POLISH-F z-index ladder — the documented stacking order for TOP-LEVEL
+     layers (children of #ui / document.body). Values keep the audited
+     pre-POLISH-F order; offsets (+5 …) are documented at their use sites.
+     Component-LOCAL stacking inside a .screen/.panel/card stacking context
+     (ribbons, lock overlays: z 2–5) intentionally stays literal.
+       --z-hud        40    home + in-room HUD chrome (room-nav dots +5)
+       --z-mg-hud     50    minigame framework HUD (pause/score pills)
+       --z-float      60    floating chips/overlays (sleep chip, countdown)
+       --z-media      80    photo-mode layer (radio now-chip +5)
+       --z-screen    100    full screens (§E6)
+       --z-panel     200    sheet backdrop + bottom sheets
+       --z-onboarding 300   tutorial overlay
+       --z-toast     500    toasts (radio local toast +50)
+       --z-debug     600    dev/FPS overlay (XP floaters +20)
+       --z-drag      900    care-mode drag layer: +1 floaters, ghost +50,
+                            soap sprite +60, pet-debug chip +90
+       --z-system   9000    rotate gate; teleport veil = --z-loading - 2;
+                            the sceneManager fade sits at 9999 (JS, body)
+       --z-loading 10000    async-init loading card (above the scene fade)
+       --z-recap   10010    recap cinematic — topmost */
+  --z-hud: 40;
+  --z-mg-hud: 50;
+  --z-float: 60;
+  --z-media: 80;
+  --z-screen: 100;
+  --z-panel: 200;
+  --z-onboarding: 300;
+  --z-toast: 500;
+  --z-debug: 600;
+  --z-drag: 900;
+  --z-system: 9000;
+  --z-loading: 10000;
+  --z-recap: 10010;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  /* V3/G47 (§C11.2): Kenney ui-pack 9-slice sprites (§D4, public/assets/ui/).
+     GREY sprites are STRUCTURE (frame/bevel) layered over the palette
+     background-colors above — hue-rotate/sepia tinting is forbidden (mushy);
+     where a sprite face must carry an identity color it is multiplied
+     (background-blend-mode) so the bevel stays crisp. Slice numbers are
+     unitless source-image pixels (9-slice offsets); the border widths are rem
+     so every frame scales with settings.uiScale (§B3). */
+  --g47-card: url('/assets/ui/grey/button_square_border.png');
+  --g47-flat: url('/assets/ui/grey/button_square_flat.png');
+  --g47-gloss: url('/assets/ui/grey/button_square_gloss.png');
+  --g47-btn: url('/assets/ui/grey/button_rectangle_depth_flat.png');
+  --g47-btn-flat: url('/assets/ui/grey/button_rectangle_flat.png');
+  --g47-btn-red: url('/assets/ui/red/button_rectangle_depth_flat.png');
+  --g47-round: url('/assets/ui/grey/check_round_grey.png');
+  --g47-round-dot: url('/assets/ui/grey/check_round_round_circle.png');
+  --g47-rail: url('/assets/ui/grey/slide_horizontal_grey.png');
+  --g47-rail-fill: url('/assets/ui/grey/slide_horizontal_color_section.png');
+  --g47-knob: url('/assets/ui/grey/slide_hangle.png');
+  --g47-star: url('/assets/ui/grey/star.png');
+  --g47-star-off: url('/assets/ui/grey/star_outline.png');
+  /* V4/AC-1 (Animal-Crossing design system foundation) — cozy tokens. The
+     --g47-* sprite tokens above stay DECLARED so any component-injected CSS
+     block that still references them keeps painting, but styles.css itself no
+     longer uses them: base components moved to the pure-CSS soft-squircle
+     language below. INTERFACE-FREEZE for later per-screen agents: every token
+     in this block (plus the .ac-* opt-in classes at the end of this file and
+     the ui/icons.js icon names) is a stable contract — extend, don't rename.
+       --paper / --paper-shade     warm card face + shaded well/inset surface
+       --outline-soft              hairline ring (use inside box-shadow lists)
+       --shadow-pop / --shadow-press  floating vs pressed elevation
+       --leaf / --leaf-dark        the AC leaf-green accent (CTA, active tab)
+       --sky-soft                  soft sky-blue accent wash
+       --card-radius-lg            big cozy squircle radius (cards, sheets)
+       --dur-pop / --dur-sheet     pop-in / sheet-slide durations
+       --ease-spring               springy overshoot curve for presses/pops
+       --font-round                rounded display stack (bundled Baloo 2 →
+                                   iOS ui-rounded/SF Pro Rounded → system)
+       --pattern-leaf / --pattern-dots  seamless acui/ background tiles
+       --acui-wordmark / --acui-coin    cookie GOOBY wordmark + carrot coin
+                                   (project-original art, public/assets/acui/) */
+  --paper: #fffaf2;
+  --paper-shade: #f6ead8;
+  --outline-soft: rgba(74, 59, 54, 0.08);
+  --shadow-pop: 0 10px 30px rgba(74, 59, 54, 0.18);
+  --shadow-press: 0 2px 6px rgba(74, 59, 54, 0.16);
+  --leaf: #8fd06c;
+  --leaf-dark: #6db54e;
+  --sky-soft: #cfe9f5;
+  --card-radius-lg: 1.75rem;
+  --dur-pop: 180ms;
+  --dur-sheet: 240ms;
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --font-round: 'Baloo 2', ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+  --pattern-leaf: url('/assets/acui/pattern_leaves.png');
+  --pattern-dots: url('/assets/acui/pattern_dots.png');
+  --acui-wordmark: url('/assets/acui/wordmark_gooby.png');
+  --acui-coin: url('/assets/acui/coin.png');
+}
+
+/* V4/AC-1: bundled rounded face — Baloo 2 variable (400–800), latin subset
+   (covers EN + DE incl. umlauts/„quotes"), SIL OFL 1.1 (license text at
+   public/assets/fonts/OFL.txt, credit row in src/data/credits.js). Preloaded
+   from index.html; font-display: swap keeps first paint on the system stack. */
+@font-face {
+  font-family: 'Baloo 2';
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url('/assets/fonts/baloo2-latin-var.woff2') format('woff2');
+}
+
+/* F3: predictable sizing everywhere — padding/borders stay inside declared
+   widths so grids/pills can never overflow their tracks at narrow widths. */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+#ui {
+  font-family: var(--font-round); /* V4/AC-1: cozy rounded type everywhere */
+  color: var(--brown);
+}
+
+/* ---------- buttons (§D5: chunky, pressable) ---------- */
+
+/* V4/AC-1: cozy pill buttons — flat identity fill + a darker bottom-edge lip
+   (inset shadow, tint-agnostic) instead of the V3/G47 9-slice sprite frame.
+   Pressed = springy squash (scale + 2px sink) with --shadow-press. The old
+   frame-compensated paddings on descendant .btn rules still apply and stay
+   harmless (min-height/min-width keep every target ≥44px). */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: max(44px, 3rem);
+  min-width: max(44px, 3rem);
+  padding: 0.375rem 1.25rem 0.5rem;
+  border: none;
+  border-radius: 999px;
+  background: var(--pink);
+  color: var(--white);
+  font-size: 1.125rem;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  box-shadow: inset 0 -0.25rem 0 rgba(74, 59, 54, 0.18), 0 3px 10px rgba(74, 59, 54, 0.12);
+  transition: transform var(--dur-pop) var(--ease-spring), box-shadow var(--dur-pop) ease;
+}
+.btn:active {
+  transform: scale(0.96) translateY(2px); /* springy press (offset stays px) */
+  box-shadow: inset 0 -0.125rem 0 rgba(74, 59, 54, 0.16), var(--shadow-press);
+}
+.btn.btn-teal {
+  background: var(--teal);
+}
+.btn.btn-yellow {
+  background: var(--yellow);
+  color: var(--brown);
+}
+.btn.btn-ghost {
+  background: var(--paper);
+  color: var(--brown);
+  box-shadow: inset 0 -0.25rem 0 rgba(74, 59, 54, 0.1), 0 0 0 1px var(--outline-soft), 0 3px 10px rgba(74, 59, 54, 0.08);
+}
+.btn.btn-ghost:active {
+  box-shadow: inset 0 -0.125rem 0 rgba(74, 59, 54, 0.08), 0 0 0 1px var(--outline-soft), var(--shadow-press);
+}
+/* V4/AC-1: leaf-green primary CTA (opt-in for later per-screen agents) */
+.btn.btn-leaf {
+  background: var(--leaf);
+  box-shadow: inset 0 -0.25rem 0 rgba(74, 59, 54, 0.14), inset 0 -0.25rem 0 var(--leaf-dark), 0 3px 10px rgba(109, 181, 78, 0.35);
+}
+.btn.btn-round {
+  border-radius: 50%;
+  width: 3.25rem;
+  height: 3.25rem;
+  padding: 0;
+}
+.btn.btn-round:active {
+  transform: scale(0.96) translateY(2px);
+}
+.btn svg {
+  display: block;
+}
+
+/* ---------- cards / sheets ---------- */
+
+/* V4/AC-1: cards are soft paper squircles (the V3/G47 sprite frame is gone;
+   total content inset stays the pre-reskin 1.25rem). Optional .card-outline
+   adds a hairline ring for cards floating on same-hue backgrounds. */
+.card {
+  background: var(--paper);
+  border: none;
+  border-radius: var(--card-radius-lg);
+  box-shadow: var(--shadow-soft);
+  padding: 1.25rem;
+}
+.card.card-outline {
+  box-shadow: 0 0 0 1px var(--outline-soft), var(--shadow-soft);
+}
+
+/* ---------- full screens & panels (§E6) ---------- */
+
+.screen {
+  position: absolute;
+  inset: 0;
+  pointer-events: auto;
+  background: var(--bg-cream);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  /* V3/G33 (§C1.4): full-bleed backdrop, content clears the insets —
+     padding-bottom: max(16px, calc(var(--safe-bottom) + 4px)) rule shape. */
+  padding: max(1rem, calc(var(--safe-top) + 0.25rem)) max(1rem, var(--safe-right)) max(1rem, calc(var(--safe-bottom) + 0.25rem)) max(1rem, var(--safe-left));
+  z-index: var(--z-screen);
+}
+/* V4/AC-1: subtle leaf/paw pattern wash on every full screen. The pseudo is
+   position:absolute + z-index:-1 inside the .screen stacking context, so it
+   paints between the cream backdrop and ALL content and never catches input.
+   The acui tile is itself low-contrast; 0.45 lands at ~5 % effective glyph
+   contrast. (On screens that scroll the .screen element itself the wash
+   covers the first viewport and fades out — acceptable at this subtlety.) */
+.screen::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--pattern-leaf) left top / 24rem 24rem repeat;
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.panel-backdrop {
+  position: absolute;
+  inset: 0;
+  pointer-events: auto;
+  background: var(--veil);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: var(--z-panel);
+  /* V4/FIX-UI (§C1.4): reserve the notch inset at the TOP of every sheet —
+     full-height panels (careSheet, whatsNew, …) size against the backdrop's
+     content box (max-height:100%), so this single rule keeps every sheet
+     title below the safe area instead of clipping behind the notch. */
+  padding-top: max(0.625rem, var(--safe-top));
+}
+/* V4/AC-1: bottom sheets are paper squircles with big rounded top corners
+   and a CSS grabber pill (no sprite frame; side/bottom insets stay the
+   pre-reskin 1.25rem, top gains room for the grabber). V6/F3 soft-settle
+   (restored idea 07 #15): the open animation rides the plan-exact settle
+   bezier cubic-bezier(0.34, 1.56, 0.64, 1) — kept literal here so the
+   test/miscQuality.test.js source gate can pin it; POLISH-D still owns the
+   200ms EXIT path unchanged. */
+.panel {
+  position: relative;
+  width: 100%;
+  max-width: 30rem;
+  background: var(--paper);
+  border: none;
+  border-radius: var(--card-radius-lg) var(--card-radius-lg) 0 0;
+  box-shadow: 0 -8px 30px rgba(74, 59, 54, 0.18);
+  padding: 1.5rem 1.25rem max(1.25rem, calc(var(--safe-bottom) + 0.25rem)); /* V3/G33 §C1.4 sheet rule */
+  animation: panel-up var(--dur-sheet) cubic-bezier(0.34, 1.56, 0.64, 1); /* V6/F3 settle bezier */
+}
+.panel::before {
+  content: '';
+  position: absolute;
+  top: 0.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 2.75rem;
+  height: 0.3125rem;
+  border-radius: 999px;
+  background: rgba(74, 59, 54, 0.16);
+  pointer-events: none;
+}
+/* V6/F3 soft-settle: sheets rise, drift ~3px past their rest position and
+   settle back (translateY 16px → −3px → 0 under the settle bezier above).
+   The px offsets are keyframe/transform motion values — §B3 px-audit exempt.
+   Reduced motion is already handled: the POLISH-D media block collapses
+   .panel's animation-duration to 1ms, which flattens this keyframe too. */
+@keyframes panel-up {
+  from { transform: translateY(16px); opacity: 0; }
+  62% { transform: translateY(-3px); opacity: 1; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+/* ---------- toast ---------- */
+
+/* V4/AC-1: toasts are cream dialog bubbles (brown ink, leaf accent) instead
+   of the old dark pill; enter/exit spring gently. ui.js timing contract
+   untouched (toast-out still settles well inside its 300ms removal window). */
+.toast {
+  /* V6.1/G3 (FINAL-WAVE A4, P2-19): viewport-FIXED — the bubble anchors to
+     the real viewport (immune to ancestor layout/scroll), so it can never
+     ride mid-page content. Same geometry as the old absolute-in-#ui values
+     (#ui is inset:0), only the anchor semantics harden. */
+  position: fixed;
+  left: 50%;
+  bottom: calc(4.75rem + var(--safe-bottom));
+  transform: translateX(-50%);
+  background: var(--paper);
+  color: var(--brown);
+  font-size: 1rem;
+  font-weight: 700;
+  padding: 0.75rem 1.375rem 0.75rem 1.125rem;
+  border-radius: 1.375rem;
+  box-shadow: 0 0 0 1px var(--outline-soft), var(--shadow-pop);
+  pointer-events: none;
+  z-index: var(--z-toast);
+  animation: toast-in var(--dur-pop) var(--ease-spring);
+  /* V4/FIX-UI: cap the bubble so it never spans the whole pet zone */
+  max-width: min(86vw, 22rem);
+  text-align: center;
+}
+/* V4/FIX-UI: while the home HUD action dock is visible (home scene, no sheet
+   up) lift toasts fully ABOVE the dock rows so they never sit on the buttons.
+   Offsets = dock bottom inset + two button rows + gap (hud.js HUD_CSS);
+   the 130 % variant tracks that scale's shorter 44px-floor buttons.
+   V6.1/G3 (A4): + :not(:has(.screen)) — a full screen COVERS the dock even
+   though hud.js only toggles .g5-hud-hidden on scene switches (the element
+   stays "visible" under album/settings/… on the home scene), so the dock lift
+   must stand down whenever a screen is up. The three .toast anchor rules are
+   mutually exclusive: sheet(base) / screen(drop) / home dock(lift). */
+#ui:has(.g5-hud:not(.g5-hud-hidden)):not(:has(.panel-backdrop)):not(:has(.screen)) .toast {
+  bottom: calc(max(2.75rem, calc(var(--safe-bottom) + 2rem)) + 7.625rem);
+}
+:root[data-ui-scale='130'] #ui:has(.g5-hud:not(.g5-hud-hidden)):not(:has(.panel-backdrop)):not(:has(.screen)) .toast {
+  bottom: calc(max(2.75rem, calc(var(--safe-bottom) + 2rem)) + 5rem);
+}
+/* V6.1/G3 (FINAL-WAVE A4, P2-19): while a FULL SCREEN (album/achievements/
+   settings…) is up — no bottom sheet — the 4.75rem home offset (or worse, the
+   dock lift: hud.js keeps .g5-hud un-hidden under screens on the home scene)
+   would park the bubble ON the content rows (the eval's sticker toast over
+   the book completion). Drop it to the safe bottom edge instead: it reads as
+   chrome over the screen's bottom padding, clear of the reading area.
+   rem-based so uiScale 130 tracks; --safe-bottom keeps it off the
+   notch/home-indicator down to 320×568. Sheets keep the base offset (toasts
+   ride above .panel-backdrop bottom sheets). */
+#ui:has(.screen):not(:has(.panel-backdrop)) .toast {
+  bottom: max(0.75rem, calc(var(--safe-bottom) + 0.375rem));
+}
+.toast::before {
+  /* little leaf accent: a green droplet rotated into a leaf silhouette */
+  content: '';
+  display: inline-block;
+  width: 0.6875rem;
+  height: 0.6875rem;
+  margin-right: 0.5rem;
+  background: linear-gradient(135deg, var(--leaf), var(--leaf-dark));
+  border-radius: 999px 0.125rem;
+  transform: rotate(45deg);
+}
+@keyframes toast-in {
+  from { transform: translate(-50%, 12px) scale(0.9); opacity: 0; }
+  to { transform: translate(-50%, 0) scale(1); opacity: 1; }
+}
+.toast.toast-out {
+  transition: opacity 250ms ease, transform 250ms ease;
+  opacity: 0;
+  transform: translate(-50%, 8px) scale(0.96);
+}
+
+/* ---------- placeholder home title (W1; G4 replaces the scene) ---------- */
+
+.home-title {
+  position: absolute;
+  top: calc(4rem + var(--safe-top));
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 4rem;
+  font-weight: 700;
+  letter-spacing: 0.375rem;
+  color: var(--pink);
+  text-shadow: 0 4px 0 rgba(224, 95, 141, 0.35), 0 10px 30px rgba(255, 123, 169, 0.35);
+  pointer-events: none;
+  user-select: none;
+}
+.home-subtitle {
+  position: absolute;
+  top: calc(9.25rem + var(--safe-top));
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--brown);
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+/* ---------- minigame HUD (framework §E8) ---------- */
+
+.mg-hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: var(--z-mg-hud);
+}
+.mg-hud .mg-top {
+  position: absolute;
+  /* V3/G33 (§C1.4): minigame pause/exit row — top: max(10px, var(--safe-top)) */
+  top: max(0.75rem, var(--safe-top));
+  left: max(0.75rem, var(--safe-left));
+  right: max(0.75rem, var(--safe-right));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.625rem;
+}
+.mg-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--paper); /* V4/AC-1: cozy paper pill over the 3D stage */
+  border-radius: 999px;
+  padding: 0.625rem 1.125rem;
+  font-size: 1.125rem;
+  font-weight: 700;
+  box-shadow: 0 0 0 1px var(--outline-soft), var(--shadow-soft);
+  min-height: 1.75rem;
+}
+.mg-pill .mg-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  opacity: 0.55;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.mg-hud .btn {
+  pointer-events: auto;
+}
+.mg-banner {
+  position: absolute;
+  top: 30%;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--white);
+  text-shadow: 0 3px 12px rgba(74, 59, 54, 0.45);
+  pointer-events: none;
+  animation: banner-pop 300ms ease-out;
+}
+@keyframes banner-pop {
+  from { transform: scale(0.6); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+/* countdown 3-2-1 */
+.mg-countdown {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto; /* swallow taps during countdown */
+  z-index: var(--z-float);
+}
+.mg-countdown .mg-count {
+  font-size: 7.5rem;
+  font-weight: 700;
+  color: var(--white);
+  /* V4/AC-1: leaf-green drop edge under the numerals (was hot pink) */
+  text-shadow: 0 6px 0 rgba(109, 181, 78, 0.55), 0 16px 40px rgba(74, 59, 54, 0.35);
+  animation: count-pop 900ms ease-out;
+}
+@keyframes count-pop {
+  0% { transform: scale(1.6); opacity: 0; }
+  25% { transform: scale(1); opacity: 1; }
+  85% { transform: scale(0.94); opacity: 1; }
+  100% { transform: scale(0.9); opacity: 0; }
+}
+
+/* pause + results */
+.mg-overlay-title {
+  font-size: 2.125rem;
+  font-weight: 700;
+  margin: 0 0 0.375rem;
+  text-align: center;
+}
+.mg-results-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  margin: 1.125rem 0 1.375rem;
+  width: min(20rem, 80vw);
+}
+.mg-results-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--paper-shade); /* V4/AC-1: shaded paper wells */
+  border-radius: var(--radius-row);
+  padding: 0.75rem 1rem;
+  font-size: 1.125rem;
+  font-weight: 700;
+}
+.mg-results-row .mg-value {
+  font-weight: 700;
+  font-size: 1.375rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+/* V4/G-UI: the coin glyph is yellow everywhere else (.g5-coins/.shop-coins
+   svg) — the results row was the one place it rendered ink-brown. */
+.mg-results-row .mg-value svg {
+  color: var(--yellow);
+}
+.mg-badge {
+  display: inline-block;
+  background: var(--yellow);
+  color: var(--brown);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 0.25rem 0.625rem;
+  margin-left: 0.5rem;
+}
+.mg-badge.mg-badge-pink {
+  background: var(--pink);
+  color: var(--white);
+}
+.mg-btn-row {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+/* ---------- stat pills base (HUD proper lands with G5) ---------- */
+
+.stat-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  background: var(--frost);
+  border-radius: 999px;
+  padding: 0.375rem 0.625rem;
+  box-shadow: var(--shadow-soft);
+}
+.stat-pill .stat-track {
+  width: 3.375rem;
+  height: 0.625rem;
+  border-radius: 999px;
+  background: var(--track-soft);
+  overflow: hidden;
+}
+.stat-pill .stat-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 300ms ease;
+}
+.stat-pill.stat-low .stat-fill {
+  animation: stat-pulse 1s ease-in-out infinite;
+}
+@keyframes stat-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+/* ---------- G6: sleep flow — countdown chip + wake sheet (§C1.4) ---------- */
+
+/* G6 */
+/* F3: sits BELOW the HUD top block (stat pills + coins/XP rows end ~98px)
+   so the chip never overlaps the pills at 320px width. */
+.sleep-chip {
+  position: absolute;
+  top: calc(6.5rem + var(--safe-top));
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: calc(100vw - 1.5rem);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(38, 42, 66, 0.88);
+  color: var(--white);
+  font-size: 1rem;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 0.625rem 1.125rem;
+  min-height: max(44px, 3rem);
+  box-shadow: var(--shadow-soft);
+  pointer-events: auto;
+  cursor: pointer;
+  z-index: var(--z-float);
+  animation: toast-in 180ms ease-out;
+}
+.sleep-chip .sleep-chip-zzz {
+  animation: sleep-zzz 2.2s ease-in-out infinite;
+  display: inline-block;
+}
+.sleep-chip .sleep-chip-energy {
+  font-size: 0.8125rem;
+  opacity: 0.85;
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  padding: 0.1875rem 0.5625rem;
+}
+@keyframes sleep-zzz {
+  0%, 100% { transform: translateY(0); opacity: 0.75; }
+  50% { transform: translateY(-3px); opacity: 1; }
+}
+
+/* G6 — permission soft-ask + wake-confirm sheets */
+.perm-panel,
+.wake-confirm {
+  text-align: center;
+}
+.perm-icon {
+  color: var(--pink);
+  margin-bottom: 0.25rem;
+}
+.perm-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 0 0 0.5rem;
+}
+.perm-body {
+  font-size: 1rem;
+  line-height: 1.45;
+  opacity: 0.8;
+  margin: 0 0 1.125rem;
+}
+.btn[disabled] {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+/* G6 — settings screen */
+/* F3: scrollable at short viewports (320×568) — flex-start + overflow so the
+   top (back button) and bottom (footer) are always reachable; margin:auto
+   keeps the card vertically centered when there IS room. */
+.screen-settings {
+  justify-content: flex-start;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.settings-wrap {
+  width: min(26.25rem, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  align-self: center;
+  margin: auto 0;
+  flex: none;
+}
+.settings-head {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap; /* V3/G33 §C1.2: long DE title wraps below the back button */
+}
+.settings-title {
+  /* V3/G33 §C1.2: compress via min() at 320px × 115/130 % („Einstellungen") */
+  font-size: min(1.875rem, 8vw);
+  font-weight: 700;
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.settings-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 0.25rem;
+  border-bottom: 0.125rem solid rgba(74, 59, 54, 0.07);
+  flex-wrap: wrap;
+}
+.settings-row:last-child {
+  border-bottom: none;
+}
+.settings-label {
+  font-size: 1.0625rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+.settings-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.625rem;
+  /* V3/G33 §C1.2: status text + button wrap inside the row at 320px × 130 % */
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  max-width: 100%;
+  min-width: 0;
+}
+.settings-status {
+  font-size: 0.875rem;
+  font-weight: 700;
+  opacity: 0.72; /* V4/G-UI: was .6 (≈3.4:1) — .72 ≈ 4.7:1 body-text contrast */
+}
+.settings-danger {
+  justify-content: center;
+}
+.settings-danger .btn {
+  /* V4/AC-1: destructive action keeps its red identity on the cozy pill —
+     the shared .btn bottom-edge inset shadow darkens the red on its own. */
+  background: var(--danger);
+}
+.settings-footer {
+  text-align: center;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  opacity: 0.45;
+}
+/* V6.1/G3 (FINAL-WAVE B1): the tiny love note under the version footer —
+   quiet body text with the authored icons.js heart glyph inline (no raw
+   glyph in the string table; settingsScreen.js swaps the {heart} slot). */
+.settings-lovenote {
+  margin-top: 0.25rem;
+  text-align: center;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: var(--brown);
+  opacity: 0.55;
+}
+.settings-lovenote .g3-lovenote-heart {
+  display: inline-block;
+  vertical-align: -0.0938rem;
+  color: var(--pink);
+  margin: 0 0.125rem;
+}
+.settings-lovenote .g3-lovenote-heart svg {
+  display: inline-block;
+}
+/* V4/AC-1: segmented controls sit in a soft shaded well (sprite rim gone);
+   the selected pill inside stays pure CSS (identity accent). */
+.seg {
+  display: inline-flex;
+  background: var(--paper-shade);
+  border: none;
+  border-radius: 999px;
+  padding: 0.25rem;
+  gap: 0.1875rem;
+  box-shadow: inset 0 1px 3px rgba(74, 59, 54, 0.08);
+  /* V3/G33 §C1.2: segments wrap instead of clipping (320px × 115/130 %) */
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  max-width: 100%;
+}
+.seg-btn {
+  border: none;
+  background: transparent;
+  color: var(--brown);
+  font-family: inherit;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  min-height: max(44px, 2.75rem); /* F3: ≥44px touch target */
+  min-width: max(44px, 3.25rem);
+  padding: 0.375rem 0.75rem;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.seg-btn.seg-on {
+  background: var(--white);
+  box-shadow: 0 2px 8px rgba(74, 59, 54, 0.16);
+  color: var(--pink-dark);
+}
+/* ---------- end G6 ---------- */
+
+/* ---------- G11: shop screen (§C5) + decorate mode (§C5.2) ---------- */
+.screen-shop {
+  justify-content: flex-start;
+  padding-left: 0;
+  padding-right: 0;
+}
+.shop-wrap {
+  width: min(30rem, 100%);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  padding: 0 0.875rem;
+}
+.shop-head {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  flex-wrap: wrap; /* F3: the Go-home button wraps below at 320px, never clips */
+  flex: none;
+}
+.shop-title {
+  font-size: clamp(1.3125rem, 7vw, 1.75rem); /* F3: shrink before the pill/button do */
+  font-weight: 700;
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.shop-coins {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  background: var(--white);
+  border-radius: 999px;
+  padding: 0.5rem 0.875rem;
+  font-size: 1.0625rem;
+  font-weight: 700;
+  box-shadow: var(--shadow-soft);
+  flex: none; /* F3: the coins pill never squishes */
+}
+/* F3: compact Go-home button so the trip header fits narrow widths */
+.shop-head .shop-home {
+  min-height: max(44px, 2.75rem);
+  padding: 0.125rem 0.5rem 0; /* V3/G47: compensates the 9-slice frame border */
+  font-size: 0.9375rem;
+  flex: none;
+}
+.shop-coins svg {
+  color: var(--yellow);
+}
+.shop-hint {
+  background: rgba(255, 209, 102, 0.28);
+  border-radius: var(--radius-row);
+  padding: 0.5625rem 0.875rem;
+  font-size: 0.875rem;
+  font-weight: 700;
+  text-align: center;
+  flex: none;
+}
+.shop-tabs {
+  display: flex;
+  gap: 0.375rem;
+  flex: none;
+  /* POLISH-F: 6 category labels never fit one row on phone widths (EN
+     "Furniture"/"Outfits" broke MID-WORD even at 390 px @ 100 %) — the 30 %
+     flex basis below wraps them into a steady 2×3 grid at every size. */
+  flex-wrap: wrap;
+}
+.shop-tab {
+  min-width: 0; /* F3: tabs shrink evenly, labels wrap instead of clipping */
+}
+.shop-tab {
+  flex: 1 1 30%;
+  border: none;
+  min-height: max(44px, 2.875rem);
+  padding: 0.375rem 0.25rem;
+  border-radius: var(--radius-row);
+  background: rgba(255, 255, 255, 0.7);
+  color: var(--brown);
+  font-family: inherit;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.shop-tab.shop-tab-on {
+  background: var(--pink);
+  color: var(--white);
+  box-shadow: 0 4px 14px rgba(255, 123, 169, 0.45);
+}
+.shop-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.125rem 0.125rem 1.5rem;
+  -webkit-overflow-scrolling: touch;
+}
+.shop-section {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  opacity: 0.6;
+  margin: 0.875rem 0.125rem 0.5rem;
+}
+.shop-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)); /* F3: tracks may shrink */
+  gap: 0.625rem;
+}
+.shop-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1875rem;
+  background: var(--white);
+  border-radius: 1rem;
+  border: none;
+  padding: 0.75rem 0.375rem 0.625rem;
+  font-family: inherit;
+  color: var(--brown);
+  cursor: pointer;
+  box-shadow: 0 3px 12px rgba(74, 59, 54, 0.08);
+  -webkit-tap-highlight-color: transparent;
+}
+.shop-card:active {
+  transform: scale(0.96);
+}
+.shop-card.shop-card-sel {
+  outline: 0.1875rem solid var(--teal);
+}
+.shop-card .shop-emoji {
+  font-size: 2.125rem;
+  line-height: 1.15;
+}
+.shop-card .shop-name {
+  font-size: 0.7188rem;
+  font-weight: 700;
+  opacity: 0.8;
+  text-align: center;
+  line-height: 1.15;
+  /* F6 (RE3): long unbreakable names (DE "Schubladenschrank", …) must wrap
+     inside the ~89px card at 320px-wide viewports instead of painting out */
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+/* V4/UI-DEEP: leaf price tag — shelf-tile prices ride the AC leaf accent. */
+.shop-card .shop-price {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.1875rem;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  background: var(--leaf);
+  color: var(--white);
+  border-radius: 999px;
+  padding: 0.0625rem 0.5rem;
+  box-shadow: inset 0 -0.0938rem 0 var(--leaf-dark);
+}
+.shop-card .shop-price svg {
+  color: var(--yellow);
+}
+.shop-card .shop-state {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: var(--teal-dark);
+  /* F6 (RE3): decor slot cards render item names here too — same wrap rule */
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.shop-card .shop-count {
+  position: absolute;
+  top: 0.3125rem;
+  right: 0.4375rem;
+  background: var(--teal);
+  color: var(--white);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 1px 0.4375rem;
+}
+.shop-buybar {
+  display: flex;
+  flex-wrap: wrap; /* F3: name row on top, stepper+buy row below — the single
+                      row crushed the item name to nothing at ≤375px */
+  align-items: center;
+  gap: 0.5rem 0.625rem;
+  background: var(--white);
+  border-radius: var(--btn-radius);
+  box-shadow: var(--shadow-soft);
+  padding: 0.625rem 0.75rem;
+  margin-bottom: 0.25rem;
+}
+.shop-buybar .shop-buybar-info {
+  flex: 1 1 100%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.shop-buybar .shop-qty {
+  flex: 1; /* F3: stepper left, buy button right on the controls row */
+}
+.shop-buybar .shop-buybar-name {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.shop-buybar .shop-buybar-total {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  opacity: 0.65;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+.shop-qty {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+.qty-btn {
+  /* F3: ≥44px touch target */
+  width: 2.75rem;
+  height: 2.75rem;
+  border: none;
+  border-radius: 0.75rem;
+  background: var(--bg-cream);
+  color: var(--brown);
+  font-size: 1.25rem;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+}
+.qty-n {
+  min-width: 1.625rem;
+  text-align: center;
+  font-size: 1.0625rem;
+  font-weight: 700;
+}
+.shop-buybar .btn {
+  min-height: max(44px, 2.75rem);
+  padding: 0.125rem 0.625rem 0; /* V3/G47: compensates the 9-slice frame border */
+  font-size: 1rem;
+}
+.shop-banner {
+  display: flex;
+  flex-wrap: wrap; /* F7: trailing hint/button drops to its own row instead of
+                      crushing the pitch text at narrow widths */
+  align-items: center;
+  gap: 0.625rem;
+  background: linear-gradient(100deg, rgba(89, 201, 185, 0.18), rgba(255, 209, 102, 0.22));
+  border-radius: 1rem;
+  padding: 0.625rem 0.75rem;
+  margin: 0.125rem 0 0.625rem;
+}
+.shop-banner .shop-banner-text {
+  flex: 1 1 160px; /* F7: real basis so long trailing content wraps below
+                      instead of shrinking this to 0 (it painted text-on-text) */
+  min-width: 0;
+}
+.shop-banner .shop-banner-hint {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.shop-banner .shop-banner-title {
+  font-size: 0.9375rem;
+  font-weight: 700;
+}
+.shop-banner .shop-banner-body {
+  font-size: 0.7813rem;
+  font-weight: 700;
+  opacity: 0.7;
+}
+.shop-banner .btn {
+  min-height: max(44px, 2.625rem);
+  padding: 0 0.5rem; /* V3/G47: compensates the 9-slice frame border */
+  font-size: 0.875rem;
+  flex: none;
+}
+.shop-outfits-card {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 1.625rem 1.125rem;
+}
+.shop-outfits-card .shop-outfits-emoji {
+  font-size: 3.25rem;
+  line-height: 1;
+}
+.swatch-row {
+  display: flex;
+  gap: 0.625rem;
+  flex-wrap: wrap;
+}
+.swatch {
+  position: relative;
+  width: 4.5rem;
+  border: none;
+  background: none;
+  padding: 0;
+  font-family: inherit;
+  color: var(--brown);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1875rem;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.swatch .swatch-chip {
+  width: 3.75rem;
+  height: 3.75rem;
+  border-radius: 1rem;
+  box-shadow: 0 3px 10px rgba(74, 59, 54, 0.18);
+  border: 0.1875rem solid var(--white);
+}
+.swatch.swatch-on .swatch-chip {
+  border-color: var(--teal);
+  outline: 0.125rem solid var(--teal);
+}
+.swatch .swatch-name {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  opacity: 0.75;
+}
+.swatch .swatch-price {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.1875rem;
+  font-size: 0.7188rem;
+  font-weight: 700;
+}
+.swatch .swatch-price svg {
+  color: var(--yellow-dark);
+}
+.room-chips {
+  display: flex;
+  gap: 0.375rem;
+  margin: 0.25rem 0 0.625rem;
+  flex-wrap: wrap;
+}
+/* V4/UI-DEEP: filter chips speak the .ac-chip pill language (paper face +
+   hairline ring; active = leaf fill like the active .ac-tab). */
+.room-chip {
+  border: none;
+  border-radius: 999px;
+  min-height: max(44px, 2.75rem); /* F3: ≥44px touch target */
+  min-width: max(44px, 2.75rem); /* V3/G33 §B3: short labels stay ≥44px wide */
+  padding: 0.375rem 0.875rem;
+  background: var(--paper);
+  color: var(--brown);
+  font-family: inherit;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 0 0 1px var(--outline-soft), 0 2px 6px rgba(74, 59, 54, 0.1);
+}
+.room-chip.room-chip-on {
+  background: var(--leaf);
+  color: var(--white);
+  box-shadow: inset 0 -0.125rem 0 var(--leaf-dark), 0 2px 6px rgba(109, 181, 78, 0.35);
+}
+/* decorate-mode slot picker (panel) */
+.decor-head {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  margin-bottom: 0.625rem;
+}
+.decor-title {
+  font-size: 1.375rem;
+  font-weight: 700;
+  margin: 0;
+  flex: 1;
+}
+.decor-sub {
+  font-size: 0.8438rem;
+  font-weight: 700;
+  opacity: 0.6;
+  margin: -0.375rem 0 0.625rem;
+}
+.decor-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)); /* F3: tracks may shrink */
+  gap: 0.625rem;
+  max-height: 44vh;
+  overflow-y: auto;
+}
+.decor-back {
+  width: 2.75rem;
+  height: 2.75rem;
+  border: none;
+  border-radius: var(--radius-row);
+  background: var(--bg-cream);
+  color: var(--brown);
+  font-family: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+/* quick-delivery order chip injected into the fridge tray */
+.g11-order-btn {
+  width: 100%;
+  margin-top: 0.75rem;
+  min-height: max(44px, 2.875rem);
+  font-size: 1rem;
+}
+/* ---------- end G11 ---------- */
+
+/* ---------- G14: audio toggles, onboarding, polish ---------- */
+/* G14 */
+.g14-toggle {
+  position: relative;
+  width: 3.25rem;
+  height: 1.875rem;
+  border: none;
+  border-radius: 999px;
+  background: rgba(74, 59, 54, 0.18);
+  cursor: pointer;
+  transition: background 160ms ease;
+  flex: none;
+}
+/* V4/AC-1: toggle knob is a plain white disc floating on --shadow-pop (the
+   G47 check_round_* sprites are gone); the pill track keeps its CSS teal
+   accent. Knob is inset 0.1875rem inside the 1.875rem pill, so the G33
+   1.375rem on-travel and the ≥44px halo below are untouched. */
+.g14-toggle .g14-knob {
+  position: absolute;
+  top: 0.1875rem;
+  left: 0.1875rem;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  background: var(--white);
+  box-shadow: 0 0 0 1px var(--outline-soft), 0 2px 6px rgba(74, 59, 54, 0.25);
+  transition: transform 160ms var(--ease-spring);
+}
+.g14-toggle.g14-on {
+  background: var(--teal);
+}
+.g14-toggle.g14-on .g14-knob {
+  transform: translateX(1.375rem); /* V3/G33 §B3: knob travel scales with the pill */
+}
+/* F3: invisible hit-area expansion — visual 52×30 stays, taps get ≥44px.
+   V3/G33 §B3: the halo now GUARANTEES a ≥44 real-px hit box at every uiScale
+   (pill is 3.25×1.875rem — 44.2×25.5 px at 85 %). */
+.g14-toggle::after {
+  content: '';
+  position: absolute;
+  inset: calc((1.875rem - max(44px, 2.875rem)) / 2) calc((3.25rem - max(44px, 3.75rem)) / 2);
+}
+
+/* onboarding overlay (§C8.1): floats over the live scene, input passes through */
+.g14-ob {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: var(--z-onboarding);
+}
+.g14-ob.g14-ob-hidden {
+  display: none;
+}
+.g14-ob-card {
+  position: absolute;
+  left: 50%;
+  bottom: calc(7.25rem + var(--safe-bottom));
+  transform: translateX(-50%);
+  width: min(86vw, 22.5rem);
+  background: var(--white);
+  border-radius: var(--card-radius);
+  box-shadow: var(--shadow-soft);
+  padding: 0.875rem 1.125rem 1rem;
+  text-align: center;
+  pointer-events: auto;
+  animation: g14-card-in 260ms cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
+@keyframes g14-card-in {
+  from { transform: translateX(-50%) translateY(24px) scale(0.94); opacity: 0; }
+  to { transform: translateX(-50%) translateY(0) scale(1); opacity: 1; }
+}
+.g14-ob-step {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: var(--brown);
+  opacity: 0.45;
+  letter-spacing: 0.0313rem;
+}
+.g14-ob-title {
+  font-size: 1.25rem;
+  font-weight: 900;
+  color: var(--brown);
+  margin-top: 0.125rem;
+}
+.g14-ob-body {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--brown);
+  opacity: 0.75;
+  margin-top: 0.375rem;
+  line-height: 1.35;
+}
+.g14-ob-btns {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+  margin-top: 0.625rem;
+  flex-wrap: wrap;
+}
+.g14-ob-btns:empty {
+  display: none;
+}
+.g14-ob-skip {
+  font-size: 0.75rem;
+  min-height: max(44px, 2.75rem); /* F3: ≥44px touch target */
+}
+
+/* HUD-tour spotlight pulse (§C8.1 #5) */
+.g14-glow {
+  animation: g14-glow-pulse 1s ease-in-out infinite;
+  border-radius: 999px;
+}
+@keyframes g14-glow-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(89, 201, 185, 0.9); }
+  50% { box-shadow: 0 0 0 7px rgba(89, 201, 185, 0); }
+}
+
+/* screen-transition touch: full screens pop in softly (§G14 polish) */
+.screen {
+  animation: g14-screen-in 200ms ease-out;
+}
+@keyframes g14-screen-in {
+  from { opacity: 0; transform: scale(1.015); }
+  to { opacity: 1; transform: scale(1); }
+}
+/* ---------- end G14 ---------- */
+
+/* G14: feed step — the food tray sheet owns the bottom, card moves up top */
+.g14-ob-card.g14-top {
+  bottom: auto;
+  top: calc(5.375rem + var(--safe-top));
+}
+
+/* ---------- V2/G21: vet clinic + destination picker (PLAN2 §C9) ---------- */
+
+/* vet arrival panel (screen id 'vetPanel', ui/vetPanel.js) */
+/* V4/FIX-UI: the clinic content reads top-down like the sibling screens —
+   .screen's default centering left a big dead band above the header. */
+.screen-vetPanel {
+  justify-content: flex-start;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.vet-wrap {
+  width: min(30rem, 100%);
+  max-height: 100%;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  padding: 0 0.875rem;
+}
+.vet-head {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  flex-wrap: wrap; /* F3 rule: the Go-home button wraps below at 320px */
+  flex: none;
+}
+.vet-title {
+  font-size: clamp(1.3125rem, 7vw, 1.75rem);
+  font-weight: 700;
+  margin: 0;
+  flex: 1;
+  /* min-width stays auto: „Tierarztpraxis" must not shrink below its own
+     word width (it would paint over the coins pill) — the home button wraps
+     to the next flex line instead at 320px DE. */
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.vet-head .vet-home {
+  min-height: max(44px, 2.75rem);
+  padding: 0.125rem 0.5rem 0; /* V3/G47: compensates the 9-slice frame border */
+  font-size: 0.9375rem;
+  flex: none;
+  margin-left: auto; /* right-aligned even on its own wrap line (320px DE) */
+}
+.vet-hint {
+  background: rgba(255, 209, 102, 0.28);
+  border-radius: var(--radius-row);
+  padding: 0.5625rem 0.875rem;
+  font-size: 0.875rem;
+  font-weight: 700;
+  text-align: center;
+  flex: none;
+}
+.vet-hint-soft {
+  background: rgba(110, 198, 255, 0.22);
+}
+.vet-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+}
+.vet-doc {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: var(--white);
+  border-radius: var(--card-radius);
+  box-shadow: var(--shadow-soft);
+  padding: 0.75rem 0.875rem;
+}
+.vet-avatar {
+  position: relative;
+  font-size: 2.5rem;
+  line-height: 1;
+  flex: none;
+}
+/* V4/UI-DEEP: the doctor avatar is the icons.js vetRabbit glyph now (glasses
+   baked into the SVG) — the old emoji-overlay rule keeps legacy markup sane. */
+.vet-avatar-glasses {
+  position: absolute;
+  left: 50%;
+  top: 44%;
+  transform: translate(-50%, -50%);
+  font-size: 1.375rem;
+}
+.vet-doc-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1875rem;
+  min-width: 0;
+}
+.vet-doc-name {
+  font-weight: 700;
+  font-size: 1rem;
+}
+.vet-doc-line {
+  font-size: 0.875rem;
+  opacity: 0.8;
+  overflow-wrap: anywhere;
+}
+.vet-bandage-badge {
+  font-size: 0.875rem;
+}
+.vet-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.vet-action {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.3125rem;
+  text-align: left;
+  background: var(--white);
+  border: none;
+  border-radius: var(--card-radius);
+  box-shadow: var(--shadow-soft);
+  padding: 0.8125rem 0.9375rem;
+  font: inherit;
+  cursor: pointer;
+  min-height: max(44px, 2.75rem); /* F3: touch target */
+}
+.vet-action:disabled {
+  /* V4/FIX-UI: whole-card opacity .55 pushed the desc (own .75) to an
+     illegible ~.41 — pin disabled ink at the shared .72 body-text contrast
+     (≈4.7:1 on paper, V4/G-UI convention) instead of fading the card. */
+  opacity: 1;
+  color: rgba(74, 59, 54, 0.72);
+  cursor: default;
+}
+.vet-action:disabled .vet-action-desc {
+  opacity: 1;
+}
+.vet-action:disabled .shop-price svg {
+  opacity: 0.72;
+}
+.vet-action-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.vet-action-name {
+  font-weight: 700;
+  font-size: 1rem;
+}
+/* V4/UI-DEEP: vet prices wear the same leaf price tag as the shop cards. */
+.vet-action .shop-price {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.1875rem;
+  font-size: 0.875rem;
+  font-weight: 700;
+  flex: none;
+  background: var(--leaf);
+  color: var(--white);
+  border-radius: 999px;
+  padding: 0.0625rem 0.5625rem;
+  box-shadow: inset 0 -0.0938rem 0 var(--leaf-dark);
+}
+.vet-action .shop-price svg {
+  color: var(--yellow);
+}
+.vet-action-desc {
+  font-size: 0.8125rem;
+  opacity: 0.75;
+  overflow-wrap: anywhere;
+}
+
+/* checkup report card (§C9.2) */
+.vet-report {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  background: var(--white);
+  border-radius: var(--card-radius);
+  box-shadow: var(--shadow-soft);
+  padding: 0.875rem 0.9375rem;
+}
+.vet-report-title {
+  font-weight: 700;
+  font-size: 1rem;
+}
+.vet-report-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.625rem;
+  font-size: 0.875rem;
+}
+.vet-report-row > span:first-child {
+  opacity: 0.65;
+  font-weight: 700;
+  flex: none;
+}
+.vet-report-row > span:last-child {
+  font-weight: 700;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+.vet-band-green { color: var(--teal-dark); }
+.vet-band-yellow { color: var(--yellow-dark); }
+.vet-band-orange { color: #e07a3f; }
+.vet-report-done {
+  margin-top: 0.25rem;
+}
+
+/* destination picker sheet (§C9.2 „Laden / Tierarzt") */
+.dest-pick {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  text-align: center;
+}
+.dest-option {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  text-align: left;
+  background: var(--bg-cream);
+  border: none;
+  border-radius: var(--card-radius);
+  padding: 0.8125rem 0.9375rem;
+  font: inherit;
+  cursor: pointer;
+  min-height: max(44px, 2.75rem); /* F3: touch target */
+}
+.dest-emoji {
+  font-size: 1.875rem;
+  line-height: 1;
+  flex: none;
+}
+.dest-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+}
+.dest-name {
+  font-weight: 700;
+  font-size: 1rem;
+}
+.dest-sub {
+  font-size: 0.8125rem;
+  opacity: 0.75;
+  overflow-wrap: anywhere;
+}
+/* ---------- end V2/G21 ---------- */
+
+/* =================== V2/G22 — shop 2.0 + skins (PLAN2 §C7/§C8) =========== */
+/* junk 🍬 badge on food cards (§C7 — informed players, no nagging) */
+.g22-junk {
+  position: absolute;
+  top: 0.25rem;
+  left: 0.4375rem;
+  font-size: 0.8125rem;
+  filter: drop-shadow(0 1px 1px rgba(74, 59, 54, 0.25));
+}
+/* Care row (§C7): medicine/fertilizer/seeds — distinctly NOT eatable-looking */
+.g22-care-hint {
+  margin: -0.125rem 0.125rem 0.5rem;
+  opacity: 0.65;
+  font-size: 0.7813rem;
+  font-weight: 700;
+}
+.shop-card.g22-care-card {
+  background: linear-gradient(#f2fbf7, #e8f6ef);
+  border: 0.125rem dashed rgba(63, 160, 145, 0.45);
+}
+.shop-card.g22-locked {
+  opacity: 0.55;
+}
+/* Skins tab (§C8.5): live 3D try-on stage + palette swatch cards */
+.g22-skin-stage {
+  position: relative;
+  width: 100%;
+  height: 12.5rem;
+  border-radius: var(--card-radius);
+  overflow: hidden;
+  background: linear-gradient(#dff3f0, var(--bg-cream));
+  box-shadow: var(--shadow-soft);
+  margin: 0.25rem 0 0.75rem;
+}
+.g22-skin-stage canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.g22-skin-badge {
+  position: absolute;
+  top: 0.625rem;
+  left: 0.75rem;
+  background: var(--frost);
+  border-radius: 999px;
+  padding: 0.375rem 0.75rem;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--pink-dark);
+  box-shadow: var(--shadow-soft);
+}
+.g22-skin-chip {
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 50%;
+  border: 0.1875rem solid rgba(74, 59, 54, 0.12);
+}
+.shop-card.g22-skin-tryon {
+  outline: 0.1875rem solid var(--pink);
+}
+.g22-skin-buy {
+  margin-top: 0.125rem;
+  min-height: max(44px, 2.75rem); /* F3: ≥44px touch target */
+  padding: 0 0.5rem; /* V3/G47: compensates the 9-slice frame border */
+  font-size: 0.8125rem;
+  border-radius: 0.75rem;
+}
+/* wardrobe Fur cards reuse the chip at the outfit-thumb size */
+.g12-wr-item .g22-skin-chip {
+  width: 3.375rem;
+  height: 3.375rem;
+  background-clip: padding-box;
+}
+/* 4 wardrobe categories (Fur added) must fit 320 px — shrink + ellipsize the
+   longest label (DE „Halsschmuck") instead of clipping mid-glyph. Double
+   selector: the base rule is a runtime-injected <style> that loads later. */
+.g12-wr-tabs .g12-wr-tab {
+  padding: 0.25rem 0.25rem;
+  font-size: clamp(0.6875rem, 3.4vw, 0.875rem);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* ---------- end V2/G22 ---------- */
+
+/* =========== V2/G19 — garden panels + forecast chip (PLAN2 §C2/§C11.3) === */
+
+.g19-title {
+  margin: 0 0 0.25rem;
+  font-size: 1.3125rem;
+  font-weight: 700;
+}
+.g19-hint {
+  margin: 0.25rem 0 0.625rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+.g19-price {
+  margin: 0.125rem 0 0.625rem;
+  font-size: 1.0625rem;
+  font-weight: 700;
+}
+.g19-lockmsg {
+  margin: 0 0 0.625rem;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--pink-dark);
+}
+.g19-empty {
+  padding: 1.125rem 0.375rem;
+  text-align: center;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--ink-faint);
+}
+/* crop / sell rows — scrollable list, 8 crops max (§C2.3) */
+.g19-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-height: min(52vh, 26.25rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0.125rem;
+}
+/* V2 fix (E16): a row is a COLUMN — info line on top, action buttons on
+   their own full-width line below — and `flex: none` so the scrollable
+   .g19-rows flex column can NEVER shrink a row to its 56px min-height
+   (that compression is what let buttons overflow the row box and get
+   painted over by the next row's opaque background — unreachable via
+   elementFromPoint at 320–390 DE). */
+.g19-row {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  flex: none;
+  gap: 0.5rem;
+  background: var(--bg-cream);
+  border-radius: var(--radius-row);
+  padding: 0.5rem 0.625rem;
+  min-height: max(44px, 3.5rem);
+}
+.g19-row-main {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  min-height: 2.5rem;
+}
+.g19-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+.g19-row.g19-locked {
+  opacity: 0.55;
+  filter: grayscale(0.6);
+}
+.g19-emoji {
+  font-size: 1.625rem;
+  line-height: 1;
+  flex: 0 0 auto;
+}
+.g19-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.g19-name {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.g19-sub {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.g19-count {
+  flex: 0 0 auto;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-soft);
+}
+/* compact in-row buttons — ≥44px targets (§D5/F3). V2 fix (E16): they share
+   the .g19-actions line equally and can never wrap under the next row. */
+.btn.g19-btn {
+  min-height: max(44px, 2.75rem);
+  min-width: 0;
+  padding: 0 0.25rem; /* V3/G47: compensates the 9-slice frame border */
+  font-size: 0.875rem;
+  border-radius: 0.8125rem;
+  flex: 1 1 0;
+  white-space: nowrap;
+}
+.g19-btnrow {
+  display: flex;
+  gap: 0.625rem;
+}
+.btn.g19-btn-wide {
+  flex: 1 1 auto;
+  width: 100%;
+}
+/* forecast chip (§C11.3) — INSIDE the garden room view, below the HUD rows
+   (~98px like .sleep-chip), right-aligned so the centered sleep chip fits */
+.g19-chip {
+  position: absolute;
+  top: calc(6.5rem + var(--safe-top));
+  right: calc(0.75rem + var(--safe-right));
+  pointer-events: auto; /* #ui root is pointer-events: none */
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-height: max(44px, 2.75rem); /* §D5 touch target */
+  min-width: max(44px, 2.75rem);
+  border: none;
+  background: var(--frost);
+  border-radius: 999px;
+  padding: 0.5rem 0.75rem;
+  box-shadow: var(--shadow-soft);
+  cursor: pointer;
+  z-index: var(--z-hud);
+  font-family: inherit;
+}
+.g19-chip:active {
+  transform: scale(0.95);
+}
+.g19-chip-icon {
+  display: inline-flex;
+  align-items: center;
+}
+.g19-chip-arrow {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--ink-faint);
+}
+.g19-chip-next {
+  opacity: 0.75;
+}
+.g19-forecast-row {
+  margin: 0.375rem 0;
+  flex-direction: row; /* V2 fix (E16): .g19-row went column — this row stays inline */
+  align-items: center;
+}
+/* ---------- end V2/G19 ---------- */
+
+/* =============== V3/G33 — core UX: UI scale, settings 3.0, dev panel ====== */
+/* (PLAN3 §B3/§B4/§B9/§C1/§C2.1/§C4 — styles.css is G33-exclusive this wave) */
+
+/* §C1.2: arcade grid drops 3 → 2 columns when the effective rem width
+   (viewportWidth / (uiScale/100)) < 350 — ≤ 100 % always keeps 3 columns.
+   Breakpoints: 350 · 1.15 = 402.5 → ≤ 402px; 350 · 1.3 = 455 → ≤ 454px. */
+@media (max-width: 402px) {
+  html[data-ui-scale='115'] .g5-arcade-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 454px) {
+  html[data-ui-scale='130'] .g5-arcade-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* §C1.2 pill wrap follow-up: when the 4 HUD stat pills wrap 2×2 (viewport <
+   ~20.4rem effective) the HUD top block grows ~1.75rem taller — the floating
+   chips (sleep §C1.4, garden forecast §C11.3, sick §C3.4) drop below it.
+   Breakpoints = 20.4rem · scale: 326px @100 %, 375px @115 %, 424px @130 %. */
+@media (max-width: 326px) {
+  .sleep-chip,
+  .g19-chip {
+    top: calc(8.25rem + var(--safe-top));
+  }
+  .g23-sick-chip {
+    top: calc(12.5rem + var(--safe-top));
+  }
+}
+@media (max-width: 375px) {
+  html[data-ui-scale='115'] .sleep-chip,
+  html[data-ui-scale='115'] .g19-chip {
+    top: calc(8.25rem + var(--safe-top));
+  }
+  html[data-ui-scale='115'] .g23-sick-chip {
+    top: calc(12.5rem + var(--safe-top));
+  }
+}
+@media (max-width: 424px) {
+  html[data-ui-scale='130'] .sleep-chip,
+  html[data-ui-scale='130'] .g19-chip {
+    top: calc(8.25rem + var(--safe-top));
+  }
+  html[data-ui-scale='130'] .g23-sick-chip {
+    top: calc(12.5rem + var(--safe-top));
+  }
+}
+
+/* --- settings 3.0 (§C2.1): section labels + 5 volume slider rows --- */
+.settings-section {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  opacity: 0.45;
+  margin: 0.25rem 0.25rem -0.5rem;
+}
+/* volume row = label line on top, full-width controls line below — fits
+   320px × 130 % (§C1.2: wrap/compress, never clip) */
+.settings-row.g33-vol-row {
+  flex-direction: column;
+  /* nowrap: the base .settings-row wraps, but a WRAPPED column flex sizes its
+     line to the items' max-content (the slider+toggle line would push past the
+     card at 320px × 130 %) — single-line column stretches to the row instead */
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: 0.25rem;
+}
+.g33-vol-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  min-width: 0;
+}
+.g33-vol-slider {
+  flex: 1;
+  min-width: 0;
+  min-height: max(44px, 2.75rem); /* §B3 tap-target rule */
+  margin: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+/* V4/AC-1: pure-CSS cozy sliders (the Kenney rail/fill/knob sprites are
+   gone) — a soft --track-soft bed, a teal accent-gradient fill and a round
+   white knob on --shadow-pop. The fill width still rides the --g47-fill
+   custom property (set by settingsScreen's + radioScreen's marked hooks;
+   defaults to 0% elsewhere, e.g. the dev-panel sliders). */
+.g33-vol-slider::-webkit-slider-runnable-track {
+  height: 0.875rem;
+  border: none;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--teal-dark), var(--teal)) no-repeat left center / var(--g47-fill, 0%) 100%, var(--track-soft);
+}
+.g33-vol-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 1.75rem;
+  height: 1.75rem;
+  margin-top: -0.4375rem;
+  border: none;
+  border-radius: 50%;
+  background: var(--white);
+  box-shadow: 0 0 0 1px var(--outline-soft), var(--shadow-pop);
+}
+.g33-vol-slider::-moz-range-track {
+  height: 0.875rem;
+  border: none;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--teal-dark), var(--teal)) no-repeat left center / var(--g47-fill, 0%) 100%, var(--track-soft);
+}
+.g33-vol-slider::-moz-range-thumb {
+  width: 1.75rem;
+  height: 1.75rem;
+  border: none;
+  border-radius: 50%;
+  background: var(--white);
+  box-shadow: 0 0 0 1px var(--outline-soft), var(--shadow-pop);
+}
+.g33-vol-slider:disabled::-webkit-slider-thumb {
+  background: rgba(74, 59, 54, 0.25);
+}
+.g33-vol-readout {
+  flex: none;
+  min-width: 2.9em;
+  text-align: right;
+  font-size: 0.875rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.7;
+}
+.g33-vol-muted .g33-vol-readout,
+.g33-vol-muted .settings-label {
+  opacity: 0.4;
+}
+
+/* --- UI-Größe row (§C1.1): 4-stop segment + live „Aa" preview glyph --- */
+.g33-scale-aa {
+  font-size: 1.375rem; /* rem → previews the live scale */
+  font-weight: 700;
+  color: var(--pink-dark);
+  flex: none;
+}
+.seg.g33-scale-seg {
+  flex-wrap: wrap; /* 320px × 130 %: the 4 stops wrap instead of clipping */
+  justify-content: flex-end;
+}
+.g33-scale-seg .seg-btn {
+  min-width: max(44px, 2.75rem);
+  padding: 0.375rem 0.5rem;
+  font-size: 0.8125rem;
+}
+
+/* --- „Entwickler" row (§B4 — rendered only when settings.devUnlocked) --- */
+.g33-dev-row .btn {
+  min-height: max(44px, 2.75rem);
+  padding: 0.125rem 0.5rem 0; /* V3/G47: compensates the 9-slice frame border */
+  font-size: 0.9375rem;
+}
+
+/* --- hidden dev panel (§C4.2 — screen id 'devPanel') --- */
+.screen-devPanel {
+  justify-content: flex-start;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.g33-dev-wrap {
+  width: min(26.25rem, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  align-self: center;
+  margin: 0 0 auto;
+  flex: none;
+}
+.g33-dev-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.875rem 1rem;
+}
+.g33-dev-card-title {
+  font-size: 0.9375rem;
+  font-weight: 700;
+}
+.g33-dev-card-desc {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  opacity: 0.65;
+  margin: -0.25rem 0 0;
+}
+.g33-dev-line {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.g33-dev-line .g33-vol-slider {
+  min-height: max(44px, 2.75rem);
+}
+.g33-dev-line .seg {
+  flex-wrap: wrap;
+}
+.g33-dev-line .seg-btn {
+  min-width: max(44px, 2.75rem);
+  padding: 0.25rem 0.5rem;
+  font-size: 0.8125rem;
+}
+.g33-dev-val {
+  flex: none;
+  min-width: 2.9em;
+  text-align: right;
+  font-size: 0.875rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.g33-dev-label {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  opacity: 0.7;
+  flex: none;
+}
+.btn.g33-dev-btn {
+  min-height: max(44px, 2.75rem);
+  padding: 0 0.375rem; /* V3/G47: compensates the 9-slice frame border */
+  font-size: 0.875rem;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.g33-dev-select {
+  flex: 1 1 8rem;
+  min-width: 0;
+  min-height: max(44px, 2.75rem);
+  border: none;
+  border-radius: 0.75rem;
+  background: var(--bg-cream);
+  color: var(--brown);
+  font-family: inherit;
+  font-size: 0.875rem;
+  font-weight: 700;
+  padding: 0.375rem 0.625rem;
+}
+
+/* --- FPS/draw-call overlay chip (§C4.2 #10) — rides above everything --- */
+.g33-overlay {
+  position: absolute;
+  top: max(0.5rem, var(--safe-top));
+  left: max(0.5rem, var(--safe-left));
+  z-index: var(--z-debug);
+  pointer-events: none;
+  background: rgba(20, 16, 14, 0.78);
+  color: #aef7c1;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 0.6875rem;
+  line-height: 1.45;
+  font-weight: 600;
+  border-radius: 0.5rem;
+  padding: 0.375rem 0.5625rem;
+  white-space: pre;
+}
+/* ---------- end V3/G33 ---------- */
+
+/* =============== V3/G36 — purblePlace ticket/button HUD (PLAN3 §C9) ======= */
+/* rem-only (§E0.1-6): scales with the §B3 uiScale root font-size. Tickets
+   are language-free pictogram cards top-left; the station bar sits along the
+   bottom edge, clear of the framework pause button (right column). */
+
+.g36-tickets {
+  position: absolute;
+  top: max(4.25rem, calc(var(--safe-top) + 3.5rem));
+  left: max(0.5rem, var(--safe-left));
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  z-index: var(--z-hud);
+  pointer-events: none;
+}
+.g36-ticket {
+  /* pictogram card — min() caps the rem growth on 320 px × 130 % */
+  width: max(56px, min(4.25rem, 20vw));
+  background: rgba(255, 251, 243, 0.94);
+  border: 0.125rem solid #e2c9a8;
+  border-radius: 0.625rem;
+  padding: 0.25rem 0.25rem 0.3125rem;
+  box-shadow: var(--shadow-soft);
+  opacity: 0;
+  transform: translateX(-0.75rem);
+  transition: opacity 200ms ease-out, transform 200ms ease-out;
+}
+.g36-ticket.g36-in {
+  opacity: 1;
+  transform: none;
+}
+.g36-ticket svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.g36-tk-bar {
+  height: 0.375rem;
+  margin-top: 0.1875rem;
+  border-radius: 999px;
+  background: rgba(74, 59, 54, 0.15);
+  overflow: hidden;
+}
+.g36-tk-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: #7cc15e;
+}
+
+.g36-controls {
+  position: absolute;
+  left: max(0.25rem, var(--safe-left));
+  /* clear the framework pause button (44 real px + 16 px inset) */
+  right: max(4rem, calc(var(--safe-right) + 64px));
+  bottom: max(0.375rem, var(--safe-bottom));
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: center;
+  /* G33 §C1.2 min() compress: tight gaps on 320 px × 130 % */
+  gap: min(0.3125rem, 1vw);
+  z-index: var(--z-hud);
+  pointer-events: none;
+}
+.g36-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.125rem;
+  background: rgba(255, 251, 243, 0.88);
+  border-radius: 0.75rem;
+  padding: min(0.25rem, 0.8vw) min(0.3125rem, 1vw) min(0.3125rem, 1vw);
+  box-shadow: var(--shadow-soft);
+  opacity: 0.72;
+  transition: opacity 140ms ease-out, box-shadow 140ms ease-out;
+  pointer-events: auto;
+}
+.g36-group.g36-on {
+  opacity: 1;
+  box-shadow: 0 0 0 0.1875rem rgba(124, 193, 94, 0.55), var(--shadow-soft);
+}
+.g36-group-label {
+  font-size: 0.5625rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--brown);
+  opacity: 0.65;
+  line-height: 1;
+}
+.g36-group-row {
+  display: flex;
+  gap: min(0.25rem, 0.8vw);
+}
+.g36-btn {
+  /* §B3: ≥44 real px at every uiScale; min() compresses the rem growth on
+     narrow viewports (320 px × 130 %) so 6 groups fit in 2–3 rows */
+  width: max(44px, min(2.75rem, 12vw));
+  height: max(44px, min(2.75rem, 12vw));
+  min-height: 0;
+  padding: 0.125rem;
+  border: none;
+  border-radius: 0.625rem;
+  background: var(--white, #fff);
+  box-shadow: inset 0 -0.1875rem rgba(74, 59, 54, 0.12);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.g36-btn:active {
+  transform: translateY(0.0625rem) scale(0.96);
+}
+.g36-btn svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.g36-shape-glyph {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #7a5b40;
+  line-height: 1;
+}
+.g36-meter {
+  position: relative;
+  width: 100%;
+  height: 0.4375rem;
+  margin-top: 0.1875rem;
+  border-radius: 999px;
+  background: rgba(74, 59, 54, 0.18);
+  overflow: hidden;
+}
+.g36-meter-green {
+  /* §C9.3 green zone = the LAST 25 % of the 3 s bake meter */
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 25%;
+  background: rgba(92, 184, 92, 0.4);
+}
+.g36-meter-fill {
+  position: relative;
+  height: 100%;
+  width: 0;
+  border-radius: 999px;
+  background: #f2762e;
+}
+/* ---------- end V3/G36 ---------- */
+
+/* =============== V3/G41 — toyRacer + ghostHunt HUDs (PLAN3 §C10.1) ======= */
+.g41-race-hud {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(0.75rem + var(--safe-bottom));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.375rem;
+  pointer-events: none;
+  z-index: 5;
+}
+.g41-row {
+  display: flex;
+  gap: 0.5rem;
+}
+.g41-pill {
+  background: var(--frost);
+  color: var(--brown);
+  font-weight: 700;
+  font-size: 0.8125rem;
+  line-height: 1;
+  border-radius: 999px;
+  padding: 0.3125rem 0.625rem;
+  box-shadow: var(--shadow-soft);
+}
+.g41-meter {
+  /* drift charge — min() keeps it inside 320 px portrait at 130 % scale */
+  width: min(10rem, 44vw);
+  height: 0.5rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.45);
+  overflow: hidden;
+}
+.g41-meter-fill {
+  height: 100%;
+  width: 0;
+  border-radius: 999px;
+  background: #f2a640;
+}
+.g41-meter-fill.g41-ready {
+  background: #5cb85c;
+}
+.g41-item-btn {
+  /* §B3: ≥44 real px tap target at every uiScale */
+  pointer-events: auto;
+  width: max(44px, 3.25rem);
+  height: max(44px, 3.25rem);
+  min-height: 0;
+  padding: 0;
+  border: none;
+  border-radius: 1rem;
+  font-size: 1.375rem;
+  line-height: 1;
+  background: var(--frost);
+  box-shadow: var(--shadow-soft);
+  cursor: pointer;
+}
+.g41-item-btn:active {
+  transform: translateY(0.0625rem) scale(0.96);
+}
+.g41-hunt-hud {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(4.25rem + var(--safe-top));
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+  pointer-events: none;
+  z-index: 5;
+}
+.g41-hunt-hud .g41-pill {
+  background: rgba(42, 30, 66, 0.78);
+  color: var(--bg-cream);
+}
+/* ---------- end V3/G41 ---------- */
+
+/* =============== V3/G47 — UI reskin block, re-themed by V4/AC-1 =========== */
+/* V4/AC-1: the Kenney 9-slice frames this block used to add are replaced by
+   the cozy soft-squircle language (paper faces, hairline rings, springy
+   presses). Selectors stay one level deeper than the injected base rules so
+   these declarations still win the cascade regardless of <style> injection
+   order; paddings return to their pre-G47 values (no frame to compensate). */
+
+/* --- arcade tiles: soft squircle + springy press (legacy .g5-tile shape) -- */
+.screen-arcade .g5-tile {
+  border: none;
+  border-radius: var(--card-radius);
+  background-clip: padding-box;
+  box-shadow: 0 0 0 1px var(--outline-soft), var(--shadow-soft);
+}
+.screen-arcade .g5-tile:active {
+  transform: scale(0.97) translateY(2px); /* springy press (offset stays px) */
+}
+.screen-arcade .g5-tile-lock {
+  border-radius: var(--card-radius); /* lock overlay follows the tile corners */
+}
+
+/* --- HUD action buttons: paper face + bottom lip (pills/toasts keep CSS) -- */
+.g5-hud .g5-hud-btn {
+  border: none;
+  border-radius: var(--btn-radius);
+  background-clip: padding-box;
+  box-shadow: inset 0 -0.1875rem 0 rgba(74, 59, 54, 0.12), 0 0 0 1px var(--outline-soft), var(--shadow-soft);
+}
+.g5-hud .g5-hud-btn:active {
+  transform: scale(0.94) translateY(2px);
+  box-shadow: inset 0 -0.0625rem 0 rgba(74, 59, 54, 0.1), 0 0 0 1px var(--outline-soft), var(--shadow-press);
+}
+
+/* --- shop: item cards + buy bar (care cards keep their dashed teal look) -- */
+.screen-shop .shop-card:not(.g22-care-card) {
+  border: none;
+  border-radius: var(--card-radius);
+  background: var(--paper);
+  background-clip: padding-box;
+  box-shadow: 0 0 0 1px var(--outline-soft), 0 3px 12px rgba(74, 59, 54, 0.08);
+  padding: 0.75rem 0.375rem 0.625rem;
+}
+.screen-shop .shop-buybar {
+  border: none;
+  border-radius: var(--card-radius);
+  background: var(--paper);
+  background-clip: padding-box;
+  box-shadow: 0 0 0 1px var(--outline-soft), var(--shadow-pop);
+  padding: 0.625rem 0.75rem;
+}
+
+/* --- wardrobe: outfit/fur item cards (base 0.1875rem border carries the
+   equipped/try-on accent colors again — the sprite frame hid them) --- */
+.screen-wardrobe .g12-wr-item {
+  border: 0.1875rem solid transparent;
+  border-image: none;
+  border-radius: var(--card-radius);
+  background-clip: padding-box;
+}
+
+/* --- quest board: quest cards + locked teaser card --- */
+.screen-questBoard .g23-qb-card,
+.screen-questBoard .g23-qb-locked {
+  border: none;
+  border-radius: var(--card-radius-lg);
+  background: var(--paper);
+  background-clip: padding-box;
+  box-shadow: 0 0 0 1px var(--outline-soft), var(--shadow-soft);
+}
+.screen-questBoard .g23-qb-card {
+  padding: 0.875rem 1rem;
+}
+.screen-questBoard .g23-qb-locked {
+  padding: 1.5rem 0.875rem;
+}
+
+/* --- album: collection page + sticker-book pages --- */
+.screen-album .g23-al-page,
+.screen-album .g34-sb-page {
+  border: none;
+  border-radius: var(--card-radius-lg);
+  background: var(--paper);
+  background-clip: padding-box;
+  box-shadow: 0 0 0 1px var(--outline-soft), var(--shadow-soft);
+}
+.screen-album .g23-al-page {
+  padding: 1rem;
+}
+.screen-album .g34-sb-page {
+  padding: 1rem;
+}
+.screen-album .g34-sb-pager {
+  border-radius: var(--card-radius-lg); /* scroll-snap viewport follows the page corners */
+}
+
+/* --- results: rounded CSS stars flank the title (sprite mask → inline SVG,
+   yellow via background-color under the mask) ---- */
+/* §C1.3 hardening: the results card shrink-wraps inside the flex-centered
+   .screen — cap it at the screen's content box, let the title stars shrink,
+   and let a long value+badge (DE „Tagesbonus ×2!" at 320px/130%) wrap inside
+   its row instead of running past the viewport. */
+.screen-mgResults .card {
+  max-width: 100%;
+}
+.screen-mgResults .mg-results-rows {
+  max-width: 100%; /* the min(20rem,80vw) rows stay inside the card frame */
+}
+.screen-mgResults .mg-results-row .mg-value {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.screen-mgResults .mg-overlay-title {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.625rem;
+}
+.screen-mgResults .mg-overlay-title::before,
+.screen-mgResults .mg-overlay-title::after {
+  content: '';
+  flex: 0 1 1.75rem; /* may shrink when the title is tight (320px @ 130%) */
+  min-width: 0;
+  aspect-ratio: 1 / 1;
+  background-color: var(--yellow);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23fff' stroke='%23fff' stroke-width='3' stroke-linejoin='round' d='M12 3.5l2.6 5.9 6.4.6-4.8 4.2 1.4 6.3-5.6-3.3-5.6 3.3 1.4-6.3-4.8-4.2 6.4-.6z'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23fff' stroke='%23fff' stroke-width='3' stroke-linejoin='round' d='M12 3.5l2.6 5.9 6.4.6-4.8 4.2 1.4 6.3-5.6-3.3-5.6 3.3 1.4-6.3-4.8-4.2 6.4-.6z'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+}
+
+/* ---------- end V3/G47 ---------- */
+
+/* ---------- V3/FIX-C: layout package 1 (E9/E13/E8 fixes) ---------- */
+
+/* E9 P1-1: at 320×568 @ 115/130 % (+notch) the results card outgrows the
+   viewport and the bottom "Home"/„Nach Hause" button was cut off — the screen
+   never scrolled (overflow visible). Settings pattern: flex-start + scroll;
+   margin:auto keeps the card vertically centered when there IS room, and the
+   .screen safe-bottom padding keeps the buttons clear of the home bar. */
+.screen-mgResults {
+  justify-content: flex-start;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.screen-mgResults .card {
+  flex: none; /* never squash — overflow scrolls instead */
+  margin-top: auto;
+  margin-bottom: auto;
+}
+.screen-mgResults .mg-btn-row {
+  flex-wrap: wrap; /* long DE labels stack instead of running offscreen */
+}
+
+/* ---------- end V3/FIX-C ---------- */
+
+/* ===================== V4/G52: Radio UI (§C-SYS1.3–1.8) ================== */
+
+.screen-radio,
+.screen-trackSettings {
+  justify-content: flex-start;
+  overflow: hidden;
+}
+
+.g52-radio {
+  width: min(100%, 27rem);
+  height: 100%;
+  min-height: 0;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+  padding: 0.125rem 0.125rem max(0.75rem, var(--safe-bottom));
+}
+
+.panel-radioPanel,
+.panel-trackSettings {
+  height: min(48rem, calc(100vh - max(1rem, var(--safe-top))));
+  max-height: calc(100vh - max(1rem, var(--safe-top)));
+  overflow: hidden;
+}
+
+.panel-radioPanel .g52-radio,
+.panel-trackSettings .g52-radio {
+  width: 100%;
+}
+
+.g52-radio-head {
+  display: grid;
+  grid-template-columns: max(44px, 3.25rem) minmax(0, 1fr);
+  align-items: center;
+  gap: 0.625rem;
+  flex: none;
+}
+
+.g52-radio-head h1 {
+  margin: 0;
+  font-size: clamp(1.25rem, 7vw, 1.875rem);
+  line-height: 1.05;
+}
+
+.g52-radio-head p {
+  margin: 0.1875rem 0 0;
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+  line-height: 1.2;
+}
+
+.g52-radio-loading {
+  min-height: 14rem;
+  display: grid;
+  place-items: center;
+  font-size: 4rem;
+  animation: g52-radio-tune 1.4s ease-in-out infinite;
+}
+
+@keyframes g52-radio-tune {
+  50% { transform: rotate(-6deg) scale(1.06); }
+}
+
+.g52-now-card {
+  display: grid;
+  grid-template-columns: 5rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.75rem;
+  flex: none;
+  min-width: 0;
+  background:
+    radial-gradient(circle at 90% 12%, rgba(255, 209, 102, 0.45), transparent 42%),
+    linear-gradient(135deg, var(--white), #fff1f7);
+}
+
+.g52-now-card > img {
+  width: 5rem;
+  height: 5rem;
+  border-radius: var(--radius-row);
+  object-fit: cover;
+  box-shadow: 0 5px 16px rgba(74, 59, 54, 0.18);
+}
+
+.g52-now-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1875rem;
+}
+
+.g52-now-copy > span {
+  color: var(--pink-dark);
+  font-size: 0.6875rem;
+  font-weight: 900;
+  letter-spacing: 0.0625rem;
+  text-transform: uppercase;
+}
+
+/* V4/FIX-UI: titles/meta WRAP inside the card at 320 px instead of running
+   offscreen — 2-line clamps keep the card height bounded. */
+.g52-now-copy strong {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  font-size: 1.125rem;
+  line-height: 1.15;
+}
+
+.g52-now-copy small {
+  /* V4/FIX-UI: station · time wraps to extra lines at 320 px (no offscreen run) */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  color: var(--ink-soft);
+  font-size: 0.6875rem;
+  line-height: 1.3;
+}
+
+/* V4/FIX-UI: at the scaled squeeze the 5rem cover left the copy column too
+   narrow for „station · m:ss / m:ss" — trade cover size for text room. */
+@media (max-width: 340px) {
+  .g52-now-card { grid-template-columns: 3.75rem minmax(0, 1fr); }
+  .g52-now-card > img { width: 3.75rem; height: 3.75rem; }
+}
+@media (max-width: 400px) {
+  :root[data-ui-scale='115'] .g52-now-card,
+  :root[data-ui-scale='130'] .g52-now-card { grid-template-columns: 3.75rem minmax(0, 1fr); }
+  :root[data-ui-scale='115'] .g52-now-card > img,
+  :root[data-ui-scale='130'] .g52-now-card > img { width: 3.75rem; height: 3.75rem; }
+}
+
+.g52-transport {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  flex: none;
+}
+
+.g52-transport-btn {
+  width: max(44px, 3rem);
+  height: max(44px, 3rem);
+  border: none;
+  border-radius: 999px;
+  background: var(--frost);
+  color: var(--brown);
+  font: 700 1.125rem/1 var(--font-round);
+  box-shadow: var(--shadow-soft);
+  cursor: pointer;
+  transition: transform 90ms ease, background 180ms ease;
+}
+
+.g52-transport-btn:active {
+  transform: scale(0.93);
+}
+
+.g52-transport-btn.g52-play {
+  width: max(56px, 3.5rem);
+  height: max(56px, 3.5rem);
+  background: var(--pink);
+  color: var(--white);
+  font-size: 1.375rem;
+}
+
+.g52-transport-btn.g52-on {
+  background: #dff8f3;
+  color: var(--teal-dark);
+}
+
+.g52-section-title {
+  flex: none;
+  margin-top: 0.125rem;
+  font-size: 0.75rem;
+  font-weight: 900;
+  letter-spacing: 0.05rem;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.g52-stations {
+  display: flex;
+  gap: 0.625rem;
+  flex: none;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+  padding: 0.125rem 0.125rem 0.5rem;
+}
+
+.g52-stations::-webkit-scrollbar {
+  display: none;
+}
+
+.g52-station {
+  position: relative;
+  flex: 0 0 6.75rem;
+  min-height: max(44px, 7.75rem);
+  scroll-snap-align: start;
+  display: grid;
+  grid-template-rows: 4.75rem auto auto;
+  gap: 0.1875rem;
+  padding: 0.375rem;
+  border: 0.1875rem solid transparent;
+  border-radius: 1rem;
+  background: var(--frost);
+  color: var(--brown);
+  box-shadow: 0 4px 14px rgba(74, 59, 54, 0.11);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.g52-station.g52-active {
+  border-color: var(--pink);
+  background: #fff4f8;
+}
+
+.g52-station.g52-locked {
+  filter: saturate(0.55);
+}
+
+.g52-station img {
+  width: 100%;
+  height: 4.75rem;
+  border-radius: 0.6875rem;
+  object-fit: cover;
+}
+
+.g52-station > span,
+.g52-station > small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.g52-station > span {
+  font-size: 0.75rem;
+  font-weight: 900;
+}
+
+.g52-station > small {
+  color: var(--ink-soft);
+  font-size: 0.5625rem;
+  font-weight: 700;
+}
+
+.g52-replace {
+  min-height: max(44px, 3.25rem);
+  padding: 0.25rem 0.375rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex: none;
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+
+.g52-toggle,
+.g52-track-toggle {
+  position: relative;
+  flex: none;
+  width: max(44px, 3.125rem);
+  height: max(44px, 2.5rem);
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: rgba(74, 59, 54, 0.16); /* V4/AC-1: warm off-track (was #d8d1ce) */
+  cursor: pointer;
+}
+
+.g52-toggle span,
+.g52-track-toggle span {
+  position: absolute;
+  top: 50%;
+  left: 0.25rem;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  background: var(--white);
+  box-shadow: 0 2px 7px rgba(74, 59, 54, 0.25);
+  transform: translateY(-50%);
+  transition: left 160ms ease;
+}
+
+.g52-toggle.g52-on,
+.g52-track-toggle.g52-on {
+  background: var(--teal);
+}
+
+.g52-toggle.g52-on span,
+.g52-track-toggle.g52-on span {
+  left: calc(100% - 1.75rem);
+}
+
+.g52-track-settings-link {
+  width: 100%;
+  min-height: max(44px, 3.5rem);
+  padding: 0.5rem 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex: none;
+  border: 0;
+  color: var(--brown);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.g52-track-settings-link > span {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.g52-track-settings-link strong,
+.g52-track-settings-link small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.g52-track-settings-link strong {
+  font-size: 0.8125rem;
+}
+
+.g52-track-settings-link small {
+  color: var(--ink-soft);
+  font-size: 0.6875rem;
+}
+
+.g52-track-settings-link b {
+  flex: none;
+  color: var(--pink-dark);
+  font-size: 1.75rem;
+  line-height: 1;
+}
+
+.g52-track-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  flex: none;
+  min-width: 0;
+}
+
+.g52-track {
+  display: grid;
+  grid-template-columns: 2.5rem minmax(0, 1fr) max(44px, 3.125rem);
+  grid-template-rows: auto auto;
+  align-items: center;
+  gap: 0.375rem 0.5rem;
+  min-width: 0;
+  padding: 0.5rem;
+  border: 1px solid var(--track-soft);
+  border-radius: var(--radius-row);
+  background: var(--frost);
+  box-shadow: 0 3px 10px rgba(74, 59, 54, 0.08);
+}
+
+.g52-track-off {
+  opacity: 0.64;
+}
+
+.g52-track-locked {
+  background: rgba(239, 235, 233, 0.92);
+}
+
+.g52-track > img {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.5rem;
+  object-fit: cover;
+}
+
+.g52-track-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.g52-track-copy strong,
+.g52-track-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.g52-track-copy strong {
+  font-size: 0.8125rem;
+}
+
+.g52-track-copy small {
+  color: var(--ink-soft);
+  font-size: 0.625rem;
+}
+
+.g52-track-volume {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(4.5rem, 1fr) 2.75rem max(44px, 2.75rem);
+  align-items: center;
+  gap: 0.375rem;
+  min-width: 0;
+}
+
+.g52-track-volume input {
+  min-width: 0;
+  width: 100%;
+  height: max(44px, 2.75rem);
+}
+
+.g52-track-volume output {
+  font-size: 0.6875rem;
+  font-weight: 900;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.g52-preview {
+  width: max(44px, 2.75rem);
+  height: max(44px, 2.75rem);
+  border: none;
+  border-radius: 999px;
+  background: #fff0c6;
+  color: #8a6425;
+  font: 700 0.875rem/1 var(--font-round);
+  cursor: pointer;
+}
+
+.g52-track button:disabled,
+.g52-track input:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.g52-more {
+  width: 100%;
+  flex: none;
+  font-size: 0.8125rem;
+}
+
+.g52-local-toast {
+  position: fixed;
+  left: 50%;
+  bottom: max(5rem, calc(var(--safe-bottom) + 4.25rem));
+  z-index: calc(var(--z-toast) + 50); /* above the shared .toast */
+  max-width: calc(100vw - max(2rem, calc(var(--safe-left) + var(--safe-right))));
+  padding: 0.625rem 1rem;
+  border-radius: 999px;
+  background: var(--brown);
+  color: var(--white);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-align: center;
+  transform: translateX(-50%);
+  box-shadow: var(--shadow-soft);
+}
+
+/* Fixed 18rem × 3.5rem (288×56 at 100%) chip. Width contracts on a narrow
+   320px viewport at 130%, and the bottom offset clears the two-row home HUD. */
+.g52-now-chip {
+  position: fixed;
+  left: 50%;
+  bottom: max(12rem, calc(var(--safe-bottom) + 11.5rem));
+  z-index: calc(var(--z-media) + 5); /* above the photo-mode layer */
+  width: min(18rem, calc(100vw - max(1rem, calc(var(--safe-left) + var(--safe-right)))));
+  min-height: 3.5rem;
+  display: grid;
+  grid-template-columns: 2.5rem minmax(0, 1fr) 1.5rem;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.5rem 0.625rem;
+  border: 1px solid rgba(74, 59, 54, 0.12);
+  border-radius: 1rem;
+  background: var(--frost);
+  color: var(--brown);
+  font-family: inherit;
+  text-align: left;
+  box-shadow: 0 10px 30px rgba(74, 59, 54, 0.24);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 1.5rem);
+  transition: transform 250ms ease, opacity 250ms ease;
+}
+
+.g52-now-chip.g52-chip-show {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translate(-50%, 0);
+}
+
+.g52-now-chip > img {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.5rem;
+  object-fit: cover;
+}
+
+.g52-chip-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.g52-chip-copy strong,
+.g52-chip-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.g52-chip-copy strong {
+  font-size: 0.8125rem;
+}
+
+.g52-chip-copy small {
+  color: var(--ink-soft);
+  font-size: 0.625rem;
+}
+
+.g52-chip-eq {
+  height: 1.5rem;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 0.125rem;
+}
+
+.g52-chip-eq i {
+  width: 0.1875rem;
+  height: 45%;
+  border-radius: 999px;
+  background: var(--pink);
+  animation: g52-eq 0.75s ease-in-out infinite alternate;
+}
+
+.g52-chip-eq i:nth-child(2) {
+  height: 85%;
+  animation-delay: -0.3s;
+}
+
+.g52-chip-eq i:nth-child(3) {
+  height: 62%;
+  animation-delay: -0.55s;
+}
+
+@keyframes g52-eq {
+  to { height: 100%; }
+}
+
+/* =============================== end V4/G52 =============================== */
+
+/* ========= V4/G58 — settings IA + codes + dev cards + buff chip ==========
+   §C-SYS12 two-level settings (main list + display/audio subscreen sheets),
+   §C-SYS5.1/5.3 codes subscreen (input shake, lock countdown, redeemed list),
+   §C-SYS5.2 HUD ×2-coins buff chip, §C-SYS6 dev cards 13–18 + ledger. */
+
+/* ---- main list (screen) ---- */
+.g58-nav-row {
+  cursor: pointer;
+  min-height: max(50px, 3.125rem); /* §E9 hit floor incl. the chevron */
+}
+
+.g58-nav-row:active {
+  background: rgba(255, 123, 169, 0.08);
+}
+
+.g58-chevron {
+  flex: none;
+  display: inline-flex;
+  color: var(--pink-dark);
+  opacity: 0.55;
+}
+
+/* §C-SYS12.2 one-time hint chip */
+.g58-hint-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 0.625rem;
+  padding: 0.5rem 0.625rem 0.5rem 0.75rem;
+  border-radius: 999px;
+  background: rgba(255, 209, 102, 0.32);
+  border: 2px solid var(--yellow);
+  color: var(--brown);
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+
+.g58-hint-chip span {
+  flex: 1;
+  min-width: 0;
+}
+
+.g58-hint-close {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: max(32px, 2rem);
+  height: max(32px, 2rem);
+  padding: 0.375rem; /* + chip padding ≈ the 44px halo (§E9 small-close rule) */
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.7);
+  color: var(--brown);
+  cursor: pointer;
+}
+
+/* ---- §B9 subscreen sheets (panels settingsDisplay/settingsAudio/codes) -- */
+.panel-settingsDisplay,
+.panel-settingsAudio,
+.panel-codes {
+  max-height: calc(100vh - max(1rem, var(--safe-top)));
+  overflow: hidden;
+  display: flex;
+}
+
+.g58-sub {
+  width: 100%;
+  min-width: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+  padding: 0.125rem 0.125rem max(0.5rem, var(--safe-bottom));
+}
+
+.g58-sub-head {
+  display: grid;
+  grid-template-columns: max(44px, 3.25rem) minmax(0, 1fr);
+  align-items: center;
+  gap: 0.625rem;
+  margin-bottom: 0.375rem;
+}
+
+.g58-sub-title {
+  margin: 0;
+  font-size: 1.25rem;
+  color: var(--brown);
+  overflow-wrap: anywhere;
+}
+
+.g58-two-line {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+.g58-subline {
+  font-size: 0.71875rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.g58-gyro-row {
+  min-height: max(50px, 3.125rem); /* toggle halo floor (§E9 P1) */
+}
+
+.g58-controls-hint {
+  margin: 0.25rem 0.25rem 0;
+  font-size: 0.71875rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+/* ---- codes subscreen (§C-SYS5.1/5.3) ---- */
+.g58-codes-sub {
+  margin: 0 0.25rem 0.625rem;
+  font-size: 0.8125rem;
+  color: var(--ink-soft);
+}
+
+.g58-codes-inputrow {
+  display: flex;
+  align-items: stretch;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.g58-codes-input {
+  flex: 1;
+  min-width: 0;
+  min-height: max(44px, 2.75rem);
+  padding: 0.5rem 0.75rem;
+  border: 2px solid rgba(74, 59, 54, 0.22);
+  border-radius: var(--btn-radius);
+  background: var(--white);
+  color: var(--brown);
+  font: 700 1rem/1.2 var(--font-round);
+}
+
+.g58-codes-input:focus {
+  /* V6/F3: outline:none removed — the global :focus-visible leaf ring (end
+     of file) must reach keyboard users; the pink border stays as the cozy
+     while-typing accent. */
+  border-color: var(--pink);
+}
+
+/* V4/FIX-UI: at narrow scaled widths the side-by-side row squeezed the input
+   to ~2 visible characters — stack the field ABOVE the redeem button so the
+   code stays readable while typing. */
+@media (max-width: 340px) {
+  .g58-codes-inputrow {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+@media (max-width: 400px) {
+  :root[data-ui-scale='115'] .g58-codes-inputrow,
+  :root[data-ui-scale='130'] .g58-codes-inputrow {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+.g58-codes-redeem {
+  flex: none;
+}
+
+/* §C-SYS5.3: wrong code → 300 ms shake */
+.g58-shake {
+  animation: g58-shake 300ms ease-in-out;
+}
+
+@keyframes g58-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-0.5rem); }
+  40% { transform: translateX(0.4375rem); }
+  60% { transform: translateX(-0.3125rem); }
+  80% { transform: translateX(0.1875rem); }
+}
+
+.g58-codes-empty {
+  margin: 0.25rem;
+  font-size: 0.8125rem;
+  color: var(--ink-soft);
+}
+
+.g58-codes-row {
+  gap: 0.5rem;
+}
+
+.g58-codes-name {
+  font-weight: 700;
+  color: var(--brown);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.g58-codes-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.125rem;
+  min-width: 0;
+  text-align: right;
+}
+
+.g58-codes-date {
+  font-size: 0.71875rem;
+  font-weight: 600;
+  color: var(--ink-faint);
+}
+
+.g58-codes-effect {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--teal-dark);
+  overflow-wrap: anywhere;
+}
+
+/* ---- HUD ×2-coins buff chip (§C-SYS5.2) ---- */
+.g58-hud-buff {
+  display: none;
+  align-items: center;
+  gap: 0.3125rem;
+  padding: 0.375rem 0.625rem;
+  border-radius: 999px;
+  background: rgba(255, 209, 102, 0.92);
+  color: var(--brown);
+  font: 700 0.6875rem/1 var(--font-round);
+  box-shadow: var(--shadow-soft);
+  pointer-events: none; /* display chip only — no tap target */
+}
+
+.g58-hud-buff.g58-show {
+  display: inline-flex;
+}
+
+.g58-hud-buff-t {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- dev panel: card-3 ledger + cards 13–18 (§C-SYS6) ---- */
+.g58-ledger {
+  margin-top: 0.375rem;
+}
+
+.g58-ledger summary {
+  cursor: pointer;
+  user-select: none;
+  min-height: max(32px, 2rem);
+  display: flex;
+  align-items: center;
+}
+
+.g58-ledger-pre {
+  margin: 0.25rem 0 0;
+  padding: 0.5rem;
+  max-height: 12rem;
+  overflow: auto;
+  border-radius: 0.5rem;
+  background: rgba(74, 59, 54, 0.06);
+  font: 600 0.6875rem/1.5 ui-monospace, 'Cascadia Mono', Menlo, monospace;
+  color: var(--brown);
+  white-space: pre;
+}
+
+.g58-flexnone {
+  flex: none;
+}
+
+.g58-dev-code {
+  flex-wrap: wrap;
+}
+
+.g58-dev-code .g33-dev-label {
+  flex: 1 1 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.g58-dev-secret {
+  font: 600 0.6875rem/1 ui-monospace, 'Cascadia Mono', Menlo, monospace;
+  color: var(--ink-soft);
+  background: rgba(74, 59, 54, 0.07);
+  padding: 0.125rem 0.3125rem;
+  border-radius: 0.375rem;
+}
+
+.g58-dev-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  margin: 0.25rem 0 0.5rem;
+}
+
+.g58-chip {
+  flex: none;
+  font-size: 0.75rem;
+  padding: 0.4375rem 0.625rem;
+}
+
+.g58-chip:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.g58-cheat-group {
+  margin-top: 0.5rem;
+  font-weight: 700;
+}
+
+.g58-cheat-row {
+  flex-wrap: wrap;
+  row-gap: 0.25rem;
+}
+
+.g58-cheat-code {
+  flex: none;
+  max-width: 100%;
+  font: 600 0.6875rem/1.2 ui-monospace, 'Cascadia Mono', Menlo, monospace;
+  color: var(--pink-dark);
+  background: rgba(255, 123, 169, 0.1);
+  padding: 0.1875rem 0.375rem;
+  border-radius: 0.375rem;
+  overflow-wrap: anywhere;
+}
+
+.g58-cheat-desc {
+  flex: 1;
+  min-width: 8rem;
+  font-size: 0.71875rem;
+  color: var(--ink-soft);
+}
+
+.g58-cheat-copy {
+  flex: none;
+  font-size: 0.75rem;
+}
+
+/* =============================== end V4/G58 =============================== */
+
+/* ================================= V4/G56 =================================
+   Async-init loading card (PLAN4-GAMES §G6.6): shown while a Promise-
+   returning game init resolves (goobyWelt splat load, 2–9 s). The scene
+   fade overlay sits at z-index 9999 on document.body — the card mounts on
+   document.body too and paints ABOVE it (10000) over the blacked-out stage.
+   The XP floater styles live in ui/hud.js's V4/G56 injected block. */
+
+.mg-loading {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: var(--z-loading);
+  pointer-events: none;
+}
+
+.mg-loading-card {
+  background: var(--paper); /* V4/AC-1: cozy paper loading card */
+  border-radius: var(--card-radius-lg);
+  box-shadow: 0 0 0 1px var(--outline-soft), var(--shadow-pop);
+  padding: 1.25rem 1.75rem;
+  text-align: center;
+  max-width: 86vw;
+}
+
+.mg-loading-title {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--brown);
+}
+
+.mg-loading-text {
+  margin-top: 0.375rem;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+
+.mg-loading-dots {
+  margin-top: 0.625rem;
+  display: flex;
+  gap: 0.375rem;
+  justify-content: center;
+}
+
+.mg-loading-dots span {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--teal);
+  animation: g56dots 1.05s ease-in-out infinite;
+}
+
+.mg-loading-dots span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.mg-loading-dots span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes g56dots {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: translateY(0);
+  }
+
+  50% {
+    opacity: 1;
+    transform: translateY(-0.25rem);
+  }
+}
+
+/* =============================== end V4/G56 =============================== */
+
+/* ========= V4/G68 — arcade cover grid + pre-game screen + modifier glow ===
+   (PLAN4-GAMES §G7.1–7.3 + §G5.6, PLAN4 §C-SYS4.5 chrome. Append-only marked
+   block per §E0.1-9; rem-based declarations only — px-audit stays green.
+   Shared cover classes live HERE (not in the component-injected arcade CSS)
+   because mgPregame must render without the arcade screen ever mounting.) */
+
+/* --- §G7.1 cover art (grid tile + pre-game): gradient+icon fallback under
+       an <img> that reveals on load and removes itself on error --- */
+.g68-cover-art {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.g68-cover-fallback {
+  color: var(--white);
+  opacity: 0.92;
+  filter: drop-shadow(0 2px 4px rgba(74, 59, 54, 0.28));
+}
+
+.g68-cover-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 160ms ease;
+}
+
+.g68-cover-img.g68-cover-loaded {
+  opacity: 1;
+}
+
+/* --- §G7.2 lock overlay (dim 55 % brown + 🔒 + „ab Level N") --- */
+.g68-cover-lock {
+  position: absolute;
+  inset: 0;
+  background: rgba(74, 59, 54, 0.55);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  color: var(--white);
+  font-size: 0.75rem;
+  font-weight: 700;
+  backdrop-filter: blur(1px);
+  z-index: 2;
+}
+
+.g68-cover-lock svg {
+  opacity: 0.9;
+}
+
+/* --- §G7.2 goobyWelt SPECIAL: gold-dashed 2px border + gold ribbon --- */
+.g68-special {
+  outline: 2px dashed #e8b23a;
+  outline-offset: -2px;
+}
+
+.g68-special-ribbon {
+  position: absolute;
+  z-index: 3;
+  right: -0.3125rem;
+  top: 0.375rem;
+  padding: 0.1875rem 0.4375rem;
+  border-radius: 999px;
+  background: linear-gradient(120deg, #f7b84b, #e8b23a);
+  color: var(--white);
+  font-size: 0.625rem;
+  font-weight: 900;
+  line-height: 1.2;
+  letter-spacing: 0.04em;
+  box-shadow: 0 0.125rem 0 rgba(74, 59, 54, 0.16);
+  transform: rotate(7deg);
+  pointer-events: none;
+  max-width: 86%;
+  text-align: center;
+}
+
+/* --- §C-SYS4.5 modifier glow chrome (canvas overlay + box-shadow pulse +
+       „N× ✨" badge with mm:ss + icon chip; tint via --modifier-color) --- */
+.g68-glow-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.g68-modified,
+.g68-pre-banner {
+  --modifier-color: var(--gold);
+
+  animation: g68pulse 2s ease infinite;
+}
+
+@keyframes g68pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 3px var(--modifier-color), 0 0 14px var(--modifier-color), var(--shadow-soft);
+  }
+
+  50% {
+    box-shadow: 0 0 0 3px var(--modifier-color), 0 0 26px var(--modifier-color), var(--shadow-soft);
+  }
+}
+
+.g68-mod-badge {
+  position: absolute;
+  z-index: 4;
+  right: 0.375rem;
+  top: 0.375rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.125rem;
+  pointer-events: none;
+}
+
+.g68-mod-plays {
+  background: var(--modifier-color, var(--gold));
+  color: var(--brown);
+  border-radius: 999px;
+  padding: 0.1875rem 0.4375rem;
+  font-size: 0.625rem;
+  font-weight: 900;
+  line-height: 1.2;
+  box-shadow: 0 0.125rem 0 rgba(74, 59, 54, 0.16);
+}
+
+.g68-mod-count {
+  background: rgba(74, 59, 54, 0.7);
+  color: var(--white);
+  border-radius: 999px;
+  padding: 0.0625rem 0.375rem;
+  font-size: 0.5625rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.g68-mod-chip {
+  position: absolute;
+  z-index: 3;
+  right: 0.375rem;
+  bottom: 0.375rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 999px;
+  background: var(--modifier-color, var(--gold));
+  color: var(--white);
+  box-shadow: 0 0.125rem 0 rgba(74, 59, 54, 0.2);
+  pointer-events: none;
+}
+
+.g68-mod-chip b {
+  position: absolute;
+  bottom: -0.3125rem;
+  right: -0.25rem;
+  font-size: 0.5625rem;
+  font-weight: 900;
+  background: var(--white);
+  color: var(--brown);
+  border-radius: 999px;
+  padding: 0 0.1875rem;
+  box-shadow: 0 1px 0 rgba(74, 59, 54, 0.2);
+}
+
+/* --- §G5.6/§G7.3 pre-game screen (screen id mgPregame) --- */
+.screen-mgPregame {
+  justify-content: flex-start;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.g68-pre-head {
+  width: 100%;
+  max-width: 27.5rem;
+  display: flex;
+  align-items: center;
+  margin: 0.375rem 0 0.5rem;
+  flex: none;
+}
+
+.g68-pre-cover {
+  position: relative;
+  width: min(86vw, 22rem);
+  aspect-ratio: 4 / 3;
+  border-radius: var(--card-radius);
+  overflow: hidden;
+  box-shadow: var(--shadow-soft);
+  flex: none;
+}
+
+.g68-pre-name {
+  margin: 0.75rem 0 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--brown);
+  text-align: center;
+  max-width: min(86vw, 22rem);
+  overflow-wrap: anywhere;
+  flex: none;
+}
+
+.g68-pre-sub {
+  margin-top: 0.125rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--brown);
+  opacity: 0.6;
+  text-align: center;
+  max-width: min(86vw, 22rem);
+  flex: none;
+}
+
+.g68-pre-info {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: center;
+  max-width: min(86vw, 22rem);
+  flex: none;
+}
+
+.g68-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: var(--white);
+  border-radius: 999px;
+  padding: 0.25rem 0.625rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--brown);
+  box-shadow: var(--shadow-soft);
+}
+
+.g68-pre-diff,
+.g68-pre-welt {
+  width: min(86vw, 22rem);
+  margin-top: 0.875rem;
+  flex: none;
+}
+
+.g68-pills {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 0.25rem;
+  background: rgba(74, 59, 54, 0.08);
+  border-radius: 999px;
+  padding: 0.25rem;
+}
+
+.g68-pill {
+  min-width: 0;
+  height: 3rem;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  font-family: inherit;
+  /* vw cap: 4 pills must fit 320 px even at uiScale 130 % (rem grows, vw doesn't) */
+  font-size: min(0.6875rem, 3.1vw);
+  font-weight: 700;
+  color: var(--brown);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.125rem;
+  cursor: pointer;
+  overflow: hidden;
+  white-space: nowrap;
+  padding: 0 0.25rem;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.g68-pill-on {
+  background: var(--teal);
+  color: var(--white);
+  box-shadow: 0 0.125rem 0 rgba(74, 59, 54, 0.14);
+}
+
+.g68-pill-locked {
+  opacity: 0.55;
+}
+
+.g68-pill-tick {
+  display: inline-flex;
+  align-items: center;
+}
+
+.g68-modeline {
+  margin-top: 0.375rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--brown);
+  opacity: 0.7;
+  text-align: center;
+  min-height: 1rem;
+  overflow-wrap: anywhere;
+}
+
+.g68-modeline-lock {
+  opacity: 0.9;
+}
+
+.g68-pre-welt {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.g68-welt-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--brown);
+  opacity: 0.7;
+  text-align: center;
+}
+
+.g68-pre-banner-host {
+  width: min(86vw, 22rem);
+  flex: none;
+}
+
+.g68-pre-banner {
+  min-height: 2.75rem;
+  margin-top: 0.875rem;
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  background: var(--white);
+  border-radius: 1rem;
+  padding: 0.5rem 0.75rem;
+  color: var(--brown);
+}
+
+.g68-banner-icon {
+  position: relative;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 999px;
+  background: var(--modifier-color, var(--gold));
+  color: var(--white);
+}
+
+.g68-banner-icon b {
+  position: absolute;
+  bottom: -0.25rem;
+  right: -0.375rem;
+  font-size: 0.625rem;
+  font-weight: 900;
+  background: var(--white);
+  color: var(--brown);
+  border-radius: 999px;
+  padding: 0 0.1875rem;
+  box-shadow: 0 1px 0 rgba(74, 59, 54, 0.2);
+}
+
+.g68-banner-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.g68-banner-name {
+  font-size: 0.8125rem;
+  font-weight: 900;
+}
+
+.g68-banner-effect {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  opacity: 0.7;
+  overflow-wrap: anywhere;
+}
+
+.g68-banner-meta {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.125rem;
+}
+
+.g68-banner-plays {
+  font-size: 0.6875rem;
+  font-weight: 900;
+  background: var(--modifier-color, var(--gold));
+  color: var(--brown);
+  border-radius: 999px;
+  padding: 0.125rem 0.5rem;
+  white-space: nowrap;
+}
+
+.g68-banner-count {
+  font-size: 0.625rem;
+  font-weight: 700;
+  opacity: 0.65;
+  font-variant-numeric: tabular-nums;
+}
+
+.g68-pre-play {
+  width: min(86vw, 22rem);
+  margin-top: 1rem;
+  padding-bottom: 0.5rem;
+  flex: none;
+}
+
+.g68-play-btn {
+  width: 100%;
+  min-height: 3.5rem;
+  font-size: 1.125rem;
+  font-weight: 700;
+}
+
+.g68-play-locked {
+  min-height: 3.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(74, 59, 54, 0.12);
+  border-radius: 1rem;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--brown);
+  opacity: 0.75;
+  text-align: center;
+  padding: 0 0.75rem;
+}
+
+/* V6/D4 (PLAN6 Wave D): authored-icon spacing for the chips that dropped
+   their raw glyphs (🔒 lock line/modeline, ✨ modifier badge). The icons are
+   inline icon() SVGs, so give them flex/inline breathing room here. */
+.g68-play-locked {
+  gap: 0.375rem;
+}
+
+.g68-play-locked svg,
+.g68-mod-plays svg {
+  flex: none;
+}
+
+.g68-mod-plays svg {
+  margin-left: 0.1875rem;
+}
+
+.g68-modeline svg {
+  vertical-align: -0.125rem;
+  margin-right: 0.25rem;
+}
+
+/* =============================== end V4/G68 =============================== */
+
+/* ========= V4/G67 — surf near-miss vignette flash (PLAN4-GAMES §G4.6) =====
+   Full-screen white 8 %-opacity flash for 0.12 s on each nearMiss logic
+   event. The element is created/removed by shoppingSurf.js; the timing is
+   driven from the game update (REAL time), CSS only paints. Pointer-events
+   none so HUD/input never notice it. */
+
+.g67-vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: var(--z-hud);
+  opacity: 0;
+  background:
+    radial-gradient(ellipse at center, rgba(255, 255, 255, 0) 55%, rgba(255, 255, 255, 0.9) 100%),
+    rgba(255, 255, 255, 0.35);
+  transition: opacity 60ms ease-out;
+}
+
+.g67-vignette.g67-flash {
+  opacity: 0.08; /* §G4.6: white 8 % */
+}
+
+/* =============================== end V4/G67 =============================== */
+
+/* ========= V4/G64 — recap cinematic overlay (PLAN4 §C-SYS2) ===============
+   Fullscreen takeover above every screen AND the sceneManager fade (z 9999):
+   the §C-SYS2.1 entry/exit fades must stay WHITE, so the overlay root sits at
+   z 10010 with a transparent stage over the 3D vignette canvas. rem-based
+   (§B3); text readable at 320 px @ 130 % via clamp() with vw ceilings. */
+
+body.g64-recap .g5-hud { display: none !important; } /* §C-SYS2.1 HUD hidden */
+
+.g64-root {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-recap);
+  pointer-events: auto; /* input limited to the overlay (§C-SYS2.1) */
+  overflow: hidden;
+  font-family: var(--font-round);
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.g64-root.g64-boot .g64-stage,
+.g64-root.g64-boot .g64-bg { visibility: hidden; } /* behind the entry white */
+
+/* DOM colored-backdrop fallback layers (G63 absent — §E block G64) */
+.g64-bg {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 500ms ease;
+  background-size: cover;
+  background-position: center;
+}
+
+.g64-stage {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding: max(2.5rem, calc(var(--safe-top) + 1.5rem)) 1rem 1rem;
+  text-align: center;
+}
+
+/* intro title card (§C-SYS2.2: bars 0–1 before the first cut) */
+.g64-intro {
+  margin-top: 8vh;
+  transition: opacity 600ms ease, transform 600ms ease;
+}
+
+.g64-intro.g64-gone {
+  opacity: 0;
+  transform: scale(1.08);
+  pointer-events: none;
+}
+
+.g64-title {
+  font-size: clamp(2.25rem, 13vw, 4.5rem);
+  font-weight: 900;
+  color: var(--white);
+  text-shadow: 0 4px 22px rgba(40, 20, 60, 0.45), 0 2px 4px rgba(40, 20, 60, 0.5);
+  letter-spacing: 0.0313rem;
+  animation: g64intro 900ms cubic-bezier(0.2, 1.6, 0.4, 1) both;
+}
+
+.g64-subtitle {
+  margin-top: 0.5rem;
+  font-size: clamp(0.9375rem, 4.5vw, 1.375rem);
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.92);
+  text-shadow: 0 2px 10px rgba(40, 20, 60, 0.5);
+  animation: g64intro 900ms 150ms cubic-bezier(0.2, 1.6, 0.4, 1) both;
+}
+
+@keyframes g64intro {
+  from { opacity: 0; transform: translateY(1.25rem) scale(0.85); }
+  to { opacity: 1; transform: none; }
+}
+
+/* beat-synced stat-text pops (§C-SYS2.6: 0.8→1.05→1.0 over popBeats) */
+.g64-pops {
+  position: absolute;
+  left: 0.75rem;
+  right: 0.75rem;
+  top: 16vh;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.g64-pop {
+  max-width: 92%;
+  padding: 0.375rem 1.125rem;
+  border-radius: 999px;
+  /* POLISH-J: soft scrim plate keeps the line readable over bright biomes */
+  background: rgba(40, 20, 60, 0.16);
+  font-size: clamp(1.375rem, 7vw, 2.5rem);
+  font-weight: 900;
+  line-height: 1.15;
+  color: var(--white);
+  text-shadow: 0 4px 18px rgba(40, 20, 60, 0.5), 0 2px 3px rgba(40, 20, 60, 0.55);
+  font-variant-numeric: tabular-nums;
+  animation: g64pop 1200ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+
+/* POLISH-J: pop rises in on the beat (fade + scale, matching the POLISH-D
+   transition language); duration stays JS-owned (popBeats on the grid) */
+@keyframes g64pop {
+  0% { opacity: 0; transform: translateY(0.875rem) scale(0.8); }
+  55% { opacity: 1; transform: translateY(0) scale(1.05); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* POLISH-J: exit drifts up + fades (animation dropped so the transition owns
+   the properties from the settled keyframe state) */
+.g64-pop-out {
+  animation: none;
+  transition: opacity 300ms ease, transform 300ms ease;
+  opacity: 0 !important;
+  transform: translateY(-0.625rem) scale(1.04);
+}
+
+/* §C-SYS2.2 skip affordance: 13px→0.8125rem, 40 % opacity, no chrome,
+   bottom-right, 1 s fade-in from t = 10 s; padded to the 44 px tap floor. */
+.g64-skip {
+  position: absolute;
+  right: max(0.5rem, var(--safe-right));
+  bottom: max(0.75rem, var(--safe-bottom));
+  min-width: max(44px, 2.75rem);
+  min-height: max(44px, 2.75rem);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0.625rem 0.875rem;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--white);
+  text-shadow: 0 1px 6px rgba(40, 20, 60, 0.6);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 1000ms ease;
+}
+
+.g64-skip.g64-skip-in { opacity: 0.4; pointer-events: auto; cursor: pointer; }
+
+/* §C-SYS2.2 skip → 300 ms hard cut flash */
+.g64-cut .g64-stage { transition: opacity 300ms ease; opacity: 0; }
+
+/* §C-SYS2.7 end card — OWN keyframes: the pop-in must END on the centering
+   translate (g64intro ends on `transform: none`, which would un-center it). */
+.g64-endcard {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(88vw, 22rem);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.625rem;
+  background: var(--frost);
+  border-radius: var(--card-radius);
+  box-shadow: 0 12px 40px rgba(40, 20, 60, 0.35);
+  padding: 1.25rem 1rem 1.125rem;
+  text-align: center;
+  animation: g64card 700ms cubic-bezier(0.2, 1.5, 0.4, 1) both;
+}
+
+@keyframes g64card {
+  from { opacity: 0; transform: translate(-50%, -44%) scale(0.85); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+.g64-ring { position: relative; width: 4.5rem; height: 4.5rem; }
+.g64-ring-bg { fill: var(--white); stroke: var(--track-soft); stroke-width: 6; }
+.g64-ring-fg {
+  fill: none;
+  stroke: var(--teal);
+  stroke-width: 6;
+  stroke-linecap: round;
+  transform: rotate(-90deg);
+  transform-origin: 50% 50%;
+  transition: stroke-dashoffset 1400ms cubic-bezier(0.3, 0.9, 0.3, 1);
+}
+
+.g64-ring-n {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  font-weight: 900;
+  color: var(--brown);
+  font-variant-numeric: tabular-nums;
+}
+
+.g64-end-title {
+  font-size: clamp(1.5rem, 8vw, 2.25rem);
+  font-weight: 900;
+  color: var(--brown);
+}
+
+.g64-end-line {
+  font-size: clamp(0.8125rem, 4vw, 1rem);
+  font-weight: 700;
+  color: var(--brown);
+  opacity: 0.85;
+  font-variant-numeric: tabular-nums;
+}
+
+.g64-end-next { opacity: 0.6; }
+.g64-continue { margin-top: 0.375rem; min-width: 60%; }
+
+/* G58's beat-debug overlay (dev card 15 toggle — §A2 ±80 ms evidence) */
+.g64-debug {
+  display: none;
+  position: absolute;
+  left: max(0.5rem, var(--safe-left));
+  bottom: max(0.5rem, var(--safe-bottom));
+  max-width: 78vw;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.5rem;
+  background: rgba(0, 0, 0, 0.62);
+  color: #9fffb3;
+  font: 700 0.625rem/1.5 ui-monospace, Menlo, monospace;
+  white-space: pre-wrap;
+  pointer-events: none;
+}
+
+/* entry/exit white (§C-SYS2.1: 400 ms in, 500 ms out — always WHITE) */
+.g64-white {
+  position: absolute;
+  inset: 0;
+  background: var(--white);
+  pointer-events: none;
+}
+
+/* profile „Rückblicke" empty state (§C-SYS2.8 — rows reuse .g59-pr-row) */
+.g64-pr-empty {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--brown);
+  opacity: 0.55;
+}
+
+/* ── POLISH-J — richer recap presentation (VISUALS only) ────────────────────
+   Letterbox bars, per-cut biome chip and the redesigned end card. All motion
+   here is decorative: cue TIMING stays owned by recapOverlay.js / G55's
+   director (±80 ms §A2 contract untouched). Tokens from POLISH-F. */
+
+/* cinematic letterbox — slides in with the first cut (.g64-cine), back out
+   for the end card; soft gradients so the 3D framing breathes underneath */
+.g64-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 6.5vh;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(0);
+  transition: opacity 600ms ease, transform 700ms cubic-bezier(0.25, 1, 0.4, 1);
+}
+
+.g64-bar-top {
+  top: 0;
+  background: linear-gradient(180deg, rgba(30, 16, 44, 0.5), rgba(30, 16, 44, 0));
+  transform: translateY(-100%);
+}
+
+.g64-bar-bottom {
+  bottom: 0;
+  background: linear-gradient(0deg, rgba(30, 16, 44, 0.5), rgba(30, 16, 44, 0));
+  transform: translateY(100%);
+}
+
+.g64-root.g64-cine .g64-bar {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* per-cut biome-name chip (labels ride G55's cut cues — showBiomeChip) */
+.g64-biome {
+  position: absolute;
+  left: 50%;
+  bottom: max(3.25rem, calc(var(--safe-bottom) + 2.5rem));
+  padding: 0.375rem 1rem;
+  border-radius: 999px;
+  background: var(--frost);
+  color: var(--brown);
+  font-size: 0.8125rem;
+  font-weight: 900;
+  letter-spacing: 0.0313rem;
+  box-shadow: 0 4px 14px rgba(40, 20, 60, 0.25);
+  pointer-events: none;
+  animation: g64biome 3200ms ease both;
+}
+
+@keyframes g64biome {
+  0% { opacity: 0; transform: translate(-50%, 0.625rem) scale(0.9); }
+  10% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  78% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -0.375rem) scale(0.96); }
+}
+
+/* end card: warm glow crown behind the ring + completion pulse */
+.g64-endcard::before {
+  content: '';
+  position: absolute;
+  top: -2.25rem;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 11rem;
+  height: 7rem;
+  background: radial-gradient(closest-side, rgba(255, 211, 77, 0.45), rgba(255, 211, 77, 0));
+  pointer-events: none;
+}
+
+.g64-ring::after {
+  content: '';
+  position: absolute;
+  inset: -0.625rem;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 211, 77, 0.55), rgba(255, 211, 77, 0) 70%);
+  opacity: 0;
+  pointer-events: none;
+  /* delay ≈ the ring stroke's 1400 ms fill — the "ding" as it completes */
+  animation: g64ringglow 1100ms 1350ms ease-out both;
+}
+
+@keyframes g64ringglow {
+  0% { opacity: 0; transform: scale(0.6); }
+  45% { opacity: 1; transform: scale(1.05); }
+  100% { opacity: 0; transform: scale(1.3); }
+}
+
+/* coin recap as a gold pill (tween.js roll-up fills the number) */
+.g64-end-coins {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.875rem;
+  border-radius: 999px;
+  background: rgba(255, 211, 77, 0.25);
+  border: 1px solid rgba(224, 176, 74, 0.45);
+  color: var(--brown);
+  font-size: clamp(0.8125rem, 4vw, 1rem);
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
+/* top-3 highlight chips (endCardHighlights) — staggered pop-in */
+.g64-hl-title {
+  margin-top: 0.125rem;
+  font-size: 0.6875rem;
+  font-weight: 900;
+  letter-spacing: 0.0938rem;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.g64-hl {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+  width: 100%;
+}
+
+.g64-hl-chip {
+  flex: 1 1 0;
+  max-width: 6.25rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.0625rem;
+  padding: 0.5rem 0.25rem 0.4375rem;
+  border-radius: var(--radius-row);
+  background: var(--track-soft);
+  animation: g64chip 500ms cubic-bezier(0.2, 1.5, 0.4, 1) both;
+}
+
+@keyframes g64chip {
+  from { opacity: 0; transform: translateY(0.5rem) scale(0.8); }
+  to { opacity: 1; transform: none; }
+}
+
+.g64-hl-icon {
+  font-size: 1.25rem;
+  line-height: 1.2;
+}
+
+.g64-hl-n {
+  font-size: 1.125rem;
+  font-weight: 900;
+  color: var(--brown);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.g64-hl-label {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.625rem;
+  font-weight: 700;
+  color: var(--ink-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.0313rem;
+}
+
+/* played-song credit (the track the recap made "heard" — POLISH-H) */
+.g64-end-song {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: var(--ink-faint);
+}
+
+/* =============================== end V4/G64 =============================== */
+
+/* ========= V4/G62 — purblePlace side-view rework (PLAN4-GAMES §G1) ========
+   Comfy-Cakes control bar: round 4.5 rem hold-pedals (§G1.7: ◀ bottom-left,
+   ▶ bottom-right inward of the 3.25 rem framework pause) + a full-width
+   station dock ROW directly above them whose buttons are positioned
+   per-frame by JS under their projected nozzle x (width/height/transform
+   are inline px — the ≥56 real-px §G1.7 floor is enforced in purblePlace.js
+   updateDock()).
+   Ticket board + §G1.4 belt-overview strip live at the top, display-only.
+   All gated props are rem (§B3); px only where px-audit exempts them. */
+
+/* ---- top: ticket board + overview strip (§G1.4, pointer-events none) ---- */
+.g62-top {
+  position: absolute;
+  top: calc(3.4rem + var(--safe-top));
+  left: max(0.5rem, var(--safe-left));
+  right: max(0.5rem, var(--safe-right));
+  display: flex;
+  flex-direction: column;
+  gap: 0.3125rem;
+  pointer-events: none;
+}
+.g62-tickets {
+  display: flex;
+  gap: 0.375rem;
+  min-height: 3.5rem;
+  overflow: hidden;
+}
+.g62-ticket {
+  width: 3.25rem;
+  flex: 0 0 auto;
+  background: rgba(255, 246, 236, 0.94);
+  border: 1px solid rgba(74, 59, 54, 0.2);
+  border-radius: 0.625rem;
+  padding: 0.125rem 0.1875rem 0.25rem;
+  box-shadow: var(--shadow-soft);
+  opacity: 0;
+  transform: translateY(-0.5rem) scale(0.9);
+  transition: opacity 180ms ease-out, transform 180ms ease-out;
+}
+.g62-ticket.g62-in {
+  opacity: 1;
+  transform: none;
+}
+.g62-ticket svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.g62-tk-bar {
+  height: 0.3125rem;
+  margin-top: 0.125rem;
+  border-radius: 999px;
+  background: rgba(74, 59, 54, 0.16);
+  overflow: hidden;
+}
+.g62-tk-fill {
+  height: 100%;
+  width: 100%;
+  border-radius: 999px;
+  background: #7cc15e;
+}
+.g62-strip {
+  position: relative;
+  height: 0.875rem;
+  border-radius: 999px;
+  background: rgba(74, 59, 54, 0.28);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+.g62-strip-st {
+  position: absolute;
+  top: 50%;
+  width: 0.3125rem;
+  height: 0.625rem;
+  transform: translate(-50%, -50%);
+  border-radius: 0.125rem;
+  opacity: 0.85;
+}
+.g62-strip-glyph {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 0.5625rem;
+  line-height: 1;
+}
+.g62-strip-dot {
+  position: absolute;
+  top: 50%;
+  width: 0.5rem;
+  height: 0.5rem;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: 1px solid rgba(74, 59, 54, 0.55);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+.g62-strip-dot.g62-hot {
+  animation: g62-hot-pulse 0.5s ease-in-out infinite alternate;
+}
+@keyframes g62-hot-pulse {
+  from { box-shadow: 0 0 2px 1px rgba(255, 122, 40, 0.7); }
+  to { box-shadow: 0 0 6px 3px rgba(255, 122, 40, 0.95); }
+}
+.g62-strip-win {
+  position: absolute;
+  top: -0.1875rem;
+  bottom: -0.1875rem;
+  border: 2px solid rgba(255, 246, 236, 0.9);
+  border-radius: 0.4375rem;
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+}
+
+/* ---- bottom row: hold pedals (§G1.3/§G1.7 — 4.5 rem ROUND, 72 px @100 %,
+   56 real-px floor at 85 % uiScale; held = scale 0.92 + color deepen, the
+   g7-brake pattern — pointer capture keeps the press alive through it) ---- */
+.g62-pedal {
+  position: absolute;
+  bottom: calc(0.75rem + var(--safe-bottom));
+  width: max(56px, 4.5rem);
+  height: max(56px, 4.5rem);
+  min-height: 0;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: linear-gradient(#8f7c72, #6f5c52);
+  color: var(--bg-cream);
+  font-size: 2rem;
+  line-height: 1;
+  box-shadow: 0 4px 0 rgba(58, 44, 38, 0.9), var(--shadow-soft);
+  pointer-events: auto;
+  cursor: pointer;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.g62-pedal-back {
+  left: max(0.75rem, var(--safe-left));
+}
+.g62-pedal-fwd {
+  /* §G1.7: bottom-RIGHT, inward of the framework pause (3.25 rem round at
+     right 16px) so the two never touch at any uiScale */
+  right: calc(16px + var(--safe-right) + 3.25rem + 0.5rem);
+}
+.g62-pedal.g62-held {
+  transform: scale(0.92);
+  box-shadow: 0 1px 0 rgba(58, 44, 38, 0.9);
+  background: linear-gradient(#7d685e, #5d4a41);
+}
+@media (max-width: 359px) {
+  /* §G1.7: pedals shift inward 0.5 rem at < 360 px — keeps the ◀/▶ pair
+     clear of each other and of the pause at 130 % UI scale */
+  .g62-pedal-back {
+    left: calc(max(0.75rem, var(--safe-left)) + 0.5rem);
+  }
+  .g62-pedal-fwd {
+    right: calc(16px + var(--safe-right) + 3.25rem + 1rem);
+  }
+}
+
+/* ---- station dock row (sits directly above the pedal row) --------------- */
+.g62-dock {
+  position: absolute;
+  bottom: calc(0.75rem + var(--safe-bottom) + max(56px, 4.5rem) + 0.5rem);
+  left: max(0.375rem, var(--safe-left));
+  right: max(0.375rem, var(--safe-right));
+  height: max(58px, 4rem); /* §G1.7 dock row height 4.0 rem */
+  pointer-events: none;
+}
+.g62-drop {
+  /* width/height/translate are inline (updateDock projects nozzle x; the
+     56 real-px floor lives there) — CSS owns the face only */
+  position: absolute;
+  left: 0;
+  top: 50%;
+  min-height: 0;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-row);
+  background: var(--g62-face, rgba(255, 246, 236, 0.96));
+  box-shadow: 0 3px 0 rgba(74, 59, 54, 0.4), var(--shadow-soft);
+  pointer-events: auto;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.g62-drop svg {
+  display: block;
+  width: 70%;
+  height: 70%;
+  margin: 0 auto;
+}
+.g62-drop:active {
+  /* NO transform here: JS owns the positional translate() inline — an
+     !important override would teleport the button mid-press and eat the
+     click (pointerup lands off-button). Press cue via face only. */
+  filter: brightness(0.88);
+  box-shadow: 0 1px 0 rgba(74, 59, 54, 0.4), var(--shadow-soft);
+}
+.g62-drop.g62-live {
+  box-shadow: 0 3px 0 rgba(74, 59, 54, 0.4), 0 0 10px 3px rgba(255, 209, 102, 0.95);
+}
+.g62-drop.g62-off {
+  filter: grayscale(0.9);
+  opacity: 0.5;
+  cursor: default;
+}
+.g62-shape {
+  background: rgba(255, 246, 236, 0.96);
+}
+.g62-shape-glyph {
+  font-size: 1.5rem;
+  line-height: 1;
+}
+.g62-spawnbtn {
+  background: #d8ecd2;
+}
+.g62-ship {
+  background: var(--pink);
+  color: var(--white);
+  font-weight: 700;
+  font-size: 0.8125rem;
+  line-height: 1.1;
+}
+.g62-ship.g62-ready {
+  animation: g62-ship-pulse 0.6s ease-in-out infinite alternate;
+}
+@keyframes g62-ship-pulse {
+  from { box-shadow: 0 3px 0 rgba(74, 59, 54, 0.4), 0 0 4px 1px rgba(255, 123, 169, 0.8); }
+  to { box-shadow: 0 3px 0 rgba(74, 59, 54, 0.4), 0 0 12px 5px rgba(255, 123, 169, 1); }
+}
+/* =============================== end V4/G62 =============================== */
+
+/* ================= V4/G-UI: style audit & polish (§C11.2 parity) ==========
+   V4/AC-1 re-theme: the sibling surfaces (achievement tiles, profile cards,
+   vet clinic cards) follow the quest/album cards onto the cozy paper
+   squircles; paddings return to their pre-G47 values. */
+
+/* --- achievements: tiles match the quest cards (same list-row family) ----- */
+.screen-achievements .g12-ach-tile {
+  border: none;
+  border-radius: var(--card-radius);
+  background: var(--paper);
+  background-clip: padding-box;
+  box-shadow: 0 0 0 1px var(--outline-soft), var(--shadow-soft);
+  padding: 0.625rem 0.875rem;
+}
+
+/* --- profile: stat/summary cards match the album/quest card faces -------- */
+.screen-profile .g23-pr-card {
+  border: none;
+  border-radius: var(--card-radius-lg);
+  background: var(--paper);
+  background-clip: padding-box;
+  box-shadow: 0 0 0 1px var(--outline-soft), var(--shadow-soft);
+  padding: 0.75rem 0.875rem;
+}
+
+/* --- vet clinic: doctor + action cards join the same paper family -------- */
+.vet-doc {
+  border: none;
+  border-radius: var(--card-radius-lg);
+  background: var(--paper);
+  background-clip: padding-box;
+  box-shadow: 0 0 0 1px var(--outline-soft), var(--shadow-soft);
+  padding: 0.75rem 0.875rem;
+}
+.vet-action {
+  border: none;
+  border-radius: var(--card-radius);
+  background: var(--paper);
+  background-clip: padding-box;
+  box-shadow: 0 0 0 1px var(--outline-soft), var(--shadow-soft);
+  padding: 0.8125rem 0.9375rem;
+}
+/* ============================== end V4/G-UI =============================== */
+
+/* ========= V4/G76 — modifier surfacing: HUD chip + results breakdown =====
+   §C-SYS4.6 HUD chip (type-tinted glow pulse, own row under the HUD meta
+   row, arcade nav dot) + §C-SYS4.4/§G8-3 results rows (type-dot accent,
+   glueckspilz Glücksrolle reel states). Tint rides --modifier-color like
+   the G68 glow chrome. */
+.g76-hud-mod-row {
+  display: none;
+  justify-content: flex-end;
+}
+
+.g76-hud-mod-row.g76-show {
+  display: flex;
+}
+
+.g76-hud-mod {
+  --modifier-color: var(--gold);
+
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3125rem;
+  min-height: max(44px, 2rem);
+  border: 0;
+  border-radius: 999px;
+  padding: 0.3125rem 0.75rem;
+  background: var(--frost);
+  color: var(--brown);
+  font: 700 0.6875rem/1 var(--font-round);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  animation: g76chipglow 1.6s ease-in-out infinite;
+}
+
+.g76-hud-mod:active {
+  transform: scale(0.94);
+}
+
+@keyframes g76chipglow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 2px var(--modifier-color), 0 0 8px var(--modifier-color), var(--shadow-soft);
+  }
+
+  50% {
+    box-shadow: 0 0 0 2px var(--modifier-color), 0 0 18px var(--modifier-color), var(--shadow-soft);
+  }
+}
+
+.g76-hud-mod-icon {
+  font-size: 0.875rem;
+  animation: g76sparkle 1.2s ease-in-out infinite;
+}
+
+@keyframes g76sparkle {
+  50% {
+    transform: rotate(18deg) scale(1.15);
+  }
+}
+
+.g76-hud-mod-name {
+  max-width: 7rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.g76-hud-mod-t {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.72;
+}
+
+/* arcade nav badge dot (§C-SYS4.6 „the arcade nav badge dots") */
+.g76-dot {
+  --modifier-color: var(--gold);
+
+  position: absolute;
+  top: -0.1875rem;
+  left: -0.1875rem;
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 50%;
+  background: var(--modifier-color);
+  box-shadow: 0 0 6px var(--modifier-color);
+  display: none;
+  pointer-events: none;
+  animation: g76dotpulse 1.6s ease-in-out infinite;
+}
+
+.g76-dot.g76-show {
+  display: block;
+}
+
+@keyframes g76dotpulse {
+  50% {
+    transform: scale(1.3);
+  }
+}
+
+/* results breakdown rows: type-tinted dot before the „{name} aktiv" chip */
+.g76-mod-row {
+  --modifier-color: var(--gold);
+}
+
+.g76-mod-row > span:first-child::before {
+  content: '';
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--modifier-color);
+  box-shadow: 0 0 6px var(--modifier-color);
+  margin-right: 0.375rem;
+}
+
+/* glueckspilz Glücksrolle reel (§C-SYS4.2: 900 ms slot-roll) */
+.g76-roll-value.g76-rolling {
+  opacity: 0.75;
+  filter: blur(0.5px);
+}
+
+.g76-roll-value.g76-roll-land {
+  animation: g76land 320ms ease;
+}
+
+@keyframes g76land {
+  0% {
+    transform: scale(1.35);
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+/* =============================== end V4/G76 =============================== */
+
+/* ========= V4/G81 — static credits / attribution screen (§C-SYS12.4) =====
+   One bounded flex column keeps the header fixed while the complete license
+   list scrolls. Attribution rows are plain text; only Back is interactive. */
+.screen-credits {
+  justify-content: flex-start;
+  overflow: hidden;
+}
+
+.g81-credits {
+  width: min(100%, 27.5rem);
+  height: 100%;
+  min-height: 0;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  overflow: hidden;
+}
+
+.g81-credits-head {
+  flex: none;
+  display: grid;
+  grid-template-columns: max(44px, 3.25rem) minmax(0, 1fr);
+  align-items: center;
+  gap: 0.625rem;
+}
+
+.g81-credits-head h1 {
+  min-width: 0;
+  margin: 0;
+  color: var(--brown);
+  font-size: clamp(1.375rem, 8vw, 1.875rem);
+  line-height: 1.05;
+  overflow-wrap: anywhere;
+}
+
+.g81-credits-scroll {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.125rem 0.125rem max(0.75rem, var(--safe-bottom));
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+}
+
+.g81-credit-section {
+  flex: none;
+  min-width: 0;
+}
+
+.g81-credit-section h2 {
+  margin: 0 0 0.5rem;
+  color: var(--brown);
+  font-size: 0.8125rem;
+  font-weight: 900;
+  line-height: 1.25;
+  letter-spacing: 0.025rem;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+
+.g81-credit-rows {
+  display: flex;
+  flex-direction: column;
+}
+
+.g81-credit-row,
+.g81-credit-copy,
+.g81-credit-url {
+  min-width: 0;
+  margin: 0;
+  padding: 0.5625rem 0.125rem;
+  border-bottom: 0.0625rem solid var(--track-soft);
+  color: var(--brown);
+  font-size: 0.75rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.g81-credit-rows > :last-child {
+  border-bottom: 0;
+}
+
+.g81-credit-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1875rem;
+}
+
+.g81-credit-main strong {
+  font-weight: 900;
+}
+
+.g81-credit-source,
+.g81-credit-url {
+  color: var(--ink-soft);
+  font-size: 0.6875rem;
+  user-select: text;
+}
+
+.g81-credit-copy {
+  font-weight: 700;
+}
+
+/* =============================== end V4/G81 =============================== */
+
+/* ================================ POLISH-D ================================
+   UI transition polish + themed game-loading card.
+
+   Transitions (ui.js contract): screens keep their g14 fade/scale ENTER and
+   gain a fade/scale EXIT (.screen-out); bottom sheets keep panel-up on open,
+   gain a backdrop fade-in, and close by sliding down while the backdrop
+   fades (.panel-backdrop-out). ui.js adds the exit class, then removes the
+   element on animationend (matched 200ms timeout fallback) — keep every
+   POLISH-D duration at 200ms, matching EXIT_ANIM_MS in ui.js. Under
+   prefers-reduced-motion ui.js removes immediately and the media block at
+   the end collapses the enter animations. */
+
+/* POLISH-D: screen exit — soft fade + shrink (mirrors g14-screen-in) */
+.screen.screen-out {
+  animation: polishd-screen-out 200ms ease-in forwards;
+}
+
+@keyframes polishd-screen-out {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: scale(0.985);
+  }
+}
+
+/* POLISH-D: sheet backdrop fades in on open (the sheet itself rides the
+   existing panel-up slide) */
+.panel-backdrop {
+  animation: polishd-backdrop-in 200ms ease-out;
+}
+
+@keyframes polishd-backdrop-in {
+  from {
+    background-color: rgba(74, 59, 54, 0);
+  }
+
+  to {
+    background-color: var(--veil);
+  }
+}
+
+/* POLISH-D: sheet close — backdrop fades out, sheet slides down */
+.panel-backdrop.panel-backdrop-out {
+  animation: polishd-backdrop-out 200ms ease-in forwards;
+}
+
+@keyframes polishd-backdrop-out {
+  from {
+    background-color: var(--veil);
+  }
+
+  to {
+    background-color: rgba(74, 59, 54, 0);
+  }
+}
+
+.panel-backdrop.panel-backdrop-out .panel {
+  animation: polishd-panel-down 200ms ease-in forwards;
+}
+
+@keyframes polishd-panel-down {
+  from {
+    transform: translateY(0);
+    opacity: 1;
+  }
+
+  to {
+    transform: translateY(100%);
+    opacity: 0.4;
+  }
+}
+
+/* POLISH-D: a leaving screen/sheet must never swallow taps — ui.js disables
+   pointer events on the root; this covers children that re-enable them. */
+.screen.screen-out,
+.screen.screen-out *,
+.panel-backdrop.panel-backdrop-out,
+.panel-backdrop.panel-backdrop-out * {
+  pointer-events: none !important;
+}
+
+/* POLISH-D: themed game-loading card (framework.js showLoading builds
+   .mg-loading.mg-loading-themed — cover art + progress bar + Gooby motif).
+   weltPreview.js still builds the PLAIN .mg-loading-card, so the V4/G56
+   base blocks above stay untouched; everything here hangs off the
+   .mg-loading-themed modifier or new mg-loading-* child classes. */
+.mg-loading-themed .mg-loading-card {
+  position: relative;
+  width: min(20rem, 86vw);
+  padding: 0;
+  overflow: hidden;
+  border-radius: var(--card-radius-lg); /* V4/AC-1: cozy squircle */
+  animation: polishd-loading-in 220ms ease-out;
+}
+
+@keyframes polishd-loading-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(0.5rem);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* cover backdrop: accent gradient (inline style) under the cover <img>,
+   with a readability shade + the "Get ready!" line at the bottom */
+.mg-loading-cover {
+  position: relative;
+  height: 9.5rem;
+  overflow: hidden;
+}
+
+.mg-loading-cover-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.mg-loading-cover-shade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(74, 59, 54, 0) 40%, rgba(74, 59, 54, 0.55) 100%);
+}
+
+.mg-loading-ready {
+  position: absolute;
+  left: 1rem;
+  bottom: 0.625rem;
+  color: var(--white);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  text-shadow: 0 1px 4px rgba(74, 59, 54, 0.6);
+}
+
+/* the cute motif: round white-rimmed sticker overlapping the cover edge,
+   gently bobbing (paused under reduced motion) */
+.mg-loading-motif {
+  position: absolute;
+  right: 0.875rem;
+  bottom: -0.75rem;
+  width: 4.5rem;
+  height: 4.5rem;
+  object-fit: cover;
+  border-radius: 50%;
+  border: 0.1875rem solid var(--white);
+  box-shadow: var(--shadow-soft);
+  background: #fdf6e3;
+  animation: polishd-motif-bob 1.6s ease-in-out infinite;
+}
+
+@keyframes polishd-motif-bob {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-2deg);
+  }
+
+  50% {
+    transform: translateY(-0.3125rem) rotate(2deg);
+  }
+}
+
+.mg-loading-body {
+  padding: 1rem 1.25rem 1.125rem;
+  text-align: left;
+}
+
+/* progress bar: determinate fill when the game reports loadPct (goobyWelt),
+   intentional indeterminate sweep otherwise */
+.mg-loading-bar {
+  position: relative;
+  height: 0.625rem;
+  margin-top: 0.625rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--teal) 18%, var(--bg-cream));
+  overflow: hidden;
+}
+
+.mg-loading-bar-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 0%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--teal), #7fd4ff);
+  transition: width 150ms ease-out;
+}
+
+.mg-loading-bar-indet .mg-loading-bar-fill {
+  width: 45%;
+  transition: none;
+  animation: polishd-bar-sweep 1.2s ease-in-out infinite;
+}
+
+@keyframes polishd-bar-sweep {
+  from {
+    transform: translateX(-100%);
+  }
+
+  to {
+    transform: translateX(320%);
+  }
+}
+
+.mg-loading-themed .mg-loading-text {
+  margin-top: 0.5rem;
+}
+
+.mg-loading-tip {
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+  line-height: 1.35;
+}
+
+/* POLISH-D: reduced motion — collapse enter/exit transitions to a single
+   frame (ui.js also skips the exit delay) and pause the decorative loops */
+@media (prefers-reduced-motion: reduce) {
+  .screen,
+  .screen.screen-out,
+  .panel,
+  .panel-backdrop,
+  .panel-backdrop.panel-backdrop-out,
+  .panel-backdrop.panel-backdrop-out .panel,
+  .mg-loading-themed .mg-loading-card {
+    animation-duration: 1ms;
+  }
+
+  .mg-loading-motif,
+  .mg-loading-bar-indet .mg-loading-bar-fill {
+    animation: none;
+  }
+}
+
+/* ============================== end POLISH-D ============================== */
+
+/* ================================ POLISH-E ================================
+   Shared 3-strikes teleport veil + landscape „rotate your phone" gate
+   (framework.js startStrikeTeleport / rotateGate). POLISH-D's loading-card
+   styles above stay untouched — the teleport cutscene only RE-USES the card
+   via showLoading(). rem-only in the px-audit-gated properties (§B3). */
+
+/* POLISH-E: teleport fade veil — below the loading card (10000), above HUD
+   and pause overlay; the -on modifier drives the CSS transition both ways. */
+.mg-teleport-veil {
+  position: fixed;
+  inset: 0;
+  background: #1c1310;
+  opacity: 0;
+  transition: opacity 450ms ease;
+  pointer-events: none;
+  z-index: calc(var(--z-loading) - 2); /* under the loading card AND the 9999 scene fade */
+}
+
+.mg-teleport-veil-on {
+  opacity: 1;
+}
+
+/* POLISH-E: rotate gate overlay — tap anywhere continues */
+.mg-rotate {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(74, 59, 54, 0.72);
+  z-index: var(--z-system);
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.mg-rotate-card {
+  background: rgba(255, 251, 244, 0.97);
+  border-radius: var(--card-radius);
+  box-shadow: var(--shadow-soft);
+  padding: 1.5rem 2rem;
+  text-align: center;
+  max-width: 80vw;
+  animation: polishe-rotate-in 220ms ease-out;
+}
+
+@keyframes polishe-rotate-in {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* the quantized pictogram (assets/ui/rotate_device.png) gently rocks; its
+   own artwork already shows the portrait→landscape turn + arrows */
+.mg-rotate-icon {
+  width: 7.5rem;
+  height: 7.5rem;
+  border-radius: 1rem;
+  animation: polishe-rotate-swing 2.4s ease-in-out infinite;
+}
+
+/* pure-CSS phone glyph fallback (shown only when the PNG fails to load):
+   a rounded phone outline doing the full quarter turn */
+.mg-rotate-glyph {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 7.5rem;
+}
+
+.mg-rotate-glyph[hidden] {
+  display: none;
+}
+
+.mg-rotate-phone {
+  display: block;
+  width: 3rem;
+  height: 5.25rem;
+  border: 0.375rem solid var(--brown, #4a3b36);
+  border-radius: 0.75rem;
+  animation: polishe-rotate-quarter 2.4s ease-in-out infinite;
+}
+
+@keyframes polishe-rotate-swing {
+  0%,
+  55%,
+  100% {
+    transform: rotate(0deg);
+  }
+
+  20%,
+  35% {
+    transform: rotate(-12deg);
+  }
+}
+
+@keyframes polishe-rotate-quarter {
+  0%,
+  15% {
+    transform: rotate(0deg);
+  }
+
+  45%,
+  70% {
+    transform: rotate(-90deg);
+  }
+
+  95%,
+  100% {
+    transform: rotate(0deg);
+  }
+}
+
+.mg-rotate-title {
+  margin-top: 0.75rem;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--brown);
+}
+
+.mg-rotate-hint {
+  margin-top: 0.375rem;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+
+.mg-rotate-continue {
+  margin-top: 0.875rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+  opacity: 0.75;
+}
+
+/* POLISH-E: reduced motion — static pictogram, instant veil/card */
+@media (prefers-reduced-motion: reduce) {
+  .mg-rotate-icon,
+  .mg-rotate-phone {
+    animation: none;
+  }
+
+  .mg-rotate-card {
+    animation-duration: 1ms;
+  }
+
+  .mg-teleport-veil {
+    transition-duration: 1ms;
+  }
+}
+
+/* ============================== end POLISH-E ============================== */
+
+/* ========================================================================== */
+/* V4/AC-1: shared opt-in Animal-Crossing components (.ac-*)                  */
+/* OPT-IN contract for later per-screen agents: nothing in the current DOM   */
+/* uses these yet. Class names + the modifier hooks below are frozen —       */
+/* extend, don't rename.                                                     */
+/*   .ac-tabbar > .ac-tab            icon tab bar; active tab = leaf circle  */
+/*     (mark active with .ac-tab-active OR aria-selected="true")             */
+/*   .ac-chip / .ac-chip-leaf/-sky   unified pill chip (coin/stat/radio/frost)*/
+/*   .ac-stamp                       rotated dashed "approval stamp" badge   */
+/*   .ac-ribbon                      leaf banner ribbon for headers/callouts */
+/*   .ac-emptystate                  dashed cozy placeholder block           */
+/* ========================================================================== */
+
+/* --- tab bar: rounded pastel rail of icon tabs -------------------------- */
+.ac-tabbar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  padding: 0.375rem;
+  border-radius: 999px;
+  background: var(--paper);
+  box-shadow: 0 0 0 1px var(--outline-soft), 0 3px 10px rgba(74, 59, 54, 0.1);
+}
+
+.ac-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: max(44px, 2.75rem);
+  min-height: max(44px, 2.75rem);
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ink-soft);
+  font-family: inherit;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform var(--dur-pop) var(--ease-spring), background var(--dur-pop) ease, color var(--dur-pop) ease;
+}
+
+.ac-tab:active {
+  transform: scale(0.92);
+}
+
+/* active tab: filled leaf circle with white glyph */
+.ac-tab.ac-tab-active,
+.ac-tab[aria-selected='true'] {
+  background: var(--leaf);
+  color: var(--white);
+  box-shadow: inset 0 -0.1875rem 0 var(--leaf-dark), 0 2px 8px rgba(109, 181, 78, 0.4);
+}
+
+.ac-tab svg {
+  display: block;
+}
+
+/* V4/UI-DEEP: labeled-tab + wrapping-rail variants — the shop/album/wardrobe
+   text tab strips ride the same kit (active still = leaf fill). A wrapped
+   rail keeps a soft squircle radius instead of the one-row stadium. */
+.ac-tabbar.ac-tabbar-wrap {
+  flex-wrap: wrap;
+  border-radius: 1.375rem;
+}
+
+.ac-tab.ac-tab-label {
+  flex: 1 1 0;
+  min-width: 0;
+  gap: 0.3125rem;
+  padding: 0.375rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.8125rem;
+  font-weight: 800;
+  line-height: 1.15;
+  color: var(--brown);
+}
+
+.ac-tab.ac-tab-label > span[lang] {
+  min-width: 0;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: break-word;
+  hyphens: auto;
+  text-align: center;
+}
+
+.ac-tab.ac-tab-label.ac-tab-active,
+.ac-tab.ac-tab-label[aria-selected='true'] {
+  color: var(--white);
+}
+
+/* --- chip: one pill language for coin/stat/frost/radio chips ------------ */
+.ac-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  background: var(--paper);
+  color: var(--brown);
+  font-size: 0.875rem;
+  font-weight: 700;
+  box-shadow: 0 0 0 1px var(--outline-soft), 0 2px 6px rgba(74, 59, 54, 0.1);
+}
+
+.ac-chip svg,
+.ac-chip img {
+  display: block;
+}
+
+.ac-chip.ac-chip-leaf {
+  background: var(--leaf);
+  color: var(--white);
+  box-shadow: inset 0 -0.125rem 0 var(--leaf-dark), 0 2px 6px rgba(109, 181, 78, 0.35);
+}
+
+.ac-chip.ac-chip-sky {
+  background: var(--sky-soft);
+  color: var(--brown);
+}
+
+/* --- stamp: rotated dashed approval badge (AC "task done" energy) ------- */
+.ac-stamp {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.375rem 0.875rem;
+  border: 0.1875rem dashed var(--leaf-dark);
+  border-radius: 999px;
+  color: var(--leaf-dark);
+  background: rgba(143, 208, 108, 0.14);
+  font-size: 0.875rem;
+  font-weight: 700;
+  letter-spacing: 0.05rem;
+  text-transform: uppercase;
+  transform: rotate(-6deg);
+  pointer-events: none;
+}
+
+/* --- ribbon: little leaf banner for section headers / callouts ---------- */
+.ac-ribbon {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.3125rem 1.125rem 0.375rem;
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--leaf), var(--leaf-dark));
+  color: var(--white);
+  font-size: 0.9375rem;
+  font-weight: 700;
+  box-shadow: inset 0 -0.125rem 0 rgba(74, 59, 54, 0.14), 0 3px 8px rgba(109, 181, 78, 0.35);
+  text-shadow: 0 1px 0 rgba(74, 59, 54, 0.18);
+}
+
+/* --- empty state: cozy dashed placeholder -------------------------------- */
+.ac-emptystate {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 1.75rem 1.25rem;
+  border: 0.125rem dashed rgba(74, 59, 54, 0.18);
+  border-radius: var(--card-radius-lg);
+  background: var(--paper-shade);
+  color: var(--ink-soft);
+  font-size: 0.9375rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.ac-emptystate svg {
+  display: block;
+  opacity: 0.55;
+}
+
+/* ========================== end V4/AC-1 .ac-* ============================ */
+
+/* ========================================================================== */
+/* V4/UI-DEEP: emoji → icons.js swap support — inline-SVG alignment + accent  */
+/* colors for the text rows that dropped their raw-emoji chrome.              */
+/* ========================================================================== */
+.shop-hint svg,
+.vet-hint svg,
+.shop-state svg,
+.g19-price svg,
+.g19-lockmsg svg,
+.g19-title svg,
+.g19-sub svg,
+.g19-hint svg,
+.g58-codes-name svg,
+.g58-codes-effect svg {
+  vertical-align: -0.125rem;
+}
+.g22-junk {
+  color: var(--pink-dark);
+}
+.g22-care-card .shop-emoji svg {
+  display: block;
+  color: var(--teal-dark);
+}
+.shop-banner-ico {
+  flex: none;
+  display: inline-flex;
+  color: var(--teal-dark);
+}
+.vet-avatar svg {
+  display: block;
+  color: var(--brown);
+}
+.g19-price svg {
+  color: var(--yellow);
+}
+.g19-title svg {
+  color: var(--yellow-dark);
+}
+.g19-sub svg {
+  color: var(--stat-hygiene, #6ec6ff);
+}
+.g58-codes-name svg {
+  color: var(--teal-dark);
+}
+/* the vet report header wears the .ac-ribbon leaf banner — keep it hugging
+   its content inside the column-flex report card */
+.vet-report-title.ac-ribbon {
+  align-self: flex-start;
+}
+.vet-bandage-badge svg {
+  vertical-align: -0.1875rem;
+  color: var(--pink-dark);
+}
+/* ======================== end V4/UI-DEEP swap support ==================== */
+
+/* ========================================================================== */
+/* V6/A2 THEMES — per-screen cozy worlds + slow ACNH pattern drift            */
+/*                                                                            */
+/* Contract (PLAN6 Wave A / A2). A theme is DATA, not new components: a       */
+/* small set of --thm-* custom properties scoped to the ui.js-stamped         */
+/* .screen-<id> / .panel-<id> class (ui.js showScreen()/openPanel() already   */
+/* stamp those — zero JS here). Consumers read the variables with var()       */
+/* fallbacks equal to today's values, so any screen/panel WITHOUT a theme     */
+/* renders pixel-identically to the pre-V6 look; in particular the static     */
+/* leaf wash rule on .screen::before near the top of this file STAYS the      */
+/* default — only the themed screens listed below swap to the drifting layer. */
+/*                                                                            */
+/*   --thm-bg               backdrop wash (screens) / sheet face (panels)     */
+/*   --thm-pattern          seamless 512×512 acui tile (url tokens below —    */
+/*                          generated by scripts/gen-patterns.mjs)            */
+/*   --thm-pattern-size     one tile period (rem — scales with uiScale)       */
+/*   --thm-pattern-opacity  tile layer opacity (the new tiles bake ≤6 %       */
+/*                          luminance delta, machine-checked, so they run     */
+/*                          at a higher opacity than the 13 %-delta leaf)     */
+/*   --thm-accent /                                                           */
+/*   --thm-accent-dark /                                                      */
+/*   --thm-soft             kit accent trio — deliberately UNSET by default   */
+/*                          so the .ac-* re-pointing at the end of this       */
+/*                          block falls back to the exact AC-1 leaf values    */
+/*   --thm-drift-x/-y       drift end offset. MUST be an explicit ±one-tile   */
+/*                          length (±24rem = ±--thm-pattern-size): the        */
+/*                          keyframes below never calc()-multiply lengths     */
+/*   --thm-drift-dur        80s–120s linear loop (PLAN6 motion guardrail)     */
+/*                                                                            */
+/* Motion rules: ONE ambient pseudo-layer per screen, transform-only          */
+/* translate by exactly one tile period (loop point invisible on the          */
+/* seamless tile), no background-position/filter/backdrop-filter animation,   */
+/* frozen under prefers-reduced-motion (the app has no separate root class    */
+/* — ui.js prefersReducedMotion() reads the same media query).                */
+/* ========================================================================== */
+
+:root {
+  /* V6/A2 pattern tokens (public/assets/acui/, indexed PNG-8, ≤48 KiB each) */
+  --pattern-shop: url('/assets/acui/pattern_shop.png');
+  --pattern-wardrobe: url('/assets/acui/pattern_wardrobe.png');
+  --pattern-arcade: url('/assets/acui/pattern_arcade.png');
+  --pattern-quest: url('/assets/acui/pattern_quest.png');
+  --pattern-album: url('/assets/acui/pattern_album.png');
+  --pattern-passport: url('/assets/acui/pattern_passport.png');
+  --pattern-clinic: url('/assets/acui/pattern_clinic.png');
+  --pattern-radio: url('/assets/acui/pattern_radio.png');
+  --pattern-trophy: url('/assets/acui/pattern_trophy.png');
+  --pattern-credits: url('/assets/acui/pattern_credits.png');
+  --pattern-blueprint: url('/assets/acui/pattern_blueprint.png');
+}
+
+/* --- theme variable defaults (today's rendering, pixel for pixel) -------- */
+.screen {
+  --thm-bg: var(--bg-cream);
+  --thm-pattern: var(--pattern-leaf);
+  --thm-pattern-size: 24rem;
+  --thm-pattern-opacity: 0.45;
+  --thm-drift-x: -24rem;
+  --thm-drift-y: -24rem;
+  --thm-drift-dur: 100s;
+  background: var(--thm-bg);
+}
+
+.panel {
+  /* panels get family TINTS only — no pattern layer (sheets stay quiet, and
+     .panel::before is already the grab handle) */
+  --thm-bg: var(--paper);
+  background: var(--thm-bg);
+}
+
+/* --- the drifting pattern layer (themed screens only) --------------------
+   position: fixed (not absolute): several screens scroll their .screen root
+   (settings/profile/album/arcade/…) and an absolutely-positioned oversized
+   pseudo would grow their scrollable overflow; a fixed box never does, and
+   the wash stays cozily UNDER the content while it scrolls. The layer is
+   oversized by exactly one tile on every side, so (a) any ±one-tile drift
+   direction never exposes an edge and (b) the at-rest phase only shifts by
+   one full period — invisible on a seamless tile. content/z-index:-1/
+   pointer-events:none carry over from the base .screen::before rule. */
+.screen-shop::before,
+.screen-wardrobe::before,
+.screen-arcade::before,
+.screen-mgPregame::before,
+.screen-mgResults::before,
+.screen-achievements::before,
+.screen-questBoard::before,
+.screen-album::before,
+.screen-profile::before,
+.screen-vetPanel::before,
+.screen-settings::before,
+.screen-devPanel::before,
+.screen-radio::before,
+.screen-trackSettings::before,
+.screen-credits::before {
+  position: fixed;
+  inset: calc(0rem - var(--thm-pattern-size));
+  background: var(--thm-pattern) left top / var(--thm-pattern-size) var(--thm-pattern-size) repeat;
+  opacity: var(--thm-pattern-opacity);
+  animation: thm-drift var(--thm-drift-dur) linear infinite;
+}
+
+/* transform-only drift — never background-position (repaints every frame on
+   iOS WebKit) and never calc() length multiplication (the drift vars are
+   already explicit one-tile lengths) */
+@keyframes thm-drift {
+  from {
+    transform: translate3d(0rem, 0rem, 0);
+  }
+  to {
+    transform: translate3d(var(--thm-drift-x), var(--thm-drift-y), 0);
+  }
+}
+
+/* reduced motion: freeze the drift (POLISH-D companion rule) */
+@media (prefers-reduced-motion: reduce) {
+  .screen::before {
+    animation: none;
+  }
+}
+
+/* --- per-screen theme assignments (exactly ONE per registered screen id —
+       machine-checked by test/screenThemes.test.js) ----------------------- */
+
+/* shop — IKEA-cozy store: Scandinavian blue, flat-pack/allen-key motifs */
+.screen-shop {
+  --thm-bg: #eef4fb;
+  --thm-pattern: var(--pattern-shop);
+  --thm-pattern-opacity: 0.85;
+  --thm-accent: #6f9bd6;
+  --thm-accent-dark: #557fb8;
+  --thm-soft: rgba(111, 155, 214, 0.3);
+  --thm-drift-dur: 96s;
+}
+
+/* wardrobe — boutique dressing room: blush rose, hangers/buttons/bows */
+.screen-wardrobe {
+  --thm-bg: #fdf0f4;
+  --thm-pattern: var(--pattern-wardrobe);
+  --thm-pattern-opacity: 0.85;
+  --thm-accent: #e78fb3;
+  --thm-accent-dark: #c9709a;
+  --thm-soft: rgba(231, 143, 179, 0.3);
+  --thm-drift-dur: 104s;
+}
+
+/* arcade family — arcade hall at dusk (one family, three rooms):
+   lavender, stars/joysticks; drift ↗ for a little energy */
+.screen-arcade,
+.screen-mgPregame,
+.screen-mgResults {
+  --thm-bg: #f3effa;
+  --thm-pattern: var(--pattern-arcade);
+  --thm-pattern-opacity: 0.85;
+  --thm-accent: #9b7fd6;
+  --thm-accent-dark: #7e63b8;
+  --thm-soft: rgba(155, 127, 214, 0.3);
+  --thm-drift-x: 24rem;
+  --thm-drift-y: -24rem;
+  --thm-drift-dur: 84s;
+}
+
+/* questBoard — village notice corkboard: warm tan, pushpins/notes/flecks */
+.screen-questBoard {
+  --thm-bg: #f8efe2;
+  --thm-pattern: var(--pattern-quest);
+  --thm-pattern-opacity: 0.85;
+  --thm-accent: #c98d5f;
+  --thm-accent-dark: #a97144;
+  --thm-soft: rgba(201, 141, 95, 0.3);
+  --thm-drift-dur: 108s;
+}
+
+/* album — scrapbook craft table: kraft gold, washi strips/photo corners */
+.screen-album {
+  --thm-bg: #f9f3e7;
+  --thm-pattern: var(--pattern-album);
+  --thm-pattern-opacity: 0.85;
+  --thm-accent: #d6a35f;
+  --thm-accent-dark: #b58445;
+  --thm-soft: rgba(214, 163, 95, 0.3);
+  --thm-drift-dur: 112s;
+}
+
+/* profile — passport / travel office: sage teal, stamps/planes/flight arcs */
+.screen-profile {
+  --thm-bg: #eff6f4;
+  --thm-pattern: var(--pattern-passport);
+  --thm-pattern-opacity: 0.85;
+  --thm-accent: #4fa8a0;
+  --thm-accent-dark: #3d8a83;
+  --thm-soft: rgba(79, 168, 160, 0.3);
+  --thm-drift-dur: 100s;
+}
+
+/* vetPanel — pastel clinic: mint, plus-crosses/hearts/leaves */
+.screen-vetPanel {
+  --thm-bg: #effaf5;
+  --thm-pattern: var(--pattern-clinic);
+  --thm-pattern-opacity: 0.85;
+  --thm-accent: var(--teal);
+  --thm-accent-dark: var(--teal-dark);
+  --thm-soft: rgba(89, 201, 185, 0.3);
+  --thm-drift-dur: 100s;
+}
+
+/* settings — the reference room stays the neutral baseline: cream + leaf
+   wash (its current pattern), it just gains the same slow drift */
+.screen-settings {
+  --thm-pattern: var(--pattern-leaf);
+  --thm-drift-dur: 100s;
+}
+
+/* devPanel — blueprint workbench: graph grid + furniture outlines (the
+   decor/furniture-mode surface) */
+.screen-devPanel {
+  --thm-bg: #f0f4f7;
+  --thm-pattern: var(--pattern-blueprint);
+  --thm-pattern-opacity: 0.85;
+  --thm-accent: #7fa3b8;
+  --thm-accent-dark: #64879c;
+  --thm-soft: rgba(127, 163, 184, 0.3);
+  --thm-drift-dur: 120s;
+}
+
+/* radio family — golden-hour kitchen radio: amber, notes/waves */
+.screen-radio,
+.screen-trackSettings {
+  --thm-bg: #fdf3e3;
+  --thm-pattern: var(--pattern-radio);
+  --thm-pattern-opacity: 0.85;
+  --thm-accent: #e8a13f;
+  --thm-accent-dark: #c78527;
+  --thm-soft: rgba(232, 161, 63, 0.3);
+  --thm-drift-dur: 92s;
+}
+
+/* achievements — trophy room: gold-cream, laurels/stars/medals */
+.screen-achievements {
+  --thm-bg: #fbf4e4;
+  --thm-pattern: var(--pattern-trophy);
+  --thm-pattern-opacity: 0.85;
+  --thm-accent: var(--yellow-dark);
+  --thm-accent-dark: #c29736;
+  --thm-soft: rgba(224, 176, 74, 0.3);
+  --thm-drift-dur: 108s;
+}
+
+/* credits — theatre at dusk: warm grey-cream, sparkles/hearts */
+.screen-credits {
+  --thm-bg: #f5f0ec;
+  --thm-pattern: var(--pattern-credits);
+  --thm-pattern-opacity: 0.85;
+  --thm-accent: var(--pink);
+  --thm-accent-dark: var(--pink-dark);
+  --thm-soft: rgba(255, 123, 169, 0.28);
+  --thm-drift-dur: 116s;
+}
+
+/* --- panel family tints (accent + paper tint only — no pattern layer) ---- */
+.panel-airport {
+  --thm-bg: #eff4fb;
+  --thm-accent: #6f9bd6;
+  --thm-accent-dark: #557fb8;
+  --thm-soft: rgba(111, 155, 214, 0.3);
+}
+
+.panel-dailyBonus {
+  --thm-bg: #fdf2f6;
+  --thm-accent: var(--pink);
+  --thm-accent-dark: var(--pink-dark);
+  --thm-soft: rgba(255, 123, 169, 0.28);
+}
+
+.panel-codes {
+  --thm-bg: #f7f3fc;
+  --thm-accent: #9b7fd6;
+  --thm-accent-dark: #7e63b8;
+  --thm-soft: rgba(155, 127, 214, 0.3);
+}
+
+.panel-gardenSeeds,
+.panel-gardenSell,
+.panel-gardenBuyPlot,
+.panel-gardenFertilizer,
+.panel-gardenForecast {
+  --thm-bg: #f4faee;
+}
+
+.panel-foodTray {
+  --thm-bg: #fdf7ec;
+  --thm-accent: var(--yellow-dark);
+  --thm-accent-dark: #c29736;
+  --thm-soft: rgba(224, 176, 74, 0.3);
+}
+
+.panel-careSheet {
+  --thm-bg: #eff7fb;
+}
+
+/* --- kit accent re-pointing (AC-1 freeze: extend, don't rename) ----------
+   Same frozen selectors, fills re-read through the theme trio with the
+   EXACT pre-V6 leaf values as var() fallbacks — unthemed surfaces (HUD
+   chips, sheets without a tint) keep rendering byte-identically. */
+.ac-tab.ac-tab-active,
+.ac-tab[aria-selected='true'] {
+  background: var(--thm-accent, var(--leaf));
+  box-shadow: inset 0 -0.1875rem 0 var(--thm-accent-dark, var(--leaf-dark)), 0 2px 8px var(--thm-soft, rgba(109, 181, 78, 0.4));
+}
+
+.ac-chip.ac-chip-leaf {
+  background: var(--thm-accent, var(--leaf));
+  box-shadow: inset 0 -0.125rem 0 var(--thm-accent-dark, var(--leaf-dark)), 0 2px 6px var(--thm-soft, rgba(109, 181, 78, 0.35));
+}
+
+.ac-ribbon {
+  background: linear-gradient(180deg, var(--thm-accent, var(--leaf)), var(--thm-accent-dark, var(--leaf-dark)));
+}
+
+.btn.btn-leaf {
+  background: var(--thm-accent, var(--leaf));
+  box-shadow: inset 0 -0.25rem 0 rgba(74, 59, 54, 0.14), inset 0 -0.25rem 0 var(--thm-accent-dark, var(--leaf-dark)), 0 3px 10px var(--thm-soft, rgba(109, 181, 78, 0.35));
+}
+
+/* ========================== end V6/A2 THEMES ============================= */
+
+/* ========================================================================== */
+/* V6/B3 SCREEN-WORLDS — the shop as a cozy IKEA store (PLAN6 Wave B / B3)    */
+/*                                                                            */
+/* Presentation only: no catalog/flow change. Cards sit ON birch shelf        */
+/* planks (per-card ::after boards that meet across the 0.625rem grid gap     */
+/* into one continuous shelf per row, ::before bracket nubs underneath,       */
+/* contact shadows), the section labels become little hanging aisle tags,     */
+/* one big aisle sign under the tab bar echoes the active category, a         */
+/* scalloped awning strip sits under the header, and price pills read as      */
+/* hanging tags (punch-hole + a gentle alternate tilt). Everything rides      */
+/* the A2 --thm-* theme vars with the shop-blue fallbacks; the decorate       */
+/* panel's .shop-card clones are untouched (all shelf rules are scoped to     */
+/* the shopScreen-stamped .b3-shelf grids). Rotated bits stay clear of        */
+/* clipping: the aisle sign carries its own top padding for the strings,      */
+/* .b3-shelf pads its sides so planks never overflow .shop-body, and the      */
+/* tag tilt is a ≤3° transform well inside each card's box.                   */
+/* ========================================================================== */
+
+/* --- scalloped awning strip under the shop header ------------------------ */
+.b3-awning {
+  flex: none;
+  position: relative;
+  height: 1rem;
+  margin: -0.125rem 0 0.75rem;
+  border-radius: 0.375rem 0.375rem 0 0;
+  background: repeating-linear-gradient(90deg, var(--thm-accent, #6f9bd6) 0 1.5rem, var(--white) 1.5rem 3rem);
+  box-shadow: inset 0 0.125rem 0 rgba(255, 255, 255, 0.35), 0 0.1875rem 0.5rem rgba(74, 59, 54, 0.14);
+  pointer-events: none;
+}
+.b3-awning::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  height: 0.6875rem;
+  background:
+    radial-gradient(circle at 0.75rem 0, var(--thm-accent, #6f9bd6) 0.625rem, transparent 0.6875rem),
+    radial-gradient(circle at 2.25rem 0, var(--white) 0.625rem, transparent 0.6875rem);
+  background-size: 3rem 0.6875rem;
+  background-repeat: repeat-x;
+}
+
+/* --- big aisle sign (first element in the scrolling body) ---------------- */
+.b3-aisle {
+  display: flex;
+  justify-content: center;
+  padding: 0.625rem 0 0.375rem; /* top padding hosts the hanging strings */
+}
+.b3-aisle-sign {
+  position: relative;
+  display: inline-block;
+  padding: 0.3125rem 1.125rem 0.4375rem;
+  border-radius: 0.625rem;
+  background: linear-gradient(180deg, var(--thm-accent, #6f9bd6), var(--thm-accent-dark, #557fb8));
+  color: var(--white);
+  font-size: 0.9375rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-shadow: 0 1px 0 rgba(74, 59, 54, 0.18);
+  transform: rotate(-2deg);
+  box-shadow: inset 0 -0.1875rem 0 rgba(74, 59, 54, 0.16), 0 0.25rem 0.625rem var(--thm-soft, rgba(111, 155, 214, 0.3));
+}
+.b3-aisle-sign::before,
+.b3-aisle-sign::after {
+  content: '';
+  position: absolute;
+  top: -0.5rem;
+  width: 0.125rem;
+  height: 0.5625rem;
+  border-radius: 999px;
+  background: rgba(74, 59, 54, 0.32);
+}
+.b3-aisle-sign::before {
+  left: 20%;
+}
+.b3-aisle-sign::after {
+  right: 20%;
+}
+
+/* --- shelf grids: planks + brackets + contact shadows --------------------- */
+.b3-shelf {
+  /* side padding hosts the half-gap plank extensions (no .shop-body
+     overflow); extra row/bottom room hosts plank + bracket */
+  padding: 0 0.3125rem 1.25rem;
+  row-gap: 1.5rem;
+}
+.b3-shelf .shop-card {
+  /* keep the card's own soft shadow + add the on-the-board contact shadow */
+  box-shadow: 0 3px 12px rgba(74, 59, 54, 0.08), 0 0.5625rem 0.375rem -0.3125rem rgba(74, 59, 54, 0.2);
+}
+.b3-shelf .shop-card::after {
+  /* the shelf plank: extends half the grid gap each side so neighbouring
+     planks meet into one continuous board per row (visible joints read as
+     real shelf-board seams) */
+  content: '';
+  position: absolute;
+  left: -0.3125rem;
+  right: -0.3125rem;
+  bottom: -0.75rem;
+  height: 0.5625rem;
+  border-radius: 0.1875rem;
+  background: linear-gradient(180deg, #ecd5ae, #d9b98d 55%, #c9a97a);
+  box-shadow: inset 0 0.0625rem 0 rgba(255, 255, 255, 0.55), 0 0.25rem 0.375rem rgba(74, 59, 54, 0.16);
+  pointer-events: none;
+}
+.b3-shelf .shop-card::before {
+  /* bracket nub under the plank */
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -1.1875rem;
+  width: 0.4375rem;
+  height: 0.5rem;
+  margin-left: -0.21875rem;
+  border-radius: 0 0 0.1875rem 0.1875rem;
+  background: linear-gradient(180deg, #c9a97a, #a9885c);
+  box-shadow: 0 0.125rem 0.25rem rgba(74, 59, 54, 0.2);
+  pointer-events: none;
+}
+
+/* --- hanging aisle tags (section labels) ---------------------------------- */
+.screen-shop .shop-section {
+  display: inline-block;
+  position: relative;
+  margin: 1.25rem 0.375rem 0.625rem;
+  padding: 0.25rem 0.8125rem 0.3125rem;
+  border-radius: 0.5rem;
+  background: var(--paper);
+  color: var(--thm-accent-dark, #557fb8);
+  font-size: 0.8125rem;
+  font-weight: 800;
+  opacity: 1;
+  transform: rotate(-1.5deg);
+  box-shadow: 0 0 0 1px var(--outline-soft), 0 0.125rem 0.375rem rgba(74, 59, 54, 0.12);
+}
+.screen-shop .shop-section::before {
+  /* the little string up to the shelf above */
+  content: '';
+  position: absolute;
+  top: -0.5rem;
+  left: 1.125rem;
+  width: 0.125rem;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: rgba(74, 59, 54, 0.28);
+}
+
+/* --- price pills → hanging tags ------------------------------------------ */
+.screen-shop .shop-card .shop-price {
+  background: var(--thm-accent, var(--leaf));
+  box-shadow: inset 0 -0.0938rem 0 var(--thm-accent-dark, var(--leaf-dark));
+}
+.screen-shop .shop-card .shop-price::before {
+  /* punch hole of the hanging tag */
+  content: '';
+  flex: none;
+  width: 0.25rem;
+  height: 0.25rem;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 0 0 1px rgba(74, 59, 54, 0.22);
+}
+.b3-shelf .shop-card:nth-child(even) .shop-price {
+  transform: rotate(-3deg); /* hand-placed AC feel; ≤3° stays inside the card */
+}
+
+/* --- decor swatches sit on the same shelf language ------------------------ */
+.screen-shop .swatch-row {
+  padding: 0 0.3125rem 1.125rem;
+}
+.screen-shop .swatch::after {
+  content: '';
+  position: absolute;
+  left: -0.3125rem;
+  right: -0.3125rem;
+  bottom: -0.6875rem;
+  height: 0.5rem;
+  border-radius: 0.1875rem;
+  background: linear-gradient(180deg, #ecd5ae, #d9b98d 55%, #c9a97a);
+  box-shadow: inset 0 0.0625rem 0 rgba(255, 255, 255, 0.55), 0 0.25rem 0.375rem rgba(74, 59, 54, 0.16);
+  pointer-events: none;
+}
+
+/* --- the one loud IKEA note: butter-yellow coins pill ---------------------- */
+.screen-shop .shop-coins {
+  background: var(--yellow);
+  color: var(--brown);
+  box-shadow: inset 0 -0.125rem 0 rgba(74, 59, 54, 0.16), 0 2px 6px rgba(224, 176, 74, 0.4);
+}
+
+/* --- checkout counter: accent lip on the buy bar --------------------------- */
+.screen-shop .shop-buybar {
+  border-top: 0.25rem solid var(--thm-accent, #6f9bd6);
+}
+
+/* ── V6/B3: the album as a scrapbook (PLAN6 Wave B / B3) ────────────────────
+   The A2 kraft-gold theme (--thm-* on .screen-album) supplies the drifting
+   craft-table backdrop; these rules turn the CARDS into scrapbook pages:
+   kraft paper faces with a stitched inset seam, washi-tape strips pinning
+   each page down, sticker slots as softly tilted photo mounts, and the Fotos
+   grid as a polaroid wall (deterministic per-index tilt — polaroidJitter()
+   in albumScreen.js sets --b3-tilt). Locked stickers keep the V5 mystery
+   presentation untouched; scroll-snap on .g34-sb-pager is untouched (only
+   top padding is added so tape overhang survives the pager's clip box). */
+
+/* --- kraft scrapbook pages (collections page + every sticker-book page) --- */
+.screen-album .g23-al-page,
+.screen-album .g34-sb-page {
+  position: relative;
+  background:
+    radial-gradient(rgba(181, 132, 69, 0.1) 0.0469rem, transparent 0.0781rem) 0 0 / 0.6875rem 0.6875rem,
+    radial-gradient(rgba(255, 255, 255, 0.5) 0.0469rem, transparent 0.0781rem) 0.3438rem 0.3438rem / 0.6875rem 0.6875rem,
+    linear-gradient(180deg, #faf1e0, #f3e6cd);
+  outline: 1px dashed rgba(181, 132, 69, 0.4); /* scrapbook stitching */
+  outline-offset: -0.4375rem;
+  box-shadow: 0 0 0 1px rgba(181, 132, 69, 0.28), var(--shadow-soft);
+}
+
+/* washi-tape strips pinning the page's top corners onto the craft table —
+   semi-transparent so the page edge reads through the tape. Both strips
+   overhang UPWARD only (never sideways): the sticker-book pager clips at its
+   own box, and the padding-top compensation below gives the lift room. */
+.screen-album .g23-al-page::before,
+.screen-album .g34-sb-page::before,
+.screen-album .g23-al-page::after,
+.screen-album .g34-sb-page::after {
+  content: '';
+  position: absolute;
+  top: -0.3125rem;
+  width: 3.125rem;
+  height: 0.875rem;
+  border-radius: 0.0938rem;
+  background:
+    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.42) 0 0.1563rem, transparent 0.1563rem 0.4375rem),
+    rgba(214, 163, 95, 0.45);
+  box-shadow: 0 0.0625rem 0.1875rem rgba(74, 59, 54, 0.12);
+  pointer-events: none;
+}
+.screen-album .g23-al-page::before,
+.screen-album .g34-sb-page::before {
+  left: 1.125rem;
+  transform: rotate(-5deg);
+}
+.screen-album .g23-al-page::after,
+.screen-album .g34-sb-page::after {
+  right: 1.125rem;
+  transform: rotate(4deg);
+}
+/* padding compensation (PLAN6): overflow-x:auto clips BOTH axes, so the snap
+   viewport gets headroom for the tape lift — snap geometry is x-only and the
+   pages keep flex-basis 100%, so scroll-snap survives unchanged. */
+.screen-album .g34-sb-pager {
+  padding-top: 0.5625rem;
+}
+
+/* --- sticker slots: softly tilted photo mounts glued into the page -------- */
+.screen-album .g34-sb-slot {
+  background: #fffdf8;
+  box-shadow: 0 0 0 1px rgba(181, 132, 69, 0.18), 0 0.125rem 0.3125rem rgba(74, 59, 54, 0.1);
+  transform: rotate(-0.65deg);
+}
+.screen-album .g34-sb-grid > .g34-sb-slot:nth-child(even) {
+  transform: rotate(0.55deg);
+}
+/* locked mystery slots stay matte kraft (V5 rule: the „?" box, never <img>) */
+.screen-album .g34-sb-slot.g34-locked {
+  background: rgba(255, 253, 248, 0.6);
+}
+.screen-album .g34-sb-mystery {
+  background: rgba(214, 163, 95, 0.16);
+  color: rgba(148, 106, 58, 0.5);
+}
+
+/* --- collections: owned art tiles get a white photo-mat, missing slots turn
+   into pencil-sketch outlines waiting to be filled in ---------------------- */
+.screen-album .g23-al-slot.g23-owned .g23-al-art {
+  box-shadow: 0 0 0 0.2188rem #fffdf8, 0 0 0 calc(0.2188rem + 1px) rgba(181, 132, 69, 0.25), 0 0.1875rem 0.375rem rgba(74, 59, 54, 0.14);
+}
+.screen-album .g23-al-grid > .g23-al-slot:nth-child(odd) .g23-al-art {
+  transform: rotate(-1.1deg);
+}
+.screen-album .g23-al-grid > .g23-al-slot:nth-child(even) .g23-al-art {
+  transform: rotate(0.9deg);
+}
+.screen-album .g23-al-grid {
+  padding: 0.25rem 0.125rem; /* rotation + mat overhang headroom */
+}
+.screen-album .g23-al-slot.g23-missing .g23-al-art {
+  background: rgba(181, 132, 69, 0.08) !important; /* base rule is !important */
+  box-shadow: none;
+  outline: 1px dashed rgba(181, 132, 69, 0.45);
+  outline-offset: -0.1875rem;
+}
+
+/* --- Fotos tab: the polaroid wall (JS sets --b3-tilt deterministically) --- */
+.screen-album .g59-ph-grid {
+  gap: 0.6875rem 0.5625rem;
+  padding: 0.4375rem 0.1875rem 0.3125rem; /* tape + tilt headroom */
+}
+.screen-album .g59-ph-cell.b3-polaroid {
+  background: #fdfbf5;
+  border-radius: 0.1875rem;
+  overflow: visible;
+  box-shadow: 0 0 0 1px rgba(181, 132, 69, 0.16), 0 0.1875rem 0.4375rem rgba(74, 59, 54, 0.16);
+  transform: rotate(var(--b3-tilt, 0deg));
+}
+.screen-album .g59-ph-cell.b3-polaroid .g59-ph-img {
+  /* white frame + classic thick polaroid chin. Explicit calc() sizes — an
+     absolutely-positioned REPLACED element with width:auto renders at its
+     intrinsic pixel size, so inset shorthand alone cannot shrink an <img>. */
+  inset: 0.3125rem auto auto 0.3125rem;
+  width: calc(100% - 0.625rem);
+  height: calc(100% - 1.3125rem);
+  border-radius: 0.125rem;
+  background: rgba(74, 59, 54, 0.08);
+}
+/* a short washi strip holds each polaroid to the wall */
+.screen-album .g59-ph-cell.b3-polaroid::after {
+  content: '';
+  position: absolute;
+  top: -0.25rem;
+  left: 50%;
+  width: 2.125rem;
+  height: 0.625rem;
+  border-radius: 0.0938rem;
+  transform: translateX(-50%) rotate(-2deg);
+  background:
+    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.42) 0 0.1563rem, transparent 0.1563rem 0.4375rem),
+    rgba(214, 163, 95, 0.5);
+  box-shadow: 0 0.0625rem 0.125rem rgba(74, 59, 54, 0.1);
+  pointer-events: none;
+}
+
+/* ── V6.1/G3 (FINAL-WAVE B6): Funkelpark ride-photo keepsakes ──────────────
+   ONLY .g3-ph-ride cells (albumScreen adds the class for frame ===
+   'coasterRide'|'ferrisWheel') get the cream card, the inset border and the
+   „Funkelpark" chin strip; every other polaroid keeps the V6/B3 look
+   byte-identical. The bolder-but-bounded alternating tilt rides the same
+   --b3-tilt custom property (albumScreen feeds ridePolaroidTilt there). */
+.screen-album .g59-ph-cell.b3-polaroid.g3-ph-ride {
+  background: #fbf3df; /* cream keepsake card (vs the #fdfbf5 wall stock) */
+}
+.screen-album .g59-ph-cell.b3-polaroid.g3-ph-ride::before {
+  /* the cream inset border framing the photo window */
+  content: '';
+  position: absolute;
+  inset: 0.1875rem 0.1875rem 0.875rem;
+  border: 0.0938rem solid rgba(214, 163, 95, 0.55);
+  border-radius: 0.1563rem;
+  pointer-events: none;
+  z-index: 1;
+}
+.screen-album .g59-ph-cell.b3-polaroid.g3-ph-ride .g3-ph-ride-strip {
+  position: absolute;
+  left: 0.3125rem;
+  right: 0.3125rem;
+  bottom: 0.1563rem;
+  font-size: 0.5rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(181, 132, 69, 0.9);
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 1;
+}
+/* the photo viewer's localized park chip (top bar, next to the date) */
+.g59-vw-top .g3-vw-park {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  background: rgba(251, 243, 223, 0.92);
+  color: #4a3b36;
+  font-size: 0.6875rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  border-radius: 999px;
+  padding: 0.25rem 0.625rem;
+  box-shadow: 0 0 0 1px rgba(214, 163, 95, 0.4);
+}
+/* ── end V6.1/G3 B6 ── */
+
+/* =================== end V6/B3 SCREEN-WORLDS (shop + album) ============== */
+
+/* ================================ V6/F3 ===================================
+   Global keyboard-focus ring (a11y — iPad keyboards/switch access). Fires on
+   :focus-visible ONLY, so pointer taps never flash the ring (deliberately NO
+   plain :focus fallback). Cozy design-system look: a soft leaf-green ring
+   offset off the control. :where() keeps specificity at bare pseudo-class
+   level so component selection states (.shop-card-sel outline, swatch rings)
+   keep painting their own looks; interactive elements everywhere in the app
+   are <button>/<input> (tray tiles, .ac-tab tabs, .ac-chip chips included),
+   plus links and role=button hosts for safety. */
+:where(button, [role='button'], a, input, select, textarea, .ac-tab, .ac-chip):focus-visible {
+  outline: 0.1875rem solid var(--leaf-dark);
+  outline-offset: 0.125rem;
+}
+/* ============================== end V6/F3 ================================= */

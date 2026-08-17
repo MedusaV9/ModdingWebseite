@@ -1,0 +1,10 @@
+{
+	"id": "pancakeTower",
+	"title_key": "mg.pancakeTower.title",
+	"scene": "res://scripts/minigames/games/pancake_tower/pancake_tower.tscn",
+	"coin_table": {"divisor": 2, "min": 4, "max": 26},
+	"target": 45,
+	"orientation": "portrait",
+	"supports_endless": true,
+	"energy_cost": 8
+}
