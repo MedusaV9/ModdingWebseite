@@ -1,6 +1,7 @@
 package de.sonic0810.goobymod.entity.goals;
 
 import de.sonic0810.goobymod.GoobyConfig;
+import de.sonic0810.goobymod.block.GoobyCouchBlock;
 import de.sonic0810.goobymod.block.RabbitHutchBlock;
 import de.sonic0810.goobymod.block.entity.RabbitHutchBlockEntity;
 import de.sonic0810.goobymod.entity.GoobyEntity;
@@ -19,8 +20,11 @@ import net.minecraft.world.phys.Vec3;
 /**
  * Nachts sucht Gooby seinen Hasenstall (bevorzugt sein gemerktes Zuhause),
  * kuschelt sich hinein und schlaeft (Zzz-Partikel!). Morgens gibt es Herzchen
- * und einen guten Start in den Tag. Ohne Stall schlaeft er irgendwann einfach
- * an Ort und Stelle ein.
+ * und einen guten Start in den Tag. Ohne Stall ist seit 5.3 die
+ * {@link GoobyCouchBlock Gooby-Woll-Couch} der bevorzugte Nickerchen-Platz;
+ * erst ganz ohne gemuetliche Optionen schlaeft er irgendwann einfach an Ort
+ * und Stelle ein. Explizit gebundene Homes und Familien-/Sozialschlaf gewinnen
+ * weiterhin immer (die Couch aendert bestehendes Stall-Verhalten NICHT).
  *
  * <p>Aufwecken (Streicheln, Fuettern, …) unterbricht den Schlaf ECHT: solange
  * {@link GoobyEntity#isSleepSuppressed()} gilt, schlaeft Gooby nicht wieder ein
@@ -31,14 +35,18 @@ public class GoobySleepGoal extends Goal {
     @Nullable
     private BlockPos hutchPos;
     @Nullable
+    private BlockPos couchPos;
+    @Nullable
     private BlockPos familySleepPos;
     private int searchCooldown;
     private int repathCooldown;
     private int noHutchSleepDelay;
     private int hutchApproachTicks;
     private int hutchEnterTicks;
+    private int couchApproachTicks;
     private int farHomeLineCooldown;
     private boolean sleptAtHutch;
+    private boolean sleptAtCouch;
 
     public GoobySleepGoal(GoobyEntity gooby) {
         this.gooby = gooby;
@@ -65,8 +73,13 @@ public class GoobySleepGoal extends Goal {
             this.familySleepPos = this.gooby.findSocialNapSpot();
         }
         this.hutchPos = this.familySleepPos == null ? findHutch() : null;
-        // Ohne Stall pennt Gooby erst nach einer Weile ein
-        return this.familySleepPos != null || this.hutchPos != null || this.gooby.getRandom().nextInt(5) == 0;
+        // Couch-Prioritaet NACH dem Stall: gebundene/freie Staelle gewinnen wie
+        // bisher, aber statt draussen zu schlafen sucht Gooby erst eine Couch.
+        this.couchPos = this.familySleepPos == null && this.hutchPos == null
+                ? findPreferredCouch(this.gooby) : null;
+        // Ohne Stall und Couch pennt Gooby erst nach einer Weile ein
+        return this.familySleepPos != null || this.hutchPos != null || this.couchPos != null
+                || this.gooby.getRandom().nextInt(5) == 0;
     }
 
     @Nullable
@@ -117,16 +130,32 @@ public class GoobySleepGoal extends Goal {
                         && hutch.isAvailableFor(gooby)).orElse(null);
     }
 
+    /**
+     * Naechste freie Gooby-Woll-Couch im 16er-Umkreis. Public und statisch,
+     * damit der fail-closed GameTest exakt den Produktions-Selektor prueft
+     * (analog {@link #findPreferredHutch(GoobyEntity)}).
+     */
+    @Nullable
+    public static BlockPos findPreferredCouch(GoobyEntity gooby) {
+        return BlockPos.findClosestMatch(gooby.blockPosition(), 16, 4,
+                pos -> gooby.level().getBlockState(pos).is(ModBlocks.GOOBY_COUCH.get())
+                        && GoobyCouchBlock.isNapSpotFree(gooby.level(), pos, gooby)).orElse(null);
+    }
+
     @Override
     public void start() {
         this.sleptAtHutch = false;
+        this.sleptAtCouch = false;
         this.hutchApproachTicks = 0;
         this.hutchEnterTicks = 0;
+        this.couchApproachTicks = 0;
         this.noHutchSleepDelay = 100 + this.gooby.getRandom().nextInt(200);
         if (this.familySleepPos != null) {
             moveToFamilySpot();
         } else if (this.hutchPos != null) {
             moveToHutch();
+        } else if (this.couchPos != null) {
+            moveToCouch();
         }
     }
 
@@ -142,6 +171,15 @@ public class GoobySleepGoal extends Goal {
             Direction facing = this.gooby.level().getBlockState(this.hutchPos)
                     .getValue(HorizontalDirectionalBlock.FACING);
             Vec3 anchor = RabbitHutchBlock.exitAnchor(this.hutchPos, facing);
+            this.gooby.getNavigation().moveTo(anchor.x, anchor.y, anchor.z, 1.0);
+        }
+    }
+
+    private void moveToCouch() {
+        if (this.couchPos != null) {
+            Direction facing = this.gooby.level().getBlockState(this.couchPos)
+                    .getValue(HorizontalDirectionalBlock.FACING);
+            Vec3 anchor = GoobyCouchBlock.frontAnchor(this.couchPos, facing);
             this.gooby.getNavigation().moveTo(anchor.x, anchor.y, anchor.z, 1.0);
         }
     }
@@ -192,9 +230,39 @@ public class GoobySleepGoal extends Goal {
                 this.repathCooldown = 40;
                 moveToHutch();
             }
+        } else if (this.couchPos != null) {
+            if (!GoobyCouchBlock.isNapSpotFree(this.gooby.level(), this.couchPos, this.gooby)) {
+                // Couch weg oder inzwischen belegt: zurueck in die normale Suche.
+                this.couchPos = null;
+                return;
+            }
+            this.couchApproachTicks++;
+            Vec3 anchor = GoobyCouchBlock.napAnchor(this.couchPos);
+            // Bodennavigation endet vor der Couch-Front; von dort hopst Gooby
+            // auf das Kissen. Das begrenzte 5-s-Fallback garantiert den Anker,
+            // falls ein PathNode an der weichen Kollision haengen bleibt.
+            if (anchor.distanceToSqr(this.gooby.position()) < 2.5
+                    || this.couchApproachTicks >= 100) {
+                fallAsleepAtCouch(anchor);
+            } else if (--this.repathCooldown <= 0) {
+                this.repathCooldown = 40;
+                moveToCouch();
+            }
         } else if (--this.noHutchSleepDelay <= 0 && this.gooby.onGround()) {
             fallAsleep(false);
         }
+    }
+
+    private void fallAsleepAtCouch(Vec3 anchor) {
+        this.gooby.getNavigation().stop();
+        Direction facing = this.gooby.level().getBlockState(this.couchPos)
+                .getValue(HorizontalDirectionalBlock.FACING);
+        this.gooby.setPos(anchor.x, anchor.y, anchor.z);
+        this.gooby.setYRot(facing.toYRot());
+        this.gooby.setYHeadRot(facing.toYRot());
+        this.sleptAtCouch = true;
+        this.gooby.playSound(ModSounds.GOOBY_HUTCH_RUSTLE.get(), 0.6F, 1.1F);
+        this.gooby.setGoobySleeping(true);
     }
 
     private void beginHutchEntry(Direction facing) {
@@ -248,7 +316,24 @@ public class GoobySleepGoal extends Goal {
                 this.gooby.playSound(ModSounds.GOOBY_HUTCH_RUSTLE.get(), 0.55F, 0.95F);
             }
         }
+        if (this.sleptAtCouch && this.couchPos != null
+                && this.gooby.level() instanceof ServerLevel level
+                && level.getBlockState(this.couchPos).is(ModBlocks.GOOBY_COUCH.get())) {
+            // Aufstehen: von der Couch vor die Front hopsen, damit Gooby nicht
+            // in der Lehnen-Kollision haengt. Rein kosmetisch — KEIN
+            // Komfort-Bonus wie beim Stall, die Couch bleibt Deko-Gemuetlichkeit.
+            Direction facing = level.getBlockState(this.couchPos)
+                    .getValue(HorizontalDirectionalBlock.FACING);
+            Vec3 exit = GoobyCouchBlock.frontAnchor(this.couchPos, facing);
+            this.gooby.setPos(exit.x, exit.y, exit.z);
+            if (level.isDay()) {
+                level.sendParticles(ParticleTypes.HEART, exit.x, exit.y + 1.2, exit.z,
+                        4, 0.4, 0.3, 0.4, 0.02);
+            }
+            this.gooby.playSound(ModSounds.GOOBY_HUTCH_RUSTLE.get(), 0.5F, 1.05F);
+        }
         this.hutchPos = null;
+        this.couchPos = null;
         this.familySleepPos = null;
         this.hutchEnterTicks = 0;
     }

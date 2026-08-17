@@ -9,6 +9,7 @@ import de.sonic0810.goobymod.registry.ModEntities;
 import de.sonic0810.goobymod.registry.ModItems;
 import de.sonic0810.goobymod.registry.ModMenus;
 import de.sonic0810.goobymod.registry.ModParticles;
+import net.minecraft.client.renderer.entity.NoopRenderer;
 import net.minecraft.world.item.component.DyedItemColor;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -24,6 +25,8 @@ public final class ClientSetup {
     @SubscribeEvent
     public static void registerRenderers(EntityRenderersEvent.RegisterRenderers event) {
         event.registerEntityRenderer(ModEntities.GOOBY.get(), GoobyRenderer::new);
+        // Der Couch-Sitzmarker ist rein logisch und hat bewusst keine Optik.
+        event.registerEntityRenderer(ModEntities.COUCH_SEAT.get(), NoopRenderer::new);
         event.registerBlockEntityRenderer(ModBlockEntities.RABBIT_HUTCH.get(), RabbitHutchRenderer::new);
     }
 

@@ -1164,6 +1164,80 @@ def gen_v54_explorer_outfit():
     pack.save(ensure(os.path.join(ROOT, "item", "picnic_backpack.png")))
 
 
+def gen_v55_cozy_home():
+    """Cozy-Home-Welle v5.5 (Release 5.3.0): Gooby-Woll-Couch.
+
+    Eigener Seed (5530) wie bei den v5.2/v5.3/v5.4-Wellen: alle Texturen sind
+    byte-identisch reproduzierbar, unabhaengig davon, was andere Generatoren
+    vorher am geteilten RNG-Strom (Seed 8108) gezogen haben. Die bemalten
+    Flaechen sind komplett deckend — validate_assets.py prueft die vom
+    handgeschriebenen Couch-Modell benutzten UV-Fenster fail-closed.
+    """
+    cozy_rng = random.Random(5530)
+
+    def cozy_noise(draw, box, base, spread=7):
+        x0, y0, x1, y1 = box
+        for x in range(x0, x1):
+            for y in range(y0, y1):
+                n = cozy_rng.randint(-spread, spread)
+                draw.point((x, y), fill=(max(0, min(255, base[0] + n)),
+                                         max(0, min(255, base[1] + n)),
+                                         max(0, min(255, base[2] + n)), 255))
+
+    # --- Couch-Polster: Creme-Wolle mit Steppnaehten und Flauschtupfern ---
+    wool = Image.new("RGBA", (16, 16), (0, 0, 0, 0))
+    d = ImageDraw.Draw(wool)
+    cozy_noise(d, (0, 0, 16, 16), CREAM, spread=9)
+    # Diagonale Steppnaht-Rauten wie bei einem Polstermoebel
+    for offset in (-16, -8, 0, 8):
+        for i in range(16):
+            x, y = i, i + offset
+            if 0 <= y < 16 and (x + y) % 4 == 0:
+                d.point((x, y), fill=CREAM_DARK + (255,))
+            y2 = 15 - i + offset
+            if 0 <= y2 < 16 and (x + y2) % 4 == 0:
+                d.point((x, y2), fill=CREAM_DARK + (255,))
+    # Polsterknoepfe an den Rauten-Kreuzungen
+    for bx, by in ((4, 4), (12, 4), (8, 8), (4, 12), (12, 12)):
+        d.point((bx, by), fill=(214, 186, 148, 255))
+        d.point((bx + 1, by), fill=WHITE + (255,))
+    for _ in range(7):
+        d.point((cozy_rng.randint(0, 15), cozy_rng.randint(0, 15)), fill=WHITE + (255,))
+    wool.save(ensure(os.path.join(ROOT, "block", "gooby_couch_wool.png")))
+
+    # --- Lehnen-Front: Fabric plus rosa Herzkissen-Applikation ---
+    front = Image.new("RGBA", (16, 16), (0, 0, 0, 0))
+    d = ImageDraw.Draw(front)
+    cozy_noise(d, (0, 0, 16, 16), CREAM, spread=8)
+    for y in (3, 12):  # Saumnaehte oben/unten an der Lehne
+        for x in range(0, 16, 3):
+            d.point((x, y), fill=CREAM_DARK + (255,))
+            d.point((x + 1, y), fill=CREAM_DARK + (255,))
+    heart = PINK + (255,)
+    heart_dark = PINK_DARK + (255,)
+    for x, y in ((6, 6), (7, 6), (9, 6), (10, 6),
+                 (5, 7), (6, 7), (7, 7), (8, 7), (9, 7), (10, 7), (11, 7),
+                 (6, 8), (7, 8), (8, 8), (9, 8), (10, 8),
+                 (7, 9), (8, 9), (9, 9), (8, 10)):
+        d.point((x, y), fill=heart)
+    d.point((6, 6), fill=(255, 210, 225, 255))  # Glanzpunkt
+    for x, y in ((5, 8), (11, 8), (6, 9), (10, 9), (7, 10), (9, 10)):
+        d.point((x, y), fill=heart_dark)  # Herzrand-Schattierung
+    front.save(ensure(os.path.join(ROOT, "block", "gooby_couch_front.png")))
+
+    # --- Holzrahmen: warme Planken mit Duebeln (dunkler als der Stall) ---
+    wood = Image.new("RGBA", (16, 16), (0, 0, 0, 0))
+    d = ImageDraw.Draw(wood)
+    cozy_noise(d, (0, 0, 16, 16), (146, 104, 62), spread=6)
+    seam = (104, 72, 42, 255)
+    for y in (3, 7, 11, 15):
+        d.line((0, y, 15, y), fill=seam)
+    for x, y in ((3, 1), (12, 5), (6, 9), (10, 13)):
+        d.point((x, y), fill=seam)
+        d.point((x + 1, y), fill=(178, 134, 86, 255))
+    wood.save(ensure(os.path.join(ROOT, "block", "gooby_couch_wood.png")))
+
+
 if __name__ == "__main__":
     gen_gooby()
     gen_nutella_item()
@@ -1187,4 +1261,5 @@ if __name__ == "__main__":
     gen_v52_content_wave()
     gen_v53_fetch_ball()
     gen_v54_explorer_outfit()
+    gen_v55_cozy_home()
     print("Alle Gooby-Texturen generiert!")

@@ -1,6 +1,7 @@
 {
   "replace": false,
   "values": [
-    "goobymod:rabbit_hutch"
+    "goobymod:rabbit_hutch",
+    "goobymod:gooby_couch"
   ]
 }

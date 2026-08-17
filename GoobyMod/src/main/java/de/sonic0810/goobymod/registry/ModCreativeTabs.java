@@ -38,6 +38,7 @@ public final class ModCreativeTabs {
                         output.accept(ModItems.GOOBY_TREASURE_MAP.get());
                         output.accept(ModItems.BUTTON_EYE.get());
                         output.accept(ModItems.GOOBY_WOOL.get());
+                        output.accept(ModItems.GOOBY_COUCH.get());
                         output.accept(ModItems.GOOBY_PLUSHIE.get());
                         output.accept(ModItems.GOOBY_STATUE.get());
                         output.accept(ModItems.RABBIT_HUTCH.get());

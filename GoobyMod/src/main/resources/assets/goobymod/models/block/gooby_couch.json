@@ -1,0 +1,100 @@
+{
+  "parent": "minecraft:block/block",
+  "textures": {
+    "wool": "goobymod:block/gooby_couch_wool",
+    "front": "goobymod:block/gooby_couch_front",
+    "wood": "goobymod:block/gooby_couch_wood",
+    "particle": "goobymod:block/gooby_couch_wool"
+  },
+  "elements": [
+    {
+      "__comment": "Holz-Sockelrahmen unter dem Kissen",
+      "from": [2, 2, 3],
+      "to": [14, 4, 16],
+      "faces": {
+        "north": {"uv": [2, 12, 14, 14], "texture": "#wood"},
+        "south": {"uv": [2, 12, 14, 14], "texture": "#wood"},
+        "east": {"uv": [0, 12, 13, 14], "texture": "#wood"},
+        "west": {"uv": [3, 12, 16, 14], "texture": "#wood"},
+        "up": {"uv": [2, 0, 14, 13], "texture": "#wood"},
+        "down": {"uv": [2, 3, 14, 16], "texture": "#wood"}
+      }
+    },
+    {
+      "__comment": "Vorderer Holzfuss links (aus Blickrichtung der Front)",
+      "from": [2, 0, 4],
+      "to": [4, 2, 6],
+      "faces": {
+        "north": {"uv": [0, 14, 2, 16], "texture": "#wood"},
+        "south": {"uv": [0, 14, 2, 16], "texture": "#wood"},
+        "east": {"uv": [0, 14, 2, 16], "texture": "#wood"},
+        "west": {"uv": [0, 14, 2, 16], "texture": "#wood"},
+        "down": {"uv": [0, 14, 2, 16], "texture": "#wood"}
+      }
+    },
+    {
+      "__comment": "Vorderer Holzfuss rechts",
+      "from": [12, 0, 4],
+      "to": [14, 2, 6],
+      "faces": {
+        "north": {"uv": [14, 14, 16, 16], "texture": "#wood"},
+        "south": {"uv": [14, 14, 16, 16], "texture": "#wood"},
+        "east": {"uv": [14, 14, 16, 16], "texture": "#wood"},
+        "west": {"uv": [14, 14, 16, 16], "texture": "#wood"},
+        "down": {"uv": [14, 14, 16, 16], "texture": "#wood"}
+      }
+    },
+    {
+      "__comment": "Seitenpolster Modell-Ost (x 0..2)",
+      "from": [0, 0, 8],
+      "to": [2, 12, 16],
+      "faces": {
+        "north": {"uv": [0, 2, 2, 14], "texture": "#wool"},
+        "south": {"uv": [14, 2, 16, 14], "texture": "#wool"},
+        "east": {"uv": [4, 2, 12, 14], "texture": "#wool"},
+        "west": {"uv": [4, 2, 12, 14], "texture": "#wool"},
+        "up": {"uv": [0, 0, 2, 8], "texture": "#wool"},
+        "down": {"uv": [14, 8, 16, 16], "texture": "#wool"}
+      }
+    },
+    {
+      "__comment": "Seitenpolster Modell-West (x 14..16)",
+      "from": [14, 0, 8],
+      "to": [16, 12, 16],
+      "faces": {
+        "north": {"uv": [14, 2, 16, 14], "texture": "#wool"},
+        "south": {"uv": [0, 2, 2, 14], "texture": "#wool"},
+        "east": {"uv": [4, 2, 12, 14], "texture": "#wool"},
+        "west": {"uv": [4, 2, 12, 14], "texture": "#wool"},
+        "up": {"uv": [14, 0, 16, 8], "texture": "#wool"},
+        "down": {"uv": [0, 8, 2, 16], "texture": "#wool"}
+      }
+    },
+    {
+      "__comment": "Sitzkissen aus Gooby-Wolle",
+      "from": [2, 4, 4],
+      "to": [14, 8, 13],
+      "faces": {
+        "north": {"uv": [2, 11, 14, 15], "texture": "#wool"},
+        "south": {"uv": [2, 11, 14, 15], "texture": "#wool"},
+        "east": {"uv": [3, 11, 12, 15], "texture": "#wool"},
+        "west": {"uv": [3, 11, 12, 15], "texture": "#wool"},
+        "up": {"uv": [2, 2, 14, 11], "texture": "#wool"},
+        "down": {"uv": [2, 2, 14, 11], "texture": "#wool"}
+      }
+    },
+    {
+      "__comment": "Rueckenlehne mit Herzkissen-Applikation vorne",
+      "from": [2, 4, 13],
+      "to": [14, 13, 16],
+      "faces": {
+        "north": {"uv": [2, 3, 14, 12], "texture": "#front"},
+        "south": {"uv": [2, 2, 14, 11], "texture": "#wool"},
+        "east": {"uv": [6, 3, 9, 12], "texture": "#wool"},
+        "west": {"uv": [6, 3, 9, 12], "texture": "#wool"},
+        "up": {"uv": [2, 0, 14, 3], "texture": "#wool"},
+        "down": {"uv": [2, 13, 14, 16], "texture": "#wool"}
+      }
+    }
+  ]
+}

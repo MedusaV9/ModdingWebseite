@@ -1,0 +1,26 @@
+{
+  "parent": "goobymod:root",
+  "display": {
+    "icon": { "id": "goobymod:gooby_couch" },
+    "title": { "translate": "advancements.goobymod.cozy_couch.title" },
+    "description": { "translate": "advancements.goobymod.cozy_couch.description" },
+    "frame": "goal",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {
+    "has_couch": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "goobymod:gooby_couch"
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

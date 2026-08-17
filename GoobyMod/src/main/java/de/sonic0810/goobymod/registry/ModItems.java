@@ -110,6 +110,10 @@ public final class ModItems {
 
     public static final DeferredItem<BlockItem> GOOBY_WOOL = ITEMS.registerSimpleBlockItem(ModBlocks.GOOBY_WOOL);
 
+    public static final DeferredItem<BlockItem> GOOBY_COUCH = ITEMS.register("gooby_couch",
+            () -> new TooltipBlockItem(ModBlocks.GOOBY_COUCH.get(), new Item.Properties(),
+                    "tooltip.goobymod.gooby_couch"));
+
     public static final DeferredItem<BlockItem> GOOBY_PLUSHIE = ITEMS.register("gooby_plushie",
             () -> new TooltipBlockItem(ModBlocks.GOOBY_PLUSHIE.get(), new Item.Properties(),
                     "tooltip.goobymod.gooby_plushie"));

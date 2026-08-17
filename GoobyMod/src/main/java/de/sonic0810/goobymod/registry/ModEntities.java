@@ -2,6 +2,7 @@ package de.sonic0810.goobymod.registry;
 
 import de.sonic0810.goobymod.GoobyConfig;
 import de.sonic0810.goobymod.GoobyMod;
+import de.sonic0810.goobymod.entity.CouchSeatEntity;
 import de.sonic0810.goobymod.entity.GoobyEntity;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.entity.EntityType;
@@ -28,6 +29,20 @@ public final class ModEntities {
                     .eyeHeight(1.05F)
                     .clientTrackingRange(10)
                     .build("gooby"));
+
+    /**
+     * Unsichtbarer Couch-Sitzmarker: nie gespeichert, nie summonbar — nach
+     * einem Reload steht der Spieler einfach auf, verwaiste Marker gibt es nicht.
+     */
+    public static final DeferredHolder<EntityType<?>, EntityType<CouchSeatEntity>> COUCH_SEAT =
+            ENTITY_TYPES.register("couch_seat",
+                    () -> EntityType.Builder.<CouchSeatEntity>of(CouchSeatEntity::new, MobCategory.MISC)
+                            .sized(0.25F, 0.25F)
+                            .noSave()
+                            .noSummon()
+                            .clientTrackingRange(8)
+                            .updateInterval(20)
+                            .build("couch_seat"));
 
     @SubscribeEvent
     public static void registerAttributes(EntityAttributeCreationEvent event) {

@@ -2,6 +2,7 @@ package de.sonic0810.goobymod.registry;
 
 import de.sonic0810.goobymod.GoobyMod;
 import de.sonic0810.goobymod.block.DugDirtBlock;
+import de.sonic0810.goobymod.block.GoobyCouchBlock;
 import de.sonic0810.goobymod.block.GoobyPlushieBlock;
 import de.sonic0810.goobymod.block.GoobyStatueBlock;
 import de.sonic0810.goobymod.block.GoobyWoolBlock;
@@ -45,6 +46,18 @@ public final class ModBlocks {
                     .mapColor(MapColor.WOOD)
                     .strength(1.5F)
                     .sound(SoundType.WOOD)
+                    .noOcclusion()));
+
+    /**
+     * Gooby-Woll-Couch: Spieler sitzen per Rechtsklick, Goobys nickern nachts
+     * drauf ein, Landungen sind wollweich. Ein Block mit Facing (siehe
+     * Klassen-Javadoc) statt Multiblock.
+     */
+    public static final DeferredBlock<GoobyCouchBlock> GOOBY_COUCH = BLOCKS.register("gooby_couch",
+            () -> new GoobyCouchBlock(BlockBehaviour.Properties.of()
+                    .mapColor(MapColor.TERRACOTTA_WHITE)
+                    .strength(0.8F)
+                    .sound(SoundType.WOOL)
                     .noOcclusion()));
 
     /** Sitzender Stoff-Gooby: knuddelbar, wasserloggbar und federweich. */
