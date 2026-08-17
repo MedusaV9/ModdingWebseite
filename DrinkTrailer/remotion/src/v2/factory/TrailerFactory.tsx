@@ -253,6 +253,16 @@ export const TrailerFactory: React.FC<TrailerFactoryProps> = ({config}) => {
   );
 
   // --- Global motion FX (innermost → outermost) --------------------------
+  // PERF: chromatic (3x children via SVG channel filters) and glitch bursts
+  // (2 RGB ghosts + N slices) multiply — stacked they explode to dozens of
+  // full-frame filtered layers and freeze the software-rendered tab. So the
+  // chromatic pulse is suppressed while a glitch burst runs (the burst's own
+  // RGB ghosts cover the split look during those frames).
+  const glitchBursts = has('glitch_bursts')
+    ? [...cutFrames, ...beatFrames.filter((_, b) => b > 0 && b % 8 === 0)]
+    : [];
+  const inGlitchBurst = glitchBursts.some((f) => frame >= f - 1 && frame < f + 10);
+
   if (has('shake_on_beat')) {
     const impacts = beatFrames.filter((_, b) => b % 4 === 0);
     stack = (
@@ -264,16 +274,17 @@ export const TrailerFactory: React.FC<TrailerFactoryProps> = ({config}) => {
   if (has('chromatic')) {
     // RGB split pulses on each beat and decays — passthrough between beats.
     let amount = 0;
-    for (const bf of beatFrames) {
-      const t = frame - bf;
-      if (t >= 0 && t < 10) amount = Math.max(amount, 7 * Math.exp(-t / 3.2));
+    if (!inGlitchBurst) {
+      for (const bf of beatFrames) {
+        const t = frame - bf;
+        if (t >= 0 && t < 10) amount = Math.max(amount, 7 * Math.exp(-t / 3.2));
+      }
     }
     stack = <ChromaticAberration amount={amount}>{stack}</ChromaticAberration>;
   }
   if (has('glitch_bursts')) {
-    const bursts = [...cutFrames, ...beatFrames.filter((_, b) => b > 0 && b % 8 === 0)];
     stack = (
-      <GlitchStack burstFrames={bursts} burstDurationInFrames={8} intensity={0.9}>
+      <GlitchStack burstFrames={glitchBursts} burstDurationInFrames={8} intensity={0.9} slices={6}>
         {stack}
       </GlitchStack>
     );

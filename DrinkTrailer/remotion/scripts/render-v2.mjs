@@ -141,6 +141,9 @@ for (let i = 0; i < selected.length; i++) {
     '--codec=h264',
     `--crf=${crf}`,
     '--pixel-format=yuv420p',
+    // Font loading via delayRender can exceed the 28s default when the host
+    // is under load (e.g. parallel asset generation) — allow 2 minutes.
+    '--timeout=120000',
   ];
   if (scale !== 1) renderArgs.push(`--scale=${scale}`);
 

@@ -60,12 +60,15 @@ export const WhipPan: React.FC<WhipPanProps> = ({
     return <AbsoluteFill>{children}</AbsoluteFill>;
   }
 
+  // PERF: ghosts fake the directional smear purely via offset + opacity (no
+  // blur filter) — only the main copy pays for a real blur. Blurred ghost
+  // copies stack multiplicatively inside glitch/chromatic wrappers and can
+  // freeze the software-rendered tab.
   const ghost = (mult: number, opacity: number) => (
     <AbsoluteFill
       style={{
         transform: `translate(${tx + axis.x * blur * mult * 0.12}%, ${ty + axis.y * blur * mult * 0.12}%)`,
         opacity,
-        filter: `blur(${blur * 0.35}px)`,
       }}
     >
       {children}

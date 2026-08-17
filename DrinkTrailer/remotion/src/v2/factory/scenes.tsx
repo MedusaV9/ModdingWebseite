@@ -120,21 +120,28 @@ const Cover: React.FC<PropsWithChildren<CoverProps>> = ({
 const paletteGradient = (c: TrailerStyleConfig): string =>
   `linear-gradient(165deg, ${c.palette.accent} 0%, ${c.palette.bg} 58%, ${c.palette.accent2} 130%)`;
 
-/** Content area that respects the bottom TikTok safe zone. */
-const SafeArea: React.FC<PropsWithChildren<{style?: CSSProperties}>> = ({style, children}) => (
-  <AbsoluteFill
-    style={{
-      paddingBottom: `${BOTTOM_SAFE_FRACTION * 100}%`,
-      paddingLeft: '7%',
-      paddingRight: '7%',
-      paddingTop: '9%',
-      boxSizing: 'border-box',
-      ...style,
-    }}
-  >
-    {children}
-  </AbsoluteFill>
-);
+/**
+ * Content area that respects the bottom TikTok safe zone. NOTE: CSS
+ * percentage padding resolves against the WIDTH, so the bottom padding is
+ * computed in px from the composition height (20% of 1920 = 384px).
+ */
+const SafeArea: React.FC<PropsWithChildren<{style?: CSSProperties}>> = ({style, children}) => {
+  const {width, height} = useVideoConfig();
+  return (
+    <AbsoluteFill
+      style={{
+        paddingBottom: height * BOTTOM_SAFE_FRACTION,
+        paddingLeft: width * 0.07,
+        paddingRight: width * 0.07,
+        paddingTop: height * 0.06,
+        boxSizing: 'border-box',
+        ...style,
+      }}
+    >
+      {children}
+    </AbsoluteFill>
+  );
+};
 
 const BottomScrim: React.FC<{color: string}> = ({color}) => (
   <AbsoluteFill
