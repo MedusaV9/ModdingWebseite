@@ -1,0 +1,148 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 320" class="mm-affe" data-affe="kommissar-kokosnuss" role="img" aria-label="Kommissar Kokosnuss">
+  <title>Kommissar Kokosnuss  der Detektiv (Sherlock-Hut + Lupe)</title>
+  <style>
+    svg[data-affe="kommissar-kokosnuss"] .fell{fill:var(--fell,#8C7A6B)}
+    svg[data-affe="kommissar-kokosnuss"] .fell-hell{fill:var(--fell-hell,#D8CCBF)}
+    svg[data-affe="kommissar-kokosnuss"] .fell-s{stroke:var(--fell,#8C7A6B);fill:none}
+    svg[data-affe="kommissar-kokosnuss"] .o{stroke:#1A1208;stroke-width:5;stroke-linejoin:round;stroke-linecap:round}
+    svg[data-affe="kommissar-kokosnuss"] .os{stroke:#1A1208;fill:none;stroke-linecap:round}
+    svg[data-affe="kommissar-kokosnuss"] .mantel{fill:var(--prop,#C4A265)}
+    svg[data-affe="kommissar-kokosnuss"] #kopf,svg[data-affe="kommissar-kokosnuss"] #arm-l,svg[data-affe="kommissar-kokosnuss"] #arm-r,svg[data-affe="kommissar-kokosnuss"] #bein-l,svg[data-affe="kommissar-kokosnuss"] #bein-r,svg[data-affe="kommissar-kokosnuss"] #schwanz{transform-box:view-box}
+    svg[data-affe="kommissar-kokosnuss"] #kopf{transform-origin:120px 144px}
+    svg[data-affe="kommissar-kokosnuss"] #arm-l{transform-origin:88px 160px}
+    svg[data-affe="kommissar-kokosnuss"] #arm-r{transform-origin:152px 160px}
+    svg[data-affe="kommissar-kokosnuss"] #bein-l{transform-origin:102px 240px}
+    svg[data-affe="kommissar-kokosnuss"] #bein-r{transform-origin:138px 240px}
+    svg[data-affe="kommissar-kokosnuss"] #schwanz{transform-origin:146px 240px}
+    svg[data-affe="kommissar-kokosnuss"] .gesicht{display:none}
+    svg[data-affe="kommissar-kokosnuss"] #gesicht-neutral{display:inline}
+    svg[data-affe="kommissar-kokosnuss"][data-gesicht=jubel] #gesicht-neutral,svg[data-affe="kommissar-kokosnuss"][data-gesicht=frust] #gesicht-neutral,svg[data-affe="kommissar-kokosnuss"][data-gesicht=denk] #gesicht-neutral{display:none}
+    svg[data-affe="kommissar-kokosnuss"][data-gesicht=jubel] #gesicht-jubel{display:inline}
+    svg[data-affe="kommissar-kokosnuss"][data-gesicht=frust] #gesicht-frust{display:inline}
+    svg[data-affe="kommissar-kokosnuss"][data-gesicht=denk] #gesicht-denk{display:inline}
+  </style>
+
+  <g id="schwanz">
+    <path class="os" d="M 144 242 C 190 252 210 218 186 204 C 170 196 162 212 176 216" stroke-width="16"/>
+    <path class="fell-s" d="M 144 242 C 190 252 210 218 186 204 C 170 196 162 212 176 216" stroke-width="9"/>
+  </g>
+
+  <g id="bein-l">
+    <path class="os" d="M 102 240 C 98 262 96 278 94 294" stroke-width="19"/>
+    <path class="fell-s" d="M 102 240 C 98 262 96 278 94 294" stroke-width="12"/>
+    <ellipse class="fell o" cx="88" cy="301" rx="16" ry="9"/>
+  </g>
+  <g id="bein-r">
+    <path class="os" d="M 138 240 C 142 262 144 278 146 294" stroke-width="19"/>
+    <path class="fell-s" d="M 138 240 C 142 262 144 278 146 294" stroke-width="12"/>
+    <ellipse class="fell o" cx="152" cy="301" rx="16" ry="9"/>
+  </g>
+
+  <g id="koerper">
+    <!-- Trenchcoat mit hochgeschlagenem Kragen -->
+    <path class="mantel o" d="M 84 150 C 72 176 74 216 86 244 L 154 244 C 166 216 168 176 156 150 C 140 138 100 138 84 150 Z"/>
+    <!-- Hochgeschlagener Kragen: zwei Spitzen neben dem Hals -->
+    <path class="mantel o" d="M 84 152 L 78 126 L 102 144 Z" stroke-width="4.5"/>
+    <path class="mantel o" d="M 156 152 L 162 126 L 138 144 Z" stroke-width="4.5"/>
+    <!-- Knopfleiste + Gürtel mit Schnalle -->
+    <path class="os" d="M 120 152 L 120 196" stroke-width="3.5" opacity="0.6"/>
+    <circle cx="112" cy="164" r="2.5" fill="#1A1208"/>
+    <circle cx="112" cy="182" r="2.5" fill="#1A1208"/>
+    <path class="o" d="M 84 200 L 156 200 L 156 212 L 84 212 Z" fill="#8A6D3B" stroke-width="4"/>
+    <rect x="112" y="197" width="16" height="18" rx="3" fill="none" stroke="#1A1208" stroke-width="4"/>
+    <!-- Mantel-Schlitz -->
+    <path class="os" d="M 120 218 L 120 242" stroke-width="3.5" opacity="0.6"/>
+  </g>
+
+  <g id="arm-l">
+    <path class="os" d="M 88 160 C 74 180 68 200 68 218" stroke-width="19"/>
+    <path d="M 88 160 C 74 180 68 200 68 218" stroke="#C4A265" stroke-width="12" fill="none" stroke-linecap="round"/>
+    <circle class="fell o" cx="68" cy="225" r="10.5"/>
+    <!-- Notizbuch: alles wird mitgeschrieben -->
+    <g id="prop-notizbuch" transform="rotate(-8 58 244)">
+      <rect x="42" y="234" width="32" height="24" rx="3" fill="#FFF6E3" stroke="#1A1208" stroke-width="4"/>
+      <path d="M 48 242 L 68 242 M 48 249 L 62 249" stroke="#1A1208" stroke-width="2" stroke-linecap="round"/>
+    </g>
+  </g>
+  <g id="arm-r">
+    <!-- Lupe hoch: JEDER ist verdächtig -->
+    <path class="os" d="M 152 160 C 166 156 176 148 180 138" stroke-width="19"/>
+    <path d="M 152 160 C 166 156 176 148 180 138" stroke="#C4A265" stroke-width="12" fill="none" stroke-linecap="round"/>
+    <circle class="fell o" cx="182" cy="132" r="10.5"/>
+    <g id="prop-lupe">
+      <path class="os" d="M 184 126 L 190 112" stroke="#8A6D3B" stroke-width="8"/>
+      <path class="os" d="M 184 126 L 190 112" stroke-width="2.5" opacity="0.5"/>
+      <circle cx="196" cy="97" r="17" fill="#BFE9F2" opacity="0.35"/>
+      <circle cx="196" cy="97" r="17" fill="none" stroke="#F5B301" stroke-width="6"/>
+      <circle class="os" cx="196" cy="97" r="17" stroke-width="2"/>
+      <path d="M 188 90 C 190 87 194 85 198 86" fill="none" stroke="#FFF6E3" stroke-width="3.5" stroke-linecap="round" opacity="0.9"/>
+    </g>
+  </g>
+
+  <g id="kopf">
+    <circle class="fell o" cx="120" cy="96" r="40"/>
+    <circle class="fell o" cx="80" cy="90" r="11"/>
+    <circle class="fell o" cx="160" cy="90" r="11"/>
+    <circle class="fell-hell" cx="80" cy="90" r="5"/>
+    <circle class="fell-hell" cx="160" cy="90" r="5"/>
+    <ellipse class="fell-hell o" cx="120" cy="108" rx="25" ry="18" stroke-width="4"/>
+
+    <g id="gesicht-neutral" class="gesicht">
+      <!-- Skeptisch: eine Braue oben, ein Auge zusammengekniffen -->
+      <circle cx="105" cy="85" r="7" fill="#FFF6E3"/>
+      <circle cx="106" cy="86" r="3.2" fill="#1A1208"/>
+      <path class="os" d="M 96 72 Q 104 66 112 71" stroke-width="4"/>
+      <path class="os" d="M 128 84 L 142 84" stroke-width="4.5"/>
+      <path class="os" d="M 128 77 L 143 79" stroke-width="4"/>
+      <circle cx="113" cy="102" r="2" fill="#1A1208"/>
+      <circle cx="127" cy="102" r="2" fill="#1A1208"/>
+      <path class="os" d="M 108 115 Q 120 118 132 113" stroke-width="4"/>
+    </g>
+    <g id="gesicht-jubel" class="gesicht">
+      <!-- Fall gelöst! -->
+      <path class="os" d="M 98 85 Q 105 77 112 85" stroke-width="4.5"/>
+      <path class="os" d="M 128 85 Q 135 77 142 85" stroke-width="4.5"/>
+      <circle cx="113" cy="100" r="2" fill="#1A1208"/>
+      <circle cx="127" cy="100" r="2" fill="#1A1208"/>
+      <path d="M 105 108 Q 120 127 135 108 Q 120 114 105 108 Z" fill="#1A1208"/>
+    </g>
+    <g id="gesicht-frust" class="gesicht">
+      <path class="os" d="M 97 76 L 113 81" stroke-width="4.5"/>
+      <path class="os" d="M 143 76 L 127 81" stroke-width="4.5"/>
+      <circle cx="106" cy="88" r="3" fill="#1A1208"/>
+      <circle cx="134" cy="88" r="3" fill="#1A1208"/>
+      <circle cx="113" cy="102" r="2" fill="#1A1208"/>
+      <circle cx="127" cy="102" r="2" fill="#1A1208"/>
+      <path class="os" d="M 107 116 Q 120 108 133 116" stroke-width="4"/>
+    </g>
+    <g id="gesicht-denk" class="gesicht">
+      <circle cx="105" cy="85" r="7" fill="#FFF6E3"/>
+      <circle cx="135" cy="85" r="7" fill="#FFF6E3"/>
+      <circle cx="104" cy="82" r="3" fill="#1A1208"/>
+      <circle cx="134" cy="82" r="3" fill="#1A1208"/>
+      <path class="os" d="M 95 73 L 111 69" stroke-width="4"/>
+      <path class="os" d="M 129 69 Q 139 63 147 71" stroke-width="4"/>
+      <circle cx="113" cy="102" r="2" fill="#1A1208"/>
+      <circle cx="127" cy="102" r="2" fill="#1A1208"/>
+      <path class="os" d="M 109 114 Q 114 110 119 114 Q 124 118 129 114" stroke-width="4"/>
+    </g>
+
+    <!-- Deerstalker: Doppelschirm + Ohrenklappen-Schleife -->
+    <g id="accessoire">
+      <g id="prop-deerstalker">
+        <path class="o" d="M 82 76 C 86 46 108 34 122 35 C 142 37 156 52 158 76 C 134 66 106 66 82 76 Z" fill="#B98E4F"/>
+        <ellipse class="o" cx="120" cy="76" rx="43" ry="9" fill="#B98E4F" stroke-width="4.5"/>
+        <!-- Ohrenklappen -->
+        <path class="o" d="M 82 76 C 76 84 74 96 76 106 C 84 102 88 92 88 80 Z" fill="#B98E4F" stroke-width="4"/>
+        <path class="o" d="M 158 76 C 164 84 166 96 164 106 C 156 102 152 92 152 80 Z" fill="#B98E4F" stroke-width="4"/>
+        <!-- Karo-Muster -->
+        <g stroke="#8A6D3B" stroke-width="2.5" opacity="0.8">
+          <path d="M 96 44 L 108 68 M 116 37 L 126 66 M 136 42 L 142 68" fill="none"/>
+          <path d="M 88 62 L 116 46 M 106 66 L 138 46 M 128 66 L 152 56" fill="none"/>
+        </g>
+        <!-- Schleife obendrauf -->
+        <path class="o" d="M 112 38 C 106 30 114 24 119 31 C 124 24 132 30 126 38 C 122 34 116 34 112 38 Z" fill="#8A6D3B" stroke-width="3.5"/>
+      </g>
+    </g>
+  </g>
+</svg>

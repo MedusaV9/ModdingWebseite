@@ -1,0 +1,275 @@
+/* Bananen-Bluff — Verhör-Bühne: Verkünder-Spot, Ansage-Karte XXL,
+   WAHRHEIT/BLUFF-Stempel und die 2 Urteils-Buttons (Player, XXL). */
+.bbf-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(900px, 94vw);
+  margin: 0 auto;
+}
+
+.bbf-kopf {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.bbf-badge {
+  background: var(--rot);
+  color: var(--mm-ticket-paper, #fff6e3);
+  border-radius: var(--mm-radius-s);
+  border: var(--mm-outline-m) solid var(--mm-outline);
+  box-shadow: var(--mm-schatten-sticker);
+  padding: 3px 10px;
+  font-weight: 800;
+  rotate: var(--mm-kipp-r, 2deg);
+}
+
+.bbf-frage {
+  text-align: center;
+  font-size: clamp(1.3rem, 3vw, 2rem);
+  line-height: 1.2;
+  margin: 0.15em 0;
+}
+
+.bbf-spot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  background: var(--panel);
+  border-radius: var(--mm-radius-l);
+  padding: 26px 16px;
+  font-size: clamp(1.1rem, 2.6vw, 1.7rem);
+}
+
+.bbf-spot-emoji {
+  font-size: 3rem;
+  animation: bbf-wackeln 1.2s ease-in-out infinite;
+}
+
+@keyframes bbf-wackeln {
+  0%,
+  100% {
+    transform: rotate(-6deg);
+  }
+
+  50% {
+    transform: rotate(6deg);
+  }
+}
+
+/* Die Ansage-Karte: das große „Er behauptet …" */
+.bbf-ansage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  background: var(--panel);
+  border-radius: var(--mm-radius-l);
+  border: var(--mm-outline-m) solid var(--mm-outline);
+  box-shadow: var(--mm-schatten-sticker-gross);
+  padding: 22px 16px;
+  rotate: var(--mm-kipp-l, -1.5deg);
+}
+
+.bbf-ansage.klein {
+  padding: 12px;
+  rotate: none;
+}
+
+.bbf-ansage-text {
+  font-size: clamp(1.4rem, 3.4vw, 2.2rem);
+  color: var(--gold);
+  text-align: center;
+}
+
+.bbf-urteil-frage {
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+/* Aufdeckung: Stempel + Geld-Ströme. */
+.bbf-aufdeckung {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  background: var(--panel);
+  border-radius: var(--mm-radius-l);
+  padding: 20px 16px;
+  text-align: center;
+}
+
+.bbf-stempel {
+  font-size: clamp(1.6rem, 4vw, 2.6rem);
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  animation: bbf-stempeln 0.4s var(--mm-kurve-bounce, ease) both;
+}
+
+.bbf-aufdeckung.wahr .bbf-stempel {
+  color: var(--gruen);
+}
+
+.bbf-aufdeckung.bluff .bbf-stempel {
+  color: var(--rot);
+}
+
+@keyframes bbf-stempeln {
+  from {
+    transform: scale(2.2) rotate(-8deg);
+    opacity: 0;
+  }
+
+  to {
+    transform: scale(1) rotate(-2deg);
+    opacity: 1;
+  }
+}
+
+.bbf-praemie {
+  color: var(--gold);
+  font-weight: 800;
+}
+
+.bbf-stroeme {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+.bbf-strom {
+  border-radius: var(--radius);
+  padding: 8px 12px;
+  font-size: 0.95rem;
+}
+
+.bbf-strom.gut {
+  background: color-mix(in srgb, var(--gruen) 25%, var(--panel));
+}
+
+.bbf-strom.schlecht {
+  background: color-mix(in srgb, var(--rot) 25%, var(--panel));
+}
+
+.bbf-bilanz {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: min(640px, 92vw);
+  margin: 0 auto;
+}
+
+.bbf-bilanz-zeile {
+  display: grid;
+  grid-template-columns: 2rem 1fr auto;
+  gap: 10px;
+  align-items: center;
+  background: var(--panel);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+}
+
+.bbf-bilanz-zeile.gewonnen {
+  outline: 2px solid var(--gold);
+}
+
+/* ---------- Player (hochkant XXL) ---------- */
+.bbf-player {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+  padding: 12px;
+  justify-content: center;
+}
+
+.bbf-frage-klein {
+  text-align: center;
+  margin: 4px 0;
+  color: var(--mm-text-hell, #fff6e3);
+  font-size: 1.05rem;
+}
+
+.bbf-hinweis {
+  text-align: center;
+  margin: 0;
+  color: var(--gold);
+  font-size: 0.9rem;
+}
+
+.bbf-status {
+  text-align: center;
+  padding: 22px 12px;
+  background: var(--panel);
+  border-radius: var(--radius);
+  font-size: 1.1rem;
+  line-height: 1.6;
+}
+
+.bbf-option {
+  position: relative;
+  flex: 1;
+  min-height: 13dvh;
+  font-size: 1.15rem;
+  font-weight: 700;
+  text-align: left;
+  border-left: 12px solid var(--deko);
+  background: var(--panel);
+}
+
+.bbf-option.wahrheit {
+  outline: 3px dashed var(--gold);
+}
+
+.bbf-wahr-tag {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  font-size: 0.75rem;
+  color: var(--gold);
+  font-weight: 800;
+}
+
+.bbf-deko {
+  display: inline-block;
+  min-width: 3.2em;
+  color: var(--deko);
+  font-weight: 800;
+}
+
+/* Die 2 Urteils-Buttons: halbe Handfläche pro Urteil. */
+.bbf-urteil {
+  min-height: 22dvh;
+  border-radius: var(--mm-radius-l);
+  border: var(--mm-outline-m) solid var(--mm-outline);
+  box-shadow: var(--mm-schatten-sticker-gross);
+  font-family: var(--mm-font-display, sans-serif);
+  font-size: clamp(1.3rem, 6vw, 2rem);
+}
+
+.bbf-urteil.wahr {
+  background: var(--gruen);
+  color: var(--mm-ticket-paper, #fff6e3);
+}
+
+.bbf-urteil.bluff {
+  background: var(--rot);
+  color: var(--mm-ticket-paper, #fff6e3);
+}
+
+.bbf-urteil.gewaehlt {
+  outline: 4px solid var(--gold);
+}
+
+.bbf-urteil:disabled:not(.gewaehlt) {
+  opacity: 0.35;
+}
+
+.bbf-urteil:active {
+  transform: scale(var(--mm-scale-gedrueckt, 0.92)) rotate(1deg);
+}

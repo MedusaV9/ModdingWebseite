@@ -1,0 +1,222 @@
+/* Monkey Market — 4 Antwort-Falltüren mit Chip-Getümmel (Screen) und
+   Chip-für-Chip-Handel mit Rücknahme + „REST!"-All-in (Player, XXL). */
+.mkt-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(900px, 94vw);
+  margin: 0 auto;
+}
+
+.mkt-kopf {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.mkt-badge {
+  background: var(--gold);
+  color: var(--mm-outline, #1a1208);
+  border-radius: var(--mm-radius-s);
+  border: var(--mm-outline-m) solid var(--mm-outline);
+  box-shadow: var(--mm-schatten-sticker);
+  padding: 3px 10px;
+  font-weight: 800;
+  rotate: var(--mm-kipp-l, -2deg);
+}
+
+.mkt-frage {
+  text-align: center;
+  font-size: clamp(1.3rem, 3vw, 2rem);
+  line-height: 1.2;
+  margin: 0.15em 0;
+}
+
+.mkt-tueren {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.mkt-tuer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--panel);
+  border-left: 10px solid var(--deko);
+  border-radius: var(--radius);
+  padding: 13px 16px;
+  font-size: clamp(1rem, 2.2vw, 1.4rem);
+  font-weight: 600;
+}
+
+.mkt-tuer.richtig {
+  outline: 3px solid var(--gold);
+  animation: mkt-aufgehen 0.5s var(--mm-kurve-bounce, ease) both;
+}
+
+.mkt-tuer.falsch {
+  opacity: 0.4;
+  filter: grayscale(0.7);
+}
+
+@keyframes mkt-aufgehen {
+  from {
+    transform: scale(0.85) rotate(-2deg);
+  }
+
+  to {
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+.mkt-deko {
+  min-width: 2.6em;
+  color: var(--deko);
+  font-weight: 800;
+}
+
+.mkt-tuer-text {
+  flex: 1;
+}
+
+/* Chip-Stapel: Münz-Punkte + Zähler. */
+.mkt-stapel {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.mkt-chip {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at 35% 30%,
+    color-mix(in srgb, var(--mm-coin-shine) 70%, var(--mm-ticket-paper)),
+    var(--gold) 70%
+  );
+  border: 2px solid var(--mm-outline, #1a1208);
+  display: inline-block;
+}
+
+.mkt-stapel.klein .mkt-chip {
+  width: 10px;
+  height: 10px;
+  margin-left: -4px;
+}
+
+.mkt-stapel b {
+  margin-left: 4px;
+  color: var(--gold);
+}
+
+.mkt-bilanz {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: min(680px, 92vw);
+  margin: 0 auto;
+}
+
+.mkt-bilanz-zeile {
+  display: grid;
+  grid-template-columns: 2rem 1fr auto auto auto;
+  gap: 10px;
+  align-items: center;
+  background: var(--panel);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+}
+
+.mkt-bilanz-zeile.gewonnen {
+  outline: 2px solid var(--gold);
+}
+
+.mkt-mini-chips {
+  font-size: 0.8rem;
+}
+
+.mkt-mut {
+  background: var(--rot);
+  color: var(--mm-ticket-paper, #fff6e3);
+  border-radius: var(--mm-radius-s);
+  padding: 2px 6px;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+/* ---------- Player (hochkant XXL) ---------- */
+.mkt-player {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+  padding: 12px;
+  justify-content: center;
+}
+
+.mkt-frage-klein {
+  text-align: center;
+  margin: 4px 0;
+  color: var(--mm-text-hell, #fff6e3);
+  font-size: 1.05rem;
+}
+
+.mkt-vorrat {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--panel);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+}
+
+.mkt-zeile {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+
+.mkt-tuer-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 12dvh;
+  font-size: 1.1rem;
+  font-weight: 700;
+  text-align: left;
+  border-left: 12px solid var(--deko);
+  background: var(--panel);
+}
+
+.mkt-tuer-button:disabled {
+  opacity: 0.5;
+}
+
+.mkt-neben {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  justify-content: center;
+}
+
+.mkt-mini {
+  min-width: 64px;
+  min-height: 5dvh;
+  border-radius: var(--mm-radius-s);
+  background: var(--panel);
+  font-weight: 800;
+}
+
+.mkt-mini.rest {
+  background: var(--gold);
+  color: var(--mm-outline, #1a1208);
+}
+
+.mkt-mini:disabled {
+  opacity: 0.35;
+}

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-label="Joker: Überziehungskredit (+10 s)">
+  <title>J2 Überziehungskredit — +10 Sekunden auf den Timer</title>
+  <g fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" transform="rotate(-2 48 48)">
+    <circle cx="44" cy="52" r="30"/>
+    <path d="M 44 34 L 44 52 L 58 60"/>
+    <path d="M 36 14 L 52 14" stroke-width="5"/>
+    <path d="M 76 22 L 90 22 M 83 15 L 83 29" stroke-width="7"/>
+  </g>
+</svg>

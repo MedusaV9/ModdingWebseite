@@ -1,0 +1,27 @@
+<!-- Podium Bananen-Girlande"  hängt als Deko-Leiste über dem eigenen
+     Podest-Platz (wird von meta-avatar.ts absolut über den Puppen-Slot gelegt).
+     preserveAspectRatio="none" ist ok: Seil + Blätter vertragen Streckung. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 44" preserveAspectRatio="none">
+  <path d="M 2 4 C 60 32 180 32 238 4" fill="none"
+    stroke="#14532D" stroke-width="5" stroke-linecap="round"/>
+  <g fill="#2E8B57" stroke="#1A1208" stroke-width="1.6">
+    <ellipse cx="34" cy="13" rx="7" ry="3.4" transform="rotate(28 34 13)"/>
+    <ellipse cx="86" cy="22" rx="7" ry="3.4" transform="rotate(12 86 22)"/>
+    <ellipse cx="154" cy="22" rx="7" ry="3.4" transform="rotate(-12 154 22)"/>
+    <ellipse cx="206" cy="13" rx="7" ry="3.4" transform="rotate(-28 206 13)"/>
+  </g>
+  <g fill="#F5B301" stroke="#1A1208" stroke-width="2.2" stroke-linejoin="round">
+    <g transform="translate(60 17) rotate(10)">
+      <path d="M 0 0 L 0 4" fill="none" stroke-width="2"/>
+      <path d="M -7 16 C -10 8 -6 3 0 3 C -4 7 -4 12 -1 17 Z"/>
+    </g>
+    <g transform="translate(120 24)">
+      <path d="M 0 0 L 0 4" fill="none" stroke-width="2"/>
+      <path d="M -7 17 C -10 9 -6 4 0 4 C -4 8 -4 13 -1 18 Z"/>
+    </g>
+    <g transform="translate(180 17) rotate(-10)">
+      <path d="M 0 0 L 0 4" fill="none" stroke-width="2"/>
+      <path d="M -7 16 C -10 8 -6 3 0 3 C -4 7 -4 12 -1 17 Z"/>
+    </g>
+  </g>
+</svg>

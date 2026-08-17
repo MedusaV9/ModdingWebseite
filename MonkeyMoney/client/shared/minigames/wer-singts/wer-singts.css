@@ -1,0 +1,353 @@
+/* Wer singt's?: Plattenspieler-Optik — die Schallplatten-Karte senkt sich
+ * mit dem Titel, dreht sich beim Raten und FLIPPT bei der Auflösung zum
+ * Interpreten (CSS-3D). Vinyl-Töne als lokale Mischungen der Banana-Vault-
+ * Palette (keine losen Hexwerte). */
+
+:root {
+  --ws-vinyl: color-mix(in srgb, var(--mm-outline) 88%, var(--mm-ticket-paper));
+  --ws-vinyl-rille: color-mix(in srgb, var(--ws-vinyl) 82%, var(--mm-ticket-paper));
+  --ws-label-papier: color-mix(in srgb, var(--mm-ticket-paper) 86%, var(--mm-vault-gold));
+  --ws-label-tinte: color-mix(in srgb, var(--mm-outline) 82%, var(--mm-vault-gold));
+}
+
+.ws-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 940px;
+  margin: 0 auto;
+}
+
+.ws-kopf {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.ws-badge {
+  background: var(--ws-vinyl);
+  color: var(--mm-text-hell);
+  border: 2px solid var(--mm-money);
+  border-radius: 999px;
+  padding: 4px 14px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.ws-ueberschrift {
+  text-align: center;
+  margin: 0;
+}
+
+.ws-hinweis {
+  text-align: center;
+  margin: 0;
+}
+
+/* ---------- Die Schallplatten-Karte (3D-Flip) ---------- */
+
+.ws-karte {
+  perspective: 1200px;
+  width: min(360px, 82vw);
+  margin: 0 auto;
+}
+
+.ws-karte.senkt {
+  animation: ws-senken 1.6s cubic-bezier(0.22, 1.2, 0.36, 1);
+}
+
+@keyframes ws-senken {
+  from {
+    transform: translateY(-46px) scale(0.92);
+    opacity: 0;
+  }
+}
+
+.ws-karte-innen {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  transform-style: preserve-3d;
+  transition: transform 1s cubic-bezier(0.35, 0, 0.2, 1);
+}
+
+/* Die Auflösung dreht die Platte um. */
+.ws-karte.flip .ws-karte-innen {
+  transform: rotateY(180deg);
+}
+
+.ws-seite {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backface-visibility: hidden;
+}
+
+.ws-seite.hinten {
+  transform: rotateY(180deg);
+}
+
+.ws-platte {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    var(--ws-vinyl) 0 34%,
+    var(--ws-vinyl-rille) 34.5% 36%,
+    var(--ws-vinyl) 36.5% 44%,
+    var(--ws-vinyl-rille) 44.5% 46%,
+    var(--ws-vinyl) 46.5% 58%,
+    var(--ws-vinyl-rille) 58.5% 60%,
+    var(--ws-vinyl) 60.5% 74%,
+    var(--ws-vinyl-rille) 74.5% 76%,
+    var(--ws-vinyl) 76.5% 100%
+  );
+  border: 4px solid var(--mm-outline);
+  box-shadow: var(--mm-schatten-sticker-gross, 0 6px 0 rgb(0 0 0 / 35%));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ws-platte.dreht {
+  animation: ws-drehen 9s linear infinite;
+}
+
+@keyframes ws-drehen {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Das Label liest sich auch während der Drehung: Gegen-Rotation. */
+.ws-platte.dreht .ws-label {
+  animation: ws-gegendrehen 9s linear infinite;
+}
+
+@keyframes ws-gegendrehen {
+  to {
+    transform: rotate(-360deg);
+  }
+}
+
+.ws-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 62%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--ws-label-papier);
+  color: var(--ws-label-tinte);
+  border: 3px solid var(--mm-money);
+  text-align: center;
+  padding: 10px;
+}
+
+.ws-label.aufgedeckt {
+  background: var(--mm-vault-gold);
+  color: var(--mm-outline);
+}
+
+.ws-genre {
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.ws-titel {
+  font-size: clamp(0.85rem, 2.6vw, 1.15rem);
+  line-height: 1.2;
+}
+
+.ws-artist {
+  font-family: "Bungee", "Rubik", sans-serif;
+  font-size: clamp(0.95rem, 3vw, 1.3rem);
+  line-height: 1.15;
+}
+
+.ws-jahr {
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.ws-nadel {
+  position: absolute;
+  top: -8px;
+  right: -4px;
+  font-size: 1.8rem;
+  transform: rotate(35deg);
+}
+
+/* ---------- Interpret-Optionen (Screen, Anzeige) ---------- */
+
+.ws-optionen {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.ws-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--mm-flaeche-chip);
+  border: 2px solid var(--deko, var(--mm-money));
+  border-radius: var(--mm-radius, 14px);
+  padding: 12px 14px;
+  font-weight: 700;
+  transition: opacity 0.4s ease-out;
+}
+
+.ws-option.richtig {
+  background: var(--mm-erfolg);
+  color: var(--mm-outline);
+  border-color: var(--mm-outline);
+}
+
+.ws-option.verblasst {
+  opacity: 0.35;
+}
+
+.ws-deko {
+  font-weight: 900;
+  color: var(--deko, var(--mm-money));
+  white-space: nowrap;
+}
+
+.ws-option.richtig .ws-deko {
+  color: var(--mm-outline);
+}
+
+.ws-ticker {
+  text-align: center;
+  font-size: 0.9rem;
+}
+
+/* ---------- Platten-Regal + Bilanz (Runden-Ende) ---------- */
+
+.ws-regal {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.ws-regal-karte {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  background: var(--ws-label-papier);
+  color: var(--ws-label-tinte);
+  border: 2px solid var(--mm-money);
+  border-radius: var(--mm-radius, 14px);
+  padding: 8px 12px;
+  font-size: 0.9rem;
+}
+
+.ws-regal-titel {
+  font-weight: 700;
+}
+
+.ws-bilanz {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 560px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.ws-bilanz-zeile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--mm-flaeche-tief);
+  border: 2px solid var(--mm-flaeche-chip);
+  border-radius: var(--mm-radius, 14px);
+  padding: 8px 14px;
+}
+
+.ws-bilanz-zeile.gut {
+  border-color: var(--mm-money);
+}
+
+.ws-bilanz-zeile strong {
+  margin-left: auto;
+  color: var(--mm-money);
+}
+
+.ws-mini {
+  width: 34px;
+  height: 34px;
+}
+
+/* ---------- Player (Handy) ---------- */
+
+.ws-player {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ws-status {
+  text-align: center;
+  background: var(--mm-flaeche-tief);
+  border-radius: var(--mm-radius, 14px);
+  padding: 18px 12px;
+  line-height: 1.7;
+}
+
+.ws-artist-klein {
+  font-size: 1.3rem;
+  color: var(--mm-money);
+}
+
+.ws-frage-klein {
+  text-align: center;
+  font-weight: 700;
+  margin: 2px 0;
+}
+
+/* XXL-Interpret-Buttons — Daumen-Zone, min. 64 px hoch. */
+.ws-button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 64px;
+  background: var(--mm-flaeche-chip);
+  color: var(--mm-text-hell);
+  border: 3px solid var(--deko, var(--mm-money));
+  border-radius: var(--mm-radius, 14px);
+  padding: 12px 16px;
+  font: inherit;
+  font-size: 1.15rem;
+  font-weight: 800;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.08s ease-out;
+}
+
+.ws-button:active {
+  transform: scale(0.97);
+}
+
+.ws-button.gewaehlt {
+  background: var(--deko, var(--mm-money));
+  color: var(--mm-outline);
+}
+
+.ws-button.gesperrt:not(.gewaehlt) {
+  opacity: 0.45;
+}

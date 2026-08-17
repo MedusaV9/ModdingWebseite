@@ -1,0 +1,17 @@
+<!-- Kopf Goldene Krone"  Overlay für den #accessoire-Slot (viewBox 0 0 240 320). -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 320">
+  <g transform="rotate(2 120 44)">
+    <path d="M 86 50 L 84 20 L 102 36 L 120 14 L 138 36 L 156 20 L 154 50 Z"
+      fill="#F5B301" stroke="#1A1208" stroke-width="4" stroke-linejoin="round"/>
+    <path d="M 84 46 C 108 54 132 54 156 46 L 155 58 C 132 66 108 66 85 58 Z"
+      fill="#FFC93C" stroke="#1A1208" stroke-width="4" stroke-linejoin="round"/>
+    <circle cx="84" cy="19" r="4" fill="#FFF6E3" stroke="#1A1208" stroke-width="2.5"/>
+    <circle cx="120" cy="13" r="4.5" fill="#FFF6E3" stroke="#1A1208" stroke-width="2.5"/>
+    <circle cx="156" cy="19" r="4" fill="#FFF6E3" stroke="#1A1208" stroke-width="2.5"/>
+    <circle cx="102" cy="53" r="3.6" fill="#C2183B" stroke="#1A1208" stroke-width="2.5"/>
+    <circle cx="120" cy="55" r="4" fill="#29D9D5" stroke="#1A1208" stroke-width="2.5"/>
+    <circle cx="138" cy="53" r="3.6" fill="#C2183B" stroke="#1A1208" stroke-width="2.5"/>
+    <path d="M 92 42 C 96 34 100 30 106 27" fill="none"
+      stroke="#FFF3B0" stroke-width="3" stroke-linecap="round" opacity="0.9"/>
+  </g>
+</svg>

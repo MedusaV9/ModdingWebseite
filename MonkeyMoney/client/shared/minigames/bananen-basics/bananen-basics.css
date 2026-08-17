@@ -1,0 +1,234 @@
+/* Bananen-Basics — pendelnde Antwort-Lianen (Screen) + 4 XXL-Farb-Buttons
+   (Player, je ~18 % Bildhöhe). Auflösung: falsche Lianen reißen ab. */
+.bb-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(900px, 94vw);
+  margin: 0 auto;
+}
+
+.bb-frage {
+  text-align: center;
+  font-size: clamp(1.4rem, 3.2vw, 2.1rem);
+  line-height: 1.2;
+  margin: 0.2em 0;
+}
+
+.bb-frage.verdeckt,
+.bb-option-text.verdeckt {
+  filter: blur(6px);
+  opacity: 0.7;
+}
+
+.bb-lianen {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+
+.bb-liane {
+  position: relative;
+  background: var(--panel);
+  border-top: 8px solid var(--deko);
+  border-radius: var(--radius);
+  padding: 26px 10px 14px;
+  text-align: center;
+  font-weight: 600;
+  font-size: clamp(0.95rem, 2vw, 1.3rem);
+  transform-origin: top center;
+}
+
+.bb-liane.pendelt {
+  animation: bb-pendel 3.2s ease-in-out infinite;
+  animation-delay: calc(var(--pendel-index) * -0.6s);
+}
+
+@keyframes bb-pendel {
+  0%,
+  100% {
+    transform: rotate(-1.6deg);
+  }
+
+  50% {
+    transform: rotate(1.6deg);
+  }
+}
+
+.bb-seil {
+  position: absolute;
+  top: -26px;
+  left: 50%;
+  width: 4px;
+  height: 26px;
+  background: var(--mm-leaf, #22a559);
+  border-radius: 2px;
+}
+
+.bb-liane.traegt {
+  outline: 4px solid var(--gold);
+  background: var(--mm-flaeche-chip);
+  animation: bb-hochziehen 0.6s var(--mm-kurve-bounce, ease) both;
+}
+
+@keyframes bb-hochziehen {
+  from {
+    transform: translateY(0);
+  }
+
+  to {
+    transform: translateY(-10px);
+  }
+}
+
+.bb-liane.reisst {
+  opacity: 0.3;
+  animation: bb-riss 0.7s ease-in both;
+}
+
+@keyframes bb-riss {
+  to {
+    transform: translateY(26px) rotate(6deg);
+    opacity: 0.2;
+  }
+}
+
+.bb-deko {
+  display: block;
+  color: var(--deko);
+  font-weight: 800;
+  margin-bottom: 4px;
+}
+
+/* „Hat geantwortet"-Ast: anonyme Mini-Affen hüpfen drauf. */
+.bb-ast {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 40px;
+  /* Holz-Regalbrett: bewusste Requisiten-Farbe (siehe tokens.css-Ausnahmen). */
+  border-top: 6px solid #6b4a2b;
+  border-radius: 6px;
+  padding-top: 4px;
+}
+
+.bb-ast-label {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.bb-mini-affe {
+  display: inline-block;
+  animation: bb-hops 0.5s var(--mm-kurve-bounce, ease) both;
+  animation-delay: calc(var(--hops) * 40ms);
+}
+
+@keyframes bb-hops {
+  from {
+    transform: translateY(-18px) scale(0.6);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+/* Player: 4 XXL-Farb-Buttons vertikal (§2.1: je ~20 % Bildhöhe). */
+.bb-player {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+  padding: 10px;
+}
+
+.bb-frage-klein {
+  text-align: center;
+  margin: 4px 0;
+  color: var(--muted);
+}
+
+.bb-zweitversuch {
+  text-align: center;
+  margin: 0;
+  color: var(--gold);
+  font-size: 0.9rem;
+}
+
+.bb-button {
+  flex: 1;
+  /* 12dvh statt 17dvh: alle 4 Antworten garantiert im 100dvh-Bild (Eval 2). */
+  min-height: 12dvh;
+  font-size: 1.25rem;
+  font-weight: 700;
+  text-align: left;
+  border-left: 12px solid var(--deko);
+  background: var(--panel);
+}
+
+.bb-button .bb-deko {
+  display: inline-block;
+  min-width: 3.2em;
+  margin: 0;
+}
+
+/* Antwort-Lock (W3): rastet mit EINEM Puls ein — bestätigt den Tap spürbar. */
+.bb-button.gewaehlt {
+  outline: 4px solid var(--gold);
+  background: var(--mm-flaeche-chip);
+  animation: bb-lock-puls 0.45s var(--mm-kurve-bounce, ease) 1;
+}
+
+@keyframes bb-lock-puls {
+  0% {
+    transform: scale(1);
+  }
+
+  40% {
+    transform: scale(1.04);
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+
+.bb-button.gesperrt:not(.gewaehlt) {
+  opacity: 0.35;
+}
+
+.bb-liane.entfernt,
+.bb-button.entfernt {
+  opacity: 0.3;
+  text-decoration: line-through;
+  filter: grayscale(0.8);
+}
+
+/* Wahr/Falsch (kind wahr_falsch): 2 breite Lianen statt 4 schmaler. */
+.bb-lianen.zweier {
+  grid-template-columns: 1fr 1fr;
+  width: min(640px, 90%);
+  margin: 0 auto;
+}
+
+.bb-lianen.zweier .bb-liane {
+  font-size: clamp(1.3rem, 2.8vw, 1.8rem);
+  padding: 30px 14px 20px;
+}
+
+/* Handy: 2 XXL-Buttons füllen die Fläche der sonst 4 Buttons. */
+.bb-button.xxl {
+  min-height: 26dvh;
+  font-size: 1.7rem;
+  text-align: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bb-button.gewaehlt {
+    animation: none;
+  }
+}

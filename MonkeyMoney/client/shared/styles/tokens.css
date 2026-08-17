@@ -1,0 +1,237 @@
+/*
+ * MONKEY MONEY — Design-Tokens „Banana Vault"
+ * Quelle: docs/ART-SOUND-VIDEO-PLAN.md §1.1–1.3 (verbindlich).
+ * Diese Datei ist die EINZIGE Stelle für Farben, Typo-Skala, Radius,
+ * Schatten, Spacing und Outline-Regeln. Screens/Komponenten nutzen nur
+ * die Custom-Properties, nie Hex-Werte direkt.
+ */
+
+/* ---------- Fonts (lokal, kein CDN — OFL-Texte in client/public/fonts/) ----------
+ * Eval-7 P2 „Erstladung 1,4 MB": WOFF2 statt TTF (1,14 MB → 0,35 MB gesamt),
+ * unversioniert unter /fonts/ (ein Cache-Eintrag für ALLE Entries, preload-bar
+ * aus den HTML-Köpfen). font-display: swap ⇒ Text steht sofort. */
+
+@font-face {
+  font-family: "Bungee";
+  src: url("/fonts/bungee.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Bungee Shade";
+  src: url("/fonts/bungeeshade.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Rubik";
+  src: url("/fonts/rubik.woff2") format("woff2");
+  font-weight: 300 900; /* Variable Font: eine Datei, alle Gewichte */
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Rubik";
+  src: url("/fonts/rubikitalic.woff2") format("woff2");
+  font-weight: 300 900;
+  font-style: italic;
+  font-display: swap;
+}
+
+:root {
+  /* ---------- 1.1 Palette „Banana Vault" (12 Farben + Outline-Konstante) ---------- */
+
+  --mm-jungle-night: #0e2a1f; /* Studio-Dunkel (Hintergrund) */
+  --mm-deep-palm: #14532d; /* Bühnen-Grün (Flächen) */
+  --mm-leaf: #22a559; /* Blatt-Grün (Deko, Erfolg) */
+  --mm-banana-leaf: #8fe04b; /* Frisch-Lime (Akzent, Streaks) */
+  --mm-bill-green: #85bb65; /* Geldschein-Grün */
+  --mm-vault-gold: #f5b301; /* Casino-Gold (Money, Rahmen) */
+  --mm-coin-shine: #ffde6b; /* Gold-Hell (Glanzkanten) */
+  --mm-banana: #ffc93c; /* Bananengelb (Logo, Maskottchen) */
+  --mm-curtain: #c2183b; /* Vorhang-Rot (Fehler, Drama) */
+  --mm-spotlight-pink: #ff3e8e; /* Show-Magenta (Spotlights, Buzzer) */
+  --mm-studio-led: #29d9d5; /* LED-Cyan (Screens, Timer) */
+  --mm-ticket-paper: #fff6e3; /* Papier-Creme (Karten, Text auf dunkel) */
+
+  /* 13. Konstante — NIE reines Schwarz */
+  --mm-outline: #1a1208;
+
+  /* Semantische Aliasse (Bedeutung, nicht Farbe, im Komponenten-Code nutzen) */
+  --mm-bg: var(--mm-jungle-night);
+  --mm-flaeche: var(--mm-deep-palm);
+  --mm-erfolg: var(--mm-leaf);
+  --mm-fehler: var(--mm-curtain);
+  --mm-money: var(--mm-vault-gold);
+  --mm-text-hell: var(--mm-ticket-paper);
+  --mm-timer: var(--mm-studio-led);
+
+  /* Abgeleitete Flächen-/Text-Töne (Token-Sweep Eval 10): eingefrorene
+   * Mischwerte der 12er-Palette, die vorher als lose Hexwerte durch die
+   * Komponenten-CSS geisterten. KEINE neuen Palettenfarben — nur die
+   * EINZIGE erlaubte Hex-Stelle dafür. */
+  --mm-flaeche-tief: #123a28; /* dunkle UI-Flächen (Inputs, Legacy --bg2): Jungle-Night×Deep-Palm */
+  --mm-flaeche-chip: #2c4a34; /* Antwort-/Slot-Flächen der Minigames: Jungle-Night×Bill-Green */
+  --mm-text-gedimmt: #9dbfa9; /* muted-Text (Legacy --muted): Ticket-Paper ins Blattgrün gedimmt */
+
+  /* ---------- 1.1 Spielerfarben (volle 8er-Reihe, Reihenfolge = Slot 1–8) ---------- */
+
+  --mm-spieler-1: #ffc93c; /* Banana */
+  --mm-spieler-2: #ff3e8e; /* Spotlight Pink */
+  --mm-spieler-3: #29d9d5; /* Studio LED */
+  --mm-spieler-4: #8fe04b; /* Banana Leaf */
+  --mm-spieler-5: #f97316; /* Orange */
+  --mm-spieler-6: #8b5cf6; /* Violett */
+  --mm-spieler-7: #3b82f6; /* Blau */
+  --mm-spieler-8: #f472b6; /* Pink */
+
+  /* ---------- 1.2 Typografie ---------- */
+
+  --mm-font-display: "Bungee", "Rubik", sans-serif;
+  --mm-font-logo: "Bungee Shade", "Bungee", sans-serif;
+  --mm-font-text: "Rubik", "Nunito", system-ui, sans-serif;
+
+  /* Text-Skala (Rubik) — Handy-lesbar, 1rem = 16px */
+  --mm-text-xs: 0.75rem; /* 12px — Ticker-Kleingedrucktes */
+  --mm-text-s: 0.875rem; /* 14px — Meta, Labels */
+  --mm-text-m: 1rem; /* 16px — Fließtext Handy */
+  --mm-text-l: 1.25rem; /* 20px — Fragen-Text Handy */
+  --mm-text-xl: 1.5rem; /* 24px — Kontostände, Buttons */
+
+  /* Display-Skala (Bungee) — Regel: NIE unter 32px, NIE > 6 Wörter */
+  --mm-display-s: 2rem; /* 32px — Untergrenze! Runden-Untertitel */
+  --mm-display-m: 2.5rem; /* 40px — Karten-Titel */
+  --mm-display-l: 3.5rem; /* 56px — Runden-Titel Bühne */
+  --mm-display-xl: 4.5rem; /* 72px — Reveals, „RICHTIG!" */
+  --mm-display-xxl: 6rem; /* 96px — Logo-Momente, Sieger */
+
+  --mm-zeilenhoehe-text: 1.45;
+  --mm-zeilenhoehe-display: 1.1;
+
+  /* Kontostände: immer tabellarische Ziffern (zappeln nicht beim Hochzählen) */
+  --mm-ziffern: tabular-nums;
+
+  /* ---------- 1.3 Outline-Regeln (Gesetz 1) ---------- */
+
+  /* 4–6px bei 1080p-Referenz; Handy nutzt die kleineren Stufen */
+  --mm-outline-s: 3px; /* Handy-Detail, Icons klein */
+  --mm-outline-m: 4px; /* Standard UI-Element */
+  --mm-outline-l: 6px; /* Bühne 1080p, große Flächen */
+
+  /* ---------- 1.3 Sticker-Prinzip (Gesetz 3): HARTE Schatten, kein Blur ---------- */
+
+  /* 2px versetzter harter Schlagschatten in Outline-Warm-Schwarz, 40% */
+  --mm-schatten-farbe: rgb(26 18 8 / 40%);
+  --mm-schatten-sticker: 2px 2px 0 0 var(--mm-schatten-farbe);
+  --mm-schatten-sticker-gross: 4px 4px 0 0 var(--mm-schatten-farbe);
+  /* Für gestanzte/gedrückte Zustände */
+  --mm-schatten-gedrueckt: 1px 1px 0 0 var(--mm-schatten-farbe);
+
+  /* ---------- 1.3 Wonky-Regel (Gesetz 2): 2–3° aus der Achse ---------- */
+
+  --mm-kipp-l: -2deg;
+  --mm-kipp-r: 2.5deg;
+  --mm-kipp-stark: -3deg;
+
+  /* ---------- 1.3 Squash & Stretch (Gesetz 6): nur transform/opacity ---------- */
+
+  --mm-scale-idle: 1;
+  --mm-scale-gedrueckt: 0.92; /* + 2° Rotation im Pressed-Zustand */
+  --mm-scale-erfolg: 1.08; /* Bounce */
+  --mm-dauer-tap: 90ms;
+  --mm-dauer-schnell: 150ms; /* Reaktions-Schwenk-Versatz Podien */
+  --mm-dauer-normal: 240ms;
+  --mm-dauer-show: 400ms;
+  --mm-kurve-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --mm-kurve-snap: cubic-bezier(0.2, 0, 0, 1);
+
+  /* ---------- Radius ---------- */
+
+  --mm-radius-s: 6px; /* Chips, kleine Tags */
+  --mm-radius-m: 12px; /* Buttons, Karten Handy */
+  --mm-radius-l: 20px; /* Frage-Karten, Panels */
+  --mm-radius-xl: 32px; /* Bühnen-Karten, LED-Wand */
+  --mm-radius-rund: 999px; /* Pills, Münzen, Buzzer */
+
+  /* ---------- Spacing (4er-Raster) ---------- */
+
+  --mm-raum-1: 4px;
+  --mm-raum-2: 8px;
+  --mm-raum-3: 12px;
+  --mm-raum-4: 16px;
+  --mm-raum-5: 24px;
+  --mm-raum-6: 32px;
+  --mm-raum-7: 48px;
+  --mm-raum-8: 64px;
+
+  /* Tap-Ziele Handy: nie kleiner (Plan §3.3: ≥96px Antwort-Kacheln) */
+  --mm-tap-min: 48px;
+  --mm-tap-kachel: 96px;
+
+  /* ---------- Verläufe (Gesetz 4: max. 2 pro Screen, NUR radial) ---------- */
+
+  --mm-glow-spot: radial-gradient(closest-side, rgb(255 246 227 / 22%), rgb(255 246 227 / 0%));
+  --mm-glow-gold: radial-gradient(closest-side, rgb(255 222 107 / 45%), rgb(245 179 1 / 0%));
+}
+
+/*
+ * BEWUSSTE Ausnahmen außerhalb der Token-Pflicht (Token-Sweep Eval 10):
+ * - Spieler-/Teamfarben SIND Tokens (--mm-spieler-1…8) — wo sie als
+ *   Wire-Format-Farbe reinkommen, ist das kein Verstoß.
+ * - var(--mm-x, #hex)-FALLBACKS mit exakt dem Token-Wert sind erlaubt
+ *   (Minigame-CSS läuft auch isoliert in Fixtures ohne tokens.css).
+ * - Requisiten-Farben ohne Palette-Entsprechung bleiben Hex und sind an der
+ *   Stelle kommentiert: Holz-Planken/Steg (Brauntöne in erklaer-demo,
+ *   lianensteg-duell, bananen-basics, stinkbanane), Silber/Bronze der
+ *   Podest-Medaillen (studio.css), Kino-Schwarz #000 hinter echtem
+ *   Video-Material (musikvideo-raten, studio-LED — reines Schwarz matcht
+ *   die Letterbox-Balken des Videos).
+ * - repeating-linear-gradient als TEXTUR (Planken, Filmstreifen-Perforation)
+ *   ist kein Farbverlauf im Sinne von Gesetz 4 (NUR-radial gilt für echte
+ *   Verläufe).
+ * - Funktionale FÜLLSTÄNDE (Tap-Meter, Schätz-Slider) dürfen linear laufen —
+ *   die Richtung IST die Information.
+ * - Gold-GLOWS (Jackpot-Puls, Münzen-Leuchten, `0 0 Xpx`-Schatten in Gold)
+ *   sind Leucht-Effekte, keine Schlagschatten — das Blur-Verbot aus Gesetz 3
+ *   betrifft Schatten. Echte Blur-SCHATTEN wurden im Sweep gehärtet.
+ */
+
+/* ---------- Basis-Utilities (Token-nah, von allen Clients nutzbar) ---------- */
+
+/* Sticker-Element: Fläche + dicke Outline + harter Schatten (Gesetz 3) */
+.mm-sticker {
+  border: var(--mm-outline-m) solid var(--mm-outline);
+  border-radius: var(--mm-radius-m);
+  box-shadow: var(--mm-schatten-sticker);
+}
+
+/* Display-Text (Bungee): Untergrenze 32px ist Absicht */
+.mm-display {
+  font-family: var(--mm-font-display);
+  font-size: var(--mm-display-s);
+  line-height: var(--mm-zeilenhoehe-display);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+/* Money-Zahlen: tabellarisch, damit Kontostände beim Ticken stillhalten */
+.mm-money-zahl {
+  font-family: var(--mm-font-text);
+  font-weight: 700;
+  font-variant-numeric: var(--mm-ziffern);
+  color: var(--mm-vault-gold);
+}
+
+/* Wonky-Helfer (Gesetz 2) */
+.mm-kipp-l {
+  rotate: var(--mm-kipp-l);
+}
+
+.mm-kipp-r {
+  rotate: var(--mm-kipp-r);
+}

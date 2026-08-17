@@ -1,0 +1,260 @@
+/* Der Taschendieb-Affe — Frage-Rennen, Suspense, Klau-Cutscene */
+.td-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: min(960px, 94vw);
+  margin: 0 auto;
+  flex: 1;
+  justify-content: center;
+}
+
+.td-beute-teaser {
+  text-align: center;
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.td-frage {
+  text-align: center;
+  font-size: clamp(1.4rem, 3.5vw, 2.4rem);
+}
+
+.td-optionen {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.td-option {
+  background: var(--panel);
+  border-left: 10px solid var(--deko);
+  border-radius: var(--radius);
+  padding: 16px;
+  font-size: clamp(1.05rem, 2.3vw, 1.5rem);
+  font-weight: 600;
+}
+
+.td-option.richtig {
+  outline: 4px solid var(--gold);
+  background: var(--mm-flaeche-chip);
+}
+
+.td-option.falsch {
+  opacity: 0.35;
+}
+
+.td-deko {
+  display: inline-block;
+  min-width: 3em;
+  color: var(--deko);
+  font-weight: 800;
+}
+
+.td-suspense {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  text-align: center;
+}
+
+.td-maske-gross {
+  font-size: 4.5rem;
+}
+
+.td-ansage {
+  text-align: center;
+  font-size: 1.4rem;
+  margin: 0;
+}
+
+/* ---------- Klau-Cutscene: Dieb links, Opfer rechts, Hand + Sack dazwischen ---------- */
+.td-cutscene {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 12px;
+  min-height: 44vh;
+}
+
+.td-podest {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.td-maske {
+  font-size: 2rem;
+  margin-bottom: -14px;
+  z-index: 2;
+}
+
+.td-dieb-svg {
+  width: min(220px, 26vw);
+}
+
+.td-dieb-svg svg {
+  width: 100%;
+  height: auto;
+}
+
+.td-opfer-affe {
+  font-size: 5rem;
+  animation: td-zittern 0.4s infinite;
+}
+
+.abgeprallt .td-opfer-affe {
+  animation: none;
+}
+
+@keyframes td-zittern {
+  0%,
+  100% {
+    transform: translateX(-3px) rotate(-2deg);
+  }
+  50% {
+    transform: translateX(3px) rotate(2deg);
+  }
+}
+
+.td-label {
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.td-flugbahn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 180px;
+}
+
+/* Die haarige Affenhand trägt die Scheine rüber: Opfer (rechts) → Dieb (links). */
+.td-hand {
+  font-size: 3rem;
+  display: inline-flex;
+  align-items: center;
+  animation: td-klauen 2.4s ease-in-out infinite;
+}
+
+.td-sack {
+  width: 54px;
+  height: auto;
+}
+
+@keyframes td-klauen {
+  0% {
+    transform: translateX(90px) scaleX(-1);
+    opacity: 0.4;
+  }
+  45% {
+    transform: translateX(90px) scaleX(-1);
+    opacity: 1;
+  }
+  55% {
+    transform: translateX(90px) scaleX(1);
+  }
+  100% {
+    transform: translateX(-90px) scaleX(1);
+    opacity: 1;
+  }
+}
+
+.td-schild {
+  font-size: 1.8rem;
+  font-weight: 800;
+  color: var(--gold);
+  animation: td-blitzen 0.5s 3;
+}
+
+@keyframes td-blitzen {
+  50% {
+    opacity: 0.2;
+  }
+}
+
+.td-betrag {
+  font-size: 1.4rem;
+  font-weight: 800;
+}
+
+.td-betrag.klaut {
+  color: var(--rot);
+}
+
+/* ---------- Player (iPhone hochkant) ---------- */
+.td-player {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+  padding: 10px;
+}
+
+.td-frage-klein {
+  text-align: center;
+  margin: 4px 0;
+  color: var(--muted);
+}
+
+.td-button {
+  flex: 1;
+  /* 12dvh statt 17dvh: alle 4 Antworten garantiert im 100dvh-Bild (Eval 2). */
+  min-height: 12dvh;
+  font-size: 1.25rem;
+  font-weight: 700;
+  text-align: left;
+  border-left: 12px solid var(--deko);
+  background: var(--panel);
+}
+
+.td-button.gewaehlt {
+  outline: 4px solid var(--gold);
+  background: var(--mm-flaeche-chip);
+}
+
+.td-button.gesperrt:not(.gewaehlt) {
+  opacity: 0.35;
+}
+
+/* Opferwahl-Grid: XXL-Ziele mit Kontostand — Klauen muss sich lohnen dürfen. */
+.td-ziel {
+  min-height: 12dvh;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 1.2rem;
+  font-weight: 700;
+  background: var(--panel);
+  border: 3px solid var(--gold);
+}
+
+.td-ziel.gesperrt {
+  border-color: var(--muted);
+  opacity: 0.45;
+}
+
+.td-ziel-konto {
+  color: var(--gold);
+}
+
+.td-antimobbing {
+  font-size: 0.8rem;
+  color: var(--rot);
+}
+
+.td-verdeckt {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-align: center;
+  padding: 20px;
+}

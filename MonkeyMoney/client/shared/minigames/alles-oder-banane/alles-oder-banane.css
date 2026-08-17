@@ -1,0 +1,360 @@
+/* Alles oder Banane — Teaser-Karte, verdeckte/aufgedeckte Geldsäcke (Reveal
+   mit Stagger), Wett-Slider XXL (Player) und die MC-4-Frage-Phase. */
+.aob-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(900px, 94vw);
+  margin: 0 auto;
+}
+
+.aob-teaser {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: var(--panel);
+  border-radius: var(--mm-radius-l);
+  border: var(--mm-outline-m) solid var(--mm-outline);
+  box-shadow: var(--mm-schatten-sticker);
+  padding: 10px 16px;
+  font-size: clamp(1.1rem, 2.6vw, 1.7rem);
+  rotate: var(--mm-kipp-r, 2.5deg);
+}
+
+.aob-teaser-label {
+  color: var(--muted);
+}
+
+.aob-schwierigkeit {
+  background: var(--rot);
+  color: var(--mm-ticket-paper, #fff6e3);
+  border-radius: var(--mm-radius-s);
+  padding: 2px 8px;
+  font-weight: 800;
+  font-size: 0.8em;
+}
+
+/* Geldsäcke vor den Avataren (§2.9): zu = ???, offen = Betrag. */
+.aob-saecke {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+
+.aob-sack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  background: var(--panel);
+  border-radius: var(--radius);
+  padding: 8px 14px;
+  min-width: 90px;
+}
+
+.aob-sack-emoji {
+  font-size: 1.8rem;
+}
+
+.aob-sack-name {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.aob-sack.zu .aob-sack-betrag {
+  color: var(--muted);
+  letter-spacing: 0.2em;
+}
+
+/* Reveal: einzeln aufgedeckt mit Trommelwirbel — Stagger über den Index. */
+.aob-saecke.reveal .aob-sack {
+  animation: aob-aufdecken 0.45s var(--mm-kurve-bounce, ease) both;
+  animation-delay: calc(var(--reveal-index) * 0.55s);
+}
+
+.aob-sack.offen {
+  outline: 2px solid var(--gold);
+}
+
+@keyframes aob-aufdecken {
+  from {
+    transform: scale(0.7) rotate(-4deg);
+    opacity: 0.4;
+  }
+
+  to {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
+  }
+}
+
+.aob-kredit {
+  font-size: 0.75rem;
+  color: var(--gold);
+}
+
+.aob-einsatz-leiste {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.aob-mini-sack {
+  background: var(--panel);
+  border-radius: var(--mm-radius-s);
+  padding: 2px 8px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.aob-frage {
+  text-align: center;
+  font-size: clamp(1.3rem, 3vw, 2rem);
+  line-height: 1.2;
+  margin: 0.15em 0;
+}
+
+.aob-optionen {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.aob-option {
+  background: var(--panel);
+  border-left: 10px solid var(--deko);
+  border-radius: var(--radius);
+  padding: 13px 16px;
+  font-size: clamp(1.1rem, 2.4vw, 1.6rem);
+  font-weight: 600;
+}
+
+.aob-deko {
+  display: inline-block;
+  min-width: 3.2em;
+  color: var(--deko);
+  font-weight: 800;
+}
+
+.aob-bilanz {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: min(640px, 92vw);
+  margin: 0 auto;
+}
+
+.aob-bilanz-zeile {
+  display: grid;
+  grid-template-columns: 2rem 1fr auto auto;
+  gap: 10px;
+  align-items: center;
+  background: var(--panel);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+}
+
+.aob-bilanz-zeile.gewonnen {
+  outline: 2px solid var(--gold);
+}
+
+/* ---------- Player (hochkant XXL) ---------- */
+.aob-player {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1;
+  padding: 12px;
+  justify-content: center;
+}
+
+.aob-status {
+  text-align: center;
+  padding: 22px 12px;
+  background: var(--panel);
+  border-radius: var(--radius);
+  font-size: 1.1rem;
+  line-height: 1.6;
+}
+
+.aob-slider-wert {
+  text-align: center;
+  font-size: var(--mm-display-m, 2.5rem);
+}
+
+/* Wett-Slider XXL: fetter Daumen, gut greifbar (§2.9 Handy).
+   Snap-Marken bei 25/50/75 % (W3): handy-fx.installiereSliderFeedback rastet
+   dort beim Ziehen magnetisch ein — die dunklen Kerben im Track zeigen die
+   Rast-Punkte an. Chromium malt KEIN background-image auf native Range-Inputs,
+   deshalb appearance:none + eigener Track/Daumen (Sticker-Look wie Buttons).
+   --aob-fuellung (0–100 %) setzt handy-fx beim Ziehen für den Gold-Füllstand.
+   (Funktionale MARKIERUNG, kein Deko-Farbverlauf im Sinne von Gesetz 4.) */
+.aob-slider {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  height: 48px;
+  margin: 0;
+  background: transparent;
+  accent-color: var(--gold);
+  touch-action: none;
+}
+
+.aob-slider::-webkit-slider-runnable-track {
+  height: 14px;
+  border: var(--mm-outline-s) solid var(--mm-outline);
+  border-radius: var(--mm-radius-rund);
+  background-image:
+    linear-gradient(
+      to right,
+      transparent calc(25% - 2px),
+      var(--mm-outline) calc(25% - 2px),
+      var(--mm-outline) calc(25% + 2px),
+      transparent calc(25% + 2px),
+      transparent calc(50% - 2px),
+      var(--mm-outline) calc(50% - 2px),
+      var(--mm-outline) calc(50% + 2px),
+      transparent calc(50% + 2px),
+      transparent calc(75% - 2px),
+      var(--mm-outline) calc(75% - 2px),
+      var(--mm-outline) calc(75% + 2px),
+      transparent calc(75% + 2px)
+    ),
+    linear-gradient(
+      to right,
+      var(--gold) var(--aob-fuellung, 0%),
+      var(--panel) var(--aob-fuellung, 0%)
+    );
+}
+
+.aob-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 34px;
+  height: 34px;
+  margin-top: -10px;
+  border: var(--mm-outline-s) solid var(--mm-outline);
+  border-radius: var(--mm-radius-rund);
+  background: var(--gold);
+  box-shadow: var(--mm-schatten-sticker);
+}
+
+.aob-slider:active::-webkit-slider-thumb {
+  transform: scale(1.12);
+}
+
+.aob-slider::-moz-range-track {
+  height: 14px;
+  border: var(--mm-outline-s) solid var(--mm-outline);
+  border-radius: var(--mm-radius-rund);
+  background-image: linear-gradient(
+    to right,
+    var(--panel) calc(25% - 2px),
+    var(--mm-outline) calc(25% - 2px),
+    var(--mm-outline) calc(25% + 2px),
+    var(--panel) calc(25% + 2px),
+    var(--panel) calc(50% - 2px),
+    var(--mm-outline) calc(50% - 2px),
+    var(--mm-outline) calc(50% + 2px),
+    var(--panel) calc(50% + 2px),
+    var(--panel) calc(75% - 2px),
+    var(--mm-outline) calc(75% - 2px),
+    var(--mm-outline) calc(75% + 2px),
+    var(--panel) calc(75% + 2px)
+  );
+}
+
+.aob-slider::-moz-range-progress {
+  height: 14px;
+  border-radius: var(--mm-radius-rund);
+  background: var(--gold);
+}
+
+.aob-slider::-moz-range-thumb {
+  width: 34px;
+  height: 34px;
+  border: var(--mm-outline-s) solid var(--mm-outline);
+  border-radius: var(--mm-radius-rund);
+  background: var(--gold);
+  box-shadow: var(--mm-schatten-sticker);
+}
+
+.aob-einloggen {
+  min-height: 15dvh;
+  border-radius: var(--mm-radius-l);
+  background: var(--gold);
+  color: var(--mm-outline, #1a1208);
+  font-family: var(--mm-font-display, sans-serif);
+  font-size: var(--mm-display-s, 2rem);
+  border: var(--mm-outline-m) solid var(--mm-outline);
+  box-shadow: var(--mm-schatten-sticker-gross);
+}
+
+.aob-einloggen:active {
+  transform: scale(var(--mm-scale-gedrueckt, 0.92)) rotate(2deg);
+}
+
+.aob-frage-klein {
+  text-align: center;
+  margin: 4px 0;
+  color: var(--mm-text-hell, #fff6e3);
+  font-size: 1.05rem;
+}
+
+.aob-zweitversuch {
+  text-align: center;
+  margin: 0;
+  color: var(--gold);
+  font-size: 0.9rem;
+}
+
+.aob-button {
+  flex: 1;
+  min-height: 15dvh;
+  font-size: 1.2rem;
+  font-weight: 700;
+  text-align: left;
+  border-left: 12px solid var(--deko);
+  background: var(--panel);
+}
+
+/* Antwort-Lock (W3): rastet mit EINEM Puls ein (wie bananen-basics). */
+.aob-button.gewaehlt {
+  outline: 4px solid var(--gold);
+  background: var(--mm-flaeche-chip);
+  animation: aob-lock-puls 0.45s var(--mm-kurve-bounce, ease) 1;
+}
+
+@keyframes aob-lock-puls {
+  0% {
+    transform: scale(1);
+  }
+
+  40% {
+    transform: scale(1.04);
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+
+.aob-button.gesperrt:not(.gewaehlt) {
+  opacity: 0.35;
+}
+
+.aob-option.entfernt,
+.aob-button.entfernt {
+  opacity: 0.3;
+  text-decoration: line-through;
+  filter: grayscale(0.8);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aob-button.gewaehlt {
+    animation: none;
+  }
+}

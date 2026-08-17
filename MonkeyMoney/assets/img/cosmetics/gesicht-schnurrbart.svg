@@ -1,0 +1,13 @@
+<!-- Gesicht Schnurrbart"  Overlay im #kopf (viewBox 0 0 240 320, Nase H 112/128 y 100). -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 320">
+  <g>
+    <path d="M 119 104 C 112 99 103 98 96 101 C 89 104 86 110 89 114 C 91 117 96 117 98 113 C 94 113 93 109 96 107 C 101 104 109 105 115 108 C 117 109 119 107 119 104 Z"
+      fill="#2B1B10" stroke="#1A1208" stroke-width="2.5" stroke-linejoin="round"/>
+    <path d="M 121 104 C 128 99 137 98 144 101 C 151 104 154 110 151 114 C 149 117 144 117 142 113 C 146 113 147 109 144 107 C 139 104 131 105 125 108 C 123 109 121 107 121 104 Z"
+      fill="#2B1B10" stroke="#1A1208" stroke-width="2.5" stroke-linejoin="round"/>
+    <path d="M 100 102.5 C 105 101 110 101.5 114 103.5" fill="none"
+      stroke="#5C3A22" stroke-width="1.6" stroke-linecap="round" opacity="0.9"/>
+    <path d="M 140 102.5 C 135 101 130 101.5 126 103.5" fill="none"
+      stroke="#5C3A22" stroke-width="1.6" stroke-linecap="round" opacity="0.9"/>
+  </g>
+</svg>

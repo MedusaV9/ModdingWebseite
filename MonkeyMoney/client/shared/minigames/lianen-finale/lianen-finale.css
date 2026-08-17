@@ -1,0 +1,251 @@
+/* Lianen-Finale — eigenes Set: Lianen von oben, Krokodil-Fluss unten.
+   --hoehe (0.25–1) = normierter Kontostand: 1 = ganz oben (sicher),
+   0.25 = Anzeige-Minimum, knapp über dem Krokodil. Ruck/Riss animiert. */
+.lf-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(940px, 94vw);
+  margin: 0 auto;
+}
+
+.lf-banner {
+  text-align: center;
+  background: var(--panel);
+  border: var(--mm-outline-m) solid var(--mm-outline);
+  border-radius: var(--mm-radius-l);
+  box-shadow: var(--mm-schatten-sticker);
+  padding: 8px 14px;
+  font-size: clamp(1rem, 2.4vw, 1.5rem);
+  rotate: var(--mm-kipp-l, -2deg);
+}
+
+.lf-set {
+  position: relative;
+  height: clamp(170px, 30vh, 260px);
+  background: radial-gradient(120% 100% at 50% 110%, rgb(41 217 213 / 12%), transparent 70%);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.lf-lianen {
+  position: absolute;
+  inset: 0 0 34px;
+  display: flex;
+  justify-content: space-evenly;
+  align-items: stretch;
+}
+
+.lf-liane {
+  position: relative;
+  flex: 0 0 auto;
+  width: clamp(56px, 10vw, 96px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* Seil von der Decke bis zum Affen: kürzer = höher = sicherer. */
+.lf-seil {
+  width: 5px;
+  background: var(--mm-leaf, #22a559);
+  border-radius: 3px;
+  flex-grow: 1;
+  max-height: calc((1 - var(--hoehe)) * 100%);
+  transition: max-height 0.9s var(--mm-kurve-bounce, ease);
+}
+
+.lf-affe-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  transition: transform 0.9s var(--mm-kurve-bounce, ease);
+}
+
+.lf-liane.ruck .lf-affe-wrap {
+  animation: lf-ruck 0.8s var(--mm-kurve-bounce, ease);
+}
+
+@keyframes lf-ruck {
+  30% {
+    transform: translateY(-14px) rotate(-4deg);
+  }
+}
+
+.lf-liane.riss .lf-affe-wrap {
+  animation: lf-riss 0.8s ease-in;
+}
+
+@keyframes lf-riss {
+  30% {
+    transform: translateY(16px) rotate(6deg);
+  }
+}
+
+.lf-liane.offline {
+  opacity: 0.45;
+}
+
+.lf-affe,
+.lf-affe-emoji {
+  font-size: 1.9rem;
+}
+
+.lf-name {
+  font-size: 0.8rem;
+  color: var(--muted);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lf-stand {
+  font-size: 0.8rem;
+}
+
+/* Der Fluss: Wellen + schnappendes Krokodil (nur Drama, niemand fällt). */
+.lf-fluss {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 34px;
+  background: rgb(41 217 213 / 25%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  overflow: hidden;
+}
+
+.lf-welle {
+  color: var(--mm-studio-led, #29d9d5);
+  letter-spacing: 2px;
+}
+
+.lf-krokodil {
+  font-size: 1.6rem;
+  animation: lf-lauern 5s ease-in-out infinite;
+}
+
+@keyframes lf-lauern {
+  0%,
+  100% {
+    transform: translateX(-30px);
+  }
+
+  50% {
+    transform: translateX(30px);
+  }
+}
+
+.lf-krokodil.schnappt {
+  animation: lf-schnappen 0.5s var(--mm-kurve-bounce, ease) 3;
+}
+
+@keyframes lf-schnappen {
+  50% {
+    transform: translateY(-10px) scale(1.35) rotate(-8deg);
+  }
+}
+
+.lf-frage {
+  text-align: center;
+  font-size: clamp(1.2rem, 2.8vw, 1.8rem);
+  line-height: 1.2;
+  margin: 0.15em 0;
+}
+
+.lf-optionen {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.lf-option {
+  background: var(--panel);
+  border-left: 10px solid var(--deko);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  font-size: clamp(1rem, 2.2vw, 1.4rem);
+  font-weight: 600;
+}
+
+.lf-option.richtig {
+  outline: 4px solid var(--gold);
+  background: var(--mm-flaeche-chip);
+}
+
+.lf-option.falsch {
+  opacity: 0.35;
+}
+
+.lf-deko {
+  display: inline-block;
+  min-width: 3em;
+  color: var(--deko);
+  font-weight: 800;
+}
+
+/* ---------- Player (hochkant XXL): Restlänge + 4 Buttons ---------- */
+.lf-player {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+  padding: 10px;
+}
+
+.lf-restlaenge {
+  position: relative;
+  height: 30px;
+  background: rgb(26 18 8 / 35%);
+  border-radius: var(--mm-radius-rund);
+  overflow: hidden;
+}
+
+.lf-restlaenge-balken {
+  position: absolute;
+  inset: 0;
+  width: calc(var(--laenge) * 100%);
+  background: var(--mm-leaf, #22a559);
+  border-radius: var(--mm-radius-rund);
+  transition: width 0.6s var(--mm-kurve-snap, ease);
+}
+
+.lf-restlaenge-text {
+  position: relative;
+  display: block;
+  text-align: center;
+  line-height: 30px;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.lf-frage-klein {
+  text-align: center;
+  margin: 4px 0;
+  color: var(--muted);
+}
+
+.lf-button {
+  flex: 1;
+  /* 12dvh statt 16dvh: alle 4 Antworten garantiert im 100dvh-Bild (Eval 2). */
+  min-height: 12dvh;
+  font-size: 1.25rem;
+  font-weight: 700;
+  text-align: left;
+  border-left: 12px solid var(--deko);
+  background: var(--panel);
+}
+
+.lf-button.gewaehlt {
+  outline: 4px solid var(--gold);
+  background: var(--mm-flaeche-chip);
+}
+
+.lf-button.gesperrt:not(.gewaehlt) {
+  opacity: 0.35;
+}

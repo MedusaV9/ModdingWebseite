@@ -1,0 +1,448 @@
+/* Der Goldene Affe — Tempel-Türen (Money-Drop), Schätz-Beats, Punkte-Pips,
+   Krönung mit Tribut; Player: Chip-Verteiler, Slider, Wett-Buttons, XXL-Speed. */
+.ga-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(920px, 94vw);
+  margin: 0 auto;
+}
+
+.ga-kopf {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.ga-badge {
+  background: radial-gradient(
+    140% 140% at 30% 20%,
+    color-mix(in srgb, var(--mm-coin-shine) 60%, var(--mm-ticket-paper)),
+    var(--gold) 80%
+  );
+  color: var(--mm-outline, #1a1208);
+  border-radius: var(--mm-radius-s);
+  border: var(--mm-outline-m) solid var(--mm-outline);
+  box-shadow: var(--mm-schatten-sticker);
+  padding: 3px 10px;
+  font-weight: 900;
+  rotate: var(--mm-kipp-r, 2deg);
+}
+
+.ga-stufe {
+  background: var(--panel);
+  border: 2px solid var(--mm-outline);
+  border-radius: var(--mm-radius-s);
+  padding: 2px 8px;
+  font-weight: 800;
+  font-size: 0.85rem;
+}
+
+.ga-titel {
+  text-align: center;
+  margin: 0;
+}
+
+.ga-frage {
+  text-align: center;
+  margin: 0;
+  font-size: clamp(1.2rem, 3vw, 2rem);
+}
+
+/* ---------- Stufe 1: die 4 Tempel-Türen ---------- */
+.ga-tueren {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.ga-tuer {
+  position: relative;
+  background: var(--panel);
+  border: var(--mm-outline-m) solid var(--mm-outline);
+  border-top: 10px solid var(--deko, var(--gold));
+  border-radius: var(--mm-radius-m) var(--mm-radius-m) var(--mm-radius-s) var(--mm-radius-s);
+  padding: 12px 14px 10px;
+  font-weight: 700;
+  min-height: 74px;
+  transition:
+    transform 500ms ease,
+    opacity 500ms ease;
+}
+
+.ga-tuer.richtig {
+  outline: 4px solid var(--gold);
+  box-shadow: 0 0 24px rgba(230, 184, 48, 0.55);
+}
+
+.ga-tuer.falltuer {
+  transform: translateY(10px) rotate(1.5deg);
+  opacity: 0.45;
+}
+
+.ga-deko {
+  font-weight: 900;
+  margin-right: 6px;
+}
+
+.ga-tuer-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.ga-chip-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--panel);
+  border: 2px solid var(--mm-outline);
+  border-radius: var(--mm-radius-s);
+  padding: 1px 8px;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.ga-chip-tag.plus {
+  border-color: var(--gold);
+}
+
+.ga-chip-tag.minus {
+  border-color: var(--rot);
+}
+
+.ga-drop-bilanz,
+.ga-tipp-liste {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ga-richtwert {
+  text-align: center;
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.ga-schaetz-ergebnis {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* ---------- Finalisten + Punkte ---------- */
+.ga-punkte {
+  display: flex;
+  justify-content: center;
+  gap: 32px;
+}
+
+.ga-finalist {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+
+.ga-puppe {
+  width: 64px;
+  height: 64px;
+}
+
+.ga-puppe.riesig {
+  width: 140px;
+  height: 140px;
+}
+
+.ga-name {
+  font-weight: 800;
+  font-size: 0.9rem;
+  background: var(--panel);
+  border: 2px solid var(--mm-outline);
+  border-radius: var(--mm-radius-s);
+  padding: 1px 8px;
+}
+
+.ga-pips {
+  display: flex;
+  gap: 4px;
+}
+
+.ga-pip {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid var(--mm-outline);
+  background: var(--panel);
+}
+
+.ga-pip.voll {
+  background: var(--gold);
+}
+
+.ga-optionen {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.ga-option {
+  background: var(--panel);
+  border: var(--mm-outline-m) solid var(--mm-outline);
+  border-left: 10px solid var(--deko, var(--gold));
+  border-radius: var(--mm-radius-m);
+  padding: 10px 14px;
+  font-weight: 700;
+}
+
+/* ---------- Krönung ---------- */
+.ga-kroenung {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.ga-krone {
+  font-size: 3rem;
+  animation: ga-schweben 2s ease-in-out infinite;
+}
+
+@keyframes ga-schweben {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+.ga-tribut {
+  text-align: center;
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.ga-bilanz {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ga-bilanz-zeile {
+  display: grid;
+  grid-template-columns: 36px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  background: var(--panel);
+  border: 2px solid var(--mm-outline);
+  border-radius: var(--mm-radius-m);
+  padding: 4px 12px;
+}
+
+.ga-bilanz-zeile.gewonnen {
+  border-color: var(--gold);
+}
+
+.ga-mini {
+  width: 32px;
+  height: 32px;
+}
+
+/* ---------- Player ---------- */
+.ga-player {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.ga-player-titel {
+  text-align: center;
+  margin: 0;
+}
+
+.ga-status {
+  background: var(--panel);
+  border: var(--mm-outline-m) solid var(--mm-outline);
+  border-radius: var(--mm-radius-l);
+  box-shadow: var(--mm-schatten-sticker);
+  padding: 16px;
+  text-align: center;
+  font-size: 1.05rem;
+}
+
+.ga-frage-klein {
+  text-align: center;
+  font-weight: 700;
+  margin: 0;
+}
+
+.ga-einsatz {
+  text-align: center;
+  background: var(--panel);
+  border: 2px solid var(--mm-outline);
+  border-radius: var(--mm-radius-m);
+  padding: 6px 10px;
+}
+
+.ga-chip-button {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 56px;
+  background: var(--panel);
+  border: var(--mm-outline-m) solid var(--mm-outline);
+  border-left: 12px solid var(--deko, var(--gold));
+  border-radius: var(--mm-radius-l);
+  box-shadow: var(--mm-schatten-sticker);
+  padding: 8px 12px;
+  font-size: 1rem;
+  font-weight: 800;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ga-chip-button:active {
+  transform: translateY(2px);
+}
+
+.ga-chip-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.ga-chip-zahl {
+  font-weight: 900;
+  color: var(--gold);
+  text-shadow: 0 1px 0 var(--mm-outline);
+}
+
+.ga-chip-werkzeuge {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.ga-werkzeug {
+  background: var(--panel);
+  border: 2px solid var(--mm-outline);
+  border-radius: var(--mm-radius-s);
+  padding: 4px 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.ga-werkzeug:disabled {
+  opacity: 0.5;
+}
+
+.ga-wert {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 6px;
+  font-size: 2rem;
+}
+
+.ga-slider {
+  width: 100%;
+  accent-color: var(--gold);
+  height: 40px;
+  touch-action: none;
+}
+
+.ga-wert-input {
+  width: min(200px, 60%);
+  margin: 0 auto;
+  text-align: center;
+  font-size: 1.2rem;
+  background: var(--panel);
+  border: 2px solid var(--mm-outline);
+  border-radius: var(--mm-radius-s);
+  padding: 6px;
+}
+
+.ga-einloggen {
+  min-height: 56px;
+  background: var(--gold);
+  color: var(--mm-outline, #1a1208);
+  border: var(--mm-outline-m) solid var(--mm-outline);
+  border-radius: var(--mm-radius-l);
+  box-shadow: var(--mm-schatten-sticker);
+  font-size: 1.2rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.ga-einloggen:active {
+  transform: translateY(2px);
+}
+
+.ga-wett-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.ga-wett-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  background: var(--panel);
+  border: var(--mm-outline-m) solid var(--mm-outline);
+  border-radius: var(--mm-radius-l);
+  box-shadow: var(--mm-schatten-sticker);
+  padding: 16px 8px;
+  font-weight: 900;
+  font-size: 1.1rem;
+  cursor: pointer;
+}
+
+.ga-wett-button:active {
+  transform: translateY(2px);
+}
+
+.ga-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 64px;
+  background: var(--panel);
+  border: var(--mm-outline-m) solid var(--mm-outline);
+  border-left: 12px solid var(--deko, var(--gold));
+  border-radius: var(--mm-radius-l);
+  box-shadow: var(--mm-schatten-sticker);
+  padding: 10px 14px;
+  font-size: 1.1rem;
+  font-weight: 800;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ga-button:active {
+  transform: translateY(2px);
+}
+
+.ga-button.gewaehlt {
+  outline: 4px solid var(--gold);
+}
+
+.ga-button.gesperrt:not(.gewaehlt) {
+  opacity: 0.5;
+}
+
+.ga-button:disabled {
+  cursor: not-allowed;
+}

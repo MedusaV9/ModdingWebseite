@@ -1,0 +1,197 @@
+/* Affenleiter — Player: vertikale Drag-Karten (Sprosse 1 unten), Screen:
+   Palmen-Leiter mit Sprosse-für-Sprosse-Auflösung von unten. */
+@import "../../styles/tokens.css";
+
+/* ---------- Screen ---------- */
+
+.al-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: min(900px, 94vw);
+  margin: 0 auto;
+}
+
+.al-frage {
+  text-align: center;
+  font-size: clamp(1.4rem, 3.5vw, 2.4rem);
+}
+
+/* Leiter: Sprossen via order-Property gestapelt (Sprosse 0 = unten) */
+.al-leiter {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0 8vw;
+  position: relative;
+}
+
+.al-leiter::before,
+.al-leiter::after {
+  content: "";
+  position: absolute;
+  top: -8px;
+  bottom: -8px;
+  width: 10px;
+  border-radius: 5px;
+  background: var(--mm-deep-palm, #14532d);
+}
+
+.al-leiter::before {
+  left: 4vw;
+}
+
+.al-leiter::after {
+  right: 4vw;
+}
+
+.al-sprosse {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--mm-flaeche, var(--panel));
+  border: var(--mm-outline-m, 4px) solid var(--mm-outline, #1a1208);
+  border-radius: var(--mm-radius-m, 12px);
+  box-shadow: var(--mm-schatten-sticker, none);
+  padding: 12px 18px;
+  font-size: clamp(1rem, 2.2vw, 1.4rem);
+  font-weight: 600;
+}
+
+.al-sprosse.geheim {
+  opacity: 0.5;
+}
+
+/* Auflösung: Sprossen klappen von unten nach oben auf (staggered delay) */
+.al-sprosse.enthuellt {
+  animation: al-sprosse-auf 0.5s var(--mm-kurve-bounce, ease) both;
+}
+
+@keyframes al-sprosse-auf {
+  from {
+    opacity: 0;
+    transform: translateY(24px) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.al-sprosse-nr {
+  font-weight: 800;
+  color: var(--mm-banana-leaf, #8fe04b);
+  min-width: 1.6em;
+}
+
+.al-sprosse-text {
+  flex: 1;
+}
+
+.al-sprosse-wert {
+  font-size: 1em;
+}
+
+.al-sprosse-affen {
+  letter-spacing: -0.2em;
+}
+
+.al-perfekt {
+  text-align: center;
+  font-weight: 800;
+  color: var(--mm-vault-gold, var(--gold));
+  font-size: var(--mm-text-xl, 1.5rem);
+}
+
+/* ---------- Player (iPhone hochkant): XXL-Drag-Karten ---------- */
+
+.al-player {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+  padding: 10px;
+}
+
+.al-frage-klein {
+  text-align: center;
+  margin: 2px 0;
+  color: var(--muted);
+}
+
+.al-karten {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+}
+
+/* touch-action:none = Drag statt Scrollen; Tap-Tap funktioniert trotzdem */
+.al-karte {
+  flex: 1;
+  min-height: 13dvh;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  font-size: 1.2rem;
+  font-weight: 700;
+  background: var(--mm-flaeche, var(--panel));
+  border: var(--mm-outline-m, 4px) solid var(--mm-outline, #1a1208);
+  box-shadow: var(--mm-schatten-sticker, none);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: transform var(--mm-dauer-tap, 90ms) ease;
+}
+
+.al-karte.gewaehlt {
+  outline: 4px solid var(--mm-studio-led, #29d9d5);
+  transform: scale(0.97) rotate(var(--mm-kipp-l, -2deg));
+}
+
+.al-karte.dragging {
+  outline: 4px solid var(--mm-vault-gold, var(--gold));
+  transform: scale(1.04);
+  z-index: 2;
+}
+
+.al-karte.gesperrt {
+  opacity: 0.55;
+}
+
+.al-griff {
+  color: var(--muted);
+  font-size: 1.5rem;
+}
+
+.al-karte-text {
+  flex: 1;
+}
+
+.al-karte-nr {
+  color: var(--mm-banana-leaf, #8fe04b);
+  font-weight: 800;
+  font-size: 1.4rem;
+}
+
+.al-hinweis {
+  text-align: center;
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.al-einloggen {
+  min-height: 64px;
+  font-size: var(--mm-text-xl, 1.5rem);
+}
+
+.al-eingeloggt-banner {
+  text-align: center;
+  font-size: var(--mm-text-l, 1.25rem);
+  font-weight: 700;
+  background: rgb(245 179 1 / 15%);
+  outline: 3px solid var(--mm-vault-gold, var(--gold));
+  border-radius: var(--mm-radius-m, 12px);
+  padding: 14px;
+}

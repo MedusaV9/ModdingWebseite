@@ -1,0 +1,1146 @@
+/* Meta-Screens auf der Landing: Bestenlisten (§7.3), Shop (§7.4),
+   Profil-Karte (§7.1), Trainingslager (§6.2). Schlicht + funktional,
+   alles auf den Banana-Vault-Tokens. */
+.meta-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  overflow-y: auto;
+  height: 100%;
+  align-items: center;
+}
+
+/* Tab-Navigation (Welle 4, Konsistenz): EINE Leiste, aktiver Tab gold +
+   gekippt (Sticker), „Zurück" klar als Ausgang abgesetzt. */
+.meta-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+  padding-bottom: 10px;
+  border-bottom: 2px dashed rgb(255 246 227 / 18%);
+  max-width: 96vw;
+}
+
+.meta-tabs button {
+  min-height: 44px;
+  padding: 6px 14px;
+}
+
+.meta-tabs button.aktiv {
+  background: var(--gold);
+  color: var(--mm-outline, #1a1208);
+  rotate: var(--mm-kipp-l);
+  box-shadow: var(--mm-schatten-sticker);
+}
+
+.meta-tabs button.zurueck {
+  background: transparent;
+  border-color: rgb(255 246 227 / 35%);
+  opacity: 0.85;
+  margin-right: 6px;
+}
+
+/* Titel-Hierarchie (Welle 4): H2-Screen-Kopf über dem Inhalt, Karten bei H3. */
+.meta-kopf {
+  text-align: center;
+  margin: 2px 0 0;
+}
+
+.meta-kopf h2 {
+  margin: 0;
+  font-family: var(--mm-font-display);
+  font-size: var(--mm-display-s);
+  line-height: var(--mm-zeilenhoehe-display);
+  color: var(--gold);
+  text-shadow: 2px 2px 0 var(--mm-schatten-farbe);
+}
+
+.meta-kopf p {
+  margin: 2px 0 0;
+  font-size: 0.85rem;
+}
+
+/* Fehler-Zustand charmant (Welle 4): Emoji + Text statt roter Zeile. */
+.meta-fehler {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  background: color-mix(in srgb, var(--rot) 18%, var(--panel));
+  border: var(--mm-outline-s) solid var(--rot);
+  border-radius: var(--radius);
+  box-shadow: var(--mm-schatten-sticker);
+  padding: 8px 14px;
+  max-width: min(720px, 96vw);
+  font-weight: 600;
+}
+
+.meta-fehler .fehler-emoji {
+  font-size: 1.6rem;
+  rotate: var(--mm-kipp-r);
+}
+
+/* Leer-Zustand charmant (Welle 4): große Emoji-Illustration + warmer Text. */
+.leer-zustand {
+  text-align: center;
+  padding: 14px 8px;
+}
+
+.leer-zustand .leer-emoji {
+  display: block;
+  font-size: 2.4rem;
+  rotate: var(--mm-kipp-l);
+  filter: drop-shadow(2px 2px 0 var(--mm-schatten-farbe));
+}
+
+.leer-zustand p {
+  margin: 6px 0 0;
+  font-size: 0.9rem;
+  opacity: 0.75;
+}
+
+.meta-inhalt {
+  width: min(720px, 96vw);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.board-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.board-karte h3 {
+  margin: 0 0 6px;
+}
+
+.board-zeile {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  padding: 3px 0;
+  border-bottom: 1px solid rgba(255, 246, 227, 0.08);
+  font-size: 0.92rem;
+}
+
+.board-zeile .platz {
+  width: 2ch;
+  color: var(--gold);
+  font-weight: 700;
+}
+
+.board-zeile .wert {
+  margin-left: auto;
+  font-weight: 700;
+  color: var(--gold);
+}
+
+/* Podest-Optik (Welle 4): Top 3 als Treppchen 2-1-3 — Medaille, Name, Wert,
+   Sockel wachsen zur Mitte. Medaillen-Metalle = bewusste Requisiten-Farben
+   (Muster: Podest-Medaillen in studio.css, tokens.css-Ausnahmenliste). */
+.board-podest {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  margin: 4px 0 8px;
+}
+
+.podest-platz {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  text-align: center;
+}
+
+.podest-medaille {
+  font-size: 1.5rem;
+  filter: drop-shadow(2px 2px 0 var(--mm-schatten-farbe));
+}
+
+.platz-1 .podest-medaille {
+  font-size: 1.9rem;
+}
+
+.podest-name {
+  font-weight: 800;
+  font-size: 0.9rem;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.podest-extra {
+  font-size: 0.72rem;
+  opacity: 0.65;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.podest-wert {
+  font-weight: 700;
+  font-size: 0.82rem;
+  color: var(--gold);
+  font-variant-numeric: var(--mm-ziffern);
+}
+
+.podest-sockel {
+  width: 100%;
+  border-radius: var(--mm-radius-s) var(--mm-radius-s) 0 0;
+  border: var(--mm-outline-s) solid var(--mm-outline);
+  border-bottom: none;
+  box-shadow: var(--mm-schatten-sticker);
+  font-weight: 900;
+  font-size: 1.1rem;
+  color: var(--mm-outline);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 3px;
+}
+
+.platz-1 .podest-sockel {
+  height: 44px;
+  background: var(--gold);
+}
+
+.platz-2 .podest-sockel {
+  height: 30px;
+  background: #c0c8d0; /* Silber (Requisiten-Farbe, s. o.) */
+}
+
+.platz-3 .podest-sockel {
+  height: 22px;
+  background: #c77b3f; /* Bronze (Requisiten-Farbe, s. o.) */
+}
+
+/* Persönlicher Fortschritt zur Board-Schwelle (§7.3-Fix für neue Gruppen). */
+.board-fortschritt {
+  margin: 8px 0 0;
+  font-size: 0.82rem;
+  color: var(--gold);
+  border-top: 1px dashed rgba(255, 246, 227, 0.25);
+  padding-top: 6px;
+}
+
+.board-fortschritt.geschafft {
+  color: var(--gruen);
+}
+
+.shop-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 10px;
+}
+
+/* Shop-Navigation (UX-Fix): Typ-Chips mit Counts + Filter/Sortierung.
+   Auf Mobile klebt die Leiste oben, damit man beim Scrollen umschalten kann. */
+.shop-chips {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 4px;
+  margin: 0 -4px;
+  background: var(--bg, #0e2a1f);
+  /* Harter Sticker-Schatten statt Blur (Gesetz 3). */
+  box-shadow: var(--mm-schatten-sticker);
+  border-radius: 0 0 var(--mm-radius-m) var(--mm-radius-m);
+}
+
+.chip-zeile {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.chip {
+  /* Touch-Ziel ≥44px (Eval-2-Befund: 34px zu klein für Daumen). */
+  min-height: 44px;
+  padding: 6px 14px;
+  font-size: 0.85rem;
+  border-radius: var(--mm-radius-rund);
+  box-shadow: none;
+}
+
+.chip.aktiv {
+  background: var(--gold);
+  color: var(--mm-outline, #1a1208);
+  font-weight: 700;
+}
+
+.chip:disabled {
+  opacity: 0.45;
+}
+
+/* Abschnitts-Header der Vitrine (Welle 4): Typ-Icon + Zähler, dashed Linie. */
+.shop-abschnitt {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 8px 0 -2px;
+}
+
+.shop-abschnitt span {
+  font-family: var(--mm-font-display);
+  font-size: 1.05rem;
+  color: var(--gold);
+  text-shadow: 1px 1px 0 var(--mm-schatten-farbe);
+  white-space: nowrap;
+}
+
+.shop-abschnitt small {
+  opacity: 0.6;
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.shop-abschnitt::after {
+  content: "";
+  flex: 1;
+  border-bottom: 2px dashed rgb(255 246 227 / 18%);
+  translate: 0 -4px;
+}
+
+/* Shop-Karten als Sticker (Eval-10-Fix „Admin-Oberfläche"): Outline + harter
+   Schatten + großes Item-Icon — Markup gehört meta-landing.ts, hier NUR CSS. */
+.shop-item {
+  position: relative;
+  background: var(--panel);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border: var(--mm-outline-s) solid var(--mm-outline);
+  box-shadow: var(--mm-schatten-sticker);
+}
+
+/* Preis-Stufen-Rahmen (Welle 4): <1k Bronze · <4k Silber · <8k Gold ·
+   drüber Legendär-GLOW (Gold-Leuchteffekt ist per tokens.css-Ausnahme ok;
+   Bronze/Silber = Requisiten-Metalle wie die Podest-Medaillen). */
+.shop-item.rahmen-bronze {
+  border-color: #c77b3f;
+}
+
+.shop-item.rahmen-silber {
+  border-color: #c0c8d0;
+}
+
+.shop-item.rahmen-gold {
+  border-color: var(--gold);
+}
+
+.shop-item.rahmen-legendaer {
+  border-color: var(--mm-coin-shine, #ffde6b);
+  box-shadow:
+    var(--mm-schatten-sticker),
+    0 0 14px rgb(255 222 107 / 45%);
+}
+
+.shop-item.rahmen-geschenk {
+  border-color: var(--mm-studio-led, #29d9d5);
+}
+
+/* Besitz deutlich (Welle 4): grüner Rahmen + Ecken-Badge „✓ Deins". */
+.shop-item.besessen {
+  border-color: var(--gruen);
+}
+
+.besitz-badge {
+  position: absolute;
+  top: -9px;
+  right: 8px;
+  background: var(--gruen);
+  color: var(--mm-outline, #1a1208);
+  font-size: 0.72rem;
+  font-weight: 900;
+  padding: 1px 8px;
+  border-radius: var(--mm-radius-rund);
+  border: 2px solid var(--mm-outline);
+  box-shadow: var(--mm-schatten-sticker);
+  rotate: var(--mm-kipp-r);
+  z-index: 1;
+}
+
+.shop-item-kopf {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+
+.shop-item-emoji {
+  font-size: 2.4rem;
+  line-height: 1.05;
+  rotate: var(--mm-kipp-l);
+  filter: drop-shadow(2px 2px 0 var(--mm-schatten-farbe));
+}
+
+/* Live-Thumbnail (Welle 4): eigener Affe MIT Item, klein auf der Karte —
+   Kopf-Items (.kopf) zeigen den Kopf-Ausschnitt (Puppen-ViewBox 240×320,
+   Kopf sitzt oben-mittig → reinzoomen + zentrieren). */
+.shop-thumb {
+  flex: 0 0 auto;
+  width: 58px;
+  height: 58px;
+  border-radius: var(--mm-radius-m);
+  border: 2px solid var(--mm-outline);
+  background: var(--mm-flaeche-tief);
+  overflow: hidden;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+.shop-thumb svg {
+  width: 52px;
+  height: 70px;
+  flex: 0 0 auto;
+}
+
+.shop-thumb.kopf svg {
+  width: 96px;
+  height: 128px;
+  margin-top: -10px;
+}
+
+.shop-item .preis {
+  color: var(--gold);
+  font-weight: 700;
+}
+
+.shop-item small {
+  opacity: 0.7;
+}
+
+.shop-item button {
+  min-height: 44px;
+  padding: 4px 10px;
+  font-size: 0.85rem;
+}
+
+.seltenheit-gruen {
+  color: var(--gruen);
+}
+
+.seltenheit-reif {
+  color: var(--gold);
+}
+
+.seltenheit-gold {
+  color: var(--mm-coin-shine, #ffde6b);
+}
+
+.seltenheit-diamant {
+  color: var(--mm-studio-led, #29d9d5);
+}
+
+.shop-vorschau {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+
+.shop-vorschau .puppe {
+  width: 120px;
+  height: 160px;
+}
+
+.shop-vorschau .puppe svg {
+  width: 100%;
+  height: 100%;
+}
+
+.training-optionen {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.training-kopfzeile {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+/* Streak-Anzeige (Welle 4): Flammen-Chip, ab 5er-Serie heiß (pulsiert). */
+.training-streak {
+  font-weight: 900;
+  font-size: 0.85rem;
+  color: var(--mm-outline, #1a1208);
+  background: var(--mm-banana-leaf, #8fe04b);
+  border: 2px solid var(--mm-outline);
+  border-radius: var(--mm-radius-rund);
+  padding: 2px 10px;
+  box-shadow: var(--mm-schatten-sticker);
+  rotate: var(--mm-kipp-r);
+  white-space: nowrap;
+}
+
+.training-streak.heiss {
+  background: var(--gold);
+  animation: mm-kauf-puls 1.2s ease-in-out infinite;
+}
+
+.training-frage {
+  font-size: 1.15rem;
+  margin: 6px 0;
+}
+
+/* Frage-Karte im MATCH-Look (Welle 4): dieselbe Antwort-Anatomie wie
+   Bananen-Basics (.bb-button) — Deko-Farbkante links, Buchstabe + Emoji. */
+.training-antworten {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.training-antwort {
+  min-height: 56px;
+  text-align: left;
+  padding: 8px 12px;
+  border-left: 12px solid var(--deko, var(--gold));
+  background: var(--panel);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+}
+
+.training-deko {
+  color: var(--deko, var(--gold));
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.training-antwort.richtig {
+  background: var(--gruen);
+  color: var(--mm-outline, #1a1208);
+}
+
+.training-antwort.richtig .training-deko {
+  color: var(--mm-outline, #1a1208);
+}
+
+.training-antwort.falsch {
+  background: var(--rot);
+}
+
+.training-antwort.falsch .training-deko {
+  color: var(--mm-text-hell, #fff6e3);
+}
+
+.training-antwort.weg {
+  opacity: 0.25;
+  pointer-events: none;
+}
+
+/* Richtig/Falsch-MOMENTE (Welle 4): Karte feiert bzw. schüttelt kurz —
+   dasselbe Feedback-Gefühl wie am Handy im Match. */
+.training-karte.moment-richtig {
+  animation: mm-moment-hops 0.5s var(--mm-kurve-bounce) 1;
+  border-color: var(--gruen);
+}
+
+.training-karte.moment-falsch {
+  animation: mm-moment-schuettel 0.4s ease-in-out 1;
+  border-color: var(--rot);
+}
+
+.training-moment {
+  font-size: 1.15rem;
+  font-weight: 900;
+}
+
+.training-moment.richtig {
+  color: var(--gruen);
+  display: inline-block;
+  animation: mm-kauf-puls 0.7s ease-in-out 2;
+}
+
+.training-moment.falsch {
+  color: var(--rot);
+}
+
+@keyframes mm-moment-hops {
+  0% {
+    transform: scale(1);
+  }
+
+  40% {
+    transform: scale(1.02) rotate(0.6deg);
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes mm-moment-schuettel {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+
+  25% {
+    transform: translateX(-5px);
+  }
+
+  75% {
+    transform: translateX(5px);
+  }
+}
+
+/* Session-Fazit-Karte (Welle 4): „12 geübt · 75 % · stärkste Kategorie X". */
+.training-fazit {
+  border-color: var(--gold);
+}
+
+.fazit-zahlen {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+
+.fazit-zahlen .kpi b {
+  display: block;
+  font-size: 1.6rem;
+  color: var(--gold);
+  font-variant-numeric: var(--mm-ziffern);
+}
+
+.karten-stat {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.karten-stat .kpi b {
+  display: block;
+  font-size: 1.25rem;
+  color: var(--gold);
+  font-variant-numeric: var(--mm-ziffern);
+}
+
+/* Count-up-Flash (Handy-Muster): Zahl blitzt beim Hochticken kurz hell. */
+.tickt {
+  animation: mm-tick-flash 0.6s ease-out 1;
+}
+
+@keyframes mm-tick-flash {
+  0% {
+    color: var(--mm-coin-shine, #ffde6b);
+    transform: scale(1.15);
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .training-karte.moment-richtig,
+  .training-karte.moment-falsch,
+  .training-moment.richtig,
+  .training-streak.heiss,
+  .tickt {
+    animation: none;
+  }
+}
+
+/* ---------- Bananen-Pass & Quests (§7.5, Meta-Agent 2) ---------- */
+
+/* Bananen-PFAD (Welle 4): Serpentinen-Reihen à 5 Stufen — jede zweite Reihe
+   läuft rückwärts, gestrichelte Pfad-Linie hinter den Stufen, Kurven-Bögen
+   verbinden die Reihen-Enden. Liest sich als REISE statt als Leiste. */
+.pass-pfad {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 20px 10px 8px;
+}
+
+.pass-reihe {
+  position: relative;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.pass-reihe.rueckweg {
+  flex-direction: row-reverse;
+}
+
+/* Pfad-Linie: gestrichelt hinter der Reihe (Bananen-Gold, gedimmt). */
+.pass-reihe::before {
+  content: "";
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: 50%;
+  border-top: 3px dashed color-mix(in srgb, var(--mm-banana) 45%, transparent);
+}
+
+/* Kurven-Verbinder zu NÄCHSTEN Reihe: Halbbogen am jeweiligen Ende. */
+.pass-reihe.kurve-rechts::after,
+.pass-reihe.kurve-links::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  height: calc(100% + 18px);
+  width: 22px;
+  border: 3px dashed color-mix(in srgb, var(--mm-banana) 45%, transparent);
+}
+
+.pass-reihe.kurve-rechts::after {
+  right: -13px;
+  border-left: none;
+  border-radius: 0 999px 999px 0;
+}
+
+.pass-reihe.kurve-links::after {
+  left: -13px;
+  border-right: none;
+  border-radius: 999px 0 0 999px;
+}
+
+.pass-stufe {
+  position: relative;
+  z-index: 1;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 78px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 6px 2px;
+  border-radius: var(--mm-radius-m);
+  background: var(--mm-flaeche-tief);
+  border: 2px solid rgb(255 246 227 / 14%);
+  opacity: 0.6;
+}
+
+/* Erreichte Stufen GEFÜLLT (Welle 4): Bananen-Gold, dunkle Schrift. */
+.pass-stufe.erreicht {
+  opacity: 1;
+  background: color-mix(in srgb, var(--mm-banana) 82%, var(--panel));
+  border-color: var(--mm-outline);
+  box-shadow: var(--mm-schatten-sticker);
+}
+
+.pass-stufe.erreicht .stufe-nr,
+.pass-stufe.erreicht small {
+  color: var(--mm-outline);
+  opacity: 1;
+}
+
+.pass-stufe.naechste {
+  opacity: 1;
+  border-color: var(--gold);
+  box-shadow: var(--mm-schatten-sticker);
+}
+
+/* Exklusiv-Stufen: GROSSES Geschenk (Welle 4) + Sticker-Kipp. */
+.pass-stufe.item-stufe {
+  border-color: color-mix(in srgb, var(--mm-studio-led, #29d9d5) 65%, transparent);
+}
+
+.pass-stufe.item-stufe .stufe-icon {
+  /* Harter Sticker-Schatten statt Blur-Glow (Gesetz 3). */
+  filter: drop-shadow(2px 2px 0 var(--mm-schatten-farbe));
+  font-size: 1.9rem;
+  rotate: var(--mm-kipp-r);
+}
+
+.pass-stufe .stufe-nr {
+  /* Lesbarkeits-Minimum 12px (UX-Fix: vorher 9,6px Mikroschrift). */
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: var(--gold);
+}
+
+.pass-stufe .stufe-icon {
+  font-size: 1.3rem;
+  line-height: 1.1;
+}
+
+.pass-stufe small {
+  /* ≥ 12px auch für die Stufen-Beschriftung (+AT / EXKLUSIV). */
+  font-size: 0.75rem;
+  opacity: 0.85;
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Affen-Kopf-Marker „Du bist hier" (Welle 4): Kopf-Ausschnitt der eigenen
+   Puppe in einer Gold-Münze, hüpft sanft über der aktuellen Stufe. */
+.pass-marker {
+  position: absolute;
+  top: -20px;
+  left: 50%;
+  translate: -50% 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--gold);
+  border: 3px solid var(--mm-outline);
+  box-shadow: var(--mm-schatten-sticker);
+  overflow: hidden;
+  display: flex;
+  justify-content: center;
+  z-index: 3;
+  animation: mm-marker-huepf 1.6s ease-in-out infinite;
+}
+
+.pass-marker svg {
+  width: 62px;
+  height: 83px;
+  flex: 0 0 auto;
+  margin-top: -4px;
+}
+
+.pass-marker.wartet {
+  filter: grayscale(0.35);
+}
+
+@keyframes mm-marker-huepf {
+  0%,
+  100% {
+    translate: -50% 0;
+  }
+
+  50% {
+    translate: -50% -5px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pass-marker {
+    animation: none;
+  }
+}
+
+.pass-items {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+}
+
+.quest-karten {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 10px;
+}
+
+/* Quest-Karten mit Fortschritts-RING statt Balken (Welle 4). */
+.quest-karte {
+  background: var(--panel);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: var(--mm-outline-s) solid var(--mm-outline);
+  box-shadow: var(--mm-schatten-sticker);
+}
+
+.quest-karte.fertig {
+  border-color: var(--gruen);
+}
+
+.quest-karte.fertig .quest-xp {
+  color: var(--gruen);
+}
+
+.quest-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.quest-text strong {
+  font-size: 0.95rem;
+}
+
+.quest-xp {
+  color: var(--gold);
+  font-weight: 800;
+  white-space: nowrap;
+  font-size: 0.85rem;
+}
+
+.quest-ring {
+  flex: 0 0 auto;
+  width: 56px;
+  height: 56px;
+}
+
+.quest-ring circle {
+  fill: none;
+  stroke-width: 5;
+}
+
+.quest-ring .ring-spur {
+  stroke: rgb(255 246 227 / 14%);
+}
+
+.quest-ring .ring-wert {
+  stroke: var(--gold);
+  stroke-linecap: round;
+  /* Ring startet OBEN: −90° um den Kreis-Mittelpunkt. */
+  transform: rotate(-90deg);
+  transform-origin: 24px 24px;
+  transition: stroke-dasharray 0.4s ease;
+}
+
+.quest-karte.fertig .ring-wert {
+  stroke: var(--gruen);
+}
+
+.quest-ring text {
+  fill: var(--mm-text-hell, #fff6e3);
+  font-size: 11px;
+  font-weight: 800;
+  text-anchor: middle;
+  dominant-baseline: middle;
+}
+
+.quest-karte.fertig text {
+  fill: var(--gruen);
+  font-size: 16px;
+}
+
+.quest-balken {
+  height: 10px;
+  border-radius: var(--mm-radius-s);
+  background: rgba(255, 246, 227, 0.12);
+  overflow: hidden;
+}
+
+.quest-balken > div {
+  height: 100%;
+  border-radius: var(--mm-radius-s);
+  /* Flat Gold statt linearem Verlauf (Gesetz 4: Verläufe nur radial). */
+  background: var(--gold);
+  transition: width 0.4s ease;
+}
+
+.pass-balken {
+  height: 14px;
+}
+
+.level-gate {
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: var(--mm-studio-led, #29d9d5);
+  border: 1px solid currentcolor;
+  border-radius: var(--mm-radius-s);
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+
+/* Kauf-Moment (Eval 4): kurzer Puls am „Gekauft!"-Hinweis im Shop-Item. */
+@keyframes mm-kauf-puls {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.12);
+  }
+}
+
+/* ---------- Profil-Karte als Sticker-AUSWEIS (Welle 4) ---------- */
+
+.ausweis {
+  padding: 0;
+  overflow: hidden;
+  border: var(--mm-outline-m) solid var(--gold);
+  box-shadow: var(--mm-schatten-sticker-gross);
+  rotate: var(--mm-kipp-l);
+}
+
+.ausweis-kopf {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 14px;
+  background: var(--gold);
+  color: var(--mm-outline, #1a1208);
+  font-family: var(--mm-font-display);
+  font-size: 0.95rem;
+  letter-spacing: 0.03em;
+}
+
+.ausweis-serie {
+  font-family: var(--mm-font-text);
+  font-weight: 800;
+  font-size: 0.75rem;
+  opacity: 0.8;
+  white-space: nowrap;
+}
+
+.ausweis-mitte {
+  display: flex;
+  gap: 14px;
+  padding: 12px 14px 8px;
+  align-items: center;
+}
+
+/* „Passbild": Affe groß links — Banner-Hintergrund kommt aus schmueckePuppen
+   (inline style am Slot), der Rahmen macht daraus ein Foto. */
+.ausweis-foto {
+  flex: 0 0 auto;
+  border: 3px solid var(--mm-outline);
+  border-radius: var(--mm-radius-m);
+  background: var(--mm-flaeche-tief);
+  overflow: hidden;
+}
+
+.ausweis-foto .puppe {
+  width: 116px;
+  height: 154px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.ausweis-foto .puppe svg {
+  width: 100%;
+  height: 100%;
+}
+
+.ausweis-daten {
+  flex: 1;
+  min-width: 0;
+}
+
+.ausweis-name {
+  margin: 0;
+  font-size: 1.35rem;
+}
+
+.ausweis-titel {
+  margin: 2px 0 6px;
+  color: var(--gold);
+  font-weight: 700;
+  font-style: italic;
+}
+
+.ausweis-stats {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px 14px;
+}
+
+@media (max-width: 400px) {
+  .ausweis-stats {
+    grid-template-columns: 1fr;
+  }
+}
+
+.ausweis-stats div {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  border-bottom: 1px dashed rgb(255 246 227 / 15%);
+  padding: 2px 0;
+}
+
+.ausweis-stats dt {
+  opacity: 0.65;
+  font-size: 0.8rem;
+}
+
+.ausweis-stats dd {
+  margin: 0;
+  font-weight: 800;
+  font-variant-numeric: var(--mm-ziffern);
+  color: var(--gold);
+}
+
+.ausweis-fuss {
+  padding: 4px 14px 12px;
+}
+
+/* Bestleistungen als 3 Mini-Medaillen (Welle 4) — Metalle wie am Podest. */
+.medaillen {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.medaille {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  text-align: center;
+  padding: 10px 8px;
+  border-radius: var(--mm-radius-m);
+  background: var(--mm-flaeche-tief);
+  border: 3px solid var(--mm-outline);
+  box-shadow: var(--mm-schatten-sticker);
+}
+
+.medaille.gold {
+  border-color: var(--gold);
+}
+
+.medaille.silber {
+  border-color: #c0c8d0; /* Silber (Requisiten-Farbe wie Podest) */
+}
+
+.medaille.bronze {
+  border-color: #c77b3f; /* Bronze (Requisiten-Farbe wie Podest) */
+}
+
+.medaille-icon {
+  font-size: 1.7rem;
+  filter: drop-shadow(2px 2px 0 var(--mm-schatten-farbe));
+}
+
+.medaille b {
+  font-size: 1.15rem;
+  color: var(--gold);
+  font-variant-numeric: var(--mm-ziffern);
+}
+
+.medaille small {
+  font-size: 0.75rem;
+  opacity: 0.7;
+}
+
+@media (max-width: 480px) {
+  .ausweis-mitte {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .ausweis-foto {
+    align-self: center;
+  }
+}

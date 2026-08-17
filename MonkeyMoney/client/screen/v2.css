@@ -1,0 +1,615 @@
+/* v2-Features (Screen): Replay-Highlights, Sudden-Death-Look, Jubiläums-Karte,
+ * Foto-Finish-Share. Nur transform/opacity-Animationen (Beamer-freundlich). */
+
+/* ---------- Replay-Highlights: „Die Highlights des Abends" ---------- */
+.highlight-buehne {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  height: 100%;
+}
+
+.highlight-karte {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 34px 54px;
+  max-width: min(860px, 86vw);
+  background: var(--panel);
+  border: var(--mm-outline-m) solid var(--gold);
+  border-radius: var(--mm-radius-l);
+  box-shadow: var(--mm-schatten-sticker-gross);
+  animation: highlight-rein 0.55s var(--mm-kurve-bounce) both;
+  text-align: center;
+}
+
+@keyframes highlight-rein {
+  from {
+    opacity: 0;
+    transform: translateY(46px) scale(0.9) rotate(-1.5deg);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.highlight-karte .hl-icon {
+  font-size: 4.4rem;
+  line-height: 1;
+  animation: hl-wackel 1.6s ease-in-out infinite;
+}
+
+@keyframes hl-wackel {
+  0%,
+  100% {
+    transform: rotate(-4deg);
+  }
+
+  50% {
+    transform: rotate(4deg);
+  }
+}
+
+.highlight-karte h1 {
+  margin: 0;
+  font-size: var(--mm-display-m, 2.4rem);
+  color: var(--gold);
+}
+
+.highlight-karte .hl-text {
+  font-size: 1.45rem;
+  max-width: 30em;
+}
+
+.highlight-karte .hl-betrag {
+  font-size: 2.2rem;
+  font-weight: 900;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Count-up (W4): der Betrag zählt hoch (Render-Tick) und landet mit Puls. */
+.highlight-karte .hl-betrag.fertig {
+  animation: hl-betrag-puls 0.45s var(--mm-kurve-bounce) both;
+}
+
+@keyframes hl-betrag-puls {
+  0% {
+    transform: scale(1);
+  }
+
+  45% {
+    transform: scale(1.22);
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+
+.highlight-puppen {
+  display: flex;
+  gap: 28px;
+  align-items: flex-end;
+}
+
+.highlight-puppen .kandidaten-puppe {
+  width: min(120px, 14vw);
+  aspect-ratio: 240 / 320;
+}
+
+/* Betroffenen-Seite (W4): echter Puppen-Kopf (frust) + „GETROFFEN!"-Chip. */
+.hl-gegner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.hl-gegner-puppe {
+  filter: saturate(0.75);
+  rotate: 5deg;
+}
+
+.hl-getroffen-chip {
+  background: var(--rot);
+  color: var(--mm-ticket-paper);
+  font-weight: 800;
+  font-size: 0.78rem;
+  border: 2px solid var(--mm-outline);
+  border-radius: var(--mm-radius-rund);
+  padding: 1px 10px;
+  rotate: -3deg;
+  animation: hl-betrag-puls 0.5s 0.5s var(--mm-kurve-bounce) both;
+}
+
+/* ---------- Replay-Mini-Animationen je Highlight-Art (W4) ----------
+   Feste Bühne (Höhe der bisherigen Icon-Zeile), nur transform/opacity. */
+.hl-anim {
+  position: relative;
+  width: min(340px, 60vw);
+  height: 4.6rem;
+  pointer-events: none;
+}
+
+.hl-anim > span {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 3.2rem;
+  line-height: 1;
+}
+
+/* Klau: die Hand wandert zur Beute, greift und zieht sie nach links weg. */
+.hl-anim.klau .hl-klau-beute {
+  animation: hl-klau-beute 2.6s ease-in-out infinite;
+}
+
+.hl-anim.klau .hl-klau-hand {
+  font-size: 3.6rem;
+  animation: hl-klau-hand 2.6s ease-in-out infinite;
+}
+
+@keyframes hl-klau-hand {
+  0% {
+    transform: translate(110px, -50%) rotate(10deg);
+    opacity: 0;
+  }
+
+  25% {
+    opacity: 1;
+  }
+
+  45% {
+    transform: translate(-50%, -50%) rotate(-6deg);
+  }
+
+  55% {
+    transform: translate(-50%, -50%) rotate(6deg) scale(0.92);
+  }
+
+  90%,
+  100% {
+    transform: translate(-170px, -50%) rotate(-14deg);
+    opacity: 0;
+  }
+}
+
+@keyframes hl-klau-beute {
+  0%,
+  45% {
+    transform: translate(-50%, -50%);
+    opacity: 1;
+  }
+
+  55% {
+    transform: translate(-50%, -50%) scale(0.9);
+  }
+
+  90%,
+  100% {
+    transform: translate(-170px, -50%) scale(0.8);
+    opacity: 0;
+  }
+}
+
+/* Buzzer: zwei Blitze schießen aufeinander, in der Mitte kracht's. */
+.hl-anim.buzzer .hl-blitz.links {
+  animation: hl-blitz-l 1.7s ease-in infinite;
+}
+
+.hl-anim.buzzer .hl-blitz.rechts {
+  animation: hl-blitz-r 1.7s ease-in infinite;
+}
+
+.hl-anim.buzzer .hl-blitz-funke {
+  animation: hl-funke 1.7s ease-out infinite;
+}
+
+@keyframes hl-blitz-l {
+  0% {
+    transform: translate(-160px, -50%) rotate(-14deg);
+    opacity: 0;
+  }
+
+  15% {
+    opacity: 1;
+  }
+
+  38%,
+  100% {
+    transform: translate(-58px, -50%);
+    opacity: 1;
+  }
+}
+
+@keyframes hl-blitz-r {
+  0% {
+    transform: translate(60px, -50%) rotate(14deg) scale(-1, 1);
+    opacity: 0;
+  }
+
+  15% {
+    opacity: 1;
+  }
+
+  38%,
+  100% {
+    transform: translate(-42px, -50%) scale(-1, 1);
+    opacity: 1;
+  }
+}
+
+@keyframes hl-funke {
+  0%,
+  36% {
+    transform: translate(-50%, -50%) scale(0);
+    opacity: 0;
+  }
+
+  46% {
+    transform: translate(-50%, -50%) scale(1.5);
+    opacity: 1;
+  }
+
+  70%,
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0.9;
+  }
+}
+
+/* Patzer: der Absturz-Pfeil kippt nach unten rechts, Scheine flattern weg. */
+.hl-anim.patzer .hl-patzer-pfeil {
+  animation: hl-absturz 2.2s ease-in infinite;
+}
+
+.hl-anim.patzer .hl-patzer-krach {
+  font-size: 2.2rem;
+  animation: hl-krach 2.2s ease-out infinite;
+}
+
+@keyframes hl-absturz {
+  0% {
+    transform: translate(-90px, -140%) rotate(-8deg);
+    opacity: 0;
+  }
+
+  20% {
+    opacity: 1;
+  }
+
+  55%,
+  100% {
+    transform: translate(-20px, -30%) rotate(6deg);
+    opacity: 1;
+  }
+}
+
+@keyframes hl-krach {
+  0%,
+  50% {
+    transform: translate(46px, 4%) scale(0);
+    opacity: 0;
+  }
+
+  65% {
+    transform: translate(46px, -12%) scale(1.25);
+    opacity: 1;
+  }
+
+  100% {
+    transform: translate(58px, -40%) scale(0.9);
+    opacity: 0;
+  }
+}
+
+/* Comeback: der Pfeil klettert von unten links nach oben rechts. */
+.hl-anim.comeback .hl-comeback-pfeil {
+  animation: hl-aufstieg 2.2s ease-out infinite;
+}
+
+.hl-anim.comeback .hl-comeback-stern {
+  font-size: 2rem;
+  animation: hl-krach 2.2s 0.3s ease-out infinite;
+}
+
+@keyframes hl-aufstieg {
+  0% {
+    transform: translate(-110px, 10%) rotate(8deg);
+    opacity: 0;
+  }
+
+  20% {
+    opacity: 1;
+  }
+
+  60%,
+  100% {
+    transform: translate(-30px, -85%) rotate(-4deg);
+    opacity: 1;
+  }
+}
+
+/* Bank-Verrat: der Geldsack rutscht aus der Bank zur Seite. */
+.hl-anim.bank .hl-bank {
+  transform: translate(-84px, -50%);
+}
+
+.hl-anim.bank .hl-bank-beute {
+  animation: hl-bank-beute 2.4s ease-in-out infinite;
+}
+
+@keyframes hl-bank-beute {
+  0%,
+  15% {
+    transform: translate(-84px, -50%) scale(0.6);
+    opacity: 0;
+  }
+
+  40% {
+    transform: translate(-10px, -58%) scale(1);
+    opacity: 1;
+  }
+
+  75%,
+  100% {
+    transform: translate(96px, -46%);
+    opacity: 1;
+  }
+}
+
+/* Jackpot: Münzen ploppen aus dem Glas. */
+.hl-anim.jackpot .hl-jackpot-muenze {
+  font-size: 2rem;
+}
+
+.hl-anim.jackpot .hl-jackpot-muenze.m1 {
+  animation: hl-muenze-l 1.9s ease-out infinite;
+}
+
+.hl-anim.jackpot .hl-jackpot-muenze.m2 {
+  animation: hl-muenze-r 1.9s 0.35s ease-out infinite;
+}
+
+@keyframes hl-muenze-l {
+  0% {
+    transform: translate(-50%, -40%) scale(0.4);
+    opacity: 0;
+  }
+
+  35% {
+    transform: translate(-120%, -150%) scale(1);
+    opacity: 1;
+  }
+
+  100% {
+    transform: translate(-190%, -30%) scale(0.9);
+    opacity: 0;
+  }
+}
+
+@keyframes hl-muenze-r {
+  0% {
+    transform: translate(-50%, -40%) scale(0.4);
+    opacity: 0;
+  }
+
+  35% {
+    transform: translate(40%, -160%) scale(1);
+    opacity: 1;
+  }
+
+  100% {
+    transform: translate(110%, -30%) scale(0.9);
+    opacity: 0;
+  }
+}
+
+/* Fortschritts-Punkte: welche Karte der Sequenz läuft gerade? */
+.highlight-punkte {
+  display: flex;
+  gap: 10px;
+}
+
+.highlight-punkte span {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--bg2);
+  border: 2px solid var(--gold);
+  opacity: 0.5;
+}
+
+.highlight-punkte span.aktiv {
+  background: var(--gold);
+  opacity: 1;
+  transform: scale(1.2);
+}
+
+.highlight-balken {
+  width: min(420px, 60vw);
+  height: 10px;
+  border-radius: 5px;
+  background: var(--bg2);
+  overflow: hidden;
+}
+
+.highlight-balken > div {
+  height: 100%;
+  background: var(--gold);
+  border-radius: 5px;
+  transition: width 0.15s linear;
+}
+
+/* ---------- Sudden-Death: rotes Studiolicht + Shake-Duell ---------- */
+.studio[data-phase="tiebreaker"] {
+  animation: sudden-death-licht 1.1s ease-in-out infinite;
+}
+
+@keyframes sudden-death-licht {
+  0%,
+  100% {
+    background: color-mix(in srgb, var(--mm-curtain) 18%, var(--mm-outline));
+  }
+
+  50% {
+    background: color-mix(in srgb, var(--mm-curtain) 32%, var(--mm-outline));
+  }
+}
+
+.sudden-death-buehne {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  height: 100%;
+  text-align: center;
+}
+
+.sudden-death-titel {
+  margin: 0;
+  font-size: var(--mm-display-l, 3.2rem);
+  color: var(--rot);
+  text-shadow: 0 0 26px rgb(255 62 62 / 70%);
+  animation: sd-puls 1.1s ease-in-out infinite;
+}
+
+@keyframes sd-puls {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.06);
+  }
+}
+
+.sudden-death-countdown {
+  font-size: 7rem;
+  font-weight: 900;
+  color: var(--gold);
+  line-height: 1;
+  animation: sd-puls 1s ease-in-out infinite;
+}
+
+.shake-duell {
+  display: flex;
+  gap: 60px;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.shake-spalte {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.shake-spalte .kandidaten-puppe {
+  width: min(140px, 16vw);
+  aspect-ratio: 240 / 320;
+}
+
+.shake-spalte.sieger .kandidaten-puppe {
+  animation: sd-jubel 0.6s var(--mm-kurve-bounce) infinite alternate;
+}
+
+@keyframes sd-jubel {
+  from {
+    transform: translateY(0);
+  }
+
+  to {
+    transform: translateY(-16px);
+  }
+}
+
+.shake-balken {
+  width: 46px;
+  height: 220px;
+  border-radius: var(--mm-radius-m);
+  background: var(--bg2);
+  border: 3px solid var(--rot);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  overflow: hidden;
+}
+
+.shake-balken > div {
+  /* Funktionaler Füllstand (Tap-Meter), kein Deko-Verlauf — Token-Ausnahme. */
+  background: linear-gradient(180deg, var(--gold), var(--rot));
+  border-radius: 0 0 9px 9px;
+  transition: height 0.18s ease-out;
+}
+
+.shake-taps {
+  font-size: 2rem;
+  font-weight: 900;
+  color: var(--gold);
+}
+
+/* ---------- Jubiläums-Karte im Opening ---------- */
+.jubilaeums-karte {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 20px 40px;
+  background: var(--panel);
+  border: var(--mm-outline-m) solid var(--gold);
+  border-radius: var(--mm-radius-l);
+  box-shadow: var(--mm-schatten-sticker-gross);
+  animation: highlight-rein 0.6s 0.4s var(--mm-kurve-bounce) both;
+  text-align: center;
+}
+
+.jubilaeums-karte h2 {
+  margin: 0;
+  font-size: 2rem;
+  color: var(--gold);
+}
+
+.jubilaeums-stats {
+  display: flex;
+  gap: 26px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.jubilaeums-stats .stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.jubilaeums-stats .stat strong {
+  font-size: 1.5rem;
+  color: var(--gold);
+}
+
+/* ---------- Foto-Finish (Screen) ---------- */
+.foto-finish-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.foto-finish-block img {
+  width: min(240px, 26vw);
+  border-radius: var(--mm-radius-m);
+  border: var(--mm-outline-s) solid var(--gold);
+  box-shadow: var(--mm-schatten-sticker-gross);
+  rotate: -1.5deg;
+}

@@ -1,0 +1,664 @@
+{
+  "songs": [
+    {
+      "id": "s_great_balls_of_fire",
+      "titel": "Great Balls of Fire",
+      "artist": "Jerry Lee Lewis",
+      "jahr": 1957,
+      "region": "global",
+      "schwierigkeit": "mittel",
+      "tags": [
+        "50s",
+        "rocknroll",
+        "tv-fassung"
+      ],
+      "medien": {
+        "intro5s": "media/s_great_balls_of_fire/intro5s.ogg",
+        "buzz": {
+          "ms100": "media/s_great_balls_of_fire/buzz_ms100.ogg",
+          "ms200": "media/s_great_balls_of_fire/buzz_ms200.ogg",
+          "ms300": "media/s_great_balls_of_fire/buzz_ms300.ogg",
+          "ms500": "media/s_great_balls_of_fire/buzz_ms500.ogg",
+          "ms1000": "media/s_great_balls_of_fire/buzz_ms1000.ogg"
+        },
+        "mitte10s": "media/s_great_balls_of_fire/mitte10s.ogg",
+        "rueckwaerts5s": "media/s_great_balls_of_fire/rueckwaerts5s.ogg",
+        "video3s": "media/s_great_balls_of_fire/video3s.mp4"
+      },
+      "quelle": {
+        "plattform": "archive.org",
+        "url": "https://archive.org/details/jerry-lee-lewis-great-balls-of-fire-1958",
+        "abgerufen": "2026-08-15"
+      }
+    },
+    {
+      "id": "s_lili_marleen",
+      "titel": "Lili Marleen",
+      "artist": "Lale Andersen",
+      "jahr": 1939,
+      "region": "de",
+      "schwierigkeit": "schwer",
+      "tags": [
+        "30s",
+        "schlager",
+        "electrola"
+      ],
+      "medien": {
+        "intro5s": "media/s_lili_marleen/intro5s.ogg",
+        "buzz": {
+          "ms100": "media/s_lili_marleen/buzz_ms100.ogg",
+          "ms200": "media/s_lili_marleen/buzz_ms200.ogg",
+          "ms300": "media/s_lili_marleen/buzz_ms300.ogg",
+          "ms500": "media/s_lili_marleen/buzz_ms500.ogg",
+          "ms1000": "media/s_lili_marleen/buzz_ms1000.ogg"
+        },
+        "mitte10s": "media/s_lili_marleen/mitte10s.ogg",
+        "rueckwaerts5s": "media/s_lili_marleen/rueckwaerts5s.ogg"
+      },
+      "quelle": {
+        "plattform": "archive.org",
+        "url": "https://archive.org/details/78_unter-der-laterne-lili-marleen-lied-eines-jungen-wachtpostens_lale-andersen-han_gbia0125670a",
+        "abgerufen": "2026-08-15"
+      }
+    },
+    {
+      "id": "s_monkeys_spinning_monkeys",
+      "titel": "Monkeys Spinning Monkeys",
+      "artist": "Kevin MacLeod",
+      "jahr": 2014,
+      "region": "global",
+      "schwierigkeit": "leicht",
+      "nurBett": true,
+      "tags": [
+        "instrumental",
+        "cc-by",
+        "meme",
+        "gratis"
+      ],
+      "medien": {
+        "intro5s": "media/s_monkeys_spinning_monkeys/intro5s.ogg",
+        "buzz": {
+          "ms100": "media/s_monkeys_spinning_monkeys/buzz_ms100.ogg",
+          "ms200": "media/s_monkeys_spinning_monkeys/buzz_ms200.ogg",
+          "ms300": "media/s_monkeys_spinning_monkeys/buzz_ms300.ogg",
+          "ms500": "media/s_monkeys_spinning_monkeys/buzz_ms500.ogg",
+          "ms1000": "media/s_monkeys_spinning_monkeys/buzz_ms1000.ogg"
+        },
+        "mitte10s": "media/s_monkeys_spinning_monkeys/mitte10s.ogg",
+        "rueckwaerts5s": "media/s_monkeys_spinning_monkeys/rueckwaerts5s.ogg"
+      },
+      "quelle": {
+        "plattform": "incompetech.com",
+        "url": "https://incompetech.com/music/royalty-free/",
+        "abgerufen": "2026-08-16"
+      }
+    },
+    {
+      "id": "s_hound_dog",
+      "titel": "Hound Dog",
+      "artist": "Elvis Presley",
+      "jahr": 1956,
+      "region": "global",
+      "schwierigkeit": "leicht",
+      "tags": [
+        "50s",
+        "rocknroll"
+      ],
+      "medien": {
+        "intro5s": "media/s_hound_dog/intro5s.ogg",
+        "buzz": {
+          "ms100": "media/s_hound_dog/buzz_ms100.ogg",
+          "ms200": "media/s_hound_dog/buzz_ms200.ogg",
+          "ms300": "media/s_hound_dog/buzz_ms300.ogg",
+          "ms500": "media/s_hound_dog/buzz_ms500.ogg",
+          "ms1000": "media/s_hound_dog/buzz_ms1000.ogg"
+        },
+        "mitte10s": "media/s_hound_dog/mitte10s.ogg",
+        "rueckwaerts5s": "media/s_hound_dog/rueckwaerts5s.ogg"
+      },
+      "quelle": {
+        "plattform": "archive.org",
+        "url": "https://archive.org/details/78_13593-Hound-Dog",
+        "abgerufen": "2026-08-16"
+      }
+    },
+    {
+      "id": "s_crazy_man_crazy",
+      "titel": "Crazy Man, Crazy",
+      "artist": "Bill Haley & His Comets",
+      "jahr": 1953,
+      "region": "global",
+      "schwierigkeit": "schwer",
+      "tags": [
+        "50s",
+        "rocknroll",
+        "erster-rock-charthit"
+      ],
+      "medien": {
+        "intro5s": "media/s_crazy_man_crazy/intro5s.ogg",
+        "buzz": {
+          "ms100": "media/s_crazy_man_crazy/buzz_ms100.ogg",
+          "ms200": "media/s_crazy_man_crazy/buzz_ms200.ogg",
+          "ms300": "media/s_crazy_man_crazy/buzz_ms300.ogg",
+          "ms500": "media/s_crazy_man_crazy/buzz_ms500.ogg",
+          "ms1000": "media/s_crazy_man_crazy/buzz_ms1000.ogg"
+        },
+        "mitte10s": "media/s_crazy_man_crazy/mitte10s.ogg",
+        "rueckwaerts5s": "media/s_crazy_man_crazy/rueckwaerts5s.ogg"
+      },
+      "quelle": {
+        "plattform": "archive.org",
+        "url": "https://archive.org/details/78_crazy-man-crazy_bill-haley-haleys-comets-bill-haley_gbia0266126a",
+        "abgerufen": "2026-08-16"
+      }
+    },
+    {
+      "id": "s_in_the_mood",
+      "titel": "In the Mood",
+      "artist": "Glenn Miller & His Orchestra",
+      "jahr": 1939,
+      "region": "global",
+      "schwierigkeit": "mittel",
+      "tags": [
+        "swing",
+        "bigband",
+        "instrumental"
+      ],
+      "medien": {
+        "intro5s": "media/s_in_the_mood/intro5s.ogg",
+        "buzz": {
+          "ms100": "media/s_in_the_mood/buzz_ms100.ogg",
+          "ms200": "media/s_in_the_mood/buzz_ms200.ogg",
+          "ms300": "media/s_in_the_mood/buzz_ms300.ogg",
+          "ms500": "media/s_in_the_mood/buzz_ms500.ogg",
+          "ms1000": "media/s_in_the_mood/buzz_ms1000.ogg"
+        },
+        "mitte10s": "media/s_in_the_mood/mitte10s.ogg",
+        "rueckwaerts5s": "media/s_in_the_mood/rueckwaerts5s.ogg"
+      },
+      "quelle": {
+        "plattform": "archive.org",
+        "url": "https://archive.org/details/78_2660-In-the-mood",
+        "abgerufen": "2026-08-16"
+      }
+    },
+    {
+      "id": "s_white_christmas",
+      "titel": "White Christmas",
+      "artist": "Bing Crosby",
+      "jahr": 1942,
+      "region": "global",
+      "schwierigkeit": "leicht",
+      "tags": [
+        "weihnachten",
+        "40s"
+      ],
+      "medien": {
+        "intro5s": "media/s_white_christmas/intro5s.ogg",
+        "buzz": {
+          "ms100": "media/s_white_christmas/buzz_ms100.ogg",
+          "ms200": "media/s_white_christmas/buzz_ms200.ogg",
+          "ms300": "media/s_white_christmas/buzz_ms300.ogg",
+          "ms500": "media/s_white_christmas/buzz_ms500.ogg",
+          "ms1000": "media/s_white_christmas/buzz_ms1000.ogg"
+        },
+        "mitte10s": "media/s_white_christmas/mitte10s.ogg",
+        "rueckwaerts5s": "media/s_white_christmas/rueckwaerts5s.ogg"
+      },
+      "quelle": {
+        "plattform": "archive.org",
+        "url": "https://archive.org/details/bingcrosby-whitechristmas_202512",
+        "abgerufen": "2026-08-16"
+      }
+    },
+    {
+      "id": "s_what_a_wonderful_world",
+      "titel": "What a Wonderful World",
+      "artist": "Louis Armstrong",
+      "jahr": 1967,
+      "region": "global",
+      "schwierigkeit": "leicht",
+      "tags": [
+        "60s",
+        "jazz"
+      ],
+      "medien": {
+        "intro5s": "media/s_what_a_wonderful_world/intro5s.ogg",
+        "buzz": {
+          "ms100": "media/s_what_a_wonderful_world/buzz_ms100.ogg",
+          "ms200": "media/s_what_a_wonderful_world/buzz_ms200.ogg",
+          "ms300": "media/s_what_a_wonderful_world/buzz_ms300.ogg",
+          "ms500": "media/s_what_a_wonderful_world/buzz_ms500.ogg",
+          "ms1000": "media/s_what_a_wonderful_world/buzz_ms1000.ogg"
+        },
+        "mitte10s": "media/s_what_a_wonderful_world/mitte10s.ogg",
+        "rueckwaerts5s": "media/s_what_a_wonderful_world/rueckwaerts5s.ogg"
+      },
+      "quelle": {
+        "plattform": "archive.org",
+        "url": "https://archive.org/details/louis-armstrong-what-a-wonderful-world-1968",
+        "abgerufen": "2026-08-16"
+      }
+    },
+    {
+      "id": "s_la_vie_en_rose",
+      "titel": "La Vie en rose",
+      "artist": "Édith Piaf",
+      "jahr": 1947,
+      "region": "global",
+      "schwierigkeit": "mittel",
+      "tags": [
+        "chanson",
+        "40s"
+      ],
+      "medien": {
+        "intro5s": "media/s_la_vie_en_rose/intro5s.ogg",
+        "buzz": {
+          "ms100": "media/s_la_vie_en_rose/buzz_ms100.ogg",
+          "ms200": "media/s_la_vie_en_rose/buzz_ms200.ogg",
+          "ms300": "media/s_la_vie_en_rose/buzz_ms300.ogg",
+          "ms500": "media/s_la_vie_en_rose/buzz_ms500.ogg",
+          "ms1000": "media/s_la_vie_en_rose/buzz_ms1000.ogg"
+        },
+        "mitte10s": "media/s_la_vie_en_rose/mitte10s.ogg",
+        "rueckwaerts5s": "media/s_la_vie_en_rose/rueckwaerts5s.ogg"
+      },
+      "quelle": {
+        "plattform": "archive.org",
+        "url": "https://archive.org/details/78_la-vie-en-rose_edith-piaf-m-david-louiguy-robert-chauvigny_gbia3025698a",
+        "abgerufen": "2026-08-16"
+      }
+    },
+    {
+      "id": "s_tutti_frutti",
+      "titel": "Tutti Frutti",
+      "artist": "Little Richard",
+      "jahr": 1955,
+      "region": "global",
+      "schwierigkeit": "mittel",
+      "tags": [
+        "50s",
+        "rocknroll"
+      ],
+      "medien": {
+        "intro5s": "media/s_tutti_frutti/intro5s.ogg",
+        "buzz": {
+          "ms100": "media/s_tutti_frutti/buzz_ms100.ogg",
+          "ms200": "media/s_tutti_frutti/buzz_ms200.ogg",
+          "ms300": "media/s_tutti_frutti/buzz_ms300.ogg",
+          "ms500": "media/s_tutti_frutti/buzz_ms500.ogg",
+          "ms1000": "media/s_tutti_frutti/buzz_ms1000.ogg"
+        },
+        "mitte10s": "media/s_tutti_frutti/mitte10s.ogg",
+        "rueckwaerts5s": "media/s_tutti_frutti/rueckwaerts5s.ogg"
+      },
+      "quelle": {
+        "plattform": "archive.org",
+        "url": "https://archive.org/details/tutti-frutti_202411",
+        "abgerufen": "2026-08-16"
+      }
+    },
+    {
+      "id": "s_blueberry_hill",
+      "titel": "Blueberry Hill",
+      "artist": "Fats Domino",
+      "jahr": 1956,
+      "region": "global",
+      "schwierigkeit": "mittel",
+      "tags": [
+        "50s",
+        "rocknroll"
+      ],
+      "medien": {
+        "intro5s": "media/s_blueberry_hill/intro5s.ogg",
+        "buzz": {
+          "ms100": "media/s_blueberry_hill/buzz_ms100.ogg",
+          "ms200": "media/s_blueberry_hill/buzz_ms200.ogg",
+          "ms300": "media/s_blueberry_hill/buzz_ms300.ogg",
+          "ms500": "media/s_blueberry_hill/buzz_ms500.ogg",
+          "ms1000": "media/s_blueberry_hill/buzz_ms1000.ogg"
+        },
+        "mitte10s": "media/s_blueberry_hill/mitte10s.ogg",
+        "rueckwaerts5s": "media/s_blueberry_hill/rueckwaerts5s.ogg"
+      },
+      "quelle": {
+        "plattform": "archive.org",
+        "url": "https://archive.org/details/8117ablueberryhillr4906120",
+        "abgerufen": "2026-08-16"
+      }
+    },
+    {
+      "id": "s_over_the_rainbow",
+      "titel": "Over the Rainbow",
+      "artist": "Judy Garland",
+      "jahr": 1939,
+      "region": "global",
+      "schwierigkeit": "mittel",
+      "tags": [
+        "30s",
+        "film",
+        "zauberer-von-oz"
+      ],
+      "medien": {
+        "intro5s": "media/s_over_the_rainbow/intro5s.ogg",
+        "buzz": {
+          "ms100": "media/s_over_the_rainbow/buzz_ms100.ogg",
+          "ms200": "media/s_over_the_rainbow/buzz_ms200.ogg",
+          "ms300": "media/s_over_the_rainbow/buzz_ms300.ogg",
+          "ms500": "media/s_over_the_rainbow/buzz_ms500.ogg",
+          "ms1000": "media/s_over_the_rainbow/buzz_ms1000.ogg"
+        },
+        "mitte10s": "media/s_over_the_rainbow/mitte10s.ogg",
+        "rueckwaerts5s": "media/s_over_the_rainbow/rueckwaerts5s.ogg"
+      },
+      "quelle": {
+        "plattform": "archive.org",
+        "url": "https://archive.org/details/judy-garland-over-the-rainbow",
+        "abgerufen": "2026-08-16"
+      }
+    },
+    {
+      "id": "s_auf_der_reeperbahn_nachts_um_halb_eins",
+      "titel": "Auf der Reeperbahn nachts um halb eins",
+      "artist": "Hans Albers",
+      "jahr": 1944,
+      "region": "de",
+      "schwierigkeit": "mittel",
+      "tags": [
+        "40s",
+        "hamburg",
+        "film"
+      ],
+      "medien": {
+        "intro5s": "media/s_auf_der_reeperbahn_nachts_um_halb_eins/intro5s.ogg",
+        "buzz": {
+          "ms100": "media/s_auf_der_reeperbahn_nachts_um_halb_eins/buzz_ms100.ogg",
+          "ms200": "media/s_auf_der_reeperbahn_nachts_um_halb_eins/buzz_ms200.ogg",
+          "ms300": "media/s_auf_der_reeperbahn_nachts_um_halb_eins/buzz_ms300.ogg",
+          "ms500": "media/s_auf_der_reeperbahn_nachts_um_halb_eins/buzz_ms500.ogg",
+          "ms1000": "media/s_auf_der_reeperbahn_nachts_um_halb_eins/buzz_ms1000.ogg"
+        },
+        "mitte10s": "media/s_auf_der_reeperbahn_nachts_um_halb_eins/mitte10s.ogg",
+        "rueckwaerts5s": "media/s_auf_der_reeperbahn_nachts_um_halb_eins/rueckwaerts5s.ogg"
+      },
+      "quelle": {
+        "plattform": "archive.org",
+        "url": "https://archive.org/details/78_auf-der-reeperbahn-nachts-um-halb-eins-ffb-orchester-berlin-dir",
+        "abgerufen": "2026-08-16"
+      }
+    },
+    {
+      "id": "s_sah_ein_knab_ein_roslein_stehn",
+      "titel": "Sah ein Knab' ein Röslein stehn",
+      "artist": "Comedian Harmonists",
+      "jahr": 1933,
+      "region": "de",
+      "schwierigkeit": "ultrahard",
+      "tags": [
+        "30s",
+        "vokalensemble",
+        "goethe"
+      ],
+      "medien": {
+        "intro5s": "media/s_sah_ein_knab_ein_roslein_stehn/intro5s.ogg",
+        "buzz": {
+          "ms100": "media/s_sah_ein_knab_ein_roslein_stehn/buzz_ms100.ogg",
+          "ms200": "media/s_sah_ein_knab_ein_roslein_stehn/buzz_ms200.ogg",
+          "ms300": "media/s_sah_ein_knab_ein_roslein_stehn/buzz_ms300.ogg",
+          "ms500": "media/s_sah_ein_knab_ein_roslein_stehn/buzz_ms500.ogg",
+          "ms1000": "media/s_sah_ein_knab_ein_roslein_stehn/buzz_ms1000.ogg"
+        },
+        "mitte10s": "media/s_sah_ein_knab_ein_roslein_stehn/mitte10s.ogg",
+        "rueckwaerts5s": "media/s_sah_ein_knab_ein_roslein_stehn/rueckwaerts5s.ogg"
+      },
+      "quelle": {
+        "plattform": "archive.org",
+        "url": "https://archive.org/details/78_sah-ein-knab-ein-rslein-stehn-heidenrslein_comedian-harmonists-werner-electrol_gbia7008673b",
+        "abgerufen": "2026-08-16"
+      }
+    },
+    {
+      "id": "s_sneaky_snitch",
+      "titel": "Sneaky Snitch",
+      "artist": "Kevin MacLeod",
+      "jahr": 2010,
+      "region": "global",
+      "schwierigkeit": "mittel",
+      "nurBett": true,
+      "tags": [
+        "instrumental",
+        "cc-by",
+        "meme",
+        "gratis"
+      ],
+      "medien": {
+        "intro5s": "media/s_sneaky_snitch/intro5s.ogg",
+        "buzz": {
+          "ms100": "media/s_sneaky_snitch/buzz_ms100.ogg",
+          "ms200": "media/s_sneaky_snitch/buzz_ms200.ogg",
+          "ms300": "media/s_sneaky_snitch/buzz_ms300.ogg",
+          "ms500": "media/s_sneaky_snitch/buzz_ms500.ogg",
+          "ms1000": "media/s_sneaky_snitch/buzz_ms1000.ogg"
+        },
+        "mitte10s": "media/s_sneaky_snitch/mitte10s.ogg",
+        "rueckwaerts5s": "media/s_sneaky_snitch/rueckwaerts5s.ogg"
+      },
+      "quelle": {
+        "plattform": "incompetech.com",
+        "url": "https://incompetech.com/music/royalty-free/",
+        "abgerufen": "2026-08-16"
+      }
+    },
+    {
+      "id": "s_fluffing_a_duck",
+      "titel": "Fluffing a Duck",
+      "artist": "Kevin MacLeod",
+      "jahr": 2010,
+      "region": "global",
+      "schwierigkeit": "mittel",
+      "nurBett": true,
+      "tags": [
+        "instrumental",
+        "cc-by",
+        "gratis"
+      ],
+      "medien": {
+        "intro5s": "media/s_fluffing_a_duck/intro5s.ogg",
+        "buzz": {
+          "ms100": "media/s_fluffing_a_duck/buzz_ms100.ogg",
+          "ms200": "media/s_fluffing_a_duck/buzz_ms200.ogg",
+          "ms300": "media/s_fluffing_a_duck/buzz_ms300.ogg",
+          "ms500": "media/s_fluffing_a_duck/buzz_ms500.ogg",
+          "ms1000": "media/s_fluffing_a_duck/buzz_ms1000.ogg"
+        },
+        "mitte10s": "media/s_fluffing_a_duck/mitte10s.ogg",
+        "rueckwaerts5s": "media/s_fluffing_a_duck/rueckwaerts5s.ogg"
+      },
+      "quelle": {
+        "plattform": "incompetech.com",
+        "url": "https://incompetech.com/music/royalty-free/",
+        "abgerufen": "2026-08-16"
+      }
+    },
+    {
+      "id": "s_local_forecast_elevator",
+      "titel": "Local Forecast - Elevator",
+      "artist": "Kevin MacLeod",
+      "jahr": 2013,
+      "region": "global",
+      "schwierigkeit": "schwer",
+      "nurBett": true,
+      "tags": [
+        "instrumental",
+        "cc-by",
+        "gratis"
+      ],
+      "medien": {
+        "intro5s": "media/s_local_forecast_elevator/intro5s.ogg",
+        "buzz": {
+          "ms100": "media/s_local_forecast_elevator/buzz_ms100.ogg",
+          "ms200": "media/s_local_forecast_elevator/buzz_ms200.ogg",
+          "ms300": "media/s_local_forecast_elevator/buzz_ms300.ogg",
+          "ms500": "media/s_local_forecast_elevator/buzz_ms500.ogg",
+          "ms1000": "media/s_local_forecast_elevator/buzz_ms1000.ogg"
+        },
+        "mitte10s": "media/s_local_forecast_elevator/mitte10s.ogg",
+        "rueckwaerts5s": "media/s_local_forecast_elevator/rueckwaerts5s.ogg"
+      },
+      "quelle": {
+        "plattform": "incompetech.com",
+        "url": "https://incompetech.com/music/royalty-free/",
+        "abgerufen": "2026-08-16"
+      }
+    },
+    {
+      "id": "s_merry_go",
+      "titel": "Merry Go",
+      "artist": "Kevin MacLeod",
+      "jahr": 2010,
+      "region": "global",
+      "schwierigkeit": "schwer",
+      "nurBett": true,
+      "tags": [
+        "instrumental",
+        "cc-by",
+        "gratis"
+      ],
+      "medien": {
+        "intro5s": "media/s_merry_go/intro5s.ogg",
+        "buzz": {
+          "ms100": "media/s_merry_go/buzz_ms100.ogg",
+          "ms200": "media/s_merry_go/buzz_ms200.ogg",
+          "ms300": "media/s_merry_go/buzz_ms300.ogg",
+          "ms500": "media/s_merry_go/buzz_ms500.ogg",
+          "ms1000": "media/s_merry_go/buzz_ms1000.ogg"
+        },
+        "mitte10s": "media/s_merry_go/mitte10s.ogg",
+        "rueckwaerts5s": "media/s_merry_go/rueckwaerts5s.ogg"
+      },
+      "quelle": {
+        "plattform": "incompetech.com",
+        "url": "https://incompetech.com/music/royalty-free/",
+        "abgerufen": "2026-08-16"
+      }
+    },
+    {
+      "id": "s_quirky_dog",
+      "titel": "Quirky Dog",
+      "artist": "Kevin MacLeod",
+      "jahr": 2015,
+      "region": "global",
+      "schwierigkeit": "ultrahard",
+      "nurBett": true,
+      "tags": [
+        "instrumental",
+        "cc-by",
+        "gratis"
+      ],
+      "medien": {
+        "intro5s": "media/s_quirky_dog/intro5s.ogg",
+        "buzz": {
+          "ms100": "media/s_quirky_dog/buzz_ms100.ogg",
+          "ms200": "media/s_quirky_dog/buzz_ms200.ogg",
+          "ms300": "media/s_quirky_dog/buzz_ms300.ogg",
+          "ms500": "media/s_quirky_dog/buzz_ms500.ogg",
+          "ms1000": "media/s_quirky_dog/buzz_ms1000.ogg"
+        },
+        "mitte10s": "media/s_quirky_dog/mitte10s.ogg",
+        "rueckwaerts5s": "media/s_quirky_dog/rueckwaerts5s.ogg"
+      },
+      "quelle": {
+        "plattform": "incompetech.com",
+        "url": "https://incompetech.com/music/royalty-free/",
+        "abgerufen": "2026-08-16"
+      }
+    },
+    {
+      "id": "s_bett_la_vie_en_rose",
+      "titel": "La Vie en rose",
+      "artist": "Édith Piaf",
+      "jahr": 1947,
+      "region": "global",
+      "schwierigkeit": "mittel",
+      "nurBett": true,
+      "stimmung": "chillig",
+      "tags": [
+        "78rpm",
+        "klassiker"
+      ],
+      "medien": {
+        "bett": "bett/s_bett_la_vie_en_rose.ogg"
+      },
+      "quelle": {
+        "plattform": "archive.org",
+        "url": "https://archive.org/details/78_la-vie-en-rose_edith-piaf-m-david-louiguy-robert-chauvigny_gbia3025698a",
+        "abgerufen": "2026-08-16"
+      }
+    },
+    {
+      "id": "s_bett_what_a_wonderful_world",
+      "titel": "What a Wonderful World",
+      "artist": "Louis Armstrong",
+      "jahr": 1967,
+      "region": "global",
+      "schwierigkeit": "mittel",
+      "nurBett": true,
+      "stimmung": "chillig",
+      "tags": [
+        "klassiker"
+      ],
+      "medien": {
+        "bett": "bett/s_bett_what_a_wonderful_world.ogg"
+      },
+      "quelle": {
+        "plattform": "archive.org",
+        "url": "https://archive.org/details/louis-armstrong-what-a-wonderful-world-1968",
+        "abgerufen": "2026-08-16"
+      }
+    },
+    {
+      "id": "s_bett_over_the_rainbow",
+      "titel": "Over the Rainbow",
+      "artist": "Judy Garland",
+      "jahr": 1939,
+      "region": "global",
+      "schwierigkeit": "mittel",
+      "nurBett": true,
+      "stimmung": "chillig",
+      "tags": [
+        "78rpm",
+        "klassiker"
+      ],
+      "medien": {
+        "bett": "bett/s_bett_over_the_rainbow.ogg"
+      },
+      "quelle": {
+        "plattform": "archive.org",
+        "url": "https://archive.org/details/judy-garland-over-the-rainbow",
+        "abgerufen": "2026-08-16"
+      }
+    },
+    {
+      "id": "s_bett_in_the_mood",
+      "titel": "In the Mood",
+      "artist": "Glenn Miller & His Orchestra",
+      "jahr": 1939,
+      "region": "global",
+      "schwierigkeit": "mittel",
+      "nurBett": true,
+      "stimmung": "upbeat",
+      "tags": [
+        "78rpm",
+        "swing"
+      ],
+      "medien": {
+        "bett": "bett/s_bett_in_the_mood.ogg"
+      },
+      "quelle": {
+        "plattform": "archive.org",
+        "url": "https://archive.org/details/78_2660-In-the-mood",
+        "abgerufen": "2026-08-16"
+      }
+    }
+  ]
+}

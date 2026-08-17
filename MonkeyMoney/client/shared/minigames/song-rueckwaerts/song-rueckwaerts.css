@@ -1,0 +1,181 @@
+/* Rückwärts-Banane — Rückwärts-Bühne (Screen) + Simultan-MC (Player) */
+.rb-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: min(980px, 94vw);
+  margin: 0 auto;
+}
+
+/* ---------- Bühne ---------- */
+.rb-buehne {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+  min-height: 200px;
+  background: var(--bg2);
+  border-radius: var(--mm-radius-xl);
+  border: var(--mm-outline-m) solid var(--mm-outline);
+  box-shadow: var(--mm-schatten-sticker-gross);
+  padding: 18px 24px;
+}
+
+.rb-buehne.vorwaerts {
+  background: var(--mm-flaeche-chip);
+}
+
+.rb-banane {
+  font-size: 6rem;
+  flex: none;
+  filter: drop-shadow(var(--mm-schatten-sticker));
+}
+
+/* Rückwärts = die Banane dreht GEGEN den Uhrzeigersinn. */
+.rb-banane.dreht {
+  animation: rb-rueckwaerts 1.6s linear infinite;
+}
+
+@keyframes rb-rueckwaerts {
+  to {
+    transform: rotate(-360deg);
+  }
+}
+
+.rb-banane.party {
+  animation: rb-vorwaerts 0.9s var(--mm-kurve-bounce) infinite;
+}
+
+@keyframes rb-vorwaerts {
+  50% {
+    transform: rotate(12deg) scale(var(--mm-scale-erfolg));
+  }
+}
+
+.rb-status {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: center;
+}
+
+.rb-banner {
+  font-family: var(--mm-font-display);
+  font-size: var(--mm-display-m);
+  color: var(--mm-studio-led);
+  margin: 0;
+}
+
+.rb-banner.vorwaerts {
+  color: var(--mm-banana-leaf);
+  font-size: var(--mm-display-s);
+}
+
+.rb-abspielungen {
+  margin: 0;
+  font-size: var(--mm-text-xl);
+}
+
+.rb-hinweis {
+  margin: 0;
+}
+
+.rb-titel-reveal {
+  font-family: var(--mm-font-display);
+  font-size: var(--mm-display-m);
+  color: var(--gold);
+  margin: 0;
+}
+
+.rb-artist-reveal {
+  margin: 0;
+  font-size: var(--mm-text-xl);
+}
+
+/* ---------- Optionen ---------- */
+.rb-optionen {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.rb-option {
+  background: var(--panel);
+  border-left: 10px solid var(--deko);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  font-size: clamp(1rem, 2.2vw, 1.4rem);
+  font-weight: 600;
+}
+
+.rb-option.richtig {
+  outline: 4px solid var(--gold);
+  background: var(--mm-flaeche-chip);
+}
+
+.rb-option.falsch {
+  opacity: 0.35;
+}
+
+.rb-deko {
+  display: inline-block;
+  min-width: 3em;
+  color: var(--deko);
+  font-weight: 800;
+}
+
+.rb-treffer b {
+  margin-left: 8px;
+  color: var(--gold);
+}
+
+.rb-eingeloggt {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 1.8rem;
+}
+
+.rb-ohr {
+  font-size: 1.4rem;
+  filter: drop-shadow(2px 2px 0 var(--mm-schatten-farbe));
+}
+
+/* ---------- Player (iPhone hochkant) ---------- */
+.rb-player {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+  padding: 10px;
+}
+
+.rb-player-kopf {
+  text-align: center;
+  background: var(--bg2);
+  border-radius: var(--radius);
+  padding: 10px;
+  font-size: 1.15rem;
+}
+
+.rb-button {
+  flex: 1;
+  min-height: 13dvh;
+  font-size: 1.2rem;
+  font-weight: 700;
+  text-align: left;
+  border-left: 12px solid var(--deko);
+  background: var(--panel);
+}
+
+.rb-verdeckt {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-align: center;
+  padding: 20px;
+}

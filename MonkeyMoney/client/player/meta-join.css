@@ -1,0 +1,44 @@
+/* Profil-Wahl im Join-Flow (§7.1) — Kacheln „Willkommen zurück". */
+.profil-reihe {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: max-content;
+  gap: 8px;
+  justify-content: start;
+  align-items: center;
+  width: min(420px, 92vw);
+  max-width: min(420px, 92vw);
+  padding: 4px 2px 8px;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  scrollbar-width: thin;
+}
+
+.profil-kachel {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 8px 14px;
+  min-height: 44px;
+  border: 2px solid var(--gold);
+  border-radius: var(--radius);
+  background: var(--panel);
+  color: var(--text);
+  min-width: 150px;
+  scroll-snap-align: start;
+}
+
+.profil-kachel.gewaehlt {
+  background: var(--gold);
+  color: var(--mm-outline, #1a1208);
+}
+
+.profil-name {
+  font-weight: 700;
+}
+
+.profil-sub {
+  font-size: 0.875rem;
+  opacity: 0.75;
+}

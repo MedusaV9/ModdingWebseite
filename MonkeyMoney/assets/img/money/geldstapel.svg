@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 160" role="img" aria-label="Banana-Buck-Stapel in 3 Höhen">
+  <title>Geldstapel — klein (19 Scheine), mittel (Bündel), groß (mit Banderole)</title>
+  <!-- Fragment-Nutzung: geldstapel.svg#klein · #mittel · #gross -->
+  <defs>
+    <!-- Ein flach liegender Banana Buck (Draufsicht, leicht perspektivisch) -->
+    <g id="schein-flach">
+      <rect x="-46" y="-13" width="92" height="26" rx="4" fill="#85BB65" stroke="#1A1208" stroke-width="3.5"/>
+      <rect x="-38" y="-8" width="76" height="16" rx="2" fill="none" stroke="#FFF6E3" stroke-width="2"/>
+      <ellipse cx="0" cy="0" rx="9" ry="6.5" fill="#FFF6E3" stroke="#1A1208" stroke-width="2"/>
+      <circle cx="0" cy="0" r="3" fill="#6B4226"/>
+    </g>
+  </defs>
+  <view id="klein" viewBox="0 0 160 160"/>
+  <view id="mittel" viewBox="160 0 160 160"/>
+  <view id="gross" viewBox="320 0 160 160"/>
+
+  <!-- KLEIN: 3 Scheine -->
+  <g transform="translate(80 132)">
+    <use href="#schein-flach" transform="rotate(-3)"/>
+    <use href="#schein-flach" transform="translate(3 -9) rotate(2)"/>
+    <use href="#schein-flach" transform="translate(-2 -18) rotate(-1)"/>
+  </g>
+
+  <!-- MITTEL: 7 Scheine, leicht versetzt -->
+  <g transform="translate(240 138)">
+    <use href="#schein-flach" transform="rotate(2)"/>
+    <use href="#schein-flach" transform="translate(-3 -9) rotate(-2)"/>
+    <use href="#schein-flach" transform="translate(2 -18) rotate(1)"/>
+    <use href="#schein-flach" transform="translate(-1 -27) rotate(-3)"/>
+    <use href="#schein-flach" transform="translate(3 -36) rotate(2)"/>
+    <use href="#schein-flach" transform="translate(-2 -45) rotate(-1)"/>
+    <use href="#schein-flach" transform="translate(1 -54) rotate(2)"/>
+  </g>
+
+  <!-- GROSS: 10er-Bündel mit Gold-Banderole + 2 lose obendrauf -->
+  <g transform="translate(400 144)">
+    <use href="#schein-flach" transform="rotate(-1)"/>
+    <use href="#schein-flach" transform="translate(2 -8) rotate(1)"/>
+    <use href="#schein-flach" transform="translate(-2 -16) rotate(-2)"/>
+    <use href="#schein-flach" transform="translate(1 -24) rotate(1)"/>
+    <use href="#schein-flach" transform="translate(-1 -32) rotate(-1)"/>
+    <use href="#schein-flach" transform="translate(2 -40) rotate(2)"/>
+    <use href="#schein-flach" transform="translate(-2 -48) rotate(-1)"/>
+    <use href="#schein-flach" transform="translate(0 -56) rotate(1)"/>
+    <use href="#schein-flach" transform="translate(-1 -64) rotate(-2)"/>
+    <use href="#schein-flach" transform="translate(1 -72) rotate(1)"/>
+    <!-- Banderole ums Bündel -->
+    <g transform="rotate(-2)">
+      <rect x="-16" y="-88" width="32" height="94" rx="3" fill="#F5B301" stroke="#1A1208" stroke-width="3.5"/>
+      <text x="0" y="-36" text-anchor="middle" font-family="Rubik,sans-serif" font-size="13" font-weight="800" fill="#1A1208" transform="rotate(-90 0 -40)">500</text>
+    </g>
+    <use href="#schein-flach" transform="translate(3 -82) rotate(4)"/>
+    <use href="#schein-flach" transform="translate(-2 -91) rotate(-3)"/>
+  </g>
+</svg>

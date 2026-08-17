@@ -1,0 +1,142 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 320" class="mm-affe" data-affe="dj-trommelfell" role="img" aria-label="DJ Trommelfell">
+  <title>DJ Trommelfell  der Beat-Affe (Kopfhörer + Vinyl)</title>
+  <style>
+    svg[data-affe="dj-trommelfell"] .fell{fill:var(--fell,#7161D6)}
+    svg[data-affe="dj-trommelfell"] .fell-hell{fill:var(--fell-hell,#D6CFF5)}
+    svg[data-affe="dj-trommelfell"] .fell-s{stroke:var(--fell,#7161D6);fill:none}
+    svg[data-affe="dj-trommelfell"] .o{stroke:#1A1208;stroke-width:5;stroke-linejoin:round;stroke-linecap:round}
+    svg[data-affe="dj-trommelfell"] .os{stroke:#1A1208;fill:none;stroke-linecap:round}
+    svg[data-affe="dj-trommelfell"] .can{fill:var(--prop,#29D9D5)}
+    svg[data-affe="dj-trommelfell"] #kopf,svg[data-affe="dj-trommelfell"] #arm-l,svg[data-affe="dj-trommelfell"] #arm-r,svg[data-affe="dj-trommelfell"] #bein-l,svg[data-affe="dj-trommelfell"] #bein-r,svg[data-affe="dj-trommelfell"] #schwanz{transform-box:view-box}
+    svg[data-affe="dj-trommelfell"] #kopf{transform-origin:120px 142px}
+    svg[data-affe="dj-trommelfell"] #arm-l{transform-origin:88px 158px}
+    svg[data-affe="dj-trommelfell"] #arm-r{transform-origin:152px 158px}
+    svg[data-affe="dj-trommelfell"] #bein-l{transform-origin:102px 240px}
+    svg[data-affe="dj-trommelfell"] #bein-r{transform-origin:138px 240px}
+    svg[data-affe="dj-trommelfell"] #schwanz{transform-origin:146px 240px}
+    svg[data-affe="dj-trommelfell"] .gesicht{display:none}
+    svg[data-affe="dj-trommelfell"] #gesicht-neutral{display:inline}
+    svg[data-affe="dj-trommelfell"][data-gesicht=jubel] #gesicht-neutral,svg[data-affe="dj-trommelfell"][data-gesicht=frust] #gesicht-neutral,svg[data-affe="dj-trommelfell"][data-gesicht=denk] #gesicht-neutral{display:none}
+    svg[data-affe="dj-trommelfell"][data-gesicht=jubel] #gesicht-jubel{display:inline}
+    svg[data-affe="dj-trommelfell"][data-gesicht=frust] #gesicht-frust{display:inline}
+    svg[data-affe="dj-trommelfell"][data-gesicht=denk] #gesicht-denk{display:inline}
+  </style>
+
+  <g id="schwanz">
+    <path class="os" d="M 144 242 C 192 254 214 218 188 204 C 172 196 164 212 178 216" stroke-width="16"/>
+    <path class="fell-s" d="M 144 242 C 192 254 214 218 188 204 C 172 196 164 212 178 216" stroke-width="9"/>
+  </g>
+
+  <g id="bein-l">
+    <path class="os" d="M 102 240 C 98 262 96 278 94 294" stroke-width="19"/>
+    <path class="fell-s" d="M 102 240 C 98 262 96 278 94 294" stroke-width="12"/>
+    <!-- Sneaker -->
+    <path class="o" d="M 72 302 C 72 294 82 290 94 291 C 102 292 106 296 106 302 Z" fill="#FFF6E3"/>
+    <path d="M 72 302 L 106 302" stroke="#29D9D5" stroke-width="4" stroke-linecap="round"/>
+  </g>
+  <g id="bein-r">
+    <path class="os" d="M 138 240 C 142 262 144 278 146 294" stroke-width="19"/>
+    <path class="fell-s" d="M 138 240 C 142 262 144 278 146 294" stroke-width="12"/>
+    <path class="o" d="M 134 302 C 134 296 138 292 146 291 C 158 290 168 294 168 302 Z" fill="#FFF6E3"/>
+    <path d="M 134 302 L 168 302" stroke="#29D9D5" stroke-width="4" stroke-linecap="round"/>
+  </g>
+
+  <g id="koerper">
+    <!-- Track-Jacke mit Zipper -->
+    <path class="o" d="M 84 152 C 74 172 76 212 88 238 L 152 238 C 164 212 166 172 156 152 C 142 140 98 140 84 152 Z" fill="#2B2733"/>
+    <path class="os" d="M 120 148 L 120 236" stroke="#29D9D5" stroke-width="4"/>
+    <circle cx="120" cy="160" r="3.5" fill="#29D9D5" stroke="#1A1208" stroke-width="2"/>
+    <!-- EQ-Balken-Print -->
+    <g stroke="#F5B301" stroke-width="6" stroke-linecap="round">
+      <line x1="98" y1="204" x2="98" y2="188"/>
+      <line x1="109" y1="204" x2="109" y2="178"/>
+      <line x1="131" y1="204" x2="131" y2="172"/>
+      <line x1="142" y1="204" x2="142" y2="192"/>
+    </g>
+    <!-- Ärmel-Streifen -->
+    <path class="os" d="M 86 158 C 84 168 84 180 86 190" stroke="#29D9D5" stroke-width="3.5"/>
+    <path class="os" d="M 154 158 C 156 168 156 180 154 190" stroke="#29D9D5" stroke-width="3.5"/>
+  </g>
+
+  <g id="arm-l">
+    <!-- Hoch: die Platte wird präsentiert -->
+    <path class="os" d="M 88 158 C 72 148 60 134 54 116" stroke-width="19"/>
+    <path d="M 88 158 C 72 148 60 134 54 116" stroke="#2B2733" stroke-width="12" fill="none" stroke-linecap="round"/>
+    <circle class="fell o" cx="52" cy="108" r="10.5"/>
+    <!-- Vinyl-Platte (am Rand gegriffen, frei neben dem Kopf) -->
+    <g id="prop-vinyl">
+      <circle class="o" cx="36" cy="76" r="26" fill="#33303B"/>
+      <circle cx="36" cy="76" r="19" fill="none" stroke="#6B6478" stroke-width="2.5"/>
+      <circle cx="36" cy="76" r="13" fill="none" stroke="#6B6478" stroke-width="2.5"/>
+      <path d="M 20 62 A 21 21 0 0 1 40 55" fill="none" stroke="#FFF6E3" stroke-width="3.5" stroke-linecap="round" opacity="0.85"/>
+      <circle cx="36" cy="76" r="9" fill="#F5B301" stroke="#1A1208" stroke-width="3"/>
+      <circle cx="36" cy="76" r="2.2" fill="#1A1208"/>
+    </g>
+  </g>
+  <g id="arm-r">
+    <!-- Scratch-Hand unten am (unsichtbaren) Pult -->
+    <path class="os" d="M 152 158 C 164 178 170 196 172 212" stroke-width="19"/>
+    <path d="M 152 158 C 164 178 170 196 172 212" stroke="#2B2733" stroke-width="12" fill="none" stroke-linecap="round"/>
+    <circle class="fell o" cx="173" cy="219" r="10.5"/>
+  </g>
+
+  <g id="kopf">
+    <circle class="fell o" cx="120" cy="94" r="42"/>
+    <circle class="fell o" cx="78" cy="88" r="12"/>
+    <circle class="fell o" cx="162" cy="88" r="12"/>
+    <circle class="fell-hell" cx="78" cy="88" r="5.5"/>
+    <circle class="fell-hell" cx="162" cy="88" r="5.5"/>
+    <ellipse class="fell-hell o" cx="120" cy="106" rx="26" ry="19" stroke-width="4"/>
+
+    <g id="gesicht-neutral" class="gesicht">
+      <circle cx="105" cy="83" r="7" fill="#FFF6E3"/>
+      <circle cx="135" cy="83" r="7" fill="#FFF6E3"/>
+      <circle cx="106" cy="84" r="3.2" fill="#1A1208"/>
+      <circle cx="134" cy="84" r="3.2" fill="#1A1208"/>
+      <path class="os" d="M 96 73 L 112 71" stroke-width="4"/>
+      <path class="os" d="M 128 71 L 144 73" stroke-width="4"/>
+      <circle cx="113" cy="100" r="2" fill="#1A1208"/>
+      <circle cx="127" cy="100" r="2" fill="#1A1208"/>
+      <!-- Lässiges Halbgrinsen im Takt -->
+      <path class="os" d="M 108 112 Q 120 118 134 110" stroke-width="4"/>
+    </g>
+    <g id="gesicht-jubel" class="gesicht">
+      <path class="os" d="M 98 83 Q 105 75 112 83" stroke-width="4.5"/>
+      <path class="os" d="M 128 83 Q 135 75 142 83" stroke-width="4.5"/>
+      <circle cx="113" cy="98" r="2" fill="#1A1208"/>
+      <circle cx="127" cy="98" r="2" fill="#1A1208"/>
+      <path d="M 104 106 Q 120 126 136 106 Q 120 112 104 106 Z" fill="#1A1208"/>
+      <path d="M 112 114 Q 120 121 128 114 Q 120 123 112 114 Z" fill="#FF3E8E"/>
+    </g>
+    <g id="gesicht-frust" class="gesicht">
+      <path class="os" d="M 97 75 L 113 80" stroke-width="4.5"/>
+      <path class="os" d="M 143 75 L 127 80" stroke-width="4.5"/>
+      <circle cx="106" cy="86" r="3" fill="#1A1208"/>
+      <circle cx="134" cy="86" r="3" fill="#1A1208"/>
+      <circle cx="113" cy="100" r="2" fill="#1A1208"/>
+      <circle cx="127" cy="100" r="2" fill="#1A1208"/>
+      <path class="os" d="M 107 114 Q 120 106 133 114" stroke-width="4"/>
+    </g>
+    <g id="gesicht-denk" class="gesicht">
+      <!-- Ein Ohr hört rein: ein Auge zu -->
+      <path class="os" d="M 97 83 L 113 83" stroke-width="4"/>
+      <circle cx="135" cy="83" r="7" fill="#FFF6E3"/>
+      <circle cx="134" cy="80" r="3" fill="#1A1208"/>
+      <path class="os" d="M 128 71 Q 138 65 146 73" stroke-width="4"/>
+      <circle cx="113" cy="100" r="2" fill="#1A1208"/>
+      <circle cx="127" cy="100" r="2" fill="#1A1208"/>
+      <path class="os" d="M 110 112 Q 115 108 120 112 Q 125 116 130 112" stroke-width="4"/>
+    </g>
+
+    <!-- Fette Over-Ear-Kopfhörer (immer sichtbar) -->
+    <g id="prop-kopfhoerer">
+      <path class="os" d="M 78 82 C 80 44 160 44 162 82" stroke-width="13"/>
+      <path d="M 78 82 C 80 44 160 44 162 82" fill="none" stroke="#2B2733" stroke-width="7" stroke-linecap="round"/>
+      <ellipse class="o" cx="75" cy="90" rx="13" ry="18" fill="#2B2733"/>
+      <ellipse class="o" cx="165" cy="90" rx="13" ry="18" fill="#2B2733"/>
+      <ellipse class="can" cx="75" cy="90" rx="6" ry="10"/>
+      <ellipse class="can" cx="165" cy="90" rx="6" ry="10"/>
+    </g>
+    <g id="accessoire"/>
+  </g>
+</svg>

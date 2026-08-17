@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 170" role="img" aria-label="Buzzer">
+  <title>Buzzer — Show-Magenta-Kuppel auf Gold-Sockel (Sticker-Stil)</title>
+  <!-- Spielerfarbe der Kuppel via --spielerfarbe überschreibbar -->
+  <g transform="rotate(-2 100 100)">
+    <!-- Harter Sticker-Schatten -->
+    <ellipse cx="104" cy="136" rx="78" ry="24" fill="#1A1208" opacity="0.4"/>
+    <!-- Gold-Sockel -->
+    <path d="M 30 108 L 170 108 C 178 108 182 114 182 122 C 182 136 164 144 100 144 C 36 144 18 136 18 122 C 18 114 22 108 30 108 Z"
+      fill="#F5B301" stroke="#1A1208" stroke-width="6"/>
+    <path d="M 30 122 C 52 128 148 128 170 122" fill="none" stroke="#C98F00" stroke-width="4" stroke-linecap="round"/>
+    <!-- Kuppel -->
+    <path class="kuppel" style="fill:var(--spielerfarbe,#FF3E8E)" d="M 34 108 C 34 72 62 48 100 48 C 138 48 166 72 166 108 Z" stroke="#1A1208" stroke-width="6"/>
+    <!-- Glanzkante (hart, kein Verlauf) -->
+    <path d="M 48 96 C 50 76 64 62 82 58" fill="none" stroke="#FFF6E3" stroke-width="7" stroke-linecap="round" opacity="0.85"/>
+    <!-- Schlitz-Reflex unten -->
+    <path d="M 58 104 L 142 104" stroke="#1A1208" stroke-width="3" opacity="0.35"/>
+  </g>
+</svg>

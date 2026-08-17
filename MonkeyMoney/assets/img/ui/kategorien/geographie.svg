@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-label="Geographie">
+  <title>Geographie — Globus mit Bananen-Äquator</title>
+  <g fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" transform="rotate(-2 48 48)">
+    <circle cx="48" cy="48" r="32"/>
+    <path d="M 48 16 C 36 26 36 70 48 80 M 48 16 C 60 26 60 70 48 80" stroke-width="4.5"/>
+    <path d="M 14 46 C 30 36 66 36 82 46" stroke-width="7"/>
+    <path d="M 12 42 L 16 36 M 84 42 L 80 36" stroke-width="5"/>
+  </g>
+</svg>

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-label="Wissenschaft">
+  <title>Wissenschaft — Kolben mit Bananen-Probe</title>
+  <g fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" transform="rotate(2 48 48)">
+    <path d="M 40 14 L 40 38 L 20 72 C 16 80 20 86 28 86 L 68 86 C 76 86 80 80 76 72 L 56 38 L 56 14"/>
+    <path d="M 34 14 L 62 14" />
+    <path d="M 34 62 C 40 56 54 56 62 64" stroke-width="5"/>
+    <circle cx="38" cy="76" r="3" fill="currentColor" stroke="none"/>
+    <circle cx="58" cy="72" r="3" fill="currentColor" stroke="none"/>
+    <circle cx="48" cy="80" r="3" fill="currentColor" stroke="none"/>
+  </g>
+</svg>

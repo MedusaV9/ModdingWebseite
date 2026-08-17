@@ -1,0 +1,13 @@
+<!-- Gesicht Augenklappe"  Overlay im #kopf (rechtes Auge H 136/82). -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 320">
+  <g>
+    <path d="M 82 63 C 98 72 112 78 123 80" fill="none"
+      stroke="#1A1208" stroke-width="4.5" stroke-linecap="round"/>
+    <path d="M 149 82 C 155 82 160 80 163 77" fill="none"
+      stroke="#1A1208" stroke-width="4.5" stroke-linecap="round"/>
+    <path d="M 122 82 C 122 74 128 69 136 69 C 144 69 150 74 150 82 C 150 90 144 95 136 95 C 128 95 122 90 122 82 Z"
+      fill="#1A1208" stroke="#1A1208" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M 127 76 C 130 73 135 72 139 73" fill="none"
+      stroke="#4A4A55" stroke-width="2.5" stroke-linecap="round"/>
+  </g>
+</svg>

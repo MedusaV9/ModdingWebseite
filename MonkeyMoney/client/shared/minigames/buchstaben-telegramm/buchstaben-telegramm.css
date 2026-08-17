@@ -1,0 +1,398 @@
+/* Das 7-Buchstaben-Telegramm: Telegramm-Amt-Optik — Papierstreifen mit
+ * Zeichen-Slots, Stempel-Aufdeckung, Telegramm-Tastatur am Handy.
+ * Token-Sweep: die Vintage-Papier-/Tinten-Töne sind als lokale Mischungen
+ * der Banana-Vault-Palette definiert (keine losen Hexwerte mehr). */
+
+:root {
+  --btg-papier: color-mix(in srgb, var(--mm-ticket-paper) 88%, var(--mm-vault-gold));
+  --btg-papier-tief: color-mix(in srgb, var(--btg-papier) 92%, var(--mm-outline));
+  --btg-tinte: color-mix(in srgb, var(--mm-outline) 85%, var(--mm-vault-gold));
+  --btg-tinte-blass: color-mix(in srgb, var(--btg-tinte) 36%, var(--btg-papier));
+  --btg-tinte-halb: color-mix(in srgb, var(--btg-tinte) 59%, var(--btg-papier));
+}
+
+.btg-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.btg-kopf {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.btg-badge {
+  background: var(--btg-papier);
+  color: var(--btg-tinte);
+  border: 2px dashed var(--btg-tinte);
+  border-radius: 6px;
+  padding: 4px 14px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+/* Paar-Vorstellung mit Affen. */
+.btg-paar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  padding: 18px;
+}
+
+.btg-affe {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  animation: btg-hops 1s ease-in-out infinite alternate;
+}
+
+.btg-affe:last-child {
+  animation-delay: 0.5s;
+}
+
+@keyframes btg-hops {
+  to {
+    transform: translateY(-6px);
+  }
+}
+
+.btg-affe-emoji {
+  font-size: 2.6rem;
+}
+
+.btg-und {
+  font-size: 2rem;
+  color: var(--gold);
+  font-weight: 900;
+}
+
+/* Papierstreifen: Telegramm-Papier mit Zeichen-Slots. */
+.btg-buehne {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+}
+
+.btg-streifen {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: center;
+  background: var(--btg-papier);
+  border: 2px solid var(--btg-tinte);
+  border-left: 10px dashed var(--btg-tinte);
+  border-right: 10px dashed var(--btg-tinte);
+  border-radius: 4px;
+  padding: 10px 16px;
+  box-shadow: var(--mm-schatten-sticker-gross);
+}
+
+.btg-slot {
+  min-width: 1.4em;
+  text-align: center;
+  font-family: "Courier New", monospace;
+  font-weight: 900;
+  font-size: 1.4rem;
+  color: var(--btg-tinte-blass);
+  border-bottom: 3px solid var(--btg-tinte);
+}
+
+.btg-slot.voll {
+  color: var(--mm-outline);
+  animation: btg-tick-ein 0.25s ease-out;
+}
+
+.btg-slot.leer {
+  color: var(--btg-tinte-halb);
+  font-size: 0.9rem;
+  border-bottom: none;
+}
+
+.btg-streifen.gross .btg-slot {
+  font-size: 2.2rem;
+  min-width: 1.5em;
+}
+
+@keyframes btg-tick-ein {
+  from {
+    transform: translateY(-10px) scale(1.6);
+    opacity: 0;
+  }
+}
+
+/* Optionen (Screen + Ratender). */
+.btg-optionen {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.btg-option {
+  border: 2px solid var(--btg-tinte);
+  border-radius: 12px;
+  padding: 10px 14px;
+  background: color-mix(in srgb, var(--btg-papier) 12%, transparent);
+  font-weight: 700;
+}
+
+.btg-deko {
+  display: inline-block;
+  min-width: 3em;
+  color: var(--gold);
+  font-weight: 800;
+}
+
+/* Aufdeckung mit Stempel. */
+.btg-aufdeckung {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+  text-align: center;
+  border-radius: 14px;
+  padding: 16px;
+}
+
+.btg-aufdeckung.erfolg {
+  background: color-mix(in srgb, var(--mm-erfolg) 12%, transparent);
+  outline: 2px solid var(--mm-erfolg);
+}
+
+.btg-aufdeckung.fehlschlag {
+  background: color-mix(in srgb, var(--mm-fehler) 10%, transparent);
+  outline: 2px solid var(--mm-fehler);
+}
+
+.btg-stempel {
+  font-size: 1.3rem;
+  font-weight: 900;
+  transform: rotate(-3deg);
+  border: 3px solid currentColor;
+  border-radius: 8px;
+  padding: 4px 14px;
+  animation: btg-stempel-schlag 0.3s ease-out;
+}
+
+@keyframes btg-stempel-schlag {
+  from {
+    transform: rotate(-3deg) scale(2.2);
+    opacity: 0;
+  }
+}
+
+.btg-begriff {
+  font-size: 1.5rem;
+  font-weight: 900;
+  color: var(--gold);
+}
+
+.btg-stroeme {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+.btg-strom {
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-weight: 700;
+}
+
+.btg-strom.gut {
+  background: color-mix(in srgb, var(--mm-erfolg) 18%, transparent);
+  border: 1px solid var(--mm-erfolg);
+}
+
+.btg-strom.schlecht {
+  background: color-mix(in srgb, var(--mm-fehler) 15%, transparent);
+  border: 1px solid var(--mm-fehler);
+}
+
+.btg-bilanz {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 560px;
+  margin: 0 auto;
+}
+
+.btg-bilanz-zeile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: 10px;
+  padding: 8px 14px;
+  background: color-mix(in srgb, var(--mm-ticket-paper) 7%, transparent);
+}
+
+.btg-bilanz-zeile.gewonnen {
+  outline: 2px solid var(--gold);
+}
+
+.btg-bilanz-zeile strong {
+  margin-left: auto;
+  color: var(--gold);
+}
+
+.btg-verfall {
+  font-size: 0.85rem;
+}
+
+/* ---------- Player (Handy, hochkant) ---------- */
+
+.btg-player {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 8px;
+}
+
+.btg-begriff-karte {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: center;
+  text-align: center;
+  background: color-mix(in srgb, var(--btg-papier) 12%, transparent);
+  border: 2px dashed var(--gold);
+  border-radius: 14px;
+  padding: 12px;
+}
+
+.btg-zaehler {
+  text-align: center;
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.btg-tastatur {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.btg-reihe {
+  display: flex;
+  gap: 4px;
+  justify-content: center;
+}
+
+.btg-taste {
+  flex: 1;
+  max-width: 42px;
+  min-height: 44px;
+  /* min-width 0 + padding 0 überstimmen base.css (button: padding 12px 20px):
+   * sonst können die Tasten nicht unter 42px schrumpfen und die 10er-Reihen
+   * (QWERTZUIOP, 0–9) laufen auf 390-px-Handys seitlich aus dem Bild —
+   * Q und P wären dann gar nicht tippbar. */
+  min-width: 0;
+  padding: 0;
+  border-radius: 8px;
+  border: 1px solid var(--btg-tinte);
+  background: var(--btg-papier);
+  color: var(--mm-outline);
+  font-family: "Courier New", monospace;
+  font-weight: 900;
+  font-size: 1.05rem;
+}
+
+.btg-taste:disabled {
+  opacity: 0.35;
+}
+
+/* Tasten-Feedback (W3): snappt in 60 ms rein wie eine mechanische
+   Telegramm-Taste — Papier drückt sich sichtbar ein. */
+.btg-taste {
+  transition:
+    transform 60ms var(--mm-kurve-snap, ease-out),
+    box-shadow 60ms var(--mm-kurve-snap, ease-out);
+}
+
+.btg-taste:active:not(:disabled) {
+  transform: translateY(2px) scale(0.94);
+  box-shadow: var(--mm-schatten-gedrueckt, 1px 1px 0 0 rgb(26 18 8 / 40%));
+  background: color-mix(in srgb, var(--btg-papier) 82%, var(--mm-vault-gold));
+}
+
+/* ⌫-Korrektur (Eval 3): löscht VOR dem Senden das letzte Zeichen und gibt
+ * es dem Budget zurück — bewusst breit + abgesetzt (kein Fett-Finger-Risiko
+ * neben den Buchstaben). */
+.btg-loeschen {
+  max-width: none;
+  flex: 0 1 320px;
+  padding: 0 14px;
+  background: var(--btg-papier-tief);
+  font-family: inherit;
+  font-size: 0.9rem;
+}
+
+.btg-senden {
+  min-height: 52px;
+  border-radius: 14px;
+  border: 2px solid var(--gold);
+  background: color-mix(in srgb, var(--mm-banana) 15%, transparent);
+  color: inherit;
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+
+.btg-option-btn {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 2px solid var(--btg-tinte);
+  border-radius: 14px;
+  padding: 16px 14px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  background: color-mix(in srgb, var(--btg-papier) 12%, transparent);
+  color: inherit;
+}
+
+/* Antwort-Lock (W3): ein Puls beim Einrasten (wie bananen-basics). */
+.btg-option-btn.gewaehlt {
+  outline: 3px solid var(--gold);
+  animation: btg-lock-puls 0.45s var(--mm-kurve-bounce, ease) 1;
+}
+
+@keyframes btg-lock-puls {
+  0% {
+    transform: scale(1);
+  }
+
+  40% {
+    transform: scale(1.04);
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+
+.btg-option-btn:active {
+  transform: scale(0.97);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btg-option-btn.gewaehlt {
+    animation: none;
+  }
+}
+
+.btg-status {
+  text-align: center;
+  padding: 28px 14px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--mm-ticket-paper) 7%, transparent);
+  font-size: 1.05rem;
+}

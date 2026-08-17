@@ -1,0 +1,145 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 320" class="mm-affe" data-affe="iro-ines" role="img" aria-label="Iro-Ines">
+  <title>Iro-Ines  die Punkerin (Zacken-Iro + Springerstiefel)</title>
+  <style>
+    svg[data-affe="iro-ines"] .fell{fill:var(--fell,#5C6672)}
+    svg[data-affe="iro-ines"] .fell-hell{fill:var(--fell-hell,#BCC5CF)}
+    svg[data-affe="iro-ines"] .fell-s{stroke:var(--fell,#5C6672);fill:none}
+    svg[data-affe="iro-ines"] .o{stroke:#1A1208;stroke-width:5;stroke-linejoin:round;stroke-linecap:round}
+    svg[data-affe="iro-ines"] .os{stroke:#1A1208;fill:none;stroke-linecap:round}
+    svg[data-affe="iro-ines"] .iro{fill:var(--prop,#8FE04B)}
+    svg[data-affe="iro-ines"] #kopf,svg[data-affe="iro-ines"] #arm-l,svg[data-affe="iro-ines"] #arm-r,svg[data-affe="iro-ines"] #bein-l,svg[data-affe="iro-ines"] #bein-r,svg[data-affe="iro-ines"] #schwanz,svg[data-affe="iro-ines"] #iro{transform-box:view-box}
+    svg[data-affe="iro-ines"] #kopf{transform-origin:120px 146px}
+    svg[data-affe="iro-ines"] #arm-l{transform-origin:90px 162px}
+    svg[data-affe="iro-ines"] #arm-r{transform-origin:150px 162px}
+    svg[data-affe="iro-ines"] #bein-l{transform-origin:102px 242px}
+    svg[data-affe="iro-ines"] #bein-r{transform-origin:138px 242px}
+    svg[data-affe="iro-ines"] #schwanz{transform-origin:146px 242px}
+    svg[data-affe="iro-ines"] #iro{transform-origin:120px 64px}
+    svg[data-affe="iro-ines"] .gesicht{display:none}
+    svg[data-affe="iro-ines"] #gesicht-neutral{display:inline}
+    svg[data-affe="iro-ines"][data-gesicht=jubel] #gesicht-neutral,svg[data-affe="iro-ines"][data-gesicht=frust] #gesicht-neutral,svg[data-affe="iro-ines"][data-gesicht=denk] #gesicht-neutral{display:none}
+    svg[data-affe="iro-ines"][data-gesicht=jubel] #gesicht-jubel{display:inline}
+    svg[data-affe="iro-ines"][data-gesicht=frust] #gesicht-frust{display:inline}
+    svg[data-affe="iro-ines"][data-gesicht=denk] #gesicht-denk{display:inline}
+  </style>
+
+  <g id="schwanz">
+    <!-- Frecher Zickzack-Schwung -->
+    <path class="os" d="M 144 244 C 184 250 200 226 184 212 C 172 202 160 214 174 220" stroke-width="15"/>
+    <path class="fell-s" d="M 144 244 C 184 250 200 226 184 212 C 172 202 160 214 174 220" stroke-width="8.5"/>
+    <!-- Nieten-Band am Schwanz -->
+    <path d="M 168 240 L 178 232" stroke="#2B2733" stroke-width="8" stroke-linecap="round"/>
+    <circle cx="173" cy="236" r="1.8" fill="#FFF6E3"/>
+  </g>
+
+  <g id="bein-l">
+    <path class="os" d="M 102 242 C 98 260 96 272 95 282" stroke-width="18"/>
+    <path class="fell-s" d="M 102 242 C 98 260 96 272 95 282" stroke-width="11"/>
+    <!-- Springerstiefel -->
+    <path class="o" d="M 82 278 L 104 278 L 106 292 C 112 293 116 296 116 302 L 76 302 L 78 284 Z" fill="#2B2733"/>
+    <path d="M 84 284 L 100 286 M 84 291 L 100 293" stroke="#FFF6E3" stroke-width="2.5" stroke-linecap="round"/>
+  </g>
+  <g id="bein-r">
+    <path class="os" d="M 138 242 C 142 260 144 272 145 282" stroke-width="18"/>
+    <path class="fell-s" d="M 138 242 C 142 260 144 272 145 282" stroke-width="11"/>
+    <path class="o" d="M 136 278 L 158 278 L 162 284 L 164 302 L 124 302 C 124 296 128 293 134 292 Z" fill="#2B2733"/>
+    <path d="M 140 286 L 156 284 M 140 293 L 156 291" stroke="#FFF6E3" stroke-width="2.5" stroke-linecap="round"/>
+  </g>
+
+  <g id="koerper">
+    <!-- Band-Shirt mit Blitz -->
+    <path class="o" d="M 92 160 C 84 182 86 216 96 242 L 144 242 C 154 216 156 182 148 160 C 138 150 102 150 92 160 Z" fill="#2B2733"/>
+    <path class="o" d="M 122 178 L 110 200 L 119 200 L 112 222 L 130 196 L 121 196 L 128 178 Z" fill="#F5B301" stroke-width="3.5"/>
+    <!-- Offene Jeans-Weste -->
+    <path class="o" d="M 92 160 L 84 164 C 78 186 80 216 88 240 L 98 240 C 92 216 90 184 96 162 Z" fill="#3E4A66" stroke-width="4"/>
+    <path class="o" d="M 148 160 L 156 164 C 162 186 160 216 152 240 L 142 240 C 148 216 150 184 144 162 Z" fill="#3E4A66" stroke-width="4"/>
+    <g fill="#FFF6E3">
+      <circle cx="89" cy="172" r="1.8"/><circle cx="90" cy="182" r="1.8"/><circle cx="91" cy="192" r="1.8"/>
+      <circle cx="151" cy="172" r="1.8"/><circle cx="150" cy="182" r="1.8"/><circle cx="149" cy="192" r="1.8"/>
+    </g>
+    <!-- Nietenkragen -->
+    <path class="o" d="M 98 152 L 142 152 L 140 162 L 100 162 Z" fill="#2B2733" stroke-width="4"/>
+    <path d="M 104 152 L 106 144 L 110 152 M 116 152 L 119 143 L 122 152 M 128 152 L 132 144 L 135 152" fill="#FFF6E3" stroke="#1A1208" stroke-width="2.5" stroke-linejoin="round"/>
+  </g>
+
+  <g id="arm-l">
+    <path class="os" d="M 90 162 C 78 182 74 200 74 216" stroke-width="17"/>
+    <path class="fell-s" d="M 90 162 C 78 182 74 200 74 216" stroke-width="10.5"/>
+    <circle class="fell o" cx="74" cy="223" r="10"/>
+    <!-- Fingerloser Handschuh -->
+    <path d="M 66 218 C 70 213 78 213 82 218" fill="none" stroke="#2B2733" stroke-width="6" stroke-linecap="round"/>
+  </g>
+  <g id="arm-r">
+    <!-- Protest-Faust hoch! -->
+    <path class="os" d="M 150 162 C 162 150 170 136 174 120" stroke-width="17"/>
+    <path class="fell-s" d="M 150 162 C 162 150 170 136 174 120" stroke-width="10.5"/>
+    <circle class="fell o" cx="176" cy="112" r="11"/>
+    <path class="os" d="M 168 105 Q 176 100 184 105" stroke-width="4"/>
+    <!-- Nietenarmband -->
+    <path d="M 166 128 C 172 122 180 122 186 128" fill="none" stroke="#2B2733" stroke-width="9" stroke-linecap="round"/>
+    <circle cx="170" cy="124" r="1.8" fill="#FFF6E3"/>
+    <circle cx="177" cy="122" r="1.8" fill="#FFF6E3"/>
+    <circle cx="184" cy="124" r="1.8" fill="#FFF6E3"/>
+  </g>
+
+  <g id="kopf">
+    <circle class="fell o" cx="120" cy="98" r="38"/>
+    <circle class="fell o" cx="82" cy="92" r="11"/>
+    <circle class="fell o" cx="158" cy="92" r="11"/>
+    <circle class="fell-hell" cx="82" cy="92" r="5"/>
+    <circle class="fell-hell" cx="158" cy="92" r="5"/>
+    <ellipse class="fell-hell o" cx="120" cy="110" rx="24" ry="17" stroke-width="4"/>
+    <!-- Sicherheitsnadel im Ohr -->
+    <path d="M 76 100 C 72 106 74 112 80 112" fill="none" stroke="#F5B301" stroke-width="3.5" stroke-linecap="round"/>
+
+    <g id="gesicht-neutral" class="gesicht">
+      <!-- Frecher Smirk -->
+      <circle cx="106" cy="87" r="6.5" fill="#FFF6E3"/>
+      <circle cx="134" cy="87" r="6.5" fill="#FFF6E3"/>
+      <circle cx="107" cy="88" r="3" fill="#1A1208"/>
+      <circle cx="133" cy="88" r="3" fill="#1A1208"/>
+      <path class="os" d="M 98 77 L 113 76" stroke-width="4"/>
+      <path class="os" d="M 127 74 L 142 78" stroke-width="4"/>
+      <circle cx="114" cy="104" r="1.8" fill="#1A1208"/>
+      <circle cx="126" cy="104" r="1.8" fill="#1A1208"/>
+      <path class="os" d="M 108 116 Q 122 121 134 112" stroke-width="4"/>
+    </g>
+    <g id="gesicht-jubel" class="gesicht">
+      <!-- Rock! Zunge raus -->
+      <path class="os" d="M 99 87 Q 106 79 113 87" stroke-width="4.5"/>
+      <path class="os" d="M 127 87 Q 134 79 141 87" stroke-width="4.5"/>
+      <circle cx="114" cy="102" r="1.8" fill="#1A1208"/>
+      <circle cx="126" cy="102" r="1.8" fill="#1A1208"/>
+      <path d="M 104 110 Q 120 128 136 110 Q 120 116 104 110 Z" fill="#1A1208"/>
+      <path d="M 116 119 C 114 128 118 133 121 133 C 125 133 127 127 125 118 Q 120 122 116 119 Z" fill="#FF3E8E" stroke="#1A1208" stroke-width="2.5"/>
+    </g>
+    <g id="gesicht-frust" class="gesicht">
+      <!-- Knurren -->
+      <path class="os" d="M 98 78 L 114 84" stroke-width="4.5"/>
+      <path class="os" d="M 142 78 L 126 84" stroke-width="4.5"/>
+      <circle cx="107" cy="90" r="2.9" fill="#1A1208"/>
+      <circle cx="133" cy="90" r="2.9" fill="#1A1208"/>
+      <circle cx="114" cy="104" r="1.8" fill="#1A1208"/>
+      <circle cx="126" cy="104" r="1.8" fill="#1A1208"/>
+      <path class="o" d="M 106 118 Q 120 111 134 118 L 130 121 L 125 117 L 120 121 L 115 117 L 110 121 Z" fill="#FFF6E3" stroke-width="3"/>
+    </g>
+    <g id="gesicht-denk" class="gesicht">
+      <!-- Augenrollen -->
+      <circle cx="106" cy="87" r="6.5" fill="#FFF6E3"/>
+      <circle cx="134" cy="87" r="6.5" fill="#FFF6E3"/>
+      <circle cx="105" cy="84" r="2.9" fill="#1A1208"/>
+      <circle cx="133" cy="84" r="2.9" fill="#1A1208"/>
+      <path class="os" d="M 97 75 L 112 72" stroke-width="4"/>
+      <circle cx="114" cy="104" r="1.8" fill="#1A1208"/>
+      <circle cx="126" cy="104" r="1.8" fill="#1A1208"/>
+      <path class="os" d="M 110 115 Q 115 111 120 115 Q 125 119 130 115" stroke-width="4"/>
+    </g>
+
+    <!-- Zacken-Iro (Nachschwing-Gelenk) -->
+    <g id="iro">
+      <path class="iro o" d="M 96 72 L 102 30 L 110 62 L 118 16 L 126 60 L 134 26 L 142 68 C 134 60 106 60 96 72 Z"/>
+      <path d="M 104 56 L 106 42 M 120 50 L 120 34 M 133 52 L 132 40" fill="none" stroke="#1A1208" stroke-width="2.5" stroke-linecap="round" opacity="0.45"/>
+    </g>
+    <g id="accessoire"/>
+  </g>
+</svg>

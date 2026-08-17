@@ -1,0 +1,470 @@
+/* Bananen-Tortenschlacht — Sitzkreis mit Puppen, fliegende Torten (echte
+   Flug-Animation Werfer→Ziel), Sahne-Schichten 1/2/3 als Overlay, Raus-Deckel;
+   Player: XXL-Antworten, geheimes Ziel-Grid, Ehrentribüne. */
+.ts-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(920px, 94vw);
+  margin: 0 auto;
+}
+
+.ts-kopf {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.ts-badge {
+  background: var(--gold);
+  color: var(--mm-outline, #1a1208);
+  border-radius: var(--mm-radius-s);
+  border: var(--mm-outline-m) solid var(--mm-outline);
+  box-shadow: var(--mm-schatten-sticker);
+  padding: 3px 10px;
+  font-weight: 800;
+  rotate: var(--mm-kipp-l, -2deg);
+}
+
+.ts-titel {
+  text-align: center;
+  margin: 0;
+}
+
+.ts-frage {
+  text-align: center;
+  margin: 4px 0;
+}
+
+.ts-optionen {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.ts-option {
+  border: var(--mm-outline-m) solid var(--mm-outline);
+  border-left: 10px solid var(--deko);
+  border-radius: var(--mm-radius-s);
+  padding: 8px 12px;
+  background: color-mix(in srgb, var(--deko) 12%, transparent);
+  font-weight: 700;
+}
+
+.ts-deko {
+  opacity: 0.85;
+  margin-right: 6px;
+}
+
+/* ---------- Der Sitzkreis ---------- */
+.ts-kreis {
+  position: relative;
+  height: clamp(230px, 34vh, 340px);
+  border-radius: var(--mm-radius-l);
+  border: var(--mm-outline-m) solid var(--mm-outline);
+  box-shadow: var(--mm-schatten-sticker);
+  background: radial-gradient(
+    120% 100% at 50% 110%,
+    color-mix(in srgb, var(--mm-deep-palm) 35%, transparent) 0%,
+    transparent 75%
+  );
+  overflow: hidden;
+}
+
+.ts-slot {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  transition: filter 0.4s ease;
+}
+
+.ts-slot.offline {
+  opacity: 0.45;
+}
+
+.ts-slot.raus {
+  filter: grayscale(0.9);
+}
+
+.ts-slot.wirft .ts-puppe {
+  animation: ts-wippen 0.7s ease-in-out infinite alternate;
+}
+
+@keyframes ts-wippen {
+  from {
+    transform: rotate(-4deg);
+  }
+  to {
+    transform: rotate(4deg) translateY(-3px);
+  }
+}
+
+/* Screen-Shake (W4, dezent): der Kreis zuckt bei JEDEM Einschlag der Salve —
+   Iterationen = Würfe, Takt 0,9 s = Wurf-Stagger, Start = erste Landung
+   (0,75 s, s. ts-splat). Nur transform, nur die ersten 40 % des Takts. */
+.ts-kreis.bebt {
+  animation: ts-beben 0.9s linear 0.75s;
+  animation-iteration-count: var(--salven, 1);
+}
+
+@keyframes ts-beben {
+  0%,
+  40%,
+  100% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+  8% {
+    transform: translate(-4px, 2px) rotate(-0.4deg);
+  }
+  20% {
+    transform: translate(4px, -2px) rotate(0.35deg);
+  }
+  32% {
+    transform: translate(-2px, 1px);
+  }
+}
+
+/* Sieger-Pose (W4): Arme hoch macht data-gesicht="jubel" (Gelenk-Rotation,
+   base.css) — dazu Sieger-Hüpfer + Krone überm Kopf. */
+.ts-slot.sieger-pose .ts-puppe-wrap {
+  animation: ts-sieger-hops 0.75s var(--mm-kurve-bounce, ease) infinite;
+}
+
+@keyframes ts-sieger-hops {
+  0%,
+  100% {
+    transform: translateY(0) scale(1.08);
+  }
+  40% {
+    /* Nur 4px hoch: der oberste Slot sitzt an der Kreis-Kante (overflow:
+       hidden) — mehr Hub schob den Kopf in den Rahmen (W4-Sichtung). */
+    transform: translateY(-4px) scale(1.12);
+  }
+}
+
+.ts-sieger-krone {
+  position: absolute;
+  left: 50%;
+  /* AUF dem Kopf statt darüber schwebend: der Kreis clippt (overflow:
+     hidden), am obersten Slot war die schwebende Krone komplett weg. */
+  top: -2px;
+  transform: translateX(-62%) rotate(-14deg);
+  font-size: 1.6rem;
+  filter: drop-shadow(2px 2px 0 var(--mm-schatten-farbe, rgb(26 18 8 / 55%)));
+  animation: ts-klecks 0.4s ease-out backwards;
+}
+
+.ts-puppe-wrap {
+  position: relative;
+  display: inline-block;
+}
+
+.ts-puppe {
+  display: inline-block;
+  width: clamp(44px, 6.5vw, 68px);
+  height: clamp(44px, 6.5vw, 68px);
+}
+
+.ts-name {
+  font-size: 0.8rem;
+  font-weight: 700;
+  max-width: 96px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Sahne-Schichten 1/2/3: weiße Kleckse wandern übers Gesicht. */
+.ts-sahne {
+  position: absolute;
+  width: 45%;
+  height: 34%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fff 0 55%, #e8dfca 75%, transparent 76%);
+  border: 2px solid var(--mm-outline);
+  pointer-events: none;
+  animation: ts-klecks 0.35s ease-out backwards;
+}
+
+.ts-sahne.s1 {
+  left: 6%;
+  top: 16%;
+  rotate: -14deg;
+}
+
+.ts-sahne.s2 {
+  right: 4%;
+  top: 30%;
+  rotate: 12deg;
+}
+
+.ts-sahne.s3 {
+  left: 26%;
+  top: 4%;
+  rotate: 4deg;
+  width: 55%;
+  height: 42%;
+}
+
+@keyframes ts-klecks {
+  from {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.ts-torte-in-hand {
+  position: absolute;
+  right: -14px;
+  bottom: -4px;
+  font-size: 1.3rem;
+}
+
+.ts-raus-deckel {
+  position: absolute;
+  left: 50%;
+  top: 40%;
+  transform: translate(-50%, -50%) rotate(-8deg);
+  background: var(--rot);
+  color: #fff;
+  border: var(--mm-outline-m) solid var(--mm-outline);
+  border-radius: var(--mm-radius-s);
+  padding: 1px 6px;
+  font-size: 0.75rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.ts-schichten {
+  display: flex;
+  gap: 3px;
+}
+
+.ts-pip {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid var(--mm-outline);
+  background: transparent;
+}
+
+.ts-pip.voll {
+  background: #fff;
+}
+
+/* ---------- Torten-Flug (Wurf-Salve, gestaffelt in Wurf-Reihenfolge) ---------- */
+.ts-torte-flug {
+  position: absolute;
+  left: var(--von-x);
+  top: var(--von-y);
+  transform: translate(-50%, -50%);
+  font-size: 1.9rem;
+  opacity: 0;
+  animation: ts-flug 0.85s ease-in forwards;
+  animation-delay: calc(var(--i) * 0.9s);
+  pointer-events: none;
+  z-index: 3;
+}
+
+@keyframes ts-flug {
+  0% {
+    left: var(--von-x);
+    top: var(--von-y);
+    opacity: 1;
+    rotate: 0turn;
+    scale: 0.7;
+  }
+  85% {
+    opacity: 1;
+    scale: 1.25;
+  }
+  100% {
+    left: var(--zu-x);
+    top: var(--zu-y);
+    opacity: 0;
+    rotate: 2turn;
+    scale: 1;
+  }
+}
+
+/* Klatsch-Splat am Ziel — erscheint, wenn die Torte einschlägt. */
+.ts-splat {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  font-size: 2.1rem;
+  opacity: 0;
+  animation: ts-splat 0.6s ease-out forwards;
+  animation-delay: calc(var(--i) * 0.9s + 0.75s);
+  pointer-events: none;
+  z-index: 4;
+}
+
+.ts-splat.voll {
+  font-size: 2.8rem;
+}
+
+@keyframes ts-splat {
+  0% {
+    opacity: 0;
+    scale: 0.3;
+  }
+  30% {
+    opacity: 1;
+    scale: 1.4;
+  }
+  100% {
+    opacity: 0.9;
+    scale: 1;
+  }
+}
+
+.ts-ticker {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  align-items: center;
+}
+
+.ts-ticker-eintrag {
+  font-size: 0.95rem;
+}
+
+.ts-ticker-eintrag.raus {
+  color: var(--rot);
+  font-weight: 800;
+}
+
+/* ---------- Auflösung ---------- */
+.ts-bilanz {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ts-bilanz-zeile {
+  display: grid;
+  grid-template-columns: 34px 1fr auto auto;
+  gap: 10px;
+  align-items: center;
+  border: var(--mm-outline-s) solid var(--mm-outline);
+  border-radius: var(--mm-radius-s);
+  padding: 4px 10px;
+}
+
+.ts-bilanz-zeile.sieger {
+  background: color-mix(in srgb, var(--gold) 18%, transparent);
+}
+
+.ts-mini {
+  display: inline-block;
+  width: 30px;
+  height: 30px;
+}
+
+/* ---------- Player ---------- */
+.ts-player {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ts-warnung {
+  text-align: center;
+  font-weight: 800;
+  margin: 0;
+}
+
+.ts-frage-klein {
+  text-align: center;
+  font-weight: 700;
+  margin: 0;
+}
+
+.ts-button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 64px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  border: var(--mm-outline-m) solid var(--mm-outline);
+  border-left: 12px solid var(--deko);
+  border-radius: var(--mm-radius-s);
+  background: color-mix(in srgb, var(--deko) 14%, transparent);
+  color: inherit;
+  padding: 8px 12px;
+}
+
+.ts-button.gewaehlt {
+  outline: 3px solid var(--gold);
+}
+
+.ts-button.gesperrt {
+  opacity: 0.55;
+}
+
+.ts-ziel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  min-height: 60px;
+  border: var(--mm-outline-m) solid var(--mm-outline);
+  border-radius: var(--mm-radius-s);
+  background: color-mix(in srgb, var(--rot) 10%, transparent);
+  color: inherit;
+  padding: 6px 12px;
+  font-weight: 700;
+}
+
+.ts-ziel-wer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ts-ziel-puppe {
+  display: inline-block;
+  width: 34px;
+  height: 34px;
+}
+
+.ts-ziel-torten {
+  font-size: 0.9rem;
+  opacity: 0.85;
+}
+
+.ts-verdeckt {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+  padding: 18px 8px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ts-torte-flug,
+  .ts-splat {
+    animation-duration: 0.01s;
+    animation-delay: 0s;
+  }
+
+  .ts-slot.wirft .ts-puppe,
+  .ts-sahne,
+  .ts-kreis.bebt,
+  .ts-slot.sieger-pose .ts-puppe-wrap {
+    animation: none;
+  }
+}

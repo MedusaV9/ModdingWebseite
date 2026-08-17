@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600" viewBox="0 0 800 600">
+  <!-- Platzhalter-Motiv Palme am Strand" für Pixel-Dschungel-Tests (Test-Asset). -->
+  <rect width="800" height="380" fill="#29d9d5"/>
+  <rect y="380" width="800" height="220" fill="#ffde6b"/>
+  <circle cx="660" cy="105" r="75" fill="#f5b301"/>
+  <path d="M 360 520 Q 340 330 395 190 L 445 200 Q 400 340 415 520 Z"
+        fill="#8a5a3b" stroke="#1a1208" stroke-width="12"/>
+  <path d="M 420 195 Q 300 120 175 175 Q 290 195 405 235 Z" fill="#22a559"
+        stroke="#1a1208" stroke-width="10"/>
+  <path d="M 420 195 Q 540 115 660 170 Q 545 190 430 235 Z" fill="#22a559"
+        stroke="#1a1208" stroke-width="10"/>
+  <path d="M 415 190 Q 355 80 240 65 Q 340 130 400 220 Z" fill="#2e8b57"
+        stroke="#1a1208" stroke-width="10"/>
+  <path d="M 425 190 Q 490 75 605 70 Q 505 135 440 220 Z" fill="#2e8b57"
+        stroke="#1a1208" stroke-width="10"/>
+  <circle cx="405" cy="225" r="26" fill="#8a5a3b" stroke="#1a1208" stroke-width="8"/>
+  <circle cx="455" cy="240" r="26" fill="#8a5a3b" stroke="#1a1208" stroke-width="8"/>
+  <ellipse cx="180" cy="500" rx="90" ry="26" fill="#e6a819" opacity="0.7"/>
+</svg>

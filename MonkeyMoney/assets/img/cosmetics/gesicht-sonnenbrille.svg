@@ -1,0 +1,21 @@
+<!-- Gesicht Sonnenbrille"  Overlay im #kopf (Augen H 104/136 auf y 82), verspiegelt. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 320">
+  <g>
+    <path d="M 90 78 L 79 84" stroke="#1A1208" stroke-width="4" stroke-linecap="round"/>
+    <path d="M 150 78 L 161 84" stroke="#1A1208" stroke-width="4" stroke-linecap="round"/>
+    <rect x="90" y="72" width="28" height="20" rx="7" fill="#2C3440"
+      stroke="#1A1208" stroke-width="4"/>
+    <rect x="122" y="72" width="28" height="20" rx="7" fill="#2C3440"
+      stroke="#1A1208" stroke-width="4"/>
+    <path d="M 117 79 C 118.5 76.5 121.5 76.5 123 79" fill="none"
+      stroke="#1A1208" stroke-width="4" stroke-linecap="round"/>
+    <path d="M 92.5 76 C 100 74 109 74 115.5 76 L 115.5 80 C 109 78 100 78 92.5 80 Z"
+      fill="#29D9D5" opacity="0.45"/>
+    <path d="M 124.5 76 C 132 74 141 74 147.5 76 L 147.5 80 C 141 78 132 78 124.5 80 Z"
+      fill="#29D9D5" opacity="0.45"/>
+    <path d="M 95 90 L 104.5 74.5 L 108.5 74.5 L 99 90 Z" fill="#FFF6E3" opacity="0.8"/>
+    <path d="M 102 90 L 111 75.5 L 113 75.5 L 104 90 Z" fill="#FFF6E3" opacity="0.5"/>
+    <path d="M 127 90 L 136.5 74.5 L 140.5 74.5 L 131 90 Z" fill="#FFF6E3" opacity="0.8"/>
+    <path d="M 134 90 L 143 75.5 L 145 75.5 L 136 90 Z" fill="#FFF6E3" opacity="0.5"/>
+  </g>
+</svg>

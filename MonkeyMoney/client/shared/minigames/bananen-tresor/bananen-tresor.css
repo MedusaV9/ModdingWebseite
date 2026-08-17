@@ -1,0 +1,306 @@
+/* Der Bananen-Tresor — Player: vertikaler XXL-Slider (hochkant), Screen:
+   Zahlenstrahl-Liane mit einfliegenden Tipps + goldenem Richtwert-Pfeil. */
+@import "../../styles/tokens.css";
+
+/* ---------- Screen ---------- */
+
+.bt-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: min(1000px, 94vw);
+  margin: 0 auto;
+}
+
+.bt-frage {
+  text-align: center;
+  font-size: clamp(1.4rem, 3.5vw, 2.4rem);
+}
+
+.bt-volltreffer {
+  text-align: center;
+  color: var(--mm-vault-gold, var(--gold));
+  animation: bt-volltreffer-bounce 0.6s var(--mm-kurve-bounce, ease) both;
+}
+
+@keyframes bt-volltreffer-bounce {
+  from {
+    transform: scale(0.2) rotate(-6deg);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1) rotate(-2deg);
+    opacity: 1;
+  }
+}
+
+.bt-strahl {
+  position: relative;
+  height: 190px;
+  margin: 20px 40px;
+}
+
+.bt-liane {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 10px;
+  border-radius: 5px;
+  background: repeating-linear-gradient(
+    90deg,
+    var(--mm-leaf, var(--gruen)) 0 26px,
+    var(--mm-deep-palm, #14532d) 26px 34px
+  );
+}
+
+.bt-skala-label {
+  position: absolute;
+  top: calc(50% + 14px);
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.bt-skala-label.min {
+  left: 0;
+}
+
+.bt-skala-label.max {
+  right: 0;
+}
+
+/* Tipps fliegen als Affen-Köpfe auf den Strahl (Auflösungs-Dramaturgie §2.3) */
+.bt-marker {
+  position: absolute;
+  top: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transform: translate(-50%, -100%);
+  animation: bt-marker-flug 0.5s var(--mm-kurve-bounce, ease) both;
+}
+
+.bt-marker.unten {
+  transform: translate(-50%, 8px);
+  flex-direction: column-reverse;
+}
+
+@keyframes bt-marker-flug {
+  from {
+    opacity: 0;
+    margin-top: -60px;
+  }
+  to {
+    opacity: 1;
+    margin-top: 0;
+  }
+}
+
+.bt-marker-kopf {
+  font-size: 1.8rem;
+}
+
+.bt-marker.volltreffer .bt-marker-kopf {
+  filter: drop-shadow(0 0 8px var(--mm-vault-gold, gold));
+}
+
+.bt-marker-wert {
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.bt-marker-delta {
+  font-size: 0.85rem;
+  color: var(--mm-vault-gold, var(--gold));
+  font-weight: 700;
+}
+
+/* Goldener Pfeil fährt zum wahren Wert — bewusst NACH den Tipps (2 s Delay) */
+.bt-pfeil {
+  position: absolute;
+  top: -12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transform: translateX(-50%);
+  animation: bt-pfeil-reveal 0.7s var(--mm-kurve-snap, ease) 2s both;
+}
+
+@keyframes bt-pfeil-reveal {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-40px) scale(2);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
+}
+
+.bt-pfeil-symbol {
+  color: var(--mm-vault-gold, var(--gold));
+  font-size: 2rem;
+  line-height: 1;
+  text-shadow: var(--mm-schatten-sticker, none);
+}
+
+.bt-pfeil-wert {
+  font-size: var(--mm-text-xl, 1.5rem);
+  background: var(--mm-outline, #1a1208);
+  border-radius: var(--mm-radius-s, 6px);
+  padding: 2px 10px;
+}
+
+.bt-abgegeben {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  align-items: center;
+}
+
+.bt-tipp-chip {
+  background: var(--mm-flaeche, var(--panel));
+  border-radius: var(--mm-radius-rund, 999px);
+  padding: 6px 12px;
+}
+
+/* ---------- Player (iPhone hochkant): Slider ~70 % Bildhöhe ---------- */
+
+.bt-player {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+  padding: 10px;
+}
+
+.bt-frage-klein {
+  text-align: center;
+  margin: 2px 0;
+  color: var(--muted);
+}
+
+.bt-wert-anzeige {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 8px;
+}
+
+.bt-wert-input {
+  width: 7.5ch;
+  font-size: var(--mm-display-s, 2rem);
+  font-weight: 800;
+  text-align: center;
+  color: var(--mm-vault-gold, var(--gold));
+  background: var(--bg2);
+  border: 2px solid var(--mm-flaeche, var(--panel));
+  border-radius: var(--mm-radius-m, 12px);
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.bt-wert-input::-webkit-outer-spin-button,
+.bt-wert-input::-webkit-inner-spin-button {
+  appearance: none;
+}
+
+.bt-einheit {
+  font-size: var(--mm-text-l, 1.25rem);
+  color: var(--muted);
+}
+
+.bt-wert-anzeige.eingeloggt .bt-wert-input {
+  outline: 3px solid var(--mm-vault-gold, var(--gold));
+}
+
+.bt-slider-zeile {
+  display: flex;
+  flex: 1;
+  gap: 14px;
+  min-height: 0;
+}
+
+/* touch-action:none = Drag statt Scrollen (kein preventDefault-Gefrickel nötig) */
+.bt-slider {
+  position: relative;
+  flex: 1;
+  min-height: 56dvh;
+  border-radius: var(--mm-radius-l, 20px);
+  background: var(--bg2);
+  border: var(--mm-outline-m, 4px) solid var(--mm-flaeche, var(--panel));
+  touch-action: none;
+  cursor: grab;
+  overflow: hidden;
+}
+
+.bt-slider.gesperrt {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.bt-slider-fuellung {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  /* Funktionaler Füllstand (Schätz-Slider), kein Deko-Verlauf — Token-Ausnahme. */
+  background: linear-gradient(to top, var(--mm-deep-palm, #14532d), var(--mm-leaf, var(--gruen)));
+}
+
+.bt-slider-griff {
+  position: absolute;
+  left: 50%;
+  transform: translate(-50%, 50%);
+  font-size: 3rem;
+  line-height: 1;
+  pointer-events: none;
+  filter: drop-shadow(2px 2px 0 var(--mm-schatten-farbe, rgb(0 0 0 / 40%)));
+}
+
+.bt-slider-label {
+  position: absolute;
+  right: 8px;
+  font-size: 0.8rem;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.bt-slider-label.max {
+  top: 6px;
+}
+
+.bt-slider-label.min {
+  bottom: 6px;
+}
+
+.bt-feintuning {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  justify-content: center;
+}
+
+.bt-fein-button {
+  min-width: 72px;
+  min-height: 72px;
+  font-size: var(--mm-text-xl, 1.5rem);
+  font-weight: 800;
+  background: var(--mm-flaeche, var(--panel));
+}
+
+.bt-einloggen {
+  min-height: 64px;
+  font-size: var(--mm-text-xl, 1.5rem);
+}
+
+.bt-eingeloggt-banner {
+  text-align: center;
+  font-size: var(--mm-text-l, 1.25rem);
+  font-weight: 700;
+  background: rgb(245 179 1 / 15%);
+  outline: 3px solid var(--mm-vault-gold, var(--gold));
+  border-radius: var(--mm-radius-m, 12px);
+  padding: 14px;
+}

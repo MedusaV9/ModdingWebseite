@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-label="Sport">
+  <title>Sport — Fußball trifft Bananenschale</title>
+  <g fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" transform="rotate(-3 48 48)">
+    <circle cx="42" cy="46" r="30"/>
+    <path d="M 42 34 L 53 42 L 49 55 L 35 55 L 31 42 Z" fill="currentColor" stroke="none"/>
+    <path d="M 42 34 L 42 22 M 53 42 L 65 38 M 49 55 L 57 65 M 35 55 L 27 65 M 31 42 L 19 38" stroke-width="5"/>
+    <path d="M 66 78 C 72 70 82 68 90 72 M 66 78 C 74 80 84 80 90 72" stroke-width="5"/>
+  </g>
+</svg>

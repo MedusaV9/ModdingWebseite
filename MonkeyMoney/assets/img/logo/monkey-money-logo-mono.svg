@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 704" role="img" aria-label="MONKEY MONEY (einfarbig)">
+  <title>MONKEY MONEY — einfarbige Stempel-/Wasserzeichen-Variante</title>
+  <!-- Nur Outline-Warm-Schwarz #1A1208 (Plan 1.4); via currentColor umfärbbar -->
+  <g fill="none" stroke="currentColor" color="#1A1208" stroke-linecap="round">
+    <path d="M -92 -20 C -78 26 -34 46 6 46 C 46 46 80 18 90 -24" stroke-width="40" transform="translate(512 128) rotate(-6)"/>
+    <path d="M -102 -40 L -108 -54 M 98 -44 L 103 -58" stroke-width="15" transform="translate(512 128) rotate(-6)"/>
+    <path d="M -13 -24 L -14 68 M 16 -26 L 15 66" stroke-width="14" transform="translate(512 128) rotate(-6)"/>
+  </g>
+  <g id="wort-monkey" transform="rotate(-1.5 512 330)">
+    <text x="234.5" y="368" font-family="'Bungee Shade','Bungee',sans-serif" font-size="110" fill="currentColor" color="#1A1208">M<tspan opacity="0">O</tspan>NKEY</text>
+    <g transform="translate(385 326) scale(0.94)" fill="none" stroke="currentColor" color="#1A1208">
+      <circle r="47" stroke-width="7"/>
+      <circle r="34" stroke-width="4"/>
+      <g fill="currentColor" stroke="none">
+        <circle cx="-15" cy="-8" r="7"/>
+        <circle cx="15" cy="-8" r="7"/>
+        <circle cx="0" cy="-2" r="17"/>
+      </g>
+    </g>
+  </g>
+  <g id="wort-money" transform="rotate(1.5 512 490)">
+    <text x="218.1" y="540" font-family="'Bungee Shade','Bungee',sans-serif" font-size="140" fill="currentColor" color="#1A1208">M<tspan opacity="0">O</tspan>NEY</text>
+    <g transform="translate(409.6 486) scale(1.18)" fill="none" stroke="currentColor" color="#1A1208">
+      <circle r="47" stroke-width="7"/>
+      <circle r="34" stroke-width="4"/>
+      <g fill="currentColor" stroke="none">
+        <circle cx="-15" cy="-8" r="7"/>
+        <circle cx="15" cy="-8" r="7"/>
+        <circle cx="0" cy="-2" r="17"/>
+      </g>
+    </g>
+  </g>
+  <path d="M 774 536 C 802 598 764 638 644 650 C 528 660 424 656 362 644 C 320 634 314 604 340 594 C 362 586 374 606 358 616"
+    fill="none" stroke="currentColor" color="#1A1208" stroke-width="20" stroke-linecap="round"/>
+</svg>

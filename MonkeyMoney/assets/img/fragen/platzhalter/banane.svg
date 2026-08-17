@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600" viewBox="0 0 800 600">
+  <!-- Platzhalter-Motiv Banane" für Pixel-Dschungel-Tests. Kräftige Formen,
+       die auch stark verpixelt erkennbar werden (Test-Asset, kein finales Art). -->
+  <rect width="800" height="600" fill="#14532d"/>
+  <circle cx="640" cy="110" r="70" fill="#ffde6b" opacity="0.9"/>
+  <path d="M 150 140 Q 120 320 260 440 Q 400 540 590 490 Q 640 475 620 445
+           Q 460 470 340 390 Q 210 300 215 150 Q 216 115 185 112 Q 155 110 150 140 Z"
+        fill="#ffc93c" stroke="#1a1208" stroke-width="14"/>
+  <path d="M 150 140 Q 145 105 175 100 L 205 96 Q 222 120 215 150 Z"
+        fill="#8a5a3b" stroke="#1a1208" stroke-width="10"/>
+  <path d="M 590 490 Q 630 480 622 448 L 648 460 Q 662 495 618 508 Z"
+        fill="#8a5a3b" stroke="#1a1208" stroke-width="10"/>
+  <path d="M 190 180 Q 180 300 290 400" fill="none" stroke="#e6a819" stroke-width="18"
+        stroke-linecap="round" opacity="0.8"/>
+</svg>

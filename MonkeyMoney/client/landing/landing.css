@@ -1,0 +1,294 @@
+/* Landing-Bühne (Eval-10-Fix „Funktionsmenü"): Studio-Stimmung statt Button-Liste.
+   Token-Treue: NUR var(--mm-*), Verläufe NUR radial (Gesetz 4, max. 2 pro Screen:
+   1× Bühnen-Licht von oben, 1× Gold-Glow hinterm Logo), Sticker-Look via
+   .mm-sticker-Utilities/Basis-Buttons, Wonky über --mm-kipp-Token. */
+
+.landing-buehne {
+  position: relative;
+  overflow: hidden auto;
+  justify-content: flex-start;
+  padding-top: max(20px, env(safe-area-inset-top));
+  /* Verlauf 1/2: radiales Bühnenlicht von oben (Deep-Palm-Mischung → Jungle Night) */
+  background: radial-gradient(
+    120% 90% at 50% -10%,
+    color-mix(in srgb, var(--mm-deep-palm) 85%, var(--mm-leaf)) 0%,
+    var(--mm-deep-palm) 34%,
+    var(--mm-jungle-night) 78%
+  );
+}
+
+/* Bühnen-Zentrierung: flexible Spacer statt justify-center — zentriert auf
+   hohen Screens, schneidet aber bei Overflow (Lobby-Browser offen) nichts
+   oben ab. Unten etwas mehr Luft = Inhalt sitzt LEICHT über der Mitte. */
+.landing-buehne::before,
+.landing-buehne::after {
+  content: "";
+  flex: 1 1 0;
+}
+
+.landing-buehne::after {
+  flex-grow: 1.6;
+}
+
+/* Dezente Blätter-/Geldschein-Silhouetten (flache Token-Füllungen, keine Verläufe) */
+.landing-deko {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.landing-deko svg {
+  position: absolute;
+}
+
+.landing-deko .deko-blatt {
+  color: var(--mm-leaf);
+  opacity: 0.16;
+}
+
+.landing-deko .deko-schein {
+  color: var(--mm-bill-green);
+  opacity: 0.14;
+}
+
+.landing-buehne > *:not(.landing-deko) {
+  z-index: 1;
+}
+
+/* Logo-Moment: echtes Logo + Gold-Glow (Verlauf 2/2), leicht wonky */
+.landing-logo-buehne {
+  position: relative;
+  display: grid;
+  place-items: center;
+  margin-bottom: -6px;
+}
+
+.landing-logo-buehne::before {
+  content: "";
+  position: absolute;
+  inset: -14% -20%;
+  background: var(--mm-glow-gold);
+  pointer-events: none;
+}
+
+.landing-logo {
+  position: relative;
+  width: min(340px, 74vw);
+  height: auto;
+  rotate: var(--mm-kipp-l);
+  border-radius: var(--mm-radius-l);
+  border: var(--mm-outline-m) solid var(--mm-outline);
+  box-shadow: var(--mm-schatten-sticker-gross);
+  animation: landing-logo-auftritt var(--mm-dauer-show) var(--mm-kurve-bounce) both;
+}
+
+@keyframes landing-logo-auftritt {
+  from {
+    opacity: 0;
+    transform: scale(0.9) translateY(-14px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.landing-tagline {
+  margin: 0;
+  color: var(--mm-text-hell);
+  font-size: var(--mm-text-m);
+  font-weight: 600;
+  opacity: 0.85;
+}
+
+/* Hero-CTA: „Bildschirm eröffnen" ist DIE Aktion — groß, gold, Sticker */
+.landing-hero {
+  width: min(400px, 88vw);
+  min-height: 76px;
+  font-size: var(--mm-text-xl);
+  font-weight: 800;
+  border-width: var(--mm-outline-m);
+  box-shadow: var(--mm-schatten-sticker-gross);
+  rotate: calc(var(--mm-kipp-r) * 0.4);
+}
+
+.landing-hero small {
+  display: block;
+  font-weight: 500;
+  font-size: var(--mm-text-s);
+}
+
+/* Sekundär-Reihe: Mitspielen-Wege als kleinere Sticker nebeneinander */
+.landing-sekundaer {
+  display: flex;
+  gap: var(--mm-raum-3);
+  width: min(400px, 88vw);
+}
+
+.landing-sekundaer button {
+  flex: 1 1 0;
+  min-width: 0;
+  font-size: var(--mm-text-m);
+}
+
+.landing-sekundaer button small {
+  display: block;
+  font-weight: 400;
+  font-size: var(--mm-text-xs);
+  /* Umbrechen statt ellipsieren — „empfohlen für dein iPhone" wurde sonst
+     auf schmalen Handys mitten im Wort gekappt (Eval-10-Nachschliff). */
+  white-space: normal;
+  overflow-wrap: break-word;
+}
+
+.landing-sekundaer button:first-child {
+  rotate: calc(var(--mm-kipp-l) * 0.5);
+}
+
+.landing-sekundaer button:last-child {
+  rotate: calc(var(--mm-kipp-r) * 0.5);
+}
+
+/* Tertiär: Show-Master / Meta / Credits — bewusst leise */
+.landing-leise {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--mm-raum-2);
+  width: min(400px, 88vw);
+}
+
+.landing-leise button {
+  flex: 1 1 auto;
+  min-height: var(--mm-tap-min);
+  padding: 6px 14px;
+  font-size: var(--mm-text-s);
+  font-weight: 600;
+  background: color-mix(in srgb, var(--mm-deep-palm) 55%, var(--mm-jungle-night));
+}
+
+.landing-leise button small {
+  display: block;
+  font-weight: 400;
+  font-size: var(--mm-text-xs);
+}
+
+.landing-lan-badge {
+  margin: 0;
+  font-size: var(--mm-text-xs);
+  color: var(--mm-timer);
+  border: 2px solid var(--mm-timer);
+  border-radius: var(--mm-radius-rund);
+  padding: 2px 12px;
+  opacity: 0.8;
+}
+
+/* ---------- Lobby-Browser (Welle 4): Karten statt Listenzeilen ---------- */
+
+.lobby-browser {
+  width: min(440px, 92vw);
+  text-align: left;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lobby-karte {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: var(--mm-radius-m);
+  background: color-mix(in srgb, var(--mm-deep-palm) 65%, var(--mm-jungle-night));
+  border: var(--mm-outline-s) solid var(--mm-outline);
+  box-shadow: var(--mm-schatten-sticker);
+}
+
+/* Modus-Icon als runder Sticker-Chip links. */
+.lobby-modus {
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+  border-radius: 50%;
+  background: var(--mm-flaeche-tief);
+  border: 2px solid var(--mm-outline);
+  box-shadow: var(--mm-schatten-sticker);
+  rotate: var(--mm-kipp-l);
+}
+
+.lobby-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.lobby-name {
+  font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lobby-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: var(--mm-text-xs);
+  margin-top: 2px;
+}
+
+/* Mini-Sitzreihe: belegte Plätze = Affen, freie = leere Sitz-Punkte. */
+.lobby-sitzreihe {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.lobby-sitzreihe .sitz {
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  border-radius: 50%;
+  background: rgb(255 246 227 / 10%);
+  border: 1px solid rgb(255 246 227 / 20%);
+}
+
+.lobby-sitzreihe .sitz.belegt {
+  background: color-mix(in srgb, var(--mm-banana) 30%, transparent);
+  border-color: var(--mm-banana);
+}
+
+.lobby-sitzreihe .sitz-zahl {
+  margin-left: 4px;
+  font-weight: 700;
+  color: var(--mm-banana);
+  font-variant-numeric: var(--mm-ziffern);
+}
+
+.lobby-status {
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.lobby-status.wartet {
+  color: var(--mm-banana-leaf);
+}
+
+.lobby-status.laeuft {
+  color: var(--mm-curtain);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-logo {
+    animation: none;
+  }
+}

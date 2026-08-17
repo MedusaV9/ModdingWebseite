@@ -1,0 +1,514 @@
+/* MONKEY MONEY — Basis-Design „Banana Vault" (Tokens: styles/tokens.css).
+   Alle 4 Clients teilen diese Datei; die Legacy-Variablen (--bg, --panel, --gold …)
+   bleiben als Aliasse erhalten, damit Minigame-CSS automatisch den Show-Look erbt.
+   iPhone-Safari: 100dvh, viewport-fit=cover, Touch-Targets ≥ 44pt (hier ≥ 56px). */
+@import "./styles/tokens.css";
+
+:root {
+  /* Legacy-Aliasse → Banana-Vault-Palette (Minigame-CSS nutzt diese Namen) */
+  --bg: var(--mm-jungle-night);
+  --bg2: var(--mm-flaeche-tief);
+  --panel: var(--mm-deep-palm);
+  --text: var(--mm-ticket-paper);
+  --muted: var(--mm-text-gedimmt);
+  --gold: var(--mm-vault-gold);
+  --rot: var(--mm-curtain);
+  --gruen: var(--mm-leaf);
+  --radius: var(--mm-radius-m);
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100dvh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--mm-font-text);
+  line-height: var(--mm-zeilenhoehe-text);
+  overscroll-behavior: none;
+}
+
+#app {
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
+    env(safe-area-inset-left);
+}
+
+h1,
+h2 {
+  margin: 0.3em 0;
+  font-family: var(--mm-font-display);
+  line-height: var(--mm-zeilenhoehe-display);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  font-weight: 400;
+}
+
+/* ---------- Sticker-Buttons (Gesetz 3: Outline + harter Schatten) ---------- */
+
+button {
+  font: inherit;
+  font-weight: 700;
+  border: var(--mm-outline-s) solid var(--mm-outline);
+  border-radius: var(--radius);
+  cursor: pointer;
+  min-height: 56px; /* ≥ 44pt Touch-Target */
+  padding: 12px 20px;
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: var(--mm-schatten-sticker);
+  transition:
+    transform var(--mm-dauer-tap) var(--mm-kurve-snap),
+    box-shadow var(--mm-dauer-tap) var(--mm-kurve-snap);
+}
+
+button:active:not(:disabled) {
+  transform: scale(var(--mm-scale-gedrueckt)) rotate(1deg);
+  box-shadow: var(--mm-schatten-gedrueckt);
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: default;
+  box-shadow: none;
+}
+
+input,
+select,
+textarea {
+  font: inherit;
+  border-radius: var(--radius);
+  border: var(--mm-outline-s) solid var(--mm-outline);
+  background: var(--bg2);
+  color: var(--text);
+  padding: 12px 14px;
+  min-height: 52px;
+}
+
+input:focus,
+textarea:focus {
+  outline: 3px solid var(--mm-studio-led);
+}
+
+.primaer {
+  background: var(--gold);
+  color: var(--mm-outline);
+  font-weight: 800;
+  font-size: 1.15rem;
+}
+
+.karte {
+  background: var(--panel);
+  border: var(--mm-outline-s) solid var(--mm-outline);
+  border-radius: var(--mm-radius-l);
+  box-shadow: var(--mm-schatten-sticker-gross);
+  padding: 16px;
+}
+
+.zentriert {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 16px;
+  text-align: center;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.mono {
+  font-family: ui-monospace, Menlo, monospace;
+  letter-spacing: 0.25em;
+}
+
+/* ---------- Spieler-Chips + Avatare ---------- */
+
+.spieler-liste {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+}
+
+.spieler-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg2);
+  border: var(--mm-outline-s) solid var(--mm-outline);
+  border-radius: var(--mm-radius-rund);
+  box-shadow: var(--mm-schatten-sticker);
+  padding: 6px 16px 6px 8px;
+  font-weight: 600;
+}
+
+.spieler-chip.offline {
+  opacity: 0.55;
+}
+
+.badge-offline {
+  background: var(--rot);
+  color: var(--mm-ticket-paper);
+  font-size: 0.7rem;
+  border-radius: 6px;
+  padding: 2px 6px;
+  font-weight: 700;
+}
+
+.avatar-dot {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  flex: none;
+  border: 2px solid var(--mm-outline);
+  background: var(--dot, var(--gold));
+}
+
+/* Legacy-Farbklassen (alte Sessions/Bots senden nur die Farbe) —
+   Werte = Spielerfarben-Tokens --mm-spieler-1…8 */
+.av-gelb {
+  background: var(--mm-spieler-1);
+}
+.av-rot {
+  background: var(--mm-spieler-2);
+}
+.av-gruen {
+  background: var(--mm-spieler-4);
+}
+.av-blau {
+  background: var(--mm-spieler-7);
+}
+.av-lila {
+  background: var(--mm-spieler-6);
+}
+.av-orange {
+  background: var(--mm-spieler-5);
+}
+.av-tuerkis {
+  background: var(--mm-spieler-3);
+}
+.av-pink {
+  background: var(--mm-spieler-8);
+}
+
+/* Mini-Puppe (Inline-SVG-Slot) — Handy-Kopf, Chips, Warte-Screens */
+.mm-affe {
+  display: inline-block;
+}
+
+.mm-affe svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* ---------- Puppen: Idle-Atmen/Wippen + Reaktions-Posen (nur transform) ---------- */
+
+.mm-affe-idle svg #koerper {
+  animation: affe-atmen 3.6s ease-in-out infinite;
+  animation-delay: var(--idle-versatz, 0s);
+}
+
+.mm-affe-idle svg #kopf {
+  animation: affe-wippen 4.4s ease-in-out infinite;
+  animation-delay: var(--idle-versatz, 0s);
+}
+
+.mm-affe-idle svg #schwanz {
+  animation: affe-wedeln 2.9s ease-in-out infinite;
+  animation-delay: var(--idle-versatz, 0s);
+}
+
+svg[data-gesicht="jubel"] #arm-l {
+  animation: affe-jubel-arm 0.7s var(--mm-kurve-bounce) infinite alternate;
+}
+
+svg[data-gesicht="jubel"] #arm-r {
+  animation: affe-jubel-arm-r 0.7s var(--mm-kurve-bounce) infinite alternate;
+}
+
+svg[data-gesicht="frust"] #kopf {
+  animation: none;
+  transform: rotate(5deg) translateY(5px);
+}
+
+svg[data-gesicht="frust"] #arm-l,
+svg[data-gesicht="frust"] #arm-r {
+  transform: rotate(0deg);
+}
+
+svg[data-gesicht="denk"] #kopf {
+  animation: none;
+  transform: rotate(-4deg);
+}
+
+@keyframes affe-atmen {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.015, 1.035);
+  }
+}
+
+@keyframes affe-wippen {
+  0%,
+  100% {
+    transform: rotate(-1.6deg);
+  }
+  50% {
+    transform: rotate(1.6deg);
+  }
+}
+
+@keyframes affe-wedeln {
+  0%,
+  100% {
+    transform: rotate(-6deg);
+  }
+  50% {
+    transform: rotate(7deg);
+  }
+}
+
+@keyframes affe-jubel-arm {
+  from {
+    transform: rotate(-118deg);
+  }
+  to {
+    transform: rotate(-138deg);
+  }
+}
+
+@keyframes affe-jubel-arm-r {
+  from {
+    transform: rotate(118deg);
+  }
+  to {
+    transform: rotate(138deg);
+  }
+}
+
+/* ---------- Timer-Banane (überall statt nackter Balken) ---------- */
+
+.mm-timer-banane {
+  width: min(420px, 60vw);
+  margin: 0 auto;
+}
+
+.mm-timer-banane svg {
+  display: block;
+  width: 100%;
+}
+
+.mm-timer-banane .banane-voll {
+  clip-path: inset(-20% calc((1 - var(--fortschritt, 1)) * 88% + 6%) -20% -2%);
+}
+
+.mm-timer-banane.kritisch {
+  animation: mm-banane-puls 0.5s ease-in-out infinite;
+}
+
+@keyframes mm-banane-puls {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.06) rotate(1deg);
+  }
+}
+
+/* Schmale Variante für Handy-Kopfzeilen */
+.mm-timer-banane.schmal {
+  width: min(300px, 76vw);
+}
+
+/* ---------- Pause-Overlay ---------- */
+
+.pause-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgb(10 26 18 / 94%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  z-index: 50;
+  text-align: center;
+  padding: 24px;
+}
+
+/* ---------- Zwischenstand ---------- */
+
+.zwischenstand-zeile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--bg2);
+  border: var(--mm-outline-s) solid var(--mm-outline);
+  border-radius: var(--radius);
+  box-shadow: var(--mm-schatten-sticker);
+  padding: 10px 16px;
+  min-width: min(420px, 88vw);
+  font-size: 1.1rem;
+}
+
+.zwischenstand-zeile .betrag {
+  margin-left: auto;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--gold);
+}
+
+/* Einflug-Choreo: Zeilen fliegen nacheinander von links ein */
+.zwischenstand-choreo .zwischenstand-zeile {
+  animation: zeile-einflug var(--mm-dauer-show) var(--mm-kurve-bounce) both;
+  animation-delay: calc(var(--einflug-index, 0) * 140ms);
+}
+
+@keyframes zeile-einflug {
+  from {
+    opacity: 0;
+    transform: translateX(-56px) rotate(-2deg);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) rotate(0deg);
+  }
+}
+
+/* ---------- Momente-Banner (Joker/Rad/Boost — Screen + Handys) ---------- */
+
+.moment-banner {
+  text-align: center;
+  padding: 10px 14px;
+  font-size: 1.15rem;
+  font-weight: 700;
+  background: var(--bg2);
+  border-bottom: var(--mm-outline-s) solid var(--gold);
+  animation: banner-rein var(--mm-dauer-normal) var(--mm-kurve-bounce) both;
+}
+
+@keyframes banner-rein {
+  from {
+    opacity: 0;
+    transform: translateY(-16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ---------- Partikel-Overlay (Konfetti/Money-Regen/Scheine) ---------- */
+
+.fx-canvas {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100dvh;
+  pointer-events: none;
+  z-index: 60;
+}
+
+/* ---------- Sound-Regler (Zahnrad-Ecke, alle Rollen) ---------- */
+
+.sound-ecke {
+  position: fixed;
+  right: max(10px, env(safe-area-inset-right));
+  bottom: max(10px, env(safe-area-inset-bottom));
+  z-index: 70;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.sound-ecke button {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 6px 12px;
+  font-size: 1.1rem;
+  border-radius: var(--mm-radius-rund);
+  opacity: 0.85;
+}
+
+.sound-ecke input[type="range"] {
+  width: 110px;
+  min-height: 24px;
+  padding: 0;
+  accent-color: var(--gold);
+  border: none;
+  background: none;
+}
+
+/* Musik-Control (Musik-Welle 3): dezent unten rechts ÜBER der Sound-Ecke —
+ * Toggle/Volume/Skip fürs Bett + Track-Ticker (Credits der MacLeod-Betten). */
+.musik-control {
+  position: fixed;
+  right: max(10px, env(safe-area-inset-right));
+  bottom: calc(max(10px, env(safe-area-inset-bottom)) + 56px);
+  z-index: 70;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.musik-control button {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 6px 12px;
+  font-size: 1.1rem;
+  border-radius: var(--mm-radius-rund);
+  opacity: 0.85;
+}
+
+.musik-control button.musik-aus {
+  filter: grayscale(1);
+  opacity: 0.4;
+}
+
+.musik-control input[type="range"] {
+  width: 90px;
+  min-height: 24px;
+  padding: 0;
+  accent-color: var(--gold);
+  border: none;
+  background: none;
+}
+
+.musik-ticker {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.85rem;
+  color: var(--muted);
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: var(--mm-radius-rund);
+  padding: 6px 12px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mm-affe-idle svg #koerper,
+  .mm-affe-idle svg #kopf,
+  .mm-affe-idle svg #schwanz,
+  .mm-timer-banane.kritisch,
+  .zwischenstand-choreo .zwischenstand-zeile {
+    animation: none;
+  }
+}

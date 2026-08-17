@@ -1,0 +1,13 @@
+<!-- Kopf Teufelshörner"  Overlay für den #accessoire-Slot (viewBox 0 0 240 320). -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 320">
+  <g>
+    <path d="M 92 61 C 78 53 70 38 76 21 C 81 36 89 44 101 48 C 99 53 96 58 92 61 Z"
+      fill="#C2183B" stroke="#1A1208" stroke-width="4" stroke-linejoin="round"/>
+    <path d="M 148 61 C 162 53 170 38 164 21 C 159 36 151 44 139 48 C 141 53 144 58 148 61 Z"
+      fill="#C2183B" stroke="#1A1208" stroke-width="4" stroke-linejoin="round"/>
+    <path d="M 82 34 C 84 42 88 48 94 52" fill="none"
+      stroke="#FF7B9C" stroke-width="3" stroke-linecap="round" opacity="0.85"/>
+    <path d="M 158 34 C 156 42 152 48 146 52" fill="none"
+      stroke="#FF7B9C" stroke-width="3" stroke-linecap="round" opacity="0.85"/>
+  </g>
+</svg>

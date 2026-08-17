@@ -1,0 +1,150 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 320" class="mm-affe" data-affe="gitti-giro" role="img" aria-label="Gitti Giro">
+  <title>Gitti Giro — die Buchhalterin</title>
+  <style>
+    svg[data-affe="gitti-giro"] .fell{fill:var(--fell,#8E8A84)}
+    svg[data-affe="gitti-giro"] .fell-hell{fill:var(--fell-hell,#D8D3CC)}
+    svg[data-affe="gitti-giro"] .fell-s{stroke:var(--fell,#8E8A84);fill:none}
+    svg[data-affe="gitti-giro"] .o{stroke:#1A1208;stroke-width:5;stroke-linejoin:round;stroke-linecap:round}
+    svg[data-affe="gitti-giro"] .os{stroke:#1A1208;fill:none;stroke-linecap:round}
+    svg[data-affe="gitti-giro"] #kopf,svg[data-affe="gitti-giro"] #arm-l,svg[data-affe="gitti-giro"] #arm-r,svg[data-affe="gitti-giro"] #bein-l,svg[data-affe="gitti-giro"] #bein-r,svg[data-affe="gitti-giro"] #schwanz,svg[data-affe="gitti-giro"] #frisur{transform-box:view-box}
+    svg[data-affe="gitti-giro"] #kopf{transform-origin:120px 148px}
+    svg[data-affe="gitti-giro"] #arm-l{transform-origin:88px 168px}
+    svg[data-affe="gitti-giro"] #arm-r{transform-origin:152px 168px}
+    svg[data-affe="gitti-giro"] #bein-l{transform-origin:102px 244px}
+    svg[data-affe="gitti-giro"] #bein-r{transform-origin:138px 244px}
+    svg[data-affe="gitti-giro"] #schwanz{transform-origin:146px 244px}
+    svg[data-affe="gitti-giro"] #frisur{transform-origin:120px 72px}
+    svg[data-affe="gitti-giro"] .gesicht{display:none}
+    svg[data-affe="gitti-giro"] #gesicht-neutral{display:inline}
+    svg[data-affe="gitti-giro"][data-gesicht=jubel] #gesicht-neutral,svg[data-affe="gitti-giro"][data-gesicht=frust] #gesicht-neutral,svg[data-affe="gitti-giro"][data-gesicht=denk] #gesicht-neutral{display:none}
+    svg[data-affe="gitti-giro"][data-gesicht=jubel] #gesicht-jubel{display:inline}
+    svg[data-affe="gitti-giro"][data-gesicht=frust] #gesicht-frust{display:inline}
+    svg[data-affe="gitti-giro"][data-gesicht=denk] #gesicht-denk{display:inline}
+  </style>
+
+  <g id="schwanz">
+    <path class="os" d="M 144 246 C 190 256 210 222 186 210 C 170 202 162 218 176 222" stroke-width="16"/>
+    <path class="fell-s" d="M 144 246 C 190 256 210 222 186 210 C 170 202 162 218 176 222" stroke-width="9"/>
+  </g>
+
+  <g id="bein-l">
+    <path class="os" d="M 102 244 C 98 264 96 280 94 296" stroke-width="19"/>
+    <path class="fell-s" d="M 102 244 C 98 264 96 280 94 296" stroke-width="12"/>
+    <ellipse class="fell o" cx="89" cy="302" rx="16" ry="9"/>
+  </g>
+  <g id="bein-r">
+    <path class="os" d="M 138 244 C 142 264 144 280 146 296" stroke-width="19"/>
+    <path class="fell-s" d="M 138 244 C 142 264 144 280 146 296" stroke-width="12"/>
+    <ellipse class="fell o" cx="151" cy="302" rx="16" ry="9"/>
+  </g>
+
+  <g id="koerper">
+    <!-- Strenger Buchhalterinnen-Blazer + Rock -->
+    <path class="o" d="M 90 160 C 82 178 84 212 92 230 L 148 230 C 156 212 158 178 150 160 C 140 150 100 150 90 160 Z" fill="#5F5B55"/>
+    <path class="o" d="M 92 230 L 148 230 L 156 252 L 84 252 Z" fill="#474440"/>
+    <path class="o" d="M 108 154 L 120 172 L 132 154 Z" fill="#FFF6E3" stroke-width="4"/>
+    <!-- Perlenkette -->
+    <g fill="#29D9D5" stroke="#1A1208" stroke-width="2">
+      <circle cx="108" cy="164" r="3.4"/><circle cx="114" cy="169" r="3.4"/>
+      <circle cx="120" cy="171" r="3.4"/><circle cx="126" cy="169" r="3.4"/>
+      <circle cx="132" cy="164" r="3.4"/>
+    </g>
+    <!-- Knopfleiste -->
+    <circle cx="120" cy="188" r="2.6" fill="#1A1208"/>
+    <circle cx="120" cy="204" r="2.6" fill="#1A1208"/>
+  </g>
+
+  <g id="arm-l">
+    <path class="os" d="M 88 168 C 76 186 74 200 80 214" stroke-width="18"/>
+    <path d="M 88 168 C 76 186 74 200 80 214" stroke="#5F5B55" stroke-width="11" fill="none" stroke-linecap="round"/>
+    <circle class="fell o" cx="84" cy="221" r="10"/>
+  </g>
+  <g id="arm-r">
+    <path class="os" d="M 152 168 C 164 186 166 200 160 214" stroke-width="18"/>
+    <path d="M 152 168 C 164 186 166 200 160 214" stroke="#5F5B55" stroke-width="11" fill="none" stroke-linecap="round"/>
+    <circle class="fell o" cx="156" cy="221" r="10"/>
+  </g>
+
+  <!-- Abakus, mit beiden Händen gehalten -->
+  <g id="prop-abakus" transform="rotate(-2 120 216)">
+    <rect x="86" y="200" width="68" height="34" rx="6" fill="#B98A4E" stroke="#1A1208" stroke-width="4.5"/>
+    <g stroke="#1A1208" stroke-width="2.5">
+      <line x1="92" y1="209" x2="148" y2="209"/>
+      <line x1="92" y1="217" x2="148" y2="217"/>
+      <line x1="92" y1="225" x2="148" y2="225"/>
+    </g>
+    <g stroke="#1A1208" stroke-width="2">
+      <circle cx="99" cy="209" r="3.6" fill="#F5B301"/><circle cx="107" cy="209" r="3.6" fill="#F5B301"/><circle cx="140" cy="209" r="3.6" fill="#C2183B"/>
+      <circle cx="100" cy="217" r="3.6" fill="#29D9D5"/><circle cx="133" cy="217" r="3.6" fill="#F5B301"/><circle cx="141" cy="217" r="3.6" fill="#F5B301"/>
+      <circle cx="99" cy="225" r="3.6" fill="#C2183B"/><circle cx="108" cy="225" r="3.6" fill="#29D9D5"/><circle cx="117" cy="225" r="3.6" fill="#F5B301"/>
+    </g>
+  </g>
+
+  <g id="kopf">
+    <circle class="fell o" cx="120" cy="102" r="42"/>
+    <circle class="fell o" cx="76" cy="94" r="12"/>
+    <circle class="fell o" cx="164" cy="94" r="12"/>
+    <circle class="fell-hell" cx="76" cy="94" r="5.5"/>
+    <circle class="fell-hell" cx="164" cy="94" r="5.5"/>
+    <ellipse class="fell-hell o" cx="120" cy="114" rx="26" ry="19" stroke-width="4"/>
+
+    <g id="gesicht-neutral" class="gesicht">
+      <circle cx="105" cy="91" r="7" fill="#FFF6E3"/>
+      <circle cx="135" cy="91" r="7" fill="#FFF6E3"/>
+      <circle cx="106" cy="92" r="3.2" fill="#1A1208"/>
+      <circle cx="134" cy="92" r="3.2" fill="#1A1208"/>
+      <circle cx="113" cy="108" r="2" fill="#1A1208"/>
+      <circle cx="127" cy="108" r="2" fill="#1A1208"/>
+      <path class="os" d="M 109 120 L 131 120" stroke-width="4"/>
+    </g>
+    <g id="gesicht-jubel" class="gesicht">
+      <path class="os" d="M 98 91 Q 105 83 112 91" stroke-width="4.5"/>
+      <path class="os" d="M 128 91 Q 135 83 142 91" stroke-width="4.5"/>
+      <circle cx="113" cy="106" r="2" fill="#1A1208"/>
+      <circle cx="127" cy="106" r="2" fill="#1A1208"/>
+      <path d="M 106 113 Q 120 132 134 113 Q 120 118 106 113 Z" fill="#1A1208"/>
+    </g>
+    <g id="gesicht-frust" class="gesicht">
+      <path class="os" d="M 98 83 L 113 88" stroke-width="4.5"/>
+      <path class="os" d="M 142 83 L 127 88" stroke-width="4.5"/>
+      <circle cx="107" cy="94" r="3" fill="#1A1208"/>
+      <circle cx="133" cy="94" r="3" fill="#1A1208"/>
+      <circle cx="113" cy="107" r="2" fill="#1A1208"/>
+      <circle cx="127" cy="107" r="2" fill="#1A1208"/>
+      <path class="os" d="M 108 122 Q 120 114 132 122" stroke-width="4"/>
+    </g>
+    <g id="gesicht-denk" class="gesicht">
+      <circle cx="105" cy="91" r="7" fill="#FFF6E3"/>
+      <circle cx="135" cy="91" r="7" fill="#FFF6E3"/>
+      <circle cx="104" cy="88" r="3" fill="#1A1208"/>
+      <circle cx="134" cy="88" r="3" fill="#1A1208"/>
+      <path class="os" d="M 96 80 L 112 76" stroke-width="4"/>
+      <circle cx="113" cy="108" r="2" fill="#1A1208"/>
+      <circle cx="127" cy="108" r="2" fill="#1A1208"/>
+      <path class="os" d="M 110 120 Q 116 116 122 120 Q 128 124 134 120" stroke-width="4"/>
+    </g>
+
+    <!-- Katzenaugen-Brille (immer sichtbar, über den Gesichtern) -->
+    <g id="prop-brille" fill="none" stroke="#1A1208" stroke-width="3.5">
+      <path d="M 92 84 L 97 88 M 148 84 L 143 88"/>
+      <ellipse cx="105" cy="92" rx="11" ry="9"/>
+      <ellipse cx="135" cy="92" rx="11" ry="9"/>
+      <line x1="116" y1="91" x2="124" y2="91"/>
+    </g>
+
+    <!-- Turmhohe Bienenkorb-Frisur mit Bleistift -->
+    <g id="frisur">
+      <path class="o" d="M 94 70 C 84 52 92 34 104 30 C 96 16 108 2 120 6 C 132 2 144 16 136 30 C 148 34 156 52 146 70 C 138 78 102 78 94 70 Z" fill="#9A958E"/>
+      <g fill="none" stroke="#29D9D5" stroke-width="4" stroke-linecap="round" opacity="0.85">
+        <path d="M 102 62 C 98 50 104 40 112 38"/>
+        <path d="M 124 34 C 132 32 138 40 136 48"/>
+        <path d="M 112 22 C 116 14 124 14 128 20"/>
+      </g>
+      <g transform="rotate(32 142 34)">
+        <rect x="130" y="30" width="36" height="8" rx="2" fill="#F5B301" stroke="#1A1208" stroke-width="3"/>
+        <path d="M 166 30 L 175 34 L 166 38 Z" fill="#D9B08C" stroke="#1A1208" stroke-width="3" stroke-linejoin="round"/>
+      </g>
+    </g>
+    <g id="accessoire"/>
+  </g>
+</svg>
